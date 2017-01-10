@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2016-2017 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -2173,7 +2173,28 @@ QDF_STATUS wmi_unified_egap_conf_params_cmd(void *wmi_hdl,
 
 	return QDF_STATUS_E_FAILURE;
 }
+
 #endif
+
+/**
+ * wmi_unified_action_frame_patterns_cmd() - send wmi cmd of action filter params
+ * @wmi_handle: wmi handler
+ * @action_params: pointer to action_params
+ *
+ * Return: 0 for success, otherwise appropriate error code
+ */
+QDF_STATUS wmi_unified_action_frame_patterns_cmd(void *wmi_hdl,
+				struct action_wakeup_set_param *action_params)
+{
+	wmi_unified_t wmi_handle = (wmi_unified_t) wmi_hdl;
+
+	if (wmi_handle->ops->send_action_frame_patterns_cmd)
+		return wmi_handle->ops->send_action_frame_patterns_cmd(
+				wmi_handle,
+				action_params);
+
+	return QDF_STATUS_E_FAILURE;
+}
 
 /**
  * wmi_unified_fw_profiling_data_cmd() - send FW profiling cmd to WLAN FW
@@ -3420,6 +3441,18 @@ QDF_STATUS wmi_unified_roam_scan_offload_rssi_change_cmd(void *wmi_hdl,
 		return wmi_handle->ops->send_roam_scan_offload_rssi_change_cmd(wmi_handle,
 				  vdev_id, rssi_change_thresh,
 				  bcn_rssi_weight, hirssi_delay_btw_scans);
+
+	return QDF_STATUS_E_FAILURE;
+}
+
+QDF_STATUS wmi_unified_set_per_roam_config(void *wmi_hdl,
+		struct wmi_per_roam_config_req *req_buf)
+{
+	wmi_unified_t wmi_handle = (wmi_unified_t) wmi_hdl;
+
+	if (wmi_handle->ops->send_per_roam_config_cmd)
+		return wmi_handle->ops->send_per_roam_config_cmd(wmi_handle,
+					req_buf);
 
 	return QDF_STATUS_E_FAILURE;
 }

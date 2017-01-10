@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2016 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2013-2017 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -514,6 +514,9 @@ QDF_STATUS (*send_pktlog_wmi_send_cmd)(wmi_unified_t wmi_handle,
 				   WMI_CMD_ID cmd_id, uint8_t user_triggered);
 #endif
 
+QDF_STATUS (*send_action_frame_patterns_cmd)(wmi_unified_t wmi_handle,
+			struct action_wakeup_set_param *action_params);
+
 QDF_STATUS (*send_fw_profiling_cmd)(wmi_unified_t wmi_handle,
 			uint32_t cmd, uint32_t value1, uint32_t value2);
 
@@ -706,6 +709,9 @@ QDF_STATUS (*send_roam_scan_offload_rssi_change_cmd)(wmi_unified_t wmi_handle,
 	int32_t rssi_change_thresh,
 	uint32_t bcn_rssi_weight,
 	uint32_t hirssi_delay_btw_scans);
+
+QDF_STATUS (*send_per_roam_config_cmd)(wmi_unified_t wmi_handle,
+		struct wmi_per_roam_config_req *req_buf);
 
 QDF_STATUS (*send_get_buf_extscan_hotlist_cmd)(wmi_unified_t wmi_handle,
 				   struct ext_scan_setbssi_hotlist_params *

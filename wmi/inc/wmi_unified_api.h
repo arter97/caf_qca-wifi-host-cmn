@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2016 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2013-2017 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -641,7 +641,11 @@ QDF_STATUS wmi_unified_get_link_speed_cmd(void *wmi_hdl,
 
 QDF_STATUS wmi_unified_egap_conf_params_cmd(void *wmi_hdl,
 		wmi_ap_ps_egap_param_cmd_fixed_param *egap_params);
+
 #endif
+
+QDF_STATUS wmi_unified_action_frame_patterns_cmd(void *wmi_hdl,
+			struct action_wakeup_set_param *action_params);
 
 QDF_STATUS wmi_unified_fw_profiling_data_cmd(void *wmi_hdl,
 			uint32_t cmd, uint32_t value1, uint32_t value2);
@@ -858,6 +862,16 @@ QDF_STATUS wmi_unified_roam_scan_offload_rssi_change_cmd(void *wmi_hdl,
 			  int32_t rssi_change_thresh,
 			  uint32_t bcn_rssi_weight,
 			  uint32_t hirssi_delay_btw_scans);
+
+/**
+ * wmi_unified_set_per_roam_config() - set PER roam config in FW
+ * @wmi_hdl: wmi handle
+ * @req_buf: per roam config request buffer
+ *
+ * Return: QDF_STATUS_SUCCESS on success and QDF_STATUS_E_FAILURE for failure
+ */
+QDF_STATUS wmi_unified_set_per_roam_config(void *wmi_hdl,
+		struct wmi_per_roam_config_req *req_buf);
 
 QDF_STATUS wmi_unified_get_buf_extscan_hotlist_cmd(void *wmi_hdl,
 				   struct ext_scan_setbssi_hotlist_params *
