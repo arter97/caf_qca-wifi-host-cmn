@@ -1707,7 +1707,7 @@ struct mobility_domain_info {
 #define WMI_HOST_ROAM_OFFLOAD_NUM_MCS_SET     (16)
 
 /* This TLV will be filled only in case roam offload
- * for wpa2-psk/okc/ese/11r is enabled */
+ * for wpa2-psk/pmkid/ese/11r is enabled */
 typedef struct {
 	/*
 	 * TLV tag and len; tag equals
@@ -1750,7 +1750,8 @@ typedef struct {
  * @rokh_id: r0kh id
  * @roam_key_mgmt_offload_enabled: roam offload flag
  * @auth_mode: authentication mode
- * @okc_enabled: enable opportunistic key caching
+ * @fw_okc: use OKC in firmware
+ * @fw_pmksa_cache: use PMKSA cache in firmware
  * @is_ese_assoc: flag to determine ese assoc
  * @mdid: mobility domain info
  * @roam_offload_params: roam offload tlv params
@@ -1773,7 +1774,8 @@ struct roam_offload_scan_params {
 	uint8_t rokh_id[WMI_ROAM_R0KH_ID_MAX_LEN];
 	uint8_t roam_key_mgmt_offload_enabled;
 	int auth_mode;
-	bool okc_enabled;
+	bool fw_okc;
+	bool fw_pmksa_cache;
 #endif
 	bool is_ese_assoc;
 	struct mobility_domain_info mdid;
@@ -2057,6 +2059,17 @@ struct pno_nw_type {
 };
 
 /**
+ * struct connected_pno_band_rssi_pref - BSS preference based on band
+ * and RSSI
+ * @band: band preference
+ * @rssi_pref: RSSI preference
+ */
+struct cpno_band_rssi_pref {
+	int8_t band;
+	int8_t rssi;
+};
+
+/**
  * struct pno_scan_req_params - PNO Scan request structure
  * @enable: flag to enable or disable
  * @modePNO: PNO Mode
@@ -2083,6 +2096,10 @@ struct pno_nw_type {
  * @mac_addr_mask: MAC address mask used with randomization, bits that
  *	are 0 in the mask should be randomized, bits that are 1 should
  *	be taken from the @mac_addr
+ * @relative_rssi_set: Flag to check whether realtive_rssi is set or not
+ * @relative_rssi: Relative rssi threshold, used for connected pno
+ * @band_rssi_pref: Band and RSSI preference that can be given to one BSS
+ *	over the other BSS
  * @ie_whitelist: set to true for enabling ie whitelisting
  * @probe_req_ie_bitmap: contains IEs to be included in probe req
  * @num_vendor_oui: number of vendor OUIs
@@ -2118,6 +2135,10 @@ struct pno_scan_req_params {
 	bool enable_pno_scan_randomization;
 	uint8_t mac_addr[QDF_MAC_ADDR_SIZE];
 	uint8_t mac_addr_mask[QDF_MAC_ADDR_SIZE];
+
+	bool relative_rssi_set;
+	int8_t relative_rssi;
+	struct cpno_band_rssi_pref band_rssi_pref;
 
 	/* probe req ie whitelisting attrs */
 	bool ie_whitelist;
@@ -6657,6 +6678,10 @@ struct wmi_adaptive_dwelltime_params {
  *     will be considered for PER based scan in rx path
  * @per_rest_time: time for which PER based roam will wait once it
  *     issues a roam scan.
+ * @tx_per_mon_time: Minimum time required to be considered as valid scenario
+ *     for PER based roam in tx path
+ * @rx_per_mon_time: Minimum time required to be considered as valid scenario
+ *     for PER based roam in rx path
  */
 struct wmi_per_roam_config {
 	uint32_t enable;
@@ -6667,6 +6692,8 @@ struct wmi_per_roam_config {
 	uint32_t tx_rate_thresh_percnt;
 	uint32_t rx_rate_thresh_percnt;
 	uint32_t per_rest_time;
+	uint32_t tx_per_mon_time;
+	uint32_t rx_per_mon_time;
 };
 
 /**
