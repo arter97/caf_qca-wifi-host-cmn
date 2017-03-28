@@ -357,8 +357,9 @@ void __qdf_nbuf_unmap_single(qdf_device_t osdev, qdf_nbuf_t buf,
 void __qdf_nbuf_unmap_single(qdf_device_t osdev, qdf_nbuf_t buf,
 					qdf_dma_dir_t dir)
 {
-	dma_unmap_single(osdev->dev, QDF_NBUF_CB_PADDR(buf),
-			 skb_end_pointer(buf) - buf->data, dir);
+	if (QDF_NBUF_CB_PADDR(buf))
+		dma_unmap_single(osdev->dev, QDF_NBUF_CB_PADDR(buf),
+			skb_end_pointer(buf) - buf->data, dir);
 }
 #endif
 EXPORT_SYMBOL(__qdf_nbuf_unmap_single);
@@ -823,6 +824,86 @@ bool __qdf_nbuf_data_is_ipv4_arp_pkt(uint8_t *data)
 		return true;
 	else
 		return false;
+}
+
+/**
+ * __qdf_nbuf_data_is_arp_req() - check if skb data is a arp request
+ * @data: Pointer to network data buffer
+ *
+ * This api is for ipv4 packet.
+ *
+ * Return: true if packet is ARP request
+ *	   false otherwise.
+ */
+bool __qdf_nbuf_data_is_arp_req(uint8_t *data)
+{
+	uint16_t op_code;
+
+	op_code = (uint16_t)(*(uint16_t *)(data +
+				QDF_NBUF_PKT_ARP_OPCODE_OFFSET));
+
+	if (op_code == QDF_SWAP_U16(QDF_NBUF_PKT_ARPOP_REQ))
+		return true;
+	else
+		return false;
+}
+
+/**
+ * __qdf_nbuf_data_is_arp_rsp() - check if skb data is a arp response
+ * @data: Pointer to network data buffer
+ *
+ * This api is for ipv4 packet.
+ *
+ * Return: true if packet is ARP response
+ *	   false otherwise.
+ */
+bool __qdf_nbuf_data_is_arp_rsp(uint8_t *data)
+{
+	uint16_t op_code;
+
+	op_code = (uint16_t)(*(uint16_t *)(data +
+				QDF_NBUF_PKT_ARP_OPCODE_OFFSET));
+
+	if (op_code == QDF_SWAP_U16(QDF_NBUF_PKT_ARPOP_REPLY))
+		return true;
+	else
+		return false;
+}
+
+/**
+ * __qdf_nbuf_data_get_arp_src_ip() - get arp src IP
+ * @data: Pointer to network data buffer
+ *
+ * This api is for ipv4 packet.
+ *
+ * Return: ARP packet source IP value.
+ */
+uint32_t  __qdf_nbuf_get_arp_src_ip(uint8_t *data)
+{
+	uint32_t src_ip;
+
+	src_ip = (uint32_t)(*(uint32_t *)(data +
+				QDF_NBUF_PKT_ARP_SRC_IP_OFFSET));
+
+	return src_ip;
+}
+
+/**
+ * __qdf_nbuf_data_get_arp_tgt_ip() - get arp target IP
+ * @data: Pointer to network data buffer
+ *
+ * This api is for ipv4 packet.
+ *
+ * Return: ARP packet target IP value.
+ */
+uint32_t  __qdf_nbuf_get_arp_tgt_ip(uint8_t *data)
+{
+	uint32_t tgt_ip;
+
+	tgt_ip = (uint32_t)(*(uint32_t *)(data +
+				QDF_NBUF_PKT_ARP_TGT_IP_OFFSET));
+
+	return tgt_ip;
 }
 
 /**
@@ -1447,9 +1528,7 @@ void qdf_net_buf_debug_add_node(qdf_nbuf_t net_buf, size_t size,
 		qdf_print("Double allocation of skb ! Already allocated from %p %s %d current alloc from %p %s %d",
 			  p_node->net_buf, p_node->file_name, p_node->line_num,
 			  net_buf, file_name, line_num);
-		QDF_ASSERT(0);
 		qdf_nbuf_track_free(new_node);
-		goto done;
 	} else {
 		p_node = new_node;
 		if (p_node) {
@@ -1459,15 +1538,11 @@ void qdf_net_buf_debug_add_node(qdf_nbuf_t net_buf, size_t size,
 			p_node->size = size;
 			p_node->p_next = gp_qdf_net_buf_track_tbl[i];
 			gp_qdf_net_buf_track_tbl[i] = p_node;
-		} else {
+		} else
 			qdf_print(
 				  "Mem alloc failed ! Could not track skb from %s %d of size %zu",
 				  file_name, line_num, size);
-			QDF_ASSERT(0);
-		}
 	}
-
-done:
 	spin_unlock_irqrestore(&g_qdf_net_buf_track_lock[i], irq_flag);
 
 	return;
@@ -1560,7 +1635,13 @@ void qdf_net_buf_debug_release_skb(qdf_nbuf_t net_buf)
 }
 EXPORT_SYMBOL(qdf_net_buf_debug_release_skb);
 
+#else
+void qdf_net_buf_debug_delete_node(qdf_nbuf_t net_buf)
+{
+}
+EXPORT_SYMBOL(qdf_net_buf_debug_delete_node);
 #endif /*MEMORY_DEBUG */
+
 #if defined(FEATURE_TSO)
 
 /**
