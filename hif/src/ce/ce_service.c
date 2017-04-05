@@ -2101,6 +2101,11 @@ ce_per_engine_handler_adjust(struct CE_state *CE_state,
 	if (Q_TARGET_ACCESS_BEGIN(scn) < 0)
 		return;
 
+	if (!TARGET_REGISTER_ACCESS_ALLOW(scn)) {
+		HIF_ERROR("%s: target access is not allowed", __func__ );
+		return;
+	}
+
 	if ((!disable_copy_compl_intr) &&
 	    (CE_state->send_cb || CE_state->recv_cb)) {
 		CE_COPY_COMPLETE_INTR_ENABLE(scn, ctrl_addr);
