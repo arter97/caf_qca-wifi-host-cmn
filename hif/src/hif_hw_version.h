@@ -31,14 +31,19 @@
 
 #define AR6004_VERSION_REV1_3           0x31c8088a
 #define AR9888_REV2_VERSION             0x4100016c
+#define AR9887_REV1_VERSION             0x4100016d
 #define AR6320_REV1_VERSION             0x5000000
 #define AR6320_REV1_1_VERSION           0x5000001
 #define AR6320_REV1_3_VERSION           0x5000003
 #define AR6320_REV2_1_VERSION           0x5010000
 #define AR6320_REV3_VERSION             0x5020000
 #define AR6320_REV3_2_VERSION           0x5030000
+#define QCA9379_REV1_VERSION            0x5040000
 #define AR6320_DEV_VERSION              0x1000000
 #define QCA9377_REV1_1_VERSION          0x5020001
+#define WCN3990_v1                      0x40000000
+#define WCN3990_v2                      0x40010000
+#define WCN3990_v2_1                    0x40010002
 
 struct qwlan_hw {
 	u32 id;

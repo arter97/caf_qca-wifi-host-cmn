@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015-2016 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2015-2017 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -39,17 +39,17 @@
 #include "hif_main.h"
 #include "hif_hw_version.h"
 #if defined(HIF_PCI) || defined(HIF_SNOC) || defined(HIF_AHB)
-#include "ce_api.h"
 #include "ce_tasklet.h"
-#include "platform_icnss.h"
 #endif
 #include "qdf_trace.h"
 #include "qdf_status.h"
-#ifdef CONFIG_CNSS
-#include <net/cnss.h>
-#endif
 #include "hif_debug.h"
 #include "mp_dev.h"
+#include "ce_api.h"
+#ifdef QCA_WIFI_QCA8074
+#include "hal_api.h"
+#endif
+#include "hif_napi.h"
 
 void hif_dump(struct hif_opaque_softc *hif_ctx, uint8_t cmd_id, bool start)
 {
@@ -293,6 +293,31 @@ static const struct qwlan_hw qwlan_hw_list[] = {
 		.id = AR6320_REV3_2_VERSION,
 		.subid = 0xA,
 		.name = "AR6320_REV3_2_VERSION",
+	},
+	{
+		.id = WCN3990_v1,
+		.subid = 0x0,
+		.name = "WCN3990_V1",
+	},
+	{
+		.id = WCN3990_v2,
+		.subid = 0x0,
+		.name = "WCN3990_V2",
+	},
+	{
+		.id = WCN3990_v2_1,
+		.subid = 0x0,
+		.name = "WCN3990_V2.1",
+	},
+	{
+		.id = QCA9379_REV1_VERSION,
+		.subid = 0xC,
+		.name = "QCA9379_REV1",
+	},
+	{
+		.id = QCA9379_REV1_VERSION,
+		.subid = 0xD,
+		.name = "QCA9379_REV1_1",
 	}
 };
 
@@ -306,6 +331,9 @@ static const char *hif_get_hw_name(struct hif_target_info *info)
 {
 	int i;
 
+	if (info->hw_name)
+		return info->hw_name;
+
 	for (i = 0; i < ARRAY_SIZE(qwlan_hw_list); i++) {
 		if (info->target_version == qwlan_hw_list[i].id &&
 		    info->target_revision == qwlan_hw_list[i].subid) {
@@ -313,7 +341,16 @@ static const char *hif_get_hw_name(struct hif_target_info *info)
 		}
 	}
 
-	return "Unknown Device";
+	info->hw_name = qdf_mem_malloc(64);
+	if (!info->hw_name)
+		return "Unknown Device (nomem)";
+
+	i = qdf_snprint(info->hw_name, 64, "HW_VERSION=%x.",
+			info->target_version);
+	if (i < 0)
+		return "Unknown Device (snprintf failure)";
+	else
+		return info->hw_name;
 }
 
 /**
@@ -328,11 +365,30 @@ void hif_get_hw_info(struct hif_opaque_softc *scn, u32 *version, u32 *revision,
 			const char **target_name)
 {
 	struct hif_target_info *info = hif_get_target_info_handle(scn);
+	struct hif_softc *sc = HIF_GET_SOFTC(scn);
+
+	if (sc->bus_type == QDF_BUS_TYPE_USB)
+		hif_usb_get_hw_info(sc);
+
 	*version = info->target_version;
 	*revision = info->target_revision;
 	*target_name = hif_get_hw_name(info);
 }
 
+/**
+ * hif_get_dev_ba(): API to get device base address.
+ * @scn: scn
+ * @version: version
+ * @revision: revision
+ *
+ * Return: n/a
+ */
+void *hif_get_dev_ba(struct hif_opaque_softc *hif_handle)
+{
+	struct hif_softc *scn = (struct hif_softc *)hif_handle;
+
+	return scn->mem;
+}
 /**
  * hif_open(): hif_open
  * @qdf_ctx: QDF Context
@@ -364,11 +420,10 @@ struct hif_opaque_softc *hif_open(qdf_device_t qdf_ctx, uint32_t mode,
 		return GET_HIF_OPAQUE_HDL(scn);
 	}
 
-	qdf_mem_zero(scn, bus_context_size);
-
 	scn->qdf_dev = qdf_ctx;
 	scn->hif_con_param = mode;
 	qdf_atomic_init(&scn->active_tasklet_cnt);
+	qdf_atomic_init(&scn->active_grp_tasklet_cnt);
 	qdf_atomic_init(&scn->link_suspended);
 	qdf_atomic_init(&scn->tasklet_from_intr);
 	qdf_mem_copy(&scn->callbacks, cbk, sizeof(struct hif_driver_state_callbacks));
@@ -404,9 +459,33 @@ void hif_close(struct hif_opaque_softc *hif_ctx)
 		scn->athdiag_procfs_inited = false;
 	}
 
+	if (scn->target_info.hw_name) {
+		char *hw_name = scn->target_info.hw_name;
+		scn->target_info.hw_name = "ErrUnloading";
+		qdf_mem_free(hw_name);
+	}
+
 	hif_bus_close(scn);
 	qdf_mem_free(scn);
 }
+
+#ifdef QCA_WIFI_QCA8074
+static QDF_STATUS hif_hal_attach(struct hif_softc *scn)
+{
+	if (ce_srng_based(scn)) {
+		scn->hal_soc = hal_attach(scn, scn->qdf_dev);
+		if (scn->hal_soc == NULL)
+			return QDF_STATUS_E_FAILURE;
+	}
+
+	return QDF_STATUS_SUCCESS;
+}
+#else
+static QDF_STATUS hif_hal_attach(struct hif_softc *scn)
+{
+	return QDF_STATUS_SUCCESS;
+}
+#endif
 
 /**
  * hif_enable(): hif_enable
@@ -439,8 +518,11 @@ QDF_STATUS hif_enable(struct hif_opaque_softc *hif_ctx, struct device *dev,
 		return status;
 	}
 
-	if (ADRASTEA_BU)
-		hif_vote_link_up(hif_ctx);
+	status = hif_hal_attach(scn);
+	if (status != QDF_STATUS_SUCCESS) {
+		HIF_ERROR("%s: hal attach failed", __func__);
+		return status;
+	}
 
 	if (hif_bus_configure(scn)) {
 		HIF_ERROR("%s: Target probe failed.", __func__);
@@ -459,7 +541,7 @@ QDF_STATUS hif_enable(struct hif_opaque_softc *hif_ctx, struct device *dev,
 
 	scn->hif_init_done = true;
 
-	HIF_TRACE("%s: X OK", __func__);
+	HIF_TRACE("%s: OK", __func__);
 
 	return QDF_STATUS_SUCCESS;
 }
@@ -476,9 +558,6 @@ void hif_disable(struct hif_opaque_softc *hif_ctx, enum hif_disable_type type)
 		hif_shutdown_device(hif_ctx);
 	else
 		hif_stop(hif_ctx);
-
-	if (ADRASTEA_BU)
-		hif_vote_link_down(hif_ctx);
 
 	hif_disable_bus(scn);
 
@@ -615,7 +694,6 @@ int hif_get_device_type(uint32_t device_id,
 	int ret = 0;
 
 	switch (device_id) {
-	case ADRASTEA_DEVICE_ID:
 	case ADRASTEA_DEVICE_ID_P2_E12:
 
 		*hif_type = HIF_TYPE_ADRASTEA;
@@ -680,6 +758,22 @@ int hif_get_device_type(uint32_t device_id,
 		HIF_INFO(" *********** IPQ4019  *************");
 		break;
 
+	case QCA8074_DEVICE_ID:
+	case RUMIM2M_DEVICE_ID_NODE0:
+	case RUMIM2M_DEVICE_ID_NODE1:
+	case RUMIM2M_DEVICE_ID_NODE2:
+	case RUMIM2M_DEVICE_ID_NODE3:
+		*hif_type = HIF_TYPE_QCA8074;
+		*target_type = TARGET_TYPE_QCA8074;
+		HIF_INFO(" *********** QCA8074  *************\n");
+		break;
+
+	case QCA6290_EMULATION_DEVICE_ID:
+		*hif_type = HIF_TYPE_QCA6290;
+		*target_type = TARGET_TYPE_QCA6290;
+		HIF_INFO(" *********** QCA6290EMU *************\n");
+		break;
+
 	default:
 		HIF_ERROR("%s: Unsupported device ID!", __func__);
 		ret = -ENODEV;
@@ -698,7 +792,9 @@ end:
 bool hif_needs_bmi(struct hif_opaque_softc *hif_ctx)
 {
 	struct hif_softc *hif_sc = HIF_GET_SOFTC(hif_ctx);
-	return hif_sc->bus_type != QDF_BUS_TYPE_SNOC;
+
+	return (hif_sc->bus_type != QDF_BUS_TYPE_SNOC) &&
+		!ce_srng_based(hif_sc);
 }
 
 /**
@@ -758,20 +854,70 @@ struct hif_target_info *hif_get_target_info_handle(
  * Return: void
  */
 void hif_lro_flush_cb_register(struct hif_opaque_softc *scn,
-			       void (handler)(void *), void *data)
+			       void (lro_flush_handler)(void *),
+			       void *(lro_init_handler)(void))
 {
-	ce_lro_flush_cb_register(scn, handler, data);
+	if (hif_napi_enabled(scn, -1))
+		hif_napi_lro_flush_cb_register(scn, lro_flush_handler,
+					       lro_init_handler);
+	else
+		ce_lro_flush_cb_register(scn, lro_flush_handler,
+					lro_init_handler);
+}
+
+/**
+ * hif_get_lro_info - Returns LRO instance for instance ID
+ * @ctx_id: LRO instance ID
+ * @hif_hdl: HIF Context
+ *
+ * Return: Pointer to LRO instance.
+ */
+void *hif_get_lro_info(int ctx_id, struct hif_opaque_softc *hif_hdl)
+{
+	void *data;
+
+	if (hif_napi_enabled(hif_hdl, -1))
+		data = hif_napi_get_lro_info(hif_hdl, ctx_id);
+	else
+		data = hif_ce_get_lro_ctx(hif_hdl, ctx_id);
+
+	return data;
+}
+
+/**
+ * hif_get_rx_ctx_id - Returns LRO instance ID based on underlying LRO instance
+ * @ctx_id: LRO context ID
+ * @hif_hdl: HIF Context
+ *
+ * Return: LRO instance ID
+ */
+int hif_get_rx_ctx_id(int ctx_id, struct hif_opaque_softc *hif_hdl)
+{
+	if (hif_napi_enabled(hif_hdl, -1))
+		return NAPI_PIPE2ID(ctx_id);
+	else
+		return ctx_id;
 }
 
 /**
  * hif_lro_flush_cb_deregister - API to deregister for LRO Flush Callbacks
- * @scn: HIF Context
+ * @hif_hdl: HIF Context
+ * @lro_deinit_cb: LRO deinit callback
  *
  * Return: void
  */
-void hif_lro_flush_cb_deregister(struct hif_opaque_softc *scn)
+void hif_lro_flush_cb_deregister(struct hif_opaque_softc *hif_hdl,
+				 void (lro_deinit_cb)(void *))
 {
-	ce_lro_flush_cb_deregister(scn);
+	if (hif_napi_enabled(hif_hdl, -1))
+		hif_napi_lro_flush_cb_deregister(hif_hdl, lro_deinit_cb);
+	else
+		ce_lro_flush_cb_deregister(hif_hdl, lro_deinit_cb);
+}
+#else /* !defined(FEATURE_LRO) */
+int hif_get_rx_ctx_id(int ctx_id, struct hif_opaque_softc *hif_hdl)
+{
+	return 0;
 }
 #endif
 
@@ -877,6 +1023,35 @@ bool hif_is_load_or_unload_in_progress(struct hif_softc *scn)
 }
 
 /**
+ * hif_update_pipe_callback() - API to register pipe specific callbacks
+ * @osc: Opaque softc
+ * @pipeid: pipe id
+ * @callbacks: callbacks to register
+ *
+ * Return: void
+ */
+
+void hif_update_pipe_callback(struct hif_opaque_softc *osc,
+					u_int8_t pipeid,
+					struct hif_msg_callbacks *callbacks)
+{
+	struct hif_softc *scn = HIF_GET_SOFTC(osc);
+	struct HIF_CE_state *hif_state = HIF_GET_CE_STATE(scn);
+	struct HIF_CE_pipe_info *pipe_info;
+
+	QDF_BUG(pipeid < CE_COUNT_MAX);
+
+	HIF_INFO_LO("+%s pipeid %d\n", __func__, pipeid);
+
+	pipe_info = &hif_state->pipe_info[pipeid];
+
+	qdf_mem_copy(&pipe_info->pipe_callbacks,
+			callbacks, sizeof(pipe_info->pipe_callbacks));
+
+	HIF_INFO_LO("-%s\n", __func__);
+}
+
+/**
  * hif_is_recovery_in_progress() - API to query upper layers if recovery in
  * progress
  * @scn: HIF Context
@@ -892,7 +1067,7 @@ bool hif_is_recovery_in_progress(struct hif_softc *scn)
 
 	return false;
 }
-
+#if defined(HIF_PCI) || defined(SNOC) || defined(HIF_AHB)
 /**
  * hif_batch_send() - API to access hif specific function
  * ce_batch_send.
@@ -907,6 +1082,7 @@ qdf_nbuf_t hif_batch_send(struct hif_opaque_softc *osc, qdf_nbuf_t msdu,
 		uint32_t transfer_id, u_int32_t len, uint32_t sendhead)
 {
 	void *ce_tx_hdl = hif_get_ce_handle(osc, CE_HTT_TX_CE);
+
 	return ce_batch_send((struct CE_handle *)ce_tx_hdl, msdu, transfer_id,
 			len, sendhead);
 }
@@ -940,6 +1116,7 @@ int hif_send_single(struct hif_opaque_softc *osc, qdf_nbuf_t msdu, uint32_t
 		transfer_id, u_int32_t len)
 {
 	void *ce_tx_hdl = hif_get_ce_handle(osc, CE_HTT_TX_CE);
+
 	return ce_send_single((struct CE_handle *)ce_tx_hdl, msdu, transfer_id,
 			len);
 }
@@ -959,9 +1136,11 @@ int hif_send_fast(struct hif_opaque_softc *osc, qdf_nbuf_t nbuf,
 		uint32_t transfer_id, uint32_t download_len)
 {
 	void *ce_tx_hdl = hif_get_ce_handle(osc, CE_HTT_TX_CE);
+
 	return ce_send_fast((struct CE_handle *)ce_tx_hdl, nbuf,
 			transfer_id, download_len);
 }
+#endif
 
 /**
  * hif_reg_write() - API to access hif specific function
@@ -993,4 +1172,111 @@ uint32_t hif_reg_read(struct hif_opaque_softc *hif_ctx, uint32_t offset)
 
 	struct hif_softc *scn = HIF_GET_SOFTC(hif_ctx);
 	return hif_read32_mb(scn->mem + offset);
+}
+
+#if defined(HIF_USB)
+/**
+ * hif_ramdump_handler(): generic ramdump handler
+ * @scn: struct hif_opaque_softc
+ *
+ * Return: None
+ */
+
+void hif_ramdump_handler(struct hif_opaque_softc *scn)
+
+{
+	if (hif_get_bus_type == QDF_BUS_TYPE_USB)
+		hif_usb_ramdump_handler();
+}
+#endif
+
+/**
+ * hif_register_ext_group_int_handler() - API to register external group
+ * interrupt handler.
+ * @hif_ctx : HIF Context
+ * @numirq: number of irq's in the group
+ * @irq: array of irq values
+ * @ext_intr_handler: callback interrupt handler function
+ * @context: context to passed in callback
+ *
+ * Return: status
+ */
+uint32_t hif_register_ext_group_int_handler(struct hif_opaque_softc *hif_ctx,
+		uint32_t numirq, uint32_t irq[], ext_intr_handler handler,
+		void *context)
+{
+	struct hif_softc *scn = HIF_GET_SOFTC(hif_ctx);
+	struct HIF_CE_state *hif_state = HIF_GET_CE_STATE(scn);
+	struct hif_ext_group_entry *hif_ext_group;
+
+	if (scn->hif_init_done) {
+		HIF_ERROR("%s Called after HIF initialization \n", __func__);
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	if (hif_state->hif_num_extgroup >= HIF_MAX_GROUP) {
+		HIF_ERROR("%s Max groups reached\n", __func__);
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	if (numirq >= HIF_MAX_GRP_IRQ) {
+		HIF_ERROR("%s invalid numirq\n", __func__);
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	hif_ext_group = &hif_state->hif_ext_group[hif_state->hif_num_extgroup];
+
+	hif_ext_group->numirq = numirq;
+	qdf_mem_copy(&hif_ext_group->irq[0], irq, numirq * sizeof(irq[0]));
+	hif_ext_group->context = context;
+	hif_ext_group->handler = handler;
+	hif_ext_group->configured = true;
+	hif_ext_group->grp_id = hif_state->hif_num_extgroup;
+	hif_ext_group->hif_state = hif_state;
+
+	hif_state->hif_num_extgroup++;
+	return QDF_STATUS_SUCCESS;
+}
+
+/**
+ * hif_ext_grp_tasklet() - grp tasklet
+ * data: context
+ *
+ * return: void
+ */
+void hif_ext_grp_tasklet(unsigned long data)
+{
+	struct hif_ext_group_entry *hif_ext_group =
+			(struct hif_ext_group_entry *)data;
+	struct HIF_CE_state *hif_state = hif_ext_group->hif_state;
+	struct hif_softc *scn = HIF_GET_SOFTC(hif_state);
+
+	if (hif_ext_group->grp_id < HIF_MAX_GROUP) {
+		hif_ext_group->handler(hif_ext_group->context, HIF_MAX_BUDGET);
+		hif_grp_irq_enable(scn, hif_ext_group->grp_id);
+	} else {
+		HIF_ERROR("%s: ERROR - invalid grp_id = %d",
+		       __func__, hif_ext_group->grp_id);
+	}
+
+	qdf_atomic_dec(&scn->active_grp_tasklet_cnt);
+}
+
+/**
+ * hif_grp_tasklet_kill() - grp tasklet kill
+ * scn: hif_softc
+ *
+ * return: void
+ */
+void hif_grp_tasklet_kill(struct hif_softc *scn)
+{
+	int i;
+	struct HIF_CE_state *hif_state = HIF_GET_CE_STATE(scn);
+
+	for (i = 0; i < HIF_MAX_GROUP; i++)
+		if (hif_state->hif_ext_group[i].inited) {
+			tasklet_kill(&hif_state->hif_ext_group[i].intr_tq);
+			hif_state->hif_ext_group[i].inited = false;
+		}
+	qdf_atomic_set(&scn->active_grp_tasklet_cnt, 0);
 }

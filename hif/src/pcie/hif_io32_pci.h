@@ -39,13 +39,17 @@
  * For maximum performance and no power management, set this to 1.
  * For power management at the cost of performance, set this to 0.
  */
+#ifndef CONFIG_ATH_PCIE_MAX_PERF
 #define CONFIG_ATH_PCIE_MAX_PERF 0
+#endif
 
 /*
  * For keeping the target awake till the driver is
  * loaded, set this to 1
  */
+#ifndef CONFIG_ATH_PCIE_AWAKE_WHILE_DRIVER_LOAD
 #define CONFIG_ATH_PCIE_AWAKE_WHILE_DRIVER_LOAD 1
+#endif
 
 /*
  * PCI-E L1 ASPPM sub-states

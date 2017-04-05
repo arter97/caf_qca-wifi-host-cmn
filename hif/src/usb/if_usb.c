@@ -361,7 +361,7 @@ int hif_usb_bus_resume(struct hif_softc *hif_ctx)
 }
 
 /**
- * hif_bus_reset_resume() - resume the bus after reset
+ * hif_usb_bus_reset_resume() - resume the bus after reset
  * @scn: struct hif_opaque_softc
  *
  * This function is called to tell the driver that USB device has been resumed
@@ -370,10 +370,9 @@ int hif_usb_bus_resume(struct hif_softc *hif_ctx)
  *
  * Return: int 0 for success, non zero for failure
  */
-int hif_bus_reset_resume(struct hif_opaque_softc *scn)
+int hif_usb_bus_reset_resume(struct hif_softc *hif_ctx)
 {
 	int ret = 0;
-	struct hif_softc *hif_ctx = HIF_GET_SOFTC(scn);
 	HIF_ENTER();
 	if (hif_usb_diag_write_cold_reset(hif_ctx) != QDF_STATUS_SUCCESS)
 		ret = 1;
@@ -437,6 +436,7 @@ void hif_usb_reg_tbl_attach(struct hif_softc *scn)
 			case AR6320_REV2_1_VERSION:
 			case AR6320_REV3_VERSION:
 			case QCA9377_REV1_1_VERSION:
+			case QCA9379_REV1_VERSION:
 				hif_type = HIF_TYPE_AR6320V2;
 				target_type = TARGET_TYPE_AR6320V2;
 				break;
@@ -576,6 +576,10 @@ void hif_fw_assert_ramdump_pattern(struct hif_usb_softc *sc)
 	uint8_t *data;
 	uint8_t *ram_ptr = NULL;
 	char *fw_ram_seg_name[FW_RAM_SEG_CNT] = {"DRAM", "IRAM", "AXI"};
+	size_t fw_ram_reg_size[FW_RAM_SEG_CNT] = {
+				  FW_RAMDUMP_DRAMSIZE,
+				  FW_RAMDUMP_IRAMSIZE,
+				  FW_RAMDUMP_AXISIZE };
 
 	data = sc->fw_data;
 	len = sc->fw_data_len;
@@ -589,7 +593,7 @@ void hif_fw_assert_ramdump_pattern(struct hif_usb_softc *sc)
 		HIF_ERROR("Firmware %s dump:\n", fw_ram_seg_name[i]);
 		sc->ramdump[i] =
 			qdf_mem_malloc(sizeof(struct fw_ramdump) +
-					FW_RAMDUMP_SEG_SIZE);
+					fw_ram_reg_size[i]);
 		if (!sc->ramdump[i]) {
 			pr_err("Fail to allocate memory for ram dump");
 			QDF_BUG(0);
@@ -607,7 +611,12 @@ void hif_fw_assert_ramdump_pattern(struct hif_usb_softc *sc)
 	reg++;
 	ram_ptr = (sc->ramdump[i])->mem + (sc->ramdump[i])->length;
 	(sc->ramdump[i])->length += (len - 8);
-	qdf_mem_copy(ram_ptr, (A_UINT8 *) reg, len - 8);
+	if (sc->ramdump[i]->length <= fw_ram_reg_size[i]) {
+		qdf_mem_copy(ram_ptr, (A_UINT8 *) reg, len - 8);
+	} else {
+		HIF_ERROR("memory copy overlap\n");
+		QDF_BUG(0);
+	}
 
 	if (pattern == FW_RAMDUMP_END_PATTERN) {
 		HIF_ERROR("%s memory size = %d\n", fw_ram_seg_name[i],
@@ -621,7 +630,7 @@ void hif_fw_assert_ramdump_pattern(struct hif_usb_softc *sc)
 }
 
 /**
- * hif_ramdump_handler(): dump bus debug registers
+ * hif_usb_ramdump_handler(): dump bus debug registers
  * @scn: struct hif_opaque_softc
  *
  * This function is to receive information of firmware crash dump, and
@@ -641,7 +650,7 @@ void hif_fw_assert_ramdump_pattern(struct hif_usb_softc *sc)
  * Return: 0 for success or error code
  */
 
-void hif_ramdump_handler(struct hif_opaque_softc *scn)
+void hif_usb_ramdump_handler(struct hif_opaque_softc *scn)
 {
 	uint32_t *reg, pattern, i, start_addr = 0;
 	uint32_t len;

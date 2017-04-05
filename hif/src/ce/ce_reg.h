@@ -193,6 +193,7 @@
 #define CE_DEBUG_SEL_LSB          (scn->target_ce_def->d_CE_DEBUG_SEL_LSB)
 #define CE_DEBUG_SEL_MASK         (scn->target_ce_def->d_CE_DEBUG_SEL_MASK)
 #define HOST_IE_ADDRESS           (scn->target_ce_def->d_HOST_IE_ADDRESS)
+#define HOST_IE_ADDRESS_2         (scn->target_ce_def->d_HOST_IE_ADDRESS_2)
 #define HOST_IS_ADDRESS           (scn->target_ce_def->d_HOST_IS_ADDRESS)
 
 #define SRC_WATERMARK_LOW_SET(x) \
@@ -258,8 +259,7 @@ uint32_t DEBUG_CE_DEST_RING_READ_IDX_GET(struct hif_softc *scn,
 				     & (uint64_t)(0xF00000000))>>32))
 
 #define VADDR_FOR_CE(scn, CE_ctrl_addr)\
-	((uint32_t *)((uint64_t)(scn->vaddr_rri_on_ddr) + \
-	COPY_ENGINE_ID(CE_ctrl_addr)*sizeof(uint32_t)))
+	((scn->vaddr_rri_on_ddr) + COPY_ENGINE_ID(CE_ctrl_addr))
 
 #define SRRI_FROM_DDR_ADDR(addr) ((*(addr)) & 0xFFFF)
 #define DRRI_FROM_DDR_ADDR(addr) (((*(addr))>>16) & 0xFFFF)
@@ -352,14 +352,14 @@ unsigned int hif_get_dst_ring_read_index(struct hif_softc *scn,
 
 #define CE_SRC_RING_BYTE_SWAP_SET(scn, CE_ctrl_addr, n) \
 	A_TARGET_WRITE(scn, (CE_ctrl_addr) + CE_CTRL1_ADDRESS, \
-		       (A_TARGET_READ((targid), \
+		       (A_TARGET_READ(scn, \
 		       (CE_ctrl_addr) + CE_CTRL1_ADDRESS) \
 		       & ~CE_CTRL1_SRC_RING_BYTE_SWAP_EN_MASK) | \
 		       CE_CTRL1_SRC_RING_BYTE_SWAP_EN_SET(n))
 
 #define CE_DEST_RING_BYTE_SWAP_SET(scn, CE_ctrl_addr, n) \
 	A_TARGET_WRITE(scn, (CE_ctrl_addr)+CE_CTRL1_ADDRESS, \
-		       (A_TARGET_READ((targid), \
+		       (A_TARGET_READ(scn, \
 		       (CE_ctrl_addr) + CE_CTRL1_ADDRESS) \
 		       & ~CE_CTRL1_DST_RING_BYTE_SWAP_EN_MASK) | \
 		       CE_CTRL1_DST_RING_BYTE_SWAP_EN_SET(n))

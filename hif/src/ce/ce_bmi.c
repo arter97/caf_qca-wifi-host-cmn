@@ -38,10 +38,8 @@
 #include <a_debug.h>
 #include "hif_main.h"
 #include "ce_api.h"
+#include "ce_bmi.h"
 #include "qdf_trace.h"
-#ifdef CONFIG_CNSS
-#include <net/cnss.h>
-#endif
 #include "hif_debug.h"
 
 /* Track a BMI transaction that is in progress */

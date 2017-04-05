@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2016-2017 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -31,11 +31,20 @@
  */
 #ifndef _CDP_TXRX_STATS_STRUCT_H_
 #define _CDP_TXRX_STATS_STRUCT_H_
+#ifndef CONFIG_WIN
 #include <wlan_defs.h>
+#endif
 
 #define TXRX_STATS_LEVEL_OFF   0
 #define TXRX_STATS_LEVEL_BASIC 1
 #define TXRX_STATS_LEVEL_FULL  2
+
+#define BSS_CHAN_INFO_READ                        1
+#define BSS_CHAN_INFO_READ_AND_CLEAR              2
+
+#define TX_FRAME_TYPE_DATA 0
+#define TX_FRAME_TYPE_MGMT 1
+#define TX_FRAME_TYPE_BEACON 2
 
 #ifndef TXRX_STATS_LEVEL
 #define TXRX_STATS_LEVEL TXRX_STATS_LEVEL_BASIC
@@ -43,13 +52,13 @@
 
 #ifndef BIG_ENDIAN_HOST
 typedef struct {
-	u_int32_t pkts;
-	u_int32_t bytes;
+	uint64_t pkts;
+	uint64_t bytes;
 } ol_txrx_stats_elem;
 #else
 struct ol_txrx_elem_t {
-	u_int32_t pkts;
-	u_int32_t bytes;
+	uint64_t pkts;
+	uint64_t bytes;
 };
 typedef struct ol_txrx_elem_t ol_txrx_stats_elem;
 #endif
@@ -75,6 +84,8 @@ struct ol_txrx_stats {
 			/* MSDUs which the target sent but couldn't get
 			 an ack for */
 			ol_txrx_stats_elem no_ack;
+			/* MSDUs dropped in NSS-FW */
+			ol_txrx_stats_elem nss_ol_dropped;
 		} dropped;
 		u_int32_t desc_in_use;
 		u_int32_t desc_alloc_fails;
@@ -82,7 +93,6 @@ struct ol_txrx_stats {
 		u_int32_t dma_map_error;
 		/* MSDUs given to the txrx layer by the management stack */
 		ol_txrx_stats_elem mgmt;
-#if (HOST_SW_TSO_ENABLE || HOST_SW_TSO_SG_ENABLE)
 		struct {
 			/* TSO applied jumbo packets received from NW Stack */
 			ol_txrx_stats_elem tso_pkts;
@@ -93,9 +103,7 @@ struct ol_txrx_stats {
 			/* TSO Descriptors */
 			u_int32_t tso_desc_cnt;
 		} tso;
-#endif /* HOST_SW_TSO_ENABLE || HOST_SW_TSO_SG_ENABLE */
 
-#if HOST_SW_SG_ENABLE
 		struct {
 			/* TSO applied jumbo packets received from NW Stack */
 			ol_txrx_stats_elem sg_pkts;
@@ -106,7 +114,6 @@ struct ol_txrx_stats {
 			/* TSO Descriptors */
 			u_int32_t sg_desc_cnt;
 		} sg;
-#endif /* HOST_SW_SG_ENABLE */
 		struct {
 			/* packets enqueued for flow control */
 			u_int32_t fl_ctrl_enqueue;
@@ -121,7 +128,6 @@ struct ol_txrx_stats {
 		ol_txrx_stats_elem delivered;
 		/* MSDUs forwarded from the rx path to the tx path */
 		ol_txrx_stats_elem forwarded;
-#if RX_CHECKSUM_OFFLOAD
 		/* MSDUs in which ipv4 chksum error detected by HW */
 		ol_txrx_stats_elem ipv4_cksum_err;
 		/* MSDUs in which tcp chksum error detected by HW */
@@ -132,10 +138,9 @@ struct ol_txrx_stats {
 		ol_txrx_stats_elem tcp_ipv6_cksum_err;
 		/* MSDUs in which UDP V6 chksum error detected by HW */
 		ol_txrx_stats_elem udp_ipv6_cksum_err;
-#endif /* RX_CHECKSUM_OFFLOAD */
 	} rx;
 	struct {
-		/* Number of mcast recieved for conversion */
+		/* Number of mcast received for conversion */
 		u_int32_t num_me_rcvd;
 		/* Number of unicast sent as part of mcast conversion */
 		u_int32_t num_me_ucast;
@@ -210,6 +215,7 @@ struct ol_ath_radiostats {
 	A_INT16     chan_nf_sec80;
 };
 
+#ifndef CONFIG_WIN
 /*
 ** structure to hold all stats information
 ** for offload device interface
@@ -222,6 +228,7 @@ struct ol_stats {
 	struct wlan_dbg_tidq_stats tidq_stats;
 };
 
+#endif
 /*
 ** Enumeration of PDEV Configuration parameter
 */
@@ -382,7 +389,6 @@ typedef enum _ol_ath_param_t {
 	OL_ATH_PARAM_FW_DUMP_NO_HOST_CRASH = 210,
 	/*Consider OBSS non-erp to change to long slot*/
 	OL_ATH_PARAM_CONSIDER_OBSS_NON_ERP_LONG_SLOT = 211,
-#if PEER_FLOW_CONTROL
 	OL_ATH_PARAM_STATS_FC,
 	OL_ATH_PARAM_QFLUSHINTERVAL,
 	OL_ATH_PARAM_TOTAL_Q_SIZE,
@@ -399,7 +405,6 @@ typedef enum _ol_ath_param_t {
 	OL_ATH_PARAM_LATENCY_PROFILE,
 	OL_ATH_PARAM_HOSTQ_DUMP,
 	OL_ATH_PARAM_TIDQ_MAP,
-#endif
 	OL_ATH_PARAM_DBG_ARP_SRC_ADDR, /* ARP DEBUG source address*/
 	OL_ATH_PARAM_DBG_ARP_DST_ADDR, /* ARP DEBUG destination address*/
 	OL_ATH_PARAM_ARP_DBG_CONF,   /* ARP debug configuration */
@@ -446,6 +451,29 @@ typedef enum _ol_ath_param_t {
 #if DBDC_REPEATER_SUPPORT
 	OL_ATH_PARAM_DELAY_STAVAP_UP = 324,
 #endif
+	OL_ATH_PARAM_TXPOW_MGMT = 326,  /* Can be used to configure transmit power for management frames */
+	OL_ATH_PARAM_CHANSWITCH_OPTIONS = 327,  /* It is used to set the channel switch options */
+	OL_ATH_BTCOEX_ENABLE        = 328,
+	OL_ATH_BTCOEX_WL_PRIORITY   = 329,
+	OL_ATH_PARAM_TID_OVERRIDE_QUEUE_MAPPING = 330,
+	OL_ATH_PARAM_CAL_VER_CHECK = 331,
+	OL_ATH_PARAM_NO_VLAN = 332,
+	OL_ATH_PARAM_CCA_THRESHOLD = 333,
+	OL_ATH_PARAM_ATF_LOGGING = 334,
+	OL_ATH_PARAM_STRICT_DOTH = 335,
+	OL_ATH_PARAM_DISCONNECTION_TIMEOUT = 336,
+	OL_ATH_PARAM_RECONFIGURATION_TIMEOUT = 337,
+	OL_ATH_PARAM_CHANNEL_SWITCH_COUNT = 338,
+	OL_ATH_PARAM_ALWAYS_PRIMARY = 339,
+	OL_ATH_PARAM_FAST_LANE = 340,
+	OL_ATH_GET_BTCOEX_DUTY_CYCLE = 341,
+	OL_ATH_PARAM_SECONDARY_OFFSET_IE = 342,
+	OL_ATH_PARAM_WIDE_BAND_SUB_ELEMENT = 343,
+	OL_ATH_PARAM_PREFERRED_UPLINK = 344,
+	OL_ATH_PARAM_PRECAC_ENABLE = 345,
+	OL_ATH_PARAM_PRECAC_TIMEOUT = 346,
+	OL_ATH_COEX_VER_CFG = 347,
+	OL_ATH_PARAM_DUMP_TARGET = 348,
 } ol_ath_param_t;
 
 /*

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2016 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2013-2017 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -51,6 +51,8 @@
 #define HIF_MIN_SLEEP_INACTIVITY_TIME_MS     50
 #define HIF_SLEEP_INACTIVITY_TIMER_PERIOD_MS 60
 
+#define HIF_MAX_BUDGET 0xFFFF
+
 /*
  * This macro implementation is exposed for efficiency only.
  * The implementation may change and callers should
@@ -84,17 +86,29 @@
 #define AR6320_FW_2_0  (0x20)
 #define AR6320_FW_3_0  (0x30)
 #define AR6320_FW_3_2  (0x32)
-#define ADRASTEA_DEVICE_ID (0xabcd)
+#define QCA6290_EMULATION_DEVICE_ID (0xabcd)
 #define ADRASTEA_DEVICE_ID_P2_E12 (0x7021)
 #define AR9887_DEVICE_ID    (0x0050)
 #define AR900B_DEVICE_ID    (0x0040)
 #define QCA9984_DEVICE_ID   (0x0046)
 #define QCA9888_DEVICE_ID   (0x0056)
+#ifndef IPQ4019_DEVICE_ID
 #define IPQ4019_DEVICE_ID   (0x12ef)
+#endif
+#define QCA8074_DEVICE_ID   (0xffff) /* Todo: replace this with
+					actual number once available.
+					currently defining this to 0xffff for
+					emulation purpose */
+#define RUMIM2M_DEVICE_ID_NODE0	0xabc0
+#define RUMIM2M_DEVICE_ID_NODE1	0xabc1
+#define RUMIM2M_DEVICE_ID_NODE2	0xabc2
+#define RUMIM2M_DEVICE_ID_NODE3	0xabc3
 
 #define HIF_GET_PCI_SOFTC(scn) ((struct hif_pci_softc *)scn)
 #define HIF_GET_CE_STATE(scn) ((struct HIF_CE_state *)scn)
 #define HIF_GET_SDIO_SOFTC(scn) ((struct hif_sdio_softc *)scn)
+#define HIF_GET_USB_SOFTC(scn) ((struct hif_usb_softc *)scn)
+#define HIF_GET_USB_DEVICE(scn) ((HIF_DEVICE_USB *)scn)
 #define HIF_GET_SOFTC(scn) ((struct hif_softc *)scn)
 #define GET_HIF_OPAQUE_HDL(scn) ((struct hif_opaque_softc *)scn)
 
@@ -102,6 +116,20 @@ struct hif_ce_stats {
 	int hif_pipe_no_resrc_count;
 	int ce_ring_delta_fail_count;
 };
+
+#ifdef WLAN_SUSPEND_RESUME_TEST
+struct fake_apps_context {
+	unsigned long state;
+	hif_fake_resume_callback resume_callback;
+	struct work_struct resume_work;
+};
+
+enum hif_fake_apps_state_bits {
+	HIF_FA_SUSPENDED_BIT = 0
+};
+
+void hif_fake_apps_resume_work(struct work_struct *work);
+#endif /* WLAN_SUSPEND_RESUME_TEST */
 
 struct hif_softc {
 	struct hif_opaque_softc osc;
@@ -125,10 +153,12 @@ struct hif_softc {
 
 	bool recovery;
 	bool notice_send;
+	bool per_ce_irq;
 	uint32_t ce_irq_summary;
 	/* No of copy engines supported */
 	unsigned int ce_count;
 	atomic_t active_tasklet_cnt;
+	atomic_t active_grp_tasklet_cnt;
 	atomic_t link_suspended;
 	uint32_t *vaddr_rri_on_ddr;
 	int linkstate_vote;
@@ -145,7 +175,18 @@ struct hif_softc {
 #ifdef QCA_NSS_WIFI_OFFLOAD_SUPPORT
 	uint32_t nss_wifi_ol_mode;
 #endif
+	void *hal_soc;
+#ifdef WLAN_SUSPEND_RESUME_TEST
+	struct fake_apps_context fake_apps_ctx;
+#endif /* WLAN_SUSPEND_RESUME_TEST */
+	uint32_t hif_attribute;
 };
+
+static inline void *hif_get_hal_handle(void *hif_hdl)
+{
+	struct hif_softc *sc = (struct hif_softc *)hif_hdl;
+	return sc->hal_soc;
+}
 
 #ifdef QCA_NSS_WIFI_OFFLOAD_SUPPORT
 static inline bool hif_is_nss_wifi_enabled(struct hif_softc *sc)
@@ -158,6 +199,12 @@ static inline bool hif_is_nss_wifi_enabled(struct hif_softc *sc)
 	return false;
 }
 #endif
+
+static inline uint8_t hif_is_attribute_set(struct hif_softc *sc,
+						uint32_t hif_attrib)
+{
+	return sc->hif_attribute == hif_attrib;
+}
 
 A_target_id_t hif_get_target_id(struct hif_softc *scn);
 void hif_dump_pipe_debug_count(struct hif_softc *scn);
@@ -203,4 +250,16 @@ void hif_wlan_disable(struct hif_softc *scn);
 int hif_target_sleep_state_adjust(struct hif_softc *scn,
 					 bool sleep_ok,
 					 bool wait_for_it);
+int hif_get_rx_ctx_id(int ctx_id, struct hif_opaque_softc *hif_hdl);
+#ifdef HIF_USB
+void hif_usb_get_hw_info(struct hif_softc *scn);
+void hif_ramdump_handler(struct hif_opaque_softc *scn);
+
+#else
+static inline void hif_usb_get_hw_info(struct hif_softc *scn) {}
+static inline void hif_ramdump_handler(struct hif_opaque_softc *scn) {}
+#endif
+void hif_ext_grp_tasklet(unsigned long data);
+void hif_grp_tasklet_kill(struct hif_softc *scn);
+
 #endif /* __HIF_MAIN_H__ */

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2016-2017 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -32,83 +32,35 @@
 
 #ifndef _CDP_TXRX_CTRL_H_
 #define _CDP_TXRX_CTRL_H_
-/* TODO: adf need to be replaced with qdf */
-/*
- * Cleanups --  Might need cleanup
- */
-#if !QCA_OL_TX_PDEV_LOCK && QCA_NSS_PLATFORM || \
-	(defined QCA_PARTNER_PLATFORM && QCA_PARTNER_SUPPORT_FAST_TX)
-#define VAP_TX_SPIN_LOCK(_x) spin_lock(_x)
-#define VAP_TX_SPIN_UNLOCK(_x) spin_unlock(_x)
-#else /* QCA_OL_TX_PDEV_LOCK */
-#define VAP_TX_SPIN_LOCK(_x)
-#define VAP_TX_SPIN_UNLOCK(_x)
-#endif /* QCA_OL_TX_PDEV_LOCK */
+#include "cdp_txrx_handle.h"
 
-#if QCA_OL_TX_PDEV_LOCK
-void ol_ll_pdev_tx_lock(void *);
-void ol_ll_pdev_tx_unlock(void *);
-#define OL_TX_LOCK(_x)  ol_ll_pdev_tx_lock(_x)
-#define OL_TX_UNLOCK(_x) ol_ll_pdev_tx_unlock(_x)
-
-#define OL_TX_PDEV_LOCK(_x)  qdf_spin_lock_bh(_x)
-#define OL_TX_PDEV_UNLOCK(_x) qdf_spin_unlock_bh(_x)
-#else
-#define OL_TX_PDEV_LOCK(_x)
-#define OL_TX_PDEV_UNLOCK(_x)
-
-#define OL_TX_LOCK(_x)
-#define OL_TX_UNLOCK(_x)
-#endif /* QCA_OL_TX_PDEV_LOCK */
-
-#if !QCA_OL_TX_PDEV_LOCK
-#define OL_TX_FLOW_CTRL_LOCK(_x)  qdf_spin_lock_bh(_x)
-#define OL_TX_FLOW_CTRL_UNLOCK(_x) qdf_spin_unlock_bh(_x)
-
-#define OL_TX_DESC_LOCK(_x)  qdf_spin_lock_bh(_x)
-#define OL_TX_DESC_UNLOCK(_x) qdf_spin_unlock_bh(_x)
-
-#define OSIF_VAP_TX_LOCK(_x)  spin_lock(&((_x)->tx_lock))
-#define OSIF_VAP_TX_UNLOCK(_x)  spin_unlock(&((_x)->tx_lock))
-
-#define OL_TX_PEER_LOCK(_x, _id) qdf_spin_lock_bh(&((_x)->peer_lock[_id]))
-#define OL_TX_PEER_UNLOCK(_x, _id) qdf_spin_unlock_bh(&((_x)->peer_lock[_id]))
-
-#define OL_TX_PEER_UPDATE_LOCK(_x, _id) \
-	qdf_spin_lock_bh(&((_x)->peer_lock[_id]))
-#define OL_TX_PEER_UPDATE_UNLOCK(_x, _id) \
-	qdf_spin_unlock_bh(&((_x)->peer_lock[_id]))
-
-#else
-#define OSIF_VAP_TX_LOCK(_x)  ol_ll_pdev_tx_lock((_x)->iv_txrx_handle)
-#define OSIF_VAP_TX_UNLOCK(_x) ol_ll_pdev_tx_unlock((_x)->iv_txrx_handle)
-
-#define OL_TX_FLOW_CTRL_LOCK(_x)
-#define OL_TX_FLOW_CTRL_UNLOCK(_x)
-
-#define OL_TX_DESC_LOCK(_x)
-#define OL_TX_DESC_UNLOCK(_x)
-
-#define OL_TX_PEER_LOCK(_x, _id)
-#define OL_TX_PEER_UNLOCK(_x, _id)
-
-#define OL_TX_PEER_UPDATE_LOCK(_x, _id) qdf_spin_lock_bh(&((_x)->tx_lock))
-#define OL_TX_PEER_UPDATE_UNLOCK(_x, _id) qdf_spin_unlock_bh(&((_x)->tx_lock))
-
-#endif /* !QCA_OL_TX_PDEV_LOCK */
-
-
-extern int ol_txrx_is_target_ar900b(ol_txrx_vdev_handle vdev);
-#define OL_TXRX_IS_TARGET_AR900B(vdev)  ol_txrx_is_target_ar900b(vdev)
+static inline int cdp_is_target_ar900b
+	(ol_txrx_soc_handle soc, struct cdp_vdev *vdev)
+{
+	if (soc->ops->ctrl_ops->txrx_is_target_ar900b)
+		return soc->ops->ctrl_ops->txrx_is_target_ar900b(vdev);
+	return 0;
+}
 
 
 /* WIN */
-int
-ol_txrx_mempools_attach(ol_pdev_handle ctrl_pdev);
-int
-ol_txrx_set_filter_neighbour_peers(
-	ol_txrx_pdev_handle pdev,
-	u_int32_t val);
+static inline int
+cdp_mempools_attach(ol_txrx_soc_handle soc, void *ctrl_pdev)
+{
+	if (soc->ops->ctrl_ops->txrx_mempools_attach)
+		return soc->ops->ctrl_ops->txrx_mempools_attach(ctrl_pdev);
+	return 0;
+}
+
+static inline int
+cdp_set_filter_neighbour_peers(ol_txrx_soc_handle soc,
+	struct cdp_pdev *pdev, u_int32_t val)
+{
+	if (soc->ops->ctrl_ops->txrx_set_filter_neighbour_peers)
+		return soc->ops->ctrl_ops->txrx_set_filter_neighbour_peers
+			(pdev, val);
+	return 0;
+}
 /**
  * @brief set the safemode of the device
  * @details
@@ -122,10 +74,14 @@ ol_txrx_set_filter_neighbour_peers(
  * @return - void
  */
 
-void
-ol_txrx_set_safemode(
-	ol_txrx_vdev_handle vdev,
-	u_int32_t val);
+static inline void
+cdp_set_safemode(ol_txrx_soc_handle soc,
+	struct cdp_vdev *vdev, u_int32_t val)
+{
+	if (soc->ops->ctrl_ops->txrx_set_safemode)
+		return soc->ops->ctrl_ops->txrx_set_safemode(vdev, val);
+	return;
+}
 /**
  * @brief configure the drop unencrypted frame flag
  * @details
@@ -136,10 +92,14 @@ ol_txrx_set_safemode(
  * @param val - flag
  * @return - void
  */
-void
-ol_txrx_set_drop_unenc(
-	ol_txrx_vdev_handle vdev,
-	u_int32_t val);
+static inline void
+cdp_set_drop_unenc(ol_txrx_soc_handle soc,
+	struct cdp_vdev *vdev, u_int32_t val)
+{
+	if (soc->ops->ctrl_ops->txrx_set_drop_unenc)
+		return soc->ops->ctrl_ops->txrx_set_drop_unenc(vdev, val);
+	return;
+}
 
 
 /**
@@ -148,13 +108,17 @@ ol_txrx_set_drop_unenc(
  *  This will be used to populate the HTT desc packet type field during Tx
  *
  * @param vdev - the data virtual device object
- * @param val - the Tx encap type
+ * @param val - the Tx encap type (htt_cmn_pkt_type)
  * @return - void
  */
-void
-ol_txrx_set_tx_encap_type(
-	ol_txrx_vdev_handle vdev,
-	enum htt_pkt_type val);
+static inline void
+cdp_set_tx_encap_type(ol_txrx_soc_handle soc,
+	struct cdp_vdev *vdev, enum htt_cmn_pkt_type val)
+{
+	if (soc->ops->ctrl_ops->txrx_set_tx_encap_type)
+		return soc->ops->ctrl_ops->txrx_set_tx_encap_type(vdev, val);
+	return;
+}
 
 /**
  * @brief set the Rx decapsulation type of the VDEV
@@ -163,22 +127,32 @@ ol_txrx_set_tx_encap_type(
  *  decap all Rx packets into, for all peers under the VDEV.
  *
  * @param vdev - the data virtual device object
- * @param val - the Rx decap mode
+ * @param val - the Rx decap mode (htt_cmn_pkt_type)
  * @return - void
  */
-void
-ol_txrx_set_vdev_rx_decap_type(
-	ol_txrx_vdev_handle vdev,
-	enum htt_pkt_type val);
+static inline void
+cdp_set_vdev_rx_decap_type(ol_txrx_soc_handle soc,
+	struct cdp_vdev *vdev, enum htt_cmn_pkt_type val)
+{
+	if (soc->ops->ctrl_ops->txrx_set_vdev_rx_decap_type)
+		return soc->ops->ctrl_ops->txrx_set_vdev_rx_decap_type
+			(vdev, val);
+	return;
+}
 
 /**
  * @brief get the Rx decapsulation type of the VDEV
  *
  * @param vdev - the data virtual device object
- * @return - the Rx decap type
+ * @return - the Rx decap type (htt_cmn_pkt_type)
  */
-enum htt_pkt_type
-ol_txrx_get_vdev_rx_decap_type(ol_txrx_vdev_handle vdev);
+static inline enum htt_cmn_pkt_type
+cdp_get_vdev_rx_decap_type(ol_txrx_soc_handle soc, struct cdp_vdev *vdev)
+{
+	if (soc->ops->ctrl_ops->txrx_get_vdev_rx_decap_type)
+		return soc->ops->ctrl_ops->txrx_get_vdev_rx_decap_type(vdev);
+	return 0;
+}
 
 /* Is this similar to ol_txrx_peer_state_update() in MCL */
 /**
@@ -193,18 +167,38 @@ ol_txrx_get_vdev_rx_decap_type(ol_txrx_vdev_handle vdev);
  *
  * @return none
  */
-void
-ol_txrx_peer_authorize(struct ol_txrx_peer_t *peer, u_int32_t authorize);
+static inline void
+cdp_peer_authorize(ol_txrx_soc_handle soc,
+	struct ol_txrx_peer_t *peer, u_int32_t authorize)
+{
+	if (soc->ops->ctrl_ops->txrx_peer_authorize)
+		return soc->ops->ctrl_ops->txrx_peer_authorize
+			(peer, authorize);
+	return;
+}
 
-bool
-ol_txrx_set_inact_params(ol_txrx_pdev_handle pdev,
+static inline bool
+cdp_set_inact_params(ol_txrx_soc_handle soc, struct cdp_pdev *pdev,
 			u_int16_t inact_check_interval,
 			u_int16_t inact_normal,
-			u_int16_t inact_overload);
-bool
-ol_txrx_start_inact_timer(
-	ol_txrx_pdev_handle pdev,
-	bool enable);
+			u_int16_t inact_overload)
+{
+	if (soc->ops->ctrl_ops->txrx_set_inact_params)
+		return soc->ops->ctrl_ops->txrx_set_inact_params
+			(pdev, inact_check_interval, inact_normal,
+			inact_overload);
+	return false;
+}
+static inline bool
+cdp_start_inact_timer(ol_txrx_soc_handle soc,
+	struct cdp_pdev *pdev,
+	bool enable)
+{
+	if (soc->ops->ctrl_ops->txrx_start_inact_timer)
+		return soc->ops->ctrl_ops->txrx_start_inact_timer
+			(pdev, enable);
+	return false;
+}
 
 /**
  * @brief Set the overload status of the radio
@@ -215,18 +209,28 @@ ol_txrx_start_inact_timer(
  * @param pdev - the data physical device object
  * @param overload - whether the radio is overloaded or not
  */
-void
-ol_txrx_set_overload(
-	ol_txrx_pdev_handle pdev,
-	bool overload);
+static inline void
+cdp_set_overload(ol_txrx_soc_handle soc, struct cdp_pdev *pdev,
+	bool overload)
+{
+	if (soc->ops->ctrl_ops->txrx_set_overload)
+		return soc->ops->ctrl_ops->txrx_set_overload(pdev, overload);
+	return;
+}
+
 /**
  * @brief Check the inactivity status of the peer/node
  *
  * @param peer - pointer to the node's object
  * @return true if the node is inactive; otherwise return false
  */
-bool
-ol_txrx_peer_is_inact(ol_txrx_peer_handle peer);
+static inline bool
+cdp_peer_is_inact(ol_txrx_soc_handle soc, void *peer)
+{
+	if (soc->ops->ctrl_ops->txrx_peer_is_inact)
+		return soc->ops->ctrl_ops->txrx_peer_is_inact(peer);
+	return false;
+}
 
 /**
  * @brief Mark inactivity status of the peer/node
@@ -237,15 +241,51 @@ ol_txrx_peer_is_inact(ol_txrx_peer_handle peer);
  * @param peer - pointer to the node's object
  * @param inactive - whether the node is inactive or not
  */
-void
-ol_txrx_mark_peer_inact(
-	ol_txrx_peer_handle peer,
-	bool inactive);
+static inline void
+cdp_mark_peer_inact(ol_txrx_soc_handle soc,
+	void *peer,
+	bool inactive)
+{
+	if (soc->ops->ctrl_ops->txrx_mark_peer_inact)
+		return soc->ops->ctrl_ops->txrx_mark_peer_inact
+			(peer, inactive);
+	return;
+}
 
 
 /* Should be ol_txrx_ctrl_api.h */
-void ol_txrx_set_mesh_mode(ol_txrx_vdev_handle vdev, u_int32_t val);
+static inline void cdp_set_mesh_mode
+(ol_txrx_soc_handle soc, struct cdp_vdev *vdev, u_int32_t val)
+{
+	if (soc->ops->ctrl_ops->txrx_set_mesh_mode)
+		return soc->ops->ctrl_ops->txrx_set_mesh_mode(vdev, val);
+	return;
+}
 
-void ol_tx_flush_buffers(struct ol_txrx_vdev_t *vdev);
+/**
+ * @brief set mesh rx filter
+ * @details based on the bits enabled in the filter packets has to be dropped.
+ *
+ * @param soc - pointer to the soc
+ * @param vdev - the data virtual device object
+ * @param val - value to be set
+ * @return - void
+ */
+static inline
+void cdp_set_mesh_rx_filter(ol_txrx_soc_handle soc,
+				struct cdp_vdev *vdev, uint32_t val)
+{
+	if (soc->ops->ctrl_ops->txrx_set_mesh_rx_filter)
+		return soc->ops->ctrl_ops->txrx_set_mesh_rx_filter(vdev, val);
+	return;
+}
+
+static inline void cdp_tx_flush_buffers
+(ol_txrx_soc_handle soc, struct cdp_vdev *vdev)
+{
+	if (soc->ops->ctrl_ops->tx_flush_buffers)
+		return soc->ops->ctrl_ops->tx_flush_buffers(vdev);
+	return;
+}
 
 #endif

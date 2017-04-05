@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2016 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2013-2017 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -89,6 +89,7 @@ typedef enum {
 	HTC_PROCESS_CREDIT_REPORT,
 	HTC_SUSPEND_ACK,
 	HTC_SUSPEND_NACK,
+	HTC_INITIAL_WAKE_UP,
 } htc_credit_exchange_type;
 
 typedef struct {
@@ -134,6 +135,7 @@ typedef struct _HTC_ENDPOINT {
 	HTC_ENDPOINT_STATS endpoint_stats;     /* endpoint statistics */
 #endif
 	bool TxCreditFlowEnabled;
+	bool async_update;  /* packets can be queued asynchronously */
 } HTC_ENDPOINT;
 
 #ifdef HTC_EP_STAT_PROFILING
@@ -193,16 +195,42 @@ typedef struct _HTC_TARGET {
 #ifdef HIF_SDIO
 	A_UINT16 AltDataCreditSize;
 #endif
-
+	A_UINT32 avail_tx_credits;
 #if defined(DEBUG_HL_LOGGING) && defined(CONFIG_HL_SUPPORT)
 	A_UINT32 rx_bundle_stats[HTC_MAX_MSG_PER_BUNDLE_RX];
 	A_UINT32 tx_bundle_stats[HTC_MAX_MSG_PER_BUNDLE_TX];
 #endif
 
 	uint32_t con_mode;
+
+	/*
+	 * This flag is from the mboxping tool. It indicates that we cannot
+	 * drop it. Besides, nodrop pkts have higher priority than normal pkts.
+	 */
+	A_BOOL is_nodrop_pkt;
+
+	/*
+	 * Number of WMI endpoints used.
+	 * Default value is 1. But it should be overidden after htc_create to
+	 * reflect the actual count.
+	 */
+	uint8_t wmi_ep_count;
 } HTC_TARGET;
 
+#if defined ENABLE_BUNDLE_TX
+#define HTC_TX_BUNDLE_ENABLED(target) (target->MaxMsgsPerHTCBundle > 1)
+#else
+#define HTC_TX_BUNDLE_ENABLED(target) 0
+#endif
+
+#if defined ENABLE_BUNDLE_RX
+#define HTC_RX_BUNDLE_ENABLED(target) (target->MaxMsgsPerHTCBundle > 1)
+#else
+#define HTC_RX_BUNDLE_ENABLED(target) 0
+#endif
+
 #define HTC_ENABLE_BUNDLE(target) (target->MaxMsgsPerHTCBundle > 1)
+
 #ifdef RX_SG_SUPPORT
 #define RESET_RX_SG_CONFIG(_target) \
 	_target->ExpRxSgTotalLen = 0; \
@@ -327,7 +355,7 @@ htc_send_complete_check(HTC_ENDPOINT *pEndpoint, int force) {
 #define DEBUG_BUNDLE 0
 #endif
 
-#ifdef HIF_SDIO
+#if defined(HIF_SDIO) || defined(HIF_USB)
 #ifndef ENABLE_BUNDLE_TX
 #define ENABLE_BUNDLE_TX 1
 #endif
@@ -335,5 +363,5 @@ htc_send_complete_check(HTC_ENDPOINT *pEndpoint, int force) {
 #ifndef ENABLE_BUNDLE_RX
 #define ENABLE_BUNDLE_RX 1
 #endif
-#endif /* HIF_SDIO */
+#endif /*defined(HIF_SDIO) || defined(HIF_USB)*/
 #endif /* !_HTC_HOST_INTERNAL_H_ */

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2016 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2014-2017 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -142,7 +142,7 @@ void qdf_mem_zero_outline(void *buf, qdf_size_t size);
  * Function to compare two pieces of memory, similar to memcmp function
  * in standard C.
  * Return:
- * int32_t - returns a bool value that tells if the memory
+ * int32_t - returns an int value that tells if the memory
  * locations are equal or not equal.
  * 0 -- equal
  * < 0 -- *memory1 is less than *memory2
@@ -191,7 +191,7 @@ static inline uint32_t qdf_str_lcopy(char *dest, const char *src, uint32_t bytes
  */
 static inline uint32_t qdf_mem_map_nbytes_single(qdf_device_t osdev, void *buf,
 						 qdf_dma_dir_t dir, int nbytes,
-						 uint32_t *phy_addr)
+						 qdf_dma_addr_t *phy_addr)
 {
 #if defined(HIF_PCI)
 	return __qdf_mem_map_nbytes_single(osdev, buf, dir, nbytes, phy_addr);
@@ -210,7 +210,7 @@ static inline uint32_t qdf_mem_map_nbytes_single(qdf_device_t osdev, void *buf,
  * Return: none
  */
 static inline void qdf_mem_unmap_nbytes_single(qdf_device_t osdev,
-					       uint32_t phy_addr,
+					       qdf_dma_addr_t phy_addr,
 					       qdf_dma_dir_t dir,
 					       int nbytes)
 {
@@ -298,6 +298,8 @@ void qdf_mem_multi_pages_alloc(qdf_device_t osdev,
 void qdf_mem_multi_pages_free(qdf_device_t osdev,
 			      struct qdf_mem_multi_page_t *pages,
 			      qdf_dma_context_t memctxt, bool cacheable);
-
+int qdf_mem_multi_page_link(qdf_device_t osdev,
+		struct qdf_mem_multi_page_t *pages,
+		uint32_t elem_size, uint32_t elem_count, uint8_t cacheable);
 
 #endif /* __QDF_MEMORY_H */

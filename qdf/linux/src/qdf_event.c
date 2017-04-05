@@ -36,6 +36,14 @@
 
 /* Include Files */
 #include "qdf_event.h"
+#include <linux/export.h>
+
+/* Flag for napier emulation */
+#ifdef QCA_WIFI_NAPIER_EMULATION
+#define QDF_TIMER_MULTIPLIER 100
+#else
+#define QDF_TIMER_MULTIPLIER 1
+#endif
 
 /* Function Definitions and Documentation */
 
@@ -242,6 +250,8 @@ QDF_STATUS qdf_wait_single_event(qdf_event_t *event, uint32_t timeout)
 		return QDF_STATUS_E_INVAL;
 	}
 
+	/* update the timeout if its on a emaulation platform */
+	timeout *= QDF_TIMER_MULTIPLIER;
 	if (timeout) {
 		long ret;
 		ret = wait_for_completion_timeout(&event->complete,
@@ -257,3 +267,14 @@ QDF_STATUS qdf_wait_single_event(qdf_event_t *event, uint32_t timeout)
 	return QDF_STATUS_SUCCESS;
 }
 EXPORT_SYMBOL(qdf_wait_single_event);
+
+QDF_STATUS qdf_exit_thread(QDF_STATUS status)
+{
+	if (status == QDF_STATUS_SUCCESS)
+		do_exit(0);
+	else
+		do_exit(SIGKILL);
+
+	return QDF_STATUS_SUCCESS;
+}
+EXPORT_SYMBOL(qdf_exit_thread);

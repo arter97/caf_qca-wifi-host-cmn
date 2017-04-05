@@ -84,6 +84,34 @@ int hif_dummy_bus_resume(struct hif_softc *hif_ctx)
 }
 
 /**
+ * hif_dummy_suspend_noirq() - suspend the bus
+ * @hif_ctx: hif context
+ *
+ * dummy for busses that don't need to syncronize
+ * with interrupt disable.
+ *
+ * Return: 0 for success and non-zero for failure
+ */
+int hif_dummy_bus_suspend_noirq(struct hif_softc *hif_ctx)
+{
+	return 0;
+}
+
+/**
+ * hif_dummy_resume_noirq() - resume the bus
+ * @hif_ctx: hif context
+ *
+ * dummy for busses that don't need to syncronize
+ * with interrupt disable.
+ *
+ * Return: 0 for success and non-zero for failure
+ */
+int hif_dummy_bus_resume_noirq(struct hif_softc *hif_ctx)
+{
+	return 0;
+}
+
+/**
  * hif_dummy_target_sleep_state_adjust() - api to adjust state of target
  * @scn: hif context
  * @sleep_ok: allow or deny target to go to sleep
@@ -205,6 +233,16 @@ void hif_dummy_irq_enable(struct hif_softc *hif_sc, int irq_id)
 {}
 
 /**
+ * hif_dummy_grp_irq_enable - dummy call
+ * hif_ctx: hif context
+ * @irq_id: grp id
+ *
+ * Return: none
+ */
+void hif_dummy_grp_irq_enable(struct hif_softc *hif_sc, uint32_t grp_id)
+{}
+
+/**
  * hif_dummy_irq_disable - dummy call
  * hif_ctx: hif context
  * @irq_id: irq id
@@ -214,6 +252,15 @@ void hif_dummy_irq_enable(struct hif_softc *hif_sc, int irq_id)
 void hif_dummy_irq_disable(struct hif_softc *hif_sc, int irq_id)
 {}
 
+/**
+ * hif_dummy_grp_irq_disable- dummy call
+ * hif_ctx: hif context
+ * @grp_id: grp id
+ *
+ * Return: none
+ */
+void hif_dummy_grp_irq_disable(struct hif_softc *hif_sc, uint32_t grp_id)
+{}
 /**
  * hif_dummy_dump_registers - dummy call
  * hif_sc: hif context
@@ -284,3 +331,27 @@ void hif_dummy_display_stats(struct hif_softc *hif_ctx)
  */
 void hif_dummy_clear_stats(struct hif_softc *hif_ctx)
 {}
+/**
+ * hif_dummy_set_bundle_mode() - dummy call
+ * @hif_sc: hif context
+ * @enabled: flag to enable/disable bundling
+ * @rx_bundle_cnt: bundle count to be used for RX
+ *
+ * Return: none
+ */
+void hif_dummy_set_bundle_mode(struct hif_softc *hif_ctx,
+					bool enabled, int rx_bundle_cnt)
+{
+	return;
+}
+
+/**
+ * hif_dummy_bus_reset_resume() - dummy call
+ * @hif_sc: hif context
+ *
+ * Return: int 0 for success, non zero for failure
+ */
+int hif_dummy_bus_reset_resume(struct hif_softc *hif_ctx)
+{
+	return 0;
+}

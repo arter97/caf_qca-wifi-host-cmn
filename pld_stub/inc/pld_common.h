@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2016-2017 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -70,6 +70,17 @@ struct pld_shadow_reg_cfg {
 };
 
 /**
+ * struct pld_shadow_reg_v2_cfg - shadow register version 2 configuration
+ * @addr: shadow register physical address
+ *
+ * pld_shadow_reg_v2_cfg is used to store shadow register version 2
+ * configuration.
+ */
+struct pld_shadow_reg_v2_cfg {
+	u32 addr;
+};
+
+/**
  * struct pld_wlan_enable_cfg - WLAN FW configuration
  * @num_ce_tgt_cfg: number of CE target configuration
  * @ce_tgt_cfg: CE target configuration
@@ -77,6 +88,8 @@ struct pld_shadow_reg_cfg {
  * @ce_svc_cfg: CE service configuration
  * @num_shadow_reg_cfg: number of shadow register configuration
  * @shadow_reg_cfg: shadow register configuration
+ * @num_shadow_reg_v2_cfg: number of shadow register version 2 configuration
+ * @shadow_reg_v2_cfg: shadow register version 2 configuration
  *
  * pld_wlan_enable_cfg stores WLAN FW configurations. It will be
  * passed to WLAN FW when WLAN host driver calls wlan_enable.
@@ -88,6 +101,8 @@ struct pld_wlan_enable_cfg {
 	struct pld_ce_svc_pipe_cfg *ce_svc_cfg;
 	u32 num_shadow_reg_cfg;
 	struct pld_shadow_reg_cfg *shadow_reg_cfg;
+	u32 num_shadow_reg_v2_cfg;
+	struct pld_shadow_reg_v2_cfg *shadow_reg_v2_cfg;
 };
 
 /**
@@ -106,18 +121,30 @@ enum pld_driver_mode {
 	PLD_OFF
 };
 
+#define PLD_MAX_TIMESTAMP_LEN 32
+
 /**
  * struct pld_soc_info - SOC information
  * @v_addr: virtual address of preallocated memory
  * @p_addr: physical address of preallcoated memory
- * @version: version number
+ * @chip_id: chip ID
+ * @chip_family: chip family
+ * @board_id: board ID
+ * @soc_id: SOC ID
+ * @fw_version: FW version
+ * @fw_build_timestamp: FW build timestamp
  *
  * pld_soc_info is used to store WLAN SOC information.
  */
 struct pld_soc_info {
 	void __iomem *v_addr;
 	phys_addr_t p_addr;
-	u32 version;
+	u32 chip_id;
+	u32 chip_family;
+	u32 board_id;
+	u32 soc_id;
+	u32 fw_version;
+	char fw_build_timestamp[PLD_MAX_TIMESTAMP_LEN + 1];
 };
 
 /**
@@ -164,6 +191,28 @@ static inline void pld_intr_notify_q6(struct device *dev)
 {
 	return;
 }
+
+static inline int pld_get_user_msi_assignment(struct device *dev,
+			char *user_name, int *num_vectors,
+			uint32_t *user_base_data, uint32_t *base_vector)
+{
+	return -EINVAL;
+}
+
+/* should not be called if pld_get_user_msi_assignment returns error */
+static inline int pld_get_msi_irq(struct device *dev, unsigned int vector)
+{
+	return -EINVAL;
+}
+
+/* should not be called if pld_get_user_msi_assignment returns error */
+static inline void pld_get_msi_address(struct device *dev,
+				       uint32_t *msi_addr_low,
+				       uint32_t *msi_addr_high)
+{
+	return;
+}
+
 static inline int pld_ce_request_irq(struct device *dev, unsigned int ce_id,
 				     irqreturn_t (*handler)(int, void *),
 				     unsigned long flags, const char *name,
@@ -197,6 +246,18 @@ static inline void pld_runtime_init(struct device *dev, int auto_delay)
 static inline void pld_runtime_exit(struct device *dev)
 {
 	return;
+}
+static inline int pld_athdiag_read(struct device *dev,
+				   uint32_t offset, uint32_t memtype,
+				   uint32_t datalen, uint8_t *output)
+{
+	return 0;
+}
+static inline int pld_athdiag_write(struct device *dev,
+				    uint32_t offset, uint32_t memtype,
+				    uint32_t datalen, uint8_t *input)
+{
+	return 0;
 }
 
 #endif

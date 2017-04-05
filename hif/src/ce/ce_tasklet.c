@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015-2016 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2015-2017 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -40,10 +40,7 @@
 #include "ce_reg.h"
 #include "ce_internal.h"
 #include "ce_tasklet.h"
-#ifdef CONFIG_CNSS
-#include <net/cnss.h>
-#endif
-#include "platform_icnss.h"
+#include "pld_common.h"
 #include "hif_debug.h"
 #include "hif_napi.h"
 
@@ -124,7 +121,7 @@ void init_tasklet_workers(struct hif_opaque_softc *scn)
 	work_initialized = true;
 }
 
-#ifdef CONFIG_SLUB_DEBUG_ON
+#ifdef HIF_CONFIG_SLUB_DEBUG_ON
 /**
  * ce_schedule_tasklet() - schedule ce tasklet
  * @tasklet_entry: struct ce_tasklet_entry
@@ -175,11 +172,13 @@ static void ce_tasklet(unsigned long data)
 		QDF_BUG(0);
 	}
 
+	qdf_spin_lock_bh(&CE_state->lro_unloading_lock);
 	ce_per_engine_service(scn, tasklet_entry->ce_id);
 
 	if (CE_state->lro_flush_cb != NULL) {
 		CE_state->lro_flush_cb(CE_state->lro_data);
 	}
+	qdf_spin_unlock_bh(&CE_state->lro_unloading_lock);
 
 	if (ce_check_rx_pending(CE_state)) {
 		/*
@@ -243,6 +242,148 @@ void ce_tasklet_kill(struct hif_softc *scn)
 	qdf_atomic_set(&scn->active_tasklet_cnt, 0);
 }
 
+#define HIF_CE_DRAIN_WAIT_CNT          20
+/**
+ * hif_drain_tasklets(): wait untill no tasklet is pending
+ * @scn: hif context
+ *
+ * Let running tasklets clear pending trafic.
+ *
+ * Return: 0 if no bottom half is in progress when it returns.
+ *   -EFAULT if it times out.
+ */
+int hif_drain_tasklets(struct hif_softc *scn)
+{
+	uint32_t ce_drain_wait_cnt = 0;
+	int32_t tasklet_cnt;
+
+	while ((tasklet_cnt = qdf_atomic_read(&scn->active_tasklet_cnt))) {
+		if (++ce_drain_wait_cnt > HIF_CE_DRAIN_WAIT_CNT) {
+			HIF_ERROR("%s: CE still not done with access: %d",
+				  __func__, tasklet_cnt);
+
+			return -EFAULT;
+		}
+		HIF_INFO("%s: Waiting for CE to finish access", __func__);
+		msleep(10);
+	}
+	return 0;
+}
+
+#ifdef WLAN_SUSPEND_RESUME_TEST
+/**
+ * hif_fake_apps_resume_work() - Work handler for fake apps resume callback
+ * @work:	The work struct being passed from the linux kernel
+ *
+ * Return: none
+ */
+void hif_fake_apps_resume_work(struct work_struct *work)
+{
+	struct fake_apps_context *ctx =
+		container_of(work, struct fake_apps_context, resume_work);
+
+	QDF_BUG(ctx->resume_callback);
+	ctx->resume_callback(0);
+	ctx->resume_callback = NULL;
+}
+
+/**
+ * hif_fake_apps_suspend(): Setup unit-test related suspend state. Call after
+ *	a normal WoW suspend has been completed.
+ * @hif_ctx:	The HIF context to operate on
+ * @callback:	The function to call when fake apps resume is triggered
+ *
+ * Set the fake suspend flag such that hif knows that it will need
+ * to fake the apps resume process using hdd_trigger_fake_apps_resume
+ *
+ * Return: none
+ */
+void hif_fake_apps_suspend(struct hif_opaque_softc *hif_ctx,
+			   hif_fake_resume_callback callback)
+{
+	struct hif_softc *scn = HIF_GET_SOFTC(hif_ctx);
+
+	scn->fake_apps_ctx.resume_callback = callback;
+	set_bit(HIF_FA_SUSPENDED_BIT, &scn->fake_apps_ctx.state);
+}
+
+/**
+ * hif_fake_apps_resume(): Cleanup unit-test related suspend state. Call before
+ *	doing a normal WoW resume if suspend was initiated via fake apps
+ *	suspend.
+ * @hif_ctx:	The HIF context to operate on
+ *
+ * Return: none
+ */
+void hif_fake_apps_resume(struct hif_opaque_softc *hif_ctx)
+{
+	struct hif_softc *scn = HIF_GET_SOFTC(hif_ctx);
+
+	clear_bit(HIF_FA_SUSPENDED_BIT, &scn->fake_apps_ctx.state);
+	scn->fake_apps_ctx.resume_callback = NULL;
+}
+
+/**
+ * hif_interrupt_is_fake_apps_resume(): Determines if the raised irq should
+ *	trigger a fake apps resume.
+ * @hif_ctx:	The HIF context to operate on
+ * @ce_id:	The copy engine Id from the originating interrupt
+ *
+ * Return: true if the raised irq should trigger a fake apps resume
+ */
+static bool hif_interrupt_is_fake_apps_resume(struct hif_opaque_softc *hif_ctx,
+					      int ce_id)
+{
+	struct hif_softc *scn = HIF_GET_SOFTC(hif_ctx);
+	int errno;
+	uint8_t wake_ce_id;
+
+	if (!test_bit(HIF_FA_SUSPENDED_BIT, &scn->fake_apps_ctx.state))
+		return false;
+
+	/* ensure passed ce_id matches wake ce_id */
+	errno = hif_get_wake_ce_id(scn, &wake_ce_id);
+	if (errno) {
+		HIF_ERROR("%s: failed to get wake CE Id: %d", __func__, errno);
+		return false;
+	}
+
+	return ce_id == wake_ce_id;
+}
+
+/**
+ * hif_trigger_fake_apps_resume(): Trigger a fake apps resume by scheduling the
+ *	previously registered callback for execution
+ * @hif_ctx:	The HIF context to operate on
+ *
+ * Return: None
+ */
+static void hif_trigger_fake_apps_resume(struct hif_opaque_softc *hif_ctx)
+{
+	struct hif_softc *scn = HIF_GET_SOFTC(hif_ctx);
+
+	if (!test_and_clear_bit(HIF_FA_SUSPENDED_BIT,
+				&scn->fake_apps_ctx.state))
+		return;
+
+	schedule_work(&scn->fake_apps_ctx.resume_work);
+}
+
+#else
+
+static inline bool
+hif_interrupt_is_fake_apps_resume(struct hif_opaque_softc *hif_ctx, int ce_id)
+{
+	return false;
+}
+
+static inline void
+hif_trigger_fake_apps_resume(struct hif_opaque_softc *hif_ctx)
+{
+}
+
+#endif /* End of WLAN_SUSPEND_RESUME_TEST */
+
 /**
  * hif_snoc_interrupt_handler() - hif_snoc_interrupt_handler
  * @irq: irq coming from kernel
@@ -253,7 +394,10 @@ void ce_tasklet_kill(struct hif_softc *scn)
 static irqreturn_t hif_snoc_interrupt_handler(int irq, void *context)
 {
 	struct ce_tasklet_entry *tasklet_entry = context;
-	return ce_dispatch_interrupt(icnss_get_ce_id(irq), tasklet_entry);
+	struct hif_softc *scn = HIF_GET_SOFTC(tasklet_entry->hif_ce_state);
+
+	return ce_dispatch_interrupt(pld_get_ce_id(scn->qdf_dev->dev, irq),
+				     tasklet_entry);
 }
 
 /**
@@ -338,9 +482,17 @@ irqreturn_t ce_dispatch_interrupt(int ce_id,
 		return IRQ_NONE;
 	}
 	hif_irq_disable(scn, ce_id);
-	qdf_atomic_inc(&scn->active_tasklet_cnt);
 	hif_record_ce_desc_event(scn, ce_id, HIF_IRQ_EVENT, NULL, NULL, 0);
 	hif_ce_increment_interrupt_count(hif_ce_state, ce_id);
+
+	if (unlikely(hif_interrupt_is_fake_apps_resume(hif_hdl, ce_id))) {
+		hif_trigger_fake_apps_resume(hif_hdl);
+		hif_irq_enable(scn, ce_id);
+		return IRQ_HANDLED;
+	}
+
+	qdf_atomic_inc(&scn->active_tasklet_cnt);
+
 	if (hif_napi_enabled(hif_hdl, ce_id))
 		hif_napi_schedule(hif_hdl, ce_id);
 	else
@@ -354,7 +506,7 @@ irqreturn_t ce_dispatch_interrupt(int ce_id,
  *
  * @ce_name: ce_name
  */
-const char *ce_name[ICNSS_MAX_IRQ_REGISTRATIONS] = {
+const char *ce_name[] = {
 	"WLAN_CE_0",
 	"WLAN_CE_1",
 	"WLAN_CE_2",
@@ -383,23 +535,37 @@ QDF_STATUS ce_unregister_irq(struct HIF_CE_state *hif_ce_state, uint32_t mask)
 	int id;
 	int ce_count;
 	int ret;
+	struct hif_softc *scn;
 
 	if (hif_ce_state == NULL) {
 		HIF_WARN("%s: hif_ce_state = NULL", __func__);
 		return QDF_STATUS_SUCCESS;
 	}
 
-	ce_count = HIF_GET_SOFTC(hif_ce_state)->ce_count;
+	scn = HIF_GET_SOFTC(hif_ce_state);
+	ce_count = scn->ce_count;
+	/* we are removing interrupts, so better stop NAPI */
+	ret = hif_napi_event(GET_HIF_OPAQUE_HDL(scn),
+			     NAPI_EVT_INT_STATE, (void *)0);
+	if (ret != 0)
+		HIF_ERROR("%s: napi_event INT_STATE returned %d",
+			  __func__, ret);
+	/* this is not fatal, continue */
+
+	/* filter mask to free only for ce's with irq registered */
+	mask &= hif_ce_state->ce_register_irq_done;
 	for (id = 0; id < ce_count; id++) {
 		if ((mask & (1 << id)) && hif_ce_state->tasklets[id].inited) {
-			ret = icnss_ce_free_irq(id,
+			ret = pld_ce_free_irq(scn->qdf_dev->dev, id,
 					&hif_ce_state->tasklets[id]);
 			if (ret < 0)
 				HIF_ERROR(
-					"%s: icnss_unregister_irq error - ce_id = %d, ret = %d",
+					"%s: pld_unregister_irq error - ce_id = %d, ret = %d",
 					__func__, id, ret);
 		}
 	}
+	hif_ce_state->ce_register_irq_done &= ~mask;
+
 	return QDF_STATUS_SUCCESS;
 }
 /**
@@ -415,14 +581,17 @@ QDF_STATUS ce_unregister_irq(struct HIF_CE_state *hif_ce_state, uint32_t mask)
 QDF_STATUS ce_register_irq(struct HIF_CE_state *hif_ce_state, uint32_t mask)
 {
 	int id;
-	int ce_count = HIF_GET_SOFTC(hif_ce_state)->ce_count;
+	int ce_count;
 	int ret;
 	unsigned long irqflags = IRQF_TRIGGER_RISING;
 	uint32_t done_mask = 0;
+	struct hif_softc *scn = HIF_GET_SOFTC(hif_ce_state);
+
+	ce_count = scn->ce_count;
 
 	for (id = 0; id < ce_count; id++) {
 		if ((mask & (1 << id)) && hif_ce_state->tasklets[id].inited) {
-			ret = icnss_ce_request_irq(id,
+			ret = pld_ce_request_irq(scn->qdf_dev->dev, id,
 				hif_snoc_interrupt_handler,
 				irqflags, ce_name[id],
 				&hif_ce_state->tasklets[id]);
@@ -437,6 +606,7 @@ QDF_STATUS ce_register_irq(struct HIF_CE_state *hif_ce_state, uint32_t mask)
 			}
 		}
 	}
+	hif_ce_state->ce_register_irq_done |= done_mask;
 
 	return QDF_STATUS_SUCCESS;
 }

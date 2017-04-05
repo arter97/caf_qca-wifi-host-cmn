@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2016 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2013-2017 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -32,7 +32,7 @@
 /* HTC Control message receive timeout msec */
 #define HTC_CONTROL_RX_TIMEOUT     3000
 
-#ifdef DEBUG
+#if defined(WLAN_DEBUG) || defined(DEBUG)
 void debug_dump_bytes(uint8_t *buffer, uint16_t length, char *pDescription)
 {
 	int8_t stream[60];
@@ -114,6 +114,9 @@ static void do_recv_completion(HTC_ENDPOINT *pEndpoint,
 							("HTC ep %d has NULL recv callback on packet %p\n",
 							 pEndpoint->Id,
 							 pPacket));
+					if (pPacket)
+						qdf_nbuf_free(
+							pPacket->pPktContext);
 					continue;
 				}
 				AR_DEBUG_PRINTF(ATH_DEBUG_RECV,
@@ -275,6 +278,7 @@ QDF_STATUS htc_rx_completion_handler(void *Context, qdf_nbuf_t netbuf,
 	uint16_t payloadLen;
 	uint32_t trailerlen = 0;
 	uint8_t htc_ep_id;
+	HTC_INIT_INFO *info;
 
 #ifdef RX_SG_SUPPORT
 	LOCK_HTC_RX(target);
@@ -440,6 +444,25 @@ QDF_STATUS htc_rx_completion_handler(void *Context, qdf_nbuf_t netbuf,
 
 				qdf_event_set(&target->ctrl_response_valid);
 				break;
+#ifdef HTC_MSG_WAKEUP_FROM_SUSPEND_ID
+			case HTC_MSG_WAKEUP_FROM_SUSPEND_ID:
+				AR_DEBUG_PRINTF(ATH_DEBUG_ANY,
+					("Received initial wake up"));
+				LOCK_HTC_CREDIT(target);
+				htc_credit_record(HTC_INITIAL_WAKE_UP,
+					pEndpoint->TxCredits,
+					HTC_PACKET_QUEUE_DEPTH(
+						&pEndpoint->TxQueue));
+				UNLOCK_HTC_CREDIT(target);
+				info = &target->HTCInitInfo;
+				if (info && info->target_initial_wakeup_cb)
+					info->target_initial_wakeup_cb(
+						info->target_psoc);
+				else
+					AR_DEBUG_PRINTF(ATH_DEBUG_ANY,
+						("No initial wake up cb"));
+				break;
+#endif
 			case HTC_MSG_SEND_SUSPEND_COMPLETE:
 				wow_nack = false;
 				LOCK_HTC_CREDIT(target);
@@ -449,7 +472,7 @@ QDF_STATUS htc_rx_completion_handler(void *Context, qdf_nbuf_t netbuf,
 						&pEndpoint->TxQueue));
 				UNLOCK_HTC_CREDIT(target);
 				target->HTCInitInfo.TargetSendSuspendComplete(
-					target->HTCInitInfo.pContext,
+					target->HTCInitInfo.target_psoc,
 					wow_nack);
 
 				break;
@@ -463,7 +486,7 @@ QDF_STATUS htc_rx_completion_handler(void *Context, qdf_nbuf_t netbuf,
 				UNLOCK_HTC_CREDIT(target);
 
 				target->HTCInitInfo.TargetSendSuspendComplete(
-					target->HTCInitInfo.pContext,
+					target->HTCInitInfo.target_psoc,
 					wow_nack);
 				break;
 			}

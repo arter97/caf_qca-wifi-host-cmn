@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015-2016 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2015-2017 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -38,9 +38,6 @@
 #include "hif_main.h"
 #include "ce_api.h"
 #include "qdf_trace.h"
-#ifdef CONFIG_CNSS
-#include <net/cnss.h>
-#endif
 #include "hif_debug.h"
 
 void
@@ -106,8 +103,8 @@ hif_ce_dump_target_memory(struct hif_softc *scn, void *ramdump_base,
  *
  * Return: soc physical address
  */
-qdf_dma_addr_t get_ce_phy_addr(struct hif_softc *sc, uint32_t  address,
-			       unsigned int target_type)
+static qdf_dma_addr_t get_ce_phy_addr(struct hif_softc *sc, uint32_t  address,
+				      unsigned int target_type)
 {
 	qdf_dma_addr_t ce_phy_addr;
 	struct hif_softc *scn = sc;
@@ -171,6 +168,12 @@ QDF_STATUS hif_diag_read_mem(struct hif_opaque_softc *hif_ctx,
 	unsigned int target_type = 0;
 	unsigned int boundary_addr = 0;
 
+	ce_diag = hif_state->ce_diag;
+	if (ce_diag == NULL) {
+		HIF_ERROR("%s: DIAG CE not present", __func__);
+		return QDF_STATUS_E_INVAL;
+	}
+
 	transaction_id = (mux_id & MUX_ID_MASK) |
 		 (transaction_id & TRANSACTION_ID_MASK);
 #ifdef QCA_WIFI_3_0
@@ -209,7 +212,6 @@ QDF_STATUS hif_diag_read_mem(struct hif_opaque_softc *hif_ctx,
 
 		return status;
 	}
-	ce_diag = hif_state->ce_diag;
 
 	A_TARGET_ACCESS_LIKELY(scn);
 
@@ -364,7 +366,13 @@ QDF_STATUS hif_diag_write_mem(struct hif_opaque_softc *hif_ctx,
 	unsigned int toeplitz_hash_result;
 	unsigned int user_flags = 0;
 	unsigned int target_type = 0;
+
 	ce_diag = hif_state->ce_diag;
+	if (ce_diag == NULL) {
+		HIF_ERROR("%s: DIAG CE not present", __func__);
+		return QDF_STATUS_E_INVAL;
+	}
+
 	transaction_id = (mux_id & MUX_ID_MASK) |
 		(transaction_id & TRANSACTION_ID_MASK);
 #ifdef QCA_WIFI_3_0

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2016 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2014-2017 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -78,6 +78,14 @@
  * @QDF_STATUS_FT_PREAUTH_KEY_FAILED: ft preauth key failed
  * @QDF_STATUS_CMD_NOT_QUEUED: command not queued
  * @QDF_STATUS_FW_MSG_TIMEDOUT: target message timeout
+ * @QDF_STATUS_E_USB_ERROR: USB transaction error
+ * @QDF_STATUS_MAXCOMP_FAIL: Component id is more than MAX UMAC components
+ * @QDF_STATUS_COMP_DISABLED: UMAC Component is disabled
+ * @QDF_STATUS_COMP_ASYNC: UMAC component runs in asynchronous communication
+ * @QDF_STATUS_CRYPTO_PN_ERROR: PN ERROR in received frame
+ * @QDF_STATUS_CRYPTO_MIC_FAILURE: MIC failure in received frame
+ * @QDF_STATUS_CRYPTO_ENCRYPT_FAILED: encryption failed
+ * @QDF_STATUS_CRYPTO_DECRYPT_FAILED: decryption failed
  * @QDF_STATUS_MAX: not a realy value just a place holder for max
  */
 typedef enum {
@@ -123,6 +131,14 @@ typedef enum {
 	QDF_STATUS_FT_PREAUTH_KEY_FAILED,
 	QDF_STATUS_CMD_NOT_QUEUED,
 	QDF_STATUS_FW_MSG_TIMEDOUT,
+	QDF_STATUS_E_USB_ERROR,
+	QDF_STATUS_MAXCOMP_FAIL,
+	QDF_STATUS_COMP_DISABLED,
+	QDF_STATUS_COMP_ASYNC,
+	QDF_STATUS_CRYPTO_PN_ERROR,
+	QDF_STATUS_CRYPTO_MIC_FAILURE,
+	QDF_STATUS_CRYPTO_ENCRYPT_FAILED,
+	QDF_STATUS_CRYPTO_DECRYPT_FAILED,
 	QDF_STATUS_MAX
 } QDF_STATUS;
 

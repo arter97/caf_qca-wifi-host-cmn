@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2016 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2014-2017 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -32,8 +32,8 @@
 #include <qdf_types.h>
 #ifdef CONFIG_MCL
 #include <i_host_diag_core_event.h>
-#include <ani_global.h>
 #include <hif.h>
+#include <cds_api.h>
 #endif
 #include <i_qdf_lock.h>
 
@@ -48,7 +48,8 @@ typedef __qdf_mutex_t qdf_mutex_t;
  * =0 success
  * else fail status
  */
-QDF_STATUS qdf_mutex_create(qdf_mutex_t *lock)
+#undef qdf_mutex_create
+QDF_STATUS qdf_mutex_create(qdf_mutex_t *lock, const char *func, int line)
 {
 	/* check for invalid pointer */
 	if (lock == NULL) {
@@ -69,6 +70,8 @@ QDF_STATUS qdf_mutex_create(qdf_mutex_t *lock)
 			  __func__);
 		return QDF_STATUS_E_FAULT;
 	}
+
+	qdf_lock_stats_create(&lock->stats, func, line);
 
 	/* initialize new lock */
 	mutex_init(&lock->m_lock);
@@ -128,8 +131,11 @@ QDF_STATUS qdf_mutex_acquire(qdf_mutex_t *lock)
 #endif
 		return QDF_STATUS_SUCCESS;
 	}
+
+	BEFORE_LOCK(lock, mutex_is_locked(&lock->m_lock));
 	/* acquire a Lock */
 	mutex_lock(&lock->m_lock);
+	AFTER_LOCK(lock, __func__);
 	rc = mutex_is_locked(&lock->m_lock);
 	if (rc == 0) {
 		QDF_TRACE(QDF_MODULE_ID_QDF, QDF_TRACE_LEVEL_ERROR,
@@ -227,6 +233,7 @@ QDF_STATUS qdf_mutex_release(qdf_mutex_t *lock)
 	lock->refcount = 0;
 	lock->state = LOCK_RELEASED;
 	/* release a Lock */
+	BEFORE_UNLOCK(lock, 0);
 	mutex_unlock(&lock->m_lock);
 #ifdef QDF_NESTED_LOCK_DEBUG
 	QDF_TRACE(QDF_MODULE_ID_QDF, QDF_TRACE_LEVEL_ERROR, "%s: Freeing lock %x %d %d", lock, lock->process_id,
@@ -244,12 +251,19 @@ EXPORT_SYMBOL(qdf_mutex_release);
  *
  * Return: Pointer to the name if it is valid or a default string
  */
-static const char *qdf_wake_lock_name(qdf_wake_lock_t *lock)
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3, 10, 0))
+const char *qdf_wake_lock_name(qdf_wake_lock_t *lock)
 {
 	if (lock->name)
 		return lock->name;
 	return "UNNAMED_WAKELOCK";
 }
+#else
+const char *qdf_wake_lock_name(qdf_wake_lock_t *lock)
+{
+	return "NO_WAKELOCK_SUPPORT";
+}
+#endif
 EXPORT_SYMBOL(qdf_wake_lock_name);
 
 /**
@@ -261,11 +275,18 @@ EXPORT_SYMBOL(qdf_wake_lock_name);
  * QDF status success: if wake lock is initialized
  * QDF status failure: if wake lock was not initialized
  */
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3, 10, 0))
 QDF_STATUS qdf_wake_lock_create(qdf_wake_lock_t *lock, const char *name)
 {
 	wakeup_source_init(lock, name);
 	return QDF_STATUS_SUCCESS;
 }
+#else
+QDF_STATUS qdf_wake_lock_create(qdf_wake_lock_t *lock, const char *name)
+{
+	return QDF_STATUS_SUCCESS;
+}
+#endif
 EXPORT_SYMBOL(qdf_wake_lock_create);
 
 /**
@@ -277,6 +298,7 @@ EXPORT_SYMBOL(qdf_wake_lock_create);
  * QDF status success: if wake lock is acquired
  * QDF status failure: if wake lock was not acquired
  */
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3, 10, 0))
 QDF_STATUS qdf_wake_lock_acquire(qdf_wake_lock_t *lock, uint32_t reason)
 {
 #ifdef CONFIG_MCL
@@ -287,6 +309,12 @@ QDF_STATUS qdf_wake_lock_acquire(qdf_wake_lock_t *lock, uint32_t reason)
 	__pm_stay_awake(lock);
 	return QDF_STATUS_SUCCESS;
 }
+#else
+QDF_STATUS qdf_wake_lock_acquire(qdf_wake_lock_t *lock, uint32_t reason)
+{
+	return QDF_STATUS_SUCCESS;
+}
+#endif
 EXPORT_SYMBOL(qdf_wake_lock_acquire);
 
 /**
@@ -298,23 +326,21 @@ EXPORT_SYMBOL(qdf_wake_lock_acquire);
  * QDF status success: if wake lock is acquired
  * QDF status failure: if wake lock was not acquired
  */
-QDF_STATUS qdf_wake_lock_timeout_acquire(qdf_wake_lock_t *lock, uint32_t msec,
-					 uint32_t reason)
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3, 10, 0))
+QDF_STATUS qdf_wake_lock_timeout_acquire(qdf_wake_lock_t *lock, uint32_t msec)
 {
 	/* Wakelock for Rx is frequent.
 	 * It is reported only during active debug
 	 */
-#ifdef CONFIG_MCL
-	if (((cds_get_ring_log_level(RING_ID_WAKELOCK) >= WLAN_LOG_LEVEL_ACTIVE)
-			&& (WIFI_POWER_EVENT_WAKELOCK_HOLD_RX == reason)) ||
-			(WIFI_POWER_EVENT_WAKELOCK_HOLD_RX != reason)) {
-		host_diag_log_wlock(reason, qdf_wake_lock_name(lock), msec,
-				WIFI_POWER_EVENT_WAKELOCK_TAKEN);
-	}
-#endif
 	__pm_wakeup_event(lock, msec);
 	return QDF_STATUS_SUCCESS;
 }
+#else
+QDF_STATUS qdf_wake_lock_timeout_acquire(qdf_wake_lock_t *lock, uint32_t msec)
+{
+	return QDF_STATUS_SUCCESS;
+}
+#endif
 EXPORT_SYMBOL(qdf_wake_lock_timeout_acquire);
 
 /**
@@ -326,6 +352,7 @@ EXPORT_SYMBOL(qdf_wake_lock_timeout_acquire);
  * QDF status success: if wake lock is acquired
  * QDF status failure: if wake lock was not acquired
  */
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3, 10, 0))
 QDF_STATUS qdf_wake_lock_release(qdf_wake_lock_t *lock, uint32_t reason)
 {
 #ifdef CONFIG_MCL
@@ -336,6 +363,12 @@ QDF_STATUS qdf_wake_lock_release(qdf_wake_lock_t *lock, uint32_t reason)
 	__pm_relax(lock);
 	return QDF_STATUS_SUCCESS;
 }
+#else
+QDF_STATUS qdf_wake_lock_release(qdf_wake_lock_t *lock, uint32_t reason)
+{
+	return QDF_STATUS_SUCCESS;
+}
+#endif
 EXPORT_SYMBOL(qdf_wake_lock_release);
 
 /**
@@ -346,11 +379,18 @@ EXPORT_SYMBOL(qdf_wake_lock_release);
  * QDF status success: if wake lock is acquired
  * QDF status failure: if wake lock was not acquired
  */
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3, 10, 0))
 QDF_STATUS qdf_wake_lock_destroy(qdf_wake_lock_t *lock)
 {
 	wakeup_source_trash(lock);
 	return QDF_STATUS_SUCCESS;
 }
+#else
+QDF_STATUS qdf_wake_lock_destroy(qdf_wake_lock_t *lock)
+{
+	return QDF_STATUS_SUCCESS;
+}
+#endif
 EXPORT_SYMBOL(qdf_wake_lock_destroy);
 
 #ifdef CONFIG_MCL
@@ -522,7 +562,7 @@ EXPORT_SYMBOL(qdf_runtime_lock_deinit);
  */
 QDF_STATUS qdf_spinlock_acquire(qdf_spinlock_t *lock)
 {
-	spin_lock(&lock->spinlock);
+	spin_lock(&lock->lock.spinlock);
 	return QDF_STATUS_SUCCESS;
 }
 EXPORT_SYMBOL(qdf_spinlock_acquire);
@@ -537,7 +577,7 @@ EXPORT_SYMBOL(qdf_spinlock_acquire);
  */
 QDF_STATUS qdf_spinlock_release(qdf_spinlock_t *lock)
 {
-	spin_unlock(&lock->spinlock);
+	spin_unlock(&lock->lock.spinlock);
 	return QDF_STATUS_SUCCESS;
 }
 EXPORT_SYMBOL(qdf_spinlock_release);
@@ -594,6 +634,7 @@ QDF_STATUS qdf_mutex_destroy(qdf_mutex_t *lock)
 	lock->process_id = 0;
 	lock->refcount = 0;
 
+	qdf_lock_stats_destroy(&lock->stats);
 	mutex_unlock(&lock->m_lock);
 
 	return QDF_STATUS_SUCCESS;
@@ -603,7 +644,7 @@ EXPORT_SYMBOL(qdf_mutex_destroy);
 /**
  * qdf_spin_trylock_bh_outline() - spin trylock bottomhalf
  * @lock: spinlock object
- * Retrun: int
+ * Return: nonzero if lock is acquired
  */
 int qdf_spin_trylock_bh_outline(qdf_spinlock_t *lock)
 {
@@ -632,3 +673,164 @@ void qdf_spin_unlock_bh_outline(qdf_spinlock_t *lock)
 	qdf_spin_unlock_bh(lock);
 }
 EXPORT_SYMBOL(qdf_spin_unlock_bh_outline);
+
+#if QDF_LOCK_STATS_LIST
+struct qdf_lock_cookie {
+	union {
+		struct {
+			struct lock_stats *stats;
+			const char *func;
+			int line;
+		} cookie;
+		struct {
+			struct qdf_lock_cookie *next;
+		} empty_node;
+	} u;
+};
+
+#ifndef QDF_LOCK_STATS_LIST_SIZE
+#define QDF_LOCK_STATS_LIST_SIZE 256
+#endif
+
+static qdf_spinlock_t qdf_lock_list_spinlock;
+static struct qdf_lock_cookie lock_cookies[QDF_LOCK_STATS_LIST_SIZE];
+static struct qdf_lock_cookie *lock_cookie_freelist;
+static qdf_atomic_t lock_cookie_get_failures;
+static qdf_atomic_t lock_cookie_untracked_num;
+/* dummy value */
+#define DUMMY_LOCK_COOKIE 0xc00c1e
+
+/**
+ * qdf_is_lock_cookie - check if memory is a valid lock cookie
+ *
+ * return true if the memory is within the range of the lock cookie
+ * memory.
+ */
+static bool qdf_is_lock_cookie(struct qdf_lock_cookie *lock_cookie)
+{
+	return lock_cookie >= &lock_cookies[0] &&
+		lock_cookie <= &lock_cookies[QDF_LOCK_STATS_LIST_SIZE-1];
+}
+
+/**
+ * qdf_is_lock_cookie_free() -  check if the lock cookie is on the freelist
+ * @lock_cookie: lock cookie to check
+ *
+ * Check that the next field of the lock cookie points to a lock cookie.
+ * currently this is only true if the cookie is on the freelist.
+ *
+ * Checking for the function and line being NULL and 0 should also have worked.
+ */
+static bool qdf_is_lock_cookie_free(struct qdf_lock_cookie *lock_cookie)
+{
+	struct qdf_lock_cookie *tmp = lock_cookie->u.empty_node.next;
+
+	return qdf_is_lock_cookie(tmp) || (tmp == NULL);
+}
+
+static struct qdf_lock_cookie *qdf_get_lock_cookie(void)
+{
+	struct qdf_lock_cookie *lock_cookie;
+
+	qdf_spin_lock_bh(&qdf_lock_list_spinlock);
+	lock_cookie = lock_cookie_freelist;
+	if (lock_cookie_freelist)
+		lock_cookie_freelist = lock_cookie_freelist->u.empty_node.next;
+	qdf_spin_unlock_bh(&qdf_lock_list_spinlock);
+	return lock_cookie;
+}
+
+static void __qdf_put_lock_cookie(struct qdf_lock_cookie *lock_cookie)
+{
+	if (!qdf_is_lock_cookie(lock_cookie))
+		QDF_BUG(0);
+
+	lock_cookie->u.empty_node.next = lock_cookie_freelist;
+	lock_cookie_freelist = lock_cookie;
+}
+
+static void qdf_put_lock_cookie(struct qdf_lock_cookie *lock_cookie)
+{
+	qdf_spin_lock_bh(&qdf_lock_list_spinlock);
+	__qdf_put_lock_cookie(lock_cookie);
+	qdf_spin_unlock_bh(&qdf_lock_list_spinlock);
+}
+
+void qdf_lock_stats_init(void)
+{
+	int i;
+
+	for (i = 0; i < QDF_LOCK_STATS_LIST_SIZE; i++)
+		__qdf_put_lock_cookie(&lock_cookies[i]);
+
+	/* stats must be allocated for the spinlock before the cookie,
+	   otherwise this qdf_lock_list_spinlock wouldnt get intialized
+	   propperly */
+	qdf_spinlock_create(&qdf_lock_list_spinlock);
+	qdf_atomic_init(&lock_cookie_get_failures);
+	qdf_atomic_init(&lock_cookie_untracked_num);
+}
+
+void qdf_lock_stats_deinit(void)
+{
+	int i;
+
+	qdf_spinlock_destroy(&qdf_lock_list_spinlock);
+	for (i = 0; i < QDF_LOCK_STATS_LIST_SIZE; i++) {
+		if (!qdf_is_lock_cookie_free(&lock_cookies[i]))
+			QDF_TRACE(QDF_MODULE_ID_QDF, QDF_TRACE_LEVEL_ERROR,
+				  "%s: lock_not_destroyed, fun: %s, line %d",
+				  __func__, lock_cookies[i].u.cookie.func,
+				  lock_cookies[i].u.cookie.line);
+	}
+}
+
+/* allocated separate memory in case the lock memory is freed without
+	   running the deinitialization code.  The cookie list will not be
+	   corrupted. */
+void qdf_lock_stats_cookie_create(struct lock_stats *stats,
+				  const char *func, int line)
+{
+	struct qdf_lock_cookie *cookie = qdf_get_lock_cookie();
+
+	if (cookie == NULL) {
+		int count;
+		qdf_atomic_inc(&lock_cookie_get_failures);
+		count = qdf_atomic_inc_return(&lock_cookie_untracked_num);
+		stats->cookie = (void *) DUMMY_LOCK_COOKIE;
+		QDF_TRACE(QDF_MODULE_ID_QDF, QDF_TRACE_LEVEL_ERROR,
+			  "%s: cookie allocation failure, using dummy (%s:%d) count %d",
+			  __func__, func, line, count);
+		return;
+	}
+
+	stats->cookie = cookie;
+	stats->cookie->u.cookie.stats = stats;
+	stats->cookie->u.cookie.func = func;
+	stats->cookie->u.cookie.line = line;
+}
+
+void qdf_lock_stats_cookie_destroy(struct lock_stats *stats)
+{
+	struct qdf_lock_cookie *cookie = stats->cookie;
+
+	if (cookie == NULL) {
+		QDF_TRACE(QDF_MODULE_ID_QDF, QDF_TRACE_LEVEL_ERROR,
+			  "%s: Double cookie destroy", __func__);
+		QDF_ASSERT(0);
+		return;
+	}
+
+	stats->cookie = NULL;
+	if (cookie == (void *)DUMMY_LOCK_COOKIE) {
+		qdf_atomic_dec(&lock_cookie_untracked_num);
+		return;
+	}
+
+	cookie->u.cookie.stats = NULL;
+	cookie->u.cookie.func = NULL;
+	cookie->u.cookie.line = 0;
+
+	qdf_put_lock_cookie(cookie);
+}
+#endif

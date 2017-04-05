@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2016 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2013-2017 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -34,6 +34,7 @@ enum CE_op_state {
 	CE_UNUSED,
 	CE_PAUSED,
 	CE_RUNNING,
+	CE_PENDING,
 };
 
 enum ol_ath_hif_ce_ecodes {
@@ -94,6 +95,7 @@ struct CE_ring_state {
 
 	unsigned int low_water_mark_nentries;
 	unsigned int high_water_mark_nentries;
+	void *srng_ctx;
 	void **per_transfer_context;
 	OS_DMA_MEM_CONTEXT(ce_dmacontext) /* OS Specific DMA context */
 };
@@ -110,6 +112,7 @@ struct CE_state {
 	fastpath_msg_handler fastpath_handler;
 	void *context;
 #endif /* WLAN_FEATURE_FASTPATH */
+	qdf_work_t oom_allocation_work;
 
 	ce_send_cb send_cb;
 	void *send_context;
@@ -129,6 +132,7 @@ struct CE_state {
 	unsigned int src_sz_max;
 	struct CE_ring_state *src_ring;
 	struct CE_ring_state *dest_ring;
+	struct CE_ring_state *status_ring;
 	atomic_t rx_pending;
 
 	qdf_spinlock_t ce_index_lock;
@@ -148,6 +152,7 @@ struct CE_state {
 	bool htt_rx_data;
 	void (*lro_flush_cb)(void *);
 	void *lro_data;
+	qdf_spinlock_t lro_unloading_lock;
 };
 
 /* Descriptor rings must be aligned to this boundary */
@@ -288,6 +293,84 @@ struct CE_dest_desc {
 };
 #endif /* QCA_WIFI_3_0 */
 
+struct ce_srng_src_desc {
+	uint32_t buffer_addr_lo;
+#if _BYTE_ORDER == _BIG_ENDIAN
+	uint32_t nbytes:16,
+		 rsvd:4,
+		 gather:1,
+		 dest_swap:1,
+		 byte_swap:1,
+		 toeplitz_hash_enable:1,
+		 buffer_addr_hi:8;
+	uint32_t rsvd1:16,
+		 meta_data:16;
+	uint32_t loop_count:4,
+		 ring_id:8,
+		 rsvd3:20;
+#else
+	uint32_t buffer_addr_hi:8,
+		 toeplitz_hash_enable:1,
+		 byte_swap:1,
+		 dest_swap:1,
+		 gather:1,
+		 rsvd:4,
+		 nbytes:16;
+	uint32_t meta_data:16,
+		 rsvd1:16;
+	uint32_t rsvd3:20,
+		 ring_id:8,
+		 loop_count:4;
+#endif
+};
+struct ce_srng_dest_desc {
+	uint32_t buffer_addr_lo;
+#if _BYTE_ORDER == _BIG_ENDIAN
+	uint32_t loop_count:4,
+		 ring_id:8,
+		 rsvd1:12,
+		 buffer_addr_hi:8;
+#else
+	uint32_t buffer_addr_hi:8,
+		 rsvd1:12,
+		 ring_id:8,
+		 loop_count:4;
+#endif
+};
+struct ce_srng_dest_status_desc {
+#if _BYTE_ORDER == _BIG_ENDIAN
+	uint32_t nbytes:16,
+		 rsvd:4,
+		 gather:1,
+		 dest_swap:1,
+		 byte_swap:1,
+		 toeplitz_hash_enable:1,
+		 rsvd0:8;
+	uint32_t rsvd1:16,
+		 meta_data:16;
+#else
+	uint32_t rsvd0:8,
+		 toeplitz_hash_enable:1,
+		 byte_swap:1,
+		 dest_swap:1,
+		 gather:1,
+		 rsvd:4,
+		 nbytes:16;
+	uint32_t meta_data:16,
+		 rsvd1:16;
+#endif
+	uint32_t toeplitz_hash;
+#if _BYTE_ORDER == _BIG_ENDIAN
+	uint32_t loop_count:4,
+		 ring_id:8,
+		 rsvd3:20;
+#else
+	uint32_t rsvd3:20,
+		 ring_id:8,
+		 loop_count:4;
+#endif
+};
+
 #define CE_SENDLIST_ITEMS_MAX 12
 
 /**
@@ -308,6 +391,8 @@ union ce_desc {
  * @HIF_RX_DESC_COMPLETION: event recorded before updating sw index of RX ring.
  * @HIF_TX_GATHER_DESC_POST: post gather desc. (no write index update)
  * @HIF_TX_DESC_POST: event recorded before updating write index of TX ring.
+ * @HIF_TX_DESC_SOFTWARE_POST: event recorded when dropping a write to the write
+ *	index in a normal tx
  * @HIF_TX_DESC_COMPLETION: event recorded before updating sw index of TX ring.
  * @FAST_RX_WRITE_INDEX_UPDATE: event recorded before updating the write index
  *	of the RX ring in fastpath
@@ -315,9 +400,10 @@ union ce_desc {
  *	index of the RX ring in fastpath
  * @FAST_TX_WRITE_INDEX_UPDATE: event recorded before updating the write index
  *	of the TX ring in fastpath
+ * @FAST_TX_WRITE_INDEX_SOFTWARE_UPDATE: recored when dropping a write to
+ *	the wirte index in fastpath
  * @FAST_TX_SOFTWARE_INDEX_UPDATE: event recorded before updating the software
  *	index of the RX ring in fastpath
- *
  * @HIF_IRQ_EVENT: event recorded in the irq before scheduling the bh
  * @HIF_CE_TASKLET_ENTRY: records the start of the ce_tasklet
  * @HIF_CE_TASKLET_RESCHEDULE: records the rescheduling of the wlan_tasklet
@@ -334,11 +420,14 @@ enum hif_ce_event_type {
 	HIF_RX_DESC_COMPLETION,
 	HIF_TX_GATHER_DESC_POST,
 	HIF_TX_DESC_POST,
+	HIF_TX_DESC_SOFTWARE_POST,
 	HIF_TX_DESC_COMPLETION,
 	FAST_RX_WRITE_INDEX_UPDATE,
 	FAST_RX_SOFTWARE_INDEX_UPDATE,
 	FAST_TX_WRITE_INDEX_UPDATE,
+	FAST_TX_WRITE_INDEX_SOFTWARE_UPDATE,
 	FAST_TX_SOFTWARE_INDEX_UPDATE,
+	RESUME_WRITE_INDEX_UPDATE,
 
 	HIF_IRQ_EVENT = 0x10,
 	HIF_CE_TASKLET_ENTRY,
@@ -350,6 +439,10 @@ enum hif_ce_event_type {
 	NAPI_POLL_ENTER,
 	NAPI_COMPLETE,
 	NAPI_POLL_EXIT,
+
+	HIF_RX_NBUF_ALLOC_FAILURE = 0x20,
+	HIF_RX_NBUF_MAP_FAILURE,
+	HIF_RX_NBUF_ENQUEUE_FAILURE,
 };
 
 void ce_init_ce_desc_event_log(int ce_id, int size);
@@ -407,10 +500,20 @@ static inline void ce_t2h_msg_ce_cleanup(struct CE_handle *ce_hdl)
 /* which ring of a CE? */
 #define CE_RING_SRC  0
 #define CE_RING_DEST 1
+#define CE_RING_STATUS 2
 
 #define CDC_WAR_MAGIC_STR   0xceef0000
 #define CDC_WAR_DATA_CE     4
 
 /* Additional internal-only ce_send flags */
 #define CE_SEND_FLAG_GATHER             0x00010000      /* Use Gather */
+
+/**
+ * hif_get_wake_ce_id() - gets the copy engine id used for waking up
+ * @scn: The hif context to use
+ * @ce_id: a pointer where the copy engine Id should be populated
+ *
+ * Return: errno
+ */
+int hif_get_wake_ce_id(struct hif_softc *scn, uint8_t *ce_id);
 #endif /* __COPY_ENGINE_INTERNAL_H__ */

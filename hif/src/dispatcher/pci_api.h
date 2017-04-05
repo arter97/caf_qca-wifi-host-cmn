@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2016-2017 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -24,14 +24,17 @@
  * under proprietary terms before Copyright ownership was assigned
  * to the Linux Foundation.
  */
-
+#ifndef _PCI_API_H_
+#define _PCI_API_H_
 QDF_STATUS hif_pci_open(struct hif_softc *hif_ctx,
 			enum qdf_bus_type bus_type);
 void hif_pci_close(struct hif_softc *hif_ctx);
 void hif_pci_prevent_linkdown(struct hif_softc *scn, bool flag);
 void hif_pci_reset_soc(struct hif_softc *ol_sc);
 int hif_pci_bus_suspend(struct hif_softc *scn);
+int hif_pci_bus_suspend_noirq(struct hif_softc *scn);
 int hif_pci_bus_resume(struct hif_softc *scn);
+int hif_pci_bus_resume_noirq(struct hif_softc *scn);
 int hif_pci_target_sleep_state_adjust(struct hif_softc *scn,
 			bool sleep_ok, bool wait_for_it);
 
@@ -51,3 +54,5 @@ void hif_pci_enable_power_management(struct hif_softc *hif_ctx,
 void hif_pci_disable_power_management(struct hif_softc *hif_ctx);
 void hif_pci_display_stats(struct hif_softc *hif_ctx);
 void hif_pci_clear_stats(struct hif_softc *hif_ctx);
+int hif_pci_legacy_map_ce_to_irq(struct hif_softc *scn, int ce_id);
+#endif /* _PCI_API_H_ */

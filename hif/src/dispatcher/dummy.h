@@ -30,6 +30,8 @@ void hif_dummy_bus_prevent_linkdown(struct hif_softc *scn, bool flag);
 void hif_dummy_reset_soc(struct hif_softc *scn);
 int hif_dummy_bus_suspend(struct hif_softc *hif_ctx);
 int hif_dummy_bus_resume(struct hif_softc *hif_ctx);
+int hif_dummy_bus_suspend_noirq(struct hif_softc *hif_ctx);
+int hif_dummy_bus_resume_noirq(struct hif_softc *hif_ctx);
 int hif_dummy_target_sleep_state_adjust(struct hif_softc *scn,
 					bool sleep_ok, bool wait_for_it);
 void hif_dummy_enable_power_management(struct hif_softc *hif_ctx,
@@ -45,6 +47,8 @@ void hif_dummy_claim_device(struct hif_softc *hif_sc);
 void hif_dummy_cancel_deferred_target_sleep(struct hif_softc *hif_sc);
 void hif_dummy_irq_enable(struct hif_softc *hif_sc, int irq_id);
 void hif_dummy_irq_disable(struct hif_softc *hif_sc, int irq_id);
+void hif_dummy_grp_irq_enable(struct hif_softc *hif_sc, uint32_t grp_id);
+void hif_dummy_grp_irq_disable(struct hif_softc *hif_sc, uint32_t grp_id);
 int hif_dummy_dump_registers(struct hif_softc *hif_sc);
 void hif_dummy_dump_target_memory(struct hif_softc *hif_sc, void *ramdump_base,
 				  uint32_t address, uint32_t size);
@@ -55,3 +59,7 @@ void hif_dummy_ipa_get_ce_resource(struct hif_softc *hif_sc,
 void hif_dummy_mask_interrupt_call(struct hif_softc *hif_sc);
 void hif_dummy_display_stats(struct hif_softc *hif_ctx);
 void hif_dummy_clear_stats(struct hif_softc *hif_ctx);
+void hif_dummy_set_bundle_mode(struct hif_softc *hif_ctx,
+					bool enabled, int rx_bundle_cnt);
+int hif_dummy_bus_reset_resume(struct hif_softc *hif_ctx);
+

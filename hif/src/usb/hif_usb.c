@@ -38,7 +38,7 @@
 #define ATH_MODULE_NAME hif
 #include <a_debug.h>
 
-#ifdef DEBUG
+#if defined(WLAN_DEBUG) || defined(DEBUG)
 static ATH_DEBUG_MASK_DESCRIPTION g_hif_debug_description[] = {
 	{USB_HIF_DEBUG_CTRL_TRANS, "Control Transfers"},
 	{USB_HIF_DEBUG_BULK_IN, "BULK In Transfers"},
@@ -893,14 +893,14 @@ void hif_suspend_wow(struct hif_opaque_softc *scn)
 }
 
 /**
- * hif_set_bundle_mode() - enable bundling and set default rx bundle cnt
+ * hif_usb_set_bundle_mode() - enable bundling and set default rx bundle cnt
  * @scn: pointer to hif_opaque_softc structure
  * @enabled: flag to enable/disable bundling
  * @rx_bundle_cnt: bundle count to be used for RX
  *
  * Return: none
  */
-void hif_set_bundle_mode(struct hif_opaque_softc *scn,
+void hif_usb_set_bundle_mode(struct hif_softc *scn,
 					bool enabled, int rx_bundle_cnt)
 {
 	HIF_DEVICE_USB *device = HIF_GET_USB_DEVICE(scn);

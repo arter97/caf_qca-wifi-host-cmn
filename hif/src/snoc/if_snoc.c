@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015-2016 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2015-2017 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -38,6 +38,12 @@
 #include "ce_main.h"
 #include "ce_tasklet.h"
 #include "snoc_api.h"
+#include <soc/qcom/icnss.h>
+#include "pld_common.h"
+#include "qdf_util.h"
+#ifdef IPA_OFFLOAD
+#include <uapi/linux/msm_ipa.h>
+#endif
 
 /**
  * hif_disable_isr(): disable isr
@@ -52,7 +58,9 @@ void hif_snoc_disable_isr(struct hif_softc *scn)
 {
 	hif_nointrs(scn);
 	ce_tasklet_kill(scn);
+	hif_grp_tasklet_kill(scn);
 	qdf_atomic_set(&scn->active_tasklet_cnt, 0);
+	qdf_atomic_set(&scn->active_grp_tasklet_cnt, 0);
 }
 
 /**
@@ -130,18 +138,22 @@ QDF_STATUS hif_snoc_open(struct hif_softc *hif_ctx, enum qdf_bus_type bus_type)
 static QDF_STATUS hif_snoc_get_soc_info(struct hif_softc *scn)
 {
 	int ret;
-	struct icnss_soc_info soc_info;
+	struct pld_soc_info soc_info;
 
 	qdf_mem_zero(&soc_info, sizeof(soc_info));
 
-	ret = icnss_get_soc_info(&soc_info);
+	ret = pld_get_soc_info(scn->qdf_dev->dev, &soc_info);
 	if (ret < 0) {
-		HIF_ERROR("%s: icnss_get_soc_info error = %d", __func__, ret);
+		HIF_ERROR("%s: pld_get_soc_info error = %d", __func__, ret);
 		return QDF_STATUS_E_FAILURE;
 	}
 
 	scn->mem = soc_info.v_addr;
 	scn->mem_pa = soc_info.p_addr;
+
+	scn->target_info.soc_version = soc_info.soc_id;
+	scn->target_info.target_version = soc_info.soc_id;
+	scn->target_info.target_revision = 0;
 	return QDF_STATUS_SUCCESS;
 }
 
@@ -192,7 +204,7 @@ static inline int hif_snoc_get_target_type(struct hif_softc *ol_sc,
 	struct device *dev, void *bdev, const hif_bus_id *bid,
 	uint32_t *hif_type, uint32_t *target_type)
 {
-	/* TODO: need to use CNSS's HW version. Hard code for now */
+	/* TODO: need to use HW version. Hard code for now */
 #ifdef QCA_WIFI_3_0_ADRASTEA
 	*hif_type = HIF_TYPE_ADRASTEA;
 	*target_type = TARGET_TYPE_ADRASTEA;
@@ -202,6 +214,25 @@ static inline int hif_snoc_get_target_type(struct hif_softc *ol_sc,
 #endif
 	return 0;
 }
+
+#ifdef IPA_OFFLOAD
+static int hif_set_dma_coherent_mask(struct device *dev)
+{
+	uint8_t addr_bits;
+
+	if (hif_get_ipa_hw_type() < IPA_HW_v3_0)
+		addr_bits = DMA_COHERENT_MASK_BELOW_IPA_VER_3;
+	else
+		addr_bits = DMA_COHERENT_MASK_IPA_VER_3_AND_ABOVE;
+
+	return qdf_set_dma_coherent_mask(dev, addr_bits);
+}
+#else
+static int hif_set_dma_coherent_mask(struct device *dev)
+{
+	return qdf_set_dma_coherent_mask(dev, 37);
+}
+#endif
 
 /**
  * hif_enable_bus(): hif_enable_bus
@@ -220,16 +251,27 @@ QDF_STATUS hif_snoc_enable_bus(struct hif_softc *ol_sc,
 	int ret;
 	int hif_type;
 	int target_type;
-	ret = dma_set_mask_and_coherent(dev, DMA_BIT_MASK(37));
+
+	if (!ol_sc) {
+		HIF_ERROR("%s: hif_ctx is NULL", __func__);
+		return QDF_STATUS_E_NOMEM;
+	}
+
+	ret = hif_set_dma_coherent_mask(dev);
 	if (ret) {
 		HIF_ERROR("%s: failed to set dma mask error = %d",
 				__func__, ret);
 		return ret;
 	}
 
-	if (!ol_sc) {
-		HIF_ERROR("%s: hif_ctx is NULL", __func__);
-		return QDF_STATUS_E_NOMEM;
+	ret = qdf_device_init_wakeup(ol_sc->qdf_dev, true);
+	if (ret == -EEXIST)
+		HIF_WARN("%s: device_init_wakeup already done",
+				__func__);
+	else if (ret) {
+		HIF_ERROR("%s: device_init_wakeup: err= %d",
+				__func__, ret);
+		return ret;
 	}
 
 	ret = hif_snoc_get_target_type(ol_sc, dev, bdev, bid,
@@ -243,6 +285,9 @@ QDF_STATUS hif_snoc_enable_bus(struct hif_softc *ol_sc,
 
 	hif_register_tbl_attach(ol_sc, hif_type);
 	hif_target_register_tbl_attach(ol_sc, target_type);
+
+	/* the bus should remain on durring suspend for snoc */
+	hif_vote_link_up(GET_HIF_OPAQUE_HDL(ol_sc));
 
 	HIF_TRACE("%s: X - hif_type = 0x%x, target_type = 0x%x",
 		  __func__, hif_type, target_type);
@@ -261,6 +306,13 @@ QDF_STATUS hif_snoc_enable_bus(struct hif_softc *ol_sc,
  */
 void hif_snoc_disable_bus(struct hif_softc *scn)
 {
+	int ret;
+
+	hif_vote_link_down(GET_HIF_OPAQUE_HDL(scn));
+
+	ret = qdf_device_init_wakeup(scn->qdf_dev, false);
+	if (ret)
+		HIF_ERROR("%s: device_init_wakeup: err %d", __func__, ret);
 }
 
 /**
@@ -275,10 +327,8 @@ void hif_snoc_disable_bus(struct hif_softc *scn)
 void hif_snoc_nointrs(struct hif_softc *scn)
 {
 	struct HIF_CE_state *hif_state = HIF_GET_CE_STATE(scn);
-	if (scn->request_irq_done) {
-		ce_unregister_irq(hif_state, 0xfff);
-		scn->request_irq_done = false;
-	}
+
+	ce_unregister_irq(hif_state, CE_ALL_BITMAP);
 }
 
 /**
@@ -304,4 +354,110 @@ void hif_snoc_irq_enable(struct hif_softc *scn,
 void hif_snoc_irq_disable(struct hif_softc *scn, int ce_id)
 {
 	ce_disable_irq_in_individual_register(scn, ce_id);
+}
+
+/*
+ * hif_snoc_setup_wakeup_sources() - enable/disable irq wake on correct irqs
+ * @hif_softc: hif context
+ *
+ * Firmware will send a wakeup request to the HTC_CTRL_RSVD_SVC when waking up
+ * the host driver. Ensure that the copy complete interrupt from this copy
+ * engine can wake up the apps processor.
+ *
+ * Return: 0 for success
+ */
+static
+QDF_STATUS hif_snoc_setup_wakeup_sources(struct hif_softc *scn, bool enable)
+{
+	struct hif_opaque_softc *hif_hdl = GET_HIF_OPAQUE_HDL(scn);
+	uint8_t ul_pipe, dl_pipe;
+	int ul_is_polled, dl_is_polled;
+	int irq_to_wake_on;
+
+	QDF_STATUS status;
+	int ret;
+
+	status = hif_map_service_to_pipe(hif_hdl, HTC_CTRL_RSVD_SVC,
+					 &ul_pipe, &dl_pipe,
+					 &ul_is_polled, &dl_is_polled);
+	if (status) {
+		HIF_ERROR("%s: pipe_mapping failure", __func__);
+		return status;
+	}
+
+	irq_to_wake_on = icnss_get_irq(dl_pipe);
+	if (irq_to_wake_on < 0) {
+		HIF_ERROR("%s: failed to map ce to irq", __func__);
+		return QDF_STATUS_E_RESOURCES;
+	}
+
+	if (enable)
+		ret = enable_irq_wake(irq_to_wake_on);
+	else
+		ret = disable_irq_wake(irq_to_wake_on);
+
+	if (ret) {
+		HIF_ERROR("%s: Fail to setup wake IRQ!", __func__);
+		return QDF_STATUS_E_RESOURCES;
+	}
+
+	HIF_INFO("%s: expecting wake from ce %d, irq %d enable %d",
+		  __func__, dl_pipe, irq_to_wake_on, enable);
+	return QDF_STATUS_SUCCESS;
+}
+
+/**
+ * hif_snoc_bus_suspend() - prepare to suspend the bus
+ * @scn: hif context
+ *
+ * Setup wakeup interrupt configuration.
+ * Disable CE interrupts (wakeup interrupt will still wake apps)
+ * Drain tasklets. - make sure that we don't suspend while processing
+ * the wakeup message.
+ *
+ * Return: 0 on success.
+ */
+int hif_snoc_bus_suspend(struct hif_softc *scn)
+{
+	if (hif_snoc_setup_wakeup_sources(scn, true) != QDF_STATUS_SUCCESS)
+		return -EFAULT;
+	return 0;
+}
+
+/**
+ * hif_snoc_bus_resume() - snoc bus resume function
+ * @scn: hif context
+ *
+ * Clear wakeup interrupt configuration.
+ * Reenable ce interrupts
+ *
+ * Return: 0 on success
+ */
+int hif_snoc_bus_resume(struct hif_softc *scn)
+{
+	if (hif_snoc_setup_wakeup_sources(scn, false) != QDF_STATUS_SUCCESS)
+		QDF_BUG(0);
+
+	return 0;
+}
+
+/**
+ * hif_snoc_bus_suspend_noirq() - ensure there are no pending transactions
+ * @scn: hif context
+ *
+ * Ensure that if we recieved the wakeup message before the irq
+ * was disabled that the message is pocessed before suspending.
+ *
+ * Return: -EBUSY if we fail to flush the tasklets.
+ */
+int hif_snoc_bus_suspend_noirq(struct hif_softc *scn)
+{
+	if (hif_drain_tasklets(scn) != 0)
+		return -EBUSY;
+	return 0;
+}
+
+int hif_snoc_map_ce_to_irq(struct hif_softc *scn, int ce_id)
+{
+	return icnss_get_irq(ce_id);
 }

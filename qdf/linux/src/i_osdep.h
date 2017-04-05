@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2016 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2013-2017 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -170,13 +170,19 @@ typedef struct {
  * @acfg_event_os_work: schedule or create work
  * @acfg_netlink_wq_init_done: Work queue ready
  * @osdev_acfg_handle: acfg handle
+ * @vap_hardstart: Tx function specific to the radio
+ * 		   initiailzed during VAP create
  */
 struct _NIC_DEV {
 	qdf_device_t qdf_dev;
 	void *bdev;
 	struct net_device *netdev;
 	qdf_bh_t intr_tq;
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 36)
+	struct rtnl_link_stats64 devstats;
+#else
 	struct net_device_stats devstats;
+#endif
 	QDF_BUS_CONTEXT bc;
 #ifdef ATH_PERF_PWR_OFFLOAD
 	struct device *device;
@@ -200,7 +206,7 @@ struct _NIC_DEV {
 	void *osdev_acfg_handle;
 #endif /* ACFG_NETLINK_TX */
 #endif /* UMAC_SUPPORT_ACFG */
-
+	int (*vap_hardstart)(struct sk_buff *skb, struct net_device *dev);
 };
 
 #define __QDF_SYSCTL_PROC_DOINTVEC(ctl, write, filp, buffer, lenp, ppos) \

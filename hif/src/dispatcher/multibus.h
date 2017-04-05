@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2016-2017 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -40,8 +40,12 @@ struct hif_bus_ops {
 	void (*hif_bus_close)(struct hif_softc *hif_sc);
 	void (*hif_bus_prevent_linkdown)(struct hif_softc *hif_sc, bool flag);
 	void (*hif_reset_soc)(struct hif_softc *hif_sc);
+	int (*hif_bus_early_suspend)(struct hif_softc *hif_ctx);
+	int (*hif_bus_late_resume)(struct hif_softc *hif_ctx);
 	int (*hif_bus_suspend)(struct hif_softc *hif_ctx);
 	int (*hif_bus_resume)(struct hif_softc *hif_ctx);
+	int (*hif_bus_suspend_noirq)(struct hif_softc *hif_ctx);
+	int (*hif_bus_resume_noirq)(struct hif_softc *hif_ctx);
 	int (*hif_target_sleep_state_adjust)(struct hif_softc *scn,
 			bool sleep_ok, bool wait_for_it);
 	void (*hif_disable_isr)(struct hif_softc *hif_sc);
@@ -59,7 +63,9 @@ struct hif_bus_ops {
 	void (*hif_stop)(struct hif_softc *hif_sc);
 	void (*hif_cancel_deferred_target_sleep)(struct hif_softc *hif_sc);
 	void (*hif_irq_disable)(struct hif_softc *hif_sc, int ce_id);
+	void (*hif_grp_irq_disable)(struct hif_softc *hif_sc, uint32_t grp_id);
 	void (*hif_irq_enable)(struct hif_softc *hif_sc, int ce_id);
+	void (*hif_grp_irq_enable)(struct hif_softc *hif_sc, uint32_t grp_id);
 	int (*hif_dump_registers)(struct hif_softc *hif_sc);
 	void (*hif_dump_target_memory)(struct hif_softc *hif_sc,
 				       void *ramdump_base,
@@ -74,6 +80,10 @@ struct hif_bus_ops {
 	void (*hif_disable_power_management)(struct hif_softc *hif_ctx);
 	void (*hif_display_stats)(struct hif_softc *hif_ctx);
 	void (*hif_clear_stats)(struct hif_softc *hif_ctx);
+	void (*hif_set_bundle_mode) (struct hif_softc *hif_ctx, bool enabled,
+					int rx_bundle_cnt);
+	int (*hif_bus_reset_resume)(struct hif_softc *hif_ctx);
+	int (*hif_map_ce_to_irq)(struct hif_softc *hif_sc, int ce_id);
 };
 
 #ifdef HIF_SNOC
@@ -169,4 +179,23 @@ static inline int hif_sdio_get_context_size(void)
 }
 #endif /* HIF_SDIO */
 
+#ifdef HIF_USB
+QDF_STATUS hif_initialize_usb_ops(struct hif_bus_ops *bus_ops);
+int hif_usb_get_context_size(void);
+#else
+static inline QDF_STATUS hif_initialize_usb_ops(struct hif_bus_ops *bus_ops)
+{
+	HIF_ERROR("%s: not supported", __func__);
+	return QDF_STATUS_E_NOSUPPORT;
+}
+/**
+ * hif_usb_get_context_size() - dummy when usb isn't supported
+ *
+ * Return: 0 as an invalid size to indicate no support
+ */
+static inline int hif_usb_get_context_size(void)
+{
+	return 0;
+}
+#endif /* HIF_USB */
 #endif /* _MULTIBUS_H_ */

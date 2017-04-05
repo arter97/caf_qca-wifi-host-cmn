@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2016 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2014-2017 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -70,6 +70,14 @@ typedef struct qdf_net_ethaddr {
 	uint8_t addr[QDF_NET_ETH_LEN];
 } qdf_net_ethaddr_t;
 
+#define QDF_TCPHDR_FIN __QDF_TCPHDR_FIN
+#define QDF_TCPHDR_SYN __QDF_TCPHDR_SYN
+#define QDF_TCPHDR_RST __QDF_TCPHDR_RST
+#define QDF_TCPHDR_PSH __QDF_TCPHDR_PSH
+#define QDF_TCPHDR_ACK __QDF_TCPHDR_ACK
+#define QDF_TCPHDR_URG __QDF_TCPHDR_URG
+#define QDF_TCPHDR_ECE __QDF_TCPHDR_ECE
+#define QDF_TCPHDR_CWR __QDF_TCPHDR_CWR
 
 typedef struct {
 	uint16_t  source;
@@ -455,4 +463,63 @@ static inline int32_t qdf_csum_ipv6(const in6_addr_t *saddr,
 	return (int32_t)__qdf_csum_ipv6(saddr, daddr, len, proto, sum);
 }
 
+typedef struct {
+	uint8_t i_fc[2];
+	uint8_t i_dur[2];
+	uint8_t i_addr1[QDF_NET_MAC_ADDR_MAX_LEN];
+	uint8_t i_addr2[QDF_NET_MAC_ADDR_MAX_LEN];
+	uint8_t i_addr3[QDF_NET_MAC_ADDR_MAX_LEN];
+	uint8_t i_seq[2];
+	uint8_t i_qos[2];
+} qdf_dot3_qosframe_t;
+
+typedef struct {
+	uint8_t ether_dhost[QDF_NET_MAC_ADDR_MAX_LEN];
+	uint8_t ether_shost[QDF_NET_MAC_ADDR_MAX_LEN];
+	uint16_t vlan_TCI;
+	uint16_t vlan_encapsulated_proto;
+	uint16_t ether_type;
+} qdf_ethervlan_header_t;
+
+typedef struct {
+	uint8_t llc_dsap;
+	uint8_t llc_ssap;
+	union {
+		struct {
+			uint8_t control;
+			uint8_t format_id;
+			uint8_t class;
+			uint8_t window_x2;
+		} __packed type_u;
+		struct {
+			uint8_t num_snd_x2;
+			uint8_t num_rcv_x2;
+		} __packed type_i;
+		struct {
+			uint8_t control;
+			uint8_t num_rcv_x2;
+		} __packed type_s;
+		struct {
+			uint8_t control;
+			/*
+			 * We cannot put the following fields in a structure
+			 * because the structure rounding might cause padding.
+			 */
+			uint8_t frmr_rej_pdu0;
+			uint8_t frmr_rej_pdu1;
+			uint8_t frmr_control;
+			uint8_t frmr_control_ext;
+			uint8_t frmr_cause;
+		} __packed type_frmr;
+		struct {
+			uint8_t  control;
+			uint8_t  org_code[3];
+			uint16_t ether_type;
+		} __packed type_snap;
+		struct {
+			uint8_t control;
+			uint8_t control_ext;
+		} __packed type_raw;
+	} llc_un /* XXX __packed ??? */;
+} qdf_llc_t;
 #endif /*_QDF_NET_TYPES_H*/

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2016-2017 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -45,8 +45,13 @@ QDF_STATUS hif_initialize_snoc_ops(struct hif_bus_ops *bus_ops)
 	bus_ops->hif_bus_close = &hif_snoc_close;
 	bus_ops->hif_bus_prevent_linkdown = &hif_dummy_bus_prevent_linkdown;
 	bus_ops->hif_reset_soc = &hif_dummy_reset_soc;
-	bus_ops->hif_bus_suspend = &hif_dummy_bus_suspend;
-	bus_ops->hif_bus_resume = &hif_dummy_bus_resume;
+	bus_ops->hif_bus_early_suspend = &hif_ce_bus_early_suspend;
+	bus_ops->hif_bus_late_resume = &hif_ce_bus_late_resume;
+	bus_ops->hif_bus_suspend = &hif_snoc_bus_suspend;
+	bus_ops->hif_bus_resume = &hif_snoc_bus_resume;
+	bus_ops->hif_bus_suspend_noirq = &hif_snoc_bus_suspend_noirq;
+	/* snoc_bus_resume_noirq had no side effects, use dummy resume_noirq */
+	bus_ops->hif_bus_resume_noirq = &hif_dummy_bus_resume_noirq;
 	bus_ops->hif_target_sleep_state_adjust =
 		&hif_dummy_target_sleep_state_adjust;
 
@@ -76,6 +81,9 @@ QDF_STATUS hif_initialize_snoc_ops(struct hif_bus_ops *bus_ops)
 		&hif_snoc_display_stats;
 	bus_ops->hif_clear_stats =
 		&hif_snoc_clear_stats;
+	bus_ops->hif_grp_irq_disable = &hif_dummy_grp_irq_disable;
+	bus_ops->hif_grp_irq_enable = &hif_dummy_grp_irq_enable;
+	bus_ops->hif_map_ce_to_irq = &hif_snoc_map_ce_to_irq;
 
 	return QDF_STATUS_SUCCESS;
 }

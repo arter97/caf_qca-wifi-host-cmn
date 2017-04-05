@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2016 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2014-2017 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -141,7 +141,7 @@ static inline uint32_t __qdf_str_lcopy(char *dest, const char *src,
 static inline uint32_t __qdf_mem_map_nbytes_single(qdf_device_t osdev,
 						  void *buf, qdf_dma_dir_t dir,
 						  int nbytes,
-						  uint32_t *phy_addr)
+						  qdf_dma_addr_t *phy_addr)
 {
 	/* assume that the OS only provides a single fragment */
 	*phy_addr = dma_map_single(osdev->dev, buf, nbytes, dir);
@@ -160,7 +160,7 @@ static inline uint32_t __qdf_mem_map_nbytes_single(qdf_device_t osdev,
  * @return - none
  */
 static inline void __qdf_mem_unmap_nbytes_single(qdf_device_t osdev,
-						 uint32_t phy_addr,
+						 qdf_dma_addr_t phy_addr,
 						 qdf_dma_dir_t dir, int nbytes)
 {
 	dma_unmap_single(osdev->dev, phy_addr, nbytes, dir);
@@ -198,7 +198,7 @@ static inline int32_t __qdf_str_len(const char *str)
  * Function to compare two pieces of memory, similar to memcmp function
  * in standard C.
  * Return:
- * int32_t - returns a bool value that tells if the memory
+ * int32_t - returns an int value that tells if the memory
  * locations are equal or not equal.
  * 0 -- equal
  * < 0 -- *memory1 is less than *memory2

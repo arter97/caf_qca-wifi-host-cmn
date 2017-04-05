@@ -57,6 +57,13 @@ QDF_STATUS qdf_event_destroy(qdf_event_t *event);
 
 QDF_STATUS qdf_wait_single_event(qdf_event_t *event,
 				 uint32_t timeout);
+/**
+ * qdf_exit_thread() - exit thread execution
+ * @status: QDF status
+ *
+ * Return: QDF status
+ */
+QDF_STATUS qdf_exit_thread(QDF_STATUS status);
 
 #ifdef __cplusplus
 }

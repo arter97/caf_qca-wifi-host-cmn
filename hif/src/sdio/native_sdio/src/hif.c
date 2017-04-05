@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2016 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2013-2017 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -212,6 +212,22 @@ static const struct sdio_device_id ar6k_id_table[] = {
 	{SDIO_DEVICE(MANUFACTURER_CODE, (MANUFACTURER_ID_QCA9377_BASE | 0xD))},
 	{SDIO_DEVICE(MANUFACTURER_CODE, (MANUFACTURER_ID_QCA9377_BASE | 0xE))},
 	{SDIO_DEVICE(MANUFACTURER_CODE, (MANUFACTURER_ID_QCA9377_BASE | 0xF))},
+	{SDIO_DEVICE(MANUFACTURER_CODE, (MANUFACTURER_ID_QCA9379_BASE | 0x0))},
+	{SDIO_DEVICE(MANUFACTURER_CODE, (MANUFACTURER_ID_QCA9379_BASE | 0x1))},
+	{SDIO_DEVICE(MANUFACTURER_CODE, (MANUFACTURER_ID_QCA9379_BASE | 0x2))},
+	{SDIO_DEVICE(MANUFACTURER_CODE, (MANUFACTURER_ID_QCA9379_BASE | 0x3))},
+	{SDIO_DEVICE(MANUFACTURER_CODE, (MANUFACTURER_ID_QCA9379_BASE | 0x4))},
+	{SDIO_DEVICE(MANUFACTURER_CODE, (MANUFACTURER_ID_QCA9379_BASE | 0x5))},
+	{SDIO_DEVICE(MANUFACTURER_CODE, (MANUFACTURER_ID_QCA9379_BASE | 0x6))},
+	{SDIO_DEVICE(MANUFACTURER_CODE, (MANUFACTURER_ID_QCA9379_BASE | 0x7))},
+	{SDIO_DEVICE(MANUFACTURER_CODE, (MANUFACTURER_ID_QCA9379_BASE | 0x8))},
+	{SDIO_DEVICE(MANUFACTURER_CODE, (MANUFACTURER_ID_QCA9379_BASE | 0x9))},
+	{SDIO_DEVICE(MANUFACTURER_CODE, (MANUFACTURER_ID_QCA9379_BASE | 0xA))},
+	{SDIO_DEVICE(MANUFACTURER_CODE, (MANUFACTURER_ID_QCA9379_BASE | 0xB))},
+	{SDIO_DEVICE(MANUFACTURER_CODE, (MANUFACTURER_ID_QCA9379_BASE | 0xC))},
+	{SDIO_DEVICE(MANUFACTURER_CODE, (MANUFACTURER_ID_QCA9379_BASE | 0xD))},
+	{SDIO_DEVICE(MANUFACTURER_CODE, (MANUFACTURER_ID_QCA9379_BASE | 0xE))},
+	{SDIO_DEVICE(MANUFACTURER_CODE, (MANUFACTURER_ID_QCA9379_BASE | 0xF))},
 	{SDIO_DEVICE(MANUFACTURER_CODE, (0 | 0x0))},
 	{SDIO_DEVICE(MANUFACTURER_CODE, (0 | 0x1))},
 #endif
@@ -251,7 +267,7 @@ static QDF_STATUS hif_disable_func(struct hif_sdio_dev *device,
 static QDF_STATUS hif_enable_func(struct hif_sdio_dev *device,
 		   struct sdio_func *func);
 
-#ifdef DEBUG
+#if defined(WLAN_DEBUG) || defined(DEBUG)
 ATH_DEBUG_INSTANTIATE_MODULE_VAR(hif,
 				 "hif",
 				 "(Linux MMC) Host Interconnect Framework",
@@ -2013,6 +2029,11 @@ static QDF_STATUS hif_enable_func(struct hif_sdio_dev *device,
 
 	device = get_hif_device(func);
 
+	if (!device) {
+		AR_DEBUG_PRINTF(ATH_DEBUG_ERR, ("HIF device is NULL\n"));
+		return QDF_STATUS_E_INVAL;
+	}
+
 	if (device->is_disabled) {
 		int setAsyncIRQ = 0;
 		__u16 manufacturer_id =
@@ -2529,7 +2550,6 @@ static struct hif_sdio_dev *add_hif_device(struct sdio_func *func)
 	hifdevice = (struct hif_sdio_dev *) qdf_mem_malloc(sizeof(
 							struct hif_sdio_dev));
 	AR_DEBUG_ASSERT(hifdevice != NULL);
-	qdf_mem_zero(hifdevice, sizeof(*hifdevice));
 #if HIF_USE_DMA_BOUNCE_BUFFER
 	hifdevice->dma_buffer = qdf_mem_malloc(HIF_DMA_BUFFER_SIZE);
 	AR_DEBUG_ASSERT(hifdevice->dma_buffer != NULL);

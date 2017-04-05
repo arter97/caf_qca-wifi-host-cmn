@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2016 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2014-2017 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -249,4 +249,40 @@ unsigned long qdf_mc_timer_get_system_ticks(void);
  */
 unsigned long qdf_mc_timer_get_system_time(void);
 
+/**
+  * qdf_get_monotonic_boottime_ns() - Get kernel boottime in ns
+  *
+  * Return: kernel boottime in nano sec
+  */
+s64 qdf_get_monotonic_boottime_ns(void);
+
+/**
+ * qdf_timer_module_init() - initializes a QDF timer module.
+ *
+ * This API initializes the QDF timer module. This needs to be called
+ * exactly once prior to using any QDF timers.
+ *
+ * Return: none
+ */
+void qdf_timer_module_init(void);
+
+/**
+ * qdf_timer_module_deinit() - Deinitializes a QDF timer module.
+ *
+ * This API deinitializes the QDF timer module.
+ * Return: none
+ */
+void qdf_timer_module_deinit(void);
+
+/**
+ * qdf_get_time_of_the_day_in_hr_min_sec_usec() - Get system time
+ * @tbuf: Pointer to time stamp buffer
+ * @len: Time buffer size
+ *
+ * This function updates the 'tbuf' with system time in hr:min:sec:msec format
+ *
+ * Return: None
+ */
+void qdf_get_time_of_the_day_in_hr_min_sec_usec(char *tbuf, int len);
+void qdf_register_mc_timer_callback(void (*callback) (unsigned long data));
 #endif /* __QDF_MC_TIMER_H */

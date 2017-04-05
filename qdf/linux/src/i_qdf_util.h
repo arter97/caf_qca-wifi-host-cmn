@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2016 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2014-2017 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -36,7 +36,8 @@
 #include <linux/compiler.h>
 #include <linux/kernel.h>
 #include <linux/types.h>
-#include <errno.h>
+#include <linux/mm.h>
+#include <linux/errno.h>
 
 #include <linux/random.h>
 
@@ -63,9 +64,19 @@
 #include <linux/byteorder/generic.h>
 #endif
 
-/*
- * Generic compiler-dependent macros if defined by the OS
- */
+typedef struct task_struct __qdf_thread_t;
+typedef wait_queue_head_t __qdf_wait_queue_head_t;
+
+/* Generic compiler-dependent macros if defined by the OS */
+#define __qdf_wait_queue_interruptible(wait_queue, condition) \
+		wait_event_interruptible(wait_queue, condition)
+
+#define __qdf_init_waitqueue_head(_q) init_waitqueue_head(_q)
+
+#define __qdf_wake_up_interruptible(_q) wake_up_interruptible(_q)
+
+#define __qdf_wake_up_completion(_q) wake_up_completion(_q)
+
 #define __qdf_unlikely(_expr)   unlikely(_expr)
 #define __qdf_likely(_expr)     likely(_expr)
 
@@ -140,6 +151,22 @@ static inline void __qdf_set_bit(unsigned int nr, unsigned long *addr)
 	__set_bit(nr, addr);
 }
 
+static inline void __qdf_clear_bit(unsigned int nr, unsigned long *addr)
+{
+	__clear_bit(nr, addr);
+}
+
+static inline bool __qdf_test_bit(unsigned int nr, unsigned long *addr)
+{
+	return test_bit(nr, addr);
+}
+
+static inline bool __qdf_test_and_clear_bit(unsigned int nr,
+					unsigned long *addr)
+{
+	return __test_and_clear_bit(nr, addr);
+}
+
 /**
  * __qdf_set_macaddr_broadcast() - set a QDF MacAddress to the 'broadcast'
  * @mac_addr: pointer to the qdf MacAddress to set to broadcast
@@ -192,8 +219,10 @@ static inline bool __qdf_is_macaddr_equal(struct qdf_mac_addr *mac_addr1,
 /**
  * @brief memory barriers.
  */
-#define __qdf_min(_a, _b)         ((_a) < (_b) ? _a : _b)
-#define __qdf_max(_a, _b)         ((_a) > (_b) ? _a : _b)
+#define __qdf_min(_a, _b) min(a, b)
+#define __qdf_max(_a, _b) max(a, b)
+
+#define MEMINFO_KB(x)  ((x) << (PAGE_SHIFT - 10))   /* In kilobytes */
 
 /**
  * @brief Assert
@@ -203,7 +232,7 @@ static inline bool __qdf_is_macaddr_equal(struct qdf_mac_addr *mac_addr1,
 			pr_err("Assertion failed! %s:%s %s:%d\n", \
 			       # expr, __func__, __FILE__, __LINE__); \
 			dump_stack(); \
-			BUG_ON(1); \
+			QDF_BUG(0); \
 		} \
 } while (0)
 
@@ -270,5 +299,114 @@ int __qdf_get_cpu(void)
 	return 0;
 }
 #endif
+
+static inline int __qdf_device_init_wakeup(__qdf_device_t qdf_dev, bool enable)
+{
+	return device_init_wakeup(qdf_dev->dev, enable);
+}
+
+/**
+ * __qdf_get_totalramsize() -  Get total ram size in Kb
+ *
+ * Return: Total ram size in Kb
+ */
+static inline uint64_t
+__qdf_get_totalramsize(void)
+{
+	struct sysinfo meminfo;
+	si_meminfo(&meminfo);
+	return MEMINFO_KB(meminfo.totalram);
+}
+
+/**
+ * __qdf_get_lower_32_bits() - get lower 32 bits from an address.
+ * @addr: address
+ *
+ * This api returns the lower 32 bits of an address.
+ *
+ * Return: lower 32 bits.
+ */
+static inline
+uint32_t __qdf_get_lower_32_bits(__qdf_dma_addr_t addr)
+{
+	return lower_32_bits(addr);
+}
+
+/**
+ * __qdf_get_upper_32_bits() - get upper 32 bits from an address.
+ * @addr: address
+ *
+ * This api returns the upper 32 bits of an address.
+ *
+ * Return: upper 32 bits.
+ */
+static inline
+uint32_t __qdf_get_upper_32_bits(__qdf_dma_addr_t addr)
+{
+	return upper_32_bits(addr);
+}
+
+/**
+ * __qdf_rounddown_pow_of_two() - Round down to nearest power of two
+ * @n: number to be tested
+ *
+ * Test if the input number is power of two, and return the nearest power of two
+ *
+ * Return: number rounded down to the nearest power of two
+ */
+static inline
+unsigned long __qdf_rounddown_pow_of_two(unsigned long n)
+{
+	if (is_power_of_2(n))
+		return n; /* already a power of 2 */
+
+	return __rounddown_pow_of_two(n);
+}
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 13, 0)
+
+/**
+ * __qdf_set_dma_coherent_mask() - set max number of bits allowed in dma addr
+ * @dev: device pointer
+ * @addr_bits: max number of bits allowed in dma address
+ *
+ * This API sets the maximum allowed number of bits in the dma address.
+ *
+ * Return: 0 - success, non zero - failure
+ */
+static inline
+int __qdf_set_dma_coherent_mask(struct device *dev, uint8_t addr_bits)
+{
+	return dma_set_mask_and_coherent(dev, DMA_BIT_MASK(addr_bits));
+}
+
+#else
+
+/**
+ * __qdf_set_dma_coherent_mask() - set max number of bits allowed in dma addr
+ * @dev: device pointer
+ * @addr_bits: max number of bits allowed in dma address
+ *
+ * This API sets the maximum allowed number of bits in the dma address.
+ *
+ * Return: 0 - success, non zero - failure
+ */
+static inline
+int __qdf_set_dma_coherent_mask(struct device *dev, uint8_t addr_bits)
+{
+	return dma_set_coherent_mask(dev, DMA_BIT_MASK(addr_bits));
+}
+#endif
+/**
+ * qdf_get_random_bytes() - returns nbytes bytes of random
+ * data
+ *
+ * Return: random bytes of data
+ */
+static inline
+void __qdf_get_random_bytes(void *buf, int nbytes)
+{
+	return get_random_bytes(buf, nbytes);
+}
 
 #endif /*_I_QDF_UTIL_H*/

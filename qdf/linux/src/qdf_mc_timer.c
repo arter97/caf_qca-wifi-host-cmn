@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2016 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2014-2017 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -36,20 +36,32 @@
 #include "qdf_lock.h"
 #include "qdf_list.h"
 #include "qdf_mem.h"
-#ifdef CONFIG_MCL
-#include <cds_mc_timer.h>
-#endif
-/* Preprocessor definitions and constants */
+#include <linux/export.h>
 
+/* Preprocessor definitions and constants */
 #define LINUX_TIMER_COOKIE 0x12341234
 #define LINUX_INVALID_TIMER_COOKIE 0xfeedface
 #define TMR_INVALID_ID (0)
+
+/* Flag for napier emulation */
+#ifdef QCA_WIFI_NAPIER_EMULATION
+#define QDF_TIMER_MULTIPLIER 100
+#else
+#define QDF_TIMER_MULTIPLIER 1
+#endif
 
 /* Type declarations */
 
 /* Static Variable Definitions */
 static unsigned int persistent_timer_count;
 static qdf_mutex_t persistent_timer_count_lock;
+
+static void (*scheduler_timer_callback) (unsigned long data);
+void qdf_register_mc_timer_callback(void (*callback) (unsigned long data))
+{
+	scheduler_timer_callback = callback;
+}
+EXPORT_SYMBOL(qdf_register_mc_timer_callback);
 
 /* Function declarations and documenation */
 
@@ -279,11 +291,7 @@ QDF_STATUS qdf_mc_timer_init_debug(qdf_mc_timer_t *timer,
 		init_timer_deferrable(&(timer->platform_info.timer));
 	else
 		init_timer(&(timer->platform_info.timer));
-#ifdef CONFIG_MCL
-	timer->platform_info.timer.function = cds_linux_timer_callback;
-#else
-	timer->platform_info.timer.function = NULL;
-#endif
+	timer->platform_info.timer.function = scheduler_timer_callback;
 	timer->platform_info.timer.data = (unsigned long)timer;
 	timer->callback = callback;
 	timer->user_data = user_data;
@@ -294,6 +302,7 @@ QDF_STATUS qdf_mc_timer_init_debug(qdf_mc_timer_t *timer,
 
 	return QDF_STATUS_SUCCESS;
 }
+EXPORT_SYMBOL(qdf_mc_timer_init_debug);
 #else
 QDF_STATUS qdf_mc_timer_init(qdf_mc_timer_t *timer, QDF_TIMER_TYPE timer_type,
 			     qdf_mc_timer_callback_t callback,
@@ -315,11 +324,7 @@ QDF_STATUS qdf_mc_timer_init(qdf_mc_timer_t *timer, QDF_TIMER_TYPE timer_type,
 		init_timer_deferrable(&(timer->platform_info.timer));
 	else
 		init_timer(&(timer->platform_info.timer));
-#ifdef CONFIG_MCL
-	timer->platform_info.timer.function = cds_linux_timer_callback;
-#else
-	timer->platform_info.timer.function = NULL;
-#endif
+	timer->platform_info.timer.function = scheduler_timer_callback;
 	timer->platform_info.timer.data = (unsigned long)timer;
 	timer->callback = callback;
 	timer->user_data = user_data;
@@ -330,6 +335,7 @@ QDF_STATUS qdf_mc_timer_init(qdf_mc_timer_t *timer, QDF_TIMER_TYPE timer_type,
 
 	return QDF_STATUS_SUCCESS;
 }
+EXPORT_SYMBOL(qdf_mc_timer_init);
 #endif
 
 /**
@@ -414,6 +420,7 @@ QDF_STATUS qdf_mc_timer_destroy(qdf_mc_timer_t *timer)
 		timer->platform_info.cookie = LINUX_INVALID_TIMER_COOKIE;
 		timer->state = QDF_TIMER_STATE_UNUSED;
 		qdf_spin_unlock_irqrestore(&timer->platform_info.spinlock);
+		qdf_spinlock_destroy(&timer->platform_info.spinlock);
 		return v_status;
 	}
 
@@ -561,6 +568,9 @@ QDF_STATUS qdf_mc_timer_start(qdf_mc_timer_t *timer, uint32_t expiration_time)
 		return QDF_STATUS_E_INVAL;
 	}
 
+	/* update expiration time based on if emulation platform */
+	expiration_time *= QDF_TIMER_MULTIPLIER;
+
 	/* make sure the remainer of the logic isn't interrupted */
 	qdf_spin_lock_irqsave(&timer->platform_info.spinlock);
 
@@ -687,3 +697,43 @@ unsigned long qdf_mc_timer_get_system_time(void)
 	return tv.tv_sec * 1000 + tv.tv_usec / 1000;
 }
 EXPORT_SYMBOL(qdf_mc_timer_get_system_time);
+
+s64 qdf_get_monotonic_boottime_ns(void)
+{
+	struct timespec ts;
+
+	ktime_get_ts(&ts);
+	return timespec_to_ns(&ts);
+}
+EXPORT_SYMBOL(qdf_get_monotonic_boottime_ns);
+
+/**
+ * qdf_timer_module_deinit() - Deinitializes a QDF timer module.
+ *
+ * This API deinitializes the QDF timer module.
+ * Return: none
+ */
+void qdf_timer_module_deinit(void)
+{
+	QDF_TRACE(QDF_MODULE_ID_QDF, QDF_TRACE_LEVEL_INFO_HIGH,
+		  "De-Initializing the QDF MC timer module");
+	qdf_mutex_destroy(&persistent_timer_count_lock);
+}
+EXPORT_SYMBOL(qdf_timer_module_deinit);
+
+void qdf_get_time_of_the_day_in_hr_min_sec_usec(char *tbuf, int len)
+{
+	struct timeval tv;
+	struct rtc_time tm;
+	unsigned long local_time;
+
+	/* Format the Log time R#: [hr:min:sec.microsec] */
+	do_gettimeofday(&tv);
+	/* Convert rtc to local time */
+	local_time = (u32)(tv.tv_sec - (sys_tz.tz_minuteswest * 60));
+	rtc_time_to_tm(local_time, &tm);
+	scnprintf(tbuf, len,
+		"[%02d:%02d:%02d.%06lu]",
+		tm.tm_hour, tm.tm_min, tm.tm_sec, tv.tv_usec);
+}
+EXPORT_SYMBOL(qdf_get_time_of_the_day_in_hr_min_sec_usec);

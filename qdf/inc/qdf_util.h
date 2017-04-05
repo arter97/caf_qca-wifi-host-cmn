@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2016 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2014-2017 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -40,6 +40,9 @@
 #else
 #define QDF_MAX_AVAILABLE_CPU	1
 #endif
+
+typedef __qdf_thread_t qdf_thread_t;
+typedef __qdf_wait_queue_head_t qdf_wait_queue_head_t;
 
 /**
  * qdf_unlikely - Compiler-dependent macro denoting code likely to execute
@@ -110,6 +113,42 @@ static inline int qdf_status_to_os_return(QDF_STATUS status)
  * Return: none
  */
 #define qdf_set_bit(nr, addr)    __qdf_set_bit(nr, addr)
+
+/**
+ * qdf_clear_bit() - clear bit in address
+ * @nr: bit number to be clear
+ * @addr: address buffer pointer
+ *
+ * Return: none
+ */
+#define qdf_clear_bit(nr, addr)    __qdf_clear_bit(nr, addr)
+
+/**
+ * qdf_test_bit() - test bit position in address
+ * @nr: bit number to be tested
+ * @addr: address buffer pointer
+ *
+ * Return: none
+ */
+#define qdf_test_bit(nr, addr)    __qdf_test_bit(nr, addr)
+
+/**
+ * qdf_test_and_clear_bit() - test and clear bit position in address
+ * @nr: bit number to be tested
+ * @addr: address buffer pointer
+ *
+ * Return: none
+ */
+#define qdf_test_and_clear_bit(nr, addr)    __qdf_test_and_clear_bit(nr, addr)
+
+#define qdf_wait_queue_interruptible(wait_queue, condition) \
+		__qdf_wait_queue_interruptible(wait_queue, condition)
+
+#define qdf_init_waitqueue_head(_q) __qdf_init_waitqueue_head(_q)
+
+#define qdf_wake_up_interruptible(_q) __qdf_wake_up_interruptible(_q)
+
+#define qdf_wake_up_completion(_q) __qdf_wake_up_completion(_q)
 
 /**
  * qdf_container_of - cast a member of a structure out to the containing
@@ -394,6 +433,11 @@ static inline uint8_t *qdf_get_u32(uint8_t *ptr, uint32_t *value)
 #define qdf_function             __qdf_function
 
 /**
+ * qdf_min - minimum of two numbers
+ */
+#define qdf_min(a, b)   __qdf_min(a, b)
+
+/**
  * qdf_get_pwr2() - get next power of 2 integer from input value
  * @value: input value to find next power of 2 integer
  *
@@ -421,4 +465,90 @@ int qdf_get_cpu(void)
 	return __qdf_get_cpu();
 }
 
+/**
+ * qdf_device_init_wakeup() - allow a device to wake up the aps system
+ * @qdf_dev: the qdf device context
+ * @enable: enable/disable the device as a wakup source
+ *
+ * Return: 0 or errno
+ */
+static inline int qdf_device_init_wakeup(qdf_device_t qdf_dev, bool enable)
+{
+	return __qdf_device_init_wakeup(qdf_dev, enable);
+}
+
+static inline
+uint64_t qdf_get_totalramsize(void)
+{
+	return __qdf_get_totalramsize();
+}
+
+/**
+ * qdf_get_lower_32_bits() - get lower 32 bits from an address.
+ * @addr: address
+ *
+ * This api returns the lower 32 bits of an address.
+ *
+ * Return: lower 32 bits.
+ */
+static inline
+uint32_t qdf_get_lower_32_bits(qdf_dma_addr_t addr)
+{
+	return __qdf_get_lower_32_bits(addr);
+}
+
+/**
+ * qdf_get_upper_32_bits() - get upper 32 bits from an address.
+ * @addr: address
+ *
+ * This api returns the upper 32 bits of an address.
+ *
+ * Return: upper 32 bits.
+ */
+static inline
+uint32_t qdf_get_upper_32_bits(qdf_dma_addr_t addr)
+{
+	return __qdf_get_upper_32_bits(addr);
+}
+
+/**
+ * qdf_rounddown_pow_of_two() - Round down to nearest power of two
+ * @n: number to be tested
+ *
+ * Test if the input number is power of two, and return the nearest power of two
+ *
+ * Return: number rounded down to the nearest power of two
+ */
+static inline
+unsigned long qdf_rounddown_pow_of_two(unsigned long n)
+{
+	return __qdf_rounddown_pow_of_two(n);
+}
+
+/**
+ * qdf_set_dma_coherent_mask() - set max number of bits allowed in dma addr
+ * @dev: device pointer
+ * @addr_bits: max number of bits allowed in dma address
+ *
+ * This API sets the maximum allowed number of bits in the dma address.
+ *
+ * Return: 0 - success, non zero - failure
+ */
+static inline
+int qdf_set_dma_coherent_mask(struct device *dev, uint8_t addr_bits)
+{
+	return __qdf_set_dma_coherent_mask(dev, addr_bits);
+}
+
+/**
+ * qdf_get_random_bytes() - returns nbytes bytes of random
+ * data
+ *
+ * Return: random bytes of data
+ */
+static inline
+void qdf_get_random_bytes(void *buf, int nbytes)
+{
+	return __qdf_get_random_bytes(buf, nbytes);
+}
 #endif /*_QDF_UTIL_H*/

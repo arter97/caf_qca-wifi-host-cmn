@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2016 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2014-2017 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -40,9 +40,6 @@
 #endif
 
 #ifdef CONFIG_MCL
-/* Include Files */
-#include <cds_packet.h>
-
 /* QDF_TRACE is the macro invoked to add trace messages to code.  See the
  * documenation for qdf_trace_msg() for the parameters etc. for this function.
  *
@@ -53,28 +50,31 @@
  * This allows us to build 'performance' builds where we can measure performance
  * without being bogged down by all the tracing in the code
  */
-#if defined(WLAN_DEBUG)
+#if defined(WLAN_DEBUG) || defined(DEBUG)
 #define QDF_TRACE qdf_trace_msg
 #define QDF_TRACE_HEX_DUMP qdf_trace_hex_dump
 #else
 #define QDF_TRACE(arg ...)
 #define QDF_TRACE_HEX_DUMP(arg ...)
 #endif
-#else
+#else /* CONFIG_MCL */
 
 #define qdf_trace(log_level, args...) \
 		do {	\
 			extern int qdf_dbg_mask; \
 			if (qdf_dbg_mask >= log_level) { \
-				printk("qdf: "args); \
+				printk(args); \
 				printk("\n"); \
 			} \
 		} while (0)
-#define QDF_TRACE(x, y, args...) printk(args)
 
+#define QDF_TRACE qdf_trace_msg
+
+#define QDF_TRACE_HEX_DUMP qdf_trace_hex_dump
 #endif /* CONFIG_MCL */
 
 #define QDF_ENABLE_TRACING
+#define qdf_scnprintf scnprintf
 
 #ifdef QDF_ENABLE_TRACING
 

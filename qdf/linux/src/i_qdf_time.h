@@ -35,7 +35,11 @@
 
 #include <linux/jiffies.h>
 #include <linux/delay.h>
+#ifdef MSM_PLATFORM
 #include <asm/arch_timer.h>
+#else
+#include <linux/ktime.h>
+#endif
 #ifdef CONFIG_CNSS
 #include <net/cnss.h>
 #endif
@@ -188,6 +192,7 @@ static inline uint64_t __qdf_get_monotonic_boottime(void)
 }
 
 #ifdef QCA_WIFI_3_0_ADRASTEA
+#include <asm/arch_timer.h>
 
 /**
  * __qdf_get_log_timestamp() - get QTIMER ticks

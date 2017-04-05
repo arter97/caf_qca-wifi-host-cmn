@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2016-2017 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -49,6 +49,8 @@ QDF_STATUS hif_initialize_pci_ops(struct hif_softc *hif_sc)
 	bus_ops->hif_reset_soc = &hif_pci_reset_soc;
 	bus_ops->hif_bus_suspend = &hif_pci_bus_suspend;
 	bus_ops->hif_bus_resume = &hif_pci_bus_resume;
+	bus_ops->hif_bus_suspend_noirq = &hif_pci_bus_suspend_noirq;
+	bus_ops->hif_bus_resume_noirq = &hif_pci_bus_resume_noirq;
 
 	/* do not put the target to sleep for epping or maxperf mode */
 	if (CONFIG_ATH_PCIE_MAX_PERF == 0 &&
@@ -85,6 +87,11 @@ QDF_STATUS hif_initialize_pci_ops(struct hif_softc *hif_sc)
 		&hif_pci_display_stats;
 	bus_ops->hif_clear_stats =
 		&hif_pci_clear_stats;
+	bus_ops->hif_grp_irq_disable = &hif_dummy_grp_irq_disable;
+	bus_ops->hif_grp_irq_enable = &hif_dummy_grp_irq_enable;
+
+	/* default to legacy mapping handler; override as needed */
+	bus_ops->hif_map_ce_to_irq = &hif_pci_legacy_map_ce_to_irq;
 
 	return QDF_STATUS_SUCCESS;
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2016-2017 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -30,9 +30,13 @@
 #include "hif_debug.h"
 #include "hif.h"
 #include "hif_main.h"
+#include "hif_io32.h"
 #include "multibus.h"
+#include "dummy.h"
 #if defined(HIF_PCI) || defined(HIF_SNOC) || defined(HIF_AHB)
 #include "ce_main.h"
+#include "ce_api.h"
+#include "ce_internal.h"
 #endif
 #include "htc_services.h"
 #include "a_types.h"
@@ -49,12 +53,19 @@ static void hif_intialize_default_ops(struct hif_softc *hif_sc)
 
 	/* must be filled in by hif_bus_open */
 	bus_ops->hif_bus_close = NULL;
-
 	/* dummy implementations */
 	bus_ops->hif_display_stats =
 		&hif_dummy_display_stats;
 	bus_ops->hif_clear_stats =
 		&hif_dummy_clear_stats;
+	bus_ops->hif_set_bundle_mode = &hif_dummy_set_bundle_mode;
+	bus_ops->hif_bus_reset_resume = &hif_dummy_bus_reset_resume;
+	bus_ops->hif_bus_suspend_noirq = &hif_dummy_bus_suspend_noirq;
+	bus_ops->hif_bus_resume_noirq = &hif_dummy_bus_resume_noirq;
+	bus_ops->hif_bus_early_suspend = &hif_dummy_bus_suspend;
+	bus_ops->hif_bus_late_resume = &hif_dummy_bus_resume;
+	bus_ops->hif_grp_irq_disable = &hif_dummy_grp_irq_disable;
+	bus_ops->hif_grp_irq_enable = &hif_dummy_grp_irq_enable;
 }
 
 #define NUM_OPS (sizeof(struct hif_bus_ops) / sizeof(void *))
@@ -100,6 +111,8 @@ int hif_bus_get_context_size(enum qdf_bus_type bus_type)
 		return hif_snoc_get_context_size();
 	case QDF_BUS_TYPE_SDIO:
 		return hif_sdio_get_context_size();
+	case QDF_BUS_TYPE_USB:
+		return hif_usb_get_context_size();
 	default:
 		return 0;
 	}
@@ -131,6 +144,9 @@ QDF_STATUS hif_bus_open(struct hif_softc *hif_sc,
 		break;
 	case QDF_BUS_TYPE_SDIO:
 		status = hif_initialize_sdio_ops(hif_sc);
+		break;
+	case QDF_BUS_TYPE_USB:
+		status = hif_initialize_usb_ops(&hif_sc->bus_ops);
 		break;
 	default:
 		status = QDF_STATUS_E_NOSUPPORT;
@@ -177,6 +193,18 @@ void hif_reset_soc(struct hif_opaque_softc *hif_ctx)
 	hif_sc->bus_ops.hif_reset_soc(hif_sc);
 }
 
+int hif_bus_early_suspend(struct hif_opaque_softc *hif_ctx)
+{
+	struct hif_softc *hif_sc = HIF_GET_SOFTC(hif_ctx);
+	return hif_sc->bus_ops.hif_bus_early_suspend(hif_sc);
+}
+
+int hif_bus_late_resume(struct hif_opaque_softc *hif_ctx)
+{
+	struct hif_softc *hif_sc = HIF_GET_SOFTC(hif_ctx);
+	return hif_sc->bus_ops.hif_bus_late_resume(hif_sc);
+}
+
 int hif_bus_suspend(struct hif_opaque_softc *hif_ctx)
 {
 	struct hif_softc *hif_sc = HIF_GET_SOFTC(hif_ctx);
@@ -187,6 +215,18 @@ int hif_bus_resume(struct hif_opaque_softc *hif_ctx)
 {
 	struct hif_softc *hif_sc = HIF_GET_SOFTC(hif_ctx);
 	return hif_sc->bus_ops.hif_bus_resume(hif_sc);
+}
+
+int hif_bus_suspend_noirq(struct hif_opaque_softc *hif_ctx)
+{
+	struct hif_softc *hif_sc = HIF_GET_SOFTC(hif_ctx);
+	return hif_sc->bus_ops.hif_bus_suspend_noirq(hif_sc);
+}
+
+int hif_bus_resume_noirq(struct hif_opaque_softc *hif_ctx)
+{
+	struct hif_softc *hif_sc = HIF_GET_SOFTC(hif_ctx);
+	return hif_sc->bus_ops.hif_bus_resume_noirq(hif_sc);
 }
 
 int hif_target_sleep_state_adjust(struct hif_softc *hif_sc,
@@ -266,9 +306,19 @@ void hif_irq_enable(struct hif_softc *hif_sc, int irq_id)
 	hif_sc->bus_ops.hif_irq_enable(hif_sc, irq_id);
 }
 
+void hif_grp_irq_enable(struct hif_softc *hif_sc, uint32_t grp_id)
+{
+	hif_sc->bus_ops.hif_grp_irq_enable(hif_sc, grp_id);
+}
+
 void hif_irq_disable(struct hif_softc *hif_sc, int irq_id)
 {
 	hif_sc->bus_ops.hif_irq_disable(hif_sc, irq_id);
+}
+
+void hif_grp_irq_disable(struct hif_softc *hif_sc, uint32_t grp_id)
+{
+	hif_sc->bus_ops.hif_grp_irq_disable(hif_sc, grp_id);
 }
 
 int hif_dump_registers(struct hif_opaque_softc *hif_hdl)
@@ -347,3 +397,114 @@ void hif_disable_power_management(struct hif_opaque_softc *hif_hdl)
 	hif_sc->bus_ops.hif_disable_power_management(hif_sc);
 }
 
+/**
+ * hif_set_bundle_mode() - enable bundling and set default rx bundle cnt
+ * @scn: pointer to hif_opaque_softc structure
+ * @enabled: flag to enable/disable bundling
+ * @rx_bundle_cnt: bundle count to be used for RX
+ *
+ * Return: none
+ */
+void hif_set_bundle_mode(struct hif_opaque_softc *scn, bool enabled,
+				int rx_bundle_cnt)
+{
+	struct hif_softc *hif_sc = HIF_GET_SOFTC(scn);
+	hif_sc->bus_ops.hif_set_bundle_mode(hif_sc, enabled, rx_bundle_cnt);
+}
+
+/**
+ * hif_bus_reset_resume() - resume the bus after reset
+ * @scn: struct hif_opaque_softc
+ *
+ * This function is called to tell the driver that USB device has been resumed
+ * and it has also been reset. The driver should redo any necessary
+ * initialization. This function resets WLAN SOC.
+ *
+ * Return: int 0 for success, non zero for failure
+ */
+int hif_bus_reset_resume(struct hif_opaque_softc *scn)
+
+{
+	struct hif_softc *hif_sc = HIF_GET_SOFTC(scn);
+	return hif_sc->bus_ops.hif_bus_reset_resume(hif_sc);
+}
+
+int hif_apps_irqs_disable(struct hif_opaque_softc *hif_ctx)
+{
+	struct hif_softc *scn;
+	int i;
+
+	scn = HIF_GET_SOFTC(hif_ctx);
+	if (!scn) {
+		QDF_BUG(0);
+		return -EINVAL;
+	}
+
+	for (i = 0; i < scn->ce_count; ++i)
+		disable_irq(scn->bus_ops.hif_map_ce_to_irq(scn, i));
+
+	return 0;
+}
+
+int hif_apps_irqs_enable(struct hif_opaque_softc *hif_ctx)
+{
+	struct hif_softc *scn;
+	int i;
+
+	scn = HIF_GET_SOFTC(hif_ctx);
+	if (!scn) {
+		QDF_BUG(0);
+		return -EINVAL;
+	}
+
+	for (i = 0; i < scn->ce_count; ++i)
+		enable_irq(scn->bus_ops.hif_map_ce_to_irq(scn, i));
+
+	return 0;
+}
+
+int hif_apps_wake_irq_disable(struct hif_opaque_softc *hif_ctx)
+{
+	int errno;
+	struct hif_softc *scn;
+	uint8_t wake_ce_id;
+
+	scn = HIF_GET_SOFTC(hif_ctx);
+	if (!scn) {
+		QDF_BUG(0);
+		return -EINVAL;
+	}
+
+	errno = hif_get_wake_ce_id(scn, &wake_ce_id);
+	if (errno) {
+		HIF_ERROR("%s: failed to get wake CE Id: %d", __func__, errno);
+		return errno;
+	}
+
+	disable_irq(scn->bus_ops.hif_map_ce_to_irq(scn, wake_ce_id));
+
+	return 0;
+}
+
+int hif_apps_wake_irq_enable(struct hif_opaque_softc *hif_ctx)
+{
+	int errno;
+	struct hif_softc *scn;
+	uint8_t wake_ce_id;
+
+	scn = HIF_GET_SOFTC(hif_ctx);
+	if (!scn) {
+		QDF_BUG(0);
+		return -EINVAL;
+	}
+
+	errno = hif_get_wake_ce_id(scn, &wake_ce_id);
+	if (errno) {
+		HIF_ERROR("%s: failed to get wake CE Id: %d", __func__, errno);
+		return errno;
+	}
+
+	enable_irq(scn->bus_ops.hif_map_ce_to_irq(scn, wake_ce_id));
+
+	return 0;
+}

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2016 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2014-2017 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -166,6 +166,7 @@ EXPORT_SYMBOL(qdf_nbuf_set_state);
 
 /* globals do not need to be initialized to NULL/0 */
 qdf_nbuf_trace_update_t qdf_trace_update_cb;
+qdf_nbuf_free_t nbuf_free_cb;
 
 /**
  * __qdf_nbuf_alloc() - Allocate nbuf
@@ -232,14 +233,22 @@ EXPORT_SYMBOL(__qdf_nbuf_alloc);
  *
  * Return: none
  */
+
+#ifdef CONFIG_MCL
 void __qdf_nbuf_free(struct sk_buff *skb)
 {
-	if (qdf_nbuf_ipa_owned_get(skb))
-		/* IPA cleanup function will need to be called here */
-		QDF_BUG(1);
+	if (nbuf_free_cb)
+		nbuf_free_cb(skb);
 	else
 		dev_kfree_skb_any(skb);
 }
+#else
+void __qdf_nbuf_free(struct sk_buff *skb)
+{
+	dev_kfree_skb_any(skb);
+}
+#endif
+
 EXPORT_SYMBOL(__qdf_nbuf_free);
 
 /**
@@ -311,13 +320,15 @@ EXPORT_SYMBOL(__qdf_nbuf_unmap);
  *
  * Return: QDF_STATUS
  */
-#ifdef A_SIMOS_DEVHOST
+#if defined(A_SIMOS_DEVHOST) || defined (HIF_USB)
 QDF_STATUS
 __qdf_nbuf_map_single(qdf_device_t osdev, qdf_nbuf_t buf, qdf_dma_dir_t dir)
 {
 	qdf_dma_addr_t paddr;
 
-	QDF_NBUF_CB_PADDR(buf) = paddr = buf->data;
+	QDF_NBUF_CB_PADDR(buf) = paddr = (uintptr_t)buf->data;
+	BUILD_BUG_ON(sizeof(paddr) < sizeof(buf->data));
+	BUILD_BUG_ON(sizeof(QDF_NBUF_CB_PADDR(buf)) < sizeof(buf->data));
 	return QDF_STATUS_SUCCESS;
 }
 EXPORT_SYMBOL(__qdf_nbuf_map_single);
@@ -345,7 +356,7 @@ EXPORT_SYMBOL(__qdf_nbuf_map_single);
  *
  * Return: none
  */
-#if defined(A_SIMOS_DEVHOST)
+#if defined(A_SIMOS_DEVHOST) || defined (HIF_USB)
 void __qdf_nbuf_unmap_single(qdf_device_t osdev, qdf_nbuf_t buf,
 				qdf_dma_dir_t dir)
 {
@@ -355,8 +366,9 @@ void __qdf_nbuf_unmap_single(qdf_device_t osdev, qdf_nbuf_t buf,
 void __qdf_nbuf_unmap_single(qdf_device_t osdev, qdf_nbuf_t buf,
 					qdf_dma_dir_t dir)
 {
-	dma_unmap_single(osdev->dev, QDF_NBUF_CB_PADDR(buf),
-			 skb_end_pointer(buf) - buf->data, dir);
+	if (QDF_NBUF_CB_PADDR(buf))
+		dma_unmap_single(osdev->dev, QDF_NBUF_CB_PADDR(buf),
+			skb_end_pointer(buf) - buf->data, dir);
 }
 #endif
 EXPORT_SYMBOL(__qdf_nbuf_unmap_single);
@@ -464,39 +476,288 @@ void __qdf_nbuf_reg_trace_cb(qdf_nbuf_trace_update_t cb_func_ptr)
 EXPORT_SYMBOL(__qdf_nbuf_reg_trace_cb);
 
 /**
- * __qdf_nbuf_is_ipv4_pkt() - check if packet is a ipv4 packet
- * @skb: Pointer to network buffer
+ * __qdf_nbuf_data_get_dhcp_subtype() - get the subtype
+ *              of DHCP packet.
+ * @data: Pointer to DHCP packet data buffer
+ *
+ * This func. returns the subtype of DHCP packet.
+ *
+ * Return: subtype of the DHCP packet.
+ */
+enum qdf_proto_subtype
+__qdf_nbuf_data_get_dhcp_subtype(uint8_t *data)
+{
+	enum qdf_proto_subtype subtype = QDF_PROTO_INVALID;
+
+	if ((data[QDF_DHCP_OPTION53_OFFSET] == QDF_DHCP_OPTION53) &&
+		(data[QDF_DHCP_OPTION53_LENGTH_OFFSET] ==
+					QDF_DHCP_OPTION53_LENGTH)) {
+
+		switch (data[QDF_DHCP_OPTION53_STATUS_OFFSET]) {
+		case QDF_DHCP_DISCOVER:
+			subtype = QDF_PROTO_DHCP_DISCOVER;
+			break;
+		case QDF_DHCP_REQUEST:
+			subtype = QDF_PROTO_DHCP_REQUEST;
+			break;
+		case QDF_DHCP_OFFER:
+			subtype = QDF_PROTO_DHCP_OFFER;
+			break;
+		case QDF_DHCP_ACK:
+			subtype = QDF_PROTO_DHCP_ACK;
+			break;
+		case QDF_DHCP_NAK:
+			subtype = QDF_PROTO_DHCP_NACK;
+			break;
+		case QDF_DHCP_RELEASE:
+			subtype = QDF_PROTO_DHCP_RELEASE;
+			break;
+		case QDF_DHCP_INFORM:
+			subtype = QDF_PROTO_DHCP_INFORM;
+			break;
+		case QDF_DHCP_DECLINE:
+			subtype = QDF_PROTO_DHCP_DECLINE;
+			break;
+		default:
+			break;
+		}
+	}
+
+	return subtype;
+}
+
+/**
+ * __qdf_nbuf_data_get_eapol_subtype() - get the subtype
+ *            of EAPOL packet.
+ * @data: Pointer to EAPOL packet data buffer
+ *
+ * This func. returns the subtype of EAPOL packet.
+ *
+ * Return: subtype of the EAPOL packet.
+ */
+enum qdf_proto_subtype
+__qdf_nbuf_data_get_eapol_subtype(uint8_t *data)
+{
+	uint16_t eapol_key_info;
+	enum qdf_proto_subtype subtype = QDF_PROTO_INVALID;
+	uint16_t mask;
+
+	eapol_key_info = (uint16_t)(*(uint16_t *)
+			(data + EAPOL_KEY_INFO_OFFSET));
+
+	mask = eapol_key_info & EAPOL_MASK;
+	switch (mask) {
+	case EAPOL_M1_BIT_MASK:
+		subtype = QDF_PROTO_EAPOL_M1;
+		break;
+	case EAPOL_M2_BIT_MASK:
+		subtype = QDF_PROTO_EAPOL_M2;
+		break;
+	case EAPOL_M3_BIT_MASK:
+		subtype = QDF_PROTO_EAPOL_M3;
+		break;
+	case EAPOL_M4_BIT_MASK:
+		subtype = QDF_PROTO_EAPOL_M4;
+		break;
+	default:
+		break;
+	}
+
+	return subtype;
+}
+
+/**
+ * __qdf_nbuf_data_get_arp_subtype() - get the subtype
+ *            of ARP packet.
+ * @data: Pointer to ARP packet data buffer
+ *
+ * This func. returns the subtype of ARP packet.
+ *
+ * Return: subtype of the ARP packet.
+ */
+enum qdf_proto_subtype
+__qdf_nbuf_data_get_arp_subtype(uint8_t *data)
+{
+	uint16_t subtype;
+	enum qdf_proto_subtype proto_subtype = QDF_PROTO_INVALID;
+
+	subtype = (uint16_t)(*(uint16_t *)
+			(data + ARP_SUB_TYPE_OFFSET));
+
+	switch (QDF_SWAP_U16(subtype)) {
+	case ARP_REQUEST:
+		proto_subtype = QDF_PROTO_ARP_REQ;
+		break;
+	case ARP_RESPONSE:
+		proto_subtype = QDF_PROTO_ARP_RES;
+		break;
+	default:
+		break;
+	}
+
+	return proto_subtype;
+}
+
+/**
+ * __qdf_nbuf_data_get_icmp_subtype() - get the subtype
+ *            of IPV4 ICMP packet.
+ * @data: Pointer to IPV4 ICMP packet data buffer
+ *
+ * This func. returns the subtype of ICMP packet.
+ *
+ * Return: subtype of the ICMP packet.
+ */
+enum qdf_proto_subtype
+__qdf_nbuf_data_get_icmp_subtype(uint8_t *data)
+{
+	uint8_t subtype;
+	enum qdf_proto_subtype proto_subtype = QDF_PROTO_INVALID;
+
+	subtype = (uint8_t)(*(uint8_t *)
+			(data + ICMP_SUBTYPE_OFFSET));
+
+	QDF_TRACE(QDF_MODULE_ID_QDF, QDF_TRACE_LEVEL_DEBUG,
+		"ICMP proto type: 0x%02x", subtype);
+
+	switch (subtype) {
+	case ICMP_REQUEST:
+		proto_subtype = QDF_PROTO_ICMP_REQ;
+		break;
+	case ICMP_RESPONSE:
+		proto_subtype = QDF_PROTO_ICMP_RES;
+		break;
+	default:
+		break;
+	}
+
+	return proto_subtype;
+}
+
+/**
+ * __qdf_nbuf_data_get_icmpv6_subtype() - get the subtype
+ *            of IPV6 ICMPV6 packet.
+ * @data: Pointer to IPV6 ICMPV6 packet data buffer
+ *
+ * This func. returns the subtype of ICMPV6 packet.
+ *
+ * Return: subtype of the ICMPV6 packet.
+ */
+enum qdf_proto_subtype
+__qdf_nbuf_data_get_icmpv6_subtype(uint8_t *data)
+{
+	uint8_t subtype;
+	enum qdf_proto_subtype proto_subtype = QDF_PROTO_INVALID;
+
+	subtype = (uint8_t)(*(uint8_t *)
+			(data + ICMPV6_SUBTYPE_OFFSET));
+
+	QDF_TRACE(QDF_MODULE_ID_QDF, QDF_TRACE_LEVEL_DEBUG,
+		"ICMPv6 proto type: 0x%02x", subtype);
+
+	switch (subtype) {
+	case ICMPV6_REQUEST:
+		proto_subtype = QDF_PROTO_ICMPV6_REQ;
+		break;
+	case ICMPV6_RESPONSE:
+		proto_subtype = QDF_PROTO_ICMPV6_RES;
+		break;
+	case ICMPV6_RS:
+		proto_subtype = QDF_PROTO_ICMPV6_RS;
+		break;
+	case ICMPV6_RA:
+		proto_subtype = QDF_PROTO_ICMPV6_RA;
+		break;
+	case ICMPV6_NS:
+		proto_subtype = QDF_PROTO_ICMPV6_NS;
+		break;
+	case ICMPV6_NA:
+		proto_subtype = QDF_PROTO_ICMPV6_NA;
+		break;
+	default:
+		break;
+	}
+
+	return proto_subtype;
+}
+
+/**
+ * __qdf_nbuf_data_get_ipv4_proto() - get the proto type
+ *            of IPV4 packet.
+ * @data: Pointer to IPV4 packet data buffer
+ *
+ * This func. returns the proto type of IPV4 packet.
+ *
+ * Return: proto type of IPV4 packet.
+ */
+uint8_t
+__qdf_nbuf_data_get_ipv4_proto(uint8_t *data)
+{
+	uint8_t proto_type;
+
+	proto_type = (uint8_t)(*(uint8_t *)(data +
+				QDF_NBUF_TRAC_IPV4_PROTO_TYPE_OFFSET));
+	return proto_type;
+}
+
+/**
+ * __qdf_nbuf_data_get_ipv6_proto() - get the proto type
+ *            of IPV6 packet.
+ * @data: Pointer to IPV6 packet data buffer
+ *
+ * This func. returns the proto type of IPV6 packet.
+ *
+ * Return: proto type of IPV6 packet.
+ */
+uint8_t
+__qdf_nbuf_data_get_ipv6_proto(uint8_t *data)
+{
+	uint8_t proto_type;
+
+	proto_type = (uint8_t)(*(uint8_t *)(data +
+				QDF_NBUF_TRAC_IPV6_PROTO_TYPE_OFFSET));
+	return proto_type;
+}
+
+/**
+ * __qdf_nbuf_data_is_ipv4_pkt() - check if packet is a ipv4 packet
+ * @data: Pointer to network data
  *
  * This api is for Tx packets.
  *
  * Return: true if packet is ipv4 packet
  *	   false otherwise
  */
-bool __qdf_nbuf_is_ipv4_pkt(struct sk_buff *skb)
+bool __qdf_nbuf_data_is_ipv4_pkt(uint8_t *data)
 {
-	if (qdf_nbuf_get_protocol(skb) == htons(ETH_P_IP))
+	uint16_t ether_type;
+
+	ether_type = (uint16_t)(*(uint16_t *)(data +
+				QDF_NBUF_TRAC_ETH_TYPE_OFFSET));
+
+	if (ether_type == QDF_SWAP_U16(QDF_NBUF_TRAC_IPV4_ETH_TYPE))
 		return true;
 	else
 		return false;
 }
+EXPORT_SYMBOL(__qdf_nbuf_data_is_ipv4_pkt);
 
 /**
- * __qdf_nbuf_is_ipv4_dhcp_pkt() - check if skb data is a dhcp packet
- * @skb: Pointer to network buffer
+ * __qdf_nbuf_data_is_ipv4_dhcp_pkt() - check if skb data is a dhcp packet
+ * @data: Pointer to network data buffer
  *
  * This api is for ipv4 packet.
  *
  * Return: true if packet is DHCP packet
  *	   false otherwise
  */
-bool __qdf_nbuf_is_ipv4_dhcp_pkt(struct sk_buff *skb)
+bool __qdf_nbuf_data_is_ipv4_dhcp_pkt(uint8_t *data)
 {
 	uint16_t sport;
 	uint16_t dport;
 
-	sport = (uint16_t)(*(uint16_t *)(skb->data + QDF_NBUF_TRAC_IPV4_OFFSET +
+	sport = (uint16_t)(*(uint16_t *)(data + QDF_NBUF_TRAC_IPV4_OFFSET +
 					 QDF_NBUF_TRAC_IPV4_HEADER_SIZE));
-	dport = (uint16_t)(*(uint16_t *)(skb->data + QDF_NBUF_TRAC_IPV4_OFFSET +
+	dport = (uint16_t)(*(uint16_t *)(data + QDF_NBUF_TRAC_IPV4_OFFSET +
 					 QDF_NBUF_TRAC_IPV4_HEADER_SIZE +
 					 sizeof(uint16_t)));
 
@@ -508,21 +769,22 @@ bool __qdf_nbuf_is_ipv4_dhcp_pkt(struct sk_buff *skb)
 	else
 		return false;
 }
+EXPORT_SYMBOL(__qdf_nbuf_data_is_ipv4_dhcp_pkt);
 
 /**
- * __qdf_nbuf_is_ipv4_eapol_pkt() - check if skb data is a eapol packet
- * @skb: Pointer to network buffer
+ * __qdf_nbuf_data_is_ipv4_eapol_pkt() - check if skb data is a eapol packet
+ * @data: Pointer to network data buffer
  *
  * This api is for ipv4 packet.
  *
  * Return: true if packet is EAPOL packet
  *	   false otherwise.
  */
-bool __qdf_nbuf_is_ipv4_eapol_pkt(struct sk_buff *skb)
+bool __qdf_nbuf_data_is_ipv4_eapol_pkt(uint8_t *data)
 {
 	uint16_t ether_type;
 
-	ether_type = (uint16_t)(*(uint16_t *)(skb->data +
+	ether_type = (uint16_t)(*(uint16_t *)(data +
 				QDF_NBUF_TRAC_ETH_TYPE_OFFSET));
 
 	if (ether_type == QDF_SWAP_U16(QDF_NBUF_TRAC_EAPOL_ETH_TYPE))
@@ -530,26 +792,281 @@ bool __qdf_nbuf_is_ipv4_eapol_pkt(struct sk_buff *skb)
 	else
 		return false;
 }
+EXPORT_SYMBOL(__qdf_nbuf_data_is_ipv4_eapol_pkt);
 
 /**
- * __qdf_nbuf_is_ipv4_arp_pkt() - check if skb data is a eapol packet
+ * __qdf_nbuf_is_ipv4_wapi_pkt() - check if skb data is a wapi packet
  * @skb: Pointer to network buffer
  *
  * This api is for ipv4 packet.
  *
- * Return: true if packet is ARP packet
+ * Return: true if packet is WAPI packet
  *	   false otherwise.
  */
-bool __qdf_nbuf_is_ipv4_arp_pkt(struct sk_buff *skb)
+bool __qdf_nbuf_is_ipv4_wapi_pkt(struct sk_buff *skb)
 {
 	uint16_t ether_type;
 
 	ether_type = (uint16_t)(*(uint16_t *)(skb->data +
 				QDF_NBUF_TRAC_ETH_TYPE_OFFSET));
 
+	if (ether_type == QDF_SWAP_U16(QDF_NBUF_TRAC_WAPI_ETH_TYPE))
+		return true;
+	else
+		return false;
+}
+
+/**
+ * __qdf_nbuf_data_is_ipv4_arp_pkt() - check if skb data is a arp packet
+ * @data: Pointer to network data buffer
+ *
+ * This api is for ipv4 packet.
+ *
+ * Return: true if packet is ARP packet
+ *	   false otherwise.
+ */
+bool __qdf_nbuf_data_is_ipv4_arp_pkt(uint8_t *data)
+{
+	uint16_t ether_type;
+
+	ether_type = (uint16_t)(*(uint16_t *)(data +
+				QDF_NBUF_TRAC_ETH_TYPE_OFFSET));
+
 	if (ether_type == QDF_SWAP_U16(QDF_NBUF_TRAC_ARP_ETH_TYPE))
 		return true;
 	else
+		return false;
+}
+EXPORT_SYMBOL(__qdf_nbuf_data_is_ipv4_arp_pkt);
+
+/**
+ * __qdf_nbuf_data_is_ipv6_pkt() - check if it is IPV6 packet.
+ * @data: Pointer to IPV6 packet data buffer
+ *
+ * This func. checks whether it is a IPV6 packet or not.
+ *
+ * Return: TRUE if it is a IPV6 packet
+ *         FALSE if not
+ */
+bool __qdf_nbuf_data_is_ipv6_pkt(uint8_t *data)
+{
+	uint16_t ether_type;
+
+	ether_type = (uint16_t)(*(uint16_t *)(data +
+				QDF_NBUF_TRAC_ETH_TYPE_OFFSET));
+
+	if (ether_type == QDF_SWAP_U16(QDF_NBUF_TRAC_IPV6_ETH_TYPE))
+		return true;
+	else
+		return false;
+}
+EXPORT_SYMBOL(__qdf_nbuf_data_is_ipv6_pkt);
+
+/**
+ * __qdf_nbuf_data_is_ipv4_mcast_pkt() - check if it is IPV4 multicast packet.
+ * @data: Pointer to IPV4 packet data buffer
+ *
+ * This func. checks whether it is a IPV4 multicast packet or not.
+ *
+ * Return: TRUE if it is a IPV4 multicast packet
+ *         FALSE if not
+ */
+bool __qdf_nbuf_data_is_ipv4_mcast_pkt(uint8_t *data)
+{
+	if (__qdf_nbuf_data_is_ipv4_pkt(data)) {
+		uint32_t *dst_addr =
+		      (uint32_t *)(data + QDF_NBUF_TRAC_IPV4_DEST_ADDR_OFFSET);
+
+		/*
+		 * Check first word of the IPV4 address and if it is
+		 * equal to 0xE then it represents multicast IP.
+		 */
+		if ((*dst_addr & QDF_NBUF_TRAC_IPV4_ADDR_BCAST_MASK) ==
+				QDF_NBUF_TRAC_IPV4_ADDR_MCAST_MASK)
+			return true;
+		else
+			return false;
+	} else
+		return false;
+}
+
+/**
+ * __qdf_nbuf_data_is_ipv6_mcast_pkt() - check if it is IPV6 multicast packet.
+ * @data: Pointer to IPV6 packet data buffer
+ *
+ * This func. checks whether it is a IPV6 multicast packet or not.
+ *
+ * Return: TRUE if it is a IPV6 multicast packet
+ *         FALSE if not
+ */
+bool __qdf_nbuf_data_is_ipv6_mcast_pkt(uint8_t *data)
+{
+	if (__qdf_nbuf_data_is_ipv6_pkt(data)) {
+		uint16_t *dst_addr;
+
+		dst_addr = (uint16_t *)
+			(data + QDF_NBUF_TRAC_IPV6_DEST_ADDR_OFFSET);
+
+		/*
+		 * Check first byte of the IP address and if it
+		 * 0xFF00 then it is a IPV6 mcast packet.
+		 */
+		if (*dst_addr ==
+		     QDF_SWAP_U16(QDF_NBUF_TRAC_IPV6_DEST_ADDR))
+			return true;
+		else
+			return false;
+	} else
+		return false;
+}
+
+/**
+ * __qdf_nbuf_data_is_icmp_pkt() - check if it is IPV4 ICMP packet.
+ * @data: Pointer to IPV4 ICMP packet data buffer
+ *
+ * This func. checks whether it is a ICMP packet or not.
+ *
+ * Return: TRUE if it is a ICMP packet
+ *         FALSE if not
+ */
+bool __qdf_nbuf_data_is_icmp_pkt(uint8_t *data)
+{
+	if (__qdf_nbuf_data_is_ipv4_pkt(data)) {
+		uint8_t pkt_type;
+
+		pkt_type = (uint8_t)(*(uint8_t *)(data +
+				QDF_NBUF_TRAC_IPV4_PROTO_TYPE_OFFSET));
+
+		if (pkt_type == QDF_NBUF_TRAC_ICMP_TYPE)
+			return true;
+		else
+			return false;
+	} else
+		return false;
+}
+
+/**
+ * __qdf_nbuf_data_is_icmpv6_pkt() - check if it is IPV6 ICMPV6 packet.
+ * @data: Pointer to IPV6 ICMPV6 packet data buffer
+ *
+ * This func. checks whether it is a ICMPV6 packet or not.
+ *
+ * Return: TRUE if it is a ICMPV6 packet
+ *         FALSE if not
+ */
+bool __qdf_nbuf_data_is_icmpv6_pkt(uint8_t *data)
+{
+	if (__qdf_nbuf_data_is_ipv6_pkt(data)) {
+		uint8_t pkt_type;
+
+		pkt_type = (uint8_t)(*(uint8_t *)(data +
+				QDF_NBUF_TRAC_IPV6_PROTO_TYPE_OFFSET));
+
+		if (pkt_type == QDF_NBUF_TRAC_ICMPV6_TYPE)
+			return true;
+		else
+			return false;
+	} else
+		return false;
+}
+
+/**
+ * __qdf_nbuf_data_is_ipv4_udp_pkt() - check if it is IPV4 UDP packet.
+ * @data: Pointer to IPV4 UDP packet data buffer
+ *
+ * This func. checks whether it is a IPV4 UDP packet or not.
+ *
+ * Return: TRUE if it is a IPV4 UDP packet
+ *         FALSE if not
+ */
+bool __qdf_nbuf_data_is_ipv4_udp_pkt(uint8_t *data)
+{
+	if (__qdf_nbuf_data_is_ipv4_pkt(data)) {
+		uint8_t pkt_type;
+
+		pkt_type = (uint8_t)(*(uint8_t *)(data +
+				QDF_NBUF_TRAC_IPV4_PROTO_TYPE_OFFSET));
+
+		if (pkt_type == QDF_NBUF_TRAC_UDP_TYPE)
+			return true;
+		else
+			return false;
+	} else
+		return false;
+}
+
+/**
+ * __qdf_nbuf_data_is_ipv4_tcp_pkt() - check if it is IPV4 TCP packet.
+ * @data: Pointer to IPV4 TCP packet data buffer
+ *
+ * This func. checks whether it is a IPV4 TCP packet or not.
+ *
+ * Return: TRUE if it is a IPV4 TCP packet
+ *         FALSE if not
+ */
+bool __qdf_nbuf_data_is_ipv4_tcp_pkt(uint8_t *data)
+{
+	if (__qdf_nbuf_data_is_ipv4_pkt(data)) {
+		uint8_t pkt_type;
+
+		pkt_type = (uint8_t)(*(uint8_t *)(data +
+				QDF_NBUF_TRAC_IPV4_PROTO_TYPE_OFFSET));
+
+		if (pkt_type == QDF_NBUF_TRAC_TCP_TYPE)
+			return true;
+		else
+			return false;
+	} else
+		return false;
+}
+
+/**
+ * __qdf_nbuf_data_is_ipv6_udp_pkt() - check if it is IPV6 UDP packet.
+ * @data: Pointer to IPV6 UDP packet data buffer
+ *
+ * This func. checks whether it is a IPV6 UDP packet or not.
+ *
+ * Return: TRUE if it is a IPV6 UDP packet
+ *         FALSE if not
+ */
+bool __qdf_nbuf_data_is_ipv6_udp_pkt(uint8_t *data)
+{
+	if (__qdf_nbuf_data_is_ipv6_pkt(data)) {
+		uint8_t pkt_type;
+
+		pkt_type = (uint8_t)(*(uint8_t *)(data +
+				QDF_NBUF_TRAC_IPV6_PROTO_TYPE_OFFSET));
+
+		if (pkt_type == QDF_NBUF_TRAC_UDP_TYPE)
+			return true;
+		else
+			return false;
+	} else
+		return false;
+}
+
+/**
+ * __qdf_nbuf_data_is_ipv6_tcp_pkt() - check if it is IPV6 TCP packet.
+ * @data: Pointer to IPV6 TCP packet data buffer
+ *
+ * This func. checks whether it is a IPV6 TCP packet or not.
+ *
+ * Return: TRUE if it is a IPV6 TCP packet
+ *         FALSE if not
+ */
+bool __qdf_nbuf_data_is_ipv6_tcp_pkt(uint8_t *data)
+{
+	if (__qdf_nbuf_data_is_ipv6_pkt(data)) {
+		uint8_t pkt_type;
+
+		pkt_type = (uint8_t)(*(uint8_t *)(data +
+				QDF_NBUF_TRAC_IPV6_PROTO_TYPE_OFFSET));
+
+		if (pkt_type == QDF_NBUF_TRAC_TCP_TYPE)
+			return true;
+		else
+			return false;
+	} else
 		return false;
 }
 
@@ -727,6 +1244,9 @@ static void qdf_nbuf_track_prefill(void)
 		qdf_nbuf_track_free(head);
 		head = node;
 	}
+
+	/* prefilled buffers should not count as used */
+	qdf_net_buf_track_max_used = 0;
 }
 
 /**
@@ -767,17 +1287,36 @@ static void qdf_nbuf_track_memory_manager_destroy(void)
 	spin_lock_irqsave(&qdf_net_buf_track_free_list_lock, irq_flag);
 	node = qdf_net_buf_track_free_list;
 
-	qdf_print("%s: %d residual freelist size\n",
-			  __func__, qdf_net_buf_track_free_list_count);
-
-	qdf_print("%s: %d max freelist size observed\n",
-			  __func__, qdf_net_buf_track_max_free);
-
-	qdf_print("%s: %d max buffers used observed\n",
+	if (qdf_net_buf_track_max_used > FREEQ_POOLSIZE * 4)
+		qdf_print("%s: unexpectedly large max_used count %d",
 			  __func__, qdf_net_buf_track_max_used);
 
-	qdf_print("%s: %d max buffers allocated observed\n",
-			  __func__, qdf_net_buf_track_max_used);
+	if (qdf_net_buf_track_max_used < qdf_net_buf_track_max_allocated)
+		qdf_print("%s: %d unused trackers were allocated",
+			  __func__,
+			  qdf_net_buf_track_max_allocated -
+			  qdf_net_buf_track_max_used);
+
+	if (qdf_net_buf_track_free_list_count > FREEQ_POOLSIZE &&
+	    qdf_net_buf_track_free_list_count > 3*qdf_net_buf_track_max_used/4)
+		qdf_print("%s: check freelist shrinking functionality",
+			  __func__);
+
+	QDF_TRACE(QDF_MODULE_ID_QDF, QDF_TRACE_LEVEL_INFO,
+		  "%s: %d residual freelist size\n",
+		  __func__, qdf_net_buf_track_free_list_count);
+
+	QDF_TRACE(QDF_MODULE_ID_QDF, QDF_TRACE_LEVEL_INFO,
+		  "%s: %d max freelist size observed\n",
+		  __func__, qdf_net_buf_track_max_free);
+
+	QDF_TRACE(QDF_MODULE_ID_QDF, QDF_TRACE_LEVEL_INFO,
+		  "%s: %d max buffers used observed\n",
+		  __func__, qdf_net_buf_track_max_used);
+
+	QDF_TRACE(QDF_MODULE_ID_QDF, QDF_TRACE_LEVEL_INFO,
+		  "%s: %d max buffers allocated observed\n",
+		  __func__, qdf_net_buf_track_max_allocated);
 
 	while (node) {
 		tmp = node;
@@ -865,7 +1404,7 @@ EXPORT_SYMBOL(qdf_net_buf_debug_exit);
  *
  * Return: hash value
  */
-uint32_t qdf_net_buf_debug_hash(qdf_nbuf_t net_buf)
+static uint32_t qdf_net_buf_debug_hash(qdf_nbuf_t net_buf)
 {
 	uint32_t i;
 
@@ -875,7 +1414,6 @@ uint32_t qdf_net_buf_debug_hash(qdf_nbuf_t net_buf)
 
 	return i;
 }
-EXPORT_SYMBOL(qdf_net_buf_debug_hash);
 
 /**
  * qdf_net_buf_debug_look_up() - look up network buffer in debug hash table
@@ -883,7 +1421,7 @@ EXPORT_SYMBOL(qdf_net_buf_debug_hash);
  * Return: If skb is found in hash table then return pointer to network buffer
  *	else return %NULL
  */
-QDF_NBUF_TRACK *qdf_net_buf_debug_look_up(qdf_nbuf_t net_buf)
+static QDF_NBUF_TRACK *qdf_net_buf_debug_look_up(qdf_nbuf_t net_buf)
 {
 	uint32_t i;
 	QDF_NBUF_TRACK *p_node;
@@ -899,7 +1437,6 @@ QDF_NBUF_TRACK *qdf_net_buf_debug_look_up(qdf_nbuf_t net_buf)
 
 	return NULL;
 }
-EXPORT_SYMBOL(qdf_net_buf_debug_look_up);
 
 /**
  * qdf_net_buf_debug_add_node() - store skb in debug hash table
@@ -925,9 +1462,7 @@ void qdf_net_buf_debug_add_node(qdf_nbuf_t net_buf, size_t size,
 		qdf_print("Double allocation of skb ! Already allocated from %p %s %d current alloc from %p %s %d",
 			  p_node->net_buf, p_node->file_name, p_node->line_num,
 			  net_buf, file_name, line_num);
-		QDF_ASSERT(0);
 		qdf_nbuf_track_free(new_node);
-		goto done;
 	} else {
 		p_node = new_node;
 		if (p_node) {
@@ -937,15 +1472,11 @@ void qdf_net_buf_debug_add_node(qdf_nbuf_t net_buf, size_t size,
 			p_node->size = size;
 			p_node->p_next = gp_qdf_net_buf_track_tbl[i];
 			gp_qdf_net_buf_track_tbl[i] = p_node;
-		} else {
+		} else
 			qdf_print(
 				  "Mem alloc failed ! Could not track skb from %s %d of size %zu",
 				  file_name, line_num, size);
-			QDF_ASSERT(0);
-		}
 	}
-
-done:
 	spin_unlock_irqrestore(&g_qdf_net_buf_track_lock[i], irq_flag);
 
 	return;
@@ -1038,15 +1569,41 @@ void qdf_net_buf_debug_release_skb(qdf_nbuf_t net_buf)
 }
 EXPORT_SYMBOL(qdf_net_buf_debug_release_skb);
 
+#else
+void qdf_net_buf_debug_delete_node(qdf_nbuf_t net_buf)
+{
+}
+EXPORT_SYMBOL(qdf_net_buf_debug_delete_node);
 #endif /*MEMORY_DEBUG */
+
 #if defined(FEATURE_TSO)
 
+/**
+ * struct qdf_tso_cmn_seg_info_t - TSO common info structure
+ *
+ * @ethproto: ethernet type of the msdu
+ * @ip_tcp_hdr_len: ip + tcp length for the msdu
+ * @l2_len: L2 length for the msdu
+ * @eit_hdr: pointer to EIT header
+ * @eit_hdr_len: EIT header length for the msdu
+ * @eit_hdr_dma_map_addr: dma addr for EIT header
+ * @tcphdr: pointer to tcp header
+ * @ipv4_csum_en: ipv4 checksum enable
+ * @tcp_ipv4_csum_en: TCP ipv4 checksum enable
+ * @tcp_ipv6_csum_en: TCP ipv6 checksum enable
+ * @ip_id: IP id
+ * @tcp_seq_num: TCP sequence number
+ *
+ * This structure holds the TSO common info that is common
+ * across all the TCP segments of the jumbo packet.
+ */
 struct qdf_tso_cmn_seg_info_t {
 	uint16_t ethproto;
 	uint16_t ip_tcp_hdr_len;
 	uint16_t l2_len;
-	unsigned char *eit_hdr;
-	unsigned int eit_hdr_len;
+	uint8_t *eit_hdr;
+	uint32_t eit_hdr_len;
+	qdf_dma_addr_t eit_hdr_dma_map_addr;
 	struct tcphdr *tcphdr;
 	uint16_t ipv4_csum_en;
 	uint16_t tcp_ipv4_csum_en;
@@ -1058,14 +1615,18 @@ struct qdf_tso_cmn_seg_info_t {
 /**
  * __qdf_nbuf_get_tso_cmn_seg_info() - get TSO common
  * information
+ * @osdev: qdf device handle
+ * @skb: skb buffer
+ * @tso_info: Parameters common to all segements
  *
  * Get the TSO information that is common across all the TCP
  * segments of the jumbo packet
  *
  * Return: 0 - success 1 - failure
  */
-uint8_t __qdf_nbuf_get_tso_cmn_seg_info(struct sk_buff *skb,
-	struct qdf_tso_cmn_seg_info_t *tso_info)
+static uint8_t __qdf_nbuf_get_tso_cmn_seg_info(qdf_device_t osdev,
+			struct sk_buff *skb,
+			struct qdf_tso_cmn_seg_info_t *tso_info)
 {
 	/* Get ethernet type and ethernet header length */
 	tso_info->ethproto = vlan_get_protocol(skb);
@@ -1098,10 +1659,24 @@ uint8_t __qdf_nbuf_get_tso_cmn_seg_info(struct sk_buff *skb,
 	tso_info->eit_hdr = skb->data;
 	tso_info->eit_hdr_len = (skb_transport_header(skb)
 		 - skb_mac_header(skb)) + tcp_hdrlen(skb);
+	tso_info->eit_hdr_dma_map_addr = dma_map_single(osdev->dev,
+							tso_info->eit_hdr,
+							tso_info->eit_hdr_len,
+							DMA_TO_DEVICE);
+	if (unlikely(dma_mapping_error(osdev->dev,
+				       tso_info->eit_hdr_dma_map_addr))) {
+		qdf_print("DMA mapping error!\n");
+		qdf_assert(0);
+		return 1;
+	}
 	tso_info->ip_tcp_hdr_len = tso_info->eit_hdr_len - tso_info->l2_len;
+	TSO_DEBUG("%s seq# %u eit hdr len %u l2 len %u  skb len %u\n", __func__,
+		tso_info->tcp_seq_num,
+		tso_info->eit_hdr_len,
+		tso_info->l2_len,
+		skb->len);
 	return 0;
 }
-EXPORT_SYMBOL(__qdf_nbuf_get_tso_cmn_seg_info);
 
 
 /**
@@ -1115,19 +1690,80 @@ void __qdf_dmaaddr_to_32s(qdf_dma_addr_t dmaaddr,
 				      uint32_t *lo, uint32_t *hi)
 {
 	if (sizeof(dmaaddr) > sizeof(uint32_t)) {
-		*lo = (uint32_t) (dmaaddr & 0x0ffffffff);
-		*hi = (uint32_t) (dmaaddr >> 32);
+		*lo = lower_32_bits(dmaaddr);
+		*hi = upper_32_bits(dmaaddr);
 	} else {
 		*lo = dmaaddr;
 		*hi = 0;
 	}
 }
+EXPORT_SYMBOL(__qdf_dmaaddr_to_32s);
+
+/**
+ * __qdf_nbuf_fill_tso_cmn_seg_info() - Init function for each TSO nbuf segment
+ *
+ * @curr_seg: Segment whose contents are initialized
+ * @tso_cmn_info: Parameters common to all segements
+ *
+ * Return: None
+ */
+static inline void __qdf_nbuf_fill_tso_cmn_seg_info(
+				struct qdf_tso_seg_elem_t *curr_seg,
+				struct qdf_tso_cmn_seg_info_t *tso_cmn_info)
+{
+	/* Initialize the flags to 0 */
+	memset(&curr_seg->seg, 0x0, sizeof(curr_seg->seg));
+
+	/*
+	 * The following fields remain the same across all segments of
+	 * a jumbo packet
+	 */
+	curr_seg->seg.tso_flags.tso_enable = 1;
+	curr_seg->seg.tso_flags.ipv4_checksum_en =
+		tso_cmn_info->ipv4_csum_en;
+	curr_seg->seg.tso_flags.tcp_ipv6_checksum_en =
+		tso_cmn_info->tcp_ipv6_csum_en;
+	curr_seg->seg.tso_flags.tcp_ipv4_checksum_en =
+		tso_cmn_info->tcp_ipv4_csum_en;
+	curr_seg->seg.tso_flags.tcp_flags_mask = 0x1FF;
+
+	/* The following fields change for the segments */
+	curr_seg->seg.tso_flags.ip_id = tso_cmn_info->ip_id;
+	tso_cmn_info->ip_id++;
+
+	curr_seg->seg.tso_flags.syn = tso_cmn_info->tcphdr->syn;
+	curr_seg->seg.tso_flags.rst = tso_cmn_info->tcphdr->rst;
+	curr_seg->seg.tso_flags.psh = tso_cmn_info->tcphdr->psh;
+	curr_seg->seg.tso_flags.ack = tso_cmn_info->tcphdr->ack;
+	curr_seg->seg.tso_flags.urg = tso_cmn_info->tcphdr->urg;
+	curr_seg->seg.tso_flags.ece = tso_cmn_info->tcphdr->ece;
+	curr_seg->seg.tso_flags.cwr = tso_cmn_info->tcphdr->cwr;
+
+	curr_seg->seg.tso_flags.tcp_seq_num = tso_cmn_info->tcp_seq_num;
+
+	/*
+	 * First fragment for each segment always contains the ethernet,
+	 * IP and TCP header
+	 */
+	curr_seg->seg.tso_frags[0].vaddr = tso_cmn_info->eit_hdr;
+	curr_seg->seg.tso_frags[0].length = tso_cmn_info->eit_hdr_len;
+	curr_seg->seg.total_len = curr_seg->seg.tso_frags[0].length;
+	curr_seg->seg.tso_frags[0].paddr = tso_cmn_info->eit_hdr_dma_map_addr;
+
+	TSO_DEBUG("%s %d eit hdr %p eit_hdr_len %d tcp_seq_num %u tso_info->total_len %u\n",
+		   __func__, __LINE__, tso_cmn_info->eit_hdr,
+		   tso_cmn_info->eit_hdr_len,
+		   curr_seg->seg.tso_flags.tcp_seq_num,
+		   curr_seg->seg.total_len);
+
+
+}
 
 /**
  * __qdf_nbuf_get_tso_info() - function to divide a TSO nbuf
  * into segments
- * @nbuf:   network buffer to be segmented
- * @tso_info:  This is the output. The information about the
+ * @nbuf: network buffer to be segmented
+ * @tso_info: This is the output. The information about the
  *           TSO segments will be populated within this.
  *
  * This function fragments a TCP jumbo packet into smaller
@@ -1141,29 +1777,31 @@ uint32_t __qdf_nbuf_get_tso_info(qdf_device_t osdev, struct sk_buff *skb,
 {
 	/* common accross all segments */
 	struct qdf_tso_cmn_seg_info_t tso_cmn_info;
-
 	/* segment specific */
-	char *tso_frag_vaddr;
+	void *tso_frag_vaddr;
 	qdf_dma_addr_t tso_frag_paddr = 0;
 	uint32_t num_seg = 0;
 	struct qdf_tso_seg_elem_t *curr_seg;
-	const struct skb_frag_struct *frag = NULL;
+	struct qdf_tso_num_seg_elem_t *total_num_seg;
+	struct skb_frag_struct *frag = NULL;
 	uint32_t tso_frag_len = 0; /* tso segment's fragment length*/
 	uint32_t skb_frag_len = 0; /* skb's fragment length (continous memory)*/
-	uint32_t foffset = 0; /* offset into the skb's fragment */
-	uint32_t skb_proc = 0; /* bytes of the skb that have been processed*/
+	uint32_t skb_proc = skb->len; /* bytes of skb pending processing */
 	uint32_t tso_seg_size = skb_shinfo(skb)->gso_size;
+	int j = 0; /* skb fragment index */
 
 	memset(&tso_cmn_info, 0x0, sizeof(tso_cmn_info));
 
-	if (qdf_unlikely(__qdf_nbuf_get_tso_cmn_seg_info(skb, &tso_cmn_info))) {
+	if (qdf_unlikely(__qdf_nbuf_get_tso_cmn_seg_info(osdev,
+						skb, &tso_cmn_info))) {
 		qdf_print("TSO: error getting common segment info\n");
 		return 0;
 	}
+	total_num_seg = tso_info->tso_num_seg_list;
 	curr_seg = tso_info->tso_seg_list;
 
 	/* length of the first chunk of data in the skb */
-	skb_proc = skb_frag_len = skb_headlen(skb);
+	skb_frag_len = skb_headlen(skb);
 
 	/* the 0th tso segment's 0th fragment always contains the EIT header */
 	/* update the remaining skb fragment length and TSO segment length */
@@ -1174,80 +1812,56 @@ uint32_t __qdf_nbuf_get_tso_info(qdf_device_t osdev, struct sk_buff *skb,
 	tso_frag_vaddr = skb->data + tso_cmn_info.eit_hdr_len;
 	/* get the length of the next tso fragment */
 	tso_frag_len = min(skb_frag_len, tso_seg_size);
+
+	if (tso_frag_len == 0) {
+		qdf_print("ERROR:tso_frag_len=0, gso_size=%d!!!",
+				tso_seg_size);
+		return 0;
+	}
+
 	tso_frag_paddr = dma_map_single(osdev->dev,
 		 tso_frag_vaddr, tso_frag_len, DMA_TO_DEVICE);
-
+	TSO_DEBUG("%s[%d] skb frag len %d tso frag len %d\n", __func__,
+		__LINE__, skb_frag_len, tso_frag_len);
 	num_seg = tso_info->num_segs;
 	tso_info->num_segs = 0;
 	tso_info->is_tso = 1;
+	total_num_seg->num_seg.tso_cmn_num_seg = 0;
 
 	while (num_seg && curr_seg) {
 		int i = 1; /* tso fragment index */
-		int j = 0; /* skb fragment index */
 		uint8_t more_tso_frags = 1;
-		uint8_t from_frag_table = 0;
 
-		/* Initialize the flags to 0 */
-		memset(&curr_seg->seg, 0x0, sizeof(curr_seg->seg));
 		tso_info->num_segs++;
+		total_num_seg->num_seg.tso_cmn_num_seg++;
 
-		/* The following fields remain the same across all segments of
-		 a jumbo packet */
-		curr_seg->seg.tso_flags.tso_enable = 1;
-		curr_seg->seg.tso_flags.partial_checksum_en = 0;
-		curr_seg->seg.tso_flags.ipv4_checksum_en =
-			tso_cmn_info.ipv4_csum_en;
-		curr_seg->seg.tso_flags.tcp_ipv6_checksum_en =
-			tso_cmn_info.tcp_ipv6_csum_en;
-		curr_seg->seg.tso_flags.tcp_ipv4_checksum_en =
-			tso_cmn_info.tcp_ipv4_csum_en;
-		curr_seg->seg.tso_flags.l2_len = 0;
-		curr_seg->seg.tso_flags.tcp_flags_mask = 0x1FF;
-		curr_seg->seg.num_frags = 0;
+		__qdf_nbuf_fill_tso_cmn_seg_info(curr_seg,
+						 &tso_cmn_info);
 
-		/* The following fields change for the segments */
-		curr_seg->seg.tso_flags.ip_id = tso_cmn_info.ip_id;
-		tso_cmn_info.ip_id++;
+		if (unlikely(skb_proc == 0))
+			return tso_info->num_segs;
 
-		curr_seg->seg.tso_flags.syn = tso_cmn_info.tcphdr->syn;
-		curr_seg->seg.tso_flags.rst = tso_cmn_info.tcphdr->rst;
-		curr_seg->seg.tso_flags.psh = tso_cmn_info.tcphdr->psh;
-		curr_seg->seg.tso_flags.ack = tso_cmn_info.tcphdr->ack;
-		curr_seg->seg.tso_flags.urg = tso_cmn_info.tcphdr->urg;
-		curr_seg->seg.tso_flags.ece = tso_cmn_info.tcphdr->ece;
-		curr_seg->seg.tso_flags.cwr = tso_cmn_info.tcphdr->cwr;
-
-		curr_seg->seg.tso_flags.tcp_seq_num = tso_cmn_info.tcp_seq_num;
-
-		/* First fragment for each segment always contains the ethernet,
-		IP and TCP header */
-		curr_seg->seg.tso_frags[0].vaddr = tso_cmn_info.eit_hdr;
-		curr_seg->seg.tso_frags[0].length = tso_cmn_info.eit_hdr_len;
-		tso_info->total_len = curr_seg->seg.tso_frags[0].length;
-		{
-			qdf_dma_addr_t mapped;
-
-			mapped = dma_map_single(osdev->dev,
-				tso_cmn_info.eit_hdr,
-				tso_cmn_info.eit_hdr_len, DMA_TO_DEVICE);
-			curr_seg->seg.tso_frags[0].paddr = mapped;
-		}
 		curr_seg->seg.tso_flags.ip_len = tso_cmn_info.ip_tcp_hdr_len;
+		curr_seg->seg.tso_flags.l2_len = tso_cmn_info.l2_len;
 		curr_seg->seg.num_frags++;
 
 		while (more_tso_frags) {
 			curr_seg->seg.tso_frags[i].vaddr = tso_frag_vaddr;
 			curr_seg->seg.tso_frags[i].length = tso_frag_len;
-			tso_info->total_len +=
-				 curr_seg->seg.tso_frags[i].length;
-			curr_seg->seg.tso_flags.ip_len +=
-				 curr_seg->seg.tso_frags[i].length;
+			curr_seg->seg.total_len += tso_frag_len;
+			curr_seg->seg.tso_flags.ip_len +=  tso_frag_len;
 			curr_seg->seg.num_frags++;
-			skb_proc = skb_proc - curr_seg->seg.tso_frags[i].length;
+			skb_proc = skb_proc - tso_frag_len;
 
 			/* increment the TCP sequence number */
 			tso_cmn_info.tcp_seq_num += tso_frag_len;
 			curr_seg->seg.tso_frags[i].paddr = tso_frag_paddr;
+			TSO_DEBUG("%s[%d] frag %d frag len %d total_len %u vaddr %p\n",
+				__func__, __LINE__,
+				i,
+				tso_frag_len,
+				curr_seg->seg.total_len,
+				curr_seg->seg.tso_frags[i].vaddr);
 
 			/* if there is no more data left in the skb */
 			if (!skb_proc)
@@ -1255,7 +1869,8 @@ uint32_t __qdf_nbuf_get_tso_info(qdf_device_t osdev, struct sk_buff *skb,
 
 			/* get the next payload fragment information */
 			/* check if there are more fragments in this segment */
-			if ((tso_seg_size - tso_frag_len)) {
+			if (tso_frag_len < tso_seg_size) {
+				tso_seg_size = tso_seg_size - tso_frag_len;
 				more_tso_frags = 1;
 				i++;
 			} else {
@@ -1267,34 +1882,42 @@ uint32_t __qdf_nbuf_get_tso_info(qdf_device_t osdev, struct sk_buff *skb,
 
 			/* if the next fragment is contiguous */
 			if (tso_frag_len < skb_frag_len) {
+				tso_frag_vaddr = tso_frag_vaddr + tso_frag_len;
 				skb_frag_len = skb_frag_len - tso_frag_len;
 				tso_frag_len = min(skb_frag_len, tso_seg_size);
-				tso_frag_vaddr = tso_frag_vaddr + tso_frag_len;
-				if (from_frag_table) {
-					tso_frag_paddr =
-						 skb_frag_dma_map(osdev->dev,
-							 frag, foffset,
-							 tso_frag_len,
-							 DMA_TO_DEVICE);
-				} else {
-					tso_frag_paddr =
-						 dma_map_single(osdev->dev,
-							 tso_frag_vaddr,
-							 tso_frag_len,
-							 DMA_TO_DEVICE);
-				}
+
 			} else { /* the next fragment is not contiguous */
-				tso_frag_len = min(skb_frag_len, tso_seg_size);
+				if (skb_shinfo(skb)->nr_frags == 0) {
+					qdf_print("TSO: nr_frags == 0!\n");
+					qdf_assert(0);
+					return 0;
+				}
+				if (j >= skb_shinfo(skb)->nr_frags) {
+					qdf_print("TSO: nr_frags %d j %d\n",
+						  skb_shinfo(skb)->nr_frags, j);
+					qdf_assert(0);
+					return 0;
+				}
 				frag = &skb_shinfo(skb)->frags[j];
 				skb_frag_len = skb_frag_size(frag);
-
-				tso_frag_vaddr = skb_frag_address(frag);
-				tso_frag_paddr = skb_frag_dma_map(osdev->dev,
-					 frag, 0, tso_frag_len,
-					 DMA_TO_DEVICE);
-				foffset += tso_frag_len;
-				from_frag_table = 1;
+				tso_frag_len = min(skb_frag_len, tso_seg_size);
+				tso_frag_vaddr = skb_frag_address_safe(frag);
 				j++;
+			}
+			TSO_DEBUG("%s[%d] skb frag len %d tso frag %d len tso_seg_size %d\n",
+				__func__, __LINE__, skb_frag_len, tso_frag_len,
+				tso_seg_size);
+
+			tso_frag_paddr =
+					 dma_map_single(osdev->dev,
+						 tso_frag_vaddr,
+						 tso_frag_len,
+						 DMA_TO_DEVICE);
+			if (unlikely(dma_mapping_error(osdev->dev,
+							tso_frag_paddr))) {
+				qdf_print("DMA mapping error!\n");
+				qdf_assert(0);
+				return 0;
 			}
 		}
 		num_seg--;
@@ -1309,6 +1932,61 @@ uint32_t __qdf_nbuf_get_tso_info(qdf_device_t osdev, struct sk_buff *skb,
 EXPORT_SYMBOL(__qdf_nbuf_get_tso_info);
 
 /**
+ * __qdf_nbuf_unmap_tso_segment() - function to dma unmap TSO segment element
+ *
+ * @osdev: qdf device handle
+ * @tso_seg: TSO segment element to be unmapped
+ * @is_last_seg: whether this is last tso seg or not
+ *
+ * Return: none
+ */
+void __qdf_nbuf_unmap_tso_segment(qdf_device_t osdev,
+			  struct qdf_tso_seg_elem_t *tso_seg,
+			  bool is_last_seg)
+{
+	uint32_t num_frags = tso_seg->seg.num_frags - 1;
+
+	/*Num of frags in a tso seg cannot be less than 2 */
+	if (num_frags < 1) {
+		qdf_assert(0);
+		qdf_print("ERROR: num of frags in a tso segment is %d\n",
+				  (num_frags + 1));
+		return;
+	}
+
+	while (num_frags) {
+		/*Do dma unmap the tso seg except the 0th frag */
+		if (0 ==  tso_seg->seg.tso_frags[num_frags].paddr) {
+			qdf_print("ERROR: TSO seg frag %d mapped physical address is NULL\n",
+				  num_frags);
+			qdf_assert(0);
+			return;
+		}
+		dma_unmap_single(osdev->dev,
+				 tso_seg->seg.tso_frags[num_frags].paddr,
+				 tso_seg->seg.tso_frags[num_frags].length,
+				 QDF_DMA_TO_DEVICE);
+		tso_seg->seg.tso_frags[num_frags].paddr = 0;
+		num_frags--;
+	}
+
+	if (is_last_seg) {
+		/*Do dma unmap for the tso seg 0th frag */
+		if (0 ==  tso_seg->seg.tso_frags[0].paddr) {
+			qdf_print("ERROR: TSO seg frag 0 mapped physical address is NULL\n");
+			qdf_assert(0);
+			return;
+		}
+		dma_unmap_single(osdev->dev,
+				 tso_seg->seg.tso_frags[0].paddr,
+				 tso_seg->seg.tso_frags[0].length,
+				 QDF_DMA_TO_DEVICE);
+		tso_seg->seg.tso_frags[0].paddr = 0;
+	}
+}
+EXPORT_SYMBOL(__qdf_nbuf_unmap_tso_segment);
+
+/**
  * __qdf_nbuf_get_tso_num_seg() - function to divide a TSO nbuf
  * into segments
  * @nbuf:   network buffer to be segmented
@@ -1321,6 +1999,7 @@ EXPORT_SYMBOL(__qdf_nbuf_get_tso_info);
  *
  * Return: 0 - success, 1 - failure
  */
+#ifndef BUILD_X86
 uint32_t __qdf_nbuf_get_tso_num_seg(struct sk_buff *skb)
 {
 	uint32_t gso_size, tmp_len, num_segs = 0;
@@ -1335,9 +2014,65 @@ uint32_t __qdf_nbuf_get_tso_num_seg(struct sk_buff *skb)
 		else
 			break;
 	}
+
 	return num_segs;
 }
+#else
+uint32_t __qdf_nbuf_get_tso_num_seg(struct sk_buff *skb)
+{
+	uint32_t i, gso_size, tmp_len, num_segs = 0;
+	struct skb_frag_struct *frag = NULL;
+
+	/*
+	 * Check if the head SKB or any of frags are allocated in < 0x50000000
+	 * region which cannot be accessed by Target
+	 */
+	if (virt_to_phys(skb->data) < 0x50000040) {
+		TSO_DEBUG("%s %d: Invalid Address nr_frags = %d, paddr = %p \n",
+				__func__, __LINE__, skb_shinfo(skb)->nr_frags,
+				virt_to_phys(skb->data));
+		goto fail;
+
+	}
+
+	for (i = 0; i < skb_shinfo(skb)->nr_frags; i++) {
+		frag = &skb_shinfo(skb)->frags[i];
+
+		if (!frag)
+			goto fail;
+
+		if (virt_to_phys(skb_frag_address_safe(frag)) < 0x50000040)
+			goto fail;
+	}
+
+
+	gso_size = skb_shinfo(skb)->gso_size;
+	tmp_len = skb->len - ((skb_transport_header(skb) - skb_mac_header(skb))
+			+ tcp_hdrlen(skb));
+	while (tmp_len) {
+		num_segs++;
+		if (tmp_len > gso_size)
+			tmp_len -= gso_size;
+		else
+			break;
+	}
+
+	return num_segs;
+
+	/*
+	 * Do not free this frame, just do socket level accounting
+	 * so that this is not reused.
+	 */
+fail:
+	if (skb->sk)
+		atomic_sub(skb->truesize, &(skb->sk->sk_wmem_alloc));
+
+	return 0;
+}
+#endif
 EXPORT_SYMBOL(__qdf_nbuf_get_tso_num_seg);
+
+#endif /* FEATURE_TSO */
 
 struct sk_buff *__qdf_nbuf_inc_users(struct sk_buff *skb)
 {
@@ -1346,7 +2081,11 @@ struct sk_buff *__qdf_nbuf_inc_users(struct sk_buff *skb)
 }
 EXPORT_SYMBOL(__qdf_nbuf_inc_users);
 
-#endif /* FEATURE_TSO */
+int __qdf_nbuf_get_users(struct sk_buff *skb)
+{
+	return atomic_read(&skb->users);
+}
+EXPORT_SYMBOL(__qdf_nbuf_get_users);
 
 /**
  * __qdf_nbuf_ref() - Reference the nbuf so it can get held until the last free.
@@ -1698,23 +2437,6 @@ EXPORT_SYMBOL(__qdf_nbuf_dmamap_set_cb);
 
 
 /**
- * __qdf_nbuf_get_vlan_info() - get vlan info
- * @hdl: net handle
- * @skb: sk buff
- * @vlan: vlan header
- *
- * Return: QDF status
- */
-QDF_STATUS
-__qdf_nbuf_get_vlan_info(qdf_net_handle_t hdl, struct sk_buff *skb,
-			qdf_net_vlanhdr_t *vlan)
-{
-	return QDF_STATUS_SUCCESS;
-}
-EXPORT_SYMBOL(__qdf_nbuf_get_vlan_info);
-
-#ifndef REMOVE_INIT_DEBUG_CODE
-/**
  * __qdf_nbuf_sync_single_for_cpu() - nbuf sync
  * @osdev: os device
  * @buf: sk buff
@@ -1723,14 +2445,13 @@ EXPORT_SYMBOL(__qdf_nbuf_get_vlan_info);
  * Return: none
  */
 #if defined(A_SIMOS_DEVHOST)
-void __qdf_nbuf_sync_single_for_cpu(
+static void __qdf_nbuf_sync_single_for_cpu(
 	qdf_device_t osdev, qdf_nbuf_t buf, qdf_dma_dir_t dir)
 {
 	return;
 }
-EXPORT_SYMBOL(__qdf_nbuf_sync_single_for_cpu);
 #else
-void __qdf_nbuf_sync_single_for_cpu(
+static void __qdf_nbuf_sync_single_for_cpu(
 	qdf_device_t osdev, qdf_nbuf_t buf, qdf_dma_dir_t dir)
 {
 	if (0 ==  QDF_NBUF_CB_PADDR(buf)) {
@@ -1740,7 +2461,6 @@ void __qdf_nbuf_sync_single_for_cpu(
 	dma_sync_single_for_cpu(osdev->dev, QDF_NBUF_CB_PADDR(buf),
 		skb_end_offset(buf) - skb_headroom(buf), dir);
 }
-EXPORT_SYMBOL(__qdf_nbuf_sync_single_for_cpu);
 #endif
 /**
  * __qdf_nbuf_sync_for_cpu() - nbuf sync
@@ -1764,8 +2484,8 @@ __qdf_nbuf_sync_for_cpu(qdf_device_t osdev,
 	__qdf_nbuf_sync_single_for_cpu(osdev, skb, dir);
 }
 EXPORT_SYMBOL(__qdf_nbuf_sync_for_cpu);
-#endif
 
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3, 10, 0))
 /**
  * qdf_nbuf_update_radiotap_vht_flags() - Update radiotap header VHT flags
  * @rx_status: Pointer to rx_status.
@@ -1839,7 +2559,7 @@ static unsigned int qdf_nbuf_update_radiotap_vht_flags(
  * Return: length of rtap_len updated.
  */
 unsigned int qdf_nbuf_update_radiotap(struct mon_rx_status *rx_status,
-				      qdf_nbuf_t nbuf, u_int32_t headroom_sz)
+				      qdf_nbuf_t nbuf, uint32_t headroom_sz)
 {
 	uint8_t rtap_buf[RADIOTAP_HEADER_LEN] = {0};
 	struct ieee80211_radiotap_header *rthdr =
@@ -1901,4 +2621,35 @@ unsigned int qdf_nbuf_update_radiotap(struct mon_rx_status *rx_status,
 	qdf_nbuf_pull_head(nbuf, headroom_sz  - rtap_len);
 	qdf_mem_copy(qdf_nbuf_data(nbuf), rtap_buf, rtap_len);
 	return rtap_len;
+}
+#else
+static unsigned int qdf_nbuf_update_radiotap_vht_flags(
+					struct mon_rx_status *rx_status,
+					int8_t *rtap_buf,
+					uint32_t rtap_len)
+{
+	qdf_print("ERROR: struct ieee80211_radiotap_header not supported");
+	return 0;
+}
+
+unsigned int qdf_nbuf_update_radiotap(struct mon_rx_status *rx_status,
+				      qdf_nbuf_t nbuf, uint32_t headroom_sz)
+{
+	qdf_print("ERROR: struct ieee80211_radiotap_header not supported");
+	return 0;
+}
+#endif
+
+/**
+ * __qdf_nbuf_reg_free_cb() - register nbuf free callback
+ * @cb_func_ptr: function pointer to the nbuf free callback
+ *
+ * This function registers a callback function for nbuf free.
+ *
+ * Return: none
+ */
+void __qdf_nbuf_reg_free_cb(qdf_nbuf_free_t cb_func_ptr)
+{
+	nbuf_free_cb = cb_func_ptr;
+	return;
 }

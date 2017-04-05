@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2016 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2014-2017 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -35,8 +35,29 @@
 
 /* Include files */
 #include <qdf_list.h>
+#include <linux/export.h>
 
 /* Function declarations and documenation */
+
+QDF_STATUS qdf_list_insert_before(qdf_list_t *list,
+	qdf_list_node_t *new_node, qdf_list_node_t *node)
+{
+	list_add_tail(new_node, node);
+	list->count++;
+
+	return QDF_STATUS_SUCCESS;
+}
+EXPORT_SYMBOL(qdf_list_insert_before);
+
+QDF_STATUS qdf_list_insert_after(qdf_list_t *list,
+	qdf_list_node_t *new_node, qdf_list_node_t *node)
+{
+	list_add(new_node, node);
+	list->count++;
+
+	return QDF_STATUS_SUCCESS;
+}
+EXPORT_SYMBOL(qdf_list_insert_after);
 
 /**
  * qdf_list_insert_front() - insert input node at front of the list
@@ -134,29 +155,45 @@ QDF_STATUS qdf_list_remove_back(qdf_list_t *list, qdf_list_node_t **node2)
 EXPORT_SYMBOL(qdf_list_remove_back);
 
 /**
+ * qdf_list_has_node() - check if a node is in a list
+ * @list: pointer to the list being searched
+ * @node: pointer to the node to search for
+ *
+ * It is expected that the list being checked is locked
+ * when this function is being called.
+ *
+ * Return: true if the node is in the list
+ */
+bool qdf_list_has_node(qdf_list_t *list, qdf_list_node_t *node)
+{
+	qdf_list_node_t *tmp;
+
+	list_for_each(tmp, &list->anchor) {
+		if (tmp == node)
+			return true;
+	}
+	return false;
+}
+
+/**
  * qdf_list_remove_node() - remove input node from list
  * @list: Pointer to list
  * @node_to_remove: Pointer to node which needs to be removed
+ *
+ * verifies that the node is in the list before removing it.
+ * It is expected that the list being removed from is locked
+ * when this function is being called.
  *
  * Return: QDF status
  */
 QDF_STATUS qdf_list_remove_node(qdf_list_t *list,
 				qdf_list_node_t *node_to_remove)
 {
-	qdf_list_node_t *tmp;
-	int found = 0;
-
 	if (list_empty(&list->anchor))
 		return QDF_STATUS_E_EMPTY;
 
 	/* verify that node_to_remove is indeed part of list list */
-	list_for_each(tmp, &list->anchor) {
-		if (tmp == node_to_remove) {
-			found = 1;
-			break;
-		}
-	}
-	if (found == 0)
+	if (!qdf_list_has_node(list, node_to_remove))
 		return QDF_STATUS_E_INVAL;
 
 	list_del(node_to_remove);

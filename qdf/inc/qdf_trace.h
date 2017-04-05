@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2016 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2014-2017 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -44,35 +44,14 @@
 /* Type declarations */
 
 #define FL(x)    "%s: %d: " x, __func__, __LINE__
+#define QDF_TRACE_BUFFER_SIZE (512)
 
-/**
- * typedef enum QDF_TRACE_LEVEL - Debug Trace level
- * @QDF_TRACE_LEVEL_NONE: no trace will be logged. This value is in place
- * for the qdf_trace_setlevel() to allow the user to turn off all traces
- * @QDF_TRACE_LEVEL_FATAL: enable trace for fatal Error
- * @QDF_TRACE_LEVEL_ERROR: enable trace for errors
- * @QDF_TRACE_LEVEL_WARN: enable trace for warnings
- * @QDF_TRACE_LEVEL_INFO: enable trace for information
- * @QDF_TRACE_LEVEL_INFO_HIGH: enable high level trace information
- * @QDF_TRACE_LEVEL_INFO_MED: enable middle level trace information
- * @QDF_TRACE_LEVEL_INFO_LOW: enable low level trace information
- * @QDF_TRACE_LEVEL_DEBUG: enable trace for debugging
- * @QDF_TRACE_LEVEL_ALL: enable all trace
- * @QDF_TRACE_LEVEL_MAX: enable max level trace
- */
-typedef enum {
-	QDF_TRACE_LEVEL_NONE = 0,
-	QDF_TRACE_LEVEL_FATAL,
-	QDF_TRACE_LEVEL_ERROR,
-	QDF_TRACE_LEVEL_WARN,
-	QDF_TRACE_LEVEL_INFO,
-	QDF_TRACE_LEVEL_INFO_HIGH,
-	QDF_TRACE_LEVEL_INFO_MED,
-	QDF_TRACE_LEVEL_INFO_LOW,
-	QDF_TRACE_LEVEL_DEBUG,
-	QDF_TRACE_LEVEL_ALL,
-	QDF_TRACE_LEVEL_MAX
-} QDF_TRACE_LEVEL;
+#ifdef CONFIG_MCL
+#define QDF_DEFAULT_TRACE_LEVEL \
+	((1 << QDF_TRACE_LEVEL_FATAL) | (1 << QDF_TRACE_LEVEL_ERROR))
+#else
+#define QDF_DEFAULT_TRACE_LEVEL (1 << QDF_TRACE_LEVEL_INFO)
+#endif
 
 /*
  * Log levels
@@ -86,6 +65,20 @@ typedef enum {
 #define QDF_DEBUG_CFG           0x40
 
 #ifdef CONFIG_MCL
+/**
+ * qdf_set_pidx() - Sets the global qdf_pidx.
+ * @pidx : Index of print control object assigned to the module
+ *
+ */
+void qdf_set_pidx(int pidx);
+
+/**
+ * qdf_get_pidx() - Returns the global qdf_pidx.
+ *
+ * Return : Current qdf print index.
+ */
+int qdf_get_pidx(void);
+
 /* By default Data Path module will have all log levels enabled, except debug
  * log level. Debug level will be left up to the framework or user space modules
  * to be enabled when issue is detected
@@ -103,8 +96,6 @@ typedef enum {
 #define INVALID_QDF_TRACE_ADDR 0xffffffff
 #define DEFAULT_QDF_TRACE_DUMP_COUNT 0
 
-#include  <i_qdf_trace.h>
-
 #define DUMP_DP_TRACE       0
 #define ENABLE_DP_TRACE_LIVE_MODE	1
 #define CLEAR_DP_TRACE_BUFFER	2
@@ -121,7 +112,8 @@ typedef enum {
 
 /**
  * typedef struct qdf_trace_record_s - keep trace record
- * @time: timestamp
+ * @qtime: qtimer ticks
+ * @time: user timestamp
  * @module: module name
  * @code: hold record of code
  * @session: hold record of session
@@ -129,7 +121,8 @@ typedef enum {
  * @pid: hold pid of the process
  */
 typedef struct qdf_trace_record_s {
-	uint64_t time;
+	uint64_t qtime;
+	char time[18];
 	uint8_t module;
 	uint8_t code;
 	uint16_t session;
@@ -180,6 +173,7 @@ typedef struct s_qdf_trace_data {
  * @QDF_DP_TRACE_DHCP_PACKET_RECORD - record DHCP packet
  * @QDF_DP_TRACE_ARP_PACKET_RECORD - record ARP packet
  * @QDF_DP_TRACE_MGMT_PACKET_RECORD - record MGMT pacekt
+ * QDF_DP_TRACE_EVENT_RECORD - record events
  * @QDF_DP_TRACE_DEFAULT_VERBOSITY - below this are part of default verbosity
  * @QDF_DP_TRACE_HDD_TX_TIMEOUT - HDD tx timeout
  * @QDF_DP_TRACE_HDD_SOFTAP_TX_TIMEOUT- SOFTAP HDD tx timeout
@@ -199,7 +193,8 @@ typedef struct s_qdf_trace_data {
  * @QDF_DP_TRACE_HIF_PACKET_PTR_RECORD - hif packet ptr record
  * @QDF_DP_TRACE_RX_TXRX_PACKET_PTR_RECORD - txrx packet ptr record
  * @QDF_DP_TRACE_MED_VERBOSITY - below this are part of med verbosity
- * @QDF_DP_TRACE_HDD_TX_PACKET_RECORD - record 32 bytes at HDD
+ * @QDF_DP_TRACE_HDD_TX_PACKET_RECORD - record 32 bytes of tx pkt at HDD
+ * @QDF_DP_TRACE_HDD_RX_PACKET_RECORD - record 32 bytes of rx pkt at HDD
  * @QDF_DP_TRACE_HIGH_VERBOSITY - below this are part of high verbosity
  */
 enum  QDF_DP_TRACE_ID {
@@ -209,6 +204,7 @@ enum  QDF_DP_TRACE_ID {
 	QDF_DP_TRACE_DHCP_PACKET_RECORD,
 	QDF_DP_TRACE_ARP_PACKET_RECORD,
 	QDF_DP_TRACE_MGMT_PACKET_RECORD,
+	QDF_DP_TRACE_EVENT_RECORD,
 	QDF_DP_TRACE_DEFAULT_VERBOSITY,
 	QDF_DP_TRACE_HDD_TX_TIMEOUT,
 	QDF_DP_TRACE_HDD_SOFTAP_TX_TIMEOUT,
@@ -229,67 +225,9 @@ enum  QDF_DP_TRACE_ID {
 	QDF_DP_TRACE_RX_TXRX_PACKET_PTR_RECORD,
 	QDF_DP_TRACE_MED_VERBOSITY,
 	QDF_DP_TRACE_HDD_TX_PACKET_RECORD,
+	QDF_DP_TRACE_HDD_RX_PACKET_RECORD,
 	QDF_DP_TRACE_HIGH_VERBOSITY,
 	QDF_DP_TRACE_MAX
-};
-
-/**
- * qdf_proto_type - protocol type
- * @QDF_PROTO_TYPE_DHCP - DHCP
- * @QDF_PROTO_TYPE_EAPOL - EAPOL
- * @QDF_PROTO_TYPE_ARP - ARP
- * @QDF_PROTO_TYPE_MGMT - MGMT
- */
-enum qdf_proto_type {
-	QDF_PROTO_TYPE_DHCP,
-	QDF_PROTO_TYPE_EAPOL,
-	QDF_PROTO_TYPE_ARP,
-	QDF_PROTO_TYPE_MGMT,
-	QDF_PROTO_TYPE_MAX
-};
-
-/**
- * qdf_proto_subtype - subtype of packet
- * @QDF_PROTO_EAPOL_M1 - EAPOL 1/4
- * @QDF_PROTO_EAPOL_M2 - EAPOL 2/4
- * @QDF_PROTO_EAPOL_M3 - EAPOL 3/4
- * @QDF_PROTO_EAPOL_M4 - EAPOL 4/4
- * @QDF_PROTO_DHCP_DISCOVER - discover
- * @QDF_PROTO_DHCP_REQUEST - request
- * @QDF_PROTO_DHCP_OFFER - offer
- * @QDF_PROTO_DHCP_ACK - ACK
- * @QDF_PROTO_DHCP_NACK - NACK
- * @QDF_PROTO_DHCP_RELEASE - release
- * @QDF_PROTO_DHCP_INFORM - inform
- * @QDF_PROTO_DHCP_DECLINE - decline
- * @QDF_PROTO_ARP_REQ - arp request
- * @QDF_PROTO_ARP_RES - arp response
- * @QDF_PROTO_MGMT_ASSOC -assoc
- * @QDF_PROTO_MGMT_DISASSOC - disassoc
- * @QDF_PROTO_MGMT_AUTH - auth
- * @QDF_PROTO_MGMT_DEAUTH - deauth
- */
-enum qdf_proto_subtype {
-	QDF_PROTO_INVALID,
-	QDF_PROTO_EAPOL_M1,
-	QDF_PROTO_EAPOL_M2,
-	QDF_PROTO_EAPOL_M3,
-	QDF_PROTO_EAPOL_M4,
-	QDF_PROTO_DHCP_DISCOVER,
-	QDF_PROTO_DHCP_REQUEST,
-	QDF_PROTO_DHCP_OFFER,
-	QDF_PROTO_DHCP_ACK,
-	QDF_PROTO_DHCP_NACK,
-	QDF_PROTO_DHCP_RELEASE,
-	QDF_PROTO_DHCP_INFORM,
-	QDF_PROTO_DHCP_DECLINE,
-	QDF_PROTO_ARP_REQ,
-	QDF_PROTO_ARP_RES,
-	QDF_PROTO_MGMT_ASSOC,
-	QDF_PROTO_MGMT_DISASSOC,
-	QDF_PROTO_MGMT_AUTH,
-	QDF_PROTO_MGMT_DEAUTH,
-	QDF_PROTO_SUBTYPE_MAX
 };
 
 /**
@@ -347,6 +285,18 @@ struct qdf_dp_trace_mgmt_buf {
 };
 
 /**
+ * struct qdf_dp_trace_event_buf - event buffer
+ * @vdev_id : vdev id
+ * @type: packet type
+ * @subtype: packet subtype
+ */
+struct qdf_dp_trace_event_buf {
+	uint8_t vdev_id;
+	uint8_t type;
+	uint8_t subtype;
+};
+
+/**
  * struct qdf_dp_trace_record_s - Describes a record in DP trace
  * @time: time when it got stored
  * @code: Describes the particular event
@@ -355,7 +305,7 @@ struct qdf_dp_trace_mgmt_buf {
  * @pid : process id which stored the data in this record
  */
 struct qdf_dp_trace_record_s {
-	uint64_t time;
+	char time[20];
 	uint8_t code;
 	uint8_t data[QDF_DP_TRACE_RECORD_SIZE];
 	uint8_t size;
@@ -423,6 +373,12 @@ void qdf_trace_set_level(QDF_MODULE_ID module, QDF_TRACE_LEVEL level);
 bool qdf_trace_get_level(QDF_MODULE_ID module, QDF_TRACE_LEVEL level);
 
 typedef void (*tp_qdf_trace_cb)(void *p_mac, tp_qdf_trace_record, uint16_t);
+typedef void (*tp_qdf_state_info_cb) (char **buf, uint16_t *size);
+void qdf_register_debugcb_init(void);
+void qdf_register_debug_callback(QDF_MODULE_ID module_id,
+					tp_qdf_state_info_cb qdf_state_infocb);
+QDF_STATUS qdf_state_info_dump_all(char *buf, uint16_t size,
+			uint16_t *driver_dump_size);
 void qdf_trace(uint8_t module, uint8_t code, uint16_t session, uint32_t data);
 void qdf_trace_register(QDF_MODULE_ID, tp_qdf_trace_cb);
 QDF_STATUS qdf_trace_spin_lock_init(void);
@@ -463,6 +419,10 @@ void qdf_dp_trace_mgmt_pkt(enum QDF_DP_TRACE_ID code, uint8_t vdev_id,
 		enum qdf_proto_type type, enum qdf_proto_subtype subtype);
 void qdf_dp_display_mgmt_pkt(struct qdf_dp_trace_record_s *record,
 			      uint16_t index);
+void qdf_dp_display_event_record(struct qdf_dp_trace_record_s *record,
+			      uint16_t index);
+void qdf_dp_trace_record_event(enum QDF_DP_TRACE_ID code, uint8_t vdev_id,
+		enum qdf_proto_type type, enum qdf_proto_subtype subtype);
 #else
 static inline
 void qdf_dp_trace_log_pkt(uint8_t session_id, struct sk_buff *skb,
@@ -500,27 +460,6 @@ void qdf_dp_trace_clear_buffer(void)
 #endif
 
 
-/**
- * qdf_trace_msg()- logging API
- * @module: Module identifier. A member of the QDF_MODULE_ID enumeration that
- *	    identifies the module issuing the trace message.
- * @level: Trace level. A member of the QDF_TRACE_LEVEL enumeration indicating
- *	   the severity of the condition causing the trace message to be issued.
- *	   More severe conditions are more likely to be logged.
- * @str_format: Format string. The message to be logged. This format string
- *	       contains printf-like replacement parameters, which follow this
- *	       parameter in the variable argument list.
- *
- * Users wishing to add tracing information to their code should use
- * QDF_TRACE.  QDF_TRACE() will compile into a call to qdf_trace_msg() when
- * tracing is enabled.
- *
- * Return: nothing
- *
- */
-void __printf(3, 4) qdf_trace_msg(QDF_MODULE_ID module, QDF_TRACE_LEVEL level,
-		   char *str_format, ...);
-
 void qdf_trace_hex_dump(QDF_MODULE_ID module, QDF_TRACE_LEVEL level,
 			void *data, int buf_len);
 
@@ -541,5 +480,253 @@ void __printf(3, 4) qdf_snprintf(char *str_buffer, unsigned int size,
 #define qdf_trace_hex_dump(x, y, z, q)
 
 #endif /* CONFIG_MCL */
+
+#define ERROR_CODE                      -1
+#define QDF_MAX_NAME_SIZE               32
+#define MAX_PRINT_CONFIG_SUPPORTED      32
+
+#define MAX_SUPPORTED_CATEGORY QDF_MODULE_ID_MAX
+
+/*
+ * Shared print control index
+ * for converged debug framework
+ */
+#define QDF_PRINT_IDX_SHARED -1
+
+/**
+ * QDF_PRINT_INFO() - Generic wrapper API for logging
+ * @idx : Index of print control object
+ * @module : Module identifier. A member of QDF_MODULE_ID enumeration that
+ *           identifies the module issuing the trace message
+ * @level : Trace level. A member of QDF_TRACE_LEVEL enumeration indicating
+ *          the severity of the condition causing the trace message to be
+ *          issued.
+ * @str_format : Format string that contains the message to be logged.
+ *
+ *
+ * This wrapper will be used for any generic logging messages. Wrapper will
+ * compile a call to converged QDF trace message API.
+ *
+ * Return : Nothing
+ *
+ */
+void QDF_PRINT_INFO(unsigned int idx, QDF_MODULE_ID module,
+		    QDF_TRACE_LEVEL level,
+		    char *str_format, ...);
+
+/**
+ * struct category_info  : Category information structure
+ * @category_verbose_mask: Embeds information about category's verbose level
+ */
+struct category_info {
+	uint16_t category_verbose_mask;
+};
+
+/**
+ * struct category_name_info  : Category name information structure
+ * @category_name_str: Embeds information about category name
+ */
+struct category_name_info {
+	unsigned char category_name_str[QDF_MAX_NAME_SIZE];
+};
+
+/**
+ * qdf_trace_msg_cmn()- Converged logging API
+ * @idx: Index of print control object assigned to the module
+ * @category: Category identifier. A member of the QDF_MODULE_ID enumeration
+ *            that identifies the category issuing the trace message.
+ * @verbose: Verbose level. A member of the QDF_TRACE_LEVEL enumeration
+ *           indicating the severity of the condition causing the trace
+ *           message to be issued. More severe conditions are more likely
+ *           to be logged.
+ * @str_format: Format string. The message to be logged. This format string
+ *              contains printf-like replacement parameters, which follow this
+ *              parameter in the variable argument list.
+ * @val: Variable argument list part of the log message
+ *
+ * Return: nothing
+ *
+ */
+void qdf_trace_msg_cmn(unsigned int idx,
+			QDF_MODULE_ID category,
+			QDF_TRACE_LEVEL verbose,
+			const char *str_format,
+			va_list val);
+
+/**
+ * struct qdf_print_ctrl: QDF Print Control structure
+ *                        Statically allocated objects of print control
+ *                        structure are declared that will support maximum of
+ *                        32 print control objects. Any module that needs to
+ *                        register to the print control framework needs to
+ *                        obtain a print control object using
+ *                        qdf_print_ctrl_register API. It will have to pass
+ *                        pointer to category info structure, name and
+ *                        custom print function to be used if required.
+ * @name                : Optional name for the control object
+ * @cat_info            : Array of category_info struct
+ * @custom_print        : Custom print handler
+ * @custom_ctxt         : Custom print context
+ * @dbglvlmac_on        : Flag to enable/disable MAC level filtering
+ * @in_use              : Boolean to indicate if control object is in use
+ */
+struct qdf_print_ctrl {
+	char name[QDF_MAX_NAME_SIZE];
+	struct category_info cat_info[MAX_SUPPORTED_CATEGORY];
+	void (*custom_print)(void *ctxt, const char *fmt, va_list args);
+	void *custom_ctxt;
+#ifdef DBG_LVL_MAC_FILTERING
+	unsigned char dbglvlmac_on;
+#endif
+	bool in_use;
+};
+
+/**
+ * qdf_print_ctrl_register() - Allocate QDF print control object, assign
+ *                             pointer to category info or print control
+ *                             structure and return the index to the callee
+ * @cinfo                 : Pointer to array of category info structure
+ * @custom_print_handler  : Pointer to custom print handler
+ * @custom_ctx            : Pointer to custom context
+ * @pctrl_name            : Pointer to print control object name
+ *
+ * Return                 : Index of qdf_print_ctrl structure
+ *
+ */
+int qdf_print_ctrl_register(const struct category_info *cinfo,
+			    void *custom_print_handler,
+			    void *custom_ctx,
+			    const char *pctrl_name);
+
+/**
+ * qdf_shared_print_ctrl_init() - Initialize the shared print ctrl obj with
+ *                                all categories set to the default level
+ *
+ * Return                 : void
+ *
+ */
+void qdf_shared_print_ctrl_init(void);
+
+/**
+ * qdf_print_setup() - Setup default values to all the print control objects
+ *
+ * Register new print control object for the callee
+ *
+ * Return :             QDF_STATUS_SUCCESS on success and QDF_STATUS_E_FAILURE
+ *                      on failure
+ */
+QDF_STATUS qdf_print_setup(void);
+
+/**
+ * qdf_print_ctrl_cleanup() - Clean up a print control object
+ *
+ * Cleanup the print control object for the callee
+ *
+ * @pctrl : Index of print control object
+ *
+ * Return : QDF_STATUS_SUCCESS on success and QDF_STATUS_E_FAILURE on failure
+ */
+QDF_STATUS qdf_print_ctrl_cleanup(unsigned int idx);
+
+/**
+ * qdf_print_ctrl_shared_cleanup() - Clean up of the shared object
+ *
+ * Cleanup the shared print-ctrl-object
+ *
+ * Return : void
+ */
+void qdf_shared_print_ctrl_cleanup(void);
+
+/**
+ * qdf_print_set_category_verbose() - Enable/Disable category for a
+ *                                    print control object with
+ *                                    user provided verbose level
+ *
+ * @idx : Index of the print control object assigned to callee
+ * @category : Category information
+ * @verbose: Verbose information
+ * @is_set: Flag indicating if verbose level needs to be enabled or disabled
+ *
+ * Return : QDF_STATUS_SUCCESS for success and QDF_STATUS_E_FAILURE for failure
+ */
+QDF_STATUS qdf_print_set_category_verbose(unsigned int idx,
+					  QDF_MODULE_ID category,
+					  QDF_TRACE_LEVEL verbose,
+					  bool is_set);
+
+/**
+ * qdf_print_is_category_enabled() - Get category information for the
+ *                                   print control object
+ *
+ * @idx : Index of print control object
+ * @category : Category information
+ *
+ * Return : Verbose enabled(true) or disabled(false) or invalid input (false)
+ */
+bool qdf_print_is_category_enabled(unsigned int idx,
+				   QDF_MODULE_ID category);
+
+/**
+ * qdf_print_is_verbose_enabled() - Get verbose information of a category for
+ *                                  the print control object
+ *
+ * @idx : Index of print control object
+ * @category : Category information
+ * @verbose : Verbose information
+ *
+ * Return : Verbose enabled(true) or disabled(false) or invalid input (false)
+ */
+bool qdf_print_is_verbose_enabled(unsigned int idx,
+				  QDF_MODULE_ID category,
+				  QDF_TRACE_LEVEL verbose);
+
+/**
+ * qdf_print_clean_node_flag() - Clean up node flag for print control object
+ *
+ * @idx : Index of print control object
+ *
+ * Return : None
+ */
+void qdf_print_clean_node_flag(unsigned int idx);
+
+#ifdef DBG_LVL_MAC_FILTERING
+
+/**
+ * qdf_print_set_node_flag() - Set flag to enable MAC level filtering
+ *
+ * @idx : Index of print control object
+ * @enable : Enable/Disable bit sent by callee
+ *
+ * Return : QDF_STATUS_SUCCESS on Success and QDF_STATUS_E_FAILURE on Failure
+ */
+QDF_STATUS qdf_print_set_node_flag(unsigned int idx,
+				   uint8_t enable);
+
+/**
+ * qdf_print_get_node_flag() - Get flag that controls MAC level filtering
+ *
+ * @idx : Index of print control object
+ *
+ * Return : Flag that indicates enable(1) or disable(0) or invalid(-1)
+ */
+bool qdf_print_get_node_flag(unsigned int idx);
+
+#endif
+
+/**
+ * qdf_logging_init() - Initialize msg logging functionality
+ *
+ *
+ * Return : void
+ */
+void qdf_logging_init(void);
+
+/**
+ * qdf_logging_exit() - Cleanup msg logging functionality
+ *
+ *
+ * Return : void
+ */
+void qdf_logging_exit(void);
 
 #endif /* __QDF_TRACE_H */

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2014, 2016 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2013-2014, 2016-2017 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -57,6 +57,8 @@ typedef struct _HTC_INIT_INFO {
 	void *pContext;         /* context for target notifications */
 	void (*TargetFailure)(void *Instance, QDF_STATUS Status);
 	void (*TargetSendSuspendComplete)(void *ctx, bool is_nack);
+	void (*target_initial_wakeup_cb)(void *cb_ctx);
+	void *target_psoc;
 } HTC_INIT_INFO;
 
 /* Struct for HTC layer packet stats*/
@@ -637,6 +639,19 @@ bool htc_is_endpoint_active(HTC_HANDLE HTCHandle,
 			      HTC_ENDPOINT_ID Endpoint);
 
 /*+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+   @desc: Set up nodrop pkt flag for mboxping nodrop pkt
+   @function name: htc_set_nodrop_pkt
+   @input:  HTCHandle - HTC handle
+	isNodropPkt - indicates whether it is nodrop pkt
+   @output:
+   @return:
+   @notes:
+   @example:
+   @see also:
+ +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++*/
+void htc_set_nodrop_pkt(HTC_HANDLE HTCHandle, A_BOOL isNodropPkt);
+
+/*+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
    @desc: Get the number of recv buffers currently queued into an HTC endpoint
    @function name: htc_get_num_recv_buffers
    @input:  HTCHandle - HTC handle
@@ -749,4 +764,42 @@ void htc_dump_bundle_stats(HTC_HANDLE HTCHandle);
 void htc_clear_bundle_stats(HTC_HANDLE HTCHandle);
 #endif
 
+#ifdef FEATURE_RUNTIME_PM
+int htc_pm_runtime_get(HTC_HANDLE htc_handle);
+int htc_pm_runtime_put(HTC_HANDLE htc_handle);
+#else
+static inline int htc_pm_runtime_get(HTC_HANDLE htc_handle) { return 0; }
+static inline int htc_pm_runtime_put(HTC_HANDLE htc_handle) { return 0; }
+#endif
+
+/**
+  * htc_set_async_ep() - set async HTC end point
+  *           user should call this function after htc_connect_service before
+  *           queing any packets to end point
+  * @HTCHandle: htc handle
+  * @HTC_ENDPOINT_ID: end point id
+  * @value: true or false
+  *
+  * Return: None
+  */
+
+void htc_set_async_ep(HTC_HANDLE HTCHandle,
+			HTC_ENDPOINT_ID htc_ep_id, bool value);
+
+/**
+ * htc_set_wmi_endpoint_count: Set number of WMI endpoint
+ * @htc_handle: HTC handle
+ * @wmi_ep_count: WMI enpoint count
+ *
+ * return: None
+ */
+void htc_set_wmi_endpoint_count(HTC_HANDLE htc_handle, uint8_t wmi_ep_count);
+
+/**
+ * htc_get_wmi_endpoint_count: Get number of WMI endpoint
+ * @htc_handle: HTC handle
+ *
+ * return: WMI enpoint count
+ */
+uint8_t  htc_get_wmi_endpoint_count(HTC_HANDLE htc_handle);
 #endif /* _HTC_API_H_ */

@@ -116,13 +116,12 @@ struct hif_pci_softc {
 	int num_msi_intrs;      /* number of MSI interrupts granted */
 	/* 0 --> using legacy PCI line interrupts */
 	struct tasklet_struct intr_tq;  /* tasklet */
-
 	struct hif_msi_info msi_info;
+	int ce_msi_irq_num[CE_COUNT_MAX];
 	int irq;
 	int irq_event;
 	int cacheline_sz;
 	u16 devid;
-	qdf_dma_addr_t soc_pcie_bar0;
 	struct hif_tasklet_entry tasklet_entries[HIF_MAX_TASKLET_NUM];
 	bool pci_enabled;
 	qdf_spinlock_t irq_lock;
@@ -185,13 +184,9 @@ irqreturn_t hif_pci_interrupt_handler(int irq, void *arg);
 #define OL_ATH_TX_DRAIN_WAIT_CNT       60
 #endif
 
-#define HIF_CE_DRAIN_WAIT_CNT          20
-
-
 #ifdef FEATURE_RUNTIME_PM
 #include <linux/pm_runtime.h>
 
-#ifdef WLAN_OPEN_SOURCE
 static inline int hif_pm_request_resume(struct device *dev)
 {
 	return pm_request_resume(dev);
@@ -215,7 +210,6 @@ static inline int hif_pm_runtime_resume(struct device *dev)
 {
 	return pm_runtime_resume(dev);
 }
-#endif
 #else
 static inline void hif_pm_runtime_mark_last_busy(struct device *dev) { }
 #endif /* FEATURE_RUNTIME_PM */

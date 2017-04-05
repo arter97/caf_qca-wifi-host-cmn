@@ -46,12 +46,39 @@
  * defined.
  */
 
-/* the following triggers napi_enable/disable as required */
+/**
+ * NAPI manages the following states:
+ * NAPI state: per NAPI instance, ENABLED/DISABLED
+ * CPU  state: per CPU,           DOWN/UP
+ * TPUT state: global,            LOW/HI
+ *
+ * "Dynamic" changes to state of various NAPI structures are
+ * managed by NAPI events. The events may be produced by
+ * various detection points. With each event, some data is
+ * sent. The main event handler in hif_napi handles and makes
+ * the state changes.
+ *
+ * event          : data             : generated
+ * ---------------:------------------:------------------
+ * EVT_INI_FILE   : cfg->napi_enable : after ini file processed
+ * EVT_CMD_STATE  : cmd arg          : by the vendor cmd
+ * EVT_INT_STATE  : 0                : internal - shut off/disable
+ * EVT_CPU_STATE  : (cpu << 16)|state: CPU hotplug events
+ * EVT_TPUT_STATE : (high/low)       : tput trigger
+ * EVT_USR_SERIAL : num-serial_calls : WMA/ROAMING-START/IND
+ * EVT_USR_NORMAL : N/A              : WMA/ROAMING-END
+ */
 enum qca_napi_event {
 	NAPI_EVT_INVALID,
 	NAPI_EVT_INI_FILE,
-	NAPI_EVT_CMD_STATE /* ioctl enable/disable commands */
+	NAPI_EVT_CMD_STATE,
+	NAPI_EVT_INT_STATE,
+	NAPI_EVT_CPU_STATE,
+	NAPI_EVT_TPUT_STATE,
+	NAPI_EVT_USR_SERIAL,
+	NAPI_EVT_USR_NORMAL
 };
+
 
 /**
  * Macros to map ids -returned by ...create()- to pipes and vice versa
@@ -59,7 +86,14 @@ enum qca_napi_event {
 #define NAPI_ID2PIPE(i) ((i)-1)
 #define NAPI_PIPE2ID(p) ((p)+1)
 
+int hif_napi_lro_flush_cb_register(struct hif_opaque_softc *hif_hdl,
+				   void (lro_flush_handler)(void *),
+				   void *(lro_init_handler)(void));
 
+void hif_napi_lro_flush_cb_deregister(struct hif_opaque_softc *hif_hdl,
+				      void (lro_deinit_cb)(void *));
+
+void *hif_napi_get_lro_info(struct hif_opaque_softc *hif_hdl, int napi_id);
 #ifdef FEATURE_NAPI
 
 /**
@@ -102,6 +136,49 @@ int hif_napi_poll(struct hif_opaque_softc *hif_ctx,
 #else
 #define NAPI_DEBUG(fmt, ...) /* NO-OP */
 #endif /* FEATURE NAPI_DEBUG */
+
+#define HNC_ANY_CPU (-1)
+#define HNC_ACT_RELOCATE (0)
+#define HNC_ACT_COLLAPSE (1)
+#define HNC_ACT_DISPERSE (-1)
+
+/**
+ * Local interface to HIF implemented functions of NAPI CPU affinity management.
+ * Note:
+ * 1- The symbols in this file are NOT supposed to be used by any
+ *    entity other than hif_napi.c
+ * 2- The symbols are valid only if HELIUMPLUS is defined. They are otherwise
+ *    mere wrappers.
+ *
+ */
+#ifndef HELIUMPLUS
+/**
+ * stub functions
+ */
+/* fw-declare to make compiler happy */
+struct qca_napi_data;
+static inline int hif_napi_cpu_init(struct hif_opaque_softc *hif)
+{ return 0; }
+
+static inline int hif_napi_cpu_deinit(struct hif_opaque_softc *hif)
+{ return 0; }
+
+static inline int hif_napi_serialize(struct hif_opaque_softc *hif, int is_on)
+{ return -EPERM; }
+#else /* HELIUMPLUS - NAPI CPU symbols are valid */
+
+/*
+ * prototype signatures
+ */
+int hif_napi_cpu_init(struct hif_opaque_softc *hif);
+int hif_napi_cpu_deinit(struct hif_opaque_softc *hif);
+
+int hif_napi_cpu_migrate(struct qca_napi_data *napid, int cpu, int action);
+int hif_napi_cpu_blacklist(bool is_on);
+
+int hif_napi_serialize(struct hif_opaque_softc *hif, int is_on);
+
+#endif /* HELIUMPLUS */
 
 #else /* ! defined(FEATURE_NAPI) */
 
@@ -150,5 +227,12 @@ static inline int hif_napi_poll(struct napi_struct *napi, int budget)
 { return -EPERM; }
 
 #endif /* FEATURE_NAPI */
+
+static inline int hif_ext_napi_enabled(struct hif_opaque_softc *hif, int ce)
+{ return 0; }
+
+static inline int hif_napi_schedule_grp(struct hif_opaque_softc *hif,
+		uint32_t grp_id)
+{ return 0; }
 
 #endif /* __HIF_NAPI_H__ */
