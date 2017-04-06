@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2016 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2013-2017 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -95,6 +95,14 @@ void htc_dump_counter_info(HTC_HANDLE HTCHandle)
 	AR_DEBUG_PRINTF(ATH_DEBUG_ERR,
 			("\n%s: ce_send_cnt = %d, TX_comp_cnt = %d\n",
 			 __func__, target->ce_send_cnt, target->TX_comp_cnt));
+}
+
+int htc_get_tx_queue_depth(HTC_HANDLE *htc_handle, HTC_ENDPOINT_ID endpoint_id)
+{
+	HTC_TARGET *target = GET_HTC_TARGET_FROM_HANDLE(htc_handle);
+	HTC_ENDPOINT *endpoint = &target->endpoint[endpoint_id];
+
+	return HTC_PACKET_QUEUE_DEPTH(&endpoint->TxQueue);
 }
 
 void htc_get_control_endpoint_tx_host_credits(HTC_HANDLE HTCHandle, int *credits)
@@ -623,10 +631,12 @@ static A_STATUS htc_issue_packets(HTC_TARGET *target,
 		UNLOCK_HTC_TX(target);
 
 		hif_send_complete_check(target->hif_dev, pEndpoint->UL_PipeID, false);
+		htc_packet_set_magic_cookie(pPacket, HTC_PACKET_MAGIC_COOKIE);
 		status = hif_send_head(target->hif_dev,
 				       pEndpoint->UL_PipeID, pEndpoint->Id,
 				       HTC_HDR_LENGTH + pPacket->ActualLength,
 				       netbuf, data_attr);
+
 #if DEBUG_BUNDLE
 		qdf_print(" Send single EP%d buffer size:0x%x, total:0x%x.\n",
 			  pEndpoint->Id,
@@ -650,8 +660,9 @@ static A_STATUS htc_issue_packets(HTC_TARGET *target,
 			pEndpoint->ul_outstanding_cnt--;
 			HTC_PACKET_REMOVE(&pEndpoint->TxLookupQueue, pPacket);
 			/* reclaim credits */
-				pEndpoint->TxCredits +=
-					pPacket->PktInfo.AsTx.CreditsUsed;
+			pEndpoint->TxCredits +=
+				pPacket->PktInfo.AsTx.CreditsUsed;
+			htc_packet_set_magic_cookie(pPacket, 0);
 			/* put it back into the callers queue */
 			HTC_PACKET_ENQUEUE_TO_HEAD(pPktQueue, pPacket);
 			UNLOCK_HTC_TX(target);

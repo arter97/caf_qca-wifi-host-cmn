@@ -647,6 +647,26 @@ int hif_ce_bus_late_resume(struct hif_softc *scn)
 	return 0;
 }
 
+/**
+ * ce_oom_recovery() - try to recover rx ce from oom condition
+ * @context: CE_state of the CE with oom rx ring
+ *
+ * the executing work Will continue to be rescheduled untill
+ * at least 1 descriptor is successfully posted to the rx ring.
+ *
+ * return: none
+ */
+static void ce_oom_recovery(void *context)
+{
+	struct CE_state *ce_state = context;
+	struct hif_softc *scn = ce_state->scn;
+	struct HIF_CE_state *ce_softc = HIF_GET_CE_STATE(scn);
+	struct HIF_CE_pipe_info *pipe_info =
+		&ce_softc->pipe_info[ce_state->id];
+
+	hif_post_recv_buffers_for_pipe(pipe_info);
+}
+
 /*
  * Initialize a Copy Engine based on caller-supplied attributes.
  * This may be called once to initialize both source and destination
@@ -679,7 +699,6 @@ struct CE_handle *ce_init(struct hif_softc *scn,
 			return NULL;
 		}
 		malloc_CE_state = true;
-		scn->ce_id_to_state[CE_id] = CE_state;
 		qdf_spinlock_create(&CE_state->ce_index_lock);
 
 		CE_state->id = CE_id;
@@ -726,7 +745,6 @@ struct CE_handle *ce_init(struct hif_softc *scn,
 				HIF_ERROR("%s: src ring has no mem", __func__);
 				if (malloc_CE_state) {
 					/* allocated CE_state locally */
-					scn->ce_id_to_state[CE_id] = NULL;
 					qdf_mem_free(CE_state);
 					malloc_CE_state = false;
 				}
@@ -879,7 +897,6 @@ struct CE_handle *ce_init(struct hif_softc *scn,
 				}
 				if (malloc_CE_state) {
 					/* allocated CE_state locally */
-					scn->ce_id_to_state[CE_id] = NULL;
 					qdf_mem_free(CE_state);
 					malloc_CE_state = false;
 				}
@@ -1008,8 +1025,12 @@ struct CE_handle *ce_init(struct hif_softc *scn,
 	if (Q_TARGET_ACCESS_END(scn) < 0)
 		goto error_target_access;
 
+	qdf_create_work(scn->qdf_dev, &CE_state->oom_allocation_work,
+			ce_oom_recovery, CE_state);
+
 	/* update the htt_data attribute */
 	ce_mark_datapath(CE_state);
+	scn->ce_id_to_state[CE_id] = CE_state;
 
 	return (struct CE_handle *)CE_state;
 
@@ -1032,7 +1053,7 @@ void hif_enable_fastpath(struct hif_opaque_softc *hif_ctx)
 {
 	struct hif_softc *scn = HIF_GET_SOFTC(hif_ctx);
 
-	HIF_INFO("%s, Enabling fastpath mode", __func__);
+	HIF_DBG("%s, Enabling fastpath mode", __func__);
 	scn->fastpath_mode_on = true;
 }
 
@@ -1091,7 +1112,7 @@ ce_h2t_tx_ce_cleanup(struct CE_handle *ce_hdl)
 		return;
 
 	if (sc->fastpath_mode_on && ce_state->htt_tx_data) {
-		HIF_INFO("%s %d Fastpath mode ON, Cleaning up HTT Tx CE",
+		HIF_DBG("%s %d Fastpath mode ON, Cleaning up HTT Tx CE",
 			 __func__, __LINE__);
 		sw_index = src_ring->sw_index;
 		write_index = src_ring->sw_index;
@@ -1147,8 +1168,11 @@ void ce_t2h_msg_ce_cleanup(struct CE_handle *ce_hdl)
 		 *    covered that case. This is not in performance path,
 		 *    so OK to do this.
 		 */
-		if (nbuf)
+		if (nbuf) {
+			qdf_nbuf_unmap_single(ce_state->scn->qdf_dev, nbuf,
+					      QDF_DMA_FROM_DEVICE);
 			qdf_nbuf_free(nbuf);
+		}
 	}
 }
 
@@ -1412,9 +1436,13 @@ hif_pci_ce_send_done(struct CE_handle *copyeng, void *ce_context,
 		 * when last fragment is complteted.
 		 */
 		if (transfer_context != CE_SENDLIST_ITEM_CTXT) {
-			if (scn->target_status == TARGET_STATUS_RESET)
+			if (scn->target_status == TARGET_STATUS_RESET) {
+
+				qdf_nbuf_unmap_single(scn->qdf_dev,
+						      transfer_context,
+						      QDF_DMA_TO_DEVICE);
 				qdf_nbuf_free(transfer_context);
-			else
+			} else
 				msg_callbacks->txCompletionHandler(
 					msg_callbacks->Context,
 					transfer_context, transfer_id,
@@ -1454,6 +1482,7 @@ static inline void hif_ce_do_recv(struct hif_msg_callbacks *msg_callbacks,
 	} else {
 		HIF_ERROR("%s: Invalid Rx msg buf:%p nbytes:%d",
 				__func__, netbuf, nbytes);
+
 		qdf_nbuf_free(netbuf);
 	}
 }
@@ -1556,7 +1585,7 @@ static int hif_completion_thread_startup(struct HIF_CE_state *hif_state)
 		attr = host_ce_config[pipe_num];
 		if (attr.src_nentries) {
 			/* pipe used to send to target */
-			HIF_INFO_MED("%s: pipe_num:%d pipe_info:0x%p",
+			HIF_DBG("%s: pipe_num:%d pipe_info:0x%p",
 					 __func__, pipe_num, pipe_info);
 			ce_send_cb_register(pipe_info->ce_hdl,
 					    hif_pci_ce_send_done, pipe_info,
@@ -1663,8 +1692,11 @@ static void hif_post_recv_buffers_failure(struct HIF_CE_pipe_info *pipe_info,
 	 *	eventually crash
 	 */
 	if (bufs_needed_tmp == CE_state->dest_ring->nentries - 1)
-		QDF_ASSERT(0);
+		qdf_sched_work(scn->qdf_dev, &CE_state->oom_allocation_work);
+
 }
+
+
 
 
 static int hif_post_recv_buffers_for_pipe(struct HIF_CE_pipe_info *pipe_info)
@@ -1706,8 +1738,7 @@ static int hif_post_recv_buffers_for_pipe(struct HIF_CE_pipe_info *pipe_info)
 		 * CE_data = dma_map_single(dev, data, buf_sz, );
 		 * DMA_FROM_DEVICE);
 		 */
-		ret =
-			qdf_nbuf_map_single(scn->qdf_dev, nbuf,
+		ret = qdf_nbuf_map_single(scn->qdf_dev, nbuf,
 					    QDF_DMA_FROM_DEVICE);
 
 		if (unlikely(ret != QDF_STATUS_SUCCESS)) {
@@ -1944,6 +1975,19 @@ void hif_flush_surprise_remove(struct hif_opaque_softc *hif_ctx)
 	hif_buffer_cleanup(hif_state);
 }
 
+static void hif_destroy_oom_work(struct hif_softc *scn)
+{
+	struct CE_state *ce_state;
+	int ce_id;
+
+	for (ce_id = 0; ce_id < scn->ce_count; ce_id++) {
+		ce_state = scn->ce_id_to_state[ce_id];
+		if (ce_state)
+			qdf_destroy_work(scn->qdf_dev,
+					 &ce_state->oom_allocation_work);
+	}
+}
+
 void hif_ce_stop(struct hif_softc *scn)
 {
 	struct HIF_CE_state *hif_state = HIF_GET_CE_STATE(scn);
@@ -1954,6 +1998,7 @@ void hif_ce_stop(struct hif_softc *scn)
 	 * bottom half contexts will not be re-entered
 	 */
 	hif_nointrs(scn);
+	hif_destroy_oom_work(scn);
 	scn->hif_init_done = false;
 
 	/*
@@ -2296,17 +2341,17 @@ int hif_config_ce(struct hif_softc *scn)
 	}
 	scn->athdiag_procfs_inited = true;
 
-	HIF_INFO_MED("%s: ce_init done", __func__);
+	HIF_DBG("%s: ce_init done", __func__);
 
 	init_tasklet_workers(hif_hdl);
 	hif_fake_apps_init_ctx(scn);
 
-	HIF_TRACE("%s: X, ret = %d", __func__, rv);
+	HIF_DBG("%s: X, ret = %d", __func__, rv);
 
 #ifdef ADRASTEA_SHADOW_REGISTERS
-	HIF_INFO("%s, Using Shadow Registers instead of CE Registers", __func__);
+	HIF_DBG("%s, Using Shadow Registers instead of CE Registers", __func__);
 	for (i = 0; i < NUM_SHADOW_REGISTERS; i++) {
-		HIF_INFO("%s Shadow Register%d is mapped to address %x",
+		HIF_DBG("%s Shadow Register%d is mapped to address %x",
 			  __func__, i,
 			  (A_TARGET_READ(scn, (SHADOW_ADDRESS(i))) << 2));
 	}
@@ -2704,10 +2749,10 @@ int hif_map_service_to_pipe(struct hif_opaque_softc *hif_hdl, uint16_t svc_id,
 		}
 	}
 	if (ul_updated == false)
-		HIF_WARN("%s: ul pipe is NOT updated for service %d",
+		HIF_INFO("%s: ul pipe is NOT updated for service %d",
 			 __func__, svc_id);
 	if (dl_updated == false)
-		HIF_WARN("%s: dl pipe is NOT updated for service %d",
+		HIF_INFO("%s: dl pipe is NOT updated for service %d",
 			 __func__, svc_id);
 
 	return status;
@@ -2827,7 +2872,7 @@ static inline void hif_config_rri_on_ddr(struct hif_softc *scn)
 	low_paddr  = BITS0_TO_31(paddr_rri_on_ddr);
 	high_paddr = BITS32_TO_35(paddr_rri_on_ddr);
 
-	HIF_INFO("%s using srri and drri from DDR", __func__);
+	HIF_DBG("%s using srri and drri from DDR", __func__);
 
 	WRITE_CE_DDR_ADDRESS_FOR_RRI_LOW(scn, low_paddr);
 	WRITE_CE_DDR_ADDRESS_FOR_RRI_HIGH(scn, high_paddr);

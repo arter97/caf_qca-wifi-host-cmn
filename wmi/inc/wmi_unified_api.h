@@ -34,8 +34,6 @@
 #define _WMI_UNIFIED_API_H_
 
 #include <osdep.h>
-#include "a_types.h"
-#include "ol_defines.h"
 #ifdef CONFIG_MCL
 #include "wmi.h"
 #endif
@@ -1360,4 +1358,8 @@ QDF_STATUS wmi_unified_fw_test_cmd(void *wmi_hdl,
 QDF_STATUS wmi_unified_get_rcpi_cmd(void *wmi_hdl,
 				    struct rcpi_req *get_rcpi_param);
 
+QDF_STATUS wmi_unified_set_arp_stats_req(void *wmi_hdl,
+					 struct set_arp_stats *req_buf);
+QDF_STATUS wmi_unified_get_arp_stats_req(void *wmi_hdl,
+					 struct get_arp_stats *req_buf);
 #endif /* _WMI_UNIFIED_API_H_ */

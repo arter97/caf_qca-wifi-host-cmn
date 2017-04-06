@@ -24,12 +24,6 @@
  * under proprietary terms before Copyright ownership was assigned
  * to the Linux Foundation.
  */
-#include "athdefs.h"
-#include "osapi_linux.h"
-#include "a_types.h"
-#include "a_debug.h"
-#include "ol_if_athvar.h"
-#include "ol_defines.h"
 #include "wmi_unified_priv.h"
 #include "wmi_unified_param.h"
 
@@ -3465,6 +3459,30 @@ QDF_STATUS wmi_unified_set_per_roam_config(void *wmi_hdl,
 	if (wmi_handle->ops->send_per_roam_config_cmd)
 		return wmi_handle->ops->send_per_roam_config_cmd(wmi_handle,
 					req_buf);
+
+	return QDF_STATUS_E_FAILURE;
+}
+
+QDF_STATUS wmi_unified_set_arp_stats_req(void *wmi_hdl,
+					 struct set_arp_stats *req_buf)
+{
+	wmi_unified_t wmi_handle = (wmi_unified_t) wmi_hdl;
+
+	if (wmi_handle->ops->send_set_arp_stats_req_cmd)
+		return wmi_handle->ops->send_set_arp_stats_req_cmd(wmi_handle,
+								   req_buf);
+
+	return QDF_STATUS_E_FAILURE;
+}
+
+QDF_STATUS wmi_unified_get_arp_stats_req(void *wmi_hdl,
+					 struct get_arp_stats *req_buf)
+{
+	wmi_unified_t wmi_handle = (wmi_unified_t) wmi_hdl;
+
+	if (wmi_handle->ops->send_get_arp_stats_req_cmd)
+		return wmi_handle->ops->send_get_arp_stats_req_cmd(wmi_handle,
+								   req_buf);
 
 	return QDF_STATUS_E_FAILURE;
 }

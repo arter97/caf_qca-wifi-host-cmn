@@ -27,11 +27,9 @@
 #ifndef _WMI_UNIFIED_TLV_H_
 #define _WMI_UNIFIED_TLV_H_
 #include <osdep.h>
-#include "a_types.h"
 #include "wmi_unified_param.h"
 #include "wmi.h"
 #include "wmi_unified.h"
-#include "ol_defines.h" /* Fix Me: wmi_unified_t structure definition */
 
 QDF_STATUS send_vdev_create_cmd_tlv(wmi_unified_t wmi_handle,
 				 uint8_t macaddr[IEEE80211_ADDR_LEN],
@@ -614,5 +612,10 @@ send_set_active_bpf_mode_cmd_tlv(wmi_unified_t wmi_handle,
 				 uint8_t vdev_id,
 				 FW_ACTIVE_BPF_MODE ucast_mode,
 				 FW_ACTIVE_BPF_MODE mcast_bcast_mode);
+
+QDF_STATUS send_set_arp_stats_req_cmd_tlv(wmi_unified_t wmi_handle,
+					  struct set_arp_stats *req_buf);
+QDF_STATUS send_get_arp_stats_req_cmd_tlv(wmi_unified_t wmi_handle,
+					  struct get_arp_stats *req_buf);
 #endif
 
