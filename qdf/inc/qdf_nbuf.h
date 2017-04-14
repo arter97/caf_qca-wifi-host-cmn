@@ -2283,4 +2283,29 @@ qdf_nbuf_reg_free_cb(qdf_nbuf_free_t cb_func_ptr)
 	 __qdf_nbuf_reg_free_cb(cb_func_ptr);
 }
 
+/**
+ * qdf_nbuf_init_replenish_timer - Initialize the alloc replenish timer
+ *
+ * This function initializes the nbuf alloc fail replenish timer.
+ *
+ * Return: void
+ */
+static inline void
+qdf_nbuf_init_replenish_timer(void)
+{
+	__qdf_nbuf_init_replenish_timer();
+}
+
+/**
+ * qdf_nbuf_deinit_replenish_timer - Deinitialize the alloc replenish timer
+ *
+ * This function deinitializes the nbuf alloc fail replenish timer.
+ *
+ * Return: void
+ */
+static inline void
+qdf_nbuf_deinit_replenish_timer(void)
+{
+	__qdf_nbuf_deinit_replenish_timer();
+}
 #endif /* _QDF_NBUF_H */
