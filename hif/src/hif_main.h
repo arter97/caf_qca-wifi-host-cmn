@@ -233,4 +233,12 @@ static inline void hif_usb_get_hw_info(struct hif_softc *scn) {}
 static inline void hif_ramdump_handler(struct hif_opaque_softc *scn) {}
 #endif
 
+#ifdef HIF_SNOC
+bool hif_is_target_register_access_allowed(struct hif_softc *hif_sc);
+#else
+static inline bool hif_is_target_register_access_allowed(struct hif_softc *hif_sc)
+{
+	return true;
+}
+#endif
 #endif /* __HIF_MAIN_H__ */

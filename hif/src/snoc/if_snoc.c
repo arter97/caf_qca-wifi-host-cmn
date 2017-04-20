@@ -457,3 +457,30 @@ int hif_snoc_bus_suspend_noirq(struct hif_softc *scn)
 	return 0;
 }
 
+#define ADRASTEA_A_WCSS_SR_APSS_SW_SCRATCH 0x00032064
+/* Firmwware write LIVE 0x1153 during target init */
+#define TARGET_STATE_LIVE 0x11530000
+#define TARGET_STATE_LIVE_MASK 0xFFFF0000
+
+/**
+ * hif_is_target_register_access_allowed(): Check target register access allow
+ * @scn: HIF Context
+ *
+ * This function help to check whether target register access is allowed or not
+ *
+ * Return: true if target access is allowed else false
+ */
+ bool hif_is_target_register_access_allowed(struct hif_softc *scn)
+{
+	uint32_t val;
+
+	val = hif_read32_mb(scn->mem + ADRASTEA_A_WCSS_SR_APSS_SW_SCRATCH);
+	val &= TARGET_STATE_LIVE_MASK;
+
+	if (val != TARGET_STATE_LIVE) {
+		return false;
+	}
+
+	return true;
+}
+
