@@ -135,7 +135,7 @@ struct qdf_nbuf_cb {
 		/* Note: MAX: 40 bytes */
 		struct {
 			uint32_t lro_eligible:1,
-				no_peer_lro_ineligible:1,
+				peer_cached_buf_frm:1,
 				tcp_proto:1,
 				tcp_pure_ack:1,
 				ipv6_proto:1,
@@ -220,8 +220,8 @@ struct qdf_nbuf_cb {
 
 #define QDF_NBUF_CB_RX_LRO_ELIGIBLE(skb) \
 	(((struct qdf_nbuf_cb *)((skb)->cb))->u.rx.lro_eligible)
-#define QDF_NBUF_CB_RX_LRO_INELIGIBLE(skb) \
-	(((struct qdf_nbuf_cb *)((skb)->cb))->u.rx.no_peer_lro_ineligible)
+#define QDF_NBUF_CB_RX_PEER_CACHED_FRM(skb) \
+	(((struct qdf_nbuf_cb *)((skb)->cb))->u.rx.peer_cached_buf_frm)
 #define QDF_NBUF_CB_RX_CTX_ID(skb) \
 	(((struct qdf_nbuf_cb *)((skb)->cb))->u.rx.rx_ctx_id)
 #define QDF_NBUF_CB_RX_TCP_PROTO(skb) \
@@ -539,6 +539,9 @@ enum qdf_proto_subtype  __qdf_nbuf_data_get_icmp_subtype(uint8_t *data);
 enum qdf_proto_subtype  __qdf_nbuf_data_get_icmpv6_subtype(uint8_t *data);
 uint8_t __qdf_nbuf_data_get_ipv4_proto(uint8_t *data);
 uint8_t __qdf_nbuf_data_get_ipv6_proto(uint8_t *data);
+
+void __qdf_nbuf_init_replenish_timer(void);
+void __qdf_nbuf_deinit_replenish_timer(void);
 
 /**
  * __qdf_to_status() - OS to QDF status conversion
