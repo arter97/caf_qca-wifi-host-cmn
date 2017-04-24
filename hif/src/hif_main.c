@@ -446,7 +446,6 @@ void hif_close(struct hif_opaque_softc *hif_ctx)
 		scn->target_info.hw_name = "ErrUnloading";
 		qdf_mem_free(hw_name);
 	}
-
 	hif_bus_close(scn);
 	qdf_mem_free(scn);
 }

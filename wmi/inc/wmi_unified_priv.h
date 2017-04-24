@@ -542,7 +542,7 @@ QDF_STATUS
 
 QDF_STATUS (*send_add_wow_wakeup_event_cmd)(wmi_unified_t wmi_handle,
 					uint32_t vdev_id,
-					uint32_t bitmap,
+					uint32_t *bitmap,
 					bool enable);
 
 QDF_STATUS (*send_wow_patterns_to_fw_cmd)(wmi_unified_t wmi_handle,
@@ -1207,7 +1207,8 @@ struct wmi_unified {
 	void *htc_handle;
 	qdf_spinlock_t eventq_lock;
 	qdf_nbuf_queue_t event_queue;
-	struct work_struct rx_event_work;
+	qdf_work_t rx_event_work;
+	qdf_workqueue_t *wmi_rx_work_queue;
 	int wmi_stop_in_progress;
 #ifndef WMI_NON_TLV_SUPPORT
 	struct _wmi_abi_version fw_abi_version;
