@@ -83,6 +83,7 @@ static int hif_post_recv_buffers_for_pipe(struct HIF_CE_pipe_info *pipe_info);
 
 static int hif_post_recv_buffers(struct hif_softc *scn);
 static void hif_config_rri_on_ddr(struct hif_softc *scn);
+static void hif_clear_rri_on_ddr(struct hif_softc *scn);
 
 /**
  * hif_target_access_log_dump() - dump access log
@@ -705,7 +706,6 @@ struct CE_handle *ce_init(struct hif_softc *scn,
 		CE_state->ctrl_addr = ctrl_addr;
 		CE_state->state = CE_RUNNING;
 		CE_state->attr_flags = attr->flags;
-		qdf_spinlock_create(&CE_state->lro_unloading_lock);
 	}
 	CE_state->scn = scn;
 
@@ -890,17 +890,7 @@ struct CE_handle *ce_init(struct hif_softc *scn,
 				 */
 				HIF_ERROR("%s: dest ring has no mem",
 					  __func__);
-				if (malloc_src_ring) {
-					qdf_mem_free(CE_state->src_ring);
-					CE_state->src_ring = NULL;
-					malloc_src_ring = false;
-				}
-				if (malloc_CE_state) {
-					/* allocated CE_state locally */
-					qdf_mem_free(CE_state);
-					malloc_CE_state = false;
-				}
-				return NULL;
+				goto error_no_dma_mem;
 			}
 
 			dest_ring = CE_state->dest_ring =
@@ -1229,8 +1219,6 @@ void ce_fini(struct CE_handle *copyeng)
 
 	CE_state->state = CE_UNUSED;
 	scn->ce_id_to_state[CE_id] = NULL;
-
-	qdf_spinlock_destroy(&CE_state->lro_unloading_lock);
 
 	if (CE_state->src_ring) {
 		/* Cleanup the datapath Tx ring */
@@ -1682,7 +1670,7 @@ static void hif_post_recv_buffers_failure(struct HIF_CE_pipe_info *pipe_info,
 	qdf_spin_lock_bh(&pipe_info->recv_bufs_needed_lock);
 	error_cnt_tmp = ++(*error_cnt);
 	qdf_spin_unlock_bh(&pipe_info->recv_bufs_needed_lock);
-	HIF_ERROR("%s: pipe_num %d, needed %d, err_cnt = %u, fail_type = %s",
+	HIF_DBG("%s: pipe_num %d, needed %d, err_cnt = %u, fail_type = %s",
 		  __func__, pipe_info->pipe_num, bufs_needed_tmp, error_cnt_tmp,
 		  failure_type_string);
 	hif_record_ce_desc_event(scn, ce_id, failure_type,
@@ -1788,9 +1776,8 @@ static int hif_post_recv_buffers_for_pipe(struct HIF_CE_pipe_info *pipe_info)
 
 /*
  * Try to post all desired receive buffers for all pipes.
- * Returns 0 if all desired buffers are posted,
- * non-zero if were were unable to completely
- * replenish receive buffers.
+ * returns 0 as oom_allocation_work will be scheduled
+ * to recover any failures.
  */
 static int hif_post_recv_buffers(struct hif_softc *scn)
 {
@@ -1809,13 +1796,9 @@ static int hif_post_recv_buffers(struct hif_softc *scn)
 			continue;
 		}
 
-		if (hif_post_recv_buffers_for_pipe(pipe_info)) {
-			rv = 1;
-			goto done;
-		}
+		hif_post_recv_buffers_for_pipe(pipe_info);
 	}
 
-done:
 	A_TARGET_ACCESS_UNLIKELY(scn);
 
 	return rv;
@@ -1997,7 +1980,7 @@ void hif_ce_stop(struct hif_softc *scn)
 	 * before cleaning up any memory, ensure irq &
 	 * bottom half contexts will not be re-entered
 	 */
-	hif_nointrs(scn);
+	hif_disable_isr(&scn->osc);
 	hif_destroy_oom_work(scn);
 	scn->hif_init_done = false;
 
@@ -2190,6 +2173,7 @@ QDF_STATUS hif_ce_open(struct hif_softc *hif_sc)
  */
 void hif_ce_close(struct hif_softc *hif_sc)
 {
+	hif_clear_rri_on_ddr(hif_sc);
 }
 
 /**
@@ -2652,15 +2636,9 @@ int ce_lro_flush_cb_deregister(struct hif_opaque_softc *hif_hdl,
 		for (i = 0; i < scn->ce_count; i++) {
 			ce_state = scn->ce_id_to_state[i];
 			if ((ce_state != NULL) && (ce_state->htt_rx_data)) {
-				qdf_spin_lock_bh(
-					&ce_state->lro_unloading_lock);
 				ce_state->lro_flush_cb = NULL;
 				lro_deinit_cb(ce_state->lro_data);
 				ce_state->lro_data = NULL;
-				qdf_spin_unlock_bh(
-					&ce_state->lro_unloading_lock);
-				qdf_spinlock_destroy(
-					&ce_state->lro_unloading_lock);
 				rc++;
 			}
 		}
@@ -2869,6 +2847,7 @@ static inline void hif_config_rri_on_ddr(struct hif_softc *scn)
 		scn->qdf_dev->dev, (CE_COUNT*sizeof(uint32_t)),
 		&paddr_rri_on_ddr);
 
+	scn->paddr_rri_on_ddr = paddr_rri_on_ddr;
 	low_paddr  = BITS0_TO_31(paddr_rri_on_ddr);
 	high_paddr = BITS32_TO_35(paddr_rri_on_ddr);
 
@@ -2884,6 +2863,18 @@ static inline void hif_config_rri_on_ddr(struct hif_softc *scn)
 
 	return;
 }
+
+static inline void hif_clear_rri_on_ddr(struct hif_softc *scn)
+{
+	if (scn && scn->vaddr_rri_on_ddr) {
+		qdf_mem_free_consistent(scn->qdf_dev, scn->qdf_dev->dev,
+				(CE_COUNT*sizeof(uint32_t)),
+				scn->vaddr_rri_on_ddr, scn->paddr_rri_on_ddr,
+				0);
+		scn->vaddr_rri_on_ddr = NULL;
+	}
+	return;
+}
 #else
 
 /**
@@ -2897,6 +2888,11 @@ static inline void hif_config_rri_on_ddr(struct hif_softc *scn)
  * Return: None
  */
 static inline void hif_config_rri_on_ddr(struct hif_softc *scn)
+{
+	return;
+}
+
+static inline void hif_clear_rri_on_ddr(struct hif_softc *scn)
 {
 	return;
 }
