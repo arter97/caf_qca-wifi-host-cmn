@@ -42,6 +42,7 @@ util_scan_get_ev_type_name(enum scan_event_type type)
 		[SCAN_EVENT_TYPE_SUSPENDED] = "SUSPENDED",
 		[SCAN_EVENT_TYPE_RESUMED] = "RESUMED",
 		[SCAN_EVENT_TYPE_NLO_COMPLETE] = "NLO_COMPLETE",
+		[SCAN_EVENT_TYPE_NLO_MATCH] = "NLO_MATCH",
 		[SCAN_EVENT_TYPE_INVALID] = "INVALID",
 		[SCAN_EVENT_TYPE_GPIO_TIMEOUT] = "GPIO_TIMEOUT",
 		[SCAN_EVENT_TYPE_RADIO_MEASUREMENT_START] =
@@ -574,6 +575,7 @@ util_scan_unpack_beacon_frame(uint8_t *frame,
 		(le16toh(*(uint16_t *)hdr->i_seq) >> WLAN_SEQ_SEQ_SHIFT);
 
 	scan_entry->rssi_raw = rx_param->rssi;
+	scan_entry->avg_rssi = WLAN_RSSI_DUMMY_MARKER;
 	scan_entry->tsf_delta = rx_param->tsf_delta;
 
 	/* store jiffies */
@@ -592,10 +594,8 @@ util_scan_unpack_beacon_frame(uint8_t *frame,
 		bcn->timestamp, 8);
 	scan_entry->erp = ERP_NON_ERP_PRESENT;
 
-
-	scan_entry->rssi_timestamp =
-		scan_entry->scan_entry_time =
-			qdf_mc_timer_get_system_time();
+	scan_entry->scan_entry_time =
+		qdf_mc_timer_get_system_time();
 
 	scan_entry->raw_frame.len = frame_len;
 	qdf_mem_copy(scan_entry->raw_frame.ptr,

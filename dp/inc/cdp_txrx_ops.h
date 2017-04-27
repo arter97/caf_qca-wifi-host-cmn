@@ -32,6 +32,7 @@
 #endif
 #include "cdp_txrx_handle.h"
 #include <cdp_txrx_mon_struct.h>
+#include "wlan_objmgr_psoc_obj.h"
 
 /******************************************************************************
  *
@@ -199,6 +200,8 @@ struct cdp_cmn_ops {
 
 	A_STATUS(*txrx_stats)(struct cdp_vdev *vdev,
 		struct ol_txrx_stats_req *req, enum cdp_stats stats);
+
+	QDF_STATUS (*display_stats)(void *psoc, uint16_t value);
 };
 
 struct cdp_ctrl_ops {
@@ -359,6 +362,40 @@ struct cdp_ctrl_ops {
 
 	int (*txrx_is_target_ar900b)(struct cdp_vdev *vdev);
 
+	void (*txrx_set_vdev_param)(struct cdp_vdev *vdev,
+			enum cdp_vdev_param_type param, uint32_t val);
+
+	void (*txrx_peer_set_nawds)(void *peer, uint8_t value);
+	/**
+	 * @brief Set the reo dest ring num of the radio
+	 * @details
+	 *  Set the reo destination ring no on which we will receive
+	 *  pkts for this radio.
+	 *
+	 * @param pdev - the data physical device object
+	 * @param reo_dest_ring_num - value ranges between 1 - 4
+	 */
+	void (*txrx_set_pdev_reo_dest)(
+			struct cdp_pdev *pdev,
+			enum cdp_host_reo_dest_ring reo_dest_ring_num);
+
+	/**
+	 * @brief Get the reo dest ring num of the radio
+	 * @details
+	 *  Get the reo destination ring no on which we will receive
+	 *  pkts for this radio.
+	 *
+	 * @param pdev - the data physical device object
+	 * @return the reo destination ring number
+	 */
+	enum cdp_host_reo_dest_ring (*txrx_get_pdev_reo_dest)(
+						struct cdp_pdev *pdev);
+
+	int (*txrx_wdi_event_sub)(struct cdp_pdev *pdev, void *event_cb_sub,
+			uint32_t event);
+
+	int (*txrx_wdi_event_unsub)(struct cdp_pdev *pdev, void *event_cb_sub,
+			uint32_t event);
 };
 
 struct cdp_me_ops {
@@ -490,7 +527,7 @@ struct cdp_wds_ops {
 	void
 		(*txrx_set_wds_rx_policy)(struct cdp_vdev *vdev,
 				u_int32_t val);
-
+	int (*vdev_set_wds)(void *vdev, uint32_t val);
 };
 
 struct cdp_raw_ops {
@@ -544,7 +581,7 @@ struct ol_if_ops {
 			uint32_t tid_mask);
 	int (*peer_unref_delete)(void *scn_handle, uint8_t vdev_id,
 			uint8_t *peer_macaddr);
-	bool (*is_hw_dbs_2x2_capable)(void);
+	bool (*is_hw_dbs_2x2_capable)(struct wlan_objmgr_psoc *psoc);
 	int (*peer_add_wds_entry)(void *ol_soc_handle,
 			const uint8_t *dest_macaddr, uint8_t *peer_macaddr,
 			uint32_t flags);
@@ -557,6 +594,7 @@ struct ol_if_ops {
 			struct cdp_lro_hash_config *lro_hash);
 	void (*update_dp_stats)(void *soc, void *stats, uint16_t id,
 			uint8_t type);
+	uint8_t (*rx_invalid_peer)(void *osif_pdev, void *msg);
 
 	/* TODO: Add any other control path calls required to OL_IF/WMA layer */
 };
@@ -844,12 +882,10 @@ struct cdp_throttle_ops {
 
 /**
  * struct cdp_ocb_ops - mcl ocb ops
- * @display_stats:
  * @clear_stats:
  * @stats:
  */
 struct cdp_mob_stats_ops {
-	void (*display_stats)(uint16_t bitmap);
 	void (*clear_stats)(uint16_t bitmap);
 	int (*stats)(uint8_t vdev_id, char *buffer, unsigned buf_len);
 };

@@ -94,7 +94,6 @@
 /* scan age time in millisec */
 #define SCAN_CACHE_AGING_TIME (300*1000)
 #define SCAN_MAX_BSS_PDEV 100
-#define SCAN_MAX_NUM_SCAN_ALLOWED 8
 #define SCAN_PRIORITY SCAN_PRIORITY_LOW
 
 /**
@@ -148,6 +147,39 @@ struct pdev_scan_info {
 };
 
 /**
+ * struct scan_vdev_obj - scan vdev obj
+ * @pno_match_evt_received: pno match received
+ * @pno_in_progress: pno in progress
+ */
+struct scan_vdev_obj {
+	bool pno_match_evt_received;
+	bool pno_in_progress;
+};
+
+/**
+ * struct pno_def_config - def configuration for PNO
+ * @channel_prediction: config PNO channel prediction feature status
+ * @top_k_num_of_channels: def top K number of channels are used for tanimoto
+ * distance calculation.
+ * @stationary_thresh: def threshold val to determine that STA is stationary.
+ * @pnoscan_adaptive_dwell_mode: def adaptive dwelltime mode for pno scan
+ * @channel_prediction_full_scan: def periodic timer upon which full scan needs
+ * to be triggered.
+ * @pno_wake_lock: pno wake lock
+ * @pno_cb: callback to call on PNO completion
+ */
+struct pno_def_config {
+	bool channel_prediction;
+	uint8_t top_k_num_of_channels;
+	uint8_t stationary_thresh;
+	enum scan_dwelltime_adaptive_mode adaptive_dwell_mode;
+	uint32_t channel_prediction_full_scan;
+	qdf_wake_lock_t pno_wake_lock;
+	struct cb_handler pno_cb;
+};
+
+
+/**
  * struct scan_default_params - default scan parameters to be used
  * @active_dwell: default active dwell time
  * @passive_dwell:default passive dwell time
@@ -167,7 +199,8 @@ struct pdev_scan_info {
  * @num_probes: default maximum number of probes to sent
  * @cache_aging_time: default scan cache aging time
  * @max_bss_per_pdev: maximum number of bss entries to be maintained per pdev
- * @max_num_scan_allowed: maximum number of parallel scan allowed per psoc
+ * @max_active_scans_allowed: maximum number of active parallel scan allowed
+ *                            per psoc
  * @scan_priority: default scan priority
  * @scan_f_passive: passively scan all channels including active channels
  * @scan_f_bcast_probe: add wild card ssid prbreq even if ssid_list is specified
@@ -227,7 +260,7 @@ struct scan_default_params {
 	uint32_t num_probes;
 	uint32_t scan_cache_aging_time;
 	uint16_t max_bss_per_pdev;
-	uint8_t max_num_scan_allowed;
+	uint32_t max_active_scans_allowed;
 	enum scan_priority scan_priority;
 	enum scan_dwelltime_adaptive_mode adaptive_dwell_time_mode;
 	union {
@@ -310,24 +343,8 @@ struct wlan_scan_obj {
 	struct scan_requester_info requesters[WLAN_MAX_REQUESTORS];
 	struct global_scan_ev_handlers global_evhandlers;
 	struct pdev_scan_info pdev_info[WLAN_UMAC_MAX_PDEVS];
+	struct pno_def_config pno_cfg;
 };
-
-/**
- * wlan_vdev_get_scan_obj() - private API to get scan object from vdev
- * @psoc: vdev object
- *
- * Return: scan object
- */
-static inline struct wlan_scan_obj *
-wlan_vdev_get_scan_obj(struct wlan_objmgr_vdev *vdev)
-{
-	struct wlan_objmgr_psoc *psoc =
-		wlan_pdev_get_psoc(wlan_vdev_get_pdev(vdev));
-
-	return (struct wlan_scan_obj *)
-		wlan_objmgr_psoc_get_comp_private_obj(psoc,
-				WLAN_UMAC_COMP_SCAN);
-}
 
 /**
  * wlan_psoc_get_scan_obj() - private API to get scan object from psoc
@@ -338,13 +355,75 @@ wlan_vdev_get_scan_obj(struct wlan_objmgr_vdev *vdev)
 static inline struct wlan_scan_obj *
 wlan_psoc_get_scan_obj(struct wlan_objmgr_psoc *psoc)
 {
-	return (struct wlan_scan_obj *)
+	struct wlan_scan_obj *scan_obj;
+
+	wlan_psoc_obj_lock(psoc);
+	scan_obj = (struct wlan_scan_obj *)
 		wlan_objmgr_psoc_get_comp_private_obj(psoc,
 				WLAN_UMAC_COMP_SCAN);
+	wlan_psoc_obj_unlock(psoc);
+
+	return scan_obj;
 }
 
 /**
- * wlan_scan_vdev_get_pdev_id)() - private API to get pdev id from vdev object
+ * wlan_pdev_get_scan_obj() - private API to get scan object from pdev
+ * @psoc: pdev object
+ *
+ * Return: scan object
+ */
+static inline struct wlan_scan_obj *
+wlan_pdev_get_scan_obj(struct wlan_objmgr_pdev *pdev)
+{
+	struct wlan_objmgr_psoc *psoc;
+
+	wlan_pdev_obj_lock(pdev);
+	psoc = wlan_pdev_get_psoc(pdev);
+	wlan_pdev_obj_unlock(pdev);
+
+	return wlan_psoc_get_scan_obj(psoc);
+}
+
+/**
+ * wlan_vdev_get_scan_obj() - private API to get scan object from vdev
+ * @psoc: vdev object
+ *
+ * Return: scan object
+ */
+static inline struct wlan_scan_obj *
+wlan_vdev_get_scan_obj(struct wlan_objmgr_vdev *vdev)
+{
+	struct wlan_objmgr_pdev *pdev;
+
+	wlan_vdev_obj_lock(vdev);
+	pdev = wlan_vdev_get_pdev(vdev);
+	wlan_vdev_obj_unlock(vdev);
+
+	return wlan_pdev_get_scan_obj(pdev);
+}
+
+/**
+ * wlan_get_vdev_scan_obj() - private API to get scan object vdev
+ * @vdev: vdev object
+ *
+ * Return: scan object
+ */
+static inline struct scan_vdev_obj *
+wlan_get_vdev_scan_obj(struct wlan_objmgr_vdev *vdev)
+{
+	struct scan_vdev_obj *scan_vdev_obj;
+
+	wlan_vdev_obj_lock(vdev);
+	scan_vdev_obj = (struct scan_vdev_obj *)
+		wlan_objmgr_vdev_get_comp_private_obj(vdev,
+				WLAN_UMAC_COMP_SCAN);
+	wlan_vdev_obj_unlock(vdev);
+
+	return scan_vdev_obj;
+}
+
+/**
+ * wlan_scan_vdev_get_pdev_id() - private API to get pdev id from vdev object
  * @vdev: vdev object
  *
  * Return: parent pdev id
@@ -352,9 +431,39 @@ wlan_psoc_get_scan_obj(struct wlan_objmgr_psoc *psoc)
 static inline uint8_t
 wlan_scan_vdev_get_pdev_id(struct wlan_objmgr_vdev *vdev)
 {
-	struct wlan_objmgr_pdev *pdev = wlan_vdev_get_pdev(vdev);
+	struct wlan_objmgr_pdev *pdev;
+
+	wlan_vdev_obj_lock(vdev);
+	pdev = wlan_vdev_get_pdev(vdev);
+	wlan_vdev_obj_unlock(vdev);
 
 	return wlan_objmgr_pdev_get_pdev_id(pdev);
+}
+
+/**
+ * wlan_pdev_get_pdev_scan_ev_handlers() - private API to get
+ * pdev scan event handlers
+ * @vdev: pdev object
+ *
+ * Return: pdev_scan_ev_handler object
+ */
+static inline struct pdev_scan_ev_handler*
+wlan_pdev_get_pdev_scan_ev_handlers(struct wlan_objmgr_pdev *pdev)
+{
+	uint8_t pdevid;
+	struct wlan_scan_obj *scan;
+	struct pdev_scan_ev_handler *pdev_ev_handler;
+
+	wlan_pdev_obj_lock(pdev);
+	pdevid = wlan_objmgr_pdev_get_pdev_id(pdev);
+	wlan_pdev_obj_unlock(pdev);
+
+	scan = wlan_pdev_get_scan_obj(pdev);
+
+	pdev_ev_handler =
+		&scan->global_evhandlers.pdev_ev_handlers[pdevid];
+
+	return pdev_ev_handler;
 }
 
 /**
@@ -367,26 +476,58 @@ wlan_scan_vdev_get_pdev_id(struct wlan_objmgr_vdev *vdev)
 static inline struct pdev_scan_ev_handler*
 wlan_vdev_get_pdev_scan_ev_handlers(struct wlan_objmgr_vdev *vdev)
 {
-	uint8_t pdevid = wlan_scan_vdev_get_pdev_id(vdev);
-	struct wlan_scan_obj *scan = wlan_vdev_get_scan_obj(vdev);
-	struct pdev_scan_ev_handler *pdev_ev_handler =
-		&scan->global_evhandlers.pdev_ev_handlers[pdevid];
+	struct wlan_objmgr_pdev *pdev;
 
-	return pdev_ev_handler;
+	wlan_vdev_obj_lock(vdev);
+	pdev = wlan_vdev_get_pdev(vdev);
+	wlan_vdev_obj_unlock(vdev);
+
+	return wlan_pdev_get_pdev_scan_ev_handlers(pdev);
+}
+
+/**
+ * wlan_scan_psoc_get_def_params() - private API to get scan defaults
+ * @psoc: psoc object
+ *
+ * Return: scan defaults
+ */
+static inline struct scan_default_params*
+wlan_scan_psoc_get_def_params(struct wlan_objmgr_psoc *psoc)
+{
+	struct wlan_scan_obj *scan = NULL;
+
+	if (!psoc) {
+		scm_err("null psoc");
+		return NULL;
+	}
+	scan = wlan_psoc_get_scan_obj(psoc);
+
+	if (!scan)
+		return NULL;
+
+	return &scan->scan_def;
 }
 
 /**
  * wlan_vdev_get_def_scan_params() - private API to get scan defaults
- * @psoc: vdev object
+ * @vdev: vdev object
  *
  * Return: scan defaults
  */
 static inline struct scan_default_params*
 wlan_vdev_get_def_scan_params(struct wlan_objmgr_vdev *vdev)
 {
-	struct wlan_scan_obj *scan = wlan_vdev_get_scan_obj(vdev);
+	struct wlan_objmgr_psoc *psoc = NULL;
 
-	return &scan->scan_def;
+	if (!vdev) {
+		scm_err("null vdev");
+		return NULL;
+	}
+	wlan_vdev_obj_lock(vdev);
+	psoc = wlan_vdev_get_psoc(vdev);
+	wlan_vdev_obj_unlock(vdev);
+
+	return wlan_scan_psoc_get_def_params(psoc);
 }
 
 /**
@@ -408,4 +549,25 @@ QDF_STATUS wlan_scan_psoc_created_notification(struct wlan_objmgr_psoc *psoc,
  */
 QDF_STATUS wlan_scan_psoc_destroyed_notification(struct wlan_objmgr_psoc *psoc,
 	void *arg_list);
+
+/**
+ * wlan_scan_vdev_created_notification() - scan psoc create handler
+ * @vdev: vdev object
+ * @arg_list: Argument list
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS wlan_scan_vdev_created_notification(struct wlan_objmgr_vdev *vdev,
+	void *arg_list);
+
+/**
+ * wlan_scan_vdev_destroyed_notification() - scan psoc delete handler
+ * @vdev: vdev object
+ * @arg_list: Argument list
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS wlan_scan_vdev_destroyed_notification(struct wlan_objmgr_vdev *vdev,
+	void *arg_list);
+
 #endif

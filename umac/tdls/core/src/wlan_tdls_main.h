@@ -33,11 +33,31 @@
 #include <wlan_objmgr_peer_obj.h>
 #include <wlan_tdls_public_structs.h>
 #include <scheduler_api.h>
+#include "wlan_serialization_api.h"
+#include "wlan_tdls_mgmt.h"
 
 /* Bit mask flag for tdls_option to FW */
 #define ENA_TDLS_OFFCHAN      (1 << 0)  /* TDLS Off Channel support */
 #define ENA_TDLS_BUFFER_STA   (1 << 1)  /* TDLS Buffer STA support */
 #define ENA_TDLS_SLEEP_STA    (1 << 2)  /* TDLS Sleep STA support */
+
+#define BW_20_OFFSET_BIT   0
+#define BW_40_OFFSET_BIT   1
+#define BW_80_OFFSET_BIT   2
+#define BW_160_OFFSET_BIT  3
+
+#define TDLS_SEC_OFFCHAN_OFFSET_0        0
+#define TDLS_SEC_OFFCHAN_OFFSET_40PLUS   40
+#define TDLS_SEC_OFFCHAN_OFFSET_40MINUS  (-40)
+#define TDLS_SEC_OFFCHAN_OFFSET_80       80
+#define TDLS_SEC_OFFCHAN_OFFSET_160      160
+/*
+ * Before UpdateTimer expires, we want to timeout discovery response
+ * should not be more than 2000.
+ */
+#define TDLS_DISCOVERY_TIMEOUT_BEFORE_UPDATE     1000
+#define TDLS_SCAN_REJECT_MAX            5
+
 
 #define tdls_log(level, args...) \
 	QDF_TRACE(QDF_MODULE_ID_TDLS, level, ## args)
@@ -55,7 +75,7 @@
 #define tdls_alert(format, args...) \
 	tdls_logfl(QDF_TRACE_LEVEL_FATAL, format, ## args)
 
-#define TDLS_IS_CONNECTED(peer)  \
+#define TDLS_IS_LINK_CONNECTED(peer)  \
 	((TDLS_LINK_CONNECTED == (peer)->link_status) || \
 	 (TDLS_LINK_TEARING == (peer)->link_status))
 
@@ -87,30 +107,6 @@ enum tdls_nss_transition_state {
 };
 
 /**
- * enum tdls_command_type - TDLS command type
- * @TDLS_CMD_TX_ACTION: send tdls action frame
- * @TDLS_CMD_ADD_STA: add tdls peer
- * @TDLS_CMD_CHANGE_STA: change tdls peer
- * @TDLS_CMD_ENABLE_LINK: enable tdls link
- * @TDLS_CMD_DISABLE_LINK: disable tdls link
- * @TDLS_CMD_CONFIG_FORCE_PEER: config external peer
- * @TDLS_CMD_REMOVE_FORCE_PEER: remove external peer
- * @TDLS_CMD_STATS_UPDATE: update tdls stats
- * @TDLS_CMD_CONFIG_UPDATE: config tdls
- */
-enum tdls_commmand_type {
-	TDLS_CMD_TX_ACTION = 1,
-	TDLS_CMD_ADD_STA,
-	TDLS_CMD_CHANGE_STA,
-	TDLS_CMD_ENABLE_LINK,
-	TDLS_CMD_DISABLE_LINK,
-	TDLS_CMD_CONFIG_FORCE_PEER,
-	TDLS_CMD_REMOVE_FORCE_PEER,
-	TDLS_CMD_STATS_UPDATE,
-	TDLS_CMD_CONFIG_UPDATE
-};
-
-/**
  * struct tdls_conn_tracker_mac_table - connection tracker peer table
  * @mac_address: peer mac address
  * @tx_packet_cnt: number of tx pkts
@@ -122,6 +118,16 @@ struct tdls_conn_tracker_mac_table {
 	uint32_t tx_packet_cnt;
 	uint32_t rx_packet_cnt;
 	uint32_t peer_timestamp_ms;
+};
+
+/**
+ * struct tdls_ct_idle_peer_data - connection tracker idle peer info
+ * @vdev: vdev object
+ * @tdls_info: tdls connection info
+ */
+struct tdls_ct_idle_peer_data {
+	struct wlan_objmgr_vdev *vdev;
+	struct tdls_conn_info *tdls_info;
 };
 
 /**
@@ -143,7 +149,9 @@ struct tdls_set_state_info {
  * struct tdls_psoc_priv_ctx - tdls context
  * @soc: objmgr psoc
  * @tdls_current_mode: current tdls mode
- * @tdls_user_config_mode: user configure tdls mode
+ * @tdls_last_mode: last tdls mode
+ * @scan_reject_count: number of times scan rejected due to TDLS
+ * @tdls_source_bitmap: bit map to set/reset TDLS by different sources
  * @tdls_conn_info: this tdls_conn_info can be removed and we can use peer type
  *                of peer object to get the active tdls peers
  * @tdls_configs: tdls user configure
@@ -163,13 +171,25 @@ struct tdls_set_state_info {
  * @tx_ack_cnf_cb_data: user data to tdls_tx_cnf_cb
  * @tdls_event_cb: tdls event callback
  * @tdls_evt_cb_data: tdls event user data
+ * @tdls_reg_tl_peer: callback to register the TDLS peer with TL
+ * @tdls_dereg_tl_peer: callback to unregister the TDLS peer
+ * @tdls_tl_peer_data: userdata for register/deregister TDLS peer
  * @tx_q_ack: queue for tx frames waiting for ack
  * @tdls_con_cap: tdls concurrency support
+ * @tdls_send_mgmt_req: store eWNI_SME_TDLS_SEND_MGMT_REQ value
+ * @tdls_add_sta_req: store eWNI_SME_TDLS_ADD_STA_REQ value
+ * @tdls_del_sta_req: store eWNI_SME_TDLS_DEL_STA_REQ value
+ * @tdls_update_peer_state: store WMA_UPDATE_TDLS_PEER_STATE value
+ * @tdls_del_all_peers:store eWNI_SME_DEL_ALL_TDLS_PEERS
+ * @tdls_idle_peer_data: provide information about idle peer
+ * @tdls_ct_spinlock: connection tracker spin lock
  */
 struct tdls_soc_priv_obj {
 	struct wlan_objmgr_psoc *soc;
-	enum tdls_support_mode tdls_current_mode;
-	enum tdls_support_mode tdls_user_config_mode;
+	enum tdls_feature_mode tdls_current_mode;
+	enum tdls_feature_mode tdls_last_mode;
+	int scan_reject_count;
+	unsigned long tdls_source_bitmap;
 	struct tdls_conn_info tdls_conn_info[WLAN_TDLS_STA_MAX_NUM];
 	struct tdls_user_config tdls_configs;
 	uint16_t max_num_tdls_sta;
@@ -181,15 +201,30 @@ struct tdls_soc_priv_obj {
 	uint8_t tdls_external_peer_count;
 	bool tdls_nss_switch_in_progress;
 	bool tdls_nss_teardown_complete;
+	bool tdls_disable_in_progress;
 	enum tdls_nss_transition_state tdls_nss_transition_mode;
 	int32_t tdls_teardown_peers_cnt;
 	struct tdls_set_state_info set_state_info;
+	tdls_rx_callback tdls_rx_cb;
+	void *tdls_rx_cb_data;
+	tdls_wmm_check tdls_wmm_cb;
+	void *tdls_wmm_cb_data;
 	tdls_tx_ack_cnf_callback tdls_tx_cnf_cb;
 	void *tx_ack_cnf_cb_data;
 	tdls_evt_callback tdls_event_cb;
 	void *tdls_evt_cb_data;
+	tdls_register_tl_peer_callback tdls_reg_tl_peer;
+	tdls_deregister_tl_peer_callback tdls_dereg_tl_peer;
+	void *tdls_tl_peer_data;
 	qdf_list_t tx_q_ack;
 	enum tdls_conc_cap tdls_con_cap;
+	uint16_t tdls_send_mgmt_req;
+	uint16_t tdls_add_sta_req;
+	uint16_t tdls_del_sta_req;
+	uint16_t tdls_update_peer_state;
+	uint16_t tdls_del_all_peers;
+	struct tdls_ct_idle_peer_data tdls_idle_peer_data;
+	qdf_spinlock_t tdls_ct_spinlock;
 };
 
 /**
@@ -222,7 +257,14 @@ struct tdls_vdev_priv_obj {
 			ct_peer_table[WLAN_TDLS_CT_TABLE_SIZE];
 	uint8_t valid_mac_entries;
 	uint32_t magic;
+	uint8_t session_id;
 	qdf_list_t tx_queue;
+};
+
+/**
+ * struct tdls_peer_mlme_info - tdls peer mlme info
+ **/
+struct tdls_peer_mlme_info {
 };
 
 /**
@@ -266,7 +308,7 @@ struct tdls_peer {
 	uint16_t sta_id;
 	int8_t rssi;
 	enum tdls_peer_capab tdls_support;
-	enum tdls_link_status link_status;
+	enum tdls_link_state link_status;
 	uint8_t signature;
 	uint8_t is_responder;
 	uint8_t discovery_processed;
@@ -288,11 +330,31 @@ struct tdls_peer {
 	qdf_mc_timer_t peer_idle_timer;
 	bool is_peer_idle_timer_initialised;
 	uint8_t spatial_streams;
-	enum tdls_link_reason reason;
+	enum tdls_link_state_reason reason;
 	tdls_state_change_callback state_change_notification;
 	uint8_t qos;
+	struct tdls_peer_mlme_info *tdls_info;
 };
 
+/**
+ * struct tdls_os_if_event - TDLS os event info
+ * @type: type of event
+ * @info: pointer to event information
+ */
+struct tdls_os_if_event {
+	uint32_t type;
+	void *info;
+};
+
+/**
+ * enum tdls_os_if_notification - TDLS notification from OS IF
+ * @TDLS_NOTIFY_STA_SESSION_INCREMENT: sta session count incremented
+ * @TDLS_NOTIFY_STA_SESSION_DECREMENT: sta session count decremented
+ */
+enum tdls_os_if_notification {
+	TDLS_NOTIFY_STA_SESSION_INCREMENT,
+	TDLS_NOTIFY_STA_SESSION_DECREMENT
+};
 /**
  * wlan_vdev_get_tdls_soc_obj - private API to get tdls soc object from vdev
  * @vdev: vdev object
@@ -302,12 +364,29 @@ struct tdls_peer {
 static inline struct tdls_soc_priv_obj *
 wlan_vdev_get_tdls_soc_obj(struct wlan_objmgr_vdev *vdev)
 {
-	struct wlan_objmgr_psoc *psoc =
-		wlan_pdev_get_psoc(wlan_vdev_get_pdev(vdev));
+	struct wlan_objmgr_psoc *psoc;
+	struct tdls_soc_priv_obj *soc_obj;
 
-	return (struct tdls_soc_priv_obj *)
+	if (!vdev) {
+		tdls_err("NULL vdev");
+		return NULL;
+	}
+
+	wlan_vdev_obj_lock(vdev);
+	psoc = wlan_vdev_get_psoc(vdev);
+	wlan_vdev_obj_unlock(vdev);
+	if (!psoc) {
+		tdls_err("can't get psoc");
+		return NULL;
+	}
+
+	wlan_psoc_obj_lock(psoc);
+	soc_obj = (struct tdls_soc_priv_obj *)
 		wlan_objmgr_psoc_get_comp_private_obj(psoc,
 						      WLAN_UMAC_COMP_TDLS);
+	wlan_psoc_obj_unlock(psoc);
+
+	return soc_obj;
 }
 
 /**
@@ -319,9 +398,18 @@ wlan_vdev_get_tdls_soc_obj(struct wlan_objmgr_vdev *vdev)
 static inline struct tdls_soc_priv_obj *
 wlan_psoc_get_tdls_soc_obj(struct wlan_objmgr_psoc *psoc)
 {
-	return (struct tdls_soc_priv_obj *)
+	struct tdls_soc_priv_obj *soc_obj;
+	if (!psoc) {
+		tdls_err("NULL psoc");
+		return NULL;
+	}
+	wlan_psoc_obj_lock(psoc);
+	soc_obj = (struct tdls_soc_priv_obj *)
 		wlan_objmgr_psoc_get_comp_private_obj(psoc,
 						      WLAN_UMAC_COMP_TDLS);
+	wlan_psoc_obj_unlock(psoc);
+
+	return soc_obj;
 }
 
 /**
@@ -333,22 +421,33 @@ wlan_psoc_get_tdls_soc_obj(struct wlan_objmgr_psoc *psoc)
 static inline struct tdls_vdev_priv_obj *
 wlan_vdev_get_tdls_vdev_obj(struct wlan_objmgr_vdev *vdev)
 {
-	return (struct tdls_vdev_priv_obj *)
+	struct tdls_vdev_priv_obj *vdev_obj;
+
+	if (!vdev) {
+		tdls_err("NULL vdev");
+		return NULL;
+	}
+
+	wlan_vdev_obj_lock(vdev);
+	vdev_obj = (struct tdls_vdev_priv_obj *)
 		wlan_objmgr_vdev_get_comp_private_obj(vdev,
 						      WLAN_UMAC_COMP_TDLS);
+	wlan_vdev_obj_unlock(vdev);
+
+	return vdev_obj;
 }
 
 /**
  * tdls_set_link_status - tdls set link status
  * @vdev: vdev object
  * @mac: mac address of tdls peer
- * @link_status: tdls link status
+ * @link_state: tdls link state
  * @link_reason: reason
  */
 void tdls_set_link_status(struct tdls_vdev_priv_obj *vdev,
 			  const uint8_t *mac,
-			  enum tdls_link_status link_status,
-			  enum tdls_link_reason link_reason);
+			  enum tdls_link_state link_state,
+			  enum tdls_link_state_reason link_reason);
 /**
  * tdls_psoc_obj_create_notification() - tdls psoc create notification handler
  * @psoc: psoc object
@@ -404,4 +503,183 @@ QDF_STATUS tdls_process_cmd(struct scheduler_msg *msg);
  * Return: QDF_STATUS
  */
 QDF_STATUS tdls_process_evt(struct scheduler_msg *msg);
+
+/**
+ * tdls_timer_restart() - restart TDLS timer
+ * @vdev: VDEV object manager
+ * @timer: timer to restart
+ * @expiration_time: new expiration time to set for the timer
+ *
+ * Return: Void
+ */
+void tdls_timer_restart(struct wlan_objmgr_vdev *vdev,
+				 qdf_mc_timer_t *timer,
+				 uint32_t expiration_time);
+
+/**
+ * wlan_hdd_tdls_timers_stop() - stop all the tdls timers running
+ * @tdls_vdev: TDLS vdev
+ *
+ * Return: none
+ */
+void tdls_timers_stop(struct tdls_vdev_priv_obj *tdls_vdev);
+
+/**
+ * tdls_get_vdev_objects() - Get TDLS private objects
+ * @vdev: VDEV object manager
+ * @tdls_vdev_obj: tdls vdev object
+ * @tdls_soc_obj: tdls soc object
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS tdls_get_vdev_objects(struct wlan_objmgr_vdev *vdev,
+				   struct tdls_vdev_priv_obj **tdls_vdev_obj,
+				   struct tdls_soc_priv_obj **tdls_soc_obj);
+
+/**
+ * cds_set_tdls_ct_mode() - Set the tdls connection tracker mode
+ * @hdd_ctx: hdd context
+ *
+ * This routine is called to set the tdls connection tracker operation status
+ *
+ * Return: NONE
+ */
+void tdls_set_ct_mode(struct wlan_objmgr_psoc *psoc);
+
+/**
+ * tdls_set_operation_mode() - set tdls operating mode
+ * @tdls_set_mode: tdls mode set params
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS tdls_set_operation_mode(struct tdls_set_mode_params *tdls_set_mode);
+
+/**
+ * tdls_notify_sta_connect() - Update tdls state for every
+ * connect event.
+ * @notify: sta connect params
+ *
+ * After every connect event in the system, check whether TDLS
+ * can be enabled in the system. If TDLS can be enabled, update the
+ * TDLS state as needed.
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS tdls_notify_sta_connect(struct tdls_sta_notify_params *notify);
+
+/**
+ * tdls_notify_sta_disconnect() - Update tdls state for every
+ * disconnect event.
+ * @notify: sta disconnect params
+ *
+ * After every disconnect event in the system, check whether TDLS
+ * can be disabled/enabled in the system and update the
+ * TDLS state as needed.
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS tdls_notify_sta_disconnect(struct tdls_sta_notify_params *notify);
+
+/**
+ * tdls_notify_decrement_session() - Notify the session decrement
+ * @psoc: psoc  object manager
+ *
+ * Policy manager notify TDLS about session decrement
+ *
+ * Return: None
+ */
+void tdls_notify_decrement_session(struct wlan_objmgr_psoc *psoc);
+
+/**
+ * tdls_notify_increment_session() - Notify the session increment
+ * @psoc: psoc  object manager
+ *
+ * Policy manager notify TDLS about session increment
+ *
+ * Return: None
+ */
+void tdls_notify_increment_session(struct wlan_objmgr_psoc *psoc);
+
+/**
+ * tdls_check_is_tdls_allowed() - check is tdls allowed or not
+ * @vdev: vdev object
+ *
+ * Function determines the whether TDLS allowed in the system
+ *
+ * Return: true or false
+ */
+bool tdls_check_is_tdls_allowed(struct wlan_objmgr_vdev *vdev);
+
+/**
+ * tdls_get_vdev() - Get tdls specific vdev object manager
+ * @psoc: wlan psoc object manager
+ * @dbg_id: debug id
+ *
+ * If TDLS possible, return the corresponding vdev
+ * to enable TDLS in the system.
+ *
+ * Return: vdev manager pointer or NULL.
+ */
+struct wlan_objmgr_vdev *tdls_get_vdev(struct wlan_objmgr_psoc *psoc,
+					  wlan_objmgr_ref_dbgid dbg_id);
+
+/**
+ * tdls_process_policy_mgr_notification() - process policy manager notification
+ * @psoc: soc object manager
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS
+tdls_process_policy_mgr_notification(struct wlan_objmgr_psoc *psoc);
+
+/**
+ * tdls_scan_complete_event_handler() - scan complete event handler for tdls
+ * @vdev: vdev object
+ * @event: scan event
+ * @arg: tdls soc object
+ *
+ * Return: None
+ */
+void tdls_scan_complete_event_handler(struct wlan_objmgr_vdev *vdev,
+			struct scan_event *event,
+			void *arg);
+
+/**
+ * tdls_scan_callback() - callback for TDLS scan operation
+ * @soc: tdls soc pvt object
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS tdls_scan_callback(struct tdls_soc_priv_obj *tdls_soc);
+
+/**
+ * wlan_hdd_tdls_scan_done_callback() - callback for tdls scan done event
+ * @tdls_soc: tdls soc object
+ *
+ * Return: Void
+ */
+void tdls_scan_done_callback(struct tdls_soc_priv_obj *tdls_soc);
+
+/**
+ * tdls_scan_serialization_comp_info_cb() - callback for scan start
+ * @comp_info: serialize rules info
+ *
+ * Return: negative = caller should stop and return error code immediately
+ *         1 = caller can continue to scan
+ */
+void tdls_scan_serialization_comp_info_cb(
+		union wlan_serialization_rules_info *comp_info);
+
+/**
+ * tdls_set_offchan_mode() - update tdls status info
+ * @psoc: soc object
+ * @param: channel switch params
+ *
+ * send message to WMI to set TDLS off channel in f/w
+ *
+ * Return: QDF_STATUS.
+ */
+QDF_STATUS tdls_set_offchan_mode(struct wlan_objmgr_psoc *psoc,
+				     struct tdls_channel_switch_params *param);
+
 #endif

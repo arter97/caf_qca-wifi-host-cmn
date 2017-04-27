@@ -364,12 +364,11 @@ static void scm_delete_duplicate_entry(struct scan_dbs *scan_db,
 	struct scan_cache_node *scan_node)
 {
 	struct scan_cache_entry *scan_entry;
+	uint64_t time_gap;
 
 	scan_entry = scan_node->entry;
 	/* If old entry have the ssid but new entry does not */
 	if (!scan_params->ssid.length && scan_entry->ssid.length) {
-		uint64_t time_gap;
-
 		/*
 		 * New entry has a hidden SSID and old one has the SSID.
 		 * Add the entry by using the ssid of the old entry
@@ -397,9 +396,29 @@ static void scm_delete_duplicate_entry(struct scan_dbs *scan_db,
 	 */
 	if (scan_params->channel_mismatch) {
 		scan_params->rssi_raw = scan_entry->rssi_raw;
+		scan_params->avg_rssi = scan_entry->avg_rssi;
 		scan_params->rssi_timestamp =
 			scan_entry->rssi_timestamp;
+	} else {
+		/* If elapsed time since last rssi update for this
+		 * entry is smaller than a thresold, calculate a
+		 * running average of the RSSI values.
+		 * Otherwise last RSSI is more representive of the
+		 * signal strength.
+		 */
+		time_gap =
+			scan_entry->rssi_timestamp -
+			scan_params->rssi_timestamp;
+		if (time_gap > WLAN_RSSI_AVERAGING_TIME)
+			scan_params->avg_rssi =
+				WLAN_RSSI_IN(scan_params->rssi_raw);
+		else
+			WLAN_RSSI_LPF(scan_params->avg_rssi,
+					scan_params->rssi_raw);
+
+		scan_params->rssi_timestamp = scan_params->scan_entry_time;
 	}
+
 	/* copy wsn ie from scan_entry to scan_params*/
 	scm_update_alt_wcn_ie(scan_entry, scan_params);
 
@@ -458,17 +477,17 @@ static QDF_STATUS scm_add_update_entry(struct scan_dbs *scan_db,
 {
 	QDF_STATUS status;
 
-	/* SSID shouldn't be NULL in probe resp */
 	if (scan_params->frm_subtype ==
 	   MGMT_SUBTYPE_PROBE_RESP &&
 	   !scan_params->ie_list.ssid)
-		return QDF_STATUS_E_INVAL;
+		scm_info("Probe resp doesnt contain SSID");
 
-	/* CSA or ECSA present ignore */
+
 	if (scan_params->ie_list.csa ||
 	   scan_params->ie_list.xcsa ||
 	   scan_params->ie_list.cswrp)
-		return QDF_STATUS_E_INVAL;
+		scm_info("CSA IE present for BSSID: %pM",
+			scan_params->bssid.bytes);
 
 	scm_find_duplicate_and_del(scan_db, scan_params);
 	status = scm_add_scan_entry(scan_db, scan_params);
@@ -542,6 +561,7 @@ QDF_STATUS scm_handle_bcn_probe(struct scheduler_msg *msg)
 		goto free_nbuf;
 	}
 
+
 	scm_info("Received %s from BSSID: %pM tsf_delta = %u Seq Num: %x ssid:%.*s",
 		(bcn->frm_type == MGMT_SUBTYPE_PROBE_RESP) ?
 		"Probe Rsp" : "Beacon", scan_entry->bssid.bytes,
@@ -562,6 +582,8 @@ QDF_STATUS scm_handle_bcn_probe(struct scheduler_msg *msg)
 	}
 
 free_nbuf:
+	if (bcn->psoc)
+		wlan_objmgr_psoc_release_ref(bcn->psoc, WLAN_SCAN_ID);
 	if (pdev)
 		wlan_objmgr_pdev_release_ref(pdev, WLAN_SCAN_ID);
 	if (bcn->rx_data)
@@ -620,7 +642,7 @@ static void scm_list_insert_sorted(struct scan_filter *filter,
 		}
 		qdf_list_peek_next(scan_list,
 			cur_lst, &next_lst);
-		next_lst = next_lst;
+		cur_lst = next_lst;
 		next_lst = NULL;
 	}
 
@@ -692,13 +714,16 @@ static void scm_get_results(struct scan_dbs *scan_db,
 	struct scan_filter *filter,
 	qdf_list_t *scan_list)
 {
-	int i;
+	int i, count;
 	struct scan_cache_node *cur_node;
 	struct scan_cache_node *next_node = NULL;
 
 	for (i = 0 ; i < SCAN_HASH_SIZE; i++) {
 		cur_node = scm_get_next_node(scan_db,
 			   &scan_db->scan_hash_tbl[i], NULL);
+		count = qdf_list_size(&scan_db->scan_hash_tbl[i]);
+		if (!count)
+			continue;
 		while (cur_node) {
 			scm_scan_apply_filter_get_entry(
 				cur_node->entry, filter, scan_list);
@@ -755,7 +780,9 @@ qdf_list_t *scm_get_scan_result(struct wlan_objmgr_pdev *pdev,
 		return NULL;
 	}
 
+	wlan_pdev_obj_lock(pdev);
 	psoc = wlan_pdev_get_psoc(pdev);
+	wlan_pdev_obj_unlock(pdev);
 	if (!psoc) {
 		scm_err("psoc is NULL");
 		return NULL;
@@ -837,7 +864,9 @@ scm_iterate_scan_db(struct wlan_objmgr_pdev *pdev,
 		return QDF_STATUS_E_INVAL;
 	}
 
+	wlan_pdev_obj_lock(pdev);
 	psoc = wlan_pdev_get_psoc(pdev);
+	wlan_pdev_obj_unlock(pdev);
 	if (!psoc) {
 		scm_err("psoc is NULL");
 		return QDF_STATUS_E_INVAL;
@@ -923,7 +952,9 @@ QDF_STATUS scm_flush_results(struct wlan_objmgr_pdev *pdev,
 		return QDF_STATUS_E_INVAL;
 	}
 
+	wlan_pdev_obj_lock(pdev);
 	psoc = wlan_pdev_get_psoc(pdev);
+	wlan_pdev_obj_unlock(pdev);
 	if (!psoc) {
 		scm_err("psoc is NULL");
 		return QDF_STATUS_E_INVAL;
@@ -985,7 +1016,9 @@ void scm_filter_valid_channel(struct wlan_objmgr_pdev *pdev,
 		return;
 	}
 
+	wlan_pdev_obj_lock(pdev);
 	psoc = wlan_pdev_get_psoc(pdev);
+	wlan_pdev_obj_unlock(pdev);
 	if (!psoc) {
 		scm_err("psoc is NULL");
 		return;

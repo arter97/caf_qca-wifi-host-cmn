@@ -234,7 +234,6 @@ dp_rx_null_q_desc_handle(struct dp_soc *soc, struct dp_rx_desc *rx_desc,
 	uint16_t peer_id = 0xFFFF;
 	struct dp_peer *peer = NULL;
 	uint32_t sgi, rate_mcs, tid;
-	uint32_t peer_mdata;
 
 	rx_bufs_used++;
 
@@ -274,9 +273,21 @@ dp_rx_null_q_desc_handle(struct dp_soc *soc, struct dp_rx_desc *rx_desc,
 	if (!peer) {
 		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_ERROR,
 		FL("peer is NULL"));
-		qdf_nbuf_free(nbuf);
+		qdf_nbuf_pull_head(nbuf, RX_PKT_TLVS_LEN);
+		dp_rx_process_invalid_peer(soc, nbuf);
 		goto fail;
 	}
+
+	vdev = peer->vdev;
+	if (!vdev) {
+		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_ERROR,
+				FL("INVALID vdev %p OR osif_rx"), vdev);
+		/* Drop & free packet */
+		qdf_nbuf_free(nbuf);
+		DP_STATS_INC(soc, rx.err.invalid_vdev, 1);
+		goto fail;
+	}
+
 
 	sgi = hal_rx_msdu_start_sgi_get(rx_desc->rx_buf_start);
 	rate_mcs = hal_rx_msdu_start_rate_mcs_get(rx_desc->rx_buf_start);
@@ -286,14 +297,10 @@ dp_rx_null_q_desc_handle(struct dp_soc *soc, struct dp_rx_desc *rx_desc,
 		"%s: %d, SGI: %d, rate_mcs: %d, tid: %d",
 		__func__, __LINE__, sgi, rate_mcs, tid);
 
-	peer_mdata = hal_rx_mpdu_peer_meta_data_get(rx_desc->rx_buf_start);
-	peer_id = DP_PEER_METADATA_PEER_ID_GET(peer_mdata);
-	peer = dp_peer_find_by_id(soc, peer_id);
-
-	if (!peer) {
-		qdf_nbuf_free(nbuf);
-		goto fail;
-	}
+	/* WDS Source Port Learning */
+	if (qdf_likely(vdev->rx_decap_type == htt_cmn_pkt_type_ethernet) &&
+			(vdev->wds_enabled))
+		dp_rx_wds_srcport_learn(soc, rx_desc->rx_buf_start, peer, nbuf);
 
 	/*
 	 * Advance the packet start pointer by total size of
@@ -303,9 +310,6 @@ dp_rx_null_q_desc_handle(struct dp_soc *soc, struct dp_rx_desc *rx_desc,
 
 	if (l2_hdr_offset)
 		qdf_nbuf_pull_head(nbuf, l2_hdr_offset);
-
-	/* WDS Source Port Learning */
-	dp_rx_wds_srcport_learn(soc, rx_desc->rx_buf_start, peer, nbuf);
 
 	if (hal_rx_mpdu_start_mpdu_qos_control_valid_get(
 		rx_desc->rx_buf_start)) {
@@ -329,33 +333,33 @@ dp_rx_null_q_desc_handle(struct dp_soc *soc, struct dp_rx_desc *rx_desc,
 		qdf_nbuf_data(nbuf), 128, false);
 #endif /* NAPIER_EMULATION */
 
-	if (qdf_unlikely(peer->bss_peer)) {
-		QDF_TRACE(QDF_MODULE_ID_DP,
-				QDF_TRACE_LEVEL_INFO,
-				FL("received pkt with same src MAC"));
-
-		/* Drop & free packet */
-		qdf_nbuf_free(nbuf);
-		/* Statistics */
-		goto fail;
-	}
-
-	vdev = peer->vdev;
-
-	if (vdev && vdev->osif_rx) {
-		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_INFO,
-			FL("vdev %p osif_rx %p"), vdev,
-			vdev->osif_rx);
-
+	if (qdf_unlikely(vdev->rx_decap_type == htt_cmn_pkt_type_raw)) {
 		qdf_nbuf_set_next(nbuf, NULL);
-		vdev->osif_rx(vdev->osif_vdev, nbuf);
-		DP_STATS_INC(vdev->pdev, rx.to_stack.num, 1);
+		dp_rx_deliver_raw(vdev, nbuf);
 	} else {
-		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_ERROR,
-			FL("INVALID vdev %p OR osif_rx"), vdev);
-		DP_STATS_INC(soc, rx.err.invalid_vdev, 1);
-	}
+		if (qdf_unlikely(peer->bss_peer)) {
+			QDF_TRACE(QDF_MODULE_ID_DP,
+					QDF_TRACE_LEVEL_INFO,
+					FL("received pkt with same src MAC"));
+			/* Drop & free packet */
+			qdf_nbuf_free(nbuf);
+			goto fail;
+		}
 
+		if (vdev->osif_rx) {
+			QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_INFO,
+				FL("vdev %p osif_rx %p"), vdev,
+				vdev->osif_rx);
+
+			qdf_nbuf_set_next(nbuf, NULL);
+			vdev->osif_rx(vdev->osif_vdev, nbuf);
+			DP_STATS_INC(vdev->pdev, rx.to_stack.num, 1);
+		} else {
+			QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_ERROR,
+				FL("INVALID vdev %p OR osif_rx"), vdev);
+			DP_STATS_INC(soc, rx.err.invalid_vdev, 1);
+		}
+	}
 fail:
 	dp_rx_add_to_free_desc_list(head, tail, rx_desc);
 
@@ -463,6 +467,7 @@ dp_rx_err_process(struct dp_soc *soc, void *hal_ring, uint32_t quota)
 		 * Need API to convert from hal_ring pointer to
 		 * Ring Type / Ring Id combo
 		 */
+		DP_STATS_INC(soc, rx.err.hal_ring_access_fail, 1);
 		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_ERROR,
 			FL("HAL RING Access Failed -- %p"), hal_ring);
 		goto done;
@@ -484,7 +489,7 @@ dp_rx_err_process(struct dp_soc *soc, void *hal_ring, uint32_t quota)
 		if (qdf_unlikely(rbm != HAL_RX_BUF_RBM_SW3_BM)) {
 			/* TODO */
 			/* Call appropriate handler */
-
+			DP_STATS_INC(soc, rx.err.invalid_rbm, 1);
 			QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_ERROR,
 			FL("Invalid RBM %d"), rbm);
 			continue;
@@ -503,6 +508,8 @@ dp_rx_err_process(struct dp_soc *soc, void *hal_ring, uint32_t quota)
 
 		if (mpdu_desc_info.mpdu_flags & HAL_MPDU_F_FRAGMENT) {
 			/* TODO */
+			DP_STATS_INC(soc,
+				rx.err.reo_error[HAL_MPDU_F_FRAGMENT], 1);
 			rx_bufs_used += dp_rx_frag_handle(soc,
 					ring_desc, &mpdu_desc_info,
 					&head, &tail, quota);
@@ -511,6 +518,10 @@ dp_rx_err_process(struct dp_soc *soc, void *hal_ring, uint32_t quota)
 
 		if (hal_rx_reo_is_pn_error(ring_desc)) {
 			/* TOD0 */
+			DP_STATS_INC(soc,
+				rx.err.
+				reo_error[HAL_REO_ERR_PN_CHECK_FAILED],
+				1);
 			rx_bufs_used += dp_rx_pn_error_handle(soc,
 					ring_desc, &mpdu_desc_info,
 					&head, &tail, quota);
@@ -519,6 +530,10 @@ dp_rx_err_process(struct dp_soc *soc, void *hal_ring, uint32_t quota)
 
 		if (hal_rx_reo_is_2k_jump(ring_desc)) {
 			/* TOD0 */
+			DP_STATS_INC(soc,
+				rx.err.
+				reo_error[HAL_REO_ERR_REGULAR_FRAME_2K_JUMP],
+				1);
 			rx_bufs_used += dp_rx_2k_jump_handle(soc,
 					ring_desc, &mpdu_desc_info,
 					&head, &tail, quota);
@@ -641,6 +656,9 @@ dp_rx_wbm_err_process(struct dp_soc *soc, void *hal_ring, uint32_t quota)
 				uint8_t reo_error_code =
 				   HAL_RX_WBM_REO_ERROR_CODE_GET(ring_desc);
 
+				DP_STATS_INC(soc, rx.err.reo_error[
+						reo_error_code], 1);
+
 				switch (reo_error_code) {
 				/*
 				 * Handling for packets which have NULL REO
@@ -676,6 +694,9 @@ dp_rx_wbm_err_process(struct dp_soc *soc, void *hal_ring, uint32_t quota)
 
 				uint8_t rxdma_error_code =
 				   HAL_RX_WBM_RXDMA_ERROR_CODE_GET(ring_desc);
+
+				DP_STATS_INC(soc, rx.err.rxdma_error[
+						rxdma_error_code], 1);
 
 				switch (rxdma_error_code) {
 

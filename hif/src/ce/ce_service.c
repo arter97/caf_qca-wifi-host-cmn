@@ -35,6 +35,7 @@
 #include "regtable.h"
 #include "hif_main.h"
 #include "hif_debug.h"
+#include "hif_napi.h"
 
 #ifdef IPA_OFFLOAD
 #ifdef QCA_WIFI_3_0
@@ -216,9 +217,21 @@ bool hif_ce_service_should_yield(struct hif_softc *scn,
 bool hif_ce_service_should_yield(struct hif_softc *scn,
 				 struct CE_state *ce_state)
 {
-	bool yield = qdf_system_time_after_eq(qdf_system_ticks(),
-					     ce_state->ce_service_yield_time) ||
-		     hif_max_num_receives_reached(scn, ce_state->receive_count);
+	bool yield, time_limit_reached, rxpkt_thresh_reached = 0;
+
+	time_limit_reached =
+		sched_clock() > ce_state->ce_service_yield_time ? 1 : 0;
+
+	if (!time_limit_reached)
+		rxpkt_thresh_reached = hif_max_num_receives_reached
+					(scn, ce_state->receive_count);
+
+	yield =  time_limit_reached || rxpkt_thresh_reached;
+
+	if (yield)
+		hif_napi_update_yield_stats(ce_state,
+					    time_limit_reached,
+					    rxpkt_thresh_reached);
 	return yield;
 }
 #endif
@@ -508,10 +521,19 @@ ce_sendlist_send_legacy(struct CE_handle *copyeng,
 	unsigned int num_items = sl->num_items;
 	unsigned int sw_index;
 	unsigned int write_index;
+	struct hif_softc *scn = CE_state->scn;
 
 	QDF_ASSERT((num_items > 0) && (num_items < src_ring->nentries));
 
 	qdf_spin_lock_bh(&CE_state->ce_index_lock);
+
+	if (CE_state->scn->fastpath_mode_on && CE_state->htt_tx_data &&
+	    Q_TARGET_ACCESS_BEGIN(scn) == 0) {
+		src_ring->sw_index = CE_SRC_RING_READ_IDX_GET_FROM_DDR(
+					       scn, CE_state->ctrl_addr);
+		Q_TARGET_ACCESS_END(scn);
+	}
+
 	sw_index = src_ring->sw_index;
 	write_index = src_ring->write_index;
 
@@ -618,11 +640,22 @@ int ce_send_fast(struct CE_handle *copyeng, qdf_nbuf_t msdu,
 	uint64_t dma_addr;
 	uint32_t user_flags;
 	enum hif_ce_event_type type = FAST_TX_SOFTWARE_INDEX_UPDATE;
+	bool ok_to_send = true;
 
 	qdf_spin_lock_bh(&ce_state->ce_index_lock);
-	Q_TARGET_ACCESS_BEGIN(scn);
 
-	DATA_CE_UPDATE_SWINDEX(src_ring->sw_index, scn, ctrl_addr);
+	/*
+	 * Request runtime PM resume if it has already suspended and make
+	 * sure there is no PCIe link access.
+	 */
+	if (hif_pm_runtime_get(hif_hdl) != 0)
+		ok_to_send = false;
+
+	if (ok_to_send) {
+		Q_TARGET_ACCESS_BEGIN(scn);
+		DATA_CE_UPDATE_SWINDEX(src_ring->sw_index, scn, ctrl_addr);
+	}
+
 	write_index = src_ring->write_index;
 	sw_index = src_ring->sw_index;
 
@@ -636,7 +669,8 @@ int ce_send_fast(struct CE_handle *copyeng, qdf_nbuf_t msdu,
 		      SLOTS_PER_DATAPATH_TX,
 		      CE_RING_DELTA(nentries_mask, write_index, sw_index - 1));
 		OL_ATH_CE_PKT_ERROR_COUNT_INCR(scn, CE_RING_DELTA_FAIL);
-		Q_TARGET_ACCESS_END(scn);
+		if (ok_to_send)
+			Q_TARGET_ACCESS_END(scn);
 		qdf_spin_unlock_bh(&ce_state->ce_index_lock);
 		return 0;
 	}
@@ -725,19 +759,20 @@ int ce_send_fast(struct CE_handle *copyeng, qdf_nbuf_t msdu,
 
 	src_ring->write_index = write_index;
 
-	if (hif_pm_runtime_get(hif_hdl) == 0) {
+	if (ok_to_send) {
 		if (qdf_likely(ce_state->state == CE_RUNNING)) {
 			type = FAST_TX_WRITE_INDEX_UPDATE;
 			war_ce_src_ring_write_idx_set(scn, ctrl_addr,
 				write_index);
+			Q_TARGET_ACCESS_END(scn);
 		} else
 			ce_state->state = CE_PENDING;
 		hif_pm_runtime_put(hif_hdl);
 	}
+
 	hif_record_ce_desc_event(scn, ce_state->id, type,
 				 NULL, NULL, write_index);
 
-	Q_TARGET_ACCESS_END(scn);
 	qdf_spin_unlock_bh(&ce_state->ce_index_lock);
 
 	/* sent 1 packet */
@@ -1814,7 +1849,6 @@ more_data:
 						 FAST_RX_SOFTWARE_INDEX_UPDATE,
 						 NULL, NULL, sw_index);
 			dest_ring->sw_index = sw_index;
-
 			ce_fastpath_rx_handle(ce_state, cmpl_msdus,
 					      MSG_FLUSH_NUM, ctrl_addr);
 
@@ -1885,7 +1919,11 @@ static void ce_per_engine_service_fast(struct hif_softc *scn, int ce_id)
 }
 #endif /* WLAN_FEATURE_FASTPATH */
 
-#define CE_PER_ENGINE_SERVICE_MAX_TIME_JIFFIES 2
+/* Maximum amount of time in nano seconds before which the CE per engine service
+ * should yield. ~1 jiffie.
+ */
+#define CE_PER_ENGINE_SERVICE_MAX_YIELD_TIME_NS (10 * 1000 * 1000)
+
 /*
  * Guts of interrupt handler for per-engine interrupts on a particular CE.
  *
@@ -1922,8 +1960,9 @@ int ce_per_engine_service(struct hif_softc *scn, unsigned int CE_id)
 	/* Clear force_break flag and re-initialize receive_count to 0 */
 	CE_state->receive_count = 0;
 	CE_state->force_break = 0;
-	CE_state->ce_service_yield_time = qdf_system_ticks() +
-		CE_PER_ENGINE_SERVICE_MAX_TIME_JIFFIES;
+	CE_state->ce_service_yield_time =
+		sched_clock() +
+		(unsigned long long)CE_PER_ENGINE_SERVICE_MAX_YIELD_TIME_NS;
 
 
 	qdf_spin_lock(&CE_state->ce_index_lock);

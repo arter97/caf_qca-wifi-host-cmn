@@ -182,13 +182,16 @@ struct CE_state;
 
 /* NOTE: "napi->scale" can be changed,
    but this does not change the number of buckets */
-#define QCA_NAPI_NUM_BUCKETS (QCA_NAPI_BUDGET / QCA_NAPI_DEF_SCALE)
+#define QCA_NAPI_NUM_BUCKETS 4
 struct qca_napi_stat {
 	uint32_t napi_schedules;
 	uint32_t napi_polls;
 	uint32_t napi_completes;
 	uint32_t napi_workdone;
+	uint32_t cpu_corrected;
 	uint32_t napi_budget_uses[QCA_NAPI_NUM_BUCKETS];
+	uint32_t time_limit_reached;
+	uint32_t rxpkt_thresh_reached;
 };
 
 /**
@@ -201,9 +204,10 @@ struct qca_napi_stat {
 struct qca_napi_info {
 	struct net_device    netdev; /* dummy net_dev */
 	void 		     *hif_ctx;
-	struct napi_struct   napi;    /* one NAPI Instance per CE in phase I */
+	struct napi_struct   napi;
 	uint8_t              scale;   /* currently same on all instances */
 	uint8_t              id;
+	uint8_t              cpu;
 	int                  irq;
 	struct qca_napi_stat stats[NR_CPUS];
 	/* will only be present for data rx CE's */
@@ -267,6 +271,7 @@ struct qca_napi_data {
 	int                  lilcl_head, bigcl_head;
 	enum qca_napi_tput_state napi_mode;
 	struct notifier_block hnc_cpu_notifier;
+	uint8_t              flags;
 };
 
 /**
@@ -652,6 +657,7 @@ void hif_display_stats(struct hif_opaque_softc *hif_ctx);
 void hif_clear_stats(struct hif_opaque_softc *hif_ctx);
 #ifdef FEATURE_RUNTIME_PM
 struct hif_pm_runtime_lock;
+void hif_fastpath_resume(struct hif_opaque_softc *hif_ctx);
 int hif_pm_runtime_get(struct hif_opaque_softc *hif_ctx);
 void hif_pm_runtime_get_noresume(struct hif_opaque_softc *hif_ctx);
 int hif_pm_runtime_put(struct hif_opaque_softc *hif_ctx);
@@ -668,7 +674,7 @@ int hif_pm_runtime_prevent_suspend_timeout(struct hif_opaque_softc *ol_sc,
 struct hif_pm_runtime_lock {
 	const char *name;
 };
-
+static inline void hif_fastpath_resume(struct hif_opaque_softc *hif_ctx) {}
 static inline void hif_pm_runtime_get_noresume(struct hif_opaque_softc *hif_ctx)
 {}
 
@@ -845,6 +851,8 @@ void hif_fake_apps_resume(struct hif_opaque_softc *hif_ctx);
 uint32_t hif_register_ext_group_int_handler(struct hif_opaque_softc *hif_ctx,
 		uint32_t numirq, uint32_t irq[], ext_intr_handler handler,
 		void *context);
+
+uint32_t hif_configure_ext_group_interrupts(struct hif_opaque_softc *hif_ctx);
 
 void hif_update_pipe_callback(struct hif_opaque_softc *osc,
 				u_int8_t pipeid,

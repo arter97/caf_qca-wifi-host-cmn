@@ -154,6 +154,41 @@ cdp_get_vdev_rx_decap_type(ol_txrx_soc_handle soc, struct cdp_vdev *vdev)
 	return 0;
 }
 
+/**
+ * @brief set the Reo Destination ring for the pdev
+ * @details
+ *  This will be used to configure the Reo Destination ring for this pdev.
+ *
+ * @param soc - pointer to the soc
+ * @param pdev - the data physical device object
+ * @param val - the Reo destination ring index (1 to 4)
+ * @return - void
+ */
+static inline void
+cdp_set_pdev_reo_dest(ol_txrx_soc_handle soc,
+	struct cdp_pdev *pdev, enum cdp_host_reo_dest_ring val)
+{
+	if (soc->ops->ctrl_ops->txrx_set_pdev_reo_dest)
+		return soc->ops->ctrl_ops->txrx_set_pdev_reo_dest
+			(pdev, val);
+	return;
+}
+
+/**
+ * @brief get the Reo Destination ring for the pdev
+ *
+ * @param soc - pointer to the soc
+ * @param pdev - the data physical device object
+ * @return - the Reo destination ring index (1 to 4), 0 if not supported.
+ */
+static inline enum cdp_host_reo_dest_ring
+cdp_get_pdev_reo_dest(ol_txrx_soc_handle soc, struct cdp_pdev *pdev)
+{
+	if (soc->ops->ctrl_ops->txrx_get_pdev_reo_dest)
+		return soc->ops->ctrl_ops->txrx_get_pdev_reo_dest(pdev);
+	return cdp_host_reo_dest_ring_unknown;
+}
+
 /* Is this similar to ol_txrx_peer_state_update() in MCL */
 /**
  * @brief Update the authorize peer object at association time
@@ -288,4 +323,84 @@ static inline void cdp_tx_flush_buffers
 	return;
 }
 
+static inline void cdp_txrx_set_vdev_param(ol_txrx_soc_handle soc,
+		struct cdp_vdev *vdev, enum cdp_vdev_param_type type,
+		uint32_t val)
+{
+	if (soc->ops->ctrl_ops->txrx_set_vdev_param)
+		return soc->ops->ctrl_ops->txrx_set_vdev_param(vdev, type, val);
+	return;
+}
+
+static inline void
+cdp_peer_set_nawds(ol_txrx_soc_handle soc,
+		struct ol_txrx_peer_t *peer, uint8_t value)
+{
+	if (soc->ops->ctrl_ops->txrx_peer_set_nawds)
+		return soc->ops->ctrl_ops->txrx_peer_set_nawds
+			(peer, value);
+	return;
+}
+
+/**
+ * @brief Subscribe to a specified WDI event.
+ * @details
+ *  This function adds the provided wdi_event_subscribe object to a list of
+ *  subscribers for the specified WDI event.
+ *  When the event in question happens, each subscriber for the event will
+ *  have their callback function invoked.
+ *  The order in which callback functions from multiple subscribers are
+ *  invoked is unspecified.
+ *
+ * @param soc - pointer to the soc
+ * @param pdev - the data physical device object
+ * @param event_cb_sub - the callback and context for the event subscriber
+ * @param event - which event's notifications are being subscribed to
+ * @return - int
+ */
+static inline int
+cdp_wdi_event_sub(ol_txrx_soc_handle soc,
+		struct cdp_pdev *pdev, void *event_cb_sub, uint32_t event)
+{
+	if (!soc || !soc->ops || !soc->ops->ctrl_ops) {
+		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_FATAL,
+			"%s invalid instance", __func__);
+		return 0;
+	}
+
+	if (soc->ops->ctrl_ops->txrx_wdi_event_sub)
+		return soc->ops->ctrl_ops->txrx_wdi_event_sub
+			(pdev, event_cb_sub, event);
+	return 0;
+}
+
+/**
+ * @brief Unsubscribe from a specified WDI event.
+ * @details
+ *  This function removes the provided event subscription object from the
+ *  list of subscribers for its event.
+ *  This function shall only be called if there was a successful prior call
+ *  to event_sub() on the same wdi_event_subscribe object.
+ *
+ * @param soc - pointer to the soc
+ * @param pdev - the data physical device object
+ * @param event_cb_sub - the callback and context for the event subscriber
+ * @param event - which event's notifications are being subscribed to
+ * @return - int
+ */
+static inline int
+cdp_wdi_event_unsub(ol_txrx_soc_handle soc,
+		struct cdp_pdev *pdev, void *event_cb_sub, uint32_t event)
+{
+	if (!soc || !soc->ops || !soc->ops->ctrl_ops) {
+		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_FATAL,
+			"%s invalid instance", __func__);
+		return 0;
+	}
+
+	if (soc->ops->ctrl_ops->txrx_wdi_event_unsub)
+		return soc->ops->ctrl_ops->txrx_wdi_event_unsub
+			(pdev, event_cb_sub, event);
+	return 0;
+}
 #endif

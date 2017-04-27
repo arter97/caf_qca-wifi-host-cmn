@@ -35,6 +35,9 @@
 #ifdef CONVERGED_P2P_ENABLE
 #include "wlan_p2p_tgt_api.h"
 #endif
+#ifdef CONVERGED_TDLS_ENABLE
+#include "wlan_tdls_tgt_api.h"
+#endif
 
 #ifdef WLAN_CONV_CRYPTO_SUPPORTED
 #include "wlan_crypto_global_api.h"
@@ -188,12 +191,30 @@ wlan_lmac_if_umac_dfs_rx_ops_register(struct wlan_lmac_if_rx_ops *rx_ops)
 	dfs_rx_ops->dfs_get_override_precac_timeout =
 		ucfg_dfs_get_override_precac_timeout;
 	dfs_rx_ops->dfs_set_current_channel = tgt_dfs_set_current_channel;
+	dfs_rx_ops->dfs_process_radar_ind = tgt_dfs_process_radar_ind;
+	dfs_rx_ops->dfs_dfs_cac_complete_ind = tgt_dfs_cac_complete;
 
 	return QDF_STATUS_SUCCESS;
 }
 #else
 static QDF_STATUS
 wlan_lmac_if_umac_dfs_rx_ops_register(struct wlan_lmac_if_rx_ops *rx_ops)
+{
+	return QDF_STATUS_SUCCESS;
+}
+#endif
+
+#ifdef CONVERGED_TDLS_ENABLE
+static QDF_STATUS
+wlan_lmac_if_umac_tdls_rx_ops_register(struct wlan_lmac_if_rx_ops *rx_ops)
+{
+	rx_ops->tdls_rx_ops.tdls_ev_handler = tgt_tdls_event_handler;
+
+	return QDF_STATUS_SUCCESS;
+}
+#else
+static QDF_STATUS
+wlan_lmac_if_umac_tdls_rx_ops_register(struct wlan_lmac_if_rx_ops *rx_ops)
 {
 	return QDF_STATUS_SUCCESS;
 }
@@ -237,12 +258,16 @@ wlan_lmac_if_umac_rx_ops_register(struct wlan_lmac_if_rx_ops *rx_ops)
 
 	/* scan rx ops */
 	rx_ops->scan.scan_ev_handler = tgt_scan_event_handler;
+	rx_ops->scan.scan_set_max_active_scans = tgt_scan_set_max_active_scans;
 
 	wlan_lmac_if_atf_rx_ops_register(rx_ops);
 
 	wlan_lmac_if_crypto_rx_ops_register(rx_ops);
 	/* wifi_pos rx ops */
 	wlan_lmac_if_umac_rx_ops_register_wifi_pos(rx_ops);
+
+	/* tdls rx ops */
+	wlan_lmac_if_umac_tdls_rx_ops_register(rx_ops);
 
 	wlan_lmac_if_register_nan_rx_ops(rx_ops);
 

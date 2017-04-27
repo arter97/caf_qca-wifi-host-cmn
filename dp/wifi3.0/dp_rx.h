@@ -163,8 +163,8 @@ QDF_STATUS dp_rx_pdev_attach(struct dp_pdev *pdev);
 void dp_rx_pdev_detach(struct dp_pdev *pdev);
 
 
-uint32_t dp_rx_process(struct dp_soc *soc, void *hal_ring, uint32_t quota);
-
+uint32_t
+dp_rx_process(struct dp_intr *int_ctx, void *hal_ring, uint32_t quota);
 
 uint32_t dp_rx_err_process(struct dp_soc *soc, void *hal_ring, uint32_t quota);
 
@@ -179,6 +179,8 @@ QDF_STATUS dp_rx_desc_pool_alloc(struct dp_soc *soc,
 void dp_rx_desc_pool_free(struct dp_soc *soc,
 				uint32_t pool_id,
 				struct rx_desc_pool *rx_desc_pool);
+
+void dp_rx_deliver_raw(struct dp_vdev *vdev, qdf_nbuf_t nbuf_list);
 
 /**
  * dp_rx_add_to_free_desc_list() - Adds to a local free descriptor list
@@ -256,6 +258,7 @@ dp_rx_wds_srcport_learn(struct dp_soc *soc,
 }
 #endif
 
+uint8_t dp_rx_process_invalid_peer(struct dp_soc *soc, qdf_nbuf_t nbuf);
 #define DP_RX_LIST_APPEND(head, tail, elem) \
 do {                                                \
 	if (!(head)) {                              \

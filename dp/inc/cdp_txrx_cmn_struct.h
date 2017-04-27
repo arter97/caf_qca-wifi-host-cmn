@@ -51,6 +51,23 @@
 #define SUPPORTED_BW 4
 #define SUPPORTED_RECEPTION_TYPES 4
 
+/* Options for Dump Statistics */
+#define CDP_HDD_STATS               0
+#define CDP_TXRX_PATH_STATS         1
+#define CDP_TXRX_HIST_STATS         2
+#define CDP_TXRX_TSO_STATS          3
+#define CDP_HDD_NETIF_OPER_HISTORY  4
+#define CDP_DUMP_TX_FLOW_POOL_INFO  5
+#define CDP_TXRX_DESC_STATS         6
+#define CDP_HIF_STATS               7
+#define CDP_LRO_STATS               8
+#define CDP_NAPI_STATS              9
+#define CDP_WLAN_RX_BUF_DEBUG_STATS 10
+#define CDP_SCHEDULER_STATS        21
+#define CDP_TX_QUEUE_STATS         22
+#define CDP_BUNDLE_STATS           23
+#define CDP_CREDIT_STATS           24
+
 /* WME stream classes */
 #define WME_AC_BE    0    /* best effort */
 #define WME_AC_BK    1    /* background */
@@ -133,6 +150,15 @@ enum htt_cmn_pkt_type {
 
     /* keep this last */
     htt_cmn_pkt_num_types
+};
+
+
+enum cdp_host_reo_dest_ring {
+    cdp_host_reo_dest_ring_unknown = 0,
+    cdp_host_reo_dest_ring_1 = 1,
+    cdp_host_reo_dest_ring_2 = 2,
+    cdp_host_reo_dest_ring_3 = 3,
+    cdp_host_reo_dest_ring_4 = 4,
 };
 
 enum htt_cmn_t2h_en_stats_type {
@@ -282,6 +308,12 @@ typedef void (*ol_txrx_rx_mon_fp)(ol_osif_vdev_handle vdev,
 typedef int (*ol_txrx_proxy_arp_fp)(ol_osif_vdev_handle vdev,
 					    qdf_nbuf_t netbuf);
 
+/*
+ * ol_txrx_mcast_me_fp - function pointer for multicast enhancement
+ */
+typedef int (*ol_txrx_mcast_me_fp)(ol_osif_vdev_handle vdev,
+						qdf_nbuf_t netbuf);
+
 /**
  * ol_txrx_stats_callback - statistics notify callback
  */
@@ -354,6 +386,7 @@ struct ol_txrx_ops {
 
 	/* proxy arp function pointer - specified by OS shim, stored by txrx */
 	ol_txrx_proxy_arp_fp      proxy_arp;
+	ol_txrx_mcast_me_fp          me_convert;
 };
 
 /**
@@ -401,7 +434,19 @@ struct cdp_soc_t {
 	struct ol_if_ops *ol_ops;
 };
 
-
+/*
+ * cdp_vdev_param_type: different types of parameters
+ *			to set values in vdev
+ * @CDP_ENABLE_NAWDS: set nawds enable/disable
+ * @CDP_ENABLE_MCAST_EN: enable/disable multicast enhancement
+ *
+ */
+enum cdp_vdev_param_type {
+	CDP_ENABLE_NAWDS,
+	CDP_ENABLE_MCAST_EN,
+	CDP_ENABLE_WDS,
+	CDP_ENABLE_PROXYSTA,
+};
 
 #define TXRX_FW_STATS_TXSTATS                     1
 #define TXRX_FW_STATS_RXSTATS                     2
@@ -657,6 +702,10 @@ struct cdp_tx_ingress_stats {
 		uint32_t dropped_send_fail;
 		/* total unicast packets transmitted */
 		uint32_t ucast;
+		/* Segment allocation failure */
+		uint32_t fail_seg_alloc;
+		/* NBUF clone failure */
+		uint32_t clone_fail;
 	} mcast_en;
 
 	/* Packets dropped on the Tx side */
@@ -691,11 +740,34 @@ struct cdp_peer_stats {
 	struct cdp_rx_stats rx;
 };
 
+/* Tx completions per interrupt */
+struct cdp_hist_tx_comp {
+	uint32_t pkts_1;
+	uint32_t pkts_2_20;
+	uint32_t pkts_21_40;
+	uint32_t pkts_41_60;
+	uint32_t pkts_61_80;
+	uint32_t pkts_81_100;
+	uint32_t pkts_101_200;
+	uint32_t pkts_201_plus;
+};
+
+/* Rx ring descriptors reaped per interrupt */
+struct cdp_hist_rx_ind {
+	uint32_t pkts_1;
+	uint32_t pkts_2_20;
+	uint32_t pkts_21_40;
+	uint32_t pkts_41_60;
+	uint32_t pkts_61_80;
+	uint32_t pkts_81_100;
+	uint32_t pkts_101_200;
+	uint32_t pkts_201_plus;
+};
+
+
 struct cdp_pdev_stats {
 	/* packets dropped on rx */
 	struct {
-		/* packets dropped because of no peer */
-		struct cdp_pkt_info no_peer;
 		/* packets dropped because nsdu_done bit not set */
 		struct cdp_pkt_info msdu_not_done;
 	} dropped;
@@ -716,5 +788,9 @@ struct cdp_pdev_stats {
 	struct cdp_tx_stats tx;
 	/* CDP Rx Stats */
 	struct cdp_rx_stats rx;
+	/* Number of Tx completions per interrupt */
+	struct cdp_hist_tx_comp tx_comp_histogram;
+	/* Number of Rx ring descriptors reaped per interrupt */
+	struct cdp_hist_rx_ind rx_ind_histogram;
 };
 #endif

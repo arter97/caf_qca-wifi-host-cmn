@@ -26,6 +26,7 @@
 #include "wlan_dfs_lmac_api.h"
 #include "wlan_dfs_mlme_api.h"
 #include "../dfs_internal.h"
+#include <dfs_ioctl.h>
 
 /*
  * Channel switch announcement (CSA)

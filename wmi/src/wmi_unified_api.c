@@ -816,6 +816,25 @@ QDF_STATUS wmi_mgmt_unified_cmd_send(void *wmi_hdl,
 }
 
 /**
+ *  wmi_offchan_data_tx_cmd_send() - Send offchan data tx cmd over wmi layer
+ *  @wmi_hdl      : handle to WMI.
+ *  @param    : pointer to hold offchan data cmd parameter
+ *
+ *  Return: QDF_STATUS_SUCCESS on success and QDF_STATUS_E_FAILURE for failure
+ */
+QDF_STATUS wmi_offchan_data_tx_cmd_send(void *wmi_hdl,
+				struct wmi_offchan_data_tx_params *param)
+{
+	wmi_unified_t wmi_handle = (wmi_unified_t) wmi_hdl;
+
+	if (wmi_handle->ops->send_offchan_data_tx_cmd)
+		return wmi_handle->ops->send_offchan_data_tx_cmd(wmi_handle,
+				  param);
+
+	return QDF_STATUS_E_FAILURE;
+}
+
+/**
  * wmi_unified_modem_power_state() - set modem power state to fw
  * @wmi_hdl: wmi handle
  * @param_value: parameter value
@@ -1931,21 +1950,19 @@ QDF_STATUS wmi_unified_pno_stop_cmd(void *wmi_hdl, uint8_t vdev_id)
  * wmi_unified_pno_start_cmd() - PNO start request
  * @wmi_hdl: wmi handle
  * @pno: PNO request
- * @gchannel_freq_list: channel frequency list
  *
  * This function request FW to start PNO request.
  * Request: QDF_STATUS_SUCCESS on success and QDF_STATUS_E_FAILURE for failure
  */
 #ifdef FEATURE_WLAN_SCAN_PNO
 QDF_STATUS wmi_unified_pno_start_cmd(void *wmi_hdl,
-		   struct pno_scan_req_params *pno,
-		   uint32_t *gchannel_freq_list)
+		   struct pno_scan_req_params *pno)
 {
 	wmi_unified_t wmi_handle = (wmi_unified_t) wmi_hdl;
 
 	if (wmi_handle->ops->send_pno_start_cmd)
 		return wmi_handle->ops->send_pno_start_cmd(wmi_handle,
-			    pno, gchannel_freq_list);
+			    pno);
 
 	return QDF_STATUS_E_FAILURE;
 }
@@ -2030,6 +2047,25 @@ QDF_STATUS wmi_unified_get_stats_cmd(void *wmi_hdl,
 	if (wmi_handle->ops->send_get_stats_cmd)
 		return wmi_handle->ops->send_get_stats_cmd(wmi_handle,
 			   get_stats_param,  addr);
+
+	return QDF_STATUS_E_FAILURE;
+}
+
+/**
+ * wmi_unified_congestion_request_cmd() - send request to fw to get CCA
+ * @wmi_hdl: wma handle
+ * @vdev_id: vdev id
+ *
+ * Return: QDF_STATUS_SUCCESS on success and QDF_STATUS_E_FAILURE for failure
+ */
+QDF_STATUS wmi_unified_congestion_request_cmd(void *wmi_hdl,
+		uint8_t vdev_id)
+{
+	wmi_unified_t wmi_handle = (wmi_unified_t) wmi_hdl;
+
+	if (wmi_handle->ops->send_congestion_cmd)
+		return wmi_handle->ops->send_congestion_cmd(wmi_handle,
+			   vdev_id);
 
 	return QDF_STATUS_E_FAILURE;
 }
@@ -2970,18 +3006,6 @@ QDF_STATUS wmi_unified_pdev_set_dual_mac_config_cmd(void *wmi_hdl,
 	if (wmi_handle->ops->send_pdev_set_dual_mac_config_cmd)
 		return wmi_handle->ops->send_pdev_set_dual_mac_config_cmd(wmi_handle,
 				  msg);
-
-	return QDF_STATUS_E_FAILURE;
-}
-
-QDF_STATUS wmi_unified_configure_broadcast_filter_cmd(void *wmi_hdl,
-			   uint8_t vdev_id, bool bc_filter)
-{
-	wmi_unified_t wmi_handle = (wmi_unified_t) wmi_hdl;
-
-	if (wmi_handle->ops->send_enable_broadcast_filter_cmd)
-		return wmi_handle->ops->send_enable_broadcast_filter_cmd(
-				wmi_handle, vdev_id, bc_filter);
 
 	return QDF_STATUS_E_FAILURE;
 }
@@ -5169,6 +5193,20 @@ QDF_STATUS wmi_extract_vdev_scan_ev_param(void *wmi_hdl, void *evt_buf,
 	return QDF_STATUS_E_FAILURE;
 }
 
+#ifdef CONVERGED_TDLS_ENABLE
+QDF_STATUS wmi_extract_vdev_tdls_ev_param(void *wmi_hdl, void *evt_buf,
+					  struct tdls_event_info *param)
+{
+	wmi_unified_t wmi_handle = (wmi_unified_t)wmi_hdl;
+
+	if (wmi_handle->ops->extract_vdev_tdls_ev_param)
+		return wmi_handle->ops->extract_vdev_tdls_ev_param(wmi_handle,
+				evt_buf, param);
+
+	return QDF_STATUS_E_FAILURE;
+}
+#endif
+
 /**
  * wmi_extract_mu_ev_param() - extract mu param from event
  * @wmi_handle: wmi handle
@@ -5404,9 +5442,9 @@ QDF_STATUS wmi_extract_pdev_generic_buffer_ev_param(void *wmi_hdl,
 /**
  * wmi_extract_mgmt_tx_compl_param() - extract mgmt tx completion param
  * from event
- * @wmi_handle: wmi handle
- * @param evt_buf: pointer to event buffer
- * @param param: Pointer to mgmt tx completion param
+ * @wmi_hdl: wmi handle
+ * @evt_buf: pointer to event buffer
+ * @param: Pointer to mgmt tx completion param
  *
  * Return: QDF_STATUS_SUCCESS on success and QDF_STATUS_E_FAILURE for failure
  */
@@ -5418,6 +5456,28 @@ QDF_STATUS wmi_extract_mgmt_tx_compl_param(void *wmi_hdl, void *evt_buf,
 	if (wmi_handle->ops->extract_mgmt_tx_compl_param)
 		return wmi_handle->ops->extract_mgmt_tx_compl_param(wmi_handle,
 				evt_buf, param);
+
+
+	return QDF_STATUS_E_FAILURE;
+}
+
+/**
+ * wmi_extract_offchan_data_tx_compl_param() -
+ *            extract offchan data tx completion param from event
+ * @wmi_hdl: wmi handle
+ * @evt_buf: pointer to event buffer
+ * @param: Pointer to offchan data tx completion param
+ *
+ * Return: QDF_STATUS_SUCCESS on success and QDF_STATUS_E_FAILURE for failure
+ */
+QDF_STATUS wmi_extract_offchan_data_tx_compl_param(void *wmi_hdl, void *evt_buf,
+	struct wmi_host_offchan_data_tx_compl_event *param)
+{
+	wmi_unified_t wmi_handle = (wmi_unified_t) wmi_hdl;
+
+	if (wmi_handle->ops->extract_offchan_data_tx_compl_param)
+		return wmi_handle->ops->extract_offchan_data_tx_compl_param(
+				wmi_handle, evt_buf, param);
 
 
 	return QDF_STATUS_E_FAILURE;
@@ -6528,6 +6588,27 @@ wmi_unified_dfs_phyerr_offload_dis_cmd(void *wmi_hdl,
 	if (wmi_handle->ops->send_dfs_phyerr_offload_dis_cmd)
 		return wmi_handle->ops->send_dfs_phyerr_offload_dis_cmd(
 				wmi_handle, pdev_id);
+
+	return QDF_STATUS_E_FAILURE;
+}
+
+/*
+ * wmi_extract_chainmask_tables_tlv() - extract chain mask tables
+ * @wmi_handle: wmi handle
+ * @evt_buf: pointer to event buffer.
+ * @chainmask_table: pointer to struct wlan_psoc_host_chainmask_table
+ *
+ *
+ * Return: QDF_STATUS_SUCCESS on success, QDF_STATUS_E_** on error
+ */
+QDF_STATUS wmi_extract_chainmask_tables(void *wmi_hdl, uint8_t *evt_buf,
+		struct wlan_psoc_host_chainmask_table *chainmask_table)
+{
+	wmi_unified_t wmi_handle = (wmi_unified_t) wmi_hdl;
+
+	if (wmi_handle->ops->extract_chainmask_tables)
+		return wmi_handle->ops->extract_chainmask_tables(wmi_handle,
+				evt_buf, chainmask_table);
 
 	return QDF_STATUS_E_FAILURE;
 }

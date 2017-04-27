@@ -77,6 +77,7 @@ QDF_STATUS wlan_objmgr_global_obj_deinit(void)
 		g_umac_glb_obj = NULL;
 	} else {
 		qdf_print("PSOCs are leaked can't free global objmgr ctx\n");
+		WLAN_OBJMGR_BUG(0);
 	}
 
 	return QDF_STATUS_SUCCESS;
@@ -784,7 +785,7 @@ void wlan_objmgr_print_ref_ids(qdf_atomic_t *id)
 	for (i = 0; i < WLAN_REF_ID_MAX; i++) {
 		pending_ref = qdf_atomic_read(&id[i]);
 		if (pending_ref)
-			qdf_print(" %d -- %d\n", i, pending_ref);
+			qdf_print(" %s -- %d\n", string_from_dbgid(i), pending_ref);
 	}
 
 	return;

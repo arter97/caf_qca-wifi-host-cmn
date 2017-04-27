@@ -44,7 +44,9 @@ wlan_vdev_get_scan_txops(struct wlan_objmgr_vdev *vdev)
 {
 	struct wlan_objmgr_psoc *psoc = NULL;
 
+	wlan_vdev_obj_lock(vdev);
 	psoc = wlan_vdev_get_psoc(vdev);
+	wlan_vdev_obj_unlock(vdev);
 
 	return wlan_psoc_get_scan_txops(psoc);
 }
@@ -54,41 +56,66 @@ wlan_vdev_get_scan_rxops(struct wlan_objmgr_vdev *vdev)
 {
 	struct wlan_objmgr_psoc *psoc = NULL;
 
+	wlan_vdev_obj_lock(vdev);
 	psoc = wlan_vdev_get_psoc(vdev);
+	wlan_vdev_obj_unlock(vdev);
 
 	return &((psoc->soc_cb.rx_ops.scan));
 }
 
-QDF_STATUS
-tgt_scan_nlo_complete_evt_handler(void *handle, uint8_t *event,
-	uint32_t len)
+#ifdef FEATURE_WLAN_SCAN_PNO
+
+QDF_STATUS tgt_scan_pno_start(struct wlan_objmgr_vdev *vdev,
+	struct pno_scan_req_params *req)
 {
-	/*
-	 * Convert the tlv/non tlv data to struct scan_event
-	 * (SCM_EVENT_NLO_COMPLETE) (same as WIN does by calling a win API) and
-	 * Post msg to target_if queue
-	 */
+	struct wlan_lmac_if_scan_tx_ops *scan_ops;
+	struct wlan_objmgr_psoc *psoc;
+
+	wlan_vdev_obj_lock(vdev);
+	psoc = wlan_vdev_get_psoc(vdev);
+	wlan_vdev_obj_unlock(vdev);
+
+	scan_ops = wlan_psoc_get_scan_txops(psoc);
+	/* invoke wmi_unified_pno_start_cmd() */
+	QDF_ASSERT(scan_ops->pno_start);
+	if (scan_ops->pno_start)
+		return scan_ops->pno_start(psoc, req);
+
 	return QDF_STATUS_SUCCESS;
 }
 
-QDF_STATUS
-tgt_nlo_match_evt_handler(void *handle, uint8_t *event,
-		uint32_t len)
+QDF_STATUS tgt_scan_pno_stop(struct wlan_objmgr_vdev *vdev,
+	uint8_t vdev_id)
 {
-	/*
-	 * Convert the tlv/non tlv data to comman data
-	 * and set the pno match received flag in vdev scan info
-	 */
+	struct wlan_lmac_if_scan_tx_ops *scan_ops;
+	struct wlan_objmgr_psoc *psoc;
+
+	wlan_vdev_obj_lock(vdev);
+	psoc = wlan_vdev_get_psoc(vdev);
+	wlan_vdev_obj_unlock(vdev);
+
+	scan_ops = wlan_psoc_get_scan_txops(psoc);
+	/* invoke wmi_unified_pno_stop_cmd() */
+	QDF_ASSERT(scan_ops->pno_stop);
+	if (scan_ops->pno_stop)
+		return scan_ops->pno_stop(psoc, vdev_id);
+
 	return QDF_STATUS_SUCCESS;
 }
+#endif
 
 QDF_STATUS
 tgt_scan_start(struct scan_start_request *req)
 {
-	struct wlan_lmac_if_scan_tx_ops *scan_ops = NULL;
-	struct wlan_objmgr_psoc *psoc = wlan_vdev_get_psoc(req->vdev);
+	struct wlan_lmac_if_scan_tx_ops *scan_ops;
+	struct wlan_objmgr_psoc *psoc;
+	struct wlan_objmgr_vdev *vdev = req->vdev;
 
-	scan_ops = wlan_vdev_get_scan_txops(req->vdev);
+	wlan_vdev_obj_lock(vdev);
+	psoc = wlan_vdev_get_psoc(vdev);
+	wlan_vdev_obj_unlock(vdev);
+
+	scan_ops = wlan_psoc_get_scan_txops(psoc);
 	/* invoke wmi_unified_scan_start_cmd_send() */
 	QDF_ASSERT(scan_ops->scan_start);
 	if (scan_ops->scan_start)
@@ -101,10 +128,15 @@ tgt_scan_start(struct scan_start_request *req)
 QDF_STATUS
 tgt_scan_cancel(struct scan_cancel_request *req)
 {
-	struct wlan_lmac_if_scan_tx_ops *scan_ops = NULL;
-	struct wlan_objmgr_psoc *psoc = wlan_vdev_get_psoc(req->vdev);
+	struct wlan_lmac_if_scan_tx_ops *scan_ops;
+	struct wlan_objmgr_psoc *psoc;
+	struct wlan_objmgr_vdev *vdev = req->vdev;
 
-	scan_ops = wlan_vdev_get_scan_txops(req->vdev);
+	wlan_vdev_obj_lock(vdev);
+	psoc = wlan_vdev_get_psoc(vdev);
+	wlan_vdev_obj_unlock(vdev);
+
+	scan_ops = wlan_psoc_get_scan_txops(psoc);
 	/* invoke wmi_unified_scan_stop_cmd_send() */
 	QDF_ASSERT(scan_ops->scan_cancel);
 	if (scan_ops->scan_cancel)
@@ -180,7 +212,6 @@ tgt_scan_event_handler(struct wlan_objmgr_psoc *psoc,
 
 	status = scheduler_post_msg(QDF_MODULE_ID_TARGET_IF, &msg);
 	if (QDF_IS_STATUS_ERROR(status)) {
-		qdf_mem_free(event_info);
 		wlan_objmgr_vdev_release_ref(event_info->vdev, WLAN_SCAN_ID);
 	}
 
@@ -222,6 +253,16 @@ QDF_STATUS tgt_scan_bcn_probe_rx_callback(struct wlan_objmgr_psoc *psoc,
 		bcn->frm_type = MGMT_SUBTYPE_PROBE_RESP;
 	else
 		bcn->frm_type = MGMT_SUBTYPE_BEACON;
+
+	status = wlan_objmgr_psoc_try_get_ref(psoc, WLAN_SCAN_ID);
+	if (QDF_IS_STATUS_ERROR(status)) {
+		scm_info("unable to get reference");
+		qdf_mem_free(bcn->rx_data);
+		qdf_mem_free(bcn);
+		qdf_nbuf_free(buf);
+		return status;
+	}
+
 	bcn->psoc = psoc;
 	bcn->buf = buf;
 	qdf_mem_copy(bcn->rx_data, rx_param, sizeof(*rx_param));
@@ -232,10 +273,28 @@ QDF_STATUS tgt_scan_bcn_probe_rx_callback(struct wlan_objmgr_psoc *psoc,
 	status = scheduler_post_msg(QDF_MODULE_ID_TARGET_IF, &msg);
 
 	if (!QDF_IS_STATUS_SUCCESS(status)) {
+		wlan_objmgr_psoc_release_ref(psoc, WLAN_SCAN_ID);
 		scm_err("failed to post to QDF_MODULE_ID_TARGET_IF");
 		qdf_mem_free(bcn->rx_data);
 		qdf_mem_free(bcn);
 		qdf_nbuf_free(buf);
 	}
 	return status;
+}
+
+QDF_STATUS
+tgt_scan_set_max_active_scans(struct wlan_objmgr_psoc *psoc,
+		uint32_t max_active_scans)
+{
+	struct scan_default_params *scan_params = NULL;
+
+	if (!psoc) {
+		scm_err("null psoc");
+		return QDF_STATUS_E_NULL_VALUE;
+	}
+	scan_params = wlan_scan_psoc_get_def_params(psoc);
+
+	scan_params->max_active_scans_allowed = max_active_scans;
+
+	return QDF_STATUS_SUCCESS;
 }

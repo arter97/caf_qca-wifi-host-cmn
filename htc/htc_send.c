@@ -55,6 +55,7 @@ static unsigned ep_debug_mask =
 
 /* HTC Control Path Credit History */
 uint32_t g_htc_credit_history_idx = 0;
+uint32_t g_htc_credit_history_length;
 HTC_CREDIT_HISTORY htc_credit_history_buffer[HTC_CREDIT_HISTORY_MAX];
 
 /**
@@ -85,8 +86,53 @@ void htc_credit_record(htc_credit_exchange_type type, uint32_t tx_credit,
 		tx_credit;
 	htc_credit_history_buffer[g_htc_credit_history_idx].htc_tx_queue_depth =
 		htc_tx_queue_depth;
+
 	g_htc_credit_history_idx++;
+	g_htc_credit_history_length++;
 }
+
+#ifdef WMI_INTERFACE_EVENT_LOGGING
+void htc_print_credit_history(HTC_HANDLE htc, uint32_t count,
+			      qdf_abstract_print *print, void *print_priv)
+{
+	uint32_t idx;
+	HTC_TARGET *target;
+
+	target = GET_HTC_TARGET_FROM_HANDLE(htc);
+	LOCK_HTC_CREDIT(target);
+
+	if (count > HTC_CREDIT_HISTORY_MAX)
+		count = HTC_CREDIT_HISTORY_MAX;
+	if (count > g_htc_credit_history_length)
+		count = g_htc_credit_history_length;
+
+	/* subtract count from index, and wrap if necessary */
+	idx = HTC_CREDIT_HISTORY_MAX + g_htc_credit_history_idx - count;
+	idx %= HTC_CREDIT_HISTORY_MAX;
+
+	print(print_priv,
+	      "Time (seconds)     Type                         Credits    Queue Depth");
+	while (count) {
+		HTC_CREDIT_HISTORY *hist = &htc_credit_history_buffer[idx];
+		uint64_t secs, usecs;
+
+		qdf_log_timestamp_to_secs(hist->time, &secs, &usecs);
+		print(print_priv, "% 8lld.%06lld    %-25s    %-7.d    %d",
+		      secs,
+		      usecs,
+		      htc_credit_exchange_type_str(hist->type),
+		      hist->tx_credit,
+		      hist->htc_tx_queue_depth);
+
+		--count;
+		++idx;
+		if (idx >= HTC_CREDIT_HISTORY_MAX)
+			idx = 0;
+	}
+
+	UNLOCK_HTC_CREDIT(target);
+}
+#endif /* WMI_INTERFACE_EVENT_LOGGING */
 
 void htc_dump_counter_info(HTC_HANDLE HTCHandle)
 {
@@ -95,6 +141,14 @@ void htc_dump_counter_info(HTC_HANDLE HTCHandle)
 	AR_DEBUG_PRINTF(ATH_DEBUG_ERR,
 			("\n%s: ce_send_cnt = %d, TX_comp_cnt = %d\n",
 			 __func__, target->ce_send_cnt, target->TX_comp_cnt));
+}
+
+int htc_get_tx_queue_depth(HTC_HANDLE *htc_handle, HTC_ENDPOINT_ID endpoint_id)
+{
+	HTC_TARGET *target = GET_HTC_TARGET_FROM_HANDLE(htc_handle);
+	HTC_ENDPOINT *endpoint = &target->endpoint[endpoint_id];
+
+	return HTC_PACKET_QUEUE_DEPTH(&endpoint->TxQueue);
 }
 
 void htc_get_control_endpoint_tx_host_credits(HTC_HANDLE HTCHandle, int *credits)
@@ -541,6 +595,7 @@ static A_STATUS htc_issue_packets(HTC_TARGET *target,
 	HTC_FRAME_HDR *pHtcHdr;
 	uint32_t data_attr = 0;
 	enum qdf_bus_type bus_type;
+	QDF_STATUS ret;
 
 	bus_type = hif_get_bus_type(target->hif_dev);
 
@@ -610,9 +665,16 @@ static A_STATUS htc_issue_packets(HTC_TARGET *target,
 			 */
 			if (pPacket->PktInfo.AsTx.
 			    Flags & HTC_TX_PACKET_FLAG_FIXUP_NETBUF) {
-				qdf_nbuf_map(target->osdev,
-					     GET_HTC_PACKET_NET_BUF_CONTEXT
-						     (pPacket), QDF_DMA_TO_DEVICE);
+				ret = qdf_nbuf_map(target->osdev,
+					GET_HTC_PACKET_NET_BUF_CONTEXT
+						(pPacket), QDF_DMA_TO_DEVICE);
+				if (ret != QDF_STATUS_SUCCESS) {
+					AR_DEBUG_PRINTF(ATH_DEBUG_ERR,
+					  ("%s: nbuf map failed, endpoint %p\n",
+					   __func__, pEndpoint));
+					status = A_ERROR;
+					break;
+				}
 			}
 		}
 
@@ -1361,6 +1423,7 @@ A_STATUS htc_send_pkts_multiple(HTC_HANDLE HTCHandle, HTC_PACKET_QUEUE *pPktQueu
 	HTC_PACKET *pPacket;
 	qdf_nbuf_t netbuf;
 	HTC_FRAME_HDR *pHtcHdr;
+	QDF_STATUS status;
 
 	AR_DEBUG_PRINTF(ATH_DEBUG_SEND,
 			("+htc_send_pkts_multiple: Queue: %p, Pkts %d \n",
@@ -1418,9 +1481,15 @@ A_STATUS htc_send_pkts_multiple(HTC_HANDLE HTCHandle, HTC_PACKET_QUEUE *pPktQueu
 		 * mapped.  This only applies to non-data frames, since data frames
 		 * were already mapped as they entered into the driver.
 		 */
-		qdf_nbuf_map(target->osdev,
-			     GET_HTC_PACKET_NET_BUF_CONTEXT(pPacket),
-			     QDF_DMA_TO_DEVICE);
+		status = qdf_nbuf_map(target->osdev,
+				GET_HTC_PACKET_NET_BUF_CONTEXT(pPacket),
+				QDF_DMA_TO_DEVICE);
+		if (status != QDF_STATUS_SUCCESS) {
+			AR_DEBUG_PRINTF(ATH_DEBUG_ERR,
+			   ("%s: nbuf map failed, endpoint %p, seq_no. %d\n",
+			   __func__, pEndpoint, pEndpoint->SeqNo));
+			return A_ERROR;
+		}
 
 		pPacket->PktInfo.AsTx.Flags |= HTC_TX_PACKET_FLAG_FIXUP_NETBUF;
 	}
@@ -2009,6 +2078,8 @@ void htc_kick_queues(void *context)
 
 		htc_try_send(target, endpoint, NULL);
 	}
+
+	hif_fastpath_resume(target->hif_dev);
 }
 #endif
 

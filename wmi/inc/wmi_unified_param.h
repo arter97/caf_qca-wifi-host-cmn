@@ -34,6 +34,9 @@
 #define _WMI_UNIFIED_PARAM_H_
 
 #include <wlan_scan_public_structs.h>
+#ifdef CONVERGED_TDLS_ENABLE
+#include <wlan_tdls_public_structs.h>
+#endif
 
 #define MAC_MAX_KEY_LENGTH 32
 #define MAC_PN_LENGTH 8
@@ -471,6 +474,8 @@ enum wmi_dwelltime_adaptive_mode {
 
 #define MAX_NUM_CHAN 128
 
+#define ATH_EXPONENT_TO_VALUE(v)	((1<<v)-1)
+#define ATH_TXOP_TO_US(v)		   (v<<5)
 /* WME stream classes */
 #define WMI_HOST_AC_BE                          0    /* best effort */
 #define WMI_HOST_AC_BK                          1    /* background */
@@ -1078,9 +1083,9 @@ struct peer_assoc_params {
 	uint32_t tx_max_rate;
 	uint32_t tx_mcs_set;
 	uint8_t vht_capable;
+	uint32_t peer_bw_rxnss_override;
 #ifndef CONFIG_MCL
 	uint32_t tx_max_mcs_nss;
-	uint32_t peer_bw_rxnss_override;
 	bool is_pmf_enabled;
 	bool is_wme_set;
 	bool qos_flag;
@@ -1289,15 +1294,35 @@ struct seg_hdr_info {
  * @tx_frame: management tx frame
  * @frm_len: frame length
  * @vdev_id: vdev id
- * @tx_complete_cb: tx download callback handler
- * @tx_ota_post_proc_cb: OTA complition handler
  * @chanfreq: channel frequency
  * @pdata: frame data
- * @wmi_desc: command descriptor
  * @desc_id: descriptor id relyaed back by target
  * @macaddr - macaddr of peer
+ * @qdf_ctx: qdf context for qdf_nbuf_map
  */
 struct wmi_mgmt_params {
+	void *tx_frame;
+	uint16_t frm_len;
+	uint8_t vdev_id;
+	uint16_t chanfreq;
+	void *pdata;
+	uint16_t desc_id;
+	uint8_t *macaddr;
+	void *qdf_ctx;
+};
+
+/**
+ * struct wmi_offchan_data_tx_params - wmi offchan data tx cmd paramters
+ * @tx_frame: management tx frame
+ * @frm_len: frame length
+ * @vdev_id: vdev id
+ * @chanfreq: channel frequency
+ * @pdata: frame data
+ * @desc_id: descriptor id relyaed back by target
+ * @macaddr: macaddr of peer
+ * @qdf_ctx: qdf context for qdf_nbuf_map
+ */
+struct wmi_offchan_data_tx_params {
 	void *tx_frame;
 	uint16_t frm_len;
 	uint8_t vdev_id;
@@ -1330,6 +1355,22 @@ struct p2p_ps_params {
 	uint8_t session_id;
 };
 
+#ifndef CONVERGED_TDLS_ENABLE
+/**
+ * struct sta_uapsd_params - uapsd auto trig params
+ * @wmm_ac: WMM access category from 0 to 3
+ * @user_priority: User priority to use in trigger frames
+ * @service_interval: service interval
+ * @suspend_interval: suspend interval
+ * @delay_interval: delay interval
+ */
+struct sta_uapsd_params {
+	uint32_t wmm_ac;
+	uint32_t user_priority;
+	uint32_t service_interval;
+	uint32_t suspend_interval;
+	uint32_t delay_interval;
+};
 
 /**
  * struct ta_uapsd_trig_params - uapsd trigger parameter
@@ -1341,9 +1382,10 @@ struct p2p_ps_params {
 struct sta_uapsd_trig_params {
 		uint32_t vdevid;
 		uint8_t peer_addr[IEEE80211_ADDR_LEN];
-		uint8_t *auto_triggerparam;
+		struct sta_uapsd_params *auto_triggerparam;
 		uint32_t num_ac;
 };
+#endif
 
 /**
  * struct ocb_utc_param
@@ -2059,105 +2101,6 @@ struct extscan_cached_result_params {
 	bool flush;
 };
 
-/* Set PNO */
-#define WMI_PNO_MAX_NETW_CHANNELS  26
-#define WMI_PNO_MAX_NETW_CHANNELS_EX  60
-#define WMI_PNO_MAX_SUPP_NETWORKS  16
-
-/*
- * size based of dot11 declaration without extra IEs as we will not carry those
- * for PNO
- */
-#define WMI_PNO_MAX_PB_REQ_SIZE    450
-
-#define WMI_PNO_24G_DEFAULT_CH     1
-#define WMI_PNO_5G_DEFAULT_CH      36
-
-/**
- * enum pno_mode - pno mode types
- * @WMI_PNO_MODE_IMMEDIATE: immidiate mode
- * @WMI_PNO_MODE_ON_SUSPEND: suspend on mode
- * @WMI_PNO_MODE_ON_RESUME: resume on mode
- * @WMI_PNO_MODE_MAX: max range
- */
-enum pno_mode {
-	WMI_PNO_MODE_IMMEDIATE,
-	WMI_PNO_MODE_ON_SUSPEND,
-	WMI_PNO_MODE_ON_RESUME,
-	WMI_PNO_MODE_MAX
-};
-
-/**
- * struct pno_nw_type - pno nw type
- * @ssid: mac ssid
- * @authentication: authentication type
- * @encryption: encryption type
- * @bcastNetwType: broadcast nw type
- * @ucChannelCount: uc channel count
- * @aChannels: pno channel
- * @rssiThreshold: rssi threshold
- */
-struct pno_nw_type {
-	struct mac_ssid ssid;
-	uint32_t authentication;
-	uint32_t encryption;
-	uint32_t bcastNetwType;
-	uint8_t ucChannelCount;
-	uint8_t aChannels[WMI_PNO_MAX_NETW_CHANNELS_EX];
-	int32_t rssiThreshold;
-};
-
-/**
- * struct pno_scan_req_params - PNO Scan request structure
- * @enable: flag to enable or disable
- * @modePNO: PNO Mode
- * @ucNetworksCount: Number of networks
- * @aNetworks: Preferred network list
- * @sessionId: Session identifier
- * @fast_scan_period: Fast Scan period
- * @slow_scan_period: Slow scan period
- * @delay_start_time: delay in seconds to use before starting the first scan
- * @fast_scan_max_cycles: Fast scan max cycles
- * @us24GProbeTemplateLen: 2.4G probe template length
- * @p24GProbeTemplate: 2.4G probe template
- * @us5GProbeTemplateLen: 5G probe template length
- * @p5GProbeTemplate: 5G probe template
- * @pno_channel_prediction: PNO channel prediction feature status
- * @top_k_num_of_channels: top K number of channels are used for tanimoto
- * distance calculation.
- * @stationary_thresh: threshold value to determine that the STA is stationary.
- * @pnoscan_adaptive_dwell_mode: adaptive dwelltime mode for pno scan
- * @channel_prediction_full_scan: periodic timer upon which a full scan needs
- * to be triggered.
- */
-struct pno_scan_req_params {
-	uint8_t enable;
-	enum pno_mode modePNO;
-	uint8_t ucNetworksCount;
-	struct pno_nw_type aNetworks[WMI_PNO_MAX_SUPP_NETWORKS];
-	uint8_t sessionId;
-	uint32_t fast_scan_period;
-	uint32_t slow_scan_period;
-	uint32_t delay_start_time;
-	uint8_t fast_scan_max_cycles;
-	uint32_t        active_min_time;
-	uint32_t        active_max_time;
-	uint32_t        passive_min_time;
-	uint32_t        passive_max_time;
-	uint16_t us24GProbeTemplateLen;
-	uint8_t p24GProbeTemplate[WMI_PNO_MAX_PB_REQ_SIZE];
-	uint16_t us5GProbeTemplateLen;
-	uint8_t p5GProbeTemplate[WMI_PNO_MAX_PB_REQ_SIZE];
-#ifdef FEATURE_WLAN_SCAN_PNO
-	bool pno_channel_prediction;
-	uint8_t top_k_num_of_channels;
-	uint8_t stationary_thresh;
-	enum wmi_dwelltime_adaptive_mode pnoscan_adaptive_dwell_mode;
-	uint32_t channel_prediction_full_scan;
-#endif
-};
-
-
 #define WMI_WLAN_EXTSCAN_MAX_CHANNELS                 36
 #define WMI_WLAN_EXTSCAN_MAX_BUCKETS                  16
 #define WMI_WLAN_EXTSCAN_MAX_HOTLIST_APS              128
@@ -2872,6 +2815,7 @@ struct wmi_tdls_params {
 	uint32_t tdls_peer_kickout_threshold;
 };
 
+#ifndef CONVERGED_TDLS_ENABLE
 /**
  * struct tdls_chan_switch_params - channel switch parameter structure
  * @vdev_id: vdev ID
@@ -2890,6 +2834,7 @@ struct tdls_channel_switch_params {
 	uint8_t     oper_class;
 	uint8_t     is_responder;
 };
+#endif
 
 /**
  * struct dhcp_offload_info_params - dhcp offload parameters
@@ -4979,6 +4924,9 @@ typedef enum {
 	wmi_peer_delete_response_event_id,
 	wmi_pdev_csa_switch_count_status_event_id,
 	wmi_reg_chan_list_cc_event_id,
+	wmi_offchan_data_tx_completion_event,
+	wmi_dfs_cac_complete_id,
+	wmi_dfs_radar_detection_event_id,
 
 	wmi_events_max,
 } wmi_conv_event_id;
@@ -5830,6 +5778,18 @@ typedef struct {
 	uint32_t	status;
 	uint32_t	pdev_id;
 } wmi_host_mgmt_tx_compl_event;
+
+/**
+ * struct wmi_host_offchan_data_tx_compl_event - TX completion event
+ * @desc_id: from tx_send_cmd
+ * @status: VWMI_MGMT_TX_COMP_STATUS_TYPE
+ * @pdev_id: pdev_id
+ */
+struct wmi_host_offchan_data_tx_compl_event {
+	uint32_t desc_id;
+	uint32_t status;
+	uint32_t pdev_id;
+};
 
 #define WMI_HOST_TIM_BITMAP_ARRAY_SIZE 17
 

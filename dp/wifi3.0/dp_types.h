@@ -25,6 +25,7 @@
 #include <qdf_atomic.h>
 #include <qdf_util.h>
 #include <qdf_list.h>
+#include <qdf_lro.h>
 #include <queue.h>
 #include <htt_common.h>
 
@@ -104,6 +105,10 @@ union dp_rx_desc_list_elem_t;
      (_a)[4] == 0xff &&                         \
      (_a)[5] == 0xff)
 #define IS_LLC_PRESENT(typeorlen) ((typeorlen) >= 0x600)
+#define DP_FRAME_FC0_TYPE_MASK 0x0c
+#define DP_FRAME_FC0_TYPE_DATA 0x08
+#define DP_FRAME_IS_DATA(_frame) \
+	(((_frame)->i_fc[0] & DP_FRAME_FC0_TYPE_MASK) == DP_FRAME_FC0_TYPE_DATA)
 
 /**
  * macros to convert hw mac id to sw mac id:
@@ -317,6 +322,7 @@ struct dp_intr {
 	uint8_t reo_status_ring_mask; /* REO command response ring */
 	struct dp_soc *soc;    /* Reference to SoC structure ,
 				to get DMA ring handles */
+	qdf_lro_ctx_t lro_ctx;
 };
 
 #define REO_DESC_FREELIST_SIZE 64
@@ -519,7 +525,7 @@ struct dp_soc {
 	/* HAL SOC handle */
 	void *hal_soc;
 
-    /* DP Interrupts */
+	/* DP Interrupts */
 	struct dp_intr intr_ctx[DP_MAX_INTERRUPT_CONTEXTS];
 
 	/* REO destination rings */
@@ -606,10 +612,9 @@ struct dp_soc {
 	struct {
 		int size;
 		uint32_t paddr;
-		char *vaddr;
+		uint32_t *vaddr;
 		struct dp_tx_me_buf_t *freelist;
 		int buf_in_use;
-		int nonpool_buf_in_use;
 		qdf_dma_mem_context(memctx);
 	} me_buf;
 
@@ -621,9 +626,6 @@ struct dp_soc {
 	 */
 	DP_MUTEX_TYPE peer_ref_mutex;
 
-	/* Number of VAPs with mcast enhancement enabled */
-	atomic_t mc_num_vap_attached;
-
 	/* maximum value for peer_id */
 	int max_peers;
 
@@ -631,6 +633,8 @@ struct dp_soc {
 	struct {
 		/* SOC level TX stats */
 		struct {
+			/* packets dropped on tx because of no peer */
+			struct cdp_pkt_info tx_invalid_peer;
 			/* descriptors in each tcl ring */
 			uint32_t tcl_ring_full[MAX_TCL_RING];
 			/* Descriptors in use at soc */
@@ -646,6 +650,8 @@ struct dp_soc {
 				uint32_t invalid_vdev;
 				/* Invalid PDEV error count */
 				uint32_t invalid_pdev;
+				/* Invalid PEER Error count */
+				struct cdp_pkt_info rx_invalid_peer;
 				/* HAL ring access Fail error count */
 				uint32_t hal_ring_access_fail;
 				/* RX DMA error count */
@@ -667,6 +673,9 @@ struct dp_soc {
 #endif
 	qdf_list_t reo_desc_freelist;
 	qdf_spinlock_t reo_desc_freelist_lock;
+
+	/* Obj Mgr SoC */
+	struct wlan_objmgr_psoc *psoc;
 };
 
 /* PDEV level structure for data path */
@@ -740,6 +749,9 @@ struct dp_pdev {
 	/* monitor mode mutex */
 	qdf_spinlock_t mon_mutex;
 
+	/*tx_mutex for me*/
+	DP_MUTEX_TYPE tx_mutex;
+
 	/* Band steering  */
 	/* TBD */
 
@@ -774,7 +786,23 @@ struct dp_pdev {
 	uint32_t mon_ppdu_status;
 	struct cdp_mon_status rx_mon_recv_status;
 
+	/* pool addr for mcast enhance buff */
+	struct {
+		int size;
+		uint32_t paddr;
+		char *vaddr;
+		struct dp_tx_me_buf_t *freelist;
+		int buf_in_use;
+		qdf_dma_mem_context(memctx);
+	} me_buf;
+
+	/* Number of VAPs with mcast enhancement enabled */
+	qdf_atomic_t mc_num_vap_attached;
+
 	/* TBD */
+
+	/* map this pdev to a particular Reo Destination ring */
+	enum cdp_host_reo_dest_ring reo_dest;
 };
 
 struct dp_peer;
@@ -834,6 +862,7 @@ struct dp_vdev {
 	/* callback to hand rx monitor 802.11 MPDU to the OS shim */
 	ol_txrx_rx_mon_fp osif_rx_mon;
 
+	ol_txrx_mcast_me_fp me_convert;
 	/* deferred vdev deletion state */
 	struct {
 		/* VDEV delete pending */
@@ -867,6 +896,9 @@ struct dp_vdev {
 	/* BSS peer */
 	struct dp_peer *vap_bss_peer;
 
+	/* WDS enabled */
+	bool wds_enabled;
+
 	/* NAWDS enabled */
 	bool nawds_enabled;
 
@@ -895,6 +927,13 @@ struct dp_vdev {
 
 	/* VDEV Stats */
 	struct cdp_vdev_stats stats;
+	bool lro_enable;
+
+	/* Is this a proxySTA VAP */
+	bool proxysta_vdev;
+
+	/* Address search flags to be configured in HAL descriptor */
+	uint8_t hal_desc_addr_search_flags;
 };
 
 
@@ -967,5 +1006,29 @@ struct dp_peer {
 
 	TAILQ_HEAD(, dp_ast_entry) ast_entry_list;
 	/* TBD */
+};
+
+#ifdef CONFIG_WIN
+/*
+ * dp_invalid_peer_msg
+ * @nbuf: data buffer
+ * @wh: 802.11 header
+ * @vdev_id: id of vdev
+ */
+struct dp_invalid_peer_msg {
+	qdf_nbuf_t nbuf;
+	struct ieee80211_frame *wh;
+	uint8_t vdev_id;
+};
+#endif
+
+/*
+ * dp_tx_me_buf_t: ME buffer
+ * data: Destination Mac address
+ * next: pointer to next buffer
+ */
+struct dp_tx_me_buf_t {
+	uint8_t data[DP_MAC_ADDR_LEN];
+	struct dp_tx_me_buf_t *next;
 };
 #endif /* _DP_TYPES_H_ */

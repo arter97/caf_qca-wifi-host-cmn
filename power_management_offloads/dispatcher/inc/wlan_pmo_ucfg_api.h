@@ -182,6 +182,30 @@ QDF_STATUS pmo_ucfg_disable_ns_offload_in_fwr(struct wlan_objmgr_vdev *vdev,
 		enum pmo_offload_trigger trigger);
 
 /**
+ * pmo_ucfg_enable_non_arp_bcast_filter_in_fwr(): API to enable
+ * hw broadcast filter in fwr
+ * @vdev: objmgr vdev param
+ *
+ *  API to enable hw broadcast filter from pmo vdev priv ctx
+ *
+ * Return QDF_STATUS -in case of success else return error
+ */
+QDF_STATUS pmo_ucfg_enable_non_arp_bcast_filter_in_fwr(
+		struct wlan_objmgr_vdev *vdev);
+
+/**
+ * pmo_ucfg_disable_non_arp_bcast_filter_in_fwr(): API to disable
+ * hw broadcast filter in fwr
+ * @vdev: objmgr vdev param
+ *
+ *  API to disable hw broadcast filter from pmo vdev priv ctx
+ *
+ * Return QDF_STATUS -in case of success else return error
+ */
+QDF_STATUS pmo_ucfg_disable_non_arp_bcast_filter_in_fwr(
+		struct wlan_objmgr_vdev *vdev);
+
+/**
  * pmo_ucfg_max_mc_addr_supported() -  to get max support mc address
  * @psoc: objmgr psoc
  *
@@ -287,26 +311,6 @@ QDF_STATUS pmo_ucfg_disable_gtk_offload_in_fwr(struct wlan_objmgr_vdev *vdev);
  */
 QDF_STATUS pmo_ucfg_get_gtk_rsp(struct wlan_objmgr_vdev *vdev,
 		struct pmo_gtk_rsp_req *gtk_rsp_req);
-
-/**
- * pmo_ucfg_update_nlo_scan_in_progress(): update nlo scan is in progress flags
- * @vdev: objmgr vdev handle
- * @value:true if pno scan is in progress else false
- *
- * Return: TRUE/FALSE
- */
-void pmo_ucfg_update_nlo_scan_in_progress(struct wlan_objmgr_vdev *vdev,
-	bool value);
-
-/**
- * pmo_ucfg_update_nlo_match_found(): Update nlo scan match flag to value
- * @vdev: objmgr vdev handle
- * @value:true if nlo scan match event received else false
- *
- * Return: TRUE/FALSE
- */
-void pmo_ucfg_update_nlo_match_found(struct wlan_objmgr_vdev *vdev,
-	bool value);
 
 /**
  * pmo_ucfg_update_extscan_in_progress(): update extscan is in progress flags

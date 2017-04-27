@@ -41,6 +41,7 @@
 #include <qdf_lock.h>
 #include <qdf_trace.h>
 #include <net/ieee80211_radiotap.h>
+#include <qdf_module.h>
 
 #if defined(FEATURE_TSO)
 #include <net/ipv6.h>
@@ -194,7 +195,7 @@ struct sk_buff *__qdf_nbuf_alloc(qdf_device_t osdev, size_t size, int reserve,
 	skb = dev_alloc_skb(size);
 
 	if (!skb) {
-		pr_err("ERROR:NBUF alloc failed\n");
+		pr_info("ERROR:NBUF alloc failed\n");
 		return NULL;
 	}
 	memset(skb->cb, 0x0, sizeof(skb->cb));
@@ -1335,6 +1336,7 @@ static void qdf_nbuf_track_memory_manager_destroy(void)
 
 	spin_unlock_irqrestore(&qdf_net_buf_track_free_list_lock, irq_flag);
 	kmem_cache_destroy(nbuf_tracking_cache);
+	qdf_net_buf_track_free_list = NULL;
 }
 
 /**
@@ -1477,6 +1479,7 @@ void qdf_net_buf_debug_add_node(qdf_nbuf_t net_buf, size_t size,
 				  "Mem alloc failed ! Could not track skb from %s %d of size %zu",
 				  file_name, line_num, size);
 	}
+
 	spin_unlock_irqrestore(&g_qdf_net_buf_track_lock[i], irq_flag);
 
 	return;
@@ -1540,6 +1543,26 @@ done:
 }
 EXPORT_SYMBOL(qdf_net_buf_debug_delete_node);
 
+void qdf_net_buf_debug_acquire_skb(qdf_nbuf_t net_buf,
+			uint8_t *file_name, uint32_t line_num)
+{
+	qdf_nbuf_t ext_list = qdf_nbuf_get_ext_list(net_buf);
+
+	while (ext_list) {
+		/*
+		 * Take care to add if it is Jumbo packet connected using
+		 * frag_list
+		 */
+		qdf_nbuf_t next;
+
+		next = qdf_nbuf_queue_next(ext_list);
+		qdf_net_buf_debug_add_node(ext_list, 0, file_name, line_num);
+		ext_list = next;
+	}
+	qdf_net_buf_debug_add_node(net_buf, 0, file_name, line_num);
+}
+EXPORT_SYMBOL(qdf_net_buf_debug_acquire_skb);
+
 /**
  * qdf_net_buf_debug_release_skb() - release skb to avoid memory leak
  * @net_buf: Network buf holding head segment (single)
@@ -1569,13 +1592,7 @@ void qdf_net_buf_debug_release_skb(qdf_nbuf_t net_buf)
 }
 EXPORT_SYMBOL(qdf_net_buf_debug_release_skb);
 
-#else
-void qdf_net_buf_debug_delete_node(qdf_nbuf_t net_buf)
-{
-}
-EXPORT_SYMBOL(qdf_net_buf_debug_delete_node);
 #endif /*MEMORY_DEBUG */
-
 #if defined(FEATURE_TSO)
 
 /**
@@ -1944,7 +1961,10 @@ void __qdf_nbuf_unmap_tso_segment(qdf_device_t osdev,
 			  struct qdf_tso_seg_elem_t *tso_seg,
 			  bool is_last_seg)
 {
-	uint32_t num_frags = tso_seg->seg.num_frags - 1;
+	uint32_t num_frags = 0;
+
+	if (tso_seg->seg.num_frags > 0)
+		num_frags = tso_seg->seg.num_frags - 1;
 
 	/*Num of frags in a tso seg cannot be less than 2 */
 	if (num_frags < 1) {
@@ -2639,6 +2659,7 @@ unsigned int qdf_nbuf_update_radiotap(struct mon_rx_status *rx_status,
 	return 0;
 }
 #endif
+qdf_export_symbol(qdf_nbuf_update_radiotap);
 
 /**
  * __qdf_nbuf_reg_free_cb() - register nbuf free callback

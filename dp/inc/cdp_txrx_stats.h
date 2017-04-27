@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2016-2017 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -32,14 +32,6 @@
 #ifndef _CDP_TXRX_STATS_H_
 #define _CDP_TXRX_STATS_H_
 #include <cdp_txrx_ops.h>
-
-static inline void
-cdp_display_stats(ol_txrx_soc_handle soc, uint16_t bitmap)
-{
-	if (soc->ops->mob_stats_ops->display_stats)
-		return soc->ops->mob_stats_ops->display_stats(bitmap);
-	return;
-}
 
 static inline void
 cdp_clear_stats(ol_txrx_soc_handle soc, uint16_t bitmap)

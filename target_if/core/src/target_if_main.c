@@ -30,6 +30,9 @@
 #endif
 #include <target_if_reg.h>
 #include <target_if_scan.h>
+#ifdef DFS_COMPONENT_ENABLE
+#include <target_if_dfs.h>
+#endif
 
 #ifdef CONVERGED_P2P_ENABLE
 #include "target_if_p2p.h"
@@ -42,6 +45,10 @@
 #ifdef WLAN_FEATURE_NAN_CONVERGENCE
 #include "target_if_nan.h"
 #endif /* WLAN_FEATURE_NAN_CONVERGENCE */
+
+#ifdef CONVERGED_TDLS_ENABLE
+#include "target_if_tdls.h"
+#endif
 
 static struct target_if_ctx *g_target_if_ctx;
 
@@ -136,6 +143,30 @@ static void target_if_nan_tx_ops_register(
 }
 #endif /* WLAN_FEATURE_NAN_CONVERGENCE */
 
+#ifdef CONVERGED_TDLS_ENABLE
+static void target_if_tdls_tx_ops_register(struct wlan_lmac_if_tx_ops *tx_ops)
+{
+	target_if_tdls_register_tx_ops(tx_ops);
+}
+#else
+static void target_if_tdls_tx_ops_register(struct wlan_lmac_if_tx_ops *tx_ops)
+{
+}
+#endif /* CONVERGED_TDLS_ENABLE */
+
+#ifdef DFS_COMPONENT_ENABLE
+static void target_if_dfs_tx_ops_register(
+				struct wlan_lmac_if_tx_ops *tx_ops)
+{
+	target_if_register_dfs_tx_ops(tx_ops);
+}
+#else
+static void target_if_dfs_tx_ops_register(
+				struct wlan_lmac_if_tx_ops *tx_ops)
+{
+}
+#endif /* DFS_COMPONENT_ENABLE */
+
 static
 QDF_STATUS target_if_register_umac_tx_ops(struct wlan_lmac_if_tx_ops *tx_ops)
 {
@@ -151,9 +182,12 @@ QDF_STATUS target_if_register_umac_tx_ops(struct wlan_lmac_if_tx_ops *tx_ops)
 
 	target_if_nan_tx_ops_register(tx_ops);
 
+	target_if_dfs_tx_ops_register(tx_ops);
+
 	/* call regulatory callback to register tx ops */
 	target_if_register_regulatory_tx_ops(tx_ops);
 
+	target_if_tdls_tx_ops_register(tx_ops);
 	/* Converged UMAC components to register their TX-ops here */
 	return QDF_STATUS_SUCCESS;
 }
@@ -195,6 +229,10 @@ QDF_STATUS target_if_register_tx_ops(struct wlan_lmac_if_tx_ops *tx_ops)
 	/* Converged UMAC components to register P2P TX-ops */
 	target_if_p2p_register_tx_ops(tx_ops);
 #endif
+#ifdef CONVERGED_TDLS_ENABLE
+	target_if_tdls_register_tx_ops(tx_ops);
+#endif
+
 	return QDF_STATUS_SUCCESS;
 }
 

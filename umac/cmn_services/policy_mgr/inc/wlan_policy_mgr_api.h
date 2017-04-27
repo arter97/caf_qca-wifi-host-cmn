@@ -757,12 +757,12 @@ struct policy_mgr_sme_cbacks {
 		uint8_t  new_nss, policy_mgr_nss_update_cback cback,
 		uint8_t next_action, struct wlan_objmgr_psoc *psoc,
 		enum policy_mgr_conn_update_reason reason);
-	QDF_STATUS (*sme_change_mcc_beacon_interval) (uint8_t session_id);
-	QDF_STATUS (*sme_get_ap_channel_from_scan) (
+	QDF_STATUS (*sme_change_mcc_beacon_interval)(uint8_t session_id);
+	QDF_STATUS (*sme_get_ap_channel_from_scan)(
 		void *roam_profile,
 		void **scan_cache,
 		uint8_t *channel);
-	QDF_STATUS (*sme_scan_result_purge) (
+	QDF_STATUS (*sme_scan_result_purge)(
 				void *scan_result);
 };
 
@@ -796,8 +796,8 @@ struct policy_mgr_hdd_cbacks {
  * @check_is_tdls_allowed: check if tdls allowed or not
  */
 struct policy_mgr_tdls_cbacks {
-	void (*set_tdls_ct_mode)(struct wlan_objmgr_psoc *psoc);
-	bool (*check_is_tdls_allowed)(enum tQDF_ADAPTER_MODE device_mode);
+	void (*tdls_notify_increment_session)(struct wlan_objmgr_psoc *psoc);
+	void (*tdls_notify_decrement_session)(struct wlan_objmgr_psoc *psoc);
 };
 
 /**

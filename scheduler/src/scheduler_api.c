@@ -185,11 +185,22 @@ QDF_STATUS scheduler_post_msg_by_priority(QDF_MODULE_ID qid,
 	struct scheduler_msg_wrapper *msg_wrapper = NULL;
 	struct scheduler_ctx *sched_ctx = scheduler_get_context();
 
-	if (!sched_ctx || !pMsg) {
+	if (!sched_ctx || !pMsg || !sched_ctx->sch_thread) {
 		QDF_TRACE(QDF_MODULE_ID_SCHEDULER, QDF_TRACE_LEVEL_ERROR,
 				"%s: Null params or global sch context is null",
 				__func__);
+		QDF_TRACE(QDF_MODULE_ID_SCHEDULER, QDF_TRACE_LEVEL_ERROR,
+				"%s: sched_ctx[%d], pMsg[%d]",
+				__func__, !!sched_ctx, !!pMsg);
 		QDF_ASSERT(0);
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	if ((0 != pMsg->reserved) && (SYS_MSG_COOKIE != pMsg->reserved)) {
+		QDF_TRACE(QDF_MODULE_ID_SCHEDULER, QDF_TRACE_LEVEL_ERROR,
+			"%s: Un-initialized message pointer.. please initialize it",
+			__func__);
+		QDF_BUG(0);
 		return QDF_STATUS_E_FAILURE;
 	}
 
@@ -513,7 +524,7 @@ QDF_STATUS scheduler_deregister_sys_legacy_handler(void)
 void scheduler_mc_timer_callback(unsigned long data)
 {
 	qdf_mc_timer_t *timer = (qdf_mc_timer_t *)data;
-	struct scheduler_msg msg;
+	struct scheduler_msg msg = {0};
 	QDF_STATUS status;
 
 	qdf_mc_timer_callback_t callback = NULL;

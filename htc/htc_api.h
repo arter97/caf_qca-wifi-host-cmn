@@ -689,6 +689,14 @@ A_STATUS HTCWaitForPendingRecv(HTC_HANDLE HTCHandle,
 /* function to fetch stats from htc layer*/
 struct ol_ath_htc_stats *ieee80211_ioctl_get_htc_stats(HTC_HANDLE
 						       HTCHandle);
+/**
+ * htc_get_tx_queue_depth() - get the tx queue depth of an htc endpoint
+ * @htc_handle: htc handle
+ * @enpoint_id: endpoint to check
+ *
+ * Return: htc_handle tx queue depth
+ */
+int htc_get_tx_queue_depth(HTC_HANDLE *htc_handle, HTC_ENDPOINT_ID endpoint_id);
 
 #ifdef HIF_USB
 #define HTCReturnReceivePkt(target, p, osbuf) \
@@ -802,4 +810,10 @@ void htc_set_wmi_endpoint_count(HTC_HANDLE htc_handle, uint8_t wmi_ep_count);
  * return: WMI enpoint count
  */
 uint8_t  htc_get_wmi_endpoint_count(HTC_HANDLE htc_handle);
+
+#ifdef WMI_INTERFACE_EVENT_LOGGING
+void htc_print_credit_history(HTC_HANDLE htc, uint32_t count,
+			      qdf_abstract_print * print, void *print_priv);
+#endif
+
 #endif /* _HTC_API_H_ */

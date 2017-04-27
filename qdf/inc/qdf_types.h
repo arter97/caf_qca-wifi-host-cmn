@@ -144,6 +144,11 @@ typedef __qdf_dma_size_t     qdf_dma_size_t;
 typedef __qdf_dma_context_t qdf_dma_context_t;
 
 /**
+ * pointer to net device
+ */
+typedef __qdf_netdev_t qdf_netdev_t;
+
+/**
  * struct qdf_dma_map_info - Information inside a DMA map.
  * @nsegs: total number mapped segments
  * struct __dma_segs - Information of physical address.
@@ -384,6 +389,7 @@ typedef enum {
 	QDF_MODULE_ID_CONFIG,
 	QDF_MODULE_ID_REGULATORY,
 	QDF_MODULE_ID_NAN,
+	QDF_MODULE_ID_OFFCHAN_TXRX,
 	QDF_MODULE_ID_ANY,
 	QDF_MODULE_ID_MAX,
 } QDF_MODULE_ID;

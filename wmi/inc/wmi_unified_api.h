@@ -479,6 +479,9 @@ QDF_STATUS wmi_unified_dbglog_cmd_send(void *wmi_hdl,
 QDF_STATUS wmi_mgmt_unified_cmd_send(void *wmi_hdl,
 				struct wmi_mgmt_params *param);
 
+QDF_STATUS wmi_offchan_data_tx_cmd_send(void *wmi_hdl,
+				struct wmi_offchan_data_tx_params *param);
+
 QDF_STATUS wmi_unified_modem_power_state(void *wmi_hdl,
 		uint32_t param_value);
 
@@ -651,8 +654,7 @@ QDF_STATUS wmi_unified_pno_stop_cmd(void *wmi_hdl, uint8_t vdev_id);
 
 #ifdef FEATURE_WLAN_SCAN_PNO
 QDF_STATUS wmi_unified_pno_start_cmd(void *wmi_hdl,
-		   struct pno_scan_req_params *pno,
-		   uint32_t *gchannel_freq_list);
+		   struct pno_scan_req_params *pno);
 #endif
 
 QDF_STATUS wmi_unified_set_ric_req_cmd(void *wmi_hdl, void *msg,
@@ -672,6 +674,16 @@ QDF_STATUS wmi_unified_process_ll_stats_get_cmd
 QDF_STATUS wmi_unified_get_stats_cmd(void *wmi_hdl,
 		       struct pe_stats_req  *get_stats_param,
 			   uint8_t addr[IEEE80211_ADDR_LEN]);
+
+/**
+ * wmi_unified_congestion_request_cmd() - send request to fw to get CCA
+ * @wmi_hdl: wma handle
+ * @vdev_id: vdev id
+ *
+ * Return: QDF_STATUS_SUCCESS on success and QDF_STATUS_E_FAILURE for failure
+ */
+QDF_STATUS wmi_unified_congestion_request_cmd(void *wmi_hdl,
+		uint8_t vdev_id);
 
 QDF_STATUS wmi_unified_snr_request_cmd(void *wmi_hdl);
 
@@ -827,20 +839,6 @@ QDF_STATUS wmi_unified_soc_set_hw_mode_cmd(void *wmi_hdl,
 
 QDF_STATUS wmi_unified_pdev_set_dual_mac_config_cmd(void *wmi_hdl,
 		struct wmi_dual_mac_config *msg);
-
-/**
- * wmi_unified_configure_broadcast_filter_cmd() - Enable/Disable Broadcast
- * filter
- * when target goes to wow suspend/resume mode
- * @wmi_hdl: wmi handle
- * @vdev_id: device identifier
- * @bc_filter: enable/disable Broadcast filter
- *
- *
- * Return: QDF_STATUS_SUCCESS on success and QDF_STATUS_E_FAILURE for failure
- */
-QDF_STATUS wmi_unified_configure_broadcast_filter_cmd(void *wmi_hdl,
-			   uint8_t vdev_id, bool bc_filter);
 
 QDF_STATUS wmi_unified_set_led_flashing_cmd(void *wmi_hdl,
 				struct flashing_req_params *flashing);
@@ -1218,6 +1216,19 @@ QDF_STATUS wmi_extract_vdev_roam_param(void *wmi_hdl, void *evt_buf,
 QDF_STATUS wmi_extract_vdev_scan_ev_param(void *wmi_hdl, void *evt_buf,
 		struct scan_event *param);
 
+#ifdef CONVERGED_TDLS_ENABLE
+/**
+ * wmi_extract_vdev_tdls_ev_param - extract vdev tdls param from event
+ * @wmi_handle: wmi handle
+ * @param evt_buf: pointer to event buffer
+ * @param param: Pointer to hold vdev tdls param
+ *
+ * Return: QDF_STATUS_SUCCESS on success and QDF_STATUS_E_FAILURE for failure
+ */
+QDF_STATUS wmi_extract_vdev_tdls_ev_param(void *wmi_hdl, void *evt_buf,
+					  struct tdls_event_info *param);
+#endif
+
 QDF_STATUS wmi_extract_mu_ev_param(void *wmi_hdl, void *evt_buf,
 		wmi_host_mu_report_event *param);
 
@@ -1254,6 +1265,9 @@ QDF_STATUS wmi_extract_pdev_generic_buffer_ev_param(void *wmi_hdl,
 
 QDF_STATUS wmi_extract_mgmt_tx_compl_param(void *wmi_hdl, void *evt_buf,
 		wmi_host_mgmt_tx_compl_event *param);
+
+QDF_STATUS wmi_extract_offchan_data_tx_compl_param(void *wmi_hdl, void *evt_buf,
+		struct wmi_host_offchan_data_tx_compl_event *param);
 
 QDF_STATUS wmi_extract_pdev_csa_switch_count_status(void *wmi_hdl,
 		void *evt_buf,
@@ -1416,6 +1430,8 @@ QDF_STATUS wmi_extract_peer_delete_response_event(void *wmi_hdl,
 		uint8_t *evt_buf,
 		struct wmi_host_peer_delete_response_event *param);
 
+QDF_STATUS wmi_extract_chainmask_tables(void *wmi_hdl, uint8_t *evt_buf,
+		struct wlan_psoc_host_chainmask_table *chainmask_table);
 /**
  * wmi_unified_dfs_phyerr_offload_en_cmd() - enable dfs phyerr offload
  * @wmi_handle: wmi handle
@@ -1435,4 +1451,28 @@ QDF_STATUS wmi_unified_dfs_phyerr_offload_en_cmd(void *wmi_hdl,
  */
 QDF_STATUS wmi_unified_dfs_phyerr_offload_dis_cmd(void *wmi_hdl,
 		uint32_t pdev_id);
+
+#ifdef WMI_INTERFACE_EVENT_LOGGING
+void wmi_print_cmd_log(wmi_unified_t wmi, uint32_t count,
+		       qdf_abstract_print *print, void *print_priv);
+
+void wmi_print_cmd_tx_cmp_log(wmi_unified_t wmi, uint32_t count,
+			      qdf_abstract_print *print, void *print_priv);
+
+void wmi_print_mgmt_cmd_log(wmi_unified_t wmi, uint32_t count,
+			    qdf_abstract_print *print, void *print_priv);
+
+void wmi_print_mgmt_cmd_tx_cmp_log(wmi_unified_t wmi, uint32_t count,
+				   qdf_abstract_print *print, void *print_priv);
+
+void wmi_print_event_log(wmi_unified_t wmi, uint32_t count,
+			 qdf_abstract_print *print, void *print_priv);
+
+void wmi_print_rx_event_log(wmi_unified_t wmi, uint32_t count,
+			    qdf_abstract_print *print, void *print_priv);
+
+void wmi_print_mgmt_event_log(wmi_unified_t wmi, uint32_t count,
+			      qdf_abstract_print *print, void *print_priv);
+#endif /* WMI_INTERFACE_EVENT_LOGGING */
+
 #endif /* _WMI_UNIFIED_API_H_ */

@@ -784,11 +784,11 @@ static QDF_STATUS p2p_mgmt_tx(struct tx_action_context *tx_ctx,
 
 	wh = (struct wlan_frame_hdr *)frame;
 	mac_addr = wh->i_addr1;
-	peer = wlan_objmgr_get_peer(psoc, mac_addr, WLAN_MGMT_NB_ID);
+	peer = wlan_objmgr_get_peer(psoc, mac_addr, WLAN_P2P_ID);
 	if (!peer) {
 		mac_addr = wh->i_addr2;
 		peer = wlan_objmgr_get_peer(psoc, mac_addr,
-					WLAN_MGMT_NB_ID);
+					WLAN_P2P_ID);
 	}
 
 	if (!peer) {
@@ -812,6 +812,8 @@ static QDF_STATUS p2p_mgmt_tx(struct tx_action_context *tx_ctx,
 			(qdf_nbuf_t)packet,
 			tx_comp_cb, tx_ota_comp_cb,
 			WLAN_UMAC_COMP_P2P, &mgmt_param);
+
+	wlan_objmgr_peer_release_ref(peer, WLAN_P2P_ID);
 
 	return status;
 }
@@ -853,7 +855,6 @@ static QDF_STATUS p2p_roc_req_for_tx_action(
 	status = p2p_process_roc_req(roc_ctx);
 	if (status != QDF_STATUS_SUCCESS) {
 		p2p_err("request roc for tx action frrame fail");
-		qdf_mem_free(roc_ctx);
 		return status;
 	}
 
@@ -989,7 +990,7 @@ static QDF_STATUS p2p_move_tx_context_to_ack_queue(
 		}
 
 		if (is_ack_q) {
-			p2p_err("Already in waiting for ack queue");
+			p2p_debug("Already in waiting for ack queue");
 			return QDF_STATUS_SUCCESS;
 		}
 	}
@@ -1372,11 +1373,11 @@ QDF_STATUS p2p_ready_to_tx_frame(struct p2p_soc_priv_obj *p2p_soc_obj,
 			}
 		}
 		if (is_ack_q) {
-			p2p_err("Already sent and waiting for ack");
+			p2p_debug("Already sent and waiting for ack");
 			status = QDF_STATUS_SUCCESS;
 		}
 	} else {
-		p2p_err("Failed to find tx ctx by cookie, cookie %llx",
+		p2p_debug("Failed to find tx ctx by cookie, cookie %llx",
 			cookie);
 		status = QDF_STATUS_E_INVAL;
 	}
@@ -1426,7 +1427,6 @@ QDF_STATUS p2p_process_mgmt_tx(struct tx_action_context *tx_ctx)
 {
 	struct p2p_soc_priv_obj *p2p_soc_obj;
 	struct p2p_roc_context *curr_roc_ctx;
-	uint64_t rc = 1;
 	QDF_STATUS status;
 
 	status = p2p_tx_context_check_valid(tx_ctx);
@@ -1460,7 +1460,7 @@ QDF_STATUS p2p_process_mgmt_tx(struct tx_action_context *tx_ctx)
 
 	status = p2p_vdev_check_valid(tx_ctx);
 	if (status != QDF_STATUS_SUCCESS) {
-		p2p_err("invalid vdev or vdev mode");
+		p2p_debug("invalid vdev or vdev mode");
 		status = QDF_STATUS_E_INVAL;
 		goto fail;
 	}
@@ -1484,15 +1484,8 @@ QDF_STATUS p2p_process_mgmt_tx(struct tx_action_context *tx_ctx)
 	/* For off channel tx case */
 	curr_roc_ctx = p2p_find_current_roc_ctx(p2p_soc_obj);
 	if (curr_roc_ctx && (curr_roc_ctx->chan == tx_ctx->chan)) {
-		if (curr_roc_ctx->roc_state ==
+		if (curr_roc_ctx->roc_state !=
 			ROC_STATE_CANCEL_IN_PROG) {
-			/* wait for roc canceling done */
-			rc = qdf_wait_single_event(
-				&p2p_soc_obj->cancel_roc_done,
-				msecs_to_jiffies(P2P_WAIT_CANCEL_ROC));
-			if (!rc)
-				p2p_err("Timeout occurred while waiting for RoC cancellation");
-		} else {
 			p2p_adjust_tx_wait(tx_ctx);
 			status = p2p_restart_roc_timer(curr_roc_ctx);
 			if (status != QDF_STATUS_SUCCESS) {
@@ -1550,7 +1543,7 @@ QDF_STATUS p2p_process_mgmt_tx_cancel(
 				cancel_tx->cookie);
 		}
 	} else {
-		p2p_err("Failed to find tx ctx by cookie, cookie %llx",
+		p2p_debug("Failed to find tx ctx by cookie, cookie %llx",
 			cancel_tx->cookie);
 		return QDF_STATUS_E_INVAL;
 	}

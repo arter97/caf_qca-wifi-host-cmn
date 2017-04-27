@@ -21,6 +21,7 @@
 
 #include "wlan_pmo_ucfg_api.h"
 #include "wlan_pmo_arp.h"
+#include "wlan_pmo_hw_bcast_fltr.h"
 #include "wlan_pmo_ns.h"
 #include "wlan_pmo_gtk.h"
 #include "wlan_pmo_wow.h"
@@ -89,6 +90,18 @@ QDF_STATUS pmo_ucfg_disable_arp_offload_in_fwr(struct wlan_objmgr_vdev *vdev,
 		enum pmo_offload_trigger trigger)
 {
 	return pmo_core_disable_arp_offload_in_fwr(vdev, trigger);
+}
+
+QDF_STATUS pmo_ucfg_enable_non_arp_bcast_filter_in_fwr(
+		struct wlan_objmgr_vdev *vdev)
+{
+	return pmo_core_enable_non_arp_bcast_filter_in_fwr(vdev);
+}
+
+QDF_STATUS pmo_ucfg_disable_non_arp_bcast_filter_in_fwr(
+		struct wlan_objmgr_vdev *vdev)
+{
+	return pmo_core_disable_non_arp_bcast_filter_in_fwr(vdev);
 }
 
 QDF_STATUS pmo_ucfg_cache_ns_offload_req(struct pmo_ns_req *ns_req)
@@ -173,18 +186,6 @@ QDF_STATUS pmo_ucfg_get_gtk_rsp(struct wlan_objmgr_vdev *vdev,
 		struct pmo_gtk_rsp_req *gtk_rsp_req)
 {
 	return pmo_core_get_gtk_rsp(vdev, gtk_rsp_req);
-}
-
-void pmo_ucfg_update_nlo_scan_in_progress(struct wlan_objmgr_vdev *vdev,
-	bool value)
-{
-	pmo_core_update_nlo_scan_in_progress(vdev, value);
-}
-
-void pmo_ucfg_update_nlo_match_found(struct wlan_objmgr_vdev *vdev,
-	bool value)
-{
-	pmo_core_update_nlo_match_found(vdev, value);
 }
 
 void pmo_ucfg_update_extscan_in_progress(struct wlan_objmgr_vdev *vdev,

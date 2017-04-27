@@ -418,7 +418,6 @@ static struct service_to_pipe target_service_to_ce_map_qca6290[] = {
 	{ HTC_CTRL_RSVD_SVC, PIPEDIR_IN , 2, },
 	{ HTT_DATA_MSG_SVC, PIPEDIR_OUT, 4, },
 	{ HTT_DATA_MSG_SVC, PIPEDIR_IN , 1, },
-	{ PACKET_LOG_SVC, PIPEDIR_IN , 5, },
 	/* (Additions here) */
 	{ 0, 0, 0, },
 };
@@ -523,10 +522,6 @@ static struct service_to_pipe target_service_to_ce_map_ar900b[] = {
 };
 
 
-static struct service_to_pipe *target_service_to_ce_map =
-	target_service_to_ce_map_wlan;
-static int target_service_to_ce_map_sz = sizeof(target_service_to_ce_map_wlan);
-
 static struct shadow_reg_cfg *target_shadow_reg_cfg = target_shadow_reg_cfg_map;
 static int shadow_cfg_sz = sizeof(target_shadow_reg_cfg_map);
 
@@ -550,6 +545,43 @@ static struct service_to_pipe target_service_to_ce_map_wlan_epping[] = {
 	{0, 0, 0,},             /* Must be last */
 };
 
+static void hif_select_service_to_pipe_map(struct hif_softc *scn,
+				    struct service_to_pipe **tgt_svc_map_to_use,
+				    uint32_t *sz_tgt_svc_map_to_use)
+{
+	uint32_t mode = hif_get_conparam(scn);
+	struct hif_target_info *tgt_info = &scn->target_info;
+
+	if (QDF_IS_EPPING_ENABLED(mode)) {
+		*tgt_svc_map_to_use = target_service_to_ce_map_wlan_epping;
+		*sz_tgt_svc_map_to_use =
+			sizeof(target_service_to_ce_map_wlan_epping);
+	} else {
+		switch (tgt_info->target_type) {
+		default:
+			*tgt_svc_map_to_use = target_service_to_ce_map_wlan;
+			*sz_tgt_svc_map_to_use =
+				sizeof(target_service_to_ce_map_wlan);
+			break;
+		case TARGET_TYPE_AR900B:
+		case TARGET_TYPE_QCA9984:
+		case TARGET_TYPE_IPQ4019:
+		case TARGET_TYPE_QCA9888:
+		case TARGET_TYPE_AR9888:
+		case TARGET_TYPE_AR9888V2:
+			*tgt_svc_map_to_use = target_service_to_ce_map_ar900b;
+			*sz_tgt_svc_map_to_use =
+				sizeof(target_service_to_ce_map_ar900b);
+			break;
+		case TARGET_TYPE_QCA6290:
+			*tgt_svc_map_to_use = target_service_to_ce_map_qca6290;
+			*sz_tgt_svc_map_to_use =
+				sizeof(target_service_to_ce_map_qca6290);
+			break;
+		}
+	}
+}
+
 /**
  * ce_mark_datapath() - marks the ce_state->htt_rx_data accordingly
  * @ce_state : pointer to the state context of the CE
@@ -565,40 +597,16 @@ static struct service_to_pipe target_service_to_ce_map_wlan_epping[] = {
 static bool ce_mark_datapath(struct CE_state *ce_state)
 {
 	struct service_to_pipe *svc_map;
-	size_t map_sz;
+	uint32_t map_sz, map_len;
 	int    i;
 	bool   rc = false;
-	struct hif_target_info *tgt_info;
 
 	if (ce_state != NULL) {
-		tgt_info = &ce_state->scn->target_info;
+		hif_select_service_to_pipe_map(ce_state->scn, &svc_map,
+					       &map_sz);
 
-		if (QDF_IS_EPPING_ENABLED(hif_get_conparam(ce_state->scn))) {
-			svc_map = target_service_to_ce_map_wlan_epping;
-			map_sz = sizeof(target_service_to_ce_map_wlan_epping) /
-				sizeof(struct service_to_pipe);
-		} else {
-			switch (tgt_info->target_type) {
-			default:
-				svc_map = target_service_to_ce_map_wlan;
-				map_sz =
-					sizeof(target_service_to_ce_map_wlan) /
-					sizeof(struct service_to_pipe);
-				break;
-			case TARGET_TYPE_AR900B:
-			case TARGET_TYPE_QCA9984:
-			case TARGET_TYPE_IPQ4019:
-			case TARGET_TYPE_QCA9888:
-			case TARGET_TYPE_AR9888:
-			case TARGET_TYPE_AR9888V2:
-				svc_map = target_service_to_ce_map_ar900b;
-				map_sz =
-					sizeof(target_service_to_ce_map_ar900b)
-					/ sizeof(struct service_to_pipe);
-				break;
-			}
-		}
-		for (i = 0; i < map_sz; i++) {
+		map_len = map_sz / sizeof(struct service_to_pipe);
+		for (i = 0; i < map_len; i++) {
 			if ((svc_map[i].pipenum == ce_state->id) &&
 			    ((svc_map[i].service_id == HTT_DATA_MSG_SVC)  ||
 			     (svc_map[i].service_id == HTT_DATA2_MSG_SVC) ||
@@ -890,7 +898,6 @@ struct CE_handle *ce_init(struct hif_softc *scn,
 			return NULL;
 		}
 		malloc_CE_state = true;
-		scn->ce_id_to_state[CE_id] = CE_state;
 		qdf_spinlock_create(&CE_state->ce_index_lock);
 
 		CE_state->id = CE_id;
@@ -935,7 +942,6 @@ struct CE_handle *ce_init(struct hif_softc *scn,
 				HIF_ERROR("%s: src ring has no mem", __func__);
 				if (malloc_CE_state) {
 					/* allocated CE_state locally */
-					scn->ce_id_to_state[CE_id] = NULL;
 					qdf_mem_free(CE_state);
 					malloc_CE_state = false;
 				}
@@ -997,18 +1003,7 @@ struct CE_handle *ce_init(struct hif_softc *scn,
 				 */
 				HIF_ERROR("%s: dest ring has no mem",
 					  __func__);
-				if (malloc_src_ring) {
-					qdf_mem_free(CE_state->src_ring);
-					CE_state->src_ring = NULL;
-					malloc_src_ring = false;
-				}
-				if (malloc_CE_state) {
-					/* allocated CE_state locally */
-					scn->ce_id_to_state[CE_id] = NULL;
-					qdf_mem_free(CE_state);
-					malloc_CE_state = false;
-				}
-				return NULL;
+				goto error_no_dma_mem;
 			}
 
 			if (Q_TARGET_ACCESS_BEGIN(scn) < 0)
@@ -1087,6 +1082,7 @@ struct CE_handle *ce_init(struct hif_softc *scn,
 
 	/* update the htt_data attribute */
 	ce_mark_datapath(CE_state);
+	scn->ce_id_to_state[CE_id] = CE_state;
 
 	return (struct CE_handle *)CE_state;
 
@@ -1228,8 +1224,11 @@ void ce_t2h_msg_ce_cleanup(struct CE_handle *ce_hdl)
 		 *    covered that case. This is not in performance path,
 		 *    so OK to do this.
 		 */
-		if (nbuf)
+		if (nbuf) {
+			qdf_nbuf_unmap_single(ce_state->scn->qdf_dev, nbuf,
+					      QDF_DMA_FROM_DEVICE);
 			qdf_nbuf_free(nbuf);
+		}
 	}
 }
 
@@ -1514,9 +1513,13 @@ hif_pci_ce_send_done(struct CE_handle *copyeng, void *ce_context,
 		 * when last fragment is complteted.
 		 */
 		if (transfer_context != CE_SENDLIST_ITEM_CTXT) {
-			if (scn->target_status == TARGET_STATUS_RESET)
+			if (scn->target_status == TARGET_STATUS_RESET) {
+
+				qdf_nbuf_unmap_single(scn->qdf_dev,
+						      transfer_context,
+						      QDF_DMA_TO_DEVICE);
 				qdf_nbuf_free(transfer_context);
-			else
+			} else
 				msg_callbacks->txCompletionHandler(
 					msg_callbacks->Context,
 					transfer_context, transfer_id,
@@ -1556,6 +1559,7 @@ static inline void hif_ce_do_recv(struct hif_msg_callbacks *msg_callbacks,
 	} else {
 		HIF_ERROR("%s: Invalid Rx msg buf:%p nbytes:%d",
 				__func__, netbuf, nbytes);
+
 		qdf_nbuf_free(netbuf);
 	}
 }
@@ -1758,7 +1762,7 @@ static void hif_post_recv_buffers_failure(struct HIF_CE_pipe_info *pipe_info,
 	qdf_spin_lock_bh(&pipe_info->recv_bufs_needed_lock);
 	error_cnt_tmp = ++(*error_cnt);
 	qdf_spin_unlock_bh(&pipe_info->recv_bufs_needed_lock);
-	HIF_ERROR("%s: pipe_num %d, needed %d, err_cnt = %u, fail_type = %s",
+	HIF_DBG("%s: pipe_num %d, needed %d, err_cnt = %u, fail_type = %s",
 		  __func__, pipe_info->pipe_num, bufs_needed_tmp, error_cnt_tmp,
 		  failure_type_string);
 	hif_record_ce_desc_event(scn, ce_id, failure_type,
@@ -2111,6 +2115,7 @@ void hif_ce_stop(struct hif_softc *scn)
 	hif_state->started = false;
 }
 
+
 /**
  * hif_get_target_ce_config() - get copy engine configuration
  * @target_ce_config_ret: basic copy engine configuration
@@ -2129,18 +2134,19 @@ void hif_ce_stop(struct hif_softc *scn)
  */
 void hif_get_target_ce_config(struct hif_softc *scn,
 		struct CE_pipe_config **target_ce_config_ret,
-		int *target_ce_config_sz_ret,
+		uint32_t *target_ce_config_sz_ret,
 		struct service_to_pipe **target_service_to_ce_map_ret,
-		int *target_service_to_ce_map_sz_ret,
+		uint32_t *target_service_to_ce_map_sz_ret,
 		struct shadow_reg_cfg **target_shadow_reg_cfg_ret,
-		int *shadow_cfg_sz_ret)
+		uint32_t *shadow_cfg_sz_ret)
 {
 	struct HIF_CE_state *hif_state = HIF_GET_CE_STATE(scn);
 
 	*target_ce_config_ret = hif_state->target_ce_config;
 	*target_ce_config_sz_ret = hif_state->target_ce_config_sz;
-	*target_service_to_ce_map_ret = target_service_to_ce_map;
-	*target_service_to_ce_map_sz_ret = target_service_to_ce_map_sz;
+
+	hif_select_service_to_pipe_map(scn, target_service_to_ce_map_ret,
+				       target_service_to_ce_map_sz_ret);
 
 	if (target_shadow_reg_cfg_ret)
 		*target_shadow_reg_cfg_ret = target_shadow_reg_cfg;
@@ -2244,10 +2250,6 @@ void hif_ce_prepare_config(struct hif_softc *scn)
 			hif_state->host_ce_config = host_ce_config_wlan_epping_poll;
 		hif_state->target_ce_config = target_ce_config_wlan_epping;
 		hif_state->target_ce_config_sz = sizeof(target_ce_config_wlan_epping);
-		target_service_to_ce_map =
-		    target_service_to_ce_map_wlan_epping;
-		target_service_to_ce_map_sz =
-			sizeof(target_service_to_ce_map_wlan_epping);
 		target_shadow_reg_cfg = target_shadow_reg_cfg_epping;
 		shadow_cfg_sz = sizeof(target_shadow_reg_cfg_epping);
 	}
@@ -2276,9 +2278,6 @@ void hif_ce_prepare_config(struct hif_softc *scn)
 		hif_state->target_ce_config_sz =
 				sizeof(target_ce_config_wlan_ar900b);
 
-		target_service_to_ce_map = target_service_to_ce_map_ar900b;
-		target_service_to_ce_map_sz =
-			sizeof(target_service_to_ce_map_ar900b);
 		break;
 
 	case TARGET_TYPE_AR9888:
@@ -2293,9 +2292,6 @@ void hif_ce_prepare_config(struct hif_softc *scn)
 		hif_state->target_ce_config_sz =
 					sizeof(target_ce_config_wlan_ar9888);
 
-		target_service_to_ce_map = target_service_to_ce_map_ar900b;
-		target_service_to_ce_map_sz =
-			sizeof(target_service_to_ce_map_ar900b);
 		break;
 
 	case TARGET_TYPE_QCA8074:
@@ -2319,6 +2315,7 @@ void hif_ce_prepare_config(struct hif_softc *scn)
 		hif_state->target_ce_config = target_ce_config_wlan_qca6290;
 		hif_state->target_ce_config_sz =
 					sizeof(target_ce_config_wlan_qca6290);
+
 		scn->ce_count = QCA_6290_CE_COUNT;
 		break;
 	}
@@ -2856,42 +2853,14 @@ int hif_map_service_to_pipe(struct hif_opaque_softc *hif_hdl, uint16_t svc_id,
 	unsigned int i;
 	struct service_to_pipe element;
 	struct service_to_pipe *tgt_svc_map_to_use;
-	size_t sz_tgt_svc_map_to_use;
+	uint32_t sz_tgt_svc_map_to_use;
 	struct hif_softc *scn = HIF_GET_SOFTC(hif_hdl);
-	uint32_t mode = hif_get_conparam(scn);
-	struct hif_target_info *tgt_info = hif_get_target_info_handle(hif_hdl);
+	struct HIF_CE_state *hif_state = HIF_GET_CE_STATE(scn);
 	bool dl_updated = false;
 	bool ul_updated = false;
-	struct HIF_CE_state *hif_state = HIF_GET_CE_STATE(scn);
 
-	if (QDF_IS_EPPING_ENABLED(mode)) {
-		tgt_svc_map_to_use = target_service_to_ce_map_wlan_epping;
-		sz_tgt_svc_map_to_use =
-			sizeof(target_service_to_ce_map_wlan_epping);
-	} else {
-		switch (tgt_info->target_type) {
-		default:
-			tgt_svc_map_to_use = target_service_to_ce_map_wlan;
-			sz_tgt_svc_map_to_use =
-				sizeof(target_service_to_ce_map_wlan);
-			break;
-		case TARGET_TYPE_AR900B:
-		case TARGET_TYPE_QCA9984:
-		case TARGET_TYPE_IPQ4019:
-		case TARGET_TYPE_QCA9888:
-		case TARGET_TYPE_AR9888:
-		case TARGET_TYPE_AR9888V2:
-			tgt_svc_map_to_use = target_service_to_ce_map_ar900b;
-			sz_tgt_svc_map_to_use =
-				sizeof(target_service_to_ce_map_ar900b);
-			break;
-		case TARGET_TYPE_QCA6290:
-			tgt_svc_map_to_use = target_service_to_ce_map_qca6290;
-			sz_tgt_svc_map_to_use =
-				sizeof(target_service_to_ce_map_qca6290);
-			break;
-		}
-	}
+	hif_select_service_to_pipe_map(scn, &tgt_svc_map_to_use,
+				       &sz_tgt_svc_map_to_use);
 
 	*dl_is_polled = 0;  /* polling for received messages not supported */
 
