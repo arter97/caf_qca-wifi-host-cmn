@@ -40,7 +40,7 @@
 #include <qdf_status.h>
 #include <qdf_lock.h>
 #include <qdf_trace.h>
-#include <qdf_timer.h>
+#include <qdf_mc_timer.h>
 #include <qdf_atomic.h>
 #include <net/ieee80211_radiotap.h>
 
@@ -52,25 +52,8 @@
 #include <linux/ip.h>
 #endif /* FEATURE_TSO */
 
-
-/*
-* state:
-* @1 - Initialized
-* @2 - Running
-* @3 - stopped
-* @4 - Expired
-*/
-enum {
-	QDF_TIMER_INITIALIZED,
-	QDF_TIMER_RUNNING,
-	QDF_TIMER_STOPPED,
-	QDF_TIMER_EXPIRED
-};
-
-
 struct qdf_track_timer {
-	qdf_timer_t track_timer;
-	qdf_atomic_t state;
+	qdf_mc_timer_t track_timer;
 	qdf_atomic_t alloc_fail_cnt;
 };
 
@@ -201,13 +184,10 @@ EXPORT_SYMBOL(qdf_nbuf_set_state);
  */
 static void __qdf_nbuf_start_replenish_timer(void)
 {
-	if (qdf_atomic_read(&alloc_track_timer.state) !=
-	    QDF_TIMER_RUNNING) {
-		qdf_timer_start(&alloc_track_timer.track_timer,
-				QDF_NBUF_ALLOC_EXPIRE_TIMER_MS);
-		qdf_atomic_set(&alloc_track_timer.state,
-			       QDF_TIMER_RUNNING);
-	}
+	if (qdf_mc_timer_get_current_state(&alloc_track_timer.track_timer) !=
+	    QDF_TIMER_STATE_RUNNING)
+		qdf_mc_timer_start(&alloc_track_timer.track_timer,
+				   QDF_NBUF_ALLOC_EXPIRE_TIMER_MS);
 }
 
 /**
@@ -219,12 +199,9 @@ static void __qdf_nbuf_start_replenish_timer(void)
  */
 static void __qdf_nbuf_stop_replenish_timer(void)
 {
-	if (qdf_atomic_read(&alloc_track_timer.state) ==
-	    QDF_TIMER_RUNNING) {
-		qdf_timer_stop(&alloc_track_timer.track_timer);
-		qdf_atomic_set(&alloc_track_timer.state,
-			       QDF_TIMER_STOPPED);
-	}
+	if (qdf_mc_timer_get_current_state(&alloc_track_timer.track_timer) ==
+	    QDF_TIMER_STATE_RUNNING)
+		qdf_mc_timer_stop(&alloc_track_timer.track_timer);
 }
 
 /* globals do not need to be initialized to NULL/0 */
@@ -2743,8 +2720,6 @@ void __qdf_nbuf_reg_free_cb(qdf_nbuf_free_t cb_func_ptr)
  */
 static void qdf_replenish_expire_handler(void *arg)
 {
-	qdf_atomic_set(&alloc_track_timer.state,
-		       QDF_TIMER_EXPIRED);
 /*
  * This is where shrink logic shall apply
  *      shrink_all_memory(1000);
@@ -2760,12 +2735,8 @@ static void qdf_replenish_expire_handler(void *arg)
  */
 void __qdf_nbuf_init_replenish_timer(void)
 {
-	qdf_timer_init(NULL, &alloc_track_timer.track_timer,
-			qdf_replenish_expire_handler,
-			NULL, QDF_TIMER_TYPE_SW);
-
-	qdf_atomic_set(&alloc_track_timer.state,
-		       QDF_TIMER_INITIALIZED);
+	qdf_mc_timer_init(&alloc_track_timer.track_timer, QDF_TIMER_TYPE_SW,
+			  qdf_replenish_expire_handler, NULL);
 }
 
 /**
@@ -2777,5 +2748,6 @@ void __qdf_nbuf_init_replenish_timer(void)
  */
 void __qdf_nbuf_deinit_replenish_timer(void)
 {
-	qdf_timer_free(&alloc_track_timer.track_timer);
+	__qdf_nbuf_stop_replenish_timer();
+	qdf_mc_timer_destroy(&alloc_track_timer.track_timer);
 }
