@@ -342,6 +342,21 @@ util_scan_is_hidden_ssid(struct ie_ssid *ssid)
 }
 
 static void
+util_scan_parse_extn_ie(struct scan_cache_entry *scan_params,
+	struct ie_header *ie)
+{
+	struct extn_ie_header *extn_ie = (struct extn_ie_header *) ie;
+
+	switch (extn_ie->ie_extn_id) {
+	case WLAN_EXTN_ELEMID_SRP:
+		scan_params->ie_list.srp = (uint8_t *)ie;
+		break;
+	default:
+		break;
+	}
+}
+
+static void
 util_scan_parse_vendor_ie(struct scan_cache_entry *scan_params,
 	struct ie_header *ie)
 {
@@ -368,8 +383,8 @@ util_scan_parse_vendor_ie(struct scan_cache_entry *scan_params,
 		scan_params->ie_list.sfa = (uint8_t *)ie;
 	} else if (is_p2p_oui((uint8_t *)ie)) {
 		scan_params->ie_list.p2p = (uint8_t *)ie;
-	} else if (is_qca_whc_oui((uint8_t *)ie,
-	   QCA_OUI_WHC_AP_INFO_SUBTYPE)) {
+	} else if (is_qca_son_oui((uint8_t *)ie,
+				  QCA_OUI_WHC_AP_INFO_SUBTYPE)) {
 		scan_params->ie_list.sonadv = (uint8_t *)ie;
 	} else if (is_ht_cap((uint8_t *)ie)) {
 		/* we only care if there isn't already an HT IE (ANA) */
@@ -520,6 +535,9 @@ util_scan_populate_bcn_ie_list(struct scan_cache_entry *scan_params)
 				scm_err("failed to parse chan_switch_wrapper_ie");
 				return status;
 			}
+			break;
+		case WLAN_ELEMID_EXTN_ELEM:
+			util_scan_parse_extn_ie(scan_params, ie);
 			break;
 		default:
 			break;

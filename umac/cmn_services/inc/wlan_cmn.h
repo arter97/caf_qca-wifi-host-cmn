@@ -48,6 +48,9 @@
 /* Max vdev_id */
 #define WLAN_UMAC_VDEV_ID_MAX 0xFF
 
+/* Invalid pdev_id */
+#define WLAN_INVALID_PDEV_ID 0xFFFFFFFF
+
 /* 802.11 cap info */
 #define WLAN_CAPINFO_ESS               0x0001
 #define WLAN_CAPINFO_IBSS              0x0002
@@ -106,10 +109,12 @@
  * @WLAN_UMAC_COMP_WIFI_POS:      WIFI Positioning
  * @WLAN_UMAC_COMP_TDLS:          TDLS
  * @WLAN_UMAC_COMP_ATF:           Airtime Fairness
+ * @WLAN_UMAC_COMP_SA_API:        Smart Antenna API
  * @WLAN_UMAC_COMP_REGULATORY:    REGULATORY
  * @WLAN_UMAC_COMP_CRYPTO:        CRYPTO
  * @WLAN_UMAC_COMP_NAN:           Neighbor Aware Networking
  * @WLAN_UMAC_COMP_DFS:           DFS
+ * @WLAN_UMAC_COMP_SPECTRAL:      Spectral
  * @WLAN_UMAC_COMP_ID_MAX:        Maximum components in UMAC
  * @WLAN_UMAC_COMP_OFFCHAN_TXRX:  Offchan TxRx
  *
@@ -128,11 +133,14 @@ enum wlan_umac_comp_id {
 	WLAN_UMAC_COMP_WIFI_POS,
 	WLAN_UMAC_COMP_TDLS,
 	WLAN_UMAC_COMP_ATF,
+	WLAN_UMAC_COMP_SA_API,
 	WLAN_UMAC_COMP_REGULATORY,
 	WLAN_UMAC_COMP_CRYPTO,
 	WLAN_UMAC_COMP_NAN,
 	WLAN_UMAC_COMP_DFS,
 	WLAN_UMAC_COMP_OFFCHAN_TXRX,
+	WLAN_UMAC_COMP_SON,
+	WLAN_UMAC_COMP_SPECTRAL,
 	WLAN_UMAC_COMP_ID_MAX,
 };
 
@@ -198,7 +206,9 @@ enum wlan_phymode {
  * enum wlan_peer_type  - peer type
  * @WLAN_PEER_SELF:     for AP mode, SELF PEER or AP PEER are same
  * @WLAN_PEER_AP:       BSS peer for STA mode, Self peer for AP mode
+ * @WLAN_PEER_P2P_GO:   BSS peer for P2P CLI mode, Self peer for P2P GO mode
  * @WLAN_PEER_STA:      Self Peer for STA mode, STA peer for AP mode
+ * @WLAN_PEER_P2P_CLI:  Self peer for P2P CLI mode, P2P CLI peer for P2P GO mode
  * @WLAN_PEER_TDLS:     TDLS Peer
  * @WLAN_PEER_NAWDS:    NAWDS Peer
  * @WLAN_PEER_STA_TEMP: STA Peer Temp (its host only node)
@@ -207,11 +217,13 @@ enum wlan_phymode {
 enum wlan_peer_type {
 	WLAN_PEER_SELF     = 1,
 	WLAN_PEER_AP       = 2,
-	WLAN_PEER_STA      = 3,
-	WLAN_PEER_TDLS     = 4,
-	WLAN_PEER_NAWDS    = 5,
-	WLAN_PEER_STA_TEMP = 6,
-	WLAN_PEER_IBSS     = 7,
+	WLAN_PEER_P2P_GO   = 3,
+	WLAN_PEER_STA      = 4,
+	WLAN_PEER_P2P_CLI  = 5,
+	WLAN_PEER_TDLS     = 6,
+	WLAN_PEER_NAWDS    = 7,
+	WLAN_PEER_STA_TEMP = 8,
+	WLAN_PEER_IBSS     = 9,
 };
 
 /**

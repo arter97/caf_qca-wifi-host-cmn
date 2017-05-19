@@ -1652,7 +1652,48 @@ static QDF_STATUS send_beacon_send_cmd_tlv(wmi_unified_t wmi_handle,
 static QDF_STATUS send_beacon_send_cmd_tlv(wmi_unified_t wmi_handle,
 				struct beacon_params *param)
 {
-	return 0;
+	QDF_STATUS ret;
+	wmi_bcn_send_from_host_cmd_fixed_param *cmd;
+	wmi_buf_t wmi_buf;
+	qdf_dma_addr_t dma_addr;
+	uint32_t dtim_flag = 0;
+
+	wmi_buf = wmi_buf_alloc(wmi_handle, sizeof(*cmd));
+	if (!wmi_buf) {
+		WMI_LOGE("%s : wmi_buf_alloc failed", __func__);
+		return QDF_STATUS_E_NOMEM;
+	}
+	if (param->is_dtim_count_zero) {
+		dtim_flag |= WMI_BCN_SEND_DTIM_ZERO;
+		if (param->is_bitctl_reqd) {
+			/* deliver CAB traffic in next DTIM beacon */
+			dtim_flag |= WMI_BCN_SEND_DTIM_BITCTL_SET;
+		}
+	}
+	cmd = (wmi_bcn_send_from_host_cmd_fixed_param *) wmi_buf_data(wmi_buf);
+	WMITLV_SET_HDR(&cmd->tlv_header,
+		WMITLV_TAG_STRUC_wmi_bcn_send_from_host_cmd_fixed_param,
+		WMITLV_GET_STRUCT_TLVLEN
+				(wmi_bcn_send_from_host_cmd_fixed_param));
+	cmd->vdev_id = param->vdev_id;
+	cmd->data_len = qdf_nbuf_len(param->wbuf);
+	cmd->frame_ctrl = param->frame_ctrl;
+	cmd->dtim_flag = dtim_flag;
+	dma_addr = qdf_nbuf_get_frag_paddr(param->wbuf, 0);
+	cmd->frag_ptr_lo = qdf_get_lower_32_bits(dma_addr);
+#if defined(HTT_PADDR64)
+	cmd->frag_ptr_hi = qdf_get_upper_32_bits(dma_addr) & 0x1F;
+#endif
+	cmd->bcn_antenna = param->bcn_txant;
+
+	ret = wmi_unified_cmd_send(wmi_handle,
+			wmi_buf, sizeof(*cmd), WMI_PDEV_SEND_BCN_CMDID);
+	if (ret != QDF_STATUS_SUCCESS) {
+		WMI_LOGE("%s: Failed to send bcn: %d", __func__, ret);
+		wmi_buf_free(wmi_buf);
+	}
+
+	return ret;
 }
 
 /**
@@ -11197,6 +11238,73 @@ static QDF_STATUS send_vdev_spectral_enable_cmd_tlv(wmi_unified_t wmi_handle,
 }
 
 /**
+ * send_thermal_mitigation_param_cmd_tlv() - configure thermal mitigation params
+ * @param wmi_handle : handle to WMI.
+ * @param param : pointer to hold thermal mitigation param
+ *
+ * @return QDF_STATUS_SUCCESS  on success and -ve on failure.
+ */
+static QDF_STATUS send_thermal_mitigation_param_cmd_tlv(
+		wmi_unified_t wmi_handle,
+		struct thermal_mitigation_params *param)
+{
+	wmi_therm_throt_config_request_fixed_param *tt_conf = NULL;
+	wmi_therm_throt_level_config_info *lvl_conf = NULL;
+	wmi_buf_t buf = NULL;
+	uint8_t *buf_ptr = NULL;
+	int error;
+	int32_t len;
+	int i;
+
+	len = sizeof(*tt_conf) + WMI_TLV_HDR_SIZE +
+			THERMAL_LEVELS * sizeof(wmi_therm_throt_level_config_info);
+
+	buf = wmi_buf_alloc(wmi_handle, len);
+	if (!buf) {
+		WMI_LOGE("%s:wmi_buf_alloc failed", __func__);
+		return QDF_STATUS_E_NOMEM;
+	}
+	tt_conf = (wmi_therm_throt_config_request_fixed_param *) wmi_buf_data(buf);
+
+	/* init fixed params */
+	WMITLV_SET_HDR(tt_conf,
+		WMITLV_TAG_STRUC_wmi_therm_throt_config_request_fixed_param,
+		(WMITLV_GET_STRUCT_TLVLEN(wmi_therm_throt_config_request_fixed_param)));
+
+	tt_conf->pdev_id = param->pdev_id;
+	tt_conf->enable = param->enable;
+	tt_conf->dc = param->dc;
+	tt_conf->dc_per_event = param->dc_per_event;
+	tt_conf->therm_throt_levels = THERMAL_LEVELS;
+
+	buf_ptr = (uint8_t *) ++tt_conf;
+	/* init TLV params */
+	WMITLV_SET_HDR(buf_ptr, WMITLV_TAG_ARRAY_STRUC,
+			(THERMAL_LEVELS * sizeof(wmi_therm_throt_level_config_info)));
+
+	lvl_conf = (wmi_therm_throt_level_config_info *) (buf_ptr +  WMI_TLV_HDR_SIZE);
+	for (i = 0; i < THERMAL_LEVELS; i++) {
+		WMITLV_SET_HDR(&lvl_conf->tlv_header,
+			WMITLV_TAG_STRUC_wmi_therm_throt_level_config_info,
+			WMITLV_GET_STRUCT_TLVLEN(wmi_therm_throt_level_config_info));
+		lvl_conf->temp_lwm = param->levelconf[i].tmplwm;
+		lvl_conf->temp_hwm = param->levelconf[i].tmphwm;
+		lvl_conf->dc_off_percent = param->levelconf[i].dcoffpercent;
+		lvl_conf->prio = param->levelconf[i].priority;
+		lvl_conf++;
+	}
+
+	error = wmi_unified_cmd_send(wmi_handle, buf, len,
+			WMI_THERM_THROT_SET_CONF_CMDID);
+	if (QDF_IS_STATUS_ERROR(error)) {
+		wmi_buf_free(buf);
+		WMI_LOGE("Failed to send WMI_THERM_THROT_SET_CONF_CMDID command");
+	}
+
+	return error;
+}
+
+/**
  * send_pdev_qvit_cmd_tlv() - send qvit command to fw
  * @wmi_handle: wmi handle
  * @param: pointer to pdev_qvit_params
@@ -11330,6 +11438,55 @@ send_wmm_update_cmd_tlv(wmi_unified_t wmi_handle,
 
 	if (ret != 0) {
 		WMI_LOGE("Sending WMM update CMD failed\n");
+		wmi_buf_free(buf);
+	}
+
+	return ret;
+}
+
+/**
+ * send_coex_config_cmd_tlv() - send coex config command to fw
+ * @wmi_handle: wmi handle
+ * @param: pointer to coex config param
+ *
+ * Return: 0 for success or error code
+ */
+static QDF_STATUS
+send_coex_config_cmd_tlv(wmi_unified_t wmi_handle,
+			 struct coex_config_params *param)
+{
+	WMI_COEX_CONFIG_CMD_fixed_param *cmd;
+	wmi_buf_t buf;
+	QDF_STATUS ret;
+	int32_t len;
+
+	len = sizeof(*cmd);
+	buf = wmi_buf_alloc(wmi_handle, len);
+	if (!buf) {
+		WMI_LOGE("%s: wmi_buf_alloc failed\n", __func__);
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	cmd = (WMI_COEX_CONFIG_CMD_fixed_param *)wmi_buf_data(buf);
+	WMITLV_SET_HDR(&cmd->tlv_header,
+		       WMITLV_TAG_STRUC_WMI_COEX_CONFIG_CMD_fixed_param,
+		       WMITLV_GET_STRUCT_TLVLEN(
+		       WMI_COEX_CONFIG_CMD_fixed_param));
+
+	cmd->vdev_id = param->vdev_id;
+	cmd->config_type = param->config_type;
+	cmd->config_arg1 = param->config_arg1;
+	cmd->config_arg2 = param->config_arg2;
+	cmd->config_arg3 = param->config_arg3;
+	cmd->config_arg4 = param->config_arg4;
+	cmd->config_arg5 = param->config_arg5;
+	cmd->config_arg6 = param->config_arg6;
+
+	ret = wmi_unified_cmd_send(wmi_handle, buf, len,
+				   WMI_COEX_CONFIG_CMDID);
+
+	if (ret != 0) {
+		WMI_LOGE("Sending COEX CONFIG CMD failed\n");
 		wmi_buf_free(buf);
 	}
 
@@ -16146,6 +16303,9 @@ static QDF_STATUS extract_chan_info_event_tlv(wmi_unified_t wmi_handle,
 	chan_info->noise_floor = ev->noise_floor;
 	chan_info->rx_clear_count = ev->rx_clear_count;
 	chan_info->cycle_count = ev->cycle_count;
+	chan_info->pdev_id = wlan_get_pdev_id_from_vdev_id(
+			(struct wlan_objmgr_psoc *)wmi_handle->soc->wmi_psoc,
+			ev->vdev_id, WLAN_SCAN_ID);
 
 	return QDF_STATUS_SUCCESS;
 }
@@ -16605,6 +16765,70 @@ static QDF_STATUS extract_dcs_im_tgt_stats_tlv(wmi_unified_t wmi_handle,
 	return QDF_STATUS_SUCCESS;
 }
 
+/**
+ * extract_thermal_stats_tlv() - extract thermal stats from event
+ * @wmi_handle: wmi handle
+ * @param evt_buf: Pointer to event buffer
+ * @param temp: Pointer to hold extracted temperature
+ * @param level: Pointer to hold extracted level
+ *
+ * Return: 0 for success or error code
+ */
+static QDF_STATUS
+extract_thermal_stats_tlv(wmi_unified_t wmi_handle,
+		void *evt_buf, uint32_t *temp,
+		uint32_t *level, uint32_t *pdev_id)
+{
+	WMI_THERM_THROT_STATS_EVENTID_param_tlvs *param_buf;
+	wmi_therm_throt_stats_event_fixed_param *tt_stats_event;
+
+	param_buf =
+		(WMI_THERM_THROT_STATS_EVENTID_param_tlvs *) evt_buf;
+	if (!param_buf)
+		return QDF_STATUS_E_INVAL;
+
+	tt_stats_event = param_buf->fixed_param;
+
+	*pdev_id = tt_stats_event->pdev_id;
+	*temp = tt_stats_event->temp;
+	*level = tt_stats_event->level;
+
+	return QDF_STATUS_SUCCESS;
+}
+
+/**
+ * extract_thermal_level_stats_tlv() - extract thermal level stats from event
+ * @wmi_handle: wmi handle
+ * @param evt_buf: pointer to event buffer
+ * @param idx: Index to level stats
+ * @param levelcount: Pointer to hold levelcount
+ * @param dccount: Pointer to hold dccount
+ *
+ * Return: 0 for success or error code
+ */
+static QDF_STATUS
+extract_thermal_level_stats_tlv(wmi_unified_t wmi_handle,
+		void *evt_buf, uint8_t idx, uint32_t *levelcount,
+		uint32_t *dccount)
+{
+	WMI_THERM_THROT_STATS_EVENTID_param_tlvs *param_buf;
+	wmi_therm_throt_level_stats_info *tt_level_info;
+
+	param_buf =
+		(WMI_THERM_THROT_STATS_EVENTID_param_tlvs *) evt_buf;
+	if (!param_buf)
+		return QDF_STATUS_E_INVAL;
+
+	tt_level_info = param_buf->therm_throt_level_stats_info;
+
+	if (idx < THERMAL_LEVELS) {
+		*levelcount = tt_level_info[idx].level_count;
+		*dccount = tt_level_info[idx].dc_count;
+		return QDF_STATUS_SUCCESS;
+	}
+
+	return QDF_STATUS_E_FAILURE;
+}
 #ifdef BIG_ENDIAN_HOST
 /**
  * fips_conv_data_be() - LE to BE conversion of FIPS ev data
@@ -17048,6 +17272,9 @@ static struct cur_reg_rule
 		reg_rule_ptr[count].reg_power =
 			WMI_REG_RULE_REG_POWER_GET(
 					wmi_reg_rule[count].bw_pwr_info);
+		reg_rule_ptr[count].ant_gain =
+			WMI_REG_RULE_ANTENNA_GAIN_GET(
+					wmi_reg_rule[count].bw_pwr_info);
 		reg_rule_ptr[count].flags =
 			WMI_REG_RULE_FLAGS_GET(
 					wmi_reg_rule[count].flag_info);
@@ -17081,6 +17308,7 @@ static QDF_STATUS extract_reg_chan_list_update_event_tlv(
 			REG_ALPHA2_LEN);
 	reg_info->dfs_region = chan_list_event_hdr->dfs_region;
 	reg_info->phybitmap = chan_list_event_hdr->phybitmap;
+	reg_info->offload_enabled = true;
 	reg_info->min_bw_2g = chan_list_event_hdr->min_bw_2g;
 	reg_info->max_bw_2g = chan_list_event_hdr->max_bw_2g;
 	reg_info->min_bw_5g = chan_list_event_hdr->min_bw_5g;
@@ -17447,8 +17675,11 @@ struct wmi_ops tlv_ops =  {
 				send_vdev_spectral_configure_cmd_tlv,
 	.send_vdev_spectral_enable_cmd =
 				send_vdev_spectral_enable_cmd_tlv,
+	.send_thermal_mitigation_param_cmd =
+		send_thermal_mitigation_param_cmd_tlv,
 	.send_pdev_qvit_cmd = send_pdev_qvit_cmd_tlv,
 	.send_wmm_update_cmd = send_wmm_update_cmd_tlv,
+	.send_coex_config_cmd = send_coex_config_cmd_tlv,
 	.get_target_cap_from_service_ready = extract_service_ready_tlv,
 	.extract_hal_reg_cap = extract_hal_reg_cap_tlv,
 	.extract_host_mem_req = extract_host_mem_req_tlv,
@@ -17530,6 +17761,8 @@ struct wmi_ops tlv_ops =  {
 		extract_reg_chan_list_update_event_tlv,
 	.extract_chainmask_tables =
 		extract_chainmask_tables_tlv,
+	.extract_thermal_stats = extract_thermal_stats_tlv,
+	.extract_thermal_level_stats = extract_thermal_level_stats_tlv,
 #ifdef DFS_COMPONENT_ENABLE
 	.extract_dfs_cac_complete_event = extract_dfs_cac_complete_event_tlv,
 	.extract_dfs_radar_detection_event =
@@ -17756,12 +17989,12 @@ static void populate_tlv_events_id(uint32_t *event_ids)
 					WMI_PEER_STA_PS_STATECHG_EVENTID;
 	event_ids[wmi_pdev_channel_hopping_event_id] =
 					WMI_PDEV_CHANNEL_HOPPING_EVENTID;
-	event_ids[wmi_wds_peer_event_id] = WMI_WDS_PEER_EVENTID;
 	event_ids[wmi_offchan_data_tx_completion_event] =
 				WMI_OFFCHAN_DATA_TX_COMPLETION_EVENTID;
 	event_ids[wmi_dfs_cac_complete_id] = WMI_VDEV_DFS_CAC_COMPLETE_EVENTID;
 	event_ids[wmi_dfs_radar_detection_event_id] =
 		WMI_PDEV_DFS_RADAR_DETECTION_EVENTID;
+	event_ids[wmi_tt_stats_event_id] = WMI_THERM_THROT_STATS_EVENTID;
 }
 
 #ifndef CONFIG_MCL
@@ -17892,7 +18125,6 @@ static void populate_tlv_service(uint32_t *wmi_service)
 	wmi_service[wmi_service_ext_res_cfg_support] = WMI_SERVICE_UNAVAILABLE;
 	wmi_service[wmi_service_mesh] = WMI_SERVICE_UNAVAILABLE;
 	wmi_service[wmi_service_restrt_chnl_support] = WMI_SERVICE_UNAVAILABLE;
-
 	wmi_service[wmi_service_peer_stats] = WMI_SERVICE_UNAVAILABLE;
 	wmi_service[wmi_service_mesh_11s] = WMI_SERVICE_UNAVAILABLE;
 	wmi_service[wmi_service_periodic_chan_stat_support] =
@@ -17903,6 +18135,55 @@ static void populate_tlv_service(uint32_t *wmi_service)
 	wmi_service[wmi_service_btcoex_duty_cycle] = WMI_SERVICE_UNAVAILABLE;
 	wmi_service[wmi_service_4_wire_coex_support] = WMI_SERVICE_UNAVAILABLE;
 	wmi_service[wmi_service_mesh] = WMI_SERVICE_ENTERPRISE_MESH;
+	wmi_service[wmi_service_peer_assoc_conf] = WMI_SERVICE_PEER_ASSOC_CONF;
+	wmi_service[wmi_service_egap] = WMI_SERVICE_EGAP;
+	wmi_service[wmi_service_sta_pmf_offload] = WMI_SERVICE_STA_PMF_OFFLOAD;
+	wmi_service[wmi_service_unified_wow_capability] =
+				WMI_SERVICE_UNIFIED_WOW_CAPABILITY;
+	wmi_service[wmi_service_enterprise_mesh] = WMI_SERVICE_ENTERPRISE_MESH;
+	wmi_service[wmi_service_bpf_offload] = WMI_SERVICE_BPF_OFFLOAD;
+	wmi_service[wmi_service_sync_delete_cmds] =
+				WMI_SERVICE_SYNC_DELETE_CMDS;
+	wmi_service[wmi_service_ratectrl_limit_max_min_rates] =
+				WMI_SERVICE_RATECTRL_LIMIT_MAX_MIN_RATES;
+	wmi_service[wmi_service_nan_data] = WMI_SERVICE_NAN_DATA;
+	wmi_service[wmi_service_nan_rtt] = WMI_SERVICE_NAN_RTT;
+	wmi_service[wmi_service_11ax] = WMI_SERVICE_11AX;
+	wmi_service[wmi_service_deprecated_replace] =
+				WMI_SERVICE_DEPRECATED_REPLACE;
+	wmi_service[wmi_service_tdls_conn_tracker_in_host_mode] =
+				WMI_SERVICE_TDLS_CONN_TRACKER_IN_HOST_MODE;
+	wmi_service[wmi_service_enhanced_mcast_filter] =
+				WMI_SERVICE_ENHANCED_MCAST_FILTER;
+	wmi_service[wmi_service_half_rate_quarter_rate_support] =
+				WMI_SERVICE_HALF_RATE_QUARTER_RATE_SUPPORT;
+	wmi_service[wmi_service_vdev_rx_filter] = WMI_SERVICE_VDEV_RX_FILTER;
+	wmi_service[wmi_service_p2p_listen_offload_support] =
+				WMI_SERVICE_P2P_LISTEN_OFFLOAD_SUPPORT;
+	wmi_service[wmi_service_mark_first_wakeup_packet] =
+				WMI_SERVICE_MARK_FIRST_WAKEUP_PACKET;
+	wmi_service[wmi_service_multiple_mcast_filter_set] =
+				WMI_SERVICE_MULTIPLE_MCAST_FILTER_SET;
+	wmi_service[wmi_service_host_managed_rx_reorder] =
+				WMI_SERVICE_HOST_MANAGED_RX_REORDER;
+	wmi_service[wmi_service_flash_rdwr_support] =
+				WMI_SERVICE_FLASH_RDWR_SUPPORT;
+	wmi_service[wmi_service_wlan_stats_report] =
+				WMI_SERVICE_WLAN_STATS_REPORT;
+	wmi_service[wmi_service_tx_msdu_id_new_partition_support] =
+				WMI_SERVICE_TX_MSDU_ID_NEW_PARTITION_SUPPORT;
+	wmi_service[wmi_service_dfs_phyerr_offload] =
+				WMI_SERVICE_DFS_PHYERR_OFFLOAD;
+	wmi_service[wmi_service_rcpi_support] = WMI_SERVICE_RCPI_SUPPORT;
+	wmi_service[wmi_service_fw_mem_dump_support] =
+				WMI_SERVICE_FW_MEM_DUMP_SUPPORT;
+	wmi_service[wmi_service_peer_stats_info] = WMI_SERVICE_PEER_STATS_INFO;
+	wmi_service[wmi_service_regulatory_db] = WMI_SERVICE_REGULATORY_DB;
+	wmi_service[wmi_service_11d_offload] = WMI_SERVICE_11D_OFFLOAD;
+	wmi_service[wmi_service_hw_data_filtering] =
+				WMI_SERVICE_HW_DATA_FILTERING;
+	wmi_service[wmi_service_pkt_routing] = WMI_SERVICE_PKT_ROUTING;
+	wmi_service[wmi_service_offchan_tx_wmi] = WMI_SERVICE_OFFCHAN_TX_WMI;
 }
 
 /**

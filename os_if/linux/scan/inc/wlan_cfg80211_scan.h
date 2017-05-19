@@ -37,7 +37,6 @@
 /* Max number of scans allowed from userspace */
 #define WLAN_MAX_SCAN_COUNT 8
 
-#ifdef WLAN_ENABLE_AGEIE_ON_SCAN_RESULTS
 /* GPS application requirement */
 #define QCOM_VENDOR_IE_ID 221
 #define QCOM_OUI1         0x00
@@ -77,16 +76,17 @@ typedef struct {
 	u64 beacon_tsf;
 	u16 seq_ctrl;
 } __attribute__ ((packed)) qcom_ie_age;
-#endif
 
 /**
  * struct osif_scan_pdev - OS scan private strcutre
  * scan_req_q: Scan request queue
  * req_id: Scan request Id
-*/
+ * runtime_pm_lock: Runtime suspend lock
+ */
 struct osif_scan_pdev{
 	qdf_list_t scan_req_q;
 	wlan_scan_requester req_id;
+	qdf_runtime_lock_t runtime_pm_lock;
 };
 
 /*
@@ -218,6 +218,7 @@ int wlan_cfg80211_abort_scan(struct wlan_objmgr_pdev *pdev);
  * @pdev_id: pdev id
  * @vdev_id: vdev id
  * @scan_id: scan id
+ * @sync: if wait for scan complete is required
  *
  * Generic API to abort scans
  *
@@ -226,7 +227,8 @@ int wlan_cfg80211_abort_scan(struct wlan_objmgr_pdev *pdev);
 QDF_STATUS wlan_abort_scan(struct wlan_objmgr_pdev *pdev,
 				   uint32_t pdev_id,
 				   uint32_t vdev_id,
-				   wlan_scan_id scan_id);
+				   wlan_scan_id scan_id,
+				   bool sync);
 
 /**
  * wlan_cfg80211_cleanup_scan_queue() - remove entries in scan queue

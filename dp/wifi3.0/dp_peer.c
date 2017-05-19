@@ -13,7 +13,7 @@
  * DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR
  * PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER
  * TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
- * PERFORMANCE OF THIS SOFTWARE.
+ *  PERFORMANCE OF THIS SOFTWARE.
  */
 
 #include <qdf_types.h>
@@ -89,11 +89,6 @@ static int dp_peer_find_map_attach(struct dp_soc *soc)
 	 * that are not in use set to 0.
 	 */
 	qdf_mem_zero(soc->peer_id_to_obj_map, peer_map_size);
-#ifdef notyet /* ATH_BAND_STEERING */
-		OS_INIT_TIMER(soc->osdev, &(soc->bs_inact_timer),
-			dp_peer_find_inact_timeout_handler, (void *)soc,
-			QDF_TIMER_TYPE_WAKE_APPS);
-#endif
 	return 0; /* success */
 }
 
@@ -308,9 +303,6 @@ void dp_peer_find_hash_erase(struct dp_soc *soc)
 
 static void dp_peer_find_map_detach(struct dp_soc *soc)
 {
-#ifdef notyet /* ATH_BAND_STEERING */
-	OS_FREE_TIMER(&(soc->bs_inact_timer));
-#endif
 	qdf_mem_free(soc->peer_id_to_obj_map);
 }
 
@@ -449,12 +441,18 @@ dp_rx_peer_map_handler(void *soc_handle, uint16_t peer_id, uint16_t hw_peer_id,
 	 * in this case just add the ast entry to the existing
 	 * peer ast_list.
 	 */
-	if (!peer)
+	if (!peer) {
 		dp_peer_find_add_id(soc, peer_mac_addr, peer_id,
-					hw_peer_id, vdev_id);
-	else
+				hw_peer_id, vdev_id);
+		if (soc->cdp_soc.ol_ops->peer_map_event) {
+			soc->cdp_soc.ol_ops->peer_map_event(soc->osif_soc,
+					peer_id, hw_peer_id, vdev_id, peer_mac_addr);
+		}
+
+	} else {
 		dp_peer_add_ast(soc, peer, peer_mac_addr,
-					hw_peer_id, vdev_id);
+				hw_peer_id, vdev_id);
+	}
 }
 
 void
@@ -483,6 +481,11 @@ dp_rx_peer_unmap_handler(void *soc_handle, uint16_t peer_id)
 			peer->peer_ids[i] = HTT_INVALID_PEER;
 			break;
 		}
+	}
+
+	if (soc->cdp_soc.ol_ops->peer_unmap_event) {
+		soc->cdp_soc.ol_ops->peer_unmap_event(soc->osif_soc,
+				peer_id);
 	}
 
 	/*

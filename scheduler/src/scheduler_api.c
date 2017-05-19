@@ -77,8 +77,38 @@ static QDF_STATUS scheduler_close(struct scheduler_ctx *sched_ctx)
 	/* Deinit all the queues */
 	scheduler_queues_deinit(sched_ctx);
 
+	qdf_timer_free(&sched_ctx->watchdog_timer);
+
 	return QDF_STATUS_SUCCESS;
 }
+
+static inline void scheduler_watchdog_notify(struct scheduler_ctx *sched)
+{
+	char symbol[QDF_SYMBOL_LEN] = "<null>";
+
+	if (sched->watchdog_callback)
+		qdf_sprint_symbol(symbol, sched->watchdog_callback);
+
+	QDF_TRACE(QDF_MODULE_ID_SCHEDULER, QDF_TRACE_LEVEL_ERROR,
+		  "%s: Callback %s (type 0x%x) has exceeded its allotted time of %ds",
+		  __func__, symbol, sched->watchdog_msg_type,
+		  SCHEDULER_WATCHDOG_TIMEOUT / 1000);
+}
+
+#ifdef CONFIG_SLUB_DEBUG_ON
+static void scheduler_watchdog_bite(void *arg)
+{
+	scheduler_watchdog_notify((struct scheduler_ctx *)arg);
+	QDF_TRACE(QDF_MODULE_ID_SCHEDULER, QDF_TRACE_LEVEL_ERROR,
+		  "%s: Going down for Scheduler Watchdog Bite!", __func__);
+	QDF_BUG(0);
+}
+#else
+static void scheduler_watchdog_bite(void *arg)
+{
+	scheduler_watchdog_notify((struct scheduler_ctx *)arg);
+}
+#endif
 
 static QDF_STATUS scheduler_open(struct scheduler_ctx *sched_ctx)
 {
@@ -98,6 +128,12 @@ static QDF_STATUS scheduler_open(struct scheduler_ctx *sched_ctx)
 	qdf_spinlock_create(&sched_ctx->sch_thread_lock);
 	qdf_init_waitqueue_head(&sched_ctx->sch_wait_queue);
 	sched_ctx->sch_event_flag = 0;
+	qdf_timer_init(NULL,
+		       &sched_ctx->watchdog_timer,
+		       &scheduler_watchdog_bite,
+		       sched_ctx,
+		       QDF_TIMER_TYPE_SW);
+
 	/* Create the Scheduler Main Controller thread */
 	sched_ctx->sch_thread = qdf_create_thread(scheduler_thread,
 					sched_ctx, "scheduler_thread");
@@ -110,7 +146,7 @@ static QDF_STATUS scheduler_open(struct scheduler_ctx *sched_ctx)
 	}
 	/* start the thread here */
 	qdf_wake_up_process(sched_ctx->sch_thread);
-	QDF_TRACE(QDF_MODULE_ID_SCHEDULER, QDF_TRACE_LEVEL_ERROR,
+	QDF_TRACE(QDF_MODULE_ID_SCHEDULER, QDF_TRACE_LEVEL_INFO,
 		  "%s: QDF Main Controller thread Created", __func__);
 
 	/*
@@ -119,7 +155,7 @@ static QDF_STATUS scheduler_open(struct scheduler_ctx *sched_ctx)
 	 */
 	qdf_wait_single_event(&sched_ctx->sch_start_event, 0);
 	/* We're good now: Let's get the ball rolling!!! */
-	QDF_TRACE(QDF_MODULE_ID_SCHEDULER, QDF_TRACE_LEVEL_ERROR,
+	QDF_TRACE(QDF_MODULE_ID_SCHEDULER, QDF_TRACE_LEVEL_INFO,
 		  "%s: Scheduler thread has started", __func__);
 	return QDF_STATUS_SUCCESS;
 }
@@ -280,7 +316,7 @@ QDF_STATUS scheduler_register_module(QDF_MODULE_ID qid,
 	struct scheduler_mq_ctx *ctx;
 	struct scheduler_ctx *sched_ctx = scheduler_get_context();
 
-	QDF_TRACE(QDF_MODULE_ID_SCHEDULER, QDF_TRACE_LEVEL_INFO,
+	QDF_TRACE(QDF_MODULE_ID_SCHEDULER, QDF_TRACE_LEVEL_DEBUG,
 		FL("Enter"));
 	if (!sched_ctx) {
 		QDF_ASSERT(0);
@@ -302,7 +338,7 @@ QDF_STATUS scheduler_register_module(QDF_MODULE_ID qid,
 	ctx->sch_msg_q[sched_ctx->sch_last_qidx].qid = qid;
 	ctx->scheduler_msg_process_fn[sched_ctx->sch_last_qidx] = callback;
 	sched_ctx->sch_last_qidx++;
-	QDF_TRACE(QDF_MODULE_ID_SCHEDULER, QDF_TRACE_LEVEL_INFO,
+	QDF_TRACE(QDF_MODULE_ID_SCHEDULER, QDF_TRACE_LEVEL_DEBUG,
 		FL("Exit"));
 	return QDF_STATUS_SUCCESS;
 }

@@ -28,6 +28,12 @@
 #ifdef WLAN_ATF_ENABLE
 #include "target_if_atf.h"
 #endif
+#ifdef WLAN_SA_API_ENABLE
+#include "target_if_sa_api.h"
+#endif
+#ifdef WLAN_CONV_SPECTRAL_ENABLE
+#include "target_if_spectral.h"
+#endif
 #include <target_if_reg.h>
 #include <target_if_scan.h>
 #ifdef DFS_COMPONENT_ENABLE
@@ -45,9 +51,11 @@
 #ifdef WLAN_FEATURE_NAN_CONVERGENCE
 #include "target_if_nan.h"
 #endif /* WLAN_FEATURE_NAN_CONVERGENCE */
-
 #ifdef CONVERGED_TDLS_ENABLE
 #include "target_if_tdls.h"
+#endif
+#ifdef QCA_SUPPORT_SON
+#include <target_if_son.h>
 #endif
 
 static struct target_if_ctx *g_target_if_ctx;
@@ -117,6 +125,12 @@ static void target_if_atf_tx_ops_register(struct wlan_lmac_if_tx_ops *tx_ops)
 }
 #endif /* WLAN_ATF_ENABLE */
 
+#ifndef WLAN_SA_API_ENABLE
+static void target_if_sa_api_tx_ops_register(struct wlan_lmac_if_tx_ops *tx_ops)
+{
+}
+#endif /* WLAN_SA_API_ENABLE */
+
 #ifdef WIFI_POS_CONVERGED
 static void target_if_wifi_pos_tx_ops_register(
 			struct wlan_lmac_if_tx_ops *tx_ops)
@@ -127,6 +141,20 @@ static void target_if_wifi_pos_tx_ops_register(
 static void target_if_wifi_pos_tx_ops_register(
 			struct wlan_lmac_if_tx_ops *tx_ops)
 {
+}
+#endif
+#ifdef QCA_SUPPORT_SON
+static void target_if_son_tx_ops_register(
+			struct wlan_lmac_if_tx_ops *tx_ops)
+{
+	target_if_son_register_tx_ops(tx_ops);
+	return;
+}
+#else
+static void target_if_son_tx_ops_register(
+			struct wlan_lmac_if_tx_ops *tx_ops)
+{
+	return;
 }
 #endif
 
@@ -167,6 +195,19 @@ static void target_if_dfs_tx_ops_register(
 }
 #endif /* DFS_COMPONENT_ENABLE */
 
+#ifdef WLAN_CONV_SPECTRAL_ENABLE
+static void target_if_sptrl_tx_ops_register(
+				struct wlan_lmac_if_tx_ops *tx_ops)
+{
+	target_if_sptrl_register_tx_ops(tx_ops);
+}
+#else
+static void target_if_sptrl_tx_ops_register(
+				struct wlan_lmac_if_tx_ops *tx_ops)
+{
+}
+#endif /* WLAN_CONV_SPECTRAL_ENABLE */
+
 static
 QDF_STATUS target_if_register_umac_tx_ops(struct wlan_lmac_if_tx_ops *tx_ops)
 {
@@ -178,6 +219,8 @@ QDF_STATUS target_if_register_umac_tx_ops(struct wlan_lmac_if_tx_ops *tx_ops)
 
 	target_if_atf_tx_ops_register(tx_ops);
 
+	target_if_sa_api_tx_ops_register(tx_ops);
+
 	target_if_wifi_pos_tx_ops_register(tx_ops);
 
 	target_if_nan_tx_ops_register(tx_ops);
@@ -186,6 +229,8 @@ QDF_STATUS target_if_register_umac_tx_ops(struct wlan_lmac_if_tx_ops *tx_ops)
 
 	/* call regulatory callback to register tx ops */
 	target_if_register_regulatory_tx_ops(tx_ops);
+
+	target_if_son_tx_ops_register(tx_ops);
 
 	target_if_tdls_tx_ops_register(tx_ops);
 	/* Converged UMAC components to register their TX-ops here */
@@ -224,6 +269,7 @@ QDF_STATUS target_if_register_tx_ops(struct wlan_lmac_if_tx_ops *tx_ops)
 
 	/* Components parallel to UMAC to register their TX-ops here */
 	target_if_pmo_register_tx_ops_req(tx_ops);
+	target_if_sptrl_tx_ops_register(tx_ops);
 
 #ifdef CONVERGED_P2P_ENABLE
 	/* Converged UMAC components to register P2P TX-ops */

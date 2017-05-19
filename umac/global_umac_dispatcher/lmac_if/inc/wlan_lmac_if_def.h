@@ -20,6 +20,7 @@
 #ifndef _WLAN_LMAC_IF_DEF_H_
 #define _WLAN_LMAC_IF_DEF_H_
 
+#include <qdf_time.h>
 #include "qdf_status.h"
 #include "wlan_objmgr_cmn.h"
 #ifdef DFS_COMPONENT_ENABLE
@@ -30,12 +31,20 @@
 #ifdef WLAN_ATF_ENABLE
 #include "wlan_atf_utils_defs.h"
 #endif
+#ifdef QCA_SUPPORT_SON
+#include <wlan_son_tgt_api.h>
+#endif
+#ifdef WLAN_SA_API_ENABLE
+#include "wlan_sa_api_utils_defs.h"
+#endif
+#ifdef WLAN_CONV_SPECTRAL_ENABLE
+#include "wlan_spectral_public_structs.h"
+#endif
 #include <reg_services_public_struct.h>
 
 #ifdef WLAN_CONV_CRYPTO_SUPPORTED
 #include "wlan_crypto_global_def.h"
 #endif
-
 /* Number of dev type: Direct attach and Offload */
 #define MAX_DEV_TYPE 2
 
@@ -94,6 +103,13 @@ struct wlan_lmac_if_scan_tx_ops {
 	QDF_STATUS (*set_chan_list)(struct wlan_objmgr_pdev *pdev, void *arg);
 };
 
+
+struct wlan_lmac_if_mlme_tx_ops {
+	void (*scan_sta_power_events)(struct wlan_objmgr_pdev *pdev,
+			int event_type, int event_status);
+	void (*scan_connection_lost)(struct wlan_objmgr_pdev *pdev);
+	void (*scan_end)(struct wlan_objmgr_pdev *pdev);
+};
 
 /**
  * struct wlan_lmac_if_scan_rx_ops  - south bound rx function pointers for scan
@@ -253,6 +269,7 @@ struct p2p_lo_start;
  * @set_ps:      function pointer to set power save
  * @lo_start:    function pointer to start listen offload
  * @lo_stop:     function pointer to stop listen offload
+ * @set_noa:     function pointer to disable/enable NOA
  * @reg_lo_ev_handler:   function pointer to register lo event handler
  * @reg_noa_ev_handler:  function pointer to register noa event handler
  * @unreg_lo_ev_handler: function pointer to unregister lo event handler
@@ -265,6 +282,8 @@ struct wlan_lmac_if_p2p_tx_ops {
 		struct p2p_lo_start *lo_start);
 	QDF_STATUS (*lo_stop)(struct wlan_objmgr_psoc *psoc,
 		uint32_t vdev_id);
+	QDF_STATUS (*set_noa)(struct wlan_objmgr_psoc *psoc,
+		uint32_t vdev_id, bool disable_noa);
 	QDF_STATUS (*reg_lo_ev_handler)(struct wlan_objmgr_psoc *psoc,
 			void *arg);
 	QDF_STATUS (*reg_noa_ev_handler)(struct wlan_objmgr_psoc *psoc,
@@ -350,6 +369,89 @@ struct wlan_lmac_if_atf_tx_ops {
 	void (*atf_unregister_event_handler)(struct wlan_objmgr_psoc *psoc);
 };
 #endif
+
+#ifdef WLAN_SA_API_ENABLE
+
+/**
+ * struct wlan_lmac_if_sa_api_tx_ops - SA API specific tx function pointers
+ */
+
+struct wlan_lmac_if_sa_api_tx_ops {
+	void (*sa_api_register_event_handler)(struct wlan_objmgr_psoc *psoc);
+	void (*sa_api_unregister_event_handler)(struct wlan_objmgr_psoc *posc);
+	void (*sa_api_enable_sa) (struct wlan_objmgr_pdev *pdev,
+			uint32_t enable, uint32_t mode, uint32_t rx_antenna);
+	void (*sa_api_set_rx_antenna) (struct wlan_objmgr_pdev *pdev,
+			uint32_t antenna);
+	void (*sa_api_set_tx_antenna) (struct wlan_objmgr_peer *peer,
+			uint32_t *antenna_array);
+	void (*sa_api_set_tx_default_antenna) (struct wlan_objmgr_pdev *pdev,
+			u_int32_t antenna);
+	void (*sa_api_set_training_info) (struct wlan_objmgr_peer *peer,
+			uint32_t *rate_array,
+			uint32_t *antenna_array,
+			uint32_t numpkts);
+	void (*sa_api_prepare_rateset)(struct wlan_objmgr_pdev *pdev,
+			struct wlan_objmgr_peer *peer,
+			struct sa_rate_info *rate_info);
+	void (*sa_api_set_node_config_ops) (struct wlan_objmgr_peer *peer,
+			uint32_t cmd_id, uint16_t args_count,
+			u_int32_t args_arr[]);
+};
+
+#endif
+
+#ifdef WLAN_CONV_SPECTRAL_ENABLE
+/**
+ * struct wlan_lmac_if_sptrl_tx_ops - Spectral south bound Tx operations
+ * @sptrlto_spectral_init:          Initialize LMAC/target_if Spectral
+ * @sptrlto_spectral_deinit:        De-initialize LMAC/target_if Spectral
+ * @sptrlto_set_spectral_config:    Set Spectral configuration
+ * @sptrlto_get_spectral_config:    Get Spectral configuration
+ * @sptrlto_start_spectral_scan:    Start Spectral Scan
+ * @sptrlto_stop_spectral_scan:     Stop Spectral Scan
+ * @sptrlto_is_spectral_active:     Get whether Spectral is active
+ * @sptrlto_is_spectral_enabled:    Get whether Spectral is enabled
+ * @sptrlto_set_icm_active:         Set whether ICM is active or inactive
+ * @sptrlto_get_icm_active:         Get whether ICM is active or inactive
+ * @sptrlto_get_nominal_nf:         Get Nominal Noise Floor for the current
+ *                                  frequency band
+ * @sptrlto_set_debug_level:        Set Spectral debug level
+ * @sptrlto_get_debug_level:        Get Spectral debug level
+ * @sptrlto_get_chaninfo:           Get channel information
+ * @sptrlto_clear_chaninfo:         Clear channel information
+ * @sptrlto_get_spectral_capinfo:   Get Spectral capability information
+ * @sptrlto_get_spectral_diagstats: Get Spectral diagnostic statistics
+ **/
+struct wlan_lmac_if_sptrl_tx_ops {
+	void * (*sptrlto_pdev_spectral_init)(struct wlan_objmgr_pdev *pdev);
+	void (*sptrlto_pdev_spectral_deinit)(struct wlan_objmgr_pdev *pdev);
+	int (*sptrlto_set_spectral_config)(struct wlan_objmgr_pdev *pdev,
+					   const u_int32_t threshtype,
+					   const u_int32_t value);
+	void (*sptrlto_get_spectral_config)(struct wlan_objmgr_pdev *pdev,
+					    struct spectral_config *sptrl_config
+					    );
+	int (*sptrlto_start_spectral_scan)(struct wlan_objmgr_pdev *pdev);
+	void (*sptrlto_stop_spectral_scan)(struct wlan_objmgr_pdev *pdev);
+	bool (*sptrlto_is_spectral_active)(struct wlan_objmgr_pdev *pdev);
+	bool (*sptrlto_is_spectral_enabled)(struct wlan_objmgr_pdev *pdev);
+	int (*sptrlto_set_icm_active)(struct wlan_objmgr_pdev *pdev,
+				      bool isactive);
+	bool (*sptrlto_get_icm_active)(struct wlan_objmgr_pdev *pdev);
+	int16_t (*sptrlto_get_nominal_nf)(struct wlan_objmgr_pdev *pdev);
+	int (*sptrlto_set_debug_level)(struct wlan_objmgr_pdev *pdev,
+				       u_int32_t debug_level);
+	u_int32_t (*sptrlto_get_debug_level)(struct wlan_objmgr_pdev *pdev);
+	void (*sptrlto_get_chaninfo)(struct wlan_objmgr_pdev *pdev,
+				     void *outdata);
+	void (*sptrlto_clear_chaninfo)(struct wlan_objmgr_pdev *pdev);
+	void (*sptrlto_get_spectral_capinfo)(struct wlan_objmgr_pdev *pdev,
+					     void *outdata);
+	void (*sptrlto_get_spectral_diagstats)(struct wlan_objmgr_pdev *pdev,
+					       void *outdata);
+};
+#endif /* WLAN_CONV_SPECTRAL_ENABLE */
 
 #ifdef WIFI_POS_CONVERGED
 /*
@@ -535,9 +637,19 @@ struct wlan_lmac_if_tx_ops {
 #ifdef CONVERGED_P2P_ENABLE
 	struct wlan_lmac_if_p2p_tx_ops p2p;
 #endif
+#ifdef QCA_SUPPORT_SON
+	struct wlan_lmac_if_son_tx_ops son_tx_ops;
+#endif
 
 #ifdef WLAN_ATF_ENABLE
 	struct wlan_lmac_if_atf_tx_ops atf_tx_ops;
+#endif
+#ifdef WLAN_SA_API_ENABLE
+	struct wlan_lmac_if_sa_api_tx_ops sa_api_tx_ops;
+#endif
+
+#ifdef WLAN_CONV_SPECTRAL_ENABLE
+	struct wlan_lmac_if_sptrl_tx_ops sptrl_tx_ops;
 #endif
 
 #ifdef WLAN_CONV_CRYPTO_SUPPORTED
@@ -556,6 +668,7 @@ struct wlan_lmac_if_tx_ops {
 #ifdef CONVERGED_TDLS_ENABLE
 	struct wlan_lmac_if_tdls_tx_ops tdls_tx_ops;
 #endif
+	 struct wlan_lmac_if_mlme_tx_ops mops;
 };
 
 /**
@@ -727,6 +840,54 @@ struct wlan_lmac_if_atf_rx_ops {
 };
 #endif
 
+#ifdef WLAN_SA_API_ENABLE
+
+/**
+ * struct wlan_lmac_if_sa_api_rx_ops - SA API south bound rx function pointers
+ */
+struct wlan_lmac_if_sa_api_rx_ops {
+	uint32_t (*sa_api_get_sa_supported)(struct wlan_objmgr_psoc *psoc);
+	uint32_t (*sa_api_get_validate_sw)(struct wlan_objmgr_psoc *psoc);
+	void (*sa_api_enable_sa)(struct wlan_objmgr_psoc *psoc, uint32_t value);
+	uint32_t (*sa_api_get_sa_enable)(struct wlan_objmgr_psoc *psoc);
+	void (*sa_api_peer_assoc_hanldler)(struct wlan_objmgr_pdev *pdev,
+			struct wlan_objmgr_peer *peer, struct sa_rate_cap *);
+	uint32_t (*sa_api_update_tx_feedback)(struct wlan_objmgr_pdev *pdev,
+			struct wlan_objmgr_peer *peer,
+			struct sa_tx_feedback *feedback);
+	uint32_t (*sa_api_update_rx_feedback)(struct wlan_objmgr_pdev *pdev,
+			struct wlan_objmgr_peer *peer,
+			struct sa_rx_feedback *feedback);
+	uint32_t (*sa_api_ucfg_set_param)(struct wlan_objmgr_pdev *pdev,
+			char *val);
+	uint32_t (*sa_api_ucfg_get_param)(struct wlan_objmgr_pdev *pdev,
+			char *val);
+	uint32_t (*sa_api_is_tx_feedback_enabled)
+			(struct wlan_objmgr_pdev *pdev);
+	uint32_t (*sa_api_is_rx_feedback_enabled)
+			(struct wlan_objmgr_pdev *pdev);
+	uint32_t (*sa_api_convert_rate_2g)(uint32_t rate);
+	uint32_t (*sa_api_convert_rate_5g)(uint32_t rate);
+	uint32_t (*sa_api_get_sa_mode)(struct wlan_objmgr_pdev *pdev);
+	uint32_t (*sa_api_get_beacon_txantenna)(struct wlan_objmgr_pdev *pdev);
+	uint32_t (*sa_api_cwm_action)(struct wlan_objmgr_pdev *pdev);
+};
+#endif
+
+#ifdef WLAN_CONV_SPECTRAL_ENABLE
+/**
+ * struct wlan_lmac_if_sptrl_rx_ops - Spectral south bound Rx operations
+ *
+ * @sptrl_send_phydata:        Send Spectral PHY Data
+ * @sptrlro_get_target_handle: Get Spectral handle for target/LMAC private data
+ */
+struct wlan_lmac_if_sptrl_rx_ops {
+	int (*sptrlro_send_phydata)(struct wlan_objmgr_pdev *pdev,
+				    struct sock *sock, qdf_nbuf_t nbuf);
+	void * (*sptrlro_get_target_handle)(struct wlan_objmgr_pdev *pdev);
+};
+#endif /* WLAN_CONV_SPECTRAL_ENABLE */
+
 #ifdef WIFI_POS_CONVERGED
 /**
  * struct wlan_lmac_if_wifi_pos_rx_ops - structure of rx function
@@ -833,6 +994,64 @@ struct wlan_lmac_if_dfs_rx_ops {
 #endif
 };
 
+struct wlan_lmac_if_mlme_rx_ops {
+
+	void (*wlan_mlme_scan_start)(struct wlan_objmgr_pdev *pdev);
+	void (*wlan_mlme_register_pm_event_handler)(
+			struct wlan_objmgr_pdev *pdev,
+			uint8_t vdev_id);
+	void (*wlan_mlme_unregister_pm_event_handler)(
+			struct wlan_objmgr_pdev *pdev,
+			uint8_t vdev_id);
+	QDF_STATUS (*wlan_mlme_register_vdev_event_handler)(
+			struct wlan_objmgr_pdev *pdev,
+			uint8_t vdev_id);
+	QDF_STATUS (*wlan_mlme_unregister_vdev_event_handler)(
+			struct wlan_objmgr_pdev *pdev,
+			uint8_t vdev_id);
+	int (*wlan_mlme_send_probe_request)(struct wlan_objmgr_pdev *pdev,
+			uint8_t vdev_id,
+			u_int8_t  *destination,
+			u_int8_t  *bssid,
+			u_int8_t  *ssid,
+			u_int32_t  ssidlen,
+			u_int8_t  *ie,
+			size_t len);
+	int (*wlan_mlme_resmgr_request_bsschan)(struct wlan_objmgr_pdev *pdev);
+	int (*wlan_mlme_resmgr_request_offchan)(struct wlan_objmgr_pdev *pdev,
+			u_int32_t freq,
+			u_int32_t flags,
+			u_int32_t estimated_offchannel_time);
+	int (*wlan_mlme_resmgr_active)(struct wlan_objmgr_pdev *pdev);
+	int (*wlan_mlme_get_cw_inter_found)(struct wlan_objmgr_pdev *pdev);
+	int (*wlan_mlme_set_home_channel)(struct wlan_objmgr_pdev *pdev,
+			uint8_t vdev_id);
+	int (*wlan_mlme_set_channel)(struct wlan_objmgr_pdev *pdev,
+			u_int32_t freq,
+			u_int32_t flags);
+	void (*wlan_mlme_start_record_stats)(struct wlan_objmgr_pdev *pdev);
+	void (*wlan_mlme_end_record_stats)(struct wlan_objmgr_pdev *pdev);
+	int (*wlan_mlme_get_enh_rpt_ind)(struct wlan_objmgr_pdev *pdev);
+	int (*wlan_mlme_pause)(struct wlan_objmgr_pdev *pdev);
+	void (*wlan_mlme_unpause)(struct wlan_objmgr_pdev *pdev);
+	int (*wlan_mlme_vdev_pause_control)(struct wlan_objmgr_pdev *pdev,
+			uint8_t vdev_id);
+	int (*wlan_mlme_sta_power_pause)(
+			struct wlan_objmgr_pdev *pdev,
+			uint8_t vdev_id,
+			u_int32_t timeout);
+	int (*wlan_mlme_sta_power_unpause)(struct wlan_objmgr_pdev *pdev,
+			uint8_t vdev_id);
+	int (*wlan_mlme_set_vdev_sleep)(struct wlan_objmgr_pdev *pdev,
+			uint8_t vdev_id);
+	int (*wlan_mlme_set_vdev_wakeup)(struct wlan_objmgr_pdev *pdev,
+			uint8_t vdev_id);
+	qdf_time_t (*wlan_mlme_get_traffic_indication_timestamp)(
+			struct wlan_objmgr_pdev *pdev);
+	int (*wlan_mlme_get_acs_in_progress)(struct wlan_objmgr_pdev *pdev,
+			uint8_t vdev_id);
+	void (*wlan_mlme_end_scan)(struct wlan_objmgr_pdev *pdev);
+};
 /**
  * struct wlan_lmac_if_rx_ops - south bound rx function pointers
  * @mgmt_txrx_tx_ops: mgmt txrx rx ops
@@ -860,6 +1079,14 @@ struct wlan_lmac_if_rx_ops {
 #ifdef WLAN_ATF_ENABLE
 	struct wlan_lmac_if_atf_rx_ops atf_rx_ops;
 #endif
+#ifdef WLAN_SA_API_ENABLE
+	struct wlan_lmac_if_sa_api_rx_ops sa_api_rx_ops;
+#endif
+
+#ifdef WLAN_CONV_SPECTRAL_ENABLE
+	struct wlan_lmac_if_sptrl_rx_ops sptrl_rx_ops;
+#endif
+
 #ifdef WLAN_CONV_CRYPTO_SUPPORTED
 	struct wlan_lmac_if_crypto_rx_ops crypto_rx_ops;
 #endif
@@ -874,6 +1101,7 @@ struct wlan_lmac_if_rx_ops {
 #ifdef CONVERGED_TDLS_ENABLE
 	struct wlan_lmac_if_tdls_rx_ops tdls_rx_ops;
 #endif
+	struct wlan_lmac_if_mlme_rx_ops mops;
 };
 
 /* Function pointer to call legacy tx_ops registration in OL/WMA.

@@ -318,13 +318,47 @@ QDF_STATUS policy_mgr_deinit(void)
 
 QDF_STATUS policy_mgr_psoc_open(struct wlan_objmgr_psoc *psoc)
 {
-	/* placeholder for now */
+	struct policy_mgr_psoc_priv_obj *pm_ctx;
+
+	pm_ctx = policy_mgr_get_context(psoc);
+	if (!pm_ctx) {
+		policy_mgr_err("Invalid Context");
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	if (!QDF_IS_STATUS_SUCCESS(qdf_mutex_create(
+		&pm_ctx->qdf_conc_list_lock))) {
+		policy_mgr_err("Failed to init qdf_conc_list_lock");
+		QDF_ASSERT(0);
+		return QDF_STATUS_E_FAILURE;
+	}
+
 	return QDF_STATUS_SUCCESS;
 }
 
 QDF_STATUS policy_mgr_psoc_close(struct wlan_objmgr_psoc *psoc)
 {
-	/* placeholder for now */
+	struct policy_mgr_psoc_priv_obj *pm_ctx;
+
+	pm_ctx = policy_mgr_get_context(psoc);
+	if (!pm_ctx) {
+		policy_mgr_err("Invalid Context");
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	if (!QDF_IS_STATUS_SUCCESS(qdf_mutex_destroy(
+		&pm_ctx->qdf_conc_list_lock))) {
+		policy_mgr_err("Failed to destroy qdf_conc_list_lock");
+		QDF_ASSERT(0);
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	if (pm_ctx->hw_mode.hw_mode_list) {
+		qdf_mem_free(pm_ctx->hw_mode.hw_mode_list);
+		pm_ctx->hw_mode.hw_mode_list = NULL;
+		policy_mgr_info("HW list is freed");
+	}
+
 	return QDF_STATUS_SUCCESS;
 }
 
@@ -358,13 +392,6 @@ QDF_STATUS policy_mgr_psoc_enable(struct wlan_objmgr_psoc *psoc)
 	status = policy_mgr_init_connection_update(pm_ctx);
 	if (!QDF_IS_STATUS_SUCCESS(status)) {
 		policy_mgr_err("connection_update_done_evt init failed");
-		return status;
-	}
-
-	if (!QDF_IS_STATUS_SUCCESS(qdf_mutex_create(
-		&pm_ctx->qdf_conc_list_lock))) {
-		policy_mgr_err("Failed to init qdf_conc_list_lock");
-		QDF_ASSERT(0);
 		return status;
 	}
 
@@ -425,19 +452,6 @@ QDF_STATUS policy_mgr_psoc_disable(struct wlan_objmgr_psoc *psoc)
 	if (!pm_ctx) {
 		policy_mgr_err("Invalid Context");
 		return QDF_STATUS_E_FAILURE;
-	}
-
-	if (pm_ctx->hw_mode.hw_mode_list) {
-		qdf_mem_free(pm_ctx->hw_mode.hw_mode_list);
-		pm_ctx->hw_mode.hw_mode_list = NULL;
-		policy_mgr_info("HW list is freed");
-	}
-
-	if (!QDF_IS_STATUS_SUCCESS(qdf_mutex_destroy(
-		&pm_ctx->qdf_conc_list_lock))) {
-		policy_mgr_err("Failed to destroy qdf_conc_list_lock");
-		status = QDF_STATUS_E_FAILURE;
-		QDF_ASSERT(0);
 	}
 
 	/* destroy connection_update_done_evt */

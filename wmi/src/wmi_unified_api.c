@@ -29,7 +29,6 @@
 #include "a_types.h"
 #include "a_debug.h"
 #include "ol_if_athvar.h"
-#include "ol_defines.h"
 #include "wmi_unified_priv.h"
 #include "wmi_unified_param.h"
 
@@ -5990,17 +5989,18 @@ QDF_STATUS wmi_extract_chan_stats(void *wmi_hdl, void *evt_buf,
  * @param evt_buf: Pointer to event buffer
  * @param temp: Pointer to hold extracted temperature
  * @param level: Pointer to hold extracted level
+ * @param pdev_id: Pointer to hold extracted pdev_id
  *
  * Return: QDF_STATUS_SUCCESS on success and QDF_STATUS_E_FAILURE for failure
  */
 QDF_STATUS wmi_extract_thermal_stats(void *wmi_hdl, void *evt_buf,
-	uint32_t *temp, uint32_t *level)
+	uint32_t *temp, uint32_t *level, uint32_t *pdev_id)
 {
 	wmi_unified_t wmi_handle = (wmi_unified_t) wmi_hdl;
 
 	if (wmi_handle->ops->extract_thermal_stats)
 		return wmi_handle->ops->extract_thermal_stats(wmi_handle,
-			evt_buf, temp, level);
+			evt_buf, temp, level, pdev_id);
 
 	return QDF_STATUS_E_FAILURE;
 }
@@ -6537,6 +6537,27 @@ QDF_STATUS wmi_unified_send_coex_ver_cfg_cmd(void *wmi_hdl,
 
 	if (wmi_handle->ops->send_coex_ver_cfg_cmd)
 		return wmi_handle->ops->send_coex_ver_cfg_cmd(wmi_handle,
+			param);
+
+	return QDF_STATUS_E_FAILURE;
+}
+
+/**
+ * wmi_unified_send_coex_config_cmd() - send coex ver cfg command
+ * @wmi_handle: wmi handle
+ * @param:      wmi coex cfg cmd params
+ *
+ * Send WMI_COEX_CFG_CMD parameters to fw.
+ *
+ * Return: QDF_STATUS_SUCCESS on success, QDF_STATUS_E_** on error
+ */
+QDF_STATUS wmi_unified_send_coex_config_cmd(void *wmi_hdl,
+					    struct coex_config_params *param)
+{
+	wmi_unified_t wmi_handle = (wmi_unified_t) wmi_hdl;
+
+	if (wmi_handle->ops->send_coex_config_cmd)
+		return wmi_handle->ops->send_coex_config_cmd(wmi_handle,
 			param);
 
 	return QDF_STATUS_E_FAILURE;

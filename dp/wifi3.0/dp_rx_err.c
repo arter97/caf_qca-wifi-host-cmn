@@ -28,38 +28,8 @@
 #else
 #include <ieee80211.h>
 #endif
-
-
-/**
- * dp_rx_frag_handle() - Handles fragmented Rx frames
- *
- * @soc: core txrx main context
- * @ring_desc: opaque pointer to the REO error ring descriptor
- * @mpdu_desc_info: MPDU descriptor information from ring descriptor
- * @head: head of the local descriptor free-list
- * @tail: tail of the local descriptor free-list
- * @quota: No. of units (packets) that can be serviced in one shot.
- *
- * This function implements RX 802.11 fragmentation handling
- * The handling is mostly same as legacy fragmentation handling.
- * If required, this function can re-inject the frames back to
- * REO ring (with proper setting to by-pass fragmentation check
- * but use duplicate detection / re-ordering and routing these frames
- * to a different core.
- *
- * Return: uint32_t: No. of elements processed
- */
-static uint32_t
-dp_rx_frag_handle(struct dp_soc *soc, void *ring_desc,
-		  struct hal_rx_mpdu_desc_info *mpdu_desc_info,
-		  union dp_rx_desc_list_elem_t **head,
-		  union dp_rx_desc_list_elem_t **tail,
-		  uint32_t quota)
-{
-	uint32_t rx_bufs_used = 0;
-
-	return rx_bufs_used;
-}
+#include "dp_rx_defrag.h"
+#include <enet.h>	/* LLC_SNAP_HDR_LEN */
 
 /**
  * dp_rx_msdus_drop() - Drops all MSDU's per MPDU
@@ -75,14 +45,12 @@ dp_rx_frag_handle(struct dp_soc *soc, void *ring_desc,
  *
  * Return: uint32_t: No. of elements processed
  */
-static uint32_t
-dp_rx_msdus_drop(struct dp_soc *soc, void *ring_desc,
+static uint32_t dp_rx_msdus_drop(struct dp_soc *soc, void *ring_desc,
 		 struct hal_rx_mpdu_desc_info *mpdu_desc_info,
 		 union dp_rx_desc_list_elem_t **head,
 		 union dp_rx_desc_list_elem_t **tail,
 		 uint32_t quota)
 {
-	uint8_t num_msdus;
 	uint32_t rx_bufs_used = 0;
 	void *link_desc_va;
 	struct hal_buf_info buf_info;
@@ -93,11 +61,9 @@ dp_rx_msdus_drop(struct dp_soc *soc, void *ring_desc,
 
 	link_desc_va = dp_rx_cookie_2_link_desc_va(soc, &buf_info);
 
-	qdf_assert(rx_msdu_link_desc);
-
 	/* No UNMAP required -- this is "malloc_consistent" memory */
-
-	hal_rx_msdu_list_get(link_desc_va, &msdu_list, &num_msdus);
+	hal_rx_msdu_list_get(link_desc_va, &msdu_list,
+		mpdu_desc_info->msdu_count);
 
 	for (i = 0; (i < HAL_RX_NUM_MSDU_DESC) && quota--; i++) {
 		struct dp_rx_desc *rx_desc =
@@ -199,6 +165,30 @@ dp_rx_2k_jump_handle(struct dp_soc *soc, void *ring_desc,
 				head, tail, quota);
 }
 
+static bool
+dp_rx_chain_msdus(struct dp_soc *soc, qdf_nbuf_t nbuf,
+		struct dp_rx_desc *rx_desc)
+{
+	bool mpdu_done = false;
+
+	if (hal_rx_msdu_end_first_msdu_get(rx_desc->rx_buf_start)) {
+		qdf_nbuf_set_chfrag_start(rx_desc->nbuf, 1);
+		soc->invalid_peer_head_msdu = NULL;
+		soc->invalid_peer_tail_msdu = NULL;
+	}
+
+	if (hal_rx_msdu_end_last_msdu_get(rx_desc->rx_buf_start)) {
+		qdf_nbuf_set_chfrag_end(rx_desc->nbuf, 1);
+		mpdu_done = true;
+	}
+
+	DP_RX_LIST_APPEND(soc->invalid_peer_head_msdu,
+				soc->invalid_peer_tail_msdu,
+				nbuf);
+
+	return mpdu_done;
+}
+
 /**
 * dp_rx_null_q_desc_handle() - Function to handle NULL Queue
 *                              descriptor violation on either a
@@ -271,11 +261,17 @@ dp_rx_null_q_desc_handle(struct dp_soc *soc, struct dp_rx_desc *rx_desc,
 	peer = dp_peer_find_by_id(soc, peer_id);
 
 	if (!peer) {
+		bool mpdu_done = false;
+
 		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_ERROR,
 		FL("peer is NULL"));
-		qdf_nbuf_pull_head(nbuf, RX_PKT_TLVS_LEN);
-		dp_rx_process_invalid_peer(soc, nbuf);
-		goto fail;
+
+		mpdu_done = dp_rx_chain_msdus(soc, nbuf, rx_desc);
+		if (mpdu_done)
+			dp_rx_process_invalid_peer(soc, nbuf);
+
+		dp_rx_add_to_free_desc_list(head, tail, rx_desc);
+		return rx_bufs_used;
 	}
 
 	vdev = peer->vdev;
@@ -350,7 +346,6 @@ dp_rx_null_q_desc_handle(struct dp_soc *soc, struct dp_rx_desc *rx_desc,
 			QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_INFO,
 				FL("vdev %p osif_rx %p"), vdev,
 				vdev->osif_rx);
-
 			qdf_nbuf_set_next(nbuf, NULL);
 			vdev->osif_rx(vdev->osif_vdev, nbuf);
 			DP_STATS_INC(vdev->pdev, rx.to_stack.num, 1);
@@ -476,6 +471,7 @@ dp_rx_err_process(struct dp_soc *soc, void *hal_ring, uint32_t quota)
 	while (qdf_likely((ring_desc =
 				hal_srng_dst_get_next(hal_soc, hal_ring))
 				&& quota--)) {
+		DP_STATS_INC(soc, rx.err_ring_pkts, 1);
 
 		error = HAL_RX_ERROR_STATUS_GET(ring_desc);
 
@@ -491,7 +487,7 @@ dp_rx_err_process(struct dp_soc *soc, void *hal_ring, uint32_t quota)
 			/* Call appropriate handler */
 			DP_STATS_INC(soc, rx.err.invalid_rbm, 1);
 			QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_ERROR,
-			FL("Invalid RBM %d"), rbm);
+				FL("Invalid RBM %d"), rbm);
 			continue;
 		}
 
@@ -508,11 +504,10 @@ dp_rx_err_process(struct dp_soc *soc, void *hal_ring, uint32_t quota)
 
 		if (mpdu_desc_info.mpdu_flags & HAL_MPDU_F_FRAGMENT) {
 			/* TODO */
-			DP_STATS_INC(soc,
-				rx.err.reo_error[HAL_MPDU_F_FRAGMENT], 1);
 			rx_bufs_used += dp_rx_frag_handle(soc,
 					ring_desc, &mpdu_desc_info,
 					&head, &tail, quota);
+			DP_STATS_INC(soc, rx.rx_frags, 1);
 			continue;
 		}
 
@@ -628,7 +623,6 @@ dp_rx_wbm_err_process(struct dp_soc *soc, void *hal_ring, uint32_t quota)
 		if (qdf_unlikely(rbm != HAL_RX_BUF_RBM_SW3_BM)) {
 			/* TODO */
 			/* Call appropriate handler */
-
 			QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_ERROR,
 				FL("Invalid RBM %d"), rbm);
 			continue;

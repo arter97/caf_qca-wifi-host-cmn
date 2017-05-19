@@ -30,6 +30,12 @@
 #include <htt_common.h>
 
 #include <cdp_txrx_cmn.h>
+#ifdef CONFIG_MCL
+#include <cds_ieee80211_common.h>
+#else
+#include <ieee80211.h>
+#endif
+
 #ifndef CONFIG_WIN
 #include <wdi_event_api.h>    /* WDI subscriber event list */
 #endif
@@ -40,6 +46,7 @@
 #include "hal_rx.h"
 #include <hal_api.h>
 #include <hal_api_mon.h>
+#include "hal_rx.h"
 
 #define MAX_TCL_RING 3
 #define MAX_RXDMA_ERRORS 32
@@ -305,6 +312,18 @@ struct dp_rx_tid {
 
 	/* only used for defrag right now */
 	TAILQ_ENTRY(dp_rx_tid) defrag_waitlist_elem;
+
+	/* MSDU link pointers used for reinjection */
+	struct hal_rx_msdu_link_ptr_info
+		transcap_msdu_link_ptr[HAL_RX_MAX_SAVED_RING_DESC];
+
+	struct hal_rx_mpdu_desc_info transcap_rx_mpdu_desc_info;
+	uint8_t curr_ring_desc_idx;
+
+	/* Sequence and fragments that are being processed currently */
+	uint32_t curr_seq_num;
+	uint32_t curr_frag_num;
+
 	uint32_t defrag_timeout_ms;
 	uint16_t dialogtoken;
 	uint16_t statuscode;
@@ -331,116 +350,6 @@ struct reo_desc_list_node {
 	qdf_list_node_t node;
 	unsigned long free_ts;
 	struct dp_rx_tid rx_tid;
-};
-
-/* TODO: Proper comments have been added in the subsequesnt gerrit */
-/* packet info */
-struct dp_pkt_info {
-	uint32_t num; /*no of packets*/
-	uint32_t bytes; /* total no of bytes */
-};
-
-/* per pdev tx stats*/
-struct dp_tx_pdev_stats {
-
-	struct dp_pkt_info rcvd; /*total packets received for transmission */
-	struct {
-		/* Pkt Info for which completions were received */
-		struct dp_pkt_info comp_pkt;
-		uint32_t mcs_count[MAX_MCS + 1]; /* MCS Count */
-	} comp; /* Tx completions received*/
-
-	struct dp_pkt_info freed; /* Tx packets freed*/
-
-	struct dp_pkt_info processed; /* Tx packets processed*/
-	struct dp_pkt_info outstanding; /* Tx packets remaining for processing*/
-
-	struct {
-		struct dp_pkt_info dropped_pkt; /* Total packets dropped */
-		uint32_t desc_total;  /* total descriptors dropped */
-		uint32_t dma_map_error; /* Dropped due to Dma Error */
-		uint32_t ring_full;    /* dropped due to ring full */
-		uint32_t fw_discard;   /* Discarded bu firmware */
-		uint32_t fw_discard_retired; /* fw_discard_retired */
-		/* firmware_discard_untransmitted */
-		uint32_t firmware_discard_untransmitted;
-		uint32_t mpdu_age_out; /* mpdu_age_out */
-		uint32_t firmware_discard_reason1; /*firmware_discard_reason1*/
-		uint32_t firmware_discard_reason2; /*firmware_discard_reason2*/
-		uint32_t firmware_discard_reason3; /*firmware_discard_reason3*/
-	} dropped; /* Packets dropped on the Tx side */
-
-	struct {
-		struct dp_pkt_info sg_pkt; /* total scatter gather packets */
-		uint32_t dropped_host; /* SG packets dropped by host */
-		uint32_t dropped_target; /* SG packets dropped by target */
-	} sg; /* Scatter Gather packet info */
-
-	struct {
-		uint32_t num_seg;  /* No of segments in TSO packets */
-		struct dp_pkt_info tso_pkt; /* total no of TSO packets */
-		uint32_t dropped_host; /* TSO packets dropped by host */
-		uint32_t dropped_target; /* TSO packets dropped by target */
-	} tso; /* TSO packets info */
-
-	struct {
-		/* total no of multicast conversion packets */
-		struct dp_pkt_info mcast_pkt;
-		/* packets dropped due to map error */
-		uint32_t dropped_map_error;
-		/* packets dropped due to self Mac address */
-		uint32_t dropped_self_mac;
-		/* Packets dropped due to send fail */
-		uint32_t dropped_send_fail;
-		/* total unicast packets transmitted */
-		uint32_t ucast;
-	} mcast_en; /* Multicast Enhancement packets info */
-
-	/* Total packets passed Reinject handler */
-	struct dp_pkt_info reinject_pkts;
-	/*  Total packets passed to inspect handler */
-	struct dp_pkt_info inspect_pkts;
-	/* Total Raw packets */
-	struct dp_pkt_info raw_pkt;
-};
-
-/* Per pdev RX stats */
-struct dp_rx_pdev_stats {
-	struct dp_pkt_info rcvd_reo; /* packets received on the reo ring */
-	struct {
-		/* packets dropped because of no peer */
-		struct dp_pkt_info no_peer;
-		/* packets dropped because nsdu_done bit not set */
-		struct dp_pkt_info msdu_not_done;
-	} dropped; /* packets dropped on rx */
-	struct dp_pkt_info replenished; /* total packets replnished */
-	struct dp_pkt_info to_stack;    /* total packets sent up the stack */
-	struct dp_pkt_info intra_bss;   /* Intra BSS packets received */
-	struct dp_pkt_info wds;         /* WDS packets received */
-	struct dp_pkt_info desc;
-	struct dp_pkt_info buff;
-	struct dp_pkt_info raw;         /* Raw Pakets received */
-	struct {
-		uint32_t rxdma_unitialized; /* rxdma_unitialized errors */
-		uint32_t desc_alloc_fail; /* desc alloc failed errors */
-	} err;                          /* Rx errors */
-	uint32_t buf_freelist;         /* buffers added back in freelist */
-	uint32_t mcs_count[MAX_MCS + 1]; /* packets in different MCS rates */
-	uint32_t sgi_count[MAX_MCS + 1]; /* SGI count */
-	/*  Number of MSDUs with no MPDU level aggregation */
-	uint32_t non_ampdu_cnt;
-	/* Number of MSDUs part of AMSPU */
-	uint32_t ampdu_cnt;
-	/* Number of MSDUs with no MSDU level aggregation */
-	uint32_t non_amsdu_cnt;
-	/* Number of MSDUs part of AMSDU*/
-	uint32_t amsdu_cnt;
-	/* Packet count in spatiel Streams */
-	uint32_t nss[SS_COUNT];
-	/* Packet count in different Bandwidths */
-	uint32_t bw[SUPPORTED_BW];
-	/* reception type os packets */
-	uint32_t reception_type[SUPPORTED_RECEPTION_TYPES];
 };
 
 struct dp_ast_entry {
@@ -643,6 +552,10 @@ struct dp_soc {
 		/* SOC level RX stats */
 		struct {
 		/* Rx errors */
+			/* Total Packets in Rx Error ring */
+			uint32_t err_ring_pkts;
+			/* No of Fragments */
+			uint32_t rx_frags;
 			struct {
 				/* Invalid RBM error count */
 				uint32_t invalid_rbm;
@@ -658,7 +571,12 @@ struct dp_soc {
 				uint32_t rxdma_error[MAX_RXDMA_ERRORS];
 				/* REO Error count */
 				uint32_t reo_error[REO_ERROR_TYPE_MAX];
+				/* HAL REO ERR Count */
+				uint32_t hal_reo_error[CDP_MAX_RX_RINGS];
 			} err;
+
+			/* packet count per core - per ring */
+			uint64_t ring_packets[NR_CPUS][MAX_REO_DEST_RINGS];
 		} rx;
 	} stats;
 
@@ -673,9 +591,65 @@ struct dp_soc {
 #endif
 	qdf_list_t reo_desc_freelist;
 	qdf_spinlock_t reo_desc_freelist_lock;
-
 	/* Obj Mgr SoC */
 	struct wlan_objmgr_psoc *psoc;
+	qdf_nbuf_t invalid_peer_head_msdu;
+	qdf_nbuf_t invalid_peer_tail_msdu;
+#ifdef QCA_SUPPORT_SON
+	/* The timer to check station's inactivity status */
+	os_timer_t pdev_bs_inact_timer;
+	/* The current inactivity count reload value
+	   based on overload condition */
+	u_int16_t pdev_bs_inact_reload;
+
+	/* The inactivity timer value when not overloaded */
+	u_int16_t pdev_bs_inact_normal;
+
+	/* The inactivity timer value when overloaded */
+	u_int16_t pdev_bs_inact_overload;
+
+	/* The inactivity timer check interval */
+	u_int16_t pdev_bs_inact_interval;
+	/* Inactivity timer */
+#endif /* QCA_SUPPORT_SON */
+};
+#define MAX_RX_MAC_RINGS 2
+/* Same as NAC_MAX_CLENT */
+#define DP_NAC_MAX_CLIENT  24
+
+/* same as ieee80211_nac_param */
+enum dp_nac_param_cmd {
+	/* IEEE80211_NAC_PARAM_ADD */
+	DP_NAC_PARAM_ADD = 1,
+	/* IEEE80211_NAC_PARAM_DEL */
+	DP_NAC_PARAM_DEL,
+	/* IEEE80211_NAC_PARAM_LIST */
+	DP_NAC_PARAM_LIST,
+};
+#define DP_MAC_ADDR_LEN 6
+union dp_align_mac_addr {
+	uint8_t raw[DP_MAC_ADDR_LEN];
+	struct {
+		uint16_t bytes_ab;
+		uint16_t bytes_cd;
+		uint16_t bytes_ef;
+	} align2;
+	struct {
+		uint32_t bytes_abcd;
+		uint16_t bytes_ef;
+	} align4;
+};
+
+/**
+ * struct dp_neighbour_peer - neighbour peer list type for smart mesh
+ * @neighbour_peers_macaddr: neighbour peer's mac address
+ * @neighbour_peer_list_elem: neighbour peer list TAILQ element
+ */
+struct dp_neighbour_peer {
+	/* MAC address of neighbour's peer */
+	union dp_align_mac_addr neighbour_peers_macaddr;
+	/* node in the list of neighbour's peer */
+	TAILQ_ENTRY(dp_neighbour_peer) neighbour_peer_list_elem;
 };
 
 /* PDEV level structure for data path */
@@ -752,6 +726,13 @@ struct dp_pdev {
 	/*tx_mutex for me*/
 	DP_MUTEX_TYPE tx_mutex;
 
+	/* Smart Mesh */
+	bool filter_neighbour_peers;
+	/* smart mesh mutex */
+	qdf_spinlock_t neighbour_peer_mutex;
+	/* Neighnour peer list */
+	TAILQ_HEAD(, dp_neighbour_peer) neighbour_peers_list;
+
 	/* Band steering  */
 	/* TBD */
 
@@ -806,23 +787,6 @@ struct dp_pdev {
 };
 
 struct dp_peer;
-
-union dp_align_mac_addr {
-	uint8_t raw[DP_MAC_ADDR_LEN];
-	struct {
-		uint16_t bytes_ab;
-		uint16_t bytes_cd;
-		uint16_t bytes_ef;
-	} align2;
-	struct {
-		uint32_t bytes_abcd;
-		uint16_t bytes_ef;
-	} align4;
-	struct {
-		uint16_t bytes_ab;
-		uint32_t bytes_cdef;
-	} align4_2;
-};
 
 /* VDEV structure for data path state */
 struct dp_vdev {
@@ -884,6 +848,8 @@ struct dp_vdev {
 	privacy_exemption privacy_filters[MAX_PRIVACY_FILTERS];
 	uint32_t filters_num;
 #endif
+	/* TDLS Link status */
+	bool tdls_link_connected;
 
 	/* VDEV operating mode */
 	enum wlan_op_mode opmode;
@@ -969,9 +935,7 @@ struct dp_peer {
 
 	struct {
 		enum htt_sec_type sec_type;
-#ifdef notyet /* TODO: See if this is required for defrag support */
 		u_int32_t michael_key[2]; /* relevant for TKIP */
-#endif
 	} security[2]; /* 0 -> multicast, 1 -> unicast */
 
 	/*
@@ -987,6 +951,7 @@ struct dp_peer {
 
 	/* Band steering: Set when node is inactive */
 	uint8_t peer_bs_inact_flag:1;
+	u_int16_t peer_bs_inact; /* inactivity mark count */
 
 	/* NAWDS Flag and Bss Peer bit */
 	uint8_t nawds_enabled:1,

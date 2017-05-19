@@ -35,7 +35,6 @@
 
 #include <osdep.h>
 #include "a_types.h"
-#include "ol_defines.h"
 #ifdef CONFIG_MCL
 #include "wmi.h"
 #endif
@@ -940,6 +939,9 @@ QDF_STATUS wmi_unified_send_btcoex_duty_cycle_cmd(void *wmi_hdl,
 QDF_STATUS wmi_unified_send_coex_ver_cfg_cmd(void *wmi_hdl,
 				coex_ver_cfg_t *param);
 
+QDF_STATUS wmi_unified_send_coex_config_cmd(void *wmi_hdl,
+					    struct coex_config_params *param);
+
 QDF_STATUS wmi_unified_set_atf_cmd_send(void *wmi_hdl,
 				struct set_atf_params *param);
 
@@ -1316,7 +1318,7 @@ QDF_STATUS wmi_extract_chan_stats(void *wmi_hdl, void *evt_buf,
 		uint32_t index, wmi_host_chan_stats *chan_stats);
 
 QDF_STATUS wmi_extract_thermal_stats(void *wmi_hdl, void *evt_buf,
-		uint32_t *temp, uint32_t *level);
+		uint32_t *temp, uint32_t *level, uint32_t *pdev_id);
 
 QDF_STATUS wmi_extract_thermal_level_stats(void *wmi_hdl, void *evt_buf,
 		uint8_t idx, uint32_t *levelcount, uint32_t *dccount);

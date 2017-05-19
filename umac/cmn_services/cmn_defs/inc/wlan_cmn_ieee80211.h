@@ -243,6 +243,7 @@ enum ext_chan_offset {
  * @WLAN_ELEMID_QUIET_CHANNEL: Quiet Channel
  * @WLAN_ELEMID_OP_MODE_NOTIFY: Operating Mode Notification
  * @WLAN_ELEMID_VENDOR: vendor private
+ * @WLAN_ELEMID_EXTN_ELEM: extended IE
  */
 enum element_ie {
 	WLAN_ELEMID_SSID             = 0,
@@ -312,6 +313,15 @@ enum element_ie {
 	WLAN_ELEMID_QUIET_CHANNEL    = 198,
 	WLAN_ELEMID_OP_MODE_NOTIFY   = 199,
 	WLAN_ELEMID_VENDOR           = 221,
+	WLAN_ELEMID_EXTN_ELEM        = 255,
+};
+
+/**
+ * enum extn_element_ie :- extended management information element
+ * @WLAN_EXTN_ELEMID_SRP: spatial reuse parameter IE
+ */
+enum extn_element_ie {
+	WLAN_EXTN_ELEMID_SRP         = 39,
 };
 
 #define WLAN_OUI_SIZE 4
@@ -515,6 +525,19 @@ struct ie_header {
 	uint8_t ie_id;
 	uint8_t ie_len;
 } qdf_packed;
+
+/**
+ * struct extn_ie_header : Extension IE header
+ * @ie_id: Element Id
+ * @ie_len: IE Length
+ * @ie_extn_id: extension id
+ */
+struct extn_ie_header {
+	uint8_t ie_id;
+	uint8_t ie_len;
+	uint8_t ie_extn_id;
+} qdf_packed;
+
 
 /**
  * struct ie_ssid : ssid IE
@@ -746,6 +769,43 @@ struct rsn_mdie {
 } qdf_packed;
 
 /**
+ * struct srp_ie: Spatial reuse parameter IE
+ * @srp_id: SRP IE id
+ * @srp_len: SRP IE len
+ * @srp_id_extn: SRP Extension ID
+ * @sr_control: sr control
+ * @non_srg_obsspd_max_offset: non srg obsspd max offset
+ * @srg_obss_pd_min_offset: srg obss pd min offset
+ * @srg_obss_pd_max_offset: srg obss pd max offset
+ * @srg_bss_color_bitmap: srg bss color bitmap
+ * @srg_partial_bssid_bitmap: srg partial bssid bitmap
+ */
+struct wlan_srp_ie {
+	uint8_t srp_id;
+	uint8_t srp_len;
+	uint8_t srp_id_extn;
+	uint8_t sr_control;
+	union {
+		struct {
+			uint8_t non_srg_obsspd_max_offset;
+			uint8_t srg_obss_pd_min_offset;
+			uint8_t srg_obss_pd_max_offset;
+			uint8_t srg_bss_color_bitmap[8];
+			uint8_t srg_partial_bssid_bitmap[8];
+		} qdf_packed nonsrg_srg_info;
+		struct {
+			uint8_t non_srg_obsspd_max_offset;
+		} qdf_packed nonsrg_info;
+		struct {
+			uint8_t srg_obss_pd_min_offset;
+			uint8_t srg_obss_pd_max_offset;
+			uint8_t srg_bss_color_bitmap[8];
+			uint8_t srg_partial_bssid_bitmap[8];
+		} qdf_packed srg_info;
+	};
+} qdf_packed;
+
+/**
  * is_wpa_oui() - If vendor IE is WPA type
  * @frm: vendor IE pointer
  *
@@ -887,7 +947,7 @@ is_p2p_oui(const uint8_t *frm)
 }
 
 /**
- * is_qca_whc_oui() - If vendor IE is QCA WHC type
+ * is_qca_son_oui() - If vendor IE is QCA WHC type
  * @frm: vendor IE pointer
  * @whc_subtype: subtype
  *
@@ -896,7 +956,7 @@ is_p2p_oui(const uint8_t *frm)
  * Return: true if its QCA WHC IE
  */
 static inline bool
-is_qca_whc_oui(uint8_t *frm, uint8_t whc_subtype)
+is_qca_son_oui(uint8_t *frm, uint8_t whc_subtype)
 {
 	return (frm[1] > 4) && (LE_READ_4(frm + 2) ==
 		((QCA_OUI_WHC_TYPE << 24) | QCA_OUI)) &&

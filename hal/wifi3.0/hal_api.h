@@ -31,11 +31,87 @@
 #define _HAL_API_H_
 
 #include "qdf_types.h"
+#include "qdf_util.h"
 #include "hal_internal.h"
-#include "hif_io32.h"
 #include "rx_msdu_link.h"
 #include "rx_reo_queue.h"
 #include "rx_reo_queue_ext.h"
+
+#define MAX_UNWINDOWED_ADDRESS 0x80000
+#define WINDOW_ENABLE_BIT 0x80000000
+#define WINDOW_REG_ADDRESS 0x310C
+#define WINDOW_SHIFT 19
+#define WINDOW_VALUE_MASK 0x1F
+#define WINDOW_START MAX_UNWINDOWED_ADDRESS
+#define WINDOW_RANGE_MASK 0x7FFFF
+
+static inline void hal_select_window(struct hal_soc *hal_soc, uint32_t offset)
+{
+	uint32_t window = (offset >> WINDOW_SHIFT) & WINDOW_VALUE_MASK;
+	if (window != hal_soc->register_window) {
+		qdf_iowrite32(hal_soc->dev_base_addr + WINDOW_REG_ADDRESS,
+			      WINDOW_ENABLE_BIT | window);
+		hal_soc->register_window = window;
+	}
+}
+
+/**
+ * note1: WINDOW_RANGE_MASK = (1 << WINDOW_SHIFT) -1
+ * note2: 1 << WINDOW_SHIFT = MAX_UNWINDOWED_ADDRESS
+ * note3: WINDOW_VALUE_MASK = big enough that trying to write past that window
+ *				would be a bug
+ */
+static inline void hal_write32_mb(struct hal_soc *hal_soc, uint32_t offset,
+				  uint32_t value)
+{
+
+	if (!hal_soc->use_register_windowing ||
+	    offset < MAX_UNWINDOWED_ADDRESS) {
+		qdf_iowrite32(hal_soc->dev_base_addr + offset, value);
+	} else {
+		qdf_spin_lock_irqsave(&hal_soc->register_access_lock);
+		hal_select_window(hal_soc, offset);
+		qdf_iowrite32(hal_soc->dev_base_addr + WINDOW_START +
+			  (offset & WINDOW_RANGE_MASK), value);
+		qdf_spin_unlock_irqrestore(&hal_soc->register_access_lock);
+	}
+}
+
+/**
+ * hal_write_address_32_mb - write a value to a register
+ *
+ */
+static inline void hal_write_address_32_mb(struct hal_soc *hal_soc,
+					   void __iomem *addr, uint32_t value)
+{
+	uint32_t offset;
+
+	if (!hal_soc->use_register_windowing)
+		return qdf_iowrite32(addr, value);
+
+	offset = addr - hal_soc->dev_base_addr;
+	hal_write32_mb(hal_soc, offset, value);
+}
+
+static inline uint32_t hal_read32_mb(struct hal_soc *hal_soc, uint32_t offset)
+{
+	uint32_t ret;
+
+	if (!hal_soc->use_register_windowing ||
+	    offset < MAX_UNWINDOWED_ADDRESS) {
+		return qdf_ioread32(hal_soc->dev_base_addr + offset);
+	}
+
+	qdf_spin_lock_irqsave(&hal_soc->register_access_lock);
+	hal_select_window(hal_soc, offset);
+	ret = qdf_ioread32(hal_soc->dev_base_addr + WINDOW_START +
+		       (offset & WINDOW_RANGE_MASK));
+	qdf_spin_unlock_irqrestore(&hal_soc->register_access_lock);
+
+	return ret;
+}
+
+#include "hif_io32.h"
 
 /**
  * hal_attach - Initalize HAL layer
@@ -111,6 +187,22 @@ extern uint32_t hal_srng_get_entrysize(void *hal_soc, int ring_type);
  */
 uint32_t hal_srng_max_entries(void *hal_soc, int ring_type);
 
+/* HAL memory information */
+struct hal_mem_info {
+	/* dev base virutal addr */
+	void *dev_base_addr;
+	/* dev base physical addr */
+	void *dev_base_paddr;
+	/* Remote virtual pointer memory for HW/FW updates */
+	void *shadow_rdptr_mem_vaddr;
+	/* Remote physical pointer memory for HW/FW updates */
+	void *shadow_rdptr_mem_paddr;
+	/* Shared memory for ring pointer updates from host to FW */
+	void *shadow_wrptr_mem_vaddr;
+	/* Shared physical memory for ring pointer updates from host to FW */
+	void *shadow_wrptr_mem_paddr;
+};
+
 /* SRNG parameters to be passed to hal_srng_setup */
 struct hal_srng_params {
 	/* Physical base address of the ring */
@@ -137,6 +229,12 @@ struct hal_srng_params {
 	uint32_t flags;
 	/* Unique ring id */
 	uint8_t ring_id;
+	/* Source or Destination ring */
+	enum hal_srng_dir ring_dir;
+	/* Size of ring entry */
+	uint32_t entry_size;
+	/* hw register base address */
+	void *hwreg_base[MAX_SRNG_REG_GROUPS];
 };
 
 /* hal_construct_shadow_config() - initialize the shadow registers for dp rings
@@ -543,10 +641,12 @@ static inline void hal_srng_access_end_unlocked(void *hal_soc, void *hal_ring)
 		}
 	} else {
 		if (srng->ring_dir == HAL_SRNG_SRC_RING)
-			hif_write32_mb(srng->u.src_ring.hp_addr,
+			hal_write_address_32_mb(hal_soc,
+				srng->u.src_ring.hp_addr,
 				srng->u.src_ring.hp);
 		else
-			hif_write32_mb(srng->u.dst_ring.tp_addr,
+			hal_write_address_32_mb(hal_soc,
+				srng->u.dst_ring.tp_addr,
 				srng->u.dst_ring.tp);
 	}
 }
@@ -869,4 +969,12 @@ static inline qdf_dma_addr_t hal_srng_get_tp_addr(void *hal_soc, void *hal_ring)
  */
 extern void hal_get_srng_params(void *hal_soc, void *hal_ring,
 	struct hal_srng_params *ring_params);
-#endif /* _HAL_API_H_ */
+
+/**
+ * hal_mem_info - Retreive hal memory base address
+ *
+ * @hal_soc: Opaque HAL SOC handle
+ * @mem: pointer to structure to be updated with hal mem info
+ */
+extern void hal_get_meminfo(void *hal_soc,struct hal_mem_info *mem );
+#endif /* _HAL_APIH_ */

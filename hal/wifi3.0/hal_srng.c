@@ -133,10 +133,10 @@
 	SRNG_REG_ADDR(_srng, _reg, _reg ## _GROUP, SRC)
 
 #define SRNG_REG_WRITE(_srng, _reg, _value, _dir) \
-	hif_write32_mb(SRNG_ ## _dir ## _ADDR(_srng, _reg), (_value))
+	hal_write_address_32_mb(_srng->hal_soc, SRNG_ ## _dir ## _ADDR(_srng, _reg), (_value))
 
 #define SRNG_REG_READ(_srng, _reg, _dir) \
-	hif_read32_mb(SRNG_ ## _dir ## _ADDR(_srng, _reg))
+	hal_read_address_32_mb(_srng->hal_soc, SRNG_ ## _dir ## _ADDR(_srng, _reg))
 
 #define SRNG_SRC_REG_WRITE(_srng, _reg, _value) \
 	SRNG_REG_WRITE(_srng, _reg, _value, SRC)
@@ -671,6 +671,20 @@ error:
 	return;
 }
 
+static void hal_target_based_configure(struct hal_soc *hal)
+{
+	struct hif_target_info *tgt_info =
+		hif_get_target_info_handle(hal->hif_handle);
+
+	switch (tgt_info->target_type) {
+	case TARGET_TYPE_QCA6290:
+		hal->use_register_windowing = true;
+	break;
+	default:
+	break;
+	}
+}
+
 /**
  * hal_attach - Initalize HAL layer
  * @hif_handle: Opaque HIF handle
@@ -724,6 +738,11 @@ void *hal_attach(void *hif_handle, qdf_device_t qdf_dev)
 		hal->srng_list[i].ring_id = i;
 	}
 
+	qdf_spinlock_create(&hal->register_access_lock);
+	hal->register_window = 0;
+
+	hal_target_based_configure(hal);
+
 	return (void *)hal;
 
 fail2:
@@ -734,6 +753,24 @@ fail1:
 	qdf_mem_free(hal);
 fail0:
 	return NULL;
+}
+
+/**
+ * hal_mem_info - Retreive hal memory base address
+ *
+ * @hal_soc: Opaque HAL SOC handle
+ * @mem: pointer to structure to be updated with hal mem info
+ */
+void hal_get_meminfo(void *hal_soc, struct hal_mem_info *mem )
+{
+	struct hal_soc *hal = (struct hal_soc *)hal_soc;
+	mem->dev_base_addr = (void *)hal->dev_base_addr;
+        mem->shadow_rdptr_mem_vaddr = (void *)hal->shadow_rdptr_mem_vaddr;
+	mem->shadow_wrptr_mem_vaddr = (void *)hal->shadow_wrptr_mem_vaddr;
+        mem->shadow_rdptr_mem_paddr = (void *)hal->shadow_rdptr_mem_paddr;
+	mem->shadow_wrptr_mem_paddr = (void *)hal->shadow_wrptr_mem_paddr;
+	hif_read_phy_mem_base(hal->hif_handle, (qdf_dma_addr_t *)&mem->dev_base_paddr);
+	return;
 }
 
 /**
@@ -1072,6 +1109,7 @@ void *hal_srng_setup(void *hal_soc, int ring_type, int ring_num,
 	srng->intr_timer_thres_us = ring_params->intr_timer_thres_us;
 	srng->intr_batch_cntr_thres_entries =
 		ring_params->intr_batch_cntr_thres_entries;
+	srng->hal_soc = hal_soc;
 
 	for (i = 0 ; i < MAX_SRNG_REG_GROUPS; i++) {
 		srng->hwreg_base[i] = dev_base_addr + ring_config->reg_start[i]
@@ -1219,6 +1257,10 @@ extern void hal_get_srng_params(void *hal_soc, void *hal_ring,
 	struct hal_srng_params *ring_params)
 {
 	struct hal_srng *srng = (struct hal_srng *)hal_ring;
+	int i =0;
+	ring_params->ring_id = srng->ring_id;
+	ring_params->ring_dir = srng->ring_dir;
+	ring_params->entry_size = srng->entry_size;
 
 	ring_params->ring_base_paddr = srng->ring_base_paddr;
 	ring_params->ring_base_vaddr = srng->ring_base_vaddr;
@@ -1231,4 +1273,6 @@ extern void hal_get_srng_params(void *hal_soc, void *hal_ring,
 	ring_params->low_threshold = srng->u.src_ring.low_threshold;
 	ring_params->flags = srng->flags;
 	ring_params->ring_id = srng->ring_id;
+	for (i = 0 ; i < MAX_SRNG_REG_GROUPS; i++)
+		ring_params->hwreg_base[i] = srng->hwreg_base[i];
 }

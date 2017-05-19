@@ -53,6 +53,9 @@
 #define QDF_DEFAULT_TRACE_LEVEL (1 << QDF_TRACE_LEVEL_INFO)
 #endif
 
+#define QDF_CATEGORY_INFO_U16(val) (((val >> 16) & 0x0000FFFF))
+#define QDF_TRACE_LEVEL_INFO_L16(val) (val & 0x0000FFFF)
+
 typedef int (qdf_abstract_print)(void *priv, const char *fmt, ...);
 
 /*
@@ -67,19 +70,6 @@ typedef int (qdf_abstract_print)(void *priv, const char *fmt, ...);
 #define QDF_DEBUG_CFG           0x40
 
 #ifdef CONFIG_MCL
-/**
- * qdf_set_pidx() - Sets the global qdf_pidx.
- * @pidx : Index of print control object assigned to the module
- *
- */
-void qdf_set_pidx(int pidx);
-
-/**
- * qdf_get_pidx() - Returns the global qdf_pidx.
- *
- * Return : Current qdf print index.
- */
-int qdf_get_pidx(void);
 
 /* By default Data Path module will have all log levels enabled, except debug
  * log level. Debug level will be left up to the framework or user space modules
@@ -476,6 +466,62 @@ void __printf(3, 4) qdf_snprintf(char *str_buffer, unsigned int size,
 		  char *str_format, ...);
 
 #define QDF_SNPRINTF qdf_snprintf
+
+#ifdef TSOSEG_DEBUG
+static inline
+int qdf_tso_seg_dbg_record(struct qdf_tso_seg_elem_t *tsoseg,
+			   uint16_t caller)
+{
+	int rc = -1;
+
+	if (tsoseg != NULL) {
+		tsoseg->dbg.cur++;  tsoseg->dbg.cur &= 0x0f;
+		tsoseg->dbg.history[tsoseg->dbg.cur] = caller;
+		rc = tsoseg->dbg.cur;
+	}
+	return rc;
+};
+static inline void qdf_tso_seg_dbg_bug(char *msg)
+{
+	qdf_print(msg);
+	QDF_BUG(0);
+};
+
+static inline void
+qdf_tso_seg_dbg_setowner(struct qdf_tso_seg_elem_t *tsoseg, void *owner)
+{
+	tsoseg->dbg.txdesc = owner;
+};
+
+static inline void
+qdf_tso_seg_dbg_zero(struct qdf_tso_seg_elem_t *tsoseg)
+{
+	memset(tsoseg, 0, offsetof(struct qdf_tso_seg_elem_t, dbg));
+	return;
+};
+
+#else
+static inline
+int qdf_tso_seg_dbg_record(struct qdf_tso_seg_elem_t *tsoseg,
+			   uint16_t caller)
+{
+	return 0;
+};
+static inline void qdf_tso_seg_dbg_bug(char *msg)
+{
+};
+static inline void
+qdf_tso_seg_dbg_setowner(struct qdf_tso_seg_elem_t *tsoseg, void *owner)
+{
+};
+static inline int
+qdf_tso_seg_dbg_zero(struct qdf_tso_seg_elem_t *tsoseg)
+{
+	memset(tsoseg, 0, sizeof(struct qdf_tso_seg_elem_t));
+	return 0;
+};
+
+#endif /* TSOSEG_DEBUG */
 #else
 
 #define DPTRACE(x)
@@ -489,10 +535,24 @@ void __printf(3, 4) qdf_snprintf(char *str_buffer, unsigned int size,
 
 #define MAX_SUPPORTED_CATEGORY QDF_MODULE_ID_MAX
 
+/**
+ * qdf_set_pidx() - Sets the global qdf_pidx.
+ * @pidx : Index of print control object assigned to the module
+ *
+ */
+void qdf_set_pidx(int pidx);
+
+/**
+ * qdf_get_pidx() - Returns the global qdf_pidx.
+ *
+ * Return : Current qdf print index.
+ */
+int qdf_get_pidx(void);
 /*
  * Shared print control index
  * for converged debug framework
  */
+
 #define QDF_PRINT_IDX_SHARED -1
 
 /**
@@ -730,5 +790,16 @@ void qdf_logging_init(void);
  * Return : void
  */
 void qdf_logging_exit(void);
+
+#define QDF_SYMBOL_LEN __QDF_SYMBOL_LEN
+
+/**
+ * qdf_sprint_symbol() - prints the name of a symbol into a string buffer
+ * @buffer: the string buffer to print into
+ * @addr: address of the symbol to lookup and print
+ *
+ * Return: number of characters printed
+ */
+int qdf_sprint_symbol(char *buffer, void *addr);
 
 #endif /* __QDF_TRACE_H */

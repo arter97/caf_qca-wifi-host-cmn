@@ -51,6 +51,21 @@ cdp_soc_attach_target(ol_txrx_soc_handle soc)
 	return 0;
 }
 
+static inline int
+cdp_soc_get_nss_cfg(ol_txrx_soc_handle soc)
+{
+	if (soc->ops->cmn_drv_ops->txrx_soc_get_nss_cfg)
+		return soc->ops->cmn_drv_ops->txrx_soc_get_nss_cfg(soc);
+	return 0;
+}
+
+static inline void
+cdp_soc_set_nss_cfg(ol_txrx_soc_handle soc, uint32_t config)
+{
+	if (soc->ops->cmn_drv_ops->txrx_soc_set_nss_cfg)
+		soc->ops->cmn_drv_ops->txrx_soc_set_nss_cfg(soc, config);
+}
+
 static inline struct cdp_vdev *
 cdp_vdev_attach(ol_txrx_soc_handle soc, struct cdp_pdev *pdev,
 	uint8_t *vdev_mac_addr, uint8_t vdev_id, enum wlan_op_mode op_mode)
@@ -150,10 +165,12 @@ cdp_peer_delete(ol_txrx_soc_handle soc, void *peer)
 }
 
 static inline int
-cdp_set_monitor_mode(ol_txrx_soc_handle soc, struct cdp_vdev *vdev)
+cdp_set_monitor_mode(ol_txrx_soc_handle soc, struct cdp_vdev *vdev,
+			uint8_t smart_monitor)
 {
 	if (soc->ops->cmn_drv_ops->txrx_set_monitor_mode)
-		return soc->ops->cmn_drv_ops->txrx_set_monitor_mode(vdev);
+		return soc->ops->cmn_drv_ops->txrx_set_monitor_mode(vdev,
+					smart_monitor);
 	return 0;
 }
 

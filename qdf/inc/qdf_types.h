@@ -303,6 +303,7 @@ typedef void (*qdf_timer_func_t)(void *);
  * @QDF_MODULE_ID_CONFIG: CONFIG module ID
  * @QDF_MODULE_ID_REGULATORY    : REGULATORY module ID
  * @QDF_MODULE_ID_NAN: NAN module ID
+ * @QDF_MODULE_ID_SPECTRAL: Spectral module ID
  * @QDF_MODULE_ID_ANY: anything
  * @QDF_MODULE_ID_MAX: Max place holder module ID
  */
@@ -388,8 +389,11 @@ typedef enum {
 	QDF_MODULE_ID_POLICY_MGR,
 	QDF_MODULE_ID_CONFIG,
 	QDF_MODULE_ID_REGULATORY,
+	QDF_MODULE_ID_SA_API,
 	QDF_MODULE_ID_NAN,
 	QDF_MODULE_ID_OFFCHAN_TXRX,
+	QDF_MODULE_ID_SON,
+	QDF_MODULE_ID_SPECTRAL,
 	QDF_MODULE_ID_ANY,
 	QDF_MODULE_ID_MAX,
 } QDF_MODULE_ID;
@@ -691,6 +695,33 @@ struct qdf_tso_seg_t {
 };
 
 /**
+ * TSO seg elem action caller locations: goes into dbg.history below.
+ * Needed to be defined outside of the feature so that
+ * callers can be coded without ifdefs (even if they get
+ * resolved to nothing)
+ */
+enum tsoseg_dbg_caller_e {
+	TSOSEG_LOC_UNDEFINED,
+	TSOSEG_LOC_INIT1,
+	TSOSEG_LOC_INIT2,
+	TSOSEG_LOC_DEINIT,
+	TSOSEG_LOC_PREPARETSO,
+	TSOSEG_LOC_TXPREPLLFAST,
+	TSOSEG_LOC_UNMAPTSO,
+	TSOSEG_LOC_ALLOC,
+	TSOSEG_LOC_FREE,
+};
+#ifdef TSOSEG_DEBUG
+
+#define MAX_TSO_SEG_ACT_HISTORY 16
+struct qdf_tso_seg_dbg_t {
+	void    *txdesc;  /* owner - (ol_txrx_tx_desc_t *) */
+	int      cur;     /* index of last valid entry */
+	uint16_t history[MAX_TSO_SEG_ACT_HISTORY];
+};
+#endif /* TSOSEG_DEBUG */
+
+/**
  * qdf_tso_seg_elem_t - tso segment element
  * @seg: instance of segment
  * @next: pointer to the next segment
@@ -700,6 +731,9 @@ struct qdf_tso_seg_elem_t {
 	uint16_t cookie:15,
 		on_freelist:1;
 	struct qdf_tso_seg_elem_t *next;
+#ifdef TSOSEG_DEBUG
+	struct qdf_tso_seg_dbg_t dbg;
+#endif /* TSOSEG_DEBUG */
 };
 
 /**

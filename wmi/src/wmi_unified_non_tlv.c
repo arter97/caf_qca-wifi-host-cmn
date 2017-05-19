@@ -31,7 +31,6 @@
 #include "a_debug.h"
 #include "wlan_defs.h"
 #include "ol_if_athvar.h"
-#include "ol_defines.h"
 #include "wmi_unified_api.h"
 #include "wmi_unified_priv.h"
 
@@ -6733,12 +6732,13 @@ static QDF_STATUS extract_rtt_ev_non_tlv(wmi_unified_t wmi_handle, void *evt_buf
  */
 static QDF_STATUS extract_thermal_stats_non_tlv(wmi_unified_t wmi_handle,
 		void *evt_buf,
-		uint32_t *temp, uint32_t *level)
+		uint32_t *temp, uint32_t *level, uint32_t *pdev_id)
 {
 	tt_stats_t *tt_stats_event = NULL;
 
 	tt_stats_event = (tt_stats_t *) evt_buf;
 
+	*pdev_id = WMI_NON_TLV_DEFAULT_PDEV_ID;
 	*temp = tt_stats_event->temp;
 	*level = tt_stats_event->level;
 	return QDF_STATUS_SUCCESS;
@@ -7008,7 +7008,7 @@ static QDF_STATUS extract_single_phyerr_non_tlv(wmi_unified_t wmi_handle,
 		phyerr->rf_info.rssi_comb =
 			WMI_UNIFIED_RSSI_COMB_GET(&ev->hdr);
 
-#if ATH_SUPPORT_SPECTRAL
+#ifdef WLAN_CONV_SPECTRAL_ENABLE
 
 	   /*
 		* If required, pass spectral events to the spectral module
@@ -7077,7 +7077,7 @@ static QDF_STATUS extract_single_phyerr_non_tlv(wmi_unified_t wmi_handle,
 
 			}
 		}
-#endif  /* ATH_SUPPORT_SPECTRAL */
+#endif  /* WLAN_CONV_SPECTRAL_ENABLE */
 
 		/*
 		 * Advance the buffer pointer to the next PHY error.
@@ -7138,7 +7138,7 @@ static QDF_STATUS extract_composite_phyerr_non_tlv(wmi_unified_t wmi_handle,
 
 	/* Handle Spectral PHY Error */
 	if ((ph->phy_err_mask0 & WMI_HOST_AR900B_SPECTRAL_PHYERR_MASK)) {
-#if ATH_SUPPORT_SPECTRAL
+#ifdef WLAN_CONV_SPECTRAL_ENABLE
 		if (ph->buf_len > 0) {
 
 			/* Initialize the NF values to Zero. */
@@ -7199,7 +7199,7 @@ static QDF_STATUS extract_composite_phyerr_non_tlv(wmi_unified_t wmi_handle,
 			    WMI_UNIFIED_FREQ_INFO_GET(ph, 2);
 
 		}
-#endif  /* ATH_SUPPORT_SPECTRAL */
+#endif  /* WLAN_CONV_SPECTRAL_ENABLE */
 
 	}
 	return QDF_STATUS_SUCCESS;
@@ -8277,6 +8277,47 @@ static void populate_non_tlv_service(uint32_t *wmi_service)
 	wmi_service[wmi_service_mawc] = WMI_SERVICE_UNAVAILABLE;
 	wmi_service[wmi_service_multiple_vdev_restart] =
 				WMI_SERVICE_UNAVAILABLE;
+	wmi_service[wmi_service_peer_assoc_conf] = WMI_SERVICE_UNAVAILABLE;
+	wmi_service[wmi_service_egap] = WMI_SERVICE_UNAVAILABLE;
+	wmi_service[wmi_service_sta_pmf_offload] = WMI_SERVICE_UNAVAILABLE;
+	wmi_service[wmi_service_unified_wow_capability] =
+				WMI_SERVICE_UNAVAILABLE;
+	wmi_service[wmi_service_enterprise_mesh] = WMI_SERVICE_UNAVAILABLE;
+	wmi_service[wmi_service_bpf_offload] = WMI_SERVICE_UNAVAILABLE;
+	wmi_service[wmi_service_sync_delete_cmds] = WMI_SERVICE_UNAVAILABLE;
+	wmi_service[wmi_service_ratectrl_limit_max_min_rates] =
+				WMI_SERVICE_UNAVAILABLE;
+	wmi_service[wmi_service_nan_data] = WMI_SERVICE_UNAVAILABLE;
+	wmi_service[wmi_service_nan_rtt] = WMI_SERVICE_UNAVAILABLE;
+	wmi_service[wmi_service_11ax] = WMI_SERVICE_UNAVAILABLE;
+	wmi_service[wmi_service_deprecated_replace] = WMI_SERVICE_UNAVAILABLE;
+	wmi_service[wmi_service_tdls_conn_tracker_in_host_mode] =
+				WMI_SERVICE_UNAVAILABLE;
+	wmi_service[wmi_service_enhanced_mcast_filter] =WMI_SERVICE_UNAVAILABLE;
+	wmi_service[wmi_service_half_rate_quarter_rate_support] =
+				WMI_SERVICE_UNAVAILABLE;
+	wmi_service[wmi_service_vdev_rx_filter] = WMI_SERVICE_UNAVAILABLE;
+	wmi_service[wmi_service_p2p_listen_offload_support] =
+				WMI_SERVICE_UNAVAILABLE;
+	wmi_service[wmi_service_mark_first_wakeup_packet] =
+				WMI_SERVICE_UNAVAILABLE;
+	wmi_service[wmi_service_multiple_mcast_filter_set] =
+				WMI_SERVICE_UNAVAILABLE;
+	wmi_service[wmi_service_host_managed_rx_reorder] =
+				WMI_SERVICE_UNAVAILABLE;
+	wmi_service[wmi_service_flash_rdwr_support] = WMI_SERVICE_UNAVAILABLE;
+	wmi_service[wmi_service_wlan_stats_report] = WMI_SERVICE_UNAVAILABLE;
+	wmi_service[wmi_service_tx_msdu_id_new_partition_support] =
+				WMI_SERVICE_UNAVAILABLE;
+	wmi_service[wmi_service_dfs_phyerr_offload] = WMI_SERVICE_UNAVAILABLE;
+	wmi_service[wmi_service_rcpi_support] = WMI_SERVICE_UNAVAILABLE;
+	wmi_service[wmi_service_fw_mem_dump_support] = WMI_SERVICE_UNAVAILABLE;
+	wmi_service[wmi_service_peer_stats_info] = WMI_SERVICE_UNAVAILABLE;
+	wmi_service[wmi_service_regulatory_db] = WMI_SERVICE_UNAVAILABLE;
+	wmi_service[wmi_service_11d_offload] = WMI_SERVICE_UNAVAILABLE;
+	wmi_service[wmi_service_hw_data_filtering] = WMI_SERVICE_UNAVAILABLE;
+	wmi_service[wmi_service_pkt_routing] = WMI_SERVICE_UNAVAILABLE;
+	wmi_service[wmi_service_offchan_tx_wmi] = WMI_SERVICE_UNAVAILABLE;
 }
 
 /**

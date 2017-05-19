@@ -312,7 +312,7 @@ enum reg_domain {
 	WORLD_6C = 0x6C,
 };
 
-static const struct country_code_to_reg_domain g_all_countries[] = {
+const struct country_code_to_reg_domain g_all_countries[] = {
 	{CTRY_AFGHANISTAN, ETSI1_WORLD, "AF", "AF" , 40, 160, 0},
 	{CTRY_ALBANIA, ETSI1_WORLD, "AL", "AL", 40, 160, 0},
 	{CTRY_ALGERIA, APL13_WORLD, "DZ", "DZ", 40, 160, 0},
@@ -361,7 +361,7 @@ static const struct country_code_to_reg_domain g_all_countries[] = {
 	{CTRY_DOMINICA, FCC1_FCCA, "DM", "DM", 40, 160, 0},
 	{CTRY_DOMINICAN_REPUBLIC, FCC1_FCCA, "DO", "DO", 40, 160, 0},
 	{CTRY_ECUADOR, FCC3_WORLD, "EC", "EC", 40, 20, 0},
-	{CTRY_EGYPT, ETSI3_WORLD, "EG", "EG", 20, 20, 0},
+	{CTRY_EGYPT, ETSI3_WORLD, "EG", "EG", 40, 40, 0},
 	{CTRY_EL_SALVADOR, FCC1_WORLD, "SV", "SV", 40, 20, 0},
 	{CTRY_ESTONIA, ETSI1_WORLD, "EE", "EE", 40, 160, 0},
 	{CTRY_ETHIOPIA, ETSI1_WORLD, "ET", "ET", 40, 160, 0},
@@ -394,7 +394,7 @@ static const struct country_code_to_reg_domain g_all_countries[] = {
 	{CTRY_JORDAN, APL4_WORLD, "JO", "JO", 40, 160, 0},
 	{CTRY_KAZAKHSTAN, NULL1_WORLD, "KZ", "KZ", 40, 0, 0},
 	{CTRY_KENYA, APL12_WORLD, "KE", "KE", 40, 160, 0},
-	{CTRY_KOREA_NORTH, APL9_WORLD, "KP", "KP", 40, 20, 0},
+	{CTRY_KOREA_NORTH, APL9_WORLD, "KP", "KP", 20, 20, 0},
 	{CTRY_KOREA_ROC, APL9_WORLD, "KR", "KR", 40, 160, 0},
 	{CTRY_KUWAIT, ETSI3_WORLD, "KW", "KW", 40, 160, 0},
 	{CTRY_LATVIA, ETSI1_WORLD, "LV", "LV", 40, 160, 0},
@@ -559,6 +559,7 @@ enum reg_domains_5g {
 	APL9,
 	APL10,
 	APL12,
+	APL13,
 	APL14,
 	MKK3,
 	MKK4,
@@ -571,7 +572,7 @@ enum reg_domains_5g {
 };
 
 
-static const struct reg_domain_pair g_reg_dmn_pairs[] = {
+const struct reg_domain_pair g_reg_dmn_pairs[] = {
 	{NULL1_WORLD, NULL1, WORLD},
 
 	{FCC1_FCCA, FCC1, FCCA},
@@ -602,6 +603,7 @@ static const struct reg_domain_pair g_reg_dmn_pairs[] = {
 	{APL9_WORLD, APL9, WORLD},
 	{APL10_WORLD, APL10, WORLD},
 	{APL12_WORLD, APL12, WORLD},
+	{APL13_WORLD, APL13, WORLD},
 	{APL14_WORLD, APL14, WORLD},
 
 	{MKK3_MKKA, MKK3, MKKA},
@@ -623,18 +625,18 @@ static const struct reg_domain_pair g_reg_dmn_pairs[] = {
 	{MKK11_FCCA, MKK11, FCCA},
 	{MKK11_MKKC, MKK11, MKKC},
 
-	{WORLD_60, WORLD_2G_3, WORLD_5G_2},
-	{WORLD_61, WORLD_2G_3, WORLD_5G_2},
-	{WORLD_62, WORLD_2G_3, WORLD_5G_2},
-	{WORLD_63, WORLD_2G_2, WORLD_5G_1},
-	{WORLD_65, WORLD_2G_2, WORLD_5G_1},
-	{WORLD_64, WORLD_2G_1, WORLD_5G_1},
-	{WORLD_66, WORLD_2G_1, WORLD_5G_2},
-	{WORLD_69, WORLD_2G_1, WORLD_5G_2},
-	{WORLD_67, WORLD_2G_2, WORLD_5G_2},
-	{WORLD_68, WORLD_2G_2, WORLD_5G_2},
-	{WORLD_6A, WORLD_2G_2, WORLD_5G_2},
-	{WORLD_6C, WORLD_2G_2, WORLD_5G_2},
+	{WORLD_60, WORLD_5G_2, WORLD_2G_3},
+	{WORLD_61, WORLD_5G_2, WORLD_2G_3},
+	{WORLD_62, WORLD_5G_2, WORLD_2G_3},
+	{WORLD_63, WORLD_5G_1, WORLD_2G_2},
+	{WORLD_65, WORLD_5G_1, WORLD_2G_2},
+	{WORLD_64, WORLD_5G_1, WORLD_2G_1},
+	{WORLD_66, WORLD_5G_2, WORLD_2G_1},
+	{WORLD_69, WORLD_5G_2, WORLD_2G_1},
+	{WORLD_67, WORLD_5G_2, WORLD_2G_2},
+	{WORLD_68, WORLD_5G_2, WORLD_2G_2},
+	{WORLD_6A, WORLD_5G_2, WORLD_2G_2},
+	{WORLD_6C, WORLD_5G_2, WORLD_2G_2},
 };
 
 enum reg_rules_2g {
@@ -648,7 +650,7 @@ enum reg_rules_2g {
 	CHAN_14_2,
 };
 
-static const struct regulatory_rule reg_rules_2g[] = {
+const struct regulatory_rule reg_rules_2g[] = {
 
 	[CHAN_1_11_1] = {2402, 2472, 40, 30, 0},
 	[CHAN_1_11_2] = {2402, 2472, 40, 20, 0},
@@ -661,17 +663,17 @@ static const struct regulatory_rule reg_rules_2g[] = {
 };
 
 
-static const struct regdomain regdomains_2g[] = {
+const struct regdomain regdomains_2g[] = {
 
-	[FCCA] = {CTL_FCC, DFS_UNINIT_REG, 0, 1, {CHAN_1_11_1} },
-	[WORLD] = {CTL_ETSI, DFS_UNINIT_REG, 0, 1, {CHAN_1_13_1} },
-	[MKKA] = {CTL_MKK, DFS_UNINIT_REG, 0, 2, {CHAN_1_13_1, CHAN_14_1} },
-	[MKKC] = {CTL_MKK, DFS_UNINIT_REG, 0, 1, {CHAN_1_13_1} },
-	[ETSIC] = {CTL_ETSI, DFS_UNINIT_REG, 0, 1, {CHAN_1_13_2} },
-	[WORLD_2G_1] = {CTL_FCC, DFS_UNINIT_REG, 0, 1, {CHAN_1_11_2} },
-	[WORLD_2G_2] = {CTL_FCC, DFS_UNINIT_REG, 0, 2,
+	[FCCA] = {CTL_FCC, DFS_UNINIT_REG, 0, 6, 1, {CHAN_1_11_1} },
+	[WORLD] = {CTL_ETSI, DFS_UNINIT_REG, 0, 0, 1, {CHAN_1_13_1} },
+	[MKKA] = {CTL_MKK, DFS_UNINIT_REG, 0, 0, 2, {CHAN_1_13_1, CHAN_14_1} },
+	[MKKC] = {CTL_MKK, DFS_UNINIT_REG, 0, 0, 1, {CHAN_1_13_1} },
+	[ETSIC] = {CTL_ETSI, DFS_UNINIT_REG, 0, 0, 1, {CHAN_1_13_2} },
+	[WORLD_2G_1] = {CTL_FCC, DFS_UNINIT_REG, 0, 0, 1, {CHAN_1_11_2} },
+	[WORLD_2G_2] = {CTL_FCC, DFS_UNINIT_REG, 0, 0, 2,
 			{CHAN_1_11_2, CHAN_12_13_1} },
-	[WORLD_2G_3] = {CTL_FCC, DFS_UNINIT_REG, 0, 3,
+	[WORLD_2G_3] = {CTL_FCC, DFS_UNINIT_REG, 0, 0, 3,
 			{CHAN_1_11_2, CHAN_12_13_1, CHAN_14_2} },
 };
 
@@ -697,6 +699,7 @@ enum reg_rules_5g {
 	CHAN_5490_5710_2,
 	CHAN_5490_5590_1,
 	CHAN_5490_5570_1,
+	CHAN_5490_5650_1,
 	CHAN_5490_5670_1,
 	CHAN_5490_5630_1,
 	CHAN_5650_5730_1,
@@ -709,7 +712,7 @@ enum reg_rules_5g {
 	CHAN_5735_5775_1,
 };
 
-static const struct regulatory_rule reg_rules_5g[] = {
+const struct regulatory_rule reg_rules_5g[] = {
 
 	[CHAN_4910_4990_1] = {4910, 4990, 20, 20, 0},
 	[CHAN_4940_4990_1] = {4940, 4990, 20, 33, 0},
@@ -730,6 +733,7 @@ static const struct regulatory_rule reg_rules_5g[] = {
 	[CHAN_5490_5710_2] = {5490, 5710, 160, 20, REGULATORY_CHAN_RADAR},
 	[CHAN_5490_5590_1] = {5490, 5590, 80, 23, REGULATORY_CHAN_RADAR},
 	[CHAN_5490_5570_1] = {5490, 5570, 80, 30, REGULATORY_CHAN_RADAR},
+	[CHAN_5490_5650_1] = {5490, 5650, 160, 23, REGULATORY_CHAN_RADAR},
 	[CHAN_5490_5670_1] = {5490, 5670, 160, 20, REGULATORY_CHAN_RADAR},
 	[CHAN_5490_5630_1] = {5490, 5630, 80, 30, REGULATORY_CHAN_RADAR},
 	[CHAN_5650_5730_1] = {5650, 5730, 80, 23, REGULATORY_CHAN_RADAR},
@@ -743,117 +747,142 @@ static const struct regulatory_rule reg_rules_5g[] = {
 };
 
 
-static const struct regdomain regdomains_5g[] = {
+const struct regdomain regdomains_5g[] = {
 
-	[FCC1] = {CTL_FCC, DFS_FCC_REG, 2, 3, {CHAN_5170_5250_1,
+	[FCC1] = {CTL_FCC, DFS_FCC_REG, 2, 6, 3, {CHAN_5170_5250_1,
 					      CHAN_5250_5330_1,
 					      CHAN_5735_5835_1} },
 
-	[FCC2] = {CTL_FCC, DFS_CN_REG, 2, 3, {CHAN_5170_5250_2,
+	[FCC2] = {CTL_FCC, DFS_CN_REG, 2, 6, 3, {CHAN_5170_5250_2,
 					     CHAN_5250_5330_1,
 					     CHAN_5735_5835_1} },
 
-	[FCC3] = {CTL_FCC, DFS_FCC_REG, 2, 4, {CHAN_5170_5250_2,
+	[FCC3] = {CTL_FCC, DFS_FCC_REG, 2, 6, 4, {CHAN_5170_5250_2,
 					      CHAN_5250_5330_1,
 					      CHAN_5490_5730_1,
 					      CHAN_5735_5835_1} },
 
-	[FCC4] = {CTL_FCC, DFS_FCC_REG, 2, 4, {CHAN_4940_4990_1,
+	[FCC4] = {CTL_FCC, DFS_FCC_REG, 2, 6, 4, {CHAN_4940_4990_1,
 					      CHAN_5170_5250_1,
 					      CHAN_5250_5330_1,
 					      CHAN_5735_5835_1} },
 
-	[FCC6] = {CTL_FCC, DFS_FCC_REG, 2, 5, {CHAN_5170_5250_2,
+	[FCC6] = {CTL_FCC, DFS_FCC_REG, 2, 6, 5, {CHAN_5170_5250_2,
 					      CHAN_5250_5330_1,
 					      CHAN_5490_5590_1,
 					      CHAN_5650_5730_1,
 					      CHAN_5735_5835_1} },
 
-	[FCC8] = {CTL_FCC, DFS_FCC_REG, 2, 4, {CHAN_5170_5250_4,
+	[FCC8] = {CTL_FCC, DFS_FCC_REG, 2, 6, 4, {CHAN_5170_5250_4,
 					      CHAN_5250_5330_1,
 					      CHAN_5490_5730_1,
 					      CHAN_5735_5835_1} },
 
-	[ETSI1] = {CTL_ETSI, DFS_ETSI_REG, 5, 3, {CHAN_5170_5250_2,
+	[ETSI1] = {CTL_ETSI, DFS_ETSI_REG, 5, 0, 3, {CHAN_5170_5250_2,
 						 CHAN_5250_5330_1,
 						 CHAN_5490_5710_1} },
 
-	[ETSI3] = {CTL_ETSI, DFS_ETSI_REG, 5, 2, {CHAN_5170_5250_3,
+	[ETSI3] = {CTL_ETSI, DFS_ETSI_REG, 5, 0, 2, {CHAN_5170_5250_3,
 						 CHAN_5250_5330_2} },
 
-	[ETSI4] = {CTL_ETSI, DFS_ETSI_REG, 5, 2, {CHAN_5170_5250_1,
+	[ETSI4] = {CTL_ETSI, DFS_ETSI_REG, 5, 0, 2, {CHAN_5170_5250_1,
 						 CHAN_5250_5330_3} },
 
-	[ETSI8] = {CTL_ETSI, DFS_ETSI_REG, 20, 4, {CHAN_5170_5250_3,
+	[ETSI8] = {CTL_ETSI, DFS_ETSI_REG, 20, 0, 4, {CHAN_5170_5250_3,
 						  CHAN_5250_5330_2,
 						  CHAN_5490_5730_2,
 						  CHAN_5735_5835_2} },
 
-	[ETSI9] = {CTL_ETSI, DFS_ETSI_REG, 20, 4, {CHAN_5170_5250_3,
+	[ETSI9] = {CTL_ETSI, DFS_ETSI_REG, 20, 0, 4, {CHAN_5170_5250_3,
 						  CHAN_5250_5330_2,
 						  CHAN_5490_5670_1,
 						  CHAN_5735_5835_3} },
 
-	[APL1] = {CTL_ETSI, DFS_UNINIT_REG, 2, 1, {CHAN_5735_5835_2} },
+	[APL1] = {CTL_ETSI, DFS_UNINIT_REG, 2, 0, 1, {CHAN_5735_5835_2} },
 
-	[APL2] = {CTL_ETSI, DFS_UNINIT_REG, 2, 1, {CHAN_5735_5815_1} },
+	[APL2] = {CTL_ETSI, DFS_UNINIT_REG, 2, 0, 1, {CHAN_5735_5815_1} },
 
-	[APL4] = {CTL_ETSI, DFS_UNINIT_REG, 2, 2, {CHAN_5170_5250_2,
+	[APL4] = {CTL_ETSI, DFS_UNINIT_REG, 2, 0, 2, {CHAN_5170_5250_2,
 						  CHAN_5735_5835_1} },
 
-	[APL6] = {CTL_ETSI, DFS_ETSI_REG, 2, 3, {CHAN_5170_5250_3,
+	[APL6] = {CTL_ETSI, DFS_ETSI_REG, 2, 0, 3, {CHAN_5170_5250_3,
 						CHAN_5250_5330_2,
 						CHAN_5735_5835_3} },
 
-	[APL8] = {CTL_ETSI, DFS_ETSI_REG, 2, 2, {CHAN_5250_5330_4,
+	[APL8] = {CTL_ETSI, DFS_ETSI_REG, 2, 0, 2, {CHAN_5250_5330_4,
 						CHAN_5735_5835_2} },
 
-	[APL9] = {CTL_ETSI, DFS_KR_REG, 2, 4, {CHAN_5170_5250_3,
+	[APL9] = {CTL_ETSI, DFS_KR_REG, 2, 6, 4, {CHAN_5170_5250_3,
 					      CHAN_5250_5330_2,
 					      CHAN_5490_5630_1,
 					      CHAN_5735_5815_1} },
 
-	[APL10] = {CTL_ETSI, DFS_ETSI_REG, 2, 4, {CHAN_5170_5250_3,
+	[APL10] = {CTL_ETSI, DFS_ETSI_REG, 2, 6, 4, {CHAN_5170_5250_3,
 						 CHAN_5250_5330_2,
 						 CHAN_5490_5710_1,
 						 CHAN_5735_5815_1} },
 
-	[APL12] = {CTL_ETSI, DFS_ETSI_REG, 2, 3, {CHAN_5170_5250_1,
+	[APL12] = {CTL_ETSI, DFS_ETSI_REG, 2, 0, 3, {CHAN_5170_5250_1,
 						 CHAN_5490_5570_1,
 						 CHAN_5735_5775_1} },
 
-	[APL14] = {CTL_FCC, DFS_CN_REG, 2, 3, {CHAN_5170_5250_2,
+	[APL13] = {CTL_ETSI, DFS_ETSI_REG, 2, 0, 3, {CHAN_5170_5250_2,
+						 CHAN_5250_5330_1,
+						 CHAN_5490_5650_1} },
+
+	[APL14] = {CTL_FCC, DFS_CN_REG, 2, 0, 3, {CHAN_5170_5250_2,
 					      CHAN_5250_5330_1,
 					      CHAN_5735_5835_4} },
 
-	[MKK3] = {CTL_MKK, DFS_UNINIT_REG, 2, 1, {CHAN_5170_5250_3} },
+	[MKK3] = {CTL_MKK, DFS_UNINIT_REG, 2, 0, 1, {CHAN_5170_5250_3} },
 
-	[MKK4] = {CTL_MKK, DFS_MKK_REG, 2, 2, {CHAN_5170_5250_3,
+	[MKK4] = {CTL_MKK, DFS_MKK_REG, 2, 0, 2, {CHAN_5170_5250_3,
 					      CHAN_5250_5330_2} },
 
-	[MKK5] = {CTL_MKK, DFS_MKK_REG, 2, 3, {CHAN_5170_5250_3,
+	[MKK5] = {CTL_MKK, DFS_MKK_REG, 2, 0, 3, {CHAN_5170_5250_3,
 					      CHAN_5250_5330_2,
 					      CHAN_5490_5710_2} },
 
-	[MKK9] = {CTL_MKK, DFS_UNINIT_REG, 2, 3, {CHAN_5170_5250_3,
+	[MKK9] = {CTL_MKK, DFS_UNINIT_REG, 2, 0, 3, {CHAN_5170_5250_3,
 						 CHAN_4910_4990_1,
 						 CHAN_5030_5090_1} },
 
-	[MKK10] = {CTL_MKK, DFS_MKK_REG, 2, 4, {CHAN_5170_5250_3,
+	[MKK10] = {CTL_MKK, DFS_MKK_REG, 2, 0, 4, {CHAN_5170_5250_3,
 					       CHAN_5250_5330_2,
 					       CHAN_4910_4990_1,
 					       CHAN_5030_5090_1} },
 
-	[MKK11] = {CTL_MKK, DFS_MKK_REG, 2, 5, {CHAN_5170_5250_3,
+	[MKK11] = {CTL_MKK, DFS_MKK_REG, 2, 0, 5, {CHAN_5170_5250_3,
 					       CHAN_5250_5330_2,
 					       CHAN_5490_5710_2,
 					       CHAN_4910_4990_1,
 					       CHAN_5030_5090_1} },
 
-	[WORLD_5G_1] = {CTL_FCC, DFS_UNINIT_REG, 2, 2, {CHAN_5170_5330_1,
+	[WORLD_5G_1] = {CTL_FCC, DFS_UNINIT_REG, 2, 0, 2, {CHAN_5170_5330_1,
 						       CHAN_5735_5835_5} },
 
-	[WORLD_5G_2] = {CTL_FCC, DFS_UNINIT_REG, 2, 3, {CHAN_5170_5330_1,
+	[WORLD_5G_2] = {CTL_FCC, DFS_UNINIT_REG, 2, 0, 3, {CHAN_5170_5330_1,
 						       CHAN_5490_5730_3,
 						       CHAN_5735_5835_5} },
 };
+
+QDF_STATUS reg_get_num_countries(int *num_countries)
+{
+	*num_countries = QDF_ARRAY_SIZE(g_all_countries);
+
+	return QDF_STATUS_SUCCESS;
+}
+
+QDF_STATUS reg_get_num_reg_dmn_pairs(int *num_reg_dmn)
+{
+	*num_reg_dmn = QDF_ARRAY_SIZE(g_reg_dmn_pairs);
+
+	return QDF_STATUS_SUCCESS;
+}
+
+QDF_STATUS reg_get_default_country(uint16_t *default_country)
+{
+	*default_country = CTRY_UNITED_STATES;
+
+	return QDF_STATUS_SUCCESS;
+}

@@ -87,6 +87,7 @@
 #define AR6320_FW_3_0  (0x30)
 #define AR6320_FW_3_2  (0x32)
 #define QCA6290_EMULATION_DEVICE_ID (0xabcd)
+#define QCA6290_DEVICE_ID (0x1100)
 #define ADRASTEA_DEVICE_ID_P2_E12 (0x7021)
 #define AR9887_DEVICE_ID    (0x0050)
 #define AR900B_DEVICE_ID    (0x0040)
@@ -108,7 +109,7 @@
 #define HIF_GET_CE_STATE(scn) ((struct HIF_CE_state *)scn)
 #define HIF_GET_SDIO_SOFTC(scn) ((struct hif_sdio_softc *)scn)
 #define HIF_GET_USB_SOFTC(scn) ((struct hif_usb_softc *)scn)
-#define HIF_GET_USB_DEVICE(scn) ((HIF_DEVICE_USB *)scn)
+#define HIF_GET_USB_DEVICE(scn) ((struct HIF_DEVICE_USB *)scn)
 #define HIF_GET_SOFTC(scn) ((struct hif_softc *)scn)
 #define GET_HIF_OPAQUE_HDL(scn) ((struct hif_opaque_softc *)scn)
 
@@ -237,13 +238,14 @@ void hif_bus_close(struct hif_softc *ol_sc);
 QDF_STATUS hif_bus_open(struct hif_softc *ol_sc,
 	enum qdf_bus_type bus_type);
 QDF_STATUS hif_enable_bus(struct hif_softc *ol_sc, struct device *dev,
-	void *bdev, const hif_bus_id *bid, enum hif_enable_type type);
+	void *bdev, const struct hif_bus_id *bid, enum hif_enable_type type);
 void hif_disable_bus(struct hif_softc *scn);
 void hif_bus_prevent_linkdown(struct hif_softc *scn, bool flag);
 int hif_bus_get_context_size(enum qdf_bus_type bus_type);
 void hif_read_phy_mem_base(struct hif_softc *scn, qdf_dma_addr_t *bar_value);
 uint32_t hif_get_conparam(struct hif_softc *scn);
-struct hif_driver_state_callbacks *hif_get_callbacks_handle(struct hif_softc *scn);
+struct hif_driver_state_callbacks *hif_get_callbacks_handle(
+							struct hif_softc *scn);
 bool hif_is_driver_unloading(struct hif_softc *scn);
 bool hif_is_load_or_unload_in_progress(struct hif_softc *scn);
 bool hif_is_recovery_in_progress(struct hif_softc *scn);

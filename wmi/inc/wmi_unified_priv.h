@@ -1030,6 +1030,10 @@ QDF_STATUS
 QDF_STATUS
 (*send_coex_ver_cfg_cmd)(wmi_unified_t wmi_handle, coex_ver_cfg_t *param);
 
+QDF_STATUS
+(*send_coex_config_cmd)(wmi_unified_t wmi_handle,
+			struct coex_config_params *param);
+
 QDF_STATUS (*extract_wds_addr_event)(wmi_unified_t wmi_handle,
 	void *evt_buf, uint16_t len, wds_addr_event_t *wds_ev);
 
@@ -1182,7 +1186,7 @@ QDF_STATUS (*extract_chan_stats)(wmi_unified_t wmi_handle, void *evt_buf,
 			 uint32_t index, wmi_host_chan_stats *chan_stats);
 
 QDF_STATUS (*extract_thermal_stats)(wmi_unified_t wmi_handle, void *evt_buf,
-	uint32_t *temp, uint32_t *level);
+	uint32_t *temp, uint32_t *level, uint32_t *pdev_id);
 
 QDF_STATUS (*extract_thermal_level_stats)(wmi_unified_t wmi_handle,
 		void *evt_buf, uint8_t idx, uint32_t *levelcount,

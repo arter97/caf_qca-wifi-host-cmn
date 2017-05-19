@@ -347,7 +347,8 @@ QDF_STATUS regulatory_psoc_open(struct wlan_objmgr_psoc *psoc)
 	struct wlan_lmac_if_reg_tx_ops *tx_ops;
 
 	tx_ops = get_reg_psoc_tx_ops(psoc);
-	tx_ops->register_master_handler(psoc, NULL);
+	if (tx_ops->register_master_handler)
+		tx_ops->register_master_handler(psoc, NULL);
 
 	return QDF_STATUS_SUCCESS;
 };
@@ -357,7 +358,8 @@ QDF_STATUS regulatory_psoc_close(struct wlan_objmgr_psoc *psoc)
 	struct wlan_lmac_if_reg_tx_ops *tx_ops;
 
 	tx_ops = get_reg_psoc_tx_ops(psoc);
-	tx_ops->unregister_master_handler(psoc, NULL);
+	if (tx_ops->unregister_master_handler)
+		tx_ops->unregister_master_handler(psoc, NULL);
 
 	return QDF_STATUS_SUCCESS;
 };
@@ -386,6 +388,12 @@ bool wlan_reg_is_passive_or_disable_ch(struct wlan_objmgr_pdev *pdev,
 				       uint32_t chan)
 {
 	return reg_is_passive_or_disable_ch(pdev, chan);
+}
+
+bool wlan_reg_is_disable_ch(struct wlan_objmgr_pdev *pdev,
+				       uint32_t chan)
+{
+	return reg_is_disable_ch(pdev, chan);
 }
 
 uint32_t wlan_reg_freq_to_chan(struct wlan_objmgr_pdev *pdev,

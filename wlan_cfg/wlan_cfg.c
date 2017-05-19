@@ -73,15 +73,16 @@
 
 #define WLAN_CFG_PER_PDEV_TX_RING 1
 #define WLAN_CFG_NUM_TCL_DATA_RINGS 3
-#define WLAN_CFG_PER_PDEV_RX_RING 1
 #define WLAN_CFG_NUM_REO_DEST_RING 4
 
 #define WLAN_CFG_HTT_PKT_TYPE 2
 #define WLAN_CFG_MAX_PEER_ID 32
 
 #ifdef CONFIG_MCL
+#define WLAN_CFG_PER_PDEV_RX_RING 0
 #define NUM_RXDMA_RINGS_PER_PDEV 2
 #else
+#define WLAN_CFG_PER_PDEV_RX_RING 1
 #define NUM_RXDMA_RINGS_PER_PDEV 1
 #endif
 
@@ -156,6 +157,7 @@ struct wlan_cfg_dp_soc_ctxt {
 	int int_ce_ring_mask[WLAN_CFG_INT_NUM_CONTEXTS];
 	bool lro_enabled;
 	bool rx_hash;
+	int nss_cfg;
 };
 
 /**
@@ -171,6 +173,7 @@ struct wlan_cfg_dp_pdev_ctxt {
 	int dma_mon_dest_ring_size;
 	int dma_mon_status_ring_size;
 	int num_mac_rings;
+	int nss_enabled;
 };
 
 /**
@@ -394,4 +397,24 @@ bool wlan_cfg_is_lro_enabled(struct wlan_cfg_dp_soc_ctxt *cfg)
 bool wlan_cfg_is_rx_hash_enabled(struct wlan_cfg_dp_soc_ctxt *cfg)
 {
 	return  cfg->rx_hash;
+}
+
+int wlan_cfg_get_dp_pdev_nss_enabled(struct wlan_cfg_dp_pdev_ctxt *cfg)
+{
+	return  cfg->nss_enabled;
+}
+
+void wlan_cfg_set_dp_pdev_nss_enabled(struct wlan_cfg_dp_pdev_ctxt *cfg, int nss_enabled)
+{
+	cfg->nss_enabled = nss_enabled;
+}
+
+int wlan_cfg_get_dp_soc_nss_cfg(struct wlan_cfg_dp_soc_ctxt *cfg)
+{
+	return  cfg->nss_cfg;
+}
+
+void wlan_cfg_set_dp_soc_nss_cfg(struct wlan_cfg_dp_soc_ctxt *cfg, int nss_cfg)
+{
+	cfg->nss_cfg = nss_cfg;
 }

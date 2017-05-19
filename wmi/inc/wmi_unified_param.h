@@ -302,6 +302,19 @@
 #define MAX_ASSOC_IE_LENGTH 1024
 typedef uint32_t TARGET_INIT_STATUS;
 
+/**
+ * @brief Opaque handle of wmi structure
+ */
+struct wmi_unified;
+typedef struct wmi_unified *wmi_unified_t;
+
+typedef void *ol_scn_t;
+/**
+ * @wmi_event_handler function prototype
+ */
+typedef int (*wmi_unified_event_handler)(ol_scn_t scn_handle,
+		 uint8_t *event_buf, uint32_t len);
+
 typedef enum {
 	WMI_HOST_MODE_11A	= 0,   /* 11a Mode */
 	WMI_HOST_MODE_11G	= 1,   /* 11b/g Mode */
@@ -3465,6 +3478,7 @@ typedef struct {
  * @tt_level_config: TT level config params
  */
 struct thermal_mitigation_params {
+	uint32_t pdev_id;
 	uint32_t enable;
 	uint32_t dc;
 	uint32_t dc_per_event;
@@ -5294,6 +5308,38 @@ typedef enum {
 	wmi_service_btcoex_duty_cycle,
 	wmi_service_4_wire_coex_support,
 	wmi_service_multiple_vdev_restart,
+	wmi_service_peer_assoc_conf,
+	wmi_service_egap,
+	wmi_service_sta_pmf_offload,
+	wmi_service_unified_wow_capability,
+	wmi_service_enterprise_mesh,
+	wmi_service_bpf_offload,
+	wmi_service_sync_delete_cmds,
+	wmi_service_ratectrl_limit_max_min_rates,
+	wmi_service_nan_data,
+	wmi_service_nan_rtt,
+	wmi_service_11ax,
+	wmi_service_deprecated_replace,
+	wmi_service_tdls_conn_tracker_in_host_mode,
+	wmi_service_enhanced_mcast_filter,
+	wmi_service_half_rate_quarter_rate_support,
+	wmi_service_vdev_rx_filter,
+	wmi_service_p2p_listen_offload_support,
+	wmi_service_mark_first_wakeup_packet,
+	wmi_service_multiple_mcast_filter_set,
+	wmi_service_host_managed_rx_reorder,
+	wmi_service_flash_rdwr_support,
+	wmi_service_wlan_stats_report,
+	wmi_service_tx_msdu_id_new_partition_support,
+	wmi_service_dfs_phyerr_offload,
+	wmi_service_rcpi_support,
+	wmi_service_fw_mem_dump_support,
+	wmi_service_peer_stats_info,
+	wmi_service_regulatory_db,
+	wmi_service_11d_offload,
+	wmi_service_hw_data_filtering,
+	wmi_service_pkt_routing,
+	wmi_service_offchan_tx_wmi,
 
 	wmi_services_max,
 } wmi_conv_service_ids;
@@ -7162,6 +7208,28 @@ enum wmi_host_active_bpf_mode {
 	WMI_HOST_ACTIVE_BPF_DISABLED =	(1 << 1),
 	WMI_HOST_ACTIVE_BPF_ENABLED =	(1 << 2),
 	WMI_HOST_ACTIVE_BPF_ADAPTIVE =	(1 << 3)
+};
+
+/**
+ * struct coex_config_params - Coex config command params
+ * @vdev_id: Virtual AP device identifier
+ * @config_type: Configuration type - wmi_coex_config_type enum
+ * @config_arg1: Configuration argument based on config type
+ * @config_arg2: Configuration argument based on config type
+ * @config_arg3: Configuration argument based on config type
+ * @config_arg4: Configuration argument based on config type
+ * @config_arg5: Configuration argument based on config type
+ * @config_arg6: Configuration argument based on config type
+ */
+struct coex_config_params {
+	uint32_t vdev_id;
+	uint32_t config_type;
+	uint32_t config_arg1;
+	uint32_t config_arg2;
+	uint32_t config_arg3;
+	uint32_t config_arg4;
+	uint32_t config_arg5;
+	uint32_t config_arg6;
 };
 
 #endif /* _WMI_UNIFIED_PARAM_H_ */

@@ -52,6 +52,16 @@ cdp_mempools_attach(ol_txrx_soc_handle soc, void *ctrl_pdev)
 	return 0;
 }
 
+/**
+ * @brief set filter neighbour peers
+ * @details
+ *  This defines interface function to set neighbour peer filtering.
+ *
+ * @param soc - the pointer to soc object
+ * @param pdev - the pointer physical device object
+ * @param val - the enable/disable value
+ * @return - int
+ */
 static inline int
 cdp_set_filter_neighbour_peers(ol_txrx_soc_handle soc,
 	struct cdp_pdev *pdev, u_int32_t val)
@@ -61,6 +71,29 @@ cdp_set_filter_neighbour_peers(ol_txrx_soc_handle soc,
 			(pdev, val);
 	return 0;
 }
+
+/**
+ * @brief update the neighbour peer addresses
+ * @details
+ *  This defines interface function to update neighbour peers addresses
+ *  which needs to be filtered
+ *
+ * @param soc - the pointer to soc object
+ * @param pdev - the pointer to physical device object
+ * @param cmd - add/del entry into peer table
+ * @param macaddr - the address of neighbour peer
+ * @return - int
+ */
+static inline int
+cdp_update_filter_neighbour_peers(ol_txrx_soc_handle soc,
+	struct cdp_pdev *pdev, uint32_t cmd, uint8_t *macaddr)
+{
+	if (soc->ops->ctrl_ops->txrx_update_filter_neighbour_peers)
+		return soc->ops->ctrl_ops->txrx_update_filter_neighbour_peers
+			(pdev, cmd, macaddr);
+	return 0;
+}
+
 /**
  * @brief set the safemode of the device
  * @details
@@ -73,7 +106,6 @@ cdp_set_filter_neighbour_peers(ol_txrx_soc_handle soc,
  * @param val - the safemode state
  * @return - void
  */
-
 static inline void
 cdp_set_safemode(ol_txrx_soc_handle soc,
 	struct cdp_vdev *vdev, u_int32_t val)
@@ -218,10 +250,14 @@ cdp_set_inact_params(ol_txrx_soc_handle soc, struct cdp_pdev *pdev,
 			u_int16_t inact_normal,
 			u_int16_t inact_overload)
 {
+	if (!soc || !pdev)
+		return false;
+
 	if (soc->ops->ctrl_ops->txrx_set_inact_params)
 		return soc->ops->ctrl_ops->txrx_set_inact_params
 			(pdev, inact_check_interval, inact_normal,
 			inact_overload);
+
 	return false;
 }
 static inline bool
@@ -229,6 +265,9 @@ cdp_start_inact_timer(ol_txrx_soc_handle soc,
 	struct cdp_pdev *pdev,
 	bool enable)
 {
+	if (!soc || !pdev)
+		return false;
+
 	if (soc->ops->ctrl_ops->txrx_start_inact_timer)
 		return soc->ops->ctrl_ops->txrx_start_inact_timer
 			(pdev, enable);
@@ -248,8 +287,12 @@ static inline void
 cdp_set_overload(ol_txrx_soc_handle soc, struct cdp_pdev *pdev,
 	bool overload)
 {
+	if (!soc || !pdev)
+		return;
+
 	if (soc->ops->ctrl_ops->txrx_set_overload)
 		return soc->ops->ctrl_ops->txrx_set_overload(pdev, overload);
+
 	return;
 }
 
@@ -262,8 +305,12 @@ cdp_set_overload(ol_txrx_soc_handle soc, struct cdp_pdev *pdev,
 static inline bool
 cdp_peer_is_inact(ol_txrx_soc_handle soc, void *peer)
 {
+	if (!soc || !peer)
+		return false;
+
 	if (soc->ops->ctrl_ops->txrx_peer_is_inact)
 		return soc->ops->ctrl_ops->txrx_peer_is_inact(peer);
+
 	return false;
 }
 

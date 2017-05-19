@@ -33,6 +33,7 @@
 #include "qdf_types.h"
 #include "qdf_lock.h"
 #include "qdf_mem.h"
+#include "qdf_nbuf.h"
 #include "wcss_seq_hwiobase.h"
 #include "tlv_hdr.h"
 #include "tlv_tag_def.h"
@@ -62,9 +63,11 @@
 #include "rx_ppdu_start_user_info.h"
 #include "rx_ppdu_end_user_stats.h"
 #include "rx_ppdu_end_user_stats_ext.h"
+#include "rx_mpdu_desc_info.h"
 #include "tx_msdu_extension.h"
 #include "wcss_version.h"
 #include "pld_common.h"
+#include "rx_msdu_link.h"
 
 /* TBD: This should be movded to shared HW header file */
 enum hal_srng_ring_id {
@@ -271,6 +274,8 @@ struct hal_srng {
 			uint32_t low_threshold;
 		} src_ring;
 	} u;
+
+	struct hal_soc *hal_soc;
 };
 
 /* HW SRNG configuration table */
@@ -322,6 +327,9 @@ struct hal_soc {
 	/* shadow register configuration */
 	struct pld_shadow_reg_v2_cfg shadow_config[MAX_SHADOW_REGISTERS];
 	int num_shadow_registers_configured;
+	bool use_register_windowing;
+	uint32_t register_window;
+	qdf_spinlock_t register_access_lock;
 };
 
 /* TODO: Check if the following can be provided directly by HW headers */
@@ -345,9 +353,9 @@ struct hal_soc {
 		(_reg ## _ ## _fld ## _SHFT))
 
 #define HAL_REG_WRITE(_soc, _reg, _value) \
-	hif_write32_mb((_soc)->dev_base_addr + (_reg), (_value))
+	hal_write32_mb(_soc, (_reg), (_value))
 
 #define HAL_REG_READ(_soc, _offset) \
-	hif_read32_mb((_soc)->dev_base_addr + (_offset))
+	hal_read32_mb(_soc, (_offset))
 
 #endif /* _HAL_INTERNAL_H_ */

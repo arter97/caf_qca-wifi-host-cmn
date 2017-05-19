@@ -1181,6 +1181,19 @@ bool policy_mgr_is_any_mode_active_on_band_along_with_session(
 		enum policy_mgr_band band);
 
 /**
+ * policy_mgr_get_chan_by_session_id() - Get channel for a given session ID
+ * @psoc: PSOC object information
+ * @session_id: Session ID
+ * @chan: Pointer to the channel
+ *
+ * Gets the channel for a given session ID
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS policy_mgr_get_chan_by_session_id(struct wlan_objmgr_psoc *psoc,
+		uint8_t session_id, uint8_t *chan);
+
+/**
  * policy_mgr_get_mac_id_by_session_id() - Get MAC ID for a given session ID
  * @psoc: PSOC object information
  * @session_id: Session ID
@@ -1317,6 +1330,19 @@ void policy_mgr_checkn_update_hw_mode_single_mac_mode(
  * Return: None
  */
 void policy_mgr_dump_connection_status_info(struct wlan_objmgr_psoc *psoc);
+
+/**
+ * policy_mgr_mode_specific_vdev_id() - provides the
+ * vdev id of the pecific mode
+ * @psoc: PSOC object information
+ * @mode: type of connection
+ *
+ * This function provides vdev id for the given mode
+ *
+ * Return: vdev id
+ */
+uint32_t policy_mgr_mode_specific_vdev_id(struct wlan_objmgr_psoc *psoc,
+					  enum policy_mgr_con_mode mode);
 
 /**
  * policy_mgr_mode_specific_connection_count() - provides the
@@ -1485,7 +1511,7 @@ bool policy_mgr_is_current_hwmode_dbs(struct wlan_objmgr_psoc *psoc);
  * policy_mgr_is_hw_dbs_2x2_capable() - if hardware is capable of dbs 2x2
  * @psoc: PSOC object information
  * This function checks if hw_modes supported are always capable of
- * DBS 2x2.
+ * DBS and there is no need for downgrading while entering DBS.
  *    true: DBS 2x2 can always be supported
  *    false: hw_modes support DBS 1x1 as well
  *
@@ -1845,4 +1871,30 @@ void policy_mgr_update_old_hw_mode_index(struct wlan_objmgr_psoc *psoc,
  */
 void policy_mgr_update_new_hw_mode_index(struct wlan_objmgr_psoc *psoc,
 		uint32_t new_hw_mode_index);
+
+/**
+ * policy_mgr_is_chan_ok_for_dnbs() - Function to check if a channel
+ * is OK for "Do Not Break Stream"
+ * @psoc: PSOC object information
+ * @channel: Channel to check.
+ * @ok: Pointer to flag in which status will be stored
+ * This function checks if a channel is OK for
+ * "Do Not Break Stream"
+ * Return: SUCCESS or FAILURE
+ */
+QDF_STATUS policy_mgr_is_chan_ok_for_dnbs(struct wlan_objmgr_psoc *psoc,
+			uint8_t channel, bool *ok);
+
+/**
+ * policy_mgr_get_hw_dbs_nss() - Computes DBS NSS
+ * @psoc: PSOC object information
+ * @nss_dbs: NSS info of both MAC0 and MAC1
+ * This function computes NSS info of both MAC0 and MAC1
+ *    True: DBS capable
+ *    False: not DBS capable
+ *
+ * Return: True or False
+ */
+bool policy_mgr_get_hw_dbs_nss(struct wlan_objmgr_psoc *psoc,
+			       struct dbs_nss *nss_dbs);
 #endif /* __WLAN_POLICY_MGR_API_H */
