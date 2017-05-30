@@ -29,6 +29,7 @@
 #define REG_SBS_SEPARATION_THRESHOLD 100
 #define REG_MAX_CHANNELS_PER_OPERATING_CLASS  25
 #define REG_MAX_SUPP_OPER_CLASSES 32
+#define REG_MAX_CHAN_CHANGE_CBKS 30
 
 /**
  * enum channel_enum - channel enumeration
@@ -381,6 +382,10 @@ struct bonded_channel {
 	uint16_t end_ch;
 };
 
+struct set_country {
+	uint8_t country[REG_ALPHA2_LEN + 1];
+	uint8_t pdev_id;
+};
 /**
  * enum ht_sec_ch_offset
  * @NO_SEC_CH: no secondary
@@ -484,19 +489,6 @@ struct reg_config_vars {
 	uint32_t indoor_chan_enabled;
 };
 
-struct set_band_req {
-	enum band_info band;
-	uint32_t pdev_id;
-};
-
-struct country_info {
-	uint8_t country_code[REG_ALPHA2_LEN + 1];
-};
-
-struct reg_country_update {
-	uint8_t country_code[REG_ALPHA2_LEN + 1];
-};
-
 /**
  * struct reg_freq_range
  * @low_freq: low frequency
@@ -505,6 +497,26 @@ struct reg_country_update {
 struct reg_freq_range {
 	uint32_t low_freq;
 	uint32_t high_freq;
+};
+
+/**
+ * struct reg_sched_payload
+ * @psoc: psoc ptr
+ * @pdev: pdev ptr
+ */
+struct reg_sched_payload {
+	struct wlan_objmgr_psoc *psoc;
+	struct wlan_objmgr_pdev *pdev;
+};
+
+/**
+ * enum direction
+ * @NORTHBOUND: northbound
+ * @SOUTHBOUND: southbound
+ */
+enum direction {
+	NORTHBOUND,
+	SOUTHBOUND,
 };
 
 #endif

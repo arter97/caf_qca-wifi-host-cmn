@@ -172,18 +172,6 @@ uint16_t wlan_reg_get_bw_value(enum phy_ch_width bw)
 }
 
 /**
- * wlan_reg_set_default_country() - Set the default country for the regdomain
- * @country: pointer to the country code.
- *
- * Return: None
- */
-void wlan_reg_set_default_country(struct wlan_objmgr_psoc *psoc,
-				  uint8_t *country)
-{
-	reg_set_default_country(psoc, country);
-}
-
-/**
  * wlan_reg_get_bonded_channel_state() - Get 2G bonded channel state
  * @ch: channel number.
  * @bw: channel band width
@@ -346,7 +334,7 @@ QDF_STATUS regulatory_psoc_open(struct wlan_objmgr_psoc *psoc)
 {
 	struct wlan_lmac_if_reg_tx_ops *tx_ops;
 
-	tx_ops = get_reg_psoc_tx_ops(psoc);
+	tx_ops = reg_get_psoc_tx_ops(psoc);
 	if (tx_ops->register_master_handler)
 		tx_ops->register_master_handler(psoc, NULL);
 
@@ -357,20 +345,12 @@ QDF_STATUS regulatory_psoc_close(struct wlan_objmgr_psoc *psoc)
 {
 	struct wlan_lmac_if_reg_tx_ops *tx_ops;
 
-	tx_ops = get_reg_psoc_tx_ops(psoc);
+	tx_ops = reg_get_psoc_tx_ops(psoc);
 	if (tx_ops->unregister_master_handler)
 		tx_ops->unregister_master_handler(psoc, NULL);
 
 	return QDF_STATUS_SUCCESS;
 };
-
-QDF_STATUS wlan_reg_get_current_chan_list(struct wlan_objmgr_pdev
-					  *pdev,
-					  struct regulatory_channel
-					  *chan_list)
-{
-	return reg_get_current_chan_list(pdev, chan_list);
-}
 
 void wlan_reg_update_nol_ch(struct wlan_objmgr_pdev *pdev, uint8_t *ch_list,
 		uint8_t num_ch, bool nol_ch)
@@ -407,3 +387,25 @@ uint32_t wlan_reg_chan_to_freq(struct wlan_objmgr_pdev *pdev,
 {
 	return reg_chan_to_freq(pdev, chan_num);
 }
+
+QDF_STATUS wlan_reg_set_country(struct wlan_objmgr_pdev *pdev,
+				       uint8_t *country)
+{
+	return reg_set_country(pdev, country);
+}
+
+void wlan_reg_register_chan_change_callback(struct wlan_objmgr_psoc *psoc,
+					    reg_chan_change_callback cbk,
+					    void *arg)
+{
+	reg_register_chan_change_callback(psoc, cbk, arg);
+
+}
+
+void wlan_reg_unregister_chan_change_callback(struct wlan_objmgr_psoc *psoc,
+					      reg_chan_change_callback cbk)
+{
+	reg_unregister_chan_change_callback(psoc, cbk);
+
+}
+

@@ -199,8 +199,7 @@ struct cdp_cmn_ops {
 	void (*set_pdev_dscp_tid_map)(struct cdp_pdev *pdev, uint8_t map_id,
 			uint8_t tos, uint8_t tid);
 
-	A_STATUS(*txrx_stats)(struct cdp_vdev *vdev,
-		struct ol_txrx_stats_req *req, enum cdp_stats stats);
+	int (*txrx_stats)(struct cdp_vdev *vdev, enum cdp_stats stats);
 
 	QDF_STATUS (*display_stats)(void *psoc, uint16_t value);
 
@@ -466,8 +465,9 @@ struct cdp_mon_ops {
 
 struct cdp_host_stats_ops {
 	int (*txrx_host_stats_get)(struct cdp_vdev *vdev,
-			struct ol_txrx_stats_req *req,
-			enum cdp_host_txrx_stats type);
+			struct ol_txrx_stats_req *req);
+
+	void (*txrx_host_stats_clr)(struct cdp_vdev *vdev);
 
 	void (*txrx_host_ce_stats)(struct cdp_vdev *vdev);
 
@@ -529,6 +529,10 @@ struct cdp_host_stats_ops {
 
 	void
 		(*reset_lro_stats)(struct cdp_vdev *vdev);
+
+	void
+		(*get_fw_peer_stats)(struct cdp_pdev *pdev, uint8_t *addr,
+				uint32_t cap);
 
 };
 
@@ -779,17 +783,6 @@ struct cdp_ipa_ops {
 };
 
 /**
- * struct cdp_lro_ops - mcl large receive offload ops
- * @register_lro_flush_cb:
- * @deregister_lro_flush_cb:
- */
-struct cdp_lro_ops {
-	void (*register_lro_flush_cb)(void (lro_flush_cb)(void *),
-			void *(lro_init_cb)(void));
-	void (*deregister_lro_flush_cb)(void (lro_deinit_cb)(void *));
-};
-
-/**
  * struct cdp_bus_ops - mcl bus suspend/resume ops
  * @bus_suspend:
  * @bus_resume:
@@ -920,7 +913,6 @@ struct cdp_ops {
 	struct cdp_flowctl_ops      *flowctl_ops;
 	struct cdp_lflowctl_ops     *l_flowctl_ops;
 	struct cdp_ipa_ops          *ipa_ops;
-	struct cdp_lro_ops          *lro_ops;
 	struct cdp_bus_ops          *bus_ops;
 	struct cdp_ocb_ops          *ocb_ops;
 	struct cdp_peer_ops         *peer_ops;

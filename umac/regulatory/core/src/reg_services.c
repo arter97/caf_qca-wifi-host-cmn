@@ -33,9 +33,14 @@
 #include "reg_services.h"
 #include "reg_priv.h"
 #include "reg_db_parser.h"
+#include <scheduler_api.h>
 
 #define MAX_PWR_FCC_CHAN_12 8
 #define MAX_PWR_FCC_CHAN_13 2
+
+#define IS_VALID_PSOC_REG_OBJ(psoc_priv_obj) (NULL != psoc_priv_obj)
+#define IS_VALID_PDEV_REG_OBJ(pdev_priv_obj) (NULL != pdev_priv_obj)
+
 
 const struct bonded_channel bonded_chan_40mhz_list[] = {
 	{36, 40},
@@ -224,7 +229,51 @@ static const struct reg_dmn_op_class_map_t japan_op_class[] = {
 	{0, 0, 0, {0} },
 };
 
+/**
+ * reg_get_psoc_obj() - Provides the reg component object pointer
+ * @psoc: pointer to psoc object.
+ *
+ * Return: reg component object pointer
+ */
+static struct wlan_regulatory_psoc_priv_obj *reg_get_psoc_obj(
+		struct wlan_objmgr_psoc *psoc)
+{
+	struct wlan_regulatory_psoc_priv_obj *soc_reg;
 
+	if (!psoc) {
+		reg_alert("psoc is NULL");
+		return NULL;
+	}
+	wlan_psoc_obj_lock(psoc);
+	soc_reg = wlan_objmgr_psoc_get_comp_private_obj(psoc,
+				WLAN_UMAC_COMP_REGULATORY);
+	wlan_psoc_obj_unlock(psoc);
+
+	return soc_reg;
+}
+
+/**
+ * reg_get_pdev_obj() - Provides the reg component object pointer
+ * @psoc: pointer to psoc object.
+ *
+ * Return: reg component object pointer
+ */
+static struct wlan_regulatory_pdev_priv_obj *reg_get_pdev_obj(
+		struct wlan_objmgr_pdev *pdev)
+{
+	struct wlan_regulatory_pdev_priv_obj *pdev_reg;
+
+	if (!pdev) {
+		reg_alert("pdev is NULL");
+		return NULL;
+	}
+	wlan_pdev_obj_lock(pdev);
+	pdev_reg = wlan_objmgr_pdev_get_comp_private_obj(pdev,
+				WLAN_UMAC_COMP_REGULATORY);
+	wlan_pdev_obj_unlock(pdev);
+
+	return pdev_reg;
+}
 /**
  * reg_get_bw_value() - give bandwidth value
  * bw: bandwidth enum
@@ -247,42 +296,15 @@ uint16_t reg_get_bw_value(enum phy_ch_width bw)
 	case CH_WIDTH_INVALID:
 		return 0;
 	case CH_WIDTH_5MHZ:
-		return 10;
-	case CH_WIDTH_10MHZ:
 		return 5;
+	case CH_WIDTH_10MHZ:
+		return 10;
 	case CH_WIDTH_MAX:
 		return 160;
 	default:
 		return 0;
 	}
 }
-
-
-/**
- * reg_set_default_country() - Read the default country for the regdomain
- * @country: country code.
- *
- * Return: QDF_STATUS
- */
-void reg_set_default_country(struct wlan_objmgr_psoc *psoc, uint8_t *country)
-{
-	struct wlan_regulatory_psoc_priv_obj *soc_reg;
-
-	wlan_psoc_obj_lock(psoc);
-	soc_reg = (struct wlan_regulatory_psoc_priv_obj *)
-		wlan_objmgr_psoc_get_comp_private_obj(psoc,
-				WLAN_UMAC_COMP_REGULATORY);
-	wlan_psoc_obj_unlock(psoc);
-
-	if (NULL == soc_reg) {
-		reg_err("reg soc is NULL");
-		return;
-	}
-
-	qdf_mem_copy(soc_reg->default_country, country,
-			sizeof(soc_reg->default_country));
-}
-
 
 /**
  * reg_get_channel_list_with_power() - Provides the channel list with power
@@ -303,14 +325,10 @@ QDF_STATUS reg_get_channel_list_with_power(struct wlan_objmgr_pdev *pdev,
 		return QDF_STATUS_E_FAILURE;
 	}
 
-	wlan_pdev_obj_lock(pdev);
-	pdev_priv_obj = (struct wlan_regulatory_pdev_priv_obj *)
-		wlan_objmgr_pdev_get_comp_private_obj(pdev,
-				WLAN_UMAC_COMP_REGULATORY);
-	wlan_pdev_obj_unlock(pdev);
+	pdev_priv_obj = reg_get_pdev_obj(pdev);
 
-	if (NULL == pdev_priv_obj) {
-		reg_err("pdev priv obj is NULL");
+	if (!IS_VALID_PDEV_REG_OBJ(pdev_priv_obj)) {
+		reg_err("reg pdev priv obj is NULL");
 		return QDF_STATUS_E_FAILURE;
 	}
 
@@ -327,38 +345,6 @@ QDF_STATUS reg_get_channel_list_with_power(struct wlan_objmgr_pdev *pdev,
 	}
 
 	*num_chan = count;
-
-	return QDF_STATUS_SUCCESS;
-}
-/**
- * reg_read_default_country() - Read the default country for the regdomain
- * @country: pointer to the country code.
- *
- * Return: QDF_STATUS
- */
-QDF_STATUS reg_read_default_country(struct wlan_objmgr_psoc *psoc,
-				    uint8_t *country)
-{
-	struct wlan_regulatory_psoc_priv_obj *psoc_priv_obj;
-
-	wlan_psoc_obj_lock(psoc);
-	psoc_priv_obj = (struct wlan_regulatory_psoc_priv_obj *)
-		wlan_objmgr_psoc_get_comp_private_obj(psoc,
-				WLAN_UMAC_COMP_REGULATORY);
-	wlan_psoc_obj_unlock(psoc);
-
-	if (NULL == psoc_priv_obj) {
-		reg_err("psoc priv obj is NULL");
-		return QDF_STATUS_E_FAILURE;
-	}
-
-	if (NULL == country) {
-		reg_err("country is NULL");
-		return QDF_STATUS_E_FAILURE;
-	}
-
-	qdf_mem_copy(country, psoc_priv_obj->default_country,
-		     sizeof(psoc_priv_obj->default_country));
 
 	return QDF_STATUS_SUCCESS;
 }
@@ -392,15 +378,11 @@ enum channel_state reg_get_channel_state(struct wlan_objmgr_pdev *pdev,
 	if (INVALID_CHANNEL == ch_idx)
 		return CHANNEL_STATE_INVALID;
 
-	wlan_pdev_obj_lock(pdev);
-	pdev_priv_obj = (struct wlan_regulatory_pdev_priv_obj *)
-		wlan_objmgr_pdev_get_comp_private_obj(pdev,
-				WLAN_UMAC_COMP_REGULATORY);
-	wlan_pdev_obj_unlock(pdev);
+	pdev_priv_obj = reg_get_pdev_obj(pdev);
 
-	if (NULL == pdev_priv_obj) {
-		reg_err("pdev piv obj is NULL");
-		return CHANNEL_STATE_INVALID;
+	if (!IS_VALID_PDEV_REG_OBJ(pdev_priv_obj)) {
+		reg_err("pdev reg obj is NULL");
+		return QDF_STATUS_E_FAILURE;
 	}
 
 	return pdev_priv_obj->cur_chan_list[ch_idx].state;
@@ -515,17 +497,12 @@ enum channel_state reg_get_5g_bonded_channel_state(
 			(CHANNEL_STATE_DISABLE == chan_state))
 		return chan_state;
 
-	wlan_pdev_obj_lock(pdev);
-	pdev_priv_obj = (struct wlan_regulatory_pdev_priv_obj *)
-		wlan_objmgr_pdev_get_comp_private_obj(pdev,
-				WLAN_UMAC_COMP_REGULATORY);
-	wlan_pdev_obj_unlock(pdev);
+	pdev_priv_obj = reg_get_pdev_obj(pdev);
 
-	if (NULL == pdev_priv_obj) {
-		reg_err("pdev priv obj is NULL");
+	if (!IS_VALID_PDEV_REG_OBJ(pdev_priv_obj)) {
+		reg_err("pdev reg obj is NULL");
 		return CHANNEL_STATE_INVALID;
 	}
-
 	reg_channels = pdev_priv_obj->cur_chan_list;
 
 	ch_indx = reg_get_chan_enum(ch);
@@ -587,14 +564,10 @@ enum channel_state reg_get_2g_bonded_channel_state(
 			return chan_state2;
 	}
 
-	wlan_pdev_obj_lock(pdev);
-	pdev_priv_obj = (struct wlan_regulatory_pdev_priv_obj *)
-		wlan_objmgr_pdev_get_comp_private_obj(pdev,
-				WLAN_UMAC_COMP_REGULATORY);
-	wlan_pdev_obj_unlock(pdev);
+	pdev_priv_obj = reg_get_pdev_obj(pdev);
 
-	if (NULL == pdev_priv_obj) {
-		reg_err("pdev priv obj is NULL");
+	if (!IS_VALID_PDEV_REG_OBJ(pdev_priv_obj)) {
+		reg_err("reg pdev priv obj is NULL");
 		return CHANNEL_STATE_INVALID;
 	}
 
@@ -800,6 +773,139 @@ void reg_set_channel_params(struct wlan_objmgr_pdev *pdev,
 					  sec_ch_2g);
 }
 
+QDF_STATUS reg_get_curr_band(struct wlan_objmgr_pdev *pdev,
+			     enum band_info *band)
+{
+	struct wlan_regulatory_pdev_priv_obj *pdev_reg;
+
+	pdev_reg = reg_get_pdev_obj(pdev);
+	if (!IS_VALID_PDEV_REG_OBJ(pdev_reg)) {
+		reg_err("pdev reg component is NULL");
+		return QDF_STATUS_E_INVAL;
+	}
+
+	*band = pdev_reg->band_capability;
+
+	return QDF_STATUS_SUCCESS;
+}
+
+QDF_STATUS reg_read_default_country(struct wlan_objmgr_psoc *psoc,
+				    uint8_t *country_code)
+{
+	struct wlan_regulatory_psoc_priv_obj *psoc_reg;
+
+	if (!country_code) {
+		reg_err("country_code is NULL");
+		return QDF_STATUS_E_INVAL;
+	}
+
+	psoc_reg = reg_get_psoc_obj(psoc);
+	if (!IS_VALID_PSOC_REG_OBJ(psoc_reg)) {
+		reg_err("psoc reg component is NULL");
+		return QDF_STATUS_E_INVAL;
+	}
+
+	qdf_mem_copy(country_code,
+		     psoc_reg->default_country,
+		     sizeof(psoc_reg->default_country));
+
+	return QDF_STATUS_SUCCESS;
+}
+
+/**
+ * reg_set_default_country() - Read the default country for the regdomain
+ * @country: country code.
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS reg_set_default_country(struct wlan_objmgr_psoc *psoc,
+				   uint8_t *country)
+{
+	struct wlan_regulatory_psoc_priv_obj *psoc_reg;
+
+	if (!country) {
+		reg_err("country is NULL");
+		return QDF_STATUS_E_INVAL;
+	}
+	psoc_reg = reg_get_psoc_obj(psoc);
+	if (!IS_VALID_PSOC_REG_OBJ(psoc_reg)) {
+		reg_err("psoc reg component is NULL");
+		return QDF_STATUS_E_INVAL;
+	}
+
+	reg_info("setting default_country:n%s", country);
+	qdf_mem_copy(psoc_reg->default_country,
+		     country, sizeof(psoc_reg->default_country));
+
+	return QDF_STATUS_SUCCESS;
+}
+
+QDF_STATUS reg_set_country(struct wlan_objmgr_pdev *pdev,
+			   uint8_t *country)
+{
+	struct wlan_regulatory_psoc_priv_obj *psoc_reg;
+	struct wlan_lmac_if_reg_tx_ops *tx_ops;
+	struct set_country country_code;
+	struct wlan_objmgr_psoc *psoc;
+
+	if (!country) {
+		reg_err("country code is NULL");
+		return QDF_STATUS_E_INVAL;
+	}
+
+	psoc = wlan_pdev_get_psoc(pdev);
+
+	psoc_reg = reg_get_psoc_obj(psoc);
+
+	if (!IS_VALID_PSOC_REG_OBJ(psoc_reg)) {
+		reg_err("psoc reg component is NULL");
+		return QDF_STATUS_E_INVAL;
+	}
+
+	if (!qdf_mem_cmp(psoc_reg->current_country,
+			country, REG_ALPHA2_LEN)) {
+		reg_err("country is not different");
+		return QDF_STATUS_E_INVAL;
+	}
+
+	reg_debug("programming new country:%s to firmware", country);
+
+	qdf_mem_copy(country_code.country,
+		     country, REG_ALPHA2_LEN + 1);
+	country_code.pdev_id = wlan_objmgr_pdev_get_pdev_id(pdev);
+
+	psoc_reg->new_user_ctry_pending = true;
+
+	tx_ops = reg_get_psoc_tx_ops(psoc);
+
+	if (tx_ops->set_country_code) {
+		tx_ops->set_country_code(psoc, &country_code);
+	} else {
+		reg_err("country set fw handler not present");
+		return QDF_STATUS_E_FAULT;
+	}
+
+	return QDF_STATUS_SUCCESS;
+}
+
+QDF_STATUS reg_reset_country(struct wlan_objmgr_psoc *psoc)
+{
+	struct wlan_regulatory_psoc_priv_obj *psoc_reg;
+
+	psoc_reg = reg_get_psoc_obj(psoc);
+	if (!IS_VALID_PSOC_REG_OBJ(psoc_reg)) {
+		reg_err("psoc reg component is NULL");
+		return QDF_STATUS_E_INVAL;
+	}
+
+	reg_info("re-setting current_country to default");
+	qdf_mem_copy(psoc_reg->current_country,
+		     psoc_reg->default_country,
+		     sizeof(psoc_reg->current_country));
+
+	return QDF_STATUS_SUCCESS;
+}
+
 /**
  * reg_get_dfs_region () - Get the current dfs region
  * @dfs_reg: pointer to dfs region
@@ -811,14 +917,9 @@ void reg_get_dfs_region(struct wlan_objmgr_psoc *psoc,
 {
 	struct wlan_regulatory_psoc_priv_obj *soc_reg;
 
-	wlan_psoc_obj_lock(psoc);
-	soc_reg = (struct wlan_regulatory_psoc_priv_obj *)
-		wlan_objmgr_psoc_get_comp_private_obj(psoc,
-				WLAN_UMAC_COMP_REGULATORY);
-	wlan_psoc_obj_unlock(psoc);
-
-	if (NULL == soc_reg) {
-		reg_err("reg soc is NULL");
+	soc_reg = reg_get_psoc_obj(psoc);
+	if (!IS_VALID_PSOC_REG_OBJ(soc_reg)) {
+		reg_err("psoc reg component is NULL");
 		return;
 	}
 
@@ -832,21 +933,15 @@ void reg_get_dfs_region(struct wlan_objmgr_psoc *psoc,
  * Return: None
  */
 void reg_set_dfs_region(struct wlan_objmgr_psoc *psoc,
-		enum dfs_reg dfs_reg)
+			enum dfs_reg dfs_reg)
 {
 	struct wlan_regulatory_psoc_priv_obj *soc_reg;
 
-	wlan_psoc_obj_lock(psoc);
-	soc_reg = (struct wlan_regulatory_psoc_priv_obj *)
-		wlan_objmgr_psoc_get_comp_private_obj(psoc,
-				 WLAN_UMAC_COMP_REGULATORY);
-	wlan_psoc_obj_unlock(psoc);
-
-	if (NULL == soc_reg) {
-		reg_err("reg soc is NULL");
+	soc_reg = reg_get_psoc_obj(psoc);
+	if (!IS_VALID_PSOC_REG_OBJ(soc_reg)) {
+		reg_err("psoc reg component is NULL");
 		return;
 	}
-
 	soc_reg->dfs_region = dfs_reg;
 }
 
@@ -880,14 +975,15 @@ uint32_t reg_get_channel_reg_power(struct wlan_objmgr_pdev *pdev,
 
 	if (chan_enum == INVALID_CHANNEL) {
 		reg_err("channel is invalid");
-		return CHANNEL_STATE_INVALID;
+		return QDF_STATUS_E_FAILURE;
 	}
 
-	wlan_pdev_obj_lock(pdev);
-	pdev_priv_obj = (struct wlan_regulatory_pdev_priv_obj *)
-		wlan_objmgr_pdev_get_comp_private_obj(pdev,
-				WLAN_UMAC_COMP_REGULATORY);
-	wlan_pdev_obj_unlock(pdev);
+	pdev_priv_obj = reg_get_pdev_obj(pdev);
+
+	if (!IS_VALID_PDEV_REG_OBJ(pdev_priv_obj)) {
+		reg_err("reg pdev priv obj is NULL");
+		return QDF_STATUS_E_FAILURE;
+	}
 
 	reg_channels = pdev_priv_obj->cur_chan_list;
 
@@ -906,15 +1002,89 @@ uint32_t reg_get_channel_freq(struct wlan_objmgr_pdev *pdev,
 	if (chan_enum == INVALID_CHANNEL)
 		return CHANNEL_STATE_INVALID;
 
-	wlan_pdev_obj_lock(pdev);
-	pdev_priv_obj = (struct wlan_regulatory_pdev_priv_obj *)
-		wlan_objmgr_pdev_get_comp_private_obj(pdev,
-				 WLAN_UMAC_COMP_REGULATORY);
-	wlan_pdev_obj_unlock(pdev);
+	pdev_priv_obj = reg_get_pdev_obj(pdev);
+
+	if (!IS_VALID_PDEV_REG_OBJ(pdev_priv_obj)) {
+		reg_err("reg pdev priv obj is NULL");
+		return QDF_STATUS_E_FAILURE;
+	}
 
 	reg_channels = pdev_priv_obj->cur_chan_list;
 
 	return reg_channels[chan_enum].center_freq;
+}
+
+
+bool reg_is_dfs_ch(struct wlan_objmgr_pdev *pdev,
+		   uint32_t chan)
+{
+	enum channel_state ch_state;
+
+	ch_state = reg_get_channel_state(pdev, chan);
+
+	return ch_state == CHANNEL_STATE_DFS;
+}
+
+bool reg_is_passive_or_disable_ch(struct wlan_objmgr_pdev *pdev,
+				  uint32_t chan)
+{
+	enum channel_state ch_state;
+
+	ch_state = reg_get_channel_state(pdev, chan);
+
+	return (ch_state == CHANNEL_STATE_DFS) ||
+		(ch_state == CHANNEL_STATE_DISABLE);
+}
+
+
+uint32_t reg_freq_to_chan(struct wlan_objmgr_pdev *pdev,
+			  uint32_t freq)
+{
+	uint32_t count;
+	struct regulatory_channel *chan_list;
+	struct wlan_regulatory_pdev_priv_obj *pdev_priv_obj;
+
+	pdev_priv_obj = reg_get_pdev_obj(pdev);
+
+	if (!IS_VALID_PDEV_REG_OBJ(pdev_priv_obj)) {
+		reg_err("reg pdev priv obj is NULL");
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	chan_list = pdev_priv_obj->cur_chan_list;
+
+	for (count = 0; count < NUM_CHANNELS; count++)
+		if (chan_list[count].center_freq == freq)
+			return chan_list[count].chan_num;
+
+	reg_err("invalid frequency %d", freq);
+
+	return 0;
+}
+
+uint32_t reg_chan_to_freq(struct wlan_objmgr_pdev *pdev,
+			  uint32_t chan_num)
+{
+	uint32_t count;
+	struct regulatory_channel *chan_list;
+	struct wlan_regulatory_pdev_priv_obj *pdev_priv_obj;
+
+	pdev_priv_obj = reg_get_pdev_obj(pdev);
+
+	if (!IS_VALID_PDEV_REG_OBJ(pdev_priv_obj)) {
+		reg_err("reg pdev priv obj is NULL");
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	chan_list = pdev_priv_obj->cur_chan_list;
+
+	for (count = 0; count < NUM_CHANNELS; count++)
+		if (chan_list[count].chan_num == chan_num)
+			return chan_list[count].center_freq;
+
+	reg_err("invalid channel %d", chan_num);
+
+	return 0;
 }
 
 enum band_info reg_chan_to_band(uint32_t chan_num)
@@ -923,7 +1093,6 @@ enum band_info reg_chan_to_band(uint32_t chan_num)
 		return BAND_2G;
 
 	return BAND_5G;
-
 }
 
 uint16_t reg_dmn_get_chanwidth_from_opclass(uint8_t *country,
@@ -959,7 +1128,8 @@ uint16_t reg_dmn_get_chanwidth_from_opclass(uint8_t *country,
 }
 
 
-uint16_t reg_dmn_get_opclass_from_channel(uint8_t *country, uint8_t channel,
+uint16_t reg_dmn_get_opclass_from_channel(uint8_t *country,
+					  uint8_t channel,
 					  uint8_t offset)
 {
 	const struct reg_dmn_op_class_map_t *class = NULL;
@@ -989,7 +1159,8 @@ uint16_t reg_dmn_get_opclass_from_channel(uint8_t *country, uint8_t channel,
 	return 0;
 }
 
-uint16_t reg_dmn_set_curr_opclasses(uint8_t num_classes, uint8_t *class)
+uint16_t reg_dmn_set_curr_opclasses(uint8_t num_classes,
+				    uint8_t *class)
 {
 	uint8_t i;
 
@@ -1006,7 +1177,8 @@ uint16_t reg_dmn_set_curr_opclasses(uint8_t num_classes, uint8_t *class)
 	return 0;
 }
 
-uint16_t reg_dmn_get_curr_opclasses(uint8_t *num_classes, uint8_t *class)
+uint16_t reg_dmn_get_curr_opclasses(uint8_t *num_classes,
+				    uint8_t *class)
 {
 	uint8_t i;
 
@@ -1065,7 +1237,6 @@ static void reg_fill_channel_info(enum channel_enum chan_enum,
 	master_list[chan_enum].min_bw = min_bw;
 	if (20 == master_list[chan_enum].max_bw)
 		master_list[chan_enum].max_bw = reg_rule->max_bw;
-
 }
 
 
@@ -1109,7 +1280,6 @@ static void populate_band_channels(enum channel_enum start_chan,
 					      mas_chan_list, min_bw);
 		}
 	}
-
 }
 
 static void update_max_bw_per_rule(uint32_t num_reg_rules,
@@ -1143,10 +1313,9 @@ static void do_auto_bw_correction(uint32_t num_reg_rules,
 	}
 }
 
-
-static void
-modify_chan_list_for_dfs_channels(struct regulatory_channel *chan_list,
-				  bool dfs_enabled)
+static void modify_chan_list_for_dfs_channels(struct regulatory_channel
+					      *chan_list,
+					      bool dfs_enabled)
 {
 	enum channel_enum chan_enum;
 
@@ -1154,8 +1323,7 @@ modify_chan_list_for_dfs_channels(struct regulatory_channel *chan_list,
 		return;
 
 	for (chan_enum = 0; chan_enum < NUM_CHANNELS; chan_enum++) {
-		if (CHANNEL_STATE_DFS ==
-		    chan_list[chan_enum].state) {
+		if (CHANNEL_STATE_DFS == chan_list[chan_enum].state) {
 			chan_list[chan_enum].state =
 				CHANNEL_STATE_DISABLE;
 			chan_list[chan_enum].chan_flags |=
@@ -1164,10 +1332,9 @@ modify_chan_list_for_dfs_channels(struct regulatory_channel *chan_list,
 	}
 }
 
-static void
-modify_chan_list_for_indoor_channels(struct regulatory_channel
-				     *chan_list,
-				     bool indoor_chan_enabled)
+static void modify_chan_list_for_indoor_channels(struct regulatory_channel
+						 *chan_list, bool
+						 indoor_chan_enabled)
 {
 	enum channel_enum chan_enum;
 
@@ -1185,10 +1352,8 @@ modify_chan_list_for_indoor_channels(struct regulatory_channel
 	}
 }
 
-static void
-modify_chan_list_for_band(struct regulatory_channel
-			  *chan_list,
-			  enum band_info band_val)
+static void modify_chan_list_for_band(struct regulatory_channel *chan_list,
+				      enum band_info band_val)
 {
 	enum channel_enum chan_enum;
 
@@ -1198,8 +1363,7 @@ modify_chan_list_for_band(struct regulatory_channel
 		     chan_enum++) {
 			chan_list[chan_enum].chan_flags |=
 				REGULATORY_CHAN_DISABLED;
-			chan_list[chan_enum].state =
-				CHANNEL_STATE_DISABLE;
+			chan_list[chan_enum].state = CHANNEL_STATE_DISABLE;
 		}
 	}
 
@@ -1209,16 +1373,14 @@ modify_chan_list_for_band(struct regulatory_channel
 		     chan_enum++) {
 			chan_list[chan_enum].chan_flags |=
 				REGULATORY_CHAN_DISABLED;
-			chan_list[chan_enum].state =
-				CHANNEL_STATE_DISABLE;
+			chan_list[chan_enum].state = CHANNEL_STATE_DISABLE;
 		}
 	}
 }
 
-static void
-modify_chan_list_for_fcc_channel(struct regulatory_channel
-				 *chan_list,
-				 bool set_fcc_channel)
+static void modify_chan_list_for_fcc_channel(struct regulatory_channel
+					     *chan_list,
+					     bool set_fcc_channel)
 {
 	if (set_fcc_channel) {
 		chan_list[CHAN_ENUM_12].tx_power = MAX_PWR_FCC_CHAN_12;
@@ -1227,8 +1389,7 @@ modify_chan_list_for_fcc_channel(struct regulatory_channel
 }
 
 static void
-modify_chan_list_for_nol_list(struct regulatory_channel
-			      *chan_list)
+modify_chan_list_for_nol_list(struct regulatory_channel *chan_list)
 {
 	enum channel_enum chan_enum;
 
@@ -1244,8 +1405,7 @@ modify_chan_list_for_nol_list(struct regulatory_channel
 }
 
 static void
-modify_chan_list_for_freq_range(struct regulatory_channel
-				*chan_list,
+modify_chan_list_for_freq_range(struct regulatory_channel *chan_list,
 				uint32_t low_freq_2g,
 				uint32_t high_freq_2g,
 				uint32_t low_freq_5g,
@@ -1311,13 +1471,251 @@ modify_chan_list_for_freq_range(struct regulatory_channel
 	}
 }
 
-static void reg_change_pdev_for_new_mas_chan_list(struct wlan_objmgr_psoc *psoc,
-						  void *object, void *arg)
+static void init_pdev_chan_list(struct wlan_regulatory_psoc_priv_obj
+				*psoc_priv_obj,
+				struct wlan_regulatory_pdev_priv_obj
+				*pdev_priv_obj)
+{
+	qdf_mem_copy(pdev_priv_obj->cur_chan_list,
+		     psoc_priv_obj->mas_chan_list,
+		     NUM_CHANNELS * sizeof(struct regulatory_channel));
+}
+
+
+static void compute_pdev_current_chan_list(struct wlan_regulatory_pdev_priv_obj
+					   *pdev_priv_obj)
+{
+	modify_chan_list_for_freq_range(pdev_priv_obj->cur_chan_list,
+					pdev_priv_obj->range_2g_low,
+					pdev_priv_obj->range_2g_high,
+					pdev_priv_obj->range_5g_low,
+					pdev_priv_obj->range_5g_high);
+
+	modify_chan_list_for_band(pdev_priv_obj->cur_chan_list,
+				  pdev_priv_obj->band_capability);
+
+	modify_chan_list_for_dfs_channels(pdev_priv_obj->cur_chan_list,
+					  pdev_priv_obj->dfs_enabled);
+
+	modify_chan_list_for_nol_list(pdev_priv_obj->cur_chan_list);
+
+	modify_chan_list_for_indoor_channels(pdev_priv_obj->cur_chan_list,
+					 pdev_priv_obj->indoor_chan_enabled);
+
+	modify_chan_list_for_fcc_channel(pdev_priv_obj->cur_chan_list,
+					 pdev_priv_obj->set_fcc_channel);
+}
+
+static void call_chan_change_cbks(struct wlan_objmgr_psoc *psoc,
+				  struct wlan_objmgr_pdev *pdev)
+{
+	struct chan_change_cbk_entry *cbk_list;
+	struct wlan_regulatory_psoc_priv_obj *psoc_priv_obj;
+	struct wlan_regulatory_pdev_priv_obj *pdev_priv_obj;
+	struct regulatory_channel *cur_chan_list;
+	uint32_t ctr;
+	reg_chan_change_callback callback;
+
+	psoc_priv_obj = reg_get_psoc_obj(psoc);
+	if (!IS_VALID_PSOC_REG_OBJ(psoc_priv_obj)) {
+		reg_alert("psoc reg component is NULL");
+		return;
+	}
+
+	pdev_priv_obj = reg_get_pdev_obj(pdev);
+	if (!IS_VALID_PDEV_REG_OBJ(pdev_priv_obj)) {
+		reg_alert("pdev reg component is NULL");
+		return;
+	}
+
+	cur_chan_list = qdf_mem_malloc(NUM_CHANNELS * sizeof(*cur_chan_list));
+	if (NULL == cur_chan_list) {
+		reg_alert("Mem alloc failed for current channel list");
+		return;
+	}
+
+	qdf_mem_copy(cur_chan_list,
+		     pdev_priv_obj->cur_chan_list,
+		     NUM_CHANNELS *
+		     sizeof(struct regulatory_channel));
+
+	cbk_list = psoc_priv_obj->cbk_list;
+
+	for (ctr = 0; ctr < REG_MAX_CHAN_CHANGE_CBKS; ctr++) {
+		callback  = NULL;
+		qdf_spin_lock_bh(&psoc_priv_obj->cbk_list_lock);
+		if (cbk_list[ctr].cbk != NULL)
+			callback = cbk_list[ctr].cbk;
+		qdf_spin_unlock_bh(&psoc_priv_obj->cbk_list_lock);
+		if (callback != NULL)
+			callback(psoc, pdev, cur_chan_list,
+				 cbk_list[ctr].arg);
+	}
+	qdf_mem_free(cur_chan_list);
+}
+
+static struct reg_sched_payload
+*reg_alloc_and_fill_payload(struct wlan_objmgr_psoc *psoc,
+			    struct wlan_objmgr_pdev *pdev)
+{
+	struct reg_sched_payload *payload;
+
+	payload = qdf_mem_malloc(sizeof(*payload));
+	if (payload != NULL) {
+		payload->psoc = psoc;
+		payload->pdev = pdev;
+	}
+
+	return payload;
+}
+
+static QDF_STATUS chan_change_flush_cbk_sb(struct scheduler_msg *msg)
+{
+	struct reg_sched_payload *load = msg->bodyptr;
+	struct wlan_objmgr_psoc *psoc = load->psoc;
+	struct wlan_objmgr_pdev *pdev = load->pdev;
+
+	wlan_objmgr_pdev_release_ref(pdev, WLAN_REGULATORY_SB_ID);
+	wlan_objmgr_psoc_release_ref(psoc, WLAN_REGULATORY_SB_ID);
+	qdf_mem_free(load);
+
+	return QDF_STATUS_SUCCESS;
+}
+
+static QDF_STATUS sched_chan_change_cbks_sb(struct scheduler_msg *msg)
+{
+	struct reg_sched_payload *load = msg->bodyptr;
+	struct wlan_objmgr_psoc *psoc = load->psoc;
+	struct wlan_objmgr_pdev *pdev = load->pdev;
+
+	call_chan_change_cbks(psoc, pdev);
+
+	wlan_objmgr_pdev_release_ref(pdev, WLAN_REGULATORY_SB_ID);
+	wlan_objmgr_psoc_release_ref(psoc, WLAN_REGULATORY_SB_ID);
+	qdf_mem_free(load);
+
+	return QDF_STATUS_SUCCESS;
+}
+
+static QDF_STATUS chan_change_flush_cbk_nb(struct scheduler_msg *msg)
+{
+	struct reg_sched_payload *load = msg->bodyptr;
+	struct wlan_objmgr_psoc *psoc = load->psoc;
+	struct wlan_objmgr_pdev *pdev = load->pdev;
+
+	wlan_objmgr_pdev_release_ref(pdev, WLAN_REGULATORY_NB_ID);
+	wlan_objmgr_psoc_release_ref(psoc, WLAN_REGULATORY_NB_ID);
+	qdf_mem_free(load);
+
+	return QDF_STATUS_SUCCESS;
+}
+
+static QDF_STATUS sched_chan_change_cbks_nb(struct scheduler_msg *msg)
+{
+	struct reg_sched_payload *load = msg->bodyptr;
+	struct wlan_objmgr_psoc *psoc = load->psoc;
+	struct wlan_objmgr_pdev *pdev = load->pdev;
+
+	call_chan_change_cbks(psoc, pdev);
+
+	wlan_objmgr_pdev_release_ref(pdev, WLAN_REGULATORY_NB_ID);
+	wlan_objmgr_psoc_release_ref(psoc, WLAN_REGULATORY_NB_ID);
+	qdf_mem_free(load);
+
+	return QDF_STATUS_SUCCESS;
+}
+
+static QDF_STATUS send_scheduler_msg_sb(struct wlan_objmgr_psoc *psoc,
+					struct wlan_objmgr_pdev *pdev)
+{
+	struct scheduler_msg msg = {0};
+	struct reg_sched_payload *payload;
+	QDF_STATUS status;
+
+	status = wlan_objmgr_psoc_try_get_ref(psoc, WLAN_REGULATORY_SB_ID);
+	if (QDF_IS_STATUS_ERROR(status)) {
+		reg_err("error taking psoc ref cnt");
+		return status;
+	}
+
+	status = wlan_objmgr_pdev_try_get_ref(pdev, WLAN_REGULATORY_SB_ID);
+	if (QDF_IS_STATUS_ERROR(status)) {
+		wlan_objmgr_psoc_release_ref(psoc, WLAN_REGULATORY_SB_ID);
+		reg_err("error taking pdev ref cnt");
+		return status;
+	}
+
+	payload = reg_alloc_and_fill_payload(psoc, pdev);
+	if (payload == NULL) {
+		reg_err("payload memory alloc failed");
+		wlan_objmgr_pdev_release_ref(pdev, WLAN_REGULATORY_SB_ID);
+		wlan_objmgr_psoc_release_ref(psoc, WLAN_REGULATORY_SB_ID);
+		return QDF_STATUS_E_NOMEM;
+	}
+	msg.bodyptr = payload;
+	msg.callback = sched_chan_change_cbks_sb;
+	msg.flush_callback = chan_change_flush_cbk_sb;
+
+	status = scheduler_post_msg(QDF_MODULE_ID_TARGET_IF, &msg);
+	if (QDF_IS_STATUS_ERROR(status)) {
+		wlan_objmgr_pdev_release_ref(pdev, WLAN_REGULATORY_SB_ID);
+		wlan_objmgr_psoc_release_ref(psoc, WLAN_REGULATORY_SB_ID);
+		reg_err("scheduler msg posting failed");
+		qdf_mem_free(payload);
+	}
+
+	return status;
+}
+
+static QDF_STATUS send_scheduler_msg_nb(struct wlan_objmgr_psoc *psoc,
+					struct wlan_objmgr_pdev *pdev)
+{
+	struct scheduler_msg msg = {0};
+	struct reg_sched_payload *payload;
+	QDF_STATUS status;
+
+	status = wlan_objmgr_psoc_try_get_ref(psoc, WLAN_REGULATORY_NB_ID);
+	if (QDF_IS_STATUS_ERROR(status)) {
+		reg_err("error taking psoc ref cnt");
+		return status;
+	}
+
+	status = wlan_objmgr_pdev_try_get_ref(pdev, WLAN_REGULATORY_NB_ID);
+	if (QDF_IS_STATUS_ERROR(status)) {
+		wlan_objmgr_psoc_release_ref(psoc, WLAN_REGULATORY_NB_ID);
+		reg_err("error taking pdev ref cnt");
+		return status;
+	}
+
+	payload = reg_alloc_and_fill_payload(psoc, pdev);
+	if (payload == NULL) {
+		reg_err("payload memory alloc failed");
+		wlan_objmgr_pdev_release_ref(pdev, WLAN_REGULATORY_NB_ID);
+		wlan_objmgr_psoc_release_ref(psoc, WLAN_REGULATORY_NB_ID);
+		return QDF_STATUS_E_NOMEM;
+	}
+	msg.bodyptr = payload;
+	msg.callback = sched_chan_change_cbks_nb;
+	msg.flush_callback = chan_change_flush_cbk_nb;
+
+	status = scheduler_post_msg(QDF_MODULE_ID_OS_IF, &msg);
+	if (QDF_IS_STATUS_ERROR(status)) {
+		wlan_objmgr_pdev_release_ref(pdev, WLAN_REGULATORY_NB_ID);
+		wlan_objmgr_psoc_release_ref(psoc, WLAN_REGULATORY_NB_ID);
+		reg_err("scheduler msg posting failed");
+		qdf_mem_free(payload);
+	}
+
+	return status;
+}
+
+static void reg_propagate_mas_chan_list_to_pdev(struct wlan_objmgr_psoc *psoc,
+						void *object, void *arg)
 {
 	struct wlan_objmgr_pdev *pdev = (struct wlan_objmgr_pdev *)object;
 	struct wlan_regulatory_psoc_priv_obj *psoc_priv_obj;
 	struct wlan_regulatory_pdev_priv_obj *pdev_priv_obj;
-	enum channel_enum chan_enum;
+	enum direction *dir = arg;
 
 	wlan_psoc_obj_lock(psoc);
 	psoc_priv_obj = (struct wlan_regulatory_psoc_priv_obj *)
@@ -1330,47 +1728,23 @@ static void reg_change_pdev_for_new_mas_chan_list(struct wlan_objmgr_psoc *psoc,
 		return;
 	}
 
-	wlan_pdev_obj_lock(pdev);
-	pdev_priv_obj = (struct wlan_regulatory_pdev_priv_obj *)
-		wlan_objmgr_pdev_get_comp_private_obj(pdev,
-					       WLAN_UMAC_COMP_REGULATORY);
-	wlan_pdev_obj_unlock(pdev);
+	pdev_priv_obj = reg_get_pdev_obj(pdev);
 
-	if (NULL == pdev_priv_obj) {
-		reg_err("pdev priv obj is NULL");
+	if (!IS_VALID_PDEV_REG_OBJ(pdev_priv_obj)) {
+		reg_err("reg pdev priv obj is NULL");
 		return;
 	}
 
-	qdf_mem_copy(pdev_priv_obj->cur_chan_list,
-		     psoc_priv_obj->mas_chan_list,
-		     NUM_CHANNELS * sizeof(struct regulatory_channel));
+	init_pdev_chan_list(psoc_priv_obj,
+			    pdev_priv_obj);
 
-	for (chan_enum = 0; chan_enum < NUM_CHANNELS; chan_enum++)
-		pdev_priv_obj->cur_chan_list[chan_enum].nol_chan =
-			psoc_priv_obj->nol_chan[chan_enum];
+	compute_pdev_current_chan_list(pdev_priv_obj);
 
-	modify_chan_list_for_freq_range(pdev_priv_obj->cur_chan_list,
-					pdev_priv_obj->range_2g_low,
-					pdev_priv_obj->range_2g_high,
-					pdev_priv_obj->range_5g_low,
-					pdev_priv_obj->range_5g_high);
-
-	modify_chan_list_for_dfs_channels(pdev_priv_obj->cur_chan_list,
-					  pdev_priv_obj->dfs_enabled);
-
-	modify_chan_list_for_indoor_channels(pdev_priv_obj->cur_chan_list,
-					 pdev_priv_obj->indoor_chan_enabled);
-
-	modify_chan_list_for_band(pdev_priv_obj->cur_chan_list,
-				  pdev_priv_obj->band_capability);
-
-	modify_chan_list_for_nol_list(pdev_priv_obj->cur_chan_list);
-
-	modify_chan_list_for_fcc_channel(pdev_priv_obj->cur_chan_list,
-					 pdev_priv_obj->set_fcc_channel);
-
+	if (*dir == NORTHBOUND)
+		send_scheduler_msg_nb(psoc, pdev);
+	else
+		send_scheduler_msg_sb(psoc, pdev);
 }
-
 
 QDF_STATUS reg_process_master_chan_list(struct cur_regulatory_info
 					*regulat_info)
@@ -1380,19 +1754,25 @@ QDF_STATUS reg_process_master_chan_list(struct cur_regulatory_info
 	struct cur_reg_rule *reg_rule_2g, *reg_rule_5g;
 	uint16_t min_bw_2g, max_bw_2g, min_bw_5g, max_bw_5g;
 	struct regulatory_channel *mas_chan_list;
-	QDF_STATUS status;
+	struct wlan_objmgr_psoc *psoc;
 	enum channel_enum chan_enum;
+	QDF_STATUS status;
+	wlan_objmgr_ref_dbgid dbg_id;
+	enum direction dir;
 
 	reg_debug("process reg master chan list");
 
-	wlan_psoc_obj_lock(regulat_info->psoc);
-	soc_reg = (struct wlan_regulatory_psoc_priv_obj *)
-		wlan_objmgr_psoc_get_comp_private_obj(regulat_info->psoc,
-						  WLAN_UMAC_COMP_REGULATORY);
-	wlan_psoc_obj_unlock(regulat_info->psoc);
+	if (regulat_info->status_code == REG_CURRENT_ALPHA2_NOT_FOUND) {
+		reg_err("current country not present in regdb");
+		soc_reg->new_user_ctry_pending = false;
+		return QDF_STATUS_SUCCESS;
+	}
 
-	if (NULL == soc_reg) {
-		reg_err("soc_reg is NULL");
+	psoc = regulat_info->psoc;
+	soc_reg = reg_get_psoc_obj(psoc);
+
+	if (!IS_VALID_PSOC_REG_OBJ(soc_reg)) {
+		reg_err("psoc reg component is NULL");
 		return QDF_STATUS_E_FAILURE;
 	}
 
@@ -1409,12 +1789,14 @@ QDF_STATUS reg_process_master_chan_list(struct cur_regulatory_info
 		mas_chan_list[chan_enum].state =
 			CHANNEL_STATE_DISABLE;
 		mas_chan_list[chan_enum].nol_chan = false;
-		soc_reg->nol_chan[chan_enum] = false;
 	}
 
 	soc_reg->offload_enabled = regulat_info->offload_enabled;
 	soc_reg->phybitmap = regulat_info->phybitmap;
 	soc_reg->dfs_region = regulat_info->dfs_region;
+	soc_reg->num_phy = regulat_info->num_phy;
+	soc_reg->ctry_code = regulat_info->ctry_code;
+	soc_reg->reg_dmn_pair = regulat_info->reg_dmn_pair;
 	qdf_mem_copy(soc_reg->default_country, regulat_info->alpha2,
 		     REG_ALPHA2_LEN + 1);
 	qdf_mem_copy(soc_reg->current_country, regulat_info->alpha2,
@@ -1435,23 +1817,47 @@ QDF_STATUS reg_process_master_chan_list(struct cur_regulatory_info
 			       reg_rule_5g, max_bw_5g);
 
 	if (num_5g_reg_rules != 0)
-		do_auto_bw_correction(num_5g_reg_rules, reg_rule_5g,
-				      max_bw_5g);
+		do_auto_bw_correction(num_5g_reg_rules,
+				      reg_rule_5g, max_bw_5g);
 
 	if (num_2g_reg_rules != 0)
-		populate_band_channels(CHAN_ENUM_1, CHAN_ENUM_14,
+		populate_band_channels(MIN_24GHZ_CHANNEL, MAX_24GHZ_CHANNEL,
 				       reg_rule_2g, num_2g_reg_rules,
 				       min_bw_2g, mas_chan_list);
 
 	if (num_5g_reg_rules != 0)
-		populate_band_channels(CHAN_ENUM_36, CHAN_ENUM_165,
+		populate_band_channels(MIN_5GHZ_CHANNEL, MAX_5GHZ_CHANNEL,
 				       reg_rule_5g,
 				       num_5g_reg_rules,
 				       min_bw_5g, mas_chan_list);
 
-	status = wlan_objmgr_iterate_obj_list(regulat_info->psoc, WLAN_PDEV_OP,
-					      reg_change_pdev_for_new_mas_chan_list,
-					      NULL, 1, WLAN_REGULATORY_SB_ID);
+	soc_reg->cc_src = SOURCE_DRIVER;
+	if (soc_reg->new_user_ctry_pending == true) {
+		soc_reg->new_user_ctry_pending = false;
+		soc_reg->cc_src = SOURCE_USERSPACE;
+
+	} else if (soc_reg->new_11d_ctry_pending == true) {
+		soc_reg->new_11d_ctry_pending = false;
+		soc_reg->cc_src = SOURCE_11D;
+	}
+
+	if (soc_reg->offload_enabled) {
+		dbg_id = WLAN_REGULATORY_NB_ID;
+		dir = NORTHBOUND;
+	} else {
+		dbg_id = WLAN_REGULATORY_SB_ID;
+		dir = SOUTHBOUND;
+	}
+
+	status = wlan_objmgr_psoc_try_get_ref(psoc, dbg_id);
+	if (QDF_IS_STATUS_ERROR(status)) {
+		reg_err("error taking psoc ref cnt");
+		return status;
+	}
+	status = wlan_objmgr_iterate_obj_list(psoc, WLAN_PDEV_OP,
+					 reg_propagate_mas_chan_list_to_pdev,
+					 &dir, 1, dbg_id);
+	wlan_objmgr_psoc_release_ref(psoc, dbg_id);
 
 	return status;
 }
@@ -1475,7 +1881,6 @@ QDF_STATUS wlan_regulatory_psoc_obj_created_notification(
 	QDF_STATUS status;
 
 	soc_reg_obj = qdf_mem_malloc(sizeof(*soc_reg_obj));
-
 	if (NULL == soc_reg_obj) {
 		reg_alert("Mem alloc failed for reg psoc priv obj");
 		return QDF_STATUS_E_NOMEM;
@@ -1487,7 +1892,7 @@ QDF_STATUS wlan_regulatory_psoc_obj_created_notification(
 	soc_reg_obj->set_fcc_channel = false;
 	soc_reg_obj->band_capability = BAND_ALL;
 	soc_reg_obj->indoor_chan_enabled = true;
-
+	qdf_spinlock_create(&soc_reg_obj->cbk_list_lock);
 
 	mas_chan_list = soc_reg_obj->mas_chan_list;
 
@@ -1502,7 +1907,6 @@ QDF_STATUS wlan_regulatory_psoc_obj_created_notification(
 		mas_chan_list[chan_enum].state =
 			CHANNEL_STATE_DISABLE;
 		mas_chan_list[chan_enum].nol_chan = false;
-		soc_reg_obj->nol_chan[chan_enum] = false;
 	}
 
 	status = wlan_objmgr_psoc_component_obj_attach(psoc,
@@ -1525,7 +1929,7 @@ QDF_STATUS wlan_regulatory_psoc_obj_created_notification(
  * Return: Success or Failure
  */
 QDF_STATUS wlan_regulatory_psoc_obj_destroyed_notification(
-		struct wlan_objmgr_psoc *psoc, void *arg_list)
+	struct wlan_objmgr_psoc *psoc, void *arg_list)
 {
 	QDF_STATUS status;
 	struct wlan_regulatory_psoc_priv_obj *soc_reg;
@@ -1541,6 +1945,7 @@ QDF_STATUS wlan_regulatory_psoc_obj_destroyed_notification(
 	}
 
 	soc_reg->psoc_ptr = NULL;
+	qdf_spinlock_destroy(&soc_reg->cbk_list_lock);
 
 	status = wlan_objmgr_psoc_component_obj_detach(psoc,
 			WLAN_UMAC_COMP_REGULATORY,
@@ -1551,6 +1956,140 @@ QDF_STATUS wlan_regulatory_psoc_obj_destroyed_notification(
 	reg_debug("reg psoc obj detached with status %d", status);
 
 	qdf_mem_free(soc_reg);
+
+	return status;
+}
+
+QDF_STATUS reg_set_band(struct wlan_objmgr_pdev *pdev,
+			enum band_info band)
+{
+	struct wlan_regulatory_psoc_priv_obj *psoc_priv_obj;
+	struct wlan_regulatory_pdev_priv_obj *pdev_priv_obj;
+	struct wlan_objmgr_psoc *psoc;
+	QDF_STATUS status;
+
+	pdev_priv_obj = reg_get_pdev_obj(pdev);
+
+	if (!IS_VALID_PDEV_REG_OBJ(pdev_priv_obj)) {
+		reg_err("pdev reg component is NULL");
+		return QDF_STATUS_E_INVAL;
+	}
+
+	if (pdev_priv_obj->band_capability == band) {
+		reg_info("band is already set to %d", band);
+		return QDF_STATUS_SUCCESS;
+	}
+
+	psoc = wlan_pdev_get_psoc(pdev);
+	if (!psoc) {
+		reg_err("psoc is NULL");
+		return QDF_STATUS_E_INVAL;
+	}
+
+	psoc_priv_obj = reg_get_psoc_obj(psoc);
+	if (!IS_VALID_PSOC_REG_OBJ(psoc_priv_obj)) {
+		reg_err("psoc reg component is NULL");
+		return QDF_STATUS_E_INVAL;
+	}
+
+	reg_info("setting band_info: %d", band);
+	pdev_priv_obj->band_capability = band;
+
+	init_pdev_chan_list(psoc_priv_obj,
+			    pdev_priv_obj);
+
+	compute_pdev_current_chan_list(pdev_priv_obj);
+
+	status = send_scheduler_msg_sb(psoc, pdev);
+
+	return status;
+}
+
+QDF_STATUS reg_set_fcc_constraint(struct wlan_objmgr_pdev *pdev,
+				  bool fcc_constraint)
+{
+	struct wlan_regulatory_pdev_priv_obj *pdev_priv_obj;
+	struct wlan_regulatory_psoc_priv_obj *psoc_priv_obj;
+	struct wlan_objmgr_psoc *psoc;
+	QDF_STATUS status;
+
+	pdev_priv_obj = reg_get_pdev_obj(pdev);
+	if (!IS_VALID_PDEV_REG_OBJ(pdev_priv_obj)) {
+		reg_err("pdev reg component is NULL");
+		return QDF_STATUS_E_INVAL;
+	}
+
+	if (pdev_priv_obj->set_fcc_channel == fcc_constraint) {
+		reg_info("fcc_constraint is already set to %d", fcc_constraint);
+		return QDF_STATUS_SUCCESS;
+	}
+
+	reg_info("setting set_fcc_channel: %d", fcc_constraint);
+	pdev_priv_obj->set_fcc_channel = fcc_constraint;
+
+	psoc = wlan_pdev_get_psoc(pdev);
+	if (!psoc) {
+		reg_err("psoc is NULL");
+		return QDF_STATUS_E_INVAL;
+	}
+
+	psoc_priv_obj = reg_get_psoc_obj(psoc);
+	if (!IS_VALID_PSOC_REG_OBJ(psoc_priv_obj)) {
+		reg_err("psoc reg component is NULL");
+		return QDF_STATUS_E_INVAL;
+	}
+
+	init_pdev_chan_list(psoc_priv_obj,
+			    pdev_priv_obj);
+
+	compute_pdev_current_chan_list(pdev_priv_obj);
+
+	status = send_scheduler_msg_sb(psoc, pdev);
+
+	return status;
+}
+
+QDF_STATUS reg_enable_dfs_channels(struct wlan_objmgr_pdev *pdev,
+				   bool enable)
+{
+	struct wlan_regulatory_pdev_priv_obj *pdev_priv_obj;
+	struct wlan_regulatory_psoc_priv_obj *psoc_priv_obj;
+	struct wlan_objmgr_psoc *psoc;
+	QDF_STATUS status;
+
+	pdev_priv_obj = reg_get_pdev_obj(pdev);
+	if (!IS_VALID_PDEV_REG_OBJ(pdev_priv_obj)) {
+		reg_err("pdev reg component is NULL");
+		return QDF_STATUS_E_INVAL;
+	}
+
+	if (pdev_priv_obj->dfs_enabled == enable) {
+		reg_info("dfs_enabled is already set to %d", enable);
+		return QDF_STATUS_SUCCESS;
+	}
+
+	psoc = wlan_pdev_get_psoc(pdev);
+	if (!psoc) {
+		reg_err("psoc is NULL");
+		return QDF_STATUS_E_INVAL;
+	}
+
+	psoc_priv_obj = reg_get_psoc_obj(psoc);
+	if (!IS_VALID_PSOC_REG_OBJ(psoc_priv_obj)) {
+		reg_err("psoc reg component is NULL");
+		return QDF_STATUS_E_INVAL;
+	}
+
+	reg_info("setting dfs_enabled: %d", enable);
+
+	pdev_priv_obj->dfs_enabled = enable;
+
+	init_pdev_chan_list(psoc_priv_obj,
+			    pdev_priv_obj);
+
+	compute_pdev_current_chan_list(pdev_priv_obj);
+
+	status = send_scheduler_msg_sb(psoc, pdev);
 
 	return status;
 }
@@ -1577,7 +2116,6 @@ QDF_STATUS wlan_regulatory_pdev_obj_created_notification(
 	uint32_t range_2g_low, range_2g_high,
 		range_5g_low, range_5g_high;
 	QDF_STATUS status;
-	enum channel_enum chan_enum;
 
 	pdev_priv_obj = qdf_mem_malloc(sizeof(*pdev_priv_obj));
 	if (NULL == pdev_priv_obj) {
@@ -1605,28 +2143,6 @@ QDF_STATUS wlan_regulatory_pdev_obj_created_notification(
 	pdev_priv_obj->band_capability =  psoc_priv_obj->band_capability;
 	pdev_priv_obj->indoor_chan_enabled =
 		psoc_priv_obj->indoor_chan_enabled;
-
-	qdf_mem_copy(pdev_priv_obj->cur_chan_list,
-		     psoc_priv_obj->mas_chan_list,
-		     NUM_CHANNELS * sizeof(struct regulatory_channel));
-
-	for (chan_enum = 0; chan_enum < NUM_CHANNELS; chan_enum++)
-		pdev_priv_obj->cur_chan_list[chan_enum].nol_chan =
-			psoc_priv_obj->nol_chan[chan_enum];
-
-	modify_chan_list_for_dfs_channels(pdev_priv_obj->cur_chan_list,
-					  pdev_priv_obj->dfs_enabled);
-
-	modify_chan_list_for_indoor_channels(pdev_priv_obj->cur_chan_list,
-					 pdev_priv_obj->indoor_chan_enabled);
-
-	modify_chan_list_for_band(pdev_priv_obj->cur_chan_list,
-				  pdev_priv_obj->band_capability);
-
-	modify_chan_list_for_nol_list(pdev_priv_obj->cur_chan_list);
-
-	modify_chan_list_for_fcc_channel(pdev_priv_obj->cur_chan_list,
-					 pdev_priv_obj->set_fcc_channel);
 
 	reg_cap_ptr = parent_psoc->ext_service_param.reg_cap;
 
@@ -1656,9 +2172,15 @@ QDF_STATUS wlan_regulatory_pdev_obj_created_notification(
 	pdev_priv_obj->range_5g_low = range_5g_low;
 	pdev_priv_obj->range_5g_high = range_5g_high;
 
-	modify_chan_list_for_freq_range(pdev_priv_obj->cur_chan_list,
-					range_2g_low, range_2g_high,
-					range_5g_low, range_5g_high);
+	init_pdev_chan_list(psoc_priv_obj,
+			    pdev_priv_obj);
+
+	compute_pdev_current_chan_list(pdev_priv_obj);
+
+	status = send_scheduler_msg_sb(parent_psoc, pdev);
+
+	if (QDF_IS_STATUS_ERROR(status))
+		return status;
 
 	status = wlan_objmgr_pdev_component_obj_attach(pdev,
 						     WLAN_UMAC_COMP_REGULATORY,
@@ -1676,14 +2198,11 @@ QDF_STATUS wlan_regulatory_pdev_obj_destroyed_notification(
 	QDF_STATUS status;
 	struct wlan_regulatory_pdev_priv_obj *pdev_priv_obj;
 
-	wlan_pdev_obj_lock(pdev);
-	pdev_priv_obj =	wlan_objmgr_pdev_get_comp_private_obj(pdev,
-				WLAN_UMAC_COMP_REGULATORY);
-	wlan_pdev_obj_unlock(pdev);
+	pdev_priv_obj = reg_get_pdev_obj(pdev);
 
-	if (NULL == pdev_priv_obj) {
+	if (!IS_VALID_PDEV_REG_OBJ(pdev_priv_obj)) {
 		reg_err("reg pdev private obj is NULL");
-		return QDF_STATUS_E_FAULT;
+		return QDF_STATUS_E_FAILURE;
 	}
 
 	pdev_priv_obj->pdev_ptr = NULL;
@@ -1707,14 +2226,11 @@ QDF_STATUS reg_get_current_chan_list(struct wlan_objmgr_pdev *pdev,
 {
 	struct wlan_regulatory_pdev_priv_obj *pdev_priv_obj;
 
-	wlan_pdev_obj_lock(pdev);
-	pdev_priv_obj =	wlan_objmgr_pdev_get_comp_private_obj(pdev,
-					WLAN_UMAC_COMP_REGULATORY);
-	wlan_pdev_obj_unlock(pdev);
+	pdev_priv_obj = reg_get_pdev_obj(pdev);
 
-	if (NULL == pdev_priv_obj) {
+	if (!IS_VALID_PDEV_REG_OBJ(pdev_priv_obj)) {
 		reg_err("reg pdev private obj is NULL");
-		return QDF_STATUS_E_FAULT;
+		return QDF_STATUS_E_FAILURE;
 	}
 
 	qdf_mem_copy(chan_list, pdev_priv_obj->cur_chan_list,
@@ -1732,19 +2248,20 @@ QDF_STATUS reg_get_current_chan_list(struct wlan_objmgr_pdev *pdev,
  *
  * Return: None
  */
-void reg_update_nol_ch(struct wlan_objmgr_pdev *pdev, uint8_t *ch_list,
-		       uint8_t num_ch, bool nol_ch)
+void reg_update_nol_ch(struct wlan_objmgr_pdev *pdev,
+		       uint8_t *chan_list,
+		       uint8_t num_chan,
+		       bool nol_chan)
 {
 	enum channel_enum chan_enum;
-	struct wlan_regulatory_pdev_priv_obj *pdev_priv_obj;
-	struct regulatory_channel *reg_channels;
-	enum channel_state ch_state;
-	uint8_t i;
+	struct regulatory_channel *mas_chan_list;
 	struct wlan_objmgr_psoc *psoc;
 	struct wlan_regulatory_psoc_priv_obj *psoc_priv_obj;
-	uint32_t reg_ch_flags;
+	uint16_t i;
+	enum direction dir;
+	QDF_STATUS status;
 
-	if (!num_ch || !ch_list) {
+	if (!num_chan || !chan_list) {
 		reg_err("chan_list or num_ch is NULL");
 		return;
 	}
@@ -1761,41 +2278,32 @@ void reg_update_nol_ch(struct wlan_objmgr_pdev *pdev, uint8_t *ch_list,
 		return;
 	}
 
-	wlan_pdev_obj_lock(pdev);
-	pdev_priv_obj = (struct wlan_regulatory_pdev_priv_obj *)
-		wlan_objmgr_pdev_get_comp_private_obj(pdev,
-				WLAN_UMAC_COMP_REGULATORY);
-	wlan_pdev_obj_unlock(pdev);
-
-	if (NULL == pdev_priv_obj) {
-		reg_err("pdev piv obj is NULL");
-		return;
-	}
-	if (nol_ch) {
-		ch_state = CHANNEL_STATE_DISABLE;
-		reg_ch_flags = REGULATORY_CHAN_DISABLED;
-	} else {
-		ch_state = CHANNEL_STATE_DFS;
-		reg_ch_flags = REGULATORY_CHAN_RADAR;
-	}
-
-	reg_channels = &pdev_priv_obj->cur_chan_list[0];
-	for (i = 0; i < num_ch; i++) {
-		chan_enum = reg_get_chan_enum(ch_list[i]);
+	mas_chan_list = psoc_priv_obj->mas_chan_list;
+	for (i = 0; i < num_chan; i++) {
+		chan_enum = reg_get_chan_enum(chan_list[i]);
 		if (chan_enum == INVALID_CHANNEL) {
-			reg_err("Invalid ch in update nol request, ch %d",
-				ch_list[i]);
+			reg_err("Invalid ch in nol list, chan %d",
+				chan_list[i]);
 			continue;
 		}
-		reg_channels[chan_enum].state = ch_state;
-		reg_channels[chan_enum].nol_chan = nol_ch;
-		reg_channels[chan_enum].chan_flags |= reg_ch_flags;
-		psoc_priv_obj->nol_chan[chan_enum] = nol_ch;
+		mas_chan_list[chan_enum].nol_chan = nol_chan;
 	}
+
+	dir =  SOUTHBOUND;
+
+	status = wlan_objmgr_psoc_try_get_ref(psoc, WLAN_REGULATORY_SB_ID);
+	if (QDF_IS_STATUS_ERROR(status)) {
+		reg_err("error taking psoc ref cnt");
+		return;
+	}
+	status = wlan_objmgr_iterate_obj_list(psoc, WLAN_PDEV_OP,
+					  reg_propagate_mas_chan_list_to_pdev,
+					  &dir, 1, WLAN_REGULATORY_SB_ID);
+	wlan_objmgr_psoc_release_ref(psoc, WLAN_REGULATORY_SB_ID);
 }
 
 static void reg_change_pdev_for_config(struct wlan_objmgr_psoc *psoc,
-				  void *object, void *arg)
+				       void *object, void *arg)
 {
 	struct wlan_objmgr_pdev *pdev = (struct wlan_objmgr_pdev *)object;
 	struct wlan_regulatory_psoc_priv_obj *psoc_priv_obj;
@@ -1804,7 +2312,7 @@ static void reg_change_pdev_for_config(struct wlan_objmgr_psoc *psoc,
 	wlan_psoc_obj_lock(psoc);
 	psoc_priv_obj = (struct wlan_regulatory_psoc_priv_obj *)
 		wlan_objmgr_psoc_get_comp_private_obj(psoc,
-				       WLAN_UMAC_COMP_REGULATORY);
+					     WLAN_UMAC_COMP_REGULATORY);
 	wlan_psoc_obj_unlock(psoc);
 
 	if (NULL == psoc_priv_obj) {
@@ -1812,14 +2320,10 @@ static void reg_change_pdev_for_config(struct wlan_objmgr_psoc *psoc,
 		return;
 	}
 
-	wlan_pdev_obj_lock(pdev);
-	pdev_priv_obj = (struct wlan_regulatory_pdev_priv_obj *)
-		wlan_objmgr_pdev_get_comp_private_obj(pdev,
-					       WLAN_UMAC_COMP_REGULATORY);
-	wlan_pdev_obj_unlock(pdev);
+	pdev_priv_obj = reg_get_pdev_obj(pdev);
 
-	if (NULL == pdev_priv_obj) {
-		reg_err("pdev priv obj is NULL");
+	if (!IS_VALID_PDEV_REG_OBJ(pdev_priv_obj)) {
+		reg_err("reg pdev private obj is NULL");
 		return;
 	}
 
@@ -1829,14 +2333,12 @@ static void reg_change_pdev_for_config(struct wlan_objmgr_psoc *psoc,
 		psoc_priv_obj->indoor_chan_enabled;
 	pdev_priv_obj->band_capability = psoc_priv_obj->band_capability;
 
-	modify_chan_list_for_dfs_channels(pdev_priv_obj->cur_chan_list,
-					  pdev_priv_obj->dfs_enabled);
+	init_pdev_chan_list(psoc_priv_obj,
+			    pdev_priv_obj);
 
-	modify_chan_list_for_indoor_channels(pdev_priv_obj->cur_chan_list,
-					 pdev_priv_obj->indoor_chan_enabled);
+	compute_pdev_current_chan_list(pdev_priv_obj);
 
-	modify_chan_list_for_band(pdev_priv_obj->cur_chan_list,
-				  pdev_priv_obj->band_capability);
+	send_scheduler_msg_sb(psoc, pdev);
 }
 
 QDF_STATUS reg_set_config_vars(struct wlan_objmgr_psoc *psoc,
@@ -1868,31 +2370,17 @@ QDF_STATUS reg_set_config_vars(struct wlan_objmgr_psoc *psoc,
 		config_vars.indoor_chan_enabled;
 	psoc_priv_obj->band_capability = config_vars.band_capability;
 
+	status = wlan_objmgr_psoc_try_get_ref(psoc, WLAN_REGULATORY_SB_ID);
+	if (QDF_IS_STATUS_ERROR(status)) {
+		reg_err("error taking psoc ref cnt");
+		return status;
+	}
 	status = wlan_objmgr_iterate_obj_list(psoc, WLAN_PDEV_OP,
 					      reg_change_pdev_for_config,
 					      NULL, 1, WLAN_REGULATORY_SB_ID);
+	wlan_objmgr_psoc_release_ref(psoc, WLAN_REGULATORY_SB_ID);
 
 	return status;
-}
-
-
-bool reg_is_dfs_ch(struct wlan_objmgr_pdev *pdev, uint32_t chan)
-{
-	enum channel_state ch_state;
-
-	ch_state = reg_get_channel_state(pdev, chan);
-
-	return ch_state == CHANNEL_STATE_DFS;
-}
-
-bool reg_is_passive_or_disable_ch(struct wlan_objmgr_pdev *pdev, uint32_t chan)
-{
-	enum channel_state ch_state;
-
-	ch_state = reg_get_channel_state(pdev, chan);
-
-	return (ch_state == CHANNEL_STATE_DFS) ||
-		(ch_state == CHANNEL_STATE_DISABLE);
 }
 
 bool reg_is_disable_ch(struct wlan_objmgr_pdev *pdev, uint32_t chan)
@@ -1902,60 +2390,6 @@ bool reg_is_disable_ch(struct wlan_objmgr_pdev *pdev, uint32_t chan)
 	ch_state = reg_get_channel_state(pdev, chan);
 
 	return ch_state == CHANNEL_STATE_DISABLE;
-}
-
-uint32_t reg_freq_to_chan(struct wlan_objmgr_pdev *pdev, uint32_t freq)
-{
-	uint32_t count;
-	struct regulatory_channel *chan_list;
-	struct wlan_regulatory_pdev_priv_obj *pdev_priv_obj;
-
-	wlan_pdev_obj_lock(pdev);
-	pdev_priv_obj = wlan_objmgr_pdev_get_comp_private_obj(pdev,
-						WLAN_UMAC_COMP_REGULATORY);
-	wlan_pdev_obj_unlock(pdev);
-
-	if (NULL == pdev_priv_obj) {
-		reg_err("reg pdev private obj is NULL");
-		return QDF_STATUS_E_FAULT;
-	}
-
-	chan_list = pdev_priv_obj->cur_chan_list;
-
-	for (count = 0; count < NUM_CHANNELS; count++)
-		if (chan_list[count].center_freq == freq)
-			return chan_list[count].chan_num;
-
-	reg_err("invalid frequency %d", freq);
-
-	return 0;
-}
-
-uint32_t reg_chan_to_freq(struct wlan_objmgr_pdev *pdev, uint32_t chan_num)
-{
-	uint32_t count;
-	struct regulatory_channel *chan_list;
-	struct wlan_regulatory_pdev_priv_obj *pdev_priv_obj;
-
-	wlan_pdev_obj_lock(pdev);
-	pdev_priv_obj = wlan_objmgr_pdev_get_comp_private_obj(pdev,
-						 WLAN_UMAC_COMP_REGULATORY);
-	wlan_pdev_obj_unlock(pdev);
-
-	if (NULL == pdev_priv_obj) {
-		reg_err("reg pdev private obj is NULL");
-		return QDF_STATUS_E_FAULT;
-	}
-
-	chan_list = pdev_priv_obj->cur_chan_list;
-
-	for (count = 0; count < NUM_CHANNELS; count++)
-		if (chan_list[count].chan_num == chan_num)
-			return chan_list[count].center_freq;
-
-	reg_err("invalid channel %d", chan_num);
-
-	return 0;
 }
 
 bool reg_is_regdb_offloaded(struct wlan_objmgr_psoc *psoc)
@@ -1975,7 +2409,6 @@ bool reg_is_regdb_offloaded(struct wlan_objmgr_psoc *psoc)
 	return psoc_priv_obj->offload_enabled;
 }
 
-
 void reg_program_mas_chan_list(struct wlan_objmgr_psoc *psoc,
 				    struct regulatory_channel *reg_channels,
 				    uint8_t *alpha2,
@@ -1985,6 +2418,7 @@ void reg_program_mas_chan_list(struct wlan_objmgr_psoc *psoc,
 	struct wlan_regulatory_psoc_priv_obj *psoc_priv_obj;
 	QDF_STATUS status;
 	uint32_t count;
+	enum direction dir;
 
 	wlan_psoc_obj_lock(psoc);
 	psoc_priv_obj = wlan_objmgr_psoc_get_comp_private_obj(psoc,
@@ -1997,7 +2431,7 @@ void reg_program_mas_chan_list(struct wlan_objmgr_psoc *psoc,
 	}
 
 	psoc_priv_obj->dfs_region = dfs_region;
-	qdf_mem_copy(psoc_priv_obj->default_country, alpha2,
+	qdf_mem_copy(psoc_priv_obj->current_country, alpha2,
 		     REG_ALPHA2_LEN);
 
 	for (count = 0; count < NUM_CHANNELS; count++) {
@@ -2005,16 +2439,107 @@ void reg_program_mas_chan_list(struct wlan_objmgr_psoc *psoc,
 			channel_map[count].chan_num;
 		reg_channels[count].center_freq =
 			channel_map[count].center_freq;
+		reg_channels[count].nol_chan = false;
 	}
 
 	qdf_mem_copy(psoc_priv_obj->mas_chan_list,
 		     reg_channels,
 		     NUM_CHANNELS * sizeof(struct regulatory_channel));
 
-	status = wlan_objmgr_iterate_obj_list(psoc, WLAN_PDEV_OP,
-				     reg_change_pdev_for_new_mas_chan_list,
-				     NULL, 1, WLAN_REGULATORY_SB_ID);
+	dir = SOUTHBOUND;
 
+	status = wlan_objmgr_psoc_try_get_ref(psoc, WLAN_REGULATORY_SB_ID);
+	if (QDF_IS_STATUS_ERROR(status)) {
+		reg_err("error taking psoc ref cnt");
+		return;
+	}
+	status = wlan_objmgr_iterate_obj_list(psoc, WLAN_PDEV_OP,
+					  reg_propagate_mas_chan_list_to_pdev,
+					  &dir, 1, WLAN_REGULATORY_SB_ID);
+	wlan_objmgr_psoc_release_ref(psoc, WLAN_REGULATORY_SB_ID);
+}
+
+
+void reg_register_chan_change_callback(struct wlan_objmgr_psoc *psoc,
+				       reg_chan_change_callback cbk,
+				       void *arg)
+{
+	struct wlan_regulatory_psoc_priv_obj *psoc_priv_obj;
+	uint32_t count;
+
+
+	wlan_psoc_obj_lock(psoc);
+	psoc_priv_obj = wlan_objmgr_psoc_get_comp_private_obj(psoc,
+					WLAN_UMAC_COMP_REGULATORY);
+	wlan_psoc_obj_unlock(psoc);
+
+	if (NULL == psoc_priv_obj) {
+		reg_err("reg psoc private obj is NULL");
+		return;
+	}
+
+	qdf_spin_lock_bh(&psoc_priv_obj->cbk_list_lock);
+	for (count = 0; count < REG_MAX_CHAN_CHANGE_CBKS; count++)
+		if (psoc_priv_obj->cbk_list[count].cbk == NULL) {
+			psoc_priv_obj->cbk_list[count].cbk = cbk;
+			psoc_priv_obj->cbk_list[count].arg = arg;
+			psoc_priv_obj->num_chan_change_cbks++;
+			break;
+		}
+	qdf_spin_unlock_bh(&psoc_priv_obj->cbk_list_lock);
+
+	if (count == REG_MAX_CHAN_CHANGE_CBKS)
+		reg_err("callback list is full, could not add the cbk");
+}
+
+void reg_unregister_chan_change_callback(struct wlan_objmgr_psoc *psoc,
+				       reg_chan_change_callback cbk)
+{
+	struct wlan_regulatory_psoc_priv_obj *psoc_priv_obj;
+	uint32_t count;
+
+	wlan_psoc_obj_lock(psoc);
+	psoc_priv_obj = wlan_objmgr_psoc_get_comp_private_obj(psoc,
+					WLAN_UMAC_COMP_REGULATORY);
+	wlan_psoc_obj_unlock(psoc);
+
+	if (NULL == psoc_priv_obj) {
+		reg_err("reg psoc private obj is NULL");
+		return;
+	}
+
+	qdf_spin_lock_bh(&psoc_priv_obj->cbk_list_lock);
+	for (count = 0; count < REG_MAX_CHAN_CHANGE_CBKS; count++)
+		if (psoc_priv_obj->cbk_list[count].cbk == cbk) {
+			psoc_priv_obj->cbk_list[count].cbk = NULL;
+			psoc_priv_obj->num_chan_change_cbks--;
+			break;
+		}
+	qdf_spin_unlock_bh(&psoc_priv_obj->cbk_list_lock);
+
+	if (count == REG_MAX_CHAN_CHANGE_CBKS)
+		reg_err("callback not found in the list");
+}
+
+enum country_src reg_get_cc_and_src(struct wlan_objmgr_psoc *psoc,
+				    uint8_t *alpha2)
+{
+	struct wlan_regulatory_psoc_priv_obj *psoc_priv_obj;
+
+	wlan_psoc_obj_lock(psoc);
+	psoc_priv_obj = wlan_objmgr_psoc_get_comp_private_obj(psoc,
+					WLAN_UMAC_COMP_REGULATORY);
+	wlan_psoc_obj_unlock(psoc);
+
+	if (NULL == psoc_priv_obj) {
+		reg_err("reg psoc private obj is NULL");
+		return false;
+	}
+
+	qdf_mem_copy(alpha2, psoc_priv_obj->current_country,
+		     REG_ALPHA2_LEN + 1);
+
+	return psoc_priv_obj->cc_src;
 }
 
 QDF_STATUS reg_program_default_cc(struct wlan_objmgr_psoc *psoc,
@@ -2042,7 +2567,7 @@ QDF_STATUS reg_program_default_cc(struct wlan_objmgr_psoc *psoc,
 		(sizeof(struct cur_regulatory_info));
 	if (reg_info == NULL) {
 		reg_err("reg info is NULL");
-		return QDF_STATUS_E_FAILURE;
+		return QDF_STATUS_E_NOMEM;
 	}
 
 	reg_info->psoc = psoc;
@@ -2120,7 +2645,7 @@ QDF_STATUS reg_program_chan_list(struct wlan_objmgr_psoc *psoc,
 		(sizeof(struct cur_regulatory_info));
 	if (reg_info == NULL) {
 		reg_err("reg info is NULL");
-		return QDF_STATUS_E_FAILURE;
+		return QDF_STATUS_E_NOMEM;
 	}
 
 	reg_info->psoc = psoc;
@@ -2158,6 +2683,7 @@ QDF_STATUS reg_program_chan_list(struct wlan_objmgr_psoc *psoc,
 
 	reg_info->offload_enabled = false;
 	reg_process_master_chan_list(reg_info);
+
 	qdf_mem_free(reg_info->reg_rules_2g_ptr);
 	qdf_mem_free(reg_info->reg_rules_5g_ptr);
 	qdf_mem_free(reg_info);

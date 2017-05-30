@@ -29,6 +29,7 @@
 #include "../../core/src/reg_services.h"
 #include <reg_services_public_struct.h>
 
+
 #define WLAN_REG_MIN_24GHZ_CH_NUM REG_MIN_24GHZ_CH_NUM
 #define WLAN_REG_MAX_24GHZ_CH_NUM REG_MAX_24GHZ_CH_NUM
 #define WLAN_REG_MIN_5GHZ_CH_NUM REG_MIN_5GHZ_CH_NUM
@@ -62,7 +63,6 @@
 
 #define WLAN_REG_CHAN_TO_BAND(chan_num)  reg_chan_to_band(chan_num)
 
-
 /**
  * wlan_reg_get_channel_list_with_power() - Provide the channel list with power
  * @ch_list: pointer to the channel list.
@@ -81,7 +81,6 @@ QDF_STATUS wlan_reg_get_channel_list_with_power(struct wlan_objmgr_pdev *pdev,
  */
 QDF_STATUS wlan_reg_read_default_country(struct wlan_objmgr_psoc *psoc,
 				   uint8_t *country);
-
 /**
  * wlan_reg_get_channel_state() - Get channel state from regulatory
  * @ch: channel number.
@@ -98,10 +97,9 @@ enum channel_state wlan_reg_get_channel_state(struct wlan_objmgr_pdev *pdev,
  *
  * Return: channel state
  */
-enum channel_state wlan_reg_get_5g_bonded_channel_state(struct wlan_objmgr_pdev
-							*pdev,
-							uint8_t ch,
-							enum phy_ch_width bw);
+enum channel_state wlan_reg_get_5g_bonded_channel_state(
+		struct wlan_objmgr_pdev *pdev, uint8_t ch,
+		enum phy_ch_width bw);
 
 /**
  * wlan_reg_get_2g_bonded_channel_state() - Get 2G bonded channel state
@@ -111,10 +109,8 @@ enum channel_state wlan_reg_get_5g_bonded_channel_state(struct wlan_objmgr_pdev
  * Return: channel state
  */
 enum channel_state wlan_reg_get_2g_bonded_channel_state(
-							struct wlan_objmgr_pdev
-							*pdev, uint8_t ch,
-							uint8_t sec_ch,
-							enum phy_ch_width bw);
+		struct wlan_objmgr_pdev *pdev, uint8_t ch,
+		uint8_t sec_ch, enum phy_ch_width bw);
 
 /**
  * wlan_reg_set_channel_params () - Sets channel parameteres for given bandwidth
@@ -166,16 +162,6 @@ uint32_t wlan_reg_get_channel_freq(struct wlan_objmgr_pdev *pdev,
 enum channel_state wlan_reg_get_bonded_channel_state(
 	struct wlan_objmgr_pdev *pdev, uint8_t ch,
 	enum phy_ch_width bw, uint8_t sec_ch);
-
-/**
- * wlan_reg_set_default_country() - set default country
- * @psoc: psoc ptr
- * @country: country alpha2
- *
- * Return: void
- */
-void wlan_reg_set_default_country(struct wlan_objmgr_psoc *psoc,
-				  uint8_t *country);
 
 /**
  * wlan_reg_set_dfs_region() - set the dfs region
@@ -282,19 +268,6 @@ QDF_STATUS regulatory_psoc_open(struct wlan_objmgr_psoc *psoc);
 QDF_STATUS regulatory_psoc_close(struct wlan_objmgr_psoc *psoc);
 
 /**
- * wlan_reg_get_current_chan_list () - Get the current channel list
- *
- * @pdev: pdev ptr
- * @chan_list: channel list to be returned
- *
- * Return: QDF_STATUS
- */
-QDF_STATUS wlan_reg_get_current_chan_list(struct wlan_objmgr_pdev
-					  *pdev,
-					  struct regulatory_channel
-					  *chan_list);
-
-/**
  * wlan_reg_update_nol_ch () - set nol channel
  * @pdev: pdev ptr
  * @ch_list: channel list to be returned
@@ -354,5 +327,37 @@ uint32_t wlan_reg_freq_to_chan(struct wlan_objmgr_pdev *pdev,
  */
 uint32_t wlan_reg_chan_to_freq(struct wlan_objmgr_pdev *pdev,
 			       uint32_t chan);
+
+/**
+ * wlan_reg_set_country() - Set the current regulatory country
+ * @pdev: The physical dev to set current country for
+ * @country: The country information to configure
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS wlan_reg_set_country(struct wlan_objmgr_pdev *pdev,
+				       uint8_t *country);
+
+/**
+ * wlan_reg_register_chan_change_callback () - add chan change cbk
+ * @psoc: channel number
+ * @cbk: callback
+ * @arg: argument
+ *
+ * Return: true or false
+ */
+void wlan_reg_register_chan_change_callback(struct wlan_objmgr_psoc *psoc,
+					    reg_chan_change_callback cbk,
+					    void *arg);
+
+/**
+ * wlan_reg_unregister_chan_change_callback () - remove chan change cbk
+ * @psoc: channel number
+ * @cbk: callback
+ *
+ * Return: true or false
+ */
+void wlan_reg_unregister_chan_change_callback(struct wlan_objmgr_psoc *psoc,
+					      reg_chan_change_callback cbk);
 
 #endif

@@ -317,49 +317,6 @@ void qdf_trace_msg(QDF_MODULE_ID module, QDF_TRACE_LEVEL level,
 }
 EXPORT_SYMBOL(qdf_trace_msg);
 
-/**
- * qdf_trace_display() - Display trace
- *
- * Return:  None
- */
-void qdf_trace_display(void)
-{
-	QDF_MODULE_ID module_id;
-
-	pr_err
-		("     1)FATAL  2)ERROR  3)WARN  4)INFO  5)INFO_H  6)INFO_M  7)INFO_L 8)DEBUG\n");
-	for (module_id = 0; module_id < QDF_MODULE_ID_MAX; ++module_id) {
-		pr_err
-			("%2d)%s    %s        %s       %s       %s        %s         %s         %s        %s\n",
-			(int)module_id, g_qdf_trace_info[module_id].module_name_str,
-			(g_qdf_trace_info[module_id].
-			 module_trace_level & (1 << QDF_TRACE_LEVEL_FATAL)) ? "X" :
-			" ",
-			(g_qdf_trace_info[module_id].
-			 module_trace_level & (1 << QDF_TRACE_LEVEL_ERROR)) ? "X" :
-			" ",
-			(g_qdf_trace_info[module_id].
-			 module_trace_level & (1 << QDF_TRACE_LEVEL_WARN)) ? "X" :
-			" ",
-			(g_qdf_trace_info[module_id].
-			 module_trace_level & (1 << QDF_TRACE_LEVEL_INFO)) ? "X" :
-			" ",
-			(g_qdf_trace_info[module_id].
-			 module_trace_level & (1 << QDF_TRACE_LEVEL_INFO_HIGH)) ? "X"
-			: " ",
-			(g_qdf_trace_info[module_id].
-			 module_trace_level & (1 << QDF_TRACE_LEVEL_INFO_MED)) ? "X"
-			: " ",
-			(g_qdf_trace_info[module_id].
-			 module_trace_level & (1 << QDF_TRACE_LEVEL_INFO_LOW)) ? "X"
-			: " ",
-			(g_qdf_trace_info[module_id].
-			 module_trace_level & (1 << QDF_TRACE_LEVEL_DEBUG)) ? "X" :
-			" ");
-	}
-}
-EXPORT_SYMBOL(qdf_trace_display);
-
 #define ROW_SIZE 16
 /* Buffer size = data bytes(2 hex chars plus space) + NULL */
 #define BUFFER_SIZE ((ROW_SIZE * 3) + 1)
@@ -382,16 +339,16 @@ void qdf_trace_hex_dump(QDF_MODULE_ID module, QDF_TRACE_LEVEL level,
 			void *data, int buf_len)
 {
 	const u8 *ptr = data;
-	int i, linelen, remaining = buf_len;
-	unsigned char linebuf[BUFFER_SIZE];
+	int i;
 
-	if (!(g_qdf_trace_info[module].module_trace_level &
-		QDF_TRACE_LEVEL_TO_MODULE_BITMASK(level)))
+	if (!qdf_print_is_verbose_enabled(qdf_pidx, module, level))
 		return;
 
 	for (i = 0; i < buf_len; i += ROW_SIZE) {
-		linelen = min(remaining, ROW_SIZE);
-		remaining -= ROW_SIZE;
+		unsigned char linebuf[BUFFER_SIZE];
+		int linelen = min(buf_len, ROW_SIZE);
+
+		buf_len -= ROW_SIZE;
 
 		hex_dump_to_buffer(ptr + i, linelen, ROW_SIZE, 1,
 				linebuf, sizeof(linebuf), false);
@@ -399,7 +356,6 @@ void qdf_trace_hex_dump(QDF_MODULE_ID module, QDF_TRACE_LEVEL level,
 		qdf_trace_msg(module, level, "%.8x: %s", i, linebuf);
 	}
 }
-EXPORT_SYMBOL(qdf_trace_hex_dump);
 
 #endif
 
@@ -1800,10 +1756,44 @@ struct category_name_info g_qdf_category_name[MAX_SUPPORTED_CATEGORY] = {
 	[QDF_MODULE_ID_SPECTRAL] = {"SPECTRAL"},
 	[QDF_MODULE_ID_P2P] = {"P2P"},
 	[QDF_MODULE_ID_OFFCHAN_TXRX] = {"OFFCHAN"},
+	[QDF_MODULE_ID_REGULATORY] = {"REGULATORY"},
 	[QDF_MODULE_ID_ANY] = {"ANY"},
 };
 EXPORT_SYMBOL(g_qdf_category_name);
 
+/**
+ * qdf_trace_display() - Display trace
+ *
+ * Return:  None
+ */
+void qdf_trace_display(void)
+{
+	QDF_MODULE_ID module_id;
+
+	pr_err("     1)FATAL  2)ERROR  3)WARN  4)INFO  5)INFO_H  6)INFO_M  7)INFO_L 8)DEBUG\n");
+	for (module_id = 0; module_id < QDF_MODULE_ID_MAX; ++module_id) {
+		pr_err("%2d)%s    %s        %s       %s       %s        %s         %s         %s        %s\n",
+		       (int)module_id,
+		       g_qdf_category_name[module_id].category_name_str,
+		       qdf_print_is_verbose_enabled(qdf_pidx, module_id,
+			       QDF_TRACE_LEVEL_FATAL) ? "X" : " ",
+		       qdf_print_is_verbose_enabled(qdf_pidx, module_id,
+			       QDF_TRACE_LEVEL_ERROR) ? "X" : " ",
+		       qdf_print_is_verbose_enabled(qdf_pidx, module_id,
+			       QDF_TRACE_LEVEL_WARN) ? "X" : " ",
+		       qdf_print_is_verbose_enabled(qdf_pidx, module_id,
+			       QDF_TRACE_LEVEL_INFO) ? "X" : " ",
+		       qdf_print_is_verbose_enabled(qdf_pidx, module_id,
+			       QDF_TRACE_LEVEL_INFO_HIGH) ? "X" : " ",
+		       qdf_print_is_verbose_enabled(qdf_pidx, module_id,
+			       QDF_TRACE_LEVEL_INFO_MED) ? "X" : " ",
+		       qdf_print_is_verbose_enabled(qdf_pidx, module_id,
+			       QDF_TRACE_LEVEL_INFO_LOW) ? "X" : " ",
+		       qdf_print_is_verbose_enabled(qdf_pidx, module_id,
+			       QDF_TRACE_LEVEL_DEBUG) ? "X" : " ");
+	}
+}
+EXPORT_SYMBOL(qdf_trace_display);
 
 #ifdef CONFIG_MCL
 #define print_to_console(str)
@@ -2010,7 +2000,7 @@ EXPORT_SYMBOL(qdf_shared_print_ctrl_cleanup);
  * Set this to invalid value to differentiate with user-provided
  * value.
  */
-int qdf_dbg_mask = -1;
+int qdf_dbg_mask = 0;
 EXPORT_SYMBOL(qdf_dbg_mask);
 qdf_declare_param(qdf_dbg_mask, int);
 
@@ -2172,7 +2162,7 @@ static void set_default_trace_levels(struct category_info *cinfo)
 		[QDF_MODULE_ID_BMI] = QDF_TRACE_LEVEL_NONE,
 		[QDF_MODULE_ID_EPPING] = QDF_TRACE_LEVEL_NONE,
 		[QDF_MODULE_ID_QVIT] = QDF_TRACE_LEVEL_NONE,
-		[QDF_MODULE_ID_DP] = QDF_TRACE_LEVEL_NONE,
+		[QDF_MODULE_ID_DP] = QDF_TRACE_LEVEL_FATAL,
 		[QDF_MODULE_ID_SOC] = QDF_TRACE_LEVEL_NONE,
 		[QDF_MODULE_ID_OS_IF] = QDF_TRACE_LEVEL_NONE,
 		[QDF_MODULE_ID_TARGET_IF] = QDF_TRACE_LEVEL_NONE,
@@ -2209,7 +2199,7 @@ void qdf_shared_print_ctrl_init(void)
 	/*
 	 * User specified across-module single debug level
 	 */
-	if ((qdf_dbg_mask >= 0) && (qdf_dbg_mask <= QDF_TRACE_LEVEL_MAX)) {
+	if ((qdf_dbg_mask > 0) && (qdf_dbg_mask <= QDF_TRACE_LEVEL_MAX)) {
 		pr_info("User specified module debug level of %d\n",
 			qdf_dbg_mask);
 		for (i = 0; i < MAX_SUPPORTED_CATEGORY; i++) {

@@ -202,7 +202,7 @@ struct dp_tx_ext_desc_pool_s {
  * @id: Descriptor ID
  * @vdev: vdev over which the packet was transmitted
  * @pdev: Handle to pdev
- * @pool_id: Pool ID - used when releasing the descripto
+ * @pool_id: Pool ID - used when releasing the descriptor
  * @flags: Flags to track the state of descriptor and special frame handling
  * @comp: Pool ID - used when releasing the descriptor
  * @tx_encap_type: Transmit encap type (i.e. Raw, Native Wi-Fi, Ethernet).
@@ -228,6 +228,8 @@ struct dp_tx_desc_s {
 	uint8_t frm_type;
 	uint8_t pkt_offset;
 	void *me_buffer;
+	void *tso_desc;
+	void *tso_num_desc;
 };
 
 /**
@@ -241,6 +243,22 @@ struct dp_tx_tso_seg_pool_s {
 	uint16_t pool_size;
 	uint16_t num_free;
 	struct qdf_tso_seg_elem_t *freelist;
+	qdf_spinlock_t lock;
+};
+
+/**
+ * struct dp_tx_tso_num_seg_pool_s {
+ * @num_seg_pool_size: total number of pool elements
+ * @num_free: free element count
+ * @freelist: first free element pointer
+ * @lock: lock for accessing the pool
+ */
+
+struct dp_tx_tso_num_seg_pool_s {
+	uint16_t num_seg_pool_size;
+	uint16_t num_free;
+	struct qdf_tso_num_seg_elem_t *freelist;
+	/*tso mutex */
 	qdf_spinlock_t lock;
 };
 
@@ -415,6 +433,9 @@ struct dp_soc {
 
 	/* Tx TSO descriptor pool */
 	struct dp_tx_tso_seg_pool_s tx_tso_desc[MAX_TXDESC_POOLS];
+
+	/* Tx TSO Num of segments pool */
+	struct dp_tx_tso_num_seg_pool_s tx_tso_num_seg[MAX_TXDESC_POOLS];
 
 	/* Tx H/W queues lock */
 	qdf_spinlock_t tx_queue_lock[MAX_TX_HW_QUEUES];
@@ -612,6 +633,10 @@ struct dp_soc {
 	u_int16_t pdev_bs_inact_interval;
 	/* Inactivity timer */
 #endif /* QCA_SUPPORT_SON */
+	/* T2H Ext stats message queue */
+	qdf_nbuf_queue_t htt_stats_msg;
+	/* T2H Ext stats message length */
+	uint32_t htt_msg_len;
 };
 #define MAX_RX_MAC_RINGS 2
 /* Same as NAC_MAX_CLENT */
@@ -761,6 +786,9 @@ struct dp_pdev {
 	uint8_t dscp_tid_map[DP_MAX_TID_MAPS][DSCP_TID_MAP_MAX];
 
 	struct hal_rx_ppdu_info ppdu_info;
+
+	/* operating channel */
+	uint8_t operating_channel;
 
 	qdf_nbuf_queue_t rx_status_q;
 	uint32_t mon_ppdu_id;

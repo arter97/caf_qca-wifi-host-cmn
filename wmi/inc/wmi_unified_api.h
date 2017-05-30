@@ -310,6 +310,15 @@ void
 wmi_flush_endpoint(wmi_unified_t wmi_handle);
 
 /**
+ * wmi_pdev_id_conversion_enable() - API to enable pdev_id conversion in WMI
+ *                     By default pdev_id conversion is not done in WMI.
+ *                     This API can be used enable conversion in WMI.
+ * @param wmi_handle   : handle to WMI
+ * Return none
+ */
+void wmi_pdev_id_conversion_enable(wmi_unified_t wmi_handle);
+
+/**
  * API to handle wmi rx event after UMAC has taken care of execution
  * context
  *
@@ -1454,6 +1463,9 @@ QDF_STATUS wmi_unified_dfs_phyerr_offload_en_cmd(void *wmi_hdl,
 QDF_STATUS wmi_unified_dfs_phyerr_offload_dis_cmd(void *wmi_hdl,
 		uint32_t pdev_id);
 
+QDF_STATUS wmi_unified_set_country_cmd_send(void *wmi_hdl,
+				struct set_country *param);
+
 #ifdef WMI_INTERFACE_EVENT_LOGGING
 void wmi_print_cmd_log(wmi_unified_t wmi, uint32_t count,
 		       qdf_abstract_print *print, void *print_priv);
@@ -1475,6 +1487,7 @@ void wmi_print_rx_event_log(wmi_unified_t wmi, uint32_t count,
 
 void wmi_print_mgmt_event_log(wmi_unified_t wmi, uint32_t count,
 			      qdf_abstract_print *print, void *print_priv);
+
 #endif /* WMI_INTERFACE_EVENT_LOGGING */
 
 #endif /* _WMI_UNIFIED_API_H_ */
