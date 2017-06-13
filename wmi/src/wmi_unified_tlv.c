@@ -10951,7 +10951,7 @@ QDF_STATUS send_roam_invoke_cmd_tlv(wmi_unified_t wmi_handle,
 	WMITLV_TAG_STRUC_wmi_roam_invoke_cmd_fixed_param,
 	WMITLV_GET_STRUCT_TLVLEN(wmi_roam_invoke_cmd_fixed_param));
 	cmd->vdev_id = roaminvoke->vdev_id;
-	cmd->flags |= WMI_ROAM_INVOKE_FLAG_REPORT_FAILURE;
+	cmd->flags |= (1 << WMI_ROAM_INVOKE_FLAG_REPORT_FAILURE);
 
 	if (roaminvoke->frame_len)
 		cmd->roam_scan_mode = WMI_ROAM_INVOKE_SCAN_MODE_SKIP;
@@ -11395,6 +11395,8 @@ QDF_STATUS send_per_roam_config_cmd_tlv(wmi_unified_t wmi_handle,
 	wmi_per_config->pkt_err_rate_mon_time =
 			(req_buf->per_config.tx_per_mon_time << 16) |
 			(req_buf->per_config.rx_per_mon_time & 0x0000ffff);
+	wmi_per_config->min_candidate_rssi =
+			req_buf->per_config.min_candidate_rssi;
 
 	/* Send per roam config parameters */
 	status = wmi_unified_cmd_send(wmi_handle, buf,

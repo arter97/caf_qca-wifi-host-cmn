@@ -6719,6 +6719,7 @@ struct wmi_per_roam_config {
 	uint32_t per_rest_time;
 	uint32_t tx_per_mon_time;
 	uint32_t rx_per_mon_time;
+	uint32_t min_candidate_rssi;
 };
 
 /**
