@@ -1700,6 +1700,11 @@ A_STATUS htc_send_data_pkt(HTC_HANDLE HTCHandle, HTC_PACKET *pPacket,
 			UNLOCK_HTC_TX(target);
 			return A_OK;
 		}
+
+		QDF_NBUF_UPDATE_TX_PKT_COUNT(netbuf, QDF_NBUF_TX_PKT_HTC);
+		DPTRACE(qdf_dp_trace(netbuf, QDF_DP_TRACE_HTC_PACKET_PTR_RECORD,
+				qdf_nbuf_data_addr(netbuf),
+				sizeof(qdf_nbuf_data(netbuf)), QDF_TX));
 	} else {
 		LOCK_HTC_TX(target);
 		pEndpoint = &target->endpoint[1];
@@ -1772,10 +1777,6 @@ A_STATUS htc_send_data_pkt(HTC_HANDLE HTCHandle, HTC_PACKET *pPacket,
 				     tx_resources);
 		UNLOCK_HTC_TX(target);
 	}
-	QDF_NBUF_UPDATE_TX_PKT_COUNT(netbuf, QDF_NBUF_TX_PKT_HTC);
-	DPTRACE(qdf_dp_trace(netbuf, QDF_DP_TRACE_HTC_PACKET_PTR_RECORD,
-				qdf_nbuf_data_addr(netbuf),
-				sizeof(qdf_nbuf_data(netbuf)), QDF_TX));
 
 	/* send what we can */
 	while (true) {
@@ -1876,6 +1877,8 @@ static HTC_PACKET *htc_lookup_tx_packet(HTC_TARGET *target,
 	HTC_PACKET_QUEUE lookupQueue;
 
 	INIT_HTC_PACKET_QUEUE(&lookupQueue);
+	LOCK_HTC_EP_TX_LOOKUP(pEndpoint);
+
 	LOCK_HTC_TX(target);
 
 	/* mark that HIF has indicated the send complete for another packet */
@@ -1885,10 +1888,12 @@ static HTC_PACKET *htc_lookup_tx_packet(HTC_TARGET *target,
 	pPacket = htc_packet_dequeue(&pEndpoint->TxLookupQueue);
 	if (qdf_unlikely(!pPacket)) {
 		UNLOCK_HTC_TX(target);
+		UNLOCK_HTC_EP_TX_LOOKUP(pEndpoint);
 		return NULL;
 	}
 	if (netbuf == (qdf_nbuf_t) GET_HTC_PACKET_NET_BUF_CONTEXT(pPacket)) {
 		UNLOCK_HTC_TX(target);
+		UNLOCK_HTC_EP_TX_LOOKUP(pEndpoint);
 		return pPacket;
 	}
 	HTC_PACKET_ENQUEUE(&lookupQueue, pPacket);
@@ -1924,6 +1929,7 @@ static HTC_PACKET *htc_lookup_tx_packet(HTC_TARGET *target,
 	HTC_PACKET_QUEUE_TRANSFER_TO_HEAD(&pEndpoint->TxLookupQueue,
 					  &lookupQueue);
 	UNLOCK_HTC_TX(target);
+	UNLOCK_HTC_EP_TX_LOOKUP(pEndpoint);
 
 	return pFoundPacket;
 }
