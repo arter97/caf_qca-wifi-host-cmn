@@ -648,13 +648,13 @@ QDF_STATUS wmi_unified_packet_log_enable_send(void *wmi_hdl,
  *  Return: QDF_STATUS_SUCCESS on success and QDF_STATUS_E_FAILURE for failure
  */
 QDF_STATUS wmi_unified_packet_log_enable_send(void *wmi_hdl,
-				WMI_HOST_PKTLOG_EVENT PKTLOG_EVENT)
+			WMI_HOST_PKTLOG_EVENT PKTLOG_EVENT, uint8_t mac_id)
 {
 	wmi_unified_t wmi_handle = (wmi_unified_t) wmi_hdl;
 
 	if (wmi_handle->ops->send_packet_log_enable_cmd)
 		return wmi_handle->ops->send_packet_log_enable_cmd(wmi_handle,
-				  PKTLOG_EVENT);
+				  PKTLOG_EVENT, mac_id);
 
 	return QDF_STATUS_E_FAILURE;
 }
@@ -666,12 +666,13 @@ QDF_STATUS wmi_unified_packet_log_enable_send(void *wmi_hdl,
  *  @param PKTLOG_EVENT    : packet log event
  *  @return QDF_STATUS_SUCCESS on success and QDF_STATUS_E_FAILURE for failure
  */
-QDF_STATUS wmi_unified_packet_log_disable_send(void *wmi_hdl)
+QDF_STATUS wmi_unified_packet_log_disable_send(void *wmi_hdl, uint8_t mac_id)
 {
 	wmi_unified_t wmi_handle = (wmi_unified_t) wmi_hdl;
 
 	if (wmi_handle->ops->send_packet_log_disable_cmd)
-		return wmi_handle->ops->send_packet_log_disable_cmd(wmi_handle);
+		return wmi_handle->ops->send_packet_log_disable_cmd(wmi_handle,
+			mac_id);
 
 	return QDF_STATUS_E_FAILURE;
 }
@@ -2258,6 +2259,20 @@ QDF_STATUS wmi_unified_csa_offload_enable(void *wmi_hdl, uint8_t vdev_id)
 
 	return QDF_STATUS_E_FAILURE;
 }
+
+#ifdef WLAN_FEATURE_CIF_CFR
+QDF_STATUS wmi_unified_oem_dma_ring_cfg(void *wmi_hdl,
+				wmi_oem_dma_ring_cfg_req_fixed_param *cfg)
+{
+	wmi_unified_t wmi_handle = (wmi_unified_t) wmi_hdl;
+
+	if (wmi_handle->ops->send_start_oem_data_cmd)
+		return wmi_handle->ops->send_oem_dma_cfg_cmd(wmi_handle, cfg);
+
+	return QDF_STATUS_E_FAILURE;
+}
+#endif
+
 /**
  * wmi_unified_start_oem_data_cmd() - start OEM data request to target
  * @wmi_handle: wmi handle
@@ -2425,50 +2440,6 @@ QDF_STATUS wmi_unified_add_ts_cmd(void *wmi_hdl,
 	if (wmi_handle->ops->send_add_ts_cmd)
 		return wmi_handle->ops->send_add_ts_cmd(wmi_handle,
 			    msg);
-
-	return QDF_STATUS_E_FAILURE;
-}
-
-/**
- * wmi_unified_enable_disable_packet_filter_cmd() - enable/disable packet filter in target
- * @wmi_handle: wmi handle
- * @vdev_id: vdev id
- * @enable: Flag to enable/disable packet filter
- *
- * Return: QDF_STATUS_SUCCESS on success and QDF_STATUS_E_FAILURE for failure
- */
-QDF_STATUS wmi_unified_enable_disable_packet_filter_cmd(void *wmi_hdl,
-					uint8_t vdev_id, bool enable)
-{
-	wmi_unified_t wmi_handle = (wmi_unified_t) wmi_hdl;
-
-	if (wmi_handle->ops->send_enable_disable_packet_filter_cmd)
-		return wmi_handle->ops->send_enable_disable_packet_filter_cmd(
-				wmi_handle, vdev_id, enable);
-
-	return QDF_STATUS_E_FAILURE;
-}
-
-/**
- * wmi_unified_config_packet_filter_cmd() - configure packet filter in target
- * @wmi_handle: wmi handle
- * @vdev_id: vdev id
- * @rcv_filter_param: Packet filter parameters
- * @filter_id: Filter id
- * @enable: Flag to add/delete packet filter configuration
- *
- * Return: QDF_STATUS_SUCCESS on success and QDF_STATUS_E_FAILURE for failure
- */
-QDF_STATUS wmi_unified_config_packet_filter_cmd(void *wmi_hdl,
-		uint8_t vdev_id, struct rcv_pkt_filter_config *rcv_filter_param,
-		uint8_t filter_id, bool enable)
-{
-	wmi_unified_t wmi_handle = (wmi_unified_t) wmi_hdl;
-
-	if (wmi_handle->ops->send_config_packet_filter_cmd)
-		return wmi_handle->ops->send_config_packet_filter_cmd(wmi_handle,
-			    vdev_id, rcv_filter_param,
-				filter_id, enable);
 
 	return QDF_STATUS_E_FAILURE;
 }
@@ -5091,22 +5062,83 @@ QDF_STATUS wmi_extract_vdev_start_resp(void *wmi_hdl, void *evt_buf,
 }
 
 /**
+ * wmi_extract_tbttoffset_num_vdevs() - extract tbtt offset num vdev
+ * @wmi_handle: wmi handle
+ * @param evt_buf: pointer to event buffer
+ * @param vdev_map: Pointer to hold num vdev
+ *
+ * Return: QDF_STATUS_SUCCESS on success and QDF_STATUS_E_FAILURE for failure
+ */
+QDF_STATUS wmi_extract_tbttoffset_num_vdevs(void *wmi_hdl, void *evt_buf,
+					    uint32_t *num_vdevs)
+{
+	wmi_unified_t wmi = (wmi_unified_t) wmi_hdl;
+
+	if (wmi->ops->extract_tbttoffset_num_vdevs)
+		return wmi->ops->extract_tbttoffset_num_vdevs(wmi,
+			evt_buf, num_vdevs);
+
+	return QDF_STATUS_E_FAILURE;
+}
+
+/**
+ * wmi_extract_ext_tbttoffset_num_vdevs() - extract ext tbtt offset num vdev
+ * @wmi_handle: wmi handle
+ * @param evt_buf: pointer to event buffer
+ * @param vdev_map: Pointer to hold num vdev
+ *
+ * Return: QDF_STATUS_SUCCESS on success and QDF_STATUS_E_FAILURE for failure
+ */
+QDF_STATUS wmi_extract_ext_tbttoffset_num_vdevs(void *wmi_hdl, void *evt_buf,
+					    uint32_t *num_vdevs)
+{
+	wmi_unified_t wmi = (wmi_unified_t) wmi_hdl;
+
+	if (wmi->ops->extract_ext_tbttoffset_num_vdevs)
+		return wmi->ops->extract_ext_tbttoffset_num_vdevs(wmi,
+			evt_buf, num_vdevs);
+
+	return QDF_STATUS_E_FAILURE;
+}
+
+/**
  * wmi_extract_tbttoffset_update_params() - extract tbtt offset update param
  * @wmi_handle: wmi handle
  * @param evt_buf: pointer to event buffer
- * @param vdev_map: Pointer to hold vdev map
- * @param tbttoffset_list: Pointer to tbtt offset list
+ * @param idx: Index refering to a vdev
+ * @param tbtt_param: Pointer to tbttoffset event param
  *
  * Return: QDF_STATUS_SUCCESS on success and QDF_STATUS_E_FAILURE for failure
  */
 QDF_STATUS wmi_extract_tbttoffset_update_params(void *wmi_hdl, void *evt_buf,
-	uint32_t *vdev_map, uint32_t **tbttoffset_list)
+	uint8_t idx, struct tbttoffset_params *tbtt_param)
 {
 	wmi_unified_t wmi = (wmi_unified_t) wmi_hdl;
 
 	if (wmi->ops->extract_tbttoffset_update_params)
 		return wmi->ops->extract_tbttoffset_update_params(wmi,
-			evt_buf, vdev_map, tbttoffset_list);
+			evt_buf, idx, tbtt_param);
+
+	return QDF_STATUS_E_FAILURE;
+}
+
+/**
+ * wmi_extract_ext_tbttoffset_update_params() - extract tbtt offset update param
+ * @wmi_handle: wmi handle
+ * @param evt_buf: pointer to event buffer
+ * @param idx: Index refering to a vdev
+ * @param tbtt_param: Pointer to tbttoffset event param
+ *
+ * Return: QDF_STATUS_SUCCESS on success and QDF_STATUS_E_FAILURE for failure
+ */
+QDF_STATUS wmi_extract_ext_tbttoffset_update_params(void *wmi_hdl,
+	void *evt_buf, uint8_t idx, struct tbttoffset_params *tbtt_param)
+{
+	wmi_unified_t wmi = (wmi_unified_t) wmi_hdl;
+
+	if (wmi->ops->extract_ext_tbttoffset_update_params)
+		return wmi->ops->extract_ext_tbttoffset_update_params(wmi,
+			evt_buf, idx, tbtt_param);
 
 	return QDF_STATUS_E_FAILURE;
 }
@@ -5508,21 +5540,21 @@ QDF_STATUS wmi_extract_pdev_csa_switch_count_status(void *wmi_hdl,
 
 
 /**
- * wmi_extract_swba_vdev_map() - extract swba vdev map from event
+ * wmi_extract_swba_num_vdevs() - extract swba num vdevs from event
  * @wmi_handle: wmi handle
  * @param evt_buf: pointer to event buffer
- * @param vdev_map: Pointer to hold vdev map
+ * @param num_vdevs: Pointer to hold num vdevs
  *
  * Return: QDF_STATUS_SUCCESS on success and QDF_STATUS_E_FAILURE for failure
  */
-QDF_STATUS wmi_extract_swba_vdev_map(void *wmi_hdl, void *evt_buf,
-		uint32_t *vdev_map)
+QDF_STATUS wmi_extract_swba_num_vdevs(void *wmi_hdl, void *evt_buf,
+		uint32_t *num_vdevs)
 {
 	wmi_unified_t wmi_handle = (wmi_unified_t) wmi_hdl;
 
-	if (wmi_handle->ops->extract_swba_vdev_map)
-		return wmi_handle->ops->extract_swba_vdev_map(wmi_handle,
-					evt_buf, vdev_map);
+	if (wmi_handle->ops->extract_swba_num_vdevs)
+		return wmi_handle->ops->extract_swba_num_vdevs(wmi_handle,
+					evt_buf, num_vdevs);
 
 	return QDF_STATUS_E_FAILURE;
 }
@@ -6652,3 +6684,23 @@ QDF_STATUS wmi_unified_set_country_cmd_send(void *wmi_hdl,
 	return QDF_STATUS_E_FAILURE;
 }
 
+/**
+ * wmi_unified_send_dbs_scan_sel_params_cmd() - send wmi cmd of
+ * DBS scan selection configuration params
+ * @wma_handle:  wma handler
+ * @dbs_scan_params: pointer to wmi_dbs_scan_sel_params
+ *
+ * Return: QDF_STATUS_SUCCESS on success and QDF failure reason code for failure
+ */
+QDF_STATUS wmi_unified_send_dbs_scan_sel_params_cmd(void *wmi_hdl,
+			struct wmi_dbs_scan_sel_params *dbs_scan_params)
+{
+	wmi_unified_t wmi_handle = (wmi_unified_t) wmi_hdl;
+
+	if (wmi_handle->ops->send_dbs_scan_sel_params_cmd)
+		return wmi_handle->ops->
+			send_dbs_scan_sel_params_cmd(wmi_handle,
+						     dbs_scan_params);
+
+	return QDF_STATUS_E_FAILURE;
+}

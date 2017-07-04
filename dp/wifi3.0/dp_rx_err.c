@@ -31,6 +31,22 @@
 #include "dp_rx_defrag.h"
 #include <enet.h>	/* LLC_SNAP_HDR_LEN */
 
+#ifdef RX_DESC_DEBUG_CHECK
+static inline bool dp_rx_desc_check_magic(struct dp_rx_desc *rx_desc)
+{
+	if (qdf_unlikely(rx_desc->magic != DP_RX_DESC_MAGIC)) {
+		return false;
+	}
+	rx_desc->magic = 0;
+	return true;
+}
+#else
+static inline bool dp_rx_desc_check_magic(struct dp_rx_desc *rx_desc)
+{
+	return true;
+}
+#endif
+
 /**
  * dp_rx_msdus_drop() - Drops all MSDU's per MPDU
  *
@@ -46,16 +62,18 @@
  * Return: uint32_t: No. of elements processed
  */
 static uint32_t dp_rx_msdus_drop(struct dp_soc *soc, void *ring_desc,
-		 struct hal_rx_mpdu_desc_info *mpdu_desc_info,
-		 union dp_rx_desc_list_elem_t **head,
-		 union dp_rx_desc_list_elem_t **tail,
-		 uint32_t quota)
+		struct hal_rx_mpdu_desc_info *mpdu_desc_info,
+		union dp_rx_desc_list_elem_t **head,
+		union dp_rx_desc_list_elem_t **tail,
+		uint32_t quota)
 {
 	uint32_t rx_bufs_used = 0;
 	void *link_desc_va;
 	struct hal_buf_info buf_info;
 	struct hal_rx_msdu_list msdu_list; /* MSDU's per MPDU */
 	int i;
+	uint8_t *rx_tlv_hdr;
+	uint32_t tid;
 
 	hal_rx_reo_buf_paddr_get(ring_desc, &buf_info);
 
@@ -72,7 +90,21 @@ static uint32_t dp_rx_msdus_drop(struct dp_soc *soc, void *ring_desc,
 
 		qdf_assert(rx_desc);
 
+		if (!dp_rx_desc_check_magic(rx_desc)) {
+			QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_ERROR,
+					FL("Invalid rx_desc cookie=%d"),
+					msdu_list.sw_cookie[i]);
+			return rx_bufs_used;
+		}
+
 		rx_bufs_used++;
+		tid = hal_rx_mpdu_start_tid_get(rx_desc->rx_buf_start);
+		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_ERROR,
+			"Packet received with PN error for tid :%d", tid);
+
+		rx_tlv_hdr = qdf_nbuf_data(rx_desc->nbuf);
+		if (hal_rx_encryption_info_valid(rx_tlv_hdr))
+			hal_rx_print_pn(rx_tlv_hdr);
 
 		/* Just free the buffers */
 		qdf_nbuf_free(rx_desc->nbuf);
@@ -116,6 +148,7 @@ dp_rx_pn_error_handle(struct dp_soc *soc, void *ring_desc,
 	peer_id = DP_PEER_METADATA_PEER_ID_GET(
 				mpdu_desc_info->peer_meta_data);
 
+
 	peer = dp_peer_find_by_id(soc, peer_id);
 
 	if (qdf_likely(peer)) {
@@ -123,7 +156,16 @@ dp_rx_pn_error_handle(struct dp_soc *soc, void *ring_desc,
 		 * TODO: Check for peer specific policies & set peer_pn_policy
 		 */
 	}
+	QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_ERROR,
+		"Packet received with PN error");
 
+	QDF_TRACE(QDF_MODULE_ID_TXRX, QDF_TRACE_LEVEL_ERROR,
+		"discard rx due to PN error for peer  %p  "
+		"(%02x:%02x:%02x:%02x:%02x:%02x)\n",
+		peer,
+		peer->mac_addr.raw[0], peer->mac_addr.raw[1],
+		peer->mac_addr.raw[2], peer->mac_addr.raw[3],
+		peer->mac_addr.raw[4], peer->mac_addr.raw[5]);
 
 	/* No peer PN policy -- definitely drop */
 	if (!peer_pn_policy)
@@ -224,6 +266,9 @@ dp_rx_null_q_desc_handle(struct dp_soc *soc, struct dp_rx_desc *rx_desc,
 	uint16_t peer_id = 0xFFFF;
 	struct dp_peer *peer = NULL;
 	uint32_t sgi, rate_mcs, tid;
+	uint8_t count;
+	struct mect_entry *mect_entry;
+	uint8_t *nbuf_data = NULL;
 
 	rx_bufs_used++;
 
@@ -293,11 +338,6 @@ dp_rx_null_q_desc_handle(struct dp_soc *soc, struct dp_rx_desc *rx_desc,
 		"%s: %d, SGI: %d, rate_mcs: %d, tid: %d",
 		__func__, __LINE__, sgi, rate_mcs, tid);
 
-	/* WDS Source Port Learning */
-	if (qdf_likely(vdev->rx_decap_type == htt_cmn_pkt_type_ethernet) &&
-			(vdev->wds_enabled))
-		dp_rx_wds_srcport_learn(soc, rx_desc->rx_buf_start, peer, nbuf);
-
 	/*
 	 * Advance the packet start pointer by total size of
 	 * pre-header TLV's
@@ -306,6 +346,28 @@ dp_rx_null_q_desc_handle(struct dp_soc *soc, struct dp_rx_desc *rx_desc,
 
 	if (l2_hdr_offset)
 		qdf_nbuf_pull_head(nbuf, l2_hdr_offset);
+
+	nbuf_data = qdf_nbuf_data(nbuf);
+	for (count = 0; count < soc->mect_cnt; count++) {
+		mect_entry = &soc->mect_table[count];
+		mect_entry->ts = jiffies_64;
+		if (!(memcmp(mect_entry->mac_addr, &nbuf_data[DP_MAC_ADDR_LEN],
+				DP_MAC_ADDR_LEN))) {
+			QDF_TRACE(QDF_MODULE_ID_DP,
+				QDF_TRACE_LEVEL_INFO,
+				FL("received pkt with same src MAC"));
+
+			/* Drop & free packet */
+			qdf_nbuf_free(nbuf);
+			/* Statistics */
+			goto fail;
+		}
+	}
+
+	/* WDS Source Port Learning */
+	if (qdf_likely(vdev->rx_decap_type == htt_cmn_pkt_type_ethernet) &&
+			(vdev->wds_enabled))
+		dp_rx_wds_srcport_learn(soc, rx_desc->rx_buf_start, peer, nbuf);
 
 	if (hal_rx_mpdu_start_mpdu_qos_control_valid_get(
 		rx_desc->rx_buf_start)) {
@@ -633,12 +695,20 @@ dp_rx_wbm_err_process(struct dp_soc *soc, void *hal_ring, uint32_t quota)
 		rx_desc = dp_rx_cookie_2_va_rxdma_buf(soc, rx_buf_cookie);
 		qdf_assert(rx_desc);
 
+		if (!dp_rx_desc_check_magic(rx_desc)) {
+			QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_ERROR,
+					FL("Invalid rx_desc cookie=%d"),
+					rx_buf_cookie);
+			continue;
+		}
+
 		/* XXX */
 		buf_type = HAL_RX_WBM_BUF_TYPE_GET(ring_desc);
+
 		/*
 		 * For WBM ring, expect only MSDU buffers
 		 */
-		qdf_assert(buf_type == HAL_RX_WBM_BUF_TYPE_REL_BUF);
+		qdf_assert_always(buf_type == HAL_RX_WBM_BUF_TYPE_REL_BUF);
 
 		if (wbm_err_src == HAL_RX_WBM_ERR_SRC_REO) {
 
@@ -706,18 +776,6 @@ dp_rx_wbm_err_process(struct dp_soc *soc, void *hal_ring, uint32_t quota)
 			}
 		} else {
 			/* Should not come here */
-			rx_buf_cookie = HAL_RX_WBM_BUF_COOKIE_GET(ring_desc);
-			rx_desc = dp_rx_cookie_2_va_rxdma_buf(soc, rx_buf_cookie);
-
-			qdf_assert(rx_desc);
-
-			qdf_nbuf_unmap_single(soc->osdev, rx_desc->nbuf,
-						QDF_DMA_BIDIRECTIONAL);
-
-			rx_desc->rx_buf_start = qdf_nbuf_data(rx_desc->nbuf);
-			hal_rx_dump_pkt_tlvs(rx_desc->rx_buf_start,
-							QDF_TRACE_LEVEL_INFO);
-
 			qdf_assert(0);
 		}
 

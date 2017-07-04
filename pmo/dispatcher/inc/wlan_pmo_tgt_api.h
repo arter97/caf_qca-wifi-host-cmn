@@ -27,26 +27,42 @@
 #define GET_PMO_TX_OPS_FROM_PSOC(psoc) (psoc->soc_cb.tx_ops.pmo_tx_ops)
 
 /**
- * pmo_tgt_enable_non_arp_bcast_filter_req() - Enable non arp
- * hw bcast filter to target
- * @vdev: objmgr vdev
- * @vdev_id: vdev id
+ * pmo_tgt_conf_hw_filter() - configure hardware filter mode in firmware
+ * @psoc: the psoc to use to communicate with firmware
+ * @req: the configuration request
  *
- * Return: QDF status
+ * Return: QDF_STATUS
  */
-QDF_STATUS pmo_tgt_enable_non_arp_bcast_filter_req(
-		struct wlan_objmgr_vdev *vdev, uint8_t vdev_id);
+QDF_STATUS pmo_tgt_conf_hw_filter(struct wlan_objmgr_psoc *psoc,
+				  struct pmo_hw_filter_params *req);
 
 /**
- * pmo_tgt_disable_non_arp_bcast_filter_req() - Disable non arp
- * hw bcast filter to target
+ * pmo_tgt_set_pkt_filter() - Set packet filter
  * @vdev: objmgr vdev
+ * @pmo_set_pkt_fltr_req:
  * @vdev_id: vdev id
  *
- * Return: QDF status
+ * API to set packet filter
+ *
+ * Return: QDF_STATUS_SUCCESS in case of success else return error
  */
-QDF_STATUS pmo_tgt_disable_non_arp_bcast_filter_req(
-		struct wlan_objmgr_vdev *vdev, uint8_t vdev_id);
+QDF_STATUS pmo_tgt_set_pkt_filter(struct wlan_objmgr_vdev *vdev,
+		struct pmo_rcv_pkt_fltr_cfg *pmo_set_pkt_fltr_req,
+		uint8_t vdev_id);
+
+/**
+ * pmo_tgt_clear_pkt_filter() - Clear packet filter
+ * @vdev: objmgr vdev
+ * @pmo_clr_pkt_fltr_param:
+ * @vdev_id: vdev id
+ *
+ * API to clear packet filter
+ *
+ * Return: QDF_STATUS_SUCCESS in case of success else return error
+ */
+QDF_STATUS pmo_tgt_clear_pkt_filter(struct wlan_objmgr_vdev *vdev,
+		struct pmo_rcv_pkt_fltr_clear_param *pmo_clr_pkt_fltr_param,
+		uint8_t vdev_id);
 
 /**
  * pmo_tgt_enable_arp_offload_req() - Enable arp offload req to target
@@ -96,7 +112,7 @@ QDF_STATUS pmo_tgt_disable_ns_offload_req(struct wlan_objmgr_vdev *vdev,
  * Return: QDF status
  */
 QDF_STATUS pmo_tgt_enable_wow_wakeup_event(struct wlan_objmgr_vdev *vdev,
-		uint32_t bitmap);
+		uint32_t *bitmap);
 
 /**
  * pmo_tgt_disable_wow_wakeup_event() - Send Disable wow wakeup events to fwr
@@ -106,7 +122,7 @@ QDF_STATUS pmo_tgt_enable_wow_wakeup_event(struct wlan_objmgr_vdev *vdev,
  * Return: QDF status
  */
 QDF_STATUS pmo_tgt_disable_wow_wakeup_event(struct wlan_objmgr_vdev *vdev,
-		uint32_t bitmap);
+		uint32_t *bitmap);
 
 /**
  * pmo_tgt_send_wow_patterns_to_fw() - Sends WOW patterns to FW.

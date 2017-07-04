@@ -437,9 +437,7 @@ static void utils_dfs_get_chan_list(struct wlan_objmgr_pdev *pdev,
 	struct wlan_objmgr_psoc *psoc;
 	uint32_t conn_count = 0;
 
-	wlan_pdev_obj_lock(pdev);
 	psoc = wlan_pdev_get_psoc(pdev);
-	wlan_pdev_obj_unlock(pdev);
 	if (!psoc) {
 		*num_chan = 0;
 		DFS_PRINTK("%s: null psoc\n", __func__);
@@ -465,8 +463,9 @@ static void utils_dfs_get_chan_list(struct wlan_objmgr_pdev *pdev,
 	}
 
 	for (i = 0; i < len; i++) {
-		chan_list[i].ic_ieee  = pcl_ch[i];
-		chan_list[i].ic_freq  = wlan_reg_chan_to_freq(pdev, pcl_ch[i]);
+		chan_list[i].dfs_ch_ieee  = pcl_ch[i];
+		chan_list[i].dfs_ch_freq  =
+			wlan_reg_chan_to_freq(pdev, pcl_ch[i]);
 	}
 	*num_chan = i;
 	DFS_PRINTK("%s: num channels %d\n", __func__, i);
@@ -490,9 +489,7 @@ QDF_STATUS dfs_get_random_channel(
 	QDF_STATUS status = QDF_STATUS_E_FAILURE;
 
 	*target_chan = 0;
-	wlan_pdev_obj_lock(pdev);
 	psoc = wlan_pdev_get_psoc(pdev);
-	wlan_pdev_obj_unlock(pdev);
 	if (!psoc) {
 		DFS_PRINTK("%s: null psoc\n", __func__);
 		goto random_chan_error;
@@ -517,8 +514,8 @@ QDF_STATUS dfs_get_random_channel(
 		goto random_chan_error;
 	}
 
-	cur_chan.ic_vhtop_ch_freq_seg1 = ch_params->center_freq_seg0;
-	cur_chan.ic_vhtop_ch_freq_seg2 = ch_params->center_freq_seg1;
+	cur_chan.dfs_ch_vhtop_ch_freq_seg1 = ch_params->center_freq_seg0;
+	cur_chan.dfs_ch_vhtop_ch_freq_seg2 = ch_params->center_freq_seg1;
 
 	if (!ch_params->ch_width)
 		utils_dfs_get_max_sup_width(pdev,
@@ -528,8 +525,8 @@ QDF_STATUS dfs_get_random_channel(
 		num_chan, flags, (uint8_t *)&ch_params->ch_width,
 		&cur_chan, (uint8_t)dfs_reg, acs_info);
 
-	ch_params->center_freq_seg0 = cur_chan.ic_vhtop_ch_freq_seg1;
-	ch_params->center_freq_seg1 = cur_chan.ic_vhtop_ch_freq_seg2;
+	ch_params->center_freq_seg0 = cur_chan.dfs_ch_vhtop_ch_freq_seg1;
+	ch_params->center_freq_seg1 = cur_chan.dfs_ch_vhtop_ch_freq_seg2;
 	DFS_PRINTK("%s: input width=%d\n", __func__, ch_params->ch_width);
 
 	if (*target_chan) {
@@ -563,9 +560,7 @@ void dfs_init_nol(struct wlan_objmgr_pdev *pdev)
 	int len;
 
 	dfs = global_dfs_to_mlme.pdev_get_comp_private_obj(pdev);
-	wlan_pdev_obj_lock(pdev);
 	psoc = wlan_pdev_get_psoc(pdev);
-	wlan_pdev_obj_unlock(pdev);
 	if (!dfs || !psoc) {
 		DFS_PRINTK("%s: dfs %p, psoc %p\n", __func__, dfs, psoc);
 		return;
@@ -610,9 +605,7 @@ void dfs_save_nol(struct wlan_objmgr_pdev *pdev)
 		return;
 	}
 
-	wlan_pdev_obj_lock(pdev);
 	psoc = wlan_pdev_get_psoc(pdev);
-	wlan_pdev_obj_unlock(pdev);
 	if (!psoc) {
 		DFS_PRINTK("%s: null psoc\n", __func__);
 		return;

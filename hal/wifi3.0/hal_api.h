@@ -157,6 +157,9 @@ enum hal_ring_type {
 	RXDMA_MONITOR_STATUS,
 	RXDMA_MONITOR_DST,
 	RXDMA_MONITOR_DESC,
+#ifdef WLAN_FEATURE_CIF_CFR
+	WIFI_POS_SRC,
+#endif
 	MAX_RING_TYPES
 };
 
@@ -166,6 +169,10 @@ enum hal_ring_type {
 #define HAL_SRNG_DATA_TLV_SWAP			0x00000020
 #define HAL_SRNG_LOW_THRES_INTR_ENABLE	0x00010000
 #define HAL_SRNG_MSI_INTR				0x00020000
+
+#define PN_SIZE_24 0
+#define PN_SIZE_48 1
+#define PN_SIZE_128 2
 
 /**
  * hal_srng_get_entrysize - Returns size of ring entry in bytes. Should be

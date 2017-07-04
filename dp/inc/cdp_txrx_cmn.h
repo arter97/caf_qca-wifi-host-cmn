@@ -24,7 +24,7 @@
  * under proprietary terms before Copyright ownership was assigned
  * to the Linux Foundation.
  */
- /**
+/**
  * @file cdp_txrx_cmn.h
  * @brief Define the host data path converged API functions
  * called by the host control SW and the OS interface module
@@ -508,10 +508,32 @@ int cdp_txrx_stats(ol_txrx_soc_handle soc, struct cdp_vdev *vdev,
 }
 
 /**
-  * cdp_display_stats(): function to map to dump stats
-  * @soc: soc handle
-  * @value: statistics option
-  */
+ * cdp_txrx_intr_attach(): function to attach and configure interrupt
+ * @soc: soc handle
+ */
+static inline QDF_STATUS cdp_txrx_intr_attach(ol_txrx_soc_handle soc)
+{
+	if (soc->ops->cmn_drv_ops->txrx_intr_attach)
+		return soc->ops->cmn_drv_ops->txrx_intr_attach(soc);
+
+	return 0;
+}
+
+/**
+ * cdp_txrx_intr_detach(): function to detach interrupt
+ * @soc: soc handle
+ */
+static inline void cdp_txrx_intr_detach(ol_txrx_soc_handle soc)
+{
+	if (soc->ops->cmn_drv_ops->txrx_intr_detach)
+		soc->ops->cmn_drv_ops->txrx_intr_detach(soc);
+}
+
+/**
+ * cdp_display_stats(): function to map to dump stats
+ * @soc: soc handle
+ * @value: statistics option
+ */
 static inline QDF_STATUS
 cdp_display_stats(ol_txrx_soc_handle soc, uint16_t value)
 {
@@ -520,4 +542,21 @@ cdp_display_stats(ol_txrx_soc_handle soc, uint16_t value)
 
 	return 0;
 }
+
+
+/**
+  * cdp_set_pn_check(): function to set pn check
+  * @soc: soc handle
+  * @sec_type: security type
+  * #rx_pn: receive pn
+  */
+static inline int cdp_set_pn_check(ol_txrx_soc_handle soc,
+	struct cdp_vdev *vdev, struct cdp_peer *peer_handle, enum cdp_sec_type sec_type,  uint32_t *rx_pn)
+{
+	if (soc->ops->cmn_drv_ops->set_pn_check)
+		soc->ops->cmn_drv_ops->set_pn_check(vdev, peer_handle,
+			sec_type, rx_pn);
+	return 0;
+}
+
 #endif /* _CDP_TXRX_CMN_H_ */

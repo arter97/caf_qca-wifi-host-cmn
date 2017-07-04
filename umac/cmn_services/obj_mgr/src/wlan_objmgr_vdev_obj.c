@@ -75,10 +75,15 @@ static QDF_STATUS wlan_objmgr_vdev_obj_free(struct wlan_objmgr_vdev *vdev)
 {
 	struct wlan_objmgr_pdev *pdev;
 
+	if (vdev == NULL) {
+			obj_mgr_err("vdev is NULL");
+			return QDF_STATUS_E_FAILURE;
+	}
 	/* if PDEV is NULL, return */
 	pdev = wlan_vdev_get_pdev(vdev);
 	if (pdev == NULL) {
-		qdf_print("%s:pdev is NULL\n", __func__);
+		obj_mgr_err("pdev is NULL for vdev-id: %d",
+			vdev->vdev_objmgr.vdev_id);
 		return QDF_STATUS_E_FAILURE;
 	}
 
@@ -113,26 +118,28 @@ struct wlan_objmgr_vdev *wlan_objmgr_vdev_obj_create(
 	QDF_STATUS obj_status;
 
 	if (pdev == NULL) {
-		qdf_print("%s: pdev is NULL\n", __func__);
+		obj_mgr_err("pdev is NULL");
 		return NULL;
 	}
 	psoc = wlan_pdev_get_psoc(pdev);
 	/* PSOC is NULL */
 	if (psoc == NULL) {
-		qdf_print("%s: psoc is NULL\n", __func__);
+		obj_mgr_err("psoc is NULL for pdev-id:%d",
+			pdev->pdev_objmgr.wlan_pdev_id);
 		return NULL;
 	}
 	/* Allocate vdev object memory */
 	vdev = qdf_mem_malloc(sizeof(*vdev));
 	if (vdev == NULL) {
-		qdf_print("%s: Memory allocation failure\n", __func__);
+		obj_mgr_err("Memory allocation failure");
 		return NULL;
 	}
 	/* Attach VDEV to PSOC VDEV's list */
 	if (wlan_objmgr_psoc_vdev_attach(psoc, vdev) !=
 				QDF_STATUS_SUCCESS) {
+		obj_mgr_err("psoc vdev attach failed for vdev-id:%d",
+					vdev->vdev_objmgr.vdev_id);
 		qdf_mem_free(vdev);
-		qdf_print("%s: psoc vdev attach failed\n", __func__);
 		return NULL;
 	}
 	/* Store pdev in vdev */
@@ -140,7 +147,8 @@ struct wlan_objmgr_vdev *wlan_objmgr_vdev_obj_create(
 	/* Attach vdev to PDEV */
 	if (wlan_objmgr_pdev_vdev_attach(pdev, vdev) !=
 				QDF_STATUS_SUCCESS) {
-		qdf_print("%s: pdev vdev attach failed\n", __func__);
+		obj_mgr_err("pdev vdev attach failed for vdev-id:%d",
+				vdev->vdev_objmgr.vdev_id);
 		wlan_objmgr_psoc_vdev_detach(psoc, vdev);
 		qdf_mem_free(vdev);
 		return NULL;
@@ -207,8 +215,8 @@ struct wlan_objmgr_vdev *wlan_objmgr_vdev_obj_create(
 	} else if (obj_status == QDF_STATUS_E_FAILURE) {
 		/* Clean up the psoc */
 		wlan_objmgr_vdev_obj_delete(vdev);
-		qdf_print("%s:VDEV component objects creation failed\n",
-			  __func__);
+		obj_mgr_err("VDEV component objects creation failed for vdev-id:%d",
+			vdev->vdev_objmgr.vdev_id);
 		return NULL;
 	}
 	return vdev;
@@ -221,14 +229,18 @@ static QDF_STATUS wlan_objmgr_vdev_obj_destroy(struct wlan_objmgr_vdev *vdev)
 	wlan_objmgr_vdev_destroy_handler handler;
 	QDF_STATUS obj_status;
 	void *arg;
+	uint8_t vdev_id;
 
 	if (vdev == NULL) {
-		qdf_print("%s:vdev is NULL\n", __func__);
+		obj_mgr_err("vdev is NULL");
 		return QDF_STATUS_E_FAILURE;
 	}
 
+	vdev_id = wlan_vdev_get_id(vdev);
+
 	if (vdev->obj_state != WLAN_OBJ_STATE_LOGICALLY_DELETED) {
-		qdf_print("%s:vdev object delete is not invoked\n", __func__);
+		obj_mgr_err("vdev object delete is not invoked: vdev-id:%d",
+			wlan_vdev_get_id(vdev));
 		WLAN_OBJMGR_BUG(0);
 	}
 
@@ -245,7 +257,7 @@ static QDF_STATUS wlan_objmgr_vdev_obj_destroy(struct wlan_objmgr_vdev *vdev)
 	obj_status = wlan_objmgr_vdev_object_status(vdev);
 
 	if (obj_status == QDF_STATUS_E_FAILURE) {
-		qdf_print("%s: VDEV object deletion failed\n", __func__);
+		obj_mgr_err("VDEV object deletion failed: vdev-id: %d", vdev_id);
 		/* Ideally should not happen */
 		/* This leads to memleak ??? how to handle */
 		QDF_BUG(0);
@@ -264,10 +276,21 @@ static QDF_STATUS wlan_objmgr_vdev_obj_destroy(struct wlan_objmgr_vdev *vdev)
 
 QDF_STATUS wlan_objmgr_vdev_obj_delete(struct wlan_objmgr_vdev *vdev)
 {
+	uint8_t print_idx;
+
 	if (vdev == NULL) {
-		qdf_print("%s:vdev is NULL\n", __func__);
+		obj_mgr_err("vdev is NULL");
 		return QDF_STATUS_E_FAILURE;
 	}
+
+	print_idx = qdf_get_pidx();
+	if (qdf_print_is_verbose_enabled(print_idx, QDF_MODULE_ID_OBJ_MGR,
+		QDF_TRACE_LEVEL_DEBUG)) {
+		obj_mgr_debug("Logically deleting the vdev(id:%d)",
+					vdev->vdev_objmgr.vdev_id);
+		wlan_objmgr_print_ref_ids(vdev->vdev_objmgr.ref_id_dbg);
+	}
+
 	/*
 	 * Update VDEV object state to LOGICALLY DELETED
 	 * It prevents further access of this object
@@ -351,6 +374,7 @@ QDF_STATUS wlan_objmgr_vdev_component_obj_detach(
 	/* component id is invalid */
 	if (id >= WLAN_UMAC_MAX_COMPONENTS)
 		return QDF_STATUS_MAXCOMP_FAIL;
+
 	wlan_vdev_obj_lock(vdev);
 	/* If there is a valid entry, return failure */
 	if (vdev->vdev_comp_priv_obj[id] != comp_priv_obj) {
@@ -424,17 +448,19 @@ QDF_STATUS wlan_objmgr_iterate_peerobj_list(
 	qdf_list_t *peer_list = NULL;
 	struct wlan_objmgr_peer *peer = NULL;
 	struct wlan_objmgr_peer *peer_next = NULL;
+	uint8_t vdev_id;
 
 	if (vdev == NULL) {
-		qdf_print("%s: VDEV NULL\n", __func__);
+		obj_mgr_err("VDEV is NULL");
 		return QDF_STATUS_E_FAILURE;
 	}
 	wlan_vdev_obj_lock(vdev);
+	vdev_id = wlan_vdev_get_id(vdev);
 
 	if (vdev->obj_state ==
 		WLAN_OBJ_STATE_LOGICALLY_DELETED) {
 		wlan_vdev_obj_unlock(vdev);
-		qdf_print("%s: VDEV is in delete progress\n", __func__);
+		obj_mgr_err("VDEV is in delete progress: vdev-id:%d", vdev_id);
 		return QDF_STATUS_E_FAILURE;
 	}
 	wlan_objmgr_vdev_get_ref(vdev, dbg_id);
@@ -661,8 +687,6 @@ void *wlan_objmgr_vdev_get_comp_private_obj(
 {
 	void *comp_priv_obj;
 
-	/* This API is invoked with lock acquired, don't add any debug prints */
-
 	/* component id is invalid */
 	if (id >= WLAN_UMAC_MAX_COMPONENTS) {
 		QDF_BUG(0);
@@ -684,7 +708,7 @@ void wlan_objmgr_vdev_get_ref(struct wlan_objmgr_vdev *vdev,
 						wlan_objmgr_ref_dbgid id)
 {
 	if (vdev == NULL) {
-		qdf_print("%s: vdev obj is NULL\n", __func__);
+		obj_mgr_err("vdev obj is NULL for id:%d", id);
 		QDF_ASSERT(0);
 		return;
 	}
@@ -699,17 +723,20 @@ EXPORT_SYMBOL(wlan_objmgr_vdev_get_ref);
 QDF_STATUS wlan_objmgr_vdev_try_get_ref(struct wlan_objmgr_vdev *vdev,
 						wlan_objmgr_ref_dbgid id)
 {
+	uint8_t vdev_id;
+
 	if (vdev == NULL) {
-		qdf_print("%s: vdev obj is NULL\n", __func__);
+		obj_mgr_err("vdev obj is NULL for id:%d", id);
 		QDF_ASSERT(0);
 		return QDF_STATUS_E_FAILURE;
 	}
 
 	wlan_vdev_obj_lock(vdev);
+	vdev_id = wlan_vdev_get_id(vdev);
 	if (vdev->obj_state == WLAN_OBJ_STATE_LOGICALLY_DELETED) {
 		wlan_vdev_obj_unlock(vdev);
-		qdf_print("%s: vdev obj is in Deletion Progress state\n",
-			  __func__);
+		obj_mgr_err("called by %d, vdev obj is in Deletion Progress state: \
+				vdev-id:%d", id, vdev_id);
 		return QDF_STATUS_E_RESOURCES;
 	}
 
@@ -724,21 +751,24 @@ EXPORT_SYMBOL(wlan_objmgr_vdev_try_get_ref);
 void wlan_objmgr_vdev_release_ref(struct wlan_objmgr_vdev *vdev,
 						wlan_objmgr_ref_dbgid id)
 {
+	uint8_t vdev_id;
+
 	if (vdev == NULL) {
-		qdf_print("%s: vdev obj is NULL\n", __func__);
+		obj_mgr_err("vdev obj is NULL for id:%d", id);
 		QDF_ASSERT(0);
 		return;
 	}
 
+	vdev_id = wlan_vdev_get_id(vdev);
+
 	if (!qdf_atomic_read(&vdev->vdev_objmgr.ref_id_dbg[id])) {
-		qdf_print("%s: vdev ref cnt was not taken by %d\n",
-			  __func__, id);
+		obj_mgr_err("vdev (id:%d)ref cnt was not taken by %d", vdev_id, id);
 		wlan_objmgr_print_ref_ids(vdev->vdev_objmgr.ref_id_dbg);
 		WLAN_OBJMGR_BUG(0);
 	}
 
 	if (!qdf_atomic_read(&vdev->vdev_objmgr.ref_cnt)) {
-		qdf_print("%s: vdev ref cnt is 0\n", __func__);
+		obj_mgr_err("vdev ref cnt is 0");
 		WLAN_OBJMGR_BUG(0);
 		return;
 	}

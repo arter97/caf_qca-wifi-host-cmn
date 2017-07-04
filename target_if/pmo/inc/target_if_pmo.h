@@ -36,7 +36,7 @@
  * Return: QDF status
  */
 QDF_STATUS target_if_pmo_enable_wow_wakeup_event(struct wlan_objmgr_vdev *vdev,
-		uint32_t bitmap);
+		uint32_t *bitmap);
 
 /**
  * target_if_pmo_disable_wow_wakeup_event() -  Disable wow wakeup events.
@@ -47,7 +47,7 @@ QDF_STATUS target_if_pmo_enable_wow_wakeup_event(struct wlan_objmgr_vdev *vdev,
  * Return: QDF status
  */
 QDF_STATUS target_if_pmo_disable_wow_wakeup_event(
-		struct wlan_objmgr_vdev *vdev, uint32_t bitmap);
+		struct wlan_objmgr_vdev *vdev, uint32_t *bitmap);
 
 /**
  * target_if_pmo_send_wow_patterns_to_fw() - Sends WOW patterns to FW.
@@ -125,17 +125,38 @@ QDF_STATUS target_if_pmo_send_action_frame_patterns(
 		struct pmo_action_wakeup_set_params *ip_cmd);
 
 /**
- * target_if_pmo_send_non_arp_bcast_filter_req() -  Enable/Disable Broadcast
- * @vdev: objmgr vdev
- * @bcast_req: enable/disable hw bcast filter
+ * target_if_pmo_conf_hw_filter() - configure hardware filter in DTIM mode
+ * @psoc: the psoc containing the vdev to configure
+ * @req: the request parameters
  *
- * This functions enable/disable non arp hw bcast filter.
- *
- * Return: QDF_STATUS_SUCCESS for success or error code
+ * Return: QDF_STATUS
  */
-QDF_STATUS target_if_pmo_send_non_arp_bcast_filter_req(
-		struct wlan_objmgr_vdev *vdev,
-		struct pmo_bcast_filter_params *bcast_req);
+QDF_STATUS target_if_pmo_conf_hw_filter(struct wlan_objmgr_psoc *psoc,
+					struct pmo_hw_filter_params *req);
+
+/**
+ * target_if_pmo_send_pkt_filter_req() - enable packet filter
+ * @vdev: objmgr vdev
+ * @rcv_filter_param: filter params
+ *
+ * This function enable packet filter
+ *
+ *  Return: QDF_STATUS_SUCCESS for success or error code
+ */
+QDF_STATUS target_if_pmo_send_pkt_filter_req(struct wlan_objmgr_vdev *vdev,
+			struct pmo_rcv_pkt_fltr_cfg *rcv_filter_param);
+
+/**
+ * target_if_pmo_clear_pkt_filter_req() - disable packet filter
+ * @vdev: objmgr vdev
+ * @rcv_clear_param: filter params
+ *
+ * This function disable packet filter
+ *
+ *  Return: QDF_STATUS_SUCCESS for success or error code
+ */
+QDF_STATUS target_if_pmo_clear_pkt_filter_req(struct wlan_objmgr_vdev *vdev,
+			struct pmo_rcv_pkt_fltr_clear_param *rcv_clear_param);
 
 /**
  * target_if_pmo_send_arp_offload_req() - sends arp request to fwr

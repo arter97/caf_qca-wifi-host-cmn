@@ -260,14 +260,15 @@ QDF_STATUS (*send_stats_request_cmd)(wmi_unified_t wmi_handle,
 
 #ifdef CONFIG_WIN
 QDF_STATUS (*send_packet_log_enable_cmd)(wmi_unified_t wmi_handle,
-				WMI_HOST_PKTLOG_EVENT PKTLOG_EVENT);
+			WMI_HOST_PKTLOG_EVENT PKTLOG_EVENT, uint8_t mac_id);
 #else
 QDF_STATUS (*send_packet_log_enable_cmd)(wmi_unified_t wmi_handle,
 				uint8_t macaddr[IEEE80211_ADDR_LEN],
 				struct packet_enable_params *param);
 #endif
 
-QDF_STATUS (*send_packet_log_disable_cmd)(wmi_unified_t wmi_handle);
+QDF_STATUS (*send_packet_log_disable_cmd)(wmi_unified_t wmi_handle,
+	uint8_t mac_id);
 
 QDF_STATUS (*send_beacon_send_cmd)(wmi_unified_t wmi_handle,
 				struct beacon_params *param);
@@ -489,7 +490,7 @@ QDF_STATUS (*send_link_status_req_cmd)(wmi_unified_t wmi_handle,
 #ifdef WLAN_PMO_ENABLE
 QDF_STATUS (*send_add_wow_wakeup_event_cmd)(wmi_unified_t wmi_handle,
 					uint32_t vdev_id,
-					uint32_t bitmap,
+					uint32_t *bitmap,
 					bool enable);
 
 QDF_STATUS (*send_wow_patterns_to_fw_cmd)(wmi_unified_t wmi_handle,
@@ -504,8 +505,8 @@ QDF_STATUS (*send_enable_arp_ns_offload_cmd)(wmi_unified_t wmi_handle,
 			   struct pmo_ns_offload_params *ns_offload_req,
 			   uint8_t vdev_id);
 
-QDF_STATUS (*send_enable_broadcast_filter_cmd)(wmi_unified_t wmi_handle,
-			   uint8_t vdev_id, bool enable);
+QDF_STATUS (*send_conf_hw_filter_cmd)(wmi_unified_t wmi,
+				      struct pmo_hw_filter_params *req);
 
 QDF_STATUS (*send_enable_enhance_multicast_offload_cmd)(
 		wmi_unified_t wmi_handle,
@@ -550,6 +551,13 @@ QDF_STATUS (*send_lphb_config_udp_params_cmd)(wmi_unified_t wmi_handle,
 
 QDF_STATUS (*send_lphb_config_udp_pkt_filter_cmd)(wmi_unified_t wmi_handle,
 					wmi_hb_set_udp_pkt_filter_cmd_fixed_param *lphb_conf_req);
+
+QDF_STATUS (*send_enable_disable_packet_filter_cmd)(wmi_unified_t wmi_handle,
+					uint8_t vdev_id, bool enable);
+
+QDF_STATUS (*send_config_packet_filter_cmd)(wmi_unified_t wmi_handle,
+		uint8_t vdev_id, struct pmo_rcv_pkt_fltr_cfg *rcv_filter_param,
+		uint8_t filter_id, bool enable);
 #endif /* end of WLAN_PMO_ENABLE */
 #ifdef CONFIG_MCL
 QDF_STATUS (*send_process_dhcp_ind_cmd)(wmi_unified_t wmi_handle,
@@ -586,6 +594,11 @@ QDF_STATUS (*send_fw_profiling_cmd)(wmi_unified_t wmi_handle,
 
 QDF_STATUS (*send_nat_keepalive_en_cmd)(wmi_unified_t wmi_handle, uint8_t vdev_id);
 
+#ifdef WLAN_FEATURE_CIF_CFR
+QDF_STATUS (*send_oem_dma_cfg_cmd)(wmi_unified_t wmi_handle,
+				   wmi_oem_dma_ring_cfg_req_fixed_param *cfg);
+#endif
+
 QDF_STATUS (*send_start_oem_data_cmd)(wmi_unified_t wmi_handle,
 			  uint32_t data_len,
 			  uint8_t *data);
@@ -607,13 +620,6 @@ QDF_STATUS (*send_aggr_qos_cmd)(wmi_unified_t wmi_handle,
 
 QDF_STATUS (*send_add_ts_cmd)(wmi_unified_t wmi_handle,
 		 struct add_ts_param *msg);
-
-QDF_STATUS (*send_enable_disable_packet_filter_cmd)(wmi_unified_t wmi_handle,
-					uint8_t vdev_id, bool enable);
-
-QDF_STATUS (*send_config_packet_filter_cmd)(wmi_unified_t wmi_handle,
-		uint8_t vdev_id, struct rcv_pkt_filter_config *rcv_filter_param,
-		uint8_t filter_id, bool enable);
 
 QDF_STATUS (*send_process_add_periodic_tx_ptrn_cmd)(wmi_unified_t wmi_handle,
 						struct periodic_tx_pattern  *
@@ -1024,6 +1030,14 @@ QDF_STATUS
 			struct btcoex_cfg_params *param);
 
 QDF_STATUS
+(*send_start_11d_scan_cmd)(wmi_unified_t wmi_handle,
+			struct reg_start_11d_scan_req *param);
+
+QDF_STATUS
+(*send_stop_11d_scan_cmd)(wmi_unified_t wmi_handle,
+			struct reg_stop_11d_scan_req *param);
+
+QDF_STATUS
 (*send_btcoex_duty_cycle_cmd)(wmi_unified_t wmi_handle,
 			struct btcoex_cfg_params *param);
 
@@ -1053,7 +1067,16 @@ QDF_STATUS (*extract_vdev_start_resp)(wmi_unified_t wmi_handle, void *evt_buf,
 	wmi_host_vdev_start_resp *vdev_rsp);
 
 QDF_STATUS (*extract_tbttoffset_update_params)(void *wmi_hdl, void *evt_buf,
-	uint32_t *vdev_map, uint32_t **tbttoffset_list);
+	uint8_t idx, struct tbttoffset_params *tbtt_param);
+
+QDF_STATUS (*extract_ext_tbttoffset_update_params)(void *wmi_hdl, void *evt_buf,
+	uint8_t idx, struct tbttoffset_params *tbtt_param);
+
+QDF_STATUS (*extract_tbttoffset_num_vdevs)(void *wmi_hdl, void *evt_buf,
+					   uint32_t *num_vdevs);
+
+QDF_STATUS (*extract_ext_tbttoffset_num_vdevs)(void *wmi_hdl, void *evt_buf,
+					       uint32_t *num_vdevs);
 
 QDF_STATUS (*extract_mgmt_rx_params)(wmi_unified_t wmi_handle, void *evt_buf,
 	struct mgmt_rx_event_params *hdr, uint8_t **bufp);
@@ -1117,8 +1140,8 @@ QDF_STATUS (*extract_offchan_data_tx_compl_param)(wmi_unified_t wmi_handle,
 QDF_STATUS (*extract_pdev_csa_switch_count_status)(wmi_unified_t wmi_handle,
 		void *evt_buf, struct pdev_csa_switch_count_status *param);
 
-QDF_STATUS (*extract_swba_vdev_map)(wmi_unified_t wmi_handle, void *evt_buf,
-	uint32_t *vdev_map);
+QDF_STATUS (*extract_swba_num_vdevs)(wmi_unified_t wmi_handle, void *evt_buf,
+	uint32_t *num_vdevs);
 
 QDF_STATUS (*extract_swba_tim_info)(wmi_unified_t wmi_handle, void *evt_buf,
 	uint32_t idx, wmi_host_tim_info *tim_info);
@@ -1236,6 +1259,9 @@ QDF_STATUS (*send_multiple_vdev_restart_req_cmd)(wmi_unified_t wmi_handle,
 QDF_STATUS (*send_adapt_dwelltime_params_cmd)(wmi_unified_t wmi_handle,
 			struct wmi_adaptive_dwelltime_params *dwelltime_params);
 
+QDF_STATUS (*send_dbs_scan_sel_params_cmd)(wmi_unified_t wmi_handle,
+			struct wmi_dbs_scan_sel_params *dbs_scan_params);
+
 QDF_STATUS (*send_fw_test_cmd)(wmi_unified_t wmi_handle,
 			       struct set_fwtest_params *wmi_fwtest);
 
@@ -1299,6 +1325,12 @@ QDF_STATUS (*extract_reg_chan_list_update_event)(wmi_unified_t wmi_handle,
 						 struct cur_regulatory_info
 						 *reg_info,
 						 uint32_t len);
+
+QDF_STATUS (*extract_reg_11d_new_country_event)(wmi_unified_t wmi_handle,
+		uint8_t *evt_buf,
+		struct reg_11d_new_country *reg_11d_country,
+		uint32_t len);
+
 QDF_STATUS (*extract_chainmask_tables)(wmi_unified_t wmi_handle,
 		uint8_t *evt_buf,
 		struct wlan_psoc_host_chainmask_table *chainmask_table);
@@ -1450,5 +1482,53 @@ void wmi_non_tlv_attach(wmi_unified_t wmi_handle);
 static inline uint32_t wmi_align(uint32_t param)
 {
 	return roundup(param, sizeof(uint32_t));
+}
+
+/**
+ * wmi_vdev_map_to_vdev_id() - Provides vdev id corresponding to idx
+ *                             from vdev map
+ * @vdev_map: Bitmask containing information of active vdev ids
+ * @idx: Index referring to the i'th bit set from LSB in vdev map
+ *
+ * This API returns the vdev id for the i'th bit set from LSB in vdev map.
+ * Index runs through 1 from maximum number of vdevs set in the vdev map
+ *
+ * Return: vdev id of the vdev object
+ */
+static inline uint32_t wmi_vdev_map_to_vdev_id(uint32_t vdev_map,
+					       uint32_t idx)
+{
+	uint32_t vdev_count = 0, vdev_set = 0, vdev_id = WLAN_INVALID_VDEV_ID;
+
+	while (vdev_map) {
+		vdev_set += (vdev_map & 0x1);
+		if (vdev_set == (idx+1)) {
+			vdev_id = vdev_count;
+			break;
+		}
+		vdev_map >>= 1;
+		vdev_count++;
+	}
+
+	return vdev_id;
+}
+
+/**
+ * wmi_vdev_map_to_num_vdevs() - Provides number of vdevs active based on the
+ *                               vdev map received from FW
+ * @vdev_map: Bitmask containing information of active vdev ids
+ *
+ * Return: Number of vdevs set in the vdev bit mask
+ */
+static inline uint32_t wmi_vdev_map_to_num_vdevs(uint32_t vdev_map)
+{
+	uint32_t num_vdevs = 0;
+
+	while (vdev_map) {
+		num_vdevs += (vdev_map & 0x1);
+		vdev_map >>= 1;
+	}
+
+	return num_vdevs;
 }
 #endif

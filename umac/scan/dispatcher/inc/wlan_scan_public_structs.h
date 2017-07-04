@@ -47,7 +47,7 @@ typedef uint32_t wlan_scan_id;
 #define SCM_BSS_CAP_VALUE_5GHZ  2
 
 #define SCM_CANCEL_SCAN_WAIT_TIME 50
-#define SCM_CANCEL_SCAN_WAIT_ITERATION 100
+#define SCM_CANCEL_SCAN_WAIT_ITERATION 600
 
 #define INVAL_SCAN_ID        0xFFFFFFFF
 #define INVAL_VDEV_ID        0xFFFFFFFF
@@ -534,6 +534,7 @@ enum scan_dwelltime_adaptive_mode {
  * @extraie: list of optional/vendor specific ie's to be added in probe requests
  * @htcap: htcap ie
  * @vhtcap: vhtcap ie
+ * @scan_ctrl_flags_ext: scan control flag extended
  */
 
 struct scan_req_params {
@@ -611,6 +612,7 @@ struct scan_req_params {
 	struct element_info extraie;
 	struct element_info htcap;
 	struct element_info vhtcap;
+	uint32_t scan_ctrl_flags_ext;
 };
 
 /**
@@ -880,6 +882,7 @@ struct pno_nw_type {
  * @slow_scan_period: Slow scan period
  * @delay_start_time: delay in seconds to use before starting the first scan
  * @fast_scan_max_cycles: Fast scan max cycles
+ * @scan_backoff_multiplier: multiply fast scan period by this after max cycles
  * @pno_channel_prediction: PNO channel prediction feature status
  * @uint32_t active_dwell_time: active dwell time
  * @uint32_t passive_dwell_time: passive dwell time
@@ -890,6 +893,11 @@ struct pno_nw_type {
  * @channel_prediction_full_scan: periodic timer upon which a full scan needs
  * to be triggered.
  * @networks_list: Preferred network list
+ *
+ * E.g.
+ *	{ fast_scan_period=120, fast_scan_max_cycles=2,
+ *	  slow_scan_period=1800, scan_backoff_multiplier=2 }
+ *	Result: 120s x2, 240s x2, 480s x2, 960s x2, 1800s xN
  */
 struct pno_scan_req_params {
 	uint32_t networks_cnt;
@@ -898,6 +906,7 @@ struct pno_scan_req_params {
 	uint32_t slow_scan_period;
 	uint32_t delay_start_time;
 	uint32_t fast_scan_max_cycles;
+	uint8_t scan_backoff_multiplier;
 	uint32_t active_dwell_time;
 	uint32_t passive_dwell_time;
 	uint32_t pno_channel_prediction;

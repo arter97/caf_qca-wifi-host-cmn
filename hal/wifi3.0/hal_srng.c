@@ -186,8 +186,8 @@ static struct hal_hw_srng_config hw_srng_table[] = {
 		.reg_size = {
 			HWIO_REO_R0_REO2SW2_RING_BASE_LSB_ADDR(0) -
 				HWIO_REO_R0_REO2SW1_RING_BASE_LSB_ADDR(0),
-			HWIO_REO_R2_REO2SW1_RING_HP_ADDR(0) -
-				HWIO_REO_R2_REO2SW2_RING_HP_ADDR(0),
+			HWIO_REO_R2_REO2SW2_RING_HP_ADDR(0) -
+				HWIO_REO_R2_REO2SW1_RING_HP_ADDR(0),
 		},
 	},
 	{ /* REO_EXCEPTION */
@@ -497,6 +497,20 @@ static struct hal_hw_srng_config hw_srng_table[] = {
 		.reg_start = {},
 		.reg_size = {},
 	},
+#ifdef WLAN_FEATURE_CIF_CFR
+	{ /* WIFI_POS_SRC */
+		.start_ring_id = HAL_SRNG_WIFI_POS_SRC_DMA_RING,
+		.max_rings = 1,
+		.entry_size = sizeof(wmi_oem_dma_buf_release_entry)  >> 2,
+		.lmac_ring = TRUE,
+		.ring_dir = HAL_SRNG_SRC_RING,
+		/* reg_start is not set because LMAC rings are not accessed
+		 * from host
+		 */
+		.reg_start = {},
+		.reg_size = {},
+	},
+#endif
 };
 
 /**
@@ -852,10 +866,17 @@ static inline void hal_srng_src_hw_init(struct hal_soc *hal,
 	 * if level mode is required
 	 */
 	reg_val = 0;
+
+	/*
+	 * WAR - Hawkeye v1 has a hardware bug which requires timer value to be
+	 * programmed in terms of 1us resolution instead of 8us resolution as
+	 * given in MLD.
+	 */
 	if (srng->intr_timer_thres_us) {
 		reg_val |= SRNG_SM(SRNG_SRC_FLD(CONSUMER_INT_SETUP_IX0,
 			INTERRUPT_TIMER_THRESHOLD),
-			srng->intr_timer_thres_us >> 3);
+			srng->intr_timer_thres_us);
+		/* For HK v2 this should be (srng->intr_timer_thres_us >> 3) */
 	}
 
 	if (srng->intr_batch_cntr_thres_entries) {
@@ -1134,7 +1155,8 @@ void *hal_srng_setup(void *hal_soc, int ring_type, int ring_num,
 			srng->entry_size;
 		srng->u.src_ring.tp_addr =
 			&(hal->shadow_rdptr_mem_vaddr[ring_id]);
-		srng->u.src_ring.low_threshold = ring_params->low_threshold;
+		srng->u.src_ring.low_threshold =
+			ring_params->low_threshold * srng->entry_size;
 		if (ring_config->lmac_ring) {
 			/* For LMAC rings, head pointer updates will be done
 			 * through FW by writing to a shared memory location

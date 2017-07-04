@@ -24,7 +24,7 @@
  * under proprietary terms before Copyright ownership was assigned
  * to the Linux Foundation.
  */
- /**
+/**
  * @file cdp_txrx_pflow.h
  * @brief Define the host data path peer flow API functions
  * called by the host control SW and the OS interface module
@@ -38,7 +38,7 @@
 
 static inline uint32_t cdp_pflow_update_pdev_params
 	(ol_txrx_soc_handle soc, struct cdp_pdev *pdev,
-	ol_ath_param_t param, uint32_t val, void *ctx)
+	enum _ol_ath_param_t param, uint32_t val, void *ctx)
 {
 	if (soc->ops->pflow_ops->pflow_update_pdev_params)
 		return soc->ops->pflow_ops->pflow_update_pdev_params

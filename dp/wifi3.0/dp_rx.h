@@ -29,7 +29,7 @@
 #define RX_BUFFER_ALIGNMENT     4
 #endif /* RXDMA_OPTIMIZATION */
 
-#define RX_BUFFER_SIZE          2048
+#define RX_BUFFER_SIZE			2048
 #define RX_BUFFER_RESERVATION   0
 
 #define DP_PEER_METADATA_PEER_ID_MASK	0x0000ffff
@@ -44,6 +44,8 @@
 #define DP_PEER_METADATA_ID_GET(_peer_metadata)			\
 	(((_peer_metadata) & DP_PEER_METADATA_VDEV_ID_MASK)	\
 			>> DP_PEER_METADATA_VDEV_ID_SHIFT)
+
+#define DP_RX_DESC_MAGIC 0xdec0de
 
 /**
  * struct dp_rx_desc
@@ -65,6 +67,10 @@ struct dp_rx_desc {
 	uint8_t *rx_buf_start;
 	uint32_t cookie;
 	uint8_t	 pool_id;
+#ifdef RX_DESC_DEBUG_CHECK
+	uint32_t magic;
+#endif
+	uint8_t in_use:1;
 };
 
 #define RX_DESC_COOKIE_INDEX_SHIFT		0
@@ -279,6 +285,16 @@ uint32_t dp_rx_err_process(struct dp_soc *soc, void *hal_ring, uint32_t quota);
 uint32_t
 dp_rx_wbm_err_process(struct dp_soc *soc, void *hal_ring, uint32_t quota);
 
+void
+dp_rx_sg_create(qdf_nbuf_t nbuf,
+		uint8_t *rx_tlv_hdr,
+		uint16_t *mpdu_len,
+		bool *is_first_frag,
+		uint16_t *frag_list_len,
+		qdf_nbuf_t *head_frag_nbuf,
+		qdf_nbuf_t *frag_list_head,
+		qdf_nbuf_t *frag_list_tail);
+
 QDF_STATUS dp_rx_desc_pool_alloc(struct dp_soc *soc,
 				uint32_t pool_id,
 				uint32_t pool_size,
@@ -307,6 +323,7 @@ void dp_rx_add_to_free_desc_list(union dp_rx_desc_list_elem_t **head,
 	qdf_assert(head && new);
 
 	new->nbuf = NULL;
+	new->in_use = 0;
 
 	((union dp_rx_desc_list_elem_t *)new)->next = *head;
 	*head = (union dp_rx_desc_list_elem_t *)new;
@@ -343,13 +360,13 @@ dp_rx_wds_srcport_learn(struct dp_soc *soc,
 
 	if (!hal_rx_msdu_end_sa_is_valid_get(rx_tlv_hdr)) {
 		ret = soc->cdp_soc.ol_ops->peer_add_wds_entry(
-						soc->osif_soc,
+						ta_peer->vdev->pdev->osif_pdev,
 						wds_src_mac,
 						ta_peer->mac_addr.raw,
 						flags);
 	} else if (sa_sw_peer_id != ta_peer->peer_ids[0]) {
 		ret = soc->cdp_soc.ol_ops->peer_update_wds_entry(
-						soc->osif_soc,
+						ta_peer->vdev->pdev->osif_pdev,
 						wds_src_mac,
 						ta_peer->mac_addr.raw,
 						flags);

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2017 The Linux Foundation. All rights reserved.
+* * Copyright (c) 2013-2017 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -106,6 +106,20 @@ void wlan_cfg_set_ce_ring_mask(struct wlan_cfg_dp_soc_ctxt *cfg,
 			       int context, int mask);
 void wlan_cfg_set_rxbuf_ring_mask(struct wlan_cfg_dp_soc_ctxt *cfg, int context,
 				  int mask);
+void wlan_cfg_set_max_peer_id(struct wlan_cfg_dp_soc_ctxt *cfg, uint32_t val);
+
+int wlan_cfg_set_rx_err_ring_mask(struct wlan_cfg_dp_soc_ctxt *cfg,
+				int context, int mask);
+int wlan_cfg_set_rx_wbm_rel_ring_mask(struct wlan_cfg_dp_soc_ctxt *cfg,
+					int context, int mask);
+int wlan_cfg_set_reo_status_ring_mask(struct wlan_cfg_dp_soc_ctxt *cfg,
+					int context, int mask);
+int wlan_cfg_get_rx_err_ring_mask(struct wlan_cfg_dp_soc_ctxt *cfg,
+					int context);
+int wlan_cfg_get_rx_wbm_rel_ring_mask(struct wlan_cfg_dp_soc_ctxt *cfg,
+					int context);
+int wlan_cfg_get_reo_status_ring_mask(struct wlan_cfg_dp_soc_ctxt *cfg,
+					int context);
 /**
  * wlan_cfg_get_num_contexts() - Number of interrupt contexts to be registered
  * @wlan_cfg_ctx - Configuration Handle
@@ -151,6 +165,59 @@ int wlan_cfg_get_rx_ring_mask(struct wlan_cfg_dp_soc_ctxt *wlan_cfg_ctx,
  */
 int wlan_cfg_get_rx_mon_ring_mask(struct wlan_cfg_dp_soc_ctxt *wlan_cfg_ctx,
 		int context);
+
+/**
+ * wlan_cfg_set_rxdma2host_ring_mask() - Set rxdma2host ring interrupt mask
+ *				   for the given interrupt context
+ * @wlan_cfg_ctx - Configuration Handle
+ * @context - Numerical ID identifying the Interrupt/NAPI context
+ *
+ */
+void wlan_cfg_set_rxdma2host_ring_mask(struct wlan_cfg_dp_soc_ctxt *cfg,
+	int context, int mask);
+
+/**
+ * wlan_cfg_get_rxdma2host_ring_mask() - Return rxdma2host ring interrupt mask
+ *				   mapped to an interrupt context
+ * @wlan_cfg_ctx - Configuration Handle
+ * @context - Numerical ID identifying the Interrupt/NAPI context
+ *
+ * Return: int_rxdma2host_ring_mask[context]
+ */
+int wlan_cfg_get_rxdma2host_ring_mask(struct wlan_cfg_dp_soc_ctxt *cfg,
+	int context);
+
+/**
+ * wlan_cfg_set_hw_macid() - Set HW MAC Id for the given PDEV index
+ *
+ * @wlan_cfg_ctx - Configuration Handle
+ * @pdev_idx - Index of SW PDEV
+ * @hw_macid - HW MAC Id
+ *
+ */
+void wlan_cfg_set_hw_macid(struct wlan_cfg_dp_soc_ctxt *cfg, int pdev_idx,
+	int hw_macid);
+
+/**
+ * wlan_cfg_get_hw_macid() - Get HW MAC Id for the given PDEV index
+ *
+ * @wlan_cfg_ctx - Configuration Handle
+ * @pdev_idx - Index of SW PDEV
+ *
+ * Return: HW MAC Id
+ */
+int wlan_cfg_get_hw_macid(struct wlan_cfg_dp_soc_ctxt *cfg, int pdev_idx);
+
+/**
+ * wlan_cfg_get_hw_mac_idx() - Get 0 based HW MAC index for the given
+ * PDEV index
+ *
+ * @wlan_cfg_ctx - Configuration Handle
+ * @pdev_idx - Index of SW PDEV
+ *
+ * Return: HW MAC index
+ */
+int wlan_cfg_get_hw_mac_idx(struct wlan_cfg_dp_soc_ctxt *cfg, int pdev_idx);
 
 /**
  * wlan_cfg_get_ce_ring_mask() - Return CE ring interrupt mask
@@ -357,4 +424,53 @@ int wlan_cfg_get_dp_soc_nss_cfg(struct wlan_cfg_dp_soc_ctxt *cfg);
  *
  */
 void wlan_cfg_set_dp_soc_nss_cfg(struct wlan_cfg_dp_soc_ctxt *cfg, int nss_cfg);
+
+
+/*
+ * wlan_cfg_get_int_batch_threshold_tx - Get interrupt mitigation cfg for Tx
+ * @wlan_cfg_soc_ctx
+ *
+ * Return: Batch threshold
+ */
+int wlan_cfg_get_int_batch_threshold_tx(struct wlan_cfg_dp_soc_ctxt *cfg);
+
+/*
+ * wlan_cfg_get_int_timer_threshold_tx - Get interrupt mitigation cfg for Tx
+ * @wlan_cfg_soc_ctx
+ *
+ * Return: Timer threshold
+ */
+int wlan_cfg_get_int_timer_threshold_tx(struct wlan_cfg_dp_soc_ctxt *cfg);
+
+/*
+ * wlan_cfg_get_int_batch_threshold_rx - Get interrupt mitigation cfg for Rx
+ * @wlan_cfg_soc_ctx
+ *
+ * Return: Batch threshold
+ */
+int wlan_cfg_get_int_batch_threshold_rx(struct wlan_cfg_dp_soc_ctxt *cfg);
+
+/*
+ * wlan_cfg_get_int_batch_threshold_rx - Get interrupt mitigation cfg for Rx
+ * @wlan_cfg_soc_ctx
+ *
+ * Return: Timer threshold
+ */
+int wlan_cfg_get_int_timer_threshold_rx(struct wlan_cfg_dp_soc_ctxt *cfg);
+
+/*
+ * wlan_cfg_get_int_batch_threshold_tx - Get interrupt mitigation cfg for other srngs
+ * @wlan_cfg_soc_ctx
+ *
+ * Return: Batch threshold
+ */
+int wlan_cfg_get_int_batch_threshold_other(struct wlan_cfg_dp_soc_ctxt *cfg);
+
+/*
+ * wlan_cfg_get_int_batch_threshold_tx - Get interrupt mitigation cfg for other srngs
+ * @wlan_cfg_soc_ctx
+ *
+ * Return: Timer threshold
+ */
+int wlan_cfg_get_int_timer_threshold_other(struct wlan_cfg_dp_soc_ctxt *cfg);
 #endif

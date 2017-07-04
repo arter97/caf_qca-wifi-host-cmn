@@ -206,6 +206,11 @@ struct cdp_cmn_ops {
 	void (*txrx_soc_set_nss_cfg)(ol_txrx_soc_handle soc, int config);
 
 	int(*txrx_soc_get_nss_cfg)(ol_txrx_soc_handle soc);
+	QDF_STATUS (*txrx_intr_attach)(void *soc);
+	void (*txrx_intr_detach)(void *soc);
+	void  (*set_pn_check)(struct cdp_vdev *vdev,
+		struct cdp_peer *peer_handle, enum cdp_sec_type sec_type,
+		 uint32_t *rx_pn);
 };
 
 struct cdp_ctrl_ops {
@@ -554,7 +559,7 @@ struct cdp_raw_ops {
 #ifdef CONFIG_WIN
 struct cdp_pflow_ops {
 	uint32_t(*pflow_update_pdev_params)(void *,
-			ol_ath_param_t, uint32_t, void *);
+			enum _ol_ath_param_t, uint32_t, void *);
 };
 #endif /* CONFIG_WIN */
 
@@ -613,6 +618,7 @@ struct ol_if_ops {
 			uint8_t vdev_id, uint8_t *peer_mac_addr);
 	int (*peer_unmap_event)(void *ol_soc_handle, uint16_t peer_id);
 
+	int (*get_dp_cfg_param)(void *ol_soc_handle, enum cdp_cfg_param_type param_num);
 
 	/* TODO: Add any other control path calls required to OL_IF/WMA layer */
 };
@@ -788,8 +794,8 @@ struct cdp_ipa_ops {
  * @bus_resume:
  */
 struct cdp_bus_ops {
-	QDF_STATUS (*bus_suspend)(void);
-	QDF_STATUS (*bus_resume)(void);
+	QDF_STATUS (*bus_suspend)(struct cdp_pdev *opaque_pdev);
+	QDF_STATUS (*bus_resume)(struct cdp_pdev *opaque_pdev);
 };
 
 /**

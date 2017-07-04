@@ -572,6 +572,7 @@ ce_sendlist_send_legacy(struct CE_handle *copyeng,
 					QDF_NBUF_TX_PKT_CE);
 		DPTRACE(qdf_dp_trace((qdf_nbuf_t)per_transfer_context,
 			QDF_DP_TRACE_CE_PACKET_PTR_RECORD,
+			QDF_TRACE_DEFAULT_PDEV_ID,
 			(uint8_t *)&(((qdf_nbuf_t)per_transfer_context)->data),
 			sizeof(((qdf_nbuf_t)per_transfer_context)->data),
 			QDF_TX));
@@ -756,7 +757,7 @@ int ce_send_fast(struct CE_handle *copyeng, qdf_nbuf_t msdu,
 
 		DPTRACE(qdf_dp_trace(msdu,
 			QDF_DP_TRACE_CE_FAST_PACKET_PTR_RECORD,
-			qdf_nbuf_data_addr(msdu),
+			QDF_TRACE_DEFAULT_PDEV_ID, qdf_nbuf_data_addr(msdu),
 			sizeof(qdf_nbuf_data(msdu)), QDF_TX));
 	}
 
@@ -2105,12 +2106,15 @@ more_watermarks:
 		    more_comp_cnt++ < CE_TXRX_COMP_CHECK_THRESHOLD) {
 			goto more_completions;
 		} else {
-			HIF_ERROR(
-				"%s:Potential infinite loop detected during Rx processing nentries_mask:0x%x sw read_idx:0x%x hw read_idx:0x%x",
-				__func__, CE_state->dest_ring->nentries_mask,
-				CE_state->dest_ring->sw_index,
-				CE_DEST_RING_READ_IDX_GET(scn,
+			if (!ce_srng_based(scn)) {
+				HIF_ERROR(
+					"%s:Potential infinite loop detected during Rx processing nentries_mask:0x%x sw read_idx:0x%x hw read_idx:0x%x",
+					__func__,
+					CE_state->dest_ring->nentries_mask,
+					CE_state->dest_ring->sw_index,
+					CE_DEST_RING_READ_IDX_GET(scn,
 							  CE_state->ctrl_addr));
+			}
 		}
 	}
 
@@ -2121,12 +2125,15 @@ more_watermarks:
 		    more_snd_comp_cnt++ < CE_TXRX_COMP_CHECK_THRESHOLD) {
 			goto more_completions;
 		} else {
-			HIF_ERROR(
-				"%s:Potential infinite loop detected during send completion nentries_mask:0x%x sw read_idx:0x%x hw read_idx:0x%x",
-				__func__, CE_state->src_ring->nentries_mask,
-				CE_state->src_ring->sw_index,
-				CE_SRC_RING_READ_IDX_GET(scn,
+			if (!ce_srng_based(scn)) {
+				HIF_ERROR(
+					"%s:Potential infinite loop detected during send completion nentries_mask:0x%x sw read_idx:0x%x hw read_idx:0x%x",
+					__func__,
+					CE_state->src_ring->nentries_mask,
+					CE_state->src_ring->sw_index,
+					CE_SRC_RING_READ_IDX_GET(scn,
 							 CE_state->ctrl_addr));
+			}
 		}
 	}
 

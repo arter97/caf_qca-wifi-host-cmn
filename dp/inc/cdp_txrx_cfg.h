@@ -24,7 +24,7 @@
  * under proprietary terms before Copyright ownership was assigned
  * to the Linux Foundation.
  */
- /**
+/**
  * @file cdp_txrx_cfg.h
  * @brief Define the host data path configuration API functions
  */
@@ -253,5 +253,10 @@ static inline void cdp_cfg_set_flow_steering(ol_txrx_soc_handle soc,
 		return soc->ops->cfg_ops->set_flow_steering(cfg_pdev, val);
 
 	return;
+}
+
+static inline void cdp_cfg_get_max_peer_id(ol_txrx_soc_handle soc,
+		struct cdp_cfg *cfg_pdev)
+{
 }
 #endif /* _CDP_TXRX_CFG_H_ */

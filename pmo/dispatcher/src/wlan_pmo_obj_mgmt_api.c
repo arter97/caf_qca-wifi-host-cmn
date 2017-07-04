@@ -452,118 +452,121 @@ out:
 }
 
 QDF_STATUS pmo_suspend_all_components(struct wlan_objmgr_psoc *psoc,
-	enum qdf_suspend_type suspend_type)
+				      enum qdf_suspend_type suspend_type)
 {
-	pmo_psoc_suspend_handler handler;
-	uint8_t index = 0;
-	QDF_STATUS suspend_status = QDF_STATUS_SUCCESS;
-	QDF_STATUS resume_status = QDF_STATUS_SUCCESS;
-	void *arg;
+	QDF_STATUS status = QDF_STATUS_SUCCESS;
+	QDF_STATUS resume_status;
 	struct wlan_pmo_ctx *pmo_ctx;
+	uint8_t i;
+	pmo_psoc_suspend_handler handler;
+	void *arg;
 
 	PMO_ENTER();
+
 	pmo_ctx = pmo_get_context();
 	if (!pmo_ctx) {
-		QDF_ASSERT(0);
 		pmo_err("unable to get pmo ctx");
-		suspend_status = QDF_STATUS_E_FAILURE;
-		goto out;
+		QDF_ASSERT(0);
+		status = QDF_STATUS_E_FAILURE;
+		goto exit_with_status;
 	}
 
-	/* call all component's Suspend Handler */
-	while (index < WLAN_UMAC_MAX_COMPONENTS) {
+	/* call each component's suspend handler */
+	for (i = 0; i < WLAN_UMAC_MAX_COMPONENTS; i++) {
 		qdf_spin_lock_bh(&pmo_ctx->lock);
-		if (pmo_ctx->pmo_suspend_handler[index]) {
-			handler = pmo_ctx->pmo_suspend_handler[index];
-			arg = pmo_ctx->pmo_suspend_handler_arg[index];
-			qdf_spin_unlock_bh(&pmo_ctx->lock);
-			suspend_status = handler(psoc, arg);
-			if (suspend_status != QDF_STATUS_SUCCESS) {
-				pmo_err("component id: %d failed to suspend status: %d",
-					index, suspend_status);
-				QDF_ASSERT(0);
-				/* break, no need to suspend next components */
-				break;
-			}
-		} else {
-			qdf_spin_unlock_bh(&pmo_ctx->lock);
+		handler = pmo_ctx->pmo_suspend_handler[i];
+		arg = pmo_ctx->pmo_suspend_handler_arg[i];
+		qdf_spin_unlock_bh(&pmo_ctx->lock);
+
+		if (!handler)
+			continue;
+
+		status = handler(psoc, arg);
+		if (QDF_IS_STATUS_ERROR(status)) {
+			pmo_err("component %d failed to suspend; status: %d",
+				i, status);
+			QDF_ASSERT(0);
+			goto suspend_recovery;
 		}
-		index++;
 	}
 
-	/* resume the succefully suspended components */
-	if (suspend_status != QDF_STATUS_SUCCESS) {
-		while (index >= 0) {
-			/*
-			 * index points to id which refuse suspend
-			 * so go to previous id.
-			 */
-			index--;
-			qdf_spin_lock_bh(&pmo_ctx->lock);
-			handler = pmo_ctx->pmo_resume_handler[index];
-			arg = pmo_ctx->pmo_resume_handler_arg[index];
-			qdf_spin_unlock_bh(&pmo_ctx->lock);
-			/* TODO: if resume got failed for some component ?? */
-			resume_status = handler(psoc, arg);
-			if (resume_status != QDF_STATUS_SUCCESS) {
-				pmo_err("Component id: %d failed to resume status: %d",
-					index, resume_status);
-				QDF_ASSERT(0);
-			}
+	goto exit_with_status;
+
+suspend_recovery:
+	/* resume, starting with the last successfully suspended component */
+	for (i -= 1; i >= 0; i--) {
+		qdf_spin_lock_bh(&pmo_ctx->lock);
+		handler = pmo_ctx->pmo_resume_handler[i];
+		arg = pmo_ctx->pmo_resume_handler_arg[i];
+		qdf_spin_unlock_bh(&pmo_ctx->lock);
+
+		if (!handler)
+			continue;
+
+		resume_status = handler(psoc, arg);
+		if (QDF_IS_STATUS_ERROR(resume_status)) {
+			pmo_fatal("Non-recoverable failure occurred!");
+			pmo_fatal("component %d failed to resume; status: %d",
+				  i, resume_status);
+			QDF_BUG(0);
 		}
 	}
-out:
+
+exit_with_status:
 	PMO_EXIT();
 
-	return suspend_status;
+	return status;
 }
 
 QDF_STATUS pmo_resume_all_components(struct wlan_objmgr_psoc *psoc,
-	enum qdf_suspend_type suspend_type)
+				     enum qdf_suspend_type suspend_type)
 {
-	uint8_t index = 0;
-	QDF_STATUS component_ret = QDF_STATUS_SUCCESS;
-	void *arg;
+	QDF_STATUS status = QDF_STATUS_SUCCESS;
 	struct wlan_pmo_ctx *pmo_ctx;
+	uint8_t i;
 	pmo_psoc_suspend_handler handler;
+	void *arg;
 
 	PMO_ENTER();
+
 	pmo_ctx = pmo_get_context();
 	if (!pmo_ctx) {
-		QDF_ASSERT(0);
 		pmo_err("unable to get pmo ctx");
-		component_ret = QDF_STATUS_E_FAILURE;
-		goto out;
+		QDF_ASSERT(0);
+		status = QDF_STATUS_E_FAILURE;
+		goto exit_with_status;
 	}
 
-	/* call all components Resume Handler */
-	while (index < WLAN_UMAC_MAX_COMPONENTS) {
+	/* call each component's resume handler */
+	for (i = 0; i < WLAN_UMAC_MAX_COMPONENTS; i++) {
 		qdf_spin_lock_bh(&pmo_ctx->lock);
-		if (pmo_ctx->pmo_resume_handler[index]) {
-			handler = pmo_ctx->pmo_resume_handler[index];
-			arg = pmo_ctx->pmo_resume_handler_arg[index];
-			qdf_spin_unlock_bh(&pmo_ctx->lock);
-			component_ret = handler(psoc, arg);
-			if (component_ret != QDF_STATUS_SUCCESS) {
-				pmo_err("Component id: %d failed to resume status: %d",
-					index, component_ret);
-				QDF_ASSERT(0);
-			}
-		} else {
-			qdf_spin_unlock_bh(&pmo_ctx->lock);
+		handler = pmo_ctx->pmo_resume_handler[i];
+		arg = pmo_ctx->pmo_resume_handler_arg[i];
+		qdf_spin_unlock_bh(&pmo_ctx->lock);
+
+		if (!handler)
+			continue;
+
+		status = handler(psoc, arg);
+		if (QDF_IS_STATUS_ERROR(status)) {
+			pmo_fatal("Non-recoverable failure occurred!");
+			pmo_fatal("component %d failed to resume; status: %d",
+				  i, status);
+			QDF_BUG(0);
 		}
-		index++;
-}
-out:
+	}
+
+exit_with_status:
 	PMO_EXIT();
 
-	return component_ret;
+	return status;
 }
 
 QDF_STATUS pmo_register_pause_bitmap_notifier(struct wlan_objmgr_psoc *psoc,
 		pmo_notify_pause_bitmap handler)
 {
 	struct pmo_psoc_priv_obj *psoc_ctx;
+	QDF_STATUS status;
 
 	if (!psoc) {
 		pmo_err("psoc is null");
@@ -575,10 +578,16 @@ QDF_STATUS pmo_register_pause_bitmap_notifier(struct wlan_objmgr_psoc *psoc,
 		return QDF_STATUS_E_NULL_VALUE;
 	}
 
+	status = pmo_psoc_get_ref(psoc);
+	if (status != QDF_STATUS_SUCCESS) {
+		pmo_err("pmo cannot get the reference out of psoc");
+		return status;
+	}
 	psoc_ctx = pmo_psoc_get_priv(psoc);
 	qdf_spin_lock_bh(&psoc_ctx->lock);
 	psoc_ctx->pause_bitmap_notifier = handler;
 	qdf_spin_unlock_bh(&psoc_ctx->lock);
+	pmo_psoc_put_ref(psoc);
 
 	return QDF_STATUS_SUCCESS;
 }
@@ -587,6 +596,7 @@ QDF_STATUS pmo_unregister_pause_bitmap_notifier(struct wlan_objmgr_psoc *psoc,
 		pmo_notify_pause_bitmap handler)
 {
 	struct pmo_psoc_priv_obj *psoc_ctx;
+	QDF_STATUS status;
 
 	if (!psoc) {
 		pmo_err("psoc is null");
@@ -598,11 +608,17 @@ QDF_STATUS pmo_unregister_pause_bitmap_notifier(struct wlan_objmgr_psoc *psoc,
 		return QDF_STATUS_E_NULL_VALUE;
 	}
 
+	status = pmo_psoc_get_ref(psoc);
+	if (status != QDF_STATUS_SUCCESS) {
+		pmo_err("pmo cannot get the reference out of psoc");
+		return status;
+	}
 	psoc_ctx = pmo_psoc_get_priv(psoc);
 	qdf_spin_lock_bh(&psoc_ctx->lock);
 	if (psoc_ctx->pause_bitmap_notifier == handler)
 		psoc_ctx->pause_bitmap_notifier = NULL;
 	qdf_spin_unlock_bh(&psoc_ctx->lock);
+	pmo_psoc_put_ref(psoc);
 
 	return QDF_STATUS_SUCCESS;
 }
@@ -611,6 +627,7 @@ QDF_STATUS pmo_register_get_pause_bitmap(struct wlan_objmgr_psoc *psoc,
 		pmo_get_pause_bitmap handler)
 {
 	struct pmo_psoc_priv_obj *psoc_ctx;
+	QDF_STATUS status;
 
 	if (!psoc) {
 		pmo_err("psoc is null");
@@ -622,10 +639,16 @@ QDF_STATUS pmo_register_get_pause_bitmap(struct wlan_objmgr_psoc *psoc,
 		return QDF_STATUS_E_NULL_VALUE;
 	}
 
+	status = pmo_psoc_get_ref(psoc);
+	if (status != QDF_STATUS_SUCCESS) {
+		pmo_err("pmo cannot get the reference out of psoc");
+		return status;
+	}
 	psoc_ctx = pmo_psoc_get_priv(psoc);
 	qdf_spin_lock_bh(&psoc_ctx->lock);
 	psoc_ctx->get_pause_bitmap = handler;
 	qdf_spin_unlock_bh(&psoc_ctx->lock);
+	pmo_psoc_put_ref(psoc);
 
 	return QDF_STATUS_SUCCESS;
 }
@@ -634,6 +657,7 @@ QDF_STATUS pmo_unregister_get_pause_bitmap(struct wlan_objmgr_psoc *psoc,
 		pmo_get_pause_bitmap handler)
 {
 	struct pmo_psoc_priv_obj *psoc_ctx;
+	QDF_STATUS status;
 
 	if (!psoc) {
 		pmo_err("psoc is null");
@@ -645,11 +669,78 @@ QDF_STATUS pmo_unregister_get_pause_bitmap(struct wlan_objmgr_psoc *psoc,
 		return QDF_STATUS_E_NULL_VALUE;
 	}
 
+	status = pmo_psoc_get_ref(psoc);
+	if (status != QDF_STATUS_SUCCESS) {
+		pmo_err("pmo cannot get the reference out of psoc");
+		return status;
+	}
 	psoc_ctx = pmo_psoc_get_priv(psoc);
 	qdf_spin_lock_bh(&psoc_ctx->lock);
 	if (psoc_ctx->get_pause_bitmap == handler)
 		psoc_ctx->get_pause_bitmap = NULL;
 	qdf_spin_unlock_bh(&psoc_ctx->lock);
+	pmo_psoc_put_ref(psoc);
+
+	return QDF_STATUS_SUCCESS;
+}
+
+QDF_STATUS pmo_register_is_device_in_low_pwr_mode(struct wlan_objmgr_psoc *psoc,
+		pmo_is_device_in_low_pwr_mode handler)
+{
+	struct pmo_psoc_priv_obj *psoc_ctx;
+	QDF_STATUS status;
+
+	if (!psoc) {
+		pmo_err("psoc is null");
+		return QDF_STATUS_E_NULL_VALUE;
+	}
+
+	if (!handler) {
+		pmo_err("pmo_get_pause_bitmap is null");
+		return QDF_STATUS_E_NULL_VALUE;
+	}
+
+	status = pmo_psoc_get_ref(psoc);
+	if (status != QDF_STATUS_SUCCESS) {
+		pmo_err("pmo cannot get the reference out of psoc");
+		return status;
+	}
+	psoc_ctx = pmo_psoc_get_priv(psoc);
+	qdf_spin_lock_bh(&psoc_ctx->lock);
+	psoc_ctx->is_device_in_low_pwr_mode = handler;
+	qdf_spin_unlock_bh(&psoc_ctx->lock);
+	pmo_psoc_put_ref(psoc);
+
+	return QDF_STATUS_SUCCESS;
+}
+
+QDF_STATUS pmo_unregister_is_device_in_low_pwr_mode(
+			struct wlan_objmgr_psoc *psoc,
+			pmo_is_device_in_low_pwr_mode handler)
+{
+	struct pmo_psoc_priv_obj *psoc_ctx;
+	QDF_STATUS status;
+
+	if (!psoc) {
+		pmo_err("psoc is null");
+		return QDF_STATUS_E_NULL_VALUE;
+	}
+
+	if (!handler) {
+		pmo_err("pmo_get_pause_bitmap is null");
+		return QDF_STATUS_E_NULL_VALUE;
+	}
+
+	status = pmo_psoc_get_ref(psoc);
+	if (status != QDF_STATUS_SUCCESS) {
+		pmo_err("pmo cannot get the reference out of psoc");
+		return status;
+	}
+	psoc_ctx = pmo_psoc_get_priv(psoc);
+	qdf_spin_lock_bh(&psoc_ctx->lock);
+	psoc_ctx->is_device_in_low_pwr_mode = NULL;
+	qdf_spin_unlock_bh(&psoc_ctx->lock);
+	pmo_psoc_put_ref(psoc);
 
 	return QDF_STATUS_SUCCESS;
 }

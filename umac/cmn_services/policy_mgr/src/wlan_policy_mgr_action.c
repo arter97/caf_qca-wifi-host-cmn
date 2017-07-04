@@ -200,6 +200,14 @@ enum policy_mgr_conc_next_action policy_mgr_need_opportunistic_upgrade(
 		} else if ((pm_conc_connection_list[conn_index].mac == 1) &&
 			pm_conc_connection_list[conn_index].in_use) {
 			mac |= POLICY_MGR_MAC1;
+			if (policy_mgr_is_hw_dbs_2x2_capable(psoc) &&
+			    WLAN_REG_IS_24GHZ_CH(
+				    pm_conc_connection_list[conn_index].chan)
+			    ) {
+				qdf_mutex_release(&pm_ctx->qdf_conc_list_lock);
+				policy_mgr_debug("2X2 DBS capable with 2.4 GHZ connection");
+				goto done;
+			}
 			if (POLICY_MGR_MAC0_AND_MAC1 == mac) {
 				qdf_mutex_release(&pm_ctx->qdf_conc_list_lock);
 				goto done;
@@ -591,33 +599,14 @@ static bool policy_mgr_is_restart_sap_allowed(
 {
 	if ((mcc_to_scc_switch == QDF_MCC_TO_SCC_SWITCH_DISABLE) ||
 	    !(policy_mgr_concurrent_open_sessions_running(psoc) &&
+	      ((policy_mgr_get_concurrency_mode(psoc) ==
+	       (QDF_STA_MASK | QDF_SAP_MASK)) ||
 	      (policy_mgr_get_concurrency_mode(psoc) ==
-	       (QDF_STA_MASK | QDF_SAP_MASK)))) {
-		policy_mgr_err("MCC switch disabled or not concurrent STA/SAP");
+	       (QDF_STA_MASK | QDF_P2P_GO_MASK))))) {
+		policy_mgr_err("MCC switch disabled or not concurrent STA/SAP, STA/GO");
 		return false;
 	}
 	return true;
-}
-
-/**
- * policy_mgr_is_sap_channel_change_without_restart() - Check if
- * SAP channel change allowed without restart
- * @mcc_to_scc_switch: MCC to SCC switch enabled user config
- *
- * Check if SAP channel change allowed without restart
- *
- * Restart: true or false
- */
-static bool policy_mgr_is_sap_channel_change_without_restart(
-			uint32_t mcc_to_scc_switch) {
-	if (mcc_to_scc_switch ==
-	    QDF_MCC_TO_SCC_SWITCH_FORCE_WITHOUT_DISCONNECTION ||
-	    mcc_to_scc_switch ==
-	    QDF_MCC_TO_SCC_SWITCH_WITH_FAVORITE_CHANNEL) {
-		policy_mgr_info("SAP chan change without restart allowed");
-		return true;
-	}
-	return false;
 }
 
 /**
@@ -637,8 +626,6 @@ void policy_mgr_check_sta_ap_concurrent_ch_intf(void *data)
 	QDF_STATUS status;
 	uint8_t channel, sec_ch;
 	uint8_t operating_channel, vdev_id;
-	bool restart_sap;
-
 
 	pm_ctx = policy_mgr_get_context(psoc);
 	if (!pm_ctx) {
@@ -654,15 +641,22 @@ void policy_mgr_check_sta_ap_concurrent_ch_intf(void *data)
 	if (!policy_mgr_is_restart_sap_allowed(psoc, mcc_to_scc_switch))
 		return;
 
-	if (!policy_mgr_get_sap_conn_info(psoc,
-					  &operating_channel,
-					  &vdev_id)) {
-		policy_mgr_err("Could not retrieve SAP channel & vdev id");
+	if (policy_mgr_get_mode_specific_conn_info(psoc,
+						   &operating_channel,
+						   &vdev_id,
+						   PM_SAP_MODE)) {
+		policy_mgr_debug("SAP operating at channel:%d",
+				 operating_channel);
+	} else if (policy_mgr_get_mode_specific_conn_info(psoc,
+							  &operating_channel,
+							  &vdev_id,
+							  PM_P2P_GO_MODE)) {
+		policy_mgr_debug("GO operating at channel:%d",
+				 operating_channel);
+	} else {
+		policy_mgr_err("Could not retrieve SAP/GO operating channel&vdevid");
 		return;
 	}
-
-	restart_sap = policy_mgr_is_sap_channel_change_without_restart(
-		mcc_to_scc_switch) ? false : true;
 
 	if (!pm_ctx->hdd_cbacks.wlan_hdd_get_channel_for_sap_restart) {
 		policy_mgr_err("SAP restart get channel callback in NULL");
@@ -671,7 +665,7 @@ void policy_mgr_check_sta_ap_concurrent_ch_intf(void *data)
 	qdf_mutex_acquire(&pm_ctx->qdf_conc_list_lock);
 	status = pm_ctx->hdd_cbacks.
 		wlan_hdd_get_channel_for_sap_restart(psoc, vdev_id,
-			&channel, &sec_ch, restart_sap);
+			&channel, &sec_ch);
 	qdf_mutex_release(&pm_ctx->qdf_conc_list_lock);
 	if (status != QDF_STATUS_SUCCESS) {
 		policy_mgr_err("Failed to switch SAP channel");
@@ -706,10 +700,20 @@ void policy_mgr_check_concurrent_intf_and_restart_sap(
 		return;
 	}
 
-	if (!policy_mgr_get_sap_conn_info(psoc,
-					  &operating_channel,
-					  &vdev_id)) {
-		policy_mgr_err("Could not retrieve SAP channel & vdev id");
+	if (policy_mgr_get_mode_specific_conn_info(psoc,
+						   &operating_channel,
+						   &vdev_id,
+						   PM_SAP_MODE)) {
+		policy_mgr_debug("SAP operating at channel:%d",
+				 operating_channel);
+	} else if (policy_mgr_get_mode_specific_conn_info(psoc,
+							  &operating_channel,
+							  &vdev_id,
+							  PM_P2P_GO_MODE)) {
+		policy_mgr_debug("GO operating at channel:%d",
+				 operating_channel);
+	} else {
+		policy_mgr_err("Could not get SAP/GO operating channel&vdevid");
 		return;
 	}
 

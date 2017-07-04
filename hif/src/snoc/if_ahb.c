@@ -301,7 +301,8 @@ int hif_ahb_configure_grp_irq(struct hif_softc *scn)
 				ic_irqnum[hif_ext_group->irq[j]] = irq;
 				ret = request_irq(irq,
 					hif_ext_group_ahb_interrupt_handler,
-						IRQF_TRIGGER_RISING, "wlan_ahb",
+						IRQF_TRIGGER_RISING,
+						ic_irqname[hif_ext_group->irq[j]],
 						hif_ext_group);
 				if (ret) {
 					dev_err(&pdev->dev,
@@ -329,7 +330,7 @@ void hif_ahb_deconfigure_grp_irq(struct hif_softc *scn)
 		if (hif_ext_group->inited == true) {
 			hif_ext_group->inited = false;
 			for (j = 0; j < hif_ext_group->numirq; j++) {
-				free_irq(ic_irqnum[hif_ext_group->irq[i]],
+				free_irq(ic_irqnum[hif_ext_group->irq[j]],
 						hif_ext_group);
 			}
 		}
@@ -634,13 +635,14 @@ void hif_ahb_irq_enable(struct hif_softc *scn, int ce_id)
 	uint32_t reg_offset = 0;
 	struct HIF_CE_state *hif_state = HIF_GET_CE_STATE(scn);
 	struct CE_pipe_config *target_ce_conf = &hif_state->target_ce_config[ce_id];
+	struct hif_target_info *tgt_info = &scn->target_info;
 
 	if (scn->per_ce_irq) {
 		if (target_ce_conf->pipedir & PIPEDIR_OUT) {
 			reg_offset = HOST_IE_ADDRESS;
 			qdf_spin_lock_irqsave(&hif_state->irq_reg_lock);
 			regval = hif_read32_mb(scn->mem + reg_offset);
-			regval |= (1 << ce_id);
+			regval |= HOST_IE_REG1_CE_BIT(ce_id);
 			hif_write32_mb(scn->mem + reg_offset, regval);
 			qdf_spin_unlock_irqrestore(&hif_state->irq_reg_lock);
 		}
@@ -648,8 +650,16 @@ void hif_ahb_irq_enable(struct hif_softc *scn, int ce_id)
 			reg_offset = HOST_IE_ADDRESS_2;
 			qdf_spin_lock_irqsave(&hif_state->irq_reg_lock);
 			regval = hif_read32_mb(scn->mem + reg_offset);
-			regval |= (1 << ce_id);
+			regval |= HOST_IE_REG2_CE_BIT(ce_id);
 			hif_write32_mb(scn->mem + reg_offset, regval);
+			if (tgt_info->target_type == TARGET_TYPE_QCA8074) {
+				/* Enable destination ring interrupts for 8074
+				 * TODO: To be removed in 2.0 HW */
+				regval = hif_read32_mb(scn->mem +
+					HOST_IE_ADDRESS_3);
+				regval |= HOST_IE_REG3_CE_BIT(ce_id);
+			}
+			hif_write32_mb(scn->mem + HOST_IE_ADDRESS_3, regval);
 			qdf_spin_unlock_irqrestore(&hif_state->irq_reg_lock);
 		}
 	} else {
@@ -670,13 +680,14 @@ void hif_ahb_irq_disable(struct hif_softc *scn, int ce_id)
 	uint32_t reg_offset = 0;
 	struct HIF_CE_state *hif_state = HIF_GET_CE_STATE(scn);
 	struct CE_pipe_config *target_ce_conf = &hif_state->target_ce_config[ce_id];
+	struct hif_target_info *tgt_info = &scn->target_info;
 
 	if (scn->per_ce_irq) {
 		if (target_ce_conf->pipedir & PIPEDIR_OUT) {
 			reg_offset = HOST_IE_ADDRESS;
 			qdf_spin_lock_irqsave(&hif_state->irq_reg_lock);
 			regval = hif_read32_mb(scn->mem + reg_offset);
-			regval &= ~(1 << ce_id);
+			regval &= ~HOST_IE_REG1_CE_BIT(ce_id);
 			hif_write32_mb(scn->mem + reg_offset, regval);
 			qdf_spin_unlock_irqrestore(&hif_state->irq_reg_lock);
 		}
@@ -684,8 +695,16 @@ void hif_ahb_irq_disable(struct hif_softc *scn, int ce_id)
 			reg_offset = HOST_IE_ADDRESS_2;
 			qdf_spin_lock_irqsave(&hif_state->irq_reg_lock);
 			regval = hif_read32_mb(scn->mem + reg_offset);
-			regval &= ~(1 << ce_id);
+			regval &= ~HOST_IE_REG2_CE_BIT(ce_id);
 			hif_write32_mb(scn->mem + reg_offset, regval);
+			if (tgt_info->target_type == TARGET_TYPE_QCA8074) {
+				/* Disable destination ring interrupts for 8074
+				 * TODO: To be removed in 2.0 HW */
+				regval = hif_read32_mb(scn->mem +
+					HOST_IE_ADDRESS_3);
+				regval &= ~HOST_IE_REG3_CE_BIT(ce_id);
+			}
+			hif_write32_mb(scn->mem + HOST_IE_ADDRESS_3, regval);
 			qdf_spin_unlock_irqrestore(&hif_state->irq_reg_lock);
 		}
 	}

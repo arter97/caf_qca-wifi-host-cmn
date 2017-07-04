@@ -76,11 +76,13 @@ typedef struct {
 /**
  * struct osif_scan_pdev - OS scan private strcutre
  * scan_req_q: Scan request queue
+ * scan_req_q_lock: Protect scan request queue
  * req_id: Scan request Id
  * runtime_pm_lock: Runtime suspend lock
  */
 struct osif_scan_pdev{
 	qdf_list_t scan_req_q;
+	qdf_mutex_t scan_req_q_lock;
 	wlan_scan_requester req_id;
 	qdf_runtime_lock_t runtime_pm_lock;
 };
@@ -117,12 +119,14 @@ struct scan_req {
  * @pdev: pdev pointer
  * @dev: Pointer network device
  * @request: Pointer to cfg80211 scheduled scan start request
+ * @scan_backoff_multiplier: multiply scan period by this after max cycles
  *
  * Return: 0 for success, non zero for failure
  */
 int wlan_cfg80211_sched_scan_start(struct wlan_objmgr_pdev *pdev,
 	struct net_device *dev,
-	struct cfg80211_sched_scan_request *request);
+	struct cfg80211_sched_scan_request *request,
+	uint8_t scan_backoff_multiplier);
 
 /**
  * wlan_cfg80211_sched_scan_stop() - cfg80211 scheduled scan(pno) stop
@@ -134,6 +138,18 @@ int wlan_cfg80211_sched_scan_start(struct wlan_objmgr_pdev *pdev,
 int wlan_cfg80211_sched_scan_stop(struct wlan_objmgr_pdev *pdev,
 	struct net_device *dev);
 #endif
+
+/**
+ * wlan_scan_runtime_pm_deinit() - API to deinitialize runtime pm
+ * for scan.
+ * @pdev: Pointer to pdev
+ *
+ * This will help to deinitialize scan runtime pm before deinitialize
+ * HIF
+ *
+ * Return: void
+ */
+void wlan_scan_runtime_pm_deinit(struct wlan_objmgr_pdev *pdev);
 
 /**
  * wlan_cfg80211_scan_priv_init() - API to initialize cfg80211 scan

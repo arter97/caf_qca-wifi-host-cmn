@@ -245,9 +245,9 @@ void policy_mgr_incr_active_session(struct wlan_objmgr_psoc *psoc,
  * mode. In the case of STA/P2P CLI/IBSS upon disconnection it is decremented
  * In the case of SAP/P2P GO upon bss stop it is decremented
  *
- * Return: None
+ * Return: QDF_STATUS
  */
-void policy_mgr_decr_active_session(struct wlan_objmgr_psoc *psoc,
+QDF_STATUS policy_mgr_decr_active_session(struct wlan_objmgr_psoc *psoc,
 		enum tQDF_ADAPTER_MODE mode, uint8_t sessionId);
 
 /**
@@ -782,7 +782,7 @@ struct policy_mgr_hdd_cbacks {
 	QDF_STATUS (*wlan_hdd_get_channel_for_sap_restart)(
 				struct wlan_objmgr_psoc *psoc,
 				uint8_t vdev_id, uint8_t *channel,
-				uint8_t *sec_ch, bool is_restart_sap);
+				uint8_t *sec_ch);
 	enum policy_mgr_con_mode (*get_mode_for_non_connected_vdev)(
 				struct wlan_objmgr_psoc *psoc,
 				uint8_t vdev_id);
@@ -1361,6 +1361,22 @@ uint32_t policy_mgr_mode_specific_connection_count(
 		uint32_t *list);
 
 /**
+ * policy_mgr_check_conn_with_mode_and_vdev_id() - checks if any active
+ * session with specific mode and vdev_id
+ * @psoc: PSOC object information
+ * @mode: type of connection
+ * @vdev_id: vdev_id of the connection
+ *
+ * This function checks if any active session with specific mode and vdev_id
+ * is present
+ *
+ * Return: QDF STATUS with success if active session is found, else failure
+ */
+QDF_STATUS policy_mgr_check_conn_with_mode_and_vdev_id(
+		struct wlan_objmgr_psoc *psoc, enum policy_mgr_con_mode mode,
+		uint32_t vdev_id);
+
+/**
  * policy_mgr_hw_mode_transition_cb() - Callback for HW mode
  * transition from FW
  * @old_hw_mode_index: Old HW mode index
@@ -1895,4 +1911,15 @@ QDF_STATUS policy_mgr_is_chan_ok_for_dnbs(struct wlan_objmgr_psoc *psoc,
  */
 uint32_t policy_mgr_get_hw_dbs_nss(struct wlan_objmgr_psoc *psoc,
 				   struct dbs_nss *nss_dbs);
+
+/**
+ * policy_mgr_is_dnsc_set - Check if user has set
+ * "Do_Not_Switch_Channel" for the vdev passed
+ * @vdev: vdev pointer
+ *
+ * Get "Do_Not_Switch_Channel" setting for the vdev passed.
+ *
+ * Return: true for success, else false
+ */
+bool policy_mgr_is_dnsc_set(struct wlan_objmgr_vdev *vdev);
 #endif /* __WLAN_POLICY_MGR_API_H */

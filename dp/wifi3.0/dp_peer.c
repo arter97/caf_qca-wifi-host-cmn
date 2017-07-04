@@ -13,7 +13,7 @@
  * DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR
  * PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER
  * TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
- *  PERFORMANCE OF THIS SOFTWARE.
+ * PERFORMANCE OF THIS SOFTWARE.
  */
 
 #include <qdf_types.h>
@@ -316,6 +316,69 @@ int dp_peer_find_attach(struct dp_soc *soc)
 		return 1;
 	}
 	return 0; /* success */
+}
+
+static void dp_rx_tid_stats_cb(struct dp_soc *soc, void *cb_ctxt,
+	union hal_reo_status *reo_status)
+{
+	struct dp_rx_tid *rx_tid = (struct dp_rx_tid *)cb_ctxt;
+	struct hal_reo_queue_status *queue_status = &(reo_status->queue_status);
+
+	if (queue_status->header.status != HAL_REO_CMD_SUCCESS) {
+		DP_TRACE_STATS(FATAL, "REO stats failure %d for TID %d\n",
+			queue_status->header.status, rx_tid->tid);
+		return;
+	}
+
+	DP_TRACE_STATS(FATAL, "REO queue stats (TID: %d): \n"
+		"ssn: %d\n"
+		"curr_idx  : %d\n"
+		"pn_31_0   : %08x\n"
+		"pn_63_32  : %08x\n"
+		"pn_95_64  : %08x\n"
+		"pn_127_96 : %08x\n"
+		"last_rx_enq_tstamp : %08x\n"
+		"last_rx_deq_tstamp : %08x\n"
+		"rx_bitmap_31_0     : %08x\n"
+		"rx_bitmap_63_32    : %08x\n"
+		"rx_bitmap_95_64    : %08x\n"
+		"rx_bitmap_127_96   : %08x\n"
+		"rx_bitmap_159_128  : %08x\n"
+		"rx_bitmap_191_160  : %08x\n"
+		"rx_bitmap_223_192  : %08x\n"
+		"rx_bitmap_255_224  : %08x\n"
+		"curr_mpdu_cnt      : %d\n"
+		"curr_msdu_cnt      : %d\n"
+		"fwd_timeout_cnt    : %d\n"
+		"fwd_bar_cnt        : %d\n"
+		"dup_cnt            : %d\n"
+		"frms_in_order_cnt  : %d\n"
+		"bar_rcvd_cnt       : %d\n"
+		"mpdu_frms_cnt      : %d\n"
+		"msdu_frms_cnt      : %d\n"
+		"total_byte_cnt     : %d\n"
+		"late_recv_mpdu_cnt : %d\n"
+		"win_jump_2k 	    : %d\n"
+		"hole_cnt 	    : %d\n",
+		rx_tid->tid,
+		queue_status->ssn, queue_status->curr_idx,
+		queue_status->pn_31_0, queue_status->pn_63_32,
+		queue_status->pn_95_64, queue_status->pn_127_96,
+		queue_status->last_rx_enq_tstamp,
+		queue_status->last_rx_deq_tstamp,
+		queue_status->rx_bitmap_31_0, queue_status->rx_bitmap_63_32,
+		queue_status->rx_bitmap_95_64, queue_status->rx_bitmap_127_96,
+		queue_status->rx_bitmap_159_128,
+		queue_status->rx_bitmap_191_160,
+		queue_status->rx_bitmap_223_192,
+		queue_status->rx_bitmap_255_224,
+		queue_status->curr_mpdu_cnt, queue_status->curr_msdu_cnt,
+		queue_status->fwd_timeout_cnt, queue_status->fwd_bar_cnt,
+		queue_status->dup_cnt, queue_status->frms_in_order_cnt,
+		queue_status->bar_rcvd_cnt, queue_status->mpdu_frms_cnt,
+		queue_status->msdu_frms_cnt, queue_status->total_cnt,
+		queue_status->late_recv_mpdu_cnt, queue_status->win_jump_2k,
+		queue_status->hole_cnt);
 }
 
 static inline void dp_peer_find_add_id(struct dp_soc *soc,
@@ -743,14 +806,14 @@ try_desc_alloc:
 	 * HTT_T2H_MSG_TYPE_SEC_IND from target
 	 */
 	switch (peer->security[dp_sec_ucast].sec_type) {
-	case htt_sec_type_tkip_nomic:
-	case htt_sec_type_aes_ccmp:
-	case htt_sec_type_aes_ccmp_256:
-	case htt_sec_type_aes_gcmp:
-	case htt_sec_type_aes_gcmp_256:
+	case cdp_sec_type_tkip_nomic:
+	case cdp_sec_type_aes_ccmp:
+	case cdp_sec_type_aes_ccmp_256:
+	case cdp_sec_type_aes_gcmp:
+	case cdp_sec_type_aes_gcmp_256:
 		hal_pn_type = HAL_PN_WPA;
 		break;
-	case htt_sec_type_wapi:
+	case cdp_sec_type_wapi:
 		if (vdev->opmode == wlan_op_mode_ap)
 			hal_pn_type = HAL_PN_WAPI_EVEN;
 		else
@@ -927,7 +990,7 @@ void dp_peer_rx_init(struct dp_pdev *pdev, struct dp_peer *peer)
 	 * send a HTT SEC_IND message to overwrite these defaults.
 	 */
 	peer->security[dp_sec_ucast].sec_type =
-		peer->security[dp_sec_mcast].sec_type = htt_sec_type_none;
+		peer->security[dp_sec_mcast].sec_type = cdp_sec_type_none;
 }
 
 /*
@@ -1076,6 +1139,102 @@ void dp_rx_discard(struct dp_vdev *vdev, struct dp_peer *peer, unsigned tid,
 		qdf_nbuf_free(msdu);
 	}
 }
+
+
+/**
+ * dp_set_pn_check_wifi3() - enable PN check in REO for security
+ * @peer: Datapath peer handle
+ * @vdev: Datapath vdev
+ * @pdev - data path device instance
+ * @sec_type - security type
+ * @rx_pn - Receive pn starting number
+ *
+ */
+
+void
+dp_set_pn_check_wifi3(struct cdp_vdev *vdev_handle, struct cdp_peer *peer_handle, enum cdp_sec_type sec_type,  uint32_t *rx_pn)
+{
+	struct dp_peer *peer =  (struct dp_peer *)peer_handle;
+	struct dp_vdev *vdev = (struct dp_vdev *)vdev_handle;
+	struct dp_pdev *pdev;
+	struct dp_soc *soc;
+	int i;
+	struct hal_reo_cmd_params params;
+
+	/* preconditions */
+	qdf_assert(vdev);
+
+	pdev = vdev->pdev;
+	soc = pdev->soc;
+
+
+	qdf_mem_zero(&params, sizeof(params));
+
+	params.std.need_status = 1;
+	params.u.upd_queue_params.update_pn_valid = 1;
+	params.u.upd_queue_params.update_pn_size = 1;
+	params.u.upd_queue_params.update_pn = 1;
+	params.u.upd_queue_params.update_pn_check_needed = 1;
+
+	peer->security[dp_sec_ucast].sec_type = sec_type;
+
+	switch (sec_type) {
+	case cdp_sec_type_tkip_nomic:
+	case cdp_sec_type_aes_ccmp:
+	case cdp_sec_type_aes_ccmp_256:
+	case cdp_sec_type_aes_gcmp:
+	case cdp_sec_type_aes_gcmp_256:
+		params.u.upd_queue_params.pn_check_needed = 1;
+		params.u.upd_queue_params.pn_size = 48;
+		break;
+	case cdp_sec_type_wapi:
+		params.u.upd_queue_params.pn_check_needed = 1;
+		params.u.upd_queue_params.pn_size = 128;
+		if (vdev->opmode == wlan_op_mode_ap) {
+			params.u.upd_queue_params.pn_even = 1;
+			params.u.upd_queue_params.update_pn_even = 1;
+		} else {
+			params.u.upd_queue_params.pn_uneven = 1;
+			params.u.upd_queue_params.update_pn_uneven = 1;
+		}
+		break;
+	default:
+		params.u.upd_queue_params.pn_check_needed = 0;
+		break;
+	}
+
+
+	for (i = 0; i < DP_MAX_TIDS; i++) {
+		struct dp_rx_tid *rx_tid = &peer->rx_tid[i];
+		if (rx_tid->hw_qdesc_vaddr_unaligned != NULL) {
+			params.std.addr_lo =
+				rx_tid->hw_qdesc_paddr & 0xffffffff;
+			params.std.addr_hi =
+				(uint64_t)(rx_tid->hw_qdesc_paddr) >> 32;
+
+			if (sec_type != cdp_sec_type_wapi) {
+				params.u.upd_queue_params.update_pn_valid = 0;
+			} else {
+				/*
+				 * Setting PN valid bit for WAPI sec_type,
+				 * since WAPI PN has to be started with
+				 * predefined value
+				 */
+				params.u.upd_queue_params.update_pn_valid = 1;
+				params.u.upd_queue_params.pn_31_0 = rx_pn[0];
+				params.u.upd_queue_params.pn_63_32 = rx_pn[1];
+				params.u.upd_queue_params.pn_95_64 = rx_pn[2];
+				params.u.upd_queue_params.pn_127_96 = rx_pn[3];
+			}
+			dp_reo_send_cmd(soc, CMD_UPDATE_RX_REO_QUEUE, &params,
+				dp_rx_tid_update_cb, rx_tid);
+		} else {
+			QDF_TRACE(QDF_MODULE_ID_TXRX, QDF_TRACE_LEVEL_INFO_HIGH,
+				"PN Check not setup for TID :%d \n", i);
+		}
+	}
+}
+
 
 void
 dp_rx_sec_ind_handler(void *soc_handle, uint16_t peer_id,
@@ -1535,4 +1694,32 @@ uint8_t dp_get_peer_mac_addr_frm_id(struct cdp_soc_t *soc_handle,
 
 	qdf_mem_copy(peer_mac, peer->mac_addr.raw, 6);
 	return peer->vdev->vdev_id;
+}
+
+/**
+ * dp_peer_rxtid_stats: Retried Rx TID (REO queue) stats from HW
+ * @peer: DP peer handle
+ *
+ * Return: 0 on success, error code on failure
+ */
+int dp_peer_rxtid_stats(struct dp_peer *peer)
+{
+	struct dp_soc *soc = peer->vdev->pdev->soc;
+	struct hal_reo_cmd_params params;
+	int i;
+
+	qdf_mem_zero(&params, sizeof(params));
+	for (i = 0; i < DP_MAX_TIDS; i++) {
+		struct dp_rx_tid *rx_tid = &peer->rx_tid[i];
+		if (rx_tid->hw_qdesc_vaddr_unaligned != NULL) {
+			params.std.need_status = 1;
+			params.std.addr_lo =
+				rx_tid->hw_qdesc_paddr & 0xffffffff;
+			params.std.addr_hi =
+				(uint64_t)(rx_tid->hw_qdesc_paddr) >> 32;
+			dp_reo_send_cmd(soc, CMD_GET_QUEUE_STATS, &params,
+				dp_rx_tid_stats_cb, rx_tid);
+		}
+	}
+	return 0;
 }

@@ -87,6 +87,15 @@
 #define MAX_TX_HW_QUEUES 3
 
 #define DP_MAX_INTERRUPT_CONTEXTS 8
+#define DP_MAX_MECT_ENTRIES 64
+
+#ifndef REMOVE_PKT_LOG
+enum rx_pktlog_mode {
+	DP_RX_PKTLOG_DISABLED = 0,
+	DP_RX_PKTLOG_FULL,
+	DP_RX_PKTLOG_LITE,
+};
+#endif
 
 struct dp_soc_cmn;
 struct dp_pdev;
@@ -357,6 +366,7 @@ struct dp_intr {
 	uint8_t rx_err_ring_mask; /* REO Exception Ring */
 	uint8_t rx_wbm_rel_ring_mask; /* WBM2SW Rx Release Ring */
 	uint8_t reo_status_ring_mask; /* REO command response ring */
+	uint8_t rxdma2host_ring_mask; /* RXDMA to host destination ring */
 	struct dp_soc *soc;    /* Reference to SoC structure ,
 				to get DMA ring handles */
 	qdf_lro_ctx_t lro_ctx;
@@ -376,6 +386,13 @@ struct dp_ast_entry {
 	uint8_t next_hop;
 	struct dp_peer *peer;
 	TAILQ_ENTRY(dp_ast_entry) ast_entry_elem;
+};
+
+struct mect_entry {
+	uint8_t idx;
+	uint8_t valid;
+	uint8_t mac_addr[6];
+	uint64_t ts;
 };
 
 /* SOC level structure for data path */
@@ -503,11 +520,6 @@ struct dp_soc {
 	/* Rx ring map for interrupt processing */
 	struct dp_srng *rx_ring_map[DP_MAX_RX_RINGS];
 
-#ifndef CONFIG_WIN
-	/* WDI event handlers */
-	struct wdi_event_subscribe_t **wdi_event_list;
-#endif
-
 	/* peer ID to peer object map (array of pointers to peer objects) */
 	struct dp_peer **peer_id_to_obj_map;
 
@@ -612,6 +624,9 @@ struct dp_soc {
 #endif
 	qdf_list_t reo_desc_freelist;
 	qdf_spinlock_t reo_desc_freelist_lock;
+	struct mect_entry mect_table[DP_MAX_MECT_ENTRIES];
+	uint8_t mect_cnt;
+
 	/* Obj Mgr SoC */
 	struct wlan_objmgr_psoc *psoc;
 	qdf_nbuf_t invalid_peer_head_msdu;
@@ -768,7 +783,7 @@ struct dp_pdev {
 	enum htt_pkt_type rx_decap_mode;
 
 	/* Enhanced Stats is enabled */
-	bool ap_stats_tx_cal_enable;
+	bool enhanced_stats_en;
 
 	qdf_atomic_t num_tx_outstanding;
 
@@ -791,7 +806,6 @@ struct dp_pdev {
 	uint8_t operating_channel;
 
 	qdf_nbuf_queue_t rx_status_q;
-	uint32_t mon_ppdu_id;
 	uint32_t mon_ppdu_status;
 	struct cdp_mon_status rx_mon_recv_status;
 
@@ -812,6 +826,14 @@ struct dp_pdev {
 
 	/* map this pdev to a particular Reo Destination ring */
 	enum cdp_host_reo_dest_ring reo_dest;
+
+#ifndef REMOVE_PKT_LOG
+	/* Packet log mode */
+	uint8_t rx_pktlog_mode;
+#endif
+
+	/* WDI event handlers */
+	struct wdi_event_subscribe_t **wdi_event_list;
 };
 
 struct dp_peer;

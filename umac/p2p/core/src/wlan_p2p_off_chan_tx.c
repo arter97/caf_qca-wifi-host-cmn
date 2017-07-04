@@ -95,9 +95,7 @@ static QDF_STATUS p2p_vdev_check_valid(struct tx_action_context *tx_ctx)
 		return QDF_STATUS_E_INVAL;
 	}
 
-	wlan_vdev_obj_lock(vdev);
 	mode = wlan_vdev_mlme_get_opmode(vdev);
-	wlan_vdev_obj_unlock(vdev);
 	p2p_debug("vdev mode:%d", mode);
 
 	/* drop probe response for sta, go, sap */
@@ -272,9 +270,7 @@ static struct p2p_noa_info *p2p_get_vdev_noa_info(
 		return NULL;
 	}
 
-	wlan_vdev_obj_lock(vdev);
 	mode = wlan_vdev_mlme_get_opmode(vdev);
-	wlan_vdev_obj_unlock(vdev);
 	p2p_debug("vdev mode:%d", mode);
 	if (mode != QDF_P2P_GO_MODE) {
 		p2p_debug("invalid p2p vdev mode:%d", mode);
@@ -535,6 +531,8 @@ static char *p2p_get_frame_type_str(struct p2p_frame_info *frame_info)
 		return "Invalid P2P command";
 	}
 
+	if (frame_info->action_type == P2P_ACTION_PRESENCE_REQ)
+		return "P2P action presence request";
 	if (frame_info->action_type == P2P_ACTION_PRESENCE_RSP)
 		return "P2P action presence response";
 
@@ -651,6 +649,9 @@ static QDF_STATUS p2p_get_frame_info(uint8_t *data_buf, uint32_t length,
 		buf = data_buf +
 			P2P_ACTION_FRAME_TYPE_OFFSET;
 		action_type = buf[0];
+		if (action_type == P2P_ACTION_PRESENCE_REQ)
+			frame_info->action_type =
+				P2P_ACTION_PRESENCE_REQ;
 		if (action_type == P2P_ACTION_PRESENCE_RSP)
 			frame_info->action_type =
 				P2P_ACTION_PRESENCE_RSP;
@@ -1630,6 +1631,10 @@ QDF_STATUS p2p_process_rx_mgmt(
 			p2p_extend_roc_timer(p2p_soc_obj, &frame_info);
 		}
 	}
+
+	if (rx_mgmt->frm_type == MGMT_ACTION_CATEGORY_VENDOR_SPECIFIC)
+		p2p_get_frame_info(rx_mgmt->buf, rx_mgmt->frame_len,
+				&frame_info);
 
 	start_param = p2p_soc_obj->start_param;
 	if (start_param->rx_cb)

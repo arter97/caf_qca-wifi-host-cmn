@@ -925,23 +925,6 @@ struct beacon_tmpl_params {
 	uint8_t *frm;
 };
 
-#ifdef CONFIG_MCL
-/**
- * struct beacon_params - beacon cmd parameter
- * @vdev_id: vdev id
- * @tim_ie_offset: tim ie offset
- * @tmpl_len: beacon template length
- * @tmpl_len_aligned: beacon template alignment
- * @frm: beacon template parameter
- */
-struct beacon_params {
-	uint8_t vdev_id;
-	uint32_t tim_ie_offset;
-	uint32_t tmpl_len;
-	uint32_t tmpl_len_aligned;
-	uint8_t *frm;
-};
-#else
 /**
  * struct beacon_params - beacon cmd parameter
  * @vdev_id: vdev id
@@ -963,7 +946,6 @@ struct beacon_params {
 	bool is_bitctl_reqd;
 	bool is_high_latency;
 };
-#endif
 
 /**
  * struct bcn_prb_template_params - beacon probe template parameter
@@ -1813,7 +1795,7 @@ struct mobility_domain_info {
 #define WMI_HOST_ROAM_OFFLOAD_NUM_MCS_SET     (16)
 
 /* This TLV will be filled only in case roam offload
- * for wpa2-psk/okc/ese/11r is enabled */
+ * for wpa2-psk/pmkid/ese/11r is enabled */
 typedef struct {
 	/*
 	 * TLV tag and len; tag equals
@@ -1856,7 +1838,8 @@ typedef struct {
  * @rokh_id: r0kh id
  * @roam_key_mgmt_offload_enabled: roam offload flag
  * @auth_mode: authentication mode
- * @okc_enabled: enable opportunistic key caching
+ * @fw_okc: use OKC in firmware
+ * @fw_pmksa_cache: use PMKSA cache in firmware
  * @is_ese_assoc: flag to determine ese assoc
  * @mdid: mobility domain info
  * @roam_offload_params: roam offload tlv params
@@ -1879,7 +1862,8 @@ struct roam_offload_scan_params {
 	uint8_t rokh_id[WMI_ROAM_R0KH_ID_MAX_LEN];
 	uint8_t roam_key_mgmt_offload_enabled;
 	int auth_mode;
-	bool okc_enabled;
+	bool fw_okc;
+	bool fw_pmksa_cache;
 #endif
 	bool is_ese_assoc;
 	struct mobility_domain_info mdid;
@@ -4955,6 +4939,8 @@ typedef enum {
 	wmi_offchan_data_tx_completion_event,
 	wmi_dfs_cac_complete_id,
 	wmi_dfs_radar_detection_event_id,
+	wmi_ext_tbttoffset_update_event_id,
+	wmi_11d_new_country_event_id,
 
 	wmi_events_max,
 } wmi_conv_event_id;
@@ -5354,6 +5340,7 @@ typedef enum {
 	wmi_service_hw_data_filtering,
 	wmi_service_pkt_routing,
 	wmi_service_offchan_tx_wmi,
+	wmi_service_chan_load_info,
 
 	wmi_services_max,
 } wmi_conv_service_ids;
@@ -5860,6 +5847,7 @@ struct wmi_host_offchan_data_tx_compl_event {
  * @tim_bitmap: TIM bitmap
  * @tim_changed: TIM changed
  * @tim_num_ps_pending: TIM num PS sta pending
+ * @vdev_id: Vdev id
  */
 typedef struct {
 	uint32_t tim_len;
@@ -5867,6 +5855,7 @@ typedef struct {
 	uint32_t tim_bitmap[WMI_HOST_TIM_BITMAP_ARRAY_SIZE];
 	uint32_t tim_changed;
 	uint32_t tim_num_ps_pending;
+	uint32_t vdev_id;
 } wmi_host_tim_info;
 
 /**
@@ -5892,6 +5881,7 @@ typedef struct {
  * @ctwindow: CT window
  * @num_descriptors: number of descriptors
  * @noa_descriptors: noa descriptors
+ * @vdev_id: Vdev id
  */
 typedef struct {
 	uint8_t modified;
@@ -5901,6 +5891,7 @@ typedef struct {
 	uint8_t num_descriptors;
 	wmi_host_p2p_noa_descriptor
 		noa_descriptors[WMI_HOST_P2P_MAX_NOA_DESCRIPTORS];
+	uint32_t vdev_id;
 } wmi_host_p2p_noa_info;
 
 /**
@@ -6891,6 +6882,8 @@ struct wmi_adaptive_dwelltime_params {
  *     for PER based roam in tx path
  * @rx_per_mon_time: Minimum time required to be considered as valid scenario
  *     for PER based roam in rx path
+ * @min_candidate_rssi: Minimum RSSI threshold for candidate AP to be used for
+ *     PER based roaming
  */
 struct wmi_per_roam_config {
 	uint32_t enable;
@@ -6903,6 +6896,7 @@ struct wmi_per_roam_config {
 	uint32_t per_rest_time;
 	uint32_t tx_per_mon_time;
 	uint32_t rx_per_mon_time;
+	uint32_t min_candidate_rssi;
 };
 
 /**
@@ -7101,11 +7095,28 @@ enum WMI_HOST_CALIBRATION_STATUS {
  * struct wmi_host_pdev_utf_event - Host defined struct to hold utf event data
  * @data:        Pointer to data
  * @datalen:     Data length
+ * @pdev_id:     Pdev_id of data
  *
  */
 struct wmi_host_pdev_utf_event {
 	uint8_t *data;
 	uint16_t datalen;
+	uint32_t pdev_id;
+};
+
+/**
+ * struct wmi_host_utf_seg_header_info - Host defined struct to map seg info in
+ *                         UTF event
+ * @len:        segment length
+ * @msgref:     message reference
+ * @segment_info: segment info
+ * @pdev_id:  pdev_id
+ *
+ */
+struct wmi_host_utf_seg_header_info {
+	uint32_t len;
+	uint32_t msgref;
+	uint32_t segment_info;
 	uint32_t pdev_id;
 };
 
@@ -7250,4 +7261,33 @@ struct coex_config_params {
 #define WMI_HOST_PDEV_ID_0   0
 #define WMI_HOST_PDEV_ID_1   1
 #define WMI_HOST_PDEV_ID_2   2
+
+/**
+ * struct tbttoffset_params - Tbttoffset event params
+ * @vdev_id: Virtual AP device identifier
+ * @tbttoffset : Tbttoffset for the virtual AP device
+ */
+struct tbttoffset_params {
+	uint32_t vdev_id;
+	uint32_t tbttoffset;
+};
+
+#define WMI_SCAN_CLIENT_MAX        7
+
+/**
+ * struct wmi_dbs_scan_sel_params - DBS scan selection params
+ * @num_clients: Number of scan clients dutycycle
+ * @pdev_id: pdev_id for identifying the MAC
+ * @module_id: scan client module id
+ * @num_dbs_scans: number of DBS scans
+ * @num_non_dbs_scans: number of non-DBS scans
+ */
+struct wmi_dbs_scan_sel_params {
+	uint32_t num_clients;
+	uint32_t pdev_id;
+	uint32_t module_id[WMI_SCAN_CLIENT_MAX];
+	uint32_t num_dbs_scans[WMI_SCAN_CLIENT_MAX];
+	uint32_t num_non_dbs_scans[WMI_SCAN_CLIENT_MAX];
+};
+
 #endif /* _WMI_UNIFIED_PARAM_H_ */

@@ -28,6 +28,7 @@
 #include "wlan_pmo_ns_public_struct.h"
 #include "wlan_pmo_gtk_public_struct.h"
 #include "wlan_pmo_wow_public_struct.h"
+#include "wlan_pmo_pkt_filter_public_struct.h"
 
 /**
  * wmi_unified_add_wow_wakeup_event_cmd() -  Configures wow wakeup events.
@@ -40,7 +41,7 @@
  */
 QDF_STATUS wmi_unified_add_wow_wakeup_event_cmd(void *wmi_hdl,
 					uint32_t vdev_id,
-					uint32_t bitmap,
+					uint32_t *bitmap,
 					bool enable);
 
 /**
@@ -165,17 +166,14 @@ QDF_STATUS wmi_unified_enable_arp_ns_offload_cmd(void *wmi_hdl,
 			   uint8_t vdev_id);
 
 /**
- * wmi_unified_configure_broadcast_filter_cmd() - Enable/Disable Broadcast
- * filter
- * when target goes to wow suspend/resume mode
- * @wmi_hdl: wmi handle
- * @vdev_id: device identifier
- * @bc_filter: enable/disable Broadcast filter
+ * wmi_unified_conf_hw_filter_cmd() - Configure hardware filter in DTIM mode
+ * @opaque_wmi: wmi handle
+ * @req: request parameters to configure to firmware
  *
- * Return: QDF_STATUS_SUCCESS on success and QDF_STATUS_E_FAILURE for failure
+ * Return: QDF_STATUS
  */
-QDF_STATUS wmi_unified_configure_broadcast_filter_cmd(void *wmi_hdl,
-			   uint8_t vdev_id, bool bc_filter);
+QDF_STATUS wmi_unified_conf_hw_filter_cmd(void *opaque_wmi,
+					  struct pmo_hw_filter_params *req);
 
 /**
  * wmi_unified_lphb_config_hbenable_cmd() - enable command of LPHB configuration
@@ -226,5 +224,30 @@ QDF_STATUS wmi_unified_lphb_config_udp_params_cmd(void *wmi_hdl,
  */
 QDF_STATUS wmi_unified_lphb_config_udp_pkt_filter_cmd(void *wmi_hdl,
 		wmi_hb_set_udp_pkt_filter_cmd_fixed_param *lphb_conf_req);
+
+/**
+ * wmi_unified_enable_disable_packet_filter_cmd() - enable/disable packet filter
+ * @wmi_handle: wmi handle
+ * @vdev_id: vdev id
+ * @enable: Flag to enable/disable packet filter
+ *
+ * Return: QDF_STATUS_SUCCESS on success and QDF_STATUS_E_FAILURE for failure
+ */
+QDF_STATUS wmi_unified_enable_disable_packet_filter_cmd(void *wmi_hdl,
+		uint8_t vdev_id, bool enable);
+
+/**
+ * wmi_unified_config_packet_filter_cmd() - configure packet filter in target
+ * @wmi_handle: wmi handle
+ * @vdev_id: vdev id
+ * @rcv_filter_param: Packet filter parameters
+ * @filter_id: Filter id
+ * @enable: Flag to add/delete packet filter configuration
+ *
+ * Return: QDF_STATUS_SUCCESS on success and QDF_STATUS_E_FAILURE for failure
+ */
+QDF_STATUS wmi_unified_config_packet_filter_cmd(void *wmi_hdl,
+		uint8_t vdev_id, struct pmo_rcv_pkt_fltr_cfg *rcv_filter_param,
+		uint8_t filter_id, bool enable);
 
 #endif /* _WMI_UNIFIED_PMO_API_H_ */

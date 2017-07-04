@@ -64,7 +64,18 @@
 #include "rx_ppdu_end_user_stats.h"
 #include "rx_ppdu_end_user_stats_ext.h"
 #include "rx_mpdu_desc_info.h"
+#include "rxpcu_ppdu_end_info.h"
+#include "phyrx_he_sig_a_su.h"
+#include "phyrx_he_sig_a_mu_dl.h"
+#include "phyrx_he_sig_b1_mu.h"
+#include "phyrx_he_sig_b2_mu.h"
+#include "phyrx_he_sig_b2_ofdma.h"
+#include "phyrx_vht_sig_a.h"
+#include "phyrx_ht_sig.h"
 #include "tx_msdu_extension.h"
+#include "receive_rssi_info.h"
+#include "phyrx_pkt_end.h"
+#include "phyrx_rssi_legacy.h"
 #include "wcss_version.h"
 #include "pld_common.h"
 #include "rx_msdu_link.h"
@@ -147,7 +158,10 @@ enum hal_srng_ring_id {
 	HAL_SRNG_WMAC1_RXDMA2SW0 = 133,
 	HAL_SRNG_WMAC1_RXDMA2SW1 = 134,
 	HAL_SRNG_WMAC1_SW2RXDMA1_DESC = 135,
-	/* 136-142 unused */
+#ifdef WLAN_FEATURE_CIF_CFR
+	HAL_SRNG_WIFI_POS_SRC_DMA_RING = 136,
+#endif
+	/* 137-142 unused */
 	HAL_SRNG_LMAC1_ID_END = 143
 };
 
@@ -167,8 +181,8 @@ enum hal_srng_dir {
 /* Lock wrappers for SRNG */
 #define hal_srng_lock_t qdf_spinlock_t
 #define SRNG_LOCK_INIT(_lock) qdf_spinlock_create(_lock)
-#define SRNG_LOCK(_lock) qdf_spinlock_acquire(_lock)
-#define SRNG_UNLOCK(_lock) qdf_spinlock_release(_lock)
+#define SRNG_LOCK(_lock) qdf_spin_lock_bh(_lock)
+#define SRNG_UNLOCK(_lock) qdf_spin_unlock_bh(_lock)
 #define SRNG_LOCK_DESTROY(_lock) qdf_spinlock_destroy(_lock)
 
 #define MAX_SRNG_REG_GROUPS 2
@@ -340,9 +354,12 @@ struct hal_soc {
 
 #define HAL_DEFAULT_REO_TIMEOUT_MS 40 /* milliseconds */
 
-#define HAL_DESC_SET_FIELD(_desc, _word, _fld, _value) \
-	((_desc)[(_word ## _ ## _fld ## _OFFSET) >> 2] |= \
-		((_value) << _word ## _ ## _fld ## _LSB))
+#define HAL_DESC_SET_FIELD(_desc, _word, _fld, _value) do { \
+	((uint32_t *)(_desc))[(_word ## _ ## _fld ## _OFFSET) >> 2] &= \
+		~(_word ## _ ## _fld ## _MASK); \
+	((uint32_t *)(_desc))[(_word ## _ ## _fld ## _OFFSET) >> 2] |= \
+		((_value) << _word ## _ ## _fld ## _LSB); \
+} while (0)
 
 #define HAL_SM(_reg, _fld, _val) \
 	(((_val) << (_reg ## _ ## _fld ## _SHFT)) & \

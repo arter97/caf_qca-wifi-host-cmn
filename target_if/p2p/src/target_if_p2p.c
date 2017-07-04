@@ -89,6 +89,9 @@ static int target_p2p_lo_event_handler(ol_scn_t scn, uint8_t *data,
 		status = p2p_rx_ops->lo_ev_handler(psoc, event_info);
 		target_if_debug("call lo event handler, status:%d",
 			status);
+	} else {
+		qdf_mem_free(event_info);
+		target_if_debug("no valid lo event handler");
 	}
 
 	return qdf_status_to_os_return(status);
@@ -152,6 +155,9 @@ static int target_p2p_noa_event_handler(ol_scn_t scn, uint8_t *data,
 		status = p2p_rx_ops->noa_ev_handler(psoc, event_info);
 		target_if_debug("call noa event handler, status:%d",
 			status);
+	} else {
+		qdf_mem_free(event_info);
+		target_if_debug("no valid noa event handler");
 	}
 
 	return qdf_status_to_os_return(status);
@@ -161,7 +167,7 @@ QDF_STATUS target_if_p2p_register_lo_event_handler(
 	struct wlan_objmgr_psoc *psoc, void *arg)
 {
 	int status;
-	wmi_unified_t wmi_handle = wlan_psoc_get_tgt_if_handle(psoc);
+	wmi_unified_t wmi_handle = target_if_get_wmi_handle(psoc);
 
 	target_if_debug("psoc:%p, arg:%p", psoc, arg);
 
@@ -184,7 +190,7 @@ QDF_STATUS target_if_p2p_register_noa_event_handler(
 	struct wlan_objmgr_psoc *psoc, void *arg)
 {
 	int status;
-	wmi_unified_t wmi_handle = wlan_psoc_get_tgt_if_handle(psoc);
+	wmi_unified_t wmi_handle = target_if_get_wmi_handle(psoc);
 
 	target_if_debug("psoc:%p, arg:%p", psoc, arg);
 
@@ -207,7 +213,7 @@ QDF_STATUS target_if_p2p_unregister_lo_event_handler(
 	struct wlan_objmgr_psoc *psoc, void *arg)
 {
 	int status;
-	wmi_unified_t wmi_handle = wlan_psoc_get_tgt_if_handle(psoc);
+	wmi_unified_t wmi_handle = target_if_get_wmi_handle(psoc);
 
 	target_if_debug("psoc:%p, arg:%p", psoc, arg);
 
@@ -229,7 +235,7 @@ QDF_STATUS target_if_p2p_unregister_noa_event_handler(
 	struct wlan_objmgr_psoc *psoc, void *arg)
 {
 	int status;
-	wmi_unified_t wmi_handle = wlan_psoc_get_tgt_if_handle(psoc);
+	wmi_unified_t wmi_handle = target_if_get_wmi_handle(psoc);
 
 	target_if_debug("psoc:%p, arg:%p", psoc, arg);
 
@@ -252,7 +258,7 @@ QDF_STATUS target_if_p2p_set_ps(struct wlan_objmgr_psoc *psoc,
 {
 	struct p2p_ps_params cmd;
 	QDF_STATUS status;
-	 wmi_unified_t wmi_handle = wlan_psoc_get_tgt_if_handle(psoc);
+	 wmi_unified_t wmi_handle = target_if_get_wmi_handle(psoc);
 
 	target_if_debug("psoc:%p, vdev_id:%d, opp_ps:%d", psoc,
 		ps_config->vdev_id, ps_config->opp_ps);
@@ -293,7 +299,7 @@ QDF_STATUS target_if_p2p_set_ps(struct wlan_objmgr_psoc *psoc,
 QDF_STATUS target_if_p2p_lo_start(struct wlan_objmgr_psoc *psoc,
 	struct p2p_lo_start *lo_start)
 {
-	wmi_unified_t wmi_handle = wlan_psoc_get_tgt_if_handle(psoc);
+	wmi_unified_t wmi_handle = target_if_get_wmi_handle(psoc);
 
 	target_if_debug("psoc:%p, vdev_id:%d", psoc, lo_start->vdev_id);
 
@@ -313,7 +319,7 @@ QDF_STATUS target_if_p2p_lo_start(struct wlan_objmgr_psoc *psoc,
 QDF_STATUS target_if_p2p_lo_stop(struct wlan_objmgr_psoc *psoc,
 	uint32_t vdev_id)
 {
-	wmi_unified_t wmi_handle = wlan_psoc_get_tgt_if_handle(psoc);
+	wmi_unified_t wmi_handle = target_if_get_wmi_handle(psoc);
 
 	target_if_debug("psoc:%p, vdev_id:%d", psoc, vdev_id);
 
@@ -330,7 +336,7 @@ QDF_STATUS target_if_p2p_set_noa(struct wlan_objmgr_psoc *psoc,
 	uint32_t vdev_id, bool disable_noa)
 {
 	struct vdev_set_params param;
-	wmi_unified_t wmi_handle = wlan_psoc_get_tgt_if_handle(psoc);
+	wmi_unified_t wmi_handle = target_if_get_wmi_handle(psoc);
 
 	if (!wmi_handle) {
 		target_if_err("Invalid wmi handle");

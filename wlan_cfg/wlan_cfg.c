@@ -31,15 +31,54 @@
  * For now, all these configuration parameters are hardcoded.
  * Many of these should actually be coming from dts file/ini file
  */
+
+#ifdef CONFIG_MCL
+#define WLAN_CFG_PER_PDEV_RX_RING 0
+#define NUM_RXDMA_RINGS_PER_PDEV 2
+#define WLAN_LRO_ENABLE 1
+
+/* Tx Descriptor and Tx Extension Descriptor pool sizes */
+#define WLAN_CFG_NUM_TX_DESC  1024
+#define WLAN_CFG_NUM_TX_EXT_DESC 1024
+
+/* Interrupt Mitigation - Batch threshold in terms of number of frames */
+#define WLAN_CFG_INT_BATCH_THRESHOLD_TX 1
+#define WLAN_CFG_INT_BATCH_THRESHOLD_RX 1
+#define WLAN_CFG_INT_BATCH_THRESHOLD_OTHER 1
+
+/* Interrupt Mitigation - Timer threshold in us */
+#define WLAN_CFG_INT_TIMER_THRESHOLD_TX 8
+#define WLAN_CFG_INT_TIMER_THRESHOLD_RX 8
+#define WLAN_CFG_INT_TIMER_THRESHOLD_OTHER 8
+
+#endif
+
+#ifdef CONFIG_WIN
+#define WLAN_CFG_PER_PDEV_RX_RING 1
+#define NUM_RXDMA_RINGS_PER_PDEV 1
+#define WLAN_LRO_ENABLE 0
+
+/* Tx Descriptor and Tx Extension Descriptor pool sizes */
+#define WLAN_CFG_NUM_TX_DESC  (16 << 10)
+#define WLAN_CFG_NUM_TX_EXT_DESC (8 << 10)
+
+/* Interrupt Mitigation - Batch threshold in terms of number of frames */
+#define WLAN_CFG_INT_BATCH_THRESHOLD_TX 256
+#define WLAN_CFG_INT_BATCH_THRESHOLD_RX 128
+#define WLAN_CFG_INT_BATCH_THRESHOLD_OTHER 1
+
+/* Interrupt Mitigation - Timer threshold in us */
+#define WLAN_CFG_INT_TIMER_THRESHOLD_TX 1000
+#define WLAN_CFG_INT_TIMER_THRESHOLD_RX 500
+#define WLAN_CFG_INT_TIMER_THRESHOLD_OTHER 8
+#endif
+
 #define WLAN_CFG_INT_NUM_CONTEXTS 4
 
 #define RXDMA_BUF_RING_SIZE 2048
 #define RXDMA_MONITOR_BUF_RING_SIZE 2048
 #define RXDMA_MONITOR_DEST_RING_SIZE 2048
 #define RXDMA_MONITOR_STATUS_RING_SIZE 2048
-
-#define WLAN_CFG_NUM_TX_DESC  1024
-#define WLAN_CFG_NUM_TX_EXT_DESC 1024
 
 #ifdef TX_PER_PDEV_DESC_POOL
 #define WLAN_CFG_NUM_TX_DESC_POOL 	MAX_PDEV_CNT
@@ -48,7 +87,6 @@
 #define WLAN_CFG_NUM_TX_DESC_POOL 3
 #define WLAN_CFG_NUM_TXEXT_DESC_POOL 3
 #endif /* TX_PER_PDEV_DESC_POOL */
-
 
 #define WLAN_CFG_TX_RING_MASK_0 0x1
 #define WLAN_CFG_TX_RING_MASK_1 0x2
@@ -65,6 +103,26 @@
 #define WLAN_CFG_RX_MON_RING_MASK_2 0x4
 #define WLAN_CFG_RX_MON_RING_MASK_3 0x0
 
+#define WLAN_CFG_RX_ERR_RING_MASK_0 0x1
+#define WLAN_CFG_RX_ERR_RING_MASK_1 0x0
+#define WLAN_CFG_RX_ERR_RING_MASK_2 0x0
+#define WLAN_CFG_RX_ERR_RING_MASK_3 0x0
+
+#define WLAN_CFG_RX_WBM_REL_RING_MASK_0 0x1
+#define WLAN_CFG_RX_WBM_REL_RING_MASK_1 0x0
+#define WLAN_CFG_RX_WBM_REL_RING_MASK_2 0x0
+#define WLAN_CFG_RX_WBM_REL_RING_MASK_3 0x0
+
+#define WLAN_CFG_REO_STATUS_RING_MASK_0 0x1
+#define WLAN_CFG_REO_STATUS_RING_MASK_1 0x0
+#define WLAN_CFG_REO_STATUS_RING_MASK_2 0x0
+#define WLAN_CFG_REO_STATUS_RING_MASK_3 0x0
+
+#define WLAN_CFG_RXDMA2HOST_RING_MASK_0 0x1
+#define WLAN_CFG_RXDMA2HOST_RING_MASK_1 0x2
+#define WLAN_CFG_RXDMA2HOST_RING_MASK_2 0x4
+#define WLAN_CFG_RXDMA2HOST_RING_MASK_3 0x0
+
 #define WLAN_CFG_DP_TX_NUM_POOLS 3
 /* Change this to a lower value to enforce scattered idle list mode */
 #define WLAN_CFG_MAX_ALLOC_SIZE (2 << 20)
@@ -78,20 +136,11 @@
 #define WLAN_CFG_HTT_PKT_TYPE 2
 #define WLAN_CFG_MAX_PEER_ID 64
 
-#ifdef CONFIG_MCL
-#define WLAN_CFG_PER_PDEV_RX_RING 0
-#define NUM_RXDMA_RINGS_PER_PDEV 2
-#else
-#define WLAN_CFG_PER_PDEV_RX_RING 1
-#define NUM_RXDMA_RINGS_PER_PDEV 1
-#endif
-
 #ifdef WLAN_RX_HASH
 #define WLAN_RX_HASH_ENABLE 1
 #else
 #define WLAN_RX_HASH_ENABLE 0
 #endif
-#define WLAN_LRO_ENABLE 0
 
 static const int tx_ring_mask[WLAN_CFG_INT_NUM_CONTEXTS] = {
 						WLAN_CFG_TX_RING_MASK_0,
@@ -110,6 +159,30 @@ static const int rx_mon_ring_mask[WLAN_CFG_INT_NUM_CONTEXTS] = {
 					WLAN_CFG_RX_MON_RING_MASK_1,
 					WLAN_CFG_RX_MON_RING_MASK_2,
 					WLAN_CFG_RX_MON_RING_MASK_3};
+
+static const int rx_err_ring_mask[WLAN_CFG_INT_NUM_CONTEXTS] = {
+					WLAN_CFG_RX_ERR_RING_MASK_0,
+					WLAN_CFG_RX_ERR_RING_MASK_1,
+					WLAN_CFG_RX_ERR_RING_MASK_2,
+					WLAN_CFG_RX_ERR_RING_MASK_3};
+
+static const int rx_wbm_rel_ring_mask[WLAN_CFG_INT_NUM_CONTEXTS] = {
+					WLAN_CFG_RX_WBM_REL_RING_MASK_0,
+					WLAN_CFG_RX_WBM_REL_RING_MASK_1,
+					WLAN_CFG_RX_WBM_REL_RING_MASK_2,
+					WLAN_CFG_RX_WBM_REL_RING_MASK_3};
+
+static const int reo_status_ring_mask[WLAN_CFG_INT_NUM_CONTEXTS] = {
+					WLAN_CFG_REO_STATUS_RING_MASK_0,
+					WLAN_CFG_REO_STATUS_RING_MASK_1,
+					WLAN_CFG_REO_STATUS_RING_MASK_2,
+					WLAN_CFG_REO_STATUS_RING_MASK_3};
+
+static const int rxdma2host_ring_mask[WLAN_CFG_INT_NUM_CONTEXTS] = {
+					WLAN_CFG_RXDMA2HOST_RING_MASK_0,
+					WLAN_CFG_RXDMA2HOST_RING_MASK_1,
+					WLAN_CFG_RXDMA2HOST_RING_MASK_2,
+					WLAN_CFG_RXDMA2HOST_RING_MASK_3};
 
 /**
  * struct wlan_cfg_dp_soc_ctxt - Configuration parameters for SoC (core TxRx)
@@ -132,6 +205,8 @@ static const int rx_mon_ring_mask[WLAN_CFG_INT_NUM_CONTEXTS] = {
  * @int_rx_ring_mask - Bitmap of Rx interrupts mapped to each NAPI/Intr context
  * @int_rx_mon_ring_mask - Bitmap of Rx monitor ring interrupts mapped to each
  *			  NAPI/Intr context
+ * @int_rxdma2host_ring_mask - Bitmap of RXDMA2host ring interrupts mapped to
+ *		each NAPI/Intr context
  * @int_ce_ring_mask - Bitmap of CE interrupts mapped to each NAPI/Intr context
  * @lro_enabled - is LRO enabled
  * @rx_hash - Enable hash based steering of rx packets
@@ -151,13 +226,25 @@ struct wlan_cfg_dp_soc_ctxt {
 	int num_tx_ext_desc;
 	int max_peer_id;
 	int htt_packet_type;
+	int int_batch_threshold_tx;
+	int int_timer_threshold_tx;
+	int int_batch_threshold_rx;
+	int int_timer_threshold_rx;
+	int int_batch_threshold_other;
+	int int_timer_threshold_other;
 	int int_tx_ring_mask[WLAN_CFG_INT_NUM_CONTEXTS];
 	int int_rx_ring_mask[WLAN_CFG_INT_NUM_CONTEXTS];
 	int int_rx_mon_ring_mask[WLAN_CFG_INT_NUM_CONTEXTS];
+	int int_rxdma2host_ring_mask[WLAN_CFG_INT_NUM_CONTEXTS];
 	int int_ce_ring_mask[WLAN_CFG_INT_NUM_CONTEXTS];
+	int int_rx_err_ring_mask[WLAN_CFG_INT_NUM_CONTEXTS];
+	int int_rx_wbm_rel_ring_mask[WLAN_CFG_INT_NUM_CONTEXTS];
+	int int_reo_status_ring_mask[WLAN_CFG_INT_NUM_CONTEXTS];
 	bool lro_enabled;
 	bool rx_hash;
 	int nss_cfg;
+	int hw_macid[MAX_PDEV_CNT];
+	int base_hw_macid;
 };
 
 /**
@@ -181,9 +268,10 @@ struct wlan_cfg_dp_pdev_ctxt {
  *
  * Return: wlan_cfg_ctx - Handle to Configuration context
  */
-struct wlan_cfg_dp_soc_ctxt *wlan_cfg_soc_attach(void)
+struct wlan_cfg_dp_soc_ctxt *wlan_cfg_soc_attach()
 {
 	int i = 0;
+
 	struct wlan_cfg_dp_soc_ctxt *wlan_cfg_ctx =
 		qdf_mem_malloc(sizeof(struct wlan_cfg_dp_soc_ctxt));
 
@@ -201,17 +289,43 @@ struct wlan_cfg_dp_soc_ctxt *wlan_cfg_soc_attach(void)
 	wlan_cfg_ctx->num_tx_ext_desc_pool = WLAN_CFG_NUM_TXEXT_DESC_POOL;
 	wlan_cfg_ctx->num_tx_desc = WLAN_CFG_NUM_TX_DESC;
 	wlan_cfg_ctx->num_tx_ext_desc = WLAN_CFG_NUM_TX_EXT_DESC;
-	wlan_cfg_ctx->max_peer_id = WLAN_CFG_MAX_PEER_ID;
 	wlan_cfg_ctx->htt_packet_type = WLAN_CFG_HTT_PKT_TYPE;
+	wlan_cfg_ctx->max_peer_id = WLAN_CFG_MAX_PEER_ID;
+
+	wlan_cfg_ctx->int_batch_threshold_tx = WLAN_CFG_INT_BATCH_THRESHOLD_TX;
+	wlan_cfg_ctx->int_timer_threshold_tx =  WLAN_CFG_INT_TIMER_THRESHOLD_TX;
+	wlan_cfg_ctx->int_batch_threshold_rx = WLAN_CFG_INT_BATCH_THRESHOLD_RX;
+	wlan_cfg_ctx->int_timer_threshold_rx = WLAN_CFG_INT_TIMER_THRESHOLD_RX;
+	wlan_cfg_ctx->int_batch_threshold_other =
+		WLAN_CFG_INT_BATCH_THRESHOLD_OTHER;
+	wlan_cfg_ctx->int_timer_threshold_other =
+		WLAN_CFG_INT_TIMER_THRESHOLD_OTHER;
 
 	for (i = 0; i < WLAN_CFG_INT_NUM_CONTEXTS; i++) {
 		wlan_cfg_ctx->int_tx_ring_mask[i] = tx_ring_mask[i];
 		wlan_cfg_ctx->int_rx_ring_mask[i] = rx_ring_mask[i];
 		wlan_cfg_ctx->int_rx_mon_ring_mask[i] = rx_mon_ring_mask[i];
+		wlan_cfg_ctx->int_rx_err_ring_mask[i] = rx_err_ring_mask[i];
+		wlan_cfg_ctx->int_rx_wbm_rel_ring_mask[i] =
+					rx_wbm_rel_ring_mask[i];
+		wlan_cfg_ctx->int_reo_status_ring_mask[i] =
+					reo_status_ring_mask[i];
+		wlan_cfg_ctx->int_rxdma2host_ring_mask[i] =
+			rxdma2host_ring_mask[i];
 	}
 
 	wlan_cfg_ctx->rx_hash = WLAN_RX_HASH_ENABLE;
 	wlan_cfg_ctx->lro_enabled = WLAN_LRO_ENABLE;
+
+	/* This is default mapping and can be overridden by HW config
+	 * received from FW */
+	wlan_cfg_set_hw_macid(wlan_cfg_ctx, 0, 1);
+	if (MAX_PDEV_CNT > 1)
+		wlan_cfg_set_hw_macid(wlan_cfg_ctx, 1, 3);
+	if (MAX_PDEV_CNT > 2)
+		wlan_cfg_set_hw_macid(wlan_cfg_ctx, 2, 2);
+
+	wlan_cfg_ctx->base_hw_macid = 1;
 
 	return wlan_cfg_ctx;
 }
@@ -248,6 +362,11 @@ void wlan_cfg_set_num_contexts(struct wlan_cfg_dp_soc_ctxt *cfg, int num)
 	cfg->num_int_ctxts = num;
 }
 
+void wlan_cfg_set_max_peer_id(struct wlan_cfg_dp_soc_ctxt *cfg, uint32_t val)
+{
+	cfg->max_peer_id = val;;
+}
+
 void wlan_cfg_set_tx_ring_mask(struct wlan_cfg_dp_soc_ctxt *cfg,
 		int context, int mask)
 {
@@ -266,6 +385,37 @@ void wlan_cfg_set_rx_mon_ring_mask(struct wlan_cfg_dp_soc_ctxt *cfg,
 	cfg->int_rx_mon_ring_mask[context] = mask;
 }
 
+void wlan_cfg_set_rxdma2host_ring_mask(struct wlan_cfg_dp_soc_ctxt *cfg,
+	int context, int mask)
+{
+	cfg->int_rxdma2host_ring_mask[context] = mask;
+}
+
+int wlan_cfg_get_rxdma2host_ring_mask(struct wlan_cfg_dp_soc_ctxt *cfg,
+	int context)
+{
+	return cfg->int_rxdma2host_ring_mask[context];
+}
+
+void wlan_cfg_set_hw_macid(struct wlan_cfg_dp_soc_ctxt *cfg, int pdev_idx,
+	int hw_macid)
+{
+	qdf_assert_always(pdev_idx < MAX_PDEV_CNT);
+	cfg->hw_macid[pdev_idx] = hw_macid;
+}
+
+int wlan_cfg_get_hw_macid(struct wlan_cfg_dp_soc_ctxt *cfg, int pdev_idx)
+{
+	qdf_assert_always(pdev_idx < MAX_PDEV_CNT);
+	return cfg->hw_macid[pdev_idx];
+}
+
+int wlan_cfg_get_hw_mac_idx(struct wlan_cfg_dp_soc_ctxt *cfg, int pdev_idx)
+{
+	qdf_assert_always(pdev_idx < MAX_PDEV_CNT);
+	return cfg->hw_macid[pdev_idx] - cfg->base_hw_macid;
+}
+
 void wlan_cfg_set_ce_ring_mask(struct wlan_cfg_dp_soc_ctxt *cfg,
 		int context, int mask)
 {
@@ -276,6 +426,24 @@ void wlan_cfg_set_rxbuf_ring_mask(struct wlan_cfg_dp_soc_ctxt *cfg, int context,
 		int mask)
 {
 	cfg->int_rx_ring_mask[context] = mask;
+}
+
+int wlan_cfg_set_rx_err_ring_mask(struct wlan_cfg_dp_soc_ctxt *cfg,
+		int context, int mask)
+{
+	return cfg->int_rx_err_ring_mask[context] = mask;
+}
+
+int wlan_cfg_set_rx_wbm_rel_ring_mask(struct wlan_cfg_dp_soc_ctxt *cfg,
+		int context, int mask)
+{
+	return cfg->int_rx_wbm_rel_ring_mask[context] = mask;
+}
+
+int wlan_cfg_set_reo_status_ring_mask(struct wlan_cfg_dp_soc_ctxt *cfg,
+		int context, int mask)
+{
+	return cfg->int_reo_status_ring_mask[context] = mask;
 }
 
 int wlan_cfg_get_num_contexts(struct wlan_cfg_dp_soc_ctxt *cfg)
@@ -291,6 +459,24 @@ int wlan_cfg_get_tx_ring_mask(struct wlan_cfg_dp_soc_ctxt *cfg, int context)
 int wlan_cfg_get_rx_ring_mask(struct wlan_cfg_dp_soc_ctxt *cfg, int context)
 {
 	return cfg->int_rx_ring_mask[context];
+}
+
+int wlan_cfg_get_rx_err_ring_mask(struct wlan_cfg_dp_soc_ctxt *cfg,
+						int context)
+{
+	return cfg->int_rx_err_ring_mask[context];
+}
+
+int wlan_cfg_get_rx_wbm_rel_ring_mask(struct wlan_cfg_dp_soc_ctxt *cfg,
+					int context)
+{
+	return cfg->int_rx_wbm_rel_ring_mask[context];
+}
+
+int wlan_cfg_get_reo_status_ring_mask(struct wlan_cfg_dp_soc_ctxt *cfg,
+					int context)
+{
+	return cfg->int_reo_status_ring_mask[context];
 }
 
 int wlan_cfg_get_rx_mon_ring_mask(struct wlan_cfg_dp_soc_ctxt *cfg, int context)
@@ -417,4 +603,34 @@ int wlan_cfg_get_dp_soc_nss_cfg(struct wlan_cfg_dp_soc_ctxt *cfg)
 void wlan_cfg_set_dp_soc_nss_cfg(struct wlan_cfg_dp_soc_ctxt *cfg, int nss_cfg)
 {
 	cfg->nss_cfg = nss_cfg;
+}
+
+int wlan_cfg_get_int_batch_threshold_tx(struct wlan_cfg_dp_soc_ctxt *cfg)
+{
+	return cfg->int_batch_threshold_tx;
+}
+
+int wlan_cfg_get_int_timer_threshold_tx(struct wlan_cfg_dp_soc_ctxt *cfg)
+{
+	return cfg->int_timer_threshold_tx;
+}
+
+int wlan_cfg_get_int_batch_threshold_rx(struct wlan_cfg_dp_soc_ctxt *cfg)
+{
+	return cfg->int_batch_threshold_rx;
+}
+
+int wlan_cfg_get_int_timer_threshold_rx(struct wlan_cfg_dp_soc_ctxt *cfg)
+{
+	return cfg->int_timer_threshold_rx;
+}
+
+int wlan_cfg_get_int_batch_threshold_other(struct wlan_cfg_dp_soc_ctxt *cfg)
+{
+	return cfg->int_batch_threshold_other;
+}
+
+int wlan_cfg_get_int_timer_threshold_other(struct wlan_cfg_dp_soc_ctxt *cfg)
+{
+	return cfg->int_timer_threshold_other;
 }

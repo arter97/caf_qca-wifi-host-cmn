@@ -426,14 +426,14 @@ QDF_STATUS wmi_unified_wow_remove_wakeup_pattern_send(void *wmi_hdl,
 
 #ifndef CONFIG_MCL
 QDF_STATUS wmi_unified_packet_log_enable_send(void *wmi_hdl,
-				WMI_HOST_PKTLOG_EVENT PKTLOG_EVENT);
+			WMI_HOST_PKTLOG_EVENT PKTLOG_EVENT, uint8_t mac_id);
 #else
 QDF_STATUS wmi_unified_packet_log_enable_send(void *wmi_hdl,
 				uint8_t macaddr[IEEE80211_ADDR_LEN],
 				struct packet_enable_params *param);
 #endif
 
-QDF_STATUS wmi_unified_packet_log_disable_send(void *wmi_hdl);
+QDF_STATUS wmi_unified_packet_log_disable_send(void *wmi_hdl, uint8_t mac_id);
 
 QDF_STATUS wmi_unified_suspend_send(void *wmi_hdl,
 				struct suspend_params *param,
@@ -719,6 +719,19 @@ QDF_STATUS wmi_unified_nat_keepalive_en_cmd(void *wmi_hdl, uint8_t vdev_id);
 
 QDF_STATUS wmi_unified_csa_offload_enable(void *wmi_hdl, uint8_t vdev_id);
 
+#ifdef WLAN_FEATURE_CIF_CFR
+/**
+ * wmi_unified_oem_dma_ring_cfg() - configure OEM DMA rings
+ * @wmi_handle: wmi handle
+ * @data_len: len of dma cfg req
+ * @data: dma cfg req
+ *
+ * Return: QDF_STATUS_SUCCESS on success and QDF_STATUS_E_FAILURE for failure
+ */
+QDF_STATUS wmi_unified_oem_dma_ring_cfg(void *wmi_hdl,
+				wmi_oem_dma_ring_cfg_req_fixed_param *cfg);
+#endif
+
 QDF_STATUS wmi_unified_start_oem_data_cmd(void *wmi_hdl,
 			  uint32_t data_len,
 			  uint8_t *data);
@@ -745,13 +758,6 @@ QDF_STATUS wmi_unified_aggr_qos_cmd(void *wmi_hdl,
 
 QDF_STATUS wmi_unified_add_ts_cmd(void *wmi_hdl,
 		 struct add_ts_param *msg);
-
-QDF_STATUS wmi_unified_enable_disable_packet_filter_cmd(void *wmi_hdl,
-					uint8_t vdev_id, bool enable);
-
-QDF_STATUS wmi_unified_config_packet_filter_cmd(void *wmi_hdl,
-		uint8_t vdev_id, struct rcv_pkt_filter_config *rcv_filter_param,
-		uint8_t filter_id, bool enable);
 
 QDF_STATUS wmi_unified_process_add_periodic_tx_ptrn_cmd(void *wmi_hdl,
 						struct periodic_tx_pattern  *
@@ -1212,8 +1218,19 @@ QDF_STATUS wmi_extract_fips_event_data(void *wmi_hdl, void *evt_buf,
 
 QDF_STATUS wmi_extract_vdev_start_resp(void *wmi_hdl, void *evt_buf,
 		wmi_host_vdev_start_resp *vdev_rsp);
+
 QDF_STATUS wmi_extract_tbttoffset_update_params(void *wmi_hdl, void *evt_buf,
-		uint32_t *vdev_map, uint32_t **tbttoffset_list);
+		uint8_t idx, struct tbttoffset_params *tbtt_param);
+
+QDF_STATUS wmi_extract_ext_tbttoffset_update_params(void *wmi_hdl,
+		void *evt_buf, uint8_t idx,
+		struct tbttoffset_params *tbtt_param);
+
+QDF_STATUS wmi_extract_tbttoffset_num_vdevs(void *wmi_hdl, void *evt_buf,
+					    uint32_t *num_vdevs);
+
+QDF_STATUS wmi_extract_ext_tbttoffset_num_vdevs(void *wmi_hdl, void *evt_buf,
+						uint32_t *num_vdevs);
 
 QDF_STATUS wmi_extract_mgmt_rx_params(void *wmi_hdl, void *evt_buf,
 		struct mgmt_rx_event_params *hdr, uint8_t **bufp);
@@ -1284,8 +1301,8 @@ QDF_STATUS wmi_extract_pdev_csa_switch_count_status(void *wmi_hdl,
 		void *evt_buf,
 		struct pdev_csa_switch_count_status *param);
 
-QDF_STATUS wmi_extract_swba_vdev_map(void *wmi_hdl, void *evt_buf,
-		uint32_t *vdev_map);
+QDF_STATUS wmi_extract_swba_num_vdevs(void *wmi_hdl, void *evt_buf,
+		uint32_t *num_vdevs);
 
 QDF_STATUS wmi_extract_swba_tim_info(void *wmi_hdl, void *evt_buf,
 		 uint32_t idx, wmi_host_tim_info *tim_info);
@@ -1490,4 +1507,6 @@ void wmi_print_mgmt_event_log(wmi_unified_t wmi, uint32_t count,
 
 #endif /* WMI_INTERFACE_EVENT_LOGGING */
 
+QDF_STATUS wmi_unified_send_dbs_scan_sel_params_cmd(void *wmi_hdl,
+				struct wmi_dbs_scan_sel_params *wmi_param);
 #endif /* _WMI_UNIFIED_API_H_ */

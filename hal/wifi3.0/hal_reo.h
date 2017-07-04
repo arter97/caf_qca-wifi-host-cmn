@@ -136,7 +136,8 @@ enum reo_thres_index_reg {
 enum reo_cmd_exec_status {
 	HAL_REO_CMD_SUCCESS = 0,
 	HAL_REO_CMD_BLOCKED = 1,
-	HAL_REO_CMD_FAILED = 2
+	HAL_REO_CMD_FAILED = 2,
+	HAL_REO_CMD_RESOURCE_BLOCKED = 3
 };
 
 /**
@@ -185,7 +186,7 @@ struct hal_reo_cmd_get_queue_stats_params {
  * @index: Blocking resource to be used
  */
 struct hal_reo_cmd_flush_queue_params {
-	bool use_after_flush;
+	bool block_use_after_flush;
 	uint8_t index;
 };
 
@@ -203,7 +204,7 @@ struct hal_reo_cmd_flush_cache_params {
 	bool rel_block_index;
 	uint8_t cache_block_res_index;
 	bool flush_no_inval;
-	bool use_after_flush;
+	bool block_use_after_flush;
 	bool flush_all;
 };
 
@@ -321,7 +322,7 @@ struct hal_reo_cmd_update_queue_params {
 		pn_hand_enab:1,
 		ignore_ampdu:1;
 	uint32_t ba_window_size:8,
-		pn_size:2,
+		pn_size:8,
 		svld:1,
 		ssn:12,
 		seq_2k_err_detect:1,

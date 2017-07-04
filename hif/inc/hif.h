@@ -122,7 +122,7 @@ enum hif_ic_irq {
 	host2rxdma_monitor_ring3,
 	host2rxdma_monitor_ring2,
 	host2rxdma_monitor_ring1,
-	reo2ost_exception,
+	reo2host_exception,
 	wbm2host_rx_release,
 	reo2host_status,
 	reo2host_destination_ring4,
@@ -263,11 +263,12 @@ struct qca_napi_cpu {
 struct qca_napi_data {
 	qdf_spinlock_t           lock;
 	uint32_t             state;
+
 	/* bitmap of created/registered NAPI instances, indexed by pipe_id,
 	 * not used by clients (clients use an id returned by create)
 	 */
 	uint32_t             ce_map;
-	struct qca_napi_info napis[CE_COUNT_MAX];
+	struct qca_napi_info *napis[CE_COUNT_MAX];
 	struct qca_napi_cpu  napi_cpu[NR_CPUS];
 	int                  lilcl_head, bigcl_head;
 	enum qca_napi_tput_state napi_mode;
@@ -852,12 +853,6 @@ int hif_bus_reset_resume(struct hif_opaque_softc *hif_ctx);
 void hif_set_attribute(struct hif_opaque_softc *osc, uint8_t hif_attrib);
 
 void *hif_get_lro_info(int ctx_id, struct hif_opaque_softc *hif_hdl);
-#ifdef WLAN_SUSPEND_RESUME_TEST
-typedef void (*hif_fake_resume_callback)(uint32_t val);
-void hif_fake_apps_suspend(struct hif_opaque_softc *hif_ctx,
-			   hif_fake_resume_callback callback);
-void hif_fake_apps_resume(struct hif_opaque_softc *hif_ctx);
-#endif
 
 uint32_t hif_register_ext_group_int_handler(struct hif_opaque_softc *hif_ctx,
 		uint32_t numirq, uint32_t irq[], ext_intr_handler handler,

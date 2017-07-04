@@ -19,6 +19,10 @@
 #ifndef _DP_INTERNAL_H_
 #define _DP_INTERNAL_H_
 
+#include "dp_types.h"
+
+#define RX_BUFFER_SIZE_PKTLOG_LITE 1024
+
 #if DP_PRINT_ENABLE
 #include <stdarg.h>       /* va_list */
 #include <qdf_types.h> /* qdf_vprint */
@@ -220,6 +224,7 @@ while (0)
 #endif
 
 
+
 extern int dp_peer_find_attach(struct dp_soc *soc);
 extern void dp_peer_find_detach(struct dp_soc *soc);
 extern void dp_peer_find_hash_add(struct dp_soc *soc, struct dp_peer *peer);
@@ -284,4 +289,63 @@ QDF_STATUS dp_h2t_ext_stats_msg_send(struct dp_pdev *pdev,
 		uint32_t config_param_1, uint32_t config_param_2,
 		uint32_t config_param_3);
 void dp_htt_stats_print_tag(uint8_t tag_type, uint32_t *tag_buf);
+int dp_peer_rxtid_stats(struct dp_peer *peer);
+void dp_set_pn_check_wifi3(struct cdp_vdev *vdev_handle,
+	struct cdp_peer *peer_handle, enum cdp_sec_type sec_type,
+	 uint32_t *rx_pn);
+
+#if defined(CONFIG_WIN) && WDI_EVENT_ENABLE
+int dp_wdi_event_unsub(struct cdp_pdev *txrx_pdev_handle,
+	void *event_cb_sub_handle,
+	uint32_t event);
+
+int dp_wdi_event_sub(struct cdp_pdev *txrx_pdev_handle,
+	void *event_cb_sub_handle,
+	uint32_t event);
+
+void dp_wdi_event_handler(enum WDI_EVENT event, void *soc,
+		void *data, u_int16_t peer_id,
+		int status, u_int8_t pdev_id);
+
+int dp_wdi_event_attach(struct dp_pdev *txrx_pdev);
+int dp_wdi_event_detach(struct dp_pdev *txrx_pdev);
+int dp_set_pktlog_wifi3(struct dp_pdev *pdev, uint32_t event,
+	bool enable);
+#else
+static inline int dp_wdi_event_unsub(struct cdp_pdev *txrx_pdev_handle,
+	void *event_cb_sub_handle,
+	uint32_t event)
+{
+	return -EPERM;
+}
+
+static inline int dp_wdi_event_sub(struct cdp_pdev *txrx_pdev_handle,
+	void *event_cb_sub_handle,
+	uint32_t event)
+{
+	return -EPERM;
+}
+
+static inline void dp_wdi_event_handler(enum WDI_EVENT event, void *soc,
+		void *data, u_int16_t peer_id,
+		int status, u_int8_t pdev_id)
+{
+}
+
+static inline int dp_wdi_event_attach(struct dp_pdev *txrx_pdev)
+{
+	return -EPERM;
+}
+
+static inline int dp_wdi_event_detach(struct dp_pdev *txrx_pdev)
+{
+	return -EPERM;
+}
+
+static inline int dp_set_pktlog_wifi3(struct dp_pdev *pdev, uint32_t event,
+	bool enable)
+{
+	return -EPERM;
+}
+#endif /* CONFIG_WIN */
 #endif /* #ifndef _DP_INTERNAL_H_ */

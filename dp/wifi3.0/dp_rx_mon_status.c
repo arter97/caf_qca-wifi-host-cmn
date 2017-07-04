@@ -25,7 +25,8 @@
 #include "hal_api_mon.h"
 #include "ieee80211.h"
 #include "dp_rx_mon.h"
-
+#include "dp_internal.h"
+#include "qdf_mem.h"   /* qdf_mem_malloc,free */
 
 /**
 * dp_rx_mon_status_process_tlv() - Process status TLV in status
@@ -36,13 +37,15 @@
 * Return: none
 */
 static inline void
-dp_rx_mon_status_process_tlv(struct dp_soc *soc, uint32_t mac_id) {
+dp_rx_mon_status_process_tlv(struct dp_soc *soc, uint32_t mac_id,
+	uint32_t quota)
+{
 	struct dp_pdev *pdev = soc->pdev_list[mac_id];
 	struct hal_rx_ppdu_info *ppdu_info;
 	qdf_nbuf_t status_nbuf;
 	uint8_t *rx_tlv;
 	uint8_t *rx_tlv_start;
-	uint32_t tlv_status;
+	uint32_t tlv_status = HAL_TLV_STATUS_DUMMY;
 
 #ifdef DP_INTR_POLL_BASED
 	if (!pdev)
@@ -60,25 +63,30 @@ dp_rx_mon_status_process_tlv(struct dp_soc *soc, uint32_t mac_id) {
 		rx_tlv = qdf_nbuf_data(status_nbuf);
 		rx_tlv_start = rx_tlv;
 
-		do {
-			tlv_status = hal_rx_status_get_tlv_info(rx_tlv,
-				ppdu_info);
-			rx_tlv = hal_rx_status_get_next_tlv(rx_tlv);
+#if defined(CONFIG_WIN) && WDI_EVENT_ENABLE
+#ifndef REMOVE_PKT_LOG
+		dp_wdi_event_handler(WDI_EVENT_RX_DESC, soc,
+			status_nbuf, HTT_INVALID_PEER, WDI_NO_VAL, 0);
+#endif
+#endif
+		if (pdev->monitor_vdev != NULL) {
 
-			if ((rx_tlv - rx_tlv_start) >= RX_BUFFER_SIZE)
-				break;
+			do {
+				tlv_status = hal_rx_status_get_tlv_info(rx_tlv,
+						ppdu_info);
+				rx_tlv = hal_rx_status_get_next_tlv(rx_tlv);
 
-		} while (tlv_status == HAL_TLV_STATUS_PPDU_NOT_DONE);
+				if ((rx_tlv - rx_tlv_start) >= RX_BUFFER_SIZE)
+					break;
 
+			} while (tlv_status == HAL_TLV_STATUS_PPDU_NOT_DONE);
+		}
 		qdf_nbuf_free(status_nbuf);
 
 		if (tlv_status == HAL_TLV_STATUS_PPDU_DONE) {
-
 			pdev->mon_ppdu_status = DP_PPDU_STATUS_DONE;
-			/* Temperary */
-			pdev->mon_ppdu_status =
-				DP_PPDU_STATUS_START;
-			break;
+			dp_rx_mon_dest_process(soc, mac_id, quota);
+			pdev->mon_ppdu_status = DP_PPDU_STATUS_START;
 		}
 	}
 	return;
@@ -207,6 +215,7 @@ dp_rx_mon_status_srng_process(struct dp_soc *soc, uint32_t mac_id,
 		paddr = qdf_nbuf_get_frag_paddr(status_nbuf, 0);
 
 		rx_desc->nbuf = status_nbuf;
+		rx_desc->in_use = 1;
 
 		hal_rxdma_buff_addr_info_set(rxdma_mon_status_ring_entry,
 			paddr, rx_desc->cookie, HAL_RX_BUF_RBM_SW3_BM);
@@ -237,8 +246,8 @@ dp_rx_mon_status_process(struct dp_soc *soc, uint32_t mac_id, uint32_t quota) {
 	uint32_t work_done;
 
 	work_done = dp_rx_mon_status_srng_process(soc, mac_id, quota);
-
-	dp_rx_mon_status_process_tlv(soc, mac_id);
+	quota -= work_done;
+	dp_rx_mon_status_process_tlv(soc, mac_id, quota);
 
 	return work_done;
 }
@@ -255,14 +264,9 @@ dp_rx_mon_status_process(struct dp_soc *soc, uint32_t mac_id, uint32_t quota) {
  */
 uint32_t
 dp_mon_process(struct dp_soc *soc, uint32_t mac_id, uint32_t quota) {
-	uint32_t work_done;
-
-	work_done = dp_rx_mon_status_process(soc, mac_id, quota);
-
-	dp_rx_mon_dest_process(soc, mac_id, quota);
-
-	return work_done;
+	return dp_rx_mon_status_process(soc, mac_id, quota);
 }
+
 /**
  * dp_rx_pdev_mon_detach() - detach dp rx for status ring
  * @pdev: core txrx pdev context
@@ -394,10 +398,11 @@ QDF_STATUS dp_rx_mon_status_buffers_replenish(struct dp_soc *dp_soc,
 		next = (*desc_list)->next;
 
 		(*desc_list)->rx_desc.nbuf = rx_netbuf;
+		(*desc_list)->rx_desc.in_use = 1;
 		hal_rxdma_buff_addr_info_set(rxdma_ring_entry, paddr,
 			(*desc_list)->rx_desc.cookie, owner);
 
-		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_INFO,
+		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_DEBUG,
 			"[%s][%d] rx_desc=%p, cookie=%d, nbuf=%p, \
 			status_buf=%p paddr=%p\n",
 			__func__, __LINE__, &(*desc_list)->rx_desc,
@@ -474,6 +479,8 @@ dp_rx_pdev_mon_status_attach(struct dp_pdev *pdev) {
 	qdf_nbuf_queue_init(&pdev->rx_status_q);
 
 	pdev->mon_ppdu_status = DP_PPDU_STATUS_START;
+	qdf_mem_zero(&(pdev->ppdu_info.rx_status),
+		sizeof(pdev->ppdu_info.rx_status));
 
 	return QDF_STATUS_SUCCESS;
 }

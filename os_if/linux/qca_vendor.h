@@ -652,9 +652,7 @@ enum qca_wlan_vendor_attr_get_station_info {
  */
 
 enum qca_nl80211_vendor_subcmds_index {
-#if defined(FEATURE_WLAN_CH_AVOID) || defined(FEATURE_WLAN_FORCE_SAP_SCC)
 	QCA_NL80211_VENDOR_SUBCMD_AVOID_FREQUENCY_INDEX = 0,
-#endif /* FEATURE_WLAN_CH_AVOID || FEATURE_WLAN_FORCE_SAP_SCC */
 
 #ifdef WLAN_FEATURE_NAN
 	QCA_NL80211_VENDOR_SUBCMD_NAN_INDEX,
@@ -728,6 +726,7 @@ enum qca_nl80211_vendor_subcmds_index {
 	QCA_NL80211_VENDOR_SUBCMD_P2P_LO_EVENT_INDEX,
 	QCA_NL80211_VENDOR_SUBCMD_SAP_CONDITIONAL_CHAN_SWITCH_INDEX,
 	QCA_NL80211_VENDOR_SUBCMD_UPDATE_EXTERNAL_ACS_CONFIG,
+	QCA_NL80211_VENDOR_SUBCMD_PWR_SAVE_FAIL_DETECTED_INDEX,
 };
 
 /**
@@ -773,6 +772,40 @@ enum qca_wlan_vendor_attr_tdls_disable {
 	QCA_WLAN_VENDOR_ATTR_TDLS_DISABLE_MAX =
 		QCA_WLAN_VENDOR_ATTR_TDLS_DISABLE_AFTER_LAST - 1,
 };
+
+/**
+ * qca_chip_power_save_failure_reason: Power save failure reason
+ * @QCA_CHIP_POWER_SAVE_FAILURE_REASON_PROTOCOL: Indicates power save failure
+ * due to protocol/module.
+ * @QCA_CHIP_POWER_SAVE_FAILURE_REASON_HARDWARE: power save failure
+ * due to hardware
+ */
+enum qca_chip_power_save_failure_reason {
+	QCA_CHIP_POWER_SAVE_FAILURE_REASON_PROTOCOL = 0,
+	QCA_CHIP_POWER_SAVE_FAILURE_REASON_HARDWARE = 1,
+};
+
+/**
+ * qca_attr_chip_power_save_failure: attributes to vendor subcmd
+ * @QCA_NL80211_VENDOR_SUBCMD_CHIP_PWRSAVE_FAILURE. This carry the requisite
+ * information leading to the power save failure.
+ * @QCA_ATTR_CHIP_POWER_SAVE_FAILURE_INVALID : invalid
+ * @QCA_ATTR_CHIP_POWER_SAVE_FAILURE_REASON : power save failure reason
+ * represented by enum qca_chip_power_save_failure_reason
+ * @QCA_ATTR_CHIP_POWER_SAVE_FAILURE_LAST : Last
+ * @QCA_ATTR_CHIP_POWER_SAVE_FAILURE_MAX : Max value
+ */
+enum qca_attr_chip_power_save_failure {
+	QCA_ATTR_CHIP_POWER_SAVE_FAILURE_INVALID = 0,
+
+	QCA_ATTR_CHIP_POWER_SAVE_FAILURE_REASON = 1,
+
+	/* keep last */
+	QCA_ATTR_CHIP_POWER_SAVE_FAILURE_LAST,
+	QCA_ATTR_CHIP_POWER_SAVE_FAILURE_MAX =
+		QCA_ATTR_CHIP_POWER_SAVE_FAILURE_LAST - 1,
+};
+
 
 /**
  * enum qca_wlan_vendor_attr_tdls_get_status - tdls get status attribute
@@ -2405,38 +2438,6 @@ enum qca_wlan_vendor_channel_prop_flags_ext {
 	QCA_WLAN_VENDOR_CHANNEL_PROP_FLAG_EXT_CAC_VALID       = 1 << 9,
 };
 
-enum qca_chip_power_save_failure_reason {
-	/*
-	 * Indicates if the reason for the failure is due to a protocol
-	 * layer/module.
-	 */
-	QCA_CHIP_POWER_SAVE_FAILURE_REASON_PROTOCOL = 0,
-	/*
-	 * Indicates if the reason for the failure is due to a hardware issue.
-	 */
-	QCA_CHIP_POWER_SAVE_FAILURE_REASON_HARDWARE = 1,
-};
-
-/**
- * qca_attr_chip_power_save_failure: Attributes to vendor subcmd
- * QCA_NL80211_VENDOR_SUBCMD_CHIP_PWRSAVE_FAILURE. This carries the requisite
- * information leading to the power save failure.
- */
-enum qca_attr_chip_power_save_failure {
-	QCA_ATTR_CHIP_POWER_SAVE_FAILURE_INVALID = 0,
-	/*
-	 * Reason to cause the power save failure.
-	 * These reasons are represented by
-	 * enum qca_chip_power_save_failure_reason.
-	 */
-	QCA_ATTR_CHIP_POWER_SAVE_FAILURE_REASON = 1,
-
-	/* keep last */
-	QCA_ATTR_CHIP_POWER_SAVE_FAILURE_LAST,
-	QCA_ATTR_CHIP_POWER_SAVE_FAILURE_MAX =
-		QCA_ATTR_CHIP_POWER_SAVE_FAILURE_LAST - 1,
-};
-
 /**
  * qca_wlan_vendor_attr_nud_stats_set: Attributes to vendor subcmd
  * QCA_NL80211_VENDOR_SUBCMD_NUD_STATS_SET. This carries the requisite
@@ -2968,6 +2969,35 @@ enum qca_wlan_vendor_attr_config {
 	QCA_WLAN_VENDOR_ATTR_CONFIG_ANT_DIV_DATA_SNR_WEIGHT = 46,
 	/* 32-bit unsigned value to set ack snr weight */
 	QCA_WLAN_VENDOR_ATTR_CONFIG_ANT_DIV_ACK_SNR_WEIGHT = 47,
+	/*
+	 * 8 bit unsigned value that is set on an AP/GO virtual interface to
+	 * disable operations that would cause the AP/GO to leave its operating
+	 * channel.
+	 *
+	 * This will restrict the scans to the AP/GO operating channel and the
+	 * channels of the other band, if DBS is supported.A STA/CLI interface
+	 * brought up after this setting is enabled, will be restricted to
+	 * connecting to devices only on the AP/GO interface's operating channel
+	 * or on the other band in DBS case. P2P supported channel list is
+	 * modified, to only include AP interface's operating-channel and the
+	 * channels of the other band if DBS is supported.
+	 *
+	 * These restrictions are only applicable as long as the AP/GO interface
+	 * is alive. If the AP/GO interface is brought down then this
+	 * setting/restriction is forgotten.
+	 *
+	 * If this variable is set on an AP/GO interface while a multi-channel
+	 * concurrent session is active, it has no effect on the operation of
+	 * the current interfaces, other than restricting the scan to the AP/GO
+	 * operating channel and the other band channels if DBS is supported.
+	 * However, if the STA is brought down and restarted then the new STA
+	 * connection will either be formed on the AP/GO channel or on the
+	 * other band in a DBS case. This is because of the scan being
+	 * restricted on these channels as mentioned above.
+	 *
+	 * 1-Disable offchannel operations, 0-Enable offchannel operations.
+	 */
+	QCA_WLAN_VENDOR_ATTR_CONFIG_RESTRICT_OFFCHANNEL = 49,
 
 	/* keep last */
 	QCA_WLAN_VENDOR_ATTR_CONFIG_AFTER_LAST,
@@ -3234,9 +3264,9 @@ enum qca_iface_type {
  * @QCA_WLAN_VENDOR_ATTR_PCL_CONFIG_WEIGHT: pcl channel weight
  */
 enum qca_wlan_vendor_attr_pcl_config {
-	QCA_WLAN_VENDOR_ATTR_PCL_CONFIG_INVALID = 0,
-	QCA_WLAN_VENDOR_ATTR_PCL_CONFIG_CHANNEL = 1,
-	QCA_WLAN_VENDOR_ATTR_PCL_CONFIG_WEIGHT = 2,
+	QCA_WLAN_VENDOR_ATTR_PCL_INVALID = 0,
+	QCA_WLAN_VENDOR_ATTR_PCL_CHANNEL = 1,
+	QCA_WLAN_VENDOR_ATTR_PCL_WEIGHT = 2,
 };
 
 enum qca_set_band {
@@ -4666,8 +4696,8 @@ enum qca_wlan_vendor_attr_external_acs_channels {
 	QCA_WLAN_VENDOR_ATTR_EXTERNAL_ACS_CHANNEL_INVALID = 0,
 
 	QCA_WLAN_VENDOR_ATTR_EXTERNAL_ACS_CHANNEL_REASON = 1,
-	QCA_WLAN_VENDOR_ATTR_EXTERNAL_ACS_CHANNEL_COUNT = 2,
-	QCA_WLAN_VENDOR_ATTR_EXTERNAL_ACS_CHANNEL_LIST = 3,
+	QCA_WLAN_VENDOR_ATTR_EXTERNAL_ACS_CHANNEL_LIST = 2,
+	QCA_WLAN_VENDOR_ATTR_EXTERNAL_ACS_CHANNEL_BAND = 3,
 	QCA_WLAN_VENDOR_ATTR_EXTERNAL_ACS_CHANNEL_PRIMARY = 4,
 	QCA_WLAN_VENDOR_ATTR_EXTERNAL_ACS_CHANNEL_SECONDARY = 5,
 	QCA_WLAN_VENDOR_ATTR_EXTERNAL_ACS_CHANNEL_CENTER_SEG0 = 6,

@@ -45,6 +45,8 @@
 #define QDF_NBUF_PKT_TRAC_TYPE_DHCP		0x04
 #define QDF_NBUF_PKT_TRAC_TYPE_MGMT_ACTION	0x08
 #define QDF_NBUF_PKT_TRAC_TYPE_ARP		0x10
+#define QDF_NBUF_PKT_TRAC_TYPE_ICMP		0x20
+
 #define QDF_NBUF_PKT_TRAC_MAX_STRING		12
 #define QDF_NBUF_PKT_TRAC_PROTO_STRING		4
 #define QDF_NBUF_PKT_ERROR			1
@@ -100,6 +102,7 @@
 #define QDF_NBUF_TX_PKT_CE                   8
 #define QDF_NBUF_TX_PKT_FREE                 9
 #define QDF_NBUF_TX_PKT_STATE_MAX            10
+#define QDF_NBUF_TX_PKT_LI_DP                11
 
 /* Enable flag to print TSO specific prints in datapath */
 #ifdef TSO_DEBUG_LOG_ENABLE
@@ -114,6 +117,10 @@
  * struct mon_rx_status - This will have monitor mode rx_status extracted from
  * htt_rx_desc used later to update radiotap information.
  * @tsft: Time Synchronization Function timer
+ * @he_sig_A1: HE (11ax) sig A1 field
+ * @he_sig_A2: HE (11ax) sig A1 field
+ * @he_sig_b_user: HE (11ax) sig B user field
+ * @he_sig_b_user_known: HE (11ax) sig B user known field
  * @chan_freq: Capture channel frequency
  * @chan_num: Capture channel number
  * @chan_flags: Bitmap of Channel flags, IEEE80211_CHAN_TURBO,
@@ -121,6 +128,11 @@
  * @ht_flags: HT flags, only present for HT frames.
  * @vht_flags: VHT flags, only present for VHT frames.
  * @vht_flag_values1-5: Contains corresponding data for flags field
+ * @he_flags: HE (11ax) flags, only present in HE frames
+ * @he_sig_A1_known: HE (11ax) sig A1 known field
+ * @he_sig_A2_known: HE (11ax) sig A2 known field
+ * @he_sig_b_common: HE (11ax) sig B common field
+ * @he_sig_b_common_known: HE (11ax) sig B common known field
  * @rate: Rate in terms 500Kbps
  * @rtap_flags: Bit map of available fields in the radiotap
  * @ant_signal_db: Rx packet RSSI
@@ -131,15 +143,25 @@
  * @sgi: Rx frame short guard interval
  * @ldpc: ldpc enabled
  * @beamformed: Is frame beamformed.
+ * @he_sig_b_common_RU[4]: HE (11ax) common RU assignment index
  */
 struct mon_rx_status {
 	uint64_t tsft;
+	uint32_t he_sig_A1;
+	uint32_t he_sig_A2;
+	uint32_t he_sig_b_user;
+	uint32_t he_sig_b_user_known;
 	uint16_t chan_freq;
 	uint16_t chan_num;
 	uint16_t chan_flags;
 	uint16_t ht_flags;
 	uint16_t vht_flags;
 	uint16_t vht_flag_values6;
+	uint16_t he_flags;
+	uint16_t he_sig_A1_known;
+	uint16_t he_sig_A2_known;
+	uint16_t he_sig_b_common;
+	uint16_t he_sig_b_common_known;
 	uint8_t  rate;
 	uint8_t  rtap_flags;
 	uint8_t  ant_signal_db;
@@ -155,7 +177,20 @@ struct mon_rx_status {
 	uint8_t  sgi;
 	uint8_t  ldpc;
 	uint8_t  beamformed;
+	uint8_t  he_sig_b_common_RU[4];
 };
+
+/* Masks for HE SIG known fields in mon_rx_status structure */
+#define QDF_MON_STATUS_HE_SIG_A1_SU_KNOWN_ALL		0x000007ff
+#define QDF_MON_STATUS_HE_SIG_A1_MU_KNOWN_ALL		0x000003ff
+#define QDF_MON_STATUS_HE_SIG_A2_SU_KNOWN_ALL		0x00000ffd
+#define QDF_MON_STATUS_HE_SIG_A2_MU_KNOWN_ALL		0x00000ffd
+#define QDF_MON_STATUS_HE_SIG_B_COMMON_KNOWN_RU0	0x00000001
+#define QDF_MON_STATUS_HE_SIG_B_USER_KNOWN_SIG_B_ALL	0x00fe0000
+#define QDF_MON_STATUS_HE_SIG_A1_HE_FORMAT_SU		0x00000000
+#define QDF_MON_STATUS_HE_SIG_A1_HE_FORMAT_EXT_SU	0x40000000
+#define QDF_MON_STATUS_HE_SIG_A1_HE_FORMAT_MU		0x80000000
+#define QDF_MON_STATUS_HE_SIG_A1_HE_FORMAT_TRIG		0xc0000000
 
 /* DHCP Related Mask */
 #define QDF_DHCP_OPTION53			(0x35)
@@ -179,9 +214,11 @@ struct mon_rx_status {
 #define ARP_REQUEST			(1)
 #define ARP_RESPONSE		(2)
 
-/* IPV4 Related Mask */
+/* IPV4 header fields offset values */
 #define IPV4_PKT_LEN_OFFSET           16
 #define IPV4_TCP_SEQ_NUM_OFFSET       38
+#define IPV4_SRC_ADDR_OFFSET          26
+#define IPV4_DST_ADDR_OFFSET          30
 #define IPV4_SRC_PORT_OFFSET          34
 #define IPV4_DST_PORT_OFFSET          36
 
@@ -191,9 +228,14 @@ struct mon_rx_status {
 #define ICMP_REQUEST                  0x08
 #define ICMP_RESPONSE                 0x00
 
-/* IPV6 Related Mask */
+#define IPV6_ADDR_STR "%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:"\
+			"%02x%02x:%02x%02x"
+
+/* IPV6 header fields offset values */
 #define IPV6_PKT_LEN_OFFSET           18
 #define IPV6_TCP_SEQ_NUM_OFFSET       58
+#define IPV6_SRC_ADDR_OFFSET          22
+#define IPV6_DST_ADDR_OFFSET          38
 #define IPV6_SRC_PORT_OFFSET          54
 #define IPV6_DST_PORT_OFFSET          56
 
@@ -215,6 +257,7 @@ struct mon_rx_status {
  * @QDF_PROTO_TYPE_EAPOL - EAPOL
  * @QDF_PROTO_TYPE_ARP - ARP
  * @QDF_PROTO_TYPE_MGMT - MGMT
+ * @QDF_PROTO_TYPE_ICMP - ICMP
  * QDF_PROTO_TYPE_EVENT - EVENT
  */
 enum qdf_proto_type {
@@ -222,6 +265,7 @@ enum qdf_proto_type {
 	QDF_PROTO_TYPE_EAPOL,
 	QDF_PROTO_TYPE_ARP,
 	QDF_PROTO_TYPE_MGMT,
+	QDF_PROTO_TYPE_ICMP,
 	QDF_PROTO_TYPE_EVENT,
 	QDF_PROTO_TYPE_MAX
 };
@@ -513,6 +557,12 @@ static inline void
 qdf_nbuf_set_vdev_ctx(qdf_nbuf_t buf, void *vdev_ctx)
 {
 	__qdf_nbuf_set_vdev_ctx(buf, vdev_ctx);
+}
+
+static inline void
+qdf_nbuf_set_ftype(qdf_nbuf_t buf, uint8_t type)
+{
+	__qdf_nbuf_set_ftype(buf, type);
 }
 
 static inline void

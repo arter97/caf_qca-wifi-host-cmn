@@ -89,6 +89,15 @@
 		WME_AC_VO)
 
 #define CDP_MAX_RX_RINGS 4
+
+/*
+ * DP configuration parameters
+ */
+enum cdp_cfg_param_type {
+	CDP_CFG_MAX_PEER_ID,
+	CDP_CFG_NUM_PARAMS
+};
+
 /*
  * htt_dbg_stats_type -
  * bit positions for each stats type within a stats type bitmask
@@ -199,6 +208,27 @@ enum ol_txrx_peer_state {
 	OL_TXRX_PEER_STATE_DISC,    /* initial state */
 	OL_TXRX_PEER_STATE_CONN,    /* authentication in progress */
 	OL_TXRX_PEER_STATE_AUTH,    /* authentication successful */
+};
+
+
+/**
+ * struct cdp_sec_type - security type information
+ */
+enum cdp_sec_type {
+    cdp_sec_type_none,
+    cdp_sec_type_wep128,
+    cdp_sec_type_wep104,
+    cdp_sec_type_wep40,
+    cdp_sec_type_tkip,
+    cdp_sec_type_tkip_nomic,
+    cdp_sec_type_aes_ccmp,
+    cdp_sec_type_wapi,
+    cdp_sec_type_aes_ccmp_256,
+    cdp_sec_type_aes_gcmp,
+    cdp_sec_type_aes_gcmp_256,
+
+    /* keep this last! */
+    cdp_num_sec_types
 };
 
 typedef struct cdp_soc_t *ol_txrx_soc_handle;

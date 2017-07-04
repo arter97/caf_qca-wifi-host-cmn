@@ -38,6 +38,28 @@
 #define WLAN_PEER_HASH(addr)   \
 (((const uint8_t *)(addr))[WLAN_MACADDR_LEN - 1] % WLAN_PEER_HASHSIZE)
 
+#define obj_mgr_log(level, args...) \
+		QDF_TRACE(QDF_MODULE_ID_OBJ_MGR, level, ## args)
+
+#define obj_mgr_logfl(level, format, args...) \
+		obj_mgr_log(level, FL(format), ## args)
+
+#define obj_mgr_alert(format, args...) \
+		obj_mgr_logfl(QDF_TRACE_LEVEL_FATAL, format, ## args)
+
+#define obj_mgr_err(format, args...) \
+		obj_mgr_logfl(QDF_TRACE_LEVEL_ERROR, format, ## args)
+
+#define obj_mgr_warn(format, args...) \
+		obj_mgr_logfl(QDF_TRACE_LEVEL_WARN, format, ## args)
+
+#define obj_mgr_info(format, args...) \
+		obj_mgr_logfl(QDF_TRACE_LEVEL_INFO, format, ## args)
+
+#define obj_mgr_debug(format, args...) \
+		obj_mgr_logfl(QDF_TRACE_LEVEL_DEBUG, format, ## args)
+
+
 /**
  * enum WLAN_OBJ_STATE - State of Object
  * @WLAN_OBJ_STATE_CREATED:             All component objects are created
@@ -226,7 +248,7 @@ typedef enum {
  */
 static inline char *string_from_dbgid(wlan_objmgr_ref_dbgid id)
 {
-    static const char *strings[] = { "WLAN_OBJMGR_ID",
+	static const char *strings[] = { "WLAN_OBJMGR_ID",
 					"WLAN_MLME_SB_ID",
 					"WLAN_MLME_NB_ID",
 					"WLAN_MGMT_SB_ID",
@@ -249,11 +271,13 @@ static inline char *string_from_dbgid(wlan_objmgr_ref_dbgid id)
 					"WLAN_NAN_ID",
 					"WLAN_REGULATORY_SB_ID",
 					"WLAN_REGULATORY_NB_ID",
+					"WLAN_OFFCHAN_TXRX_ID",
+					"WLAN_POLICY_MGR_ID",
 					"WLAN_SON_ID",
 					"WLAN_SPECTRAL_ID",
 					"WLAN_REF_ID_MAX" };
 
-    return (char *)strings[id];
+	return (char *)strings[id];
 }
 
 #ifdef WLAN_OBJMGR_DEBUG

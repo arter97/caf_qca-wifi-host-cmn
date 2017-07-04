@@ -701,8 +701,6 @@ static struct dp_tx_desc_s *dp_tx_prepare_desc(struct dp_vdev *vdev,
 
 	return tx_desc;
 failure:
-	if (qdf_unlikely(tx_desc->flags & DP_TX_DESC_FLAG_ME))
-		dp_tx_me_free_buf(pdev, tx_desc->me_buffer);
 	dp_tx_desc_release(tx_desc, desc_pool_id);
 	return NULL;
 }
@@ -816,9 +814,9 @@ static QDF_STATUS dp_tx_hw_enqueue(struct dp_soc *soc, struct dp_vdev *vdev,
 			vdev->dscp_tid_map_id);
 
 	QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_INFO,
-			"%s length:%d , type = %d, dma_addr %llx, offset %d\n",
+			"%s length:%d , type = %d, dma_addr %llx, offset %d desc id %u\n",
 			__func__, length, type, (uint64_t)dma_addr,
-			tx_desc->pkt_offset);
+			tx_desc->pkt_offset, tx_desc->id);
 
 	if (tx_desc->flags & DP_TX_DESC_FLAG_TO_FW)
 		hal_tx_desc_set_to_fw(hal_tx_desc_cached, 1);
@@ -1107,21 +1105,23 @@ qdf_nbuf_t dp_tx_send_msdu_multiple(struct dp_vdev *vdev, qdf_nbuf_t nbuf,
 		tx_desc = dp_tx_prepare_desc(vdev, nbuf, msdu_info,
 				tx_q->desc_pool_id);
 
-		if (msdu_info->frm_type == dp_tx_frm_me) {
-			tx_desc->me_buffer =
-				msdu_info->u.sg_info.curr_seg->frags[0].vaddr;
-			tx_desc->flags |= DP_TX_DESC_FLAG_ME;
-		}
-
 		if (!tx_desc) {
 			QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_ERROR,
 				  "%s Tx_desc prepare Fail vdev %p queue %d\n",
 				  __func__, vdev, tx_q->desc_pool_id);
 
-			if (tx_desc->flags & DP_TX_DESC_FLAG_ME)
-				dp_tx_me_free_buf(pdev, tx_desc->me_buffer);
-			dp_tx_desc_release(tx_desc, tx_q->desc_pool_id);
+			if (msdu_info->frm_type == dp_tx_frm_me) {
+				dp_tx_me_free_buf(pdev,
+					(void *)(msdu_info->u.sg_info
+						.curr_seg->frags[0].vaddr));
+			}
 			goto done;
+		}
+
+		if (msdu_info->frm_type == dp_tx_frm_me) {
+			tx_desc->me_buffer =
+				msdu_info->u.sg_info.curr_seg->frags[0].vaddr;
+			tx_desc->flags |= DP_TX_DESC_FLAG_ME;
 		}
 
 		/*
@@ -1397,11 +1397,53 @@ qdf_nbuf_t dp_tx_send(void *vap_dev, qdf_nbuf_t nbuf)
 	struct dp_tx_msdu_info_s msdu_info;
 	struct dp_tx_seg_info_s seg_info;
 	struct dp_vdev *vdev = (struct dp_vdev *) vap_dev;
+	struct dp_soc *soc = vdev->pdev->soc;
 	uint16_t peer_id = HTT_INVALID_PEER;
+	uint8_t count;
+	uint8_t found = 0;
+	uint8_t oldest_mec_entry_idx = 0;
+	uint64_t oldest_mec_ts = 0;
+	struct mect_entry *mect_entry;
 
 	qdf_mem_set(&msdu_info, sizeof(msdu_info), 0x0);
 	qdf_mem_set(&seg_info, sizeof(seg_info), 0x0);
 
+	if (qdf_nbuf_get_ftype(nbuf) == CB_FTYPE_INTRABSS_FWD)
+		goto out;
+
+	eh = (struct ether_header *)qdf_nbuf_data(nbuf);
+	if (DP_FRAME_IS_MULTICAST((eh)->ether_dhost)) {
+		for (count = 0; count < soc->mect_cnt; count++) {
+			mect_entry = &soc->mect_table[count];
+			if (!memcmp(mect_entry->mac_addr, eh->ether_shost,
+					DP_MAC_ADDR_LEN)) {
+				found = 1;
+				break;
+			}
+
+			if (!oldest_mec_ts) {
+				oldest_mec_entry_idx = count;
+				oldest_mec_ts = mect_entry->ts;
+			} else if (mect_entry->ts < oldest_mec_ts) {
+				oldest_mec_entry_idx = count;
+				oldest_mec_ts = mect_entry->ts;
+			}
+		}
+
+		if (!found) {
+			if (count >= DP_MAX_MECT_ENTRIES)
+				count = oldest_mec_entry_idx;
+			else
+				soc->mect_cnt++;
+
+			mect_entry = &soc->mect_table[count];
+			mect_entry->ts = jiffies_64;
+			memcpy(mect_entry->mac_addr, eh->ether_shost,
+				DP_MAC_ADDR_LEN);
+		}
+	}
+
+out:
 	QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_DEBUG,
 			"%s , skb %0x:%0x:%0x:%0x:%0x:%0x\n",
 			__func__, nbuf->data[0], nbuf->data[1], nbuf->data[2],
@@ -1760,6 +1802,7 @@ static inline void dp_tx_comp_process_tx_status(struct dp_tx_desc_s *tx_desc,
 	struct dp_soc *soc = NULL;
 	struct dp_vdev *vdev = tx_desc->vdev;
 	struct dp_peer *peer = NULL;
+	struct dp_pdev *pdev = NULL;
 	uint8_t comp_status = 0;
 	qdf_mem_zero(&ts, sizeof(struct hal_tx_completion_status));
 	hal_tx_comp_get_status(&tx_desc->comp, &ts);
@@ -1889,15 +1932,19 @@ static inline void dp_tx_comp_process_tx_status(struct dp_tx_desc_s *tx_desc,
 	/* TODO: This call is temporary.
 	 * Stats update has to be attached to the HTT PPDU message
 	 */
-	if (soc->cdp_soc.ol_ops->update_dp_stats)
-		soc->cdp_soc.ol_ops->update_dp_stats(vdev->pdev->osif_pdev,
-				&peer->stats, ts.peer_id, UPDATE_PEER_STATS);
-
 out:
-	dp_aggregate_vdev_stats(tx_desc->vdev);
-	if (soc->cdp_soc.ol_ops->update_dp_stats)
+	pdev = vdev->pdev;
+
+	if (pdev->enhanced_stats_en && soc->cdp_soc.ol_ops->update_dp_stats) {
+		if (peer) {
+			soc->cdp_soc.ol_ops->update_dp_stats(pdev->osif_pdev,
+					&peer->stats, ts.peer_id,
+					UPDATE_PEER_STATS);
+		}
+		dp_aggregate_vdev_stats(tx_desc->vdev);
 		soc->cdp_soc.ol_ops->update_dp_stats(vdev->pdev->osif_pdev,
 				&vdev->stats, vdev->vdev_id, UPDATE_VDEV_STATS);
+	}
 fail:
 	return;
 }

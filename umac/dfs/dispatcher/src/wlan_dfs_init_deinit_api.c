@@ -37,10 +37,8 @@ struct dfs_to_mlme global_dfs_to_mlme;
 struct wlan_dfs *wlan_pdev_get_dfs_obj(struct wlan_objmgr_pdev *pdev)
 {
 	struct wlan_dfs *dfs;
-	wlan_pdev_obj_lock(pdev);
 	dfs = wlan_objmgr_pdev_get_comp_private_obj(pdev,
 			WLAN_UMAC_COMP_DFS);
-	wlan_pdev_obj_unlock(pdev);
 
 	return dfs;
 }
@@ -64,9 +62,9 @@ void register_dfs_callbacks(void)
 	tmp_dfs_to_mlme->mlme_proc_cac = mlme_dfs_proc_cac;
 	tmp_dfs_to_mlme->mlme_deliver_event_up_afrer_cac =
 		mlme_dfs_deliver_event_up_afrer_cac;
-	tmp_dfs_to_mlme->mlme_get_ic_nchans = mlme_dfs_get_ic_nchans;
-	tmp_dfs_to_mlme->mlme_get_ic_no_weather_radar_chan =
-		mlme_dfs_get_ic_no_weather_radar_chan;
+	tmp_dfs_to_mlme->mlme_get_dfs_ch_nchans = mlme_dfs_get_dfs_ch_nchans;
+	tmp_dfs_to_mlme->mlme_get_dfs_ch_no_weather_radar_chan =
+		mlme_dfs_get_dfs_ch_no_weather_radar_chan;
 	tmp_dfs_to_mlme->mlme_find_alternate_mode_channel =
 		mlme_dfs_find_alternate_mode_channel;
 	tmp_dfs_to_mlme->mlme_find_any_valid_channel =
@@ -76,8 +74,9 @@ void register_dfs_callbacks(void)
 		mlme_dfs_set_no_chans_available;
 	tmp_dfs_to_mlme->mlme_ieee2mhz = mlme_dfs_ieee2mhz;
 	tmp_dfs_to_mlme->mlme_find_dot11_channel = mlme_dfs_find_dot11_channel;
-	tmp_dfs_to_mlme->mlme_get_ic_channels = mlme_dfs_get_ic_channels;
-	tmp_dfs_to_mlme->mlme_ic_flags_ext = mlme_dfs_ic_flags_ext;
+	tmp_dfs_to_mlme->mlme_get_dfs_ch_channels =
+		mlme_dfs_get_dfs_ch_channels;
+	tmp_dfs_to_mlme->mlme_dfs_ch_flags_ext = mlme_dfs_dfs_ch_flags_ext;
 	tmp_dfs_to_mlme->mlme_channel_change_by_precac =
 		mlme_dfs_channel_change_by_precac;
 	tmp_dfs_to_mlme->mlme_nol_timeout_notification =
@@ -157,9 +156,7 @@ QDF_STATUS wlan_dfs_pdev_obj_create_notification(struct wlan_objmgr_pdev *pdev,
 	global_dfs_to_mlme.pdev_component_obj_attach(pdev,
 		WLAN_UMAC_COMP_DFS, (void *)dfs, QDF_STATUS_SUCCESS);
 	dfs->dfs_pdev_obj = pdev;
-	wlan_pdev_obj_lock(pdev);
 	psoc = wlan_pdev_get_psoc(pdev);
-	wlan_pdev_obj_unlock(pdev);
 	if (!psoc) {
 		DFS_PRINTK("%s: null psoc\n", __func__);
 		return QDF_STATUS_E_FAILURE;

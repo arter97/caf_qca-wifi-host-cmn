@@ -569,9 +569,8 @@ static struct CE_attr host_ce_config_wlan_qca8074[] = {
 	/* host->target HTT */
 	{ /* CE4 */ (CE_ATTR_FLAGS | CE_ATTR_DISABLE_INTR), 0,
 		CE_HTT_H2T_MSG_SRC_NENTRIES, 256, 0, NULL,},
-	/* ipa_uc->target HTC control */
-	{ /* CE5 */ (CE_ATTR_FLAGS | CE_ATTR_DISABLE_INTR), 0,
-		1024, 512, 0, NULL,},
+	/* target -> host PKTLOG */
+	{ /* CE5 */ CE_ATTR_FLAGS, 0, 0, 2048, 512, NULL,},
 	/* Target autonomous HIF_memcpy */
 	{ /* CE6 */ CE_ATTR_FLAGS, 0, 0, 0, 0, NULL,},
 	/* host->target WMI (mac1) */
@@ -582,8 +581,7 @@ static struct CE_attr host_ce_config_wlan_qca8074[] = {
 	{ /* CE9 */ CE_ATTR_FLAGS, 0, 32,  2048, 0, NULL,},
 	/* target->host HTT */
 	{ /* CE10 */ CE_ATTR_FLAGS, 0, 0,  2048, 512, NULL,},
-	/* target -> host PKTLOG */
-	{ /* CE11 */ CE_ATTR_FLAGS, 0, 0, 2048, 512, NULL,},
+	/* CE11 unused */
 };
 
 static struct CE_pipe_config target_ce_config_wlan_qca8074[] = {
@@ -600,21 +598,20 @@ static struct CE_pipe_config target_ce_config_wlan_qca8074[] = {
 		(CE_ATTR_FLAGS | CE_ATTR_DISABLE_INTR), 0,},
 	/* NB: 50% of src nentries, since tx has 2 frags */
 	/* ipa_uc->target */
-	{ /* CE5 */ 5, PIPEDIR_OUT, 1024,   64,
-		(CE_ATTR_FLAGS | CE_ATTR_DISABLE_INTR), 0,},
+	{ /* CE5 */ 5, PIPEDIR_INOUT_H2H, 0, 0, 0, 0,},
 	/* Reserved for target autonomous HIF_memcpy */
-	{ /* CE6 */ 6, PIPEDIR_INOUT, 32, 16384, CE_ATTR_FLAGS, 0,},
+	{ /* CE6 */ 6, PIPEDIR_INOUT, 32, 65535, 64, 0,},
 	/* CE7 used only by Host */
-	{ /* CE7 */ 7, PIPEDIR_INOUT_H2H, 0, 0,
-		(CE_ATTR_FLAGS | CE_ATTR_DISABLE_INTR), 0,},
+	{ /* CE7 */ 7, PIPEDIR_OUT, 32, 2048,
+		8192, 0,},
 	/* CE8 used only by IPA */
-	{ /* CE8 */ 8, PIPEDIR_IN, 32, 2048, CE_ATTR_FLAGS, 0,},
+	{ /* CE8 */ 8, PIPEDIR_INOUT, 32, 65535, 112, 0,},
 	/* CE9 target->host HTT */
-	{ /* CE9 */ 9, PIPEDIR_IN,  32, 2048, CE_ATTR_FLAGS, 0,},
+	{ /* CE9 */ 9, PIPEDIR_OUT,  32, 2048, 8192, 0,},
 	/* CE10 target->host HTT */
-	{ /* CE10 */ 10, PIPEDIR_IN,  32, 2048, CE_ATTR_FLAGS, 0,},
+	{ /* CE10 */ 10, PIPEDIR_INOUT_H2H,  0, 0, 0, 0,},
 	/* Target -> host PKTLOG */
-	{ /* CE11 */ 11, PIPEDIR_IN,  32, 2048, CE_ATTR_FLAGS, 0,},
+	{ /* CE11 */ 11, PIPEDIR_IN,  32, 2048, 48, 0,},
 };
 
 static struct CE_attr host_ce_config_wlan_qca8074_pci[] = {
@@ -629,9 +626,8 @@ static struct CE_attr host_ce_config_wlan_qca8074_pci[] = {
 	/* host->target HTT */
 	{ /* CE4 */ (CE_ATTR_FLAGS | CE_ATTR_DISABLE_INTR), 0,
 		CE_HTT_H2T_MSG_SRC_NENTRIES, 256, 0, NULL,},
-	/* ipa_uc->target HTC control */
-	{ /* CE5 */ (CE_ATTR_FLAGS | CE_ATTR_DISABLE_INTR), 0,
-		1024, 512, 0, NULL,},
+	/* target -> host PKTLOG */
+	{ /* CE5 */ EPPING_CE_FLAGS_POLL, 0, 0, 2048, 512, NULL,},
 	/* Target autonomous HIF_memcpy */
 	{ /* CE6 */ CE_ATTR_FLAGS, 0, 0, 0, 0, NULL,},
 	/* host->target WMI (mac1) */
@@ -642,9 +638,9 @@ static struct CE_attr host_ce_config_wlan_qca8074_pci[] = {
 	{ /* CE9 */ EPPING_CE_FLAGS_POLL, 0, 32,  2048, 0, NULL,},
 	/* target->host HTT */
 	{ /* CE10 */ CE_ATTR_FLAGS, 0, 0,  2048, 512, NULL,},
-	/* target -> host PKTLOG */
-	{ /* CE11 */ CE_ATTR_FLAGS, 0, 0, 2048, 512, NULL,},
+	/* CE11 unused */
 };
+
 static struct CE_pipe_config target_ce_config_wlan_qca8074_pci[] = {
 	/* host->target HTC control and raw streams */
 	{ /* CE0 */ 0, PIPEDIR_OUT, 32, 2048, CE_ATTR_FLAGS, 0,},

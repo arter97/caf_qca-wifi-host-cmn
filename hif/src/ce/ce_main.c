@@ -404,6 +404,29 @@ static struct service_to_pipe target_service_to_ce_map_wlan[] = {
 
 /* PIPEDIR_OUT = HOST to Target */
 /* PIPEDIR_IN  = TARGET to HOST */
+static struct service_to_pipe target_service_to_ce_map_qca8074[] = {
+	{ WMI_DATA_VO_SVC, PIPEDIR_OUT, 3, },
+	{ WMI_DATA_VO_SVC, PIPEDIR_IN, 2, },
+	{ WMI_DATA_BK_SVC, PIPEDIR_OUT, 3, },
+	{ WMI_DATA_BK_SVC, PIPEDIR_IN, 2, },
+	{ WMI_DATA_BE_SVC, PIPEDIR_OUT, 3, },
+	{ WMI_DATA_BE_SVC, PIPEDIR_IN, 2, },
+	{ WMI_DATA_VI_SVC, PIPEDIR_OUT, 3, },
+	{ WMI_DATA_VI_SVC, PIPEDIR_IN, 2, },
+	{ WMI_CONTROL_SVC, PIPEDIR_OUT, 3, },
+	{ WMI_CONTROL_SVC, PIPEDIR_IN, 2, },
+	{ WMI_CONTROL_SVC_WMAC1, PIPEDIR_OUT, 7},
+	{ WMI_CONTROL_SVC_WMAC1, PIPEDIR_IN, 2},
+	{ HTC_CTRL_RSVD_SVC, PIPEDIR_OUT, 0, },
+	{ HTC_CTRL_RSVD_SVC, PIPEDIR_IN, 1, },
+	{ HTC_RAW_STREAMS_SVC, PIPEDIR_OUT, 0},
+	{ HTC_RAW_STREAMS_SVC, PIPEDIR_IN, 1 },
+	{ HTT_DATA_MSG_SVC, PIPEDIR_OUT, 4, },
+	{ HTT_DATA_MSG_SVC, PIPEDIR_IN, 1, },
+	/* (Additions here) */
+	{ 0, 0, 0, },
+};
+
 static struct service_to_pipe target_service_to_ce_map_qca6290[] = {
 	{ WMI_DATA_VO_SVC, PIPEDIR_OUT, 3, },
 	{ WMI_DATA_VO_SVC, PIPEDIR_IN , 2, },
@@ -578,6 +601,11 @@ static void hif_select_service_to_pipe_map(struct hif_softc *scn,
 			*tgt_svc_map_to_use = target_service_to_ce_map_qca6290;
 			*sz_tgt_svc_map_to_use =
 				sizeof(target_service_to_ce_map_qca6290);
+			break;
+		case TARGET_TYPE_QCA8074:
+			*tgt_svc_map_to_use = target_service_to_ce_map_qca8074;
+			*sz_tgt_svc_map_to_use =
+				sizeof(target_service_to_ce_map_qca8074);
 			break;
 		}
 	}
@@ -1445,8 +1473,8 @@ hif_send_head(struct hif_opaque_softc *hif_ctx,
 
 	QDF_NBUF_UPDATE_TX_PKT_COUNT(nbuf, QDF_NBUF_TX_PKT_HIF);
 	DPTRACE(qdf_dp_trace(nbuf, QDF_DP_TRACE_HIF_PACKET_PTR_RECORD,
-				qdf_nbuf_data_addr(nbuf),
-				sizeof(qdf_nbuf_data(nbuf)), QDF_TX));
+		QDF_TRACE_DEFAULT_PDEV_ID, qdf_nbuf_data_addr(nbuf),
+		sizeof(qdf_nbuf_data(nbuf)), QDF_TX));
 	status = ce_sendlist_send(ce_hdl, nbuf, &sendlist, transfer_id);
 	QDF_ASSERT(status == QDF_STATUS_SUCCESS);
 
@@ -1874,9 +1902,10 @@ static int hif_post_recv_buffers_for_pipe(struct HIF_CE_pipe_info *pipe_info)
 
 /*
  * Try to post all desired receive buffers for all pipes.
- * Returns 0 if all desired buffers are posted,
- * non-zero if were were unable to completely
- * replenish receive buffers.
+ * Returns 0 for non fastpath rx copy engine as
+ * oom_allocation_work will be scheduled to recover any
+ * failures, non-zero if unable to completely replenish
+ * receive buffers for fastpath rx Copy engine.
  */
 static int hif_post_recv_buffers(struct hif_softc *scn)
 {
@@ -1895,7 +1924,9 @@ static int hif_post_recv_buffers(struct hif_softc *scn)
 		    ce_state && (ce_state->htt_rx_data))
 			continue;
 
-		if (hif_post_recv_buffers_for_pipe(pipe_info)) {
+		if (hif_post_recv_buffers_for_pipe(pipe_info) &&
+			ce_state->htt_rx_data &&
+			scn->fastpath_mode_on) {
 			rv = 1;
 			goto done;
 		}
@@ -1960,9 +1991,11 @@ static void hif_recv_buffer_cleanup_on_pipe(struct HIF_CE_pipe_info *pipe_info)
 	while (ce_revoke_recv_next
 		       (ce_hdl, &per_CE_context, (void **)&netbuf,
 			&CE_data) == QDF_STATUS_SUCCESS) {
-		qdf_nbuf_unmap_single(scn->qdf_dev, netbuf,
-				      QDF_DMA_FROM_DEVICE);
-		qdf_nbuf_free(netbuf);
+		if (netbuf) {
+			qdf_nbuf_unmap_single(scn->qdf_dev, netbuf,
+					      QDF_DMA_FROM_DEVICE);
+			qdf_nbuf_free(netbuf);
+		}
 	}
 }
 
@@ -2081,7 +2114,7 @@ void hif_ce_stop(struct hif_softc *scn)
 	 * before cleaning up any memory, ensure irq &
 	 * bottom half contexts will not be re-entered
 	 */
-	hif_nointrs(scn);
+	hif_disable_isr(&scn->osc);
 	hif_destroy_oom_work(scn);
 	scn->hif_init_done = false;
 
@@ -2410,16 +2443,6 @@ static inline void hif_post_static_buf_to_target(struct hif_softc *scn)
 }
 #endif
 
-#ifdef WLAN_SUSPEND_RESUME_TEST
-static void hif_fake_apps_init_ctx(struct hif_softc *scn)
-{
-	INIT_WORK(&scn->fake_apps_ctx.resume_work,
-		  hif_fake_apps_resume_work);
-}
-#else
-static inline void hif_fake_apps_init_ctx(struct hif_softc *scn) {}
-#endif
-
 /**
  * hif_config_ce() - configure copy engines
  * @scn: hif context
@@ -2506,7 +2529,6 @@ int hif_config_ce(struct hif_softc *scn)
 	HIF_DBG("%s: ce_init done", __func__);
 
 	init_tasklet_workers(hif_hdl);
-	hif_fake_apps_init_ctx(scn);
 
 	HIF_DBG("%s: X, ret = %d", __func__, rv);
 

@@ -87,7 +87,7 @@ int init_deinit_service_ready_event_handler(ol_scn_t scn_handle,
 		return -EINVAL;
 	}
 
-	wmi_handle = psoc->tgt_if_handle;
+	wmi_handle = GET_WMI_HDL_FROM_PSOC(psoc);
 
 	service_param = qdf_mem_malloc(sizeof(*service_param));
 	if (!service_param) {
@@ -168,6 +168,12 @@ static int populate_mac_phy_capability(void *handle, uint8_t *evt,
 
 	mac_phy_id = 0;
 	while (phy_bit_map) {
+		if (*total_mac_phy >= PSOC_MAX_MAC_PHY_CAP) {
+			WMI_LOGE("total mac phy exceeds max limit %d",
+				*total_mac_phy);
+			return -EINVAL;
+		}
+
 		status = wmi_extract_mac_phy_cap_service_ready_ext(handle,
 				evt, hw_mode_id, mac_phy_id,
 				&(service_param->mac_phy_cap[*total_mac_phy]));
@@ -175,12 +181,8 @@ static int populate_mac_phy_capability(void *handle, uint8_t *evt,
 			WMI_LOGE("failed to parse mac phy capability");
 			return qdf_status_to_os_return(status);
 		}
+
 		(*total_mac_phy)++;
-		if (*total_mac_phy > PSOC_MAX_MAC_PHY_CAP) {
-			WMI_LOGE("total mac phy exceeds max limit %d",
-				*total_mac_phy);
-			return -EINVAL;
-		}
 		phy_bit_map &= (phy_bit_map - 1);
 		mac_phy_id++;
 	}
@@ -282,7 +284,7 @@ int init_deinit_service_ext_ready_event_handler(ol_scn_t scn_handle,
 		return -EINVAL;
 	}
 
-	wmi_handle = psoc->tgt_if_handle;
+	wmi_handle = GET_WMI_HDL_FROM_PSOC(psoc);
 
 	service_param =
 		qdf_mem_malloc(sizeof(*service_param));
@@ -296,6 +298,7 @@ int init_deinit_service_ext_ready_event_handler(ol_scn_t scn_handle,
 	if (err_code)
 		goto free_param_and_exit;
 
+	psoc->total_mac_phy = 0;
 	err_code =  populate_hw_mode_capability(wmi_handle,
 					    event,
 					    &psoc->total_mac_phy,

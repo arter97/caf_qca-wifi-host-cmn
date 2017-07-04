@@ -78,9 +78,7 @@ static int target_if_dfs_cac_complete_event_handler(
 		return -EINVAL;
 	}
 
-	wlan_vdev_obj_lock(vdev);
 	pdev = wlan_vdev_get_pdev(vdev);
-	wlan_vdev_obj_unlock(vdev);
 	if (!pdev) {
 		target_if_err("null pdev");
 		ret = -EINVAL;
@@ -151,12 +149,12 @@ static QDF_STATUS target_if_dfs_reg_offload_events(
 {
 	int ret1, ret2;
 
-	ret1 = wmi_unified_register_event(psoc->tgt_if_handle,
+	ret1 = wmi_unified_register_event(GET_WMI_HDL_FROM_PSOC(psoc),
 			wmi_dfs_radar_detection_event_id,
 			target_if_dfs_radar_detection_event_handler);
 	target_if_debug("wmi_dfs_radar_detection_event_id ret=%d", ret1);
 
-	ret2 = wmi_unified_register_event(psoc->tgt_if_handle,
+	ret2 = wmi_unified_register_event(GET_WMI_HDL_FROM_PSOC(psoc),
 			wmi_dfs_cac_complete_id,
 			target_if_dfs_cac_complete_event_handler);
 	target_if_debug("wmi_dfs_cac_complete_id ret=%d", ret2);
@@ -180,9 +178,7 @@ static QDF_STATUS target_if_dfs_register_event_handler(
 	QDF_STATUS status = QDF_STATUS_SUCCESS;
 	struct wlan_objmgr_psoc *psoc = NULL;
 
-	wlan_pdev_obj_lock(pdev);
 	psoc = wlan_pdev_get_psoc(pdev);
-	wlan_pdev_obj_unlock(pdev);
 	if (!psoc) {
 		target_if_err("null psoc");
 		return QDF_STATUS_E_FAILURE;

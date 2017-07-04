@@ -21,7 +21,6 @@
 
 #include "wlan_pmo_ucfg_api.h"
 #include "wlan_pmo_arp.h"
-#include "wlan_pmo_hw_bcast_fltr.h"
 #include "wlan_pmo_ns.h"
 #include "wlan_pmo_gtk.h"
 #include "wlan_pmo_wow.h"
@@ -29,6 +28,7 @@
 #include "wlan_pmo_main.h"
 #include "wlan_pmo_lphb.h"
 #include "wlan_pmo_suspend_resume.h"
+#include "wlan_pmo_pkt_filter.h"
 
 QDF_STATUS pmo_ucfg_get_psoc_config(struct wlan_objmgr_psoc *psoc,
 		struct pmo_psoc_cfg *psoc_cfg)
@@ -59,7 +59,7 @@ bool pmo_ucfg_is_vdev_supports_offload(struct wlan_objmgr_vdev *vdev)
 }
 
 void pmo_ucfg_enable_wakeup_event(struct wlan_objmgr_psoc *psoc,
-	uint32_t vdev_id, uint32_t bitmap)
+	uint32_t vdev_id, uint32_t *bitmap)
 {
 	pmo_core_enable_wakeup_event(psoc, vdev_id, bitmap);
 }
@@ -67,7 +67,7 @@ void pmo_ucfg_enable_wakeup_event(struct wlan_objmgr_psoc *psoc,
 void pmo_ucfg_disable_wakeup_event(struct wlan_objmgr_psoc *psoc,
 	uint32_t vdev_id, uint32_t bitmap)
 {
-	pmo_core_disable_wakeup_event(psoc, vdev_id, bitmap);
+	pmo_core_disable_wakeup_event(psoc, vdev_id, &bitmap);
 }
 
 QDF_STATUS pmo_ucfg_cache_arp_offload_req(struct pmo_arp_req *arp_req)
@@ -90,18 +90,6 @@ QDF_STATUS pmo_ucfg_disable_arp_offload_in_fwr(struct wlan_objmgr_vdev *vdev,
 		enum pmo_offload_trigger trigger)
 {
 	return pmo_core_disable_arp_offload_in_fwr(vdev, trigger);
-}
-
-QDF_STATUS pmo_ucfg_enable_non_arp_bcast_filter_in_fwr(
-		struct wlan_objmgr_vdev *vdev)
-{
-	return pmo_core_enable_non_arp_bcast_filter_in_fwr(vdev);
-}
-
-QDF_STATUS pmo_ucfg_disable_non_arp_bcast_filter_in_fwr(
-		struct wlan_objmgr_vdev *vdev)
-{
-	return pmo_core_disable_non_arp_bcast_filter_in_fwr(vdev);
 }
 
 QDF_STATUS pmo_ucfg_cache_ns_offload_req(struct pmo_ns_req *ns_req)
@@ -180,6 +168,21 @@ QDF_STATUS pmo_ucfg_enable_gtk_offload_in_fwr(struct wlan_objmgr_vdev *vdev)
 QDF_STATUS pmo_ucfg_disable_gtk_offload_in_fwr(struct wlan_objmgr_vdev *vdev)
 {
 	return pmo_core_disable_gtk_offload_in_fwr(vdev);
+}
+
+QDF_STATUS pmo_ucfg_set_pkt_filter(struct wlan_objmgr_psoc *psoc,
+		struct pmo_rcv_pkt_fltr_cfg *pmo_set_pkt_fltr_req,
+		uint8_t vdev_id)
+{
+	return pmo_core_set_pkt_filter(psoc, pmo_set_pkt_fltr_req, vdev_id);
+}
+
+QDF_STATUS pmo_ucfg_clear_pkt_filter(struct wlan_objmgr_psoc *psoc,
+		struct pmo_rcv_pkt_fltr_clear_param *pmo_clr_pkt_fltr_param,
+		uint8_t vdev_id)
+{
+	return pmo_core_clear_pkt_filter(psoc,
+				pmo_clr_pkt_fltr_param, vdev_id);
 }
 
 QDF_STATUS pmo_ucfg_get_gtk_rsp(struct wlan_objmgr_vdev *vdev,

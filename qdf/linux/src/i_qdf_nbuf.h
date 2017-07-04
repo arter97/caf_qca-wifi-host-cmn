@@ -65,6 +65,8 @@ typedef struct sk_buff *__qdf_nbuf_t;
 #define QDF_NBUF_CB_PACKET_TYPE_ARP    2
 #define QDF_NBUF_CB_PACKET_TYPE_WAPI   3
 #define QDF_NBUF_CB_PACKET_TYPE_DHCP   4
+#define QDF_NBUF_CB_PACKET_TYPE_ICMP   5
+
 
 /* mark the first packet after wow wakeup */
 #define QDF_MARK_FIRST_WAKEUP_PACKET   0x80000000
@@ -177,8 +179,24 @@ struct qdf_nbuf_cb {
 			}  extra_frag; /* 19 bytes */
 			union {
 				struct {
+					union {
+						struct {
+							uint8_t packet_state:7,
+							is_packet_priv:1;
+							uint8_t packet_track:4,
+								proto_type:4;
+							uint8_t dp_trace:1,
+								is_bcast:1,
+								is_mcast:1,
+								packet_type:3,
+							/* used only for hl*/
+								htt2_frm:1,
+								print:1;
+							uint8_t vdev_id;
+						} trace; /* 4 bytes */
+						uint32_t submit_ts;
+					} u;
 					uint8_t ftype;
-					uint32_t submit_ts;
 					void *fctx;
 					void *vdev_ctx;
 				} win; /* 21 bytes*/
@@ -202,7 +220,8 @@ struct qdf_nbuf_cb {
 							priv:31;
 					} ipa; /* 4 */
 					uint16_t desc_id; /* 2 bytes */
-				} mcl;/* 14 bytes*/
+					uint8_t ftype; /*1 byte */
+				} mcl;/* 15 bytes*/
 			} dev;
 		} tx; /* 40 bytes */
 	} u;
@@ -281,6 +300,32 @@ struct qdf_nbuf_cb {
 		((skb)->cb))->u.tx.extra_frag.flags.bits.flag_nbuf)
 #define QDF_NBUF_CB_TX_DATA_ATTR(skb) \
 	(((struct qdf_nbuf_cb *)((skb)->cb))->u.tx.dev.mcl.data_attr)
+#define QDF_NBUF_UPDATE_TX_PKT_COUNT(skb, PACKET_STATE) \
+	qdf_nbuf_set_state(skb, PACKET_STATE)
+
+
+#define QDF_NBUF_CB_TX_IPA_OWNED(skb) \
+	(((struct qdf_nbuf_cb *)((skb)->cb))->u.tx.dev.mcl.ipa.owned)
+
+#define QDF_NBUF_CB_TX_IPA_PRIV(skb) \
+	(((struct qdf_nbuf_cb *)((skb)->cb))->u.tx.dev.mcl.ipa.priv)
+
+
+#define QDF_NBUF_CB_TX_FCTX(skb) \
+	(((struct qdf_nbuf_cb *)((skb)->cb))->u.tx.dev.win.fctx)
+
+#define QDF_NBUF_CB_TX_VDEV_CTX(skb) \
+		(((struct qdf_nbuf_cb *)((skb)->cb))->u.tx.dev.win.vdev_ctx)
+
+
+#ifndef CONFIG_WIN
+
+#define QDF_NBUF_CB_TX_IS_PACKET_PRIV(skb) \
+	(((struct qdf_nbuf_cb *) \
+		((skb)->cb))->u.tx.dev.mcl.trace.is_packet_priv)
+
+#define QDF_NBUF_CB_TX_DESC_ID(skb) \
+	(((struct qdf_nbuf_cb *)((skb)->cb))->u.tx.dev.mcl.desc_id)
 #define QDF_NBUF_CB_TX_PACKET_STATE(skb) \
 	(((struct qdf_nbuf_cb *) \
 		((skb)->cb))->u.tx.dev.mcl.trace.packet_state)
@@ -290,8 +335,6 @@ struct qdf_nbuf_cb {
 #define QDF_NBUF_CB_TX_PROTO_TYPE(skb) \
 	(((struct qdf_nbuf_cb *) \
 		((skb)->cb))->u.tx.dev.mcl.trace.proto_type)
-#define QDF_NBUF_UPDATE_TX_PKT_COUNT(skb, PACKET_STATE) \
-	qdf_nbuf_set_state(skb, PACKET_STATE)
 #define QDF_NBUF_GET_PACKET_TRACK(skb) \
 	(((struct qdf_nbuf_cb *)((skb)->cb))->u.tx.dev.mcl.trace.packet_track)
 #define QDF_NBUF_CB_TX_DP_TRACE(skb) \
@@ -302,27 +345,82 @@ struct qdf_nbuf_cb {
 	(((struct qdf_nbuf_cb *)((skb)->cb))->u.tx.dev.mcl.trace.htt2_frm)
 #define QDF_NBUF_CB_TX_VDEV_ID(skb) \
 	(((struct qdf_nbuf_cb *)((skb)->cb))->u.tx.dev.mcl.trace.vdev_id)
+
 #define QDF_NBUF_CB_GET_IS_BCAST(skb) \
 	(((struct qdf_nbuf_cb *)((skb)->cb))->u.tx.dev.mcl.trace.is_bcast)
 #define QDF_NBUF_CB_GET_IS_MCAST(skb) \
 	(((struct qdf_nbuf_cb *)((skb)->cb))->u.tx.dev.mcl.trace.is_mcast)
 #define QDF_NBUF_CB_GET_PACKET_TYPE(skb) \
 	(((struct qdf_nbuf_cb *)((skb)->cb))->u.tx.dev.mcl.trace.packet_type)
-#define QDF_NBUF_CB_TX_IPA_OWNED(skb) \
-	(((struct qdf_nbuf_cb *)((skb)->cb))->u.tx.dev.mcl.ipa.owned)
-#define QDF_NBUF_CB_TX_IPA_PRIV(skb) \
-	(((struct qdf_nbuf_cb *)((skb)->cb))->u.tx.dev.mcl.ipa.priv)
-#define QDF_NBUF_CB_TX_DESC_ID(skb) \
-	(((struct qdf_nbuf_cb *)((skb)->cb))->u.tx.dev.mcl.desc_id)
+
+#define QDF_NBUF_CB_SET_BCAST(skb) \
+	(((struct qdf_nbuf_cb *) \
+		((skb)->cb))->u.tx.dev.mcl.trace.is_bcast = true)
+#define QDF_NBUF_CB_SET_MCAST(skb) \
+	(((struct qdf_nbuf_cb *) \
+		((skb)->cb))->u.tx.dev.mcl.trace.is_mcast = true)
+#define QDF_NBUF_CB_TX_FTYPE(skb) \
+	(((struct qdf_nbuf_cb *)((skb)->cb))->u.tx.dev.mcl.ftype)
+
+#else
+
+#define QDF_NBUF_CB_TX_DESC_ID(skb)\
+	(((struct qdf_nbuf_cb *)((skb)->cb))->u.tx.dev.win.desc_id)
+
+#define QDF_NBUF_CB_TX_PACKET_STATE(skb)\
+	(((struct qdf_nbuf_cb *) \
+		((skb)->cb))->u.tx.dev.win.u.trace.packet_state)
+
+#define QDF_NBUF_CB_TX_IS_PACKET_PRIV(skb) \
+	(((struct qdf_nbuf_cb *) \
+		((skb)->cb))->u.tx.dev.win.u.trace.is_packet_priv)
+
+#define QDF_NBUF_CB_TX_PACKET_TRACK(skb)\
+	(((struct qdf_nbuf_cb *) \
+		((skb)->cb))->u.tx.dev.win.u.trace.packet_track)
+
+#define QDF_NBUF_CB_TX_SUBMIT_TS(skb) \
+	(((struct qdf_nbuf_cb *)((skb)->cb))->u.tx.dev.win.u.submit_ts)
+
+#define QDF_NBUF_CB_TX_PROTO_TYPE(skb)\
+	(((struct qdf_nbuf_cb *) \
+		((skb)->cb))->u.tx.dev.win.u.trace.proto_type)
+
+#define QDF_NBUF_GET_PACKET_TRACK(skb)\
+	(((struct qdf_nbuf_cb *)((skb)->cb))->u.tx.dev.win.trace.packet_track)
+
+#define QDF_NBUF_CB_TX_DP_TRACE(skb)\
+	(((struct qdf_nbuf_cb *)((skb)->cb))->u.tx.dev.win.u.trace.dp_trace)
+
+#define QDF_NBUF_CB_DP_TRACE_PRINT(skb)	\
+	(((struct qdf_nbuf_cb *)((skb)->cb))->u.tx.dev.win.u.trace.print)
+
+#define QDF_NBUF_CB_TX_HL_HTT2_FRM(skb)	\
+	(((struct qdf_nbuf_cb *)((skb)->cb))->u.tx.dev.win.u.trace.htt2_frm)
+
+#define QDF_NBUF_CB_TX_VDEV_ID(skb)\
+	(((struct qdf_nbuf_cb *)((skb)->cb))->u.tx.dev.win.u.trace.vdev_id)
+
+#define QDF_NBUF_CB_GET_IS_BCAST(skb)\
+	(((struct qdf_nbuf_cb *)((skb)->cb))->u.tx.dev.win.u.trace.is_bcast)
+
+#define QDF_NBUF_CB_GET_IS_MCAST(skb)\
+	(((struct qdf_nbuf_cb *)((skb)->cb))->u.tx.dev.win.u.trace.is_mcast)
+
+#define QDF_NBUF_CB_GET_PACKET_TYPE(skb)\
+	(((struct qdf_nbuf_cb *)((skb)->cb))->u.tx.dev.win.u.trace.packet_type)
+
+#define QDF_NBUF_CB_SET_BCAST(skb) \
+	(((struct qdf_nbuf_cb *) \
+		((skb)->cb))->u.tx.dev.win.u.trace.is_bcast = true)
+
+#define QDF_NBUF_CB_SET_MCAST(skb) \
+	(((struct qdf_nbuf_cb *) \
+		((skb)->cb))->u.tx.dev.win.u.trace.is_mcast = true)
+
 #define QDF_NBUF_CB_TX_FTYPE(skb) \
 	(((struct qdf_nbuf_cb *)((skb)->cb))->u.tx.dev.win.ftype)
-#define QDF_NBUF_CB_TX_SUBMIT_TS(skb) \
-	(((struct qdf_nbuf_cb *)((skb)->cb))->u.tx.dev.win.submit_ts)
-#define QDF_NBUF_CB_TX_FCTX(skb) \
-	(((struct qdf_nbuf_cb *)((skb)->cb))->u.tx.dev.win.fctx)
-#define QDF_NBUF_CB_TX_VDEV_CTX(skb) \
-		(((struct qdf_nbuf_cb *)((skb)->cb))->u.tx.dev.win.vdev_ctx)
-
+#endif
 
 /* assume the OS provides a single fragment */
 #define __qdf_nbuf_get_num_frags(skb)		   \
@@ -397,6 +495,11 @@ typedef void (*qdf_nbuf_free_t)(__qdf_nbuf_t);
 
 #define __qdf_nbuf_get_vdev_ctx(skb) \
 	QDF_NBUF_CB_TX_VDEV_CTX((skb))
+
+#define __qdf_nbuf_set_ftype(skb, type) \
+	do { \
+		QDF_NBUF_CB_TX_FTYPE((skb)) = (type); \
+	} while (0)
 
 #define __qdf_nbuf_set_fctx_type(skb, ctx, type) \
 	do { \
@@ -477,28 +580,16 @@ void __qdf_nbuf_num_frags_init(struct sk_buff *skb)
 	QDF_NBUF_CB_TX_NUM_EXTRA_FRAGS(skb) = 0;
 }
 
-#ifdef CONFIG_MCL
 typedef enum {
 	CB_FTYPE_INVALID = 0,
 	CB_FTYPE_MCAST2UCAST = 1,
 	CB_FTYPE_TSO = 2,
 	CB_FTYPE_TSO_SG = 3,
 	CB_FTYPE_SG = 4,
+	CB_FTYPE_INTRABSS_FWD = 5,
+	CB_FTYPE_RX_INFO = 6,
+	CB_FTYPE_MESH_RX_INFO = 7,
 } CB_FTYPE;
-#else
-typedef enum {
-	CB_FTYPE_INVALID = 0,
-	CB_FTYPE_MCAST2UCAST = 1,
-	CB_FTYPE_TSO = 2,
-	CB_FTYPE_TSO_SG = 3,
-	CB_FTYPE_SG = 4,
-#if ATH_DATA_RX_INFO_EN
-	CB_FTYPE_RX_INFO = 5,
-#else
-	CB_FTYPE_MESH_RX_INFO = 5,
-#endif
-} CB_FTYPE;
-#endif
 
 /*
  * prototypes. Implemented in qdf_nbuf.c
@@ -538,6 +629,7 @@ void __qdf_nbuf_frag_info(struct sk_buff *skb, qdf_sglist_t  *sg);
 QDF_STATUS __qdf_nbuf_frag_map(
 	qdf_device_t osdev, __qdf_nbuf_t nbuf,
 	int offset, qdf_dma_dir_t dir, int cur_frag);
+void qdf_nbuf_classify_pkt(struct sk_buff *skb);
 
 bool __qdf_nbuf_is_ipv4_wapi_pkt(struct sk_buff *skb);
 bool __qdf_nbuf_data_is_ipv4_pkt(uint8_t *data);
@@ -605,8 +697,8 @@ static inline size_t __qdf_nbuf_len(struct sk_buff *skb)
  * @dst: Buffer to piggyback into
  * @src: Buffer to put
  *
- * Link tow nbufs the new buf is piggybacked into the older one. The older
- * (src) skb is released.
+ * Concat two nbufs, the new buf(src) is piggybacked into the older one.
+ * It is callers responsibility to free the src skb.
  *
  * Return: QDF_STATUS (status of the call) if failed the src skb
  *         is released
@@ -628,11 +720,9 @@ __qdf_nbuf_cat(struct sk_buff *dst, struct sk_buff *src)
 		if (error)
 			return __qdf_to_status(error);
 	}
+
 	memcpy(skb_tail_pointer(dst), src->data, src->len);
-
 	skb_put(dst, src->len);
-	dev_kfree_skb_any(src);
-
 	return __qdf_to_status(error);
 }
 
