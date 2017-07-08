@@ -1427,6 +1427,18 @@ void qdf_net_buf_debug_init(void)
 }
 qdf_export_symbol(qdf_net_buf_debug_init);
 
+#ifdef CONFIG_HALT_KMEMLEAK
+static void qdf_net_buf_handle_skb_leak(uint32_t leaked_skb_count)
+{
+	if (leaked_skb_count) {
+		qdf_print("%d SKB leaked", leaked_skb_count);
+		QDF_BUG(0);
+	}
+}
+#else
+static void qdf_net_buf_handle_skb_leak(uint32_t leaked_skb_count) { }
+#endif
+
 /**
  * qdf_net_buf_debug_init() - exit network buffer debug functionality
  *
@@ -1439,6 +1451,7 @@ qdf_export_symbol(qdf_net_buf_debug_init);
 void qdf_net_buf_debug_exit(void)
 {
 	uint32_t i;
+	uint32_t count = 0;
 	unsigned long irq_flag;
 	QDF_NBUF_TRACK *p_node;
 	QDF_NBUF_TRACK *p_prev;
@@ -1449,6 +1462,7 @@ void qdf_net_buf_debug_exit(void)
 		while (p_node) {
 			p_prev = p_node;
 			p_node = p_node->p_next;
+			count++;
 			qdf_print("SKB buf memory Leak@ File %s, @Line %d, size %zu\n",
 				  p_prev->file_name, p_prev->line_num,
 				  p_prev->size);
@@ -1458,6 +1472,8 @@ void qdf_net_buf_debug_exit(void)
 	}
 
 	qdf_nbuf_track_memory_manager_destroy();
+
+	qdf_net_buf_handle_skb_leak(count);
 }
 qdf_export_symbol(qdf_net_buf_debug_exit);
 
@@ -1743,7 +1759,21 @@ static uint8_t __qdf_nbuf_get_tso_cmn_seg_info(qdf_device_t osdev,
 		qdf_assert(0);
 		return 1;
 	}
-	tso_info->ip_tcp_hdr_len = tso_info->eit_hdr_len - tso_info->l2_len;
+
+	if (tso_info->ethproto == htons(ETH_P_IP)) {
+		/* inlcude IPv4 header length for IPV4 (total length) */
+		tso_info->ip_tcp_hdr_len =
+			tso_info->eit_hdr_len - tso_info->l2_len;
+	} else if (tso_info->ethproto == htons(ETH_P_IPV6)) {
+		/* exclude IPv6 header length for IPv6 (payload length) */
+		tso_info->ip_tcp_hdr_len = tcp_hdrlen(skb);
+	}
+	/*
+	 * The length of the payload (application layer data) is added to
+	 * tso_info->ip_tcp_hdr_len before passing it on to the msdu link ext
+	 * descriptor.
+	 */
+
 	TSO_DEBUG("%s seq# %u eit hdr len %u l2 len %u  skb len %u\n", __func__,
 		tso_info->tcp_seq_num,
 		tso_info->eit_hdr_len,
@@ -1906,6 +1936,8 @@ uint32_t __qdf_nbuf_get_tso_info(qdf_device_t osdev, struct sk_buff *skb,
 			return tso_info->num_segs;
 
 		curr_seg->seg.tso_flags.ip_len = tso_cmn_info.ip_tcp_hdr_len;
+		/* frag len is added to ip_len in while loop below*/
+
 		curr_seg->seg.num_frags++;
 
 		while (more_tso_frags) {
@@ -2654,7 +2686,7 @@ unsigned int qdf_nbuf_update_radiotap(struct mon_rx_status *rx_status,
 	}
 	rthdr->it_len = cpu_to_le16(rtap_len);
 
-	if ((headroom_sz  - rtap_len) < 0) {
+	if (headroom_sz < rtap_len) {
 		qdf_print("ERROR: not enough space to update radiotap\n");
 		return 0;
 	}
