@@ -969,16 +969,6 @@ struct ap_ps_params {
 	uint32_t value;
 };
 
-/**
- * struct vendor_oui - probe request ie vendor oui information
- * @oui_type: type of the vendor oui (3 valid octets)
- * @oui_subtype: subtype of the vendor oui (1 valid octet)
- */
-struct vendor_oui {
-	uint32_t oui_type;
-	uint32_t oui_subtype;
-};
-
 #define WMI_HOST_SCAN_CHAN_FREQ_SHIFT	0
 #define WMI_HOST_SCAN_CHAN_FREQ_MASK	0xffff
 #define WMI_HOST_SCAN_CHAN_MODE_SHIFT	16
@@ -3289,7 +3279,6 @@ struct ssid_hotlist_param {
 /**
  * struct roam_scan_filter_params - Structure holding roaming scan
  *                                  parameters
- * @len:                      length
  * @op_bitmap:                bitmap to determine reason of roaming
  * @session_id:               vdev id
  * @num_bssid_black_list:     The number of BSSID's that we should
@@ -3319,7 +3308,6 @@ struct ssid_hotlist_param {
  */
 
 struct roam_scan_filter_params {
-	uint32_t len;
 	uint32_t op_bitmap;
 	uint8_t session_id;
 	uint32_t num_bssid_black_list;
