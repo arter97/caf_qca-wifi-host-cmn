@@ -66,6 +66,7 @@ typedef struct sk_buff *__qdf_nbuf_t;
 #define QDF_NBUF_CB_PACKET_TYPE_WAPI   3
 #define QDF_NBUF_CB_PACKET_TYPE_DHCP   4
 #define QDF_NBUF_CB_PACKET_TYPE_ICMP   5
+#define QDF_NBUF_CB_PACKET_TYPE_ICMPv6 6
 
 
 /* mark the first packet after wow wakeup */
@@ -427,6 +428,9 @@ typedef void (*qdf_nbuf_free_t)(__qdf_nbuf_t);
 
 #define __qdf_nbuf_ipa_owned_set(skb) \
 	(QDF_NBUF_CB_TX_IPA_OWNED(skb) = 1)
+
+#define __qdf_nbuf_ipa_owned_clear(skb) \
+	(QDF_NBUF_CB_TX_IPA_OWNED(skb) = 0)
 
 #define __qdf_nbuf_ipa_priv_get(skb)	\
 	QDF_NBUF_CB_TX_IPA_PRIV(skb)
