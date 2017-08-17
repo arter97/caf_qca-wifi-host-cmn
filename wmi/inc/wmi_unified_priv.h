@@ -229,6 +229,13 @@ QDF_STATUS (*send_suspend_cmd)(wmi_unified_t wmi_handle,
 QDF_STATUS (*send_resume_cmd)(wmi_unified_t wmi_handle,
 				uint8_t mac_id);
 
+#ifdef FEATURE_WLAN_D0WOW
+QDF_STATUS (*send_d0wow_enable_cmd)(wmi_unified_t wmi_handle,
+				uint8_t mac_id);
+QDF_STATUS (*send_d0wow_disable_cmd)(wmi_unified_t wmi_handle,
+				uint8_t mac_id);
+#endif
+
 QDF_STATUS (*send_wow_enable_cmd)(wmi_unified_t wmi_handle,
 				struct wow_cmd_params *param,
 				uint8_t mac_id);
@@ -393,6 +400,9 @@ QDF_STATUS (*send_reset_passpoint_network_list_cmd)(wmi_unified_t wmi_handle,
 QDF_STATUS (*send_roam_scan_offload_rssi_thresh_cmd)(wmi_unified_t wmi_handle,
 				struct roam_offload_scan_rssi_params *roam_req);
 
+QDF_STATUS (*send_roam_mawc_params_cmd)(wmi_unified_t wmi_handle,
+		struct wmi_mawc_roam_params *params);
+
 QDF_STATUS (*send_roam_scan_filter_cmd)(wmi_unified_t wmi_handle,
 				struct roam_scan_filter_params *roam_req);
 
@@ -442,6 +452,9 @@ QDF_STATUS (*send_pno_start_cmd)(wmi_unified_t wmi_handle,
 		   struct pno_scan_req_params *pno,
 		   uint32_t *gchannel_freq_list);
 #endif
+
+QDF_STATUS (*send_nlo_mawc_cmd)(wmi_unified_t wmi_handle,
+		struct nlo_mawc_params *params);
 
 QDF_STATUS (*send_ipa_offload_control_cmd)(wmi_unified_t wmi_handle,
 		struct ipa_offload_control_params *ipa_offload);

@@ -358,6 +358,46 @@ QDF_STATUS wmi_unified_resume_send(void *wmi_hdl,
 	return QDF_STATUS_E_FAILURE;
 }
 
+#ifdef FEATURE_WLAN_D0WOW
+/**
+ *  wmi_d0wow_enable_send() - WMI d0 wow enable function
+ *  @param wmi_handle: handle to WMI.
+ *  @mac_id: radio context
+ *
+ *  Return: QDF_STATUS_SUCCESS on success and QDF_STATUS_E_FAILURE for failure
+ */
+QDF_STATUS wmi_d0wow_enable_send(void *wmi_hdl,
+				uint8_t mac_id)
+{
+	wmi_unified_t wmi_handle = (wmi_unified_t) wmi_hdl;
+
+	if (wmi_handle->ops->send_d0wow_enable_cmd)
+		return wmi_handle->ops->send_d0wow_enable_cmd(
+					wmi_handle, mac_id);
+
+	return QDF_STATUS_E_FAILURE;
+}
+
+/**
+ *  wmi_d0wow_disable_send() - WMI d0 wow disable function
+ *  @param wmi_handle: handle to WMI.
+ *  @mac_id: radio context
+ *
+ *  Return: QDF_STATUS_SUCCESS on success and QDF_STATUS_E_FAILURE for failure
+ */
+QDF_STATUS wmi_d0wow_disable_send(void *wmi_hdl,
+				uint8_t mac_id)
+{
+	wmi_unified_t wmi_handle = (wmi_unified_t) wmi_hdl;
+
+	if (wmi_handle->ops->send_d0wow_disable_cmd)
+		return wmi_handle->ops->send_d0wow_disable_cmd(
+					wmi_handle, mac_id);
+
+	return QDF_STATUS_E_FAILURE;
+}
+#endif
+
 /**
  *  wmi_unified_wow_enable_send() - WMI wow enable function
  *  @param wmi_handle      : handle to WMI.
@@ -1577,6 +1617,17 @@ QDF_STATUS wmi_unified_roam_scan_offload_rssi_thresh_cmd(void *wmi_hdl,
 	return QDF_STATUS_E_FAILURE;
 }
 
+QDF_STATUS wmi_unified_roam_mawc_params_cmd(
+			void *wmi_hdl, struct wmi_mawc_roam_params *params)
+{
+	wmi_unified_t wmi_handle = (wmi_unified_t) wmi_hdl;
+
+	if (wmi_handle->ops->send_roam_mawc_params_cmd)
+		return wmi_handle->ops->send_roam_mawc_params_cmd(
+				wmi_handle, params);
+
+	return QDF_STATUS_E_FAILURE;
+}
 /**
  * wmi_unified_roam_scan_filter_cmd() - send roam scan whitelist,
  *                                      blacklist and preferred list
@@ -1855,6 +1906,24 @@ QDF_STATUS wmi_unified_pno_start_cmd(void *wmi_hdl,
 	return QDF_STATUS_E_FAILURE;
 }
 #endif
+
+/**
+ * wmi_unified_nlo_mawc_cmd() - NLO MAWC cmd configuration
+ * @wmi_hdl: wmi handle
+ * @params: Configuration parameters
+ *
+ * Return: QDF_STATUS_SUCCESS on success and QDF_STATUS_E_FAILURE for failure
+ */
+QDF_STATUS wmi_unified_nlo_mawc_cmd(void *wmi_hdl,
+		struct nlo_mawc_params *params)
+{
+	wmi_unified_t wmi_handle = (wmi_unified_t) wmi_hdl;
+
+	if (wmi_handle->ops->send_nlo_mawc_cmd)
+		return wmi_handle->ops->send_nlo_mawc_cmd(wmi_handle, params);
+
+	return QDF_STATUS_E_FAILURE;
+}
 
 /* wmi_unified_set_ric_req_cmd() - set ric request element
  * @wmi_hdl: wmi handle
