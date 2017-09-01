@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016-2018 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2016-2018, 2020 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -4819,8 +4819,27 @@ QDF_STATUS wmi_save_service_bitmap(void *wmi_hdl, void *evt_buf)
 	struct wmi_unified *wmi_handle = (struct wmi_unified *) wmi_hdl;
 
 	if (wmi_handle->ops->save_service_bitmap) {
-		wmi_handle->ops->save_service_bitmap(wmi_handle, evt_buf);
-		return 0;
+		return wmi_handle->ops->save_service_bitmap(wmi_handle,
+							    evt_buf);
+	}
+	return QDF_STATUS_E_FAILURE;
+}
+
+/**
+ * wmi_save_ext_service_bitmap() - save extended service bitmap
+ * @wmi_handle: wmi handle
+ * @param evt_buf: pointer to event buffer
+ *
+ * Return: QDF_STATUS_SUCCESS on success and QDF_STATUS_E_FAILURE for failure
+ */
+QDF_STATUS wmi_save_ext_service_bitmap(void *wmi_hdl, void *evt_buf,
+				   void *bitmap_buf)
+{
+	struct wmi_unified *wmi_handle = (struct wmi_unified *) wmi_hdl;
+
+	if (wmi_handle->ops->save_ext_service_bitmap) {
+		return wmi_handle->ops->save_ext_service_bitmap(wmi_handle,
+				evt_buf, bitmap_buf);
 	}
 	return QDF_STATUS_E_FAILURE;
 }

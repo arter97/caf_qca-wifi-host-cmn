@@ -12799,26 +12799,92 @@ static QDF_STATUS init_cmd_send_tlv(wmi_unified_t wmi_handle,
  * @wmi_handle: wmi handle
  * @param evt_buf: pointer to event buffer
  *
- * Return: None
+ * Return: QDF_STATUS
  */
 #ifdef WMI_TLV_AND_NON_TLV_SUPPORT
 static
-void save_service_bitmap_tlv(wmi_unified_t wmi_handle, void *evt_buf)
+QDF_STATUS save_service_bitmap_tlv(wmi_unified_t wmi_handle, void *evt_buf)
 {
 	WMI_SERVICE_READY_EVENTID_param_tlvs *param_buf;
+
 	param_buf = (WMI_SERVICE_READY_EVENTID_param_tlvs *) evt_buf;
 
+	/* If it is already allocated, use that buffer. This can happen
+	 * during target stop/start scenarios where host allocation is skipped.
+	 */
+	if (!wmi_handle->wmi_service_bitmap) {
+		wmi_handle->wmi_service_bitmap =
+			qdf_mem_malloc(WMI_SERVICE_BM_SIZE * sizeof(uint32_t));
+		if (!wmi_handle->wmi_service_bitmap) {
+			WMI_LOGE("Failed memory allocation for service bitmap");
+			return QDF_STATUS_E_NOMEM;
+		}
+	}
+
 	qdf_mem_copy(wmi_handle->wmi_service_bitmap,
-			param_buf->wmi_service_bitmap,
-			(WMI_SERVICE_BM_SIZE * sizeof(uint32_t)));
-}
-#else
-static
-void save_service_bitmap_tlv(wmi_unified_t wmi_handle, void *evt_buf)
-{
-	return;
+		     param_buf->wmi_service_bitmap,
+		     (WMI_SERVICE_BM_SIZE * sizeof(uint32_t)));
+
+	return QDF_STATUS_SUCCESS;
 }
 
+/**
+ * save_ext_service_bitmap_tlv() - save extendend service bitmap
+ * @wmi_handle: wmi handle
+ * @param evt_buf: pointer to event buffer
+ * @param bitmap_buf: bitmap buffer, for converged legacy support
+ *
+ * Return: QDF_STATUS
+ */
+static
+QDF_STATUS save_ext_service_bitmap_tlv(wmi_unified_t wmi_handle, void *evt_buf,
+			     void *bitmap_buf)
+{
+	WMI_SERVICE_AVAILABLE_EVENTID_param_tlvs *param_buf;
+	wmi_service_available_event_fixed_param *ev;
+
+	param_buf = (WMI_SERVICE_AVAILABLE_EVENTID_param_tlvs *) evt_buf;
+
+	ev = param_buf->fixed_param;
+
+	/* If it is already allocated, use that buffer. This can happen
+	 * during target stop/start scenarios where host allocation is skipped.
+	 */
+	if (!wmi_handle->wmi_ext_service_bitmap) {
+		wmi_handle->wmi_ext_service_bitmap = qdf_mem_malloc(
+			WMI_SERVICE_SEGMENT_BM_SIZE32 * sizeof(uint32_t));
+		if (!wmi_handle->wmi_ext_service_bitmap) {
+			WMI_LOGE("Failed memory allocation for service bitmap");
+			return QDF_STATUS_E_NOMEM;
+		}
+	}
+
+	qdf_mem_copy(wmi_handle->wmi_ext_service_bitmap,
+		     ev->wmi_service_segment_bitmap,
+		     (WMI_SERVICE_SEGMENT_BM_SIZE32 * sizeof(uint32_t)));
+
+	if (bitmap_buf)
+		qdf_mem_copy(
+			bitmap_buf,
+			wmi_handle->wmi_ext_service_bitmap,
+			(WMI_SERVICE_SEGMENT_BM_SIZE32 * sizeof(uint32_t)));
+
+	return QDF_STATUS_SUCCESS;
+}
+
+#else
+static
+QDF_STATUS save_service_bitmap_tlv(wmi_unified_t wmi_handle, void *evt_buf)
+{
+	return QDF_STATUS_SUCCESS;
+}
+
+static
+QDF_STATUS save_ext_service_bitmap_tlv(wmi_unified_t wmi_handle, void *evt_buf,
+				       void *bitmap_buf)
+{
+	return QDF_STATUS_SUCCESS;
+}
 #endif
 
 /**
@@ -12830,14 +12896,28 @@ void save_service_bitmap_tlv(wmi_unified_t wmi_handle, void *evt_buf)
  */
 #ifdef WMI_TLV_AND_NON_TLV_SUPPORT
 static bool is_service_enabled_tlv(wmi_unified_t wmi_handle,
-		uint32_t service_id)
+				   uint32_t service_id)
 {
+	if (!wmi_handle->wmi_service_bitmap) {
+		WMI_LOGE("WMI service bit map is not saved yet\n");
+		return false;
+	}
+
+	/* if WMI_EXTENDED_SERVICE_AVAILABLE was received with extended bitmap,
+	 * use WMI_SERVICE_EXT_ENABLE to check the services.
+	 */
+	if (wmi_handle->wmi_ext_service_bitmap)
+		return WMI_SERVICE_EXT_IS_ENABLED(
+				wmi_handle->wmi_service_bitmap,
+				wmi_handle->wmi_ext_service_bitmap,
+				service_id);
+
 	return WMI_SERVICE_IS_ENABLED(wmi_handle->wmi_service_bitmap,
-						service_id);
+				      service_id);
 }
 #else
 static bool is_service_enabled_tlv(wmi_unified_t wmi_handle,
-		uint32_t service_id)
+				   uint32_t service_id)
 {
 	return false;
 }
@@ -15188,6 +15268,7 @@ struct wmi_ops tlv_ops =  {
 	.extract_hal_reg_cap = extract_hal_reg_cap_tlv,
 	.extract_host_mem_req = extract_host_mem_req_tlv,
 	.save_service_bitmap = save_service_bitmap_tlv,
+	.save_ext_service_bitmap = save_ext_service_bitmap_tlv,
 	.is_service_enabled = is_service_enabled_tlv,
 	.save_fw_version = save_fw_version_in_service_ready_tlv,
 	.ready_extract_init_status = ready_extract_init_status_tlv,
@@ -15598,6 +15679,8 @@ static void populate_tlv_events_id(uint32_t *event_ids)
 	event_ids[wmi_sar_get_limits_event_id] = WMI_SAR_GET_LIMITS_EVENTID;
 	event_ids[wmi_roam_scan_stats_event_id] = WMI_ROAM_SCAN_STATS_EVENTID;
 	event_ids[wmi_wlan_sar2_result_event_id] = WMI_SAR2_RESULT_EVENTID;
+	event_ids[wmi_service_available_event_id] =
+						WMI_SERVICE_AVAILABLE_EVENTID;
 }
 
 /**

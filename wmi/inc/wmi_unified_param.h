@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016-2018 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2016-2018, 2020 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -5329,6 +5329,7 @@ typedef enum {
 	wmi_sar_get_limits_event_id,
 	wmi_roam_scan_stats_event_id,
 	wmi_wlan_sar2_result_event_id,
+	wmi_service_available_event_id,
 	wmi_events_max,
 } wmi_conv_event_id;
 
