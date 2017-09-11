@@ -98,6 +98,7 @@
 #define WMI_MSEC_TO_USEC(msec)       (msec * 1000) /* msec to usec */
 #define WMI_NLO_FREQ_THRESH          1000       /* in MHz */
 
+#define WMI_SVC_MSG_MAX_SIZE   1536
 #define MAX_UTF_EVENT_LENGTH	2048
 #define MAX_WMI_UTF_LEN	252
 #define MAX_WMI_QVIT_LEN	252
@@ -1227,6 +1228,63 @@ struct seg_hdr_info {
 };
 
 /**
+ * struct tx_send_params - TX parameters
+ * @pwr: Tx frame transmission power
+ * @mcs_mask: Modulation and coding index mask for transmission
+ *	      bit  0 -> CCK 1 Mbps rate is allowed
+ *	      bit  1 -> CCK 2 Mbps rate is allowed
+ *	      bit  2 -> CCK 5.5 Mbps rate is allowed
+ *	      bit  3 -> CCK 11 Mbps rate is allowed
+ *	      bit  4 -> OFDM BPSK modulation, 1/2 coding rate is allowed
+ *	      bit  5 -> OFDM BPSK modulation, 3/4 coding rate is allowed
+ *	      bit  6 -> OFDM QPSK modulation, 1/2 coding rate is allowed
+ *	      bit  7 -> OFDM QPSK modulation, 3/4 coding rate is allowed
+ *	      bit  8 -> OFDM 16-QAM modulation, 1/2 coding rate is allowed
+ *	      bit  9 -> OFDM 16-QAM modulation, 3/4 coding rate is allowed
+ *	      bit 10 -> OFDM 64-QAM modulation, 2/3 coding rate is allowed
+ *	      bit 11 -> OFDM 64-QAM modulation, 3/4 coding rate is allowed
+ * @nss_mask: Spatial streams permitted
+ *	      bit 0: if set, Nss = 1 (non-MIMO) is permitted
+ *	      bit 1: if set, Nss = 2 (2x2 MIMO) is permitted
+ *	      bit 2: if set, Nss = 3 (3x3 MIMO) is permitted
+ *	      bit 3: if set, Nss = 4 (4x4 MIMO) is permitted
+ *	      bit 4: if set, Nss = 5 (5x5 MIMO) is permitted
+ *	      bit 5: if set, Nss = 6 (6x6 MIMO) is permitted
+ *	      bit 6: if set, Nss = 7 (7x7 MIMO) is permitted
+ *	      bit 7: if set, Nss = 8 (8x8 MIMO) is permitted
+ *            If no bits are set, target will choose what NSS type to use
+ * @retry_limit: Maximum number of retries before ACK
+ * @chain_mask: Chains to be used for transmission
+ * @bw_mask: Bandwidth to be used for transmission
+ *	     bit  0 -> 5MHz
+ *	     bit  1 -> 10MHz
+ *	     bit  2 -> 20MHz
+ *	     bit  3 -> 40MHz
+ *	     bit  4 -> 80MHz
+ *	     bit  5 -> 160MHz
+ *	     bit  6 -> 80_80MHz
+ * @preamble_type: Preamble types for transmission
+ *	     bit 0: if set, OFDM
+ *	     bit 1: if set, CCK
+ *	     bit 2: if set, HT
+ *	     bit 3: if set, VHT
+ *	     bit 4: if set, HE
+ * @frame_type: Data or Management frame
+ *	        Data:1 Mgmt:0
+ */
+struct tx_send_params {
+	uint32_t pwr:8,
+		 mcs_mask:12,
+		 nss_mask:8,
+		 retry_limit:4;
+	uint32_t chain_mask:8,
+		 bw_mask:7,
+		 preamble_type:5,
+		 frame_type:1,
+		 reserved:11;
+};
+
+/**
  * struct wmi_mgmt_params - wmi mgmt cmd paramters
  * @tx_frame: management tx frame
  * @frm_len: frame length
@@ -1238,6 +1296,9 @@ struct seg_hdr_info {
  * @wmi_desc: command descriptor
  * @desc_id: descriptor id relyaed back by target
  * @macaddr - macaddr of peer
+ * @qdf_ctx: qdf context for qdf_nbuf_map
+ * @tx_param: TX send parameters
+ * @tx_params_valid: Flag that indicates if TX params are valid
  */
 struct wmi_mgmt_params {
 	void *tx_frame;
@@ -1248,6 +1309,8 @@ struct wmi_mgmt_params {
 	uint16_t desc_id;
 	uint8_t *macaddr;
 	void *qdf_ctx;
+	struct tx_send_params tx_param;
+	bool tx_params_valid;
 };
 
 /**
@@ -1736,6 +1799,35 @@ typedef struct {
 	uint32_t mcsset[WMI_HOST_ROAM_OFFLOAD_NUM_MCS_SET >> 2];
 } roam_offload_param;
 
+#define WMI_FILS_MAX_RRK_LENGTH 64
+#define WMI_FILS_MAX_RIK_LENGTH WMI_FILS_MAX_RRK_LENGTH
+#define WMI_FILS_MAX_REALM_LENGTH 256
+#define WMI_FILS_MAX_USERNAME_LENGTH 16
+
+/**
+ * struct roam_fils_params - Roam FILS params
+ * @username: username
+ * @username_length: username length
+ * @next_erp_seq_num: next ERP sequence number
+ * @rrk: RRK
+ * @rrk_length: length of @rrk
+ * @rik: RIK
+ * @rik_length: length of @rik
+ * @realm: realm
+ * @realm_len: length of @realm
+ */
+struct roam_fils_params {
+	uint8_t username[WMI_FILS_MAX_USERNAME_LENGTH];
+	uint32_t username_length;
+	uint32_t next_erp_seq_num;
+	uint8_t rrk[WMI_FILS_MAX_RRK_LENGTH];
+	uint32_t rrk_length;
+	uint8_t rik[WMI_FILS_MAX_RIK_LENGTH];
+	uint32_t rik_length;
+	uint8_t realm[WMI_FILS_MAX_REALM_LENGTH];
+	uint32_t realm_len;
+};
+
 /* struct roam_offload_scan_params - structure
  *     containing roaming offload scan parameters
  * @is_roam_req_valid: flag to tell whether roam req
@@ -1760,6 +1852,10 @@ typedef struct {
  * @is_ese_assoc: flag to determine ese assoc
  * @mdid: mobility domain info
  * @roam_offload_params: roam offload tlv params
+ * @assoc_ie_length: Assoc IE length
+ * @assoc_ie: Assoc IE buffer
+ * @add_fils_tlv: add FILS TLV boolean
+ * @roam_fils_params: roam fils params
  */
 struct roam_offload_scan_params {
 	uint8_t is_roam_req_valid;
@@ -1792,6 +1888,10 @@ struct roam_offload_scan_params {
 #endif
 	uint32_t assoc_ie_length;
 	uint8_t  assoc_ie[MAX_ASSOC_IE_LENGTH];
+	bool add_fils_tlv;
+#ifdef WLAN_FEATURE_FILS_SK
+	struct roam_fils_params roam_fils_params;
+#endif
 };
 
 /* struct roam_offload_scan_rssi_params - structure containing
@@ -1845,6 +1945,7 @@ struct roam_offload_scan_rssi_params {
 	int traffic_threshold;
 	int8_t bg_scan_bad_rssi_thresh;
 	uint32_t bg_scan_client_bitmap;
+	int32_t rssi_thresh_offset_5g;
 };
 
 /**
@@ -3055,7 +3156,7 @@ struct periodic_tx_pattern {
 	uint8_t ucPattern[WMI_PERIODIC_TX_PTRN_MAX_SIZE];
 };
 
-#define WMI_GTK_OFFLOAD_KEK_BYTES       16
+#define WMI_GTK_OFFLOAD_KEK_BYTES       64
 #define WMI_GTK_OFFLOAD_KCK_BYTES       16
 #define WMI_GTK_OFFLOAD_ENABLE          0
 #define WMI_GTK_OFFLOAD_DISABLE         1
@@ -3065,6 +3166,7 @@ struct periodic_tx_pattern {
  * @ulFlags: optional flags
  * @aKCK: Key confirmation key
  * @aKEK: key encryption key
+ * @kek_len: Kek length
  * @ullKeyReplayCounter: replay counter
  * @bssid: bss id
  */
@@ -3072,6 +3174,7 @@ struct gtk_offload_params {
 	uint32_t ulFlags;
 	uint8_t aKCK[WMI_GTK_OFFLOAD_KCK_BYTES];
 	uint8_t aKEK[WMI_GTK_OFFLOAD_KEK_BYTES];
+	uint32_t kek_len;
 	uint64_t ullKeyReplayCounter;
 	struct qdf_mac_addr bssid;
 };
@@ -3358,6 +3461,19 @@ struct roam_scan_filter_params {
 	uint32_t num_disallowed_aps;
 	uint32_t num_rssi_rejection_ap;
 	struct rssi_disallow_bssid rssi_rejection_ap[MAX_RSSI_AVOID_BSSID_LIST];
+};
+
+#define WMI_MAX_HLP_IE_LEN 2048
+/**
+ * struct hlp_params - HLP info params
+ * @vdev_id: vdev id
+ * @hlp_ie_len: HLP IE length
+ * @hlp_ie: HLP IE
+ */
+struct hlp_params {
+	uint8_t vdev_id;
+	uint32_t  hlp_ie_len;
+	uint8_t hlp_ie[WMI_MAX_HLP_IE_LEN];
 };
 
 /**
@@ -6914,11 +7030,13 @@ struct rcpi_req {
  * @operation: 0 reset to fw default, 1 set the bits,
  *    2 add the setting bits, 3 delete the setting bits
  * @action_category_map: bit mapping.
+ * @action_per_category: action id bitmask per category
  */
 struct action_wakeup_set_param {
 	uint32_t vdev_id;
 	uint32_t operation;
 	uint32_t action_category_map[WMI_SUPPORTED_ACTION_CATEGORY_ELE_LIST];
+	uint32_t action_per_category[WMI_SUPPORTED_ACTION_CATEGORY];
 };
 
 /**
