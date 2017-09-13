@@ -98,6 +98,7 @@
 #define WMI_MSEC_TO_USEC(msec)       (msec * 1000) /* msec to usec */
 #define WMI_NLO_FREQ_THRESH          1000       /* in MHz */
 
+#define WMI_SVC_MSG_MAX_SIZE   1536
 #define MAX_UTF_EVENT_LENGTH	2048
 #define MAX_WMI_UTF_LEN	252
 #define MAX_WMI_QVIT_LEN	252
@@ -3289,7 +3290,6 @@ struct ssid_hotlist_param {
 /**
  * struct roam_scan_filter_params - Structure holding roaming scan
  *                                  parameters
- * @len:                      length
  * @op_bitmap:                bitmap to determine reason of roaming
  * @session_id:               vdev id
  * @num_bssid_black_list:     The number of BSSID's that we should
@@ -3311,7 +3311,6 @@ struct ssid_hotlist_param {
  */
 
 struct roam_scan_filter_params {
-	uint32_t len;
 	uint32_t op_bitmap;
 	uint8_t session_id;
 	uint32_t num_bssid_black_list;

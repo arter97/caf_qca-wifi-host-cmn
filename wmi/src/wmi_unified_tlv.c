@@ -4965,8 +4965,18 @@ QDF_STATUS send_roam_scan_filter_cmd_tlv(wmi_unified_t wmi_handle,
 	uint32_t *bssid_preferred_factor_ptr = NULL;
 
 	len = sizeof(wmi_roam_filter_fixed_param);
+
 	len += WMI_TLV_HDR_SIZE;
-	len += roam_req->len;
+	if (roam_req->num_bssid_black_list)
+		len += roam_req->num_bssid_black_list * sizeof(wmi_mac_addr);
+	len += WMI_TLV_HDR_SIZE;
+	if (roam_req->num_ssid_white_list)
+		len += roam_req->num_ssid_white_list * sizeof(wmi_ssid);
+	len += 2 * WMI_TLV_HDR_SIZE;
+	if (roam_req->num_bssid_preferred_list) {
+		len += roam_req->num_bssid_preferred_list * sizeof(wmi_mac_addr);
+		len += roam_req->num_bssid_preferred_list * sizeof(A_UINT32);
+	}
 
 	buf = wmi_buf_alloc(wmi_handle, len);
 	if (!buf) {
@@ -10002,6 +10012,13 @@ QDF_STATUS send_log_supported_evt_cmd_tlv(wmi_unified_t wmi_handle,
 	if (wmi_handle->events_logs_list)
 		qdf_mem_free(wmi_handle->events_logs_list);
 
+	if (num_of_diag_events_logs >
+		(WMI_SVC_MSG_MAX_SIZE / sizeof(uint32_t))) {
+		WMI_LOGE("%s: excess num of logs:%d", __func__,
+			num_of_diag_events_logs);
+		QDF_ASSERT(0);
+		return QDF_STATUS_E_INVAL;
+	}
 	/* Store the event list for run time enable/disable */
 	wmi_handle->events_logs_list = qdf_mem_malloc(num_of_diag_events_logs *
 			sizeof(uint32_t));
