@@ -24,7 +24,7 @@
 #include "qdf_trace.h"
 #include "qdf_nbuf.h"
 #include "hal_api_mon.h"
-#include "ieee80211.h"
+#include "linux/ieee80211.h"
 #include "dp_rx_mon.h"
 #include "wlan_cfg.h"
 
@@ -85,6 +85,27 @@ done:
 }
 
 /**
+ * dp_mon_adjust_frag_len() - MPDU and MSDU may spread across
+ *				multiple nbufs. This function
+ *                              is to return data length in
+ *				fragmented buffer
+ *
+ * @total_len: pointer to remaining data length.
+ * @frag_len: poiter to data length in this fragment.
+*/
+static inline void dp_mon_adjust_frag_len(uint32_t *total_len,
+uint32_t *frag_len)
+{
+	if (*total_len >= (RX_BUFFER_SIZE - RX_PKT_TLVS_LEN)) {
+		*frag_len = RX_BUFFER_SIZE - RX_PKT_TLVS_LEN;
+		*total_len -= *frag_len;
+	} else {
+		*frag_len = *total_len;
+		*total_len = 0;
+	}
+}
+
+/**
  * dp_rx_mon_mpdu_pop() - Return a MPDU link descriptor to HW
  *			      (WBM), following error handling
  *
@@ -112,7 +133,7 @@ dp_rx_mon_mpdu_pop(struct dp_soc *soc, uint32_t mac_id,
 	qdf_nbuf_t msdu;
 	qdf_nbuf_t last;
 	struct hal_rx_msdu_list msdu_list;
-	uint8_t num_msdus;
+	uint16_t num_msdus;
 	uint32_t rx_buf_size, rx_pkt_offset;
 	struct hal_buf_info buf_info;
 	void *p_buf_addr_info;
@@ -121,14 +142,23 @@ dp_rx_mon_mpdu_pop(struct dp_soc *soc, uint32_t mac_id,
 	uint32_t msdu_ppdu_id, msdu_cnt;
 	uint8_t *data;
 	uint32_t i;
-	bool mpdu_fcs_err;
+	bool mpdu_err = false;
+	uint32_t total_frag_len, frag_len;
+	bool is_frag, is_first_msdu;
 
 	msdu = 0;
 
 	last = NULL;
 
 	hal_rx_reo_ent_buf_paddr_get(rxdma_dst_ring_desc, &buf_info,
-		&p_last_buf_addr_info, &msdu_cnt, &mpdu_fcs_err);
+		&p_last_buf_addr_info, &msdu_cnt);
+
+	if(HAL_RX_WBM_RXDMA_PSH_RSN_ERROR ==
+		hal_rx_reo_ent_rxdma_push_reason_get(rxdma_dst_ring_desc))
+		mpdu_err = true;
+
+	is_frag = false;
+	is_first_msdu = true;
 
 	do {
 		rx_msdu_link_desc =
@@ -136,11 +166,7 @@ dp_rx_mon_mpdu_pop(struct dp_soc *soc, uint32_t mac_id,
 
 		qdf_assert(rx_msdu_link_desc);
 
-		num_msdus = msdu_cnt;
-
-		hal_rx_msdu_list_get(rx_msdu_link_desc, &msdu_list, num_msdus);
-
-		msdu_cnt -= num_msdus;
+		hal_rx_msdu_list_get(rx_msdu_link_desc, &msdu_list, &num_msdus);
 
 		for (i = 0; i < num_msdus; i++) {
 			uint32_t l2_hdr_offset;
@@ -162,8 +188,12 @@ dp_rx_mon_mpdu_pop(struct dp_soc *soc, uint32_t mac_id,
 					__func__, __LINE__, msdu, data);
 
 				rx_desc_tlv = HAL_RX_MON_DEST_GET_DESC(data);
-				msdu_ppdu_id =
+
+				if(is_first_msdu) {
+					msdu_ppdu_id =
 					HAL_RX_MON_HW_DESC_GET_PPDUID_GET(rx_desc_tlv);
+					is_first_msdu = false;
+				}
 
 				QDF_TRACE(QDF_MODULE_ID_DP,
 					QDF_TRACE_LEVEL_DEBUG,
@@ -178,7 +208,7 @@ dp_rx_mon_mpdu_pop(struct dp_soc *soc, uint32_t mac_id,
 					__func__, __LINE__, *ppdu_id,
 					msdu_ppdu_id);
 
-				if (*ppdu_id != msdu_ppdu_id) {
+				if ((*ppdu_id != msdu_ppdu_id) && !mpdu_err) {
 					*ppdu_id = msdu_ppdu_id;
 					return rx_bufs_used;
 				}
@@ -186,6 +216,28 @@ dp_rx_mon_mpdu_pop(struct dp_soc *soc, uint32_t mac_id,
 				if (hal_rx_desc_is_first_msdu(rx_desc_tlv))
 					hal_rx_mon_hw_desc_get_mpdu_status(rx_desc_tlv,
 						&(dp_pdev->ppdu_info.rx_status));
+
+
+				if(msdu_list.msdu_info[i].msdu_flags &
+					HAL_MSDU_F_MSDU_CONTINUATION) {
+					if(!is_frag) {
+						total_frag_len =
+						msdu_list.msdu_info[i].msdu_len;
+						is_frag = true;
+					}
+					dp_mon_adjust_frag_len(
+						&total_frag_len, &frag_len);
+				} else {
+					if(is_frag) {
+						dp_mon_adjust_frag_len(
+							&total_frag_len, &frag_len);
+					} else {
+						frag_len =
+						msdu_list.msdu_info[i].msdu_len;
+					}
+					is_frag = false;
+					msdu_cnt--;
+				}
 
 				rx_pkt_offset = HAL_RX_MON_HW_RX_DESC_SIZE();
 				/*
@@ -198,7 +250,7 @@ dp_rx_mon_mpdu_pop(struct dp_soc *soc, uint32_t mac_id,
 				hal_rx_msdu_end_l3_hdr_padding_get(data);
 
 				rx_buf_size = rx_pkt_offset + l2_hdr_offset
-					+ msdu_list.msdu_info[i].msdu_len;
+					+ frag_len;
 
 				qdf_nbuf_set_pktlen(msdu, rx_buf_size);
 
@@ -678,27 +730,21 @@ mon_deliver_fail:
 void dp_rx_mon_dest_process(struct dp_soc *soc, uint32_t mac_id, uint32_t quota)
 {
 	struct dp_pdev *pdev = soc->pdev_list[mac_id];
-	uint8_t pdev_id = pdev->pdev_id;
+	uint8_t pdev_id;
 	void *hal_soc;
 	void *rxdma_dst_ring_desc;
-	void *mon_dst_srng = pdev->rxdma_mon_dst_ring.hal_srng;
+	void *mon_dst_srng;
 	union dp_rx_desc_list_elem_t *head = NULL;
 	union dp_rx_desc_list_elem_t *tail = NULL;
 	uint32_t ppdu_id;
 	uint32_t rx_bufs_used;
 
-#ifdef DP_INTR_POLL_BASED
-	if (!pdev)
-		return;
-#endif
-
 	pdev_id = pdev->pdev_id;
 	mon_dst_srng = pdev->rxdma_mon_dst_ring.hal_srng;
 
-	if (!mon_dst_srng) {
+	if (!mon_dst_srng || !hal_srng_initialized(mon_dst_srng)) {
 		QDF_TRACE(QDF_MODULE_ID_TXRX, QDF_TRACE_LEVEL_ERROR,
-			"%s %d : HAL Monitor Destination Ring Init \
-			Failed -- %p\n",
+			"%s %d : HAL Monitor Destination Ring Init Failed -- %p\n",
 			__func__, __LINE__, mon_dst_srng);
 		return;
 	}
@@ -709,8 +755,7 @@ void dp_rx_mon_dest_process(struct dp_soc *soc, uint32_t mac_id, uint32_t quota)
 
 	if (qdf_unlikely(hal_srng_access_start(hal_soc, mon_dst_srng))) {
 		QDF_TRACE(QDF_MODULE_ID_TXRX, QDF_TRACE_LEVEL_ERROR,
-			"%s %d : HAL Monitor Destination Ring Init \
-			Failed -- %p\n",
+			"%s %d : HAL Monitor Destination Ring access Failed -- %p\n",
 			__func__, __LINE__, mon_dst_srng);
 		return;
 	}
@@ -760,6 +805,7 @@ dp_rx_pdev_mon_buf_attach(struct dp_pdev *pdev) {
 	struct dp_srng *rxdma_srng;
 	uint32_t rxdma_entries;
 	struct rx_desc_pool *rx_desc_pool;
+	QDF_STATUS status;
 
 	rxdma_srng = &pdev->rxdma_mon_buf_ring;
 
@@ -773,14 +819,26 @@ dp_rx_pdev_mon_buf_attach(struct dp_pdev *pdev) {
 			"%s: Mon RX Desc Pool[%d] allocation size=%d\n"
 			, __func__, pdev_id, rxdma_entries*3);
 
-	dp_rx_desc_pool_alloc(soc, pdev_id, rxdma_entries*3, rx_desc_pool);
+	status = dp_rx_desc_pool_alloc(soc, pdev_id,
+			rxdma_entries*3, rx_desc_pool);
+	if (!QDF_IS_STATUS_SUCCESS(status)) {
+		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_ERROR,
+			"%s: dp_rx_desc_pool_alloc() failed \n", __func__);
+		return status;
+	}
 
 	QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_WARN,
 			"%s: Mon RX Buffers Replenish pdev_id=%d\n",
 			__func__, pdev_id);
 
-	dp_rx_buffers_replenish(soc, pdev_id, rxdma_srng, rx_desc_pool,
-		rxdma_entries, &desc_list, &tail, HAL_RX_BUF_RBM_SW3_BM);
+	status = dp_rx_buffers_replenish(soc, pdev_id, rxdma_srng, rx_desc_pool,
+			rxdma_entries, &desc_list, &tail,
+			HAL_RX_BUF_RBM_SW3_BM);
+	if (!QDF_IS_STATUS_SUCCESS(status)) {
+		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_ERROR,
+			"%s: dp_rx_buffers_replenish() failed \n", __func__);
+		return status;
+	}
 
 	return QDF_STATUS_SUCCESS;
 }
@@ -846,14 +904,22 @@ static int dp_mon_link_desc_pool_setup(struct dp_soc *soc, uint32_t mac_id)
 
 	QDF_TRACE(QDF_MODULE_ID_TXRX, QDF_TRACE_LEVEL_WARN,
 		"%s: total_mem_size: %d, num_link_desc_banks: %u, \
-		max_alloc_size: %d\n",
-		__func__, total_mem_size, num_link_desc_banks, max_alloc_size);
+		max_alloc_size: %d last_bank_size: %d\n",
+		__func__, total_mem_size, num_link_desc_banks, max_alloc_size,
+		last_bank_size);
 
 	for (i = 0; i < num_link_desc_banks; i++) {
 		dp_pdev->link_desc_banks[i].base_vaddr_unaligned =
-		qdf_mem_alloc_consistent(soc->osdev, NULL,
+		qdf_mem_alloc_consistent(soc->osdev, soc->osdev->dev,
 			max_alloc_size,
 			&(dp_pdev->link_desc_banks[i].base_paddr_unaligned));
+
+		if (!dp_pdev->link_desc_banks[i].base_vaddr_unaligned) {
+			QDF_TRACE(QDF_MODULE_ID_TXRX, QDF_TRACE_LEVEL_ERROR,
+				"%s: Link desc memory allocation failed\n",
+				__func__);
+			goto fail;
+		}
 		dp_pdev->link_desc_banks[i].size = max_alloc_size;
 
 		dp_pdev->link_desc_banks[i].base_vaddr =
@@ -870,13 +936,6 @@ static int dp_mon_link_desc_pool_setup(struct dp_soc *soc, uint32_t mac_id)
 			(dp_pdev->link_desc_banks[i].base_vaddr) -
 			 (unsigned long)
 			 (dp_pdev->link_desc_banks[i].base_vaddr_unaligned));
-
-		if (!dp_pdev->link_desc_banks[i].base_vaddr_unaligned) {
-			QDF_TRACE(QDF_MODULE_ID_TXRX, QDF_TRACE_LEVEL_ERROR,
-				"%s: Link desc memory allocation failed\n",
-				__func__);
-			goto fail;
-		}
 	}
 
 	if (last_bank_size) {
@@ -885,8 +944,15 @@ static int dp_mon_link_desc_pool_setup(struct dp_soc *soc, uint32_t mac_id)
 		 */
 		dp_pdev->link_desc_banks[i].base_vaddr_unaligned =
 			qdf_mem_alloc_consistent(soc->osdev,
-			NULL, last_bank_size,
+			soc->osdev->dev, last_bank_size,
 			&(dp_pdev->link_desc_banks[i].base_paddr_unaligned));
+
+		if (dp_pdev->link_desc_banks[i].base_vaddr_unaligned == NULL) {
+			QDF_TRACE(QDF_MODULE_ID_TXRX, QDF_TRACE_LEVEL_ERROR,
+				"%s: allocation failed for mon link desc pool\n",
+				__func__);
+			goto fail;
+		}
 		dp_pdev->link_desc_banks[i].size = last_bank_size;
 
 		dp_pdev->link_desc_banks[i].base_vaddr =
@@ -1002,13 +1068,33 @@ QDF_STATUS
 dp_rx_pdev_mon_attach(struct dp_pdev *pdev) {
 	uint8_t pdev_id = pdev->pdev_id;
 	struct dp_soc *soc = pdev->soc;
+	QDF_STATUS status;
 
 	QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_WARN,
 			"%s: pdev attach id=%d\n", __func__, pdev_id);
 
-	dp_rx_pdev_mon_buf_attach(pdev);
-	dp_rx_pdev_mon_status_attach(pdev);
-	dp_mon_link_desc_pool_setup(soc, pdev_id);
+	status = dp_rx_pdev_mon_buf_attach(pdev);
+	if (!QDF_IS_STATUS_SUCCESS(status)) {
+		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_ERROR,
+			"%s: dp_rx_pdev_mon_buf_attach() failed \n", __func__);
+		return status;
+	}
+
+	status = dp_rx_pdev_mon_status_attach(pdev);
+	if (!QDF_IS_STATUS_SUCCESS(status)) {
+		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_ERROR,
+			"%s: dp_rx_pdev_mon_status_attach() failed \n",
+			__func__);
+		return status;
+	}
+
+	status = dp_mon_link_desc_pool_setup(soc, pdev_id);
+	if (!QDF_IS_STATUS_SUCCESS(status)) {
+		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_ERROR,
+			"%s: dp_mon_link_desc_pool_setup() failed \n",
+			__func__);
+		return status;
+	}
 
 	return QDF_STATUS_SUCCESS;
 }

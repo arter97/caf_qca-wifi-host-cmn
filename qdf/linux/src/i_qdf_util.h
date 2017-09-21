@@ -56,7 +56,7 @@
 #endif
 
 #include <qdf_types.h>
-#include <asm/io.h>
+#include <linux/io.h>
 #include <asm/byteorder.h>
 
 #ifdef QCA_PARTNER_PLATFORM
@@ -65,7 +65,6 @@
 #include <linux/byteorder/generic.h>
 #endif
 
-typedef struct task_struct __qdf_thread_t;
 typedef wait_queue_head_t __qdf_wait_queue_head_t;
 
 /* Generic compiler-dependent macros if defined by the OS */
@@ -168,6 +167,12 @@ static inline bool __qdf_test_and_clear_bit(unsigned int nr,
 	return __test_and_clear_bit(nr, addr);
 }
 
+static inline unsigned long __qdf_find_first_bit(unsigned long *addr,
+					unsigned long nbits)
+{
+	return find_first_bit(addr, nbits);
+}
+
 /**
  * __qdf_set_macaddr_broadcast() - set a QDF MacAddress to the 'broadcast'
  * @mac_addr: pointer to the qdf MacAddress to set to broadcast
@@ -249,6 +254,12 @@ static inline bool __qdf_is_macaddr_equal(struct qdf_mac_addr *mac_addr1,
 	}     \
 } while (0)
 
+/**
+ * @brief Compile time Assert
+ */
+#define QDF_COMPILE_TIME_ASSERT(assertion_name, predicate) \
+    typedef char assertion_name[(predicate) ? 1 : -1]
+
 #define __qdf_container_of(ptr, type, member) container_of(ptr, type, member)
 
 #define __qdf_ntohs                      ntohs
@@ -320,6 +331,7 @@ static inline uint64_t
 __qdf_get_totalramsize(void)
 {
 	struct sysinfo meminfo;
+
 	si_meminfo(&meminfo);
 	return MEMINFO_KB(meminfo.totalram);
 }
@@ -413,6 +425,21 @@ static inline
 void __qdf_get_random_bytes(void *buf, int nbytes)
 {
 	return get_random_bytes(buf, nbytes);
+}
+
+/**
+ * __qdf_do_div() - wrapper function for kernel macro(do_div).
+ * @dividend: Dividend value
+ * @divisor : Divisor value
+ *
+ * Return: Quotient
+ */
+static inline
+uint64_t __qdf_do_div(uint64_t dividend, uint32_t divisor)
+{
+	do_div(dividend, divisor);
+	/*do_div macro updates dividend with Quotient of dividend/divisor */
+	return dividend;
 }
 
 #endif /*_I_QDF_UTIL_H*/

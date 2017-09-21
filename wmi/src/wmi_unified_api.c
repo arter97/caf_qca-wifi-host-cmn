@@ -24,11 +24,6 @@
  * under proprietary terms before Copyright ownership was assigned
  * to the Linux Foundation.
  */
-#include "athdefs.h"
-#include "osapi_linux.h"
-#include "a_types.h"
-#include "a_debug.h"
-#include "ol_if_athvar.h"
 #include "wmi_unified_priv.h"
 #include "wmi_unified_param.h"
 
@@ -1425,26 +1420,25 @@ QDF_STATUS wmi_unified_vdev_set_gtx_cfg_cmd(void *wmi_hdl, uint32_t if_id,
 /**
  * wmi_unified_process_update_edca_param() - update EDCA params
  * @wmi_hdl: wmi handle
- * @edca_params: edca parameters
+ * @vdev_id: vdev id.
+ * @wmm_vparams: edca parameters
  *
  * This function updates EDCA parameters to the target
  *
  * Return: QDF_STATUS_SUCCESS on success and QDF_STATUS_E_FAILURE for failure
  */
-#ifdef CONFIG_MCL
 QDF_STATUS wmi_unified_process_update_edca_param(void *wmi_hdl,
 				uint8_t vdev_id,
-				wmi_wmm_vparams gwmm_param[WMI_MAX_NUM_AC])
+				struct wmi_host_wme_vparams wmm_vparams[WMI_MAX_NUM_AC])
 {
 	wmi_unified_t wmi_handle = (wmi_unified_t) wmi_hdl;
 
 	if (wmi_handle->ops->send_process_update_edca_param_cmd)
 		return wmi_handle->ops->send_process_update_edca_param_cmd(wmi_handle,
-					 vdev_id, gwmm_param);
+					 vdev_id, wmm_vparams);
 
 	return QDF_STATUS_E_FAILURE;
 }
-#endif
 
 /**
  * wmi_unified_probe_rsp_tmpl_send_cmd() - send probe response template to fw
@@ -1691,6 +1685,17 @@ QDF_STATUS wmi_unified_roam_scan_offload_rssi_thresh_cmd(void *wmi_hdl,
 	return QDF_STATUS_E_FAILURE;
 }
 
+QDF_STATUS wmi_unified_roam_mawc_params_cmd(
+			void *wmi_hdl, struct wmi_mawc_roam_params *params)
+{
+	wmi_unified_t wmi_handle = (wmi_unified_t) wmi_hdl;
+
+	if (wmi_handle->ops->send_roam_mawc_params_cmd)
+		return wmi_handle->ops->send_roam_mawc_params_cmd(
+				wmi_handle, params);
+
+	return QDF_STATUS_E_FAILURE;
+}
 /**
  * wmi_unified_roam_scan_filter_cmd() - send roam scan whitelist,
  *                                      blacklist and preferred list
@@ -1967,6 +1972,24 @@ QDF_STATUS wmi_unified_pno_start_cmd(void *wmi_hdl,
 	return QDF_STATUS_E_FAILURE;
 }
 #endif
+
+/**
+ * wmi_unified_nlo_mawc_cmd() - NLO MAWC cmd configuration
+ * @wmi_hdl: wmi handle
+ * @params: Configuration parameters
+ *
+ * Return: QDF_STATUS_SUCCESS on success and QDF_STATUS_E_FAILURE for failure
+ */
+QDF_STATUS wmi_unified_nlo_mawc_cmd(void *wmi_hdl,
+		struct nlo_mawc_params *params)
+{
+	wmi_unified_t wmi_handle = (wmi_unified_t) wmi_hdl;
+
+	if (wmi_handle->ops->send_nlo_mawc_cmd)
+		return wmi_handle->ops->send_nlo_mawc_cmd(wmi_handle, params);
+
+	return QDF_STATUS_E_FAILURE;
+}
 
 /* wmi_unified_set_ric_req_cmd() - set ric request element
  * @wmi_hdl: wmi handle
@@ -2633,8 +2656,8 @@ QDF_STATUS wmi_unified_process_ch_avoid_update_cmd(void *wmi_hdl)
  */
 QDF_STATUS wmi_unified_send_regdomain_info_to_fw_cmd(void *wmi_hdl,
 				   uint32_t reg_dmn, uint16_t regdmn2G,
-				   uint16_t regdmn5G, int8_t ctl2G,
-				   int8_t ctl5G)
+				   uint16_t regdmn5G, uint8_t ctl2G,
+				   uint8_t ctl5G)
 {
 	wmi_unified_t wmi_handle = (wmi_unified_t) wmi_hdl;
 
@@ -3292,7 +3315,7 @@ QDF_STATUS wmi_unified_set_active_bpf_mode_cmd(void *wmi_hdl,
 	wmi_unified_t wmi = (wmi_unified_t)wmi_hdl;
 
 	if (!wmi->ops->send_set_active_bpf_mode_cmd) {
-		WMI_LOGI("send_set_active_bpf_mode_cmd op is NULL");
+		WMI_LOGD("send_set_active_bpf_mode_cmd op is NULL");
 		return QDF_STATUS_E_FAILURE;
 	}
 
@@ -4596,6 +4619,28 @@ QDF_STATUS wmi_ready_extract_mac_addr(void *wmi_hdl, void *ev, uint8_t *macaddr)
 
 
 	return QDF_STATUS_E_FAILURE;
+}
+
+/**
+ * wmi_ready_extract_mac_addr() - extract MAC address list from ready event
+ * @wmi_handle: wmi handle
+ * @param ev: pointer to event buffer
+ * @param num_mac_addr: Pointer to number of entries
+ *
+ * Return: address to start of mac addr list
+ */
+wmi_host_mac_addr *wmi_ready_extract_mac_addr_list(void *wmi_hdl, void *ev,
+					      uint8_t *num_mac_addr)
+{
+	wmi_unified_t wmi_handle = (wmi_unified_t) wmi_hdl;
+
+	if (wmi_handle->ops->ready_extract_mac_addr_list)
+		return wmi_handle->ops->ready_extract_mac_addr_list(wmi_handle,
+			ev, num_mac_addr);
+
+	*num_mac_addr = 0;
+
+	return NULL;
 }
 
 /**
@@ -6701,6 +6746,26 @@ QDF_STATUS wmi_unified_send_dbs_scan_sel_params_cmd(void *wmi_hdl,
 		return wmi_handle->ops->
 			send_dbs_scan_sel_params_cmd(wmi_handle,
 						     dbs_scan_params);
+
+	return QDF_STATUS_E_FAILURE;
+}
+
+/**
+ * wmi_unified_send_limit_off_chan_cmd() - send wmi cmd of limit off channel
+ * configuration params
+ * @wmi_hdl:  wmi handler
+ * @limit_off_chan_param: pointer to wmi_limit_off_chan_param
+ *
+ * Return: QDF_STATUS_SUCCESS on success and QDF failure reason code on failure
+ */
+QDF_STATUS wmi_unified_send_limit_off_chan_cmd(void *wmi_hdl,
+		struct wmi_limit_off_chan_param *limit_off_chan_param)
+{
+	wmi_unified_t wmi_handle = (wmi_unified_t) wmi_hdl;
+
+	if (wmi_handle->ops->send_limit_off_chan_cmd)
+		return wmi_handle->ops->send_limit_off_chan_cmd(wmi_handle,
+				limit_off_chan_param);
 
 	return QDF_STATUS_E_FAILURE;
 }

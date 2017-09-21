@@ -37,7 +37,7 @@ struct dfs_nol_info {
 	struct dfsreq_nolelem dfs_nol[DFS_MAX_NOL_CHANNEL];
 };
 
-QDF_STATUS utils_nif_dfs_attach(struct wlan_objmgr_pdev *pdev)
+QDF_STATUS utils_dfs_reset(struct wlan_objmgr_pdev *pdev)
 {
 	struct wlan_dfs *dfs;
 
@@ -45,25 +45,12 @@ QDF_STATUS utils_nif_dfs_attach(struct wlan_objmgr_pdev *pdev)
 	if (dfs == NULL)
 		return  QDF_STATUS_E_FAILURE;
 
-	nif_dfs_attach(dfs);
+	dfs_reset(dfs);
+	dfs_nol_update(dfs);
+	dfs_init_precac_list(dfs);
 
 	return QDF_STATUS_SUCCESS;
 }
-EXPORT_SYMBOL(utils_nif_dfs_attach);
-
-QDF_STATUS utils_nif_dfs_detach(struct wlan_objmgr_pdev *pdev)
-{
-	struct wlan_dfs *dfs;
-
-	dfs = global_dfs_to_mlme.pdev_get_comp_private_obj(pdev);
-	if (dfs == NULL)
-		return  QDF_STATUS_E_FAILURE;
-
-	nif_dfs_detach(dfs);
-
-	return QDF_STATUS_SUCCESS;
-}
-EXPORT_SYMBOL(utils_nif_dfs_detach);
 
 QDF_STATUS utils_dfs_cac_valid_reset(struct wlan_objmgr_pdev *pdev,
 		uint8_t prevchan_ieee,
@@ -407,6 +394,21 @@ QDF_STATUS utils_dfs_get_nol_chfreq_and_chwidth(struct wlan_objmgr_pdev *pdev,
 }
 EXPORT_SYMBOL(utils_dfs_get_nol_chfreq_and_chwidth);
 
+QDF_STATUS utils_dfs_update_cur_chan_flags(struct wlan_objmgr_pdev *pdev,
+		uint64_t flags,
+		uint16_t flagext)
+{
+	struct wlan_dfs *dfs;
+
+	dfs = global_dfs_to_mlme.pdev_get_comp_private_obj(pdev);
+	if (dfs == NULL)
+		return  QDF_STATUS_E_FAILURE;
+
+	dfs_update_cur_chan_flags(dfs, flags, flagext);
+
+	return QDF_STATUS_SUCCESS;
+}
+
 static void utils_dfs_get_max_phy_mode(struct wlan_objmgr_pdev *pdev,
 		uint32_t *phy_mode)
 {
@@ -453,7 +455,7 @@ static void utils_dfs_get_chan_list(struct wlan_objmgr_pdev *pdev,
 				&len, weight_list, weight_len);
 	else
 		policy_mgr_get_pcl_for_existing_conn(psoc, PM_SAP_MODE, pcl_ch,
-				&len, weight_list, weight_len);
+				&len, weight_list, weight_len, true);
 
 	if (*num_chan < len) {
 		DFS_PRINTK("%s: Invalid len src=%d, dst=%d\n",
@@ -501,7 +503,7 @@ QDF_STATUS dfs_get_random_channel(
 		goto random_chan_error;
 	}
 
-	wlan_reg_get_dfs_region(psoc, &dfs_reg);
+	wlan_reg_get_dfs_region(pdev, &dfs_reg);
 	chan_list = qdf_mem_malloc(num_chan * sizeof(*chan_list));
 	if (!chan_list) {
 		DFS_PRINTK("%s: mem alloc failed\n", __func__);
@@ -662,6 +664,7 @@ void dfs_clear_nol_channels(struct wlan_objmgr_pdev *pdev)
 
 	/* clear local cache first */
 	dfs_nol_timer_cleanup(dfs);
+	dfs_nol_update(dfs);
 
 	/*
 	 * update platform driver nol list with local cache which is zero,

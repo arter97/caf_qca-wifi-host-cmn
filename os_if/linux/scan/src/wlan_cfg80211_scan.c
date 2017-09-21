@@ -59,6 +59,91 @@ static uint32_t hdd_config_sched_scan_start_delay(
 }
 #endif
 
+#if defined(CFG80211_SCAN_RANDOM_MAC_ADDR) || \
+	(LINUX_VERSION_CODE >= KERNEL_VERSION(4, 4, 0))
+/**
+ * wlan_fill_scan_rand_attrs() - Populate the scan randomization attrs
+ * @vdev: pointer to objmgr vdev
+ * @flags: cfg80211 scan flags
+ * @mac_addr: random mac addr from cfg80211
+ * @mac_addr_mask: mac addr mask from cfg80211
+ * @randomize: output variable to check scan randomization status
+ * @addr: output variable to hold random addr
+ * @mask: output variable to hold mac mask
+ *
+ * Return: None
+ */
+static void wlan_fill_scan_rand_attrs(struct wlan_objmgr_vdev *vdev,
+				      uint32_t flags,
+				      uint8_t *mac_addr,
+				      uint8_t *mac_addr_mask,
+				      bool *randomize,
+				      uint8_t *addr,
+				      uint8_t *mask)
+{
+	if (!(flags & NL80211_SCAN_FLAG_RANDOM_ADDR))
+		return;
+
+	if (wlan_vdev_mlme_get_opmode(vdev) != QDF_STA_MODE)
+		return;
+
+	if (wlan_vdev_is_connected(vdev))
+		return;
+
+	*randomize = true;
+	memcpy(addr, mac_addr, QDF_MAC_ADDR_SIZE);
+	memcpy(mask, mac_addr_mask, QDF_MAC_ADDR_SIZE);
+	cfg80211_info("Random mac addr: %pM and Random mac mask: %pM",
+		      addr, mask);
+}
+
+/**
+ * wlan_scan_rand_attrs() - Wrapper function to fill scan random attrs
+ * @vdev: pointer to objmgr vdev
+ * @request: pointer to cfg80211 scan request
+ * @req: pointer to cmn module scan request
+ *
+ * This is a wrapper function which invokes wlan_fill_scan_rand_attrs()
+ * to fill random attributes of internal scan request with cfg80211_scan_request
+ *
+ * Return: None
+ */
+static void wlan_scan_rand_attrs(struct wlan_objmgr_vdev *vdev,
+				 struct cfg80211_scan_request *request,
+				 struct scan_start_request *req)
+{
+	bool *randomize = &req->scan_req.scan_random.randomize;
+	uint8_t *mac_addr = req->scan_req.scan_random.mac_addr;
+	uint8_t *mac_mask = req->scan_req.scan_random.mac_mask;
+
+	wlan_fill_scan_rand_attrs(vdev, request->flags, request->mac_addr,
+				  request->mac_addr_mask, randomize, mac_addr,
+				  mac_mask);
+	if (!*randomize)
+		return;
+
+	req->scan_req.scan_f_add_spoofed_mac_in_probe = true;
+	req->scan_req.scan_f_add_rand_seq_in_probe = true;
+}
+#else
+/**
+ * wlan_scan_rand_attrs() - Wrapper function to fill scan random attrs
+ * @vdev: pointer to objmgr vdev
+ * @request: pointer to cfg80211 scan request
+ * @req: pointer to cmn module scan request
+ *
+ * This is a wrapper function which invokes wlan_fill_scan_rand_attrs()
+ * to fill random attributes of internal scan request with cfg80211_scan_request
+ *
+ * Return: None
+ */
+static void wlan_scan_rand_attrs(struct wlan_objmgr_vdev *vdev,
+				 struct cfg80211_scan_request *request,
+				 struct scan_start_request *req)
+{
+}
+#endif
+
 #ifdef FEATURE_WLAN_SCAN_PNO
 #if ((LINUX_VERSION_CODE >= KERNEL_VERSION(4, 4, 0)) || \
 	defined(CFG80211_MULTI_SCAN_PLAN_BACKPORT))
@@ -149,37 +234,6 @@ static void wlan_cfg80211_pno_callback(struct wlan_objmgr_vdev *vdev,
 	cfg80211_sched_scan_results(pdev_ospriv->wiphy);
 }
 
-/**
- * wlan_cfg80211_is_pno_allowed() -  Check if PNO is allowed
- * @vdev: vdev ptr
- *
- * The PNO Start request is coming from upper layers.
- * It is to be allowed only for Infra STA device type
- * and the link should be in a disconnected state.
- *
- * Return: Success if PNO is allowed, Failure otherwise.
- */
-static QDF_STATUS wlan_cfg80211_is_pno_allowed(struct wlan_objmgr_vdev *vdev)
-{
-	enum wlan_vdev_state state;
-	enum tQDF_ADAPTER_MODE vdev_opmode;
-	uint8_t vdev_id;
-
-	vdev_opmode = wlan_vdev_mlme_get_opmode(vdev);
-	state = wlan_vdev_mlme_get_state(vdev);
-	vdev_id = wlan_vdev_get_id(vdev);
-
-	cfg80211_notice("dev_mode=%d, state=%d vdev id %d",
-		vdev_opmode, state, vdev_id);
-
-	if ((vdev_opmode == QDF_STA_MODE) &&
-	   ((state == WLAN_VDEV_S_INIT) ||
-	   (state == WLAN_VDEV_S_STOP)))
-		return QDF_STATUS_SUCCESS;
-	else
-		return QDF_STATUS_E_FAILURE;
-}
-
 #ifdef WLAN_POLICY_MGR_ENABLE
 static bool wlan_cfg80211_is_ap_go_present(struct wlan_objmgr_psoc *psoc)
 {
@@ -223,6 +277,82 @@ static QDF_STATUS wlan_cfg80211_is_chan_ok_for_dnbs(
 }
 #endif
 
+#if defined(CFG80211_SCAN_RANDOM_MAC_ADDR) || \
+	(LINUX_VERSION_CODE >= KERNEL_VERSION(4, 4, 0))
+/**
+ * wlan_pno_scan_rand_attr() - Wrapper function to fill sched scan random attrs
+ * @vdev: pointer to objmgr vdev
+ * @request: pointer to cfg80211 sched scan request
+ * @req: pointer to cmn module pno scan request
+ *
+ * This is a wrapper function which invokes wlan_fill_scan_rand_attrs()
+ * to fill random attributes of internal pno scan
+ * with cfg80211_sched_scan_request
+ *
+ * Return: None
+ */
+static void wlan_pno_scan_rand_attr(struct wlan_objmgr_vdev *vdev,
+				    struct cfg80211_sched_scan_request *request,
+				    struct pno_scan_req_params *req)
+{
+	bool *randomize = &req->scan_random.randomize;
+	uint8_t *mac_addr = req->scan_random.mac_addr;
+	uint8_t *mac_mask = req->scan_random.mac_mask;
+
+	wlan_fill_scan_rand_attrs(vdev, request->flags, request->mac_addr,
+				  request->mac_addr_mask, randomize, mac_addr,
+				  mac_mask);
+}
+#else
+/**
+ * wlan_pno_scan_rand_attr() - Wrapper function to fill sched scan random attrs
+ * @vdev: pointer to objmgr vdev
+ * @request: pointer to cfg80211 sched scan request
+ * @req: pointer to cmn module pno scan request
+ *
+ * This is a wrapper function which invokes wlan_fill_scan_rand_attrs()
+ * to fill random attributes of internal pno scan
+ * with cfg80211_sched_scan_request
+ *
+ * Return: None
+ */
+static void wlan_pno_scan_rand_attr(struct wlan_objmgr_vdev *vdev,
+				    struct cfg80211_sched_scan_request *request,
+				    struct pno_scan_req_params *req)
+{
+}
+#endif
+
+/**
+ * wlan_hdd_sched_scan_update_relative_rssi() - update CPNO params
+ * @pno_request: pointer to PNO scan request
+ * @request: Pointer to cfg80211 scheduled scan start request
+ *
+ * This function is used to update Connected PNO params sent by kernel
+ *
+ * Return: None
+ */
+#if defined(CFG80211_REPORT_BETTER_BSS_IN_SCHED_SCAN)
+static inline void wlan_hdd_sched_scan_update_relative_rssi(
+			struct pno_scan_req_params *pno_request,
+			struct cfg80211_sched_scan_request *request)
+{
+	pno_request->relative_rssi_set = request->relative_rssi_set;
+	pno_request->relative_rssi = request->relative_rssi;
+	if (NL80211_BAND_2GHZ == request->rssi_adjust.band)
+		pno_request->band_rssi_pref.band = WLAN_BAND_2_4_GHZ;
+	else if (NL80211_BAND_5GHZ == request->rssi_adjust.band)
+		pno_request->band_rssi_pref.band = WLAN_BAND_5_GHZ;
+	pno_request->band_rssi_pref.rssi = request->rssi_adjust.delta;
+}
+#else
+static inline void wlan_hdd_sched_scan_update_relative_rssi(
+			struct pno_scan_req_params *pno_request,
+			struct cfg80211_sched_scan_request *request)
+{
+}
+#endif
+
 int wlan_cfg80211_sched_scan_start(struct wlan_objmgr_pdev *pdev,
 	struct net_device *dev,
 	struct cfg80211_sched_scan_request *request,
@@ -241,13 +371,6 @@ int wlan_cfg80211_sched_scan_start(struct wlan_objmgr_pdev *pdev,
 	if (!vdev) {
 		cfg80211_err("vdev object is NULL");
 		return -EIO;
-	}
-
-	status = wlan_cfg80211_is_pno_allowed(vdev);
-	if (QDF_IS_STATUS_ERROR(status)) {
-		cfg80211_err("pno is not allowed");
-		wlan_objmgr_vdev_release_ref(vdev, WLAN_OSIF_ID);
-		return -ENOTSUPP;
 	}
 
 	if (ucfg_scan_get_pno_in_progress(vdev)) {
@@ -388,6 +511,8 @@ int wlan_cfg80211_sched_scan_start(struct wlan_objmgr_pdev *pdev,
 	cfg80211_notice("Number of hidden networks being Configured = %d",
 		  request->n_ssids);
 
+	wlan_pno_scan_rand_attr(vdev, request, req);
+
 	/*
 	 * Before Kernel 4.4
 	 *   Driver gets only one time interval which is hard coded in
@@ -411,11 +536,14 @@ int wlan_cfg80211_sched_scan_start(struct wlan_objmgr_pdev *pdev,
 	cfg80211_notice("Base scan interval: %d sec, scan cycles: %d, slow scan interval %d",
 		req->fast_scan_period, req->fast_scan_max_cycles,
 		req->slow_scan_period);
+	wlan_hdd_sched_scan_update_relative_rssi(req, request);
 
 	psoc = wlan_pdev_get_psoc(pdev);
 	ucfg_scan_register_pno_cb(psoc,
 		wlan_cfg80211_pno_callback, NULL);
 	ucfg_scan_get_pno_def_params(vdev, req);
+	if (ucfg_ie_whitelist_enabled(psoc, vdev))
+		ucfg_copy_ie_whitelist_attrs(psoc, &req->ie_whitelist);
 	status = ucfg_scan_pno_start(vdev, req);
 	if (QDF_IS_STATUS_ERROR(status)) {
 		cfg80211_err("Failed to enable PNO");
@@ -831,7 +959,7 @@ allow_suspend:
 	osif_priv = wlan_pdev_get_ospriv(pdev);
 	if (qdf_list_empty(&osif_priv->osif_scan->scan_req_q))
 		qdf_runtime_pm_allow_suspend(
-			osif_priv->osif_scan->runtime_pm_lock);
+			&osif_priv->osif_scan->runtime_pm_lock);
 
 }
 
@@ -845,8 +973,7 @@ void wlan_scan_runtime_pm_deinit(struct wlan_objmgr_pdev *pdev)
 	wlan_pdev_obj_unlock(pdev);
 
 	scan_priv = osif_priv->osif_scan;
-	qdf_runtime_lock_deinit(scan_priv->runtime_pm_lock);
-	scan_priv->runtime_pm_lock = NULL;
+	qdf_runtime_lock_deinit(&scan_priv->runtime_pm_lock);
 }
 
 QDF_STATUS wlan_cfg80211_scan_priv_init(struct wlan_objmgr_pdev *pdev)
@@ -872,7 +999,7 @@ QDF_STATUS wlan_cfg80211_scan_priv_init(struct wlan_objmgr_pdev *pdev)
 	qdf_list_create(&scan_priv->scan_req_q, WLAN_MAX_SCAN_COUNT);
 	qdf_mutex_create(&scan_priv->scan_req_q_lock);
 	scan_priv->req_id = req_id;
-	scan_priv->runtime_pm_lock = qdf_runtime_lock_init("scan");
+	qdf_runtime_lock_init(&scan_priv->runtime_pm_lock);
 
 	return QDF_STATUS_SUCCESS;
 }
@@ -1149,6 +1276,14 @@ int wlan_cfg80211_scan(struct wlan_objmgr_pdev *pdev,
 				request->ie_len);
 	}
 
+	if (!is_p2p_scan) {
+		wlan_scan_rand_attrs(vdev, request, req);
+		if (ucfg_ie_whitelist_enabled(psoc, vdev) &&
+		    ucfg_copy_ie_whitelist_attrs(psoc,
+					&req->scan_req.ie_whitelist))
+			req->scan_req.scan_f_en_ie_whitelist_in_probe = true;
+	}
+
 	if (request->flags & NL80211_SCAN_FLAG_FLUSH)
 		ucfg_scan_flush_results(pdev, NULL);
 
@@ -1156,7 +1291,7 @@ int wlan_cfg80211_scan(struct wlan_objmgr_pdev *pdev,
 	wlan_scan_request_enqueue(pdev, request, source, req->scan_req.scan_id);
 
 	qdf_runtime_pm_prevent_suspend(
-		osif_priv->osif_scan->runtime_pm_lock);
+		&osif_priv->osif_scan->runtime_pm_lock);
 
 	status = ucfg_scan_start(req);
 	if (QDF_STATUS_SUCCESS != status) {
@@ -1170,7 +1305,7 @@ int wlan_cfg80211_scan(struct wlan_objmgr_pdev *pdev,
 		wlan_scan_request_dequeue(pdev, scan_id, &request, &source);
 		if (qdf_list_empty(&osif_priv->osif_scan->scan_req_q))
 			qdf_runtime_pm_allow_suspend(
-				osif_priv->osif_scan->runtime_pm_lock);
+				&osif_priv->osif_scan->runtime_pm_lock);
 	}
 
 end:
@@ -1323,8 +1458,8 @@ int wlan_vendor_abort_scan(struct wlan_objmgr_pdev *pdev,
 	uint8_t pdev_id;
 
 	pdev_id = wlan_objmgr_pdev_get_pdev_id(pdev);
-	if (nla_parse(tb, QCA_WLAN_VENDOR_ATTR_SCAN_MAX, data,
-		      data_len, scan_policy)) {
+	if (wlan_cfg80211_nla_parse(tb, QCA_WLAN_VENDOR_ATTR_SCAN_MAX, data,
+				    data_len, scan_policy)) {
 		cfg80211_err("Invalid ATTR");
 		return ret;
 	}

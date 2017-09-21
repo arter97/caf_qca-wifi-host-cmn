@@ -57,6 +57,12 @@ extern "C" {
 #define HTC_MAX_MSG_PER_BUNDLE_TX           32
 #endif
 
+#ifdef HIF_SDIO
+#define UPDATE_ALT_CREDIT(tar, val) (tar->AltDataCreditSize = (uint16_t) val)
+#else
+#define UPDATE_ALT_CREDIT(tar, val) /* no-op */
+#endif
+
 /*
  * HTC_MAX_TX_BUNDLE_SEND_LIMIT -
  * This value is in units of tx frame fragments.
@@ -168,6 +174,7 @@ typedef struct _HTC_ENDPOINT {
 #endif
 	bool TxCreditFlowEnabled;
 	bool async_update;  /* packets can be queued asynchronously */
+	qdf_spinlock_t lookup_queue_lock;
 } HTC_ENDPOINT;
 
 #ifdef HTC_EP_STAT_PROFILING
@@ -250,19 +257,6 @@ typedef struct _HTC_TARGET {
 	uint8_t wmi_ep_count;
 } HTC_TARGET;
 
-#if defined ENABLE_BUNDLE_TX
-#define HTC_TX_BUNDLE_ENABLED(target) (target->MaxMsgsPerHTCBundle > 1)
-#else
-#define HTC_TX_BUNDLE_ENABLED(target) 0
-#endif
-
-#if defined ENABLE_BUNDLE_RX
-#define HTC_RX_BUNDLE_ENABLED(target) (target->MaxMsgsPerHTCBundle > 1)
-#else
-#define HTC_RX_BUNDLE_ENABLED(target) 0
-#endif
-
-#define HTC_ENABLE_BUNDLE(target) (target->MaxMsgsPerHTCBundle > 1)
 
 #ifdef RX_SG_SUPPORT
 #define RESET_RX_SG_CONFIG(_target) \
@@ -273,16 +267,18 @@ do { \
 } while (0)
 #endif
 
-#define HTC_STATE_STOPPING      (1 << 0)
-#define HTC_STOPPING(t)         ((t)->HTCStateFlags & HTC_STATE_STOPPING)
-#define LOCK_HTC(t)             qdf_spin_lock_bh(&(t)->HTCLock)
-#define UNLOCK_HTC(t)           qdf_spin_unlock_bh(&(t)->HTCLock)
-#define LOCK_HTC_RX(t)          qdf_spin_lock_bh(&(t)->HTCRxLock)
-#define UNLOCK_HTC_RX(t)        qdf_spin_unlock_bh(&(t)->HTCRxLock)
-#define LOCK_HTC_TX(t)          qdf_spin_lock_bh(&(t)->HTCTxLock)
-#define UNLOCK_HTC_TX(t)        qdf_spin_unlock_bh(&(t)->HTCTxLock)
-#define LOCK_HTC_CREDIT(t)      qdf_spin_lock_bh(&(t)->HTCCreditLock)
-#define UNLOCK_HTC_CREDIT(t)    qdf_spin_unlock_bh(&(t)->HTCCreditLock)
+#define HTC_STATE_STOPPING         (1 << 0)
+#define HTC_STOPPING(t)            ((t)->HTCStateFlags & HTC_STATE_STOPPING)
+#define LOCK_HTC(t)                qdf_spin_lock_bh(&(t)->HTCLock)
+#define UNLOCK_HTC(t)              qdf_spin_unlock_bh(&(t)->HTCLock)
+#define LOCK_HTC_RX(t)             qdf_spin_lock_bh(&(t)->HTCRxLock)
+#define UNLOCK_HTC_RX(t)           qdf_spin_unlock_bh(&(t)->HTCRxLock)
+#define LOCK_HTC_TX(t)             qdf_spin_lock_bh(&(t)->HTCTxLock)
+#define UNLOCK_HTC_TX(t)           qdf_spin_unlock_bh(&(t)->HTCTxLock)
+#define LOCK_HTC_CREDIT(t)         qdf_spin_lock_bh(&(t)->HTCCreditLock)
+#define UNLOCK_HTC_CREDIT(t)       qdf_spin_unlock_bh(&(t)->HTCCreditLock)
+#define LOCK_HTC_EP_TX_LOOKUP(t)   qdf_spin_lock_bh(&(t)->lookup_queue_lock)
+#define UNLOCK_HTC_EP_TX_LOOKUP(t) qdf_spin_unlock_bh(&(t)->lookup_queue_lock)
 
 #define GET_HTC_TARGET_FROM_HANDLE(hnd) ((HTC_TARGET *)(hnd))
 
@@ -317,7 +313,7 @@ void htc_flush_rx_hold_queue(HTC_TARGET *target, HTC_ENDPOINT *pEndpoint);
 void htc_flush_endpoint_tx(HTC_TARGET *target, HTC_ENDPOINT *pEndpoint,
 			   HTC_TX_TAG Tag);
 void htc_recv_init(HTC_TARGET *target);
-A_STATUS htc_wait_recv_ctrl_message(HTC_TARGET *target);
+QDF_STATUS htc_wait_recv_ctrl_message(HTC_TARGET *target);
 void htc_free_control_tx_packet(HTC_TARGET *target, HTC_PACKET *pPacket);
 HTC_PACKET *htc_alloc_control_tx_packet(HTC_TARGET *target);
 uint8_t htc_get_credit_allocation(HTC_TARGET *target, uint16_t service_id);
@@ -396,4 +392,19 @@ htc_send_complete_check(HTC_ENDPOINT *pEndpoint, int force) {
 #define ENABLE_BUNDLE_RX 1
 #endif
 #endif /*defined(HIF_SDIO) || defined(HIF_USB)*/
+
+#if defined ENABLE_BUNDLE_TX
+#define HTC_TX_BUNDLE_ENABLED(target) (target->MaxMsgsPerHTCBundle > 1)
+#else
+#define HTC_TX_BUNDLE_ENABLED(target) 0
+#endif
+
+#if defined ENABLE_BUNDLE_RX
+#define HTC_RX_BUNDLE_ENABLED(target) (target->MaxMsgsPerHTCBundle > 1)
+#else
+#define HTC_RX_BUNDLE_ENABLED(target) 0
+#endif
+
+#define HTC_ENABLE_BUNDLE(target) (target->MaxMsgsPerHTCBundle > 1)
+
 #endif /* !_HTC_HOST_INTERNAL_H_ */

@@ -423,6 +423,7 @@ static struct service_to_pipe target_service_to_ce_map_qca8074[] = {
 	{ HTC_RAW_STREAMS_SVC, PIPEDIR_IN, 1 },
 	{ HTT_DATA_MSG_SVC, PIPEDIR_OUT, 4, },
 	{ HTT_DATA_MSG_SVC, PIPEDIR_IN, 1, },
+	{ PACKET_LOG_SVC, PIPEDIR_IN, 5, },
 	/* (Additions here) */
 	{ 0, 0, 0, },
 };
@@ -2134,12 +2135,21 @@ void hif_ce_stop(struct hif_softc *scn)
 
 	for (pipe_num = 0; pipe_num < scn->ce_count; pipe_num++) {
 		struct HIF_CE_pipe_info *pipe_info;
+		struct CE_attr attr;
+		struct CE_handle *ce_diag = hif_state->ce_diag;
 
 		pipe_info = &hif_state->pipe_info[pipe_num];
 		if (pipe_info->ce_hdl) {
+			if (pipe_info->ce_hdl != ce_diag) {
+				attr = hif_state->host_ce_config[pipe_num];
+				if (attr.src_nentries)
+					qdf_spinlock_destroy(&pipe_info->
+							completion_freeq_lock);
+			}
 			ce_fini(pipe_info->ce_hdl);
 			pipe_info->ce_hdl = NULL;
 			pipe_info->buf_sz = 0;
+			qdf_spinlock_destroy(&pipe_info->recv_bufs_needed_lock);
 		}
 	}
 
@@ -2382,6 +2392,7 @@ void hif_ce_close(struct hif_softc *hif_sc)
 	struct HIF_CE_state *hif_state = HIF_GET_CE_STATE(hif_sc);
 
 	qdf_spinlock_destroy(&hif_state->irq_reg_lock);
+	qdf_spinlock_destroy(&hif_state->keep_awake_lock);
 }
 
 /**
@@ -2443,6 +2454,13 @@ static inline void hif_post_static_buf_to_target(struct hif_softc *scn)
 }
 #endif
 
+static int hif_srng_sleep_state_adjust(struct hif_softc *scn, bool sleep_ok,
+				bool wait_for_it)
+{
+	/* todo */
+	return 0;
+}
+
 /**
  * hif_config_ce() - configure copy engines
  * @scn: hif context
@@ -2473,6 +2491,10 @@ int hif_config_ce(struct hif_softc *scn)
 	hif_state->fw_indicator_address = FW_INDICATOR_ADDRESS;
 
 	hif_config_rri_on_ddr(scn);
+
+	if (ce_srng_based(scn))
+		scn->bus_ops.hif_target_sleep_state_adjust =
+			&hif_srng_sleep_state_adjust;
 
 	for (pipe_num = 0; pipe_num < scn->ce_count; pipe_num++) {
 		struct CE_attr *attr;

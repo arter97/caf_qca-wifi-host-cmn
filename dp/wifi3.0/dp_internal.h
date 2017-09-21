@@ -65,6 +65,10 @@ while (0)
 	QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_##LVL,       \
 		fmt, ## args)
 
+#define DP_PRINT_STATS(fmt, args ...)	\
+	QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_FATAL,       \
+		fmt, ## args)
+
 #define DP_STATS_INIT(_handle) \
 	qdf_mem_set(&((_handle)->stats), sizeof((_handle)->stats), 0x0)
 
@@ -74,24 +78,26 @@ while (0)
 #ifndef DISABLE_DP_STATS
 #define DP_STATS_INC(_handle, _field, _delta) \
 { \
-	_handle->stats._field += _delta; \
+	if (likely(_handle)) \
+		_handle->stats._field += _delta; \
 }
 
 #define DP_STATS_INCC(_handle, _field, _delta, _cond) \
 { \
-	if (_cond) { \
+	if (_cond && likely(_handle)) \
 		_handle->stats._field += _delta; \
-	} \
 }
 
 #define DP_STATS_DEC(_handle, _field, _delta) \
 { \
-	_handle->stats._field -= _delta; \
+	if (likely(_handle)) \
+		_handle->stats._field -= _delta; \
 }
 
 #define DP_STATS_UPD(_handle, _field, _delta) \
 { \
-	_handle->stats._field = _delta; \
+	if (likely(_handle)) \
+		_handle->stats._field = _delta; \
 }
 
 #define DP_STATS_INC_PKT(_handle, _field, _count, _bytes) \
@@ -250,6 +256,7 @@ void *dp_peer_find_by_local_id(struct cdp_pdev *pdev_handle, uint8_t local_id);
 QDF_STATUS dp_peer_state_update(struct cdp_pdev *pdev_handle, uint8_t *peer_mac,
 		enum ol_txrx_peer_state state);
 QDF_STATUS dp_get_vdevid(void *peer_handle, uint8_t *vdev_id);
+struct cdp_vdev *dp_get_vdev_by_sta_id(uint8_t sta_id);
 struct cdp_vdev *dp_get_vdev_for_peer(void *peer);
 uint8_t *dp_peer_get_peer_mac_addr(void *peer);
 int dp_get_peer_state(void *peer_handle);
@@ -276,6 +283,7 @@ extern QDF_STATUS dp_reo_send_cmd(struct dp_soc *soc,
 	enum hal_reo_cmd_type type, struct hal_reo_cmd_params *params,
 	void (*callback_fn), void *data);
 
+extern void dp_reo_cmdlist_destroy(struct dp_soc *soc);
 extern void dp_reo_status_ring_handler(struct dp_soc *soc);
 void dp_aggregate_vdev_stats(struct dp_vdev *vdev);
 uint16_t dp_tx_me_send_convert_ucast(struct cdp_vdev *vdev_handle,
@@ -295,6 +303,9 @@ void dp_set_pn_check_wifi3(struct cdp_vdev *vdev_handle,
 	 uint32_t *rx_pn);
 
 #if defined(CONFIG_WIN) && WDI_EVENT_ENABLE
+QDF_STATUS dp_h2t_cfg_stats_msg_send(struct dp_pdev *pdev,
+		                uint32_t stats_type_upload_mask);
+
 int dp_wdi_event_unsub(struct cdp_pdev *txrx_pdev_handle,
 	void *event_cb_sub_handle,
 	uint32_t event);
@@ -316,14 +327,14 @@ static inline int dp_wdi_event_unsub(struct cdp_pdev *txrx_pdev_handle,
 	void *event_cb_sub_handle,
 	uint32_t event)
 {
-	return -EPERM;
+	return 0;
 }
 
 static inline int dp_wdi_event_sub(struct cdp_pdev *txrx_pdev_handle,
 	void *event_cb_sub_handle,
 	uint32_t event)
 {
-	return -EPERM;
+	return 0;
 }
 
 static inline void dp_wdi_event_handler(enum WDI_EVENT event, void *soc,
@@ -334,18 +345,28 @@ static inline void dp_wdi_event_handler(enum WDI_EVENT event, void *soc,
 
 static inline int dp_wdi_event_attach(struct dp_pdev *txrx_pdev)
 {
-	return -EPERM;
+	return 0;
 }
 
 static inline int dp_wdi_event_detach(struct dp_pdev *txrx_pdev)
 {
-	return -EPERM;
+	return 0;
 }
 
 static inline int dp_set_pktlog_wifi3(struct dp_pdev *pdev, uint32_t event,
 	bool enable)
 {
-	return -EPERM;
+	return 0;
+}
+static inline QDF_STATUS dp_h2t_cfg_stats_msg_send(struct dp_pdev *pdev,
+		uint32_t stats_type_upload_mask)
+{
+	return 0;
 }
 #endif /* CONFIG_WIN */
+#ifdef QCA_LL_TX_FLOW_CONTROL_V2
+void dp_tx_dump_flow_pool_info(void *soc);
+int dp_tx_delete_flow_pool(struct dp_soc *soc, struct dp_tx_desc_pool_s *pool,
+	bool force);
+#endif /* QCA_LL_TX_FLOW_CONTROL_V2 */
 #endif /* #ifndef _DP_INTERNAL_H_ */

@@ -38,7 +38,6 @@
 void dp_rx_mon_dest_process(struct dp_soc *soc, uint32_t mac_id,
 	uint32_t quota);
 
-
 QDF_STATUS dp_rx_pdev_mon_attach(struct dp_pdev *pdev);
 QDF_STATUS dp_rx_pdev_mon_detach(struct dp_pdev *pdev);
 
@@ -48,4 +47,7 @@ QDF_STATUS dp_rx_pdev_mon_status_detach(struct dp_pdev *pdev);
 uint32_t dp_mon_process(struct dp_soc *soc, uint32_t mac_id, uint32_t quota);
 QDF_STATUS dp_rx_mon_deliver(struct dp_soc *soc, uint32_t mac_id,
 	qdf_nbuf_t head_msdu, qdf_nbuf_t tail_msdu);
+
+uint32_t dp_rxdma_err_process(struct dp_soc *soc, uint32_t mac_id,
+	uint32_t quota);
 #endif

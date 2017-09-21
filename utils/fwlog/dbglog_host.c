@@ -1309,7 +1309,7 @@ int dbglog_vap_log_enable(wmi_unified_t wmi_handle, A_UINT16 vap_id,
 	return 0;
 }
 
-int dbglog_set_log_lvl(wmi_unified_t wmi_handle, enum DBGLOG_LOG_LVL log_lvl)
+int dbglog_set_log_lvl(wmi_unified_t wmi_handle, DBGLOG_LOG_LVL log_lvl)
 {
 	A_UINT32 val = 0;
 
@@ -1358,13 +1358,6 @@ dbglog_set_mod_enable_bitmap(wmi_unified_t wmi_handle, A_UINT32 log_level,
 int dbglog_report_enable(wmi_unified_t wmi_handle, bool isenable)
 {
 	int bitmap[2] = { 0 };
-
-	if (isenable > true) {
-		AR_DEBUG_PRINTF(ATH_DEBUG_ERR,
-				("dbglog_report_enable:Invalid value %d\n",
-				 isenable));
-		return -EINVAL;
-	}
 
 	if (isenable) {
 		/* set the vap enable bitmap */
@@ -4091,25 +4084,41 @@ static const struct file_operations fops_dbglog_block = {
 	.llseek = default_llseek,
 };
 
-static int dbglog_debugfs_init(wmi_unified_t wmi_handle)
+#ifdef WLAN_DEBUGFS
+
+static void dbglog_debugfs_init(wmi_unified_t wmi_handle)
 {
 
 	wmi_handle->debugfs_phy = debugfs_create_dir(CLD_DEBUGFS_DIR, NULL);
-	if (!wmi_handle->debugfs_phy)
-		return -ENOMEM;
+	if (!wmi_handle->debugfs_phy) {
+		qdf_print("Failed to create WMI debug fs");
+		return;
+	}
 
 	debugfs_create_file(DEBUGFS_BLOCK_NAME, S_IRUSR,
 			    wmi_handle->debugfs_phy, &wmi_handle->dbglog,
 			    &fops_dbglog_block);
 
-	return true;
+	return;
 }
 
-static int dbglog_debugfs_remove(wmi_unified_t wmi_handle)
+static void dbglog_debugfs_remove(wmi_unified_t wmi_handle)
 {
 	debugfs_remove_recursive(wmi_handle->debugfs_phy);
-	return true;
 }
+
+#else
+
+static void dbglog_debugfs_init(wmi_unified_t wmi_handle)
+{
+}
+
+static void dbglog_debugfs_remove(wmi_unified_t wmi_handle)
+{
+}
+
+#endif /* End of WLAN_DEBUGFS */
+
 #endif /* WLAN_OPEN_SOURCE */
 
 /**
@@ -4165,7 +4174,8 @@ static void cnss_diag_cmd_handler(const void *data, int data_len,
 	 * audit note: it is ok to pass a NULL policy here since a
 	 * length check on the data is added later already
 	 */
-	if (nla_parse(tb, CLD80211_ATTR_MAX, data, data_len, NULL)) {
+	if (wlan_cfg80211_nla_parse(tb, CLD80211_ATTR_MAX,
+				    data, data_len, NULL)) {
 		AR_DEBUG_PRINTF(ATH_DEBUG_ERR, ("%s: nla parse fails \n",
 							__func__));
 		return;

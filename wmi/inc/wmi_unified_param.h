@@ -93,6 +93,7 @@
 #define WMI_MSEC_TO_USEC(msec)       (msec * 1000) /* msec to usec */
 #define WMI_NLO_FREQ_THRESH          1000       /* in MHz */
 
+#define WMI_SVC_MSG_MAX_SIZE   1536
 #define MAX_UTF_EVENT_LENGTH	2048
 #define MAX_WMI_UTF_LEN	252
 #define MAX_WMI_QVIT_LEN	252
@@ -642,6 +643,7 @@ struct mac_ssid {
  * @dot11_mode: Phy mode (VHT20/VHT80...)
  * @disable_hw_ack: Disable hw ack if chan is dfs channel for cac
  * @channel_param: Channel params required by target.
+ * @ldpc_rx_enabled: Enable/Disable LDPC RX for this vdev
  */
 struct vdev_start_params {
 	uint8_t vdev_id;
@@ -675,6 +677,7 @@ struct vdev_start_params {
 	uint8_t disable_hw_ack;
 	struct channel_param channel;
 #endif
+	bool ldpc_rx_enabled;
 };
 
 /**
@@ -977,7 +980,7 @@ typedef struct {
 
 #define WMI_HOST_MAX_NUM_SS		8
 #define WMI_HOST_MAX_HECAP_PHY_SIZE	3
-#define WMI_HOST_MAX_HE_RATE_SET	1
+#define WMI_HOST_MAX_HE_RATE_SET	3
 /**
  * struct wmi_host_ppe_threshold -PPE threshold
  * @numss_m1: NSS - 1
@@ -1285,6 +1288,63 @@ struct seg_hdr_info {
 };
 
 /**
+ * struct tx_send_params - TX parameters
+ * @pwr: Tx frame transmission power
+ * @mcs_mask: Modulation and coding index mask for transmission
+ *	      bit  0 -> CCK 1 Mbps rate is allowed
+ *	      bit  1 -> CCK 2 Mbps rate is allowed
+ *	      bit  2 -> CCK 5.5 Mbps rate is allowed
+ *	      bit  3 -> CCK 11 Mbps rate is allowed
+ *	      bit  4 -> OFDM BPSK modulation, 1/2 coding rate is allowed
+ *	      bit  5 -> OFDM BPSK modulation, 3/4 coding rate is allowed
+ *	      bit  6 -> OFDM QPSK modulation, 1/2 coding rate is allowed
+ *	      bit  7 -> OFDM QPSK modulation, 3/4 coding rate is allowed
+ *	      bit  8 -> OFDM 16-QAM modulation, 1/2 coding rate is allowed
+ *	      bit  9 -> OFDM 16-QAM modulation, 3/4 coding rate is allowed
+ *	      bit 10 -> OFDM 64-QAM modulation, 2/3 coding rate is allowed
+ *	      bit 11 -> OFDM 64-QAM modulation, 3/4 coding rate is allowed
+ * @nss_mask: Spatial streams permitted
+ *	      bit 0: if set, Nss = 1 (non-MIMO) is permitted
+ *	      bit 1: if set, Nss = 2 (2x2 MIMO) is permitted
+ *	      bit 2: if set, Nss = 3 (3x3 MIMO) is permitted
+ *	      bit 3: if set, Nss = 4 (4x4 MIMO) is permitted
+ *	      bit 4: if set, Nss = 5 (5x5 MIMO) is permitted
+ *	      bit 5: if set, Nss = 6 (6x6 MIMO) is permitted
+ *	      bit 6: if set, Nss = 7 (7x7 MIMO) is permitted
+ *	      bit 7: if set, Nss = 8 (8x8 MIMO) is permitted
+ *            If no bits are set, target will choose what NSS type to use
+ * @retry_limit: Maximum number of retries before ACK
+ * @chain_mask: Chains to be used for transmission
+ * @bw_mask: Bandwidth to be used for transmission
+ *	     bit  0 -> 5MHz
+ *	     bit  1 -> 10MHz
+ *	     bit  2 -> 20MHz
+ *	     bit  3 -> 40MHz
+ *	     bit  4 -> 80MHz
+ *	     bit  5 -> 160MHz
+ *	     bit  6 -> 80_80MHz
+ * @preamble_type: Preamble types for transmission
+ *	     bit 0: if set, OFDM
+ *	     bit 1: if set, CCK
+ *	     bit 2: if set, HT
+ *	     bit 3: if set, VHT
+ *	     bit 4: if set, HE
+ * @frame_type: Data or Management frame
+ *	        Data:1 Mgmt:0
+ */
+struct tx_send_params {
+	uint32_t pwr:8,
+		 mcs_mask:12,
+		 nss_mask:8,
+		 retry_limit:4;
+	uint32_t chain_mask:8,
+		 bw_mask:7,
+		 preamble_type:5,
+		 frame_type:1,
+		 reserved:11;
+};
+
+/**
  * struct wmi_mgmt_params - wmi mgmt cmd paramters
  * @tx_frame: management tx frame
  * @frm_len: frame length
@@ -1294,6 +1354,8 @@ struct seg_hdr_info {
  * @desc_id: descriptor id relyaed back by target
  * @macaddr - macaddr of peer
  * @qdf_ctx: qdf context for qdf_nbuf_map
+ * @tx_param: TX send parameters
+ * @tx_params_valid: Flag that indicates if TX params are valid
  */
 struct wmi_mgmt_params {
 	void *tx_frame;
@@ -1304,6 +1366,8 @@ struct wmi_mgmt_params {
 	uint16_t desc_id;
 	uint8_t *macaddr;
 	void *qdf_ctx;
+	struct tx_send_params tx_param;
+	bool tx_params_valid;
 };
 
 /**
@@ -1316,6 +1380,8 @@ struct wmi_mgmt_params {
  * @desc_id: descriptor id relyaed back by target
  * @macaddr: macaddr of peer
  * @qdf_ctx: qdf context for qdf_nbuf_map
+ * @tx_param: TX send parameters
+ * @tx_params_valid: Flag that indicates if TX params are valid
  */
 struct wmi_offchan_data_tx_params {
 	void *tx_frame;
@@ -1326,6 +1392,8 @@ struct wmi_offchan_data_tx_params {
 	uint16_t desc_id;
 	uint8_t *macaddr;
 	void *qdf_ctx;
+	struct tx_send_params tx_param;
+	bool tx_params_valid;
 };
 
 /**
@@ -1747,9 +1815,15 @@ struct rssi_monitor_param {
 /**
  * struct scan_mac_oui - oui paramters
  * @oui: oui parameters
+ * @vdev_id: interface id
+ * @enb_probe_req_sno_randomization: control probe req sequence no randomization
+ * @ie_whitelist: probe req IE whitelist attrs
  */
 struct scan_mac_oui {
 	uint8_t oui[WMI_WIFI_SCANNING_MAC_OUI_LENGTH];
+	uint32_t vdev_id;
+	bool enb_probe_req_sno_randomization;
+	struct probe_req_whitelist_attr ie_whitelist;
 };
 
 #define WMI_PASSPOINT_REALM_LEN 256
@@ -1924,6 +1998,7 @@ struct roam_offload_scan_rssi_params {
 	int dense_min_aps_cnt;
 	int initial_dense_status;
 	int traffic_threshold;
+	int32_t rssi_thresh_offset_5g;
 };
 
 /**
@@ -2275,7 +2350,7 @@ struct plm_req_params {
 #define MAX_SSID_ALLOWED_LIST    4
 #define MAX_BSSID_AVOID_LIST     16
 #define MAX_BSSID_FAVORED      16
-
+#define MAX_RSSI_AVOID_BSSID_LIST 10
 
 /**
  * struct mac_ts_info_tfc - mac ts info parameters
@@ -3150,9 +3225,21 @@ struct ssid_hotlist_param {
 };
 
 /**
+ * struct rssi_disallow_bssid - Structure holding Rssi based avoid candidate
+ * @bssid: BSSID of the AP
+ * @remaining_duration: remaining disallow duration in ms
+ * @expected_rssi: RSSI at which STA can initate in dBm
+ */
+struct rssi_disallow_bssid {
+	struct qdf_mac_addr bssid;
+	uint32_t remaining_duration;
+	int8_t expected_rssi;
+};
+
+
+/**
  * struct roam_scan_filter_params - Structure holding roaming scan
  *                                  parameters
- * @len:                      length
  * @op_bitmap:                bitmap to determine reason of roaming
  * @session_id:               vdev id
  * @num_bssid_black_list:     The number of BSSID's that we should
@@ -3168,13 +3255,20 @@ struct ssid_hotlist_param {
  * @ssid_allowed_list:        Whitelist SSID's
  * @bssid_favored:            Favorable BSSID's
  * @bssid_favored_factor:     RSSI to be added to this BSSID to prefer it
+ * @lca_disallow_config_present: LCA [Last Connected AP] disallow config present
+ * @disallow_duration:        How long LCA AP will be disallowed before it
+ *                            can be a roaming candidate again, in seconds
+ * @rssi_channel_penalization:How much RSSI will be penalized if candidate(s)
+ *                            are found in the same channel as disallowed AP's,
+ *                            in units of db
+ * @num_disallowed_aps:       How many APs the target should maintain in its
+ *                            LCA list
  *
  * This structure holds all the key parameters related to
  * initial connection and roaming connections.
  */
 
 struct roam_scan_filter_params {
-	uint32_t len;
 	uint32_t op_bitmap;
 	uint8_t session_id;
 	uint32_t num_bssid_black_list;
@@ -3184,6 +3278,12 @@ struct roam_scan_filter_params {
 	struct mac_ssid ssid_allowed_list[MAX_SSID_ALLOWED_LIST];
 	struct qdf_mac_addr bssid_favored[MAX_BSSID_FAVORED];
 	uint8_t bssid_favored_factor[MAX_BSSID_FAVORED];
+	uint8_t lca_disallow_config_present;
+	uint32_t disallow_duration;
+	uint32_t rssi_channel_penalization;
+	uint32_t num_disallowed_aps;
+	uint32_t num_rssi_rejection_ap;
+	struct rssi_disallow_bssid rssi_rejection_ap[MAX_RSSI_AVOID_BSSID_LIST];
 };
 
 /**
@@ -3948,6 +4048,27 @@ struct wmm_update_params {
 };
 
 /**
+ * struct wmi_host_wmevParams - WME params
+ * @wmep_acm: ACM paramete
+ * @wmep_aifsn:	AIFSN parameters
+ * @wmep_logcwmin: cwmin in exponential form
+ * @wmep_logcwmax: cwmax in exponential form
+ * @wmep_txopLimit: txopLimit
+ * @wmep_noackPolicy: No-Ack Policy: 0=ack, 1=no-ack
+ */
+struct wmi_host_wme_vparams {
+	u_int32_t	acm;
+	u_int32_t	aifs;
+	u_int32_t	cwmin;
+	u_int32_t	cwmax;
+	union {
+		u_int32_t txoplimit;
+		u_int32_t mu_edca_timer;
+	};
+	u_int32_t	noackpolicy;
+};
+
+/**
  * struct ant_switch_tbl_params - Antenna switch table params
  * @ant_ctrl_common1: ANtenna control common param 1
  * @ant_ctrl_common2: Antenna control commn param 2
@@ -4110,14 +4231,78 @@ struct periodic_chan_stats_params {
 };
 
 /**
+ * enum wmi_host_packet_power_rate_flags: packer power rate flags
+ * @WMI_HOST_FLAG_RTSENA: RTS enabled
+ * @WMI_HOST_FLAG_CTSENA: CTS enabled
+ * @WMI_HOST_FLAG_STBC: STBC is set
+ * @WMI_HOST_FLAG_LDPC: LDPC is set
+ * @WMI_HOST_FLAG_TXBF: Tx Bf enabled
+ * @WMI_HOST_FLAG_MU2: MU2 data
+ * @WMI_HOST_FLAG_MU3: MU3 data
+ * @WMI_HOST_FLAG_SERIES1: Rate series 1
+ * @WMI_HOST_FLAG_SGI: Short gaurd interval
+ */
+enum wmi_host_packet_power_rate_flags {
+	WMI_HOST_FLAG_RTSENA        =  0x0001,
+	WMI_HOST_FLAG_CTSENA        =  0x0002,
+	WMI_HOST_FLAG_STBC          =  0x0004,
+	WMI_HOST_FLAG_LDPC          =  0x0008,
+	WMI_HOST_FLAG_TXBF          =  0x0010,
+	WMI_HOST_FLAG_MU2           =  0x0020,
+	WMI_HOST_FLAG_MU3           =  0x0040,
+	WMI_HOST_FLAG_SERIES1       =  0x0080,
+	WMI_HOST_FLAG_SGI           =  0x0100,
+};
+
+/**
+ * enum wmi_host_su_mu_ofdma_flags: packer power su mu ofdma flags
+ * @WMI_HOST_FLAG_SU: SU Data
+ * @WMI_HOST_FLAG_DL_MU_MIMO_AC: DL AC MU data
+ * @WMI_HOST_FLAG_DL_MU_MIMO_AX: DL AX MU data
+ * @WMI_HOST_FLAG_DL_OFDMA: DL OFDMA data
+ * @WMI_HOST_FLAG_UL_OFDMA: UL OFDMA data
+ * @WMI_HOST_FLAG_UL_MU_MIMO: UL MU data
+ */
+enum wmi_host_su_mu_ofdma_flags {
+	WMI_HOST_FLAG_SU            =  0x0001,
+	WMI_HOST_FLAG_DL_MU_MIMO_AC =  0x0002,
+	WMI_HOST_FLAG_DL_MU_MIMO_AX =  0x0003,
+	WMI_HOST_FLAG_DL_OFDMA      =  0x0004,
+	WMI_HOST_FLAG_UL_OFDMA      =  0x0005,
+	WMI_HOST_FLAG_UL_MU_MIMO    =  0x0006,
+};
+
+/**
+ * enum wmi_host_preamble_type: preamble type
+ * @WMI_HOST_PREAMBLE_OFDM: ofdm rate
+ * @WMI_HOST_PREAMBLE_CCK:  cck rate
+ * @WMI_HOST_PREAMBLE_HT: ht rate
+ * @WMI_HOST_PREAMBLE_VHT: vht rate
+ * @WMI_HOST_PREAMBLE_HE: 11ax he rate
+ */
+enum wmi_host_preamble_type {
+	WMI_HOST_PREAMBLE_OFDM  =  0,
+	WMI_HOST_PREAMBLE_CCK   =  1,
+	WMI_HOST_PREAMBLE_HT    =  2,
+	WMI_HOST_PREAMBLE_VHT   =  3,
+	WMI_HOST_PREAMBLE_HE    =  4,
+};
+
+/**
  * struct packet_power_info_params - packet power info params
+ * @chainmask: chain mask
+ * @chan_width: channel bandwidth
  * @rate_flags: rate flags
+ * @su_mu_ofdma: su/mu/ofdma flags
  * @nss: number of spatial streams
  * @preamble: preamble
  * @hw_rate:
  */
 struct packet_power_info_params {
+	uint16_t chainmask;
+	uint16_t chan_width;
 	uint16_t rate_flags;
+	uint16_t su_mu_ofdma;
 	uint16_t nss;
 	uint16_t preamble;
 	uint16_t hw_rate;
@@ -5341,6 +5526,7 @@ typedef enum {
 	wmi_service_pkt_routing,
 	wmi_service_offchan_tx_wmi,
 	wmi_service_chan_load_info,
+	wmi_service_extended_nss_support,
 
 	wmi_services_max,
 } wmi_conv_service_ids;
@@ -5686,13 +5872,25 @@ typedef struct {
 } wmi_host_pdev_nfcal_power_all_channels_event;
 
 /**
+ * enum wmi_host_pdev_tpc_event_offset: offsets of TPC events
+ * @WMI_HOST_TX_POWER_MAX: offset of max tx power
+ * @WMI_HOST_TX_POWER_MIN: offset of min tx power
+ * @WMI_HOST_TX_POWER_LEN: size of tpc values
+ */
+enum wmi_host_pdev_tpc_event_offset {
+	WMI_HOST_TX_POWER_MAX,
+	WMI_HOST_TX_POWER_MIN,
+	WMI_HOST_TX_POWER_LEN,
+};
+
+/**
  * struct wmi_host_pdev_tpc_event - WMI host pdev TPC event
  * @pdev_id: pdev_id
  * @tpc:
  */
 typedef struct {
 	uint32_t pdev_id;
-	uint32_t tpc[1];
+	int32_t tpc[WMI_HOST_TX_POWER_LEN];
 } wmi_host_pdev_tpc_event;
 
 /**
@@ -6035,6 +6233,10 @@ typedef enum {
 	/* Set default Rx routing */
 	WMI_HOST_PEER_SET_DEFAULT_ROUTING = 0x13,
 	WMI_HOST_PEER_SET_MIN_TX_RATE = 0x14,
+	/* peer NSS for 160Mhx */
+	WMI_HOST_PEER_NSS_VHT160 = 0x15,
+	/* peer NSS for 160Mhx */
+	WMI_HOST_PEER_NSS_VHT80_80 = 0x16,
 } PEER_PARAM_ENUM;
 #define WMI_HOST_PEER_MIMO_PS_NONE	0x0
 #define WMI_HOST_PEER_MIMO_PS_STATIC	0x1
@@ -6123,7 +6325,9 @@ enum wmi_host_sta_powersave_param {
 #define WMI_HOST_HT_CAP_MPDU_DENSITY	0x0700   /* MPDU Density */
 #define WMI_HOST_HT_CAP_MPDU_DENSITY_MASK_SHIFT 8
 #define WMI_HOST_HT_CAP_HT40_SGI	0x0800
-#define WMI_HOST_HT_CAP_IBF_BFER	0x1000
+#define WMI_HOST_HT_CAP_RX_LDPC         0x1000
+#define WMI_HOST_HT_CAP_TX_LDPC         0x2000
+#define WMI_HOST_HT_CAP_IBF_BFER	0x4000
 
 /* These macros should be used when we wish to advertise STBC support for
  * only 1SS or 2SS or 3SS. */
@@ -6661,6 +6865,10 @@ typedef struct {
  * @chan_tx_pwr_tp: channel tx power per throughput
  * @rx_frame_count: rx frame count
  * @rx_11b_mode_data_duration: 11b mode data duration
+ * @my_bss_rx_cycle_count: BSS rx cycle count
+ * @tx_frame_cnt: tx frame count
+ * @mac_clk_mhz: mac clock
+ * @vdev_id: unique id identifying the VDEV
  */
 typedef struct {
 	uint32_t pdev_id;
@@ -6674,6 +6882,10 @@ typedef struct {
 	uint32_t chan_tx_pwr_tp;
 	uint32_t rx_frame_count;
 	uint32_t rx_11b_mode_data_duration;
+	uint32_t my_bss_rx_cycle_count;
+	uint32_t tx_frame_cnt;
+	uint32_t mac_clk_mhz;
+	uint32_t vdev_id;
 } wmi_host_chan_info_event;
 
 /**
@@ -6998,6 +7210,8 @@ struct encrypt_decrypt_req_params {
  *                        to be communicated separately.
  * @WMI_HOST_HW_MODE_DBS_SBS: 3 PHYs, with 2 on the same band doing SBS
  *                           as in WMI_HW_MODE_SBS, and 3rd on the other band
+ * @WMI_HOST_HW_MODE_DBS_OR_SBS: Two PHY with one PHY capabale of both 2G and
+ *                        5G. It can support SBS (5G + 5G) OR DBS (5G + 2G).
  * @WMI_HOST_HW_MODE_MAX: Max hw_mode_id. Used to indicate invalid mode.
  */
 enum wmi_host_hw_mode_config_type {
@@ -7006,6 +7220,7 @@ enum wmi_host_hw_mode_config_type {
 	WMI_HOST_HW_MODE_SBS_PASSIVE  = 2,
 	WMI_HOST_HW_MODE_SBS          = 3,
 	WMI_HOST_HW_MODE_DBS_SBS      = 4,
+	WMI_HOST_HW_MODE_DBS_OR_SBS   = 5,
 	WMI_HOST_HW_MODE_MAX,
 };
 
@@ -7288,6 +7503,40 @@ struct wmi_dbs_scan_sel_params {
 	uint32_t module_id[WMI_SCAN_CLIENT_MAX];
 	uint32_t num_dbs_scans[WMI_SCAN_CLIENT_MAX];
 	uint32_t num_non_dbs_scans[WMI_SCAN_CLIENT_MAX];
+};
+
+/**
+ * struct wmi_limit_off_chan_param - limit off channel parameters
+ * @vdev_id: vdev id
+ * @status: status of the command (enable/disable)
+ * @max_offchan_time: max off channel time
+ * @rest_time: home channel time
+ * @skip_dfs_chans: skip dfs channels during scan
+ */
+struct wmi_limit_off_chan_param {
+	uint32_t vdev_id;
+	bool status;
+	uint32_t max_offchan_time;
+	uint32_t rest_time;
+	bool skip_dfs_chans;
+};
+
+/**
+ * struct wmi_mawc_roam_params - Motion Aided wireless connectivity params
+ * @vdev_id: VDEV on which the parameters should be applied
+ * @enable: MAWC roaming feature enable/disable
+ * @traffic_load_threshold: Traffic threshold in kBps for MAWC roaming
+ * @best_ap_rssi_threshold: AP RSSI Threshold for MAWC roaming
+ * @rssi_stationary_high_adjust: High RSSI adjustment value to suppress scan
+ * @rssi_stationary_low_adjust: Low RSSI adjustment value to suppress scan
+ */
+struct wmi_mawc_roam_params {
+	uint8_t vdev_id;
+	bool enable;
+	uint32_t traffic_load_threshold;
+	uint32_t best_ap_rssi_threshold;
+	uint8_t rssi_stationary_high_adjust;
+	uint8_t rssi_stationary_low_adjust;
 };
 
 #endif /* _WMI_UNIFIED_PARAM_H_ */

@@ -324,6 +324,7 @@ struct wlan_objmgr_vdev_nif {
  *  @c_flags:           creation specific flags
  *  @ref_cnt:           Ref count
  *  @ref_id_dbg:        Array to track Ref count
+ *  @print_cnt:         Count to throttle Logical delete prints
  */
 struct wlan_objmgr_vdev_objmgr {
 	uint8_t vdev_id;
@@ -336,6 +337,7 @@ struct wlan_objmgr_vdev_objmgr {
 	uint32_t c_flags;
 	qdf_atomic_t ref_cnt;
 	qdf_atomic_t ref_id_dbg[WLAN_REF_ID_MAX];
+	uint8_t print_cnt;
 };
 
 /**
@@ -1340,7 +1342,7 @@ static inline void wlan_vdev_reset_ospriv(struct wlan_objmgr_vdev *vdev)
  * wlan_vdev_get_peer_count() - get vdev peer count
  * @vdev: VDEV object
  *
- * API to get OS private pointer from VDEV
+ * API to get peer count from VDEV
  *
  * Return: peer_count - vdev's peer count
  */
@@ -1445,4 +1447,12 @@ static inline uint16_t wlan_vdev_get_max_peer_count(
 {
 	return vdev->vdev_objmgr.max_peer_count;
 }
+
+/**
+ * wlan_vdev_is_connected() - Check whether peer is associated or not
+ * @vdev: pointer to objmgr vdev
+ *
+ * Return: true in case success else false
+ */
+bool wlan_vdev_is_connected(struct wlan_objmgr_vdev *vdev);
 #endif /* _WLAN_OBJMGR_VDEV_OBJ_H_*/

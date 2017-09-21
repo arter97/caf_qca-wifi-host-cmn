@@ -101,6 +101,9 @@ static QDF_STATUS policy_mgr_pdev_obj_create_cb(struct wlan_objmgr_pdev *pdev,
 
 	policy_mgr_ctx->pdev = pdev;
 
+	wlan_reg_register_chan_change_callback(psoc,
+		policy_mgr_reg_chan_change_callback, NULL);
+
 	return QDF_STATUS_SUCCESS;
 }
 
@@ -118,6 +121,8 @@ static QDF_STATUS policy_mgr_pdev_obj_destroy_cb(struct wlan_objmgr_pdev *pdev,
 	}
 
 	policy_mgr_ctx->pdev = NULL;
+	wlan_reg_unregister_chan_change_callback(psoc,
+		policy_mgr_reg_chan_change_callback);
 
 	return QDF_STATUS_SUCCESS;
 }
@@ -357,6 +362,12 @@ QDF_STATUS policy_mgr_psoc_close(struct wlan_objmgr_psoc *psoc)
 		qdf_mem_free(pm_ctx->hw_mode.hw_mode_list);
 		pm_ctx->hw_mode.hw_mode_list = NULL;
 		policy_mgr_info("HW list is freed");
+	}
+
+	if (pm_ctx->sta_ap_intf_check_work_info) {
+		qdf_cancel_work(0, &pm_ctx->sta_ap_intf_check_work);
+		qdf_mem_free(pm_ctx->sta_ap_intf_check_work_info);
+		pm_ctx->sta_ap_intf_check_work_info = NULL;
 	}
 
 	return QDF_STATUS_SUCCESS;

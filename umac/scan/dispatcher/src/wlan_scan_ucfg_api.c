@@ -26,11 +26,15 @@
 #include <wlan_objmgr_cmn.h>
 #include <wlan_serialization_api.h>
 #include <wlan_scan_tgt_api.h>
+#include <wlan_reg_services_api.h>
 #include "../../core/src/wlan_scan_main.h"
 #include "../../core/src/wlan_scan_manager.h"
 #include "../../core/src/wlan_scan_cache_db.h"
 #ifdef WLAN_PMO_ENABLE
 #include <wlan_pmo_obj_mgmt_api.h>
+#endif
+#ifdef WLAN_POLICY_MGR_ENABLE
+#include <wlan_policy_mgr_api.h>
 #endif
 
 QDF_STATUS ucfg_scan_register_bcn_cb(struct wlan_objmgr_psoc *psoc,
@@ -328,6 +332,72 @@ ucfg_scan_update_pno_config(struct pno_def_config *pno,
 
 #endif
 
+#ifdef WLAN_POLICY_MGR_ENABLE
+/**
+ * ucfg_scan_update_dbs_scan_ctrl_ext_flag() - update dbs scan ctrl flags
+ * @req: pointer to scan request
+ *
+ * This function updates the dbs scan ctrl flags.
+ * Non-DBS scan is requested if any of the below case is met:
+ * 1. HW is DBS incapable
+ * 2. Directed scan
+ * 3. Channel list has only few channels
+ * 4. Channel list has single band channels
+ * For remaining cases, dbs scan is requested.
+ *
+ * Return: None
+ */
+static void
+ucfg_scan_update_dbs_scan_ctrl_ext_flag(struct scan_start_request *req)
+{
+	uint32_t num_chan;
+	struct wlan_objmgr_psoc *psoc;
+	uint32_t scan_dbs_policy = SCAN_DBS_POLICY_FORCE_NONDBS;
+
+	psoc = wlan_vdev_get_psoc(req->vdev);
+
+	/* Resetting the scan_ctrl_flags_ext to 0 */
+	req->scan_req.scan_ctrl_flags_ext = 0;
+
+	if (DISABLE_DBS_CXN_AND_SCAN ==
+			wlan_objmgr_psoc_get_dual_mac_disable(psoc))
+		goto end;
+
+	if (!qdf_is_macaddr_zero(&req->scan_req.bssid_list[0]))
+		goto end;
+
+	num_chan = req->scan_req.num_chan;
+
+	/* num_chan=0 means all channels */
+	if (!num_chan)
+		scan_dbs_policy = SCAN_DBS_POLICY_DEFAULT;
+
+	if (num_chan < SCAN_MIN_CHAN_DBS_SCAN_THRESHOLD)
+		goto end;
+
+	while (num_chan > 1) {
+		if (!WLAN_REG_IS_SAME_BAND_CHANNELS(
+					req->scan_req.chan_list[0],
+					req->scan_req.chan_list[num_chan-1])) {
+			scan_dbs_policy = SCAN_DBS_POLICY_DEFAULT;
+			break;
+		}
+		num_chan--;
+	}
+
+end:
+	req->scan_req.scan_ctrl_flags_ext |=
+		((scan_dbs_policy << SCAN_FLAG_EXT_DBS_SCAN_POLICY_BIT)
+		 & SCAN_FLAG_EXT_DBS_SCAN_POLICY_MASK);
+	scm_debug("scan_ctrl_flags_ext: 0x%x",
+			req->scan_req.scan_ctrl_flags_ext);
+}
+#else
+static void
+ucfg_scan_update_dbs_scan_ctrl_ext_flag(struct scan_start_request *req)
+{
+}
+#endif
 
 QDF_STATUS
 ucfg_scan_start(struct scan_start_request *req)
@@ -344,6 +414,8 @@ ucfg_scan_start(struct scan_start_request *req)
 	scm_info("reqid: %d, scanid: %d, vdevid: %d",
 		req->scan_req.scan_req_id, req->scan_req.scan_id,
 		req->scan_req.vdev_id);
+
+	ucfg_scan_update_dbs_scan_ctrl_ext_flag(req);
 
 	/* Try to get vdev reference. Return if reference could
 	 * not be taken. Reference will be released once scan
@@ -685,6 +757,7 @@ wlan_scan_global_init(struct wlan_scan_obj *scan_obj)
 	scan_obj->scan_def.scan_ev_completed = true;
 	scan_obj->scan_def.scan_ev_bss_chan = true;
 	scan_obj->scan_def.scan_ev_foreign_chan = true;
+	scan_obj->scan_def.scan_ev_foreign_chn_exit = true;
 	scan_obj->scan_def.scan_ev_dequeued = true;
 	scan_obj->scan_def.scan_ev_preempted = true;
 	scan_obj->scan_def.scan_ev_start_failed = true;
@@ -765,6 +838,45 @@ ucfg_scan_unregister_event_handler(struct wlan_objmgr_pdev *pdev,
 		(found ? "removed" : "not found"), handler_cnt);
 }
 
+#ifdef WLAN_POLICY_MGR_ENABLE
+/**
+ * ucfg_scan_req_update_params() - update scan req params depending
+ * on active modes
+ * @vdev: vdev object pointer
+ * @req: scan request
+ *
+ * Return: void
+ */
+static void ucfg_scan_req_update_params(struct wlan_objmgr_vdev *vdev,
+	struct scan_start_request *req)
+{
+	bool ap_or_go_present;
+	struct wlan_objmgr_psoc *psoc;
+
+	psoc = wlan_vdev_get_psoc(vdev);
+
+	if (!psoc)
+		return;
+
+	ap_or_go_present = policy_mgr_mode_specific_connection_count(
+				psoc, QDF_SAP_MODE, NULL) ||
+				policy_mgr_mode_specific_connection_count(
+				psoc, QDF_P2P_GO_MODE, NULL);
+
+	/*
+	 * If AP is active set min rest time same as max rest time, so that
+	 * firmware spends more time on home channel which will increase the
+	 * probability of sending beacon at TBTT
+	 */
+	if (ap_or_go_present)
+		req->scan_req.min_rest_time = req->scan_req.max_rest_time;
+}
+#else
+static inline void ucfg_scan_req_update_params(struct wlan_objmgr_vdev *vdev,
+	struct scan_start_request *req){}
+#endif
+
+
 QDF_STATUS
 ucfg_scan_init_default_params(struct wlan_objmgr_vdev *vdev,
 	struct scan_start_request *req)
@@ -798,6 +910,8 @@ ucfg_scan_init_default_params(struct wlan_objmgr_vdev *vdev,
 		def->adaptive_dwell_time_mode;
 	req->scan_req.scan_flags = def->scan_flags;
 	req->scan_req.scan_events = def->scan_events;
+
+	ucfg_scan_req_update_params(vdev, req);
 
 	return QDF_STATUS_SUCCESS;
 }
@@ -1045,6 +1159,7 @@ QDF_STATUS ucfg_scan_update_user_config(struct wlan_objmgr_psoc *psoc,
 	scan_def->select_5ghz_margin = scan_cfg->select_5ghz_margin;
 	scan_def->adaptive_dwell_time_mode = scan_cfg->scan_dwell_time_mode;
 	scan_def->scan_f_chan_stat_evnt = scan_cfg->is_snr_monitoring_enabled;
+	scan_obj->ie_whitelist = scan_cfg->ie_whitelist;
 
 	ucfg_scan_assign_rssi_category(scan_def,
 			scan_cfg->scan_bucket_threshold,
@@ -1219,13 +1334,13 @@ static bool scm_serialization_scan_rules_cb(
 		uint8_t comp_id)
 {
 	switch (comp_id) {
-	case QDF_MODULE_ID_TDLS:
+	case WLAN_UMAC_COMP_TDLS:
 		if (comp_info->scan_info.is_tdls_in_progress) {
 			scm_info("Cancel scan. Tdls in progress");
 			return false;
 		}
 		break;
-	case QDF_MODULE_ID_DFS:
+	case WLAN_UMAC_COMP_DFS:
 		if (comp_info->scan_info.is_cac_in_progress) {
 			scm_info("Cancel scan. CAC in progress");
 			return false;
@@ -1292,4 +1407,38 @@ ucfg_scan_get_max_active_scans(struct wlan_objmgr_psoc *psoc)
 	scan_params = wlan_scan_psoc_get_def_params(psoc);
 
 	return scan_params->max_active_scans_allowed;
+}
+
+bool ucfg_copy_ie_whitelist_attrs(struct wlan_objmgr_psoc *psoc,
+				  struct probe_req_whitelist_attr *ie_whitelist)
+{
+	struct wlan_scan_obj *scan_obj = NULL;
+
+	scan_obj = wlan_psoc_get_scan_obj(psoc);
+	if (!scan_obj)
+		return false;
+
+	qdf_mem_copy(ie_whitelist, &scan_obj->ie_whitelist,
+		     sizeof(*ie_whitelist));
+
+	return true;
+}
+
+bool ucfg_ie_whitelist_enabled(struct wlan_objmgr_psoc *psoc,
+			       struct wlan_objmgr_vdev *vdev)
+{
+	struct wlan_scan_obj *scan_obj = NULL;
+
+	scan_obj = wlan_psoc_get_scan_obj(psoc);
+	if (!scan_obj)
+		return false;
+
+	if ((wlan_vdev_mlme_get_opmode(vdev) != QDF_STA_MODE) ||
+	    wlan_vdev_is_connected(vdev))
+		return false;
+
+	if (!scan_obj->ie_whitelist.white_list)
+		return false;
+
+	return true;
 }

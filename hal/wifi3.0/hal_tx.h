@@ -25,7 +25,6 @@
 #include "hal_api.h"
 #include "wcss_version.h"
 
-
 #define WBM_RELEASE_RING_5_TX_RATE_STATS_OFFSET   0x00000014
 #define WBM_RELEASE_RING_5_TX_RATE_STATS_LSB      0
 #define WBM_RELEASE_RING_5_TX_RATE_STATS_MASK     0xffffffff
@@ -76,6 +75,7 @@ do {                                            \
 #define HAL_TX_COMPLETION_DESC_LEN_DWORDS (NUM_OF_DWORDS_WBM_RELEASE_RING)
 #define HAL_TX_COMPLETION_DESC_LEN_BYTES (NUM_OF_DWORDS_WBM_RELEASE_RING*4)
 #define HAL_TX_BITS_PER_TID 3
+#define HAL_TX_TID_BITS_MASK ((1 << HAL_TX_BITS_PER_TID) - 1)
 #define HAL_TX_NUM_DSCP_PER_REGISTER 10
 #define HAL_MAX_HW_DSCP_TID_MAPS 2
 
@@ -95,11 +95,11 @@ do {                                            \
 /*
  * Offset of HTT Tx Descriptor in WBM Completion
  * HTT Tx Desc structure is passed from firmware to host overlayed
- * on wbm_release_ring DWORD 3 and 4 for software based completions
+ * on wbm_release_ring DWORDs 2,3 ,4 and 5for software based completions
  * (Exception frames and TQM bypass frames)
  */
-#define HAL_TX_COMP_HTT_STATUS_OFFSET 12
-#define HAL_TX_COMP_HTT_STATUS_LEN 8
+#define HAL_TX_COMP_HTT_STATUS_OFFSET 8
+#define HAL_TX_COMP_HTT_STATUS_LEN 16
 
 #define HAL_TX_BUF_TYPE_BUFFER 0
 #define HAL_TX_BUF_TYPE_EXT_DESC 1
@@ -126,6 +126,8 @@ enum hal_tx_ret_buf_manager {
   ---------------------------------------------------------------------------*/
 /**
  * struct hal_tx_completion_status - HAL Tx completion descriptor contents
+ * @status: frame acked/failed
+ * @release_src: release source = TQM/FW
  * @ack_frame_rssi: RSSI of the received ACK or BA frame
  * @first_msdu: Indicates this MSDU is the first MSDU in AMSDU
  * @last_msdu: Indicates this MSDU is the last MSDU in AMSDU
@@ -153,6 +155,8 @@ enum hal_tx_ret_buf_manager {
  * @peer_id: Peer ID of the flow or MPDU queue
  */
 struct hal_tx_completion_status {
+	uint8_t status;
+	uint8_t release_src;
 	uint8_t ack_frame_rssi;
 	uint8_t first_msdu:1,
 		last_msdu:1,
@@ -162,9 +166,9 @@ struct hal_tx_completion_status {
 		 stbc:1,
 		 ldpc:1,
 		 sgi:2,
-		 mcs:2,
+		 mcs:4,
 		 ofdma:1,
-		 tones_in_ru:10,
+		 tones_in_ru:12,
 		 valid:1;
 	uint32_t tsf;
 	uint32_t ppdu_id;
@@ -856,7 +860,6 @@ static inline uint8_t hal_tx_comp_get_release_reason(void *hal_desc)
 static inline void hal_tx_comp_get_status(void *desc,
 		struct hal_tx_completion_status *ts)
 {
-
 	uint8_t rate_stats_valid = 0;
 	uint32_t rate_stats = 0;
 
@@ -901,6 +904,9 @@ static inline void hal_tx_comp_get_status(void *desc,
 				rate_stats);
 	}
 
+	ts->release_src = hal_tx_comp_get_buffer_source(desc);
+	ts->status = hal_tx_comp_get_release_reason(desc);
+
 	ts->tsf = HAL_TX_DESC_GET(desc, WBM_RELEASE_RING_6,
 			TX_RATE_STATS_INFO_TX_RATE_STATS);
 }
@@ -917,6 +923,9 @@ static inline void hal_tx_comp_get_status(void *desc,
 	ts->last_msdu = HAL_TX_DESC_GET(desc, WBM_RELEASE_RING_4, LAST_MSDU);
 	ts->msdu_part_of_amsdu = HAL_TX_DESC_GET(desc, WBM_RELEASE_RING_4,
 			MSDU_PART_OF_AMSDU);
+
+	ts->release_src = hal_tx_comp_get_buffer_source(desc);
+	ts->status = hal_tx_comp_get_release_reason(desc);
 }
 #endif
 
@@ -1025,6 +1034,7 @@ static inline void hal_tx_update_dscp_tid(void *hal_soc, uint8_t tid,
 	int index;
 	uint32_t addr;
 	uint32_t value;
+	uint32_t regval;
 
 	struct hal_soc *soc = (struct hal_soc *)hal_soc;
 
@@ -1041,8 +1051,15 @@ static inline void hal_tx_update_dscp_tid(void *hal_soc, uint8_t tid,
 	addr += 4 * (dscp/HAL_TX_NUM_DSCP_PER_REGISTER);
 	value = tid << (HAL_TX_BITS_PER_TID * index);
 
+	/* Read back previous DSCP TID config and update
+	 * with new config.
+	 */
+	regval = HAL_REG_READ(soc, addr);
+	regval &= ~(HAL_TX_TID_BITS_MASK << (HAL_TX_BITS_PER_TID * index));
+	regval |= value;
+
 	HAL_REG_WRITE(soc, addr,
-			(value & HWIO_TCL_R0_DSCP_TID1_MAP_1_RMSK));
+			(regval & HWIO_TCL_R0_DSCP_TID1_MAP_1_RMSK));
 }
 
 /**

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2016 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2014-2017 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -35,11 +35,16 @@
 #include <qdf_types.h>
 #include <qdf_trace.h>
 #include <linux/jiffies.h>
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4, 11, 0)
 #include <linux/sched.h>
+#else
+#include <linux/sched/signal.h>
+#endif /* KERNEL_VERSION(4, 11, 0) */
 #include <linux/delay.h>
 #include <linux/interrupt.h>
 #include <linux/export.h>
 #include <linux/kthread.h>
+#include <linux/stacktrace.h>
 
 /* Function declarations and documenation */
 
@@ -78,6 +83,7 @@ EXPORT_SYMBOL(qdf_sleep);
 void qdf_sleep_us(uint32_t us_interval)
 {
 	unsigned long timeout = usecs_to_jiffies(us_interval) + 1;
+
 	if (in_interrupt()) {
 		QDF_TRACE(QDF_MODULE_ID_QDF, QDF_TRACE_LEVEL_ERROR,
 			  "%s cannot be called from interrupt context!!!",
@@ -124,3 +130,28 @@ int qdf_wake_up_process(qdf_thread_t *thread)
 	return wake_up_process(thread);
 }
 EXPORT_SYMBOL(qdf_wake_up_process);
+
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 13, 0)) ||\
+	defined(BACKPORTED_EXPORT_SAVE_STACK_TRACE_TSK)
+/* save_stack_trace_tsk is not generally exported for arm architectures */
+#define QDF_PRINT_TRACE_COUNT 32
+void qdf_print_thread_trace(qdf_thread_t *thread)
+{
+	const int spaces = 4;
+	struct task_struct *task = thread;
+	unsigned long entries[QDF_PRINT_TRACE_COUNT] = {0};
+	struct stack_trace trace = {
+		.nr_entries = 0,
+		.skip = 0,
+		.entries = &entries[0],
+		.max_entries = QDF_PRINT_TRACE_COUNT,
+	};
+
+	save_stack_trace_tsk(task, &trace);
+	print_stack_trace(&trace, spaces);
+}
+#else
+void qdf_print_thread_trace(qdf_thread_t *thread) { }
+#endif /* KERNEL_VERSION(4, 13, 0) */
+EXPORT_SYMBOL(qdf_print_thread_trace);
+

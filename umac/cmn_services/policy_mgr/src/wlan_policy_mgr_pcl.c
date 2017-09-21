@@ -40,8 +40,8 @@
 #include "qdf_types.h"
 #include "qdf_trace.h"
 #include "wlan_objmgr_global_obj.h"
+#include "wlan_utility.h"
 
-#define PM_24_GHZ_CHANNEL_6   (6)
 /**
  * first_connection_pcl_table - table which provides PCL for the
  * very first connection in the system
@@ -68,24 +68,38 @@ policy_mgr_next_action_three_connection_table_type
 QDF_STATUS policy_mgr_get_pcl_for_existing_conn(struct wlan_objmgr_psoc *psoc,
 		enum policy_mgr_con_mode mode,
 		uint8_t *pcl_ch, uint32_t *len,
-		uint8_t *pcl_weight, uint32_t weight_len)
+		uint8_t *pcl_weight, uint32_t weight_len,
+		bool all_matching_cxn_to_del)
 {
-	struct policy_mgr_conc_connection_info info;
+	struct policy_mgr_conc_connection_info
+			info[MAX_NUMBER_OF_CONC_CONNECTIONS] = { {0} };
+	uint8_t num_cxn_del = 0;
 
 	QDF_STATUS status = QDF_STATUS_SUCCESS;
+	struct policy_mgr_psoc_priv_obj *pm_ctx;
 
-	policy_mgr_notice("get pcl for existing conn:%d", mode);
+	policy_mgr_debug("get pcl for existing conn:%d", mode);
+	pm_ctx = policy_mgr_get_context(psoc);
+	if (!pm_ctx) {
+		policy_mgr_err("Invalid Context");
+		return QDF_STATUS_E_FAILURE;
+	}
 
+	qdf_mutex_acquire(&pm_ctx->qdf_conc_list_lock);
 	if (policy_mgr_mode_specific_connection_count(psoc, mode, NULL) > 0) {
 		/* Check, store and temp delete the mode's parameter */
-		policy_mgr_store_and_del_conn_info(psoc, mode, &info);
+		policy_mgr_store_and_del_conn_info(psoc, mode,
+				all_matching_cxn_to_del, info, &num_cxn_del);
+		qdf_mutex_release(&pm_ctx->qdf_conc_list_lock);
 		/* Get the PCL */
 		status = policy_mgr_get_pcl(psoc, mode, pcl_ch, len,
 					pcl_weight, weight_len);
-		policy_mgr_notice("Get PCL to FW for mode:%d", mode);
+		policy_mgr_debug("Get PCL to FW for mode:%d", mode);
+		qdf_mutex_acquire(&pm_ctx->qdf_conc_list_lock);
 		/* Restore the connection info */
-		policy_mgr_restore_deleted_conn_info(psoc, &info);
+		policy_mgr_restore_deleted_conn_info(psoc, info, num_cxn_del);
 	}
+	qdf_mutex_release(&pm_ctx->qdf_conc_list_lock);
 
 	return status;
 }
@@ -138,9 +152,95 @@ void policy_mgr_decr_session_set_pcl(struct wlan_objmgr_psoc *psoc,
 	return;
 }
 
-void policy_mgr_update_with_safe_channel_list(uint8_t *pcl_channels,
-		uint32_t *len, uint8_t *weight_list, uint32_t weight_len)
+void policy_mgr_reg_chan_change_callback(struct wlan_objmgr_psoc *psoc,
+		struct wlan_objmgr_pdev *pdev,
+		struct regulatory_channel *chan_list,
+		struct avoid_freq_ind_data *avoid_freq_ind,
+		void *arg)
 {
+	struct policy_mgr_psoc_priv_obj *pm_ctx;
+
+	pm_ctx = policy_mgr_get_context(psoc);
+	if (!pm_ctx) {
+		policy_mgr_err("Invalid Context");
+		return;
+	}
+
+	if (!avoid_freq_ind) {
+		policy_mgr_debug("avoid_freq_ind NULL");
+		return;
+	}
+
+	pm_ctx->unsafe_channel_count = avoid_freq_ind->chan_list.ch_cnt >=
+			QDF_MAX_NUM_CHAN ?
+			QDF_MAX_NUM_CHAN : avoid_freq_ind->chan_list.ch_cnt;
+	if (pm_ctx->unsafe_channel_count)
+		qdf_mem_copy(pm_ctx->unsafe_channel_list,
+			avoid_freq_ind->chan_list.ch_list,
+			pm_ctx->unsafe_channel_count);
+	policy_mgr_debug("Channel list update, recieved %d avoided channels",
+		pm_ctx->unsafe_channel_count);
+}
+
+void policy_mgr_update_with_safe_channel_list(struct wlan_objmgr_psoc *psoc,
+		uint8_t *pcl_channels, uint32_t *len,
+		uint8_t *weight_list, uint32_t weight_len)
+{
+	uint8_t current_channel_list[QDF_MAX_NUM_CHAN];
+	uint8_t org_weight_list[QDF_MAX_NUM_CHAN];
+	uint8_t is_unsafe = 1;
+	uint8_t i, j;
+	uint32_t safe_channel_count = 0, current_channel_count = 0;
+	struct policy_mgr_psoc_priv_obj *pm_ctx;
+
+	pm_ctx = policy_mgr_get_context(psoc);
+	if (!pm_ctx) {
+		policy_mgr_err("Invalid Context");
+		return;
+	}
+
+	if (len) {
+		current_channel_count = QDF_MIN(*len, QDF_MAX_NUM_CHAN);
+	} else {
+		policy_mgr_err("invalid number of channel length");
+		return;
+	}
+
+	if (pm_ctx->unsafe_channel_count == 0) {
+		policy_mgr_debug("There are no unsafe channels");
+		return;
+	}
+
+	qdf_mem_copy(current_channel_list, pcl_channels,
+		current_channel_count);
+	qdf_mem_zero(pcl_channels, current_channel_count);
+
+	qdf_mem_copy(org_weight_list, weight_list, QDF_MAX_NUM_CHAN);
+	qdf_mem_zero(weight_list, weight_len);
+
+	for (i = 0; i < current_channel_count; i++) {
+		is_unsafe = 0;
+		for (j = 0; j < pm_ctx->unsafe_channel_count; j++) {
+			if (current_channel_list[i] ==
+				pm_ctx->unsafe_channel_list[j]) {
+				/* Found unsafe channel, update it */
+				is_unsafe = 1;
+				policy_mgr_warn("CH %d is not safe",
+					current_channel_list[i]);
+				break;
+			}
+		}
+		if (!is_unsafe) {
+			pcl_channels[safe_channel_count] =
+				current_channel_list[i];
+			if (safe_channel_count < weight_len)
+				weight_list[safe_channel_count] =
+					org_weight_list[i];
+			safe_channel_count++;
+		}
+	}
+	*len = safe_channel_count;
+
 	return;
 }
 
@@ -353,6 +453,11 @@ static QDF_STATUS policy_mgr_mode_specific_modification_on_pcl(
 		status = policy_mgr_pcl_modification_for_p2p_go(
 			psoc, pcl_channels, pcl_weight, len);
 		break;
+	case PM_STA_MODE:
+	case PM_P2P_CLIENT_MODE:
+	case PM_IBSS_MODE:
+		status = QDF_STATUS_SUCCESS;
+		break;
 	default:
 		policy_mgr_err("unexpected mode %d", mode);
 		break;
@@ -467,11 +572,7 @@ QDF_STATUS policy_mgr_get_pcl(struct wlan_objmgr_psoc *psoc,
 	}
 
 	policy_mgr_mode_specific_modification_on_pcl(
-		psoc, pcl_channels, pcl_weight, len, PM_SAP_MODE);
-
-	policy_mgr_mode_specific_modification_on_pcl(
-		psoc, pcl_channels, pcl_weight, len, PM_P2P_GO_MODE);
-
+		psoc, pcl_channels, pcl_weight, len, mode);
 
 	status = policy_mgr_modify_pcl_based_on_dnbs(psoc, pcl_channels,
 						pcl_weight, len);
@@ -1282,7 +1383,8 @@ policy_mgr_get_nondfs_preferred_channel(struct wlan_objmgr_psoc *psoc,
 		if (QDF_STATUS_SUCCESS != policy_mgr_get_pcl_for_existing_conn(
 					psoc, mode,
 					&pcl_channels[0], &pcl_len,
-					pcl_weight, QDF_ARRAY_SIZE(pcl_weight)))
+					pcl_weight, QDF_ARRAY_SIZE(pcl_weight),
+					false))
 			return channel;
 	} else {
 		if (QDF_STATUS_SUCCESS != policy_mgr_get_pcl(psoc, mode,
@@ -1301,6 +1403,22 @@ policy_mgr_get_nondfs_preferred_channel(struct wlan_objmgr_psoc *psoc,
 	}
 
 	return channel;
+}
+
+static void policy_mgr_remove_dsrc_channels(uint8_t *chan_list,
+				uint32_t *num_channels)
+{
+	uint32_t num_chan_temp = 0;
+	int i;
+
+	for (i = 0; i < *num_channels; i++) {
+		if (!wlan_is_dsrc_channel(wlan_chan_to_freq(chan_list[i]))) {
+			chan_list[num_chan_temp] = chan_list[i];
+			num_chan_temp++;
+		}
+	}
+
+	*num_channels = num_chan_temp;
 }
 
 QDF_STATUS policy_mgr_get_valid_chans(struct wlan_objmgr_psoc *psoc,
@@ -1330,6 +1448,8 @@ QDF_STATUS policy_mgr_get_valid_chans(struct wlan_objmgr_psoc *psoc,
 		*list_len = 0;
 		return status;
 	}
+
+	policy_mgr_remove_dsrc_channels(chan_list, list_len);
 
 	return QDF_STATUS_SUCCESS;
 }
@@ -1463,17 +1583,21 @@ QDF_STATUS policy_mgr_get_sap_mandatory_channel(struct wlan_objmgr_psoc *psoc,
 
 	status = policy_mgr_get_pcl_for_existing_conn(psoc, PM_SAP_MODE,
 			pcl.pcl_list, &pcl.pcl_len,
-			pcl.weight_list, QDF_ARRAY_SIZE(pcl.weight_list));
+			pcl.weight_list, QDF_ARRAY_SIZE(pcl.weight_list),
+			false);
 	if (QDF_IS_STATUS_ERROR(status)) {
 		policy_mgr_err("Unable to get PCL for SAP");
 		return status;
 	}
 
-	/* No existing SAP connection and hence a new SAP connection might be
-	 * coming up.
+	/*
+	 * Get inside below loop if no existing SAP connection and hence a new
+	 * SAP connection might be coming up. pcl.pcl_len can be 0 if no common
+	 * channel between PCL & mandatory channel list as well
 	 */
-	if (!pcl.pcl_len) {
-		policy_mgr_notice("policy_mgr_get_pcl_for_existing_conn returned no pcl");
+	if (!pcl.pcl_len && !policy_mgr_mode_specific_connection_count(psoc,
+		PM_SAP_MODE, NULL)) {
+		policy_mgr_debug("policy_mgr_get_pcl_for_existing_conn returned no pcl");
 		status = policy_mgr_get_pcl(psoc, PM_SAP_MODE,
 				pcl.pcl_list, &pcl.pcl_len,
 				pcl.weight_list,
@@ -1493,8 +1617,13 @@ QDF_STATUS policy_mgr_get_sap_mandatory_channel(struct wlan_objmgr_psoc *psoc,
 		return status;
 	}
 
+	if (!pcl.pcl_len) {
+		policy_mgr_err("No common channel between mandatory list & PCL");
+		return QDF_STATUS_E_FAILURE;
+	}
+
 	*chan = pcl.pcl_list[0];
-	policy_mgr_notice("mandatory channel:%d", *chan);
+	policy_mgr_debug("mandatory channel:%d", *chan);
 
 	return QDF_STATUS_SUCCESS;
 }
@@ -1503,7 +1632,16 @@ QDF_STATUS policy_mgr_get_valid_chan_weights(struct wlan_objmgr_psoc *psoc,
 		struct policy_mgr_pcl_chan_weights *weight)
 {
 	uint32_t i, j;
-	struct policy_mgr_conc_connection_info info;
+	struct policy_mgr_conc_connection_info
+			info[MAX_NUMBER_OF_CONC_CONNECTIONS] = { {0} };
+	uint8_t num_cxn_del = 0;
+	struct policy_mgr_psoc_priv_obj *pm_ctx;
+
+	pm_ctx = policy_mgr_get_context(psoc);
+	if (!pm_ctx) {
+		policy_mgr_err("Invalid Context");
+		return QDF_STATUS_E_FAILURE;
+	}
 
 	if (!weight->pcl_list) {
 		policy_mgr_err("Invalid pcl");
@@ -1522,7 +1660,7 @@ QDF_STATUS policy_mgr_get_valid_chan_weights(struct wlan_objmgr_psoc *psoc,
 
 	qdf_mem_set(weight->weighed_valid_list, QDF_MAX_NUM_CHAN,
 		    WEIGHT_OF_DISALLOWED_CHANNELS);
-
+	qdf_mutex_acquire(&pm_ctx->qdf_conc_list_lock);
 	if (policy_mgr_mode_specific_connection_count(
 		psoc, PM_STA_MODE, NULL) > 0) {
 		/*
@@ -1531,7 +1669,9 @@ QDF_STATUS policy_mgr_get_valid_chan_weights(struct wlan_objmgr_psoc *psoc,
 		 * check can be used as though a new connection is coming up,
 		 * allowing to detect the disallowed channels.
 		 */
-		policy_mgr_store_and_del_conn_info(psoc, PM_STA_MODE, &info);
+		policy_mgr_store_and_del_conn_info(psoc, PM_STA_MODE, false,
+						info, &num_cxn_del);
+		qdf_mutex_release(&pm_ctx->qdf_conc_list_lock);
 		/*
 		 * There is a small window between releasing the above lock
 		 * and acquiring the same in policy_mgr_allow_concurrency,
@@ -1539,16 +1679,17 @@ QDF_STATUS policy_mgr_get_valid_chan_weights(struct wlan_objmgr_psoc *psoc,
 		 */
 		for (i = 0; i < weight->saved_num_chan; i++) {
 			if (policy_mgr_allow_concurrency(psoc, PM_STA_MODE,
-						  weight->saved_chan_list[i],
-						  HW_MODE_20_MHZ)) {
+					weight->saved_chan_list[i],
+					HW_MODE_20_MHZ)) {
 				weight->weighed_valid_list[i] =
 					WEIGHT_OF_NON_PCL_CHANNELS;
 			}
 		}
-
+		qdf_mutex_acquire(&pm_ctx->qdf_conc_list_lock);
 		/* Restore the connection info */
-		policy_mgr_restore_deleted_conn_info(psoc, &info);
+		policy_mgr_restore_deleted_conn_info(psoc, info, num_cxn_del);
 	}
+	qdf_mutex_release(&pm_ctx->qdf_conc_list_lock);
 
 	for (i = 0; i < weight->saved_num_chan; i++) {
 		for (j = 0; j < weight->pcl_len; j++) {
@@ -1561,4 +1702,48 @@ QDF_STATUS policy_mgr_get_valid_chan_weights(struct wlan_objmgr_psoc *psoc,
 	}
 
 	return QDF_STATUS_SUCCESS;
+}
+
+uint8_t policy_mgr_mode_specific_get_channel(
+	struct wlan_objmgr_psoc *psoc, enum policy_mgr_con_mode mode)
+{
+	uint32_t conn_index;
+	uint8_t channel = 0;
+	struct policy_mgr_psoc_priv_obj *pm_ctx;
+
+	pm_ctx = policy_mgr_get_context(psoc);
+	if (!pm_ctx) {
+		policy_mgr_err("Invalid Context");
+		return channel;
+	}
+	/* provides the channel for the first matching mode type */
+	qdf_mutex_acquire(&pm_ctx->qdf_conc_list_lock);
+	for (conn_index = 0; conn_index < MAX_NUMBER_OF_CONC_CONNECTIONS;
+		conn_index++) {
+		if ((pm_conc_connection_list[conn_index].mode == mode) &&
+			pm_conc_connection_list[conn_index].in_use) {
+			channel = pm_conc_connection_list[conn_index].chan;
+			break;
+		}
+	}
+	qdf_mutex_release(&pm_ctx->qdf_conc_list_lock);
+
+	return channel;
+}
+
+uint8_t policy_mgr_get_alternate_channel_for_sap(
+	struct wlan_objmgr_psoc *psoc)
+{
+	uint8_t pcl_channels[QDF_MAX_NUM_CHAN];
+	uint8_t pcl_weight[QDF_MAX_NUM_CHAN];
+	uint8_t channel = 0;
+	uint32_t pcl_len;
+
+	if (QDF_STATUS_SUCCESS == policy_mgr_get_pcl(psoc, PM_SAP_MODE,
+		&pcl_channels[0], &pcl_len,
+		pcl_weight, QDF_ARRAY_SIZE(pcl_weight))) {
+		channel = pcl_channels[0];
+	}
+
+	return channel;
 }

@@ -302,26 +302,6 @@ inline QDF_STATUS ucfg_nan_get_callbacks(struct wlan_objmgr_psoc *psoc,
 	return QDF_STATUS_SUCCESS;
 }
 
-struct wlan_objmgr_vdev *ucfg_nan_get_ndi_vdev(struct wlan_objmgr_psoc *psoc,
-						wlan_objmgr_ref_dbgid dbg_id)
-{
-	QDF_STATUS status;
-	struct nan_psoc_priv_obj *psoc_obj = nan_get_psoc_priv_obj(psoc);
-
-	if (!psoc_obj) {
-		nan_err("nan psoc priv object is NULL");
-		return NULL;
-	}
-
-	status = wlan_objmgr_vdev_try_get_ref(psoc_obj->vdev, dbg_id);
-	if (QDF_IS_STATUS_ERROR(status)) {
-		nan_err("could not get vdev ref. vdev may have been deleted");
-		return NULL;
-	}
-
-	return psoc_obj->vdev;
-}
-
 static struct nan_datapath_initiator_req *ucfg_nan_copy_intiator_req(
 			struct wlan_objmgr_vdev *vdev,
 			struct nan_datapath_initiator_req *in_req)
@@ -369,11 +349,42 @@ static struct nan_datapath_initiator_req *ucfg_nan_copy_intiator_req(
 			     in_req->pmk.pmk_len);
 	}
 
+	if (in_req->passphrase.passphrase_len) {
+		out_req->passphrase.passphrase =
+			qdf_mem_malloc(in_req->passphrase.passphrase_len);
+		if (NULL == out_req->passphrase.passphrase) {
+			nan_alert("malloc failed");
+			goto free_resources;
+		}
+		qdf_mem_copy(out_req->passphrase.passphrase,
+			     in_req->passphrase.passphrase,
+			     in_req->passphrase.passphrase_len);
+	}
+
+	if (in_req->service_name.service_name_len) {
+		out_req->service_name.service_name =
+		    qdf_mem_malloc(in_req->service_name.service_name_len);
+		if (NULL == out_req->service_name.service_name) {
+			nan_alert("malloc failed");
+			goto free_resources;
+		}
+		qdf_mem_copy(out_req->service_name.service_name,
+			     in_req->service_name.service_name,
+			     in_req->service_name.service_name_len);
+	}
+
+	nan_debug("pmk_len: %d, passphrase_len: %d, service_name_len: %d",
+		  out_req->pmk.pmk_len,
+		  out_req->passphrase.passphrase_len,
+		  out_req->service_name.service_name_len);
+
 	/* do not get ref here, rather take ref when request is activated */
 	out_req->vdev = vdev;
 	return out_req;
 
 free_resources:
+	qdf_mem_free(out_req->passphrase.passphrase);
+	qdf_mem_free(out_req->service_name.service_name);
 	qdf_mem_free(out_req->pmk.pmk);
 	qdf_mem_free(out_req->ndp_info.ndp_app_info);
 	qdf_mem_free(out_req->ndp_config.ndp_cfg);
@@ -428,11 +439,42 @@ static struct nan_datapath_responder_req *ucfg_nan_copy_responder_req(
 				in_req->pmk.pmk_len);
 	}
 
+	if (in_req->passphrase.passphrase_len) {
+		req->passphrase.passphrase =
+			qdf_mem_malloc(in_req->passphrase.passphrase_len);
+		if (NULL == req->passphrase.passphrase) {
+			nan_alert("malloc failed");
+			goto free_resources;
+		}
+		qdf_mem_copy(req->passphrase.passphrase,
+			     in_req->passphrase.passphrase,
+			     in_req->passphrase.passphrase_len);
+	}
+
+	if (in_req->service_name.service_name_len) {
+		req->service_name.service_name =
+		    qdf_mem_malloc(in_req->service_name.service_name_len);
+		if (NULL == req->service_name.service_name) {
+			nan_alert("malloc failed");
+			goto free_resources;
+		}
+		qdf_mem_copy(req->service_name.service_name,
+			     in_req->service_name.service_name,
+			     in_req->service_name.service_name_len);
+	}
+
+	nan_debug("pmk_len: %d, passphrase_len: %d, service_name_len: %d",
+		  req->pmk.pmk_len,
+		  req->passphrase.passphrase_len,
+		  req->service_name.service_name_len);
+
 	/* do not get ref here, rather take ref when request is activated */
 	req->vdev = vdev;
 	return req;
 
 free_resources:
+	qdf_mem_free(req->passphrase.passphrase);
+	qdf_mem_free(req->service_name.service_name);
 	qdf_mem_free(req->pmk.pmk);
 	qdf_mem_free(req->ndp_info.ndp_app_info);
 	qdf_mem_free(req->ndp_config.ndp_cfg);

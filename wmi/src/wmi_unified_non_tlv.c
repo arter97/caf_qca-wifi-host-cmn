@@ -25,14 +25,9 @@
  * to the Linux Foundation.
  */
 
-#include "athdefs.h"
-#include "osapi_linux.h"
-#include "a_types.h"
-#include "a_debug.h"
-#include "wlan_defs.h"
-#include "ol_if_athvar.h"
 #include "wmi_unified_api.h"
 #include "wmi_unified_priv.h"
+#include "hif.h"
 
 #if defined(WMI_NON_TLV_SUPPORT) || defined(WMI_TLV_AND_NON_TLV_SUPPORT)
 #include "wmi.h"
@@ -517,6 +512,9 @@ static QDF_STATUS convert_host_peer_id_to_target_id_non_tlv(
 	case WMI_HOST_PEER_EXT_STATS_ENABLE:
 		*targ_paramid = WMI_PEER_EXT_STATS_ENABLE;
 		break;
+	/* Populate appropriate targetid once feature is supported in FW */
+	case WMI_HOST_PEER_NSS_VHT160:
+	case WMI_HOST_PEER_NSS_VHT80_80:
 	default:
 		return QDF_STATUS_E_NOSUPPORT;
 	}
@@ -4436,6 +4434,87 @@ send_nf_dbr_dbm_info_get_cmd_non_tlv(wmi_unified_t wmi_handle)
 }
 
 /**
+ * enum packet_power_non_tlv_flags: Target defined
+ * packet power rate flags
+ * @WMI_NON_TLV_FLAG_ONE_CHAIN: one chain
+ * @WMI_NON_TLV_FLAG_TWO_CHAIN: two chain
+ * @WMI_NON_TLV_FLAG_THREE_CHAIN: three chain
+ * @WMI_NON_TLV_FLAG_FOUR_CHAIN: four chain
+ * @WMI_NON_TLV_FLAG_STBC: STBC is set
+ * @WMI_NON_TLV_FLAG_40MHZ: 40MHz channel width
+ * @WMI_NON_TLV_FLAG_80MHZ: 80MHz channel width
+ * @WMI_NON_TLV_FLAG_1600MHZ: 1600MHz channel width
+ * @WMI_NON_TLV_FLAG_TXBF: Tx Bf enabled
+ * @WMI_NON_TLV_FLAG_RTSENA: RTS enabled
+ * @WMI_NON_TLV_FLAG_CTSENA: CTS enabled
+ * @WMI_NON_TLV_FLAG_LDPC: LDPC is set
+ * @WMI_NON_TLV_FLAG_SERIES1: Rate series 1
+ * @WMI_NON_TLV_FLAG_SGI: Short gaurd interval
+ * @WMI_NON_TLV_FLAG_MU2: MU2 data
+ * @WMI_NON_TLV_FLAG_MU3: MU3 data
+ */
+enum packet_power_non_tlv_flags {
+	WMI_NON_TLV_FLAG_ONE_CHAIN     = 0x0001,
+	WMI_NON_TLV_FLAG_TWO_CHAIN     = 0x0005,
+	WMI_NON_TLV_FLAG_THREE_CHAIN   = 0x0007,
+	WMI_NON_TLV_FLAG_FOUR_CHAIN    = 0x000F,
+	WMI_NON_TLV_FLAG_STBC          = 0x0010,
+	WMI_NON_TLV_FLAG_40MHZ         = 0x0020,
+	WMI_NON_TLV_FLAG_80MHZ         = 0x0040,
+	WMI_NON_TLV_FLAG_160MHZ        = 0x0080,
+	WMI_NON_TLV_FLAG_TXBF          = 0x0100,
+	WMI_NON_TLV_FLAG_RTSENA        = 0x0200,
+	WMI_NON_TLV_FLAG_CTSENA        = 0x0400,
+	WMI_NON_TLV_FLAG_LDPC          = 0x0800,
+	WMI_NON_TLV_FLAG_SERIES1       = 0x1000,
+	WMI_NON_TLV_FLAG_SGI           = 0x2000,
+	WMI_NON_TLV_FLAG_MU2           = 0x4000,
+	WMI_NON_TLV_FLAG_MU3           = 0x8000,
+};
+
+/**
+ * convert_to_power_info_rate_flags() - convert packet_power_info_params
+ * to FW understandable format
+ * @param: pointer to hold packet power info param
+ *
+ * @return FW understandable 16 bit rate flags
+ */
+static uint16_t
+convert_to_power_info_rate_flags(struct packet_power_info_params *param)
+{
+	uint16_t rateflags = 0;
+
+	if (param->chainmask)
+		rateflags |= (param->chainmask & 0xf);
+	if (param->chan_width == WMI_HOST_CHAN_WIDTH_40)
+		rateflags |= WMI_NON_TLV_FLAG_40MHZ;
+	if (param->chan_width == WMI_HOST_CHAN_WIDTH_80)
+		rateflags |= WMI_NON_TLV_FLAG_80MHZ;
+	if (param->chan_width == WMI_HOST_CHAN_WIDTH_160)
+		rateflags |= WMI_NON_TLV_FLAG_160MHZ;
+	if (param->rate_flags & WMI_HOST_FLAG_STBC)
+		rateflags |= WMI_NON_TLV_FLAG_STBC;
+	if (param->rate_flags & WMI_HOST_FLAG_LDPC)
+		rateflags |= WMI_NON_TLV_FLAG_LDPC;
+	if (param->rate_flags & WMI_HOST_FLAG_TXBF)
+		rateflags |= WMI_NON_TLV_FLAG_TXBF;
+	if (param->rate_flags & WMI_HOST_FLAG_RTSENA)
+		rateflags |= WMI_NON_TLV_FLAG_RTSENA;
+	if (param->rate_flags & WMI_HOST_FLAG_CTSENA)
+		rateflags |= WMI_NON_TLV_FLAG_CTSENA;
+	if (param->rate_flags & WMI_HOST_FLAG_SGI)
+		rateflags |= WMI_NON_TLV_FLAG_SGI;
+	if (param->rate_flags & WMI_HOST_FLAG_SERIES1)
+		rateflags |= WMI_NON_TLV_FLAG_SERIES1;
+	if (param->rate_flags & WMI_HOST_FLAG_MU2)
+		rateflags |= WMI_NON_TLV_FLAG_MU2;
+	if (param->rate_flags & WMI_HOST_FLAG_MU3)
+		rateflags |= WMI_NON_TLV_FLAG_MU3;
+
+	return rateflags;
+}
+
+/**
  * send_packet_power_info_get_cmd_non_tlv() - send request to get packet power
  * info to fw
  * @wmi_handle: wmi handle
@@ -4449,20 +4528,24 @@ send_packet_power_info_get_cmd_non_tlv(wmi_unified_t wmi_handle,
 {
 	wmi_pdev_get_tpc_cmd *cmd;
 	wmi_buf_t wmibuf;
-	 u_int32_t len = sizeof(wmi_pdev_get_tpc_cmd);
+	u_int32_t len = sizeof(wmi_pdev_get_tpc_cmd);
 
 	wmibuf = wmi_buf_alloc(wmi_handle, len);
 	if (wmibuf == NULL)
 		return QDF_STATUS_E_NOMEM;
 
 	cmd = (wmi_pdev_get_tpc_cmd *)wmi_buf_data(wmibuf);
-	cmd->rate_flags = param->rate_flags;
+	cmd->rate_flags = convert_to_power_info_rate_flags(param);
 	cmd->nss = param->nss;
 	cmd->preamble = param->preamble;
 	cmd->hw_rate = param->hw_rate;
 	cmd->rsvd = 0x0;
-	qdf_print("%s[%d] commandID %d, wmi_pdev_get_tpc_cmd=0x%x\n", __func__,
-		__LINE__, WMI_PDEV_GET_TPC_CMDID, *((u_int32_t *)cmd));
+
+	WMI_LOGD("%s[%d] commandID %d, wmi_pdev_get_tpc_cmd=0x%x,"
+		"rate_flags: 0x%x, nss: %d, preamble: %d, hw_rate: %d\n",
+		__func__, __LINE__, WMI_PDEV_GET_TPC_CMDID, *((u_int32_t *)cmd),
+		cmd->rate_flags, cmd->nss, cmd->preamble, cmd->hw_rate);
+
 	return wmi_unified_cmd_send(wmi_handle, wmibuf, len,
 				   WMI_PDEV_GET_TPC_CMDID);
 }
@@ -5406,6 +5489,27 @@ static bool is_service_enabled_non_tlv(wmi_unified_t wmi_handle,
 			service_id);
 }
 
+static inline void copy_ht_cap_info(uint32_t ev_target_cap,
+				struct wlan_psoc_target_capability_info *cap)
+{
+	cap->ht_cap_info |= ev_target_cap & (
+					WMI_HT_CAP_ENABLED
+					| WMI_HT_CAP_HT20_SGI
+					| WMI_HT_CAP_DYNAMIC_SMPS
+					| WMI_HT_CAP_TX_STBC
+					| WMI_HT_CAP_TX_STBC_MASK_SHIFT
+					| WMI_HT_CAP_RX_STBC
+					| WMI_HT_CAP_RX_STBC_MASK_SHIFT
+					| WMI_HT_CAP_LDPC
+					| WMI_HT_CAP_L_SIG_TXOP_PROT
+					| WMI_HT_CAP_MPDU_DENSITY
+					| WMI_HT_CAP_MPDU_DENSITY_MASK_SHIFT
+					| WMI_HT_CAP_HT40_SGI
+					| WMI_HT_CAP_IBF_BFER);
+	if (ev_target_cap & WMI_HT_CAP_IBF_BFER)
+			cap->ht_cap_info |= WMI_HOST_HT_CAP_IBF_BFER;
+}
+
 /**
  * extract_service_ready_non_tlv() - extract service ready event
  * @wmi_handle: wmi handle
@@ -5425,7 +5529,7 @@ static QDF_STATUS extract_service_ready_non_tlv(wmi_unified_t wmi_handle,
 	cap->phy_capability = ev->phy_capability;
 	cap->max_frag_entry = ev->max_frag_entry;
 	cap->num_rf_chains = ev->num_rf_chains;
-	cap->ht_cap_info = ev->ht_cap_info;
+	copy_ht_cap_info(ev->ht_cap_info, cap);
 	cap->vht_cap_info = ev->vht_cap_info;
 	cap->vht_supp_mcs = ev->vht_supp_mcs;
 	cap->hw_min_tx_power = ev->hw_min_tx_power;
@@ -5954,12 +6058,13 @@ static QDF_STATUS extract_mgmt_rx_params_non_tlv(wmi_unified_t wmi_handle,
 
 	hdr->channel = ev->hdr.channel;
 	hdr->snr = ev->hdr.snr;
+	hdr->rssi = ev->hdr.snr;
 	hdr->rate = ev->hdr.rate;
 	hdr->phy_mode = ev->hdr.phy_mode;
 	hdr->buf_len = ev->hdr.buf_len;
 	hdr->status = ev->hdr.status;
 	hdr->pdev_id = WMI_NON_TLV_DEFAULT_PDEV_ID;
-
+	qdf_mem_copy(hdr->rssi_ctl, ev->hdr.rssi_ctl, sizeof(hdr->rssi_ctl));
 	*bufp = ev->bufp;
 
 	return QDF_STATUS_SUCCESS;
@@ -8369,6 +8474,7 @@ static void populate_non_tlv_service(uint32_t *wmi_service)
 	wmi_service[wmi_service_pkt_routing] = WMI_SERVICE_UNAVAILABLE;
 	wmi_service[wmi_service_offchan_tx_wmi] = WMI_SERVICE_UNAVAILABLE;
 	wmi_service[wmi_service_chan_load_info] = WMI_SERVICE_UNAVAILABLE;
+	wmi_service[wmi_service_extended_nss_support] = WMI_SERVICE_UNAVAILABLE;
 }
 
 /**

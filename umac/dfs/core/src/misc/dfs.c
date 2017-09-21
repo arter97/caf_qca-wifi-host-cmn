@@ -94,6 +94,21 @@ int dfs_get_debug_info(struct wlan_dfs *dfs, void *data)
 	return (int)dfs->dfs_proc_phyerr;
 }
 
+void dfs_main_timer_init(struct wlan_dfs *dfs)
+{
+	qdf_timer_init(NULL,
+			&(dfs->wlan_dfs_task_timer),
+			dfs_task,
+			(void *)(dfs),
+			QDF_TIMER_TYPE_WAKE_APPS);
+
+	qdf_timer_init(NULL,
+			&(dfs->wlan_dfstesttimer),
+			dfs_testtimer_task,
+			(void *)dfs,
+			QDF_TIMER_TYPE_WAKE_APPS);
+}
+
 int dfs_create_object(struct wlan_dfs **dfs)
 {
 	*dfs = (struct wlan_dfs *)qdf_mem_malloc(sizeof(**dfs));
@@ -115,7 +130,7 @@ int dfs_create_object(struct wlan_dfs **dfs)
 	return 0;
 }
 
-int dfs_attach(struct wlan_dfs *dfs)
+int dfs_main_attach(struct wlan_dfs *dfs)
 {
 	int i, n;
 	struct wlan_dfs_radar_tab_info radar_info;
@@ -170,18 +185,11 @@ int dfs_attach(struct wlan_dfs *dfs)
 	dfs->dfs_event_log_on = 1;
 	DFS_PRINTK("%s: event log enabled by default\n", __func__);
 
+	dfs->dfs_enable = 1;
+
 	/*Verify : Passing NULL to qdf_timer_init().*/
-	qdf_timer_init(NULL,
-			&(dfs->wlan_dfs_task_timer),
-			dfs_task,
-			(void *)(dfs),
-			QDF_TIMER_TYPE_WAKE_APPS);
-	qdf_timer_init(NULL,
-			&(dfs->wlan_dfstesttimer),
-			dfs_testtimer_task,
-			(void *)dfs,
-			QDF_TIMER_TYPE_WAKE_APPS);
-	dfs->wlan_dfs_cac_time = WLAN_DFS_WAIT_MS;
+	dfs_main_timer_init(dfs);
+
 	WLAN_DFSQ_LOCK_INIT(dfs);
 	STAILQ_INIT(&dfs->dfs_radarq);
 	WLAN_ARQ_LOCK_INIT(dfs);
@@ -225,17 +233,17 @@ int dfs_attach(struct wlan_dfs *dfs)
 	}
 
 	/* Allocate memory for radar table. */
-	dfs->dfs_radartable = (int8_t **)qdf_mem_malloc(256*sizeof(int8_t *));
-	if (dfs->dfs_radartable == NULL) {
+	dfs->dfs_ftindextable = (int8_t **)qdf_mem_malloc(256*sizeof(int8_t *));
+	if (dfs->dfs_ftindextable == NULL) {
 		DFS_PRINTK(
 				"%s: Cannot allocate memory for radar table\n",
 				__func__);
 		goto bad1;
 	}
 	for (n = 0; n < 256; n++) {
-		dfs->dfs_radartable[n] = qdf_mem_malloc(
+		dfs->dfs_ftindextable[n] = qdf_mem_malloc(
 				DFS_MAX_RADAR_OVERLAP*sizeof(int8_t));
-		if (dfs->dfs_radartable[n] == NULL) {
+		if (dfs->dfs_ftindextable[n] == NULL) {
 			DFS_PRINTK(
 					"%s: cannot allocate memory for radar table entry\n",
 					__func__);
@@ -277,13 +285,13 @@ int dfs_attach(struct wlan_dfs *dfs)
 	dfs->dfs_phyerr_queued_count = 0;
 	dfs->dfs_phyerr_w53_counter  = 0;
 	dfs->dfs_pri_multiplier      = 2;
-	dfs->wlan_dfs_nol_timeout = DFS_NOL_TIMEOUT_S;
+	dfs_get_radars(dfs);
 
 	return 0;
 
 bad2:
-	qdf_mem_free(dfs->dfs_radartable);
-	dfs->dfs_radartable = NULL;
+	qdf_mem_free(dfs->dfs_ftindextable);
+	dfs->dfs_ftindextable = NULL;
 bad1:
 	for (n = 0; n < DFS_MAX_RADAR_TYPES; n++) {
 		if (dfs->dfs_radarf[n] != NULL) {
@@ -303,6 +311,43 @@ bad1:
 	return 1;
 }
 
+int dfs_attach(struct wlan_dfs *dfs)
+{
+	int ret;
+
+	if (!dfs->dfs_is_offload_enabled) {
+		ret = dfs_main_attach(dfs);
+		if (ret) {
+			DFS_PRINTK("%s: dfs_main_attach failed\n", __func__);
+			return ret;
+		}
+	}
+	dfs_cac_attach(dfs);
+	dfs_zero_cac_attach(dfs);
+	dfs_nol_attach(dfs);
+
+	return 0;
+}
+
+void dfs_stop(struct wlan_dfs *dfs)
+{
+	dfs_nol_timer_cleanup(dfs);
+	dfs_clear_nolhistory(dfs);
+}
+
+void dfs_main_timer_reset(struct wlan_dfs *dfs)
+{
+	if (dfs->wlan_radar_tasksched) {
+		qdf_timer_stop(&dfs->wlan_dfs_task_timer);
+		dfs->wlan_radar_tasksched = 0;
+	}
+
+	if (dfs->wlan_dfstest) {
+		qdf_timer_stop(&dfs->wlan_dfstesttimer);
+		dfs->wlan_dfstest = 0;
+	}
+}
+
 void dfs_reset(struct wlan_dfs *dfs)
 {
 	if (dfs == NULL) {
@@ -311,43 +356,24 @@ void dfs_reset(struct wlan_dfs *dfs)
 		return;
 	}
 
-	if (dfs->wlan_radar_tasksched) {
-		qdf_timer_stop(&dfs->wlan_dfs_task_timer);
-		dfs->wlan_radar_tasksched = 0;
-	}
-
-	if (dfs->wlan_dfstest) {
-		qdf_timer_stop(&dfs->wlan_dfstesttimer);
-		dfs->wlan_dfstest = 0;
-	}
-
-	dfs_nol_timer_cleanup(dfs);
-	dfs_clear_nolhistory(dfs);
+	dfs_cac_timer_reset(dfs);
+	dfs_zero_cac_reset(dfs);
+	if (!dfs->dfs_is_offload_enabled)
+		dfs_main_timer_reset(dfs);
 }
 
-void sif_dfs_detach(struct wlan_dfs *dfs)
+void dfs_main_detach(struct wlan_dfs *dfs)
 {
 	int n, empty;
 
-	if (dfs == NULL) {
-		DFS_DPRINTK(dfs, WLAN_DEBUG_DFS1,
-				"%s: dfs is NULL\n", __func__);
+	if (!dfs->dfs_enable)
 		return;
-	}
+
+	dfs->dfs_enable = 0;
 
 	if (dfs->dfs_curchan != NULL) {
-		OS_FREE(dfs->dfs_curchan);
+		qdf_mem_free(dfs->dfs_curchan);
 		dfs->dfs_curchan = NULL;
-	}
-
-	if (dfs->wlan_radar_tasksched) {
-		qdf_timer_stop(&dfs->wlan_dfs_task_timer);
-		dfs->wlan_radar_tasksched = 0;
-	}
-
-	if (dfs->wlan_dfstest) {
-		qdf_timer_stop(&dfs->wlan_dfstesttimer);
-		dfs->wlan_dfstest = 0;
 	}
 
 	dfs_reset_radarq(dfs);
@@ -365,15 +391,15 @@ void sif_dfs_detach(struct wlan_dfs *dfs)
 		}
 	}
 
-	if (dfs->dfs_radartable != NULL) {
+	if (dfs->dfs_ftindextable != NULL) {
 		for (n = 0; n < 256; n++) {
-			if (dfs->dfs_radartable[n] != NULL) {
-				qdf_mem_free(dfs->dfs_radartable[n]);
-				dfs->dfs_radartable[n] = NULL;
+			if (dfs->dfs_ftindextable[n] != NULL) {
+				qdf_mem_free(dfs->dfs_ftindextable[n]);
+				dfs->dfs_ftindextable[n] = NULL;
 			}
 		}
-		qdf_mem_free(dfs->dfs_radartable);
-		dfs->dfs_radartable = NULL;
+		qdf_mem_free(dfs->dfs_ftindextable);
+		dfs->dfs_ftindextable = NULL;
 		dfs->wlan_dfs_isdfsregdomain = 0;
 	}
 
@@ -394,7 +420,13 @@ void sif_dfs_detach(struct wlan_dfs *dfs)
 		qdf_mem_free(dfs->events);
 		dfs->events = NULL;
 	}
-	dfs_nol_timer_cleanup(dfs);
+}
+
+void dfs_detach(struct wlan_dfs *dfs)
+{
+	if (!dfs->dfs_is_offload_enabled)
+		dfs_main_detach(dfs);
+	dfs_zero_cac_detach(dfs);
 }
 
 void dfs_destroy_object(struct wlan_dfs *dfs)
@@ -894,7 +926,7 @@ int dfs_control(struct wlan_dfs *dfs,
 	case DFS_BANGRADAR:
 		dfs->dfs_bangradar = 1;
 		dfs->wlan_radar_tasksched = 1;
-		OS_SET_TIMER(&dfs->wlan_dfs_task_timer, 0);
+		qdf_timer_mod(&dfs->wlan_dfs_task_timer, 0);
 		error = 0;
 		break;
 	case DFS_SHOW_PRECAC_LISTS:
@@ -906,7 +938,7 @@ int dfs_control(struct wlan_dfs *dfs,
 	case DFS_SECOND_SEGMENT_BANGRADAR:
 		dfs->dfs_second_segment_bangradar = 1;
 		dfs->wlan_radar_tasksched = 1;
-		OS_SET_TIMER(&dfs->wlan_dfs_task_timer, 0);
+		qdf_timer_mod(&dfs->wlan_dfs_task_timer, 0);
 		error = 0;
 		break;
 	default:
@@ -1024,38 +1056,9 @@ int dfs_get_thresholds(struct wlan_dfs *dfs,
 	return 1;
 }
 
-void dfs_getnol(struct wlan_dfs *dfs, void *dfs_nolinfo)
-{
-	struct dfsreq_nolinfo *nolinfo = (struct dfsreq_nolinfo *)dfs_nolinfo;
-
-	dfs_get_nol(dfs, nolinfo->dfs_nol, &(nolinfo->dfs_ch_nchans));
-}
-
-void dfs_clear_nolhistory(struct wlan_dfs *dfs)
-{
-	/* We should have a dfs_clear_nolhistory API from Regdomain. */
-	struct dfs_ieee80211_channel *c, lc;
-	int i;
-	int nchans = 0;
-
-	c = &lc;
-	dfs_mlme_get_dfs_ch_nchans(dfs->dfs_pdev_obj, &nchans);
-	for (i = 0; i < nchans; i++) {
-		dfs_mlme_get_dfs_ch_channels(dfs->dfs_pdev_obj,
-				&(c->dfs_ch_freq),
-				&(c->dfs_ch_flags),
-				&(c->dfs_ch_flagext),
-				&(c->dfs_ch_ieee),
-				&(c->dfs_ch_vhtop_ch_freq_seg1),
-				&(c->dfs_ch_vhtop_ch_freq_seg2),
-				i);
-		IEEE80211_CHAN_CLR_HISTORY_RADAR(c);
-	}
-}
-
 void dfs_set_current_channel(struct wlan_dfs *dfs,
 		uint16_t dfs_ch_freq,
-		uint32_t dfs_ch_flags,
+		uint64_t dfs_ch_flags,
 		uint16_t dfs_ch_flagext,
 		uint8_t dfs_ch_ieee,
 		uint8_t dfs_ch_vhtop_ch_freq_seg1,
@@ -1081,4 +1084,12 @@ u_int dfs_ieee80211_chan2freq(struct dfs_ieee80211_channel *chan)
 
 	return chan == IEEE80211_CHAN_ANYC ?
 		IEEE80211_CHAN_ANY : chan->dfs_ch_freq;
+}
+
+void dfs_update_cur_chan_flags(struct wlan_dfs *dfs,
+		uint64_t flags,
+		uint16_t flagext)
+{
+	dfs->dfs_curchan->dfs_ch_flags = flags;
+	dfs->dfs_curchan->dfs_ch_flagext = flagext;
 }

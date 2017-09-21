@@ -51,6 +51,17 @@ QDF_STATUS ucfg_reg_get_current_chan_list(struct wlan_objmgr_pdev *pdev,
 	return reg_get_current_chan_list(pdev, chan_list);
 }
 
+QDF_STATUS ucfg_reg_modify_chan_144(struct wlan_objmgr_pdev *pdev,
+				    bool enable_ch_144)
+{
+	return reg_modify_chan_144(pdev, enable_ch_144);
+}
+
+bool ucfg_reg_get_en_chan_144(struct wlan_objmgr_pdev *pdev)
+{
+	return reg_get_en_chan_144(pdev);
+}
+
 QDF_STATUS ucfg_reg_set_config_vars(struct wlan_objmgr_psoc *psoc,
 				 struct reg_config_vars config_vars)
 {
@@ -70,22 +81,22 @@ void ucfg_reg_program_mas_chan_list(struct wlan_objmgr_psoc *psoc,
 	reg_program_mas_chan_list(psoc, reg_channels, alpha2, dfs_region);
 }
 
-QDF_STATUS ucfg_reg_program_default_cc(struct wlan_objmgr_psoc *psoc,
-		uint16_t regdmn)
+QDF_STATUS ucfg_reg_program_default_cc(struct wlan_objmgr_pdev *pdev,
+				       uint16_t regdmn)
 {
-	return reg_program_default_cc(psoc, regdmn);
+	return reg_program_default_cc(pdev, regdmn);
 }
 
-QDF_STATUS ucfg_reg_program_cc(struct wlan_objmgr_psoc *psoc,
-		struct cc_regdmn_s *rd)
+QDF_STATUS ucfg_reg_program_cc(struct wlan_objmgr_pdev *pdev,
+			       struct cc_regdmn_s *rd)
 {
-	return reg_program_chan_list(psoc, rd);
+	return reg_program_chan_list(pdev, rd);
 }
 
-QDF_STATUS ucfg_reg_get_current_cc(struct wlan_objmgr_psoc *psoc,
-		struct cc_regdmn_s *rd)
+QDF_STATUS ucfg_reg_get_current_cc(struct wlan_objmgr_pdev *pdev,
+				   struct cc_regdmn_s *rd)
 {
-	return reg_get_current_cc(psoc, rd);
+	return reg_get_current_cc(pdev, rd);
 }
 
 /**

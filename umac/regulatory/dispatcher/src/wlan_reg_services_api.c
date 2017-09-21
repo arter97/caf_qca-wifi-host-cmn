@@ -28,6 +28,7 @@
 #include <wlan_reg_services_api.h>
 #include "../../core/src/reg_services.h"
 #include "../../core/src/reg_priv.h"
+#include "../../core/src/reg_db_parser.h"
 
 /**
  * wlan_reg_get_channel_list_with_power() - Provide the channel list with power
@@ -131,15 +132,17 @@ void wlan_reg_set_channel_params(struct wlan_objmgr_pdev *pdev, uint8_t ch,
  * wlan_reg_get_dfs_region () - Get the current dfs region
  * @dfs_reg: pointer to dfs region
  *
- * Return: None
+ * Return: Status
  */
-void wlan_reg_get_dfs_region(struct wlan_objmgr_psoc *psoc,
+QDF_STATUS wlan_reg_get_dfs_region(struct wlan_objmgr_pdev *pdev,
 			     enum dfs_reg *dfs_reg)
 {
 	/*
 	 * Get the current dfs region
 	 */
-	reg_get_dfs_region(psoc, dfs_reg);
+	reg_get_dfs_region(pdev, dfs_reg);
+
+	return QDF_STATUS_SUCCESS;
 }
 
 uint32_t wlan_reg_get_channel_reg_power(struct wlan_objmgr_pdev *pdev,
@@ -202,10 +205,10 @@ enum channel_state wlan_reg_get_bonded_channel_state(
  *
  * Return: None
  */
-void wlan_reg_set_dfs_region(struct wlan_objmgr_psoc *psoc,
+void wlan_reg_set_dfs_region(struct wlan_objmgr_pdev *pdev,
 			     enum dfs_reg dfs_reg)
 {
-	reg_set_dfs_region(psoc, dfs_reg);
+	reg_set_dfs_region(pdev, dfs_reg);
 }
 
 QDF_STATUS wlan_reg_get_domain_from_country_code(v_REGDOMAIN_t *reg_domain_ptr,
@@ -452,6 +455,11 @@ QDF_STATUS wlan_reg_get_chip_mode(struct wlan_objmgr_pdev *pdev,
 	return QDF_STATUS_SUCCESS;
 }
 
+bool wlan_reg_is_11d_scan_inprogress(struct wlan_objmgr_psoc *psoc)
+{
+	return reg_is_11d_scan_inprogress(psoc);
+}
+
 QDF_STATUS wlan_reg_get_freq_range(struct wlan_objmgr_pdev *pdev,
 		uint32_t *low_2g,
 		uint32_t *high_2g,
@@ -480,4 +488,10 @@ struct wlan_lmac_if_reg_tx_ops *
 wlan_reg_get_tx_ops(struct wlan_objmgr_psoc *psoc)
 {
 	return reg_get_psoc_tx_ops(psoc);
+}
+
+QDF_STATUS wlan_reg_get_curr_regdomain(struct wlan_objmgr_pdev *pdev,
+		struct cur_regdmn_info *cur_regdmn)
+{
+	return reg_get_curr_regdomain(pdev, cur_regdmn);
 }

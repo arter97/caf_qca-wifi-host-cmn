@@ -58,6 +58,9 @@ typedef uint32_t wlan_scan_id;
 /* Increase dwell time for P2P search in ms */
 #define P2P_SEARCH_DWELL_TIME_INC 20
 
+#define PROBE_REQ_BITMAP_LEN 8
+#define MAX_PROBE_REQ_OUIS 16
+
 /* forward declaration */
 struct wlan_objmgr_vdev;
 struct wlan_objmgr_pdev;
@@ -123,6 +126,7 @@ struct element_info {
  * @widebw:     pointer to wide band channel switch sub ie
  * @txpwrenvlp: pointer to tx power envelop sub ie
  * @srp: pointer to spatial reuse parameter sub extended ie
+ * @fils_indication: pointer to FILS indication ie
  */
 struct ie_list {
 	uint8_t *tim;
@@ -164,6 +168,7 @@ struct ie_list {
 	uint8_t *hecap;
 	uint8_t *heop;
 	uint8_t *srp;
+	uint8_t *fils_indication;
 };
 
 /**
@@ -332,6 +337,22 @@ struct roam_filter_params {
 #define WLAN_SCAN_FILTER_NUM_SSID 5
 #define WLAN_SCAN_FILTER_NUM_BSSID 5
 
+#define REAM_HASH_LEN 2
+#define CACHE_IDENTIFIER_LEN 2
+#define HESSID_LEN 6
+
+/**
+ * struct fils_filter_info: FILS info present in scan filter
+ * @realm_check: whether realm check is required
+ * @fils_realm: realm hash value
+ * @security_type: type of security supported
+ */
+struct fils_filter_info {
+	bool realm_check;
+	uint8_t fils_realm[REAM_HASH_LEN];
+	uint8_t security_type;
+};
+
 /**
  * @age_threshold: If set return entry which are newer than the age_threshold
  * @p2p_results: If only p2p entries is required
@@ -363,6 +384,7 @@ struct roam_filter_params {
  * @enc_type: unicast enc type list
  * @mc_enc_type: multicast cast enc type list
  * @pcl_channel_list: PCL channel list
+ * @fils_scan_filter: FILS info
  */
 struct scan_filter {
 	uint32_t age_threshold;
@@ -392,6 +414,7 @@ struct scan_filter {
 	enum wlan_enc_type enc_type[WLAN_NUM_OF_ENCRYPT_TYPE];
 	enum wlan_enc_type mc_enc_type[WLAN_NUM_OF_ENCRYPT_TYPE];
 	uint8_t pcl_channel_list[QDF_MAX_NUM_CHAN];
+	struct fils_filter_info fils_scan_filter;
 };
 
 
@@ -466,6 +489,32 @@ enum scan_dwelltime_adaptive_mode {
 };
 
 /**
+ * struct scan_random_attr - holds scan randomization attrs
+ * @randomize: set to true for scan randomization
+ * @mac_addr: mac addr to be randomized
+ * @mac_mask: used to represent bits in mac_addr for randomization
+ */
+struct scan_random_attr {
+	bool randomize;
+	uint8_t mac_addr[QDF_MAC_ADDR_SIZE];
+	uint8_t mac_mask[QDF_MAC_ADDR_SIZE];
+};
+
+/**
+ * struct probe_req_whitelist_attr - holds probe req ie whitelist attrs
+ * @white_list: enable/disable whitelist
+ * @ie_bitmap: bitmap of IEs to be enabled
+ * @num_vendor_oui: number of vendor OUIs
+ * @voui: vendor oui buffer
+ */
+struct probe_req_whitelist_attr {
+	bool white_list;
+	uint32_t ie_bitmap[PROBE_REQ_BITMAP_LEN];
+	uint32_t num_vendor_oui;
+	uint32_t voui[MAX_PROBE_REQ_OUIS];
+};
+
+/**
  * struct scan_req_params - start scan request parameter
  * @scan_id: scan id
  * @scan_req_id: scan requester id
@@ -531,6 +580,8 @@ enum scan_dwelltime_adaptive_mode {
  * @chan_list: channel list
  * @ssid: ssid list
  * @bssid_list: Lisst of bssid to scan
+ * @scan_random: scan randomization params
+ * @ie_whitelist: probe req IE whitelist attrs
  * @extraie: list of optional/vendor specific ie's to be added in probe requests
  * @htcap: htcap ie
  * @vhtcap: vhtcap ie
@@ -609,6 +660,8 @@ struct scan_req_params {
 	uint32_t chan_list[WLAN_SCAN_MAX_NUM_CHANNELS];
 	struct wlan_ssid ssid[WLAN_SCAN_MAX_NUM_SSID];
 	struct qdf_mac_addr bssid_list[WLAN_SCAN_MAX_NUM_BSSID];
+	struct scan_random_attr scan_random;
+	struct probe_req_whitelist_attr ie_whitelist;
 	struct element_info extraie;
 	struct element_info htcap;
 	struct element_info vhtcap;
@@ -665,19 +718,6 @@ struct scan_cancel_request {
 	struct wlan_objmgr_vdev *vdev;
 	/* Actual scan cancel request parameters */
 	struct scan_cancel_param cancel_req;
-};
-
-/**
- * struct mlme_update_info - meta information required to
- * update mlme info in scan entry
- * @vdev: vdev object
- * @bss: bss identifier
- * @mlme_info: mlme info to update
- */
-struct mlme_update_info {
-	struct wlan_objmgr_vdev *vdev;
-	struct bss_info bss;
-	struct mlme_info mlme_info;
 };
 
 /**
@@ -763,6 +803,7 @@ enum scan_completion_reason {
  * @chan_freq: channel centre frequency
  * @requester: requester id
  * @scan_id: scan id
+ * @timestamp: timestamp in microsec recorded by target for the scan event
  */
 struct scan_event {
 	uint32_t vdev_id;
@@ -771,6 +812,7 @@ struct scan_event {
 	uint32_t chan_freq;
 	uint32_t requester;
 	uint32_t scan_id;
+	uint32_t timestamp;
 };
 
 /**
@@ -875,6 +917,17 @@ struct pno_nw_type {
 };
 
 /**
+ * struct connected_pno_band_rssi_pref - BSS preference based on band
+ * and RSSI
+ * @band: band preference
+ * @rssi_pref: RSSI preference
+ */
+struct cpno_band_rssi_pref {
+	int8_t band;
+	int8_t rssi;
+};
+
+/**
  * struct pno_scan_req_params - PNO Scan request structure
  * @networks_cnt: Number of networks
  * @vdev_id: vdev id
@@ -893,6 +946,12 @@ struct pno_nw_type {
  * @channel_prediction_full_scan: periodic timer upon which a full scan needs
  * to be triggered.
  * @networks_list: Preferred network list
+ * @scan_random: scan randomization params
+ * @ie_whitelist: probe req IE whitelist attrs
+ * @relative_rssi_set: Flag to check whether realtive_rssi is set or not
+ * @relative_rssi: Relative rssi threshold, used for connected pno
+ * @band_rssi_pref: Band and RSSI preference that can be given to one BSS
+ *     over the other BSS
  *
  * E.g.
  *	{ fast_scan_period=120, fast_scan_max_cycles=2,
@@ -915,6 +974,28 @@ struct pno_scan_req_params {
 	enum scan_dwelltime_adaptive_mode adaptive_dwell_mode;
 	uint32_t channel_prediction_full_scan;
 	struct pno_nw_type networks_list[SCAN_PNO_MAX_SUPP_NETWORKS];
+	struct scan_random_attr scan_random;
+	struct probe_req_whitelist_attr ie_whitelist;
+	bool relative_rssi_set;
+	int8_t relative_rssi;
+	struct cpno_band_rssi_pref band_rssi_pref;
+};
+
+/**
+ * struct nlo_mawc_params - Motion Aided Wireless Connectivity based
+ *                          Network List Offload configuration
+ * @vdev_id: VDEV ID on which the configuration needs to be applied
+ * @enable: flag to enable or disable
+ * @exp_backoff_ratio: ratio of exponential backoff
+ * @init_scan_interval: initial scan interval(msec)
+ * @max_scan_interval:  max scan interval(msec)
+ */
+struct nlo_mawc_params {
+	uint8_t vdev_id;
+	bool enable;
+	uint32_t exp_backoff_ratio;
+	uint32_t init_scan_interval;
+	uint32_t max_scan_interval;
 };
 
 /**
@@ -957,6 +1038,7 @@ struct pno_user_cfg {
  * @rssi_cat_gap: set rssi category gap
  * @scan_dwell_time_mode: Adaptive dweltime mode
  * @pno_cfg: Pno related config params
+ * @ie_whitelist: probe req IE whitelist attrs
  */
 struct scan_user_cfg {
 	uint32_t active_dwell;
@@ -974,6 +1056,7 @@ struct scan_user_cfg {
 	uint32_t rssi_cat_gap;
 	enum scan_dwelltime_adaptive_mode scan_dwell_time_mode;
 	struct pno_user_cfg pno_cfg;
+	struct probe_req_whitelist_attr ie_whitelist;
 };
 
 /**

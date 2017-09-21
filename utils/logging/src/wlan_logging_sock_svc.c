@@ -31,7 +31,7 @@
 ******************************************************************************/
 
 #ifdef WLAN_LOGGING_SOCK_SVC_ENABLE
-#include <vmalloc.h>
+#include <linux/vmalloc.h>
 #ifdef CONFIG_MCL
 #include <cds_api.h>
 #include <host_diag_core_event.h>
@@ -43,7 +43,7 @@
 #include "pktlog_ac.h"
 #endif
 #include <wlan_logging_sock_svc.h>
-#include <kthread.h>
+#include <linux/kthread.h>
 #include <qdf_time.h>
 #include <qdf_trace.h>
 #include <qdf_mc_timer.h>
@@ -56,6 +56,12 @@
 #endif
 
 #define MAX_NUM_PKT_LOG 32
+
+#define ALLOWED_LOG_LEVELS_TO_CONSOLE(level) \
+	((QDF_TRACE_LEVEL_FATAL == (level)) || \
+	 (QDF_TRACE_LEVEL_ERROR == (level)) || \
+	 (QDF_TRACE_LEVEL_WARN == (level)) || \
+	 (QDF_TRACE_LEVEL_INFO == (level)))
 
 /**
  * struct tx_status - tx status
@@ -89,6 +95,9 @@ static uint8_t grx_count;
 
 #define ANI_NL_MSG_LOG_TYPE 89
 #define ANI_NL_MSG_READY_IND_TYPE 90
+#ifndef MAX_LOGMSG_COUNT
+#define MAX_LOGMSG_COUNT 256
+#endif
 #define MAX_LOGMSG_LENGTH 2048
 #define MAX_SKBMSG_LENGTH 4096
 #define MAX_PKTSTATS_LENGTH 2048
@@ -143,7 +152,8 @@ struct wlan_logging {
 	/* Log Fatal and ERROR to console */
 	bool log_to_console;
 	/* Number of buffers to be used for logging */
-	int num_buf;
+	uint32_t num_buf;
+	uint32_t buffer_length;
 	/* Lock to synchronize access to shared logging resource */
 	spinlock_t spin_lock;
 	/* Holds the free node which can be used for filling logs */
@@ -178,7 +188,7 @@ struct wlan_logging {
 };
 
 static struct wlan_logging gwlan_logging;
-static struct log_msg *gplog_msg;
+static struct log_msg gplog_msg[MAX_LOGMSG_COUNT];
 static struct pkt_stats_msg *gpkt_stats_buffers;
 
 /* Need to call this with spin_lock acquired */
@@ -297,7 +307,7 @@ static int wlan_add_user_log_radio_time_stamp(char *tbuf, size_t tbuf_sz,
 #ifdef CONFIG_MCL
 static inline void print_to_console(char *tbuf, char *to_be_sent)
 {
-	pr_info("%s %s\n", tbuf, to_be_sent);
+	pr_err("%s %s\n", tbuf, to_be_sent);
 }
 #else
 #define print_to_console(str1, str2)
@@ -364,8 +374,7 @@ int wlan_log_to_user(QDF_TRACE_LEVEL log_level, char *to_be_sent, int length)
 	pfilled_length = &gwlan_logging.pcur_node->filled_length;
 
 	/* Check if we can accomodate more log into current node/buffer */
-	if ((MAX_LOGMSG_LENGTH <= (*pfilled_length +
-						sizeof(tAniNlHdr))) ||
+	if ((MAX_LOGMSG_LENGTH <= (*pfilled_length + sizeof(tAniNlHdr))) ||
 		((MAX_LOGMSG_LENGTH - (*pfilled_length +
 			sizeof(tAniNlHdr))) < total_log_len)) {
 		wake_up_thread = true;
@@ -407,8 +416,7 @@ int wlan_log_to_user(QDF_TRACE_LEVEL log_level, char *to_be_sent, int length)
 	}
 
 	if (gwlan_logging.log_to_console
-	    && ((QDF_TRACE_LEVEL_FATAL == log_level)
-		|| (QDF_TRACE_LEVEL_ERROR == log_level))) {
+	    && ALLOWED_LOG_LEVELS_TO_CONSOLE(log_level)) {
 		print_to_console(tbuf, to_be_sent);
 	}
 
@@ -675,6 +683,7 @@ static int send_filled_buffers_to_user(void)
  * @is_fatal: Type of event, fatal or not
  * @indicator: Source of bug report, framework/host/firmware
  * @reason_code: Reason for triggering bug report
+ * @ring_id: Ring id of logging entities
  *
  * This function is used to report the bug report completion to userspace
  *
@@ -682,7 +691,8 @@ static int send_filled_buffers_to_user(void)
  */
 void wlan_report_log_completion(uint32_t is_fatal,
 		uint32_t indicator,
-		uint32_t reason_code)
+		uint32_t reason_code,
+		uint8_t ring_id)
 {
 	WLAN_HOST_DIAG_EVENT_DEF(wlan_diag_event,
 			struct host_event_wlan_log_complete);
@@ -690,7 +700,7 @@ void wlan_report_log_completion(uint32_t is_fatal,
 	wlan_diag_event.is_fatal = is_fatal;
 	wlan_diag_event.indicator = indicator;
 	wlan_diag_event.reason_code = reason_code;
-	wlan_diag_event.reserved = 0;
+	wlan_diag_event.reserved = ring_id;
 
 	WLAN_HOST_DIAG_EVENT_REPORT(&wlan_diag_event, EVENT_WLAN_LOG_COMPLETE);
 }
@@ -699,12 +709,13 @@ void wlan_report_log_completion(uint32_t is_fatal,
 #ifdef CONFIG_MCL
 /**
  * send_flush_completion_to_user() - Indicate flush completion to the user
+ * @ring_id:  Ring id of logging entities
  *
  * This function is used to send the flush completion message to user space
  *
  * Return: None
  */
-static void send_flush_completion_to_user(void)
+static void send_flush_completion_to_user(uint8_t ring_id)
 {
 	uint32_t is_fatal, indicator, reason_code;
 	bool recovery_needed;
@@ -713,13 +724,13 @@ static void send_flush_completion_to_user(void)
 		&indicator, &reason_code, &recovery_needed);
 
 	/* Error on purpose, so that it will get logged in the kmsg */
-	LOGGING_TRACE(QDF_TRACE_LEVEL_ERROR,
+	LOGGING_TRACE(QDF_TRACE_LEVEL_DEBUG,
 			"%s: Sending flush done to userspace", __func__);
 
-	wlan_report_log_completion(is_fatal, indicator, reason_code);
+	wlan_report_log_completion(is_fatal, indicator, reason_code, ring_id);
 
 	if (recovery_needed)
-		cds_trigger_recovery(false);
+		cds_trigger_recovery();
 }
 #endif
 
@@ -770,7 +781,8 @@ static int wlan_logging_thread(void *Arg)
 #ifdef CONFIG_MCL
 			if (WLAN_LOG_INDICATOR_HOST_ONLY ==
 			   cds_get_log_indicator()) {
-				send_flush_completion_to_user();
+				send_flush_completion_to_user(
+						RING_ID_DRIVER_DEBUG);
 			}
 #endif
 		}
@@ -792,7 +804,8 @@ static int wlan_logging_thread(void *Arg)
 			if (gwlan_logging.is_flush_complete == true) {
 				gwlan_logging.is_flush_complete = false;
 #ifdef CONFIG_MCL
-				send_flush_completion_to_user();
+				send_flush_completion_to_user(
+						RING_ID_DRIVER_DEBUG);
 #endif
 			} else {
 				gwlan_logging.is_flush_complete = true;
@@ -819,27 +832,33 @@ static int wlan_logging_thread(void *Arg)
 	return 0;
 }
 
-int wlan_logging_sock_activate_svc(int log_to_console, int num_buf)
+void wlan_logging_set_active(bool active)
+{
+	gwlan_logging.is_active = active;
+}
+
+void wlan_logging_set_log_to_console(bool log_to_console)
+{
+	gwlan_logging.log_to_console = log_to_console;
+}
+
+int wlan_logging_sock_init_svc(void)
 {
 	int i = 0, j, pkt_stats_size;
 	unsigned long irq_flag;
 
-	gplog_msg = (struct log_msg *)vmalloc(num_buf * sizeof(struct log_msg));
-	if (!gplog_msg) {
-		pr_err("%s: Could not allocate memory\n", __func__);
-		return -ENOMEM;
-	}
+	spin_lock_init(&gwlan_logging.spin_lock);
+	spin_lock_init(&gwlan_logging.pkt_stats_lock);
 
-	qdf_mem_zero(gplog_msg, (num_buf * sizeof(struct log_msg)));
-
-	gwlan_logging.log_to_console = !!log_to_console;
-	gwlan_logging.num_buf = num_buf;
+	gwlan_logging.log_to_console = true;
+	gwlan_logging.num_buf = MAX_LOGMSG_COUNT;
+	gwlan_logging.buffer_length = MAX_LOGMSG_LENGTH;
 
 	spin_lock_irqsave(&gwlan_logging.spin_lock, irq_flag);
 	INIT_LIST_HEAD(&gwlan_logging.free_list);
 	INIT_LIST_HEAD(&gwlan_logging.filled_list);
 
-	for (i = 0; i < num_buf; i++) {
+	for (i = 0; i < gwlan_logging.num_buf; i++) {
 		list_add(&gplog_msg[i].node, &gwlan_logging.free_list);
 		gplog_msg[i].index = i;
 	}
@@ -921,17 +940,16 @@ err1:
 	spin_lock_irqsave(&gwlan_logging.spin_lock, irq_flag);
 	gwlan_logging.pcur_node = NULL;
 	spin_unlock_irqrestore(&gwlan_logging.spin_lock, irq_flag);
-	vfree(gplog_msg);
-	gplog_msg = NULL;
+
 	return -ENOMEM;
 }
 
-int wlan_logging_sock_deactivate_svc(void)
+int wlan_logging_sock_deinit_svc(void)
 {
 	unsigned long irq_flag;
-	int i = 0;
+	int i;
 
-	if (!gplog_msg)
+	if (!gwlan_logging.pcur_node)
 		return 0;
 
 #ifdef CONFIG_MCL
@@ -952,8 +970,6 @@ int wlan_logging_sock_deactivate_svc(void)
 	spin_lock_irqsave(&gwlan_logging.spin_lock, irq_flag);
 	gwlan_logging.pcur_node = NULL;
 	spin_unlock_irqrestore(&gwlan_logging.spin_lock, irq_flag);
-	vfree(gplog_msg);
-	gplog_msg = NULL;
 
 	spin_lock_irqsave(&gwlan_logging.pkt_stats_lock, irq_flag);
 	gwlan_logging.pkt_stats_pcur_node = NULL;
@@ -967,24 +983,6 @@ int wlan_logging_sock_deactivate_svc(void)
 
 	vfree(gpkt_stats_buffers);
 	gpkt_stats_buffers = NULL;
-
-	return 0;
-}
-
-int wlan_logging_sock_init_svc(void)
-{
-	spin_lock_init(&gwlan_logging.spin_lock);
-	spin_lock_init(&gwlan_logging.pkt_stats_lock);
-	gwlan_logging.pcur_node = NULL;
-	gwlan_logging.pkt_stats_pcur_node = NULL;
-
-	return 0;
-}
-
-int wlan_logging_sock_deinit_svc(void)
-{
-	gwlan_logging.pcur_node = NULL;
-	gwlan_logging.pkt_stats_pcur_node = NULL;
 
 	return 0;
 }
@@ -1237,15 +1235,10 @@ static void send_packetdump(qdf_nbuf_t netbuf, uint8_t status,
 {
 	struct ath_pktlog_hdr pktlog_hdr = {0};
 	struct packet_dump pd_hdr = {0};
-	hdd_context_t *hdd_ctx;
-	hdd_adapter_t *adapter;
-	v_CONTEXT_t vos_ctx;
+	struct hdd_context *hdd_ctx;
+	struct hdd_adapter *adapter;
 
-	vos_ctx = cds_get_global_context();
-	if (!vos_ctx)
-		return;
-
-	hdd_ctx = (hdd_context_t *)cds_get_context(QDF_MODULE_ID_HDD);
+	hdd_ctx = (struct hdd_context *)cds_get_context(QDF_MODULE_ID_HDD);
 	if (!hdd_ctx)
 		return;
 
@@ -1301,7 +1294,7 @@ static void send_packetdump_monitor(uint8_t type)
 
 	pd_hdr.type = type;
 
-	LOGGING_TRACE(QDF_TRACE_LEVEL_INFO,
+	LOGGING_TRACE(QDF_TRACE_LEVEL_DEBUG,
 			"fate Tx-Rx %s: type: %d", __func__, type);
 
 	wlan_pkt_stats_to_logger_thread(&pktlog_hdr, &pd_hdr, NULL);
@@ -1328,7 +1321,7 @@ void wlan_deregister_txrx_packetdump(void)
 		gtx_count = 0;
 		grx_count = 0;
 	} else
-		LOGGING_TRACE(QDF_TRACE_LEVEL_INFO,
+		LOGGING_TRACE(QDF_TRACE_LEVEL_DEBUG,
 			"%s: deregistered packetdump already", __func__);
 }
 
@@ -1347,7 +1340,7 @@ static bool check_txrx_packetdump_count(void)
 {
 	if (gtx_count == MAX_NUM_PKT_LOG ||
 		grx_count == MAX_NUM_PKT_LOG) {
-		LOGGING_TRACE(QDF_TRACE_LEVEL_INFO,
+		LOGGING_TRACE(QDF_TRACE_LEVEL_DEBUG,
 			"%s gtx_count: %d grx_count: %d deregister packetdump",
 			__func__, gtx_count, grx_count);
 		wlan_deregister_txrx_packetdump();

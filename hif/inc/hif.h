@@ -97,9 +97,9 @@ typedef void *hif_handle_t;
 /* For Tufello1.0 target_reg_tbl ID*/
 #define TARGET_TYPE_QCA9377V1   17
 #endif /* ENABLE_10_4_FW_HDR */
-/* For Adrastea target */
-#define TARGET_TYPE_ADRASTEA     19
 #endif /* CONFIG_WIN */
+/* For Adrastea target */
+#define TARGET_TYPE_ADRASTEA  19
 #ifndef TARGET_TYPE_QCA8074
 #define TARGET_TYPE_QCA8074   20
 #endif
@@ -179,11 +179,24 @@ struct CE_state;
 #endif
 
 #define HIF_NAPI_MAX_RECEIVES (QCA_NAPI_BUDGET * QCA_NAPI_DEF_SCALE)
-
 /* NOTE: "napi->scale" can be changed,
  * but this does not change the number of buckets
  */
 #define QCA_NAPI_NUM_BUCKETS 4
+/**
+ * qca_napi_stat - stats structure for execution contexts
+ * @napi_schedules - number of times the schedule function is called
+ * @napi_polls - number of times the execution context runs
+ * @napi_completes - number of times that the generating interrupt is reenabled
+ * @napi_workdone - cumulative of all work done reported by handler
+ * @cpu_corrected - incremented when execution context runs on a different core
+ *			than the one that its irq is affined to.
+ * @napi_budget_uses - histogram of work done per execution run
+ * @time_limit_reache - count of yields due to time limit threshholds
+ * @rxpkt_thresh_reached - count of yields due to a work limit
+ *
+ * needs to be renamed
+ */
 struct qca_napi_stat {
 	uint32_t napi_schedules;
 	uint32_t napi_polls;
@@ -194,6 +207,7 @@ struct qca_napi_stat {
 	uint32_t time_limit_reached;
 	uint32_t rxpkt_thresh_reached;
 };
+
 
 /**
  * per NAPI instance data structure
@@ -217,24 +231,6 @@ struct qca_napi_info {
 	qdf_spinlock_t lro_unloading_lock;
 };
 
-/**
- * struct qca_napi_cpu - an entry of the napi cpu table
- * @core_id:     physical core id of the core
- * @cluster_id:  cluster this core belongs to
- * @core_mask:   mask to match all core of this cluster
- * @thread_mask: mask for this core within the cluster
- * @max_freq:    maximum clock this core can be clocked at
- *               same for all cpus of the same core.
- * @napis:       bitmap of napi instances on this core
- * cluster_nxt:  chain to link cores within the same cluster
- *
- * This structure represents a single entry in the napi cpu
- * table. The table is part of struct qca_napi_data.
- * This table is initialized by the init function, called while
- * the first napi instance is being created, updated by hotplug
- * notifier and when cpu affinity decisions are made (by throughput
- * detection), and deleted when the last napi instance is removed.
- */
 enum qca_napi_tput_state {
 	QCA_NAPI_TPUT_UNINITIALIZED,
 	QCA_NAPI_TPUT_LO,
@@ -244,6 +240,26 @@ enum qca_napi_cpu_state {
 	QCA_NAPI_CPU_UNINITIALIZED,
 	QCA_NAPI_CPU_DOWN,
 	QCA_NAPI_CPU_UP };
+
+/**
+ * struct qca_napi_cpu - an entry of the napi cpu table
+ * @core_id:     physical core id of the core
+ * @cluster_id:  cluster this core belongs to
+ * @core_mask:   mask to match all core of this cluster
+ * @thread_mask: mask for this core within the cluster
+ * @max_freq:    maximum clock this core can be clocked at
+ *               same for all cpus of the same core.
+ * @napis:       bitmap of napi instances on this core
+ * @execs:       bitmap of execution contexts on this core
+ * cluster_nxt:  chain to link cores within the same cluster
+ *
+ * This structure represents a single entry in the napi cpu
+ * table. The table is part of struct qca_napi_data.
+ * This table is initialized by the init function, called while
+ * the first napi instance is being created, updated by hotplug
+ * notifier and when cpu affinity decisions are made (by throughput
+ * detection), and deleted when the last napi instance is removed.
+ */
 struct qca_napi_cpu {
 	enum qca_napi_cpu_state state;
 	int			core_id;
@@ -252,27 +268,38 @@ struct qca_napi_cpu {
 	cpumask_t		thread_mask;
 	unsigned int		max_freq;
 	uint32_t		napis;
+	uint32_t		execs;
 	int			cluster_nxt;  /* index, not pointer */
 };
 
 /**
- * NAPI data-structure common to all NAPI instances.
- *
- * A variable of this type will be stored in hif module context.
+ * struct qca_napi_data - collection of napi data for a single hif context
+ * @hif_softc: pointer to the hif context
+ * @lock: spinlock used in the event state machine
+ * @state: state variable used in the napi stat machine
+ * @ce_map: bit map indicating which ce's have napis running
+ * @exec_map: bit map of instanciated exec contexts
+ * @napi_cpu: cpu info for irq affinty
+ * @lilcl_head:
+ * @bigcl_head:
+ * @napi_mode: irq affinity & clock voting mode
  */
 struct qca_napi_data {
-	qdf_spinlock_t           lock;
+	struct               hif_softc *hif_softc;
+	qdf_spinlock_t       lock;
 	uint32_t             state;
 
 	/* bitmap of created/registered NAPI instances, indexed by pipe_id,
 	 * not used by clients (clients use an id returned by create)
 	 */
 	uint32_t             ce_map;
+	uint32_t             exec_map;
 	struct qca_napi_info *napis[CE_COUNT_MAX];
 	struct qca_napi_cpu  napi_cpu[NR_CPUS];
 	int                  lilcl_head, bigcl_head;
 	enum qca_napi_tput_state napi_mode;
 	struct notifier_block hnc_cpu_notifier;
+	bool cpu_notifier_registered;
 	uint8_t              flags;
 };
 
@@ -495,7 +522,6 @@ QDF_STATUS hif_diag_write_mem(struct hif_opaque_softc *hif_ctx,
 			uint32_t address, uint8_t *data, int nbytes);
 
 typedef void (*fastpath_msg_handler)(void *, qdf_nbuf_t *, uint32_t);
-typedef uint32_t (*ext_intr_handler)(void *, uint32_t);
 
 /*
  * Set the FASTPATH_mode_on flag in sc, for use by data path
@@ -673,7 +699,7 @@ void hif_fastpath_resume(struct hif_opaque_softc *hif_ctx);
 int hif_pm_runtime_get(struct hif_opaque_softc *hif_ctx);
 void hif_pm_runtime_get_noresume(struct hif_opaque_softc *hif_ctx);
 int hif_pm_runtime_put(struct hif_opaque_softc *hif_ctx);
-struct hif_pm_runtime_lock *hif_runtime_lock_init(const char *name);
+int hif_runtime_lock_init(qdf_runtime_lock_t *lock, const char *name);
 void hif_runtime_lock_deinit(struct hif_opaque_softc *hif_ctx,
 			struct hif_pm_runtime_lock *lock);
 int hif_pm_runtime_prevent_suspend(struct hif_opaque_softc *ol_sc,
@@ -694,9 +720,9 @@ static inline int hif_pm_runtime_get(struct hif_opaque_softc *hif_ctx)
 { return 0; }
 static inline int hif_pm_runtime_put(struct hif_opaque_softc *hif_ctx)
 { return 0; }
-static inline struct hif_pm_runtime_lock *hif_runtime_lock_init(
-		const char *name)
-{ return NULL; }
+static inline int hif_runtime_lock_init(qdf_runtime_lock_t *lock,
+					const char *name)
+{ return 0; }
 static inline void
 hif_runtime_lock_deinit(struct hif_opaque_softc *hif_ctx,
 			struct hif_pm_runtime_lock *lock) {}
@@ -854,16 +880,25 @@ void hif_set_attribute(struct hif_opaque_softc *osc, uint8_t hif_attrib);
 
 void *hif_get_lro_info(int ctx_id, struct hif_opaque_softc *hif_hdl);
 
-uint32_t hif_register_ext_group_int_handler(struct hif_opaque_softc *hif_ctx,
-		uint32_t numirq, uint32_t irq[], ext_intr_handler handler,
-		void *context);
+enum hif_exec_type {
+	HIF_EXEC_NAPI_TYPE,
+	HIF_EXEC_TASKLET_TYPE,
+};
 
+typedef uint32_t (*ext_intr_handler)(void *, uint32_t);
 uint32_t hif_configure_ext_group_interrupts(struct hif_opaque_softc *hif_ctx);
+uint32_t  hif_register_ext_group(struct hif_opaque_softc *hif_ctx,
+		uint32_t numirq, uint32_t irq[], ext_intr_handler handler,
+		void *cb_ctx, const char *context_name,
+		uint32_t budget);
+void hif_deregister_exec_group(struct hif_opaque_softc *hif_ctx,
+				const char *context_name);
 
 void hif_update_pipe_callback(struct hif_opaque_softc *osc,
 				u_int8_t pipeid,
 				struct hif_msg_callbacks *callbacks);
 
+void hif_print_napi_stats(struct hif_opaque_softc *hif_ctx);
 #ifdef __cplusplus
 }
 #endif

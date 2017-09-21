@@ -585,9 +585,6 @@ static void ce_srng_msi_ring_params_setup(struct hif_softc *scn, uint32_t ce_id,
 	if (ret)
 		return;
 
-	HIF_INFO("%s: ce_id %d, msi_start: %d, msi_count %d", __func__, ce_id,
-		  msi_data_start, msi_data_count);
-
 	pld_get_msi_address(scn->qdf_dev->dev, &addr_low, &addr_high);
 
 	ring_params->msi_addr = addr_low;
@@ -595,18 +592,17 @@ static void ce_srng_msi_ring_params_setup(struct hif_softc *scn, uint32_t ce_id,
 	ring_params->msi_data = (ce_id % msi_data_count) + msi_data_start;
 	ring_params->flags |= HAL_SRNG_MSI_INTR;
 
-	HIF_INFO("%s: ce_id %d, msi_addr %p, msi_data %d", __func__, ce_id,
+	HIF_DBG("%s: ce_id %d, msi_addr %p, msi_data %d", __func__, ce_id,
 		  (void *)ring_params->msi_addr, ring_params->msi_data);
 }
 
 static void ce_srng_src_ring_setup(struct hif_softc *scn, uint32_t ce_id,
-			struct CE_ring_state *src_ring)
+			struct CE_ring_state *src_ring,
+			struct CE_attr *attr)
 {
 	struct hal_srng_params ring_params = {0};
 
 	HIF_INFO("%s: ce_id %d", __func__, ce_id);
-
-	ce_srng_msi_ring_params_setup(scn, ce_id, &ring_params);
 
 	ring_params.ring_base_paddr = src_ring->base_addr_CE_space;
 	ring_params.ring_base_vaddr = src_ring->base_addr_owner_space;
@@ -617,17 +613,45 @@ static void ce_srng_src_ring_setup(struct hif_softc *scn, uint32_t ce_id,
 	 * A valid default value caused continuous interrupts to
 	 * fire with MSI enabled. Need to revisit usage of the timer
 	 */
-	ring_params.intr_timer_thres_us = 0;
-	ring_params.intr_batch_cntr_thres_entries = 1;
 
-	/* TODO
-	 * ring_params.msi_addr = XXX;
-	 * ring_params.msi_data = XXX;
-	 * ring_params.flags = XXX;
-	 */
+	if (!(CE_ATTR_DISABLE_INTR & attr->flags)) {
+		ce_srng_msi_ring_params_setup(scn, ce_id, &ring_params);
+
+		ring_params.intr_timer_thres_us = 0;
+		ring_params.intr_batch_cntr_thres_entries = 1;
+	}
 
 	src_ring->srng_ctx = hal_srng_setup(scn->hal_soc, CE_SRC, ce_id, 0,
 			&ring_params);
+}
+
+/**
+ * ce_srng_initialize_dest_timer_interrupt_war() - war initialization
+ * @dest_ring: ring being initialized
+ * @ring_params: pointer to initialized parameters
+ *
+ * For Napier & Hawkeye v1, the status ring timer interrupts do not work
+ * As a work arround host configures the destination rings to be a proxy for
+ * work needing to be done.
+ *
+ * The interrupts are setup such that if the destination ring is less than fully
+ * posted, there is likely undone work for the status ring that the host should
+ * process.
+ *
+ * There is a timing bug in srng based copy engines such that a fully posted
+ * srng based copy engine has 2 empty entries instead of just one.  The copy
+ * engine data sturctures work with 1 empty entry, but the software frequently
+ * fails to post the last entry due to the race condition.
+ */
+static void ce_srng_initialize_dest_timer_interrupt_war(
+		struct CE_ring_state *dest_ring,
+		struct hal_srng_params *ring_params) {
+	int num_buffers_when_fully_posted = dest_ring->nentries - 2;
+
+	ring_params->low_threshold = num_buffers_when_fully_posted - 1;
+	ring_params->intr_timer_thres_us = 1024;
+	ring_params->intr_batch_cntr_thres_entries = 0;
+	ring_params->flags |= HAL_SRNG_LOW_THRES_INTR_ENABLE;
 }
 
 static void ce_srng_dest_ring_setup(struct hif_softc *scn, uint32_t ce_id,
@@ -635,25 +659,28 @@ static void ce_srng_dest_ring_setup(struct hif_softc *scn, uint32_t ce_id,
 				struct CE_attr *attr)
 {
 	struct hal_srng_params ring_params = {0};
+	bool status_ring_timer_thresh_work_arround = true;
 
 	HIF_INFO("%s: ce_id %d", __func__, ce_id);
-
-	ce_srng_msi_ring_params_setup(scn, ce_id, &ring_params);
 
 	ring_params.ring_base_paddr = dest_ring->base_addr_CE_space;
 	ring_params.ring_base_vaddr = dest_ring->base_addr_owner_space;
 	ring_params.num_entries = dest_ring->nentries;
-	ring_params.low_threshold = dest_ring->nentries - 1;
-	ring_params.flags |= HAL_SRNG_LOW_THRES_INTR_ENABLE;
-	ring_params.intr_timer_thres_us = 1024;
-	ring_params.intr_batch_cntr_thres_entries = 0;
 	ring_params.max_buffer_length = attr->src_sz_max;
 
-	/* TODO
-	 * ring_params.msi_addr = XXX;
-	 * ring_params.msi_data = XXX;
-	 * ring_params.flags = XXX;
-	 */
+	if (!(CE_ATTR_DISABLE_INTR & attr->flags)) {
+		ce_srng_msi_ring_params_setup(scn, ce_id, &ring_params);
+		if (status_ring_timer_thresh_work_arround) {
+			ce_srng_initialize_dest_timer_interrupt_war(
+					dest_ring, &ring_params);
+		} else {
+			/* normal behavior for future chips */
+			ring_params.low_threshold = dest_ring->nentries >> 3;
+			ring_params.intr_timer_thres_us = 100000;
+			ring_params.intr_batch_cntr_thres_entries = 0;
+			ring_params.flags |= HAL_SRNG_LOW_THRES_INTR_ENABLE;
+		}
+	}
 
 	/*Dest ring is also source ring*/
 	dest_ring->srng_ctx = hal_srng_setup(scn->hal_soc, CE_DST, ce_id, 0,
@@ -661,7 +688,8 @@ static void ce_srng_dest_ring_setup(struct hif_softc *scn, uint32_t ce_id,
 }
 
 static void ce_srng_status_ring_setup(struct hif_softc *scn, uint32_t ce_id,
-				struct CE_ring_state *status_ring)
+				struct CE_ring_state *status_ring,
+				struct CE_attr *attr)
 {
 	struct hal_srng_params ring_params = {0};
 
@@ -672,14 +700,11 @@ static void ce_srng_status_ring_setup(struct hif_softc *scn, uint32_t ce_id,
 	ring_params.ring_base_paddr = status_ring->base_addr_CE_space;
 	ring_params.ring_base_vaddr = status_ring->base_addr_owner_space;
 	ring_params.num_entries = status_ring->nentries;
-	ring_params.intr_timer_thres_us = 0;
-	ring_params.intr_batch_cntr_thres_entries = 1;
 
-	/* TODO
-	 * ring_params.msi_addr = XXX;
-	 * ring_params.msi_data = XXX;
-	 * ring_params.flags = XXX;
-	 */
+	if (!(CE_ATTR_DISABLE_INTR & attr->flags)) {
+		ring_params.intr_timer_thres_us = 0x1000;
+		ring_params.intr_batch_cntr_thres_entries = 0x1;
+	}
 
 	status_ring->srng_ctx = hal_srng_setup(scn->hal_soc, CE_DST_STATUS,
 			ce_id, 0, &ring_params);
@@ -691,13 +716,13 @@ static void ce_ring_setup_srng(struct hif_softc *scn, uint8_t ring_type,
 {
 	switch (ring_type) {
 	case CE_RING_SRC:
-		ce_srng_src_ring_setup(scn, ce_id, ring);
+		ce_srng_src_ring_setup(scn, ce_id, ring, attr);
 		break;
 	case CE_RING_DEST:
 		ce_srng_dest_ring_setup(scn, ce_id, ring, attr);
 		break;
 	case CE_RING_STATUS:
-		ce_srng_status_ring_setup(scn, ce_id, ring);
+		ce_srng_status_ring_setup(scn, ce_id, ring, attr);
 		break;
 	default:
 		qdf_assert(0);

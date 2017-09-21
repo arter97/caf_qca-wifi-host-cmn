@@ -32,9 +32,12 @@
 #ifndef _WMI_UNIFIED_PRIV_H_
 #define _WMI_UNIFIED_PRIV_H_
 #include <osdep.h>
-#include "a_types.h"
+#include "wmi_unified_api.h"
 #include "wmi_unified_param.h"
 #include "wlan_scan_ucfg_api.h"
+#ifdef CONFIG_MCL
+#include <wmi_unified.h>
+#endif
 #include "qdf_atomic.h"
 #include "wlan_objmgr_psoc_service_ready_api.h"
 
@@ -48,8 +51,6 @@
 
 #define WMI_UNIFIED_MAX_EVENT 0x100
 #define WMI_MAX_CMDS 1024
-
-typedef qdf_nbuf_t wmi_buf_t;
 
 #ifdef WMI_INTERFACE_EVENT_LOGGING
 
@@ -409,6 +410,9 @@ QDF_STATUS (*send_reset_passpoint_network_list_cmd)(wmi_unified_t wmi_handle,
 QDF_STATUS (*send_roam_scan_offload_rssi_thresh_cmd)(wmi_unified_t wmi_handle,
 				struct roam_offload_scan_rssi_params *roam_req);
 
+QDF_STATUS (*send_roam_mawc_params_cmd)(wmi_unified_t wmi_handle,
+		struct wmi_mawc_roam_params *params);
+
 QDF_STATUS (*send_roam_scan_filter_cmd)(wmi_unified_t wmi_handle,
 				struct roam_scan_filter_params *roam_req);
 
@@ -455,6 +459,9 @@ QDF_STATUS (*send_pno_stop_cmd)(wmi_unified_t wmi_handle, uint8_t vdev_id);
 
 QDF_STATUS (*send_pno_start_cmd)(wmi_unified_t wmi_handle,
 		   struct pno_scan_req_params *pno);
+
+QDF_STATUS (*send_nlo_mawc_cmd)(wmi_unified_t wmi_handle,
+		struct nlo_mawc_params *params);
 
 QDF_STATUS (*send_ipa_offload_control_cmd)(wmi_unified_t wmi_handle,
 		struct ipa_offload_control_params *ipa_offload);
@@ -569,10 +576,6 @@ QDF_STATUS (*send_get_link_speed_cmd)(wmi_unified_t wmi_handle,
 QDF_STATUS (*send_egap_conf_params_cmd)(wmi_unified_t wmi_handle,
 				     wmi_ap_ps_egap_param_cmd_fixed_param *egap_params);
 
-QDF_STATUS (*send_process_update_edca_param_cmd)(wmi_unified_t wmi_handle,
-			     uint8_t vdev_id,
-			     wmi_wmm_vparams gwmm_param[WMI_MAX_NUM_AC]);
-
 QDF_STATUS (*send_bcn_buf_ll_cmd)(wmi_unified_t wmi_handle,
 			wmi_bcn_send_from_host_cmd_fixed_param * param);
 
@@ -652,8 +655,8 @@ QDF_STATUS (*send_process_ch_avoid_update_cmd)(wmi_unified_t wmi_handle);
 
 QDF_STATUS (*send_regdomain_info_to_fw_cmd)(wmi_unified_t wmi_handle,
 				   uint32_t reg_dmn, uint16_t regdmn2G,
-				   uint16_t regdmn5G, int8_t ctl2G,
-				   int8_t ctl5G);
+				   uint16_t regdmn5G, uint8_t ctl2G,
+				   uint8_t ctl5G);
 
 QDF_STATUS (*send_set_tdls_offchan_mode_cmd)(wmi_unified_t wmi_handle,
 			      struct tdls_channel_switch_params *chan_switch_params);
@@ -785,6 +788,10 @@ QDF_STATUS (*send_set_vht_ie_cmd)(wmi_unified_t wmi_handle,
 
 QDF_STATUS (*send_wmm_update_cmd)(wmi_unified_t wmi_handle,
 		struct wmm_update_params *param);
+
+QDF_STATUS (*send_process_update_edca_param_cmd)(wmi_unified_t wmi_handle,
+		uint8_t vdev_id,
+		struct wmi_host_wme_vparams wmm_vparams[WMI_MAX_NUM_AC]);
 
 QDF_STATUS (*send_set_ant_switch_tbl_cmd)(wmi_unified_t wmi_handle,
 		struct ant_switch_tbl_params *param);
@@ -968,6 +975,9 @@ QDF_STATUS (*save_fw_version)(wmi_unified_t wmi_handle, void *evt_buf);
 uint32_t (*ready_extract_init_status)(wmi_unified_t wmi_hdl, void *ev);
 QDF_STATUS (*ready_extract_mac_addr)(wmi_unified_t wmi_hdl, void *ev,
 		uint8_t *macaddr);
+wmi_host_mac_addr * (*ready_extract_mac_addr_list)(wmi_unified_t wmi_hdl,
+					void *ev, uint8_t *num_mac_addr);
+
 QDF_STATUS (*check_and_update_fw_version)(wmi_unified_t wmi_hdl, void *ev);
 uint8_t* (*extract_dbglog_data_len)(wmi_unified_t wmi_handle, void *evt_buf,
 		uint32_t *len);
@@ -1331,6 +1341,11 @@ QDF_STATUS (*extract_reg_11d_new_country_event)(wmi_unified_t wmi_handle,
 		struct reg_11d_new_country *reg_11d_country,
 		uint32_t len);
 
+QDF_STATUS (*extract_reg_ch_avoid_event)(wmi_unified_t wmi_handle,
+		uint8_t *evt_buf,
+		struct ch_avoid_ind_type *ch_avoid_event,
+		uint32_t len);
+
 QDF_STATUS (*extract_chainmask_tables)(wmi_unified_t wmi_handle,
 		uint8_t *evt_buf,
 		struct wlan_psoc_host_chainmask_table *chainmask_table);
@@ -1351,6 +1366,10 @@ QDF_STATUS (*send_set_country_cmd)(wmi_unified_t wmi_handle,
 uint32_t (*convert_pdev_id_host_to_target)(uint32_t pdev_id);
 uint32_t (*convert_pdev_id_target_to_host)(uint32_t pdev_id);
 
+QDF_STATUS (*send_user_country_code_cmd)(wmi_unified_t wmi_handle,
+		uint8_t pdev_id, struct cc_regdmn_s *rd);
+QDF_STATUS (*send_limit_off_chan_cmd)(wmi_unified_t wmi_handle,
+		struct wmi_limit_off_chan_param *limit_off_chan_param);
 };
 
 struct target_abi_version {

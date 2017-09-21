@@ -173,6 +173,26 @@ enum hal_rx_ret_buf_manager {
 		BUFFER_ADDR_INFO_1_SW_BUFFER_COOKIE_MASK)
 
 /*
+ * macro to set the LSW of the nbuf data physical address
+ * to the WBM ring entry
+ */
+#define HAL_WBM_PADDR_LO_SET(buff_addr_info, paddr_lo) \
+		((*(((unsigned int *) buff_addr_info) + \
+		(BUFFER_ADDR_INFO_0_BUFFER_ADDR_31_0_OFFSET >> 2))) = \
+		(paddr_lo << BUFFER_ADDR_INFO_0_BUFFER_ADDR_31_0_LSB) & \
+		BUFFER_ADDR_INFO_0_BUFFER_ADDR_31_0_MASK)
+
+/*
+ * macro to set the LSB of MSW of the nbuf data physical address
+ * to the WBM ring entry
+ */
+#define HAL_WBM_PADDR_HI_SET(buff_addr_info, paddr_hi) \
+		((*(((unsigned int *) buff_addr_info) + \
+		(BUFFER_ADDR_INFO_1_BUFFER_ADDR_39_32_OFFSET >> 2))) = \
+		(paddr_hi << BUFFER_ADDR_INFO_1_BUFFER_ADDR_39_32_LSB) & \
+		BUFFER_ADDR_INFO_1_BUFFER_ADDR_39_32_MASK)
+
+/*
  * macro to set the manager into the rxdma ring entry
  */
 #define HAL_RXDMA_MANAGER_SET(buff_addr_info, manager) \
@@ -663,6 +683,56 @@ hal_rx_attn_first_mpdu_get(uint8_t *buf)
 	return first_mpdu;
 }
 
+#define HAL_RX_ATTN_TCP_UDP_CKSUM_FAIL_GET(_rx_attn)		\
+	(_HAL_MS((*_OFFSET_TO_WORD_PTR(_rx_attn,		\
+		RX_ATTENTION_1_TCP_UDP_CHKSUM_FAIL_OFFSET)),	\
+		RX_ATTENTION_1_TCP_UDP_CHKSUM_FAIL_MASK,	\
+		RX_ATTENTION_1_TCP_UDP_CHKSUM_FAIL_LSB))
+
+/*
+ * hal_rx_attn_tcp_udp_cksum_fail_get(): get tcp_udp cksum fail bit
+ * from rx attention
+ * @buf: pointer to rx_pkt_tlvs
+ *
+ * Return: tcp_udp_cksum_fail
+ */
+static inline bool
+hal_rx_attn_tcp_udp_cksum_fail_get(uint8_t *buf)
+{
+	struct rx_pkt_tlvs *pkt_tlvs = (struct rx_pkt_tlvs *)buf;
+	struct rx_attention *rx_attn = &pkt_tlvs->attn_tlv.rx_attn;
+	bool tcp_udp_cksum_fail;
+
+	tcp_udp_cksum_fail = HAL_RX_ATTN_TCP_UDP_CKSUM_FAIL_GET(rx_attn);
+
+	return tcp_udp_cksum_fail;
+}
+
+#define HAL_RX_ATTN_IP_CKSUM_FAIL_GET(_rx_attn)		\
+	(_HAL_MS((*_OFFSET_TO_WORD_PTR(_rx_attn,	\
+		RX_ATTENTION_1_IP_CHKSUM_FAIL_OFFSET)),	\
+		RX_ATTENTION_1_IP_CHKSUM_FAIL_MASK,	\
+		RX_ATTENTION_1_IP_CHKSUM_FAIL_LSB))
+
+/*
+ * hal_rx_attn_ip_cksum_fail_get(): get ip cksum fail bit
+ * from rx attention
+ * @buf: pointer to rx_pkt_tlvs
+ *
+ * Return: ip_cksum_fail
+ */
+static inline bool
+hal_rx_attn_ip_cksum_fail_get(uint8_t *buf)
+{
+	struct rx_pkt_tlvs *pkt_tlvs = (struct rx_pkt_tlvs *)buf;
+	struct rx_attention *rx_attn = &pkt_tlvs->attn_tlv.rx_attn;
+	bool ip_cksum_fail;
+
+	ip_cksum_fail = HAL_RX_ATTN_IP_CKSUM_FAIL_GET(rx_attn);
+
+	return ip_cksum_fail;
+}
+
 /*
  * Get peer_meta_data from RX_MPDU_INFO within RX_MPDU_START
  */
@@ -685,6 +755,31 @@ hal_rx_mpdu_peer_meta_data_get(uint8_t *buf)
 	peer_meta_data = HAL_RX_MPDU_PEER_META_DATA_GET(mpdu_info);
 
 	return peer_meta_data;
+}
+
+#define HAL_RX_MPDU_PEER_META_DATA_SET(_rx_mpdu_info, peer_mdata)	\
+		((*(((uint32_t *)_rx_mpdu_info) +			\
+		(RX_MPDU_INFO_8_PEER_META_DATA_OFFSET >> 2))) =		\
+		(peer_mdata << RX_MPDU_INFO_8_PEER_META_DATA_LSB) &	\
+		RX_MPDU_INFO_8_PEER_META_DATA_MASK)
+
+/*
+ * @ hal_rx_mpdu_peer_meta_data_set: set peer meta data in RX mpdu start tlv
+ *
+ * @ buf: rx_tlv_hdr of the received packet
+ * @ peer_mdata: peer meta data to be set.
+ * @ Return: void
+ */
+static inline void
+hal_rx_mpdu_peer_meta_data_set(uint8_t *buf, uint32_t peer_mdata)
+{
+	struct rx_pkt_tlvs *pkt_tlvs = (struct rx_pkt_tlvs *)buf;
+	struct rx_mpdu_start *mpdu_start =
+				 &pkt_tlvs->mpdu_start_tlv.rx_mpdu_start;
+
+	struct rx_mpdu_info *mpdu_info = &mpdu_start->rx_mpdu_info_details;
+
+	HAL_RX_MPDU_PEER_META_DATA_SET(mpdu_info, peer_mdata);
 }
 
 #if defined(WCSS_VERSION) && \
@@ -811,6 +906,31 @@ hal_rx_msdu_end_l3_hdr_padding_get(uint8_t *buf)
 	l3_header_padding = HAL_RX_MSDU_END_L3_HEADER_PADDING_GET(msdu_end);
 
 	return l3_header_padding;
+}
+
+#define HAL_RX_MSDU_END_SA_IDX_GET(_rx_msdu_end)	\
+	(_HAL_MS((*_OFFSET_TO_WORD_PTR(_rx_msdu_end,	\
+		RX_MSDU_END_13_SA_IDX_OFFSET)),	\
+		RX_MSDU_END_13_SA_IDX_MASK,		\
+		RX_MSDU_END_13_SA_IDX_LSB))
+
+ /**
+ * hal_rx_msdu_end_sa_idx_get(): API to get the
+ * sa_idx from rx_msdu_end TLV
+ *
+ * @ buf: pointer to the start of RX PKT TLV headers
+ * Return: sa_idx (SA AST index)
+ */
+static inline uint16_t
+hal_rx_msdu_end_sa_idx_get(uint8_t *buf)
+{
+	struct rx_pkt_tlvs *pkt_tlvs = (struct rx_pkt_tlvs *)buf;
+	struct rx_msdu_end *msdu_end = &pkt_tlvs->msdu_end_tlv.rx_msdu_end;
+	uint16_t sa_idx;
+
+	sa_idx = HAL_RX_MSDU_END_SA_IDX_GET(msdu_end);
+
+	return sa_idx;
 }
 
 #define HAL_RX_MSDU_END_SA_IS_VALID_GET(_rx_msdu_end)	\
@@ -1158,7 +1278,7 @@ hal_rx_msdu_get_keyid(uint8_t *buf)
 
 	keyid_octet = HAL_RX_MSDU_END_KEYID_OCTET_GET(msdu_end);
 
-	return (keyid_octet >> 6) & 0x3;
+	return keyid_octet & 0x3;
 }
 
 #define HAL_RX_MSDU_START_RSSI_GET(_rx_msdu_start)	\
@@ -1633,6 +1753,10 @@ struct hal_buf_info {
 	uint32_t sw_cookie;
 };
 
+/* This special cookie value will be used to indicate FW allocated buffers
+ * received through RXDMA2SW ring for RXDMA WARs */
+#define HAL_RX_COOKIE_SPECIAL 0x1fffff
+
 /**
  * hal_rx_msdu_link_desc_get(): API to get the MSDU information
  * from the MSDU link descriptor
@@ -1647,15 +1771,12 @@ struct hal_buf_info {
  * Return: void
  */
 static inline void hal_rx_msdu_list_get(void *msdu_link_desc,
-			struct hal_rx_msdu_list *msdu_list, uint8_t num_msdus)
+		struct hal_rx_msdu_list *msdu_list, uint16_t *num_msdus)
 {
 	struct rx_msdu_details *msdu_details;
 	struct rx_msdu_desc_info *msdu_desc_info;
 	struct rx_msdu_link *msdu_link = (struct rx_msdu_link *)msdu_link_desc;
 	int i;
-
-	if (num_msdus > HAL_RX_NUM_MSDU_DESC)
-		num_msdus = HAL_RX_NUM_MSDU_DESC;
 
 	msdu_details = HAL_RX_LINK_DESC_MSDU0_PTR(msdu_link);
 
@@ -1663,7 +1784,13 @@ static inline void hal_rx_msdu_list_get(void *msdu_link_desc,
 		"[%s][%d] msdu_link=%p msdu_details=%p\n",
 		__func__, __LINE__, msdu_link, msdu_details);
 
-	for (i = 0; i < num_msdus; i++) {
+	for (i = 0; i < HAL_RX_NUM_MSDU_DESC; i++) {
+		/* num_msdus received in mpdu descriptor may be incorrect
+		 * sometimes due to HW issue. Check msdu buffer address also */
+		if (HAL_RX_BUFFER_ADDR_31_0_GET(
+			&msdu_details[i].buffer_addr_info_details) == 0) {
+			break;
+		}
 		msdu_desc_info = HAL_RX_MSDU_DESC_INFO_GET(&msdu_details[i]);
 		msdu_list->msdu_info[i].msdu_flags =
 			 HAL_RX_MSDU_FLAGS_GET(msdu_desc_info);
@@ -1677,6 +1804,7 @@ static inline void hal_rx_msdu_list_get(void *msdu_link_desc,
 			"[%s][%d] i=%d sw_cookie=%d\n",
 			__func__, __LINE__, i, msdu_list->sw_cookie[i]);
 	}
+	*num_msdus = i;
 }
 
 /**
@@ -1762,7 +1890,8 @@ enum hal_reo_error_code {
 	HAL_REO_ERR_PN_CHECK_FAILED,
 	HAL_REO_ERR_2K_ERROR_HANDLING_FLAG_SET,
 	HAL_REO_ERR_PN_ERROR_HANDLING_FLAG_SET,
-	HAL_REO_ERR_QUEUE_DESC_BLOCKED_SET
+	HAL_REO_ERR_QUEUE_DESC_BLOCKED_SET,
+	HAL_REO_ERR_MAX
 };
 
 /**
@@ -1777,7 +1906,7 @@ enum hal_reo_error_code {
  * @ HAL_RXDMA_ERR_FCS           : FCS check on the MPDU frame failed
  * @ HAL_RXDMA_ERR_DECRYPT       : Decryption error
  * @ HAL_RXDMA_ERR_TKIP_MIC      : TKIP MIC error
- * @ HAL_RXDMA_ERR_UNECRYPTED    : Received a frame that was expected to be
+ * @ HAL_RXDMA_ERR_UNENCRYPTED   : Received a frame that was expected to be
  * 			  	   encrypted but wasn’t
  * @ HAL_RXDMA_ERR_MSDU_LEN      : MSDU related length error
  * @ HAL_RXDMA_ERR_MSDU_LIMIT    : Number of MSDUs in the MPDUs exceeded
@@ -1788,6 +1917,7 @@ enum hal_reo_error_code {
  * @ HAL_RXDMA_ERR_DA_TIMEOUT    : Destination Address  search timeout
  * @ HAL_RXDMA_ERR_FLOW_TIMEOUT  : Flow Search Timeout
  * @ HAL_RXDMA_ERR_FLUSH_REQUEST : RxDMA FIFO Flush request
+ * @ HAL_RXDMA_ERR_WAR           : RxDMA WAR dummy errors
  */
 enum hal_rxdma_error_code {
 	HAL_RXDMA_ERR_OVERFLOW = 0,
@@ -1795,7 +1925,7 @@ enum hal_rxdma_error_code {
 	HAL_RXDMA_ERR_FCS,
 	HAL_RXDMA_ERR_DECRYPT,
 	HAL_RXDMA_ERR_TKIP_MIC,
-	HAL_RXDMA_ERR_UNECRYPTED,
+	HAL_RXDMA_ERR_UNENCRYPTED,
 	HAL_RXDMA_ERR_MSDU_LEN,
 	HAL_RXDMA_ERR_MSDU_LIMIT,
 	HAL_RXDMA_ERR_WIFI_PARSE,
@@ -1803,7 +1933,9 @@ enum hal_rxdma_error_code {
 	HAL_RXDMA_ERR_SA_TIMEOUT,
 	HAL_RXDMA_ERR_DA_TIMEOUT,
 	HAL_RXDMA_ERR_FLOW_TIMEOUT,
-	HAL_RXDMA_ERR_FLUSH_REQUEST
+	HAL_RXDMA_ERR_FLUSH_REQUEST,
+	HAL_RXDMA_ERR_WAR = 31,
+	HAL_RXDMA_ERR_MAX
 };
 
 /**
@@ -2842,6 +2974,29 @@ uint8_t hal_rx_get_mpdu_frame_control_valid(uint8_t *buf)
 		HAL_RX_MPDU_GET_FRAME_CONTROL_VALID(rx_mpdu_info);
 
 	return frm_ctrl_valid;
+}
+
+#define HAL_RX_MPDU_GET_MAC_AD4_VALID(_rx_mpdu_info)		\
+	(_HAL_MS((*_OFFSET_TO_WORD_PTR(_rx_mpdu_info,		\
+		RX_MPDU_INFO_2_MAC_ADDR_AD4_VALID_OFFSET)),	\
+		RX_MPDU_INFO_2_MAC_ADDR_AD4_VALID_MASK,		\
+		RX_MPDU_INFO_2_MAC_ADDR_AD4_VALID_LSB))
+/*
+ * hal_rx_get_mpdu_mac_ad4_valid(): Retrieves if mpdu 4th addr is valid
+ *
+ * @nbuf: Network buffer
+ * Returns: value of mpdu 4th address vaild field
+ */
+static inline
+bool hal_rx_get_mpdu_mac_ad4_valid(uint8_t *buf)
+{
+	struct rx_pkt_tlvs *pkt_tlvs = hal_rx_get_pkt_tlvs(buf);
+	struct rx_mpdu_info *rx_mpdu_info = hal_rx_get_mpdu_info(pkt_tlvs);
+	bool ad4_valid = 0;
+
+	ad4_valid = HAL_RX_MPDU_GET_MAC_AD4_VALID(rx_mpdu_info);
+
+	return ad4_valid;
 }
 
 /*

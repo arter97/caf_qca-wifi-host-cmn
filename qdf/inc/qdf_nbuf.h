@@ -121,6 +121,7 @@
  * @he_sig_A2: HE (11ax) sig A1 field
  * @he_sig_b_user: HE (11ax) sig B user field
  * @he_sig_b_user_known: HE (11ax) sig B user known field
+ * @preamble_type: Preamble type in radio header
  * @chan_freq: Capture channel frequency
  * @chan_num: Capture channel number
  * @chan_flags: Bitmap of Channel flags, IEEE80211_CHAN_TURBO,
@@ -138,12 +139,20 @@
  * @ant_signal_db: Rx packet RSSI
  * @nr_ant: Number of Antennas used for streaming
  * @mcs: MCS index of Rx frame
+ * @nss: Number of spatial streams
  * @bw: bandwidth of rx frame
  * @is_stbc: Is STBC enabled
  * @sgi: Rx frame short guard interval
+ * @he_re: HE range extension
  * @ldpc: ldpc enabled
  * @beamformed: Is frame beamformed.
  * @he_sig_b_common_RU[4]: HE (11ax) common RU assignment index
+ * @rssi_comb: Combined RSSI
+ * @duration: 802.11 Duration
+ * @first_data_seq_ctrl: Sequence ctrl field of first data frame
+ * @ast_index: AST table hash index
+ * @tid: QoS traffic tid number
+ *
  */
 struct mon_rx_status {
 	uint64_t tsft;
@@ -151,6 +160,7 @@ struct mon_rx_status {
 	uint32_t he_sig_A2;
 	uint32_t he_sig_b_user;
 	uint32_t he_sig_b_user_known;
+	uint32_t preamble_type;
 	uint16_t chan_freq;
 	uint16_t chan_num;
 	uint16_t chan_flags;
@@ -167,6 +177,7 @@ struct mon_rx_status {
 	uint8_t  ant_signal_db;
 	uint8_t  nr_ant;
 	uint8_t  mcs;
+	uint8_t  nss;
 	uint8_t  bw;
 	uint8_t  vht_flag_values1;
 	uint8_t  vht_flag_values2;
@@ -175,9 +186,15 @@ struct mon_rx_status {
 	uint8_t  vht_flag_values5;
 	uint8_t  is_stbc;
 	uint8_t  sgi;
+	uint8_t  he_re;
 	uint8_t  ldpc;
 	uint8_t  beamformed;
 	uint8_t  he_sig_b_common_RU[4];
+	int8_t   rssi_comb;
+	uint16_t duration;
+	int16_t first_data_seq_ctrl;
+	uint32_t ast_index;
+	uint32_t tid;
 };
 
 /* Masks for HE SIG known fields in mon_rx_status structure */
@@ -186,6 +203,9 @@ struct mon_rx_status {
 #define QDF_MON_STATUS_HE_SIG_A2_SU_KNOWN_ALL		0x00000ffd
 #define QDF_MON_STATUS_HE_SIG_A2_MU_KNOWN_ALL		0x00000ffd
 #define QDF_MON_STATUS_HE_SIG_B_COMMON_KNOWN_RU0	0x00000001
+#define QDF_MON_STATUS_HE_SIG_B_COMMON_KNOWN_RU1	0x00000002
+#define QDF_MON_STATUS_HE_SIG_B_COMMON_KNOWN_RU2	0x00000004
+#define QDF_MON_STATUS_HE_SIG_B_COMMON_KNOWN_RU3	0x00000008
 #define QDF_MON_STATUS_HE_SIG_B_USER_KNOWN_SIG_B_ALL	0x00fe0000
 #define QDF_MON_STATUS_HE_SIG_A1_HE_FORMAT_SU		0x00000000
 #define QDF_MON_STATUS_HE_SIG_A1_HE_FORMAT_EXT_SU	0x40000000
@@ -554,9 +574,9 @@ qdf_nbuf_set_frag_is_wordstream(qdf_nbuf_t buf,
 }
 
 static inline void
-qdf_nbuf_set_vdev_ctx(qdf_nbuf_t buf, void *vdev_ctx)
+qdf_nbuf_set_vdev_ctx(qdf_nbuf_t buf, uint8_t vdev_id)
 {
-	__qdf_nbuf_set_vdev_ctx(buf, vdev_ctx);
+	__qdf_nbuf_set_vdev_ctx(buf, vdev_id);
 }
 
 static inline void
@@ -566,12 +586,18 @@ qdf_nbuf_set_ftype(qdf_nbuf_t buf, uint8_t type)
 }
 
 static inline void
+qdf_nbuf_set_ext_cb(qdf_nbuf_t buf, void *ref)
+{
+	__qdf_nbuf_set_ext_cb(buf, ref);
+}
+
+static inline void
 qdf_nbuf_set_fctx_type(qdf_nbuf_t buf, void *ctx, uint8_t type)
 {
 	__qdf_nbuf_set_fctx_type(buf, ctx, type);
 }
 
-static inline void *
+static inline uint8_t
 qdf_nbuf_get_vdev_ctx(qdf_nbuf_t buf)
 {
 	return  __qdf_nbuf_get_vdev_ctx(buf);
@@ -585,6 +611,12 @@ static inline void *qdf_nbuf_get_fctx(qdf_nbuf_t buf)
 static inline uint8_t qdf_nbuf_get_ftype(qdf_nbuf_t buf)
 {
 	return  __qdf_nbuf_get_ftype(buf);
+}
+
+static inline void *
+qdf_nbuf_get_ext_cb(qdf_nbuf_t buf)
+{
+	return  __qdf_nbuf_get_ext_cb(buf);
 }
 
 static inline qdf_dma_addr_t
@@ -758,6 +790,7 @@ qdf_nbuf_alloc_debug(qdf_device_t osdev, qdf_size_t size, int reserve,
 		uint32_t line_num)
 {
 	qdf_nbuf_t net_buf;
+
 	net_buf = __qdf_nbuf_alloc(osdev, size, reserve, align, prio);
 
 	/* Store SKB in internal QDF tracking table */
@@ -849,7 +882,6 @@ static inline void qdf_net_buf_debug_acquire_skb(qdf_nbuf_t net_buf,
 
 static inline void qdf_net_buf_debug_release_skb(qdf_nbuf_t net_buf)
 {
-	return;
 }
 
 /* Nbuf allocation rouines */
@@ -904,13 +936,7 @@ static inline qdf_nbuf_t qdf_nbuf_copy(qdf_nbuf_t buf)
  * Return: data pointer of this buf where new data has to be
  *         put, or NULL if there is not enough room in this buf.
  */
-
-static inline void qdf_nbuf_init_fast(qdf_nbuf_t nbuf)
-{
-	atomic_set(&nbuf->users, 1);
-	nbuf->data = nbuf->head + NET_SKB_PAD;
-	skb_reset_tail_pointer(nbuf);
-}
+void qdf_nbuf_init_fast(qdf_nbuf_t nbuf);
 #endif /* WLAN_FEATURE_FASTPATH */
 
 static inline void qdf_nbuf_tx_free(qdf_nbuf_t buf_list, int tx_err)
@@ -2346,4 +2372,42 @@ qdf_nbuf_reg_free_cb(qdf_nbuf_free_t cb_func_ptr)
 	 __qdf_nbuf_reg_free_cb(cb_func_ptr);
 }
 
+/**
+ * qdf_nbuf_set_timestamp() - set the timestamp for frame
+ *
+ * @buf: sk buff
+ *
+ * Return: void
+ */
+static inline void
+qdf_nbuf_set_timestamp(struct sk_buff *skb)
+{
+	__qdf_nbuf_set_timestamp(skb);
+}
+
+/**
+ * qdf_nbuf_get_timedelta_ms() - get time difference in ms
+ *
+ * @buf: sk buff
+ *
+ * Return: time difference ms
+ */
+static inline uint64_t
+qdf_nbuf_get_timedelta_ms(struct sk_buff *skb)
+{
+	return __qdf_nbuf_get_timedelta_ms(skb);
+}
+
+/**
+ * qdf_nbuf_get_timedelta_us() - get time difference in micro seconds
+ *
+ * @buf: sk buff
+ *
+ * Return: time difference in micro seconds
+ */
+static inline uint64_t
+qdf_nbuf_get_timedelta_us(struct sk_buff *skb)
+{
+	return __qdf_nbuf_get_timedelta_us(skb);
+}
 #endif /* _QDF_NBUF_H */

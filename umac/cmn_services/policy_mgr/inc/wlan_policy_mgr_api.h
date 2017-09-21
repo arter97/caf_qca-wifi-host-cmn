@@ -304,6 +304,7 @@ QDF_STATUS policy_mgr_get_pcl(struct wlan_objmgr_psoc *psoc,
 /**
  * policy_mgr_update_with_safe_channel_list() - provides the safe
  * channel list
+ * @psoc: PSOC object information
  * @pcl_channels: channel list
  * @len: length of the list
  * @weight_list: Weights of the PCL
@@ -314,8 +315,9 @@ QDF_STATUS policy_mgr_get_pcl(struct wlan_objmgr_psoc *psoc,
  *
  * Return: None
  */
-void policy_mgr_update_with_safe_channel_list(uint8_t *pcl_channels,
-		uint32_t *len, uint8_t *weight_list, uint32_t weight_len);
+void policy_mgr_update_with_safe_channel_list(struct wlan_objmgr_psoc *psoc,
+		uint8_t *pcl_channels, uint32_t *len,
+		uint8_t *weight_list, uint32_t weight_len);
 
 /**
  * policy_mgr_get_nondfs_preferred_channel() - to get non-dfs preferred channel
@@ -1241,6 +1243,7 @@ uint8_t policy_mgr_get_mcc_operating_channel(struct wlan_objmgr_psoc *psoc,
  * @len: Pointer to the length of the PCL
  * @pcl_weight: Pointer to the weights of the PCL
  * @weight_len: Max length of the weights list
+ * @all_matching_cxn_to_del: Need remove all entries before getting pcl
  *
  * Get the PCL for an existing connection
  *
@@ -1249,7 +1252,8 @@ uint8_t policy_mgr_get_mcc_operating_channel(struct wlan_objmgr_psoc *psoc,
 QDF_STATUS policy_mgr_get_pcl_for_existing_conn(struct wlan_objmgr_psoc *psoc,
 		enum policy_mgr_con_mode mode,
 		uint8_t *pcl_ch, uint32_t *len,
-		uint8_t *weight_list, uint32_t weight_len);
+		uint8_t *weight_list, uint32_t weight_len,
+		bool all_matching_cxn_to_del);
 
 /**
  * policy_mgr_get_valid_chan_weights() - Get the weightage for
@@ -1707,14 +1711,7 @@ enum policy_mgr_hw_mode_change policy_mgr_get_hw_mode_change_from_hw_mode_index(
  *
  * Return: True if master DBS control is enabled
  */
-static inline bool policy_mgr_is_scan_simultaneous_capable(
-	struct wlan_objmgr_psoc *psoc)
-{
-	if (policy_mgr_is_hw_dbs_capable(psoc))
-		return true;
-
-	return false;
-}
+bool policy_mgr_is_scan_simultaneous_capable(struct wlan_objmgr_psoc *psoc);
 
 /**
  * policy_mgr_is_mcc_adaptive_scheduler_enabled() - Function to
@@ -1922,4 +1919,170 @@ uint32_t policy_mgr_get_hw_dbs_nss(struct wlan_objmgr_psoc *psoc,
  * Return: true for success, else false
  */
 bool policy_mgr_is_dnsc_set(struct wlan_objmgr_vdev *vdev);
+
+/**
+ * policy_mgr_get_updated_scan_and_fw_mode_config() - Function
+ * to get latest scan & fw config for DBS
+ * @psoc: PSOC object information
+ * @scan_config: DBS related scan config
+ * @fw_mode_config: DBS related FW config
+ * @dual_mac_disable_ini: DBS related ini config
+ * This function returns the latest DBS configuration for
+ * connection & scan, sent to FW
+ * Return: SUCCESS or FAILURE
+ */
+QDF_STATUS policy_mgr_get_updated_scan_and_fw_mode_config(
+		struct wlan_objmgr_psoc *psoc, uint32_t *scan_config,
+		uint32_t *fw_mode_config, uint32_t dual_mac_disable_ini);
+
+/**
+ * policy_mgr_is_safe_channel - Check if the channel is in LTE
+ * coex channel avoidance list
+ * @psoc: PSOC object information
+ * @channel: channel to be checked
+ *
+ * Check if the channel is in LTE coex channel avoidance list.
+ *
+ * Return: true for success, else false
+ */
+bool policy_mgr_is_safe_channel(struct wlan_objmgr_psoc *psoc,
+		uint8_t channel);
+
+/**
+ * policy_mgr_is_force_scc() - checks if SCC needs to be
+ * mandated
+ * @psoc: PSOC object information
+ *
+ * This function checks if SCC needs to be mandated or not
+ *
+ * Return: True if SCC to be mandated, false otherwise
+ */
+bool policy_mgr_is_force_scc(struct wlan_objmgr_psoc *psoc);
+
+/**
+ * policy_mgr_valid_sap_conc_channel_check() - checks & updates
+ * the channel SAP to come up on in case of STA+SAP concurrency
+ * @psoc: PSOC object information
+ * @con_ch: pointer to the channel on which sap will come up
+ * @sap_ch: initial channel for SAP
+ *
+ * This function checks & updates the channel SAP to come up on in
+ * case of STA+SAP concurrency
+ * Return: Success if SAP can come up on a channel
+ */
+QDF_STATUS policy_mgr_valid_sap_conc_channel_check(
+	struct wlan_objmgr_psoc *psoc, uint8_t *con_ch, uint8_t sap_ch);
+
+/**
+ * policy_mgr_get_alternate_channel_for_sap() - Get an alternate
+ * channel to move the SAP to
+ * @psoc: PSOC object information
+ *
+ * This function returns an alternate channel for SAP to move to
+ * Return: The new channel for SAP
+ */
+uint8_t policy_mgr_get_alternate_channel_for_sap(
+	struct wlan_objmgr_psoc *psoc);
+
+/**
+ * policy_mgr_disallow_mcc() - Check for mcc
+ *
+ * @psoc: PSOC object information
+ * @channel: channel on which new connection is coming up
+ *
+ * When a new connection is about to come up check if current
+ * concurrency combination including the new connection is
+ * causing MCC
+ *
+ * Return: True if it is causing MCC
+ */
+bool policy_mgr_disallow_mcc(struct wlan_objmgr_psoc *psoc,
+		uint8_t channel);
+
+/**
+ * policy_mgr_mode_specific_get_channel() - Get channel for a
+ * connection type
+ * @psoc: PSOC object information
+ * @chan_list: Connection type
+ *
+ * Get channel for a connection type
+ *
+ * Return: channel number
+ */
+uint8_t policy_mgr_mode_specific_get_channel(
+	struct wlan_objmgr_psoc *psoc, enum policy_mgr_con_mode mode);
+
+/**
+ * policy_mgr_enable_disable_sap_mandatory_chan_list() - Update the value of
+ * enable_sap_mandatory_chan_list
+ * @psoc: Pointer to soc
+ * @val: value of enable_sap_mandatory_chan_list
+ *
+ * Update the value of enable_sap_mandatory_chan_list
+ *
+ * Return: void
+ */
+void policy_mgr_enable_disable_sap_mandatory_chan_list(
+		struct wlan_objmgr_psoc *psoc, bool val);
+
+/**
+ * policy_mgr_add_sap_mandatory_chan() - Add chan to SAP mandatory channel
+ * list
+ * @psoc: Pointer to soc
+ * @chan: Channel to be added
+ *
+ * Add chan to SAP mandatory channel list
+ *
+ * Return: None
+ */
+void policy_mgr_add_sap_mandatory_chan(struct wlan_objmgr_psoc *psoc,
+		uint8_t chan);
+
+/**
+ * policy_mgr_is_sap_mandatory_chan_list_enabled() - Return the SAP mandatory
+ * channel list enabled status
+ * @psoc: Pointer to soc
+ *
+ * Get the SAP mandatory channel list enabled status
+ *
+ * Return: Enable or Disable
+ */
+bool policy_mgr_is_sap_mandatory_chan_list_enabled(
+		struct wlan_objmgr_psoc *psoc);
+
+/**
+ * policy_mgr_get_sap_mandatory_chan_list_len() - Return the SAP mandatory
+ * channel list len
+ * @psoc: Pointer to soc
+ *
+ * Get the SAP mandatory channel list len
+ *
+ * Return: Channel list length
+ */
+uint32_t policy_mgr_get_sap_mandatory_chan_list_len(
+		struct wlan_objmgr_psoc *psoc);
+
+/**
+ * policy_mgr_init_sap_mandatory_2g_chan() - Init 2.4G SAP mandatory channel
+ * list
+ * @psoc: Pointer to soc
+ *
+ * Initialize the 2.4G SAP mandatory channels
+ *
+ * Return: None
+ */
+void  policy_mgr_init_sap_mandatory_2g_chan(struct wlan_objmgr_psoc *psoc);
+
+/**
+ * policy_mgr_remove_sap_mandatory_chan() - Remove channel from SAP mandatory
+ * channel list
+ * @psoc: Pointer to soc
+ * @chan: channel to be removed from mandatory channel list
+ *
+ * Remove channel from SAP mandatory channel list
+ *
+ * Return: None
+ */
+void policy_mgr_remove_sap_mandatory_chan(struct wlan_objmgr_psoc *psoc,
+		uint8_t chan);
 #endif /* __WLAN_POLICY_MGR_API_H */

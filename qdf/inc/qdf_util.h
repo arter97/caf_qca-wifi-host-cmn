@@ -41,7 +41,6 @@
 #define QDF_MAX_AVAILABLE_CPU	1
 #endif
 
-typedef __qdf_thread_t qdf_thread_t;
 typedef __qdf_wait_queue_head_t qdf_wait_queue_head_t;
 
 /**
@@ -153,6 +152,15 @@ static inline int qdf_status_to_os_return(QDF_STATUS status)
  */
 #define qdf_test_and_clear_bit(nr, addr)    __qdf_test_and_clear_bit(nr, addr)
 
+/**
+ * qdf_find_first_bit() - find first bit position in address
+ * @addr: address buffer pointer
+ * @nbits: number of bits
+ *
+ * Return: position first set bit in addr
+ */
+#define qdf_find_first_bit(addr, nbits)    __qdf_find_first_bit(addr, nbits)
+
 #define qdf_wait_queue_interruptible(wait_queue, condition) \
 		__qdf_wait_queue_interruptible(wait_queue, condition)
 
@@ -218,6 +226,7 @@ static inline bool qdf_is_macaddr_equal(struct qdf_mac_addr *mac_addr1,
 static inline bool qdf_is_macaddr_zero(struct qdf_mac_addr *mac_addr)
 {
 	struct qdf_mac_addr zero_mac_addr = QDF_MAC_ADDR_ZERO_INITIALIZER;
+
 	return qdf_is_macaddr_equal(mac_addr, &zero_mac_addr);
 }
 
@@ -508,6 +517,7 @@ static inline uint8_t *qdf_get_u32(uint8_t *ptr, uint32_t *value)
 static inline int qdf_get_pwr2(int value)
 {
 	int log2;
+
 	if (QDF_IS_PWR2(value))
 		return value;
 
@@ -598,6 +608,19 @@ static inline
 int qdf_set_dma_coherent_mask(struct device *dev, uint8_t addr_bits)
 {
 	return __qdf_set_dma_coherent_mask(dev, addr_bits);
+}
+
+/**
+ * qdf_do_div() - wrapper function for kernel macro(do_div).
+ * @dividend: Dividend value
+ * @divisor : Divisor value
+ *
+ * Return: Quotient
+ */
+static inline
+uint64_t qdf_do_div(uint64_t dividend, uint32_t divisor)
+{
+	return __qdf_do_div(dividend, divisor);
 }
 
 /**

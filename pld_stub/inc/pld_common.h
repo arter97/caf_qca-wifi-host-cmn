@@ -211,6 +211,11 @@ static inline void pld_get_msi_address(struct device *dev,
 	return;
 }
 
+static inline int pld_get_irq(struct device *dev, int ce_id)
+{
+	return -EINVAL;
+}
+
 static inline int pld_ce_request_irq(struct device *dev, unsigned int ce_id,
 				     irqreturn_t (*handler)(int, void *),
 				     unsigned long flags, const char *name,
@@ -254,6 +259,14 @@ static inline int pld_athdiag_write(struct device *dev,
 				    uint32_t datalen, uint8_t *input)
 {
 	return 0;
+}
+static inline void *pld_hif_sdio_get_virt_ramdump_mem(struct device *dev,
+						unsigned long *size)
+{
+	return NULL;
+}
+static inline void pld_hif_sdio_release_ramdump_mem(unsigned long *address)
+{
 }
 
 #endif

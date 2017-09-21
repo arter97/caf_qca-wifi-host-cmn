@@ -127,9 +127,9 @@ void wlan_reg_set_channel_params(struct wlan_objmgr_pdev *pdev, uint8_t ch,
  * wlan_reg_get_dfs_region () - Get the current dfs region
  * @dfs_reg: pointer to dfs region
  *
- * Return: None
+ * Return: Status
  */
-void wlan_reg_get_dfs_region(struct wlan_objmgr_psoc *psoc,
+QDF_STATUS wlan_reg_get_dfs_region(struct wlan_objmgr_pdev *pdev,
 			     enum dfs_reg *dfs_reg);
 
 /**
@@ -174,12 +174,12 @@ enum channel_state wlan_reg_get_bonded_channel_state(
 
 /**
  * wlan_reg_set_dfs_region() - set the dfs region
- * @psoc: psoc ptr
+ * @pdev: pdev ptr
  * @dfs_reg: dfs region
  *
  * Return: void
  */
-void wlan_reg_set_dfs_region(struct wlan_objmgr_psoc *psoc,
+void wlan_reg_set_dfs_region(struct wlan_objmgr_pdev *pdev,
 			     enum dfs_reg dfs_reg);
 
 /**
@@ -387,6 +387,13 @@ QDF_STATUS wlan_reg_get_chip_mode(struct wlan_objmgr_pdev *pdev,
 		uint32_t *chip_mode);
 
 /**
+ * wlan_reg_is_11d_scan_inprogress() - checks 11d scan status
+ * @psoc: psoc ptr
+ *
+ * Return: bool
+ */
+bool wlan_reg_is_11d_scan_inprogress(struct wlan_objmgr_psoc *psoc);
+/**
  * wlan_reg_get_freq_range() - Get 2GHz and 5GHz frequency range
  * @pdev: pdev pointer
  * @low_2g: low 2GHz frequency range
@@ -409,4 +416,13 @@ QDF_STATUS wlan_reg_get_freq_range(struct wlan_objmgr_pdev *pdev,
 struct wlan_lmac_if_reg_tx_ops *
 wlan_reg_get_tx_ops(struct wlan_objmgr_psoc *psoc);
 
+/**
+ * wlan_reg_get_curr_regdomain() - Get current regdomain in use
+ * @pdev: pdev pointer
+ * @cur_regdmn: Current regdomain info
+ *
+ * Return: QDF status
+ */
+QDF_STATUS wlan_reg_get_curr_regdomain(struct wlan_objmgr_pdev *pdev,
+		struct cur_regdmn_info *cur_regdmn);
 #endif

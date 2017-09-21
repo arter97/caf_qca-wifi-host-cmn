@@ -107,10 +107,12 @@ static struct dentry *qdf_mem_debugfs_root;
  * struct __qdf_mem_stat - qdf memory statistics
  * @kmalloc:	total kmalloc allocations
  * @dma:	total dma allocations
+ * @skb:	total skb allocations
  */
 static struct __qdf_mem_stat {
 	qdf_atomic_t kmalloc;
 	qdf_atomic_t dma;
+	qdf_atomic_t skb;
 } qdf_mem_stat;
 
 static inline void qdf_mem_kmalloc_inc(qdf_size_t size)
@@ -123,6 +125,11 @@ static inline void qdf_mem_dma_inc(qdf_size_t size)
 	qdf_atomic_add(size, &qdf_mem_stat.dma);
 }
 
+void qdf_mem_skb_inc(qdf_size_t size)
+{
+	qdf_atomic_add(size, &qdf_mem_stat.skb);
+}
+
 static inline void qdf_mem_kmalloc_dec(qdf_size_t size)
 {
 	qdf_atomic_sub(size, &qdf_mem_stat.kmalloc);
@@ -131,6 +138,11 @@ static inline void qdf_mem_kmalloc_dec(qdf_size_t size)
 static inline void qdf_mem_dma_dec(qdf_size_t size)
 {
 	qdf_atomic_sub(size, &qdf_mem_stat.dma);
+}
+
+void qdf_mem_skb_dec(qdf_size_t size)
+{
+	qdf_atomic_sub(size, &qdf_mem_stat.skb);
 }
 
 #ifdef MEMORY_DEBUG
@@ -493,6 +505,11 @@ static QDF_STATUS qdf_mem_debugfs_init(void)
 				qdf_mem_debugfs_root,
 				&qdf_mem_stat.dma);
 
+	debugfs_create_atomic_t("skb",
+				S_IRUSR,
+				qdf_mem_debugfs_root,
+				&qdf_mem_stat.skb);
+
 	return QDF_STATUS_SUCCESS;
 }
 
@@ -838,6 +855,7 @@ static void qdf_handle_leaked_memory(qdf_list_node_t *node)
 static void qdf_mem_debug_clean(void)
 {
 	uint32_t list_size;
+
 	list_size = qdf_list_size(&qdf_mem_list);
 	if (list_size) {
 		qdf_list_node_t *node;
@@ -861,7 +879,8 @@ static void qdf_mem_debug_clean(void)
 			if (QDF_STATUS_SUCCESS == qdf_status) {
 				mem_struct = (struct s_qdf_mem_struct *)node;
 				/* Take care to log only once multiple memory
-				   leaks from the same place */
+				 * leaks from the same place
+				 */
 				if (strcmp(prev_mleak_file,
 					mem_struct->file_name)
 				    || (prev_mleak_line_num !=
@@ -910,6 +929,7 @@ static void qdf_mem_debug_exit(void)
 	qdf_net_buf_debug_exit();
 	qdf_mem_debug_clean();
 	qdf_list_destroy(&qdf_mem_list);
+	qdf_spinlock_destroy(&qdf_mem_list_lock);
 }
 
 /**
@@ -940,7 +960,6 @@ void *qdf_mem_malloc_debug(size_t size,
 		QDF_TRACE(QDF_MODULE_ID_QDF, QDF_TRACE_LEVEL_ERROR,
 			  "%s: called with invalid arg; passed in %zu !!!",
 			  __func__, size);
-		host_log_low_resource_failure(WIFI_EVENT_MEMORY_FAILURE);
 		return NULL;
 	}
 
@@ -1690,3 +1709,27 @@ void qdf_mem_exit(void)
 	qdf_mem_debug_exit();
 }
 EXPORT_SYMBOL(qdf_mem_exit);
+
+/**
+ * qdf_ether_addr_copy() - copy an Ethernet address
+ *
+ * @dst_addr: A six-byte array Ethernet address destination
+ * @src_addr: A six-byte array Ethernet address source
+ *
+ * Please note: dst & src must both be aligned to u16.
+ *
+ * Return: none
+ */
+void qdf_ether_addr_copy(void *dst_addr, const void *src_addr)
+{
+	if ((dst_addr == NULL) || (src_addr == NULL)) {
+		QDF_TRACE(QDF_MODULE_ID_QDF, QDF_TRACE_LEVEL_ERROR,
+			  "%s called with NULL parameter, source:%p destination:%p",
+			  __func__, src_addr, dst_addr);
+		QDF_ASSERT(0);
+		return;
+	}
+	ether_addr_copy(dst_addr, src_addr);
+}
+EXPORT_SYMBOL(qdf_ether_addr_copy);
+

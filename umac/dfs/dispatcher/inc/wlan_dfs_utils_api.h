@@ -84,24 +84,6 @@
 extern struct dfs_to_mlme global_dfs_to_mlme;
 
 /**
- * utils_nif_dfs_attach() - DFS attach function.
- * @pdev: Pointer to DFS pdev object.
- *
- * Wrapper function for nif_dfs_attach(). This function called from outside of
- * DFS component.
- */
-QDF_STATUS utils_nif_dfs_attach(struct wlan_objmgr_pdev *pdev);
-
-/**
- * utils_nif_dfs_detach() - DFS detach
- * @pdev: Pointer to DFS pdev object.
- *
- * Wrapper function for nif_dfs_detach(). This function called from outside of
- * DFS component.
- */
-QDF_STATUS utils_nif_dfs_detach(struct wlan_objmgr_pdev *pdev);
-
-/**
  * utils_dfs_cac_valid_reset() - Cancels the dfs_cac_valid_timer timer.
  * @pdev: Pointer to DFS pdev object.
  * @prevchan_ieee: Prevchan number.
@@ -114,6 +96,12 @@ QDF_STATUS utils_nif_dfs_detach(struct wlan_objmgr_pdev *pdev);
 QDF_STATUS utils_dfs_cac_valid_reset(struct wlan_objmgr_pdev *pdev,
 		uint8_t prevchan_ieee,
 		uint32_t prevchan_flags);
+
+/**
+ * utils_dfs_reset() - Reset DFS members.
+ * @pdev: Pointer to DFS pdev object.
+ */
+QDF_STATUS utils_dfs_reset(struct wlan_objmgr_pdev *pdev);
 
 /**
  * utils_dfs_reset_precaclists() - Clears and initiakizes precac_required_list,
@@ -432,11 +420,20 @@ void utils_dfs_reg_update_nol_ch(struct wlan_objmgr_pdev *pdev,
 uint8_t utils_dfs_freq_to_chan(uint32_t freq);
 
 /**
- * utils_dfs__chan_to_freq () - convert channel number to frequency
+ * utils_dfs_chan_to_freq () - convert channel number to frequency
  * @chan: channel number
  *
  * Return: frequency
  */
 uint32_t utils_dfs_chan_to_freq(uint8_t chan);
 
+/**
+ * utils_dfs_update_cur_chan_flags() - Update DFS channel flag and flagext.
+ * @pdev: Pointer to DFS pdev object.
+ * @flags: New channel flags
+ * @flagext: New Extended flags
+ */
+QDF_STATUS utils_dfs_update_cur_chan_flags(struct wlan_objmgr_pdev *pdev,
+		uint64_t flags,
+		uint16_t flagext);
 #endif /* _WLAN_DFS_UTILS_API_H_ */

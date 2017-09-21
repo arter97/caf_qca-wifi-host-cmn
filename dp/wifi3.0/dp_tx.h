@@ -40,16 +40,6 @@ do {                                                           \
 	qdf_nbuf_free(buf);                                    \
 } while (0)
 
-#define DP_TX_FREE_DMA_TO_DEVICE(soc, vdev, buf)               \
-do {                                                           \
-	qdf_nbuf_unmap(soc->osdev, buf, QDF_DMA_TO_DEVICE);    \
-	if (!vdev->mesh_vdev) {                                \
-		qdf_nbuf_free(buf);                            \
-	} else {                                               \
-		vdev->osif_tx_free_ext((buf));		       \
-	}                                                      \
-} while (0)
-
 #define OCB_HEADER_VERSION	 1
 
 /**
@@ -153,20 +143,20 @@ QDF_STATUS dp_tx_pdev_attach(struct dp_pdev *pdev);
 
 qdf_nbuf_t dp_tx_send(void *data_vdev, qdf_nbuf_t nbuf);
 
-uint32_t dp_tx_comp_handler(struct dp_soc *soc, uint32_t ring_id,
-		uint32_t budget);
+uint32_t dp_tx_comp_handler(struct dp_soc *soc, void *hal_srng, uint32_t quota);
 
 int32_t
 dp_tx_prepare_send_me(struct dp_vdev *vdev, qdf_nbuf_t nbuf);
+
+
+#ifdef FEATURE_WDS
+void dp_tx_mec_handler(struct dp_vdev *vdev, uint8_t *status);
+#endif
 
 /* TODO TX_FEATURE_NOT_YET */
 static inline void dp_tx_comp_process_exception(struct dp_tx_desc_s *tx_desc)
 {
 	return;
-}
-static inline QDF_STATUS dp_tx_flow_control(struct dp_vdev *vdev)
-{
-	return  QDF_STATUS_SUCCESS;
 }
 /* TODO TX_FEATURE_NOT_YET */
 #endif

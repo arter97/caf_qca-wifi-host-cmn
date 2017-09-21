@@ -194,6 +194,15 @@ extern uint32_t hal_srng_get_entrysize(void *hal_soc, int ring_type);
  */
 uint32_t hal_srng_max_entries(void *hal_soc, int ring_type);
 
+/**
+ * hal_srng_get_dir - Returns the direction of the ring
+ * @hal_soc: Opaque HAL SOC handle
+ * @ring_type: one of the types from hal_ring_type
+ *
+ * Return: Ring direction
+ */
+enum hal_srng_dir hal_srng_get_dir(void *hal_soc, int ring_type);
+
 /* HAL memory information */
 struct hal_mem_info {
 	/* dev base virutal addr */
@@ -299,12 +308,55 @@ extern void hal_get_shadow_config(void *hal_soc,
 extern void *hal_srng_setup(void *hal_soc, int ring_type, int ring_num,
 	int mac_id, struct hal_srng_params *ring_params);
 
+/* Remapping ids of REO rings */
+#define REO_REMAP_TCL 0
+#define REO_REMAP_SW1 1
+#define REO_REMAP_SW2 2
+#define REO_REMAP_SW3 3
+#define REO_REMAP_SW4 4
+#define REO_REMAP_RELEASE 5
+#define REO_REMAP_FW 6
+#define REO_REMAP_UNUSED 7
+
+/*
+ * currently this macro only works for IX0 since all the rings we are remapping
+ * can be remapped from HWIO_REO_R0_DESTINATION_RING_CTRL_IX_0
+ */
+#define HAL_REO_REMAP_VAL(_ORIGINAL_DEST, _NEW_DEST) \
+	HAL_REO_REMAP_VAL_(_ORIGINAL_DEST, _NEW_DEST)
+/* allow the destination macros to be expanded */
+#define HAL_REO_REMAP_VAL_(_ORIGINAL_DEST, _NEW_DEST) \
+	(_NEW_DEST << \
+	 (HWIO_REO_R0_DESTINATION_RING_CTRL_IX_0_DEST_RING_MAPPING_ ## \
+	  _ORIGINAL_DEST ## _SHFT))
+
+/**
+ * hal_reo_remap_IX0 - Remap REO ring destination
+ * @hal: HAL SOC handle
+ * @remap_val: Remap value
+ */
+extern void hal_reo_remap_IX0(struct hal_soc *hal, uint32_t remap_val);
+
+/**
+ * hal_srng_set_hp_paddr() - Set physical address to SRNG head pointer
+ * @sring: sring pointer
+ * @paddr: physical address
+ */
+extern void hal_srng_set_hp_paddr(struct hal_srng *sring, uint64_t paddr);
+
 /**
  * hal_srng_cleanup - Deinitialize HW SRNG ring.
  * @hal_soc: Opaque HAL SOC handle
  * @hal_srng: Opaque HAL SRNG pointer
  */
 extern void hal_srng_cleanup(void *hal_soc, void *hal_srng);
+
+static inline bool hal_srng_initialized(void *hal_ring)
+{
+	struct hal_srng *srng = (struct hal_srng *)hal_ring;
+
+	return !!srng->initialized;
+}
 
 /**
  * hal_srng_access_start_unlocked - Start ring access (unlocked). Should use
@@ -358,13 +410,10 @@ static inline int hal_srng_access_start(void *hal_soc, void *hal_ring)
 static inline void *hal_srng_dst_get_next(void *hal_soc, void *hal_ring)
 {
 	struct hal_srng *srng = (struct hal_srng *)hal_ring;
-	volatile uint32_t *desc = &(srng->ring_base_vaddr[srng->u.dst_ring.tp]);
-	uint32_t desc_loop_cnt;
+	uint32_t *desc;
 
-	desc_loop_cnt = (desc[srng->entry_size - 1] & SRNG_LOOP_CNT_MASK)
-		>> SRNG_LOOP_CNT_LSB;
-
-	if (srng->u.dst_ring.loop_cnt == desc_loop_cnt) {
+	if (srng->u.dst_ring.tp != srng->u.dst_ring.cached_hp) {
+		desc = &(srng->ring_base_vaddr[srng->u.dst_ring.tp]);
 		/* TODO: Using % is expensive, but we have to do this since
 		 * size of some SRNG rings is not power of 2 (due to descriptor
 		 * sizes). Need to create separate API for rings used
@@ -374,12 +423,9 @@ static inline void *hal_srng_dst_get_next(void *hal_soc, void *hal_ring)
 		srng->u.dst_ring.tp = (srng->u.dst_ring.tp + srng->entry_size) %
 			srng->ring_size;
 
-		srng->u.dst_ring.loop_cnt = (srng->u.dst_ring.loop_cnt +
-			!srng->u.dst_ring.tp) &
-			(SRNG_LOOP_CNT_MASK >> SRNG_LOOP_CNT_LSB);
-		/* TODO: Confirm if loop count mask is same for all rings */
 		return (void *)desc;
 	}
+
 	return NULL;
 }
 
@@ -397,14 +443,10 @@ static inline void *hal_srng_dst_get_next(void *hal_soc, void *hal_ring)
 static inline void *hal_srng_dst_peek(void *hal_soc, void *hal_ring)
 {
 	struct hal_srng *srng = (struct hal_srng *)hal_ring;
-	uint32_t *desc = &(srng->ring_base_vaddr[srng->u.dst_ring.tp]);
-	uint32_t desc_loop_cnt;
 
-	desc_loop_cnt = (desc[srng->entry_size - 1] & SRNG_LOOP_CNT_MASK)
-		>> SRNG_LOOP_CNT_LSB;
+	if (srng->u.dst_ring.tp != srng->u.dst_ring.cached_hp)
+		return (void *)(&(srng->ring_base_vaddr[srng->u.dst_ring.tp]));
 
-	if (srng->u.dst_ring.loop_cnt == desc_loop_cnt)
-		return (void *)desc;
 	return NULL;
 }
 
@@ -702,6 +744,7 @@ static inline void hal_srng_access_end_reap(void *hal_soc, void *hal_ring)
 #define LINK_DESC_SIZE (NUM_OF_DWORDS_RX_MSDU_LINK << 2)
 #define LINK_DESC_ALIGN 128
 
+#define ADDRESS_MATCH_TAG_VAL 0x5
 /* Number of mpdu link pointers is 9 in case of TX_MPDU_QUEUE_HEAD and 14 in
  * of TX_MPDU_QUEUE_EXT. We are defining a common average count here
  */
@@ -822,6 +865,27 @@ static inline uint32_t hal_idle_scatter_buf_num_entries(void *hal_soc,
 }
 
 /**
+ * hal_idle_list_num_scatter_bufs - Get the number of sctater buffer
+ * each given buffer size
+ *
+ * @hal_soc: Opaque HAL SOC handle
+ * @total_mem: size of memory to be scattered
+ * @scatter_buf_size: Size of scatter buffer
+ *
+ */
+static inline uint32_t hal_idle_list_num_scatter_bufs(void *hal_soc,
+	uint32_t total_mem, uint32_t scatter_buf_size)
+{
+	uint8_t rem = (total_mem % (scatter_buf_size -
+			WBM_IDLE_SCATTER_BUF_NEXT_PTR_SIZE)) ? 1 : 0;
+
+	uint32_t num_scatter_bufs = (total_mem / (scatter_buf_size -
+				WBM_IDLE_SCATTER_BUF_NEXT_PTR_SIZE)) + rem;
+
+	return num_scatter_bufs;
+}
+
+/**
  * hal_idle_scatter_buf_setup - Setup scattered idle list using the buffer list
  * provided
  *
@@ -830,16 +894,24 @@ static inline uint32_t hal_idle_scatter_buf_num_entries(void *hal_soc,
  * @idle_scatter_bufs_base_vaddr: Array of virtual base addresses
  * @num_scatter_bufs: Number of scatter buffers in the above lists
  * @scatter_buf_size: Size of each scatter buffer
+ * @last_buf_end_offset: Offset to the last entry
+ * @num_entries: Total entries of all scatter bufs
  *
  */
 extern void hal_setup_link_idle_list(void *hal_soc,
 	qdf_dma_addr_t scatter_bufs_base_paddr[],
 	void *scatter_bufs_base_vaddr[], uint32_t num_scatter_bufs,
-	uint32_t scatter_buf_size, uint32_t last_buf_end_offset);
+	uint32_t scatter_buf_size, uint32_t last_buf_end_offset,
+	uint32_t num_entries);
 
 /* REO parameters to be passed to hal_reo_setup */
 struct hal_reo_params {
+	/* rx hash steering enabled or disabled */
 	bool rx_hash_enabled;
+	/* reo remap 1 register */
+	uint32_t remap1;
+	/* reo remap 2 register */
+	uint32_t remap2;
 };
 
 /**
@@ -923,11 +995,6 @@ static inline qdf_dma_addr_t hal_srng_get_hp_addr(void *hal_soc, void *hal_ring)
 	struct hal_srng *srng = (struct hal_srng *)hal_ring;
 	struct hal_soc *hal = (struct hal_soc *)hal_soc;
 
-	if (!(srng->flags & HAL_SRNG_LMAC_RING)) {
-		/* Currently this interface is required only for LMAC rings */
-		return (qdf_dma_addr_t)NULL;
-	}
-
 	if (srng->ring_dir == HAL_SRNG_SRC_RING) {
 		return hal->shadow_wrptr_mem_paddr +
 		  ((unsigned long)(srng->u.src_ring.hp_addr) -
@@ -950,11 +1017,6 @@ static inline qdf_dma_addr_t hal_srng_get_tp_addr(void *hal_soc, void *hal_ring)
 {
 	struct hal_srng *srng = (struct hal_srng *)hal_ring;
 	struct hal_soc *hal = (struct hal_soc *)hal_soc;
-
-	if (!(srng->flags & HAL_SRNG_LMAC_RING)) {
-		/* Currently this interface is required only for LMAC rings */
-		return (qdf_dma_addr_t)NULL;
-	}
 
 	if (srng->ring_dir == HAL_SRNG_SRC_RING) {
 		return hal->shadow_rdptr_mem_paddr +

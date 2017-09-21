@@ -32,6 +32,11 @@
 #define REG_MAX_CHAN_CHANGE_CBKS 30
 #define MAX_STA_VDEV_CNT 4
 #define INVALID_VDEV_ID 0xFF
+#define INVALID_CHANNEL_NUM 0xBAD
+#define CH_AVOID_MAX_RANGE   4
+
+#ifdef CONFIG_LEGACY_CHAN_ENUM
+
 /**
  * enum channel_enum - channel enumeration
  * @CHAN_ENUM_1:  channel number 1
@@ -81,6 +86,7 @@
  * @CHAN_ENUM_157:  channel number 157
  * @CHAN_ENUM_161:  channel number 161
  * @CHAN_ENUM_165:  channel number 165
+ * @CHAN_ENUM_169:  channel number 169
  * @CHAN_ENUM_170:  channel number 170
  * @CHAN_ENUM_171:  channel number 171
  * @CHAN_ENUM_172:  channel number 172
@@ -140,6 +146,7 @@ enum channel_enum {
 	CHAN_ENUM_157,
 	CHAN_ENUM_161,
 	CHAN_ENUM_165,
+	CHAN_ENUM_169,
 
 	CHAN_ENUM_170,
 	CHAN_ENUM_171,
@@ -174,6 +181,225 @@ enum channel_enum {
 	INVALID_CHANNEL = 0xBAD,
 };
 
+#else
+/**
+ * enum channel_enum - channel enumeration
+ * @CHAN_ENUM_2412: channel with freq 2412
+ * @CHAN_ENUM_2417: channel with freq 2417
+ * @CHAN_ENUM_2422: channel with freq 2422
+ * @CHAN_ENUM_2427: channel with freq 2427
+ * @CHAN_ENUM_2432: channel with freq 2432
+ * @CHAN_ENUM_2437: channel with freq 2437
+ * @CHAN_ENUM_2442: channel with freq 2442
+ * @CHAN_ENUM_2447: channel with freq 2447
+ * @CHAN_ENUM_2452: channel with freq 2452
+ * @CHAN_ENUM_2457: channel with freq 2457
+ * @CHAN_ENUM_2462: channel with freq 2462
+ * @CHAN_ENUM_2467: channel with freq 2467
+ * @CHAN_ENUM_2472: channel with freq 2472
+ * @CHAN_ENUM_2484: channel with freq 2484
+ * @CHAN_ENUM_4912: channel with freq 4912
+ * @CHAN_ENUM_4915: channel with freq 4915
+ * @CHAN_ENUM_4917: channel with freq 4917
+ * @CHAN_ENUM_4920: channel with freq 4920
+ * @CHAN_ENUM_4922: channel with freq 4922
+ * @CHAN_ENUM_4925: channel with freq 4925
+ * @CHAN_ENUM_4927: channel with freq 4927
+ * @CHAN_ENUM_4932: channel with freq 4932
+ * @CHAN_ENUM_4935: channel with freq 4935
+ * @CHAN_ENUM_4937: channel with freq 4937
+ * @CHAN_ENUM_4940: channel with freq 4940
+ * @CHAN_ENUM_4942: channel with freq 4942
+ * @CHAN_ENUM_4945: channel with freq 4945
+ * @CHAN_ENUM_4947: channel with freq 4947
+ * @CHAN_ENUM_4950: channel with freq 4950
+ * @CHAN_ENUM_4952: channel with freq 4952
+ * @CHAN_ENUM_4955: channel with freq 4955
+ * @CHAN_ENUM_4957: channel with freq 4957
+ * @CHAN_ENUM_4960: channel with freq 4960
+ * @CHAN_ENUM_4962: channel with freq 4962
+ * @CHAN_ENUM_4965: channel with freq 4965
+ * @CHAN_ENUM_4967: channel with freq 4967
+ * @CHAN_ENUM_4970: channel with freq 4970
+ * @CHAN_ENUM_4972: channel with freq 4972
+ * @CHAN_ENUM_4975: channel with freq 4975
+ * @CHAN_ENUM_4977: channel with freq 4977
+ * @CHAN_ENUM_4980: channel with freq 4980
+ * @CHAN_ENUM_4982: channel with freq 4982
+ * @CHAN_ENUM_4985: channel with freq 4985
+ * @CHAN_ENUM_4987: channel with freq 4987
+ * @CHAN_ENUM_5032: channel with freq 5032
+ * @CHAN_ENUM_5035: channel with freq 5035
+ * @CHAN_ENUM_5037: channel with freq 5037
+ * @CHAN_ENUM_5040: channel with freq 5040
+ * @CHAN_ENUM_5042: channel with freq 5042
+ * @CHAN_ENUM_5045: channel with freq 5045
+ * @CHAN_ENUM_5047: channel with freq 5047
+ * @CHAN_ENUM_5052: channel with freq 5052
+ * @CHAN_ENUM_5055: channel with freq 5055
+ * @CHAN_ENUM_5057: channel with freq 5057
+ * @CHAN_ENUM_5060: channel with freq 5060
+ * @CHAN_ENUM_5080: channel with freq 5080
+ * @CHAN_ENUM_5180: channel with freq 5180
+ * @CHAN_ENUM_5200: channel with freq 5200
+ * @CHAN_ENUM_5220: channel with freq 5220
+ * @CHAN_ENUM_5240: channel with freq 5240
+ * @CHAN_ENUM_5260: channel with freq 5260
+ * @CHAN_ENUM_5280: channel with freq 5280
+ * @CHAN_ENUM_5300: channel with freq 5300
+ * @CHAN_ENUM_5320: channel with freq 5320
+ * @CHAN_ENUM_5500: channel with freq 5500
+ * @CHAN_ENUM_5520: channel with freq 5520
+ * @CHAN_ENUM_5540: channel with freq 5540
+ * @CHAN_ENUM_5560: channel with freq 5560
+ * @CHAN_ENUM_5580: channel with freq 5580
+ * @CHAN_ENUM_5600: channel with freq 5600
+ * @CHAN_ENUM_5620: channel with freq 5620
+ * @CHAN_ENUM_5640: channel with freq 5640
+ * @CHAN_ENUM_5660: channel with freq 5660
+ * @CHAN_ENUM_5680: channel with freq 5680
+ * @CHAN_ENUM_5700: channel with freq 5700
+ * @CHAN_ENUM_5720: channel with freq 5720
+ * @CHAN_ENUM_5745: channel with freq 5745
+ * @CHAN_ENUM_5765: channel with freq 5765
+ * @CHAN_ENUM_5785: channel with freq 5785
+ * @CHAN_ENUM_5805: channel with freq 5805
+ * @CHAN_ENUM_5825: channel with freq 5825
+ * @CHAN_ENUM_5850: channel with freq 5850
+ * @CHAN_ENUM_5855: channel with freq 5855
+ * @CHAN_ENUM_5860: channel with freq 5860
+ * @CHAN_ENUM_5865: channel with freq 5865
+ * @CHAN_ENUM_5870: channel with freq 5870
+ * @CHAN_ENUM_5875: channel with freq 5875
+ * @CHAN_ENUM_5880: channel with freq 5880
+ * @CHAN_ENUM_5885: channel with freq 5885
+ * @CHAN_ENUM_5890: channel with freq 5890
+ * @CHAN_ENUM_5895: channel with freq 5895
+ * @CHAN_ENUM_5900: channel with freq 5900
+ * @CHAN_ENUM_5905: channel with freq 5905
+ * @CHAN_ENUM_5910: channel with freq 5910
+ * @CHAN_ENUM_5915: channel with freq 5915
+ * @CHAN_ENUM_5920: channel with freq 5920
+ */
+enum channel_enum {
+	CHAN_ENUM_2412,
+	CHAN_ENUM_2417,
+	CHAN_ENUM_2422,
+	CHAN_ENUM_2427,
+	CHAN_ENUM_2432,
+	CHAN_ENUM_2437,
+	CHAN_ENUM_2442,
+	CHAN_ENUM_2447,
+	CHAN_ENUM_2452,
+	CHAN_ENUM_2457,
+	CHAN_ENUM_2462,
+	CHAN_ENUM_2467,
+	CHAN_ENUM_2472,
+	CHAN_ENUM_2484,
+
+	CHAN_ENUM_4912,
+	CHAN_ENUM_4915,
+	CHAN_ENUM_4917,
+	CHAN_ENUM_4920,
+	CHAN_ENUM_4922,
+	CHAN_ENUM_4925,
+	CHAN_ENUM_4927,
+	CHAN_ENUM_4932,
+	CHAN_ENUM_4935,
+	CHAN_ENUM_4937,
+	CHAN_ENUM_4940,
+	CHAN_ENUM_4942,
+	CHAN_ENUM_4945,
+	CHAN_ENUM_4947,
+	CHAN_ENUM_4950,
+	CHAN_ENUM_4952,
+	CHAN_ENUM_4955,
+	CHAN_ENUM_4957,
+	CHAN_ENUM_4960,
+	CHAN_ENUM_4962,
+	CHAN_ENUM_4965,
+	CHAN_ENUM_4967,
+	CHAN_ENUM_4970,
+	CHAN_ENUM_4972,
+	CHAN_ENUM_4975,
+	CHAN_ENUM_4977,
+	CHAN_ENUM_4980,
+	CHAN_ENUM_4982,
+	CHAN_ENUM_4985,
+	CHAN_ENUM_4987,
+	CHAN_ENUM_5032,
+	CHAN_ENUM_5035,
+	CHAN_ENUM_5037,
+	CHAN_ENUM_5040,
+	CHAN_ENUM_5042,
+	CHAN_ENUM_5045,
+	CHAN_ENUM_5047,
+	CHAN_ENUM_5052,
+	CHAN_ENUM_5055,
+	CHAN_ENUM_5057,
+	CHAN_ENUM_5060,
+	CHAN_ENUM_5080,
+
+	CHAN_ENUM_5180,
+	CHAN_ENUM_5200,
+	CHAN_ENUM_5220,
+	CHAN_ENUM_5240,
+	CHAN_ENUM_5260,
+	CHAN_ENUM_5280,
+	CHAN_ENUM_5300,
+	CHAN_ENUM_5320,
+	CHAN_ENUM_5500,
+	CHAN_ENUM_5520,
+	CHAN_ENUM_5540,
+	CHAN_ENUM_5560,
+	CHAN_ENUM_5580,
+	CHAN_ENUM_5600,
+	CHAN_ENUM_5620,
+	CHAN_ENUM_5640,
+	CHAN_ENUM_5660,
+	CHAN_ENUM_5680,
+	CHAN_ENUM_5700,
+	CHAN_ENUM_5720,
+	CHAN_ENUM_5745,
+	CHAN_ENUM_5765,
+	CHAN_ENUM_5785,
+	CHAN_ENUM_5805,
+	CHAN_ENUM_5825,
+	CHAN_ENUM_5845,
+
+	CHAN_ENUM_5850,
+	CHAN_ENUM_5855,
+	CHAN_ENUM_5860,
+	CHAN_ENUM_5865,
+	CHAN_ENUM_5870,
+	CHAN_ENUM_5875,
+	CHAN_ENUM_5880,
+	CHAN_ENUM_5885,
+	CHAN_ENUM_5890,
+	CHAN_ENUM_5895,
+	CHAN_ENUM_5900,
+	CHAN_ENUM_5905,
+	CHAN_ENUM_5910,
+	CHAN_ENUM_5915,
+	CHAN_ENUM_5920,
+
+	NUM_CHANNELS,
+
+	MIN_24GHZ_CHANNEL = CHAN_ENUM_2412,
+	MAX_24GHZ_CHANNEL = CHAN_ENUM_2484,
+	NUM_24GHZ_CHANNELS = (MAX_24GHZ_CHANNEL - MIN_24GHZ_CHANNEL + 1),
+
+	MIN_5GHZ_CHANNEL = CHAN_ENUM_5180,
+	MAX_5GHZ_CHANNEL = CHAN_ENUM_5920,
+	NUM_5GHZ_CHANNELS = (MAX_5GHZ_CHANNEL - MIN_5GHZ_CHANNEL + 1),
+
+	MIN_11P_CHANNEL = CHAN_ENUM_5850,
+	MAX_11P_CHANNEL = CHAN_ENUM_5920,
+	NUM_11P_CHANNELS = (MAX_11P_CHANNEL - MIN_11P_CHANNEL + 1),
+
+	INVALID_CHANNEL = 0xBAD,
+};
+#endif
 
 /**
  * enum channel_state - channel state
@@ -393,12 +619,16 @@ struct regulatory {
 
 /**
  * struct chan_map
- * @start_ch: center frequency
+ * @center_freq: center freq in mhz
  * @chan_num: channel number
+ * @min_bw: min bw
+ * @max_bw: max bw
  */
 struct chan_map {
 	uint32_t center_freq;
 	uint32_t chan_num;
+	uint16_t min_bw;
+	uint16_t max_bw;
 };
 
 /**
@@ -457,8 +687,13 @@ struct cur_reg_rule {
 /**
  * struct cur_regulatory_info
  * @psoc: psoc ptr
- * @cc_setting_code: cc setting regdb value
+ * @status_code: status value
+ * @num_phy: number of phy
+ * @phy_id: phy id
+ * @reg_dmn_pair: reg domain pair
+ * @ctry_code: country code
  * @alpha2: country alpha2
+ * @offload_enabled: offload enabled
  * @dfs_reg: dfs region
  * @phybitmap: phy bit map
  * @min_bw_2g: minimum 2G bw
@@ -474,6 +709,7 @@ struct cur_regulatory_info {
 	struct wlan_objmgr_psoc *psoc;
 	enum cc_setting_code status_code;
 	uint8_t num_phy;
+	uint8_t phy_id;
 	uint16_t reg_dmn_pair;
 	uint16_t ctry_code;
 	uint8_t alpha2[REG_ALPHA2_LEN + 1];
@@ -503,19 +739,39 @@ enum band_info {
 };
 
 /**
+ * enum restart_beaconing_on_ch_avoid_rule: control the beaconing entity to
+ * move away from active LTE channels
+ * @CH_AVOID_RULE_DO_NOT_RESTART: Do not move from active LTE
+ *                              channels
+ * @CH_AVOID_RULE_RESTART: Move from active LTE channels
+ * @CH_AVOID_RULE_RESTART_24G_ONLY: move from 2.4G active LTE
+ *                                channels only
+ */
+enum restart_beaconing_on_ch_avoid_rule {
+	CH_AVOID_RULE_DO_NOT_RESTART,
+	CH_AVOID_RULE_RESTART,
+	CH_AVOID_RULE_RESTART_24G_ONLY,
+};
+
+/**
  * struct reg_config_vars
  * @enable_11d_support: enable 11d support
+ * @scan_11d_interval: 11d scan interval in ms
  * @userspace_ctry_priority: user priority
  * @band_capability: band capability
  * @dfs_disable: dfs disabled
  * @indoor_channel_support: indoor channel support
+ * @restart_beaconing: control the beaconing entity to move
+ * away from active LTE channels
  */
 struct reg_config_vars {
 	uint32_t enable_11d_support;
+	uint32_t scan_11d_interval;
 	uint32_t userspace_ctry_priority;
 	enum band_info band_capability;
 	uint32_t dfs_enabled;
 	uint32_t indoor_chan_enabled;
+	enum restart_beaconing_on_ch_avoid_rule restart_beaconing;
 };
 
 /**
@@ -546,6 +802,114 @@ struct reg_sched_payload {
 enum direction {
 	NORTHBOUND,
 	SOUTHBOUND,
+};
+
+/**
+ * struct mas_chan_params
+ * @dfs_region: dfs region
+ * @phybitmap: phybitmap
+ * @mas_chan_list: master chan list
+ * @default_country: default country
+ * @current_country: current country
+ * @reg_dmn_pair: reg domain pair
+ * @ctry_code: country code
+ */
+struct mas_chan_params {
+	enum dfs_reg dfs_region;
+	uint32_t phybitmap;
+	struct regulatory_channel mas_chan_list[NUM_CHANNELS];
+	char default_country[REG_ALPHA2_LEN + 1];
+	char current_country[REG_ALPHA2_LEN + 1];
+	uint16_t reg_dmn_pair;
+	uint16_t ctry_code;
+};
+
+/**
+ * enum cc_regdmn_flag: Regdomain flags
+ * @INVALID:       Invalid flag
+ * @CC_IS_SET:     Country code is set
+ * @REGDMN_IS_SET: Regdomain ID is set
+ * @ALPHA_IS_SET:  Country ISO is set
+ */
+enum cc_regdmn_flag {
+	INVALID_CC,
+	CC_IS_SET,
+	REGDMN_IS_SET,
+	ALPHA_IS_SET,
+};
+
+/**
+ * struct cc_regdmn_s: User country code or regdomain
+ * @country_code: Country code
+ * @regdmn_id:    Regdomain pair ID
+ * @alpha:        Country ISO
+ * @flags:        Regdomain flags
+ */
+struct cc_regdmn_s {
+	union {
+		uint16_t country_code;
+		uint16_t regdmn_id;
+		uint8_t alpha[REG_ALPHA2_LEN + 1];
+	} cc;
+	uint8_t flags;
+};
+
+/**
+ * struct cur_regdmn_info: Current regulatory info
+ * @regdmn_pair_id: Current regdomain pair ID
+ * @dmn_id_2g: 2GHz regdomain ID
+ * @dmn_id_5g: 5GHz regdomain ID
+ * @ctl_2g: 2GHz CTL value
+ * @ctl_5g: 5GHzCTL value
+ * @dfs_region: dfs region
+ */
+struct cur_regdmn_info {
+	uint16_t regdmn_pair_id;
+	uint16_t dmn_id_2g;
+	uint16_t dmn_id_5g;
+	uint8_t ctl_2g;
+	uint8_t ctl_5g;
+	uint8_t dfs_region;
+};
+
+/**
+ * struct ch_avoid_freq_type
+ * @start_freq: start freq
+ * @end_freq: end freq
+ */
+struct ch_avoid_freq_type {
+	uint32_t start_freq;
+	uint32_t end_freq;
+};
+
+/**
+ * struct ch_avoid_ind_type
+ * @ch_avoid_range_cnt: count
+ * @avoid_freq_range: avoid freq range array
+ */
+struct ch_avoid_ind_type {
+	uint32_t ch_avoid_range_cnt;
+	struct ch_avoid_freq_type avoid_freq_range[CH_AVOID_MAX_RANGE];
+};
+
+/**
+ * struct unsafe_ch_list
+ * @ch_cnt: no.of channels
+ * @ch_list: channel list
+ */
+struct unsafe_ch_list {
+	uint16_t ch_cnt;
+	uint16_t ch_list[NUM_CHANNELS];
+};
+
+/**
+ * struct avoid_freq_ind_data
+ * @freq_list: frequency list
+ * @chan_list: channel list
+ */
+struct avoid_freq_ind_data {
+	struct ch_avoid_ind_type freq_list;
+	struct unsafe_ch_list chan_list;
 };
 
 #endif

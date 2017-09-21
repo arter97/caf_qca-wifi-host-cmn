@@ -346,7 +346,7 @@ void hif_display_ce_stats(struct HIF_CE_state *hif_ce_state)
 	char str_buffer[STR_SIZE];
 	int size, ret;
 
-	qdf_print("CE interrupt statistics:");
+	qdf_debug("CE interrupt statistics:");
 	for (i = 0; i < CE_COUNT_MAX; i++) {
 		size = STR_SIZE;
 		pos = 0;
@@ -358,7 +358,7 @@ void hif_display_ce_stats(struct HIF_CE_state *hif_ce_state)
 			size -= ret;
 			pos += ret;
 		}
-		qdf_print("CE id[%2d] - %s", i, str_buffer);
+		qdf_debug("CE id[%2d] - %s", i, str_buffer);
 	}
 #undef STR_SIZE
 }
@@ -398,6 +398,7 @@ irqreturn_t ce_dispatch_interrupt(int ce_id,
 			  __func__, tasklet_entry->ce_id, CE_COUNT_MAX);
 		return IRQ_NONE;
 	}
+
 	hif_irq_disable(scn, ce_id);
 	hif_record_ce_desc_event(scn, ce_id, HIF_IRQ_EVENT, NULL, NULL, 0);
 	hif_ce_increment_interrupt_count(hif_ce_state, ce_id);

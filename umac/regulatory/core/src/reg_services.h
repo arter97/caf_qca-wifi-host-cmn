@@ -55,6 +55,10 @@
 	((chan_num >= REG_MIN_11P_CH_NUM) &&	\
 	 (chan_num <= REG_MAX_11P_CH_NUM))
 
+#define REG_IS_5GHZ_FREQ(freq) \
+	((freq >= channel_map[MIN_5GHZ_CHANNEL].center_freq) &&	\
+	 (freq <= channel_map[MAX_5GHZ_CHANNEL].center_freq))
+
 #define REG_CH_NUM(ch_enum) channel_map[ch_enum].chan_num
 #define REG_CH_TO_FREQ(ch_enum) channel_map[ch_enum].center_freq
 
@@ -67,33 +71,13 @@
 	 - REG_CH_TO_FREQ(reg_get_chan_enum(curchan))	\
 	 > REG_SBS_SEPARATION_THRESHOLD)
 
+#define IS_VALID_PSOC_REG_OBJ(psoc_priv_obj) (NULL != psoc_priv_obj)
+#define IS_VALID_PDEV_REG_OBJ(pdev_priv_obj) (NULL != pdev_priv_obj)
+
 /* EEPROM setting is a country code */
 #define    COUNTRY_ERD_FLAG     0x8000
 
-/**
- * enum cc_regdmn_flag: Regdomain flags
- * @INVALID:       Invalid flag
- * @CC_IS_SET:     Country code is set
- * @REGDMN_IS_SET: Regdomain ID is set
- * @ALPHA_IS_SET:  Country ISO is set
- */
-enum cc_regdmn_flag {
-	INVALID,
-	CC_IS_SET,
-	REGDMN_IS_SET,
-	ALPHA_IS_SET,
-};
-
-struct cc_regdmn_s {
-	union {
-		uint16_t country_code;
-		uint16_t regdmn_id;
-		uint8_t alpha[REG_ALPHA2_LEN + 1];
-	} cc;
-	uint8_t flags;
-};
-
-extern const struct chan_map channel_map[NUM_CHANNELS];
+extern const struct chan_map *channel_map;
 
 enum channel_enum reg_get_chan_enum(uint32_t chan_num);
 
@@ -187,7 +171,7 @@ QDF_STATUS reg_reset_country(struct wlan_objmgr_psoc *psoc);
 QDF_STATUS reg_enable_dfs_channels(struct wlan_objmgr_pdev *pdev, bool enable);
 
 
-void reg_get_dfs_region(struct wlan_objmgr_psoc *psoc,
+void reg_get_dfs_region(struct wlan_objmgr_pdev *pdev,
 			enum dfs_reg *dfs_reg);
 
 uint32_t reg_get_channel_reg_power(struct wlan_objmgr_pdev *pdev,
@@ -199,7 +183,7 @@ uint32_t reg_get_channel_freq(struct wlan_objmgr_pdev *pdev,
 
 uint16_t reg_get_bw_value(enum phy_ch_width bw);
 
-void reg_set_dfs_region(struct wlan_objmgr_psoc *psoc,
+void reg_set_dfs_region(struct wlan_objmgr_pdev *pdev,
 			enum dfs_reg dfs_reg);
 
 QDF_STATUS reg_get_domain_from_country_code(v_REGDOMAIN_t *reg_domain_ptr,
@@ -249,8 +233,8 @@ QDF_STATUS reg_get_current_chan_list(struct wlan_objmgr_pdev *pdev,
 				     struct regulatory_channel
 				     *chan_list);
 
-QDF_STATUS reg_program_chan_list(struct wlan_objmgr_psoc *psoc,
-		struct cc_regdmn_s *rd);
+QDF_STATUS reg_program_chan_list(struct wlan_objmgr_pdev *pdev,
+				 struct cc_regdmn_s *rd);
 
 void reg_update_nol_ch(struct wlan_objmgr_pdev *pdev, uint8_t *ch_list,
 		       uint8_t num_ch, bool nol_ch);
@@ -290,20 +274,20 @@ void reg_program_mas_chan_list(struct wlan_objmgr_psoc *psoc,
 			       uint8_t *alpha2,
 			       enum dfs_reg dfs_region);
 
-QDF_STATUS reg_program_default_cc(struct wlan_objmgr_psoc *psoc,
-		uint16_t regdmn);
+QDF_STATUS reg_program_default_cc(struct wlan_objmgr_pdev *pdev,
+				  uint16_t regdmn);
 
-QDF_STATUS reg_get_current_cc(struct wlan_objmgr_psoc *psoc,
-		struct cc_regdmn_s *rd);
+QDF_STATUS reg_get_current_cc(struct wlan_objmgr_pdev *pdev,
+			      struct cc_regdmn_s *rd);
 
 QDF_STATUS reg_get_curr_band(struct wlan_objmgr_pdev *pdev,
 		enum band_info *band);
 
 typedef void (*reg_chan_change_callback)(struct wlan_objmgr_psoc *psoc,
-					      struct wlan_objmgr_pdev *pdev,
-					      struct regulatory_channel
-					      *chan_list,
-					      void *arg);
+		struct wlan_objmgr_pdev *pdev,
+		struct regulatory_channel *chan_list,
+		struct avoid_freq_ind_data *avoid_freq_ind,
+		void *arg);
 
 void reg_register_chan_change_callback(struct wlan_objmgr_psoc *psoc,
 				       reg_chan_change_callback cbk,
@@ -317,6 +301,8 @@ struct chan_change_cbk_entry {
 	reg_chan_change_callback cbk;
 	void *arg;
 };
+
+bool reg_is_11d_scan_inprogress(struct wlan_objmgr_psoc *psoc);
 
 enum country_src reg_get_cc_and_src(struct wlan_objmgr_psoc *psoc,
 				    uint8_t *alpha2);
@@ -354,4 +340,69 @@ QDF_STATUS reg_11d_vdev_delete_update(struct wlan_objmgr_vdev *vdev);
  * Return: Success or Failure
  */
 QDF_STATUS reg_11d_vdev_created_update(struct wlan_objmgr_vdev *vdev);
+
+/**
+ * reg_get_psoc_obj() - Provides the reg component object pointer
+ * @psoc: pointer to psoc object.
+ *
+ * Return: reg component object pointer
+ */
+struct wlan_regulatory_psoc_priv_obj *reg_get_psoc_obj(
+		struct wlan_objmgr_psoc *psoc);
+
+/**
+ * reg_set_regdb_offloaded() - set/clear regulatory offloaded flag
+ *
+ * @psoc: psoc pointer
+ * Return: Success or Failure
+ */
+QDF_STATUS reg_set_regdb_offloaded(struct wlan_objmgr_psoc *psoc,
+		bool val);
+
+/**
+ * reg_set_11d_offloaded() - set/clear 11d offloaded flag
+ *
+ * @psoc: psoc pointer
+ * Return: Success or Failure
+ */
+QDF_STATUS reg_set_11d_offloaded(struct wlan_objmgr_psoc *psoc,
+		bool val);
+
+/**
+ * reg_get_curr_regdomain() - Get current regdomain in use
+ * @pdev: pdev pointer
+ * @cur_regdmn: Current regdomain info
+ *
+ * Return: QDF status
+ */
+QDF_STATUS reg_get_curr_regdomain(struct wlan_objmgr_pdev *pdev,
+				  struct cur_regdmn_info *cur_regdmn);
+
+/**
+ * reg_modify_chan_144() - Enable/Disable channel 144
+ * @pdev: pdev pointer
+ * @enable_chan_144: flag to disable/enable channel 144
+ *
+ * Return: Success or Failure
+ */
+QDF_STATUS reg_modify_chan_144(struct wlan_objmgr_pdev *pdev,
+			       bool en_chan_144);
+
+/**
+ * reg_get_en_chan_144() - get en_chan_144 flag value
+ * @pdev: pdev pointer
+ *
+ * Return: en_chan_144 flag value
+ */
+bool reg_get_en_chan_144(struct wlan_objmgr_pdev *pdev);
+
+/**
+ * reg_process_ch_avoid_event() - Process channel avoid event
+ * @psoc: psoc for country information
+ * @ch_avoid_event: channel avoid event buffer
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS reg_process_ch_avoid_event(struct wlan_objmgr_psoc *psoc,
+		struct ch_avoid_ind_type *ch_avoid_event);
 #endif

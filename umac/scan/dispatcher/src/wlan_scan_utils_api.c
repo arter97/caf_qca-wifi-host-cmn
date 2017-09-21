@@ -119,7 +119,7 @@ bool util_is_scan_entry_match(
 
 	if (entry1->cap_info.wlan_caps.ess &&
 	   !qdf_mem_cmp(entry1->bssid.bytes,
-	   entry1->bssid.bytes, QDF_MAC_ADDR_SIZE) &&
+	   entry2->bssid.bytes, QDF_MAC_ADDR_SIZE) &&
 	   scm_chan_to_band(
 	   entry1->channel.chan_idx) ==
 	   scm_chan_to_band(entry2->channel.chan_idx)) {
@@ -140,7 +140,7 @@ bool util_is_scan_entry_match(
 	} else if (!entry1->cap_info.wlan_caps.ibss &&
 	   !entry1->cap_info.wlan_caps.ess &&
 	   !qdf_mem_cmp(entry1->bssid.bytes,
-	   entry1->bssid.bytes, QDF_MAC_ADDR_SIZE)) {
+	   entry2->bssid.bytes, QDF_MAC_ADDR_SIZE)) {
 		/* In case of P2P devices, ess and ibss will be set to zero */
 		return true;
 	}
@@ -321,7 +321,7 @@ util_scan_parse_chan_switch_wrapper_ie(struct scan_cache_entry *scan_params,
 	return QDF_STATUS_SUCCESS;
 }
 
-static bool
+bool
 util_scan_is_hidden_ssid(struct ie_ssid *ssid)
 {
 	uint8_t i;
@@ -349,7 +349,13 @@ util_scan_parse_extn_ie(struct scan_cache_entry *scan_params,
 
 	switch (extn_ie->ie_extn_id) {
 	case WLAN_EXTN_ELEMID_SRP:
-		scan_params->ie_list.srp = (uint8_t *)ie;
+		scan_params->ie_list.srp   = (uint8_t *)ie;
+		break;
+	case WLAN_EXTN_ELEMID_HECAP:
+		scan_params->ie_list.hecap = (uint8_t *)ie;
+		break;
+	case WLAN_EXTN_ELEMID_HEOP:
+		scan_params->ie_list.heop  = (uint8_t *)ie;
 		break;
 	default:
 		break;
@@ -408,14 +414,7 @@ util_scan_parse_vendor_ie(struct scan_cache_entry *scan_params,
 		 * hence copy data just after version byte
 		 */
 		scan_params->ie_list.bwnss_map = (((uint8_t *)ie) + 8);
-	} else if (is_he_cap_oui(((uint8_t *)(ie))) &&
-			!(scan_params->ie_list.hecap)) {
-		scan_params->ie_list.hecap = (uint8_t *)ie;
-	} else if (is_he_op_oui(((uint8_t *)(ie))) &&
-			!(scan_params->ie_list.heop)) {
-		scan_params->ie_list.heop = (uint8_t *)ie;
 	}
-
 }
 
 static QDF_STATUS
@@ -536,6 +535,9 @@ util_scan_populate_bcn_ie_list(struct scan_cache_entry *scan_params)
 				return status;
 			}
 			break;
+		case WLAN_ELEMID_FILS_INDICATION:
+			scan_params->ie_list.fils_indication = (uint8_t *)ie;
+			break;
 		case WLAN_ELEMID_EXTN_ELEM:
 			util_scan_parse_extn_ie(scan_params, ie);
 			break;
@@ -593,7 +595,7 @@ util_scan_unpack_beacon_frame(uint8_t *frame,
 		(le16toh(*(uint16_t *)hdr->i_seq) >> WLAN_SEQ_SEQ_SHIFT);
 
 	scan_entry->rssi_raw = rx_param->rssi;
-	scan_entry->avg_rssi = WLAN_RSSI_DUMMY_MARKER;
+	scan_entry->avg_rssi = WLAN_RSSI_IN(scan_entry->rssi_raw);
 	scan_entry->tsf_delta = rx_param->tsf_delta;
 
 	/* store jiffies */
@@ -670,4 +672,17 @@ util_scan_unpack_beacon_frame(uint8_t *frame,
 
 	/* TODO calculate channel struct */
 	return scan_entry;
+}
+
+QDF_STATUS
+util_scan_entry_update_mlme_info(struct wlan_objmgr_pdev *pdev,
+	struct scan_cache_entry *scan_entry)
+{
+
+	if (!pdev || !scan_entry) {
+		scm_err("pdev 0x%p, scan_entry: 0x%p", pdev, scan_entry);
+		return QDF_STATUS_E_INVAL;
+	}
+
+	return scm_update_scan_mlme_info(pdev, scan_entry);
 }

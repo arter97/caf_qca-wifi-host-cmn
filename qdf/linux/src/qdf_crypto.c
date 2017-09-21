@@ -30,6 +30,7 @@
 #include <crypto/skcipher.h>
 
 /* Function Definitions and Documentation */
+#define MAX_HMAC_ELEMENT_CNT 10
 
 /*
  * xor: API to calculate xor
@@ -49,31 +50,8 @@ int qdf_get_hash(uint8_t *type,
 		uint8_t element_cnt, uint8_t *addr[], uint32_t *addr_len,
 		int8_t *hash)
 {
-	int i, ret;
-	struct hash_desc desc;
-	struct scatterlist sg;
-
-	/* allocate crypto hash type */
-	desc.tfm = crypto_alloc_hash(type, 0, CRYPTO_ALG_ASYNC);
-
-	if (IS_ERR(desc.tfm)) {
-		ret = PTR_ERR(desc.tfm);
-		return -EINVAL;
-	}
-	desc.flags = 0;
-	ret = crypto_hash_init(&desc);
-
-	if (ret)
-		return ret;
-
-	for (i = 0; i < element_cnt ; i++) {
-		sg_init_one(&sg, addr[i], addr_len[i]);
-		crypto_hash_update(&desc, &sg, addr_len[i]);
-	}
-
-	crypto_hash_final(&desc, hash);
-	crypto_free_hash(desc.tfm);
-	return 0;
+	return qdf_get_hmac_hash(type, NULL, 0, element_cnt,
+				 addr, addr_len, hash);
 }
 
 int qdf_get_hmac_hash(uint8_t *type, uint8_t *key,
@@ -81,33 +59,20 @@ int qdf_get_hmac_hash(uint8_t *type, uint8_t *key,
 		uint8_t element_cnt, uint8_t *addr[], uint32_t *addr_len,
 		int8_t *hash)
 {
-	int i, ret;
-	struct hash_desc desc;
-	struct scatterlist sg;
+	int i;
+	size_t src_len[MAX_HMAC_ELEMENT_CNT];
 
-	/* allocate crypto hash type */
-	desc.tfm = crypto_alloc_hash(type, 0, CRYPTO_ALG_ASYNC);
-
-	if (IS_ERR(desc.tfm)) {
-		ret = PTR_ERR(desc.tfm);
+	if (element_cnt > MAX_HMAC_ELEMENT_CNT) {
+		QDF_TRACE(QDF_MODULE_ID_QDF, QDF_TRACE_LEVEL_ERROR,
+			  FL("Invalid element count %d"), element_cnt);
 		return -EINVAL;
 	}
-	desc.flags = 0;
-	ret = crypto_hash_setkey(desc.tfm, key, keylen);
 
-	crypto_hash_init(&desc);
+	for (i = 0; i < element_cnt; i++)
+		src_len[i] = addr_len[i];
 
-	if (ret)
-		return ret;
-
-	for (i = 0; i < element_cnt ; i++) {
-		sg_init_one(&sg, addr[i], addr_len[i]);
-		crypto_hash_update(&desc, &sg, addr_len[i]);
-	}
-
-	crypto_hash_final(&desc, hash);
-	crypto_free_hash(desc.tfm);
-	return 0;
+	return qdf_get_keyed_hash(type, key, keylen, (const uint8_t **)addr,
+				  src_len, element_cnt,  hash);
 }
 
 /* qdf_update_dbl from RFC 5297. Length of d is AES_BLOCK_SIZE (128 bits) */
@@ -270,7 +235,7 @@ int qdf_aes_ctr(const uint8_t *key, unsigned int key_len, uint8_t *siv,
 	struct scatterlist sg_in, sg_out;
 	int ret;
 
-	if (key_len != 16 && key_len != 24 && key_len != 32) {
+	if (!IS_VALID_CTR_KEY_LEN(key_len)) {
 		QDF_TRACE(QDF_MODULE_ID_QDF, QDF_TRACE_LEVEL_ERROR,
 			  FL("Invalid key length: %u"), key_len);
 		return -EINVAL;
@@ -318,6 +283,66 @@ int qdf_aes_ctr(const uint8_t *key, unsigned int key_len, uint8_t *siv,
 
 	skcipher_request_free(req);
 	crypto_free_skcipher(tfm);
+	return ret;
+}
+#elif (LINUX_VERSION_CODE >= KERNEL_VERSION(3, 18, 0))
+int qdf_aes_ctr(const uint8_t *key, unsigned int key_len, uint8_t *siv,
+		const uint8_t *src, size_t src_len, uint8_t *dest, bool enc)
+{
+	struct crypto_ablkcipher *tfm;
+	struct ablkcipher_request *req = NULL;
+	struct scatterlist sg_in, sg_out;
+	int ret;
+
+	if (!IS_VALID_CTR_KEY_LEN(key_len)) {
+		QDF_TRACE(QDF_MODULE_ID_QDF, QDF_TRACE_LEVEL_ERROR,
+			  FL("Invalid key length: %u"), key_len);
+		return -EINVAL;
+	}
+
+	tfm = crypto_alloc_ablkcipher("ctr(aes)", 0, CRYPTO_ALG_ASYNC);
+	if (IS_ERR(tfm)) {
+		QDF_TRACE(QDF_MODULE_ID_QDF, QDF_TRACE_LEVEL_ERROR,
+			  FL("Failed to alloc transformation for ctr(aes):%ld"),
+			  PTR_ERR(tfm));
+		return -EAGAIN;
+	}
+
+	req = ablkcipher_request_alloc(tfm, GFP_KERNEL);
+	if (!req) {
+		QDF_TRACE(QDF_MODULE_ID_QDF, QDF_TRACE_LEVEL_ERROR,
+			  FL("Failed to allocate request for ctr(aes)"));
+		crypto_free_ablkcipher(tfm);
+		return -EAGAIN;
+	}
+
+	ret = crypto_ablkcipher_setkey(tfm, key, key_len);
+	if (ret) {
+		QDF_TRACE(QDF_MODULE_ID_QDF, QDF_TRACE_LEVEL_ERROR,
+			  FL("Set key failed for ctr(aes), ret:%d"), -ret);
+		ablkcipher_request_free(req);
+		crypto_free_ablkcipher(tfm);
+		return ret;
+	}
+
+	sg_init_one(&sg_in, src, src_len);
+	sg_init_one(&sg_out, dest, src_len);
+	ablkcipher_request_set_crypt(req, &sg_in, &sg_out, src_len, siv);
+
+	if (enc)
+		ret = crypto_ablkcipher_encrypt(req);
+	else
+		ret = crypto_ablkcipher_decrypt(req);
+
+	if (ret) {
+		QDF_TRACE(QDF_MODULE_ID_QDF, QDF_TRACE_LEVEL_ERROR,
+			  FL("%s failed for ctr(aes), ret:%d"),
+			  enc ? "Encryption" : "Decryption", -ret);
+	}
+
+	ablkcipher_request_free(req);
+	crypto_free_ablkcipher(tfm);
+
 	return ret;
 }
 #else

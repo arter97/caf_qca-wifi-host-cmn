@@ -76,8 +76,8 @@ static QDF_STATUS wlan_objmgr_vdev_obj_free(struct wlan_objmgr_vdev *vdev)
 	struct wlan_objmgr_pdev *pdev;
 
 	if (vdev == NULL) {
-			obj_mgr_err("vdev is NULL");
-			return QDF_STATUS_E_FAILURE;
+		obj_mgr_err("vdev is NULL");
+		return QDF_STATUS_E_FAILURE;
 	}
 	/* if PDEV is NULL, return */
 	pdev = wlan_vdev_get_pdev(vdev);
@@ -168,12 +168,14 @@ struct wlan_objmgr_vdev *wlan_objmgr_vdev_obj_create(
 	/* peer count to 0 */
 	vdev->vdev_objmgr.wlan_peer_count = 0;
 	qdf_atomic_init(&vdev->vdev_objmgr.ref_cnt);
+	vdev->vdev_objmgr.print_cnt = 0;
 	wlan_objmgr_vdev_get_ref(vdev, WLAN_OBJMGR_ID);
 	/* Initialize max peer count based on opmode type */
 	if (wlan_vdev_mlme_get_opmode(vdev) == QDF_STA_MODE)
 		vdev->vdev_objmgr.max_peer_count = WLAN_UMAC_MAX_STA_PEERS;
 	else
-		vdev->vdev_objmgr.max_peer_count = WLAN_UMAC_MAX_AP_PEERS;
+		vdev->vdev_objmgr.max_peer_count =
+				wlan_pdev_get_max_peer_count(pdev);
 
 	/* Initialize peer list */
 	qdf_list_create(&vdev->vdev_objmgr.wlan_peer_list,
@@ -215,7 +217,7 @@ struct wlan_objmgr_vdev *wlan_objmgr_vdev_obj_create(
 	} else if (obj_status == QDF_STATUS_E_FAILURE) {
 		/* Clean up the psoc */
 		wlan_objmgr_vdev_obj_delete(vdev);
-		obj_mgr_err("VDEV component objects creation failed for vdev-id:%d",
+		obj_mgr_err("VDEV comp objects creation failed for vdev-id:%d",
 			vdev->vdev_objmgr.vdev_id);
 		return NULL;
 	}
@@ -257,7 +259,8 @@ static QDF_STATUS wlan_objmgr_vdev_obj_destroy(struct wlan_objmgr_vdev *vdev)
 	obj_status = wlan_objmgr_vdev_object_status(vdev);
 
 	if (obj_status == QDF_STATUS_E_FAILURE) {
-		obj_mgr_err("VDEV object deletion failed: vdev-id: %d", vdev_id);
+		obj_mgr_err("VDEV object deletion failed: vdev-id: %d",
+				vdev_id);
 		/* Ideally should not happen */
 		/* This leads to memleak ??? how to handle */
 		QDF_BUG(0);
@@ -595,35 +598,40 @@ QDF_STATUS wlan_objmgr_vdev_peer_attach(struct wlan_objmgr_vdev *vdev,
 						struct wlan_objmgr_peer *peer)
 {
 	struct wlan_objmgr_vdev_objmgr *objmgr = &vdev->vdev_objmgr;
+	struct wlan_objmgr_pdev *pdev;
 
 	wlan_vdev_obj_lock(vdev);
+	pdev = wlan_vdev_get_pdev(vdev);
 	/* If Max peer count exceeds, return failure */
-	if (objmgr->wlan_peer_count > objmgr->max_peer_count) {
+	if ((objmgr->wlan_peer_count >= objmgr->max_peer_count) ||
+	     (wlan_pdev_get_peer_count(pdev) >=
+			wlan_pdev_get_max_peer_count(pdev))) {
 		wlan_vdev_obj_unlock(vdev);
 		return QDF_STATUS_E_FAILURE;
 	}
 	/* Add peer to vdev's peer list */
 	wlan_obj_vdev_peerlist_add_tail(&objmgr->wlan_peer_list, peer);
 	objmgr->wlan_peer_count++;
+	wlan_pdev_incr_peer_count(wlan_vdev_get_pdev(vdev));
 
-	if ((wlan_peer_get_peer_type(peer) == WLAN_PEER_AP) ||
-	    (wlan_peer_get_peer_type(peer) == WLAN_PEER_P2P_GO)) {
-		if (WLAN_ADDR_EQ(wlan_peer_get_macaddr(peer),
-				 wlan_vdev_mlme_get_macaddr(vdev)) ==
-					QDF_STATUS_SUCCESS) {
-			/*
-			 * if peer mac address and vdev mac address match, set
-			 * this peer as self peer
-			 */
-			wlan_vdev_set_selfpeer(vdev, peer);
-			/* For AP mode, self peer and BSS peer are same */
-			if (wlan_vdev_mlme_get_opmode(vdev) == QDF_SAP_MODE)
-				wlan_vdev_set_bsspeer(vdev, peer);
-		}
-		/* set BSS peer for sta */
-		if (wlan_vdev_mlme_get_opmode(vdev) == QDF_STA_MODE)
+	if (WLAN_ADDR_EQ(wlan_peer_get_macaddr(peer),
+			 wlan_vdev_mlme_get_macaddr(vdev)) ==
+				QDF_STATUS_SUCCESS) {
+		/*
+		 * if peer mac address and vdev mac address match, set
+		 * this peer as self peer
+		 */
+		wlan_vdev_set_selfpeer(vdev, peer);
+		/* For AP mode, self peer and BSS peer are same */
+		if (wlan_vdev_mlme_get_opmode(vdev) == QDF_SAP_MODE)
 			wlan_vdev_set_bsspeer(vdev, peer);
 	}
+	/* set BSS peer for sta */
+	if ((wlan_vdev_mlme_get_opmode(vdev) == QDF_STA_MODE) &&
+		((wlan_peer_get_peer_type(peer) == WLAN_PEER_AP) ||
+		 (wlan_peer_get_peer_type(peer) == WLAN_PEER_P2P_GO)))
+		wlan_vdev_set_bsspeer(vdev, peer);
+
 	/* Increment vdev ref count to make sure it won't be destroyed before */
 	wlan_objmgr_vdev_get_ref(vdev, WLAN_OBJMGR_ID);
 	wlan_vdev_obj_unlock(vdev);
@@ -675,6 +683,7 @@ QDF_STATUS wlan_objmgr_vdev_peer_detach(struct wlan_objmgr_vdev *vdev,
 	}
 	/* decrement peer count */
 	objmgr->wlan_peer_count--;
+	wlan_pdev_decr_peer_count(wlan_vdev_get_pdev(vdev));
 	wlan_vdev_obj_unlock(vdev);
 	/* decrement vdev ref count after peer released its reference */
 	wlan_objmgr_vdev_release_ref(vdev, WLAN_OBJMGR_ID);
@@ -735,8 +744,11 @@ QDF_STATUS wlan_objmgr_vdev_try_get_ref(struct wlan_objmgr_vdev *vdev,
 	vdev_id = wlan_vdev_get_id(vdev);
 	if (vdev->obj_state == WLAN_OBJ_STATE_LOGICALLY_DELETED) {
 		wlan_vdev_obj_unlock(vdev);
-		obj_mgr_err("called by %d, vdev obj is in Deletion Progress state: \
-				vdev-id:%d", id, vdev_id);
+		if (vdev->vdev_objmgr.print_cnt++ <=
+				WLAN_OBJMGR_RATELIMIT_THRESH)
+			obj_mgr_err("[Ref id: %d] vdev(%d) is in Log Del",
+				id, vdev_id);
+
 		return QDF_STATUS_E_RESOURCES;
 	}
 
@@ -762,7 +774,8 @@ void wlan_objmgr_vdev_release_ref(struct wlan_objmgr_vdev *vdev,
 	vdev_id = wlan_vdev_get_id(vdev);
 
 	if (!qdf_atomic_read(&vdev->vdev_objmgr.ref_id_dbg[id])) {
-		obj_mgr_err("vdev (id:%d)ref cnt was not taken by %d", vdev_id, id);
+		obj_mgr_err("vdev (id:%d)ref cnt was not taken by %d",
+				vdev_id, id);
 		wlan_objmgr_print_ref_ids(vdev->vdev_objmgr.ref_id_dbg);
 		WLAN_OBJMGR_BUG(0);
 	}
@@ -781,3 +794,26 @@ void wlan_objmgr_vdev_release_ref(struct wlan_objmgr_vdev *vdev,
 	return;
 }
 EXPORT_SYMBOL(wlan_objmgr_vdev_release_ref);
+
+bool wlan_vdev_is_connected(struct wlan_objmgr_vdev *vdev)
+{
+	struct wlan_objmgr_peer *peer;
+	enum wlan_peer_state peer_state;
+
+	wlan_vdev_obj_lock(vdev);
+	peer = wlan_vdev_get_bsspeer(vdev);
+	wlan_vdev_obj_unlock(vdev);
+
+	if (!peer)
+		return false;
+
+	wlan_peer_obj_lock(peer);
+	peer_state = wlan_peer_mlme_get_state(peer);
+	wlan_peer_obj_unlock(peer);
+
+	if (peer_state != WLAN_ASSOC_STATE)
+		return false;
+
+	return true;
+}
+EXPORT_SYMBOL(wlan_vdev_is_connected);

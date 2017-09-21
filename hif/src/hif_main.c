@@ -40,12 +40,12 @@
 #include "hif_hw_version.h"
 #if defined(HIF_PCI) || defined(HIF_SNOC) || defined(HIF_AHB)
 #include "ce_tasklet.h"
+#include "ce_api.h"
 #endif
 #include "qdf_trace.h"
 #include "qdf_status.h"
 #include "hif_debug.h"
 #include "mp_dev.h"
-#include "ce_api.h"
 #ifdef QCA_WIFI_QCA8074
 #include "hal_api.h"
 #endif
@@ -148,12 +148,6 @@ bool hif_can_suspend_link(struct hif_opaque_softc *hif_ctx)
 	QDF_BUG(scn);
 	return scn->linkstate_vote == 0;
 }
-
-#ifndef CONFIG_WIN
-#define QCA9984_HOST_INTEREST_ADDRESS -1
-#define QCA9888_HOST_INTEREST_ADDRESS -1
-#define IPQ4019_HOST_INTEREST_ADDRESS -1
-#endif
 
 /**
  * hif_hia_item_address(): hif_hia_item_address
@@ -483,8 +477,23 @@ static QDF_STATUS hif_hal_attach(struct hif_softc *scn)
 
 	return QDF_STATUS_SUCCESS;
 }
+
+static QDF_STATUS hif_hal_detach(struct hif_softc *scn)
+{
+	if (ce_srng_based(scn)) {
+		hal_detach(scn->hal_soc);
+		scn->hal_soc = NULL;
+	}
+
+	return QDF_STATUS_SUCCESS;
+}
 #else
 static QDF_STATUS hif_hal_attach(struct hif_softc *scn)
+{
+	return QDF_STATUS_SUCCESS;
+}
+
+static QDF_STATUS hif_hal_detach(struct hif_softc *scn)
 {
 	return QDF_STATUS_SUCCESS;
 }
@@ -525,14 +534,13 @@ QDF_STATUS hif_enable(struct hif_opaque_softc *hif_ctx, struct device *dev,
 	status = hif_hal_attach(scn);
 	if (status != QDF_STATUS_SUCCESS) {
 		HIF_ERROR("%s: hal attach failed", __func__);
-		return status;
+		goto disable_bus;
 	}
 
 	if (hif_bus_configure(scn)) {
 		HIF_ERROR("%s: Target probe failed.", __func__);
-		hif_disable_bus(scn);
 		status = QDF_STATUS_E_FAILURE;
-		return status;
+		goto hal_detach;
 	}
 
 	hif_ut_suspend_init(scn);
@@ -550,6 +558,12 @@ QDF_STATUS hif_enable(struct hif_opaque_softc *hif_ctx, struct device *dev,
 	HIF_DBG("%s: OK", __func__);
 
 	return QDF_STATUS_SUCCESS;
+
+hal_detach:
+	hif_hal_detach(scn);
+disable_bus:
+	hif_disable_bus(scn);
+	return status;
 }
 
 void hif_disable(struct hif_opaque_softc *hif_ctx, enum hif_disable_type type)
@@ -564,6 +578,8 @@ void hif_disable(struct hif_opaque_softc *hif_ctx, enum hif_disable_type type)
 		hif_shutdown_device(hif_ctx);
 	else
 		hif_stop(hif_ctx);
+
+	hif_hal_detach(scn);
 
 	hif_disable_bus(scn);
 
@@ -782,6 +798,11 @@ int hif_get_device_type(uint32_t device_id,
 		HIF_ERROR("%s: Unsupported device ID!", __func__);
 		ret = -ENODEV;
 		break;
+	}
+
+	if (*target_type == TARGET_TYPE_UNKNOWN) {
+		HIF_ERROR("%s: Unsupported target_type!", __func__);
+		ret = -ENODEV;
 	}
 end:
 	return ret;
@@ -1165,115 +1186,23 @@ void hif_ramdump_handler(struct hif_opaque_softc *scn)
 }
 #endif
 
-/**
- * hif_register_ext_group_int_handler() - API to register external group
- * interrupt handler.
- * @hif_ctx : HIF Context
- * @numirq: number of irq's in the group
- * @irq: array of irq values
- * @ext_intr_handler: callback interrupt handler function
- * @context: context to passed in callback
- *
- * Return: status
- */
-uint32_t hif_register_ext_group_int_handler(struct hif_opaque_softc *hif_ctx,
-		uint32_t numirq, uint32_t irq[], ext_intr_handler handler,
-		void *context)
+#ifdef WLAN_SUSPEND_RESUME_TEST
+irqreturn_t hif_wake_interrupt_handler(int irq, void *context)
 {
-	struct hif_softc *scn = HIF_GET_SOFTC(hif_ctx);
-	struct HIF_CE_state *hif_state = HIF_GET_CE_STATE(scn);
-	struct hif_ext_group_entry *hif_ext_group;
+	struct hif_softc *scn = context;
 
-	if (scn->ext_grp_irq_configured) {
-		HIF_ERROR("%s Called after ext grp irq configured\n", __func__);
-		return QDF_STATUS_E_FAILURE;
-	}
+	HIF_INFO("wake interrupt received on irq %d", irq);
 
-	if (hif_state->hif_num_extgroup >= HIF_MAX_GROUP) {
-		HIF_ERROR("%s Max groups reached\n", __func__);
-		return QDF_STATUS_E_FAILURE;
-	}
+	if (hif_is_ut_suspended(scn))
+		hif_ut_fw_resume(scn);
 
-	if (numirq >= HIF_MAX_GRP_IRQ) {
-		HIF_ERROR("%s invalid numirq\n", __func__);
-		return QDF_STATUS_E_FAILURE;
-	}
-
-	hif_ext_group = &hif_state->hif_ext_group[hif_state->hif_num_extgroup];
-
-	hif_ext_group->numirq = numirq;
-	qdf_mem_copy(&hif_ext_group->irq[0], irq, numirq * sizeof(irq[0]));
-	hif_ext_group->context = context;
-	hif_ext_group->handler = handler;
-	hif_ext_group->configured = true;
-	hif_ext_group->grp_id = hif_state->hif_num_extgroup;
-	hif_ext_group->hif_state = hif_state;
-
-	hif_state->hif_num_extgroup++;
-	return QDF_STATUS_SUCCESS;
+	return IRQ_HANDLED;
 }
-
-/**
- * hif_configure_ext_group_interrupts() - API to configure external group
- * interrpts
- * @hif_ctx : HIF Context
- *
- * Return: status
- */
-uint32_t hif_configure_ext_group_interrupts(struct hif_opaque_softc *hif_ctx)
+#else /* WLAN_SUSPEND_RESUME_TEST */
+irqreturn_t hif_wake_interrupt_handler(int irq, void *context)
 {
-	struct hif_softc *scn = HIF_GET_SOFTC(hif_ctx);
+	HIF_INFO("wake interrupt received on irq %d", irq);
 
-	if (scn->ext_grp_irq_configured) {
-		HIF_ERROR("%s Called after ext grp irq configured\n", __func__);
-		return QDF_STATUS_E_FAILURE;
-	}
-
-	hif_grp_irq_configure(scn);
-	scn->ext_grp_irq_configured = true;
-
-	return QDF_STATUS_SUCCESS;
+	return IRQ_HANDLED;
 }
-
-/**
- * hif_ext_grp_tasklet() - grp tasklet
- * data: context
- *
- * return: void
- */
-void hif_ext_grp_tasklet(unsigned long data)
-{
-	struct hif_ext_group_entry *hif_ext_group =
-			(struct hif_ext_group_entry *)data;
-	struct HIF_CE_state *hif_state = hif_ext_group->hif_state;
-	struct hif_softc *scn = HIF_GET_SOFTC(hif_state);
-
-	if (hif_ext_group->grp_id < HIF_MAX_GROUP) {
-		hif_ext_group->handler(hif_ext_group->context, HIF_MAX_BUDGET);
-		hif_grp_irq_enable(scn, hif_ext_group->grp_id);
-	} else {
-		HIF_ERROR("%s: ERROR - invalid grp_id = %d",
-		       __func__, hif_ext_group->grp_id);
-	}
-
-	qdf_atomic_dec(&scn->active_grp_tasklet_cnt);
-}
-
-/**
- * hif_grp_tasklet_kill() - grp tasklet kill
- * scn: hif_softc
- *
- * return: void
- */
-void hif_grp_tasklet_kill(struct hif_softc *scn)
-{
-	int i;
-	struct HIF_CE_state *hif_state = HIF_GET_CE_STATE(scn);
-
-	for (i = 0; i < HIF_MAX_GROUP; i++)
-		if (hif_state->hif_ext_group[i].inited) {
-			tasklet_kill(&hif_state->hif_ext_group[i].intr_tq);
-			hif_state->hif_ext_group[i].inited = false;
-		}
-	qdf_atomic_set(&scn->active_grp_tasklet_cnt, 0);
-}
+#endif /* WLAN_SUSPEND_RESUME_TEST */

@@ -74,6 +74,7 @@
 #define SCAN_MAX_SCAN_TIME 30000
 #define SCAN_NUM_PROBES 2
 #define SCAN_NETWORK_IDLE_TIMEOUT 0
+#define HIDDEN_SSID_TIME (1*60*1000)
 #else
 #define MAX_SCAN_CACHE_SIZE 1024
 #define SCAN_ACTIVE_DWELL_TIME 105
@@ -92,13 +93,29 @@
 #define SCAN_MAX_SCAN_TIME 50000
 #define SCAN_NUM_PROBES 0
 #define SCAN_NETWORK_IDLE_TIMEOUT 200
+#define HIDDEN_SSID_TIME (0xFFFFFFFF)
 #endif
 
 #define SCAN_TIMEOUT_GRACE_PERIOD 10
 /* scan age time in millisec */
+#ifdef QCA_WIFI_NAPIER_EMULATION
+#define SCAN_CACHE_AGING_TIME (90 * 1000)
+#else
 #define SCAN_CACHE_AGING_TIME (30 * 1000)
+#endif
 #define SCAN_MAX_BSS_PDEV 100
 #define SCAN_PRIORITY SCAN_PRIORITY_LOW
+
+/* DBS Scan policy selection ext flags */
+#define SCAN_FLAG_EXT_DBS_SCAN_POLICY_MASK  0x00000003
+#define SCAN_FLAG_EXT_DBS_SCAN_POLICY_BIT   0
+#define SCAN_DBS_POLICY_DEFAULT             0x0
+#define SCAN_DBS_POLICY_FORCE_NONDBS        0x1
+#define SCAN_DBS_POLICY_IGNORE_DUTY         0x2
+#define SCAN_DBS_POLICY_MAX                 0x3
+/* Minimum number of channels for enabling DBS Scan */
+#define SCAN_MIN_CHAN_DBS_SCAN_THRESHOLD         8
+
 
 /**
  * struct cb_handler - defines scan event handler
@@ -350,6 +367,9 @@ struct scan_cb {
  * @requesters: requester allocation pool
  * @scan_ids:   last allocated scan id
  * @global_evhandlers:  registered scan event handlers
+ * @pdev_info: pointer to pdev info
+ * @pno_cfg: default pno configuration
+ * @ie_whitelist: default ie whitelist attrs
  */
 struct wlan_scan_obj {
 	qdf_spinlock_t lock;
@@ -361,6 +381,7 @@ struct wlan_scan_obj {
 	struct global_scan_ev_handlers global_evhandlers;
 	struct pdev_scan_info pdev_info[WLAN_UMAC_MAX_PDEVS];
 	struct pno_def_config pno_cfg;
+	struct probe_req_whitelist_attr ie_whitelist;
 };
 
 /**

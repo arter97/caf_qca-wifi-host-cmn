@@ -144,18 +144,24 @@ struct wlan_objmgr_pdev_mlme {
  * @wlan_vdev_list:    List maintains the VDEVs created on this PDEV
  * @wlan_vdev_count:   VDEVs count
  * @max_vdev_count:    Max no. of VDEVs supported by this PDEV
+ * @wlan_peer_count:   Peer count
+ * @max_peer_count:    Max Peer count
  * @wlan_psoc:         back pointer to PSOC, its attached to
  * @ref_cnt:           Ref count
  * @ref_id_dbg:        Array to track Ref count
+ * @print_cnt:         Count to throttle Logical delete prints
  */
 struct wlan_objmgr_pdev_objmgr {
 	uint8_t wlan_pdev_id;
 	qdf_list_t wlan_vdev_list;
 	uint8_t wlan_vdev_count;
 	uint8_t max_vdev_count;
+	uint16_t wlan_peer_count;
+	uint16_t max_peer_count;
 	struct wlan_objmgr_psoc *wlan_psoc;
 	qdf_atomic_t ref_cnt;
 	qdf_atomic_t ref_id_dbg[WLAN_REF_ID_MAX];
+	uint8_t print_cnt;
 };
 
 /**
@@ -323,6 +329,10 @@ QDF_STATUS wlan_objmgr_trigger_pdev_comp_priv_object_deletion(
  *
  * API to find vdev object pointer by vdev id from pdev's vdev list
  *
+ * This API increments the ref count of the vdev object internally, the
+ * caller has to invoke the wlan_objmgr_vdev_release_ref() to decrement
+ * ref count
+ *
  * Return: vdev pointer
  *         NULL on FAILURE
  */
@@ -339,6 +349,10 @@ struct wlan_objmgr_vdev *wlan_objmgr_get_vdev_by_id_from_pdev(
  *
  * API to find vdev object pointer by vdev id from pdev's vdev list
  *
+ * This API increments the ref count of the vdev object internally, the
+ * caller has to invoke the wlan_objmgr_vdev_release_ref() to decrement
+ * ref count
+ *
  * Return: vdev pointer
  *         NULL on FAILURE
  */
@@ -353,6 +367,10 @@ struct wlan_objmgr_vdev *wlan_objmgr_get_vdev_by_id_from_pdev_no_state(
  * @dbg_id: id of the caller
  *
  * API to find vdev object pointer by vdev mac addr from pdev's vdev list
+ *
+ * This API increments the ref count of the vdev object internally, the
+ * caller has to invoke the wlan_objmgr_vdev_release_ref() to decrement
+ * ref count
  *
  * Return: vdev pointer
  *         NULL on FAILURE
@@ -369,6 +387,10 @@ struct wlan_objmgr_vdev *wlan_objmgr_get_vdev_by_macaddr_from_pdev(
  * @dbg_id: id of the caller
  *
  * API to find vdev object pointer by vdev mac addr from pdev's vdev list
+ *
+ * This API increments the ref count of the vdev object internally, the
+ * caller has to invoke the wlan_objmgr_vdev_release_ref() to decrement
+ * ref count
  *
  * Return: vdev pointer
  *         NULL on FAILURE
@@ -761,5 +783,86 @@ static inline void *wlan_pdev_get_tgt_if_handle(struct wlan_objmgr_pdev *pdev)
 		return NULL;
 
 	return pdev->tgt_if_handle;
+}
+
+/**
+ * wlan_pdev_set_max_peer_count() - set max peer count
+ * @vdev: PDEV object
+ * @count: Max peer count
+ *
+ * API to set max peer count of PDEV
+ *
+ * Return: void
+ */
+static inline void wlan_pdev_set_max_peer_count(struct wlan_objmgr_pdev *pdev,
+						uint16_t count)
+{
+	pdev->pdev_objmgr.max_peer_count = count;
+}
+
+/**
+ * wlan_pdev_get_max_peer_count() - get max peer count
+ * @pdev: PDEV object
+ *
+ * API to get max peer count of PDEV
+ *
+ * Return: max peer count
+ */
+static inline uint16_t wlan_pdev_get_max_peer_count(
+						struct wlan_objmgr_pdev *pdev)
+{
+	return pdev->pdev_objmgr.max_peer_count;
+}
+
+/**
+ * wlan_pdev_get_peer_count() - get pdev peer count
+ * @pdev: PDEV object
+ *
+ * API to get peer count from PDEV
+ *
+ * Return: peer_count - pdev's peer count
+ */
+static inline uint16_t wlan_pdev_get_peer_count(struct wlan_objmgr_pdev *pdev)
+{
+	return pdev->pdev_objmgr.wlan_peer_count;
+}
+
+/**
+ * wlan_pdev_incr_peer_count() - increment pdev peer count
+ * @pdev: PDEV object
+ *
+ * API to increment peer count of PDEV by 1
+ *
+ * Return: void
+ */
+static inline void wlan_pdev_incr_peer_count(struct wlan_objmgr_pdev *pdev)
+{
+	pdev->pdev_objmgr.wlan_peer_count++;
+}
+
+/**
+ * wlan_pdev_decr_peer_count() - decrement pdev peer count
+ * @pdev: PDEV object
+ *
+ * API to decrement peer count of PDEV by 1
+ *
+ * Return: void
+ */
+static inline void wlan_pdev_decr_peer_count(struct wlan_objmgr_pdev *pdev)
+{
+	pdev->pdev_objmgr.wlan_peer_count--;
+}
+
+/**
+ * wlan_pdev_get_vdev_count() - get PDEV vdev count
+ * @pdev: PDEV object
+ *
+ * API to get vdev count from PDEV
+ *
+ * Return: vdev_count - pdev's vdev count
+ */
+static inline uint8_t wlan_pdev_get_vdev_count(struct wlan_objmgr_pdev *pdev)
+{
+	return pdev->pdev_objmgr.wlan_vdev_count;
 }
 #endif /* _WLAN_OBJMGR_PDEV_H_*/

@@ -67,6 +67,8 @@
  * XXX Peregrine reports pulses in microseconds, not hardware clocks!
  */
 
+#define MAX_DUR_FOR_LOW_RSSI 4
+
 /**
  * Cascade has issue with reported duration especially when there is a
  * crossover of chirp from one segment to another. It may report a value
@@ -231,7 +233,7 @@
  * struct dfs_pulseparams - DFS pulse param structure.
  * @p_time:        Time for start of pulse in usecs.
  * @p_dur:         Duration of pulse in usecs.
- * @p_rssi:        Duration of pulse in usecs.
+ * @p_rssi:        RSSI of pulse.
  */
 struct dfs_pulseparams {
 	uint64_t p_time;
@@ -448,7 +450,7 @@ struct dfs_filtertype {
  */
 struct dfs_ieee80211_channel {
 	uint16_t       dfs_ch_freq;
-	uint32_t       dfs_ch_flags;
+	uint64_t       dfs_ch_flags;
 	uint16_t       dfs_ch_flagext;
 	uint8_t        dfs_ch_ieee;
 	uint8_t        dfs_ch_vhtop_ch_freq_seg1;
@@ -497,7 +499,7 @@ struct dfs_nolelem {
 /**
  * struct dfs_info - DFS Info.
  * @rn_use_nol:            Use the NOL when radar found (default: TRUE).
- * @rn_numradars:          Number of different types of radars.
+ * @rn_ftindex:            Number of different types of radars.
  * @rn_lastfull_ts:        Last 64 bit timstamp from recv interrupt.
  * @rn_last_ts:            last 15 bit ts from recv descriptor.
  * @rn_last_unique_ts:     last unique 32 bit ts from recv descriptor.
@@ -513,7 +515,7 @@ struct dfs_nolelem {
  */
 struct dfs_info {
 	int       rn_use_nol;
-	uint32_t  rn_numradars;
+	uint32_t  rn_ftindex;
 	uint64_t  rn_lastfull_ts;
 	uint16_t  rn_last_ts;
 	uint32_t  rn_last_unique_ts;
@@ -642,6 +644,7 @@ struct dfs_event_log {
 		&(_dfs)->dfs_precac_lock, (_dfs)->dfs_precac_lock_flags)
 #define PRECAC_LIST_UNLOCK(_dfs)  spin_unlock_irqrestore(  \
 		&(_dfs)->dfs_precac_lock, (_dfs)->dfs_precac_lock_flags)
+#define PRECAC_LIST_LOCK_INIT(_dfs)  spin_lock_init(&(_dfs)->dfs_precac_lock)
 
 /**
  * struct wlan_dfs -        The main dfs structure.
@@ -662,7 +665,7 @@ struct dfs_event_log {
  * @dfs_radarf[]:          dfs_radarf - One filter for each radar pulse type.
  * @dfs_rinfo:             State vars for radar processing.
  * @dfs_b5radars:          array of bin5 radar events.
- * @dfs_radartable:        map of radar durs to filter types.
+ * @dfs_ftindextable:        map of radar durs to filter types.
  * @dfs_nol:               Non occupancy list for radar.
  * @dfs_nol_count:         How many items?
  * @dfs_defaultparams:     Default phy params per radar state.
@@ -728,6 +731,7 @@ struct dfs_event_log {
  * @dfs_precac_required_list: PreCAC required list.
  * @dfs_precac_done_list:  PreCAC done list.
  * @dfs_precac_nol_list:   PreCAC NOL List.
+ * @dfs_is_offload_enabled: Set if DFS offload enabled.
  */
 struct wlan_dfs {
 	uint32_t  dfs_debug_mask;
@@ -750,7 +754,7 @@ struct wlan_dfs {
 	struct dfs_filtertype *dfs_radarf[DFS_MAX_RADAR_TYPES];
 	struct dfs_info dfs_rinfo;
 	struct dfs_bin5radars *dfs_b5radars;
-	int8_t **dfs_radartable;
+	int8_t **dfs_ftindextable;
 	struct dfs_nolelem *dfs_nol;
 	int dfs_nol_count;
 	struct wlan_dfs_phyerr_param dfs_defaultparams;
@@ -801,11 +805,11 @@ struct wlan_dfs {
 	os_timer_t dfs_cac_timer;
 	os_timer_t dfs_cac_valid_timer;
 	int dfs_cac_timeout_override;
-	int8_t dfs_enable:1,
-		   dfs_cac_timer_running:1,
-		   dfs_ignore_dfs:1,
-		   dfs_ignore_cac:1,
-		   dfs_cac_valid:1;
+	uint8_t dfs_enable:1,
+		dfs_cac_timer_running:1,
+		dfs_ignore_dfs:1,
+		dfs_ignore_cac:1,
+		dfs_cac_valid:1;
 	uint32_t dfs_cac_valid_time;
 	os_timer_t dfs_precac_timer;
 	int dfs_precac_timeout_override;
@@ -816,6 +820,7 @@ struct wlan_dfs {
 	TAILQ_HEAD(, dfs_precac_entry) dfs_precac_nol_list;
 	struct dfs_ieee80211_channel *dfs_curchan;
 	struct wlan_objmgr_pdev *dfs_pdev_obj;
+	bool dfs_is_offload_enabled;
 };
 
 /**
@@ -1009,7 +1014,8 @@ void dfs_radar_found_action(struct wlan_dfs *dfs);
  * and ext channels as being unavailable.  This should be fixed for 802.11ac
  * or we'll quickly run out of valid channels to use.
  *
- * Return: If a radar event is found, return 1.  Otherwise, return 0.
+ * Return: If a radar event found on non-DFS channel return 0.
+ * Otherwise, return 1.
  */
 int dfs_process_radarevent(struct wlan_dfs *dfs,
 		struct dfs_ieee80211_channel *chan);
@@ -1227,18 +1233,6 @@ void dfs_add_pulse(struct wlan_dfs *dfs,
 		uint64_t this_ts);
 
 /**
- * dfs_bin_fixedpattern_check() - Checks the BIN pattern.
- * @dfs: Pointer to wlan_dfs structure.
- * @rf:  Pointer to dfs_filter structure.
- * @dur: Duration.
- * ext_chan_flag : Ext channel flag.
- */
-int dfs_bin_fixedpattern_check(struct wlan_dfs *dfs,
-		struct dfs_filter *rf,
-		uint32_t dur,
-		int ext_chan_flag);
-
-/**
  * dfs_bin_check() - BIN check
  * @dfs: Pointer to wlan_dfs structure.
  * @rf: Pointer to dfs_filter structure.
@@ -1406,10 +1400,16 @@ bool dfs_is_precac_timer_running(struct wlan_dfs *dfs);
 void dfs_get_radars(struct wlan_dfs *dfs);
 
 /**
- * dfs_attach() - Allocates memory for wlan_dfs members.
+ * dfs_attach() - Wrapper function to allocate memory for wlan_dfs members.
  * @dfs: Pointer to wlan_dfs structure.
  */
 int dfs_attach(struct wlan_dfs *dfs);
+
+/**
+ * dfs_main_attach() - Allocates memory for wlan_dfs members.
+ * @dfs: Pointer to wlan_dfs structure.
+ */
+int dfs_main_attach(struct wlan_dfs *dfs);
 
 /**
  * dfs_create_object() - Creates DFS object.
@@ -1424,12 +1424,6 @@ int dfs_create_object(struct wlan_dfs **dfs);
 void dfs_destroy_object(struct wlan_dfs *dfs);
 
 /**
- * nif_dfs_reset() - DFS reset.
- * @dfs: Pointer to wlan_dfs structure.
- */
-void nif_dfs_reset(struct wlan_dfs *dfs);
-
-/**
  * dfs_random_channel() - Function to choose the random channel from the current
  *                        channel list.
  * @dfs: Pointer to wlan_dfs structure.
@@ -1442,22 +1436,16 @@ int dfs_random_channel(struct wlan_dfs *dfs,
 		uint8_t skip_curchan);
 
 /**
- * sif_dfs_detach() - DFS detach.
+ * dfs_detach() - Wrapper function to free dfs variables.
  * @dfs: Pointer to wlan_dfs structure.
  */
-void sif_dfs_detach(struct wlan_dfs *dfs);
+void dfs_detach(struct wlan_dfs *dfs);
 
 /**
- * nif_dfs_detach() - DFS detach
+ * dfs_main_detach() - Free dfs variables.
  * @dfs: Pointer to wlan_dfs structure.
  */
-void nif_dfs_detach(struct wlan_dfs *dfs);
-
-/**
- * nif_dfs_attach() - DFS attach function.
- * @dfs: Pointer to wlan_dfs structure.
- **/
-void nif_dfs_attach(struct wlan_dfs *dfs);
+void dfs_main_detach(struct wlan_dfs *dfs);
 
 /**
  * dfs_cac_valid_reset() - Cancels the dfs_cac_valid_timer timer.
@@ -1647,6 +1635,36 @@ int dfs_get_debug_info(struct wlan_dfs *dfs,
 		void *data);
 
 /**
+ * dfs_cac_timer_init() - Initialize cac timers.
+ * @dfs: Pointer to wlan_dfs structure.
+ */
+void dfs_cac_timer_init(struct wlan_dfs *dfs);
+
+/**
+ * dfs_cac_attach() - Initialize dfs cac variables.
+ * @dfs: Pointer to wlan_dfs structure.
+ */
+void dfs_cac_attach(struct wlan_dfs *dfs);
+
+/**
+ * dfs_cac_timer_reset() - Cancel dfs cac timers.
+ * @dfs: Pointer to wlan_dfs structure.
+ */
+void dfs_cac_timer_reset(struct wlan_dfs *dfs);
+
+/**
+ * dfs_nol_timer_init() - Initialize NOL timers.
+ * @dfs: Pointer to wlan_dfs structure.
+ */
+void dfs_nol_timer_init(struct wlan_dfs *dfs);
+
+/**
+ * dfs_nol_attach() - Initialize NOL variables.
+ * @dfs: Pointer to wlan_dfs structure.
+ */
+void dfs_nol_attach(struct wlan_dfs *dfs);
+
+/**
  * dfs_print_nolhistory() - Print NOL history.
  * @dfs: Pointer to wlan_dfs structure.
  */
@@ -1719,7 +1737,7 @@ void ol_if_dfs_clist_update(struct wlan_dfs *dfs,
  */
 void dfs_set_current_channel(struct wlan_dfs *dfs,
 		uint16_t dfs_ch_freq,
-		uint32_t dfs_ch_flags,
+		uint64_t dfs_ch_flags,
 		uint16_t dfs_ch_flagext,
 		uint8_t dfs_ch_ieee,
 		uint8_t dfs_ch_vhtop_ch_freq_seg1,
@@ -1818,7 +1836,6 @@ int dfs_process_phyerr_merlin(struct wlan_dfs *dfs,
  * __dfs_process_radarevent() - Continuation of process a radar event function.
  * @dfs: Pointer to wlan_dfs structure.
  * @ft: Pointer to dfs_filtertype structure.
- * @rf: Pointer to dfs_filter structure.
  * @re: Pointer to dfs_event structure.
  * @this_ts: Timestamp.
  *
@@ -1831,7 +1848,6 @@ int dfs_process_phyerr_merlin(struct wlan_dfs *dfs,
  */
 void __dfs_process_radarevent(struct wlan_dfs *dfs,
 		struct dfs_filtertype *ft,
-		struct dfs_filter *rf,
 		struct dfs_event *re,
 		uint64_t this_ts,
 		int *found);
@@ -1852,33 +1868,34 @@ void bin5_rules_check_internal(struct wlan_dfs *dfs,
 		uint32_t *numevents,
 		uint32_t prev,
 		uint32_t i,
-		uint32_t this);
+		uint32_t this,
+		int *index);
 
 /**
- * count_the_other_delay_elements() - Counts the ther delay elements.
+ * dfs_main_timer_init() - Initialize dfs timers.
  * @dfs: Pointer to wlan_dfs structure.
- * @rf: Pointer to dfs_filter structure.
- * @dl: Pointer to dfs_delayline structure.
- * @i: Index value.
- * @refpri: Current "filter" time for start of pulse in usecs.
- * @refdur: Duration value.
- * @primargin: Primary margin.
- * @durmargin: Duration margin.
- * @numpulses: Number of pulses.
- * @prev_good_timestamp: Previous good timestamp.
- * @fundamentalpri: Highest PRI.
  */
-void count_the_other_delay_elements(struct wlan_dfs *dfs,
-		struct dfs_filter *rf,
-		struct dfs_delayline *dl,
-		uint32_t i,
-		uint32_t refpri,
-		uint32_t refdur,
-		uint32_t primargin,
-		uint32_t durmargin,
-		int *numpulses,
-		uint32_t *prev_good_timestamp,
-		int fundamentalpri
-		);
+void dfs_main_timer_init(struct wlan_dfs *dfs);
 
+/**
+ * dfs_main_timer_reset() - Stop dfs timers.
+ * @dfs: Pointer to wlan_dfs structure.
+ */
+void dfs_main_timer_reset(struct wlan_dfs *dfs);
+
+/**
+ * dfs_stop() - Clear dfs timers.
+ * @dfs: Pointer to wlan_dfs structure.
+ */
+void dfs_stop(struct wlan_dfs *dfs);
+
+/**
+ * dfs_update_cur_chan_flags() - Update DFS channel flag and flagext.
+ * @dfs: Pointer to wlan_dfs structure.
+ * @flags: New channel flags
+ * @flagext: New Extended flags
+ */
+void dfs_update_cur_chan_flags(struct wlan_dfs *dfs,
+		uint64_t flags,
+		uint16_t flagext);
 #endif  /* _DFS_H_ */

@@ -136,12 +136,32 @@ QDF_STATUS policy_mgr_get_updated_fw_mode_config(
  *
  * Checks if the dual mac feature is disabled in INI
  *
- * Return: true if the dual mac feature is disabled from INI
+ * Return: true if the dual mac connection is disabled from INI
  */
 bool policy_mgr_is_dual_mac_disabled_in_ini(
 		struct wlan_objmgr_psoc *psoc)
 {
-	return wlan_objmgr_psoc_get_dual_mac_disable(psoc);
+	bool is_disabled = false;
+	enum dbs_support dbs_type = wlan_objmgr_psoc_get_dual_mac_disable(psoc);
+
+	/*
+	 * If DBS support for connection is disabled through INI then assume
+	 * that DBS is not supported, so that policy manager takes
+	 * the decision considering non-dbs cases only.
+	 *
+	 * For DBS scan check the INI value explicitly
+	 */
+	switch (dbs_type) {
+	case DISABLE_DBS_CXN_AND_SCAN:
+	case DISABLE_DBS_CXN_AND_ENABLE_DBS_SCAN:
+	case DISABLE_DBS_CXN_AND_ENABLE_DBS_SCAN_WITH_ASYNC_SCAN_OFF:
+		is_disabled = true;
+		break;
+	default:
+		break;
+	}
+
+	return is_disabled;
 }
 
 uint32_t policy_mgr_mcc_to_scc_switch_mode_in_user_cfg(
@@ -324,12 +344,12 @@ int8_t policy_mgr_get_matching_hw_mode_index(
 	for (i = 0; i < pm_ctx->num_dbs_hw_modes; i++) {
 		t_mac0_tx_ss = POLICY_MGR_HW_MODE_MAC0_TX_STREAMS_GET(
 				pm_ctx->hw_mode.hw_mode_list[i]);
-		if (t_mac0_tx_ss != mac0_tx_ss)
+		if (t_mac0_tx_ss < mac0_tx_ss)
 			continue;
 
 		t_mac0_rx_ss = POLICY_MGR_HW_MODE_MAC0_RX_STREAMS_GET(
 				pm_ctx->hw_mode.hw_mode_list[i]);
-		if (t_mac0_rx_ss != mac0_rx_ss)
+		if (t_mac0_rx_ss < mac0_rx_ss)
 			continue;
 
 		t_mac0_bw = POLICY_MGR_HW_MODE_MAC0_BANDWIDTH_GET(
@@ -344,12 +364,12 @@ int8_t policy_mgr_get_matching_hw_mode_index(
 
 		t_mac1_tx_ss = POLICY_MGR_HW_MODE_MAC1_TX_STREAMS_GET(
 				pm_ctx->hw_mode.hw_mode_list[i]);
-		if (t_mac1_tx_ss != mac1_tx_ss)
+		if (t_mac1_tx_ss < mac1_tx_ss)
 			continue;
 
 		t_mac1_rx_ss = POLICY_MGR_HW_MODE_MAC1_RX_STREAMS_GET(
 				pm_ctx->hw_mode.hw_mode_list[i]);
-		if (t_mac1_rx_ss != mac1_rx_ss)
+		if (t_mac1_rx_ss < mac1_rx_ss)
 			continue;
 
 		t_mac1_bw = POLICY_MGR_HW_MODE_MAC1_BANDWIDTH_GET(
@@ -373,7 +393,7 @@ int8_t policy_mgr_get_matching_hw_mode_index(
 			continue;
 
 		found = i;
-		policy_mgr_notice("hw_mode index %d found", i);
+		policy_mgr_debug("hw_mode index %d found", i);
 		break;
 	}
 	return found;
@@ -410,11 +430,11 @@ int8_t policy_mgr_get_hw_mode_idx_from_dbs_hw_list(
 	policy_mgr_get_tx_rx_ss_from_config(mac0_ss, &mac0_tx_ss, &mac0_rx_ss);
 	policy_mgr_get_tx_rx_ss_from_config(mac1_ss, &mac1_tx_ss, &mac1_rx_ss);
 
-	policy_mgr_notice("MAC0: TxSS=%d, RxSS=%d, BW=%d",
+	policy_mgr_debug("MAC0: TxSS=%d, RxSS=%d, BW=%d",
 		mac0_tx_ss, mac0_rx_ss, mac0_bw);
-	policy_mgr_notice("MAC1: TxSS=%d, RxSS=%d, BW=%d",
+	policy_mgr_debug("MAC1: TxSS=%d, RxSS=%d, BW=%d",
 		mac1_tx_ss, mac1_rx_ss, mac1_bw);
-	policy_mgr_notice("DBS=%d, Agile DFS=%d, SBS=%d",
+	policy_mgr_debug("DBS=%d, Agile DFS=%d, SBS=%d",
 		dbs, dfs, sbs);
 
 	return policy_mgr_get_matching_hw_mode_index(psoc, mac0_tx_ss,
@@ -562,7 +582,9 @@ void policy_mgr_update_conc_list(struct wlan_objmgr_psoc *psoc,
 /**
  * policy_mgr_store_and_del_conn_info() - Store and del a connection info
  * @mode: Mode whose entry has to be deleted
- * @info: Struture pointer where the connection info will be saved
+ * @all_matching_cxn_to_del: All the specified mode entries should be deleted
+ * @info: Struture array pointer where the connection info will be saved
+ * @num_cxn_del: Number of connection which are going to be deleted
  *
  * Saves the connection info corresponding to the provided mode
  * and deleted that corresponding entry based on vdev from the
@@ -571,18 +593,22 @@ void policy_mgr_update_conc_list(struct wlan_objmgr_psoc *psoc,
  * Return: None
  */
 void policy_mgr_store_and_del_conn_info(struct wlan_objmgr_psoc *psoc,
-				enum policy_mgr_con_mode mode,
-				struct policy_mgr_conc_connection_info *info)
+	enum policy_mgr_con_mode mode, bool all_matching_cxn_to_del,
+	struct policy_mgr_conc_connection_info *info, uint8_t *num_cxn_del)
 {
-	uint32_t conn_index = 0;
-	bool found = false;
+	int32_t conn_index = 0;
+	uint32_t found_index = 0;
 	struct policy_mgr_psoc_priv_obj *pm_ctx;
 
+	if (!num_cxn_del) {
+		policy_mgr_err("num_cxn_del is NULL");
+		return;
+	}
+	*num_cxn_del = 0;
 	if (!info) {
 		policy_mgr_err("Invalid connection info");
 		return;
 	}
-	qdf_mem_zero(info, sizeof(*info));
 	pm_ctx = policy_mgr_get_context(psoc);
 	if (!pm_ctx) {
 		policy_mgr_err("Invalid Context");
@@ -592,34 +618,47 @@ void policy_mgr_store_and_del_conn_info(struct wlan_objmgr_psoc *psoc,
 	qdf_mutex_acquire(&pm_ctx->qdf_conc_list_lock);
 	while (PM_CONC_CONNECTION_LIST_VALID_INDEX(conn_index)) {
 		if (mode == pm_conc_connection_list[conn_index].mode) {
-			found = true;
-			break;
+			/*
+			 * Storing the connection entry which will be
+			 * temporarily deleted.
+			 */
+			info[found_index] = pm_conc_connection_list[conn_index];
+			/* Deleting the connection entry */
+			policy_mgr_decr_connection_count(psoc,
+					info[found_index].vdev_id);
+			policy_mgr_notice("Stored %d (%d), deleted STA entry with vdev id %d, index %d",
+				info[found_index].vdev_id,
+				info[found_index].mode,
+				info[found_index].vdev_id, conn_index);
+			found_index++;
+			if (all_matching_cxn_to_del)
+				continue;
+			else
+				break;
 		}
 		conn_index++;
 	}
-
-	if (!found) {
-		qdf_mutex_release(&pm_ctx->qdf_conc_list_lock);
-		policy_mgr_err("Mode:%d not available in the conn info", mode);
-		return;
-	}
-
-	/* Storing the STA entry which will be temporarily deleted */
-	*info = pm_conc_connection_list[conn_index];
 	qdf_mutex_release(&pm_ctx->qdf_conc_list_lock);
 
-	/* Deleting the STA entry */
-	policy_mgr_decr_connection_count(psoc, info->vdev_id);
+	if (!found_index) {
+		*num_cxn_del = 0;
+		policy_mgr_err("Mode:%d not available in the conn info", mode);
+	} else {
+		*num_cxn_del = found_index;
+		policy_mgr_err("Mode:%d number of conn %d temp del",
+				mode, *num_cxn_del);
+	}
 
-	policy_mgr_notice("Stored %d (%d), deleted STA entry with vdev id %d, index %d",
-		info->vdev_id, info->mode, info->vdev_id, conn_index);
-
-	/* Caller should set the PCL and restore the STA entry in conn info */
+	/*
+	 * Caller should set the PCL and restore the connection entry
+	 * in conn info.
+	 */
 }
 
 /**
  * policy_mgr_restore_deleted_conn_info() - Restore connection info
- * @info: Saved connection info that is to be restored
+ * @info: An array saving connection info that is to be restored
+ * @num_cxn_del: Number of connection temporary deleted
  *
  * Restores the connection info of STA that was saved before
  * updating the PCL to the FW
@@ -627,11 +666,17 @@ void policy_mgr_store_and_del_conn_info(struct wlan_objmgr_psoc *psoc,
  * Return: None
  */
 void policy_mgr_restore_deleted_conn_info(struct wlan_objmgr_psoc *psoc,
-		struct policy_mgr_conc_connection_info *info)
+		struct policy_mgr_conc_connection_info *info,
+		uint8_t num_cxn_del)
 {
 	uint32_t conn_index;
 	struct policy_mgr_psoc_priv_obj *pm_ctx;
 
+	if (MAX_NUMBER_OF_CONC_CONNECTIONS <= num_cxn_del || 0 == num_cxn_del) {
+		policy_mgr_err("Failed to restore %d/%d deleted information",
+				num_cxn_del, MAX_NUMBER_OF_CONC_CONNECTIONS);
+		return;
+	}
 	pm_ctx = policy_mgr_get_context(psoc);
 	if (!pm_ctx) {
 		policy_mgr_err("Invalid Context");
@@ -646,10 +691,11 @@ void policy_mgr_restore_deleted_conn_info(struct wlan_objmgr_psoc *psoc,
 	}
 
 	qdf_mutex_acquire(&pm_ctx->qdf_conc_list_lock);
-	pm_conc_connection_list[conn_index] = *info;
+	qdf_mem_copy(&pm_conc_connection_list[conn_index], info,
+			num_cxn_del * sizeof(*info));
 	qdf_mutex_release(&pm_ctx->qdf_conc_list_lock);
 
-	policy_mgr_notice("Restored the deleleted conn info, vdev:%d, index:%d",
+	policy_mgr_debug("Restored the deleleted conn info, vdev:%d, index:%d",
 		info->vdev_id, conn_index);
 }
 
@@ -693,7 +739,7 @@ void policy_mgr_update_hw_mode_conn_info(struct wlan_objmgr_psoc *psoc,
 		if (found) {
 			pm_conc_connection_list[conn_index].mac =
 				vdev_mac_map[i].mac_id;
-			policy_mgr_notice("vdev:%d, mac:%d",
+			policy_mgr_debug("vdev:%d, mac:%d",
 			  pm_conc_connection_list[conn_index].vdev_id,
 			  pm_conc_connection_list[conn_index].mac);
 			if (pm_ctx->cdp_cbacks.cdp_update_mac_id)
@@ -743,10 +789,10 @@ void policy_mgr_pdev_set_hw_mode_cb(uint32_t status,
 		return;
 	}
 
-	policy_mgr_notice("cfgd_hw_mode_index=%d", cfgd_hw_mode_index);
+	policy_mgr_debug("cfgd_hw_mode_index=%d", cfgd_hw_mode_index);
 
 	for (i = 0; i < num_vdev_mac_entries; i++)
-		policy_mgr_notice("vdev_id:%d mac_id:%d",
+		policy_mgr_debug("vdev_id:%d mac_id:%d",
 				vdev_mac_map[i].vdev_id,
 				vdev_mac_map[i].mac_id);
 
@@ -757,11 +803,11 @@ void policy_mgr_pdev_set_hw_mode_cb(uint32_t status,
 		return;
 	}
 
-	policy_mgr_notice("MAC0: TxSS:%d, RxSS:%d, Bw:%d",
+	policy_mgr_debug("MAC0: TxSS:%d, RxSS:%d, Bw:%d",
 		hw_mode.mac0_tx_ss, hw_mode.mac0_rx_ss, hw_mode.mac0_bw);
-	policy_mgr_notice("MAC1: TxSS:%d, RxSS:%d, Bw:%d",
+	policy_mgr_debug("MAC1: TxSS:%d, RxSS:%d, Bw:%d",
 		hw_mode.mac1_tx_ss, hw_mode.mac1_rx_ss, hw_mode.mac1_bw);
-	policy_mgr_notice("DBS:%d, Agile DFS:%d, SBS:%d",
+	policy_mgr_debug("DBS:%d, Agile DFS:%d, SBS:%d",
 		hw_mode.dbs_cap, hw_mode.agile_dfs_cap, hw_mode.sbs_cap);
 
 	/* update pm_conc_connection_list */
@@ -1142,7 +1188,7 @@ void policy_mgr_pdev_set_pcl(struct wlan_objmgr_psoc *psoc,
 	if (status != QDF_STATUS_SUCCESS)
 		policy_mgr_err("Send soc set PCL to SME failed");
 	else
-		policy_mgr_notice("Set PCL to FW for mode:%d", mode);
+		policy_mgr_debug("Set PCL to FW for mode:%d", mode);
 }
 
 
@@ -1157,8 +1203,17 @@ void policy_mgr_pdev_set_pcl(struct wlan_objmgr_psoc *psoc,
 void policy_mgr_set_pcl_for_existing_combo(
 		struct wlan_objmgr_psoc *psoc, enum policy_mgr_con_mode mode)
 {
-	struct policy_mgr_conc_connection_info info;
+	struct policy_mgr_conc_connection_info
+			info[MAX_NUMBER_OF_CONC_CONNECTIONS] = { {0} };
 	enum tQDF_ADAPTER_MODE pcl_mode;
+	uint8_t num_cxn_del = 0;
+	struct policy_mgr_psoc_priv_obj *pm_ctx;
+
+	pm_ctx = policy_mgr_get_context(psoc);
+	if (!pm_ctx) {
+		policy_mgr_err("Invalid Context");
+		return;
+	}
 
 	switch (mode) {
 	case PM_STA_MODE:
@@ -1180,16 +1235,20 @@ void policy_mgr_set_pcl_for_existing_combo(
 		policy_mgr_err("Invalid mode to set PCL");
 		return;
 	};
-
+	qdf_mutex_acquire(&pm_ctx->qdf_conc_list_lock);
 	if (policy_mgr_mode_specific_connection_count(psoc, mode, NULL) > 0) {
 		/* Check, store and temp delete the mode's parameter */
-		policy_mgr_store_and_del_conn_info(psoc, mode, &info);
+		policy_mgr_store_and_del_conn_info(psoc, mode, false,
+						info, &num_cxn_del);
+		qdf_mutex_release(&pm_ctx->qdf_conc_list_lock);
 		/* Set the PCL to the FW since connection got updated */
 		policy_mgr_pdev_set_pcl(psoc, pcl_mode);
-		policy_mgr_notice("Set PCL to FW for mode:%d", mode);
+		policy_mgr_debug("Set PCL to FW for mode:%d", mode);
+		qdf_mutex_acquire(&pm_ctx->qdf_conc_list_lock);
 		/* Restore the connection info */
-		policy_mgr_restore_deleted_conn_info(psoc, &info);
+		policy_mgr_restore_deleted_conn_info(psoc, info, num_cxn_del);
 	}
+	qdf_mutex_release(&pm_ctx->qdf_conc_list_lock);
 }
 
 /**
@@ -1213,7 +1272,7 @@ void pm_dbs_opportunistic_timer_handler(void *data)
 
 	/* if we still need it */
 	action = policy_mgr_need_opportunistic_upgrade(psoc);
-	policy_mgr_notice("action:%d", action);
+	policy_mgr_debug("action:%d", action);
 	if (action) {
 		/* lets call for action */
 		/* session id is being used only
@@ -1668,7 +1727,7 @@ QDF_STATUS policy_mgr_get_channel_list(struct wlan_objmgr_psoc *psoc,
 
 	if (PM_NONE == pcl) {
 		/* msg */
-		policy_mgr_notice("pcl is 0");
+		policy_mgr_debug("pcl is 0");
 		return QDF_STATUS_SUCCESS;
 	}
 	/* get the channel list for current domain */
@@ -1685,7 +1744,7 @@ QDF_STATUS policy_mgr_get_channel_list(struct wlan_objmgr_psoc *psoc,
 	if (((mode == PM_SAP_MODE) || (mode == PM_P2P_GO_MODE)) &&
 	    (policy_mgr_mode_specific_connection_count(
 		psoc, PM_STA_MODE, NULL) > 0)) {
-		policy_mgr_notice("STA present, skip DFS channels from pcl for SAP/Go");
+		policy_mgr_debug("STA present, skip DFS channels from pcl for SAP/Go");
 		skip_dfs_channel = true;
 	}
 
@@ -2053,11 +2112,11 @@ QDF_STATUS policy_mgr_get_channel_list(struct wlan_objmgr_psoc *psoc,
 	}
 
 	if ((*len != 0) && (*len != i))
-		policy_mgr_notice("pcl len (%d) and weight list len mismatch (%d)",
+		policy_mgr_debug("pcl len (%d) and weight list len mismatch (%d)",
 			*len, i);
 
 	/* check the channel avoidance list */
-	policy_mgr_update_with_safe_channel_list(pcl_channels, len,
+	policy_mgr_update_with_safe_channel_list(psoc, pcl_channels, len,
 				pcl_weights, weight_len);
 
 	return status;
@@ -2621,4 +2680,130 @@ QDF_STATUS policy_mgr_reset_sap_mandatory_channels(
 		QDF_ARRAY_SIZE(pm_ctx->sap_mandatory_channels));
 
 	return QDF_STATUS_SUCCESS;
+}
+
+void policy_mgr_enable_disable_sap_mandatory_chan_list(
+		struct wlan_objmgr_psoc *psoc, bool val)
+{
+	struct policy_mgr_psoc_priv_obj *pm_ctx;
+
+	pm_ctx = policy_mgr_get_context(psoc);
+	if (!pm_ctx) {
+		policy_mgr_err("Invalid Context");
+		return;
+	}
+
+	pm_ctx->enable_sap_mandatory_chan_list = val;
+}
+
+void policy_mgr_add_sap_mandatory_chan(struct wlan_objmgr_psoc *psoc,
+		uint8_t chan)
+{
+	int i;
+	struct policy_mgr_psoc_priv_obj *pm_ctx;
+
+	pm_ctx = policy_mgr_get_context(psoc);
+	if (!pm_ctx) {
+		policy_mgr_err("Invalid Context");
+		return;
+	}
+
+	for (i = 0; i < pm_ctx->sap_mandatory_channels_len; i++) {
+		if (chan == pm_ctx->sap_mandatory_channels[i])
+			return;
+	}
+
+	policy_mgr_debug("chan %hu", chan);
+	pm_ctx->sap_mandatory_channels[pm_ctx->sap_mandatory_channels_len++]
+		= chan;
+}
+
+bool policy_mgr_is_sap_mandatory_chan_list_enabled(
+		struct wlan_objmgr_psoc *psoc)
+{
+	struct policy_mgr_psoc_priv_obj *pm_ctx;
+
+	pm_ctx = policy_mgr_get_context(psoc);
+	if (!pm_ctx) {
+		policy_mgr_err("Invalid Context");
+		return false;
+	}
+
+	return pm_ctx->enable_sap_mandatory_chan_list;
+}
+
+uint32_t policy_mgr_get_sap_mandatory_chan_list_len(
+		struct wlan_objmgr_psoc *psoc)
+{
+	struct policy_mgr_psoc_priv_obj *pm_ctx;
+
+	pm_ctx = policy_mgr_get_context(psoc);
+	if (!pm_ctx) {
+		policy_mgr_err("Invalid Context");
+		return 0;
+	}
+
+	return pm_ctx->sap_mandatory_channels_len;
+}
+
+void  policy_mgr_init_sap_mandatory_2g_chan(struct wlan_objmgr_psoc *psoc)
+{
+	uint8_t chan_list[QDF_MAX_NUM_CHAN] = {0};
+	uint32_t len = 0;
+	int i;
+	QDF_STATUS status;
+	struct policy_mgr_psoc_priv_obj *pm_ctx;
+
+	pm_ctx = policy_mgr_get_context(psoc);
+	if (!pm_ctx) {
+		policy_mgr_err("Invalid Context");
+		return;
+	}
+
+	status = policy_mgr_get_valid_chans(psoc, chan_list, &len);
+	if (QDF_IS_STATUS_ERROR(status)) {
+		policy_mgr_err("Error in getting valid channels");
+		return;
+	}
+	for (i = 0; i < len; i++) {
+		if (WLAN_REG_IS_24GHZ_CH(chan_list[i])) {
+			policy_mgr_debug("Add chan %hu to mandatory list",
+					chan_list[i]);
+			pm_ctx->sap_mandatory_channels[
+				pm_ctx->sap_mandatory_channels_len++] =
+				chan_list[i];
+		}
+	}
+}
+
+void policy_mgr_remove_sap_mandatory_chan(struct wlan_objmgr_psoc *psoc,
+		uint8_t chan)
+{
+	uint8_t chan_list[QDF_MAX_NUM_CHAN] = {0};
+	uint32_t num_chan = 0;
+	int i;
+	struct policy_mgr_psoc_priv_obj *pm_ctx;
+
+	pm_ctx = policy_mgr_get_context(psoc);
+	if (!pm_ctx) {
+		policy_mgr_err("Invalid Context");
+		return;
+	}
+
+	if (pm_ctx->sap_mandatory_channels_len >= QDF_MAX_NUM_CHAN) {
+		policy_mgr_err("Invalid channel len %d ",
+				pm_ctx->sap_mandatory_channels_len);
+		return;
+	}
+
+	for (i = 0; i < pm_ctx->sap_mandatory_channels_len; i++) {
+		if (chan == pm_ctx->sap_mandatory_channels[i])
+			continue;
+		chan_list[num_chan++] = pm_ctx->sap_mandatory_channels[i];
+	}
+
+	qdf_mem_zero(pm_ctx->sap_mandatory_channels,
+			pm_ctx->sap_mandatory_channels_len);
+	qdf_mem_copy(pm_ctx->sap_mandatory_channels, chan_list, num_chan);
+	pm_ctx->sap_mandatory_channels_len = num_chan;
 }

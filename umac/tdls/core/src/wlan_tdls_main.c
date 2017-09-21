@@ -290,6 +290,9 @@ QDF_STATUS tdls_process_cmd(struct scheduler_msg *msg)
 	case TDLS_CMD_TEARDOWN_LINKS:
 		tdls_teardown_connections(msg->bodyptr);
 		break;
+	case TDLS_NOTIFY_RESET_ADAPTERS:
+		tdls_notify_reset_adapter(msg->bodyptr);
+		break;
 	default:
 		break;
 	}
@@ -982,6 +985,31 @@ QDF_STATUS tdls_notify_sta_disconnect(struct tdls_sta_notify_params *notify)
 	return status;
 }
 
+static void tdls_process_reset_adapter(struct wlan_objmgr_vdev *vdev)
+{
+	struct tdls_vdev_priv_obj *tdls_vdev;
+
+	tdls_vdev = wlan_vdev_get_tdls_vdev_obj(vdev);
+	if (!tdls_vdev)
+		return;
+	tdls_timers_stop(tdls_vdev);
+}
+
+void tdls_notify_reset_adapter(struct wlan_objmgr_vdev *vdev)
+{
+	if (!vdev) {
+		QDF_ASSERT(0);
+		return;
+	}
+
+	if (QDF_STATUS_SUCCESS != wlan_objmgr_vdev_try_get_ref(vdev,
+						WLAN_TDLS_NB_ID))
+		return;
+
+	tdls_process_reset_adapter(vdev);
+	wlan_objmgr_vdev_release_ref(vdev, WLAN_TDLS_NB_ID);
+}
+
 void tdls_peers_deleted_notification(struct wlan_objmgr_vdev *vdev,
 					 uint32_t session_id)
 {
@@ -1304,7 +1332,7 @@ return_success:
 	return status;
 }
 
-void tdls_scan_serialization_comp_info_cb(
+void tdls_scan_serialization_comp_info_cb(struct wlan_objmgr_vdev *vdev,
 		union wlan_serialization_rules_info *comp_info)
 {
 	struct tdls_soc_priv_obj *tdls_soc;

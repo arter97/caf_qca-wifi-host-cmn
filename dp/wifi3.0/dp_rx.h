@@ -304,7 +304,8 @@ void dp_rx_desc_pool_free(struct dp_soc *soc,
 				uint32_t pool_id,
 				struct rx_desc_pool *rx_desc_pool);
 
-void dp_rx_deliver_raw(struct dp_vdev *vdev, qdf_nbuf_t nbuf_list);
+void dp_rx_deliver_raw(struct dp_vdev *vdev, qdf_nbuf_t nbuf_list,
+				struct dp_peer *peer);
 
 /**
  * dp_rx_add_to_free_desc_list() - Adds to a local free descriptor list
@@ -343,7 +344,7 @@ void dp_rx_add_to_free_desc_list(union dp_rx_desc_list_elem_t **head,
  *
  * Return: void:
  */
-#ifndef CONFIG_MCL
+#ifdef FEATURE_WDS
 static inline void
 dp_rx_wds_srcport_learn(struct dp_soc *soc,
 			 uint8_t *rx_tlv_hdr,
@@ -355,43 +356,69 @@ dp_rx_wds_srcport_learn(struct dp_soc *soc,
 	uint32_t ret = 0;
 	uint8_t wds_src_mac[IEEE80211_ADDR_LEN];
 
+	/* Do wds source port learning only if it is a 4-address mpdu */
+	if (!(qdf_nbuf_is_chfrag_start(nbuf) &&
+		hal_rx_get_mpdu_mac_ad4_valid(rx_tlv_hdr)))
+		return;
+
 	memcpy(wds_src_mac, (qdf_nbuf_data(nbuf) + IEEE80211_ADDR_LEN),
 		IEEE80211_ADDR_LEN);
 
-	if (!hal_rx_msdu_end_sa_is_valid_get(rx_tlv_hdr)) {
-		ret = soc->cdp_soc.ol_ops->peer_add_wds_entry(
-						ta_peer->vdev->pdev->osif_pdev,
-						wds_src_mac,
-						ta_peer->mac_addr.raw,
-						flags);
-	} else if (sa_sw_peer_id != ta_peer->peer_ids[0]) {
-		ret = soc->cdp_soc.ol_ops->peer_update_wds_entry(
-						ta_peer->vdev->pdev->osif_pdev,
-						wds_src_mac,
-						ta_peer->mac_addr.raw,
-						flags);
+	if (qdf_unlikely(!hal_rx_msdu_end_sa_is_valid_get(rx_tlv_hdr))) {
+		if (!dp_peer_add_ast(soc, ta_peer, wds_src_mac, 0)) {
+			ret = soc->cdp_soc.ol_ops->peer_add_wds_entry(
+					ta_peer->vdev->pdev->osif_pdev,
+					wds_src_mac,
+					ta_peer->mac_addr.raw,
+					flags);
+		}
+	} else {
+		/*
+		 * Get the AST entry from HW SA index and mark it as active
+		 */
+		struct dp_ast_entry *ast;
+		uint16_t sa_idx = hal_rx_msdu_end_sa_idx_get(rx_tlv_hdr);
+		ast = soc->ast_table[sa_idx];
+
+		/*
+		 * Ensure we are updating the right AST entry by
+		 * validating ast_idx.
+		 * There is a possibility we might arrive here without
+		 * AST MAP event , so this check is mandatory
+		 */
+		if (ast && (ast->ast_idx == sa_idx)) {
+			ast->is_active = TRUE;
+		}
+
+		if (sa_sw_peer_id != ta_peer->peer_ids[0]) {
+			ret = soc->cdp_soc.ol_ops->peer_update_wds_entry(
+					ta_peer->vdev->pdev->osif_pdev,
+					wds_src_mac,
+					ta_peer->mac_addr.raw,
+					flags);
+		}
 	}
 	return;
 }
 #else
-static inline void
+	static inline void
 dp_rx_wds_srcport_learn(struct dp_soc *soc,
-			 uint8_t *rx_tlv_hdr,
-			 struct dp_peer *ta_peer,
-			 qdf_nbuf_t nbuf)
+		uint8_t *rx_tlv_hdr,
+		struct dp_peer *ta_peer,
+		qdf_nbuf_t nbuf)
 {
 }
 #endif
 
 uint8_t dp_rx_process_invalid_peer(struct dp_soc *soc, qdf_nbuf_t nbuf);
 #define DP_RX_LIST_APPEND(head, tail, elem) \
-do {                                                \
-	if (!(head)) {                              \
-		(head) = (elem);                    \
-	} else {                                    \
-		qdf_nbuf_set_next((tail), (elem));  \
-	}                                           \
-	(tail) = (elem);                            \
+	do {                                                \
+		if (!(head)) {                              \
+			(head) = (elem);                    \
+		} else {                                    \
+			qdf_nbuf_set_next((tail), (elem));  \
+		}                                           \
+		(tail) = (elem);                            \
 	qdf_nbuf_set_next((tail), NULL);            \
 } while (0)
 
@@ -483,13 +510,15 @@ void *dp_rx_cookie_2_link_desc_va(struct dp_soc *soc,
 				  struct hal_buf_info *buf_info)
 {
 	void *link_desc_va;
+	uint32_t bank_id = LINK_DESC_COOKIE_BANK_ID(buf_info->sw_cookie);
+
 
 	/* TODO */
 	/* Add sanity for  cookie */
 
-	link_desc_va = soc->link_desc_banks[buf_info->sw_cookie].base_vaddr +
+	link_desc_va = soc->link_desc_banks[bank_id].base_vaddr +
 		(buf_info->paddr -
-			soc->link_desc_banks[buf_info->sw_cookie].base_paddr);
+			soc->link_desc_banks[bank_id].base_paddr);
 
 	return link_desc_va;
 }
@@ -544,6 +573,42 @@ static inline QDF_STATUS dp_rx_defrag_concat(qdf_nbuf_t dst, qdf_nbuf_t src)
 	return QDF_STATUS_SUCCESS;
 }
 
+/*
+ * dp_rx_ast_set_active() - set the active flag of the astentry
+ *				    corresponding to a hw index.
+ * @soc: core txrx main context
+ * @sa_idx: hw idx
+ * @is_active: active flag
+ *
+ */
+#ifdef FEATURE_WDS
+static inline QDF_STATUS dp_rx_ast_set_active(struct dp_soc *soc, uint16_t sa_idx, bool is_active)
+{
+	struct dp_ast_entry *ast;
+	qdf_spin_lock_bh(&soc->ast_lock);
+	ast = soc->ast_table[sa_idx];
+
+	/*
+	 * Ensure we are updating the right AST entry by
+	 * validating ast_idx.
+	 * There is a possibility we might arrive here without
+	 * AST MAP event , so this check is mandatory
+	 */
+	if (ast && (ast->ast_idx == sa_idx)) {
+		ast->is_active = is_active;
+		qdf_spin_unlock_bh(&soc->ast_lock);
+		return QDF_STATUS_SUCCESS;
+	}
+
+	qdf_spin_unlock_bh(&soc->ast_lock);
+	return QDF_STATUS_E_FAILURE;
+}
+#else
+static inline QDF_STATUS dp_rx_ast_set_active(struct dp_soc *soc, uint16_t sa_idx, bool is_active)
+{
+	return QDF_STATUS_SUCCESS;
+}
+#endif
 
 /*
  * dp_rx_buffers_replenish() - replenish rxdma ring with rx nbufs
@@ -582,4 +647,14 @@ QDF_STATUS dp_rx_buffers_replenish(struct dp_soc *dp_soc, uint32_t mac_id,
 QDF_STATUS
 dp_rx_link_desc_buf_return(struct dp_soc *soc, struct dp_srng *dp_rxdma_srng,
 				void *buf_addr_info);
+
+uint32_t
+dp_rxdma_err_process(struct dp_soc *soc, uint32_t mac_id,
+						uint32_t quota);
+
+void dp_rx_fill_mesh_stats(struct dp_vdev *vdev, qdf_nbuf_t nbuf,
+				uint8_t *rx_tlv_hdr, struct dp_peer *peer);
+QDF_STATUS dp_rx_filter_mesh_packets(struct dp_vdev *vdev, qdf_nbuf_t nbuf,
+					uint8_t *rx_tlv_hdr);
+
 #endif /* _DP_RX_H */

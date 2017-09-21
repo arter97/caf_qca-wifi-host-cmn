@@ -45,3 +45,20 @@ QDF_STATUS tgt_reg_process_11d_new_country(struct wlan_objmgr_psoc *psoc,
 	return reg_save_new_11d_country(psoc, reg_11d_new_cc->alpha2);
 }
 
+QDF_STATUS tgt_reg_set_regdb_offloaded(struct wlan_objmgr_psoc *psoc,
+		bool val)
+{
+	return reg_set_regdb_offloaded(psoc, val);
+}
+
+QDF_STATUS tgt_reg_set_11d_offloaded(struct wlan_objmgr_psoc *psoc,
+		bool val)
+{
+	return reg_set_11d_offloaded(psoc, val);
+}
+
+QDF_STATUS tgt_reg_process_ch_avoid_event(struct wlan_objmgr_psoc *psoc,
+		struct ch_avoid_ind_type *ch_avoid_evnt)
+{
+	return reg_process_ch_avoid_event(psoc, ch_avoid_evnt);
+}

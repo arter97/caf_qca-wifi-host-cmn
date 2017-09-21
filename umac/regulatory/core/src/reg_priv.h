@@ -46,23 +46,16 @@
 		reg_logfl(QDF_TRACE_LEVEL_DEBUG, format, ## args)
 
 struct wlan_regulatory_psoc_priv_obj {
-	struct regulatory_channel mas_chan_list[NUM_CHANNELS];
+	struct mas_chan_params mas_chan_params[PSOC_MAX_PHY_REG_CAP];
 	bool offload_enabled;
 	uint8_t num_phy;
-	uint16_t reg_dmn_pair;
-	uint16_t ctry_code;
-	bool nol_chan[NUM_CHANNELS];
-	char default_country[REG_ALPHA2_LEN + 1];
-	char current_country[REG_ALPHA2_LEN + 1];
+	char cur_country[REG_ALPHA2_LEN + 1];
+	char def_country[REG_ALPHA2_LEN + 1];
 	enum country_src cc_src;
 	struct wlan_objmgr_psoc *psoc_ptr;
-	uint32_t phybitmap;
-	enum dfs_reg dfs_region;
 	bool new_user_ctry_pending;
 	bool new_11d_ctry_pending;
-	char country_11d[REG_ALPHA2_LEN + 1];
 	bool dfs_enabled;
-	bool set_fcc_channel;
 	enum band_info band_capability;
 	bool indoor_chan_enabled;
 	bool enable_11d_supp_original;
@@ -71,16 +64,28 @@ struct wlan_regulatory_psoc_priv_obj {
 	uint8_t vdev_id_for_11d_scan;
 	uint8_t master_vdev_cnt;
 	uint8_t vdev_cnt_11d;
+	uint32_t scan_11d_interval;
 	uint8_t vdev_ids_11d[MAX_STA_VDEV_CNT];
 	bool user_ctry_priority;
 	bool user_ctry_set;
 	struct chan_change_cbk_entry cbk_list[REG_MAX_CHAN_CHANGE_CBKS];
 	uint8_t num_chan_change_cbks;
+	uint8_t ch_avoid_ind;
+	struct unsafe_ch_list unsafe_chan_list;
+	struct ch_avoid_ind_type avoid_freq_list;
+	enum restart_beaconing_on_ch_avoid_rule restart_beaconing;
 	qdf_spinlock_t cbk_list_lock;
 };
 
 struct wlan_regulatory_pdev_priv_obj {
 	struct regulatory_channel cur_chan_list[NUM_CHANNELS];
+	struct regulatory_channel mas_chan_list[NUM_CHANNELS];
+	char default_country[REG_ALPHA2_LEN + 1];
+	char current_country[REG_ALPHA2_LEN + 1];
+	uint16_t reg_dmn_pair;
+	uint16_t ctry_code;
+	enum dfs_reg dfs_region;
+	uint32_t phybitmap;
 	struct wlan_objmgr_pdev *pdev_ptr;
 	uint32_t range_2g_low;
 	uint32_t range_2g_high;
@@ -90,7 +95,9 @@ struct wlan_regulatory_pdev_priv_obj {
 	bool set_fcc_channel;
 	enum band_info band_capability;
 	bool indoor_chan_enabled;
+	bool en_chan_144;
 	uint32_t wireless_modes;
+	struct ch_avoid_ind_type freq_avoid_list;
 };
 
 #endif

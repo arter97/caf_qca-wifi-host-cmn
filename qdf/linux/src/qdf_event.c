@@ -39,6 +39,10 @@
 #include "qdf_mc_timer.h"
 #include <linux/export.h>
 
+#ifdef CONFIG_MCL
+static qdf_self_recovery_callback self_recovery_cb;
+#endif
+
 /* Function Definitions and Documentation */
 
 /**
@@ -248,6 +252,7 @@ QDF_STATUS qdf_wait_single_event(qdf_event_t *event, uint32_t timeout)
 	timeout *= qdf_timer_get_multiplier();
 	if (timeout) {
 		long ret;
+
 		ret = wait_for_completion_timeout(&event->complete,
 						  msecs_to_jiffies(timeout));
 		if (0 >= ret)
@@ -272,3 +277,20 @@ QDF_STATUS qdf_exit_thread(QDF_STATUS status)
 	return QDF_STATUS_SUCCESS;
 }
 EXPORT_SYMBOL(qdf_exit_thread);
+
+#ifdef CONFIG_MCL
+void qdf_register_self_recovery_callback(qdf_self_recovery_callback callback)
+{
+	self_recovery_cb = callback;
+}
+
+void qdf_trigger_self_recovery(void)
+{
+	if (!self_recovery_cb) {
+		QDF_TRACE(QDF_MODULE_ID_QDF, QDF_TRACE_LEVEL_INFO,
+			  "No self recovery callback registered %s", __func__);
+		return;
+	}
+	self_recovery_cb();
+}
+#endif

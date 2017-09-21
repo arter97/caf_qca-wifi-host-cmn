@@ -356,6 +356,21 @@ static QDF_STATUS scm_add_scan_entry(struct scan_dbs *scan_db,
 }
 
 /**
+ * scm_update_mlme_info() - update mlme info
+ * @src: source scan entry
+ * @dest: destination scan entry
+ *
+ * Return: void
+ */
+static inline void
+scm_update_mlme_info(struct scan_cache_entry *src,
+	struct scan_cache_entry *dest)
+{
+	qdf_mem_copy(&dest->mlme_info, &src->mlme_info,
+		sizeof(struct mlme_info));
+}
+
+/**
  * scm_delete_duplicate_entry() - remove duplicate node entry
  * @scan_db: scan database
  * @scan_params: new entry to be added
@@ -410,24 +425,31 @@ static void scm_delete_duplicate_entry(struct scan_dbs *scan_db,
 		/* If elapsed time since last rssi update for this
 		 * entry is smaller than a thresold, calculate a
 		 * running average of the RSSI values.
-		 * Otherwise last RSSI is more representive of the
-		 * signal strength.
+		 * Otherwise new frames RSSI is more representive
+		 * of the signal strength.
 		 */
 		time_gap =
-			scan_entry->rssi_timestamp -
-			scan_params->rssi_timestamp;
+			scan_params->scan_entry_time -
+			scan_entry->rssi_timestamp;
 		if (time_gap > WLAN_RSSI_AVERAGING_TIME)
 			scan_params->avg_rssi =
 				WLAN_RSSI_IN(scan_params->rssi_raw);
-		else
+		else {
+			/* Copy previous average rssi to new entry */
+			scan_params->avg_rssi = scan_entry->avg_rssi;
+			/* Average with previous samples */
 			WLAN_RSSI_LPF(scan_params->avg_rssi,
 					scan_params->rssi_raw);
+		}
 
 		scan_params->rssi_timestamp = scan_params->scan_entry_time;
 	}
 
 	/* copy wsn ie from scan_entry to scan_params*/
 	scm_update_alt_wcn_ie(scan_entry, scan_params);
+
+	/* copy mlme info from scan_entry to scan_params*/
+	scm_update_mlme_info(scan_entry, scan_params);
 
 	/* Mark delete the duplicate node */
 	scm_scan_entry_put_ref(scan_db, scan_node, true);
@@ -568,12 +590,12 @@ QDF_STATUS scm_handle_bcn_probe(struct scheduler_msg *msg)
 		goto free_nbuf;
 	}
 
-
-	scm_info("Received %s from BSSID: %pM tsf_delta = %u Seq Num: %x ssid:%.*s",
+	scm_info("Received %s from BSSID: %pM tsf_delta = %u Seq Num: %x "
+		"ssid:%.*s, rssi: %d",
 		(bcn->frm_type == MGMT_SUBTYPE_PROBE_RESP) ?
 		"Probe Rsp" : "Beacon", scan_entry->bssid.bytes,
 		scan_entry->tsf_delta, scan_entry->seq_num,
-		scan_entry->ssid.length, scan_entry->ssid.ssid);
+		scan_entry->ssid.length, scan_entry->ssid.ssid, scan_entry->rssi_raw);
 
 	if (scan_obj->cb.update_beacon)
 		scan_obj->cb.update_beacon(pdev, scan_entry);
@@ -1127,4 +1149,48 @@ QDF_STATUS scm_db_deinit(struct wlan_objmgr_psoc *psoc)
 	}
 
 	return QDF_STATUS_SUCCESS;
+}
+
+QDF_STATUS scm_update_scan_mlme_info(struct wlan_objmgr_pdev *pdev,
+	struct scan_cache_entry *entry)
+{
+	uint8_t hash_idx;
+	struct scan_dbs *scan_db;
+	struct scan_cache_node *cur_node;
+	struct scan_cache_node *next_node = NULL;
+	struct wlan_objmgr_psoc *psoc;
+
+	psoc = wlan_pdev_get_psoc(pdev);
+	if (!psoc) {
+		scm_err("psoc is NULL");
+		return QDF_STATUS_E_INVAL;
+	}
+	scan_db = wlan_pdev_get_scan_db(psoc, pdev);
+	if (!scan_db) {
+		scm_err("scan_db is NULL");
+		return QDF_STATUS_E_INVAL;
+	}
+
+	hash_idx = SCAN_GET_HASH(entry->bssid.bytes);
+
+	cur_node = scm_get_next_node(scan_db,
+			&scan_db->scan_hash_tbl[hash_idx], NULL);
+
+	while (cur_node) {
+		if (util_is_scan_entry_match(entry,
+					cur_node->entry)) {
+			/* Acquire db lock to prevent simultaneous update */
+			qdf_spin_lock_bh(&scan_db->scan_db_lock);
+			scm_update_mlme_info(entry, cur_node->entry);
+			qdf_spin_unlock_bh(&scan_db->scan_db_lock);
+			scm_scan_entry_put_ref(scan_db,
+					cur_node, true);
+			return QDF_STATUS_SUCCESS;
+		}
+		next_node = scm_get_next_node(scan_db,
+				&scan_db->scan_hash_tbl[hash_idx], cur_node);
+		cur_node = next_node;
+	}
+
+	return QDF_STATUS_E_INVAL;
 }

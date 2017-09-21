@@ -43,6 +43,9 @@
 #define CONNECTION_UPDATE_TIMEOUT 1000
 #endif
 
+#define PM_24_GHZ_CHANNEL_6   (6)
+#define PM_5_GHZ_CHANNEL_36   (36)
+
 /**
  * Policy Mgr hardware mode list bit-mask definitions.
  * Bits 4:0, 31:29 are unused.
@@ -182,6 +185,15 @@ extern enum policy_mgr_conc_next_action
 	(struct wlan_objmgr_psoc *psoc);
 
 /**
+ * struct sta_ap_intf_check_work_ctx - sta_ap_intf_check_work
+ * related info
+ * @psoc: pointer to PSOC object information
+ */
+struct sta_ap_intf_check_work_ctx {
+	struct wlan_objmgr_psoc *psoc;
+};
+
+/**
  * struct policy_mgr_psoc_priv_obj - Policy manager private data
  * @psoc: pointer to PSOC object information
  * @pdev: pointer to PDEV object information
@@ -224,32 +236,39 @@ extern enum policy_mgr_conc_next_action
  *                            change is in progress
  * @enable_mcc_adaptive_scheduler: Enable MCC adaptive scheduler
  *      value from INI
+ * @unsafe_channel_list: LTE coex channel avoidance list
+ * @unsafe_channel_count: LTE coex channel avoidance list count
+ * @sta_ap_intf_check_work_info: Info related to sta_ap_intf_check_work
  */
 struct policy_mgr_psoc_priv_obj {
-		struct wlan_objmgr_psoc *psoc;
-		struct wlan_objmgr_pdev *pdev;
-		qdf_event_t connection_update_done_evt;
-		qdf_mutex_t qdf_conc_list_lock;
-		qdf_mc_timer_t dbs_opportunistic_timer;
-		struct policy_mgr_hdd_cbacks hdd_cbacks;
-		struct policy_mgr_sme_cbacks sme_cbacks;
-		struct policy_mgr_wma_cbacks wma_cbacks;
-		struct policy_mgr_tdls_cbacks tdls_cbacks;
-		struct policy_mgr_cdp_cbacks cdp_cbacks;
-		uint8_t sap_mandatory_channels[QDF_MAX_NUM_CHAN];
-		uint32_t sap_mandatory_channels_len;
-		bool do_hw_mode_change;
-		uint32_t concurrency_mode;
-		uint8_t no_of_open_sessions[QDF_MAX_NO_OF_MODE];
-		uint8_t no_of_active_sessions[QDF_MAX_NO_OF_MODE];
-		qdf_work_t sta_ap_intf_check_work;
-		uint32_t num_dbs_hw_modes;
-		struct dbs_hw_mode_info hw_mode;
-		uint32_t old_hw_mode_index;
-		uint32_t new_hw_mode_index;
-		struct dual_mac_config dual_mac_cfg;
-		uint32_t hw_mode_change_in_progress;
-		struct policy_mgr_user_cfg user_cfg;
+	struct wlan_objmgr_psoc *psoc;
+	struct wlan_objmgr_pdev *pdev;
+	qdf_event_t connection_update_done_evt;
+	qdf_mutex_t qdf_conc_list_lock;
+	qdf_mc_timer_t dbs_opportunistic_timer;
+	struct policy_mgr_hdd_cbacks hdd_cbacks;
+	struct policy_mgr_sme_cbacks sme_cbacks;
+	struct policy_mgr_wma_cbacks wma_cbacks;
+	struct policy_mgr_tdls_cbacks tdls_cbacks;
+	struct policy_mgr_cdp_cbacks cdp_cbacks;
+	bool enable_sap_mandatory_chan_list;
+	uint8_t sap_mandatory_channels[QDF_MAX_NUM_CHAN];
+	uint32_t sap_mandatory_channels_len;
+	bool do_hw_mode_change;
+	uint32_t concurrency_mode;
+	uint8_t no_of_open_sessions[QDF_MAX_NO_OF_MODE];
+	uint8_t no_of_active_sessions[QDF_MAX_NO_OF_MODE];
+	qdf_work_t sta_ap_intf_check_work;
+	uint32_t num_dbs_hw_modes;
+	struct dbs_hw_mode_info hw_mode;
+	uint32_t old_hw_mode_index;
+	uint32_t new_hw_mode_index;
+	struct dual_mac_config dual_mac_cfg;
+	uint32_t hw_mode_change_in_progress;
+	struct policy_mgr_user_cfg user_cfg;
+	uint16_t unsafe_channel_list[QDF_MAX_NUM_CHAN];
+	uint16_t unsafe_channel_count;
+	struct sta_ap_intf_check_work_ctx *sta_ap_intf_check_work_info;
 };
 
 /**
@@ -334,9 +353,12 @@ void policy_mgr_update_conc_list(struct wlan_objmgr_psoc *psoc,
 		bool in_use);
 void policy_mgr_store_and_del_conn_info(struct wlan_objmgr_psoc *psoc,
 				enum policy_mgr_con_mode mode,
-				struct policy_mgr_conc_connection_info *info);
+				bool all_matching_cxn_to_del,
+				struct policy_mgr_conc_connection_info *info,
+				uint8_t *num_cxn_del);
 void policy_mgr_restore_deleted_conn_info(struct wlan_objmgr_psoc *psoc,
-		struct policy_mgr_conc_connection_info *info);
+				struct policy_mgr_conc_connection_info *info,
+				uint8_t num_cxn_del);
 void policy_mgr_update_hw_mode_conn_info(struct wlan_objmgr_psoc *psoc,
 				uint32_t num_vdev_mac_entries,
 				struct policy_mgr_vdev_mac_map *vdev_mac_map,
@@ -360,8 +382,6 @@ QDF_STATUS policy_mgr_get_channel_list(struct wlan_objmgr_psoc *psoc,
 			uint8_t *pcl_channels, uint32_t *len,
 			enum policy_mgr_con_mode mode,
 			uint8_t *pcl_weights, uint32_t weight_len);
-bool policy_mgr_disallow_mcc(struct wlan_objmgr_psoc *psoc,
-		uint8_t channel);
 bool policy_mgr_allow_new_home_channel(struct wlan_objmgr_psoc *psoc,
 			uint8_t channel, uint32_t num_connections);
 bool policy_mgr_is_5g_channel_allowed(struct wlan_objmgr_psoc *psoc,
@@ -400,4 +420,23 @@ QDF_STATUS policy_mgr_reset_sap_mandatory_channels(
 bool policy_mgr_get_mode_specific_conn_info(struct wlan_objmgr_psoc *psoc,
 				  uint8_t *channel, uint8_t *vdev_id,
 				  enum policy_mgr_con_mode mode);
+
+/**
+ * policy_mgr_reg_chan_change_callback() - Callback to be
+ * invoked by regulatory module when valid channel list changes
+ * @psoc: PSOC object information
+ * @pdev: PDEV object information
+ * @chan_list: New channel list
+ * @avoid_freq_ind: LTE coex avoid channel list
+ * @arg: Information passed at registration
+ *
+ * Get updated channel list from regulatory module
+ *
+ * Return: None
+ */
+void policy_mgr_reg_chan_change_callback(struct wlan_objmgr_psoc *psoc,
+		struct wlan_objmgr_pdev *pdev,
+		struct regulatory_channel *chan_list,
+		struct avoid_freq_ind_data *avoid_freq_ind,
+		void *arg);
 #endif

@@ -44,6 +44,10 @@
 #define HTT_MAC_ADDR_LEN 6
 #endif
 
+#define DP_HTT_HTC_PKT_MISCLIST_SIZE          256
+
+#define HTT_T2H_EXT_STATS_TLV_START_OFFSET    3
+
 struct dp_htt_htc_pkt {
 	void *soc_ctxt;
 	qdf_dma_addr_t nbuf_paddr;
@@ -65,6 +69,7 @@ struct htt_soc {
 	qdf_device_t osdev;
 	HTC_ENDPOINT_ID htc_endpoint;
 	struct dp_htt_htc_pkt_union *htt_htc_pkt_freelist;
+	struct dp_htt_htc_pkt_union *htt_htc_pkt_misclist;
 	struct {
 		u_int8_t major;
 		u_int8_t minor;
@@ -76,6 +81,7 @@ struct htt_soc {
 
 	struct {
 		int htc_err_cnt;
+		int htc_pkt_free;
 	} stats;
 
 	HTT_TX_MUTEX_TYPE htt_tx_mutex;
@@ -144,5 +150,25 @@ int htt_soc_attach_target(void *htt_soc);
 int htt_h2t_rx_ring_cfg(void *htt_soc, int pdev_id, void *hal_srng,
 	int hal_ring_type, int ring_buf_size,
 	struct htt_rx_ring_tlv_filter *htt_tlv_filter);
+
+/*
+ * htt_t2h_stats_handler() - target to host stats work handler
+ * @context:	context (dp soc context)
+ *
+ * Return: void
+ */
+void htt_t2h_stats_handler(void *context);
+
+/**
+ * struct htt_stats_context - htt stats information
+ * @soc: Size of each descriptor in the pool
+ * @msg: T2H Ext stats message queue
+ * @msg_len: T2H Ext stats message length
+ */
+struct htt_stats_context {
+	struct dp_soc *soc;
+	qdf_nbuf_queue_t msg;
+	uint32_t msg_len;
+};
 
 #endif /* _DP_HTT_H_ */

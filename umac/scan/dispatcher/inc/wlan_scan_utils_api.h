@@ -649,6 +649,8 @@ util_scan_copy_beacon_data(struct scan_cache_entry *new_entry,
 	ie_lst->mdie = conv_ptr(ie_lst->mdie, old_ptr, new_ptr);
 	ie_lst->hecap = conv_ptr(ie_lst->hecap, old_ptr, new_ptr);
 	ie_lst->heop = conv_ptr(ie_lst->heop, old_ptr, new_ptr);
+	ie_lst->fils_indication = conv_ptr(ie_lst->fils_indication,
+					   old_ptr, new_ptr);
 
 	return QDF_STATUS_SUCCESS;
 }
@@ -1290,6 +1292,20 @@ util_scan_entry_spatial_reuse_parameter(struct scan_cache_entry *scan_entry)
 }
 
 /**
+ * util_scan_entry_fils_indication() - function to read FILS indication ie
+ * @scan_entry: scan entry
+ *
+ * API, function to read FILS indication ie
+ *
+ * Return, FILS indication ie or NULL if ie is not present
+ */
+static inline uint8_t*
+util_scan_entry_fils_indication(struct scan_cache_entry *scan_entry)
+{
+	return scan_entry->ie_list.fils_indication;
+}
+
+/**
  * util_get_last_scan_time() - function to get last scan time on this pdev
  * @vdev: vdev object
  *
@@ -1300,5 +1316,41 @@ util_scan_entry_spatial_reuse_parameter(struct scan_cache_entry *scan_entry)
 qdf_time_t
 util_get_last_scan_time(struct wlan_objmgr_vdev *vdev);
 
-#endif
+/**
+ * util_scan_entry_update_mlme_info() - function to update mlme info
+ * @scan_entry: scan entry object
+ *
+ * API, function to update mlme info in scan DB
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS
+util_scan_entry_update_mlme_info(struct wlan_objmgr_pdev *pdev,
+	struct scan_cache_entry *scan_entry);
 
+/**
+ * util_scan_is_hidden_ssid() - function to check if ssid is hidden
+ * @ssid: struct ie_ssid object
+ *
+ * API, function to check if ssid is hidden
+ *
+ * Return: true if ap is hidden, false otherwise
+ */
+bool
+util_scan_is_hidden_ssid(struct ie_ssid *ssid);
+
+/**
+ * util_scan_entry_is_hidden_ap() - function to check if ap is hidden
+ * @scan_entry: scan entry
+ *
+ * API, function to check if ap is hidden
+ *
+ * Return: true if ap is hidden, false otherwise
+ */
+static inline bool
+util_scan_entry_is_hidden_ap(struct scan_cache_entry *scan_entry)
+{
+    return util_scan_is_hidden_ssid(
+			(struct ie_ssid *)scan_entry->ie_list.ssid);
+}
+#endif

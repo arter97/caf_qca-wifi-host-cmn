@@ -449,12 +449,14 @@ enum qca_vendor_attr_set_trace_level {
  * @QCA_WLAN_VENDOR_ATTR_GET_STATION_INVALID: Invalid attribute
  * @QCA_WLAN_VENDOR_ATTR_GET_STATION_INFO: bss info
  * @QCA_WLAN_VENDOR_ATTR_GET_STATION_ASSOC_FAIL_REASON: assoc fail reason
+ * @QCA_WLAN_VENDOR_ATTR_GET_STATION_REMOTE: remote station info
  * @QCA_WLAN_VENDOR_ATTR_GET_STATION_AFTER_LAST: After last
  */
 enum qca_wlan_vendor_attr_get_station {
 	QCA_WLAN_VENDOR_ATTR_GET_STATION_INVALID = 0,
 	QCA_WLAN_VENDOR_ATTR_GET_STATION_INFO,
 	QCA_WLAN_VENDOR_ATTR_GET_STATION_ASSOC_FAIL_REASON,
+	QCA_WLAN_VENDOR_ATTR_GET_STATION_REMOTE,
 
 	/* keep last */
 	QCA_WLAN_VENDOR_ATTR_GET_STATION_AFTER_LAST,
@@ -546,6 +548,35 @@ enum qca_wlan_auth_type {
  * @QCA_WLAN_VENDOR_ATTR_GET_STATION_INFO_ASSOC_FAIL_REASON:
  *  Status Code Corresponding to the Association Failure.
  *  Unsigned 32 bit value.
+ * @QCA_WLAN_VENDOR_ATTR_GET_STATION_INFO_REMOTE_MAX_PHY_RATE:
+ *  Max phy rate of remote station
+ * @QCA_WLAN_VENDOR_ATTR_GET_STATION_INFO_REMOTE_TX_PACKETS:
+ *  TX packets to remote station
+ * @QCA_WLAN_VENDOR_ATTR_GET_STATION_INFO_REMOTE_TX_BYTES:
+ *  TX bytes to remote station
+ * @QCA_WLAN_VENDOR_ATTR_GET_STATION_INFO_REMOTE_RX_PACKETS:
+ *  RX packets from remote station
+ * @QCA_WLAN_VENDOR_ATTR_GET_STATION_INFO_REMOTE_RX_BYTES:
+ *  RX bytes from remote station
+ * @QCA_WLAN_VENDOR_ATTR_GET_STATION_INFO_REMOTE_LAST_TX_RATE:
+ *  Last TX rate with remote station
+ * @QCA_WLAN_VENDOR_ATTR_GET_STATION_INFO_REMOTE_LAST_RX_RATE:
+ *  Last RX rate with remote station
+ * @QCA_WLAN_VENDOR_ATTR_GET_STATION_INFO_REMOTE_WMM:
+ *  Remote station enable/disable WMM
+ * @QCA_WLAN_VENDOR_ATTR_GET_STATION_INFO_REMOTE_SUPPORTED_MODE:
+ *  Remote staion connection mode
+ * @QCA_WLAN_VENDOR_ATTR_GET_STATION_INFO_REMOTE_AMPDU:
+ *  Remote station AMPDU enable/disable
+ * @QCA_WLAN_VENDOR_ATTR_GET_STATION_INFO_REMOTE_TX_STBC:
+ *  Remote station TX Space-time block coding enable/disable
+ * @QCA_WLAN_VENDOR_ATTR_GET_STATION_INFO_REMOTE_RX_STBC:
+ *  Remote station RX Space-time block coding enable/disable
+ * @QCA_WLAN_VENDOR_ATTR_GET_STATION_INFO_REMOTE_CH_WIDTH:
+ *  Remote station channel width
+ * @QCA_WLAN_VENDOR_ATTR_GET_STATION_INFO_REMOTE_SGI_ENABLE:
+ *  Remote station short GI enable/disable
+ * @QCA_WLAN_VENDOR_ATTR_GET_STATION_INFO_PAD: Attribute type for padding
  * @QCA_WLAN_VENDOR_ATTR_GET_STATION_INFO_AFTER_LAST: After last
  */
 enum qca_wlan_vendor_attr_get_station_info {
@@ -559,31 +590,28 @@ enum qca_wlan_vendor_attr_get_station_info {
 	QCA_WLAN_VENDOR_ATTR_GET_STATION_INFO_HT_OPERATION,
 	QCA_WLAN_VENDOR_ATTR_GET_STATION_INFO_VHT_OPERATION,
 	QCA_WLAN_VENDOR_ATTR_GET_STATION_INFO_ASSOC_FAIL_REASON,
+	QCA_WLAN_VENDOR_ATTR_GET_STATION_INFO_REMOTE_MAX_PHY_RATE,
+	QCA_WLAN_VENDOR_ATTR_GET_STATION_INFO_REMOTE_TX_PACKETS,
+	QCA_WLAN_VENDOR_ATTR_GET_STATION_INFO_REMOTE_TX_BYTES,
+	QCA_WLAN_VENDOR_ATTR_GET_STATION_INFO_REMOTE_RX_PACKETS,
+	QCA_WLAN_VENDOR_ATTR_GET_STATION_INFO_REMOTE_RX_BYTES,
+	QCA_WLAN_VENDOR_ATTR_GET_STATION_INFO_REMOTE_LAST_TX_RATE,
+	QCA_WLAN_VENDOR_ATTR_GET_STATION_INFO_REMOTE_LAST_RX_RATE,
+	QCA_WLAN_VENDOR_ATTR_GET_STATION_INFO_REMOTE_WMM,
+	QCA_WLAN_VENDOR_ATTR_GET_STATION_INFO_REMOTE_SUPPORTED_MODE,
+	QCA_WLAN_VENDOR_ATTR_GET_STATION_INFO_REMOTE_AMPDU,
+	QCA_WLAN_VENDOR_ATTR_GET_STATION_INFO_REMOTE_TX_STBC,
+	QCA_WLAN_VENDOR_ATTR_GET_STATION_INFO_REMOTE_RX_STBC,
+	QCA_WLAN_VENDOR_ATTR_GET_STATION_INFO_REMOTE_CH_WIDTH,
+	QCA_WLAN_VENDOR_ATTR_GET_STATION_INFO_REMOTE_SGI_ENABLE,
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 7, 0))
+	QCA_WLAN_VENDOR_ATTR_GET_STATION_INFO_PAD,
+#endif
 	/* keep last */
 	QCA_WLAN_VENDOR_ATTR_GET_STATION_INFO_AFTER_LAST,
 	QCA_WLAN_VENDOR_ATTR_GET_STATION_INFO_MAX =
 		QCA_WLAN_VENDOR_ATTR_GET_STATION_INFO_AFTER_LAST - 1,
 };
-
-/* define short names for get station info attributes */
-#define LINK_INFO_STANDARD_NL80211_ATTR \
-	QCA_WLAN_VENDOR_ATTR_GET_STATION_INFO_LINK_STANDARD_NL80211_ATTR
-#define AP_INFO_STANDARD_NL80211_ATTR \
-	QCA_WLAN_VENDOR_ATTR_GET_STATION_INFO_AP_STANDARD_NL80211_ATTR
-#define INFO_ROAM_COUNT \
-	QCA_WLAN_VENDOR_ATTR_GET_STATION_INFO_ROAM_COUNT
-#define INFO_AKM \
-	QCA_WLAN_VENDOR_ATTR_GET_STATION_INFO_AKM
-#define WLAN802_11_MODE \
-	QCA_WLAN_VENDOR_ATTR_GET_STATION_INFO_802_11_MODE
-#define AP_INFO_HS20_INDICATION \
-	QCA_WLAN_VENDOR_ATTR_GET_STATION_INFO_AP_HS20_INDICATION
-#define HT_OPERATION \
-	QCA_WLAN_VENDOR_ATTR_GET_STATION_INFO_HT_OPERATION
-#define VHT_OPERATION \
-	QCA_WLAN_VENDOR_ATTR_GET_STATION_INFO_VHT_OPERATION
-#define INFO_ASSOC_FAIL_REASON \
-	QCA_WLAN_VENDOR_ATTR_GET_STATION_INFO_ASSOC_FAIL_REASON
 
 /**
  * enum qca_nl80211_vendor_subcmds_index - vendor sub commands index
@@ -2166,6 +2194,8 @@ enum qca_wlan_epno_type {
  *@QCA_WLAN_VENDOR_ATTR_EPNO_BAND5GHZ_BONUS
  *	Signed 32-bit value; 5GHz RSSI score bonus applied to all
  *	5GHz networks
+ *@QCA_WLAN_VENDOR_ATTR_PNO_CONFIG_REQUEST_ID
+ *	Unsigned 32-bit value, representing the PNO Request ID
  * @QCA_WLAN_VENDOR_ATTR_PNO_AFTER_LAST: After last
  * @QCA_WLAN_VENDOR_ATTR_PNO_MAX: max
  */
@@ -2196,6 +2226,7 @@ enum qca_wlan_vendor_attr_pno_config_params {
 	QCA_WLAN_VENDOR_ATTR_EPNO_SECURE_BONUS = 21,
 	QCA_WLAN_VENDOR_ATTR_EPNO_BAND5GHZ_BONUS = 22,
 
+	QCA_WLAN_VENDOR_ATTR_PNO_CONFIG_REQUEST_ID = 23,
 	/* keep last */
 	QCA_WLAN_VENDOR_ATTR_PNO_AFTER_LAST,
 	QCA_WLAN_VENDOR_ATTR_PNO_MAX =
@@ -2635,12 +2666,24 @@ enum qca_wlan_vendor_attr_nd_offload {
  *	user space wpa_supplicant do it. Information from received P2P
  *	Requests are forwarded from firmware to host whenever the APPS
  *	processor exits power collapse state.
+ * @QCA_WLAN_VENDOR_FEATURE_OCE_STA: Device supports all OCE non-AP STA
+ *	specific features
+ * @QCA_WLAN_VENDOR_FEATURE_OCE_AP: Device supports all OCE AP specific
+ *	features.
+ * @QCA_WLAN_VENDOR_FEATURE_OCE_STA_CFON: Device supports OCE STA-CFON
+ *	specific features only. If a Device sets this bit but not the
+ *	QCA_WLAN_VENDOR_FEATURE_OCE_AP, the userspace shall assume that
+ *	this Device may not support all OCE AP functionalities but can support
+ *	only OCE STA-CFON functionalities.
  */
 enum qca_wlan_vendor_features {
 	QCA_WLAN_VENDOR_FEATURE_KEY_MGMT_OFFLOAD = 0,
 	QCA_WLAN_VENDOR_FEATURE_SUPPORT_HW_MODE_ANY = 1,
 	QCA_WLAN_VENDOR_FEATURE_OFFCHANNEL_SIMULTANEOUS = 2,
 	QCA_WLAN_VENDOR_FEATURE_P2P_LISTEN_OFFLOAD	= 3,
+	QCA_WLAN_VENDOR_FEATURE_OCE_STA = 4,
+	QCA_WLAN_VENDOR_FEATURE_OCE_AP = 5,
+	QCA_WLAN_VENDOR_FEATURE_OCE_STA_CFON = 6,
 	/* Additional features need to be added above this */
 	NUM_QCA_WLAN_VENDOR_FEATURES
 };
@@ -2969,6 +3012,16 @@ enum qca_wlan_vendor_attr_config {
 	QCA_WLAN_VENDOR_ATTR_CONFIG_ANT_DIV_DATA_SNR_WEIGHT = 46,
 	/* 32-bit unsigned value to set ack snr weight */
 	QCA_WLAN_VENDOR_ATTR_CONFIG_ANT_DIV_ACK_SNR_WEIGHT = 47,
+	/*
+	 * 32-bit unsigned value to configure the listen interval.
+	 * This is in units of beacon intervals. This configuration alters
+	 * the negotiated listen interval with the AP during the connection.
+	 * It is highly recommended to configure a value less than or equal to
+	 * the one negotiated during the association. Configuring any greater
+	 * value can have adverse effects (frame loss, AP disassociating STA,
+	 * etc.).
+	 */
+	QCA_WLAN_VENDOR_ATTR_CONFIG_LISTEN_INTERVAL = 48,
 	/*
 	 * 8 bit unsigned value that is set on an AP/GO virtual interface to
 	 * disable operations that would cause the AP/GO to leave its operating

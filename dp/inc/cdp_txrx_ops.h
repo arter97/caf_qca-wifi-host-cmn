@@ -25,7 +25,6 @@
 #ifndef _CDP_TXRX_CMN_OPS_H_
 #define _CDP_TXRX_CMN_OPS_H_
 
-
 #include <cdp_txrx_cmn_struct.h>
 #ifdef CONFIG_WIN
 #include <cdp_txrx_stats_struct.h>
@@ -33,6 +32,9 @@
 #include "cdp_txrx_handle.h"
 #include <cdp_txrx_mon_struct.h>
 #include "wlan_objmgr_psoc_obj.h"
+#ifdef IPA_OFFLOAD
+#include <linux/ipa.h>
+#endif
 
 /******************************************************************************
  *
@@ -309,7 +311,7 @@ struct cdp_ctrl_ops {
 	 * @return none
 	 */
 	void
-		(*txrx_peer_authorize)(void *peer,
+		(*txrx_peer_authorize)(struct cdp_peer *peer,
 				u_int32_t authorize);
 
 	bool
@@ -378,7 +380,7 @@ struct cdp_ctrl_ops {
 	void (*txrx_set_vdev_param)(struct cdp_vdev *vdev,
 			enum cdp_vdev_param_type param, uint32_t val);
 
-	void (*txrx_peer_set_nawds)(void *peer, uint8_t value);
+	void (*txrx_peer_set_nawds)(struct cdp_peer *peer, uint8_t value);
 	/**
 	 * @brief Set the reo dest ring num of the radio
 	 * @details
@@ -409,6 +411,10 @@ struct cdp_ctrl_ops {
 
 	int (*txrx_wdi_event_unsub)(struct cdp_pdev *pdev, void *event_cb_sub,
 			uint32_t event);
+	int (*txrx_get_sec_type)(struct cdp_peer *peer, uint8_t sec_idx);
+
+	void (*txrx_update_mgmt_txpow_vdev)(struct cdp_vdev *vdev,
+			uint8_t subtype, uint8_t tx_power);
 };
 
 struct cdp_me_ops {
@@ -615,7 +621,8 @@ struct ol_if_ops {
 	uint8_t (*rx_invalid_peer)(void *osif_pdev, void *msg);
 
 	int  (*peer_map_event)(void *ol_soc_handle, uint16_t peer_id, uint16_t hw_peer_id,
-			uint8_t vdev_id, uint8_t *peer_mac_addr);
+			uint8_t vdev_id, uint8_t *peer_mac_addr,
+			enum cdp_txrx_ast_entry_type peer_type);
 	int (*peer_unmap_event)(void *ol_soc_handle, uint16_t peer_id);
 
 	int (*get_dp_cfg_param)(void *ol_soc_handle, enum cdp_cfg_param_type param_num);
@@ -725,10 +732,10 @@ struct cdp_cfg_ops {
  * @dump_flow_pool_info:
  */
 struct cdp_flowctl_ops {
-	QDF_STATUS (*register_pause_cb)(ol_tx_pause_callback_fp);
-
+	QDF_STATUS (*register_pause_cb)(struct cdp_soc_t *soc,
+					tx_pause_callback);
 	void (*set_desc_global_pool_size)(uint32_t num_msdu_desc);
-	void (*dump_flow_pool_info)(void);
+	void (*dump_flow_pool_info)(void *);
 };
 
 /**
@@ -744,7 +751,8 @@ struct cdp_flowctl_ops {
  */
 struct cdp_lflowctl_ops {
 	int (*register_tx_flow_control)(uint8_t vdev_id,
-		ol_txrx_tx_flow_control_fp flowControl, void *osif_fc_ctx);
+		ol_txrx_tx_flow_control_fp flowControl, void *osif_fc_ctx,
+		ol_txrx_tx_flow_control_is_pause_fp flow_control_is_pause);
 	int (*deregister_tx_flow_control_cb)(uint8_t vdev_id);
 	void (*flow_control_cb)(struct cdp_vdev *vdev, bool tx_resume);
 	bool (*get_tx_resource)(uint8_t sta_id,
@@ -756,6 +764,7 @@ struct cdp_lflowctl_ops {
 	void (*vdev_unpause)(struct cdp_vdev *vdev, uint32_t reason);
 };
 
+#ifdef IPA_OFFLOAD
 /**
  * struct cdp_ipa_ops - mcl ipa data path ops
  * @ipa_get_resource:
@@ -767,26 +776,43 @@ struct cdp_lflowctl_ops {
  * @ipa_tx_data_frame:
  */
 struct cdp_ipa_ops {
-	void (*ipa_get_resource)(struct cdp_pdev *pdev,
-		struct ol_txrx_ipa_resources *ipa_res);
-	void (*ipa_set_doorbell_paddr)(struct cdp_pdev *pdev,
-		qdf_dma_addr_t ipa_tx_uc_doorbell_paddr,
-		qdf_dma_addr_t ipa_rx_uc_doorbell_paddr);
-	void (*ipa_set_active)(struct cdp_pdev *pdev,
-		bool uc_active, bool is_tx);
-	void (*ipa_op_response)(struct cdp_pdev *pdev, uint8_t *op_msg);
-	void (*ipa_register_op_cb)(struct cdp_pdev *pdev,
+	QDF_STATUS (*ipa_get_resource)(struct cdp_pdev *pdev);
+	QDF_STATUS (*ipa_set_doorbell_paddr)(struct cdp_pdev *pdev);
+	QDF_STATUS (*ipa_set_active)(struct cdp_pdev *pdev, bool uc_active,
+		bool is_tx);
+	QDF_STATUS (*ipa_op_response)(struct cdp_pdev *pdev, uint8_t *op_msg);
+	QDF_STATUS (*ipa_register_op_cb)(struct cdp_pdev *pdev,
 		void (*ipa_uc_op_cb_type)(uint8_t *op_msg, void *osif_ctxt),
-		void *osif_dev);
-	void (*ipa_get_stat)(struct cdp_pdev *pdev);
+		void *usr_ctxt);
+	QDF_STATUS (*ipa_get_stat)(struct cdp_pdev *pdev);
 	qdf_nbuf_t (*ipa_tx_data_frame)(struct cdp_vdev *vdev, qdf_nbuf_t skb);
-	void (*ipa_set_uc_tx_partition_base)(struct cdp_cfg *cfg_pdev,
+	void (*ipa_set_uc_tx_partition_base)(struct cdp_cfg *pdev,
 		uint32_t value);
-	void (*ipa_uc_get_share_stats)(struct cdp_pdev *pdev,
+#ifdef FEATURE_METERING
+	QDF_STATUS (*ipa_uc_get_share_stats)(struct cdp_pdev *pdev,
 		uint8_t reset_stats);
-	void (*ipa_uc_set_quota)(struct cdp_pdev *pdev,
+	QDF_STATUS (*ipa_uc_set_quota)(struct cdp_pdev *pdev,
 		uint64_t quota_bytes);
+#endif
+	QDF_STATUS (*ipa_enable_autonomy)(struct cdp_pdev *pdev);
+	QDF_STATUS (*ipa_disable_autonomy)(struct cdp_pdev *pdev);
+	QDF_STATUS (*ipa_setup)(struct cdp_pdev *pdev, void *ipa_i2w_cb,
+		void *ipa_w2i_cb, void *ipa_wdi_meter_notifier_cb,
+		uint32_t ipa_desc_size, void *ipa_priv, bool is_rm_enabled,
+		uint32_t *tx_pipe_handle, uint32_t *rx_pipe_handle);
+	QDF_STATUS (*ipa_cleanup)(uint32_t tx_pipe_handle,
+		uint32_t rx_pipe_handle);
+	QDF_STATUS (*ipa_setup_iface)(char *ifname, uint8_t *mac_addr,
+		enum ipa_client_type prod_client,
+		enum ipa_client_type cons_client,
+		uint8_t session_id, bool is_ipv6_enabled);
+	QDF_STATUS (*ipa_cleanup_iface)(char *ifname, bool is_ipv6_enabled);
+	QDF_STATUS (*ipa_enable_pipes)(struct cdp_pdev *pdev);
+	QDF_STATUS (*ipa_disable_pipes)(struct cdp_pdev *pdev);
+	QDF_STATUS (*ipa_set_perf_level)(int client,
+		uint32_t max_supported_bw_mbps);
 };
+#endif
 
 /**
  * struct cdp_bus_ops - mcl bus suspend/resume ops
@@ -857,8 +883,7 @@ struct cdp_peer_ops {
 			enum ol_txrx_peer_state state);
 	QDF_STATUS (*get_vdevid)(void *peer, uint8_t *vdev_id);
 	struct cdp_vdev * (*get_vdev_by_sta_id)(uint8_t sta_id);
-	QDF_STATUS (*register_ocb_peer)(void *cds_ctx, uint8_t *mac_addr,
-			uint8_t *peer_id);
+	QDF_STATUS (*register_ocb_peer)(uint8_t *mac_addr, uint8_t *peer_id);
 	uint8_t * (*peer_get_peer_mac_addr)(void *peer);
 	int (*get_peer_state)(void *peer);
 	struct cdp_vdev * (*get_vdev_for_peer)(void *peer);
@@ -918,7 +943,9 @@ struct cdp_ops {
 	struct cdp_cfg_ops          *cfg_ops;
 	struct cdp_flowctl_ops      *flowctl_ops;
 	struct cdp_lflowctl_ops     *l_flowctl_ops;
+#ifdef IPA_OFFLOAD
 	struct cdp_ipa_ops          *ipa_ops;
+#endif
 	struct cdp_bus_ops          *bus_ops;
 	struct cdp_ocb_ops          *ocb_ops;
 	struct cdp_peer_ops         *peer_ops;

@@ -54,7 +54,31 @@ void dp_rx_sec_ind_handler(void *soc_handle, uint16_t peer_id,
 uint8_t dp_get_peer_mac_addr_frm_id(struct cdp_soc_t *soc_handle,
 		uint16_t peer_id, uint8_t *peer_mac);
 
-#ifdef DP_LFR
+
+#ifdef FEATURE_WDS
+int dp_peer_add_ast(struct dp_soc *soc, struct dp_peer *peer,
+		uint8_t *mac_addr, uint8_t is_self);
+void dp_peer_del_ast(struct dp_soc *soc,
+		struct dp_ast_entry *ast_entry);
+struct dp_ast_entry *dp_peer_ast_hash_find(struct dp_soc *soc,
+		uint8_t *ast_mac_addr, int mac_addr_is_aligned);
+#else
+static inline int dp_peer_add_ast(struct dp_soc *soc, struct dp_peer *peer,
+		uint8_t *mac_addr, uint8_t is_self)
+{
+	return 0;
+}
+static inline void dp_peer_del_ast(struct dp_soc *soc,
+		struct dp_ast_entry *ast_entry)
+{
+}
+static inline struct dp_ast_entry *dp_peer_ast_hash_find(struct dp_soc *soc,
+		uint8_t *ast_mac_addr, int mac_addr_is_aligned)
+{
+	return NULL;
+}
+#endif
+
 /*
  * dp_get_vdev_from_soc_vdev_id_wifi3() -
  * Returns vdev object given the vdev id
@@ -88,5 +112,4 @@ dp_get_vdev_from_soc_vdev_id_wifi3(struct dp_soc *soc,
 	return NULL;
 
 }
-#endif
 #endif /* _DP_PEER_H_ */

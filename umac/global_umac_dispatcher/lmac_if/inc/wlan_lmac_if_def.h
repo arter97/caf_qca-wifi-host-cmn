@@ -46,10 +46,6 @@
 #include "wlan_crypto_global_def.h"
 #endif
 
-#ifdef WLAN_PMO_ENABLE
-#include "wlan_pmo_hw_filter_public_struct.h"
-#endif
-
 /* Number of dev type: Direct attach and Offload */
 #define MAX_DEV_TYPE 2
 
@@ -129,147 +125,6 @@ struct wlan_lmac_if_scan_rx_ops {
 	QDF_STATUS (*scan_set_max_active_scans)(struct wlan_objmgr_psoc *psoc,
 			uint32_t max_active_scans);
 };
-
-#ifdef WLAN_PMO_ENABLE
-
-/* fwd declarations for pmo tx ops */
-struct pmo_arp_offload_params;
-struct pmo_ns_offload_params;
-struct pmo_bcast_filter_params;
-struct pmo_gtk_req;
-struct pmo_action_wakeup_set_params;
-struct pmo_lphb_enable_req;
-struct pmo_lphb_tcp_params;
-struct pmo_lphb_tcp_filter_req;
-struct pmo_lphb_udp_params;
-struct pmo_lphb_udp_filter_req;
-struct pmo_wow_cmd_params;
-struct pmo_suspend_params;
-struct pmo_rcv_pkt_fltr_cfg;
-struct pmo_rcv_pkt_fltr_clear_param;
-
-/**
- * struct wlan_lmac_if_pmo_tx_ops - structure of tx function
- *					pointers for pmo component
- * @send_arp_offload_req: fp to send arp offload request
- * @send_ns_offload_req: fp to send ns offload request
- * @send_non_arp_bcast_filter_req: for enable/disable  broadcast filter
- * @send_set_pkt_filter: send set packet filter
- * @send_clear_pkt_filter: send clear packet filter
- * @send_enable_wakeup_event_req: fp to send enable wow wakeup events req
- * @send_disable_wakeup_event_req: fp to send disable wow wakeup events req
- * @send_add_wow_pattern: fp to send wow pattern request
- * @send_enhance_mc_offload_req: fp to send enhanced multicast offload request
- * @send_set_mc_filter_req: fp to send set mc filter request
- * @send_clear_mc_filter_req: fp to send clear mc filter request
- * @send_ra_filter_req: fp to send ra filter request
- * @send_gtk_offload_req: fp to send gtk offload request command
- * @send_get_gtk_rsp_cmd: fp to send get gtk response request cmd to firmware
- * @send_action_frame_pattern_req: fp to send wow action frame patterns request
- * @send_lphb_enable: fp to send lphb enable request command
- * @send_lphb_tcp_params: fp to send lphb tcp params request command
- * @send_lphb_tcp_filter_req: fp to send lphb tcp packet filter request command
- * @send_lphb_upd_params: fp to send lphb udp params request command
- * @send_lphb_udp_filter_req: fp to send lphb udp packet filter request command
- * @send_vdev_param_update_req: fp to send vdev param request
- * @send_vdev_set_sta_ps_param: fp to send sta vdev ps power set req
- * @psoc_update_wow_bus_suspend: fp to update bus suspend req flag at wmi
- * @psoc_get_host_credits: fp to get the host credits
- * @psoc_get_pending_cmnds: fp to get the host pending wmi commands
- * @update_target_suspend_flag: fp to update target suspend flag at wmi
- * @psoc_send_wow_enable_req: fp to send wow enable request
- * @psoc_send_supend_req: fp to send target suspend request
- * @psoc_set_runtime_pm_in_progress: fp to set runtime pm is in progress status
- * @psoc_get_runtime_pm_in_progress: fp to get runtime pm is in progress status
- * @psoc_send_host_wakeup_ind: fp tp send host wake indication to fwr
- * @psoc_send_target_resume_req: fp to send target resume request
- */
-struct wlan_lmac_if_pmo_tx_ops {
-	QDF_STATUS (*send_arp_offload_req)(struct wlan_objmgr_vdev *vdev,
-			struct pmo_arp_offload_params *arp_offload_req,
-			struct pmo_ns_offload_params *ns_offload_req);
-	QDF_STATUS (*send_conf_hw_filter_req)(
-			struct wlan_objmgr_psoc *psoc,
-			struct pmo_hw_filter_params *req);
-	QDF_STATUS (*send_ns_offload_req)(struct wlan_objmgr_vdev *vdev,
-			struct pmo_arp_offload_params *arp_offload_req,
-			struct pmo_ns_offload_params *ns_offload_req);
-	QDF_STATUS(*send_set_pkt_filter)(struct wlan_objmgr_vdev *vdev,
-			struct pmo_rcv_pkt_fltr_cfg *pmo_set_pkt_fltr_req);
-	QDF_STATUS(*send_clear_pkt_filter)(struct wlan_objmgr_vdev *vdev,
-			struct pmo_rcv_pkt_fltr_clear_param
-						*pmo_clr_pkt_fltr_param);
-	QDF_STATUS (*send_enable_wow_wakeup_event_req)(
-			struct wlan_objmgr_vdev *vdev,
-			uint32_t *bitmap);
-	QDF_STATUS (*send_disable_wow_wakeup_event_req)(
-			struct wlan_objmgr_vdev *vdev,
-			uint32_t *bitmap);
-	QDF_STATUS (*send_add_wow_pattern)(
-			struct wlan_objmgr_vdev *vdev,
-			uint8_t ptrn_id, const uint8_t *ptrn, uint8_t ptrn_len,
-			uint8_t ptrn_offset, const uint8_t *mask,
-			uint8_t mask_len, bool user);
-	QDF_STATUS (*send_enhance_mc_offload_req)(
-			struct wlan_objmgr_vdev *vdev, bool enable);
-	QDF_STATUS (*send_set_mc_filter_req)(
-			struct wlan_objmgr_vdev *vdev,
-			struct qdf_mac_addr multicast_addr);
-	QDF_STATUS (*send_clear_mc_filter_req)(
-			struct wlan_objmgr_vdev *vdev,
-			struct qdf_mac_addr multicast_addr);
-	QDF_STATUS (*send_ra_filter_req)(
-			struct wlan_objmgr_vdev *vdev,
-			uint8_t default_pattern, uint16_t rate_limit_interval);
-	QDF_STATUS (*send_gtk_offload_req)(
-			struct wlan_objmgr_vdev *vdev,
-			struct pmo_gtk_req *gtk_offload_req);
-	QDF_STATUS (*send_get_gtk_rsp_cmd)(struct wlan_objmgr_vdev *vdev);
-	QDF_STATUS (*send_action_frame_pattern_req)(
-			struct wlan_objmgr_vdev *vdev,
-			struct pmo_action_wakeup_set_params *ip_cmd);
-	QDF_STATUS (*send_lphb_enable)(
-			struct wlan_objmgr_psoc *psoc,
-			struct pmo_lphb_enable_req *ts_lphb_enable);
-	QDF_STATUS (*send_lphb_tcp_params)(
-			struct wlan_objmgr_psoc *psoc,
-			struct pmo_lphb_tcp_params *ts_lphb_tcp_param);
-	QDF_STATUS (*send_lphb_tcp_filter_req)(
-			struct wlan_objmgr_psoc *psoc,
-			struct pmo_lphb_tcp_filter_req *ts_lphb_tcp_filter);
-	QDF_STATUS (*send_lphb_upd_params)(
-			struct wlan_objmgr_psoc *psoc,
-			struct pmo_lphb_udp_params *ts_lphb_udp_param);
-	QDF_STATUS (*send_lphb_udp_filter_req)(
-			struct wlan_objmgr_psoc *psoc,
-			struct pmo_lphb_udp_filter_req *ts_lphb_udp_filter);
-	QDF_STATUS (*send_vdev_param_update_req)(
-			struct wlan_objmgr_vdev *vdev,
-			uint32_t param_id, uint32_t param_value);
-	QDF_STATUS (*send_vdev_sta_ps_param_req)(
-			struct wlan_objmgr_vdev *vdev,
-			uint32_t ps_mode, uint32_t value);
-	void (*psoc_update_wow_bus_suspend)(
-			struct wlan_objmgr_psoc *psoc, uint8_t value);
-	int (*psoc_get_host_credits)(
-			struct wlan_objmgr_psoc *psoc);
-	int (*psoc_get_pending_cmnds)(
-			struct wlan_objmgr_psoc *psoc);
-	void (*update_target_suspend_flag)(
-		struct wlan_objmgr_psoc *psoc, uint8_t value);
-	QDF_STATUS (*psoc_send_wow_enable_req)(struct wlan_objmgr_psoc *psoc,
-		struct pmo_wow_cmd_params *param);
-	QDF_STATUS (*psoc_send_supend_req)(struct wlan_objmgr_psoc *psoc,
-		struct pmo_suspend_params *param);
-	void (*psoc_set_runtime_pm_in_progress)(struct wlan_objmgr_psoc *psoc,
-						bool value);
-	bool (*psoc_get_runtime_pm_in_progress)(struct wlan_objmgr_psoc *psoc);
-	QDF_STATUS (*psoc_send_host_wakeup_ind)(struct wlan_objmgr_psoc *psoc);
-	QDF_STATUS (*psoc_send_target_resume_req)(
-			struct wlan_objmgr_psoc *psoc);
-
-};
-#endif
 
 #ifdef CONVERGED_P2P_ENABLE
 
@@ -562,10 +417,15 @@ struct wlan_lmac_if_reg_tx_ops {
 			struct reg_start_11d_scan_req *reg_start_11d_scan_req);
 	QDF_STATUS (*stop_11d_scan)(struct wlan_objmgr_psoc *psoc,
 			struct reg_stop_11d_scan_req *reg_stop_11d_scan_req);
-
-	bool (*is_11d_offloaded)(struct wlan_objmgr_psoc *psoc);
-	bool (*is_regdb_offloaded)(struct wlan_objmgr_psoc *psoc);
 	bool (*is_there_serv_ready_extn)(struct wlan_objmgr_psoc *psoc);
+	QDF_STATUS (*set_user_country_code)(struct wlan_objmgr_psoc *psoc,
+					    uint8_t pdev_id,
+					    struct cc_regdmn_s *rd);
+	QDF_STATUS (*set_country_failed)(struct wlan_objmgr_pdev *pdev);
+	QDF_STATUS (*register_ch_avoid_event_handler)(
+			struct wlan_objmgr_psoc *psoc, void *arg);
+	QDF_STATUS (*unregister_ch_avoid_event_handler)(
+			struct wlan_objmgr_psoc *psoc, void *arg);
 };
 
 /**
@@ -664,9 +524,6 @@ struct wlan_lmac_if_tx_ops {
 	 */
 	 struct wlan_lmac_if_mgmt_txrx_tx_ops mgmt_txrx_tx_ops;
 	 struct wlan_lmac_if_scan_tx_ops scan;
-#ifdef WLAN_PMO_ENABLE
-	 struct wlan_lmac_if_pmo_tx_ops pmo_tx_ops;
-#endif
 #ifdef CONVERGED_P2P_ENABLE
 	struct wlan_lmac_if_p2p_tx_ops p2p;
 #endif
@@ -734,30 +591,19 @@ struct wlan_lmac_if_mgmt_txrx_rx_ops {
 			uint32_t desc_id);
 };
 
-#ifdef WLAN_PMO_ENABLE
-
-/* fwd declarations for pmo rx ops */
-struct pmo_gtk_rsp_params;
-struct pmo_lphb_rsp;
-
-/**
- * struct wlan_lmac_if_pmo_rx_ops - structure of rx function
- *                  pointers for pmo component
- * @gtk_rsp_event: function pointer to handle gtk rsp event from fwr
- * @lphb_rsp_event: function pointer to handle lphb rsp event from fwr
- */
-struct wlan_lmac_if_pmo_rx_ops {
-	QDF_STATUS(*rx_gtk_rsp_event)(struct wlan_objmgr_psoc *psoc,
-			struct pmo_gtk_rsp_params *rsp_param);
-	QDF_STATUS (*lphb_rsp_event)(struct wlan_objmgr_psoc *psoc,
-			struct pmo_lphb_rsp *rsp_param);
-};
-#endif
 struct wlan_lmac_if_reg_rx_ops {
 	QDF_STATUS (*master_list_handler)(struct cur_regulatory_info
 					  *reg_info);
 	QDF_STATUS (*reg_11d_new_cc_handler)(struct wlan_objmgr_psoc *psoc,
 			struct reg_11d_new_country *reg_11d_new_cc);
+	QDF_STATUS (*reg_set_regdb_offloaded)(struct wlan_objmgr_psoc *psoc,
+			bool val);
+	QDF_STATUS (*reg_set_11d_offloaded)(struct wlan_objmgr_psoc *psoc,
+			bool val);
+	QDF_STATUS (*get_dfs_region)(struct wlan_objmgr_pdev *pdev,
+			enum dfs_reg *dfs_reg);
+	QDF_STATUS (*reg_ch_avoid_event_handler)(struct wlan_objmgr_psoc *psoc,
+			struct ch_avoid_ind_type *ch_avoid_ind);
 };
 
 #ifdef CONVERGED_P2P_ENABLE
@@ -949,15 +795,11 @@ struct wlan_lmac_if_nan_rx_ops {
 /**
  * struct wlan_lmac_if_dfs_rx_ops - Function pointers to call dfs functions
  *                                  from lmac/offload.
- * @dfs_reset:                        Reset dfs.
  * @dfs_get_radars:                   Calls init radar table functions.
  * @dfs_process_phyerr:               Process phyerr.
  * @dfs_destroy_object:               Destroys the DFS object.
  * @dfs_radar_enable:                 Enables the radar.
- * @dfs_attach:                       Allocates memory for wlan_dfs members.
- * @dfs_sif_dfs_detach:               DFS detach.
  * @dfs_control:                      Used to process ioctls related to DFS.
- * @dfs_nif_dfs_reset:                DFS reset.
  * @dfs_is_precac_timer_running:      Check whether precac timer is running.
  * @dfs_find_vht80_chan_for_precac:   Find VHT80 channel for precac.
  * @dfs_cancel_precac_timer:          Cancel the precac timer.
@@ -968,9 +810,9 @@ struct wlan_lmac_if_nan_rx_ops {
  * @dfs_set_current_channel:          Set DFS current channel.
  * @dfs_process_radar_ind:            Process radar found indication.
  * @dfs_dfs_cac_complete_ind:         Process cac complete indication.
+ * @dfs_stop:                         Clear dfs timers.
  */
 struct wlan_lmac_if_dfs_rx_ops {
-	QDF_STATUS (*dfs_reset)(struct wlan_objmgr_pdev *pdev);
 	QDF_STATUS (*dfs_get_radars)(struct wlan_objmgr_pdev *pdev);
 	QDF_STATUS (*dfs_process_phyerr)(struct wlan_objmgr_pdev *pdev,
 			void *buf,
@@ -983,8 +825,6 @@ struct wlan_lmac_if_dfs_rx_ops {
 	QDF_STATUS (*dfs_radar_enable)(struct wlan_objmgr_pdev *pdev,
 			int no_cac,
 			uint32_t opmode);
-	QDF_STATUS (*dfs_attach)(struct wlan_objmgr_pdev *pdev);
-	QDF_STATUS (*dfs_sif_dfs_detach)(struct wlan_objmgr_pdev *pdev);
 	QDF_STATUS (*dfs_control)(struct wlan_objmgr_pdev *pdev,
 			u_int id,
 			void *indata,
@@ -992,7 +832,6 @@ struct wlan_lmac_if_dfs_rx_ops {
 			void *outdata,
 			uint32_t *outsize,
 			int *error);
-	QDF_STATUS (*dfs_nif_dfs_reset)(struct wlan_objmgr_pdev *pdev);
 	QDF_STATUS (*dfs_is_precac_timer_running)(struct wlan_objmgr_pdev *pdev,
 			bool *is_precac_timer_running);
 	QDF_STATUS (*dfs_find_vht80_chan_for_precac)(struct wlan_objmgr_pdev *pdev,
@@ -1016,7 +855,7 @@ struct wlan_lmac_if_dfs_rx_ops {
 			int *precac_timeout);
 	QDF_STATUS (*dfs_set_current_channel)(struct wlan_objmgr_pdev *pdev,
 			uint16_t ic_freq,
-			uint32_t ic_flags,
+			uint64_t ic_flags,
 			uint16_t ic_flagext,
 			uint8_t ic_ieee,
 			uint8_t ic_vhtop_ch_freq_seg1,
@@ -1027,6 +866,7 @@ struct wlan_lmac_if_dfs_rx_ops {
 	QDF_STATUS (*dfs_dfs_cac_complete_ind)(struct wlan_objmgr_pdev *pdev,
 			uint32_t vdev_id);
 #endif
+	QDF_STATUS (*dfs_stop)(struct wlan_objmgr_pdev *pdev);
 };
 
 struct wlan_lmac_if_mlme_rx_ops {
@@ -1104,9 +944,6 @@ struct wlan_lmac_if_rx_ops {
 	 */
 	 struct wlan_lmac_if_mgmt_txrx_rx_ops mgmt_txrx_rx_ops;
 	 struct wlan_lmac_if_scan_rx_ops scan;
-#ifdef WLAN_PMO_ENABLE
-	 struct wlan_lmac_if_pmo_rx_ops pmo_rx_ops;
-#endif
 #ifdef CONVERGED_P2P_ENABLE
 	struct wlan_lmac_if_p2p_rx_ops p2p;
 #endif

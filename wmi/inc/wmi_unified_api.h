@@ -34,7 +34,6 @@
 #define _WMI_UNIFIED_API_H_
 
 #include <osdep.h>
-#include "a_types.h"
 #ifdef CONFIG_MCL
 #include "wmi.h"
 #endif
@@ -572,12 +571,9 @@ QDF_STATUS wmi_unified_set_sta_keep_alive_cmd(void *wmi_hdl,
 QDF_STATUS wmi_unified_vdev_set_gtx_cfg_cmd(void *wmi_hdl, uint32_t if_id,
 				  struct wmi_gtx_config *gtx_info);
 
-#ifdef CONFIG_MCL
 QDF_STATUS wmi_unified_process_update_edca_param(void *wmi_hdl,
 		     uint8_t vdev_id,
-		     wmi_wmm_vparams gwmm_param[WMI_MAX_NUM_AC]);
-#endif
-
+		     struct wmi_host_wme_vparams wmm_vparams[WMI_MAX_NUM_AC]);
 
 QDF_STATUS wmi_unified_probe_rsp_tmpl_send_cmd(void *wmi_hdl,
 		   uint8_t vdev_id,
@@ -614,6 +610,19 @@ QDF_STATUS wmi_unified_roam_scan_offload_mode_cmd(void *wmi_hdl,
 				wmi_start_scan_cmd_fixed_param *scan_cmd_fp,
 				struct roam_offload_scan_params *roam_req);
 #endif
+
+/**
+ * wmi_unified_roam_mawc_params_cmd() - configure roaming MAWC parameters
+ * @wmi_hdl: wmi handle
+ * @params: Parameters to be configured
+ *
+ * Pass the MAWC(Motion Aided wireless connectivity) related roaming
+ * parameters from the host to the target
+ *
+ * Return: QDF_STATUS_SUCCESS on success and QDF_STATUS_E_FAILURE for failure
+ */
+QDF_STATUS wmi_unified_roam_mawc_params_cmd(void *wmi_hdl,
+			struct wmi_mawc_roam_params *params);
 
 QDF_STATUS wmi_unified_roam_scan_offload_rssi_thresh_cmd(void *wmi_hdl,
 				struct roam_offload_scan_rssi_params *roam_req);
@@ -664,6 +673,9 @@ QDF_STATUS wmi_unified_pno_stop_cmd(void *wmi_hdl, uint8_t vdev_id);
 QDF_STATUS wmi_unified_pno_start_cmd(void *wmi_hdl,
 		   struct pno_scan_req_params *pno);
 #endif
+
+QDF_STATUS wmi_unified_nlo_mawc_cmd(void *wmi_hdl,
+		struct nlo_mawc_params *params);
 
 QDF_STATUS wmi_unified_set_ric_req_cmd(void *wmi_hdl, void *msg,
 			uint8_t is_add_ts);
@@ -790,8 +802,8 @@ QDF_STATUS wmi_unified_process_ch_avoid_update_cmd(void *wmi_hdl);
 
 QDF_STATUS wmi_unified_send_regdomain_info_to_fw_cmd(void *wmi_hdl,
 				   uint32_t reg_dmn, uint16_t regdmn2G,
-				   uint16_t regdmn5G, int8_t ctl2G,
-				   int8_t ctl5G);
+				   uint16_t regdmn5G, uint8_t ctl2G,
+				   uint8_t ctl5G);
 
 QDF_STATUS wmi_unified_set_tdls_offchan_mode_cmd(void *wmi_hdl,
 			      struct tdls_channel_switch_params *chan_switch_params);
@@ -1148,6 +1160,9 @@ uint32_t wmi_ready_extract_init_status(void *wmi_hdl, void *ev);
 
 QDF_STATUS wmi_ready_extract_mac_addr(void *wmi_hdl,
 				void *ev, uint8_t *macaddr);
+
+wmi_host_mac_addr *wmi_ready_extract_mac_addr_list(void *wmi_hdl, void *ev,
+					      uint8_t *num_mac_addr);
 
 QDF_STATUS wmi_extract_fw_version(void *wmi_hdl,
 				void *ev, struct wmi_host_fw_ver *fw_ver);
@@ -1509,4 +1524,7 @@ void wmi_print_mgmt_event_log(wmi_unified_t wmi, uint32_t count,
 
 QDF_STATUS wmi_unified_send_dbs_scan_sel_params_cmd(void *wmi_hdl,
 				struct wmi_dbs_scan_sel_params *wmi_param);
+
+QDF_STATUS wmi_unified_send_limit_off_chan_cmd(void *wmi_hdl,
+		struct wmi_limit_off_chan_param *wmi_param);
 #endif /* _WMI_UNIFIED_API_H_ */

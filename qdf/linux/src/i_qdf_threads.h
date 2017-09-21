@@ -17,36 +17,13 @@
  */
 
 /**
- * DOC: Implements public API for pmo to interact with target/WMI
+ * DOC: i_qdf_threads
+ * Header file for linux-specific thead abstractions
  */
 
-#include "wlan_pmo_tgt_api.h"
-#include "wlan_pmo_hw_filter_public_struct.h"
-#include "wlan_pmo_obj_mgmt_public_struct.h"
+#ifndef __I_QDF_THREADS_H
+#define __I_QDF_THREADS_H
 
-QDF_STATUS pmo_tgt_conf_hw_filter(struct wlan_objmgr_psoc *psoc,
-				  struct pmo_hw_filter_params *req)
-{
-	QDF_STATUS status;
-	struct wlan_lmac_if_pmo_tx_ops ops;
+typedef struct task_struct __qdf_thread_t;
 
-	PMO_ENTER();
-
-	pmo_debug("Configure hw filter; vdev_id:%u, mode:%d",
-		  req->vdev_id, req->mode);
-
-	ops = GET_PMO_TX_OPS_FROM_PSOC(psoc);
-	if (!ops.send_conf_hw_filter_req) {
-		pmo_err("send_conf_hw_filter_req is null");
-		status = QDF_STATUS_E_NULL_VALUE;
-		goto exit_with_status;
-	}
-
-	status = ops.send_conf_hw_filter_req(psoc, req);
-
-exit_with_status:
-	PMO_EXIT();
-
-	return status;
-}
-
+#endif /* __I_QDF_THREADS_H */
