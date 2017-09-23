@@ -71,11 +71,6 @@ cdp_dump_flow_pool_info(struct cdp_soc_t *soc)
 #define RX_RING_MASK_VAL	0xF
 #endif
 
-unsigned int napi_budget = 128;
-module_param(napi_budget, uint, 0644);
-MODULE_PARM_DESC(napi_budget,
-		"tasklet mode: more than 0xffff , napi budget if <= 0xffff");
-
 bool rx_hash = 1;
 qdf_declare_param(rx_hash, bool);
 
@@ -1154,7 +1149,7 @@ static QDF_STATUS dp_soc_interrupt_attach(void *txrx_soc)
 		ret = hif_register_ext_group(soc->hif_handle,
 				num_irq, irq_id_map, dp_service_srngs,
 				&soc->intr_ctx[i], "dp_intr",
-				napi_budget);
+				HIF_EXEC_NAPI_TYPE, 2);
 
 		if (ret) {
 			QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_ERROR,
@@ -3564,6 +3559,7 @@ static int dp_vdev_set_monitor_mode(struct cdp_vdev *vdev_handle,
 	htt_tlv_filter.ppdu_end_user_stats = 0;
 	htt_tlv_filter.ppdu_end_user_stats_ext = 0;
 	htt_tlv_filter.ppdu_end_status_done = 0;
+	htt_tlv_filter.header_per_msdu = 1;
 	htt_tlv_filter.enable_fp = 1;
 	htt_tlv_filter.enable_md = 0;
 	htt_tlv_filter.enable_mo = 1;
@@ -3584,6 +3580,7 @@ static int dp_vdev_set_monitor_mode(struct cdp_vdev *vdev_handle,
 	htt_tlv_filter.ppdu_end_user_stats = 1;
 	htt_tlv_filter.ppdu_end_user_stats_ext = 1;
 	htt_tlv_filter.ppdu_end_status_done = 1;
+	htt_tlv_filter.header_per_msdu = 0;
 	htt_tlv_filter.enable_fp = 1;
 	htt_tlv_filter.enable_md = 0;
 	htt_tlv_filter.enable_mo = 1;
@@ -3710,7 +3707,8 @@ void dp_aggregate_vdev_stats(struct dp_vdev *vdev)
 			peer->stats.tx.last_ack_rssi;
 	}
 
-	soc->cdp_soc.ol_ops->update_dp_stats(vdev->pdev->osif_pdev,
+	if (soc->cdp_soc.ol_ops->update_dp_stats)
+		soc->cdp_soc.ol_ops->update_dp_stats(vdev->pdev->osif_pdev,
 			&vdev->stats, vdev->vdev_id, UPDATE_VDEV_STATS);
 }
 
