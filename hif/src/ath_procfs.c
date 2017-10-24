@@ -84,7 +84,6 @@ static ssize_t ath_procfs_diag_read(struct file *file, char __user *buf,
 		return -ENOMEM;
 	}
 
-	hif_hdl = get_hif_hdl_from_file(file);
 	HIF_DBG("rd buff 0x%pK cnt %zu offset 0x%x buf 0x%pK",
 		 read_buffer, count, (int)*pos, buf);
 
@@ -150,7 +149,6 @@ static ssize_t ath_procfs_diag_write(struct file *file,
 		return -EFAULT;
 	}
 
-	hif_hdl = get_hif_hdl_from_file(file);
 	HIF_DBG("wr buff 0x%pK buf 0x%pK cnt %zu offset 0x%x value 0x%x",
 		 write_buffer, buf, count,
 		 (int)*pos, *((uint32_t *) write_buffer));
