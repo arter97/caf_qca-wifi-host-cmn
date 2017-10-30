@@ -53,6 +53,20 @@
 #include <linux/ip.h>
 #endif /* FEATURE_TSO */
 
+#ifdef CONFIG_MCL
+#include <qdf_mc_timer.h>
+
+struct qdf_track_timer {
+	qdf_mc_timer_t track_timer;
+	qdf_atomic_t alloc_fail_cnt;
+};
+
+static struct qdf_track_timer alloc_track_timer;
+
+#define QDF_NBUF_ALLOC_EXPIRE_TIMER_MS  5000
+#define QDF_NBUF_ALLOC_EXPIRE_CNT_THRESHOLD  50
+#endif
+
 /* Packet Counter */
 static uint32_t nbuf_tx_mgmt[QDF_NBUF_TX_PKT_STATE_MAX];
 static uint32_t nbuf_tx_data[QDF_NBUF_TX_PKT_STATE_MAX];
@@ -168,6 +182,90 @@ void qdf_nbuf_set_state(qdf_nbuf_t nbuf, uint8_t current_state)
 }
 qdf_export_symbol(qdf_nbuf_set_state);
 
+#ifdef CONFIG_MCL
+/**
+ * __qdf_nbuf_start_replenish_timer - Start alloc fail replenish timer
+ *
+ * This function starts the alloc fail replenish timer.
+ *
+ * Return: void
+ */
+static void __qdf_nbuf_start_replenish_timer(void)
+{
+	qdf_atomic_inc(&alloc_track_timer.alloc_fail_cnt);
+	if (qdf_mc_timer_get_current_state(&alloc_track_timer.track_timer) !=
+	    QDF_TIMER_STATE_RUNNING)
+		qdf_mc_timer_start(&alloc_track_timer.track_timer,
+				   QDF_NBUF_ALLOC_EXPIRE_TIMER_MS);
+}
+
+/**
+ * __qdf_nbuf_stop_replenish_timer - Stop alloc fail replenish timer
+ *
+ * This function stops the alloc fail replenish timer.
+ *
+ * Return: void
+ */
+static void __qdf_nbuf_stop_replenish_timer(void)
+{
+	if (qdf_atomic_read(&alloc_track_timer.alloc_fail_cnt) == 0)
+		return;
+
+	qdf_atomic_set(&alloc_track_timer.alloc_fail_cnt, 0);
+	if (qdf_mc_timer_get_current_state(&alloc_track_timer.track_timer) ==
+	    QDF_TIMER_STATE_RUNNING)
+		qdf_mc_timer_stop(&alloc_track_timer.track_timer);
+}
+
+/**
+ * qdf_replenish_expire_handler - Replenish expire handler
+ *
+ * This function triggers when the alloc fail replenish timer expires.
+ *
+ * Return: void
+ */
+static void qdf_replenish_expire_handler(void *arg)
+{
+	if (qdf_atomic_read(&alloc_track_timer.alloc_fail_cnt) >
+	    QDF_NBUF_ALLOC_EXPIRE_CNT_THRESHOLD) {
+		qdf_print("ERROR: NBUF allocation timer expired Fail count %d",
+			  qdf_atomic_read(&alloc_track_timer.alloc_fail_cnt));
+
+		/* Error handling here */
+	}
+}
+
+/**
+ * __qdf_nbuf_init_replenish_timer - Initialize the alloc replenish timer
+ *
+ * This function initializes the nbuf alloc fail replenish timer.
+ *
+ * Return: void
+ */
+void __qdf_nbuf_init_replenish_timer(void)
+{
+	qdf_mc_timer_init(&alloc_track_timer.track_timer, QDF_TIMER_TYPE_SW,
+			  qdf_replenish_expire_handler, NULL);
+}
+
+/**
+ * __qdf_nbuf_deinit_replenish_timer - Deinitialize the alloc replenish timer
+ *
+ * This function deinitializes the nbuf alloc fail replenish timer.
+ *
+ * Return: void
+ */
+void __qdf_nbuf_deinit_replenish_timer(void)
+{
+	__qdf_nbuf_stop_replenish_timer();
+	qdf_mc_timer_destroy(&alloc_track_timer.track_timer);
+}
+#else
+
+static inline void __qdf_nbuf_start_replenish_timer(void) {}
+static inline void __qdf_nbuf_stop_replenish_timer(void) {}
+#endif
+
 /* globals do not need to be initialized to NULL/0 */
 qdf_nbuf_trace_update_t qdf_trace_update_cb;
 qdf_nbuf_free_t nbuf_free_cb;
@@ -191,15 +289,29 @@ struct sk_buff *__qdf_nbuf_alloc(qdf_device_t osdev, size_t size, int reserve,
 {
 	struct sk_buff *skb;
 	unsigned long offset;
+	int flags = GFP_KERNEL;
 
 	if (align)
 		size += (align - 1);
 
-	skb = dev_alloc_skb(size);
+	if (in_interrupt() || irqs_disabled() || in_atomic())
+		flags = GFP_ATOMIC;
 
-	if (!skb)
+	skb = __netdev_alloc_skb(NULL, size, flags);
+
+	if (skb)
+		goto skb_alloc;
+
+	skb = pld_nbuf_pre_alloc(size);
+
+	if (!skb) {
+		pr_info("ERROR:NBUF alloc failed\n");
+		__qdf_nbuf_start_replenish_timer();
 		return NULL;
+	}
 
+skb_alloc:
+	__qdf_nbuf_stop_replenish_timer();
 	memset(skb->cb, 0x0, sizeof(skb->cb));
 
 	/*
@@ -238,6 +350,9 @@ qdf_export_symbol(__qdf_nbuf_alloc);
  */
 void __qdf_nbuf_free(struct sk_buff *skb)
 {
+	if (pld_nbuf_pre_alloc_free(skb))
+		return;
+
 	if (nbuf_free_cb)
 		nbuf_free_cb(skb);
 	else
@@ -1607,7 +1722,7 @@ void qdf_net_buf_debug_add_node(qdf_nbuf_t net_buf, size_t size,
 	p_node = qdf_net_buf_debug_look_up(net_buf);
 
 	if (p_node) {
-		qdf_print("Double allocation of skb ! Already allocated from %p %s %d current alloc from %p %s %d",
+		qdf_print("Double allocation of skb ! Already allocated from %pK %s %d current alloc from %pK %s %d",
 			  p_node->net_buf, p_node->file_name, p_node->line_num,
 			  net_buf, file_name, line_num);
 		qdf_nbuf_track_free(new_node);
@@ -1677,7 +1792,7 @@ done:
 	spin_unlock_irqrestore(&g_qdf_net_buf_track_lock[i], irq_flag);
 
 	if (!found) {
-		qdf_print("Unallocated buffer ! Double free of net_buf %p ?",
+		qdf_print("Unallocated buffer ! Double free of net_buf %pK ?",
 			  net_buf);
 		QDF_ASSERT(0);
 	} else {
@@ -1925,7 +2040,7 @@ static inline void __qdf_nbuf_fill_tso_cmn_seg_info(
 	curr_seg->seg.total_len = curr_seg->seg.tso_frags[0].length;
 	curr_seg->seg.tso_frags[0].paddr = tso_cmn_info->eit_hdr_dma_map_addr;
 
-	TSO_DEBUG("%s %d eit hdr %p eit_hdr_len %d tcp_seq_num %u tso_info->total_len %u\n",
+	TSO_DEBUG("%s %d eit hdr %pK eit_hdr_len %d tcp_seq_num %u tso_info->total_len %u\n",
 		   __func__, __LINE__, tso_cmn_info->eit_hdr,
 		   tso_cmn_info->eit_hdr_len,
 		   curr_seg->seg.tso_flags.tcp_seq_num,
@@ -2028,7 +2143,7 @@ uint32_t __qdf_nbuf_get_tso_info(qdf_device_t osdev, struct sk_buff *skb,
 				curr_seg->seg.tso_frags[i].paddr =
 								tso_frag_paddr;
 				TSO_DEBUG("%s[%d] frag %d frag len %d "
-					"total_len %u vaddr %p\n",
+					"total_len %u vaddr %pK\n",
 					__func__, __LINE__,
 					i,
 					tso_frag_len,
@@ -2045,6 +2160,18 @@ uint32_t __qdf_nbuf_get_tso_info(qdf_device_t osdev, struct sk_buff *skb,
 					tso_seg_size = tso_seg_size - tso_frag_len;
 					more_tso_frags = 1;
 					i++;
+					if (curr_seg->seg.num_frags ==
+								FRAG_NUM_MAX) {
+						more_tso_frags = 0;
+						/*
+						 * reset i and the tso
+						 * payload size
+						 */
+						i = 1;
+						tso_seg_size =
+							skb_shinfo(skb)->
+								gso_size;
+					}
 				} else {
 					more_tso_frags = 0;
 					/* reset i and the tso payload size */
@@ -2178,17 +2305,91 @@ qdf_export_symbol(__qdf_nbuf_unmap_tso_segment);
  */
 uint32_t __qdf_nbuf_get_tso_num_seg(struct sk_buff *skb)
 {
-	uint32_t gso_size, tmp_len, num_segs = 0;
+	uint32_t tso_seg_size = skb_shinfo(skb)->gso_size;
+	uint32_t remainder, num_segs = 0;
+	uint8_t skb_nr_frags = skb_shinfo(skb)->nr_frags;
+	uint8_t frags_per_tso = 0;
+	uint32_t skb_frag_len = 0;
+	uint32_t eit_hdr_len = (skb_transport_header(skb)
+			 - skb_mac_header(skb)) + tcp_hdrlen(skb);
+	struct skb_frag_struct *frag = NULL;
+	int j = 0;
+	uint32_t temp_num_seg = 0;
 
-	gso_size = skb_shinfo(skb)->gso_size;
-	tmp_len = skb->len - ((skb_transport_header(skb) - skb_mac_header(skb))
-		+ tcp_hdrlen(skb));
-	while (tmp_len > 0) {
-		num_segs++;
-		if (tmp_len > gso_size)
-			tmp_len -= gso_size;
+	/* length of the first chunk of data in the skb minus eit header*/
+	skb_frag_len = skb_headlen(skb) - eit_hdr_len;
+
+	/* Calculate num of segs for skb's first chunk of data*/
+	remainder = skb_frag_len % tso_seg_size;
+	num_segs = skb_frag_len / tso_seg_size;
+	/**
+	 * Remainder non-zero and nr_frags zero implies end of skb data.
+	 * In that case, one more tso seg is required to accommodate
+	 * remaining data, hence num_segs++. If nr_frags is non-zero,
+	 * then remaining data will be accomodated while doing the calculation
+	 * for nr_frags data. Hence, frags_per_tso++.
+	 */
+	if (remainder) {
+		if (!skb_nr_frags)
+			num_segs++;
 		else
-			break;
+			frags_per_tso++;
+	}
+
+	while (skb_nr_frags) {
+		if (j >= skb_shinfo(skb)->nr_frags) {
+			qdf_print("TSO: nr_frags %d j %d\n",
+			skb_shinfo(skb)->nr_frags, j);
+			qdf_assert(0);
+			return 0;
+		}
+		/**
+		 * Calculate the number of tso seg for nr_frags data:
+		 * Get the length of each frag in skb_frag_len, add to
+		 * remainder.Get the number of segments by dividing it to
+		 * tso_seg_size and calculate the new remainder.
+		 * Decrement the nr_frags value and keep
+		 * looping all the skb_fragments.
+		 */
+		frag = &skb_shinfo(skb)->frags[j];
+		skb_frag_len = skb_frag_size(frag);
+		temp_num_seg = num_segs;
+		remainder += skb_frag_len;
+		num_segs += remainder / tso_seg_size;
+		remainder = remainder % tso_seg_size;
+		skb_nr_frags--;
+		if (remainder) {
+			if (num_segs > temp_num_seg)
+				frags_per_tso = 0;
+			/**
+			 * increment the tso per frags whenever remainder is
+			 * positive. If frags_per_tso reaches the (max-1),
+			 * [First frags always have EIT header, therefore max-1]
+			 * increment the num_segs as no more data can be
+			 * accomodated in the curr tso seg. Reset the remainder
+			 * and frags per tso and keep looping.
+			 */
+			frags_per_tso++;
+			if (frags_per_tso == FRAG_NUM_MAX - 1) {
+				num_segs++;
+				frags_per_tso = 0;
+				remainder = 0;
+			}
+			/**
+			 * If this is the last skb frag and still remainder is
+			 * non-zero(frags_per_tso is not reached to the max-1)
+			 * then increment the num_segs to take care of the
+			 * remaining length.
+			 */
+			if (!skb_nr_frags && remainder) {
+				num_segs++;
+				frags_per_tso = 0;
+			}
+		} else {
+			 /* Whenever remainder is 0, reset the frags_per_tso. */
+			frags_per_tso = 0;
+		}
+		j++;
 	}
 	return num_segs;
 }

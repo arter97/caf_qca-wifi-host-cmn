@@ -318,8 +318,12 @@ void ol_txrx_pdev_detach(ol_txrx_pdev_handle pdev);
 ol_txrx_peer_handle
 ol_txrx_peer_attach(ol_txrx_vdev_handle vdev, uint8_t *peer_mac_addr);
 
+#ifdef CONFIG_MCL
 void
+ol_txrx_peer_detach(ol_txrx_peer_handle peer, bool start_peer_unmap_timer);
+#else
 ol_txrx_peer_detach(ol_txrx_peer_handle peer);
+#endif
 
 int
 ol_txrx_set_monitor_mode(ol_txrx_vdev_handle vdev);
@@ -340,6 +344,8 @@ void
 ol_txrx_vdev_register(ol_txrx_vdev_handle vdev,
 			 void *osif_vdev, struct ol_txrx_ops *txrx_ops);
 
+void ol_register_offld_flush_cb(void (gro_flush_cb)(void *),
+				void *(gro_init_cb)(void));
 int
 ol_txrx_mgmt_send(
 	ol_txrx_vdev_handle vdev,

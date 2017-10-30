@@ -92,9 +92,10 @@ typedef void *hif_handle_t;
 #define TARGET_TYPE_AR6320V3    16
 /* For Tufello1.0 target_reg_tbl ID*/
 #define TARGET_TYPE_QCA9377V1   17
+#endif /* CONFIG_WIN */
+
 /* For Adrastea target */
 #define TARGET_TYPE_ADRASTEA     19
-#endif
 
 #ifdef IPA_OFFLOAD
 #define DMA_COHERENT_MASK_IPA_VER_3_AND_ABOVE   37
@@ -146,8 +147,8 @@ struct qca_napi_info {
 	int                  irq;
 	struct qca_napi_stat stats[NR_CPUS];
 	/* will only be present for data rx CE's */
-	void (*lro_flush_cb)(void *arg);
-	void                 *lro_ctx;
+	void (*offld_flush_cb)(void *arg);
+	void                 *offld_ctx;
 };
 
 /**
@@ -708,11 +709,12 @@ int ol_copy_ramdump(struct hif_opaque_softc *hif_ctx);
 void hif_crash_shutdown(struct hif_opaque_softc *hif_ctx);
 void hif_get_hw_info(struct hif_opaque_softc *hif_ctx, u32 *version,
 		     u32 *revision, const char **target_name);
-void hif_lro_flush_cb_register(struct hif_opaque_softc *hif_ctx,
-			       void (lro_flush_handler)(void *arg),
-			       void *(lro_init_handler)(void));
-void hif_lro_flush_cb_deregister(struct hif_opaque_softc *hif_ctx,
-				 void (lro_deinit_cb)(void *arg));
+
+void hif_offld_flush_cb_register(struct hif_opaque_softc *scn,
+			       void (offld_flush_handler)(void *),
+			       void *(offld_init_handler)(void));
+void hif_offld_flush_cb_deregister(struct hif_opaque_softc *hif_ctx,
+				 void (offld_deinit_cb)(void *arg));
 bool hif_needs_bmi(struct hif_opaque_softc *hif_ctx);
 enum qdf_bus_type hif_get_bus_type(struct hif_opaque_softc *hif_hdl);
 struct hif_target_info *hif_get_target_info_handle(struct hif_opaque_softc *
