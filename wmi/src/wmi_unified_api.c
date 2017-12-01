@@ -6287,3 +6287,16 @@ QDF_STATUS wmi_unified_get_rcpi_cmd(void *wmi_hdl,
 
 	return QDF_STATUS_E_FAILURE;
 }
+
+QDF_STATUS
+wmi_unified_send_action_oui_cmd(void *wmi_hdl,
+				struct wmi_action_oui *action_oui)
+{
+	wmi_unified_t wmi_handle = (wmi_unified_t)wmi_hdl;
+
+	if (wmi_handle->ops->send_action_oui_cmd)
+		return wmi_handle->ops->send_action_oui_cmd(wmi_handle,
+							    action_oui);
+
+	return QDF_STATUS_E_FAILURE;
+}
