@@ -1710,7 +1710,7 @@ end:
 
 }
 
-#define WMI_WQ_WD_TIMEOUT (20 * 1000) /* 20s */
+#define WMI_WQ_WD_TIMEOUT (30 * 1000) /* 30s */
 
 static inline void wmi_workqueue_watchdog_warn(uint32_t msg_type_id)
 {
