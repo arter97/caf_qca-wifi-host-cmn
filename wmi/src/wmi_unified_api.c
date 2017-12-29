@@ -2324,6 +2324,28 @@ QDF_STATUS wmi_unified_wow_sta_ra_filter_cmd(void *wmi_hdl,
 #endif /* FEATURE_WLAN_RA_FILTERING */
 
 /**
+ * wmi_unified_wow_timer_pattern_cmd() - set timer pattern tlv, so that firmware
+ * will wake up host after specified time is elapsed
+ * @wmi_handle: wmi handle
+ * @vdev_id: vdev id
+ * @cookie: value to identify reason why host set up wake call.
+ * @time: time in ms
+ *
+ * Return: CDF status
+ */
+QDF_STATUS wmi_unified_wow_timer_pattern_cmd(void *wmi_hdl, uint8_t vdev_id,
+					     uint32_t cookie, uint32_t time)
+{
+	wmi_unified_t wmi_handle = (wmi_unified_t) wmi_hdl;
+
+	if (wmi_handle->ops->send_wow_timer_pattern_cmd)
+		return wmi_handle->ops->send_wow_timer_pattern_cmd(wmi_handle,
+							vdev_id, cookie, time);
+
+	return QDF_STATUS_E_FAILURE;
+}
+
+/**
  * wmi_unified_nat_keepalive_en_cmd() - enable NAT keepalive filter
  * @wmi_handle: wmi handle
  * @vdev_id: vdev id
@@ -2970,29 +2992,6 @@ QDF_STATUS wmi_unified_update_tdls_peer_state_cmd(void *wmi_hdl,
 	if (wmi_handle->ops->send_update_tdls_peer_state_cmd)
 		return wmi_handle->ops->send_update_tdls_peer_state_cmd(wmi_handle,
 			    peerStateParams, ch_mhz);
-
-	return QDF_STATUS_E_FAILURE;
-}
-
-/**
- * wmi_unified_process_fw_mem_dump_cmd() - Function to request fw memory dump from
- * firmware
- * @wmi_handle:         Pointer to wmi handle
- * @mem_dump_req:       Pointer for mem_dump_req
- *
- * This function sends memory dump request to firmware
- *
- * Return: QDF_STATUS_SUCCESS on success and QDF_STATUS_E_FAILURE for failure
- *
- */
-QDF_STATUS wmi_unified_process_fw_mem_dump_cmd(void *wmi_hdl,
-					struct fw_dump_req_param *mem_dump_req)
-{
-	wmi_unified_t wmi_handle = (wmi_unified_t) wmi_hdl;
-
-	if (wmi_handle->ops->send_process_fw_mem_dump_cmd)
-		return wmi_handle->ops->send_process_fw_mem_dump_cmd(wmi_handle,
-			    mem_dump_req);
 
 	return QDF_STATUS_E_FAILURE;
 }
@@ -6407,6 +6406,19 @@ QDF_STATUS wmi_unified_send_dbs_scan_sel_params_cmd(void *wmi_hdl,
 		return wmi_handle->ops->
 			send_dbs_scan_sel_params_cmd(wmi_handle,
 				  dbs_scan_params);
+
+	return QDF_STATUS_E_FAILURE;
+}
+
+QDF_STATUS
+wmi_unified_send_action_oui_cmd(void *wmi_hdl,
+				struct wmi_action_oui *action_oui)
+{
+	wmi_unified_t wmi_handle = (wmi_unified_t)wmi_hdl;
+
+	if (wmi_handle->ops->send_action_oui_cmd)
+		return wmi_handle->ops->send_action_oui_cmd(wmi_handle,
+							    action_oui);
 
 	return QDF_STATUS_E_FAILURE;
 }

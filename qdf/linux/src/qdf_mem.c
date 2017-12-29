@@ -56,36 +56,31 @@
 #include <net/cnss_prealloc.h>
 #endif
 
-#ifdef MEMORY_DEBUG
-#include <qdf_list.h>
+/* Preprocessor Definitions and Constants */
+#define QDF_MEM_MAX_MALLOC (1024 * 1024) /* 1MiB */
+#define QDF_MEM_WARN_THRESHOLD 300 /* ms */
 
-static enum qdf_mem_domain qdf_mem_current_domain;
-static qdf_list_t qdf_mem_domains[QDF_MEM_DOMAIN_MAX_COUNT];
-static qdf_list_t *qdf_mem_list;
-static qdf_spinlock_t qdf_mem_list_lock;
+static enum qdf_mem_domain qdf_mem_current_domain = QDF_MEM_DOMAIN_INIT;
 
-static uint64_t WLAN_MEM_HEADER = 0x6162636465666768;
-static uint64_t WLAN_MEM_TAIL = 0x8081828384858687;
+enum qdf_mem_domain qdf_mem_get_domain(void)
+{
+	return qdf_mem_current_domain;
+}
 
-/**
- * struct s_qdf_mem_struct - memory object to dubug
- * @node:	node to the list
- * @filename:	name of file
- * @line_num:	line number
- * @size:	size of the file
- * @header:	array that contains header
- * @in_use:	memory usage count
- */
-struct s_qdf_mem_struct {
-	qdf_list_node_t node;
-	char *file_name;
-	uint32_t line_num;
-	uint32_t size;
-	uint64_t header;
-	enum qdf_mem_domain domain;
-};
+void qdf_mem_set_domain(enum qdf_mem_domain domain)
+{
+	QDF_BUG(domain >= QDF_MEM_DOMAIN_INIT);
+	if (domain < QDF_MEM_DOMAIN_INIT)
+		return;
 
-static const uint8_t *qdf_mem_domain_name(enum qdf_mem_domain domain)
+	QDF_BUG(domain < QDF_MEM_DOMAIN_MAX_COUNT);
+	if (domain >= QDF_MEM_DOMAIN_MAX_COUNT)
+		return;
+
+	qdf_mem_current_domain = domain;
+}
+
+const uint8_t *qdf_mem_domain_name(enum qdf_mem_domain domain)
 {
 	switch (domain) {
 	case QDF_MEM_DOMAIN_INIT:
@@ -96,10 +91,238 @@ static const uint8_t *qdf_mem_domain_name(enum qdf_mem_domain domain)
 		return "Invalid";
 	}
 }
-#endif /* MEMORY_DEBUG */
 
-/* Preprocessor Definitions and Constants */
-#define QDF_GET_MEMORY_TIME_THRESHOLD 300
+#ifdef MEMORY_DEBUG
+#include <qdf_list.h>
+
+static qdf_list_t qdf_mem_domains[QDF_MEM_DOMAIN_MAX_COUNT];
+static qdf_spinlock_t qdf_mem_list_lock;
+
+static qdf_list_t qdf_mem_dma_domains[QDF_MEM_DOMAIN_MAX_COUNT];
+static qdf_spinlock_t qdf_mem_dma_list_lock;
+
+static uint64_t WLAN_MEM_HEADER = 0x6162636465666768;
+static uint64_t WLAN_MEM_TRAILER = 0x8081828384858687;
+
+static inline qdf_list_t *qdf_mem_list(enum qdf_mem_domain domain)
+{
+	if (domain < QDF_MEM_DOMAIN_INIT || domain >= QDF_MEM_DOMAIN_MAX_COUNT)
+		return NULL;
+
+	return &qdf_mem_domains[domain];
+}
+
+static inline qdf_list_t *qdf_mem_dma_list(enum qdf_mem_domain domain)
+{
+	if (domain < QDF_MEM_DOMAIN_INIT || domain >= QDF_MEM_DOMAIN_MAX_COUNT)
+		return NULL;
+
+	return &qdf_mem_dma_domains[domain];
+}
+
+static inline qdf_list_t *qdf_mem_active_list(void)
+{
+	return &qdf_mem_domains[qdf_mem_get_domain()];
+}
+
+static inline qdf_list_t *qdf_mem_dma_active_list(void)
+{
+	return &qdf_mem_dma_domains[qdf_mem_get_domain()];
+}
+
+/**
+ * struct qdf_mem_header - memory object to dubug
+ * @node: node to the list
+ * @domain: the active memory domain at time of allocation
+ * @freed: flag set during free, used to detect double frees
+ *	Use uint8_t so we can detect corruption
+ * @file: name of the file the allocation was made from
+ * @line: line number of the file the allocation was made from
+ * @size: size of the allocation in bytes
+ * @header: a known value, used to detect out-of-bounds access
+ */
+struct qdf_mem_header {
+	qdf_list_node_t node;
+	enum qdf_mem_domain domain;
+	uint8_t freed;
+	const char *file;
+	uint32_t line;
+	uint32_t size;
+	uint64_t header;
+};
+
+static inline struct qdf_mem_header *qdf_mem_get_header(void *ptr)
+{
+	return (struct qdf_mem_header *)ptr - 1;
+}
+
+static inline struct qdf_mem_header *qdf_mem_dma_get_header(void *ptr,
+							    qdf_size_t size)
+{
+	return (struct qdf_mem_header *) ((uint8_t *) ptr + size);
+}
+
+static inline uint64_t *qdf_mem_get_trailer(struct qdf_mem_header *header)
+{
+	return (uint64_t *)((void *)(header + 1) + header->size);
+}
+
+static inline void *qdf_mem_get_ptr(struct qdf_mem_header *header)
+{
+	return (void *)(header + 1);
+}
+
+/* number of bytes needed for the qdf memory debug information */
+#define QDF_MEM_DEBUG_SIZE \
+	(sizeof(struct qdf_mem_header) + sizeof(WLAN_MEM_TRAILER))
+
+/* number of bytes needed for the qdf dma memory debug information */
+#define QDF_DMA_MEM_DEBUG_SIZE \
+	(sizeof(struct qdf_mem_header))
+
+static void qdf_mem_trailer_init(struct qdf_mem_header *header)
+{
+	QDF_BUG(header);
+	if (!header)
+		return;
+	*qdf_mem_get_trailer(header) = WLAN_MEM_TRAILER;
+}
+
+static void qdf_mem_header_init(struct qdf_mem_header *header, qdf_size_t size,
+				const char *file, uint32_t line)
+{
+	QDF_BUG(header);
+	if (!header)
+		return;
+
+	header->domain = qdf_mem_get_domain();
+	header->freed = false;
+	header->file = file;
+	header->line = line;
+	header->size = size;
+	header->header = WLAN_MEM_HEADER;
+}
+
+enum qdf_mem_validation_bitmap {
+	QDF_MEM_BAD_HEADER = 1 << 0,
+	QDF_MEM_BAD_TRAILER = 1 << 1,
+	QDF_MEM_BAD_SIZE = 1 << 2,
+	QDF_MEM_DOUBLE_FREE = 1 << 3,
+	QDF_MEM_BAD_FREED = 1 << 4,
+	QDF_MEM_BAD_NODE = 1 << 5,
+	QDF_MEM_BAD_DOMAIN = 1 << 6,
+	QDF_MEM_WRONG_DOMAIN = 1 << 7,
+};
+
+/**
+ * qdf_mem_validate_list_node() - validate that the node is in a list
+ * @qdf_node: node to check for being in a list
+ *
+ * Return: true if the node validly linked in an anchored doubly linked list
+ */
+static bool qdf_mem_validate_list_node(qdf_list_node_t *qdf_node)
+{
+	struct list_head *node = qdf_node;
+
+	/*
+	 * if the node is an empty list, it is not tied to an anchor node
+	 * and must have been removed with list_del_init
+	 */
+	if (list_empty(node))
+		return false;
+
+	if (!node->prev || !node->next)
+		return false;
+
+	if (node->prev->next != node || node->next->prev != node)
+		return false;
+
+	return true;
+}
+
+static enum qdf_mem_validation_bitmap
+qdf_mem_trailer_validate(struct qdf_mem_header *header,
+			enum qdf_mem_domain domain)
+{
+	enum qdf_mem_validation_bitmap error_bitmap = 0;
+
+	if (*qdf_mem_get_trailer(header) != WLAN_MEM_TRAILER)
+			error_bitmap |= QDF_MEM_BAD_TRAILER;
+	return error_bitmap;
+}
+
+static enum qdf_mem_validation_bitmap
+qdf_mem_header_validate(struct qdf_mem_header *header,
+			enum qdf_mem_domain domain)
+{
+	enum qdf_mem_validation_bitmap error_bitmap = 0;
+
+	if (header->header != WLAN_MEM_HEADER)
+		error_bitmap |= QDF_MEM_BAD_HEADER;
+
+	if (header->size > QDF_MEM_MAX_MALLOC)
+		error_bitmap |= QDF_MEM_BAD_SIZE;
+
+	if (header->freed == true)
+		error_bitmap |= QDF_MEM_DOUBLE_FREE;
+	else if (header->freed)
+		error_bitmap |= QDF_MEM_BAD_FREED;
+
+	if (!qdf_mem_validate_list_node(&header->node))
+		error_bitmap |= QDF_MEM_BAD_NODE;
+
+	if (header->domain < QDF_MEM_DOMAIN_INIT ||
+	    header->domain >= QDF_MEM_DOMAIN_MAX_COUNT)
+		error_bitmap |= QDF_MEM_BAD_DOMAIN;
+	else if (header->domain != domain)
+		error_bitmap |= QDF_MEM_WRONG_DOMAIN;
+
+	return error_bitmap;
+}
+
+static void
+qdf_mem_header_assert_valid(struct qdf_mem_header *header,
+			    enum qdf_mem_domain current_domain,
+			    enum qdf_mem_validation_bitmap error_bitmap,
+			    const char *file,
+			    uint32_t line)
+{
+	if (!error_bitmap)
+		return;
+
+	if (error_bitmap & QDF_MEM_BAD_HEADER)
+		qdf_err("Corrupted memory header 0x%llx (expected 0x%llx)",
+			header->header, WLAN_MEM_HEADER);
+
+	if (error_bitmap & QDF_MEM_BAD_SIZE)
+		qdf_err("Corrupted memory size %u (expected < %d)",
+			header->size, QDF_MEM_MAX_MALLOC);
+
+	if (error_bitmap & QDF_MEM_BAD_TRAILER)
+		qdf_err("Corrupted memory trailer 0x%llx (expected 0x%llx)",
+			*qdf_mem_get_trailer(header), WLAN_MEM_TRAILER);
+
+	if (error_bitmap & QDF_MEM_DOUBLE_FREE)
+		qdf_err("Memory has previously been freed");
+
+	if (error_bitmap & QDF_MEM_BAD_FREED)
+		qdf_err("Corrupted memory freed flag 0x%x", header->freed);
+
+	if (error_bitmap & QDF_MEM_BAD_NODE)
+		qdf_err("Corrupted memory header node or double free");
+
+	if (error_bitmap & QDF_MEM_BAD_DOMAIN)
+		qdf_err("Corrupted memory domain 0x%x", header->domain);
+
+	if (error_bitmap & QDF_MEM_WRONG_DOMAIN)
+		qdf_err("Memory domain mismatch; found %s(%d), expected %s(%d)",
+			qdf_mem_domain_name(header->domain), header->domain,
+			qdf_mem_domain_name(current_domain), current_domain);
+
+	panic("A fatal memory error was detected @ %s:%d",
+	      kbasename(file), line);
+}
+#endif /* MEMORY_DEBUG */
 
 int qdf_dbg_mask;
 qdf_declare_param(qdf_dbg_mask, int);
@@ -183,15 +406,15 @@ static int seq_printf_printer(void *priv, const char *fmt, ...)
 
 /**
  * struct __qdf_mem_info - memory statistics
- * @file_name:	the file which allocated memory
- * @line_num:	the line at which allocation happened
- * @size:	the size of allocation
- * @count:	how many allocations of same type
+ * @file: the file which allocated memory
+ * @line: the line at which allocation happened
+ * @size: the size of allocation
+ * @count: how many allocations of same type
  *
  */
 struct __qdf_mem_info {
-	char *file_name;
-	uint32_t line_num;
+	const char *file;
+	uint32_t line;
 	uint32_t size;
 	uint32_t count;
 };
@@ -242,8 +465,8 @@ static void qdf_mem_meta_table_print(struct __qdf_mem_info *table,
 		      table[i].count,
 		      table[i].size,
 		      table[i].count * table[i].size,
-		      kbasename(table[i].file_name),
-		      table[i].line_num);
+		      kbasename(table[i].file),
+		      table[i].line);
 	}
 }
 
@@ -255,21 +478,21 @@ static void qdf_mem_meta_table_print(struct __qdf_mem_info *table,
  * Return: true if the table is full after inserting, false otherwise
  */
 static bool qdf_mem_meta_table_insert(struct __qdf_mem_info *table,
-				      struct s_qdf_mem_struct *meta)
+				      struct qdf_mem_header *meta)
 {
 	int i;
 
 	for (i = 0; i < QDF_MEM_STAT_TABLE_SIZE; i++) {
 		if (!table[i].count) {
-			table[i].file_name = meta->file_name;
-			table[i].line_num = meta->line_num;
+			table[i].file = meta->file;
+			table[i].line = meta->line;
 			table[i].size = meta->size;
 			table[i].count = 1;
 			break;
 		}
 
-		if (table[i].file_name == meta->file_name &&
-		    table[i].line_num == meta->line_num &&
+		if (table[i].file == meta->file &&
+		    table[i].line == meta->line &&
 		    table[i].size == meta->size) {
 			table[i].count++;
 			break;
@@ -303,7 +526,7 @@ static void qdf_mem_domain_print(qdf_list_t *domain,
 	qdf_spin_lock(&qdf_mem_list_lock);
 	status = qdf_list_peek_front(domain, &node);
 	while (QDF_IS_STATUS_SUCCESS(status)) {
-		struct s_qdf_mem_struct *meta = (struct s_qdf_mem_struct *)node;
+		struct qdf_mem_header *meta = (struct qdf_mem_header *)node;
 		bool is_full = qdf_mem_meta_table_insert(table, meta);
 
 		qdf_spin_unlock(&qdf_mem_list_lock);
@@ -745,16 +968,18 @@ qdf_export_symbol(qdf_mem_zero_outline);
  */
 static void *qdf_mem_prealloc_get(size_t size)
 {
-	void *mem;
+	void *ptr;
 
 	if (size <= WCNSS_PRE_ALLOC_GET_THRESHOLD)
 		return NULL;
 
-	mem = wcnss_prealloc_get(size);
-	if (mem)
-		memset(mem, 0, size);
+	ptr = wcnss_prealloc_get(size);
+	if (!ptr)
+		return NULL;
 
-	return mem;
+	memset(ptr, 0, size);
+
+	return ptr;
 }
 
 static inline bool qdf_mem_prealloc_put(void *ptr)
@@ -773,6 +998,14 @@ static inline bool qdf_mem_prealloc_put(void *ptr)
 }
 #endif /* CONFIG_WCNSS_MEM_PRE_ALLOC */
 
+static int qdf_mem_malloc_flags(void)
+{
+	if (in_interrupt() || irqs_disabled() || in_atomic())
+		return GFP_ATOMIC;
+
+	return GFP_KERNEL;
+}
+
 /* External Function implementation */
 #ifdef MEMORY_DEBUG
 
@@ -785,79 +1018,46 @@ static void qdf_mem_debug_init(void)
 {
 	int i;
 
-	/* Initalizing the list with maximum size of 60000 */
 	qdf_mem_current_domain = QDF_MEM_DOMAIN_INIT;
-	qdf_mem_list = &qdf_mem_domains[QDF_MEM_DOMAIN_INIT];
+
+	/* mem */
 	for (i = 0; i < QDF_MEM_DOMAIN_MAX_COUNT; ++i)
 		qdf_list_create(&qdf_mem_domains[i], 60000);
 	qdf_spinlock_create(&qdf_mem_list_lock);
+
+	/* dma */
+	for (i = 0; i < QDF_MEM_DOMAIN_MAX_COUNT; ++i)
+		qdf_list_create(&qdf_mem_dma_domains[i], 0);
+	qdf_spinlock_create(&qdf_mem_dma_list_lock);
+
+	/* skb */
 	qdf_net_buf_debug_init();
 }
 
-#ifdef CONFIG_HALT_KMEMLEAK
-/*
- * There are two scenarios for handling memory leaks. We want to either:
- *	1) Crash and not release memory for offline debugging (internal testing)
- *	2) Clean up any leaks and continue (production devices)
- */
-
-static inline void qdf_mem_leak_panic(void)
+static uint32_t
+qdf_mem_domain_check_for_leaks(enum qdf_mem_domain domain, qdf_list_t *mem_list)
 {
-	QDF_BUG(0);
+	if (qdf_list_empty(mem_list))
+		return 0;
+
+	qdf_err("Memory leaks detected in %s domain!",
+		qdf_mem_domain_name(domain));
+	qdf_mem_domain_print(mem_list, qdf_err_printer, NULL);
+
+	return mem_list->count;
 }
 
-static inline void qdf_mem_free_leaked_memory(qdf_list_t *domain) { }
-#else
-static inline void qdf_mem_leak_panic(void) { }
-
-static void qdf_mem_free_leaked_memory(qdf_list_t *domain)
+static void qdf_mem_domain_set_check_for_leaks(qdf_list_t *domains)
 {
-	QDF_STATUS status;
-	qdf_list_node_t *node;
-
-	qdf_spin_lock(&qdf_mem_list_lock);
-	status = qdf_list_remove_front(domain, &node);
-	while (QDF_IS_STATUS_SUCCESS(status)) {
-		kfree(node);
-		status = qdf_list_remove_front(domain, &node);
-	}
-	qdf_spin_unlock(&qdf_mem_list_lock);
-}
-#endif
-
-/**
- * qdf_mem_debug_clean() - display memory leak debug info and free leaked
- * pointers
- *
- * Return: none
- */
-static void qdf_mem_debug_clean(void)
-{
-	bool leaks_detected = false;
+	uint32_t leak_count = 0;
 	int i;
 
 	/* detect and print leaks */
-	for (i = 0; i < QDF_MEM_DOMAIN_MAX_COUNT; ++i) {
-		qdf_list_t *domain = &qdf_mem_domains[i];
+	for (i = 0; i < QDF_MEM_DOMAIN_MAX_COUNT; ++i)
+		leak_count += qdf_mem_domain_check_for_leaks(i, domains + i);
 
-		if (qdf_list_empty(domain))
-			continue;
-
-		leaks_detected = true;
-
-		qdf_err("\nMemory leaks detected in the %s (Id %d) domain!\n\n",
-			qdf_mem_domain_name(i), i);
-		qdf_mem_domain_print(domain, qdf_err_printer, NULL);
-	}
-
-	if (leaks_detected) {
-		/* panic, if enabled */
-		qdf_mem_leak_panic();
-
-		/* if we didn't crash, release the leaked memory */
-		for (i = 0; i < QDF_MEM_DOMAIN_MAX_COUNT; ++i)
-			qdf_mem_free_leaked_memory(&qdf_mem_domains[i]);
-	}
+	if (leak_count)
+		panic("%u fatal memory leaks detected!", leak_count);
 }
 
 /**
@@ -869,132 +1069,70 @@ static void qdf_mem_debug_exit(void)
 {
 	int i;
 
+	/* skb */
 	qdf_net_buf_debug_exit();
-	qdf_mem_debug_clean();
 
+	/* mem */
+	qdf_mem_domain_set_check_for_leaks(qdf_mem_domains);
 	for (i = 0; i < QDF_MEM_DOMAIN_MAX_COUNT; ++i)
 		qdf_list_destroy(&qdf_mem_domains[i]);
-
 	qdf_spinlock_destroy(&qdf_mem_list_lock);
+
+	/* dma */
+	qdf_mem_domain_set_check_for_leaks(qdf_mem_dma_domains);
+	for (i = 0; i < QDF_MEM_DOMAIN_MAX_COUNT; ++i)
+		qdf_list_destroy(&qdf_mem_dma_domains[i]);
+	qdf_spinlock_destroy(&qdf_mem_dma_list_lock);
 }
 
-/**
- * qdf_mem_malloc_debug() - debug version of QDF memory allocation API
- * @size: Number of bytes of memory to allocate.
- * @file_name: File name from which memory allocation is called
- * @line_num: Line number from which memory allocation is called
- *
- * This function will dynamicallly allocate the specified number of bytes of
- * memory and ad it in qdf tracking list to check against memory leaks and
- * corruptions
- *
- * Return:
- * Upon successful allocate, returns a non-NULL pointer to the allocated
- * memory.  If this function is unable to allocate the amount of memory
- * specified (for any reason) it returns %NULL.
- */
-void *qdf_mem_malloc_debug(size_t size, char *file_name, uint32_t line_num)
+void *qdf_mem_malloc_debug(size_t size, const char *file, uint32_t line)
 {
-	struct s_qdf_mem_struct *mem_struct;
-	void *mem_ptr = NULL;
-	uint32_t new_size;
-	int flags = GFP_KERNEL;
-	unsigned long time_before_kzalloc;
+	QDF_STATUS status;
+	qdf_list_t *mem_list = qdf_mem_active_list();
+	struct qdf_mem_header *header;
+	void *ptr;
+	unsigned long start, duration;
 
-	if (size > (1024 * 1024) || size == 0) {
-		QDF_TRACE(QDF_MODULE_ID_QDF, QDF_TRACE_LEVEL_ERROR,
-			  "%s: called with invalid arg; passed in %zu !!!",
-			  __func__, size);
+	if (!size || size > QDF_MEM_MAX_MALLOC) {
+		qdf_err("Cannot malloc %zu bytes @ %s:%d", size, file, line);
 		return NULL;
 	}
 
-	mem_ptr = qdf_mem_prealloc_get(size);
-	if (mem_ptr)
-		return mem_ptr;
+	ptr = qdf_mem_prealloc_get(size);
+	if (ptr)
+		return ptr;
 
-	if (in_interrupt() || irqs_disabled() || in_atomic())
-		flags = GFP_ATOMIC;
+	start = qdf_mc_timer_get_system_time();
+	header = kzalloc(size + QDF_MEM_DEBUG_SIZE, qdf_mem_malloc_flags());
+	duration = qdf_mc_timer_get_system_time() - start;
 
-	new_size = sizeof(*mem_struct) + size + sizeof(WLAN_MEM_TAIL);
-	time_before_kzalloc = qdf_mc_timer_get_system_time();
-	mem_struct = kzalloc(new_size, flags);
-	/**
-	 * If time taken by kmalloc is greater than
-	 * QDF_GET_MEMORY_TIME_THRESHOLD msec
-	 */
-	if (qdf_mc_timer_get_system_time() - time_before_kzalloc >=
-					  QDF_GET_MEMORY_TIME_THRESHOLD)
-			QDF_TRACE(QDF_MODULE_ID_QDF, QDF_TRACE_LEVEL_ERROR,
-				  "%s: kzalloc took %lu msec for size %zu called from %p_s at line %d",
-			 __func__,
-			 qdf_mc_timer_get_system_time() - time_before_kzalloc,
-			 size, (void *)_RET_IP_, line_num);
+	if (duration > QDF_MEM_WARN_THRESHOLD)
+		qdf_warn("Malloc slept; %lums, %zuB @ %s:%d",
+			 duration, size, file, line);
 
-	if (mem_struct) {
-		QDF_STATUS status;
-		uint64_t *trailer;
-
-		mem_ptr = (void *)(mem_struct + 1);
-		trailer = (uint64_t *)(mem_ptr + size);
-
-		mem_struct->file_name = file_name;
-		mem_struct->line_num = line_num;
-		mem_struct->size = size;
-		mem_struct->domain = qdf_mem_current_domain;
-		mem_struct->header = WLAN_MEM_HEADER;
-		*trailer = WLAN_MEM_TAIL;
-
-		qdf_mem_kmalloc_inc(ksize(mem_struct));
-
-		qdf_spin_lock_irqsave(&qdf_mem_list_lock);
-		status = qdf_list_insert_front(qdf_mem_list, &mem_struct->node);
-		qdf_spin_unlock_irqrestore(&qdf_mem_list_lock);
-		if (QDF_IS_STATUS_ERROR(status))
-			qdf_err("Unable to insert into list status %d", status);
+	if (!header) {
+		qdf_warn("Failed to malloc %zuB @ %s:%d", size, file, line);
+		return NULL;
 	}
 
-	return mem_ptr;
+	qdf_mem_header_init(header, size, file, line);
+	qdf_mem_trailer_init(header);
+	ptr = qdf_mem_get_ptr(header);
+
+	qdf_spin_lock_irqsave(&qdf_mem_list_lock);
+	status = qdf_list_insert_front(mem_list, &header->node);
+	qdf_spin_unlock_irqrestore(&qdf_mem_list_lock);
+	if (QDF_IS_STATUS_ERROR(status))
+		qdf_err("Failed to insert memory header; status %d", status);
+
+	qdf_mem_kmalloc_inc(size);
+
+	return ptr;
 }
 qdf_export_symbol(qdf_mem_malloc_debug);
 
 /**
- * qdf_mem_validate_node_for_free() - validate that the node is in a list
- * @qdf_node: node to check for being in a list
- *
- * qdf_node should be a non null value.
- *
- * Return: true if the node validly linked in an anchored doubly linked list
- */
-static bool qdf_mem_validate_node_for_free(qdf_list_node_t *qdf_node)
-{
-	struct list_head *node = qdf_node;
-
-	/*
-	 * if the node is an empty list, it is not tied to an anchor node
-	 * and must have been removed with list_del_init
-	 */
-	if (list_empty(node))
-		return false;
-
-	if (node->prev == NULL)
-		return false;
-
-	if (node->next == NULL)
-		return false;
-
-	if (node->prev->next != node)
-		return false;
-
-	if (node->next->prev != node)
-		return false;
-
-	return true;
-}
-
-
-
-/**
- * qdf_mem_free() - QDF memory free API
+ * qdf_mem_free_debug() - QDF memory free API
  * @ptr: Pointer to the starting address of the memory to be free'd.
  *
  * This function will free the memory pointed to by 'ptr'. It also checks
@@ -1002,147 +1140,53 @@ static bool qdf_mem_validate_node_for_free(qdf_list_node_t *qdf_node)
  *
  * Return: none
  */
-void qdf_mem_free(void *ptr)
+void qdf_mem_free_debug(void *ptr, const char *file, uint32_t line)
 {
-	struct s_qdf_mem_struct *mem_struct;
-	uint64_t *trailer;
+	enum qdf_mem_domain domain = qdf_mem_get_domain();
+	struct qdf_mem_header *header;
+	enum qdf_mem_validation_bitmap error_bitmap;
 
 	/* freeing a null pointer is valid */
-	if (qdf_unlikely(ptr == NULL))
+	if (qdf_unlikely(!ptr))
 		return;
 
 	if (qdf_mem_prealloc_put(ptr))
 		return;
 
-	mem_struct = ((struct s_qdf_mem_struct *)ptr) - 1;
-
-	if (qdf_unlikely(mem_struct == NULL)) {
-		QDF_TRACE(QDF_MODULE_ID_QDF, QDF_TRACE_LEVEL_FATAL,
-			  "%s: null mem_struct", __func__);
-		QDF_BUG(0);
-	}
-
-	trailer = (uint64_t *)(ptr + mem_struct->size);
+	if (qdf_unlikely((qdf_size_t)ptr <= sizeof(*header)))
+		panic("Failed to free invalid memory location %pK", ptr);
 
 	qdf_spin_lock_irqsave(&qdf_mem_list_lock);
-
-	/*
-	 * invalid memory access when checking the header/tailer
-	 * would be a use after free and would indicate a double free
-	 * or invalid pointer passed.
-	 */
-	if (mem_struct->header != WLAN_MEM_HEADER)
-		goto error;
-
-	/*
-	 * invalid memory access while checking validate node
-	 * would indicate corruption in the nodes pointed to
-	 */
-	if (!qdf_mem_validate_node_for_free(&mem_struct->node))
-		goto error;
-
-	/*
-	 * invalid memory access here is unlikely and would imply
-	 * that the size value was corrupted/incorrect.
-	 * It is unlikely that the above checks would pass in a
-	 * double free case.
-	 */
-	if (*trailer != WLAN_MEM_TAIL)
-		goto error;
-
-	/* make sure the memory belongs to the current domain */
-	if (mem_struct->domain != qdf_mem_current_domain) {
-		qdf_spin_unlock_irqrestore(&qdf_mem_list_lock);
-		qdf_err("Memory domain mismatch; found %s, expected %s (%s:%u)",
-			qdf_mem_domain_name(mem_struct->domain),
-			qdf_mem_domain_name(qdf_mem_current_domain),
-			kbasename(mem_struct->file_name),
-			mem_struct->line_num);
-		qdf_mem_leak_panic();
-
-		/* continue de-allocation if we didn't crash */
-		qdf_spin_lock_irqsave(&qdf_mem_list_lock);
+	header = qdf_mem_get_header(ptr);
+	error_bitmap = qdf_mem_header_validate(header, domain);
+	error_bitmap |= qdf_mem_trailer_validate(header, domain);
+	if (!error_bitmap) {
+		header->freed = true;
+		list_del_init(&header->node);
+		qdf_mem_list(header->domain)->count--;
 	}
-
-	/*
-	 * make the node an empty list before doing the spin unlock
-	 * The empty list check will guarantee that we avoid a race condition.
-	 */
-	list_del_init(&mem_struct->node);
-	qdf_mem_list->count--;
-	qdf_mem_kmalloc_dec(ksize(mem_struct));
-	kfree(mem_struct);
 	qdf_spin_unlock_irqrestore(&qdf_mem_list_lock);
 
-	return;
+	qdf_mem_header_assert_valid(header, domain, error_bitmap, file, line);
 
-error:
-	if (!qdf_list_has_node(qdf_mem_list, &mem_struct->node)) {
-		QDF_TRACE(QDF_MODULE_ID_QDF, QDF_TRACE_LEVEL_FATAL,
-			  "%s: Unallocated memory (double free?)",
-			  __func__);
-		qdf_spin_unlock_irqrestore(&qdf_mem_list_lock);
-		QDF_BUG(0);
-	}
-
-	if (mem_struct->header != WLAN_MEM_HEADER) {
-		QDF_TRACE(QDF_MODULE_ID_QDF, QDF_TRACE_LEVEL_FATAL,
-			  "Memory Header is corrupted.");
-		qdf_spin_unlock_irqrestore(&qdf_mem_list_lock);
-		QDF_BUG(0);
-	}
-
-	if (!qdf_mem_validate_node_for_free(&mem_struct->node)) {
-		QDF_TRACE(QDF_MODULE_ID_QDF, QDF_TRACE_LEVEL_FATAL,
-			  "Memory_struct is corrupted.");
-		qdf_spin_unlock_irqrestore(&qdf_mem_list_lock);
-		QDF_BUG(0);
-	}
-
-	if (*trailer != WLAN_MEM_TAIL) {
-		QDF_TRACE(QDF_MODULE_ID_QDF, QDF_TRACE_LEVEL_FATAL,
-			  "Memory Trailer is corrupted. mem_info: Filename %s, line_num %d",
-			  mem_struct->file_name, (int)mem_struct->line_num);
-		qdf_spin_unlock_irqrestore(&qdf_mem_list_lock);
-		QDF_BUG(0);
-	}
-
-	QDF_TRACE(QDF_MODULE_ID_QDF, QDF_TRACE_LEVEL_FATAL,
-		  "%s unexpected error", __func__);
-	qdf_spin_unlock_irqrestore(&qdf_mem_list_lock);
-	QDF_BUG(0);
+	qdf_mem_kmalloc_dec(header->size);
+	kfree(header);
 }
-qdf_export_symbol(qdf_mem_free);
-
-void qdf_mem_set_domain(enum qdf_mem_domain domain)
-{
-	QDF_BUG(domain >= QDF_MEM_DOMAIN_INIT);
-	if (domain < QDF_MEM_DOMAIN_INIT)
-		return;
-
-	QDF_BUG(domain < QDF_MEM_DOMAIN_MAX_COUNT);
-	if (domain >= QDF_MEM_DOMAIN_MAX_COUNT)
-		return;
-
-	qdf_spin_lock(&qdf_mem_list_lock);
-	qdf_mem_current_domain = domain;
-	qdf_mem_list = &qdf_mem_domains[domain];
-	qdf_spin_unlock(&qdf_mem_list_lock);
-}
+qdf_export_symbol(qdf_mem_free_debug);
 
 void qdf_mem_check_for_leaks(void)
 {
-	/* get local copy in case qdf_mem_list changes after empty check */
-	qdf_list_t *domain = qdf_mem_list;
+	enum qdf_mem_domain domain = qdf_mem_current_domain;
+	qdf_list_t *mem_list = &qdf_mem_domains[domain];
+	qdf_list_t *dma_list = &qdf_mem_dma_domains[domain];
+	uint32_t leaks_count = 0;
 
-	if (!qdf_list_empty(domain)) {
-		qdf_err("Memory leaks detected in %s domain!",
-			qdf_mem_domain_name(qdf_mem_current_domain));
-		qdf_mem_domain_print(domain, qdf_err_printer, NULL);
-		qdf_mem_leak_panic();
-	}
+	leaks_count += qdf_mem_domain_check_for_leaks(domain, mem_list);
+	leaks_count += qdf_mem_domain_check_for_leaks(domain, dma_list);
+
+	if (leaks_count)
+		panic("%u fatal memory leaks detected!", leaks_count);
 }
-
 #else
 static void qdf_mem_debug_init(void) {}
 
@@ -1162,23 +1206,19 @@ static void qdf_mem_debug_exit(void) {}
  */
 void *qdf_mem_malloc(size_t size)
 {
-	int flags = GFP_KERNEL;
-	void *mem;
+	void *ptr;
 
-	mem = qdf_mem_prealloc_get(size);
-	if (mem)
-		return mem;
+	ptr = qdf_mem_prealloc_get(size);
+	if (ptr)
+		return ptr;
 
-	if (in_interrupt() || irqs_disabled())
-		flags = GFP_ATOMIC;
+	ptr = kzalloc(size, qdf_mem_malloc_flags());
+	if (!ptr)
+		return NULL;
 
-	mem = kzalloc(size, flags);
+	qdf_mem_kmalloc_inc(ksize(ptr));
 
-	if (mem)
-		qdf_mem_kmalloc_inc(ksize(mem));
-
-	return mem;
-
+	return ptr;
 }
 qdf_export_symbol(qdf_mem_malloc);
 
@@ -1461,7 +1501,7 @@ qdf_export_symbol(qdf_mem_move);
 
 #if defined(A_SIMOS_DEVHOST) || defined(HIF_SDIO) || defined(HIF_USB)
 /**
- * qdf_mem_alloc_consistent() - allocates consistent qdf memory
+ * qdf_mem_dma_alloc() - allocates memory for dma
  * @osdev: OS device handle
  * @dev: Pointer to device handle
  * @size: Size to be allocated
@@ -1469,8 +1509,9 @@ qdf_export_symbol(qdf_mem_move);
  *
  * Return: pointer of allocated memory or null if memory alloc fails
  */
-void *qdf_mem_alloc_consistent(qdf_device_t osdev, void *dev, qdf_size_t size,
-			       qdf_dma_addr_t *phy_addr)
+static inline void *qdf_mem_dma_alloc(qdf_device_t osdev, void *dev,
+				      qdf_size_t size,
+				      qdf_dma_addr_t *phy_addr)
 {
 	void *vaddr;
 
@@ -1480,65 +1521,130 @@ void *qdf_mem_alloc_consistent(qdf_device_t osdev, void *dev, qdf_size_t size,
 	 * of different size" warning on some platforms
 	 */
 	BUILD_BUG_ON(sizeof(*phy_addr) < sizeof(vaddr));
-	if (vaddr)
-		qdf_mem_dma_inc(ksize(vaddr));
 	return vaddr;
 }
 
-#else
-void *qdf_mem_alloc_consistent(qdf_device_t osdev, void *dev, qdf_size_t size,
-			       qdf_dma_addr_t *phy_addr)
+inline void
+qdf_mem_dma_free(void *dev, qdf_size_t size, void *vaddr, qdf_dma_addr_t paddr)
 {
-	int flags = GFP_KERNEL;
-	void *alloc_mem = NULL;
-
-	if (in_interrupt() || irqs_disabled() || in_atomic())
-		flags = GFP_ATOMIC;
-
-	alloc_mem = dma_alloc_coherent(dev, size, phy_addr, flags);
-	if (alloc_mem == NULL)
-		qdf_print("%s Warning: unable to alloc consistent memory of size %zu!\n",
-			__func__, size);
-	qdf_mem_dma_inc(size);
-	return alloc_mem;
-}
-
-#endif
-qdf_export_symbol(qdf_mem_alloc_consistent);
-
-#if defined(A_SIMOS_DEVHOST) ||  defined(HIF_SDIO) || defined(HIF_USB)
-/**
- * qdf_mem_free_consistent() - free consistent qdf memory
- * @osdev: OS device handle
- * @size: Size to be allocated
- * @vaddr: virtual address
- * @phy_addr: Physical address
- * @mctx: Pointer to DMA context
- *
- * Return: none
- */
-inline void qdf_mem_free_consistent(qdf_device_t osdev, void *dev,
-				    qdf_size_t size, void *vaddr,
-				    qdf_dma_addr_t phy_addr,
-				    qdf_dma_context_t memctx)
-{
-	qdf_mem_dma_dec(ksize(vaddr));
 	qdf_mem_free(vaddr);
 	return;
 }
-
 #else
-inline void qdf_mem_free_consistent(qdf_device_t osdev, void *dev,
-				    qdf_size_t size, void *vaddr,
-				    qdf_dma_addr_t phy_addr,
-				    qdf_dma_context_t memctx)
+static inline void *qdf_mem_dma_alloc(qdf_device_t osdev, void *dev,
+					 qdf_size_t size, qdf_dma_addr_t *paddr)
 {
-	dma_free_coherent(dev, size, vaddr, phy_addr);
-	qdf_mem_dma_dec(size);
+	return dma_alloc_coherent(dev, size, paddr, qdf_mem_malloc_flags());
 }
 
+inline void
+qdf_mem_dma_free(void *dev, qdf_size_t size, void *vaddr, qdf_dma_addr_t paddr)
+{
+	dma_free_coherent(dev, size, vaddr, paddr);
+}
 #endif
-qdf_export_symbol(qdf_mem_free_consistent);
+
+#ifdef MEMORY_DEBUG
+void *qdf_mem_alloc_consistent_debug(qdf_device_t osdev, void *dev,
+				 qdf_size_t size, qdf_dma_addr_t *paddr,
+				 const char *file, uint32_t line)
+{
+	QDF_STATUS status;
+	qdf_list_t *mem_list = qdf_mem_dma_active_list();
+	struct qdf_mem_header *header;
+	void *vaddr;
+
+	if (!size || size > QDF_MEM_MAX_MALLOC) {
+		qdf_err("Cannot malloc %zu bytes @ %s:%d", size, file, line);
+		return NULL;
+	}
+
+	vaddr = qdf_mem_dma_alloc(osdev, dev, size + QDF_DMA_MEM_DEBUG_SIZE,
+				   paddr);
+
+	if (!vaddr) {
+		qdf_warn("Failed to malloc %zuB @ %s:%d", size, file, line);
+		return NULL;
+	}
+
+	header = qdf_mem_dma_get_header(vaddr, size);
+	/* For DMA buffers we only add trailers, this function will init
+	 * the header structure at the tail
+	 * Prefix the header into DMA buffer causes SMMU faults, so
+	 * do not prefix header into the DMA buffers
+	 */
+	qdf_mem_header_init(header, size, file, line);
+
+	qdf_spin_lock_irqsave(&qdf_mem_dma_list_lock);
+	status = qdf_list_insert_front(mem_list, &header->node);
+	qdf_spin_unlock_irqrestore(&qdf_mem_dma_list_lock);
+	if (QDF_IS_STATUS_ERROR(status))
+		qdf_err("Failed to insert memory header; status %d", status);
+
+	qdf_mem_dma_inc(size);
+
+	return vaddr;
+}
+
+void qdf_mem_free_consistent_debug(qdf_device_t osdev, void *dev,
+			       qdf_size_t size, void *vaddr,
+			       qdf_dma_addr_t paddr, qdf_dma_context_t memctx,
+			       const char *file, uint32_t line)
+{
+	enum qdf_mem_domain domain = qdf_mem_get_domain();
+	struct qdf_mem_header *header;
+	enum qdf_mem_validation_bitmap error_bitmap;
+
+	/* freeing a null pointer is valid */
+	if (qdf_unlikely(!vaddr))
+		return;
+
+	qdf_spin_lock_irqsave(&qdf_mem_dma_list_lock);
+	/* For DMA buffers we only add trailers, this function will retrive
+	 * the header structure at the tail
+	 * Prefix the header into DMA buffer causes SMMU faults, so
+	 * do not prefix header into the DMA buffers
+	 */
+	header = qdf_mem_dma_get_header(vaddr, size);
+	error_bitmap = qdf_mem_header_validate(header, domain);
+	if (!error_bitmap) {
+		header->freed = true;
+		list_del_init(&header->node);
+		qdf_mem_dma_list(header->domain)->count--;
+	}
+	qdf_spin_unlock_irqrestore(&qdf_mem_dma_list_lock);
+
+	qdf_mem_header_assert_valid(header, domain, error_bitmap, file, line);
+
+	qdf_mem_dma_dec(header->size);
+	qdf_mem_dma_free(dev, size + QDF_DMA_MEM_DEBUG_SIZE, vaddr, paddr);
+}
+
+#else
+
+void *qdf_mem_alloc_consistent_debug(qdf_device_t osdev, void *dev,
+				 qdf_size_t size, qdf_dma_addr_t *paddr,
+				 const char *file, uint32_t line)
+{
+	void *vaddr = qdf_mem_dma_alloc(osdev, dev, size, paddr);
+
+	if (vaddr)
+		qdf_mem_dma_inc(size);
+
+	return vaddr;
+}
+
+void qdf_mem_free_consistent_debug(qdf_device_t osdev, void *dev,
+			       qdf_size_t size, void *vaddr,
+			       qdf_dma_addr_t paddr, qdf_dma_context_t memctx,
+			       const char *file, uint32_t line)
+{
+	qdf_mem_dma_dec(size);
+	qdf_mem_dma_free(dev, size, vaddr, paddr);
+}
+#endif /* MEMORY_DEBUG */
+qdf_export_symbol(qdf_mem_alloc_consistent_debug);
+qdf_export_symbol(qdf_mem_free_consistent_debug);
 
 /**
  * qdf_mem_dma_sync_single_for_device() - assign memory to device

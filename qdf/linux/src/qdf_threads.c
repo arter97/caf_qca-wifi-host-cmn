@@ -45,6 +45,7 @@
 #include <linux/interrupt.h>
 #include <linux/export.h>
 #include <linux/stacktrace.h>
+#include <qdf_defer.h>
 
 /* Function declarations and documenation */
 
@@ -112,8 +113,8 @@ void qdf_busy_wait(uint32_t us_interval)
 }
 qdf_export_symbol(qdf_busy_wait);
 
-#if defined(CONFIG_MCL) && (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 9, 0))
-/* save_stack_trace_tsk is not generally exported for arm architectures */
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 14, 0) || \
+	defined(BACKPORTED_EXPORT_SAVE_STACK_TRACE_TSK_ARM)
 #define QDF_PRINT_TRACE_COUNT 32
 void qdf_print_thread_trace(qdf_thread_t *thread)
 {
@@ -132,6 +133,11 @@ void qdf_print_thread_trace(qdf_thread_t *thread)
 }
 #else
 void qdf_print_thread_trace(qdf_thread_t *thread) { }
-#endif /* CONFIG_MCL */
+#endif /* LINUX_VERSION_CODE >= KERNEL_VERSION(4, 14, 0) */
 qdf_export_symbol(qdf_print_thread_trace);
 
+qdf_thread_t *qdf_get_current_task(void)
+{
+	return current;
+}
+EXPORT_SYMBOL(qdf_get_current_task);
