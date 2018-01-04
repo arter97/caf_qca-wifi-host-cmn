@@ -1726,6 +1726,10 @@ static void wmi_workqueue_watchdog_bite(void *arg)
 
 	wmi_workqueue_watchdog_warn(info->wd_msg_type_id);
 	qdf_print_thread_trace(info->task);
+
+	QDF_TRACE(QDF_MODULE_ID_QDF, QDF_TRACE_LEVEL_ERROR,
+		  "%s: Going down for WMI WQ Watchdog Bite!", __func__);
+	QDF_BUG(0);
 }
 #else
 static inline void wmi_workqueue_watchdog_bite(void *arg)
