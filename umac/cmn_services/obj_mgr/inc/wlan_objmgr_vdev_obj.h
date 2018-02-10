@@ -26,6 +26,7 @@
 #include "qdf_atomic.h"
 #include "qdf_list.h"
 #include "qdf_lock.h"
+#include "qdf_event.h"
 #include "qdf_types.h"
 #include "wlan_cmn.h"
 #include "wlan_objmgr_cmn.h"
@@ -368,6 +369,7 @@ struct wlan_objmgr_vdev_objmgr {
  * @obj_state:      VDEV object state
  * @dp_handle:      DP module handle
  * @vdev_lock:      VDEV lock
+ * @peer_delete_completion: VDEV peer delete completion event
  */
 struct wlan_objmgr_vdev {
 	qdf_list_node_t vdev_node;
@@ -379,6 +381,7 @@ struct wlan_objmgr_vdev {
 	WLAN_OBJ_STATE obj_state;
 	void *dp_handle;
 	qdf_spinlock_t vdev_lock;
+	qdf_event_t peer_delete_completion;
 };
 
 /**

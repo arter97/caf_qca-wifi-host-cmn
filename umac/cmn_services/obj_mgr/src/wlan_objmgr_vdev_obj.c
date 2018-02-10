@@ -80,6 +80,9 @@ static QDF_STATUS wlan_objmgr_vdev_obj_free(struct wlan_objmgr_vdev *vdev)
 		obj_mgr_err("vdev is NULL");
 		return QDF_STATUS_E_FAILURE;
 	}
+
+	qdf_event_destroy(&vdev->peer_delete_completion);
+
 	/* if PDEV is NULL, return */
 	pdev = wlan_vdev_get_pdev(vdev);
 	if (pdev == NULL) {
@@ -200,6 +203,8 @@ struct wlan_objmgr_vdev *wlan_objmgr_vdev_obj_create(
 	vdev->vdev_nif.osdev = params->osifp;
 	/* peer count to 0 */
 	vdev->vdev_objmgr.wlan_peer_count = 0;
+	qdf_event_create(&vdev->peer_delete_completion);
+	qdf_event_set(&vdev->peer_delete_completion);
 	qdf_atomic_init(&vdev->vdev_objmgr.ref_cnt);
 	vdev->vdev_objmgr.print_cnt = 0;
 	wlan_objmgr_vdev_get_ref(vdev, WLAN_OBJMGR_ID);
@@ -647,6 +652,10 @@ QDF_STATUS wlan_objmgr_vdev_peer_attach(struct wlan_objmgr_vdev *vdev,
 		wlan_vdev_obj_unlock(vdev);
 		return QDF_STATUS_E_FAILURE;
 	}
+
+	if (objmgr->wlan_peer_count == 0)
+		qdf_event_reset(&vdev->peer_delete_completion);
+
 	/* Add peer to vdev's peer list */
 	wlan_obj_vdev_peerlist_add_tail(&objmgr->wlan_peer_list, peer);
 	objmgr->wlan_peer_count++;
@@ -721,6 +730,8 @@ QDF_STATUS wlan_objmgr_vdev_peer_detach(struct wlan_objmgr_vdev *vdev,
 	}
 	/* decrement peer count */
 	objmgr->wlan_peer_count--;
+	if (objmgr->wlan_peer_count == 0)
+		qdf_event_set(&vdev->peer_delete_completion);
 	wlan_pdev_decr_peer_count(wlan_vdev_get_pdev(vdev));
 	wlan_vdev_obj_unlock(vdev);
 	/* decrement vdev ref count after peer released its reference */
