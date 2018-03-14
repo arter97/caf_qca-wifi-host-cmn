@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2018 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2014-2019 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -58,14 +58,26 @@
 #define QDF_TRACE qdf_trace_msg
 #define QDF_VTRACE qdf_vtrace_msg
 #define QDF_TRACE_HEX_DUMP qdf_trace_hex_dump
-#define QDF_TRACE_RATE_LIMITED(rate, module, level, format, ...)\
+#define QDF_MAX_LOGS_PER_SEC 2
+/**
+ * QDF_TRACE_RATE_LIMITED() - rate limited version of QDF_TRACE
+ * @params: parameters to pass through to QDF_TRACE
+ *
+ * This API prevents logging a message more than QDF_MAX_LOGS_PER_SEC times per
+ * second. This means any subsequent calls to this API from the same location
+ * within 1/QDF_MAX_LOGS_PER_SEC seconds will be dropped.
+ *
+ * Return: None
+ */
+#define QDF_TRACE_RATE_LIMITED(params...)\
 	do {\
-		static int rate_limit;\
-		rate_limit++;\
-		if (rate)\
-			if (0 == (rate_limit % rate))\
-				qdf_trace_msg(module, level, format,\
-						##__VA_ARGS__);\
+		static ulong __last_ticks;\
+		ulong __ticks = jiffies;\
+		if (time_after(__ticks,\
+			       __last_ticks + HZ / QDF_MAX_LOGS_PER_SEC)) {\
+			QDF_TRACE(params);\
+			__last_ticks = __ticks;\
+		} \
 	} while (0)
 #else
 #define QDF_TRACE(arg ...)
@@ -92,10 +104,8 @@
 #define __QDF_TRACE_FL(log_level, module_id, format, args...) \
 	QDF_TRACE(module_id, log_level, FL(format), ## args)
 
-#define QDF_MAX_LOGS_PER_SEC 2
 #define __QDF_TRACE_RL(log_level, module_id, format, args...) \
-	QDF_TRACE_RATE_LIMITED(QDF_MAX_LOGS_PER_SEC, module_id, log_level, \
-			       FL(format), ## args)
+	QDF_TRACE_RATE_LIMITED(module_id, log_level, FL(format), ## args)
 
 static inline void __qdf_trace_noop(QDF_MODULE_ID module, char *format, ...) { }
 
