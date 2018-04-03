@@ -870,6 +870,7 @@ struct policy_mgr_cdp_cbacks {
 struct policy_mgr_dp_cbacks {
 	void (*hdd_disable_lro_in_concurrency)(bool);
 	void (*hdd_set_rx_mode_rps_cb)(bool);
+	void (*hdd_ipa_set_mcc_mode_cb)(bool);
 };
 
 /**
