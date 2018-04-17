@@ -1388,4 +1388,27 @@ QDF_STATUS
 wmi_unified_send_action_oui_cmd(void *wmi_hdl,
 				struct wmi_action_oui *action_oui);
 
+/**
+ * wmi_unified_offload_11k_cmd() - send 11k offload command
+ * @wmi_hdl: wmi handle
+ * @params: 11k offload params
+ *
+ * This function passes the 11k offload command params to FW
+ *
+ * Return: QDF_STATUS_SUCCESS on success and QDF_STATUS_E_FAILURE for failure
+ */
+QDF_STATUS wmi_unified_offload_11k_cmd(void *wmi_hdl,
+				struct wmi_11k_offload_params *params);
+
+/**
+ * wmi_unified_invoke_neighbor_report_cmd() - send invoke neighbor report cmd
+ * @wmi_hdl: wmi handle
+ * @params: invoke neighbor report params
+ *
+ * This function passes the invoke neighbor report command to fw
+ *
+ * Return: QDF_STATUS_SUCCESS on success and QDF_STATUS_E_FAILURE for failure
+ */
+QDF_STATUS wmi_unified_invoke_neighbor_report_cmd(void *wmi_hdl,
+			struct wmi_invoke_neighbor_report_params *params);
 #endif /* _WMI_UNIFIED_API_H_ */
