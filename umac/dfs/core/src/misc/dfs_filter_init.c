@@ -68,6 +68,49 @@ static void dfs_main_task_timer_init(struct wlan_dfs *dfs)
 			QDF_TIMER_TYPE_WAKE_APPS);
 }
 
+#ifdef DFS_FALSE_DETECT_DUR_CHECK
+/**
+ * dfs_sidx_pulses_init() - Initialize dfs sidx pulses.
+ * @dfs: Pointer to wlan_dfs structure.
+ *
+ * Return: 0 if sidx pulses is allocated successfully, otherwise 1.
+ */
+static int dfs_sidx_pulses_init(struct wlan_dfs *dfs)
+{
+	dfs->sidx_pulses = (struct dfs_sidx_pulseline *)qdf_mem_malloc(
+				sizeof(struct dfs_sidx_pulseline));
+	if (dfs->sidx_pulses) {
+		dfs->sidx_pulses->pl_lastelem = DFS_SIDX_MASK;
+		return 0;
+	}
+
+	return 1;
+}
+
+/**
+ * dfs_sidx_pulses_init() - Deinitialize dfs sidx pulses.
+ * @dfs: Pointer to wlan_dfs structure.
+ *
+ * Return: void
+ */
+static void dfs_sidx_pulses_deinit(struct wlan_dfs *dfs)
+{
+	if (dfs->sidx_pulses) {
+		qdf_mem_free(dfs->sidx_pulses);
+		dfs->sidx_pulses = NULL;
+	}
+}
+#else
+static int dfs_sidx_pulses_init(struct wlan_dfs *dfs)
+{
+	return 0;
+}
+
+static void dfs_sidx_pulses_deinit(struct wlan_dfs *dfs)
+{
+}
+#endif
+
 int dfs_main_attach(struct wlan_dfs *dfs)
 {
 	int i, n;
@@ -128,8 +171,16 @@ int dfs_main_attach(struct wlan_dfs *dfs)
 		dfs_alert(dfs, WLAN_DEBUG_DFS_ALWAYS, "Pulse buffer allocation failed");
 		return 1;
 	}
-
 	dfs->pulses->pl_lastelem = DFS_MAX_PULSE_BUFFER_MASK;
+
+	if (dfs_sidx_pulses_init(dfs)) {
+		qdf_mem_free(dfs->events);
+		dfs->events = NULL;
+		qdf_mem_free(dfs->pulses);
+		dfs->pulses = NULL;
+		dfs_alert(dfs, WLAN_DEBUG_DFS_ALWAYS, "sidx pulse buffer allocation failed");
+		return 1;
+	}
 
 	/* Allocate memory for radar filters. */
 	for (n = 0; n < DFS_MAX_RADAR_TYPES; n++) {
@@ -201,6 +252,7 @@ bad1:
 			dfs->dfs_radarf[n] = NULL;
 		}
 	}
+	dfs_sidx_pulses_deinit(dfs);
 	if (dfs->pulses) {
 		qdf_mem_free(dfs->pulses);
 		dfs->pulses = NULL;
@@ -244,6 +296,8 @@ void dfs_main_detach(struct wlan_dfs *dfs)
 
 	dfs_reset_radarq(dfs);
 	dfs_reset_alldelaylines(dfs);
+
+	dfs_sidx_pulses_deinit(dfs);
 
 	if (dfs->pulses != NULL) {
 		qdf_mem_free(dfs->pulses);
