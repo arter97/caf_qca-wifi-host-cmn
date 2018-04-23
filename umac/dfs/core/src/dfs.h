@@ -208,6 +208,15 @@
 #define DFS_MAX_DL_SIZE                64
 #define DFS_MAX_DL_MASK                0x3F
 
+/*Max number of pulses kept in buffer*/
+#define DFS_SIDX_SIZE                  0x20
+#define DFS_SIDX_MASK                  0x1f
+#define DFS_SIDX_TIME_WINDOW           20000 /* time window in microseconds */
+/* Max difference between highest and lowest duration in microseconds */
+#define DFS_SIDX_MAX_DIFF_DUR          10
+#define DFS_SPECIAL_SIDX1              1
+#define DFS_SPECIAL_SIDX2              2
+
 #define DFS_NOL_TIME DFS_NOL_TIMEOUT_US
 /* 30 minutes in usecs */
 
@@ -376,6 +385,20 @@ struct dfs_pulseparams {
 	int8_t   p_delta_peak;
 	int16_t  p_psidx_diff;
 	uint32_t p_seq_num;
+} qdf_packed;
+
+/**
+ * struct dfs_sidx_pulseline - Pulseline structure of special sidx.
+ * @pl_elems[]:     array of pulses in delay line.
+ * @pl_firstelem:   Index of the first element.
+ * @pl_lastelem:    Index of the last element.
+ * @pl_numelems:    Number of elements in the delay line.
+ */
+struct dfs_sidx_pulseline {
+	struct dfs_pulseparams pl_elems[DFS_SIDX_SIZE];
+	u_int8_t  pl_firstelem;
+	u_int8_t  pl_lastelem;
+	u_int8_t  pl_numelems;
 } qdf_packed;
 
 /**
@@ -866,6 +889,7 @@ struct dfs_event_log {
  * @dfs_defaultparams:               Default phy params per radar state.
  * @wlan_dfs_stats:                  DFS related stats.
  * @pulses:                          Pulse history.
+ * @sidx_pulses:                     Pulse history of special sidx.
  * @events:                          Events structure.
  * @wlan_radar_tasksched:            Radar task is scheduled.
  * @wlan_dfswait:                    Waiting on channel for radar detect.
@@ -965,6 +989,7 @@ struct wlan_dfs {
 	struct wlan_dfs_phyerr_param dfs_defaultparams;
 	struct dfs_stats      wlan_dfs_stats;
 	struct dfs_pulseline  *pulses;
+	struct dfs_sidx_pulseline *sidx_pulses;
 	struct dfs_event      *events;
 
 	uint32_t       wlan_radar_tasksched:1,
