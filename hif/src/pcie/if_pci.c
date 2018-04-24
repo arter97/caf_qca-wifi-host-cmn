@@ -2731,6 +2731,59 @@ static int hif_mark_wake_irq_wakeable(struct hif_softc *scn)
 	return 0;
 }
 
+static void hif_pci_disable_interrupt(struct hif_softc *scn)
+{
+	uint32_t target_type = scn->target_info.target_type;
+
+	/* Disable PCIe interrupts */
+	if ((target_type == TARGET_TYPE_IPQ4019) ||
+	    (target_type == TARGET_TYPE_AR900B)  ||
+	    (target_type == TARGET_TYPE_QCA9984) ||
+	    (target_type == TARGET_TYPE_AR9888) ||
+	    (target_type == TARGET_TYPE_QCA9888) ||
+	    (target_type == TARGET_TYPE_AR6320V1) ||
+	    (target_type == TARGET_TYPE_AR6320V2) ||
+	    (target_type == TARGET_TYPE_AR6320V3)) {
+		hif_write32_mb(scn->mem + (SOC_CORE_BASE_ADDRESS |
+					   PCIE_INTR_ENABLE_ADDRESS),
+			       0);
+		hif_write32_mb(scn->mem +
+			       (SOC_CORE_BASE_ADDRESS | PCIE_INTR_CLR_ADDRESS),
+			       PCIE_INTR_FIRMWARE_MASK | PCIE_INTR_CE_MASK_ALL);
+		/*
+		 * This extra read transaction is required to flush the posted
+		 * write buffer
+		 */
+		hif_read32_mb(scn->mem + (SOC_CORE_BASE_ADDRESS |
+					  PCIE_INTR_ENABLE_ADDRESS));
+	}
+}
+
+static void hif_pci_enable_interrupt(struct hif_softc *scn)
+{
+	uint32_t target_type = scn->target_info.target_type;
+
+	/* Enable Legacy PCI line interrupts */
+	if ((target_type == TARGET_TYPE_IPQ4019) ||
+	    (target_type == TARGET_TYPE_AR900B)  ||
+	    (target_type == TARGET_TYPE_QCA9984) ||
+	    (target_type == TARGET_TYPE_AR9888) ||
+	    (target_type == TARGET_TYPE_QCA9888) ||
+	    (target_type == TARGET_TYPE_AR6320V1) ||
+	    (target_type == TARGET_TYPE_AR6320V2) ||
+	    (target_type == TARGET_TYPE_AR6320V3)) {
+		hif_write32_mb(scn->mem + (SOC_CORE_BASE_ADDRESS |
+					   PCIE_INTR_ENABLE_ADDRESS),
+			       PCIE_INTR_FIRMWARE_MASK | PCIE_INTR_CE_MASK_ALL);
+		/*
+		 * This extra read transaction is required to flush the posted
+		 * write buffer
+		 */
+		hif_read32_mb(scn->mem + (SOC_CORE_BASE_ADDRESS |
+					  PCIE_INTR_ENABLE_ADDRESS));
+	}
+}
+
 /**
  * hif_pci_bus_suspend(): prepare hif for suspend
  *
@@ -2740,11 +2793,30 @@ static int hif_mark_wake_irq_wakeable(struct hif_softc *scn)
  */
 int hif_pci_bus_suspend(struct hif_softc *scn)
 {
-	if (hif_can_suspend_link(GET_HIF_OPAQUE_HDL(scn)))
-		return 0;
+	int ret = 0;
+
+	hif_pci_disable_interrupt(scn);
+
+	if (hif_drain_tasklets(scn) != 0) {
+		ret = -EBUSY;
+		goto reenable_irq;
+	}
+
+	/* Stop the HIF Sleep Timer */
+	hif_cancel_deferred_target_sleep(scn);
 
 	/* pci link is staying up; enable wake irq */
-	return hif_mark_wake_irq_wakeable(scn);
+	if (!hif_can_suspend_link(GET_HIF_OPAQUE_HDL(scn)))
+		ret = hif_mark_wake_irq_wakeable(scn);
+
+	if (ret)
+		goto reenable_irq;
+
+	return 0;
+
+reenable_irq:
+	hif_pci_enable_interrupt(scn);
+	return ret;
 }
 
 /**
@@ -2814,6 +2886,8 @@ int hif_pci_bus_resume(struct hif_softc *scn)
 	if (ret)
 		return ret;
 
+	hif_pci_enable_interrupt(scn);
+
 	if (hif_can_suspend_link(GET_HIF_OPAQUE_HDL(scn)))
 		return 0;
 
@@ -2832,12 +2906,6 @@ int hif_pci_bus_resume(struct hif_softc *scn)
  */
 int hif_pci_bus_suspend_noirq(struct hif_softc *scn)
 {
-	if (hif_drain_tasklets(scn) != 0)
-		return -EBUSY;
-
-	/* Stop the HIF Sleep Timer */
-	hif_cancel_deferred_target_sleep(scn);
-
 	if (hif_can_suspend_link(GET_HIF_OPAQUE_HDL(scn)))
 		qdf_atomic_set(&scn->link_suspended, 1);
 
