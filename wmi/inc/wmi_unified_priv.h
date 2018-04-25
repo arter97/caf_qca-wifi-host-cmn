@@ -1166,6 +1166,12 @@ uint16_t (*wmi_set_htc_tx_tag)(wmi_unified_t wmi_handle,
 
 QDF_STATUS (*send_get_rcpi_cmd)(wmi_unified_t wmi_handle,
 				struct rcpi_req *get_rcpi_param);
+
+QDF_STATUS (*send_offload_11k_cmd)(wmi_unified_t wmi_handle,
+		struct wmi_11k_offload_params *params);
+
+QDF_STATUS (*send_invoke_neighbor_report_cmd)(wmi_unified_t wmi_handle,
+		struct wmi_invoke_neighbor_report_params *params);
 };
 
 struct target_abi_version {
