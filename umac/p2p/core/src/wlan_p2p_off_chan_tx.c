@@ -1215,8 +1215,10 @@ static QDF_STATUS p2p_remove_tx_context(
 					&is_ack_q);
 
 	/* for not off channel tx case, won't find from queue */
-	if (!cur_tx_ctx)
+	if (!cur_tx_ctx) {
 		p2p_debug("Do not find tx context from queue");
+		goto end;
+	}
 
 	if (is_roc_q) {
 		status = qdf_list_remove_node(
@@ -1234,6 +1236,7 @@ static QDF_STATUS p2p_remove_tx_context(
 			p2p_err("Failed to  tx context from wait ack req queue");
 	}
 
+end:
 	qdf_idr_remove(&p2p_soc_obj->p2p_idr, tx_ctx->id);
 	qdf_mem_free(tx_ctx->buf);
 	qdf_mem_free(tx_ctx);
