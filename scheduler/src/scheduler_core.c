@@ -436,9 +436,19 @@ void scheduler_cleanup_queues(struct scheduler_ctx *sch_ctx, int idx)
 	while ((msg_wrapper =
 			scheduler_mq_get(&sch_ctx->queue_ctx.sch_msg_q[idx]))) {
 		if (msg_wrapper->msg_buf != NULL) {
+			if ((QDF_MODULE_ID_SYS ==
+				sch_ctx->queue_ctx.sch_msg_q[idx].qid) &&
+			    (SYS_MSG_ID_MC_TIMER ==
+				msg_wrapper->msg_buf->type)) {
+				QDF_TRACE(QDF_MODULE_ID_SCHEDULER, QDF_TRACE_LEVEL_INFO,
+					"%s:Timer is freed by each module, not here",
+					__func__);
+				continue;
+			}
 			QDF_TRACE(QDF_MODULE_ID_SCHEDULER, QDF_TRACE_LEVEL_INFO,
-				"%s: Freeing MC WMA MSG message type %d",
-				__func__, msg_wrapper->msg_buf->type);
+				"%s: Freeing MC MSG message type %d, module id:%d",
+				__func__, msg_wrapper->msg_buf->type,
+				sch_ctx->queue_ctx.sch_msg_q[idx].qid);
 			if (msg_wrapper->msg_buf->flush_callback) {
 				QDF_TRACE(QDF_MODULE_ID_SCHEDULER,
 					QDF_TRACE_LEVEL_DEBUG,
