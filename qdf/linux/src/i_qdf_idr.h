@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015-2016 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2018 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -16,12 +16,27 @@
  * PERFORMANCE OF THIS SOFTWARE.
  */
 
-#ifndef __MP_DEV_H__
-#define __MP_DEV_H__
-void priv_start_agc(struct hif_softc *scn);
-void priv_dump_agc(struct hif_softc *scn);
-void priv_start_cap_chaninfo(struct hif_softc *scn);
-void priv_dump_chaninfo(struct hif_softc *scn);
-void priv_dump_bbwatchdog(struct hif_softc *scn);
-void hif_shutdown_device(struct hif_opaque_softc *scn);
-#endif /* __MP_DEV_H__ */
+/**
+ * DOC: i_qdf_idr.h (ID Allocation)
+ * Linux-specific definitions for QDF ID Allocation API's
+ */
+
+#if !defined(__I_QDF_IDR_H)
+#define __I_QDF_IDR_H
+
+#include <linux/idr.h>
+#include <qdf_lock.h>
+
+/**
+ * struct __qdf_idr_s
+ * @lock: qdf spinlock
+ * @idr:  idr handler
+ */
+struct __qdf_idr_s {
+	qdf_spinlock_t lock;
+	struct idr idr;
+};
+
+typedef struct __qdf_idr_s __qdf_idr;
+
+#endif /* __I_QDF_IDR_H */
