@@ -694,7 +694,7 @@ QDF_STATUS dp_rx_mon_deliver(struct dp_soc *soc, uint32_t mac_id,
 				pdev->monitor_vdev->osif_vdev, mon_mpdu, NULL);
 	} else {
 		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_ERROR,
-				  "[%s][%d] mon_mpdu=%p pdev->monitor_vdev %p osif_vdev %p",
+				  "[%s][%d] mon_mpdu=%pK pdev->monitor_vdev %pK osif_vdev %pK",
 				  __func__, __LINE__, mon_mpdu, pdev->monitor_vdev,
 				  pdev->monitor_vdev->osif_vdev);
 		goto mon_deliver_fail;
@@ -708,7 +708,7 @@ mon_deliver_fail:
 		skb_next = qdf_nbuf_next(mon_skb);
 
 		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_ERROR,
-				  "[%s][%d] mon_skb=%p len %u", __func__, __LINE__,
+				  "[%s][%d] mon_skb=%pK len %u", __func__, __LINE__,
 				  mon_skb, mon_skb->len);
 
 		qdf_nbuf_free(mon_skb);
