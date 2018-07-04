@@ -2142,6 +2142,32 @@ void htc_flush_endpoint_tx(HTC_TARGET *target, HTC_ENDPOINT *pEndpoint,
 	UNLOCK_HTC_TX(target);
 }
 
+void htc_flush_endpoint_txlookupQ(HTC_TARGET *target,
+				  HTC_ENDPOINT_ID endpoint_id,
+				  bool call_ep_callback)
+{
+	HTC_PACKET *packet;
+	HTC_ENDPOINT *endpoint;
+
+	endpoint = &target->endpoint[endpoint_id];
+
+	if (!endpoint && endpoint->service_id == 0)
+		return;
+
+	while (HTC_PACKET_QUEUE_DEPTH(&endpoint->TxLookupQueue)) {
+		packet = htc_packet_dequeue(&endpoint->TxLookupQueue);
+
+		if (packet) {
+			if (call_ep_callback == true) {
+				packet->Status = QDF_STATUS_E_CANCELED;
+				send_packet_completion(target, packet);
+			} else {
+				qdf_mem_free(packet);
+			}
+		}
+	}
+}
+
 /* HTC API to flush an endpoint's TX queue*/
 void htc_flush_endpoint(HTC_HANDLE HTCHandle, HTC_ENDPOINT_ID Endpoint,
 			HTC_TX_TAG Tag)
