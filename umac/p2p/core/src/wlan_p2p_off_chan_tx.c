@@ -1714,6 +1714,8 @@ QDF_STATUS p2p_process_cleanup_tx_queue(struct p2p_cleanup_param *param)
 	while (QDF_IS_STATUS_SUCCESS(status)) {
 		curr_tx_ctx = qdf_container_of(p_node,
 					struct tx_action_context, node);
+		status = qdf_list_peek_next(&p2p_soc_obj->tx_q_roc,
+					    p_node, &p_node);
 		if ((vdev_id == P2P_INVALID_VDEV_ID) ||
 		    (vdev_id == curr_tx_ctx->vdev_id)) {
 			ret = qdf_list_remove_node(&p2p_soc_obj->tx_q_roc,
@@ -1726,8 +1728,6 @@ QDF_STATUS p2p_process_cleanup_tx_queue(struct p2p_cleanup_param *param)
 				p2p_err("remove %pK from roc_q fail",
 					curr_tx_ctx);
 		}
-		status = qdf_list_peek_next(&p2p_soc_obj->tx_q_roc,
-					    p_node, &p_node);
 	}
 
 	p2p_debug("clean up tx queue wait for ack, size:%d",
@@ -1737,6 +1737,8 @@ QDF_STATUS p2p_process_cleanup_tx_queue(struct p2p_cleanup_param *param)
 	while (QDF_IS_STATUS_SUCCESS(status)) {
 		curr_tx_ctx = qdf_container_of(p_node,
 					struct tx_action_context, node);
+		status = qdf_list_peek_next(&p2p_soc_obj->tx_q_ack,
+					    p_node, &p_node);
 		if ((vdev_id == P2P_INVALID_VDEV_ID) ||
 		    (vdev_id == curr_tx_ctx->vdev_id)) {
 			ret = qdf_list_remove_node(&p2p_soc_obj->tx_q_ack,
@@ -1750,8 +1752,6 @@ QDF_STATUS p2p_process_cleanup_tx_queue(struct p2p_cleanup_param *param)
 				p2p_err("remove %pK from roc_q fail",
 					curr_tx_ctx);
 		}
-		status = qdf_list_peek_next(&p2p_soc_obj->tx_q_ack,
-					    p_node, &p_node);
 	}
 
 	qdf_event_set(&p2p_soc_obj->cleanup_tx_done);
