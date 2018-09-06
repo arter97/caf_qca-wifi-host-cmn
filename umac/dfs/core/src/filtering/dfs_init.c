@@ -44,6 +44,30 @@ static inline void dfs_reset_filtertype(
 	}
 }
 
+#ifdef DFS_FALSE_DETECT_DUR_CHECK
+/**
+ * dfs_reset_sidx_pulses() - reset sidx pulses
+ * @dfs: Pointer to wlan_dfs structure.
+ *
+ * Return: void
+ */
+static void dfs_reset_sidx_pulses(struct wlan_dfs *dfs)
+{
+	if (!dfs->sidx_pulses) {
+		dfs_err(dfs, WLAN_DEBUG_DFS_ALWAYS,
+			"sidx_pulses==NULL, dfs=%pK", dfs);
+		return;
+	}
+	dfs->sidx_pulses->pl_firstelem = 0;
+	dfs->sidx_pulses->pl_numelems = 0;
+	dfs->sidx_pulses->pl_lastelem = DFS_SIDX_MASK;
+}
+#else
+static void dfs_reset_sidx_pulses(struct wlan_dfs *dfs)
+{
+}
+#endif
+
 void dfs_reset_alldelaylines(struct wlan_dfs *dfs)
 {
 	struct dfs_filtertype *ft = NULL;
@@ -64,6 +88,8 @@ void dfs_reset_alldelaylines(struct wlan_dfs *dfs)
 	/* Reset the pulse log. */
 	pl->pl_firstelem = pl->pl_numelems = 0;
 	pl->pl_lastelem = DFS_MAX_PULSE_BUFFER_MASK;
+
+	dfs_reset_sidx_pulses(dfs);
 
 	for (i = 0; i < DFS_MAX_RADAR_TYPES; i++) {
 		if (dfs->dfs_radarf[i] != NULL) {

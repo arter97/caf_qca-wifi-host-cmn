@@ -133,6 +133,53 @@ static void dfs_print_radar_events(struct wlan_dfs *dfs)
 	dfs->dfs_phyerr_freq_max = 0;
 }
 
+#ifdef DFS_FALSE_DETECT_DUR_CHECK
+/**
+ * dfs_find_lowest_hightest_dur() - Find the lowest duration and the highest
+ * duration of the given sidx pulseline.
+ * @dfs: Pointer to dfs structure.
+ * @lowestdur: The lowest duration of the given sidx pulseline.
+ * @highestdur: The highest duration of the given sidx pulseline.
+ *
+ * Return: 1 if duration diff is greater than speified value, otherwise 0.
+ */
+static int dfs_find_lowest_hightest_dur_check_diff(struct wlan_dfs *dfs,
+						   uint32_t *lowestdur,
+						   uint32_t *highestdur)
+{
+	struct dfs_sidx_pulseline *sidx_pl;
+	struct dfs_pulseline *pl;
+	int i = 0;
+	int index;
+
+	sidx_pl = dfs->sidx_pulses;
+	pl = dfs->pulses;
+	*lowestdur =  sidx_pl->pl_elems[sidx_pl->pl_lastelem].p_dur;
+	*highestdur = sidx_pl->pl_elems[sidx_pl->pl_lastelem].p_dur;
+
+	for (i = 0; i < sidx_pl->pl_numelems; i++) {
+		index = (sidx_pl->pl_firstelem + i) & DFS_SIDX_MASK;
+		if (pl->pl_elems[pl->pl_lastelem].p_time -
+			sidx_pl->pl_elems[index].p_time <
+			DFS_SIDX_TIME_WINDOW) {
+			if (sidx_pl->pl_elems[index].p_dur < *lowestdur)
+				*lowestdur = sidx_pl->pl_elems[index].p_dur;
+			if (sidx_pl->pl_elems[index].p_dur > *highestdur)
+				*highestdur = sidx_pl->pl_elems[index].p_dur;
+		}
+	}
+
+	return (*highestdur - *lowestdur) > DFS_SIDX_MAX_DIFF_DUR;
+}
+#else
+static int dfs_find_lowest_hightest_dur_check_diff(struct wlan_dfs *dfs,
+						   uint32_t *lowestdur,
+						   uint32_t *highestdur)
+{
+	return 0;
+}
+#endif
+
 /**
  * dfs_confirm_radar() - This function checks for fractional PRI and jitter in
  * sidx index to determine if the radar is real or not.
@@ -146,6 +193,7 @@ static int dfs_confirm_radar(struct wlan_dfs *dfs,
 {
 	int i = 0;
 	int index;
+	uint32_t lowestdur, highestdur;
 	struct dfs_delayline *dl = &rf->rf_dl;
 	struct dfs_delayelem *de;
 	uint64_t target_ts = 0;
@@ -287,6 +335,16 @@ static int dfs_confirm_radar(struct wlan_dfs *dfs,
 			__func__, dl->dl_delta_peak_match_count,
 			dl->dl_psidx_diff_match_count,
 			rf->rf_threshold);
+		return 0;
+	}
+
+	if (dfs_find_lowest_hightest_dur_check_diff(dfs, &lowestdur,
+						    &highestdur)) {
+		dfs_info(dfs, WLAN_DEBUG_DFS_ALWAYS,
+			 "%s: Rejecting Radar since duration diff %d is more than %d\n",
+			 __func__, (highestdur - lowestdur),
+			 DFS_SIDX_MAX_DIFF_DUR);
+
 		return 0;
 	}
 
@@ -1003,6 +1061,49 @@ static inline void  dfs_calculate_timestamps(
 	dfs->dfs_rinfo.rn_last_ts = (*re).re_ts;
 }
 
+#ifdef DFS_FALSE_DETECT_DUR_CHECK
+/**
+ * dfs_add_to_sidxpulseline() - Add the pulse to the sidx pulseline if its sidx
+ * equals to one of the given sidx values.
+ * @dfs: Pointer to wlan_dfs structure.
+ * @re:  Pointer to re(radar event)
+ * @this_ts: Pointer to  this_ts (this timestamp)
+ *
+ * Return: void
+ */
+static inline void dfs_add_to_sidxpulseline(
+	struct wlan_dfs *dfs,
+	struct dfs_event *re,
+	uint64_t *this_ts)
+{
+	struct dfs_sidx_pulseline *sidx_pl;
+	uint32_t sidx_index;
+
+	sidx_pl = dfs->sidx_pulses;
+	if ((*re).re_sidx == DFS_SPECIAL_SIDX1 ||
+	    (*re).re_sidx == DFS_SPECIAL_SIDX2) {
+		sidx_index = (sidx_pl->pl_lastelem + 1) &
+			DFS_SIDX_MASK;
+		if (sidx_pl->pl_numelems == DFS_SIDX_SIZE)
+			sidx_pl->pl_firstelem =
+				(sidx_pl->pl_firstelem + 1) &
+				DFS_SIDX_MASK;
+		else
+			sidx_pl->pl_numelems++;
+		sidx_pl->pl_lastelem = sidx_index;
+		sidx_pl->pl_elems[sidx_index].p_time = *this_ts;
+		sidx_pl->pl_elems[sidx_index].p_dur = (*re).re_dur;
+	}
+}
+#else
+static inline void dfs_add_to_sidxpulseline(
+	struct wlan_dfs *dfs,
+	struct dfs_event *re,
+	uint64_t *this_ts)
+{
+}
+#endif
+
 /**
  * dfs_add_to_pulseline - Extract necessary items from dfs_event and
  * add it as pulse in the pulseline
@@ -1050,6 +1151,7 @@ static inline void dfs_add_to_pulseline(
 		*this_ts -= (*re).re_dur;
 
 	pl = dfs->pulses;
+
 	/* Save the pulse parameters in the pulse buffer(pulse line). */
 	*index = (pl->pl_lastelem + 1) & DFS_MAX_PULSE_BUFFER_MASK;
 
@@ -1068,6 +1170,8 @@ static inline void dfs_add_to_pulseline(
 	pl->pl_elems[*index].p_psidx_diff = (*re).re_psidx_diff;
 	*diff_ts = (uint32_t)*this_ts - *test_ts;
 	*test_ts = (uint32_t)*this_ts;
+
+	dfs_add_to_sidxpulseline(dfs, re, this_ts);
 
 	dfs_debug(dfs, WLAN_DEBUG_DFS1,
 			"ts%u %u %u diff %u pl->pl_lastelem.p_time=%llu",
