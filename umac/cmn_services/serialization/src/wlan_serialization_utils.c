@@ -27,6 +27,8 @@
 #include "wlan_objmgr_pdev_obj.h"
 #include "qdf_mc_timer.h"
 #include "wlan_utility.h"
+#include <cds_api.h>
+
 
 QDF_STATUS
 wlan_serialization_put_back_to_global_list(qdf_list_t *queue,
@@ -176,8 +178,12 @@ static void wlan_serialization_generic_timer_callback(void *arg)
 	if (cmd->cmd_cb)
 		cmd->cmd_cb(cmd, WLAN_SER_CB_ACTIVE_CMD_TIMEOUT);
 
-	if (cmd->cmd_type >= WLAN_SER_CMD_NONSCAN)
-		QDF_BUG(0);
+	if (cmd->cmd_type >= WLAN_SER_CMD_NONSCAN) {
+		if (cds_is_self_recovery_enabled())
+		   cds_trigger_recovery(QDF_REASON_UNSPECIFIED);
+		else
+		   QDF_BUG(0);
+	}
 	/*
 	 * dequeue cmd API will cleanup and destroy the timer. If it fails to
 	 * dequeue command then we have to destroy the timer. It will also call
