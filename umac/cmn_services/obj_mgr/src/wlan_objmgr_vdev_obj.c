@@ -25,6 +25,7 @@
 #include <wlan_objmgr_vdev_obj.h>
 #include <wlan_objmgr_peer_obj.h>
 #include <qdf_mem.h>
+#include <qdf_module.h>
 #include "wlan_objmgr_global_obj_i.h"
 #include "wlan_objmgr_psoc_obj_i.h"
 #include "wlan_objmgr_pdev_obj_i.h"
@@ -261,7 +262,7 @@ struct wlan_objmgr_vdev *wlan_objmgr_vdev_obj_create(
 
 	return vdev;
 }
-EXPORT_SYMBOL(wlan_objmgr_vdev_obj_create);
+qdf_export_symbol(wlan_objmgr_vdev_obj_create);
 
 static QDF_STATUS wlan_objmgr_vdev_obj_destroy(struct wlan_objmgr_vdev *vdev)
 {
@@ -347,7 +348,7 @@ QDF_STATUS wlan_objmgr_vdev_obj_delete(struct wlan_objmgr_vdev *vdev)
 
 	return QDF_STATUS_SUCCESS;
 }
-EXPORT_SYMBOL(wlan_objmgr_vdev_obj_delete);
+qdf_export_symbol(wlan_objmgr_vdev_obj_delete);
 
 /**
  ** APIs to attach/detach component objects
@@ -407,7 +408,7 @@ QDF_STATUS wlan_objmgr_vdev_component_obj_attach(
 	}
 	return QDF_STATUS_SUCCESS;
 }
-EXPORT_SYMBOL(wlan_objmgr_vdev_component_obj_attach);
+qdf_export_symbol(wlan_objmgr_vdev_component_obj_attach);
 
 QDF_STATUS wlan_objmgr_vdev_component_obj_detach(
 		struct wlan_objmgr_vdev *vdev,
@@ -480,7 +481,7 @@ QDF_STATUS wlan_objmgr_vdev_component_obj_detach(
 	}
 	return QDF_STATUS_SUCCESS;
 }
-EXPORT_SYMBOL(wlan_objmgr_vdev_component_obj_detach);
+qdf_export_symbol(wlan_objmgr_vdev_component_obj_detach);
 
 /**
  ** APIs to operations on vdev objects
@@ -772,7 +773,7 @@ void *wlan_objmgr_vdev_get_comp_private_obj(
 
 	return comp_priv_obj;
 }
-EXPORT_SYMBOL(wlan_objmgr_vdev_get_comp_private_obj);
+qdf_export_symbol(wlan_objmgr_vdev_get_comp_private_obj);
 
 void wlan_objmgr_vdev_get_ref(struct wlan_objmgr_vdev *vdev,
 						wlan_objmgr_ref_dbgid id)
@@ -788,7 +789,7 @@ void wlan_objmgr_vdev_get_ref(struct wlan_objmgr_vdev *vdev,
 
 	return;
 }
-EXPORT_SYMBOL(wlan_objmgr_vdev_get_ref);
+qdf_export_symbol(wlan_objmgr_vdev_get_ref);
 
 QDF_STATUS wlan_objmgr_vdev_try_get_ref(struct wlan_objmgr_vdev *vdev,
 						wlan_objmgr_ref_dbgid id)
@@ -820,7 +821,7 @@ QDF_STATUS wlan_objmgr_vdev_try_get_ref(struct wlan_objmgr_vdev *vdev,
 
 	return QDF_STATUS_SUCCESS;
 }
-EXPORT_SYMBOL(wlan_objmgr_vdev_try_get_ref);
+qdf_export_symbol(wlan_objmgr_vdev_try_get_ref);
 
 void wlan_objmgr_vdev_release_ref(struct wlan_objmgr_vdev *vdev,
 						wlan_objmgr_ref_dbgid id)
@@ -855,7 +856,7 @@ void wlan_objmgr_vdev_release_ref(struct wlan_objmgr_vdev *vdev,
 
 	return;
 }
-EXPORT_SYMBOL(wlan_objmgr_vdev_release_ref);
+qdf_export_symbol(wlan_objmgr_vdev_release_ref);
 
 bool wlan_vdev_is_connected(struct wlan_objmgr_vdev *vdev)
 {
@@ -878,4 +879,4 @@ bool wlan_vdev_is_connected(struct wlan_objmgr_vdev *vdev)
 
 	return true;
 }
-EXPORT_SYMBOL(wlan_vdev_is_connected);
+qdf_export_symbol(wlan_vdev_is_connected);
