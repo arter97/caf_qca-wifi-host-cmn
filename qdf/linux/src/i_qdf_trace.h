@@ -92,8 +92,10 @@
 #define __QDF_TRACE_FL(log_level, module_id, format, args...) \
 	QDF_TRACE(module_id, log_level, FL(format), ## args)
 
+#define QDF_MAX_LOGS_PER_SEC 2
 #define __QDF_TRACE_RL(log_level, module_id, format, args...) \
-	QDF_TRACE_RATE_LIMITED(module_id, log_level, FL(format), ## args)
+	QDF_TRACE_RATE_LIMITED(QDF_MAX_LOGS_PER_SEC, module_id, log_level, \
+			       FL(format), ## args)
 
 static inline void __qdf_trace_noop(QDF_MODULE_ID module, char *format, ...) { }
 
