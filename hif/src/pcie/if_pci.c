@@ -2351,7 +2351,11 @@ static int hif_configure_msi(struct hif_pci_softc *sc)
 	}
 
 	if (num_msi_desired > 1) {
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3, 16, 0))
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 11, 0))
+		rv = pci_alloc_irq_vectors(sc->pdev, num_msi_desired,
+						num_msi_desired,
+						PCI_IRQ_ALL_TYPES);
+#elif (LINUX_VERSION_CODE >= KERNEL_VERSION(3, 16, 0))
 		rv = pci_enable_msi_range(sc->pdev, num_msi_desired,
 						num_msi_desired);
 #else
@@ -2372,7 +2376,12 @@ static int hif_configure_msi(struct hif_pci_softc *sc)
 		tasklet_init(&sc->intr_tq, wlan_tasklet_msi,
 			 (unsigned long)&sc->tasklet_entries[
 			 HIF_MAX_TASKLET_NUM-1]);
-		ret = request_irq(sc->pdev->irq + MSI_ASSIGN_FW,
+		ret = request_irq(
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 11, 0))
+				  pci_irq_vector(sc->pdev, MSI_ASSIGN_FW),
+#else
+				  sc->pdev->irq + MSI_ASSIGN_FW,
+#endif
 				  hif_pci_msi_fw_handler,
 				  IRQF_SHARED, "wlan_pci", sc);
 		if (ret) {
@@ -2384,8 +2393,14 @@ static int hif_configure_msi(struct hif_pci_softc *sc)
 			sc->tasklet_entries[i].id = i;
 			tasklet_init(&sc->intr_tq, wlan_tasklet_msi,
 				 (unsigned long)&sc->tasklet_entries[i]);
-			ret = request_irq((sc->pdev->irq +
+			ret = request_irq(
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 11, 0))
+					  pci_irq_vector(sc->pdev, i +
+					  MSI_ASSIGN_CE_INITIAL),
+#else
+					  (sc->pdev->irq +
 					   i + MSI_ASSIGN_CE_INITIAL),
+#endif
 					  ce_per_engine_handler, IRQF_SHARED,
 					  "wlan_pci", sc);
 			if (ret) {
@@ -2407,7 +2422,7 @@ static int hif_configure_msi(struct hif_pci_softc *sc)
 			tasklet_init(&sc->intr_tq,
 				wlan_tasklet, (unsigned long)sc);
 			ret = request_irq(sc->pdev->irq,
-					 hif_pci_legacy_ce_interrupt_handler,
+					  hif_pci_legacy_ce_interrupt_handler,
 					  IRQF_SHARED, "wlan_pci", sc);
 			if (ret) {
 				HIF_ERROR("%s: request_irq failed", __func__);
@@ -2450,8 +2465,13 @@ static int hif_configure_msi(struct hif_pci_softc *sc)
 	return ret;
 
 err_intr:
-	if (sc->num_msi_intrs >= 1)
+	if (sc->num_msi_intrs >= 1) {
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 11, 0))
+		pci_free_irq_vectors(sc->pdev);
+#else
 		pci_disable_msi(sc->pdev);
+#endif
+	}
 	return ret;
 }
 
