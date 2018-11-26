@@ -2471,6 +2471,7 @@ err_intr:
 #else
 		pci_disable_msi(sc->pdev);
 #endif
+	}
 	return ret;
 }
 
