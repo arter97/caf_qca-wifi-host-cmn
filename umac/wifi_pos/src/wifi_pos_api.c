@@ -109,6 +109,11 @@ void wifi_pos_set_oem_target_type(struct wlan_objmgr_psoc *psoc, uint32_t val)
 	struct wifi_pos_psoc_priv_obj *wifi_pos_psoc =
 			wifi_pos_get_psoc_priv_obj(psoc);
 
+	if (!wifi_pos_psoc) {
+		wifi_pos_err("wifi_pos priv obj is null");
+		return;
+	}
+
 	qdf_spin_lock_bh(&wifi_pos_psoc->wifi_pos_lock);
 	wifi_pos_psoc->oem_target_type = val;
 	qdf_spin_unlock_bh(&wifi_pos_psoc->wifi_pos_lock);
@@ -118,6 +123,11 @@ void wifi_pos_set_oem_fw_version(struct wlan_objmgr_psoc *psoc, uint32_t val)
 {
 	struct wifi_pos_psoc_priv_obj *wifi_pos_psoc =
 			wifi_pos_get_psoc_priv_obj(psoc);
+
+	if (!wifi_pos_psoc) {
+		wifi_pos_err("wifi_pos priv obj is null");
+		return;
+	}
 
 	qdf_spin_lock_bh(&wifi_pos_psoc->wifi_pos_lock);
 	wifi_pos_psoc->oem_fw_version = val;
@@ -129,6 +139,11 @@ void wifi_pos_set_drv_ver_major(struct wlan_objmgr_psoc *psoc, uint8_t val)
 	struct wifi_pos_psoc_priv_obj *wifi_pos_psoc =
 			wifi_pos_get_psoc_priv_obj(psoc);
 
+	if (!wifi_pos_psoc) {
+		wifi_pos_err("wifi_pos priv obj is null");
+		return;
+	}
+
 	qdf_spin_lock_bh(&wifi_pos_psoc->wifi_pos_lock);
 	wifi_pos_psoc->driver_version.major = val;
 	qdf_spin_unlock_bh(&wifi_pos_psoc->wifi_pos_lock);
@@ -138,6 +153,11 @@ void wifi_pos_set_drv_ver_minor(struct wlan_objmgr_psoc *psoc, uint8_t val)
 {
 	struct wifi_pos_psoc_priv_obj *wifi_pos_psoc =
 			wifi_pos_get_psoc_priv_obj(psoc);
+
+	if (!wifi_pos_psoc) {
+		wifi_pos_err("wifi_pos priv obj is null");
+		return;
+	}
 
 	qdf_spin_lock_bh(&wifi_pos_psoc->wifi_pos_lock);
 	wifi_pos_psoc->driver_version.minor = val;
@@ -149,6 +169,11 @@ void wifi_pos_set_drv_ver_patch(struct wlan_objmgr_psoc *psoc, uint8_t val)
 	struct wifi_pos_psoc_priv_obj *wifi_pos_psoc =
 			wifi_pos_get_psoc_priv_obj(psoc);
 
+	if (!wifi_pos_psoc) {
+		wifi_pos_err("wifi_pos priv obj is null");
+		return;
+	}
+
 	qdf_spin_lock_bh(&wifi_pos_psoc->wifi_pos_lock);
 	wifi_pos_psoc->driver_version.patch = val;
 	qdf_spin_unlock_bh(&wifi_pos_psoc->wifi_pos_lock);
@@ -158,6 +183,11 @@ void wifi_pos_set_drv_ver_build(struct wlan_objmgr_psoc *psoc, uint8_t val)
 {
 	struct wifi_pos_psoc_priv_obj *wifi_pos_psoc =
 			wifi_pos_get_psoc_priv_obj(psoc);
+
+	if (!wifi_pos_psoc) {
+		wifi_pos_err("wifi_pos priv obj is null");
+		return;
+	}
 
 	qdf_spin_lock_bh(&wifi_pos_psoc->wifi_pos_lock);
 	wifi_pos_psoc->driver_version.build = val;
@@ -169,6 +199,11 @@ void wifi_pos_set_dwell_time_min(struct wlan_objmgr_psoc *psoc, uint16_t val)
 	struct wifi_pos_psoc_priv_obj *wifi_pos_psoc =
 			wifi_pos_get_psoc_priv_obj(psoc);
 
+	if (!wifi_pos_psoc) {
+		wifi_pos_err("wifi_pos priv obj is null");
+		return;
+	}
+
 	qdf_spin_lock_bh(&wifi_pos_psoc->wifi_pos_lock);
 	wifi_pos_psoc->allowed_dwell_time_min = val;
 	qdf_spin_unlock_bh(&wifi_pos_psoc->wifi_pos_lock);
@@ -177,6 +212,11 @@ void wifi_pos_set_dwell_time_max(struct wlan_objmgr_psoc *psoc, uint16_t val)
 {
 	struct wifi_pos_psoc_priv_obj *wifi_pos_psoc =
 			wifi_pos_get_psoc_priv_obj(psoc);
+
+	if (!wifi_pos_psoc) {
+		wifi_pos_err("wifi_pos priv obj is null");
+		return;
+	}
 
 	qdf_spin_lock_bh(&wifi_pos_psoc->wifi_pos_lock);
 	wifi_pos_psoc->allowed_dwell_time_max = val;
@@ -189,6 +229,11 @@ void wifi_pos_set_current_dwell_time_max(struct wlan_objmgr_psoc *psoc,
 	struct wifi_pos_psoc_priv_obj *wifi_pos_psoc =
 			wifi_pos_get_psoc_priv_obj(psoc);
 
+	if (!wifi_pos_psoc) {
+		wifi_pos_err("wifi_pos priv obj is null");
+		return;
+	}
+
 	qdf_spin_lock_bh(&wifi_pos_psoc->wifi_pos_lock);
 	wifi_pos_psoc->current_dwell_time_max = val;
 	qdf_spin_unlock_bh(&wifi_pos_psoc->wifi_pos_lock);
@@ -199,6 +244,11 @@ void wifi_pos_set_current_dwell_time_min(struct wlan_objmgr_psoc *psoc,
 {
 	struct wifi_pos_psoc_priv_obj *wifi_pos_psoc =
 			wifi_pos_get_psoc_priv_obj(psoc);
+
+	if (!wifi_pos_psoc) {
+		wifi_pos_err("wifi_pos priv obj is null");
+		return;
+	}
 
 	qdf_spin_lock_bh(&wifi_pos_psoc->wifi_pos_lock);
 	wifi_pos_psoc->current_dwell_time_max = val;
