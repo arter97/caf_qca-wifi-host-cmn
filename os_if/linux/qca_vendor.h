@@ -263,6 +263,9 @@
  * @QCA_NL80211_VENDOR_SUBCMD_WIFI_TEST_CONFIGURATION: Sub command to set WiFi
  *	test configuration. Attributes for this command are defined in
  *	enum qca_wlan_vendor_attr_wifi_test_config.
+ * @QCA_NL80211_VENDOR_SUBCMD_GET_FW_STATE: Sub command to get firmware state.
+ *	The returned firmware state is specified in the attribute
+ *	QCA_WLAN_VENDOR_ATTR_FW_STATE.
  *
  */
 
@@ -469,6 +472,7 @@ enum qca_nl80211_vendor_subcmds {
 	QCA_NL80211_VENDOR_SUBCMD_SET_QDEPTH_THRESH = 166,
 	/* Wi-Fi test configuration subcommand */
 	QCA_NL80211_VENDOR_SUBCMD_WIFI_TEST_CONFIGURATION = 169,
+	QCA_NL80211_VENDOR_SUBCMD_GET_FW_STATE = 177,
 };
 
 enum qca_wlan_vendor_tos {
@@ -1237,6 +1241,12 @@ enum qca_wlan_vendor_attr {
 	 * to report the corresponding antenna index to the chain RSSI value
 	 */
 	QCA_WLAN_VENDOR_ATTR_ANTENNA_INFO = 40,
+	/*
+	 * Used in QCA_NL80211_VENDOR_SUBCMD_GET_FW_STATE command to report
+	 * wlan firmware current state. FW state is an unsigned 8 bit value,
+	 * one of the values in enum qca_wlan_vendor_attr_fw_state.
+	 */
+	QCA_WLAN_VENDOR_ATTR_FW_STATE = 42,
 
 	/* keep last */
 	QCA_WLAN_VENDOR_ATTR_AFTER_LAST,
@@ -4456,6 +4466,18 @@ enum qca_wlan_vendor_attr_dmg_rf_sector_type {
 	QCA_WLAN_VENDOR_ATTR_DMG_RF_SECTOR_TYPE_RX,
 	QCA_WLAN_VENDOR_ATTR_DMG_RF_SECTOR_TYPE_TX,
 	QCA_WLAN_VENDOR_ATTR_DMG_RF_SECTOR_TYPE_MAX
+};
+
+/**
+ * enum qca_wlan_vendor_attr_fw_state - State of firmware
+ *
+ * @QCA_WLAN_VENDOR_ATTR_FW_STATE_ERROR: FW is in bad state
+ * @QCA_WLAN_VENDOR_ATTR_FW_STATE_ACTIVE: FW is active
+ */
+enum qca_wlan_vendor_attr_fw_state {
+	QCA_WLAN_VENDOR_ATTR_FW_STATE_ERROR,
+	QCA_WLAN_VENDOR_ATTR_FW_STATE_ACTIVE,
+	QCA_WLAN_VENDOR_ATTR_FW_STATE_MAX
 };
 
 /**
