@@ -112,6 +112,7 @@ static void dfs_nol_elem_free_work_cb(void *context)
 				tmp_nol_entry) {
 			TAILQ_REMOVE(&dfs->dfs_nol_free_list,
 					nol_entry, nolelem_list);
+			qdf_timer_free(&nol_entry->nol_timer);
 			qdf_mem_free(nol_entry);
 		}
 	WLAN_DFSNOL_UNLOCK(dfs);
@@ -229,13 +230,6 @@ static os_timer_func(dfs_remove_from_nol)
 	utils_dfs_reg_update_nol_ch(dfs->dfs_pdev_obj,
 				    &chan, 1, DFS_NOL_RESET);
 	utils_dfs_save_nol(dfs->dfs_pdev_obj);
-
-	/*
-	 * Free the NOL element in a thread. This is to avoid freeing the
-	 * timer object from within timer callback function . The nol element
-	 * contains the timer Object.
-	 */
-	qdf_sched_work(NULL, &dfs->dfs_nol_elem_free_work);
 }
 
 void dfs_print_nol(struct wlan_dfs *dfs)
