@@ -52,6 +52,7 @@ QDF_STATUS wlan_serialization_psoc_close(struct wlan_objmgr_psoc *psoc)
 	ser_soc_obj->timers = NULL;
 	ser_soc_obj->max_active_cmds = 0;
 
+	wlan_serialization_destroy_lock(&ser_soc_obj->timer_lock);
 	return status;
 }
 
@@ -77,6 +78,7 @@ QDF_STATUS wlan_serialization_psoc_open(struct wlan_objmgr_psoc *psoc)
 		return QDF_STATUS_E_NOMEM;
 	}
 
+	wlan_serialization_create_lock(&ser_soc_obj->timer_lock);
 	return QDF_STATUS_SUCCESS;
 }
 
@@ -201,7 +203,8 @@ static QDF_STATUS wlan_serialization_pdev_obj_create_notification(
 		serialization_alert("Mem alloc failed for ser pdev obj");
 		return QDF_STATUS_E_NOMEM;
 	}
-	status = wlan_serialization_create_lock(ser_pdev_obj);
+	status = wlan_serialization_create_lock(
+					&ser_pdev_obj->pdev_ser_list_lock);
 	if (status != QDF_STATUS_SUCCESS) {
 		serialization_err("Failed to create serialization lock");
 		return status;
@@ -297,7 +300,8 @@ static QDF_STATUS wlan_serialization_pdev_obj_destroy_notification(
 					&ser_pdev_obj->pending_scan_list);
 	wlan_serialization_destroy_cmd_pool(ser_pdev_obj);
 	serialization_debug("ser pdev obj detached with status %d", status);
-	status = wlan_serialization_destroy_lock(ser_pdev_obj);
+	status = wlan_serialization_destroy_lock(
+					&ser_pdev_obj->pdev_ser_list_lock);
 	if (status != QDF_STATUS_SUCCESS)
 		serialization_err("Failed to destroy serialization lock");
 	qdf_mem_free(ser_pdev_obj);
