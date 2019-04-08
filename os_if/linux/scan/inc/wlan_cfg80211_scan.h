@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017-2018 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2017-2019 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -45,6 +45,8 @@
 #define QCOM_VENDOR_IE_AGE_TYPE  0x100
 #define QCOM_VENDOR_IE_AGE_LEN   (sizeof(qcom_ie_age) - 2)
 #define SCAN_DONE_EVENT_BUF_SIZE 4096
+#define SCAN_WAKE_LOCK_CONNECT_DURATION (1 * 1000) /* in msec */
+#define SCAN_WAKE_LOCK_SCAN_DURATION (5 * 1000) /* in msec */
 
 /**
  * typedef struct qcom_ie_age - age ie
@@ -79,12 +81,14 @@ typedef struct {
  * scan_req_q_lock: Protect scan request queue
  * req_id: Scan request Id
  * runtime_pm_lock: Runtime suspend lock
+ * scan_wake_lock: Scan wake lock
  */
 struct osif_scan_pdev{
 	qdf_list_t scan_req_q;
 	qdf_mutex_t scan_req_q_lock;
 	wlan_scan_requester req_id;
 	qdf_runtime_lock_t runtime_pm_lock;
+	qdf_wake_lock_t scan_wake_lock;
 };
 
 /*
@@ -258,6 +262,34 @@ wlan_cfg80211_inform_bss_frame_data(struct wiphy *wiphy,
  */
 void wlan_cfg80211_inform_bss_frame(struct wlan_objmgr_pdev *pdev,
 	struct scan_cache_entry *scan_params);
+
+/**
+ * wlan_cfg80211_get_bss() - Get the bss entry matching the chan, bssid and ssid
+ * @wiphy: wiphy
+ * @channel: channel of the BSS to find
+ * @bssid: bssid of the BSS to find
+ * @ssid: ssid of the BSS to find
+ * @ssid_len: ssid len of of the BSS to find
+ *
+ * The API is a wrapper to get bss from kernel matching the chan,
+ * bssid and ssid
+ *
+ * Return: bss structure if found else NULL
+ */
+struct cfg80211_bss *wlan_cfg80211_get_bss(struct wiphy *wiphy,
+					   struct ieee80211_channel *channel,
+					   const u8 *bssid,
+					   const u8 *ssid, size_t ssid_len);
+
+/*
+ * wlan_cfg80211_unlink_bss_list : flush bss from the kernel cache
+ * @pdev: Pointer to pdev
+ * @scan_entry: scan entry
+ *
+ * Return: bss which is unlinked from kernel cache
+ */
+void wlan_cfg80211_unlink_bss_list(struct wlan_objmgr_pdev *pdev,
+				   struct scan_cache_entry *scan_entry);
 
 /**
  * wlan_vendor_abort_scan() - API to vendor abort scan

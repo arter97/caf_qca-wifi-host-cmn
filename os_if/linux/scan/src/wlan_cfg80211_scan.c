@@ -38,6 +38,9 @@
 #include <wlan_policy_mgr_api.h>
 #endif
 #include <wlan_reg_services_api.h>
+#ifdef FEATURE_WLAN_DIAG_SUPPORT
+#include "host_diag_core_event.h"
+#endif
 
 static const
 struct nla_policy scan_policy[QCA_WLAN_VENDOR_ATTR_SCAN_MAX + 1] = {
@@ -910,6 +913,57 @@ nla_put_failure:
 	qdf_mem_free(req);
 }
 
+/**
+ * wlan_scan_acquire_wake_lock_timeout() - acquire scan wake lock
+ * @psoc: psoc ptr
+ * @scan_wake_lock: Scan wake lock
+ * @timeout: timeout in ms
+ *
+ * Return: void
+ */
+static inline
+void wlan_scan_acquire_wake_lock_timeout(struct wlan_objmgr_psoc *psoc,
+					 qdf_wake_lock_t *scan_wake_lock,
+					 uint32_t timeout)
+{
+	if (!psoc || !scan_wake_lock)
+		return;
+
+	if (ucfg_scan_wake_lock_in_user_scan(psoc))
+		qdf_wake_lock_timeout_acquire(scan_wake_lock, timeout);
+}
+
+/**
+ * wlan_scan_release_wake_lock() - release scan wake lock
+ * @psoc: psoc ptr
+ * @scan_wake_lock: Scan wake lock
+ *
+ * Return: void
+ */
+#ifdef FEATURE_WLAN_DIAG_SUPPORT
+static inline
+void wlan_scan_release_wake_lock(struct wlan_objmgr_psoc *psoc,
+				 qdf_wake_lock_t *scan_wake_lock)
+{
+	if (!psoc || !scan_wake_lock)
+		return;
+
+	if (ucfg_scan_wake_lock_in_user_scan(psoc))
+		qdf_wake_lock_release(scan_wake_lock,
+				      WIFI_POWER_EVENT_WAKELOCK_SCAN);
+}
+#else
+static inline
+void wlan_scan_release_wake_lock(struct wlan_objmgr_psoc *psoc,
+				 qdf_wake_lock_t *scan_wake_lock)
+{
+	if (!psoc || !scan_wake_lock)
+		return;
+
+	if (ucfg_scan_wake_lock_in_user_scan(psoc))
+		qdf_wake_lock_release(scan_wake_lock, 0);
+}
+#endif
 
 /**
  * wlan_cfg80211_scan_done_callback() - scan done callback function called after
@@ -983,10 +1037,26 @@ static void wlan_cfg80211_scan_done_callback(
 	wlan_objmgr_vdev_release_ref(vdev, WLAN_OSIF_ID);
 allow_suspend:
 	osif_priv = wlan_pdev_get_ospriv(pdev);
-	if (qdf_list_empty(&osif_priv->osif_scan->scan_req_q))
+	if (qdf_list_empty(&osif_priv->osif_scan->scan_req_q)) {
+		struct wlan_objmgr_psoc *psoc;
+
 		qdf_runtime_pm_allow_suspend(
 			&osif_priv->osif_scan->runtime_pm_lock);
 
+		psoc = wlan_pdev_get_psoc(pdev);
+		wlan_scan_release_wake_lock(psoc,
+					&osif_priv->osif_scan->scan_wake_lock);
+		/*
+		 * Acquire wakelock to handle the case where APP's tries
+		 * to suspend immediately after the driver gets connect
+		 * request(i.e after scan) from supplicant, this result in
+		 * app's is suspending and not able to process the connect
+		 * request to AP
+		 */
+		wlan_scan_acquire_wake_lock_timeout(psoc,
+					&osif_priv->osif_scan->scan_wake_lock,
+					SCAN_WAKE_LOCK_CONNECT_DURATION);
+	}
 }
 
 QDF_STATUS wlan_scan_runtime_pm_init(struct wlan_objmgr_pdev *pdev)
@@ -1034,11 +1104,13 @@ QDF_STATUS wlan_cfg80211_scan_priv_init(struct wlan_objmgr_pdev *pdev)
 		cfg80211_err("failed to allocate memory");
 		return QDF_STATUS_E_NOMEM;
 	}
-	/* Initialize the scan request queue */
+
 	osif_priv->osif_scan = scan_priv;
+	scan_priv->req_id = req_id;
+	/* Initialize the scan request queue */
 	qdf_list_create(&scan_priv->scan_req_q, WLAN_MAX_SCAN_COUNT);
 	qdf_mutex_create(&scan_priv->scan_req_q_lock);
-	scan_priv->req_id = req_id;
+	qdf_wake_lock_create(&scan_priv->scan_wake_lock, "scan_wake_lock");
 
 	return QDF_STATUS_SUCCESS;
 }
@@ -1054,11 +1126,12 @@ QDF_STATUS wlan_cfg80211_scan_priv_deinit(struct wlan_objmgr_pdev *pdev)
 
 	wlan_cfg80211_cleanup_scan_queue(pdev, NULL);
 	scan_priv = osif_priv->osif_scan;
-	ucfg_scan_unregister_requester(psoc, scan_priv->req_id);
-	qdf_list_destroy(&scan_priv->scan_req_q);
+	qdf_wake_lock_destroy(&scan_priv->scan_wake_lock);
 	qdf_mutex_destroy(&scan_priv->scan_req_q_lock);
-	qdf_mem_free(scan_priv);
+	qdf_list_destroy(&scan_priv->scan_req_q);
+	ucfg_scan_unregister_requester(psoc, scan_priv->req_id);
 	osif_priv->osif_scan = NULL;
+	qdf_mem_free(scan_priv);
 
 	return QDF_STATUS_SUCCESS;
 }
@@ -1205,6 +1278,20 @@ static inline void wlan_cfg80211_update_scan_policy_type_flags(
 }
 #endif
 
+#ifdef WLAN_POLICY_MGR_ENABLE
+static bool
+wlan_cfg80211_allow_simultaneous_scan(struct wlan_objmgr_psoc *psoc)
+{
+	return policy_mgr_is_scan_simultaneous_capable(psoc);
+}
+#else
+static bool
+wlan_cfg80211_allow_simultaneous_scan(struct wlan_objmgr_psoc *psoc)
+{
+	return true;
+}
+#endif
+
 int wlan_cfg80211_scan(struct wlan_objmgr_pdev *pdev,
 		struct cfg80211_scan_request *request,
 		struct scan_params *params)
@@ -1239,6 +1326,24 @@ int wlan_cfg80211_scan(struct wlan_objmgr_pdev *pdev,
 		cfg80211_err("Invalid psoc object");
 		return -EINVAL;
 	}
+	/* Get NL global context from objmgr*/
+	osif_priv = wlan_pdev_get_ospriv(pdev);
+	if (!osif_priv) {
+		wlan_objmgr_vdev_release_ref(vdev, WLAN_OSIF_ID);
+		cfg80211_err("Invalid osif priv object");
+		return -EINVAL;
+	}
+
+	/*
+	 * If a scan is already going on i.e the qdf_list ( scan que) is not
+	 * empty, and the simultaneous scan is disabled, dont allow 2nd scan
+	 */
+	if (!wlan_cfg80211_allow_simultaneous_scan(psoc) &&
+	    !qdf_list_empty(&osif_priv->osif_scan->scan_req_q)) {
+		wlan_objmgr_vdev_release_ref(vdev, WLAN_OSIF_ID);
+		cfg80211_err("Simultaneous scan disabled, reject scan");
+		return -EBUSY;
+	}
 	req = qdf_mem_malloc(sizeof(*req));
 	if (!req) {
 		wlan_objmgr_vdev_release_ref(vdev, WLAN_OSIF_ID);
@@ -1248,8 +1353,6 @@ int wlan_cfg80211_scan(struct wlan_objmgr_pdev *pdev,
 	/* Initialize the scan global params */
 	ucfg_scan_init_default_params(vdev, req);
 
-	/* Get NL global context from objmgr*/
-	osif_priv = wlan_pdev_get_ospriv(pdev);
 	req_id = osif_priv->osif_scan->req_id;
 	scan_id = ucfg_scan_get_scan_id(psoc);
 	if (!scan_id) {
@@ -1439,6 +1542,16 @@ int wlan_cfg80211_scan(struct wlan_objmgr_pdev *pdev,
 	wlan_scan_request_enqueue(pdev, request, params->source,
 				  req->scan_req.scan_id);
 
+	/*
+	 * Acquire wakelock to handle the case where APP's send scan to connect.
+	 * If suspend is received during scan scan will be aborted and APP will
+	 * not get scan result and not connect. eg if PNO is implemented in
+	 * framework.
+	 */
+	wlan_scan_acquire_wake_lock_timeout(psoc,
+					&osif_priv->osif_scan->scan_wake_lock,
+					SCAN_WAKE_LOCK_SCAN_DURATION);
+
 	qdf_runtime_pm_prevent_suspend(
 		&osif_priv->osif_scan->runtime_pm_lock);
 
@@ -1449,9 +1562,12 @@ int wlan_cfg80211_scan(struct wlan_objmgr_pdev *pdev,
 			cfg80211_err("HO is in progress.So defer the scan by informing busy");
 		wlan_scan_request_dequeue(pdev, scan_id, &request,
 					  &params->source, &netdev);
-		if (qdf_list_empty(&osif_priv->osif_scan->scan_req_q))
+		if (qdf_list_empty(&osif_priv->osif_scan->scan_req_q)) {
 			qdf_runtime_pm_allow_suspend(
 				&osif_priv->osif_scan->runtime_pm_lock);
+			wlan_scan_release_wake_lock(psoc,
+				&osif_priv->osif_scan->scan_wake_lock);
+		}
 	}
 	ret = qdf_status_to_os_return(qdf_status);
 
@@ -1790,7 +1906,8 @@ void wlan_cfg80211_inform_bss_frame(struct wlan_objmgr_pdev *pdev,
 	bss_data.frame_len = wlan_get_frame_len(scan_params);
 	bss_data.mgmt = qdf_mem_malloc_atomic(bss_data.frame_len);
 	if (!bss_data.mgmt) {
-		cfg80211_err("mem alloc failed");
+		cfg80211_err("mem alloc failed for bss %pM seq %d",
+			     bss_data.mgmt->bssid, scan_params->seq_num);
 		return;
 	}
 	qdf_mem_copy(bss_data.mgmt,
@@ -1811,6 +1928,9 @@ void wlan_cfg80211_inform_bss_frame(struct wlan_objmgr_pdev *pdev,
 	bss_data.chan = wlan_get_ieee80211_channel(wiphy, pdev,
 		scan_params->channel.chan_idx);
 	if (!bss_data.chan) {
+		cfg80211_err("Channel not found for bss %pM seq %d chan %d",
+			     bss_data.mgmt->bssid, scan_params->seq_num,
+			     scan_params->channel.chan_idx);
 		qdf_mem_free(bss_data.mgmt);
 		return;
 	}
@@ -1826,14 +1946,63 @@ void wlan_cfg80211_inform_bss_frame(struct wlan_objmgr_pdev *pdev,
 	qdf_mem_copy(bss_data.per_chain_snr, scan_params->per_chain_snr,
 		     WLAN_MGMT_TXRX_HOST_MAX_ANTENNA);
 
-	cfg80211_debug("BSSID: %pM Channel:%d RSSI:%d", bss_data.mgmt->bssid,
-		       bss_data.chan->center_freq, (int)(bss_data.rssi / 100));
-
 	bss = wlan_cfg80211_inform_bss_frame_data(wiphy, &bss_data);
 	if (!bss)
-		cfg80211_err("failed to inform bss");
+		cfg80211_err("failed to inform bss %pM seq %d",
+			     bss_data.mgmt->bssid, scan_params->seq_num);
 	else
 		wlan_cfg80211_put_bss(wiphy, bss);
 
 	qdf_mem_free(bss_data.mgmt);
+}
+
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(4, 1, 0)) && \
+	!defined(WITH_BACKPORTS) && !defined(IEEE80211_PRIVACY)
+struct cfg80211_bss *wlan_cfg80211_get_bss(struct wiphy *wiphy,
+					   struct ieee80211_channel *channel,
+					   const u8 *bssid, const u8 *ssid,
+					   size_t ssid_len)
+{
+	return cfg80211_get_bss(wiphy, channel, bssid,
+				ssid, ssid_len,
+				WLAN_CAPABILITY_ESS,
+				WLAN_CAPABILITY_ESS);
+}
+#else
+struct cfg80211_bss *wlan_cfg80211_get_bss(struct wiphy *wiphy,
+					   struct ieee80211_channel *channel,
+					   const u8 *bssid, const u8 *ssid,
+					   size_t ssid_len)
+{
+	return cfg80211_get_bss(wiphy, channel, bssid,
+				ssid, ssid_len,
+				IEEE80211_BSS_TYPE_ESS,
+				IEEE80211_PRIVACY_ANY);
+}
+#endif
+
+void wlan_cfg80211_unlink_bss_list(struct wlan_objmgr_pdev *pdev,
+				   struct scan_cache_entry *scan_entry)
+{
+	struct cfg80211_bss *bss = NULL;
+	struct pdev_osif_priv *pdev_ospriv = wlan_pdev_get_ospriv(pdev);
+	struct wiphy *wiphy;
+
+	if (!pdev_ospriv) {
+		cfg80211_err("os_priv is NULL");
+		return;
+	}
+
+	wiphy = pdev_ospriv->wiphy;
+	bss = wlan_cfg80211_get_bss(wiphy, NULL, scan_entry->bssid.bytes,
+				    scan_entry->ssid.ssid,
+				    scan_entry->ssid.length);
+	if (!bss) {
+		cfg80211_err("BSS %pM not found", scan_entry->bssid.bytes);
+	} else {
+		cfg80211_debug("cfg80211_unlink_bss called for BSSID %pM",
+			       scan_entry->bssid.bytes);
+		cfg80211_unlink_bss(wiphy, bss);
+		wlan_cfg80211_put_bss(wiphy, bss);
+	}
 }

@@ -728,6 +728,7 @@ static QDF_STATUS send_peer_unmap_conf_cmd_tlv(wmi_unified_t wmi,
 	wmi_peer_unmap_response_cmd_fixed_param *cmd;
 	uint32_t peer_id_list_len;
 	uint32_t len = sizeof(*cmd);
+	QDF_STATUS status;
 
 	if (!peer_id_cnt || !peer_id_list)
 		return QDF_STATUS_E_FAILURE;
@@ -766,12 +767,13 @@ static QDF_STATUS send_peer_unmap_conf_cmd_tlv(wmi_unified_t wmi,
 	WMI_LOGD("%s: vdev_id %d peer_id_cnt %d", __func__,
 		 vdev_id, peer_id_cnt);
 	wmi_mtrace(WMI_PEER_UNMAP_RESPONSE_CMDID, vdev_id, 0);
-	if (wmi_unified_cmd_send(wmi, buf, len,
-				 WMI_PEER_UNMAP_RESPONSE_CMDID)) {
-		WMI_LOGP("%s: Failed to send peer delete conf command",
-			 __func__);
+	status = wmi_unified_cmd_send(wmi, buf, len,
+				      WMI_PEER_UNMAP_RESPONSE_CMDID);
+	if (QDF_IS_STATUS_ERROR(status)) {
+		WMI_LOGE("%s: Failed to send peer unmap conf command: Err[%d]",
+			 __func__, status);
 		wmi_buf_free(buf);
-		return QDF_STATUS_E_FAILURE;
+		return status;
 	}
 
 	return QDF_STATUS_SUCCESS;
@@ -2837,8 +2839,8 @@ static QDF_STATUS send_scan_start_cmd_tlv(wmi_unified_t wmi_handle,
 	uint32_t *tmp_ptr;
 	wmi_ssid *ssid = NULL;
 	wmi_mac_addr *bssid;
-	int len = sizeof(*cmd);
-	uint8_t extraie_len_with_pad = 0;
+	size_t len = sizeof(*cmd);
+	uint16_t extraie_len_with_pad = 0;
 	uint8_t phymode_roundup = 0;
 	struct probe_req_whitelist_attr *ie_whitelist = &params->ie_whitelist;
 
@@ -17934,6 +17936,12 @@ static host_mem_req *extract_host_mem_req_tlv(wmi_unified_t wmi_handle,
 		return NULL;
 	}
 
+	if (ev->num_mem_reqs > param_buf->num_mem_reqs) {
+		WMI_LOGE("Invalid num_mem_reqs %d:%d",
+			 ev->num_mem_reqs, param_buf->num_mem_reqs);
+		return NULL;
+	}
+
 	*num_entries = ev->num_mem_reqs;
 
 	return (host_mem_req *)param_buf->mem_reqs;
@@ -19712,6 +19720,7 @@ static QDF_STATUS extract_chainmask_tables_tlv(wmi_unified_t wmi_handle,
 	WMI_MAC_PHY_CHAINMASK_CAPABILITY *chainmask_caps;
 	WMI_SOC_MAC_PHY_HW_MODE_CAPS *hw_caps;
 	uint8_t i = 0, j = 0;
+	uint32_t num_mac_phy_chainmask_caps = 0;
 
 	param_buf = (WMI_SERVICE_READY_EXT_EVENTID_param_tlvs *) event;
 	if (!param_buf)
@@ -19731,6 +19740,26 @@ static QDF_STATUS extract_chainmask_tables_tlv(wmi_unified_t wmi_handle,
 
 	if (chainmask_caps == NULL)
 		return QDF_STATUS_E_INVAL;
+
+	for (i = 0; i < hw_caps->num_chainmask_tables; i++) {
+		if (chainmask_table[i].num_valid_chainmasks >
+		    (UINT_MAX - num_mac_phy_chainmask_caps)) {
+			wmi_err_rl("integer overflow, num_mac_phy_chainmask_caps:%d, i:%d, um_valid_chainmasks:%d",
+				   num_mac_phy_chainmask_caps, i,
+				   chainmask_table[i].num_valid_chainmasks);
+			return QDF_STATUS_E_INVAL;
+		}
+		num_mac_phy_chainmask_caps +=
+			chainmask_table[i].num_valid_chainmasks;
+	}
+
+	if (num_mac_phy_chainmask_caps >
+	    param_buf->num_mac_phy_chainmask_caps) {
+		wmi_err_rl("invalid chainmask caps num, num_mac_phy_chainmask_caps:%d, param_buf->num_mac_phy_chainmask_caps:%d",
+			   num_mac_phy_chainmask_caps,
+			   param_buf->num_mac_phy_chainmask_caps);
+		return QDF_STATUS_E_INVAL;
+	}
 
 	for (i = 0; i < hw_caps->num_chainmask_tables; i++) {
 
@@ -19926,6 +19955,12 @@ static QDF_STATUS extract_hw_mode_cap_service_ready_ext_tlv(
 	if (!hw_caps)
 		return QDF_STATUS_E_INVAL;
 
+	if (!hw_caps->num_hw_modes ||
+	    !param_buf->hw_mode_caps ||
+	    hw_caps->num_hw_modes > PSOC_MAX_HW_MODE ||
+	    hw_caps->num_hw_modes > param_buf->num_hw_mode_caps)
+		return QDF_STATUS_E_INVAL;
+
 	if (hw_mode_idx >= hw_caps->num_hw_modes)
 		return QDF_STATUS_E_INVAL;
 
@@ -19967,6 +20002,12 @@ static QDF_STATUS extract_mac_phy_cap_service_ready_ext_tlv(
 	hw_caps = param_buf->soc_hw_mode_caps;
 	if (!hw_caps)
 		return QDF_STATUS_E_INVAL;
+	if (hw_caps->num_hw_modes > PSOC_MAX_HW_MODE ||
+	    hw_caps->num_hw_modes > param_buf->num_hw_mode_caps) {
+		wmi_err_rl("invalid num_hw_modes %d, num_hw_mode_caps %d",
+			   hw_caps->num_hw_modes, param_buf->num_hw_mode_caps);
+		return QDF_STATUS_E_INVAL;
+	}
 
 	for (hw_idx = 0; hw_idx < hw_caps->num_hw_modes; hw_idx++) {
 		if (hw_mode_id == param_buf->hw_mode_caps[hw_idx].hw_mode_id)
@@ -20063,6 +20104,9 @@ static QDF_STATUS extract_reg_cap_service_ready_ext_tlv(
 
 	reg_caps = param_buf->soc_hal_reg_caps;
 	if (!reg_caps)
+		return QDF_STATUS_E_INVAL;
+
+	if (reg_caps->num_phy > param_buf->num_hal_reg_caps)
 		return QDF_STATUS_E_INVAL;
 
 	if (phy_idx >= reg_caps->num_phy)
@@ -23540,6 +23584,8 @@ static void populate_tlv_events_id(uint32_t *event_ids)
 	event_ids[wmi_vdev_bcn_reception_stats_event_id] =
 		WMI_VDEV_BCN_RECEPTION_STATS_EVENTID;
 	event_ids[wmi_roam_blacklist_event_id] = WMI_ROAM_BLACKLIST_EVENTID;
+	event_ids[wmi_pdev_cold_boot_cal_event_id] =
+					    WMI_PDEV_COLD_BOOT_CAL_DATA_EVENTID;
 }
 
 /**

@@ -59,6 +59,17 @@
 #define scm_debug_rl(params...) \
 	QDF_TRACE_DEBUG_RL(QDF_MODULE_ID_SCAN, params)
 
+#define scm_nofl_alert(params...) \
+	QDF_TRACE_FATAL_NO_FL(QDF_MODULE_ID_SCAN, params)
+#define scm_nofl_err(params...) \
+	QDF_TRACE_ERROR_NO_FL(QDF_MODULE_ID_SCAN, params)
+#define scm_nofl_warn(params...) \
+	QDF_TRACE_WARN_NO_FL(QDF_MODULE_ID_SCAN, params)
+#define scm_nofl_info(params...) \
+	QDF_TRACE_INFO_NO_FL(QDF_MODULE_ID_SCAN, params)
+#define scm_nofl_debug(params...) \
+	QDF_TRACE_DEBUG_NO_FL(QDF_MODULE_ID_SCAN, params)
+
 #define scm_hex_dump(level, data, buf_len) \
 		qdf_trace_hex_dump(QDF_MODULE_ID_SCAN, level, data, buf_len)
 
@@ -279,6 +290,8 @@ struct pno_def_config {
  * @active_dwell: default active dwell time
  * @allow_dfs_chan_in_first_scan: first scan should contain dfs channels or not.
  * @allow_dfs_chan_in_scan: Scan DFS channels or not.
+ * @skip_dfs_chan_in_p2p_search: Skip dfs channels in p2p search.
+ * @use_wake_lock_in_user_scan: if wake lock will be acquired during user scan
  * @active_dwell_2g: default active dwell time for 2G channels, if it's not zero
  * @passive_dwell:default passive dwell time
  * @max_rest_time: default max rest time
@@ -359,6 +372,8 @@ struct scan_default_params {
 	uint32_t active_dwell;
 	bool allow_dfs_chan_in_first_scan;
 	bool allow_dfs_chan_in_scan;
+	bool skip_dfs_chan_in_p2p_search;
+	bool use_wake_lock_in_user_scan;
 	uint32_t active_dwell_2g;
 	uint32_t passive_dwell;
 	uint32_t max_rest_time;
@@ -388,6 +403,10 @@ struct scan_default_params {
 	int rssi_cat[SCM_NUM_RSSI_CAT];
 	uint16_t max_bss_per_pdev;
 	uint32_t max_active_scans_allowed;
+	uint8_t sta_scan_burst_duration;
+	uint8_t p2p_scan_burst_duration;
+	uint8_t go_scan_burst_duration;
+	uint8_t ap_scan_burst_duration;
 	enum scan_priority scan_priority;
 	enum scan_dwelltime_adaptive_mode adaptive_dwell_time_mode;
 	enum scan_dwelltime_adaptive_mode adaptive_dwell_time_mode_nc;
@@ -447,10 +466,12 @@ struct scan_default_params {
  * struct scan_cb - nif/sif function callbacks
  * @inform_beacon: cb to indicate frame to OS
  * @update_beacon: cb to indicate frame to MLME
+ * @unlink_bss: cb to unlink bss from kernel cache
  */
 struct scan_cb {
 	update_beacon_cb inform_beacon;
 	update_beacon_cb update_beacon;
+	update_beacon_cb unlink_bss;
 	/* Define nif/sif function callbacks here */
 };
 
