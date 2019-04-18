@@ -23,6 +23,7 @@
 #ifdef CONFIG_PCI_MSM
 #include <linux/msm_pcie.h>
 #endif
+#include <linux/of_irq.h>
 #include "hif_io32.h"
 #include "if_pci.h"
 #include "hif.h"
@@ -2290,8 +2291,23 @@ static int hif_pci_configure_legacy_irq(struct hif_pci_softc *sc)
 	int ret = 0;
 	struct hif_softc *scn = HIF_GET_SOFTC(sc);
 	uint32_t target_type = scn->target_info.target_type;
+	struct device_node *dev_node;
 
 	HIF_TRACE("%s: E", __func__);
+	dev_node = of_find_node_by_path("/soc/qcom,pcie@1c00000");
+	if (dev_node == NULL) {
+		HIF_ERROR("%s: of_find_node_by_path failed, pcie@1c00000, ret = %d", __func__, ret);
+		dev_node = of_find_node_by_path("/soc/qcom,pcie@1c08000");
+		if (dev_node == NULL) {
+			HIF_ERROR("%s: of_find_node_by_path failed, pcie@1c08000, ret = %d", __func__, ret);
+		}
+	}
+	sc->pdev->irq = of_irq_get_byname(dev_node, "int_a");
+	if(sc->pdev->irq == 0) {
+		HIF_ERROR("%s: of_irq_get_byname failed, ret = %d", __func__, ret);
+	}
+	HIF_ERROR("%s: irq = %d", __func__, sc->pdev->irq);
+
 
 	/* do notn support MSI or MSI IRQ failed */
 	tasklet_init(&sc->intr_tq, wlan_tasklet, (unsigned long)sc);
