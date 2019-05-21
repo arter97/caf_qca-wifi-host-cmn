@@ -2161,7 +2161,7 @@ static int hif_enable_pci(struct hif_pci_softc *sc,
 		goto err_iomap;
 	}
 
-	pr_err("*****BAR is %pK\n", mem);
+	HIF_INFO("*****BAR is %pK\n", (void *)mem);
 
 	sc->mem = mem;
 
