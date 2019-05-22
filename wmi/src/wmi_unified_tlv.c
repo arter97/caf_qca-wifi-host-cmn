@@ -21166,6 +21166,10 @@ static QDF_STATUS extract_dfs_radar_detection_event_tlv(
 	radar_event = param_tlv->fixed_param;
 	radar_found->pdev_id = wmi_handle->ops->
 		convert_pdev_id_target_to_host(radar_event->pdev_id);
+
+	if (radar_found->pdev_id == WMI_HOST_PDEV_ID_INVALID)
+		return QDF_STATUS_E_FAILURE;
+
 	radar_found->detection_mode = radar_event->detection_mode;
 	radar_found->chan_freq = radar_event->chan_freq;
 	radar_found->chan_width = radar_event->chan_width;
@@ -21841,9 +21845,9 @@ static uint32_t convert_target_pdev_id_to_host_pdev_id(uint32_t pdev_id)
 		return WMI_HOST_PDEV_ID_2;
 	}
 
-	QDF_ASSERT(0);
+	WMI_LOGE("Invalid pdev_id");
 
-	return WMI_HOST_PDEV_ID_SOC;
+	return WMI_HOST_PDEV_ID_INVALID;
 }
 
 /**
