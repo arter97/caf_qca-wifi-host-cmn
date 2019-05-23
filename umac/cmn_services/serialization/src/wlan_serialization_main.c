@@ -288,6 +288,10 @@ static QDF_STATUS wlan_serialization_pdev_obj_destroy_notification(
 	struct wlan_serialization_pdev_priv_obj *ser_pdev_obj =
 		wlan_serialization_get_pdev_priv_obj(pdev);
 
+	if (NULL == ser_pdev_obj) {
+		serialization_err("invalid ser_pdev_obj");
+		return QDF_STATUS_E_FAULT;
+	}
 	status = wlan_objmgr_pdev_component_obj_detach(pdev,
 			WLAN_UMAC_COMP_SERIALIZATION, ser_pdev_obj);
 	wlan_serialization_destroy_list(ser_pdev_obj,

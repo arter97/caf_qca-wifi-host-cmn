@@ -4070,6 +4070,7 @@ static ssize_t dbglog_block_read(struct file *file,
 	buf = vmalloc(count);
 	if (!buf)
 		return -ENOMEM;
+	OS_MEMSET(buf, 0, count);
 
 	spin_lock_bh(&fwlog->fwlog_queue.lock);
 
