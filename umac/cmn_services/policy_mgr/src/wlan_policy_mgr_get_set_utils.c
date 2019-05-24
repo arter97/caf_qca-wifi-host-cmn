@@ -2585,6 +2585,8 @@ QDF_STATUS policy_mgr_is_chan_ok_for_dnbs(struct wlan_objmgr_psoc *psoc,
 					&vdev_id[cc_count],
 					PM_SAP_MODE);
 	policy_mgr_debug("Number of SAP modes: %d", cc_count);
+	if (cc_count >= MAX_NUMBER_OF_CONC_CONNECTIONS)
+		return QDF_STATUS_E_INVAL;
 	cc_count = cc_count + policy_mgr_get_mode_specific_conn_info(psoc,
 					&operating_channel[cc_count],
 					&vdev_id[cc_count],
@@ -2596,6 +2598,8 @@ QDF_STATUS policy_mgr_is_chan_ok_for_dnbs(struct wlan_objmgr_psoc *psoc,
 		return QDF_STATUS_SUCCESS;
 	}
 
+	if (cc_count >= MAX_NUMBER_OF_CONC_CONNECTIONS)
+		return QDF_STATUS_E_INVAL;
 	for (i = 0; i < cc_count; i++) {
 		vdev = wlan_objmgr_get_vdev_by_id_from_psoc(psoc,
 							vdev_id[i],
