@@ -1115,6 +1115,8 @@ static enum HTC_SEND_QUEUE_RESULT htc_try_send(HTC_TARGET *target,
 				/* pop off caller's queue */
 				pPacket = htc_packet_dequeue(pCallersSendQueue);
 				A_ASSERT(pPacket != NULL);
+				if (NULL == pPacket)
+					continue;
 				/* insert into local queue */
 				HTC_PACKET_ENQUEUE(&sendQueue, pPacket);
 			}

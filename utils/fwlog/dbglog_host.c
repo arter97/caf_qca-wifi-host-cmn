@@ -4104,6 +4104,10 @@ static ssize_t dbglog_block_read(struct file *file,
 
 	spin_unlock_bh(&fwlog->fwlog_queue.lock);
 
+	if (0 == len) {
+		ret_cnt = 0;
+		goto out;
+	}
 	/* FIXME: what to do if len == 0? */
 	not_copied = copy_to_user(user_buf, buf, len);
 	if (not_copied != 0) {

@@ -221,7 +221,7 @@ void policy_mgr_update_with_safe_channel_list(struct wlan_objmgr_psoc *psoc,
 		current_channel_count);
 	qdf_mem_zero(pcl_channels, current_channel_count);
 
-	qdf_mem_copy(org_weight_list, weight_list, QDF_MAX_NUM_CHAN);
+	qdf_mem_copy(org_weight_list, weight_list, QDF_MIN(QDF_MAX_NUM_CHAN, weight_len));
 	qdf_mem_zero(weight_list, weight_len);
 
 	for (i = 0; i < current_channel_count; i++) {
@@ -1443,6 +1443,10 @@ QDF_STATUS policy_mgr_get_valid_chans(struct wlan_objmgr_psoc *psoc,
 		policy_mgr_err("Error in getting valid channels");
 		*list_len = 0;
 		return status;
+	}
+
+	if (*list_len > QDF_MAX_NUM_CHAN) {
+		*list_len = QDF_MAX_NUM_CHAN;
 	}
 
 	policy_mgr_remove_dsrc_channels(chan_list, list_len, pm_ctx->pdev);
