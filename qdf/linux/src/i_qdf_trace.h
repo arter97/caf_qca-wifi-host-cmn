@@ -186,13 +186,20 @@ static inline void qdf_trace_msg(QDF_MODULE_ID module, QDF_TRACE_LEVEL level,
 
 #endif
 
+void cds_trigger_ssr(const char *source);
+#define QDF_TRIGGER_SSR() \
+	do { \
+		WARN_ON(1); \
+		cds_trigger_ssr(__func__); \
+	} while (0)
+
 #ifdef PANIC_ON_BUG
 static inline void QDF_DEBUG_PANIC(void)
 {
 	BUG();
 }
 #else
-static inline void QDF_DEBUG_PANIC(void) { }
+#define QDF_DEBUG_PANIC() QDF_TRIGGER_SSR()
 #endif
 
 #define QDF_BUG(_condition) \
