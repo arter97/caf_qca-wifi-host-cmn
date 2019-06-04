@@ -2314,18 +2314,26 @@ void hif_unconfig_ce(struct hif_softc *hif_sc)
 	int pipe_num;
 	struct HIF_CE_pipe_info *pipe_info;
 	struct HIF_CE_state *hif_state = HIF_GET_CE_STATE(hif_sc);
+	struct hif_opaque_softc *hif_hdl = GET_HIF_OPAQUE_HDL(hif_sc);
 
 	for (pipe_num = 0; pipe_num < hif_sc->ce_count; pipe_num++) {
 		pipe_info = &hif_state->pipe_info[pipe_num];
 		if (pipe_info->ce_hdl) {
 			ce_unregister_irq(hif_state, (1 << pipe_num));
 			hif_sc->request_irq_done = false;
+		}
+	}
+	deinit_tasklet_workers(hif_hdl);
+	for (pipe_num = 0; pipe_num < hif_sc->ce_count; pipe_num++) {
+		pipe_info = &hif_state->pipe_info[pipe_num];
+		if (pipe_info->ce_hdl) {
 			ce_fini(pipe_info->ce_hdl);
 			pipe_info->ce_hdl = NULL;
 			pipe_info->buf_sz = 0;
 			qdf_spinlock_destroy(&pipe_info->recv_bufs_needed_lock);
 		}
 	}
+	deinit_tasklet_workers(hif_hdl);
 	if (hif_sc->athdiag_procfs_inited) {
 		athdiag_procfs_remove();
 		hif_sc->athdiag_procfs_inited = false;
