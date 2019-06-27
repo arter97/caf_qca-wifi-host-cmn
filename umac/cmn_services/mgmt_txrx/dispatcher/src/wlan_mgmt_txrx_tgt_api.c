@@ -940,9 +940,14 @@ QDF_STATUS tgt_mgmt_txrx_rx_frame_handler(
 		goto dec_peer_ref_cnt;
 	}
 
-	mgmt_txrx_info("Rcvd mgmt frame, mgmt txrx frm type: %u seq. no.: %u, peer: %pK fc: %x %x",
-		       frm_type, *(uint16_t *)wh->i_seq, peer, wh->i_fc[0],
-		       wh->i_fc[1]);
+	if (!(mgmt_subtype == MGMT_SUBTYPE_BEACON ||
+	      mgmt_subtype == MGMT_SUBTYPE_PROBE_RESP ||
+	      mgmt_subtype == MGMT_SUBTYPE_PROBE_REQ))
+		mgmt_txrx_debug("Rcvd mgmt frame subtype %x (frame type %u) from %pM, seq_num = %d, rssi = %d tsf_delta: %u",
+				mgmt_subtype, frm_type, wh->i_addr2,
+				(le16toh(*(uint16_t *)wh->i_seq) >>
+				WLAN_SEQ_SEQ_SHIFT), mgmt_rx_params->rssi,
+				mgmt_rx_params->tsf_delta);
 
 	mgmt_txrx_psoc_ctx = (struct mgmt_txrx_priv_psoc_context *)
 			wlan_objmgr_psoc_get_comp_private_obj(psoc,
