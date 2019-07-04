@@ -244,10 +244,38 @@ wdi_pktlog_subscribe(struct cdp_pdev *cdp_pdev, int32_t log_state)
 		}
 	}
 
+	if (log_state & ATH_PKTLOG_TX) {
+		if (cdp_wdi_event_sub(soc, cdp_pdev,
+				      &PKTLOG_TX_SUBSCRIBER,
+				      WDI_EVENT_TX_STATUS)) {
+			return A_ERROR;
+		}
+	}
+
 	if (log_state & ATH_PKTLOG_RX) {
 		if (cdp_wdi_event_sub(soc, cdp_pdev,
-					&PKTLOG_RX_SUBSCRIBER,
-					WDI_EVENT_RX_DESC)) {
+				      &PKTLOG_RX_SUBSCRIBER,
+				      WDI_EVENT_RX_DESC)) {
+			return A_ERROR;
+		}
+		if (cdp_wdi_event_sub(soc, cdp_pdev,
+				      &PKTLOG_RX_REMOTE_SUBSCRIBER,
+				      WDI_EVENT_RX_DESC_REMOTE)) {
+			return A_ERROR;
+		}
+	}
+
+	if (log_state & ATH_PKTLOG_RCFIND) {
+		if (cdp_wdi_event_sub(soc, cdp_pdev,
+				      &PKTLOG_RCFIND_SUBSCRIBER,
+				      WDI_EVENT_RATE_FIND)) {
+			return A_ERROR;
+		}
+	}
+	if (log_state & ATH_PKTLOG_RCUPDATE) {
+		if (cdp_wdi_event_sub(soc, cdp_pdev,
+				      &PKTLOG_RCUPDATE_SUBSCRIBER,
+				      WDI_EVENT_RATE_UPDATE)) {
 			return A_ERROR;
 		}
 	}
@@ -473,10 +501,48 @@ wdi_pktlog_unsubscribe(struct cdp_pdev *pdev, uint32_t log_state)
 			return A_ERROR;
 		}
 	}
+
+	if (log_state & ATH_PKTLOG_TX) {
+		if (cdp_wdi_event_unsub(soc, pdev,
+					&PKTLOG_TX_SUBSCRIBER,
+					WDI_EVENT_TX_STATUS)) {
+			return A_ERROR;
+		}
+	}
+
 	if (log_state & ATH_PKTLOG_RX) {
 		if (cdp_wdi_event_unsub(soc, pdev,
 					&PKTLOG_RX_SUBSCRIBER,
 					WDI_EVENT_RX_DESC)) {
+			return A_ERROR;
+		}
+		if (cdp_wdi_event_unsub(soc, pdev,
+					&PKTLOG_RX_REMOTE_SUBSCRIBER,
+					WDI_EVENT_RX_DESC_REMOTE)) {
+			return A_ERROR;
+		}
+	}
+
+	if (log_state & ATH_PKTLOG_RCFIND) {
+		if (cdp_wdi_event_unsub(soc, pdev,
+					&PKTLOG_RCFIND_SUBSCRIBER,
+					WDI_EVENT_RATE_FIND)) {
+			return A_ERROR;
+		}
+	}
+
+	if (log_state & ATH_PKTLOG_RCUPDATE) {
+		if (cdp_wdi_event_unsub(soc, pdev,
+					&PKTLOG_RCUPDATE_SUBSCRIBER,
+					WDI_EVENT_RATE_UPDATE)) {
+			return A_ERROR;
+		}
+	}
+
+	if (log_state & ATH_PKTLOG_SW_EVENT) {
+		if (cdp_wdi_event_unsub(soc, pdev,
+					&PKTLOG_SW_EVENT_SUBSCRIBER,
+					WDI_EVENT_SW_EVENT)) {
 			return A_ERROR;
 		}
 	}
@@ -580,9 +646,14 @@ static void pktlog_callback_registration(uint8_t callback_type)
 static void pktlog_callback_registration(uint8_t callback_type)
 {
 	if (callback_type == PKTLOG_DEFAULT_CALLBACK_REGISTRATION) {
-		PKTLOG_RX_SUBSCRIBER.callback = lit_pktlog_callback;
 		PKTLOG_LITE_T2H_SUBSCRIBER.callback = lit_pktlog_callback;
 		PKTLOG_OFFLOAD_SUBSCRIBER.callback = pktlog_callback;
+		PKTLOG_TX_SUBSCRIBER.callback = pktlog_callback;
+		PKTLOG_RX_SUBSCRIBER.callback = pktlog_callback;
+		PKTLOG_RX_REMOTE_SUBSCRIBER.callback = pktlog_callback;
+		PKTLOG_RCFIND_SUBSCRIBER.callback = pktlog_callback;
+		PKTLOG_RCUPDATE_SUBSCRIBER.callback = pktlog_callback;
+		PKTLOG_SW_EVENT_SUBSCRIBER.callback = pktlog_callback;
 	} else if (callback_type == PKTLOG_LITE_CALLBACK_REGISTRATION) {
 		PKTLOG_LITE_T2H_SUBSCRIBER.callback = lit_pktlog_callback;
 		PKTLOG_LITE_RX_SUBSCRIBER.callback = lit_pktlog_callback;

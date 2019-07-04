@@ -110,7 +110,9 @@ void pktlog_getbuf_intsafe(struct ath_pktlog_arg *plarg)
 	log_hdr->size = (uint16_t) log_size;
 	log_hdr->missed_cnt = plarg->missed_cnt;
 	log_hdr->timestamp = plarg->timestamp;
+#ifdef HELIUMPLUS
 	log_hdr->type_specific_data = plarg->type_specific_data;
+#endif
 	cur_wr_offset += sizeof(*log_hdr);
 
 	if ((buf_size - cur_wr_offset) < log_size) {
@@ -155,8 +157,9 @@ char *pktlog_getbuf(struct pktlog_dev_t *pl_dev,
 	plarg.flags = pl_hdr->flags;
 	plarg.missed_cnt = pl_hdr->missed_cnt;
 	plarg.timestamp = pl_hdr->timestamp;
+#ifdef HELIUMPLUS
 	plarg.type_specific_data = pl_hdr->type_specific_data;
-
+#endif
 	if (flags & PHFLAGS_INTERRUPT_CONTEXT) {
 		/*
 		 * We are already in interrupt context, no need to make it
@@ -680,9 +683,10 @@ process_offload_pktlog(struct cdp_pdev *pdev, void *data)
 	pl_hdr.size =  (*(pl_tgt_hdr + ATH_PKTLOG_HDR_SIZE_OFFSET) &
 			ATH_PKTLOG_HDR_SIZE_MASK) >> ATH_PKTLOG_HDR_SIZE_SHIFT;
 	pl_hdr.timestamp = *(pl_tgt_hdr + ATH_PKTLOG_HDR_TIMESTAMP_OFFSET);
+#ifdef HELIUMPLUS
 	pl_hdr.type_specific_data = *(pl_tgt_hdr
 			+ ATH_PKTLOG_HDR_TYPE_SPECIFIC_DATA_OFFSET);
-
+#endif
 	/*
 	 *  Must include to process different types
 	 *  TX_CTL, TX_STATUS, TX_MSDU_ID, TX_FRM_HDR
