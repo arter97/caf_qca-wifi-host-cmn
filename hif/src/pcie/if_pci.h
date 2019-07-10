@@ -120,6 +120,7 @@ struct hif_pci_softc {
 	u16 devid;
 	struct hif_tasklet_entry tasklet_entries[HIF_MAX_TASKLET_NUM];
 	bool pci_enabled;
+	bool single_msi_enabled;
 	bool use_register_windowing;
 	uint32_t register_window;
 	qdf_spinlock_t register_access_lock;
@@ -188,6 +189,45 @@ int hif_pci_addr_in_boundary(struct hif_softc *scn, uint32_t offset);
 #else
 #define OL_ATH_TX_DRAIN_WAIT_CNT       60
 #endif
+
+#ifdef FEATURE_SINGLE_MSI
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 11, 0))
+static inline int hif_pci_enable_msi(struct hif_pci_softc *sc, int num_vec)
+{
+	return pci_alloc_irq_vectors(sc->pdev, num_vec, num_vec,
+				     PCI_IRQ_ALL_TYPES);
+}
+#elif (LINUX_VERSION_CODE >= KERNEL_VERSION(3, 16, 0))
+static inline int hif_pci_enable_msi(struct hif_pci_softc *sc, int num_vec)
+{
+	return pci_enable_msi_range(sc->pdev, num_vec, num_vec);
+}
+#else
+static inline int hif_pci_enable_msi(struct hif_pci_softc *sc, int num_vec)
+{
+	return pci_enable_msi_block(sc->pdev, num_vec);
+}
+#endif
+
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 11, 0))
+static inline void hif_pci_disable_msi(struct hif_pci_softc *sc)
+{
+	pci_free_irq_vectors(sc->pdev);
+}
+#else
+static inline void hif_pci_disable_msi(struct hif_pci_softc *sc)
+{
+	pci_disable_msi(sc->pdev);
+}
+#endif
+#else
+static inline int hif_pci_enable_msi(struct hif_pci_softc *sc, int num_vec)
+{
+	return -EINVAL;
+}
+
+static inline void hif_pci_disable_msi(struct hif_pci_softc *sc) {}
+#endif /* FEATURE_SINGLE_MSI */
 
 #ifdef FEATURE_RUNTIME_PM
 #include <linux/pm_runtime.h>
