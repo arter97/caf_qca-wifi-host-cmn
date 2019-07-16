@@ -98,6 +98,11 @@ util_get_last_scan_time(struct wlan_objmgr_vdev *vdev)
 	pdev_id = wlan_scan_vdev_get_pdev_id(vdev);
 	scan_obj = wlan_vdev_get_scan_obj(vdev);
 
+	if (!scan_obj) {
+		scm_warn("null scan_obj");
+		QDF_ASSERT(0);
+		return 0;
+	}
 	return scan_obj->pdev_info[pdev_id].last_scan_time;
 }
 

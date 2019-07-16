@@ -157,9 +157,11 @@ void htc_dump_counter_info(HTC_HANDLE HTCHandle)
 {
 	HTC_TARGET *target = GET_HTC_TARGET_FROM_HANDLE(HTCHandle);
 
-	AR_DEBUG_PRINTF(ATH_DEBUG_ERR,
+	if (target) {
+		AR_DEBUG_PRINTF(ATH_DEBUG_ERR,
 			("\n%s: ce_send_cnt = %d, TX_comp_cnt = %d\n",
 			 __func__, target->ce_send_cnt, target->TX_comp_cnt));
+	}
 }
 
 int htc_get_tx_queue_depth(HTC_HANDLE *htc_handle, HTC_ENDPOINT_ID endpoint_id)

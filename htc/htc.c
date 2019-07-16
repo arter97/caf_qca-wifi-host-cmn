@@ -1066,6 +1066,9 @@ bool htc_can_suspend_link(HTC_HANDLE htc_handle)
 {
 	HTC_TARGET *target = GET_HTC_TARGET_FROM_HANDLE(htc_handle);
 
+	if (!target)
+		return false;
+
 	if (!target->hif_dev)
 		return false;
 

@@ -89,6 +89,11 @@ target_if_send_vdev_spectral_configure_cmd(struct target_if_spectral *spectral,
 
 	qdf_assert_always(spectral && param);
 
+	if (!spectral)
+		return QDF_STATUS_E_NOENT;
+	if (!param)
+		return QDF_STATUS_E_NOENT;
+
 	pdev = spectral->pdev_obj;
 
 	qdf_assert_always(pdev);

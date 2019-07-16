@@ -1851,6 +1851,9 @@ QDF_STATUS policy_mgr_get_channel_list(struct wlan_objmgr_psoc *psoc,
 		policy_mgr_err("Error in getting valid channels");
 		return status;
 	}
+	if (num_channels > QDF_MAX_NUM_CHAN) {
+		num_channels = QDF_MAX_NUM_CHAN;
+	}
 
 	/*
 	 * if you have atleast one STA connection then don't fill DFS channels

@@ -287,15 +287,17 @@ static QDF_STATUS wlan_serialization_pdev_obj_destroy_notification(
 
 	status = wlan_objmgr_pdev_component_obj_detach(pdev,
 			WLAN_UMAC_COMP_SERIALIZATION, ser_pdev_obj);
-	wlan_serialization_destroy_list(ser_pdev_obj,
-					&ser_pdev_obj->active_list);
-	wlan_serialization_destroy_list(ser_pdev_obj,
-					&ser_pdev_obj->pending_list);
-	wlan_serialization_destroy_list(ser_pdev_obj,
-					&ser_pdev_obj->active_scan_list);
-	wlan_serialization_destroy_list(ser_pdev_obj,
-					&ser_pdev_obj->pending_scan_list);
-	wlan_serialization_destroy_cmd_pool(ser_pdev_obj);
+	if (ser_pdev_obj != NULL) {
+		wlan_serialization_destroy_list(ser_pdev_obj,
+				&ser_pdev_obj->active_list);
+		wlan_serialization_destroy_list(ser_pdev_obj,
+				&ser_pdev_obj->pending_list);
+		wlan_serialization_destroy_list(ser_pdev_obj,
+				&ser_pdev_obj->active_scan_list);
+		wlan_serialization_destroy_list(ser_pdev_obj,
+				&ser_pdev_obj->pending_scan_list);
+		wlan_serialization_destroy_cmd_pool(ser_pdev_obj);
+	}
 	serialization_debug("ser pdev obj detached with status %d", status);
 	status = wlan_serialization_destroy_lock(ser_pdev_obj);
 	if (status != QDF_STATUS_SUCCESS)
