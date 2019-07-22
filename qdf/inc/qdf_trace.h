@@ -54,10 +54,7 @@
  */
 #define QDF_WMI_MTRACE_CMD_ID(message_id) ((message_id) & 0x7F)
 
-#ifdef CONFIG_MCL
-#define QDF_DEFAULT_TRACE_LEVEL \
-	((1 << QDF_TRACE_LEVEL_FATAL) | (1 << QDF_TRACE_LEVEL_ERROR))
-#else
+#ifdef QDF_TRACE_PRINT_ENABLE
 #define QDF_DEFAULT_TRACE_LEVEL (1 << QDF_TRACE_LEVEL_INFO)
 #endif
 
@@ -497,7 +494,7 @@ void qdf_trace_enable(uint32_t, uint8_t enable);
 void qdf_trace_dump_all(void *, uint8_t, uint8_t, uint32_t, uint32_t);
 QDF_STATUS qdf_trace_spin_lock_init(void);
 #else
-#ifdef CONFIG_MCL
+#ifndef QDF_TRACE_PRINT_ENABLE
 static inline
 void qdf_trace_init(void)
 {
@@ -1045,8 +1042,39 @@ qdf_tso_seg_dbg_zero(struct qdf_tso_seg_elem_t *tsoseg)
 
 #endif /* TSOSEG_DEBUG */
 
+/**
+ * qdf_trace_hex_dump() - externally called hex dump function
+ * @module: Module identifier a member of the QDF_MODULE_ID enumeration that
+ * identifies the module issuing the trace message.
+ * @level: Trace level a member of the QDF_TRACE_LEVEL enumeration indicating
+ * the severity of the condition causing the trace message to be
+ * issued. More severe conditions are more likely to be logged.
+ * @data: The base address of the buffer to be logged.
+ * @buf_len: The size of the buffer to be logged.
+ *
+ * Checks the level of severity and accordingly prints the trace messages
+ *
+ * Return:  None
+ */
 void qdf_trace_hex_dump(QDF_MODULE_ID module, QDF_TRACE_LEVEL level,
 			void *data, int buf_len);
+
+/**
+ * qdf_trace_hex_ascii_dump() - externally called hex and ascii dump function
+ * @module: Module identifier a member of the QDF_MODULE_ID enumeration that
+ * identifies the module issuing the trace message.
+ * @level: Trace level a member of the QDF_TRACE_LEVEL enumeration indicating
+ * the severity of the condition causing the trace message to be
+ * issued. More severe conditions are more likely to be logged.
+ * @data: The base address of the buffer to be logged.
+ * @buf_len: The size of the buffer to be logged.
+ *
+ * Checks the level of severity and accordingly prints the trace messages
+ *
+ * Return:  None
+ */
+void qdf_trace_hex_ascii_dump(QDF_MODULE_ID module, QDF_TRACE_LEVEL level,
+			      void *data, int buf_len);
 
 #define ERROR_CODE                      -1
 #define QDF_MAX_NAME_SIZE               32

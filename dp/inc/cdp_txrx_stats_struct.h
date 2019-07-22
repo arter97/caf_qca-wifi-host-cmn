@@ -23,9 +23,6 @@
  */
 #ifndef _CDP_TXRX_STATS_STRUCT_H_
 #define _CDP_TXRX_STATS_STRUCT_H_
-#ifdef CONFIG_MCL
-#include <wlan_defs.h>
-#endif
 #define TXRX_STATS_LEVEL_OFF   0
 #define TXRX_STATS_LEVEL_BASIC 1
 #define TXRX_STATS_LEVEL_FULL  2
@@ -1272,7 +1269,7 @@ struct cdp_pdev_stats {
 	struct cdp_tid_stats tid_stats;
 };
 
-#ifndef CONFIG_MCL
+#ifdef QCA_ENH_V3_STATS_SUPPORT
 /*
  * Enumeration of PDEV Configuration parameter
  */
@@ -1619,6 +1616,10 @@ enum _ol_ath_param_t {
 	OL_ATH_PARAM_TBTT_CTRL = 420,
 	/* Enable/disable AP OBSS_PD_THRESHOLD */
 	OL_ATH_PARAM_SET_CMD_OBSS_PD_THRESHOLD_ENABLE = 421,
+	/* Get baseline radio level channel width */
+	OL_ATH_PARAM_RCHWIDTH = 422,
+	/* Whether external ACS request is in progress */
+	OL_ATH_EXT_ACS_REQUEST_IN_PROGRESS = 423,
 };
 #endif
 /* Bitmasks for stats that can block */

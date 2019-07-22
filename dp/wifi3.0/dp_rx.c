@@ -40,31 +40,21 @@
 #define DP_RX_TID_SAVE(_nbuf, _tid)
 #endif
 
-#ifdef CONFIG_MCL
-static inline bool dp_rx_check_ap_bridge(struct dp_vdev *vdev)
-{
-	if (vdev->opmode != wlan_op_mode_sta)
-		return true;
-	else
-		return false;
-}
-#else
 static inline bool dp_rx_check_ap_bridge(struct dp_vdev *vdev)
 {
 	return vdev->ap_bridge_enabled;
 }
-#endif
 
-/*
- * dp_rx_dump_info_and_assert() - dump RX Ring info and Rx Desc info
- *
- * @soc: core txrx main context
- * @hal_ring: opaque pointer to the HAL Rx Ring, which will be serviced
- * @ring_desc: opaque pointer to the RX ring descriptor
- * @rx_desc: host rs descriptor
- *
- * Return: void
- */
+#ifdef DUP_RX_DESC_WAR
+void dp_rx_dump_info_and_assert(struct dp_soc *soc, void *hal_ring,
+				void *ring_desc, struct dp_rx_desc *rx_desc)
+{
+	void *hal_soc = soc->hal_soc;
+
+	hal_srng_dump_ring_desc(hal_soc, hal_ring, ring_desc);
+	dp_rx_desc_dump(rx_desc);
+}
+#else
 void dp_rx_dump_info_and_assert(struct dp_soc *soc, void *hal_ring,
 				void *ring_desc, struct dp_rx_desc *rx_desc)
 {
@@ -75,6 +65,7 @@ void dp_rx_dump_info_and_assert(struct dp_soc *soc, void *hal_ring,
 	hal_srng_dump_ring(hal_soc, hal_ring);
 	qdf_assert_always(0);
 }
+#endif
 
 /*
  * dp_rx_buffers_replenish() - replenish rxdma ring with rx nbufs
@@ -694,19 +685,23 @@ struct dp_vdev *dp_rx_nac_filter(struct dp_pdev *pdev,
  * dp_rx_process_invalid_peer(): Function to pass invalid peer list to umac
  * @soc: DP SOC handle
  * @mpdu: mpdu for which peer is invalid
+ * @mac_id: mac_id which is one of 3 mac_ids(Assuming mac_id and
+ * pool_id has same mapping)
  *
  * return: integer type
  */
-uint8_t dp_rx_process_invalid_peer(struct dp_soc *soc, qdf_nbuf_t mpdu)
+uint8_t dp_rx_process_invalid_peer(struct dp_soc *soc, qdf_nbuf_t mpdu,
+				   uint8_t mac_id)
 {
 	struct dp_invalid_peer_msg msg;
 	struct dp_vdev *vdev = NULL;
 	struct dp_pdev *pdev = NULL;
 	struct ieee80211_frame *wh;
-	uint8_t i;
 	qdf_nbuf_t curr_nbuf, next_nbuf;
 	uint8_t *rx_tlv_hdr = qdf_nbuf_data(mpdu);
 	uint8_t *rx_pkt_hdr = hal_rx_pkt_hdr_get(rx_tlv_hdr);
+
+	rx_pkt_hdr = hal_rx_pkt_hdr_get(rx_tlv_hdr);
 
 	if (!HAL_IS_DECAP_FORMAT_RAW(rx_tlv_hdr)) {
 		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_DEBUG,
@@ -718,53 +713,51 @@ uint8_t dp_rx_process_invalid_peer(struct dp_soc *soc, qdf_nbuf_t mpdu)
 
 	if (!DP_FRAME_IS_DATA(wh)) {
 		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_DEBUG,
-				"NAWDS valid only for data frames");
+			  "NAWDS valid only for data frames");
 		goto free;
 	}
 
 	if (qdf_nbuf_len(mpdu) < sizeof(struct ieee80211_frame)) {
 		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_ERROR,
-				"Invalid nbuf length");
+			"Invalid nbuf length");
 		goto free;
 	}
 
+	pdev = dp_get_pdev_for_mac_id(soc, mac_id);
 
-	for (i = 0; i < MAX_PDEV_CNT; i++) {
-		pdev = soc->pdev_list[i];
-		if (!pdev) {
-			QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_ERROR,
-					"PDEV not found");
-			continue;
+	if (!pdev) {
+		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_ERROR,
+			  "PDEV not found");
+		goto free;
+	}
+
+	if (pdev->filter_neighbour_peers) {
+		/* Next Hop scenario not yet handle */
+		vdev = dp_rx_nac_filter(pdev, rx_pkt_hdr);
+		if (vdev) {
+			dp_rx_mon_deliver(soc, pdev->pdev_id,
+					  pdev->invalid_peer_head_msdu,
+					  pdev->invalid_peer_tail_msdu);
+
+			pdev->invalid_peer_head_msdu = NULL;
+			pdev->invalid_peer_tail_msdu = NULL;
+
+			return 0;
 		}
-
-		if (pdev->filter_neighbour_peers) {
-			/* Next Hop scenario not yet handle */
-			vdev = dp_rx_nac_filter(pdev, rx_pkt_hdr);
-			if (vdev) {
-				dp_rx_mon_deliver(soc, i,
-						pdev->invalid_peer_head_msdu,
-						pdev->invalid_peer_tail_msdu);
-
-				pdev->invalid_peer_head_msdu = NULL;
-				pdev->invalid_peer_tail_msdu = NULL;
-
-				return 0;
-			}
-		}
+	}
 
 
-		TAILQ_FOREACH(vdev, &pdev->vdev_list, vdev_list_elem) {
+	TAILQ_FOREACH(vdev, &pdev->vdev_list, vdev_list_elem) {
 
-			if (qdf_mem_cmp(wh->i_addr1, vdev->mac_addr.raw,
-						QDF_MAC_ADDR_SIZE) == 0) {
-				goto out;
-			}
+		if (qdf_mem_cmp(wh->i_addr1, vdev->mac_addr.raw,
+				QDF_MAC_ADDR_SIZE) == 0) {
+			goto out;
 		}
 	}
 
 	if (!vdev) {
 		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_ERROR,
-				"VDEV not found");
+			"VDEV not found");
 		goto free;
 	}
 
@@ -794,22 +787,25 @@ free:
  * @soc: DP SOC handle
  * @mpdu: mpdu for which peer is invalid
  * @mpdu_done: if an mpdu is completed
+ * @mac_id: mac_id which is one of 3 mac_ids(Assuming mac_id and
+ * pool_id has same mapping)
  *
  * return: integer type
  */
 void dp_rx_process_invalid_peer_wrapper(struct dp_soc *soc,
-					qdf_nbuf_t mpdu, bool mpdu_done)
+					qdf_nbuf_t mpdu, bool mpdu_done,
+					uint8_t mac_id)
 {
 	/* Only trigger the process when mpdu is completed */
 	if (mpdu_done)
-		dp_rx_process_invalid_peer(soc, mpdu);
+		dp_rx_process_invalid_peer(soc, mpdu, mac_id);
 }
 #else
-uint8_t dp_rx_process_invalid_peer(struct dp_soc *soc, qdf_nbuf_t mpdu)
+uint8_t dp_rx_process_invalid_peer(struct dp_soc *soc, qdf_nbuf_t mpdu,
+				   uint8_t mac_id)
 {
 	qdf_nbuf_t curr_nbuf, next_nbuf;
 	struct dp_pdev *pdev;
-	uint8_t i;
 	struct dp_vdev *vdev = NULL;
 	struct ieee80211_frame *wh;
 	uint8_t *rx_tlv_hdr = qdf_nbuf_data(mpdu);
@@ -829,25 +825,23 @@ uint8_t dp_rx_process_invalid_peer(struct dp_soc *soc, qdf_nbuf_t mpdu)
 		goto free;
 	}
 
-	for (i = 0; i < MAX_PDEV_CNT; i++) {
-		pdev = soc->pdev_list[i];
-		if (!pdev) {
-			QDF_TRACE(QDF_MODULE_ID_DP,
-				  QDF_TRACE_LEVEL_ERROR,
-				  "PDEV not found");
-			continue;
-		}
-
-		qdf_spin_lock_bh(&pdev->vdev_list_lock);
-		DP_PDEV_ITERATE_VDEV_LIST(pdev, vdev) {
-			if (qdf_mem_cmp(wh->i_addr1, vdev->mac_addr.raw,
-					QDF_MAC_ADDR_SIZE) == 0) {
-				qdf_spin_unlock_bh(&pdev->vdev_list_lock);
-				goto out;
-			}
-		}
-		qdf_spin_unlock_bh(&pdev->vdev_list_lock);
+	pdev = dp_get_pdev_for_mac_id(soc, mac_id);
+	if (!pdev) {
+		QDF_TRACE(QDF_MODULE_ID_DP,
+			  QDF_TRACE_LEVEL_ERROR,
+			  "PDEV not found");
+		goto free;
 	}
+
+	qdf_spin_lock_bh(&pdev->vdev_list_lock);
+	DP_PDEV_ITERATE_VDEV_LIST(pdev, vdev) {
+		if (qdf_mem_cmp(wh->i_addr1, vdev->mac_addr.raw,
+				QDF_MAC_ADDR_SIZE) == 0) {
+			qdf_spin_unlock_bh(&pdev->vdev_list_lock);
+			goto out;
+		}
+	}
+	qdf_spin_unlock_bh(&pdev->vdev_list_lock);
 
 	if (!vdev) {
 		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_ERROR,
@@ -860,15 +854,8 @@ out:
 		soc->cdp_soc.ol_ops->rx_invalid_peer(vdev->vdev_id, wh);
 free:
 	/* reset the head and tail pointers */
-	for (i = 0; i < MAX_PDEV_CNT; i++) {
-		pdev = soc->pdev_list[i];
-		if (!pdev) {
-			QDF_TRACE(QDF_MODULE_ID_DP,
-				  QDF_TRACE_LEVEL_ERROR,
-				  "PDEV not found");
-			continue;
-		}
-
+	pdev = dp_get_pdev_for_mac_id(soc, mac_id);
+	if (pdev) {
 		pdev->invalid_peer_head_msdu = NULL;
 		pdev->invalid_peer_tail_msdu = NULL;
 	}
@@ -885,10 +872,11 @@ free:
 }
 
 void dp_rx_process_invalid_peer_wrapper(struct dp_soc *soc,
-					qdf_nbuf_t mpdu, bool mpdu_done)
+					qdf_nbuf_t mpdu, bool mpdu_done,
+					uint8_t mac_id)
 {
 	/* Process the nbuf */
-	dp_rx_process_invalid_peer(soc, mpdu);
+	dp_rx_process_invalid_peer(soc, mpdu, mac_id);
 }
 #endif
 
@@ -1443,9 +1431,9 @@ static inline bool is_sa_da_idx_valid(struct dp_soc *soc,
 	if ((qdf_nbuf_is_sa_valid(nbuf) &&
 	     (hal_rx_msdu_end_sa_idx_get(rx_tlv_hdr) >
 		wlan_cfg_get_max_ast_idx(soc->wlan_cfg_ctx))) ||
-	    (qdf_nbuf_is_da_valid(nbuf) &&
-	     (hal_rx_msdu_end_da_idx_get(soc->hal_soc,
-					 rx_tlv_hdr) >
+	    (!qdf_nbuf_is_da_mcbc(nbuf) &&
+	     qdf_nbuf_is_da_valid(nbuf) &&
+	     (hal_rx_msdu_end_da_idx_get(soc->hal_soc, rx_tlv_hdr) >
 	      wlan_cfg_get_max_ast_idx(soc->wlan_cfg_ctx))))
 		return false;
 
@@ -1522,6 +1510,97 @@ static inline bool dp_rx_enable_eol_data_check(struct dp_soc *soc)
 }
 
 #endif /* WLAN_FEATURE_RX_SOFTIRQ_TIME_LIMIT */
+
+/**
+ * dp_is_special_data() - check is the pkt special like eapol, dhcp, etc
+ *
+ * @nbuf: pkt skb pointer
+ *
+ * Return: true if matched, false if not
+ */
+static inline
+bool dp_is_special_data(qdf_nbuf_t nbuf)
+{
+	if (qdf_nbuf_is_ipv4_arp_pkt(nbuf) ||
+	    qdf_nbuf_is_ipv4_dhcp_pkt(nbuf) ||
+	    qdf_nbuf_is_ipv4_eapol_pkt(nbuf) ||
+	    qdf_nbuf_is_ipv6_dhcp_pkt(nbuf))
+		return true;
+	else
+		return false;
+}
+
+#ifdef DP_RX_PKT_NO_PEER_DELIVER
+/**
+ * dp_rx_deliver_to_stack_no_peer() - try deliver rx data even if
+ *				      no corresbonding peer found
+ * @soc: core txrx main context
+ * @nbuf: pkt skb pointer
+ *
+ * This function will try to deliver some RX special frames to stack
+ * even there is no peer matched found. for instance, LFR case, some
+ * eapol data will be sent to host before peer_map done.
+ *
+ * Return: None
+ */
+static inline
+void dp_rx_deliver_to_stack_no_peer(struct dp_soc *soc, qdf_nbuf_t nbuf)
+{
+	uint32_t peer_mdata;
+	uint16_t peer_id;
+	uint8_t vdev_id;
+	struct dp_vdev *vdev;
+	uint32_t l2_hdr_offset = 0;
+	uint16_t msdu_len = 0;
+	uint32_t pkt_len = 0;
+	uint8_t *rx_tlv_hdr;
+
+	peer_mdata =  QDF_NBUF_CB_RX_PEER_ID(nbuf);
+
+	peer_id = DP_PEER_METADATA_PEER_ID_GET(peer_mdata);
+	if (peer_id > soc->max_peers)
+		goto deliver_fail;
+
+	vdev_id = DP_PEER_METADATA_ID_GET(peer_mdata);
+	vdev = dp_get_vdev_from_soc_vdev_id_wifi3(soc, vdev_id);
+	if (!vdev || !vdev->osif_rx)
+		goto deliver_fail;
+
+	rx_tlv_hdr = qdf_nbuf_data(nbuf);
+	l2_hdr_offset =
+		hal_rx_msdu_end_l3_hdr_padding_get(rx_tlv_hdr);
+
+	msdu_len = QDF_NBUF_CB_RX_PKT_LEN(nbuf);
+	pkt_len = msdu_len + l2_hdr_offset + RX_PKT_TLVS_LEN;
+
+	qdf_nbuf_set_pktlen(nbuf, pkt_len);
+	qdf_nbuf_pull_head(nbuf,
+			   RX_PKT_TLVS_LEN +
+			   l2_hdr_offset);
+
+	/* only allow special frames */
+	if (!dp_is_special_data(nbuf))
+		goto deliver_fail;
+
+	vdev->osif_rx(vdev->osif_vdev, nbuf);
+	DP_STATS_INC(soc, rx.err.pkt_delivered_no_peer, 1);
+	return;
+
+deliver_fail:
+	DP_STATS_INC_PKT(soc, rx.err.rx_invalid_peer, 1,
+			 QDF_NBUF_CB_RX_PKT_LEN(nbuf));
+	qdf_nbuf_free(nbuf);
+}
+#else
+static inline
+void dp_rx_deliver_to_stack_no_peer(struct dp_soc *soc, qdf_nbuf_t nbuf)
+{
+	DP_STATS_INC_PKT(soc, rx.err.rx_invalid_peer, 1,
+			 QDF_NBUF_CB_RX_PKT_LEN(nbuf));
+	qdf_nbuf_free(nbuf);
+}
+#endif
+
 /**
  * dp_rx_process() - Brain of the Rx processing functionality
  *		     Called from the bottom half (tasklet/NET_RX_SOFTIRQ)
@@ -1603,7 +1682,7 @@ more_data:
 	qdf_mem_zero(head, sizeof(head));
 	qdf_mem_zero(tail, sizeof(tail));
 
-	if (qdf_unlikely(hal_srng_access_start(hal_soc, hal_ring))) {
+	if (qdf_unlikely(dp_srng_access_start(int_ctx, soc, hal_ring))) {
 
 		/*
 		 * Need API to convert from hal_ring pointer to
@@ -1612,7 +1691,6 @@ more_data:
 		DP_STATS_INC(soc, rx.err.hal_ring_access_fail, 1);
 		QDF_TRACE(QDF_MODULE_ID_TXRX, QDF_TRACE_LEVEL_ERROR,
 			FL("HAL RING Access Failed -- %pK"), hal_ring);
-		hal_srng_access_end(hal_soc, hal_ring);
 		goto done;
 	}
 
@@ -1640,7 +1718,6 @@ more_data:
 		rx_desc = dp_rx_cookie_2_va_rxdma_buf(soc, rx_buf_cookie);
 		qdf_assert(rx_desc);
 
-		dp_rx_desc_nbuf_sanity_check(ring_desc, rx_desc);
 		/*
 		 * this is a unlikely scenario where the host is reaping
 		 * a descriptor which it already reaped just a while ago
@@ -1650,9 +1727,13 @@ more_data:
 		 */
 		if (qdf_unlikely(!rx_desc->in_use)) {
 			DP_STATS_INC(soc, rx.err.hal_reo_dest_dup, 1);
-			dp_err("Reaping rx_desc not in use!");
+			dp_info_rl("Reaping rx_desc not in use!");
 			dp_rx_dump_info_and_assert(soc, hal_ring,
 						   ring_desc, rx_desc);
+			/* ignore duplicate RX desc and continue to process */
+			/* Pop out the descriptor */
+			hal_srng_dst_get_next(hal_soc, hal_ring);
+			continue;
 		}
 
 		if (qdf_unlikely(!dp_rx_desc_check_magic(rx_desc))) {
@@ -1661,6 +1742,8 @@ more_data:
 			dp_rx_dump_info_and_assert(soc, hal_ring,
 						   ring_desc, rx_desc);
 		}
+
+		dp_rx_desc_nbuf_sanity_check(ring_desc, rx_desc);
 
 		/* TODO */
 		/*
@@ -1768,7 +1851,7 @@ more_data:
 			break;
 	}
 done:
-	hal_srng_access_end(hal_soc, hal_ring);
+	dp_srng_access_end(int_ctx, soc, hal_ring);
 
 	if (nbuf_tail)
 		QDF_NBUF_CB_RX_FLUSH_IND(nbuf_tail) = 1;
@@ -1810,29 +1893,6 @@ done:
 		if (qdf_nbuf_is_rx_chfrag_start(nbuf))
 			tid = qdf_nbuf_get_tid_val(nbuf);
 
-		/*
-		 * Check if DMA completed -- msdu_done is the last bit
-		 * to be written
-		 */
-		rx_pdev = soc->pdev_list[rx_desc->pool_id];
-		DP_RX_TID_SAVE(nbuf, tid);
-		if (qdf_unlikely(rx_pdev->delay_stats_flag))
-			qdf_nbuf_set_timestamp(nbuf);
-
-		tid_stats = &rx_pdev->stats.tid_stats.
-			    tid_rx_stats[ring_id][tid];
-		if (qdf_unlikely(!hal_rx_attn_msdu_done_get(rx_tlv_hdr))) {
-			dp_err("MSDU DONE failure");
-			DP_STATS_INC(soc, rx.err.msdu_done_fail, 1);
-			hal_rx_dump_pkt_tlvs(hal_soc, rx_tlv_hdr,
-					QDF_TRACE_LEVEL_INFO);
-			tid_stats->fail_cnt[MSDU_DONE_FAILURE]++;
-			qdf_nbuf_free(nbuf);
-			qdf_assert(0);
-			nbuf = next;
-			continue;
-		}
-
 		peer_mdata =  QDF_NBUF_CB_RX_PEER_ID(nbuf);
 		peer_id = DP_PEER_METADATA_PEER_ID_GET(peer_mdata);
 		peer = dp_peer_find_by_id(soc, peer_id);
@@ -1857,20 +1917,42 @@ done:
 		if (qdf_likely(peer)) {
 			vdev = peer->vdev;
 		} else {
-			DP_STATS_INC_PKT(soc, rx.err.rx_invalid_peer, 1,
-					 QDF_NBUF_CB_RX_PKT_LEN(nbuf));
-			tid_stats->fail_cnt[INVALID_PEER_VDEV]++;
-			qdf_nbuf_free(nbuf);
+			dp_rx_deliver_to_stack_no_peer(soc, nbuf);
 			nbuf = next;
 			continue;
 		}
 
 		if (qdf_unlikely(!vdev)) {
-			tid_stats->fail_cnt[INVALID_PEER_VDEV]++;
 			qdf_nbuf_free(nbuf);
 			nbuf = next;
 			DP_STATS_INC(soc, rx.err.invalid_vdev, 1);
 			dp_peer_unref_del_find_by_id(peer);
+			continue;
+		}
+
+		rx_pdev = vdev->pdev;
+		DP_RX_TID_SAVE(nbuf, tid);
+		if (qdf_unlikely(rx_pdev->delay_stats_flag))
+			qdf_nbuf_set_timestamp(nbuf);
+
+		ring_id = QDF_NBUF_CB_RX_CTX_ID(nbuf);
+		tid_stats =
+			&rx_pdev->stats.tid_stats.tid_rx_stats[ring_id][tid];
+
+		/*
+		 * Check if DMA completed -- msdu_done is the last bit
+		 * to be written
+		 */
+		if (qdf_unlikely(!qdf_nbuf_is_raw_frame(nbuf) &&
+				 !hal_rx_attn_msdu_done_get(rx_tlv_hdr))) {
+			dp_err("MSDU DONE failure");
+			DP_STATS_INC(soc, rx.err.msdu_done_fail, 1);
+			hal_rx_dump_pkt_tlvs(hal_soc, rx_tlv_hdr,
+					     QDF_TRACE_LEVEL_INFO);
+			tid_stats->fail_cnt[MSDU_DONE_FAILURE]++;
+			qdf_nbuf_free(nbuf);
+			qdf_assert(0);
+			nbuf = next;
 			continue;
 		}
 
@@ -2041,7 +2123,7 @@ done:
 		dp_peer_unref_del_find_by_id(peer);
 	}
 
-	if (deliver_list_head)
+	if (deliver_list_head && peer)
 		dp_rx_deliver_to_stack(vdev, peer, deliver_list_head,
 				       deliver_list_tail);
 
@@ -2089,125 +2171,164 @@ dp_rx_pdev_detach(struct dp_pdev *pdev)
 }
 
 static QDF_STATUS
+dp_pdev_nbuf_alloc_and_map(struct dp_soc *dp_soc, qdf_nbuf_t *nbuf,
+			   struct dp_pdev *dp_pdev)
+{
+	qdf_dma_addr_t paddr;
+	QDF_STATUS ret = QDF_STATUS_E_FAILURE;
+
+	*nbuf = qdf_nbuf_alloc(dp_soc->osdev, RX_BUFFER_SIZE,
+			      RX_BUFFER_RESERVATION, RX_BUFFER_ALIGNMENT,
+			      FALSE);
+	if (!(*nbuf)) {
+		dp_err("nbuf alloc failed");
+		DP_STATS_INC(dp_pdev, replenish.nbuf_alloc_fail, 1);
+		return ret;
+	}
+
+	ret = qdf_nbuf_map_single(dp_soc->osdev, *nbuf,
+				  QDF_DMA_FROM_DEVICE);
+	if (qdf_unlikely(QDF_IS_STATUS_ERROR(ret))) {
+		qdf_nbuf_free(*nbuf);
+		dp_err("nbuf map failed");
+		DP_STATS_INC(dp_pdev, replenish.map_err, 1);
+		return ret;
+	}
+
+	paddr = qdf_nbuf_get_frag_paddr(*nbuf, 0);
+
+	ret = check_x86_paddr(dp_soc, nbuf, &paddr, dp_pdev);
+	if (ret == QDF_STATUS_E_FAILURE) {
+		qdf_nbuf_unmap_single(dp_soc->osdev, *nbuf,
+				      QDF_DMA_FROM_DEVICE);
+		qdf_nbuf_free(*nbuf);
+		dp_err("nbuf check x86 failed");
+		DP_STATS_INC(dp_pdev, replenish.x86_fail, 1);
+		return ret;
+	}
+
+	return QDF_STATUS_SUCCESS;
+}
+
+static QDF_STATUS
 dp_pdev_rx_buffers_attach(struct dp_soc *dp_soc, uint32_t mac_id,
 			  struct dp_srng *dp_rxdma_srng,
 			  struct rx_desc_pool *rx_desc_pool,
-			  uint32_t num_req_buffers,
-			  union dp_rx_desc_list_elem_t **desc_list,
-			  union dp_rx_desc_list_elem_t **tail)
+			  uint32_t num_req_buffers)
 {
 	struct dp_pdev *dp_pdev = dp_get_pdev_for_mac_id(dp_soc, mac_id);
 	void *rxdma_srng = dp_rxdma_srng->hal_srng;
 	union dp_rx_desc_list_elem_t *next;
 	void *rxdma_ring_entry;
 	qdf_dma_addr_t paddr;
-	void **rx_nbuf_arr;
-	uint32_t nr_descs;
-	uint32_t nr_nbuf;
+	qdf_nbuf_t *rx_nbuf_arr;
+	uint32_t nr_descs, nr_nbuf = 0, nr_nbuf_total = 0;
+	uint32_t buffer_index, nbuf_ptrs_per_page;
 	qdf_nbuf_t nbuf;
 	QDF_STATUS ret;
-	int i;
+	int page_idx, total_pages;
+	union dp_rx_desc_list_elem_t *desc_list = NULL;
+	union dp_rx_desc_list_elem_t *tail = NULL;
 
 	if (qdf_unlikely(!rxdma_srng)) {
 		DP_STATS_INC(dp_pdev, replenish.rxdma_err, num_req_buffers);
 		return QDF_STATUS_E_FAILURE;
 	}
 
-	QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_DEBUG,
-		  "requested %u RX buffers for driver attach", num_req_buffers);
+	dp_debug("requested %u RX buffers for driver attach", num_req_buffers);
 
 	nr_descs = dp_rx_get_free_desc_list(dp_soc, mac_id, rx_desc_pool,
-					    num_req_buffers, desc_list, tail);
+					    num_req_buffers, &desc_list, &tail);
 	if (!nr_descs) {
-		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_ERROR,
-			  "no free rx_descs in freelist");
+		dp_err("no free rx_descs in freelist");
 		DP_STATS_INC(dp_pdev, err.desc_alloc_fail, num_req_buffers);
 		return QDF_STATUS_E_NOMEM;
 	}
 
-	QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_DEBUG,
-		  "got %u RX descs for driver attach", nr_descs);
+	dp_debug("got %u RX descs for driver attach", nr_descs);
 
-	rx_nbuf_arr = qdf_mem_malloc(nr_descs * sizeof(*rx_nbuf_arr));
+	/*
+	 * Try to allocate pointers to the nbuf one page at a time.
+	 * Take pointers that can fit in one page of memory and
+	 * iterate through the total descriptors that need to be
+	 * allocated in order of pages. Reuse the pointers that
+	 * have been allocated to fit in one page across each
+	 * iteration to index into the nbuf.
+	 */
+	total_pages = (nr_descs * sizeof(*rx_nbuf_arr)) / PAGE_SIZE;
+
+	/*
+	 * Add an extra page to store the remainder if any
+	 */
+	if ((nr_descs * sizeof(*rx_nbuf_arr)) % PAGE_SIZE)
+		total_pages++;
+	rx_nbuf_arr = qdf_mem_malloc(PAGE_SIZE);
 	if (!rx_nbuf_arr) {
-		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_ERROR,
-			  "failed to allocate nbuf array");
+		dp_err("failed to allocate nbuf array");
 		DP_STATS_INC(dp_pdev, replenish.rxdma_err, num_req_buffers);
+		QDF_BUG(0);
 		return QDF_STATUS_E_NOMEM;
 	}
+	nbuf_ptrs_per_page = PAGE_SIZE / sizeof(*rx_nbuf_arr);
 
-	for (nr_nbuf = 0; nr_nbuf < nr_descs; nr_nbuf++) {
-		nbuf = qdf_nbuf_alloc(dp_soc->osdev, RX_BUFFER_SIZE,
-				      RX_BUFFER_RESERVATION,
-				      RX_BUFFER_ALIGNMENT,
-				      FALSE);
-		if (!nbuf) {
-			QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_ERROR,
-				  "nbuf alloc failed");
-			DP_STATS_INC(dp_pdev, replenish.nbuf_alloc_fail, 1);
-			break;
+	for (page_idx = 0; page_idx < total_pages; page_idx++) {
+		qdf_mem_zero(rx_nbuf_arr, PAGE_SIZE);
+
+		for (nr_nbuf = 0; nr_nbuf < nbuf_ptrs_per_page; nr_nbuf++) {
+			/*
+			 * The last page of buffer pointers may not be required
+			 * completely based on the number of descriptors. Below
+			 * check will ensure we are allocating only the
+			 * required number of descriptors.
+			 */
+			if (nr_nbuf_total >= nr_descs)
+				break;
+			ret = dp_pdev_nbuf_alloc_and_map(dp_soc,
+							 &rx_nbuf_arr[nr_nbuf],
+							 dp_pdev);
+			if (QDF_IS_STATUS_ERROR(ret))
+				break;
+
+			nr_nbuf_total++;
 		}
 
-		ret = qdf_nbuf_map_single(dp_soc->osdev, nbuf,
-					  QDF_DMA_FROM_DEVICE);
-		if (qdf_unlikely(QDF_IS_STATUS_ERROR(ret))) {
-			qdf_nbuf_free(nbuf);
-			QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_ERROR,
-				  "nbuf map failed");
-			DP_STATS_INC(dp_pdev, replenish.map_err, 1);
-			break;
+		hal_srng_access_start(dp_soc->hal_soc, rxdma_srng);
+
+		for (buffer_index = 0; buffer_index < nr_nbuf; buffer_index++) {
+			rxdma_ring_entry =
+				hal_srng_src_get_next(dp_soc->hal_soc,
+						      rxdma_srng);
+			qdf_assert_always(rxdma_ring_entry);
+
+			next = desc_list->next;
+			nbuf = rx_nbuf_arr[buffer_index];
+			paddr = qdf_nbuf_get_frag_paddr(nbuf, 0);
+
+			dp_rx_desc_prep(&desc_list->rx_desc, nbuf);
+			desc_list->rx_desc.in_use = 1;
+
+			hal_rxdma_buff_addr_info_set(rxdma_ring_entry, paddr,
+						     desc_list->rx_desc.cookie,
+						     rx_desc_pool->owner);
+
+			dp_ipa_handle_rx_buf_smmu_mapping(dp_soc, nbuf, true);
+
+			desc_list = next;
 		}
 
-		paddr = qdf_nbuf_get_frag_paddr(nbuf, 0);
-
-		ret = check_x86_paddr(dp_soc, &nbuf, &paddr, dp_pdev);
-		if (ret == QDF_STATUS_E_FAILURE) {
-			qdf_nbuf_unmap_single(dp_soc->osdev, nbuf,
-					      QDF_DMA_FROM_DEVICE);
-			qdf_nbuf_free(nbuf);
-			QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_ERROR,
-				  "nbuf check x86 failed");
-			DP_STATS_INC(dp_pdev, replenish.x86_fail, 1);
-			break;
-		}
-
-		rx_nbuf_arr[nr_nbuf] = (void *)nbuf;
+		hal_srng_access_end(dp_soc->hal_soc, rxdma_srng);
 	}
 
-	QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_DEBUG,
-		  "allocated %u nbuf for driver attach", nr_nbuf);
-
-	hal_srng_access_start(dp_soc->hal_soc, rxdma_srng);
-
-	for (i = 0; i < nr_nbuf; i++) {
-		rxdma_ring_entry = hal_srng_src_get_next(dp_soc->hal_soc,
-							 rxdma_srng);
-		qdf_assert_always(rxdma_ring_entry);
-
-		next = (*desc_list)->next;
-		nbuf = rx_nbuf_arr[i];
-		paddr = qdf_nbuf_get_frag_paddr(nbuf, 0);
-
-		dp_rx_desc_prep(&((*desc_list)->rx_desc), nbuf);
-		(*desc_list)->rx_desc.in_use = 1;
-
-		hal_rxdma_buff_addr_info_set(rxdma_ring_entry, paddr,
-					     (*desc_list)->rx_desc.cookie,
-					     rx_desc_pool->owner);
-
-		dp_ipa_handle_rx_buf_smmu_mapping(dp_soc, nbuf, true);
-
-		*desc_list = next;
-	}
-
-	hal_srng_access_end(dp_soc->hal_soc, rxdma_srng);
-
-	QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_DEBUG,
-		  "filled %u RX buffers for driver attach", nr_nbuf);
-	DP_STATS_INC_PKT(dp_pdev, replenish.pkts, nr_nbuf, RX_BUFFER_SIZE *
-			 nr_nbuf);
-
+	dp_info("filled %u RX buffers for driver attach", nr_nbuf_total);
 	qdf_mem_free(rx_nbuf_arr);
+
+	if (!nr_nbuf_total) {
+		dp_err("No nbuf's allocated");
+		QDF_BUG(0);
+		return QDF_STATUS_E_RESOURCES;
+	}
+	DP_STATS_INC_PKT(dp_pdev, replenish.pkts, nr_nbuf,
+			 RX_BUFFER_SIZE * nr_nbuf_total);
 
 	return QDF_STATUS_SUCCESS;
 }
@@ -2229,8 +2350,6 @@ dp_rx_pdev_attach(struct dp_pdev *pdev)
 	uint8_t pdev_id = pdev->pdev_id;
 	struct dp_soc *soc = pdev->soc;
 	uint32_t rxdma_entries;
-	union dp_rx_desc_list_elem_t *desc_list = NULL;
-	union dp_rx_desc_list_elem_t *tail = NULL;
 	struct dp_srng *dp_rxdma_srng;
 	struct rx_desc_pool *rx_desc_pool;
 
@@ -2255,8 +2374,7 @@ dp_rx_pdev_attach(struct dp_pdev *pdev)
 	/* For Rx buffers, WBM release ring is SW RING 3,for all pdev's */
 
 	return dp_pdev_rx_buffers_attach(soc, pdev_id, dp_rxdma_srng,
-					 rx_desc_pool, rxdma_entries - 1,
-					 &desc_list, &tail);
+					 rx_desc_pool, rxdma_entries - 1);
 }
 
 /*

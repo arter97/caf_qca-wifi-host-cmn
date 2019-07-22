@@ -50,26 +50,6 @@
 
 #define MAX_NUM_PKT_LOG 32
 
-/**
- * struct tx_status - tx status
- * @tx_status_ok: successfully sent + acked
- * @tx_status_discard: discard - not sent (congestion control)
- * @tx_status_no_ack: no_ack - sent, but no ack
- * @tx_status_download_fail: download_fail -
- * the host could not deliver the tx frame to the target
- * @tx_status_peer_del: peer_del - tx completion for
- * alreay deleted peer used for HL case
- *
- * This enum has tx status types
- */
-enum tx_status {
-	tx_status_ok,
-	tx_status_discard,
-	tx_status_no_ack,
-	tx_status_download_fail,
-	tx_status_peer_del,
-};
-
 #define LOGGING_TRACE(level, args ...) \
 	QDF_TRACE(QDF_MODULE_ID_HDD, level, ## args)
 
@@ -1107,11 +1087,7 @@ void wlan_logging_set_per_pkt_stats(void)
  */
 void wlan_logging_set_fw_flush_complete(void)
 {
-	if (gwlan_logging.is_active == false
-#ifdef CONFIG_MCL
-	    || !cds_is_fatal_event_enabled()
-#endif
-	   )
+	if (!gwlan_logging.is_active)
 		return;
 
 	set_bit(HOST_LOG_FW_FLUSH_COMPLETE, &gwlan_logging.eventFlag);
@@ -1130,23 +1106,17 @@ void wlan_flush_host_logs_for_fatal(void)
 {
 	unsigned long flags;
 
-#ifdef CONFIG_MCL
-	if (cds_is_log_report_in_progress()) {
-#endif
-		if (gwlan_logging.flush_timer_period == 0)
-			pr_info("%s:flush all host logs Setting HOST_LOG_POST_MASK\n",
-				__func__);
-		spin_lock_irqsave(&gwlan_logging.spin_lock, flags);
-		wlan_queue_logmsg_for_app();
-		spin_unlock_irqrestore(&gwlan_logging.spin_lock, flags);
-		set_bit(HOST_LOG_DRIVER_MSG, &gwlan_logging.eventFlag);
-		wake_up_interruptible(&gwlan_logging.wait_queue);
-#ifdef CONFIG_MCL
-	}
-#endif
+	if (gwlan_logging.flush_timer_period == 0)
+		pr_info("%s:flush all host logs Setting HOST_LOG_POST_MASK\n",
+			__func__);
+	spin_lock_irqsave(&gwlan_logging.spin_lock, flags);
+	wlan_queue_logmsg_for_app();
+	spin_unlock_irqrestore(&gwlan_logging.spin_lock, flags);
+	set_bit(HOST_LOG_DRIVER_MSG, &gwlan_logging.eventFlag);
+	wake_up_interruptible(&gwlan_logging.wait_queue);
 }
 
-#ifdef CONFIG_MCL
+#ifdef FEATURE_PKTLOG
 #ifndef REMOVE_PKT_LOG
 
 static uint8_t gtx_count;
@@ -1532,5 +1502,5 @@ void wlan_register_txrx_packetdump(void)
 	grx_count = 0;
 }
 #endif /* REMOVE_PKT_LOG */
-#endif /* CONFIG_MCL */
+#endif /* FEATURE_PKTLOG */
 #endif /* WLAN_LOGGING_SOCK_SVC_ENABLE */

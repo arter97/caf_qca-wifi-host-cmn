@@ -62,13 +62,58 @@ target_if_vdev_mgr_get_tx_ops(struct wlan_objmgr_psoc *psoc)
 QDF_STATUS
 target_if_vdev_mgr_register_tx_ops(struct wlan_lmac_if_tx_ops *tx_ops);
 
+/**
+ * target_if_vdev_mgr_assert_mgmt() - vdev assert mgmt api
+ * @vdev: pointer to objmgr vdev
+ * @vdev_rsp: pointer to vdev mlme response timer
+ * @set_bit: bit to be set
+ *
+ * Return: NA
+ */
+#ifdef VDEV_ASSERT_MANAGEMENT
+static void target_if_vdev_mgr_assert_mgmt(
+					struct wlan_objmgr_vdev *vdev,
+					struct vdev_response_timer *vdev_rsp,
+					uint8_t set_bit)
+{
+}
 #else
+static void target_if_vdev_mgr_assert_mgmt(
+					struct wlan_objmgr_vdev *vdev,
+					struct vdev_response_timer *vdev_rsp,
+					uint8_t set_bit)
+{
+	QDF_ASSERT(0);
+}
+#endif
 
+/**
+ * target_if_vdev_mgr_rsp_timer_stop() - API to stop response timer for
+ * vdev manager operations
+ * @vdev: pointer to vdev object
+ * @vdev_rsp: pointer to response timer
+ * @clear_bit: acton bit
+ *
+ * Return: QDF_STATUS_SUCCESS on success, QDF_STATUS_E_** on error
+ */
+QDF_STATUS target_if_vdev_mgr_rsp_timer_stop(
+					struct wlan_objmgr_vdev *vdev,
+					struct vdev_response_timer *vdev_rsp,
+					uint8_t clear_bit);
+#else
 static inline QDF_STATUS
 target_if_vdev_mgr_register_tx_ops(struct wlan_lmac_if_tx_ops *tx_ops)
 {
 	return QDF_STATUS_SUCCESS;
 }
 
+static inline
+QDF_STATUS target_if_vdev_mgr_rsp_timer_stop(
+					struct wlan_objmgr_vdev *vdev,
+					struct vdev_response_timer *vdev_rsp,
+					uint8_t clear_bit)
+{
+	return QDF_STATUS_SUCCESS;
+}
 #endif /* CMN_VDEV_MGR_TGT_IF_ENABLE */
 #endif /* __TARGET_IF_VDEV_MGR_TX_OPS_H__ */

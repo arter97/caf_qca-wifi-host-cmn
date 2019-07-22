@@ -334,9 +334,36 @@ static QDF_STATUS htc_send_bundled_netbuf(HTC_TARGET *target,
 			       pEndpoint->UL_PipeID,
 			       pEndpoint->Id, data_len,
 			       bundleBuf, data_attr);
-	if (status != QDF_STATUS_SUCCESS) {
-		qdf_print("%s:hif_send_head failed(len=%zu).", __func__,
-			  data_len);
+	if (qdf_unlikely(QDF_IS_STATUS_ERROR(status))) {
+		HTC_PACKET_QUEUE requeue;
+
+		qdf_print("hif_send_head failed(len=%zu).", data_len);
+		INIT_HTC_PACKET_QUEUE(&requeue);
+		LOCK_HTC_TX(target);
+		pEndpoint->ul_outstanding_cnt--;
+		HTC_PACKET_REMOVE(&pEndpoint->TxLookupQueue, pPacketTx);
+
+		if (pPacketTx->PktInfo.AsTx.Tag == HTC_TX_PACKET_TAG_BUNDLED) {
+			HTC_PACKET *temp_packet;
+			HTC_PACKET_QUEUE *packet_queue =
+				(HTC_PACKET_QUEUE *)pPacketTx->pContext;
+
+			HTC_PACKET_QUEUE_ITERATE_ALLOW_REMOVE(packet_queue,
+							      temp_packet) {
+				HTC_PACKET_ENQUEUE(&requeue, temp_packet);
+			} HTC_PACKET_QUEUE_ITERATE_END;
+
+			UNLOCK_HTC_TX(target);
+			free_htc_bundle_packet(target, pPacketTx);
+			LOCK_HTC_TX(target);
+
+		} else {
+			HTC_PACKET_ENQUEUE(&requeue, pPacketTx);
+		}
+
+		HTC_PACKET_QUEUE_TRANSFER_TO_HEAD(&pEndpoint->TxQueue,
+						  &requeue);
+		UNLOCK_HTC_TX(target);
 	}
 	return status;
 }
@@ -1041,8 +1068,10 @@ static enum HTC_SEND_QUEUE_RESULT htc_try_send(HTC_TARGET *target,
 				/* pop off caller's queue */
 				pPacket = htc_packet_dequeue(pCallersSendQueue);
 				A_ASSERT(pPacket);
-				/* insert into local queue */
-				HTC_PACKET_ENQUEUE(&sendQueue, pPacket);
+				if (pPacket)
+					/* insert into local queue */
+					HTC_PACKET_ENQUEUE(&sendQueue,
+							   pPacket);
 			}
 
 			/* the caller's queue has all the packets that won't fit
@@ -1110,14 +1139,6 @@ static enum HTC_SEND_QUEUE_RESULT htc_try_send(HTC_TARGET *target,
 		return result;
 	}
 
-	if (!IS_TX_CREDIT_FLOW_ENABLED(pEndpoint)) {
-		tx_resources =
-			hif_get_free_queue_number(target->hif_dev,
-						  pEndpoint->UL_PipeID);
-	} else {
-		tx_resources = 0;
-	}
-
 	LOCK_HTC_TX(target);
 
 	if (!HTC_QUEUE_EMPTY(&sendQueue)) {
@@ -1156,6 +1177,14 @@ static enum HTC_SEND_QUEUE_RESULT htc_try_send(HTC_TARGET *target,
 	/* now drain the endpoint TX queue for transmission as long as we have
 	 * enough transmit resources
 	 */
+	if (!IS_TX_CREDIT_FLOW_ENABLED(pEndpoint)) {
+		tx_resources =
+			hif_get_free_queue_number(target->hif_dev,
+						  pEndpoint->UL_PipeID);
+	} else {
+		tx_resources = 0;
+	}
+
 	while (true) {
 
 		if (HTC_PACKET_QUEUE_DEPTH(&pEndpoint->TxQueue) == 0)

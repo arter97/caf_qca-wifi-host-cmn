@@ -98,11 +98,26 @@ typedef unsigned long dma_addr_t;
 typedef unsigned long phys_addr_t;
 typedef unsigned long __sgtable_t;
 
+#ifndef SIOCGIWAP
 #define SIOCGIWAP       0
+#endif
+
+#ifndef IWEVCUSTOM
 #define IWEVCUSTOM      0
+#endif
+
+#ifndef IWEVREGISTERED
 #define IWEVREGISTERED  0
+#endif
+
+#ifndef IWEVEXPIRED
 #define IWEVEXPIRED     0
+#endif
+
+#ifndef SIOCGIWSCAN
 #define SIOCGIWSCAN     0
+#endif
+
 #define DMA_TO_DEVICE   0
 #define DMA_BIDIRECTIONAL 0
 #define DMA_FROM_DEVICE 0
@@ -156,6 +171,7 @@ typedef dma_addr_t __qdf_dma_addr_t;
 typedef size_t __qdf_dma_size_t;
 typedef dma_addr_t __qdf_dma_context_t;
 typedef struct net_device *__qdf_netdev_t;
+typedef struct cpumask __qdf_cpu_mask;
 typedef __le16 __qdf_le16_t;
 typedef __le32 __qdf_le32_t;
 typedef __le64 __qdf_le64_t;

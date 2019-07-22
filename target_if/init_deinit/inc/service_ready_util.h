@@ -39,7 +39,8 @@
  *
  * Return: QDF Status
  */
-QDF_STATUS init_deinit_populate_rf_characterization_entries(void *handle,
+QDF_STATUS init_deinit_populate_rf_characterization_entries(
+		wmi_unified_t handle,
 		uint8_t *evt,
 		struct wlan_psoc_host_service_ext_param *service_ext_par);
 
@@ -56,9 +57,9 @@ QDF_STATUS init_deinit_rf_characterization_entries_free(
 		struct wlan_psoc_host_service_ext_param *service_ext_par);
 #else
 static inline
-QDF_STATUS init_deinit_populate_rf_characterization_entries(void *handle,
-			uint8_t *evt,
-			struct wlan_psoc_host_service_ext_param *ser_ext_par)
+QDF_STATUS init_deinit_populate_rf_characterization_entries(
+		wmi_unified_t handle, uint8_t *evt,
+		struct wlan_psoc_host_service_ext_param *ser_ext_par)
 {
 	return QDF_STATUS_SUCCESS;
 }
@@ -105,8 +106,9 @@ QDF_STATUS init_deinit_chainmask_table_free(
  *
  * Return: zero on successful population of service bitmap or failure flag
  */
-int init_deinit_populate_service_bitmap(void *wmi_handle, uint8_t *event,
-				      uint32_t *service_bitmap);
+int init_deinit_populate_service_bitmap(
+		wmi_unified_t wmi_handle, uint8_t *event,
+		uint32_t *service_bitmap);
 
 /**
  * init_deinit_populate_fw_version_cmd() - populate FW version
@@ -117,7 +119,8 @@ int init_deinit_populate_service_bitmap(void *wmi_handle, uint8_t *event,
  *
  * Return: zero on successful population of fw_version command or failure flag
  */
-int init_deinit_populate_fw_version_cmd(void *wmi_handle, uint8_t *event);
+int
+init_deinit_populate_fw_version_cmd(wmi_unified_t wmi_handle, uint8_t *event);
 
 /**
  * init_deinit_populate_target_cap() - populate target cap
@@ -129,8 +132,9 @@ int init_deinit_populate_fw_version_cmd(void *wmi_handle, uint8_t *event);
  *
  * Return: zero on successful population of target cap or failure flag
  */
-int init_deinit_populate_target_cap(void *wmi_handle, uint8_t *event,
-			       struct wlan_psoc_target_capability_info *cap);
+int init_deinit_populate_target_cap(
+		wmi_unified_t wmi_handle, uint8_t *event,
+		struct wlan_psoc_target_capability_info *cap);
 
 /**
  * init_deinit_populate_service_ready_ext_param() - populate service ready ext
@@ -143,8 +147,9 @@ int init_deinit_populate_target_cap(void *wmi_handle, uint8_t *event,
  *
  * Return: zero on successful parsing of service ready ext parameter or failure
  */
-int init_deinit_populate_service_ready_ext_param(void *handle, uint8_t *evt,
-			struct wlan_psoc_host_service_ext_param *param);
+int init_deinit_populate_service_ready_ext_param(
+		wmi_unified_t handle, uint8_t *evt,
+		struct wlan_psoc_host_service_ext_param *param);
 
 /**
  * init_deinit_populate_chainmask_tables() - populate chainmaks tables
@@ -156,7 +161,8 @@ int init_deinit_populate_service_ready_ext_param(void *handle, uint8_t *evt,
  *
  * Return: zero on successful parsing of chainmaks tables or failure flag
  */
-int init_deinit_populate_chainmask_tables(void *handle, uint8_t *evt,
+int init_deinit_populate_chainmask_tables(
+		wmi_unified_t handle, uint8_t *evt,
 		struct wlan_psoc_host_chainmask_table *param);
 
 /**
@@ -170,7 +176,8 @@ int init_deinit_populate_chainmask_tables(void *handle, uint8_t *evt,
  *
  * Return: zero on successful population of mac physical capability or failure
  */
-int init_deinit_populate_mac_phy_capability(void *handle, uint8_t *evt,
+int init_deinit_populate_mac_phy_capability(
+	wmi_unified_t handle, uint8_t *evt,
 	struct wlan_psoc_host_hw_mode_caps *hw_cap, struct tgt_info *info);
 
 /**
@@ -183,7 +190,8 @@ int init_deinit_populate_mac_phy_capability(void *handle, uint8_t *evt,
  *
  * Return: zero on successful parsing of hw mode capability or failure
  */
-int init_deinit_populate_hw_mode_capability(void *wmi_handle,
+int init_deinit_populate_hw_mode_capability(
+		wmi_unified_t wmi_handle,
 		uint8_t *event, struct target_psoc_info *tgt_hdl);
 
 /**
@@ -198,8 +206,8 @@ int init_deinit_populate_hw_mode_capability(void *wmi_handle,
  * Return: zero on successful parsing of dbr ring capability or failure
  */
 int init_deinit_populate_dbr_ring_cap(struct wlan_objmgr_psoc *psoc,
-				void *handle, uint8_t *event,
-				struct tgt_info *info);
+				      wmi_unified_t handle, uint8_t *event,
+				      struct tgt_info *info);
 
 /**
  * init_deinit_populate_spectral_bin_scale_params() - populate Spectral scaling
@@ -214,7 +222,7 @@ int init_deinit_populate_dbr_ring_cap(struct wlan_objmgr_psoc *psoc,
  */
 int init_deinit_populate_spectral_bin_scale_params(
 				struct wlan_objmgr_psoc *psoc,
-				void *handle, uint8_t *event,
+				wmi_unified_t handle, uint8_t *event,
 				struct tgt_info *info);
 
 /**
@@ -252,8 +260,9 @@ QDF_STATUS init_deinit_spectral_scaling_params_free(
  * Return: zero on successful parsing of physical reg capability or failure flag
  */
 int init_deinit_populate_phy_reg_cap(struct wlan_objmgr_psoc *psoc,
-				void *wmi_handle, uint8_t *event,
-				struct tgt_info *info, bool service_ready);
+				     wmi_unified_t wmi_handle, uint8_t *event,
+				     struct tgt_info *info,
+				     bool service_ready);
 
 /**
  * init_deinit_validate_160_80p80_fw_caps() - validate 160 80p80 fw caps

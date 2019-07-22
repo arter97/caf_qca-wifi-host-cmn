@@ -464,6 +464,9 @@ static const uint32_t vdev_param_tlv[] = {
 	[wmi_vdev_param_ul_stbc] = WMI_VDEV_PARAM_UL_STBC,
 	[wmi_vdev_param_ul_fixed_rate] = WMI_VDEV_PARAM_UL_FIXED_RATE,
 	[wmi_vdev_param_rawmode_open_war] = WMI_VDEV_PARAM_RAW_IS_ENCRYPTED,
+	[wmi_vdev_param_max_mtu_size] = WMI_VDEV_PARAM_MAX_MTU_SIZE,
+	[wmi_vdev_param_mcast_rc_stale_period] =
+					WMI_VDEV_PARAM_MCAST_RC_STALE_PERIOD,
 };
 #endif
 
@@ -1119,26 +1122,43 @@ static QDF_STATUS send_peer_delete_cmd_tlv(wmi_unified_t wmi,
 }
 
 /**
- * crash_on_send_peer_rx_reorder_queue_remove_cmd() - crash on reorder queue cmd
+ * send_peer_delete_all_cmd_tlv() - send PEER delete all command to fw
+ * @wmi: wmi handle
+ * @param: pointer to hold peer delete all parameter
  *
- * On MCL side, we are suspecting this cmd to trigger drop of ARP
- * response frames from REO by the FW. This function causes a crash if this
- * command is sent out by the host, so we can track this issue. Ideally no one
- * should be calling this API from the MCL side
- *
- * Return: None
+ * Return: QDF_STATUS_SUCCESS for success or error code
  */
-#ifdef CONFIG_MCL
-static void crash_on_send_peer_rx_reorder_queue_remove_cmd(void)
+static QDF_STATUS send_peer_delete_all_cmd_tlv(
+				wmi_unified_t wmi,
+				struct peer_delete_all_params *param)
 {
-	QDF_BUG(0);
+	wmi_vdev_delete_all_peer_cmd_fixed_param *cmd;
+	wmi_buf_t buf;
+	int32_t len = sizeof(*cmd);
+
+	buf = wmi_buf_alloc(wmi, len);
+	if (!buf)
+		return QDF_STATUS_E_NOMEM;
+
+	cmd = (wmi_vdev_delete_all_peer_cmd_fixed_param *)wmi_buf_data(buf);
+	WMITLV_SET_HDR(
+		&cmd->tlv_header,
+		WMITLV_TAG_STRUC_wmi_vdev_delete_all_peer_cmd_fixed_param,
+		WMITLV_GET_STRUCT_TLVLEN
+				(wmi_vdev_delete_all_peer_cmd_fixed_param));
+	cmd->vdev_id = param->vdev_id;
+
+	WMI_LOGD("%s: vdev_id %d", __func__, cmd->vdev_id);
+	wmi_mtrace(WMI_VDEV_DELETE_ALL_PEER_CMDID, cmd->vdev_id, 0);
+	if (wmi_unified_cmd_send(wmi, buf, len,
+				 WMI_VDEV_DELETE_ALL_PEER_CMDID)) {
+		WMI_LOGP("%s: Failed to send peer del all command", __func__);
+		wmi_buf_free(buf);
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	return QDF_STATUS_SUCCESS;
 }
-#else
-static void crash_on_send_peer_rx_reorder_queue_remove_cmd(void)
-{
-	/* No-OP */
-}
-#endif
 
 /**
  * convert_host_peer_param_id_to_target_id_tlv - convert host peer param_id
@@ -1360,8 +1380,6 @@ QDF_STATUS send_peer_rx_reorder_queue_remove_cmd_tlv(wmi_unified_t wmi,
 	wmi_peer_reorder_queue_remove_cmd_fixed_param *cmd;
 	wmi_buf_t buf;
 	int32_t len = sizeof(*cmd);
-
-	crash_on_send_peer_rx_reorder_queue_remove_cmd();
 
 	buf = wmi_buf_alloc(wmi, len);
 	if (!buf)
@@ -2027,8 +2045,6 @@ static QDF_STATUS send_stats_request_cmd_tlv(wmi_unified_t wmi_handle,
 	return ret;
 }
 
-#ifdef CONFIG_WIN
-
 /**
  *  send_peer_based_pktlog_cmd() - Send WMI command to enable packet-log
  *  @wmi_handle: handle to WMI.
@@ -2163,53 +2179,6 @@ static QDF_STATUS send_packet_log_disable_cmd_tlv(wmi_unified_t wmi_handle,
 
 	return ret;
 }
-#else
-/**
- *  send_packet_log_enable_cmd_tlv() - Send WMI command to enable
- *  packet-log
- *  @param wmi_handle      : handle to WMI.
- *  @param macaddr	: MAC address
- *  @param param    : pointer to hold stats request parameter
- *
- *  Return: QDF_STATUS.
- */
-static QDF_STATUS send_packet_log_enable_cmd_tlv(wmi_unified_t wmi_handle,
-				uint8_t macaddr[QDF_MAC_ADDR_SIZE],
-				struct packet_enable_params *param)
-{
-	return QDF_STATUS_SUCCESS;
-}
-
-/**
- *  send_peer_based_pktlog_cmd() - Send WMI command to enable packet-log
- *  @wmi_handle: handle to WMI.
- *  @macaddr: Peer mac address to be filter
- *  @mac_id: mac id to have radio context
- *  @enb_dsb: Enable MAC based filtering or Disable
- *
- *  Return: QDF_STATUS
- */
-static QDF_STATUS send_peer_based_pktlog_cmd(wmi_unified_t wmi_handle,
-					     uint8_t *macaddr,
-					     uint8_t mac_id,
-					     uint8_t enb_dsb)
-{
-	return QDF_STATUS_SUCCESS;
-}
-/**
- *  send_packet_log_disable_cmd_tlv() - Send WMI command to disable
- *  packet-log
- *  @param wmi_handle      : handle to WMI.
- *  @mac_id: mac id to have radio context
- *
- *  Return: QDF_STATUS.
- */
-static QDF_STATUS send_packet_log_disable_cmd_tlv(wmi_unified_t wmi_handle,
-				uint8_t mac_id)
-{
-	return QDF_STATUS_SUCCESS;
-}
-#endif
 
 #define WMI_FW_TIME_STAMP_LOW_MASK 0xffffffff
 /**
@@ -2325,14 +2294,6 @@ static QDF_STATUS send_beacon_tmpl_send_cmd_tlv(wmi_unified_t wmi_handle,
 	return 0;
 }
 
-#ifdef CONFIG_MCL
-static inline void copy_peer_flags_tlv(
-			wmi_peer_assoc_complete_cmd_fixed_param * cmd,
-			struct peer_assoc_params *param)
-{
-	cmd->peer_flags = param->peer_flags;
-}
-#else
 static inline void copy_peer_flags_tlv(
 			wmi_peer_assoc_complete_cmd_fixed_param * cmd,
 			struct peer_assoc_params *param)
@@ -2383,6 +2344,8 @@ static inline void copy_peer_flags_tlv(
 			cmd->peer_flags |= WMI_PEER_VHT;
 		if (param->he_flag)
 			cmd->peer_flags |= WMI_PEER_HE;
+		if (param->p2p_capable_sta)
+			cmd->peer_flags |= WMI_PEER_IS_P2P_CAPABLE;
 	}
 
 	if (param->is_pmf_enabled)
@@ -2423,7 +2386,6 @@ static inline void copy_peer_flags_tlv(
 	if (param->twt_responder)
 		cmd->peer_flags |= WMI_PEER_TWT_RESP;
 }
-#endif
 
 static inline void copy_peer_mac_addr_tlv(
 		wmi_peer_assoc_complete_cmd_fixed_param * cmd,
@@ -3060,6 +3022,9 @@ static QDF_STATUS send_scan_chan_list_cmd_tlv(wmi_unified_t wmi_handle,
 		if (tchan_info->dfs_set)
 			WMI_SET_CHANNEL_FLAG(chan_info,
 					     WMI_CHAN_FLAG_DFS);
+		if (tchan_info->allow_he)
+			WMI_SET_CHANNEL_FLAG(chan_info,
+					     WMI_CHAN_FLAG_ALLOW_HE);
 
 		if (tchan_info->allow_vht)
 			WMI_SET_CHANNEL_FLAG(chan_info,
@@ -3952,49 +3917,6 @@ static QDF_STATUS send_peer_rate_report_cmd_tlv(wmi_unified_t wmi_handle,
 	}
 	return status;
 }
-
-#ifdef CONFIG_MCL
-/**
- * send_bcn_buf_ll_cmd_tlv() - prepare and send beacon buffer to fw for LL
- * @wmi_handle: wmi handle
- * @param: bcn ll cmd parameter
- *
- * Return: QDF_STATUS_SUCCESS for success otherwise failure
- */
-static QDF_STATUS send_bcn_buf_ll_cmd_tlv(wmi_unified_t wmi_handle,
-			wmi_bcn_send_from_host_cmd_fixed_param *param)
-{
-	wmi_bcn_send_from_host_cmd_fixed_param *cmd;
-	wmi_buf_t wmi_buf;
-	QDF_STATUS ret;
-
-	wmi_buf = wmi_buf_alloc(wmi_handle, sizeof(*cmd));
-	if (!wmi_buf)
-		return QDF_STATUS_E_FAILURE;
-
-	cmd = (wmi_bcn_send_from_host_cmd_fixed_param *) wmi_buf_data(wmi_buf);
-	WMITLV_SET_HDR(&cmd->tlv_header,
-		       WMITLV_TAG_STRUC_wmi_bcn_send_from_host_cmd_fixed_param,
-		       WMITLV_GET_STRUCT_TLVLEN
-			       (wmi_bcn_send_from_host_cmd_fixed_param));
-	cmd->vdev_id = param->vdev_id;
-	cmd->data_len = param->data_len;
-	cmd->frame_ctrl = param->frame_ctrl;
-	cmd->frag_ptr = param->frag_ptr;
-	cmd->dtim_flag = param->dtim_flag;
-
-	wmi_mtrace(WMI_PDEV_SEND_BCN_CMDID, cmd->vdev_id, 0);
-	ret = wmi_unified_cmd_send(wmi_handle, wmi_buf, sizeof(*cmd),
-				      WMI_PDEV_SEND_BCN_CMDID);
-
-	if (QDF_IS_STATUS_ERROR(ret)) {
-		WMI_LOGE("Failed to send WMI_PDEV_SEND_BCN_CMDID command");
-		wmi_buf_free(wmi_buf);
-	}
-
-	return ret;
-}
-#endif /* CONFIG_MCL */
 
 /**
  * send_process_update_edca_param_cmd_tlv() - update EDCA params
@@ -5344,13 +5266,14 @@ static QDF_STATUS send_stop_11d_scan_cmd_tlv(wmi_unified_t wmi_handle,
 /**
  * send_start_oem_data_cmd_tlv() - start OEM data request to target
  * @wmi_handle: wmi handle
- * @startOemDataReq: start request params
+ * @data_len: the length of @data
+ * @data: the pointer to data buf
  *
  * Return: CDF status
  */
 static QDF_STATUS send_start_oem_data_cmd_tlv(wmi_unified_t wmi_handle,
-			  uint32_t data_len,
-			  uint8_t *data)
+					      uint32_t data_len,
+					      uint8_t *data)
 {
 	wmi_buf_t buf;
 	uint8_t *cmd;
@@ -5383,6 +5306,68 @@ static QDF_STATUS send_start_oem_data_cmd_tlv(wmi_unified_t wmi_handle,
 
 	return ret;
 }
+
+#ifdef FEATURE_OEM_DATA
+/**
+ * send_start_oemv2_data_cmd_tlv() - start OEM data to target
+ * @wmi_handle: wmi handle
+ * @oem_data: the pointer to oem data
+ *
+ * Return: QDF status
+ */
+static QDF_STATUS send_start_oemv2_data_cmd_tlv(wmi_unified_t wmi_handle,
+						struct oem_data *oem_data)
+{
+	QDF_STATUS ret;
+	wmi_oem_data_cmd_fixed_param *cmd;
+	wmi_buf_t buf;
+	uint16_t len = sizeof(*cmd);
+	uint16_t oem_data_len_aligned;
+	uint8_t *buf_ptr;
+
+	if (!oem_data || !oem_data->data) {
+		wmi_err_rl("oem data is not valid");
+		return QDF_STATUS_E_FAILURE;
+	}
+	oem_data_len_aligned = roundup(oem_data->data_len, sizeof(uint32_t));
+	if (oem_data_len_aligned < oem_data->data_len) {
+		wmi_err_rl("integer overflow while rounding up data_len");
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	if (oem_data_len_aligned > WMI_SVC_MSG_MAX_SIZE - WMI_TLV_HDR_SIZE) {
+		wmi_err_rl("wmi_max_msg_size overflow for given data_len");
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	len += WMI_TLV_HDR_SIZE + oem_data_len_aligned;
+	buf = wmi_buf_alloc(wmi_handle, len);
+	if (!buf)
+		return QDF_STATUS_E_NOMEM;
+
+	buf_ptr = (uint8_t *)wmi_buf_data(buf);
+	cmd = (wmi_oem_data_cmd_fixed_param *)buf_ptr;
+	WMITLV_SET_HDR(&cmd->tlv_header,
+		       WMITLV_TAG_STRUC_wmi_oem_data_cmd_fixed_param,
+		       WMITLV_GET_STRUCT_TLVLEN(wmi_oem_data_cmd_fixed_param));
+
+	cmd->vdev_id = oem_data->vdev_id;
+	cmd->data_len = oem_data->data_len;
+	buf_ptr += sizeof(*cmd);
+	WMITLV_SET_HDR(buf_ptr, WMITLV_TAG_ARRAY_BYTE, oem_data_len_aligned);
+	buf_ptr += WMI_TLV_HDR_SIZE;
+	qdf_mem_copy(buf_ptr, oem_data->data, oem_data->data_len);
+
+	wmi_mtrace(WMI_OEM_DATA_CMDID, NO_SESSION, 0);
+	ret = wmi_unified_cmd_send(wmi_handle, buf, len, WMI_OEM_DATA_CMDID);
+	if (QDF_IS_STATUS_ERROR(ret)) {
+		wmi_err_rl("Failed with ret = %d", ret);
+		wmi_buf_free(buf);
+	}
+
+	return ret;
+}
+#endif
 
 /**
  * send_dfs_phyerr_filter_offload_en_cmd_tlv() - enable dfs phyerr filter
@@ -5480,12 +5465,13 @@ send_dfs_phyerr_filter_offload_en_cmd_tlv(wmi_unified_t wmi_handle,
 	return QDF_STATUS_SUCCESS;
 }
 
-#if !defined(REMOVE_PKT_LOG) && defined(CONFIG_MCL)
+#if !defined(REMOVE_PKT_LOG) && defined(FEATURE_PKTLOG)
 /**
  * send_pktlog_wmi_send_cmd_tlv() - send pktlog enable/disable command to target
  * @wmi_handle: wmi handle
  * @pktlog_event: pktlog event
  * @cmd_id: pktlog cmd id
+ * @user_triggered: user triggered input for PKTLOG enable mode
  *
  * Return: CDF status
  */
@@ -5561,7 +5547,7 @@ wmi_send_failed:
 	wmi_buf_free(buf);
 	return QDF_STATUS_E_FAILURE;
 }
-#endif /* !REMOVE_PKT_LOG &&  CONFIG_MCL*/
+#endif /* !REMOVE_PKT_LOG && FEATURE_PKTLOG */
 
 /**
  * send_stats_ext_req_cmd_tlv() - request ext stats from fw
@@ -10020,61 +10006,6 @@ static bool is_diag_event_tlv(uint32_t event_id)
 	return false;
 }
 
-static uint16_t wmi_tag_vdev_set_cmd(wmi_unified_t wmi_hdl, wmi_buf_t buf)
-{
-	wmi_vdev_set_param_cmd_fixed_param *set_cmd;
-
-	set_cmd = (wmi_vdev_set_param_cmd_fixed_param *)wmi_buf_data(buf);
-
-	switch (set_cmd->param_id) {
-	case WMI_VDEV_PARAM_LISTEN_INTERVAL:
-	case WMI_VDEV_PARAM_DTIM_POLICY:
-	case WMI_STA_PS_PARAM_INACTIVITY_TIME:
-	case WMI_STA_PS_PARAM_MAX_RESET_ITO_COUNT_ON_TIM_NO_TXRX:
-		return HTC_TX_PACKET_TAG_AUTO_PM;
-	default:
-		break;
-	}
-
-	return 0;
-}
-
-static uint16_t wmi_tag_sta_powersave_cmd(wmi_unified_t wmi_hdl, wmi_buf_t buf)
-{
-	wmi_sta_powersave_param_cmd_fixed_param *ps_cmd;
-
-	ps_cmd = (wmi_sta_powersave_param_cmd_fixed_param *)wmi_buf_data(buf);
-
-	switch (ps_cmd->param) {
-	case WMI_STA_PS_PARAM_TX_WAKE_THRESHOLD:
-	case WMI_STA_PS_PARAM_INACTIVITY_TIME:
-	case WMI_STA_PS_ENABLE_QPOWER:
-		return HTC_TX_PACKET_TAG_AUTO_PM;
-	default:
-		break;
-	}
-
-	return 0;
-}
-
-static uint16_t wmi_tag_common_cmd(wmi_unified_t wmi_hdl, wmi_buf_t buf,
-				   uint32_t cmd_id)
-{
-	if (qdf_atomic_read(&wmi_hdl->is_wow_bus_suspended))
-		return 0;
-
-	switch (cmd_id) {
-	case WMI_VDEV_SET_PARAM_CMDID:
-		return wmi_tag_vdev_set_cmd(wmi_hdl, buf);
-	case WMI_STA_POWERSAVE_PARAM_CMDID:
-		return wmi_tag_sta_powersave_cmd(wmi_hdl, buf);
-	default:
-		break;
-	}
-
-	return 0;
-}
-
 static uint16_t wmi_tag_fw_hang_cmd(wmi_unified_t wmi_handle)
 {
 	uint16_t tag = 0;
@@ -10111,6 +10042,7 @@ static uint16_t wmi_set_htc_tx_tag_tlv(wmi_unified_t wmi_handle,
 	case WMI_PDEV_SUSPEND_CMDID:
 	case WMI_WOW_HOSTWAKEUP_FROM_SLEEP_CMDID:
 	case WMI_PDEV_RESUME_CMDID:
+	case WMI_HB_SET_ENABLE_CMDID:
 #ifdef FEATURE_WLAN_D0WOW
 	case WMI_D0_WOW_ENABLE_DISABLE_CMDID:
 #endif
@@ -10119,9 +10051,6 @@ static uint16_t wmi_set_htc_tx_tag_tlv(wmi_unified_t wmi_handle,
 	case WMI_FORCE_FW_HANG_CMDID:
 		htc_tx_tag = wmi_tag_fw_hang_cmd(wmi_handle);
 		break;
-	case WMI_VDEV_SET_PARAM_CMDID:
-	case WMI_STA_POWERSAVE_PARAM_CMDID:
-		htc_tx_tag = wmi_tag_common_cmd(wmi_handle, buf, cmd_id);
 	default:
 		break;
 	}
@@ -11599,7 +11528,7 @@ static void wmi_11ax_bss_color_attach_tlv(struct wmi_unified *wmi_handle)
  * Return QDF_STATUS_SUCCESS on success or proper error code.
  */
 static QDF_STATUS
-extract_cfr_peer_tx_event_param_tlv(wmi_unified_t *wmi_handle, void *evt_buf,
+extract_cfr_peer_tx_event_param_tlv(wmi_unified_t wmi_handle, void *evt_buf,
 				    wmi_cfr_peer_tx_event_param *peer_tx_event)
 {
 	WMI_PEER_CFR_CAPTURE_EVENTID_param_tlvs *param_buf;
@@ -11687,6 +11616,53 @@ static QDF_STATUS send_mws_coex_status_req_cmd_tlv(wmi_unified_t wmi_handle,
 }
 #endif
 
+#ifdef WIFI_POS_CONVERGED
+/**
+ * extract_oem_response_param_tlv() - Extract oem response params
+ * @wmi_handle: wmi handle
+ * @resp_buf: response buffer
+ * @oem_resp_param: pointer to hold oem response params
+ *
+ * Return: QDF_STATUS_SUCCESS on success or proper error code.
+ */
+static QDF_STATUS
+extract_oem_response_param_tlv(wmi_unified_t wmi_handle, void *resp_buf,
+			       struct wmi_oem_response_param *oem_resp_param)
+{
+	uint64_t temp_addr;
+	WMI_OEM_RESPONSE_EVENTID_param_tlvs *param_buf =
+		(WMI_OEM_RESPONSE_EVENTID_param_tlvs *)resp_buf;
+
+	if (!param_buf) {
+		WMI_LOGE("Invalid OEM response");
+		return QDF_STATUS_E_INVAL;
+	}
+
+	if (param_buf->num_data) {
+		oem_resp_param->num_data1 = param_buf->num_data;
+		oem_resp_param->data_1    = param_buf->data;
+	}
+
+	if (param_buf->num_data2) {
+		oem_resp_param->num_data2 = param_buf->num_data2;
+		oem_resp_param->data_2    = param_buf->data2;
+	}
+
+	if (param_buf->indirect_data) {
+		oem_resp_param->indirect_data.pdev_id =
+			param_buf->indirect_data->pdev_id;
+		temp_addr = (param_buf->indirect_data->addr_hi) & 0xf;
+		oem_resp_param->indirect_data.addr =
+			param_buf->indirect_data->addr_lo +
+			((uint64_t)temp_addr << 32);
+		oem_resp_param->indirect_data.len =
+			param_buf->indirect_data->len;
+	}
+
+	return QDF_STATUS_SUCCESS;
+}
+#endif /* WIFI_POS_CONVERGED */
+
 struct wmi_ops tlv_ops =  {
 	.send_vdev_create_cmd = send_vdev_create_cmd_tlv,
 	.send_vdev_delete_cmd = send_vdev_delete_cmd_tlv,
@@ -11701,6 +11677,7 @@ struct wmi_ops tlv_ops =  {
 	.send_vdev_stop_cmd = send_vdev_stop_cmd_tlv,
 	.send_peer_create_cmd = send_peer_create_cmd_tlv,
 	.send_peer_delete_cmd = send_peer_delete_cmd_tlv,
+	.send_peer_delete_all_cmd = send_peer_delete_all_cmd_tlv,
 	.send_peer_rx_reorder_queue_setup_cmd =
 		send_peer_rx_reorder_queue_setup_cmd_tlv,
 	.send_peer_rx_reorder_queue_remove_cmd =
@@ -11764,11 +11741,8 @@ struct wmi_ops tlv_ops =  {
 	.send_snr_request_cmd = send_snr_request_cmd_tlv,
 	.send_snr_cmd = send_snr_cmd_tlv,
 	.send_link_status_req_cmd = send_link_status_req_cmd_tlv,
-#ifdef CONFIG_MCL
-	.send_bcn_buf_ll_cmd = send_bcn_buf_ll_cmd_tlv,
-#ifndef REMOVE_PKT_LOG
+#if !defined(REMOVE_PKT_LOG) && defined(FEATURE_PKTLOG)
 	.send_pktlog_wmi_send_cmd = send_pktlog_wmi_send_cmd_tlv,
-#endif
 #endif
 #ifdef WLAN_SUPPORT_GREEN_AP
 	.send_egap_conf_params_cmd = send_egap_conf_params_cmd_tlv,
@@ -11778,6 +11752,9 @@ struct wmi_ops tlv_ops =  {
 #endif
 	.send_csa_offload_enable_cmd = send_csa_offload_enable_cmd_tlv,
 	.send_start_oem_data_cmd = send_start_oem_data_cmd_tlv,
+#ifdef FEATURE_OEM_DATA
+	.send_start_oemv2_data_cmd = send_start_oemv2_data_cmd_tlv,
+#endif
 #ifdef WLAN_FEATURE_CIF_CFR
 	.send_oem_dma_cfg_cmd = send_oem_dma_cfg_cmd_tlv,
 #endif
@@ -11955,6 +11932,9 @@ struct wmi_ops tlv_ops =  {
 		send_peer_cfr_capture_cmd_tlv,
 	.extract_cfr_peer_tx_event_param = extract_cfr_peer_tx_event_param_tlv,
 #endif /* WLAN_CFR_ENABLE */
+#ifdef WIFI_POS_CONVERGED
+	.extract_oem_response_param = extract_oem_response_param_tlv,
+#endif /* WIFI_POS_CONVERGED */
 #ifdef WLAN_MWS_INFO_DEBUGFS
 	.send_mws_coex_status_req_cmd = send_mws_coex_status_req_cmd_tlv,
 #endif
@@ -11998,6 +11978,8 @@ static void populate_tlv_events_id(uint32_t *event_ids)
 	event_ids[wmi_peer_state_event_id] = WMI_PEER_STATE_EVENTID;
 	event_ids[wmi_peer_delete_response_event_id] =
 					WMI_PEER_DELETE_RESP_EVENTID;
+	event_ids[wmi_peer_delete_all_response_event_id] =
+					WMI_VDEV_DELETE_ALL_PEER_RESP_EVENTID;
 	event_ids[wmi_mgmt_rx_event_id] = WMI_MGMT_RX_EVENTID;
 	event_ids[wmi_host_swba_event_id] = WMI_HOST_SWBA_EVENTID;
 	event_ids[wmi_tbttoffset_update_event_id] =
@@ -12287,6 +12269,8 @@ static void populate_tlv_events_id(uint32_t *event_ids)
 	event_ids[wmi_vdev_get_mws_coex_antenna_sharing_state_eventid] =
 			WMI_VDEV_GET_MWS_COEX_ANTENNA_SHARING_STATE_EVENTID;
 #endif
+	event_ids[wmi_coex_report_antenna_isolation_event_id] =
+				WMI_COEX_REPORT_ANTENNA_ISOLATION_EVENTID;
 }
 
 /**
@@ -12550,6 +12534,8 @@ static void populate_tlv_service(uint32_t *wmi_service)
 			WMI_SERVICE_TX_COMPL_TSF64;
 	wmi_service[wmi_service_data_stall_recovery_support] =
 			WMI_SERVICE_DSM_ROAM_FILTER;
+	wmi_service[wmi_service_vdev_delete_all_peer] =
+			WMI_SERVICE_DELETE_ALL_PEER_SUPPORT;
 }
 
 /**
@@ -12591,6 +12577,7 @@ void wmi_tlv_attach(wmi_unified_t wmi_handle)
 	wmi_dbr_attach_tlv(wmi_handle);
 	wmi_atf_attach_tlv(wmi_handle);
 	wmi_ap_attach_tlv(wmi_handle);
+	wmi_bcn_attach_tlv(wmi_handle);
 	wmi_ocb_attach_tlv(wmi_handle);
 	wmi_nan_attach_tlv(wmi_handle);
 	wmi_p2p_attach_tlv(wmi_handle);

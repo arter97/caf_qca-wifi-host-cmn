@@ -34,7 +34,7 @@
 #include "qdf_types.h"
 #include "qdf_nbuf.h"
 #include "qdf_atomic.h"
-#ifdef CONFIG_MCL
+#ifdef DP_MOB_DEFS
 #include <cdp_txrx_mob_def.h>
 #endif
 #include <cdp_txrx_handle.h>
@@ -1294,10 +1294,12 @@ struct cdp_tx_indication_mpdu_info {
 
 /**
  * struct cdp_tx_indication_info - Tx capture information
+ * @frame_payload: 802.11 payload is present already
  * @mpdu_info: Tx MPDU completion information
  * @mpdu_nbuf: reconstructed mpdu packet
  */
 struct cdp_tx_indication_info {
+	uint8_t frame_payload;
 	struct cdp_tx_indication_mpdu_info mpdu_info;
 	qdf_nbuf_t mpdu_nbuf;
 };
@@ -1513,7 +1515,7 @@ struct cdp_rx_indication_ppdu {
 	uint8_t rx_ratecode;
 	uint8_t fcs_error_mpdus;
 	uint16_t frame_ctrl;
-	uint32_t rssi_chain[SS_COUNT][MAX_BW];
+	int8_t rssi_chain[SS_COUNT][MAX_BW];
 	struct cdp_stats_cookie *cookie;
 };
 

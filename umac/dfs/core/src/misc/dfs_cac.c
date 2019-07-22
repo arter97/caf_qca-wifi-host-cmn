@@ -102,6 +102,8 @@ static os_timer_func(dfs_cac_valid_timeout)
 static os_timer_func(dfs_cac_timeout)
 {
 	struct wlan_dfs *dfs = NULL;
+	enum phy_ch_width ch_width = CH_WIDTH_INVALID;
+	uint8_t primary_chan_ieee = 0, secondary_chan_ieee = 0;
 
 	OS_GET_TIMER_ARG(dfs, struct wlan_dfs *);
 	dfs->dfs_cac_timer_running = 0;
@@ -144,6 +146,14 @@ static os_timer_func(dfs_cac_timeout)
 			qdf_timer_mod(&dfs->dfs_cac_valid_timer,
 					dfs->dfs_cac_valid_time * 1000);
 		}
+
+		dfs_find_chwidth_and_center_chan(dfs,
+						 &ch_width,
+						 &primary_chan_ieee,
+						 &secondary_chan_ieee);
+		/* Mark the current channel as preCAC done */
+		dfs_mark_precac_done(dfs, primary_chan_ieee,
+				     secondary_chan_ieee, ch_width);
 	}
 
 	/* Iterate over the nodes, processing the CAC completion event. */
@@ -272,6 +282,7 @@ bool dfs_is_subset_channel(struct wlan_dfs *dfs,
 			old_n_chans = dfs_get_bonding_channels(dfs,
 							       old_chan,
 							       SEG_ID_SECONDARY,
+							       DETECTOR_ID_0,
 							       old_subchans);
 		else
 			old_n_chans = dfs_get_bonding_channels_without_seg_info(
@@ -287,6 +298,7 @@ bool dfs_is_subset_channel(struct wlan_dfs *dfs,
 		if (WLAN_IS_CHAN_DFS(new_chan))
 			new_n_chans = dfs_get_bonding_channels(
 					dfs, new_chan, SEG_ID_SECONDARY,
+					DETECTOR_ID_0,
 					new_subchans);
 		else
 			new_n_chans = dfs_get_bonding_channels_without_seg_info(

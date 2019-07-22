@@ -153,7 +153,7 @@ static const struct dp_rate_debug dp_rate_string[DOT11_MAX][MAX_MCS] = {
 	}
 };
 
-#ifdef CONFIG_WIN
+#ifdef QCA_ENH_V3_STATS_SUPPORT
 const char *fw_to_hw_delay_bucket[CDP_DELAY_BUCKET_MAX + 1] = {
 	"0 to 10 ms", "11 to 20 ms",
 	"21 to 30 ms", "31 to 40 ms",
@@ -3834,11 +3834,9 @@ void dp_htt_stats_print_tag(uint8_t tag_type, uint32_t *tag_buf)
 		dp_print_tx_tid_stats_tlv(tag_buf);
 		break;
 
-#ifdef CONFIG_WIN
 	case HTT_STATS_TX_TID_DETAILS_V1_TAG:
 		dp_print_tx_tid_stats_v1_tlv(tag_buf);
 		break;
-#endif
 
 	case HTT_STATS_RX_TID_DETAILS_TAG:
 		dp_print_rx_tid_stats_tlv(tag_buf);
@@ -3990,7 +3988,7 @@ QDF_STATUS dp_peer_stats_notify(struct dp_peer *peer)
 	return QDF_STATUS_SUCCESS;
 }
 
-#ifdef CONFIG_WIN
+#ifdef QCA_ENH_V3_STATS_SUPPORT
 /**
  * dp_vow_str_fw_to_hw_delay() - Return string for a delay
  * @index: Index of delay
@@ -4758,6 +4756,9 @@ void dp_print_peer_stats(struct dp_peer *peer)
 	uint32_t j;
 	char nss[DP_NSS_LENGTH];
 	char mu_group_id[DP_MU_GROUP_LENGTH];
+	struct dp_pdev *pdev;
+
+	pdev = peer->vdev->pdev;
 
 	DP_PRINT_STATS("Node Tx Stats:\n");
 	DP_PRINT_STATS("Total Packet Completions = %d",
@@ -4800,8 +4801,10 @@ void dp_print_peer_stats(struct dp_peer *peer)
 		       peer->stats.tx.last_ack_rssi);
 	DP_PRINT_STATS("Dropped At FW: Removed Pkts = %u",
 		       peer->stats.tx.dropped.fw_rem.num);
-	DP_PRINT_STATS("Dropped At FW: Removed bytes = %llu",
-		       peer->stats.tx.dropped.fw_rem.bytes);
+	if (pdev && !wlan_cfg_get_dp_pdev_nss_enabled(pdev->wlan_cfg_ctx)) {
+		DP_PRINT_STATS("Dropped At FW: Removed bytes = %llu",
+			peer->stats.tx.dropped.fw_rem.bytes);
+	}
 	DP_PRINT_STATS("Dropped At FW: Removed transmitted = %d",
 		       peer->stats.tx.dropped.fw_rem_tx);
 	DP_PRINT_STATS("Dropped At FW: Removed Untransmitted = %d",
@@ -5091,6 +5094,12 @@ void dp_txrx_path_stats(struct dp_soc *soc)
 			       pdev->soc->stats.rx.err.rx_invalid_peer_id.num);
 		DP_PRINT_STATS("packet_len invalid %u",
 			       pdev->soc->stats.rx.err.rx_invalid_pkt_len.num);
+		DP_PRINT_STATS("sa or da idx invalid %u",
+			       pdev->soc->stats.rx.err.invalid_sa_da_idx);
+		DP_PRINT_STATS("defrag peer uninit %u",
+			       pdev->soc->stats.rx.err.defrag_peer_uninit);
+		DP_PRINT_STATS("pkts delivered no peer %u",
+			       pdev->soc->stats.rx.err.pkt_delivered_no_peer);
 
 		DP_PRINT_STATS("Reo Statistics");
 		DP_PRINT_STATS("rbm error: %u msdus",
@@ -5255,7 +5264,7 @@ dp_print_pdev_tx_stats(struct dp_pdev *pdev)
 		       pdev->stats.tx.dropped.age_out);
 	DP_PRINT_STATS("	headroom insufficient = %d",
 		       pdev->stats.tx_i.dropped.headroom_insufficient);
-	DP_PRINT_STATS("	Multicast:");
+	DP_PRINT_STATS("Multicast:");
 	DP_PRINT_STATS("	Packets: %u",
 		       pdev->stats.tx.mcast.num);
 	DP_PRINT_STATS("	Bytes: %llu",
@@ -5551,6 +5560,10 @@ dp_print_soc_rx_stats(struct dp_soc *soc)
 		       soc->stats.rx.err.invalid_vdev);
 	DP_PRINT_STATS("Invalid sa_idx or da_idx = %d",
 		       soc->stats.rx.err.invalid_sa_da_idx);
+	DP_PRINT_STATS("Defrag peer uninit = %d",
+		       soc->stats.rx.err.defrag_peer_uninit);
+	DP_PRINT_STATS("Pkts delivered no peer = %d",
+		       soc->stats.rx.err.pkt_delivered_no_peer);
 	DP_PRINT_STATS("Invalid Pdev = %d",
 		       soc->stats.rx.err.invalid_pdev);
 	DP_PRINT_STATS("Invalid Peer = %d",

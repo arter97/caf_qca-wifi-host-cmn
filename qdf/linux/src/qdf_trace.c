@@ -156,22 +156,8 @@ qdf_export_symbol(qdf_vtrace_msg);
 /* Buffer size = data bytes(2 hex chars plus space) + NULL */
 #define BUFFER_SIZE ((QDF_DP_TRACE_RECORD_SIZE * 3) + 1)
 
-/**
- * qdf_trace_hex_dump() - externally called hex dump function
- * @module: Module identifier a member of the QDF_MODULE_ID enumeration that
- * identifies the module issuing the trace message.
- * @level: Trace level a member of the QDF_TRACE_LEVEL enumeration indicating
- * the severity of the condition causing the trace message to be
- * issued. More severe conditions are more likely to be logged.
- * @data: The base address of the buffer to be logged.
- * @buf_len: The size of the buffer to be logged.
- *
- * Checks the level of severity and accordingly prints the trace messages
- *
- * Return:  None
- */
-void qdf_trace_hex_dump(QDF_MODULE_ID module, QDF_TRACE_LEVEL level,
-			void *data, int buf_len)
+static void __qdf_trace_hex_dump(QDF_MODULE_ID module, QDF_TRACE_LEVEL level,
+				 void *data, int buf_len, bool print_ascii)
 {
 	const u8 *ptr = data;
 	int i = 0;
@@ -186,14 +172,29 @@ void qdf_trace_hex_dump(QDF_MODULE_ID module, QDF_TRACE_LEVEL level,
 		buf_len -= ROW_SIZE;
 
 		hex_dump_to_buffer(ptr, linelen, ROW_SIZE, 1,
-				linebuf, sizeof(linebuf), false);
+				   linebuf, sizeof(linebuf), print_ascii);
 
 		qdf_trace_msg(module, level, "%.8x: %s", i, linebuf);
 		ptr += ROW_SIZE;
 		i += ROW_SIZE;
 	}
 }
+
+void qdf_trace_hex_dump(QDF_MODULE_ID module, QDF_TRACE_LEVEL level,
+			void *data, int buf_len)
+{
+	__qdf_trace_hex_dump(module, level, data, buf_len, false);
+}
+
 qdf_export_symbol(qdf_trace_hex_dump);
+
+void qdf_trace_hex_ascii_dump(QDF_MODULE_ID module, QDF_TRACE_LEVEL level,
+			      void *data, int buf_len)
+{
+	__qdf_trace_hex_dump(module, level, data, buf_len, true);
+}
+
+qdf_export_symbol(qdf_trace_hex_ascii_dump);
 
 #endif
 
@@ -2710,6 +2711,7 @@ struct category_name_info g_qdf_category_name[MAX_SUPPORTED_CATEGORY] = {
 	[QDF_MODULE_ID_TX_CAPTURE] = {"TX_CAPTURE_ENHANCE"},
 	[QDF_MODULE_ID_INTEROP_ISSUES_AP] = {"INTEROP_ISSUES_AP"},
 	[QDF_MODULE_ID_BLACKLIST_MGR] = {"blm"},
+	[QDF_MODULE_ID_QLD] = {"QLD"},
 	[QDF_MODULE_ID_ANY] = {"ANY"},
 };
 qdf_export_symbol(g_qdf_category_name);
@@ -3168,6 +3170,7 @@ static void set_default_trace_levels(struct category_info *cinfo)
 		[QDF_MODULE_ID_TX_CAPTURE] = QDF_TRACE_LEVEL_NONE,
 		[QDF_MODULE_ID_INTEROP_ISSUES_AP] = QDF_TRACE_LEVEL_NONE,
 		[QDF_MODULE_ID_BLACKLIST_MGR] = QDF_TRACE_LEVEL_NONE,
+		[QDF_MODULE_ID_QLD] = QDF_TRACE_LEVEL_ERROR,
 		[QDF_MODULE_ID_ANY] = QDF_TRACE_LEVEL_INFO,
 	};
 

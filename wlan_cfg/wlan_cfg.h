@@ -23,7 +23,7 @@
  * Temporary place holders. These should come either from target config
  * or platform configuration
  */
-#if defined(CONFIG_MCL)
+#if defined(WLAN_MAX_PDEVS) && (WLAN_MAX_PDEVS == 1)
 #define WLAN_CFG_DST_RING_CACHED_DESC 0
 #define MAX_PDEV_CNT 1
 #define WLAN_CFG_INT_NUM_CONTEXTS 7
@@ -42,18 +42,10 @@
 #define WLAN_CFG_DST_RING_CACHED_DESC 1
 #define MAX_PDEV_CNT 3
 #define WLAN_CFG_INT_NUM_CONTEXTS 11
-#define WLAN_CFG_RXDMA1_ENABLE 1
-/*
- * This mask defines how many transmit frames account for 1 NAPI work unit
- * 0xFFFF means each 64K tx frame completions account for 1 unit of NAPI budget
- */
-#define DP_TX_NAPI_BUDGET_DIV_MASK 0xFFFF
-
-/* PPDU Stats Configuration - Configure bitmask for enabling tx ppdu tlv's */
-#define DP_PPDU_TXLITE_STATS_BITMASK_CFG 0xFFFF
-
 #define NUM_RXDMA_RINGS_PER_PDEV 1
 #endif
+
+#define WLAN_CFG_INT_NUM_CONTEXTS_MAX 11
 
 /* Tx configuration */
 #define MAX_LINK_DESC_BANKS 8
@@ -66,7 +58,7 @@
 #define MAX_RX_MAC_RINGS 2
 
 /* DP process status */
-#ifdef CONFIG_MCL
+#if defined(MAX_PDEV_CNT) && (MAX_PDEV_CNT == 1)
 #define CONFIG_PROCESS_RX_STATUS 1
 #define CONFIG_PROCESS_TX_STATUS 1
 #else
@@ -83,6 +75,19 @@
 #define DP_NON_QOS_TID 16
 
 struct wlan_cfg_dp_pdev_ctxt;
+
+/**
+ * struct wlan_srng_cfg - Per ring configuration parameters
+ * @timer_threshold: Config to control interrupts based on timer duration
+ * @batch_count_threshold: Config to control interrupts based on
+ * number of packets in the ring
+ * @low_threshold: Config to control low threshold interrupts for SRC rings
+ */
+struct wlan_srng_cfg {
+	uint32_t timer_threshold;
+	uint32_t batch_count_threshold;
+	uint32_t low_threshold;
+};
 
 /**
  * struct wlan_cfg_dp_soc_ctxt - Configuration parameters for SoC (core TxRx)
@@ -1012,6 +1017,16 @@ wlan_cfg_get_dp_soc_rxdma_err_dst_ring_size(struct wlan_cfg_dp_soc_ctxt *cfg);
 bool
 wlan_cfg_get_dp_caps(struct wlan_cfg_dp_soc_ctxt *cfg,
 		     enum cdp_capabilities dp_caps);
+
+/**
+ * wlan_set_srng_cfg() - Fill per ring specific
+ * configuration parameters
+ * @wlan_cfg: global srng configuration table
+ *
+ * Return: None
+ */
+void wlan_set_srng_cfg(struct wlan_srng_cfg **wlan_cfg);
+
 #ifdef QCA_LL_TX_FLOW_CONTROL_V2
 int wlan_cfg_get_tx_flow_stop_queue_th(struct wlan_cfg_dp_soc_ctxt *cfg);
 

@@ -76,6 +76,7 @@ static const struct reg_dmn_op_class_map_t us_op_class[] = {
 	{27, 40, BW40_HIGH_PRIMARY, {40, 48} },
 	{28, 40, BW40_HIGH_PRIMARY, {56, 64} },
 	{29, 40, BW40_HIGH_PRIMARY, {104, 112, 120, 128, 136} },
+	{30, 40, BW40_HIGH_PRIMARY, {153, 161} },
 	{31, 40, BW40_HIGH_PRIMARY, {153, 161} },
 	{32, 40, BW40_LOW_PRIMARY, {1, 2, 3, 4, 5, 6, 7} },
 	{33, 40, BW40_HIGH_PRIMARY, {5, 6, 7, 8, 9, 10, 11} },
@@ -217,7 +218,13 @@ void reg_dmn_print_channels_in_opclass(uint8_t *country, uint8_t op_class)
 	uint16_t i = 0;
 
 	class = reg_get_class_from_country(country);
-	while (class && class->op_class) {
+
+	if (!class) {
+		reg_err("class is NULL");
+		return;
+	}
+
+	while (class->op_class) {
 		if (class->op_class == op_class) {
 			for (i = 0;
 			     (i < REG_MAX_CHANNELS_PER_OPERATING_CLASS &&

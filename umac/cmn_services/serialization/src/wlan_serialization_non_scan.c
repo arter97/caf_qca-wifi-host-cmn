@@ -142,6 +142,8 @@ enum wlan_serialization_status wlan_ser_add_non_scan_cmd(
 			ser_pdev_obj, cmd_list, is_cmd_for_active_queue);
 
 	if (vdev_status == WLAN_SER_CMD_DENIED_LIST_FULL) {
+		ser_err_rl("List is full cannot add CMD %d cmd id %d",
+			   cmd_list->cmd.cmd_type, cmd_list->cmd.cmd_id);
 		status = vdev_status;
 		goto vdev_error;
 	}
@@ -461,7 +463,7 @@ wlan_ser_cancel_non_scan_cmd(
 		struct wlan_objmgr_pdev *pdev, struct wlan_objmgr_vdev *vdev,
 		struct wlan_serialization_command *cmd,
 		enum wlan_serialization_cmd_type cmd_type,
-		uint8_t is_active_queue)
+		uint8_t is_active_queue, enum wlan_ser_cmd_attr cmd_attr)
 {
 	qdf_list_t *pdev_queue;
 	qdf_list_t *vdev_queue;
@@ -536,6 +538,18 @@ wlan_ser_cancel_non_scan_cmd(
 							WLAN_SER_PDEV_NODE) ||
 		    !wlan_serialization_match_cmd_vdev(nnode, vdev,
 						       WLAN_SER_PDEV_NODE))) {
+			pnode = nnode;
+			continue;
+		}
+
+		/*
+		 * If a non-blocking cmd is required to be cancelled, but
+		 * the nnode cmd is a blocking cmd then continue with the
+		 * next command in the list else proceed with cmd cancel.
+		 */
+		if ((cmd_attr == WLAN_SER_CMD_ATTR_NONBLOCK) &&
+		    wlan_serialization_match_cmd_blocking(nnode,
+							  WLAN_SER_PDEV_NODE)) {
 			pnode = nnode;
 			continue;
 		}

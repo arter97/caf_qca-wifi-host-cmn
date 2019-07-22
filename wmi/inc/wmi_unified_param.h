@@ -582,6 +582,7 @@ typedef enum {
  * @WMI_HOST_CHAN_WIDTH_80P80: 80+80 MHz channel operating width
  * @WMI_HOST_CHAN_WIDTH_5: 5 MHz channel operating width
  * @WMI_HOST_CHAN_WIDTH_10: 10 MHz channel operating width
+ * @WMI_HOST_CHAN_WIDTH_165: 165 MHz channel operating width
  */
 typedef enum {
 	WMI_HOST_CHAN_WIDTH_20    = 0,
@@ -591,6 +592,7 @@ typedef enum {
 	WMI_HOST_CHAN_WIDTH_80P80 = 4,
 	WMI_HOST_CHAN_WIDTH_5     = 5,
 	WMI_HOST_CHAN_WIDTH_10    = 6,
+	WMI_HOST_CHAN_WIDTH_165   = 7,
 } wmi_host_channel_width;
 
 #define ATH_EXPONENT_TO_VALUE(v)	((1<<v)-1)
@@ -620,6 +622,7 @@ typedef enum {
  * @allow_ht: HT allowed in chan
  * @allow_vht: VHT allowed on chan
  * @set_agile: is agile mode
+ * @allow_he: HE allowed on chan
  * @phy_mode: phymode (vht80 or ht40 or ...)
  * @cfreq1: centre frequency on primary
  * @cfreq2: centre frequency on secondary
@@ -641,7 +644,8 @@ struct channel_param {
 		is_chan_passive:1,
 		allow_ht:1,
 		allow_vht:1,
-		set_agile:1;
+		set_agile:1,
+		allow_he:1;
 	uint32_t phy_mode;
 	uint32_t cfreq1;
 	uint32_t cfreq2;
@@ -651,6 +655,20 @@ struct channel_param {
 	uint8_t  antennamax;
 	uint8_t  reg_class_id;
 };
+
+#ifdef FEATURE_OEM_DATA
+/**
+ * struct oem_data - oem data to be sent to firmware
+ * @vdev_id: Unique identifier assigned to the vdev
+ * @data_len: len of data
+ * @data: the pointer to the buffer containing data
+ */
+struct oem_data {
+	uint8_t vdev_id;
+	size_t data_len;
+	uint8_t *data;
+};
+#endif
 
 /**
  * struct mac_ssid - mac ssid structure
@@ -941,6 +959,15 @@ struct peer_flush_params {
 	uint32_t peer_tid_bitmap;
 	uint8_t vdev_id;
 };
+
+/**
+ * struct peer_delete_all_params - peer delete all request parameter
+ * @vdev_id: vdev id
+ */
+struct peer_delete_all_params {
+	uint8_t vdev_id;
+};
+
 #endif
 
 /**
@@ -1223,7 +1250,6 @@ typedef struct {
  * @vdev_id: vdev id
  * @peer_new_assoc: peer association type
  * @peer_associd: peer association id
- * @peer_flags: peer flags
  * @peer_caps: peer capabalities
  * @peer_listen_intval: peer listen interval
  * @peer_ht_caps: HT capabalities
@@ -1279,7 +1305,6 @@ struct peer_assoc_params {
 	uint32_t vdev_id;
 	uint32_t peer_new_assoc;
 	uint32_t peer_associd;
-	uint32_t peer_flags;
 	uint32_t peer_caps;
 	uint32_t peer_listen_intval;
 	uint32_t peer_ht_caps;
@@ -1298,30 +1323,29 @@ struct peer_assoc_params {
 	uint32_t tx_mcs_set;
 	uint8_t vht_capable;
 	uint32_t peer_bw_rxnss_override;
-#ifndef CONFIG_MCL
 	uint32_t tx_max_mcs_nss;
-	bool is_pmf_enabled;
-	bool is_wme_set;
-	bool qos_flag;
-	bool apsd_flag;
-	bool ht_flag;
-	bool bw_40;
-	bool bw_80;
-	bool bw_160;
-	bool stbc_flag;
-	bool ldpc_flag;
-	bool static_mimops_flag;
-	bool dynamic_mimops_flag;
-	bool spatial_mux_flag;
-	bool vht_flag;
-	bool vht_ng_flag;
-	bool need_ptk_4_way;
-	bool need_gtk_2_way;
-	bool auth_flag;
-	bool safe_mode_enabled;
-	bool amsdu_disable;
+	uint32_t is_pmf_enabled:1,
+		 is_wme_set:1,
+		 qos_flag:1,
+		 apsd_flag:1,
+		 ht_flag:1,
+		 bw_40:1,
+		 bw_80:1,
+		 bw_160:1,
+		 stbc_flag:1,
+		 ldpc_flag:1,
+		 static_mimops_flag:1,
+		 dynamic_mimops_flag:1,
+		 spatial_mux_flag:1,
+		 vht_flag:1,
+		 vht_ng_flag:1,
+		 need_ptk_4_way:1,
+		 need_gtk_2_way:1,
+		 auth_flag:1,
+		 safe_mode_enabled:1,
+		 amsdu_disable:1,
+		 p2p_capable_sta:1;
 	/* Use common structure */
-#endif
 	uint8_t peer_mac[QDF_MAC_ADDR_SIZE];
 	bool he_flag;
 	bool twt_requester;
@@ -4764,6 +4788,7 @@ typedef enum {
 	wmi_pdev_check_cal_version_event_id,
 	wmi_atf_peer_stats_event_id,
 	wmi_peer_delete_response_event_id,
+	wmi_peer_delete_all_response_event_id,
 	wmi_pdev_csa_switch_count_status_event_id,
 	wmi_reg_chan_list_cc_event_id,
 	wmi_offchan_data_tx_completion_event,
@@ -4834,6 +4859,7 @@ typedef enum {
 #ifdef WLAN_FEATURE_INTEROP_ISSUES_AP
 	wmi_pdev_interop_issues_ap_event_id,
 #endif
+	wmi_coex_report_antenna_isolation_event_id,
 	wmi_events_max,
 } wmi_conv_event_id;
 
@@ -5125,6 +5151,8 @@ typedef enum {
 	wmi_vdev_param_ul_stbc,
 	wmi_vdev_param_ul_fixed_rate,
 	wmi_vdev_param_rawmode_open_war,
+	wmi_vdev_param_max_mtu_size,
+	wmi_vdev_param_mcast_rc_stale_period,
 } wmi_conv_vdev_param_id;
 
 /**
@@ -5318,6 +5346,7 @@ typedef enum {
 	wmi_service_adaptive_11r_support,
 	wmi_service_data_stall_recovery_support,
 	wmi_service_tx_compl_tsf64,
+	wmi_service_vdev_delete_all_peer,
 	wmi_services_max,
 } wmi_conv_service_ids;
 #define WMI_SERVICE_UNAVAILABLE 0xFFFF
@@ -7115,6 +7144,20 @@ struct wmi_host_peer_delete_response_event {
 };
 
 /**
+ * struct wmi_host_vdev_peer_delete_all_response_event -
+ * VDEV peer delete all response
+ * @vdev_id: vdev id
+ * @status: status of request
+ * 0 - OK; command successful
+ * 1 - EINVAL; Requested invalid vdev_id
+ * 2 - EFAILED; Delete all peer failed
+ */
+struct wmi_host_vdev_peer_delete_all_response_event {
+	uint32_t vdev_id;
+	uint32_t status;
+};
+
+/**
  * @struct wmi_host_dcs_interference_param
  * @interference_type: Type of DCS Interference
  * @uint32_t pdev_id: pdev id
@@ -7811,6 +7854,34 @@ typedef struct {
 	uint32_t counter;
 	uint32_t chain_rssi[WMI_HOST_MAX_CHAINS];
 } wmi_cfr_peer_tx_event_param;
+
+/**
+ * struct wmi_host_oem_indirect_data - Indirect OEM data
+ * @pdev_id: pdev id
+ * @addr: 36 bit address
+ * @len: length of data in bytes
+ */
+struct wmi_host_oem_indirect_data {
+	uint32_t pdev_id;
+	uint64_t addr;
+	uint32_t len;
+};
+
+/**
+ * struct wmi_oem_response_param - OEM response info
+ * @num_data1: First data response length
+ * @data_1: First data
+ * @num_data2: Second data response length
+ * @data_2: Second data
+ * @indirect_data: Indirect data
+ */
+struct wmi_oem_response_param {
+	uint32_t num_data1;
+	uint8_t  *data_1;
+	uint32_t num_data2;
+	uint8_t  *data_2;
+	struct wmi_host_oem_indirect_data indirect_data;
+};
 
 /**
  * struct mws_coex_state - Modem Wireless Subsystem(MWS) coex info

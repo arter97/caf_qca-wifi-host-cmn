@@ -236,6 +236,7 @@
  * @first_data_seq_ctrl: Sequence ctrl field of first data frame
  * @rxpcu_filter_pass: Flag which indicates whether RX packets are received in
  *						BSS mode(not in promisc mode)
+ * @rssi_chain: Rssi chain per nss per bw
  */
 struct mon_rx_status {
 	uint64_t tsft;
@@ -315,6 +316,7 @@ struct mon_rx_status {
 	uint16_t first_data_seq_ctrl;
 	uint8_t ltf_size;
 	uint8_t rxpcu_filter_pass;
+	int8_t rssi_chain[8][8];
 };
 
 /**
@@ -3476,7 +3478,7 @@ static inline void qdf_nbuf_orphan(qdf_nbuf_t buf)
 	return __qdf_nbuf_orphan(buf);
 }
 
-#ifdef CONFIG_WIN
+#ifdef CONFIG_NBUF_AP_PLATFORM
 #include <i_qdf_nbuf_api_w.h>
 #else
 #include <i_qdf_nbuf_api_m.h>

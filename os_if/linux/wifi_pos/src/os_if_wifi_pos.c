@@ -23,6 +23,7 @@
  */
 
 #include "qdf_platform.h"
+#include "qdf_module.h"
 #include "wlan_nlink_srv.h"
 #include "wlan_ptt_sock_svc.h"
 #include "wlan_nlink_common.h"
@@ -50,13 +51,13 @@ static void os_if_wifi_pos_send_rsp(uint32_t pid, uint32_t rsp_msg_type,
 
 	/* OEM msg is always to a specific process and cannot be a broadcast */
 	if (pid == 0) {
-		cfg80211_err("invalid dest pid");
+		osif_err("invalid dest pid");
 		return;
 	}
 
 	skb = alloc_skb(NLMSG_SPACE(sizeof(tAniMsgHdr) + buf_len), GFP_ATOMIC);
 	if (!skb) {
-		cfg80211_alert("alloc_skb failed");
+		osif_alert("alloc_skb failed");
 		return;
 	}
 
@@ -73,8 +74,8 @@ static void os_if_wifi_pos_send_rsp(uint32_t pid, uint32_t rsp_msg_type,
 	aniHdr->length = buf_len;
 
 	skb_put(skb, NLMSG_SPACE(sizeof(tAniMsgHdr) + buf_len));
-	cfg80211_debug("sending oem rsp: type: %d len(%d) to pid (%d)",
-		      rsp_msg_type, buf_len, pid);
+	osif_debug("sending oem rsp: type: %d len(%d) to pid (%d)",
+		   rsp_msg_type, buf_len, pid);
 	nl_srv_ucast_oem(skb, pid, MSG_DONTWAIT);
 }
 
@@ -84,33 +85,66 @@ static int  wifi_pos_parse_req(const void *data, int len, int pid,
 {
 	tAniMsgHdr *msg_hdr;
 	struct nlattr *tb[CLD80211_ATTR_MAX + 1];
+	uint32_t msg_len, id, nl_field_info_size, expected_field_info_size;
+	struct wifi_pos_field_info *field_info;
 
 	if (wlan_cfg80211_nla_parse(tb, CLD80211_ATTR_MAX, data, len, NULL)) {
-		cfg80211_err("invalid data in request");
+		osif_err("invalid data in request");
 		return OEM_ERR_INVALID_MESSAGE_TYPE;
 	}
 
 	if (!tb[CLD80211_ATTR_DATA]) {
-		cfg80211_err("CLD80211_ATTR_DATA not present");
+		osif_err("CLD80211_ATTR_DATA not present");
 		return OEM_ERR_INVALID_MESSAGE_TYPE;
 	}
 
-	msg_hdr = (tAniMsgHdr *)nla_data(tb[CLD80211_ATTR_DATA]);
-	if (!msg_hdr) {
-		cfg80211_err("msg_hdr null");
-		return OEM_ERR_NULL_MESSAGE_HEADER;
+	msg_len = nla_len(tb[CLD80211_ATTR_DATA]);
+	if (msg_len < sizeof(*msg_hdr)) {
+		osif_err("Insufficient length for msg_hdr: %u", msg_len);
+		return OEM_ERR_INVALID_MESSAGE_LENGTH;
 	}
 
+	msg_hdr = nla_data(tb[CLD80211_ATTR_DATA]);
 	req->msg_type = msg_hdr->type;
+
+	if (msg_len < sizeof(*msg_hdr) + msg_hdr->length) {
+		osif_err("Insufficient length for msg_hdr buffer: %u",
+			 msg_len);
+		return OEM_ERR_INVALID_MESSAGE_LENGTH;
+	}
+
 	req->buf_len = msg_hdr->length;
 	req->buf = (uint8_t *)&msg_hdr[1];
 	req->pid = pid;
 
-	if (tb[CLD80211_ATTR_META_DATA]) {
-		req->field_info_buf = (struct wifi_pos_field_info *)
-					nla_data(tb[CLD80211_ATTR_META_DATA]);
-		req->field_info_buf_len = nla_len(tb[CLD80211_ATTR_META_DATA]);
+	id = CLD80211_ATTR_META_DATA;
+	if (!tb[id])
+		return 0;
+
+	nl_field_info_size = nla_len(tb[id]);
+	if (nl_field_info_size < sizeof(*field_info)) {
+		osif_err("Insufficient length for field_info_buf: %u",
+			 nl_field_info_size);
+		return OEM_ERR_INVALID_MESSAGE_LENGTH;
 	}
+
+	field_info = nla_data(tb[id]);
+	if (!field_info->count) {
+		osif_debug("field_info->count is zero, ignoring META_DATA");
+		return 0;
+	}
+
+	expected_field_info_size = sizeof(*field_info) +
+		(field_info->count - 1) * sizeof(struct wifi_pos_field);
+
+	if (nl_field_info_size < expected_field_info_size) {
+		osif_err("Insufficient len for total no.of %u fields",
+			 field_info->count);
+		return OEM_ERR_INVALID_MESSAGE_LENGTH;
+	}
+
+	req->field_info_buf = field_info;
+	req->field_info_buf_len = nl_field_info_size;
 
 	return 0;
 }
@@ -124,19 +158,25 @@ static int wifi_pos_parse_req(struct sk_buff *skb, struct wifi_pos_req_msg *req)
 
 	nlh = (struct nlmsghdr *)skb->data;
 	if (!nlh) {
-		cfg80211_err("Netlink header null");
+		osif_err("Netlink header null");
 		return OEM_ERR_NULL_MESSAGE_HEADER;
+	}
+
+	if (nlh->nlmsg_len < NLMSG_LENGTH(sizeof(*msg_hdr))) {
+		osif_err("nlmsg_len(%d) and msg_hdr_size(%zu) mis-match",
+			 nlh->nlmsg_len, sizeof(*msg_hdr));
+		return OEM_ERR_INVALID_MESSAGE_LENGTH;
 	}
 
 	msg_hdr = NLMSG_DATA(nlh);
 	if (!msg_hdr) {
-		cfg80211_err("Message header null");
+		osif_err("Message header null");
 		return OEM_ERR_NULL_MESSAGE_HEADER;
 	}
 
 	if (nlh->nlmsg_len < NLMSG_LENGTH(sizeof(*msg_hdr) + msg_hdr->length)) {
-		cfg80211_err("nlmsg_len(%d) and animsg_len(%d) mis-match",
-			nlh->nlmsg_len, msg_hdr->length);
+		osif_err("nlmsg_len(%d) and animsg_len(%d) mis-match",
+			 nlh->nlmsg_len, msg_hdr->length);
 		return OEM_ERR_INVALID_MESSAGE_LENGTH;
 	}
 
@@ -165,9 +205,9 @@ static void __os_if_wifi_pos_callback(const void *data, int data_len,
 	struct wifi_pos_req_msg req = {0};
 	struct wlan_objmgr_psoc *psoc = wifi_pos_get_psoc();
 
-	cfg80211_debug("enter: pid %d", pid);
+	osif_debug("enter: pid %d", pid);
 	if (!psoc) {
-		cfg80211_err("global psoc object not registered yet.");
+		osif_err("global psoc object not registered yet.");
 		return;
 	}
 
@@ -182,8 +222,8 @@ static void __os_if_wifi_pos_callback(const void *data, int data_len,
 
 	status = ucfg_wifi_pos_process_req(psoc, &req, os_if_wifi_pos_send_rsp);
 	if (QDF_IS_STATUS_ERROR(status))
-		cfg80211_err("ucfg_wifi_pos_process_req failed. status: %d",
-				status);
+		osif_err("ucfg_wifi_pos_process_req failed. status: %d",
+			 status);
 
 release_psoc_ref:
 	wlan_objmgr_psoc_release_ref(psoc, WLAN_WIFI_POS_OSIF_ID);
@@ -208,9 +248,9 @@ static int __os_if_wifi_pos_callback(struct sk_buff *skb)
 	struct wifi_pos_req_msg req = {0};
 	struct wlan_objmgr_psoc *psoc = wifi_pos_get_psoc();
 
-	cfg80211_debug("enter");
+	osif_debug("enter");
 	if (!psoc) {
-		cfg80211_err("global psoc object not registered yet.");
+		osif_err("global psoc object not registered yet.");
 		return -EINVAL;
 	}
 
@@ -225,8 +265,8 @@ static int __os_if_wifi_pos_callback(struct sk_buff *skb)
 
 	status = ucfg_wifi_pos_process_req(psoc, &req, os_if_wifi_pos_send_rsp);
 	if (QDF_IS_STATUS_ERROR(status))
-		cfg80211_err("ucfg_wifi_pos_process_req failed. status: %d",
-				status);
+		osif_err("ucfg_wifi_pos_process_req failed. status: %d",
+			 status);
 
 release_psoc_ref:
 	wlan_objmgr_psoc_release_ref(psoc, WLAN_WIFI_POS_OSIF_ID);
@@ -255,7 +295,7 @@ int os_if_wifi_pos_register_nl(void)
 	int ret = register_cld_cmd_cb(WLAN_NL_MSG_OEM,
 				os_if_wifi_pos_callback, NULL);
 	if (ret)
-		cfg80211_err("register_cld_cmd_cb failed");
+		osif_err("register_cld_cmd_cb failed");
 
 	return ret;
 }
@@ -265,13 +305,14 @@ int os_if_wifi_pos_register_nl(void)
 	return nl_srv_register(WLAN_NL_MSG_OEM, os_if_wifi_pos_callback);
 }
 #endif /* CNSS_GENL */
+qdf_export_symbol(os_if_wifi_pos_register_nl);
 
 #ifdef CNSS_GENL
 int os_if_wifi_pos_deregister_nl(void)
 {
 	int ret = deregister_cld_cmd_cb(WLAN_NL_MSG_OEM);
 	if (ret)
-		cfg80211_err("deregister_cld_cmd_cb failed");
+		osif_err("deregister_cld_cmd_cb failed");
 
 	return ret;
 }
@@ -293,13 +334,13 @@ void os_if_wifi_pos_send_peer_status(struct qdf_mac_addr *peer_mac,
 	struct wmi_pos_peer_status_info *peer_info;
 
 	if (!psoc) {
-		cfg80211_err("global wifi_pos psoc object not registered");
+		osif_err("global wifi_pos psoc object not registered");
 		return;
 	}
 
 	if (!wifi_pos_is_app_registered(psoc) ||
 			wifi_pos_get_app_pid(psoc) == 0) {
-		cfg80211_debug("app is not registered or pid is invalid");
+		osif_debug("app is not registered or pid is invalid");
 		return;
 	}
 
@@ -340,7 +381,7 @@ int os_if_wifi_pos_populate_caps(struct wlan_objmgr_psoc *psoc,
 				   struct wifi_pos_driver_caps *caps)
 {
 	if (!psoc || !caps) {
-		cfg80211_err("psoc or caps buffer is null");
+		osif_err("psoc or caps buffer is null");
 		return -EINVAL;
 	}
 

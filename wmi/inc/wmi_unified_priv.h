@@ -26,9 +26,6 @@
 #include "wmi_unified_api.h"
 #include "wmi_unified_param.h"
 #include "wlan_scan_ucfg_api.h"
-#ifdef CONFIG_MCL
-#include <wmi_unified.h>
-#endif
 #include "qdf_atomic.h"
 #include <wbuff.h>
 
@@ -302,6 +299,10 @@ QDF_STATUS (*send_peer_delete_cmd)(wmi_unified_t wmi,
 				    uint8_t peer_addr[QDF_MAC_ADDR_SIZE],
 				    uint8_t vdev_id);
 
+QDF_STATUS (*send_peer_delete_all_cmd)(
+				wmi_unified_t wmi,
+				struct peer_delete_all_params *param);
+
 QDF_STATUS
 (*send_peer_unmap_conf_cmd)(wmi_unified_t wmi,
 			    uint8_t vdev_id,
@@ -386,14 +387,8 @@ QDF_STATUS (*send_stats_request_cmd)(wmi_unified_t wmi_handle,
 				uint8_t macaddr[QDF_MAC_ADDR_SIZE],
 				struct stats_request_params *param);
 
-#ifdef CONFIG_WIN
 QDF_STATUS (*send_packet_log_enable_cmd)(wmi_unified_t wmi_handle,
 			WMI_HOST_PKTLOG_EVENT PKTLOG_EVENT, uint8_t mac_id);
-#else
-QDF_STATUS (*send_packet_log_enable_cmd)(wmi_unified_t wmi_handle,
-				uint8_t macaddr[QDF_MAC_ADDR_SIZE],
-				struct packet_enable_params *param);
-#endif
 
 QDF_STATUS (*send_packet_log_disable_cmd)(wmi_unified_t wmi_handle,
 	uint8_t mac_id);
@@ -785,10 +780,12 @@ QDF_STATUS (*send_config_packet_filter_cmd)(wmi_unified_t wmi_handle,
 		uint8_t filter_id, bool enable);
 #endif
 #endif /* end of WLAN_POWER_MANAGEMENT_OFFLOAD */
-#ifdef CONFIG_MCL
+#ifdef WLAN_WMI_BCN
 QDF_STATUS (*send_bcn_buf_ll_cmd)(wmi_unified_t wmi_handle,
 			wmi_bcn_send_from_host_cmd_fixed_param * param);
+#endif
 
+#if !defined(REMOVE_PKT_LOG) && defined(FEATURE_PKTLOG)
 QDF_STATUS (*send_pktlog_wmi_send_cmd)(wmi_unified_t wmi_handle,
 				   WMI_PKTLOG_EVENT pktlog_event,
 				   WMI_CMD_ID cmd_id, uint8_t user_triggered);
@@ -805,8 +802,13 @@ QDF_STATUS (*send_oem_dma_cfg_cmd)(wmi_unified_t wmi_handle,
 #endif
 
 QDF_STATUS (*send_start_oem_data_cmd)(wmi_unified_t wmi_handle,
-			  uint32_t data_len,
-			  uint8_t *data);
+				      uint32_t data_len,
+				      uint8_t *data);
+
+#ifdef FEATURE_OEM_DATA
+QDF_STATUS (*send_start_oemv2_data_cmd)(wmi_unified_t wmi_handle,
+					struct oem_data *params);
+#endif
 
 QDF_STATUS
 (*send_dfs_phyerr_filter_offload_en_cmd)(wmi_unified_t wmi_handle,
@@ -1715,6 +1717,17 @@ QDF_STATUS (*extract_peer_delete_response_event)(
 			void *evt_buf,
 			struct wmi_host_peer_delete_response_event *param);
 
+QDF_STATUS (*extract_vdev_peer_delete_all_resp)(
+		wmi_unified_t wmi_handle,
+		void *evt_buf,
+		struct wmi_host_vdev_peer_delete_all_response_event
+						*peer_delete_all_rsp);
+
+QDF_STATUS (*extract_vdev_peer_delete_all_response_event)(
+		wmi_unified_t wmi_handle,
+		void *evt_buf,
+		struct wmi_host_vdev_peer_delete_all_response_event *param);
+
 bool (*is_management_record)(uint32_t cmd_id);
 bool (*is_diag_event)(uint32_t event_id);
 uint8_t *(*wmi_id_to_name)(uint32_t cmd_id);
@@ -1929,7 +1942,7 @@ QDF_STATUS (*extract_dfs_status_from_fw)(wmi_unified_t wmi_handle,
 #endif
 
 QDF_STATUS
-(*extract_cfr_peer_tx_event_param)(wmi_unified_t *wmi_handle, void *evt_buf,
+(*extract_cfr_peer_tx_event_param)(wmi_unified_t wmi_handle, void *evt_buf,
 				   wmi_cfr_peer_tx_event_param * peer_tx_event);
 
 #ifdef OBSS_PD
@@ -1968,6 +1981,11 @@ QDF_STATUS (*send_mws_coex_status_req_cmd)(wmi_unified_t wmi_handle,
 QDF_STATUS (*set_rx_pkt_type_routing_tag_cmd)(
 	wmi_unified_t wmi_hdl, struct wmi_rx_pkt_protocol_routing_info *param);
 #endif /* WLAN_SUPPORT_RX_PROTOCOL_TYPE_TAG */
+#ifdef WIFI_POS_CONVERGED
+QDF_STATUS (*extract_oem_response_param)
+		(wmi_unified_t wmi_hdl, void *resp_buf,
+		 struct wmi_oem_response_param *oem_resp_param);
+#endif /* WIFI_POS_CONVERGED */
 };
 
 /* Forward declartion for psoc*/
@@ -2347,6 +2365,14 @@ void wmi_blacklist_mgr_attach_tlv(struct wmi_unified *wmi_handle)
 void wmi_sta_attach_tlv(struct wmi_unified *wmi_handle);
 #else
 static inline void wmi_sta_attach_tlv(struct wmi_unified *wmi_handle)
+{
+}
+#endif
+
+#ifdef WLAN_WMI_BCN
+void wmi_bcn_attach_tlv(wmi_unified_t wmi_handle);
+#else
+static inline void wmi_bcn_attach_tlv(wmi_unified_t wmi_handle)
 {
 }
 #endif

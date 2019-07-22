@@ -157,7 +157,7 @@ static inline void hal_tx_desc_set_buf_addr_generic(void *desc,
 		HAL_TX_SM(UNIFIED_TCL_DATA_CMD_2, BUF_OR_EXT_DESC_TYPE, type);
 }
 
-#if defined(CONFIG_MCL) && defined(QCA_WIFI_QCA6290_11AX)
+#if defined(QCA_WIFI_QCA6290_11AX_MU_UL) && defined(QCA_WIFI_QCA6290_11AX)
 /**
  * hal_rx_handle_other_tlvs() - handle special TLVs like MU_UL
  * tlv_tag: Taf of the TLVs
@@ -239,7 +239,7 @@ hal_rx_handle_other_tlvs(uint32_t tlv_tag, void *rx_tlv,
 {
 	return false;
 }
-#endif /* CONFIG_MCL && QCA_WIFI_QCA6290_11AX */
+#endif /* QCA_WIFI_QCA6290_11AX_MU_UL && QCA_WIFI_QCA6290_11AX */
 
 #if defined(RX_PPDU_END_USER_STATS_1_OFDMA_INFO_VALID_OFFSET)
 static inline void
@@ -265,6 +265,53 @@ hal_rx_handle_ofdma_info(void *rx_tlv,
 }
 #endif
 
+#define HAL_RX_UPDATE_RSSI_PER_CHAIN_BW(chain, word_1, word_2, \
+					ppdu_info, rssi_info_tlv) \
+	{						\
+	ppdu_info->rx_status.rssi_chain[chain][0] = \
+			HAL_RX_GET(rssi_info_tlv, RECEIVE_RSSI_INFO_##word_1,\
+				   RSSI_PRI20_CHAIN##chain); \
+	ppdu_info->rx_status.rssi_chain[chain][1] = \
+			HAL_RX_GET(rssi_info_tlv, RECEIVE_RSSI_INFO_##word_1,\
+				   RSSI_EXT20_CHAIN##chain); \
+	ppdu_info->rx_status.rssi_chain[chain][2] = \
+			HAL_RX_GET(rssi_info_tlv, RECEIVE_RSSI_INFO_##word_1,\
+				   RSSI_EXT40_LOW20_CHAIN##chain); \
+	ppdu_info->rx_status.rssi_chain[chain][3] = \
+			HAL_RX_GET(rssi_info_tlv, RECEIVE_RSSI_INFO_##word_1,\
+				   RSSI_EXT40_HIGH20_CHAIN##chain); \
+	ppdu_info->rx_status.rssi_chain[chain][4] = \
+			HAL_RX_GET(rssi_info_tlv, RECEIVE_RSSI_INFO_##word_2,\
+				   RSSI_EXT80_LOW20_CHAIN##chain); \
+	ppdu_info->rx_status.rssi_chain[chain][5] = \
+			HAL_RX_GET(rssi_info_tlv, RECEIVE_RSSI_INFO_##word_2,\
+				   RSSI_EXT80_LOW_HIGH20_CHAIN##chain); \
+	ppdu_info->rx_status.rssi_chain[chain][6] = \
+			HAL_RX_GET(rssi_info_tlv, RECEIVE_RSSI_INFO_##word_2,\
+				   RSSI_EXT80_HIGH_LOW20_CHAIN##chain); \
+	ppdu_info->rx_status.rssi_chain[chain][7] = \
+			HAL_RX_GET(rssi_info_tlv, RECEIVE_RSSI_INFO_##word_2,\
+				   RSSI_EXT80_HIGH20_CHAIN##chain); \
+	}						\
+
+#define HAL_RX_PPDU_UPDATE_RSSI(ppdu_info, rssi_info_tlv) \
+	{HAL_RX_UPDATE_RSSI_PER_CHAIN_BW(0, 0, 1, ppdu_info, rssi_info_tlv) \
+	HAL_RX_UPDATE_RSSI_PER_CHAIN_BW(1, 2, 3, ppdu_info, rssi_info_tlv) \
+	HAL_RX_UPDATE_RSSI_PER_CHAIN_BW(2, 4, 5, ppdu_info, rssi_info_tlv) \
+	HAL_RX_UPDATE_RSSI_PER_CHAIN_BW(3, 6, 7, ppdu_info, rssi_info_tlv) \
+	HAL_RX_UPDATE_RSSI_PER_CHAIN_BW(4, 8, 9, ppdu_info, rssi_info_tlv) \
+	HAL_RX_UPDATE_RSSI_PER_CHAIN_BW(5, 10, 11, ppdu_info, rssi_info_tlv) \
+	HAL_RX_UPDATE_RSSI_PER_CHAIN_BW(6, 12, 13, ppdu_info, rssi_info_tlv) \
+	HAL_RX_UPDATE_RSSI_PER_CHAIN_BW(7, 14, 15, ppdu_info, rssi_info_tlv)} \
+
+static inline uint32_t
+hal_rx_update_rssi_chain(struct hal_rx_ppdu_info *ppdu_info,
+			 uint8_t *rssi_info_tlv)
+{
+	HAL_RX_PPDU_UPDATE_RSSI(ppdu_info, rssi_info_tlv)
+	return 0;
+}
+
 /**
  * hal_rx_status_get_tlv_info() - process receive info TLV
  * @rx_tlv_hdr: pointer to TLV header
@@ -274,7 +321,7 @@ hal_rx_handle_ofdma_info(void *rx_tlv,
  */
 static inline uint32_t
 hal_rx_status_get_tlv_info_generic(void *rx_tlv_hdr, void *ppduinfo,
-			   void *halsoc)
+			   void *halsoc, qdf_nbuf_t nbuf)
 {
 	struct hal_soc *hal = (struct hal_soc *)halsoc;
 	uint32_t tlv_tag, user_id, tlv_len, value;
@@ -301,6 +348,9 @@ hal_rx_status_get_tlv_info_generic(void *rx_tlv_hdr, void *ppduinfo,
 	switch (tlv_tag) {
 
 	case WIFIRX_PPDU_START_E:
+	{
+		struct hal_rx_ppdu_common_info *com_info = &ppdu_info->com_info;
+
 		ppdu_info->com_info.ppdu_id =
 			HAL_RX_GET(rx_tlv, RX_PPDU_START_0,
 				PHY_PPDU_ID);
@@ -314,7 +364,18 @@ hal_rx_status_get_tlv_info_generic(void *rx_tlv_hdr, void *ppduinfo,
 		ppdu_info->rx_status.ppdu_timestamp =
 			ppdu_info->com_info.ppdu_timestamp;
 		ppdu_info->rx_state = HAL_RX_MON_PPDU_START;
+
+		/* If last ppdu_id doesn't match new ppdu_id,
+		 * 1. reset mpdu_cnt
+		 * 2. update last_ppdu_id with new
+		 */
+		if (com_info->ppdu_id != com_info->last_ppdu_id) {
+			com_info->mpdu_cnt = 0;
+			com_info->last_ppdu_id =
+				com_info->ppdu_id;
+		}
 		break;
+	}
 
 	case WIFIRX_PPDU_START_USER_INFO_E:
 		break;
@@ -402,17 +463,19 @@ hal_rx_status_get_tlv_info_generic(void *rx_tlv_hdr, void *ppduinfo,
 		default:
 			break;
 		}
+		if (user_id < HAL_MAX_UL_MU_USERS) {
+			mon_rx_user_status =
+				&ppdu_info->rx_user_status[user_id];
 
-		mon_rx_user_status = &ppdu_info->rx_user_status[user_id];
+			mon_rx_user_status->mcs =
+				HAL_RX_GET(rx_tlv, RX_PPDU_END_USER_STATS_1,
+					   MCS);
+			mon_rx_user_status->nss =
+				HAL_RX_GET(rx_tlv, RX_PPDU_END_USER_STATS_1,
+					   NSS);
 
-		mon_rx_user_status->mcs =
-			HAL_RX_GET(rx_tlv, RX_PPDU_END_USER_STATS_1,
-				   MCS);
-		mon_rx_user_status->nss =
-			HAL_RX_GET(rx_tlv, RX_PPDU_END_USER_STATS_1,
-				   NSS);
-
-		hal_rx_handle_ofdma_info(rx_tlv, mon_rx_user_status);
+			hal_rx_handle_ofdma_info(rx_tlv, mon_rx_user_status);
+		}
 
 		ppdu_info->com_info.mpdu_cnt_fcs_ok =
 			HAL_RX_GET(rx_tlv, RX_PPDU_END_USER_STATS_3,
@@ -426,6 +489,20 @@ hal_rx_status_get_tlv_info_generic(void *rx_tlv_hdr, void *ppduinfo,
 		else
 			ppdu_info->rx_status.rs_flags &=
 				(~IEEE80211_AMPDU_FLAG);
+
+		ppdu_info->com_info.mpdu_fcs_ok_bitmap =
+			(((ppdu_info->com_info.mpdu_fcs_ok_bitmap |
+			 HAL_RX_GET(rx_tlv, RX_PPDU_END_USER_STATS_8,
+				    FCS_OK_BITMAP_63_32)) <<
+				    HAL_RX_MPDU_FCS_BITMAP_LSB) &
+				    HAL_RX_MPDU_FCS_BITMAP_32_63_OFFSET);
+
+		ppdu_info->com_info.mpdu_fcs_ok_bitmap =
+			((ppdu_info->com_info.mpdu_fcs_ok_bitmap |
+			HAL_RX_GET(rx_tlv, RX_PPDU_END_USER_STATS_7,
+				   FCS_OK_BITMAP_31_0)) &
+				   HAL_RX_MPDU_FCS_BITMAP_0_31_OFFSET);
+
 		break;
 	}
 
@@ -576,11 +653,15 @@ hal_rx_status_get_tlv_info_generic(void *rx_tlv_hdr, void *ppduinfo,
 		case TARGET_TYPE_QCA8074:
 		case TARGET_TYPE_QCA8074V2:
 		case TARGET_TYPE_QCA6018:
+#ifdef QCA_WIFI_QCA6390
+		case TARGET_TYPE_QCA6390:
+#endif
 			ppdu_info->rx_status.is_stbc =
 				HAL_RX_GET(vht_sig_a_info,
 					   VHT_SIG_A_INFO_0, STBC);
 			value =  HAL_RX_GET(vht_sig_a_info,
 					    VHT_SIG_A_INFO_0, N_STS);
+			value = value & VHT_SIG_SU_NSS_MASK;
 			if (ppdu_info->rx_status.is_stbc && (value > 0))
 				value = ((value + 1) >> 1) - 1;
 			ppdu_info->rx_status.nss =
@@ -594,6 +675,7 @@ hal_rx_status_get_tlv_info_generic(void *rx_tlv_hdr, void *ppduinfo,
 					   VHT_SIG_A_INFO_0, STBC);
 			value =  HAL_RX_GET(vht_sig_a_info,
 					    VHT_SIG_A_INFO_0, N_STS);
+			value = value & VHT_SIG_SU_NSS_MASK;
 			if (ppdu_info->rx_status.is_stbc && (value > 0))
 				value = ((value + 1) >> 1) - 1;
 			ppdu_info->rx_status.nss =
@@ -602,11 +684,6 @@ hal_rx_status_get_tlv_info_generic(void *rx_tlv_hdr, void *ppduinfo,
 			ppdu_info->rx_status.nss = 0;
 #endif
 			break;
-#ifdef QCA_WIFI_QCA6390
-		case TARGET_TYPE_QCA6390:
-			ppdu_info->rx_status.nss = 0;
-			break;
-#endif
 		default:
 			break;
 		}
@@ -1103,6 +1180,7 @@ hal_rx_status_get_tlv_info_generic(void *rx_tlv_hdr, void *ppduinfo,
 		default:
 			break;
 		}
+		hal_rx_update_rssi_chain(ppdu_info, rssi_info_tlv);
 		value = HAL_RX_GET(rssi_info_tlv,
 			RECEIVE_RSSI_INFO_0, RSSI_PRI20_CHAIN0);
 		ppdu_info->rx_status.rssi[0] = value;
@@ -1157,13 +1235,28 @@ hal_rx_status_get_tlv_info_generic(void *rx_tlv_hdr, void *ppduinfo,
 								ppdu_info);
 		break;
 	case WIFIRX_HEADER_E:
+	{
+		struct hal_rx_ppdu_common_info *com_info = &ppdu_info->com_info;
+		uint16_t mpdu_cnt = com_info->mpdu_cnt;
+
+		/* Update first_msdu_payload for every mpdu and increment
+		 * com_info->mpdu_cnt for every WIFIRX_HEADER_E TLV
+		 */
+		ppdu_info->ppdu_msdu_info[mpdu_cnt].first_msdu_payload =
+			rx_tlv;
+		ppdu_info->ppdu_msdu_info[mpdu_cnt].payload_len = tlv_len;
+		ppdu_info->ppdu_msdu_info[mpdu_cnt].nbuf = nbuf;
 		ppdu_info->msdu_info.first_msdu_payload = rx_tlv;
 		ppdu_info->msdu_info.payload_len = tlv_len;
 		ppdu_info->user_id = user_id;
 		ppdu_info->hdr_len = tlv_len;
 		ppdu_info->data = rx_tlv;
 		ppdu_info->data += 4;
+
+		/* for every RX_HEADER TLV increment mpdu_cnt */
+		com_info->mpdu_cnt++;
 		return HAL_TLV_STATUS_HEADER;
+	}
 	case WIFIRX_MPDU_START_E:
 	{
 		uint8_t *rx_mpdu_start =
@@ -1231,8 +1324,10 @@ hal_rx_status_get_tlv_info_generic(void *rx_tlv_hdr, void *ppduinfo,
 				   FCS_ERR);
 		return HAL_TLV_STATUS_MPDU_END;
 	case WIFIRX_MSDU_END_E:
-		ppdu_info->rx_msdu_info[user_id].cce_metadata =
-			HAL_RX_MSDU_END_CCE_METADATA_GET(rx_tlv);
+		if (user_id < HAL_MAX_UL_MU_USERS) {
+			ppdu_info->rx_msdu_info[user_id].cce_metadata =
+				HAL_RX_MSDU_END_CCE_METADATA_GET(rx_tlv);
+		}
 		return HAL_TLV_STATUS_MSDU_END;
 	case 0:
 		return HAL_TLV_STATUS_PPDU_DONE;
@@ -1482,15 +1577,11 @@ void hal_get_hw_hptp_generic(struct hal_soc *soc, void *hal_ring,
 	ring_config = HAL_SRNG_CONFIG(soc, ring_type);
 	if (!ring_config->lmac_ring) {
 		if (srng->ring_dir == HAL_SRNG_SRC_RING) {
-			*headp =
-			   (SRNG_SRC_REG_READ(srng, HP)) / srng->entry_size;
-			*tailp =
-			   (SRNG_SRC_REG_READ(srng, TP)) / srng->entry_size;
+			*headp = SRNG_SRC_REG_READ(srng, HP);
+			*tailp = SRNG_SRC_REG_READ(srng, TP);
 		} else {
-			*headp =
-			   (SRNG_DST_REG_READ(srng, HP)) / srng->entry_size;
-			*tailp =
-			   (SRNG_DST_REG_READ(srng, TP)) / srng->entry_size;
+			*headp = SRNG_DST_REG_READ(srng, HP);
+			*tailp = SRNG_DST_REG_READ(srng, TP);
 		}
 	}
 }

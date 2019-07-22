@@ -29,6 +29,7 @@
 #include <qdf_lock.h>        /* qdf_spinlock */
 #include <qdf_time.h>
 #include <qdf_timer.h>
+#include <qdf_str.h>         /* qdf_str_lcopy */
 
 #include <wlan_dfs_ioctl.h>
 #include "dfs_structs.h"
@@ -39,6 +40,7 @@
 #include <wlan_objmgr_psoc_obj.h>
 #include <wlan_objmgr_pdev_obj.h>
 #include <osdep.h>
+#include <wlan_cmn.h>
 
 /* File Line and Submodule String */
 #define FLSM(x, str)   #str " : " FL(x)
@@ -319,12 +321,6 @@
 #define NUM_BINS 128
 #define THOUSAND 1000
 
-/* ETSI11_WORLD regdmn pair id */
-#define ETSI11_WORLD_REGDMN_PAIR_ID 0x26
-#define ETSI12_WORLD_REGDMN_PAIR_ID 0x28
-#define ETSI13_WORLD_REGDMN_PAIR_ID 0x27
-#define ETSI14_WORLD_REGDMN_PAIR_ID 0x29
-
 /* Array offset to ETSI legacy pulse */
 #define ETSI_LEGACY_PULSE_ARR_OFFSET 2
 
@@ -400,6 +396,11 @@
  * in host. NOL timer can be configured by user. NOL in FW (for FO) is disabled.
  */
 #define USENOL_ENABLE_NOL_HOST_DISABLE_NOL_FW 2
+
+/* Non Agile detector IDs */
+#define DETECTOR_ID_0 0
+#define DETECTOR_ID_1 1
+/* Agile detector ID */
 #define AGILE_DETECTOR_ID 2
 
 /**
@@ -979,9 +980,8 @@ struct dfs_event_log {
  *                                   not be re-done.
  * @dfs_precac_timeout_override:     Overridden precac timeout.
  * @dfs_num_precac_freqs:            Number of PreCAC VHT80 frequencies.
- * @dfs_precac_required_list:        PreCAC required list.
- * @dfs_precac_done_list:            PreCAC done list.
- * @dfs_precac_nol_list:             PreCAC NOL List.
+ * @dfs_precac_list:                 PreCAC list (contains individual trees).
+ * @dfs_precac_chwidth:              PreCAC channel width enum.
  * @dfs_curchan:                     DFS current channel.
  * @dfs_cac_started_chan:            CAC started channel.
  * @dfs_pdev_obj:                    DFS pdev object.
@@ -1126,10 +1126,8 @@ struct wlan_dfs {
 #if defined(WLAN_DFS_FULL_OFFLOAD) && defined(QCA_DFS_NOL_OFFLOAD)
 	uint8_t        dfs_disable_radar_marking;
 #endif
-	TAILQ_HEAD(, dfs_precac_entry) dfs_precac_required_list;
-	TAILQ_HEAD(, dfs_precac_entry) dfs_precac_done_list;
-	TAILQ_HEAD(, dfs_precac_entry) dfs_precac_nol_list;
-
+	TAILQ_HEAD(, dfs_precac_entry) dfs_precac_list;
+	enum phy_ch_width dfs_precac_chwidth;
 #ifdef QCA_SUPPORT_ETSI_PRECAC_DFS
 	TAILQ_HEAD(, dfs_etsi_precac_entry) dfs_etsiprecac_required_list;
 	TAILQ_HEAD(, dfs_etsi_precac_entry) dfs_etsiprecac_done_list;
@@ -1141,8 +1139,8 @@ struct wlan_dfs {
 	struct dfs_soc_priv_obj *dfs_soc_obj;
 #if defined(QCA_SUPPORT_AGILE_DFS) || defined(ATH_SUPPORT_ZERO_CAC_DFS)
 	uint8_t dfs_psoc_idx;
-	uint8_t        dfs_agile_precac_freq;
 #endif
+	uint8_t        dfs_agile_precac_freq;
 	bool           dfs_is_offload_enabled;
 	int            dfs_use_nol;
 	qdf_spinlock_t dfs_nol_lock;

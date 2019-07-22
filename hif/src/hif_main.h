@@ -98,8 +98,10 @@
 #define QCA6018_DEVICE_ID (0xfffd) /* Todo: replace this with actual number */
 /* Genoa */
 #define QCN7605_DEVICE_ID  (0x1102) /* Genoa PCIe device ID*/
-#define QCN7605_COMPOSITE  (0x9900)
-#define QCN7605_STANDALONE  (0x9901)
+#define QCN7605_COMPOSITE  (0x9901)
+#define QCN7605_STANDALONE  (0x9900)
+#define QCN7605_STANDALONE_V2  (0x9902)
+#define QCN7605_COMPOSITE_V2  (0x9903)
 
 #define RUMIM2M_DEVICE_ID_NODE0	0xabc0
 #define RUMIM2M_DEVICE_ID_NODE1	0xabc1
@@ -152,6 +154,7 @@ struct hif_softc {
 	/* Packet statistics */
 	struct hif_ce_stats pkt_stats;
 	enum hif_target_status target_status;
+	uint64_t event_disable_mask;
 
 	struct targetdef_s *targetdef;
 	struct ce_reg_def *target_ce_def;
@@ -237,6 +240,19 @@ static inline uint8_t hif_is_attribute_set(struct hif_softc *sc,
 {
 	return sc->hif_attribute == hif_attrib;
 }
+
+#ifdef WLAN_FEATURE_DP_EVENT_HISTORY
+static inline void hif_set_event_hist_mask(struct hif_opaque_softc *hif_handle)
+{
+	struct hif_softc *scn = (struct hif_softc *)hif_handle;
+
+	scn->event_disable_mask = HIF_EVENT_HIST_DISABLE_MASK;
+}
+#else
+static inline void hif_set_event_hist_mask(struct hif_opaque_softc *hif_handle)
+{
+}
+#endif /* WLAN_FEATURE_DP_EVENT_HISTORY */
 
 A_target_id_t hif_get_target_id(struct hif_softc *scn);
 void hif_dump_pipe_debug_count(struct hif_softc *scn);

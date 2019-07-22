@@ -676,6 +676,25 @@ error:
 	return cmd_type;
 }
 
+bool wlan_ser_is_vdev_queue_enabled(struct wlan_objmgr_vdev *vdev)
+{
+	struct wlan_ser_vdev_obj *ser_vdev_obj;
+	struct wlan_serialization_vdev_queue *vdev_queue;
+
+	ser_vdev_obj = wlan_serialization_get_vdev_obj(vdev);
+	if (!ser_vdev_obj) {
+		ser_err("invalid ser_vdev_obj");
+		return false;
+	}
+
+	vdev_queue = wlan_serialization_get_vdev_queue_obj(
+			ser_vdev_obj, WLAN_SER_CMD_NONSCAN);
+	if (vdev_queue->queue_disable)
+		return false;
+	else
+		return true;
+}
+
 QDF_STATUS
 wlan_ser_get_cmd_activation_status(struct wlan_objmgr_vdev *vdev)
 {
@@ -802,9 +821,11 @@ void wlan_serialization_purge_all_pdev_cmd(struct wlan_objmgr_pdev *pdev)
 	wlan_ser_cancel_scan_cmd(ser_pdev_obj, pdev, NULL, NULL,
 				 WLAN_SER_CMD_SCAN, true);
 	wlan_ser_cancel_non_scan_cmd(ser_pdev_obj, pdev, NULL, NULL,
-				     WLAN_SER_CMD_NONSCAN, false);
+				     WLAN_SER_CMD_NONSCAN, false,
+				     WLAN_SER_CMD_ATTR_NONE);
 	wlan_ser_cancel_non_scan_cmd(ser_pdev_obj, pdev, NULL, NULL,
-				     WLAN_SER_CMD_NONSCAN, true);
+				     WLAN_SER_CMD_NONSCAN, true,
+				     WLAN_SER_CMD_ATTR_NONE);
 }
 
 static inline
@@ -851,7 +872,8 @@ void wlan_serialization_purge_all_pending_cmd_by_vdev_id(
 	wlan_ser_cancel_scan_cmd(ser_pdev_obj, pdev, vdev, NULL,
 				 WLAN_SER_CMD_SCAN, false);
 	wlan_ser_cancel_non_scan_cmd(ser_pdev_obj, pdev, vdev, NULL,
-				     WLAN_SER_CMD_NONSCAN, false);
+				     WLAN_SER_CMD_NONSCAN, false,
+				     WLAN_SER_CMD_ATTR_NONE);
 
 	wlan_objmgr_vdev_release_ref(vdev, WLAN_SERIALIZATION_ID);
 }

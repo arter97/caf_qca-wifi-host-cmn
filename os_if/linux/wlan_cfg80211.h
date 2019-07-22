@@ -30,20 +30,31 @@
 #include <net/cfg80211.h>
 #include <qca_vendor.h>
 
-#define cfg80211_alert(params...) \
+#define osif_alert(params...) \
 	QDF_TRACE_FATAL(QDF_MODULE_ID_OS_IF, params)
-#define cfg80211_err(params...) \
+#define osif_err(params...) \
 	QDF_TRACE_ERROR(QDF_MODULE_ID_OS_IF, params)
-#define cfg80211_warn(params...) \
+#define osif_warn(params...) \
 	QDF_TRACE_WARN(QDF_MODULE_ID_OS_IF, params)
-#define cfg80211_notice(params...) \
+#define osif_notice(params...) \
 	QDF_TRACE_INFO(QDF_MODULE_ID_OS_IF, params)
-#define cfg80211_info(params...) \
+#define osif_info(params...) \
 	QDF_TRACE_INFO(QDF_MODULE_ID_OS_IF, params)
-#define cfg80211_debug(params...) \
+#define osif_debug(params...) \
 	QDF_TRACE_DEBUG(QDF_MODULE_ID_OS_IF, params)
-#define cfg80211_debug_rl(params...) \
+#define osif_rl_debug(params...) \
 	QDF_TRACE_DEBUG_RL(QDF_MODULE_ID_OS_IF, params)
+
+#define osif_nofl_alert(params...) \
+	QDF_TRACE_FATAL_NO_FL(QDF_MODULE_ID_OS_IF, params)
+#define osif_nofl_err(params...) \
+	QDF_TRACE_ERROR_NO_FL(QDF_MODULE_ID_OS_IF, params)
+#define osif_nofl_warn(params...) \
+	QDF_TRACE_WARN_NO_FL(QDF_MODULE_ID_OS_IF, params)
+#define osif_nofl_info(params...) \
+	QDF_TRACE_INFO_NO_FL(QDF_MODULE_ID_OS_IF, params)
+#define osif_nofl_debug(params...) \
+	QDF_TRACE_DEBUG_NO_FL(QDF_MODULE_ID_OS_IF, params)
 
 #define COMMON_VENDOR_COMMANDS						\
 { 									\

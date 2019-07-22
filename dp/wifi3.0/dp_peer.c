@@ -27,10 +27,6 @@
 #include "dp_rx.h"
 #include <hal_api.h>
 #include <hal_reo.h>
-#ifdef CONFIG_MCL
-#include <cds_ieee80211_common.h>
-#include <cds_api.h>
-#endif
 #include <cdp_txrx_handle.h>
 #include <wlan_cfg.h>
 
@@ -900,7 +896,13 @@ int dp_peer_update_ast(struct dp_soc *soc, struct dp_peer *peer,
 		  peer->vdev->vdev_id, flags, ast_entry->mac_addr.raw,
 		  peer->mac_addr.raw);
 
-	if (ast_entry->delete_in_progress)
+	/* Do not send AST update in below cases
+	 *  1) Ast entry delete has already triggered
+	 *  2) Peer delete is already triggered
+	 *  3) We did not get the HTT map for create event
+	 */
+	if (ast_entry->delete_in_progress || peer->delete_in_progress ||
+	    !ast_entry->is_mapped)
 		return ret;
 
 	if ((ast_entry->type == CDP_TXRX_AST_TYPE_STATIC) ||
@@ -1087,10 +1089,22 @@ void dp_peer_ast_send_wds_del(struct dp_soc *soc,
 	ast_entry->delete_in_progress = true;
 }
 
-static void dp_peer_ast_free_entry(struct dp_soc *soc,
-				   struct dp_ast_entry *ast_entry)
+/**
+ * dp_peer_ast_free_entry_by_mac() - find ast entry by MAC address and delete
+ * @soc: soc handle
+ * @peer: peer handle
+ * @mac_addr: mac address of the AST entry to searc and delete
+ *
+ * find the ast entry from the peer list using the mac address and free
+ * the entry.
+ *
+ * Return: SUCCESS or NOENT
+ */
+static int dp_peer_ast_free_entry_by_mac(struct dp_soc *soc,
+					 struct dp_peer *peer,
+					 uint8_t *mac_addr)
 {
-	struct dp_peer *peer = ast_entry->peer;
+	struct dp_ast_entry *ast_entry;
 	void *cookie = NULL;
 	txrx_ast_free_cb cb = NULL;
 
@@ -1100,8 +1114,14 @@ static void dp_peer_ast_free_entry(struct dp_soc *soc,
 	 */
 
 	qdf_spin_lock_bh(&soc->ast_lock);
-	if (ast_entry->is_mapped)
+
+	ast_entry = dp_peer_ast_list_find(soc, peer, mac_addr);
+	if (!ast_entry) {
+		qdf_spin_unlock_bh(&soc->ast_lock);
+		return QDF_STATUS_E_NOENT;
+	} else if (ast_entry->is_mapped) {
 		soc->ast_table[ast_entry->ast_idx] = NULL;
+	}
 
 	TAILQ_REMOVE(&peer->ast_entry_list, ast_entry, ase_list_elem);
 	DP_STATS_INC(soc, ast.deleted, 1);
@@ -1115,6 +1135,7 @@ static void dp_peer_ast_free_entry(struct dp_soc *soc,
 	if (ast_entry == peer->self_ast_entry)
 		peer->self_ast_entry = NULL;
 
+	soc->num_ast_entries--;
 	qdf_spin_unlock_bh(&soc->ast_lock);
 
 	if (cb) {
@@ -1124,7 +1145,8 @@ static void dp_peer_ast_free_entry(struct dp_soc *soc,
 		   CDP_TXRX_AST_DELETED);
 	}
 	qdf_mem_free(ast_entry);
-	soc->num_ast_entries--;
+
+	return QDF_STATUS_SUCCESS;
 }
 
 struct dp_peer *dp_peer_find_hash_find(struct dp_soc *soc,
@@ -1446,19 +1468,51 @@ dp_rx_peer_map_handler(void *soc_handle, uint16_t peer_id,
 		  peer_mac_addr[2], peer_mac_addr[3], peer_mac_addr[4],
 		  peer_mac_addr[5], vdev_id);
 
-	if ((hw_peer_id < 0) ||
-	    (hw_peer_id >= wlan_cfg_get_max_ast_idx(soc->wlan_cfg_ctx))) {
-		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_ERROR,
-			"invalid hw_peer_id: %d", hw_peer_id);
-		qdf_assert_always(0);
-	}
-
 	/* Peer map event for WDS ast entry get the peer from
 	 * obj map
 	 */
 	if (is_wds) {
 		peer = soc->peer_id_to_obj_map[peer_id];
+		/*
+		 * In certain cases like Auth attack on a repeater
+		 * can result in the number of ast_entries falling
+		 * in the same hash bucket to exceed the max_skid
+		 * length supported by HW in root AP. In these cases
+		 * the FW will return the hw_peer_id (ast_index) as
+		 * 0xffff indicating HW could not add the entry in
+		 * its table. Host has to delete the entry from its
+		 * table in these cases.
+		 */
+		if (hw_peer_id == HTT_INVALID_PEER) {
+			DP_STATS_INC(soc, ast.map_err, 1);
+			if (!dp_peer_ast_free_entry_by_mac(soc,
+							   peer,
+							   peer_mac_addr))
+				return;
+
+			dp_alert("AST entry not found with peer %pK peer_id %u peer_mac %pM mac_addr %pM vdev_id %u next_hop %u",
+				 peer, peer->peer_ids[0],
+				 peer->mac_addr.raw, peer_mac_addr, vdev_id,
+				 is_wds);
+
+			return;
+		}
+
 	} else {
+		/*
+		 * It's the responsibility of the CP and FW to ensure
+		 * that peer is created successfully. Ideally DP should
+		 * not hit the below condition for directly assocaited
+		 * peers.
+		 */
+		if ((hw_peer_id < 0) ||
+		    (hw_peer_id >=
+		     wlan_cfg_get_max_ast_idx(soc->wlan_cfg_ctx))) {
+			QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_ERROR,
+				  "invalid hw_peer_id: %d", hw_peer_id);
+			qdf_assert_always(0);
+		}
+
 		peer = dp_peer_find_add_id(soc, peer_mac_addr, peer_id,
 					   hw_peer_id, vdev_id);
 
@@ -1513,7 +1567,6 @@ dp_rx_peer_unmap_handler(void *soc_handle, uint16_t peer_id,
 			 uint8_t is_wds)
 {
 	struct dp_peer *peer;
-	struct dp_ast_entry *ast_entry;
 	struct dp_soc *soc = (struct dp_soc *)soc_handle;
 	uint8_t i;
 
@@ -1532,16 +1585,8 @@ dp_rx_peer_unmap_handler(void *soc_handle, uint16_t peer_id,
 	/* If V2 Peer map messages are enabled AST entry has to be freed here
 	 */
 	if (soc->is_peer_map_unmap_v2 && is_wds) {
-
-		qdf_spin_lock_bh(&soc->ast_lock);
-		ast_entry = dp_peer_ast_list_find(soc, peer,
-						  mac_addr);
-		qdf_spin_unlock_bh(&soc->ast_lock);
-
-		if (ast_entry) {
-			dp_peer_ast_free_entry(soc, ast_entry);
+		if (!dp_peer_ast_free_entry_by_mac(soc, peer, mac_addr))
 			return;
-		}
 
 		dp_alert("AST entry not found with peer %pK peer_id %u peer_mac %pM mac_addr %pM vdev_id %u next_hop %u",
 			 peer, peer->peer_ids[0],
@@ -2277,12 +2322,13 @@ static void dp_teardown_256_ba_sessions(struct dp_peer *peer)
 					delba_rcode = rx_tid->delba_rcode;
 
 					qdf_spin_unlock_bh(&rx_tid->tid_lock);
-					peer->vdev->pdev->soc->cdp_soc.ol_ops->send_delba(
-							peer->vdev->pdev->ctrl_pdev,
-							peer->ctrl_peer,
-							peer->mac_addr.raw,
-							tid, peer->vdev->ctrl_vdev,
-							delba_rcode);
+					if (peer->vdev->pdev->soc->cdp_soc.ol_ops->send_delba)
+						peer->vdev->pdev->soc->cdp_soc.ol_ops->send_delba(
+								peer->vdev->pdev->ctrl_pdev,
+								peer->ctrl_peer,
+								peer->mac_addr.raw,
+								tid, peer->vdev->ctrl_vdev,
+								delba_rcode);
 				} else {
 					qdf_spin_unlock_bh(&rx_tid->tid_lock);
 				}
@@ -2605,10 +2651,11 @@ int dp_delba_tx_completion_wifi3(void *peer_handle,
 			rx_tid->delba_tx_retry++;
 			rx_tid->delba_tx_status = 1;
 			qdf_spin_unlock_bh(&rx_tid->tid_lock);
-			peer->vdev->pdev->soc->cdp_soc.ol_ops->send_delba(
-				peer->vdev->pdev->ctrl_pdev, peer->ctrl_peer,
-				peer->mac_addr.raw, tid, peer->vdev->ctrl_vdev,
-				rx_tid->delba_rcode);
+			if (peer->vdev->pdev->soc->cdp_soc.ol_ops->send_delba)
+				peer->vdev->pdev->soc->cdp_soc.ol_ops->send_delba(
+					peer->vdev->pdev->ctrl_pdev, peer->ctrl_peer,
+					peer->mac_addr.raw, tid, peer->vdev->ctrl_vdev,
+					rx_tid->delba_rcode);
 		}
 		return QDF_STATUS_SUCCESS;
 	} else {
@@ -2818,7 +2865,7 @@ dp_rx_sec_ind_handler(void *soc_handle, uint16_t peer_id,
 	dp_peer_unref_del_find_by_id(peer);
 }
 
-#ifdef CONFIG_MCL
+#ifdef DP_PEER_EXTENDED_API
 /**
  * dp_register_peer() - Register peer into physical device
  * @pdev - data path device instance

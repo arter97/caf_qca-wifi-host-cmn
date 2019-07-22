@@ -744,7 +744,7 @@ QDF_STATUS reg_get_channel_list_with_power(struct wlan_objmgr_pdev *pdev,
 
 	for (i = 0, count = 0; i < NUM_CHANNELS; i++) {
 		if (reg_channels[i].state &&
-		    reg_channels[i].state != REGULATORY_CHAN_DISABLED) {
+		    reg_channels[i].chan_flags != REGULATORY_CHAN_DISABLED) {
 			ch_list[count].chan_num =
 				reg_channels[i].chan_num;
 			ch_list[count++].tx_power =
@@ -2008,4 +2008,18 @@ QDF_STATUS reg_enable_dfs_channels(struct wlan_objmgr_pdev *pdev,
 	status = reg_send_scheduler_msg_sb(psoc, pdev);
 
 	return status;
+}
+
+bool reg_is_regdmn_en302502_applicable(struct wlan_objmgr_pdev *pdev)
+{
+	struct cur_regdmn_info cur_reg_dmn;
+	QDF_STATUS status;
+
+	status = reg_get_curr_regdomain(pdev, &cur_reg_dmn);
+	if (status != QDF_STATUS_SUCCESS) {
+		reg_err("Failed to get reg domain");
+		return false;
+	}
+
+	return reg_en302_502_regdmn(cur_reg_dmn.regdmn_pair_id);
 }

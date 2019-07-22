@@ -17,6 +17,7 @@
  */
 
 #include "htt.h"
+#include "dp_htt.h"
 #include "hal_hw_headers.h"
 #include "dp_tx.h"
 #include "dp_tx_desc.h"
@@ -947,6 +948,26 @@ error:
 }
 
 /**
+ * dp_tx_raw_prepare_unset() - unmap the chain of nbufs belonging to RAW frame.
+ * @soc: DP soc handle
+ * @nbuf: Buffer pointer
+ *
+ * unmap the chain of nbufs that belong to this RAW frame.
+ *
+ * Return: None
+ */
+static void dp_tx_raw_prepare_unset(struct dp_soc *soc,
+				    qdf_nbuf_t nbuf)
+{
+	qdf_nbuf_t cur_nbuf = nbuf;
+
+	do {
+		qdf_nbuf_unmap(soc->osdev, cur_nbuf, QDF_DMA_TO_DEVICE);
+		cur_nbuf = qdf_nbuf_next(cur_nbuf);
+	} while (cur_nbuf);
+}
+
+/**
  * dp_tx_hw_enqueue() - Enqueue to TCL HW for transmit
  * @soc: DP Soc Handle
  * @vdev: DP vdev handle
@@ -1514,7 +1535,6 @@ qdf_nbuf_t dp_tx_send_msdu_multiple(struct dp_vdev *vdev, qdf_nbuf_t nbuf,
 	bool is_cce_classified = false;
 	QDF_STATUS status;
 	uint16_t htt_tcl_metadata = 0;
-
 	struct dp_tx_queue *tx_q = &msdu_info->tx_queue;
 	void *hal_srng = soc->tcl_data_ring[tx_q->ring_id].hal_srng;
 	struct cdp_tid_tx_stats *tid_stats = NULL;
@@ -1862,8 +1882,9 @@ static bool dp_check_exc_metadata(struct cdp_tx_exception_metadata *tx_exc)
 {
 	bool invalid_tid = (tx_exc->tid > DP_MAX_TIDS && tx_exc->tid !=
 			    HTT_INVALID_TID);
-	bool invalid_encap_type = (tx_exc->tid > DP_MAX_TIDS && tx_exc->tid !=
-				   HTT_INVALID_TID);
+	bool invalid_encap_type =
+			(tx_exc->tx_encap_type > htt_cmn_pkt_num_types &&
+			 tx_exc->tx_encap_type != CDP_INVALID_TX_ENCAP_TYPE);
 	bool invalid_sec_type = (tx_exc->sec_type > cdp_num_sec_types &&
 				 tx_exc->sec_type != CDP_INVALID_SEC_TYPE);
 	bool invalid_cookie = (tx_exc->is_tx_sniffer == 1 &&
@@ -2207,6 +2228,9 @@ qdf_nbuf_t dp_tx_send(void *vap_dev, qdf_nbuf_t nbuf)
 
 send_multiple:
 	nbuf = dp_tx_send_msdu_multiple(vdev, nbuf, &msdu_info);
+
+	if (qdf_unlikely(nbuf && msdu_info.frm_type == dp_tx_frm_raw))
+		dp_tx_raw_prepare_unset(vdev->pdev->soc, nbuf);
 
 	return nbuf;
 }
@@ -3068,12 +3092,7 @@ void dp_tx_comp_process_tx_status(struct dp_tx_desc_s *tx_desc,
 		goto out;
 	}
 
-	if (qdf_likely(!peer->bss_peer)) {
-		DP_STATS_INC_PKT(peer, tx.ucast, 1, length);
-
-		if (ts->status == HAL_TX_TQM_RR_FRAME_ACKED)
-			DP_STATS_INC_PKT(peer, tx.tx_success, 1, length);
-	} else {
+	if (qdf_unlikely(peer->bss_peer && vdev->opmode == wlan_op_mode_ap)) {
 		if (ts->status != HAL_TX_TQM_RR_REM_CMD_REM) {
 			DP_STATS_INC_PKT(peer, tx.mcast, 1, length);
 
@@ -3083,6 +3102,10 @@ void dp_tx_comp_process_tx_status(struct dp_tx_desc_s *tx_desc,
 				DP_STATS_INC_PKT(peer, tx.bcast, 1, length);
 			}
 		}
+	} else {
+		DP_STATS_INC_PKT(peer, tx.ucast, 1, length);
+		if (ts->status == HAL_TX_TQM_RR_FRAME_ACKED)
+			DP_STATS_INC_PKT(peer, tx.tx_success, 1, length);
 	}
 
 	dp_tx_update_peer_stats(tx_desc, ts, peer, ring_id);
@@ -3165,6 +3188,7 @@ void dp_tx_process_htt_completion(struct dp_tx_desc_s *tx_desc, uint8_t *status,
 	uint32_t *htt_desc = (uint32_t *)status;
 	struct dp_peer *peer;
 	struct cdp_tid_tx_stats *tid_stats = NULL;
+	struct htt_soc *htt_handle;
 
 	qdf_assert(tx_desc->pdev);
 
@@ -3174,8 +3198,9 @@ void dp_tx_process_htt_completion(struct dp_tx_desc_s *tx_desc, uint8_t *status,
 
 	if (!vdev)
 		return;
-
 	tx_status = HTT_TX_WBM_COMPLETION_V2_TX_STATUS_GET(htt_desc[0]);
+	htt_handle = (struct htt_soc *)soc->htt_handle;
+	htt_wbm_event_record(htt_handle->htt_logger_handle, tx_status, status);
 
 	switch (tx_status) {
 	case HTT_TX_FW2WBM_TX_STATUS_OK:
@@ -3305,7 +3330,7 @@ more_data:
 	/* Re-initialize local variables to be re-used */
 		head_desc = NULL;
 		tail_desc = NULL;
-	if (qdf_unlikely(hal_srng_access_start(soc->hal_soc, hal_srng))) {
+	if (qdf_unlikely(dp_srng_access_start(int_ctx, soc, hal_srng))) {
 		QDF_TRACE(QDF_MODULE_ID_TXRX, QDF_TRACE_LEVEL_ERROR,
 				"%s %d : HAL RING Access Failed -- %pK",
 				__func__, __LINE__, hal_srng);
@@ -3424,7 +3449,7 @@ more_data:
 			break;
 	}
 
-	hal_srng_access_end(soc->hal_soc, hal_srng);
+	dp_srng_access_end(int_ctx, soc, hal_srng);
 
 	/* Process the reaped descriptors */
 	if (head_desc)

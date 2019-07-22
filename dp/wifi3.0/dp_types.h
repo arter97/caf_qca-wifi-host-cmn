@@ -30,10 +30,10 @@
 #include <htt_common.h>
 
 #include <cdp_txrx_cmn.h>
-#ifdef CONFIG_MCL
+#ifdef DP_MOB_DEFS
 #include <cds_ieee80211_common.h>
-#include <wdi_event_api.h>    /* WDI subscriber event list */
 #endif
+#include <wdi_event_api.h>    /* WDI subscriber event list */
 
 #include "hal_hw_headers.h"
 #include <hal_tx.h>
@@ -71,7 +71,7 @@
 #define MAX_MON_LINK_DESC_BANKS 2
 #define DP_VDEV_ALL 0xff
 
-#if defined(CONFIG_MCL)
+#if defined(WLAN_MAX_PDEVS) && (WLAN_MAX_PDEVS == 1)
 #define MAX_PDEV_CNT 1
 #else
 #define MAX_PDEV_CNT 3
@@ -644,6 +644,7 @@ struct dp_soc_stats {
 		uint32_t added;
 		uint32_t deleted;
 		uint32_t aged_out;
+		uint32_t map_err;
 	} ast;
 
 	/* SOC level TX stats */
@@ -689,6 +690,10 @@ struct dp_soc_stats {
 			/* Invalid PDEV error count */
 			uint32_t invalid_pdev;
 
+			/* Packets delivered to stack that no related peer */
+			uint32_t pkt_delivered_no_peer;
+			/* Defrag peer uninit error count */
+			uint32_t defrag_peer_uninit;
 			/* Invalid sa_idx or da_idx*/
 			uint32_t invalid_sa_da_idx;
 			/* MSDU DONE failures */
@@ -786,7 +791,6 @@ struct dp_ast_entry {
 	struct dp_peer *peer;
 	bool next_hop;
 	bool is_active;
-	bool is_bss;
 	bool is_mapped;
 	uint8_t pdev_id;
 	uint8_t vdev_id;
@@ -1118,6 +1122,8 @@ struct dp_soc {
 	uint8_t pcp_tid_map[PCP_TID_MAP_MAX];
 	/* TID map priority value */
 	uint8_t tidmap_prty;
+	/* Pointer to global per ring type specific configuration table */
+	struct wlan_srng_cfg *wlan_srng_cfg;
 };
 
 #ifdef IPA_OFFLOAD
@@ -1380,6 +1386,9 @@ struct dp_pdev {
 	/* Monitor mode interface and status storage */
 	struct dp_vdev *monitor_vdev;
 
+	/* Monitor mode operation channel */
+	int mon_chan_num;
+
 	/* monitor mode lock */
 	qdf_spinlock_t mon_lock;
 
@@ -1622,6 +1631,11 @@ struct dp_pdev {
 	uint64_t tx_ppdu_proc;
 
 	uint32_t *ppdu_tlv_buf; /* Buffer to hold HTT ppdu stats TLVs*/
+
+	/* nbuf queue to maintain rx ppdu status buffer
+	 * belonging to one ppdu
+	 */
+	qdf_nbuf_queue_t rx_ppdu_buf_q;
 };
 
 struct dp_peer;

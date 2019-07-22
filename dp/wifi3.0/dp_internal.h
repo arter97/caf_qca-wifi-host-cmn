@@ -24,6 +24,7 @@
 #define RX_BUFFER_SIZE_PKTLOG_LITE 1024
 
 
+#define DP_RSSI_INVAL 0x80
 #define DP_RSSI_AVG_WEIGHT 2
 /*
  * Formula to derive avg_rssi is taken from wifi2.o firmware
@@ -90,7 +91,7 @@
 
 #ifdef WLAN_TX_PKT_CAPTURE_ENH
 extern uint8_t
-dp_cpu_ring_map[DP_NSS_CPU_RING_MAP_MAX][WLAN_CFG_INT_NUM_CONTEXTS];
+dp_cpu_ring_map[DP_NSS_CPU_RING_MAP_MAX][WLAN_CFG_INT_NUM_CONTEXTS_MAX];
 #endif
 
 #if DP_PRINT_ENABLE
@@ -131,7 +132,7 @@ while (0)
 	QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_##LVL,       \
 		fmt, ## args)
 
-#ifdef CONFIG_MCL
+#ifdef DP_PRINT_NO_CONSOLE
 /* Stat prints should not go to console or kernel logs.*/
 #define DP_PRINT_STATS(fmt, args ...)\
 	QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_INFO_HIGH,       \
@@ -742,7 +743,7 @@ extern void dp_peer_rx_init(struct dp_pdev *pdev, struct dp_peer *peer);
 void dp_peer_tx_init(struct dp_pdev *pdev, struct dp_peer *peer);
 extern void dp_peer_cleanup(struct dp_vdev *vdev, struct dp_peer *peer);
 extern void dp_peer_rx_cleanup(struct dp_vdev *vdev, struct dp_peer *peer);
-extern void dp_peer_unref_delete(void *peer_handle);
+void dp_peer_unref_delete(struct dp_peer *peer);
 extern void dp_rx_discard(struct dp_vdev *vdev, struct dp_peer *peer,
 	unsigned tid, qdf_nbuf_t msdu_list);
 extern void *dp_find_peer_by_addr(struct cdp_pdev *dev,
@@ -750,7 +751,7 @@ extern void *dp_find_peer_by_addr(struct cdp_pdev *dev,
 extern struct dp_peer *dp_peer_find_hash_find(struct dp_soc *soc,
 	uint8_t *peer_mac_addr, int mac_addr_is_aligned, uint8_t vdev_id);
 
-#ifndef CONFIG_WIN
+#ifdef DP_PEER_EXTENDED_API
 QDF_STATUS dp_register_peer(struct cdp_pdev *pdev_handle,
 		struct ol_txrx_desc_type *sta_desc);
 QDF_STATUS dp_clear_peer(struct cdp_pdev *pdev_handle, uint8_t local_id);
@@ -826,11 +827,13 @@ extern void dp_reo_cmdlist_destroy(struct dp_soc *soc);
 
 /**
  * dp_reo_status_ring_handler - Handler for REO Status ring
+ * @int_ctx: pointer to DP interrupt context
  * @soc: DP Soc handle
  *
  * Returns: Number of descriptors reaped
  */
-uint32_t dp_reo_status_ring_handler(struct dp_soc *soc);
+uint32_t dp_reo_status_ring_handler(struct dp_intr *int_ctx,
+				    struct dp_soc *soc);
 void dp_aggregate_vdev_stats(struct dp_vdev *vdev,
 			     struct cdp_vdev_stats *vdev_stats);
 void dp_rx_tid_stats_cb(struct dp_soc *soc, void *cb_ctxt,
@@ -853,10 +856,19 @@ void dp_set_pn_check_wifi3(struct cdp_vdev *vdev_handle,
 void *dp_get_pdev_for_mac_id(struct dp_soc *soc, uint32_t mac_id);
 void dp_set_michael_key(struct cdp_peer *peer_handle,
 			bool is_unicast, uint32_t *key);
-#ifdef CONFIG_WIN
+#ifdef QCA_ENH_V3_STATS_SUPPORT
 uint32_t dp_pdev_tid_stats_display(void *pdev_handle,
 			enum _ol_ath_param_t param, uint32_t value, void *buff);
 #endif
+
+/**
+ * dp_check_pdev_exists() - Validate pdev before use
+ * @soc - dp soc handle
+ * @data - pdev handle
+ *
+ * Return: 0 - success/invalid - failure
+ */
+bool dp_check_pdev_exists(struct dp_soc *soc, struct dp_pdev *data);
 
 /**
  * dp_update_delay_stats() - Update delay statistics in structure
@@ -1194,7 +1206,49 @@ static inline void dp_peer_unref_del_find_by_id(struct dp_peer *peer)
 }
 #endif
 
-#ifdef CONFIG_WIN
+#ifdef WLAN_FEATURE_DP_EVENT_HISTORY
+/**
+ * dp_srng_access_start() - Wrapper function to log access start of a hal ring
+ * @int_ctx: pointer to DP interrupt context
+ * @soc: DP Soc handle
+ * @hal_ring: opaque pointer to the HAL Rx Error Ring, which will be serviced
+ *
+ * Return: 0 on success; error on failure
+ */
+int dp_srng_access_start(struct dp_intr *int_ctx, struct dp_soc *dp_soc,
+			 void *hal_ring);
+
+/**
+ * dp_srng_access_end() - Wrapper function to log access end of a hal ring
+ * @int_ctx: pointer to DP interrupt context
+ * @soc: DP Soc handle
+ * @hal_ring: opaque pointer to the HAL Rx Error Ring, which will be serviced
+ *
+ * Return: void
+ */
+void dp_srng_access_end(struct dp_intr *int_ctx, struct dp_soc *dp_soc,
+			void *hal_ring);
+
+#else
+
+static inline int dp_srng_access_start(struct dp_intr *int_ctx,
+				       struct dp_soc *dp_soc, void *hal_ring)
+{
+	void *hal_soc = dp_soc->hal_soc;
+
+	return hal_srng_access_start(hal_soc, hal_ring);
+}
+
+static inline void dp_srng_access_end(struct dp_intr *int_ctx,
+				      struct dp_soc *dp_soc, void *hal_ring)
+{
+	void *hal_soc = dp_soc->hal_soc;
+
+	return hal_srng_access_end(hal_soc, hal_ring);
+}
+#endif /* WLAN_FEATURE_DP_EVENT_HISTORY */
+
+#ifdef QCA_ENH_V3_STATS_SUPPORT
 /**
  * dp_pdev_print_delay_stats(): Print pdev level delay stats
  * @pdev: DP_PDEV handle

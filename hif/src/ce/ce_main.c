@@ -37,9 +37,6 @@
 #include "ce_reg.h"
 #include "ce_assignment.h"
 #include "ce_tasklet.h"
-#ifndef CONFIG_WIN
-#include "qwlan_version.h"
-#endif
 #include "qdf_module.h"
 
 #define CE_POLL_TIMEOUT 10      /* ms */
@@ -1279,7 +1276,7 @@ void free_mem_ce_debug_hist_data(struct hif_softc *scn, uint32_t ce_id)
 }
 #endif /* HIF_CE_DEBUG_DATA_BUF */
 
-#if defined(CONFIG_MCL)
+#ifndef HIF_CE_DEBUG_DATA_DYNAMIC_BUF
 #if defined(HIF_CONFIG_SLUB_DEBUG_ON) || defined(HIF_CE_DEBUG_DATA_BUF)
 struct hif_ce_desc_event hif_ce_desc_history[CE_COUNT_MAX][HIF_CE_HISTORY_MAX];
 
@@ -1336,7 +1333,7 @@ alloc_mem_ce_debug_history(struct hif_softc *scn, unsigned int CE_id,
 static inline void
 free_mem_ce_debug_history(struct hif_softc *scn, unsigned int CE_id) { }
 #endif /* (HIF_CONFIG_SLUB_DEBUG_ON) || (HIF_CE_DEBUG_DATA_BUF) */
-#elif defined(CONFIG_WIN)
+#else
 #if defined(HIF_CE_DEBUG_DATA_BUF)
 
 static QDF_STATUS
@@ -1385,7 +1382,7 @@ alloc_mem_ce_debug_history(struct hif_softc *scn, unsigned int CE_id,
 static inline void
 free_mem_ce_debug_history(struct hif_softc *scn, unsigned int CE_id) { }
 #endif /* HIF_CE_DEBUG_DATA_BUF */
-#endif /* CONFIG_MCL */
+#endif /* HIF_CE_DEBUG_DATA_DYNAMIC_BUF */
 
 #if defined(HIF_CONFIG_SLUB_DEBUG_ON) || defined(HIF_CE_DEBUG_DATA_BUF)
 /**
@@ -2973,8 +2970,7 @@ int hif_wlan_enable(struct hif_softc *scn)
 	if (BYPASS_QMI)
 		return 0;
 	else
-		return pld_wlan_enable(scn->qdf_dev->dev, &cfg,
-				       mode, QWLAN_VERSIONSTR);
+		return pld_wlan_enable(scn->qdf_dev->dev, &cfg, mode);
 }
 
 #ifdef WLAN_FEATURE_EPPING
@@ -3136,16 +3132,21 @@ void hif_ce_prepare_config(struct hif_softc *scn)
 		scn->ce_count = QCA_6390_CE_COUNT;
 		break;
 	case TARGET_TYPE_ADRASTEA:
-		if (hif_is_attribute_set(scn, HIF_LOWDESC_CE_NO_PKTLOG_CFG))
+		if (hif_is_attribute_set(scn, HIF_LOWDESC_CE_NO_PKTLOG_CFG)) {
 			hif_state->host_ce_config =
 				host_lowdesc_ce_config_wlan_adrastea_nopktlog;
-		else
+			hif_state->target_ce_config =
+			       target_lowdesc_ce_config_wlan_adrastea_nopktlog;
+			hif_state->target_ce_config_sz =
+			sizeof(target_lowdesc_ce_config_wlan_adrastea_nopktlog);
+		} else {
 			hif_state->host_ce_config =
 				host_ce_config_wlan_adrastea;
-
-		hif_state->target_ce_config = target_ce_config_wlan_adrastea;
-		hif_state->target_ce_config_sz =
+			hif_state->target_ce_config =
+					target_ce_config_wlan_adrastea;
+			hif_state->target_ce_config_sz =
 					sizeof(target_ce_config_wlan_adrastea);
+		}
 		break;
 
 	}

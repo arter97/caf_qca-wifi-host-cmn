@@ -1334,9 +1334,17 @@ void hif_pci_enable_power_management(struct hif_softc *hif_sc,
 				 bool is_packet_log_enabled)
 {
 	struct hif_pci_softc *pci_ctx = HIF_GET_PCI_SOFTC(hif_sc);
+	uint32_t mode;
 
 	if (!pci_ctx) {
 		HIF_ERROR("%s, hif_ctx null", __func__);
+		return;
+	}
+
+	mode = hif_get_conparam(hif_sc);
+	if (mode == QDF_GLOBAL_FTM_MODE) {
+		HIF_INFO("%s: Enable power gating for FTM mode", __func__);
+		hif_enable_power_gating(pci_ctx);
 		return;
 	}
 
@@ -2799,6 +2807,7 @@ void hif_process_runtime_suspend_success(struct hif_opaque_softc *hif_ctx)
 	struct hif_softc *scn = HIF_GET_SOFTC(hif_ctx);
 
 	hif_runtime_pm_set_state_suspended(scn);
+	hif_pm_runtime_set_monitor_wake_intr(hif_ctx, 1);
 	hif_log_runtime_suspend_success(scn);
 }
 
@@ -2811,6 +2820,7 @@ void hif_pre_runtime_resume(struct hif_opaque_softc *hif_ctx)
 {
 	struct hif_softc *scn = HIF_GET_SOFTC(hif_ctx);
 
+	hif_pm_runtime_set_monitor_wake_intr(hif_ctx, 0);
 	hif_runtime_pm_set_state_inprogress(scn);
 }
 
@@ -3636,8 +3646,12 @@ static void hif_pci_get_soc_info_nopld(struct hif_pci_softc *sc,
 				       struct device *dev)
 {}
 
-static bool hif_is_pld_based_target(int device_id)
+static bool hif_is_pld_based_target(struct hif_pci_softc *sc,
+				    int device_id)
 {
+	if (!pld_have_platform_driver_support(sc->dev))
+		return false;
+
 	switch (device_id) {
 	case QCA6290_DEVICE_ID:
 	case QCA6290_EMULATION_DEVICE_ID:
@@ -3654,7 +3668,7 @@ static bool hif_is_pld_based_target(int device_id)
 static void hif_pci_init_deinit_ops_attach(struct hif_pci_softc *sc,
 					   int device_id)
 {
-	if (hif_is_pld_based_target(device_id)) {
+	if (hif_is_pld_based_target(sc, device_id)) {
 		sc->hif_enable_pci = hif_enable_pci_pld;
 		sc->hif_pci_deinit = hif_pci_deinit_pld;
 		sc->hif_pci_get_soc_info = hif_pci_get_soc_info_pld;
@@ -4357,6 +4371,54 @@ void hif_runtime_lock_deinit(struct hif_opaque_softc *hif_ctx,
 	}
 
 	qdf_mem_free(context);
+}
+
+/**
+ * hif_pm_runtime_is_suspended() - API to check if driver has runtime suspended
+ * @hif_ctx: HIF context
+ *
+ * Return: true for runtime suspended, otherwise false
+ */
+bool hif_pm_runtime_is_suspended(struct hif_opaque_softc *hif_ctx)
+{
+	struct hif_pci_softc *sc = HIF_GET_PCI_SOFTC(hif_ctx);
+
+	return qdf_atomic_read(&sc->pm_state) ==
+		HIF_PM_RUNTIME_STATE_SUSPENDED;
+}
+
+/**
+ * hif_pm_runtime_get_monitor_wake_intr() - API to get monitor_wake_intr
+ * @hif_ctx: HIF context
+ *
+ * monitor_wake_intr variable can be used to indicate if driver expects wake
+ * MSI for runtime PM
+ *
+ * Return: monitor_wake_intr variable
+ */
+int hif_pm_runtime_get_monitor_wake_intr(struct hif_opaque_softc *hif_ctx)
+{
+	struct hif_pci_softc *sc = HIF_GET_PCI_SOFTC(hif_ctx);
+
+	return qdf_atomic_read(&sc->monitor_wake_intr);
+}
+
+/**
+ * hif_pm_runtime_set_monitor_wake_intr() - API to set monitor_wake_intr
+ * @hif_ctx: HIF context
+ * @val: value to set
+ *
+ * monitor_wake_intr variable can be used to indicate if driver expects wake
+ * MSI for runtime PM
+ *
+ * Return: void
+ */
+void hif_pm_runtime_set_monitor_wake_intr(struct hif_opaque_softc *hif_ctx,
+					  int val)
+{
+	struct hif_pci_softc *sc = HIF_GET_PCI_SOFTC(hif_ctx);
+
+	qdf_atomic_set(&sc->monitor_wake_intr, val);
 }
 #endif /* FEATURE_RUNTIME_PM */
 

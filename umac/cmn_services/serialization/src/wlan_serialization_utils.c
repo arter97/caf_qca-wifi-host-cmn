@@ -550,6 +550,8 @@ wlan_serialization_add_cmd_to_queue(
 
 	if (qdf_list_size(queue) == qdf_list_max_size(queue)) {
 		status = WLAN_SER_CMD_DENIED_LIST_FULL;
+		ser_err("qdf_list_size: %d is already max %d",
+			qdf_list_size(queue), qdf_list_max_size(queue));
 		goto error;
 	}
 
@@ -770,6 +772,30 @@ bool wlan_serialization_match_cmd_pdev(qdf_list_node_t *nnode,
 
 	node_pdev = wlan_vdev_get_pdev(cmd_list->cmd.vdev);
 	if (node_pdev == pdev)
+		match_found = true;
+
+	return match_found;
+}
+
+bool wlan_serialization_match_cmd_blocking(
+		qdf_list_node_t *nnode,
+		enum wlan_serialization_node node_type)
+{
+	struct wlan_serialization_command_list *cmd_list = NULL;
+	bool match_found = false;
+
+	if (node_type == WLAN_SER_PDEV_NODE)
+		cmd_list =
+			qdf_container_of(nnode,
+					 struct wlan_serialization_command_list,
+					 pdev_node);
+	else
+		cmd_list =
+			qdf_container_of(nnode,
+					 struct wlan_serialization_command_list,
+					 vdev_node);
+
+	if (cmd_list->cmd.is_blocking)
 		match_found = true;
 
 	return match_found;

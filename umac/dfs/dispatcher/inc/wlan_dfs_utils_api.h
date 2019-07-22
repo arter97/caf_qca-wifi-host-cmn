@@ -116,14 +116,22 @@ QDF_STATUS utils_dfs_reset(struct wlan_objmgr_pdev *pdev);
 bool utils_dfs_is_freq_in_nol(struct wlan_objmgr_pdev *pdev, uint32_t freq);
 
 /**
- * utils_dfs_reset_precaclists() - Clears and initiakizes precac_required_list,
- *                                 precac_done_list and precac_nol_list.
+ * utils_dfs_reset_precaclists() - Clears and initializes precac_list.
  * @pdev: Pointer to DFS pdev object.
  *
  * Wrapper function for dfs_reset_precaclists(). This function called from
  * outside of DFS component.
  */
 QDF_STATUS utils_dfs_reset_precaclists(struct wlan_objmgr_pdev *pdev);
+
+/**
+ * utils_dfs_unmark_precac_nol() - Clears precac channel marked as NOL.
+ * @pdev: Pointer to DFS pdev object.
+ * @chan: channel to be unmarked as NOL.
+ *
+ * Return void.
+ */
+void utils_dfs_unmark_precac_nol(struct wlan_objmgr_pdev *pdev, uint8_t chan);
 
 /**
  * utils_dfs_reset_etsi_precaclists() - Clears and initializes etsi
@@ -447,6 +455,26 @@ QDF_STATUS utils_dfs_get_random_channel(struct wlan_objmgr_pdev *pdev,
 		uint16_t flags, struct ch_params *ch_params,
 		uint32_t *hw_mode, uint8_t *target_chan,
 		struct dfs_acs_info *acs_info);
+
+/**
+ * utils_dfs_get_vdev_random_channel() - Get random channel for vdev
+ * @pdev: Pointer to DFS pdev object.
+ * @vdev: vdev of the request
+ * @flags: random channel selection flags.
+ * @ch_params: current channel params.
+ * @hw_mode: current operating mode.
+ * @target_chan: Pointer to target_chan.
+ * @acs_info: acs range info.
+ *
+ * Get random channel based on vdev interface type. If the vdev is null,
+ * the function will get random channel by SAP interface type.
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS utils_dfs_get_vdev_random_channel(
+	struct wlan_objmgr_pdev *pdev, struct wlan_objmgr_vdev *vdev,
+	uint16_t flags, struct ch_params *ch_params, uint32_t *hw_mode,
+	uint8_t *target_chan, struct dfs_acs_info *acs_info);
 
 /**
  * utils_dfs_bw_reduced_channel() - Get BW reduced channel.

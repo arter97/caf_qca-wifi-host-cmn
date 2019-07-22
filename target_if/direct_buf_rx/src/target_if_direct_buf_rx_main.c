@@ -562,7 +562,7 @@ static QDF_STATUS target_if_dbr_cfg_tgt(struct wlan_objmgr_pdev *pdev,
 {
 	QDF_STATUS status;
 	struct wlan_objmgr_psoc *psoc;
-	void *wmi_hdl;
+	wmi_unified_t wmi_hdl;
 	struct direct_buf_rx_cfg_req dbr_cfg_req = {0};
 	struct direct_buf_rx_ring_cfg *dbr_ring_cfg;
 	struct direct_buf_rx_ring_cap *dbr_ring_cap;
@@ -920,7 +920,7 @@ static int target_if_direct_buf_rx_rsp_event_handler(ol_scn_t scn,
 	struct direct_buf_rx_buf_info *dbr_buf_pool;
 	struct direct_buf_rx_pdev_obj *dbr_pdev_obj;
 	struct direct_buf_rx_module_param *mod_param;
-	struct common_wmi_handle *wmi_handle;
+	struct wmi_unified *wmi_handle;
 	wlan_objmgr_ref_dbgid dbr_mod_id = WLAN_DIRECT_BUF_RX_ID;
 
 	direct_buf_rx_enter();

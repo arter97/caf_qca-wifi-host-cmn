@@ -27,6 +27,7 @@
 #include <cdp_txrx_ops.h>
 #include "wlan_cfg.h"
 #include "cfg_ucfg_api.h"
+#include "hal_api.h"
 
 /*
  * FIX THIS -
@@ -89,7 +90,7 @@
 #define WLAN_CFG_HOST2RXDMA_RING_MASK_2 0x4
 #define WLAN_CFG_HOST2RXDMA_RING_MASK_3 0x0
 
-#ifdef CONFIG_MCL
+#if defined(WLAN_MAX_PDEVS) && (WLAN_MAX_PDEVS == 1)
 static const int tx_ring_mask[WLAN_CFG_INT_NUM_CONTEXTS] = {
 	WLAN_CFG_TX_RING_MASK_0, 0, 0, 0, 0, 0, 0};
 
@@ -200,7 +201,83 @@ static const int reo_status_ring_mask[WLAN_CFG_INT_NUM_CONTEXTS] = {
 					WLAN_CFG_REO_STATUS_RING_MASK_1,
 					WLAN_CFG_REO_STATUS_RING_MASK_2,
 					WLAN_CFG_REO_STATUS_RING_MASK_3};
-#endif /*CONFIG_MCL*/
+#endif /* MAX_PDEV_CNT == 1 */
+
+/**
+ * g_wlan_srng_cfg[] - Per ring_type specific configuration
+ *
+ */
+struct wlan_srng_cfg g_wlan_srng_cfg[MAX_RING_TYPES];
+
+/* REO_DST ring configuration */
+struct wlan_srng_cfg wlan_srng_reo_cfg = {
+	.timer_threshold = WLAN_CFG_INT_TIMER_THRESHOLD_REO_RING,
+	.batch_count_threshold = 0,
+	.low_threshold = 0,
+};
+
+/* WBM2SW_RELEASE ring configuration */
+struct wlan_srng_cfg wlan_srng_wbm_release_cfg = {
+	.timer_threshold = WLAN_CFG_INT_TIMER_THRESHOLD_WBM_RELEASE_RING,
+	.batch_count_threshold = 0,
+	.low_threshold = 0,
+};
+
+/* RXDMA_BUF ring configuration */
+struct wlan_srng_cfg wlan_srng_rxdma_buf_cfg = {
+	.timer_threshold = WLAN_CFG_INT_TIMER_THRESHOLD_RX,
+	.batch_count_threshold = 0,
+	.low_threshold = WLAN_CFG_RXDMA_REFILL_RING_SIZE >> 3,
+};
+
+/* RXDMA_MONITOR_BUF ring configuration */
+struct wlan_srng_cfg wlan_srng_rxdma_monitor_buf_cfg = {
+	.timer_threshold = WLAN_CFG_INT_TIMER_THRESHOLD_RX,
+	.batch_count_threshold = 0,
+	.low_threshold = WLAN_CFG_RXDMA_MONITOR_BUF_RING_SIZE >> 3,
+};
+
+/* RXDMA_MONITOR_STATUS ring configuration */
+struct wlan_srng_cfg wlan_srng_rxdma_monitor_status_cfg = {
+	.timer_threshold = WLAN_CFG_INT_TIMER_THRESHOLD_RX,
+	.batch_count_threshold = 0,
+	.low_threshold = WLAN_CFG_RXDMA_MONITOR_STATUS_RING_SIZE >> 3,
+};
+
+/* DEFAULT_CONFIG ring configuration */
+struct wlan_srng_cfg wlan_srng_default_cfg = {
+	.timer_threshold = WLAN_CFG_INT_TIMER_THRESHOLD_OTHER,
+	.batch_count_threshold = WLAN_CFG_INT_BATCH_THRESHOLD_OTHER,
+	.low_threshold = 0,
+};
+
+void wlan_set_srng_cfg(struct wlan_srng_cfg **wlan_cfg)
+{
+	g_wlan_srng_cfg[REO_DST] = wlan_srng_reo_cfg;
+	g_wlan_srng_cfg[WBM2SW_RELEASE] = wlan_srng_wbm_release_cfg;
+	g_wlan_srng_cfg[REO_EXCEPTION] = wlan_srng_default_cfg;
+	g_wlan_srng_cfg[REO_REINJECT] = wlan_srng_default_cfg;
+	g_wlan_srng_cfg[REO_CMD] = wlan_srng_default_cfg;
+	g_wlan_srng_cfg[REO_STATUS] = wlan_srng_default_cfg;
+	g_wlan_srng_cfg[TCL_DATA] = wlan_srng_default_cfg;
+	g_wlan_srng_cfg[TCL_CMD] = wlan_srng_default_cfg;
+	g_wlan_srng_cfg[TCL_STATUS] = wlan_srng_default_cfg;
+	g_wlan_srng_cfg[WBM_IDLE_LINK] = wlan_srng_default_cfg;
+	g_wlan_srng_cfg[SW2WBM_RELEASE] = wlan_srng_default_cfg;
+	g_wlan_srng_cfg[RXDMA_BUF] = wlan_srng_rxdma_buf_cfg;
+	g_wlan_srng_cfg[RXDMA_DST] = wlan_srng_default_cfg;
+	g_wlan_srng_cfg[RXDMA_MONITOR_BUF] =
+			wlan_srng_rxdma_monitor_buf_cfg;
+	g_wlan_srng_cfg[RXDMA_MONITOR_STATUS] =
+			wlan_srng_rxdma_monitor_status_cfg;
+	g_wlan_srng_cfg[RXDMA_MONITOR_DST] = wlan_srng_default_cfg;
+	g_wlan_srng_cfg[RXDMA_MONITOR_DESC] = wlan_srng_default_cfg;
+	g_wlan_srng_cfg[DIR_BUF_RX_DMA_SRC] = wlan_srng_default_cfg;
+#ifdef WLAN_FEATURE_CIF_CFR
+	g_wlan_srng_cfg[WIFI_POS_SRC] = wlan_srng_default_cfg;
+#endif
+	*wlan_cfg = g_wlan_srng_cfg;
+}
 
 /**
  * wlan_cfg_soc_attach() - Allocate and prepare SoC configuration
@@ -241,6 +318,7 @@ struct wlan_cfg_dp_soc_ctxt *wlan_cfg_soc_attach(void *psoc)
 
 	wlan_cfg_ctx->tx_comp_ring_size_nss =
 		cfg_get(psoc, CFG_DP_NSS_COMP_RING_SIZE);
+
 	wlan_cfg_ctx->int_batch_threshold_tx =
 			cfg_get(psoc, CFG_DP_INT_BATCH_THRESHOLD_TX);
 	wlan_cfg_ctx->int_timer_threshold_tx =

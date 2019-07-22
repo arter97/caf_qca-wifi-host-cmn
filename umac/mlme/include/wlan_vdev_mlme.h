@@ -438,6 +438,8 @@ enum vdev_start_resp_type {
  * @mlme_vdev_notify_start_state_exit:  callback to notify on vdev start
  *                                      start state exit
  * @mlme_vdev_is_newchan_no_cac:        callback to check CAC is required
+ * @mlme_vdev_ext_peer_delete_all_rsp:  callback to initiate actions for
+ *                                      vdev mlme peer delete all response
  */
 struct vdev_mlme_ops {
 	QDF_STATUS (*mlme_vdev_validate_basic_params)(
@@ -509,7 +511,26 @@ struct vdev_mlme_ops {
 				struct vdev_mlme_obj *vdev_mlme);
 	QDF_STATUS (*mlme_vdev_is_newchan_no_cac)(
 				struct vdev_mlme_obj *vdev_mlme);
+	QDF_STATUS (*mlme_vdev_ext_peer_delete_all_rsp)(
+				struct vdev_mlme_obj *vdev_mlme,
+				struct peer_delete_all_response *rsp);
 };
+
+#ifdef FEATURE_VDEV_RSP_WAKELOCK
+/**
+ *  struct wlan_vdev_wakelock - vdev wake lock sub structure
+ *  @start_wakelock: wakelock for vdev start
+ *  @stop_wakelock: wakelock for vdev stop
+ *  @delete_wakelock: wakelock for vdev delete
+ *  @wmi_cmd_rsp_runtime_lock: run time lock
+ */
+struct vdev_mlme_wakelock {
+	qdf_wake_lock_t start_wakelock;
+	qdf_wake_lock_t stop_wakelock;
+	qdf_wake_lock_t delete_wakelock;
+	qdf_runtime_lock_t wmi_cmd_rsp_runtime_lock;
+};
+#endif
 
 /**
  * struct vdev_mlme_obj - VDEV MLME component object
@@ -522,6 +543,7 @@ struct vdev_mlme_ops {
  * @ops:                  VDEV MLME callback table
  * @ext_vdev_ptr:         VDEV MLME legacy pointer
  * @vdev_rt: VDEV response timer
+ * @vdev_wakelock:  vdev wakelock sub structure
  */
 struct vdev_mlme_obj {
 	struct vdev_mlme_proto proto;
@@ -535,6 +557,9 @@ struct vdev_mlme_obj {
 	struct vdev_mlme_ops *ops;
 	void *ext_vdev_ptr;
 	struct vdev_response_timer vdev_rt;
+#ifdef FEATURE_VDEV_RSP_WAKELOCK
+	struct vdev_mlme_wakelock vdev_wakelock;
+#endif
 };
 
 /**
