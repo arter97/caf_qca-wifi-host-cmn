@@ -142,7 +142,6 @@ static void hif_pci_route_adrastea_interrupt(struct hif_pci_softc *sc)
 }
 #endif
 
-
 /**
  * pci_dispatch_ce_irq() - pci_dispatch_ce_irq
  * @scn: scn
@@ -162,7 +161,6 @@ static void pci_dispatch_interrupt(struct hif_softc *scn)
 		return;
 
 	intr_summary = CE_INTERRUPT_SUMMARY(scn);
-
 	if (intr_summary == 0) {
 		if ((scn->target_status != TARGET_STATUS_RESET) &&
 			(!qdf_atomic_read(&scn->link_suspended))) {
@@ -189,6 +187,21 @@ static void pci_dispatch_interrupt(struct hif_softc *scn)
 		}
 	}
 }
+
+#ifdef FEATURE_SINGLE_MSI
+irqreturn_t hif_pci_legacy_ce_interrupt_handler_msi(int irq, void *arg)
+{
+	struct hif_pci_softc *sc = (struct hif_pci_softc *)arg;
+	struct hif_softc *scn = HIF_GET_SOFTC(sc);
+
+	sc->irq_event = irq;
+	qdf_atomic_set(&scn->tasklet_from_intr, 1);
+	qdf_atomic_inc(&scn->active_tasklet_cnt);
+	tasklet_schedule(&sc->intr_tq);
+
+	return IRQ_HANDLED;
+}
+#endif
 
 irqreturn_t hif_pci_legacy_ce_interrupt_handler(int irq, void *arg)
 {
@@ -897,6 +910,47 @@ static void hif_init_reschedule_tasklet_work(struct hif_pci_softc *sc)
 static void hif_init_reschedule_tasklet_work(struct hif_pci_softc *sc) { }
 #endif /* HIF_CONFIG_SLUB_DEBUG_ON */
 
+#ifdef FEATURE_SINGLE_MSI
+void wlan_tasklet_msi(unsigned long data)
+{
+	struct hif_pci_softc *sc = (struct hif_pci_softc *)data;
+	struct hif_softc *scn = HIF_GET_SOFTC(sc);
+
+	if (scn->hif_init_done == false)
+		goto end;
+
+	if (qdf_atomic_read(&scn->link_suspended))
+		goto end;
+
+	if (!ADRASTEA_BU) {
+		(irqreturn_t) hif_fw_interrupt_handler(sc->irq_event, scn);
+		if (scn->target_status == TARGET_STATUS_RESET)
+			goto end;
+	}
+
+	ce_per_engine_service_any(sc->irq_event, scn);
+	qdf_atomic_set(&scn->tasklet_from_intr, 1);
+	if (ce_get_rx_pending(scn)) {
+		if (hif_is_load_or_unload_in_progress(scn)) {
+			hif_err("%s: Load/Unload in Progress\n", __func__);
+		goto end;
+		}
+		if (hif_is_recovery_in_progress(scn)) {
+			hif_err("%s: LOGP in progress\n", __func__);
+			goto end;
+		}
+		/*
+		 * There are frames pending, schedule tasklet to process them.
+		 * Enable the interrupt only when there is no pending frames in
+		 * any of the Copy Engine pipes.
+		 */
+		tasklet_schedule(&sc->intr_tq);
+	}
+end:
+	qdf_atomic_dec(&scn->active_tasklet_cnt);
+}
+#endif
+
 void wlan_tasklet(unsigned long data)
 {
 	struct hif_pci_softc *sc = (struct hif_pci_softc *)data;
@@ -1580,7 +1634,6 @@ done:
 static int hif_configure_irq_wrapper(struct hif_softc *scn, bool *irq_config)
 {
 	int status;
-	struct hif_pci_softc *sc = HIF_GET_PCI_SOFTC(scn);
 
 	status = hif_configure_irq(scn);
 	if (status < 0) {
@@ -1589,12 +1642,10 @@ static int hif_configure_irq_wrapper(struct hif_softc *scn, bool *irq_config)
 	}
 
 	*irq_config = true;
-	if (sc->single_msi_enabled) {
-		hif_pci_device_reset(sc);
-		hif_pci_device_warm_reset(sc);
-	}
 	return status;
 }
+
+static void hif_target_sync(struct hif_softc *scn);
 
 static int hif_configure_single_msi(struct hif_softc *scn)
 {
@@ -1613,9 +1664,9 @@ static int hif_configure_single_msi(struct hif_softc *scn)
 	if (rv >= 0) {
 		hif_info("%s: use single msi", __func__);
 
-		tasklet_init(&sc->intr_tq, wlan_tasklet, (unsigned long)sc);
+		tasklet_init(&sc->intr_tq, wlan_tasklet_msi, (unsigned long)sc);
 		ret = request_irq(sc->pdev->irq,
-				  hif_pci_legacy_ce_interrupt_handler,
+				  hif_pci_legacy_ce_interrupt_handler_msi,
 				  IRQF_SHARED, "wlan_pci", sc);
 		if (ret) {
 			hif_err("%s: request_irq failed", __func__);
@@ -1639,6 +1690,8 @@ static int hif_configure_single_msi(struct hif_softc *scn)
 			       PCIE_SOC_WAKE_RESET);
 	}
 	hif_info("%s: X, ret = %d", __func__, ret);
+
+	hif_target_sync(scn);
 
 	return ret;
 
@@ -1693,6 +1746,7 @@ int hif_pci_bus_configure(struct hif_softc *hif_sc)
 		goto timer_free;
 	}
 
+#ifndef FEATURE_SINGLE_MSI
 	A_TARGET_ACCESS_LIKELY(hif_sc);
 
 	if ((CONFIG_ATH_PCIE_MAX_PERF ||
@@ -1716,6 +1770,7 @@ int hif_pci_bus_configure(struct hif_softc *hif_sc)
 			}
 		}
 	}
+#endif /* FEATURE_SINGLE_MSI */
 
 	/* todo: consider replacing this with an srng field */
 	if (((hif_sc->target_info.target_type == TARGET_TYPE_QCA8074) ||
@@ -1741,6 +1796,32 @@ int hif_pci_bus_configure(struct hif_softc *hif_sc)
 		if (status < 0)
 			goto disable_wlan;
 	}
+
+#ifdef FEATURE_SINGLE_MSI
+	A_TARGET_ACCESS_LIKELY(hif_sc);
+
+	if ((CONFIG_ATH_PCIE_MAX_PERF ||
+	     CONFIG_ATH_PCIE_AWAKE_WHILE_DRIVER_LOAD) &&
+	    !ce_srng_based(hif_sc)) {
+		/*
+		 * prevent sleep for PCIE_AWAKE_WHILE_DRIVER_LOAD feature
+		 * prevent sleep when we want to keep firmware always awake
+		 * note: when we want to keep firmware always awake,
+		 *       hif_target_sleep_state_adjust will point to a dummy
+		 *       function, and hif_pci_target_sleep_state_adjust must
+		 *       be called instead.
+		 * note: bus type check is here because AHB bus is reusing
+		 *       hif_pci_bus_configure code.
+		 */
+		if (hif_sc->bus_type == QDF_BUS_TYPE_PCI) {
+			if (hif_pci_target_sleep_state_adjust(hif_sc,
+					false, true) < 0) {
+				status = -EACCES;
+				goto disable_wlan;
+			}
+		}
+	}
+#endif /* FEATURE_SINGLE_MSI */
 
 	status = hif_config_ce(hif_sc);
 	if (status)
@@ -3639,7 +3720,9 @@ again:
 	}
 
 	if (!ce_srng_based(ol_sc)) {
+#ifndef FEATURE_SINGLE_MSI
 		hif_target_sync(ol_sc);
+#endif
 
 		if (hif_pci_default_link_up(tgt_info))
 			hif_vote_link_up(hif_hdl);
