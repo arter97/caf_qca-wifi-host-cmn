@@ -1160,16 +1160,7 @@ static enum channel_state reg_get_5g_bonded_chan_array(
 	return chan_state;
 }
 
-/**
- * reg_get_5g_bonded_channel() - get the 5G bonded channel state
- * @pdev: Pointer to pdev structure
- * @chan_num: channel number
- * @ch_width: channel width
- * @bonded_chan_ptr_ptr: bonded channel ptr ptr
- *
- * Return: channel state
- */
-static enum channel_state reg_get_5g_bonded_channel(
+enum channel_state reg_get_5g_bonded_channel(
 		struct wlan_objmgr_pdev *pdev, uint32_t chan_num,
 		enum phy_ch_width ch_width,
 		const struct bonded_channel **bonded_chan_ptr_ptr)
@@ -1649,15 +1640,102 @@ uint32_t reg_freq_to_chan(struct wlan_objmgr_pdev *pdev,
 		return 0;
 	}
 
-	chan_list = pdev_priv_obj->cur_chan_list;
+	chan_list = pdev_priv_obj->mas_chan_list;
+	for (count = 0; count < NUM_CHANNELS; count++) {
+		if (chan_list[count].center_freq >= freq)
+			break;
+	}
 
-	for (count = 0; count < NUM_CHANNELS; count++)
-		if (chan_list[count].center_freq == freq)
-			return chan_list[count].chan_num;
+	if (count == NUM_CHANNELS)
+		goto end;
 
+	if (chan_list[count].center_freq == freq)
+		return chan_list[count].chan_num;
+
+	if (count == 0)
+		goto end;
+
+	if ((chan_list[count - 1].chan_num == INVALID_CHANNEL_NUM) ||
+	    (chan_list[count].chan_num == INVALID_CHANNEL_NUM)) {
+		reg_err("Frequency %d invalid in current reg domain", freq);
+		return 0;
+	}
+
+	return (chan_list[count - 1].chan_num +
+		(freq - chan_list[count - 1].center_freq) / 5);
+
+end:
 	reg_err("invalid frequency %d", freq);
-
 	return 0;
+}
+
+static uint16_t reg_compute_chan_to_freq(struct wlan_objmgr_pdev *pdev,
+					 uint8_t chan_num,
+					 enum channel_enum min_chan_range,
+					 enum channel_enum max_chan_range)
+{
+	uint16_t count;
+	struct regulatory_channel *chan_list;
+	struct wlan_regulatory_pdev_priv_obj *pdev_priv_obj;
+
+	pdev_priv_obj = reg_get_pdev_obj(pdev);
+
+	if (!IS_VALID_PDEV_REG_OBJ(pdev_priv_obj)) {
+		reg_err("reg pdev priv obj is NULL");
+		return 0;
+	}
+
+	chan_list = pdev_priv_obj->mas_chan_list;
+
+	for (count = min_chan_range; count <= max_chan_range; count++) {
+		if (reg_chan_is_49ghz(pdev, chan_list[count].chan_num)) {
+			if (chan_list[count].chan_num == chan_num)
+				break;
+			continue;
+		} else if ((chan_list[count].chan_num >= chan_num) &&
+			   (chan_list[count].chan_num != INVALID_CHANNEL_NUM))
+			break;
+	}
+
+	if (count == max_chan_range + 1)
+		goto end;
+
+	if (chan_list[count].chan_num == chan_num) {
+		if (chan_list[count].chan_flags & REGULATORY_CHAN_DISABLED)
+			reg_err("Channel %d disabled in current reg domain",
+				chan_num);
+		return chan_list[count].center_freq;
+	}
+
+	if (count == min_chan_range)
+		goto end;
+
+	if ((chan_list[count - 1].chan_num == INVALID_CHANNEL_NUM) ||
+	    reg_chan_is_49ghz(pdev, chan_list[count - 1].chan_num) ||
+	    (chan_list[count].chan_num == INVALID_CHANNEL_NUM)) {
+		reg_err("Channel %d invalid in current reg domain",
+			chan_num);
+		return 0;
+	}
+
+	return (chan_list[count - 1].center_freq +
+		(chan_num - chan_list[count - 1].chan_num) * 5);
+
+end:
+
+	reg_debug_rl("Invalid channel %d", chan_num);
+	return 0;
+}
+
+uint16_t reg_legacy_chan_to_freq(struct wlan_objmgr_pdev *pdev,
+				 uint8_t chan_num)
+{
+	uint16_t min_chan_range = MIN_24GHZ_CHANNEL;
+	uint16_t max_chan_range = MAX_5GHZ_CHANNEL;
+
+	return reg_compute_chan_to_freq(pdev, chan_num,
+					min_chan_range,
+					max_chan_range);
 }
 
 #ifdef CONFIG_CHAN_NUM_API
@@ -1676,7 +1754,6 @@ uint32_t reg_chan_to_freq(struct wlan_objmgr_pdev *pdev,
 	}
 
 	chan_list = pdev_priv_obj->cur_chan_list;
-
 	for (count = 0; count < NUM_CHANNELS; count++)
 		if (chan_list[count].chan_num == chan_num) {
 			if (reg_chan_in_range(chan_list,
@@ -1690,7 +1767,6 @@ uint32_t reg_chan_to_freq(struct wlan_objmgr_pdev *pdev,
 		}
 
 	reg_debug_rl("invalid channel %d", chan_num);
-
 	return 0;
 }
 
@@ -2235,6 +2311,28 @@ bool reg_is_5ghz_ch_freq(uint32_t freq)
 	return REG_IS_5GHZ_FREQ(freq);
 }
 
+/**
+ * BAND_2G_PRESENT() - Check if REG_BAND_2G is set in the band_mask
+ * @band_mask: Bitmask for bands
+ *
+ * Return: True if REG_BAND_2G is set in the band_mask, else false
+ */
+static inline bool BAND_2G_PRESENT(uint8_t band_mask)
+{
+	return !!(band_mask & (BIT(REG_BAND_2G)));
+}
+
+/**
+ * BAND_5G_PRESENT() - Check if REG_BAND_5G is set in the band_mask
+ * @band_mask: Bitmask for bands
+ *
+ * Return: True if REG_BAND_5G is set in the band_mask, else false
+ */
+static inline bool BAND_5G_PRESENT(uint8_t band_mask)
+{
+	return !!(band_mask & (BIT(REG_BAND_5G)));
+}
+
 #ifdef CONFIG_BAND_6GHZ
 bool reg_is_6ghz_chan_freq(uint16_t freq)
 {
@@ -2269,7 +2367,130 @@ bool reg_is_6ghz_psc_chan_freq(uint16_t freq)
 
 	return false;
 }
-#endif
+
+/**
+ * BAND_6G_PRESENT() - Check if REG_BAND_6G is set in the band_mask
+ * @band_mask: Bitmask for bands
+ *
+ * Return: True if REG_BAND_6G is set in the band_mask, else false
+ */
+static inline bool BAND_6G_PRESENT(uint8_t band_mask)
+{
+	return !!(band_mask & (BIT(REG_BAND_6G)));
+}
+#else
+static inline bool BAND_6G_PRESENT(uint8_t band_mask)
+{
+	return false;
+}
+#endif /* CONFIG_BAND_6GHZ */
+
+uint16_t
+reg_get_band_channel_list(struct wlan_objmgr_pdev *pdev,
+			  uint8_t band_mask,
+			  struct regulatory_channel *channel_list)
+{
+	struct wlan_regulatory_pdev_priv_obj *pdev_priv_obj;
+	struct regulatory_channel *cur_chan_list;
+	uint16_t i, num_channels = 0;
+
+	pdev_priv_obj = reg_get_pdev_obj(pdev);
+	if (!IS_VALID_PDEV_REG_OBJ(pdev_priv_obj)) {
+		reg_err("reg pdev priv obj is NULL");
+		return 0;
+	}
+
+	cur_chan_list = pdev_priv_obj->cur_chan_list;
+
+	if (BAND_2G_PRESENT(band_mask)) {
+		for (i = MIN_24GHZ_CHANNEL; i <= MAX_24GHZ_CHANNEL; i++) {
+			if ((cur_chan_list[i].state != CHANNEL_STATE_DISABLE) &&
+			    !(cur_chan_list[i].chan_flags &
+			      REGULATORY_CHAN_DISABLED)) {
+				channel_list[num_channels] = cur_chan_list[i];
+				num_channels++;
+			}
+		}
+	}
+	if (BAND_5G_PRESENT(band_mask)) {
+		for (i = MIN_49GHZ_CHANNEL; i <= MAX_5GHZ_CHANNEL; i++) {
+			if ((cur_chan_list[i].state != CHANNEL_STATE_DISABLE) &&
+			    !(cur_chan_list[i].chan_flags &
+			      REGULATORY_CHAN_DISABLED)) {
+				channel_list[num_channels] = cur_chan_list[i];
+				num_channels++;
+			}
+		}
+	}
+	if (BAND_6G_PRESENT(band_mask)) {
+		for (i = MIN_6GHZ_CHANNEL; i <= MAX_6GHZ_CHANNEL; i++) {
+			if ((cur_chan_list[i].state != CHANNEL_STATE_DISABLE) &&
+			    !(cur_chan_list[i].chan_flags &
+			      REGULATORY_CHAN_DISABLED)) {
+				channel_list[num_channels] = cur_chan_list[i];
+				num_channels++;
+			}
+		}
+	}
+
+	if (!num_channels) {
+		reg_err("Failed to retrieve the channel list");
+		return 0;
+	}
+
+	return num_channels;
+}
+
+uint16_t reg_chan_band_to_freq(struct wlan_objmgr_pdev *pdev,
+			       uint8_t chan_num,
+			       uint8_t band_mask)
+{
+	enum channel_enum min_chan, max_chan;
+	struct wlan_regulatory_pdev_priv_obj *pdev_priv_obj;
+	uint16_t freq;
+
+	pdev_priv_obj = reg_get_pdev_obj(pdev);
+	if (!IS_VALID_PDEV_REG_OBJ(pdev_priv_obj)) {
+		reg_err("reg pdev priv obj is NULL");
+		return 0;
+	}
+
+	if (BAND_6G_PRESENT(band_mask)) {
+		if (BAND_2G_PRESENT(band_mask) ||
+		    BAND_5G_PRESENT(band_mask)) {
+			reg_err("Incorrect band_mask %x", band_mask);
+				return 0;
+		}
+
+		min_chan = MIN_6GHZ_CHANNEL;
+		max_chan = MAX_6GHZ_CHANNEL;
+		return reg_compute_chan_to_freq(pdev, chan_num,
+						min_chan,
+						max_chan);
+	} else {
+		if (BAND_2G_PRESENT(band_mask)) {
+			min_chan = MIN_24GHZ_CHANNEL;
+			max_chan = MAX_24GHZ_CHANNEL;
+			freq = reg_compute_chan_to_freq(pdev, chan_num,
+							min_chan,
+							max_chan);
+			if (freq != 0)
+				return freq;
+		}
+
+		if (BAND_5G_PRESENT(band_mask)) {
+			min_chan = MIN_49GHZ_CHANNEL;
+			max_chan = MAX_5GHZ_CHANNEL;
+
+			return reg_compute_chan_to_freq(pdev, chan_num,
+							min_chan,
+							max_chan);
+		}
+
+		reg_err("Incorrect band_mask %x", band_mask);
+		return 0;
+	}
+}
 
 bool reg_is_49ghz_freq(uint32_t freq)
 {
@@ -2837,7 +3058,8 @@ static void reg_set_5g_channel_params_for_freq(struct wlan_objmgr_pdev *pdev,
 
 		if (ch_params->ch_width == CH_WIDTH_80P80MHZ) {
 			chan_state2 = reg_get_5g_bonded_channel_state_for_freq(
-					pdev, ch_params->mhz_freq_seg1 - 10,
+					pdev, ch_params->mhz_freq_seg1 -
+					NEAREST_20MHZ_CHAN_FREQ_OFFSET,
 					CH_WIDTH_80MHZ);
 
 			chan_state = reg_combine_channel_states(
@@ -3040,7 +3262,7 @@ bool reg_is_dfs_for_freq(struct wlan_objmgr_pdev *pdev, uint16_t freq)
 }
 
 void reg_update_nol_ch_for_freq(struct wlan_objmgr_pdev *pdev,
-				uint16_t *chan_list,
+				uint16_t *chan_freq_list,
 				uint8_t num_chan,
 				bool nol_chan)
 {
@@ -3049,8 +3271,8 @@ void reg_update_nol_ch_for_freq(struct wlan_objmgr_pdev *pdev,
 	struct wlan_regulatory_pdev_priv_obj *pdev_priv_obj;
 	uint16_t i;
 
-	if (!num_chan || !chan_list) {
-		reg_err("chan_list or num_ch is NULL");
+	if (!num_chan || !chan_freq_list) {
+		reg_err("chan_freq_list or num_ch is NULL");
 		return;
 	}
 
@@ -3062,10 +3284,10 @@ void reg_update_nol_ch_for_freq(struct wlan_objmgr_pdev *pdev,
 
 	mas_chan_list = pdev_priv_obj->mas_chan_list;
 	for (i = 0; i < num_chan; i++) {
-		chan_enum = reg_get_chan_enum(chan_list[i]);
+		chan_enum = reg_get_chan_enum_for_freq(chan_freq_list[i]);
 		if (chan_enum == INVALID_CHANNEL) {
-			reg_err("Invalid ch in nol list, chan %d",
-				chan_list[i]);
+			reg_err("Invalid freq in nol list, freq %d",
+				chan_freq_list[i]);
 			continue;
 		}
 		mas_chan_list[chan_enum].nol_chan = nol_chan;
@@ -3130,7 +3352,16 @@ bool reg_is_frequency_valid_5g_sbs(uint16_t curfreq, uint16_t newfreq)
 	return REG_IS_FREQUENCY_VALID_5G_SBS(curfreq, newfreq);
 }
 
-#ifdef CONFIG_BAND_6GHZ
+uint16_t reg_min_chan_freq(void)
+{
+	return channel_map[MIN_24GHZ_CHANNEL].center_freq;
+}
+
+uint16_t reg_max_chan_freq(void)
+{
+	return channel_map[NUM_CHANNELS - 1].center_freq;
+}
+
 bool reg_is_same_band_freqs(uint16_t freq1, uint16_t freq2)
 {
 	return (freq1 && freq2 && ((REG_IS_6GHZ_FREQ(freq1) &&
@@ -3140,13 +3371,15 @@ bool reg_is_same_band_freqs(uint16_t freq1, uint16_t freq2)
 				   (REG_IS_24GHZ_CH_FREQ(freq1) &&
 				    REG_IS_24GHZ_CH_FREQ(freq2))));
 }
-#else
-bool reg_is_same_band_freqs(uint16_t freq1, uint16_t freq2)
+
+enum reg_wifi_band reg_freq_to_band(uint16_t freq)
 {
-	return (freq1 && freq2 && ((REG_IS_5GHZ_FREQ(freq1) &&
-				    REG_IS_5GHZ_FREQ(freq2)) ||
-				   (REG_IS_24GHZ_CH_FREQ(freq1) &&
-				    REG_IS_24GHZ_CH_FREQ(freq2))));
+	if (REG_IS_24GHZ_CH_FREQ(freq))
+		return REG_BAND_2G;
+	else if (REG_IS_5GHZ_FREQ(freq) || REG_IS_49GHZ_FREQ(freq))
+		return REG_BAND_5G;
+	else if (REG_IS_6GHZ_FREQ(freq))
+		return REG_BAND_6G;
+	return REG_BAND_UNKNOWN;
 }
-#endif /* CONFIG_BAND_6GHZ */
 #endif /* CONFIG_CHAN_FREQ_API */

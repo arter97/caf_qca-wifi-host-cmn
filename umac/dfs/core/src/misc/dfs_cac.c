@@ -30,7 +30,6 @@
 
 #include "../dfs_channel.h"
 #include "../dfs_zero_cac.h"
-#include "../dfs_etsi_precac.h"
 #include <wlan_objmgr_vdev_obj.h>
 #include "wlan_dfs_utils_api.h"
 #include "wlan_dfs_mlme_api.h"
@@ -121,10 +120,6 @@ static os_timer_func(dfs_cac_timeout)
 	dfs_info(dfs, WLAN_DEBUG_DFS_ALWAYS, "cac expired, chan %d curr time %d",
 		dfs->dfs_curchan->dfs_ch_freq,
 		(qdf_system_ticks_to_msecs(qdf_system_ticks()) / 1000));
-
-	/* Once CAC is done, add channel to ETSI precacdone list*/
-	if (utils_get_dfsdomain(dfs->dfs_pdev_obj) == DFS_ETSI_DOMAIN)
-		dfs_add_to_etsi_precac_done_list(dfs);
 
 	/*
 	 * When radar is detected during a CAC we are woken up prematurely to
@@ -372,29 +367,6 @@ dfs_is_new_chan_subset_of_old_chan(struct wlan_dfs *dfs,
 				     n_new_subchans);
 }
 
-#ifdef QCA_SKIP_CAC_AFTER_RESTART
-bool dfs_skip_cac_after_vdev_restart(struct wlan_dfs *dfs,
-				     struct dfs_channel *cur_chan,
-				     struct dfs_channel *prev_chan)
-{
-	if (dfs_is_new_chan_subset_of_old_chan(dfs, cur_chan, prev_chan)) {
-		/* AP bandwidth reduce case:
-		 * When AP detects the RADAR in in-service monitoring
-		 * mode in channel A, it cancels the running CAC and
-		 * tries to find the channel B with the reduced
-		 * bandwidth of channel A.
-		 * If the new channel B is subset of the channel A
-		 * then AP skips the CAC.
-		 */
-		if (!dfs->dfs_cac_aborted) {
-			dfs_debug(dfs, WLAN_DEBUG_DFS, "Skip CAC");
-			return false;
-		}
-	}
-	return true;
-}
-#endif
-
 bool dfs_is_cac_required(struct wlan_dfs *dfs,
 			 struct dfs_channel *cur_chan,
 			 struct dfs_channel *prev_chan,
@@ -407,13 +379,6 @@ bool dfs_is_cac_required(struct wlan_dfs *dfs,
 			  "Skip CAC, ignore_dfs = %d cac_valid = %d ignore_cac = %d",
 			  dfs->dfs_ignore_dfs, dfs->dfs_cac_valid,
 			  dfs->dfs_ignore_cac);
-		return false;
-	}
-
-	if (dfs_is_etsi_precac_done(dfs)) {
-		dfs_debug(dfs, WLAN_DEBUG_DFS,
-			  "ETSI PRE-CAC alreay done on this channel %d",
-			  dfs->dfs_curchan->dfs_ch_ieee);
 		return false;
 	}
 
@@ -456,9 +421,22 @@ bool dfs_is_cac_required(struct wlan_dfs *dfs,
 			dfs_cancel_cac_timer(dfs);
 		}
 	} else { /* CAC timer is not running. */
-		return dfs_skip_cac_after_vdev_restart(dfs,
+		if (dfs_is_new_chan_subset_of_old_chan(dfs,
 						       cur_chan,
-						       prev_chan);
+						       prev_chan)) {
+			/* AP bandwidth reduce case:
+			 * When AP detects the RADAR in in-service monitoring
+			 * mode in channel A, it cancels the running CAC and
+			 * tries to find the channel B with the reduced
+			 * bandwidth of channel A.
+			 * If the new channel B is subset of the channel A
+			 * then AP skips the CAC.
+			 */
+			if (!dfs->dfs_cac_aborted) {
+				dfs_debug(dfs, WLAN_DEBUG_DFS, "Skip CAC");
+				return false;
+			}
+		}
 	}
 
 	return true;

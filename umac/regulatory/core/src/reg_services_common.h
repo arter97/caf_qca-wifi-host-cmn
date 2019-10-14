@@ -29,6 +29,8 @@
 #define IS_VALID_PSOC_REG_OBJ(psoc_priv_obj) (psoc_priv_obj)
 #define IS_VALID_PDEV_REG_OBJ(pdev_priv_obj) (pdev_priv_obj)
 #define FREQ_TO_CHAN_SCALE     5
+/* The distance between the 80Mhz center and the nearest 20Mhz channel */
+#define NEAREST_20MHZ_CHAN_FREQ_OFFSET     10
 
 #ifdef CONFIG_CHAN_NUM_API
 #define REG_MIN_24GHZ_CH_NUM channel_map[MIN_24GHZ_CHANNEL].chan_num
@@ -133,6 +135,20 @@ QDF_STATUS reg_get_channel_list_with_power(struct wlan_objmgr_pdev *pdev,
  */
 enum channel_state reg_get_channel_state(struct wlan_objmgr_pdev *pdev,
 					 uint32_t ch);
+
+/**
+ * reg_get_5g_bonded_channel() - get the 5G bonded channel state
+ * @pdev: Pointer to pdev structure
+ * @chan_num: channel number
+ * @ch_width: channel width
+ * @bonded_chan_ptr_ptr: bonded channel ptr ptr
+ *
+ * Return: channel state
+ */
+enum channel_state reg_get_5g_bonded_channel(
+		struct wlan_objmgr_pdev *pdev, uint32_t chan_num,
+		enum phy_ch_width ch_width,
+		const struct bonded_channel **bonded_chan_ptr_ptr);
 
 /**
  * reg_get_5g_bonded_channel_state() - Get channel state for 5G bonded channel
@@ -295,6 +311,16 @@ uint32_t reg_freq_to_chan(struct wlan_objmgr_pdev *pdev, uint32_t freq);
  * Return: Channel frequency if success, otherwise 0
  */
 uint32_t reg_chan_to_freq(struct wlan_objmgr_pdev *pdev, uint32_t chan_num);
+
+/**
+ * reg_legacy_chan_to_freq() - Get freq from chan noumber, for 2G and 5G
+ * @pdev: Pointer to pdev
+ * @chan_num: Channel number
+ *
+ * Return: Channel frequency if success, otherwise 0
+ */
+uint16_t reg_legacy_chan_to_freq(struct wlan_objmgr_pdev *pdev,
+				 uint8_t chan_num);
 
 /**
  * reg_chan_is_49ghz() - Check if the input channel number is 4.9GHz
@@ -543,6 +569,37 @@ static inline uint16_t reg_max_6ghz_chan_freq(void)
 #endif /* CONFIG_BAND_6GHZ */
 
 /**
+ * reg_get_band_channel_list() - Get the channel list and number of channels
+ * @pdev: pdev ptr
+ * @band_mask: Input bitmap with band set
+ * @channel_list: Pointer to Channel List
+ *
+ * Get the given channel list and number of channels from the current channel
+ * list based on input band bitmap.
+ *
+ * Return: Number of channels, else 0 to indicate error
+ */
+uint16_t reg_get_band_channel_list(struct wlan_objmgr_pdev *pdev,
+				   uint8_t band_mask,
+				   struct regulatory_channel *channel_list);
+
+/**
+ * reg_chan_band_to_freq - Return channel frequency based on the channel number
+ * and band.
+ * @pdev: pdev ptr
+ * @chan: Channel Number
+ * @band_mask: Bitmap for bands
+ *
+ * Return: Return channel frequency or return 0, if the channel is disabled or
+ * if the input channel number or band_mask is invalid. Composite bands are
+ * supported only for 2.4Ghz and 5Ghz bands. For other bands the following
+ * priority is given: 1) 6Ghz 2) 5Ghz 3) 2.4Ghz.
+ */
+uint16_t reg_chan_band_to_freq(struct wlan_objmgr_pdev *pdev,
+			       uint8_t chan,
+			       uint8_t band_mask);
+
+/**
  * reg_is_49ghz_freq() - Check if the given channel frequency is 4.9GHz
  * @freq: Channel frequency
  *
@@ -762,14 +819,14 @@ uint8_t reg_get_channel_reg_power_for_freq(struct wlan_objmgr_pdev *pdev,
 /**
  * reg_update_nol_ch_for_freq () - Updates NOL channels in current channel list
  * @pdev: pointer to pdev object
- * @ch_list: pointer to NOL channel list
+ * @chan_freq_list: pointer to NOL channel list
  * @num_ch: No.of channels in list
  * @update_nol: set/reset the NOL status
  *
  * Return: None
  */
 void reg_update_nol_ch_for_freq(struct wlan_objmgr_pdev *pdev,
-				uint16_t *chan_list,
+				uint16_t *chan_freq_list,
 				uint8_t num_chan,
 				bool nol_chan);
 /**
@@ -824,5 +881,28 @@ bool reg_is_same_band_freqs(uint16_t freq1, uint16_t freq2);
  * Return: true if the given center frequency is a valid 5G SBS
  */
 bool reg_is_frequency_valid_5g_sbs(uint16_t curfreq, uint16_t newfreq);
+
+/**
+ * reg_freq_to_band() - Get band from channel frequency
+ * @chan_num: channel frequency
+ *
+ * Return: wifi band
+ */
+enum reg_wifi_band reg_freq_to_band(uint16_t freq);
+
+/**
+ * reg_min_chan_freq() - minimum channel frequency supported
+ *
+ * Return: channel frequency
+ */
+uint16_t reg_min_chan_freq(void);
+
+/**
+ * reg_max_chan_freq() - maximum channel frequency supported
+ *
+ * Return: channel frequency
+ */
+uint16_t reg_max_chan_freq(void);
+
 #endif /* CONFIG_CHAN_FREQ_API */
 #endif

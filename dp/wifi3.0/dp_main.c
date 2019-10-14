@@ -4626,11 +4626,13 @@ static void dp_soc_set_nss_cfg_wifi3(struct cdp_soc_t *cdp_soc, int config)
 * @vdev_mac_addr: MAC address of the virtual interface
 * @vdev_id: VDEV Id
 * @wlan_op_mode: VDEV operating mode
+* @subtype: VDEV operating subtype
 *
 * Return: DP VDEV handle on success, NULL on failure
 */
 static struct cdp_vdev *dp_vdev_attach_wifi3(struct cdp_pdev *txrx_pdev,
-	uint8_t *vdev_mac_addr, uint8_t vdev_id, enum wlan_op_mode op_mode)
+	uint8_t *vdev_mac_addr, uint8_t vdev_id, enum wlan_op_mode op_mode,
+	enum wlan_op_subtype subtype)
 {
 	struct dp_pdev *pdev = (struct dp_pdev *)txrx_pdev;
 	struct dp_soc *soc = pdev->soc;
@@ -4645,6 +4647,7 @@ static struct cdp_vdev *dp_vdev_attach_wifi3(struct cdp_pdev *txrx_pdev,
 	vdev->pdev = pdev;
 	vdev->vdev_id = vdev_id;
 	vdev->opmode = op_mode;
+	vdev->subtype = subtype;
 	vdev->osdev = soc->osdev;
 
 	vdev->osif_rx = NULL;
@@ -4772,6 +4775,33 @@ static void dp_vdev_register_wifi3(struct cdp_vdev *vdev_handle,
 }
 
 /**
+ * dp_peer_flush_ast_entry() - Forcibily flush all AST entry of peer
+ * @soc: Datapath soc handle
+ * @peer: Datapath peer handle
+ * @peer_id: Peer ID
+ * @vdev_id: Vdev ID
+ *
+ * Return: void
+ */
+static inline void dp_peer_flush_ast_entry(struct dp_soc *soc,
+					   struct dp_peer *peer,
+					   uint16_t peer_id,
+					   uint8_t vdev_id)
+{
+	struct dp_ast_entry *ase, *tmp_ase;
+
+	if (soc->is_peer_map_unmap_v2) {
+		DP_PEER_ITERATE_ASE_LIST(peer, ase, tmp_ase) {
+				dp_rx_peer_unmap_handler
+						(soc, peer_id,
+						 vdev_id,
+						 ase->mac_addr.raw,
+						 1);
+		}
+	}
+}
+
+/**
  * dp_vdev_flush_peers() - Forcibily Flush peers of vdev
  * @vdev: Datapath VDEV handle
  * @unmap_only: Flag to indicate "only unmap"
@@ -4785,13 +4815,11 @@ static void dp_vdev_flush_peers(struct cdp_vdev *vdev_handle, bool unmap_only)
 	struct dp_soc *soc = pdev->soc;
 	struct dp_peer *peer;
 	uint16_t *peer_ids;
-	struct dp_ast_entry *ase, *tmp_ase;
 	uint8_t i = 0, j = 0;
 
 	peer_ids = qdf_mem_malloc(soc->max_peers * sizeof(peer_ids[0]));
 	if (!peer_ids) {
-		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_ERROR,
-			"DP alloc failure - unable to flush peers");
+		dp_err("DP alloc failure - unable to flush peers");
 		return;
 	}
 
@@ -4805,70 +4833,33 @@ static void dp_vdev_flush_peers(struct cdp_vdev *vdev_handle, bool unmap_only)
 	qdf_spin_unlock_bh(&soc->peer_ref_mutex);
 
 	for (i = 0; i < j ; i++) {
-		if (unmap_only) {
-			peer = __dp_peer_find_by_id(soc, peer_ids[i]);
+		peer = __dp_peer_find_by_id(soc, peer_ids[i]);
 
-			if (peer) {
-				if (soc->is_peer_map_unmap_v2) {
-					/* free AST entries of peer before
-					 * release peer reference
-					 */
-					DP_PEER_ITERATE_ASE_LIST(peer, ase,
-								 tmp_ase) {
-						dp_rx_peer_unmap_handler
-							(soc, peer_ids[i],
-							 vdev->vdev_id,
-							 ase->mac_addr.raw,
-							 1);
-					}
-				}
-				dp_rx_peer_unmap_handler(soc, peer_ids[i],
-							 vdev->vdev_id,
-							 peer->mac_addr.raw,
-							 0);
-			}
-		} else {
-			peer = __dp_peer_find_by_id(soc, peer_ids[i]);
+		if (!peer)
+			continue;
 
-			if (peer) {
-				dp_info("peer: %pM is getting flush",
-					peer->mac_addr.raw);
+		dp_info("peer: %pM is getting flush",
+			peer->mac_addr.raw);
+		/* free AST entries of peer */
+		dp_peer_flush_ast_entry(soc, peer,
+					peer_ids[i],
+					vdev->vdev_id);
+		/*
+		 * If peer flag valid is false, then dp_peer_delete_wifi3()
+		 * is already executed, skip doing it again to avoid
+		 * peer member invalid accessing.
+		 */
+		if (!unmap_only && peer->valid)
+			dp_peer_delete_wifi3(peer, 0);
 
-				if (soc->is_peer_map_unmap_v2) {
-					/* free AST entries of peer before
-					 * release peer reference
-					 */
-					DP_PEER_ITERATE_ASE_LIST(peer, ase,
-								 tmp_ase) {
-						dp_rx_peer_unmap_handler
-							(soc, peer_ids[i],
-							 vdev->vdev_id,
-							 ase->mac_addr.raw,
-							 1);
-					}
-				}
-				dp_peer_delete_wifi3(peer, 0);
-				/*
-				 * we need to call dp_peer_unref_del_find_by_id
-				 * to remove additional ref count incremented
-				 * by dp_peer_find_by_id() call.
-				 *
-				 * Hold the ref count while executing
-				 * dp_peer_delete_wifi3() call.
-				 *
-				 */
-				dp_peer_unref_del_find_by_id(peer);
-				dp_rx_peer_unmap_handler(soc, peer_ids[i],
-							 vdev->vdev_id,
-							 peer->mac_addr.raw, 0);
-			}
-		}
+		dp_rx_peer_unmap_handler(soc, peer_ids[i],
+					 vdev->vdev_id,
+					 peer->mac_addr.raw, 0);
 	}
 
 	qdf_mem_free(peer_ids);
 
-	QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_INFO_HIGH,
-		FL("Flushed peers for vdev object %pK "), vdev);
+	dp_info("Flushed peers for vdev object %pK ", vdev);
 }
 
 /*
@@ -5276,6 +5267,23 @@ void dp_vdev_get_default_reo_hash(struct dp_vdev *vdev,
 }
 
 #ifdef IPA_OFFLOAD
+/**
+ * dp_is_vdev_subtype_p2p() - Check if the subtype for vdev is P2P
+ * @vdev: Virtual device
+ *
+ * Return: true if the vdev is of subtype P2P
+ *	   false if the vdev is of any other subtype
+ */
+static inline bool dp_is_vdev_subtype_p2p(struct dp_vdev *vdev)
+{
+	if (vdev->subtype == wlan_op_subtype_p2p_device ||
+	    vdev->subtype == wlan_op_subtype_p2p_cli ||
+	    vdev->subtype == wlan_op_subtype_p2p_go)
+		return true;
+
+	return false;
+}
+
 /*
  * dp_peer_setup_get_reo_hash() - get reo dest ring and hash values for a peer
  * @vdev: Datapath VDEV handle
@@ -5297,6 +5305,12 @@ static void dp_peer_setup_get_reo_hash(struct dp_vdev *vdev,
 	soc = pdev->soc;
 
 	dp_vdev_get_default_reo_hash(vdev, reo_dest, hash_based);
+
+	/* For P2P-GO interfaces we do not need to change the REO
+	 * configuration even if IPA config is enabled
+	 */
+	if (dp_is_vdev_subtype_p2p(vdev))
+		return;
 
 	/*
 	 * If IPA is enabled, disable hash-based flow steering and set
@@ -6339,9 +6353,8 @@ static QDF_STATUS dp_vdev_set_monitor_mode(struct cdp_vdev *vdev_handle,
 
 	/*Check if current pdev's monitor_vdev exists */
 	if (pdev->monitor_configured) {
-		QDF_TRACE(QDF_MODULE_ID_TXRX, QDF_TRACE_LEVEL_ERROR,
+		QDF_TRACE(QDF_MODULE_ID_TXRX, QDF_TRACE_LEVEL_DEBUG,
 			  "monitor vap already created vdev=%pK\n", vdev);
-		qdf_assert(vdev);
 		return QDF_STATUS_E_RESOURCES;
 	}
 
@@ -6515,6 +6528,19 @@ void dp_pdev_set_monitor_channel(struct cdp_pdev *pdev_handle, int chan_num)
 	struct dp_pdev *pdev = (struct dp_pdev *)pdev_handle;
 
 	pdev->mon_chan_num = chan_num;
+}
+
+/**
+ * dp_deliver_tx_mgmt() - Deliver mgmt frame for tx capture
+ * @pdev_handle: Datapath PDEV handle
+ * @nbuf: Management frame buffer
+ */
+static void
+dp_deliver_tx_mgmt(struct cdp_pdev *pdev_handle, qdf_nbuf_t nbuf)
+{
+	struct dp_pdev *pdev = (struct dp_pdev *)pdev_handle;
+
+	dp_deliver_mgmt_frm(pdev, nbuf);
 }
 
 /**
@@ -7541,7 +7567,7 @@ dp_get_htt_stats(struct cdp_pdev *pdev_handle, void *data, uint32_t data_len)
  */
 static QDF_STATUS dp_set_pdev_param(struct cdp_pdev *pdev_handle,
 				    enum cdp_pdev_param_type param,
-				    uint8_t val)
+				    uint32_t val)
 {
 	struct dp_pdev *pdev = (struct dp_pdev *)pdev_handle;
 	switch (param) {
@@ -8206,7 +8232,8 @@ static QDF_STATUS dp_txrx_dump_stats(void *psoc, uint16_t value,
 		break;
 
 	case CDP_DUMP_TX_FLOW_POOL_INFO:
-		cdp_dump_flow_pool_info((struct cdp_soc_t *)soc);
+		if (level == QDF_STATS_VERBOSITY_LEVEL_HIGH)
+			cdp_dump_flow_pool_info((struct cdp_soc_t *)soc);
 		break;
 
 	case CDP_DP_NAPI_STATS:
@@ -9146,6 +9173,7 @@ static struct cdp_mon_ops dp_ops_mon = {
 	/* Added support for HK advance filter */
 	.txrx_set_advance_monitor_filter = dp_pdev_set_advance_monitor_filter,
 	.txrx_monitor_record_channel = dp_pdev_set_monitor_channel,
+	.txrx_deliver_tx_mgmt = dp_deliver_tx_mgmt,
 };
 
 static struct cdp_host_stats_ops dp_ops_host_stats = {

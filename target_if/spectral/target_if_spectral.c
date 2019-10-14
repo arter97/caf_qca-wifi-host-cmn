@@ -27,10 +27,11 @@
 #include <wlan_osif_priv.h>
 #include <init_deinit_lmac.h>
 #include <reg_services_public_struct.h>
-#include <reg_services_public_struct.h>
 #include <target_if_spectral_sim.h>
 #include <target_if.h>
 #include <qdf_module.h>
+#include <wlan_reg_services_api.h>
+#include <wlan_dfs_ucfg_api.h>
 
 /**
  * @spectral_ops - Spectral function table, holds the Spectral functions that
@@ -2152,6 +2153,350 @@ target_if_pdev_spectral_deinit(struct wlan_objmgr_pdev *pdev)
 	return;
 }
 
+/* target_if_spectral_find_agile_width() - Given a channel width enum, find the
+ *                          corresponding translation for Agile channel width.
+ *                          Translation schema of different operating modes:
+ *                          20 -> 20, 40 -> 40, (80 & 160 & 80_80) -> 80.
+ * @chwidth: Channel width enum.
+ *
+ * Return: The translated channel width enum.
+ */
+static enum phy_ch_width
+target_if_spectral_find_agile_width(enum phy_ch_width chwidth)
+{
+	switch (chwidth) {
+	case CH_WIDTH_20MHZ:
+		return CH_WIDTH_20MHZ;
+	case CH_WIDTH_40MHZ:
+		return CH_WIDTH_40MHZ;
+	case CH_WIDTH_80MHZ:
+	case CH_WIDTH_80P80MHZ:
+	case CH_WIDTH_160MHZ:
+		return CH_WIDTH_80MHZ;
+	default:
+		spectral_err("Invalid chwidth enum %d", chwidth);
+		return CH_WIDTH_INVALID;
+	}
+}
+
+/**
+ * target_if_calculate_center_freq() - Helper routine to
+ * check whether given frequency is center frequency of a
+ * WLAN channel
+ *
+ * @spectral: Pointer to Spectral object
+ * @chan_freq: Center frequency of a WLAN channel
+ * @is_valid: Indicates whether given frequency is valid
+ *
+ * Return: QDF_STATUS
+ */
+static QDF_STATUS
+target_if_is_center_freq_of_any_chan(struct wlan_objmgr_pdev *pdev,
+				     uint32_t chan_freq,
+				     bool *is_valid)
+{
+	struct regulatory_channel *cur_chan_list;
+	int i;
+
+	if (!pdev) {
+		spectral_err("pdev object is null");
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	if (!is_valid) {
+		spectral_err("is valid argument is null");
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	cur_chan_list = qdf_mem_malloc(NUM_CHANNELS * sizeof(*cur_chan_list));
+	if (!cur_chan_list)
+		return QDF_STATUS_E_FAILURE;
+
+	if (wlan_reg_get_current_chan_list(
+			pdev, cur_chan_list) != QDF_STATUS_SUCCESS) {
+		spectral_err("Failed to get cur_chan list");
+		qdf_mem_free(cur_chan_list);
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	*is_valid = false;
+	for (i = 0; i < NUM_CHANNELS; i++) {
+		uint32_t flags;
+		uint32_t center_freq;
+
+		flags = cur_chan_list[i].chan_flags;
+		center_freq = cur_chan_list[i].center_freq;
+
+		if (!(flags & REGULATORY_CHAN_DISABLED) &&
+		    (center_freq == chan_freq)) {
+			*is_valid = true;
+			break;
+		}
+	}
+
+	qdf_mem_free(cur_chan_list);
+
+	return QDF_STATUS_SUCCESS;
+}
+
+/**
+ * target_if_calculate_center_freq() - Helper routine to
+ * find the center frequency of the agile span from a
+ * WLAN channel center frequency
+ *
+ * @spectral: Pointer to Spectral object
+ * @chan_freq: Center frequency of a WLAN channel
+ * @center_freq: Pointer to center frequency
+ *
+ * Return: QDF_STATUS
+ */
+static QDF_STATUS
+target_if_calculate_center_freq(struct target_if_spectral *spectral,
+				uint16_t chan_freq,
+				uint16_t *center_freq)
+{
+	struct wlan_objmgr_vdev *vdev;
+	enum phy_ch_width ch_width;
+	enum phy_ch_width agile_ch_width;
+	uint16_t chan_num;
+
+	if (!spectral) {
+		spectral_err("spectral target if object is null");
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	if (!center_freq) {
+		spectral_err("center_freq argument is null");
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	chan_num = wlan_reg_freq_to_chan(spectral->pdev_obj, chan_freq);
+
+	vdev = target_if_spectral_get_vdev(spectral);
+	if (!vdev) {
+		spectral_err("vdev is NULL");
+		return QDF_STATUS_E_FAILURE;
+	}
+	ch_width = target_if_vdev_get_ch_width(vdev);
+	wlan_objmgr_vdev_release_ref(vdev, WLAN_SPECTRAL_ID);
+	agile_ch_width = target_if_spectral_find_agile_width(ch_width);
+
+	if (agile_ch_width == CH_WIDTH_20MHZ) {
+		*center_freq = chan_freq;
+	} else {
+		uint16_t start_freq;
+		uint16_t end_freq;
+		const struct bonded_channel *bonded_chan_ptr = NULL;
+
+		wlan_reg_get_5g_bonded_channel_and_state
+			(spectral->pdev_obj, chan_num, agile_ch_width,
+			 &bonded_chan_ptr);
+		if (!bonded_chan_ptr) {
+			spectral_err("Bonded channel is not found");
+			return QDF_STATUS_E_FAILURE;
+		}
+		start_freq = wlan_reg_chan_to_freq(spectral->pdev_obj,
+						   bonded_chan_ptr->start_ch);
+		end_freq = wlan_reg_chan_to_freq(spectral->pdev_obj,
+						 bonded_chan_ptr->end_ch);
+		*center_freq = (start_freq + end_freq) >> 1;
+	}
+
+	return QDF_STATUS_SUCCESS;
+}
+
+/**
+ * target_if_validate_center_freq() - Helper routine to
+ * validate user provided agile center frequency
+ *
+ * @spectral: Pointer to Spectral object
+ * @center_freq: User provided agile span center frequency
+ * @is_valid: Indicates whether agile span center frequency is valid
+ *
+ * Return: QDF_STATUS
+ */
+static QDF_STATUS
+target_if_validate_center_freq(struct target_if_spectral *spectral,
+			       uint16_t center_freq,
+			       bool *is_valid)
+{
+	struct wlan_objmgr_vdev *vdev;
+	enum phy_ch_width ch_width;
+	enum phy_ch_width agile_ch_width;
+	uint16_t chan_num;
+	struct wlan_objmgr_pdev *pdev;
+	QDF_STATUS status;
+
+	if (!spectral) {
+		spectral_err("spectral target if object is null");
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	if (!is_valid) {
+		spectral_err("is_valid argument is null");
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	pdev = spectral->pdev_obj;
+	vdev = target_if_spectral_get_vdev(spectral);
+	if (!vdev) {
+		spectral_err("vdev is NULL");
+		return QDF_STATUS_E_FAILURE;
+	}
+	ch_width = target_if_vdev_get_ch_width(vdev);
+	wlan_objmgr_vdev_release_ref(vdev, WLAN_SPECTRAL_ID);
+	agile_ch_width = target_if_spectral_find_agile_width(ch_width);
+
+	if (agile_ch_width == CH_WIDTH_20MHZ) {
+		status = target_if_is_center_freq_of_any_chan
+				(pdev, center_freq, is_valid);
+		if (QDF_IS_STATUS_ERROR(status))
+			return QDF_STATUS_E_FAILURE;
+	} else {
+		uint16_t start_freq;
+		uint16_t end_freq;
+		const struct bonded_channel *bonded_chan_ptr = NULL;
+		bool is_chan;
+
+		status = target_if_is_center_freq_of_any_chan
+				(pdev, center_freq + 10, &is_chan);
+		if (QDF_IS_STATUS_ERROR(status))
+			return QDF_STATUS_E_FAILURE;
+
+		if (is_chan) {
+			uint32_t calulated_center_freq;
+
+			chan_num = wlan_reg_freq_to_chan(pdev,
+							 center_freq + 10);
+			wlan_reg_get_5g_bonded_channel_and_state
+				(pdev, chan_num, agile_ch_width,
+				 &bonded_chan_ptr);
+			if (!bonded_chan_ptr) {
+				spectral_err("Bonded channel is not found");
+				return QDF_STATUS_E_FAILURE;
+			}
+			start_freq = wlan_reg_chan_to_freq
+				(pdev, bonded_chan_ptr->start_ch);
+			end_freq = wlan_reg_chan_to_freq
+				(pdev, bonded_chan_ptr->end_ch);
+			calulated_center_freq = (start_freq + end_freq) >> 1;
+			*is_valid = (center_freq == calulated_center_freq);
+		} else {
+			*is_valid = false;
+		}
+	}
+
+	return QDF_STATUS_SUCCESS;
+}
+
+/**
+ * target_if_is_agile_span_overlap_with_operating_span() - Helper routine to
+ * check whether agile span overlaps with current operating band.
+ *
+ * @spectral: Pointer to Spectral object
+ * @ss_frequency: Agile span center frequency
+ * @is_overlapping: Indicates whether Agile span overlaps with operating span
+ *
+ * Helper routine to check whether agile span overlaps with current
+ * operating band.
+ *
+ * Return: QDF_STATUS
+ */
+static QDF_STATUS
+target_if_is_agile_span_overlap_with_operating_span
+			(struct target_if_spectral *spectral,
+			 uint32_t ss_frequency,
+			 bool *is_overlapping)
+{
+	uint32_t chan_num;
+	enum phy_ch_width ch_width;
+	enum phy_ch_width agile_ch_width;
+	const struct bonded_channel *bonded_chan_ptr = NULL;
+	struct wlan_objmgr_vdev *vdev;
+	struct wlan_objmgr_pdev *pdev;
+	int16_t chan_freq;
+	uint32_t op_start_freq;
+	uint32_t op_end_freq;
+	uint32_t agile_start_freq;
+	uint32_t agile_end_freq;
+	uint32_t cfreq2;
+
+	if (!spectral) {
+		spectral_err("Spectral object is NULL");
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	pdev  = spectral->pdev_obj;
+	if (!pdev) {
+		spectral_err("pdev object is NULL");
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	if (!is_overlapping) {
+		spectral_err("Argument(is_overlapping) is NULL");
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	vdev = target_if_spectral_get_vdev(spectral);
+	if (!vdev) {
+		spectral_err("vdev is NULL");
+		return QDF_STATUS_E_FAILURE;
+	}
+	ch_width = target_if_vdev_get_ch_width(vdev);
+	chan_freq = target_if_vdev_get_chan_freq(vdev);
+	cfreq2 = target_if_vdev_get_chan_freq_seg2(vdev);
+	wlan_objmgr_vdev_release_ref(vdev, WLAN_SPECTRAL_ID);
+	if (cfreq2 < 0)
+		return QDF_STATUS_E_FAILURE;
+
+	chan_num = wlan_reg_freq_to_chan(pdev, chan_freq);
+
+	if (ch_width == CH_WIDTH_20MHZ) {
+		op_start_freq = chan_freq - 10;
+		op_end_freq = chan_freq + 10;
+	} else {
+		wlan_reg_get_5g_bonded_channel_and_state
+			(pdev, chan_num, ch_width, &bonded_chan_ptr);
+		if (!bonded_chan_ptr) {
+			spectral_err("Bonded channel is not found");
+			return QDF_STATUS_E_FAILURE;
+		}
+		op_start_freq =
+			wlan_reg_chan_to_freq(pdev,
+					      bonded_chan_ptr->start_ch) - 10;
+		op_end_freq =
+			wlan_reg_chan_to_freq(pdev,
+					      bonded_chan_ptr->end_ch) + 10;
+	}
+
+	agile_ch_width = target_if_spectral_find_agile_width(ch_width);
+	if (agile_ch_width == CH_WIDTH_INVALID)
+		return QDF_STATUS_E_FAILURE;
+	agile_start_freq = ss_frequency -
+				(wlan_reg_get_bw_value(agile_ch_width) >> 1);
+	agile_end_freq = ss_frequency +
+				(wlan_reg_get_bw_value(agile_ch_width) >> 1);
+	if (agile_end_freq <= op_start_freq || op_end_freq <= agile_start_freq)
+		*is_overlapping = false;
+	else
+		*is_overlapping = true;
+
+	/* Use non zero cfreq2 to identify 80p80 */
+	if (cfreq2) {
+		uint32_t sec80_start_feq;
+		uint32_t sec80_end_freq;
+
+		sec80_start_feq = cfreq2 - 40;
+		sec80_end_freq = cfreq2 + 40;
+
+		if ((agile_end_freq > sec80_start_feq) &&
+		    (sec80_end_freq > agile_start_freq))
+			*is_overlapping = true;
+	}
+
+	return QDF_STATUS_SUCCESS;
+}
+
 /**
  * _target_if_set_spectral_config() - Set spectral config
  * @spectral:       Pointer to spectral object
@@ -2173,6 +2518,10 @@ _target_if_set_spectral_config(struct target_if_spectral *spectral,
 	struct spectral_config params;
 	struct target_if_spectral_ops *p_sops;
 	struct spectral_config *sparams;
+	QDF_STATUS status;
+	bool is_overlapping;
+	uint16_t agile_cfreq;
+	bool is_valid_chan;
 
 	if (!err) {
 		spectral_err("Error code argument is null");
@@ -2275,7 +2624,47 @@ _target_if_set_spectral_config(struct target_if_spectral *spectral,
 		sparams->ss_chn_mask = value;
 		break;
 	case SPECTRAL_PARAM_FREQUENCY:
-		sparams->ss_frequency = value;
+		status = target_if_is_center_freq_of_any_chan
+				(spectral->pdev_obj, value, &is_valid_chan);
+		if (QDF_IS_STATUS_ERROR(status))
+			return QDF_STATUS_E_FAILURE;
+
+		if (is_valid_chan) {
+			status = target_if_calculate_center_freq(spectral,
+								 value,
+								 &agile_cfreq);
+			if (QDF_IS_STATUS_ERROR(status)) {
+				*err = SPECTRAL_SCAN_ERR_PARAM_INVALID_VALUE;
+				return QDF_STATUS_E_FAILURE;
+			}
+		} else {
+			bool is_valid_agile_cfreq;
+
+			status = target_if_validate_center_freq
+				(spectral, value, &is_valid_agile_cfreq);
+			if (QDF_IS_STATUS_ERROR(status))
+				return QDF_STATUS_E_FAILURE;
+
+			if (!is_valid_agile_cfreq) {
+				*err = SPECTRAL_SCAN_ERR_PARAM_INVALID_VALUE;
+				spectral_err("Invalid agile center frequency");
+				return QDF_STATUS_E_FAILURE;
+			}
+
+			agile_cfreq = value;
+		}
+
+		status = target_if_is_agile_span_overlap_with_operating_span
+				(spectral, agile_cfreq, &is_overlapping);
+		if (QDF_IS_STATUS_ERROR(status))
+			return QDF_STATUS_E_FAILURE;
+
+		if (is_overlapping) {
+			spectral_err("Agile span overlapping with current BW");
+			*err = SPECTRAL_SCAN_ERR_PARAM_INVALID_VALUE;
+			return QDF_STATUS_E_FAILURE;
+		}
+		sparams->ss_frequency = agile_cfreq;
 		break;
 	}
 
@@ -2766,6 +3155,125 @@ target_if_spectral_scan_enable_params(struct target_if_spectral *spectral,
 	return 0;
 }
 
+/**
+ * target_if_is_aspectral_prohibited_by_adfs() - Is Agile Spectral prohibited by
+ * Agile DFS
+ * @psoc: Pointer to psoc
+ * @object: Pointer to pdev
+ * @arg: Pointer to flag which indicates whether Agile Spectral is prohibited
+ *
+ * This API checks whether Agile DFS is running on any of the pdevs. If so, it
+ * indicates that Agile Spectral scan is prohibited by Agile DFS.
+ *
+ * Return: void
+ */
+static void
+target_if_is_aspectral_prohibited_by_adfs(struct wlan_objmgr_psoc *psoc,
+					  void *object, void *arg)
+{
+	bool *is_aspectral_prohibited = arg;
+	struct wlan_objmgr_pdev *cur_pdev = object;
+	bool is_agile_dfs_enabled_cur_pdev = false;
+	QDF_STATUS status;
+
+	qdf_assert_always(is_aspectral_prohibited);
+	if (*is_aspectral_prohibited)
+		return;
+
+	qdf_assert_always(psoc);
+	qdf_assert_always(cur_pdev);
+
+	status = ucfg_dfs_get_agile_precac_enable
+				(cur_pdev,
+				 &is_agile_dfs_enabled_cur_pdev);
+	if (QDF_IS_STATUS_ERROR(status)) {
+		spectral_err("Get agile precac failed, prohibiting aSpectral");
+		*is_aspectral_prohibited = true;
+		return;
+	}
+
+	if (is_agile_dfs_enabled_cur_pdev) {
+		spectral_err("aDFS is in progress on one of the pdevs");
+		*is_aspectral_prohibited = true;
+	}
+}
+
+/**
+ * target_if_get_curr_band() - Get current operating band of pdev
+ *
+ * @spectral: pointer to spectral object
+ *
+ * API to get current operating band of a given pdev.
+ *
+ * Return: if success enum band_info, BAND_UNKNOWN in case of failure
+ */
+static enum band_info
+target_if_get_curr_band(struct wlan_objmgr_pdev *pdev)
+{
+	struct wlan_objmgr_vdev *vdev;
+	int16_t chan_freq;
+	enum band_info cur_band;
+	uint32_t chan_num;
+
+	if (!pdev) {
+		spectral_err("pdev is NULL");
+		return BAND_UNKNOWN;
+	}
+
+	vdev = wlan_objmgr_pdev_get_first_vdev(pdev, WLAN_SPECTRAL_ID);
+	if (!vdev) {
+		spectral_debug("vdev is NULL");
+		return BAND_UNKNOWN;
+	}
+	chan_freq = target_if_vdev_get_chan_freq(vdev);
+	chan_num = wlan_reg_freq_to_chan(pdev, chan_freq);
+	cur_band = wlan_reg_chan_to_band(chan_num);
+	wlan_objmgr_vdev_release_ref(vdev, WLAN_SPECTRAL_ID);
+
+	return cur_band;
+}
+
+/**
+ * target_if_is_agile_scan_active_in_5g() - Is Agile Spectral scan active on
+ * any of the 5G pdevs
+ * @psoc: Pointer to psoc
+ * @object: Pointer to pdev
+ * @arg: Pointer to flag which indicates whether Agile Spectral scan is in
+ *       progress in any 5G pdevs
+ *
+ * Return: void
+ */
+static void
+target_if_is_agile_scan_active_in_5g(struct wlan_objmgr_psoc *psoc,
+				     void *object, void *arg)
+{
+	enum band_info band;
+	bool *is_agile_scan_inprog_5g_pdev = arg;
+	struct target_if_spectral *spectral;
+	struct wlan_objmgr_pdev *cur_pdev = object;
+	struct target_if_spectral_ops *p_sops;
+
+	if (*is_agile_scan_inprog_5g_pdev)
+		return;
+
+	spectral = get_target_if_spectral_handle_from_pdev(cur_pdev);
+	if (!spectral) {
+		spectral_err("target if spectral handle is NULL");
+		return;
+	}
+	p_sops = GET_TARGET_IF_SPECTRAL_OPS(spectral);
+
+	band = target_if_get_curr_band(cur_pdev);
+	if (band == BAND_UNKNOWN) {
+		spectral_debug("Failed to get current band");
+		return;
+	}
+
+	if (band == BAND_5G &&
+	    p_sops->is_spectral_active(spectral, SPECTRAL_SCAN_MODE_AGILE))
+		*is_agile_scan_inprog_5g_pdev = true;
+}
+
 QDF_STATUS
 target_if_start_spectral_scan(struct wlan_objmgr_pdev *pdev,
 			      const enum spectral_scan_mode smode,
@@ -2773,12 +3281,20 @@ target_if_start_spectral_scan(struct wlan_objmgr_pdev *pdev,
 {
 	struct target_if_spectral_ops *p_sops;
 	struct target_if_spectral *spectral;
+	struct wlan_objmgr_psoc *psoc;
+	enum band_info band;
 
 	if (!err) {
 		spectral_err("Error code argument is null");
 		QDF_ASSERT(0);
 	}
 	*err = SPECTRAL_SCAN_ERR_INVALID;
+
+	psoc = wlan_pdev_get_psoc(pdev);
+	if (!psoc) {
+		spectral_err("psoc is null");
+		return QDF_STATUS_E_FAILURE;
+	}
 
 	if (smode >= SPECTRAL_SCAN_MODE_MAX) {
 		*err = SPECTRAL_SCAN_ERR_MODE_UNSUPPORTED;
@@ -2798,6 +3314,74 @@ target_if_start_spectral_scan(struct wlan_objmgr_pdev *pdev,
 
 	p_sops = GET_TARGET_IF_SPECTRAL_OPS(spectral);
 
+	band = target_if_get_curr_band(spectral->pdev_obj);
+	if (band == BAND_UNKNOWN) {
+		spectral_err("Failed to get current band");
+		return QDF_STATUS_E_FAILURE;
+	}
+	if ((band == BAND_5G) && (smode == SPECTRAL_SCAN_MODE_AGILE)) {
+		struct target_psoc_info *tgt_hdl;
+		enum wmi_host_hw_mode_config_type mode;
+		bool is_agile_scan_inprog_5g_pdev;
+
+		if (p_sops->is_spectral_active(spectral,
+					       SPECTRAL_SCAN_MODE_AGILE)) {
+			spectral_err("Agile Scan in progress in current pdev");
+			return QDF_STATUS_E_FAILURE;
+		}
+
+		tgt_hdl = wlan_psoc_get_tgt_if_handle(psoc);
+		if (!tgt_hdl) {
+			target_if_err("target_psoc_info is null");
+			return QDF_STATUS_E_FAILURE;
+		}
+
+		mode = target_psoc_get_preferred_hw_mode(tgt_hdl);
+		switch (mode) {
+		case WMI_HOST_HW_MODE_SBS_PASSIVE:
+		case WMI_HOST_HW_MODE_SBS:
+		case WMI_HOST_HW_MODE_DBS_SBS:
+		case WMI_HOST_HW_MODE_DBS_OR_SBS:
+			is_agile_scan_inprog_5g_pdev = false;
+			wlan_objmgr_iterate_obj_list
+				(psoc, WLAN_PDEV_OP,
+				 target_if_is_agile_scan_active_in_5g,
+				 &is_agile_scan_inprog_5g_pdev, 0,
+				 WLAN_SPECTRAL_ID);
+			break;
+		default:
+			is_agile_scan_inprog_5g_pdev = false;
+			break;
+		}
+
+		if (is_agile_scan_inprog_5g_pdev) {
+			spectral_err("Agile Scan in progress in one of the SBS 5G pdev");
+			*err = SPECTRAL_SCAN_ERR_MODE_UNSUPPORTED;
+			return QDF_STATUS_E_FAILURE;
+		}
+	}
+
+	if (smode == SPECTRAL_SCAN_MODE_AGILE) {
+		bool is_aspectral_prohibited = false;
+		QDF_STATUS status;
+
+		status = wlan_objmgr_iterate_obj_list
+				(psoc, WLAN_PDEV_OP,
+				 target_if_is_aspectral_prohibited_by_adfs,
+				 &is_aspectral_prohibited, 0,
+				 WLAN_SPECTRAL_ID);
+		if (QDF_IS_STATUS_ERROR(status)) {
+			spectral_err("Failed to iterate over pdevs");
+			*err = SPECTRAL_SCAN_ERR_MODE_UNSUPPORTED;
+			return QDF_STATUS_E_FAILURE;
+		}
+
+		if (is_aspectral_prohibited) {
+			*err = SPECTRAL_SCAN_ERR_MODE_UNSUPPORTED;
+			return QDF_STATUS_E_FAILURE;
+		}
+	}
+
 	if (!spectral->params_valid[smode]) {
 		target_if_spectral_info_read(spectral,
 					     smode,
@@ -2813,6 +3397,26 @@ target_if_start_spectral_scan(struct wlan_objmgr_pdev *pdev,
 		*err = SPECTRAL_SCAN_ERR_PARAM_NOT_INITIALIZED;
 		qdf_spin_unlock(&spectral->spectral_lock);
 		return QDF_STATUS_E_FAILURE;
+	}
+
+	if (smode == SPECTRAL_SCAN_MODE_AGILE) {
+		QDF_STATUS status;
+		bool is_overlapping;
+
+		status = target_if_is_agile_span_overlap_with_operating_span
+				(spectral,
+				 spectral->params[smode].ss_frequency,
+				 &is_overlapping);
+		if (QDF_IS_STATUS_ERROR(status)) {
+			qdf_spin_unlock(&spectral->spectral_lock);
+			return QDF_STATUS_E_FAILURE;
+		}
+
+		if (is_overlapping) {
+			*err = SPECTRAL_SCAN_ERR_PARAM_INVALID_VALUE;
+			qdf_spin_unlock(&spectral->spectral_lock);
+			return QDF_STATUS_E_FAILURE;
+		}
 	}
 
 	target_if_spectral_scan_enable_params(spectral,

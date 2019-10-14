@@ -69,7 +69,8 @@ struct cdp_cmn_ops {
 
 	struct cdp_vdev *(*txrx_vdev_attach)
 		(struct cdp_pdev *pdev, uint8_t *vdev_mac_addr,
-		 uint8_t vdev_id, enum wlan_op_mode op_mode);
+		 uint8_t vdev_id, enum wlan_op_mode op_mode,
+		 enum wlan_op_subtype subtype);
 
 	void (*txrx_vdev_detach)
 		(struct cdp_vdev *vdev, ol_txrx_vdev_delete_cb callback,
@@ -639,7 +640,7 @@ struct cdp_ctrl_ops {
 	 */
 	QDF_STATUS (*txrx_set_pdev_param)(struct cdp_pdev *pdev,
 					  enum cdp_pdev_param_type type,
-					  uint8_t val);
+					  uint32_t val);
 	void * (*txrx_get_pldev)(struct cdp_pdev *pdev);
 
 #ifdef ATH_SUPPORT_NAC_RSSI
@@ -752,6 +753,9 @@ struct cdp_mon_ops {
 
 	void (*txrx_monitor_record_channel)
 		(struct cdp_pdev *, int val);
+
+	void (*txrx_deliver_tx_mgmt)
+		(struct cdp_pdev *pdev, qdf_nbuf_t nbuf);
 };
 
 struct cdp_host_stats_ops {

@@ -28,13 +28,13 @@
 #include <qdf_atomic.h>
 #include <wlan_cmn_ieee80211.h>
 #include <wlan_mgmt_txrx_utils_api.h>
+#include <reg_services_public_struct.h>
 
 typedef uint16_t wlan_scan_requester;
 typedef uint32_t wlan_scan_id;
 
 #define WLAN_SCAN_MAX_NUM_SSID          16
 #define WLAN_SCAN_MAX_NUM_BSSID         4
-#define WLAN_SCAN_MAX_NUM_CHANNELS      68
 
 #define SCM_CANCEL_SCAN_WAIT_TIME 50
 #define SCM_CANCEL_SCAN_WAIT_ITERATION 600
@@ -761,7 +761,7 @@ struct chan_info {
  */
 struct chan_list {
 	uint32_t num_chan;
-	struct chan_info chan[WLAN_SCAN_MAX_NUM_CHANNELS];
+	struct chan_info chan[NUM_CHANNELS];
 };
 
 /**
@@ -803,6 +803,8 @@ enum scan_request_type {
  * @dwell_time_active: active dwell time
  * @dwell_time_active_2g: active dwell time for 2G channels, if it's not zero
  * @dwell_time_passive: passive dwell time
+ * @dwell_time_active_6g: 6Ghz active dwell time
+ * @dwell_time_passive_6g: 6Ghz passive dwell time
  * @min_rest_time: min rest time
  * @max_rest_time: max rest time
  * @repeat_probe_time: repeat probe time
@@ -882,6 +884,8 @@ struct scan_req_params {
 	uint32_t dwell_time_active;
 	uint32_t dwell_time_active_2g;
 	uint32_t dwell_time_passive;
+	uint32_t dwell_time_active_6g;
+	uint32_t dwell_time_passive_6g;
 	uint32_t min_rest_time;
 	uint32_t max_rest_time;
 	uint32_t repeat_probe_time;

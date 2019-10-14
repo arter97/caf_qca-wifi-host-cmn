@@ -111,7 +111,7 @@ void hif_ce_desc_data_record(struct hif_ce_desc_event *event, int len)
 	uint8_t *data = NULL;
 
 	if (!event->data) {
-		hif_err("No memory allocated");
+		hif_err_rl("No ce debug memory allocated");
 		return;
 	}
 
@@ -127,6 +127,17 @@ void hif_ce_desc_data_record(struct hif_ce_desc_event *event, int len)
 				 len : CE_DEBUG_MAX_DATA_BUF_SIZE));
 		event->actual_data_len = len;
 	}
+}
+
+void hif_clear_ce_desc_debug_data(struct hif_ce_desc_event *event)
+{
+	qdf_mem_zero(event,
+		     offsetof(struct hif_ce_desc_event, data));
+}
+#else
+void hif_clear_ce_desc_debug_data(struct hif_ce_desc_event *event)
+{
+	qdf_mem_zero(event, sizeof(struct hif_ce_desc_event));
 }
 #endif
 
@@ -199,14 +210,14 @@ void hif_record_ce_desc_event(struct hif_softc *scn, int ce_id,
 
 	event = &hist_ev[record_index];
 
-	qdf_mem_zero(event, sizeof(struct hif_ce_desc_event));
+	hif_clear_ce_desc_debug_data(event);
 
 	event->type = type;
 	event->time = qdf_get_log_timestamp();
 
 	if (descriptor)
 		qdf_mem_copy(&event->descriptor, descriptor,
-			     sizeof(union ce_desc));
+			     sizeof(union ce_srng_desc));
 
 	event->memory = memory;
 	event->index = index;
@@ -1636,13 +1647,13 @@ ssize_t hif_input_desc_trace_buf_index(struct hif_softc *scn,
 	ce_hist = &scn->hif_ce_desc_hist;
 
 	if (!size) {
-		pr_err("%s: Invalid input buffer.\n", __func__);
+		qdf_nofl_err("%s: Invalid input buffer.", __func__);
 		return -EINVAL;
 	}
 
 	if (sscanf(buf, "%u %u", (unsigned int *)&ce_hist->hist_id,
 		   (unsigned int *)&ce_hist->hist_index) != 2) {
-		pr_err("%s: Invalid input value.\n", __func__);
+		qdf_nofl_err("%s: Invalid input value.", __func__);
 		return -EINVAL;
 	}
 	if ((ce_hist->hist_id >= CE_COUNT_MAX) ||
@@ -1681,13 +1692,14 @@ ssize_t hif_ce_en_desc_hist(struct hif_softc *scn, const char *buf, size_t size)
 	ce_hist = &scn->hif_ce_desc_hist;
 
 	if (!size) {
-		pr_err("%s: Invalid input buffer.\n", __func__);
+		qdf_nofl_err("%s: Invalid input buffer.", __func__);
 		return -EINVAL;
 	}
 
 	if (sscanf(buf, "%u %u", (unsigned int *)&ce_id,
 		   (unsigned int *)&cfg) != 2) {
-		pr_err("%s: Invalid input: Enter CE Id<sp><1/0>.\n", __func__);
+		qdf_nofl_err("%s: Invalid input: Enter CE Id<sp><1/0>.",
+			     __func__);
 		return -EINVAL;
 	}
 	if (ce_id >= CE_COUNT_MAX) {

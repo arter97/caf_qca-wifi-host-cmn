@@ -25,6 +25,7 @@
 
 #include <qdf_status.h>
 #include <qdf_types.h>
+#include <qdf_module.h>
 #include <wlan_cmn.h>
 #include <reg_services_public_struct.h>
 #include <wlan_reg_services_api.h>
@@ -104,6 +105,19 @@ wlan_reg_chan_has_dfs_attribute(struct wlan_objmgr_pdev *pdev, uint32_t ch)
 {
 	return reg_chan_has_dfs_attribute(pdev, ch);
 }
+
+enum channel_state wlan_reg_get_5g_bonded_channel_and_state(
+	struct wlan_objmgr_pdev *pdev, uint8_t ch,
+	enum phy_ch_width bw,
+	const struct bonded_channel **bonded_chan_ptr_ptr)
+{
+	/*
+	 * Get channel and state from regulatory
+	 */
+	return reg_get_5g_bonded_channel(pdev, ch, bw, bonded_chan_ptr_ptr);
+}
+
+qdf_export_symbol(wlan_reg_get_5g_bonded_channel_and_state);
 
 /**
  * wlan_reg_get_5g_bonded_channel_state() - Get 5G bonded channel state
@@ -201,6 +215,8 @@ QDF_STATUS wlan_reg_get_current_chan_list(struct wlan_objmgr_pdev *pdev,
 	return reg_get_current_chan_list(pdev, chan_list);
 }
 
+qdf_export_symbol(wlan_reg_get_current_chan_list);
+
 /**
  * wlan_reg_get_bw_value() - give bandwidth value
  * bw: bandwidth enum
@@ -211,6 +227,8 @@ uint16_t wlan_reg_get_bw_value(enum phy_ch_width bw)
 {
 	return reg_get_bw_value(bw);
 }
+
+qdf_export_symbol(wlan_reg_get_bw_value);
 
 #ifdef CONFIG_CHAN_NUM_API
 /**
@@ -491,13 +509,23 @@ uint32_t wlan_reg_freq_to_chan(struct wlan_objmgr_pdev *pdev,
 	return reg_freq_to_chan(pdev, freq);
 }
 
+qdf_export_symbol(wlan_reg_freq_to_chan);
+
+#ifdef CONFIG_CHAN_NUM_API
 uint32_t wlan_reg_chan_to_freq(struct wlan_objmgr_pdev *pdev,
 			       uint32_t chan_num)
 {
 	return reg_chan_to_freq(pdev, chan_num);
 }
 
-#ifdef CONFIG_CHAN_NUM_API
+qdf_export_symbol(wlan_reg_chan_to_freq);
+
+uint16_t wlan_reg_legacy_chan_to_freq(struct wlan_objmgr_pdev *pdev,
+				      uint8_t chan_num)
+{
+	return reg_legacy_chan_to_freq(pdev, chan_num);
+}
+
 bool wlan_reg_chan_is_49ghz(struct wlan_objmgr_pdev *pdev,
 		uint8_t chan_num)
 {
@@ -726,7 +754,27 @@ bool wlan_reg_is_6ghz_psc_chan_freq(uint16_t freq)
 {
 	return reg_is_6ghz_psc_chan_freq(freq);
 }
+
 #endif /* CONFIG_BAND_6GHZ */
+
+uint16_t
+wlan_reg_get_band_channel_list(struct wlan_objmgr_pdev *pdev,
+			       uint8_t band_mask,
+			       struct regulatory_channel *channel_list)
+{
+	if (!pdev) {
+		reg_err("pdev object is NULL");
+		return 0;
+	}
+
+	return reg_get_band_channel_list(pdev, band_mask, channel_list);
+}
+
+uint16_t wlan_reg_chan_band_to_freq(struct wlan_objmgr_pdev *pdev,
+				    uint8_t chan, uint8_t band_mask)
+{
+	return reg_chan_band_to_freq(pdev, chan, band_mask);
+}
 
 bool wlan_reg_is_49ghz_freq(uint32_t freq)
 {
@@ -758,6 +806,8 @@ enum band_info wlan_reg_chan_to_band(uint32_t chan_num)
 {
 	return reg_chan_to_band(chan_num);
 }
+
+qdf_export_symbol(wlan_reg_chan_to_band);
 
 /**
  * wlan_reg_get_chan_enum() - Get channel enum for given channel number
@@ -815,11 +865,11 @@ bool wlan_reg_is_dsrc_freq(uint16_t freq)
 }
 
 void wlan_reg_update_nol_ch_for_freq(struct wlan_objmgr_pdev *pdev,
-				     uint16_t *ch_list,
+				     uint16_t *chan_freq_list,
 				     uint8_t num_ch,
 				     bool nol_ch)
 {
-	reg_update_nol_ch_for_freq(pdev, ch_list, num_ch, nol_ch);
+	reg_update_nol_ch_for_freq(pdev, chan_freq_list, num_ch, nol_ch);
 }
 
 void wlan_reg_update_nol_history_ch_for_freq(struct wlan_objmgr_pdev *pdev,
@@ -901,9 +951,25 @@ wlan_reg_get_channel_state_for_freq(struct wlan_objmgr_pdev *pdev,
 	return reg_get_channel_state_for_freq(pdev, freq);
 }
 
-uint32_t wlan_reg_get_channel_reg_power_for_freq(struct wlan_objmgr_pdev *pdev,
-						 uint32_t freq)
+uint8_t wlan_reg_get_channel_reg_power_for_freq(struct wlan_objmgr_pdev *pdev,
+						uint16_t freq)
 {
 	return reg_get_channel_reg_power_for_freq(pdev, freq);
 }
+
+enum reg_wifi_band wlan_reg_freq_to_band(uint16_t freq)
+{
+	return reg_freq_to_band(freq);
+}
+
+uint16_t wlan_reg_min_chan_freq(void)
+{
+	return reg_min_chan_freq();
+}
+
+uint16_t wlan_reg_max_chan_freq(void)
+{
+	return reg_max_chan_freq();
+}
+
 #endif /* CONFIG CHAN FREQ API */
