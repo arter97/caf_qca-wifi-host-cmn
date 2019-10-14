@@ -348,7 +348,7 @@ dfs_compute_radar_found_cfreq(struct wlan_dfs *dfs,
 	     * legacy chips.
 	     */
 		if (dfs_is_precac_timer_running(dfs) &&
-		    (dfs->dfs_precac_enable)) {
+		    dfs_is_legacy_precac_enabled(dfs)) {
 			*freq_center = utils_dfs_chan_to_freq(
 					dfs->dfs_precac_secondary_freq);
 		} else {
@@ -530,9 +530,20 @@ uint8_t dfs_get_bonding_channels(struct wlan_dfs *dfs,
 	else {
 		/* When precac is running "dfs_ch_vhtop_ch_freq_seg2" is
 		 * zero and "dfs_precac_secondary_freq" holds the secondary
-		 * frequency.
+		 * frequency in case of legacy chips.
+		 * For chips that support a separate agile detector engine,
+		 * "dfs_agile_precac_freq" holds the frequency that agile
+		 * engine operates on.
+		 *
+		 * In case of radar detected by the HW in the secondary 80
+		 * channel,"dfs_ch_vhtop_ch_freq_seg2" holds the secondary
+		 * segment center frequency in the below cases:
+		 * 1. preCAC timer is running in chips that support separate
+		 * agile engines.
+		 * 2. preCAC timer is not running.
 		 */
-		if (dfs_is_precac_timer_running(dfs))
+		if (dfs_is_precac_timer_running(dfs) &&
+		    dfs_is_legacy_precac_enabled(dfs))
 			center_chan = dfs->dfs_precac_secondary_freq;
 		else
 			center_chan = curchan->dfs_ch_vhtop_ch_freq_seg2;
@@ -775,7 +786,8 @@ QDF_STATUS dfs_process_radar_ind(struct wlan_dfs *dfs,
 
 	/* Sanity checks for radar on Agile detector */
 	if (radar_found->detector_id == AGILE_DETECTOR_ID &&
-	    (!dfs->dfs_agile_precac_enable || !dfs->dfs_agile_precac_freq)) {
+	    (!dfs_is_agile_precac_enabled(dfs) ||
+	     !dfs->dfs_agile_precac_freq)) {
 		dfs_err(dfs, WLAN_DEBUG_DFS,
 			"radar on Agile detector when ADFS is not running");
 		return QDF_STATUS_E_FAILURE;

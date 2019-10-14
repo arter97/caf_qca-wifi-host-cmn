@@ -256,6 +256,8 @@ enum hal_tx_encap_type {
  *				remove reason is fw_reason2
  * @HAL_TX_TQM_RR_FW_REASON3 : Remove command where fw indicated that
  *				remove reason is fw_reason3
+ * @HAL_TX_TQM_RR_REM_CMD_DISABLE_QUEUE : Remove command where fw indicated that
+ *				remove reason is remove disable queue
  */
 enum hal_tx_tqm_release_reason {
 	HAL_TX_TQM_RR_FRAME_ACKED,
@@ -266,6 +268,7 @@ enum hal_tx_tqm_release_reason {
 	HAL_TX_TQM_RR_FW_REASON1,
 	HAL_TX_TQM_RR_FW_REASON2,
 	HAL_TX_TQM_RR_FW_REASON3,
+	HAL_TX_TQM_RR_REM_CMD_DISABLE_QUEUE,
 };
 
 /* enum - Table IDs for 2 DSCP-TID mapping Tables that TCL H/W supports
@@ -996,6 +999,28 @@ static inline void hal_tx_desc_set_search_index(hal_soc_handle_t hal_soc_hdl,
 }
 
 /**
+ * hal_tx_desc_set_cache_set_num - Set the cache-set-num value
+ * @desc: Handle to Tx Descriptor
+ * @cache_num: Cache set number that should be used to cache the index
+ *                based search results, for address and flow search.
+ *                This value should be equal to LSB four bits of the hash value
+ *                of match data, in case of search index points to an entry
+ *                which may be used in content based search also. The value can
+ *                be anything when the entry pointed by search index will not be
+ *                used for content based search.
+ *
+ * Return: void
+ */
+static inline void hal_tx_desc_set_cache_set_num(hal_soc_handle_t hal_soc_hdl,
+						 void *desc,
+						 uint8_t cache_num)
+{
+	struct hal_soc *hal_soc = (struct hal_soc *)hal_soc_hdl;
+
+	hal_soc->ops->hal_tx_desc_set_cache_set_num(desc, cache_num);
+}
+
+/**
  * hal_tx_comp_get_status() - TQM Release reason
  * @hal_desc: completion ring Tx status
  *
@@ -1083,5 +1108,23 @@ void hal_tx_set_tidmap_prty(hal_soc_handle_t hal_soc_hdl, uint8_t val)
 	struct hal_soc *hal_soc = (struct hal_soc *)hal_soc_hdl;
 
 	hal_soc->ops->hal_tx_set_tidmap_prty(hal_soc, val);
+}
+
+/**
+ * hal_get_wbm_internal_error() - wbm internal error
+ * @hal_desc: completion ring descriptor pointer
+ *
+ * This function will return the type of pointer - buffer or descriptor
+ *
+ * Return: buffer type
+ */
+static inline uint8_t hal_get_wbm_internal_error(void *hal_desc)
+{
+	uint32_t comp_desc =
+		*(uint32_t *)(((uint8_t *)hal_desc) +
+			      WBM_RELEASE_RING_2_WBM_INTERNAL_ERROR_OFFSET);
+
+	return (comp_desc & WBM_RELEASE_RING_2_WBM_INTERNAL_ERROR_MASK) >>
+		WBM_RELEASE_RING_2_WBM_INTERNAL_ERROR_LSB;
 }
 #endif /* HAL_TX_H */

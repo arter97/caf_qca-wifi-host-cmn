@@ -4828,7 +4828,7 @@ static void dp_vdev_flush_peers(struct cdp_vdev *vdev_handle, bool unmap_only)
 							 0);
 			}
 		} else {
-			peer = dp_peer_find_by_id(soc, peer_ids[i]);
+			peer = __dp_peer_find_by_id(soc, peer_ids[i]);
 
 			if (peer) {
 				dp_info("peer: %pM is getting flush",
@@ -6339,9 +6339,8 @@ static QDF_STATUS dp_vdev_set_monitor_mode(struct cdp_vdev *vdev_handle,
 
 	/*Check if current pdev's monitor_vdev exists */
 	if (pdev->monitor_configured) {
-		QDF_TRACE(QDF_MODULE_ID_TXRX, QDF_TRACE_LEVEL_ERROR,
+		QDF_TRACE(QDF_MODULE_ID_TXRX, QDF_TRACE_LEVEL_DEBUG,
 			  "monitor vap already created vdev=%pK\n", vdev);
-		qdf_assert(vdev);
 		return QDF_STATUS_E_RESOURCES;
 	}
 
@@ -7541,7 +7540,7 @@ dp_get_htt_stats(struct cdp_pdev *pdev_handle, void *data, uint32_t data_len)
  */
 static QDF_STATUS dp_set_pdev_param(struct cdp_pdev *pdev_handle,
 				    enum cdp_pdev_param_type param,
-				    uint8_t val)
+				    uint32_t val)
 {
 	struct dp_pdev *pdev = (struct dp_pdev *)pdev_handle;
 	switch (param) {
@@ -8546,7 +8545,7 @@ static QDF_STATUS dp_config_for_nac_rssi(struct cdp_vdev *vdev_handle,
 	if (soc->cdp_soc.ol_ops->config_bssid_in_fw_for_nac_rssi)
 		soc->cdp_soc.ol_ops->config_bssid_in_fw_for_nac_rssi
 			((void *)vdev->pdev->ctrl_pdev,
-			 vdev->vdev_id, cmd, bssid);
+			 vdev->vdev_id, cmd, bssid, client_macaddr);
 
 	return QDF_STATUS_SUCCESS;
 }

@@ -1369,7 +1369,6 @@ enum qca_wlan_vendor_attr {
 		QCA_WLAN_VENDOR_ATTR_MAX = QCA_WLAN_VENDOR_ATTR_AFTER_LAST - 1
 };
 
-#ifdef FEATURE_WLAN_EXTSCAN
 enum qca_wlan_vendor_attr_extscan_config_params {
 	QCA_WLAN_VENDOR_ATTR_EXTSCAN_SUBCMD_CONFIG_PARAM_INVALID = 0,
 
@@ -1784,8 +1783,6 @@ enum qca_wlan_vendor_attr_extscan_results {
 	QCA_WLAN_VENDOR_ATTR_EXTSCAN_RESULTS_MAX =
 	QCA_WLAN_VENDOR_ATTR_EXTSCAN_RESULTS_AFTER_LAST - 1,
 };
-#endif
-
 
 /**
  * enum qca_vendor_interop_issues_ap_type - interop issues type
@@ -5906,20 +5903,55 @@ enum qca_wlan_vendor_attr_external_acs_channels {
 
 /**
  * qca_wlan_vendor_acs_select_reason: This represents the different reasons why
- * the ACS has to be triggered. These parameters are used by
+ * the ACS has to be triggered. These values are used by
  * QCA_WLAN_VENDOR_ATTR_EXTERNAL_ACS_EVENT_REASON and
- * QCA_NL80211_VENDOR_SUBCMD_ACS_SET_CHANNELS
- * @QCA_WLAN_VENDOR_ACS_SELECT_REASON_INIT: Represents the reason that the
- * ACS triggered during the AP start
- * @QCA_WLAN_VENDOR_ACS_SELECT_REASON_DFS: Represents the reason that
- * DFS found with current channel
- * @QCA_WLAN_VENDOR_ACS_SELECT_REASON_LTE_COEX: Represents the reason that
- * LTE CO-Exist in current band
+ * QCA_WLAN_VENDOR_ATTR_EXTERNAL_ACS_CHANNEL_REASON
  */
 enum qca_wlan_vendor_acs_select_reason {
+	/* Represents the reason that the ACS triggered during the AP start */
 	QCA_WLAN_VENDOR_ACS_SELECT_REASON_INIT,
+	/* Represents the reason that DFS found with the current channel */
 	QCA_WLAN_VENDOR_ACS_SELECT_REASON_DFS,
+	/* Represents the reason that LTE co-exist in the current band. */
 	QCA_WLAN_VENDOR_ACS_SELECT_REASON_LTE_COEX,
+	/* Represents the reason that generic, uncategorized interference has
+	 * been found in the current channel.
+	 */
+	QCA_WLAN_VENDOR_ACS_SELECT_REASON_GENERIC_INTERFERENCE,
+	/* Represents the reason that excessive 802.11 interference has been
+	 * found in the current channel.
+	 */
+	QCA_WLAN_VENDOR_ACS_SELECT_REASON_80211_INTERFERENCE,
+	/* Represents the reason that generic Continuous Wave (CW) interference
+	 * has been found in the current channel.
+	 */
+	QCA_WLAN_VENDOR_ACS_SELECT_REASON_CW_INTERFERENCE,
+	/* Represents the reason that Microwave Oven (MWO) interference has been
+	 * found in the current channel.
+	 */
+	QCA_WLAN_VENDOR_ACS_SELECT_REASON_MWO_INTERFERENCE,
+	/* Represents the reason that generic Frequency-Hopping Spread Spectrum
+	 * (FHSS) interference has been found in the current channel. This may
+	 * include 802.11 waveforms.
+	 */
+	QCA_WLAN_VENDOR_ACS_SELECT_REASON_FHSS_INTERFERENCE,
+	/* Represents the reason that non-802.11 generic Frequency-Hopping
+	 * Spread Spectrum (FHSS) interference has been found in the current
+	 * channel.
+	 */
+	QCA_WLAN_VENDOR_ACS_SELECT_REASON_NON_80211_FHSS_INTERFERENCE,
+	/* Represents the reason that generic Wideband (WB) interference has
+	 * been found in the current channel. This may include 802.11 waveforms.
+	 */
+	QCA_WLAN_VENDOR_ACS_SELECT_REASON_WB_INTERFERENCE,
+	/* Represents the reason that non-802.11 generic Wideband (WB)
+	 * interference has been found in the current channel.
+	 */
+	QCA_WLAN_VENDOR_ACS_SELECT_REASON_NON_80211_WB_INTERFERENCE,
+	/* Represents the reason that Jammer interference has been found in the
+	 * current channel.
+	 */
+	QCA_WLAN_VENDOR_ACS_SELECT_REASON_JAMMER_INTERFERENCE,
 };
 
 /**

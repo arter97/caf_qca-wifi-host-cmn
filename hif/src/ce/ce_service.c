@@ -130,6 +130,35 @@ void hif_ce_desc_data_record(struct hif_ce_desc_event *event, int len)
 }
 #endif
 
+#if defined(HIF_CONFIG_SLUB_DEBUG_ON) && defined(HIF_RECORD_RX_PADDR)
+/**
+ * hif_ce_desc_record_rx_paddr() - record physical address for IOMMU
+ * IOVA addr and MMU virtual addr for Rx
+ * @scn: hif_softc
+ * @event: structure detailing a ce event
+ *
+ * Record physical address for ce event type HIF_RX_DESC_POST and
+ * HIF_RX_DESC_COMPLETION
+ *
+ * Return: none
+ */
+void hif_ce_desc_record_rx_paddr(struct hif_softc *scn,
+				 struct hif_ce_desc_event *event)
+{
+	if (event->type != HIF_RX_DESC_POST &&
+	    event->type != HIF_RX_DESC_COMPLETION)
+		return;
+
+	if (event->descriptor.dest_desc.buffer_addr)
+		event->dma_to_phy = qdf_mem_paddr_from_dmaaddr(
+				scn->qdf_dev,
+				event->descriptor.dest_desc.buffer_addr);
+
+	if (event->memory)
+		event->virt_to_phy = virt_to_phys(qdf_nbuf_data(event->memory));
+}
+#endif
+
 /**
  * hif_record_ce_desc_event() - record ce descriptor events
  * @scn: hif_softc
@@ -181,6 +210,8 @@ void hif_record_ce_desc_event(struct hif_softc *scn, int ce_id,
 
 	event->memory = memory;
 	event->index = index;
+
+	hif_ce_desc_record_rx_paddr(scn, event);
 
 	if (ce_hist->data_enable[ce_id])
 		hif_ce_desc_data_record(event, len);
@@ -1605,13 +1636,13 @@ ssize_t hif_input_desc_trace_buf_index(struct hif_softc *scn,
 	ce_hist = &scn->hif_ce_desc_hist;
 
 	if (!size) {
-		pr_err("%s: Invalid input buffer.\n", __func__);
+		qdf_nofl_err("%s: Invalid input buffer.", __func__);
 		return -EINVAL;
 	}
 
 	if (sscanf(buf, "%u %u", (unsigned int *)&ce_hist->hist_id,
 		   (unsigned int *)&ce_hist->hist_index) != 2) {
-		pr_err("%s: Invalid input value.\n", __func__);
+		qdf_nofl_err("%s: Invalid input value.", __func__);
 		return -EINVAL;
 	}
 	if ((ce_hist->hist_id >= CE_COUNT_MAX) ||
@@ -1650,13 +1681,14 @@ ssize_t hif_ce_en_desc_hist(struct hif_softc *scn, const char *buf, size_t size)
 	ce_hist = &scn->hif_ce_desc_hist;
 
 	if (!size) {
-		pr_err("%s: Invalid input buffer.\n", __func__);
+		qdf_nofl_err("%s: Invalid input buffer.", __func__);
 		return -EINVAL;
 	}
 
 	if (sscanf(buf, "%u %u", (unsigned int *)&ce_id,
 		   (unsigned int *)&cfg) != 2) {
-		pr_err("%s: Invalid input: Enter CE Id<sp><1/0>.\n", __func__);
+		qdf_nofl_err("%s: Invalid input: Enter CE Id<sp><1/0>.",
+			     __func__);
 		return -EINVAL;
 	}
 	if (ce_id >= CE_COUNT_MAX) {

@@ -29,6 +29,10 @@
 #include "qdf_atomic.h"
 #include <wbuff.h>
 
+#ifdef WLAN_FW_OFFLOAD
+#include "wlan_fwol_public_structs.h"
+#endif
+
 #ifdef DFS_COMPONENT_ENABLE
 #include <wlan_dfs_public_struct.h>
 #endif
@@ -287,9 +291,6 @@ QDF_STATUS (*send_vdev_start_cmd)(wmi_unified_t wmi,
 
 QDF_STATUS (*send_vdev_set_nac_rssi_cmd)(wmi_unified_t wmi,
 		struct vdev_scan_nac_rssi_params *req);
-
-QDF_STATUS (*send_hidden_ssid_vdev_restart_cmd)(wmi_unified_t wmi_handle,
-		struct hidden_ssid_vdev_restart_params *restart_params);
 
 QDF_STATUS (*send_peer_flush_tids_cmd)(wmi_unified_t wmi,
 					 uint8_t peer_addr[QDF_MAC_ADDR_SIZE],
@@ -942,15 +943,6 @@ QDF_STATUS (*extract_sar2_result_event)(void *handle,
 					uint8_t *event,
 					uint32_t len);
 
-#ifdef WLAN_FEATURE_DISA
-QDF_STATUS (*send_encrypt_decrypt_send_cmd)(wmi_unified_t wmi_handle,
-				struct disa_encrypt_decrypt_req_params *params);
-
-QDF_STATUS (*extract_encrypt_decrypt_resp_event)(wmi_unified_t wmi_handle,
-			void *evt_buf,
-			struct disa_encrypt_decrypt_resp_params *resp);
-#endif
-
 #ifdef FEATURE_WLAN_TDLS
 QDF_STATUS (*send_set_tdls_offchan_mode_cmd)(wmi_unified_t wmi_handle,
 			      struct tdls_channel_switch_params *chan_switch_params);
@@ -1045,6 +1037,13 @@ QDF_STATUS (*send_pdev_fips_cmd)(wmi_unified_t wmi_handle,
 
 QDF_STATUS (*send_wlan_profile_enable_cmd)(wmi_unified_t wmi_handle,
 		struct wlan_profile_params *param);
+
+#ifdef WLAN_FEATURE_DISA
+QDF_STATUS
+(*send_encrypt_decrypt_send_cmd)(wmi_unified_t wmi_handle,
+				 struct disa_encrypt_decrypt_req_params
+				 *params);
+#endif
 
 QDF_STATUS (*send_wlan_profile_trigger_cmd)(wmi_unified_t wmi_handle,
 		struct wlan_profile_params *param);
@@ -1393,6 +1392,14 @@ QDF_STATUS (*extract_dcs_im_tgt_stats)(wmi_unified_t wmi_handle, void *evt_buf,
 QDF_STATUS (*extract_fips_event_data)(wmi_unified_t wmi_handle,
 	void *evt_buf, struct wmi_host_fips_event_param *param);
 
+#ifdef WLAN_FEATURE_DISA
+QDF_STATUS
+(*extract_encrypt_decrypt_resp_event)(wmi_unified_t wmi_handle,
+				      void *evt_buf,
+				      struct disa_encrypt_decrypt_resp_params
+				      *resp);
+#endif
+
 QDF_STATUS (*extract_vdev_start_resp)(wmi_unified_t wmi_handle, void *evt_buf,
 	wmi_host_vdev_start_resp *vdev_rsp);
 
@@ -1518,7 +1525,9 @@ QDF_STATUS (*extract_peer_sta_kickout_ev)(wmi_unified_t wmi_handle,
 		void *evt_buf, wmi_host_peer_sta_kickout_event *ev);
 
 QDF_STATUS (*extract_peer_ratecode_list_ev)(wmi_unified_t wmi_handle,
-		void *evt_buf, uint8_t *peer_mac, wmi_sa_rate_cap *rate_cap);
+					    void *evt_buf, uint8_t *peer_mac,
+					    uint32_t *pdev_id,
+					    wmi_sa_rate_cap *rate_cap);
 
 QDF_STATUS (*extract_comb_phyerr)(wmi_unified_t wmi_handle, void *evt_buf,
 	uint16_t datalen, uint16_t *buf_offset, wmi_host_phyerr_t *phyerr);
@@ -1676,6 +1685,11 @@ QDF_STATUS (*extract_reg_cap_service_ready_ext)(
 			struct wlan_psoc_host_hal_reg_capabilities_ext *param);
 
 QDF_STATUS (*extract_dbr_ring_cap_service_ready_ext)(
+			wmi_unified_t wmi_handle,
+			uint8_t *evt_buf, uint8_t idx,
+			struct wlan_psoc_host_dbr_ring_caps *param);
+
+QDF_STATUS (*extract_dbr_ring_cap_service_ready_ext2)(
 			wmi_unified_t wmi_handle,
 			uint8_t *evt_buf, uint8_t idx,
 			struct wlan_psoc_host_dbr_ring_caps *param);
@@ -2011,6 +2025,16 @@ QDF_STATUS (*extract_hw_mode_resp_event)(wmi_unified_t wmi_handle,
 QDF_STATUS (*send_set_roam_trigger_cmd)(wmi_unified_t wmi_handle,
 					uint32_t vdev_id,
 					uint32_t trigger_bitmap);
+
+#ifdef WLAN_FEATURE_ELNA
+QDF_STATUS (*send_set_elna_bypass_cmd)(wmi_unified_t wmi_handle,
+				       struct set_elna_bypass_request *req);
+QDF_STATUS (*send_get_elna_bypass_cmd)(wmi_unified_t wmi_handle,
+				       struct get_elna_bypass_request *req);
+QDF_STATUS (*extract_get_elna_bypass_resp)(wmi_unified_t wmi_handle,
+					 void *resp_buf,
+					 struct get_elna_bypass_response *resp);
+#endif /* WLAN_FEATURE_ELNA */
 };
 
 /* Forward declartion for psoc*/
@@ -2360,14 +2384,6 @@ static inline void wmi_tdls_attach_tlv(struct wmi_unified *wmi_handle)
 }
 #endif
 
-#ifdef WLAN_FEATURE_DISA
-void wmi_disa_attach_tlv(struct wmi_unified *wmi_handle);
-#else
-static inline void wmi_disa_attach_tlv(struct wmi_unified *wmi_handle)
-{
-}
-#endif
-
 #ifdef WLAN_POLICY_MGR_ENABLE
 void wmi_policy_mgr_attach_tlv(struct wmi_unified *wmi_handle);
 #else
@@ -2398,6 +2414,20 @@ static inline void wmi_sta_attach_tlv(struct wmi_unified *wmi_handle)
 void wmi_bcn_attach_tlv(wmi_unified_t wmi_handle);
 #else
 static inline void wmi_bcn_attach_tlv(wmi_unified_t wmi_handle)
+{
+}
+#endif
+
+/**
+ * wmi_fwol_attach_tlv() - attach fw offload tlv handlers
+ * @wmi_handle: wmi handle
+ *
+ * Return: void
+ */
+#ifdef WLAN_FW_OFFLOAD
+void wmi_fwol_attach_tlv(wmi_unified_t wmi_handle);
+#else
+static inline void wmi_fwol_attach_tlv(wmi_unified_t wmi_handle)
 {
 }
 #endif

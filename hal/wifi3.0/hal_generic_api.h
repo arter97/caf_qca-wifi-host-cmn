@@ -1527,7 +1527,7 @@ static void hal_reo_status_get_header_generic(uint32_t *d, int b, void *h1)
 			UNIFORM_REO_STATUS_HEADER_STATUS_HEADER)];
 		break;
 	default:
-		pr_err("ERROR: Unknown tlv\n");
+		qdf_nofl_err("ERROR: Unknown tlv");
 		break;
 	}
 	h->cmd_num =
@@ -1570,7 +1570,7 @@ static void hal_reo_status_get_header_generic(uint32_t *d, int b, void *h1)
 			UNIFORM_REO_STATUS_HEADER_STATUS_HEADER_GENERIC)];
 		break;
 	default:
-		pr_err("ERROR: Unknown tlv\n");
+		qdf_nofl_err("ERROR: Unknown tlv");
 		break;
 	}
 	h->tstamp =
@@ -1729,7 +1729,7 @@ void hal_srng_src_hw_init_generic(struct hal_soc *hal,
 	uint32_t reg_val = 0;
 	uint64_t tp_addr = 0;
 
-	HIF_DBG("%s: hw_init srng %d", __func__, srng->ring_id);
+	hal_debug("hw_init srng %d", srng->ring_id);
 
 	if (srng->flags & HAL_SRNG_MSI_INTR) {
 		SRNG_SRC_REG_WRITE(srng, MSI1_BASE_LSB,
@@ -1842,7 +1842,7 @@ void hal_srng_dst_hw_init_generic(struct hal_soc *hal,
 	uint32_t reg_val = 0;
 	uint64_t hp_addr = 0;
 
-	HIF_DBG("%s: hw_init srng %d", __func__, srng->ring_id);
+	hal_debug("hw_init srng %d", srng->ring_id);
 
 	if (srng->flags & HAL_SRNG_MSI_INTR) {
 		SRNG_DST_REG_WRITE(srng, MSI1_BASE_LSB,
@@ -2227,6 +2227,33 @@ static void hal_tx_desc_set_search_index_generic(void *desc,
 #else
 static void hal_tx_desc_set_search_index_generic(void *desc,
 						 uint32_t search_index)
+{
+}
+#endif
+
+/**
+ * hal_tx_desc_set_cache_set_num_generic - Set the cache-set-num value
+ * @desc: Handle to Tx Descriptor
+ * @cache_num: Cache set number that should be used to cache the index
+ *                based search results, for address and flow search.
+ *                This value should be equal to LSB four bits of the hash value
+ *                of match data, in case of search index points to an entry
+ *                which may be used in content based search also. The value can
+ *                be anything when the entry pointed by search index will not be
+ *                used for content based search.
+ *
+ * Return: void
+ */
+#ifdef TCL_DATA_CMD_5_CACHE_SET_NUM_OFFSET
+static void hal_tx_desc_set_cache_set_num_generic(void *desc,
+						  uint8_t cache_num)
+{
+	HAL_SET_FLD(desc, TCL_DATA_CMD_5, CACHE_SET_NUM) |=
+		HAL_TX_SM(TCL_DATA_CMD_5, CACHE_SET_NUM, cache_num);
+}
+#else
+static void hal_tx_desc_set_cache_set_num_generic(void *desc,
+						  uint8_t cache_num)
 {
 }
 #endif

@@ -1697,7 +1697,7 @@ uint32_t dp_rx_process(struct dp_intr *int_ctx, hal_ring_handle_t hal_ring_hdl,
 	qdf_assert_always(hal_soc);
 
 	scn = soc->hif_handle;
-	hif_pm_runtime_mark_last_busy(scn);
+	hif_pm_runtime_mark_dp_rx_busy(scn);
 	intr_id = int_ctx->dp_intr_id;
 
 more_data:
@@ -2158,8 +2158,6 @@ done:
 		}
 
 		dp_rx_fill_gro_info(soc, rx_tlv_hdr, nbuf, &rx_ol_pkt_cnt);
-
-		qdf_nbuf_cb_update_peer_local_id(nbuf, peer->local_id);
 
 		DP_RX_LIST_APPEND(deliver_list_head,
 				  deliver_list_tail,
