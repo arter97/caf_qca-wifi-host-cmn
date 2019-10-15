@@ -573,29 +573,47 @@ int dp_peer_add_ast(struct dp_soc *soc,
 			uint32_t flags)
 {
 	struct dp_ast_entry *ast_entry = NULL;
-	struct dp_vdev *vdev = NULL;
+	struct dp_vdev *vdev = NULL, *tmp_vdev = NULL;
 	struct dp_pdev *pdev = NULL;
 	uint8_t next_node_mac[6];
 	int  ret = -1;
 	txrx_ast_free_cb cb = NULL;
 	void *cookie = NULL;
-
-	qdf_spin_lock_bh(&soc->ast_lock);
-	if (peer->delete_in_progress) {
-		qdf_spin_unlock_bh(&soc->ast_lock);
-		return ret;
-	}
+	struct dp_peer *tmp_peer = NULL;
+	bool is_peer_found = false;
 
 	vdev = peer->vdev;
 	if (!vdev) {
 		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_ERROR,
 			  FL("Peers vdev is NULL"));
 		QDF_ASSERT(0);
-		qdf_spin_unlock_bh(&soc->ast_lock);
 		return ret;
 	}
 
 	pdev = vdev->pdev;
+
+	tmp_peer = dp_peer_find_hash_find(soc, mac_addr, 0,
+					  DP_VDEV_ALL);
+	if (tmp_peer) {
+		tmp_vdev = tmp_peer->vdev;
+		if (!tmp_vdev) {
+			QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_ERROR,
+				  FL("Peers vdev is NULL"));
+			QDF_ASSERT(0);
+			dp_peer_unref_delete(tmp_peer);
+			return ret;
+		}
+		if (tmp_vdev->pdev->pdev_id == pdev->pdev_id)
+			is_peer_found = true;
+
+		dp_peer_unref_delete(tmp_peer);
+	}
+
+	qdf_spin_lock_bh(&soc->ast_lock);
+	if (peer->delete_in_progress) {
+		qdf_spin_unlock_bh(&soc->ast_lock);
+		return ret;
+	}
 
 	QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_DEBUG,
 		  "%s: pdevid: %u vdev: %u  ast_entry->type: %d flags: 0x%x peer_mac: %pM peer: %pK mac %pM",
@@ -625,6 +643,10 @@ int dp_peer_add_ast(struct dp_soc *soc,
 			    (ast_entry->type == CDP_TXRX_AST_TYPE_MEC))
 				ast_entry->is_active = TRUE;
 
+			qdf_spin_unlock_bh(&soc->ast_lock);
+			return 0;
+		}
+		if (is_peer_found) {
 			qdf_spin_unlock_bh(&soc->ast_lock);
 			return 0;
 		}
@@ -1310,6 +1332,9 @@ void dp_rx_tid_stats_cb(struct dp_soc *soc, void *cb_ctxt,
 	struct dp_rx_tid *rx_tid = (struct dp_rx_tid *)cb_ctxt;
 	struct hal_reo_queue_status *queue_status = &(reo_status->queue_status);
 
+	if (queue_status->header.status == HAL_REO_CMD_DRAIN)
+		return;
+
 	if (queue_status->header.status != HAL_REO_CMD_SUCCESS) {
 		DP_PRINT_STATS("REO stats failure %d for TID %d\n",
 			       queue_status->header.status, rx_tid->tid);
@@ -1527,8 +1552,10 @@ dp_rx_peer_map_handler(struct dp_soc *soc, uint16_t peer_id,
 				peer->vdev->vap_bss_peer = peer;
 			}
 
-			if (peer->vdev->opmode == wlan_op_mode_sta)
+			if (peer->vdev->opmode == wlan_op_mode_sta) {
 				peer->vdev->bss_ast_hash = ast_hash;
+				peer->vdev->bss_ast_idx = hw_peer_id;
+			}
 
 			/* Add ast entry incase self ast entry is
 			 * deleted due to DP CP sync issue
@@ -3104,8 +3131,8 @@ QDF_STATUS dp_get_vdevid(void *peer_handle, uint8_t *vdev_id)
 {
 	struct dp_peer *peer = peer_handle;
 
-	DP_TRACE(INFO, "peer %pK vdev %pK vdev id %d",
-			peer, peer->vdev, peer->vdev->vdev_id);
+	dp_info("peer %pK vdev %pK vdev id %d",
+		peer, peer->vdev, peer->vdev->vdev_id);
 	*vdev_id = peer->vdev->vdev_id;
 	return QDF_STATUS_SUCCESS;
 }

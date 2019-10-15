@@ -2856,6 +2856,7 @@ void hif_process_runtime_resume_success(struct hif_opaque_softc *hif_ctx)
  */
 int hif_runtime_suspend(struct hif_opaque_softc *hif_ctx)
 {
+	struct hif_pci_softc *sc = HIF_GET_PCI_SOFTC(hif_ctx);
 	int errno;
 
 	errno = hif_bus_suspend(hif_ctx);
@@ -2872,6 +2873,8 @@ int hif_runtime_suspend(struct hif_opaque_softc *hif_ctx)
 		hif_pm_runtime_set_monitor_wake_intr(hif_ctx, 0);
 		goto bus_resume;
 	}
+
+	qdf_atomic_set(&sc->pm_dp_rx_busy, 0);
 
 	return 0;
 
@@ -3469,11 +3472,12 @@ int hif_pci_configure_grp_irq(struct hif_softc *scn,
 	for (j = 0; j < hif_ext_group->numirq; j++) {
 		irq = hif_ext_group->irq[j];
 
-		HIF_DBG("%s: request_irq = %d for grp %d",
-			  __func__, irq, hif_ext_group->grp_id);
+		hif_info("request_irq = %d for grp %d",
+			 irq, hif_ext_group->grp_id);
 		ret = request_irq(irq,
 				  hif_ext_group_interrupt_handler,
-				  IRQF_SHARED, "wlan_EXT_GRP",
+				  IRQF_SHARED | IRQF_NO_SUSPEND,
+				  "wlan_EXT_GRP",
 				  hif_ext_group);
 		if (ret) {
 			HIF_ERROR("%s: request_irq failed ret = %d",
@@ -3903,8 +3907,8 @@ int hif_pm_runtime_get_sync(struct hif_opaque_softc *hif_ctx)
 	pm_state = qdf_atomic_read(&sc->pm_state);
 	if (pm_state == HIF_PM_RUNTIME_STATE_SUSPENDED ||
 	    pm_state == HIF_PM_RUNTIME_STATE_SUSPENDING)
-		HIF_INFO("Runtime PM resume is requested by %ps",
-			 (void *)_RET_IP_);
+		hif_info_high("Runtime PM resume is requested by %ps",
+			      (void *)_RET_IP_);
 
 	sc->pm_stats.runtime_get++;
 	ret = pm_runtime_get_sync(sc->dev);
@@ -3917,8 +3921,8 @@ int hif_pm_runtime_get_sync(struct hif_opaque_softc *hif_ctx)
 
 	if (ret) {
 		sc->pm_stats.runtime_get_err++;
-		HIF_ERROR("Runtime PM Get Sync error in pm_state: %d, ret: %d",
-			  qdf_atomic_read(&sc->pm_state), ret);
+		hif_err("Runtime PM Get Sync error in pm_state: %d, ret: %d",
+			qdf_atomic_read(&sc->pm_state), ret);
 		hif_pm_runtime_put(hif_ctx);
 	}
 
@@ -4027,8 +4031,7 @@ int hif_pm_runtime_get(struct hif_opaque_softc *hif_ctx)
 	int pm_state;
 
 	if (!scn) {
-		HIF_ERROR("%s: Could not do runtime get, scn is null",
-				__func__);
+		hif_err("Could not do runtime get, scn is null");
 		return -EFAULT;
 	}
 
@@ -4050,8 +4053,8 @@ int hif_pm_runtime_get(struct hif_opaque_softc *hif_ctx)
 
 		if (ret && ret != -EINPROGRESS) {
 			sc->pm_stats.runtime_get_err++;
-			HIF_ERROR("%s: Runtime Get PM Error in pm_state:%d ret: %d",
-				__func__, qdf_atomic_read(&sc->pm_state), ret);
+			hif_err("Runtime Get PM Error in pm_state:%d ret: %d",
+				qdf_atomic_read(&sc->pm_state), ret);
 		}
 
 		return ret;
@@ -4059,8 +4062,8 @@ int hif_pm_runtime_get(struct hif_opaque_softc *hif_ctx)
 
 	if (pm_state == HIF_PM_RUNTIME_STATE_SUSPENDED ||
 	    pm_state == HIF_PM_RUNTIME_STATE_SUSPENDING) {
-		HIF_INFO("Runtime PM resume is requested by %ps",
-			 (void *)_RET_IP_);
+		hif_info_high("Runtime PM resume is requested by %ps",
+			      (void *)_RET_IP_);
 		ret = -EAGAIN;
 	} else {
 		ret = -EBUSY;
@@ -4522,6 +4525,58 @@ void hif_pm_runtime_set_monitor_wake_intr(struct hif_opaque_softc *hif_ctx,
 
 	qdf_atomic_set(&sc->monitor_wake_intr, val);
 }
+
+/**
+ * hif_pm_runtime_mark_dp_rx_busy() - Set last busy mark my data path
+ * @hif_ctx: HIF context
+ *
+ * Return: void
+ */
+void hif_pm_runtime_mark_dp_rx_busy(struct hif_opaque_softc *hif_ctx)
+{
+	struct hif_pci_softc *sc = HIF_GET_PCI_SOFTC(hif_ctx);
+
+	if (!sc)
+		return;
+
+	qdf_atomic_set(&sc->pm_dp_rx_busy, 1);
+	sc->dp_last_busy_timestamp = qdf_get_log_timestamp_usecs();
+
+	hif_pm_runtime_mark_last_busy(hif_ctx);
+}
+
+/**
+ * hif_pm_runtime_is_dp_rx_busy() - Check if last mark busy by dp rx
+ * @hif_ctx: HIF context
+ *
+ * Return: dp rx busy set value
+ */
+int hif_pm_runtime_is_dp_rx_busy(struct hif_opaque_softc *hif_ctx)
+{
+	struct hif_pci_softc *sc = HIF_GET_PCI_SOFTC(hif_ctx);
+
+	if (!sc)
+		return 0;
+
+	return qdf_atomic_read(&sc->pm_dp_rx_busy);
+}
+
+/**
+ * hif_pm_runtime_get_dp_rx_busy_mark() - Get last busy by dp rx timestamp
+ * @hif_ctx: HIF context
+ *
+ * Return: timestamp of last mark busy by dp rx
+ */
+qdf_time_t hif_pm_runtime_get_dp_rx_busy_mark(struct hif_opaque_softc *hif_ctx)
+{
+	struct hif_pci_softc *sc = HIF_GET_PCI_SOFTC(hif_ctx);
+
+	if (!sc)
+		return 0;
+
+	return sc->dp_last_busy_timestamp;
+}
+
 #endif /* FEATURE_RUNTIME_PM */
 
 int hif_pci_legacy_map_ce_to_irq(struct hif_softc *scn, int ce_id)

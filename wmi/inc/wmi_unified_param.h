@@ -613,6 +613,7 @@ typedef enum {
  * @allow_vht: VHT allowed on chan
  * @set_agile: is agile mode
  * @allow_he: HE allowed on chan
+ * @psc_channel: 6 ghz preferred scan chan
  * @phy_mode: phymode (vht80 or ht40 or ...)
  * @cfreq1: centre frequency on primary
  * @cfreq2: centre frequency on secondary
@@ -636,7 +637,8 @@ struct channel_param {
 		allow_ht:1,
 		allow_vht:1,
 		set_agile:1,
-		allow_he:1;
+		allow_he:1,
+		psc_channel:1;
 	uint32_t phy_mode;
 	uint32_t cfreq1;
 	uint32_t cfreq2;
@@ -706,40 +708,6 @@ struct vdev_nss_chains {
 	uint32_t num_tx_chains_11a;
 	bool disable_rx_mrc[NSS_CHAINS_BAND_MAX];
 	bool disable_tx_mrc[NSS_CHAINS_BAND_MAX];
-};
-
-/**
- * struct hidden_ssid_vdev_restart_params -
- *                    vdev restart cmd parameter
- * @vdev_id: ID of the vdev that needs to be restarted
- * @ssid_len: ssid length
- * @ssid: ssid
- * @flags: flags
- * @requestor_id: requestor id
- * @disable_hw_ack: flag to disable hw ack feature
- * @mhz: channel frequency
- * @band_center_freq1: center freq 1
- * @band_center_freq2: center freq 2
- * @info: channel info
- * @reg_info_1: contains min power, max power,
- *              reg power and reg class id
- * @reg_info_2: contains antennamax
- * @hidden_ssid_restart_in_progress:
- *      flag to check if restart is in progress
- */
-struct hidden_ssid_vdev_restart_params {
-	uint8_t vdev_id;
-	uint32_t ssid_len;
-	uint32_t ssid[8];
-	uint32_t flags;
-	uint32_t requestor_id;
-	uint32_t disable_hw_ack;
-	uint32_t mhz;
-	uint32_t band_center_freq1;
-	uint32_t band_center_freq2;
-	uint32_t info;
-	uint32_t reg_info_1;
-	uint32_t reg_info_2;
 };
 
 #ifdef WLAN_CFR_ENABLE
@@ -3382,6 +3350,40 @@ struct fips_params {
 	uint32_t pdev_id;
 };
 
+#ifdef WLAN_FEATURE_DISA_FIPS
+/**
+ * struct disa_encrypt_decrypt_req_params - disa encrypt request
+ * @vdev_id: virtual device id
+ * @key_flag: This indicates firmware to encrypt/decrypt payload
+ *    see ENCRYPT_DECRYPT_FLAG
+ * @key_idx: Index used in storing key
+ * @key_cipher: cipher used for encryption/decryption
+ *    Eg: see WMI_CIPHER_AES_CCM for CCMP
+ * @key_len: length of key data
+ * @key_txmic_len: length of Tx MIC
+ * @key_rxmic_len: length of Rx MIC
+ * @key_data: Key
+ * @pn: packet number
+ * @mac_header: MAC header
+ * @data_len: length of data
+ * @data: pointer to payload
+ */
+struct disa_encrypt_decrypt_req_params {
+	uint32_t vdev_id;
+	uint8_t key_flag;
+	uint32_t key_idx;
+	uint32_t key_cipher;
+	uint32_t key_len;
+	uint32_t key_txmic_len;
+	uint32_t key_rxmic_len;
+	uint8_t key_data[MAC_MAX_KEY_LENGTH];
+	uint8_t pn[MAC_PN_LENGTH];
+	uint8_t mac_header[MAX_MAC_HEADER_LEN];
+	uint32_t data_len;
+	uint8_t *data;
+};
+#endif
+
 /**
  * struct mcast_group_update_param - Mcast group table update to target
  * @action: Addition/deletion
@@ -4521,6 +4523,7 @@ typedef enum {
 	wmi_chan_rf_characterization_info_event_id,
 	wmi_roam_auth_offload_event_id,
 	wmi_service_ready_ext2_event_id,
+	wmi_get_elna_bypass_event_id,
 	wmi_events_max,
 } wmi_conv_event_id;
 
@@ -4684,6 +4687,7 @@ typedef enum {
 	wmi_pdev_param_set_tbtt_ctrl,
 	wmi_pdev_param_set_cmd_obss_pd_threshold,
 	wmi_pdev_param_set_cmd_obss_pd_per_ac,
+	wmi_pdev_param_set_cong_ctrl_max_msdus,
 	wmi_pdev_param_max,
 } wmi_conv_pdev_params_id;
 
@@ -6856,6 +6860,22 @@ struct wmi_host_fips_event_param {
 	uint32_t data_len;
 	uint32_t *data;
 };
+
+#ifdef WLAN_FEATURE_DISA_FIPS
+/**
+ * struct disa_encrypt_decrypt_resp_params - disa encrypt response
+ * @vdev_id: vdev id
+ * @status: status
+ * @data_length: data length
+ * @data: data pointer
+ */
+struct disa_encrypt_decrypt_resp_params {
+	uint32_t vdev_id;
+	int32_t status;
+	uint32_t data_len;
+	uint8_t *data;
+};
+#endif
 
 /**
  * struct wmi_host_proxy_ast_reserve_param

@@ -241,6 +241,20 @@ enum rrm_actioncode {
 };
 
 /**
+ * enum ft_actioncode - ft action frames
+ * @FT_FAST_BSS_TRNST_REQ: ft request frame
+ * @FT_FAST_BSS_TRNST_RES: ft response frame
+ * @FT_FAST_BSS_TRNST_CONFIRM: ft confirm frame
+ * @FT_FAST_BSS_TRNST_ACK: ft ACK frame
+ */
+enum ft_actioncode {
+	FT_FAST_BSS_TRNST_REQ = 1,
+	FT_FAST_BSS_TRNST_RES,
+	FT_FAST_BSS_TRNST_CONFIRM,
+	FT_FAST_BSS_TRNST_ACK,
+};
+
+/**
  * enum ht_actioncode - ht action frames
  * @HT_ACTION_NOTIFY_CHANWIDTH: ht notify bw action frame
  * @HT_ACTION_SMPS: ht smps action frame
@@ -602,6 +616,10 @@ enum mgmt_frame_type {
 	MGMT_ACTION_RRM_LINK_MEASUREMENT_RPT,
 	MGMT_ACTION_RRM_NEIGHBOR_REQ,
 	MGMT_ACTION_RRM_NEIGHBOR_RPT,
+	MGMT_ACTION_FT_REQUEST,
+	MGMT_ACTION_FT_RESPONSE,
+	MGMT_ACTION_FT_CONFIRM,
+	MGMT_ACTION_FT_ACK,
 	MGMT_ACTION_HT_NOTIFY_CHANWIDTH,
 	MGMT_ACTION_HT_SMPS,
 	MGMT_ACTION_HT_PSMP,
@@ -683,6 +701,7 @@ enum mgmt_frame_type {
 #define WLAN_NOISE_FLOOR_DBM_DEFAULT            -96
 /**
  * struct mgmt_rx_event_params - host mgmt header params
+ * @chan_freq: channel frequency on which this frame is received
  * @channel: channel on which this frame is received
  * @snr: snr information used to call rssi
  * @rssi_ctl[WLAN_MGMT_TXRX_HOST_MAX_ANTENNA]: RSSI of PRI 20MHz for each chain
@@ -699,6 +718,7 @@ enum mgmt_frame_type {
  *             (win specific, will be removed in phase 4)
  */
 struct mgmt_rx_event_params {
+	uint32_t    chan_freq;
 	uint32_t    channel;
 	uint32_t    snr;
 	uint8_t     rssi_ctl[WLAN_MGMT_TXRX_HOST_MAX_ANTENNA];

@@ -27,6 +27,7 @@
 #include <cdp_txrx_cmn_struct.h>
 #include <wlan_mlme_dbg.h>
 #include <qdf_module.h>
+#include <wlan_vdev_mgr_tgt_if_tx_api.h>
 
 static QDF_STATUS vdev_mgr_config_ratemask_update(
 				struct vdev_mlme_obj *mlme_obj,
@@ -42,6 +43,30 @@ static QDF_STATUS vdev_mgr_config_ratemask_update(
 	param->lower32_2 = mlme_obj->mgmt.rate_info.lower32_2;
 
 	return QDF_STATUS_SUCCESS;
+}
+
+enum wlan_op_subtype
+wlan_util_vdev_get_cdp_txrx_subtype(struct wlan_objmgr_vdev *vdev)
+{
+	enum QDF_OPMODE qdf_opmode;
+	enum wlan_op_subtype cdp_txrx_subtype;
+
+	qdf_opmode = wlan_vdev_mlme_get_opmode(vdev);
+	switch (qdf_opmode) {
+	case QDF_P2P_DEVICE_MODE:
+		cdp_txrx_subtype = wlan_op_subtype_p2p_device;
+		break;
+	case QDF_P2P_CLIENT_MODE:
+		cdp_txrx_subtype = wlan_op_subtype_p2p_cli;
+		break;
+	case QDF_P2P_GO_MODE:
+		cdp_txrx_subtype = wlan_op_subtype_p2p_go;
+		break;
+	default:
+		cdp_txrx_subtype = wlan_op_subtype_none;
+	};
+
+	return cdp_txrx_subtype;
 }
 
 enum wlan_op_mode
@@ -323,11 +348,19 @@ wlan_util_vdev_mlme_set_param(struct vdev_mlme_obj *vdev_mlme,
 	case WLAN_MLME_CFG_UAPSD:
 		mlme_proto->sta.uapsd_cfg = mlme_cfg.value;
 		break;
-	case WLAN_MLME_CFG_TX_DECAP_TYPE:
-		mlme_mgmt->generic.tx_decap_type = mlme_cfg.value;
+	case WLAN_MLME_CFG_TX_ENCAP_TYPE:
+		is_wmi_cmd = true;
+		mlme_mgmt->generic.tx_encap_type = mlme_cfg.value;
+		tgt_vdev_mgr_set_tx_rx_decap_type(vdev_mlme,
+						  WLAN_MLME_CFG_TX_ENCAP_TYPE,
+						  mlme_cfg.value);
 		break;
 	case WLAN_MLME_CFG_RX_DECAP_TYPE:
+		is_wmi_cmd = true;
 		mlme_mgmt->generic.rx_decap_type = mlme_cfg.value;
+		tgt_vdev_mgr_set_tx_rx_decap_type(vdev_mlme,
+						  WLAN_MLME_CFG_RX_DECAP_TYPE,
+						  mlme_cfg.value);
 		break;
 	case WLAN_MLME_CFG_RATEMASK_TYPE:
 		mlme_mgmt->rate_info.type = mlme_cfg.value;

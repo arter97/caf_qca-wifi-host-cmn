@@ -316,6 +316,9 @@ static void wlan_lmac_if_umac_reg_rx_ops_register(
 
 	rx_ops->reg_rx_ops.reg_modify_pdev_chan_range =
 		wlan_reg_modify_pdev_chan_range;
+
+	rx_ops->reg_rx_ops.reg_ignore_fw_reg_offload_ind =
+		tgt_reg_ignore_fw_reg_offload_ind;
 }
 
 #ifdef CONVERGED_P2P_ENABLE
@@ -391,8 +394,10 @@ wlan_lmac_if_umac_dfs_rx_ops_register(struct wlan_lmac_if_rx_ops *rx_ops)
 	dfs_rx_ops->dfs_override_precac_timeout =
 		ucfg_dfs_override_precac_timeout;
 	dfs_rx_ops->dfs_set_precac_enable = ucfg_dfs_set_precac_enable;
-	dfs_rx_ops->dfs_get_precac_enable = ucfg_dfs_get_precac_enable;
-	dfs_rx_ops->dfs_get_agile_precac_enable = ucfg_dfs_get_agile_precac_enable;
+	dfs_rx_ops->dfs_get_legacy_precac_enable =
+		ucfg_dfs_get_legacy_precac_enable;
+	dfs_rx_ops->dfs_get_agile_precac_enable =
+		ucfg_dfs_get_agile_precac_enable;
 	dfs_rx_ops->dfs_get_override_precac_timeout =
 		ucfg_dfs_get_override_precac_timeout;
 	dfs_rx_ops->dfs_set_current_channel = tgt_dfs_set_current_channel;
@@ -428,6 +433,8 @@ wlan_lmac_if_umac_dfs_rx_ops_register(struct wlan_lmac_if_rx_ops *rx_ops)
 		ucfg_dfs_allow_hw_pulses;
 	dfs_rx_ops->dfs_is_hw_pulses_allowed =
 		ucfg_dfs_is_hw_pulses_allowed;
+	dfs_rx_ops->dfs_set_fw_adfs_support =
+		tgt_dfs_set_fw_adfs_support;
 
 	register_precac_auto_chan_rx_ops(dfs_rx_ops);
 

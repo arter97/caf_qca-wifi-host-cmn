@@ -181,6 +181,11 @@ typedef struct hal_ring_handle *hal_ring_handle_t;
 
 #define MAX_SRNG_REG_GROUPS 2
 
+/* Hal Srng bit mask
+ * HAL_SRNG_FLUSH_EVENT: SRNG HP TP flush in case of link down
+ */
+#define HAL_SRNG_FLUSH_EVENT BIT(0)
+
 /* Common SRNG ring structure for source and destination rings */
 struct hal_srng {
 	/* Unique SRNG ring ID */
@@ -286,7 +291,11 @@ struct hal_srng {
 	struct hal_soc *hal_soc;
 
 	/* Number of times hp/tp updated in runtime resume */
-	uint32_t needs_flush;
+	uint32_t flush_count;
+	/* hal srng event flag*/
+	unsigned long srng_event;
+	/* last flushed time stamp */
+	uint64_t last_flush_ts;
 };
 
 /* HW SRNG configuration table */
@@ -336,6 +345,7 @@ struct hal_hw_txrx_ops {
 			uint8_t pool_id, uint32_t desc_id, uint8_t type);
 	void (*hal_tx_desc_set_search_type)(void *desc, uint8_t search_type);
 	void (*hal_tx_desc_set_search_index)(void *desc, uint32_t search_index);
+	void (*hal_tx_desc_set_cache_set_num)(void *desc, uint8_t search_index);
 	void (*hal_tx_comp_get_status)(void *desc, void *ts,
 				       struct hal_soc *hal);
 	uint8_t (*hal_tx_comp_get_release_reason)(void *hal_desc);

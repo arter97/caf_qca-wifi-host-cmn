@@ -36,6 +36,7 @@
 #include <wlan_vdev_mgr_utils_api.h>
 #include <wlan_cmn.h>
 #include <wmi_unified_vdev_api.h>
+#include <cdp_txrx_ctrl.h>
 
 static QDF_STATUS target_if_vdev_mgr_register_event_handler(
 					struct wlan_objmgr_psoc *psoc)
@@ -312,12 +313,46 @@ target_if_vdev_mlme_id_2_wmi(uint32_t cfg_id)
 	case WLAN_MLME_CFG_MAX_GROUP_KEYS:
 		wmi_id = wmi_vdev_param_max_group_keys;
 		break;
+	case WLAN_MLME_CFG_TX_ENCAP_TYPE:
+		wmi_id = wmi_vdev_param_tx_encap_type;
+		break;
+	case WLAN_MLME_CFG_RX_DECAP_TYPE:
+		wmi_id = wmi_vdev_param_rx_decap_type;
+		break;
 	default:
 		wmi_id = cfg_id;
 		break;
 	}
 
 	return wmi_id;
+}
+
+static
+QDF_STATUS target_if_vdev_set_tx_rx_decap_type(struct wlan_objmgr_vdev *vdev,
+					       enum wlan_mlme_cfg_id param_id,
+					       uint32_t value)
+{
+	ol_txrx_soc_handle soc_txrx_handle;
+	struct cdp_vdev *vdev_txrx_handle;
+	struct wlan_objmgr_psoc *psoc;
+
+	psoc = wlan_vdev_get_psoc(vdev);
+	soc_txrx_handle = wlan_psoc_get_dp_handle(psoc);
+	vdev_txrx_handle = wlan_vdev_get_dp_handle(vdev);
+
+	if (!soc_txrx_handle || !vdev_txrx_handle)
+		return QDF_STATUS_E_INVAL;
+
+	if (param_id ==  WLAN_MLME_CFG_TX_ENCAP_TYPE)
+		cdp_set_tx_encap_type(soc_txrx_handle,
+				      (struct cdp_vdev *)vdev_txrx_handle,
+				      value);
+	else if (param_id == WLAN_MLME_CFG_RX_DECAP_TYPE)
+		cdp_set_vdev_rx_decap_type(soc_txrx_handle,
+					   (struct cdp_vdev *)vdev_txrx_handle,
+					   value);
+
+	return QDF_STATUS_SUCCESS;
 }
 
 static QDF_STATUS target_if_vdev_mgr_set_param_send(
@@ -1071,6 +1106,8 @@ target_if_vdev_mgr_register_tx_ops(struct wlan_lmac_if_tx_ops *tx_ops)
 	mlme_tx_ops->beacon_tmpl_send = target_if_vdev_mgr_beacon_tmpl_send;
 	mlme_tx_ops->vdev_set_param_send =
 			target_if_vdev_mgr_set_param_send;
+	mlme_tx_ops->vdev_set_tx_rx_decap_type =
+			target_if_vdev_set_tx_rx_decap_type;
 	mlme_tx_ops->vdev_sta_ps_param_send =
 			target_if_vdev_mgr_sta_ps_param_send;
 	mlme_tx_ops->vdev_mgr_rsp_timer_init =
