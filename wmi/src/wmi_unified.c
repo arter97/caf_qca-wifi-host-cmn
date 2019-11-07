@@ -36,6 +36,7 @@
 #include <linux/debugfs.h>
 
 #ifdef WMI_EXT_DBG
+#include "qdf_atomic.h"
 
 /**
  * wmi_ext_dbg_msg_enqueue() - enqueue wmi message
@@ -1682,6 +1683,73 @@ static inline void wmi_unified_debug_dump(wmi_unified_t wmi_handle)
 						"WMI_NON_TLV_TARGET"));
 }
 
+#ifdef WLAN_FEATURE_WMI_SEND_RECV_QMI
+QDF_STATUS wmi_unified_cmd_send_over_qmi(struct wmi_unified *wmi_handle,
+				    wmi_buf_t buf, uint32_t buflen,
+				    uint32_t cmd_id)
+{
+	QDF_STATUS status;
+	int32_t ret;
+
+	if (!qdf_nbuf_push_head(buf, sizeof(WMI_CMD_HDR))) {
+		wmi_err("Failed to send cmd %x, no memory", cmd_id);
+		return QDF_STATUS_E_NOMEM;
+	}
+
+	qdf_mem_zero(qdf_nbuf_data(buf), sizeof(WMI_CMD_HDR));
+	WMI_SET_FIELD(qdf_nbuf_data(buf), WMI_CMD_HDR, COMMANDID, cmd_id);
+	wmi_debug("Sending WMI_CMD_ID: %d over qmi", cmd_id);
+	status = qdf_wmi_send_recv_qmi(qdf_nbuf_data(buf),
+				       buflen + sizeof(WMI_CMD_HDR),
+				       wmi_handle,
+				       wmi_process_qmi_fw_event);
+	if (QDF_IS_STATUS_ERROR(status)) {
+		qdf_nbuf_pull_head(buf, sizeof(WMI_CMD_HDR));
+		wmi_warn("WMI send on QMI failed. Retrying WMI on HTC");
+	} else {
+		ret = qdf_atomic_inc_return(&wmi_handle->num_stats_over_qmi);
+		wmi_debug("num stats over qmi: %d", ret);
+		wmi_buf_free(buf);
+	}
+
+	return status;
+}
+
+static int __wmi_process_qmi_fw_event(void *wmi_cb_ctx, void *buf, int len)
+{
+	struct wmi_unified *wmi_handle = wmi_cb_ctx;
+	wmi_buf_t evt_buf;
+	uint32_t evt_id;
+
+	if (!wmi_handle || !buf)
+		return -EINVAL;
+
+	evt_buf = wmi_buf_alloc(wmi_handle, len);
+	if (!evt_buf)
+		return -ENOMEM;
+
+	qdf_mem_copy(qdf_nbuf_data(evt_buf), buf, len);
+	evt_id = WMI_GET_FIELD(qdf_nbuf_data(evt_buf), WMI_CMD_HDR, COMMANDID);
+	wmi_debug("Received WMI_EVT_ID: %d over qmi", evt_id);
+	wmi_process_fw_event(wmi_handle, evt_buf);
+
+	return 0;
+}
+
+int wmi_process_qmi_fw_event(void *wmi_cb_ctx, void *buf, int len)
+{
+	struct qdf_op_sync *op_sync;
+	int ret;
+
+	if (qdf_op_protect(&op_sync))
+		return -EINVAL;
+	ret = __wmi_process_qmi_fw_event(wmi_cb_ctx, buf, len);
+	qdf_op_unprotect(op_sync);
+
+	return ret;
+}
+#endif
+
 QDF_STATUS wmi_unified_cmd_send_fl(wmi_unified_t wmi_handle, wmi_buf_t buf,
 				   uint32_t len, uint32_t cmd_id,
 				   const char *func, uint32_t line)
@@ -2456,6 +2524,8 @@ void *wmi_unified_get_pdev_handle(struct wmi_soc *soc, uint32_t pdev_idx)
 		wmi_handle->wmi_events = soc->wmi_events;
 		wmi_handle->services = soc->services;
 		wmi_handle->soc = soc;
+		wmi_handle->cmd_pdev_id_map = soc->cmd_pdev_id_map;
+		wmi_handle->evt_pdev_id_map = soc->evt_pdev_id_map;
 		wmi_interface_logging_init(wmi_handle, pdev_idx);
 		qdf_atomic_init(&wmi_handle->pending_cmds);
 		qdf_atomic_init(&wmi_handle->is_target_suspended);
@@ -2564,9 +2634,12 @@ void *wmi_unified_attach(void *scn_handle,
 	wmi_handle->wmi_events = soc->wmi_events;
 	wmi_handle->services = soc->services;
 	wmi_handle->scn_handle = scn_handle;
+	wmi_handle->cmd_pdev_id_map = soc->cmd_pdev_id_map;
+	wmi_handle->evt_pdev_id_map = soc->evt_pdev_id_map;
 	soc->scn_handle = scn_handle;
 	qdf_atomic_init(&wmi_handle->pending_cmds);
 	qdf_atomic_init(&wmi_handle->is_target_suspended);
+	qdf_atomic_init(&wmi_handle->num_stats_over_qmi);
 	wmi_runtime_pm_init(wmi_handle);
 	qdf_spinlock_create(&wmi_handle->eventq_lock);
 	qdf_nbuf_queue_init(&wmi_handle->event_queue);
@@ -2780,7 +2853,7 @@ static void wmi_htc_log_pkt(void *ctx, HTC_PACKET *htc_pkt)
 	cmd_id = WMI_GET_FIELD(qdf_nbuf_data(wmi_cmd_buf), WMI_CMD_HDR,
 			       COMMANDID);
 
-	WMI_LOGI("WMI command from HTC packet: %s, ID: %d\n",
+	WMI_LOGD("WMI command from HTC packet: %s, ID: %d\n",
 		 wmi_id_to_name(cmd_id), cmd_id);
 }
 #else
@@ -2976,10 +3049,15 @@ qdf_export_symbol(wmi_flush_endpoint);
  *                     By default pdev_id conversion is not done in WMI.
  *                     This API can be used enable conversion in WMI.
  * @param wmi_handle   : handle to WMI
+ * @param pdev_map     : pointer to pdev_map
+ * @size               : size of pdev_id_map
  * Return none
  */
-void wmi_pdev_id_conversion_enable(wmi_unified_t wmi_handle)
+void wmi_pdev_id_conversion_enable(wmi_unified_t wmi_handle,
+				   uint32_t *pdev_id_map, uint8_t size)
 {
 	if (wmi_handle->target_type == WMI_TLV_TARGET)
-		wmi_handle->ops->wmi_pdev_id_conversion_enable(wmi_handle);
+		wmi_handle->ops->wmi_pdev_id_conversion_enable(wmi_handle,
+							       pdev_id_map,
+							       size);
 }

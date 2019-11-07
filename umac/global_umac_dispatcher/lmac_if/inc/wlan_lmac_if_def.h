@@ -180,7 +180,7 @@ struct wlan_lmac_if_ftm_tx_ops {
 				uint8_t *buf, uint32_t len, uint8_t mac_id);
 };
 
-
+enum wlan_mlme_cfg_id;
 /**
  * struct wlan_lmac_if_mlme_tx_ops - south bound tx function pointers for mlme
  * @scan_sta_power_events: function to handle STA power events
@@ -198,6 +198,7 @@ struct wlan_lmac_if_ftm_tx_ops {
  * @vdev_stop_send: function to send vdev stop
  * @vdev_down_send: function to send vdev down
  * @vdev_set_param_send: function to send vdev parameter
+ * @vdev_set_tx_rx_decap_type: function to send vdev tx rx cap/decap type
  * @vdev_set_nac_rssi_send: function to send nac rssi
  * @vdev_set_neighbour_rx_cmd_send: function to send vdev neighbour rx cmd
  * @vdev_sifs_trigger_send: function to send vdev sifs trigger
@@ -240,6 +241,9 @@ struct wlan_lmac_if_mlme_tx_ops {
 				     struct vdev_down_params *param);
 	QDF_STATUS (*vdev_set_param_send)(struct wlan_objmgr_vdev *vdev,
 					  struct vdev_set_params *param);
+	QDF_STATUS (*vdev_set_tx_rx_decap_type)(struct wlan_objmgr_vdev *vdev,
+						enum wlan_mlme_cfg_id param_id,
+						uint32_t value);
 	QDF_STATUS (*vdev_set_nac_rssi_send)(
 				struct wlan_objmgr_vdev *vdev,
 				struct vdev_scan_nac_rssi_params *param);
@@ -421,12 +425,15 @@ struct wlan_lmac_if_atf_tx_ops {
  * @fd_vdev_config_fils:         Enable and configure FILS Discovery
  * @fd_register_event_handler:   Register swfda WMI event handler
  * @fd_unregister_event_handler: Un-register swfda WMI event handler
+ * @fd_offload_tmpl_send:        Send FD template to FW
  */
 struct wlan_lmac_if_fd_tx_ops {
 	QDF_STATUS (*fd_vdev_config_fils)(struct wlan_objmgr_vdev *vdev,
 					  uint32_t fd_period);
 	void (*fd_register_event_handler)(struct wlan_objmgr_psoc *psoc);
 	void (*fd_unregister_event_handler)(struct wlan_objmgr_psoc *psoc);
+	QDF_STATUS (*fd_offload_tmpl_send)(struct wlan_objmgr_pdev *pdev,
+			struct fils_discovery_tmpl_params *fd_tmpl_param);
 };
 #endif
 
@@ -609,7 +616,7 @@ struct wlan_lmac_if_direct_buf_rx_tx_ops {
 	QDF_STATUS (*direct_buf_rx_get_ring_params)
 		(struct wlan_objmgr_pdev *pdev,
 		 struct module_ring_params *param,
-		 int module_id);
+		 uint8_t module_id, uint8_t srng_id);
 };
 #endif
 
@@ -626,7 +633,6 @@ struct sta_uapsd_trig_params;
  * @set_offchan_mode: function to set tdls offchannel mode
  * @tdls_reg_ev_handler: function to register for tdls events
  * @tdls_unreg_ev_handler: function to unregister for tdls events
- * @tdls_set_uapsd: function to set upasdt trigger command
  *
  * tdls module uses these functions to avail ol/da lmac services
  */
@@ -641,8 +647,6 @@ struct wlan_lmac_if_tdls_tx_ops {
 					 void *arg);
 	QDF_STATUS (*tdls_unreg_ev_handler) (struct wlan_objmgr_psoc *psoc,
 					    void *arg);
-	QDF_STATUS (*tdls_set_uapsd)(struct wlan_objmgr_psoc *psoc,
-				    struct sta_uapsd_trig_params *params);
 };
 
 /* fwd declarations for tdls rx ops */
@@ -797,6 +801,7 @@ struct wlan_lmac_if_dfs_tx_ops {
  * @tgt_is_tgt_type_ipq4019: To check IPQ4019 target type.
  * @tgt_is_tgt_type_qca9984: To check QCA9984 target type.
  * @tgt_is_tgt_type_qca9888: To check QCA9888 target type.
+ * @tgt_is_tgt_type_adrastea: To check QCS40X target type.
  * @tgt_get_tgt_type:        Get target type
  * @tgt_get_tgt_version:     Get target version
  * @tgt_get_tgt_revision:    Get target revision
@@ -806,6 +811,7 @@ struct wlan_lmac_if_target_tx_ops {
 	bool (*tgt_is_tgt_type_ipq4019)(uint32_t);
 	bool (*tgt_is_tgt_type_qca9984)(uint32_t);
 	bool (*tgt_is_tgt_type_qca9888)(uint32_t);
+	bool (*tgt_is_tgt_type_adrastea)(uint32_t);
 	uint32_t (*tgt_get_tgt_type)(struct wlan_objmgr_psoc *psoc);
 	uint32_t (*tgt_get_tgt_version)(struct wlan_objmgr_psoc *psoc);
 	uint32_t (*tgt_get_tgt_revision)(struct wlan_objmgr_psoc *psoc);
@@ -981,6 +987,7 @@ struct wlan_lmac_if_reg_rx_ops {
 					      bool dfs_enable);
 	QDF_STATUS (*reg_modify_pdev_chan_range)(struct
 						 wlan_objmgr_pdev *pdev);
+	bool (*reg_ignore_fw_reg_offload_ind)(struct wlan_objmgr_psoc *psoc);
 };
 
 #ifdef CONVERGED_P2P_ENABLE
@@ -1132,6 +1139,7 @@ struct wlan_lmac_if_atf_rx_ops {
  * @fd_free:                Free FD frame buffer
  * @fd_get_valid_fd_period: Get valid FD period
  * @fd_swfda_handler:       SWFDA event handler
+ * @fd_offload:             Offload FD frame
  */
 struct wlan_lmac_if_fd_rx_ops {
 	uint8_t (*fd_is_fils_enable)(struct wlan_objmgr_vdev *vdev);
@@ -1141,6 +1149,8 @@ struct wlan_lmac_if_fd_rx_ops {
 	uint32_t (*fd_get_valid_fd_period)(struct wlan_objmgr_vdev *vdev,
 					   uint8_t *is_modified);
 	QDF_STATUS (*fd_swfda_handler)(struct wlan_objmgr_vdev *vdev);
+	QDF_STATUS (*fd_offload)(struct wlan_objmgr_vdev *vdev,
+				 uint32_t vdev_id);
 };
 #endif
 
@@ -1198,11 +1208,14 @@ struct wlan_lmac_if_cfr_rx_ops {
  * struct wlan_lmac_if_sptrl_rx_ops - Spectral south bound Rx operations
  *
  * @sptrlro_get_target_handle: Get Spectral handle for target/LMAC private data
+ * @sptrlro_vdev_get_chan_freq_seg2: Get secondary 80 center frequency
  * @sptrlro_spectral_is_feature_disabled: Check if spectral feature is disabled
  */
 struct wlan_lmac_if_sptrl_rx_ops {
 	void * (*sptrlro_get_target_handle)(struct wlan_objmgr_pdev *pdev);
 	int16_t (*sptrlro_vdev_get_chan_freq)(struct wlan_objmgr_vdev *vdev);
+	int16_t (*sptrlro_vdev_get_chan_freq_seg2)
+					(struct wlan_objmgr_vdev *vdev);
 	enum phy_ch_width (*sptrlro_vdev_get_ch_width)(
 			struct wlan_objmgr_vdev *vdev);
 	int (*sptrlro_vdev_get_sec20chan_freq_mhz)(
@@ -1239,7 +1252,8 @@ struct wlan_lmac_if_wifi_pos_rx_ops {
  * @dfs_cancel_precac_timer:          Cancel the precac timer.
  * @dfs_override_precac_timeout:      Override the default precac timeout.
  * @dfs_set_precac_enable:            Set precac enable flag.
- * @dfs_get_precac_enable:            Get precac enable flag.
+ * @dfs_get_legacy_precac_enable:     Get the precac enable flag for
+ *                                    partial offload (legacy) chipsets.
  * @dfs_set_precac_intermediate_chan: Set intermediate channel for precac.
  * @dfs_get_precac_intermediate_chan: Get intermediate channel for precac.
  * @dfs_precac_preferred_chan:        Configure preferred channel during
@@ -1271,6 +1285,8 @@ struct wlan_lmac_if_wifi_pos_rx_ops {
  * @dfs_allow_hw_pulses:              Set or unset dfs_allow_hw_pulses which
  *                                    allow or disallow HW pulses.
  * @dfs_is_hw_pulses_allowed:         Check if HW pulses are allowed or not.
+ * @dfs_set_fw_adfs_support:          Set the agile DFS FW support in DFS.
+ * @dfs_reset_dfs_prevchan:           Reset DFS previous channel structure.
  */
 struct wlan_lmac_if_dfs_rx_ops {
 	QDF_STATUS (*dfs_get_radars)(struct wlan_objmgr_pdev *pdev);
@@ -1297,6 +1313,7 @@ struct wlan_lmac_if_dfs_rx_ops {
 	QDF_STATUS (*dfs_is_precac_timer_running)(struct wlan_objmgr_pdev *pdev,
 						  bool *is_precac_timer_running
 						  );
+#ifdef CONFIG_CHAN_NUM_API
 	QDF_STATUS
 	    (*dfs_find_vht80_chan_for_precac)(struct wlan_objmgr_pdev *pdev,
 					      uint32_t chan_mode,
@@ -1306,6 +1323,19 @@ struct wlan_lmac_if_dfs_rx_ops {
 					      uint32_t *phy_mode,
 					      bool *dfs_set_cfreq2,
 					      bool *set_agile);
+#endif
+#ifdef CONFIG_CHAN_FREQ_API
+	QDF_STATUS
+	    (*dfs_find_vht80_chan_for_precac_for_freq)(struct wlan_objmgr_pdev
+						       *pdev,
+						       uint32_t chan_mode,
+						       uint16_t ch_freq_seg1,
+						       uint32_t *cfreq1,
+						       uint32_t *cfreq2,
+						       uint32_t *phy_mode,
+						       bool *dfs_set_cfreq2,
+						       bool *set_agile);
+#endif
 	QDF_STATUS (*dfs_agile_precac_start)(struct wlan_objmgr_pdev *pdev);
 	QDF_STATUS (*dfs_set_agile_precac_state)(struct wlan_objmgr_pdev *pdev,
 						 int agile_precac_state);
@@ -1320,8 +1350,9 @@ struct wlan_lmac_if_dfs_rx_ops {
 			int precac_timeout);
 	QDF_STATUS (*dfs_set_precac_enable)(struct wlan_objmgr_pdev *pdev,
 			uint32_t value);
-	QDF_STATUS (*dfs_get_precac_enable)(struct wlan_objmgr_pdev *pdev,
-			int *buff);
+	QDF_STATUS
+	(*dfs_get_legacy_precac_enable)(struct wlan_objmgr_pdev *pdev,
+					bool *buff);
 	QDF_STATUS (*dfs_get_agile_precac_enable)(struct wlan_objmgr_pdev *pdev,
 						  bool *buff);
 #ifdef WLAN_DFS_PRECAC_AUTO_CHAN_SUPPORT
@@ -1329,15 +1360,33 @@ struct wlan_lmac_if_dfs_rx_ops {
 						       uint32_t value);
 	QDF_STATUS (*dfs_get_precac_intermediate_chan)(struct wlan_objmgr_pdev *pdev,
 						       int *buff);
+#ifdef CONFIG_CHAN_NUM_API
 	bool (*dfs_decide_precac_preferred_chan)(struct wlan_objmgr_pdev *pdev,
 						 uint8_t *pref_chan,
 						 enum wlan_phymode mode);
+#endif
+#ifdef CONFIG_CHAN_FREQ_API
+	bool (*dfs_decide_precac_preferred_chan_for_freq)(struct
+						    wlan_objmgr_pdev *pdev,
+						    uint16_t *pref_chan_freq,
+						    enum wlan_phymode mode);
+#endif
+
+#ifdef CONFIG_CHAN_NUM_API
 	enum precac_chan_state (*dfs_get_precac_chan_state)(struct wlan_objmgr_pdev *pdev,
 							    uint8_t precac_chan);
+#endif
+
+#ifdef CONFIG_CHAN_FREQ_API
+	enum precac_chan_state (*dfs_get_precac_chan_state_for_freq)(struct
+						      wlan_objmgr_pdev *pdev,
+						      uint16_t pcac_freq);
+#endif
 #endif
 	QDF_STATUS (*dfs_get_override_precac_timeout)(
 			struct wlan_objmgr_pdev *pdev,
 			int *precac_timeout);
+#ifdef CONFIG_CHAN_NUM_API
 	QDF_STATUS (*dfs_set_current_channel)(struct wlan_objmgr_pdev *pdev,
 			uint16_t ic_freq,
 			uint64_t ic_flags,
@@ -1345,6 +1394,19 @@ struct wlan_lmac_if_dfs_rx_ops {
 			uint8_t ic_ieee,
 			uint8_t ic_vhtop_ch_freq_seg1,
 			uint8_t ic_vhtop_ch_freq_seg2);
+#endif
+#ifdef CONFIG_CHAN_FREQ_API
+	QDF_STATUS
+	    (*dfs_set_current_channel_for_freq)(struct wlan_objmgr_pdev *pdev,
+						uint16_t ic_freq,
+						uint64_t ic_flags,
+						uint16_t ic_flagext,
+						uint8_t ic_ieee,
+						uint8_t ic_vhtop_ch_freq_seg1,
+						uint8_t ic_vhtop_ch_freq_seg2,
+						uint16_t dfs_ch_mhz_freq_seg1,
+						uint16_t dfs_ch_mhz_freq_seg2);
+#endif
 #ifdef DFS_COMPONENT_ENABLE
 	QDF_STATUS (*dfs_process_radar_ind)(struct wlan_objmgr_pdev *pdev,
 			struct radar_found_info *radar_found);
@@ -1386,6 +1448,10 @@ struct wlan_lmac_if_dfs_rx_ops {
 	void (*dfs_allow_hw_pulses)(struct wlan_objmgr_pdev *pdev,
 				    bool allow_hw_pulses);
 	bool (*dfs_is_hw_pulses_allowed)(struct wlan_objmgr_pdev *pdev);
+	void (*dfs_set_fw_adfs_support)(struct wlan_objmgr_pdev *pdev,
+					bool fw_adfs_support_160,
+					bool fw_adfs_support_non_160);
+	void (*dfs_reset_dfs_prevchan)(struct wlan_objmgr_pdev *pdev);
 };
 
 /**

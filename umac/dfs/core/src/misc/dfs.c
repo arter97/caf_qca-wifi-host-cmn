@@ -31,7 +31,6 @@
 #include "../dfs_full_offload.h"
 #include <wlan_objmgr_vdev_obj.h>
 #include "wlan_dfs_utils_api.h"
-#include "../dfs_etsi_precac.h"
 #include "../dfs_partial_offload_radar.h"
 
 /* Disable NOL in FW. */
@@ -69,15 +68,20 @@ static inline struct dfs_channel *dfs_alloc_dfs_curchan(void)
 	return qdf_mem_malloc(sizeof(struct dfs_channel));
 }
 
+static inline struct dfs_channel *dfs_alloc_dfs_prevchan(void)
+{
+	return qdf_mem_malloc(sizeof(struct dfs_channel));
+}
+
 /*
- * dfs_free_dfs_curchan() - Free dfs_channel buffer
- * @dfs_curchan: dfs_channel buffer pointer
+ * dfs_free_dfs_chan() - Free dfs_channel buffer
+ * @dfs_chan: dfs_channel buffer pointer
  *
  * Return: None
  */
-static inline void dfs_free_dfs_curchan(struct dfs_channel *dfs_curchan)
+static inline void dfs_free_dfs_chan(struct dfs_channel *dfs_chan)
 {
-	qdf_mem_free(dfs_curchan);
+	qdf_mem_free(dfs_chan);
 }
 
 #else
@@ -85,6 +89,7 @@ static inline void dfs_free_dfs_curchan(struct dfs_channel *dfs_curchan)
 /* Static buffers for DFS objects */
 static struct wlan_dfs global_dfs;
 static struct dfs_channel global_dfs_curchan;
+static struct dfs_channel global_dfs_prevchan;
 
 static inline struct wlan_dfs *dfs_alloc_wlan_dfs(void)
 {
@@ -100,7 +105,12 @@ static inline struct dfs_channel *dfs_alloc_dfs_curchan(void)
 	return &global_dfs_curchan;
 }
 
-static inline void dfs_free_dfs_curchan(struct dfs_channel *dfs_curchan)
+static inline struct dfs_channel *dfs_alloc_dfs_prevchan(void)
+{
+	return &global_dfs_prevchan;
+}
+
+static inline void dfs_free_dfs_chan(struct dfs_channel *dfs_chan)
 {
 }
 #endif
@@ -112,6 +122,28 @@ static inline void dfs_free_dfs_curchan(struct dfs_channel *dfs_curchan)
  * channel as RADAR and does not add the channel to NOL. It sends the CSA in
  * the current channel.
  */
+#ifdef CONFIG_CHAN_FREQ_API
+static os_timer_func(dfs_testtimer_task)
+{
+	struct wlan_dfs *dfs = NULL;
+
+	OS_GET_TIMER_ARG(dfs, struct wlan_dfs *);
+	dfs->wlan_dfstest = 0;
+
+	/*
+	 * Flip the channel back to the original channel.
+	 * Make sure this is done properly with a CSA.
+	 */
+	dfs_info(dfs, WLAN_DEBUG_DFS_ALWAYS, "go back to channel %d",
+		 dfs->wlan_dfstest_ieeechan);
+	dfs_mlme_start_csa_for_freq(dfs->dfs_pdev_obj,
+				    dfs->wlan_dfstest_ieeechan,
+				    dfs->dfs_curchan->dfs_ch_freq,
+				    dfs->dfs_curchan->dfs_ch_mhz_freq_seg2,
+				    dfs->dfs_curchan->dfs_ch_flags);
+}
+#else
+#ifdef CONFIG_CHAN_NUM_API
 static os_timer_func(dfs_testtimer_task)
 {
 	struct wlan_dfs *dfs = NULL;
@@ -131,6 +163,8 @@ static os_timer_func(dfs_testtimer_task)
 			dfs->dfs_curchan->dfs_ch_vhtop_ch_freq_seg2,
 			dfs->dfs_curchan->dfs_ch_flags);
 }
+#endif
+#endif
 
 int dfs_get_debug_info(struct wlan_dfs *dfs, void *data)
 {
@@ -162,6 +196,12 @@ int dfs_create_object(struct wlan_dfs **dfs)
 		return 1;
 	}
 
+	(*dfs)->dfs_prevchan = dfs_alloc_dfs_prevchan();
+	if (!((*dfs)->dfs_prevchan)) {
+		dfs_free_wlan_dfs(*dfs);
+		return 1;
+	}
+	qdf_mem_zero((*dfs)->dfs_prevchan, sizeof(struct dfs_channel));
 	return 0;
 }
 
@@ -187,7 +227,6 @@ int dfs_attach(struct wlan_dfs *dfs)
 	}
 	dfs_cac_timer_attach(dfs);
 	dfs_zero_cac_attach(dfs);
-	dfs_etsi_precac_attach(dfs);
 	dfs_nol_attach(dfs);
 
 	/*
@@ -257,13 +296,13 @@ void dfs_detach(struct wlan_dfs *dfs)
 		dfs_main_detach(dfs);
 	dfs_zero_cac_detach(dfs);
 	dfs_nol_detach(dfs);
-	dfs_etsi_precac_detach(dfs);
 }
 
 #ifndef WLAN_DFS_STATIC_MEM_ALLOC
 void dfs_destroy_object(struct wlan_dfs *dfs)
 {
-	dfs_free_dfs_curchan(dfs->dfs_curchan);
+	dfs_free_dfs_chan(dfs->dfs_prevchan);
+	dfs_free_dfs_chan(dfs->dfs_curchan);
 	dfs_free_wlan_dfs(dfs);
 }
 #else
@@ -703,7 +742,6 @@ int dfs_control(struct wlan_dfs *dfs,
 		break;
 	case DFS_RESET_PRECAC_LISTS:
 		dfs_reset_precac_lists(dfs);
-		dfs_reset_etsi_precac_lists(dfs);
 		break;
 	case DFS_INJECT_SEQUENCE:
 		error = dfs_inject_synthetic_pulse_sequence(dfs, indata);
@@ -719,6 +757,12 @@ int dfs_control(struct wlan_dfs *dfs,
 		}
 		dfs_allow_hw_pulses(dfs, !!(*(u_int8_t *)indata));
 		break;
+	case DFS_SET_PRI_MULTIPILER:
+		dfs->dfs_pri_multiplier = *(int *)indata;
+		dfs_debug(dfs, WLAN_DEBUG_DFS_ALWAYS,
+			  "Set dfs pri multiplier to %d, dfsdomain %d",
+			  dfs->dfs_pri_multiplier, dfs->dfsdomain);
+		break;
 	default:
 		error = -EINVAL;
 	}
@@ -727,6 +771,40 @@ bad:
 	return error;
 }
 
+/**
+ * dfs_is_curchan_same_as_given_chan() - Find if dfs_curchan has the same
+ * channel parameters provided.
+ * @dfs_curchan: Pointer to DFS current channel structure.
+ * @dfs_ch_freq: New curchan's primary frequency.
+ * @dfs_ch_flags: New curchan's channel flags.
+ * @dfs_ch_flagext: New curchan's channel flags extension.
+ * @dfs_ch_vhtop_ch_freq_seg1: New curchan's primary centre IEEE.
+ * @dfs_ch_vhtop_ch_freq_seg2: New curchan's secondary centre IEEE.
+ *
+ * Return: True if curchan has the same channel parameters of the given channel,
+ * else false.
+ */
+static bool
+dfs_is_curchan_same_as_given_chan(struct dfs_channel *dfs_curchan,
+				  uint16_t dfs_ch_freq,
+				  uint64_t dfs_ch_flags,
+				  uint16_t dfs_ch_flagext,
+				  uint8_t dfs_ch_vhtop_ch_freq_seg1,
+				  uint8_t dfs_ch_vhtop_ch_freq_seg2)
+{
+	if ((dfs_curchan->dfs_ch_freq == dfs_ch_freq) &&
+	    (dfs_curchan->dfs_ch_flags == dfs_ch_flags) &&
+	    (dfs_curchan->dfs_ch_flagext == dfs_ch_flagext) &&
+	    (dfs_curchan->dfs_ch_vhtop_ch_freq_seg1 ==
+	     dfs_ch_vhtop_ch_freq_seg1) &&
+	    (dfs_curchan->dfs_ch_vhtop_ch_freq_seg2 ==
+	     dfs_ch_vhtop_ch_freq_seg2))
+		return true;
+
+	return false;
+}
+
+#ifdef CONFIG_CHAN_NUM_API
 void dfs_set_current_channel(struct wlan_dfs *dfs,
 		uint16_t dfs_ch_freq,
 		uint64_t dfs_ch_flags,
@@ -740,6 +818,29 @@ void dfs_set_current_channel(struct wlan_dfs *dfs,
 		return;
 	}
 
+	if (!dfs->dfs_curchan) {
+		dfs_err(dfs, WLAN_DEBUG_DFS_ALWAYS,  "dfs_curchan is NULL");
+		return;
+	}
+
+	/* Check if the input parameters are the same as that of dfs_curchan */
+	if (dfs_is_curchan_same_as_given_chan(dfs->dfs_curchan,
+					      dfs_ch_freq,
+					      dfs_ch_flags,
+					      dfs_ch_flagext,
+					      dfs_ch_vhtop_ch_freq_seg1,
+					      dfs_ch_vhtop_ch_freq_seg2)) {
+		dfs_info(dfs, WLAN_DEBUG_DFS_ALWAYS,
+			 "dfs_curchan already updated");
+		return;
+	}
+
+	/* Update dfs previous channel with the old dfs_curchan, if it exists */
+	if (dfs->dfs_curchan->dfs_ch_freq)
+		qdf_mem_copy(dfs->dfs_prevchan,
+			     dfs->dfs_curchan,
+			     sizeof(struct dfs_channel));
+
 	dfs->dfs_curchan->dfs_ch_freq = dfs_ch_freq;
 	dfs->dfs_curchan->dfs_ch_flags = dfs_ch_flags;
 	dfs->dfs_curchan->dfs_ch_flagext = dfs_ch_flagext;
@@ -747,6 +848,53 @@ void dfs_set_current_channel(struct wlan_dfs *dfs,
 	dfs->dfs_curchan->dfs_ch_vhtop_ch_freq_seg1 = dfs_ch_vhtop_ch_freq_seg1;
 	dfs->dfs_curchan->dfs_ch_vhtop_ch_freq_seg2 = dfs_ch_vhtop_ch_freq_seg2;
 }
+#endif
+
+#ifdef CONFIG_CHAN_FREQ_API
+void dfs_set_current_channel_for_freq(struct wlan_dfs *dfs,
+				      uint16_t dfs_chan_freq,
+				      uint64_t dfs_chan_flags,
+				      uint16_t dfs_chan_flagext,
+				      uint8_t dfs_chan_ieee,
+				      uint8_t dfs_chan_vhtop_freq_seg1,
+				      uint8_t dfs_chan_vhtop_freq_seg2,
+				      uint16_t dfs_chan_mhz_freq_seg1,
+				      uint16_t dfs_chan_mhz_freq_seg2)
+
+{
+	if (!dfs) {
+		dfs_err(dfs, WLAN_DEBUG_DFS_ALWAYS,  "dfs is NULL");
+		return;
+	}
+
+	/* Check if the input parameters are the same as that of dfs_curchan */
+	if (dfs_is_curchan_same_as_given_chan(dfs->dfs_curchan,
+					      dfs_chan_freq,
+					      dfs_chan_flags,
+					      dfs_chan_flagext,
+					      dfs_chan_vhtop_freq_seg1,
+					      dfs_chan_vhtop_freq_seg2)) {
+		dfs_info(dfs, WLAN_DEBUG_DFS_ALWAYS,
+			 "dfs_curchan already updated");
+		return;
+	}
+
+	/* Update dfs previous channel with the old dfs_curchan, if it exists */
+	if (dfs->dfs_curchan->dfs_ch_freq)
+		qdf_mem_copy(dfs->dfs_prevchan,
+			     dfs->dfs_curchan,
+			     sizeof(struct dfs_channel));
+
+	dfs->dfs_curchan->dfs_ch_freq = dfs_chan_freq;
+	dfs->dfs_curchan->dfs_ch_flags = dfs_chan_flags;
+	dfs->dfs_curchan->dfs_ch_flagext = dfs_chan_flagext;
+	dfs->dfs_curchan->dfs_ch_ieee = dfs_chan_ieee;
+	dfs->dfs_curchan->dfs_ch_vhtop_ch_freq_seg1 = dfs_chan_vhtop_freq_seg1;
+	dfs->dfs_curchan->dfs_ch_vhtop_ch_freq_seg2 = dfs_chan_vhtop_freq_seg2;
+	dfs->dfs_curchan->dfs_ch_mhz_freq_seg1 = dfs_chan_mhz_freq_seg1;
+	dfs->dfs_curchan->dfs_ch_mhz_freq_seg2 = dfs_chan_mhz_freq_seg2;
+}
+#endif
 
 void dfs_update_cur_chan_flags(struct wlan_dfs *dfs,
 		uint64_t flags,
@@ -763,4 +911,9 @@ int dfs_reinit_timers(struct wlan_dfs *dfs)
 	dfs_nol_timer_init(dfs);
 	dfs_main_task_testtimer_init(dfs);
 	return 0;
+}
+
+void dfs_reset_dfs_prevchan(struct wlan_dfs *dfs)
+{
+	qdf_mem_zero(dfs->dfs_prevchan, sizeof(struct dfs_channel));
 }

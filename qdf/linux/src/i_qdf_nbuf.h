@@ -110,7 +110,7 @@ typedef union {
  * @rx.dev.priv_cb_m.dp.wifi3.msdu_len: length of RX packet
  * @rx.dev.priv_cb_m.dp.wifi3.peer_id:  peer_id for RX packet
  * @rx.dev.priv_cb_m.dp.wifi2.map_index:
- * @rx.dev.priv_cb_m.peer_local_id: peer_local_id for RX pkt
+ * @rx.dev.priv_cb_m.vdev_id: vdev_id for RX pkt
  * @rx.dev.priv_cb_m.ipa_owned: packet owned by IPA
  *
  * @rx.lro_eligible: flag to indicate whether the MSDU is LRO eligible
@@ -220,7 +220,8 @@ struct qdf_nbuf_cb {
 					 */
 					uint32_t ipa_owned:1,
 						 reserved:15,
-						 peer_local_id:16;
+						 vdev_id:8,
+						 reserved1:8;
 					uint32_t tcp_seq_num;
 					uint32_t tcp_ack_num;
 					union {
@@ -1452,9 +1453,23 @@ void __qdf_nbuf_unmap_tso_segment(qdf_device_t osdev,
 			  bool is_last_seg);
 
 #ifdef FEATURE_TSO
+/**
+ * __qdf_nbuf_get_tcp_payload_len() - function to return the tcp
+ *                                    payload len
+ * @skb: buffer
+ *
+ * Return: size
+ */
+size_t __qdf_nbuf_get_tcp_payload_len(struct sk_buff *skb);
 uint32_t __qdf_nbuf_get_tso_num_seg(struct sk_buff *skb);
 
 #else
+static inline
+size_t __qdf_nbuf_get_tcp_payload_len(struct sk_buff *skb)
+{
+	return 0;
+}
+
 static inline uint32_t __qdf_nbuf_get_tso_num_seg(struct sk_buff *skb)
 {
 	return 0;

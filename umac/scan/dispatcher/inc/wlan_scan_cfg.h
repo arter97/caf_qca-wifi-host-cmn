@@ -24,6 +24,19 @@
 
 #include "cfg_define.h"
 
+/**
+ * enum scan_mode_6ghz - scan mode for 6GHz
+ * @SCAN_MODE_6G_NO_CHANNEL: Remove 6GHz channels in the scan request
+ * @SCAN_MODE_6G_PSC_CHANNEL: Allow/Add 6Ghz PSC channels to scan request
+ * @SCAN_MODE_6G_ALL_CHANNEL: Allow all the 6Ghz channels
+ */
+enum scan_mode_6ghz {
+	SCAN_MODE_6G_NO_CHANNEL,
+	SCAN_MODE_6G_PSC_CHANNEL,
+	SCAN_MODE_6G_ALL_CHANNEL,
+	SCAN_MODE_6G_MAX = SCAN_MODE_6G_ALL_CHANNEL,
+};
+
 /*
  * <ini>
  * drop_bcn_on_chan_mismatch - drop the beacon for chan mismatch
@@ -127,6 +140,48 @@
 		"active_max_channel_time_2g",\
 		0, 10000, PLATFORM_VALUE(80, 0),\
 		CFG_VALUE_OR_DEFAULT, "active dwell time for 2G channels")
+
+/*
+ * <ini>
+ * active_max_channel_time_6g - Set max time for active 6G channel scan
+ * @Min: 0
+ * @Max: 10000
+ * @Default: 40
+ *
+ * This ini is used to set maximum time in msecs spent in active 6G channel scan
+ *
+ *
+ * Related: None
+ *
+ * Usage: External
+ *
+ * </ini>
+ */
+#define CFG_ACTIVE_MAX_6G_CHANNEL_TIME CFG_INI_UINT(\
+		"active_max_channel_time_6g",\
+		0, 10000, 40,\
+		CFG_VALUE_OR_DEFAULT, "active dwell time for 6G channels")
+
+/*
+ * <ini>
+ * passive_max_channel_time_6g - Set max time for passive 6G channel scan
+ * @Min: 0
+ * @Max: 10000
+ * @Default: 30
+ *
+ * This ini is used to set maximum time in msecs spent in passive 6G chan scan
+ *
+ *
+ * Related: None
+ *
+ * Usage: External
+ *
+ * </ini>
+ */
+#define CFG_PASSIVE_MAX_6G_CHANNEL_TIME CFG_INI_UINT(\
+		"passive_max_channel_time_6g",\
+		0, 10000, 30,\
+		CFG_VALUE_OR_DEFAULT, "passive dwell time for 6G channels")
 
 /*
  * <ini>
@@ -841,12 +896,19 @@
 
 /*
  * <ini>
- * wake_lock_in_user_scan - use wake lock during user scan
+ * wake_lock_in_user_scan - use to acquire wake lock during user scan
  * @Min: 0
  * @Max: 1
  * @Default: 0
  *
- * This ini is used to define if wake lock is held used during user scan req
+ * This INI is added for a specific OEM on their request, who don’t want to
+ * use PNO offload scan (sched scans). This is useful only if PNO scan offload
+ * is disabled. If PNO scan is enabled this INI should be disabled and its
+ * by default disabled intentionally.
+ * This is used to acquire wake lock to handle the case where PNO scan offload
+ * is disabled so that wlan is not suspended during scan before connect and
+ * thus scan is not aborted in between. In case PNO scan is offloaded, the FW
+ * will take care of connect scans and will wake up host when candidate is found
  *
  * Related: Scan
  *
@@ -1140,6 +1202,32 @@
 			false,\
 			"Enable/Disable SNR Monitoring")
 
+/*
+ * <ini>
+ * scan_mode_6ghz - 6ghz Scan mode
+ * @Min: 0
+ * @Max: 2
+ * @Default: 2
+ *
+ * Configure the 6Ghz scan mode
+ * 0 - Remove 6GHz channels in the scan request
+ * 1 - Allow/Add 6Ghz PSC channels to scan request
+ * 2 - Allow all the 6Ghz channels
+ *
+ * Related: SCAN
+ *
+ * Usage: Internal/External
+ *
+ * </ini>
+ */
+#define CFG_6GHZ_SCAN_MODE CFG_INI_UINT( \
+				"scan_mode_6ghz", \
+				SCAN_MODE_6G_NO_CHANNEL, \
+				SCAN_MODE_6G_MAX, \
+				SCAN_MODE_6G_PSC_CHANNEL, \
+				CFG_VALUE_OR_DEFAULT, \
+				"6ghz scan mode")
+
 #define CFG_SCAN_ALL \
 	CFG(CFG_DROP_BCN_ON_CHANNEL_MISMATCH) \
 	CFG(CFG_ENABLE_WAKE_LOCK_IN_SCAN) \
@@ -1149,6 +1237,8 @@
 	CFG(CFG_INITIAL_NO_DFS_SCAN) \
 	CFG(CFG_ACTIVE_MAX_2G_CHANNEL_TIME) \
 	CFG(CFG_PASSIVE_MAX_CHANNEL_TIME) \
+	CFG(CFG_ACTIVE_MAX_6G_CHANNEL_TIME) \
+	CFG(CFG_PASSIVE_MAX_6G_CHANNEL_TIME) \
 	CFG(CFG_SCAN_NUM_PROBES) \
 	CFG(CFG_SCAN_PROBE_REPEAT_TIME) \
 	CFG(CFG_ADAPTIVE_SCAN_DWELL_MODE) \
@@ -1169,6 +1259,7 @@
 	CFG(CFG_ENABLE_SNR_MONITORING) \
 	CFG(CFG_AP_SCAN_BURST_DURATION) \
 	CFG(CFG_ENABLE_SKIP_DFS_IN_P2P_SEARCH) \
+	CFG(CFG_6GHZ_SCAN_MODE) \
 	CFG_SCAN_PNO
 
 #endif /* __CONFIG_SCAN_H */

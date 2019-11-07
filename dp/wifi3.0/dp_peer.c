@@ -34,7 +34,6 @@
 #include "dp_tx_capture.h"
 #endif
 
-#ifdef DP_LFR
 static inline void
 dp_set_ssn_valid_flag(struct hal_reo_cmd_params *params,
 					uint8_t valid)
@@ -45,11 +44,6 @@ dp_set_ssn_valid_flag(struct hal_reo_cmd_params *params,
 		  "%s: Setting SSN valid bit to %d",
 		  __func__, valid);
 }
-#else
-static inline void
-dp_set_ssn_valid_flag(struct hal_reo_cmd_params *params,
-					uint8_t valid) {};
-#endif
 
 static inline int dp_peer_find_mac_addr_cmp(
 	union dp_align_mac_addr *mac_addr1,
@@ -573,29 +567,47 @@ int dp_peer_add_ast(struct dp_soc *soc,
 			uint32_t flags)
 {
 	struct dp_ast_entry *ast_entry = NULL;
-	struct dp_vdev *vdev = NULL;
+	struct dp_vdev *vdev = NULL, *tmp_vdev = NULL;
 	struct dp_pdev *pdev = NULL;
 	uint8_t next_node_mac[6];
 	int  ret = -1;
 	txrx_ast_free_cb cb = NULL;
 	void *cookie = NULL;
-
-	qdf_spin_lock_bh(&soc->ast_lock);
-	if (peer->delete_in_progress) {
-		qdf_spin_unlock_bh(&soc->ast_lock);
-		return ret;
-	}
+	struct dp_peer *tmp_peer = NULL;
+	bool is_peer_found = false;
 
 	vdev = peer->vdev;
 	if (!vdev) {
 		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_ERROR,
 			  FL("Peers vdev is NULL"));
 		QDF_ASSERT(0);
-		qdf_spin_unlock_bh(&soc->ast_lock);
 		return ret;
 	}
 
 	pdev = vdev->pdev;
+
+	tmp_peer = dp_peer_find_hash_find(soc, mac_addr, 0,
+					  DP_VDEV_ALL);
+	if (tmp_peer) {
+		tmp_vdev = tmp_peer->vdev;
+		if (!tmp_vdev) {
+			QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_ERROR,
+				  FL("Peers vdev is NULL"));
+			QDF_ASSERT(0);
+			dp_peer_unref_delete(tmp_peer);
+			return ret;
+		}
+		if (tmp_vdev->pdev->pdev_id == pdev->pdev_id)
+			is_peer_found = true;
+
+		dp_peer_unref_delete(tmp_peer);
+	}
+
+	qdf_spin_lock_bh(&soc->ast_lock);
+	if (peer->delete_in_progress) {
+		qdf_spin_unlock_bh(&soc->ast_lock);
+		return ret;
+	}
 
 	QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_DEBUG,
 		  "%s: pdevid: %u vdev: %u  ast_entry->type: %d flags: 0x%x peer_mac: %pM peer: %pK mac %pM",
@@ -627,6 +639,17 @@ int dp_peer_add_ast(struct dp_soc *soc,
 
 			qdf_spin_unlock_bh(&soc->ast_lock);
 			return 0;
+		}
+		if (is_peer_found) {
+			/* During WDS to static roaming, peer is added
+			 * to the list before static AST entry create.
+			 * So, allow AST entry for STATIC type
+			 * even if peer is present
+			 */
+			if (type != CDP_TXRX_AST_TYPE_STATIC) {
+				qdf_spin_unlock_bh(&soc->ast_lock);
+				return 0;
+			}
 		}
 	} else {
 		/* For HWMWDS_SEC entries can be added for same mac address
@@ -1310,6 +1333,9 @@ void dp_rx_tid_stats_cb(struct dp_soc *soc, void *cb_ctxt,
 	struct dp_rx_tid *rx_tid = (struct dp_rx_tid *)cb_ctxt;
 	struct hal_reo_queue_status *queue_status = &(reo_status->queue_status);
 
+	if (queue_status->header.status == HAL_REO_CMD_DRAIN)
+		return;
+
 	if (queue_status->header.status != HAL_REO_CMD_SUCCESS) {
 		DP_PRINT_STATS("REO stats failure %d for TID %d\n",
 			       queue_status->header.status, rx_tid->tid);
@@ -1527,8 +1553,10 @@ dp_rx_peer_map_handler(struct dp_soc *soc, uint16_t peer_id,
 				peer->vdev->vap_bss_peer = peer;
 			}
 
-			if (peer->vdev->opmode == wlan_op_mode_sta)
+			if (peer->vdev->opmode == wlan_op_mode_sta) {
 				peer->vdev->bss_ast_hash = ast_hash;
+				peer->vdev->bss_ast_idx = hw_peer_id;
+			}
 
 			/* Add ast entry incase self ast entry is
 			 * deleted due to DP CP sync issue
@@ -1727,9 +1755,9 @@ static QDF_STATUS dp_rx_tid_update_wifi3(struct dp_peer *peer, int tid, uint32_t
 	if (start_seq < IEEE80211_SEQ_MAX) {
 		params.u.upd_queue_params.update_ssn = 1;
 		params.u.upd_queue_params.ssn = start_seq;
+	} else {
+	    dp_set_ssn_valid_flag(&params, 0);
 	}
-
-	dp_set_ssn_valid_flag(&params, 0);
 	dp_reo_send_cmd(soc, CMD_UPDATE_RX_REO_QUEUE, &params,
 			dp_rx_tid_update_cb, rx_tid);
 
@@ -2271,12 +2299,12 @@ void dp_peer_rx_cleanup(struct dp_vdev *vdev, struct dp_peer *peer, bool reuse)
 	int tid;
 	uint32_t tid_delete_mask = 0;
 
-	DP_TRACE(INFO_HIGH, FL("Remove tids for peer: %pK"), peer);
+	dp_info("Remove tids for peer: %pK", peer);
 	for (tid = 0; tid < DP_MAX_TIDS; tid++) {
 		struct dp_rx_tid *rx_tid = &peer->rx_tid[tid];
 
 		qdf_spin_lock_bh(&rx_tid->tid_lock);
-		if (!peer->bss_peer && peer->vdev->opmode != wlan_op_mode_sta) {
+		if (!peer->bss_peer || peer->vdev->opmode == wlan_op_mode_sta) {
 			/* Cleanup defrag related resource */
 			dp_rx_defrag_waitlist_remove(peer, tid);
 			dp_rx_reorder_flush_frag(peer, tid);
@@ -2724,24 +2752,6 @@ int dp_delba_tx_completion_wifi3(void *peer_handle,
 	return QDF_STATUS_SUCCESS;
 }
 
-void dp_rx_discard(struct dp_vdev *vdev, struct dp_peer *peer, unsigned tid,
-	qdf_nbuf_t msdu_list)
-{
-	while (msdu_list) {
-		qdf_nbuf_t msdu = msdu_list;
-
-		msdu_list = qdf_nbuf_next(msdu_list);
-		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_INFO_HIGH,
-			  "discard rx %pK from partly-deleted peer %pK (%02x:%02x:%02x:%02x:%02x:%02x)",
-			  msdu, peer,
-			  peer->mac_addr.raw[0], peer->mac_addr.raw[1],
-			  peer->mac_addr.raw[2], peer->mac_addr.raw[3],
-			  peer->mac_addr.raw[4], peer->mac_addr.raw[5]);
-		qdf_nbuf_free(msdu);
-	}
-}
-
-
 /**
  * dp_set_pn_check_wifi3() - enable PN check in REO for security
  * @peer: Datapath peer handle
@@ -3104,8 +3114,8 @@ QDF_STATUS dp_get_vdevid(void *peer_handle, uint8_t *vdev_id)
 {
 	struct dp_peer *peer = peer_handle;
 
-	DP_TRACE(INFO, "peer %pK vdev %pK vdev id %d",
-			peer, peer->vdev, peer->vdev->vdev_id);
+	dp_info("peer %pK vdev %pK vdev id %d",
+		peer, peer->vdev, peer->vdev->vdev_id);
 	*vdev_id = peer->vdev->vdev_id;
 	return QDF_STATUS_SUCCESS;
 }

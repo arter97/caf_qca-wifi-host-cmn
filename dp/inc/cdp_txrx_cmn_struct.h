@@ -56,6 +56,7 @@
 #define CDP_BA_64_BIT_MAP_SIZE_DWORDS 2
 #define CDP_RSSI_CHAIN_LEN 8
 
+#define OL_TXRX_INVALID_PDEV_ID 0xff
 #define OL_TXRX_INVALID_LOCAL_PEER_ID 0xffff
 #define CDP_INVALID_VDEV_ID 0xff
 /* Options for Dump Statistics */
@@ -562,6 +563,23 @@ enum wlan_op_mode {
 };
 
 /**
+ * enum wlan_op_subtype - Virtual device subtype
+ * @wlan_op_subtype_none: Subtype not applicable
+ * @wlan_op_subtype_p2p_device: P2P device
+ * @wlan_op_subtye_p2p_cli: P2P Client
+ * @wlan_op_subtype_p2p_go: P2P GO
+ *
+ * This enum lists the subtypes of a particular virtual
+ * device.
+ */
+enum wlan_op_subtype {
+	wlan_op_subtype_none,
+	wlan_op_subtype_p2p_device,
+	wlan_op_subtype_p2p_cli,
+	wlan_op_subtype_p2p_go,
+};
+
+/**
  * connectivity_stats_pkt_status - data pkt type
  * @PKT_TYPE_REQ: Request packet
  * @PKT_TYPE_RSP: Response packet
@@ -912,6 +930,16 @@ enum cdp_rx_enh_capture_mode {
 	CDP_RX_ENH_CAPTURE_DISABLED = 0,
 	CDP_RX_ENH_CAPTURE_MPDU,
 	CDP_RX_ENH_CAPTURE_MPDU_MSDU,
+};
+
+/**
+ * cdp_rx_enh_capture_peer - Rx enhanced capture peer filtering
+ * @CDP_RX_ENH_CAPTURE_PEER_DISABLED: Disable Rx ENH capture peer filtering
+ * @CDP_RX_ENH_CAPTURE_PEER_ENABLED: Enable Rx ENH capture peer filtering
+ */
+enum cdp_rx_enh_capture_peer {
+	CDP_RX_ENH_CAPTURE_PEER_DISABLED = 0,
+	CDP_RX_ENH_CAPTURE_PEER_ENABLED,
 };
 
 /**
@@ -1437,12 +1465,10 @@ struct cdp_tx_indication_mpdu_info {
 
 /**
  * struct cdp_tx_indication_info - Tx capture information
- * @frame_payload: 802.11 payload is present already
  * @mpdu_info: Tx MPDU completion information
  * @mpdu_nbuf: reconstructed mpdu packet
  */
 struct cdp_tx_indication_info {
-	uint8_t frame_payload;
 	struct cdp_tx_indication_mpdu_info mpdu_info;
 	qdf_nbuf_t mpdu_nbuf;
 };

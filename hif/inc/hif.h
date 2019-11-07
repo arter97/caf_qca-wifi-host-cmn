@@ -63,6 +63,7 @@ typedef void *hif_handle_t;
 #define HIF_TYPE_QCA8074V2 19
 #define HIF_TYPE_QCA6018  20
 #define HIF_TYPE_QCN9000 21
+#define HIF_TYPE_QCA6490 22
 
 #ifdef IPA_OFFLOAD
 #define DMA_COHERENT_MASK_IPA_VER_3_AND_ABOVE   37
@@ -865,6 +866,9 @@ bool hif_pm_runtime_is_suspended(struct hif_opaque_softc *hif_ctx);
 int hif_pm_runtime_get_monitor_wake_intr(struct hif_opaque_softc *hif_ctx);
 void hif_pm_runtime_set_monitor_wake_intr(struct hif_opaque_softc *hif_ctx,
 					  int val);
+void hif_pm_runtime_mark_dp_rx_busy(struct hif_opaque_softc *hif_ctx);
+int hif_pm_runtime_is_dp_rx_busy(struct hif_opaque_softc *hif_ctx);
+qdf_time_t hif_pm_runtime_get_dp_rx_busy_mark(struct hif_opaque_softc *hif_ctx);
 #else
 struct hif_pm_runtime_lock {
 	const char *name;
@@ -912,6 +916,14 @@ hif_pm_runtime_get_monitor_wake_intr(struct hif_opaque_softc *hif_ctx)
 static inline void
 hif_pm_runtime_set_monitor_wake_intr(struct hif_opaque_softc *hif_ctx, int val)
 { return; }
+static inline void
+hif_pm_runtime_mark_dp_rx_busy(struct hif_opaque_softc *hif_ctx) {};
+static inline int
+hif_pm_runtime_is_dp_rx_busy(struct hif_opaque_softc *hif_ctx)
+{ return 0; }
+static inline qdf_time_t
+hif_pm_runtime_get_dp_rx_busy_mark(struct hif_opaque_softc *hif_ctx)
+{ return 0; }
 #endif
 
 void hif_enable_power_management(struct hif_opaque_softc *hif_ctx,

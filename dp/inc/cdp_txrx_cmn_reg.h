@@ -30,7 +30,16 @@
 #define LITHIUM_DP		0xfffd/*FIXME Add Litium device ID */
 /* Use these device IDs for attach in future */
 
-ol_txrx_soc_handle ol_txrx_soc_attach(void *scn_handle, struct ol_if_ops *dp_ol_if_ops);
+#if defined(DP_TXRX_SOC_ATTACH)
+static inline ol_txrx_soc_handle
+ol_txrx_soc_attach(void *scn_handle, struct ol_if_ops *dp_ol_if_ops)
+{
+	return NULL;
+}
+#else
+ol_txrx_soc_handle
+ol_txrx_soc_attach(void *scn_handle, struct ol_if_ops *dp_ol_if_ops);
+#endif
 
 /**
  * dp_soc_attach_wifi3() - Attach txrx SOC
@@ -100,6 +109,7 @@ static inline ol_txrx_soc_handle cdp_soc_attach(
 	case QCA6290_DEVICE_ID:
 	case QCN9000_DEVICE_ID:
 	case QCA6390_DEVICE_ID:
+	case QCA6490_DEVICE_ID:
 	case QCA6390_EMULATION_DEVICE_ID:
 	case RUMIM2M_DEVICE_ID_NODE0: /*lithium emulation */
 	case RUMIM2M_DEVICE_ID_NODE1: /*lithium emulation */

@@ -34,6 +34,15 @@
 /* Hard coded config parameters until dp_ops_cfg.cfg_attach implemented */
 #define CFG_IPA_UC_TX_BUF_SIZE_DEFAULT            (2048)
 
+/* WAR for IPA_OFFLOAD case. In some cases, its observed that WBM tries to
+ * release a buffer into WBM2SW RELEASE ring for IPA, and the ring is full.
+ * This causes back pressure, resulting in a FW crash.
+ * By leaving some entries with no buffer attached, WBM will be able to write
+ * to the ring, and from dumps we can figure out the buffer which is causing
+ * this issue.
+ */
+#define DP_IPA_WAR_WBM2SW_REL_RING_NO_BUF_ENTRIES 16
+
 static QDF_STATUS __dp_ipa_handle_buf_smmu_mapping(struct dp_soc *soc,
 						   qdf_nbuf_t nbuf,
 						   bool create)
@@ -56,7 +65,6 @@ QDF_STATUS dp_ipa_handle_rx_buf_smmu_mapping(struct dp_soc *soc,
 					     qdf_nbuf_t nbuf,
 					     bool create)
 {
-	bool reo_remapped = false;
 	struct dp_pdev *pdev;
 	int i;
 
@@ -70,11 +78,7 @@ QDF_STATUS dp_ipa_handle_rx_buf_smmu_mapping(struct dp_soc *soc,
 	    !qdf_mem_smmu_s1_enabled(soc->osdev))
 		return QDF_STATUS_SUCCESS;
 
-	qdf_spin_lock_bh(&soc->remap_lock);
-	reo_remapped = soc->reo_remapped;
-	qdf_spin_unlock_bh(&soc->remap_lock);
-
-	if (!reo_remapped)
+	if (!qdf_atomic_read(&soc->ipa_pipes_enabled))
 		return QDF_STATUS_SUCCESS;
 
 	return __dp_ipa_handle_buf_smmu_mapping(soc, nbuf, create);
@@ -220,8 +224,6 @@ int dp_ipa_uc_detach(struct dp_soc *soc, struct dp_pdev *pdev)
 	/* RX resource detach */
 	dp_rx_ipa_uc_detach(soc, pdev);
 
-	qdf_spinlock_destroy(&soc->remap_lock);
-
 	return QDF_STATUS_SUCCESS;	/* success */
 }
 
@@ -249,6 +251,7 @@ static int dp_tx_ipa_uc_attach(struct dp_soc *soc, struct dp_pdev *pdev)
 	int num_entries;
 	qdf_nbuf_t nbuf;
 	int retval = QDF_STATUS_SUCCESS;
+	int max_alloc_count = 0;
 
 	/*
 	 * Uncomment when dp_ops_cfg.cfg_attach is implemented
@@ -262,17 +265,21 @@ static int dp_tx_ipa_uc_attach(struct dp_soc *soc, struct dp_pdev *pdev)
 			    &srng_params);
 	num_entries = srng_params.num_entries;
 
-	QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_INFO,
-		  "%s: requested %d buffers to be posted to wbm ring",
-		   __func__, num_entries);
+	max_alloc_count =
+		num_entries - DP_IPA_WAR_WBM2SW_REL_RING_NO_BUF_ENTRIES;
+	if (max_alloc_count <= 0) {
+		dp_err("incorrect value for buffer count %u", max_alloc_count);
+		return -EINVAL;
+	}
+
+	dp_info("requested %d buffers to be posted to wbm ring",
+		max_alloc_count);
 
 	soc->ipa_uc_tx_rsc.tx_buf_pool_vaddr_unaligned =
 		qdf_mem_malloc(num_entries *
 		sizeof(*soc->ipa_uc_tx_rsc.tx_buf_pool_vaddr_unaligned));
 	if (!soc->ipa_uc_tx_rsc.tx_buf_pool_vaddr_unaligned) {
-		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_ERROR,
-			  "%s: IPA WBM Ring Tx buf pool vaddr alloc fail",
-			  __func__);
+		dp_err("IPA WBM Ring Tx buf pool vaddr alloc fail");
 		return -ENOMEM;
 	}
 
@@ -280,13 +287,14 @@ static int dp_tx_ipa_uc_attach(struct dp_soc *soc, struct dp_pdev *pdev)
 				       hal_srng_to_hal_ring_handle(wbm_srng));
 
 	/*
-	 * Allocate Tx buffers as many as possible
+	 * Allocate Tx buffers as many as possible.
+	 * Leave DP_IPA_WAR_WBM2SW_REL_RING_NO_BUF_ENTRIES empty
 	 * Populate Tx buffers into WBM2IPA ring
 	 * This initial buffer population will simulate H/W as source ring,
 	 * and update HP
 	 */
 	for (tx_buffer_count = 0;
-		tx_buffer_count < num_entries - 1; tx_buffer_count++) {
+		tx_buffer_count < max_alloc_count - 1; tx_buffer_count++) {
 		nbuf = qdf_nbuf_alloc(soc->osdev, alloc_size, 0, 256, FALSE);
 		if (!nbuf)
 			break;
@@ -325,13 +333,9 @@ static int dp_tx_ipa_uc_attach(struct dp_soc *soc, struct dp_pdev *pdev)
 	soc->ipa_uc_tx_rsc.alloc_tx_buf_cnt = tx_buffer_count;
 
 	if (tx_buffer_count) {
-		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_INFO,
-			  "%s: IPA WDI TX buffer: %d allocated",
-			  __func__, tx_buffer_count);
+		dp_info("IPA WDI TX buffer: %d allocated", tx_buffer_count);
 	} else {
-		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_ERROR,
-			  "%s: No IPA WDI TX buffer allocated",
-			  __func__);
+		dp_err("No IPA WDI TX buffer allocated!");
 		qdf_mem_free(soc->ipa_uc_tx_rsc.tx_buf_pool_vaddr_unaligned);
 		soc->ipa_uc_tx_rsc.tx_buf_pool_vaddr_unaligned = NULL;
 		retval = -ENOMEM;
@@ -362,8 +366,6 @@ int dp_ipa_uc_attach(struct dp_soc *soc, struct dp_pdev *pdev)
 
 	if (!wlan_cfg_is_ipa_enabled(soc->wlan_cfg_ctx))
 		return QDF_STATUS_SUCCESS;
-
-	qdf_spinlock_create(&soc->remap_lock);
 
 	/* TX resource attach */
 	error = dp_tx_ipa_uc_attach(soc, pdev);
@@ -755,29 +757,29 @@ QDF_STATUS dp_ipa_enable_autonomy(struct cdp_pdev *ppdev)
 	if (!wlan_cfg_is_ipa_enabled(soc->wlan_cfg_ctx))
 		return QDF_STATUS_SUCCESS;
 
-	qdf_spin_lock_bh(&soc->remap_lock);
-	soc->reo_remapped = true;
-	qdf_spin_unlock_bh(&soc->remap_lock);
-
 	/* Call HAL API to remap REO rings to REO2IPA ring */
-	ix0 = HAL_REO_REMAP_VAL(REO_REMAP_TCL, REO_REMAP_TCL) |
-	      HAL_REO_REMAP_VAL(REO_REMAP_SW1, REO_REMAP_SW4) |
-	      HAL_REO_REMAP_VAL(REO_REMAP_SW2, REO_REMAP_SW4) |
-	      HAL_REO_REMAP_VAL(REO_REMAP_SW3, REO_REMAP_SW4) |
-	      HAL_REO_REMAP_VAL(REO_REMAP_SW4, REO_REMAP_SW4) |
-	      HAL_REO_REMAP_VAL(REO_REMAP_RELEASE, REO_REMAP_RELEASE) |
-	      HAL_REO_REMAP_VAL(REO_REMAP_FW, REO_REMAP_FW) |
-	      HAL_REO_REMAP_VAL(REO_REMAP_UNUSED, REO_REMAP_FW);
+	ix0 = HAL_REO_REMAP_IX0(REO_REMAP_TCL, 0) |
+	      HAL_REO_REMAP_IX0(REO_REMAP_SW4, 1) |
+	      HAL_REO_REMAP_IX0(REO_REMAP_SW4, 2) |
+	      HAL_REO_REMAP_IX0(REO_REMAP_SW4, 3) |
+	      HAL_REO_REMAP_IX0(REO_REMAP_SW4, 4) |
+	      HAL_REO_REMAP_IX0(REO_REMAP_RELEASE, 5) |
+	      HAL_REO_REMAP_IX0(REO_REMAP_FW, 6) |
+	      HAL_REO_REMAP_IX0(REO_REMAP_FW, 7);
 
 	if (wlan_cfg_is_rx_hash_enabled(soc->wlan_cfg_ctx)) {
-		ix2 = ((REO_REMAP_SW4 << 0) | (REO_REMAP_SW4 << 3) |
-		       (REO_REMAP_SW4 << 6) | (REO_REMAP_SW4 << 9) |
-		       (REO_REMAP_SW4 << 12) | (REO_REMAP_SW4 << 15) |
-		       (REO_REMAP_SW4 << 18) | (REO_REMAP_SW4 << 21)) << 8;
-
-		hal_reo_read_write_ctrl_ix(soc->hal_soc, false, &ix0, NULL,
-					   &ix2, &ix2);
+		ix2 = HAL_REO_REMAP_IX2(REO_REMAP_SW4, 16) |
+		      HAL_REO_REMAP_IX2(REO_REMAP_SW4, 17) |
+		      HAL_REO_REMAP_IX2(REO_REMAP_SW4, 18) |
+		      HAL_REO_REMAP_IX2(REO_REMAP_SW4, 19) |
+		      HAL_REO_REMAP_IX2(REO_REMAP_SW4, 20) |
+		      HAL_REO_REMAP_IX2(REO_REMAP_SW4, 21) |
+		      HAL_REO_REMAP_IX2(REO_REMAP_SW4, 22) |
+		      HAL_REO_REMAP_IX2(REO_REMAP_SW4, 23);
 	}
+
+	hal_reo_read_write_ctrl_ix(soc->hal_soc, false, &ix0, NULL,
+				   &ix2, &ix2);
 
 	return QDF_STATUS_SUCCESS;
 }
@@ -802,14 +804,14 @@ QDF_STATUS dp_ipa_disable_autonomy(struct cdp_pdev *ppdev)
 		return QDF_STATUS_SUCCESS;
 
 	/* Call HAL API to remap REO rings to REO2IPA ring */
-	ix0 = HAL_REO_REMAP_VAL(REO_REMAP_TCL, REO_REMAP_TCL) |
-	      HAL_REO_REMAP_VAL(REO_REMAP_SW1, REO_REMAP_SW1) |
-	      HAL_REO_REMAP_VAL(REO_REMAP_SW2, REO_REMAP_SW2) |
-	      HAL_REO_REMAP_VAL(REO_REMAP_SW3, REO_REMAP_SW3) |
-	      HAL_REO_REMAP_VAL(REO_REMAP_SW4, REO_REMAP_SW2) |
-	      HAL_REO_REMAP_VAL(REO_REMAP_RELEASE, REO_REMAP_RELEASE) |
-	      HAL_REO_REMAP_VAL(REO_REMAP_FW, REO_REMAP_FW) |
-	      HAL_REO_REMAP_VAL(REO_REMAP_UNUSED, REO_REMAP_FW);
+	ix0 = HAL_REO_REMAP_IX0(REO_REMAP_TCL, 0) |
+	      HAL_REO_REMAP_IX0(REO_REMAP_SW1, 1) |
+	      HAL_REO_REMAP_IX0(REO_REMAP_SW2, 2) |
+	      HAL_REO_REMAP_IX0(REO_REMAP_SW3, 3) |
+	      HAL_REO_REMAP_IX0(REO_REMAP_SW2, 4) |
+	      HAL_REO_REMAP_IX0(REO_REMAP_RELEASE, 5) |
+	      HAL_REO_REMAP_IX0(REO_REMAP_FW, 6) |
+	      HAL_REO_REMAP_IX0(REO_REMAP_FW, 7);
 
 	if (wlan_cfg_is_rx_hash_enabled(soc->wlan_cfg_ctx)) {
 		dp_reo_remap_config(soc, &ix2, &ix3);
@@ -817,10 +819,6 @@ QDF_STATUS dp_ipa_disable_autonomy(struct cdp_pdev *ppdev)
 		hal_reo_read_write_ctrl_ix(soc->hal_soc, false, &ix0, NULL,
 					   &ix2, &ix3);
 	}
-
-	qdf_spin_lock_bh(&soc->remap_lock);
-	soc->reo_remapped = false;
-	qdf_spin_unlock_bh(&soc->remap_lock);
 
 	return QDF_STATUS_SUCCESS;
 }
@@ -1560,6 +1558,7 @@ QDF_STATUS dp_ipa_enable_pipes(struct cdp_pdev *ppdev)
 	struct dp_soc *soc = pdev->soc;
 	QDF_STATUS result;
 
+	qdf_atomic_set(&soc->ipa_pipes_enabled, 1);
 	dp_ipa_handle_rx_buf_pool_smmu_mapping(soc, pdev, true);
 
 	result = qdf_ipa_wdi_enable_pipes();
@@ -1567,6 +1566,7 @@ QDF_STATUS dp_ipa_enable_pipes(struct cdp_pdev *ppdev)
 		QDF_TRACE(QDF_MODULE_ID_TXRX, QDF_TRACE_LEVEL_ERROR,
 			  "%s: Enable WDI PIPE fail, code %d",
 			  __func__, result);
+		qdf_atomic_set(&soc->ipa_pipes_enabled, 0);
 		dp_ipa_handle_rx_buf_pool_smmu_mapping(soc, pdev, false);
 		return QDF_STATUS_E_FAILURE;
 	}
@@ -1592,6 +1592,7 @@ QDF_STATUS dp_ipa_disable_pipes(struct cdp_pdev *ppdev)
 			  "%s: Disable WDI PIPE fail, code %d",
 			  __func__, result);
 
+	qdf_atomic_set(&soc->ipa_pipes_enabled, 0);
 	dp_ipa_handle_rx_buf_pool_smmu_mapping(soc, pdev, false);
 
 	return result ? QDF_STATUS_E_FAILURE : QDF_STATUS_SUCCESS;
@@ -1747,5 +1748,52 @@ bool dp_ipa_is_mdm_platform(void)
 	return false;
 }
 #endif
+
+/**
+ * dp_ipa_handle_rx_reo_reinject - Handle RX REO reinject skb buffer
+ * @soc: soc
+ * @nbuf: skb
+ *
+ * Return: nbuf if success and otherwise NULL
+ */
+qdf_nbuf_t dp_ipa_handle_rx_reo_reinject(struct dp_soc *soc, qdf_nbuf_t nbuf)
+{
+	uint8_t *rx_pkt_tlvs;
+
+	if (!wlan_cfg_is_ipa_enabled(soc->wlan_cfg_ctx))
+		return nbuf;
+
+	/* WLAN IPA is run-time disabled */
+	if (!qdf_atomic_read(&soc->ipa_pipes_enabled))
+		return nbuf;
+
+	/* Linearize the skb since IPA assumes linear buffer */
+	if (qdf_likely(qdf_nbuf_is_frag(nbuf))) {
+		if (qdf_nbuf_linearize(nbuf)) {
+			dp_err_rl("nbuf linearize failed");
+			return NULL;
+		}
+	}
+
+	rx_pkt_tlvs = qdf_mem_malloc(RX_PKT_TLVS_LEN);
+	if (!rx_pkt_tlvs) {
+		dp_err_rl("rx_pkt_tlvs alloc failed");
+		return NULL;
+	}
+
+	qdf_mem_copy(rx_pkt_tlvs, qdf_nbuf_data(nbuf), RX_PKT_TLVS_LEN);
+
+	/* Pad L3_HEADER_PADDING before ethhdr and after rx_pkt_tlvs */
+	qdf_nbuf_push_head(nbuf, L3_HEADER_PADDING);
+
+	qdf_mem_copy(qdf_nbuf_data(nbuf), rx_pkt_tlvs, RX_PKT_TLVS_LEN);
+
+	/* L3_HEADDING_PADDING is not accounted for real skb length */
+	qdf_nbuf_set_len(nbuf, qdf_nbuf_len(nbuf) - L3_HEADER_PADDING);
+
+	qdf_mem_free(rx_pkt_tlvs);
+
+	return nbuf;
+}
 
 #endif

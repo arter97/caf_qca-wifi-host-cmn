@@ -1156,6 +1156,22 @@ static inline struct wlan_objmgr_peer *wlan_vdev_get_bsspeer(
 }
 
 /**
+ * wlan_objmgr_vdev_find_peer_by_mac() - get a peer with given mac from vdev
+ * @vdev: VDEV object
+ * @peer_mac: mac address of the peer to be found
+ * @dbg_id: dbg_id of the module
+ *
+ * API to get and increment ref count of BSS peer of VDEV
+ *
+ * Return:
+ * @peer: peer pointer to the peer of the mac address
+ */
+struct wlan_objmgr_peer *
+wlan_objmgr_vdev_find_peer_by_mac(struct wlan_objmgr_vdev *vdev,
+				  uint8_t *peer_mac,
+				  wlan_objmgr_ref_dbgid dbg_id);
+
+/**
  * wlan_objmgr_vdev_try_get_bsspeer() - get and increment ref count of BSS peer
  * of VDEV
  * @vdev: VDEV object
@@ -1339,5 +1355,17 @@ static inline void *wlan_vdev_get_dp_handle(struct wlan_objmgr_vdev *vdev)
 
 	return vdev->dp_handle;
 }
+
+/**
+ * wlan_print_vdev_info() - print vdev members
+ * @vdev: vdev object pointer
+ *
+ * Return: void
+ */
+#ifdef WLAN_OBJMGR_DEBUG
+void wlan_print_vdev_info(struct wlan_objmgr_vdev *vdev);
+#else
+static inline void wlan_print_vdev_info(struct wlan_objmgr_vdev *vdev) {}
+#endif
 
 #endif /* _WLAN_OBJMGR_VDEV_OBJ_H_*/

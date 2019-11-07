@@ -215,6 +215,7 @@ static void dp_tx_tso_desc_release(struct dp_soc *soc,
 			dp_tso_num_seg_free(soc, tx_desc->pool_id,
 					    tx_desc->tso_num_desc);
 			tx_desc->tso_num_desc = NULL;
+			DP_STATS_INC(tx_desc->pdev, tso_stats.tso_comp, 1);
 		}
 
 		/* Add the tso segment into the free list*/
@@ -497,6 +498,28 @@ static void dp_tx_unmap_tso_seg_list(
 	}
 }
 
+#ifdef FEATURE_TSO_STATS
+/**
+ * dp_tso_get_stats_idx: Retrieve the tso packet id
+ * @pdev - pdev handle
+ *
+ * Return: id
+ */
+static uint32_t dp_tso_get_stats_idx(struct dp_pdev *pdev)
+{
+	uint32_t stats_idx;
+
+	stats_idx = (((uint32_t)qdf_atomic_inc_return(&pdev->tso_idx))
+						% CDP_MAX_TSO_PACKETS);
+	return stats_idx;
+}
+#else
+static int dp_tso_get_stats_idx(struct dp_pdev *pdev)
+{
+	return 0;
+}
+#endif /* FEATURE_TSO_STATS */
+
 /**
  * dp_tx_free_remaining_tso_desc() - do dma unmap for tso segments if any,
  *				     free the tso segments descriptor and
@@ -542,9 +565,9 @@ static QDF_STATUS dp_tx_prepare_tso(struct dp_vdev *vdev,
 	struct qdf_tso_seg_elem_t *tso_seg;
 	int num_seg = qdf_nbuf_get_tso_num_seg(msdu);
 	struct dp_soc *soc = vdev->pdev->soc;
+	struct dp_pdev *pdev = vdev->pdev;
 	struct qdf_tso_info_t *tso_info;
 	struct qdf_tso_num_seg_elem_t *tso_num_seg;
-
 	tso_info = &msdu_info->u.tso_info;
 	tso_info->curr_seg = NULL;
 	tso_info->tso_seg_list = NULL;
@@ -605,6 +628,12 @@ static QDF_STATUS dp_tx_prepare_tso(struct dp_vdev *vdev,
 
 	tso_info->curr_seg = tso_info->tso_seg_list;
 
+	tso_info->msdu_stats_idx = dp_tso_get_stats_idx(pdev);
+	dp_tso_packet_update(pdev, tso_info->msdu_stats_idx,
+			     msdu, msdu_info->num_seg);
+	dp_tso_segment_stats_update(pdev, tso_info->tso_seg_list,
+				    tso_info->msdu_stats_idx);
+	dp_stats_tso_segment_histogram_update(pdev, msdu_info->num_seg);
 	return QDF_STATUS_SUCCESS;
 }
 #else
@@ -1103,11 +1132,13 @@ static QDF_STATUS dp_tx_hw_enqueue(struct dp_soc *soc, struct dp_vdev *vdev,
 	hal_tx_desc_set_search_type(soc->hal_soc, hal_tx_desc_cached,
 				    vdev->search_type);
 	hal_tx_desc_set_search_index(soc->hal_soc, hal_tx_desc_cached,
-				     vdev->bss_ast_hash);
+				     vdev->bss_ast_idx);
 	hal_tx_desc_set_dscp_tid_table_id(soc->hal_soc, hal_tx_desc_cached,
 					  vdev->dscp_tid_map_id);
 	hal_tx_desc_set_encrypt_type(hal_tx_desc_cached,
 			sec_type_map[sec_type]);
+	hal_tx_desc_set_cache_set_num(soc->hal_soc, hal_tx_desc_cached,
+				      (vdev->bss_ast_hash & 0xF));
 
 	dp_verbose_debug("length:%d , type = %d, dma_addr %llx, offset %d desc id %u",
 			 length, type, (uint64_t)dma_addr,
@@ -1131,7 +1162,7 @@ static QDF_STATUS dp_tx_hw_enqueue(struct dp_soc *soc, struct dp_vdev *vdev,
 		hal_tx_desc_set_hlos_tid(hal_tx_desc_cached, tid);
 
 	if (tx_desc->flags & DP_TX_DESC_FLAG_MESH)
-		hal_tx_desc_set_mesh_en(hal_tx_desc_cached, 1);
+		hal_tx_desc_set_mesh_en(soc->hal_soc, hal_tx_desc_cached, 1);
 
 
 	tx_desc->timestamp = qdf_ktime_to_ms(qdf_ktime_get());
@@ -1579,6 +1610,8 @@ fail_return:
 		hif_pm_runtime_put(soc->hif_handle);
 	} else {
 		hal_srng_access_end_reap(soc->hal_soc, hal_ring_hdl);
+		hal_srng_set_event(hal_ring_hdl, HAL_SRNG_FLUSH_EVENT);
+		hal_srng_inc_flush_cnt(hal_ring_hdl);
 	}
 
 	return nbuf;
@@ -1656,6 +1689,8 @@ qdf_nbuf_t dp_tx_send_msdu_multiple(struct dp_vdev *vdev, qdf_nbuf_t nbuf,
 				dp_tx_me_free_buf(pdev,
 					(void *)(msdu_info->u.sg_info
 						.curr_seg->frags[0].vaddr));
+				i++;
+				continue;
 			}
 			goto done;
 		}
@@ -1689,10 +1724,12 @@ qdf_nbuf_t dp_tx_send_msdu_multiple(struct dp_vdev *vdev, qdf_nbuf_t nbuf,
 			tid_stats = &pdev->stats.tid_stats.
 				    tid_tx_stats[tx_q->ring_id][msdu_info->tid];
 			tid_stats->swdrop_cnt[TX_HW_ENQUEUE]++;
-			if (tx_desc->flags & DP_TX_DESC_FLAG_ME)
-				dp_tx_me_free_buf(pdev, tx_desc->me_buffer);
 
 			dp_tx_desc_release(tx_desc, tx_q->desc_pool_id);
+			if (msdu_info->frm_type == dp_tx_frm_me) {
+				i++;
+				continue;
+			}
 			goto done;
 		}
 
@@ -1749,6 +1786,8 @@ done:
 		hif_pm_runtime_put(soc->hif_handle);
 	} else {
 		hal_srng_access_end_reap(soc->hal_soc, hal_ring_hdl);
+		hal_srng_set_event(hal_ring_hdl, HAL_SRNG_FLUSH_EVENT);
+		hal_srng_inc_flush_cnt(hal_ring_hdl);
 	}
 
 	return nbuf;
@@ -2234,11 +2273,11 @@ qdf_nbuf_t dp_tx_send(struct cdp_vdev *vap_dev, qdf_nbuf_t nbuf)
 	 */
 	if (qdf_nbuf_is_tso(nbuf)) {
 		dp_verbose_debug("TSO frame %pK", vdev);
-		DP_STATS_INC_PKT(vdev, tx_i.tso.tso_pkt, 1,
-				qdf_nbuf_len(nbuf));
+		DP_STATS_INC_PKT(vdev->pdev, tso_stats.num_tso_pkts, 1,
+				 qdf_nbuf_len(nbuf));
 
 		if (dp_tx_prepare_tso(vdev, nbuf, &msdu_info)) {
-			DP_STATS_INC_PKT(vdev, tx_i.tso.dropped_host, 1,
+			DP_STATS_INC_PKT(vdev->pdev, tso_stats.dropped_host, 1,
 					 qdf_nbuf_len(nbuf));
 			return nbuf;
 		}
@@ -2852,12 +2891,13 @@ dp_tx_update_peer_stats(struct dp_tx_desc_s *tx_desc,
 				peer->stats.tx.dropped.fw_reason2 +
 				peer->stats.tx.dropped.fw_reason3;
 
-	if (ts->status != HAL_TX_TQM_RR_FRAME_ACKED) {
-		tid_stats->comp_fail_cnt++;
-		return;
+	if (ts->status < CDP_MAX_TX_TQM_STATUS) {
+		tid_stats->tqm_status_cnt[ts->status]++;
 	}
 
-	tid_stats->success_cnt++;
+	if (ts->status != HAL_TX_TQM_RR_FRAME_ACKED) {
+		return;
+	}
 
 	DP_STATS_INCC(peer, tx.ofdma, 1, ts->ofdma);
 
@@ -3327,11 +3367,8 @@ void dp_tx_process_htt_completion(struct dp_tx_desc_s *tx_desc, uint8_t *status,
 
 		if (qdf_unlikely(pdev->delay_stats_flag))
 			dp_tx_compute_delay(vdev, tx_desc, tid, ring_id);
-		if (qdf_unlikely(tx_status != HTT_TX_FW2WBM_TX_STATUS_OK)) {
-			ts.status = HAL_TX_TQM_RR_REM_CMD_REM;
-			tid_stats->comp_fail_cnt++;
-		} else {
-			tid_stats->success_cnt++;
+		if (tx_status < CDP_MAX_TX_HTT_STATUS) {
+			tid_stats->htt_status_cnt[tx_status]++;
 		}
 
 		peer = dp_peer_find_by_id(soc, ts.peer_id);
@@ -3439,6 +3476,7 @@ more_data:
 		 * Tx completion indication, assert */
 		if ((buffer_src != HAL_TX_COMP_RELEASE_SOURCE_TQM) &&
 				(buffer_src != HAL_TX_COMP_RELEASE_SOURCE_FW)) {
+			uint8_t wbm_internal_error;
 
 			QDF_TRACE(QDF_MODULE_ID_DP,
 				  QDF_TRACE_LEVEL_FATAL,
@@ -3446,7 +3484,37 @@ more_data:
 				  buffer_src);
 			hal_dump_comp_desc(tx_comp_hal_desc);
 			DP_STATS_INC(soc, tx.invalid_release_source, 1);
-			qdf_assert_always(0);
+
+			/* When WBM sees NULL buffer_addr_info in any of
+			 * ingress rings it sends an error indication,
+			 * with wbm_internal_error=1, to a specific ring.
+			 * The WBM2SW ring used to indicate these errors is
+			 * fixed in HW, and that ring is being used as Tx
+			 * completion ring. These errors are not related to
+			 * Tx completions, and should just be ignored
+			 */
+
+			wbm_internal_error =
+			hal_get_wbm_internal_error(tx_comp_hal_desc);
+
+			if (wbm_internal_error) {
+				QDF_TRACE(QDF_MODULE_ID_DP,
+					  QDF_TRACE_LEVEL_ERROR,
+					  "Tx comp wbm_internal_error!!!\n");
+				DP_STATS_INC(soc, tx.wbm_internal_error[WBM_INT_ERROR_ALL], 1);
+
+				if (HAL_TX_COMP_RELEASE_SOURCE_REO ==
+								buffer_src)
+					dp_handle_wbm_internal_error(
+						soc,
+						tx_comp_hal_desc,
+						hal_tx_comp_get_buffer_type(
+							tx_comp_hal_desc));
+
+				continue;
+			} else {
+				qdf_assert_always(0);
+			}
 		}
 
 		/* Get descriptor id */

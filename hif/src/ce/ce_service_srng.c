@@ -108,7 +108,7 @@ void hif_record_ce_srng_desc_event(struct hif_softc *scn, int ce_id,
 
 	event = &hist_ev[record_index];
 
-	qdf_mem_zero(event, sizeof(struct hif_ce_desc_event));
+	hif_clear_ce_desc_debug_data(event);
 
 	event->type = type;
 	event->time = qdf_get_log_timestamp();
@@ -124,10 +124,13 @@ void hif_record_ce_srng_desc_event(struct hif_softc *scn, int ce_id,
 	event->memory = memory;
 	event->index = index;
 
+	if (event->type == HIF_CE_SRC_RING_BUFFER_POST)
+		hif_ce_desc_record_rx_paddr(scn, event, memory);
+
 	if (ce_hist->data_enable[ce_id])
 		hif_ce_desc_data_record(event, len);
 }
-#endif
+#endif /* HIF_CONFIG_SLUB_DEBUG_ON || HIF_CE_DEBUG_DATA_BUF */
 
 static int
 ce_send_nolock_srng(struct CE_handle *copyeng,
@@ -305,7 +308,7 @@ ce_recv_buf_enqueue_srng(struct CE_handle *copyeng,
 	unsigned int sw_index;
 	uint64_t dma_addr = buffer;
 	struct hif_softc *scn = CE_state->scn;
-	struct ce_srng_dest_desc *dest_desc;
+	struct ce_srng_dest_desc *dest_desc = NULL;
 
 	qdf_spin_lock_bh(&CE_state->ce_index_lock);
 	write_index = dest_ring->write_index;

@@ -30,6 +30,7 @@
 #include <wlan_scan_public_structs.h>
 #include "wlan_scan_cache_db.h"
 #include "wlan_scan_11d.h"
+#include "wlan_scan_cfg.h"
 
 #define scm_alert(params...) \
 	QDF_TRACE_FATAL(QDF_MODULE_ID_SCAN, params)
@@ -272,6 +273,8 @@ struct extscan_def_config {
  * @skip_dfs_chan_in_p2p_search: Skip DFS channels in p2p search.
  * @use_wake_lock_in_user_scan: if wake lock will be acquired during user scan
  * @active_dwell_2g: default active dwell time for 2G channels, if it's not zero
+ * @active_dwell_6g: default active dwell time for 6G channels
+ * @passive_dwell_6g: default passive dwell time for 6G channels
  * @passive_dwell:default passive dwell time
  * @max_rest_time: default max rest time
  * @sta_miracast_mcc_rest_time: max rest time for miracast and mcc
@@ -297,6 +300,7 @@ struct extscan_def_config {
  * @max_bss_per_pdev: maximum number of bss entries to be maintained per pdev
  * @max_active_scans_allowed: maximum number of active parallel scan allowed
  *                            per psoc
+ * @scan_mode_6g: scan mode in 6Ghz
  * @enable_connected_scan: enable scans after connection
  * @scan_priority: default scan priority
  * @adaptive_dwell_time_mode: adaptive dwell mode with connection
@@ -354,6 +358,8 @@ struct scan_default_params {
 	bool skip_dfs_chan_in_p2p_search;
 	bool use_wake_lock_in_user_scan;
 	uint32_t active_dwell_2g;
+	uint32_t active_dwell_6g;
+	uint32_t passive_dwell_6g;
 	uint32_t passive_dwell;
 	uint32_t max_rest_time;
 	uint32_t sta_miracast_mcc_rest_time;
@@ -382,6 +388,7 @@ struct scan_default_params {
 	uint8_t p2p_scan_burst_duration;
 	uint8_t go_scan_burst_duration;
 	uint8_t ap_scan_burst_duration;
+	enum scan_mode_6ghz scan_mode_6g;
 	bool enable_connected_scan;
 	enum scan_priority scan_priority;
 	enum scan_dwelltime_adaptive_mode adaptive_dwell_time_mode;

@@ -156,8 +156,10 @@ void hal_reo_qdesc_setup(hal_soc_handle_t hal_soc_hdl, int tid,
 		HAL_DESC_SET_FIELD(reo_queue_desc, RX_REO_QUEUE_2,
 			PN_SHALL_BE_UNEVEN, 1);
 
-	HAL_DESC_SET_FIELD(reo_queue_desc, RX_REO_QUEUE_2, PN_HANDLING_ENABLE,
-		pn_enable);
+	/*
+	 *  TODO: Need to check if PN handling in SW needs to be enabled
+	 *  So far this is not a requirement
+	 */
 
 	HAL_DESC_SET_FIELD(reo_queue_desc, RX_REO_QUEUE_2, PN_SIZE,
 		pn_size);
@@ -434,7 +436,14 @@ inline int hal_reo_cmd_queue_stats(hal_ring_handle_t  hal_ring_hdl,
 	HAL_DESC_SET_FIELD(reo_desc, REO_GET_QUEUE_STATS_2, CLEAR_STATS,
 			      cmd->u.stats_params.clear);
 
-	hal_srng_access_end(hal_soc, hal_ring_hdl);
+	if (hif_pm_runtime_get(hal_soc->hif_handle) == 0) {
+		hal_srng_access_end(hal_soc_hdl, hal_ring_hdl);
+		hif_pm_runtime_put(hal_soc->hif_handle);
+	} else {
+		hal_srng_access_end_reap(hal_soc_hdl, hal_ring_hdl);
+		hal_srng_set_event(hal_ring_hdl, HAL_SRNG_FLUSH_EVENT);
+		hal_srng_inc_flush_cnt(hal_ring_hdl);
+	}
 
 	val = reo_desc[CMD_HEADER_DW_OFFSET];
 	return HAL_GET_FIELD(UNIFORM_REO_CMD_HEADER_0, REO_CMD_NUMBER,
@@ -565,7 +574,15 @@ inline int hal_reo_cmd_flush_cache(hal_ring_handle_t hal_ring_hdl,
 	HAL_DESC_SET_FIELD(reo_desc, REO_FLUSH_CACHE_2, FLUSH_ENTIRE_CACHE,
 		cp->flush_all);
 
-	hal_srng_access_end(hal_soc, hal_ring_hdl);
+	if (hif_pm_runtime_get(hal_soc->hif_handle) == 0) {
+		hal_srng_access_end(hal_soc_hdl, hal_ring_hdl);
+		hif_pm_runtime_put(hal_soc->hif_handle);
+	} else {
+		hal_srng_access_end_reap(hal_soc_hdl, hal_ring_hdl);
+		hal_srng_set_event(hal_ring_hdl, HAL_SRNG_FLUSH_EVENT);
+		hal_srng_inc_flush_cnt(hal_ring_hdl);
+	}
+
 	val = reo_desc[CMD_HEADER_DW_OFFSET];
 	return HAL_GET_FIELD(UNIFORM_REO_CMD_HEADER_0, REO_CMD_NUMBER,
 				     val);
@@ -684,7 +701,6 @@ inline int hal_reo_cmd_update_rx_queue(hal_ring_handle_t hal_ring_hdl,
 	struct hal_soc *hal_soc = (struct hal_soc *)hal_soc_hdl;
 	uint32_t *reo_desc, val;
 	struct hal_reo_cmd_update_queue_params *p;
-	struct hal_srng *srng = (struct hal_srng *)hal_ring_hdl;
 
 	p = &cmd->u.upd_queue_params;
 
@@ -886,7 +902,8 @@ inline int hal_reo_cmd_update_rx_queue(hal_ring_handle_t hal_ring_hdl,
 		hif_pm_runtime_put(hal_soc->hif_handle);
 	} else {
 		hal_srng_access_end_reap(hal_soc_hdl, hal_ring_hdl);
-		srng->needs_flush++;
+		hal_srng_set_event(hal_ring_hdl, HAL_SRNG_FLUSH_EVENT);
+		hal_srng_inc_flush_cnt(hal_ring_hdl);
 	}
 
 	val = reo_desc[CMD_HEADER_DW_OFFSET];

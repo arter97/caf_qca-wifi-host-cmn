@@ -141,8 +141,8 @@ bool util_is_scan_entry_match(
 		    util_scan_is_null_ssid(&entry2->ssid))
 			return true;
 	} else if (entry1->cap_info.wlan_caps.ibss &&
-	   (entry1->channel.chan_idx ==
-	   entry2->channel.chan_idx)) {
+	   (entry1->channel.chan_freq ==
+	   entry2->channel.chan_freq)) {
 		/*
 		 * Same channel cannot have same SSID for
 		 * different IBSS, so no need to check BSSID
@@ -205,14 +205,8 @@ util_scan_get_phymode_5g(struct scan_cache_entry *scan_params)
 	if (util_scan_entry_vhtcap(scan_params) && vhtop) {
 		switch (vhtop->vht_op_chwidth) {
 		case WLAN_VHTOP_CHWIDTH_2040:
-			if ((ht_cap & WLAN_HTCAP_C_CHWIDTH40) &&
-			   (htinfo->hi_extchoff ==
-			   WLAN_HTINFO_EXTOFFSET_ABOVE))
-				phymode = WLAN_PHYMODE_11AC_VHT40PLUS;
-			else if ((ht_cap & WLAN_HTCAP_C_CHWIDTH40) &&
-			   (htinfo->hi_extchoff ==
-			   WLAN_HTINFO_EXTOFFSET_BELOW))
-				phymode = WLAN_PHYMODE_11AC_VHT40MINUS;
+			if (ht_cap & WLAN_HTCAP_C_CHWIDTH40)
+				phymode = WLAN_PHYMODE_11AC_VHT40;
 			else
 				phymode = WLAN_PHYMODE_11AC_VHT20;
 			break;
@@ -233,16 +227,14 @@ util_scan_get_phymode_5g(struct scan_cache_entry *scan_params)
 		default:
 			scm_err("bad channel: %d",
 					vhtop->vht_op_chwidth);
+			phymode = WLAN_PHYMODE_11AC_VHT20;
 			break;
 		}
-	} else if ((ht_cap & WLAN_HTCAP_C_CHWIDTH40) &&
-	   (htinfo->hi_extchoff == WLAN_HTINFO_EXTOFFSET_ABOVE))
-		phymode = WLAN_PHYMODE_11NA_HT40PLUS;
-	else if ((ht_cap & WLAN_HTCAP_C_CHWIDTH40) &&
-	   (htinfo->hi_extchoff == WLAN_HTINFO_EXTOFFSET_BELOW))
-		phymode = WLAN_PHYMODE_11NA_HT40MINUS;
-	else
+	} else if (ht_cap & WLAN_HTCAP_C_CHWIDTH40) {
+		phymode = WLAN_PHYMODE_11NA_HT40;
+	} else {
 		phymode = WLAN_PHYMODE_11NA_HT20;
+	}
 
 	return phymode;
 }
@@ -288,6 +280,25 @@ util_scan_get_phymode_2g(struct scan_cache_entry *scan_params)
 				phymode = WLAN_PHYMODE_11B;
 		} else {
 			phymode = WLAN_PHYMODE_11B;
+		}
+	}
+
+	if (util_scan_entry_vhtcap(scan_params) && vhtop) {
+		switch (vhtop->vht_op_chwidth) {
+		case WLAN_VHTOP_CHWIDTH_2040:
+			if (phymode == WLAN_PHYMODE_11NG_HT40PLUS)
+				phymode = WLAN_PHYMODE_11AC_VHT40PLUS_2G;
+			else if (phymode == WLAN_PHYMODE_11NG_HT40MINUS)
+				phymode = WLAN_PHYMODE_11AC_VHT40MINUS_2G;
+			else
+				phymode = WLAN_PHYMODE_11AC_VHT20_2G;
+
+			break;
+		default:
+			scm_info("bad vht_op_chwidth: %d",
+				 vhtop->vht_op_chwidth);
+			phymode = WLAN_PHYMODE_11AC_VHT20_2G;
+			break;
 		}
 	}
 
@@ -378,6 +389,9 @@ util_scan_parse_extn_ie(struct scan_cache_entry *scan_params,
 		break;
 	case WLAN_EXTN_ELEMID_MUEDCA:
 		scan_params->ie_list.muedca = (uint8_t *)ie;
+		break;
+	case WLAN_EXTN_ELEMID_HE_6G_CAP:
+		scan_params->ie_list.hecap_6g = (uint8_t *)ie;
 		break;
 	default:
 		break;
@@ -485,7 +499,8 @@ util_scan_parse_vendor_ie(struct scan_cache_entry *scan_params,
 }
 
 static QDF_STATUS
-util_scan_populate_bcn_ie_list(struct scan_cache_entry *scan_params)
+util_scan_populate_bcn_ie_list(struct scan_cache_entry *scan_params,
+			       uint8_t *chan_idx)
 {
 	struct ie_header *ie, *sub_ie;
 	uint32_t ie_len, sub_ie_len;
@@ -525,7 +540,7 @@ util_scan_populate_bcn_ie_list(struct scan_cache_entry *scan_params)
 			if (ie->ie_len != WLAN_DS_PARAM_IE_MAX_LEN)
 				return QDF_STATUS_E_INVAL;
 			scan_params->ie_list.ds_param = (uint8_t *)ie;
-			scan_params->channel.chan_idx =
+			*chan_idx =
 				((struct ds_ie *)ie)->cur_chan;
 			break;
 		case WLAN_ELEMID_TIM:
@@ -603,8 +618,8 @@ util_scan_populate_bcn_ie_list(struct scan_cache_entry *scan_params)
 				goto err;
 			scan_params->ie_list.htinfo =
 			  (uint8_t *)&(((struct wlan_ie_htinfo *) ie)->hi_ie);
-			scan_params->channel.chan_idx =
-			  ((struct wlan_ie_htinfo_cmn *)
+			*chan_idx =
+				((struct wlan_ie_htinfo_cmn *)
 			  (scan_params->ie_list.htinfo))->hi_ctrlchannel;
 			break;
 		case WLAN_ELEMID_WAPI:
@@ -1031,7 +1046,7 @@ util_scan_gen_scan_entry(struct wlan_objmgr_pdev *pdev,
 	struct scan_cache_entry *scan_entry;
 	struct qbss_load_ie *qbss_load;
 	struct scan_cache_node *scan_node;
-	uint8_t i;
+	uint8_t i, chan_idx = 0;
 
 	scan_entry = qdf_mem_malloc_atomic(sizeof(*scan_entry));
 	if (!scan_entry) {
@@ -1062,9 +1077,12 @@ util_scan_gen_scan_entry(struct wlan_objmgr_pdev *pdev,
 	scan_entry->seq_num =
 		(le16toh(*(uint16_t *)hdr->i_seq) >> WLAN_SEQ_SEQ_SHIFT);
 
+	scan_entry->snr = rx_param->snr;
+	scan_entry->avg_snr = WLAN_SNR_IN(scan_entry->snr);
 	scan_entry->rssi_raw = rx_param->rssi;
 	scan_entry->avg_rssi = WLAN_RSSI_IN(scan_entry->rssi_raw);
 	scan_entry->tsf_delta = rx_param->tsf_delta;
+	scan_entry->pdev_id = wlan_objmgr_pdev_get_pdev_id(pdev);
 
 	/* Copy per chain rssi to scan entry */
 	qdf_mem_copy(scan_entry->per_chain_rssi, rx_param->rssi_ctl,
@@ -1105,7 +1123,7 @@ util_scan_gen_scan_entry(struct wlan_objmgr_pdev *pdev,
 	scan_entry->raw_frame.len = frame_len;
 	qdf_mem_copy(scan_entry->raw_frame.ptr,
 		frame, frame_len);
-	status = util_scan_populate_bcn_ie_list(scan_entry);
+	status = util_scan_populate_bcn_ie_list(scan_entry, &chan_idx);
 	if (QDF_IS_STATUS_ERROR(status)) {
 		scm_debug("failed to parse beacon IE");
 		qdf_mem_free(scan_entry->raw_frame.ptr);
@@ -1125,13 +1143,21 @@ util_scan_gen_scan_entry(struct wlan_objmgr_pdev *pdev,
 	if (scan_entry->ie_list.p2p)
 		scan_entry->is_p2p = true;
 
+	if (chan_idx) {
+		uint8_t band_mask = BIT(wlan_reg_freq_to_band(
+							rx_param->chan_freq));
+
+		scan_entry->channel.chan_freq =
+			wlan_reg_chan_band_to_freq(
+				pdev, chan_idx,
+				band_mask);
+	}
 	/* If no channel info is present in beacon use meta channel */
-	if (!scan_entry->channel.chan_idx) {
-		scan_entry->channel.chan_idx =
-				rx_param->channel;
-	} else if (rx_param->channel !=
-	   scan_entry->channel.chan_idx) {
-		if (!wlan_reg_chan_is_49ghz(pdev, scan_entry->channel.chan_idx))
+	if (!scan_entry->channel.chan_freq) {
+		scan_entry->channel.chan_freq = rx_param->chan_freq;
+	} else if (rx_param->chan_freq !=
+	   scan_entry->channel.chan_freq) {
+		if (!wlan_reg_is_49ghz_freq(scan_entry->channel.chan_freq))
 			scan_entry->channel_mismatch = true;
 	}
 
@@ -1147,7 +1173,7 @@ util_scan_gen_scan_entry(struct wlan_objmgr_pdev *pdev,
 	}
 	qdf_mem_copy(&scan_entry->mbssid_info, mbssid_info,
 		     sizeof(scan_entry->mbssid_info));
-	if (WLAN_CHAN_IS_5GHZ(scan_entry->channel.chan_idx))
+	if (WLAN_REG_IS_5GHZ_CH_FREQ(scan_entry->channel.chan_freq))
 		scan_entry->phy_mode = util_scan_get_phymode_5g(scan_entry);
 	else
 		scan_entry->phy_mode = util_scan_get_phymode_2g(scan_entry);
@@ -1212,7 +1238,7 @@ static void util_gen_new_bssid(uint8_t *bssid, uint8_t max_bssid,
 	lsb_n = bssid_tmp & ((1 << max_bssid) - 1);
 	new_bssid = bssid_tmp;
 	new_bssid &= ~((1 << max_bssid) - 1);
-	new_bssid |= (lsb_n + mbssid_index) % (1 << max_bssid);
+	new_bssid |= qdf_do_div((lsb_n + mbssid_index), (1 << max_bssid));
 
 	for (i = QDF_MAC_ADDR_SIZE - 1; i >= 0; i--) {
 		new_bssid_addr[i] = new_bssid & 0xff;

@@ -28,13 +28,13 @@
 #include <qdf_atomic.h>
 #include <wlan_cmn_ieee80211.h>
 #include <wlan_mgmt_txrx_utils_api.h>
+#include <reg_services_public_struct.h>
 
 typedef uint16_t wlan_scan_requester;
 typedef uint32_t wlan_scan_id;
 
 #define WLAN_SCAN_MAX_NUM_SSID          16
 #define WLAN_SCAN_MAX_NUM_BSSID         4
-#define WLAN_SCAN_MAX_NUM_CHANNELS      68
 
 #define SCM_CANCEL_SCAN_WAIT_TIME 50
 #define SCM_CANCEL_SCAN_WAIT_ITERATION 600
@@ -89,15 +89,15 @@ struct wlan_objmgr_psoc;
 
 /**
  * struct channel_info - BSS channel information
- * @chan_idx: current operating channel index
+ * @chan_freq: channel frequency
  * @cfreq0: channel frequency index0
  * @cfreq1: channel frequency index1
  * @priv: channel private information
  */
 struct channel_info {
-	uint8_t chan_idx;
-	uint8_t cfreq0;
-	uint8_t cfreq1;
+	uint32_t chan_freq;
+	uint32_t cfreq0;
+	uint32_t cfreq1;
 	void *priv;
 };
 
@@ -148,6 +148,8 @@ struct element_info {
  * @cswrp:      pointer to channel switch announcement wrapper ie
  * @widebw:     pointer to wide band channel switch sub ie
  * @txpwrenvlp: pointer to tx power envelop sub ie
+ * @hecap:      pointer to hecap ie
+ * @hecap_6g:   pointer to he 6ghz cap ie
  * @srp: pointer to spatial reuse parameter sub extended ie
  * @fils_indication: pointer to FILS indication ie
  * @esp: pointer to ESP indication ie
@@ -194,6 +196,7 @@ struct ie_list {
 	uint8_t *secchanoff;
 	uint8_t *mdie;
 	uint8_t *hecap;
+	uint8_t *hecap_6g;
 	uint8_t *heop;
 	uint8_t *srp;
 	uint8_t *fils_indication;
@@ -284,8 +287,10 @@ struct scan_mbssid_info {
  * @is_hidden_ssid: is AP having hidden ssid.
  * @seq_num: sequence number
  * @phy_mode: Phy mode of the AP
- * @avg_rssi: Average RSSI fof the AP
+ * @avg_rssi: Average RSSI of the AP
  * @rssi_raw: The rssi of the last beacon/probe received
+ * @snr: The snr of the last beacon/probe received
+ * @avg_snr: Average SNR of the AP
  * @bcn_int: Beacon interval of the AP
  * @cap_info: Capability of the AP
  * @tsf_info: TSF info
@@ -314,6 +319,7 @@ struct scan_mbssid_info {
  * @alt_wcn_ie: alternate WCN IE
  * @ie_list: IE list pointers
  * @raw_frame: contain raw frame and the length of the raw frame
+ * @pdev_id: pdev id
  */
 struct scan_cache_entry {
 	uint8_t frm_subtype;
@@ -325,6 +331,8 @@ struct scan_cache_entry {
 	enum wlan_phymode phy_mode;
 	int32_t avg_rssi;
 	int8_t rssi_raw;
+	uint8_t snr;
+	uint32_t avg_snr;
 	uint16_t bcn_int;
 	union wlan_capability cap_info;
 	union {
@@ -354,6 +362,12 @@ struct scan_cache_entry {
 	struct element_info alt_wcn_ie;
 	struct ie_list ie_list;
 	struct element_info raw_frame;
+	/*
+	 * This is added temporarily for 6GHz channel to freq conversion
+	 * to get pdev wherever it requores to convert frequency to
+	 * channel as regulatory apis requires pdev as argument
+	 */
+	uint8_t pdev_id;
 };
 
 #define MAX_FAVORED_BSSID 16
@@ -761,7 +775,7 @@ struct chan_info {
  */
 struct chan_list {
 	uint32_t num_chan;
-	struct chan_info chan[WLAN_SCAN_MAX_NUM_CHANNELS];
+	struct chan_info chan[NUM_CHANNELS];
 };
 
 /**
@@ -803,6 +817,8 @@ enum scan_request_type {
  * @dwell_time_active: active dwell time
  * @dwell_time_active_2g: active dwell time for 2G channels, if it's not zero
  * @dwell_time_passive: passive dwell time
+ * @dwell_time_active_6g: 6Ghz active dwell time
+ * @dwell_time_passive_6g: 6Ghz passive dwell time
  * @min_rest_time: min rest time
  * @max_rest_time: max rest time
  * @repeat_probe_time: repeat probe time
@@ -882,6 +898,8 @@ struct scan_req_params {
 	uint32_t dwell_time_active;
 	uint32_t dwell_time_active_2g;
 	uint32_t dwell_time_passive;
+	uint32_t dwell_time_active_6g;
+	uint32_t dwell_time_passive_6g;
 	uint32_t min_rest_time;
 	uint32_t max_rest_time;
 	uint32_t repeat_probe_time;

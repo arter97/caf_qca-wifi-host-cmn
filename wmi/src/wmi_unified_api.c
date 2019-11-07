@@ -139,18 +139,6 @@ wmi_unified_vdev_set_nac_rssi_send(wmi_unified_t wmi_handle,
 }
 
 QDF_STATUS
-wmi_unified_hidden_ssid_vdev_restart_send(
-		wmi_unified_t wmi_handle,
-		struct hidden_ssid_vdev_restart_params *restart_params)
-{
-	if (wmi_handle->ops->send_hidden_ssid_vdev_restart_cmd)
-		return wmi_handle->ops->send_hidden_ssid_vdev_restart_cmd(
-			wmi_handle, restart_params);
-
-	return QDF_STATUS_E_FAILURE;
-}
-
-QDF_STATUS
 wmi_unified_peer_flush_tids_send(wmi_unified_t wmi_handle,
 				 uint8_t peer_addr[QDF_MAC_ADDR_SIZE],
 				 struct peer_flush_params *param)
@@ -472,6 +460,17 @@ QDF_STATUS wmi_unified_packet_log_disable_send(wmi_unified_t wmi_handle,
 	if (wmi_handle->ops->send_packet_log_disable_cmd)
 		return wmi_handle->ops->send_packet_log_disable_cmd(wmi_handle,
 			mac_id);
+
+	return QDF_STATUS_E_FAILURE;
+}
+
+QDF_STATUS
+wmi_unified_fd_tmpl_send_cmd(wmi_unified_t wmi_handle,
+			     struct fils_discovery_tmpl_params *param)
+{
+	if (wmi_handle->ops->send_fd_tmpl_cmd)
+		return wmi_handle->ops->send_fd_tmpl_cmd(wmi_handle,
+				  param);
 
 	return QDF_STATUS_E_FAILURE;
 }
@@ -1108,6 +1107,22 @@ wmi_unified_pdev_fips_cmd_send(wmi_unified_t wmi_handle,
 
 	return QDF_STATUS_E_FAILURE;
 }
+
+#ifdef WLAN_FEATURE_DISA
+QDF_STATUS
+wmi_unified_encrypt_decrypt_send_cmd(void *wmi_hdl,
+				     struct disa_encrypt_decrypt_req_params
+				     *params)
+{
+	wmi_unified_t wmi_handle = (wmi_unified_t)wmi_hdl;
+
+	if (wmi_handle->ops->send_encrypt_decrypt_send_cmd)
+		return wmi_handle->ops->send_encrypt_decrypt_send_cmd(wmi_handle
+								      , params);
+
+	return QDF_STATUS_E_FAILURE;
+}
+#endif /* WLAN_FEATURE_DISA */
 
 QDF_STATUS
 wmi_unified_wlan_profile_enable_cmd_send(wmi_unified_t wmi_handle,
@@ -1803,6 +1818,24 @@ wmi_extract_fips_event_data(wmi_unified_t wmi_handle, void *evt_buf,
 	return QDF_STATUS_E_FAILURE;
 }
 
+#ifdef WLAN_FEATURE_DISA
+QDF_STATUS
+wmi_extract_encrypt_decrypt_resp_params(void *wmi_hdl, void *evt_buf,
+					struct disa_encrypt_decrypt_resp_params
+					*param)
+{
+	wmi_unified_t wmi_handle = (wmi_unified_t)wmi_hdl;
+
+	if (wmi_handle->ops->extract_encrypt_decrypt_resp_event)
+		return
+		wmi_handle->ops->extract_encrypt_decrypt_resp_event(wmi_handle,
+								    evt_buf,
+								    param);
+
+	return QDF_STATUS_E_FAILURE;
+}
+#endif /* WLAN_FEATURE_DISA */
+
 QDF_STATUS
 wmi_extract_mgmt_rx_params(wmi_unified_t wmi_handle, void *evt_buf,
 			   struct mgmt_rx_event_params *hdr, uint8_t **bufp)
@@ -1929,12 +1962,12 @@ QDF_STATUS wmi_extract_pdev_generic_buffer_ev_param(
 
 QDF_STATUS wmi_extract_peer_ratecode_list_ev(
 		wmi_unified_t wmi_handle, void *evt_buf,
-		uint8_t *peer_mac, wmi_sa_rate_cap *rate_cap)
+		uint8_t *peer_mac, uint32_t *pdev_id, wmi_sa_rate_cap *rate_cap)
 {
 	if (wmi_handle->ops->extract_peer_ratecode_list_ev)
 		return wmi_handle->ops->extract_peer_ratecode_list_ev(
 						wmi_handle, evt_buf,
-						peer_mac, rate_cap);
+						peer_mac, pdev_id, rate_cap);
 
 	return QDF_STATUS_E_FAILURE;
 
@@ -2359,6 +2392,19 @@ QDF_STATUS wmi_extract_dbr_ring_cap_service_ready_ext(
 {
 	if (wmi_handle->ops->extract_dbr_ring_cap_service_ready_ext)
 		return wmi_handle->ops->extract_dbr_ring_cap_service_ready_ext(
+				wmi_handle,
+				evt_buf, idx, param);
+
+	return QDF_STATUS_E_FAILURE;
+}
+
+QDF_STATUS wmi_extract_dbr_ring_cap_service_ready_ext2(
+			wmi_unified_t wmi_handle,
+			uint8_t *evt_buf, uint8_t idx,
+			struct wlan_psoc_host_dbr_ring_caps *param)
+{
+	if (wmi_handle->ops->extract_dbr_ring_cap_service_ready_ext2)
+		return wmi_handle->ops->extract_dbr_ring_cap_service_ready_ext2(
 				wmi_handle,
 				evt_buf, idx, param);
 
@@ -2825,6 +2871,7 @@ QDF_STATUS wmi_convert_pdev_id_host_to_target(wmi_unified_t wmi_handle,
 	if (wmi_handle->ops->convert_pdev_id_host_to_target) {
 		*target_pdev_id =
 			wmi_handle->ops->convert_pdev_id_host_to_target(
+					wmi_handle,
 					host_pdev_id);
 		return QDF_STATUS_SUCCESS;
 	}

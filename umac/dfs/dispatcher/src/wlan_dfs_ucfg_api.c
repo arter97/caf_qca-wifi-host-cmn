@@ -139,8 +139,8 @@ QDF_STATUS ucfg_dfs_set_precac_enable(struct wlan_objmgr_pdev *pdev,
 }
 qdf_export_symbol(ucfg_dfs_set_precac_enable);
 
-QDF_STATUS ucfg_dfs_get_precac_enable(struct wlan_objmgr_pdev *pdev,
-		int *buff)
+QDF_STATUS ucfg_dfs_get_legacy_precac_enable(struct wlan_objmgr_pdev *pdev,
+					     bool *buff)
 {
 	struct wlan_dfs *dfs;
 
@@ -153,11 +153,12 @@ QDF_STATUS ucfg_dfs_get_precac_enable(struct wlan_objmgr_pdev *pdev,
 		return  QDF_STATUS_E_FAILURE;
 	}
 
-	*buff = dfs_get_precac_enable(dfs);
+	*buff = dfs_is_legacy_precac_enabled(dfs);
 
 	return QDF_STATUS_SUCCESS;
 }
-qdf_export_symbol(ucfg_dfs_get_precac_enable);
+
+qdf_export_symbol(ucfg_dfs_get_legacy_precac_enable);
 
 QDF_STATUS ucfg_dfs_get_agile_precac_enable(struct wlan_objmgr_pdev *pdev,
 					    bool *buff)
@@ -178,7 +179,7 @@ QDF_STATUS ucfg_dfs_get_agile_precac_enable(struct wlan_objmgr_pdev *pdev,
 		return QDF_STATUS_E_FAILURE;
 	}
 
-	*buff = dfs_get_agile_precac_enable(dfs);
+	*buff = dfs_is_agile_precac_enabled(dfs);
 
 	return QDF_STATUS_SUCCESS;
 }
@@ -248,6 +249,7 @@ QDF_STATUS ucfg_dfs_get_precac_intermediate_chan(struct wlan_objmgr_pdev *pdev,
 	return QDF_STATUS_SUCCESS;
 }
 
+#ifdef CONFIG_CHAN_NUM_API
 enum precac_chan_state
 ucfg_dfs_get_precac_chan_state(struct wlan_objmgr_pdev *pdev,
 			       uint8_t precac_chan)
@@ -262,13 +264,24 @@ ucfg_dfs_get_precac_chan_state(struct wlan_objmgr_pdev *pdev,
 	}
 
 	retval = dfs_get_precac_chan_state(dfs, precac_chan);
-	if (PRECAC_ERR == retval) {
+	if (retval == PRECAC_ERR) {
 		dfs_err(dfs, WLAN_DEBUG_DFS_ALWAYS,
 			"Could not find precac channel state");
 	}
 
 	return retval;
 }
+#endif
+
+#ifdef CONFIG_CHAN_FREQ_API
+enum precac_chan_state
+ucfg_dfs_get_precac_chan_state_for_freq(struct wlan_objmgr_pdev *pdev,
+					uint16_t precac_chan_freq)
+{
+	/* To be implemented when component dev changes are ready */
+	return PRECAC_ERR;
+}
+#endif
 #endif
 
 #ifdef QCA_MCL_DFS_SUPPORT

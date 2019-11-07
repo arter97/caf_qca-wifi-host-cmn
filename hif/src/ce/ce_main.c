@@ -611,6 +611,26 @@ static struct service_to_pipe target_service_to_ce_map_qca6390[] = {
 };
 #endif
 
+static struct service_to_pipe target_service_to_ce_map_qca6490[] = {
+	{ WMI_DATA_VO_SVC, PIPEDIR_OUT, 3, },
+	{ WMI_DATA_VO_SVC, PIPEDIR_IN, 2, },
+	{ WMI_DATA_BK_SVC, PIPEDIR_OUT, 3, },
+	{ WMI_DATA_BK_SVC, PIPEDIR_IN, 2, },
+	{ WMI_DATA_BE_SVC, PIPEDIR_OUT, 3, },
+	{ WMI_DATA_BE_SVC, PIPEDIR_IN, 2, },
+	{ WMI_DATA_VI_SVC, PIPEDIR_OUT, 3, },
+	{ WMI_DATA_VI_SVC, PIPEDIR_IN, 2, },
+	{ WMI_CONTROL_SVC, PIPEDIR_OUT, 3, },
+	{ WMI_CONTROL_SVC, PIPEDIR_IN, 2, },
+	{ HTC_CTRL_RSVD_SVC, PIPEDIR_OUT, 0, },
+	{ HTC_CTRL_RSVD_SVC, PIPEDIR_IN, 2, },
+	{ HTT_DATA_MSG_SVC, PIPEDIR_OUT, 4, },
+	{ HTT_DATA_MSG_SVC, PIPEDIR_IN, 1, },
+	{ PACKET_LOG_SVC, PIPEDIR_IN, 5, },
+	/* (Additions here) */
+	{ 0, 0, 0, },
+};
+
 static struct service_to_pipe target_service_to_ce_map_ar900b[] = {
 	{
 		WMI_DATA_VO_SVC,
@@ -801,6 +821,11 @@ static void hif_select_service_to_pipe_map(struct hif_softc *scn,
 			*tgt_svc_map_to_use = target_service_to_ce_map_qca6390;
 			*sz_tgt_svc_map_to_use =
 				sizeof(target_service_to_ce_map_qca6390);
+			break;
+		case TARGET_TYPE_QCA6490:
+			*tgt_svc_map_to_use = target_service_to_ce_map_qca6490;
+			*sz_tgt_svc_map_to_use =
+				sizeof(target_service_to_ce_map_qca6490);
 			break;
 		case TARGET_TYPE_QCA8074:
 			*tgt_svc_map_to_use = target_service_to_ce_map_qca8074;
@@ -1032,6 +1057,7 @@ bool ce_srng_based(struct hif_softc *scn)
 	case TARGET_TYPE_QCA8074V2:
 	case TARGET_TYPE_QCA6290:
 	case TARGET_TYPE_QCA6390:
+	case TARGET_TYPE_QCA6490:
 	case TARGET_TYPE_QCA6018:
 	case TARGET_TYPE_QCN9000:
 		return true;
@@ -1274,8 +1300,10 @@ QDF_STATUS alloc_mem_ce_debug_hist_data(struct hif_softc *scn, uint32_t ce_id)
 		event = &hist_ev[index];
 		event->data =
 			(uint8_t *)qdf_mem_malloc(CE_DEBUG_MAX_DATA_BUF_SIZE);
-		if (!event->data)
+		if (!event->data) {
+			hif_err_rl("ce debug data alloc failed");
 			return QDF_STATUS_E_NOMEM;
+		}
 	}
 	return QDF_STATUS_SUCCESS;
 }
@@ -1307,6 +1335,7 @@ void free_mem_ce_debug_hist_data(struct hif_softc *scn, uint32_t ce_id)
 		event->data = NULL;
 		event = NULL;
 	}
+
 }
 #endif /* HIF_CE_DEBUG_DATA_BUF */
 
@@ -1350,11 +1379,11 @@ static void free_mem_ce_debug_history(struct hif_softc *scn, unsigned int ce_id)
 	struct ce_desc_hist *ce_hist = &scn->hif_ce_desc_hist;
 
 	ce_hist->enable[ce_id] = 0;
-	ce_hist->hist_ev[ce_id] = NULL;
 	if (ce_hist->data_enable[ce_id]) {
 		ce_hist->data_enable[ce_id] = false;
 		free_mem_ce_debug_hist_data(scn, ce_id);
 	}
+	ce_hist->hist_ev[ce_id] = NULL;
 }
 #else
 static inline QDF_STATUS
@@ -2381,6 +2410,7 @@ QDF_STATUS hif_post_recv_buffers_for_pipe(struct HIF_CE_pipe_info *pipe_info)
 	struct hif_softc *scn = HIF_GET_SOFTC(pipe_info->HIF_CE_state);
 	QDF_STATUS status;
 	uint32_t bufs_posted = 0;
+	unsigned int ce_id;
 
 	buf_sz = pipe_info->buf_sz;
 	if (buf_sz == 0) {
@@ -2389,6 +2419,7 @@ QDF_STATUS hif_post_recv_buffers_for_pipe(struct HIF_CE_pipe_info *pipe_info)
 	}
 
 	ce_hdl = pipe_info->ce_hdl;
+	ce_id = ((struct CE_state *)ce_hdl)->id;
 
 	qdf_spin_lock_bh(&pipe_info->recv_bufs_needed_lock);
 	while (atomic_read(&pipe_info->recv_bufs_needed) > 0) {
@@ -2398,6 +2429,9 @@ QDF_STATUS hif_post_recv_buffers_for_pipe(struct HIF_CE_pipe_info *pipe_info)
 		atomic_dec(&pipe_info->recv_bufs_needed);
 		qdf_spin_unlock_bh(&pipe_info->recv_bufs_needed_lock);
 
+		hif_record_ce_desc_event(scn, ce_id,
+					 HIF_RX_DESC_PRE_NBUF_ALLOC, NULL, NULL,
+					 0, 0);
 		nbuf = qdf_nbuf_alloc(scn->qdf_dev, buf_sz, 0, 4, false);
 		if (!nbuf) {
 			hif_post_recv_buffers_failure(pipe_info, nbuf,
@@ -2407,6 +2441,9 @@ QDF_STATUS hif_post_recv_buffers_for_pipe(struct HIF_CE_pipe_info *pipe_info)
 			return QDF_STATUS_E_NOMEM;
 		}
 
+		hif_record_ce_desc_event(scn, ce_id,
+					 HIF_RX_DESC_PRE_NBUF_MAP, NULL, nbuf,
+					 0, 0);
 		/*
 		 * qdf_nbuf_peek_header(nbuf, &data, &unused);
 		 * CE_data = dma_map_single(dev, data, buf_sz, );
@@ -2425,7 +2462,9 @@ QDF_STATUS hif_post_recv_buffers_for_pipe(struct HIF_CE_pipe_info *pipe_info)
 		}
 
 		CE_data = qdf_nbuf_get_frag_paddr(nbuf, 0);
-
+		hif_record_ce_desc_event(scn, ce_id,
+					 HIF_RX_DESC_POST_NBUF_MAP, NULL, nbuf,
+					 0, 0);
 		qdf_mem_dma_sync_single_for_device(scn->qdf_dev, CE_data,
 					       buf_sz, DMA_FROM_DEVICE);
 		status = ce_recv_buf_enqueue(ce_hdl, (void *)nbuf, CE_data);
@@ -3173,6 +3212,14 @@ void hif_ce_prepare_config(struct hif_softc *scn)
 					sizeof(target_ce_config_wlan_qca6390);
 
 		scn->ce_count = QCA_6390_CE_COUNT;
+		break;
+	case TARGET_TYPE_QCA6490:
+		hif_state->host_ce_config = host_ce_config_wlan_qca6490;
+		hif_state->target_ce_config = target_ce_config_wlan_qca6490;
+		hif_state->target_ce_config_sz =
+					sizeof(target_ce_config_wlan_qca6490);
+
+		scn->ce_count = QCA_6490_CE_COUNT;
 		break;
 	case TARGET_TYPE_ADRASTEA:
 		if (hif_is_attribute_set(scn, HIF_LOWDESC_CE_NO_PKTLOG_CFG)) {
