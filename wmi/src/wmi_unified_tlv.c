@@ -19820,7 +19820,9 @@ static QDF_STATUS extract_chainmask_tables_tlv(wmi_unified_t wmi_handle,
 		return QDF_STATUS_E_INVAL;
 
 	if ((!hw_caps->num_chainmask_tables) ||
-	    (hw_caps->num_chainmask_tables > PSOC_MAX_CHAINMASK_TABLES))
+	    (hw_caps->num_chainmask_tables > PSOC_MAX_CHAINMASK_TABLES) ||
+	    (hw_caps->num_chainmask_tables >
+	     param_buf->num_mac_phy_chainmask_combo))
 		return QDF_STATUS_E_INVAL;
 
 	chainmask_caps = param_buf->mac_phy_chainmask_caps;
@@ -21078,6 +21080,10 @@ static QDF_STATUS extract_reg_ch_avoid_event_tlv(
 
 	if (!ch_avoid_ind) {
 		WMI_LOGE("Invalid channel avoid indication buffer");
+		return QDF_STATUS_E_INVAL;
+	}
+	if (param_buf->num_avd_freq_range < afr_fixed_param->num_freq_ranges) {
+		WMI_LOGE(FL("no.of freq ranges exceeded the limit"));
 		return QDF_STATUS_E_INVAL;
 	}
 	num_freq_ranges = (afr_fixed_param->num_freq_ranges >
