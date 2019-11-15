@@ -65,7 +65,6 @@ QDF_STATUS dp_ipa_handle_rx_buf_smmu_mapping(struct dp_soc *soc,
 					     qdf_nbuf_t nbuf,
 					     bool create)
 {
-	bool reo_remapped = false;
 	struct dp_pdev *pdev;
 	int i;
 
@@ -79,11 +78,7 @@ QDF_STATUS dp_ipa_handle_rx_buf_smmu_mapping(struct dp_soc *soc,
 	    !qdf_mem_smmu_s1_enabled(soc->osdev))
 		return QDF_STATUS_SUCCESS;
 
-	qdf_spin_lock_bh(&soc->remap_lock);
-	reo_remapped = soc->reo_remapped;
-	qdf_spin_unlock_bh(&soc->remap_lock);
-
-	if (!reo_remapped)
+	if (!qdf_atomic_read(&soc->ipa_pipes_enabled))
 		return QDF_STATUS_SUCCESS;
 
 	return __dp_ipa_handle_buf_smmu_mapping(soc, nbuf, create);
@@ -229,8 +224,6 @@ int dp_ipa_uc_detach(struct dp_soc *soc, struct dp_pdev *pdev)
 	/* RX resource detach */
 	dp_rx_ipa_uc_detach(soc, pdev);
 
-	qdf_spinlock_destroy(&soc->remap_lock);
-
 	return QDF_STATUS_SUCCESS;	/* success */
 }
 
@@ -374,8 +367,6 @@ int dp_ipa_uc_attach(struct dp_soc *soc, struct dp_pdev *pdev)
 	if (!wlan_cfg_is_ipa_enabled(soc->wlan_cfg_ctx))
 		return QDF_STATUS_SUCCESS;
 
-	qdf_spinlock_create(&soc->remap_lock);
-
 	/* TX resource attach */
 	error = dp_tx_ipa_uc_attach(soc, pdev);
 	if (error) {
@@ -412,6 +403,7 @@ int dp_ipa_ring_resource_setup(struct dp_soc *soc,
 	struct hal_srng_params srng_params;
 	qdf_dma_addr_t hp_addr;
 	unsigned long addr_offset, dev_base_paddr;
+	uint32_t ix0;
 
 	if (!wlan_cfg_is_ipa_enabled(soc->wlan_cfg_ctx))
 		return QDF_STATUS_SUCCESS;
@@ -526,6 +518,21 @@ int dp_ipa_ring_resource_setup(struct dp_soc *soc,
 		(void *)soc->ipa_uc_rx_rsc.ipa_rx_refill_buf_ring_base_vaddr,
 		srng_params.num_entries,
 		soc->ipa_uc_rx_rsc.ipa_rx_refill_buf_ring_size);
+
+	/*
+	 * Set DEST_RING_MAPPING_4 to SW2 as default value for
+	 * DESTINATION_RING_CTRL_IX_0.
+	 */
+	ix0 = HAL_REO_REMAP_IX0(REO_REMAP_TCL, 0) |
+	      HAL_REO_REMAP_IX0(REO_REMAP_SW1, 1) |
+	      HAL_REO_REMAP_IX0(REO_REMAP_SW2, 2) |
+	      HAL_REO_REMAP_IX0(REO_REMAP_SW3, 3) |
+	      HAL_REO_REMAP_IX0(REO_REMAP_SW2, 4) |
+	      HAL_REO_REMAP_IX0(REO_REMAP_RELEASE, 5) |
+	      HAL_REO_REMAP_IX0(REO_REMAP_FW, 6) |
+	      HAL_REO_REMAP_IX0(REO_REMAP_FW, 7);
+
+	hal_reo_read_write_ctrl_ix(soc->hal_soc, false, &ix0, NULL, NULL, NULL);
 
 	return 0;
 }
@@ -766,28 +773,31 @@ QDF_STATUS dp_ipa_enable_autonomy(struct cdp_pdev *ppdev)
 	if (!wlan_cfg_is_ipa_enabled(soc->wlan_cfg_ctx))
 		return QDF_STATUS_SUCCESS;
 
-	qdf_spin_lock_bh(&soc->remap_lock);
-	soc->reo_remapped = true;
-	qdf_spin_unlock_bh(&soc->remap_lock);
-
 	/* Call HAL API to remap REO rings to REO2IPA ring */
-	ix0 = HAL_REO_REMAP_VAL(REO_REMAP_TCL, REO_REMAP_TCL) |
-	      HAL_REO_REMAP_VAL(REO_REMAP_SW1, REO_REMAP_SW4) |
-	      HAL_REO_REMAP_VAL(REO_REMAP_SW2, REO_REMAP_SW4) |
-	      HAL_REO_REMAP_VAL(REO_REMAP_SW3, REO_REMAP_SW4) |
-	      HAL_REO_REMAP_VAL(REO_REMAP_SW4, REO_REMAP_SW4) |
-	      HAL_REO_REMAP_VAL(REO_REMAP_RELEASE, REO_REMAP_RELEASE) |
-	      HAL_REO_REMAP_VAL(REO_REMAP_FW, REO_REMAP_FW) |
-	      HAL_REO_REMAP_VAL(REO_REMAP_UNUSED, REO_REMAP_FW);
+	ix0 = HAL_REO_REMAP_IX0(REO_REMAP_TCL, 0) |
+	      HAL_REO_REMAP_IX0(REO_REMAP_SW4, 1) |
+	      HAL_REO_REMAP_IX0(REO_REMAP_SW4, 2) |
+	      HAL_REO_REMAP_IX0(REO_REMAP_SW4, 3) |
+	      HAL_REO_REMAP_IX0(REO_REMAP_SW4, 4) |
+	      HAL_REO_REMAP_IX0(REO_REMAP_RELEASE, 5) |
+	      HAL_REO_REMAP_IX0(REO_REMAP_FW, 6) |
+	      HAL_REO_REMAP_IX0(REO_REMAP_FW, 7);
 
 	if (wlan_cfg_is_rx_hash_enabled(soc->wlan_cfg_ctx)) {
-		ix2 = ((REO_REMAP_SW4 << 0) | (REO_REMAP_SW4 << 3) |
-		       (REO_REMAP_SW4 << 6) | (REO_REMAP_SW4 << 9) |
-		       (REO_REMAP_SW4 << 12) | (REO_REMAP_SW4 << 15) |
-		       (REO_REMAP_SW4 << 18) | (REO_REMAP_SW4 << 21)) << 8;
+		ix2 = HAL_REO_REMAP_IX2(REO_REMAP_SW4, 16) |
+		      HAL_REO_REMAP_IX2(REO_REMAP_SW4, 17) |
+		      HAL_REO_REMAP_IX2(REO_REMAP_SW4, 18) |
+		      HAL_REO_REMAP_IX2(REO_REMAP_SW4, 19) |
+		      HAL_REO_REMAP_IX2(REO_REMAP_SW4, 20) |
+		      HAL_REO_REMAP_IX2(REO_REMAP_SW4, 21) |
+		      HAL_REO_REMAP_IX2(REO_REMAP_SW4, 22) |
+		      HAL_REO_REMAP_IX2(REO_REMAP_SW4, 23);
 
 		hal_reo_read_write_ctrl_ix(soc->hal_soc, false, &ix0, NULL,
 					   &ix2, &ix2);
+	} else {
+		hal_reo_read_write_ctrl_ix(soc->hal_soc, false, &ix0, NULL,
+					   NULL, NULL);
 	}
 
 	return QDF_STATUS_SUCCESS;
@@ -813,25 +823,24 @@ QDF_STATUS dp_ipa_disable_autonomy(struct cdp_pdev *ppdev)
 		return QDF_STATUS_SUCCESS;
 
 	/* Call HAL API to remap REO rings to REO2IPA ring */
-	ix0 = HAL_REO_REMAP_VAL(REO_REMAP_TCL, REO_REMAP_TCL) |
-	      HAL_REO_REMAP_VAL(REO_REMAP_SW1, REO_REMAP_SW1) |
-	      HAL_REO_REMAP_VAL(REO_REMAP_SW2, REO_REMAP_SW2) |
-	      HAL_REO_REMAP_VAL(REO_REMAP_SW3, REO_REMAP_SW3) |
-	      HAL_REO_REMAP_VAL(REO_REMAP_SW4, REO_REMAP_SW2) |
-	      HAL_REO_REMAP_VAL(REO_REMAP_RELEASE, REO_REMAP_RELEASE) |
-	      HAL_REO_REMAP_VAL(REO_REMAP_FW, REO_REMAP_FW) |
-	      HAL_REO_REMAP_VAL(REO_REMAP_UNUSED, REO_REMAP_FW);
+	ix0 = HAL_REO_REMAP_IX0(REO_REMAP_TCL, 0) |
+	      HAL_REO_REMAP_IX0(REO_REMAP_SW1, 1) |
+	      HAL_REO_REMAP_IX0(REO_REMAP_SW2, 2) |
+	      HAL_REO_REMAP_IX0(REO_REMAP_SW3, 3) |
+	      HAL_REO_REMAP_IX0(REO_REMAP_SW2, 4) |
+	      HAL_REO_REMAP_IX0(REO_REMAP_RELEASE, 5) |
+	      HAL_REO_REMAP_IX0(REO_REMAP_FW, 6) |
+	      HAL_REO_REMAP_IX0(REO_REMAP_FW, 7);
 
 	if (wlan_cfg_is_rx_hash_enabled(soc->wlan_cfg_ctx)) {
 		dp_reo_remap_config(soc, &ix2, &ix3);
 
 		hal_reo_read_write_ctrl_ix(soc->hal_soc, false, &ix0, NULL,
 					   &ix2, &ix3);
+	} else {
+		hal_reo_read_write_ctrl_ix(soc->hal_soc, false, &ix0, NULL,
+					   NULL, NULL);
 	}
-
-	qdf_spin_lock_bh(&soc->remap_lock);
-	soc->reo_remapped = false;
-	qdf_spin_unlock_bh(&soc->remap_lock);
 
 	return QDF_STATUS_SUCCESS;
 }
@@ -1571,6 +1580,7 @@ QDF_STATUS dp_ipa_enable_pipes(struct cdp_pdev *ppdev)
 	struct dp_soc *soc = pdev->soc;
 	QDF_STATUS result;
 
+	qdf_atomic_set(&soc->ipa_pipes_enabled, 1);
 	dp_ipa_handle_rx_buf_pool_smmu_mapping(soc, pdev, true);
 
 	result = qdf_ipa_wdi_enable_pipes();
@@ -1578,6 +1588,7 @@ QDF_STATUS dp_ipa_enable_pipes(struct cdp_pdev *ppdev)
 		QDF_TRACE(QDF_MODULE_ID_TXRX, QDF_TRACE_LEVEL_ERROR,
 			  "%s: Enable WDI PIPE fail, code %d",
 			  __func__, result);
+		qdf_atomic_set(&soc->ipa_pipes_enabled, 0);
 		dp_ipa_handle_rx_buf_pool_smmu_mapping(soc, pdev, false);
 		return QDF_STATUS_E_FAILURE;
 	}
@@ -1603,6 +1614,7 @@ QDF_STATUS dp_ipa_disable_pipes(struct cdp_pdev *ppdev)
 			  "%s: Disable WDI PIPE fail, code %d",
 			  __func__, result);
 
+	qdf_atomic_set(&soc->ipa_pipes_enabled, 0);
 	dp_ipa_handle_rx_buf_pool_smmu_mapping(soc, pdev, false);
 
 	return result ? QDF_STATUS_E_FAILURE : QDF_STATUS_SUCCESS;
@@ -1758,5 +1770,52 @@ bool dp_ipa_is_mdm_platform(void)
 	return false;
 }
 #endif
+
+/**
+ * dp_ipa_handle_rx_reo_reinject - Handle RX REO reinject skb buffer
+ * @soc: soc
+ * @nbuf: skb
+ *
+ * Return: nbuf if success and otherwise NULL
+ */
+qdf_nbuf_t dp_ipa_handle_rx_reo_reinject(struct dp_soc *soc, qdf_nbuf_t nbuf)
+{
+	uint8_t *rx_pkt_tlvs;
+
+	if (!wlan_cfg_is_ipa_enabled(soc->wlan_cfg_ctx))
+		return nbuf;
+
+	/* WLAN IPA is run-time disabled */
+	if (!qdf_atomic_read(&soc->ipa_pipes_enabled))
+		return nbuf;
+
+	/* Linearize the skb since IPA assumes linear buffer */
+	if (qdf_likely(qdf_nbuf_is_frag(nbuf))) {
+		if (qdf_nbuf_linearize(nbuf)) {
+			dp_err_rl("nbuf linearize failed");
+			return NULL;
+		}
+	}
+
+	rx_pkt_tlvs = qdf_mem_malloc(RX_PKT_TLVS_LEN);
+	if (!rx_pkt_tlvs) {
+		dp_err_rl("rx_pkt_tlvs alloc failed");
+		return NULL;
+	}
+
+	qdf_mem_copy(rx_pkt_tlvs, qdf_nbuf_data(nbuf), RX_PKT_TLVS_LEN);
+
+	/* Pad L3_HEADER_PADDING before ethhdr and after rx_pkt_tlvs */
+	qdf_nbuf_push_head(nbuf, L3_HEADER_PADDING);
+
+	qdf_mem_copy(qdf_nbuf_data(nbuf), rx_pkt_tlvs, RX_PKT_TLVS_LEN);
+
+	/* L3_HEADDING_PADDING is not accounted for real skb length */
+	qdf_nbuf_set_len(nbuf, qdf_nbuf_len(nbuf) - L3_HEADER_PADDING);
+
+	qdf_mem_free(rx_pkt_tlvs);
+
+	return nbuf;
+}
 
 #endif

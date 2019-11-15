@@ -757,6 +757,9 @@ qdf_nbuf_set_send_complete_flag(qdf_nbuf_t buf, bool flag)
 	__qdf_nbuf_set_send_complete_flag(buf, flag);
 }
 
+#define QDF_NBUF_QUEUE_WALK_SAFE(queue, var, tvar)	\
+		__qdf_nbuf_queue_walk_safe(queue, var, tvar)
+
 #ifdef NBUF_MAP_UNMAP_DEBUG
 /**
  * qdf_nbuf_map_check_for_leaks() - check for nbut map leaks
@@ -962,6 +965,28 @@ static inline
 void qdf_nbuf_queue_head_purge(qdf_nbuf_queue_head_t *nbuf_queue_head)
 {
 	return __qdf_nbuf_queue_head_purge(nbuf_queue_head);
+}
+
+/**
+ * qdf_nbuf_queue_head_lock() - Acquire the nbuf_queue_head lock
+ * @head: nbuf_queue_head of the nbuf_list for which lock is to be acquired
+ *
+ * Return: void
+ */
+static inline void qdf_nbuf_queue_head_lock(qdf_nbuf_queue_head_t *head)
+{
+	__qdf_nbuf_queue_head_lock(head);
+}
+
+/**
+ * qdf_nbuf_queue_head_unlock() - Release the nbuf queue lock
+ * @head: nbuf_queue_head of the nbuf_list for which lock is to be release
+ *
+ * Return: void
+ */
+static inline void qdf_nbuf_queue_head_unlock(qdf_nbuf_queue_head_t *head)
+{
+	__qdf_nbuf_queue_head_unlock(head);
 }
 
 static inline void
@@ -1864,6 +1889,22 @@ static inline void qdf_nbuf_set_len(qdf_nbuf_t buf, uint32_t len)
 static inline void qdf_nbuf_set_tail_pointer(qdf_nbuf_t buf, int len)
 {
 	__qdf_nbuf_set_tail_pointer(buf, len);
+}
+
+/**
+ * qdf_nbuf_unlink_no_lock() - unlink a nbuf from nbuf list
+ * @buf: Network buf instance
+ * @list: list to use
+ *
+ * This is a lockless version, driver must acquire locks if it
+ * needs to synchronize
+ *
+ * Return: none
+ */
+static inline void
+qdf_nbuf_unlink_no_lock(qdf_nbuf_t buf, qdf_nbuf_queue_head_t *list)
+{
+	__qdf_nbuf_unlink_no_lock(buf, list);
 }
 
 /**
@@ -3149,6 +3190,17 @@ static inline void qdf_nbuf_unmap_tso_segment(qdf_device_t osdev,
 }
 
 /**
+ * qdf_nbuf_get_tcp_payload_len() - function to return the tso payload len
+ * @nbuf: network buffer
+ *
+ * Return: size of the tso packet
+ */
+static inline size_t qdf_nbuf_get_tcp_payload_len(qdf_nbuf_t nbuf)
+{
+	return __qdf_nbuf_get_tcp_payload_len(nbuf);
+}
+
+/**
  * qdf_nbuf_get_tso_num_seg() - function to calculate the number
  * of TCP segments within the TSO jumbo packet
  * @nbuf:   TSO jumbo network buffer to be segmented
@@ -3267,8 +3319,9 @@ qdf_nbuf_unshare_debug(qdf_nbuf_t buf, const char *func_name, uint32_t line_num)
 	if (qdf_likely(buf != unshared_buf)) {
 		qdf_net_buf_debug_delete_node(buf);
 
-		qdf_net_buf_debug_add_node(unshared_buf, 0,
-					   func_name, line_num);
+		if (unshared_buf)
+			qdf_net_buf_debug_add_node(unshared_buf, 0,
+						   func_name, line_num);
 	}
 
 	return unshared_buf;

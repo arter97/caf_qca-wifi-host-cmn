@@ -52,11 +52,36 @@ static inline uint32_t get_chan_list_cc_event_id(void)
 static bool tgt_if_regulatory_is_regdb_offloaded(struct wlan_objmgr_psoc *psoc)
 {
 	wmi_unified_t wmi_handle = get_wmi_unified_hdl_from_psoc(psoc);
+	struct wlan_lmac_if_reg_rx_ops *reg_rx_ops;
+
+	reg_rx_ops = target_if_regulatory_get_rx_ops(psoc);
 
 	if (!wmi_handle)
 		return false;
 
+	if (reg_rx_ops->reg_ignore_fw_reg_offload_ind &&
+	    reg_rx_ops->reg_ignore_fw_reg_offload_ind(psoc)) {
+		target_if_debug("User disabled regulatory offload from ini");
+		return 0;
+	}
+
 	return wmi_service_enabled(wmi_handle, wmi_service_regulatory_db);
+}
+
+/**
+ * tgt_if_regulatory_is_6ghz_supported() - Check if 6ghz is supported
+ * @psoc: Pointer to psoc
+ *
+ * Return: true if regdb if offloaded, else false
+ */
+static bool tgt_if_regulatory_is_6ghz_supported(struct wlan_objmgr_psoc *psoc)
+{
+	wmi_unified_t wmi_handle = get_wmi_unified_hdl_from_psoc(psoc);
+
+	if (!wmi_handle)
+		return false;
+
+	return wmi_service_enabled(wmi_handle, wmi_service_6ghz_support);
 }
 
 /**
@@ -107,6 +132,24 @@ QDF_STATUS target_if_reg_set_offloaded_info(struct wlan_objmgr_psoc *psoc)
 	if (reg_rx_ops->reg_set_11d_offloaded)
 		reg_rx_ops->reg_set_11d_offloaded(
 				psoc, tgt_if_regulatory_is_11d_offloaded(psoc));
+
+	return QDF_STATUS_SUCCESS;
+}
+
+QDF_STATUS target_if_reg_set_6ghz_info(struct wlan_objmgr_psoc *psoc)
+{
+	struct wlan_lmac_if_reg_rx_ops *reg_rx_ops;
+
+	reg_rx_ops = target_if_regulatory_get_rx_ops(psoc);
+	if (!reg_rx_ops) {
+		target_if_err("reg_rx_ops is NULL");
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	if (reg_rx_ops->reg_set_6ghz_supported)
+		reg_rx_ops->reg_set_6ghz_supported(
+			psoc,
+			tgt_if_regulatory_is_6ghz_supported(psoc));
 
 	return QDF_STATUS_SUCCESS;
 }

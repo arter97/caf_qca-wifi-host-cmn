@@ -30,6 +30,13 @@
 #define hal_warn(params...) QDF_TRACE_WARN(QDF_MODULE_ID_TXRX, params)
 #define hal_info(params...) QDF_TRACE_INFO(QDF_MODULE_ID_TXRX, params)
 #define hal_debug(params...) QDF_TRACE_DEBUG(QDF_MODULE_ID_TXRX, params)
+
+#define hal_alert_rl(params...) QDF_TRACE_FATAL_RL(QDF_MODULE_ID_HAL, params)
+#define hal_err_rl(params...) QDF_TRACE_ERROR_RL(QDF_MODULE_ID_HAL, params)
+#define hal_warn_rl(params...) QDF_TRACE_WARN_RL(QDF_MODULE_ID_HAL, params)
+#define hal_info_rl(params...) QDF_TRACE_INFO_RL(QDF_MODULE_ID_HAL, params)
+#define hal_debug_rl(params...) QDF_TRACE_DEBUG_RL(QDF_MODULE_ID_HAL, params)
+
 #ifdef ENABLE_VERBOSE_DEBUG
 extern bool is_hal_verbose_debug_enabled;
 #define hal_verbose_debug(params...) \
@@ -181,6 +188,11 @@ typedef struct hal_ring_handle *hal_ring_handle_t;
 
 #define MAX_SRNG_REG_GROUPS 2
 
+/* Hal Srng bit mask
+ * HAL_SRNG_FLUSH_EVENT: SRNG HP TP flush in case of link down
+ */
+#define HAL_SRNG_FLUSH_EVENT BIT(0)
+
 /* Common SRNG ring structure for source and destination rings */
 struct hal_srng {
 	/* Unique SRNG ring ID */
@@ -286,7 +298,11 @@ struct hal_srng {
 	struct hal_soc *hal_soc;
 
 	/* Number of times hp/tp updated in runtime resume */
-	uint32_t needs_flush;
+	uint32_t flush_count;
+	/* hal srng event flag*/
+	unsigned long srng_event;
+	/* last flushed time stamp */
+	uint64_t last_flush_ts;
 };
 
 /* HW SRNG configuration table */
@@ -302,6 +318,20 @@ struct hal_hw_srng_config {
 };
 
 #define MAX_SHADOW_REGISTERS 36
+
+/* REO parameters to be passed to hal_reo_setup */
+struct hal_reo_params {
+	/** rx hash steering enabled or disabled */
+	bool rx_hash_enabled;
+	/** reo remap 1 register */
+	uint32_t remap1;
+	/** reo remap 2 register */
+	uint32_t remap2;
+	/** fragment destination ring */
+	uint8_t frag_dst_ring;
+	/** padding */
+	uint8_t padding[3];
+};
 
 struct hal_hw_txrx_ops {
 
@@ -340,6 +370,7 @@ struct hal_hw_txrx_ops {
 	void (*hal_tx_comp_get_status)(void *desc, void *ts,
 				       struct hal_soc *hal);
 	uint8_t (*hal_tx_comp_get_release_reason)(void *hal_desc);
+	void (*hal_tx_desc_set_mesh_en)(void *desc, uint8_t en);
 
 	/* rx */
 	uint32_t (*hal_rx_msdu_start_nss_get)(uint8_t *);
@@ -371,6 +402,61 @@ struct hal_hw_txrx_ops {
 	void (*hal_tx_update_pcp_tid_map)(struct hal_soc *hal_soc, uint8_t pcp,
 					  uint8_t id);
 	void (*hal_tx_set_tidmap_prty)(struct hal_soc *hal_soc, uint8_t prio);
+	uint8_t (*hal_rx_get_rx_fragment_number)(uint8_t *buf);
+	uint8_t (*hal_rx_msdu_end_da_is_mcbc_get)(uint8_t *buf);
+	uint8_t (*hal_rx_msdu_end_sa_is_valid_get)(uint8_t *buf);
+	uint16_t (*hal_rx_msdu_end_sa_idx_get)(uint8_t *buf);
+	uint32_t (*hal_rx_desc_is_first_msdu)(void *hw_desc_addr);
+	uint32_t (*hal_rx_msdu_end_l3_hdr_padding_get)(uint8_t *buf);
+	uint32_t (*hal_rx_encryption_info_valid)(uint8_t *buf);
+	void (*hal_rx_print_pn)(uint8_t *buf);
+	uint8_t (*hal_rx_msdu_end_first_msdu_get)(uint8_t *buf);
+	uint8_t (*hal_rx_msdu_end_da_is_valid_get)(uint8_t *buf);
+	uint8_t (*hal_rx_msdu_end_last_msdu_get)(uint8_t *buf);
+	bool (*hal_rx_get_mpdu_mac_ad4_valid)(uint8_t *buf);
+	uint32_t (*hal_rx_mpdu_start_sw_peer_id_get)(uint8_t *buf);
+	uint32_t (*hal_rx_mpdu_get_to_ds)(uint8_t *buf);
+	uint32_t (*hal_rx_mpdu_get_fr_ds)(uint8_t *buf);
+	uint8_t (*hal_rx_get_mpdu_frame_control_valid)(uint8_t *buf);
+	QDF_STATUS
+		(*hal_rx_mpdu_get_addr1)(uint8_t *buf, uint8_t *mac_addr);
+	QDF_STATUS
+		(*hal_rx_mpdu_get_addr2)(uint8_t *buf, uint8_t *mac_addr);
+	QDF_STATUS
+		(*hal_rx_mpdu_get_addr3)(uint8_t *buf, uint8_t *mac_addr);
+	QDF_STATUS
+		(*hal_rx_mpdu_get_addr4)(uint8_t *buf, uint8_t *mac_addr);
+	uint8_t (*hal_rx_get_mpdu_sequence_control_valid)(uint8_t *buf);
+	bool (*hal_rx_is_unicast)(uint8_t *buf);
+	uint32_t (*hal_rx_tid_get)(hal_soc_handle_t hal_soc_hdl, uint8_t *buf);
+	uint32_t (*hal_rx_hw_desc_get_ppduid_get)(void *hw_desc_addr);
+	uint32_t (*hal_rx_mpdu_start_mpdu_qos_control_valid_get)(uint8_t *buf);
+	uint32_t (*hal_rx_msdu_end_sa_sw_peer_id_get)(uint8_t *buf);
+	void * (*hal_rx_msdu0_buffer_addr_lsb)(void *link_desc_addr);
+	void * (*hal_rx_msdu_desc_info_ptr_get)(void *msdu0);
+	void * (*hal_ent_mpdu_desc_info)(void *hw_addr);
+	void * (*hal_dst_mpdu_desc_info)(void *hw_addr);
+	uint8_t (*hal_rx_get_fc_valid)(uint8_t *buf);
+	uint8_t (*hal_rx_get_to_ds_flag)(uint8_t *buf);
+	uint8_t (*hal_rx_get_mac_addr2_valid)(uint8_t *buf);
+	uint8_t (*hal_rx_get_filter_category)(uint8_t *buf);
+	uint32_t (*hal_rx_get_ppdu_id)(uint8_t *buf);
+	void (*hal_reo_config)(struct hal_soc *soc,
+			       uint32_t reg_val,
+			       struct hal_reo_params *reo_params);
+	uint32_t (*hal_rx_msdu_flow_idx_get)(uint8_t *buf);
+	bool (*hal_rx_msdu_flow_idx_invalid)(uint8_t *buf);
+	bool (*hal_rx_msdu_flow_idx_timeout)(uint8_t *buf);
+	uint32_t (*hal_rx_msdu_fse_metadata_get)(uint8_t *buf);
+	uint16_t (*hal_rx_msdu_cce_metadata_get)(uint8_t *buf);
+	void
+	    (*hal_rx_msdu_get_flow_params)(
+					  uint8_t *buf,
+					  bool *flow_invalid,
+					  bool *flow_timeout,
+					  uint32_t *flow_index);
+	uint16_t (*hal_rx_tlv_get_tcp_chksum)(uint8_t *buf);
+	uint16_t (*hal_rx_get_rx_sequence)(uint8_t *buf);
 };
 
 /**
@@ -418,6 +504,7 @@ struct hal_soc {
 	struct hal_hw_txrx_ops *ops;
 };
 
+void hal_qca6490_attach(struct hal_soc *hal_soc);
 void hal_qca6390_attach(struct hal_soc *hal_soc);
 void hal_qca6290_attach(struct hal_soc *hal_soc);
 void hal_qca8074_attach(struct hal_soc *hal_soc);

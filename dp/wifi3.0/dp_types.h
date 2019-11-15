@@ -78,6 +78,13 @@
 #define MAX_PDEV_CNT 3
 #endif
 
+/* Max no. of VDEV per PSOC */
+#ifdef WLAN_PSOC_MAX_VDEVS
+#define MAX_VDEV_CNT WLAN_PSOC_MAX_VDEVS
+#else
+#define MAX_VDEV_CNT 51
+#endif
+
 #define MAX_LINK_DESC_BANKS 8
 #define MAX_TXDESC_POOLS 4
 #define MAX_RXDESC_POOLS 4
@@ -88,12 +95,21 @@
 #define DP_MAX_IRQ_PER_CONTEXT 12
 #define DEFAULT_HW_PEER_ID 0xffff
 
+#define WBM_INT_ERROR_ALL 0
+#define WBM_INT_ERROR_REO_NULL_BUFFER 1
+#define WBM_INT_ERROR_REO_NULL_LINK_DESC 2
+#define WBM_INT_ERROR_REO_NULL_MSDU_BUFF 3
+#define WBM_INT_ERROR_REO_BUFF_REAPED 4
+#define MAX_WBM_INT_ERROR_REASONS 5
+
 #define MAX_TX_HW_QUEUES MAX_TCL_DATA_RINGS
 /* Maximum retries for Delba per tid per peer */
 #define DP_MAX_DELBA_RETRY 3
 
 #define PCP_TID_MAP_MAX 8
 #define MAX_MU_USERS 37
+
+#define REO_CMD_EVENT_HIST_MAX 64
 
 #ifndef REMOVE_PKT_LOG
 enum rx_pktlog_mode {
@@ -640,6 +656,30 @@ struct reo_desc_list_node {
 	struct dp_rx_tid rx_tid;
 };
 
+#ifdef WLAN_FEATURE_DP_EVENT_HISTORY
+/**
+ * struct reo_cmd_event_record: Elements to record for each reo command
+ * @cmd_type: reo command type
+ * @cmd_return_status: reo command post status
+ * @timestamp: record timestamp for the reo command
+ */
+struct reo_cmd_event_record {
+	enum hal_reo_cmd_type cmd_type;
+	uint8_t cmd_return_status;
+	uint32_t timestamp;
+};
+
+/**
+ * struct reo_cmd_event_history: Account for reo cmd events
+ * @index: record number
+ * @cmd_record: list of records
+ */
+struct reo_cmd_event_history {
+	qdf_atomic_t index;
+	struct reo_cmd_event_record cmd_record[REO_CMD_EVENT_HIST_MAX];
+};
+#endif /* WLAN_FEATURE_DP_EVENT_HISTORY */
+
 /* SoC level data path statistics */
 struct dp_soc_stats {
 	struct {
@@ -662,7 +702,7 @@ struct dp_soc_stats {
 		/* tx completion release_src != TQM or FW */
 		uint32_t invalid_release_source;
 		/* tx completion wbm_internal_error */
-		uint32_t wbm_internal_error;
+		uint32_t wbm_internal_error[MAX_WBM_INT_ERROR_REASONS];
 		/* TX Comp loop packet limit hit */
 		uint32_t tx_comp_loop_pkt_limit_hit;
 		/* Head pointer Out of sync at the end of dp_tx_comp_handler */
@@ -680,12 +720,16 @@ struct dp_soc_stats {
 		uint32_t rx_frag_wait;
 		/* Fragments dropped due to errors */
 		uint32_t rx_frag_err;
+		/* Fragments dropped due to len errors in skb */
+		uint32_t rx_frag_err_len_error;
 		/* No of reinjected packets */
 		uint32_t reo_reinject;
 		/* Reap loop packet limit hit */
 		uint32_t reap_loop_pkt_limit_hit;
 		/* Head pointer Out of sync at the end of dp_rx_process */
 		uint32_t hp_oos2;
+		/* Rx ring near full */
+		uint32_t near_full;
 		struct {
 			/* Invalid RBM error count */
 			uint32_t invalid_rbm;
@@ -729,6 +773,10 @@ struct dp_soc_stats {
 		/* packet count per core - per ring */
 		uint64_t ring_packets[NR_CPUS][MAX_REO_DEST_RINGS];
 	} rx;
+
+#ifdef WLAN_FEATURE_DP_EVENT_HISTORY
+	struct reo_cmd_event_history cmd_event_history;
+#endif /* WLAN_FEATURE_DP_EVENT_HISTORY */
 };
 
 union dp_align_mac_addr {
@@ -797,7 +845,6 @@ struct dp_ast_entry {
 	bool is_active;
 	bool is_mapped;
 	uint8_t pdev_id;
-	uint8_t vdev_id;
 	uint16_t ast_hash_value;
 	qdf_atomic_t ref_cnt;
 	enum cdp_txrx_ast_entry_type type;
@@ -973,6 +1020,9 @@ struct dp_soc {
 
 	uint32_t wbm_idle_scatter_buf_size;
 
+	/* VDEVs on this SOC */
+	struct dp_vdev *vdev_id_map[MAX_VDEV_CNT];
+
 	/* Tx H/W queues lock */
 	qdf_spinlock_t tx_queue_lock[MAX_TX_HW_QUEUES];
 
@@ -1103,8 +1153,7 @@ struct dp_soc {
 		qdf_dma_addr_t ipa_rx_refill_buf_hp_paddr;
 	} ipa_uc_rx_rsc;
 
-	bool reo_remapped; /* Indicate if REO2IPA rings are remapped */
-	qdf_spinlock_t remap_lock;
+	qdf_atomic_t ipa_pipes_enabled;
 #endif
 
 	/* Smart monitor capability for HKv2 */
@@ -1681,6 +1730,11 @@ struct dp_pdev {
 	 */
 	struct dp_rx_fst *rx_fst;
 #endif /* WLAN_SUPPORT_RX_FLOW_TAG */
+
+#ifdef FEATURE_TSO_STATS
+	/* TSO Id to index into TSO packet information */
+	qdf_atomic_t tso_idx;
+#endif /* FEATURE_TSO_STATS */
 };
 
 struct dp_peer;
@@ -1715,6 +1769,8 @@ struct dp_vdev {
 	ol_txrx_rx_fp osif_rx;
 	/* callback to deliver rx frames to the OS */
 	ol_txrx_rx_fp osif_rx_stack;
+	/* call back function to flush out queued rx packets*/
+	ol_txrx_rx_flush_fp osif_rx_flush;
 	ol_txrx_rsim_rx_decap_fp osif_rsim_rx_decap;
 	ol_txrx_get_key_fp osif_get_key;
 	ol_txrx_tx_free_ext_fp osif_tx_free_ext;
@@ -1940,14 +1996,6 @@ struct dp_peer {
 		enum cdp_sec_type sec_type;
 		u_int32_t michael_key[2]; /* relevant for TKIP */
 	} security[2]; /* 0 -> multicast, 1 -> unicast */
-
-	/*
-	* rx proc function: this either is a copy of pdev's rx_opt_proc for
-	* regular rx processing, or has been redirected to a /dev/null discard
-	* function when peer deletion is in progress.
-	*/
-	void (*rx_opt_proc)(struct dp_vdev *vdev, struct dp_peer *peer,
-		unsigned tid, qdf_nbuf_t msdu_list);
 
 	/* NAWDS Flag and Bss Peer bit */
 	uint8_t nawds_enabled:1, /* NAWDS flag */

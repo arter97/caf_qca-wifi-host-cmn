@@ -29,6 +29,8 @@
 	QDF_TRACE_FATAL(QDF_MODULE_ID_REGULATORY, params)
 #define reg_err(params...) \
 	QDF_TRACE_ERROR(QDF_MODULE_ID_REGULATORY, params)
+#define reg_err_rl(params...) \
+	QDF_TRACE_ERROR_RL(QDF_MODULE_ID_REGULATORY, params)
 #define reg_warn(params...) \
 	QDF_TRACE_WARN(QDF_MODULE_ID_REGULATORY, params)
 #define reg_notice(params...) \
@@ -86,10 +88,13 @@ struct chan_change_cbk_entry {
  *	country update is pending for pdev (phy_id).
  * @world_country_pending: In this array, element[phy_id] is true if any world
  *	country update is pending for pdev (phy_id).
+ * @ignore_fw_reg_offload_ind: Ignore FW reg offload indication
+ * @six_ghz_supported: whether 6ghz is supported
  */
 struct wlan_regulatory_psoc_priv_obj {
 	struct mas_chan_params mas_chan_params[PSOC_MAX_PHY_REG_CAP];
 	bool offload_enabled;
+	bool six_ghz_supported;
 	uint8_t num_phy;
 	char cur_country[REG_ALPHA2_LEN + 1];
 	char def_country[REG_ALPHA2_LEN + 1];
@@ -104,6 +109,7 @@ struct wlan_regulatory_psoc_priv_obj {
 	bool dfs_enabled;
 	enum band_info band_capability;
 	bool indoor_chan_enabled;
+	bool ignore_fw_reg_offload_ind;
 	bool enable_11d_supp_original;
 	bool enable_11d_supp;
 	bool is_11d_offloaded;

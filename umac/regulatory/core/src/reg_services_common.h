@@ -102,8 +102,15 @@
 
 /* EEPROM setting is a country code */
 #define    COUNTRY_ERD_FLAG     0x8000
+#define MIN_6GHZ_OPER_CLASS 131
+#define MAX_6GHZ_OPER_CLASS 135
 
 extern const struct chan_map *channel_map;
+extern const struct chan_map channel_map_us[];
+extern const struct chan_map channel_map_eu[];
+extern const struct chan_map channel_map_jp[];
+extern const struct chan_map channel_map_china[];
+extern const struct chan_map channel_map_global[];
 
 #ifdef CONFIG_CHAN_NUM_API
 /**
@@ -905,4 +912,47 @@ uint16_t reg_min_chan_freq(void);
 uint16_t reg_max_chan_freq(void);
 
 #endif /* CONFIG_CHAN_FREQ_API */
+
+/**
+ * reg_set_ignore_fw_reg_offload_ind() - Set if regdb offload indication
+ * needs to be ignored
+ * @psoc: Pointer to psoc
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS reg_set_ignore_fw_reg_offload_ind(struct wlan_objmgr_psoc *psoc);
+
+/**
+ * reg_get_ignore_fw_reg_offload_ind() - Check whether regdb offload indication
+ * needs to be ignored
+ *
+ * @psoc: Pointer to psoc
+ */
+bool reg_get_ignore_fw_reg_offload_ind(struct wlan_objmgr_psoc *psoc);
+
+/**
+ * reg_set_6ghz_supported() - Set if 6ghz is supported
+ *
+ * @psoc: Pointer to psoc
+ * @val: value
+ */
+QDF_STATUS reg_set_6ghz_supported(struct wlan_objmgr_psoc *psoc,
+				  bool val);
+
+/**
+ * reg_is_6ghz_op_class() - Check whether 6ghz oper class
+ *
+ * @pdev: Pointer to pdev
+ * @op_class: oper class
+ */
+bool reg_is_6ghz_op_class(struct wlan_objmgr_pdev *pdev,
+			  uint8_t op_class);
+
+/**
+ * reg_is_6ghz_supported() - Whether 6ghz is supported
+ *
+ * @pdev: pointer to pdev
+ */
+bool reg_is_6ghz_supported(struct wlan_objmgr_pdev *pdev);
+
 #endif
