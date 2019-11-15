@@ -465,6 +465,17 @@ QDF_STATUS wmi_unified_packet_log_disable_send(wmi_unified_t wmi_handle,
 }
 
 QDF_STATUS
+wmi_unified_fd_tmpl_send_cmd(wmi_unified_t wmi_handle,
+			     struct fils_discovery_tmpl_params *param)
+{
+	if (wmi_handle->ops->send_fd_tmpl_cmd)
+		return wmi_handle->ops->send_fd_tmpl_cmd(wmi_handle,
+				  param);
+
+	return QDF_STATUS_E_FAILURE;
+}
+
+QDF_STATUS
 wmi_unified_beacon_tmpl_send_cmd(wmi_unified_t wmi_handle,
 				 struct beacon_tmpl_params *param)
 {
@@ -2860,6 +2871,7 @@ QDF_STATUS wmi_convert_pdev_id_host_to_target(wmi_unified_t wmi_handle,
 	if (wmi_handle->ops->convert_pdev_id_host_to_target) {
 		*target_pdev_id =
 			wmi_handle->ops->convert_pdev_id_host_to_target(
+					wmi_handle,
 					host_pdev_id);
 		return QDF_STATUS_SUCCESS;
 	}

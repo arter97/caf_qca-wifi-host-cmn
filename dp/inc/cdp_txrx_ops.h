@@ -386,8 +386,9 @@ struct cdp_cmn_ops {
 	void (*hmmc_tid_override_en)(struct cdp_pdev *pdev, bool val);
 	void (*set_hmmc_tid_val)(struct cdp_pdev *pdev, uint8_t tid);
 
-	QDF_STATUS (*txrx_stats_request)(struct cdp_vdev *vdev,
-					 struct cdp_txrx_stats_req *req);
+	QDF_STATUS(*txrx_stats_request)(struct cdp_soc_t *soc_handle,
+					uint8_t vdev_id,
+					struct cdp_txrx_stats_req *req);
 
 	QDF_STATUS (*display_stats)(void *psoc, uint16_t value,
 				    enum qdf_stats_verbosity_level level);
@@ -1157,6 +1158,8 @@ struct cdp_peer_ops {
 	void (*update_last_real_peer)(struct cdp_pdev *pdev, void *vdev,
 			uint8_t *peer_id, bool restore_last_peer);
 	void (*peer_detach_force_delete)(void *peer);
+	void (*set_tdls_offchan_enabled)(void *peer, bool val);
+	void (*set_peer_as_tdls_peer)(void *peer, bool val);
 };
 
 /**
@@ -1165,7 +1168,8 @@ struct cdp_peer_ops {
  * @stats:
  */
 struct cdp_mob_stats_ops {
-	void (*clear_stats)(uint16_t bitmap);
+	QDF_STATUS
+		(*clear_stats)(struct cdp_soc *soc, uint8_t bitmap);
 	int (*stats)(uint8_t vdev_id, char *buffer, unsigned buf_len);
 };
 
@@ -1280,8 +1284,10 @@ struct cdp_lflowctl_ops {
 			 unsigned int high_watermark_offset);
 	int (*ll_set_tx_pause_q_depth)(uint8_t vdev_id, int pause_q_depth);
 	void (*vdev_flush)(struct cdp_vdev *vdev);
-	void (*vdev_pause)(struct cdp_vdev *vdev, uint32_t reason);
-	void (*vdev_unpause)(struct cdp_vdev *vdev, uint32_t reason);
+	void (*vdev_pause)(struct cdp_vdev *vdev, uint32_t reason,
+			   uint32_t pause_type);
+	void (*vdev_unpause)(struct cdp_vdev *vdev, uint32_t reason,
+			     uint32_t pause_type);
 };
 
 /**

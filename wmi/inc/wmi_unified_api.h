@@ -121,19 +121,6 @@ typedef qdf_nbuf_t wmi_buf_t;
 
 struct wmi_soc;
 struct policy_mgr_dual_mac_config;
-/**
- * struct wmi_rx_ops - handle to wmi rx ops
- * @scn_handle: handle to scn
- * @ev: event buffer
- * @rx_ctx: rx execution context
- * @wma_process_fw_event_handler_cbk: generic event handler callback
- */
-struct wmi_rx_ops {
-
-	int (*wma_process_fw_event_handler_cbk)(ol_scn_t scn_handle,
-						void *ev,
-						uint8_t rx_ctx);
-};
 
 /**
  * enum wmi_target_type - type of supported wmi command
@@ -151,11 +138,14 @@ enum wmi_target_type {
  * enum wmi_rx_exec_ctx - wmi rx execution context
  * @WMI_RX_WORK_CTX: work queue context execution provided by WMI layer
  * @WMI_RX_UMAC_CTX: execution context provided by umac layer
+ * @WMI_RX_SERIALIZER_CTX: Execution context is serialized thread context
  *
  */
 enum wmi_rx_exec_ctx {
 	WMI_RX_WORK_CTX,
-	WMI_RX_UMAC_CTX
+	WMI_RX_UMAC_CTX,
+	WMI_RX_TASKLET_CTX = WMI_RX_UMAC_CTX,
+	WMI_RX_SERIALIZER_CTX = 2
 };
 
 /**
@@ -174,7 +164,6 @@ struct wmi_unified_attach_params {
 	enum wmi_target_type target_type;
 	bool use_cookie;
 	bool is_async_ep;
-	struct wmi_rx_ops *rx_ops;
 	struct wlan_objmgr_psoc *psoc;
 	uint16_t max_commands;
 	uint32_t soc_id;
@@ -466,9 +455,12 @@ wmi_flush_endpoint(wmi_unified_t wmi_handle);
  *                     By default pdev_id conversion is not done in WMI.
  *                     This API can be used enable conversion in WMI.
  * @param wmi_handle   : handle to WMI
+ * @param *pdev_id_map : pdev conversion map
+ * @param size         : size of pdev_id_map
  * Return none
  */
-void wmi_pdev_id_conversion_enable(wmi_unified_t wmi_handle);
+void wmi_pdev_id_conversion_enable(wmi_unified_t wmi_handle,
+				   uint32_t *pdev_id_map, uint8_t size);
 
 /**
  * API to handle wmi rx event after UMAC has taken care of execution
@@ -849,6 +841,17 @@ QDF_STATUS
 wmi_unified_pdev_param_send(wmi_unified_t wmi_handle,
 			    struct pdev_params *param,
 			    uint8_t mac_id);
+
+/**
+ * wmi_unified_fd_tmpl_send_cmd() - WMI FILS Discovery send function
+ * @wmi_handle: handle to WMI.
+ * @param: pointer to hold FILS Discovery send cmd parameter
+ *
+ * @return QDF_STATUS_SUCCESS on success and QDF_STATUS_E_FAILURE for failure
+ */
+QDF_STATUS
+wmi_unified_fd_tmpl_send_cmd(wmi_unified_t wmi_handle,
+			     struct fils_discovery_tmpl_params *param);
 
 /**
  * wmi_unified_beacon_tmpl_send_cmd() - WMI beacon send function
@@ -3614,7 +3617,6 @@ wmi_unified_send_peer_cfr_capture_cmd(wmi_unified_t wmi_handle,
 QDF_STATUS
 wmi_extract_cfr_peer_tx_event_param(wmi_unified_t wmi_handle, void *evt_buf,
 				    wmi_cfr_peer_tx_event_param *peer_tx_event);
-
 #endif /* WLAN_CFR_ENABLE */
 
 #ifdef WIFI_POS_CONVERGED
@@ -3630,4 +3632,13 @@ QDF_STATUS
 wmi_extract_oem_response_param(wmi_unified_t wmi_hdl, void *resp_buf,
 			       struct wmi_oem_response_param *oem_resp_param);
 #endif /* WIFI_POS_CONVERGED */
+/**
+ * wmi_critical_events_in_flight() - get the number of critical events in flight
+ *
+ * @wmi_hdl: WMI handle
+ *
+ * Return: the number of critical events in flight.
+ */
+uint32_t wmi_critical_events_in_flight(struct wmi_unified *wmi);
+
 #endif /* _WMI_UNIFIED_API_H_ */

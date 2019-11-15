@@ -344,6 +344,8 @@ QDF_STATUS wlan_regulatory_init(void)
 
 	reg_debug("regulatory handlers registered with obj mgr");
 
+	channel_map = channel_map_global;
+
 	return status;
 
 unreg_pdev_create:
@@ -972,4 +974,52 @@ uint16_t wlan_reg_max_chan_freq(void)
 	return reg_max_chan_freq();
 }
 
+void wlan_reg_freq_width_to_chan_op_class(struct wlan_objmgr_pdev *pdev,
+					  uint16_t freq,
+					  uint16_t chan_width,
+					  bool global_tbl_lookup,
+					  uint16_t behav_limit,
+					  uint8_t *op_class,
+					  uint8_t *chan_num)
+{
+	return reg_freq_width_to_chan_op_class(pdev, freq, chan_width,
+					       global_tbl_lookup,
+					       behav_limit,
+					       op_class,
+					       chan_num);
+}
+
+void wlan_reg_freq_to_chan_op_class(struct wlan_objmgr_pdev *pdev,
+				    uint16_t freq,
+				    bool global_tbl_lookup,
+				    uint16_t behav_limit,
+				    uint8_t *op_class,
+				    uint8_t *chan_num)
+{
+	return reg_freq_to_chan_op_class(pdev, freq,
+					 global_tbl_lookup,
+					 behav_limit,
+					 op_class,
+					 chan_num);
+}
+
 #endif /* CONFIG CHAN FREQ API */
+
+uint16_t wlan_reg_get_op_class_width(struct wlan_objmgr_pdev *pdev,
+				     uint8_t op_class,
+				     bool global_tbl_lookup)
+{
+	return reg_get_op_class_width(pdev, op_class,
+				      global_tbl_lookup);
+}
+
+bool wlan_reg_is_6ghz_op_class(struct wlan_objmgr_pdev *pdev,
+			       uint8_t op_class)
+{
+	return reg_is_6ghz_op_class(pdev, op_class);
+}
+
+bool wlan_reg_is_6ghz_supported(struct wlan_objmgr_pdev *pdev)
+{
+	return reg_is_6ghz_supported(pdev);
+}

@@ -383,7 +383,8 @@ dp_rx_mon_mpdu_pop(struct dp_soc *soc, uint32_t mac_id,
 					goto next_msdu;
 				}
 
-				msdu_ppdu_id = HAL_RX_HW_DESC_GET_PPDUID_GET(
+				msdu_ppdu_id = hal_rx_hw_desc_get_ppduid_get(
+						soc->hal_soc,
 						rx_desc_tlv);
 				is_first_msdu = false;
 
@@ -415,7 +416,8 @@ dp_rx_mon_mpdu_pop(struct dp_soc *soc, uint32_t mac_id,
 					buf_info.paddr;
 			}
 
-			if (hal_rx_desc_is_first_msdu(rx_desc_tlv))
+			if (hal_rx_desc_is_first_msdu(soc->hal_soc,
+						      rx_desc_tlv))
 				hal_rx_mon_hw_desc_get_mpdu_status(soc->hal_soc,
 					rx_desc_tlv,
 					&(dp_pdev->ppdu_info.rx_status));
@@ -454,7 +456,7 @@ dp_rx_mon_mpdu_pop(struct dp_soc *soc, uint32_t mac_id,
 			 * header begins.
 			 */
 			l2_hdr_offset =
-			hal_rx_msdu_end_l3_hdr_padding_get(data);
+			hal_rx_msdu_end_l3_hdr_padding_get(soc->hal_soc, data);
 
 			rx_buf_size = rx_pkt_offset + l2_hdr_offset
 					+ frag_len;
@@ -528,14 +530,14 @@ next_msdu:
 }
 
 static inline
-void dp_rx_msdus_set_payload(qdf_nbuf_t msdu)
+void dp_rx_msdus_set_payload(struct dp_soc *soc, qdf_nbuf_t msdu)
 {
 	uint8_t *data;
 	uint32_t rx_pkt_offset, l2_hdr_offset;
 
 	data = qdf_nbuf_data(msdu);
 	rx_pkt_offset = HAL_RX_MON_HW_RX_DESC_SIZE();
-	l2_hdr_offset = hal_rx_msdu_end_l3_hdr_padding_get(data);
+	l2_hdr_offset = hal_rx_msdu_end_l3_hdr_padding_get(soc->hal_soc, data);
 	qdf_nbuf_pull_head(msdu, rx_pkt_offset + l2_hdr_offset);
 }
 
@@ -595,7 +597,7 @@ qdf_nbuf_t dp_rx_mon_restitch_mpdu_from_msdus(struct dp_soc *soc,
 		 * - but the RX status is usually enough
 		 */
 
-		dp_rx_msdus_set_payload(head_msdu);
+		dp_rx_msdus_set_payload(soc, head_msdu);
 
 		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_DEBUG,
 				  "[%s][%d] decap format raw head %pK head->next %pK last_msdu %pK last_msdu->next %pK",
@@ -612,7 +614,7 @@ qdf_nbuf_t dp_rx_mon_restitch_mpdu_from_msdus(struct dp_soc *soc,
 
 		while (msdu) {
 
-			dp_rx_msdus_set_payload(msdu);
+			dp_rx_msdus_set_payload(soc, msdu);
 
 			if (is_first_frag) {
 				is_first_frag = 0;
@@ -771,7 +773,7 @@ qdf_nbuf_t dp_rx_mon_restitch_mpdu_from_msdus(struct dp_soc *soc,
 		dest += amsdu_pad;
 		qdf_mem_copy(dest, hdr_desc, msdu_llc_len);
 
-		dp_rx_msdus_set_payload(msdu);
+		dp_rx_msdus_set_payload(soc, msdu);
 
 		/* Push the MSDU buffer beyond the decap header */
 		qdf_nbuf_pull_head(msdu, decap_hdr_pull_bytes);
@@ -1189,7 +1191,7 @@ void dp_rx_mon_dest_process(struct dp_soc *soc, uint32_t mac_id, uint32_t quota)
 }
 
 #ifndef DISABLE_MON_CONFIG
-#ifndef QCA_WIFI_QCA6390
+#if !defined(QCA_WIFI_QCA6390) && !defined(QCA_WIFI_QCA6490)
 /**
  * dp_rx_pdev_mon_buf_attach() - Allocate the monitor descriptor pool
  *

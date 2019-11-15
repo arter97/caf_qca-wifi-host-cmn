@@ -34,8 +34,9 @@
 #endif
 
 #include <linux/debugfs.h>
-
+#include <target_if.h>
 #ifdef WMI_EXT_DBG
+#include "qdf_atomic.h"
 
 /**
  * wmi_ext_dbg_msg_enqueue() - enqueue wmi message
@@ -1688,6 +1689,7 @@ QDF_STATUS wmi_unified_cmd_send_over_qmi(struct wmi_unified *wmi_handle,
 				    uint32_t cmd_id)
 {
 	QDF_STATUS status;
+	int32_t ret;
 
 	if (!qdf_nbuf_push_head(buf, sizeof(WMI_CMD_HDR))) {
 		wmi_err("Failed to send cmd %x, no memory", cmd_id);
@@ -1705,6 +1707,8 @@ QDF_STATUS wmi_unified_cmd_send_over_qmi(struct wmi_unified *wmi_handle,
 		qdf_nbuf_pull_head(buf, sizeof(WMI_CMD_HDR));
 		wmi_warn("WMI send on QMI failed. Retrying WMI on HTC");
 	} else {
+		ret = qdf_atomic_inc_return(&wmi_handle->num_stats_over_qmi);
+		wmi_debug("num stats over qmi: %d", ret);
 		wmi_buf_free(buf);
 	}
 
@@ -2079,29 +2083,6 @@ int wmi_unified_unregister_event_handler(wmi_unified_t wmi_handle,
 }
 qdf_export_symbol(wmi_unified_unregister_event_handler);
 
-/**
- * wmi_process_fw_event_default_ctx() - process in default caller context
- * @wmi_handle: handle to wmi
- * @htc_packet: pointer to htc packet
- * @exec_ctx: execution context for wmi fw event
- *
- * Event process by below function will be in default caller context.
- * wmi internally provides rx work thread processing context.
- *
- * Return: none
- */
-static void wmi_process_fw_event_default_ctx(struct wmi_unified *wmi_handle,
-		       HTC_PACKET *htc_packet, uint8_t exec_ctx)
-{
-	wmi_buf_t evt_buf;
-	evt_buf = (wmi_buf_t) htc_packet->pPktContext;
-
-	wmi_handle->rx_ops.wma_process_fw_event_handler_cbk
-		(wmi_handle->scn_handle, evt_buf, exec_ctx);
-
-	return;
-}
-
 void wmi_process_fw_event_worker_thread_ctx(struct wmi_unified *wmi_handle,
 					    void *evt_buf)
 {
@@ -2116,6 +2097,129 @@ void wmi_process_fw_event_worker_thread_ctx(struct wmi_unified *wmi_handle,
 }
 
 qdf_export_symbol(wmi_process_fw_event_worker_thread_ctx);
+
+uint32_t wmi_critical_events_in_flight(struct wmi_unified *wmi)
+{
+	return qdf_atomic_read(&wmi->critical_events_in_flight);
+}
+
+static bool
+wmi_is_event_critical(struct wmi_unified *wmi_handle, uint32_t event_id)
+{
+	if (wmi_handle->wmi_events[wmi_roam_synch_event_id] == event_id)
+		return true;
+
+	return false;
+}
+
+static void wmi_discard_fw_event(struct scheduler_msg *msg)
+{
+	struct wmi_process_fw_event_params *event_param;
+
+	if (!msg->bodyptr)
+		return;
+
+	event_param = (struct wmi_process_fw_event_params *)msg->bodyptr;
+	qdf_nbuf_free(event_param->evt_buf);
+	qdf_mem_free(msg->bodyptr);
+	msg->bodyptr = NULL;
+	msg->bodyval = 0;
+	msg->type = 0;
+}
+
+static int wmi_process_fw_event_handler(struct scheduler_msg *msg)
+{
+	struct wmi_process_fw_event_params *params =
+		(struct wmi_process_fw_event_params *)msg->bodyptr;
+	struct wmi_unified *wmi_handle;
+	uint32_t event_id;
+
+	wmi_handle = (struct wmi_unified *)params->wmi_handle;
+	event_id = WMI_GET_FIELD(qdf_nbuf_data(params->evt_buf),
+				 WMI_CMD_HDR, COMMANDID);
+	wmi_process_fw_event(wmi_handle, params->evt_buf);
+
+	if (wmi_is_event_critical(wmi_handle, event_id))
+		qdf_atomic_dec(&wmi_handle->critical_events_in_flight);
+
+	qdf_mem_free(msg->bodyptr);
+
+	return 0;
+}
+
+/**
+ * wmi_process_fw_event_sched_thread_ctx() - common event handler to serialize
+ *                                  event processing through scheduler thread
+ * @ctx: wmi context
+ * @ev: event buffer
+ * @rx_ctx: rx execution context
+ *
+ * Return: 0 on success, errno on failure
+ */
+static QDF_STATUS
+wmi_process_fw_event_sched_thread_ctx(struct wmi_unified *wmi,
+				      void *ev)
+{
+	struct wmi_process_fw_event_params *params_buf;
+	struct scheduler_msg msg = { 0 };
+	uint32_t event_id;
+	struct target_psoc_info *tgt_hdl;
+	bool is_wmi_ready = false;
+	struct wlan_objmgr_psoc *psoc;
+
+	psoc = target_if_get_psoc_from_scn_hdl(wmi->scn_handle);
+	if (!psoc) {
+		target_if_err("psoc is null");
+		qdf_nbuf_free(ev);
+		return QDF_STATUS_E_INVAL;
+	}
+
+	tgt_hdl = wlan_psoc_get_tgt_if_handle(psoc);
+	if (!tgt_hdl) {
+		wmi_err("target_psoc_info is null");
+		qdf_nbuf_free(ev);
+		return QDF_STATUS_E_INVAL;
+	}
+
+	is_wmi_ready = target_psoc_get_wmi_ready(tgt_hdl);
+	if (!is_wmi_ready) {
+		wmi_debug("fw event recvd before ready event processed");
+		wmi_debug("therefore use worker thread");
+		wmi_process_fw_event_worker_thread_ctx(wmi, ev);
+		return QDF_STATUS_E_INVAL;
+	}
+
+	params_buf = qdf_mem_malloc(sizeof(struct wmi_process_fw_event_params));
+	if (!params_buf) {
+		wmi_err("malloc failed");
+		qdf_nbuf_free(ev);
+		return QDF_STATUS_E_NOMEM;
+	}
+
+	params_buf->wmi_handle = wmi;
+	params_buf->evt_buf = ev;
+
+	event_id = WMI_GET_FIELD(qdf_nbuf_data(params_buf->evt_buf),
+				 WMI_CMD_HDR, COMMANDID);
+	if (wmi_is_event_critical(wmi, event_id))
+		qdf_atomic_inc(&wmi->critical_events_in_flight);
+
+	msg.bodyptr = params_buf;
+	msg.bodyval = 0;
+	msg.callback = wmi_process_fw_event_handler;
+	msg.flush_callback = wmi_discard_fw_event;
+
+	if (QDF_STATUS_SUCCESS !=
+		scheduler_post_message(QDF_MODULE_ID_TARGET_IF,
+				       QDF_MODULE_ID_TARGET_IF,
+				       QDF_MODULE_ID_TARGET_IF, &msg)) {
+		qdf_nbuf_free(ev);
+		qdf_mem_free(params_buf);
+		return QDF_STATUS_E_FAULT;
+	}
+
+	return QDF_STATUS_SUCCESS;
+}
 
 /**
  * wmi_get_pdev_ep: Get wmi handle based on endpoint
@@ -2231,9 +2335,10 @@ static void wmi_control_rx(void *ctx, HTC_PACKET *htc_packet)
 	if (exec_ctx == WMI_RX_WORK_CTX) {
 		wmi_process_fw_event_worker_thread_ctx
 					(wmi_handle, evt_buf);
-	} else if (exec_ctx > WMI_RX_WORK_CTX) {
-		wmi_process_fw_event_default_ctx
-					(wmi_handle, htc_packet, exec_ctx);
+	} else if (exec_ctx == WMI_RX_TASKLET_CTX) {
+		wmi_process_fw_event(wmi_handle, evt_buf);
+	} else if (exec_ctx == WMI_RX_SERIALIZER_CTX) {
+		wmi_process_fw_event_sched_thread_ctx(wmi_handle, evt_buf);
 	} else {
 		WMI_LOGE("Invalid event context %d", exec_ctx);
 		qdf_nbuf_free(evt_buf);
@@ -2520,6 +2625,8 @@ void *wmi_unified_get_pdev_handle(struct wmi_soc *soc, uint32_t pdev_idx)
 		wmi_handle->wmi_events = soc->wmi_events;
 		wmi_handle->services = soc->services;
 		wmi_handle->soc = soc;
+		wmi_handle->cmd_pdev_id_map = soc->cmd_pdev_id_map;
+		wmi_handle->evt_pdev_id_map = soc->evt_pdev_id_map;
 		wmi_interface_logging_init(wmi_handle, pdev_idx);
 		qdf_atomic_init(&wmi_handle->pending_cmds);
 		qdf_atomic_init(&wmi_handle->is_target_suspended);
@@ -2628,9 +2735,12 @@ void *wmi_unified_attach(void *scn_handle,
 	wmi_handle->wmi_events = soc->wmi_events;
 	wmi_handle->services = soc->services;
 	wmi_handle->scn_handle = scn_handle;
+	wmi_handle->cmd_pdev_id_map = soc->cmd_pdev_id_map;
+	wmi_handle->evt_pdev_id_map = soc->evt_pdev_id_map;
 	soc->scn_handle = scn_handle;
 	qdf_atomic_init(&wmi_handle->pending_cmds);
 	qdf_atomic_init(&wmi_handle->is_target_suspended);
+	qdf_atomic_init(&wmi_handle->num_stats_over_qmi);
 	wmi_runtime_pm_init(wmi_handle);
 	qdf_spinlock_create(&wmi_handle->eventq_lock);
 	qdf_nbuf_queue_init(&wmi_handle->event_queue);
@@ -2643,9 +2753,6 @@ void *wmi_unified_attach(void *scn_handle,
 		goto error;
 	}
 	wmi_interface_logging_init(wmi_handle, WMI_HOST_PDEV_ID_0);
-	/* Attach mc_thread context processing function */
-	wmi_handle->rx_ops.wma_process_fw_event_handler_cbk =
-				param->rx_ops->wma_process_fw_event_handler_cbk;
 	wmi_handle->target_type = param->target_type;
 	soc->target_type = param->target_type;
 
@@ -3040,10 +3147,15 @@ qdf_export_symbol(wmi_flush_endpoint);
  *                     By default pdev_id conversion is not done in WMI.
  *                     This API can be used enable conversion in WMI.
  * @param wmi_handle   : handle to WMI
+ * @param pdev_map     : pointer to pdev_map
+ * @size               : size of pdev_id_map
  * Return none
  */
-void wmi_pdev_id_conversion_enable(wmi_unified_t wmi_handle)
+void wmi_pdev_id_conversion_enable(wmi_unified_t wmi_handle,
+				   uint32_t *pdev_id_map, uint8_t size)
 {
 	if (wmi_handle->target_type == WMI_TLV_TARGET)
-		wmi_handle->ops->wmi_pdev_id_conversion_enable(wmi_handle);
+		wmi_handle->ops->wmi_pdev_id_conversion_enable(wmi_handle,
+							       pdev_id_map,
+							       size);
 }
