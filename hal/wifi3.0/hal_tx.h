@@ -29,6 +29,8 @@
 #define WBM_RELEASE_RING_5_TX_RATE_STATS_LSB      0
 #define WBM_RELEASE_RING_5_TX_RATE_STATS_MASK     0xffffffff
 
+#define HAL_WBM_RELEASE_RING_2_BUFFER_TYPE    0
+#define HAL_WBM_RELEASE_RING_2_DESC_TYPE      1
 
 /*---------------------------------------------------------------------------
   Preprocessor definitions and constants
@@ -91,6 +93,7 @@ do {                                            \
 #define HAL_TX_COMPLETION_DESC_BASE_LEN 12
 
 #define HAL_TX_COMP_RELEASE_SOURCE_TQM 0
+#define HAL_TX_COMP_RELEASE_SOURCE_REO 2
 #define HAL_TX_COMP_RELEASE_SOURCE_FW 3
 
 /* Define a place-holder release reason for FW */
@@ -425,6 +428,7 @@ static inline void hal_tx_desc_set_to_fw(void *desc, uint8_t to_fw)
 
 /**
  * hal_tx_desc_set_mesh_en - Set mesh_enable flag in Tx descriptor
+ * @hal_soc_hdl: hal soc handle
  * @desc: Handle to Tx Descriptor
  * @en:   For raw WiFi frames, this indicates transmission to a mesh STA,
  *        enabling the interpretation of the 'Mesh Control Present' bit
@@ -434,10 +438,12 @@ static inline void hal_tx_desc_set_to_fw(void *desc, uint8_t to_fw)
  *
  * Return: void
  */
-static inline void hal_tx_desc_set_mesh_en(void *desc, uint8_t en)
+static inline void hal_tx_desc_set_mesh_en(hal_soc_handle_t hal_soc_hdl,
+					   void *desc, uint8_t en)
 {
-	HAL_SET_FLD(desc, TCL_DATA_CMD_4, MESH_ENABLE) |=
-		HAL_TX_SM(TCL_DATA_CMD_4, MESH_ENABLE, en);
+	struct hal_soc *hal_soc = (struct hal_soc *)hal_soc_hdl;
+
+	hal_soc->ops->hal_tx_desc_set_mesh_en(desc, en);
 }
 
 /**

@@ -45,6 +45,14 @@ extern bool is_dp_verbose_debug_enabled;
 #define dp_info(params...) \
 	__QDF_TRACE_FL(QDF_TRACE_LEVEL_INFO_HIGH, QDF_MODULE_ID_DP, ## params)
 #define dp_debug(params...) QDF_TRACE_DEBUG(QDF_MODULE_ID_DP, params)
+
+#ifdef DP_PRINT_NO_CONSOLE
+#define dp_err_log(params...) \
+	__QDF_TRACE_FL(QDF_TRACE_LEVEL_INFO_HIGH, QDF_MODULE_ID_DP, ## params)
+#else
+#define dp_err_log(params...) QDF_TRACE_ERROR(QDF_MODULE_ID_DP, params)
+#endif /* DP_PRINT_NO_CONSOLE */
+
 #ifdef ENABLE_VERBOSE_DEBUG
 /**
  * @enum verbose_debug_module:
@@ -1680,14 +1688,14 @@ static inline void cdp_flush_cache_rx_queue(ol_txrx_soc_handle soc)
 /**
  * cdp_txrx_stats_request(): function to map to host and firmware statistics
  * @soc: soc handle
- * @vdev: virtual device
+ * @vdev_id: virtual device ID
  * @req: stats request container
  *
  * return: status
  */
 static inline
-int cdp_txrx_stats_request(ol_txrx_soc_handle soc, struct cdp_vdev *vdev,
-		struct cdp_txrx_stats_req *req)
+int cdp_txrx_stats_request(ol_txrx_soc_handle soc, uint8_t vdev_id,
+			   struct cdp_txrx_stats_req *req)
 {
 	if (!soc || !soc->ops || !soc->ops->cmn_drv_ops || !req) {
 		QDF_TRACE(QDF_MODULE_ID_CDP, QDF_TRACE_LEVEL_DEBUG,
@@ -1697,7 +1705,8 @@ int cdp_txrx_stats_request(ol_txrx_soc_handle soc, struct cdp_vdev *vdev,
 	}
 
 	if (soc->ops->cmn_drv_ops->txrx_stats_request)
-		return soc->ops->cmn_drv_ops->txrx_stats_request(vdev, req);
+		return soc->ops->cmn_drv_ops->txrx_stats_request(soc, vdev_id,
+								 req);
 
 	return 0;
 }

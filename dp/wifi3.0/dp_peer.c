@@ -34,7 +34,6 @@
 #include "dp_tx_capture.h"
 #endif
 
-#ifdef DP_LFR
 static inline void
 dp_set_ssn_valid_flag(struct hal_reo_cmd_params *params,
 					uint8_t valid)
@@ -45,11 +44,6 @@ dp_set_ssn_valid_flag(struct hal_reo_cmd_params *params,
 		  "%s: Setting SSN valid bit to %d",
 		  __func__, valid);
 }
-#else
-static inline void
-dp_set_ssn_valid_flag(struct hal_reo_cmd_params *params,
-					uint8_t valid) {};
-#endif
 
 static inline int dp_peer_find_mac_addr_cmp(
 	union dp_align_mac_addr *mac_addr1,
@@ -647,8 +641,15 @@ int dp_peer_add_ast(struct dp_soc *soc,
 			return 0;
 		}
 		if (is_peer_found) {
-			qdf_spin_unlock_bh(&soc->ast_lock);
-			return 0;
+			/* During WDS to static roaming, peer is added
+			 * to the list before static AST entry create.
+			 * So, allow AST entry for STATIC type
+			 * even if peer is present
+			 */
+			if (type != CDP_TXRX_AST_TYPE_STATIC) {
+				qdf_spin_unlock_bh(&soc->ast_lock);
+				return 0;
+			}
 		}
 	} else {
 		/* For HWMWDS_SEC entries can be added for same mac address
@@ -760,7 +761,6 @@ add_ast_entry:
 
 	qdf_mem_copy(&ast_entry->mac_addr.raw[0], mac_addr, QDF_MAC_ADDR_SIZE);
 	ast_entry->pdev_id = vdev->pdev->pdev_id;
-	ast_entry->vdev_id = vdev->vdev_id;
 	ast_entry->is_mapped = false;
 	ast_entry->delete_in_progress = false;
 
@@ -940,7 +940,7 @@ int dp_peer_update_ast(struct dp_soc *soc, struct dp_peer *peer,
 	 */
 	if (qdf_unlikely(ast_entry->peer == peer) &&
 	    (ast_entry->type == CDP_TXRX_AST_TYPE_WDS) &&
-	    (ast_entry->vdev_id == peer->vdev->vdev_id) &&
+	    (ast_entry->peer->vdev == peer->vdev) &&
 	    (ast_entry->is_active))
 		return 0;
 
@@ -950,7 +950,6 @@ int dp_peer_update_ast(struct dp_soc *soc, struct dp_peer *peer,
 	ast_entry->peer = peer;
 	ast_entry->type = CDP_TXRX_AST_TYPE_WDS;
 	ast_entry->pdev_id = peer->vdev->pdev->pdev_id;
-	ast_entry->vdev_id = peer->vdev->vdev_id;
 	ast_entry->is_active = TRUE;
 	TAILQ_INSERT_TAIL(&peer->ast_entry_list, ast_entry, ase_list_elem);
 
@@ -1754,9 +1753,9 @@ static QDF_STATUS dp_rx_tid_update_wifi3(struct dp_peer *peer, int tid, uint32_t
 	if (start_seq < IEEE80211_SEQ_MAX) {
 		params.u.upd_queue_params.update_ssn = 1;
 		params.u.upd_queue_params.ssn = start_seq;
+	} else {
+	    dp_set_ssn_valid_flag(&params, 0);
 	}
-
-	dp_set_ssn_valid_flag(&params, 0);
 	dp_reo_send_cmd(soc, CMD_UPDATE_RX_REO_QUEUE, &params,
 			dp_rx_tid_update_cb, rx_tid);
 
@@ -2084,12 +2083,9 @@ static void dp_rx_tid_delete_cb(struct dp_soc *soc, void *cb_ctxt,
 							&params,
 							NULL,
 							NULL)) {
-				QDF_TRACE(QDF_MODULE_ID_DP,
-					QDF_TRACE_LEVEL_ERROR,
-					"%s: fail to send CMD_CACHE_FLUSH:"
-					"tid %d desc %pK", __func__,
-					rx_tid->tid,
-					(void *)(rx_tid->hw_qdesc_paddr));
+				dp_err_log("fail to send CMD_CACHE_FLUSH:"
+					   "tid %d desc %pK", rx_tid->tid,
+					   (void *)(rx_tid->hw_qdesc_paddr));
 			}
 		}
 
@@ -2113,9 +2109,8 @@ static void dp_rx_tid_delete_cb(struct dp_soc *soc, void *cb_ctxt,
 			 *
 			 * Here invoke desc_free function directly to do clean up.
 			 */
-			QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_ERROR,
-				  "%s: fail to send REO cmd to flush cache: tid %d",
-				  __func__, rx_tid->tid);
+			dp_err_log("%s: fail to send REO cmd to flush cache: tid %d",
+				   __func__, rx_tid->tid);
 			qdf_mem_zero(&reo_status, sizeof(reo_status));
 			reo_status.fl_cache_status.header.status = 0;
 			dp_reo_desc_free(soc, (void *)desc, &reo_status);
@@ -2298,12 +2293,12 @@ void dp_peer_rx_cleanup(struct dp_vdev *vdev, struct dp_peer *peer, bool reuse)
 	int tid;
 	uint32_t tid_delete_mask = 0;
 
-	DP_TRACE(INFO_HIGH, FL("Remove tids for peer: %pK"), peer);
+	dp_info("Remove tids for peer: %pK", peer);
 	for (tid = 0; tid < DP_MAX_TIDS; tid++) {
 		struct dp_rx_tid *rx_tid = &peer->rx_tid[tid];
 
 		qdf_spin_lock_bh(&rx_tid->tid_lock);
-		if (!peer->bss_peer && peer->vdev->opmode != wlan_op_mode_sta) {
+		if (!peer->bss_peer || peer->vdev->opmode == wlan_op_mode_sta) {
 			/* Cleanup defrag related resource */
 			dp_rx_defrag_waitlist_remove(peer, tid);
 			dp_rx_reorder_flush_frag(peer, tid);
@@ -2750,24 +2745,6 @@ int dp_delba_tx_completion_wifi3(void *peer_handle,
 
 	return QDF_STATUS_SUCCESS;
 }
-
-void dp_rx_discard(struct dp_vdev *vdev, struct dp_peer *peer, unsigned tid,
-	qdf_nbuf_t msdu_list)
-{
-	while (msdu_list) {
-		qdf_nbuf_t msdu = msdu_list;
-
-		msdu_list = qdf_nbuf_next(msdu_list);
-		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_INFO_HIGH,
-			  "discard rx %pK from partly-deleted peer %pK (%02x:%02x:%02x:%02x:%02x:%02x)",
-			  msdu, peer,
-			  peer->mac_addr.raw[0], peer->mac_addr.raw[1],
-			  peer->mac_addr.raw[2], peer->mac_addr.raw[3],
-			  peer->mac_addr.raw[4], peer->mac_addr.raw[5]);
-		qdf_nbuf_free(msdu);
-	}
-}
-
 
 /**
  * dp_set_pn_check_wifi3() - enable PN check in REO for security

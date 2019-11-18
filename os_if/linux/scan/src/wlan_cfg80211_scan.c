@@ -267,7 +267,8 @@ static QDF_STATUS wlan_cfg80211_is_chan_ok_for_dnbs(
 			struct wlan_objmgr_psoc *psoc,
 			u8 channel, bool *ok)
 {
-	QDF_STATUS status = policy_mgr_is_chan_ok_for_dnbs(psoc, channel, ok);
+	QDF_STATUS status = policy_mgr_is_chan_ok_for_dnbs(
+				psoc, wlan_chan_to_freq(channel), ok);
 
 	if (QDF_IS_STATUS_ERROR(status)) {
 		osif_err("DNBS check failed");
@@ -1446,12 +1447,8 @@ int wlan_cfg80211_scan(struct wlan_objmgr_vdev *vdev,
 			if (ap_or_go_present) {
 				bool ok;
 
-				qdf_status =
-					policy_mgr_is_chan_ok_for_dnbs(
-							psoc,
-							wlan_reg_freq_to_chan(
-								pdev, c_freq),
-							&ok);
+				qdf_status = policy_mgr_is_chan_ok_for_dnbs(
+							psoc, c_freq, &ok);
 
 				if (QDF_IS_STATUS_ERROR(qdf_status)) {
 					osif_err("DNBS check failed");
@@ -1745,15 +1742,13 @@ int wlan_vendor_abort_scan(struct wlan_objmgr_pdev *pdev,
 static inline struct ieee80211_channel *
 wlan_get_ieee80211_channel(struct wiphy *wiphy,
 		struct wlan_objmgr_pdev *pdev,
-		int chan_no)
+		int chan_freq)
 {
-	unsigned int freq;
 	struct ieee80211_channel *chan;
 
-	freq = wlan_reg_chan_to_freq(pdev, chan_no);
-	chan = ieee80211_get_channel(wiphy, freq);
+	chan = ieee80211_get_channel(wiphy, chan_freq);
 	if (!chan)
-		osif_err("chan is NULL, chan_no: %d freq: %d", chan_no, freq);
+		osif_err("chan is NULL, freq: %d", chan_freq);
 
 	return chan;
 }
@@ -1925,11 +1920,11 @@ void wlan_cfg80211_inform_bss_frame(struct wlan_objmgr_pdev *pdev,
 	bss_data.rssi = scan_params->rssi_raw;
 
 	bss_data.chan = wlan_get_ieee80211_channel(wiphy, pdev,
-		scan_params->channel.chan_idx);
+		scan_params->channel.chan_freq);
 	if (!bss_data.chan) {
-		osif_err("Channel not found for bss %pM seq %d chan %d",
+		osif_err("Channel not found for bss %pM seq %d chan_freq %d",
 			 bss_data.mgmt->bssid, scan_params->seq_num,
-			 scan_params->channel.chan_idx);
+			 scan_params->channel.chan_freq);
 		qdf_mem_free(bss_data.mgmt);
 		return;
 	}
