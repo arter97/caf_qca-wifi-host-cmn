@@ -246,9 +246,9 @@ struct wlan_objmgr_vdev *wlan_objmgr_vdev_obj_create(
 	/* Component object failed to be created, clean up the object */
 	} else if (obj_status == QDF_STATUS_E_FAILURE) {
 		/* Clean up the psoc */
-		wlan_objmgr_vdev_obj_delete(vdev);
 		obj_mgr_err("VDEV comp objects creation failed for vdev-id:%d",
 			vdev->vdev_objmgr.vdev_id);
+		wlan_objmgr_vdev_obj_delete(vdev);
 		/*
 		 * Set params osifp to NULL as it is freed during vdev obj
 		 * delete, This prevents caller from performing double free.
@@ -279,6 +279,7 @@ static QDF_STATUS wlan_objmgr_vdev_obj_destroy(struct wlan_objmgr_vdev *vdev)
 
 	vdev_id = wlan_vdev_get_id(vdev);
 
+	wlan_print_vdev_info(vdev);
 	obj_mgr_debug("Physically deleting vdev %d", vdev_id);
 
 	if (vdev->obj_state != WLAN_OBJ_STATE_LOGICALLY_DELETED) {
@@ -503,8 +504,8 @@ QDF_STATUS wlan_objmgr_iterate_peerobj_list(
 
 	if (vdev->obj_state != WLAN_OBJ_STATE_CREATED) {
 		wlan_vdev_obj_unlock(vdev);
-		obj_mgr_err("VDEV is not in create state(:%d): vdev-id:%d",
-				vdev_id, vdev->obj_state);
+		obj_mgr_err("VDEV is not in create state:%d: vdev-id:%d",
+			    vdev->obj_state, vdev_id);
 		return QDF_STATUS_E_FAILURE;
 	}
 	wlan_objmgr_vdev_get_ref(vdev, dbg_id);
@@ -528,6 +529,59 @@ QDF_STATUS wlan_objmgr_iterate_peerobj_list(
 	wlan_vdev_obj_unlock(vdev);
 	return QDF_STATUS_SUCCESS;
 }
+
+/**
+ ** APIs to get a peer with given mac in a vdev
+ */
+struct wlan_objmgr_peer *
+wlan_objmgr_vdev_find_peer_by_mac(struct wlan_objmgr_vdev *vdev,
+				  uint8_t *peer_mac,
+				  wlan_objmgr_ref_dbgid dbg_id)
+{
+	qdf_list_t *peer_list;
+	struct wlan_objmgr_peer *peer = NULL;
+	struct wlan_objmgr_peer *peer_next = NULL;
+	uint8_t vdev_id;
+
+	if (!vdev) {
+		obj_mgr_err("VDEV is NULL");
+		return NULL;
+	}
+	wlan_vdev_obj_lock(vdev);
+	vdev_id = wlan_vdev_get_id(vdev);
+
+	if (vdev->obj_state != WLAN_OBJ_STATE_CREATED) {
+		wlan_vdev_obj_unlock(vdev);
+		obj_mgr_err("VDEV is not in create state:%d: vdev-id:%d",
+			    vdev->obj_state, vdev_id);
+		return NULL;
+	}
+	wlan_objmgr_vdev_get_ref(vdev, dbg_id);
+	peer_list = &vdev->vdev_objmgr.wlan_peer_list;
+	/* Iterate through VDEV's peer list */
+	peer = wlan_vdev_peer_list_peek_head(peer_list);
+	while (peer) {
+		peer_next = wlan_peer_get_next_peer_of_vdev(peer_list,
+							    peer);
+		if (wlan_objmgr_peer_try_get_ref(peer, dbg_id) ==
+						 QDF_STATUS_SUCCESS) {
+			if (!WLAN_ADDR_EQ(peer_mac,
+					  wlan_peer_get_macaddr(peer))) {
+				wlan_objmgr_vdev_release_ref(vdev,
+							     dbg_id);
+				wlan_vdev_obj_unlock(vdev);
+				return peer;
+			}
+			wlan_objmgr_peer_release_ref(peer, dbg_id);
+		}
+		peer = peer_next;
+	}
+	wlan_objmgr_vdev_release_ref(vdev, dbg_id);
+	wlan_vdev_obj_unlock(vdev);
+	return NULL;
+}
+
+qdf_export_symbol(wlan_objmgr_vdev_find_peer_by_mac);
 
 /**
  * wlan_obj_vdev_populate_logically_del_peerlist() - get peer
@@ -1079,4 +1133,24 @@ struct wlan_objmgr_vdev *wlan_vdev_get_next_active_vdev_of_pdev(
 
 	return NULL;
 }
+
+#ifdef WLAN_OBJMGR_DEBUG
+void wlan_print_vdev_info(struct wlan_objmgr_vdev *vdev)
+{
+	struct wlan_objmgr_vdev_objmgr *vdev_objmgr;
+	uint32_t ref_cnt;
+
+	vdev_objmgr = &vdev->vdev_objmgr;
+
+	ref_cnt = qdf_atomic_read(&vdev_objmgr->ref_cnt);
+
+	obj_mgr_debug("vdev: %pK", vdev);
+	obj_mgr_debug("vdev_id: %d", vdev_objmgr->vdev_id);
+	obj_mgr_debug("print_cnt: %d", vdev_objmgr->print_cnt);
+	obj_mgr_debug("wlan_pdev: %pK", vdev_objmgr->wlan_pdev);
+	obj_mgr_debug("ref_cnt: %d", ref_cnt);
+}
+
+qdf_export_symbol(wlan_print_vdev_info);
+#endif
 

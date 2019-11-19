@@ -80,6 +80,8 @@ enum spectral_params {
 	SPECTRAL_PARAM_STOP,
 	SPECTRAL_PARAM_ENABLE,
 	SPECTRAL_PARAM_FREQUENCY,
+	SPECTRAL_PARAM_CHAN_FREQUENCY,
+	SPECTRAL_PARAM_CHAN_WIDTH,
 	SPECTRAL_PARAM_MAX,
 };
 
@@ -224,7 +226,7 @@ struct spectral_config {
  * @high_level_offset: high_level_offset
  * @rssi_thr: rssi_thr
  * @default_agc_max_gain: default_agc_max_gain
- * @agile_spectral_cap: agile Spectral capability
+ * @agile_spectral_cap: agile Spectral capability for 20/40/80
  * @agile_spectral_cap_160: agile Spectral capability for 160 MHz
  * @agile_spectral_cap_80p80: agile Spectral capability for 80p80
  */
@@ -427,6 +429,9 @@ struct spectral_samp_data {
  * @freq:               Operating frequency in MHz
  * @vhtop_ch_freq_seg1: VHT Segment 1 centre frequency in MHz
  * @vhtop_ch_freq_seg2: VHT Segment 2 centre frequency in MHz
+ * @agile_freq:         Center frequency in MHz of the entire span across which
+ *                      Agile Spectral is carried out. Applicable only for Agile
+ *                      Spectral samples.
  * @freq_loading:       How busy was the channel
  * @dcs_enabled:        Whether DCS is enabled
  * @int_type:           Interference type indicated by DCS
@@ -438,6 +443,7 @@ struct spectral_samp_msg {
 	uint16_t freq;
 	uint16_t vhtop_ch_freq_seg1;
 	uint16_t vhtop_ch_freq_seg2;
+	uint16_t agile_freq;
 	uint16_t freq_loading;
 	uint16_t dcs_enabled;
 	enum dcs_int_type int_type;

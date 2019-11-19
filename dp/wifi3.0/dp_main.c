@@ -668,7 +668,7 @@ static bool dp_peer_get_ast_info_by_soc_wifi3
 	}
 	ast_entry_info->type = ast_entry->type;
 	ast_entry_info->pdev_id = ast_entry->pdev_id;
-	ast_entry_info->vdev_id = ast_entry->vdev_id;
+	ast_entry_info->vdev_id = ast_entry->peer->vdev->vdev_id;
 	ast_entry_info->peer_id = ast_entry->peer->peer_ids[0];
 	qdf_mem_copy(&ast_entry_info->peer_mac_addr[0],
 		     &ast_entry->peer->mac_addr.raw[0],
@@ -713,7 +713,7 @@ static bool dp_peer_get_ast_info_by_pdevid_wifi3
 	}
 	ast_entry_info->type = ast_entry->type;
 	ast_entry_info->pdev_id = ast_entry->pdev_id;
-	ast_entry_info->vdev_id = ast_entry->vdev_id;
+	ast_entry_info->vdev_id = ast_entry->peer->vdev->vdev_id;
 	ast_entry_info->peer_id = ast_entry->peer->peer_ids[0];
 	qdf_mem_copy(&ast_entry_info->peer_mac_addr[0],
 		     &ast_entry->peer->mac_addr.raw[0],
@@ -1051,8 +1051,7 @@ void dp_print_ast_stats(struct dp_soc *soc)
 					    ase->ast_idx,
 					    ase->ast_hash_value,
 					    ase->delete_in_progress,
-					    ase->pdev_id,
-					    ase->vdev_id);
+					    ase->pdev_id);
 				}
 			}
 		}
@@ -2592,11 +2591,23 @@ static void dp_soc_reset_intr_mask(struct dp_soc *soc)
  */
 bool dp_reo_remap_config(struct dp_soc *soc, uint32_t *remap1, uint32_t *remap2)
 {
-	*remap1 = ((0x1 << 0) | (0x2 << 3) | (0x3 << 6) | (0x1 << 9) |
-		(0x2 << 12) | (0x3 << 15) | (0x1 << 18) | (0x2 << 21)) << 8;
+	*remap1 = HAL_REO_REMAP_IX2(REO_REMAP_SW1, 16) |
+		  HAL_REO_REMAP_IX2(REO_REMAP_SW2, 17) |
+		  HAL_REO_REMAP_IX2(REO_REMAP_SW3, 18) |
+		  HAL_REO_REMAP_IX2(REO_REMAP_SW1, 19) |
+		  HAL_REO_REMAP_IX2(REO_REMAP_SW2, 20) |
+		  HAL_REO_REMAP_IX2(REO_REMAP_SW3, 21) |
+		  HAL_REO_REMAP_IX2(REO_REMAP_SW1, 22) |
+		  HAL_REO_REMAP_IX2(REO_REMAP_SW2, 23);
 
-	*remap2 = ((0x3 << 0) | (0x1 << 3) | (0x2 << 6) | (0x3 << 9) |
-		(0x1 << 12) | (0x2 << 15) | (0x3 << 18) | (0x1 << 21)) << 8;
+	*remap2 = HAL_REO_REMAP_IX3(REO_REMAP_SW3, 24) |
+		  HAL_REO_REMAP_IX3(REO_REMAP_SW1, 25) |
+		  HAL_REO_REMAP_IX3(REO_REMAP_SW2, 26) |
+		  HAL_REO_REMAP_IX3(REO_REMAP_SW3, 27) |
+		  HAL_REO_REMAP_IX3(REO_REMAP_SW1, 28) |
+		  HAL_REO_REMAP_IX3(REO_REMAP_SW2, 29) |
+		  HAL_REO_REMAP_IX3(REO_REMAP_SW3, 30) |
+		  HAL_REO_REMAP_IX3(REO_REMAP_SW1, 31);
 
 	dp_debug("remap1 %x remap2 %x", *remap1, *remap2);
 
@@ -2608,37 +2619,69 @@ static bool dp_reo_remap_config(struct dp_soc *soc,
 				uint32_t *remap2)
 {
 	uint8_t offload_radio = wlan_cfg_get_dp_soc_nss_cfg(soc->wlan_cfg_ctx);
+	uint8_t target_type;
+
+	target_type = hal_get_target_type(soc->hal_soc);
 
 	switch (offload_radio) {
 	case dp_nss_cfg_default:
-		*remap1 = ((0x1 << 0) | (0x2 << 3) | (0x3 << 6) |
-			(0x4 << 9) | (0x1 << 12) | (0x2 << 15) |
-			(0x3 << 18) | (0x4 << 21)) << 8;
+		*remap1 = HAL_REO_REMAP_IX2(REO_REMAP_SW1, 16) |
+			  HAL_REO_REMAP_IX2(REO_REMAP_SW2, 17) |
+			  HAL_REO_REMAP_IX2(REO_REMAP_SW3, 18) |
+			  HAL_REO_REMAP_IX2(REO_REMAP_SW4, 19) |
+			  HAL_REO_REMAP_IX2(REO_REMAP_SW1, 20) |
+			  HAL_REO_REMAP_IX2(REO_REMAP_SW2, 21) |
+			  HAL_REO_REMAP_IX2(REO_REMAP_SW3, 22) |
+			  HAL_REO_REMAP_IX2(REO_REMAP_SW4, 23);
 
-		*remap2 = ((0x1 << 0) | (0x2 << 3) | (0x3 << 6) |
-			(0x4 << 9) | (0x1 << 12) | (0x2 << 15) |
-			(0x3 << 18) | (0x4 << 21)) << 8;
+		*remap2 = HAL_REO_REMAP_IX3(REO_REMAP_SW1, 24) |
+			  HAL_REO_REMAP_IX3(REO_REMAP_SW2, 25) |
+			  HAL_REO_REMAP_IX3(REO_REMAP_SW3, 26) |
+			  HAL_REO_REMAP_IX3(REO_REMAP_SW4, 27) |
+			  HAL_REO_REMAP_IX3(REO_REMAP_SW1, 28) |
+			  HAL_REO_REMAP_IX3(REO_REMAP_SW2, 29) |
+			  HAL_REO_REMAP_IX3(REO_REMAP_SW3, 30) |
+			  HAL_REO_REMAP_IX3(REO_REMAP_SW4, 31);
 		break;
 	case dp_nss_cfg_first_radio:
-		*remap1 = ((0x2 << 0) | (0x3 << 3) | (0x4 << 6) |
-			(0x2 << 9) | (0x3 << 12) | (0x4 << 15) |
-			(0x2 << 18) | (0x3 << 21)) << 8;
+		*remap1 = HAL_REO_REMAP_IX2(REO_REMAP_SW2, 16) |
+			  HAL_REO_REMAP_IX2(REO_REMAP_SW3, 17) |
+			  HAL_REO_REMAP_IX2(REO_REMAP_SW4, 18) |
+			  HAL_REO_REMAP_IX2(REO_REMAP_SW2, 19) |
+			  HAL_REO_REMAP_IX2(REO_REMAP_SW3, 20) |
+			  HAL_REO_REMAP_IX2(REO_REMAP_SW4, 21) |
+			  HAL_REO_REMAP_IX2(REO_REMAP_SW2, 22) |
+			  HAL_REO_REMAP_IX2(REO_REMAP_SW3, 23);
 
-		*remap2 = ((0x4 << 0) | (0x2 << 3) | (0x3 << 6) |
-			(0x4 << 9) | (0x2 << 12) | (0x3 << 15) |
-			(0x4 << 18) | (0x2 << 21)) << 8;
+		*remap2 = HAL_REO_REMAP_IX3(REO_REMAP_SW4, 24) |
+			  HAL_REO_REMAP_IX3(REO_REMAP_SW2, 25) |
+			  HAL_REO_REMAP_IX3(REO_REMAP_SW3, 26) |
+			  HAL_REO_REMAP_IX3(REO_REMAP_SW4, 27) |
+			  HAL_REO_REMAP_IX3(REO_REMAP_SW2, 28) |
+			  HAL_REO_REMAP_IX3(REO_REMAP_SW3, 29) |
+			  HAL_REO_REMAP_IX3(REO_REMAP_SW4, 30) |
+			  HAL_REO_REMAP_IX3(REO_REMAP_SW2, 31);
 		break;
-
 	case dp_nss_cfg_second_radio:
-		*remap1 = ((0x1 << 0) | (0x3 << 3) | (0x4 << 6) |
-			(0x1 << 9) | (0x3 << 12) | (0x4 << 15) |
-			(0x1 << 18) | (0x3 << 21)) << 8;
+		*remap1 = HAL_REO_REMAP_IX2(REO_REMAP_SW1, 16) |
+			  HAL_REO_REMAP_IX2(REO_REMAP_SW3, 17) |
+			  HAL_REO_REMAP_IX2(REO_REMAP_SW4, 18) |
+			  HAL_REO_REMAP_IX2(REO_REMAP_SW1, 19) |
+			  HAL_REO_REMAP_IX2(REO_REMAP_SW3, 20) |
+			  HAL_REO_REMAP_IX2(REO_REMAP_SW4, 21) |
+			  HAL_REO_REMAP_IX2(REO_REMAP_SW1, 22) |
+			  HAL_REO_REMAP_IX2(REO_REMAP_SW3, 23);
 
-		*remap2 = ((0x4 << 0) | (0x1 << 3) | (0x3 << 6) |
-			(0x4 << 9) | (0x1 << 12) | (0x3 << 15) |
-			(0x4 << 18) | (0x1 << 21)) << 8;
+		*remap2 = HAL_REO_REMAP_IX3(REO_REMAP_SW4, 24) |
+			  HAL_REO_REMAP_IX3(REO_REMAP_SW1, 25) |
+			  HAL_REO_REMAP_IX3(REO_REMAP_SW3, 26) |
+			  HAL_REO_REMAP_IX3(REO_REMAP_SW4, 27) |
+			  HAL_REO_REMAP_IX3(REO_REMAP_SW1, 28) |
+			  HAL_REO_REMAP_IX3(REO_REMAP_SW3, 29) |
+			  HAL_REO_REMAP_IX3(REO_REMAP_SW4, 30) |
+			  HAL_REO_REMAP_IX3(REO_REMAP_SW1, 31);
+
 		break;
-
 	case dp_nss_cfg_dbdc:
 	case dp_nss_cfg_dbtc:
 		/* return false if both or all are offloaded to NSS */
@@ -2649,7 +2692,7 @@ static bool dp_reo_remap_config(struct dp_soc *soc,
 		 *remap1, *remap2, offload_radio);
 	return true;
 }
-#endif
+#endif /* IPA_OFFLOAD */
 
 /*
  * dp_reo_frag_dst_set() - configure reo register to set the
@@ -3597,6 +3640,8 @@ static struct cdp_pdev *dp_pdev_attach_wifi3(struct cdp_soc_t *txrx_soc,
 	qdf_event_create(&pdev->fw_peer_stats_event);
 
 	pdev->num_tx_allowed = wlan_cfg_get_num_tx_desc(soc->wlan_cfg_ctx);
+
+	dp_init_tso_stats(pdev);
 
 	if (dp_htt_ppdu_stats_attach(pdev) != QDF_STATUS_SUCCESS)
 		goto fail1;
@@ -4757,6 +4802,8 @@ static struct cdp_vdev *dp_vdev_attach_wifi3(struct cdp_pdev *txrx_pdev,
 			qdf_timer_mod(&soc->int_timer, DP_INTR_POLL_TIMER_MS);
 	}
 
+	soc->vdev_id_map[vdev_id] = vdev;
+
 	if (wlan_op_mode_monitor == vdev->opmode) {
 		pdev->monitor_vdev = vdev;
 		return (struct cdp_vdev *)vdev;
@@ -4821,6 +4868,7 @@ static void dp_vdev_register_wifi3(struct cdp_vdev *vdev_handle,
 	vdev->ctrl_vdev = ctrl_vdev;
 	vdev->osif_rx = txrx_ops->rx.rx;
 	vdev->osif_rx_stack = txrx_ops->rx.rx_stack;
+	vdev->osif_rx_flush = txrx_ops->rx.rx_flush;
 	vdev->osif_gro_flush = txrx_ops->rx.rx_gro_flush;
 	vdev->osif_rsim_rx_decap = txrx_ops->rx.rsim_rx_decap;
 	vdev->osif_get_key = txrx_ops->get_key;
@@ -4890,7 +4938,7 @@ static void dp_vdev_flush_peers(struct cdp_vdev *vdev_handle, bool unmap_only)
 	struct dp_soc *soc = pdev->soc;
 	struct dp_peer *peer;
 	uint16_t *peer_ids;
-	struct dp_peer **peer_array;
+	struct dp_peer **peer_array = NULL;
 	uint8_t i = 0, j = 0;
 	uint8_t m = 0, n = 0;
 
@@ -4982,6 +5030,8 @@ static void dp_vdev_detach_wifi3(struct cdp_vdev *vdev_handle,
 	pdev = vdev->pdev;
 	soc = pdev->soc;
 
+	soc->vdev_id_map[vdev->vdev_id] = NULL;
+
 	if (wlan_op_mode_monitor == vdev->opmode)
 		goto free_vdev;
 
@@ -5035,6 +5085,7 @@ static void dp_vdev_detach_wifi3(struct cdp_vdev *vdev_handle,
 
 	qdf_spin_lock_bh(&pdev->vdev_list_lock);
 	dp_tx_vdev_detach(vdev);
+	dp_rx_vdev_detach(vdev);
 	/* remove the vdev from its parent pdev's list */
 	TAILQ_REMOVE(&pdev->vdev_list, vdev, vdev_list_elem);
 	QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_INFO_HIGH,
@@ -5255,9 +5306,6 @@ static void *dp_peer_create_wifi3(struct cdp_vdev *vdev_handle,
 
 	qdf_mem_copy(
 		&peer->mac_addr.raw[0], peer_mac_addr, QDF_MAC_ADDR_SIZE);
-
-	/* TODO: See of rx_opt_proc is really required */
-	peer->rx_opt_proc = soc->rx_opt_proc;
 
 	/* initialize the peer_id */
 	for (i = 0; i < MAX_NUM_PEER_ID_PER_PEER; i++)
@@ -5857,6 +5905,8 @@ static void dp_delete_pending_vdev(struct dp_pdev *pdev, struct dp_vdev *vdev,
 			FLOW_TYPE_VDEV, vdev_id);
 	dp_tx_vdev_detach(vdev);
 
+	pdev->soc->vdev_id_map[vdev_id] = NULL;
+
 	qdf_spin_lock_bh(&pdev->vdev_list_lock);
 	TAILQ_REMOVE(&pdev->vdev_list, vdev, vdev_list_elem);
 	qdf_spin_unlock_bh(&pdev->vdev_list_lock);
@@ -6015,8 +6065,6 @@ static void dp_peer_delete_wifi3(void *peer_handle, uint32_t bitmap)
 	/* redirect the peer's rx delivery function to point to a
 	 * discard func
 	 */
-
-	peer->rx_opt_proc = dp_rx_discard;
 
 	/* Do not make ctrl_peer to NULL for connected sta peers.
 	 * We need ctrl_peer to release the reference during dp
@@ -8232,20 +8280,26 @@ static int dp_fw_stats_process(struct cdp_vdev *vdev_handle,
 
 /**
  * dp_txrx_stats_request - function to map to firmware and host stats
- * @vdev: virtual handle
+ * @soc: soc handle
+ * @vdev_id: virtual device ID
  * @req: stats request
  *
  * Return: QDF_STATUS
  */
 static
-QDF_STATUS dp_txrx_stats_request(struct cdp_vdev *vdev,
+QDF_STATUS dp_txrx_stats_request(struct cdp_soc_t *soc_handle,
+				 uint8_t vdev_id,
 				 struct cdp_txrx_stats_req *req)
 {
+	struct dp_soc *soc = cdp_soc_t_to_dp_soc(soc_handle);
+	struct cdp_vdev *vdev;
 	int host_stats;
 	int fw_stats;
 	enum cdp_stats stats;
 	int num_stats;
 
+	vdev = dp_vdev_to_cdp_vdev(dp_get_vdev_from_soc_vdev_id_wifi3(soc,
+								      vdev_id));
 	if (!vdev || !req) {
 		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_ERROR,
 				"Invalid vdev/req instance");
@@ -8327,7 +8381,7 @@ static QDF_STATUS dp_txrx_dump_stats(void *psoc, uint16_t value,
 		break;
 
 	case CDP_TXRX_TSO_STATS:
-		/* TODO: NOT IMPLEMENTED */
+		dp_print_tso_stats(soc, level);
 		break;
 
 	case CDP_DUMP_TX_FLOW_POOL_INFO:
@@ -8350,6 +8404,38 @@ static QDF_STATUS dp_txrx_dump_stats(void *psoc, uint16_t value,
 
 	return status;
 
+}
+
+/**
+ * dp_txrx_clear_dump_stats() - clear dumpStats
+ * @soc- soc handle
+ * @value - stats option
+ *
+ * Return: 0 - Success, non-zero - failure
+ */
+static
+QDF_STATUS dp_txrx_clear_dump_stats(struct cdp_soc_t *soc_hdl, uint8_t pdev_id,
+				    uint8_t value)
+{
+	struct dp_soc *soc = cdp_soc_t_to_dp_soc(soc_hdl);
+	QDF_STATUS status = QDF_STATUS_SUCCESS;
+
+	if (!soc) {
+		dp_err("%s: soc is NULL", __func__);
+		return QDF_STATUS_E_INVAL;
+	}
+
+	switch (value) {
+	case CDP_TXRX_TSO_STATS:
+		dp_txrx_clear_tso_stats(soc);
+		break;
+
+	default:
+		status = QDF_STATUS_E_INVAL;
+		break;
+	}
+
+	return status;
 }
 
 #ifdef QCA_LL_TX_FLOW_CONTROL_V2
@@ -9388,10 +9474,10 @@ static QDF_STATUS dp_runtime_resume(struct cdp_pdev *opaque_pdev)
 static uint32_t dp_tx_get_success_ack_stats(struct cdp_pdev *pdev,
 					    uint8_t vdev_id)
 {
-	struct dp_vdev *vdev =
-		(struct dp_vdev *)dp_get_vdev_from_vdev_id_wifi3(pdev,
-								 vdev_id);
 	struct dp_soc *soc = ((struct dp_pdev *)pdev)->soc;
+	struct dp_vdev *vdev =
+		(struct dp_vdev *)dp_get_vdev_from_soc_vdev_id_wifi3(soc,
+								 vdev_id);
 	struct cdp_vdev_stats *vdev_stats = NULL;
 	uint32_t tx_success;
 
@@ -9530,7 +9616,7 @@ static struct cdp_ocb_ops dp_ops_ocb = {
 };
 
 static struct cdp_mob_stats_ops dp_ops_mob_stats = {
-	/* WIFI 3.0 DP NOT IMPLEMENTED YET */
+	.clear_stats = dp_txrx_clear_dump_stats,
 };
 
 /*
@@ -9733,6 +9819,7 @@ dp_soc_attach(struct cdp_ctrl_objmgr_psoc *ctrl_psoc, HTC_HANDLE htc_handle,
 	soc->num_hw_dscp_tid_map = HAL_MAX_HW_DSCP_TID_MAPS;
 
 	wlan_set_srng_cfg(&soc->wlan_srng_cfg);
+	qdf_mem_zero(&soc->vdev_id_map, sizeof(soc->vdev_id_map));
 
 	soc->wlan_cfg_ctx = wlan_cfg_soc_attach(soc->ctrl_psoc);
 	if (!soc->wlan_cfg_ctx) {
@@ -9793,8 +9880,9 @@ void *dp_soc_init(void *dpsoc, HTC_HANDLE htc_handle,
 		soc->ast_override_support = 1;
 		soc->da_war_enabled = false;
 		break;
-#ifdef QCA_WIFI_QCA6390
+#if defined(QCA_WIFI_QCA6390) || defined(QCA_WIFI_QCA6490)
 	case TARGET_TYPE_QCA6390:
+	case TARGET_TYPE_QCA6490:
 		wlan_cfg_set_reo_dst_ring_size(soc->wlan_cfg_ctx,
 					       REO_DST_RING_SIZE_QCA6290);
 		wlan_cfg_set_raw_mode_war(soc->wlan_cfg_ctx, true);
@@ -9811,7 +9899,8 @@ void *dp_soc_init(void *dpsoc, HTC_HANDLE htc_handle,
 		}
 		soc->wlan_cfg_ctx->rxdma1_enable = 0;
 		break;
-#endif
+#endif /* QCA_WIFI_QCA6390 || QCA_WIFI_QCA6490 */
+
 	case TARGET_TYPE_QCA8074:
 		wlan_cfg_set_reo_dst_ring_size(soc->wlan_cfg_ctx,
 					       REO_DST_RING_SIZE_QCA8074);
