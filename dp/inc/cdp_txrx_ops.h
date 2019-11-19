@@ -386,8 +386,9 @@ struct cdp_cmn_ops {
 	void (*hmmc_tid_override_en)(struct cdp_pdev *pdev, bool val);
 	void (*set_hmmc_tid_val)(struct cdp_pdev *pdev, uint8_t tid);
 
-	QDF_STATUS (*txrx_stats_request)(struct cdp_vdev *vdev,
-					 struct cdp_txrx_stats_req *req);
+	QDF_STATUS(*txrx_stats_request)(struct cdp_soc_t *soc_handle,
+					uint8_t vdev_id,
+					struct cdp_txrx_stats_req *req);
 
 	QDF_STATUS (*display_stats)(void *psoc, uint16_t value,
 				    enum qdf_stats_verbosity_level level);
@@ -1078,14 +1079,16 @@ struct cdp_misc_ops {
 
 /**
  * struct cdp_ocb_ops - mcl ocb ops
- * @set_ocb_chan_info:
- * @get_ocb_chan_info:
+ * @set_ocb_chan_info: set OCB channel info
+ * @get_ocb_chan_info: get OCB channel info
+ *
+ * Function pointers for operations related to OCB.
  */
 struct cdp_ocb_ops {
-	void (*set_ocb_chan_info)(struct cdp_vdev *vdev,
-			struct ol_txrx_ocb_set_chan ocb_set_chan);
-	struct ol_txrx_ocb_chan_info *
-		(*get_ocb_chan_info)(struct cdp_vdev *vdev);
+	void (*set_ocb_chan_info)(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
+				  struct ol_txrx_ocb_set_chan ocb_set_chan);
+	struct ol_txrx_ocb_chan_info *(*get_ocb_chan_info)(
+				struct cdp_soc_t *soc_hdl, uint8_t vdev_id);
 };
 
 /**
@@ -1157,15 +1160,18 @@ struct cdp_peer_ops {
 	void (*update_last_real_peer)(struct cdp_pdev *pdev, void *vdev,
 			uint8_t *peer_id, bool restore_last_peer);
 	void (*peer_detach_force_delete)(void *peer);
+	void (*set_tdls_offchan_enabled)(void *peer, bool val);
+	void (*set_peer_as_tdls_peer)(void *peer, bool val);
 };
 
 /**
- * struct cdp_ocb_ops - mcl ocb ops
- * @clear_stats:
- * @stats:
+ * struct cdp_mob_stats_ops - mcl mob stats ops
+ * @clear_stats: handler to clear ol txrx stats
+ * @stats: handler to update ol txrx stats
  */
 struct cdp_mob_stats_ops {
-	void (*clear_stats)(uint16_t bitmap);
+	QDF_STATUS(*clear_stats)(struct cdp_soc_t *soc_hdl,
+				 uint8_t pdev_id, uint8_t bitmap);
 	int (*stats)(uint8_t vdev_id, char *buffer, unsigned buf_len);
 };
 
@@ -1229,70 +1235,91 @@ struct cdp_cfg_ops {
 
 /**
  * struct cdp_flowctl_ops - mcl flow control
- * @register_pause_cb:
- * @set_desc_global_pool_size:
- * @dump_flow_pool_info:
+ * @flow_pool_map_handler: handler to map flow_id and pool descriptors
+ * @flow_pool_unmap_handler: handler to unmap flow_id and pool descriptors
+ * @register_pause_cb: handler to register tx pause callback
+ * @set_desc_global_pool_size: handler to set global pool size
+ * @dump_flow_pool_info: handler to dump global and flow pool info
+ * @tx_desc_thresh_reached: handler to set tx desc threshold
+ *
+ * Function pointers for operations related to flow control
  */
 struct cdp_flowctl_ops {
 	QDF_STATUS (*flow_pool_map_handler)(struct cdp_soc_t *soc,
-					    struct cdp_pdev *pdev,
+					    uint8_t pdev_id,
 					    uint8_t vdev_id);
 	void (*flow_pool_unmap_handler)(struct cdp_soc_t *soc,
-					struct cdp_pdev *pdev,
+					uint8_t pdev_id,
 					uint8_t vdev_id);
 	QDF_STATUS (*register_pause_cb)(struct cdp_soc_t *soc,
 					tx_pause_callback);
 	void (*set_desc_global_pool_size)(uint32_t num_msdu_desc);
 
-	void (*dump_flow_pool_info)(void *);
+	void (*dump_flow_pool_info)(struct cdp_soc_t *soc_hdl);
 
-	bool (*tx_desc_thresh_reached)(struct cdp_vdev *vdev);
+	bool (*tx_desc_thresh_reached)(struct cdp_soc_t *soc_hdl,
+				       uint8_t vdev_id);
 };
 
 /**
  * struct cdp_lflowctl_ops - mcl legacy flow control ops
- * @register_tx_flow_control:
- * @deregister_tx_flow_control_cb:
- * @flow_control_cb:
- * @get_tx_resource:
- * @ll_set_tx_pause_q_depth:
- * @vdev_flush:
- * @vdev_pause:
- * @vdev_unpause:
+ * @register_tx_flow_control: Register tx flow control callback
+ * @set_vdev_tx_desc_limit:  Set tx descriptor limit for a vdev
+ * @set_vdev_os_queue_status: Set vdev queue status
+ * @deregister_tx_flow_control_cb: Deregister tx flow control callback
+ * @flow_control_cb: Call osif flow control callback
+ * @get_tx_resource: Get tx resources and comapre with watermark
+ * @ll_set_tx_pause_q_depth: set pause queue depth
+ * @vdev_flush: Flush all packets on a particular vdev
+ * @vdev_pause: Pause a particular vdev
+ * @vdev_unpause: Unpause a particular vdev
+ *
+ * Function pointers for operations related to flow control
  */
 struct cdp_lflowctl_ops {
 #ifdef QCA_HL_NETDEV_FLOW_CONTROL
-	int (*register_tx_flow_control)(struct cdp_soc_t *soc,
+	int (*register_tx_flow_control)(struct cdp_soc_t *soc_hdl,
 					tx_pause_callback flowcontrol);
-	int (*set_vdev_tx_desc_limit)(uint8_t vdev_id, uint8_t chan);
-	int (*set_vdev_os_queue_status)(uint8_t vdev_id,
+	int (*set_vdev_tx_desc_limit)(struct cdp_soc_t *soc_hdl,
+				      uint8_t vdev_id, uint8_t chan);
+	int (*set_vdev_os_queue_status)(struct cdp_soc_t *soc_hdl,
+					uint8_t vdev_id,
 					enum netif_action_type action);
 #else
-	int (*register_tx_flow_control)(uint8_t vdev_id,
+	int (*register_tx_flow_control)(
+		struct cdp_soc_t *soc_hdl,
+		uint8_t vdev_id,
 		ol_txrx_tx_flow_control_fp flowControl, void *osif_fc_ctx,
 		ol_txrx_tx_flow_control_is_pause_fp flow_control_is_pause);
 #endif /* QCA_HL_NETDEV_FLOW_CONTROL */
-	int (*deregister_tx_flow_control_cb)(uint8_t vdev_id);
-	void (*flow_control_cb)(struct cdp_vdev *vdev, bool tx_resume);
-	bool (*get_tx_resource)(struct cdp_pdev *pdev,
-			 struct qdf_mac_addr peer_addr,
-			 unsigned int low_watermark,
-			 unsigned int high_watermark_offset);
-	int (*ll_set_tx_pause_q_depth)(uint8_t vdev_id, int pause_q_depth);
-	void (*vdev_flush)(struct cdp_vdev *vdev);
-	void (*vdev_pause)(struct cdp_vdev *vdev, uint32_t reason);
-	void (*vdev_unpause)(struct cdp_vdev *vdev, uint32_t reason);
+	int (*deregister_tx_flow_control_cb)(struct cdp_soc_t *soc_hdl,
+					     uint8_t vdev_id);
+	void (*flow_control_cb)(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
+				bool tx_resume);
+	bool (*get_tx_resource)(struct cdp_soc_t *soc_hdl, uint8_t pdev_id,
+				struct qdf_mac_addr peer_addr,
+				unsigned int low_watermark,
+				unsigned int high_watermark_offset);
+	int (*ll_set_tx_pause_q_depth)(struct cdp_soc_t *soc, uint8_t vdev_id,
+				       int pause_q_depth);
+	void (*vdev_flush)(struct cdp_soc_t *soc_hdl, uint8_t vdev_id);
+	void (*vdev_pause)(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
+			   uint32_t reason, uint32_t pause_type);
+	void (*vdev_unpause)(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
+			     uint32_t reason, uint32_t pause_type);
 };
 
 /**
- * struct cdp_ocb_ops - mcl ocb ops
- * @throttle_init_period:
- * @throttle_set_level:
+ * struct cdp_throttle_ops - mcl throttle ops
+ * @throttle_init_period: handler to initialize tx throttle time
+ * @throttle_set_level: handler to set tx throttle level
  */
 struct cdp_throttle_ops {
-	void (*throttle_init_period)(struct cdp_pdev *pdev, int period,
-			uint8_t *dutycycle_level);
-	void (*throttle_set_level)(struct cdp_pdev *pdev, int level);
+	void (*throttle_init_period)(struct cdp_soc_t *soc_hdl,
+				     uint8_t pdev_id, int period,
+				     uint8_t *dutycycle_level);
+	void (*throttle_set_level)(struct cdp_soc_t *soc_hdl,
+				   uint8_t pdev_id, int level);
 };
 #endif
 
@@ -1360,21 +1387,24 @@ struct cdp_ipa_ops {
 #ifdef DP_POWER_SAVE
 /**
  * struct cdp_tx_delay_ops - mcl tx delay ops
- * @tx_delay:
- * @tx_delay_hist:
- * @tx_packet_count:
- * @tx_set_compute_interval:
+ * @tx_delay: handler to get tx packet delay
+ * @tx_delay_hist: handler to get tx packet delay histogram
+ * @tx_packet_count: handler to get tx packet count
+ * @tx_set_compute_interval: update compute interval period for TSM stats
+ *
+ * Function pointer for operations related to tx delay.
  */
 struct cdp_tx_delay_ops {
-	void (*tx_delay)(struct cdp_pdev *pdev, uint32_t *queue_delay_microsec,
-		uint32_t *tx_delay_microsec, int category);
-	void (*tx_delay_hist)(struct cdp_pdev *pdev,
-		uint16_t *bin_values, int category);
-	void (*tx_packet_count)(struct cdp_pdev *pdev,
-		uint16_t *out_packet_count,
-		uint16_t *out_packet_loss_count, int category);
-	void (*tx_set_compute_interval)(struct cdp_pdev *pdev,
-		uint32_t interval);
+	void (*tx_delay)(struct cdp_soc_t *soc_hdl, uint8_t pdev_id,
+			 uint32_t *queue_delay_microsec,
+			 uint32_t *tx_delay_microsec, int category);
+	void (*tx_delay_hist)(struct cdp_soc_t *soc_hdl, uint8_t pdev_id,
+			      uint16_t *bin_values, int category);
+	void (*tx_packet_count)(struct cdp_soc_t *soc_hdl, uint8_t pdev_id,
+				uint16_t *out_packet_count,
+				uint16_t *out_packet_loss_count, int category);
+	void (*tx_set_compute_interval)(struct cdp_soc_t *soc_hdl,
+					uint8_t pdev_id, uint32_t interval);
 };
 
 /**

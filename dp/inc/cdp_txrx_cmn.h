@@ -45,6 +45,14 @@ extern bool is_dp_verbose_debug_enabled;
 #define dp_info(params...) \
 	__QDF_TRACE_FL(QDF_TRACE_LEVEL_INFO_HIGH, QDF_MODULE_ID_DP, ## params)
 #define dp_debug(params...) QDF_TRACE_DEBUG(QDF_MODULE_ID_DP, params)
+
+#ifdef DP_PRINT_NO_CONSOLE
+#define dp_err_log(params...) \
+	__QDF_TRACE_FL(QDF_TRACE_LEVEL_INFO_HIGH, QDF_MODULE_ID_DP, ## params)
+#else
+#define dp_err_log(params...) QDF_TRACE_ERROR(QDF_MODULE_ID_DP, params)
+#endif /* DP_PRINT_NO_CONSOLE */
+
 #ifdef ENABLE_VERBOSE_DEBUG
 /**
  * @enum verbose_debug_module:
@@ -174,16 +182,16 @@ cdp_vdev_attach(ol_txrx_soc_handle soc, struct cdp_pdev *pdev,
 #ifdef DP_FLOW_CTL
 /**
  * cdp_flow_pool_map() - Create flow pool for vdev
- * @soc - data path soc handle
- * @pdev
- * @vdev_id - vdev_id corresponding to vdev start
+ * @soc: data path soc handle
+ * @pdev_id: id of dp pdev handle
+ * @vdev_id: vdev_id corresponding to vdev start
  *
  * Create per vdev flow pool.
  *
  * return none
  */
 static inline QDF_STATUS cdp_flow_pool_map(ol_txrx_soc_handle soc,
-					struct cdp_pdev *pdev, uint8_t vdev_id)
+					   uint8_t pdev_id, uint8_t vdev_id)
 {
 	if (!soc || !soc->ops) {
 		QDF_TRACE(QDF_MODULE_ID_CDP, QDF_TRACE_LEVEL_DEBUG,
@@ -196,21 +204,22 @@ static inline QDF_STATUS cdp_flow_pool_map(ol_txrx_soc_handle soc,
 	    !soc->ops->flowctl_ops->flow_pool_map_handler)
 		return QDF_STATUS_E_INVAL;
 
-	return soc->ops->flowctl_ops->flow_pool_map_handler(soc, pdev, vdev_id);
+	return soc->ops->flowctl_ops->flow_pool_map_handler(soc, pdev_id,
+							    vdev_id);
 }
 
 /**
  * cdp_flow_pool_unmap() - Delete flow pool
- * @soc - data path soc handle
- * @pdev
- * @vdev_id - vdev_id corresponding to vdev start
+ * @soc: data path soc handle
+ * @pdev_id: id of dp pdev handle
+ * @vdev_id: vdev_id corresponding to vdev start
  *
  * Delete flow pool
  *
  * return none
  */
 static inline void cdp_flow_pool_unmap(ol_txrx_soc_handle soc,
-					struct cdp_pdev *pdev, uint8_t vdev_id)
+				       uint8_t pdev_id, uint8_t vdev_id)
 {
 	if (!soc || !soc->ops) {
 		QDF_TRACE(QDF_MODULE_ID_CDP, QDF_TRACE_LEVEL_DEBUG,
@@ -223,7 +232,7 @@ static inline void cdp_flow_pool_unmap(ol_txrx_soc_handle soc,
 	    !soc->ops->flowctl_ops->flow_pool_unmap_handler)
 		return;
 
-	return soc->ops->flowctl_ops->flow_pool_unmap_handler(soc, pdev,
+	return soc->ops->flowctl_ops->flow_pool_unmap_handler(soc, pdev_id,
 							vdev_id);
 }
 #endif
@@ -1680,14 +1689,14 @@ static inline void cdp_flush_cache_rx_queue(ol_txrx_soc_handle soc)
 /**
  * cdp_txrx_stats_request(): function to map to host and firmware statistics
  * @soc: soc handle
- * @vdev: virtual device
+ * @vdev_id: virtual device ID
  * @req: stats request container
  *
  * return: status
  */
 static inline
-int cdp_txrx_stats_request(ol_txrx_soc_handle soc, struct cdp_vdev *vdev,
-		struct cdp_txrx_stats_req *req)
+int cdp_txrx_stats_request(ol_txrx_soc_handle soc, uint8_t vdev_id,
+			   struct cdp_txrx_stats_req *req)
 {
 	if (!soc || !soc->ops || !soc->ops->cmn_drv_ops || !req) {
 		QDF_TRACE(QDF_MODULE_ID_CDP, QDF_TRACE_LEVEL_DEBUG,
@@ -1697,7 +1706,8 @@ int cdp_txrx_stats_request(ol_txrx_soc_handle soc, struct cdp_vdev *vdev,
 	}
 
 	if (soc->ops->cmn_drv_ops->txrx_stats_request)
-		return soc->ops->cmn_drv_ops->txrx_stats_request(vdev, req);
+		return soc->ops->cmn_drv_ops->txrx_stats_request(soc, vdev_id,
+								 req);
 
 	return 0;
 }

@@ -991,6 +991,7 @@ typedef struct {
  * @tx_max_rate: max tx rates
  * @tx_mcs_set: tx mcs
  * @vht_capable: VHT capabalities
+ * @min_data_rate: Peer minimum rate
  * @tx_max_mcs_nss: max tx MCS and NSS
  * @peer_bw_rxnss_override: Peer BW RX NSS overridden or not.
  * @is_pmf_enabled: PMF enabled
@@ -1047,6 +1048,7 @@ struct peer_assoc_params {
 	uint32_t tx_max_rate;
 	uint32_t tx_mcs_set;
 	uint8_t vht_capable;
+	uint8_t min_data_rate;
 	uint32_t peer_bw_rxnss_override;
 	uint32_t tx_max_mcs_nss;
 	uint32_t is_pmf_enabled:1,
@@ -1110,12 +1112,14 @@ struct ap_ps_params {
  * @num_chan: no of scan channels
  * @nallchans: nall chans
  * @append: append to existing chan list
+ * @max_bw_support_present: max BW support present
  * @ch_param: pointer to channel_paramw
  */
 struct scan_chan_list_params {
 	uint32_t pdev_id;
 	uint16_t nallchans;
 	bool append;
+	bool max_bw_support_present;
 	struct channel_param ch_param[1];
 };
 
@@ -2124,7 +2128,6 @@ struct mac_tspec_ie {
 /**
  * struct add_ts_param - ADDTS related parameters
  * @vdev_id: vdev id
- * @sta_idx: station index
  * @tspec_idx: TSPEC handle uniquely identifying a TSPEC for a STA in a BSS
  * @tspec: tspec value
  * @status: QDF status
@@ -2134,7 +2137,6 @@ struct mac_tspec_ie {
  */
 struct add_ts_param {
 	uint8_t vdev_id;
-	uint16_t sta_idx;
 	uint16_t tspec_idx;
 	struct mac_tspec_ie tspec;
 	QDF_STATUS status;
@@ -2165,7 +2167,6 @@ struct delts_req_info {
 
 /**
  * struct del_ts_params - DELTS related parameters
- * @staIdx: station index
  * @tspecIdx: TSPEC identifier uniquely identifying a TSPEC for a STA in a BSS
  * @bssId: BSSID
  * @sessionId: session id
@@ -2174,7 +2175,6 @@ struct delts_req_info {
  * @setRICparams: RIC parameters
  */
 struct del_ts_params {
-	uint16_t staIdx;
 	uint16_t tspecIdx;
 	uint8_t bssId[QDF_MAC_ADDR_SIZE];
 	uint8_t sessionId;
@@ -2920,6 +2920,10 @@ struct smart_ant_enable_tx_feedback_params {
  * @bin_scale: BIN scale
  * @dbm_adj: DBM adjust
  * @chn_mask: chain mask
+ * @mode: Mode
+ * @center_freq: Center frequency
+ * @chan_freq: Primary channel frequency
+ * @chan_width: Channel width
  */
 struct vdev_spectral_configure_params {
 	uint8_t vdev_id;
@@ -2941,6 +2945,10 @@ struct vdev_spectral_configure_params {
 	uint16_t bin_scale;
 	uint16_t dbm_adj;
 	uint16_t chn_mask;
+	uint16_t mode;
+	uint16_t center_freq;
+	uint16_t chan_freq;
+	uint16_t chan_width;
 };
 
 /**
@@ -2950,6 +2958,7 @@ struct vdev_spectral_configure_params {
  * @active: active
  * @enabled_valid: Enabled valid
  * @enabled: enabled
+ * @mode: Mode
  */
 struct vdev_spectral_enable_params {
 	uint8_t vdev_id;
@@ -2957,6 +2966,7 @@ struct vdev_spectral_enable_params {
 	uint8_t active;
 	uint8_t enabled_valid;
 	uint8_t enabled;
+	uint8_t mode;
 };
 
 /**
@@ -4524,6 +4534,8 @@ typedef enum {
 	wmi_roam_auth_offload_event_id,
 	wmi_service_ready_ext2_event_id,
 	wmi_get_elna_bypass_event_id,
+	wmi_motion_det_host_eventid,
+	wmi_motion_det_base_line_host_eventid,
 	wmi_events_max,
 } wmi_conv_event_id;
 
@@ -4821,6 +4833,7 @@ typedef enum {
 	wmi_vdev_param_mcast_rc_stale_period,
 	wmi_vdev_param_enable_multi_group_key,
 	wmi_vdev_param_max_group_keys,
+	wmi_vdev_param_enable_mcast_rc,
 } wmi_conv_vdev_param_id;
 
 /**
@@ -5021,6 +5034,7 @@ typedef enum {
 	wmi_service_sae_roam_support,
 	wmi_service_owe_roam_support,
 	wmi_service_ext2_msg,
+	wmi_service_6ghz_support,
 	wmi_services_max,
 } wmi_conv_service_ids;
 #define WMI_SERVICE_UNAVAILABLE 0xFFFF
@@ -6654,6 +6668,21 @@ enum wmi_host_hw_mode_config_type {
 	WMI_HOST_HW_MODE_DBS_OR_SBS   = 5,
 	WMI_HOST_HW_MODE_MAX,
 	WMI_HOST_HW_MODE_DETECT,
+};
+
+/**
+ * enum wmi_host_dynamic_hw_mode_config_type - Host defined enum for
+ * dynamic mode switch
+ * @WMI_HOST_DYNAMIC_HW_MODE_DISABLED: hw mode switch is disabled
+ * @WMI_HOST_DYNAMIC_HW_MODE_SLOW: hw mode switch with interface down/up
+ * @WMI_HOST_DYNAMIC_HW_MODE_FAST: hw mode switch without interface down/up
+ * @WMI_HOST_DYNAMIC_HW_MODE_MAX: Max value to indicate invalid mode
+ */
+enum wmi_host_dynamic_hw_mode_config_type {
+	WMI_HOST_DYNAMIC_HW_MODE_DISABLED = 0,
+	WMI_HOST_DYNAMIC_HW_MODE_SLOW     = 1,
+	WMI_HOST_DYNAMIC_HW_MODE_FAST     = 2,
+	WMI_HOST_DYNAMIC_HW_MODE_MAX,
 };
 
 /*

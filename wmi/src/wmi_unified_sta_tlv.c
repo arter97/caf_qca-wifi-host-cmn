@@ -671,6 +671,8 @@ send_update_fw_tdls_state_cmd_tlv(wmi_unified_t wmi_handle,
 		tdls_param->teardown_notification_ms;
 	cmd->tdls_peer_kickout_threshold =
 		tdls_param->tdls_peer_kickout_threshold;
+	cmd->tdls_discovery_wake_timeout =
+		tdls_param->tdls_discovery_wake_timeout;
 
 	WMI_LOGD("%s: tdls_state: %d, state: %d, "
 		 "notification_interval_ms: %d, "
@@ -685,7 +687,8 @@ send_update_fw_tdls_state_cmd_tlv(wmi_unified_t wmi_handle,
 		 "tdls_puapsd_inactivity_time: %d, "
 		 "tdls_puapsd_rx_frame_threshold: %d, "
 		 "teardown_notification_ms: %d, "
-		 "tdls_peer_kickout_threshold: %d",
+		 "tdls_peer_kickout_threshold: %d, "
+		 "tdls_discovery_wake_timeout: %d",
 		 __func__, tdls_state, cmd->state,
 		 cmd->notification_interval_ms,
 		 cmd->tx_discovery_threshold,
@@ -699,7 +702,8 @@ send_update_fw_tdls_state_cmd_tlv(wmi_unified_t wmi_handle,
 		 cmd->tdls_puapsd_inactivity_time_ms,
 		 cmd->tdls_puapsd_rx_frame_threshold,
 		 cmd->teardown_notification_ms,
-		 cmd->tdls_peer_kickout_threshold);
+		 cmd->tdls_peer_kickout_threshold,
+		 cmd->tdls_discovery_wake_timeout);
 
 	wmi_mtrace(WMI_TDLS_SET_STATE_CMDID, cmd->vdev_id, 0);
 	if (wmi_unified_cmd_send(wmi_handle, wmi_buf, len,
@@ -1078,6 +1082,7 @@ static QDF_STATUS send_set_base_macaddr_indicate_cmd_tlv(wmi_unified_t wmi_handl
 			       (wmi_pdev_set_base_macaddr_cmd_fixed_param));
 	WMI_CHAR_ARRAY_TO_MAC_ADDR(custom_addr, &cmd->base_macaddr);
 	cmd->pdev_id = wmi_handle->ops->convert_pdev_id_host_to_target(
+							wmi_handle,
 							WMI_HOST_PDEV_ID_SOC);
 	wmi_mtrace(WMI_PDEV_SET_BASE_MACADDR_CMDID, NO_SESSION, 0);
 	err = wmi_unified_cmd_send(wmi_handle, buf,
@@ -1946,6 +1951,7 @@ static QDF_STATUS send_pdev_set_pcl_cmd_tlv(wmi_unified_t wmi_handle,
 		WMITLV_GET_STRUCT_TLVLEN(wmi_pdev_set_pcl_cmd_fixed_param));
 
 	cmd->pdev_id = wmi_handle->ops->convert_pdev_id_host_to_target(
+							wmi_handle,
 							WMI_HOST_PDEV_ID_SOC);
 	cmd->num_chan = chan_len;
 	WMI_LOGD("%s: Total chan (PCL) len:%d", __func__, cmd->num_chan);
@@ -1956,7 +1962,7 @@ static QDF_STATUS send_pdev_set_pcl_cmd_tlv(wmi_unified_t wmi_handle,
 	cmd_args = (uint32_t *) (buf_ptr + WMI_TLV_HDR_SIZE);
 	for (i = 0; i < chan_len ; i++) {
 		cmd_args[i] = msg->weighed_valid_list[i];
-		WMI_LOGD("%s: chan:%d weight:%d", __func__,
+		WMI_LOGD("%s: freq:%d weight:%d", __func__,
 			 msg->saved_chan_list[i], cmd_args[i]);
 	}
 	wmi_mtrace(WMI_PDEV_SET_PCL_CMDID, NO_SESSION, 0);
@@ -2001,6 +2007,7 @@ QDF_STATUS send_pdev_set_dual_mac_config_cmd_tlv(wmi_unified_t wmi_handle,
 			wmi_pdev_set_mac_config_cmd_fixed_param));
 
 	cmd->pdev_id = wmi_handle->ops->convert_pdev_id_host_to_target(
+							wmi_handle,
 							WMI_HOST_PDEV_ID_SOC);
 	cmd->concurrent_scan_config_bits = msg->scan_config;
 	cmd->fw_mode_config_bits = msg->fw_mode_config;

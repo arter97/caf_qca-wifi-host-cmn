@@ -24,7 +24,8 @@
 #include "qdf_atomic.h"
 #include "hal_internal.h"
 #define MAX_UNWINDOWED_ADDRESS 0x80000
-#ifdef QCA_WIFI_QCA6390
+#if defined(QCA_WIFI_QCA6390) || defined(QCA_WIFI_QCA6490) || \
+	defined(QCA_WIFI_QCN9000)
 #define WINDOW_ENABLE_BIT 0x40000000
 #else
 #define WINDOW_ENABLE_BIT 0x80000000
@@ -70,7 +71,42 @@ hal_set_verbose_debug(bool flag)
 }
 #endif
 
-#ifndef QCA_WIFI_QCA6390
+#ifdef HAL_REGISTER_WRITE_DEBUG
+/**
+ * hal_reg_write_result_check() - check register writing result
+ * @hal_soc: HAL soc handle
+ * @offset: register offset to read
+ * @exp_val: the expected value of register
+ * @ret_confirm: result confirm flag
+ *
+ * Return: none
+ */
+static inline void hal_reg_write_result_check(struct hal_soc *hal_soc,
+					      uint32_t offset,
+					      uint32_t exp_val,
+					      bool ret_confirm)
+{
+	uint32_t value;
+
+	if (!ret_confirm)
+		return;
+
+	value = qdf_ioread32(hal_soc->dev_base_addr + offset);
+	if (exp_val != value) {
+		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_INFO_HIGH,
+			  "register offset 0x%x write failed!\n", offset);
+		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_INFO_HIGH,
+			  "the expectation 0x%x, actual value 0x%x\n",
+			  exp_val,
+			  value);
+	}
+}
+#else
+/* no op */
+#define hal_reg_write_result_check(_hal_soc, _offset, _exp_val, _ret_confirm)
+#endif
+
+#if !defined(QCA_WIFI_QCA6390) && !defined(QCA_WIFI_QCA6490)
 static inline int hal_force_wake_request(struct hal_soc *soc)
 {
 	return 0;
@@ -80,14 +116,29 @@ static inline int hal_force_wake_release(struct hal_soc *soc)
 {
 	return 0;
 }
+
+static inline void hal_lock_reg_access(struct hal_soc *soc,
+				       unsigned long *flags)
+{
+	qdf_spin_lock_irqsave(&soc->register_access_lock);
+}
+
+static inline void hal_unlock_reg_access(struct hal_soc *soc,
+					 unsigned long *flags)
+{
+	qdf_spin_unlock_irqrestore(&soc->register_access_lock);
+}
+
 #else
 static inline int hal_force_wake_request(struct hal_soc *soc)
 {
 	uint32_t timeout = 0;
+	int ret;
 
-	if (pld_force_wake_request(soc->qdf_dev->dev)) {
+	ret = pld_force_wake_request(soc->qdf_dev->dev);
+	if (ret) {
 		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_ERROR,
-			  "%s: Request send failed \n", __func__);
+			  "%s: Request send failed %d\n", __func__, ret);
 		return -EINVAL;
 	}
 
@@ -107,25 +158,49 @@ static inline int hal_force_wake_release(struct hal_soc *soc)
 {
 	return pld_force_wake_release(soc->qdf_dev->dev);
 }
+
+static inline void hal_lock_reg_access(struct hal_soc *soc,
+				       unsigned long *flags)
+{
+	pld_lock_reg_window(soc->qdf_dev->dev, flags);
+}
+
+static inline void hal_unlock_reg_access(struct hal_soc *soc,
+					 unsigned long *flags)
+{
+	pld_unlock_reg_window(soc->qdf_dev->dev, flags);
+}
 #endif
 
 #ifdef PCIE_REG_WINDOW_LOCAL_NO_CACHE
-static inline void hal_select_window(struct hal_soc *hal_soc, uint32_t offset)
+static inline void hal_select_window(struct hal_soc *hal_soc, uint32_t offset,
+				     bool ret_confirm)
 {
 	uint32_t window = (offset >> WINDOW_SHIFT) & WINDOW_VALUE_MASK;
 
 	qdf_iowrite32(hal_soc->dev_base_addr + WINDOW_REG_ADDRESS,
 		      WINDOW_ENABLE_BIT | window);
 	hal_soc->register_window = window;
+
+	hal_reg_write_result_check(hal_soc, WINDOW_REG_ADDRESS,
+				   WINDOW_ENABLE_BIT | window,
+				   ret_confirm);
 }
 #else
-static inline void hal_select_window(struct hal_soc *hal_soc, uint32_t offset)
+static inline void hal_select_window(struct hal_soc *hal_soc, uint32_t offset,
+				     bool ret_confirm)
 {
 	uint32_t window = (offset >> WINDOW_SHIFT) & WINDOW_VALUE_MASK;
 	if (window != hal_soc->register_window) {
 		qdf_iowrite32(hal_soc->dev_base_addr + WINDOW_REG_ADDRESS,
 			      WINDOW_ENABLE_BIT | window);
 		hal_soc->register_window = window;
+
+		hal_reg_write_result_check(
+					hal_soc,
+					WINDOW_REG_ADDRESS,
+					WINDOW_ENABLE_BIT | window,
+					ret_confirm);
 	}
 }
 #endif
@@ -136,41 +211,65 @@ static inline void hal_select_window(struct hal_soc *hal_soc, uint32_t offset)
  * note3: WINDOW_VALUE_MASK = big enough that trying to write past that window
  *				would be a bug
  */
-#ifndef QCA_WIFI_QCA6390
+#if !defined(QCA_WIFI_QCA6390) && !defined(QCA_WIFI_QCA6490)
 static inline void hal_write32_mb(struct hal_soc *hal_soc, uint32_t offset,
-				  uint32_t value)
+				  uint32_t value, bool ret_confirm)
 {
+	unsigned long flags;
+
 	if (!hal_soc->use_register_windowing ||
 	    offset < MAX_UNWINDOWED_ADDRESS) {
 		qdf_iowrite32(hal_soc->dev_base_addr + offset, value);
+		hal_reg_write_result_check(hal_soc, offset,
+					   value, ret_confirm);
 	} else {
-		qdf_spin_lock_irqsave(&hal_soc->register_access_lock);
-		hal_select_window(hal_soc, offset);
+		hal_lock_reg_access(hal_soc, &flags);
+		hal_select_window(hal_soc, offset, ret_confirm);
 		qdf_iowrite32(hal_soc->dev_base_addr + WINDOW_START +
 			  (offset & WINDOW_RANGE_MASK), value);
-		qdf_spin_unlock_irqrestore(&hal_soc->register_access_lock);
+
+		hal_reg_write_result_check(
+				hal_soc,
+				WINDOW_START + (offset & WINDOW_RANGE_MASK),
+				value, ret_confirm);
+		hal_unlock_reg_access(hal_soc, &flags);
 	}
 }
 #else
 static inline void hal_write32_mb(struct hal_soc *hal_soc, uint32_t offset,
-				  uint32_t value)
+				  uint32_t value, bool ret_confirm)
 {
-	if ((offset > MAPPED_REF_OFF) &&
-	    hal_force_wake_request(hal_soc)) {
-		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_ERROR,
-			  "%s: Wake up request failed\n", __func__);
-		return;
+	int ret;
+	unsigned long flags;
+
+	if (offset > MAPPED_REF_OFF) {
+		ret = hal_force_wake_request(hal_soc);
+		if (ret) {
+			QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_ERROR,
+				  "%s: Wake up request failed %d\n",
+				  __func__, ret);
+			QDF_BUG(0);
+			return;
+		}
 	}
 
 	if (!hal_soc->use_register_windowing ||
 	    offset < MAX_UNWINDOWED_ADDRESS) {
 		qdf_iowrite32(hal_soc->dev_base_addr + offset, value);
+		hal_reg_write_result_check(hal_soc, offset,
+					   value, ret_confirm);
 	} else {
-		qdf_spin_lock_irqsave(&hal_soc->register_access_lock);
-		hal_select_window(hal_soc, offset);
+		hal_lock_reg_access(hal_soc, &flags);
+		hal_select_window(hal_soc, offset, ret_confirm);
 		qdf_iowrite32(hal_soc->dev_base_addr + WINDOW_START +
 			  (offset & WINDOW_RANGE_MASK), value);
-		qdf_spin_unlock_irqrestore(&hal_soc->register_access_lock);
+
+		hal_reg_write_result_check(
+				hal_soc,
+				WINDOW_START + (offset & WINDOW_RANGE_MASK),
+				value,
+				ret_confirm);
+		hal_unlock_reg_access(hal_soc, &flags);
 	}
 
 	if ((offset > MAPPED_REF_OFF) &&
@@ -194,24 +293,25 @@ static inline void hal_write_address_32_mb(struct hal_soc *hal_soc,
 		return qdf_iowrite32(addr, value);
 
 	offset = addr - hal_soc->dev_base_addr;
-	hal_write32_mb(hal_soc, offset, value);
+	hal_write32_mb(hal_soc, offset, value, false);
 }
 
-#ifndef QCA_WIFI_QCA6390
+#if !defined(QCA_WIFI_QCA6390) && !defined(QCA_WIFI_QCA6490)
 static inline uint32_t hal_read32_mb(struct hal_soc *hal_soc, uint32_t offset)
 {
 	uint32_t ret;
+	unsigned long flags;
 
 	if (!hal_soc->use_register_windowing ||
 	    offset < MAX_UNWINDOWED_ADDRESS) {
 		return qdf_ioread32(hal_soc->dev_base_addr + offset);
 	}
 
-	qdf_spin_lock_irqsave(&hal_soc->register_access_lock);
-	hal_select_window(hal_soc, offset);
+	hal_lock_reg_access(hal_soc, &flags);
+	hal_select_window(hal_soc, offset, false);
 	ret = qdf_ioread32(hal_soc->dev_base_addr + WINDOW_START +
 		       (offset & WINDOW_RANGE_MASK));
-	qdf_spin_unlock_irqrestore(&hal_soc->register_access_lock);
+	hal_unlock_reg_access(hal_soc, &flags);
 
 	return ret;
 }
@@ -240,6 +340,7 @@ static inline uint32_t hal_read_address_32_mb(struct hal_soc *soc,
 static inline uint32_t hal_read32_mb(struct hal_soc *hal_soc, uint32_t offset)
 {
 	uint32_t ret;
+	unsigned long flags;
 
 	if ((offset > MAPPED_REF_OFF) &&
 	    hal_force_wake_request(hal_soc)) {
@@ -253,11 +354,11 @@ static inline uint32_t hal_read32_mb(struct hal_soc *hal_soc, uint32_t offset)
 		return qdf_ioread32(hal_soc->dev_base_addr + offset);
 	}
 
-	qdf_spin_lock_irqsave(&hal_soc->register_access_lock);
-	hal_select_window(hal_soc, offset);
+	hal_lock_reg_access(hal_soc, &flags);
+	hal_select_window(hal_soc, offset, false);
 	ret = qdf_ioread32(hal_soc->dev_base_addr + WINDOW_START +
 		       (offset & WINDOW_RANGE_MASK));
-	qdf_spin_unlock_irqrestore(&hal_soc->register_access_lock);
+	hal_unlock_reg_access(hal_soc, &flags);
 
 	if ((offset > MAPPED_REF_OFF) &&
 	    hal_force_wake_release(hal_soc))
@@ -499,16 +600,31 @@ extern void *hal_srng_setup(void *hal_soc, int ring_type, int ring_num,
 #define REO_REMAP_UNUSED 7
 
 /*
- * currently this macro only works for IX0 since all the rings we are remapping
- * can be remapped from HWIO_REO_R0_DESTINATION_RING_CTRL_IX_0
+ * Macro to access HWIO_REO_R0_DESTINATION_RING_CTRL_IX_0
+ * to map destination to rings
  */
-#define HAL_REO_REMAP_VAL(_ORIGINAL_DEST, _NEW_DEST) \
-	HAL_REO_REMAP_VAL_(_ORIGINAL_DEST, _NEW_DEST)
-/* allow the destination macros to be expanded */
-#define HAL_REO_REMAP_VAL_(_ORIGINAL_DEST, _NEW_DEST) \
-	(_NEW_DEST << \
+#define HAL_REO_REMAP_IX0(_VALUE, _OFFSET) \
+	((_VALUE) << \
 	 (HWIO_REO_R0_DESTINATION_RING_CTRL_IX_0_DEST_RING_MAPPING_ ## \
-	  _ORIGINAL_DEST ## _SHFT))
+	  _OFFSET ## _SHFT))
+
+/*
+ * Macro to access HWIO_REO_R0_DESTINATION_RING_CTRL_IX_1
+ * to map destination to rings
+ */
+#define HAL_REO_REMAP_IX2(_VALUE, _OFFSET) \
+	((_VALUE) << \
+	 (HWIO_REO_R0_DESTINATION_RING_CTRL_IX_2_DEST_RING_MAPPING_ ## \
+	  _OFFSET ## _SHFT))
+
+/*
+ * Macro to access HWIO_REO_R0_DESTINATION_RING_CTRL_IX_3
+ * to map destination to rings
+ */
+#define HAL_REO_REMAP_IX3(_VALUE, _OFFSET) \
+	((_VALUE) << \
+	 (HWIO_REO_R0_DESTINATION_RING_CTRL_IX_3_DEST_RING_MAPPING_ ## \
+	  _OFFSET ## _SHFT))
 
 /**
  * hal_reo_read_write_ctrl_ix - Read or write REO_DESTINATION_RING_CTRL_IX
@@ -781,9 +897,10 @@ void *hal_srng_dst_peek_sync_locked(hal_soc_handle_t hal_soc_hdl,
  * @sync_hw_ptr: Sync cached head pointer with HW
  *
  */
-static inline uint32_t hal_srng_dst_num_valid(void *hal_soc,
-					      hal_ring_handle_t hal_ring_hdl,
-					      int sync_hw_ptr)
+static inline
+uint32_t hal_srng_dst_num_valid(void *hal_soc,
+				hal_ring_handle_t hal_ring_hdl,
+				int sync_hw_ptr)
 {
 	struct hal_srng *srng = (struct hal_srng *)hal_ring_hdl;
 	uint32_t hp;
@@ -800,6 +917,33 @@ static inline uint32_t hal_srng_dst_num_valid(void *hal_soc,
 		return (hp - tp) / srng->entry_size;
 	else
 		return (srng->ring_size - tp + hp) / srng->entry_size;
+}
+
+/**
+ * hal_srng_dst_num_valid_locked - Returns num valid entries to be processed
+ *
+ * @hal_soc: Opaque HAL SOC handle
+ * @hal_ring_hdl: Destination ring pointer
+ * @sync_hw_ptr: Sync cached head pointer with HW
+ *
+ * Returns number of valid entries to be processed by the host driver. The
+ * function takes up SRNG lock.
+ *
+ * Return: Number of valid destination entries
+ */
+static inline uint32_t
+hal_srng_dst_num_valid_locked(hal_soc_handle_t hal_soc,
+			      hal_ring_handle_t hal_ring_hdl,
+			      int sync_hw_ptr)
+{
+	uint32_t num_valid;
+	struct hal_srng *srng = (struct hal_srng *)hal_ring_hdl;
+
+	SRNG_LOCK(&srng->lock);
+	num_valid = hal_srng_dst_num_valid(hal_soc, hal_ring_hdl, sync_hw_ptr);
+	SRNG_UNLOCK(&srng->lock);
+
+	return num_valid;
 }
 
 /**
@@ -1288,21 +1432,6 @@ uint32_t hal_idle_list_num_scatter_bufs(hal_soc_handle_t hal_soc_hdl,
 	return num_scatter_bufs;
 }
 
-/* REO parameters to be passed to hal_reo_setup */
-struct hal_reo_params {
-	/** rx hash steering enabled or disabled */
-	bool rx_hash_enabled;
-	/** reo remap 1 register */
-	uint32_t remap1;
-	/** reo remap 2 register */
-	uint32_t remap2;
-	/** fragment destination ring */
-	uint8_t frag_dst_ring;
-	/** padding */
-	uint8_t padding[3];
-};
-
-
 enum hal_pn_type {
 	HAL_PN_NONE,
 	HAL_PN_WPA,
@@ -1389,6 +1518,23 @@ hal_srng_get_tp_addr(void *hal_soc, hal_ring_handle_t hal_ring_hdl)
 			((unsigned long)(srng->u.dst_ring.tp_addr) -
 			(unsigned long)(hal->shadow_wrptr_mem_vaddr));
 	}
+}
+
+/**
+ * hal_srng_get_num_entries - Get total entries in the HAL Srng
+ *
+ * @hal_soc: Opaque HAL SOC handle
+ * @hal_ring_hdl: Ring pointer (Source or Destination ring)
+ *
+ * Return: total number of entries in hal ring
+ */
+static inline
+uint32_t hal_srng_get_num_entries(hal_soc_handle_t hal_soc_hdl,
+				  hal_ring_handle_t hal_ring_hdl)
+{
+	struct hal_srng *srng = (struct hal_srng *)hal_ring_hdl;
+
+	return srng->num_entries;
 }
 
 /**
