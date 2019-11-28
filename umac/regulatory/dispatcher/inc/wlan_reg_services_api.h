@@ -634,7 +634,7 @@ QDF_STATUS regulatory_psoc_close(struct wlan_objmgr_psoc *psoc);
 
 /**
  * regulatory_pdev_open() - Open regulatory component
- * @pdev: Pointer to pdev structure.
+ * @pdev: Pointer to pdev structure
  *
  * Return: Success or Failure
  */
