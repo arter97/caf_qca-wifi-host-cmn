@@ -696,4 +696,35 @@ static inline void cdp_vdev_set_driver_del_ack_enable(ol_txrx_soc_handle soc,
 		return soc->ops->misc_ops->vdev_set_driver_del_ack_enable(
 			vdev_id, rx_packets, time_in_ms, high_th, low_th);
 }
+
+static inline void cdp_vdev_set_bundle_require_flag(ol_txrx_soc_handle soc,
+						    uint8_t vdev_id,
+						    unsigned long tx_bytes,
+						    uint32_t time_in_ms,
+						    uint32_t high_th,
+						    uint32_t low_th)
+{
+	if (!soc || !soc->ops || !soc->ops->misc_ops) {
+		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_FATAL,
+			  "%s invalid instance", __func__);
+		return;
+	}
+
+	if (soc->ops->misc_ops->vdev_set_bundle_require_flag)
+		return soc->ops->misc_ops->vdev_set_bundle_require_flag(
+			vdev_id, tx_bytes, time_in_ms, high_th, low_th);
+}
+
+static inline void cdp_pdev_reset_bundle_require_flag(ol_txrx_soc_handle soc,
+						      struct cdp_pdev *pdev)
+{
+	if (!soc || !soc->ops || !soc->ops->misc_ops) {
+		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_FATAL,
+			  "%s invalid instance", __func__);
+		return;
+	}
+
+	if (soc->ops->misc_ops->pdev_reset_bundle_require_flag)
+		return soc->ops->misc_ops->pdev_reset_bundle_require_flag(pdev);
+}
 #endif /* _CDP_TXRX_MISC_H_ */
