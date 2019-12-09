@@ -341,10 +341,8 @@ QDF_STATUS wlan_regulatory_init(void)
 		reg_err("failed to register reg psoc obj create handler");
 		goto unreg_pdev_create;
 	}
-
-	reg_debug("regulatory handlers registered with obj mgr");
-
 	channel_map = channel_map_global;
+	reg_debug("regulatory handlers registered with obj mgr");
 
 	return status;
 
@@ -443,16 +441,12 @@ QDF_STATUS regulatory_psoc_close(struct wlan_objmgr_psoc *psoc)
 QDF_STATUS regulatory_pdev_open(struct wlan_objmgr_pdev *pdev)
 {
 	struct wlan_objmgr_psoc *parent_psoc;
-	QDF_STATUS status;
 
 	parent_psoc = wlan_pdev_get_psoc(pdev);
 
-	status = reg_send_scheduler_msg_sb(parent_psoc, pdev);
+	reg_send_scheduler_msg_nb(parent_psoc, pdev);
 
-	if (QDF_IS_STATUS_ERROR(status))
-		reg_err("scheduler send msg failed");
-
-	return status;
+	return QDF_STATUS_SUCCESS;
 }
 
 QDF_STATUS regulatory_pdev_close(struct wlan_objmgr_pdev *pdev)
@@ -838,6 +832,14 @@ QDF_STATUS wlan_reg_modify_pdev_chan_range(struct wlan_objmgr_pdev *pdev)
 {
 	return reg_modify_pdev_chan_range(pdev);
 }
+
+#ifdef DISABLE_UNII_SHARED_BANDS
+QDF_STATUS wlan_reg_disable_chan_coex(struct wlan_objmgr_pdev *pdev,
+				      uint8_t unii_5g_bitmap)
+{
+	return reg_disable_chan_coex(pdev, unii_5g_bitmap);
+}
+#endif
 
 #ifdef CONFIG_CHAN_FREQ_API
 bool wlan_reg_is_same_band_freqs(uint16_t freq1, uint16_t freq2)

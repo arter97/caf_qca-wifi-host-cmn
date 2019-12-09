@@ -322,6 +322,8 @@ static const uint32_t pdev_param_tlv[] = {
 			WMI_PDEV_PARAM_SET_CMD_OBSS_PD_PER_AC,
 	[wmi_pdev_param_set_cong_ctrl_max_msdus] =
 			WMI_PDEV_PARAM_SET_CONG_CTRL_MAX_MSDUS,
+	[wmi_pdev_param_enable_fw_dynamic_he_edca] =
+			WMI_PDEV_PARAM_ENABLE_FW_DYNAMIC_HE_EDCA,
 };
 
 /**
@@ -2337,6 +2339,7 @@ static QDF_STATUS send_beacon_tmpl_send_cmd_tlv(wmi_unified_t wmi_handle,
 	cmd->csa_switch_count_offset = param->csa_switch_count_offset;
 	cmd->ext_csa_switch_count_offset = param->ext_csa_switch_count_offset;
 	cmd->esp_ie_offset = param->esp_ie_offset;
+	cmd->mu_edca_ie_offset = param->mu_edca_ie_offset;
 	cmd->buf_len = param->tmpl_len;
 	buf_ptr += sizeof(wmi_bcn_tmpl_cmd_fixed_param);
 
@@ -2436,6 +2439,9 @@ static inline void copy_peer_flags_tlv(
 	if (param->safe_mode_enabled)
 		cmd->peer_flags &=
 		    ~(WMI_PEER_NEED_PTK_4_WAY | WMI_PEER_NEED_GTK_2_WAY);
+	/* inter BSS peer */
+	if (param->inter_bss_peer)
+		cmd->peer_flags |= WMI_PEER_INTER_BSS_PEER;
 	/* Disable AMSDU for station transmit, if user configures it */
 	/* Disable AMSDU for AP transmit to 11n Stations, if user configures
 	 * it
@@ -2594,6 +2600,20 @@ static QDF_STATUS send_peer_assoc_cmd_tlv(wmi_unified_t wmi_handle,
 		buf_ptr += sizeof(wmi_he_rate_set);
 	}
 
+	if ((param->he_flag) && (param->peer_he_mcs_count > 1) &&
+	    (param->peer_he_rx_mcs_set[WMI_HOST_HE_TXRX_MCS_NSS_IDX_160]
+	     == WMI_HOST_HE_INVALID_MCSNSSMAP ||
+	     param->peer_he_tx_mcs_set[WMI_HOST_HE_TXRX_MCS_NSS_IDX_160]
+	     == WMI_HOST_HE_INVALID_MCSNSSMAP)) {
+		WMI_LOGD("param->peer_he_tx_mcs_set[160MHz]=%x",
+			 param->peer_he_tx_mcs_set[WMI_HOST_HE_TXRX_MCS_NSS_IDX_160]);
+		WMI_LOGD("param->peer_he_rx_mcs_set[160MHz]=%x",
+			 param->peer_he_rx_mcs_set[WMI_HOST_HE_TXRX_MCS_NSS_IDX_160]);
+		WMI_LOGD("peer_mac=%02x:%02x:%02x:%02x:%02x:%02x",
+			 param->peer_mac[0], param->peer_mac[1],
+			 param->peer_mac[2], param->peer_mac[3],
+			 param->peer_mac[4], param->peer_mac[5]);
+	}
 
 	WMI_LOGD("%s: vdev_id %d associd %d peer_flags %x rate_caps %x "
 		 "peer_caps %x listen_intval %d ht_caps %x max_mpdu %d "
@@ -8999,7 +9019,9 @@ static QDF_STATUS extract_all_stats_counts_tlv(wmi_unified_t wmi_handle,
 		(((uint64_t)ev->num_mib_stats) * sizeof(wmi_mib_stats)) +
 		(((uint64_t)ev->num_bcn_stats) * sizeof(wmi_bcn_stats)) +
 		(((uint64_t)ev->num_peer_extd_stats) *
-		 sizeof(wmi_peer_extd_stats));
+		 sizeof(wmi_peer_extd_stats)) +
+		(((uint64_t)ev->num_mib_extd_stats) *
+		 sizeof(wmi_mib_extd_stats));
 	if (param_buf->num_data != min_data_len) {
 		WMI_LOGE("data len: %u isn't same as calculated: %llu",
 			 param_buf->num_data, min_data_len);
@@ -9014,6 +9036,8 @@ static QDF_STATUS extract_all_stats_counts_tlv(wmi_unified_t wmi_handle,
 	stats_param->num_peer_extd_stats = ev->num_peer_extd_stats;
 	stats_param->num_bcnflt_stats = ev->num_bcnflt_stats;
 	stats_param->num_chan_stats = ev->num_chan_stats;
+	stats_param->num_mib_stats = ev->num_mib_stats;
+	stats_param->num_mib_extd_stats = ev->num_mib_extd_stats;
 	stats_param->num_bcn_stats = ev->num_bcn_stats;
 	stats_param->pdev_id = wmi_handle->ops->convert_pdev_id_target_to_host(
 							wmi_handle,
@@ -9528,6 +9552,144 @@ static QDF_STATUS extract_chan_stats_tlv(wmi_unified_t wmi_handle,
 
 	return QDF_STATUS_SUCCESS;
 }
+
+#ifdef WLAN_FEATURE_MIB_STATS
+/**
+ * extract_mib_stats_tlv() - extract mib stats from event
+ * @wmi_handle: wmi handle
+ * @param evt_buf: pointer to event buffer
+ * @param mib_stats: pointer to hold mib stats
+ *
+ * Return: QDF_STATUS_SUCCESS for success or error code
+ */
+static QDF_STATUS extract_mib_stats_tlv(wmi_unified_t wmi_handle,
+					void *evt_buf,
+					struct mib_stats_metrics
+					*mib_stats)
+{
+	WMI_UPDATE_STATS_EVENTID_param_tlvs *param_buf;
+	wmi_stats_event_fixed_param *ev_param;
+	uint8_t *data;
+	wmi_mib_stats *ev;
+	wmi_mib_extd_stats *ev_extd;
+
+	param_buf = (WMI_UPDATE_STATS_EVENTID_param_tlvs *)evt_buf;
+	ev_param = (wmi_stats_event_fixed_param *)param_buf->fixed_param;
+	data = (uint8_t *)param_buf->data;
+
+	ev = (wmi_mib_stats *)(data +
+	      ev_param->num_pdev_stats * sizeof(wmi_pdev_stats) +
+	      ev_param->num_vdev_stats * sizeof(wmi_vdev_stats) +
+	      ev_param->num_peer_stats * sizeof(wmi_peer_stats) +
+	      ev_param->num_bcnflt_stats *
+	      sizeof(wmi_bcnfilter_stats_t) +
+	      ev_param->num_chan_stats * sizeof(wmi_chan_stats));
+
+	qdf_mem_zero(mib_stats, sizeof(*mib_stats));
+
+	mib_stats->mib_counters.tx_frags =
+		ev->tx_mpdu_grp_frag_cnt;
+	mib_stats->mib_counters.group_tx_frames =
+		ev->tx_msdu_grp_frm_cnt;
+	mib_stats->mib_counters.failed_cnt = ev->tx_msdu_fail_cnt;
+	mib_stats->mib_counters.rx_frags = ev->rx_mpdu_frag_cnt;
+	mib_stats->mib_counters.group_rx_frames =
+		ev->rx_msdu_grp_frm_cnt;
+	mib_stats->mib_counters.fcs_error_cnt =
+		ev->rx_mpdu_fcs_err;
+	mib_stats->mib_counters.tx_frames =
+		ev->tx_msdu_frm_cnt;
+	mib_stats->mib_mac_statistics.retry_cnt =
+		ev->tx_msdu_retry_cnt;
+	mib_stats->mib_mac_statistics.frame_dup_cnt =
+		ev->rx_frm_dup_cnt;
+	mib_stats->mib_mac_statistics.rts_success_cnt =
+		ev->tx_rts_success_cnt;
+	mib_stats->mib_mac_statistics.rts_fail_cnt =
+		ev->tx_rts_fail_cnt;
+
+	mib_stats->mib_qos_counters.qos_tx_frag_cnt =
+		 ev->tx_Qos_mpdu_grp_frag_cnt;
+	mib_stats->mib_qos_counters.qos_retry_cnt =
+		ev->tx_Qos_msdu_retry_UP;
+	mib_stats->mib_qos_counters.qos_failed_cnt =
+		ev->tx_Qos_msdu_fail_UP;
+	mib_stats->mib_qos_counters.qos_frame_dup_cnt =
+		ev->rx_Qos_frm_dup_cnt_UP;
+	mib_stats->mib_qos_counters.qos_rts_success_cnt =
+		ev->tx_Qos_rts_success_cnt_UP;
+	mib_stats->mib_qos_counters.qos_rts_fail_cnt =
+		ev->tx_Qos_rts_fail_cnt_UP;
+	mib_stats->mib_qos_counters.qos_rx_frag_cnt =
+		ev->rx_Qos_mpdu_frag_cnt_UP;
+	mib_stats->mib_qos_counters.qos_tx_frame_cnt =
+		ev->tx_Qos_msdu_frm_cnt_UP;
+	mib_stats->mib_qos_counters.qos_discarded_frame_cnt =
+		ev->rx_Qos_msdu_discard_cnt_UP;
+	mib_stats->mib_qos_counters.qos_mpdu_rx_cnt =
+		ev->rx_Qos_mpdu_cnt;
+	mib_stats->mib_qos_counters.qos_retries_rx_cnt =
+		ev->rx_Qos_mpdu_retryBit_cnt;
+
+	mib_stats->mib_rsna_stats.tkip_icv_err =
+		ev->rsna_TKIP_icv_err_cnt;
+	mib_stats->mib_rsna_stats.tkip_replays =
+		ev->rsna_TKIP_replay_err_cnt;
+	mib_stats->mib_rsna_stats.ccmp_decrypt_err =
+		ev->rsna_CCMP_decrypt_err_cnt;
+	mib_stats->mib_rsna_stats.ccmp_replays =
+		ev->rsna_CCMP_replay_err_cnt;
+
+	mib_stats->mib_counters_group3.tx_ampdu_cnt =
+		ev->tx_ampdu_cnt;
+	mib_stats->mib_counters_group3.tx_mpdus_in_ampdu_cnt =
+		ev->tx_mpdu_cnt_in_ampdu;
+	mib_stats->mib_counters_group3.tx_octets_in_ampdu_cnt =
+		ev->tx_octets_in_ampdu.upload.high;
+	mib_stats->mib_counters_group3.tx_octets_in_ampdu_cnt =
+		mib_stats->mib_counters_group3.tx_octets_in_ampdu_cnt << 32;
+	mib_stats->mib_counters_group3.tx_octets_in_ampdu_cnt +=
+		ev->tx_octets_in_ampdu.upload.low;
+
+	mib_stats->mib_counters_group3.ampdu_rx_cnt =
+		ev->rx_ampdu_cnt;
+	mib_stats->mib_counters_group3.mpdu_in_rx_ampdu_cnt =
+		ev->rx_mpdu_cnt_in_ampdu;
+	mib_stats->mib_counters_group3.rx_octets_in_ampdu_cnt =
+		ev->rx_octets_in_ampdu.upload.rx_octets_in_ampdu_high;
+	mib_stats->mib_counters_group3.rx_octets_in_ampdu_cnt =
+		mib_stats->mib_counters_group3.rx_octets_in_ampdu_cnt << 32;
+	mib_stats->mib_counters_group3.rx_octets_in_ampdu_cnt +=
+		ev->rx_octets_in_ampdu.upload.rx_octets_in_ampdu_low;
+
+	if (ev_param->num_mib_extd_stats) {
+		ev_extd = (wmi_mib_extd_stats *)((uint8_t *)ev +
+			   ev_param->num_mib_stats * sizeof(wmi_mib_stats) +
+			   ev_param->num_bcn_stats * sizeof(wmi_bcn_stats) +
+			   ev_param->num_peer_extd_stats *
+			   sizeof(wmi_peer_extd_stats));
+		mib_stats->mib_mac_statistics.multi_retry_cnt =
+			ev_extd->tx_msdu_multi_retry_cnt;
+		mib_stats->mib_mac_statistics.tx_ack_fail_cnt =
+			ev_extd->tx_ack_fail_cnt;
+
+		mib_stats->mib_qos_counters.qos_multi_retry_cnt =
+			ev_extd->tx_qos_msdu_multi_retry_up;
+		mib_stats->mib_qos_counters.tx_qos_ack_fail_cnt_up =
+			ev_extd->tx_qos_ack_fail_cnt_up;
+
+		mib_stats->mib_rsna_stats.cmac_icv_err =
+			ev_extd->rsna_cmac_icv_err_cnt;
+		mib_stats->mib_rsna_stats.cmac_replays =
+			ev_extd->rsna_cmac_replay_err_cnt;
+
+		mib_stats->mib_counters_group3.rx_ampdu_deli_crc_err_cnt =
+			ev_extd->rx_ampdu_deli_crc_err_cnt;
+	}
+
+	return QDF_STATUS_SUCCESS;
+}
+#endif
 
 /**
  * extract_profile_ctx_tlv() - extract profile context from event
@@ -11970,6 +12132,42 @@ static void wmi_11ax_bss_color_attach_tlv(struct wmi_unified *wmi_handle)
 		extract_obss_color_collision_info_tlv;
 }
 
+#if defined(WLAN_SUPPORT_FILS) || defined(CONFIG_BAND_6GHZ)
+static QDF_STATUS
+send_vdev_fils_enable_cmd_send(struct wmi_unified *wmi_handle,
+			       struct config_fils_params *param)
+{
+	wmi_buf_t buf;
+	wmi_enable_fils_cmd_fixed_param *cmd;
+	uint8_t len = sizeof(wmi_enable_fils_cmd_fixed_param);
+
+	buf = wmi_buf_alloc(wmi_handle, len);
+	if (!buf)
+		return QDF_STATUS_E_NOMEM;
+
+	cmd = (wmi_enable_fils_cmd_fixed_param *)wmi_buf_data(
+			buf);
+	WMITLV_SET_HDR(&cmd->tlv_header,
+		       WMITLV_TAG_STRUC_wmi_enable_fils_cmd_fixed_param,
+		       WMITLV_GET_STRUCT_TLVLEN
+		       (wmi_enable_fils_cmd_fixed_param));
+	cmd->vdev_id = param->vdev_id;
+	cmd->fd_period = param->fd_period;
+	WMI_LOGD("%s: vdev id: %d fd_period: %d",
+		 __func__, cmd->vdev_id, cmd->fd_period);
+	wmi_mtrace(WMI_ENABLE_FILS_CMDID, cmd->vdev_id, cmd->fd_period);
+	if (wmi_unified_cmd_send(wmi_handle, buf, len,
+				 WMI_ENABLE_FILS_CMDID)) {
+		WMI_LOGE("%s: Sending FILS cmd failed, vdev_id: %d",
+			 __func__, param->vdev_id);
+		wmi_buf_free(buf);
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	return QDF_STATUS_SUCCESS;
+}
+#endif
+
 #ifdef WLAN_CFR_ENABLE
 /**
  * extract_cfr_peer_tx_event_param_tlv() - Extract peer cfr tx event params
@@ -12162,6 +12360,102 @@ extract_hw_mode_resp_event_status_tlv(wmi_unified_t wmi_handle, void *evt_buf,
 	return QDF_STATUS_SUCCESS;
 }
 
+#ifdef FEATURE_ANI_LEVEL_REQUEST
+static QDF_STATUS send_ani_level_cmd_tlv(wmi_unified_t wmi_handle,
+					 uint32_t *freqs,
+					 uint8_t num_freqs)
+{
+	wmi_buf_t buf;
+	wmi_get_channel_ani_cmd_fixed_param *cmd;
+	QDF_STATUS ret;
+	uint32_t len;
+	A_UINT32 *chan_list;
+	uint8_t i, *buf_ptr;
+
+	len = sizeof(wmi_get_channel_ani_cmd_fixed_param) +
+	      WMI_TLV_HDR_SIZE +
+	      num_freqs * sizeof(A_UINT32);
+
+	buf = wmi_buf_alloc(wmi_handle, len);
+	if (!buf)
+		return QDF_STATUS_E_FAILURE;
+
+	buf_ptr = (uint8_t *)wmi_buf_data(buf);
+	cmd = (wmi_get_channel_ani_cmd_fixed_param *)buf_ptr;
+	WMITLV_SET_HDR(&cmd->tlv_header,
+		       WMITLV_TAG_STRUC_wmi_get_channel_ani_cmd_fixed_param,
+		       WMITLV_GET_STRUCT_TLVLEN(
+		       wmi_get_channel_ani_cmd_fixed_param));
+
+	buf_ptr += sizeof(wmi_get_channel_ani_cmd_fixed_param);
+	WMITLV_SET_HDR(buf_ptr, WMITLV_TAG_ARRAY_UINT32,
+		       (num_freqs * sizeof(A_UINT32)));
+
+	chan_list = (A_UINT32 *)(buf_ptr + WMI_TLV_HDR_SIZE);
+	for (i = 0; i < num_freqs; i++) {
+		chan_list[i] = freqs[i];
+		WMI_LOGD("Requesting ANI for channel[%d]", chan_list[i]);
+	}
+
+	ret = wmi_unified_cmd_send(wmi_handle, buf, len,
+				   WMI_GET_CHANNEL_ANI_CMDID);
+
+	if (QDF_IS_STATUS_ERROR(ret)) {
+		WMI_LOGE("WMI_GET_CHANNEL_ANI_CMDID send error %d", ret);
+		wmi_buf_free(buf);
+	}
+
+	return ret;
+}
+
+static QDF_STATUS extract_ani_level_tlv(uint8_t *evt_buf,
+					struct wmi_host_ani_level_event **info,
+					uint32_t *num_freqs)
+{
+	WMI_GET_CHANNEL_ANI_EVENTID_param_tlvs *param_buf;
+	wmi_get_channel_ani_event_fixed_param *fixed_param;
+	wmi_channel_ani_info_tlv_param *tlv_params;
+	uint8_t *buf_ptr, i;
+
+	param_buf = (WMI_GET_CHANNEL_ANI_EVENTID_param_tlvs *)evt_buf;
+	if (!param_buf) {
+		wmi_err("Invalid ani level event buffer");
+		return QDF_STATUS_E_INVAL;
+	}
+
+	fixed_param =
+		(wmi_get_channel_ani_event_fixed_param *)param_buf->fixed_param;
+	if (!fixed_param) {
+		wmi_err("Invalid fixed param");
+		return QDF_STATUS_E_INVAL;
+	}
+
+	buf_ptr = (uint8_t *)fixed_param;
+	buf_ptr += sizeof(wmi_get_channel_ani_event_fixed_param);
+	buf_ptr += WMI_TLV_HDR_SIZE;
+
+	*num_freqs = param_buf->num_ani_info;
+	if (*num_freqs > MAX_NUM_FREQS_FOR_ANI_LEVEL) {
+		wmi_err("Invalid number of freqs received");
+		return QDF_STATUS_E_INVAL;
+	}
+
+	*info = qdf_mem_malloc(*num_freqs *
+				   sizeof(struct wmi_host_ani_level_event));
+	if (!(*info))
+		return QDF_STATUS_E_NOMEM;
+
+	tlv_params = (wmi_channel_ani_info_tlv_param *)buf_ptr;
+	for (i = 0; i < param_buf->num_ani_info; i++) {
+		(*info)[i].ani_level = tlv_params->ani_level;
+		(*info)[i].chan_freq = tlv_params->chan_freq;
+		tlv_params++;
+	}
+
+	return QDF_STATUS_SUCCESS;
+}
+#endif /* FEATURE_ANI_LEVEL_REQUEST */
+
 struct wmi_ops tlv_ops =  {
 	.send_vdev_create_cmd = send_vdev_create_cmd_tlv,
 	.send_vdev_delete_cmd = send_vdev_delete_cmd_tlv,
@@ -12337,6 +12631,9 @@ struct wmi_ops tlv_ops =  {
 	.extract_peer_extd_stats = extract_peer_extd_stats_tlv,
 	.extract_peer_adv_stats = extract_peer_adv_stats_tlv,
 	.extract_chan_stats = extract_chan_stats_tlv,
+#ifdef WLAN_FEATURE_MIB_STATS
+	.extract_mib_stats = extract_mib_stats_tlv,
+#endif
 	.extract_profile_ctx = extract_profile_ctx_tlv,
 	.extract_profile_data = extract_profile_data_tlv,
 	.send_fw_test_cmd = send_fw_test_cmd_tlv,
@@ -12358,6 +12655,9 @@ struct wmi_ops tlv_ops =  {
 	.extract_pdev_utf_event = extract_pdev_utf_event_tlv,
 	.wmi_set_htc_tx_tag = wmi_set_htc_tx_tag_tlv,
 	.extract_fips_event_data = extract_fips_event_data_tlv,
+#if defined(WLAN_SUPPORT_FILS) || defined(CONFIG_BAND_6GHZ)
+	.send_vdev_fils_enable_cmd = send_vdev_fils_enable_cmd_send,
+#endif
 #ifdef WLAN_FEATURE_DISA
 	.extract_encrypt_decrypt_resp_event =
 				extract_encrypt_decrypt_resp_event_tlv,
@@ -12450,6 +12750,10 @@ struct wmi_ops tlv_ops =  {
 	.send_mws_coex_status_req_cmd = send_mws_coex_status_req_cmd_tlv,
 #endif
 	.extract_hw_mode_resp_event = extract_hw_mode_resp_event_status_tlv,
+#ifdef FEATURE_ANI_LEVEL_REQUEST
+	.send_ani_level_cmd = send_ani_level_cmd_tlv,
+	.extract_ani_level = extract_ani_level_tlv,
+#endif /* FEATURE_ANI_LEVEL_REQUEST */
 };
 
 /**
@@ -12797,6 +13101,7 @@ static void populate_tlv_events_id(uint32_t *event_ids)
 	event_ids[wmi_motion_det_host_eventid] = WMI_MOTION_DET_HOST_EVENTID;
 	event_ids[wmi_motion_det_base_line_host_eventid] =
 				WMI_MOTION_DET_BASE_LINE_HOST_EVENTID;
+	event_ids[wmi_get_ani_level_event_id] = WMI_GET_CHANNEL_ANI_EVENTID;
 }
 
 /**

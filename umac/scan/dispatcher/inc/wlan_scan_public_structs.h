@@ -35,7 +35,7 @@ typedef uint32_t wlan_scan_id;
 
 #define WLAN_SCAN_MAX_HINT_S_SSID        10
 #define WLAN_SCAN_MAX_HINT_BSSID         10
-#define MAX_RNR_BSS			5
+#define MAX_RNR_BSS                      5
 #define WLAN_SCAN_MAX_NUM_SSID          16
 #define WLAN_SCAN_MAX_NUM_BSSID         4
 
@@ -240,12 +240,12 @@ struct mlme_info {
 
 /**
  * struct bss_info - information required to uniquely define a bss
- * @chan: bss operating primary channel index
+ * @freq: freq of operating primary channel
  * @ssid: ssid of bss
  * @bssid: bssid of bss
  */
 struct bss_info {
-	uint8_t chan;
+	uint32_t freq;
 	struct wlan_ssid ssid;
 	struct qdf_mac_addr bssid;
 };
@@ -627,11 +627,11 @@ struct fils_filter_info {
  * @country[3]: Ap with specific country code
  * @bssid_list: bssid list
  * @ssid_list: ssid list
- * @channel_list: channel list
+ * @chan_freq_list: channel frequency list, frequency unit: MHz
  * @auth_type: auth type list
  * @enc_type: unicast enc type list
  * @mc_enc_type: multicast cast enc type list
- * @pcl_channel_list: PCL channel list
+ * @pcl_freq_list: PCL channel frequency list, frequency unit: MHz
  * @fils_scan_filter: FILS info
  * @pcl_weight_list: PCL Weight list
  * @bssid_hint: Mac address of bssid_hint
@@ -662,11 +662,11 @@ struct scan_filter {
 	uint8_t country[3];
 	struct qdf_mac_addr bssid_list[WLAN_SCAN_FILTER_NUM_BSSID];
 	struct wlan_ssid ssid_list[WLAN_SCAN_FILTER_NUM_SSID];
-	uint8_t channel_list[QDF_MAX_NUM_CHAN];
+	uint32_t chan_freq_list[QDF_MAX_NUM_CHAN];
 	enum wlan_auth_type auth_type[WLAN_NUM_OF_SUPPORT_AUTH_TYPE];
 	enum wlan_enc_type enc_type[WLAN_NUM_OF_ENCRYPT_TYPE];
 	enum wlan_enc_type mc_enc_type[WLAN_NUM_OF_ENCRYPT_TYPE];
-	uint8_t pcl_channel_list[QDF_MAX_NUM_CHAN];
+	uint32_t pcl_freq_list[QDF_MAX_NUM_CHAN];
 	struct fils_filter_info fils_scan_filter;
 	uint8_t pcl_weight_list[QDF_MAX_NUM_CHAN];
 	struct qdf_mac_addr bssid_hint;
@@ -702,27 +702,6 @@ enum scan_priority {
 	SCAN_PRIORITY_HIGH,
 	SCAN_PRIORITY_VERY_HIGH,
 	SCAN_PRIORITY_COUNT,
-};
-
-
-/**
- * enum scan_type - type of scan
- * @SCAN_TYPE_BACKGROUND: background scan
- * @SCAN_TYPE_FOREGROUND: foregrounc scan
- * @SCAN_TYPE_SPECTRAL: spectral scan
- * @SCAN_TYPE_REPEATER_BACKGROUND: background scan in repeater
- * @SCAN_TYPE_REPEATER_EXT_BACKGROUND: background scan in extended repeater
- * @SCAN_TYPE_RADIO_MEASUREMENTS: redio measurement
- * @SCAN_TYPE_COUNT: number of scan types supported
- */
-enum scan_type {
-	SCAN_TYPE_BACKGROUND,
-	SCAN_TYPE_FOREGROUND,
-	SCAN_TYPE_SPECTRAL,
-	SCAN_TYPE_REPEATER_BACKGROUND,
-	SCAN_TYPE_REPEATER_EXT_BACKGROUND,
-	SCAN_TYPE_RADIO_MEASUREMENTS,
-	SCAN_TYPE_COUNT,
 };
 
 /**
@@ -781,21 +760,6 @@ enum scan_phy_mode {
 	SCAN_PHY_MODE_11AX_HE80_2G = 23,
 	SCAN_PHY_MODE_UNKNOWN = 24,
 	SCAN_PHY_MODE_MAX = 24
-};
-
-/**
- * struct scan_extra_params_legacy
- * extra parameters required for legacy DA scan module
- * @scan_type: type of scan
- * @min_dwell_active: min active dwell time
- * @min_dwell_passive: min passive dwell time
- * @init_rest_time: init rest time for enhanced independent repeater
- */
-struct scan_extra_params_legacy {
-	enum scan_type scan_type;
-	uint32_t min_dwell_active;
-	uint32_t min_dwell_passive;
-	uint32_t init_rest_time;
 };
 
 /**
@@ -1081,12 +1045,10 @@ struct scan_req_params {
 /**
  * struct scan_start_request - scan request config
  * @vdev: vdev
- * @legacy_params: extra parameters required for legacy DA arch
  * @scan_req: common scan start request parameters
  */
 struct scan_start_request {
 	struct wlan_objmgr_vdev *vdev;
-	struct scan_extra_params_legacy legacy_params;
 	struct scan_req_params scan_req;
 };
 
@@ -1470,4 +1432,59 @@ enum ext_cap_bit_field {
 	OBSS_NARROW_BW_RU_IN_ULOFDMA_TOLERENT_SUPPORT = 79,
 };
 
+/**
+ * scan_rnr_info - RNR information
+ * @timestamp: time stamp of beacon/probe
+ * @short_ssid: Short SSID
+ * @bssid: BSSID
+ */
+struct scan_rnr_info {
+	qdf_time_t timestamp;
+	uint32_t short_ssid;
+	struct qdf_mac_addr bssid;
+};
+
+/**
+ * struct scan_rnr_node - Scan RNR entry node
+ * @node: node pointers
+ * @entry: scan RNR entry pointer
+ */
+struct scan_rnr_node {
+	qdf_list_node_t node;
+	struct scan_rnr_info entry;
+};
+
+/**
+ * meta_rnr_channel - Channel information for scan priority algorithm
+ * @chan_freq: channel frequency
+ * @bss_beacon_probe_count: Beacon and probe request count
+ * @saved_profile_count: Saved profile count
+ * @beacon_probe_last_time_found: Timestamp of beacon/probe observed
+ * @rnr_list: RNR list to store RNR IE information
+ */
+struct meta_rnr_channel {
+	uint32_t chan_freq;
+	uint32_t bss_beacon_probe_count;
+	uint32_t saved_profile_count;
+	qdf_time_t beacon_probe_last_time_found;
+	qdf_list_t rnr_list;
+};
+
+/**
+ * channel_list_db - Database for channel information
+ * @channel: channel meta information
+ */
+struct channel_list_db {
+	struct meta_rnr_channel channel[NUM_6GHZ_CHANNELS];
+};
+
+/**
+ * rnr_chan_weight - RNR channel weightage
+ * @chan_freq: channel frequency
+ * @weight: weightage of the channel
+ */
+struct rnr_chan_weight {
+	uint32_t chan_freq;
+	uint32_t weight;
+};
 #endif

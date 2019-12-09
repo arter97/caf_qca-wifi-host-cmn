@@ -948,6 +948,12 @@ typedef struct {
 #define WMI_HOST_HECAP_MAC_WORD1	0
 #define WMI_HOST_HECAP_MAC_WORD2	1
 #define WMI_HOST_MAX_HE_RATE_SET	3
+
+#define WMI_HOST_HE_INVALID_MCSNSSMAP (0xFFFF)
+#define WMI_HOST_HE_TXRX_MCS_NSS_IDX_80    0
+#define WMI_HOST_HE_TXRX_MCS_NSS_IDX_160   1
+#define WMI_HOST_HE_TXRX_MCS_NSS_IDX_80_80 2
+
 /**
  * struct wmi_host_ppe_threshold -PPE threshold
  * @numss_m1: NSS - 1
@@ -1071,7 +1077,8 @@ struct peer_assoc_params {
 		 auth_flag:1,
 		 safe_mode_enabled:1,
 		 amsdu_disable:1,
-		 p2p_capable_sta:1;
+		 p2p_capable_sta:1,
+		 inter_bss_peer:1;
 	/* Use common structure */
 	uint8_t peer_mac[QDF_MAC_ADDR_SIZE];
 	bool he_flag;
@@ -2785,16 +2792,6 @@ struct peer_chan_width_switch_params {
 };
 
 /**
- * struct config_fils_params - FILS config params
- * @vdev_id:  vdev id
- * @fd_period:  0 - Disabled, non-zero - Period in ms (mili seconds)
- */
-struct config_fils_params {
-	uint8_t vdev_id;
-	uint32_t fd_period;
-};
-
-/**
  * struct peer_add_wds_entry_params - WDS peer entry add params
  * @dest_addr: Pointer to destination macaddr
  * @peer_addr: Pointer to peer mac addr
@@ -3794,6 +3791,8 @@ struct rx_reorder_queue_remove_params {
  * @num_bcn_stats: number of beacon stats
  * @num_rssi_stats: number of rssi stats
  * @num_peer_adv_stats: number of peer adv stats
+ * @num_mib_stats: number of mib stats
+ * @num_mib_extd_stats: number of extended mib stats
  * @last_event: specify if the current event is the last event
  */
 typedef struct {
@@ -3809,6 +3808,8 @@ typedef struct {
 	uint32_t num_bcn_stats;
 	uint32_t num_rssi_stats;
 	uint32_t num_peer_adv_stats;
+	uint32_t num_mib_stats;
+	uint32_t num_mib_extd_stats;
 	uint32_t last_event;
 } wmi_host_stats_event;
 
@@ -4536,6 +4537,7 @@ typedef enum {
 	wmi_get_elna_bypass_event_id,
 	wmi_motion_det_host_eventid,
 	wmi_motion_det_base_line_host_eventid,
+	wmi_get_ani_level_event_id,
 	wmi_events_max,
 } wmi_conv_event_id;
 
@@ -4700,6 +4702,7 @@ typedef enum {
 	wmi_pdev_param_set_cmd_obss_pd_threshold,
 	wmi_pdev_param_set_cmd_obss_pd_per_ac,
 	wmi_pdev_param_set_cong_ctrl_max_msdus,
+	wmi_pdev_param_enable_fw_dynamic_he_edca,
 	wmi_pdev_param_max,
 } wmi_conv_pdev_params_id;
 
@@ -6457,6 +6460,7 @@ typedef struct {
  * @rx_clear_ext20_count: ext20 frame count
  * @rx_clear_ext40_count: ext40 frame count
  * @rx_clear_ext80_count: ext80 frame count
+ * @per_chain_noise_floor: Per chain NF value in dBm
  */
 typedef struct {
 	uint32_t pdev_id;
@@ -6478,6 +6482,7 @@ typedef struct {
 	uint32_t rx_clear_ext20_count;
 	uint32_t rx_clear_ext40_count;
 	uint32_t rx_clear_ext80_count;
+	uint32_t per_chain_noise_floor[WMI_HOST_MAX_CHAINS];
 } wmi_host_chan_info_event;
 
 /**
@@ -7838,4 +7843,17 @@ struct wmi_rx_pkt_protocol_routing_info {
 	uint32_t      meta_data;
 };
 #endif /* WLAN_SUPPORT_RX_PROTOCOL_TYPE_TAG */
+
+#ifdef FEATURE_ANI_LEVEL_REQUEST
+/* Maximum number of freqs for which ANI level can be requested */
+#define MAX_NUM_FREQS_FOR_ANI_LEVEL 20
+
+/* A valid ANI level lies between 0 to 9 */
+#define MAX_ANI_LEVEL 9
+
+struct wmi_host_ani_level_event {
+	uint32_t chan_freq;
+	uint32_t ani_level;
+};
+#endif /* FEATURE_ANI_LEVEL_REQUEST */
 #endif /* _WMI_UNIFIED_PARAM_H_ */

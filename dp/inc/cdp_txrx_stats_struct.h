@@ -195,6 +195,18 @@ enum cdp_packet_type {
 	DOT11_MAX = 5,
 };
 
+/*
+ * cdp_mu_packet_type: MU Rx type index
+ * RX_TYPE_MU_MIMO: MU MIMO Rx type index
+ * RX_TYPE_MU_OFDMA: MU OFDMA Rx type index
+ * MU_MIMO_OFDMA: MU Rx MAX type index
+ */
+enum cdp_mu_packet_type {
+	RX_TYPE_MU_MIMO = 0,
+	RX_TYPE_MU_OFDMA = 1,
+	RX_TYPE_MU_MAX = 2,
+};
+
 enum WDI_EVENT {
 	WDI_EVENT_TX_STATUS = WDI_EVENT_BASE,
 	WDI_EVENT_OFFLOAD_ALL,
@@ -445,6 +457,20 @@ struct cdp_pkt_type {
 	uint32_t mcs_count[MAX_MCS];
 };
 
+/*
+ * struct cdp_rx_mu - Rx MU Stats
+ * @ppdu_nss[SS_COUNT]: Packet Count in spatial streams
+ * @mpdu_cnt_fcs_ok: Rx success mpdu count
+ * @mpdu_cnt_fcs_err: Rx fail mpdu count
+ * @cdp_pkt_type: counter array for each MCS index
+ */
+struct cdp_rx_mu {
+	uint32_t ppdu_nss[SS_COUNT];
+	uint32_t mpdu_cnt_fcs_ok;
+	uint32_t mpdu_cnt_fcs_err;
+	struct cdp_pkt_type ppdu;
+};
+
 /* struct cdp_tx_pkt_info - tx packet info
  * num_msdu - successful msdu
  * num_mpdu - successful mpdu from compltn common
@@ -505,6 +531,8 @@ struct cdp_tso_info {
  * @num_tso_pkts: Total number of TSO Packets
  * @tso_comp: Total tso packet completions
  * @dropped_host: TSO packets dropped by host
+ * @tso_no_mem_dropped: TSO packets dropped by host due to descriptor
+			unavailablity
  * @dropped_target: TSO packets_dropped by target
  * @tso_info: Per TSO packet counters
  * @seg_histogram: TSO histogram stats
@@ -513,6 +541,7 @@ struct cdp_tso_stats {
 	struct cdp_pkt_info num_tso_pkts;
 	uint32_t tso_comp;
 	struct cdp_pkt_info dropped_host;
+	struct cdp_pkt_info tso_no_mem_dropped;
 	uint32_t dropped_target;
 #ifdef FEATURE_TSO_STATS
 	struct cdp_tso_info tso_info;
@@ -703,7 +732,13 @@ struct cdp_tx_stats {
  * @reception_type[MAX_RECEPTION_TYPES]: Reception type os packets
  * @mcs_count[MAX_MCS]: mcs count
  * @sgi_count[MAX_GI]: sgi count
- * @nss[SS_COUNT]: Packet count in spatiel Streams
+ * @nss[SS_COUNT]: packet count in spatiel Streams
+ * @ppdu_nss[SS_COUNT]: PPDU packet count in spatial streams
+ * @mpdu_cnt_fcs_ok: SU Rx success mpdu count
+ * @mpdu_cnt_fcs_err: SU Rx fail mpdu count
+ * @su_ax_ppdu_cnt: SU Rx packet count
+ * @ppdu_cnt[MAX_RECEPTION_TYPES]: PPDU packet count in reception type
+ * @rx_mu[RX_TYPE_MU_MAX]: Rx MU stats
  * @bw[MAX_BW]:  Packet Count in different bandwidths
  * @non_ampdu_cnt: Number of MSDUs with no MPDU level aggregation
  * @ampdu_cnt: Number of MSDUs part of AMSPU
@@ -764,6 +799,12 @@ struct cdp_rx_stats {
 	struct cdp_pkt_type pkt_type[DOT11_MAX];
 	uint32_t sgi_count[MAX_GI];
 	uint32_t nss[SS_COUNT];
+	uint32_t ppdu_nss[SS_COUNT];
+	uint32_t mpdu_cnt_fcs_ok;
+	uint32_t mpdu_cnt_fcs_err;
+	struct cdp_pkt_type su_ax_ppdu_cnt;
+	uint32_t ppdu_cnt[MAX_RECEPTION_TYPES];
+	struct cdp_rx_mu rx_mu[RX_TYPE_MU_MAX];
 	uint32_t bw[MAX_BW];
 	uint32_t non_ampdu_cnt;
 	uint32_t ampdu_cnt;
@@ -1814,6 +1855,8 @@ enum _ol_ath_param_t {
 #endif
 	/* get MBSS enable flag */
 	OL_ATH_PARAM_MBSS_EN  = 426,
+	/* UNII-1 and UNII-2A channel coexistance */
+	OL_ATH_PARAM_CHAN_COEX = 427,
 };
 #endif
 /* Bitmasks for stats that can block */

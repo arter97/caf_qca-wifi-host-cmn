@@ -704,6 +704,8 @@ struct dp_soc_stats {
 		uint32_t invalid_release_source;
 		/* tx completion wbm_internal_error */
 		uint32_t wbm_internal_error[MAX_WBM_INT_ERROR_REASONS];
+		/* tx completion non_wbm_internal_error */
+		uint32_t non_wbm_internal_err;
 		/* TX Comp loop packet limit hit */
 		uint32_t tx_comp_loop_pkt_limit_hit;
 		/* Head pointer Out of sync at the end of dp_tx_comp_handler */
@@ -1318,6 +1320,7 @@ struct ppdu_info {
  * @last_msdu          - last msdu indication
  * @msdu_part_of_amsdu - msdu part of amsdu
  * @transmit_cnt       - retried count
+ * @status             - transmit status
  * @tsf                - timestamp which it transmitted
  */
 struct msdu_completion_info {
@@ -1328,6 +1331,7 @@ struct msdu_completion_info {
 		last_msdu:1,
 		msdu_part_of_amsdu:1;
 	uint8_t transmit_cnt;
+	uint8_t status;
 	uint32_t tsf;
 };
 
@@ -1738,6 +1742,10 @@ struct dp_pdev {
 	/* TSO Id to index into TSO packet information */
 	qdf_atomic_t tso_idx;
 #endif /* FEATURE_TSO_STATS */
+
+#ifdef WLAN_SUPPORT_DATA_STALL
+	data_stall_detect_cb data_stall_detect_callback;
+#endif /* WLAN_SUPPORT_DATA_STALL */
 };
 
 struct dp_peer;

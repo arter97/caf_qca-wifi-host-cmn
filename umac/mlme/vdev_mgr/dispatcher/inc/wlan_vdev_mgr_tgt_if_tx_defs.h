@@ -139,6 +139,7 @@ struct tbttoffset_params {
  * @csa_switch_count_offset: CSA swith count offset in beacon frame
  * @ext_csa_switch_count_offset: ECSA switch count offset in beacon frame
  * @esp_ie_offset: ESP IE offset in beacon frame
+ * @mu_edca_ie_offset: Mu EDCA IE offset in beacon frame
  * @frm: beacon template parameter
  */
 struct beacon_tmpl_params {
@@ -150,6 +151,7 @@ struct beacon_tmpl_params {
 	uint32_t csa_switch_count_offset;
 	uint32_t ext_csa_switch_count_offset;
 	uint32_t esp_ie_offset;
+	uint32_t mu_edca_ie_offset;
 	uint8_t *frm;
 };
 
@@ -263,6 +265,21 @@ struct peer_flush_params {
 	uint32_t peer_tid_bitmap;
 	uint8_t vdev_id;
 	uint8_t peer_mac[QDF_MAC_ADDR_SIZE];
+};
+
+/* Default FILS DISCOVERY sent in period of 20TU */
+#define DEFAULT_FILS_DISCOVERY_PERIOD 20
+
+/**
+ * struct config_fils_params - FILS config params
+ * @vdev_id:  vdev id
+ * @fd_period:  0 - Disabled, non-zero - Period in ms (mili seconds)
+ * @send_prb_rsp_frame: send broadcast prb resp frame
+ */
+struct config_fils_params {
+	uint8_t vdev_id;
+	uint32_t fd_period;
+	uint32_t send_prb_rsp_frame: 1;
 };
 
 /**

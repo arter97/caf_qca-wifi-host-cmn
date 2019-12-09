@@ -323,6 +323,12 @@ static void wlan_lmac_if_umac_reg_rx_ops_register(
 
 	rx_ops->reg_rx_ops.reg_ignore_fw_reg_offload_ind =
 		tgt_reg_ignore_fw_reg_offload_ind;
+
+	rx_ops->reg_rx_ops.reg_disable_chan_coex =
+		wlan_reg_disable_chan_coex;
+
+	rx_ops->reg_rx_ops.reg_get_unii_5g_bitmap =
+		ucfg_reg_get_unii_5g_bitmap;
 }
 
 #ifdef CONVERGED_P2P_ENABLE

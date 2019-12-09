@@ -1363,6 +1363,19 @@ target_if_init_spectral_param_properties(struct target_if_spectral *spectral)
 		}
 	}
 
+	/* Once FW advertisement is in place remove this hard coding */
+	smode = SPECTRAL_SCAN_MODE_NORMAL;
+	spectral->properties[SPECTRAL_SCAN_MODE_NORMAL]
+			[SPECTRAL_PARAM_FREQUENCY].supported = false;
+	for (; smode < SPECTRAL_SCAN_MODE_MAX; smode++) {
+		spectral->properties[smode]
+			[SPECTRAL_PARAM_SPECT_PRI].common_all_modes = true;
+		spectral->properties[smode]
+			[SPECTRAL_PARAM_SCAN_PERIOD].common_all_modes = true;
+		spectral->properties[smode]
+			[SPECTRAL_PARAM_INIT_DELAY].common_all_modes = true;
+	}
+
 	return QDF_STATUS_SUCCESS;
 }
 
@@ -1407,14 +1420,6 @@ target_if_init_spectral_capability(struct target_if_spectral *spectral)
 	num_bin_scaling_params = ext_svc_param->num_bin_scaling_params;
 	scaling_params = target_psoc_get_spectral_scaling_params(tgt_psoc_info);
 	pdev_id = wlan_objmgr_pdev_get_pdev_id(pdev);
-	mac_phy_cap_arr = target_psoc_get_mac_phy_cap(tgt_psoc_info);
-	mac_phy_cap = &mac_phy_cap_arr[pdev_id];
-	table_id = mac_phy_cap->chainmask_table_id;
-	table =  &ext_svc_param->chainmask_table[table_id];
-	if (!table) {
-		spectral_err("chainmask table not found");
-		return QDF_STATUS_E_FAILURE;
-	}
 
 	/* XXX : Workaround: Set Spectral capability */
 	pcap = &spectral->capability;
@@ -1423,13 +1428,38 @@ target_if_init_spectral_capability(struct target_if_spectral *spectral)
 	pcap->spectral_cap = 1;
 	pcap->advncd_spectral_cap = 1;
 	pcap->hw_gen = spectral->spectral_gen;
-	for (j = 0; j < table->num_valid_chainmasks; j++) {
-		pcap->agile_spectral_cap |=
-			table->cap_list[j].supports_aSpectral;
-		pcap->agile_spectral_cap_160 |=
-			table->cap_list[j].supports_aSpectral_160;
+	if (spectral->spectral_gen >= SPECTRAL_GEN3) {
+		mac_phy_cap_arr = target_psoc_get_mac_phy_cap(tgt_psoc_info);
+		if (!mac_phy_cap_arr) {
+			spectral_err("mac phy cap array is null");
+			return QDF_STATUS_E_FAILURE;
+		}
+
+		mac_phy_cap = &mac_phy_cap_arr[pdev_id];
+		if (!mac_phy_cap) {
+			spectral_err("mac phy cap is null");
+			return QDF_STATUS_E_FAILURE;
+		}
+
+		table_id = mac_phy_cap->chainmask_table_id;
+		table =  &ext_svc_param->chainmask_table[table_id];
+		if (!table) {
+			spectral_err("chainmask table not found");
+			return QDF_STATUS_E_FAILURE;
+		}
+
+		for (j = 0; j < table->num_valid_chainmasks; j++) {
+			pcap->agile_spectral_cap |=
+				table->cap_list[j].supports_aSpectral;
+			pcap->agile_spectral_cap_160 |=
+				table->cap_list[j].supports_aSpectral_160;
+		}
+		pcap->agile_spectral_cap_80p80 = pcap->agile_spectral_cap_160;
+	} else {
+		pcap->agile_spectral_cap = false;
+		pcap->agile_spectral_cap_160 = false;
+		pcap->agile_spectral_cap_80p80 = false;
 	}
-	pcap->agile_spectral_cap_80p80 = pcap->agile_spectral_cap_160;
 
 	for (param_idx = 0; param_idx < num_bin_scaling_params; param_idx++) {
 		if (scaling_params[param_idx].pdev_id == pdev_id) {
@@ -3301,6 +3331,134 @@ target_if_is_agile_scan_active_in_5g(struct wlan_objmgr_psoc *psoc,
 		*is_agile_scan_inprog_5g_pdev = true;
 }
 
+/**
+ * target_if_is_agile_supported_cur_chmask() - Is Agile Spectral scan supported
+ * for current vdev rx chainmask.
+ *
+ * @spectral: Pointer to Spectral object
+ * @is_supported: Pointer to is_supported
+ *
+ * Return: QDF_STATUS_SUCCESS on success, QDF_STATUS_E_FAILURE on failure
+ */
+static QDF_STATUS
+target_if_is_agile_supported_cur_chmask(struct target_if_spectral *spectral,
+					bool *is_supported)
+{
+	struct wlan_objmgr_vdev *vdev;
+	uint8_t vdev_rxchainmask;
+	struct wlan_objmgr_psoc *psoc;
+	struct wlan_objmgr_pdev *pdev;
+	struct target_psoc_info *tgt_psoc_info;
+	struct wlan_psoc_host_service_ext_param *ext_svc_param;
+	struct wlan_psoc_host_mac_phy_caps *mac_phy_cap_arr = NULL;
+	struct wlan_psoc_host_mac_phy_caps *mac_phy_cap = NULL;
+	struct wlan_psoc_host_chainmask_table *table;
+	int j;
+	uint32_t table_id;
+	enum phy_ch_width ch_width;
+	uint8_t pdev_id;
+
+	if (!spectral) {
+		spectral_err("spectral target if object is null");
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	if (!is_supported) {
+		spectral_err("is supported argument is null");
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	if (spectral->spectral_gen <= SPECTRAL_GEN2) {
+		spectral_err("HW Agile mode is not supported up to gen 2");
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	pdev = spectral->pdev_obj;
+	if (!pdev) {
+		spectral_err("pdev is null");
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	psoc = wlan_pdev_get_psoc(pdev);
+	if (!psoc) {
+		spectral_err("psoc is null");
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	vdev = target_if_spectral_get_vdev(spectral);
+	if (!vdev) {
+		spectral_err("First vdev is NULL");
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	vdev_rxchainmask = wlan_vdev_mlme_get_rxchainmask(vdev);
+	if (!vdev_rxchainmask) {
+		spectral_err("vdev rx chainmask is zero");
+		wlan_objmgr_vdev_release_ref(vdev, WLAN_SPECTRAL_ID);
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	ch_width = target_if_vdev_get_ch_width(vdev);
+	if (ch_width == CH_WIDTH_INVALID) {
+		spectral_err("Invalid channel width");
+		wlan_objmgr_vdev_release_ref(vdev, WLAN_SPECTRAL_ID);
+		return QDF_STATUS_E_FAILURE;
+	}
+	wlan_objmgr_vdev_release_ref(vdev, WLAN_SPECTRAL_ID);
+
+	tgt_psoc_info = wlan_psoc_get_tgt_if_handle(psoc);
+	if (!tgt_psoc_info) {
+		spectral_err("target_psoc_info is null");
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	ext_svc_param = target_psoc_get_service_ext_param(tgt_psoc_info);
+	if (!ext_svc_param) {
+		spectral_err("Extended service ready param null");
+		return QDF_STATUS_E_FAILURE;
+	}
+	pdev_id = wlan_objmgr_pdev_get_pdev_id(pdev);
+
+	mac_phy_cap_arr = target_psoc_get_mac_phy_cap(tgt_psoc_info);
+	if (!mac_phy_cap_arr) {
+		spectral_err("mac phy cap array is null");
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	mac_phy_cap = &mac_phy_cap_arr[pdev_id];
+	if (!mac_phy_cap) {
+		spectral_err("mac phy cap is null");
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	table_id = mac_phy_cap->chainmask_table_id;
+	table =  &ext_svc_param->chainmask_table[table_id];
+	if (!table) {
+		spectral_err("chainmask table not found");
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	for (j = 0; j < table->num_valid_chainmasks; j++) {
+		if (table->cap_list[j].chainmask == vdev_rxchainmask) {
+			if (ch_width <= CH_WIDTH_80MHZ)
+				*is_supported =
+					table->cap_list[j].supports_aSpectral;
+			else
+				*is_supported =
+				      table->cap_list[j].supports_aSpectral_160;
+			break;
+		}
+	}
+
+	if (j == table->num_valid_chainmasks) {
+		spectral_err("vdev rx chainmask %u not found in table id = %u",
+			     vdev_rxchainmask, table_id);
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	return QDF_STATUS_SUCCESS;
+}
+
 QDF_STATUS
 target_if_start_spectral_scan(struct wlan_objmgr_pdev *pdev,
 			      const enum spectral_scan_mode smode,
@@ -3340,6 +3498,24 @@ target_if_start_spectral_scan(struct wlan_objmgr_pdev *pdev,
 	}
 
 	p_sops = GET_TARGET_IF_SPECTRAL_OPS(spectral);
+
+	if (smode == SPECTRAL_SCAN_MODE_AGILE) {
+		QDF_STATUS status;
+		bool is_supported = false;
+
+		status = target_if_is_agile_supported_cur_chmask(spectral,
+								 &is_supported);
+		if (QDF_IS_STATUS_ERROR(status)) {
+			*err = SPECTRAL_SCAN_ERR_MODE_UNSUPPORTED;
+			return QDF_STATUS_E_FAILURE;
+		}
+
+		if (!is_supported) {
+			spectral_err("aSpectral unsupported for cur chainmask");
+			*err = SPECTRAL_SCAN_ERR_MODE_UNSUPPORTED;
+			return QDF_STATUS_E_FAILURE;
+		}
+	}
 
 	band = target_if_get_curr_band(spectral->pdev_obj);
 	if (band == BAND_UNKNOWN) {
