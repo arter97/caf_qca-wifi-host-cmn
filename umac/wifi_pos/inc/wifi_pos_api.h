@@ -354,7 +354,19 @@ bool wifi_pos_is_app_registered(struct wlan_objmgr_psoc *psoc);
  * Return: global psoc object.
  */
 struct wlan_objmgr_psoc *wifi_pos_get_psoc(void);
-
+/**
+ * wifi_pos_register_get_phy_mode_cb: API to register callback to get
+ * current PHY mode
+ * @psoc: pointer to psoc object
+ * @handler: callback to be registered
+ *
+ * Return: QDF_STATUS_SUCCESS in case of success, error codes in
+ * case of failure
+ */
+QDF_STATUS wifi_pos_register_get_phy_mode_cb(struct wlan_objmgr_psoc *psoc,
+					     void (*handler)(uint8_t,
+							     uint32_t,
+							     uint32_t *));
 #else
 static inline QDF_STATUS wifi_pos_init(void)
 {
@@ -372,6 +384,27 @@ static inline QDF_STATUS wifi_pos_psoc_enable(struct wlan_objmgr_psoc *psoc)
 }
 
 static inline QDF_STATUS wifi_pos_psoc_disable(struct wlan_objmgr_psoc *psoc)
+{
+	return QDF_STATUS_SUCCESS;
+}
+
+static inline
+QDF_STATUS ucfg_wifi_pos_set_ftm_cap(struct wlan_objmgr_psoc *psoc,
+				     uint32_t val)
+{
+	return QDF_STATUS_SUCCESS;
+}
+
+static inline
+uint32_t ucfg_wifi_pos_get_ftm_cap(struct wlan_objmgr_psoc *psoc)
+{
+	return QDF_STATUS_SUCCESS;
+}
+static inline
+QDF_STATUS wifi_pos_register_get_phy_mode_cb(struct wlan_objmgr_psoc *psoc,
+					     void (*handler)(uint8_t,
+							     uint32_t,
+							     uint32_t *))
 {
 	return QDF_STATUS_SUCCESS;
 }
@@ -398,18 +431,5 @@ static inline QDF_STATUS wifi_pos_init_cir_cfr_rings(
 	return QDF_STATUS_SUCCESS;
 }
 #endif
-
-/**
- * wifi_pos_register_get_phy_mode_cb: API to register callback to get
- * current PHY mode
- * @psoc: pointer to psoc object
- * @handler: callback to be registered
- *
- * Return: QDF_STATUS_SUCCESS in case of success, error codes in
- * case of failure
- */
-QDF_STATUS wifi_pos_register_get_phy_mode_cb(
-			struct wlan_objmgr_psoc *psoc,
-			void (*handler)(uint8_t, uint32_t, uint32_t *));
 
 #endif
