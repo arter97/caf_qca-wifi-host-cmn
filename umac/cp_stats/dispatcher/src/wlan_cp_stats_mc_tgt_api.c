@@ -560,7 +560,7 @@ static void tgt_mc_cp_stats_extract_mib_stats(struct wlan_objmgr_psoc *psoc,
 		return;
 	}
 
-	if (tgt_mc_cp_stats_is_last_event(ev, TYPE_MIB_STATS)) {
+	if (tgt_mc_cp_stats_is_last_event(ev)) {
 		ucfg_mc_cp_stats_reset_pending_req(psoc, TYPE_MIB_STATS);
 		if (last_req.u.get_mib_stats_cb)
 			last_req.u.get_mib_stats_cb(ev, last_req.cookie);
