@@ -672,6 +672,14 @@ typedef bool (*ol_txrx_tx_flow_control_is_pause_fp)(void *osif_dev);
 typedef QDF_STATUS(*ol_txrx_rx_fp)(void *osif_dev, qdf_nbuf_t msdu_list);
 
 /**
+ * ol_txrx_rx_flush_fp - receive function to hand batches of data
+ * frames from txrx to OS shim
+ * @osif_dev: handle to the OSIF virtual device object
+ * @vdev_id: vdev_if of the packets to be flushed
+ */
+typedef QDF_STATUS(*ol_txrx_rx_flush_fp)(void *osif_dev, uint8_t vdev_id);
+
+/**
  * ol_txrx_rx_gro_flush_ind - function to send GRO flush indication to stack
  * for a given RX Context Id.
  * @osif_dev - handle to the OSIF virtual device object
@@ -758,10 +766,11 @@ typedef void (*ol_txrx_stats_callback)(void *ctxt,
  * ol_txrx_pktdump_cb - callback for packet dump feature
  */
 typedef void (*ol_txrx_pktdump_cb)(ol_txrx_soc_handle soc,
-				struct cdp_vdev *vdev,
-				qdf_nbuf_t netbuf,
-				uint8_t status,
-				uint8_t type);
+				   uint8_t pdev_id,
+				   uint8_t vdev_id,
+				   qdf_nbuf_t netbuf,
+				   uint8_t status,
+				   uint8_t type);
 
 /**
  * ol_txrx_ops - (pointers to) the functions used for tx and rx
@@ -832,6 +841,7 @@ struct ol_txrx_ops {
 	struct {
 		ol_txrx_rx_fp           rx;
 		ol_txrx_rx_fp           rx_stack;
+		ol_txrx_rx_flush_fp     rx_flush;
 		ol_txrx_rx_gro_flush_ind_fp           rx_gro_flush;
 		ol_txrx_rx_check_wai_fp wai_check;
 		ol_txrx_rx_mon_fp       mon;
@@ -1262,6 +1272,7 @@ struct cdp_delayed_tx_completion_ppdu_user {
  * @completion_status: completion status - OK/Filter/Abort/Timeout
  * @tid: TID number
  * @peer_id: Peer ID
+ * @ba_size: Block-Ack size
  * @frame_ctrl: frame control field in 802.11 header
  * @qos_ctrl: QoS control field in 802.11 header
  * @mpdu_tried: number of mpdus tried
@@ -1311,12 +1322,14 @@ struct cdp_delayed_tx_completion_ppdu_user {
  * @sa_max_rates: smart antenna tx feedback info max rates
  * @sa_goodput: smart antenna tx feedback info goodput
  * @current_rate_per: Moving average per
+ * @last_enq_seq: last equeue sequence number
  */
 struct cdp_tx_completion_ppdu_user {
 	uint32_t completion_status:8,
 		 tid:8,
 		 peer_id:16;
 	uint8_t mac_addr[6];
+	uint16_t ba_size;
 	uint32_t frame_ctrl:16,
 		 qos_ctrl:16;
 	uint32_t mpdu_tried_ucast:16,
@@ -1394,6 +1407,7 @@ struct cdp_tx_completion_ppdu_user {
 	 * of no use. It is just for Host computation.
 	 */
 	uint32_t current_rate_per;
+	uint32_t last_enq_seq;
 };
 
 /**
@@ -1481,6 +1495,7 @@ struct cdp_tx_indication_info {
  * @vdev_id: VAP Id
  * @bar_num_users: BA response user count, based on completion common TLV
  * @num_users: Number of users
+ * @pending_retries: pending MPDUs (retries)
  * @num_mpdu: Number of MPDUs in PPDU
  * @num_msdu: Number of MSDUs in PPDU
  * @frame_type: frame SU or MU
@@ -1494,6 +1509,7 @@ struct cdp_tx_indication_info {
  * @delayed_ba: Delayed ba flag
  * @user: per-User stats (array of per-user structures)
  * @mpdu_q: queue of mpdu in a ppdu
+ * @mpdus: MPDU list based on enqueue sequence bitmap
  */
 struct cdp_tx_completion_ppdu {
 	uint32_t ppdu_id;
@@ -1502,6 +1518,7 @@ struct cdp_tx_completion_ppdu {
 	uint16_t bar_num_users;
 	uint32_t num_users;
 	uint8_t last_usr_index;
+	uint32_t pending_retries;
 	uint32_t num_mpdu:9,
 		 num_msdu:16;
 	uint16_t frame_type;
@@ -1516,6 +1533,7 @@ struct cdp_tx_completion_ppdu {
 	bool delayed_ba;
 	struct cdp_tx_completion_ppdu_user user[CDP_MU_MAX_USERS];
 	qdf_nbuf_queue_t mpdu_q;
+	qdf_nbuf_t *mpdus;
 };
 
 /**

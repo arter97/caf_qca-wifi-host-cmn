@@ -5757,6 +5757,8 @@ dp_print_soc_rx_stats(struct dp_soc *soc)
 				" %d", soc->stats.rx.err.reo_error[i]);
 	}
 	DP_PRINT_STATS("REO Error(0-14):%s", reo_error);
+	DP_PRINT_STATS("REO CMD SEND FAIL: %d",
+		       soc->stats.rx.err.reo_cmd_send_fail);
 }
 
 #ifdef FEATURE_TSO_STATS
@@ -5780,7 +5782,7 @@ void dp_print_tso_stats(struct dp_soc *soc,
 		for (id = 0; id < CDP_MAX_TSO_PACKETS; id++) {
 			/* TSO LEVEL 1 - PACKET INFO */
 			DP_PRINT_STATS(
-				  "Packet_Id:[%u]: Packet Length %lu | No. of segments: %u",
+				  "Packet_Id:[%u]: Packet Length %zu | No. of segments: %u",
 				  id,
 				  pdev->stats.tso_stats.tso_info
 				  .tso_packet_info[id].tso_packet_len,

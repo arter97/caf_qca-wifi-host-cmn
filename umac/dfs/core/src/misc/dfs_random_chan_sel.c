@@ -1804,8 +1804,8 @@ static void dfs_apply_rules(struct wlan_dfs *dfs,
 
 		if (acs_info && acs_info->acs_mode) {
 			for (j = 0; j < acs_info->num_of_channel; j++) {
-				if (acs_info->channel_list[j] ==
-				    chan->dfs_ch_ieee) {
+				if (acs_info->chan_freq_list[j] ==
+				    wlan_chan_to_freq(chan->dfs_ch_ieee)) {
 					found = true;
 					break;
 				}
@@ -1957,8 +1957,8 @@ static void dfs_apply_rules_for_freq(struct wlan_dfs *dfs,
 		}
 		if (acs_info && acs_info->acs_mode) {
 			for (j = 0; j < acs_info->num_of_channel; j++) {
-				if (acs_info->channel_list[j] ==
-				    chan->dfs_ch_ieee) {
+				if (acs_info->chan_freq_list[j] ==
+				    chan->dfs_ch_freq) {
 					found = true;
 					break;
 				}
@@ -1966,8 +1966,8 @@ static void dfs_apply_rules_for_freq(struct wlan_dfs *dfs,
 
 			if (!found) {
 				dfs_debug(dfs, WLAN_DEBUG_DFS_RANDOM_CHAN,
-					  "skip ch %d not in acs range",
-					  chan->dfs_ch_ieee);
+					  "skip ch freq %d not in acs range",
+					  chan->dfs_ch_freq);
 				continue;
 			}
 			found = false;
@@ -2201,7 +2201,8 @@ uint16_t dfs_prepare_random_channel_for_freq(struct wlan_dfs *dfs,
 		flags & DFS_RANDOM_CH_FLAG_NO_WEATHER_CH : 0;
 
 	/* list adjusted after leakage has been marked */
-	leakage_adjusted_lst = qdf_mem_malloc(random_chan_cnt);
+	leakage_adjusted_lst = qdf_mem_malloc(random_chan_cnt *
+					      sizeof(*leakage_adjusted_lst));
 	if (!leakage_adjusted_lst) {
 		qdf_mem_free(random_chan_freq_list);
 		return 0;
@@ -2211,7 +2212,7 @@ uint16_t dfs_prepare_random_channel_for_freq(struct wlan_dfs *dfs,
 		int ret;
 
 		qdf_mem_copy(leakage_adjusted_lst, random_chan_freq_list,
-			     random_chan_cnt);
+			     random_chan_cnt * sizeof(*leakage_adjusted_lst));
 		ret = dfs_mark_leaking_chan_for_freq(dfs, *chan_wd,
 						   random_chan_cnt,
 						   leakage_adjusted_lst);

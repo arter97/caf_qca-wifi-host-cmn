@@ -705,6 +705,9 @@ typedef void (*qdf_nbuf_free_t)(__qdf_nbuf_t);
 #define __qdf_nbuf_data_attr_set(skb, data_attr) \
 	(QDF_NBUF_CB_TX_DATA_ATTR(skb) = (data_attr))
 
+#define __qdf_nbuf_queue_walk_safe(queue, var, tvar)	\
+		skb_queue_walk_safe(queue, var, tvar)
+
 /**
  * __qdf_nbuf_num_frags_init() - init extra frags
  * @skb: sk buffer
@@ -1083,6 +1086,22 @@ static inline void
 __qdf_nbuf_set_tail_pointer(struct sk_buff *skb, int len)
 {
 	skb_set_tail_pointer(skb, len);
+}
+
+/**
+ * __qdf_nbuf_unlink_no_lock() - unlink an skb from skb queue
+ * @skb: Pointer to network buffer
+ * @list: list to use
+ *
+ * This is a lockless version, driver must acquire locks if it
+ * needs to synchronize
+ *
+ * Return: none
+ */
+static inline void
+__qdf_nbuf_unlink_no_lock(struct sk_buff *skb, struct sk_buff_head *list)
+{
+	__skb_unlink(skb, list);
 }
 
 /**
@@ -1897,6 +1916,21 @@ __qdf_nbuf_expand(struct sk_buff *skb, uint32_t headroom, uint32_t tailroom)
 }
 
 /**
+ * __qdf_nbuf_copy_expand() - copy and expand nbuf
+ * @buf: Network buf instance
+ * @headroom: Additional headroom to be added
+ * @tailroom: Additional tailroom to be added
+ *
+ * Return: New nbuf that is a copy of buf, with additional head and tailroom
+ *	or NULL if there is no memory
+ */
+static inline struct sk_buff *
+__qdf_nbuf_copy_expand(struct sk_buff *buf, int headroom, int tailroom)
+{
+	return skb_copy_expand(buf, headroom, tailroom, GFP_ATOMIC);
+}
+
+/**
  * __qdf_nbuf_tx_cksum_info() - tx checksum info
  *
  * Return: true/false
@@ -2202,6 +2236,30 @@ static inline
 void __qdf_nbuf_queue_head_purge(struct sk_buff_head *skb_queue_head)
 {
 	return skb_queue_purge(skb_queue_head);
+}
+
+/**
+ * __qdf_nbuf_queue_head_lock() - Acquire the skb list lock
+ * @head: skb list for which lock is to be acquired
+ *
+ * Return: void
+ */
+static inline
+void __qdf_nbuf_queue_head_lock(struct sk_buff_head *skb_queue_head)
+{
+	spin_lock_bh(&skb_queue_head->lock);
+}
+
+/**
+ * __qdf_nbuf_queue_head_unlock() - Release the skb list lock
+ * @head: skb list for which lock is to be release
+ *
+ * Return: void
+ */
+static inline
+void __qdf_nbuf_queue_head_unlock(struct sk_buff_head *skb_queue_head)
+{
+	spin_unlock_bh(&skb_queue_head->lock);
 }
 
 #ifdef CONFIG_NBUF_AP_PLATFORM

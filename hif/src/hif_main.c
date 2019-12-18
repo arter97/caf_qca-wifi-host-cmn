@@ -77,6 +77,17 @@ void *hif_get_targetdef(struct hif_opaque_softc *hif_ctx)
 	return scn->targetdef;
 }
 
+#ifdef FORCE_WAKE
+void hif_srng_init_phase(struct hif_opaque_softc *hif_ctx,
+			 bool init_phase)
+{
+	struct hif_softc *scn = HIF_GET_SOFTC(hif_ctx);
+
+	if (ce_srng_based(scn))
+		hal_set_init_phase(scn->hal_soc, init_phase);
+}
+#endif /* FORCE_WAKE */
+
 /**
  * hif_vote_link_down(): unvote for link up
  *
@@ -1282,6 +1293,8 @@ irqreturn_t hif_wake_interrupt_handler(int irq, void *context)
 
 	if (hif_is_ut_suspended(scn))
 		hif_ut_fw_resume(scn);
+
+	qdf_pm_system_wakeup();
 
 	return IRQ_HANDLED;
 }

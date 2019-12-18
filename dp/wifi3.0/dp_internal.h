@@ -1261,7 +1261,7 @@ int dp_wdi_event_detach(struct dp_pdev *txrx_pdev);
 int dp_set_pktlog_wifi3(struct dp_pdev *pdev, uint32_t event,
 	bool enable);
 void *dp_get_pldev(struct cdp_pdev *txrx_pdev);
-void dp_pkt_log_init(struct cdp_pdev *ppdev, void *scn);
+void dp_pkt_log_init(struct cdp_soc_t *soc_hdl, uint8_t pdev_id, void *scn);
 
 static inline void
 dp_hif_update_pipe_callback(struct dp_soc *dp_soc,
@@ -1343,7 +1343,7 @@ static inline QDF_STATUS dp_peer_stats_notify(struct dp_pdev *pdev,
 
 #endif /* CONFIG_WIN */
 #ifdef QCA_LL_TX_FLOW_CONTROL_V2
-void dp_tx_dump_flow_pool_info(void *soc);
+void dp_tx_dump_flow_pool_info(struct cdp_soc_t *soc_hdl);
 int dp_tx_delete_flow_pool(struct dp_soc *soc, struct dp_tx_desc_pool_s *pool,
 	bool force);
 #endif /* QCA_LL_TX_FLOW_CONTROL_V2 */

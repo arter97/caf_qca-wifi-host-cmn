@@ -144,7 +144,7 @@ qdf_export_symbol(tgt_dfs_set_current_channel_for_freq);
 #endif
 
 QDF_STATUS tgt_dfs_radar_enable(struct wlan_objmgr_pdev *pdev,
-				int no_cac, uint32_t opmode)
+				int no_cac, uint32_t opmode, bool enable)
 {
 	struct wlan_dfs *dfs;
 	struct wlan_lmac_if_dfs_tx_ops *dfs_tx_ops;
@@ -158,8 +158,14 @@ QDF_STATUS tgt_dfs_radar_enable(struct wlan_objmgr_pdev *pdev,
 	}
 
 	if (!dfs->dfs_is_offload_enabled) {
-		dfs_radar_enable(dfs, no_cac, opmode);
-		return QDF_STATUS_SUCCESS;
+		if (enable) {
+			dfs_radar_enable(dfs, no_cac, opmode);
+			return QDF_STATUS_SUCCESS;
+		} else {
+			dfs_debug(dfs, WLAN_DEBUG_DFS_ALWAYS,
+				  "Disabling dfs not allowed for non-offload chips");
+			return QDF_STATUS_E_FAILURE;
+		}
 	}
 
 	psoc = wlan_pdev_get_psoc(pdev);
@@ -174,7 +180,7 @@ QDF_STATUS tgt_dfs_radar_enable(struct wlan_objmgr_pdev *pdev,
 		return  QDF_STATUS_E_FAILURE;
 	}
 
-	status = dfs_tx_ops->dfs_send_offload_enable_cmd(pdev, true);
+	status = dfs_tx_ops->dfs_send_offload_enable_cmd(pdev, enable);
 	if (QDF_IS_STATUS_ERROR(status))
 		dfs_err(dfs, WLAN_DEBUG_DFS_ALWAYS,
 			"Failed to enable dfs offload, pdev_id: %d",
@@ -425,6 +431,8 @@ QDF_STATUS tgt_dfs_set_agile_precac_state(struct wlan_objmgr_pdev *pdev,
 					  int agile_precac_state)
 {
 	struct wlan_dfs *dfs;
+	struct dfs_soc_priv_obj *dfs_soc;
+	bool is_precac_running_on_given_pdev = false;
 	int i;
 
 	if (!tgt_dfs_is_pdev_5ghz(pdev))
@@ -436,12 +444,29 @@ QDF_STATUS tgt_dfs_set_agile_precac_state(struct wlan_objmgr_pdev *pdev,
 		return  QDF_STATUS_E_FAILURE;
 	}
 
-	dfs->dfs_soc_obj->precac_state_started = agile_precac_state;
-	if (!dfs->dfs_soc_obj->precac_state_started) {
-		for (i = 0; i < dfs->dfs_soc_obj->num_dfs_privs; i++)
-			dfs->dfs_soc_obj->dfs_priv[i].agile_precac_active = 0;
-		dfs->dfs_agile_precac_freq_mhz = 0;
+	dfs_soc = dfs->dfs_soc_obj;
+	for (i = 0; i < dfs_soc->num_dfs_privs; i++) {
+		if (dfs_soc->dfs_priv[i].dfs == dfs) {
+			/* Set the pdev state to given value. */
+			dfs_soc->dfs_priv[i].agile_precac_active =
+				agile_precac_state;
+			/* If the pdev state is changed to inactive,
+			 * reset the agile channel.
+			 */
+			if (!agile_precac_state)
+				dfs->dfs_agile_precac_freq_mhz = 0;
+			if (dfs_soc->cur_precac_dfs_index == i)
+				is_precac_running_on_given_pdev = true;
+		}
 	}
+
+	/* If preCAC is running on this pdev and the agile_precac_state
+	 * is set to false, set the global state in dfs_soc_obj to false.
+	 * If this global state is not set to false, then preCAC will not be
+	 * started the next time this pdev becomes active.
+	 */
+	if (is_precac_running_on_given_pdev && !agile_precac_state)
+		dfs_soc->precac_state_started = PRECAC_NOT_STARTED;
 
 	return  QDF_STATUS_SUCCESS;
 }
@@ -451,6 +476,8 @@ QDF_STATUS tgt_dfs_set_agile_precac_state(struct wlan_objmgr_pdev *pdev,
 					  int agile_precac_state)
 {
 	struct wlan_dfs *dfs;
+	struct dfs_soc_priv_obj *dfs_soc;
+	bool is_precac_running_on_given_pdev = false;
 	int i;
 
 	if (!tgt_dfs_is_pdev_5ghz(pdev))
@@ -462,12 +489,29 @@ QDF_STATUS tgt_dfs_set_agile_precac_state(struct wlan_objmgr_pdev *pdev,
 		return  QDF_STATUS_E_FAILURE;
 	}
 
-	dfs->dfs_soc_obj->precac_state_started = agile_precac_state;
-	if (!dfs->dfs_soc_obj->precac_state_started) {
-		for (i = 0; i < dfs->dfs_soc_obj->num_dfs_privs; i++)
-			dfs->dfs_soc_obj->dfs_priv[i].agile_precac_active = 0;
-		dfs->dfs_agile_precac_freq = 0;
+	dfs_soc = dfs->dfs_soc_obj;
+	for (i = 0; i < dfs_soc->num_dfs_privs; i++) {
+		if (dfs_soc->dfs_priv[i].dfs == dfs) {
+			/* Set the pdev state to given value. */
+			dfs_soc->dfs_priv[i].agile_precac_active =
+				agile_precac_state;
+			/* If the pdev state is changed to inactive,
+			 * reset the agile channel.
+			 */
+			if (!agile_precac_state)
+				dfs->dfs_agile_precac_freq = 0;
+			if (dfs_soc->cur_precac_dfs_index == i)
+				is_precac_running_on_given_pdev = true;
+		}
 	}
+
+	/* If preCAC is running on this pdev and the agile_precac_state
+	 * is set to false, set the global state in dfs_soc_obj to false.
+	 * If this global state is not set to false, then preCAC will not be
+	 * started the next time this pdev becomes active.
+	 */
+	if (is_precac_running_on_given_pdev && !agile_precac_state)
+		dfs_soc->precac_state_started = PRECAC_NOT_STARTED;
 
 	return  QDF_STATUS_SUCCESS;
 }

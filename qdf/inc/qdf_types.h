@@ -190,7 +190,7 @@ typedef struct qdf_shared_mem {
 	qdf_dma_mem_context(memctx);
 } qdf_shared_mem_t;
 
-#define qdf_iomem_t __qdf_iomem_t;
+#define qdf_iomem_t __qdf_iomem_t
 
 /**
  * typedef enum QDF_TIMER_TYPE - QDF timer type
@@ -673,7 +673,6 @@ enum QDF_GLOBAL_MODE {
 #define qdf_rl_nofl_debug(params...) \
 	QDF_TRACE_DEBUG_RL_NO_FL(QDF_MODULE_ID_QDF, ## params)
 
-#define qdf_vprint    __qdf_vprint
 #define qdf_snprint   __qdf_snprint
 
 #define qdf_kstrtoint __qdf_kstrtoint

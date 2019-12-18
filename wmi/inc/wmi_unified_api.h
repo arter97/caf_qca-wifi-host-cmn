@@ -121,19 +121,6 @@ typedef qdf_nbuf_t wmi_buf_t;
 
 struct wmi_soc;
 struct policy_mgr_dual_mac_config;
-/**
- * struct wmi_rx_ops - handle to wmi rx ops
- * @scn_handle: handle to scn
- * @ev: event buffer
- * @rx_ctx: rx execution context
- * @wma_process_fw_event_handler_cbk: generic event handler callback
- */
-struct wmi_rx_ops {
-
-	int (*wma_process_fw_event_handler_cbk)(ol_scn_t scn_handle,
-						void *ev,
-						uint8_t rx_ctx);
-};
 
 /**
  * enum wmi_target_type - type of supported wmi command
@@ -151,11 +138,14 @@ enum wmi_target_type {
  * enum wmi_rx_exec_ctx - wmi rx execution context
  * @WMI_RX_WORK_CTX: work queue context execution provided by WMI layer
  * @WMI_RX_UMAC_CTX: execution context provided by umac layer
+ * @WMI_RX_SERIALIZER_CTX: Execution context is serialized thread context
  *
  */
 enum wmi_rx_exec_ctx {
 	WMI_RX_WORK_CTX,
-	WMI_RX_UMAC_CTX
+	WMI_RX_UMAC_CTX,
+	WMI_RX_TASKLET_CTX = WMI_RX_UMAC_CTX,
+	WMI_RX_SERIALIZER_CTX = 2
 };
 
 /**
@@ -174,7 +164,6 @@ struct wmi_unified_attach_params {
 	enum wmi_target_type target_type;
 	bool use_cookie;
 	bool is_async_ep;
-	struct wmi_rx_ops *rx_ops;
 	struct wlan_objmgr_psoc *psoc;
 	uint16_t max_commands;
 	uint32_t soc_id;
@@ -452,6 +441,14 @@ void wmi_set_tgt_assert(wmi_unified_t wmi_handle, bool val);
  */
 int
 wmi_stop(wmi_unified_t wmi_handle);
+
+/**
+ * generic function to start unified WMI command
+ * @param wmi_handle      : handle to WMI.
+ * @return 0  on success and -ve on failure.
+ */
+int
+wmi_start(wmi_unified_t wmi_handle);
 
 /**
  * API to flush all the previous packets  associated with the wmi endpoint
@@ -3628,7 +3625,6 @@ wmi_unified_send_peer_cfr_capture_cmd(wmi_unified_t wmi_handle,
 QDF_STATUS
 wmi_extract_cfr_peer_tx_event_param(wmi_unified_t wmi_handle, void *evt_buf,
 				    wmi_cfr_peer_tx_event_param *peer_tx_event);
-
 #endif /* WLAN_CFR_ENABLE */
 
 #ifdef WIFI_POS_CONVERGED
@@ -3644,4 +3640,40 @@ QDF_STATUS
 wmi_extract_oem_response_param(wmi_unified_t wmi_hdl, void *resp_buf,
 			       struct wmi_oem_response_param *oem_resp_param);
 #endif /* WIFI_POS_CONVERGED */
+/**
+ * wmi_critical_events_in_flight() - get the number of critical events in flight
+ *
+ * @wmi_hdl: WMI handle
+ *
+ * Return: the number of critical events in flight.
+ */
+uint32_t wmi_critical_events_in_flight(struct wmi_unified *wmi);
+
+
+#ifdef FEATURE_ANI_LEVEL_REQUEST
+/**
+ * wmi_unified_ani_level_cmd_send() - WMI function to send get ani level cmd
+ * @wmi_hdl: WMI handle
+ * @freqs: pointer to list of freqs for which ANI levels are to be fetched
+ * @num_freqs: number of freqs in the above parameter
+ *
+ * Return: QDF_STATUS_SUCCESS if success, else returns proper error code.
+ */
+QDF_STATUS wmi_unified_ani_level_cmd_send(wmi_unified_t wmi_handle,
+					  uint32_t *freqs,
+					  uint8_t num_freqs);
+
+/**
+ * wmi_unified_extract_ani_level() - WMI function to receive ani level cmd
+ * @wmi_hdl: WMI handle
+ * @info: pointer to ANI data received from the FW and stored in HOST
+ * @num_freqs: number of freqs in the above parameter
+ *
+ * Return: QDF_STATUS_SUCCESS if success, else returns proper error code.
+ */
+QDF_STATUS wmi_unified_extract_ani_level(wmi_unified_t wmi_handle,
+					 uint8_t *data,
+					 struct wmi_host_ani_level_event **info,
+					 uint32_t *num_freqs);
+#endif /* FEATURE_ANI_LEVEL_REQUEST */
 #endif /* _WMI_UNIFIED_API_H_ */

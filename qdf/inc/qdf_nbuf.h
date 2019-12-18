@@ -757,6 +757,9 @@ qdf_nbuf_set_send_complete_flag(qdf_nbuf_t buf, bool flag)
 	__qdf_nbuf_set_send_complete_flag(buf, flag);
 }
 
+#define QDF_NBUF_QUEUE_WALK_SAFE(queue, var, tvar)	\
+		__qdf_nbuf_queue_walk_safe(queue, var, tvar)
+
 #ifdef NBUF_MAP_UNMAP_DEBUG
 /**
  * qdf_nbuf_map_check_for_leaks() - check for nbut map leaks
@@ -962,6 +965,28 @@ static inline
 void qdf_nbuf_queue_head_purge(qdf_nbuf_queue_head_t *nbuf_queue_head)
 {
 	return __qdf_nbuf_queue_head_purge(nbuf_queue_head);
+}
+
+/**
+ * qdf_nbuf_queue_head_lock() - Acquire the nbuf_queue_head lock
+ * @head: nbuf_queue_head of the nbuf_list for which lock is to be acquired
+ *
+ * Return: void
+ */
+static inline void qdf_nbuf_queue_head_lock(qdf_nbuf_queue_head_t *head)
+{
+	__qdf_nbuf_queue_head_lock(head);
+}
+
+/**
+ * qdf_nbuf_queue_head_unlock() - Release the nbuf queue lock
+ * @head: nbuf_queue_head of the nbuf_list for which lock is to be release
+ *
+ * Return: void
+ */
+static inline void qdf_nbuf_queue_head_unlock(qdf_nbuf_queue_head_t *head)
+{
+	__qdf_nbuf_queue_head_unlock(head);
 }
 
 static inline void
@@ -1556,6 +1581,24 @@ qdf_nbuf_t qdf_nbuf_clone_debug(qdf_nbuf_t buf, const char *func,
  */
 qdf_nbuf_t qdf_nbuf_copy_debug(qdf_nbuf_t buf, const char *func, uint32_t line);
 
+#define qdf_nbuf_copy_expand(buf, headroom, tailroom)     \
+	qdf_nbuf_copy_expand_debug(buf, headroom, tailroom, __func__, __LINE__)
+
+/**
+ * qdf_nbuf_copy_expand_debug() - copy and expand nbuf
+ * @buf: Network buf instance
+ * @headroom: Additional headroom to be added
+ * @tailroom: Additional tailroom to be added
+ * @func: name of the calling function
+ * @line: line number of the callsite
+ *
+ * Return: New nbuf that is a copy of buf, with additional head and tailroom
+ *	or NULL if there is no memory
+ */
+qdf_nbuf_t
+qdf_nbuf_copy_expand_debug(qdf_nbuf_t buf, int headroom, int tailroom,
+			   const char *func, uint32_t line);
+
 #else /* NBUF_MEMORY_DEBUG */
 
 static inline void qdf_net_buf_debug_init(void) {}
@@ -1623,6 +1666,20 @@ static inline qdf_nbuf_t qdf_nbuf_copy(qdf_nbuf_t buf)
 	return __qdf_nbuf_copy(buf);
 }
 
+/**
+ * qdf_nbuf_copy_expand() - copy and expand nbuf
+ * @buf: Network buf instance
+ * @headroom: Additional headroom to be added
+ * @tailroom: Additional tailroom to be added
+ *
+ * Return: New nbuf that is a copy of buf, with additional head and tailroom
+ *	or NULL if there is no memory
+ */
+static inline qdf_nbuf_t qdf_nbuf_copy_expand(qdf_nbuf_t buf, int headroom,
+					      int tailroom)
+{
+	return __qdf_nbuf_copy_expand(buf, headroom, tailroom);
+}
 #endif /* NBUF_MEMORY_DEBUG */
 
 #ifdef WLAN_FEATURE_FASTPATH
@@ -1864,6 +1921,22 @@ static inline void qdf_nbuf_set_len(qdf_nbuf_t buf, uint32_t len)
 static inline void qdf_nbuf_set_tail_pointer(qdf_nbuf_t buf, int len)
 {
 	__qdf_nbuf_set_tail_pointer(buf, len);
+}
+
+/**
+ * qdf_nbuf_unlink_no_lock() - unlink a nbuf from nbuf list
+ * @buf: Network buf instance
+ * @list: list to use
+ *
+ * This is a lockless version, driver must acquire locks if it
+ * needs to synchronize
+ *
+ * Return: none
+ */
+static inline void
+qdf_nbuf_unlink_no_lock(qdf_nbuf_t buf, qdf_nbuf_queue_head_t *list)
+{
+	__qdf_nbuf_unlink_no_lock(buf, list);
 }
 
 /**

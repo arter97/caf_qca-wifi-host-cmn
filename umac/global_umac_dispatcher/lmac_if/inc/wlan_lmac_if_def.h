@@ -970,6 +970,8 @@ struct wlan_lmac_if_reg_rx_ops {
 			bool val);
 	QDF_STATUS (*reg_set_11d_offloaded)(struct wlan_objmgr_psoc *psoc,
 			bool val);
+	QDF_STATUS (*reg_set_6ghz_supported)(struct wlan_objmgr_psoc *psoc,
+					     bool val);
 	QDF_STATUS (*get_dfs_region)(struct wlan_objmgr_pdev *pdev,
 			enum dfs_reg *dfs_reg);
 	QDF_STATUS (*reg_ch_avoid_event_handler)(struct wlan_objmgr_psoc *psoc,
@@ -1298,9 +1300,11 @@ struct wlan_lmac_if_dfs_rx_ops {
 			uint32_t r_rs_tstamp,
 			uint64_t r_fulltsf);
 	QDF_STATUS (*dfs_destroy_object)(struct wlan_objmgr_pdev *pdev);
-	QDF_STATUS (*dfs_radar_enable)(struct wlan_objmgr_pdev *pdev,
+	QDF_STATUS (*dfs_radar_enable)(
+			struct wlan_objmgr_pdev *pdev,
 			int no_cac,
-			uint32_t opmode);
+			uint32_t opmode,
+			bool enable);
 	void (*dfs_is_radar_enabled)(struct wlan_objmgr_pdev *pdev,
 				     int *ignore_dfs);
 	QDF_STATUS (*dfs_control)(struct wlan_objmgr_pdev *pdev,

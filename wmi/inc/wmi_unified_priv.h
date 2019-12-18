@@ -617,8 +617,7 @@ QDF_STATUS (*send_plm_stop_cmd)(wmi_unified_t wmi_handle,
 		 const struct plm_req_params *plm);
 
 QDF_STATUS (*send_plm_start_cmd)(wmi_unified_t wmi_handle,
-		  const struct plm_req_params *plm,
-		  uint32_t *gchannel_list);
+				 const struct plm_req_params *plm);
 #endif /* FEATURE_WLAN_ESE */
 
 #ifdef WLAN_FEATURE_ROAM_OFFLOAD
@@ -2047,6 +2046,15 @@ QDF_STATUS (*extract_get_elna_bypass_resp)(wmi_unified_t wmi_handle,
 					 void *resp_buf,
 					 struct get_elna_bypass_response *resp);
 #endif /* WLAN_FEATURE_ELNA */
+
+#ifdef FEATURE_ANI_LEVEL_REQUEST
+QDF_STATUS (*send_ani_level_cmd)(wmi_unified_t wmi_handle, uint32_t *freqs,
+				 uint8_t num_freqs);
+
+QDF_STATUS (*extract_ani_level)(uint8_t *evt_buf,
+				struct wmi_host_ani_level_event **info,
+				uint32_t *num_freqs);
+#endif /* FEATURE_ANI_LEVEL_REQUEST */
 };
 
 /* Forward declartion for psoc*/
@@ -2118,7 +2126,6 @@ struct wmi_unified {
 	bool tag_crash_inject;
 	bool tgt_force_assert_enable;
 	enum wmi_target_type target_type;
-	struct wmi_rx_ops rx_ops;
 	struct wmi_ops *ops;
 	bool use_cookie;
 	bool wmi_stopinprogress;
@@ -2127,6 +2134,7 @@ struct wmi_unified {
 	struct wmi_soc *soc;
 	uint16_t wmi_max_cmds;
 	struct dentry *debugfs_de[NUM_DEBUG_INFOS];
+	qdf_atomic_t critical_events_in_flight;
 #ifdef WMI_EXT_DBG
 	int wmi_ext_dbg_msg_queue_size;
 	qdf_list_t wmi_ext_dbg_msg_queue;
@@ -2170,6 +2178,16 @@ struct wmi_soc {
 	uint32_t buf_offset_command;
 	uint32_t buf_offset_event;
 #endif /*WMI_INTERFACE_EVENT_LOGGING */
+};
+
+/**
+ * struct wmi_process_fw_event_params - fw event parameters
+ * @wmi_handle: wmi handle
+ * @evt_buf: event buffer
+ */
+struct wmi_process_fw_event_params {
+	void *wmi_handle;
+	void *evt_buf;
 };
 
 /**

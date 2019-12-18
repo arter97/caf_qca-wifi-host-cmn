@@ -195,9 +195,6 @@ void hal_get_shadow_config(void *hal_soc,
 	*shadow_config = hal->shadow_config;
 	*num_shadow_registers_configured =
 		hal->num_shadow_registers_configured;
-
-	QDF_TRACE(QDF_MODULE_ID_TXRX, QDF_TRACE_LEVEL_ERROR,
-			"%s", __func__);
 }
 
 qdf_export_symbol(hal_get_shadow_config);
@@ -276,6 +273,11 @@ static void hal_target_based_configure(struct hal_soc *hal)
 #ifdef QCA_WIFI_QCN9000
 	case TARGET_TYPE_QCN9000:
 		hal->use_register_windowing = true;
+		/*
+		 * Static window map  is enabled for qcn9000 to use 2mb bar
+		 * size and use multiple windows to write into registers.
+		 */
+		hal->static_window_map = true;
 		hal_qcn9000_attach(hal);
 	break;
 #endif
@@ -358,6 +360,11 @@ void *hal_attach(struct hif_opaque_softc *hif_handle, qdf_device_t qdf_dev)
 	hal->target_type = hal_get_target_type(hal_soc_to_hal_soc_handle(hal));
 
 	hal_target_based_configure(hal);
+	/**
+	 * Indicate Initialization of srngs to avoid force wake
+	 * as umac power collapse is not enabled yet
+	 */
+	hal->init_phase = true;
 
 	return (void *)hal;
 
@@ -495,7 +502,7 @@ void hal_reo_read_write_ctrl_ix(hal_soc_handle_t hal_soc_hdl, bool read,
 			reg_offset =
 				HWIO_REO_R0_DESTINATION_RING_CTRL_IX_0_ADDR(
 						SEQ_WCSS_UMAC_REO_REG_OFFSET);
-			HAL_REG_WRITE(hal, reg_offset, *ix0);
+			HAL_REG_WRITE_CONFIRM(hal, reg_offset, *ix0);
 		}
 
 		if (ix1) {
@@ -674,7 +681,9 @@ void *hal_srng_setup(void *hal_soc, int ring_type, int ring_num,
 					HAL_SRNG_LMAC1_ID_START]);
 			srng->flags |= HAL_SRNG_LMAC_RING;
 		} else if (ignore_shadow || (srng->u.src_ring.hp_addr == 0)) {
-			srng->u.src_ring.hp_addr = SRNG_SRC_ADDR(srng, HP);
+			srng->u.src_ring.hp_addr =
+				hal_get_window_address(hal,
+						SRNG_SRC_ADDR(srng, HP));
 
 			if (CHECK_SHADOW_REGISTERS) {
 				QDF_TRACE(QDF_MODULE_ID_TXRX,
@@ -709,7 +718,9 @@ void *hal_srng_setup(void *hal_soc, int ring_type, int ring_num,
 				HAL_SRNG_LMAC1_ID_START]);
 			srng->flags |= HAL_SRNG_LMAC_RING;
 		} else if (ignore_shadow || srng->u.dst_ring.tp_addr == 0) {
-			srng->u.dst_ring.tp_addr = SRNG_DST_ADDR(srng, TP);
+			srng->u.dst_ring.tp_addr =
+				hal_get_window_address(hal,
+						SRNG_DST_ADDR(srng, TP));
 
 			if (CHECK_SHADOW_REGISTERS) {
 				QDF_TRACE(QDF_MODULE_ID_TXRX,
@@ -804,15 +815,15 @@ enum hal_srng_dir hal_srng_get_dir(void *hal_soc, int ring_type)
 void hal_srng_dump(struct hal_srng *srng)
 {
 	if (srng->ring_dir == HAL_SRNG_SRC_RING) {
-		qdf_print("=== SRC RING %d ===", srng->ring_id);
-		qdf_print("hp %u, reap_hp %u, tp %u, cached tp %u",
+		hal_debug("=== SRC RING %d ===", srng->ring_id);
+		hal_debug("hp %u, reap_hp %u, tp %u, cached tp %u",
 			  srng->u.src_ring.hp,
 			  srng->u.src_ring.reap_hp,
 			  *srng->u.src_ring.tp_addr,
 			  srng->u.src_ring.cached_tp);
 	} else {
-		qdf_print("=== DST RING %d ===", srng->ring_id);
-		qdf_print("tp %u, hp %u, cached tp %u, loop_cnt %u",
+		hal_debug("=== DST RING %d ===", srng->ring_id);
+		hal_debug("tp %u, hp %u, cached tp %u, loop_cnt %u",
 			  srng->u.dst_ring.tp,
 			  *srng->u.dst_ring.hp_addr,
 			  srng->u.dst_ring.cached_hp,
@@ -852,3 +863,12 @@ extern void hal_get_srng_params(hal_soc_handle_t hal_soc_hdl,
 		ring_params->hwreg_base[i] = srng->hwreg_base[i];
 }
 qdf_export_symbol(hal_get_srng_params);
+
+#ifdef FORCE_WAKE
+void hal_set_init_phase(hal_soc_handle_t soc, bool init_phase)
+{
+	struct hal_soc *hal_soc = (struct hal_soc *)soc;
+
+	hal_soc->init_phase = init_phase;
+}
+#endif /* FORCE_WAKE */

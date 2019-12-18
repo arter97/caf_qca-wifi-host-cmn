@@ -109,6 +109,8 @@
 #define PCP_TID_MAP_MAX 8
 #define MAX_MU_USERS 37
 
+#define REO_CMD_EVENT_HIST_MAX 64
+
 #ifndef REMOVE_PKT_LOG
 enum rx_pktlog_mode {
 	DP_RX_PKTLOG_DISABLED = 0,
@@ -652,7 +654,32 @@ struct reo_desc_list_node {
 	qdf_list_node_t node;
 	unsigned long free_ts;
 	struct dp_rx_tid rx_tid;
+	bool resend_update_reo_cmd;
 };
+
+#ifdef WLAN_FEATURE_DP_EVENT_HISTORY
+/**
+ * struct reo_cmd_event_record: Elements to record for each reo command
+ * @cmd_type: reo command type
+ * @cmd_return_status: reo command post status
+ * @timestamp: record timestamp for the reo command
+ */
+struct reo_cmd_event_record {
+	enum hal_reo_cmd_type cmd_type;
+	uint8_t cmd_return_status;
+	uint32_t timestamp;
+};
+
+/**
+ * struct reo_cmd_event_history: Account for reo cmd events
+ * @index: record number
+ * @cmd_record: list of records
+ */
+struct reo_cmd_event_history {
+	qdf_atomic_t index;
+	struct reo_cmd_event_record cmd_record[REO_CMD_EVENT_HIST_MAX];
+};
+#endif /* WLAN_FEATURE_DP_EVENT_HISTORY */
 
 /* SoC level data path statistics */
 struct dp_soc_stats {
@@ -694,6 +721,8 @@ struct dp_soc_stats {
 		uint32_t rx_frag_wait;
 		/* Fragments dropped due to errors */
 		uint32_t rx_frag_err;
+		/* Fragments dropped due to len errors in skb */
+		uint32_t rx_frag_err_len_error;
 		/* No of reinjected packets */
 		uint32_t reo_reinject;
 		/* Reap loop packet limit hit */
@@ -740,11 +769,17 @@ struct dp_soc_stats {
 			uint32_t hal_wbm_rel_dup;
 			/* HAL RXDMA error Duplicate count */
 			uint32_t hal_rxdma_err_dup;
+			/* REO cmd send fail/requeue count */
+			uint32_t reo_cmd_send_fail;
 		} err;
 
 		/* packet count per core - per ring */
 		uint64_t ring_packets[NR_CPUS][MAX_REO_DEST_RINGS];
 	} rx;
+
+#ifdef WLAN_FEATURE_DP_EVENT_HISTORY
+	struct reo_cmd_event_history cmd_event_history;
+#endif /* WLAN_FEATURE_DP_EVENT_HISTORY */
 };
 
 union dp_align_mac_addr {
@@ -813,7 +848,6 @@ struct dp_ast_entry {
 	bool is_active;
 	bool is_mapped;
 	uint8_t pdev_id;
-	uint8_t vdev_id;
 	uint16_t ast_hash_value;
 	qdf_atomic_t ref_cnt;
 	enum cdp_txrx_ast_entry_type type;
@@ -1284,6 +1318,7 @@ struct ppdu_info {
  * @last_msdu          - last msdu indication
  * @msdu_part_of_amsdu - msdu part of amsdu
  * @transmit_cnt       - retried count
+ * @status             - transmit status
  * @tsf                - timestamp which it transmitted
  */
 struct msdu_completion_info {
@@ -1294,6 +1329,7 @@ struct msdu_completion_info {
 		last_msdu:1,
 		msdu_part_of_amsdu:1;
 	uint8_t transmit_cnt;
+	uint8_t status;
 	uint32_t tsf;
 };
 
@@ -1704,6 +1740,10 @@ struct dp_pdev {
 	/* TSO Id to index into TSO packet information */
 	qdf_atomic_t tso_idx;
 #endif /* FEATURE_TSO_STATS */
+
+#ifdef WLAN_SUPPORT_DATA_STALL
+	data_stall_detect_cb data_stall_detect_callback;
+#endif /* WLAN_SUPPORT_DATA_STALL */
 };
 
 struct dp_peer;
@@ -1738,6 +1778,8 @@ struct dp_vdev {
 	ol_txrx_rx_fp osif_rx;
 	/* callback to deliver rx frames to the OS */
 	ol_txrx_rx_fp osif_rx_stack;
+	/* call back function to flush out queued rx packets*/
+	ol_txrx_rx_flush_fp osif_rx_flush;
 	ol_txrx_rsim_rx_decap_fp osif_rsim_rx_decap;
 	ol_txrx_get_key_fp osif_get_key;
 	ol_txrx_tx_free_ext_fp osif_tx_free_ext;

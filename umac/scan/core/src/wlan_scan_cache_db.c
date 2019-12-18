@@ -53,6 +53,174 @@
 #include <wlan_objmgr_vdev_obj.h>
 #include <wlan_dfs_utils_api.h>
 
+/* MAX RNR entries per channel*/
+#define WLAN_MAX_RNR_COUNT 15
+struct channel_list_db rnr_channel_db;
+
+#ifdef FEATURE_6G_SCAN_CHAN_SORT_ALGO
+struct meta_rnr_channel *scm_get_chan_meta(uint32_t chan_freq)
+{
+	int i;
+
+	for (i = 0; i <= MAX_6GHZ_CHANNEL; i++)
+		if (rnr_channel_db.channel[i].chan_freq == chan_freq)
+			return &rnr_channel_db.channel[i];
+
+	return NULL;
+}
+
+static void scm_add_rnr_channel_db(struct scan_cache_entry *entry)
+{
+	uint32_t chan_freq;
+	uint8_t is_6g_bss, i;
+	struct meta_rnr_channel *channel;
+	struct rnr_bss_info *rnr_bss;
+	struct scan_rnr_node *rnr_node;
+
+	chan_freq = entry->channel.chan_freq;
+	is_6g_bss = wlan_reg_is_6ghz_chan_freq(chan_freq);
+
+	/* Return if the BSS is not 6G and RNR IE is not present */
+	if (!(is_6g_bss || entry->ie_list.rnrie))
+		return;
+
+	scm_debug("scan entry channel freq %d", chan_freq);
+	if (is_6g_bss) {
+		channel = scm_get_chan_meta(chan_freq);
+		if (channel) {
+			scm_debug("Failed to get chan Meta freq %d", chan_freq);
+			return;
+		}
+		channel->bss_beacon_probe_count++;
+		channel->beacon_probe_last_time_found = entry->scan_entry_time;
+	}
+
+	/*
+	 * If scan entry got RNR IE then loop through all
+	 * entries and increase the BSS count in respective channels
+	 */
+	if (!entry->ie_list.rnrie)
+		return;
+
+	for (i = 0; i < MAX_RNR_BSS; i++) {
+		rnr_bss = &entry->rnr.bss_info[i];
+		channel->bss_beacon_probe_count++;
+		/* Don't add RNR entry if list is full */
+		if (qdf_list_size(&channel->rnr_list) >= WLAN_MAX_RNR_COUNT)
+			continue;
+		/* Skip if entry is not valid */
+		if (!rnr_bss->channel_number)
+			continue;
+		rnr_node = qdf_mem_malloc(sizeof(struct scan_rnr_node));
+		if (!rnr_node)
+			return;
+		chan_freq = wlan_reg_chan_opclass_to_freq(rnr_bss->channel_number,
+							  rnr_bss->operating_class,
+							  false);
+		channel = scm_get_chan_meta(chan_freq);
+		if (!channel) {
+			scm_debug("Failed to get chan Meta freq %d", chan_freq);
+			qdf_mem_free(rnr_node);
+			return;
+		}
+		rnr_node->entry.timestamp = entry->scan_entry_time;
+		if (!qdf_is_macaddr_zero(&rnr_bss->bssid))
+			qdf_mem_copy(&rnr_node->entry.bssid,
+				     &rnr_bss->bssid,
+				     QDF_MAC_ADDR_SIZE);
+		if (rnr_bss->short_ssid)
+			rnr_node->entry.short_ssid = rnr_bss->short_ssid;
+		qdf_list_insert_back(&channel->rnr_list,
+				     &rnr_node->node);
+	}
+}
+
+static void scm_del_rnr_channel_db(struct scan_cache_entry *entry)
+{
+	uint32_t chan_freq;
+	uint8_t is_6g_bss, i;
+	struct meta_rnr_channel *channel;
+	struct rnr_bss_info *rnr_bss;
+	struct scan_rnr_node *rnr_node;
+	qdf_list_node_t *cur_node, *next_node;
+
+	chan_freq = entry->channel.chan_freq;
+	is_6g_bss = wlan_reg_is_6ghz_chan_freq(chan_freq);
+
+	/* Return if the BSS is not 6G and RNR IE is not present*/
+	if (!(is_6g_bss || entry->ie_list.rnrie))
+		return;
+
+	scm_debug("channel freq of scan entry %d", chan_freq);
+	if (is_6g_bss) {
+		channel = scm_get_chan_meta(chan_freq);
+		if (!channel) {
+			scm_debug("Failed to get chan Meta freq %d", chan_freq);
+			return;
+		}
+		channel->bss_beacon_probe_count--;
+	}
+	/*
+	 * If scan entry got RNR IE then loop through all
+	 * entries and decrease the BSS count in respective channels
+	 */
+	if (!entry->ie_list.rnrie)
+		return;
+
+	for (i = 0; i < MAX_RNR_BSS; i++) {
+		rnr_bss = &entry->rnr.bss_info[i];
+		/* Skip if entry is not valid */
+		if (!rnr_bss->channel_number)
+			continue;
+		chan_freq = wlan_reg_chan_opclass_to_freq(rnr_bss->channel_number,
+							  rnr_bss->operating_class,
+							  false);
+		channel = scm_get_chan_meta(chan_freq);
+		if (!channel) {
+			scm_debug("Failed to get chan Meta freq %d",
+				  chan_freq);
+			return;
+		}
+		channel->bss_beacon_probe_count--;
+		qdf_list_peek_front(&channel->rnr_list, &cur_node);
+		/* Free the Node */
+		while (cur_node) {
+			qdf_list_peek_next(&channel->rnr_list, cur_node,
+					   &next_node);
+			rnr_node = qdf_container_of(cur_node,
+						    struct scan_rnr_node,
+						    node);
+			if (qdf_is_macaddr_equal(&rnr_node->entry.bssid,
+						 &rnr_bss->bssid)) {
+				qdf_list_remove_node(&channel->rnr_list,
+						     &rnr_node->node);
+				qdf_mem_free(rnr_node);
+			} else if (rnr_node->entry.short_ssid ==
+					rnr_bss->short_ssid) {
+				qdf_list_remove_node(&channel->rnr_list,
+						     &rnr_node->node);
+				qdf_mem_free(rnr_node);
+			}
+			cur_node = next_node;
+			next_node = NULL;
+		}
+	}
+}
+#else
+struct meta_rnr_channel *scm_get_chan_meta(uint32_t channel_freq)
+{
+	return NULL;
+}
+
+static void scm_add_rnr_channel_db(struct scan_cache_entry *entry)
+{
+}
+
+static void scm_del_rnr_channel_db(struct scan_cache_entry *entry)
+{
+}
+#endif
+
 /**
  * scm_del_scan_node() - API to remove scan node from the list
  * @list: hash list
@@ -183,7 +351,7 @@ static void scm_scan_entry_del(struct scan_dbs *scan_db,
 		return;
 	}
 	scan_node->cookie = 0;
-
+	scm_del_rnr_channel_db(scan_node->entry);
 	scm_scan_entry_put_ref(scan_db, scan_node, false);
 }
 
@@ -217,6 +385,7 @@ static void scm_add_scan_node(struct scan_dbs *scan_db,
 		qdf_list_insert_before(&scan_db->scan_hash_tbl[hash_idx],
 				       &scan_node->node, &dup_node->node);
 
+	scm_add_rnr_channel_db(scan_node->entry);
 	scan_db->num_entries++;
 }
 
@@ -832,7 +1001,7 @@ QDF_STATUS __scm_handle_bcn_probe(struct scan_bcn_probe_event *bcn)
 			continue;
 		}
 
-		scm_nofl_debug("Received %s from BSSID: %pM tsf_delta = %u Seq Num: %d  ssid:%.*s, rssi: %d snr = %d frequency %d pdev_id = %d",
+		scm_nofl_debug("Received %s from BSSID: %pM tsf_delta = %u Seq Num: %d  ssid:%.*s, rssi: %d snr = %d frequency %d phy_mode %d pdev_id = %d",
 			       (bcn->frm_type == MGMT_SUBTYPE_PROBE_RESP) ?
 			       "Probe Rsp" : "Beacon", scan_entry->bssid.bytes,
 			       scan_entry->tsf_delta, scan_entry->seq_num,
@@ -840,6 +1009,7 @@ QDF_STATUS __scm_handle_bcn_probe(struct scan_bcn_probe_event *bcn)
 			       scan_entry->rssi_raw,
 			       scan_entry->snr,
 			       scan_entry->channel.chan_freq,
+			       scan_entry->phy_mode,
 			       wlan_objmgr_pdev_get_pdev_id(pdev));
 
 		if (scan_obj->cb.update_beacon)
@@ -909,27 +1079,16 @@ static void scm_list_insert_sorted(struct wlan_objmgr_psoc *psoc,
 	qdf_list_node_t *cur_lst = NULL, *next_lst = NULL;
 	struct scan_default_params *params;
 	int pcl_chan_weight = 0;
-	struct wlan_objmgr_pdev *pdev = NULL;
 
 	params = wlan_scan_psoc_get_def_params(psoc);
 	if (!params) {
 		scm_err("wlan_scan_psoc_get_def_params failed");
 		return;
 	}
-
-	pdev = wlan_objmgr_get_pdev_by_id(psoc, scan_node->entry->pdev_id,
-					  WLAN_SCAN_ID);
-	if (!pdev) {
-		scm_err("pdev is NULL");
-		return;
-	}
-
 	if (filter->num_of_pcl_channels > 0 &&
 			(scan_node->entry->rssi_raw > SCM_PCL_RSSI_THRESHOLD)) {
 		if (scm_get_pcl_weight_of_channel(
-				wlan_reg_freq_to_chan(
-					pdev,
-					scan_node->entry->channel.chan_freq),
+					scan_node->entry->channel.chan_freq,
 					filter, &pcl_chan_weight,
 					filter->pcl_weight_list)) {
 			scm_debug("pcl freq %d pcl_chan_weight %d",
@@ -937,8 +1096,6 @@ static void scm_list_insert_sorted(struct wlan_objmgr_psoc *psoc,
 				  pcl_chan_weight);
 		}
 	}
-	wlan_objmgr_pdev_release_ref(pdev, WLAN_SCAN_ID);
-
 	if (params->is_bssid_hint_priority &&
 	    !qdf_mem_cmp(filter->bssid_hint.bytes,
 			 scan_node->entry->bssid.bytes,
@@ -1426,7 +1583,6 @@ QDF_STATUS scm_db_init(struct wlan_objmgr_psoc *psoc)
 			qdf_list_create(&scan_db->scan_hash_tbl[j],
 				MAX_SCAN_CACHE_SIZE);
 	}
-
 	return QDF_STATUS_SUCCESS;
 }
 
@@ -1456,6 +1612,65 @@ QDF_STATUS scm_db_deinit(struct wlan_objmgr_psoc *psoc)
 
 	return QDF_STATUS_SUCCESS;
 }
+
+#ifdef FEATURE_6G_SCAN_CHAN_SORT_ALGO
+QDF_STATUS scm_channel_list_db_init(struct wlan_objmgr_psoc *psoc)
+{
+	uint8_t i, j = 0;
+	uint32_t min_freq, max_freq;
+
+	min_freq = wlan_reg_min_6ghz_chan_freq();
+	max_freq = wlan_reg_max_6ghz_chan_freq();
+
+	scm_debug("min_freq %d max_freq %d", min_freq, max_freq);
+	for (i = min_freq; i <= max_freq; i += 20, j++) {
+		rnr_channel_db.channel[j].chan_freq = i;
+		qdf_list_create(&rnr_channel_db.channel[j].rnr_list,
+				WLAN_MAX_RNR_COUNT);
+		scm_debug("freq %d", i);
+	}
+
+	return QDF_STATUS_SUCCESS;
+}
+
+QDF_STATUS scm_channel_list_db_deinit(struct wlan_objmgr_psoc *psoc)
+{
+	int i;
+	qdf_list_node_t *cur_node, *next_node;
+	struct meta_rnr_channel *channel;
+	struct scan_rnr_node *rnr_node;
+
+	for (i = 0; i <= MAX_6GHZ_CHANNEL; i++) {
+		channel = &rnr_channel_db.channel[i];
+		channel->chan_freq = 0;
+		qdf_list_peek_front(&channel->rnr_list, &cur_node);
+		while (cur_node) {
+			qdf_list_peek_next(&channel->rnr_list, cur_node,
+					   &next_node);
+			rnr_node = qdf_container_of(cur_node,
+						    struct scan_rnr_node,
+						    node);
+			qdf_list_remove_node(&channel->rnr_list,
+					     &rnr_node->node);
+			qdf_mem_free(rnr_node);
+			cur_node = next_node;
+			next_node = NULL;
+		}
+	}
+
+	return QDF_STATUS_SUCCESS;
+}
+#else
+QDF_STATUS scm_channel_list_db_init(struct wlan_objmgr_psoc *psoc)
+{
+	return QDF_STATUS_SUCCESS;
+}
+
+QDF_STATUS scm_channel_list_db_deinit(struct wlan_objmgr_psoc *psoc)
+{
+	return QDF_STATUS_SUCCESS;
+}
+#endif
 
 QDF_STATUS scm_update_scan_mlme_info(struct wlan_objmgr_pdev *pdev,
 	struct scan_cache_entry *entry)
@@ -1529,9 +1744,7 @@ QDF_STATUS scm_scan_update_mlme_by_bssinfo(struct wlan_objmgr_pdev *pdev,
 		entry = cur_node->entry;
 		if (qdf_is_macaddr_equal(&bss_info->bssid, &entry->bssid) &&
 			(util_is_ssid_match(&bss_info->ssid, &entry->ssid)) &&
-			(bss_info->chan == wlan_reg_freq_to_chan(
-						pdev,
-						entry->channel.chan_freq))) {
+			(bss_info->freq == entry->channel.chan_freq)) {
 			/* Acquire db lock to prevent simultaneous update */
 			qdf_spin_lock_bh(&scan_db->scan_db_lock);
 			qdf_mem_copy(&entry->mlme_info, mlme,

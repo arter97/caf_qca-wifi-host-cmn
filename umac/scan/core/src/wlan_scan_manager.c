@@ -36,6 +36,18 @@
 #include <wlan_dfs_utils_api.h>
 #include <wlan_scan_cfg.h>
 
+/* Beacon/probe weightage multiplier */
+#define BCN_PROBE_WEIGHTAGE 5
+
+/* Saved profile weightage multiplier */
+#define SAVED_PROFILE_WEIGHTAGE 10
+
+/* maximum number of 6ghz hints can be sent per scan request */
+#define MAX_HINTS_PER_SCAN_REQ 15
+
+/* maximum number of hints can be sent per 6ghz channel */
+#define MAX_HINTS_PER_CHANNEL 4
+
 QDF_STATUS
 scm_scan_free_scan_request_mem(struct scan_start_request *req)
 {
@@ -864,7 +876,7 @@ scm_update_6ghz_channel_list(struct wlan_objmgr_vdev *vdev,
 
 		/* Add the 6Ghz channels based on config*/
 		channel_count = wlan_reg_get_band_channel_list(pdev,
-							       REG_BAND_6G,
+							       BIT(REG_BAND_6G),
 							       chan_list_6g);
 		scm_debug("Number of 6G channels %d", channel_count);
 		for (i = 0; i < channel_count; i++) {
@@ -882,6 +894,7 @@ scm_update_6ghz_channel_list(struct wlan_objmgr_vdev *vdev,
 					chan_list_6g[i].center_freq;
 			}
 		}
+		qdf_mem_free(chan_list_6g);
 	}
 	scm_debug("Number of channels to scan %d", num_scan_channels);
 	for (i = 0; i < num_scan_channels; i++)
@@ -894,6 +907,128 @@ static void
 scm_update_6ghz_channel_list(struct wlan_objmgr_vdev *vdev,
 			     struct chan_list *chan_list,
 			     struct wlan_scan_obj *scan_obj)
+{
+}
+#endif
+
+#ifdef FEATURE_6G_SCAN_CHAN_SORT_ALGO
+static void scm_sort_6ghz_channel_list(struct wlan_objmgr_vdev *vdev,
+				       struct chan_list *chan_list)
+{
+	uint8_t i, j = 0, min, tmp_list_count;
+	struct meta_rnr_channel *channel;
+	struct chan_info temp_list[MAX_6GHZ_CHANNEL];
+	struct rnr_chan_weight *rnr_chan_info, *temp;
+	uint32_t weight;
+
+	rnr_chan_info = qdf_mem_malloc(sizeof(rnr_chan_info) * MAX_6GHZ_CHANNEL);
+	if (!rnr_chan_info)
+		return;
+
+	for (i = 0; i < chan_list->num_chan; i++) {
+		if (WLAN_REG_IS_6GHZ_CHAN_FREQ(chan_list->chan[i].freq))
+			temp_list[j++].freq = chan_list->chan[i].freq;
+	}
+	tmp_list_count = j;
+	scm_debug("Total 6ghz channels %d", tmp_list_count);
+
+	/* No Need to sort if the 6ghz channels are less than one */
+	if (tmp_list_count < 1) {
+		qdf_mem_free(rnr_chan_info);
+		return;
+	}
+
+	/* compute the weightage */
+	for (i = 0; i < tmp_list_count; i++) {
+		channel = scm_get_chan_meta(temp_list[i].freq);
+		weight = channel->bss_beacon_probe_count * BCN_PROBE_WEIGHTAGE +
+			 channel->saved_profile_count * SAVED_PROFILE_WEIGHTAGE;
+		rnr_chan_info[i].weight = weight;
+		rnr_chan_info[i].chan_freq = temp_list[i].freq;
+	}
+
+	/* Sort the channel using selection sort */
+	for (i = 0; i < tmp_list_count - 1; i++) {
+		min = i;
+		for (j = i + 1; j < tmp_list_count; j++) {
+			if (rnr_chan_info[j].weight <
+			    rnr_chan_info[min].weight) {
+				min = j;
+			}
+		}
+		if (min != i) {
+			qdf_mem_copy(&temp, &rnr_chan_info[min],
+				     sizeof(*rnr_chan_info));
+			qdf_mem_copy(&rnr_chan_info[min], &rnr_chan_info[i],
+				     sizeof(*rnr_chan_info));
+			qdf_mem_copy(&rnr_chan_info[i], &temp,
+				     sizeof(*rnr_chan_info));
+		}
+	}
+
+	/* update the 6g list based on the weightage */
+	for (i = 0, j = 0;
+		(i < NUM_CHANNELS && j < NUM_6GHZ_CHANNELS); i++) {
+		if (wlan_reg_is_6ghz_chan_freq(chan_list->chan[i].freq))
+			chan_list->chan[i].freq = rnr_chan_info[j++].chan_freq;
+	}
+	qdf_mem_free(rnr_chan_info);
+}
+
+static void scm_update_rnr_info(struct scan_start_request *req)
+{
+	uint8_t i, num_bssid = 0, num_ssid = 0;
+	uint8_t total_count = MAX_HINTS_PER_SCAN_REQ;
+	uint32_t freq;
+	struct meta_rnr_channel *chan;
+	qdf_list_node_t *cur_node, *next_node;
+	struct scan_rnr_node *rnr_node;
+	struct chan_list *chan_list;
+
+	if (!req)
+		return;
+
+	chan_list = &req->scan_req.chan_list;
+	for (i = 0; i < chan_list->num_chan; i++) {
+		freq = chan_list->chan[i].freq;
+		if (!wlan_reg_is_6ghz_chan_freq(freq))
+			continue;
+
+		chan = scm_get_chan_meta(freq);
+		if (qdf_list_empty(&chan->rnr_list))
+			continue;
+
+		qdf_list_peek_front(&chan->rnr_list, &cur_node);
+		while (cur_node && total_count) {
+			qdf_list_peek_next(&chan->rnr_list, cur_node,
+					   &next_node);
+			rnr_node = qdf_container_of(cur_node,
+						    struct scan_rnr_node,
+						    node);
+			if (!qdf_is_macaddr_zero(&rnr_node->entry.bssid)) {
+				qdf_mem_copy(&req->scan_req.hint_bssid[num_bssid++].bssid,
+					     &rnr_node->entry.bssid,
+					     QDF_MAC_ADDR_SIZE);
+				req->scan_req.num_hint_bssid++;
+				total_count--;
+			} else if (rnr_node->entry.short_ssid) {
+				req->scan_req.hint_s_ssid[num_ssid++].short_ssid =
+						rnr_node->entry.short_ssid;
+				req->scan_req.num_hint_s_ssid++;
+				total_count--;
+			}
+			cur_node = next_node;
+			next_node = NULL;
+		}
+	}
+}
+#else
+static void scm_sort_6ghz_channel_list(struct wlan_objmgr_vdev *vdev,
+				       struct chan_list *chan_list)
+{
+}
+
+static void scm_update_rnr_info(struct scan_start_request *req)
 {
 }
 #endif
@@ -917,6 +1052,7 @@ scm_update_channel_list(struct scan_start_request *req,
 	bool first_scan_done = true;
 	bool p2p_search = false;
 	bool skip_dfs_ch = true;
+	uint32_t first_freq;
 
 	pdev = wlan_vdev_get_pdev(req->vdev);
 
@@ -937,10 +1073,11 @@ scm_update_channel_list(struct scan_start_request *req,
 	 * No need to update channels if req is single channel* ie ROC,
 	 * Preauth or a single channel scan etc.
 	 * If the single chan in the scan channel list is an NOL channel,it is
-	 * not removed as it would reduce the number of scan channels to 0
-	 * and FW would scan all chans which is unexpected in this scenerio.
+	 * removed and it would reduce the number of scan channels to 0.
 	 */
-	if (req->scan_req.chan_list.num_chan == 1)
+	first_freq = req->scan_req.chan_list.chan[0].freq;
+	if ((req->scan_req.chan_list.num_chan == 1) &&
+	    (!utils_dfs_is_freq_in_nol(pdev, first_freq)))
 		return;
 
 	/* do this only for STA and P2P-CLI mode */
@@ -960,7 +1097,7 @@ scm_update_channel_list(struct scan_start_request *req,
 
 		freq = req->scan_req.chan_list.chan[i].freq;
 		if (skip_dfs_ch &&
-		    wlan_reg_is_dfs_ch(pdev, wlan_reg_freq_to_chan(pdev, freq)))
+		    wlan_reg_chan_has_dfs_attribute_for_freq(pdev, freq))
 			continue;
 		if (utils_dfs_is_freq_in_nol(pdev, freq))
 			continue;
@@ -972,6 +1109,7 @@ scm_update_channel_list(struct scan_start_request *req,
 	req->scan_req.chan_list.num_chan = num_scan_channels;
 	scm_update_6ghz_channel_list(req->vdev, &req->scan_req.chan_list,
 				     scan_obj);
+	scm_sort_6ghz_channel_list(req->vdev, &req->scan_req.chan_list);
 	scm_scan_chlist_concurrency_modify(req->vdev, req);
 }
 
@@ -1102,6 +1240,7 @@ scm_scan_req_update_params(struct wlan_objmgr_vdev *vdev,
 		ucfg_scan_init_chanlist_params(req, 0, NULL, NULL);
 
 	scm_update_channel_list(req, scan_obj);
+	scm_update_rnr_info(req);
 	scm_debug("dwell time: active %d, passive %d, repeat_probe_time %d n_probes %d flags_ext %x, wide_bw_scan: %d priority: %d",
 		  req->scan_req.dwell_time_active,
 		  req->scan_req.dwell_time_passive,

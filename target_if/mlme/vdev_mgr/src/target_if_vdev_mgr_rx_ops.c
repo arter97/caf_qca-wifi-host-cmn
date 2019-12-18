@@ -184,7 +184,7 @@ void target_if_flush_vdev_timers(struct wlan_objmgr_pdev *pdev)
 					  NULL, true, WLAN_VDEV_TARGET_IF_ID);
 }
 
-#ifdef SERIALIZE_VDEV_RESP_TIMER
+#ifdef SERIALIZE_VDEV_RESP
 static QDF_STATUS target_if_vdev_mgr_rsp_flush_cb(struct scheduler_msg *msg)
 {
 	struct wlan_objmgr_vdev *vdev = msg->bodyptr;
@@ -223,16 +223,20 @@ void target_if_vdev_mgr_rsp_timer_mgmt_cb(void *arg)
 {
 	target_if_vdev_mgr_rsp_cb_mc_ctx(arg);
 }
+
+#define VDEV_RSP_RX_CTX WMI_RX_SERIALIZER_CTX
 #else
 void target_if_vdev_mgr_rsp_timer_mgmt_cb(void *arg)
 {
 	target_if_vdev_mgr_rsp_timer_cb(arg);
 }
+
+#define VDEV_RSP_RX_CTX WMI_RX_UMAC_CTX
 #endif
 
-int target_if_vdev_mgr_start_response_handler(ol_scn_t scn,
-					      uint8_t *data,
-					      uint32_t datalen)
+static int target_if_vdev_mgr_start_response_handler(ol_scn_t scn,
+						     uint8_t *data,
+						     uint32_t datalen)
 {
 	QDF_STATUS status = QDF_STATUS_E_INVAL;
 	struct wlan_objmgr_psoc *psoc;
@@ -319,9 +323,9 @@ release_vdev_target_if_ref:
 	return qdf_status_to_os_return(status);
 }
 
-int target_if_vdev_mgr_stop_response_handler(ol_scn_t scn,
-					     uint8_t *data,
-					     uint32_t datalen)
+static int target_if_vdev_mgr_stop_response_handler(ol_scn_t scn,
+						    uint8_t *data,
+						    uint32_t datalen)
 {
 	QDF_STATUS status = QDF_STATUS_E_INVAL;
 	struct wlan_objmgr_psoc *psoc;
@@ -394,9 +398,9 @@ release_vdev_target_if_ref:
 	return qdf_status_to_os_return(status);
 }
 
-int target_if_vdev_mgr_delete_response_handler(ol_scn_t scn,
-					       uint8_t *data,
-					       uint32_t datalen)
+static int target_if_vdev_mgr_delete_response_handler(ol_scn_t scn,
+						      uint8_t *data,
+						      uint32_t datalen)
 {
 	QDF_STATUS status = QDF_STATUS_E_INVAL;
 	struct wlan_objmgr_psoc *psoc;
@@ -708,7 +712,7 @@ QDF_STATUS target_if_vdev_mgr_wmi_event_register(
 				wmi_handle,
 				wmi_vdev_stopped_event_id,
 				target_if_vdev_mgr_stop_response_handler,
-				WMI_RX_UMAC_CTX);
+				VDEV_RSP_RX_CTX);
 	if (retval)
 		mlme_err("failed to register for stop response");
 
@@ -716,7 +720,7 @@ QDF_STATUS target_if_vdev_mgr_wmi_event_register(
 				wmi_handle,
 				wmi_vdev_delete_resp_event_id,
 				target_if_vdev_mgr_delete_response_handler,
-				WMI_RX_UMAC_CTX);
+				VDEV_RSP_RX_CTX);
 	if (retval)
 		mlme_err("failed to register for delete response");
 
@@ -724,7 +728,7 @@ QDF_STATUS target_if_vdev_mgr_wmi_event_register(
 				wmi_handle,
 				wmi_vdev_start_resp_event_id,
 				target_if_vdev_mgr_start_response_handler,
-				WMI_RX_UMAC_CTX);
+				VDEV_RSP_RX_CTX);
 	if (retval)
 		mlme_err("failed to register for start response");
 

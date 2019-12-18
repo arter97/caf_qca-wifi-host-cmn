@@ -1011,6 +1011,8 @@ wlan_scan_global_init(struct wlan_objmgr_psoc *psoc,
 			cfg_get(psoc, CFG_HONOUR_NL_SCAN_POLICY_FLAGS);
 	scan_obj->scan_def.enable_mac_spoofing =
 			cfg_get(psoc, CFG_ENABLE_MAC_ADDR_SPOOFING);
+	scan_obj->scan_def.is_bssid_hint_priority =
+			cfg_get(psoc, CFG_IS_BSSID_HINT_PRIORITY);
 	scan_obj->scan_def.extscan_adaptive_dwell_mode =
 			cfg_get(psoc, CFG_ADAPTIVE_EXTSCAN_DWELL_MODE);
 
@@ -1641,6 +1643,7 @@ ucfg_scan_psoc_open(struct wlan_objmgr_psoc *psoc)
 	qdf_spinlock_create(&scan_obj->lock);
 	ucfg_scan_register_pmo_handler();
 	scm_db_init(psoc);
+	scm_channel_list_db_init(psoc);
 
 	return QDF_STATUS_SUCCESS;
 }
@@ -1664,6 +1667,7 @@ ucfg_scan_psoc_close(struct wlan_objmgr_psoc *psoc)
 	ucfg_scan_unregister_pmo_handler();
 	qdf_spinlock_destroy(&scan_obj->lock);
 	wlan_scan_global_deinit(psoc);
+	scm_channel_list_db_deinit(psoc);
 
 	return QDF_STATUS_SUCCESS;
 }

@@ -356,9 +356,20 @@
  *	binary blobs from application/service to firmware. The attributes
  *	defined in enum qca_wlan_vendor_attr_oem_data_params are used to
  *	deliver the parameters.
+ * @QCA_NL80211_VENDOR_SUBCMD_AVOID_FREQUENCY_EXT: This command/event is used
+ *	to send/receive avoid frequency data using
+ *	enum qca_wlan_vendor_attr_avoid_frequency_ext.
+ *	This new command is alternative to existing command
+ *	QCA_NL80211_VENDOR_SUBCMD_AVOID_FREQUENCY since existing command/event
+ *	is using stream of bytes instead of structured data using vendor
+ *	attributes.
  * @QCA_NL80211_VENDOR_SUBCMD_ADD_STA_NODE: This vendor subcommand is used to
  *	add the STA node details in driver/firmware. Attributes for this event
  *	are specified in enum qca_wlan_vendor_attr_add_sta_node_params.
+ * @QCA_NL80211_VENDOR_SUBCMD_BTC_CHAIN_MODE: This command is used to set BT
+ *	coex chain mode from application/service.
+ *	The attributes defined in enum qca_vendor_attr_btc_chain_mode are used
+ *	to deliver the parameters.
  */
 
 enum qca_nl80211_vendor_subcmds {
@@ -574,7 +585,9 @@ enum qca_nl80211_vendor_subcmds {
 	QCA_NL80211_VENDOR_SUBCMD_BEACON_REPORTING = 180,
 	QCA_NL80211_VENDOR_SUBCMD_INTEROP_ISSUES_AP = 181,
 	QCA_NL80211_VENDOR_SUBCMD_OEM_DATA = 182,
+	QCA_NL80211_VENDOR_SUBCMD_AVOID_FREQUENCY_EXT = 183,
 	QCA_NL80211_VENDOR_SUBCMD_ADD_STA_NODE = 184,
+	QCA_NL80211_VENDOR_SUBCMD_BTC_CHAIN_MODE = 185,
 };
 
 enum qca_wlan_vendor_tos {
@@ -8110,6 +8123,32 @@ enum qca_wlan_vendor_attr_oem_data_params {
 		QCA_WLAN_VENDOR_ATTR_OEM_DATA_PARAMS_AFTER_LAST - 1
 };
 
+/**
+ * enum qca_wlan_vendor_attr_avoid_frequency_ext - Defines attributes to be
+ * used with vendor command/event QCA_NL80211_VENDOR_SUBCMD_AVOID_FREQUENCY_EXT.
+ *
+ * @QCA_WLAN_VENDOR_ATTR_AVOID_FREQUENCY_RANGE: Required
+ * Nested attribute containing multiple ranges with following attributes:
+ *	QCA_WLAN_VENDOR_ATTR_AVOID_FREQUENCY_START and
+ *	QCA_WLAN_VENDOR_ATTR_AVOID_FREQUENCY_END.
+ *
+ * @QCA_WLAN_VENDOR_ATTR_AVOID_FREQUENCY_START: Required (u32)
+ * Starting center frequency in MHz.
+ *
+ * @QCA_WLAN_VENDOR_ATTR_AVOID_FREQUENCY_END: Required (u32)
+ * Ending center frequency in MHz.
+ */
+enum qca_wlan_vendor_attr_avoid_frequency_ext {
+	QCA_WLAN_VENDOR_ATTR_AVOID_FREQUENCY_INVALID = 0,
+	QCA_WLAN_VENDOR_ATTR_AVOID_FREQUENCY_RANGE = 1,
+	QCA_WLAN_VENDOR_ATTR_AVOID_FREQUENCY_START = 2,
+	QCA_WLAN_VENDOR_ATTR_AVOID_FREQUENCY_END = 3,
+
+	QCA_WLAN_VENDOR_ATTR_AVOID_FREQUENCY_AFTER_LAST,
+	QCA_WLAN_VENDOR_ATTR_AVOID_FREQUENCY_MAX =
+		QCA_WLAN_VENDOR_ATTR_AVOID_FREQUENCY_AFTER_LAST - 1
+};
+
 /*
  * enum qca_wlan_vendor_attr_add_sta_node_params - Used by the vendor command
  * QCA_NL80211_VENDOR_SUBCMD_ADD_STA_NODE.
@@ -8128,4 +8167,43 @@ enum qca_wlan_vendor_attr_add_sta_node_params {
 	QCA_WLAN_VENDOR_ATTR_ADD_STA_NODE_PARAM_MAX =
 		QCA_WLAN_VENDOR_ATTR_ADD_STA_NODE_PARAM_AFTER_LAST - 1
 };
+
+/**
+ * enum qca_btc_chain_mode - Specifies BT coex chain mode.
+ * This enum defines the valid set of values of BT coex chain mode.
+ * These values are used by attribute %QCA_VENDOR_ATTR_BTC_CHAIN_MODE of
+ * %QCA_NL80211_VENDOR_SUBCMD_BTC_CHAIN_MODE.
+ *
+ * @QCA_BTC_CHAIN_SHARED: chains of BT and WLAN 2.4G are shared.
+ * @QCA_BTC_CHAIN_SEPARATED: chains of BT and WLAN 2.4G are separated.
+ */
+enum qca_btc_chain_mode {
+	QCA_BTC_CHAIN_SHARED = 0,
+	QCA_BTC_CHAIN_SEPARATED = 1,
+};
+
+/**
+ * enum qca_vendor_attr_btc_chain_mode - Specifies attributes for BT coex
+ * chain mode.
+ * Attributes for data used by QCA_NL80211_VENDOR_SUBCMD_BTC_CHAIN_MODE.
+ *
+ * @QCA_VENDOR_ATTR_COEX_BTC_CHAIN_MODE: u32 attribute.
+ * Indicates the BT coex chain mode, are 32-bit values from
+ * enum qca_btc_chain_mode. This attribute is mandatory.
+ *
+ * @QCA_VENDOR_ATTR_COEX_BTC_CHAIN_MODE_RESTART: flag attribute.
+ * If set, vdev should be restarted when BT coex chain mode is updated.
+ * This attribute is optional.
+ */
+enum qca_vendor_attr_btc_chain_mode {
+	QCA_VENDOR_ATTR_BTC_CHAIN_MODE_INVALID = 0,
+	QCA_VENDOR_ATTR_BTC_CHAIN_MODE = 1,
+	QCA_VENDOR_ATTR_BTC_CHAIN_MODE_RESTART = 2,
+
+	/* Keep last */
+	QCA_VENDOR_ATTR_BTC_CHAIN_MODE_LAST,
+	QCA_VENDOR_ATTR_BTC_CHAIN_MODE_MAX =
+	QCA_VENDOR_ATTR_BTC_CHAIN_MODE_LAST - 1,
+};
+
 #endif
