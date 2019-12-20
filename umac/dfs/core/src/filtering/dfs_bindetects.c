@@ -825,6 +825,8 @@ static void dfs_count_the_other_delay_elements(
 				break;
 			}
 		}
+	} else if (rf->rf_patterntype == 2) {
+		primatch = 1;
 	} else if ((deltapri1 < primargin) || (deltapri2 < primargin)) {
 		primatch = 1;
 	}
