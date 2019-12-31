@@ -919,24 +919,24 @@ static struct CE_pipe_config target_ce_config_wlan_adrastea[] = {
 	{ /* CE11 */ 11, PIPEDIR_IN,  32, 2048, CE_ATTR_FLAGS, 0,},
 };
 
-#define QCN_9000_CE_COUNT 9
+#define QCN_9000_CE_COUNT 6
 /* QCN9000 enable polling mode */
 static struct CE_attr host_ce_config_wlan_qcn9000[] = {
 	/* host->target HTC control and raw streams */
-	{/*CE0*/ (CE_ATTR_FLAGS | EPPING_CE_FLAGS_POLL), 0, 16, 2048, 0, NULL,},
+	{/*CE0*/ (CE_ATTR_FLAGS), 0, 16, 2048, 0, NULL,},
 	/* target->host HTT + HTC control */
-	{/*CE1*/ (CE_ATTR_FLAGS | EPPING_CE_FLAGS_POLL), 0, 0,  2048,
+	{/*CE1*/ (CE_ATTR_FLAGS), 0, 0,  2048,
 		512, NULL,},
 	/* target->host WMI */
-	{/*CE2*/ (CE_ATTR_FLAGS | EPPING_CE_FLAGS_POLL), 0, 0,  2048,
+	{/*CE2*/ (CE_ATTR_FLAGS), 0, 0,  2048,
 		32, NULL,},
 	/* host->target WMI */
-	{/*CE3*/ (CE_ATTR_FLAGS | EPPING_CE_FLAGS_POLL), 0, 32, 2048, 0, NULL,},
+	{/*CE3*/ (CE_ATTR_FLAGS), 0, 32, 2048, 0, NULL,},
 	/* host->target HTT */
-	{/*CE4*/ (CE_ATTR_FLAGS | EPPING_CE_FLAGS_POLL), 0,
+	{/*CE4*/ (CE_ATTR_FLAGS | CE_ATTR_DISABLE_INTR), 0,
 		CE_HTT_H2T_MSG_SRC_NENTRIES, 256, 0, NULL,},
 	/* target -> host PKTLOG */
-	{/*CE5*/ (CE_ATTR_FLAGS | EPPING_CE_FLAGS_POLL), 0, 0, 2048,
+	{/*CE5*/ (CE_ATTR_FLAGS), 0, 0, 2048,
 		512, NULL,},
 	/* Target autonomous HIF_memcpy */
 	{/*CE6*/ CE_ATTR_FLAGS, 0, 0, 0, 0, NULL,},

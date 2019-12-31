@@ -704,6 +704,8 @@ struct dp_soc_stats {
 		uint32_t invalid_release_source;
 		/* tx completion wbm_internal_error */
 		uint32_t wbm_internal_error[MAX_WBM_INT_ERROR_REASONS];
+		/* tx completion non_wbm_internal_error */
+		uint32_t non_wbm_internal_err;
 		/* TX Comp loop packet limit hit */
 		uint32_t tx_comp_loop_pkt_limit_hit;
 		/* Head pointer Out of sync at the end of dp_tx_comp_handler */
@@ -723,6 +725,8 @@ struct dp_soc_stats {
 		uint32_t rx_frag_err;
 		/* Fragments dropped due to len errors in skb */
 		uint32_t rx_frag_err_len_error;
+		/* Fragments dropped due to no peer found */
+		uint32_t rx_frag_err_no_peer;
 		/* No of reinjected packets */
 		uint32_t reo_reinject;
 		/* Reap loop packet limit hit */
@@ -1318,6 +1322,7 @@ struct ppdu_info {
  * @last_msdu          - last msdu indication
  * @msdu_part_of_amsdu - msdu part of amsdu
  * @transmit_cnt       - retried count
+ * @status             - transmit status
  * @tsf                - timestamp which it transmitted
  */
 struct msdu_completion_info {
@@ -1328,6 +1333,7 @@ struct msdu_completion_info {
 		last_msdu:1,
 		msdu_part_of_amsdu:1;
 	uint8_t transmit_cnt;
+	uint8_t status;
 	uint32_t tsf;
 };
 
@@ -1377,8 +1383,6 @@ struct dp_pdev {
 	/**
 	 * Re-use Memory Section Starts
 	 */
-	/* PDEV handle from OSIF layer TBD: see if we really need osif_pdev */
-	struct cdp_ctrl_objmgr_pdev *ctrl_pdev;
 
 	/* PDEV Id */
 	int pdev_id;
@@ -1738,6 +1742,10 @@ struct dp_pdev {
 	/* TSO Id to index into TSO packet information */
 	qdf_atomic_t tso_idx;
 #endif /* FEATURE_TSO_STATS */
+
+#ifdef WLAN_SUPPORT_DATA_STALL
+	data_stall_detect_cb data_stall_detect_callback;
+#endif /* WLAN_SUPPORT_DATA_STALL */
 };
 
 struct dp_peer;
@@ -1752,8 +1760,6 @@ struct dp_vdev {
 	/* Handle to the OS shim SW's virtual device */
 	ol_osif_vdev_handle osif_vdev;
 
-	/* Handle to the UMAC handle */
-	struct cdp_ctrl_objmgr_vdev *ctrl_vdev;
 	/* vdev_id - ID used to specify a particular vdev to the target */
 	uint8_t vdev_id;
 
@@ -1970,8 +1976,6 @@ struct dp_peer_cached_bufq {
 struct dp_peer {
 	/* VDEV to which this peer is associated */
 	struct dp_vdev *vdev;
-
-	struct cdp_ctrl_objmgr_peer *ctrl_peer;
 
 	struct dp_ast_entry *self_ast_entry;
 

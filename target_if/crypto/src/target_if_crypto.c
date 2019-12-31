@@ -117,7 +117,6 @@ QDF_STATUS target_if_crypto_set_key(struct wlan_objmgr_vdev *vdev,
 	struct cdp_vdev *txrx_vdev;
 	uint32_t pn[4] = {0, 0, 0, 0};
 	struct cdp_peer *peer = NULL;
-	uint8_t peer_id;
 	uint8_t def_tx_idx;
 	wmi_unified_t pdev_wmi_handle;
 	bool pairwise;
@@ -160,7 +159,7 @@ QDF_STATUS target_if_crypto_set_key(struct wlan_objmgr_vdev *vdev,
 		     &req->keyrsc[0], sizeof(uint64_t));
 	txrx_vdev = (struct cdp_vdev *)cdp_get_vdev_from_vdev_id(soc,
 				(struct cdp_pdev *)txrx_pdev, params.vdev_id);
-	peer = cdp_peer_find_by_addr(soc, txrx_pdev, req->macaddr, &peer_id);
+	peer = cdp_peer_find_by_addr(soc, txrx_pdev, req->macaddr);
 
 	if (!txrx_vdev) {
 		target_if_err("Invalid txrx vdev");
@@ -221,6 +220,8 @@ QDF_STATUS target_if_crypto_set_key(struct wlan_objmgr_vdev *vdev,
 			   &params.key_rsc_ctr, sizeof(uint64_t));
 	status = wmi_unified_setup_install_key_cmd(pdev_wmi_handle, &params);
 
+	/* Zero-out local key variables */
+	qdf_mem_zero(&params, sizeof(struct set_key_params));
 	return status;
 }
 

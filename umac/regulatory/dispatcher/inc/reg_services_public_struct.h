@@ -36,7 +36,7 @@
 #define REG_MAX_CHAN_CHANGE_CBKS 30
 #define MAX_STA_VDEV_CNT 4
 #define INVALID_VDEV_ID 0xFF
-#define INVALID_CHANNEL_NUM 0xBAD
+#define INVALID_CHANNEL_NUM 0x0
 #define CH_AVOID_MAX_RANGE   4
 #define REG_ALPHA2_LEN 2
 #define MAX_REG_RULES 10
@@ -46,6 +46,7 @@
 #define REGULATORY_CHAN_RADAR        BIT(3)
 #define REGULATORY_CHAN_NO_OFDM      BIT(6)
 #define REGULATORY_CHAN_INDOOR_ONLY  BIT(9)
+#define REGULATORY_CHAN_AFC          BIT(13)
 
 #define REGULATORY_CHAN_NO_HT40      BIT(4)
 #define REGULATORY_CHAN_NO_80MHZ     BIT(7)
@@ -68,8 +69,12 @@
  * @DFS_MKK_REGION: MKK region
  * @DFS_CN_REGION: China region
  * @DFS_KR_REGION: Korea region
+ * @DFS_MKK_REGION: MKKN region
+ * that supports updated W53 RADAR pattern
+ * detection.
  * @DFS_UNDEF_REGION: Undefined region
  */
+
 enum dfs_reg {
 	DFS_UNINIT_REGION = 0,
 	DFS_FCC_REGION = 1,
@@ -77,6 +82,7 @@ enum dfs_reg {
 	DFS_MKK_REGION = 3,
 	DFS_CN_REGION = 4,
 	DFS_KR_REGION = 5,
+	DFS_MKKN_REGION = 6,
 	DFS_UNDEF_REGION = 0xFFFF,
 };
 
@@ -435,6 +441,18 @@ enum channel_enum {
 
 	INVALID_CHANNEL = 0xBAD,
 
+#ifdef DISABLE_UNII_SHARED_BANDS
+	MIN_UNII_1_BAND_CHANNEL = CHAN_ENUM_5180,
+	MAX_UNII_1_BAND_CHANNEL = CHAN_ENUM_5240,
+	NUM_UNII_1_BAND_CHANNELS = (MAX_UNII_1_BAND_CHANNEL -
+				    MIN_UNII_1_BAND_CHANNEL + 1),
+
+	MIN_UNII_2A_BAND_CHANNEL = CHAN_ENUM_5260,
+	MAX_UNII_2A_BAND_CHANNEL = CHAN_ENUM_5320,
+	NUM_UNII_2A_BAND_CHANNELS = (MAX_UNII_2A_BAND_CHANNEL -
+				     MIN_UNII_2A_BAND_CHANNEL + 1),
+#endif
+
 #ifdef CONFIG_BAND_6GHZ
 	MIN_6GHZ_CHANNEL = CHAN_ENUM_5945,
 	MAX_6GHZ_CHANNEL = CHAN_ENUM_7105,
@@ -510,10 +528,10 @@ enum ctl_value {
 struct ch_params {
 	enum phy_ch_width ch_width;
 	uint8_t sec_ch_offset;
-	uint8_t center_freq_seg0;
-	uint8_t center_freq_seg1;
-	uint16_t mhz_freq_seg0;
-	uint16_t mhz_freq_seg1;
+	qdf_freq_t center_freq_seg0;
+	qdf_freq_t center_freq_seg1;
+	qdf_freq_t mhz_freq_seg0;
+	qdf_freq_t mhz_freq_seg1;
 };
 
 /**
@@ -523,8 +541,8 @@ struct ch_params {
  * @tx_power: TX power
  */
 struct channel_power {
-	uint32_t center_freq;
-	uint32_t chan_num;
+	qdf_freq_t center_freq;
+	uint8_t chan_num;
 	uint32_t tx_power;
 };
 
@@ -575,7 +593,7 @@ struct reg_dmn_op_class_map_t {
 	uint8_t chan_spacing;
 	enum offset_t offset;
 	uint16_t behav_limit;
-	uint16_t start_freq;
+	qdf_freq_t start_freq;
 	uint8_t channels[REG_MAX_CHANNELS_PER_OPERATING_CLASS];
 };
 
@@ -647,8 +665,8 @@ enum country_src {
  * @nol_history: Set NOL-History when STA vap detects RADAR.
  */
 struct regulatory_channel {
-	uint32_t center_freq;
-	uint32_t chan_num;
+	qdf_freq_t center_freq;
+	uint8_t chan_num;
 	enum channel_state state;
 	uint32_t chan_flags;
 	uint32_t tx_power;
@@ -658,7 +676,6 @@ struct regulatory_channel {
 	bool nol_chan;
 	bool nol_history;
 };
-
 
 /**
  * struct regulatory: regulatory information
@@ -694,8 +711,8 @@ struct regulatory {
  * @max_bw: max bw
  */
 struct chan_map {
-	uint32_t center_freq;
-	uint32_t chan_num;
+	qdf_freq_t center_freq;
+	uint8_t chan_num;
 	uint16_t min_bw;
 	uint16_t max_bw;
 };
@@ -706,8 +723,8 @@ struct chan_map {
  * @end_ch: end channel
  */
 struct bonded_channel {
-	uint16_t start_ch;
-	uint16_t end_ch;
+	uint8_t start_ch;
+	uint8_t end_ch;
 };
 
 /**
@@ -832,6 +849,18 @@ enum reg_wifi_band {
 	REG_BAND_6G,
 	REG_BAND_UNKNOWN
 };
+
+#ifdef DISABLE_UNII_SHARED_BANDS
+/**
+ * enum reg_unii_band
+ * @REG_UNII_BAND_1: Disable UNII-1 band channels
+ * @REG_UNII_BAND_2A: Disable UNII-2A band channels
+ */
+enum reg_unii_band {
+	REG_UNII_BAND_1 = 0x0,
+	REG_UNII_BAND_2A = 0x1,
+};
+#endif
 
 #define REG_BAND_MASK_ALL (BIT(REG_BAND_2G) | BIT(REG_BAND_5G) \
 			  | BIT(REG_BAND_6G))
@@ -1005,8 +1034,8 @@ struct cur_regdmn_info {
  * @end_freq: end freq
  */
 struct ch_avoid_freq_type {
-	uint32_t start_freq;
-	uint32_t end_freq;
+	qdf_freq_t start_freq;
+	qdf_freq_t end_freq;
 };
 
 /**
@@ -1038,5 +1067,13 @@ struct avoid_freq_ind_data {
 	struct ch_avoid_ind_type freq_list;
 	struct unsafe_ch_list chan_list;
 };
+
+#define FIVEG_STARTING_FREQ     5000
+#define TWOG_STARTING_FREQ      2407
+#define TWOG_CHAN_14_IN_MHZ     2484
+#define TWOG_CHAN_1_IN_MHZ      2412
+#define TWOG_CHAN_5_IN_MHZ      2432
+#define TWOG_CHAN_6_IN_MHZ      2437
+#define TWOG_CHAN_13_IN_MHZ     2472
 
 #endif

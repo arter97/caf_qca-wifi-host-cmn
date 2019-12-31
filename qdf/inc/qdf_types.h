@@ -105,6 +105,15 @@ typedef void *qdf_pm_t;
 typedef void *qdf_handle_t;
 
 /**
+ * typedef qdf_freq_t - define frequency as a 16 bit/32 bit
+ * unsigned integer depending on the requirement
+ */
+#ifdef CONFIG_16_BIT_FREQ_TYPE
+typedef uint16_t qdf_freq_t;
+#else
+typedef uint32_t qdf_freq_t;
+#endif
+/**
  * typedef qdf_device_t - Platform/bus generic handle.
  * Used for bus specific functions.
  */
@@ -190,7 +199,7 @@ typedef struct qdf_shared_mem {
 	qdf_dma_mem_context(memctx);
 } qdf_shared_mem_t;
 
-#define qdf_iomem_t __qdf_iomem_t;
+#define qdf_iomem_t __qdf_iomem_t
 
 /**
  * typedef enum QDF_TIMER_TYPE - QDF timer type
@@ -673,7 +682,6 @@ enum QDF_GLOBAL_MODE {
 #define qdf_rl_nofl_debug(params...) \
 	QDF_TRACE_DEBUG_RL_NO_FL(QDF_MODULE_ID_QDF, ## params)
 
-#define qdf_vprint    __qdf_vprint
 #define qdf_snprint   __qdf_snprint
 
 #define qdf_kstrtoint __qdf_kstrtoint
@@ -690,6 +698,7 @@ enum QDF_GLOBAL_MODE {
 #define QDF_SAP_MASK (1 << QDF_SAP_MODE)
 #define QDF_P2P_CLIENT_MASK (1 << QDF_P2P_CLIENT_MODE)
 #define QDF_P2P_GO_MASK (1 << QDF_P2P_GO_MODE)
+#define QDF_MONITOR_MASK (1 << QDF_MONITOR_MODE)
 
 #ifdef FEATURE_WLAN_MCC_TO_SCC_SWITCH
 

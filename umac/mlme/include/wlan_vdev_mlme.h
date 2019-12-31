@@ -31,6 +31,7 @@ struct vdev_mlme_obj;
 #define MULTIPLE_VDEV_RESTART_REQ_ID 0x1234
 
 /* values for vdev_type */
+#define WLAN_VDEV_MLME_TYPE_UNKNOWN   0x0
 #define WLAN_VDEV_MLME_TYPE_AP   0x1
 #define WLAN_VDEV_MLME_TYPE_STA  0x2
 #define WLAN_VDEV_MLME_TYPE_IBSS 0x3
@@ -40,6 +41,7 @@ struct vdev_mlme_obj;
 #define WLAN_VDEV_MLME_TYPE_NDI 0x7
 
 /* values for vdev_subtype */
+#define WLAN_VDEV_MLME_SUBTYPE_UNKNOWN   0x0
 #define WLAN_VDEV_MLME_SUBTYPE_P2P_DEVICE 0x1
 #define WLAN_VDEV_MLME_SUBTYPE_P2P_CLIENT 0x2
 #define WLAN_VDEV_MLME_SUBTYPE_P2P_GO 0x3
@@ -507,9 +509,6 @@ struct vdev_mlme_ops {
 	QDF_STATUS (*mlme_vdev_notify_down_complete)(
 				struct vdev_mlme_obj *vdev_mlme,
 				uint16_t event_data_len, void *event_data);
-	QDF_STATUS (*mlme_vdev_ext_delete_rsp)(
-				struct vdev_mlme_obj *vdev_mlme,
-				struct vdev_delete_response *rsp);
 	QDF_STATUS (*mlme_vdev_ext_stop_rsp)(
 				struct vdev_mlme_obj *vdev_mlme,
 				struct vdev_stop_response *rsp);
@@ -524,22 +523,6 @@ struct vdev_mlme_ops {
 				struct vdev_mlme_obj *vdev_mlme,
 				struct peer_delete_all_response *rsp);
 };
-
-#ifdef FEATURE_VDEV_RSP_WAKELOCK
-/**
- *  struct wlan_vdev_wakelock - vdev wake lock sub structure
- *  @start_wakelock: wakelock for vdev start
- *  @stop_wakelock: wakelock for vdev stop
- *  @delete_wakelock: wakelock for vdev delete
- *  @wmi_cmd_rsp_runtime_lock: run time lock
- */
-struct vdev_mlme_wakelock {
-	qdf_wake_lock_t start_wakelock;
-	qdf_wake_lock_t stop_wakelock;
-	qdf_wake_lock_t delete_wakelock;
-	qdf_runtime_lock_t wmi_cmd_rsp_runtime_lock;
-};
-#endif
 
 /**
  * struct vdev_mlme_obj - VDEV MLME component object
@@ -565,10 +548,6 @@ struct vdev_mlme_obj {
 	struct wlan_objmgr_vdev *vdev;
 	struct vdev_mlme_ops *ops;
 	mlme_vdev_ext_t *ext_vdev_ptr;
-	struct vdev_response_timer vdev_rt;
-#ifdef FEATURE_VDEV_RSP_WAKELOCK
-	struct vdev_mlme_wakelock vdev_wakelock;
-#endif
 };
 
 /**
