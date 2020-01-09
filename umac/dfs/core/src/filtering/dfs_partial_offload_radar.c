@@ -97,6 +97,29 @@ static struct dfs_pulse dfs_mkk4_radars[] = {
 };
 
 /**
+ * struct dfs_pulse dfs_mkkn_radars - MKKN radar table for Offload chipsets.
+ */
+static struct dfs_pulse dfs_mkkn_radars[] = {
+	/** Since the table is empty  no new radar type shall be detected.
+	 * New filters shall be added to this tables after proper testing
+	 * and verification.
+	 */
+	/* constant PRF based */
+	/* Type 1 */
+	/* 0.8-5us, 200  300 PRF, 10 pulses */
+	{10, 5,   200,  400, 0,  4,  5,  0,  8, 15, 0,   0, 2, 5, 0, 91},
+	{10, 5,   400,  600, 0,  4,  5,  0,  8, 15, 0,   0, 2, 5, 0, 92},
+	{10, 5,   600,  800, 0,  4,  5,  0,  8, 15, 0,   0, 2, 5, 0, 93},
+	{10, 5,   800, 1000, 0,  4,  5,  0,  8, 15, 0,   0, 2, 5, 0, 94},
+	/* {10, 5,   200, 1000, 0,  6,  5,  0,  8, 15, 0,   0, 2, 5, 33}, */
+
+	/* Type 2 */
+	/* 0.8-15us, 200-1600 PRF, 15 pulses */
+	{15, 15,  200, 1600, 0,  4, 8,  0, 18, 24, 0,   0, 0, 5, 0, 95},
+
+};
+
+/**
  * struct dfs_bin5pulse dfs_fcc_bin5pulses - FCC BIN5 pulses for Offload
  *                                           chipsets.
  */
@@ -403,6 +426,14 @@ void dfs_get_po_radars(struct wlan_dfs *dfs)
 		 */
 		rinfo.dfs_radars = dfs_korea_radars;
 		rinfo.numradars = QDF_ARRAY_SIZE(dfs_korea_radars);
+		rinfo.b5pulses = NULL;
+		rinfo.numb5radars = 0;
+		break;
+	case DFS_MKKN_DOMAIN:
+		dfs_info(dfs, WLAN_DEBUG_DFS_ALWAYS, "MKKN domain");
+		rinfo.dfsdomain = DFS_MKKN_DOMAIN;
+		rinfo.dfs_radars = dfs_mkkn_radars;
+		rinfo.numradars = QDF_ARRAY_SIZE(dfs_mkkn_radars);
 		rinfo.b5pulses = NULL;
 		rinfo.numb5radars = 0;
 		break;

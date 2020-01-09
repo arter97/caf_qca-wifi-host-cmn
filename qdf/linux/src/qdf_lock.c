@@ -28,6 +28,7 @@
 #include <hif.h>
 #endif
 #include <i_qdf_lock.h>
+#include <linux/suspend.h>
 
 /**
  * qdf_mutex_create() - Initialize a mutex
@@ -264,7 +265,13 @@ qdf_export_symbol(qdf_wake_lock_name);
  * QDF status success: if wake lock is initialized
  * QDF status failure: if wake lock was not initialized
  */
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3, 10, 0))
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 4, 0))
+QDF_STATUS qdf_wake_lock_create(qdf_wake_lock_t *lock, const char *name)
+{
+	wakeup_source_register(lock->dev, name);
+	return QDF_STATUS_SUCCESS;
+}
+#elif (LINUX_VERSION_CODE >= KERNEL_VERSION(3, 10, 0))
 QDF_STATUS qdf_wake_lock_create(qdf_wake_lock_t *lock, const char *name)
 {
 	wakeup_source_init(lock, name);
@@ -372,7 +379,13 @@ qdf_export_symbol(qdf_wake_lock_release);
  * QDF status success: if wake lock is acquired
  * QDF status failure: if wake lock was not acquired
  */
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3, 10, 0))
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 1, 0))
+QDF_STATUS qdf_wake_lock_destroy(qdf_wake_lock_t *lock)
+{
+	wakeup_source_unregister(lock);
+	return QDF_STATUS_SUCCESS;
+}
+#elif (LINUX_VERSION_CODE >= KERNEL_VERSION(3, 10, 0))
 QDF_STATUS qdf_wake_lock_destroy(qdf_wake_lock_t *lock)
 {
 	wakeup_source_trash(lock);
@@ -385,6 +398,18 @@ QDF_STATUS qdf_wake_lock_destroy(qdf_wake_lock_t *lock)
 }
 #endif
 qdf_export_symbol(qdf_wake_lock_destroy);
+
+/**
+ * qdf_pm_system_wakeup() - wakeup system
+ *
+ * Return: None
+ */
+void qdf_pm_system_wakeup(void)
+{
+	pm_system_wakeup();
+}
+
+qdf_export_symbol(qdf_pm_system_wakeup);
 
 #ifdef FEATURE_RUNTIME_PM
 /**

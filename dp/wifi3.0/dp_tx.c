@@ -141,11 +141,13 @@ dp_tx_limit_check(struct dp_vdev *vdev)
 static inline void
 dp_tx_outstanding_inc(struct dp_pdev *pdev)
 {
+	qdf_atomic_inc(&pdev->num_tx_outstanding);
 }
 
 static inline void
 dp_tx_outstanding_dec(struct dp_pdev *pdev)
 {
+	qdf_atomic_dec(&pdev->num_tx_outstanding);
 }
 #endif //QCA_TX_LIMIT_CHECK
 
@@ -585,8 +587,10 @@ static QDF_STATUS dp_tx_prepare_tso(struct dp_vdev *vdev,
 			tso_info->tso_seg_list = tso_seg;
 			num_seg--;
 		} else {
-			DP_TRACE(ERROR, "%s: Failed to alloc tso seg desc",
-				 __func__);
+			dp_err_rl("Failed to alloc tso seg desc");
+			DP_STATS_INC_PKT(vdev->pdev,
+					 tso_stats.tso_no_mem_dropped, 1,
+					 qdf_nbuf_len(msdu));
 			dp_tx_free_remaining_tso_desc(soc, msdu_info, false);
 
 			return QDF_STATUS_E_NOMEM;
@@ -1502,6 +1506,39 @@ static inline void dp_non_std_tx_comp_free_buff(struct dp_tx_desc_s *tx_desc,
 {
 }
 #endif
+
+/**
+ * dp_tx_frame_is_drop() - checks if the packet is loopback
+ * @vdev: DP vdev handle
+ * @nbuf: skb
+ *
+ * Return: 1 if frame needs to be dropped else 0
+ */
+int dp_tx_frame_is_drop(struct dp_vdev *vdev, uint8_t *srcmac, uint8_t *dstmac)
+{
+	struct dp_pdev *pdev = NULL;
+	struct dp_ast_entry *src_ast_entry = NULL;
+	struct dp_ast_entry *dst_ast_entry = NULL;
+	struct dp_soc *soc = NULL;
+
+	qdf_assert(vdev);
+	pdev = vdev->pdev;
+	qdf_assert(pdev);
+	soc = pdev->soc;
+
+	dst_ast_entry = dp_peer_ast_hash_find_by_pdevid
+				(soc, dstmac, vdev->pdev->pdev_id);
+
+	src_ast_entry = dp_peer_ast_hash_find_by_pdevid
+				(soc, srcmac, vdev->pdev->pdev_id);
+	if (dst_ast_entry && src_ast_entry) {
+		if (dst_ast_entry->peer->peer_ids[0] ==
+				src_ast_entry->peer->peer_ids[0])
+			return 1;
+	}
+
+	return 0;
+}
 
 /**
  * dp_tx_send_msdu_single() - Setup descriptor and enqueue single MSDU to TCL
@@ -3460,9 +3497,7 @@ more_data:
 		head_desc = NULL;
 		tail_desc = NULL;
 	if (qdf_unlikely(dp_srng_access_start(int_ctx, soc, hal_ring_hdl))) {
-		QDF_TRACE(QDF_MODULE_ID_TXRX, QDF_TRACE_LEVEL_ERROR,
-				"%s %d : HAL RING Access Failed -- %pK",
-				__func__, __LINE__, hal_ring_hdl);
+		dp_err("HAL RING Access Failed -- %pK", hal_ring_hdl);
 		return 0;
 	}
 
@@ -3478,10 +3513,9 @@ more_data:
 				(buffer_src != HAL_TX_COMP_RELEASE_SOURCE_FW)) {
 			uint8_t wbm_internal_error;
 
-			QDF_TRACE(QDF_MODULE_ID_DP,
-				  QDF_TRACE_LEVEL_FATAL,
-				  "Tx comp release_src != TQM | FW but from %d",
-				  buffer_src);
+			dp_err_rl(
+				"Tx comp release_src != TQM | FW but from %d",
+				buffer_src);
 			hal_dump_comp_desc(tx_comp_hal_desc);
 			DP_STATS_INC(soc, tx.invalid_release_source, 1);
 
@@ -3498,9 +3532,7 @@ more_data:
 			hal_get_wbm_internal_error(tx_comp_hal_desc);
 
 			if (wbm_internal_error) {
-				QDF_TRACE(QDF_MODULE_ID_DP,
-					  QDF_TRACE_LEVEL_ERROR,
-					  "Tx comp wbm_internal_error!!!\n");
+				dp_err_rl("Tx comp wbm_internal_error!!");
 				DP_STATS_INC(soc, tx.wbm_internal_error[WBM_INT_ERROR_ALL], 1);
 
 				if (HAL_TX_COMP_RELEASE_SOURCE_REO ==
@@ -3511,10 +3543,11 @@ more_data:
 						hal_tx_comp_get_buffer_type(
 							tx_comp_hal_desc));
 
-				continue;
 			} else {
-				qdf_assert_always(0);
+				dp_err_rl("Tx comp wbm_internal_error false");
+				DP_STATS_INC(soc, tx.non_wbm_internal_err, 1);
 			}
+			continue;
 		}
 
 		/* Get descriptor id */
@@ -3645,24 +3678,21 @@ more_data:
 }
 
 #ifdef FEATURE_WLAN_TDLS
-/**
- * dp_tx_non_std() - Allow the control-path SW to send data frames
- *
- * @data_vdev - which vdev should transmit the tx data frames
- * @tx_spec - what non-standard handling to apply to the tx data frames
- * @msdu_list - NULL-terminated list of tx MSDUs
- *
- * Return: NULL on success,
- *         nbuf when it fails to send
- */
-qdf_nbuf_t dp_tx_non_std(struct cdp_vdev *vdev_handle,
-			enum ol_tx_spec tx_spec, qdf_nbuf_t msdu_list)
+qdf_nbuf_t dp_tx_non_std(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
+			 enum ol_tx_spec tx_spec, qdf_nbuf_t msdu_list)
 {
-	struct dp_vdev *vdev = (struct dp_vdev *) vdev_handle;
+	struct dp_soc *soc = cdp_soc_t_to_dp_soc(soc_hdl);
+	struct dp_vdev *vdev = dp_get_vdev_from_soc_vdev_id_wifi3(soc, vdev_id);
+
+	if (!vdev) {
+		dp_err("vdev handle for id %d is NULL", vdev_id);
+		return NULL;
+	}
 
 	if (tx_spec & OL_TX_SPEC_NO_FREE)
 		vdev->is_tdls_frame = true;
-	return dp_tx_send(vdev_handle, msdu_list);
+
+	return dp_tx_send(dp_vdev_to_cdp_vdev(vdev), msdu_list);
 }
 #endif
 

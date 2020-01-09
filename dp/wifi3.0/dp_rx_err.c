@@ -498,6 +498,49 @@ dp_rx_chain_msdus(struct dp_soc *soc, qdf_nbuf_t nbuf, uint8_t *rx_tlv_hdr,
 	return mpdu_done;
 }
 
+static
+void dp_rx_wbm_err_handle_bar(struct dp_soc *soc,
+			      struct dp_peer *peer,
+			      qdf_nbuf_t nbuf)
+{
+	uint8_t *rx_tlv_hdr;
+	unsigned char type, subtype;
+	uint16_t start_seq_num;
+	uint32_t tid;
+	struct ieee80211_frame_bar *bar;
+
+	/*
+	 * 1. Is this a BAR frame. If not Discard it.
+	 * 2. If it is, get the peer id, tid, ssn
+	 * 2a Do a tid update
+	 */
+
+	rx_tlv_hdr = qdf_nbuf_data(nbuf);
+	bar = (struct ieee80211_frame_bar *)(rx_tlv_hdr +
+					     sizeof(struct rx_pkt_tlvs));
+
+	type = bar->i_fc[0] & IEEE80211_FC0_TYPE_MASK;
+	subtype = bar->i_fc[0] & IEEE80211_FC0_SUBTYPE_MASK;
+
+	if (!(type == IEEE80211_FC0_TYPE_CTL &&
+	      subtype == QDF_IEEE80211_FC0_SUBTYPE_BAR)) {
+		dp_err_rl("Not a BAR frame!");
+		return;
+	}
+
+	tid = hal_rx_mpdu_start_tid_get(soc->hal_soc, rx_tlv_hdr);
+	qdf_assert_always(tid < DP_MAX_TIDS);
+
+	start_seq_num = le16toh(bar->i_seq) >> IEEE80211_SEQ_SEQ_SHIFT;
+
+	dp_info_rl("tid %u window_size %u start_seq_num %u",
+		   tid, peer->rx_tid[tid].ba_win_size, start_seq_num);
+
+	dp_rx_tid_update_wifi3(peer, tid,
+			       peer->rx_tid[tid].ba_win_size,
+			       start_seq_num);
+}
+
 /**
  * dp_2k_jump_handle() - Function to handle 2k jump exception
  *                        on WBM ring
@@ -561,12 +604,12 @@ dp_2k_jump_handle(struct dp_soc *soc,
 			IEEE80211_REASON_QOS_SETUP_REQUIRED;
 		qdf_spin_unlock_bh(&rx_tid->tid_lock);
 		if (soc->cdp_soc.ol_ops->send_delba)
-			soc->cdp_soc.ol_ops->send_delba(peer->vdev->pdev->ctrl_pdev,
-							peer->ctrl_peer,
-							peer->mac_addr.raw,
-							tid,
-							peer->vdev->ctrl_vdev,
-							rx_tid->delba_rcode);
+			soc->cdp_soc.ol_ops->send_delba(
+					peer->vdev->pdev->soc->ctrl_psoc,
+					peer->vdev->vdev_id,
+					peer->mac_addr.raw,
+					tid,
+					rx_tid->delba_rcode);
 	} else {
 		qdf_spin_unlock_bh(&rx_tid->tid_lock);
 	}
@@ -599,7 +642,6 @@ dp_rx_null_q_handle_invalid_peer_id_exception(struct dp_soc *soc,
 					      uint8_t *rx_tlv_hdr,
 					      qdf_nbuf_t nbuf)
 {
-	uint8_t local_id;
 	struct dp_peer *peer = NULL;
 	uint8_t *rx_pkt_hdr = hal_rx_pkt_hdr_get(rx_tlv_hdr);
 	struct dp_pdev *pdev = soc->pdev_list[pool_id];
@@ -612,7 +654,7 @@ dp_rx_null_q_handle_invalid_peer_id_exception(struct dp_soc *soc,
 	 */
 	if (wh)
 		peer = dp_find_peer_by_addr((struct cdp_pdev *)pdev,
-					    wh->i_addr2, &local_id);
+					    wh->i_addr2);
 	if (peer) {
 		dp_verbose_debug("MPDU sw_peer_id & ast_idx is corrupted");
 		hal_rx_dump_pkt_tlvs(soc->hal_soc, rx_tlv_hdr,
@@ -1115,7 +1157,8 @@ void dp_rx_process_mic_error(struct dp_soc *soc, qdf_nbuf_t nbuf,
 
 	tops = pdev->soc->cdp_soc.ol_ops;
 	if (tops->rx_mic_error)
-		tops->rx_mic_error(pdev->ctrl_pdev, &mic_failure_info);
+		tops->rx_mic_error(soc->ctrl_psoc, pdev->pdev_id,
+				   &mic_failure_info);
 
 fail:
 	qdf_nbuf_free(nbuf);
@@ -1462,15 +1505,20 @@ done:
 		uint8_t *tlv_hdr;
 		rx_tlv_hdr = qdf_nbuf_data(nbuf);
 
-		peer_id = hal_rx_mpdu_start_sw_peer_id_get(soc->hal_soc,
-							   rx_tlv_hdr);
-		peer = dp_peer_find_by_id(soc, peer_id);
-
 		/*
 		 * retrieve the wbm desc info from nbuf TLV, so we can
 		 * handle error cases appropriately
 		 */
 		hal_rx_wbm_err_info_get_from_tlv(rx_tlv_hdr, &wbm_err_info);
+
+		peer_id = hal_rx_mpdu_start_sw_peer_id_get(soc->hal_soc,
+							   rx_tlv_hdr);
+		peer = dp_peer_find_by_id(soc, peer_id);
+
+		if (!peer)
+			dp_err_rl("peer is null! peer_id %u err_src %u err_rsn %u",
+				  peer_id, wbm_err_info.wbm_err_src,
+				  wbm_err_info.reo_psh_rsn);
 
 		/* Set queue_mapping in nbuf to 0 */
 		dp_set_rx_queue(nbuf, 0);
@@ -1526,6 +1574,14 @@ done:
 						dp_peer_unref_del_find_by_id(
 									peer);
 					continue;
+				case HAL_REO_ERR_BAR_FRAME_2K_JUMP:
+				case HAL_REO_ERR_BAR_FRAME_OOR:
+					if (peer)
+						dp_rx_wbm_err_handle_bar(soc,
+									 peer,
+									 nbuf);
+					break;
+
 				default:
 					dp_err_rl("Got pkt with REO ERROR: %d",
 						  wbm_err_info.reo_err_code);

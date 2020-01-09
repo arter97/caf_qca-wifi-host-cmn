@@ -555,6 +555,7 @@ enum qdf_nbuf_event_type {
 	QDF_NBUF_FREE,
 	QDF_NBUF_MAP,
 	QDF_NBUF_UNMAP,
+	QDF_NBUF_ALLOC_COPY_EXPAND,
 };
 
 struct qdf_nbuf_event {
@@ -2681,6 +2682,25 @@ qdf_nbuf_t qdf_nbuf_copy_debug(qdf_nbuf_t buf, const char *func, uint32_t line)
 }
 qdf_export_symbol(qdf_nbuf_copy_debug);
 
+qdf_nbuf_t
+qdf_nbuf_copy_expand_debug(qdf_nbuf_t buf, int headroom, int tailroom,
+			   const char *func, uint32_t line)
+{
+	qdf_nbuf_t copied_buf = __qdf_nbuf_copy_expand(buf, headroom, tailroom);
+
+	if (qdf_unlikely(!copied_buf))
+		return NULL;
+
+	/* Store SKB in internal QDF tracking table */
+	qdf_net_buf_debug_add_node(copied_buf, 0, func, line);
+	qdf_nbuf_history_add(copied_buf, func, line,
+			     QDF_NBUF_ALLOC_COPY_EXPAND);
+
+	return copied_buf;
+}
+
+qdf_export_symbol(qdf_nbuf_copy_expand_debug);
+
 #endif /* NBUF_MEMORY_DEBUG */
 
 #if defined(FEATURE_TSO)
@@ -2883,7 +2903,7 @@ uint32_t __qdf_nbuf_get_tso_info(qdf_device_t osdev, struct sk_buff *skb,
 	uint32_t num_seg = 0;
 	struct qdf_tso_seg_elem_t *curr_seg;
 	struct qdf_tso_num_seg_elem_t *total_num_seg;
-	struct skb_frag_struct *frag = NULL;
+	skb_frag_t *frag = NULL;
 	uint32_t tso_frag_len = 0; /* tso segment's fragment length*/
 	uint32_t skb_frag_len = 0; /* skb's fragment length (contiguous memory)*/
 	uint32_t skb_proc = skb->len; /* bytes of skb pending processing */
@@ -3174,7 +3194,7 @@ uint32_t __qdf_nbuf_get_tso_num_seg(struct sk_buff *skb)
 	uint32_t skb_frag_len = 0;
 	uint32_t eit_hdr_len = (skb_transport_header(skb)
 			 - skb_mac_header(skb)) + tcp_hdrlen(skb);
-	struct skb_frag_struct *frag = NULL;
+	skb_frag_t *frag = NULL;
 	int j = 0;
 	uint32_t temp_num_seg = 0;
 
@@ -3260,7 +3280,7 @@ uint32_t __qdf_nbuf_get_tso_num_seg(struct sk_buff *skb)
 uint32_t __qdf_nbuf_get_tso_num_seg(struct sk_buff *skb)
 {
 	uint32_t i, gso_size, tmp_len, num_segs = 0;
-	struct skb_frag_struct *frag = NULL;
+	skb_frag_t *frag = NULL;
 
 	/*
 	 * Check if the head SKB or any of frags are allocated in < 0x50000000
@@ -3312,7 +3332,7 @@ fail:
 uint32_t __qdf_nbuf_get_tso_num_seg(struct sk_buff *skb)
 {
 	uint32_t i, gso_size, tmp_len, num_segs = 0;
-	struct skb_frag_struct *frag = NULL;
+	skb_frag_t *frag = NULL;
 
 	for (i = 0; i < skb_shinfo(skb)->nr_frags; i++) {
 		frag = &skb_shinfo(skb)->frags[i];

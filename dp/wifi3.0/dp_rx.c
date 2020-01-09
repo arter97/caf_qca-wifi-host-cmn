@@ -499,6 +499,8 @@ dp_rx_intrabss_fwd(struct dp_soc *soc,
 		len = QDF_NBUF_CB_RX_PKT_LEN(nbuf);
 		memset(nbuf_copy->cb, 0x0, sizeof(nbuf_copy->cb));
 
+		/* Set cb->ftype to intrabss FWD */
+		qdf_nbuf_set_tx_ftype(nbuf_copy, CB_FTYPE_INTRABSS_FWD);
 		if (dp_tx_send(dp_vdev_to_cdp_vdev(ta_peer->vdev), nbuf_copy)) {
 			DP_STATS_INC_PKT(ta_peer, rx.intra_bss.fail, 1, len);
 			tid_stats->fail_cnt[INTRABSS_DROP]++;
@@ -801,8 +803,9 @@ out:
 	msg.nbuf = mpdu;
 	msg.vdev_id = vdev->vdev_id;
 	if (pdev->soc->cdp_soc.ol_ops->rx_invalid_peer)
-		pdev->soc->cdp_soc.ol_ops->rx_invalid_peer(pdev->ctrl_pdev,
-							&msg);
+		pdev->soc->cdp_soc.ol_ops->rx_invalid_peer(
+				(struct cdp_ctrl_objmgr_psoc *)soc->ctrl_psoc,
+				pdev->pdev_id, &msg);
 
 free:
 	/* Drop and free packet */
@@ -1030,7 +1033,7 @@ static inline bool dp_rx_adjust_nbuf_len(qdf_nbuf_t nbuf, uint16_t *mpdu_len)
  */
 qdf_nbuf_t dp_rx_sg_create(qdf_nbuf_t nbuf, uint8_t *rx_tlv_hdr)
 {
-	qdf_nbuf_t parent, next, frag_list;
+	qdf_nbuf_t parent, frag_list, next = NULL;
 	uint16_t frag_list_len = 0;
 	uint16_t mpdu_len;
 	bool last_nbuf;

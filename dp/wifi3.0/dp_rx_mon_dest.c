@@ -1140,9 +1140,9 @@ void dp_rx_mon_dest_process(struct dp_soc *soc, uint32_t mac_id, uint32_t quota)
 
 		if (pdev->mon_dest_ring_stuck_cnt >
 		    MON_DEST_RING_STUCK_MAX_CNT) {
-			dp_err("destination ring stuck");
-			dp_err("ppdu_id status=%d dest=%d",
-			       pdev->ppdu_info.com_info.ppdu_id, ppdu_id);
+			dp_info("destination ring stuck");
+			dp_info("ppdu_id status=%d dest=%d",
+				pdev->ppdu_info.com_info.ppdu_id, ppdu_id);
 			rx_mon_stats->mon_rx_dest_stuck++;
 			pdev->ppdu_info.com_info.ppdu_id = ppdu_id;
 			continue;
@@ -1229,8 +1229,8 @@ dp_rx_pdev_mon_buf_attach(struct dp_pdev *pdev, int mac_id) {
 
 	rx_desc_pool->owner = HAL_RX_BUF_RBM_SW3_BM;
 
-	replenish_size = (num_entries < MON_BUF_MIN_ALLOC_ENTRIES) ?
-			  num_entries : MON_BUF_MIN_ALLOC_ENTRIES;
+	replenish_size = ((num_entries - 1) < MON_BUF_MIN_ALLOC_ENTRIES) ?
+			  (num_entries - 1) : MON_BUF_MIN_ALLOC_ENTRIES;
 	status = dp_pdev_rx_buffers_attach(soc, mac_id, mon_buf_ring,
 					   rx_desc_pool, replenish_size);
 

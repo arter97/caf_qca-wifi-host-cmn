@@ -80,6 +80,7 @@ struct chan_change_cbk_entry {
 
 /**
  * struct wlan_regulatory_psoc_priv_obj - wlan regulatory psoc private object
+ * @chan_list_recvd: whether channel list has been received
  * @new_user_ctry_pending: In this array, element[phy_id] is true if any user
  *	country update is pending for pdev (phy_id), used in case of MCL.
  * @new_init_ctry_pending: In this array, element[phy_id] is true if any user
@@ -93,6 +94,7 @@ struct chan_change_cbk_entry {
  */
 struct wlan_regulatory_psoc_priv_obj {
 	struct mas_chan_params mas_chan_params[PSOC_MAX_PHY_REG_CAP];
+	bool chan_list_recvd[PSOC_MAX_PHY_REG_CAP];
 	bool offload_enabled;
 	bool six_ghz_supported;
 	uint8_t num_phy;
@@ -154,13 +156,16 @@ struct wlan_regulatory_pdev_priv_obj {
 	char current_country[REG_ALPHA2_LEN + 1];
 	uint16_t reg_dmn_pair;
 	uint16_t ctry_code;
+#ifdef DISABLE_UNII_SHARED_BANDS
+	uint8_t unii_5g_bitmap;
+#endif
 	enum dfs_reg dfs_region;
 	uint32_t phybitmap;
 	struct wlan_objmgr_pdev *pdev_ptr;
-	uint32_t range_2g_low;
-	uint32_t range_2g_high;
-	uint32_t range_5g_low;
-	uint32_t range_5g_high;
+	qdf_freq_t range_2g_low;
+	qdf_freq_t range_2g_high;
+	qdf_freq_t range_5g_low;
+	qdf_freq_t range_5g_high;
 	bool dfs_enabled;
 	bool set_fcc_channel;
 	enum band_info band_capability;
@@ -172,6 +177,7 @@ struct wlan_regulatory_pdev_priv_obj {
 	bool sap_state;
 	struct reg_rule_info reg_rules;
 	qdf_spinlock_t reg_rules_lock;
+	bool chan_list_recvd;
 };
 
 /**

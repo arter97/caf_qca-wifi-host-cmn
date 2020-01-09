@@ -145,7 +145,7 @@ QDF_STATUS scm_flush_results(struct wlan_objmgr_pdev *pdev,
  * scm_filter_valid_channel() - The Public API to filter scan result
  * based on valid channel list
  * @pdev: pdev object
- * @chan_list: valid channel list
+ * @chan_freq_list: valid channel frequency (in MHz) list
  * @num_chan: number of valid channels
  *
  * The Public API to to filter scan result
@@ -154,7 +154,7 @@ QDF_STATUS scm_flush_results(struct wlan_objmgr_pdev *pdev,
  * Return: void.
  */
 void scm_filter_valid_channel(struct wlan_objmgr_pdev *pdev,
-	uint8_t *chan_list, uint32_t num_chan);
+	uint32_t *chan_freq_list, uint32_t num_chan);
 
 /**
  * scm_iterate_scan_db() - function to iterate scan table
@@ -198,6 +198,30 @@ QDF_STATUS scm_db_init(struct wlan_objmgr_psoc *psoc);
  * Return: QDF_STATUS
  */
 QDF_STATUS scm_db_deinit(struct wlan_objmgr_psoc *psoc);
+
+/**
+ * scm_channel_list_db_init() - API to init scan list priority list db
+ * @psoc: psoc
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS scm_channel_list_db_init(struct wlan_objmgr_psoc *psoc);
+
+/**
+ * scm_channel_list_db_deinit() - API to deinit scan list priority list db
+ * @psoc: psoc
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS scm_channel_list_db_deinit(struct wlan_objmgr_psoc *psoc);
+
+/**
+ * scm_get_chan_meta() - API to return channel meta
+ * @freq: channel frequency
+ *
+ * Return: channel meta information
+ */
+struct meta_rnr_channel *scm_get_chan_meta(uint32_t freq);
 
 /**
  * scm_validate_scoring_config() - validate score config

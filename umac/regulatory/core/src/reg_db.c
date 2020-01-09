@@ -20,7 +20,7 @@
 /**
  * DOC: reg_db.c
  * This file implements QCA regulatory database.
- * Current implementation conforms to database version 29.
+ * Current implementation conforms to database version 30.
  */
 
 #include <qdf_types.h>
@@ -251,7 +251,11 @@ enum reg_domain {
 	FCC11_WORLD = 0x19,
 	FCC13_WORLD = 0xE4,
 	FCC14_FCCB = 0xE6,
-
+#ifdef CONFIG_BAND_6GHZ
+	FCC15_FCCA = 0xEA,
+	FCC16_FCCA = 0xE8,
+	FCC17_FCCA = 0xE9,
+#endif
 	ETSI1_WORLD = 0x37,
 	ETSI3_WORLD = 0x36,
 	ETSI4_WORLD = 0x30,
@@ -269,6 +273,7 @@ enum reg_domain {
 	APL1_ETSIC = 0x55,
 	APL2_WORLD = 0x45,
 	APL2_ETSIC = 0x56,
+	APL2_ETSID = 0x41,
 	APL4_WORLD = 0x42,
 	APL6_WORLD = 0x5B,
 	APL8_WORLD = 0x5D,
@@ -282,10 +287,13 @@ enum reg_domain {
 	APL14_WORLD = 0x57,
 	APL15_WORLD = 0x59,
 	APL16_WORLD = 0x70,
+	APL16_ETSIC = 0x6D,
+	APL17_ETSIC = 0xE7,
 	APL17_ETSID = 0xE0,
 	APL19_ETSIC = 0x71,
 	APL20_WORLD = 0xE5,
 	APL23_WORLD = 0xE3,
+	APL24_ETSIC = 0xE2,
 
 	MKK3_MKKC = 0x82,
 	MKK5_MKKA = 0x99,
@@ -318,7 +326,7 @@ const struct country_code_to_reg_domain g_all_countries[] = {
 	{CTRY_ANDORRA, ETSI3_WORLD, "AD", 40, 160, 0},
 	{CTRY_ANGUILLA, ETSI1_WORLD, "AI", 40, 160, 0},
 	{CTRY_ANTIGUA_AND_BARBUDA, ETSI1_WORLD, "AG", 40, 160, 0},
-	{CTRY_ARGENTINA, APL16_WORLD, "AR", 40, 160, 0},
+	{CTRY_ARGENTINA, APL16_ETSIC, "AR", 40, 160, 0},
 	{CTRY_ARMENIA, ETSI4_WORLD, "AM", 40, 20, 0},
 	{CTRY_ARUBA, ETSI1_WORLD, "AW", 40, 160, 0},
 	{CTRY_AUSTRALIA, FCC6_WORLD, "AU", 40, 160, 0},
@@ -390,7 +398,7 @@ const struct country_code_to_reg_domain g_all_countries[] = {
 	{CTRY_HUNGARY, ETSI1_WORLD, "HU", 40, 160, 0},
 	{CTRY_ICELAND, ETSI1_WORLD, "IS", 40, 160, 0},
 	{CTRY_INDIA, APL19_ETSIC, "IN", 40, 160, 0},
-	{CTRY_INDONESIA, APL2_ETSIC, "ID", 40, 20, 0},
+	{CTRY_INDONESIA, APL2_ETSID, "ID", 40, 80, 0},
 	{CTRY_IRAQ, ETSI1_WORLD, "IQ", 40, 160, 0},
 	{CTRY_IRELAND, ETSI1_WORLD, "IE", 40, 160, 0},
 	{CTRY_ISLE_OF_MAN, ETSI1_WORLD, "IM", 40, 160, 0},
@@ -508,8 +516,8 @@ const struct country_code_to_reg_domain g_all_countries[] = {
 	{CTRY_WALLIS_AND_FUTUNA, ETSI1_WORLD, "WF", 40, 160, 0},
 	{CTRY_YEMEN, NULL1_WORLD, "YE", 40, 0, 0},
 	{CTRY_ZIMBABWE, ETSI1_WORLD, "ZW", 40, 160, 0},
-	{CTRY_JAPAN, MKK5_MKKC, "JP", 40, 160, 0},
-	{CTRY_JAPAN15, MKK5_MKKC, "JP", 40, 160, 0},
+	{CTRY_JAPAN, MKK17_MKKC, "JP", 40, 160, 0},
+	{CTRY_JAPAN15, MKK17_MKKC, "JP", 40, 160, 0},
 };
 #else
 #ifdef WLAN_FEATURE_DSRC
@@ -522,7 +530,7 @@ const struct country_code_to_reg_domain g_all_countries[] = {
 	{CTRY_ANDORRA, ETSI3_WORLD, "AD", 40, 160, 0},
 	{CTRY_ANGUILLA, ETSI1_WORLD, "AI", 40, 160, 0},
 	{CTRY_ANTIGUA_AND_BARBUDA, ETSI10_WORLD, "AG", 40, 160, 0},
-	{CTRY_ARGENTINA, APL17_ETSID, "AR", 40, 160, 0},
+	{CTRY_ARGENTINA, APL17_ETSIC, "AR", 40, 160, 0},
 	{CTRY_ARMENIA, ETSI4_WORLD, "AM", 40, 20, 0},
 	{CTRY_ARUBA, ETSI1_WORLD, "AW", 40, 160, 0},
 	{CTRY_AUSTRALIA, FCC6_WORLD, "AU", 40, 160, 0},
@@ -594,7 +602,7 @@ const struct country_code_to_reg_domain g_all_countries[] = {
 	{CTRY_HUNGARY, ETSI10_WORLD, "HU", 40, 160, 0},
 	{CTRY_ICELAND, ETSI10_WORLD, "IS", 40, 160, 0},
 	{CTRY_INDIA, APL15_WORLD, "IN", 40, 160, 0},
-	{CTRY_INDONESIA, APL2_ETSIC, "ID", 40, 20, 0},
+	{CTRY_INDONESIA, APL2_ETSID, "ID", 40, 80, 0},
 	{CTRY_IRAQ, ETSI1_WORLD, "IQ", 40, 160, 0},
 	{CTRY_IRELAND, ETSI10_WORLD, "IE", 40, 160, 0},
 	{CTRY_ISLE_OF_MAN, ETSI10_WORLD, "IM", 40, 160, 0},
@@ -725,7 +733,7 @@ const struct country_code_to_reg_domain g_all_countries[] = {
 	{CTRY_ANDORRA, ETSI3_WORLD, "AD", 40, 160, 0},
 	{CTRY_ANGUILLA, ETSI1_WORLD, "AI", 40, 160, 0},
 	{CTRY_ANTIGUA_AND_BARBUDA, ETSI13_WORLD, "AG", 40, 160, 0},
-	{CTRY_ARGENTINA, APL17_ETSID, "AR", 40, 160, 0},
+	{CTRY_ARGENTINA, APL17_ETSIC, "AR", 40, 160, 0},
 	{CTRY_ARMENIA, ETSI4_WORLD, "AM", 40, 20, 0},
 	{CTRY_ARUBA, ETSI1_WORLD, "AW", 40, 160, 0},
 	{CTRY_AUSTRALIA, FCC6_WORLD, "AU", 40, 160, 0},
@@ -797,7 +805,7 @@ const struct country_code_to_reg_domain g_all_countries[] = {
 	{CTRY_HUNGARY, ETSI13_WORLD, "HU", 40, 160, 0},
 	{CTRY_ICELAND, ETSI13_WORLD, "IS", 40, 160, 0},
 	{CTRY_INDIA, APL19_ETSIC, "IN", 40, 160, 0},
-	{CTRY_INDONESIA, APL2_ETSIC, "ID", 40, 20, 0},
+	{CTRY_INDONESIA, APL2_ETSID, "ID", 40, 80, 0},
 	{CTRY_IRAQ, ETSI1_WORLD, "IQ", 40, 160, 0},
 	{CTRY_IRELAND, ETSI13_WORLD, "IE", 40, 160, 0},
 	{CTRY_ISLE_OF_MAN, ETSI13_WORLD, "IM", 40, 160, 0},
@@ -948,6 +956,11 @@ enum reg_domains_5g {
 	FCC11,
 	FCC13,
 	FCC14,
+#ifdef CONFIG_BAND_6GHZ
+	FCC15,
+	FCC16,
+	FCC17,
+#endif
 	ETSI1,
 	ETSI3,
 	ETSI4,
@@ -976,6 +989,7 @@ enum reg_domains_5g {
 	APL19,
 	APL20,
 	APL23,
+	APL24,
 	MKK3,
 	MKK4,
 	MKK5,
@@ -987,7 +1001,6 @@ enum reg_domains_5g {
 	WORLD_5G_1,
 	WORLD_5G_2,
 };
-
 
 const struct reg_domain_pair g_reg_dmn_pairs[] = {
 	{NULL1_WORLD, NULL1, WORLD},
@@ -1008,7 +1021,11 @@ const struct reg_domain_pair g_reg_dmn_pairs[] = {
 	{FCC11_WORLD, FCC11, WORLD},
 	{FCC13_WORLD, FCC13, WORLD},
 	{FCC14_FCCB, FCC14, FCCB},
-
+#ifdef CONFIG_BAND_6GHZ
+	{FCC15_FCCA, FCC15, FCCA},
+	{FCC16_FCCA, FCC16, FCCA},
+	{FCC17_FCCA, FCC17, FCCA},
+#endif
 	{ETSI1_WORLD, ETSI1, WORLD},
 	{ETSI3_WORLD, ETSI3, WORLD},
 	{ETSI4_WORLD, ETSI4, WORLD},
@@ -1026,6 +1043,7 @@ const struct reg_domain_pair g_reg_dmn_pairs[] = {
 	{APL1_ETSIC, APL1, ETSIC},
 	{APL2_WORLD, APL2, WORLD},
 	{APL2_ETSIC, APL2, ETSIC},
+	{APL2_ETSID, APL2, ETSID},
 	{APL4_WORLD, APL4, WORLD},
 	{APL6_WORLD, APL6, WORLD},
 	{APL8_WORLD, APL8, WORLD},
@@ -1039,10 +1057,13 @@ const struct reg_domain_pair g_reg_dmn_pairs[] = {
 	{APL14_WORLD, APL14, WORLD},
 	{APL15_WORLD, APL15, WORLD},
 	{APL16_WORLD, APL16, WORLD},
+	{APL16_ETSIC, APL16, ETSIC},
+	{APL17_ETSIC, APL17, ETSIC},
 	{APL17_ETSID, APL17, ETSID},
 	{APL19_ETSIC, APL19, ETSIC},
 	{APL20_WORLD, APL20, WORLD},
 	{APL23_WORLD, APL23, WORLD},
+	{APL24_ETSIC, APL24, ETSIC},
 
 	{MKK3_MKKC, MKK3, MKKC},
 	{MKK5_MKKA, MKK5, MKKA},
@@ -1074,6 +1095,7 @@ enum reg_rules_2g {
 	CHAN_1_13_2,
 	CHAN_1_13_3,
 	CHAN_1_13_4,
+	CHAN_1_13_5,
 	CHAN_12_12_1,
 	CHAN_12_13_1,
 	CHAN_14_1,
@@ -1089,6 +1111,7 @@ const struct regulatory_rule reg_rules_2g[] = {
 	[CHAN_1_13_2] = {2402, 2482, 40, 30, 0},
 	[CHAN_1_13_3] = {2402, 2482, 40, 36, 0},
 	[CHAN_1_13_4] = {2402, 2482, 40, 23, 0},
+	[CHAN_1_13_5] = {2402, 2482, 20, 20, 0},
 	[CHAN_12_12_1] = {2457, 2477, 20, 20, REGULATORY_CHAN_NO_IR},
 	[CHAN_12_13_1] = {2457, 2482, 20, 20, REGULATORY_CHAN_NO_IR},
 	[CHAN_14_1] = {2474, 2494, 20, 23, REGULATORY_CHAN_NO_OFDM},
@@ -1106,7 +1129,7 @@ const struct regdomain regdomains_2g[] = {
 							CHAN_14_1} },
 	[MKKC] = {CTL_MKK, DFS_UNINIT_REGION, 0, 0, 1, {CHAN_1_13_4} },
 	[ETSIC] = {CTL_ETSI, DFS_UNINIT_REGION, 0, 0, 1, {CHAN_1_13_2} },
-	[ETSID] = {CTL_ETSI, DFS_UNINIT_REGION, 0, 0, 1, {CHAN_1_13_3} },
+	[ETSID] = {CTL_ETSI, DFS_UNINIT_REGION, 0, 0, 1, {CHAN_1_13_5} },
 	[KRRA]  = {CTL_KOR, DFS_UNINIT_REGION, 0, 0, 1,  {CHAN_1_13_4} },
 	[WORLD_2G_1] = {CTL_NONE, DFS_UNINIT_REGION, 0, 0, 1, {CHAN_1_11_2} },
 	[WORLD_2G_2] = {CTL_NONE, DFS_UNINIT_REGION, 0, 0, 2,
@@ -1187,11 +1210,23 @@ enum reg_rules_5g {
 	CHAN_5735_5875_5,
 	CHAN_5735_5815_1,
 	CHAN_5735_5815_2,
+	CHAN_5735_5815_3,
+	CHAN_5735_5815_4,
 	CHAN_5735_5775_1,
 	CHAN_5835_5855_1,
 	CHAN_5855_5875_1,
 	CHAN_5850_5925_1,
 	CHAN_5850_5925_2,
+#ifdef CONFIG_BAND_6GHZ
+	CHAN_5935_6435_1,
+	CHAN_5935_6435_2,
+	CHAN_6435_6535_1,
+	CHAN_6435_6535_2,
+	CHAN_6535_6875_1,
+	CHAN_6535_6875_2,
+	CHAN_6875_7115_1,
+	CHAN_6875_7115_2,
+#endif
 };
 
 const struct regulatory_rule reg_rules_5g[] = {
@@ -1267,11 +1302,23 @@ const struct regulatory_rule reg_rules_5g[] = {
 	[CHAN_5735_5875_5] = {5735, 5875, 80, 20, REGULATORY_CHAN_RADAR},
 	[CHAN_5735_5815_1] = {5735, 5815, 80, 30, 0},
 	[CHAN_5735_5815_2] = {5735, 5815, 80, 30, REGULATORY_CHAN_RADAR},
+	[CHAN_5735_5815_3] = {5735, 5815, 80, 23, REGULATORY_CHAN_INDOOR_ONLY},
+	[CHAN_5735_5815_4] = {5735, 5815, 20, 20, 0},
 	[CHAN_5735_5775_1] = {5735, 5775, 40, 23, 0},
 	[CHAN_5835_5855_1] = {5835, 5855, 20, 30, 0},
 	[CHAN_5855_5875_1] = {5855, 5875, 20, 30, 0},
 	[CHAN_5850_5925_1] = {5850, 5925, 20, 24, 0},
 	[CHAN_5850_5925_2] = {5850, 5925, 20, 30, 0},
+#ifdef CONFIG_BAND_6GHZ
+	[CHAN_5935_6435_1] = {5935, 6435, 160, 18, REGULATORY_CHAN_AFC},
+	[CHAN_5935_6435_2] = {5935, 6435, 160, 30, REGULATORY_CHAN_AFC},
+	[CHAN_6435_6535_1] = {6435, 6535, 160, 18, REGULATORY_CHAN_INDOOR_ONLY},
+	[CHAN_6435_6535_2] = {6435, 6535, 160, 24, REGULATORY_CHAN_INDOOR_ONLY},
+	[CHAN_6535_6875_1] = {6535, 6875, 160, 18, REGULATORY_CHAN_AFC},
+	[CHAN_6535_6875_2] = {6535, 6875, 160, 30, REGULATORY_CHAN_AFC},
+	[CHAN_6875_7115_1] = {6875, 7115, 160, 18, REGULATORY_CHAN_INDOOR_ONLY},
+	[CHAN_6875_7115_2] = {6875, 7115, 160, 24, REGULATORY_CHAN_INDOOR_ONLY},
+#endif
 };
 
 
@@ -1327,6 +1374,33 @@ const struct regdomain regdomains_5g[] = {
 							 CHAN_5490_5730_4,
 							 CHAN_5735_5835_2} },
 
+#ifdef CONFIG_BAND_6GHZ
+	[FCC15] = {CTL_FCC, DFS_FCC_REGION, 2, 0, 8, {CHAN_5170_5250_5,
+							 CHAN_5250_5330_7,
+							 CHAN_5490_5730_1,
+							 CHAN_5735_5835_2,
+							 CHAN_5935_6435_1,
+							 CHAN_6435_6535_1,
+							 CHAN_6535_6875_1,
+							 CHAN_6875_7115_1} },
+
+	[FCC16] = {CTL_FCC, DFS_FCC_REGION, 2, 0, 8, {CHAN_5170_5250_4,
+							CHAN_5250_5330_7,
+							CHAN_5490_5730_1,
+							CHAN_5735_5835_2,
+							CHAN_5935_6435_2,
+							CHAN_6435_6535_2,
+							CHAN_6535_6875_2,
+							CHAN_6875_7115_2} },
+
+	[FCC17] = {CTL_FCC, DFS_FCC_REGION, 2, 0, 6, {CHAN_5170_5250_4,
+							CHAN_5250_5330_7,
+							CHAN_5490_5730_1,
+							CHAN_5735_5835_2,
+							CHAN_5935_6435_2,
+							CHAN_6535_6875_2} },
+#endif
+
 	[ETSI1] = {CTL_ETSI, DFS_ETSI_REGION, 2, 0, 3, {CHAN_5170_5250_8,
 							CHAN_5250_5330_12,
 							CHAN_5490_5710_1} },
@@ -1379,7 +1453,7 @@ const struct regdomain regdomains_5g[] = {
 
 	[APL1] = {CTL_ETSI, DFS_UNINIT_REGION, 2, 0, 1, {CHAN_5735_5835_2} },
 
-	[APL2] = {CTL_ETSI, DFS_UNINIT_REGION, 2, 0, 1, {CHAN_5735_5815_1} },
+	[APL2] = {CTL_ETSI, DFS_UNINIT_REGION, 2, 0, 1, {CHAN_5735_5815_4} },
 
 	[APL4] = {CTL_ETSI, DFS_UNINIT_REGION, 2, 0, 2, {CHAN_5170_5250_2,
 							 CHAN_5735_5835_1} },
@@ -1401,7 +1475,7 @@ const struct regdomain regdomains_5g[] = {
 						       CHAN_5490_5710_1,
 						       CHAN_5735_5815_1} },
 
-	[APL11] = { CTL_ETSI, DFS_ETSI_REGION, 2, 0, 4, {CHAN_5170_5250_9,
+	[APL11] = { CTL_ETSI, DFS_FCC_REGION, 2, 0, 4, {CHAN_5170_5250_9,
 							 CHAN_5250_5330_13,
 							 CHAN_5490_5710_4,
 							 CHAN_5735_5875_2} },
@@ -1414,7 +1488,7 @@ const struct regdomain regdomains_5g[] = {
 							CHAN_5250_5330_1,
 							CHAN_5490_5670_2} },
 
-	[APL14] = {CTL_FCC, DFS_CN_REGION, 2, 0, 3, {CHAN_5170_5250_2,
+	[APL14] = {CTL_MKK, DFS_CN_REGION, 2, 0, 3, {CHAN_5170_5250_2,
 						     CHAN_5250_5330_1,
 						     CHAN_5735_5835_4} },
 
@@ -1434,7 +1508,7 @@ const struct regdomain regdomains_5g[] = {
 							 CHAN_5650_5730_3,
 							 CHAN_5735_5835_7} },
 
-	[APL19] = {CTL_FCC, DFS_ETSI_REGION, 2, 0, 4, {CHAN_5170_5250_4,
+	[APL19] = {CTL_FCC, DFS_FCC_REGION, 2, 0, 4, {CHAN_5170_5250_4,
 						       CHAN_5250_5330_7,
 						       CHAN_5490_5730_1,
 						       CHAN_5735_5875_3} },
@@ -1447,6 +1521,10 @@ const struct regdomain regdomains_5g[] = {
 	[APL23] = {CTL_ETSI, DFS_UNINIT_REGION, 2, 0, 3, {CHAN_5170_5250_7,
 							  CHAN_5250_5330_11,
 							  CHAN_5735_5835_3} },
+
+	[APL24] = {CTL_ETSI, DFS_ETSI_REGION, 2, 0, 3, {CHAN_5170_5250_8,
+							CHAN_5250_5330_12,
+							CHAN_5735_5815_3} },
 
 	[MKK3] = {CTL_MKK, DFS_UNINIT_REGION, 2, 0, 1, {CHAN_5170_5250_3} },
 
@@ -1462,7 +1540,7 @@ const struct regdomain regdomains_5g[] = {
 
 	[MKK16] = {CTL_MKK, DFS_MKK_REGION, 2, 0, 1, {CHAN_5490_5710_6} },
 
-	[MKK17] = {CTL_MKK, DFS_MKK_REGION, 2, 0, 3, {CHAN_5170_5250_8,
+	[MKK17] = {CTL_MKK, DFS_MKKN_REGION, 2, 0, 3, {CHAN_5170_5250_8,
 						      CHAN_5250_5330_12,
 						      CHAN_5490_5730_6} },
 
