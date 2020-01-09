@@ -49,8 +49,11 @@ extern bool is_dp_verbose_debug_enabled;
 #ifdef DP_PRINT_NO_CONSOLE
 #define dp_err_log(params...) \
 	__QDF_TRACE_FL(QDF_TRACE_LEVEL_INFO_HIGH, QDF_MODULE_ID_DP, ## params)
+#define dp_info_rl(params...) \
+	__QDF_TRACE_RL(QDF_TRACE_LEVEL_INFO_HIGH, QDF_MODULE_ID_DP, ## params)
 #else
 #define dp_err_log(params...) QDF_TRACE_ERROR(QDF_MODULE_ID_DP, params)
+#define dp_info_rl(params...) QDF_TRACE_INFO_RL(QDF_MODULE_ID_DP, params)
 #endif /* DP_PRINT_NO_CONSOLE */
 
 #ifdef ENABLE_VERBOSE_DEBUG
@@ -92,7 +95,6 @@ enum verbose_debug_module {
 #define dp_alert_rl(params...) QDF_TRACE_FATAL_RL(QDF_MODULE_ID_DP, params)
 #define dp_err_rl(params...) QDF_TRACE_ERROR_RL(QDF_MODULE_ID_DP, params)
 #define dp_warn_rl(params...) QDF_TRACE_WARN_RL(QDF_MODULE_ID_DP, params)
-#define dp_info_rl(params...) QDF_TRACE_INFO_RL(QDF_MODULE_ID_DP, params)
 #define dp_debug_rl(params...) QDF_TRACE_DEBUG_RL(QDF_MODULE_ID_DP, params)
 
 /**
@@ -182,16 +184,16 @@ cdp_vdev_attach(ol_txrx_soc_handle soc, struct cdp_pdev *pdev,
 #ifdef DP_FLOW_CTL
 /**
  * cdp_flow_pool_map() - Create flow pool for vdev
- * @soc - data path soc handle
- * @pdev
- * @vdev_id - vdev_id corresponding to vdev start
+ * @soc: data path soc handle
+ * @pdev_id: id of dp pdev handle
+ * @vdev_id: vdev_id corresponding to vdev start
  *
  * Create per vdev flow pool.
  *
  * return none
  */
 static inline QDF_STATUS cdp_flow_pool_map(ol_txrx_soc_handle soc,
-					struct cdp_pdev *pdev, uint8_t vdev_id)
+					   uint8_t pdev_id, uint8_t vdev_id)
 {
 	if (!soc || !soc->ops) {
 		QDF_TRACE(QDF_MODULE_ID_CDP, QDF_TRACE_LEVEL_DEBUG,
@@ -204,21 +206,22 @@ static inline QDF_STATUS cdp_flow_pool_map(ol_txrx_soc_handle soc,
 	    !soc->ops->flowctl_ops->flow_pool_map_handler)
 		return QDF_STATUS_E_INVAL;
 
-	return soc->ops->flowctl_ops->flow_pool_map_handler(soc, pdev, vdev_id);
+	return soc->ops->flowctl_ops->flow_pool_map_handler(soc, pdev_id,
+							    vdev_id);
 }
 
 /**
  * cdp_flow_pool_unmap() - Delete flow pool
- * @soc - data path soc handle
- * @pdev
- * @vdev_id - vdev_id corresponding to vdev start
+ * @soc: data path soc handle
+ * @pdev_id: id of dp pdev handle
+ * @vdev_id: vdev_id corresponding to vdev start
  *
  * Delete flow pool
  *
  * return none
  */
 static inline void cdp_flow_pool_unmap(ol_txrx_soc_handle soc,
-					struct cdp_pdev *pdev, uint8_t vdev_id)
+				       uint8_t pdev_id, uint8_t vdev_id)
 {
 	if (!soc || !soc->ops) {
 		QDF_TRACE(QDF_MODULE_ID_CDP, QDF_TRACE_LEVEL_DEBUG,
@@ -231,7 +234,7 @@ static inline void cdp_flow_pool_unmap(ol_txrx_soc_handle soc,
 	    !soc->ops->flowctl_ops->flow_pool_unmap_handler)
 		return;
 
-	return soc->ops->flowctl_ops->flow_pool_unmap_handler(soc, pdev,
+	return soc->ops->flowctl_ops->flow_pool_unmap_handler(soc, pdev_id,
 							vdev_id);
 }
 #endif
@@ -273,8 +276,8 @@ cdp_pdev_attach_target(ol_txrx_soc_handle soc, struct cdp_pdev *pdev)
 }
 
 static inline struct cdp_pdev *cdp_pdev_attach
-	(ol_txrx_soc_handle soc, struct cdp_ctrl_objmgr_pdev *ctrl_pdev,
-	HTC_HANDLE htc_pdev, qdf_device_t osdev, uint8_t pdev_id)
+	(ol_txrx_soc_handle soc, HTC_HANDLE htc_pdev, qdf_device_t osdev,
+	 uint8_t pdev_id)
 {
 	if (!soc || !soc->ops) {
 		QDF_TRACE(QDF_MODULE_ID_CDP, QDF_TRACE_LEVEL_DEBUG,
@@ -287,8 +290,8 @@ static inline struct cdp_pdev *cdp_pdev_attach
 	    !soc->ops->cmn_drv_ops->txrx_pdev_attach)
 		return NULL;
 
-	return soc->ops->cmn_drv_ops->txrx_pdev_attach(soc, ctrl_pdev,
-			htc_pdev, osdev, pdev_id);
+	return soc->ops->cmn_drv_ops->txrx_pdev_attach(soc, htc_pdev, osdev,
+						       pdev_id);
 }
 
 static inline int cdp_pdev_post_attach(ol_txrx_soc_handle soc,
@@ -361,7 +364,7 @@ cdp_pdev_deinit(ol_txrx_soc_handle soc, struct cdp_pdev *pdev, int force)
 
 static inline void *cdp_peer_create
 	(ol_txrx_soc_handle soc, struct cdp_vdev *vdev,
-	uint8_t *peer_mac_addr, struct cdp_ctrl_objmgr_peer *ctrl_peer)
+	uint8_t *peer_mac_addr)
 {
 	if (!soc || !soc->ops) {
 		QDF_TRACE(QDF_MODULE_ID_CDP, QDF_TRACE_LEVEL_DEBUG,
@@ -375,7 +378,7 @@ static inline void *cdp_peer_create
 		return NULL;
 
 	return soc->ops->cmn_drv_ops->txrx_peer_create(vdev,
-			peer_mac_addr, ctrl_peer);
+			peer_mac_addr);
 }
 
 static inline void cdp_peer_setup
@@ -813,7 +816,7 @@ cdp_set_monitor_filter(ol_txrx_soc_handle soc, struct cdp_pdev *pdev,
  *****************************************************************************/
 static inline void
 cdp_vdev_register(ol_txrx_soc_handle soc, struct cdp_vdev *vdev,
-	 void *osif_vdev, struct cdp_ctrl_objmgr_vdev *ctrl_vdev,
+	 void *osif_vdev,
 	 struct ol_txrx_ops *txrx_ops)
 {
 	if (!soc || !soc->ops) {
@@ -828,7 +831,7 @@ cdp_vdev_register(ol_txrx_soc_handle soc, struct cdp_vdev *vdev,
 		return;
 
 	soc->ops->cmn_drv_ops->txrx_vdev_register(vdev,
-			osif_vdev, ctrl_vdev, txrx_ops);
+			osif_vdev, txrx_ops);
 }
 
 static inline int
@@ -2305,25 +2308,6 @@ cdp_peer_map_attach(ol_txrx_soc_handle soc, uint32_t max_peers,
 							peer_map_unmap_v2);
 
 	return QDF_STATUS_SUCCESS;
-}
-
-/**
-
- * cdp_pdev_set_ctrl_pdev() - set UMAC ctrl pdev to dp pdev
- * @soc: opaque soc handle
- * @pdev: opaque dp pdev handle
- * @ctrl_pdev: opaque ctrl pdev handle
- *
- * Return: void
- */
-static inline void
-cdp_pdev_set_ctrl_pdev(ol_txrx_soc_handle soc, struct cdp_pdev *dp_pdev,
-		       struct cdp_ctrl_objmgr_pdev *ctrl_pdev)
-{
-	if (soc && soc->ops && soc->ops->cmn_drv_ops &&
-	    soc->ops->cmn_drv_ops->txrx_pdev_set_ctrl_pdev)
-		soc->ops->cmn_drv_ops->txrx_pdev_set_ctrl_pdev(dp_pdev,
-							       ctrl_pdev);
 }
 
 /* cdp_txrx_classify_and_update() - To classify the packet and update stats

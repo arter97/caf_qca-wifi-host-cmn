@@ -219,15 +219,15 @@ hal_rx_handle_other_tlvs(uint32_t tlv_tag, void *rx_tlv,
 defined(RX_PPDU_END_USER_STATS_22_SW_RESPONSE_REFERENCE_PTR_EXT_OFFSET)
 
 static inline void
-hal_rx_handle_ofdma_info(
+hal_rx_handle_mu_ul_info(
 	void *rx_tlv,
 	struct mon_rx_user_status *mon_rx_user_status)
 {
-	mon_rx_user_status->ul_ofdma_user_v0_word0 =
+	mon_rx_user_status->mu_ul_user_v0_word0 =
 		HAL_RX_GET(rx_tlv, RX_PPDU_END_USER_STATS_11,
 			   SW_RESPONSE_REFERENCE_PTR);
 
-	mon_rx_user_status->ul_ofdma_user_v0_word1 =
+	mon_rx_user_status->mu_ul_user_v0_word1 =
 		HAL_RX_GET(rx_tlv, RX_PPDU_END_USER_STATS_22,
 			   SW_RESPONSE_REFERENCE_PTR_EXT);
 }
@@ -251,7 +251,7 @@ hal_rx_populate_byte_count(void *rx_tlv, void *ppduinfo,
 }
 #else
 static inline void
-hal_rx_handle_ofdma_info(void *rx_tlv,
+hal_rx_handle_mu_ul_info(void *rx_tlv,
 			 struct mon_rx_user_status *mon_rx_user_status)
 {
 }
@@ -485,14 +485,18 @@ hal_rx_status_get_tlv_info_generic(void *rx_tlv_hdr, void *ppduinfo,
 			HAL_RX_GET(rx_tlv, RX_PPDU_END_USER_STATS_10,
 					OTHER_MSDU_COUNT);
 
-		ppdu_info->rx_status.frame_control_info_valid =
-			HAL_RX_GET(rx_tlv, RX_PPDU_END_USER_STATS_3,
-					FRAME_CONTROL_INFO_VALID);
+		if (ppdu_info->sw_frame_group_id
+		    != HAL_MPDU_SW_FRAME_GROUP_NULL_DATA) {
+			ppdu_info->rx_status.frame_control_info_valid =
+				HAL_RX_GET(rx_tlv, RX_PPDU_END_USER_STATS_3,
+					   FRAME_CONTROL_INFO_VALID);
 
-		if (ppdu_info->rx_status.frame_control_info_valid)
-			ppdu_info->rx_status.frame_control =
-				 HAL_RX_GET(rx_tlv, RX_PPDU_END_USER_STATS_4,
-					    FRAME_CONTROL_FIELD);
+			if (ppdu_info->rx_status.frame_control_info_valid)
+				ppdu_info->rx_status.frame_control =
+					HAL_RX_GET(rx_tlv,
+						   RX_PPDU_END_USER_STATS_4,
+						   FRAME_CONTROL_FIELD);
+		}
 
 		ppdu_info->rx_status.data_sequence_control_info_valid =
 			HAL_RX_GET(rx_tlv, RX_PPDU_END_USER_STATS_3,
@@ -546,7 +550,7 @@ hal_rx_status_get_tlv_info_generic(void *rx_tlv_hdr, void *ppduinfo,
 			mon_rx_user_status =
 				&ppdu_info->rx_user_status[user_id];
 
-			hal_rx_handle_ofdma_info(rx_tlv, mon_rx_user_status);
+			hal_rx_handle_mu_ul_info(rx_tlv, mon_rx_user_status);
 
 			ppdu_info->com_info.num_users++;
 
@@ -1367,6 +1371,17 @@ hal_rx_status_get_tlv_info_generic(void *rx_tlv_hdr, void *ppduinfo,
 			HAL_RX_GET(rx_mpdu_start,
 				   RX_MPDU_INFO_14,
 				   MPDU_FRAME_CONTROL_FIELD);
+
+		ppdu_info->sw_frame_group_id =
+			HAL_RX_GET_SW_FRAME_GROUP_ID(rx_mpdu_start);
+
+		if (ppdu_info->sw_frame_group_id ==
+		    HAL_MPDU_SW_FRAME_GROUP_NULL_DATA) {
+			ppdu_info->rx_status.frame_control_info_valid =
+				ppdu_info->nac_info.fc_valid;
+			ppdu_info->rx_status.frame_control =
+				ppdu_info->nac_info.frame_control;
+		}
 
 		ppdu_info->nac_info.mac_addr2_valid =
 				HAL_RX_GET_MAC_ADDR2_VALID(rx_mpdu_start);

@@ -174,6 +174,9 @@ typedef QDF_STATUS (*wlan_objmgr_vdev_destroy_handler)(
 typedef void (*wlan_objmgr_vdev_status_handler)(
 				struct wlan_objmgr_vdev *vdev, void *arg,
 						QDF_STATUS status);
+typedef void (*wlan_objmgr_vdev_peer_free_notify_handler)(
+				struct wlan_objmgr_vdev *vdev);
+
 
 typedef QDF_STATUS (*wlan_objmgr_peer_create_handler)(
 				struct wlan_objmgr_peer *peer, void *arg);
@@ -229,7 +232,7 @@ typedef void (*wlan_objmgr_peer_status_handler)(
  * @WLAN_MLME_OBJ_DEL_ID:       Object delete req/resp tracking with FW
  * @WLAN_ACTION_OUI_ID:         action oui operations
  * @WLAN_LEGACY_SAP_ID:         legacy sap fsm
- * @WLAN_TGT_IF_DP_PEER_REF_ID: cp peer reference in dp (Target IF)
+ * @WLAN_PDEV_TARGET_IF_ID:     Target interface layer for pdev APIs
  * @WLAN_MLME_SER_IF_ID:        mlme serialization interface layer
  * @WLAN_SCHEDULER_ID:          mlme scheduler
  * @WLAN_CFR_ID:                CFG Capture method
@@ -256,6 +259,7 @@ typedef void (*wlan_objmgr_peer_status_handler)(
  * @WLAN_MISC_ID:               power manager, PAPI, rate set, etc.
  * @WLAN_FWOL_NB_ID:            fw offload northbound operations
  * @WLAN_FWOL_SB_ID:            fw offload southbound operations
+ * @WLAN_PSOC_TARGET_IF_ID      PSOC related target_if operations
  * @WLAN_REF_ID_MAX:            Max id used to generate ref count tracking array
  */
  /* New value added to the enum must also be reflected in function
@@ -307,7 +311,7 @@ typedef enum {
 	WLAN_MLME_OBJ_DEL_ID    = 42,
 	WLAN_ACTION_OUI_ID      = 43,
 	WLAN_LEGACY_SAP_ID      = 44,
-	WLAN_TGT_IF_DP_PEER_REF_ID = 45,
+	WLAN_PDEV_TARGET_IF_ID     = 45,
 	WLAN_MLME_SER_IF_ID        = 46,
 	WLAN_SCHEDULER_ID          = 47,
 	WLAN_CFR_ID                = 48,
@@ -334,6 +338,7 @@ typedef enum {
 	WLAN_MISC_ID          = 69,
 	WLAN_FWOL_NB_ID       = 70,
 	WLAN_FWOL_SB_ID       = 71,
+	WLAN_PSOC_TARGET_IF_ID = 72,
 	WLAN_REF_ID_MAX,
 } wlan_objmgr_ref_dbgid;
 
@@ -392,7 +397,7 @@ static inline char *string_from_dbgid(wlan_objmgr_ref_dbgid id)
 					"WLAN_MLME_OBJ_DEL_ID",
 					"WLAN_ACTION_OUI_ID",
 					"WLAN_LEGACY_SAP_ID",
-					"WLAN_TGT_IF_DP_PEER_REF_ID",
+					"WLAN_PDEV_TARGET_IF_ID",
 					"WLAN_MLME_SER_IF_ID",
 					"WLAN_SCHEDULER_ID",
 					"WLAN_CFR_ID",

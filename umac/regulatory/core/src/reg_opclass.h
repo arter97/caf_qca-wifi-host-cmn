@@ -90,7 +90,7 @@ uint16_t reg_dmn_get_curr_opclasses(uint8_t *num_classes, uint8_t *class);
  * Return: Void.
  */
 void reg_freq_width_to_chan_op_class(struct wlan_objmgr_pdev *pdev,
-				     uint16_t freq,
+				     qdf_freq_t freq,
 				     uint16_t chan_width,
 				     bool global_tbl_lookup,
 				     uint16_t behav_limit,
@@ -110,7 +110,7 @@ void reg_freq_width_to_chan_op_class(struct wlan_objmgr_pdev *pdev,
  * Return: Void.
  */
 void reg_freq_to_chan_op_class(struct wlan_objmgr_pdev *pdev,
-			       uint16_t freq,
+			       qdf_freq_t freq,
 			       bool global_tbl_lookup,
 			       uint16_t behav_limit,
 			       uint8_t *op_class,
@@ -129,6 +129,17 @@ uint16_t reg_get_op_class_width(struct wlan_objmgr_pdev *pdev,
 				uint8_t op_class,
 				bool global_tbl_lookup);
 
+/**
+ * reg_chan_opclass_to_freq() - Convert channel number and opclass to frequency
+ * @chan: IEEE Channel Number.
+ * @op_class: Opclass.
+ * @global_tbl_lookup: Global table lookup.
+ *
+ * Return: Channel center frequency else return 0.
+ */
+uint16_t reg_chan_opclass_to_freq(uint8_t chan,
+				  uint8_t op_class,
+				  bool global_tbl_lookup);
 #else
 
 static inline uint16_t reg_dmn_get_chanwidth_from_opclass(
@@ -164,7 +175,7 @@ static inline void reg_dmn_print_channels_in_opclass(uint8_t *country,
 
 static inline void
 reg_freq_width_to_chan_op_class(struct wlan_objmgr_pdev *pdev,
-				uint16_t freq,
+				qdf_freq_t freq,
 				uint16_t chan_width,
 				bool global_tbl_lookup,
 				uint16_t behav_limit,
@@ -175,7 +186,7 @@ reg_freq_width_to_chan_op_class(struct wlan_objmgr_pdev *pdev,
 
 static inline void
 reg_freq_to_chan_op_class(struct wlan_objmgr_pdev *pdev,
-			  uint16_t freq,
+			  qdf_freq_t freq,
 			  bool global_tbl_lookup,
 			  uint16_t behav_limit,
 			  uint8_t *op_class,
@@ -185,9 +196,17 @@ reg_freq_to_chan_op_class(struct wlan_objmgr_pdev *pdev,
 
 #endif
 
-uint16_t reg_get_op_class_width(struct wlan_objmgr_pdev *pdev,
-				uint8_t op_class,
-				bool global_tbl_lookup)
+static inline uint16_t reg_get_op_class_width(struct wlan_objmgr_pdev *pdev,
+					      uint8_t op_class,
+					      bool global_tbl_lookup)
+{
+	return 0;
+}
+
+static inline uint16_t
+reg_chan_opclass_to_freq(uint8_t chan,
+			 uint8_t op_class,
+			 bool global_tbl_lookup)
 {
 	return 0;
 }

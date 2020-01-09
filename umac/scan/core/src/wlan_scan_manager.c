@@ -36,6 +36,18 @@
 #include <wlan_dfs_utils_api.h>
 #include <wlan_scan_cfg.h>
 
+/* Beacon/probe weightage multiplier */
+#define BCN_PROBE_WEIGHTAGE 5
+
+/* Saved profile weightage multiplier */
+#define SAVED_PROFILE_WEIGHTAGE 10
+
+/* maximum number of 6ghz hints can be sent per scan request */
+#define MAX_HINTS_PER_SCAN_REQ 15
+
+/* maximum number of hints can be sent per 6ghz channel */
+#define MAX_HINTS_PER_CHANNEL 4
+
 QDF_STATUS
 scm_scan_free_scan_request_mem(struct scan_start_request *req)
 {
@@ -617,13 +629,22 @@ static void scm_req_update_concurrency_params(struct wlan_objmgr_vdev *vdev,
 		req->scan_req.adaptive_dwell_time_mode =
 			scan_obj->scan_def.adaptive_dwell_time_mode_nc;
 	/*
-	 * If AP/GO is active and has connected clients set min rest time
-	 * same as max rest time, so that firmware spends more time on home
-	 * channel which will increase the probability of sending beacon at TBTT
+	 * If AP/GO is active and has connected clients :
+	 * 1.set min rest time same as max rest time, so that
+	 * firmware spends more time on home channel which will
+	 * increase the probability of sending beacon at TBTT
+	 * 2.if DBS is supported and SAP is not on 2g,
+	 * do not reset active dwell time for 2g.
 	 */
 	if ((ap_present && sap_peer_count) ||
 	    (go_present && go_peer_count)) {
-		req->scan_req.dwell_time_active_2g = 0;
+		if (policy_mgr_is_hw_dbs_capable(psoc) &&
+		    policy_mgr_is_sap_go_on_2g(psoc)) {
+			req->scan_req.dwell_time_active_2g =
+				QDF_MIN(req->scan_req.dwell_time_active,
+					(SCAN_CTS_DURATION_MS_MAX -
+					SCAN_ROAM_SCAN_CHANNEL_SWITCH_TIME));
+		}
 		req->scan_req.min_rest_time = req->scan_req.max_rest_time;
 	}
 
@@ -713,21 +734,28 @@ static void scm_req_update_concurrency_params(struct wlan_objmgr_vdev *vdev,
 	}
 
 	if (ap_present) {
-		uint8_t ap_chan_freq;
+		uint16_t ap_chan_freq;
 		struct wlan_objmgr_pdev *pdev = wlan_vdev_get_pdev(vdev);
 
 		ap_chan_freq = policy_mgr_get_channel(psoc, PM_SAP_MODE, NULL);
 		/*
 		 * P2P/STA scan while SoftAP is sending beacons.
 		 * Max duration of CTS2self is 32 ms, which limits the
-		 * dwell time. If DBS is supported and if SAP is on 2G channel
-		 * then keep passive dwell time default.
+		 * dwell time.
+		 * If DBS is supported and:
+		 * 1.if SAP is on 2G channel then keep passive
+		 * dwell time default.
+		 * 2.if SAP is on 5G/6G channel then update dwell time active.
 		 */
 		if (sap_peer_count) {
-			req->scan_req.dwell_time_active =
-				QDF_MIN(req->scan_req.dwell_time_active,
-					(SCAN_CTS_DURATION_MS_MAX -
+			if (policy_mgr_is_hw_dbs_capable(psoc) &&
+			    (WLAN_REG_IS_5GHZ_CH_FREQ(ap_chan_freq) ||
+			    WLAN_REG_IS_6GHZ_CHAN_FREQ(ap_chan_freq))) {
+				req->scan_req.dwell_time_active =
+					QDF_MIN(req->scan_req.dwell_time_active,
+						(SCAN_CTS_DURATION_MS_MAX -
 					SCAN_ROAM_SCAN_CHANNEL_SWITCH_TIME));
+			}
 			if (!policy_mgr_is_hw_dbs_capable(psoc) ||
 			    (policy_mgr_is_hw_dbs_capable(psoc) &&
 			     WLAN_REG_IS_5GHZ_CH_FREQ(ap_chan_freq))) {
@@ -735,6 +763,7 @@ static void scm_req_update_concurrency_params(struct wlan_objmgr_vdev *vdev,
 					req->scan_req.dwell_time_active;
 			}
 		}
+
 		if (scan_obj->scan_def.ap_scan_burst_duration) {
 			req->scan_req.burst_duration =
 				scan_obj->scan_def.ap_scan_burst_duration;
@@ -899,6 +928,128 @@ scm_update_6ghz_channel_list(struct wlan_objmgr_vdev *vdev,
 }
 #endif
 
+#ifdef FEATURE_6G_SCAN_CHAN_SORT_ALGO
+static void scm_sort_6ghz_channel_list(struct wlan_objmgr_vdev *vdev,
+				       struct chan_list *chan_list)
+{
+	uint8_t i, j = 0, min, tmp_list_count;
+	struct meta_rnr_channel *channel;
+	struct chan_info temp_list[MAX_6GHZ_CHANNEL];
+	struct rnr_chan_weight *rnr_chan_info, *temp;
+	uint32_t weight;
+
+	rnr_chan_info = qdf_mem_malloc(sizeof(rnr_chan_info) * MAX_6GHZ_CHANNEL);
+	if (!rnr_chan_info)
+		return;
+
+	for (i = 0; i < chan_list->num_chan; i++) {
+		if (WLAN_REG_IS_6GHZ_CHAN_FREQ(chan_list->chan[i].freq))
+			temp_list[j++].freq = chan_list->chan[i].freq;
+	}
+	tmp_list_count = j;
+	scm_debug("Total 6ghz channels %d", tmp_list_count);
+
+	/* No Need to sort if the 6ghz channels are less than one */
+	if (tmp_list_count < 1) {
+		qdf_mem_free(rnr_chan_info);
+		return;
+	}
+
+	/* compute the weightage */
+	for (i = 0; i < tmp_list_count; i++) {
+		channel = scm_get_chan_meta(temp_list[i].freq);
+		weight = channel->bss_beacon_probe_count * BCN_PROBE_WEIGHTAGE +
+			 channel->saved_profile_count * SAVED_PROFILE_WEIGHTAGE;
+		rnr_chan_info[i].weight = weight;
+		rnr_chan_info[i].chan_freq = temp_list[i].freq;
+	}
+
+	/* Sort the channel using selection sort */
+	for (i = 0; i < tmp_list_count - 1; i++) {
+		min = i;
+		for (j = i + 1; j < tmp_list_count; j++) {
+			if (rnr_chan_info[j].weight <
+			    rnr_chan_info[min].weight) {
+				min = j;
+			}
+		}
+		if (min != i) {
+			qdf_mem_copy(&temp, &rnr_chan_info[min],
+				     sizeof(*rnr_chan_info));
+			qdf_mem_copy(&rnr_chan_info[min], &rnr_chan_info[i],
+				     sizeof(*rnr_chan_info));
+			qdf_mem_copy(&rnr_chan_info[i], &temp,
+				     sizeof(*rnr_chan_info));
+		}
+	}
+
+	/* update the 6g list based on the weightage */
+	for (i = 0, j = 0;
+		(i < NUM_CHANNELS && j < NUM_6GHZ_CHANNELS); i++) {
+		if (wlan_reg_is_6ghz_chan_freq(chan_list->chan[i].freq))
+			chan_list->chan[i].freq = rnr_chan_info[j++].chan_freq;
+	}
+	qdf_mem_free(rnr_chan_info);
+}
+
+static void scm_update_rnr_info(struct scan_start_request *req)
+{
+	uint8_t i, num_bssid = 0, num_ssid = 0;
+	uint8_t total_count = MAX_HINTS_PER_SCAN_REQ;
+	uint32_t freq;
+	struct meta_rnr_channel *chan;
+	qdf_list_node_t *cur_node, *next_node;
+	struct scan_rnr_node *rnr_node;
+	struct chan_list *chan_list;
+
+	if (!req)
+		return;
+
+	chan_list = &req->scan_req.chan_list;
+	for (i = 0; i < chan_list->num_chan; i++) {
+		freq = chan_list->chan[i].freq;
+		if (!wlan_reg_is_6ghz_chan_freq(freq))
+			continue;
+
+		chan = scm_get_chan_meta(freq);
+		if (qdf_list_empty(&chan->rnr_list))
+			continue;
+
+		qdf_list_peek_front(&chan->rnr_list, &cur_node);
+		while (cur_node && total_count) {
+			qdf_list_peek_next(&chan->rnr_list, cur_node,
+					   &next_node);
+			rnr_node = qdf_container_of(cur_node,
+						    struct scan_rnr_node,
+						    node);
+			if (!qdf_is_macaddr_zero(&rnr_node->entry.bssid)) {
+				qdf_mem_copy(&req->scan_req.hint_bssid[num_bssid++].bssid,
+					     &rnr_node->entry.bssid,
+					     QDF_MAC_ADDR_SIZE);
+				req->scan_req.num_hint_bssid++;
+				total_count--;
+			} else if (rnr_node->entry.short_ssid) {
+				req->scan_req.hint_s_ssid[num_ssid++].short_ssid =
+						rnr_node->entry.short_ssid;
+				req->scan_req.num_hint_s_ssid++;
+				total_count--;
+			}
+			cur_node = next_node;
+			next_node = NULL;
+		}
+	}
+}
+#else
+static void scm_sort_6ghz_channel_list(struct wlan_objmgr_vdev *vdev,
+				       struct chan_list *chan_list)
+{
+}
+
+static void scm_update_rnr_info(struct scan_start_request *req)
+{
+}
+#endif
+
 /**
  * scm_update_channel_list() - update scan req params depending on dfs inis
  * and initial scan request.
@@ -973,8 +1124,13 @@ scm_update_channel_list(struct scan_start_request *req,
 	}
 
 	req->scan_req.chan_list.num_chan = num_scan_channels;
-	scm_update_6ghz_channel_list(req->vdev, &req->scan_req.chan_list,
-				     scan_obj);
+	/* Dont upadte the channel list for SAP mode */
+	if (wlan_vdev_mlme_get_opmode(req->vdev) != QDF_SAP_MODE) {
+		scm_update_6ghz_channel_list(req->vdev,
+					     &req->scan_req.chan_list,
+					     scan_obj);
+		scm_sort_6ghz_channel_list(req->vdev, &req->scan_req.chan_list);
+	}
 	scm_scan_chlist_concurrency_modify(req->vdev, req);
 }
 
@@ -1105,6 +1261,7 @@ scm_scan_req_update_params(struct wlan_objmgr_vdev *vdev,
 		ucfg_scan_init_chanlist_params(req, 0, NULL, NULL);
 
 	scm_update_channel_list(req, scan_obj);
+	scm_update_rnr_info(req);
 	scm_debug("dwell time: active %d, passive %d, repeat_probe_time %d n_probes %d flags_ext %x, wide_bw_scan: %d priority: %d",
 		  req->scan_req.dwell_time_active,
 		  req->scan_req.dwell_time_passive,
