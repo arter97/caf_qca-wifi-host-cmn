@@ -2082,6 +2082,12 @@ target_if_pdev_spectral_init(struct wlan_objmgr_pdev *pdev)
 	qdf_spinlock_create(&spectral->noise_pwr_reports_lock);
 	target_if_spectral_clear_stats(spectral);
 
+	if (target_type == TARGET_TYPE_QCA8074 ||
+	    target_type == TARGET_TYPE_QCA8074V2 ||
+	    target_type == TARGET_TYPE_QCA6018 ||
+	    target_type == TARGET_TYPE_QCA6390)
+		spectral->direct_dma_support = true;
+
 	if (target_type == TARGET_TYPE_QCA8074V2)
 		spectral->fftbin_size_war =
 			SPECTRAL_FFTBIN_SIZE_WAR_2BYTE_TO_1BYTE;
@@ -2141,6 +2147,7 @@ target_if_pdev_spectral_init(struct wlan_objmgr_pdev *pdev)
 	target_if_init_spectral_ops(spectral);
 
 	/* Spectral mode specific init */
+	spectral->target_reset_count = 0;
 	for (; smode < SPECTRAL_SCAN_MODE_MAX; smode++) {
 		spectral->last_fft_timestamp[smode] = 0;
 		spectral->timestamp_war_offset[smode] = 0;
@@ -2315,7 +2322,6 @@ target_if_calculate_center_freq(struct target_if_spectral *spectral,
 	struct wlan_objmgr_vdev *vdev;
 	enum phy_ch_width ch_width;
 	enum phy_ch_width agile_ch_width;
-	uint16_t chan_num;
 
 	if (!spectral) {
 		spectral_err("spectral target if object is null");
@@ -2326,8 +2332,6 @@ target_if_calculate_center_freq(struct target_if_spectral *spectral,
 		spectral_err("center_freq argument is null");
 		return QDF_STATUS_E_FAILURE;
 	}
-
-	chan_num = wlan_reg_freq_to_chan(spectral->pdev_obj, chan_freq);
 
 	vdev = target_if_spectral_get_vdev(spectral);
 	if (!vdev) {
@@ -2343,19 +2347,17 @@ target_if_calculate_center_freq(struct target_if_spectral *spectral,
 	} else {
 		uint16_t start_freq;
 		uint16_t end_freq;
-		const struct bonded_channel *bonded_chan_ptr = NULL;
+		const struct bonded_channel_freq *bonded_chan_ptr = NULL;
 
-		wlan_reg_get_5g_bonded_channel_and_state
-			(spectral->pdev_obj, chan_num, agile_ch_width,
+		wlan_reg_get_5g_bonded_channel_and_state_for_freq
+			(spectral->pdev_obj, chan_freq, agile_ch_width,
 			 &bonded_chan_ptr);
 		if (!bonded_chan_ptr) {
 			spectral_err("Bonded channel is not found");
 			return QDF_STATUS_E_FAILURE;
 		}
-		start_freq = wlan_reg_chan_to_freq(spectral->pdev_obj,
-						   bonded_chan_ptr->start_ch);
-		end_freq = wlan_reg_chan_to_freq(spectral->pdev_obj,
-						 bonded_chan_ptr->end_ch);
+		start_freq = bonded_chan_ptr->start_freq;
+		end_freq = bonded_chan_ptr->end_freq;
 		*center_freq = (start_freq + end_freq) >> 1;
 	}
 
@@ -2380,7 +2382,6 @@ target_if_validate_center_freq(struct target_if_spectral *spectral,
 	struct wlan_objmgr_vdev *vdev;
 	enum phy_ch_width ch_width;
 	enum phy_ch_width agile_ch_width;
-	uint16_t chan_num;
 	struct wlan_objmgr_pdev *pdev;
 	QDF_STATUS status;
 
@@ -2412,30 +2413,28 @@ target_if_validate_center_freq(struct target_if_spectral *spectral,
 	} else {
 		uint16_t start_freq;
 		uint16_t end_freq;
-		const struct bonded_channel *bonded_chan_ptr = NULL;
+		const struct bonded_channel_freq *bonded_chan_ptr = NULL;
 		bool is_chan;
 
 		status = target_if_is_center_freq_of_any_chan
-				(pdev, center_freq + 10, &is_chan);
+				(pdev, center_freq + FREQ_OFFSET_10MHZ,
+				 &is_chan);
 		if (QDF_IS_STATUS_ERROR(status))
 			return QDF_STATUS_E_FAILURE;
 
 		if (is_chan) {
 			uint32_t calulated_center_freq;
 
-			chan_num = wlan_reg_freq_to_chan(pdev,
-							 center_freq + 10);
-			wlan_reg_get_5g_bonded_channel_and_state
-				(pdev, chan_num, agile_ch_width,
+			wlan_reg_get_5g_bonded_channel_and_state_for_freq
+				(pdev, center_freq + FREQ_OFFSET_10MHZ,
+				 agile_ch_width,
 				 &bonded_chan_ptr);
 			if (!bonded_chan_ptr) {
 				spectral_err("Bonded channel is not found");
 				return QDF_STATUS_E_FAILURE;
 			}
-			start_freq = wlan_reg_chan_to_freq
-				(pdev, bonded_chan_ptr->start_ch);
-			end_freq = wlan_reg_chan_to_freq
-				(pdev, bonded_chan_ptr->end_ch);
+			start_freq = bonded_chan_ptr->start_freq;
+			end_freq = bonded_chan_ptr->end_freq;
 			calulated_center_freq = (start_freq + end_freq) >> 1;
 			*is_valid = (center_freq == calulated_center_freq);
 		} else {
@@ -2465,10 +2464,9 @@ target_if_is_agile_span_overlap_with_operating_span
 			 uint32_t ss_frequency,
 			 bool *is_overlapping)
 {
-	uint32_t chan_num;
 	enum phy_ch_width ch_width;
 	enum phy_ch_width agile_ch_width;
-	const struct bonded_channel *bonded_chan_ptr = NULL;
+	const struct bonded_channel_freq *bonded_chan_ptr = NULL;
 	struct wlan_objmgr_vdev *vdev;
 	struct wlan_objmgr_pdev *pdev;
 	int16_t chan_freq;
@@ -2506,24 +2504,18 @@ target_if_is_agile_span_overlap_with_operating_span
 	if (cfreq2 < 0)
 		return QDF_STATUS_E_FAILURE;
 
-	chan_num = wlan_reg_freq_to_chan(pdev, chan_freq);
-
 	if (ch_width == CH_WIDTH_20MHZ) {
-		op_start_freq = chan_freq - 10;
-		op_end_freq = chan_freq + 10;
+		op_start_freq = chan_freq - FREQ_OFFSET_10MHZ;
+		op_end_freq = chan_freq + FREQ_OFFSET_10MHZ;
 	} else {
-		wlan_reg_get_5g_bonded_channel_and_state
-			(pdev, chan_num, ch_width, &bonded_chan_ptr);
+		wlan_reg_get_5g_bonded_channel_and_state_for_freq
+			(pdev, chan_freq, ch_width, &bonded_chan_ptr);
 		if (!bonded_chan_ptr) {
 			spectral_err("Bonded channel is not found");
 			return QDF_STATUS_E_FAILURE;
 		}
-		op_start_freq =
-			wlan_reg_chan_to_freq(pdev,
-					      bonded_chan_ptr->start_ch) - 10;
-		op_end_freq =
-			wlan_reg_chan_to_freq(pdev,
-					      bonded_chan_ptr->end_ch) + 10;
+		op_start_freq = bonded_chan_ptr->start_freq - FREQ_OFFSET_10MHZ;
+		op_end_freq = bonded_chan_ptr->end_freq - FREQ_OFFSET_10MHZ;
 	}
 
 	agile_ch_width = target_if_spectral_find_agile_width(ch_width);
@@ -2962,6 +2954,9 @@ target_if_spectral_scan_enable_params(struct target_if_spectral *spectral,
 	if (spectral->ch_width == CH_WIDTH_INVALID)
 		return 1;
 
+	spectral->agile_ch_width =
+			target_if_spectral_find_agile_width(spectral->ch_width);
+
 	if (spectral->capability.advncd_spectral_cap) {
 		spectral->lb_edge_extrabins = 0;
 		spectral->rb_edge_extrabins = 0;
@@ -3262,29 +3257,27 @@ target_if_is_aspectral_prohibited_by_adfs(struct wlan_objmgr_psoc *psoc,
  *
  * API to get current operating band of a given pdev.
  *
- * Return: if success enum band_info, BAND_UNKNOWN in case of failure
+ * Return: if success enum reg_wifi_band, REG_BAND_UNKNOWN in case of failure
  */
-static enum band_info
+static enum reg_wifi_band
 target_if_get_curr_band(struct wlan_objmgr_pdev *pdev)
 {
 	struct wlan_objmgr_vdev *vdev;
 	int16_t chan_freq;
-	enum band_info cur_band;
-	uint32_t chan_num;
+	enum reg_wifi_band cur_band;
 
 	if (!pdev) {
 		spectral_err("pdev is NULL");
-		return BAND_UNKNOWN;
+		return REG_BAND_UNKNOWN;
 	}
 
 	vdev = wlan_objmgr_pdev_get_first_vdev(pdev, WLAN_SPECTRAL_ID);
 	if (!vdev) {
 		spectral_debug("vdev is NULL");
-		return BAND_UNKNOWN;
+		return REG_BAND_UNKNOWN;
 	}
 	chan_freq = target_if_vdev_get_chan_freq(vdev);
-	chan_num = wlan_reg_freq_to_chan(pdev, chan_freq);
-	cur_band = wlan_reg_chan_to_band(chan_num);
+	cur_band = wlan_reg_freq_to_band(chan_freq);
 	wlan_objmgr_vdev_release_ref(vdev, WLAN_SPECTRAL_ID);
 
 	return cur_band;
@@ -3304,7 +3297,7 @@ static void
 target_if_is_agile_scan_active_in_5g(struct wlan_objmgr_psoc *psoc,
 				     void *object, void *arg)
 {
-	enum band_info band;
+	enum reg_wifi_band band;
 	bool *is_agile_scan_inprog_5g_pdev = arg;
 	struct target_if_spectral *spectral;
 	struct wlan_objmgr_pdev *cur_pdev = object;
@@ -3321,12 +3314,12 @@ target_if_is_agile_scan_active_in_5g(struct wlan_objmgr_psoc *psoc,
 	p_sops = GET_TARGET_IF_SPECTRAL_OPS(spectral);
 
 	band = target_if_get_curr_band(cur_pdev);
-	if (band == BAND_UNKNOWN) {
+	if (band == REG_BAND_UNKNOWN) {
 		spectral_debug("Failed to get current band");
 		return;
 	}
 
-	if (band == BAND_5G &&
+	if (band == REG_BAND_5G &&
 	    p_sops->is_spectral_active(spectral, SPECTRAL_SCAN_MODE_AGILE))
 		*is_agile_scan_inprog_5g_pdev = true;
 }
@@ -3467,7 +3460,7 @@ target_if_start_spectral_scan(struct wlan_objmgr_pdev *pdev,
 	struct target_if_spectral_ops *p_sops;
 	struct target_if_spectral *spectral;
 	struct wlan_objmgr_psoc *psoc;
-	enum band_info band;
+	enum reg_wifi_band band;
 
 	if (!err) {
 		spectral_err("Error code argument is null");
@@ -3518,11 +3511,11 @@ target_if_start_spectral_scan(struct wlan_objmgr_pdev *pdev,
 	}
 
 	band = target_if_get_curr_band(spectral->pdev_obj);
-	if (band == BAND_UNKNOWN) {
+	if (band == REG_BAND_UNKNOWN) {
 		spectral_err("Failed to get current band");
 		return QDF_STATUS_E_FAILURE;
 	}
-	if ((band == BAND_5G) && (smode == SPECTRAL_SCAN_MODE_AGILE)) {
+	if ((band == REG_BAND_5G) && (smode == SPECTRAL_SCAN_MODE_AGILE)) {
 		struct target_psoc_info *tgt_hdl;
 		enum wmi_host_hw_mode_config_type mode;
 		bool is_agile_scan_inprog_5g_pdev;
@@ -3734,6 +3727,251 @@ target_if_is_spectral_enabled(struct wlan_objmgr_pdev *pdev,
 	return p_sops->is_spectral_enabled(spectral, smode);
 }
 
+#ifdef DIRECT_BUF_RX_DEBUG
+/**
+ * target_if_spectral_do_dbr_ring_debug() - Start/Stop Spectral DMA ring debug
+ * @pdev: Pointer to pdev object
+ * @enable: Enable/Disable Spectral DMA ring debug
+ *
+ * Start/stop Spectral DMA ring debug based on @enable.
+ * Also save the state for future use.
+ *
+ * Return: QDF_STATUS of operation
+ */
+static QDF_STATUS
+target_if_spectral_do_dbr_ring_debug(struct wlan_objmgr_pdev *pdev, bool enable)
+{
+	struct target_if_spectral *spectral;
+	struct wlan_lmac_if_tx_ops *tx_ops;
+	struct wlan_objmgr_psoc *psoc;
+
+	if (!pdev)
+		return QDF_STATUS_E_FAILURE;
+
+	psoc = wlan_pdev_get_psoc(pdev);
+	if (!psoc) {
+		spectral_err("psoc is null");
+		return QDF_STATUS_E_INVAL;
+	}
+	tx_ops = &psoc->soc_cb.tx_ops;
+
+	spectral = get_target_if_spectral_handle_from_pdev(pdev);
+	if (!spectral) {
+		spectral_err("Spectal LMAC object is NULL");
+		return QDF_STATUS_E_INVAL;
+	}
+
+	/* Save the state */
+	spectral->dbr_ring_debug = enable;
+
+	if (enable)
+		return tx_ops->dbr_tx_ops.direct_buf_rx_start_ring_debug(
+				pdev, 0, SPECTRAL_DBR_RING_DEBUG_SIZE);
+	else
+		return tx_ops->dbr_tx_ops.direct_buf_rx_stop_ring_debug(
+				pdev, 0);
+
+	return QDF_STATUS_SUCCESS;
+}
+
+/**
+ * target_if_spectral_do_dbr_buff_debug() - Start/Stop Spectral DMA buffer debug
+ * @pdev: Pointer to pdev object
+ * @enable: Enable/Disable Spectral DMA buffer debug
+ *
+ * Start/stop Spectral DMA buffer debug based on @enable.
+ * Also save the state for future use.
+ *
+ * Return: QDF_STATUS of operation
+ */
+static QDF_STATUS
+target_if_spectral_do_dbr_buff_debug(struct wlan_objmgr_pdev *pdev, bool enable)
+{
+	struct target_if_spectral *spectral;
+	struct wlan_lmac_if_tx_ops *tx_ops;
+	struct wlan_objmgr_psoc *psoc;
+
+	if (!pdev)
+		return QDF_STATUS_E_FAILURE;
+
+	psoc = wlan_pdev_get_psoc(pdev);
+	if (!psoc) {
+		spectral_err("psoc is null");
+		return QDF_STATUS_E_INVAL;
+	}
+	tx_ops = &psoc->soc_cb.tx_ops;
+
+	spectral = get_target_if_spectral_handle_from_pdev(pdev);
+	if (!spectral) {
+		spectral_err("Spectal LMAC object is NULL");
+		return QDF_STATUS_E_INVAL;
+	}
+
+	/* Save the state */
+	spectral->dbr_buff_debug = enable;
+
+	if (enable)
+		return tx_ops->dbr_tx_ops.direct_buf_rx_start_buffer_poisoning(
+				pdev, 0, MEM_POISON_SIGNATURE);
+	else
+		return tx_ops->dbr_tx_ops.direct_buf_rx_stop_buffer_poisoning(
+				pdev, 0);
+}
+
+/**
+ * target_if_spectral_check_and_do_dbr_buff_debug() - Start/Stop Spectral buffer
+ * debug based on the previous state
+ * @pdev: Pointer to pdev object
+ *
+ * Return: QDF_STATUS of operation
+ */
+static QDF_STATUS
+target_if_spectral_check_and_do_dbr_buff_debug(struct wlan_objmgr_pdev *pdev)
+{
+	struct target_if_spectral *spectral;
+
+	if (!pdev) {
+		spectral_err("pdev is NULL!");
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	spectral = get_target_if_spectral_handle_from_pdev(pdev);
+	if (!spectral) {
+		spectral_err("Spectal LMAC object is NULL");
+		return QDF_STATUS_E_INVAL;
+	}
+
+	if (spectral->dbr_buff_debug)
+		return target_if_spectral_do_dbr_buff_debug(pdev, true);
+	else
+		return target_if_spectral_do_dbr_buff_debug(pdev, false);
+}
+
+/**
+ * target_if_spectral_check_and_do_dbr_ring_debug() - Start/Stop Spectral ring
+ * debug based on the previous state
+ * @pdev: Pointer to pdev object
+ *
+ * Return: QDF_STATUS of operation
+ */
+static QDF_STATUS
+target_if_spectral_check_and_do_dbr_ring_debug(struct wlan_objmgr_pdev *pdev)
+{
+	struct target_if_spectral *spectral;
+
+	if (!pdev) {
+		spectral_err("pdev is NULL!");
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	spectral = get_target_if_spectral_handle_from_pdev(pdev);
+	if (!spectral) {
+		spectral_err("Spectal LMAC object is NULL");
+		return QDF_STATUS_E_INVAL;
+	}
+
+	if (spectral->dbr_ring_debug)
+		return target_if_spectral_do_dbr_ring_debug(pdev, true);
+	else
+		return target_if_spectral_do_dbr_ring_debug(pdev, false);
+}
+
+/**
+ * target_if_spectral_set_dma_debug() - Set DMA debug for Spectral
+ * @pdev: Pointer to pdev object
+ * @dma_debug_type: Type of Spectral DMA debug i.e., ring or buffer debug
+ * @debug_value: Value to be set for @dma_debug_type
+ *
+ * Set DMA debug for Spectral and start/stop Spectral DMA debug function
+ * based on @debug_value
+ *
+ * Return: QDF_STATUS of operation
+ */
+static QDF_STATUS
+target_if_spectral_set_dma_debug(
+	struct wlan_objmgr_pdev *pdev,
+	enum spectral_dma_debug dma_debug_type,
+	bool debug_value)
+{
+	struct target_if_spectral_ops *p_sops;
+	struct wlan_objmgr_psoc *psoc;
+	struct wlan_lmac_if_tx_ops *tx_ops;
+	struct target_if_spectral *spectral;
+
+	if (!pdev)
+		return QDF_STATUS_E_FAILURE;
+
+	psoc = wlan_pdev_get_psoc(pdev);
+	if (!psoc) {
+		spectral_err("psoc is null");
+		return QDF_STATUS_E_INVAL;
+	}
+	tx_ops = &psoc->soc_cb.tx_ops;
+
+	if (!tx_ops->target_tx_ops.tgt_get_tgt_type) {
+		spectral_err("Unable to fetch target type");
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	spectral = get_target_if_spectral_handle_from_pdev(pdev);
+	if (!spectral) {
+		spectral_err("Spectal LMAC object is NULL");
+		return QDF_STATUS_E_INVAL;
+	}
+
+	if (spectral->direct_dma_support) {
+		p_sops = GET_TARGET_IF_SPECTRAL_OPS(spectral);
+		if (p_sops->is_spectral_active(spectral,
+					       SPECTRAL_SCAN_MODE_NORMAL) ||
+		    p_sops->is_spectral_active(spectral,
+					       SPECTRAL_SCAN_MODE_AGILE)) {
+			spectral_err("Altering DBR debug config isn't allowed during an ongoing scan");
+			return QDF_STATUS_E_FAILURE;
+		}
+
+		switch (dma_debug_type) {
+		case SPECTRAL_DMA_RING_DEBUG:
+			target_if_spectral_do_dbr_ring_debug(pdev, debug_value);
+			break;
+
+		case SPECTRAL_DMA_BUFFER_DEBUG:
+			target_if_spectral_do_dbr_buff_debug(pdev, debug_value);
+			break;
+
+		default:
+			spectral_err("Unsupported DMA debug type : %d",
+				     dma_debug_type);
+			return QDF_STATUS_E_FAILURE;
+		}
+	}
+	return QDF_STATUS_SUCCESS;
+}
+#endif /* DIRECT_BUF_RX_DEBUG */
+
+/**
+ * target_if_spectral_direct_dma_support() - Get Direct-DMA support
+ * @pdev: Pointer to pdev object
+ *
+ * Return: Whether Direct-DMA is supported on this radio
+ */
+static bool
+target_if_spectral_direct_dma_support(struct wlan_objmgr_pdev *pdev)
+{
+	struct target_if_spectral *spectral;
+
+	if (!pdev) {
+		spectral_err("pdev is NULL!");
+		return false;
+	}
+
+	spectral = get_target_if_spectral_handle_from_pdev(pdev);
+	if (!spectral) {
+		spectral_err("Spectral LMAC object is NULL");
+		return false;
+	}
+	return spectral->direct_dma_support;
+}
+
 /**
  * target_if_set_debug_level() - Set debug level for Spectral
  * @pdev: Pointer to pdev object
@@ -3904,6 +4142,27 @@ target_if_process_spectral_report(struct wlan_objmgr_pdev *pdev,
 	return p_sops->process_spectral_report(pdev, payload);
 }
 
+#ifdef DIRECT_BUF_RX_DEBUG
+static inline void
+target_if_sptrl_debug_register_tx_ops(struct wlan_lmac_if_tx_ops *tx_ops)
+{
+	if (!tx_ops)
+		return;
+
+	tx_ops->sptrl_tx_ops.sptrlto_set_dma_debug =
+		target_if_spectral_set_dma_debug;
+	tx_ops->sptrl_tx_ops.sptrlto_check_and_do_dbr_ring_debug =
+		target_if_spectral_check_and_do_dbr_ring_debug;
+	tx_ops->sptrl_tx_ops.sptrlto_check_and_do_dbr_buff_debug =
+		target_if_spectral_check_and_do_dbr_buff_debug;
+}
+#else
+static inline void
+target_if_sptrl_debug_register_tx_ops(struct wlan_lmac_if_tx_ops *tx_ops)
+{
+}
+#endif
+
 void
 target_if_sptrl_register_tx_ops(struct wlan_lmac_if_tx_ops *tx_ops)
 {
@@ -3940,7 +4199,10 @@ target_if_sptrl_register_tx_ops(struct wlan_lmac_if_tx_ops *tx_ops)
 	tx_ops->sptrl_tx_ops.sptrlto_deregister_netlink_cb =
 	    target_if_deregister_netlink_cb;
 	tx_ops->sptrl_tx_ops.sptrlto_process_spectral_report =
-		target_if_process_spectral_report;
+	    target_if_process_spectral_report;
+	tx_ops->sptrl_tx_ops.sptrlto_direct_dma_support =
+		target_if_spectral_direct_dma_support;
+	target_if_sptrl_debug_register_tx_ops(tx_ops);
 }
 qdf_export_symbol(target_if_sptrl_register_tx_ops);
 

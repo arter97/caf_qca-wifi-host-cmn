@@ -156,13 +156,16 @@ struct wlan_regulatory_pdev_priv_obj {
 	char current_country[REG_ALPHA2_LEN + 1];
 	uint16_t reg_dmn_pair;
 	uint16_t ctry_code;
+#ifdef DISABLE_UNII_SHARED_BANDS
+	uint8_t unii_5g_bitmap;
+#endif
 	enum dfs_reg dfs_region;
 	uint32_t phybitmap;
 	struct wlan_objmgr_pdev *pdev_ptr;
-	uint32_t range_2g_low;
-	uint32_t range_2g_high;
-	uint32_t range_5g_low;
-	uint32_t range_5g_high;
+	qdf_freq_t range_2g_low;
+	qdf_freq_t range_2g_high;
+	qdf_freq_t range_5g_low;
+	qdf_freq_t range_5g_high;
 	bool dfs_enabled;
 	bool set_fcc_channel;
 	enum band_info band_capability;

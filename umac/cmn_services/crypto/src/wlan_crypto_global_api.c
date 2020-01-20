@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017-2019 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2017-2020 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -968,6 +968,10 @@ QDF_STATUS wlan_crypto_getkey(struct wlan_objmgr_vdev *vdev,
 			return QDF_STATUS_E_NOENT;
 		}
 		key = wlan_crypto_peer_getkey(peer, req_key->keyix);
+		if (WLAN_CRYPTO_TX_OPS_GETPN(psoc) &&
+		    (req_key->flags & WLAN_CRYPTO_KEY_GET_PN))
+			WLAN_CRYPTO_TX_OPS_GETPN(psoc)(vdev, mac_addr,
+						       req_key->type);
 		wlan_objmgr_peer_release_ref(peer, WLAN_CRYPTO_ID);
 		if (!key)
 			return QDF_STATUS_E_INVAL;
@@ -1104,6 +1108,9 @@ QDF_STATUS wlan_crypto_delkey(struct wlan_objmgr_vdev *vdev,
 				qdf_mem_free(key->private);
 		}
 	}
+
+	/* Zero-out local key variables */
+	qdf_mem_zero(key, sizeof(struct wlan_crypto_key));
 	qdf_mem_free(key);
 
 	return QDF_STATUS_SUCCESS;
@@ -2383,7 +2390,7 @@ QDF_STATUS wlan_crypto_wpaie_check(struct wlan_crypto_params *crypto_params,
 		frm += 2, len -= 2;
 	}
 
-	return 0;
+	return QDF_STATUS_SUCCESS;
 }
 
 /**
@@ -3186,7 +3193,7 @@ QDF_STATUS wlan_crypto_set_peer_wep_keys(struct wlan_objmgr_vdev *vdev,
 	if (opmode == QDF_STA_MODE) {
 		peer = wlan_objmgr_vdev_try_get_bsspeer(vdev, WLAN_CRYPTO_ID);
 		if (!peer) {
-			crypto_err("peer NULL");
+			crypto_debug("peer NULL");
 			return QDF_STATUS_E_INVAL;
 		}
 	}

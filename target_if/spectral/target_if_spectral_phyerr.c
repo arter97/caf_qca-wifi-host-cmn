@@ -1540,6 +1540,104 @@ target_if_get_spectral_mode(enum spectral_detector_id detector_id,
 	return QDF_STATUS_SUCCESS;
 }
 
+#ifdef DIRECT_BUF_RX_DEBUG
+static void target_if_spectral_check_buffer_poisoning(
+	struct target_if_spectral *spectral,
+	struct spectral_report *report,
+	int num_fft_bins, enum spectral_scan_mode smode)
+{
+	uint32_t *data;
+	size_t len;
+	size_t words_to_check =
+		sizeof(struct spectral_sscan_summary_report_gen3) >> 2;
+	bool poisoned_words_found = false;
+
+	if (!spectral) {
+		spectral_err_rl("Spectral LMAC object is null");
+		return;
+	}
+
+	if (!spectral->dbr_buff_debug)
+		return;
+
+	if (!report) {
+		spectral_err_rl("Spectral report is null");
+		return;
+	}
+
+	/* Add search FFT report */
+	if (spectral->params[smode].ss_rpt_mode > 0)
+		words_to_check +=
+			sizeof(struct spectral_phyerr_fft_report_gen3) >> 2;
+
+	/* Now add the number of FFT bins */
+	if (spectral->params[smode].ss_rpt_mode > 1) {
+		/* Caller should take care to pass correct number of FFT bins */
+		if (spectral->fftbin_size_war ==
+				SPECTRAL_FFTBIN_SIZE_WAR_4BYTE_TO_1BYTE)
+			words_to_check += num_fft_bins;
+		else if (spectral->fftbin_size_war ==
+				SPECTRAL_FFTBIN_SIZE_WAR_2BYTE_TO_1BYTE)
+			words_to_check += (num_fft_bins >> 1);
+	}
+
+	data = (uint32_t *)report->data;
+	for (len = 0; len < words_to_check; ++len) {
+		if (*data == MEM_POISON_SIGNATURE) {
+			spectral_err("Pattern(%x) found in Spectral search FFT report at position %zu in the buffer %pK",
+				     MEM_POISON_SIGNATURE,
+				     (len << 2), report->data);
+			poisoned_words_found = true;
+			break;
+		}
+		++data;
+	}
+
+	/* Crash the FW even if one word is poisoned */
+	if (poisoned_words_found) {
+		spectral_err("Pattern(%x) found in Spectral report, Hex dump of the sfft follows",
+			     MEM_POISON_SIGNATURE);
+		target_if_spectral_hexdump((unsigned char *)report->data,
+					   words_to_check << 2);
+		spectral_err("Asserting the FW");
+		target_if_spectral_fw_hang(spectral);
+	}
+}
+
+static void target_if_spectral_verify_ts(struct target_if_spectral *spectral,
+					 uint8_t *buf, uint32_t current_ts)
+{
+	if (!spectral) {
+		spectral_err_rl("Spectral LMAC object is null");
+		return;
+	}
+
+	if (!spectral->dbr_buff_debug)
+		return;
+
+	if (spectral->prev_tstamp) {
+		if (current_ts == spectral->prev_tstamp) {
+			spectral_err("Spectral timestamp(%u) in the current buffer(%pK) is equal to the previous timestamp, same report DMAed twice? Asserting the FW",
+				     current_ts, buf);
+			target_if_spectral_fw_hang(spectral);
+		}
+	}
+	spectral->prev_tstamp = current_ts;
+}
+#else
+static void target_if_spectral_check_buffer_poisoning(
+	struct target_if_spectral *spectral,
+	struct spectral_report *report,
+	int num_fft_bins, enum spectral_scan_mode smode)
+{
+}
+
+static void target_if_spectral_verify_ts(struct target_if_spectral *spectral,
+					 uint8_t *buf, uint32_t current_ts)
+{
+}
+#endif
+
 int
 target_if_consume_spectral_report_gen3(
 	 struct target_if_spectral *spectral,
@@ -1694,6 +1792,10 @@ target_if_consume_spectral_report_gen3(
 			}
 		}
 
+		params.last_raw_timestamp =
+				spectral->last_fft_timestamp[params.smode];
+		params.reset_delay = 0;
+
 		if (report->reset_delay) {
 			enum spectral_scan_mode mode =
 						SPECTRAL_SCAN_MODE_NORMAL;
@@ -1707,8 +1809,14 @@ target_if_consume_spectral_report_gen3(
 				spectral->timestamp_war_offset[mode] +=
 					(report->reset_delay +
 					 spectral->last_fft_timestamp[mode]);
+			params.reset_delay = report->reset_delay;
+			spectral->target_reset_count++;
 		}
+		params.target_reset_count = spectral->target_reset_count;
+		params.timestamp_war_offset =
+				   spectral->timestamp_war_offset[params.smode];
 		tsf64 = p_sfft->timestamp;
+		params.raw_timestamp = tsf64;
 		spectral->last_fft_timestamp[params.smode] = p_sfft->timestamp;
 		tsf64 += spectral->timestamp_war_offset[params.smode];
 
@@ -1768,6 +1876,9 @@ target_if_consume_spectral_report_gen3(
 		params.datalen           = (fft_hdr_length * 4);
 		params.pwr_count         = fft_bin_len;
 		params.tstamp            = (tsf64 & SPECTRAL_TSMASK);
+
+		target_if_spectral_verify_ts(spectral, report->data,
+					     params.tstamp);
 	} else if (is_secondaryseg_expected(spectral)) {
 		/* RSSI is in 1/2 dBm steps, Covert it to dBm scale */
 		rssi = (sscan_report_fields.inband_pwr_db) >> 1;
@@ -1851,6 +1962,8 @@ target_if_consume_spectral_report_gen3(
 			}
 		}
 
+		params.raw_timestamp_sec80 = p_sfft->timestamp;
+
 		/* Take care of state transitions for 160 MHz and 80p80 */
 		if (spectral->ch_width == CH_WIDTH_160MHZ) {
 			ret = target_if_160mhz_delivery_state_change(
@@ -1905,6 +2018,8 @@ target_if_consume_spectral_report_gen3(
 		goto fail;
 	}
 
+	target_if_spectral_check_buffer_poisoning(spectral, report,
+						  fft_bin_len, params.smode);
 	qdf_mem_copy(&params.classifier_params,
 		     &spectral->classifier_params,
 		     sizeof(struct spectral_classifier_params));
@@ -1913,7 +2028,6 @@ target_if_consume_spectral_report_gen3(
 	target_if_spectral_create_samp_msg(spectral, &params);
 
 	return 0;
-
  fail:
 	spectral_err_rl("Error while processing Spectral report");
 	reset_160mhz_delivery_state_machine(spectral,

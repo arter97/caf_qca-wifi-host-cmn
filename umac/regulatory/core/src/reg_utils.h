@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017-2019 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2017-2020 The Linux Foundation. All rights reserved.
  *
  *
  * Permission to use, copy, modify, and/or distribute this software for
@@ -61,7 +61,7 @@ bool reg_is_world_ctry_code(uint16_t ctry_code);
  *
  * Return: true if chan is dfs, otherwise false
  */
-bool reg_chan_has_dfs_attribute(struct wlan_objmgr_pdev *pdev, uint32_t ch);
+bool reg_chan_has_dfs_attribute(struct wlan_objmgr_pdev *pdev, uint8_t ch);
 
 /**
  * reg_is_passive_or_disable_ch() - Check if the given channel is passive or
@@ -71,7 +71,7 @@ bool reg_chan_has_dfs_attribute(struct wlan_objmgr_pdev *pdev, uint32_t ch);
  *
  * Return: true if channel is passive or disabled, else false.
  */
-bool reg_is_passive_or_disable_ch(struct wlan_objmgr_pdev *pdev, uint32_t chan);
+bool reg_is_passive_or_disable_ch(struct wlan_objmgr_pdev *pdev, uint8_t chan);
 
 /**
  * reg_is_disable_ch() - Check if the given channel in disable state
@@ -80,22 +80,22 @@ bool reg_is_passive_or_disable_ch(struct wlan_objmgr_pdev *pdev, uint32_t chan);
  *
  * Return: True if channel state is disabled, else false
  */
-bool reg_is_disable_ch(struct wlan_objmgr_pdev *pdev, uint32_t chan);
+bool reg_is_disable_ch(struct wlan_objmgr_pdev *pdev, uint8_t chan);
 #else
 static inline bool
-reg_chan_has_dfs_attribute(struct wlan_objmgr_pdev *pdev, uint32_t ch)
+reg_chan_has_dfs_attribute(struct wlan_objmgr_pdev *pdev, uint8_t ch)
 {
 	return false;
 }
 
 static inline bool
-reg_is_passive_or_disable_ch(struct wlan_objmgr_pdev *pdev, uint32_t chan)
+reg_is_passive_or_disable_ch(struct wlan_objmgr_pdev *pdev, uint8_t chan)
 {
 	return false;
 }
 
 static inline bool
-reg_is_disable_ch(struct wlan_objmgr_pdev *pdev, uint32_t chan)
+reg_is_disable_ch(struct wlan_objmgr_pdev *pdev, uint8_t chan)
 {
 	return false;
 }
@@ -113,7 +113,7 @@ reg_is_disable_ch(struct wlan_objmgr_pdev *pdev, uint32_t chan)
  * Return: true if channel frequency is dfs, otherwise false
  */
 bool reg_chan_has_dfs_attribute_for_freq(struct wlan_objmgr_pdev *pdev,
-					 uint16_t freq);
+					 qdf_freq_t freq);
 /**
  * reg_is_passive_or_disable_for_freq() - Check if the given channel is
  * passive or disabled.
@@ -123,7 +123,7 @@ bool reg_chan_has_dfs_attribute_for_freq(struct wlan_objmgr_pdev *pdev,
  * Return: true if channel frequency is passive or disabled, else false.
  */
 bool reg_is_passive_or_disable_for_freq(struct wlan_objmgr_pdev *pdev,
-					uint16_t freq);
+					qdf_freq_t freq);
 /**
  * reg_is_disable_for_freq() - Check if the given channel frequency in
  * disable state
@@ -132,24 +132,24 @@ bool reg_is_passive_or_disable_for_freq(struct wlan_objmgr_pdev *pdev,
  *
  * Return: True if channel state is disabled, else false
  */
-bool reg_is_disable_for_freq(struct wlan_objmgr_pdev *pdev, uint16_t freq);
+bool reg_is_disable_for_freq(struct wlan_objmgr_pdev *pdev, qdf_freq_t freq);
 #else
 static inline bool
 reg_chan_has_dfs_attribute_for_freq(struct wlan_objmgr_pdev *pdev,
-				    uint16_t freq)
+				    qdf_freq_t freq)
 {
 	return false;
 }
 
 static inline bool
 reg_is_passive_or_disable_for_freq(struct wlan_objmgr_pdev *pdev,
-				   uint16_t freq)
+				   qdf_freq_t freq)
 {
 	return false;
 }
 
 static inline bool
-reg_is_disable_for_freq(struct wlan_objmgr_pdev *pdev, uint16_t freq)
+reg_is_disable_for_freq(struct wlan_objmgr_pdev *pdev, qdf_freq_t freq)
 {
 	return false;
 }
@@ -516,7 +516,7 @@ bool reg_get_fcc_constraint(struct wlan_objmgr_pdev *pdev, uint32_t freq)
  * Return: true or false
  */
 #ifdef CONFIG_CHAN_FREQ_API
-bool reg_is_dsrc_freq(uint16_t freq);
+bool reg_is_dsrc_freq(qdf_freq_t freq);
 #endif /* CONFIG_CHAN_FREQ_API*/
 
 #ifdef CONFIG_CHAN_NUM_API
@@ -527,11 +527,11 @@ bool reg_is_dsrc_freq(uint16_t freq);
  *
  * Return: true or false
  */
-bool reg_is_dsrc_chan(struct wlan_objmgr_pdev *pdev, uint32_t chan);
+bool reg_is_dsrc_chan(struct wlan_objmgr_pdev *pdev, uint8_t chan);
 #endif /* CONFIG_CHAN_NUM_API */
 
 static inline bool reg_is_etsi13_srd_chan(struct wlan_objmgr_pdev *pdev,
-					  uint32_t chan)
+					  uint8_t chan)
 {
 	return false;
 }
@@ -562,12 +562,12 @@ reg_is_etsi13_srd_chan_allowed_master_mode(struct wlan_objmgr_pdev *pdev)
 }
 #elif defined(CONFIG_REG_CLIENT)
 static inline bool reg_is_dsrc_chan(struct wlan_objmgr_pdev *pdev,
-				    uint32_t chan)
+				    uint8_t chan)
 {
 	return false;
 }
 
-static inline bool reg_is_dsrc_freq(uint16_t freq)
+static inline bool reg_is_dsrc_freq(qdf_freq_t freq)
 {
 	return false;
 }
@@ -593,7 +593,7 @@ bool reg_is_etsi13_regdmn(struct wlan_objmgr_pdev *pdev);
  *
  * Return: true or false
  */
-bool reg_is_etsi13_srd_chan(struct wlan_objmgr_pdev *pdev, uint32_t chan);
+bool reg_is_etsi13_srd_chan(struct wlan_objmgr_pdev *pdev, uint8_t chan);
 #endif /* CONFIG_CHAN_NUM_API */
 
 /**
@@ -607,12 +607,12 @@ bool reg_is_etsi13_srd_chan(struct wlan_objmgr_pdev *pdev, uint32_t chan);
 bool reg_is_etsi13_srd_chan_allowed_master_mode(struct wlan_objmgr_pdev *pdev);
 #else
 static inline bool reg_is_dsrc_chan(struct wlan_objmgr_pdev *pdev,
-				    uint32_t chan)
+				    uint8_t chan)
 {
 	return false;
 }
 
-static inline bool reg_is_dsrc_freq(uint16_t freq)
+static inline bool reg_is_dsrc_freq(qdf_freq_t freq)
 {
 	return false;
 }
@@ -636,7 +636,7 @@ reg_is_etsi13_srd_chan_allowed_master_mode(struct wlan_objmgr_pdev *pdev)
 }
 
 static inline bool reg_is_etsi13_srd_chan(struct wlan_objmgr_pdev *pdev,
-					  uint32_t chan)
+					  uint8_t chan)
 {
 	return false;
 }

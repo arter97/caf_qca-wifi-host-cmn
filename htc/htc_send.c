@@ -125,6 +125,15 @@ static void send_packet_completion(HTC_TARGET *target, HTC_PACKET *pPacket)
 
 	restore_tx_packet(target, pPacket);
 
+	/*
+	 * In case of SSR, we cannot call the upper layer completion
+	 * callbacks, hence just free the nbuf and HTC packet here.
+	 */
+	if (hif_get_target_status(target->hif_dev)) {
+		htc_free_control_tx_packet(target, pPacket);
+		return;
+	}
+
 	/* do completion */
 	AR_DEBUG_PRINTF(ATH_DEBUG_SEND,
 			("HTC calling ep %d send complete callback on packet %pK\n",
@@ -295,8 +304,10 @@ htc_send_update_tx_bundle_stats(HTC_TARGET *target,
 				qdf_size_t data_len,
 				int TxCreditSize)
 {
-	if ((data_len / TxCreditSize) <= HTC_MAX_MSG_PER_BUNDLE_TX)
-		target->tx_bundle_stats[(data_len / TxCreditSize) - 1]++;
+	int index = ((data_len + TxCreditSize - 1) / TxCreditSize) - 1;
+
+	if (index < HTC_MAX_MSG_PER_BUNDLE_TX)
+		target->tx_bundle_stats[index]++;
 }
 
 /**

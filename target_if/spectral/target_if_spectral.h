@@ -41,6 +41,7 @@
 
 #include <spectral_defs_i.h>
 
+#define FREQ_OFFSET_10MHZ 10
 #ifndef SPECTRAL_USE_NL_BCAST
 #define SPECTRAL_USE_NL_BCAST  (0)
 #endif
@@ -87,6 +88,9 @@
 #define SPECTRAL_PARAM_RPT_MODE_MIN        (0)
 #define SPECTRAL_PARAM_RPT_MODE_MAX        (3)
 
+/* DBR ring debug size for Spectral */
+#define SPECTRAL_DBR_RING_DEBUG_SIZE 512
+
 #ifdef BIG_ENDIAN_HOST
 #define SPECTRAL_MESSAGE_COPY_CHAR_ARRAY(destp, srcp, len)  do { \
 	int j; \
@@ -109,6 +113,8 @@
 /* Mask for time stamp from descriptor */
 #define SPECTRAL_TSMASK              0xFFFFFFFF
 #define SPECTRAL_SIGNATURE           0xdeadbeef
+/* Signature to write onto spectral buffer and then later validate */
+#define MEM_POISON_SIGNATURE (htobe32(0xdeadbeef))
 
 /* START of spectral GEN II HW specific details */
 #define SPECTRAL_PHYERR_SIGNATURE_GEN2           0xbb
@@ -833,6 +839,12 @@ struct spectral_param_properties {
  * report a bin count of 0 to higher layers.
  * @last_fft_timestamp: last fft report timestamp
  * @timestamp_war_offset: Offset to be added to correct timestamp
+ * @dbr_ring_debug: Whether Spectral DBR ring debug is enabled
+ * @dbr_buff_debug: Whether Spectral DBR buffer debug is enabled
+ * @direct_dma_support: Whether Direct-DMA is supported on the current radio
+ * @prev_tstamp: Timestamp of the previously received sample, which has to be
+ * compared with the current tstamp to check descrepancy
+ * @target_reset_count: Number of times target excercised the reset routine
  */
 struct target_if_spectral {
 	struct wlan_objmgr_pdev *pdev_obj;
@@ -920,6 +932,7 @@ struct target_if_spectral {
 					param_info[SPECTRAL_SCAN_MODE_MAX];
 #endif
 	uint32_t                               ch_width;
+	uint32_t                               agile_ch_width;
 	struct spectral_diag_stats              diag_stats;
 	bool                                    is_160_format;
 	bool                                    is_lb_edge_extrabins_format;
@@ -947,6 +960,11 @@ struct target_if_spectral {
 	uint32_t timestamp_war_offset[SPECTRAL_SCAN_MODE_MAX];
 	uint16_t fft_size_min;
 	uint16_t fft_size_max;
+	bool dbr_ring_debug;
+	bool dbr_buff_debug;
+	bool direct_dma_support;
+	uint32_t prev_tstamp;
+	uint32_t target_reset_count;
 };
 
 /**
@@ -998,6 +1016,17 @@ struct target_if_spectral {
  * channel switch - Software may choose to ignore the sample if this is set.
  * Applicable only if smode = SPECTRAL_SCAN_MODE_NORMAL and for 160/80+80 MHz
  * Spectral operation.
+ * @last_raw_timestamp: Previous FFT report's raw timestamp. In case of 160MHz
+ * it will be primary 80 segment's timestamp as both primary & secondary
+ * segment's timestamps are expected to be almost equal
+ * @timestamp_war_offset: Offset calculated based on reset_delay and
+ * last_raw_stamp. It will be added to raw_timestamp to get tstamp.
+ * @raw_timestamp: FFT timestamp reported by HW on primary segment.
+ * @raw_timestamp_sec80: FFT timestamp reported by HW on secondary 80 segment.
+ * @reset_delay: Time gap between the last spectral report before reset and the
+ * end of reset.
+ * @target_reset_count: Indicates the the number of times the target went
+ * through reset routine after spectral was enabled.
  */
 struct target_if_samp_msg_params {
 	int8_t      rssi;
@@ -1042,6 +1071,12 @@ struct target_if_samp_msg_params {
 	enum spectral_scan_mode smode;
 	uint8_t pri80ind;
 	uint8_t pri80ind_sec80;
+	uint32_t last_raw_timestamp;
+	uint32_t timestamp_war_offset;
+	uint32_t raw_timestamp;
+	uint32_t raw_timestamp_sec80;
+	uint32_t reset_delay;
+	uint32_t target_reset_count;
 };
 
 #ifdef WLAN_CONV_SPECTRAL_ENABLE

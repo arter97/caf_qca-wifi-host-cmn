@@ -105,6 +105,15 @@ typedef void *qdf_pm_t;
 typedef void *qdf_handle_t;
 
 /**
+ * typedef qdf_freq_t - define frequency as a 16 bit/32 bit
+ * unsigned integer depending on the requirement
+ */
+#ifdef CONFIG_16_BIT_FREQ_TYPE
+typedef uint16_t qdf_freq_t;
+#else
+typedef uint32_t qdf_freq_t;
+#endif
+/**
  * typedef qdf_device_t - Platform/bus generic handle.
  * Used for bus specific functions.
  */
@@ -368,6 +377,7 @@ typedef bool (*qdf_irqlocked_func_t)(void *);
  * @QDF_MODULE_ID_BLACKLIST_MGR: Blacklist Manager module
  * @QDF_MODULE_ID_QLD: QCA Live Debug module ID
  * @QDF_MODULE_ID_DYNAMIC_MODE_CHG: Dynamic mode change module ID
+ * @QDF_MODULE_ID_COEX: Coex related config module ID
  * @QDF_MODULE_ID_ANY: anything
  * @QDF_MODULE_ID_MAX: Max place holder module ID
  */
@@ -486,6 +496,7 @@ typedef enum {
 	QDF_MODULE_ID_BLACKLIST_MGR,
 	QDF_MODULE_ID_QLD,
 	QDF_MODULE_ID_DYNAMIC_MODE_CHG,
+	QDF_MODULE_ID_COEX,
 	QDF_MODULE_ID_ANY,
 	QDF_MODULE_ID_MAX,
 } QDF_MODULE_ID;
@@ -680,15 +691,16 @@ enum QDF_GLOBAL_MODE {
 
 #ifdef WLAN_OPEN_P2P_INTERFACE
 /* This should match with WLAN_MAX_INTERFACES */
-#define QDF_MAX_CONCURRENCY_PERSONA  (4)
+#define QDF_MAX_CONCURRENCY_PERSONA  (WLAN_MAX_VDEVS)
 #else
-#define QDF_MAX_CONCURRENCY_PERSONA  (3)
+#define QDF_MAX_CONCURRENCY_PERSONA  (WLAN_MAX_VDEVS - 1)
 #endif
 
 #define QDF_STA_MASK (1 << QDF_STA_MODE)
 #define QDF_SAP_MASK (1 << QDF_SAP_MODE)
 #define QDF_P2P_CLIENT_MASK (1 << QDF_P2P_CLIENT_MODE)
 #define QDF_P2P_GO_MASK (1 << QDF_P2P_GO_MODE)
+#define QDF_MONITOR_MASK (1 << QDF_MONITOR_MODE)
 
 #ifdef FEATURE_WLAN_MCC_TO_SCC_SWITCH
 

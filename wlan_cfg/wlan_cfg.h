@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2019 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2013-2020 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -73,6 +73,7 @@
 #define MAX_NUM_PEER_ID_PER_PEER 8
 #define DP_MAX_TIDS 17
 #define DP_NON_QOS_TID 16
+#define DP_NULL_DATA_TID 17
 
 #define WLAN_CFG_RX_FST_MAX_SEARCH 2
 #define WLAN_CFG_RX_FST_TOEPLITZ_KEYLEN 40
@@ -1229,4 +1230,15 @@ wlan_cfg_set_rx_mon_protocol_flow_tag_enabled(struct wlan_cfg_dp_soc_ctxt *cfg,
  */
 bool
 wlan_cfg_is_rx_mon_protocol_flow_tag_enabled(struct wlan_cfg_dp_soc_ctxt *cfg);
+
+/**
+ * wlan_cfg_fill_interrupt_mask() - set interrupt mask
+ *
+ * @wlan_cfg_dp_soc_ctxt: soc configuration context
+ * @interrupt_mode: interrupt_mode: MSI/LEGACY
+ *
+ * Return: void
+ */
+void wlan_cfg_fill_interrupt_mask(struct wlan_cfg_dp_soc_ctxt *wlan_cfg_ctx,
+				  int interrupt_mode);
 #endif

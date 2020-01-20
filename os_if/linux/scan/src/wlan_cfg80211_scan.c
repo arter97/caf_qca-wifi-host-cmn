@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017-2019 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2017-2020 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -22,6 +22,7 @@
 
 #include <qdf_list.h>
 #include <qdf_status.h>
+#include <qdf_module.h>
 #include <linux/wireless.h>
 #include <linux/netdevice.h>
 #include <net/cfg80211.h>
@@ -838,11 +839,13 @@ static void wlan_vendor_scan_callback(struct cfg80211_scan_request *req,
 	int i;
 	uint8_t scan_status;
 	uint64_t cookie;
+	int index = QCA_NL80211_VENDOR_SUBCMD_SCAN_DONE_INDEX;
 
-	skb = cfg80211_vendor_event_alloc(req->wdev->wiphy, req->wdev,
-			SCAN_DONE_EVENT_BUF_SIZE + 4 + NLMSG_HDRLEN,
-			QCA_NL80211_VENDOR_SUBCMD_SCAN_DONE_INDEX,
-			GFP_ATOMIC);
+	skb = wlan_cfg80211_vendor_event_alloc(req->wdev->wiphy, req->wdev,
+					       SCAN_DONE_EVENT_BUF_SIZE + 4 +
+					       NLMSG_HDRLEN,
+					       index,
+					       GFP_ATOMIC);
 
 	if (!skb) {
 		osif_err("skb alloc failed");
@@ -888,13 +891,13 @@ static void wlan_vendor_scan_callback(struct cfg80211_scan_request *req,
 	if (nla_put_u8(skb, QCA_WLAN_VENDOR_ATTR_SCAN_STATUS, scan_status))
 		goto nla_put_failure;
 
-	cfg80211_vendor_event(skb, GFP_ATOMIC);
+	wlan_cfg80211_vendor_event(skb, GFP_ATOMIC);
 	qdf_mem_free(req);
 
 	return;
 
 nla_put_failure:
-	kfree_skb(skb);
+	wlan_cfg80211_vendor_free_skb(skb);
 	qdf_mem_free(req);
 }
 
@@ -1404,6 +1407,24 @@ int wlan_cfg80211_scan(struct wlan_objmgr_vdev *vdev,
 	if (is_p2p_scan && request->no_cck)
 		req->scan_req.scan_type = SCAN_TYPE_P2P_SEARCH;
 
+	if (params->dwell_time_active)
+		req->scan_req.dwell_time_active = params->dwell_time_active;
+
+	if (params->dwell_time_active_2g)
+		req->scan_req.dwell_time_active_2g =
+			params->dwell_time_active_2g;
+
+	if (params->dwell_time_passive)
+		req->scan_req.dwell_time_passive = params->dwell_time_passive;
+
+	if (params->dwell_time_active_6g)
+		req->scan_req.dwell_time_active_6g =
+			params->dwell_time_active_6g;
+
+	if (params->dwell_time_passive_6g)
+		req->scan_req.dwell_time_passive_6g =
+			params->dwell_time_passive_6g;
+
 	/* Set dwell time mode according to scan policy type flags */
 	if (ucfg_scan_cfg_honour_nl_scan_policy_flags(psoc)) {
 		if (req->scan_req.scan_policy_high_accuracy)
@@ -1695,6 +1716,8 @@ QDF_STATUS wlan_abort_scan(struct wlan_objmgr_pdev *pdev,
 
 	return status;
 }
+
+qdf_export_symbol(wlan_abort_scan);
 
 int wlan_cfg80211_abort_scan(struct wlan_objmgr_pdev *pdev)
 {

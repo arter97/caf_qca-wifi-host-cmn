@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016-2019 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2016-2020 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -169,7 +169,7 @@ QDF_STATUS dp_tx_soc_detach(struct dp_soc *soc);
  * Return: QDF_STATUS_E_FAILURE on failure or
  * QDF_STATUS_SUCCESS on success
  */
-QDF_STATUS dp_tso_soc_attach(void *txrx_soc);
+QDF_STATUS dp_tso_soc_attach(struct cdp_soc_t *txrx_soc);
 
 /**
  * dp_tso_detach() - TSO Detach handler
@@ -180,15 +180,16 @@ QDF_STATUS dp_tso_soc_attach(void *txrx_soc);
  * Return: QDF_STATUS_E_FAILURE on failure or
  * QDF_STATUS_SUCCESS on success
  */
-QDF_STATUS dp_tso_soc_detach(void *txrx_soc);
+QDF_STATUS dp_tso_soc_detach(struct cdp_soc_t *txrx_soc);
 
 QDF_STATUS dp_tx_pdev_detach(struct dp_pdev *pdev);
 QDF_STATUS dp_tx_pdev_attach(struct dp_pdev *pdev);
 
-qdf_nbuf_t dp_tx_send(struct cdp_vdev *data_vdev, qdf_nbuf_t nbuf);
+qdf_nbuf_t dp_tx_send(struct cdp_soc_t *soc, uint8_t vdev_id, qdf_nbuf_t nbuf);
 qdf_nbuf_t dp_tx_send_exception(struct cdp_vdev *data_vdev, qdf_nbuf_t nbuf,
 				struct cdp_tx_exception_metadata *tx_exc);
-qdf_nbuf_t dp_tx_send_mesh(struct cdp_vdev *data_vdev, qdf_nbuf_t nbuf);
+qdf_nbuf_t dp_tx_send_mesh(struct cdp_soc_t *soc, uint8_t vdev_id,
+			   qdf_nbuf_t nbuf);
 qdf_nbuf_t
 dp_tx_send_msdu_single(struct dp_vdev *vdev, qdf_nbuf_t nbuf,
 		       struct dp_tx_msdu_info_s *msdu_info, uint16_t peer_id,
@@ -216,6 +217,7 @@ qdf_nbuf_t dp_tx_send_msdu_multiple(struct dp_vdev *vdev, qdf_nbuf_t nbuf,
 qdf_nbuf_t dp_tx_non_std(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
 			 enum ol_tx_spec tx_spec, qdf_nbuf_t msdu_list);
 #endif
+int dp_tx_frame_is_drop(struct dp_vdev *vdev, uint8_t *srcmac, uint8_t *dstmac);
 
 /**
  * dp_tx_comp_handler() - Tx completion handler
@@ -350,4 +352,11 @@ static inline void dp_tx_comp_process_exception(struct dp_tx_desc_s *tx_desc)
 	return;
 }
 /* TODO TX_FEATURE_NOT_YET */
+
+#ifndef WLAN_TX_PKT_CAPTURE_ENH
+static inline
+void dp_peer_set_tx_capture_enabled(struct cdp_peer *peer_handle, bool value)
+{
+}
+#endif
 #endif

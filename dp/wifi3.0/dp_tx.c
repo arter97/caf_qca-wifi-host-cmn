@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016-2019 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2016-2020 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -141,11 +141,13 @@ dp_tx_limit_check(struct dp_vdev *vdev)
 static inline void
 dp_tx_outstanding_inc(struct dp_pdev *pdev)
 {
+	qdf_atomic_inc(&pdev->num_tx_outstanding);
 }
 
 static inline void
 dp_tx_outstanding_dec(struct dp_pdev *pdev)
 {
+	qdf_atomic_dec(&pdev->num_tx_outstanding);
 }
 #endif //QCA_TX_LIMIT_CHECK
 
@@ -585,8 +587,10 @@ static QDF_STATUS dp_tx_prepare_tso(struct dp_vdev *vdev,
 			tso_info->tso_seg_list = tso_seg;
 			num_seg--;
 		} else {
-			DP_TRACE(ERROR, "%s: Failed to alloc tso seg desc",
-				 __func__);
+			dp_err_rl("Failed to alloc tso seg desc");
+			DP_STATS_INC_PKT(vdev->pdev,
+					 tso_stats.tso_no_mem_dropped, 1,
+					 qdf_nbuf_len(msdu));
 			dp_tx_free_remaining_tso_desc(soc, msdu_info, false);
 
 			return QDF_STATUS_E_NOMEM;
@@ -1504,6 +1508,39 @@ static inline void dp_non_std_tx_comp_free_buff(struct dp_tx_desc_s *tx_desc,
 #endif
 
 /**
+ * dp_tx_frame_is_drop() - checks if the packet is loopback
+ * @vdev: DP vdev handle
+ * @nbuf: skb
+ *
+ * Return: 1 if frame needs to be dropped else 0
+ */
+int dp_tx_frame_is_drop(struct dp_vdev *vdev, uint8_t *srcmac, uint8_t *dstmac)
+{
+	struct dp_pdev *pdev = NULL;
+	struct dp_ast_entry *src_ast_entry = NULL;
+	struct dp_ast_entry *dst_ast_entry = NULL;
+	struct dp_soc *soc = NULL;
+
+	qdf_assert(vdev);
+	pdev = vdev->pdev;
+	qdf_assert(pdev);
+	soc = pdev->soc;
+
+	dst_ast_entry = dp_peer_ast_hash_find_by_pdevid
+				(soc, dstmac, vdev->pdev->pdev_id);
+
+	src_ast_entry = dp_peer_ast_hash_find_by_pdevid
+				(soc, srcmac, vdev->pdev->pdev_id);
+	if (dst_ast_entry && src_ast_entry) {
+		if (dst_ast_entry->peer->peer_ids[0] ==
+				src_ast_entry->peer->peer_ids[0])
+			return 1;
+	}
+
+	return 0;
+}
+
+/**
  * dp_tx_send_msdu_single() - Setup descriptor and enqueue single MSDU to TCL
  * @vdev: DP vdev handle
  * @nbuf: skb
@@ -2121,7 +2158,8 @@ fail:
 
 /**
  * dp_tx_send_mesh() - Transmit mesh frame on a given VAP
- * @vap_dev: DP vdev handle
+ * @soc: DP soc handle
+ * @vdev_id: DP vdev handle
  * @nbuf: skb
  *
  * Entry point for Core Tx layer (DP_TX) invoked from
@@ -2131,12 +2169,13 @@ fail:
  *         nbuf when it fails to send
  */
 #ifdef MESH_MODE_SUPPORT
-qdf_nbuf_t dp_tx_send_mesh(struct cdp_vdev *vap_dev, qdf_nbuf_t nbuf)
+qdf_nbuf_t dp_tx_send_mesh(struct cdp_soc_t *soc, uint8_t vdev_id,
+			   qdf_nbuf_t nbuf)
 {
 	struct meta_hdr_s *mhdr;
 	qdf_nbuf_t nbuf_mesh = NULL;
 	qdf_nbuf_t nbuf_clone = NULL;
-	struct dp_vdev *vdev = (struct dp_vdev *) vap_dev;
+	struct dp_vdev *vdev;
 	uint8_t no_enc_frame = 0;
 
 	nbuf_mesh = qdf_nbuf_unshare(nbuf);
@@ -2145,6 +2184,15 @@ qdf_nbuf_t dp_tx_send_mesh(struct cdp_vdev *vap_dev, qdf_nbuf_t nbuf)
 				"qdf_nbuf_unshare failed");
 		return nbuf;
 	}
+
+	vdev = dp_get_vdev_from_soc_vdev_id_wifi3((struct dp_soc *)soc,
+						  vdev_id);
+	if (!vdev) {
+		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_ERROR,
+				"vdev is NULL for vdev_id %d", vdev_id);
+		return nbuf;
+	}
+
 	nbuf = nbuf_mesh;
 
 	mhdr = (struct meta_hdr_s *)qdf_nbuf_data(nbuf);
@@ -2168,7 +2216,7 @@ qdf_nbuf_t dp_tx_send_mesh(struct cdp_vdev *vap_dev, qdf_nbuf_t nbuf)
 	}
 
 	if (nbuf_clone) {
-		if (!dp_tx_send(vap_dev, nbuf_clone)) {
+		if (!dp_tx_send(soc, vdev_id, nbuf_clone)) {
 			DP_STATS_INC(vdev, tx_i.mesh.exception_fw, 1);
 		} else {
 			qdf_nbuf_free(nbuf_clone);
@@ -2180,7 +2228,7 @@ qdf_nbuf_t dp_tx_send_mesh(struct cdp_vdev *vap_dev, qdf_nbuf_t nbuf)
 	else
 		qdf_nbuf_set_tx_ftype(nbuf, CB_FTYPE_INVALID);
 
-	nbuf = dp_tx_send(vap_dev, nbuf);
+	nbuf = dp_tx_send(soc, vdev_id, nbuf);
 	if ((!nbuf) && no_enc_frame) {
 		DP_STATS_INC(vdev, tx_i.mesh.exception_fw, 1);
 	}
@@ -2190,16 +2238,18 @@ qdf_nbuf_t dp_tx_send_mesh(struct cdp_vdev *vap_dev, qdf_nbuf_t nbuf)
 
 #else
 
-qdf_nbuf_t dp_tx_send_mesh(struct cdp_vdev *vap_dev, qdf_nbuf_t nbuf)
+qdf_nbuf_t dp_tx_send_mesh(struct cdp_soc_t *soc, uint8_t vdev_id,
+			   qdf_nbuf_t nbuf)
 {
-	return dp_tx_send(vap_dev, nbuf);
+	return dp_tx_send(soc, vdev_id, nbuf);
 }
 
 #endif
 
 /**
  * dp_tx_send() - Transmit a frame on a given VAP
- * @vap_dev: DP vdev handle
+ * @soc: DP soc handle
+ * @vdev_id: id of DP vdev handle
  * @nbuf: skb
  *
  * Entry point for Core Tx layer (DP_TX) invoked from
@@ -2209,14 +2259,19 @@ qdf_nbuf_t dp_tx_send_mesh(struct cdp_vdev *vap_dev, qdf_nbuf_t nbuf)
  * Return: NULL on success,
  *         nbuf when it fails to send
  */
-qdf_nbuf_t dp_tx_send(struct cdp_vdev *vap_dev, qdf_nbuf_t nbuf)
+qdf_nbuf_t dp_tx_send(struct cdp_soc_t *soc, uint8_t vdev_id, qdf_nbuf_t nbuf)
 {
 	qdf_ether_header_t *eh = NULL;
 	struct dp_tx_msdu_info_s msdu_info;
 	struct dp_tx_seg_info_s seg_info;
-	struct dp_vdev *vdev = (struct dp_vdev *) vap_dev;
 	uint16_t peer_id = HTT_INVALID_PEER;
 	qdf_nbuf_t nbuf_mesh = NULL;
+	struct dp_vdev *vdev =
+		dp_get_vdev_from_soc_vdev_id_wifi3((struct dp_soc *)soc,
+						   vdev_id);
+
+	if (qdf_unlikely(!vdev))
+		return nbuf;
 
 	qdf_mem_zero(&msdu_info, sizeof(msdu_info));
 	qdf_mem_zero(&seg_info, sizeof(seg_info));
@@ -3159,8 +3214,7 @@ void dp_tx_comp_process_tx_status(struct dp_tx_desc_s *tx_desc,
 	qdf_nbuf_t nbuf = tx_desc->nbuf;
 
 	if (!vdev || !nbuf) {
-		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_INFO,
-				"invalid tx descriptor. vdev or nbuf NULL");
+		dp_info_rl("invalid tx descriptor. vdev or nbuf NULL");
 		goto out;
 	}
 
@@ -3460,9 +3514,7 @@ more_data:
 		head_desc = NULL;
 		tail_desc = NULL;
 	if (qdf_unlikely(dp_srng_access_start(int_ctx, soc, hal_ring_hdl))) {
-		QDF_TRACE(QDF_MODULE_ID_TXRX, QDF_TRACE_LEVEL_ERROR,
-				"%s %d : HAL RING Access Failed -- %pK",
-				__func__, __LINE__, hal_ring_hdl);
+		dp_err("HAL RING Access Failed -- %pK", hal_ring_hdl);
 		return 0;
 	}
 
@@ -3478,10 +3530,9 @@ more_data:
 				(buffer_src != HAL_TX_COMP_RELEASE_SOURCE_FW)) {
 			uint8_t wbm_internal_error;
 
-			QDF_TRACE(QDF_MODULE_ID_DP,
-				  QDF_TRACE_LEVEL_FATAL,
-				  "Tx comp release_src != TQM | FW but from %d",
-				  buffer_src);
+			dp_err_rl(
+				"Tx comp release_src != TQM | FW but from %d",
+				buffer_src);
 			hal_dump_comp_desc(tx_comp_hal_desc);
 			DP_STATS_INC(soc, tx.invalid_release_source, 1);
 
@@ -3493,14 +3544,12 @@ more_data:
 			 * completion ring. These errors are not related to
 			 * Tx completions, and should just be ignored
 			 */
-
-			wbm_internal_error =
-			hal_get_wbm_internal_error(tx_comp_hal_desc);
+			wbm_internal_error = hal_get_wbm_internal_error(
+							soc->hal_soc,
+							tx_comp_hal_desc);
 
 			if (wbm_internal_error) {
-				QDF_TRACE(QDF_MODULE_ID_DP,
-					  QDF_TRACE_LEVEL_ERROR,
-					  "Tx comp wbm_internal_error!!!\n");
+				dp_err_rl("Tx comp wbm_internal_error!!");
 				DP_STATS_INC(soc, tx.wbm_internal_error[WBM_INT_ERROR_ALL], 1);
 
 				if (HAL_TX_COMP_RELEASE_SOURCE_REO ==
@@ -3511,10 +3560,11 @@ more_data:
 						hal_tx_comp_get_buffer_type(
 							tx_comp_hal_desc));
 
-				continue;
 			} else {
-				qdf_assert_always(0);
+				dp_err_rl("Tx comp wbm_internal_error false");
+				DP_STATS_INC(soc, tx.non_wbm_internal_err, 1);
 			}
+			continue;
 		}
 
 		/* Get descriptor id */
@@ -3659,7 +3709,7 @@ qdf_nbuf_t dp_tx_non_std(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
 	if (tx_spec & OL_TX_SPEC_NO_FREE)
 		vdev->is_tdls_frame = true;
 
-	return dp_tx_send(dp_vdev_to_cdp_vdev(vdev), msdu_list);
+	return dp_tx_send(soc_hdl, vdev_id, msdu_list);
 }
 #endif
 
@@ -3760,26 +3810,6 @@ dp_is_tx_desc_flush_match(struct dp_pdev *pdev,
 
 #ifdef QCA_LL_TX_FLOW_CONTROL_V2
 /**
- * dp_tx_desc_reset_vdev() - reset vdev to NULL in TX Desc
- *
- * @soc: Handle to DP SoC structure
- * @tx_desc: pointer of one TX desc
- * @desc_pool_id: TX Desc pool id
- */
-static inline void
-dp_tx_desc_reset_vdev(struct dp_soc *soc, struct dp_tx_desc_s *tx_desc,
-		      uint8_t desc_pool_id)
-{
-	struct dp_tx_desc_pool_s *pool = &soc->tx_desc[desc_pool_id];
-
-	qdf_spin_lock_bh(&pool->flow_pool_lock);
-
-	tx_desc->vdev = NULL;
-
-	qdf_spin_unlock_bh(&pool->flow_pool_lock);
-}
-
-/**
  * dp_tx_desc_flush() - release resources associated
  *                      to TX Desc
  *
@@ -3822,6 +3852,17 @@ static void dp_tx_desc_flush(struct dp_pdev *pdev,
 		    !(tx_desc_pool->desc_pages.cacheable_pages))
 			continue;
 
+		/*
+		 * Add flow pool lock protection in case pool is freed
+		 * due to all tx_desc is recycled when handle TX completion.
+		 * this is not necessary when do force flush as:
+		 * a. double lock will happen if dp_tx_desc_release is
+		 *    also trying to acquire it.
+		 * b. dp interrupt has been disabled before do force TX desc
+		 *    flush in dp_pdev_deinit().
+		 */
+		if (!force_free)
+			qdf_spin_lock_bh(&tx_desc_pool->flow_pool_lock);
 		num_desc = tx_desc_pool->pool_size;
 		num_desc_per_page =
 			tx_desc_pool->desc_pages.num_element_per_page;
@@ -3845,15 +3886,22 @@ static void dp_tx_desc_flush(struct dp_pdev *pdev,
 					dp_tx_comp_free_buf(soc, tx_desc);
 					dp_tx_desc_release(tx_desc, i);
 				} else {
-					dp_tx_desc_reset_vdev(soc, tx_desc,
-							      i);
+					tx_desc->vdev = NULL;
 				}
 			}
 		}
+		if (!force_free)
+			qdf_spin_unlock_bh(&tx_desc_pool->flow_pool_lock);
 	}
 }
 #else /* QCA_LL_TX_FLOW_CONTROL_V2! */
-
+/**
+ * dp_tx_desc_reset_vdev() - reset vdev to NULL in TX Desc
+ *
+ * @soc: Handle to DP soc structure
+ * @tx_desc: pointer of one TX desc
+ * @desc_pool_id: TX Desc pool id
+ */
 static inline void
 dp_tx_desc_reset_vdev(struct dp_soc *soc, struct dp_tx_desc_s *tx_desc,
 		      uint8_t desc_pool_id)
@@ -4067,7 +4115,7 @@ QDF_STATUS dp_tso_detach_wifi3(void *txrx_soc)
 }
 #endif
 
-QDF_STATUS dp_tso_soc_detach(void *txrx_soc)
+QDF_STATUS dp_tso_soc_detach(struct cdp_soc_t *txrx_soc)
 {
 	struct dp_soc *soc = (struct dp_soc *)txrx_soc;
 	uint8_t i;
@@ -4101,7 +4149,7 @@ QDF_STATUS dp_tso_soc_detach(void *txrx_soc)
  * Return: QDF_STATUS_E_FAILURE on failure or
  * QDF_STATUS_SUCCESS on success
  */
-QDF_STATUS dp_tso_soc_attach(void *txrx_soc)
+QDF_STATUS dp_tso_soc_attach(struct cdp_soc_t *txrx_soc)
 {
 	struct dp_soc *soc = (struct dp_soc *)txrx_soc;
 	uint8_t i;

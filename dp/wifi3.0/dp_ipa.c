@@ -42,6 +42,54 @@
  * this issue.
  */
 #define DP_IPA_WAR_WBM2SW_REL_RING_NO_BUF_ENTRIES 16
+/**
+ *struct dp_ipa_reo_remap_record - history for dp ipa reo remaps
+ * @ix0_reg: reo destination ring IX0 value
+ * @ix2_reg: reo destination ring IX2 value
+ * @ix3_reg: reo destination ring IX3 value
+ */
+struct dp_ipa_reo_remap_record {
+	uint64_t timestamp;
+	uint32_t ix0_reg;
+	uint32_t ix2_reg;
+	uint32_t ix3_reg;
+};
+
+#define REO_REMAP_HISTORY_SIZE 32
+
+struct dp_ipa_reo_remap_record dp_ipa_reo_remap_history[REO_REMAP_HISTORY_SIZE];
+
+static qdf_atomic_t dp_ipa_reo_remap_history_index;
+static int dp_ipa_reo_remap_record_index_next(qdf_atomic_t *index)
+{
+	int next = qdf_atomic_inc_return(index);
+
+	if (next == REO_REMAP_HISTORY_SIZE)
+		qdf_atomic_sub(REO_REMAP_HISTORY_SIZE, index);
+
+	return next % REO_REMAP_HISTORY_SIZE;
+}
+
+/**
+ * dp_ipa_reo_remap_history_add() - Record dp ipa reo remap values
+ * @ix0_val: reo destination ring IX0 value
+ * @ix2_val: reo destination ring IX2 value
+ * @ix3_val: reo destination ring IX3 value
+ *
+ * Return: None
+ */
+static void dp_ipa_reo_remap_history_add(uint32_t ix0_val, uint32_t ix2_val,
+					 uint32_t ix3_val)
+{
+	int idx = dp_ipa_reo_remap_record_index_next(
+				&dp_ipa_reo_remap_history_index);
+	struct dp_ipa_reo_remap_record *record = &dp_ipa_reo_remap_history[idx];
+
+	record->timestamp = qdf_get_log_timestamp();
+	record->ix0_reg = ix0_val;
+	record->ix2_reg = ix2_val;
+	record->ix3_reg = ix3_val;
+}
 
 static QDF_STATUS __dp_ipa_handle_buf_smmu_mapping(struct dp_soc *soc,
 						   qdf_nbuf_t nbuf,
@@ -722,22 +770,22 @@ QDF_STATUS dp_ipa_get_stat(struct cdp_soc_t *soc_hdl, uint8_t pdev_id)
 	return QDF_STATUS_SUCCESS;
 }
 
+/**
+ * dp_tx_send_ipa_data_frame() - send IPA data frame
+ * @soc_hdl: datapath soc handle
+ * @vdev_id: id of the virtual device
+ * @skb: skb to transmit
+ *
+ * Return: skb/ NULL is for success
+ */
 qdf_nbuf_t dp_tx_send_ipa_data_frame(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
 				     qdf_nbuf_t skb)
 {
-	struct dp_soc *soc = cdp_soc_t_to_dp_soc(soc_hdl);
-	struct dp_vdev *vdev =
-		dp_get_vdev_from_soc_vdev_id_wifi3(soc, vdev_id);
 	qdf_nbuf_t ret;
-
-	if (!vdev) {
-		dp_err("%s invalid instance", __func__);
-		return skb;
-	}
 
 	/* Terminate the (single-element) list of tx frames */
 	qdf_nbuf_set_next(skb, NULL);
-	ret = dp_tx_send(dp_vdev_to_cdp_vdev(vdev), skb);
+	ret = dp_tx_send(soc_hdl, vdev_id, skb);
 	if (ret) {
 		QDF_TRACE(QDF_MODULE_ID_TXRX, QDF_TRACE_LEVEL_ERROR,
 			  "%s: Failed to tx", __func__);
@@ -788,9 +836,11 @@ QDF_STATUS dp_ipa_enable_autonomy(struct cdp_soc_t *soc_hdl, uint8_t pdev_id)
 
 		hal_reo_read_write_ctrl_ix(soc->hal_soc, false, &ix0, NULL,
 					   &ix2, &ix2);
+		dp_ipa_reo_remap_history_add(ix0, ix2, ix2);
 	} else {
 		hal_reo_read_write_ctrl_ix(soc->hal_soc, false, &ix0, NULL,
 					   NULL, NULL);
+		dp_ipa_reo_remap_history_add(ix0, 0, 0);
 	}
 
 	return QDF_STATUS_SUCCESS;
@@ -831,9 +881,11 @@ QDF_STATUS dp_ipa_disable_autonomy(struct cdp_soc_t *soc_hdl, uint8_t pdev_id)
 
 		hal_reo_read_write_ctrl_ix(soc->hal_soc, false, &ix0, NULL,
 					   &ix2, &ix3);
+		dp_ipa_reo_remap_history_add(ix0, ix2, ix3);
 	} else {
 		hal_reo_read_write_ctrl_ix(soc->hal_soc, false, &ix0, NULL,
 					   NULL, NULL);
+		dp_ipa_reo_remap_history_add(ix0, 0, 0);
 	}
 
 	return QDF_STATUS_SUCCESS;
@@ -1647,7 +1699,7 @@ static qdf_nbuf_t dp_ipa_intrabss_send(struct dp_pdev *pdev,
 	qdf_mem_zero(nbuf->cb, sizeof(nbuf->cb));
 	len = qdf_nbuf_len(nbuf);
 
-	if (dp_tx_send(dp_vdev_to_cdp_vdev(vdev), nbuf)) {
+	if (dp_tx_send((struct cdp_soc_t *)pdev->soc, vdev->vdev_id, nbuf)) {
 		DP_STATS_INC_PKT(vdev_peer, rx.intra_bss.fail, 1, len);
 		return nbuf;
 	}
@@ -1668,7 +1720,6 @@ bool dp_ipa_rx_intrabss_fwd(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
 	qdf_nbuf_t nbuf_copy;
 	uint8_t da_is_bcmc;
 	struct ethhdr *eh;
-	uint8_t local_id;
 
 	*fwd_success = false; /* set default as failure */
 
@@ -1709,16 +1760,14 @@ bool dp_ipa_rx_intrabss_fwd(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
 	if (!qdf_mem_cmp(eh->h_dest, vdev->mac_addr.raw, QDF_MAC_ADDR_SIZE))
 		return false;
 
-	da_peer = dp_find_peer_by_addr((struct cdp_pdev *)pdev, eh->h_dest,
-				       &local_id);
+	da_peer = dp_find_peer_by_addr((struct cdp_pdev *)pdev, eh->h_dest);
 	if (!da_peer)
 		return false;
 
 	if (da_peer->vdev != vdev)
 		return false;
 
-	sa_peer = dp_find_peer_by_addr((struct cdp_pdev *)pdev, eh->h_source,
-				       &local_id);
+	sa_peer = dp_find_peer_by_addr((struct cdp_pdev *)pdev, eh->h_source);
 	if (!sa_peer)
 		return false;
 
@@ -1753,6 +1802,69 @@ bool dp_ipa_is_mdm_platform(void)
 #endif
 
 /**
+ * dp_ipa_frag_nbuf_linearize - linearize nbuf for IPA
+ * @soc: soc
+ * @nbuf: source skb
+ *
+ * Return: new nbuf if success and otherwise NULL
+ */
+static qdf_nbuf_t dp_ipa_frag_nbuf_linearize(struct dp_soc *soc,
+					     qdf_nbuf_t nbuf)
+{
+	uint8_t *src_nbuf_data;
+	uint8_t *dst_nbuf_data;
+	qdf_nbuf_t dst_nbuf;
+	qdf_nbuf_t temp_nbuf = nbuf;
+	uint32_t nbuf_len = qdf_nbuf_len(nbuf);
+	bool is_nbuf_head = true;
+	uint32_t copy_len = 0;
+
+	dst_nbuf = qdf_nbuf_alloc(soc->osdev, RX_BUFFER_SIZE,
+				  RX_BUFFER_RESERVATION, RX_BUFFER_ALIGNMENT,
+				  FALSE);
+
+	if (!dst_nbuf) {
+		dp_err_rl("nbuf allocate fail");
+		return NULL;
+	}
+
+	if ((nbuf_len + L3_HEADER_PADDING) > RX_BUFFER_SIZE) {
+		qdf_nbuf_free(dst_nbuf);
+		dp_err_rl("nbuf is jumbo data");
+		return NULL;
+	}
+
+	/* prepeare to copy all data into new skb */
+	dst_nbuf_data = qdf_nbuf_data(dst_nbuf);
+	while (temp_nbuf) {
+		src_nbuf_data = qdf_nbuf_data(temp_nbuf);
+		/* first head nbuf */
+		if (is_nbuf_head) {
+			qdf_mem_copy(dst_nbuf_data, src_nbuf_data,
+				     RX_PKT_TLVS_LEN);
+			/* leave extra 2 bytes L3_HEADER_PADDING */
+			dst_nbuf_data += (RX_PKT_TLVS_LEN + L3_HEADER_PADDING);
+			src_nbuf_data += RX_PKT_TLVS_LEN;
+			copy_len = qdf_nbuf_headlen(temp_nbuf) -
+						RX_PKT_TLVS_LEN;
+			temp_nbuf = qdf_nbuf_get_ext_list(temp_nbuf);
+			is_nbuf_head = false;
+		} else {
+			copy_len = qdf_nbuf_len(temp_nbuf);
+			temp_nbuf = qdf_nbuf_queue_next(temp_nbuf);
+		}
+		qdf_mem_copy(dst_nbuf_data, src_nbuf_data, copy_len);
+		dst_nbuf_data += copy_len;
+	}
+
+	qdf_nbuf_set_len(dst_nbuf, nbuf_len);
+	/* copy is done, free original nbuf */
+	qdf_nbuf_free(nbuf);
+
+	return dst_nbuf;
+}
+
+/**
  * dp_ipa_handle_rx_reo_reinject - Handle RX REO reinject skb buffer
  * @soc: soc
  * @nbuf: skb
@@ -1761,7 +1873,6 @@ bool dp_ipa_is_mdm_platform(void)
  */
 qdf_nbuf_t dp_ipa_handle_rx_reo_reinject(struct dp_soc *soc, qdf_nbuf_t nbuf)
 {
-	uint8_t *rx_pkt_tlvs;
 
 	if (!wlan_cfg_is_ipa_enabled(soc->wlan_cfg_ctx))
 		return nbuf;
@@ -1770,33 +1881,11 @@ qdf_nbuf_t dp_ipa_handle_rx_reo_reinject(struct dp_soc *soc, qdf_nbuf_t nbuf)
 	if (!qdf_atomic_read(&soc->ipa_pipes_enabled))
 		return nbuf;
 
-	/* Linearize the skb since IPA assumes linear buffer */
-	if (qdf_likely(qdf_nbuf_is_frag(nbuf))) {
-		if (qdf_nbuf_linearize(nbuf)) {
-			dp_err_rl("nbuf linearize failed");
-			return NULL;
-		}
-	}
+	if (!qdf_nbuf_is_frag(nbuf))
+		return nbuf;
 
-	rx_pkt_tlvs = qdf_mem_malloc(RX_PKT_TLVS_LEN);
-	if (!rx_pkt_tlvs) {
-		dp_err_rl("rx_pkt_tlvs alloc failed");
-		return NULL;
-	}
-
-	qdf_mem_copy(rx_pkt_tlvs, qdf_nbuf_data(nbuf), RX_PKT_TLVS_LEN);
-
-	/* Pad L3_HEADER_PADDING before ethhdr and after rx_pkt_tlvs */
-	qdf_nbuf_push_head(nbuf, L3_HEADER_PADDING);
-
-	qdf_mem_copy(qdf_nbuf_data(nbuf), rx_pkt_tlvs, RX_PKT_TLVS_LEN);
-
-	/* L3_HEADDING_PADDING is not accounted for real skb length */
-	qdf_nbuf_set_len(nbuf, qdf_nbuf_len(nbuf) - L3_HEADER_PADDING);
-
-	qdf_mem_free(rx_pkt_tlvs);
-
-	return nbuf;
+	/* linearize skb for IPA */
+	return dp_ipa_frag_nbuf_linearize(soc, nbuf);
 }
 
 #endif

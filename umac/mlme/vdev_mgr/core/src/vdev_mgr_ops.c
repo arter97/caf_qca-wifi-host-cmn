@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2019-2020 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -343,6 +343,8 @@ QDF_STATUS vdev_mgr_up_send(struct vdev_mlme_obj *mlme_obj)
 	struct beacon_tmpl_params bcn_tmpl_param = {0};
 	enum QDF_OPMODE opmode;
 	struct wlan_objmgr_vdev *vdev;
+	struct config_fils_params fils_param = {0};
+	uint8_t is_6g_sap_fd_enabled;
 
 	if (!mlme_obj) {
 		mlme_err("VDEV_MLME is NULL");
@@ -370,6 +372,21 @@ QDF_STATUS vdev_mgr_up_send(struct vdev_mlme_obj *mlme_obj)
 		return status;
 
 	status = tgt_vdev_mgr_up_send(mlme_obj, &param);
+	if (QDF_IS_STATUS_ERROR(status))
+		return status;
+
+	is_6g_sap_fd_enabled = wlan_vdev_mlme_feat_ext_cap_get(vdev,
+					WLAN_VDEV_FEXT_FILS_DISC_6G_SAP);
+	mlme_debug("SAP FD enabled %d", is_6g_sap_fd_enabled);
+	if (opmode == QDF_SAP_MODE && mlme_obj->vdev->vdev_mlme.des_chan &&
+	    is_6g_sap_fd_enabled &&
+	    WLAN_REG_IS_6GHZ_CHAN_FREQ(
+			mlme_obj->vdev->vdev_mlme.des_chan->ch_freq)) {
+		fils_param.vdev_id = wlan_vdev_get_id(mlme_obj->vdev);
+		fils_param.fd_period = DEFAULT_FILS_DISCOVERY_PERIOD;
+		status = tgt_vdev_mgr_fils_enable_send(mlme_obj,
+						       &fils_param);
+	}
 
 	return status;
 }

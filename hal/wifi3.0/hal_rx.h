@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016-2019 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2016-2020 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -1147,6 +1147,7 @@ enum hal_rx_mpdu_info_sw_frame_group_id_type {
 	HAL_MPDU_SW_FRAME_GROUP_UNICAST_DATA,
 	HAL_MPDU_SW_FRAME_GROUP_NULL_DATA,
 	HAL_MPDU_SW_FRAME_GROUP_MGMT,
+	HAL_MPDU_SW_FRAME_GROUP_MGMT_BEACON = 12,
 	HAL_MPDU_SW_FRAME_GROUP_CTRL = 20,
 	HAL_MPDU_SW_FRAME_GROUP_UNSUPPORTED = 36,
 	HAL_MPDU_SW_FRAME_GROUP_MAX = 37,
@@ -1701,6 +1702,7 @@ struct hal_rx_msdu_list {
 struct hal_buf_info {
 	uint64_t paddr;
 	uint32_t sw_cookie;
+	uint8_t rbm;
 };
 
 /**
@@ -2095,7 +2097,7 @@ static inline void hal_dump_wbm_rel_desc(void *src_srng_desc)
 static inline
 void hal_rx_msdu_link_desc_set(hal_soc_handle_t hal_soc_hdl,
 			       void *src_srng_desc,
-			       hal_link_desc_t buf_addr_info,
+			       hal_buff_addrinfo_t buf_addr_info,
 			       uint8_t bm_action)
 {
 	struct wbm_release_ring *wbm_rel_srng =
@@ -3098,7 +3100,6 @@ HAL_RX_DESC_GET_80211_HDR(void *hw_desc_addr) {
 }
 #endif
 
-#ifdef NO_RX_PKT_HDR_TLV
 static inline
 bool HAL_IS_DECAP_FORMAT_RAW(hal_soc_handle_t hal_soc_hdl,
 			     uint8_t *rx_tlv_hdr)
@@ -3113,14 +3114,6 @@ bool HAL_IS_DECAP_FORMAT_RAW(hal_soc_handle_t hal_soc_hdl,
 
 	return false;
 }
-#else
-static inline
-bool HAL_IS_DECAP_FORMAT_RAW(hal_soc_handle_t hal_soc_hdl,
-			     uint8_t *rx_tlv_hdr)
-{
-	return true;
-}
-#endif
 
 /**
  * hal_rx_msdu_fse_metadata_get: API to get FSE metadata
@@ -3374,5 +3367,27 @@ uint16_t hal_rx_get_rx_sequence(hal_soc_handle_t hal_soc_hdl,
 	struct hal_soc *hal_soc = (struct hal_soc *)hal_soc_hdl;
 
 	return hal_soc->ops->hal_rx_get_rx_sequence(buf);
+}
+
+static inline void
+hal_rx_get_bb_info(hal_soc_handle_t hal_soc_hdl,
+		   void *rx_tlv,
+		   void *ppdu_info)
+{
+	struct hal_soc *hal_soc = (struct hal_soc *)hal_soc_hdl;
+
+	if (hal_soc->ops->hal_rx_get_bb_info)
+		hal_soc->ops->hal_rx_get_bb_info(rx_tlv, ppdu_info);
+}
+
+static inline void
+hal_rx_get_rtt_info(hal_soc_handle_t hal_soc_hdl,
+		    void *rx_tlv,
+		    void *ppdu_info)
+{
+	struct hal_soc *hal_soc = (struct hal_soc *)hal_soc_hdl;
+
+	if (hal_soc->ops->hal_rx_get_rtt_info)
+		hal_soc->ops->hal_rx_get_rtt_info(rx_tlv, ppdu_info);
 }
 #endif /* _HAL_RX_H */

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016-2019 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2016-2020 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -200,12 +200,12 @@ enum dp_fl_ctrl_threshold {
 
 /**
  * enum dp_intr_mode
- * @DP_INTR_LEGACY: Legacy/Line interrupts, for WIN
- * @DP_INTR_MSI: MSI interrupts, for MCL
+ * @DP_INTR_INTEGRATED: Line interrupts
+ * @DP_INTR_MSI: MSI interrupts
  * @DP_INTR_POLL: Polling
  */
 enum dp_intr_mode {
-	DP_INTR_LEGACY = 0,
+	DP_INTR_INTEGRATED = 0,
 	DP_INTR_MSI,
 	DP_INTR_POLL,
 };
@@ -704,6 +704,8 @@ struct dp_soc_stats {
 		uint32_t invalid_release_source;
 		/* tx completion wbm_internal_error */
 		uint32_t wbm_internal_error[MAX_WBM_INT_ERROR_REASONS];
+		/* tx completion non_wbm_internal_error */
+		uint32_t non_wbm_internal_err;
 		/* TX Comp loop packet limit hit */
 		uint32_t tx_comp_loop_pkt_limit_hit;
 		/* Head pointer Out of sync at the end of dp_tx_comp_handler */
@@ -723,6 +725,8 @@ struct dp_soc_stats {
 		uint32_t rx_frag_err;
 		/* Fragments dropped due to len errors in skb */
 		uint32_t rx_frag_err_len_error;
+		/* Fragments dropped due to no peer found */
+		uint32_t rx_frag_err_no_peer;
 		/* No of reinjected packets */
 		uint32_t reo_reinject;
 		/* Reap loop packet limit hit */
@@ -1111,8 +1115,11 @@ struct dp_soc {
 	/*interrupt timer*/
 	qdf_timer_t mon_reap_timer;
 	uint8_t reap_timer_init;
+	qdf_timer_t lmac_reap_timer;
+	uint8_t lmac_timer_init;
 	qdf_timer_t int_timer;
 	uint8_t intr_mode;
+	uint8_t lmac_polled_mode;
 
 	qdf_list_t reo_desc_freelist;
 	qdf_spinlock_t reo_desc_freelist_lock;
@@ -1157,6 +1164,17 @@ struct dp_soc {
 	} ipa_uc_rx_rsc;
 
 	qdf_atomic_t ipa_pipes_enabled;
+#endif
+
+#ifdef WLAN_FEATURE_STATS_EXT
+	struct {
+		uint32_t rx_mpdu_received;
+		uint32_t rx_mpdu_missed;
+	} ext_stats;
+	qdf_event_t rx_hw_stats_event;
+
+	/* Ignore reo command queue status during peer delete */
+	bool ignore_reo_status_cb;
 #endif
 
 	/* Smart monitor capability for HKv2 */
@@ -1379,8 +1397,6 @@ struct dp_pdev {
 	/**
 	 * Re-use Memory Section Starts
 	 */
-	/* PDEV handle from OSIF layer TBD: see if we really need osif_pdev */
-	struct cdp_ctrl_objmgr_pdev *ctrl_pdev;
 
 	/* PDEV Id */
 	int pdev_id;
@@ -1477,6 +1493,9 @@ struct dp_pdev {
 
 	/* Monitor mode operation channel */
 	int mon_chan_num;
+
+	/* Monitor mode operation frequency */
+	qdf_freq_t mon_chan_freq;
 
 	/* monitor mode lock */
 	qdf_spinlock_t mon_lock;
@@ -1615,6 +1634,7 @@ struct dp_pdev {
 	bool tx_sniffer_enable;
 	/* mirror copy mode */
 	bool mcopy_mode;
+	bool cfr_rcc_mode;
 	bool bpr_enable;
 
 	/* enable time latency check for tx completion */
@@ -1758,8 +1778,6 @@ struct dp_vdev {
 	/* Handle to the OS shim SW's virtual device */
 	ol_osif_vdev_handle osif_vdev;
 
-	/* Handle to the UMAC handle */
-	struct cdp_ctrl_objmgr_vdev *ctrl_vdev;
 	/* vdev_id - ID used to specify a particular vdev to the target */
 	uint8_t vdev_id;
 
@@ -1976,8 +1994,6 @@ struct dp_peer_cached_bufq {
 struct dp_peer {
 	/* VDEV to which this peer is associated */
 	struct dp_vdev *vdev;
-
-	struct cdp_ctrl_objmgr_peer *ctrl_peer;
 
 	struct dp_ast_entry *self_ast_entry;
 

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016-2019 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2016-2020 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -638,7 +638,8 @@ static inline void cdp_deregister_packetdump_cb(ol_txrx_soc_handle soc,
 		return soc->ops->misc_ops->unregister_pktdump_cb(soc, pdev_id);
 }
 
-typedef void (*rx_mic_error_callback)(void *scn_handle,
+typedef void (*rx_mic_error_callback)(struct cdp_ctrl_objmgr_psoc *psoc,
+				uint8_t pdev_id,
 				struct cdp_rx_mic_err_info *info);
 
 /**
@@ -714,4 +715,103 @@ static inline void cdp_vdev_set_driver_del_ack_enable(ol_txrx_soc_handle soc,
 		return soc->ops->misc_ops->vdev_set_driver_del_ack_enable(
 			soc, vdev_id, rx_packets, time_in_ms, high_th, low_th);
 }
+
+static inline void cdp_vdev_set_bundle_require_flag(ol_txrx_soc_handle soc,
+						    uint8_t vdev_id,
+						    unsigned long tx_bytes,
+						    uint32_t time_in_ms,
+						    uint32_t high_th,
+						    uint32_t low_th)
+{
+	if (!soc || !soc->ops || !soc->ops->misc_ops) {
+		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_FATAL,
+			  "%s invalid instance", __func__);
+		return;
+	}
+
+	if (soc->ops->misc_ops->vdev_set_bundle_require_flag)
+		return soc->ops->misc_ops->vdev_set_bundle_require_flag(
+			vdev_id, tx_bytes, time_in_ms, high_th, low_th);
+}
+
+static inline void cdp_pdev_reset_bundle_require_flag(ol_txrx_soc_handle soc,
+						      uint8_t pdev_id)
+{
+	if (!soc || !soc->ops || !soc->ops->misc_ops) {
+		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_FATAL,
+			  "%s invalid instance", __func__);
+		return;
+	}
+
+	if (soc->ops->misc_ops->pdev_reset_bundle_require_flag)
+		return soc->ops->misc_ops->pdev_reset_bundle_require_flag(
+								soc, pdev_id);
+}
+
+/**
+ * cdp_txrx_ext_stats_request(): request dp tx and rx extended stats
+ * @soc: soc handle
+ * @pdev_id: pdev id
+ * @req: stats request structure to fill
+ *
+ * return: status
+ */
+static inline QDF_STATUS
+cdp_txrx_ext_stats_request(ol_txrx_soc_handle soc, uint8_t pdev_id,
+			   struct cdp_txrx_ext_stats *req)
+{
+	if (!soc || !soc->ops || !soc->ops->misc_ops || !req) {
+		QDF_TRACE(QDF_MODULE_ID_CDP, QDF_TRACE_LEVEL_DEBUG,
+			  "%s: Invalid Instance:", __func__);
+		return QDF_STATUS_E_INVAL;
+	}
+
+	if (soc->ops->misc_ops->txrx_ext_stats_request)
+		return soc->ops->misc_ops->txrx_ext_stats_request(soc, pdev_id,
+								  req);
+
+	return QDF_STATUS_SUCCESS;
+}
+
+/**
+ * cdp_request_rx_hw_stats(): request rx hw stats
+ * @soc: soc handle
+ * @vdev_id: vdev id
+ *
+ * return: none
+ */
+static inline void
+cdp_request_rx_hw_stats(ol_txrx_soc_handle soc, uint8_t vdev_id)
+{
+	if (!soc || !soc->ops || !soc->ops->misc_ops) {
+		QDF_TRACE(QDF_MODULE_ID_CDP, QDF_TRACE_LEVEL_DEBUG,
+			  "%s: Invalid Instance:", __func__);
+		return;
+	}
+
+	if (soc->ops->misc_ops->request_rx_hw_stats)
+		soc->ops->misc_ops->request_rx_hw_stats(soc, vdev_id);
+}
+
+/**
+ * cdp_wait_for_ext_rx_stats(): wait for reo command status for stats
+ * @soc: soc handle
+ *
+ * return: status
+ */
+static inline QDF_STATUS
+cdp_wait_for_ext_rx_stats(ol_txrx_soc_handle soc)
+{
+	if (!soc || !soc->ops || !soc->ops->misc_ops) {
+		QDF_TRACE(QDF_MODULE_ID_CDP, QDF_TRACE_LEVEL_DEBUG,
+			  "%s: Invalid Instance:", __func__);
+		return QDF_STATUS_E_INVAL;
+	}
+
+	if (soc->ops->misc_ops->wait_for_ext_rx_stats)
+		return soc->ops->misc_ops->wait_for_ext_rx_stats(soc);
+
+	return QDF_STATUS_SUCCESS;
+}
+
 #endif /* _CDP_TXRX_MISC_H_ */

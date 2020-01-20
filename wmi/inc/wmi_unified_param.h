@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016-2019 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2016-2020 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -710,30 +710,6 @@ struct vdev_nss_chains {
 	bool disable_tx_mrc[NSS_CHAINS_BAND_MAX];
 };
 
-#ifdef WLAN_CFR_ENABLE
-
-#define WMI_HOST_PEER_CFR_TIMER_ENABLE   1
-#define WMI_HOST_PEER_CFR_TIMER_DISABLE  0
-
-/**
- * struct peer_cfr_params - peer cfr capture cmd parameter
- * @request: enable/disable cfr capture
- * @macaddr: macaddr of the client
- * @vdev_id: vdev id
- * @periodicity: cfr capture period
- * @bandwidth: bandwidth of cfr capture
- * @capture_method: cfr capture method/type
- */
-struct peer_cfr_params {
-	uint32_t request;
-	uint8_t  *macaddr;
-	uint32_t vdev_id;
-	uint32_t periodicity;
-	uint32_t bandwidth;
-	uint32_t capture_method;
-};
-
-#endif /* WLAN_CFR_ENABLE */
 
 /**
  * struct peer_delete_params - peer delete cmd parameter
@@ -905,13 +881,13 @@ struct pdev_params {
 /**
  * struct fd_params - FD cmd parameter
  * @vdev_id: vdev id
- * @wbuf: FD buffer
  * @frame_ctrl: frame control field
+ * @wbuf: FD buffer
  */
 struct fd_params {
 	uint8_t vdev_id;
-	qdf_nbuf_t wbuf;
 	uint16_t frame_ctrl;
+	qdf_nbuf_t wbuf;
 };
 
 /**
@@ -1028,6 +1004,7 @@ typedef struct {
  * @peer_he_ops: Peer HE operation info
  * @peer_he_cap_phyinfo: Peer HE Cap PHY info
  * @peer_he_cap_info_internal: Peer HE internal PHY capability info
+ * @peer_he_caps_6ghz: Peer HE 6GHz Band Capabilities info
  * @peer_he_mcs_count: Peer HE MCS TX/RX MAP count
  * @peer_he_rx_mcs_set: Peer HE RX MCS MAP
  * @peer_he_tx_mcs_set: Peer HE TX MCS MAP
@@ -1088,6 +1065,7 @@ struct peer_assoc_params {
 	uint32_t peer_he_ops;
 	uint32_t peer_he_cap_phyinfo[WMI_HOST_MAX_HECAP_PHY_SIZE];
 	uint32_t peer_he_cap_info_internal;
+	uint32_t peer_he_caps_6ghz;
 	uint32_t peer_he_mcs_count;
 	uint32_t peer_he_rx_mcs_set[WMI_HOST_MAX_HE_RATE_SET];
 	uint32_t peer_he_tx_mcs_set[WMI_HOST_MAX_HE_RATE_SET];
@@ -1298,30 +1276,30 @@ struct tx_send_params {
  * @tx_frame: management tx frame
  * @frm_len: frame length
  * @vdev_id: vdev id
+ * @tx_type: type of management frame (determines what callback to use)
  * @chanfreq: channel frequency
- * @pdata: frame data
  * @desc_id: descriptor id relyaed back by target
+ * @pdata: frame data
  * @macaddr: macaddr of peer
  * @qdf_ctx: qdf context for qdf_nbuf_map
  * @tx_param: TX send parameters
  * @tx_params_valid: Flag that indicates if TX params are valid
  * @use_6mbps: specify whether management frame to transmit should
  *  use 6 Mbps rather than 1 Mbps min rate(for 5GHz band or P2P)
- * @tx_type: type of management frame (determines what callback to use)
  */
 struct wmi_mgmt_params {
 	void *tx_frame;
 	uint16_t frm_len;
 	uint8_t vdev_id;
+	uint8_t tx_type;
 	uint16_t chanfreq;
-	void *pdata;
 	uint16_t desc_id;
+	void *pdata;
 	uint8_t *macaddr;
 	void *qdf_ctx;
 	struct tx_send_params tx_param;
 	bool tx_params_valid;
 	uint8_t use_6mbps;
-	uint8_t tx_type;
 };
 
 /**
@@ -1329,25 +1307,25 @@ struct wmi_mgmt_params {
  * @tx_frame: management tx frame
  * @frm_len: frame length
  * @vdev_id: vdev id
+ * @tx_params_valid: Flag that indicates if TX params are valid
  * @chanfreq: channel frequency
- * @pdata: frame data
  * @desc_id: descriptor id relyaed back by target
+ * @pdata: frame data
  * @macaddr: macaddr of peer
  * @qdf_ctx: qdf context for qdf_nbuf_map
  * @tx_param: TX send parameters
- * @tx_params_valid: Flag that indicates if TX params are valid
  */
 struct wmi_offchan_data_tx_params {
 	void *tx_frame;
 	uint16_t frm_len;
 	uint8_t vdev_id;
+	bool tx_params_valid;
 	uint16_t chanfreq;
-	void *pdata;
 	uint16_t desc_id;
+	void *pdata;
 	uint8_t *macaddr;
 	void *qdf_ctx;
 	struct tx_send_params tx_param;
-	bool tx_params_valid;
 };
 
 /**
@@ -1370,14 +1348,14 @@ struct sta_uapsd_params {
  * struct ta_uapsd_trig_params - uapsd trigger parameter
  * @vdevid: vdev id
  * @peer_addr: peer address
- * @auto_triggerparam: trigger parameters
  * @num_ac: no of access category
+ * @auto_triggerparam: trigger parameters
  */
 struct sta_uapsd_trig_params {
-		uint32_t vdevid;
-		uint8_t peer_addr[QDF_MAC_ADDR_SIZE];
-		struct sta_uapsd_params *auto_triggerparam;
-		uint32_t num_ac;
+	uint32_t vdevid;
+	uint8_t peer_addr[QDF_MAC_ADDR_SIZE];
+	uint32_t num_ac;
+	struct sta_uapsd_params *auto_triggerparam;
 };
 
 #define WMI_NUM_AC                     (4)
@@ -1553,14 +1531,15 @@ struct scan_mac_oui {
  * struct wifi_passpoint_network_param - passpoint network block
  * @id: identifier of this network block
  * @realm: null terminated UTF8 encoded realm, 0 if unspecified
- * @roaming_consortium_ids: roaming consortium ids to match, 0s if unspecified
  * @plmn: mcc/mnc combination as per rules, 0s if unspecified
+ * @roaming_consortium_ids: roaming consortium ids to match, 0s if unspecified
  */
 struct wifi_passpoint_network_param {
 	uint32_t id;
 	uint8_t  realm[WMI_PASSPOINT_REALM_LEN];
-	int64_t  roaming_consortium_ids[WMI_PASSPOINT_ROAMING_CONSORTIUM_ID_NUM];
 	uint8_t  plmn[WMI_PASSPOINT_PLMN_LEN];
+	int64_t  roaming_consortium_ids[
+			WMI_PASSPOINT_ROAMING_CONSORTIUM_ID_NUM];
 };
 
 /**
@@ -2792,16 +2771,6 @@ struct peer_chan_width_switch_params {
 };
 
 /**
- * struct config_fils_params - FILS config params
- * @vdev_id:  vdev id
- * @fd_period:  0 - Disabled, non-zero - Period in ms (mili seconds)
- */
-struct config_fils_params {
-	uint8_t vdev_id;
-	uint32_t fd_period;
-};
-
-/**
  * struct peer_add_wds_entry_params - WDS peer entry add params
  * @dest_addr: Pointer to destination macaddr
  * @peer_addr: Pointer to peer mac addr
@@ -3273,13 +3242,16 @@ struct ratepwr_table_params {
  * struct ctl_table_params - Ctl table params
  * @ctl_array: pointer to ctl array
  * @ctl_cmd_len: ctl command length
- * @is_acfg_ctl: is acfg_ctl table
+ * @is_2g: is 2G
+ * @target_type: target type
+ * @ctl_band: ctl band
+ * @pdev_id: pdev id
  */
 struct ctl_table_params {
 	uint8_t *ctl_array;
 	uint16_t ctl_cmd_len;
-	uint32_t target_type;
 	bool is_2g;
+	uint32_t target_type;
 	uint32_t ctl_band;
 	uint32_t pdev_id;
 };
@@ -3407,29 +3379,29 @@ struct disa_encrypt_decrypt_req_params {
  * @wildcard: iwldcard table entry?
  * @mcast_ip_addr: mcast ip address to be updated
  * @mcast_ip_addr_bytes: mcast ip addr bytes
- * @ucast_mac_addr: ucast peer mac subscribed to mcast ip
- * @filter_mode: filter mode
  * @nsrcs: number of entries in source list
+ * @filter_mode: filter mode
+ * @is_action_delete: is delete
+ * @is_filter_mode_snoop: is filter mode snoop
+ * @ucast_mac_addr: ucast peer mac subscribed to mcast ip
  * @srcs: source mac accpted
  * @mask: mask
  * @vap_id: vdev id
- * @is_action_delete: is delete
- * @is_filter_mode_snoop:
- * @is_mcast_addr_len:
+ * @is_mcast_addr_len: is mcast address length
  */
 struct mcast_group_update_params {
 	int action;
 	int wildcard;
 	uint8_t *mcast_ip_addr;
 	int mcast_ip_addr_bytes;
-	uint8_t *ucast_mac_addr;
-	uint8_t filter_mode;
 	uint8_t nsrcs;
+	uint8_t filter_mode;
+	bool is_action_delete;
+	bool is_filter_mode_snoop;
+	uint8_t *ucast_mac_addr;
 	uint8_t *srcs;
 	uint8_t *mask;
 	uint8_t vap_id;
-	bool is_action_delete;
-	bool is_filter_mode_snoop;
 	bool is_mcast_addr_len;
 };
 
@@ -3661,29 +3633,41 @@ struct rtt_meas_req_test_params {
 };
 
 /**
+ * struct peer_request_pn_param - PN request params
+ * @vdev_id: vdev id
+ * @peer_macaddr: Peer mac address
+ * @key_type: key type
+ */
+struct peer_request_pn_param {
+	uint32_t vdev_id;
+	uint8_t  peer_macaddr[QDF_MAC_ADDR_SIZE];
+	uint32_t key_type;
+};
+
+/**
  * struct rtt_meas_req_params - RTT measurement request params
  * @req_id: Request id
  * @vdev_id: vdev id
- * @sta_mac_addr: pointer to station mac address
- * @spoof_mac_addr: pointer to spoof mac address
  * @is_mode_na: 11NA
  * @is_mode_ac: AC
  * @is_bw_20: 20
  * @is_bw_40: 40
  * @is_bw_80: 80
+ * @sta_mac_addr: pointer to station mac address
+ * @spoof_mac_addr: pointer to spoof mac address
  * @num_probe_rqst: number of probe request
  * @channel_param: channel param
  */
 struct rtt_meas_req_params {
 	uint8_t req_id;
 	uint8_t vdev_id;
-	uint8_t *sta_mac_addr;
-	uint8_t *spoof_mac_addr;
 	bool is_mode_na;
 	bool is_mode_ac;
 	bool is_bw_20;
 	bool is_bw_40;
 	bool is_bw_80;
+	uint8_t *sta_mac_addr;
+	uint8_t *spoof_mac_addr;
 	uint32_t num_probe_rqst;
 	struct channel_param channel;
 };
@@ -3801,6 +3785,8 @@ struct rx_reorder_queue_remove_params {
  * @num_bcn_stats: number of beacon stats
  * @num_rssi_stats: number of rssi stats
  * @num_peer_adv_stats: number of peer adv stats
+ * @num_mib_stats: number of mib stats
+ * @num_mib_extd_stats: number of extended mib stats
  * @last_event: specify if the current event is the last event
  */
 typedef struct {
@@ -3816,6 +3802,8 @@ typedef struct {
 	uint32_t num_bcn_stats;
 	uint32_t num_rssi_stats;
 	uint32_t num_peer_adv_stats;
+	uint32_t num_mib_stats;
+	uint32_t num_mib_extd_stats;
 	uint32_t last_event;
 } wmi_host_stats_event;
 
@@ -3857,14 +3845,14 @@ typedef struct {
  * struct wmi_host_peer_adv_stats - peer adv stats event structure
  * @peer_macaddr: mac address
  * @fcs_count: fcs count
- * @rx_bytes: rx bytes
  * @rx_count: rx count
+ * @rx_bytes: rx bytes
  */
 struct wmi_host_peer_adv_stats {
 	uint8_t peer_macaddr[QDF_MAC_ADDR_SIZE];
 	uint32_t fcs_count;
-	uint64_t rx_bytes;
 	uint32_t rx_count;
+	uint64_t rx_bytes;
 };
 
 /**
@@ -4544,6 +4532,10 @@ typedef enum {
 	wmi_motion_det_host_eventid,
 	wmi_motion_det_base_line_host_eventid,
 	wmi_get_ani_level_event_id,
+	wmi_peer_tx_pn_response_event_id,
+	wmi_roam_stats_event_id,
+	wmi_oem_data_event_id,
+	wmi_mgmt_offload_data_event_id,
 	wmi_events_max,
 } wmi_conv_event_id;
 
@@ -5044,6 +5036,9 @@ typedef enum {
 	wmi_service_owe_roam_support,
 	wmi_service_ext2_msg,
 	wmi_service_6ghz_support,
+	wmi_service_bw_165mhz_support,
+	wmi_service_packet_capture_support,
+	wmi_service_nan_vdev,
 	wmi_services_max,
 } wmi_conv_service_ids;
 #define WMI_SERVICE_UNAVAILABLE 0xFFFF
@@ -5167,6 +5162,7 @@ struct wmi_host_fw_abi_ver {
  * @max_bssid_indicator: max number of MBSS VAPs
  * @three_way_coex_config_legacy_en: enable three way coex legacy feature
  * @max_num_group_keys: max number of group keys supported for VLAN
+ * @re_ul_resp: enable 11ax UL response feature (UL-OFDMA) for repeater
  */
 typedef struct {
 	uint32_t num_vdevs;
@@ -5214,7 +5210,8 @@ typedef struct {
 		 mgmt_comp_evt_bundle_support:1,
 		 tx_msdu_new_partition_id_support:1,
 		 new_htt_msg_format:1,
-		 peer_unmap_conf_support:1;
+		 peer_unmap_conf_support:1,
+		 pktcapture_support:1;
 	uint32_t iphdr_pad_config;
 	uint32_t
 		qwrap_config:16,
@@ -5251,6 +5248,7 @@ typedef struct {
 	bool tstamp64_en;
 	bool three_way_coex_config_legacy_en;
 	uint32_t max_num_group_keys;
+	uint32_t re_ul_resp;
 } target_resource_config;
 
 /**
@@ -5570,12 +5568,16 @@ typedef struct {
  * @status: WMI_MGMT_TX_COMP_STATUS_TYPE
  * @pdev_id: pdev_id
  * @ppdu_id: ppdu_id
+ * @retries_count: retries count
+ * @tx_tsf: 64 bits completion timestamp
  */
 typedef struct {
 	uint32_t	desc_id;
 	uint32_t	status;
 	uint32_t	pdev_id;
 	uint32_t        ppdu_id;
+	uint32_t	retries_count;
+	uint64_t	tx_tsf;
 } wmi_host_mgmt_tx_compl_event;
 
 /**
@@ -6878,13 +6880,13 @@ struct wmi_host_dcs_interference_param {
 /**
  * struct wmi_host_rf_characterization_event_param - rf characterization table
  * @freq: center frequency of primary channel (in MHz)
- * @bw: bandwidth of primary channel (in MHz)
  * @chan_metric: primary channel-specific metric
+ * @bw: bandwidth of primary channel (in MHz)
  */
 struct wmi_host_rf_characterization_event_param {
 	uint16_t freq;
-	wmi_host_channel_width bw;
 	uint8_t chan_metric;
+	wmi_host_channel_width bw;
 };
 
 /*
@@ -7081,6 +7083,22 @@ enum wmi_host_fatal_condition_subtype_packet_log_config {
 };
 
 #endif /* OL_ATH_SMART_LOGGING */
+
+#define GET_PN_MAX_LEN 16
+
+/**
+ * struct wmi_host_get_pn_event - PN event params
+ * @vdev_id: vdev id
+ * @peer_macaddr: Peer mac address
+ * @key_type: key type
+ * @pn : pn value
+ */
+struct wmi_host_get_pn_event {
+	uint32_t vdev_id;
+	uint8_t mac_addr[QDF_MAC_ADDR_SIZE];
+	uint32_t key_type;
+	uint8_t pn[GET_PN_MAX_LEN];
+};
 
 /**
  * struct wmi_init_cmd_param - INIT command params
@@ -7448,6 +7466,152 @@ struct wmi_roam_scan_stats_res {
 	struct wmi_roam_scan_stats_params roam_scan[0];
 };
 
+#define MAX_ROAM_CANDIDATE_AP      8
+#define MAX_ROAM_SCAN_CHAN         38
+
+/**
+ * struct wmi_roam_btm_trigger_data - BTM roam trigger related information
+ * @btm_request_mode:      BTM request mode - solicited/unsolicited
+ * @disassoc_timer:        Number of TBTT before AP disassociates the STA in ms
+ * @validity_interval:     Preferred candidate list validity interval in ms
+ * @candidate_list_count:  Number of candidates in BTM request.
+ * @btm_resp_status:       Status code of the BTM response.
+ */
+struct wmi_roam_btm_trigger_data {
+	uint32_t btm_request_mode;
+	uint32_t disassoc_timer;
+	uint32_t validity_interval;
+	uint32_t candidate_list_count;
+	uint32_t btm_resp_status;
+};
+
+/**
+ * struct wmi_roam_cu_trigger_data - BSS Load roam trigger parameters
+ * @cu_load: Connected AP CU load percentage
+ */
+struct wmi_roam_cu_trigger_data {
+	uint32_t cu_load;
+	/* TODO: Add threshold value */
+};
+
+/**
+ * Struct wmi_roam_rssi_trigger_data - RSSI roam trigger related
+ * parameters
+ * @threshold: RSSI threshold value in dBm for LOW rssi roam trigger
+ */
+struct wmi_roam_rssi_trigger_data {
+	uint32_t threshold;
+};
+
+/**
+ * struct wmi_roam_deauth_trigger_data - Deauth roaming trigger related
+ * parameters
+ * @type:   1- Deauthentication 2- Disassociation
+ * @reason: Status code of the Deauth/Disassoc received
+ */
+struct wmi_roam_deauth_trigger_data {
+	uint32_t type;
+	uint32_t reason;
+};
+
+/**
+ *  struct wmi_roam_candidate_info - Roam scan candidate APs related info
+ *  @timestamp:   Host timestamp in millisecs
+ *  @type:        0 - Candidate AP; 1 - Current connected AP.
+ *  @bssid:       AP bssid.
+ *  @freq:        Channel frquency
+ *  @cu_load:     Channel utilization load of the AP.
+ *  @cu_score:    Channel Utilization score.
+ *  @rssi:        Candidate AP rssi
+ *  @rssi_score:  AP RSSI score
+ *  @total_score: Total score of the candidate AP.
+ *  @etp:         Estimated throughput value of the AP in Mbps
+ */
+struct wmi_roam_candidate_info {
+	uint32_t timestamp;
+	uint8_t type;
+	struct qdf_mac_addr bssid;
+	uint16_t freq;
+	uint32_t cu_load;
+	uint32_t cu_score;
+	uint32_t rssi;
+	uint32_t rssi_score;
+	uint32_t total_score;
+	uint32_t etp;
+};
+
+/**
+ * struct wmi_roam_scan_data - Roam scan event details
+ * @type:      0 - Partial roam scan; 1 - Full roam scan
+ * @num_ap:    Number of candidate APs.
+ * @num_chan:  Number of channels.
+ * @next_rssi_threshold: Next roam can trigger rssi threshold
+ * @chan_freq: List of frequencies scanned as part of roam scan
+ * @ap: List of candidate AP info
+ */
+struct wmi_roam_scan_data {
+	uint16_t type;
+	uint16_t num_ap;
+	uint16_t num_chan;
+	uint32_t next_rssi_threshold;
+	uint16_t chan_freq[MAX_ROAM_SCAN_CHAN];
+	struct wmi_roam_candidate_info ap[MAX_ROAM_CANDIDATE_AP];
+};
+
+/**
+ * struct wmi_roam_result - Roam result related info.
+ * @timestamp:          Host timestamp in millisecs
+ * @status:             0 - Roaming is success ; 1 - Roaming failed
+ * @fail_reason:        One of WMI_ROAM_FAIL_REASON_ID
+ */
+struct wmi_roam_result {
+	uint32_t timestamp;
+	bool status;
+	uint32_t fail_reason;
+};
+
+/**
+ *  struct wmi_neighbor_report_data - Neighbor report/BTM request related
+ *  data.
+ *  @timestamp:  Host timestamp in millisecs
+ *  @req_type:   1 - BTM query ; 2 - 11K neighbor report request
+ *  @req_time:   Request timestamp in ms
+ *  @resp_time:  Response timestamp in ms
+ *  @freq:       Channel frequency in Mhz
+ */
+struct wmi_neighbor_report_data {
+	uint32_t timestamp;
+	uint8_t req_type;
+	uint32_t req_time;
+	uint32_t resp_time;
+	uint8_t num_freq;
+	uint32_t freq[MAX_ROAM_SCAN_CHAN];
+};
+
+/**
+ * struct wmi_roam_trigger_info() - Roam trigger related details
+ * @trigger_reason:     Roam trigger reason(enum WMI_ROAM_TRIGGER_REASON_ID)
+ * @trigger_sub_reason: Sub reason for roam trigger if multiple roam scans
+ * @current_rssi:       Connected AP RSSI
+ * @timestamp:          Host timestamp in millisecs when roam scan was triggered
+ * @btm_trig_data:      BTM roam trigger parameters.
+ * @cu_trig_data:       BSS Load roam trigger parameters.
+ * @rssi_trig_data:     RSSI trigger related info.
+ * @deauth_trig_data:   Deauth roam trigger related info
+ */
+struct wmi_roam_trigger_info {
+	uint32_t trigger_reason;
+	uint32_t trigger_sub_reason;
+	uint32_t current_rssi;
+	uint32_t timestamp;
+	union {
+		struct wmi_roam_btm_trigger_data btm_trig_data;
+		struct wmi_roam_cu_trigger_data cu_trig_data;
+		struct wmi_roam_rssi_trigger_data rssi_trig_data;
+		struct wmi_roam_deauth_trigger_data deauth_trig_data;
+	};
+};
+
 /* End of roam scan stats definitions */
 
 /**
@@ -7522,6 +7686,38 @@ struct vap_tidmap_prec_params {
 	uint32_t vdev_id;
 	uint32_t map_precedence;
 };
+
+/**
+ * struct peer_vlan_config_param - peer vlan config command
+ * @tx_cmd: Tx command
+ * @rx_cmd: Rx command
+ * @tx_strip_insert: Strip or Insert vlan in Tx[0:Strip, 1: Insert]
+ * @tx_strip_insert_inner: Enable tx_strip_insert operation for inner vlan tag.
+ * @tx_strip_insert_outer: Enable tx_strip_insert operation for outer vlan tag.
+ * @rx_strip_c_tag: Strip c_tag
+ * @rx_strip_s_tag: Strip s_tag
+ * @rx_insert_c_tag: Insert c_tag
+ * @rx_insert_s_tag: Insert s_tag
+ *
+ * @insert_vlan_inner_tci: Vlan inner tci
+ * @insert_vlan_inner_tci: Vlan outer tci
+ *
+ * @vdev_id: vdev id corresponding to peer.
+ */
+struct peer_vlan_config_param {
+	uint16_t tx_cmd:1,
+		rx_cmd:1,
+		tx_strip_insert:1,
+		tx_strip_insert_inner:1,
+		tx_strip_insert_outer:1,
+		rx_strip_c_tag:1,
+		rx_strip_s_tag:1,
+		rx_insert_c_tag:1,
+		rx_insert_s_tag:1;
+	uint16_t insert_vlan_inner_tci;
+	uint16_t insert_vlan_outer_tci;
+	uint8_t vdev_id;
+};
 #endif
 
 /**
@@ -7589,27 +7785,27 @@ typedef struct {
 /**
  * struct wmi_host_oem_indirect_data - Indirect OEM data
  * @pdev_id: pdev id
- * @addr: 36 bit address
  * @len: length of data in bytes
+ * @addr: 36 bit address
  */
 struct wmi_host_oem_indirect_data {
 	uint32_t pdev_id;
-	uint64_t addr;
 	uint32_t len;
+	uint64_t addr;
 };
 
 /**
  * struct wmi_oem_response_param - OEM response info
  * @num_data1: First data response length
- * @data_1: First data
  * @num_data2: Second data response length
+ * @data_1: First data
  * @data_2: Second data
  * @indirect_data: Indirect data
  */
 struct wmi_oem_response_param {
 	uint32_t num_data1;
-	uint8_t  *data_1;
 	uint32_t num_data2;
+	uint8_t  *data_1;
 	uint8_t  *data_2;
 	struct wmi_host_oem_indirect_data indirect_data;
 };

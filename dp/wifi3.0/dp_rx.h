@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016-2019 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2016-2020 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -36,22 +36,25 @@
 
 #ifdef QCA_HOST2FW_RXBUF_RING
 #define DP_WBM2SW_RBM HAL_RX_BUF_RBM_SW1_BM
+/* RBM value used for re-injecting defragmented packets into REO */
+#define DP_DEFRAG_RBM HAL_RX_BUF_RBM_SW3_BM
 #else
 #define DP_WBM2SW_RBM HAL_RX_BUF_RBM_SW3_BM
+#define DP_DEFRAG_RBM DP_WBM2SW_RBM
 #endif /* QCA_HOST2FW_RXBUF_RING */
 
 #define RX_BUFFER_RESERVATION   0
 
 #define DP_PEER_METADATA_PEER_ID_MASK	0x0000ffff
 #define DP_PEER_METADATA_PEER_ID_SHIFT	0
-#define DP_PEER_METADATA_VDEV_ID_MASK	0x00070000
+#define DP_PEER_METADATA_VDEV_ID_MASK	0x003f0000
 #define DP_PEER_METADATA_VDEV_ID_SHIFT	16
 
 #define DP_PEER_METADATA_PEER_ID_GET(_peer_metadata)		\
 	(((_peer_metadata) & DP_PEER_METADATA_PEER_ID_MASK)	\
 			>> DP_PEER_METADATA_PEER_ID_SHIFT)
 
-#define DP_PEER_METADATA_ID_GET(_peer_metadata)			\
+#define DP_PEER_METADATA_VDEV_ID_GET(_peer_metadata)		\
 	(((_peer_metadata) & DP_PEER_METADATA_VDEV_ID_MASK)	\
 			>> DP_PEER_METADATA_VDEV_ID_SHIFT)
 
@@ -975,7 +978,7 @@ dp_rx_link_desc_return(struct dp_soc *soc, hal_ring_desc_t ring_desc,
  */
 QDF_STATUS
 dp_rx_link_desc_return_by_addr(struct dp_soc *soc,
-			       hal_link_desc_t link_desc_addr,
+			       hal_buff_addrinfo_t link_desc_addr,
 			       uint8_t bm_action);
 
 /**
@@ -1094,4 +1097,10 @@ bool dp_rx_multipass_process(struct dp_peer *peer, qdf_nbuf_t nbuf,
 			     uint8_t tid);
 #endif
 
+#ifndef WLAN_RX_PKT_CAPTURE_ENH
+static inline
+void dp_peer_set_rx_capture_enabled(struct cdp_peer *peer_handle, bool value)
+{
+}
+#endif
 #endif /* _DP_RX_H */
