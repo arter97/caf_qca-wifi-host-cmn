@@ -5227,6 +5227,7 @@ typedef enum {
 	wmi_tx_data_traffic_ctrl_event_id,
 	wmi_update_rcpi_event_id,
 	wmi_get_arp_stats_req_id,
+	wmi_roam_pmkid_request_event_id,
 
 	wmi_events_max,
 } wmi_conv_event_id;
