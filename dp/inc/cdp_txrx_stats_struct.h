@@ -617,6 +617,56 @@ struct cdp_tso_stats {
 #endif /* FEATURE_TSO_STATS */
 };
 
+#define CDP_PEER_STATS_START 0
+
+enum cdp_peer_stats_type {
+	cdp_peer_stats_min = CDP_PEER_STATS_START,
+
+	/* Tx types */
+	cdp_peer_tx_ucast = cdp_peer_stats_min,
+	cdp_peer_tx_mcast,
+	cdp_peer_tx_rate,
+	cdp_peer_tx_last_tx_rate,
+	cdp_peer_tx_inactive_time,
+	cdp_peer_tx_ratecode,
+	cdp_peer_tx_flags,
+	cdp_peer_tx_power,
+
+	/* Rx types */
+	cdp_peer_rx_rate,
+	cdp_peer_rx_last_rx_rate,
+	cdp_peer_rx_ratecode,
+	cdp_peer_rx_ucast,
+	cdp_peer_rx_flags,
+	cdp_peer_rx_avg_rssi,
+	cdp_peer_stats_max,
+};
+
+/*
+ * The max size of cdp_peer_stats_param_t is limited to 16 bytes.
+ * If the buffer size is exceeding this size limit,
+ * dp_txrx_get_peer_stats is to be used instead.
+ */
+typedef union cdp_peer_stats_buf {
+	/* Tx types */
+	struct cdp_pkt_info tx_ucast;
+	struct cdp_pkt_info tx_mcast;
+	uint32_t tx_rate;
+	uint32_t last_tx_rate;
+	uint32_t tx_inactive_time;
+	uint32_t tx_flags;
+	uint32_t tx_power;
+	uint16_t tx_ratecode;
+
+	/* Rx types */
+	struct cdp_pkt_info rx_ucast;
+	uint32_t rx_rate;
+	uint32_t last_rx_rate;
+	uint32_t rx_ratecode;
+	uint32_t rx_flags;
+	uint32_t rx_avg_rssi;
+} cdp_peer_stats_param_t; /* Max union size 16 bytes */
+
 /* struct cdp_tx_stats - tx stats
  * @cdp_pkt_info comp_pkt: Pkt Info for which completions were received
  * @cdp_pkt_info ucast: Unicast Packet Count
@@ -839,6 +889,7 @@ struct cdp_tx_stats {
  * @rx_rssi_measured_time: Time at which rssi is measured
  * @rssi: RSSI of received signal
  * @last_rssi: Previous rssi
+ * @multipass_rx_pkt_drop: Dropped multipass rx pkt
  */
 struct cdp_rx_stats {
 	struct cdp_pkt_info to_stack;
@@ -902,6 +953,7 @@ struct cdp_rx_stats {
 	uint32_t rx_rssi_measured_time;
 	uint8_t rssi;
 	uint8_t last_rssi;
+	uint32_t multipass_rx_pkt_drop;
 };
 
 /* struct cdp_tx_ingress_stats - Tx ingress Stats
@@ -1934,6 +1986,16 @@ enum _ol_ath_param_t {
 	OL_ATH_PARAM_HW_MODE_SWITCH_OMN_ENABLE = 430,
 	/* set primary interface for hw-mode switch */
 	OL_ATH_PARAM_HW_MODE_SWITCH_PRIMARY_IF = 431,
+	/* Number of vdevs configured per PSOC */
+	OL_ATH_PARAM_GET_PSOC_NUM_VDEVS = 432,
+	/* Number of peers configured per PSOC */
+	OL_ATH_PARAM_GET_PSOC_NUM_PEERS = 433,
+	/* Number of vdevs configured per PDEV */
+	OL_ATH_PARAM_GET_PDEV_NUM_VDEVS = 434,
+	/* Number of peers configured per PDEV */
+	OL_ATH_PARAM_GET_PDEV_NUM_PEERS = 435,
+	/* Number of monitor vdevs configured per PDEV */
+	OL_ATH_PARAM_GET_PDEV_NUM_MONITOR_VDEVS = 436,
 };
 #endif
 /* Bitmasks for stats that can block */

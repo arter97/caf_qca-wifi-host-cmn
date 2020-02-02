@@ -87,7 +87,7 @@ static void scm_add_rnr_channel_db(struct scan_cache_entry *entry)
 	scm_debug("scan entry channel freq %d", chan_freq);
 	if (is_6g_bss) {
 		channel = scm_get_chan_meta(chan_freq);
-		if (channel) {
+		if (!channel) {
 			scm_debug("Failed to get chan Meta freq %d", chan_freq);
 			return;
 		}
@@ -107,9 +107,6 @@ static void scm_add_rnr_channel_db(struct scan_cache_entry *entry)
 		/* Skip if entry is not valid */
 		if (!rnr_bss->channel_number)
 			continue;
-		rnr_node = qdf_mem_malloc(sizeof(struct scan_rnr_node));
-		if (!rnr_node)
-			return;
 		chan_freq = wlan_reg_chan_opclass_to_freq(rnr_bss->channel_number,
 							  rnr_bss->operating_class,
 							  false);
@@ -119,13 +116,16 @@ static void scm_add_rnr_channel_db(struct scan_cache_entry *entry)
 		channel = scm_get_chan_meta(chan_freq);
 		if (!channel) {
 			scm_debug("Failed to get chan Meta freq %d", chan_freq);
-			qdf_mem_free(rnr_node);
 			return;
 		}
 		channel->bss_beacon_probe_count++;
 		/* Don't add RNR entry if list is full */
 		if (qdf_list_size(&channel->rnr_list) >= WLAN_MAX_RNR_COUNT)
 			continue;
+
+		rnr_node = qdf_mem_malloc(sizeof(struct scan_rnr_node));
+		if (!rnr_node)
+			return;
 		rnr_node->entry.timestamp = entry->scan_entry_time;
 		if (!qdf_is_macaddr_zero(&rnr_bss->bssid))
 			qdf_mem_copy(&rnr_node->entry.bssid,
@@ -184,7 +184,6 @@ static void scm_del_rnr_channel_db(struct scan_cache_entry *entry)
 				  chan_freq);
 			return;
 		}
-		channel->bss_beacon_probe_count--;
 		cur_node = NULL;
 		qdf_list_peek_front(&channel->rnr_list, &cur_node);
 		/* Free the Node */
@@ -200,11 +199,15 @@ static void scm_del_rnr_channel_db(struct scan_cache_entry *entry)
 				qdf_list_remove_node(&channel->rnr_list,
 						     &rnr_node->node);
 				qdf_mem_free(rnr_node);
+				channel->bss_beacon_probe_count--;
+				break;
 			} else if (rnr_node->entry.short_ssid ==
 					rnr_bss->short_ssid) {
 				qdf_list_remove_node(&channel->rnr_list,
 						     &rnr_node->node);
 				qdf_mem_free(rnr_node);
+				channel->bss_beacon_probe_count--;
+				break;
 			}
 			cur_node = next_node;
 			next_node = NULL;
@@ -850,6 +853,7 @@ static QDF_STATUS scm_add_update_entry(struct wlan_objmgr_psoc *psoc,
 	QDF_STATUS status;
 	struct scan_dbs *scan_db;
 	struct wlan_scan_obj *scan_obj;
+	uint8_t security_type;
 
 	scan_db = wlan_pdev_get_scan_db(psoc, pdev);
 	if (!scan_db) {
@@ -878,7 +882,8 @@ static QDF_STATUS scm_add_update_entry(struct wlan_objmgr_psoc *psoc,
 	is_dup_found = scm_find_duplicate(pdev, scan_obj, scan_db, scan_params,
 					  &dup_node);
 
-	scm_nofl_debug("Received %s: BSSID: %pM tsf_delta %u Seq %d ssid: %.*s rssi: %d snr %d freq %d phy_mode %d hidden %d chan_mismatch %d pdev %d",
+	security_type = scan_params->security_type;
+	scm_nofl_debug("Received %s: BSSID: %pM tsf_delta %u Seq %d ssid: %.*s rssi: %d snr %d freq %d phy_mode %d hidden %d chan_mismatch %d %s%s%s%s pdev %d",
 		       (scan_params->frm_subtype == MGMT_SUBTYPE_PROBE_RESP) ?
 		       "Probe Rsp" : "Beacon", scan_params->bssid.bytes,
 		       scan_params->tsf_delta, scan_params->seq_num,
@@ -887,6 +892,10 @@ static QDF_STATUS scm_add_update_entry(struct wlan_objmgr_psoc *psoc,
 		       scan_params->channel.chan_freq, scan_params->phy_mode,
 		       scan_params->is_hidden_ssid,
 		       scan_params->channel_mismatch,
+		       security_type & SCAN_SECURITY_TYPE_WPA ? "[WPA]" : "",
+		       security_type & SCAN_SECURITY_TYPE_RSN ? "[RSN]" : "",
+		       security_type & SCAN_SECURITY_TYPE_WAPI ? "[WAPI]" : "",
+		       security_type & SCAN_SECURITY_TYPE_WEP ? "[WEP]" : "",
 		       wlan_objmgr_pdev_get_pdev_id(pdev));
 
 	if (scan_obj->cb.inform_beacon)

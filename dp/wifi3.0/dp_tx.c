@@ -2051,7 +2051,8 @@ static bool dp_check_exc_metadata(struct cdp_tx_exception_metadata *tx_exc)
 
 /**
  * dp_tx_send_exception() - Transmit a frame on a given VAP in exception path
- * @vap_dev: DP vdev handle
+ * @soc: DP soc handle
+ * @vdev_id: id of DP vdev handle
  * @nbuf: skb
  * @tx_exc_metadata: Handle that holds exception path meta data
  *
@@ -2062,12 +2063,17 @@ static bool dp_check_exc_metadata(struct cdp_tx_exception_metadata *tx_exc)
  *         nbuf when it fails to send
  */
 qdf_nbuf_t
-dp_tx_send_exception(struct cdp_vdev *vap_dev, qdf_nbuf_t nbuf,
+dp_tx_send_exception(struct cdp_soc_t *soc, uint8_t vdev_id, qdf_nbuf_t nbuf,
 		     struct cdp_tx_exception_metadata *tx_exc_metadata)
 {
 	qdf_ether_header_t *eh = NULL;
-	struct dp_vdev *vdev = (struct dp_vdev *) vap_dev;
 	struct dp_tx_msdu_info_s msdu_info;
+	struct dp_vdev *vdev =
+		dp_get_vdev_from_soc_vdev_id_wifi3((struct dp_soc *)soc,
+						   vdev_id);
+
+	if (qdf_unlikely(!vdev))
+		goto fail;
 
 	qdf_mem_zero(&msdu_info, sizeof(msdu_info));
 
@@ -3722,6 +3728,7 @@ qdf_nbuf_t dp_tx_non_std(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
  */
 QDF_STATUS dp_tx_vdev_attach(struct dp_vdev *vdev)
 {
+	int pdev_id;
 	/*
 	 * Fill HTT TCL Metadata with Vdev ID and MAC ID
 	 */
@@ -3731,8 +3738,10 @@ QDF_STATUS dp_tx_vdev_attach(struct dp_vdev *vdev)
 	HTT_TX_TCL_METADATA_VDEV_ID_SET(vdev->htt_tcl_metadata,
 			vdev->vdev_id);
 
-	HTT_TX_TCL_METADATA_PDEV_ID_SET(vdev->htt_tcl_metadata,
-			DP_SW2HW_MACID(vdev->pdev->pdev_id));
+	pdev_id =
+		dp_get_target_pdev_id_for_host_pdev_id(vdev->pdev->soc,
+						       vdev->pdev->pdev_id);
+	HTT_TX_TCL_METADATA_PDEV_ID_SET(vdev->htt_tcl_metadata, pdev_id);
 
 	/*
 	 * Set HTT Extension Valid bit to 0 by default

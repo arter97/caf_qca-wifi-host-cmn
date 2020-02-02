@@ -2606,12 +2606,14 @@ struct extscan_bssid_hotlist_set_params {
  * @unit_size: Size of single unit requested.
  * @num_unit_info: Memory chunk info
  * @num_units: number of units requested.
+ * @tgt_num_units: number of units request by target.
  */
 typedef struct {
 	uint32_t	req_id;
 	uint32_t	unit_size;
 	uint32_t	num_unit_info;
 	uint32_t	num_units;
+	uint32_t	tgt_num_units;
 } host_mem_req;
 
 #define WMI_HOST_DSCP_MAP_MAX	(64)
@@ -4536,6 +4538,8 @@ typedef enum {
 	wmi_roam_stats_event_id,
 	wmi_oem_data_event_id,
 	wmi_mgmt_offload_data_event_id,
+	wmi_pdev_multi_vdev_restart_response_event_id,
+	wmi_roam_pmkid_request_event_id,
 	wmi_events_max,
 } wmi_conv_event_id;
 
@@ -4835,6 +4839,7 @@ typedef enum {
 	wmi_vdev_param_enable_multi_group_key,
 	wmi_vdev_param_max_group_keys,
 	wmi_vdev_param_enable_mcast_rc,
+	wmi_vdev_param_6ghz_params,
 } wmi_conv_vdev_param_id;
 
 /**
@@ -5039,6 +5044,7 @@ typedef enum {
 	wmi_service_bw_165mhz_support,
 	wmi_service_packet_capture_support,
 	wmi_service_nan_vdev,
+	wmi_service_multiple_vdev_restart_ext,
 	wmi_services_max,
 } wmi_conv_service_ids;
 #define WMI_SERVICE_UNAVAILABLE 0xFFFF
@@ -5163,6 +5169,7 @@ struct wmi_host_fw_abi_ver {
  * @three_way_coex_config_legacy_en: enable three way coex legacy feature
  * @max_num_group_keys: max number of group keys supported for VLAN
  * @re_ul_resp: enable 11ax UL response feature (UL-OFDMA) for repeater
+ * @ipa_disable: disable IPA feature
  */
 typedef struct {
 	uint32_t num_vdevs;
@@ -5249,6 +5256,7 @@ typedef struct {
 	bool three_way_coex_config_legacy_en;
 	uint32_t max_num_group_keys;
 	uint32_t re_ul_resp;
+	bool ipa_disable;
 } target_resource_config;
 
 /**

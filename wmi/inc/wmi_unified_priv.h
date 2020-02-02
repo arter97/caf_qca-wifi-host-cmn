@@ -1262,8 +1262,14 @@ QDF_STATUS (*extract_fw_abi_version)(wmi_unified_t wmi_handle,
 QDF_STATUS (*extract_hal_reg_cap)(wmi_unified_t wmi_handle, void *evt_buf,
 	struct wlan_psoc_hal_reg_capability *hal_reg_cap);
 
-host_mem_req * (*extract_host_mem_req)(wmi_unified_t wmi_handle,
-	void *evt_buf, uint8_t *num_entries);
+uint32_t (*extract_num_mem_reqs)(wmi_unified_t wmi_handle,
+				 void *evt_buf);
+
+QDF_STATUS (*extract_host_mem_req)(wmi_unified_t wmi_handle,
+				   void *evt_buf, host_mem_req *mem_reqs,
+				   uint32_t num_active_peers,
+				   uint32_t num_peers,
+				   enum wmi_fw_mem_prio fw_prio, uint16_t idx);
 
 QDF_STATUS (*init_cmd_send)(wmi_unified_t wmi_handle,
 				struct wmi_init_cmd_param *param);
@@ -1996,6 +2002,14 @@ QDF_STATUS (*send_twt_pause_dialog_cmd)(wmi_unified_t wmi_handle,
 QDF_STATUS (*send_twt_resume_dialog_cmd)(wmi_unified_t wmi_handle,
 			struct wmi_twt_resume_dialog_cmd_param *params);
 
+#ifdef WLAN_SUPPORT_BCAST_TWT
+QDF_STATUS (*send_twt_btwt_invite_sta_cmd)(wmi_unified_t wmi_handle,
+			struct wmi_twt_btwt_invite_sta_cmd_param *params);
+
+QDF_STATUS (*send_twt_btwt_remove_sta_cmd)(wmi_unified_t wmi_handle,
+			struct wmi_twt_btwt_remove_sta_cmd_param *params);
+#endif
+
 QDF_STATUS (*extract_twt_enable_comp_event)(wmi_unified_t wmi_handle,
 		uint8_t *evt_buf,
 		struct wmi_twt_enable_complete_event_param *params);
@@ -2019,6 +2033,17 @@ QDF_STATUS (*extract_twt_pause_dialog_comp_event)(wmi_unified_t wmi_handle,
 QDF_STATUS (*extract_twt_resume_dialog_comp_event)(wmi_unified_t wmi_handle,
 		uint8_t *evt_buf,
 		struct wmi_twt_resume_dialog_complete_event_param *params);
+
+#ifdef WLAN_SUPPORT_BCAST_TWT
+QDF_STATUS (*extract_twt_btwt_invite_sta_comp_event)(wmi_unified_t wmi_handle,
+		uint8_t *evt_buf,
+		struct wmi_twt_btwt_invite_sta_complete_event_param *params);
+
+QDF_STATUS (*extract_twt_btwt_remove_sta_comp_event)(wmi_unified_t wmi_handle,
+		uint8_t *evt_buf,
+		struct wmi_twt_btwt_remove_sta_complete_event_param *params);
+#endif
+
 #endif
 
 #ifdef QCA_SUPPORT_CP_STATS
@@ -2125,6 +2150,20 @@ QDF_STATUS (*extract_ani_level)(uint8_t *evt_buf,
 				struct wmi_host_ani_level_event **info,
 				uint32_t *num_freqs);
 #endif /* FEATURE_ANI_LEVEL_REQUEST */
+
+QDF_STATUS (*extract_multi_vdev_restart_resp_event)(
+		wmi_unified_t wmi_handle, void *evt_buf,
+		struct multi_vdev_restart_resp *restart_rsp);
+
+#ifdef FEATURE_WLAN_TIME_SYNC_FTM
+QDF_STATUS (*send_wlan_time_sync_ftm_trigger_cmd)(wmi_unified_t wmi_handle,
+						  uint32_t vdev_id,
+						  bool burst_mode);
+QDF_STATUS (*send_wlan_ts_qtime_cmd)(wmi_unified_t wmi_handle,
+				     uint32_t vdev_id,
+				     uint64_t lpass_ts);
+#endif /* FEATURE_WLAN_TIME_SYNC_FTM */
+
 };
 
 /* Forward declartion for psoc*/
