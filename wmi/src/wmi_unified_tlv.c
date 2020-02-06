@@ -1778,6 +1778,9 @@ QDF_STATUS send_scan_chan_list_cmd_tlv(wmi_unified_t wmi_handle,
 	WMI_LOGD("no of channels = %d, len = %d", chan_list->num_scan_chans, len);
 
 	cmd->num_scan_chans = chan_list->num_scan_chans;
+	if (chan_list->max_bw_support_present)
+		cmd->flags |= CHANNEL_MAX_BANDWIDTH_VALID;
+
 	WMITLV_SET_HDR((buf_ptr + sizeof(wmi_scan_chan_list_cmd_fixed_param)),
 		       WMITLV_TAG_ARRAY_STRUC,
 		       sizeof(wmi_channel) * chan_list->num_scan_chans);
@@ -10999,7 +11002,7 @@ QDF_STATUS send_enable_specific_fw_logs_cmd_tlv(wmi_unified_t wmi_handle,
 	count = 0;
 
 	if (!wmi_handle->events_logs_list) {
-		WMI_LOGE("%s: Not received event/log list from FW, yet",
+		WMI_LOGD("%s: Not received event/log list from FW, yet",
 				__func__);
 		return QDF_STATUS_E_NOMEM;
 	}
@@ -14255,7 +14258,7 @@ QDF_STATUS send_limit_off_chan_cmd_tlv(wmi_unified_t wmi_handle,
 	cmd->max_offchan_time = limit_off_chan_param->max_offchan_time;
 	cmd->rest_time = limit_off_chan_param->rest_time;
 
-	WMI_LOGE("%s: vdev_id=%d, flags =%x, max_offchan_time=%d, rest_time=%d",
+	WMI_LOGD("%s: vdev_id=%d, flags =%x, max_offchan_time=%d, rest_time=%d",
 		__func__, cmd->vdev_id, cmd->flags, cmd->max_offchan_time,
 		cmd->rest_time);
 
