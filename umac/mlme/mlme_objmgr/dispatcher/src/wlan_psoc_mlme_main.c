@@ -18,6 +18,7 @@
  * DOC: Implements PSOC MLME APIs
  */
 
+#include <qdf_module.h>
 #include <wlan_objmgr_cmn.h>
 #include <wlan_objmgr_global_obj.h>
 #include <wlan_mlme_dbg.h>
@@ -25,6 +26,23 @@
 #include <include/wlan_psoc_mlme.h>
 #include <wlan_psoc_mlme_main.h>
 #include <wlan_psoc_mlme_api.h>
+#include <target_if_psoc_wake_lock.h>
+
+struct psoc_mlme_obj *mlme_psoc_get_priv(struct wlan_objmgr_psoc *psoc)
+{
+	struct psoc_mlme_obj *psoc_mlme;
+
+	psoc_mlme = wlan_objmgr_psoc_get_comp_private_obj(psoc,
+							  WLAN_UMAC_COMP_MLME);
+	if (!psoc_mlme) {
+		mlme_err("PSOC MLME component object is NULL");
+		return NULL;
+	}
+
+	return psoc_mlme;
+}
+
+qdf_export_symbol(mlme_psoc_get_priv);
 
 static QDF_STATUS mlme_psoc_obj_create_handler(struct wlan_objmgr_psoc *psoc,
 					       void *arg)
@@ -55,7 +73,8 @@ static QDF_STATUS mlme_psoc_obj_create_handler(struct wlan_objmgr_psoc *psoc,
 		goto init_failed;
 	}
 
-	return status;
+	target_if_wake_lock_init(psoc);
+	return QDF_STATUS_SUCCESS;
 init_failed:
 	qdf_mem_free(psoc_mlme);
 
@@ -67,13 +86,13 @@ static QDF_STATUS mlme_psoc_obj_destroy_handler(struct wlan_objmgr_psoc *psoc,
 {
 	struct psoc_mlme_obj *psoc_mlme;
 
-	psoc_mlme = wlan_objmgr_psoc_get_comp_private_obj(psoc,
-							  WLAN_UMAC_COMP_MLME);
+	psoc_mlme = mlme_psoc_get_priv(psoc);
 	if (!psoc_mlme) {
-		mlme_err(" PSOC MLME component object is NULL");
+		mlme_err("PSOC MLME component object is NULL");
 		return QDF_STATUS_E_FAILURE;
 	}
 
+	target_if_wake_lock_deinit(psoc);
 	wlan_objmgr_psoc_component_obj_detach(psoc, WLAN_UMAC_COMP_MLME,
 					      psoc_mlme);
 

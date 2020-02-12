@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016-2019 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2016-2020 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -114,7 +114,7 @@ QDF_STATUS dp_rx_buffers_replenish(struct dp_soc *dp_soc, uint32_t mac_id,
 {
 	uint32_t num_alloc_desc;
 	uint16_t num_desc_to_free = 0;
-	struct dp_pdev *dp_pdev = dp_get_pdev_for_mac_id(dp_soc, mac_id);
+	struct dp_pdev *dp_pdev = dp_get_pdev_for_lmac_id(dp_soc, mac_id);
 	uint32_t num_entries_avail;
 	uint32_t count;
 	int sync_hw_ptr = 1;
@@ -335,14 +335,14 @@ dp_get_vdev_from_peer(struct dp_soc *soc,
 
 	if (unlikely(!peer)) {
 		if (peer_id != HTT_INVALID_PEER) {
-			vdev_id = DP_PEER_METADATA_ID_GET(
+			vdev_id = DP_PEER_METADATA_VDEV_ID_GET(
 					mpdu_desc_info.peer_meta_data);
 			QDF_TRACE(QDF_MODULE_ID_DP,
 				QDF_TRACE_LEVEL_DEBUG,
 				FL("PeerID %d not found use vdevID %d"),
 				peer_id, vdev_id);
 			vdev = dp_get_vdev_from_soc_vdev_id_wifi3(soc,
-							vdev_id);
+								  vdev_id);
 		} else {
 			QDF_TRACE(QDF_MODULE_ID_DP,
 				QDF_TRACE_LEVEL_DEBUG,
@@ -466,8 +466,8 @@ dp_rx_intrabss_fwd(struct dp_soc *soc,
 				}
 			}
 
-			if (!dp_tx_send(dp_vdev_to_cdp_vdev(ta_peer->vdev),
-					nbuf)) {
+			if (!dp_tx_send((struct cdp_soc_t *)soc,
+					ta_peer->vdev->vdev_id, nbuf)) {
 				DP_STATS_INC_PKT(ta_peer, rx.intra_bss.pkts, 1,
 						 len);
 				return true;
@@ -499,7 +499,10 @@ dp_rx_intrabss_fwd(struct dp_soc *soc,
 		len = QDF_NBUF_CB_RX_PKT_LEN(nbuf);
 		memset(nbuf_copy->cb, 0x0, sizeof(nbuf_copy->cb));
 
-		if (dp_tx_send(dp_vdev_to_cdp_vdev(ta_peer->vdev), nbuf_copy)) {
+		/* Set cb->ftype to intrabss FWD */
+		qdf_nbuf_set_tx_ftype(nbuf_copy, CB_FTYPE_INTRABSS_FWD);
+		if (dp_tx_send((struct cdp_soc_t *)soc,
+			       ta_peer->vdev->vdev_id, nbuf_copy)) {
 			DP_STATS_INC_PKT(ta_peer, rx.intra_bss.fail, 1, len);
 			tid_stats->fail_cnt[INTRABSS_DROP]++;
 			qdf_nbuf_free(nbuf_copy);
@@ -758,7 +761,7 @@ uint8_t dp_rx_process_invalid_peer(struct dp_soc *soc, qdf_nbuf_t mpdu,
 		goto free;
 	}
 
-	pdev = dp_get_pdev_for_mac_id(soc, mac_id);
+	pdev = dp_get_pdev_for_lmac_id(soc, mac_id);
 
 	if (!pdev || qdf_unlikely(pdev->is_pdev_down)) {
 		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_ERROR,
@@ -801,8 +804,9 @@ out:
 	msg.nbuf = mpdu;
 	msg.vdev_id = vdev->vdev_id;
 	if (pdev->soc->cdp_soc.ol_ops->rx_invalid_peer)
-		pdev->soc->cdp_soc.ol_ops->rx_invalid_peer(pdev->ctrl_pdev,
-							&msg);
+		pdev->soc->cdp_soc.ol_ops->rx_invalid_peer(
+				(struct cdp_ctrl_objmgr_psoc *)soc->ctrl_psoc,
+				pdev->pdev_id, &msg);
 
 free:
 	/* Drop and free packet */
@@ -859,7 +863,7 @@ uint8_t dp_rx_process_invalid_peer(struct dp_soc *soc, qdf_nbuf_t mpdu,
 		goto free;
 	}
 
-	pdev = dp_get_pdev_for_mac_id(soc, mac_id);
+	pdev = dp_get_pdev_for_lmac_id(soc, mac_id);
 	if (!pdev) {
 		QDF_TRACE(QDF_MODULE_ID_DP,
 			  QDF_TRACE_LEVEL_ERROR,
@@ -888,7 +892,7 @@ out:
 		soc->cdp_soc.ol_ops->rx_invalid_peer(vdev->vdev_id, wh);
 free:
 	/* reset the head and tail pointers */
-	pdev = dp_get_pdev_for_mac_id(soc, mac_id);
+	pdev = dp_get_pdev_for_lmac_id(soc, mac_id);
 	if (pdev) {
 		pdev->invalid_peer_head_msdu = NULL;
 		pdev->invalid_peer_tail_msdu = NULL;
@@ -900,6 +904,13 @@ free:
 		next_nbuf = qdf_nbuf_next(curr_nbuf);
 		qdf_nbuf_free(curr_nbuf);
 		curr_nbuf = next_nbuf;
+	}
+
+	/* Reset the head and tail pointers */
+	pdev = dp_get_pdev_for_mac_id(soc, mac_id);
+	if (pdev) {
+		pdev->invalid_peer_head_msdu = NULL;
+		pdev->invalid_peer_tail_msdu = NULL;
 	}
 
 	return 0;
@@ -1030,7 +1041,7 @@ static inline bool dp_rx_adjust_nbuf_len(qdf_nbuf_t nbuf, uint16_t *mpdu_len)
  */
 qdf_nbuf_t dp_rx_sg_create(qdf_nbuf_t nbuf, uint8_t *rx_tlv_hdr)
 {
-	qdf_nbuf_t parent, next, frag_list;
+	qdf_nbuf_t parent, frag_list, next = NULL;
 	uint16_t frag_list_len = 0;
 	uint16_t mpdu_len;
 	bool last_nbuf;
@@ -1589,7 +1600,6 @@ bool dp_is_special_data(qdf_nbuf_t nbuf)
 static inline
 void dp_rx_deliver_to_stack_no_peer(struct dp_soc *soc, qdf_nbuf_t nbuf)
 {
-	uint32_t peer_mdata;
 	uint16_t peer_id;
 	uint8_t vdev_id;
 	struct dp_vdev *vdev;
@@ -1598,13 +1608,11 @@ void dp_rx_deliver_to_stack_no_peer(struct dp_soc *soc, qdf_nbuf_t nbuf)
 	uint32_t pkt_len = 0;
 	uint8_t *rx_tlv_hdr;
 
-	peer_mdata =  QDF_NBUF_CB_RX_PEER_ID(nbuf);
-
-	peer_id = DP_PEER_METADATA_PEER_ID_GET(peer_mdata);
+	peer_id = QDF_NBUF_CB_RX_PEER_ID(nbuf);
 	if (peer_id > soc->max_peers)
 		goto deliver_fail;
 
-	vdev_id = DP_PEER_METADATA_ID_GET(peer_mdata);
+	vdev_id = QDF_NBUF_CB_RX_VDEV_ID(nbuf);
 	vdev = dp_get_vdev_from_soc_vdev_id_wifi3(soc, vdev_id);
 	if (!vdev || !vdev->osif_rx)
 		goto deliver_fail;
@@ -1713,6 +1721,7 @@ uint32_t dp_rx_process(struct dp_intr *int_ctx, hal_ring_handle_t hal_ring_hdl,
 	uint32_t l2_hdr_offset = 0;
 	uint16_t msdu_len = 0;
 	uint16_t peer_id;
+	uint8_t vdev_id;
 	struct dp_peer *peer;
 	struct dp_vdev *vdev;
 	uint32_t pkt_len = 0;
@@ -1723,7 +1732,6 @@ uint32_t dp_rx_process(struct dp_intr *int_ctx, hal_ring_handle_t hal_ring_hdl,
 	uint8_t *rx_tlv_hdr;
 	uint32_t rx_bufs_reaped[MAX_PDEV_CNT];
 	uint8_t mac_id = 0;
-	struct dp_pdev *pdev;
 	struct dp_pdev *rx_pdev;
 	struct dp_srng *dp_rxdma_srng;
 	struct rx_desc_pool *rx_desc_pool;
@@ -1893,6 +1901,8 @@ more_data:
 		peer_mdata = mpdu_desc_info.peer_meta_data;
 		QDF_NBUF_CB_RX_PEER_ID(rx_desc->nbuf) =
 			DP_PEER_METADATA_PEER_ID_GET(peer_mdata);
+		QDF_NBUF_CB_RX_VDEV_ID(rx_desc->nbuf) =
+			DP_PEER_METADATA_VDEV_ID_GET(peer_mdata);
 
 		/*
 		 * save msdu flags first, last and continuation msdu in
@@ -1956,8 +1966,8 @@ done:
 		if (!rx_bufs_reaped[mac_id])
 			continue;
 
-		pdev = soc->pdev_list[mac_id];
-		dp_rxdma_srng = &pdev->rx_refill_buf_ring;
+		dp_rxdma_srng = &soc->rx_refill_buf_ring[mac_id];
+
 		rx_desc_pool = &soc->rx_desc_buf[mac_id];
 
 		dp_rx_buffers_replenish(soc, mac_id, dp_rxdma_srng,
@@ -1981,12 +1991,20 @@ done:
 	while (nbuf) {
 		next = nbuf->next;
 		rx_tlv_hdr = qdf_nbuf_data(nbuf);
+		vdev_id = QDF_NBUF_CB_RX_VDEV_ID(nbuf);
+
+		if (deliver_list_head && vdev && (vdev->vdev_id != vdev_id)) {
+			dp_rx_deliver_to_stack(vdev, peer, deliver_list_head,
+					       deliver_list_tail);
+			deliver_list_head = NULL;
+			deliver_list_tail = NULL;
+		}
+
 		/* Get TID from struct cb->tid_val, save to tid */
 		if (qdf_nbuf_is_rx_chfrag_start(nbuf))
 			tid = qdf_nbuf_get_tid_val(nbuf);
 
-		peer_mdata =  QDF_NBUF_CB_RX_PEER_ID(nbuf);
-		peer_id = DP_PEER_METADATA_PEER_ID_GET(peer_mdata);
+		peer_id =  QDF_NBUF_CB_RX_PEER_ID(nbuf);
 		peer = dp_peer_find_by_id(soc, peer_id);
 
 		if (peer) {
@@ -1998,13 +2016,6 @@ done:
 		}
 
 		rx_bufs_used++;
-
-		if (deliver_list_head && peer && (vdev != peer->vdev)) {
-			dp_rx_deliver_to_stack(vdev, peer, deliver_list_head,
-					deliver_list_tail);
-			deliver_list_head = NULL;
-			deliver_list_tail = NULL;
-		}
 
 		if (qdf_likely(peer)) {
 			vdev = peer->vdev;
@@ -2118,7 +2129,13 @@ done:
 		 * process frame for mulitpass phrase processing
 		 */
 		if (qdf_unlikely(vdev->multipass_en)) {
-			dp_rx_multipass_process(peer, nbuf, tid);
+			if (dp_rx_multipass_process(peer, nbuf, tid) == false) {
+				DP_STATS_INC(peer, rx.multipass_rx_pkt_drop, 1);
+				qdf_nbuf_free(nbuf);
+				nbuf = next;
+				dp_peer_unref_del_find_by_id(peer);
+				continue;
+			}
 		}
 
 		if (!dp_wds_rx_policy_check(rx_tlv_hdr, vdev, peer)) {
@@ -2232,9 +2249,20 @@ done:
 		dp_peer_unref_del_find_by_id(peer);
 	}
 
-	if (deliver_list_head && peer)
-		dp_rx_deliver_to_stack(vdev, peer, deliver_list_head,
-				       deliver_list_tail);
+	if (qdf_likely(deliver_list_head)) {
+		if (qdf_likely(peer))
+			dp_rx_deliver_to_stack(vdev, peer, deliver_list_head,
+					       deliver_list_tail);
+		else {
+			nbuf = deliver_list_head;
+			while (nbuf) {
+				next = nbuf->next;
+				nbuf->next = NULL;
+				dp_rx_deliver_to_stack_no_peer(soc, nbuf);
+				nbuf = next;
+			}
+		}
+	}
 
 	if (dp_rx_enable_eol_data_check(soc) && rx_bufs_used) {
 		if (quota) {
@@ -2296,15 +2324,15 @@ QDF_STATUS dp_rx_vdev_detach(struct dp_vdev *vdev)
 void
 dp_rx_pdev_detach(struct dp_pdev *pdev)
 {
-	uint8_t pdev_id = pdev->pdev_id;
+	uint8_t mac_for_pdev = pdev->lmac_id;
 	struct dp_soc *soc = pdev->soc;
 	struct rx_desc_pool *rx_desc_pool;
 
-	rx_desc_pool = &soc->rx_desc_buf[pdev_id];
+	rx_desc_pool = &soc->rx_desc_buf[mac_for_pdev];
 
 	if (rx_desc_pool->pool_size != 0) {
 		if (!dp_is_soc_reinit(soc))
-			dp_rx_desc_nbuf_and_pool_free(soc, pdev_id,
+			dp_rx_desc_nbuf_and_pool_free(soc, mac_for_pdev,
 						      rx_desc_pool);
 		else
 			dp_rx_desc_nbuf_free(soc, rx_desc_pool);
@@ -2359,7 +2387,7 @@ dp_pdev_rx_buffers_attach(struct dp_soc *dp_soc, uint32_t mac_id,
 			  struct rx_desc_pool *rx_desc_pool,
 			  uint32_t num_req_buffers)
 {
-	struct dp_pdev *dp_pdev = dp_get_pdev_for_mac_id(dp_soc, mac_id);
+	struct dp_pdev *dp_pdev = dp_get_pdev_for_lmac_id(dp_soc, mac_id);
 	hal_ring_handle_t rxdma_srng = dp_rxdma_srng->hal_srng;
 	union dp_rx_desc_list_elem_t *next;
 	void *rxdma_ring_entry;
@@ -2497,7 +2525,7 @@ dp_rx_pdev_attach(struct dp_pdev *pdev)
 	struct dp_srng *dp_rxdma_srng;
 	struct rx_desc_pool *rx_desc_pool;
 	QDF_STATUS ret_val;
-
+	int mac_for_pdev;
 
 	if (wlan_cfg_get_dp_pdev_nss_enabled(pdev->wlan_cfg_ctx)) {
 		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_INFO,
@@ -2506,15 +2534,17 @@ dp_rx_pdev_attach(struct dp_pdev *pdev)
 	}
 
 	pdev = soc->pdev_list[pdev_id];
-	dp_rxdma_srng = &pdev->rx_refill_buf_ring;
+	mac_for_pdev = pdev->lmac_id;
+	dp_rxdma_srng = &soc->rx_refill_buf_ring[mac_for_pdev];
+
 	rxdma_entries = dp_rxdma_srng->num_entries;
 
 	soc->process_rx_status = CONFIG_PROCESS_RX_STATUS;
 
-	rx_desc_pool = &soc->rx_desc_buf[pdev_id];
+	rx_desc_pool = &soc->rx_desc_buf[mac_for_pdev];
 	rx_sw_desc_weight = wlan_cfg_get_dp_soc_rx_sw_desc_weight(soc->wlan_cfg_ctx);
 
-	dp_rx_desc_pool_alloc(soc, pdev_id,
+	dp_rx_desc_pool_alloc(soc, mac_for_pdev,
 			      rx_sw_desc_weight * rxdma_entries,
 			      rx_desc_pool);
 
@@ -2530,7 +2560,7 @@ dp_rx_pdev_attach(struct dp_pdev *pdev)
 		return ret_val;
 	}
 
-	return dp_pdev_rx_buffers_attach(soc, pdev_id, dp_rxdma_srng,
+	return dp_pdev_rx_buffers_attach(soc, mac_for_pdev, dp_rxdma_srng,
 					 rx_desc_pool, rxdma_entries - 1);
 }
 

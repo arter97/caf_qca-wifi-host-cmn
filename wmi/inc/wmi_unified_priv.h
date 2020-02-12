@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2019 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2013-2020 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -63,6 +63,10 @@
 
 #ifdef WLAN_FEATURE_INTEROP_ISSUES_AP
 #include <wlan_interop_issues_ap_public_structs.h>
+#endif
+
+#ifdef WLAN_CFR_ENABLE
+#include <wmi_unified_cfr_param.h>
 #endif
 
 #define WMI_UNIFIED_MAX_EVENT 0x100
@@ -192,6 +196,7 @@ struct wmi_command_header {
 	uint32_t sub_type:4;
 
 #endif
+
 };
 
 /**
@@ -1436,6 +1441,16 @@ QDF_STATUS (*extract_vdev_roam_param)(wmi_unified_t wmi_handle, void *evt_buf,
 QDF_STATUS (*extract_vdev_scan_ev_param)(wmi_unified_t wmi_handle,
 		void *evt_buf, struct scan_event *param);
 
+#ifdef FEATURE_WLAN_SCAN_PNO
+QDF_STATUS (*extract_nlo_match_ev_param)(wmi_unified_t wmi_handle,
+					 void *evt_buf,
+					 struct scan_event *param);
+
+QDF_STATUS (*extract_nlo_complete_ev_param)(wmi_unified_t wmi_handle,
+					    void *evt_buf,
+					    struct scan_event *param);
+#endif
+
 QDF_STATUS (*extract_mu_ev_param)(wmi_unified_t wmi_handle, void *evt_buf,
 	wmi_host_mu_report_event *param);
 
@@ -1591,6 +1606,11 @@ QDF_STATUS (*extract_peer_adv_stats)(wmi_unified_t wmi_handle, void *evt_buf,
 
 QDF_STATUS (*extract_chan_stats)(wmi_unified_t wmi_handle, void *evt_buf,
 			 uint32_t index, wmi_host_chan_stats *chan_stats);
+
+#ifdef WLAN_FEATURE_MIB_STATS
+QDF_STATUS (*extract_mib_stats)(wmi_unified_t wmi_handle, void *evt_buf,
+				struct mib_stats_metrics *mib_stats);
+#endif
 
 QDF_STATUS (*extract_thermal_stats)(wmi_unified_t wmi_handle, void *evt_buf,
 	uint32_t *temp, uint32_t *level, uint32_t *pdev_id);
@@ -1828,6 +1848,10 @@ uint32_t (*convert_pdev_id_host_to_target)(wmi_unified_t wmi_handle,
 					   uint32_t pdev_id);
 uint32_t (*convert_pdev_id_target_to_host)(wmi_unified_t wmi_handle,
 					   uint32_t pdev_id);
+uint32_t (*convert_phy_id_host_to_target)(wmi_unified_t wmi_handle,
+					  uint32_t phy_id);
+uint32_t (*convert_phy_id_target_to_host)(wmi_unified_t wmi_handle,
+					  uint32_t phy_id);
 
 /*
  * For MCL, convert_pdev_id_host_to_target returns legacy pdev id value.
@@ -1843,6 +1867,11 @@ uint32_t (*convert_host_pdev_id_to_target)(wmi_unified_t wmi_handle,
 					   uint32_t pdev_id);
 uint32_t (*convert_target_pdev_id_to_host)(wmi_unified_t wmi_handle,
 					   uint32_t pdev_id);
+
+uint32_t (*convert_host_phy_id_to_target)(wmi_unified_t wmi_handle,
+					  uint32_t phy_id);
+uint32_t (*convert_target_phy_id_to_host)(wmi_unified_t wmi_handle,
+					  uint32_t phy_id);
 
 QDF_STATUS (*send_user_country_code_cmd)(wmi_unified_t wmi_handle,
 		uint8_t pdev_id, struct cc_regdmn_s *rd);
@@ -1885,10 +1914,11 @@ QDF_STATUS (*send_obss_detection_cfg_cmd)(wmi_unified_t wmi_handle,
 		struct wmi_obss_detection_cfg_param *obss_cfg_param);
 QDF_STATUS (*extract_obss_detection_info)(uint8_t *evt_buf,
 					  struct wmi_obss_detect_info *info);
-
-#ifdef WLAN_SUPPORT_FILS
+#if defined(WLAN_SUPPORT_FILS) || defined(CONFIG_BAND_6GHZ)
 QDF_STATUS (*send_vdev_fils_enable_cmd)(wmi_unified_t wmi_handle,
 					struct config_fils_params *param);
+#endif
+#ifdef WLAN_SUPPORT_FILS
 QDF_STATUS (*extract_swfda_vdev_id)(wmi_unified_t wmi_handle, void *evt_buf,
 				    uint32_t *vdev_id);
 QDF_STATUS (*send_fils_discovery_send_cmd)(wmi_unified_t wmi_handle,
@@ -1909,8 +1939,33 @@ QDF_STATUS
 				     void *evt_buf, uint32_t *vdev_id,
 				     uint32_t *tx_status);
 
+QDF_STATUS
+(*extract_roam_trigger_stats)(wmi_unified_t wmi_handle,
+			      void *evt_buf,
+			      struct wmi_roam_trigger_info *trig,
+			      uint8_t idx);
+
+QDF_STATUS
+(*extract_roam_scan_stats)(wmi_unified_t wmi_handle,
+			   void *evt_buf,
+			   struct wmi_roam_scan_data *dst, uint8_t idx,
+			   uint8_t chan_idx, uint8_t ap_idx);
+
+QDF_STATUS
+(*extract_roam_result_stats)(wmi_unified_t wmi_handle,
+			     void *evt_buf,
+			     struct wmi_roam_result *dst,
+			     uint8_t idx);
+
+QDF_STATUS
+(*extract_roam_11kv_stats)(wmi_unified_t wmi_handle,
+			   void *evt_buf,
+			   struct wmi_neighbor_report_data *dst,
+			   uint8_t idx, uint8_t rpt_idx);
+
 void (*wmi_pdev_id_conversion_enable)(wmi_unified_t wmi_handle,
-				      uint32_t *pdev_map, uint8_t size);
+				      uint32_t *pdev_map,
+				      uint8_t size);
 void (*send_time_stamp_sync_cmd)(wmi_unified_t wmi_handle);
 void (*wmi_free_allocated_event)(uint32_t cmd_event_id,
 				void **wmi_cmd_struct_ptr);
@@ -1981,9 +2036,6 @@ QDF_STATUS (*extract_dfs_status_from_fw)(wmi_unified_t wmi_handle,
 					 uint32_t *dfs_status_check);
 #endif
 
-QDF_STATUS
-(*extract_cfr_peer_tx_event_param)(wmi_unified_t wmi_handle, void *evt_buf,
-				   wmi_cfr_peer_tx_event_param * peer_tx_event);
 
 #ifdef OBSS_PD
 QDF_STATUS (*send_obss_spatial_reuse_set)(wmi_unified_t wmi_handle,
@@ -2005,9 +2057,18 @@ QDF_STATUS (*send_peer_del_all_wds_entries_cmd)(wmi_unified_t wmi_handle,
 		struct peer_del_all_wds_entries_params *param);
 
 #ifdef WLAN_CFR_ENABLE
+QDF_STATUS
+(*extract_cfr_peer_tx_event_param)(wmi_unified_t wmi_handle, void *evt_buf,
+				   wmi_cfr_peer_tx_event_param *peer_tx_event);
+
 QDF_STATUS (*send_peer_cfr_capture_cmd)(wmi_unified_t wmi_handle,
 					struct peer_cfr_params *param);
+#ifdef WLAN_ENH_CFR_ENABLE
+QDF_STATUS (*send_cfr_rcc_cmd)(wmi_unified_t wmi_handle,
+			  struct cfr_rcc_param *cfg);
 #endif
+#endif
+
 #ifdef WMI_AP_SUPPORT
 QDF_STATUS (*send_vdev_pcp_tid_map_cmd)(wmi_unified_t wmi_handle,
 					struct vap_pcp_tid_map_params *param);
@@ -2016,6 +2077,10 @@ QDF_STATUS (*send_vdev_tidmap_prec_cmd)(wmi_unified_t wmi_handle,
 QDF_STATUS (*send_peer_ft_roam_cmd)(wmi_unified_t wmi_handle,
 				    uint8_t peer_addr[QDF_MAC_ADDR_SIZE],
 				    uint8_t vdev_id);
+QDF_STATUS (*send_peer_vlan_config_cmd)(wmi_unified_t wmi,
+					uint8_t peer_addr[QDF_MAC_ADDR_SIZE],
+					struct peer_vlan_config_param *param);
+
 #endif
 QDF_STATUS (*send_mws_coex_status_req_cmd)(wmi_unified_t wmi_handle,
 					   uint32_t vdev_id, uint32_t cmd_id);
@@ -2047,6 +2112,11 @@ QDF_STATUS (*extract_get_elna_bypass_resp)(wmi_unified_t wmi_handle,
 					 struct get_elna_bypass_response *resp);
 #endif /* WLAN_FEATURE_ELNA */
 
+QDF_STATUS (*send_pdev_get_pn_cmd)(wmi_unified_t wmi_handle,
+				   struct peer_request_pn_param *pn_params);
+QDF_STATUS (*extract_get_pn_data)(wmi_unified_t wmi_handle,
+				  void *evt_buf,
+				  struct wmi_host_get_pn_event *param);
 #ifdef FEATURE_ANI_LEVEL_REQUEST
 QDF_STATUS (*send_ani_level_cmd)(wmi_unified_t wmi_handle, uint32_t *freqs,
 				 uint8_t num_freqs);
@@ -2055,6 +2125,10 @@ QDF_STATUS (*extract_ani_level)(uint8_t *evt_buf,
 				struct wmi_host_ani_level_event **info,
 				uint32_t *num_freqs);
 #endif /* FEATURE_ANI_LEVEL_REQUEST */
+
+QDF_STATUS (*extract_multi_vdev_restart_resp_event)(
+		wmi_unified_t wmi_handle, void *evt_buf,
+		struct multi_vdev_restart_resp *restart_rsp);
 };
 
 /* Forward declartion for psoc*/
@@ -2143,6 +2217,8 @@ struct wmi_unified {
 #endif /*WMI_EXT_DBG*/
 	uint32_t *cmd_pdev_id_map;
 	uint32_t *evt_pdev_id_map;
+	uint32_t *cmd_phy_id_map;
+	uint32_t *evt_phy_id_map;
 	qdf_atomic_t num_stats_over_qmi;
 };
 
@@ -2173,7 +2249,10 @@ struct wmi_soc {
 	uint32_t soc_idx;
 	uint32_t cmd_pdev_id_map[WMI_MAX_RADIOS];
 	uint32_t evt_pdev_id_map[WMI_MAX_RADIOS];
+	uint32_t cmd_phy_id_map[WMI_MAX_RADIOS];
+	uint32_t evt_phy_id_map[WMI_MAX_RADIOS];
 	bool is_pdev_is_map_enable;
+	bool is_phy_id_map_enable;
 #ifdef WMI_INTERFACE_EVENT_LOGGING
 	uint32_t buf_offset_command;
 	uint32_t buf_offset_event;
@@ -2581,4 +2660,12 @@ static inline QDF_STATUS wmi_ext_dbgfs_deinit(struct wmi_unified *wmi_handle)
 }
 
 #endif /*WMI_EXT_DBG */
+
+#ifdef WLAN_CFR_ENABLE
+void wmi_cfr_attach_tlv(struct wmi_unified *wmi_handle);
+#else
+static inline void wmi_cfr_attach_tlv(struct wmi_unified *wmi_handle)
+{
+}
+#endif
 #endif

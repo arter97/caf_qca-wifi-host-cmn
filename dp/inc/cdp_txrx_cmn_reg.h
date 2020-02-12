@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011-2019 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2011-2020 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -71,7 +71,8 @@ dp_soc_attach_wifi3(struct cdp_ctrl_objmgr_psoc *ctrl_psoc,
 		    struct hif_opaque_softc *hif_handle,
 		    HTC_HANDLE htc_handle, qdf_device_t qdf_osdev,
 		    struct ol_if_ops *ol_ops, uint16_t device_id);
-void *dp_soc_init_wifi3(void *soc, struct cdp_ctrl_objmgr_psoc *ctrl_psoc,
+void *dp_soc_init_wifi3(struct cdp_soc_t *soc,
+			struct cdp_ctrl_objmgr_psoc *ctrl_psoc,
 			struct hif_opaque_softc *hif_handle,
 			HTC_HANDLE htc_handle, qdf_device_t qdf_osdev,
 			struct ol_if_ops *ol_ops, uint16_t device_id);
@@ -88,7 +89,8 @@ struct cdp_soc_t *dp_soc_attach_wifi3(struct cdp_ctrl_objmgr_psoc *ctrl_psoc,
 }
 
 static inline
-void *dp_soc_init_wifi3(void *soc, struct cdp_ctrl_objmgr_psoc *ctrl_psoc,
+void *dp_soc_init_wifi3(struct cdp_soc_t *soc,
+			struct cdp_ctrl_objmgr_psoc *ctrl_psoc,
 			struct hif_opaque_softc *hif_handle,
 			HTC_HANDLE htc_handle, qdf_device_t qdf_osdev,
 			struct ol_if_ops *ol_ops, uint16_t device_id)
@@ -110,6 +112,7 @@ static inline ol_txrx_soc_handle cdp_soc_attach(
 	case QCN9000_DEVICE_ID:
 	case QCA6390_DEVICE_ID:
 	case QCA6490_DEVICE_ID:
+	case QCA6750_DEVICE_ID:
 	case QCA6390_EMULATION_DEVICE_ID:
 	case RUMIM2M_DEVICE_ID_NODE0: /*lithium emulation */
 	case RUMIM2M_DEVICE_ID_NODE1: /*lithium emulation */

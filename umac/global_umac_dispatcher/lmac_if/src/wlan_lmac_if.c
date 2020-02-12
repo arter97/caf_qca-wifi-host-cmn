@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016-2019 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2016-2020 The Linux Foundation. All rights reserved.
  *
  *
  * Permission to use, copy, modify, and/or distribute this software for
@@ -323,6 +323,12 @@ static void wlan_lmac_if_umac_reg_rx_ops_register(
 
 	rx_ops->reg_rx_ops.reg_ignore_fw_reg_offload_ind =
 		tgt_reg_ignore_fw_reg_offload_ind;
+
+	rx_ops->reg_rx_ops.reg_disable_chan_coex =
+		wlan_reg_disable_chan_coex;
+
+	rx_ops->reg_rx_ops.reg_get_unii_5g_bitmap =
+		ucfg_reg_get_unii_5g_bitmap;
 }
 
 #ifdef CONVERGED_P2P_ENABLE
@@ -517,7 +523,18 @@ wlan_lmac_if_umac_dfs_rx_ops_register(struct wlan_lmac_if_rx_ops *rx_ops)
 		tgt_dfs_set_fw_adfs_support;
 	dfs_rx_ops->dfs_reset_dfs_prevchan =
 		utils_dfs_reset_dfs_prevchan;
-
+	dfs_rx_ops->dfs_init_tmp_psoc_nol =
+		tgt_dfs_init_tmp_psoc_nol;
+	dfs_rx_ops->dfs_deinit_tmp_psoc_nol =
+		tgt_dfs_deinit_tmp_psoc_nol;
+	dfs_rx_ops->dfs_save_dfs_nol_in_psoc =
+		tgt_dfs_save_dfs_nol_in_psoc;
+	dfs_rx_ops->dfs_reinit_nol_from_psoc_copy =
+		tgt_dfs_reinit_nol_from_psoc_copy;
+	dfs_rx_ops->dfs_reinit_precac_lists =
+		tgt_dfs_reinit_precac_lists;
+	dfs_rx_ops->dfs_complete_deferred_tasks =
+		tgt_dfs_complete_deferred_tasks;
 	register_precac_auto_chan_rx_ops(dfs_rx_ops);
 	register_precac_auto_chan_rx_ops_ieee(dfs_rx_ops);
 	register_precac_auto_chan_rx_ops_freq(dfs_rx_ops);

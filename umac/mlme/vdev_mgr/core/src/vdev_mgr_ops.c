@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2019-2020 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -343,6 +343,8 @@ QDF_STATUS vdev_mgr_up_send(struct vdev_mlme_obj *mlme_obj)
 	struct beacon_tmpl_params bcn_tmpl_param = {0};
 	enum QDF_OPMODE opmode;
 	struct wlan_objmgr_vdev *vdev;
+	struct config_fils_params fils_param = {0};
+	uint8_t is_6g_sap_fd_enabled;
 
 	if (!mlme_obj) {
 		mlme_err("VDEV_MLME is NULL");
@@ -370,6 +372,25 @@ QDF_STATUS vdev_mgr_up_send(struct vdev_mlme_obj *mlme_obj)
 		return status;
 
 	status = tgt_vdev_mgr_up_send(mlme_obj, &param);
+	if (QDF_IS_STATUS_ERROR(status))
+		return status;
+
+	is_6g_sap_fd_enabled = wlan_vdev_mlme_feat_ext_cap_get(vdev,
+					WLAN_VDEV_FEXT_FILS_DISC_6G_SAP);
+	mlme_debug("SAP FD enabled %d", is_6g_sap_fd_enabled);
+	if (opmode == QDF_SAP_MODE && mlme_obj->vdev->vdev_mlme.des_chan &&
+	    WLAN_REG_IS_6GHZ_CHAN_FREQ(
+			mlme_obj->vdev->vdev_mlme.des_chan->ch_freq)) {
+		fils_param.vdev_id = wlan_vdev_get_id(mlme_obj->vdev);
+		if (is_6g_sap_fd_enabled) {
+			fils_param.fd_period = DEFAULT_FILS_DISCOVERY_PERIOD;
+		} else {
+			fils_param.send_prb_rsp_frame = true;
+			fils_param.fd_period = DEFAULT_PROBE_RESP_PERIOD;
+		}
+		status = tgt_vdev_mgr_fils_enable_send(mlme_obj,
+						       &fils_param);
+	}
 
 	return status;
 }
@@ -462,6 +483,7 @@ static QDF_STATUS vdev_mgr_multiple_restart_param_update(
 				uint32_t disable_hw_ack,
 				uint32_t *vdev_ids,
 				uint32_t num_vdevs,
+				struct vdev_mlme_mvr_param *mvr_param,
 				struct multiple_vdev_restart_params *param)
 {
 	param->pdev_id = wlan_objmgr_pdev_get_pdev_id(pdev);
@@ -474,6 +496,8 @@ static QDF_STATUS vdev_mgr_multiple_restart_param_update(
 		     sizeof(uint32_t) * (param->num_vdevs));
 	qdf_mem_copy(&param->ch_param, chan,
 		     sizeof(struct mlme_channel_param));
+	qdf_mem_copy(param->mvr_param, mvr_param,
+		     sizeof(*mvr_param) * (param->num_vdevs));
 
 	return QDF_STATUS_SUCCESS;
 }
@@ -482,14 +506,15 @@ QDF_STATUS vdev_mgr_multiple_restart_send(struct wlan_objmgr_pdev *pdev,
 					  struct mlme_channel_param *chan,
 					  uint32_t disable_hw_ack,
 					  uint32_t *vdev_ids,
-					  uint32_t num_vdevs)
+					  uint32_t num_vdevs,
+					  struct vdev_mlme_mvr_param *mvr_param)
 {
 	struct multiple_vdev_restart_params param = {0};
 
 	vdev_mgr_multiple_restart_param_update(pdev, chan,
 					       disable_hw_ack,
 					       vdev_ids, num_vdevs,
-					       &param);
+					       mvr_param, &param);
 
 	return tgt_vdev_mgr_multiple_vdev_restart_send(pdev, &param);
 }

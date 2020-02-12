@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016-2019 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2016-2020 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -591,6 +591,8 @@ static inline void dp_update_pdev_stats(struct dp_pdev *tgtobj,
 		srcobj->tx.last_ack_rssi;
 	tgtobj->stats.rx.mec_drop.num += srcobj->rx.mec_drop.num;
 	tgtobj->stats.rx.mec_drop.bytes += srcobj->rx.mec_drop.bytes;
+	tgtobj->stats.rx.multipass_rx_pkt_drop +=
+		srcobj->rx.multipass_rx_pkt_drop;
 }
 
 static inline void dp_update_pdev_ingress_stats(struct dp_pdev *tgtobj,
@@ -774,6 +776,8 @@ static inline void dp_update_vdev_stats(struct cdp_vdev_stats *tgtobj,
 		srcobj->stats.tx.last_ack_rssi;
 	tgtobj->rx.mec_drop.num += srcobj->stats.rx.mec_drop.num;
 	tgtobj->rx.mec_drop.bytes += srcobj->stats.rx.mec_drop.bytes;
+	tgtobj->rx.multipass_rx_pkt_drop +=
+		srcobj->stats.rx.multipass_rx_pkt_drop;
 }
 
 #define DP_UPDATE_STATS(_tgtobj, _srcobj)	\
@@ -868,6 +872,7 @@ static inline void dp_update_vdev_stats(struct cdp_vdev_stats *tgtobj,
 								  \
 		_tgtobj->stats.tx.last_ack_rssi =	\
 			_srcobj->stats.tx.last_ack_rssi; \
+		DP_STATS_AGGR(_tgtobj, _srcobj, rx.multipass_rx_pkt_drop); \
 	}  while (0)
 
 extern int dp_peer_find_attach(struct dp_soc *soc);
@@ -900,7 +905,7 @@ void dp_peer_rx_cleanup(struct dp_vdev *vdev, struct dp_peer *peer,
 			bool reuse);
 void dp_peer_unref_delete(struct dp_peer *peer);
 extern void *dp_find_peer_by_addr(struct cdp_pdev *dev,
-	uint8_t *peer_mac_addr, uint8_t *peer_id);
+	uint8_t *peer_mac_addr);
 extern struct dp_peer *dp_peer_find_hash_find(struct dp_soc *soc,
 	uint8_t *peer_mac_addr, int mac_addr_is_aligned, uint8_t vdev_id);
 
@@ -911,9 +916,7 @@ QDF_STATUS dp_clear_peer(struct cdp_pdev *pdev_handle,
 			 struct qdf_mac_addr peer_addr);
 void *dp_find_peer_by_addr_and_vdev(struct cdp_pdev *pdev_handle,
 		struct cdp_vdev *vdev,
-		uint8_t *peer_addr, uint8_t *local_id);
-uint16_t dp_local_peer_id(void *peer);
-void *dp_peer_find_by_local_id(struct cdp_pdev *pdev_handle, uint8_t local_id);
+		uint8_t *peer_addr);
 QDF_STATUS dp_peer_state_update(struct cdp_pdev *pdev_handle, uint8_t *peer_mac,
 		enum ol_txrx_peer_state state);
 QDF_STATUS dp_get_vdevid(void *peer_handle, uint8_t *vdev_id);
@@ -946,30 +949,44 @@ void dp_local_peer_id_free(struct dp_pdev *pdev, struct dp_peer *peer)
 {
 }
 #endif
-int dp_addba_resp_tx_completion_wifi3(void *peer_handle, uint8_t tid,
-	int status);
-extern int dp_addba_requestprocess_wifi3(void *peer_handle,
-	uint8_t dialogtoken, uint16_t tid, uint16_t batimeout,
-	uint16_t buffersize, uint16_t startseqnum);
-extern void dp_addba_responsesetup_wifi3(void *peer_handle, uint8_t tid,
-	uint8_t *dialogtoken, uint16_t *statuscode,
-	uint16_t *buffersize, uint16_t *batimeout);
-extern void dp_set_addba_response(void *peer_handle, uint8_t tid,
-	uint16_t statuscode);
-extern int dp_delba_process_wifi3(void *peer_handle,
-	int tid, uint16_t reasoncode);
+int dp_addba_resp_tx_completion_wifi3(struct cdp_soc_t *cdp_soc,
+				      uint8_t *peer_mac, uint16_t vdev_id,
+				      uint8_t tid,
+				      int status);
+int dp_addba_requestprocess_wifi3(struct cdp_soc_t *cdp_soc,
+				  uint8_t *peer_mac, uint16_t vdev_id,
+				  uint8_t dialogtoken, uint16_t tid,
+				  uint16_t batimeout,
+				  uint16_t buffersize,
+				  uint16_t startseqnum);
+QDF_STATUS dp_addba_responsesetup_wifi3(struct cdp_soc_t *cdp_soc,
+					uint8_t *peer_mac, uint16_t vdev_id,
+					uint8_t tid, uint8_t *dialogtoken,
+					uint16_t *statuscode,
+					uint16_t *buffersize,
+					uint16_t *batimeout);
+QDF_STATUS dp_set_addba_response(struct cdp_soc_t *cdp_soc,
+				 uint8_t *peer_mac,
+				 uint16_t vdev_id, uint8_t tid,
+				 uint16_t statuscode);
+int dp_delba_process_wifi3(struct cdp_soc_t *cdp_soc, uint8_t *peer_mac,
+			   uint16_t vdev_id, int tid,
+			   uint16_t reasoncode);
 /*
  * dp_delba_tx_completion_wifi3() -  Handle delba tx completion
  *
- * @peer_handle: Peer handle
+ * @cdp_soc: soc handle
+ * @vdev_id: id of the vdev handle
+ * @peer_mac: peer mac address
  * @tid: Tid number
  * @status: Tx completion status
  * Indicate status of delba Tx to DP for stats update and retry
  * delba if tx failed.
  *
  */
-int dp_delba_tx_completion_wifi3(void *peer_handle, uint8_t tid,
-				  int status);
+int dp_delba_tx_completion_wifi3(struct cdp_soc_t *cdp_soc, uint8_t *peer_mac,
+				 uint16_t vdev_id, uint8_t tid,
+				 int status);
 extern QDF_STATUS dp_rx_tid_setup_wifi3(struct dp_peer *peer, int tid,
 					uint32_t ba_window_size,
 					uint32_t start_seq);
@@ -1005,9 +1022,10 @@ void dp_htt_stats_print_tag(struct dp_pdev *pdev,
 void dp_htt_stats_copy_tag(struct dp_pdev *pdev, uint8_t tag_type, uint32_t *tag_buf);
 void dp_peer_rxtid_stats(struct dp_peer *peer, void (*callback_fn),
 		void *cb_ctxt);
-void dp_set_pn_check_wifi3(struct cdp_vdev *vdev_handle,
-	struct cdp_peer *peer_handle, enum cdp_sec_type sec_type,
-	 uint32_t *rx_pn);
+QDF_STATUS
+dp_set_pn_check_wifi3(struct cdp_soc_t *soc, uint8_t vdev_id,
+		      uint8_t *peer_mac, enum cdp_sec_type sec_type,
+		      uint32_t *rx_pn);
 
 void *dp_get_pdev_for_mac_id(struct dp_soc *soc, uint32_t mac_id);
 void dp_set_michael_key(struct cdp_peer *peer_handle,
@@ -1187,6 +1205,121 @@ static inline int dp_get_mac_id_for_pdev(uint32_t mac_id, uint32_t pdev_id)
 		return 0;
 	}
 	return (mac_id + pdev_id);
+}
+
+/**
+ * dp_get_lmac_id_for_pdev_id() -  Return lmac id corresponding to host pdev id
+ * @soc: soc pointer
+ * @mac_id: MAC id
+ * @pdev_id: pdev_id corresponding to pdev, 0 for MCL
+ *
+ * For MCL, Single pdev using both MACs will operate on both MAC rings.
+ *
+ * For WIN, each PDEV will operate one ring.
+ *
+ */
+static inline int
+dp_get_lmac_id_for_pdev_id
+	(struct dp_soc *soc, uint32_t mac_id, uint32_t pdev_id)
+{
+	if (!wlan_cfg_per_pdev_lmac_ring(soc->wlan_cfg_ctx)) {
+		if (mac_id && pdev_id) {
+			qdf_print("Both mac_id and pdev_id cannot be non zero");
+			QDF_BUG(0);
+			return 0;
+		}
+		return (mac_id + pdev_id);
+	}
+
+	return soc->pdev_list[pdev_id]->lmac_id;
+}
+
+/**
+ * dp_get_pdev_for_lmac_id() -  Return pdev pointer corresponding to lmac id
+ * @soc: soc pointer
+ * @lmac_id: LMAC id
+ *
+ * For MCL, Single pdev exists
+ *
+ * For WIN, each PDEV will operate one ring.
+ *
+ */
+static inline struct dp_pdev *
+	dp_get_pdev_for_lmac_id(struct dp_soc *soc, uint32_t lmac_id)
+{
+	int i = 0;
+
+	if (wlan_cfg_per_pdev_lmac_ring(soc->wlan_cfg_ctx)) {
+		i = wlan_cfg_get_pdev_idx(soc->wlan_cfg_ctx, lmac_id);
+		qdf_assert_always(i < MAX_PDEV_CNT);
+
+		return soc->pdev_list[i];
+	}
+
+	/* Typically for MCL as there only 1 PDEV*/
+	return soc->pdev_list[0];
+}
+
+/**
+ * dp_get_target_pdev_id_for_host_pdev_id() - Return target pdev corresponding
+ *                                         to host pdev id
+ * @soc: soc pointer
+ * @mac_for_pdev: pdev_id corresponding to host pdev for WIN, mac id for MCL
+ *
+ * returns target pdev_id for host pdev id. For WIN, this is derived through
+ * a two step process:
+ * 1. Get lmac_id corresponding to host pdev_id (lmac_id can change
+ *    during mode switch)
+ * 2. Get target pdev_id (set up during WMI ready) from lmac_id
+ *
+ * For MCL, return the offset-1 translated mac_id
+ */
+static inline int
+dp_get_target_pdev_id_for_host_pdev_id
+	(struct dp_soc *soc, uint32_t mac_for_pdev)
+{
+	struct dp_pdev *pdev;
+
+	if (!wlan_cfg_per_pdev_lmac_ring(soc->wlan_cfg_ctx))
+		return DP_SW2HW_MACID(mac_for_pdev);
+
+	pdev = soc->pdev_list[mac_for_pdev];
+
+	/*non-MCL case, get original target_pdev mapping*/
+	return wlan_cfg_get_target_pdev_id(soc->wlan_cfg_ctx, pdev->lmac_id);
+}
+
+/**
+ * dp_get_host_pdev_id_for_target_pdev_id() - Return host pdev corresponding
+ *                                         to target pdev id
+ * @soc: soc pointer
+ * @pdev_id: pdev_id corresponding to target pdev
+ *
+ * returns host pdev_id for target pdev id. For WIN, this is derived through
+ * a two step process:
+ * 1. Get lmac_id corresponding to target pdev_id
+ * 2. Get host pdev_id (set up during WMI ready) from lmac_id
+ *
+ * For MCL, return the 0-offset pdev_id
+ */
+static inline int
+dp_get_host_pdev_id_for_target_pdev_id
+	(struct dp_soc *soc, uint32_t pdev_id)
+{
+	struct dp_pdev *pdev;
+	int lmac_id;
+
+	if (!wlan_cfg_per_pdev_lmac_ring(soc->wlan_cfg_ctx))
+		return DP_HW2SW_MACID(pdev_id);
+
+	/*non-MCL case, get original target_lmac mapping from target pdev*/
+	lmac_id = wlan_cfg_get_hw_mac_idx(soc->wlan_cfg_ctx,
+					  DP_HW2SW_MACID(pdev_id));
+
+	/*Get host pdev from lmac*/
+	pdev = dp_get_pdev_for_lmac_id(soc, lmac_id);
+
+	return pdev->pdev_id;
 }
 
 /*
@@ -1478,6 +1611,31 @@ QDF_STATUS dp_tx_add_to_comp_queue(struct dp_soc *soc,
 {
 	return QDF_STATUS_E_FAILURE;
 }
+
+/*
+ * dp_tx_capture_htt_frame_counter: increment counter for htt_frame_type
+ * pdev: DP pdev handle
+ * htt_frame_type: htt frame type received from fw
+ *
+ * return: void
+ */
+static inline
+void dp_tx_capture_htt_frame_counter(struct dp_pdev *pdev,
+				     uint32_t htt_frame_type)
+{
+}
+
+/*
+ * dp_tx_cature_stats: print tx capture stats
+ * @pdev: DP PDEV handle
+ *
+ * return: void
+ */
+static inline
+void dp_print_pdev_tx_capture_stats(struct dp_pdev *pdev)
+{
+}
+
 #endif
 
 #ifdef FEATURE_PERPKT_INFO
@@ -1670,5 +1828,30 @@ dp_get_pdev_from_soc_pdev_id_wifi3(struct dp_soc *soc,
 
 	return soc->pdev_list[pdev_id];
 }
+
+/*
+ * dp_rx_tid_update_wifi3() – Update receive TID state
+ * @peer: Datapath peer handle
+ * @tid: TID
+ * @ba_window_size: BlockAck window size
+ * @start_seq: Starting sequence number
+ *
+ * Return: QDF_STATUS code
+ */
+QDF_STATUS dp_rx_tid_update_wifi3(struct dp_peer *peer, int tid, uint32_t
+					 ba_window_size, uint32_t start_seq);
+
+/**
+ * dp_get_peer_mac_list(): function to get peer mac list of vdev
+ * @soc: Datapath soc handle
+ * @vdev_id: vdev id
+ * @newmac: Table of the clients mac
+ * @mac_cnt: No. of MACs required
+ *
+ * return: no of clients
+ */
+uint16_t dp_get_peer_mac_list(ol_txrx_soc_handle soc, uint8_t vdev_id,
+			      u_int8_t newmac[][QDF_MAC_ADDR_SIZE],
+			      u_int16_t mac_cnt);
 
 #endif /* #ifndef _DP_INTERNAL_H_ */

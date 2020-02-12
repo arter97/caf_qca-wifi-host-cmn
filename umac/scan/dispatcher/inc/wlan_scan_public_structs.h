@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017-2019 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2017-2020 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -359,6 +359,11 @@ struct reduced_neighbor_report {
 	struct rnr_bss_info bss_info[MAX_RNR_BSS];
 };
 
+#define SCAN_SECURITY_TYPE_WEP 0x01
+#define SCAN_SECURITY_TYPE_WPA 0x02
+#define SCAN_SECURITY_TYPE_WAPI 0x04
+#define SCAN_SECURITY_TYPE_RSN 0x08
+
 /**
  * struct scan_cache_entry: structure containing scan entry
  * @frm_subtype: updated from beacon/probe
@@ -366,6 +371,7 @@ struct reduced_neighbor_report {
  * @mac_addr: mac address
  * @ssid: ssid
  * @is_hidden_ssid: is AP having hidden ssid.
+ * @security_type: security supported
  * @seq_num: sequence number
  * @phy_mode: Phy mode of the AP
  * @avg_rssi: Average RSSI of the AP
@@ -409,6 +415,7 @@ struct scan_cache_entry {
 	struct qdf_mac_addr mac_addr;
 	struct wlan_ssid ssid;
 	bool is_hidden_ssid;
+	uint8_t security_type;
 	uint16_t seq_num;
 	enum wlan_phymode phy_mode;
 	int32_t avg_rssi;
@@ -704,27 +711,6 @@ enum scan_priority {
 	SCAN_PRIORITY_COUNT,
 };
 
-
-/**
- * enum scan_type - type of scan
- * @SCAN_TYPE_BACKGROUND: background scan
- * @SCAN_TYPE_FOREGROUND: foregrounc scan
- * @SCAN_TYPE_SPECTRAL: spectral scan
- * @SCAN_TYPE_REPEATER_BACKGROUND: background scan in repeater
- * @SCAN_TYPE_REPEATER_EXT_BACKGROUND: background scan in extended repeater
- * @SCAN_TYPE_RADIO_MEASUREMENTS: redio measurement
- * @SCAN_TYPE_COUNT: number of scan types supported
- */
-enum scan_type {
-	SCAN_TYPE_BACKGROUND,
-	SCAN_TYPE_FOREGROUND,
-	SCAN_TYPE_SPECTRAL,
-	SCAN_TYPE_REPEATER_BACKGROUND,
-	SCAN_TYPE_REPEATER_EXT_BACKGROUND,
-	SCAN_TYPE_RADIO_MEASUREMENTS,
-	SCAN_TYPE_COUNT,
-};
-
 /**
  * enum scan_phy_mode - phymode used for scan
  * @SCAN_PHY_MODE_11A: 11a mode
@@ -784,21 +770,6 @@ enum scan_phy_mode {
 };
 
 /**
- * struct scan_extra_params_legacy
- * extra parameters required for legacy DA scan module
- * @scan_type: type of scan
- * @min_dwell_active: min active dwell time
- * @min_dwell_passive: min passive dwell time
- * @init_rest_time: init rest time for enhanced independent repeater
- */
-struct scan_extra_params_legacy {
-	enum scan_type scan_type;
-	uint32_t min_dwell_active;
-	uint32_t min_dwell_passive;
-	uint32_t init_rest_time;
-};
-
-/**
  * enum scan_dwelltime_adaptive_mode: dwelltime_mode
  * @SCAN_DWELL_MODE_DEFAULT: Use firmware default mode
  * @SCAN_DWELL_MODE_CONSERVATIVE: Conservative adaptive mode
@@ -846,7 +817,7 @@ struct probe_req_whitelist_attr {
  * @phymode: phymode in which @frequency should be scanned
  */
 struct chan_info {
-	uint32_t freq;
+	qdf_freq_t freq;
 	uint32_t phymode;
 };
 
@@ -857,7 +828,7 @@ struct chan_info {
  * @chan: channel parameters used for this scan
  */
 struct chan_list {
-	uint32_t num_chan;
+	uint8_t num_chan;
 	struct chan_info chan[NUM_CHANNELS];
 };
 
@@ -1081,12 +1052,10 @@ struct scan_req_params {
 /**
  * struct scan_start_request - scan request config
  * @vdev: vdev
- * @legacy_params: extra parameters required for legacy DA arch
  * @scan_req: common scan start request parameters
  */
 struct scan_start_request {
 	struct wlan_objmgr_vdev *vdev;
-	struct scan_extra_params_legacy legacy_params;
 	struct scan_req_params scan_req;
 };
 
@@ -1284,7 +1253,7 @@ enum scan_cb_type {
 
 /* Set PNO */
 #define SCAN_PNO_MAX_PLAN_REQUEST   2
-#define SCAN_PNO_MAX_NETW_CHANNELS_EX  60
+#define SCAN_PNO_MAX_NETW_CHANNELS_EX  (QDF_MAX_NUM_CHAN)
 #define SCAN_PNO_MAX_SUPP_NETWORKS  16
 #define SCAN_PNO_DEF_SLOW_SCAN_MULTIPLIER 6
 #define SCAN_PNO_DEF_SCAN_TIMER_REPEAT 20

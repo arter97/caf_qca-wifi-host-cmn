@@ -629,13 +629,22 @@ static void scm_req_update_concurrency_params(struct wlan_objmgr_vdev *vdev,
 		req->scan_req.adaptive_dwell_time_mode =
 			scan_obj->scan_def.adaptive_dwell_time_mode_nc;
 	/*
-	 * If AP/GO is active and has connected clients set min rest time
-	 * same as max rest time, so that firmware spends more time on home
-	 * channel which will increase the probability of sending beacon at TBTT
+	 * If AP/GO is active and has connected clients :
+	 * 1.set min rest time same as max rest time, so that
+	 * firmware spends more time on home channel which will
+	 * increase the probability of sending beacon at TBTT
+	 * 2.if DBS is supported and SAP is not on 2g,
+	 * do not reset active dwell time for 2g.
 	 */
 	if ((ap_present && sap_peer_count) ||
 	    (go_present && go_peer_count)) {
-		req->scan_req.dwell_time_active_2g = 0;
+		if (policy_mgr_is_hw_dbs_capable(psoc) &&
+		    policy_mgr_is_sap_go_on_2g(psoc)) {
+			req->scan_req.dwell_time_active_2g =
+				QDF_MIN(req->scan_req.dwell_time_active,
+					(SCAN_CTS_DURATION_MS_MAX -
+					SCAN_ROAM_SCAN_CHANNEL_SWITCH_TIME));
+		}
 		req->scan_req.min_rest_time = req->scan_req.max_rest_time;
 	}
 
@@ -725,21 +734,28 @@ static void scm_req_update_concurrency_params(struct wlan_objmgr_vdev *vdev,
 	}
 
 	if (ap_present) {
-		uint8_t ap_chan_freq;
+		uint16_t ap_chan_freq;
 		struct wlan_objmgr_pdev *pdev = wlan_vdev_get_pdev(vdev);
 
 		ap_chan_freq = policy_mgr_get_channel(psoc, PM_SAP_MODE, NULL);
 		/*
 		 * P2P/STA scan while SoftAP is sending beacons.
 		 * Max duration of CTS2self is 32 ms, which limits the
-		 * dwell time. If DBS is supported and if SAP is on 2G channel
-		 * then keep passive dwell time default.
+		 * dwell time.
+		 * If DBS is supported and:
+		 * 1.if SAP is on 2G channel then keep passive
+		 * dwell time default.
+		 * 2.if SAP is on 5G/6G channel then update dwell time active.
 		 */
 		if (sap_peer_count) {
-			req->scan_req.dwell_time_active =
-				QDF_MIN(req->scan_req.dwell_time_active,
-					(SCAN_CTS_DURATION_MS_MAX -
+			if (policy_mgr_is_hw_dbs_capable(psoc) &&
+			    (WLAN_REG_IS_5GHZ_CH_FREQ(ap_chan_freq) ||
+			    WLAN_REG_IS_6GHZ_CHAN_FREQ(ap_chan_freq))) {
+				req->scan_req.dwell_time_active =
+					QDF_MIN(req->scan_req.dwell_time_active,
+						(SCAN_CTS_DURATION_MS_MAX -
 					SCAN_ROAM_SCAN_CHANNEL_SWITCH_TIME));
+			}
 			if (!policy_mgr_is_hw_dbs_capable(psoc) ||
 			    (policy_mgr_is_hw_dbs_capable(psoc) &&
 			     WLAN_REG_IS_5GHZ_CH_FREQ(ap_chan_freq))) {
@@ -747,6 +763,7 @@ static void scm_req_update_concurrency_params(struct wlan_objmgr_vdev *vdev,
 					req->scan_req.dwell_time_active;
 			}
 		}
+
 		if (scan_obj->scan_def.ap_scan_burst_duration) {
 			req->scan_req.burst_duration =
 				scan_obj->scan_def.ap_scan_burst_duration;
@@ -1107,9 +1124,13 @@ scm_update_channel_list(struct scan_start_request *req,
 	}
 
 	req->scan_req.chan_list.num_chan = num_scan_channels;
-	scm_update_6ghz_channel_list(req->vdev, &req->scan_req.chan_list,
-				     scan_obj);
-	scm_sort_6ghz_channel_list(req->vdev, &req->scan_req.chan_list);
+	/* Dont upadte the channel list for SAP mode */
+	if (wlan_vdev_mlme_get_opmode(req->vdev) != QDF_SAP_MODE) {
+		scm_update_6ghz_channel_list(req->vdev,
+					     &req->scan_req.chan_list,
+					     scan_obj);
+		scm_sort_6ghz_channel_list(req->vdev, &req->scan_req.chan_list);
+	}
 	scm_scan_chlist_concurrency_modify(req->vdev, req);
 }
 

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2019 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2014-2020 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -43,7 +43,7 @@
 #define IS_VALID_PDEV_REG_OBJ(pdev_priv_obj) (pdev_priv_obj)
 
 #ifdef CONFIG_CHAN_NUM_API
-bool reg_chan_has_dfs_attribute(struct wlan_objmgr_pdev *pdev, uint32_t ch)
+bool reg_chan_has_dfs_attribute(struct wlan_objmgr_pdev *pdev, uint8_t ch)
 {
 	enum channel_enum ch_idx;
 	struct wlan_regulatory_pdev_priv_obj *pdev_priv_obj;
@@ -70,7 +70,7 @@ bool reg_chan_has_dfs_attribute(struct wlan_objmgr_pdev *pdev, uint32_t ch)
 
 #ifdef CONFIG_CHAN_FREQ_API
 bool reg_chan_has_dfs_attribute_for_freq(struct wlan_objmgr_pdev *pdev,
-					 uint16_t freq)
+					 qdf_freq_t freq)
 {
 	enum channel_enum ch_idx;
 	struct wlan_regulatory_pdev_priv_obj *pdev_priv_obj;
@@ -201,8 +201,11 @@ QDF_STATUS reg_set_country(struct wlan_objmgr_pdev *pdev,
 	}
 
 	if (!qdf_mem_cmp(psoc_reg->cur_country, country, REG_ALPHA2_LEN)) {
-		reg_err("country is not different");
-		return QDF_STATUS_SUCCESS;
+		if (psoc_reg->cc_src == SOURCE_USERSPACE ||
+		    psoc_reg->cc_src == SOURCE_CORE) {
+			reg_debug("country is not different");
+			return QDF_STATUS_SUCCESS;
+		}
 	}
 
 	reg_debug("programming new country: %s to firmware", country);
@@ -305,7 +308,7 @@ QDF_STATUS reg_get_domain_from_country_code(v_REGDOMAIN_t *reg_domain_ptr,
 
 #ifdef CONFIG_CHAN_NUM_API
 bool reg_is_passive_or_disable_ch(struct wlan_objmgr_pdev *pdev,
-				  uint32_t chan)
+				  uint8_t chan)
 {
 	enum channel_state ch_state;
 
@@ -318,7 +321,7 @@ bool reg_is_passive_or_disable_ch(struct wlan_objmgr_pdev *pdev,
 
 #ifdef CONFIG_CHAN_FREQ_API
 bool reg_is_passive_or_disable_for_freq(struct wlan_objmgr_pdev *pdev,
-					uint16_t freq)
+					qdf_freq_t freq)
 {
 	enum channel_state chan_state;
 
@@ -331,9 +334,9 @@ bool reg_is_passive_or_disable_for_freq(struct wlan_objmgr_pdev *pdev,
 
 #ifdef WLAN_FEATURE_DSRC
 #ifdef CONFIG_CHAN_FREQ_API
-bool reg_is_dsrc_freq(uint16_t freq)
+bool reg_is_dsrc_freq(qdf_freq_t freq)
 {
-	if (!REG_IS_5GHZ_FREQ(chan))
+	if (!REG_IS_5GHZ_FREQ(freq))
 		return false;
 
 	if (!(freq >= REG_DSRC_START_FREQ && freq <= REG_DSRC_END_FREQ))
@@ -344,10 +347,10 @@ bool reg_is_dsrc_freq(uint16_t freq)
 #endif  /*CONFIG_CHAN_FREQ_API*/
 
 #ifdef CONFIG_CHAN_NUM_API
-bool reg_is_dsrc_chan(struct wlan_objmgr_pdev *pdev, uint32_t chan)
+bool reg_is_dsrc_chan(struct wlan_objmgr_pdev *pdev, uint8_t chan)
 {
 	struct wlan_regulatory_pdev_priv_obj *pdev_priv_obj;
-	uint32_t freq = 0;
+	qdf_freq_t freq = 0;
 
 	pdev_priv_obj = reg_get_pdev_obj(pdev);
 
@@ -400,10 +403,10 @@ bool reg_is_etsi13_srd_chan_for_freq(struct wlan_objmgr_pdev *pdev,
 #endif /* CONFIG_CHAN_FREQ_API */
 
 #ifdef CONFIG_CHAN_NUM_API
-bool reg_is_etsi13_srd_chan(struct wlan_objmgr_pdev *pdev, uint32_t chan)
+bool reg_is_etsi13_srd_chan(struct wlan_objmgr_pdev *pdev, uint8_t chan)
 {
 	struct wlan_regulatory_pdev_priv_obj *pdev_priv_obj;
-	uint32_t freq = 0;
+	qdf_freq_t freq = 0;
 
 	pdev_priv_obj = reg_get_pdev_obj(pdev);
 
@@ -815,7 +818,7 @@ QDF_STATUS reg_set_config_vars(struct wlan_objmgr_psoc *psoc,
 }
 
 #ifdef CONFIG_CHAN_FREQ_API
-bool reg_is_disable_for_freq(struct wlan_objmgr_pdev *pdev, uint16_t freq)
+bool reg_is_disable_for_freq(struct wlan_objmgr_pdev *pdev, qdf_freq_t freq)
 {
 	enum channel_state ch_state;
 
@@ -826,7 +829,7 @@ bool reg_is_disable_for_freq(struct wlan_objmgr_pdev *pdev, uint16_t freq)
 #endif /* CONFIG_CHAN_FREQ_API */
 
 #ifdef CONFIG_CHAN_NUM_API
-bool reg_is_disable_ch(struct wlan_objmgr_pdev *pdev, uint32_t chan)
+bool reg_is_disable_ch(struct wlan_objmgr_pdev *pdev, uint8_t chan)
 {
 	enum channel_state ch_state;
 

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012-2019 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012-2020 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -41,6 +41,11 @@
 #include "htc.h"
 #include <cdp_txrx_cmn_struct.h>
 #include <cdp_txrx_ctrl.h>
+#ifdef PKTLOG_LEGACY
+#include "pktlog_wifi2.h"
+#else
+#include "pktlog_wifi3.h"
+#endif /* PKTLOG_LEGACY */
 
 wdi_event_subscribe PKTLOG_TX_SUBSCRIBER;
 wdi_event_subscribe PKTLOG_RX_SUBSCRIBER;
@@ -286,7 +291,7 @@ void pktlog_callback(void *pdev, enum WDI_EVENT event, void *log_data,
 	switch (event) {
 	case WDI_EVENT_OFFLOAD_ALL:
 	{
-		if (process_offload_pktlog(pdev, log_data)) {
+		if (process_offload_pktlog_wifi3(pdev, log_data)) {
 			qdf_print("Unable to process offload info");
 			return;
 		}
@@ -370,7 +375,7 @@ lit_pktlog_callback(void *context, enum WDI_EVENT event, void *log_data,
 	switch (event) {
 	case WDI_EVENT_RX_DESC:
 	{
-		if (process_rx_desc_remote(context, log_data)) {
+		if (process_rx_desc_remote_wifi3(context, log_data)) {
 			qdf_print("Unable to process RX info");
 			return;
 		}
@@ -378,8 +383,8 @@ lit_pktlog_callback(void *context, enum WDI_EVENT event, void *log_data,
 	}
 	case WDI_EVENT_LITE_T2H:
 	{
-		if (process_pktlog_lite(context, log_data,
-					PKTLOG_TYPE_LITE_T2H)) {
+		if (process_pktlog_lite_wifi3(context, log_data,
+					      PKTLOG_TYPE_LITE_T2H)) {
 			qdf_print("Unable to process lite_t2h");
 			return;
 		}
@@ -387,8 +392,8 @@ lit_pktlog_callback(void *context, enum WDI_EVENT event, void *log_data,
 	}
 	case WDI_EVENT_LITE_RX:
 	{
-		if (process_pktlog_lite(context, log_data,
-					PKTLOG_TYPE_LITE_RX)) {
+		if (process_pktlog_lite_wifi3(context, log_data,
+					      PKTLOG_TYPE_LITE_RX)) {
 			qdf_print("Unable to process lite_rx");
 			return;
 		}
@@ -625,9 +630,9 @@ void pktlog_init(struct hif_opaque_softc *scn)
 	pktlog_callback_registration(pl_dev->callback_type);
 }
 
-static int __pktlog_enable(struct hif_opaque_softc *scn, int32_t log_state,
-		 bool ini_triggered, uint8_t user_triggered,
-		 uint32_t is_iwpriv_command)
+int __pktlog_enable(struct hif_opaque_softc *scn, int32_t log_state,
+		    bool ini_triggered, uint8_t user_triggered,
+		    uint32_t is_iwpriv_command)
 {
 	struct pktlog_dev_t *pl_dev;
 	struct ath_pktlog_info *pl_info;

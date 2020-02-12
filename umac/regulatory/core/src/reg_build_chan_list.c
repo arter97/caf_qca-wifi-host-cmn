@@ -360,13 +360,13 @@ static void reg_modify_chan_list_for_nol_list(
  * Return: None
  */
 static void reg_find_low_limit_chan_enum(
-		struct regulatory_channel *chan_list, uint32_t low_freq,
+		struct regulatory_channel *chan_list, qdf_freq_t low_freq,
 		uint32_t *low_limit)
 {
 	enum channel_enum chan_enum;
 	uint16_t min_bw;
 	uint16_t max_bw;
-	uint32_t center_freq;
+	qdf_freq_t center_freq;
 
 	for (chan_enum = 0; chan_enum < NUM_CHANNELS; chan_enum++) {
 		min_bw = chan_list[chan_enum].min_bw;
@@ -396,13 +396,13 @@ static void reg_find_low_limit_chan_enum(
  * Return: None
  */
 static void reg_find_high_limit_chan_enum(
-		struct regulatory_channel *chan_list, uint32_t high_freq,
+		struct regulatory_channel *chan_list, qdf_freq_t high_freq,
 		uint32_t *high_limit)
 {
 	enum channel_enum chan_enum;
 	uint16_t min_bw;
 	uint16_t max_bw;
-	uint32_t center_freq;
+	qdf_freq_t center_freq;
 
 	for (chan_enum = NUM_CHANNELS - 1; chan_enum >= 0; chan_enum--) {
 		min_bw = chan_list[chan_enum].min_bw;
@@ -471,10 +471,10 @@ reg_modify_chan_list_for_japan(struct wlan_objmgr_pdev *pdev)
  */
 static void
 reg_modify_chan_list_for_freq_range(struct regulatory_channel *chan_list,
-				    uint32_t low_freq_2g,
-				    uint32_t high_freq_2g,
-				    uint32_t low_freq_5g,
-				    uint32_t high_freq_5g)
+				    qdf_freq_t low_freq_2g,
+				    qdf_freq_t high_freq_2g,
+				    qdf_freq_t low_freq_5g,
+				    qdf_freq_t high_freq_5g)
 {
 	uint32_t low_limit_2g = NUM_CHANNELS;
 	uint32_t high_limit_2g = NUM_CHANNELS;
@@ -615,6 +615,134 @@ reg_modify_chan_list_for_srd_channels(struct wlan_objmgr_pdev *pdev,
 }
 #endif
 
+#ifdef DISABLE_UNII_SHARED_BANDS
+/**
+ * reg_is_reg_unii_band_1_set() - Check UNII bitmap
+ * @unii_bitmap: 5G UNII band bitmap
+ *
+ * This function checks the input bitmap to disable UNII-1 band channels.
+ *
+ * Return: Return true if UNII-1 channels need to be disabled,
+ * else return false.
+ */
+static bool reg_is_reg_unii_band_1_set(uint8_t unii_bitmap)
+{
+	return !!(unii_bitmap & BIT(REG_UNII_BAND_1));
+}
+
+/**
+ * reg_is_reg_unii_band_2a_set() - Check UNII bitmap
+ * @unii_bitmap: 5G UNII band bitmap
+ *
+ * This function checks the input bitmap to disable UNII-2A band channels.
+ *
+ * Return: Return true if UNII-2A channels need to be disabled,
+ * else return false.
+ */
+static bool reg_is_reg_unii_band_2a_set(uint8_t unii_bitmap)
+{
+	return !!(unii_bitmap & BIT(REG_UNII_BAND_2A));
+}
+
+/**
+ * reg_is_5g_enum() - Check if channel enum is a 5G channel enum
+ * @chan_enum: channel enum
+ *
+ * Return: Return true if the input channel enum is 5G, else return false.
+ */
+static bool reg_is_5g_enum(enum channel_enum chan_enum)
+{
+	return (chan_enum >= MIN_5GHZ_CHANNEL && chan_enum <= MAX_5GHZ_CHANNEL);
+}
+
+/**
+ * reg_remove_unii_chan_from_chan_list() - Remove UNII band channels
+ * @chan_list: Pointer to current channel list
+ * @start_enum: starting enum value
+ * @end_enum: ending enum value
+ *
+ * Remove channels in a unii band based in on the input start_enum and end_enum.
+ * Disable the state and flags. Set disable_coex flag to true.
+ *
+ * return: void.
+ */
+static void
+reg_remove_unii_chan_from_chan_list(struct regulatory_channel *chan_list,
+				    enum channel_enum start_enum,
+				    enum channel_enum end_enum)
+{
+	enum channel_enum chan_enum;
+
+	if (!(reg_is_5g_enum(start_enum) && reg_is_5g_enum(end_enum))) {
+		reg_err_rl("start_enum or end_enum is invalid");
+		return;
+	}
+
+	for (chan_enum = start_enum; chan_enum <= end_enum; chan_enum++) {
+		chan_list[chan_enum].state = CHANNEL_STATE_DISABLE;
+		chan_list[chan_enum].chan_flags |= REGULATORY_CHAN_DISABLED;
+	}
+}
+
+/**
+ * reg_modify_disable_chan_list_for_unii1_and_unii2a() - Disable UNII-1 and
+ * UNII2A band
+ * @pdev_priv_obj: Pointer to pdev private object
+ *
+ * This function disables the UNII-1 and UNII-2A band channels
+ * based on input unii_5g_bitmap.
+ *
+ * Return: void.
+ */
+static void
+reg_modify_disable_chan_list_for_unii1_and_unii2a(
+		struct wlan_regulatory_pdev_priv_obj *pdev_priv_obj)
+{
+	uint8_t unii_bitmap = pdev_priv_obj->unii_5g_bitmap;
+	struct regulatory_channel *chan_list = pdev_priv_obj->cur_chan_list;
+
+	if (reg_is_reg_unii_band_1_set(unii_bitmap)) {
+		reg_remove_unii_chan_from_chan_list(chan_list,
+						    MIN_UNII_1_BAND_CHANNEL,
+						    MAX_UNII_1_BAND_CHANNEL);
+	}
+
+	if (reg_is_reg_unii_band_2a_set(unii_bitmap)) {
+		reg_remove_unii_chan_from_chan_list(chan_list,
+						    MIN_UNII_2A_BAND_CHANNEL,
+						    MAX_UNII_2A_BAND_CHANNEL);
+	}
+}
+#else
+static inline bool reg_is_reg_unii_band_1_set(uint8_t unii_bitmap)
+{
+	return false;
+}
+
+static inline bool reg_is_reg_unii_band_2a_set(uint8_t unii_bitmap)
+{
+	return false;
+}
+
+static inline bool reg_is_5g_enum(enum channel_enum chan_enum)
+{
+	return false;
+}
+
+static inline void
+reg_remove_unii_chan_from_chan_list(struct regulatory_channel *chan_list,
+				    enum channel_enum start_enum,
+				    enum channel_enum end_enum)
+{
+}
+
+static inline void
+reg_modify_disable_chan_list_for_unii1_and_unii2a(
+		struct wlan_regulatory_pdev_priv_obj *pdev_priv_obj)
+{
+}
+#endif
+
 void reg_compute_pdev_current_chan_list(struct wlan_regulatory_pdev_priv_obj
 					*pdev_priv_obj)
 {
@@ -629,6 +757,8 @@ void reg_compute_pdev_current_chan_list(struct wlan_regulatory_pdev_priv_obj
 
 	reg_modify_chan_list_for_band(pdev_priv_obj->cur_chan_list,
 				      pdev_priv_obj->band_capability);
+
+	reg_modify_disable_chan_list_for_unii1_and_unii2a(pdev_priv_obj);
 
 	reg_modify_chan_list_for_dfs_channels(pdev_priv_obj->cur_chan_list,
 					      pdev_priv_obj->dfs_enabled);
@@ -768,6 +898,77 @@ reg_populate_6g_band_channels(struct cur_reg_rule *reg_rule_5g,
 {
 }
 #endif /* CONFIG_BAND_6GHZ */
+
+#ifdef CONFIG_REG_CLIENT
+/**
+ * reg_send_ctl_info() - Send CTL info to firmware when regdb is not offloaded
+ * @soc_reg: soc private object for regulatory
+ * @regulatory_info: regulatory info
+ * @tx_ops: send operations for regulatory component
+ *
+ * Return: QDF_STATUS
+ */
+static QDF_STATUS
+reg_send_ctl_info(struct wlan_regulatory_psoc_priv_obj *soc_reg,
+		  struct cur_regulatory_info *regulatory_info,
+		  struct wlan_lmac_if_reg_tx_ops *tx_ops)
+{
+	struct wlan_objmgr_psoc *psoc = regulatory_info->psoc;
+	struct reg_ctl_params params = {0};
+	QDF_STATUS status;
+	uint16_t regd_index;
+	uint32_t index_2g, index_5g;
+
+	if (soc_reg->offload_enabled)
+		return QDF_STATUS_SUCCESS;
+
+	if (!tx_ops || !tx_ops->send_ctl_info) {
+		reg_err("No regulatory tx_ops for send_ctl_info");
+		return QDF_STATUS_E_FAULT;
+	}
+
+	status = reg_get_rdpair_from_regdmn_id(regulatory_info->reg_dmn_pair,
+					       &regd_index);
+	if (QDF_IS_STATUS_ERROR(status)) {
+		reg_err("Failed to get regdomain index for regdomain pair: %x",
+			regulatory_info->reg_dmn_pair);
+		return status;
+	}
+
+	index_2g = g_reg_dmn_pairs[regd_index].dmn_id_2g;
+	index_5g = g_reg_dmn_pairs[regd_index].dmn_id_5g;
+	params.ctl_2g = regdomains_2g[index_2g].ctl_val;
+	params.ctl_5g = regdomains_5g[index_5g].ctl_val;
+	params.regd_2g = reg_2g_sub_dmn_code[index_2g];
+	params.regd_5g = reg_5g_sub_dmn_code[index_5g];
+
+	if (reg_is_world_ctry_code(regulatory_info->reg_dmn_pair))
+		params.regd = regulatory_info->reg_dmn_pair;
+	else
+		params.regd = regulatory_info->ctry_code | COUNTRY_ERD_FLAG;
+
+	reg_debug("regdomain pair = %u, regdomain index = %u",
+		  regulatory_info->reg_dmn_pair, regd_index);
+	reg_debug("index_2g = %u, index_5g = %u, ctl_2g = %x, ctl_5g = %x",
+		  index_2g, index_5g, params.ctl_2g, params.ctl_5g);
+	reg_debug("regd_2g = %x, regd_5g = %x, regd = %x",
+		  params.regd_2g, params.regd_5g, params.regd);
+
+	status = tx_ops->send_ctl_info(psoc, &params);
+	if (QDF_IS_STATUS_ERROR(status))
+		reg_err("Failed to send CTL info to firmware");
+
+	return status;
+}
+#else
+static QDF_STATUS
+reg_send_ctl_info(struct wlan_regulatory_psoc_priv_obj *soc_reg,
+		  struct cur_regulatory_info *regulatory_info,
+		  struct wlan_lmac_if_reg_tx_ops *tx_ops)
+{
+	return QDF_STATUS_SUCCESS;
+}
+#endif
 
 QDF_STATUS reg_process_master_chan_list(
 		struct cur_regulatory_info *regulat_info)
@@ -933,6 +1134,12 @@ QDF_STATUS reg_process_master_chan_list(
 	}
 
 	soc_reg->chan_list_recvd[phy_id] = true;
+	status = reg_send_ctl_info(soc_reg, regulat_info, tx_ops);
+	if (!QDF_IS_STATUS_SUCCESS(status)) {
+		reg_err("Failed to send ctl info to fw");
+		return status;
+	}
+
 	if (soc_reg->new_user_ctry_pending[phy_id]) {
 		soc_reg->new_user_ctry_pending[phy_id] = false;
 		soc_reg->cc_src = SOURCE_USERSPACE;

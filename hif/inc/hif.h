@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2019 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2013-2020 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -64,6 +64,7 @@ typedef void *hif_handle_t;
 #define HIF_TYPE_QCA6018  20
 #define HIF_TYPE_QCN9000 21
 #define HIF_TYPE_QCA6490 22
+#define HIF_TYPE_QCA6750 23
 
 #ifdef IPA_OFFLOAD
 #define DMA_COHERENT_MASK_IPA_VER_3_AND_ABOVE   37
@@ -284,7 +285,7 @@ struct qca_napi_data {
 struct hif_config_info {
 	bool enable_self_recovery;
 #ifdef FEATURE_RUNTIME_PM
-	bool enable_runtime_pm;
+	uint8_t enable_runtime_pm;
 	u_int32_t runtime_pm_delay;
 #endif
 	uint64_t rx_softirq_max_yield_duration_ns;
@@ -672,6 +673,7 @@ struct hif_msg_callbacks {
 					uint8_t pipeID);
 	void (*txResourceAvailHandler)(void *context, uint8_t pipe);
 	void (*fwEventHandler)(void *context, QDF_STATUS status);
+	void (*update_bundle_stats)(void *context, uint8_t no_of_pkt_in_bundle);
 };
 
 enum hif_target_status {

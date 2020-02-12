@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017-2019 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2017-2020 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -96,13 +96,15 @@ static void dp_rx_return_head_frag_desc(struct dp_peer *peer,
 	struct rx_desc_pool *rx_desc_pool;
 	union dp_rx_desc_list_elem_t *head = NULL;
 	union dp_rx_desc_list_elem_t *tail = NULL;
+	uint8_t pool_id;
 
 	pdev = peer->vdev->pdev;
 	soc = pdev->soc;
 
 	if (peer->rx_tid[tid].head_frag_desc) {
-		dp_rxdma_srng = &pdev->rx_refill_buf_ring;
-		rx_desc_pool = &soc->rx_desc_buf[pdev->pdev_id];
+		pool_id = peer->rx_tid[tid].head_frag_desc->pool_id;
+		dp_rxdma_srng = &soc->rx_refill_buf_ring[pool_id];
+		rx_desc_pool = &soc->rx_desc_buf[pool_id];
 
 		dp_rx_add_to_free_desc_list(&head, &tail,
 					    peer->rx_tid[tid].head_frag_desc);
@@ -237,8 +239,8 @@ static void dp_rx_defrag_waitlist_add(struct dp_peer *peer, unsigned tid)
 	struct dp_soc *psoc = peer->vdev->pdev->soc;
 	struct dp_rx_tid *rx_reorder = &peer->rx_tid[tid];
 
-	dp_info("Adding TID %u to waitlist for peer %pK at MAC address %pM",
-		tid, peer, peer->mac_addr.raw);
+	dp_debug("Adding TID %u to waitlist for peer %pK at MAC address %pM",
+		 tid, peer, peer->mac_addr.raw);
 
 	/* TODO: use LIST macros instead of TAIL macros */
 	qdf_spin_lock_bh(&psoc->rx.defrag.defrag_lock);
@@ -266,11 +268,11 @@ void dp_rx_defrag_waitlist_remove(struct dp_peer *peer, unsigned tid)
 	struct dp_rx_tid *rx_reorder;
 	struct dp_rx_tid *tmp;
 
-	dp_info("Removing TID %u to waitlist for peer %pK at MAC address %pM",
-		tid, peer, peer->mac_addr.raw);
+	dp_debug("Removing TID %u to waitlist for peer %pK at MAC address %pM",
+		 tid, peer, peer->mac_addr.raw);
 
 	if (tid >= DP_MAX_TIDS) {
-		dp_info("TID out of bounds: %d", tid);
+		dp_err("TID out of bounds: %d", tid);
 		qdf_assert_always(0);
 	}
 
@@ -891,7 +893,8 @@ static void dp_rx_defrag_err(struct dp_vdev *vdev, qdf_nbuf_t nbuf)
 
 	tops = pdev->soc->cdp_soc.ol_ops;
 	if (tops->rx_mic_error)
-		tops->rx_mic_error(pdev->ctrl_pdev, &mic_failure_info);
+		tops->rx_mic_error(pdev->soc->ctrl_psoc, pdev->pdev_id,
+				   &mic_failure_info);
 }
 
 
@@ -1025,11 +1028,21 @@ static QDF_STATUS dp_rx_defrag_reo_reinject(struct dp_peer *peer,
 		peer->rx_tid[tid].dst_ring_desc;
 	hal_ring_handle_t hal_srng = soc->reo_reinject_ring.hal_srng;
 	struct dp_rx_desc *rx_desc = peer->rx_tid[tid].head_frag_desc;
+	struct dp_rx_reorder_array_elem *rx_reorder_array_elem =
+						peer->rx_tid[tid].array;
+	qdf_nbuf_t nbuf_head;
 
-	head = dp_ipa_handle_rx_reo_reinject(soc, head);
-	if (qdf_unlikely(!head)) {
+	nbuf_head = dp_ipa_handle_rx_reo_reinject(soc, head);
+	if (qdf_unlikely(!nbuf_head)) {
 		dp_err_rl("IPA RX REO reinject failed");
 		return QDF_STATUS_E_FAILURE;
+	}
+
+	/* update new allocated skb in case IPA is enabled */
+	if (nbuf_head != head) {
+		head = nbuf_head;
+		rx_desc->nbuf = head;
+		rx_reorder_array_elem->head = head;
 	}
 
 	ent_ring_desc = hal_srng_src_get_next(soc->hal_soc, hal_srng);
@@ -1108,7 +1121,7 @@ static QDF_STATUS dp_rx_defrag_reo_reinject(struct dp_peer *peer,
 		return QDF_STATUS_E_FAILURE;
 	}
 
-	hal_rxdma_buff_addr_info_set(msdu0, paddr, cookie, DP_WBM2SW_RBM);
+	hal_rxdma_buff_addr_info_set(msdu0, paddr, cookie, DP_DEFRAG_RBM);
 
 	/* Lets fill entrance ring now !!! */
 	if (qdf_unlikely(hal_srng_access_start(soc->hal_soc, hal_srng))) {
@@ -1140,12 +1153,10 @@ static QDF_STATUS dp_rx_defrag_reo_reinject(struct dp_peer *peer,
 	HAL_RX_MPDU_DESC_INFO_SET(ent_mpdu_desc_info,
 			MSDU_COUNT, 0x1);
 	HAL_RX_MPDU_DESC_INFO_SET(ent_mpdu_desc_info,
-			MPDU_SEQUENCE_NUMBER, seq_no);
-
+				  MPDU_SEQUENCE_NUMBER, seq_no);
 	/* unset frag bit */
 	HAL_RX_MPDU_DESC_INFO_SET(ent_mpdu_desc_info,
 			FRAGMENT_FLAG, 0x0);
-
 	/* set sa/da valid bits */
 	HAL_RX_MPDU_DESC_INFO_SET(ent_mpdu_desc_info,
 			SA_IS_VALID, 0x1);
@@ -1292,27 +1303,22 @@ static QDF_STATUS dp_rx_defrag(struct dp_peer *peer, unsigned tid,
 
 	if (tkip_demic) {
 		msdu = frag_list_head;
-		if (soc->cdp_soc.ol_ops->rx_frag_tkip_demic) {
-			status = soc->cdp_soc.ol_ops->rx_frag_tkip_demic(
-				(void *)peer->ctrl_peer, msdu, hdr_space);
-		} else {
-			qdf_mem_copy(key,
-				     &peer->security[index].michael_key[0],
-				IEEE80211_WEP_MICLEN);
-			status = dp_rx_defrag_tkip_demic(key, msdu,
-							 RX_PKT_TLVS_LEN +
-							 hdr_space);
+		qdf_mem_copy(key,
+			     &peer->security[index].michael_key[0],
+			     IEEE80211_WEP_MICLEN);
+		status = dp_rx_defrag_tkip_demic(key, msdu,
+						 RX_PKT_TLVS_LEN +
+						 hdr_space);
 
-			if (status) {
-				dp_rx_defrag_err(vdev, frag_list_head);
+		if (status) {
+			dp_rx_defrag_err(vdev, frag_list_head);
 
-				QDF_TRACE(QDF_MODULE_ID_TXRX,
-					  QDF_TRACE_LEVEL_ERROR,
-					  "%s: TKIP demic failed status %d",
-					  __func__, status);
+			QDF_TRACE(QDF_MODULE_ID_TXRX,
+				  QDF_TRACE_LEVEL_ERROR,
+				  "%s: TKIP demic failed status %d",
+				   __func__, status);
 
-				return QDF_STATUS_E_DEFRAG_ERROR;
-			}
+			return QDF_STATUS_E_DEFRAG_ERROR;
 		}
 	}
 
@@ -1443,9 +1449,9 @@ dp_rx_defrag_store_fragment(struct dp_soc *soc,
 		 * however, that might happen while we are in the monitor mode.
 		 * We don't need to handle that here
 		 */
-		QDF_TRACE(QDF_MODULE_ID_TXRX, QDF_TRACE_LEVEL_ERROR,
-			"Unknown peer, dropping the fragment");
-
+		dp_info_rl("Unknown peer with peer_id %d, dropping fragment",
+			   peer_id);
+		DP_STATS_INC(soc, rx.rx_frag_err_no_peer, 1);
 		goto discard_frag;
 	}
 
@@ -1700,9 +1706,8 @@ uint32_t dp_rx_frag_handle(struct dp_soc *soc, hal_ring_desc_t ring_desc,
 	qdf_assert(mpdu_desc_info);
 	qdf_assert(rx_desc);
 
-	QDF_TRACE(QDF_MODULE_ID_TXRX, QDF_TRACE_LEVEL_INFO_HIGH,
-		"Number of MSDUs to process, num_msdus: %d",
-		mpdu_desc_info->msdu_count);
+	dp_debug("Number of MSDUs to process, num_msdus: %d",
+		 mpdu_desc_info->msdu_count);
 
 
 	if (qdf_unlikely(mpdu_desc_info->msdu_count == 0)) {
@@ -1735,11 +1740,10 @@ uint32_t dp_rx_frag_handle(struct dp_soc *soc, hal_ring_desc_t ring_desc,
 		rx_bufs_used++;
 
 	if (!QDF_IS_STATUS_SUCCESS(status))
-		QDF_TRACE(QDF_MODULE_ID_TXRX, QDF_TRACE_LEVEL_ERROR,
-			  "Rx Defrag err seq#:0x%x msdu_count:%d flags:%d",
-			  mpdu_desc_info->mpdu_seq,
-			  mpdu_desc_info->msdu_count,
-			  mpdu_desc_info->mpdu_flags);
+		dp_info_rl("Rx Defrag err seq#:0x%x msdu_count:%d flags:%d",
+			   mpdu_desc_info->mpdu_seq,
+			   mpdu_desc_info->msdu_count,
+			   mpdu_desc_info->mpdu_flags);
 
 	return rx_bufs_used;
 }

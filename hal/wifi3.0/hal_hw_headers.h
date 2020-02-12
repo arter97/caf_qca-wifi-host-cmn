@@ -87,6 +87,9 @@
 #define SRNG_LOOP_CNT_MASK REO_DESTINATION_RING_15_LOOPING_COUNT_MASK
 #define SRNG_LOOP_CNT_LSB REO_DESTINATION_RING_15_LOOPING_COUNT_LSB
 
+/* HAL Macro to get the buffer info size */
+#define HAL_RX_BUFFINFO_NUM_DWORDS NUM_OF_DWORDS_BUFFER_ADDR_INFO
+
 #define HAL_DEFAULT_BE_BK_VI_REO_TIMEOUT_MS 100 /* milliseconds */
 #define HAL_DEFAULT_VO_REO_TIMEOUT_MS 40 /* milliseconds */
 
@@ -106,11 +109,11 @@
 		(_reg ## _ ## _fld ## _SHFT))
 
 #define HAL_REG_WRITE(_soc, _reg, _value) \
-	hal_write32_mb(_soc, (_reg), (_value), false)
+	hal_write32_mb(_soc, (_reg), (_value))
 
 /* Check register writing result */
 #define HAL_REG_WRITE_CONFIRM(_soc, _reg, _value) \
-	hal_write32_mb(_soc, (_reg), (_value), true)
+	hal_write32_mb_confirm(_soc, (_reg), (_value))
 
 #define HAL_REG_READ(_soc, _offset) \
 	hal_read32_mb(_soc, (_offset))

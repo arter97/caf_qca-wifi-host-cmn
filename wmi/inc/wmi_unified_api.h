@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2019 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2013-2020 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -459,8 +459,9 @@ void
 wmi_flush_endpoint(wmi_unified_t wmi_handle);
 
 /**
- * wmi_pdev_id_conversion_enable() - API to enable pdev_id conversion in WMI
- *                     By default pdev_id conversion is not done in WMI.
+ * wmi_pdev_id_conversion_enable() - API to enable pdev_id and phy_id
+ *                     conversion in WMI. By default pdev_id and
+ *                     phyid conversion is not done in WMI.
  *                     This API can be used enable conversion in WMI.
  * @param wmi_handle   : handle to WMI
  * @param *pdev_id_map : pdev conversion map
@@ -468,7 +469,8 @@ wmi_flush_endpoint(wmi_unified_t wmi_handle);
  * Return none
  */
 void wmi_pdev_id_conversion_enable(wmi_unified_t wmi_handle,
-				   uint32_t *pdev_id_map, uint8_t size);
+				   uint32_t *pdev_id_map,
+				   uint8_t size);
 
 /**
  * API to handle wmi rx event after UMAC has taken care of execution
@@ -531,6 +533,67 @@ QDF_STATUS
 wmi_unified_extract_hw_mode_resp(wmi_unified_t wmi,
 				 void *evt_buf,
 				 uint32_t *cmd_status);
+
+/**
+ * wmi_unified_extract_roam_trigger_stats() - Extract roam trigger related
+ * stats
+ * @wmi:        wmi handle
+ * @evt_buf:    Pointer to the event buffer
+ * @trig:       Pointer to destination structure to fill data
+ * @idx:        TLV id
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS
+wmi_unified_extract_roam_trigger_stats(wmi_unified_t wmi, void *evt_buf,
+				       struct wmi_roam_trigger_info *trig,
+				       uint8_t idx);
+
+/**
+ * wmi_unified_extract_roam_scan_stats() - Extract roam scan stats from
+ * firmware
+ * @wmi:        wmi handle
+ * @evt_buf:    Pointer to the event buffer
+ * @dst:        Pointer to destination structure to fill data
+ * @idx:        TLV id
+ * @chan_idx:   Index of the channel frequency for this roam trigger
+ * @ap_idx:     Index of the candidate AP for this roam trigger
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS
+wmi_unified_extract_roam_scan_stats(wmi_unified_t wmi, void *evt_buf,
+				    struct wmi_roam_scan_data *dst, uint8_t idx,
+				    uint8_t chan_idx, uint8_t ap_idx);
+
+/**
+ * wmi_unified_extract_roam_result_stats() - Extract roam result related stats
+ * @wmi:        wmi handle
+ * @evt_buf:    Pointer to the event buffer
+ * @dst:        Pointer to destination structure to fill data
+ * @idx:        TLV id
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS
+wmi_unified_extract_roam_result_stats(wmi_unified_t wmi, void *evt_buf,
+				      struct wmi_roam_result *dst,
+				      uint8_t idx);
+
+/**
+ * wmi_unified_extract_roam_11kv_stats() - Extract BTM/Neigh report stats
+ * @wmi:       wmi handle
+ * @evt_buf:   Pointer to the event buffer
+ * @dst:       Pointer to destination structure to fill data
+ * @idx:       TLV id
+ * @rpt_idx:   index of the current channel
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS
+wmi_unified_extract_roam_11kv_stats(wmi_unified_t wmi, void *evt_buf,
+				    struct wmi_neighbor_report_data *dst,
+				    uint8_t idx, uint8_t rpt_idx);
 
 /**
  * wmi_unified_vdev_create_send() - send VDEV create command to fw
@@ -1160,6 +1223,17 @@ wmi_unified_probe_rsp_tmpl_send_cmd(
 QDF_STATUS
 wmi_unified_setup_install_key_cmd(wmi_unified_t wmi_handle,
 				  struct set_key_params *key_params);
+
+/**
+ * wmi_unified_get_pn_send_cmd() - send command to fw get PN for peer
+ * @wmi_handle: wmi handle
+ * @pn_params: PN parameters
+ *
+ * Return: QDF_STATUS_SUCCESS on success and QDF_STATUS_E_FAILURE for failure
+ */
+QDF_STATUS
+wmi_unified_get_pn_send_cmd(wmi_unified_t wmi_hdl,
+			    struct peer_request_pn_param *pn_params);
 
 /**
  * wmi_unified_p2p_go_set_beacon_ie_cmd() - set beacon IE for p2p go
@@ -1900,6 +1974,19 @@ QDF_STATUS wmi_unified_vdev_spectral_enable_cmd_send(
 			wmi_unified_t wmi_handle,
 			struct vdev_spectral_enable_params *param);
 
+#if defined(WLAN_SUPPORT_FILS) || defined(CONFIG_BAND_6GHZ)
+/**
+ *  wmi_unified_vdev_fils_enable_cmd_send() - WMI send fils enable command
+ *  @param wmi_handle: handle to WMI.
+ *  @param config_fils_params: fils enable parameters
+ *
+ *  Return: QDF_STATUS_SUCCESS on success and QDF_STATUS_E_FAILURE for failure
+ */
+QDF_STATUS
+wmi_unified_vdev_fils_enable_cmd_send(struct wmi_unified *wmi_handle,
+				      struct config_fils_params *param);
+#endif
+
 /**
  *  wmi_unified_bss_chan_info_request_cmd_send() - WMI bss chan info
  *  request function
@@ -2328,6 +2415,17 @@ QDF_STATUS wmi_unified_lcr_set_cmd_send(wmi_unified_t wmi_handle,
 					struct lcr_set_params *param);
 
 /**
+ * wmi_unified_extract_pn() - extract pn event data
+ * @wmi_handle: wmi handle
+ * @evt_buf: pointer to event buffer
+ * @param: pointer to get pn event param
+ *
+ * Return: QDF_STATUS_SUCCESS on success and QDF_STATUS_E_FAILURE for failure
+ */
+QDF_STATUS wmi_unified_extract_pn(wmi_unified_t wmi_hdl, void *evt_buf,
+			  struct wmi_host_get_pn_event *param);
+
+/**
  * wmi_unified_send_periodic_chan_stats_config_cmd() - send periodic chan
  * stats cmd to fw
  * @wmi_handle: wmi handle
@@ -2405,6 +2503,32 @@ wmi_extract_vdev_roam_param(wmi_unified_t wmi_handle, void *evt_buf,
 QDF_STATUS
 wmi_extract_vdev_scan_ev_param(wmi_unified_t wmi_handle, void *evt_buf,
 			       struct scan_event *param);
+
+#ifdef FEATURE_WLAN_SCAN_PNO
+/**
+ * wmi_extract_nlo_match_ev_param() - extract NLO match param from event
+ * @wmi_handle: pointer to WMI handle
+ * @evt_buf: pointer to WMI event buffer
+ * @param: pointer to scan event param for NLO match
+ *
+ * Return: QDF_STATUS_SUCCESS for success or error code
+ */
+QDF_STATUS
+wmi_extract_nlo_match_ev_param(wmi_unified_t wmi_handle, void *evt_buf,
+			       struct scan_event *param);
+
+/**
+ * wmi_extract_nlo_complete_ev_param() - extract NLO complete param from event
+ * @wmi_handle: pointer to WMI handle
+ * @evt_buf: pointer to WMI event buffer
+ * @param: pointer to scan event param for NLO complete
+ *
+ * Return: QDF_STATUS_SUCCESS for success or error code
+ */
+QDF_STATUS
+wmi_extract_nlo_complete_ev_param(wmi_unified_t wmi_handle, void *evt_buf,
+				  struct scan_event *param);
+#endif
 
 /**
  * wmi_extract_mu_ev_param() - extract mu param from event
@@ -2827,6 +2951,19 @@ QDF_STATUS wmi_extract_per_chain_rssi_stats(
 		wmi_unified_t wmi_handle, void *evt_buf,
 		uint32_t index,
 		struct wmi_host_per_chain_rssi_stats *rssi_stats);
+
+#ifdef WLAN_FEATURE_MIB_STATS
+/**
+ * wmi_extract_mib_stats() - extract mib stats from event
+ * @wmi_handle: wmi handle
+ * @evt_buf: pointer to event buffer
+ * @mib_stats: pointer to hold mib stats
+ *
+ * Return: QDF_STATUS_SUCCESS on success and QDF_STATUS_E_FAILURE for failure
+ */
+QDF_STATUS wmi_extract_mib_stats(wmi_unified_t wmi_handle, void *evt_buf,
+				 struct mib_stats_metrics *mib_stats);
+#endif
 
 /**
  * wmi_extract_vdev_extd_stats() - extract extended vdev stats from event
@@ -3601,31 +3738,6 @@ QDF_STATUS wmi_unified_send_mws_coex_req_cmd(struct wmi_unified *wmi_handle,
 QDF_STATUS
 wmi_unified_send_idle_trigger_monitor(wmi_unified_t wmi_handle, uint8_t val);
 
-#ifdef WLAN_CFR_ENABLE
-/**
- * wmi_unified_send_peer_cfr_capture_cmd() - WMI function to start CFR capture
- * for a peer
- * @wmi_handle: WMI handle
- * @param: configuration params for capture
- *
- * Return: QDF_STATUS_SUCCESS if success, else returns proper error code.
- */
-QDF_STATUS
-wmi_unified_send_peer_cfr_capture_cmd(wmi_unified_t wmi_handle,
-				      struct peer_cfr_params *param);
-/**
- * wmi_extract_cfr_peer_tx_event_param() - WMI function to extract cfr tx event
- * for a peer
- * @wmi_handle: WMI handle
- * @evt_buf: Buffer holding event data
- * @peer_tx_event: pointer to hold tx event data
- *
- * Return: QDF_STATUS_SUCCESS if success, else returns proper error code.
- */
-QDF_STATUS
-wmi_extract_cfr_peer_tx_event_param(wmi_unified_t wmi_handle, void *evt_buf,
-				    wmi_cfr_peer_tx_event_param *peer_tx_event);
-#endif /* WLAN_CFR_ENABLE */
 
 #ifdef WIFI_POS_CONVERGED
 /**
