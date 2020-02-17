@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017-2019 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2017-2020 The Linux Foundation. All rights reserved.
  *
  *
  * Permission to use, copy, modify, and/or distribute this software for
@@ -67,56 +67,69 @@ struct cdp_cmn_ops {
 
 	QDF_STATUS (*txrx_soc_attach_target)(ol_txrx_soc_handle soc);
 
-	int (*txrx_pdev_attach_target)(struct cdp_pdev *pdev);
+	int (*txrx_pdev_attach_target)(ol_txrx_soc_handle soc, uint8_t pdev_id);
 
-	struct cdp_vdev *(*txrx_vdev_attach)
-		(struct cdp_pdev *pdev, uint8_t *vdev_mac_addr,
+	QDF_STATUS (*txrx_vdev_attach)
+		(struct cdp_soc_t *soc, uint8_t pdev_id, uint8_t *mac,
 		 uint8_t vdev_id, enum wlan_op_mode op_mode,
 		 enum wlan_op_subtype subtype);
 
-	void (*txrx_vdev_detach)
-		(struct cdp_vdev *vdev, ol_txrx_vdev_delete_cb callback,
-		 void *cb_context);
+	QDF_STATUS
+	(*txrx_vdev_detach)(struct cdp_soc_t *cdp_soc, uint8_t vdev_id,
+			    ol_txrx_vdev_delete_cb callback,
+			    void *cb_context);
 
-	struct cdp_pdev *(*txrx_pdev_attach)
+	QDF_STATUS (*txrx_pdev_attach)
 		(ol_txrx_soc_handle soc, HTC_HANDLE htc_pdev,
 		 qdf_device_t osdev, uint8_t pdev_id);
 
-	int (*txrx_pdev_post_attach)(struct cdp_pdev *pdev);
+	int (*txrx_pdev_post_attach)(struct cdp_soc_t *soc, uint8_t pdev_id);
 
-	void (*txrx_pdev_pre_detach)(struct cdp_pdev *pdev, int force);
+	void
+	(*txrx_pdev_pre_detach)(struct cdp_soc_t *soc, uint8_t pdev_id,
+				int force);
 
-	void (*txrx_pdev_detach)(struct cdp_pdev *pdev, int force);
+	QDF_STATUS
+	(*txrx_pdev_detach)(struct cdp_soc_t *psoc, uint8_t pdev_id,
+			    int force);
 
 	/**
 	 * txrx_pdev_deinit() - Deinitialize pdev and dp ring memory
-	 * @pdev: Dp pdev handle
+	 * @soc: soc dp handle
+	 * @pdev_id: id of Dp pdev handle
 	 * @force: Force deinit or not
 	 *
-	 * Return: None
+	 * Return: QDF_STATUS
 	 */
-	void (*txrx_pdev_deinit)(struct cdp_pdev *pdev, int force);
+	QDF_STATUS
+	(*txrx_pdev_deinit)(struct cdp_soc_t *soc, uint8_t pdev_id,
+			    int force);
 
-	void *(*txrx_peer_create)
-		(struct cdp_vdev *vdev, uint8_t *peer_mac_addr);
+	QDF_STATUS
+	(*txrx_peer_create)
+		(ol_txrx_soc_handle soc, uint8_t vdev_id,
+		uint8_t *peer_mac_addr);
 
-	void (*txrx_peer_setup)
-		(struct cdp_vdev *vdev_hdl, void *peer_hdl);
+	QDF_STATUS
+	(*txrx_peer_setup)(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
+			   uint8_t *peer_mac);
 
-	void (*txrx_cp_peer_del_response)
-		(ol_txrx_soc_handle soc, struct cdp_vdev *vdev_hdl,
+	QDF_STATUS
+	(*txrx_cp_peer_del_response)
+		(ol_txrx_soc_handle soc, uint8_t vdev_id,
 		 uint8_t *peer_mac_addr);
 
-	void (*txrx_peer_teardown)
-		(struct cdp_vdev *vdev_hdl, void *peer_hdl);
+	QDF_STATUS
+	(*txrx_peer_teardown)
+		(struct cdp_soc_t *soc, uint8_t vdev_id, uint8_t *peer_mac);
 
 	int (*txrx_peer_add_ast)
-		(ol_txrx_soc_handle soc, struct cdp_peer *peer_hdl,
+		(ol_txrx_soc_handle soc, uint8_t vdev_id, uint8_t *peer_mac,
 		uint8_t *mac_addr, enum  cdp_txrx_ast_entry_type type,
 		uint32_t flags);
 
 	int (*txrx_peer_update_ast)
-		(ol_txrx_soc_handle soc, struct cdp_peer *peer_hdl,
+		(ol_txrx_soc_handle soc, uint8_t vdev_id, uint8_t *peer_mac,
 		uint8_t *mac_addr, uint32_t flags);
 
 	bool (*txrx_peer_get_ast_info_by_soc)
@@ -139,94 +152,91 @@ struct cdp_cmn_ops {
 		txrx_ast_free_cb callback,
 		void *cookie);
 
-	void (*txrx_peer_delete)(void *peer, uint32_t bitmap);
+	QDF_STATUS
+	(*txrx_peer_delete)(struct cdp_soc_t *soc, uint8_t vdev_id,
+			    uint8_t *peer_mac, uint32_t bitmap);
 
-	void (*txrx_vdev_flush_peers)(struct cdp_vdev *vdev, bool unmap_only);
-
-	QDF_STATUS (*txrx_set_monitor_mode)(struct cdp_vdev *vdev,
+	QDF_STATUS (*txrx_set_monitor_mode)(struct cdp_soc_t *soc,
+					    uint8_t vdev_id,
 					    uint8_t smart_monitor);
-	void (*txrx_peer_delete_sync)(void *peer,
+	void (*txrx_peer_delete_sync)(struct cdp_soc_t *soc, uint8_t vdev_id,
+				      uint8_t *peer_mac,
 				      QDF_STATUS(*delete_cb)(
 						uint8_t vdev_id,
 						uint32_t peerid_cnt,
 						uint16_t *peerid_list),
 				      uint32_t bitmap);
 
-	void (*txrx_peer_unmap_sync_cb_set)(struct cdp_pdev *pdev,
-					    QDF_STATUS(*unmap_resp_cb)(
-						uint8_t vdev_id,
-						uint32_t peerid_cnt,
-						uint16_t *peerid_list));
+	void (*txrx_peer_unmap_sync_cb_set)(struct cdp_soc_t *soc_hdl,
+					    uint8_t pdev_id,
+					    ol_txrx_peer_unmap_sync_cb
+					    peer_unmap_sync);
 
-	uint8_t (*txrx_get_pdev_id_frm_pdev)(struct cdp_pdev *pdev);
-	bool (*txrx_get_vow_config_frm_pdev)(struct cdp_pdev *pdev);
-
-	void (*txrx_pdev_set_chan_noise_floor)(struct cdp_pdev *pdev,
-					       int16_t chan_noise_floor);
-
-	void (*txrx_set_nac)(struct cdp_peer *peer);
-
-	/**
-	 * txrx_set_pdev_tx_capture() - callback to set pdev tx_capture
-	 * @soc: opaque soc handle
-	 * @pdev: data path pdev handle
-	 * @val: value of pdev_tx_capture
-	 *
-	 * Return: status: 0 - Success, non-zero: Failure
-	 */
-	QDF_STATUS (*txrx_set_pdev_tx_capture)(struct cdp_pdev *pdev, int val);
-
-	void (*txrx_get_peer_mac_from_peer_id)
-		(struct cdp_pdev *pdev_handle,
+	QDF_STATUS
+	(*txrx_get_peer_mac_from_peer_id)
+		(struct cdp_soc_t *cdp_soc,
 		 uint32_t peer_id, uint8_t *peer_mac);
 
-	void (*txrx_vdev_tx_lock)(struct cdp_vdev *vdev);
+	void
+	(*txrx_vdev_tx_lock)(struct cdp_soc_t *soc, uint8_t vdev_id);
 
-	void (*txrx_vdev_tx_unlock)(struct cdp_vdev *vdev);
+	void
+	(*txrx_vdev_tx_unlock)(struct cdp_soc_t *soc, uint8_t vdev_id);
 
-	void (*txrx_ath_getstats)(void *pdev,
-			struct cdp_dev_stats *stats, uint8_t type);
+	QDF_STATUS
+	(*txrx_ath_getstats)(struct cdp_soc_t *soc, uint8_t id,
+			     struct cdp_dev_stats *stats, uint8_t type);
 
-	void (*txrx_set_gid_flag)(struct cdp_pdev *pdev, u_int8_t *mem_status,
-			u_int8_t *user_position);
+	QDF_STATUS
+	(*txrx_set_gid_flag)(struct cdp_soc_t *soc, uint8_t pdev_id,
+			     u_int8_t *mem_status,
+			     u_int8_t *user_position);
 
-	uint32_t (*txrx_fw_supported_enh_stats_version)(struct cdp_pdev *pdev);
+	uint32_t (*txrx_fw_supported_enh_stats_version)(struct cdp_soc_t *soc,
+							uint8_t pdev_id);
 
-	void (*txrx_if_mgmt_drain)(void *ni, int force);
+	QDF_STATUS
+	(*txrx_if_mgmt_drain)(struct cdp_soc_t *soc, uint8_t pdev_id,
+			      int force);
 
-	void (*txrx_set_curchan)(struct cdp_pdev *pdev, uint32_t chan_mhz);
+	QDF_STATUS
+	(*txrx_set_curchan)(struct cdp_soc_t *soc, uint8_t pdev_id,
+			    uint32_t chan_mhz);
 
-	void (*txrx_set_privacy_filters)
-		(struct cdp_vdev *vdev, void *filter, uint32_t num);
+	QDF_STATUS
+	(*txrx_set_privacy_filters)
+		(struct cdp_soc_t *soc, uint8_t vdev_id, void *filter,
+		 uint32_t num);
 
-	uint32_t (*txrx_get_cfg)(void *soc, enum cdp_dp_cfg cfg);
+	uint32_t (*txrx_get_cfg)(struct cdp_soc_t *soc, enum cdp_dp_cfg cfg);
 
 	/********************************************************************
 	 * Data Interface (B Interface)
 	 ********************************************************************/
 
-	void (*txrx_vdev_register)(struct cdp_vdev *vdev,
-			void *osif_vdev,
-			struct ol_txrx_ops *txrx_ops);
+	QDF_STATUS
+	(*txrx_vdev_register)(struct cdp_soc_t *soc, uint8_t vdev_id,
+			      ol_osif_vdev_handle osif_vdev,
+			      struct ol_txrx_ops *txrx_ops);
 
-	int (*txrx_mgmt_send)(struct cdp_vdev *vdev,
-			qdf_nbuf_t tx_mgmt_frm, uint8_t type);
+	int (*txrx_mgmt_send)(struct cdp_soc_t *soc, uint8_t vdev_id,
+			      qdf_nbuf_t tx_mgmt_frm, uint8_t type);
 
-	int (*txrx_mgmt_send_ext)(struct cdp_vdev *vdev,
-			qdf_nbuf_t tx_mgmt_frm,	uint8_t type, uint8_t use_6mbps,
-			uint16_t chanfreq);
+	int (*txrx_mgmt_send_ext)(struct cdp_soc_t *soc, uint8_t vdev_id,
+				  qdf_nbuf_t tx_mgmt_frm, uint8_t type,
+				  uint8_t use_6mbps, uint16_t chanfreq);
 
 	/**
 	 * ol_txrx_mgmt_tx_cb - tx management delivery notification
 	 * callback function
 	 */
 
-	void (*txrx_mgmt_tx_cb_set)(struct cdp_pdev *pdev, uint8_t type,
-				    ol_txrx_mgmt_tx_cb download_cb,
-				    ol_txrx_mgmt_tx_cb ota_ack_cb,
-				    void *ctxt);
-
-	int (*txrx_get_tx_pending)(struct cdp_pdev *pdev);
+	QDF_STATUS
+	(*txrx_mgmt_tx_cb_set)(struct cdp_soc_t *soc, uint8_t pdev_id,
+			       uint8_t type,
+			       ol_txrx_mgmt_tx_cb download_cb,
+			       ol_txrx_mgmt_tx_cb ota_ack_cb,
+			       void *ctxt);
 
 	/**
 	 * ol_txrx_data_tx_cb - Function registered with the data path
@@ -234,95 +244,85 @@ struct cdp_cmn_ops {
 	 * done being transmitted
 	 */
 
-	void (*txrx_data_tx_cb_set)(struct cdp_vdev *data_vdev,
-			ol_txrx_data_tx_cb callback, void *ctxt);
+	void (*txrx_data_tx_cb_set)(struct cdp_soc_t *soc, uint8_t vdev_id,
+				    ol_txrx_data_tx_cb callback, void *ctxt);
+
+	qdf_nbuf_t (*tx_send_exc)
+		(ol_txrx_soc_handle soc, uint8_t vdev_id, qdf_nbuf_t msdu_list,
+		 struct cdp_tx_exception_metadata *tx_exc_metadata);
 
 	/*******************************************************************
 	 * Statistics and Debugging Interface (C Interface)
 	 ********************************************************************/
 
-	int (*txrx_aggr_cfg)(struct cdp_vdev *vdev, int max_subfrms_ampdu,
-			int max_subfrms_amsdu);
+	int (*txrx_aggr_cfg)(struct cdp_soc_t *soc, uint8_t vdev_id,
+			     int max_subfrms_ampdu,
+			     int max_subfrms_amsdu);
 
-	A_STATUS (*txrx_fw_stats_get)(struct cdp_vdev *vdev,
-			struct ol_txrx_stats_req *req,
-			bool per_vdev, bool response_expected);
+	A_STATUS
+	(*txrx_fw_stats_get)(struct cdp_soc_t *soc, uint8_t vdev_id,
+			     struct ol_txrx_stats_req *req,
+			     bool per_vdev, bool response_expected);
 
-	int (*txrx_debug)(struct cdp_vdev *vdev, int debug_specs);
+	int (*txrx_debug)(struct cdp_soc_t *soc, uint8_t vdev_id,
+			  int debug_specs);
 
-	void (*txrx_fw_stats_cfg)(struct cdp_vdev *vdev,
-			uint8_t cfg_stats_type, uint32_t cfg_val);
+	QDF_STATUS
+	(*txrx_fw_stats_cfg)(struct cdp_soc_t *soc, uint8_t vdev_id,
+			     uint8_t cfg_stats_type, uint32_t cfg_val);
 
 	void (*txrx_print_level_set)(unsigned level);
 
 	/**
 	 * ol_txrx_get_vdev_mac_addr() - Return mac addr of vdev
-	 * @vdev: vdev handle
+	 * @soc: datapath soc handle
+	 * @vdev_id: vdev id
 	 *
 	 * Return: vdev mac address
 	 */
-	uint8_t * (*txrx_get_vdev_mac_addr)(struct cdp_vdev *vdev);
-
-	/**
-	 * ol_txrx_get_vdev_struct_mac_addr() - Return handle to struct qdf_mac_addr of
-	 * vdev
-	 * @vdev: vdev handle
-	 *
-	 * Return: Handle to struct qdf_mac_addr
-	 */
-	struct qdf_mac_addr *
-		(*txrx_get_vdev_struct_mac_addr)(struct cdp_vdev *vdev);
-
-	/**
-	 * ol_txrx_get_pdev_from_vdev() - Return handle to pdev of vdev
-	 * @vdev: vdev handle
-	 *
-	 * Return: Handle to pdev
-	 */
-	struct cdp_pdev *(*txrx_get_pdev_from_vdev)
-		(struct cdp_vdev *vdev);
+	uint8_t * (*txrx_get_vdev_mac_addr)(struct cdp_soc_t *soc,
+					    uint8_t vdev_id);
 
 	/**
 	 * ol_txrx_get_ctrl_pdev_from_vdev() - Return control pdev of vdev
-	 * @vdev: vdev handle
+	 * @soc: datapath soc handle
+	 * @vdev_id: vdev id
 	 *
 	 * Return: Handle to control pdev
 	 */
-	struct cdp_cfg *
-		(*txrx_get_ctrl_pdev_from_vdev)(struct cdp_vdev *vdev);
+	struct cdp_cfg *(*txrx_get_ctrl_pdev_from_vdev)(struct cdp_soc_t *soc,
+							uint8_t vdev_id);
 
 	/**
 	 * txrx_get_mon_vdev_from_pdev() - Return monitor mode vdev
-	 * @pdev: pdev handle
+	 * @soc: datapath soc handle
+	 * @pdev: pdev id
 	 *
-	 * Return: Handle to vdev
+	 * Return: vdev_id
 	 */
-	struct cdp_vdev *
-		(*txrx_get_mon_vdev_from_pdev)(struct cdp_pdev *pdev);
+	uint8_t (*txrx_get_mon_vdev_from_pdev)(struct cdp_soc_t *soc,
+					       uint8_t pdev_id);
 
-	struct cdp_vdev *
-		(*txrx_get_vdev_from_vdev_id)(struct cdp_pdev *pdev,
-				uint8_t vdev_id);
-
-	void (*txrx_soc_detach)(void *soc);
+	void (*txrx_soc_detach)(struct cdp_soc_t *soc);
 
 	/**
 	 * txrx_soc_deinit() - Deinitialize dp soc and dp ring memory
 	 * @soc: Opaque Dp handle
 	 *
-	 * Return: None
+	 * Return None
 	 */
-	void (*txrx_soc_deinit)(void *soc);
+	void (*txrx_soc_deinit)(struct cdp_soc_t *soc);
 
 	/**
 	 * txrx_soc_init() - Initialize dp soc and dp ring memory
 	 * @soc: Opaque Dp handle
+	 * @ctrl_psoc: Opaque Cp handle
 	 * @htchdl: Opaque htc handle
 	 * @hifhdl: Opaque hif handle
 	 *
 	 * Return: None
 	 */
-	void *(*txrx_soc_init)(void *soc,
+	void *(*txrx_soc_init)(struct cdp_soc_t *soc,
 			       struct cdp_ctrl_objmgr_psoc *ctrl_psoc,
 			       struct hif_opaque_softc *hif_handle,
 			       HTC_HANDLE htc_handle, qdf_device_t qdf_osdev,
@@ -335,7 +335,7 @@ struct cdp_cmn_ops {
 	 *
 	 * Return: QDF status
 	 */
-	QDF_STATUS (*txrx_tso_soc_attach)(void *soc);
+	QDF_STATUS (*txrx_tso_soc_attach)(struct cdp_soc_t *soc);
 
 	/**
 	 * txrx_tso_soc_detach() - TSO detach handler triggered during
@@ -344,85 +344,106 @@ struct cdp_cmn_ops {
 	 *
 	 * Return: QDF status
 	 */
-	QDF_STATUS (*txrx_tso_soc_detach)(void *soc);
-	int (*addba_resp_tx_completion)(void *peer_handle, uint8_t tid,
+	QDF_STATUS (*txrx_tso_soc_detach)(struct cdp_soc_t *soc);
+	int (*addba_resp_tx_completion)(struct cdp_soc_t *cdp_soc,
+					uint8_t *peer_mac,
+					uint16_t vdev_id, uint8_t tid,
 					int status);
 
-	int (*addba_requestprocess)(void *peer_handle, uint8_t dialogtoken,
-				   uint16_t tid, uint16_t batimeout,
-				   uint16_t buffersize,
-				   uint16_t startseqnum);
+	int (*addba_requestprocess)(struct cdp_soc_t *cdp_soc,
+				    uint8_t *peer_mac,
+				    uint16_t vdev_id,
+				    uint8_t dialogtoken,
+				    uint16_t tid, uint16_t batimeout,
+				    uint16_t buffersize,
+				    uint16_t startseqnum);
 
-	void (*addba_responsesetup)(void *peer_handle, uint8_t tid,
-		uint8_t *dialogtoken, uint16_t *statuscode,
-		uint16_t *buffersize, uint16_t *batimeout);
+	QDF_STATUS
+	(*addba_responsesetup)(struct cdp_soc_t *cdp_soc,
+			       uint8_t *peer_mac,
+			       uint16_t vdev_id, uint8_t tid,
+			       uint8_t *dialogtoken, uint16_t *statuscode,
+			       uint16_t *buffersize, uint16_t *batimeout);
 
-	int (*delba_process)(void *peer_handle,
-		int tid, uint16_t reasoncode);
+	int (*delba_process)(struct cdp_soc_t *cdp_soc, uint8_t *peer_mac,
+			     uint16_t vdev_id, int tid, uint16_t reasoncode);
 
 	/**
 	 * delba_tx_completion() - Indicate delba tx status
-	 * @peer_handle: Peer handle
+	 * @cdp_soc: soc handle
+	 * @peer_mac: Peer mac address
+	 * @vdev_id: vdev id
 	 * @tid: Tid number
 	 * @status: Tx completion status
 	 *
 	 * Return: 0 on Success, 1 on failure
 	 */
-	int (*delba_tx_completion)(void *peer_handle,
+	int (*delba_tx_completion)(struct cdp_soc_t *cdp_soc, uint8_t *peer_mac,
+				   uint16_t vdev_id,
 				   uint8_t tid, int status);
 
-	void (*set_addba_response)(void *peer_handle,
-		uint8_t tid, uint16_t statuscode);
+	QDF_STATUS
+	(*set_addba_response)(struct cdp_soc_t *cdp_soc, uint8_t *peer_mac,
+			      uint16_t vdev_id, uint8_t tid,
+			      uint16_t statuscode);
 
-	uint8_t (*get_peer_mac_addr_frm_id)(struct cdp_soc_t *soc_handle,
-			uint16_t peer_id, uint8_t *mac_addr);
-
-	void (*set_vdev_dscp_tid_map)(struct cdp_vdev *vdev_handle,
-			uint8_t map_id);
-	int (*txrx_get_total_per)(struct cdp_pdev *pdev_handle);
+	QDF_STATUS
+	(*set_vdev_dscp_tid_map)(struct cdp_soc_t *soc_handle,
+				 uint8_t vdev_id, uint8_t map_id);
+	int (*txrx_get_total_per)(struct cdp_soc_t *soc, uint8_t pdev_id);
 
 	void (*flush_cache_rx_queue)(void);
-	void (*set_pdev_dscp_tid_map)(struct cdp_pdev *pdev, uint8_t map_id,
-			uint8_t tos, uint8_t tid);
-	void (*hmmc_tid_override_en)(struct cdp_pdev *pdev, bool val);
-	void (*set_hmmc_tid_val)(struct cdp_pdev *pdev, uint8_t tid);
 
-	QDF_STATUS(*txrx_stats_request)(struct cdp_soc_t *soc_handle,
-					uint8_t vdev_id,
-					struct cdp_txrx_stats_req *req);
+	QDF_STATUS (*set_pdev_dscp_tid_map)(struct cdp_soc_t *soc_handle,
+					    uint8_t pdev_id,
+					    uint8_t map_id,
+					    uint8_t tos, uint8_t tid);
 
-	QDF_STATUS (*display_stats)(void *psoc, uint16_t value,
+	QDF_STATUS (*txrx_stats_request)(struct cdp_soc_t *soc_handle,
+					 uint8_t vdev_id,
+					 struct cdp_txrx_stats_req *req);
+
+	QDF_STATUS (*display_stats)(struct cdp_soc_t *psoc, uint16_t value,
 				    enum qdf_stats_verbosity_level level);
-	void (*txrx_soc_set_nss_cfg)(ol_txrx_soc_handle soc, int config);
 
-	int(*txrx_soc_get_nss_cfg)(ol_txrx_soc_handle soc);
-	QDF_STATUS (*txrx_intr_attach)(void *soc);
-	void (*txrx_intr_detach)(void *soc);
-	void  (*set_pn_check)(struct cdp_vdev *vdev,
-		struct cdp_peer *peer_handle, enum cdp_sec_type sec_type,
-		 uint32_t *rx_pn);
+	QDF_STATUS (*txrx_intr_attach)(struct cdp_soc_t *soc_handle);
+	void (*txrx_intr_detach)(struct cdp_soc_t *soc_handle);
+	QDF_STATUS  (*set_pn_check)(struct cdp_soc_t *soc_handle,
+				    uint8_t vdev_id, uint8_t *peermac,
+				    enum cdp_sec_type sec_type,
+				    uint32_t *rx_pn);
 	QDF_STATUS (*update_config_parameters)(struct cdp_soc *psoc,
 			struct cdp_config_params *params);
 
-	void *(*get_dp_txrx_handle)(struct cdp_pdev *pdev_hdl);
-	void (*set_dp_txrx_handle)(struct cdp_pdev *pdev_hdl,
-			void *dp_txrx_hdl);
+	void *(*get_dp_txrx_handle)(ol_txrx_soc_handle soc, uint8_t pdev_id);
+	void (*set_dp_txrx_handle)(ol_txrx_soc_handle soc, uint8_t pdev_id,
+				   void *dp_hdl);
+
+	void *(*get_vdev_dp_ext_txrx_handle)(struct cdp_soc_t *soc,
+					     uint8_t vdev_id);
+	QDF_STATUS (*set_vdev_dp_ext_txrx_handle)(struct cdp_soc_t *soc,
+						  uint8_t vdev_id,
+						  uint16_t size);
 
 	void *(*get_soc_dp_txrx_handle)(struct cdp_soc *soc_handle);
 	void (*set_soc_dp_txrx_handle)(struct cdp_soc *soc_handle,
 			void *dp_txrx_handle);
 
-	void (*map_pdev_to_lmac)(struct cdp_pdev *pdev_hdl,
-				 uint32_t lmac_id);
+	QDF_STATUS (*map_pdev_to_lmac)(ol_txrx_soc_handle soc, uint8_t pdev_id,
+				       uint32_t lmac_id);
 
-	void (*set_pdev_status_down)(struct cdp_pdev *pdev_hdl, bool is_pdev_down);
+	QDF_STATUS (*handle_mode_change)(ol_txrx_soc_handle soc,
+					 uint8_t pdev_id, uint32_t lmac_id);
 
-	void (*txrx_peer_reset_ast)
+	QDF_STATUS (*set_pdev_status_down)(struct cdp_soc_t *soc_handle,
+					   uint8_t pdev_id, bool is_pdev_down);
+
+	QDF_STATUS (*txrx_peer_reset_ast)
 		(ol_txrx_soc_handle soc, uint8_t *ast_macaddr,
-		 uint8_t *peer_macaddr, void *vdev_hdl);
+		 uint8_t *peer_macaddr, uint8_t vdev_id);
 
-	void (*txrx_peer_reset_ast_table)(ol_txrx_soc_handle soc,
-					  void *vdev_hdl);
+	QDF_STATUS (*txrx_peer_reset_ast_table)(ol_txrx_soc_handle soc,
+						uint8_t vdev_id);
 
 	void (*txrx_peer_flush_ast_table)(ol_txrx_soc_handle soc);
 	void (*txrx_set_ba_aging_timeout)(struct cdp_soc_t *soc_handle,
@@ -439,123 +460,57 @@ struct cdp_cmn_ops {
 	/**
 	 * txrx_get_os_rx_handles_from_vdev() - Return function, osif vdev
 	 *					to deliver pkt to stack.
-	 * @vdev: vdev handle
+	 * @soc: datapath soc handle
+	 * @vdev: vdev id
 	 * @stack_fn: pointer to - function pointer to deliver RX pkt to stack
 	 * @osif_vdev: pointer to - osif vdev to deliver RX packet to.
 	 */
 	void (*txrx_get_os_rx_handles_from_vdev)
-					(struct cdp_vdev *vdev,
+					(ol_txrx_soc_handle soc,
+					 uint8_t vdev_id,
 					 ol_txrx_rx_fp *stack_fn,
 					 ol_osif_vdev_handle *osif_vdev);
+
+	void (*set_rate_stats_ctx)(struct cdp_soc_t *soc,
+				   void *ctx);
+
 	int (*txrx_classify_update)
-		(struct cdp_vdev *vdev, qdf_nbuf_t skb,
+		(struct cdp_soc_t *soc, uint8_t vdev_id, qdf_nbuf_t skb,
 		 enum txrx_direction, struct ol_txrx_nbuf_classify *nbuf_class);
 
 	bool (*get_dp_capabilities)(struct cdp_soc_t *soc,
 				    enum cdp_capabilities dp_caps);
-	void (*set_rate_stats_ctx)(struct cdp_soc_t *soc, void *ctx);
 	void* (*get_rate_stats_ctx)(struct cdp_soc_t *soc);
-	void (*txrx_peer_flush_rate_stats)(struct cdp_soc_t *soc,
-					   struct cdp_pdev *pdev,
-					   void *buf);
-	void (*txrx_flush_rate_stats_request)(struct cdp_soc_t *soc,
-					      struct cdp_pdev *pdev);
-	QDF_STATUS (*set_pdev_pcp_tid_map)(struct cdp_pdev *pdev,
+	QDF_STATUS (*txrx_peer_flush_rate_stats)(struct cdp_soc_t *soc,
+						 uint8_t pdev_id,
+						 void *buf);
+
+	QDF_STATUS (*txrx_flush_rate_stats_request)(struct cdp_soc_t *soc,
+						    uint8_t pdev_id);
+	QDF_STATUS (*set_pdev_pcp_tid_map)(struct cdp_soc_t *soc,
+					   uint8_t pdev_id,
 					   uint8_t pcp, uint8_t tid);
-	QDF_STATUS (*set_pdev_tidmap_prty)(struct cdp_pdev *pdev, uint8_t prty);
-	QDF_STATUS (*set_vdev_pcp_tid_map)(struct cdp_vdev *vdev,
+	QDF_STATUS (*set_vdev_pcp_tid_map)(struct cdp_soc_t *soc,
+					   uint8_t vdev_id,
 					   uint8_t pcp, uint8_t tid);
-	QDF_STATUS (*set_vdev_tidmap_prty)(struct cdp_vdev *vdev, uint8_t prty);
-	QDF_STATUS (*set_vdev_tidmap_tbl_id)(struct cdp_vdev *vdev,
-					     uint8_t mapid);
 #ifdef QCA_MULTIPASS_SUPPORT
-	QDF_STATUS (*set_vlan_groupkey)(struct cdp_vdev *vdev_handle,
+	QDF_STATUS (*set_vlan_groupkey)(struct cdp_soc_t *soc, uint8_t vdev_id,
 					uint16_t vlan_id, uint16_t group_key);
 #endif
+
+	uint16_t (*get_peer_mac_list)
+		 (ol_txrx_soc_handle soc, uint8_t vdev_id,
+		  u_int8_t newmac[][QDF_MAC_ADDR_SIZE], uint16_t mac_cnt);
 };
 
 struct cdp_ctrl_ops {
 
 	int
-		(*txrx_mempools_attach)(void *ctrl_pdev);
-
-	int
-		(*txrx_set_filter_neighbour_peers)(
-				struct cdp_pdev *pdev,
-				uint32_t val);
+		(*txrx_mempools_attach)(ol_txrx_soc_handle dp_soc);
 	int
 		(*txrx_update_filter_neighbour_peers)(
-				struct cdp_vdev *vdev,
+				struct cdp_soc_t *soc, uint8_t vdev_id,
 				uint32_t cmd, uint8_t *macaddr);
-	/**
-	 * @brief set the safemode of the device
-	 * @details
-	 * This flag is used to bypass the encrypt and decrypt processes when
-	 * send and receive packets. It works like open AUTH mode, HW will
-	 * ctreate all packets as non-encrypt frames because no key installed.
-	 * For rx fragmented frames,it bypasses all the rx defragmentaion.
-	 *
-	 * @param vdev - the data virtual device object
-	 * @param val - the safemode state
-	 * @return - void
-	 */
-
-	void
-		(*txrx_set_safemode)(
-				struct cdp_vdev *vdev,
-				u_int32_t val);
-	/**
-	 * @brief configure the drop unencrypted frame flag
-	 * @details
-	 * Rx related. When set this flag, all the unencrypted frames
-	 * received over a secure connection will be discarded
-	 *
-	 * @param vdev - the data virtual device object
-	 * @param val - flag
-	 * @return - void
-	 */
-	void
-		(*txrx_set_drop_unenc)(
-				struct cdp_vdev *vdev,
-				u_int32_t val);
-
-
-	/**
-	 * @brief set the Tx encapsulation type of the VDEV
-	 * @details
-	 * This will be used to populate the HTT desc packet type field
-	 * during Tx
-	 * @param vdev - the data virtual device object
-	 * @param val - the Tx encap type
-	 * @return - void
-	 */
-	void
-		(*txrx_set_tx_encap_type)(
-				struct cdp_vdev *vdev,
-				enum htt_cmn_pkt_type val);
-	/**
-	 * @brief set the Rx decapsulation type of the VDEV
-	 * @details
-	 * This will be used to configure into firmware and hardware
-	 * which format to decap all Rx packets into, for all peers under
-	 * the VDEV.
-	 * @param vdev - the data virtual device object
-	 * @param val - the Rx decap mode
-	 * @return - void
-	 */
-	void
-		(*txrx_set_vdev_rx_decap_type)(
-				struct cdp_vdev *vdev,
-				enum htt_cmn_pkt_type val);
-
-	/**
-	 * @brief get the Rx decapsulation type of the VDEV
-	 *
-	 * @param vdev - the data virtual device object
-	 * @return - the Rx decap type
-	 */
-	enum htt_cmn_pkt_type
-		(*txrx_get_vdev_rx_decap_type)(struct cdp_vdev *vdev);
 
 	/* Is this similar to ol_txrx_peer_state_update() in MCL */
 	/**
@@ -565,47 +520,42 @@ struct cdp_ctrl_ops {
 	 * updates the peer/node-related parameters within rate-control
 	 * context of the peer at association.
 	 *
-	 * @param peer - pointer to the node's object
+	 * @param soc_hdl - pointer to the soc object
+	 * @param vdev_id - id of the virtual object
+	 * @param peer_mac - mac address of the node's object
 	 * @authorize - either to authorize or unauthorize peer
 	 *
-	 * @return none
+	 * @return QDF_STATUS
 	 */
-	void
-		(*txrx_peer_authorize)(struct cdp_peer *peer,
-				u_int32_t authorize);
+	QDF_STATUS
+		(*txrx_peer_authorize)(struct cdp_soc_t *soc_hdl,
+				       uint8_t vdev_id,
+				       uint8_t *peer_mac,
+				       u_int32_t authorize);
 
-	/* Should be ol_txrx_ctrl_api.h */
-	void (*txrx_set_mesh_mode)(struct cdp_vdev *vdev, u_int32_t val);
+	void (*tx_flush_buffers)(struct cdp_soc_t *soc, uint8_t vdev_id);
 
-	/**
-	 * @brief setting mesh rx filter
-	 * @details
-	 *  based on the bits enabled in the filter packets has to be dropped.
-	 *
-	 * @param vdev - the data virtual device object
-	 * @param val - value to set
-	 */
-	void (*txrx_set_mesh_rx_filter)(struct cdp_vdev *vdev, uint32_t val);
+	int (*txrx_is_target_ar900b)(struct cdp_soc_t *soc_hdl);
 
-	void (*tx_flush_buffers)(struct cdp_vdev *vdev);
+	QDF_STATUS
+	(*txrx_set_vdev_param)(struct cdp_soc_t *soc, uint8_t vdev_id,
+			       enum cdp_vdev_param_type param,
+			       cdp_config_param_type val);
 
-	int (*txrx_is_target_ar900b)(struct cdp_vdev *vdev);
-
-	void (*txrx_set_vdev_param)(struct cdp_vdev *vdev,
-			enum cdp_vdev_param_type param, uint32_t val);
-
-	void (*txrx_peer_set_nawds)(struct cdp_peer *peer, uint8_t value);
 	/**
 	 * @brief Set the reo dest ring num of the radio
 	 * @details
 	 *  Set the reo destination ring no on which we will receive
 	 *  pkts for this radio.
 	 *
-	 * @param pdev - the data physical device object
+	 * @txrx_soc - soc handle
+	 * @param pdev_id - id of physical device
+	 * @return the reo destination ring number
 	 * @param reo_dest_ring_num - value ranges between 1 - 4
 	 */
-	void (*txrx_set_pdev_reo_dest)(
-			struct cdp_pdev *pdev,
+	QDF_STATUS (*txrx_set_pdev_reo_dest)(
+			struct cdp_soc_t *txrx_soc,
+			uint8_t pdev_id,
 			enum cdp_host_reo_dest_ring reo_dest_ring_num);
 
 	/**
@@ -614,151 +564,152 @@ struct cdp_ctrl_ops {
 	 *  Get the reo destination ring no on which we will receive
 	 *  pkts for this radio.
 	 *
-	 * @param pdev - the data physical device object
+	 * @txrx_soc - soc handle
+	 * @param pdev_id - id of physical device
 	 * @return the reo destination ring number
 	 */
 	enum cdp_host_reo_dest_ring (*txrx_get_pdev_reo_dest)(
-						struct cdp_pdev *pdev);
+				     struct cdp_soc_t *txrx_soc,
+				     uint8_t pdev_id);
 
-	int (*txrx_wdi_event_sub)(struct cdp_pdev *pdev, void *event_cb_sub,
-			uint32_t event);
+	int (*txrx_wdi_event_sub)(struct cdp_soc_t *soc, uint8_t pdev_id,
+				  wdi_event_subscribe *event_cb_sub,
+				  uint32_t event);
 
-	int (*txrx_wdi_event_unsub)(struct cdp_pdev *pdev, void *event_cb_sub,
-			uint32_t event);
-	int (*txrx_get_sec_type)(struct cdp_peer *peer, uint8_t sec_idx);
+	int (*txrx_wdi_event_unsub)(struct cdp_soc_t *soc, uint8_t pdev_id,
+				    wdi_event_subscribe *event_cb_sub,
+				    uint32_t event);
 
-	void (*txrx_update_mgmt_txpow_vdev)(struct cdp_vdev *vdev,
-			uint8_t subtype, uint8_t tx_power);
+	int (*txrx_get_sec_type)(ol_txrx_soc_handle soc, uint8_t vdev_id,
+				 uint8_t *peer_mac, uint8_t sec_idx);
+
+	QDF_STATUS
+	(*txrx_update_mgmt_txpow_vdev)(struct cdp_soc_t *soc,
+				       uint8_t vdev_id,
+				       uint8_t subtype, uint8_t tx_power);
 
 	/**
 	 * txrx_set_pdev_param() - callback to set pdev parameter
 	 * @soc: opaque soc handle
-	 * @pdev: data path pdev handle
+	 * @pdev_id:id of data path pdev handle
 	 * @val: value of pdev_tx_capture
 	 *
 	 * Return: status: 0 - Success, non-zero: Failure
 	 */
-	QDF_STATUS (*txrx_set_pdev_param)(struct cdp_pdev *pdev,
+	QDF_STATUS (*txrx_set_pdev_param)(struct cdp_soc_t *soc,
+					  uint8_t pdev_id,
 					  enum cdp_pdev_param_type type,
-					  uint32_t val);
-	void * (*txrx_get_pldev)(struct cdp_pdev *pdev);
+					  cdp_config_param_type val);
+
+	QDF_STATUS (*txrx_get_pdev_param)(struct cdp_soc_t *soc,
+					  uint8_t pdev_id,
+					  enum cdp_pdev_param_type type,
+					  cdp_config_param_type *val);
+
+	QDF_STATUS (*txrx_set_peer_param)(struct cdp_soc_t *soc,
+					  uint8_t vdev_id, uint8_t *peer_mac,
+					  enum cdp_peer_param_type param,
+					  cdp_config_param_type val);
+
+	QDF_STATUS (*txrx_get_peer_param)(struct cdp_soc_t *soc,
+					  uint8_t vdev_id, uint8_t *peer_mac,
+					  enum cdp_peer_param_type param,
+					  cdp_config_param_type *val);
+
+	void * (*txrx_get_pldev)(struct cdp_soc_t *soc, uint8_t pdev_id);
 
 #ifdef ATH_SUPPORT_NAC_RSSI
-	QDF_STATUS (*txrx_vdev_config_for_nac_rssi)(struct cdp_vdev *vdev,
-		enum cdp_nac_param_cmd cmd, char *bssid, char *client_macaddr,
-		uint8_t chan_num);
-	QDF_STATUS (*txrx_vdev_get_neighbour_rssi)(struct cdp_vdev *vdev,
+	QDF_STATUS (*txrx_vdev_config_for_nac_rssi)(struct cdp_soc_t *cdp_soc,
+						    uint8_t vdev_id,
+						    enum cdp_nac_param_cmd cmd,
+						    char *bssid,
+						    char *client_macaddr,
+						    uint8_t chan_num);
+
+	QDF_STATUS (*txrx_vdev_get_neighbour_rssi)(struct cdp_soc_t *cdp_soc,
+						   uint8_t vdev_id,
 						   char *macaddr,
 						   uint8_t *rssi);
 #endif
-	void (*set_key)(struct cdp_peer *peer_handle,
-			bool is_unicast, uint32_t *key);
+	QDF_STATUS
+	(*set_key)(struct cdp_soc_t *soc, uint8_t vdev_id, uint8_t *mac,
+		   bool is_unicast, uint32_t *key);
 
-	uint32_t (*txrx_get_vdev_param)(struct cdp_vdev *vdev,
-					enum cdp_vdev_param_type param);
-	int (*enable_peer_based_pktlog)(struct cdp_pdev
-			*txrx_pdev_handle, char *macaddr, uint8_t enb_dsb);
+	QDF_STATUS (*txrx_get_vdev_param)(struct cdp_soc_t *soc,
+					  uint8_t vdev_id,
+					  enum cdp_vdev_param_type param,
+					  cdp_config_param_type *val);
+	int (*enable_peer_based_pktlog)(struct cdp_soc_t *cdp_soc,
+					uint8_t pdev_id,
+					uint8_t *macaddr, uint8_t enb_dsb);
 
-	void (*calculate_delay_stats)(struct cdp_vdev *vdev, qdf_nbuf_t nbuf);
+	QDF_STATUS
+	(*calculate_delay_stats)(struct cdp_soc_t *cdp_soc,
+				 uint8_t vdev_id, qdf_nbuf_t nbuf);
 #ifdef WLAN_SUPPORT_RX_PROTOCOL_TYPE_TAG
 	QDF_STATUS (*txrx_update_pdev_rx_protocol_tag)(
-			struct cdp_pdev *txrx_pdev_handle,
+			struct cdp_soc_t  *soc, uint8_t pdev_id,
 			uint32_t protocol_mask, uint16_t protocol_type,
 			uint16_t tag);
 #ifdef WLAN_SUPPORT_RX_TAG_STATISTICS
 	void (*txrx_dump_pdev_rx_protocol_tag_stats)(
-				struct cdp_pdev *txrx_pdev_handle,
+				struct cdp_soc_t  *soc, uint8_t pdev_id,
 				uint16_t protocol_type);
 #endif /* WLAN_SUPPORT_RX_TAG_STATISTICS */
 #endif /* WLAN_SUPPORT_RX_PROTOCOL_TYPE_TAG */
 #ifdef WLAN_SUPPORT_RX_FLOW_TAG
 	QDF_STATUS (*txrx_set_rx_flow_tag)(
-		struct cdp_pdev *txrx_pdev_handle,
+		struct cdp_soc_t *cdp_soc, uint8_t pdev_id,
 		struct cdp_rx_flow_info *flow_info);
 	QDF_STATUS (*txrx_dump_rx_flow_tag_stats)(
-		struct cdp_pdev *txrx_pdev_handle,
+		struct cdp_soc_t *cdp_soc, uint8_t pdev_id,
 		struct cdp_rx_flow_info *flow_info);
 #endif /* WLAN_SUPPORT_RX_FLOW_TAG */
 #ifdef QCA_MULTIPASS_SUPPORT
-	void (*txrx_peer_set_vlan_id)(ol_txrx_soc_handle soc,
-				      struct cdp_vdev *vdev, uint8_t *peer_mac,
+	void (*txrx_peer_set_vlan_id)(struct cdp_soc_t *cdp_soc,
+				      uint8_t vdev_id, uint8_t *peer_mac,
 				      uint16_t vlan_id);
 #endif
 #if defined(WLAN_TX_PKT_CAPTURE_ENH) || defined(WLAN_RX_PKT_CAPTURE_ENH)
 	QDF_STATUS (*txrx_update_peer_pkt_capture_params)(
-			struct cdp_pdev *txrx_pdev_handle,
+			ol_txrx_soc_handle soc, uint8_t pdev_id,
 			bool is_rx_pkt_cap_enable, bool is_tx_pkt_cap_enable,
 			uint8_t *peer_mac);
 #endif /* WLAN_TX_PKT_CAPTURE_ENH || WLAN_RX_PKT_CAPTURE_ENH */
+	QDF_STATUS
+	(*txrx_set_psoc_param)(struct cdp_soc_t *soc,
+			       enum cdp_psoc_param_type param,
+			       cdp_config_param_type val);
+
+	QDF_STATUS (*txrx_get_psoc_param)(ol_txrx_soc_handle soc,
+					  enum cdp_psoc_param_type type,
+					  cdp_config_param_type *val);
 };
 
 struct cdp_me_ops {
 
-	u_int16_t (*tx_desc_alloc_and_mark_for_mcast_clone)
-		(struct cdp_pdev *pdev, u_int16_t buf_count);
+	void (*tx_me_alloc_descriptor)(struct cdp_soc_t *soc,
+				       uint8_t pdev_id);
 
-		u_int16_t (*tx_desc_free_and_unmark_for_mcast_clone)(
-				struct cdp_pdev *pdev,
-				u_int16_t buf_count);
+	void (*tx_me_free_descriptor)(struct cdp_soc_t *soc, uint8_t pdev_id);
 
-	u_int16_t
-		(*tx_get_mcast_buf_allocated_marked)
-			(struct cdp_pdev *pdev);
-	void
-		(*tx_me_alloc_descriptor)(struct cdp_pdev *pdev);
-
-	void
-		(*tx_me_free_descriptor)(struct cdp_pdev *pdev);
-
-	uint16_t
-		(*tx_me_convert_ucast)(struct cdp_vdev *vdev,
-			qdf_nbuf_t wbuf, u_int8_t newmac[][6],
-			uint8_t newmaccnt);
-	/* Should be a function pointer in ol_txrx_osif_ops{} */
-	/**
-	 * @brief notify mcast frame indication from FW.
-	 * @details
-	 *     This notification will be used to convert
-	 *     multicast frame to unicast.
-	 *
-	 * @param pdev - handle to the ctrl SW's physical device object
-	 * @param vdev_id - ID of the virtual device received the special data
-	 * @param msdu - the multicast msdu returned by FW for host inspect
-	 */
-
-	int (*mcast_notify)(struct cdp_pdev *pdev,
-			u_int8_t vdev_id, qdf_nbuf_t msdu);
+	uint16_t (*tx_me_convert_ucast)(struct cdp_soc_t *soc, uint8_t vdev_id,
+					qdf_nbuf_t wbuf, u_int8_t newmac[][6],
+					uint8_t newmaccnt);
 };
 
 struct cdp_mon_ops {
 
-	void (*txrx_monitor_set_filter_ucast_data)
-		(struct cdp_pdev *, u_int8_t val);
-	void (*txrx_monitor_set_filter_mcast_data)
-		(struct cdp_pdev *, u_int8_t val);
-	void (*txrx_monitor_set_filter_non_data)
-	      (struct cdp_pdev *, u_int8_t val);
+	QDF_STATUS (*txrx_reset_monitor_mode)(ol_txrx_soc_handle soc,
+					      uint8_t pdev_id);
 
-	bool (*txrx_monitor_get_filter_ucast_data)
-		(struct cdp_vdev *vdev_txrx_handle);
-	bool (*txrx_monitor_get_filter_mcast_data)
-		(struct cdp_vdev *vdev_txrx_handle);
-	bool (*txrx_monitor_get_filter_non_data)
-		(struct cdp_vdev *vdev_txrx_handle);
-	QDF_STATUS (*txrx_reset_monitor_mode)(struct cdp_pdev *pdev);
+	QDF_STATUS (*txrx_deliver_tx_mgmt)
+		(struct cdp_soc_t *cdp_soc, uint8_t pdev_id, qdf_nbuf_t nbuf);
 
 	/* HK advance monitor filter support */
 	QDF_STATUS (*txrx_set_advance_monitor_filter)
-		(struct cdp_pdev *pdev, struct cdp_monitor_filter *filter_val);
-
-	void (*txrx_monitor_record_channel)
-		(struct cdp_pdev *, int val);
-
-	void (*txrx_deliver_tx_mgmt)
-		(struct cdp_pdev *pdev, qdf_nbuf_t nbuf);
-
-	void (*txrx_set_bsscolor)
-		(struct cdp_pdev *pdev, uint8_t bsscolor);
+		(struct cdp_soc_t *soc_hdl, uint8_t pdev_id,
+		 struct cdp_monitor_filter *filter_val);
 };
 
 #ifdef WLAN_FEATURE_PKT_CAPTURE
@@ -874,6 +825,12 @@ struct cdp_host_stats_ops {
 					  uint8_t pdev_id, void *data,
 					  uint16_t stats_id);
 	QDF_STATUS
+		(*txrx_get_peer_stats_param)(struct cdp_soc_t *soc,
+					     uint8_t vdev_id,
+					     uint8_t *peer_mac,
+					     enum cdp_peer_stats_type type,
+					     cdp_peer_stats_param_t *buf);
+	QDF_STATUS
 		(*txrx_get_peer_stats)(struct cdp_soc_t *soc, uint8_t vdev_id,
 				       uint8_t *peer_mac,
 				       struct cdp_peer_stats *peer_stats);
@@ -908,9 +865,6 @@ struct cdp_host_stats_ops {
 	int
 		(*txrx_get_ratekbps)(int preamb, int mcs,
 				     int htflag, int gintval);
-
-	QDF_STATUS
-	(*configure_rate_stats)(struct cdp_soc_t *soc, uint8_t val);
 
 	QDF_STATUS
 	(*txrx_update_peer_stats)(struct cdp_soc_t *soc, uint8_t vdev_id,
@@ -1001,7 +955,8 @@ struct ol_if_ops {
 				  uint8_t *peer_macaddr,
 				  const uint8_t *dest_macaddr,
 				  uint8_t *next_node_mac,
-				  uint32_t flags);
+				  uint32_t flags,
+				  uint8_t type);
 	int (*peer_update_wds_entry)(struct cdp_ctrl_objmgr_psoc *soc,
 				     uint8_t vdev_id,
 				     uint8_t *dest_macaddr,
@@ -1083,7 +1038,11 @@ struct ol_if_ops {
 					    uint8_t *dest_macaddr,
 					    uint8_t *peer_macaddr,
 					    uint32_t flags);
-
+	int
+	(*pdev_update_lmac_n_target_pdev_id)(struct cdp_ctrl_objmgr_psoc *psoc,
+					    uint8_t *pdev_id,
+					    uint8_t *lmac_id,
+					    uint8_t *target_pdev_id);
 	bool (*is_roam_inprogress)(uint32_t vdev_id);
 	enum QDF_GLOBAL_MODE (*get_con_mode)(void);
 	/* TODO: Add any other control path calls required to OL_IF/WMA layer */
@@ -1198,6 +1157,11 @@ struct cdp_misc_ops {
 					     uint32_t low_th);
 	void (*pdev_reset_bundle_require_flag)(struct cdp_soc_t *soc_hdl,
 					       uint8_t pdev_id);
+	QDF_STATUS (*txrx_ext_stats_request)(struct cdp_soc_t *soc_hdl,
+					     uint8_t pdev_id,
+					     struct cdp_txrx_ext_stats *req);
+	void (*request_rx_hw_stats)(struct cdp_soc_t *soc_hdl, uint8_t vdev_id);
+	QDF_STATUS (*wait_for_ext_rx_stats)(struct cdp_soc_t *soc_hdl);
 };
 
 /**
@@ -1218,70 +1182,69 @@ struct cdp_ocb_ops {
  * struct cdp_peer_ops - mcl peer related ops
  * @register_peer:
  * @clear_peer:
- * @cfg_attach:
- * @find_peer_by_addr:
- * @find_peer_by_addr_and_vdev:
- * @local_peer_id:
- * @peer_find_by_local_id:
+ * @find_peer_exist
+ * @find_peer_exist_on_vdev
+ * @find_peer_exist_on_other_vdev
  * @peer_state_update:
  * @get_vdevid:
- * @get_vdev_by_sta_id:
  * @register_ocb_peer:
  * @peer_get_peer_mac_addr:
  * @get_peer_state:
- * @get_vdev_for_peer:
  * @update_ibss_add_peer_num_of_vdev:
- * @remove_peers_for_vdev:
- * @remove_peers_for_vdev_no_lock:
  * @copy_mac_addr_raw:
  * @add_last_real_peer:
  * @is_vdev_restore_last_peer:
  * @update_last_real_peer:
  */
 struct cdp_peer_ops {
-	QDF_STATUS (*register_peer)(struct cdp_pdev *pdev,
-			struct ol_txrx_desc_type *sta_desc);
-	QDF_STATUS (*clear_peer)(struct cdp_pdev *pdev,
+	QDF_STATUS (*register_peer)(struct cdp_soc_t *soc_hdl, uint8_t pdev_id,
+				    struct ol_txrx_desc_type *sta_desc);
+	QDF_STATUS (*clear_peer)(struct cdp_soc_t *soc_hdl, uint8_t pdev_id,
 				 struct qdf_mac_addr peer_addr);
-	QDF_STATUS (*change_peer_state)(uint8_t sta_id,
-			enum ol_txrx_peer_state sta_state,
-			bool roam_synch_in_progress);
-	void * (*peer_get_ref_by_addr)(struct cdp_pdev *pdev,
-				       uint8_t *peer_addr,
-				       enum peer_debug_id_type debug_id);
-	void (*peer_release_ref)(void *peer, enum peer_debug_id_type debug_id);
-	void * (*find_peer_by_addr)(struct cdp_pdev *pdev,
-			uint8_t *peer_addr);
-	void * (*find_peer_by_addr_and_vdev)(struct cdp_pdev *pdev,
-			struct cdp_vdev *vdev,
-			uint8_t *peer_addr);
-	QDF_STATUS (*peer_state_update)(struct cdp_pdev *pdev,
-			uint8_t *peer_addr,
-			enum ol_txrx_peer_state state);
-	QDF_STATUS (*get_vdevid)(void *peer, uint8_t *vdev_id);
+	bool (*find_peer_exist)(struct cdp_soc_t *soc, uint8_t pdev_id,
+				uint8_t *peer_addr);
+	bool (*find_peer_exist_on_vdev)(struct cdp_soc_t *soc, uint8_t vdev_id,
+					uint8_t *peer_addr);
+	bool (*find_peer_exist_on_other_vdev)(struct cdp_soc_t *soc,
+					      uint8_t vdev_id,
+					      uint8_t *peer_addr,
+					      uint16_t max_bssid);
+	QDF_STATUS (*peer_state_update)(struct cdp_soc_t *soc,
+					uint8_t *peer_addr,
+					enum ol_txrx_peer_state state);
+	QDF_STATUS (*get_vdevid)(struct cdp_soc_t *soc_hdl, uint8_t *peer_mac,
+				 uint8_t *vdev_id);
 	struct cdp_vdev * (*get_vdev_by_peer_addr)(struct cdp_pdev *pdev,
 			struct qdf_mac_addr peer_addr);
 	QDF_STATUS (*register_ocb_peer)(uint8_t *mac_addr);
 	uint8_t * (*peer_get_peer_mac_addr)(void *peer);
-	int (*get_peer_state)(void *peer);
+	int (*get_peer_state)(struct cdp_soc_t *soc, uint8_t vdev_id,
+			      uint8_t *peer_mac);
 	struct cdp_vdev * (*get_vdev_for_peer)(void *peer);
-	int16_t (*update_ibss_add_peer_num_of_vdev)(struct cdp_vdev *vdev,
-			int16_t peer_num_delta);
+	int16_t (*update_ibss_add_peer_num_of_vdev)(struct cdp_soc_t *soc,
+						    uint8_t vdev_id,
+						    int16_t peer_num_delta);
 	void (*remove_peers_for_vdev)(struct cdp_vdev *vdev,
 			ol_txrx_vdev_peer_remove_cb callback,
 			void *callback_context, bool remove_last_peer);
 	void (*remove_peers_for_vdev_no_lock)(struct cdp_vdev *vdev,
 			ol_txrx_vdev_peer_remove_cb callback,
 			void *callback_context);
-	void (*copy_mac_addr_raw)(struct cdp_vdev *vdev, uint8_t *bss_addr);
-	void (*add_last_real_peer)(struct cdp_pdev *pdev,
-		struct cdp_vdev *vdev);
-	bool (*is_vdev_restore_last_peer)(void *peer);
-	void (*update_last_real_peer)(struct cdp_pdev *pdev, void *vdev,
-			bool restore_last_peer);
-	void (*peer_detach_force_delete)(void *peer);
-	void (*set_tdls_offchan_enabled)(void *peer, bool val);
-	void (*set_peer_as_tdls_peer)(void *peer, bool val);
+	void (*copy_mac_addr_raw)(struct cdp_soc_t *soc, uint8_t vdev_id,
+				  uint8_t *bss_addr);
+	void (*add_last_real_peer)(struct cdp_soc_t *soc, uint8_t pdev_id,
+				   uint8_t vdev_id);
+	bool (*is_vdev_restore_last_peer)(struct cdp_soc_t *soc,
+					  uint8_t vdev_id,
+					  uint8_t *peer_mac);
+	void (*update_last_real_peer)(struct cdp_soc_t *soc, uint8_t pdev_id,
+				      uint8_t vdev_id, bool restore_last_peer);
+	void (*peer_detach_force_delete)(struct cdp_soc_t *soc_hdl,
+					 uint8_t vdev_id, uint8_t *peer_addr);
+	void (*set_tdls_offchan_enabled)(struct cdp_soc_t *soc, uint8_t vdev_id,
+					 uint8_t *peer_mac, bool val);
+	void (*set_peer_as_tdls_peer)(struct cdp_soc_t *soc, uint8_t vdev_id,
+				      uint8_t *peer_mac, bool val);
 };
 
 /**
@@ -1341,7 +1304,8 @@ struct cdp_cfg_ops {
 	void (*set_cfg_packet_log_enabled)(struct cdp_cfg *cfg_pdev,
 		uint8_t val);
 	struct cdp_cfg * (*cfg_attach)(qdf_device_t osdev, void *cfg_param);
-	void (*vdev_rx_set_intrabss_fwd)(struct cdp_vdev *vdev, bool val);
+	void (*vdev_rx_set_intrabss_fwd)(struct cdp_soc_t *soc_hdl,
+					 uint8_t vdev_id, bool val);
 	uint8_t (*is_rx_fwd_disabled)(struct cdp_vdev *vdev);
 	void (*tx_set_is_mgmt_over_wmi_enabled)(uint8_t value);
 	int (*is_high_latency)(struct cdp_cfg *cfg_pdev);
@@ -1569,6 +1533,26 @@ struct cdp_rx_offld_ops {
 };
 #endif
 
+#if defined(WLAN_CFR_ENABLE) && defined(WLAN_ENH_CFR_ENABLE)
+/**
+ * struct cdp_cfr_ops - host cfr ops
+ * @txrx_cfr_filter: Handler to configure host rx monitor status ring
+ * @txrx_get_cfr_rcc: Handler to get CFR mode
+ * @txrx_set_cfr_rcc: Handler to enable/disable CFR mode
+ */
+struct cdp_cfr_ops {
+	void (*txrx_cfr_filter)(struct cdp_soc_t *soc_hdl,
+				uint8_t pdev_id,
+				bool enable,
+				struct cdp_monitor_filter *filter_val);
+	bool (*txrx_get_cfr_rcc)(struct cdp_soc_t *soc_hdl,
+				 uint8_t pdev_id);
+	void (*txrx_set_cfr_rcc)(struct cdp_soc_t *soc_hdl,
+				 uint8_t pdev_id,
+				 bool enable);
+};
+#endif
+
 struct cdp_ops {
 	struct cdp_cmn_ops          *cmn_drv_ops;
 	struct cdp_ctrl_ops         *ctrl_ops;
@@ -1603,6 +1587,9 @@ struct cdp_ops {
 #endif
 #ifdef WLAN_FEATURE_PKT_CAPTURE
 	struct cdp_pktcapture_ops   *pktcapture_ops;
+#endif
+#if defined(WLAN_CFR_ENABLE) && defined(WLAN_ENH_CFR_ENABLE)
+	struct cdp_cfr_ops          *cfr_ops;
 #endif
 
 };

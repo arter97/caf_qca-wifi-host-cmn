@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017-2019 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2017-2020 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -96,13 +96,15 @@ static void dp_rx_return_head_frag_desc(struct dp_peer *peer,
 	struct rx_desc_pool *rx_desc_pool;
 	union dp_rx_desc_list_elem_t *head = NULL;
 	union dp_rx_desc_list_elem_t *tail = NULL;
+	uint8_t pool_id;
 
 	pdev = peer->vdev->pdev;
 	soc = pdev->soc;
 
 	if (peer->rx_tid[tid].head_frag_desc) {
-		dp_rxdma_srng = &pdev->rx_refill_buf_ring;
-		rx_desc_pool = &soc->rx_desc_buf[pdev->pdev_id];
+		pool_id = peer->rx_tid[tid].head_frag_desc->pool_id;
+		dp_rxdma_srng = &soc->rx_refill_buf_ring[pool_id];
+		rx_desc_pool = &soc->rx_desc_buf[pool_id];
 
 		dp_rx_add_to_free_desc_list(&head, &tail,
 					    peer->rx_tid[tid].head_frag_desc);
@@ -1026,11 +1028,21 @@ static QDF_STATUS dp_rx_defrag_reo_reinject(struct dp_peer *peer,
 		peer->rx_tid[tid].dst_ring_desc;
 	hal_ring_handle_t hal_srng = soc->reo_reinject_ring.hal_srng;
 	struct dp_rx_desc *rx_desc = peer->rx_tid[tid].head_frag_desc;
+	struct dp_rx_reorder_array_elem *rx_reorder_array_elem =
+						peer->rx_tid[tid].array;
+	qdf_nbuf_t nbuf_head;
 
-	head = dp_ipa_handle_rx_reo_reinject(soc, head);
-	if (qdf_unlikely(!head)) {
+	nbuf_head = dp_ipa_handle_rx_reo_reinject(soc, head);
+	if (qdf_unlikely(!nbuf_head)) {
 		dp_err_rl("IPA RX REO reinject failed");
 		return QDF_STATUS_E_FAILURE;
+	}
+
+	/* update new allocated skb in case IPA is enabled */
+	if (nbuf_head != head) {
+		head = nbuf_head;
+		rx_desc->nbuf = head;
+		rx_reorder_array_elem->head = head;
 	}
 
 	ent_ring_desc = hal_srng_src_get_next(soc->hal_soc, hal_srng);
@@ -1566,7 +1578,7 @@ dp_rx_defrag_store_fragment(struct dp_soc *soc,
 		}
 	} else {
 		dp_rx_add_to_free_desc_list(head, tail, rx_desc);
-		*rx_bfs = 1;
+		(*rx_bfs)++;
 
 		/* Return the non-head link desc */
 		if (ring_desc &&
@@ -1607,7 +1619,7 @@ dp_rx_defrag_store_fragment(struct dp_soc *soc,
 
 		dp_rx_add_to_free_desc_list(head, tail,
 				peer->rx_tid[tid].head_frag_desc);
-		*rx_bfs = 1;
+		(*rx_bfs)++;
 
 		if (dp_rx_link_desc_return(soc,
 					peer->rx_tid[tid].dst_ring_desc,
@@ -1648,7 +1660,7 @@ discard_frag:
 	    QDF_STATUS_SUCCESS)
 		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_ERROR,
 			  "%s: Failed to return link desc", __func__);
-	*rx_bfs = 1;
+	(*rx_bfs)++;
 
 end:
 	if (peer)
@@ -1686,7 +1698,7 @@ uint32_t dp_rx_frag_handle(struct dp_soc *soc, hal_ring_desc_t ring_desc,
 	uint32_t rx_bufs_used = 0;
 	qdf_nbuf_t msdu = NULL;
 	uint32_t tid;
-	int rx_bfs = 0;
+	uint32_t rx_bfs = 0;
 	struct dp_pdev *pdev;
 	QDF_STATUS status = QDF_STATUS_SUCCESS;
 
@@ -1725,7 +1737,7 @@ uint32_t dp_rx_frag_handle(struct dp_soc *soc, hal_ring_desc_t ring_desc,
 					     tid, rx_desc, &rx_bfs);
 
 	if (rx_bfs)
-		rx_bufs_used++;
+		rx_bufs_used += rx_bfs;
 
 	if (!QDF_IS_STATUS_SUCCESS(status))
 		dp_info_rl("Rx Defrag err seq#:0x%x msdu_count:%d flags:%d",
@@ -1756,9 +1768,9 @@ QDF_STATUS dp_rx_defrag_add_last_frag(struct dp_soc *soc,
 	 */
 	if (!rx_reorder_array_elem) {
 		dp_verbose_debug(
-			"peer id:%d mac:" QDF_MAC_ADDR_STR "drop rx frame!",
+			"peer id:%d mac: %pM drop rx frame!",
 			peer->peer_ids[0],
-			QDF_MAC_ADDR_ARRAY(peer->mac_addr.raw));
+			peer->mac_addr.raw);
 		DP_STATS_INC(soc, rx.err.defrag_peer_uninit, 1);
 		qdf_nbuf_free(nbuf);
 		goto fail;

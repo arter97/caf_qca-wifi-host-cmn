@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016-2019 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2016-2020 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -47,14 +47,14 @@
 
 #define DP_PEER_METADATA_PEER_ID_MASK	0x0000ffff
 #define DP_PEER_METADATA_PEER_ID_SHIFT	0
-#define DP_PEER_METADATA_VDEV_ID_MASK	0x00070000
+#define DP_PEER_METADATA_VDEV_ID_MASK	0x003f0000
 #define DP_PEER_METADATA_VDEV_ID_SHIFT	16
 
 #define DP_PEER_METADATA_PEER_ID_GET(_peer_metadata)		\
 	(((_peer_metadata) & DP_PEER_METADATA_PEER_ID_MASK)	\
 			>> DP_PEER_METADATA_PEER_ID_SHIFT)
 
-#define DP_PEER_METADATA_ID_GET(_peer_metadata)			\
+#define DP_PEER_METADATA_VDEV_ID_GET(_peer_metadata)		\
 	(((_peer_metadata) & DP_PEER_METADATA_VDEV_ID_MASK)	\
 			>> DP_PEER_METADATA_VDEV_ID_SHIFT)
 
@@ -497,14 +497,13 @@ dp_rx_wbm_err_process(struct dp_intr *int_ctx, struct dp_soc *soc,
  * dp_rx_sg_create() - create a frag_list for MSDUs which are spread across
  *		     multiple nbufs.
  * @nbuf: pointer to the first msdu of an amsdu.
- * @rx_tlv_hdr: pointer to the start of RX TLV headers.
  *
  * This function implements the creation of RX frag_list for cases
  * where an MSDU is spread across multiple nbufs.
  *
  * Return: returns the head nbuf which contains complete frag_list.
  */
-qdf_nbuf_t dp_rx_sg_create(qdf_nbuf_t nbuf, uint8_t *rx_tlv_hdr);
+qdf_nbuf_t dp_rx_sg_create(qdf_nbuf_t nbuf);
 
 /*
  * dp_rx_desc_pool_alloc() - create a pool of software rx_descs
@@ -582,7 +581,8 @@ void dp_rx_add_to_free_desc_list(union dp_rx_desc_list_elem_t **head,
 
 	((union dp_rx_desc_list_elem_t *)new)->next = *head;
 	*head = (union dp_rx_desc_list_elem_t *)new;
-	if (!*tail)
+	/* reset tail if head->next is NULL */
+	if (!*tail || !(*head)->next)
 		*tail = *head;
 
 }
@@ -730,15 +730,16 @@ void *dp_rx_cookie_2_mon_link_desc_va(struct dp_pdev *pdev,
 				  int mac_id)
 {
 	void *link_desc_va;
-	int mac_for_pdev = dp_get_mac_id_for_mac(pdev->soc, mac_id);
 
 	/* TODO */
 	/* Add sanity for  cookie */
 
 	link_desc_va =
-	   pdev->link_desc_banks[mac_for_pdev][buf_info->sw_cookie].base_vaddr +
+	   pdev->soc->mon_link_desc_banks[mac_id][buf_info->sw_cookie]
+			.base_vaddr +
 	   (buf_info->paddr -
-	   pdev->link_desc_banks[mac_for_pdev][buf_info->sw_cookie].base_paddr);
+	   pdev->soc->mon_link_desc_banks[mac_id][buf_info->sw_cookie]
+			.base_paddr);
 
 	return link_desc_va;
 }
@@ -978,7 +979,7 @@ dp_rx_link_desc_return(struct dp_soc *soc, hal_ring_desc_t ring_desc,
  */
 QDF_STATUS
 dp_rx_link_desc_return_by_addr(struct dp_soc *soc,
-			       hal_link_desc_t link_desc_addr,
+			       hal_buff_addrinfo_t link_desc_addr,
 			       uint8_t bm_action);
 
 /**
@@ -1097,4 +1098,10 @@ bool dp_rx_multipass_process(struct dp_peer *peer, qdf_nbuf_t nbuf,
 			     uint8_t tid);
 #endif
 
+#ifndef WLAN_RX_PKT_CAPTURE_ENH
+static inline
+void dp_peer_set_rx_capture_enabled(struct dp_peer *peer_handle, bool value)
+{
+}
+#endif
 #endif /* _DP_RX_H */

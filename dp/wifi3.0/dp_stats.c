@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017-2019 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2017-2020 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -4750,19 +4750,19 @@ void dp_print_mon_ring_stat_from_hal(struct dp_pdev *pdev, uint8_t mac_id)
 {
 	if (pdev->soc->wlan_cfg_ctx->rxdma1_enable) {
 		dp_print_ring_stat_from_hal(pdev->soc,
-					    &pdev->rxdma_mon_buf_ring[mac_id],
-					    RXDMA_MONITOR_BUF);
+			&pdev->soc->rxdma_mon_buf_ring[mac_id],
+			RXDMA_MONITOR_BUF);
 		dp_print_ring_stat_from_hal(pdev->soc,
-					    &pdev->rxdma_mon_dst_ring[mac_id],
-					    RXDMA_MONITOR_DST);
+			&pdev->soc->rxdma_mon_dst_ring[mac_id],
+			RXDMA_MONITOR_DST);
 		dp_print_ring_stat_from_hal(pdev->soc,
-					    &pdev->rxdma_mon_desc_ring[mac_id],
-					    RXDMA_MONITOR_DESC);
+			&pdev->soc->rxdma_mon_desc_ring[mac_id],
+			RXDMA_MONITOR_DESC);
 	}
 
 	dp_print_ring_stat_from_hal(pdev->soc,
-				    &pdev->rxdma_mon_status_ring[mac_id],
-				    RXDMA_MONITOR_STATUS);
+				    &pdev->soc->rxdma_mon_status_ring[mac_id],
+					RXDMA_MONITOR_STATUS);
 }
 
 void
@@ -4770,6 +4770,7 @@ dp_print_ring_stats(struct dp_pdev *pdev)
 {
 	uint32_t i;
 	int mac_id;
+	int lmac_id;
 
 	if (hif_pm_runtime_get_sync(pdev->soc->hif_handle))
 		return;
@@ -4812,9 +4813,10 @@ dp_print_ring_stats(struct dp_pdev *pdev)
 					    &pdev->soc->tx_comp_ring[i],
 					    WBM2SW_RELEASE);
 
+	lmac_id = dp_get_lmac_id_for_pdev_id(pdev->soc, 0, pdev->pdev_id);
 	dp_print_ring_stat_from_hal(pdev->soc,
-				    &pdev->rx_refill_buf_ring,
-				    RXDMA_BUF);
+				&pdev->soc->rx_refill_buf_ring[lmac_id],
+				RXDMA_BUF);
 
 	dp_print_ring_stat_from_hal(pdev->soc,
 				    &pdev->rx_refill_buf_ring2,
@@ -4825,14 +4827,22 @@ dp_print_ring_stats(struct dp_pdev *pdev)
 					    &pdev->rx_mac_buf_ring[i],
 					    RXDMA_BUF);
 
-	for (mac_id = 0; mac_id < NUM_RXDMA_RINGS_PER_PDEV; mac_id++)
-		dp_print_mon_ring_stat_from_hal(pdev, mac_id);
+	for (mac_id = 0; mac_id < NUM_RXDMA_RINGS_PER_PDEV; mac_id++) {
+		lmac_id = dp_get_lmac_id_for_pdev_id(pdev->soc,
+						     mac_id, pdev->pdev_id);
 
-	for (i = 0; i < NUM_RXDMA_RINGS_PER_PDEV; i++)
+		dp_print_mon_ring_stat_from_hal(pdev, lmac_id);
+	}
+
+	for (i = 0; i < NUM_RXDMA_RINGS_PER_PDEV; i++)	{
+		lmac_id = dp_get_lmac_id_for_pdev_id(pdev->soc,
+						     i, pdev->pdev_id);
+
 		dp_print_ring_stat_from_hal(pdev->soc,
-					    &pdev->rxdma_err_dst_ring[i],
+					    &pdev->soc->rxdma_err_dst_ring
+					    [lmac_id],
 					    RXDMA_DST);
-
+	}
 	hif_pm_runtime_put(pdev->soc->hif_handle);
 }
 
@@ -5272,6 +5282,8 @@ void dp_print_peer_stats(struct dp_peer *peer)
 		       peer->stats.rx.rx_byte_rate);
 	DP_PRINT_STATS("	Data received in last sec: %d",
 		       peer->stats.rx.rx_data_rate);
+	DP_PRINT_STATS("Multipass Rx Packet Drop = %d",
+		       peer->stats.rx.multipass_rx_pkt_drop);
 }
 
 void dp_print_per_ring_stats(struct dp_soc *soc)
@@ -5907,6 +5919,12 @@ dp_print_soc_rx_stats(struct dp_soc *soc)
 
 	DP_PRINT_STATS("RXDMA ERR DUP DESC: %d",
 		       soc->stats.rx.err.hal_rxdma_err_dup);
+
+	DP_PRINT_STATS("RX scatter msdu: %d",
+		       soc->stats.rx.err.scatter_msdu);
+
+	DP_PRINT_STATS("RX wait completed msdu break: %d",
+		       soc->stats.rx.msdu_scatter_wait_break);
 
 	for (i = 0; i < HAL_RXDMA_ERR_MAX; i++) {
 		index += qdf_snprint(&rxdma_error[index],
