@@ -233,14 +233,14 @@ int hif_ahb_configure_legacy_irq(struct hif_pci_softc *sc)
 	qal_vbus_get_irq((struct qdf_pfm_hndl *)pdev, "legacy", &irq);
 	if (irq < 0) {
 		dev_err(&pdev->dev, "Unable to get irq\n");
-		ret = -1;
+		ret = -EFAULT;
 		goto end;
 	}
 	ret = request_irq(irq, hif_pci_legacy_ce_interrupt_handler,
 				IRQF_DISABLED, "wlan_ahb", sc);
 	if (ret) {
 		dev_err(&pdev->dev, "ath_request_irq failed\n");
-		ret = -1;
+		ret = -EFAULT;
 		goto end;
 	}
 	sc->irq = irq;
@@ -276,7 +276,7 @@ int hif_ahb_configure_irq(struct hif_pci_softc *sc)
 				   HIF_IC_CE0_IRQ_OFFSET + i, &irq);
 		if (ret) {
 			dev_err(&pdev->dev, "get irq failed\n");
-			ret = -1;
+			ret = -EFAULT;
 			goto end;
 		}
 
@@ -288,7 +288,7 @@ int hif_ahb_configure_irq(struct hif_pci_softc *sc)
 				       &hif_state->tasklets[i]);
 		if (ret) {
 			dev_err(&pdev->dev, "ath_request_irq failed\n");
-			ret = -1;
+			ret = -EFAULT;
 			goto end;
 		}
 		hif_ahb_irq_enable(scn, i);
@@ -313,18 +313,23 @@ int hif_ahb_configure_grp_irq(struct hif_softc *scn,
 	hif_ext_group->irq_name = &hif_ahb_get_irq_name;
 	hif_ext_group->work_complete = &hif_dummy_grp_done;
 
-	qdf_spin_lock_irqsave(&hif_ext_group->irq_lock);
-
 	for (j = 0; j < hif_ext_group->numirq; j++) {
 		ret = pfrm_get_irq(&pdev->dev, (struct qdf_pfm_hndl *)pdev,
 				   ic_irqname[hif_ext_group->irq[j]],
 				   hif_ext_group->irq[j], &irq);
 		if (ret) {
 			dev_err(&pdev->dev, "get irq failed\n");
-			ret = -1;
+			ret = -EFAULT;
 			goto end;
 		}
 		ic_irqnum[hif_ext_group->irq[j]] = irq;
+		hif_ext_group->os_irq[j] = irq;
+	}
+
+	qdf_spin_lock_irqsave(&hif_ext_group->irq_lock);
+
+	for (j = 0; j < hif_ext_group->numirq; j++) {
+		irq = hif_ext_group->os_irq[j];
 		irq_set_status_flags(irq, IRQ_DISABLE_UNLAZY);
 		ret = pfrm_request_irq(scn->qdf_dev->dev,
 				       irq, hif_ext_group_interrupt_handler,
@@ -333,10 +338,9 @@ int hif_ahb_configure_grp_irq(struct hif_softc *scn,
 				       hif_ext_group);
 		if (ret) {
 			dev_err(&pdev->dev, "ath_request_irq failed\n");
-			ret = -1;
+			ret = -EFAULT;
 			goto end;
 		}
-		hif_ext_group->os_irq[j] = irq;
 	}
 	qdf_spin_unlock_irqrestore(&hif_ext_group->irq_lock);
 
@@ -601,7 +605,6 @@ QDF_STATUS hif_ahb_enable_bus(struct hif_softc *ol_sc,
 	hif_register_tbl_attach(ol_sc, hif_type);
 	hif_target_register_tbl_attach(ol_sc, target_type);
 
-	/* QCA_WIFI_QCA8074_VP:Should not be executed on 8074 VP platform */
 	if ((tgt_info->target_type != TARGET_TYPE_QCA8074) &&
 	    (tgt_info->target_type != TARGET_TYPE_QCA8074V2) &&
 	    (tgt_info->target_type != TARGET_TYPE_QCA6018)) {
@@ -620,7 +623,6 @@ QDF_STATUS hif_ahb_enable_bus(struct hif_softc *ol_sc,
 
 	return QDF_STATUS_SUCCESS;
 err_target_sync:
-	/* QCA_WIFI_QCA8074_VP:Should not be executed on 8074 VP platform */
 	if ((tgt_info->target_type != TARGET_TYPE_QCA8074) &&
 	    (tgt_info->target_type != TARGET_TYPE_QCA8074V2) &&
 	    (tgt_info->target_type != TARGET_TYPE_QCA6018)) {

@@ -28,6 +28,7 @@
 #include "qdf_nbuf.h"
 #include "qdf_net_types.h"
 #include <wlan_cfg.h>
+#include "dp_ipa.h"
 #if defined(MESH_MODE_SUPPORT) || defined(FEATURE_PERPKT_INFO)
 #include "if_meta_hdr.h"
 #endif
@@ -1070,6 +1071,31 @@ static void dp_tx_raw_prepare_unset(struct dp_soc *soc,
 	} while (cur_nbuf);
 }
 
+#ifdef VDEV_PEER_PROTOCOL_COUNT
+#define dp_vdev_peer_stats_update_protocol_cnt_tx(vdev_hdl, nbuf) \
+{ \
+	qdf_nbuf_t nbuf_local; \
+	struct dp_vdev *vdev_local = vdev_hdl; \
+	do { \
+		if (qdf_likely(!((vdev_local)->peer_protocol_count_track))) \
+			break; \
+		nbuf_local = nbuf; \
+		if (qdf_unlikely(((vdev_local)->tx_encap_type) == \
+			 htt_cmn_pkt_type_raw)) \
+			break; \
+		else if (qdf_unlikely(qdf_nbuf_is_nonlinear((nbuf_local)))) \
+			break; \
+		else if (qdf_nbuf_is_tso((nbuf_local))) \
+			break; \
+		dp_vdev_peer_stats_update_protocol_cnt((vdev_local), \
+						       (nbuf_local), \
+						       NULL, 1, 0); \
+	} while (0); \
+}
+#else
+#define dp_vdev_peer_stats_update_protocol_cnt_tx(vdev_hdl, skb)
+#endif
+
 /**
  * dp_tx_hw_enqueue() - Enqueue to TCL HW for transmit
  * @soc: DP Soc Handle
@@ -1181,6 +1207,7 @@ static QDF_STATUS dp_tx_hw_enqueue(struct dp_soc *soc, struct dp_vdev *vdev,
 	}
 
 	tx_desc->flags |= DP_TX_DESC_FLAG_QUEUED_TX;
+	dp_vdev_peer_stats_update_protocol_cnt_tx(vdev, tx_desc->nbuf);
 
 	hal_tx_desc_sync(hal_tx_desc_cached, hal_tx_desc);
 	DP_STATS_INC_PKT(vdev, tx_i.processed, 1, length);
@@ -2051,7 +2078,8 @@ static bool dp_check_exc_metadata(struct cdp_tx_exception_metadata *tx_exc)
 
 /**
  * dp_tx_send_exception() - Transmit a frame on a given VAP in exception path
- * @vap_dev: DP vdev handle
+ * @soc: DP soc handle
+ * @vdev_id: id of DP vdev handle
  * @nbuf: skb
  * @tx_exc_metadata: Handle that holds exception path meta data
  *
@@ -2062,12 +2090,17 @@ static bool dp_check_exc_metadata(struct cdp_tx_exception_metadata *tx_exc)
  *         nbuf when it fails to send
  */
 qdf_nbuf_t
-dp_tx_send_exception(struct cdp_vdev *vap_dev, qdf_nbuf_t nbuf,
+dp_tx_send_exception(struct cdp_soc_t *soc, uint8_t vdev_id, qdf_nbuf_t nbuf,
 		     struct cdp_tx_exception_metadata *tx_exc_metadata)
 {
 	qdf_ether_header_t *eh = NULL;
-	struct dp_vdev *vdev = (struct dp_vdev *) vap_dev;
 	struct dp_tx_msdu_info_s msdu_info;
+	struct dp_vdev *vdev =
+		dp_get_vdev_from_soc_vdev_id_wifi3((struct dp_soc *)soc,
+						   vdev_id);
+
+	if (qdf_unlikely(!vdev))
+		goto fail;
 
 	qdf_mem_zero(&msdu_info, sizeof(msdu_info));
 
@@ -3137,6 +3170,7 @@ static inline void dp_tx_sojourn_stats_process(struct dp_pdev *pdev,
 }
 #else
 static inline void dp_tx_sojourn_stats_process(struct dp_pdev *pdev,
+					       struct dp_peer *peer,
 					       uint8_t tid,
 					       uint64_t txdesc_ts,
 					       uint32_t ppdu_id)
@@ -3544,9 +3578,9 @@ more_data:
 			 * completion ring. These errors are not related to
 			 * Tx completions, and should just be ignored
 			 */
-
-			wbm_internal_error =
-			hal_get_wbm_internal_error(tx_comp_hal_desc);
+			wbm_internal_error = hal_get_wbm_internal_error(
+							soc->hal_soc,
+							tx_comp_hal_desc);
 
 			if (wbm_internal_error) {
 				dp_err_rl("Tx comp wbm_internal_error!!");
@@ -3722,6 +3756,7 @@ qdf_nbuf_t dp_tx_non_std(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
  */
 QDF_STATUS dp_tx_vdev_attach(struct dp_vdev *vdev)
 {
+	int pdev_id;
 	/*
 	 * Fill HTT TCL Metadata with Vdev ID and MAC ID
 	 */
@@ -3731,8 +3766,10 @@ QDF_STATUS dp_tx_vdev_attach(struct dp_vdev *vdev)
 	HTT_TX_TCL_METADATA_VDEV_ID_SET(vdev->htt_tcl_metadata,
 			vdev->vdev_id);
 
-	HTT_TX_TCL_METADATA_PDEV_ID_SET(vdev->htt_tcl_metadata,
-			DP_SW2HW_MACID(vdev->pdev->pdev_id));
+	pdev_id =
+		dp_get_target_pdev_id_for_host_pdev_id(vdev->pdev->soc,
+						       vdev->pdev->pdev_id);
+	HTT_TX_TCL_METADATA_PDEV_ID_SET(vdev->htt_tcl_metadata, pdev_id);
 
 	/*
 	 * Set HTT Extension Valid bit to 0 by default
@@ -4291,6 +4328,9 @@ QDF_STATUS dp_tx_soc_attach(struct dp_soc *soc)
 			hal_tx_init_data_ring(soc->hal_soc,
 					soc->tcl_data_ring[i].hal_srng);
 		}
+		if (wlan_cfg_is_ipa_enabled(soc->wlan_cfg_ctx))
+			hal_tx_init_data_ring(soc->hal_soc,
+					soc->tcl_data_ring[IPA_TCL_DATA_RING_IDX].hal_srng);
 	}
 
 	/*

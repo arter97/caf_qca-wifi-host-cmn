@@ -1170,7 +1170,8 @@ static void hif_pm_runtime_stop(struct hif_pci_softc *sc)
 		return;
 
 	hif_runtime_exit(sc->dev);
-	hif_pm_runtime_resume(sc->dev);
+
+	hif_pm_runtime_sync_resume(GET_HIF_OPAQUE_HDL(sc));
 
 	qdf_atomic_set(&sc->pm_state, HIF_PM_RUNTIME_STATE_NONE);
 
@@ -1276,6 +1277,29 @@ static void hif_pm_runtime_close(struct hif_pci_softc *sc)
 	hif_is_recovery_in_progress(scn) ?
 		hif_pm_runtime_sanitize_on_ssr_exit(sc) :
 		hif_pm_runtime_sanitize_on_exit(sc);
+}
+
+int hif_pm_runtime_sync_resume(struct hif_opaque_softc *hif_ctx)
+{
+	struct hif_pci_softc *sc = HIF_GET_PCI_SOFTC(hif_ctx);
+	int pm_state;
+
+	if (!sc)
+		return -EINVAL;
+
+	if (!pm_runtime_enabled(sc->dev))
+		return 0;
+
+	pm_state = qdf_atomic_read(&sc->pm_state);
+	if (pm_state == HIF_PM_RUNTIME_STATE_SUSPENDED ||
+	    pm_state == HIF_PM_RUNTIME_STATE_SUSPENDING)
+		HIF_INFO("Runtime PM resume is requested by %ps",
+			 (void *)_RET_IP_);
+
+	sc->pm_stats.request_resume++;
+	sc->pm_stats.last_resume_caller = (void *)_RET_IP_;
+
+	return pm_runtime_resume(sc->dev);
 }
 #else
 static void hif_pm_runtime_close(struct hif_pci_softc *sc) {}
@@ -2013,7 +2037,6 @@ int hif_pci_bus_configure(struct hif_softc *hif_sc)
 	if (status)
 		goto disable_wlan;
 
-	/* QCA_WIFI_QCA8074_VP:Should not be executed on 8074 VP platform */
 	if (hif_needs_bmi(hif_osc)) {
 		status = hif_set_hia(hif_sc);
 		if (status)
@@ -3363,19 +3386,25 @@ static int hif_ce_msi_configure_irq(struct hif_softc *scn)
 	struct hif_pci_softc *pci_sc = HIF_GET_PCI_SOFTC(scn);
 	struct CE_attr *host_ce_conf = ce_sc->host_ce_config;
 
-	/* do wake irq assignment */
-	ret = pld_get_user_msi_assignment(scn->qdf_dev->dev, "WAKE",
-					  &msi_data_count, &msi_data_start,
-					  &msi_irq_start);
-	if (ret)
-		return ret;
+	if (!scn->disable_wake_irq) {
+		/* do wake irq assignment */
+		ret = pld_get_user_msi_assignment(scn->qdf_dev->dev, "WAKE",
+						  &msi_data_count,
+						  &msi_data_start,
+						  &msi_irq_start);
+		if (ret)
+			return ret;
 
-	scn->wake_irq = pld_get_msi_irq(scn->qdf_dev->dev, msi_irq_start);
-	ret = pfrm_request_irq(scn->qdf_dev->dev, scn->wake_irq,
-			       hif_wake_interrupt_handler,
-			       IRQF_NO_SUSPEND, "wlan_wake_irq", scn);
-	if (ret)
-		return ret;
+		scn->wake_irq = pld_get_msi_irq(scn->qdf_dev->dev,
+						msi_irq_start);
+
+		ret = pfrm_request_irq(scn->qdf_dev->dev, scn->wake_irq,
+				       hif_wake_interrupt_handler,
+				       IRQF_NO_SUSPEND, "wlan_wake_irq", scn);
+
+		if (ret)
+			return ret;
+	}
 
 	/* do ce irq assignments */
 	ret = pld_get_user_msi_assignment(scn->qdf_dev->dev, "CE",
@@ -3436,9 +3465,11 @@ free_irq:
 	}
 
 free_wake_irq:
-	pfrm_free_irq(scn->qdf_dev->dev,
-		      scn->wake_irq, scn->qdf_dev->dev);
-	scn->wake_irq = 0;
+	if (!scn->disable_wake_irq) {
+		pfrm_free_irq(scn->qdf_dev->dev,
+			      scn->wake_irq, scn->qdf_dev->dev);
+		scn->wake_irq = 0;
+	}
 
 	return ret;
 }
@@ -3923,6 +3954,9 @@ int hif_pm_runtime_get_sync(struct hif_opaque_softc *hif_ctx)
 	if (!sc)
 		return -EINVAL;
 
+	if (!pm_runtime_enabled(sc->dev))
+		return 0;
+
 	pm_state = qdf_atomic_read(&sc->pm_state);
 	if (pm_state == HIF_PM_RUNTIME_STATE_SUSPENDED ||
 	    pm_state == HIF_PM_RUNTIME_STATE_SUSPENDING)
@@ -3967,6 +4001,9 @@ int hif_pm_runtime_put_sync_suspend(struct hif_opaque_softc *hif_ctx)
 	if (!sc)
 		return -EINVAL;
 
+	if (!pm_runtime_enabled(sc->dev))
+		return 0;
+
 	usage_count = atomic_read(&sc->dev->power.usage_count);
 	if (usage_count == 1) {
 		pm_state = qdf_atomic_read(&sc->pm_state);
@@ -3992,6 +4029,9 @@ int hif_pm_runtime_request_resume(struct hif_opaque_softc *hif_ctx)
 
 	if (!sc)
 		return -EINVAL;
+
+	if (!pm_runtime_enabled(sc->dev))
+		return 0;
 
 	pm_state = qdf_atomic_read(&sc->pm_state);
 	if (pm_state == HIF_PM_RUNTIME_STATE_SUSPENDED ||
@@ -4025,6 +4065,9 @@ void hif_pm_runtime_get_noresume(struct hif_opaque_softc *hif_ctx)
 	if (!sc)
 		return;
 
+	if (!pm_runtime_enabled(sc->dev))
+		return;
+
 	sc->pm_stats.runtime_get++;
 	pm_runtime_get_noresume(sc->dev);
 }
@@ -4053,6 +4096,9 @@ int hif_pm_runtime_get(struct hif_opaque_softc *hif_ctx)
 		hif_err("Could not do runtime get, scn is null");
 		return -EFAULT;
 	}
+
+	if (!pm_runtime_enabled(sc->dev))
+		return 0;
 
 	pm_state = qdf_atomic_read(&sc->pm_state);
 
@@ -4096,9 +4142,9 @@ int hif_pm_runtime_get(struct hif_opaque_softc *hif_ctx)
 }
 
 /**
- * hif_pm_runtime_put() - do a put opperation on the device
+ * hif_pm_runtime_put() - do a put operation on the device
  *
- * A put opperation will allow a runtime suspend after a corresponding
+ * A put operation will allow a runtime suspend after a corresponding
  * get was done.  This api should be used when sending data.
  *
  * This api will return a failure if runtime pm is stopped
@@ -4118,6 +4164,10 @@ int hif_pm_runtime_put(struct hif_opaque_softc *hif_ctx)
 				__func__);
 		return -EFAULT;
 	}
+
+	if (!pm_runtime_enabled(sc->dev))
+		return 0;
+
 	usage_count = atomic_read(&sc->dev->power.usage_count);
 
 	if (usage_count == 1) {
@@ -4143,6 +4193,46 @@ int hif_pm_runtime_put(struct hif_opaque_softc *hif_ctx)
 	return 0;
 }
 
+/**
+ * hif_pm_runtime_put_noidle() - do a put operation with no idle
+ *
+ * This API will do a runtime put no idle operation
+ *
+ * @hif_ctx: pointer of HIF context
+ *
+ * Return: 0 for success otherwise an error code
+ */
+int hif_pm_runtime_put_noidle(struct hif_opaque_softc *hif_ctx)
+{
+	struct hif_pci_softc *sc = HIF_GET_PCI_SOFTC(hif_ctx);
+	int usage_count, pm_state;
+	char *err = NULL;
+
+	if (!sc)
+		return -EINVAL;
+
+	if (!pm_runtime_enabled(sc->dev))
+		return 0;
+
+	usage_count = atomic_read(&sc->dev->power.usage_count);
+	if (usage_count == 1) {
+		pm_state = qdf_atomic_read(&sc->pm_state);
+		if (pm_state == HIF_PM_RUNTIME_STATE_NONE)
+			err = "Ignore unexpected Put as runtime PM is disabled";
+	} else if (usage_count == 0) {
+		err = "Put without a Get Operation";
+	}
+
+	if (err) {
+		hif_pci_runtime_pm_warn(sc, err);
+		return -EINVAL;
+	}
+
+	sc->pm_stats.runtime_put++;
+	pm_runtime_put_noidle(sc->dev);
+
+	return 0;
+}
 
 /**
  * __hif_pm_runtime_prevent_suspend() - prevent runtime suspend for a protocol
