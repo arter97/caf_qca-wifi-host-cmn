@@ -528,8 +528,8 @@ enum ctl_value {
 struct ch_params {
 	enum phy_ch_width ch_width;
 	uint8_t sec_ch_offset;
-	qdf_freq_t center_freq_seg0;
-	qdf_freq_t center_freq_seg1;
+	uint8_t center_freq_seg0;
+	uint8_t center_freq_seg1;
 	qdf_freq_t mhz_freq_seg0;
 	qdf_freq_t mhz_freq_seg1;
 };
@@ -595,6 +595,30 @@ struct reg_dmn_op_class_map_t {
 	uint16_t behav_limit;
 	qdf_freq_t start_freq;
 	uint8_t channels[REG_MAX_CHANNELS_PER_OPERATING_CLASS];
+};
+
+/**
+ * struct regdmn_ap_cap_opclass_t: AP Cap operation class table
+ * @op_class: operating class number
+ * @ch_width: channel width in MHz
+ * @start_freq: Starting Frequency in MHz
+ * @behav_limit: OR of bitmaps of enum behav_limit
+ * @max_tx_pwr_dbm: Maximum tx power in dbm
+ * @num_supported_chan: Number of supported channels
+ * @num_non_supported_chan: Number of non-supported channels
+ * @sup_chan_list: Array of supported channel numbers
+ * @non_sup_chan_list: Array of non supported channel numbers
+ */
+struct regdmn_ap_cap_opclass_t {
+	uint8_t op_class;
+	uint8_t ch_width;
+	qdf_freq_t start_freq;
+	uint16_t behav_limit;
+	uint8_t max_tx_pwr_dbm;
+	uint8_t num_supported_chan;
+	uint8_t num_non_supported_chan;
+	uint8_t sup_chan_list[REG_MAX_CHANNELS_PER_OPERATING_CLASS];
+	uint8_t non_sup_chan_list[REG_MAX_CHANNELS_PER_OPERATING_CLASS];
 };
 
 /**
@@ -1075,5 +1099,21 @@ struct avoid_freq_ind_data {
 #define TWOG_CHAN_5_IN_MHZ      2432
 #define TWOG_CHAN_6_IN_MHZ      2437
 #define TWOG_CHAN_13_IN_MHZ     2472
+
+/**
+ * struct reg_ctl_params - reg ctl and regd info
+ * @regd: regdomain pair
+ * @regd_2g: 2g sub domain code
+ * @regd_5g: 5g sub domain code
+ * @ctl_2g: 2g ctl info
+ * @ctl_5g: 5g ctl info
+ */
+struct reg_ctl_params {
+	uint32_t regd;
+	uint16_t regd_2g;
+	uint16_t regd_5g;
+	uint8_t ctl_2g;
+	uint8_t ctl_5g;
+};
 
 #endif
