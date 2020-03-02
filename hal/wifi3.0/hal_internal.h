@@ -20,6 +20,7 @@
 #define _HAL_INTERNAL_H_
 
 #include "qdf_types.h"
+#include "qdf_atomic.h"
 #include "qdf_lock.h"
 #include "qdf_mem.h"
 #include "qdf_nbuf.h"
@@ -374,6 +375,8 @@ struct hal_hw_txrx_ops {
 	uint8_t (*hal_tx_comp_get_release_reason)(void *hal_desc);
 	uint8_t (*hal_get_wbm_internal_error)(void *hal_desc);
 	void (*hal_tx_desc_set_mesh_en)(void *desc, uint8_t en);
+	void (*hal_tx_init_cmd_credit_ring)(hal_soc_handle_t hal_soc_hdl,
+					    hal_ring_handle_t hal_ring_hdl);
 
 	/* rx */
 	uint32_t (*hal_rx_msdu_start_nss_get)(uint8_t *);
@@ -432,7 +435,8 @@ struct hal_hw_txrx_ops {
 	uint8_t (*hal_rx_get_mpdu_sequence_control_valid)(uint8_t *buf);
 	bool (*hal_rx_is_unicast)(uint8_t *buf);
 	uint32_t (*hal_rx_tid_get)(hal_soc_handle_t hal_soc_hdl, uint8_t *buf);
-	uint32_t (*hal_rx_hw_desc_get_ppduid_get)(void *hw_desc_addr);
+	uint32_t (*hal_rx_hw_desc_get_ppduid_get)(void *rx_tlv_hdr,
+						  void *rxdma_dst_ring_desc);
 	uint32_t (*hal_rx_mpdu_start_mpdu_qos_control_valid_get)(uint8_t *buf);
 	uint32_t (*hal_rx_msdu_end_sa_sw_peer_id_get)(uint8_t *buf);
 	void * (*hal_rx_msdu0_buffer_addr_lsb)(void *link_desc_addr);
@@ -470,7 +474,52 @@ struct hal_hw_txrx_ops {
 	bool (*hal_rx_get_fisa_flow_agg_continuation)(uint8_t *buf);
 	uint8_t (*hal_rx_get_fisa_flow_agg_count)(uint8_t *buf);
 	bool (*hal_rx_get_fisa_timeout)(uint8_t *buf);
+	uint8_t (*hal_rx_mpdu_start_tlv_tag_valid)(void *rx_tlv_hdr);
 };
+
+/**
+ * struct hal_soc_stats - Hal layer stats
+ * @reg_write_fail: number of failed register writes
+ *
+ * This structure holds all the statistics at HAL layer.
+ */
+struct hal_soc_stats {
+	uint32_t reg_write_fail;
+};
+
+#ifdef ENABLE_HAL_REG_WR_HISTORY
+/* The history size should always be a power of 2 */
+#define HAL_REG_WRITE_HIST_SIZE 8
+
+/**
+ * struct hal_reg_write_fail_entry - Record of
+ *		register write which failed.
+ * @timestamp: timestamp of reg write failure
+ * @reg_offset: offset of register where the write failed
+ * @write_val: the value which was to be written
+ * @read_val: the value read back from the register after write
+ */
+struct hal_reg_write_fail_entry {
+	uint64_t timestamp;
+	uint32_t reg_offset;
+	uint32_t write_val;
+	uint32_t read_val;
+};
+
+/**
+ * struct hal_reg_write_fail_history - Hal layer history
+ *		of all the register write failures.
+ * @index: index to add the new record
+ * @record: array of all the records in history
+ *
+ * This structure holds the history of register write
+ * failures at HAL layer.
+ */
+struct hal_reg_write_fail_history {
+	qdf_atomic_t index;
+	struct hal_reg_write_fail_entry record[HAL_REG_WRITE_HIST_SIZE];
+};
+#endif
 
 /**
  * HAL context to be used to access SRNG APIs (currently used by data path
@@ -521,6 +570,11 @@ struct hal_soc {
 
 	/* Indicate srngs initialization */
 	bool init_phase;
+	/* Hal level stats */
+	struct hal_soc_stats stats;
+#ifdef ENABLE_HAL_REG_WR_HISTORY
+	struct hal_reg_write_fail_history *reg_wr_fail_hist;
+#endif
 };
 
 void hal_qca6750_attach(struct hal_soc *hal_soc);

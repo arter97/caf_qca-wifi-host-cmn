@@ -546,6 +546,9 @@ void dp_rx_fill_mesh_stats(struct dp_vdev *vdev, qdf_nbuf_t nbuf,
 	uint32_t nss;
 	uint32_t rate_mcs;
 	uint32_t bw;
+	uint8_t primary_chan_num;
+	uint32_t center_chan_freq;
+	struct dp_soc *soc;
 
 	/* fill recv mesh stats */
 	rx_info = qdf_mem_malloc(sizeof(struct mesh_recv_hdr_s));
@@ -577,7 +580,18 @@ void dp_rx_fill_mesh_stats(struct dp_vdev *vdev, qdf_nbuf_t nbuf,
 	}
 
 	rx_info->rs_rssi = hal_rx_msdu_start_get_rssi(rx_tlv_hdr);
-	rx_info->rs_channel = hal_rx_msdu_start_get_freq(rx_tlv_hdr);
+
+	soc = vdev->pdev->soc;
+	primary_chan_num = hal_rx_msdu_start_get_freq(rx_tlv_hdr);
+	center_chan_freq = hal_rx_msdu_start_get_freq(rx_tlv_hdr) >> 16;
+
+	if (soc->cdp_soc.ol_ops && soc->cdp_soc.ol_ops->freq_to_band) {
+		rx_info->rs_band = soc->cdp_soc.ol_ops->freq_to_band(
+							soc->ctrl_psoc,
+							vdev->pdev->pdev_id,
+							center_chan_freq);
+	}
+	rx_info->rs_channel = primary_chan_num;
 	pkt_type = hal_rx_msdu_start_get_pkt_type(rx_tlv_hdr);
 	rate_mcs = hal_rx_msdu_start_rate_mcs_get(rx_tlv_hdr);
 	bw = hal_rx_msdu_start_bw_get(rx_tlv_hdr);
@@ -910,7 +924,7 @@ free:
 	}
 
 	/* Reset the head and tail pointers */
-	pdev = dp_get_pdev_for_mac_id(soc, mac_id);
+	pdev = dp_get_pdev_for_lmac_id(soc, mac_id);
 	if (pdev) {
 		pdev->invalid_peer_head_msdu = NULL;
 		pdev->invalid_peer_tail_msdu = NULL;
@@ -1746,26 +1760,18 @@ uint32_t dp_rx_srng_get_num_pending(hal_soc_handle_t hal_soc,
 }
 
 #ifdef WLAN_SUPPORT_RX_FISA
-/*
- * dp_rx_skip_tlvs() - Skip TLVs only if FISA is not enabled
- * @vdev: DP vdev context
- * @nbuf: nbuf whose data pointer is adjusted
- * @size: size to be adjusted
- *
- * Return: None
- */
-static void dp_rx_skip_tlvs(struct dp_vdev *vdev, qdf_nbuf_t nbuf, int size)
+void dp_rx_skip_tlvs(qdf_nbuf_t nbuf, uint32_t l3_padding)
 {
-	/* TLVs include FISA info do not skip them yet */
-	if (!vdev->osif_fisa_rx)
-		qdf_nbuf_pull_head(nbuf, size);
+	QDF_NBUF_CB_RX_PACKET_L3_HDR_PAD(nbuf) = l3_padding;
+	qdf_nbuf_pull_head(nbuf, l3_padding + RX_PKT_TLVS_LEN);
 }
-#else /* !WLAN_SUPPORT_RX_FISA */
-static void dp_rx_skip_tlvs(struct dp_vdev *vdev, qdf_nbuf_t nbuf, int size)
+#else
+void dp_rx_skip_tlvs(qdf_nbuf_t nbuf, uint32_t l3_padding)
 {
-	qdf_nbuf_pull_head(nbuf, size);
+	qdf_nbuf_pull_head(nbuf, l3_padding + RX_PKT_TLVS_LEN);
 }
-#endif /* !WLAN_SUPPORT_RX_FISA */
+#endif
+
 
 /**
  * dp_rx_process() - Brain of the Rx processing functionality
@@ -2213,8 +2219,7 @@ done:
 				  RX_PKT_TLVS_LEN;
 
 			qdf_nbuf_set_pktlen(nbuf, pkt_len);
-			dp_rx_skip_tlvs(vdev, nbuf, RX_PKT_TLVS_LEN +
-						msdu_metadata.l3_hdr_pad);
+			dp_rx_skip_tlvs(nbuf, msdu_metadata.l3_hdr_pad);
 		}
 
 		/*

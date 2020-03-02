@@ -82,6 +82,10 @@ struct dbr_module_config;
 #include <wlan_vdev_mgr_tgt_if_tx_defs.h>
 #include <wlan_vdev_mgr_tgt_if_rx_defs.h>
 
+#ifdef DCS_INTERFERENCE_DETECTION
+#include <wlan_dcs_tgt_api.h>
+#endif
+
 #ifdef QCA_SUPPORT_CP_STATS
 /**
  * struct wlan_lmac_if_cp_stats_tx_ops - defines southbound tx callbacks for
@@ -113,6 +117,33 @@ struct wlan_lmac_if_cp_stats_rx_ops {
 	QDF_STATUS (*process_stats_event)(struct wlan_objmgr_psoc *psoc,
 					  struct stats_event *ev);
 #endif
+};
+#endif
+
+#ifdef DCS_INTERFERENCE_DETECTION
+/**
+ * struct wlan_target_if_dcs_tx_ops - south bound tx function pointers for dcs
+ * @dcs_attach: function to register event handlers with FW
+ * @dcs_detach: function to de-register event handlers with FW
+ * @dcs_cmd_send: function to send dcs commands to FW
+ */
+struct wlan_target_if_dcs_tx_ops {
+	QDF_STATUS (*dcs_attach)(struct wlan_objmgr_psoc *psoc);
+	QDF_STATUS (*dcs_detach)(struct wlan_objmgr_psoc *psoc);
+	QDF_STATUS (*dcs_cmd_send)(struct wlan_objmgr_psoc *psoc,
+				   uint32_t pdev_id,
+				   bool is_host_pdev_id,
+				   uint32_t dcs_enable);
+};
+
+/**
+ * struct wlan_target_if_dcs_rx_ops - defines southbound rx callbacks for
+ * dcs component
+ * @process_dcs_event:  function pointer to rx FW events
+ */
+struct wlan_target_if_dcs_rx_ops {
+	QDF_STATUS (*process_dcs_event)(struct wlan_objmgr_psoc *psoc,
+					struct dcs_stats_event *event);
 };
 #endif
 
@@ -497,6 +528,8 @@ struct wlan_lmac_if_sa_api_tx_ops {
  * @cfr_default_ta_ra_cfg: Function to configure default values for TA_RA mode
  * @cfr_dump_lut_enh: Function to dump LUT entries
  * @cfr_rx_tlv_process: Function to process PPDU status TLVs
+ * @cfr_update_global_cfg: Function to update the global config for
+ * a successful commit session.
  */
 struct wlan_lmac_if_cfr_tx_ops {
 	int (*cfr_init_pdev)(struct wlan_objmgr_psoc *psoc,
@@ -513,12 +546,13 @@ struct wlan_lmac_if_cfr_tx_ops {
 #ifdef WLAN_ENH_CFR_ENABLE
 	QDF_STATUS (*cfr_config_rcc)(struct wlan_objmgr_pdev *pdev,
 				     struct cfr_rcc_param *params);
-	QDF_STATUS (*cfr_start_lut_timer)(struct wlan_objmgr_pdev *pdev);
-	QDF_STATUS (*cfr_stop_lut_timer)(struct wlan_objmgr_pdev *pdev);
+	void (*cfr_start_lut_timer)(struct wlan_objmgr_pdev *pdev);
+	void (*cfr_stop_lut_timer)(struct wlan_objmgr_pdev *pdev);
 	void (*cfr_default_ta_ra_cfg)(struct cfr_rcc_param *params,
 				      bool allvalid, uint16_t reset_cfg);
 	void (*cfr_dump_lut_enh)(struct wlan_objmgr_pdev *pdev);
 	void (*cfr_rx_tlv_process)(struct wlan_objmgr_pdev *pdev, void *nbuf);
+	void (*cfr_update_global_cfg)(struct wlan_objmgr_pdev *pdev);
 #endif
 };
 #endif /* WLAN_CFR_ENABLE */
@@ -962,6 +996,9 @@ struct wlan_lmac_if_tx_ops {
 #endif
 #ifdef QCA_SUPPORT_CP_STATS
 	struct wlan_lmac_if_cp_stats_tx_ops cp_stats_tx_ops;
+#endif
+#ifdef DCS_INTERFERENCE_DETECTION
+	struct wlan_target_if_dcs_tx_ops dcs_tx_ops;
 #endif
 #ifdef WLAN_SA_API_ENABLE
 	struct wlan_lmac_if_sa_api_tx_ops sa_api_tx_ops;
@@ -1651,6 +1688,9 @@ struct wlan_lmac_if_rx_ops {
 #endif
 #ifdef QCA_SUPPORT_CP_STATS
 	struct wlan_lmac_if_cp_stats_rx_ops cp_stats_rx_ops;
+#endif
+#ifdef DCS_INTERFERENCE_DETECTION
+	struct wlan_target_if_dcs_rx_ops dcs_rx_ops;
 #endif
 #ifdef WLAN_SA_API_ENABLE
 	struct wlan_lmac_if_sa_api_rx_ops sa_api_rx_ops;

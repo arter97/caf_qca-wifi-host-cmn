@@ -85,7 +85,6 @@
 #define MAX_VDEV_CNT 51
 #endif
 
-#define MAX_LINK_DESC_BANKS 8
 #define MAX_TXDESC_POOLS 4
 #define MAX_RXDESC_POOLS 4
 #define MAX_REO_DEST_RINGS 4
@@ -961,14 +960,8 @@ struct dp_soc {
 	/* Device ID coming from Bus sub-system */
 	uint32_t device_id;
 
-	/* Link descriptor memory banks */
-	struct {
-		void *base_vaddr_unaligned;
-		void *base_vaddr;
-		qdf_dma_addr_t base_paddr_unaligned;
-		qdf_dma_addr_t base_paddr;
-		uint32_t size;
-	} link_desc_banks[MAX_LINK_DESC_BANKS];
+	/* Link descriptor pages */
+	struct qdf_mem_multi_page_t link_desc_pages;
 
 	/* Link descriptor Idle list for HW internal use (SRNG mode) */
 	struct dp_srng wbm_idle_link_ring;
@@ -1014,8 +1007,9 @@ struct dp_soc {
 	/* Number of TCL data rings */
 	uint8_t num_tcl_data_rings;
 
-	/* TCL command ring */
-	struct dp_srng tcl_cmd_ring;
+	/* TCL CMD_CREDIT ring */
+	/* It is used as credit based ring on QCN9000 else command ring */
+	struct dp_srng tcl_cmd_credit_ring;
 
 	/* TCL command status ring */
 	struct dp_srng tcl_status_ring;
@@ -1209,10 +1203,9 @@ struct dp_soc {
 		uint32_t rx_mpdu_missed;
 	} ext_stats;
 	qdf_event_t rx_hw_stats_event;
-
-	/* Ignore reo command queue status during peer delete */
-	bool ignore_reo_status_cb;
-#endif
+	qdf_spinlock_t rx_hw_stats_lock;
+	bool is_last_stats_ctx_init;
+#endif /* WLAN_FEATURE_STATS_EXT */
 
 	/* Smart monitor capability for HKv2 */
 	uint8_t hw_nac_monitor_support;
@@ -1282,19 +1275,35 @@ struct dp_ipa_resources {
 #define DP_NAC_MAX_CLIENT  24
 
 /*
- * Macros to setup link descriptor cookies - for link descriptors, we just
- * need first 3 bits to store bank ID. The remaining bytes will be used set a
- * unique ID, which will be useful in debugging
+ * 24 bits cookie size
+ * 10 bits page id 0 ~ 1023 for MCL
+ * 3 bits page id 0 ~ 7 for WIN
+ * WBM Idle List Desc size = 128,
+ * Num descs per page = 4096/128 = 32 for MCL
+ * Num descs per page = 2MB/128 = 16384 for WIN
  */
-#define LINK_DESC_BANK_ID_MASK 0x7
-#define LINK_DESC_ID_SHIFT 3
+/*
+ * Macros to setup link descriptor cookies - for link descriptors, we just
+ * need first 3 bits to store bank/page ID for WIN. The
+ * remaining bytes will be used to set a unique ID, which will
+ * be useful in debugging
+ */
+#ifdef MAX_ALLOC_PAGE_SIZE
+#define LINK_DESC_PAGE_ID_MASK  0x007FE0
+#define LINK_DESC_ID_SHIFT      5
+#define LINK_DESC_COOKIE(_desc_id, _page_id) \
+	((((_page_id) + LINK_DESC_ID_START) << LINK_DESC_ID_SHIFT) | (_desc_id))
+#define LINK_DESC_COOKIE_PAGE_ID(_cookie) \
+	(((_cookie) & LINK_DESC_PAGE_ID_MASK) >> LINK_DESC_ID_SHIFT)
+#else
+#define LINK_DESC_PAGE_ID_MASK  0x7
+#define LINK_DESC_ID_SHIFT      3
+#define LINK_DESC_COOKIE(_desc_id, _page_id) \
+	((((_desc_id) + LINK_DESC_ID_START) << LINK_DESC_ID_SHIFT) | (_page_id))
+#define LINK_DESC_COOKIE_PAGE_ID(_cookie) \
+	((_cookie) & LINK_DESC_PAGE_ID_MASK)
+#endif
 #define LINK_DESC_ID_START 0x8000
-
-#define LINK_DESC_COOKIE(_desc_id, _bank_id) \
-	((((_desc_id) + LINK_DESC_ID_START) << LINK_DESC_ID_SHIFT) | (_bank_id))
-
-#define LINK_DESC_COOKIE_BANK_ID(_cookie) \
-	((_cookie) & LINK_DESC_BANK_ID_MASK)
 
 /* same as ieee80211_nac_param */
 enum dp_nac_param_cmd {
@@ -1574,7 +1583,11 @@ struct dp_pdev {
 	struct hal_rx_ppdu_info ppdu_info;
 
 	/* operating channel */
-	uint8_t operating_channel;
+	struct {
+		uint8_t num;
+		uint8_t band;
+		uint16_t freq;
+	} operating_channel;
 
 	qdf_nbuf_queue_t rx_status_q;
 	uint32_t mon_ppdu_status;
@@ -1993,6 +2006,9 @@ struct dp_vdev {
 	bool peer_protocol_count_track;
 	int peer_protocol_count_dropmask;
 #endif
+
+	/* vap bss peer mac addr */
+	uint8_t vap_bss_peer_mac_addr[QDF_MAC_ADDR_SIZE];
 };
 
 
@@ -2318,5 +2334,17 @@ struct dp_rx_fst {
 
 #endif /* WLAN_SUPPORT_RX_FISA */
 #endif /* WLAN_SUPPORT_RX_FLOW_TAG || WLAN_SUPPORT_RX_FISA */
+
+#ifdef WLAN_FEATURE_STATS_EXT
+/*
+ * dp_req_rx_hw_stats_t: RX peer HW stats query structure
+ * @pending_tid_query_cnt: pending tid stats count which waits for REO status
+ * @is_query_timeout: flag to show is stats query timeout
+ */
+struct dp_req_rx_hw_stats_t {
+	qdf_atomic_t pending_tid_stats_cnt;
+	bool is_query_timeout;
+};
+#endif
 
 #endif /* _DP_TYPES_H_ */

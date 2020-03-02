@@ -69,6 +69,14 @@
 #include <wmi_unified_cfr_param.h>
 #endif
 
+#ifdef DCS_INTERFERENCE_DETECTION
+#include <wlan_dcs_public_structs.h>
+#endif
+
+#ifdef WLAN_FEATURE_PKT_CAPTURE
+#include "wlan_pkt_capture_public_structs.h"
+#endif
+
 #define WMI_UNIFIED_MAX_EVENT 0x100
 
 #ifdef WMI_EXT_DBG
@@ -1095,6 +1103,9 @@ QDF_STATUS
 QDF_STATUS (*send_wlan_profile_trigger_cmd)(wmi_unified_t wmi_handle,
 		struct wlan_profile_params *param);
 
+QDF_STATUS (*send_wlan_profile_hist_intvl_cmd)(wmi_unified_t wmi_handle,
+		struct wlan_profile_params *param);
+
 QDF_STATUS (*send_pdev_set_chan_cmd)(wmi_unified_t wmi_handle,
 		struct channel_param *param);
 
@@ -1433,6 +1444,17 @@ QDF_STATUS
 QDF_STATUS (*extract_wds_addr_event)(wmi_unified_t wmi_handle,
 	void *evt_buf, uint16_t len, wds_addr_event_t *wds_ev);
 
+#ifdef DCS_INTERFERENCE_DETECTION
+QDF_STATUS (*extract_dcs_interference_type)(
+		wmi_unified_t wmi_handle,
+		void *evt_buf,
+		struct wlan_host_dcs_interference_param *param);
+
+QDF_STATUS (*extract_dcs_im_tgt_stats)(
+		wmi_unified_t wmi_handle,
+		void *evt_buf,
+		struct wlan_host_dcs_im_tgt_stats *wlan_stat);
+#else
 QDF_STATUS (*extract_dcs_interference_type)(wmi_unified_t wmi_handle,
 	void *evt_buf, struct wmi_host_dcs_interference_param *param);
 
@@ -1441,6 +1463,7 @@ QDF_STATUS (*extract_dcs_cw_int)(wmi_unified_t wmi_handle, void *evt_buf,
 
 QDF_STATUS (*extract_dcs_im_tgt_stats)(wmi_unified_t wmi_handle, void *evt_buf,
 	wmi_host_dcs_im_tgt_stats_t *wlan_stat);
+#endif
 
 QDF_STATUS (*extract_fips_event_data)(wmi_unified_t wmi_handle,
 	void *evt_buf, struct wmi_host_fips_event_param *param);
@@ -1941,6 +1964,8 @@ QDF_STATUS (*extract_ndp_initiator_rsp)(wmi_unified_t wmi_handle,
 		uint8_t *data, struct nan_datapath_initiator_rsp *rsp);
 QDF_STATUS (*extract_ndp_ind)(wmi_unified_t wmi_handle,
 		uint8_t *data, struct nan_datapath_indication_event *ind);
+QDF_STATUS (*extract_nan_msg)(uint8_t *data,
+			      struct nan_dump_msg *msg);
 QDF_STATUS (*extract_ndp_confirm)(wmi_unified_t wmi_handle,
 		uint8_t *data, struct nan_datapath_confirm_event *ev);
 QDF_STATUS (*extract_ndp_responder_rsp)(wmi_unified_t wmi_handle,
@@ -2199,6 +2224,13 @@ QDF_STATUS (*extract_multi_vdev_restart_resp_event)(
 		wmi_unified_t wmi_handle, void *evt_buf,
 		struct multi_vdev_restart_resp *restart_rsp);
 
+#ifdef WLAN_FEATURE_PKT_CAPTURE
+QDF_STATUS (*extract_vdev_mgmt_offload_event)(
+				void *handle,
+				void *event_buf,
+				struct mgmt_offload_event_params *params);
+#endif /* WLAN_FEATURE_PKT_CAPTURE */
+
 #ifdef FEATURE_WLAN_TIME_SYNC_FTM
 QDF_STATUS (*send_wlan_time_sync_ftm_trigger_cmd)(wmi_unified_t wmi_handle,
 						  uint32_t vdev_id,
@@ -2216,7 +2248,8 @@ QDF_STATUS (*extract_time_sync_ftm_offset_event)(
 					wmi_unified_t wmi_hdl, void *evt_buf,
 					struct ftm_time_sync_offset *param);
 #endif /* FEATURE_WLAN_TIME_SYNC_FTM */
-
+QDF_STATUS (*send_roam_scan_ch_list_req_cmd)(wmi_unified_t wmi_hdl,
+					     uint32_t vdev_id);
 };
 
 /* Forward declartion for psoc*/
@@ -2473,6 +2506,15 @@ void wmi_interop_issues_ap_attach_tlv(wmi_unified_t wmi_handle);
 #else
 static inline void
 wmi_interop_issues_ap_attach_tlv(struct wmi_unified *wmi_handle)
+{
+}
+#endif
+
+#ifdef DCS_INTERFERENCE_DETECTION
+void wmi_dcs_attach_tlv(wmi_unified_t wmi_handle);
+#else
+static inline void
+wmi_dcs_attach_tlv(struct wmi_unified *wmi_handle)
 {
 }
 #endif
