@@ -46,6 +46,9 @@
 #include "dp_rx_mon.h"
 #include "htt_stats.h"
 #include "dp_htt.h"
+#ifdef WLAN_SUPPORT_RX_FISA
+#include <dp_fisa_rx.h>
+#endif
 #include "htt_ppdu_stats.h"
 #include "qdf_mem.h"   /* qdf_mem_malloc,free */
 #include "cfg_ucfg_api.h"
@@ -314,6 +317,7 @@ const int dp_stats_mapping_table[][STATS_TYPE_MAX] = {
 	{TXRX_FW_STATS_INVALID, TXRX_SOC_CFG_PARAMS},
 	{TXRX_FW_STATS_INVALID, TXRX_PDEV_CFG_PARAMS},
 	{TXRX_FW_STATS_INVALID, TXRX_SOC_INTERRUPT_STATS},
+	{TXRX_FW_STATS_INVALID, TXRX_SOC_FSE_STATS},
 };
 
 /* MCL specific functions */
@@ -2883,6 +2887,40 @@ static inline void dp_create_ext_stats_event(struct dp_soc *soc)
 }
 #endif
 
+static
+QDF_STATUS dp_setup_tx_ring_pair_by_index(struct dp_soc *soc, uint8_t index)
+{
+	int tx_ring_size;
+	int tx_comp_ring_size;
+	struct wlan_cfg_dp_soc_ctxt *soc_cfg_ctx = soc->wlan_cfg_ctx;
+	int cached;
+
+	tx_ring_size = wlan_cfg_tx_ring_size(soc_cfg_ctx);
+	if (dp_srng_setup(soc, &soc->tcl_data_ring[index], TCL_DATA,
+			  index, 0, tx_ring_size, 0)) {
+		dp_err("dp_srng_setup failed for tcl_data_ring");
+		goto fail1;
+	}
+
+	tx_comp_ring_size = wlan_cfg_tx_comp_ring_size(soc_cfg_ctx);
+	/* Disable cached desc if NSS offload is enabled */
+	cached = WLAN_CFG_DST_RING_CACHED_DESC;
+	if (wlan_cfg_get_dp_soc_nss_cfg(soc_cfg_ctx))
+		cached = 0;
+
+	if (dp_srng_setup(soc, &soc->tx_comp_ring[index],
+			  WBM2SW_RELEASE, index, 0, tx_comp_ring_size,
+			cached)) {
+		dp_err("dp_srng_setup failed for tx_comp_ring");
+		goto fail1;
+	}
+
+	return QDF_STATUS_SUCCESS;
+
+fail1:
+	return QDF_STATUS_E_FAILURE;
+}
+
 /*
  * dp_soc_cmn_setup() - Common SoC level initializion
  * @soc:		Datapath SOC handle
@@ -2899,6 +2937,7 @@ static int dp_soc_cmn_setup(struct dp_soc *soc)
 	int reo_dst_ring_size;
 	uint32_t entries;
 	struct wlan_cfg_dp_soc_ctxt *soc_cfg_ctx;
+	QDF_STATUS status;
 
 	if (qdf_atomic_read(&soc->cmn_init_done))
 		return 0;
@@ -2934,32 +2973,17 @@ static int dp_soc_cmn_setup(struct dp_soc *soc)
 			wlan_cfg_tx_comp_ring_size(soc_cfg_ctx);
 		tx_ring_size =
 			wlan_cfg_tx_ring_size(soc_cfg_ctx);
-		for (i = 0; i < soc->num_tcl_data_rings; i++) {
-			if (dp_srng_setup(soc, &soc->tcl_data_ring[i],
-					  TCL_DATA, i, 0, tx_ring_size, 0)) {
-				QDF_TRACE(QDF_MODULE_ID_DP,
-					QDF_TRACE_LEVEL_ERROR,
-					FL("dp_srng_setup failed for tcl_data_ring[%d]"), i);
-				goto fail1;
-			}
 
-			/* Disable cached desc if NSS offload is enabled */
-			cached = WLAN_CFG_DST_RING_CACHED_DESC;
-			if (wlan_cfg_get_dp_soc_nss_cfg(soc_cfg_ctx))
-				cached = 0;
-			/*
-			 * TBD: Set IPA WBM ring size with ini IPA UC tx buffer
-			 * count
-			 */
-			if (dp_srng_setup(soc, &soc->tx_comp_ring[i],
-					  WBM2SW_RELEASE, i, 0,
-					  tx_comp_ring_size,
-					  cached)) {
-				QDF_TRACE(QDF_MODULE_ID_DP,
-					QDF_TRACE_LEVEL_ERROR,
-					FL("dp_srng_setup failed for tx_comp_ring[%d]"), i);
+		for (i = 0; i < soc->num_tcl_data_rings; i++) {
+			status = dp_setup_tx_ring_pair_by_index(soc, i);
+			if (status != QDF_STATUS_SUCCESS)
 				goto fail1;
-			}
+		}
+		if (wlan_cfg_is_ipa_enabled(soc->wlan_cfg_ctx)) {
+			status = dp_setup_tx_ring_pair_by_index(soc,
+						IPA_TCL_DATA_RING_IDX);
+			if (status != QDF_STATUS_SUCCESS)
+				goto fail1;
 		}
 	} else {
 		/* This will be incremented during per pdev ring setup */
@@ -4349,11 +4373,10 @@ static void dp_soc_deinit(void *txrx_soc)
 	/* Tx data rings */
 	if (!wlan_cfg_per_pdev_tx_ring(soc->wlan_cfg_ctx)) {
 		for (i = 0; i < soc->num_tcl_data_rings; i++) {
-			dp_srng_deinit(soc, &soc->tcl_data_ring[i],
-				       TCL_DATA, i);
-			dp_srng_deinit(soc, &soc->tx_comp_ring[i],
-				       WBM2SW_RELEASE, i);
+			dp_tx_deinit_pair_by_index(soc, i);
 		}
+		if (wlan_cfg_is_ipa_enabled(soc->wlan_cfg_ctx))
+			dp_tx_deinit_pair_by_index(soc, IPA_TCL_DATA_RING_IDX);
 	}
 
 	/* TCL command and status rings */
@@ -4400,6 +4423,12 @@ static void dp_soc_deinit(void *txrx_soc)
 	qdf_spinlock_destroy(&soc->ast_lock);
 
 	dp_soc_mem_reset(soc);
+}
+
+void dp_tx_deinit_pair_by_index(struct dp_soc *soc, int index)
+{
+	dp_srng_deinit(soc, &soc->tcl_data_ring[index], TCL_DATA, index);
+	dp_srng_deinit(soc, &soc->tx_comp_ring[index], WBM2SW_RELEASE, index);
 }
 
 /**
@@ -4455,6 +4484,12 @@ static void dp_soc_detach(struct cdp_soc_t *txrx_soc)
 				TCL_DATA, i);
 			dp_srng_cleanup(soc, &soc->tx_comp_ring[i],
 				WBM2SW_RELEASE, i);
+		}
+		if (wlan_cfg_is_ipa_enabled(soc->wlan_cfg_ctx)) {
+			dp_srng_cleanup(soc, &soc->tcl_data_ring[IPA_TCL_DATA_RING_IDX],
+				TCL_DATA, IPA_TCL_DATA_RING_IDX);
+			dp_srng_cleanup(soc, &soc->tx_comp_ring[IPA_TCL_DATA_RING_IDX],
+				WBM2SW_RELEASE, IPA_TCL_DATA_RING_IDX);
 		}
 	}
 
@@ -4885,20 +4920,57 @@ dp_rx_target_fst_config(struct dp_soc *soc)
 	}
 	return status;
 }
-#else
+#elif defined(WLAN_SUPPORT_RX_FISA)
 /**
  * dp_rx_target_fst_config() - Configure RX OLE FSE engine in HW
  * @soc: SoC handle
  *
  * Return: Success
  */
-static inline QDF_STATUS
-dp_rx_target_fst_config(struct dp_soc *soc)
+static inline QDF_STATUS dp_rx_target_fst_config(struct dp_soc *soc)
+{
+	/* Check if it is enabled in the INI */
+	if (!soc->fisa_enable) {
+		dp_err("RX FISA feature is disabled");
+		return QDF_STATUS_E_NOSUPPORT;
+	}
+
+	return dp_rx_flow_send_fst_fw_setup(soc, soc->pdev_list[0]);
+}
+
+#define FISA_MAX_TIMEOUT 0xffffffff
+#define FISA_DISABLE_TIMEOUT 0
+static QDF_STATUS dp_rx_fisa_config(struct dp_soc *soc)
+{
+	struct dp_htt_rx_fisa_cfg fisa_config;
+
+	fisa_config.pdev_id = 0;
+	fisa_config.fisa_timeout = FISA_MAX_TIMEOUT;
+
+	return dp_htt_rx_fisa_config(soc->pdev_list[0], &fisa_config);
+}
+#else /* !WLAN_SUPPORT_RX_FISA */
+static inline QDF_STATUS dp_rx_target_fst_config(struct dp_soc *soc)
+{
+	return QDF_STATUS_SUCCESS;
+}
+#endif /* !WLAN_SUPPORT_RX_FISA */
+
+#ifndef WLAN_SUPPORT_RX_FISA
+static QDF_STATUS dp_rx_fisa_config(struct dp_soc *soc)
 {
 	return QDF_STATUS_SUCCESS;
 }
 
-#endif /* WLAN_SUPPORT_RX_FLOW_TAG */
+static QDF_STATUS dp_rx_dump_fisa_stats(struct dp_soc *soc)
+{
+	return QDF_STATUS_SUCCESS;
+}
+
+static void dp_rx_dump_fisa_table(struct dp_soc *soc)
+{
+}
+#endif /* !WLAN_SUPPORT_RX_FISA */
 
 /*
  * dp_soc_attach_target_wifi3() - SOC initialization in the target
@@ -4927,9 +4999,18 @@ dp_soc_attach_target_wifi3(struct cdp_soc_t *cdp_soc)
 	}
 
 	status = dp_rx_target_fst_config(soc);
-	if (status != QDF_STATUS_SUCCESS) {
+	if (status != QDF_STATUS_SUCCESS &&
+	    status != QDF_STATUS_E_NOSUPPORT) {
 		dp_err("Failed to send htt fst setup config message to target");
 		return status;
+	}
+
+	if (status == QDF_STATUS_SUCCESS) {
+		status = dp_rx_fisa_config(soc);
+		if (status != QDF_STATUS_SUCCESS) {
+			dp_err("Failed to send htt FISA config message to target");
+			return status;
+		}
 	}
 
 	DP_STATS_INIT(soc);
@@ -5091,6 +5172,8 @@ static QDF_STATUS dp_vdev_register_wifi3(struct cdp_soc_t *soc,
 	vdev->osif_rx_flush = txrx_ops->rx.rx_flush;
 	vdev->osif_gro_flush = txrx_ops->rx.rx_gro_flush;
 	vdev->osif_rsim_rx_decap = txrx_ops->rx.rsim_rx_decap;
+	vdev->osif_fisa_rx = txrx_ops->rx.osif_fisa_rx;
+	vdev->osif_fisa_flush = txrx_ops->rx.osif_fisa_flush;
 	vdev->osif_get_key = txrx_ops->get_key;
 	vdev->osif_rx_mon = txrx_ops->rx.mon;
 	vdev->osif_tx_free_ext = txrx_ops->tx.tx_free_ext;
@@ -6301,7 +6384,6 @@ void dp_peer_unref_delete(struct dp_peer *peer)
 	struct cdp_peer_cookie peer_cookie;
 	enum wlan_op_mode vdev_opmode;
 	uint8_t vdev_mac_addr[QDF_MAC_ADDR_SIZE];
-	struct dp_ast_entry *peer_ast_entry = NULL;
 
 	/*
 	 * Hold the lock all the way from checking if the peer ref count
@@ -6333,10 +6415,7 @@ void dp_peer_unref_delete(struct dp_peer *peer)
 
 		qdf_spin_lock_bh(&soc->ast_lock);
 		if (peer->self_ast_entry) {
-			peer_ast_entry = peer->self_ast_entry;
-			dp_peer_unlink_ast_entry(soc, peer_ast_entry);
-			dp_peer_free_ast_entry(soc, peer_ast_entry);
-			peer->self_ast_entry = NULL;
+			dp_peer_del_ast(soc, peer->self_ast_entry);
 		}
 		qdf_spin_unlock_bh(&soc->ast_lock);
 
@@ -7435,6 +7514,7 @@ static void dp_txrx_stats_help(void)
 	dp_info(" 28 -- Host REO Queue Statistics");
 	dp_info(" 29 -- Host Soc cfg param Statistics");
 	dp_info(" 30 -- Host pdev cfg param Statistics");
+	dp_info(" 31 -- Host FISA stats");
 }
 
 /**
@@ -7497,6 +7577,8 @@ dp_print_host_stats(struct dp_vdev *vdev,
 	case TXRX_SOC_INTERRUPT_STATS:
 		dp_print_soc_interrupt_stats(pdev->soc);
 		break;
+	case TXRX_SOC_FSE_STATS:
+		dp_rx_dump_fisa_table(pdev->soc);
 	default:
 		dp_info("Wrong Input For TxRx Host Stats");
 		dp_txrx_stats_help();
@@ -8945,6 +9027,10 @@ static QDF_STATUS dp_txrx_dump_stats(struct cdp_soc_t *psoc, uint16_t value,
 
 	case CDP_TXRX_DESC_STATS:
 		/* TODO: NOT IMPLEMENTED */
+		break;
+
+	case CDP_DP_RX_FISA_STATS:
+		dp_rx_dump_fisa_stats(soc);
 		break;
 
 	default:

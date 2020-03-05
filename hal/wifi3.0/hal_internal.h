@@ -432,7 +432,8 @@ struct hal_hw_txrx_ops {
 	uint8_t (*hal_rx_get_mpdu_sequence_control_valid)(uint8_t *buf);
 	bool (*hal_rx_is_unicast)(uint8_t *buf);
 	uint32_t (*hal_rx_tid_get)(hal_soc_handle_t hal_soc_hdl, uint8_t *buf);
-	uint32_t (*hal_rx_hw_desc_get_ppduid_get)(void *hw_desc_addr);
+	uint32_t (*hal_rx_hw_desc_get_ppduid_get)(void *rx_tlv_hdr,
+						  void *rxdma_dst_ring_desc);
 	uint32_t (*hal_rx_mpdu_start_mpdu_qos_control_valid_get)(uint8_t *buf);
 	uint32_t (*hal_rx_msdu_end_sa_sw_peer_id_get)(uint8_t *buf);
 	void * (*hal_rx_msdu0_buffer_addr_lsb)(void *link_desc_addr);
@@ -464,6 +465,13 @@ struct hal_hw_txrx_ops {
 	void (*hal_rx_get_rtt_info)(void *rx_tlv, void *ppdu_info_handle);
 	void (*hal_rx_msdu_packet_metadata_get)(uint8_t *buf,
 						void *msdu_pkt_metadata);
+	uint16_t (*hal_rx_get_fisa_cumulative_l4_checksum)(uint8_t *buf);
+	uint16_t (*hal_rx_get_fisa_cumulative_ip_length)(uint8_t *buf);
+	bool (*hal_rx_get_udp_proto)(uint8_t *buf);
+	bool (*hal_rx_get_fisa_flow_agg_continuation)(uint8_t *buf);
+	uint8_t (*hal_rx_get_fisa_flow_agg_count)(uint8_t *buf);
+	bool (*hal_rx_get_fisa_timeout)(uint8_t *buf);
+	uint8_t (*hal_rx_mpdu_start_tlv_tag_valid)(void *rx_tlv_hdr);
 };
 
 /**

@@ -995,6 +995,14 @@ hal_rx_mpdu_peer_meta_data_set(uint8_t *buf, uint32_t peer_mdata)
 		RX_MSDU_START_2_TCP_PROTO_MASK, \
 		RX_MSDU_START_2_TCP_PROTO_LSB))
 
+#define HAL_RX_TLV_GET_UDP_PROTO(buf) \
+	(_HAL_MS( \
+		 (*_OFFSET_TO_WORD_PTR(&(((struct rx_pkt_tlvs *)(buf))->\
+			 msdu_start_tlv.rx_msdu_start), \
+			 RX_MSDU_START_2_UDP_PROTO_OFFSET)), \
+		RX_MSDU_START_2_UDP_PROTO_MASK, \
+		RX_MSDU_START_2_UDP_PROTO_LSB))
+
 #define HAL_RX_TLV_GET_IPV6(buf) \
 	(_HAL_MS( \
 		 (*_OFFSET_TO_WORD_PTR(&(((struct rx_pkt_tlvs *)(buf))->\
@@ -1184,6 +1192,7 @@ hal_rx_msdu_start_toeplitz_get(uint8_t *buf)
  * @ HAL_MPDU_SW_FRAME_GROUP_MGMT_PROBE_REQ: probe req frame
  * @ HAL_MPDU_SW_FRAME_GROUP_CTRL: control frame
  * @ HAL_MPDU_SW_FRAME_GROUP_CTRL_BAR: BAR frame
+ * @ HAL_MPDU_SW_FRAME_GROUP_CTRL_RTS: RTS frame
  * @ HAL_MPDU_SW_FRAME_GROUP_UNSUPPORTED: unsupported
  * @ HAL_MPDU_SW_FRAME_GROUP_MAX: max limit
  */
@@ -1197,6 +1206,7 @@ enum hal_rx_mpdu_info_sw_frame_group_id_type {
 	HAL_MPDU_SW_FRAME_GROUP_MGMT_BEACON = 12,
 	HAL_MPDU_SW_FRAME_GROUP_CTRL = 20,
 	HAL_MPDU_SW_FRAME_GROUP_CTRL_BAR = 28,
+	HAL_MPDU_SW_FRAME_GROUP_CTRL_RTS = 31,
 	HAL_MPDU_SW_FRAME_GROUP_UNSUPPORTED = 36,
 	HAL_MPDU_SW_FRAME_GROUP_MAX = 37,
 };
@@ -3233,17 +3243,20 @@ hal_rx_msdu_flow_idx_invalid(hal_soc_handle_t hal_soc_hdl,
 /**
  * hal_rx_hw_desc_get_ppduid_get() - Retrieve ppdu id
  * @hal_soc_hdl: hal_soc handle
- * @hw_desc_addr: hardware descriptor address
+ * @rx_tlv_hdr: Rx_tlv_hdr
+ * @rxdma_dst_ring_desc: Rx HW descriptor
  *
- * Return: 0 - success/ non-zero failure
+ * Return: ppdu id
  */
 static inline
 uint32_t hal_rx_hw_desc_get_ppduid_get(hal_soc_handle_t hal_soc_hdl,
-				       void *hw_desc_addr)
+				       void *rx_tlv_hdr,
+				       void *rxdma_dst_ring_desc)
 {
 	struct hal_soc *hal_soc = (struct hal_soc *)hal_soc_hdl;
 
-	return hal_soc->ops->hal_rx_hw_desc_get_ppduid_get(hw_desc_addr);
+	return hal_soc->ops->hal_rx_hw_desc_get_ppduid_get(rx_tlv_hdr,
+							   rxdma_dst_ring_desc);
 }
 
 /**
@@ -3458,5 +3471,171 @@ hal_rx_msdu_metadata_get(hal_soc_handle_t hal_soc_hdl, uint8_t *buf,
 	struct hal_soc *hal_soc = (struct hal_soc *)hal_soc_hdl;
 
 	return hal_soc->ops->hal_rx_msdu_packet_metadata_get(buf, msdu_md);
+}
+
+/**
+ * hal_rx_get_fisa_cumulative_l4_checksum: API to get cumulative_l4_checksum
+ * from rx_msdu_end TLV
+ * @buf: pointer to the start of RX PKT TLV headers
+ *
+ * Return: cumulative_l4_checksum
+ */
+static inline uint16_t
+hal_rx_get_fisa_cumulative_l4_checksum(hal_soc_handle_t hal_soc_hdl,
+				       uint8_t *buf)
+{
+	struct hal_soc *hal_soc = (struct hal_soc *)hal_soc_hdl;
+
+	if (!hal_soc || !hal_soc->ops) {
+		hal_err("hal handle is NULL");
+		QDF_BUG(0);
+		return 0;
+	}
+
+	if (!hal_soc->ops->hal_rx_get_fisa_cumulative_l4_checksum)
+		return 0;
+
+	return hal_soc->ops->hal_rx_get_fisa_cumulative_l4_checksum(buf);
+}
+
+/**
+ * hal_rx_get_fisa_cumulative_ip_length: API to get cumulative_ip_length
+ * from rx_msdu_end TLV
+ * @buf: pointer to the start of RX PKT TLV headers
+ *
+ * Return: cumulative_ip_length
+ */
+static inline uint16_t
+hal_rx_get_fisa_cumulative_ip_length(hal_soc_handle_t hal_soc_hdl,
+				     uint8_t *buf)
+{
+	struct hal_soc *hal_soc = (struct hal_soc *)hal_soc_hdl;
+
+	if (!hal_soc || !hal_soc->ops) {
+		hal_err("hal handle is NULL");
+		QDF_BUG(0);
+		return 0;
+	}
+
+	if (hal_soc->ops->hal_rx_get_fisa_cumulative_ip_length)
+		return hal_soc->ops->hal_rx_get_fisa_cumulative_ip_length(buf);
+
+	return 0;
+}
+
+/**
+ * hal_rx_get_udp_proto: API to get UDP proto field
+ * from rx_msdu_start TLV
+ * @buf: pointer to the start of RX PKT TLV headers
+ *
+ * Return: UDP proto field value
+ */
+static inline bool
+hal_rx_get_udp_proto(hal_soc_handle_t hal_soc_hdl, uint8_t *buf)
+{
+	struct hal_soc *hal_soc = (struct hal_soc *)hal_soc_hdl;
+
+	if (!hal_soc || !hal_soc->ops) {
+		hal_err("hal handle is NULL");
+		QDF_BUG(0);
+		return 0;
+	}
+
+	if (hal_soc->ops->hal_rx_get_udp_proto)
+		return hal_soc->ops->hal_rx_get_udp_proto(buf);
+
+	return 0;
+}
+
+/**
+ * hal_rx_get_fisa_flow_agg_continuation: API to get fisa flow_agg_continuation
+ * from rx_msdu_end TLV
+ * @buf: pointer to the start of RX PKT TLV headers
+ *
+ * Return: flow_agg_continuation bit field value
+ */
+static inline bool
+hal_rx_get_fisa_flow_agg_continuation(hal_soc_handle_t hal_soc_hdl,
+				      uint8_t *buf)
+{
+	struct hal_soc *hal_soc = (struct hal_soc *)hal_soc_hdl;
+
+	if (!hal_soc || !hal_soc->ops) {
+		hal_err("hal handle is NULL");
+		QDF_BUG(0);
+		return 0;
+	}
+
+	if (hal_soc->ops->hal_rx_get_fisa_flow_agg_continuation)
+		return hal_soc->ops->hal_rx_get_fisa_flow_agg_continuation(buf);
+
+	return 0;
+}
+
+/**
+ * hal_rx_get_fisa_flow_agg_count: API to get fisa flow_agg count from
+ * rx_msdu_end TLV
+ * @buf: pointer to the start of RX PKT TLV headers
+ *
+ * Return: flow_agg count value
+ */
+static inline uint8_t
+hal_rx_get_fisa_flow_agg_count(hal_soc_handle_t hal_soc_hdl,
+			       uint8_t *buf)
+{
+	struct hal_soc *hal_soc = (struct hal_soc *)hal_soc_hdl;
+
+	if (!hal_soc || !hal_soc->ops) {
+		hal_err("hal handle is NULL");
+		QDF_BUG(0);
+		return 0;
+	}
+
+	if (hal_soc->ops->hal_rx_get_fisa_flow_agg_count)
+		return hal_soc->ops->hal_rx_get_fisa_flow_agg_count(buf);
+
+	return 0;
+}
+
+/**
+ * hal_rx_get_fisa_timeout: API to get fisa time out from rx_msdu_end TLV
+ * @buf: pointer to the start of RX PKT TLV headers
+ *
+ * Return: fisa flow_agg timeout bit value
+ */
+static inline bool
+hal_rx_get_fisa_timeout(hal_soc_handle_t hal_soc_hdl, uint8_t *buf)
+{
+	struct hal_soc *hal_soc = (struct hal_soc *)hal_soc_hdl;
+
+	if (!hal_soc || !hal_soc->ops) {
+		hal_err("hal handle is NULL");
+		QDF_BUG(0);
+		return 0;
+	}
+
+	if (hal_soc->ops->hal_rx_get_fisa_timeout)
+		return hal_soc->ops->hal_rx_get_fisa_timeout(buf);
+
+	return 0;
+}
+
+/**
+ * hal_rx_mpdu_start_tlv_tag_valid - API to check if RX_MPDU_START tlv
+ * tag is valid
+ *
+ * @hal_soc_hdl: HAL SOC handle
+ * @rx_tlv_hdr: start address of rx_pkt_tlvs
+ *
+ * Return: true if RX_MPDU_START tlv tag is valid, else false
+ */
+
+static inline uint8_t
+hal_rx_mpdu_start_tlv_tag_valid(hal_soc_handle_t hal_soc_hdl,
+				void *rx_tlv_hdr)
+{
+	struct hal_soc *hal = (struct hal_soc *)hal_soc_hdl;
+
+	return hal->ops->hal_rx_mpdu_start_tlv_tag_valid(rx_tlv_hdr);
 }
 #endif /* _HAL_RX_H */
