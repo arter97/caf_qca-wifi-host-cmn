@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017-2019 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2017-2020 The Linux Foundation. All rights reserved.
  *
  *
  * Permission to use, copy, modify, and/or distribute this software for
@@ -486,12 +486,6 @@ void wlan_reg_update_nol_history_ch(struct wlan_objmgr_pdev *pdev,
 				    bool nol_history_ch)
 {
 	reg_update_nol_history_ch(pdev, ch_list, num_ch, nol_history_ch);
-}
-
-bool wlan_reg_is_dfs_ch(struct wlan_objmgr_pdev *pdev,
-			uint8_t chan)
-{
-	return reg_is_dfs_ch(pdev, chan);
 }
 
 bool wlan_reg_is_passive_or_disable_ch(struct wlan_objmgr_pdev *pdev,
@@ -1013,6 +1007,15 @@ void wlan_reg_freq_to_chan_op_class(struct wlan_objmgr_pdev *pdev,
 					 behav_limit,
 					 op_class,
 					 chan_num);
+}
+
+bool wlan_reg_country_opclass_freq_check(struct wlan_objmgr_pdev *pdev,
+					 const uint8_t country[3],
+					 uint8_t op_class,
+					 qdf_freq_t chan_freq)
+{
+	return reg_country_opclass_freq_check(pdev, country,
+					      op_class, chan_freq);
 }
 
 enum channel_state

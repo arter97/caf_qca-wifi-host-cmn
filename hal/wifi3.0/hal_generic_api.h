@@ -310,6 +310,30 @@ hal_rx_populate_mu_user_info(void *rx_tlv, void *ppduinfo,
 	hal_rx_populate_byte_count(rx_tlv, ppdu_info, mon_rx_user_status);
 }
 
+#ifdef WLAN_TX_PKT_CAPTURE_ENH
+static inline void
+hal_rx_populate_tx_capture_user_info(void *ppduinfo,
+				     uint32_t user_id)
+{
+	struct hal_rx_ppdu_info *ppdu_info;
+	struct mon_rx_info *mon_rx_info;
+	struct mon_rx_user_info *mon_rx_user_info;
+
+	ppdu_info = (struct hal_rx_ppdu_info *)ppduinfo;
+	mon_rx_info = &ppdu_info->rx_info;
+	mon_rx_user_info = &ppdu_info->rx_user_info[user_id];
+	mon_rx_user_info->qos_control_info_valid =
+		mon_rx_info->qos_control_info_valid;
+	mon_rx_user_info->qos_control =  mon_rx_info->qos_control;
+}
+#else
+static inline void
+hal_rx_populate_tx_capture_user_info(void *ppduinfo,
+				     uint32_t user_id)
+{
+}
+#endif
+
 #define HAL_RX_UPDATE_RSSI_PER_CHAIN_BW(chain, word_1, word_2, \
 					ppdu_info, rssi_info_tlv) \
 	{						\
@@ -357,6 +381,50 @@ hal_rx_update_rssi_chain(struct hal_rx_ppdu_info *ppdu_info,
 	return 0;
 }
 
+#ifdef WLAN_TX_PKT_CAPTURE_ENH
+static inline void
+hal_get_qos_control(void *rx_tlv,
+		    struct hal_rx_ppdu_info *ppdu_info)
+{
+	ppdu_info->rx_info.qos_control_info_valid =
+		HAL_RX_GET(rx_tlv, RX_PPDU_END_USER_STATS_3,
+			   QOS_CONTROL_INFO_VALID);
+
+	if (ppdu_info->rx_info.qos_control_info_valid)
+		ppdu_info->rx_info.qos_control =
+			HAL_RX_GET(rx_tlv,
+				   RX_PPDU_END_USER_STATS_5,
+				   QOS_CONTROL_FIELD);
+}
+
+static inline void
+hal_get_mac_addr1(uint8_t *rx_mpdu_start,
+		  struct hal_rx_ppdu_info *ppdu_info)
+{
+	if (ppdu_info->sw_frame_group_id
+	    == HAL_MPDU_SW_FRAME_GROUP_MGMT_PROBE_REQ) {
+		ppdu_info->rx_info.mac_addr1_valid =
+				HAL_RX_GET_MAC_ADDR1_VALID(rx_mpdu_start);
+
+		*(uint32_t *)&ppdu_info->rx_info.mac_addr1[0] =
+			HAL_RX_GET(rx_mpdu_start,
+				   RX_MPDU_INFO_15,
+				   MAC_ADDR_AD1_31_0);
+	}
+}
+#else
+static inline void
+hal_get_qos_control(void *rx_tlv,
+		    struct hal_rx_ppdu_info *ppdu_info)
+{
+}
+
+static inline void
+hal_get_mac_addr1(uint8_t *rx_mpdu_start,
+		  struct hal_rx_ppdu_info *ppdu_info)
+{
+}
+#endif
 /**
  * hal_rx_status_get_tlv_info() - process receive info TLV
  * @rx_tlv_hdr: pointer to TLV header
@@ -504,6 +572,8 @@ hal_rx_status_get_tlv_info_generic(void *rx_tlv_hdr, void *ppduinfo,
 					HAL_RX_GET(rx_tlv,
 						   RX_PPDU_END_USER_STATS_4,
 						   FRAME_CONTROL_FIELD);
+
+			hal_get_qos_control(rx_tlv, ppdu_info);
 		}
 
 		ppdu_info->rx_status.data_sequence_control_info_valid =
@@ -564,6 +634,10 @@ hal_rx_status_get_tlv_info_generic(void *rx_tlv_hdr, void *ppduinfo,
 
 			hal_rx_populate_mu_user_info(rx_tlv, ppdu_info,
 						     mon_rx_user_status);
+
+			hal_rx_populate_tx_capture_user_info(ppdu_info,
+							     user_id);
+
 		}
 		break;
 	}
@@ -1391,6 +1465,9 @@ hal_rx_status_get_tlv_info_generic(void *rx_tlv_hdr, void *ppduinfo,
 			ppdu_info->rx_status.frame_control =
 				ppdu_info->nac_info.frame_control;
 		}
+
+		hal_get_mac_addr1(rx_mpdu_start,
+				  ppdu_info);
 
 		ppdu_info->nac_info.mac_addr2_valid =
 				HAL_RX_GET_MAC_ADDR2_VALID(rx_mpdu_start);
@@ -2239,4 +2316,27 @@ void hal_tx_update_tidmap_prty_generic(struct hal_soc *soc, uint8_t value)
 		      (value & HWIO_TCL_R0_TID_MAP_PRTY_RMSK));
 }
 
+/**
+ * hal_rx_msdu_packet_metadata_get(): API to get the
+ * msdu information from rx_msdu_end TLV
+ *
+ * @ buf: pointer to the start of RX PKT TLV headers
+ * @ hal_rx_msdu_metadata: pointer to the msdu info structure
+ */
+static void
+hal_rx_msdu_packet_metadata_get_generic(uint8_t *buf,
+					void *pkt_msdu_metadata)
+{
+	struct rx_pkt_tlvs *pkt_tlvs = (struct rx_pkt_tlvs *)buf;
+	struct rx_msdu_end *msdu_end = &pkt_tlvs->msdu_end_tlv.rx_msdu_end;
+	struct hal_rx_msdu_metadata *msdu_metadata =
+		(struct hal_rx_msdu_metadata *)pkt_msdu_metadata;
+
+	msdu_metadata->l3_hdr_pad =
+		HAL_RX_MSDU_END_L3_HEADER_PADDING_GET(msdu_end);
+	msdu_metadata->sa_idx = HAL_RX_MSDU_END_SA_IDX_GET(msdu_end);
+	msdu_metadata->da_idx = HAL_RX_MSDU_END_DA_IDX_GET(msdu_end);
+	msdu_metadata->sa_sw_peer_id =
+		HAL_RX_MSDU_END_SA_SW_PEER_ID_GET(msdu_end);
+}
 #endif /* _HAL_GENERIC_API_H_ */

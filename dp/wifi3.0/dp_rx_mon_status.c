@@ -430,22 +430,30 @@ static inline void dp_rx_rate_stats_update(struct dp_peer *peer,
 	uint32_t ratekbps = 0;
 	uint32_t ppdu_rx_rate = 0;
 	uint32_t nss = 0;
+	uint8_t mcs = 0;
 	uint32_t rix;
 	uint16_t ratecode;
-	struct cdp_rx_stats_ppdu_user *ppdu_user;
+	struct cdp_rx_stats_ppdu_user *ppdu_user = NULL;
 
 	if (!peer || !ppdu)
 		return;
 
-	ppdu_user = &ppdu->user[user];
+	if (ppdu->u.ppdu_type != HAL_RX_TYPE_SU) {
+		ppdu_user = &ppdu->user[user];
 
-	if (ppdu_user->nss == 0)
-		nss = 0;
-	else
-		nss = ppdu_user->nss - 1;
+		if (ppdu_user->nss == 0)
+			nss = 0;
+		else
+			nss = ppdu_user->nss - 1;
+		mcs = ppdu_user->mcs;
+
+	} else {
+		mcs = ppdu->u.mcs;
+		nss = ppdu->u.nss;
+	}
 
 	ratekbps = dp_getrateindex(ppdu->u.gi,
-				   ppdu_user->mcs,
+				   mcs,
 				   nss,
 				   ppdu->u.preamble,
 				   ppdu->u.bw,
@@ -1420,7 +1428,8 @@ dp_rx_mon_status_process_tlv(struct dp_soc *soc, uint32_t mac_id,
 
 				rx_tlv = hal_rx_status_get_next_tlv(rx_tlv);
 
-				if ((rx_tlv - rx_tlv_start) >= RX_BUFFER_SIZE)
+				if ((rx_tlv - rx_tlv_start) >=
+					RX_DATA_BUFFER_SIZE)
 					break;
 
 			} while ((tlv_status == HAL_TLV_STATUS_PPDU_NOT_DONE) ||
@@ -1599,7 +1608,7 @@ dp_rx_mon_status_srng_process(struct dp_soc *soc, uint32_t mac_id,
 				hal_srng_src_get_next(hal_soc, mon_status_srng);
 				continue;
 			}
-			qdf_nbuf_set_pktlen(status_nbuf, RX_BUFFER_SIZE);
+			qdf_nbuf_set_pktlen(status_nbuf, RX_DATA_BUFFER_SIZE);
 
 			qdf_nbuf_unmap_single(soc->osdev, status_nbuf,
 				QDF_DMA_FROM_DEVICE);
@@ -1933,6 +1942,9 @@ dp_rx_pdev_mon_status_attach(struct dp_pdev *pdev, int ring_id) {
 				       rx_desc_pool);
 	if (!QDF_IS_STATUS_SUCCESS(status))
 		return status;
+
+	rx_desc_pool->buf_size = RX_DATA_BUFFER_SIZE;
+	rx_desc_pool->buf_alignment = RX_DATA_BUFFER_ALIGNMENT;
 
 	dp_debug("Mon RX Status Buffers Replenish ring_id=%d", ring_id);
 

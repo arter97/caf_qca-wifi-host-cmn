@@ -23,6 +23,7 @@
 
 #define TX_WMM_AC_NUM	4
 #define ENABLE_DP_HIST_STATS
+#define DP_MEMORY_OPT
 #define DP_RX_DISABLE_NDI_MDNS_FORWARDING
 
 #define OL_TXQ_PAUSE_REASON_FW                (1 << 0)
@@ -316,6 +317,7 @@ struct txrx_pdev_cfg_param_t {
 	uint16_t bundle_timer_value;
 	uint16_t bundle_size;
 #endif
+	uint8_t pktlog_buffer_size;
 };
 
 #ifdef IPA_OFFLOAD

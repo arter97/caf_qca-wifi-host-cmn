@@ -28,6 +28,7 @@
 #include "qdf_nbuf.h"
 #include "qdf_net_types.h"
 #include <wlan_cfg.h>
+#include "dp_ipa.h"
 #if defined(MESH_MODE_SUPPORT) || defined(FEATURE_PERPKT_INFO)
 #include "if_meta_hdr.h"
 #endif
@@ -1070,6 +1071,31 @@ static void dp_tx_raw_prepare_unset(struct dp_soc *soc,
 	} while (cur_nbuf);
 }
 
+#ifdef VDEV_PEER_PROTOCOL_COUNT
+#define dp_vdev_peer_stats_update_protocol_cnt_tx(vdev_hdl, nbuf) \
+{ \
+	qdf_nbuf_t nbuf_local; \
+	struct dp_vdev *vdev_local = vdev_hdl; \
+	do { \
+		if (qdf_likely(!((vdev_local)->peer_protocol_count_track))) \
+			break; \
+		nbuf_local = nbuf; \
+		if (qdf_unlikely(((vdev_local)->tx_encap_type) == \
+			 htt_cmn_pkt_type_raw)) \
+			break; \
+		else if (qdf_unlikely(qdf_nbuf_is_nonlinear((nbuf_local)))) \
+			break; \
+		else if (qdf_nbuf_is_tso((nbuf_local))) \
+			break; \
+		dp_vdev_peer_stats_update_protocol_cnt((vdev_local), \
+						       (nbuf_local), \
+						       NULL, 1, 0); \
+	} while (0); \
+}
+#else
+#define dp_vdev_peer_stats_update_protocol_cnt_tx(vdev_hdl, skb)
+#endif
+
 /**
  * dp_tx_hw_enqueue() - Enqueue to TCL HW for transmit
  * @soc: DP Soc Handle
@@ -1181,6 +1207,7 @@ static QDF_STATUS dp_tx_hw_enqueue(struct dp_soc *soc, struct dp_vdev *vdev,
 	}
 
 	tx_desc->flags |= DP_TX_DESC_FLAG_QUEUED_TX;
+	dp_vdev_peer_stats_update_protocol_cnt_tx(vdev, tx_desc->nbuf);
 
 	hal_tx_desc_sync(hal_tx_desc_cached, hal_tx_desc);
 	DP_STATS_INC_PKT(vdev, tx_i.processed, 1, length);
@@ -3143,6 +3170,7 @@ static inline void dp_tx_sojourn_stats_process(struct dp_pdev *pdev,
 }
 #else
 static inline void dp_tx_sojourn_stats_process(struct dp_pdev *pdev,
+					       struct dp_peer *peer,
 					       uint8_t tid,
 					       uint64_t txdesc_ts,
 					       uint32_t ppdu_id)
@@ -4300,6 +4328,9 @@ QDF_STATUS dp_tx_soc_attach(struct dp_soc *soc)
 			hal_tx_init_data_ring(soc->hal_soc,
 					soc->tcl_data_ring[i].hal_srng);
 		}
+		if (wlan_cfg_is_ipa_enabled(soc->wlan_cfg_ctx))
+			hal_tx_init_data_ring(soc->hal_soc,
+					soc->tcl_data_ring[IPA_TCL_DATA_RING_IDX].hal_srng);
 	}
 
 	/*

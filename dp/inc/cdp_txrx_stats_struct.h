@@ -667,6 +667,32 @@ typedef union cdp_peer_stats_buf {
 	uint32_t rx_avg_rssi;
 } cdp_peer_stats_param_t; /* Max union size 16 bytes */
 
+/**
+ * enum cdp_protocol_trace -  Protocols supported by per-peer protocol trace
+ * @CDP_TRACE_ICMP: ICMP packets
+ * @CDP_TRACE_EAP: EAPOL packets
+ * @CDP_TRACE_ARP: ARP packets
+ *
+ * Enumeration of all protocols supported by per-peer protocol trace feature
+ */
+enum cdp_protocol_trace {
+	CDP_TRACE_ICMP,
+	CDP_TRACE_EAP,
+	CDP_TRACE_ARP,
+	CDP_TRACE_MAX
+};
+
+/**
+ * struct protocol_trace_count - type of count on per-peer protocol trace
+ * @egress_cnt: how many packets go out of host driver
+ * @ingress_cnt: how many packets come into the host driver
+ *
+ * Type of count on per-peer protocol trace
+ */
+struct protocol_trace_count {
+	uint16_t egress_cnt;
+	uint16_t ingress_cnt;
+};
 /* struct cdp_tx_stats - tx stats
  * @cdp_pkt_info comp_pkt: Pkt Info for which completions were received
  * @cdp_pkt_info ucast: Unicast Packet Count
@@ -675,6 +701,7 @@ typedef union cdp_peer_stats_buf {
  * @cdp_pkt_info nawds_mcast: NAWDS  Multicast Packet Count
  * @cdp_pkt_info tx_success: Successful Tx Packets
  * @nawds_mcast_drop: NAWDS  Multicast Drop Count
+ * @protocol_trace_cnt: per-peer protocol counter
  * @tx_failed: Total Tx failure
  * @ofdma: Total Packets as ofdma
  * @stbc: Packets in STBC
@@ -749,6 +776,9 @@ struct cdp_tx_stats {
 	struct cdp_pkt_info mcast;
 	struct cdp_pkt_info bcast;
 	struct cdp_pkt_info nawds_mcast;
+#ifdef VDEV_PEER_PROTOCOL_COUNT
+	struct protocol_trace_count protocol_trace_cnt[CDP_TRACE_MAX];
+#endif
 	struct cdp_pkt_info tx_success;
 	uint32_t nawds_mcast_drop;
 	uint32_t tx_failed;
@@ -842,6 +872,7 @@ struct cdp_tx_stats {
  * @pkts: Intra BSS packets received
  * @fail: Intra BSS packets failed
  * @mdns_no_fwd: Intra BSS MDNS packets not forwarded
+ * @protocol_trace_cnt: per-peer protocol counters
  * @mic_err: Rx MIC errors CCMP
  * @decrypt_err: Rx Decryption Errors CRC
  * @fcserr: rx MIC check failed (CCMP)
@@ -905,6 +936,9 @@ struct cdp_rx_stats {
 		struct cdp_pkt_info fail;
 		uint32_t mdns_no_fwd;
 	} intra_bss;
+#ifdef VDEV_PEER_PROTOCOL_COUNT
+	struct protocol_trace_count protocol_trace_cnt[CDP_TRACE_MAX];
+#endif
 
 	struct {
 		uint32_t mic_err;
@@ -1809,8 +1843,8 @@ enum _ol_ath_param_t {
 	OL_ATH_PARAM_ATF_GROUP_POLICY = 302,
 #endif
 #if DBDC_REPEATER_SUPPORT
-	OL_ATH_PARAM_PRIMARY_RADIO,
-	OL_ATH_PARAM_DBDC_ENABLE,
+	OL_ATH_PARAM_PRIMARY_RADIO = 303,
+	OL_ATH_PARAM_DBDC_ENABLE = 304,
 #endif
 	OL_ATH_PARAM_TXPOWER_DBSCALE,
 	OL_ATH_PARAM_CTL_POWER_SCALE,
@@ -1996,6 +2030,12 @@ enum _ol_ath_param_t {
 	OL_ATH_PARAM_GET_PDEV_NUM_PEERS = 435,
 	/* Number of monitor vdevs configured per PDEV */
 	OL_ATH_PARAM_GET_PDEV_NUM_MONITOR_VDEVS = 436,
+#ifdef CE_TASKLET_DEBUG_ENABLE
+	/* Enable/disable CE stats print */
+	OL_ATH_PARAM_ENABLE_CE_LATENCY_STATS = 437,
+#endif
+	/* set operating class table (MBO) value. */
+	OL_ATH_PARAM_OPCLASS_TBL = 438,
 };
 #endif
 /* Bitmasks for stats that can block */

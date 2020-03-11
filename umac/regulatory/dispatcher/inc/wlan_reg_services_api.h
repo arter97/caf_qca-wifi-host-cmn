@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017-2019 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2017-2020 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -683,15 +683,6 @@ void wlan_reg_update_nol_ch(struct wlan_objmgr_pdev *pdev,
 			    bool nol_ch);
 
 /**
- * wlan_reg_is_dfs_ch () - Checks the channel state for DFS
- * @pdev: pdev ptr
- * @chan: channel
- *
- * Return: true or false
- */
-bool wlan_reg_is_dfs_ch(struct wlan_objmgr_pdev *pdev, uint8_t chan);
-
-/**
  * wlan_reg_is_dsrc_chan () - Checks if the channel is dsrc channel or not
  * @pdev: pdev ptr
  * @chan_num: channel
@@ -1179,6 +1170,21 @@ void wlan_reg_freq_to_chan_op_class(struct wlan_objmgr_pdev *pdev,
 				    uint16_t behav_limit,
 				    uint8_t *op_class,
 				    uint8_t *chan_num);
+
+/**
+ * wlan_reg_country_opclass_freq_check() - checks frequency in (ctry, op class)
+ *                                         pair
+ * @pdev: pdev ptr
+ * @country: country information
+ * @op_class: operating class
+ * @chan_freq: channel frequency
+ *
+ * Return: bool
+ */
+bool wlan_reg_country_opclass_freq_check(struct wlan_objmgr_pdev *pdev,
+					 const uint8_t country[3],
+					 uint8_t op_class,
+					 qdf_freq_t chan_freq);
 
 /**
  * wlan_reg_get_5g_bonded_channel_and_state_for_freq()- Return the channel

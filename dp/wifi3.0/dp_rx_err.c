@@ -447,8 +447,8 @@ dp_rx_chain_msdus(struct dp_soc *soc, qdf_nbuf_t nbuf,
 	    QDF_NBUF_CB_RX_NUM_ELEMENTS_IN_LIST
 	    (dp_pdev->invalid_peer_head_msdu) >= DP_MAX_INVALID_BUFFERS)) {
 		qdf_nbuf_set_rx_chfrag_start(nbuf, 1);
-		dp_pdev->ppdu_id = hal_rx_hw_desc_get_ppduid_get(soc->hal_soc,
-								 rx_tlv_hdr);
+		dp_pdev->ppdu_id = hal_rx_get_ppdu_id(soc->hal_soc,
+						      rx_tlv_hdr);
 		dp_pdev->first_nbuf = true;
 
 		/* If the new nbuf received is the first msdu of the
@@ -513,8 +513,7 @@ void dp_rx_wbm_err_handle_bar(struct dp_soc *soc,
 	 */
 
 	rx_tlv_hdr = qdf_nbuf_data(nbuf);
-	bar = (struct ieee80211_frame_bar *)(rx_tlv_hdr +
-					     sizeof(struct rx_pkt_tlvs));
+	bar = (struct ieee80211_frame_bar *)(rx_tlv_hdr + SIZE_OF_DATA_RX_TLV);
 
 	type = bar->i_fc[0] & IEEE80211_FC0_TYPE_MASK;
 	subtype = bar->i_fc[0] & IEEE80211_FC0_SUBTYPE_MASK;
@@ -667,7 +666,7 @@ dp_rx_null_q_handle_invalid_peer_id_exception(struct dp_soc *soc,
 }
 
 /**
- * dp_rx_null_q_check_pkt_len_exception() - Check for pktlen validity
+ * dp_rx_check_pkt_len() - Check for pktlen validity
  * @soc: DP SOC context
  * @pkt_len: computed length of the pkt from caller in bytes
  *
@@ -675,9 +674,9 @@ dp_rx_null_q_handle_invalid_peer_id_exception(struct dp_soc *soc,
  *
  */
 static inline
-bool dp_rx_null_q_check_pkt_len_exception(struct dp_soc *soc, uint32_t pkt_len)
+bool dp_rx_check_pkt_len(struct dp_soc *soc, uint32_t pkt_len)
 {
-	if (qdf_unlikely(pkt_len > RX_BUFFER_SIZE)) {
+	if (qdf_unlikely(pkt_len > RX_DATA_BUFFER_SIZE)) {
 		DP_STATS_INC_PKT(soc, rx.err.rx_invalid_pkt_len,
 				 1, pkt_len);
 		return true;
@@ -697,7 +696,7 @@ dp_rx_null_q_handle_invalid_peer_id_exception(struct dp_soc *soc,
 }
 
 static inline
-bool dp_rx_null_q_check_pkt_len_exception(struct dp_soc *soc, uint32_t pkt_len)
+bool dp_rx_check_pkt_len(struct dp_soc *soc, uint32_t pkt_len)
 {
 	return false;
 }
@@ -731,11 +730,12 @@ dp_rx_null_q_desc_handle(struct dp_soc *soc, qdf_nbuf_t nbuf,
 			 uint8_t *rx_tlv_hdr, uint8_t pool_id,
 			 struct dp_peer *peer)
 {
-	uint32_t pkt_len, l2_hdr_offset;
+	uint32_t pkt_len;
 	uint16_t msdu_len;
 	struct dp_vdev *vdev;
 	uint8_t tid;
 	qdf_ether_header_t *eh;
+	struct hal_rx_msdu_metadata msdu_metadata;
 
 	qdf_nbuf_set_rx_chfrag_start(nbuf,
 				hal_rx_msdu_end_first_msdu_get(soc->hal_soc,
@@ -752,18 +752,17 @@ dp_rx_null_q_desc_handle(struct dp_soc *soc, qdf_nbuf_t nbuf,
 			      hal_rx_msdu_end_sa_is_valid_get(soc->hal_soc,
 							      rx_tlv_hdr));
 
-	l2_hdr_offset = hal_rx_msdu_end_l3_hdr_padding_get(soc->hal_soc,
-							   rx_tlv_hdr);
+	hal_rx_msdu_metadata_get(soc->hal_soc, rx_tlv_hdr, &msdu_metadata);
 	msdu_len = hal_rx_msdu_start_msdu_len_get(rx_tlv_hdr);
-	pkt_len = msdu_len + l2_hdr_offset + RX_PKT_TLVS_LEN;
+	pkt_len = msdu_len + msdu_metadata.l3_hdr_pad + RX_PKT_TLVS_LEN;
 
 	if (qdf_likely(!qdf_nbuf_is_frag(nbuf))) {
-		if (dp_rx_null_q_check_pkt_len_exception(soc, pkt_len))
+		if (dp_rx_check_pkt_len(soc, pkt_len))
 			goto drop_nbuf;
 
 		/* Set length in nbuf */
-		qdf_nbuf_set_pktlen(nbuf,
-				    qdf_min(pkt_len, (uint32_t)RX_BUFFER_SIZE));
+		qdf_nbuf_set_pktlen(
+			nbuf, qdf_min(pkt_len, (uint32_t)RX_DATA_BUFFER_SIZE));
 		qdf_assert_always(nbuf->data == rx_tlv_hdr);
 	}
 
@@ -820,7 +819,10 @@ dp_rx_null_q_desc_handle(struct dp_soc *soc, qdf_nbuf_t nbuf,
 	if (qdf_nbuf_is_frag(nbuf))
 		qdf_nbuf_pull_head(nbuf, RX_PKT_TLVS_LEN);
 	else
-		qdf_nbuf_pull_head(nbuf, (l2_hdr_offset + RX_PKT_TLVS_LEN));
+		qdf_nbuf_pull_head(nbuf, (msdu_metadata.l3_hdr_pad +
+				   RX_PKT_TLVS_LEN));
+
+	dp_vdev_peer_stats_update_protocol_cnt(vdev, nbuf, NULL, 0, 1);
 
 	if (dp_rx_mcast_echo_check(soc, peer, rx_tlv_hdr, nbuf)) {
 		/* this is a looped back MCBC pkt, drop it */
@@ -854,7 +856,8 @@ dp_rx_null_q_desc_handle(struct dp_soc *soc, qdf_nbuf_t nbuf,
 	/* WDS Source Port Learning */
 	if (qdf_likely(vdev->rx_decap_type == htt_cmn_pkt_type_ethernet &&
 		vdev->wds_enabled))
-		dp_rx_wds_srcport_learn(soc, rx_tlv_hdr, peer, nbuf);
+		dp_rx_wds_srcport_learn(soc, rx_tlv_hdr, peer, nbuf,
+					msdu_metadata);
 
 	if (hal_rx_is_unicast(soc->hal_soc, rx_tlv_hdr)) {
 		tid = hal_rx_tid_get(soc->hal_soc, rx_tlv_hdr);
@@ -956,6 +959,11 @@ dp_rx_process_rxdma_err(struct dp_soc *soc, qdf_nbuf_t nbuf,
 	msdu_len = hal_rx_msdu_start_msdu_len_get(rx_tlv_hdr);
 	pkt_len = msdu_len + l2_hdr_offset + RX_PKT_TLVS_LEN;
 
+	if (dp_rx_check_pkt_len(soc, pkt_len)) {
+		/* Drop & free packet */
+		qdf_nbuf_free(nbuf);
+		return;
+	}
 	/* Set length in nbuf */
 	qdf_nbuf_set_pktlen(nbuf, pkt_len);
 
@@ -1068,7 +1076,7 @@ process_rx:
 		/* Update the flow tag in SKB based on FSE metadata */
 		dp_rx_update_flow_tag(soc, vdev, nbuf, rx_tlv_hdr, true);
 		DP_STATS_INC(peer, rx.to_stack.num, 1);
-		vdev->osif_rx(vdev->osif_vdev, nbuf);
+		dp_rx_deliver_to_stack(soc, vdev, peer, nbuf, NULL);
 	}
 
 	return;
@@ -1361,6 +1369,23 @@ done:
 	return rx_bufs_used; /* Assume no scale factor for now */
 }
 
+#ifdef DROP_RXDMA_DECRYPT_ERR
+/**
+ * dp_handle_rxdma_decrypt_err() - Check if decrypt err frames can be handled
+ *
+ * Return: true if rxdma decrypt err frames are handled and false otheriwse
+ */
+static inline bool dp_handle_rxdma_decrypt_err(void)
+{
+	return false;
+}
+#else
+static inline bool dp_handle_rxdma_decrypt_err(void)
+{
+	return true;
+}
+#endif
+
 uint32_t
 dp_rx_wbm_err_process(struct dp_intr *int_ctx, struct dp_soc *soc,
 		      hal_ring_handle_t hal_ring_hdl, uint32_t quota)
@@ -1501,7 +1526,7 @@ done:
 	while (nbuf) {
 		struct dp_peer *peer;
 		uint16_t peer_id;
-		uint8_t e_code;
+		uint8_t err_code;
 		uint8_t *tlv_hdr;
 		rx_tlv_hdr = qdf_nbuf_data(nbuf);
 
@@ -1631,28 +1656,28 @@ done:
 					continue;
 
 				case HAL_RXDMA_ERR_DECRYPT:
+					if (!dp_handle_rxdma_decrypt_err()) {
+						if (peer)
+							DP_STATS_INC(peer,
+							rx.err.decrypt_err, 1);
+						break;
+					}
+
 					pool_id = wbm_err_info.pool_id;
-					e_code = wbm_err_info.rxdma_err_code;
+					err_code = wbm_err_info.rxdma_err_code;
 					tlv_hdr = rx_tlv_hdr;
+					dp_rx_process_rxdma_err(soc, nbuf,
+								tlv_hdr, peer,
+								err_code,
+								pool_id);
+					nbuf = next;
 					if (peer) {
 						DP_STATS_INC(peer, rx.err.
 							     decrypt_err, 1);
-					} else {
-						dp_rx_process_rxdma_err(soc,
-									nbuf,
-									tlv_hdr,
-									NULL,
-									e_code,
-									pool_id
-									);
-						nbuf = next;
-						continue;
+						dp_peer_unref_del_find_by_id(
+									peer);
 					}
-
-					QDF_TRACE(QDF_MODULE_ID_DP,
-						QDF_TRACE_LEVEL_DEBUG,
-					"Packet received with Decrypt error");
-					break;
+					continue;
 
 				default:
 					dp_err_rl("RXDMA error %d",

@@ -114,7 +114,7 @@ static uint32_t nbuf_tx_data[QDF_NBUF_TX_PKT_STATE_MAX];
 static qdf_atomic_t nbuf_count;
 #endif
 
-#if defined(NBUF_MEMORY_DEBUG)
+#if defined(NBUF_MEMORY_DEBUG) || defined(QDF_NBUF_GLOBAL_COUNT)
 static bool is_initial_mem_debug_disabled;
 #endif
 
@@ -340,7 +340,12 @@ qdf_export_symbol(__qdf_nbuf_count_get);
 void __qdf_nbuf_count_inc(qdf_nbuf_t nbuf)
 {
 	int num_nbuf = 1;
-	qdf_nbuf_t ext_list = qdf_nbuf_get_ext_list(nbuf);
+	qdf_nbuf_t ext_list;
+
+	if (qdf_likely(is_initial_mem_debug_disabled))
+		return;
+
+	ext_list = qdf_nbuf_get_ext_list(nbuf);
 
 	/* Take care to account for frag_list */
 	while (ext_list) {
@@ -364,6 +369,9 @@ void __qdf_nbuf_count_dec(__qdf_nbuf_t nbuf)
 	qdf_nbuf_t ext_list;
 	int num_nbuf;
 
+	if (qdf_likely(is_initial_mem_debug_disabled))
+		return;
+
 	if (qdf_nbuf_get_users(nbuf) > 1)
 		return;
 
@@ -382,7 +390,7 @@ void __qdf_nbuf_count_dec(__qdf_nbuf_t nbuf)
 qdf_export_symbol(__qdf_nbuf_count_dec);
 #endif
 
-#if defined(QCA_WIFI_QCA8074_VP) && defined(BUILD_X86) && \
+#if defined(CONFIG_WIFI_EMULATION_WIFI_3_0) && defined(BUILD_X86) && \
 	!defined(QCA_WIFI_QCN9000)
 struct sk_buff *__qdf_nbuf_alloc(qdf_device_t osdev, size_t size, int reserve,
 				 int align, int prio, const char *func,
@@ -1913,6 +1921,8 @@ bool __qdf_nbuf_data_is_icmp_pkt(uint8_t *data)
 	} else
 		return false;
 }
+
+qdf_export_symbol(__qdf_nbuf_data_is_icmp_pkt);
 
 /**
  * __qdf_nbuf_data_is_icmpv6_pkt() - check if it is IPV6 ICMPV6 packet.
@@ -4442,6 +4452,7 @@ qdf_export_symbol(qdf_nbuf_init_fast);
  */
 void __qdf_nbuf_mod_init(void)
 {
+	is_initial_mem_debug_disabled = qdf_mem_debug_config_get();
 	qdf_atomic_init(&nbuf_count);
 	qdf_debugfs_create_atomic(NBUF_DEBUGFS_NAME, S_IRUSR, NULL, &nbuf_count);
 }

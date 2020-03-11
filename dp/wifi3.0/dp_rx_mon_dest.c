@@ -113,8 +113,8 @@ done:
 static inline void dp_mon_adjust_frag_len(uint32_t *total_len,
 uint32_t *frag_len)
 {
-	if (*total_len >= (RX_BUFFER_SIZE - RX_PKT_TLVS_LEN)) {
-		*frag_len = RX_BUFFER_SIZE - RX_PKT_TLVS_LEN;
+	if (*total_len >= (RX_MONITOR_BUFFER_SIZE - RX_PKT_TLVS_LEN)) {
+		*frag_len = RX_MONITOR_BUFFER_SIZE - RX_PKT_TLVS_LEN;
 		*total_len -= *frag_len;
 	} else {
 		*frag_len = *total_len;
@@ -371,8 +371,9 @@ dp_rx_mon_mpdu_pop(struct dp_soc *soc, uint32_t mac_id,
 				__func__, i, *ppdu_id, num_msdus);
 
 			if (is_first_msdu) {
-				if (!HAL_RX_HW_DESC_MPDU_VALID(
-					rx_desc_tlv)) {
+				if (!hal_rx_mpdu_start_tlv_tag_valid(
+						soc->hal_soc,
+						rx_desc_tlv)) {
 					drop_mpdu = true;
 					qdf_nbuf_free(msdu);
 					msdu = NULL;
@@ -383,7 +384,8 @@ dp_rx_mon_mpdu_pop(struct dp_soc *soc, uint32_t mac_id,
 
 				msdu_ppdu_id = hal_rx_hw_desc_get_ppduid_get(
 						soc->hal_soc,
-						rx_desc_tlv);
+						rx_desc_tlv,
+						rxdma_dst_ring_desc);
 				is_first_msdu = false;
 
 				QDF_TRACE(QDF_MODULE_ID_DP,
@@ -446,7 +448,7 @@ dp_rx_mon_mpdu_pop(struct dp_soc *soc, uint32_t mac_id,
 				  __func__, total_frag_len, frag_len,
 				  msdu_list.msdu_info[i].msdu_flags);
 
-			rx_pkt_offset = HAL_RX_MON_HW_RX_DESC_SIZE();
+			rx_pkt_offset = SIZE_OF_MONITOR_TLV;
 			/*
 			 * HW structures call this L3 header padding
 			 * -- even though this is actually the offset
@@ -537,7 +539,7 @@ void dp_rx_msdus_set_payload(struct dp_soc *soc, qdf_nbuf_t msdu)
 	uint32_t rx_pkt_offset, l2_hdr_offset;
 
 	data = qdf_nbuf_data(msdu);
-	rx_pkt_offset = HAL_RX_MON_HW_RX_DESC_SIZE();
+	rx_pkt_offset = SIZE_OF_MONITOR_TLV;
 	l2_hdr_offset = hal_rx_msdu_end_l3_hdr_padding_get(soc->hal_soc, data);
 	qdf_nbuf_pull_head(msdu, rx_pkt_offset + l2_hdr_offset);
 }
@@ -1223,6 +1225,8 @@ dp_rx_pdev_mon_buf_attach(struct dp_pdev *pdev, int mac_id) {
 		return status;
 
 	rx_desc_pool->owner = HAL_RX_BUF_RBM_SW3_BM;
+	rx_desc_pool->buf_size = RX_MONITOR_BUFFER_SIZE;
+	rx_desc_pool->buf_alignment = RX_MONITOR_BUFFER_ALIGNMENT;
 
 	replenish_size = ((num_entries - 1) < MON_BUF_MIN_ALLOC_ENTRIES) ?
 			  (num_entries - 1) : MON_BUF_MIN_ALLOC_ENTRIES;

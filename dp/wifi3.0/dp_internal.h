@@ -1133,12 +1133,19 @@ QDF_STATUS dp_h2t_ext_stats_msg_send(struct dp_pdev *pdev,
 void dp_htt_stats_print_tag(struct dp_pdev *pdev,
 			    uint8_t tag_type, uint32_t *tag_buf);
 void dp_htt_stats_copy_tag(struct dp_pdev *pdev, uint8_t tag_type, uint32_t *tag_buf);
+QDF_STATUS dp_h2t_3tuple_config_send(struct dp_pdev *pdev, uint32_t tuple_mask,
+				     uint8_t mac_id);
 void dp_peer_rxtid_stats(struct dp_peer *peer, void (*callback_fn),
 		void *cb_ctxt);
 QDF_STATUS
 dp_set_pn_check_wifi3(struct cdp_soc_t *soc, uint8_t vdev_id,
 		      uint8_t *peer_mac, enum cdp_sec_type sec_type,
 		      uint32_t *rx_pn);
+
+QDF_STATUS
+dp_set_key_sec_type_wifi3(struct cdp_soc_t *soc, uint8_t vdev_id,
+			  uint8_t *peer_mac, enum cdp_sec_type sec_type,
+			  bool is_unicast);
 
 void *dp_get_pdev_for_mac_id(struct dp_soc *soc, uint32_t mac_id);
 
@@ -1599,6 +1606,48 @@ static inline QDF_STATUS dp_peer_stats_notify(struct dp_pdev *pdev,
 }
 
 #endif /* CONFIG_WIN */
+
+#ifdef VDEV_PEER_PROTOCOL_COUNT
+/**
+ * dp_vdev_peer_stats_update_protocol_cnt() - update per-peer protocol counters
+ * @vdev: VDEV DP object
+ * @nbuf: data packet
+ * @peer: Peer DP object
+ * @is_egress: whether egress or ingress
+ * @is_rx: whether rx or tx
+ *
+ * This function updates the per-peer protocol counters
+ * Return: void
+ */
+void dp_vdev_peer_stats_update_protocol_cnt(struct dp_vdev *vdev,
+					    qdf_nbuf_t nbuf,
+					    struct dp_peer *peer,
+					    bool is_egress,
+					    bool is_rx);
+
+/**
+ * dp_vdev_peer_stats_update_protocol_cnt() - update per-peer protocol counters
+ * @soc: SOC DP object
+ * @vdev_id: vdev_id
+ * @nbuf: data packet
+ * @is_egress: whether egress or ingress
+ * @is_rx: whether rx or tx
+ *
+ * This function updates the per-peer protocol counters
+ * Return: void
+ */
+
+void dp_peer_stats_update_protocol_cnt(struct cdp_soc_t *soc,
+				       int8_t vdev_id,
+				       qdf_nbuf_t nbuf,
+				       bool is_egress,
+				       bool is_rx);
+
+#else
+#define dp_vdev_peer_stats_update_protocol_cnt(vdev, nbuf, peer, \
+					       is_egress, is_rx)
+#endif
+
 #ifdef QCA_LL_TX_FLOW_CONTROL_V2
 void dp_tx_dump_flow_pool_info(struct cdp_soc_t *soc_hdl);
 int dp_tx_delete_flow_pool(struct dp_soc *soc, struct dp_tx_desc_pool_s *pool,
@@ -1760,6 +1809,19 @@ void dp_print_pdev_tx_capture_stats(struct dp_pdev *pdev)
 {
 }
 
+/*
+ * dp_peer_tx_capture_filter_check: check filter is enable for the filter
+ * and update tx_cap_enabled flag
+ * @pdev: DP PDEV handle
+ * @peer: DP PEER handle
+ *
+ * return: void
+ */
+static inline
+void dp_peer_tx_capture_filter_check(struct dp_pdev *pdev,
+				     struct dp_peer *peer)
+{
+}
 #endif
 
 #ifdef FEATURE_PERPKT_INFO
@@ -1833,7 +1895,7 @@ struct dp_soc *cdp_soc_t_to_dp_soc(struct cdp_soc_t *psoc)
 	return (struct dp_soc *)psoc;
 }
 
-#ifdef WLAN_SUPPORT_RX_FLOW_TAG
+#if defined(WLAN_SUPPORT_RX_FLOW_TAG) || defined(WLAN_SUPPORT_RX_FISA)
 /**
  * dp_rx_flow_update_fse_stats() - Update a flow's statistics
  * @pdev: pdev handle
@@ -1892,7 +1954,8 @@ void dp_rx_fst_detach(struct dp_soc *soc, struct dp_pdev *pdev);
  */
 QDF_STATUS dp_rx_flow_send_fst_fw_setup(struct dp_soc *soc,
 					struct dp_pdev *pdev);
-#else
+#else /* !((WLAN_SUPPORT_RX_FLOW_TAG) || defined(WLAN_SUPPORT_RX_FISA)) */
+
 /**
  * dp_rx_fst_attach() - Initialize Rx FST and setup necessary parameters
  * @soc: SoC handle
@@ -1917,7 +1980,7 @@ static inline
 void dp_rx_fst_detach(struct dp_soc *soc, struct dp_pdev *pdev)
 {
 }
-#endif /* WLAN_SUPPORT_RX_FLOW_TAG */
+#endif
 
 /**
  * dp_get_vdev_from_soc_vdev_id_wifi3() - Returns vdev object given the vdev id
@@ -1977,5 +2040,18 @@ QDF_STATUS dp_rx_tid_update_wifi3(struct dp_peer *peer, int tid, uint32_t
 uint16_t dp_get_peer_mac_list(ol_txrx_soc_handle soc, uint8_t vdev_id,
 			      u_int8_t newmac[][QDF_MAC_ADDR_SIZE],
 			      u_int16_t mac_cnt);
+/*
+ * dp_is_hw_dbs_enable() - Procedure to check if DBS is supported
+ * @soc:		DP SoC context
+ * @max_mac_rings:	No of MAC rings
+ *
+ * Return: None
+ */
+void dp_is_hw_dbs_enable(struct dp_soc *soc,
+				int *max_mac_rings);
 
+
+#if defined(WLAN_SUPPORT_RX_FISA)
+void dp_rx_dump_fisa_table(struct dp_soc *soc);
+#endif /* WLAN_SUPPORT_RX_FISA */
 #endif /* #ifndef _DP_INTERNAL_H_ */

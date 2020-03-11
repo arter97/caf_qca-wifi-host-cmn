@@ -860,6 +860,10 @@ QDF_STATUS hif_enable(struct hif_opaque_softc *hif_ctx, struct device *dev,
 		      enum qdf_bus_type bus_type,
 		      enum hif_enable_type type);
 void hif_disable(struct hif_opaque_softc *hif_ctx, enum hif_disable_type type);
+#ifdef CE_TASKLET_DEBUG_ENABLE
+void hif_enable_ce_latency_stats(struct hif_opaque_softc *hif_ctx,
+				 uint8_t value);
+#endif
 void hif_display_stats(struct hif_opaque_softc *hif_ctx);
 void hif_clear_stats(struct hif_opaque_softc *hif_ctx);
 #ifdef FEATURE_RUNTIME_PM
@@ -871,6 +875,7 @@ int hif_pm_runtime_request_resume(struct hif_opaque_softc *hif_ctx);
 int hif_pm_runtime_get(struct hif_opaque_softc *hif_ctx);
 void hif_pm_runtime_get_noresume(struct hif_opaque_softc *hif_ctx);
 int hif_pm_runtime_put(struct hif_opaque_softc *hif_ctx);
+int hif_pm_runtime_put_noidle(struct hif_opaque_softc *hif_ctx);
 void hif_pm_runtime_mark_last_busy(struct hif_opaque_softc *hif_ctx);
 int hif_runtime_lock_init(qdf_runtime_lock_t *lock, const char *name);
 void hif_runtime_lock_deinit(struct hif_opaque_softc *hif_ctx,
@@ -888,6 +893,7 @@ void hif_pm_runtime_set_monitor_wake_intr(struct hif_opaque_softc *hif_ctx,
 void hif_pm_runtime_mark_dp_rx_busy(struct hif_opaque_softc *hif_ctx);
 int hif_pm_runtime_is_dp_rx_busy(struct hif_opaque_softc *hif_ctx);
 qdf_time_t hif_pm_runtime_get_dp_rx_busy_mark(struct hif_opaque_softc *hif_ctx);
+int hif_pm_runtime_sync_resume(struct hif_opaque_softc *hif_ctx);
 #else
 struct hif_pm_runtime_lock {
 	const char *name;
@@ -907,6 +913,8 @@ static inline void hif_pm_runtime_get_noresume(struct hif_opaque_softc *hif_ctx)
 static inline int hif_pm_runtime_get(struct hif_opaque_softc *hif_ctx)
 { return 0; }
 static inline int hif_pm_runtime_put(struct hif_opaque_softc *hif_ctx)
+{ return 0; }
+static inline int hif_pm_runtime_put_noidle(struct hif_opaque_softc *hif_ctx)
 { return 0; }
 static inline void
 hif_pm_runtime_mark_last_busy(struct hif_opaque_softc *hif_ctx) {};
@@ -942,6 +950,8 @@ hif_pm_runtime_is_dp_rx_busy(struct hif_opaque_softc *hif_ctx)
 { return 0; }
 static inline qdf_time_t
 hif_pm_runtime_get_dp_rx_busy_mark(struct hif_opaque_softc *hif_ctx)
+{ return 0; }
+static inline int hif_pm_runtime_sync_resume(struct hif_opaque_softc *hif_ctx)
 { return 0; }
 #endif
 

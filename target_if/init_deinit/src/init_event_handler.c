@@ -126,9 +126,15 @@ static int init_deinit_service_ready_event_handler(ol_scn_t scn_handle,
 	if (wmi_service_enabled(wmi_handle, wmi_service_dynamic_hw_mode))
 		wlan_psoc_nif_fw_ext_cap_set(psoc, WLAN_SOC_CEXT_DYNAMIC_HW_MODE);
 
-	if (wmi_service_enabled(wmi_handle, wmi_service_bw_165mhz_support))
+	if (wmi_service_enabled(wmi_handle,
+				wmi_service_bw_restricted_80p80_support))
 		wlan_psoc_nif_fw_ext_cap_set(psoc,
 					     WLAN_SOC_RESTRICTED_80P80_SUPPORT);
+
+	if (wmi_service_enabled(wmi_handle,
+				wmi_service_nss_ratio_to_host_support))
+		wlan_psoc_nif_fw_ext_cap_set(
+				psoc, WLAN_SOC_NSS_RATIO_TO_HOST_SUPPORT);
 
 	target_if_debug(" TT support %d, Wide BW Scan %d, SW cal %d",
 		wlan_psoc_nif_fw_ext_cap_get(psoc, WLAN_SOC_CEXT_TT_SUPPORT),
@@ -466,6 +472,21 @@ static int init_deinit_ready_event_handler(ol_scn_t scn_handle,
 	else
 		info->wlan_res_cfg.agile_capability = ready_ev.agile_capability;
 
+	/* Indicate to the waiting thread that the ready
+	 * event was received
+	 */
+	info->wlan_init_status = wmi_ready_extract_init_status(
+						wmi_handle, event);
+
+	legacy_callback = target_if_get_psoc_legacy_service_ready_cb();
+	if (legacy_callback)
+		if (legacy_callback(wmi_ready_event_id,
+				    scn_handle, event, data_len)) {
+			target_if_err("Legacy callback returned error!");
+			tgt_hdl->info.wmi_ready = FALSE;
+			goto exit;
+		}
+
 	num_radios = target_psoc_get_num_radios(tgt_hdl);
 
 	if ((ready_ev.num_total_peer != 0) &&
@@ -513,20 +534,6 @@ static int init_deinit_ready_event_handler(ol_scn_t scn_handle,
 		}
 	}
 
-	/* Indicate to the waiting thread that the ready
-	 * event was received
-	 */
-	info->wlan_init_status = wmi_ready_extract_init_status(
-						wmi_handle, event);
-
-	legacy_callback = target_if_get_psoc_legacy_service_ready_cb();
-	if (legacy_callback)
-		if (legacy_callback(wmi_ready_event_id,
-				    scn_handle, event, data_len)) {
-			target_if_err("Legacy callback returned error!");
-			tgt_hdl->info.wmi_ready = FALSE;
-			goto exit;
-		}
 
 	if (ready_ev.pktlog_defs_checksum) {
 		for (i = 0; i < num_radios; i++) {
