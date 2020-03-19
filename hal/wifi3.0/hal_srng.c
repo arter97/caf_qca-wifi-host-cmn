@@ -561,7 +561,7 @@ void hal_srng_dst_init_hp(struct hal_srng *srng,
 		return;
 
 	srng->u.dst_ring.hp_addr = vaddr;
-	SRNG_DST_REG_WRITE(srng, HP, srng->u.dst_ring.cached_hp);
+	SRNG_DST_REG_WRITE_CONFIRM(srng, HP, srng->u.dst_ring.cached_hp);
 
 	if (vaddr) {
 		*srng->u.dst_ring.hp_addr = srng->u.dst_ring.cached_hp;

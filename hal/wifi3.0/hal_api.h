@@ -350,7 +350,9 @@ static inline void hal_write32_mb_confirm(struct hal_soc *hal_soc,
  *
  */
 static inline void hal_write_address_32_mb(struct hal_soc *hal_soc,
-					   void __iomem *addr, uint32_t value)
+					   void __iomem *addr, uint32_t value,
+					   bool wr_confirm)
+
 {
 	uint32_t offset;
 
@@ -358,7 +360,12 @@ static inline void hal_write_address_32_mb(struct hal_soc *hal_soc,
 		return qdf_iowrite32(addr, value);
 
 	offset = addr - hal_soc->dev_base_addr;
-	hal_write32_mb(hal_soc, offset, value);
+
+
+	if (qdf_unlikely(wr_confirm))
+		hal_write32_mb_confirm(hal_soc, offset, value);
+	else
+		hal_write32_mb(hal_soc, offset, value);
 }
 
 #ifndef QCA_WIFI_QCA6390
@@ -1235,11 +1242,11 @@ static inline void hal_srng_access_end_unlocked(void *hal_soc, void *hal_ring)
 		if (srng->ring_dir == HAL_SRNG_SRC_RING)
 			hal_write_address_32_mb(hal_soc,
 				srng->u.src_ring.hp_addr,
-				srng->u.src_ring.hp);
+				srng->u.src_ring.hp, false);
 		else
 			hal_write_address_32_mb(hal_soc,
 				srng->u.dst_ring.tp_addr,
-				srng->u.dst_ring.tp);
+				srng->u.dst_ring.tp, false);
 	}
 }
 
