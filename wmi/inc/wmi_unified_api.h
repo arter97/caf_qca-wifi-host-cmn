@@ -68,6 +68,10 @@
 #include "wlan_ipa_public_struct.h"
 #endif
 
+#ifdef WLAN_FEATURE_PKT_CAPTURE
+#include "wlan_pkt_capture_public_structs.h"
+#endif
+
 typedef qdf_nbuf_t wmi_buf_t;
 #define wmi_buf_data(_buf) qdf_nbuf_data(_buf)
 
@@ -2462,4 +2466,21 @@ void wmi_process_fw_event_worker_thread_ctx(struct wmi_unified *wmi_handle,
  */
 QDF_STATUS wmi_unified_send_mws_coex_req_cmd(struct wmi_unified *wmi_handle,
 					     uint32_t vdev_id, uint32_t cmd_id);
+
+#ifdef WLAN_FEATURE_PKT_CAPTURE
+/**
+ * wmi_unified_extract_vdev_mgmt_offload_event() - Extract mgmt offload params
+ * @wmi: WMI handle
+ * @evt_buf: Event buffer
+ * @params: Management offload event params
+ *
+ * WMI function to extract management offload event params
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS
+wmi_unified_extract_vdev_mgmt_offload_event(wmi_unified_t wmi, void *evt_buf,
+				struct mgmt_offload_event_params *params);
+#endif
+
 #endif /* _WMI_UNIFIED_API_H_ */

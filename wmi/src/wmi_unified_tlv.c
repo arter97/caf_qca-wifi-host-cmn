@@ -13023,6 +13023,10 @@ void wmi_copy_resource_config(wmi_resource_config *resource_cfg,
 		WMI_RSRC_CFG_FLAG_THREE_WAY_COEX_CONFIG_LEGACY_SUPPORT_SET(
 						resource_cfg->flag1, 1);
 
+	if (tgt_res_cfg->pktcapture_support)
+		WMI_RSRC_CFG_FLAG_PACKET_CAPTURE_SUPPORT_SET(
+				resource_cfg->flag1, 1);
+
 	wmi_copy_twt_resource_config(resource_cfg, tgt_res_cfg);
 }
 
@@ -22896,6 +22900,37 @@ static QDF_STATUS send_mws_coex_status_req_cmd_tlv(wmi_unified_t wmi_handle,
 }
 #endif
 
+#ifdef WLAN_FEATURE_PKT_CAPTURE
+static QDF_STATUS
+extract_vdev_mgmt_offload_event_tlv(void *handle, void *evt_buf,
+				    struct mgmt_offload_event_params *params)
+{
+	WMI_VDEV_MGMT_OFFLOAD_EVENTID_param_tlvs *param_tlvs;
+	wmi_mgmt_hdr *hdr;
+
+	param_tlvs = (WMI_VDEV_MGMT_OFFLOAD_EVENTID_param_tlvs *)evt_buf;
+	if (!param_tlvs)
+		return QDF_STATUS_E_INVAL;
+
+	hdr = param_tlvs->fixed_param;
+	if (!hdr)
+		return QDF_STATUS_E_INVAL;
+
+	if (hdr->buf_len > param_tlvs->num_bufp)
+		return QDF_STATUS_E_INVAL;
+
+	params->tsf_l32 = hdr->tsf_l32;
+	params->chan_freq = hdr->chan_freq;
+	params->rate_kbps = hdr->rate_kbps;
+	params->rssi = hdr->rssi;
+	params->buf_len = hdr->buf_len;
+	params->tx_status = hdr->tx_status;
+	params->buf = param_tlvs->bufp;
+	params->tx_retry_cnt = hdr->tx_retry_cnt;
+	return QDF_STATUS_SUCCESS;
+}
+#endif /* WLAN_FEATURE_PKT_CAPTURE */
+
 struct wmi_ops tlv_ops =  {
 	.send_vdev_create_cmd = send_vdev_create_cmd_tlv,
 	.send_vdev_delete_cmd = send_vdev_delete_cmd_tlv,
@@ -23402,6 +23437,9 @@ struct wmi_ops tlv_ops =  {
 #ifdef WLAN_MWS_INFO_DEBUGFS
 	.send_mws_coex_status_req_cmd = send_mws_coex_status_req_cmd_tlv,
 #endif
+#ifdef WLAN_FEATURE_PKT_CAPTURE
+	.extract_vdev_mgmt_offload_event = extract_vdev_mgmt_offload_event_tlv,
+#endif /* WLAN_FEATURE_PKT_CAPTURE */
 };
 
 /**
@@ -23718,6 +23756,8 @@ static void populate_tlv_events_id(uint32_t *event_ids)
 #endif
 	event_ids[wmi_coex_report_antenna_isolation_event_id] =
 				WMI_COEX_REPORT_ANTENNA_ISOLATION_EVENTID;
+	event_ids[wmi_mgmt_offload_data_event_id] =
+				WMI_VDEV_MGMT_OFFLOAD_EVENTID;
 }
 
 /**
@@ -23954,6 +23994,8 @@ static void populate_tlv_service(uint32_t *wmi_service)
 			WMI_SERVICE_TX_COMPL_TSF64;
 	wmi_service[wmi_service_three_way_coex_config_legacy] =
 			WMI_SERVICE_THREE_WAY_COEX_CONFIG_LEGACY;
+	wmi_service[wmi_service_packet_capture_support] =
+			WMI_SERVICE_PACKET_CAPTURE_SUPPORT;
 }
 
 #ifndef CONFIG_MCL
