@@ -848,7 +848,7 @@ static int32_t target_if_vdev_mgr_multi_vdev_restart_get_ref(
 	struct wlan_objmgr_psoc *psoc;
 	struct wlan_objmgr_vdev *tvdev;
 	struct wlan_lmac_if_mlme_rx_ops *rx_ops;
-	int32_t vdev_idx = -1;
+	int32_t vdev_idx;
 	int32_t last_vdev_idx = -1;
 	struct vdev_response_timer *vdev_rsp;
 
@@ -856,7 +856,7 @@ static int32_t target_if_vdev_mgr_multi_vdev_restart_get_ref(
 	rx_ops = target_if_vdev_mgr_get_rx_ops(psoc);
 
 	if (!rx_ops || !rx_ops->psoc_get_vdev_response_timer_info) {
-		mlme_err("VDEV_%d: No Rx Ops", vdev_idx);
+		mlme_err("PDEV: No Rx Ops");
 		return last_vdev_idx;
 	}
 
@@ -875,6 +875,9 @@ static int32_t target_if_vdev_mgr_multi_vdev_restart_get_ref(
 						psoc,
 						wlan_vdev_get_id(tvdev));
 		if (!vdev_rsp) {
+			wlan_objmgr_vdev_release_ref(tvdev,
+						     WLAN_VDEV_TARGET_IF_ID);
+			vdev_list[vdev_idx] = NULL;
 			mlme_err("VDEV_%d PSOC_%d No vdev rsp timer",
 				 vdev_idx, wlan_psoc_get_id(psoc));
 			return last_vdev_idx;
@@ -899,7 +902,7 @@ static void target_if_vdev_mgr_multi_vdev_restart_rel_ref(
 	struct wlan_objmgr_psoc *psoc;
 	struct wlan_objmgr_vdev *tvdev;
 	struct wlan_lmac_if_mlme_rx_ops *rx_ops;
-	uint32_t vdev_idx;
+	int32_t vdev_idx;
 	struct vdev_response_timer *vdev_rsp;
 
 	psoc = wlan_pdev_get_psoc(pdev);
@@ -957,6 +960,12 @@ static QDF_STATUS target_if_vdev_mgr_multiple_vdev_restart_req_cmd(
 	wmi_handle = get_wmi_unified_hdl_from_pdev(pdev);
 	if (!wmi_handle) {
 		mlme_err("PDEV WMI Handle is NULL!");
+		return QDF_STATUS_E_INVAL;
+	}
+
+	if (param->num_vdevs > WLAN_UMAC_PDEV_MAX_VDEVS) {
+		mlme_err("param->num_vdevs: %u exceed the limit",
+			 param->num_vdevs);
 		return QDF_STATUS_E_INVAL;
 	}
 
