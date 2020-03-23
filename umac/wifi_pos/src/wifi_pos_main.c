@@ -770,6 +770,11 @@ static void wifi_pos_pdev_iterator(struct wlan_objmgr_psoc *psoc,
 	struct wifi_pos_psoc_priv_obj *wifi_pos_obj =
 					wifi_pos_get_psoc_priv_obj(psoc);
 
+	if (!wifi_pos_obj) {
+		wifi_pos_err("wifi_pos_obj is null");
+		return;
+	}
+
 	size = QDF_MAX(OEM_CAP_MAX_NUM_CHANNELS, NUM_CHANNELS);
 	ch_list = qdf_mem_malloc(size * sizeof(*ch_list));
 	if (!ch_list)
