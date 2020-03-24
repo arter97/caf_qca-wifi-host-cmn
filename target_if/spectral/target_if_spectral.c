@@ -4257,6 +4257,11 @@ target_if_get_spectral_capinfo(struct wlan_objmgr_pdev *pdev,
 	struct target_if_spectral *spectral = NULL;
 
 	spectral = get_target_if_spectral_handle_from_pdev(pdev);
+	if (!spectral) {
+		spectral_err("SPECTRAL : Module doesn't exist");
+		return QDF_STATUS_E_FAILURE;
+	}
+
 	qdf_mem_copy(scaps, &spectral->capability,
 		     sizeof(struct spectral_caps));
 
@@ -4279,6 +4284,11 @@ target_if_get_spectral_diagstats(struct wlan_objmgr_pdev *pdev,
 	struct target_if_spectral *spectral = NULL;
 
 	spectral = get_target_if_spectral_handle_from_pdev(pdev);
+	if (!spectral) {
+		spectral_err("SPECTRAL : Module doesn't exist");
+		return QDF_STATUS_E_FAILURE;
+	}
+
 	qdf_mem_copy(stats, &spectral->diag_stats,
 		     sizeof(struct spectral_diag_stats));
 
@@ -4387,6 +4397,11 @@ target_if_process_spectral_report(struct wlan_objmgr_pdev *pdev,
 	struct target_if_spectral_ops *p_sops = NULL;
 
 	spectral = get_target_if_spectral_handle_from_pdev(pdev);
+	if (!spectral) {
+		spectral_err("SPECTRAL : Module doesn't exist");
+		return -EPERM;
+	}
+
 	p_sops = GET_TARGET_IF_SPECTRAL_OPS(spectral);
 
 	if (!p_sops) {
