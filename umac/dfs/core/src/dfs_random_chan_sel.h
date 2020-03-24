@@ -93,9 +93,6 @@
 /* Start channel and center channel freq diff in 80Mhz */
 #define DFS_80MHZ_START_CENTER_CH_FREQ_DIFF     30
 
-/* Max number of channels */
-#define DFS_MAX_NUM_CHAN                        128
-
 /* Bitmap mask for 80MHz */
 #define DFS_80MHZ_MASK                          0x0F
 
