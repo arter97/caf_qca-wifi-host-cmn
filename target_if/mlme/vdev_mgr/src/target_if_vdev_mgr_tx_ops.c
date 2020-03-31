@@ -91,6 +91,12 @@ target_if_vdev_mgr_rsp_timer_stop(struct wlan_objmgr_psoc *psoc,
 		 */
 		vdev_rsp->timer_status = QDF_STATUS_SUCCESS;
 		/*
+		 * Reset the timer_status to clear any error state. As this
+		 * variable is persistent, any leftover error status can cause
+		 * undesirable effects.
+		 */
+		vdev_rsp->timer_status = QDF_STATUS_SUCCESS;
+		/*
 		 * Releasing reference taken at the time of
 		 * starting response timer
 		 */
