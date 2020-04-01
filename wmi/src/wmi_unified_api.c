@@ -7549,3 +7549,18 @@ QDF_STATUS wmi_unified_send_mws_coex_req_cmd(struct wmi_unified *wmi_handle,
 
 	return QDF_STATUS_E_FAILURE;
 }
+
+#ifdef WLAN_FEATURE_PKT_CAPTURE
+QDF_STATUS
+wmi_unified_extract_vdev_mgmt_offload_event(
+				wmi_unified_t wmi, void *evt_buf,
+				struct mgmt_offload_event_params *params)
+{
+	if (wmi->ops->extract_vdev_mgmt_offload_event)
+		return wmi->ops->extract_vdev_mgmt_offload_event(wmi, evt_buf,
+								 params);
+
+	return QDF_STATUS_E_FAILURE;
+}
+#endif /* WLAN_FEATURE_PKT_CAPTURE */
+
