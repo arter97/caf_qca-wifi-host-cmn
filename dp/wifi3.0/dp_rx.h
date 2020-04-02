@@ -25,13 +25,15 @@
 #include "dp_internal.h"
 
 #ifdef RXDMA_OPTIMIZATION
-#ifdef NO_RX_PKT_HDR_TLV
-#define RX_BUFFER_ALIGNMENT     0
-#else
-#define RX_BUFFER_ALIGNMENT     128
-#endif /* NO_RX_PKT_HDR_TLV */
+#ifndef RX_DATA_BUFFER_ALIGNMENT
+#define RX_DATA_BUFFER_ALIGNMENT        128
+#endif
+#ifndef RX_MONITOR_BUFFER_ALIGNMENT
+#define RX_MONITOR_BUFFER_ALIGNMENT     128
+#endif
 #else /* RXDMA_OPTIMIZATION */
-#define RX_BUFFER_ALIGNMENT     4
+#define RX_DATA_BUFFER_ALIGNMENT        4
+#define RX_MONITOR_BUFFER_ALIGNMENT     4
 #endif /* RXDMA_OPTIMIZATION */
 
 #ifdef QCA_HOST2FW_RXBUF_RING
@@ -613,14 +615,14 @@ void dp_2k_jump_handle(struct dp_soc *soc, qdf_nbuf_t nbuf, uint8_t *rx_tlv_hdr,
 /*for qcn9000 emulation the pcie is complete phy and no address restrictions*/
 #if !defined(BUILD_X86) || defined(QCA_WIFI_QCN9000)
 static inline int check_x86_paddr(struct dp_soc *dp_soc, qdf_nbuf_t *rx_netbuf,
-		qdf_dma_addr_t *paddr, struct dp_pdev *pdev)
+		qdf_dma_addr_t *paddr, struct rx_desc_pool *rx_desc_pool)
 {
 	return QDF_STATUS_SUCCESS;
 }
 #else
 #define MAX_RETRY 100
 static inline int check_x86_paddr(struct dp_soc *dp_soc, qdf_nbuf_t *rx_netbuf,
-		qdf_dma_addr_t *paddr, struct dp_pdev *pdev)
+		qdf_dma_addr_t *paddr, struct rx_desc_pool *rx_desc_pool)
 {
 	uint32_t nbuf_retry = 0;
 	int32_t ret;
@@ -651,10 +653,10 @@ static inline int check_x86_paddr(struct dp_soc *dp_soc, qdf_nbuf_t *rx_netbuf,
 			}
 
 			*rx_netbuf = qdf_nbuf_alloc(dp_soc->osdev,
-							RX_BUFFER_SIZE,
-							RX_BUFFER_RESERVATION,
-							RX_BUFFER_ALIGNMENT,
-							FALSE);
+						    rx_desc_pool->buf_size,
+						    RX_BUFFER_RESERVATION,
+						    rx_desc_pool->buf_alignment,
+						    FALSE);
 
 			if (qdf_unlikely(!(*rx_netbuf)))
 				return QDF_STATUS_E_FAILURE;
@@ -686,8 +688,9 @@ static inline int check_x86_paddr(struct dp_soc *dp_soc, qdf_nbuf_t *rx_netbuf,
  * dp_rx_cookie_2_link_desc_va() - Converts cookie to a virtual address of
  *				   the MSDU Link Descriptor
  * @soc: core txrx main context
- * @buf_info: buf_info include cookie that used to lookup virtual address of
- * link descriptor Normally this is just an index into a per SOC array.
+ * @buf_info: buf_info includes cookie that is used to lookup
+ * virtual address of link descriptor after deriving the page id
+ * and the offset or index of the desc on the associatde page.
  *
  * This is the VA of the link descriptor, that HAL layer later uses to
  * retrieve the list of MSDU's for a given MPDU.
@@ -699,16 +702,16 @@ void *dp_rx_cookie_2_link_desc_va(struct dp_soc *soc,
 				  struct hal_buf_info *buf_info)
 {
 	void *link_desc_va;
-	uint32_t bank_id = LINK_DESC_COOKIE_BANK_ID(buf_info->sw_cookie);
+	struct qdf_mem_multi_page_t *pages;
+	uint16_t page_id = LINK_DESC_COOKIE_PAGE_ID(buf_info->sw_cookie);
 
-
-	/* TODO */
-	/* Add sanity for  cookie */
-
-	link_desc_va = soc->link_desc_banks[bank_id].base_vaddr +
-		(buf_info->paddr -
-			soc->link_desc_banks[bank_id].base_paddr);
-
+	pages = &soc->link_desc_pages;
+	if (!pages)
+		return NULL;
+	if (qdf_unlikely(page_id >= pages->num_pages))
+		return NULL;
+	link_desc_va = pages->dma_pages[page_id].page_v_addr_start +
+		(buf_info->paddr - pages->dma_pages[page_id].page_p_addr);
 	return link_desc_va;
 }
 
@@ -784,7 +787,8 @@ static inline void
 dp_rx_wds_srcport_learn(struct dp_soc *soc,
 			uint8_t *rx_tlv_hdr,
 			struct dp_peer *ta_peer,
-			qdf_nbuf_t nbuf)
+			qdf_nbuf_t nbuf,
+			struct hal_rx_msdu_metadata msdu_metadata)
 {
 }
 #endif
@@ -1100,8 +1104,29 @@ bool dp_rx_multipass_process(struct dp_peer *peer, qdf_nbuf_t nbuf,
 
 #ifndef WLAN_RX_PKT_CAPTURE_ENH
 static inline
-void dp_peer_set_rx_capture_enabled(struct dp_peer *peer_handle, bool value)
+QDF_STATUS dp_peer_set_rx_capture_enabled(struct dp_pdev *pdev,
+					  struct dp_peer *peer_handle,
+					  bool value, uint8_t *mac_addr)
 {
+	return QDF_STATUS_SUCCESS;
 }
 #endif
+
+/**
+ * dp_rx_deliver_to_stack() - deliver pkts to network stack
+ * Caller to hold peer refcount and check for valid peer
+ * @soc: soc
+ * @vdev: vdev
+ * @peer: peer
+ * @nbuf_head: skb list head
+ * @nbuf_tail: skb list tail
+ *
+ * Return: None
+ */
+void dp_rx_deliver_to_stack(struct dp_soc *soc,
+			    struct dp_vdev *vdev,
+			    struct dp_peer *peer,
+			    qdf_nbuf_t nbuf_head,
+			    qdf_nbuf_t nbuf_tail);
+
 #endif /* _DP_RX_H */

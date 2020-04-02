@@ -110,6 +110,7 @@
 					emulation purpose */
 #define QCA8074V2_DEVICE_ID (0xfffe) /* Todo: replace this with actual number */
 #define QCA6018_DEVICE_ID (0xfffd) /* Todo: replace this with actual number */
+#define QCA5018_DEVICE_ID (0xfffc) /* Todo: replace this with actual number */
 /* Genoa */
 #define QCN7605_DEVICE_ID  (0x1102) /* Genoa PCIe device ID*/
 #define QCN7605_COMPOSITE  (0x9901)
@@ -176,6 +177,7 @@ struct hif_softc {
 	bool hif_init_done;
 	bool request_irq_done;
 	bool ext_grp_irq_configured;
+	uint8_t ce_latency_stats;
 	/* Packet statistics */
 	struct hif_ce_stats pkt_stats;
 	enum hif_target_status target_status;
@@ -233,7 +235,6 @@ struct hif_softc {
 #if defined(HIF_CONFIG_SLUB_DEBUG_ON) || defined(HIF_CE_DEBUG_DATA_BUF)
 	struct ce_desc_hist hif_ce_desc_hist;
 #endif /*defined(HIF_CONFIG_SLUB_DEBUG_ON) || defined(HIF_CE_DEBUG_DATA_BUF)*/
-
 #ifdef IPA_OFFLOAD
 	qdf_shared_mem_t *ipa_ce_ring;
 #endif
@@ -324,6 +325,15 @@ bool hif_is_driver_unloading(struct hif_softc *scn);
 bool hif_is_load_or_unload_in_progress(struct hif_softc *scn);
 bool hif_is_recovery_in_progress(struct hif_softc *scn);
 bool hif_is_target_ready(struct hif_softc *scn);
+
+/**
+ * hif_get_bandwidth_level() - API to get the current bandwidth level
+ * @scn: HIF Context
+ *
+ * Return: PLD bandwidth level
+ */
+int hif_get_bandwidth_level(struct hif_opaque_softc *hif_handle);
+
 void hif_wlan_disable(struct hif_softc *scn);
 int hif_target_sleep_state_adjust(struct hif_softc *scn,
 					 bool sleep_ok,

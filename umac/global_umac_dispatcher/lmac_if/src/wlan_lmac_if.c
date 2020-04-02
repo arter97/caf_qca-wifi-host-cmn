@@ -108,6 +108,27 @@ wlan_lmac_if_cp_stats_rx_ops_register(struct wlan_lmac_if_rx_ops *rx_ops)
 }
 #endif /* QCA_SUPPORT_CP_STATS */
 
+#ifdef DCS_INTERFERENCE_DETECTION
+/**
+ * wlan_target_if_dcs_rx_ops_register() - API to register dcs Rx Ops
+ * @rx_ops:	pointer to lmac rx ops
+ *
+ * This API will be used to register function pointers for FW events
+ *
+ * Return: void
+ */
+static void
+wlan_target_if_dcs_rx_ops_register(struct wlan_lmac_if_rx_ops *rx_ops)
+{
+	rx_ops->dcs_rx_ops.process_dcs_event = tgt_dcs_process_event;
+}
+#else
+static void
+wlan_target_if_dcs_rx_ops_register(struct wlan_lmac_if_rx_ops *rx_ops)
+{
+}
+#endif /* DCS_INTERFERENCE_DETECTION */
+
 #ifdef WLAN_ATF_ENABLE
 /**
  * wlan_lmac_if_atf_rx_ops_register() - Function to register ATF RX ops.
@@ -183,6 +204,7 @@ wlan_lmac_if_fd_rx_ops_register(struct wlan_lmac_if_rx_ops *rx_ops)
 	fd_rx_ops->fd_get_valid_fd_period = tgt_fd_get_valid_fd_period;
 	fd_rx_ops->fd_swfda_handler = tgt_fd_swfda_handler;
 	fd_rx_ops->fd_offload = tgt_fd_offload;
+	fd_rx_ops->fd_tmpl_update = tgt_fd_tmpl_update;
 }
 #else
 static void
@@ -652,6 +674,8 @@ wlan_lmac_if_umac_rx_ops_register(struct wlan_lmac_if_rx_ops *rx_ops)
 	wlan_lmac_if_atf_rx_ops_register(rx_ops);
 
 	wlan_lmac_if_cp_stats_rx_ops_register(rx_ops);
+
+	wlan_target_if_dcs_rx_ops_register(rx_ops);
 
 	wlan_lmac_if_sa_api_rx_ops_register(rx_ops);
 

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016-2019 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2016-2020 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -15,6 +15,10 @@
  * TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
  * PERFORMANCE OF THIS SOFTWARE.
  */
+
+#include "sw_monitor_ring.h"
+#include "hal_rx.h"
+#include "hal_api_mon.h"
 
 #define HAL_RX_MSDU0_BUFFER_ADDR_LSB(link_desc_va)      \
 	((uint8_t *)(link_desc_va) +			\
@@ -37,6 +41,9 @@
 
 #define HAL_RX_GET_TO_DS_FLAG(rx_mpdu_start)	\
 	HAL_RX_GET(rx_mpdu_start, RX_MPDU_INFO_11, TO_DS)
+
+#define HAL_RX_GET_MAC_ADDR1_VALID(rx_mpdu_start) \
+	HAL_RX_GET(rx_mpdu_start, RX_MPDU_INFO_11, MAC_ADDR_AD1_VALID)
 
 #define HAL_RX_GET_MAC_ADDR2_VALID(rx_mpdu_start) \
 	HAL_RX_GET(rx_mpdu_start, RX_MPDU_INFO_11, MAC_ADDR_AD2_VALID)

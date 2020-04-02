@@ -39,7 +39,8 @@
 #include "qdf_status.h"
 #include "hif_debug.h"
 #include "mp_dev.h"
-#if defined(QCA_WIFI_QCA8074) || defined(QCA_WIFI_QCA6018)
+#if defined(QCA_WIFI_QCA8074) || defined(QCA_WIFI_QCA6018) || \
+	defined(QCA_WIFI_QCA5018)
 #include "hal_api.h"
 #endif
 #include "hif_napi.h"
@@ -525,9 +526,9 @@ void hif_close(struct hif_opaque_softc *hif_ctx)
 }
 
 #if (defined(QCA_WIFI_QCA8074) || defined(QCA_WIFI_QCA6018) || \
-     defined(QCA_WIFI_QCA6290) || defined(QCA_WIFI_QCA6390) || \
-     defined(QCA_WIFI_QCN9000) || defined(QCA_WIFI_QCA6490) || \
-     defined(QCA_WIFI_QCA6750))
+	defined(QCA_WIFI_QCA6290) || defined(QCA_WIFI_QCA6390) || \
+	defined(QCA_WIFI_QCN9000) || defined(QCA_WIFI_QCA6490) || \
+	defined(QCA_WIFI_QCA6750) || defined(QCA_WIFI_QCA5018))
 static QDF_STATUS hif_hal_attach(struct hif_softc *scn)
 {
 	if (ce_srng_based(scn)) {
@@ -653,10 +654,24 @@ void hif_disable(struct hif_opaque_softc *hif_ctx, enum hif_disable_type type)
 	HIF_DBG("%s: X", __func__);
 }
 
+#ifdef CE_TASKLET_DEBUG_ENABLE
+void hif_enable_ce_latency_stats(struct hif_opaque_softc *hif_ctx, uint8_t val)
+{
+	struct hif_softc *scn = HIF_GET_SOFTC(hif_ctx);
+
+	if (!scn)
+		return;
+
+	scn->ce_latency_stats = val;
+}
+#endif
+
 void hif_display_stats(struct hif_opaque_softc *hif_ctx)
 {
 	hif_display_bus_stats(hif_ctx);
 }
+
+qdf_export_symbol(hif_display_stats);
 
 void hif_clear_stats(struct hif_opaque_softc *hif_ctx)
 {
@@ -907,6 +922,12 @@ int hif_get_device_type(uint32_t device_id,
 		*hif_type = HIF_TYPE_QCA6018;
 		*target_type = TARGET_TYPE_QCA6018;
 		HIF_INFO(" *********** QCA6018 *************\n");
+		break;
+
+	case QCA5018_DEVICE_ID:
+		*hif_type = HIF_TYPE_QCA5018;
+		*target_type = TARGET_TYPE_QCA5018;
+		HIF_INFO(" *********** qca5018 *************\n");
 		break;
 
 	default:
@@ -1204,6 +1225,19 @@ bool hif_is_target_ready(struct hif_softc *scn)
 	return true;
 }
 qdf_export_symbol(hif_is_target_ready);
+
+int hif_get_bandwidth_level(struct hif_opaque_softc *hif_handle)
+{
+	struct hif_softc *scn = HIF_GET_SOFTC(hif_handle);
+	struct hif_driver_state_callbacks *cbk = hif_get_callbacks_handle(scn);
+
+	if (cbk && cbk->get_bandwidth_level)
+		return cbk->get_bandwidth_level(cbk->context);
+
+	return 0;
+}
+
+qdf_export_symbol(hif_get_bandwidth_level);
 
 /**
  * hif_batch_send() - API to access hif specific function

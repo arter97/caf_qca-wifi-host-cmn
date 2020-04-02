@@ -153,6 +153,20 @@ struct dp_tx_msdu_info_s {
 	uint8_t is_tx_sniffer;
 };
 
+/**
+ * dp_tx_deinit_pair_by_index() - Deinit TX rings based on index
+ * @soc: core txrx context
+ * @index: index of ring to deinit
+ *
+ * Deinit 1 TCL and 1 WBM2SW release ring on as needed basis using
+ * index of the respective TCL/WBM2SW release in soc structure.
+ * For example, if the index is 2 then &soc->tcl_data_ring[2]
+ * and &soc->tx_comp_ring[2] will be deinitialized.
+ *
+ * Return: none
+ */
+void dp_tx_deinit_pair_by_index(struct dp_soc *soc, int index);
+
 QDF_STATUS dp_tx_vdev_attach(struct dp_vdev *vdev);
 QDF_STATUS dp_tx_vdev_detach(struct dp_vdev *vdev);
 void dp_tx_vdev_update_search_flags(struct dp_vdev *vdev);
@@ -357,8 +371,11 @@ static inline void dp_tx_comp_process_exception(struct dp_tx_desc_s *tx_desc)
 
 #ifndef WLAN_TX_PKT_CAPTURE_ENH
 static inline
-void dp_peer_set_tx_capture_enabled(struct dp_peer *peer_handle, bool value)
+QDF_STATUS dp_peer_set_tx_capture_enabled(struct dp_pdev *pdev,
+					  struct dp_peer *peer_handle,
+					  uint8_t value, uint8_t *peer_mac)
 {
+	return QDF_STATUS_SUCCESS;
 }
 #endif
 #endif

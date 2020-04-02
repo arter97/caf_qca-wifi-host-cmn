@@ -66,6 +66,7 @@ typedef void *hif_handle_t;
 #define HIF_TYPE_QCN9000 21
 #define HIF_TYPE_QCA6490 22
 #define HIF_TYPE_QCA6750 23
+#define HIF_TYPE_QCA5018 24
 
 #ifdef IPA_OFFLOAD
 #define DMA_COHERENT_MASK_IPA_VER_3_AND_ABOVE   37
@@ -537,7 +538,7 @@ struct htc_callbacks {
  * @is_recovery_in_progress: Query if driver state is recovery in progress
  * @is_load_unload_in_progress: Query if driver state Load/Unload in Progress
  * @is_driver_unloading: Query if driver is unloading.
- *
+ * @get_bandwidth_level: Query current bandwidth level for the driver
  * This Structure provides callback pointer for HIF to query hdd for driver
  * states.
  */
@@ -548,6 +549,7 @@ struct hif_driver_state_callbacks {
 	bool (*is_load_unload_in_progress)(void *context);
 	bool (*is_driver_unloading)(void *context);
 	bool (*is_target_ready)(void *context);
+	int (*get_bandwidth_level)(void *context);
 };
 
 /* This API detaches the HTC layer from the HIF device */
@@ -860,6 +862,10 @@ QDF_STATUS hif_enable(struct hif_opaque_softc *hif_ctx, struct device *dev,
 		      enum qdf_bus_type bus_type,
 		      enum hif_enable_type type);
 void hif_disable(struct hif_opaque_softc *hif_ctx, enum hif_disable_type type);
+#ifdef CE_TASKLET_DEBUG_ENABLE
+void hif_enable_ce_latency_stats(struct hif_opaque_softc *hif_ctx,
+				 uint8_t value);
+#endif
 void hif_display_stats(struct hif_opaque_softc *hif_ctx);
 void hif_clear_stats(struct hif_opaque_softc *hif_ctx);
 #ifdef FEATURE_RUNTIME_PM
@@ -871,6 +877,7 @@ int hif_pm_runtime_request_resume(struct hif_opaque_softc *hif_ctx);
 int hif_pm_runtime_get(struct hif_opaque_softc *hif_ctx);
 void hif_pm_runtime_get_noresume(struct hif_opaque_softc *hif_ctx);
 int hif_pm_runtime_put(struct hif_opaque_softc *hif_ctx);
+int hif_pm_runtime_put_noidle(struct hif_opaque_softc *hif_ctx);
 void hif_pm_runtime_mark_last_busy(struct hif_opaque_softc *hif_ctx);
 int hif_runtime_lock_init(qdf_runtime_lock_t *lock, const char *name);
 void hif_runtime_lock_deinit(struct hif_opaque_softc *hif_ctx,
@@ -888,6 +895,7 @@ void hif_pm_runtime_set_monitor_wake_intr(struct hif_opaque_softc *hif_ctx,
 void hif_pm_runtime_mark_dp_rx_busy(struct hif_opaque_softc *hif_ctx);
 int hif_pm_runtime_is_dp_rx_busy(struct hif_opaque_softc *hif_ctx);
 qdf_time_t hif_pm_runtime_get_dp_rx_busy_mark(struct hif_opaque_softc *hif_ctx);
+int hif_pm_runtime_sync_resume(struct hif_opaque_softc *hif_ctx);
 #else
 struct hif_pm_runtime_lock {
 	const char *name;
@@ -907,6 +915,8 @@ static inline void hif_pm_runtime_get_noresume(struct hif_opaque_softc *hif_ctx)
 static inline int hif_pm_runtime_get(struct hif_opaque_softc *hif_ctx)
 { return 0; }
 static inline int hif_pm_runtime_put(struct hif_opaque_softc *hif_ctx)
+{ return 0; }
+static inline int hif_pm_runtime_put_noidle(struct hif_opaque_softc *hif_ctx)
 { return 0; }
 static inline void
 hif_pm_runtime_mark_last_busy(struct hif_opaque_softc *hif_ctx) {};
@@ -942,6 +952,8 @@ hif_pm_runtime_is_dp_rx_busy(struct hif_opaque_softc *hif_ctx)
 { return 0; }
 static inline qdf_time_t
 hif_pm_runtime_get_dp_rx_busy_mark(struct hif_opaque_softc *hif_ctx)
+{ return 0; }
+static inline int hif_pm_runtime_sync_resume(struct hif_opaque_softc *hif_ctx)
 { return 0; }
 #endif
 
@@ -1190,6 +1202,37 @@ int hif_force_wake_release(struct hif_opaque_softc *handle)
 	return 0;
 }
 #endif /* FORCE_WAKE */
+
+#ifdef FEATURE_HAL_DELAYED_REG_WRITE
+/**
+ * hif_prevent_link_low_power_states() - Prevent from going to low power states
+ * @hif - HIF opaque context
+ *
+ * Return: 0 on success. Error code on failure.
+ */
+int hif_prevent_link_low_power_states(struct hif_opaque_softc *hif);
+
+/**
+ * hif_allow_link_low_power_states() - Allow link to go to low power states
+ * @hif - HIF opaque context
+ *
+ * Return: None
+ */
+void hif_allow_link_low_power_states(struct hif_opaque_softc *hif);
+
+#else
+
+static inline
+int hif_prevent_link_low_power_states(struct hif_opaque_softc *hif)
+{
+	return 0;
+}
+
+static inline
+void hif_allow_link_low_power_states(struct hif_opaque_softc *hif)
+{
+}
+#endif
 
 void *hif_get_dev_ba(struct hif_opaque_softc *hif_handle);
 

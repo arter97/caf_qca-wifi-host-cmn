@@ -4041,6 +4041,118 @@ void dp_htt_stats_copy_tag(struct dp_pdev *pdev, uint8_t tag_type, uint32_t *tag
 		qdf_mem_copy(dest_ptr, tag_buf, size);
 }
 
+#ifdef VDEV_PEER_PROTOCOL_COUNT
+#ifdef VDEV_PEER_PROTOCOL_COUNT_TESTING
+static QDF_STATUS dp_peer_stats_update_protocol_test_cnt(struct dp_vdev *vdev,
+							 bool is_egress,
+							 bool is_rx)
+{
+	int mask;
+
+	if (is_egress)
+		if (is_rx)
+			mask = VDEV_PEER_PROTOCOL_RX_EGRESS_MASK;
+		else
+			mask = VDEV_PEER_PROTOCOL_TX_EGRESS_MASK;
+	else
+		if (is_rx)
+			mask = VDEV_PEER_PROTOCOL_RX_INGRESS_MASK;
+		else
+			mask = VDEV_PEER_PROTOCOL_TX_INGRESS_MASK;
+
+	if (qdf_unlikely(vdev->peer_protocol_count_dropmask & mask)) {
+		dp_info("drop mask set %x", vdev->peer_protocol_count_dropmask);
+		return QDF_STATUS_SUCCESS;
+	}
+	return QDF_STATUS_E_FAILURE;
+}
+
+#else
+static QDF_STATUS dp_peer_stats_update_protocol_test_cnt(struct dp_vdev *vdev,
+							 bool is_egress,
+							 bool is_rx)
+{
+	return QDF_STATUS_E_FAILURE;
+}
+#endif
+
+void dp_vdev_peer_stats_update_protocol_cnt(struct dp_vdev *vdev,
+					    qdf_nbuf_t nbuf,
+					    struct dp_peer *peer,
+					    bool is_egress,
+					    bool is_rx)
+{
+	struct cdp_peer_stats *peer_stats;
+	struct protocol_trace_count *protocol_trace_cnt;
+	enum cdp_protocol_trace prot;
+	struct dp_soc *soc;
+	struct ether_header *eh;
+	char *mac;
+	bool new_peer_ref = false;
+
+	if (qdf_likely(!vdev->peer_protocol_count_track))
+		return;
+	if (qdf_unlikely(dp_peer_stats_update_protocol_test_cnt(vdev,
+								is_egress,
+								is_rx) ==
+					       QDF_STATUS_SUCCESS))
+		return;
+
+	soc = vdev->pdev->soc;
+	eh = (struct ether_header *)qdf_nbuf_data(nbuf);
+	if (is_rx)
+		mac = eh->ether_shost;
+	else
+		mac = eh->ether_dhost;
+
+	if (!peer) {
+		peer = dp_peer_find_hash_find(soc, mac, 0, vdev->vdev_id);
+		new_peer_ref = true;
+		if (!peer)
+			return;
+	}
+	peer_stats = &peer->stats;
+
+	if (qdf_nbuf_is_icmp_pkt(nbuf) == true)
+		prot = CDP_TRACE_ICMP;
+	else if (qdf_nbuf_is_ipv4_arp_pkt(nbuf) == true)
+		prot = CDP_TRACE_ARP;
+	else if (qdf_nbuf_is_ipv4_eapol_pkt(nbuf) == true)
+		prot = CDP_TRACE_EAP;
+	else
+		goto dp_vdev_peer_stats_update_protocol_cnt_free_peer;
+
+	if (is_rx)
+		protocol_trace_cnt = peer_stats->rx.protocol_trace_cnt;
+	else
+		protocol_trace_cnt = peer_stats->tx.protocol_trace_cnt;
+
+	if (is_egress)
+		protocol_trace_cnt[prot].egress_cnt++;
+	else
+		protocol_trace_cnt[prot].ingress_cnt++;
+dp_vdev_peer_stats_update_protocol_cnt_free_peer:
+	if (new_peer_ref)
+		dp_peer_unref_delete(peer);
+}
+
+void dp_peer_stats_update_protocol_cnt(struct cdp_soc_t *soc,
+				       int8_t vdev_id,
+				       qdf_nbuf_t nbuf,
+				       bool is_egress,
+				       bool is_rx)
+{
+	struct dp_vdev *vdev;
+
+	vdev = dp_get_vdev_from_soc_vdev_id_wifi3((struct dp_soc *)soc,
+						  vdev_id);
+	if (qdf_likely(!vdev->peer_protocol_count_track))
+		return;
+	dp_vdev_peer_stats_update_protocol_cnt(vdev, nbuf, NULL, is_egress,
+					       is_rx);
+}
+#endif
+
 QDF_STATUS dp_peer_stats_notify(struct dp_pdev *dp_pdev, struct dp_peer *peer)
 {
 	struct cdp_interface_peer_stats peer_stats_intf;
@@ -4577,8 +4689,8 @@ void dp_print_soc_cfg_params(struct dp_soc *soc)
 		       soc_cfg_ctx->rx_defrag_min_timeout);
 	DP_PRINT_STATS("WBM release ring: %u ",
 		       soc_cfg_ctx->wbm_release_ring);
-	DP_PRINT_STATS("TCL CMD ring: %u ",
-		       soc_cfg_ctx->tcl_cmd_ring);
+	DP_PRINT_STATS("TCL CMD_CREDIT ring: %u ",
+		       soc_cfg_ctx->tcl_cmd_credit_ring);
 	DP_PRINT_STATS("TCL Status ring: %u ",
 		       soc_cfg_ctx->tcl_status_ring);
 	DP_PRINT_STATS("REO Reinject ring: %u ",
@@ -4791,8 +4903,8 @@ dp_print_ring_stats(struct dp_pdev *pdev)
 				    &pdev->soc->rx_rel_ring,
 				    WBM2SW_RELEASE);
 	dp_print_ring_stat_from_hal(pdev->soc,
-				    &pdev->soc->tcl_cmd_ring,
-				    TCL_CMD);
+				    &pdev->soc->tcl_cmd_credit_ring,
+				    TCL_CMD_CREDIT);
 	dp_print_ring_stat_from_hal(pdev->soc,
 				    &pdev->soc->tcl_status_ring,
 				    TCL_STATUS);
@@ -5419,6 +5531,8 @@ void dp_txrx_path_stats(struct dp_soc *soc)
 			       pdev->soc->stats.rx.err.defrag_peer_uninit);
 		DP_PRINT_STATS("pkts delivered no peer %u",
 			       pdev->soc->stats.rx.err.pkt_delivered_no_peer);
+		DP_PRINT_STATS("RX invalid cookie: %d",
+			       soc->stats.rx.err.invalid_cookie);
 
 		DP_PRINT_STATS("Reo Statistics");
 		DP_PRINT_STATS("near_full: %u ", soc->stats.rx.near_full);
@@ -5682,8 +5796,6 @@ dp_print_pdev_rx_stats(struct dp_pdev *pdev)
 	DP_PRINT_STATS("Replenished:");
 	DP_PRINT_STATS("	Packets = %d",
 		       pdev->stats.replenish.pkts.num);
-	DP_PRINT_STATS("	Bytes = %llu",
-		       pdev->stats.replenish.pkts.bytes);
 	DP_PRINT_STATS("	Buffers Added To Freelist = %d",
 		       pdev->stats.buf_freelist);
 	DP_PRINT_STATS("	Low threshold intr = %d",
@@ -5765,6 +5877,12 @@ dp_print_pdev_rx_mon_stats(struct dp_pdev *pdev)
 		       rx_mon_stats->dup_mon_linkdesc_cnt);
 	DP_PRINT_STATS("dup_mon_buf_cnt = %d",
 		       rx_mon_stats->dup_mon_buf_cnt);
+	DP_PRINT_STATS("ppdu_id_mismatch = %u",
+		       rx_mon_stats->ppdu_id_mismatch);
+	DP_PRINT_STATS("mon_rx_buf_reaped = %u",
+		       rx_mon_stats->mon_rx_bufs_reaped_dest);
+	DP_PRINT_STATS("mon_rx_buf_replenished = %u",
+		       rx_mon_stats->mon_rx_bufs_replenished_dest);
 	stat_ring_ppdu_ids =
 		(uint32_t *)qdf_mem_malloc(sizeof(uint32_t) * MAX_PPDU_ID_HIST);
 	dest_ring_ppdu_ids =
@@ -5922,6 +6040,9 @@ dp_print_soc_rx_stats(struct dp_soc *soc)
 
 	DP_PRINT_STATS("RX scatter msdu: %d",
 		       soc->stats.rx.err.scatter_msdu);
+
+	DP_PRINT_STATS("RX invalid cookie: %d",
+		       soc->stats.rx.err.invalid_cookie);
 
 	DP_PRINT_STATS("RX wait completed msdu break: %d",
 		       soc->stats.rx.msdu_scatter_wait_break);

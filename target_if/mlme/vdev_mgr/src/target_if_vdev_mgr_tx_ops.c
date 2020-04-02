@@ -70,13 +70,20 @@ target_if_vdev_mgr_rsp_timer_stop(struct wlan_objmgr_psoc *psoc,
 		 * This is triggered from timer expiry case only for
 		 * which timer stop is not required
 		 */
-		if (vdev_rsp->timer_status != QDF_STATUS_E_TIMEOUT)
-			qdf_timer_stop(&vdev_rsp->rsp_timer);
-
-		vdev_rsp->timer_status = QDF_STATUS_SUCCESS;
-		if (clear_bit == DELETE_RESPONSE_BIT)
-			txops->psoc_vdev_rsp_timer_deinit(psoc,
-							  vdev_rsp->vdev_id);
+		if (vdev_rsp->timer_status == QDF_STATUS_E_TIMEOUT) {
+			if (clear_bit == DELETE_RESPONSE_BIT) {
+				qdf_atomic_set(&vdev_rsp->rsp_timer_inuse, 0);
+				vdev_rsp->psoc = NULL;
+			}
+		} else {
+			vdev_rsp->timer_status = QDF_STATUS_SUCCESS;
+			if (clear_bit == DELETE_RESPONSE_BIT) {
+				txops->psoc_vdev_rsp_timer_deinit(psoc,
+								  vdev_rsp->vdev_id);
+			} else {
+				qdf_timer_stop(&vdev_rsp->rsp_timer);
+			}
+		}
 
 		/*
 		 * Releasing reference taken at the time of
@@ -643,9 +650,7 @@ static QDF_STATUS target_if_vdev_mgr_up_send(
 {
 	QDF_STATUS status;
 	struct wmi_unified *wmi_handle;
-	struct vdev_set_params sparam = {0};
 	uint8_t bssid[QDF_MAC_ADDR_SIZE];
-	uint8_t vdev_id;
 	struct wlan_objmgr_psoc *psoc;
 
 	if (!vdev || !param) {
@@ -664,17 +669,6 @@ static QDF_STATUS target_if_vdev_mgr_up_send(
 		mlme_err("Failed to get PSOC Object");
 		return QDF_STATUS_E_INVAL;
 	}
-
-	vdev_id = wlan_vdev_get_id(vdev);
-	sparam.vdev_id = vdev_id;
-
-	sparam.param_id = WLAN_MLME_CFG_BEACON_INTERVAL;
-	wlan_util_vdev_get_param(vdev, WLAN_MLME_CFG_BEACON_INTERVAL,
-				 &sparam.param_value);
-	status = target_if_vdev_mgr_set_param_send(vdev, &sparam);
-	if (QDF_IS_STATUS_ERROR(status))
-		mlme_err("VDEV_%d: Failed to set beacon interval!", vdev_id);
-
 	ucfg_wlan_vdev_mgr_get_param_bssid(vdev, bssid);
 
 	status = wmi_unified_vdev_up_send(wmi_handle, bssid, param);
@@ -883,6 +877,9 @@ static int32_t target_if_vdev_mgr_multi_vdev_restart_get_ref(
 						psoc,
 						wlan_vdev_get_id(tvdev));
 		if (!vdev_rsp) {
+			wlan_objmgr_vdev_release_ref(tvdev,
+						     WLAN_VDEV_TARGET_IF_ID);
+			vdev_list[vdev_idx] = NULL;
 			mlme_err("VDEV_%d PSOC_%d No vdev rsp timer",
 				 vdev_idx, wlan_psoc_get_id(psoc));
 			return last_vdev_idx;
@@ -907,7 +904,7 @@ static void target_if_vdev_mgr_multi_vdev_restart_rel_ref(
 	struct wlan_objmgr_psoc *psoc;
 	struct wlan_objmgr_vdev *tvdev;
 	struct wlan_lmac_if_mlme_rx_ops *rx_ops;
-	uint32_t vdev_idx;
+	int32_t vdev_idx;
 	struct vdev_response_timer *vdev_rsp;
 
 	psoc = wlan_pdev_get_psoc(pdev);

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017-2019 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2017-2020 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -34,6 +34,7 @@
 
 #define REG_MAX_SUPP_OPER_CLASSES 32
 #define REG_MAX_CHAN_CHANGE_CBKS 30
+#define REG_INVALID_TXPOWER 255
 #define MAX_STA_VDEV_CNT 4
 #define INVALID_VDEV_ID 0xFF
 #define INVALID_CHANNEL_NUM 0x0
@@ -60,6 +61,10 @@
 #define REGULATORY_CHAN_NO11N        BIT(3)
 #define REGULATORY_PHYMODE_NO11AC    BIT(4)
 #define REGULATORY_PHYMODE_NO11AX    BIT(5)
+
+#define BW_80_MHZ     80
+#define BW_160_MHZ    160
+#define BW_40_MHZ     40
 
 /**
  * enum dfs_reg - DFS region

@@ -1652,10 +1652,13 @@ QDF_STATUS dp_ipa_disable_pipes(struct cdp_soc_t *soc_hdl, uint8_t pdev_id)
 	}
 
 	result = qdf_ipa_wdi_disable_pipes();
-	if (result)
+	if (result) {
 		QDF_TRACE(QDF_MODULE_ID_TXRX, QDF_TRACE_LEVEL_ERROR,
 			  "%s: Disable WDI PIPE fail, code %d",
 			  __func__, result);
+		qdf_assert_always(0);
+		return QDF_STATUS_E_FAILURE;
+	}
 
 	qdf_atomic_set(&soc->ipa_pipes_enabled, 0);
 	dp_ipa_handle_rx_buf_pool_smmu_mapping(soc, pdev, false);
@@ -1831,16 +1834,16 @@ static qdf_nbuf_t dp_ipa_frag_nbuf_linearize(struct dp_soc *soc,
 	bool is_nbuf_head = true;
 	uint32_t copy_len = 0;
 
-	dst_nbuf = qdf_nbuf_alloc(soc->osdev, RX_BUFFER_SIZE,
-				  RX_BUFFER_RESERVATION, RX_BUFFER_ALIGNMENT,
-				  FALSE);
+	dst_nbuf = qdf_nbuf_alloc(soc->osdev, RX_DATA_BUFFER_SIZE,
+				  RX_BUFFER_RESERVATION,
+				  RX_DATA_BUFFER_ALIGNMENT, FALSE);
 
 	if (!dst_nbuf) {
 		dp_err_rl("nbuf allocate fail");
 		return NULL;
 	}
 
-	if ((nbuf_len + L3_HEADER_PADDING) > RX_BUFFER_SIZE) {
+	if ((nbuf_len + L3_HEADER_PADDING) > RX_DATA_BUFFER_SIZE) {
 		qdf_nbuf_free(dst_nbuf);
 		dp_err_rl("nbuf is jumbo data");
 		return NULL;

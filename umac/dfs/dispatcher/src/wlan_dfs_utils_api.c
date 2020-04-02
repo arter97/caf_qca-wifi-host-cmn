@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016-2019 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2016-2020 The Linux Foundation. All rights reserved.
  *
  *
  * Permission to use, copy, modify, and/or distribute this software for
@@ -965,6 +965,12 @@ void utils_dfs_get_chan_list(struct wlan_objmgr_pdev *pdev,
 	utils_dfs_get_channel_list(pdev, NULL, (struct dfs_channel *)clist,
 				   num_chan);
 }
+
+bool utils_dfs_can_ignore_radar_event(struct wlan_objmgr_pdev *pdev)
+{
+	return !policy_mgr_get_dfs_master_dynamic_enabled(
+		wlan_pdev_get_psoc(pdev), INVALID_VDEV_ID);
+}
 #endif
 
 #ifdef CONFIG_CHAN_NUM_API
@@ -1586,6 +1592,7 @@ QDF_STATUS utils_dfs_get_disable_radar_marking(struct wlan_objmgr_pdev *pdev,
 }
 
 qdf_export_symbol(utils_dfs_get_disable_radar_marking);
+#endif
 
 bool utils_is_dfs_cfreq2_ch(struct wlan_objmgr_pdev *pdev)
 {
@@ -1599,7 +1606,6 @@ bool utils_is_dfs_cfreq2_ch(struct wlan_objmgr_pdev *pdev)
 }
 
 qdf_export_symbol(utils_is_dfs_cfreq2_ch);
-#endif
 
 void utils_dfs_deliver_event(struct wlan_objmgr_pdev *pdev, uint16_t freq,
 			     enum WLAN_DFS_EVENTS event)

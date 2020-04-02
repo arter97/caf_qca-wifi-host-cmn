@@ -373,6 +373,12 @@
 #define WMI_HOST_TPC_REGINDEX_MAX           4
 #define WMI_HOST_ARRAY_GAIN_NUM_STREAMS     2
 
+/* AST Index for flow override */
+#define WMI_CONFIG_MSDU_AST_INDEX_0         0x0
+#define WMI_CONFIG_MSDU_AST_INDEX_1         0x1
+#define WMI_CONFIG_MSDU_AST_INDEX_2         0x2
+#define WMI_CONFIG_MSDU_AST_INDEX_3         0x3
+
 #include "qdf_atomic.h"
 
 #ifdef BIG_ENDIAN_HOST
@@ -872,10 +878,12 @@ struct suspend_params {
  * struct pdev_params - pdev set cmd parameter
  * @param_id: parameter id
  * @param_value: parameter value
+ * @is_host_pdev_id: indicate whether pdev_id is host pdev_id or not
  */
 struct pdev_params {
 	uint32_t param_id;
 	uint32_t param_value;
+	bool is_host_pdev_id;
 };
 
 /**
@@ -1117,7 +1125,11 @@ struct scan_chan_list_params {
  * @max_duration_ms: Maximum Off channel CAC duration
  * @chan_freq: channel number of precac channel
  * @chan_width: Precac Channel width
- * @center_freq: Center frequency of precac channel
+ * @center_freq1: Agile preCAC channel frequency in MHz for 20/40/80/160
+ *                and left center frequency(5690MHz) for restricted 80p80.
+ * @center_freq2: Second segment Agile frequency if applicable. 0 for
+ *                20/40/80/160 and right center frequency(5775MHz) for
+ *                restricted 80p80.
  */
 struct vdev_adfs_ch_cfg_params {
 	uint32_t vdev_id;
@@ -1126,7 +1138,8 @@ struct vdev_adfs_ch_cfg_params {
 	uint32_t max_duration_ms;
 	uint32_t chan_freq;
 	uint32_t chan_width;
-	uint32_t center_freq; /* in MHz */
+	uint32_t center_freq1; /* in MHz */
+	uint32_t center_freq2; /* in MHz */
 };
 
 /**
@@ -1666,6 +1679,8 @@ struct roam_fils_params {
  * roam candidate table are valid
  * @roam_scan_inactivity_time: inactivity monitoring time in ms for which the
  * device is considered to be inactive
+ * @is_sae_same_pmk: Flag to indicate fw whether WLAN_SAE_SINGLE_PMK feature is
+ * enable or not
  * @roam_inactive_data_packet_count: Maximum allowed data packets count during
  * roam_scan_inactivity_time.
  * @roam_scan_period_after_inactivity: Roam scan period in ms after device is
@@ -1693,6 +1708,7 @@ struct roam_offload_scan_params {
 	bool fw_pmksa_cache;
 	uint32_t rct_validity_timer;
 	bool is_adaptive_11r;
+	bool is_sae_same_pmk;
 #endif
 	uint32_t min_delay_btw_roam_scans;
 	uint32_t roam_trigger_reason_bitmask;
@@ -2859,6 +2875,7 @@ typedef struct {
  * @enable: Enable/Disable Thermal mitigation
  * @dc: DC
  * @dc_per_event: DC per event
+ * @num_thermal_conf: Number of thermal configurations to be sent
  * @tt_level_config: TT level config params
  */
 struct thermal_mitigation_params {
@@ -2866,6 +2883,7 @@ struct thermal_mitigation_params {
 	uint32_t enable;
 	uint32_t dc;
 	uint32_t dc_per_event;
+	uint8_t num_thermal_conf;
 	tt_level_config levelconf[THERMAL_LEVELS];
 };
 
@@ -4306,6 +4324,50 @@ typedef struct {
 	uint32_t rx_duration_us;
 } wmi_host_chan_stats;
 
+#ifdef FEATURE_WLAN_TIME_SYNC_FTM
+
+#define FTM_TIME_SYNC_QTIME_PAIR_MAX 32
+
+/**
+ * struct ftm_time_sync_start_stop_param- Get wlan time sync ftm info
+ * @vdev_id: vdev id
+ * @timer_interval: periodicity to trigger wlan time sync strobe
+ * @num_reads: Number of times to trigger wlabn time sync strobe
+ * @qtime: ref Qtimer value
+ * @mac_time: ref Mac timer value
+ */
+struct ftm_time_sync_start_stop_params {
+	uint32_t vdev_id;
+	uint32_t timer_interval;
+	uint32_t num_reads;
+	uint64_t qtime;
+	uint64_t mac_time;
+};
+
+/**
+ * struct wlan_time_sync_qtime_pair- Get wlan time sync qtime pair value
+ * @vdev_id: vdev id
+ * @qtime_master: qtimer value of master
+ * @qtime_slave: qtimer value of slave
+ */
+struct wlan_time_sync_qtime_pair {
+	uint64_t qtime_master;
+	uint64_t qtime_slave;
+};
+
+/**
+ * struct ftm_time_sync_offset- Get ftm time sync offset
+ * @vdev_id: vdev id
+ * @num_qtime: number of qtime values received
+ * @pairs: array of qtime pairs
+ */
+struct ftm_time_sync_offset {
+	uint32_t vdev_id;
+	uint32_t num_qtime;
+	struct wlan_time_sync_qtime_pair pairs[FTM_TIME_SYNC_QTIME_PAIR_MAX];
+};
+#endif
+
 #define WMI_EVENT_ID_INVALID 0
 /**
  * Host based ENUM IDs for events to abstract target enums for event_id
@@ -4472,6 +4534,7 @@ typedef enum {
 	wmi_ndp_responder_rsp_event_id,
 	wmi_ndp_end_indication_event_id,
 	wmi_ndp_end_rsp_event_id,
+	wmi_nan_dmesg_event_id,
 	wmi_ndl_schedule_update_event_id,
 	wmi_ndp_event_id,
 	wmi_oem_response_event_id,
@@ -4540,6 +4603,12 @@ typedef enum {
 	wmi_mgmt_offload_data_event_id,
 	wmi_pdev_multi_vdev_restart_response_event_id,
 	wmi_roam_pmkid_request_event_id,
+#ifdef FEATURE_WLAN_TIME_SYNC_FTM
+	wmi_wlan_time_sync_ftm_start_stop_event_id,
+	wmi_wlan_time_sync_q_master_slave_offset_eventid,
+#endif
+	wmi_roam_scan_chan_list_id,
+	wmi_muedca_params_config_eventid,
 	wmi_events_max,
 } wmi_conv_event_id;
 
@@ -4840,6 +4909,7 @@ typedef enum {
 	wmi_vdev_param_max_group_keys,
 	wmi_vdev_param_enable_mcast_rc,
 	wmi_vdev_param_6ghz_params,
+	wmi_vdev_param_enable_disable_roam_reason_vsie,
 } wmi_conv_vdev_param_id;
 
 /**
@@ -5042,9 +5112,14 @@ typedef enum {
 	wmi_service_ext2_msg,
 	wmi_service_6ghz_support,
 	wmi_service_bw_165mhz_support,
+	wmi_service_bw_restricted_80p80_support,
 	wmi_service_packet_capture_support,
 	wmi_service_nan_vdev,
 	wmi_service_multiple_vdev_restart_ext,
+	wmi_service_peer_delete_no_peer_flush_tids_cmd,
+	wmi_service_time_sync_ftm,
+	wmi_service_nss_ratio_to_host_support,
+	wmi_roam_scan_chan_list_to_host_support,
 	wmi_services_max,
 } wmi_conv_service_ids;
 #define WMI_SERVICE_UNAVAILABLE 0xFFFF
@@ -5170,6 +5245,17 @@ struct wmi_host_fw_abi_ver {
  * @max_num_group_keys: max number of group keys supported for VLAN
  * @re_ul_resp: enable 11ax UL response feature (UL-OFDMA) for repeater
  * @ipa_disable: disable IPA feature
+ * @ast_1_valid_mask_enable: mask to enable ast index 1
+ * @ast_2_valid_mask_enable: mask to enable ast index 2
+ * @ast_3_valid_mask_enable: mask to enable ast index 3
+ * @ast_0_flow_mask_enable: mask to enable flow support for ast index 0
+ * @ast_1_flow_mask_enable: mask to enable flow support for ast index 1
+ * @ast_2_flow_mask_enable: mask to enable flow support for ast index 2
+ * @ast_3_flow_mask_enable: mask to enable flow support for ast index 3
+ * @ast_tid_high_mask_enable: enable tid valid mask for high priority flow
+ * @ast_tid_low_mask_enable: enable tid valid mask for low priority flow
+ * @nan_separate_iface_support: Separate iface creation for NAN
+ * @time_sync_ftm: enable ftm based time sync
  */
 typedef struct {
 	uint32_t num_vdevs;
@@ -5257,6 +5343,17 @@ typedef struct {
 	uint32_t max_num_group_keys;
 	uint32_t re_ul_resp;
 	bool ipa_disable;
+	uint32_t ast_1_valid_mask_enable:1,
+		 ast_2_valid_mask_enable:1,
+		 ast_3_valid_mask_enable:1;
+	uint32_t ast_0_flow_mask_enable:4,
+		 ast_1_flow_mask_enable:4,
+		 ast_2_flow_mask_enable:4,
+		 ast_3_flow_mask_enable:4,
+		 ast_tid_high_mask_enable:8,
+		 ast_tid_low_mask_enable:8;
+	bool nan_separate_iface_support;
+	bool time_sync_ftm;
 } target_resource_config;
 
 /**
@@ -7261,6 +7358,22 @@ struct wmi_host_obss_spatial_reuse_set_def_thresh {
 #endif
 
 /**
+ * struct wmi_host_injector_frame_params - Injector frame configuration params
+ * @vdev_id: vdev identifer of VAP
+ * @enable: Enable/disable flag for the frame
+ * @frame_type: Frame type to be enabled
+ * @frame_inject_period: Periodicity of injector frame transmission
+ * @dstmac: Destination address to be used for the frame
+ */
+struct wmi_host_injector_frame_params {
+	uint32_t vdev_id;
+	uint32_t enable;
+	uint32_t frame_type;
+	uint32_t frame_inject_period;
+	uint8_t dstmac[QDF_MAC_ADDR_SIZE];
+};
+
+/**
  * struct wds_entry - WDS entry structure
  * @peer_mac: peer mac
  * @wds_mac: wds mac address
@@ -7474,8 +7587,9 @@ struct wmi_roam_scan_stats_res {
 	struct wmi_roam_scan_stats_params roam_scan[0];
 };
 
-#define MAX_ROAM_CANDIDATE_AP      8
+#define MAX_ROAM_CANDIDATE_AP      9
 #define MAX_ROAM_SCAN_CHAN         38
+#define MAX_ROAM_SCAN_STATS_TLV    5
 
 /**
  * struct wmi_roam_btm_trigger_data - BTM roam trigger related information
@@ -7550,6 +7664,7 @@ struct wmi_roam_candidate_info {
 
 /**
  * struct wmi_roam_scan_data - Roam scan event details
+ * @present:            Flag to check if the roam scan tlv is present
  * @type:      0 - Partial roam scan; 1 - Full roam scan
  * @num_ap:    Number of candidate APs.
  * @num_chan:  Number of channels.
@@ -7558,6 +7673,7 @@ struct wmi_roam_candidate_info {
  * @ap: List of candidate AP info
  */
 struct wmi_roam_scan_data {
+	bool present;
 	uint16_t type;
 	uint16_t num_ap;
 	uint16_t num_chan;
@@ -7568,11 +7684,13 @@ struct wmi_roam_scan_data {
 
 /**
  * struct wmi_roam_result - Roam result related info.
+ * @present:            Flag to check if the roam result tlv is present
  * @timestamp:          Host timestamp in millisecs
  * @status:             0 - Roaming is success ; 1 - Roaming failed
  * @fail_reason:        One of WMI_ROAM_FAIL_REASON_ID
  */
 struct wmi_roam_result {
+	bool present;
 	uint32_t timestamp;
 	bool status;
 	uint32_t fail_reason;
@@ -7581,6 +7699,7 @@ struct wmi_roam_result {
 /**
  *  struct wmi_neighbor_report_data - Neighbor report/BTM request related
  *  data.
+ *  @present:    Flag to check if the roam 11kv tlv is present
  *  @timestamp:  Host timestamp in millisecs
  *  @req_type:   1 - BTM query ; 2 - 11K neighbor report request
  *  @req_time:   Request timestamp in ms
@@ -7588,6 +7707,7 @@ struct wmi_roam_result {
  *  @freq:       Channel frequency in Mhz
  */
 struct wmi_neighbor_report_data {
+	bool present;
 	uint32_t timestamp;
 	uint8_t req_type;
 	uint32_t req_time;
@@ -7598,6 +7718,7 @@ struct wmi_neighbor_report_data {
 
 /**
  * struct wmi_roam_trigger_info() - Roam trigger related details
+ * @present:            Flag to check if the roam_trigger_info tlv is present
  * @trigger_reason:     Roam trigger reason(enum WMI_ROAM_TRIGGER_REASON_ID)
  * @trigger_sub_reason: Sub reason for roam trigger if multiple roam scans
  * @current_rssi:       Connected AP RSSI
@@ -7608,6 +7729,7 @@ struct wmi_neighbor_report_data {
  * @deauth_trig_data:   Deauth roam trigger related info
  */
 struct wmi_roam_trigger_info {
+	bool present;
 	uint32_t trigger_reason;
 	uint32_t trigger_sub_reason;
 	uint32_t current_rssi;

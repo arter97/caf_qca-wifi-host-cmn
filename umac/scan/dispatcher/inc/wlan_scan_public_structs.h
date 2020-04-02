@@ -159,6 +159,7 @@ struct element_info {
  * @mbo_oce: pointer to mbo/oce indication ie
  * @rnrie: reduced neighbor report IE
  * @adaptive_11r: pointer to adaptive 11r IE
+ * @single_pmk: Pointer to sae single pmk IE
  */
 struct ie_list {
 	uint8_t *tim;
@@ -210,6 +211,7 @@ struct ie_list {
 	uint8_t *rnrie;
 	uint8_t *extender;
 	uint8_t *adaptive_11r;
+	uint8_t *single_pmk;
 };
 
 enum scan_entry_connection_state {
@@ -1477,12 +1479,15 @@ struct meta_rnr_channel {
 	qdf_list_t rnr_list;
 };
 
+#define RNR_UPDATE_SCAN_CNT_THRESHOLD 2
 /**
  * channel_list_db - Database for channel information
  * @channel: channel meta information
+ * @scan_count: scan count since the db was updated
  */
 struct channel_list_db {
 	struct meta_rnr_channel channel[NUM_6GHZ_CHANNELS];
+	uint8_t scan_count;
 };
 
 /**

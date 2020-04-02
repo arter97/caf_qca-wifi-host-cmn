@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2017-2019 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2011, 2017-2020 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -87,14 +87,68 @@ enum spectral_params {
 };
 
 /**
+ * enum spectral_report_mode: Spectral report mode
+ * @SPECTRAL_REPORT_MODE_0: No FFT report (only spectral scan summary report)
+ * @SPECTRAL_REPORT_MODE_1: FFT report header + spectral scan summary report
+ * @SPECTRAL_REPORT_MODE_2: FFt report header + in-band bins per
+ *                          FFT (half of the number of FFT bins), where the
+ *                          FFT input is sampled at two times the channel
+ *                          bandwidth + spectral scan summary report
+ * @SPECTRAL_REPORT_MODE_3: FFT report header + all bins per FFT, where the FFT
+ *                          input is sampled at two times the channel bandwidth
+ *                          + spectral scan summary report
+ * @SPECTRAL_REPORT_MODE_MAX: Max number of report modes
+ */
+enum spectral_report_mode {
+	SPECTRAL_REPORT_MODE_0,
+	SPECTRAL_REPORT_MODE_1,
+	SPECTRAL_REPORT_MODE_2,
+	SPECTRAL_REPORT_MODE_3,
+	SPECTRAL_REPORT_MODE_MAX,
+};
+
+/**
+ * enum spectral_fft_size : FFT size values
+ * @SPECTRAL_FFT_SIZE_INVALID: Invalid FFT size
+ * @SPECTRAL_FFT_SIZE_1: FFT size 1
+ * @SPECTRAL_FFT_SIZE_2: FFT size 2
+ * @SPECTRAL_FFT_SIZE_3: FFT size 3
+ * @SPECTRAL_FFT_SIZE_4: FFT size 4
+ * @SPECTRAL_FFT_SIZE_5: FFT size 5
+ * @SPECTRAL_FFT_SIZE_6: FFT size 6
+ * @SPECTRAL_FFT_SIZE_7: FFT size 7
+ * @SPECTRAL_FFT_SIZE_8: FFT size 8
+ * @SPECTRAL_FFT_SIZE_9: FFT size 9
+ * @SPECTRAL_FFT_SIZE_10: FFT size 10
+ * @SPECTRAL_FFT_SIZE_MAX: Max number of FFT size
+ */
+enum spectral_fft_size {
+	SPECTRAL_FFT_SIZE_INVALID,
+	SPECTRAL_FFT_SIZE_1,
+	SPECTRAL_FFT_SIZE_2,
+	SPECTRAL_FFT_SIZE_3,
+	SPECTRAL_FFT_SIZE_4,
+	SPECTRAL_FFT_SIZE_5,
+	SPECTRAL_FFT_SIZE_6,
+	SPECTRAL_FFT_SIZE_7,
+	SPECTRAL_FFT_SIZE_8,
+	SPECTRAL_FFT_SIZE_9,
+	SPECTRAL_FFT_SIZE_10,
+	SPECTRAL_FFT_SIZE_MAX,
+};
+
+/**
  * enum spectral_scan_mode - Spectral scan mode
  * @SPECTRAL_SCAN_MODE_NORMAL: Normal mode
  * @SPECTRAL_SCAN_MODE_AGILE: Agile mode
+ * @SPECTRAL_SCAN_MODE_MAX: Max number of Spectral modes
+ * @SPECTRAL_SCAN_MODE_INVALID: Invalid Spectral mode
  */
 enum spectral_scan_mode {
 	SPECTRAL_SCAN_MODE_NORMAL,
 	SPECTRAL_SCAN_MODE_AGILE,
 	SPECTRAL_SCAN_MODE_MAX,
+	SPECTRAL_SCAN_MODE_INVALID = 0xff,
 };
 
 struct spectral_ioctl_params {
@@ -250,8 +304,11 @@ struct spectral_caps {
 
 #define SPECTRAL_IOCTL_PARAM_NOVAL (65535)
 
-#define MAX_SPECTRAL_CHAINS          3
-#define MAX_NUM_BINS                 520
+#define MAX_SPECTRAL_CHAINS           (3)
+#define MAX_NUM_BINS                  (1024)
+#define MAX_NUM_BINS_PRI80            (1024)
+#define MAX_NUM_BINS_SEC80            (520)
+#define MAX_NUM_BINS_5MHZ             (32)
 /* 5 categories x (lower + upper) bands */
 #define MAX_INTERF                   10
 
@@ -379,6 +436,10 @@ struct spectral_classifier_params {
  *                            via direct DMA framework.
  * @target_reset_count:       Indicates the number of times target went through
  *                            reset routine after spectral was enabled.
+ * @bin_pwr_count_5mhz:       Indicates the number of FFT bins in the extra
+ *                            5 MHz for 165 MHz/ Restricted 80p80 mode
+ * @bin_pwr_5mhz:             Contains FFT magnitudes corresponding to the extra
+ *                            5 MHz in 165 MHz/ Restricted 80p80 mode
  */
 struct spectral_samp_data {
 	int16_t spectral_data_len;
@@ -425,8 +486,8 @@ struct spectral_samp_data {
 	uint8_t lb_edge_extrabins;
 	uint8_t rb_edge_extrabins;
 	uint16_t bin_pwr_count_sec80;
-	uint8_t bin_pwr[MAX_NUM_BINS];
-	uint8_t bin_pwr_sec80[MAX_NUM_BINS];
+	uint8_t bin_pwr[MAX_NUM_BINS_PRI80];
+	uint8_t bin_pwr_sec80[MAX_NUM_BINS_SEC80];
 	struct interf_src_rsp interf_list;
 	int16_t noise_floor;
 	int16_t noise_floor_sec80;
@@ -445,6 +506,8 @@ struct spectral_samp_data {
 	uint32_t reset_delay;
 	uint32_t target_reset_count;
 	uint32_t agile_ch_width;
+	uint16_t bin_pwr_count_5mhz;
+	uint8_t bin_pwr_5mhz[MAX_NUM_BINS_5MHZ];
 } __packed;
 
 /**
