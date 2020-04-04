@@ -80,10 +80,35 @@
 		     CFG_VALUE_OR_DEFAULT, \
 		     "CE Status ring batch count threshold")
 
-#define CFG_HIF \
+#define __CFG_CE_INT_THREASHOLD_CONFIG \
 	CFG(CFG_CE_STATUS_RING_TIMER_THRESHOLD) \
 	CFG(CFG_CE_STATUS_RING_BATCH_COUNT_THRESHOLD)
 #else
-#define CFG_HIF
+#define __CFG_CE_INT_THREASHOLD_CONFIG
 #endif /* WLAN_CE_INTERRUPT_THRESHOLD_CONFIG */
+
+#define WLAN_CFG_BITMAP_MIN 0
+#define WLAN_CFG_BITMAP_MAX 0xFFFF
+#define WLAN_CFG_BITMAP_DEFAULT 0
+
+#define CFG_CE_POLL_BITMAP \
+	CFG_INI_UINT("ce_poll_bitmap", \
+		     WLAN_CFG_BITMAP_MIN, \
+		     WLAN_CFG_BITMAP_MAX, \
+		     WLAN_CFG_BITMAP_DEFAULT, \
+		     CFG_VALUE_OR_DEFAULT, \
+		     "CE Poll Bitmap")
+
+#define CFG_CE_POLL_TIMEOUT \
+	CFG_INI_UINT("ce_poll_timeout_in_ms", \
+		     10, \
+		     1000, \
+		     100, \
+		     CFG_VALUE_OR_DEFAULT, \
+		     "CE Poll timeout in ms")
+
+#define CFG_HIF \
+	__CFG_CE_INT_THREASHOLD_CONFIG \
+	CFG(CFG_CE_POLL_BITMAP) \
+	CFG(CFG_CE_POLL_TIMEOUT)
 #endif /* _CFG_HIF_H_ */
