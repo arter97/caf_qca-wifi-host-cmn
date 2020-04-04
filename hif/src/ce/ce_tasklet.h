@@ -30,4 +30,6 @@ irqreturn_t ce_dispatch_interrupt(int irq,
 				  struct ce_tasklet_entry *tasklet_entry);
 void hif_display_ce_stats(struct hif_softc *hif_ctx);
 void hif_clear_ce_stats(struct HIF_CE_state *hif_ce_state);
+bool hif_tasklet_schedule(struct hif_opaque_softc *hif_ctx,
+		struct ce_tasklet_entry *tasklet_entry);
 #endif /* __CE_TASKLET_H__ */

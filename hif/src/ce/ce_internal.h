@@ -147,6 +147,15 @@ struct CE_state {
 	qdf_lro_ctx_t lro_data;
 
 	void (*service)(struct hif_softc *scn, int CE_id);
+	uint16_t poll_count;
+	uint16_t before_int_count;
+	uint16_t after_int_count;
+	uint16_t int_enable_count;
+	uint16_t int_disable_count;
+	bool print_flag;
+
+	qdf_atomic_t disable_process;
+	qdf_atomic_t int_status;
 };
 
 /* Descriptor rings must be aligned to this boundary */
@@ -468,6 +477,10 @@ enum hif_ce_event_type {
 	HIF_RX_DESC_PRE_NBUF_ALLOC,
 	HIF_RX_DESC_PRE_NBUF_MAP,
 	HIF_RX_DESC_POST_NBUF_MAP,
+	HIF_PKT_PEND_BEFORE_INT,
+	HIF_PKT_PEND_AFTER_INT,
+	HIF_PKT_PEND_IN_POLL,
+	HIF_CE_POLL_TIMER,
 
 	HIF_EVENT_TYPE_MAX,
 };

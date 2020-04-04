@@ -377,6 +377,7 @@ void ce_fini(struct CE_handle *copyeng);
 void ce_per_engine_service_any(int irq, struct hif_softc *scn);
 int ce_per_engine_service(struct hif_softc *scn, unsigned int CE_id);
 void ce_per_engine_servicereap(struct hif_softc *scn, unsigned int CE_id);
+bool ce_per_engine_pkt_pending_check(struct hif_softc *scn, unsigned int CE_id);
 
 /*===================CE cmpl interrupt Enable/Disable =======================*/
 void ce_disable_any_copy_compl_intr_nolock(struct hif_softc *scn);

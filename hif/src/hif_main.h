@@ -166,6 +166,8 @@ struct ce_desc_hist {
 struct hif_cfg {
 	uint16_t ce_status_ring_timer_threshold;
 	uint8_t ce_status_ring_batch_count_threshold;
+	uint16_t ce_poll_bitmap;
+	uint16_t ce_poll_timeout;
 };
 
 struct hif_softc {
