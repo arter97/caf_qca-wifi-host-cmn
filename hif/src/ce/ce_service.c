@@ -1168,6 +1168,32 @@ int ce_per_engine_service(struct hif_softc *scn, unsigned int CE_id)
 }
 qdf_export_symbol(ce_per_engine_service);
 
+bool ce_per_engine_pkt_pending_check(struct hif_softc *scn, unsigned int CE_id)
+{
+	struct CE_state *CE_state = scn->ce_id_to_state[CE_id];
+	struct HIF_CE_state *hif_state = HIF_GET_CE_STATE(scn);
+
+	qdf_spin_lock(&CE_state->ce_index_lock);
+
+	if (CE_state->recv_cb &&
+		hif_state->ce_services->ce_recv_entries_done_nolock(scn,
+			CE_state)) {
+		qdf_spin_unlock(&CE_state->ce_index_lock);
+		return true;
+	}
+
+	if (CE_state->send_cb &&
+		hif_state->ce_services->ce_send_entries_done_nolock(scn,
+				CE_state)) {
+		qdf_spin_unlock(&CE_state->ce_index_lock);
+		return true;
+	}
+
+	qdf_spin_unlock(&CE_state->ce_index_lock);
+	return false;
+}
+qdf_export_symbol(ce_per_engine_pkt_pending_check);
+
 /*
  * Handler for per-engine interrupts on ALL active CEs.
  * This is used in cases where the system is sharing a

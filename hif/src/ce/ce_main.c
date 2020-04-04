@@ -38,6 +38,7 @@
 #include "ce_assignment.h"
 #include "ce_tasklet.h"
 #include "qdf_module.h"
+#include "hif_napi.h"
 
 #define CE_POLL_TIMEOUT 10      /* ms */
 
@@ -133,15 +134,59 @@ void hif_trigger_dump(struct hif_opaque_softc *hif_ctx,
 	}
 }
 
+#if 0
 static void ce_poll_timeout(void *arg)
 {
 	struct CE_state *CE_state = (struct CE_state *)arg;
 
 	if (CE_state->timer_inited) {
+		CE_state->poll_count++;
+		hif_record_ce_desc_event(CE_state->scn, CE_state->id,
+			HIF_CE_POLL_TIMER, NULL, NULL, CE_state->poll_count, 0);
 		ce_per_engine_service(CE_state->scn, CE_state->id);
-		qdf_timer_mod(&CE_state->poll_timer, CE_POLL_TIMEOUT);
+                qdf_timer_mod(&CE_state->poll_timer,
+			 CE_state->scn->ini_cfg.ce_poll_timeout);
 	}
 }
+#else
+static void ce_poll_timeout(void *arg)
+{
+	struct CE_state *CE_state = (struct CE_state *)arg;
+	struct hif_opaque_softc *hif_hdl = GET_HIF_OPAQUE_HDL(CE_state->scn);
+	struct HIF_CE_state *hif_state = HIF_GET_CE_STATE(CE_state->scn);
+
+	if (CE_state->timer_inited) {
+		CE_state->poll_count++;
+		if (ce_per_engine_pkt_pending_check(CE_state->scn, CE_state->id)) {
+
+			if ((qdf_atomic_inc_return(&CE_state->disable_process) == 1) &&
+				(qdf_atomic_read(&CE_state->int_status) == 1)) {
+
+				qdf_err("triggr tasklet/napi from timer %d", CE_state->poll_count);
+
+				hif_record_ce_desc_event(CE_state->scn, CE_state->id,
+					HIF_CE_POLL_TIMER, NULL, NULL, CE_state->poll_count, 0);
+
+				hif_irq_disable(CE_state->scn, CE_state->id);
+
+				qdf_atomic_inc(&CE_state->scn->active_tasklet_cnt);
+
+				if (hif_napi_enabled(hif_hdl, CE_state->id))
+					hif_napi_schedule(hif_hdl, CE_state->id);
+				else
+					hif_tasklet_schedule(hif_hdl, &hif_state->tasklets[CE_state->id]);
+
+				qdf_atomic_dec(&CE_state->disable_process);
+			} else {
+				qdf_atomic_dec(&CE_state->disable_process);
+			}
+		}
+                qdf_timer_mod(&CE_state->poll_timer,
+			 CE_state->scn->ini_cfg.ce_poll_timeout);
+	}
+}
+
+#endif
 
 static unsigned int roundup_pwr2(unsigned int n)
 {
@@ -1594,6 +1639,10 @@ struct CE_handle *ce_init(struct hif_softc *scn,
 	CE_state->scn = scn;
 	CE_state->service = ce_engine_service_reg;
 
+	qdf_atomic_init(&CE_state->disable_process);
+	qdf_atomic_init(&CE_state->int_status);
+	qdf_atomic_set(&CE_state->int_status, 1);
+
 	qdf_atomic_init(&CE_state->rx_pending);
 	if (!attr) {
 		/* Already initialized; caller wants the handle */
@@ -1732,6 +1781,16 @@ struct CE_handle *ce_init(struct hif_softc *scn,
 
 			/* epping */
 			/* poll timer */
+			if (scn->ini_cfg.ce_poll_bitmap & (1 << CE_id)) {
+				qdf_timer_init(scn->qdf_dev,
+						&CE_state->poll_timer,
+						ce_poll_timeout,
+						CE_state,
+						QDF_TIMER_TYPE_WAKE_APPS);
+				CE_state->timer_inited = true;
+				qdf_err("Enable ce_poll for ce_id %d", CE_id);
+			}
+
 			if (CE_state->attr_flags & CE_ATTR_ENABLE_POLL) {
 				qdf_timer_init(scn->qdf_dev,
 						&CE_state->poll_timer,
@@ -2769,7 +2828,22 @@ void hif_ce_stop(struct hif_softc *scn)
 {
 	struct HIF_CE_state *hif_state = HIF_GET_CE_STATE(scn);
 	int pipe_num;
+	struct CE_state *CE_state;
 
+	/* stop poll timer before tasklet kill */
+	for (pipe_num = 0; pipe_num < scn->ce_count; pipe_num++) {
+		struct HIF_CE_pipe_info *pipe_info;
+
+		pipe_info = &hif_state->pipe_info[pipe_num];
+		if (pipe_info->ce_hdl) {
+			CE_state =(struct CE_state *)pipe_info->ce_hdl;
+
+			if (CE_state->timer_inited) {
+				CE_state->timer_inited = false;
+				qdf_timer_free(&CE_state->poll_timer);
+			}
+		}
+	}
 	/*
 	 * before cleaning up any memory, ensure irq &
 	 * bottom half contexts will not be re-entered

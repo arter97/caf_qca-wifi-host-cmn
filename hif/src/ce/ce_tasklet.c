@@ -373,8 +373,31 @@ static void ce_tasklet(unsigned long data)
 		return;
 	}
 
-	if (scn->target_status != TARGET_STATUS_RESET)
+	if (scn->target_status != TARGET_STATUS_RESET) {
+		if (ce_per_engine_pkt_pending_check(CE_state->scn, CE_state->id)) {
+			CE_state->before_int_count++;
+			qdf_err("before pkt pending for ce_id %d", CE_state->id);
+			hif_record_ce_desc_event(CE_state->scn, CE_state->id,
+			    HIF_PKT_PEND_BEFORE_INT, NULL, NULL, CE_state->before_int_count, 0);
+		}
+
 		hif_irq_enable(scn, tasklet_entry->ce_id);
+
+		if (ce_per_engine_pkt_pending_check(CE_state->scn, CE_state->id)) {
+			CE_state->after_int_count++;
+			qdf_err("After pkt pending for ce_id %d", CE_state->id);
+			hif_record_ce_desc_event(CE_state->scn, CE_state->id,
+			    HIF_PKT_PEND_AFTER_INT, NULL, NULL, CE_state->after_int_count, 0);
+		}
+	
+		if (scn->ini_cfg.ce_poll_bitmap &
+			 (1 << tasklet_entry->ce_id)) {
+			CE_state->poll_count = 0;
+			CE_state->print_flag = 0;
+			qdf_timer_mod(&CE_state->poll_timer,
+				scn->ini_cfg.ce_poll_timeout);
+		}
+	}
 
 	hif_record_ce_desc_event(scn, tasklet_entry->ce_id, HIF_CE_TASKLET_EXIT,
 				NULL, NULL, -1, 0);
@@ -584,7 +607,7 @@ void hif_clear_ce_stats(struct HIF_CE_state *hif_ce_state)
  *
  * Return: false if tasklet already scheduled, otherwise true
  */
-static inline bool hif_tasklet_schedule(struct hif_opaque_softc *hif_ctx,
+inline bool hif_tasklet_schedule(struct hif_opaque_softc *hif_ctx,
 					struct ce_tasklet_entry *tasklet_entry)
 {
 	struct hif_softc *scn = HIF_GET_SOFTC(hif_ctx);
@@ -615,6 +638,7 @@ irqreturn_t ce_dispatch_interrupt(int ce_id,
 	struct HIF_CE_state *hif_ce_state = tasklet_entry->hif_ce_state;
 	struct hif_softc *scn = HIF_GET_SOFTC(hif_ce_state);
 	struct hif_opaque_softc *hif_hdl = GET_HIF_OPAQUE_HDL(scn);
+	struct CE_state *CE_state = scn->ce_id_to_state[tasklet_entry->ce_id];
 
 	if (tasklet_entry->ce_id != ce_id) {
 		HIF_ERROR("%s: ce_id (expect %d, received %d) does not match",
@@ -627,7 +651,17 @@ irqreturn_t ce_dispatch_interrupt(int ce_id,
 		return IRQ_NONE;
 	}
 
+	if ((qdf_atomic_inc_return(&CE_state->disable_process) != 1)
+		|| (qdf_atomic_read(&CE_state->int_status) == 0)) {
+		qdf_atomic_dec(&CE_state->disable_process);
+		return IRQ_HANDLED;
+	}
+
 	hif_irq_disable(scn, ce_id);
+	if (CE_state->scn->ini_cfg.ce_poll_bitmap &
+		 (1 << tasklet_entry->ce_id)) {
+		qdf_timer_stop(&CE_state->poll_timer);
+	}
 
 	if (!TARGET_REGISTER_ACCESS_ALLOWED(scn))
 		return IRQ_HANDLED;
@@ -648,6 +682,8 @@ irqreturn_t ce_dispatch_interrupt(int ce_id,
 		hif_napi_schedule(hif_hdl, ce_id);
 	else
 		hif_tasklet_schedule(hif_hdl, tasklet_entry);
+
+	qdf_atomic_dec(&CE_state->disable_process);
 
 	return IRQ_HANDLED;
 }

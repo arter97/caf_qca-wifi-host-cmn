@@ -977,6 +977,14 @@ int hif_napi_poll(struct hif_opaque_softc *hif_ctx,
 		napi_complete(napi);
 		/* enable interrupts */
 		hif_napi_enable_irq(hif_ctx, napi_info->id);
+
+		if (ce_state->scn->ini_cfg.ce_poll_bitmap &
+			(1 << ce_state->id)) {
+			ce_state->poll_count = 0;
+			ce_state->print_flag = 0;
+			qdf_timer_mod(&ce_state->poll_timer,
+				ce_state->scn->ini_cfg.ce_poll_timeout);
+		}
 		/* support suspend/resume */
 		qdf_atomic_dec(&(hif->active_tasklet_cnt));
 

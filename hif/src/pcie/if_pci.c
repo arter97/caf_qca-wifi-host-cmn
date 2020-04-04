@@ -3416,11 +3416,19 @@ static void hif_ce_srng_msi_irq_enable(struct hif_softc *hif_sc, int ce_id)
 
 static void hif_ce_legacy_msi_irq_disable(struct hif_softc *hif_sc, int ce_id)
 {
+	struct CE_state *CE_state = hif_sc->ce_id_to_state[ce_id];
+
+	qdf_atomic_set(&CE_state->int_status, 0);
+	CE_state->int_disable_count++;
 	disable_irq_nosync(hif_ce_msi_map_ce_to_irq(hif_sc, ce_id));
 }
 
 static void hif_ce_legacy_msi_irq_enable(struct hif_softc *hif_sc, int ce_id)
 {
+	struct CE_state *CE_state = hif_sc->ce_id_to_state[ce_id];
+
+	qdf_atomic_set(&CE_state->int_status, 1);
+	CE_state->int_enable_count++;
 	enable_irq(hif_ce_msi_map_ce_to_irq(hif_sc, ce_id));
 }
 

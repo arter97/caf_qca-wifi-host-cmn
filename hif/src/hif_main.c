@@ -423,6 +423,12 @@ void hif_get_cfg_from_psoc(struct hif_softc *scn,
 		scn->ini_cfg.ce_status_ring_batch_count_threshold =
 			cfg_get(psoc,
 				CFG_CE_STATUS_RING_BATCH_COUNT_THRESHOLD);
+		scn->ini_cfg.ce_poll_bitmap =
+			cfg_get(psoc, CFG_CE_POLL_BITMAP);
+		scn->ini_cfg.ce_poll_timeout =
+			cfg_get(psoc, CFG_CE_POLL_TIMEOUT);
+		qdf_err("poll_bitmap %x  poll_timeout %d", scn->ini_cfg.ce_poll_bitmap, scn->ini_cfg.ce_poll_timeout);
+
 	}
 }
 #else
@@ -430,6 +436,14 @@ static inline
 void hif_get_cfg_from_psoc(struct hif_softc *scn,
 			   struct wlan_objmgr_psoc *psoc)
 {
+	if (psoc) {
+		scn->ini_cfg.ce_poll_bitmap =
+			cfg_get(psoc, CFG_CE_POLL_BITMAP);
+		scn->ini_cfg.ce_poll_timeout =
+			cfg_get(psoc, CFG_CE_POLL_TIMEOUT);
+		qdf_err("poll_bitmap %x  poll_timeout %d", scn->ini_cfg.ce_poll_bitmap, scn->ini_cfg.ce_poll_timeout);
+
+	}
 }
 #endif /* WLAN_CE_INTERRUPT_THRESHOLD_CONFIG */
 
