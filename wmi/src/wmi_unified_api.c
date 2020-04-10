@@ -1147,6 +1147,17 @@ wmi_unified_wlan_profile_trigger_cmd_send(wmi_unified_t wmi_handle,
 }
 
 QDF_STATUS
+wmi_unified_wlan_profile_hist_intvl_cmd_send(wmi_unified_t wmi_handle,
+					     struct wlan_profile_params *param)
+{
+	if (wmi_handle->ops->send_wlan_profile_hist_intvl_cmd)
+		return wmi_handle->ops->send_wlan_profile_hist_intvl_cmd(
+					wmi_handle, param);
+
+	return QDF_STATUS_E_FAILURE;
+}
+
+QDF_STATUS
 wmi_unified_set_chan_cmd_send(wmi_unified_t wmi_handle,
 			      struct channel_param *param)
 {
@@ -3101,6 +3112,20 @@ wmi_unified_extract_roam_scan_stats(wmi_unified_t wmi, void *evt_buf,
 	return QDF_STATUS_E_FAILURE;
 }
 
+#ifdef WLAN_FEATURE_PKT_CAPTURE
+QDF_STATUS
+wmi_unified_extract_vdev_mgmt_offload_event(
+				wmi_unified_t wmi, void *evt_buf,
+				struct mgmt_offload_event_params *params)
+{
+	if (wmi->ops->extract_vdev_mgmt_offload_event)
+		return wmi->ops->extract_vdev_mgmt_offload_event(wmi, evt_buf,
+								 params);
+
+	return QDF_STATUS_E_FAILURE;
+}
+#endif /* WLAN_FEATURE_PKT_CAPTURE */
+
 QDF_STATUS
 wmi_unified_extract_roam_result_stats(wmi_unified_t wmi, void *buf,
 				      struct wmi_roam_result *dst,
@@ -3171,3 +3196,15 @@ QDF_STATUS wmi_unified_extract_time_sync_ftm_offset(
 	return QDF_STATUS_E_FAILURE;
 }
 #endif /* FEATURE_WLAN_TIME_SYNC_FTM */
+
+QDF_STATUS
+wmi_unified_send_injector_frame_config_cmd(wmi_unified_t wmi_handle,
+				 struct wmi_host_injector_frame_params *param)
+{
+	if (wmi_handle->ops->send_injector_config_cmd) {
+		return wmi_handle->ops->send_injector_config_cmd(wmi_handle,
+			param);
+	}
+
+	return QDF_STATUS_E_FAILURE;
+}

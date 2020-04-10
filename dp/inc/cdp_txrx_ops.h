@@ -761,6 +761,10 @@ struct cdp_mon_ops {
 	QDF_STATUS (*txrx_set_advance_monitor_filter)
 		(struct cdp_soc_t *soc_hdl, uint8_t pdev_id,
 		 struct cdp_monitor_filter *filter_val);
+
+	/* Configure full monitor mode */
+	QDF_STATUS
+		(*config_full_mon_mode)(struct cdp_soc_t *soc, uint8_t val);
 };
 
 #ifdef WLAN_FEATURE_PKT_CAPTURE
@@ -948,7 +952,7 @@ struct cdp_raw_ops {
 struct cdp_pflow_ops {
 	uint32_t (*pflow_update_pdev_params)(struct cdp_soc_t *soc,
 					     uint8_t pdev_id,
-					     enum _ol_ath_param_t,
+					     enum _dp_param_t,
 					     uint32_t, void *);
 };
 #endif /* PEER_FLOW_CONTROL */
@@ -1004,6 +1008,7 @@ struct ol_if_ops {
 	int (*peer_add_wds_entry)(struct cdp_ctrl_objmgr_psoc *soc,
 				  uint8_t vdev_id,
 				  uint8_t *peer_macaddr,
+				  uint16_t peer_id,
 				  const uint8_t *dest_macaddr,
 				  uint8_t *next_node_mac,
 				  uint32_t flags,
@@ -1052,7 +1057,10 @@ struct ol_if_ops {
 				   uint16_t hdr_space);
 
 	uint8_t (*freq_to_channel)(struct cdp_ctrl_objmgr_psoc *psoc,
-				   uint8_t vdev_id, uint16_t freq);
+				   uint8_t pdev_id, uint16_t freq);
+
+	uint8_t (*freq_to_band)(struct cdp_ctrl_objmgr_psoc *psoc,
+				uint8_t pdev_id, uint16_t freq);
 
 #ifdef ATH_SUPPORT_NAC_RSSI
 	int (*config_fw_for_nac_rssi)(struct cdp_ctrl_objmgr_psoc *psoc,
@@ -1596,6 +1604,9 @@ struct cdp_rx_offld_ops {
  * @txrx_cfr_filter: Handler to configure host rx monitor status ring
  * @txrx_get_cfr_rcc: Handler to get CFR mode
  * @txrx_set_cfr_rcc: Handler to enable/disable CFR mode
+ * @txrx_get_cfr_dbg_stats: Handler to get debug statistics for CFR mode
+ * @txrx_clear_cfr_dbg_stats: Handler to clear debug statistics for CFR mode
+ * @txrx_enable_mon_reap_timer: Enable/Disable reap timer of monitor status ring
  */
 struct cdp_cfr_ops {
 	void (*txrx_cfr_filter)(struct cdp_soc_t *soc_hdl,
@@ -1607,6 +1618,14 @@ struct cdp_cfr_ops {
 	void (*txrx_set_cfr_rcc)(struct cdp_soc_t *soc_hdl,
 				 uint8_t pdev_id,
 				 bool enable);
+	void (*txrx_get_cfr_dbg_stats)(struct cdp_soc_t *soc_hdl,
+				       uint8_t pdev_id,
+				       struct cdp_cfr_rcc_stats *buf);
+	void (*txrx_clear_cfr_dbg_stats)(struct cdp_soc_t *soc_hdl,
+					 uint8_t pdev_id);
+	void (*txrx_enable_mon_reap_timer)(struct cdp_soc_t *soc_hdl,
+					   uint8_t pdev_id,
+					   bool enable);
 };
 #endif
 

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2019 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2013-2020 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -29,6 +29,9 @@
 /* #endif */
 #define HTC_DATA_RESOURCE_THRS 256
 #define HTC_DATA_MINDESC_PERPACKET 2
+
+/* maximum number of requeue attempts before print */
+#define MAX_REQUEUE_WARN 5
 
 enum HTC_SEND_QUEUE_RESULT {
 	HTC_SEND_QUEUE_OK = 0,  /* packet was queued */
@@ -129,7 +132,7 @@ static void send_packet_completion(HTC_TARGET *target, HTC_PACKET *pPacket)
 	 * In case of SSR, we cannot call the upper layer completion
 	 * callbacks, hence just free the nbuf and HTC packet here.
 	 */
-	if (hif_get_target_status(target->hif_dev)) {
+	if (target->hif_dev && hif_get_target_status(target->hif_dev)) {
 		htc_free_control_tx_packet(target, pPacket);
 		return;
 	}
@@ -795,9 +798,6 @@ static QDF_STATUS htc_issue_packets(HTC_TARGET *target,
 			 * frames, since data frames were already mapped as they
 			 * entered into the driver.
 			 */
-			pPacket->PktInfo.AsTx.Flags |=
-				HTC_TX_PACKET_FLAG_FIXUP_NETBUF;
-
 			ret = qdf_nbuf_map(target->osdev,
 				GET_HTC_PACKET_NET_BUF_CONTEXT(pPacket),
 				QDF_DMA_TO_DEVICE);
@@ -809,6 +809,8 @@ static QDF_STATUS htc_issue_packets(HTC_TARGET *target,
 				status = QDF_STATUS_E_FAILURE;
 				break;
 			}
+			pPacket->PktInfo.AsTx.Flags |=
+				HTC_TX_PACKET_FLAG_FIXUP_NETBUF;
 		}
 
 		if (!pEndpoint->async_update) {
@@ -872,6 +874,13 @@ static QDF_STATUS htc_issue_packets(HTC_TARGET *target,
 				AR_DEBUG_PRINTF(ATH_DEBUG_ERR,
 						("hif_send Failed status:%d\n",
 						 status));
+			} else {
+				if (target->htc_pkt_dbg) {
+					if (pEndpoint->num_requeues_warn >
+						MAX_REQUEUE_WARN) {
+						hif_print_napi_stats(target->hif_dev);
+					}
+				}
 			}
 
 			/* only unmap if we mapped in this function */
@@ -904,14 +913,21 @@ static QDF_STATUS htc_issue_packets(HTC_TARGET *target,
 			break;
 		}
 		if (rt_put) {
-			hif_pm_runtime_put(target->hif_dev);
+			hif_pm_runtime_put(target->hif_dev,
+					   RTPM_ID_HTC);
 			rt_put = false;
 		}
 	}
+
 	if (qdf_unlikely(QDF_IS_STATUS_ERROR(status))) {
-		AR_DEBUG_PRINTF(ATH_DEBUG_ERR,
-			("htc_issue_packets, failed pkt:0x%pK status:%d",
-			 pPacket, status));
+		if (((status == QDF_STATUS_E_RESOURCES) &&
+		     (pEndpoint->num_requeues_warn > MAX_REQUEUE_WARN)) ||
+		     (status != QDF_STATUS_E_RESOURCES)) {
+			QDF_TRACE(QDF_MODULE_ID_HIF, QDF_TRACE_LEVEL_INFO,
+				  "failed pkt:0x%pK status:%d endpoint:%d",
+				  pPacket, status, pEndpoint->Id);
+		}
+
 	}
 
 	AR_DEBUG_PRINTF(ATH_DEBUG_SEND, ("-htc_issue_packets\n"));
@@ -973,6 +989,40 @@ static void queue_htc_pm_packets(HTC_ENDPOINT *endpoint,
 #endif
 
 /**
+ * htc_send_pkts_rtpm_dbgid_get() - get runtime pm dbgid by service_id
+ * @service_id: service for endpoint
+ *
+ * For service_id HTT_DATA_MSG_SVC, HTT message donot have a tx complete
+ * from CE level, so they need runtime put which only can happen in fw
+ * response. runtime put will happens at 2 ways.
+ *    1 if packet tag HTC_TX_PACKET_TAG_RUNTIME_PUT, runtime put
+ *      will be just in htc_issue_packets. as such pkt doesn't have
+ *      a response from fw.
+ *    2 other pkt must have a response from fw, it will be handled
+ *      by fw response using htc_pm_runtime_put.
+ *
+ * For other service_id, they have tx_completion from CE, so they will be
+ * handled in htc_tx_completion_handler, except packet tag as
+ * HTC_TX_PACKET_TAG_AUTO_PM, pm related wmi cmd don't need a runtime
+ * put/get.
+ *
+ *
+ * Return: rtpm_dbgid to trace who use it
+ */
+static wlan_rtpm_dbgid
+htc_send_pkts_rtpm_dbgid_get(HTC_SERVICE_ID service_id)
+{
+	wlan_rtpm_dbgid rtpm_dbgid;
+
+	if (service_id == HTT_DATA_MSG_SVC)
+		rtpm_dbgid = RTPM_ID_HTC;
+	else
+		rtpm_dbgid = RTPM_ID_WMI;
+
+	return rtpm_dbgid;
+}
+
+/**
  * get_htc_send_packets_credit_based() - get packets based on available credits
  * @target: HTC target on which packets need to be sent
  * @pEndpoint: logical endpoint on which packets needs to be sent
@@ -995,6 +1045,7 @@ static void get_htc_send_packets_credit_based(HTC_TARGET *target,
 	HTC_PACKET_QUEUE *tx_queue;
 	HTC_PACKET_QUEUE pm_queue;
 	bool do_pm_get = false;
+	wlan_rtpm_dbgid rtpm_dbgid = 0;
 	int ret;
 
 	/*** NOTE : the TX lock is held when this function is called ***/
@@ -1012,28 +1063,24 @@ static void get_htc_send_packets_credit_based(HTC_TARGET *target,
 
 	/* loop until we can grab as many packets out of the queue as we can */
 	while (true) {
-		if (do_pm_get) {
-			ret = hif_pm_runtime_get(target->hif_dev);
-			if (ret) {
-				/* bus suspended, runtime resume issued */
-				QDF_ASSERT(HTC_PACKET_QUEUE_DEPTH(pQueue) == 0);
-				if (ret == -EAGAIN) {
-					pPacket = htc_get_pkt_at_head(tx_queue);
-					if (!pPacket)
-						break;
-					log_packet_info(target, pPacket);
-				}
-				break;
-			}
-		}
-
 		sendFlags = 0;
 		/* get packet at head, but don't remove it */
 		pPacket = htc_get_pkt_at_head(tx_queue);
-		if (!pPacket) {
-			if (do_pm_get)
-				hif_pm_runtime_put(target->hif_dev);
+		if (!pPacket)
 			break;
+
+		if (do_pm_get) {
+			rtpm_dbgid =
+				htc_send_pkts_rtpm_dbgid_get(
+					pEndpoint->service_id);
+			ret = hif_pm_runtime_get(target->hif_dev,
+						 rtpm_dbgid);
+			if (ret) {
+				/* bus suspended, runtime resume issued */
+				if (ret == -EAGAIN)
+					log_packet_info(target, pPacket);
+				break;
+			}
 		}
 
 		AR_DEBUG_PRINTF(ATH_DEBUG_SEND,
@@ -1076,7 +1123,8 @@ static void get_htc_send_packets_credit_based(HTC_TARGET *target,
 						 creditsRequired));
 #endif
 				if (do_pm_get)
-					hif_pm_runtime_put(target->hif_dev);
+					hif_pm_runtime_put(target->hif_dev,
+							   rtpm_dbgid);
 				break;
 			}
 
@@ -1135,6 +1183,7 @@ static void get_htc_send_packets(HTC_TARGET *target,
 	HTC_PACKET_QUEUE *tx_queue;
 	HTC_PACKET_QUEUE pm_queue;
 	bool do_pm_get = false;
+	wlan_rtpm_dbgid rtpm_dbgid;
 	int ret;
 
 	/*** NOTE : the TX lock is held when this function is called ***/
@@ -1154,26 +1203,22 @@ static void get_htc_send_packets(HTC_TARGET *target,
 	while (Resources > 0) {
 		int num_frags;
 
+		pPacket = htc_packet_dequeue(tx_queue);
+		if (!pPacket)
+			break;
+
 		if (do_pm_get) {
-			ret = hif_pm_runtime_get(target->hif_dev);
+			rtpm_dbgid =
+				htc_send_pkts_rtpm_dbgid_get(
+					pEndpoint->service_id);
+			ret = hif_pm_runtime_get(target->hif_dev,
+						 rtpm_dbgid);
 			if (ret) {
 				/* bus suspended, runtime resume issued */
-				QDF_ASSERT(HTC_PACKET_QUEUE_DEPTH(pQueue) == 0);
-				if (ret == -EAGAIN) {
-					pPacket = htc_get_pkt_at_head(tx_queue);
-					if (!pPacket)
-						break;
+				if (ret == -EAGAIN)
 					log_packet_info(target, pPacket);
-				}
 				break;
 			}
-		}
-
-		pPacket = htc_packet_dequeue(tx_queue);
-		if (!pPacket) {
-			if (do_pm_get)
-				hif_pm_runtime_put(target->hif_dev);
-			break;
 		}
 		AR_DEBUG_PRINTF(ATH_DEBUG_SEND,
 				(" Got packet:%pK , New Queue Depth: %d\n",
@@ -1231,6 +1276,7 @@ static enum HTC_SEND_QUEUE_RESULT htc_try_send(HTC_TARGET *target,
 	int tx_resources;
 	int overflow;
 	enum HTC_SEND_QUEUE_RESULT result = HTC_SEND_QUEUE_OK;
+	QDF_STATUS status;
 
 	AR_DEBUG_PRINTF(ATH_DEBUG_SEND, ("+htc_try_send (Queue:%pK Depth:%d)\n",
 					 pCallersSendQueue,
@@ -1488,22 +1534,47 @@ static enum HTC_SEND_QUEUE_RESULT htc_try_send(HTC_TARGET *target,
 			UNLOCK_HTC_TX(target);
 
 		/* send what we can */
-		if (htc_issue_packets(target, pEndpoint, &sendQueue)) {
+		status = htc_issue_packets(target, pEndpoint, &sendQueue);
+		if (status) {
 			int i;
+			wlan_rtpm_dbgid rtpm_dbgid;
 
 			result = HTC_SEND_QUEUE_DROP;
-			AR_DEBUG_PRINTF(ATH_DEBUG_ERR,
-				("htc_issue_packets, failed status:%d put it back to head of callersSendQueue",
-				 result));
 
+			switch (status) {
+			case  QDF_STATUS_E_RESOURCES:
+				if (pEndpoint->num_requeues_warn <= MAX_REQUEUE_WARN) {
+					pEndpoint->num_requeues_warn++;
+					pEndpoint->total_num_requeues++;
+					break;
+				} else {
+					pEndpoint->total_num_requeues++;
+					pEndpoint->num_requeues_warn = 0;
+				}
+			default:
+				QDF_TRACE(QDF_MODULE_ID_HIF, QDF_TRACE_LEVEL_INFO,
+					  "htc_issue_packets, failed status:%d"
+					  "endpoint:%d, put it back to head of"
+					  "callersSendQueue", result, pEndpoint->Id);
+				break;
+			}
+
+			rtpm_dbgid =
+				htc_send_pkts_rtpm_dbgid_get(
+					pEndpoint->service_id);
 			for (i = HTC_PACKET_QUEUE_DEPTH(&sendQueue); i > 0; i--)
-				hif_pm_runtime_put(target->hif_dev);
+				hif_pm_runtime_put(target->hif_dev,
+						   rtpm_dbgid);
+
 			if (!pEndpoint->async_update) {
 				LOCK_HTC_TX(target);
 			}
 			HTC_PACKET_QUEUE_TRANSFER_TO_HEAD(&pEndpoint->TxQueue,
 							  &sendQueue);
 			break;
+		}  else {
+			if (pEndpoint->num_requeues_warn)
+				pEndpoint->num_requeues_warn = 0;
 		}
 
 		if (!IS_TX_CREDIT_FLOW_ENABLED(pEndpoint)) {
@@ -1780,6 +1851,7 @@ QDF_STATUS htc_send_data_pkt(HTC_HANDLE htc_hdl, qdf_nbuf_t netbuf, int ep_id,
 	int tx_resources;
 	uint32_t data_attr = 0;
 	int htc_payload_len = actual_length;
+	wlan_rtpm_dbgid rtpm_dbgid;
 
 	pEndpoint = &target->endpoint[ep_id];
 
@@ -1798,7 +1870,9 @@ QDF_STATUS htc_send_data_pkt(HTC_HANDLE htc_hdl, qdf_nbuf_t netbuf, int ep_id,
 			return QDF_STATUS_E_FAILURE;
 	}
 
-	if (hif_pm_runtime_get(target->hif_dev))
+	rtpm_dbgid =
+		htc_send_pkts_rtpm_dbgid_get(pEndpoint->service_id);
+	if (hif_pm_runtime_get(target->hif_dev, rtpm_dbgid))
 		return QDF_STATUS_E_FAILURE;
 
 	p_htc_hdr = (HTC_FRAME_HDR *)qdf_nbuf_get_frag_vaddr(netbuf, 0);
@@ -2241,7 +2315,8 @@ QDF_STATUS htc_tx_completion_handler(void *Context,
 			break;
 		}
 		if (pPacket->PktInfo.AsTx.Tag != HTC_TX_PACKET_TAG_AUTO_PM)
-			hif_pm_runtime_put(target->hif_dev);
+			hif_pm_runtime_put(target->hif_dev,
+					   RTPM_ID_WMI);
 
 		if (pPacket->PktInfo.AsTx.Tag == HTC_TX_PACKET_TAG_BUNDLED) {
 			HTC_PACKET *pPacketTemp;
@@ -2440,6 +2515,13 @@ void htc_indicate_activity_change(HTC_HANDLE HTCHandle,
 bool htc_is_endpoint_active(HTC_HANDLE HTCHandle, HTC_ENDPOINT_ID Endpoint)
 {
 	return true;
+}
+
+void htc_set_pkt_dbg(HTC_HANDLE handle, A_BOOL dbg_flag)
+{
+	HTC_TARGET *target = GET_HTC_TARGET_FROM_HANDLE(handle);
+
+	target->htc_pkt_dbg = dbg_flag;
 }
 
 void htc_set_nodrop_pkt(HTC_HANDLE HTCHandle, A_BOOL isNodropPkt)

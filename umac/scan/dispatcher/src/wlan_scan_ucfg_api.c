@@ -190,12 +190,12 @@ QDF_STATUS ucfg_scan_pno_stop(struct wlan_objmgr_vdev *vdev)
 	}
 	if (!scan_vdev_obj->pno_in_progress) {
 		scm_debug("pno already stopped");
-		return QDF_STATUS_E_ALREADY;
+		return QDF_STATUS_SUCCESS;
 	}
 
 	status = tgt_scan_pno_stop(vdev, wlan_vdev_get_id(vdev));
 	if (QDF_IS_STATUS_ERROR(status))
-		scm_err("pno start failed");
+		scm_err("pno stop failed");
 	else
 		scan_vdev_obj->pno_in_progress = false;
 
@@ -1380,7 +1380,7 @@ ucfg_scan_init_chanlist_params(struct scan_start_request *req,
 		req->scan_req.chan_list.chan[idx].freq =
 			(chan_list[idx] > WLAN_24_GHZ_BASE_FREQ) ?
 			chan_list[idx] :
-			wlan_reg_chan_to_freq(pdev, chan_list[idx]);
+			wlan_reg_legacy_chan_to_freq(pdev, chan_list[idx]);
 		if (phymode)
 			req->scan_req.chan_list.chan[idx].phymode =
 				phymode[idx];

@@ -68,6 +68,7 @@ typedef uint32_t wlan_scan_id;
 #define PCL_WEIGHT 10
 #define CHANNEL_CONGESTION_WEIGHTAGE 5
 #define OCE_WAN_WEIGHTAGE 0
+#define OCE_AP_TX_POWER_WEIGHTAGE 5
 #define BEST_CANDIDATE_MAX_WEIGHT 100
 #define MAX_INDEX_SCORE 100
 #define MAX_INDEX_PER_INI 4
@@ -159,6 +160,7 @@ struct element_info {
  * @mbo_oce: pointer to mbo/oce indication ie
  * @rnrie: reduced neighbor report IE
  * @adaptive_11r: pointer to adaptive 11r IE
+ * @single_pmk: Pointer to sae single pmk IE
  */
 struct ie_list {
 	uint8_t *tim;
@@ -210,6 +212,7 @@ struct ie_list {
 	uint8_t *rnrie;
 	uint8_t *extender;
 	uint8_t *adaptive_11r;
+	uint8_t *single_pmk;
 };
 
 enum scan_entry_connection_state {
@@ -476,6 +479,7 @@ struct scan_cache_entry {
  * @pcl_weightage: PCL weightage
  * @channel_congestion_weightage: channel congestion weightage
  * @oce_wan_weightage: OCE WAN metrics weightage
+ * @oce_ap_tx_pwr_weightage: OCE AP tx power weigtage
  */
 struct  weight_config {
 	uint8_t rssi_weightage;
@@ -489,6 +493,7 @@ struct  weight_config {
 	uint8_t pcl_weightage;
 	uint8_t channel_congestion_weightage;
 	uint8_t oce_wan_weightage;
+	uint8_t oce_ap_tx_pwr_weightage;
 };
 
 /**
@@ -669,13 +674,13 @@ struct scan_filter {
 	uint8_t country[3];
 	struct qdf_mac_addr bssid_list[WLAN_SCAN_FILTER_NUM_BSSID];
 	struct wlan_ssid ssid_list[WLAN_SCAN_FILTER_NUM_SSID];
-	uint32_t chan_freq_list[QDF_MAX_NUM_CHAN];
+	uint32_t chan_freq_list[NUM_CHANNELS];
 	enum wlan_auth_type auth_type[WLAN_NUM_OF_SUPPORT_AUTH_TYPE];
 	enum wlan_enc_type enc_type[WLAN_NUM_OF_ENCRYPT_TYPE];
 	enum wlan_enc_type mc_enc_type[WLAN_NUM_OF_ENCRYPT_TYPE];
-	uint32_t pcl_freq_list[QDF_MAX_NUM_CHAN];
+	uint32_t pcl_freq_list[NUM_CHANNELS];
 	struct fils_filter_info fils_scan_filter;
-	uint8_t pcl_weight_list[QDF_MAX_NUM_CHAN];
+	uint8_t pcl_weight_list[NUM_CHANNELS];
 	struct qdf_mac_addr bssid_hint;
 };
 
@@ -1253,7 +1258,7 @@ enum scan_cb_type {
 
 /* Set PNO */
 #define SCAN_PNO_MAX_PLAN_REQUEST   2
-#define SCAN_PNO_MAX_NETW_CHANNELS_EX  (QDF_MAX_NUM_CHAN)
+#define SCAN_PNO_MAX_NETW_CHANNELS_EX  (NUM_CHANNELS)
 #define SCAN_PNO_MAX_SUPP_NETWORKS  16
 #define SCAN_PNO_DEF_SLOW_SCAN_MULTIPLIER 6
 #define SCAN_PNO_DEF_SCAN_TIMER_REPEAT 20
@@ -1477,12 +1482,15 @@ struct meta_rnr_channel {
 	qdf_list_t rnr_list;
 };
 
+#define RNR_UPDATE_SCAN_CNT_THRESHOLD 2
 /**
  * channel_list_db - Database for channel information
  * @channel: channel meta information
+ * @scan_count: scan count since the db was updated
  */
 struct channel_list_db {
 	struct meta_rnr_channel channel[NUM_6GHZ_CHANNELS];
+	uint8_t scan_count;
 };
 
 /**
