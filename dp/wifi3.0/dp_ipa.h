@@ -25,6 +25,12 @@
 #define IPA_REO_DEST_RING_IDX	3
 #define IPA_RX_REFILL_BUF_RING_IDX	2
 
+#ifdef IPA_WDI3_TX_TWO_PIPES
+#define IPA_TX_ALT_RING_IDX 1
+#define IPA_TX_ALT_COMP_RING_IDX 1
+#define IPA_SESSION_ID_SHIFT 1
+#endif
+
 /**
  * struct dp_ipa_uc_tx_hdr - full tx header registered to IPA hardware
  * @eth:     ether II header
