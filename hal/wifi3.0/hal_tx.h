@@ -128,6 +128,7 @@ enum hal_tx_ret_buf_manager {
 	HAL_WBM_SW1_BM_ID = 4,
 	HAL_WBM_SW2_BM_ID = 5,
 	HAL_WBM_SW3_BM_ID = 6,
+	HAL_WBM_SW4_BM_ID = 7,
 };
 
 /*---------------------------------------------------------------------------
