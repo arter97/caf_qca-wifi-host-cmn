@@ -66,6 +66,9 @@ struct qdf_mem_multi_page_t {
 	struct qdf_mem_dma_page_t *dma_pages;
 	void **cacheable_pages;
 	qdf_size_t page_size;
+#ifndef ALLOCATE_DMA_BUFFER_PER_PAGE
+	bool contiguous_dma_pages;
+#endif
 };
 
 
