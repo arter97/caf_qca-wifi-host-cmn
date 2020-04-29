@@ -805,6 +805,9 @@ QDF_STATUS dp_ipa_enable_autonomy(struct cdp_pdev *ppdev)
 	if (!wlan_cfg_is_ipa_enabled(soc->wlan_cfg_ctx))
 		return QDF_STATUS_SUCCESS;
 
+	if (!hif_is_target_ready(HIF_GET_SOFTC(soc->hif_handle)))
+		return QDF_STATUS_E_AGAIN;
+
 	/* Call HAL API to remap REO rings to REO2IPA ring */
 	ix0 = HAL_REO_REMAP_VAL(REO_REMAP_TCL, REO_REMAP_TCL) |
 	      HAL_REO_REMAP_VAL(REO_REMAP_SW1, REO_REMAP_SW4) |
@@ -851,6 +854,9 @@ QDF_STATUS dp_ipa_disable_autonomy(struct cdp_pdev *ppdev)
 
 	if (!wlan_cfg_is_ipa_enabled(soc->wlan_cfg_ctx))
 		return QDF_STATUS_SUCCESS;
+
+	if (!hif_is_target_ready(HIF_GET_SOFTC(soc->hif_handle)))
+		return QDF_STATUS_E_AGAIN;
 
 	/* Call HAL API to remap REO rings to REO2IPA ring */
 	ix0 = HAL_REO_REMAP_VAL(REO_REMAP_TCL, REO_REMAP_TCL) |
