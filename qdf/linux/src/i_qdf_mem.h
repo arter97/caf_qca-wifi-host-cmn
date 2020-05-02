@@ -61,7 +61,9 @@
 #ifdef CONFIG_ARM_SMMU
 #include <pld_common.h>
 #ifdef ENABLE_SMMU_S1_TRANSLATION
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(5, 4, 0))
 #include <asm/dma-iommu.h>
+#endif
 #endif
 #include <linux/iommu.h>
 #endif
@@ -98,6 +100,7 @@ typedef struct __qdf_mempool_ctxt {
 
 #endif /* __KERNEL__ */
 
+#define __page_size ((size_t)PAGE_SIZE)
 #define __qdf_align(a, mask) ALIGN(a, mask)
 
 #ifdef DISABLE_MEMDEBUG_PANIC

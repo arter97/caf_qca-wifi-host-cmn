@@ -1677,6 +1677,36 @@ static inline int cdp_set_pn_check(ol_txrx_soc_handle soc,
 	return 0;
 }
 
+/**
+ * cdp_set_key_sec_type(): function to set sec mode of key
+ * @soc: soc handle
+ * @vdev_id: id of virtual device
+ * @peer_mac: mac address of peer
+ * @sec_type: security type
+ * #is_unicast: ucast or mcast
+ */
+static inline int cdp_set_key_sec_type(ol_txrx_soc_handle soc,
+				       uint8_t vdev_id,
+				       uint8_t *peer_mac,
+				       enum cdp_sec_type sec_type,
+				       bool is_unicast)
+{
+	if (!soc || !soc->ops) {
+		QDF_TRACE(QDF_MODULE_ID_CDP, QDF_TRACE_LEVEL_DEBUG,
+			  "%s: Invalid Instance:", __func__);
+		QDF_BUG(0);
+		return 0;
+	}
+
+	if (!soc->ops->cmn_drv_ops ||
+	    !soc->ops->cmn_drv_ops->set_key_sec_type)
+		return 0;
+
+	soc->ops->cmn_drv_ops->set_key_sec_type(soc, vdev_id,
+			peer_mac, sec_type, is_unicast);
+	return 0;
+}
+
 static inline QDF_STATUS
 cdp_set_key(ol_txrx_soc_handle soc,
 	    uint8_t vdev_id,
@@ -1895,7 +1925,7 @@ cdp_soc_handle_mode_change(ol_txrx_soc_handle soc, uint8_t pdev_id,
 	}
 
 	if (!soc->ops->cmn_drv_ops ||
-	    !soc->ops->cmn_drv_ops->map_pdev_to_lmac)
+	    !soc->ops->cmn_drv_ops->handle_mode_change)
 		return QDF_STATUS_E_FAILURE;
 
 	return soc->ops->cmn_drv_ops->handle_mode_change(soc, pdev_id,
@@ -2513,6 +2543,33 @@ cdp_vdev_get_peer_mac_list(ol_txrx_soc_handle soc,
 
 	return soc->ops->cmn_drv_ops->get_peer_mac_list
 			(soc, vdev_id, newmac, mac_cnt);
+}
+
+/*
+ * cdp_soc_config_full_mon_mode () - Configure Full monitor mode
+ *
+ *@soc: dp soc handle
+ *@val: value to be configured val should be 0 or 1
+ *
+ * This API is used to enable/disable support for Full monitor mode feature
+ *
+ * Return: QDF_STATUS_SUCCESS if value set successfully
+ *         QDF_STATUS_E_INVAL false if error
+ */
+static inline QDF_STATUS
+cdp_soc_config_full_mon_mode(ol_txrx_soc_handle soc, uint8_t val)
+{
+	if (!soc || !soc->ops) {
+		QDF_TRACE(QDF_MODULE_ID_CDP, QDF_TRACE_LEVEL_DEBUG,
+			  "%s: Invalid Instance", __func__);
+		return QDF_STATUS_E_INVAL;
+	}
+
+	if (!soc->ops->mon_ops ||
+	    !soc->ops->mon_ops->config_full_mon_mode)
+		return QDF_STATUS_E_INVAL;
+
+	return soc->ops->mon_ops->config_full_mon_mode(soc, val);
 }
 
 #endif /* _CDP_TXRX_CMN_H_ */

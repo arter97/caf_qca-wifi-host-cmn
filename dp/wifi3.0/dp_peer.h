@@ -100,6 +100,10 @@ void dp_rx_peer_unmap_handler(struct dp_soc *soc, uint16_t peer_id,
 void dp_rx_sec_ind_handler(struct dp_soc *soc, uint16_t peer_id,
 			   enum cdp_sec_type sec_type, int is_unicast,
 			   u_int32_t *michael_key, u_int32_t *rx_pn);
+
+QDF_STATUS dp_rx_delba_ind_handler(void *soc_handle, uint16_t peer_id,
+				   uint8_t tid, uint16_t win_sz);
+
 uint8_t dp_get_peer_mac_addr_frm_id(struct cdp_soc_t *soc_handle,
 		uint16_t peer_id, uint8_t *peer_mac);
 
@@ -286,7 +290,9 @@ void dp_peer_ast_index_flow_queue_map_create(void *soc_hdl,
  * @soc: DP SOC handle
  * @pdev_id: id of DP pdev handle
  * @is_rx_pkt_cap_enable: enable/disable Rx packet capture in monitor mode
- * @is_tx_pkt_cap_enable: enable/disable Tx packet capture in monitor mode
+ * @is_tx_pkt_cap_enable: enable/disable/delete/print
+ * Tx packet capture in monitor mode
+ * Tx packet capture in monitor mode
  * @peer_mac: MAC address for which the above need to be enabled/disabled
  *
  * Return: Success if Rx & Tx capture is enabled for peer, false otherwise
@@ -295,7 +301,7 @@ QDF_STATUS
 dp_peer_update_pkt_capture_params(ol_txrx_soc_handle soc,
 				  uint8_t pdev_id,
 				  bool is_rx_pkt_cap_enable,
-				  bool is_tx_pkt_cap_enable,
+				  uint8_t is_tx_pkt_cap_enable,
 				  uint8_t *peer_mac);
 
 /*

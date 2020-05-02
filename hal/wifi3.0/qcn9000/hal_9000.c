@@ -21,6 +21,9 @@
 #include "target_type.h"
 #include "wcss_version.h"
 #include "qdf_module.h"
+#include "hal_9000_rx.h"
+#include "hal_api_mon.h"
+
 #define UNIFIED_RXPCU_PPDU_END_INFO_8_RX_PPDU_DURATION_OFFSET \
 	RXPCU_PPDU_END_INFO_9_RX_PPDU_DURATION_OFFSET
 #define UNIFIED_RXPCU_PPDU_END_INFO_8_RX_PPDU_DURATION_MASK \
@@ -117,6 +120,60 @@
 #include <hal_wbm.h>
 
 /**
+ * hal_rx_sw_mon_desc_info_get_9000(): API to read the
+ * sw monitor ring descriptor
+ *
+ * @rxdma_dst_ring_desc: sw monitor ring descriptor
+ * @desc_info_buf: Descriptor info buffer to which
+ * sw monitor ring descriptor is populated to
+ *
+ * Return: void
+ */
+static void
+hal_rx_sw_mon_desc_info_get_9000(hal_ring_desc_t rxdma_dst_ring_desc,
+				 hal_rx_mon_desc_info_t desc_info_buf)
+{
+	struct sw_monitor_ring *sw_mon_ring =
+		(struct sw_monitor_ring *)rxdma_dst_ring_desc;
+	struct buffer_addr_info *buf_addr_info;
+	uint32_t *mpdu_info;
+	uint32_t loop_cnt;
+	struct hal_rx_mon_desc_info *desc_info;
+
+	desc_info = (struct hal_rx_mon_desc_info *)desc_info_buf;
+	mpdu_info = (uint32_t *)&sw_mon_ring->
+			reo_level_mpdu_frame_info.rx_mpdu_desc_info_details;
+
+	loop_cnt = HAL_RX_GET(sw_mon_ring, SW_MONITOR_RING_7, LOOPING_COUNT);
+	desc_info->msdu_count = HAL_RX_MPDU_MSDU_COUNT_GET(mpdu_info);
+
+	/* Get msdu link descriptor buf_addr_info */
+	buf_addr_info = &sw_mon_ring->
+		reo_level_mpdu_frame_info.msdu_link_desc_addr_info;
+	desc_info->link_desc.paddr = HAL_RX_BUFFER_ADDR_31_0_GET(buf_addr_info)
+			| ((uint64_t)(HAL_RX_BUFFER_ADDR_39_32_GET(
+			buf_addr_info)) << 32);
+	desc_info->link_desc.sw_cookie = HAL_RX_BUF_COOKIE_GET(buf_addr_info);
+	buf_addr_info = &sw_mon_ring->status_buff_addr_info;
+	desc_info->status_buf.paddr = HAL_RX_BUFFER_ADDR_31_0_GET(buf_addr_info)
+			| ((uint64_t)
+			  (HAL_RX_BUFFER_ADDR_39_32_GET(buf_addr_info)) << 32);
+	desc_info->status_buf.sw_cookie = HAL_RX_BUF_COOKIE_GET(buf_addr_info);
+	desc_info->end_of_ppdu = HAL_RX_GET(sw_mon_ring,
+					    SW_MONITOR_RING_6,
+					    END_OF_PPDU);
+	desc_info->status_buf_count = HAL_RX_GET(sw_mon_ring,
+						 SW_MONITOR_RING_6,
+						 STATUS_BUF_COUNT);
+	desc_info->rxdma_push_reason = HAL_RX_GET(sw_mon_ring,
+						  SW_MONITOR_RING_6,
+						  RXDMA_PUSH_REASON);
+	desc_info->ppdu_id = HAL_RX_GET(sw_mon_ring,
+					SW_MONITOR_RING_7,
+					PHY_PPDU_ID);
+}
+
+/**
  * hal_rx_msdu_start_nss_get_9000(): API to get the NSS
  * Interval from rx_msdu_start
  *
@@ -191,6 +248,42 @@ static uint32_t hal_get_link_desc_size_9000(void)
 static uint8_t hal_rx_get_tlv_9000(void *rx_tlv)
 {
 	return HAL_RX_GET(rx_tlv, PHYRX_RSSI_LEGACY_0, RECEIVE_BANDWIDTH);
+}
+
+/**
+ * hal_rx_mpdu_start_tlv_tag_valid_9000 () - API to check if RX_MPDU_START
+ * tlv tag is valid
+ *
+ *@rx_tlv_hdr: start address of rx_pkt_tlvs
+ *
+ * Return: true if RX_MPDU_START is valied, else false.
+ */
+uint8_t hal_rx_mpdu_start_tlv_tag_valid_9000(void *rx_tlv_hdr)
+{
+	struct rx_pkt_tlvs *rx_desc = (struct rx_pkt_tlvs *)rx_tlv_hdr;
+	uint32_t tlv_tag;
+
+	tlv_tag = HAL_RX_GET_USER_TLV32_TYPE(&rx_desc->mpdu_start_tlv);
+
+	return tlv_tag == WIFIRX_MPDU_START_E ? true : false;
+}
+
+/**
+ * hal_rx_wbm_err_msdu_continuation_get_9000 () - API to check if WBM
+ * msdu continuation bit is set
+ *
+ *@wbm_desc: wbm release ring descriptor
+ *
+ * Return: true if msdu continuation bit is set.
+ */
+uint8_t hal_rx_wbm_err_msdu_continuation_get_9000(void *wbm_desc)
+{
+	uint32_t comp_desc =
+		*(uint32_t *)(((uint8_t *)wbm_desc) +
+				WBM_RELEASE_RING_3_MSDU_CONTINUATION_OFFSET);
+
+	return (comp_desc & WBM_RELEASE_RING_3_MSDU_CONTINUATION_MASK) >>
+		WBM_RELEASE_RING_3_MSDU_CONTINUATION_LSB;
 }
 
 /**
@@ -918,19 +1011,17 @@ static uint32_t hal_rx_tid_get_9000(hal_soc_handle_t hal_soc_hdl, uint8_t *buf)
 
 /**
  * hal_rx_hw_desc_get_ppduid_get_9000(): retrieve ppdu id
- * @hw_desc_addr: hw addr
+ * @rx_tlv_hdr: rx tlv header
+ * @rxdma_dst_ring_desc: rxdma HW descriptor
  *
  * Return: ppdu id
  */
-static uint32_t hal_rx_hw_desc_get_ppduid_get_9000(void *hw_desc_addr)
+static uint32_t hal_rx_hw_desc_get_ppduid_get_9000(void *rx_tlv_hdr,
+						   void *rxdma_dst_ring_desc)
 {
-	struct rx_mpdu_info *rx_mpdu_info;
-	struct rx_pkt_tlvs *rx_desc = (struct rx_pkt_tlvs *)hw_desc_addr;
+	struct reo_entrance_ring *reo_ent = rxdma_dst_ring_desc;
 
-	rx_mpdu_info =
-		&rx_desc->mpdu_start_tlv.rx_mpdu_start.rx_mpdu_info_details;
-
-	return HAL_RX_GET(rx_mpdu_info, RX_MPDU_INFO_9, PHY_PPDU_ID);
+	return reo_ent->phy_ppdu_id;
 }
 
 /**
@@ -1130,7 +1221,13 @@ static uint8_t hal_rx_get_filter_category_9000(uint8_t *buf)
 static uint32_t
 hal_rx_get_ppdu_id_9000(uint8_t *buf)
 {
-	return HAL_RX_GET_PPDU_ID(buf);
+	struct rx_mpdu_info *rx_mpdu_info;
+	struct rx_pkt_tlvs *rx_desc = (struct rx_pkt_tlvs *)buf;
+
+	rx_mpdu_info =
+		&rx_desc->mpdu_start_tlv.rx_mpdu_start.rx_mpdu_info_details;
+
+	return HAL_RX_GET_PPDU_ID(rx_mpdu_info);
 }
 
 /**
@@ -1376,6 +1473,7 @@ struct hal_hw_txrx_ops qcn9000_hal_hw_txrx_ops = {
 	hal_reo_setup_generic,
 	hal_setup_link_idle_list_generic,
 	hal_get_window_address_9000,
+	NULL,
 
 	/* tx */
 	hal_tx_desc_set_dscp_tid_table_id_9000,
@@ -1390,6 +1488,7 @@ struct hal_hw_txrx_ops qcn9000_hal_hw_txrx_ops = {
 	hal_tx_comp_get_release_reason_generic,
 	hal_get_wbm_internal_error_generic,
 	hal_tx_desc_set_mesh_en_9000,
+	hal_tx_init_cmd_credit_ring_9000,
 
 	/* rx */
 	hal_rx_msdu_start_nss_get_9000,
@@ -1460,6 +1559,15 @@ struct hal_hw_txrx_ops qcn9000_hal_hw_txrx_ops = {
 	NULL,
 	/* rx - msdu fast path info fields */
 	hal_rx_msdu_packet_metadata_get_9000,
+	NULL,
+	NULL,
+	NULL,
+	NULL,
+	NULL,
+	NULL,
+	hal_rx_mpdu_start_tlv_tag_valid_9000,
+	hal_rx_sw_mon_desc_info_get_9000,
+	hal_rx_wbm_err_msdu_continuation_get_9000,
 };
 
 struct hal_hw_srng_config hw_srng_table_9000[] = {
@@ -1593,11 +1701,12 @@ struct hal_hw_srng_config hw_srng_table_9000[] = {
 			HWIO_TCL_R0_SW2TCL1_RING_BASE_MSB_RING_SIZE_BMSK >>
 			HWIO_TCL_R0_SW2TCL1_RING_BASE_MSB_RING_SIZE_SHFT,
 	},
-	{ /* TCL_CMD */
+	{ /* TCL_CMD/CREDIT */
+	  /* qca8074v2 and qcn9000 uses this ring for data commands */
 		.start_ring_id = HAL_SRNG_SW2TCL_CMD,
 		.max_rings = 1,
 		.entry_size = (sizeof(struct tlv_32_hdr) +
-			sizeof(struct tcl_gse_cmd)) >> 2,
+			sizeof(struct tcl_data_cmd)) >> 2,
 		.lmac_ring =  FALSE,
 		.ring_dir = HAL_SRNG_SRC_RING,
 		.reg_start = {
@@ -1821,7 +1930,7 @@ struct hal_hw_srng_config hw_srng_table_9000[] = {
 	{ /* RXDMA_MONITOR_DST */
 		.start_ring_id = HAL_SRNG_WMAC1_RXDMA2SW1,
 		.max_rings = 1,
-		.entry_size = sizeof(struct reo_entrance_ring) >> 2,
+		.entry_size = sizeof(struct sw_monitor_ring) >> 2,
 		.lmac_ring = TRUE,
 		.ring_dir = HAL_SRNG_DST_RING,
 		/* reg_start is not set because LMAC rings are not accessed

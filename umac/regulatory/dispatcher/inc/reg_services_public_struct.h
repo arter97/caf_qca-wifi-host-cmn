@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017-2019 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2017-2020 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -34,6 +34,7 @@
 
 #define REG_MAX_SUPP_OPER_CLASSES 32
 #define REG_MAX_CHAN_CHANGE_CBKS 30
+#define REG_INVALID_TXPOWER 255
 #define MAX_STA_VDEV_CNT 4
 #define INVALID_VDEV_ID 0xFF
 #define INVALID_CHANNEL_NUM 0x0
@@ -60,6 +61,15 @@
 #define REGULATORY_CHAN_NO11N        BIT(3)
 #define REGULATORY_PHYMODE_NO11AC    BIT(4)
 #define REGULATORY_PHYMODE_NO11AX    BIT(5)
+
+#define BW_5_MHZ      5
+#define BW_10_MHZ     10
+#define BW_20_MHZ     20
+#define BW_25_MHZ     25
+#define BW_40_MHZ     40
+#define BW_80_MHZ     80
+#define BW_160_MHZ    160
+#define BW_40_MHZ     40
 
 /**
  * enum dfs_reg - DFS region
@@ -91,12 +101,14 @@ enum dfs_reg {
  * OP_CLASS_EU- Class corresponds to EU
  * OP_CLASS_JAPAN- Class corresponds to JAPAN
  * OP_CLASS_GLOBAL- Class corresponds to GLOBAL
+ * OP_CLASS_CHINA- Class corresponds to CHINA
  */
 enum op_class_table_num {
 	OP_CLASS_US = 1,
 	OP_CLASS_EU,
 	OP_CLASS_JAPAN,
-	OP_CLASS_GLOBAL
+	OP_CLASS_GLOBAL,
+	OP_CLASS_CHINA
 };
 
 /**
@@ -643,6 +655,15 @@ struct reg_start_11d_scan_req {
 	uint32_t start_interval_msec;
 };
 
+/**
+ * struct reg_11d_scan_msg: 11d scan message structure
+ * @psoc: pointer to psoc object
+ * @enable_11d_supp: enable 11d scan or disable 11d scan
+ */
+struct reg_11d_scan_msg {
+	struct wlan_objmgr_psoc *psoc;
+	bool enable_11d_supp;
+};
 /**
  * struct reg_stop_11d_scan_req: stop 11d scan request
  * @vdev_id: vdev id

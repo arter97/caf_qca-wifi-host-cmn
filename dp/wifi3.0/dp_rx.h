@@ -132,6 +132,69 @@ struct dp_rx_desc {
 	(((_cookie) & RX_DESC_COOKIE_INDEX_MASK) >>	\
 			RX_DESC_COOKIE_INDEX_SHIFT)
 
+#define FRAME_MASK_IPV4_ARP   1
+#define FRAME_MASK_IPV4_DHCP  2
+#define FRAME_MASK_IPV4_EAPOL 4
+#define FRAME_MASK_IPV6_DHCP  8
+
+#ifdef DP_RX_SPECIAL_FRAME_NEED
+/**
+ * dp_rx_is_special_frame() - check is RX frame special needed
+ *
+ * @nbuf: RX skb pointer
+ * @frame_mask: the mask for speical frame needed
+ *
+ * Check is RX frame wanted matched with mask
+ *
+ * Return: true - special frame needed, false - no
+ */
+static inline
+bool dp_rx_is_special_frame(qdf_nbuf_t nbuf, uint32_t frame_mask)
+{
+	if (((frame_mask & FRAME_MASK_IPV4_ARP) &&
+	     qdf_nbuf_is_ipv4_arp_pkt(nbuf)) ||
+	    ((frame_mask & FRAME_MASK_IPV4_DHCP) &&
+	     qdf_nbuf_is_ipv4_dhcp_pkt(nbuf)) ||
+	    ((frame_mask & FRAME_MASK_IPV4_EAPOL) &&
+	     qdf_nbuf_is_ipv4_eapol_pkt(nbuf)) ||
+	    ((frame_mask & FRAME_MASK_IPV6_DHCP) &&
+	     qdf_nbuf_is_ipv6_dhcp_pkt(nbuf)))
+		return true;
+
+	return false;
+}
+
+/**
+ * dp_rx_deliver_special_frame() - Deliver the RX special frame to stack
+ *				   if matches mask
+ *
+ * @soc: Datapath soc handler
+ * @peer: pointer to DP peer
+ * @nbuf: pointer to the skb of RX frame
+ * @frame_mask: the mask for speical frame needed
+ *
+ * note: Msdu_len must have been stored in QDF_NBUF_CB_RX_PKT_LEN(nbuf) and
+ * single nbuf is expected.
+ *
+ * return: true - nbuf has been delivered to stack, false - not.
+ */
+bool dp_rx_deliver_special_frame(struct dp_soc *soc, struct dp_peer *peer,
+				 qdf_nbuf_t nbuf, uint32_t frame_mask);
+#else
+static inline
+bool dp_rx_is_special_frame(qdf_nbuf_t nbuf, uint32_t frame_mask)
+{
+	return false;
+}
+
+static inline
+bool dp_rx_deliver_special_frame(struct dp_soc *soc, struct dp_peer *peer,
+				 qdf_nbuf_t nbuf, uint32_t frame_mask)
+{
+	return false;
+}
+#endif
+
 /* DOC: Offset to obtain LLC hdr
  *
  * In the case of Wifi parse error
@@ -688,8 +751,9 @@ static inline int check_x86_paddr(struct dp_soc *dp_soc, qdf_nbuf_t *rx_netbuf,
  * dp_rx_cookie_2_link_desc_va() - Converts cookie to a virtual address of
  *				   the MSDU Link Descriptor
  * @soc: core txrx main context
- * @buf_info: buf_info include cookie that used to lookup virtual address of
- * link descriptor Normally this is just an index into a per SOC array.
+ * @buf_info: buf_info includes cookie that is used to lookup
+ * virtual address of link descriptor after deriving the page id
+ * and the offset or index of the desc on the associatde page.
  *
  * This is the VA of the link descriptor, that HAL layer later uses to
  * retrieve the list of MSDU's for a given MPDU.
@@ -701,16 +765,16 @@ void *dp_rx_cookie_2_link_desc_va(struct dp_soc *soc,
 				  struct hal_buf_info *buf_info)
 {
 	void *link_desc_va;
-	uint32_t bank_id = LINK_DESC_COOKIE_BANK_ID(buf_info->sw_cookie);
+	struct qdf_mem_multi_page_t *pages;
+	uint16_t page_id = LINK_DESC_COOKIE_PAGE_ID(buf_info->sw_cookie);
 
-
-	/* TODO */
-	/* Add sanity for  cookie */
-
-	link_desc_va = soc->link_desc_banks[bank_id].base_vaddr +
-		(buf_info->paddr -
-			soc->link_desc_banks[bank_id].base_paddr);
-
+	pages = &soc->link_desc_pages;
+	if (!pages)
+		return NULL;
+	if (qdf_unlikely(page_id >= pages->num_pages))
+		return NULL;
+	link_desc_va = pages->dma_pages[page_id].page_v_addr_start +
+		(buf_info->paddr - pages->dma_pages[page_id].page_p_addr);
 	return link_desc_va;
 }
 
@@ -1071,24 +1135,6 @@ static inline void dp_rx_desc_prep(struct dp_rx_desc *rx_desc, qdf_nbuf_t nbuf)
 }
 #endif /* RX_DESC_DEBUG_CHECK */
 
-#ifdef RXDMA_ERR_PKT_DROP
-/**
- * dp_rxdma_err_nbuf_drop(): Function to drop rxdma err frame
- * @nbuf: buffer pointer
- *
- * return: bool: true if RXDMA_ERR_PKT_DROP is enabled
- */
-static inline bool dp_rxdma_err_nbuf_drop(void)
-{
-	return true;
-}
-#else
-static inline bool dp_rxdma_err_nbuf_drop(void)
-{
-	return false;
-}
-#endif
-
 void dp_rx_process_rxdma_err(struct dp_soc *soc, qdf_nbuf_t nbuf,
 			     uint8_t *rx_tlv_hdr, struct dp_peer *peer,
 			     uint8_t err_code, uint8_t mac_id);
@@ -1121,8 +1167,11 @@ bool dp_rx_multipass_process(struct dp_peer *peer, qdf_nbuf_t nbuf,
 
 #ifndef WLAN_RX_PKT_CAPTURE_ENH
 static inline
-void dp_peer_set_rx_capture_enabled(struct dp_peer *peer_handle, bool value)
+QDF_STATUS dp_peer_set_rx_capture_enabled(struct dp_pdev *pdev,
+					  struct dp_peer *peer_handle,
+					  bool value, uint8_t *mac_addr)
 {
+	return QDF_STATUS_SUCCESS;
 }
 #endif
 

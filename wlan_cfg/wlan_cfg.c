@@ -342,7 +342,7 @@ void wlan_set_srng_cfg(struct wlan_srng_cfg **wlan_cfg)
 	g_wlan_srng_cfg[REO_CMD] = wlan_srng_default_cfg;
 	g_wlan_srng_cfg[REO_STATUS] = wlan_srng_default_cfg;
 	g_wlan_srng_cfg[TCL_DATA] = wlan_srng_default_cfg;
-	g_wlan_srng_cfg[TCL_CMD] = wlan_srng_default_cfg;
+	g_wlan_srng_cfg[TCL_CMD_CREDIT] = wlan_srng_default_cfg;
 	g_wlan_srng_cfg[TCL_STATUS] = wlan_srng_default_cfg;
 	g_wlan_srng_cfg[WBM_IDLE_LINK] = wlan_srng_default_cfg;
 	g_wlan_srng_cfg[SW2WBM_RELEASE] = wlan_srng_default_cfg;
@@ -516,8 +516,8 @@ wlan_cfg_soc_attach(struct cdp_ctrl_objmgr_psoc *psoc)
 
 	wlan_cfg_ctx->wbm_release_ring = cfg_get(psoc,
 						 CFG_DP_WBM_RELEASE_RING);
-	wlan_cfg_ctx->tcl_cmd_ring = cfg_get(psoc,
-					     CFG_DP_TCL_CMD_RING);
+	wlan_cfg_ctx->tcl_cmd_credit_ring = cfg_get(psoc,
+					     CFG_DP_TCL_CMD_CREDIT_RING);
 	wlan_cfg_ctx->tcl_status_ring = cfg_get(psoc,
 						CFG_DP_TCL_STATUS_RING);
 	wlan_cfg_ctx->reo_reinject_ring = cfg_get(psoc,
@@ -566,6 +566,7 @@ wlan_cfg_soc_attach(struct cdp_ctrl_objmgr_psoc *psoc)
 			cfg_get(psoc, CFG_DP_RX_MON_PROTOCOL_FLOW_TAG_ENABLE);
 	wlan_cfg_ctx->mon_drop_thresh =
 		cfg_get(psoc, CFG_DP_RXDMA_MONITOR_RX_DROP_THRESHOLD);
+	wlan_cfg_ctx->is_rx_fisa_enabled = cfg_get(psoc, CFG_DP_RX_FISA_ENABLE);
 	return wlan_cfg_ctx;
 }
 
@@ -713,7 +714,7 @@ int wlan_cfg_get_target_pdev_id(struct wlan_cfg_dp_soc_ctxt *cfg,
 {
 	int idx;
 
-	for (idx = 0; idx < MAX_NUM_LMAC_HW; idx++) {
+	for (idx = 0; idx < MAX_PDEV_CNT; idx++) {
 		if (cfg->hw_macid[idx] == hw_macid)
 			return (idx + 1);
 	}
@@ -724,9 +725,9 @@ int wlan_cfg_get_target_pdev_id(struct wlan_cfg_dp_soc_ctxt *cfg,
 void wlan_cfg_set_pdev_idx(struct wlan_cfg_dp_soc_ctxt *cfg, int pdev_idx,
 			   int hw_macid)
 {
-	qdf_assert_always(pdev_idx < MAX_PDEV_CNT);
+	qdf_assert_always((pdev_idx < MAX_PDEV_CNT) ||
+			  (pdev_idx == INVALID_PDEV_ID));
 	qdf_assert_always(hw_macid < MAX_NUM_LMAC_HW);
-
 	cfg->hw_macid_pdev_id_map[hw_macid] = pdev_idx;
 }
 
@@ -829,10 +830,17 @@ int wlan_cfg_per_pdev_lmac_ring(struct wlan_cfg_dp_soc_ctxt *cfg)
 	return cfg->per_pdev_lmac_ring;
 }
 
+#ifdef DP_MEMORY_OPT
+int wlan_cfg_num_tcl_data_rings(struct wlan_cfg_dp_soc_ctxt *cfg)
+{
+	return 1;
+}
+#else
 int wlan_cfg_num_tcl_data_rings(struct wlan_cfg_dp_soc_ctxt *cfg)
 {
 	return cfg->num_tcl_data_rings;
 }
+#endif
 
 int wlan_cfg_tx_ring_size(struct wlan_cfg_dp_soc_ctxt *cfg)
 {
@@ -1067,9 +1075,9 @@ wlan_cfg_get_dp_soc_wbm_release_ring_size(struct wlan_cfg_dp_soc_ctxt *cfg)
 }
 
 int
-wlan_cfg_get_dp_soc_tcl_cmd_ring_size(struct wlan_cfg_dp_soc_ctxt *cfg)
+wlan_cfg_get_dp_soc_tcl_cmd_credit_ring_size(struct wlan_cfg_dp_soc_ctxt *cfg)
 {
-	return cfg->tcl_cmd_ring;
+	return cfg->tcl_cmd_credit_ring;
 }
 
 int
@@ -1227,6 +1235,18 @@ bool wlan_cfg_is_rx_flow_tag_enabled(struct wlan_cfg_dp_soc_ctxt *cfg)
 {
 	return cfg->is_rx_flow_tag_enabled;
 }
+
+#ifdef WLAN_SUPPORT_RX_FISA
+bool wlan_cfg_is_rx_fisa_enabled(struct wlan_cfg_dp_soc_ctxt *cfg)
+{
+	return (bool)(cfg->is_rx_fisa_enabled);
+}
+#else
+bool wlan_cfg_is_rx_fisa_enabled(struct wlan_cfg_dp_soc_ctxt *cfg)
+{
+	return false;
+}
+#endif
 
 void
 wlan_cfg_set_rx_flow_search_table_per_pdev(struct wlan_cfg_dp_soc_ctxt *cfg,

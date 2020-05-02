@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016-2019 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2016-2020 The Linux Foundation. All rights reserved.
  *
  *
  * Permission to use, copy, modify, and/or distribute this software for
@@ -646,21 +646,6 @@ static inline bool utils_is_dfs_chan_for_freq(struct wlan_objmgr_pdev *pdev,
 #endif
 
 /**
- * utils_is_dfs_ch() - is channel dfs.
- * @pdev: pdev handler.
- *
- * is channel dfs.
- *
- * Return: True if channel dfs, else false.
- */
-#ifdef CONFIG_CHAN_NUM_API
-static inline bool utils_is_dfs_ch(struct wlan_objmgr_pdev *pdev, uint32_t chan)
-{
-	return wlan_reg_is_dfs_ch(pdev, chan);
-}
-#endif
-
-/**
  * utils_is_dfs_cfreq2_ch() - is channel dfs cfreq2.
  * @pdev: pdev handler.
  *
@@ -668,15 +653,7 @@ static inline bool utils_is_dfs_ch(struct wlan_objmgr_pdev *pdev, uint32_t chan)
  *
  * Return: True if channel dfs cfreq2, else false.
  */
-#if defined(WLAN_DFS_FULL_OFFLOAD) && defined(QCA_DFS_NOL_OFFLOAD)
 bool utils_is_dfs_cfreq2_ch(struct wlan_objmgr_pdev *pdev);
-#else
-static inline
-bool utils_is_dfs_cfreq2_ch(struct wlan_objmgr_pdev *pdev)
-{
-	return false;
-}
-#endif
 
 /**
  * utils_dfs_reg_update_nol_ch() - set nol channel
@@ -784,6 +761,18 @@ QDF_STATUS utils_dfs_mark_leaking_chan_for_freq(struct wlan_objmgr_pdev *pdev,
 						uint8_t temp_ch_lst_sz,
 						uint16_t *temp_ch_lst);
 #endif
+
+/**
+ * utils_dfs_can_ignore_radar_event() - check whether to skip radar event
+ * processing
+ * @pdev: Pointer to pdev structure.
+ *
+ * This function will check with policy mgr to process radar event or not based
+ * on current concurrency mode and dfs policy.
+ *
+ * Return: true - ignore radar event processing, otherwise false.
+ */
+bool utils_dfs_can_ignore_radar_event(struct wlan_objmgr_pdev *pdev);
 #else
 #ifdef CONFIG_CHAN_NUM_API
 static inline QDF_STATUS utils_dfs_mark_leaking_ch
@@ -805,6 +794,11 @@ static inline QDF_STATUS utils_dfs_mark_leaking_chan_for_freq
 	return QDF_STATUS_SUCCESS;
 }
 #endif
+static inline bool
+utils_dfs_can_ignore_radar_event(struct wlan_objmgr_pdev *pdev)
+{
+	return false;
+}
 #endif
 /**
  * utils_get_dfsdomain() - Get DFS domain.

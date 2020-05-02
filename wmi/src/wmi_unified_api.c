@@ -1147,6 +1147,17 @@ wmi_unified_wlan_profile_trigger_cmd_send(wmi_unified_t wmi_handle,
 }
 
 QDF_STATUS
+wmi_unified_wlan_profile_hist_intvl_cmd_send(wmi_unified_t wmi_handle,
+					     struct wlan_profile_params *param)
+{
+	if (wmi_handle->ops->send_wlan_profile_hist_intvl_cmd)
+		return wmi_handle->ops->send_wlan_profile_hist_intvl_cmd(
+					wmi_handle, param);
+
+	return QDF_STATUS_E_FAILURE;
+}
+
+QDF_STATUS
 wmi_unified_set_chan_cmd_send(wmi_unified_t wmi_handle,
 			      struct channel_param *param)
 {
@@ -3101,6 +3112,20 @@ wmi_unified_extract_roam_scan_stats(wmi_unified_t wmi, void *evt_buf,
 	return QDF_STATUS_E_FAILURE;
 }
 
+#ifdef WLAN_FEATURE_PKT_CAPTURE
+QDF_STATUS
+wmi_unified_extract_vdev_mgmt_offload_event(
+				wmi_unified_t wmi, void *evt_buf,
+				struct mgmt_offload_event_params *params)
+{
+	if (wmi->ops->extract_vdev_mgmt_offload_event)
+		return wmi->ops->extract_vdev_mgmt_offload_event(wmi, evt_buf,
+								 params);
+
+	return QDF_STATUS_E_FAILURE;
+}
+#endif /* WLAN_FEATURE_PKT_CAPTURE */
+
 QDF_STATUS
 wmi_unified_extract_roam_result_stats(wmi_unified_t wmi, void *buf,
 				      struct wmi_roam_result *dst,
@@ -3125,9 +3150,9 @@ wmi_unified_extract_roam_11kv_stats(wmi_unified_t wmi, void *evt_buf,
 }
 
 #ifdef FEATURE_WLAN_TIME_SYNC_FTM
-QDF_STATUS wmi_send_wlan_time_sync_ftm_trigger(wmi_unified_t wmi_handle,
-					       uint32_t vdev_id,
-					       bool burst_mode)
+QDF_STATUS wmi_unified_send_wlan_time_sync_ftm_trigger(wmi_unified_t wmi_handle,
+						       uint32_t vdev_id,
+						       bool burst_mode)
 {
 	if (wmi_handle->ops->send_wlan_time_sync_ftm_trigger_cmd)
 		return wmi_handle->ops->send_wlan_time_sync_ftm_trigger_cmd
@@ -3136,9 +3161,9 @@ QDF_STATUS wmi_send_wlan_time_sync_ftm_trigger(wmi_unified_t wmi_handle,
 	return QDF_STATUS_E_FAILURE;
 }
 
-QDF_STATUS wmi_send_wlan_time_sync_qtime(wmi_unified_t wmi_handle,
-					 uint32_t vdev_id,
-					 uint64_t lpass_ts)
+QDF_STATUS wmi_unified_send_wlan_time_sync_qtime(wmi_unified_t wmi_handle,
+						 uint32_t vdev_id,
+						 uint64_t lpass_ts)
 {
 	if (wmi_handle->ops->send_wlan_ts_qtime_cmd)
 		return wmi_handle->ops->send_wlan_ts_qtime_cmd(wmi_handle,
@@ -3146,4 +3171,40 @@ QDF_STATUS wmi_send_wlan_time_sync_qtime(wmi_unified_t wmi_handle,
 
 	return QDF_STATUS_E_FAILURE;
 }
+
+QDF_STATUS wmi_unified_extract_time_sync_ftm_start_stop_params(
+				wmi_unified_t wmi_handle, void *evt_buf,
+				struct ftm_time_sync_start_stop_params *param)
+{
+	if (wmi_handle->ops->extract_time_sync_ftm_start_stop_event)
+		return
+		wmi_handle->ops->extract_time_sync_ftm_start_stop_event(
+						wmi_handle, evt_buf, param);
+
+	return QDF_STATUS_E_FAILURE;
+}
+
+QDF_STATUS wmi_unified_extract_time_sync_ftm_offset(
+			wmi_unified_t wmi_handle, void *evt_buf,
+			struct ftm_time_sync_offset *param)
+{
+	if (wmi_handle->ops->extract_time_sync_ftm_offset_event)
+		return
+		wmi_handle->ops->extract_time_sync_ftm_offset_event(
+						wmi_handle, evt_buf, param);
+
+	return QDF_STATUS_E_FAILURE;
+}
 #endif /* FEATURE_WLAN_TIME_SYNC_FTM */
+
+QDF_STATUS
+wmi_unified_send_injector_frame_config_cmd(wmi_unified_t wmi_handle,
+				 struct wmi_host_injector_frame_params *param)
+{
+	if (wmi_handle->ops->send_injector_config_cmd) {
+		return wmi_handle->ops->send_injector_config_cmd(wmi_handle,
+			param);
+	}
+
+	return QDF_STATUS_E_FAILURE;
+}

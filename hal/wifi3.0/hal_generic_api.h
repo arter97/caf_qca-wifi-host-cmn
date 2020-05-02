@@ -425,6 +425,97 @@ hal_get_mac_addr1(uint8_t *rx_mpdu_start,
 {
 }
 #endif
+
+/**
+ * hal_get_radiotap_he_gi_ltf() - Convert HE ltf and GI value
+ * from stats enum to radiotap enum
+ * @he_gi: HE GI value used in stats
+ * @he_ltf: HE LTF value used in stats
+ *
+ * Return: void
+ */
+static inline void hal_get_radiotap_he_gi_ltf(uint16_t *he_gi, uint16_t *he_ltf)
+{
+	switch (*he_gi) {
+	case HE_GI_0_8:
+		*he_gi = HE_GI_RADIOTAP_0_8;
+		break;
+	case HE_GI_1_6:
+		*he_gi = HE_GI_RADIOTAP_1_6;
+		break;
+	case HE_GI_3_2:
+		*he_gi = HE_GI_RADIOTAP_3_2;
+		break;
+	default:
+		*he_gi = HE_GI_RADIOTAP_RESERVED;
+	}
+
+	switch (*he_ltf) {
+	case HE_LTF_1_X:
+		*he_ltf = HE_LTF_RADIOTAP_1_X;
+		break;
+	case HE_LTF_2_X:
+		*he_ltf = HE_LTF_RADIOTAP_2_X;
+		break;
+	case HE_LTF_4_X:
+		*he_ltf = HE_LTF_RADIOTAP_4_X;
+		break;
+	default:
+		*he_ltf = HE_LTF_RADIOTAP_UNKNOWN;
+	}
+}
+
+/* channel number to freq conversion */
+#define CHANNEL_NUM_14 14
+#define CHANNEL_NUM_15 15
+#define CHANNEL_NUM_27 27
+#define CHANNEL_NUM_35 35
+#define CHANNEL_NUM_182 182
+#define CHANNEL_NUM_197 197
+#define CHANNEL_FREQ_2484 2484
+#define CHANNEL_FREQ_2407 2407
+#define CHANNEL_FREQ_2512 2512
+#define CHANNEL_FREQ_5000 5000
+#define CHANNEL_FREQ_5940 5940
+#define CHANNEL_FREQ_4000 4000
+#define CHANNEL_FREQ_5150 5150
+#define FREQ_MULTIPLIER_CONST_5MHZ 5
+#define FREQ_MULTIPLIER_CONST_20MHZ 20
+/**
+ * hal_rx_radiotap_num_to_freq() - Get frequency from chan number
+ * @chan_num - Input channel number
+ * @center_freq - Input Channel Center frequency
+ *
+ * Return - Channel frequency in Mhz
+ */
+static uint16_t
+hal_rx_radiotap_num_to_freq(uint16_t chan_num, qdf_freq_t center_freq)
+{
+	if (center_freq < CHANNEL_FREQ_5940) {
+		if (chan_num == CHANNEL_NUM_14)
+			return CHANNEL_FREQ_2484;
+		if (chan_num < CHANNEL_NUM_14)
+			return CHANNEL_FREQ_2407 +
+				(chan_num * FREQ_MULTIPLIER_CONST_5MHZ);
+
+		if (chan_num < CHANNEL_NUM_27)
+			return CHANNEL_FREQ_2512 +
+				((chan_num - CHANNEL_NUM_15) *
+					FREQ_MULTIPLIER_CONST_20MHZ);
+
+		if (chan_num > CHANNEL_NUM_182 &&
+		    chan_num < CHANNEL_NUM_197)
+			return ((chan_num * FREQ_MULTIPLIER_CONST_5MHZ) +
+				CHANNEL_FREQ_4000);
+
+		return CHANNEL_FREQ_5000 +
+			(chan_num * FREQ_MULTIPLIER_CONST_5MHZ);
+	} else {
+		return CHANNEL_FREQ_5940 +
+			(chan_num * FREQ_MULTIPLIER_CONST_5MHZ);
+	}
+}
+
 /**
  * hal_rx_status_get_tlv_info() - process receive info TLV
  * @rx_tlv_hdr: pointer to TLV header
@@ -475,6 +566,13 @@ hal_rx_status_get_tlv_info_generic(void *rx_tlv_hdr, void *ppduinfo,
 		ppdu_info->rx_status.chan_freq =
 			(HAL_RX_GET(rx_tlv, RX_PPDU_START_1,
 				SW_PHY_META_DATA) & 0xFFFF0000)>>16;
+		if (ppdu_info->rx_status.chan_num &&
+		    ppdu_info->rx_status.chan_freq) {
+			ppdu_info->rx_status.chan_freq =
+				hal_rx_radiotap_num_to_freq(
+				ppdu_info->rx_status.chan_num,
+				 ppdu_info->rx_status.chan_freq);
+		}
 		ppdu_info->com_info.ppdu_timestamp =
 			HAL_RX_GET(rx_tlv, RX_PPDU_START_2,
 				PPDU_START_TIMESTAMP);
@@ -812,6 +910,7 @@ hal_rx_status_get_tlv_info_generic(void *rx_tlv_hdr, void *ppduinfo,
 		case TARGET_TYPE_QCA8074:
 		case TARGET_TYPE_QCA8074V2:
 		case TARGET_TYPE_QCA6018:
+		case TARGET_TYPE_QCA5018:
 		case TARGET_TYPE_QCN9000:
 #ifdef QCA_WIFI_QCA6390
 		case TARGET_TYPE_QCA6390:
@@ -989,10 +1088,11 @@ hal_rx_status_get_tlv_info_generic(void *rx_tlv_hdr, void *ppduinfo,
 				break;
 		}
 		ppdu_info->rx_status.sgi = he_gi;
+		ppdu_info->rx_status.ltf_size = he_ltf;
+		hal_get_radiotap_he_gi_ltf(&he_gi, &he_ltf);
 		value = he_gi << QDF_MON_STATUS_GI_SHIFT;
 		ppdu_info->rx_status.he_data5 |= value;
 		value = he_ltf << QDF_MON_STATUS_HE_LTF_SIZE_SHIFT;
-		ppdu_info->rx_status.ltf_size = he_ltf;
 		ppdu_info->rx_status.he_data5 |= value;
 
 		value = HAL_RX_GET(he_sig_a_su_info, HE_SIG_A_SU_INFO_0, NSTS);
@@ -1115,6 +1215,8 @@ hal_rx_status_get_tlv_info_generic(void *rx_tlv_hdr, void *ppduinfo,
 			break;
 		}
 		ppdu_info->rx_status.sgi = he_gi;
+		ppdu_info->rx_status.ltf_size = he_ltf;
+		hal_get_radiotap_he_gi_ltf(&he_gi, &he_ltf);
 		value = he_gi << QDF_MON_STATUS_GI_SHIFT;
 		ppdu_info->rx_status.he_data5 |= value;
 
@@ -1628,7 +1730,6 @@ static void hal_reo_setup_generic(struct hal_soc *soc,
 				       HWIO_REO_R0_DESTINATION_RING_CTRL_IX_3_ADDR(
 				       SEQ_WCSS_UMAC_REO_REG_OFFSET)));
 	}
-
 
 	/* TODO: Check if the following registers shoould be setup by host:
 	 * AGING_CONTROL

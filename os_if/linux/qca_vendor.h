@@ -280,6 +280,10 @@
  *	legacy blob encapsulated within an attribute and can be extended with
  *	additional vendor attributes that can enhance the NAN command
  *	interface.
+ * @QCA_NL80211_VENDOR_SUBCMD_PEER_CFR_CAPTURE_CFG: This command is used to
+ *	configure parameters per peer to capture Channel Frequency Response
+ *	(CFR) and enable Periodic CFR capture. The attributes for this command
+ *	are defined in enum qca_wlan_vendor_peer_cfr_capture_attr.
  * @QCA_NL80211_VENDOR_SUBCMD_GET_FW_STATE: Sub command to get firmware state.
  *	The returned firmware state is specified in the attribute
  *	QCA_WLAN_VENDOR_ATTR_FW_STATE.
@@ -377,6 +381,22 @@
  *	user space for the SAR power limits configuration from user space. If
  *	the driver does not get the SAR power limits from user space for all
  *	the retried attempts, it can configure a default SAR power limit.
+ * @QCA_NL80211_VENDOR_SUBCMD_UPDATE_STA_INFO: This acts as a vendor event and
+ *	is used to update the information about the station from the driver to
+ *	userspace. Uses attributes from enum
+ *	qca_wlan_vendor_attr_update_sta_info.
+ *
+ * @QCA_NL80211_VENDOR_SUBCMD_DRIVER_DISCONNECT_REASON: This acts as an event.
+ *	The host driver initiates the disconnection for scenarios such as beacon
+ *	miss, NUD failure, peer kick out, etc. The disconnection indication
+ *	through cfg80211_disconnected() expects the reason codes from enum
+ *	ieee80211_reasoncode which does not signify these various reasons why
+ *	the driver has triggered the disconnection. This event will be used to
+ *	send the driver specific reason codes by the host driver to userspace.
+ *	Host drivers should trigger this event and pass the respective reason
+ *	code immediately prior to triggering cfg80211_disconnected(). The
+ *	attributes used with this event are defined in enum
+ *	qca_wlan_vendor_attr_driver_disconnect_reason.
  */
 
 enum qca_nl80211_vendor_subcmds {
@@ -585,6 +605,7 @@ enum qca_nl80211_vendor_subcmds {
 	/* Wi-Fi test configuration subcommand */
 	QCA_NL80211_VENDOR_SUBCMD_WIFI_TEST_CONFIGURATION = 169,
 	QCA_NL80211_VENDOR_SUBCMD_NAN_EXT = 171,
+	QCA_NL80211_VENDOR_SUBCMD_PEER_CFR_CAPTURE_CFG = 173,
 	QCA_NL80211_VENDOR_SUBCMD_THROUGHPUT_CHANGE_EVENT = 174,
 	QCA_NL80211_VENDOR_SUBCMD_COEX_CONFIG = 175,
 	QCA_NL80211_VENDOR_SUBCMD_GET_FW_STATE = 177,
@@ -597,6 +618,8 @@ enum qca_nl80211_vendor_subcmds {
 	QCA_NL80211_VENDOR_SUBCMD_ADD_STA_NODE = 184,
 	QCA_NL80211_VENDOR_SUBCMD_BTC_CHAIN_MODE = 185,
 	QCA_NL80211_VENDOR_SUBCMD_GET_SAR_LIMITS_EVENT = 187,
+	QCA_NL80211_VENDOR_SUBCMD_UPDATE_STA_INFO = 188,
+	QCA_NL80211_VENDOR_SUBCMD_DRIVER_DISCONNECT_REASON = 189,
 };
 
 enum qca_wlan_vendor_tos {
@@ -650,6 +673,39 @@ enum qca_wlan_vendor_hang_reason {
 	QCA_WLAN_HANG_DXE_FAILURE = 12,
 	/* WMI pending commands exceed the maximum count */
 	QCA_WLAN_HANG_WMI_EXCEED_MAX_PENDING_CMDS = 13,
+	/* Timeout for peer STA connection accept command's response from the
+	 * FW in AP mode. This command is triggered when a STA (peer) connects
+	 * to AP (DUT).
+	 */
+	QCA_WLAN_HANG_AP_STA_CONNECT_REQ_TIMEOUT = 14,
+	/* Timeout for the AP connection accept command's response from the FW
+	 * in STA mode. This command is triggered when the STA (DUT) connects
+	 * to an AP (peer).
+	 */
+	QCA_WLAN_HANG_STA_AP_CONNECT_REQ_TIMEOUT = 15,
+	/* Timeout waiting for the response to the MAC HW mode change command
+	 * sent to FW as a part of MAC mode switch among DBS (Dual Band
+	 * Simultaneous), SCC (Single Channel Concurrency), and MCC (Multi
+	 * Channel Concurrency) mode.
+	 */
+	QCA_WLAN_HANG_MAC_HW_MODE_CHANGE_TIMEOUT = 16,
+	/* Timeout waiting for the response from FW to configure the MAC HW's
+	 * mode. This operation is to configure the single/two MACs in either
+	 * SCC/MCC/DBS mode.
+	 */
+	QCA_WLAN_HANG_MAC_HW_MODE_CONFIG_TIMEOUT = 17,
+	/* Timeout waiting for response of VDEV start command from the FW */
+	QCA_WLAN_HANG_VDEV_START_RESPONSE_TIMED_OUT = 18,
+	/* Timeout waiting for response of VDEV restart command from the FW */
+	QCA_WLAN_HANG_VDEV_RESTART_RESPONSE_TIMED_OUT = 19,
+	/* Timeout waiting for response of VDEV stop command from the FW */
+	QCA_WLAN_HANG_VDEV_STOP_RESPONSE_TIMED_OUT = 20,
+	/* Timeout waiting for response of VDEV delete command from the FW */
+	QCA_WLAN_HANG_VDEV_DELETE_RESPONSE_TIMED_OUT = 21,
+	/* Timeout waiting for response of peer all delete request command to
+	 * the FW on a specific VDEV.
+	 */
+	QCA_WLAN_HANG_VDEV_PEER_DELETE_ALL_RESPONSE_TIMED_OUT = 22,
 };
 
 /**
@@ -663,7 +719,12 @@ enum qca_wlan_vendor_attr_hang {
 	 * qca_wlan_vendor_hang_reason.
 	 */
 	QCA_WLAN_VENDOR_ATTR_HANG_REASON = 1,
-
+	/* The binary blob data associated with the hang reason specified by
+	 * QCA_WLAN_VENDOR_ATTR_HANG_REASON. This binary data is expected to
+	 * contain the required dump to analyze the reason for the hang.
+	 * NLA_BINARY attribute, the max size is 1024 bytes.
+	 */
+	QCA_WLAN_VENDOR_ATTR_HANG_REASON_DATA = 2,
 	QCA_WLAN_VENDOR_ATTR_HANG_AFTER_LAST,
 	QCA_WLAN_VENDOR_ATTR_HANG_MAX =
 		QCA_WLAN_VENDOR_ATTR_HANG_AFTER_LAST - 1,
@@ -718,6 +779,29 @@ enum qca_wlan_vendor_attr_get_station {
 	QCA_WLAN_VENDOR_ATTR_GET_STATION_AFTER_LAST,
 	QCA_WLAN_VENDOR_ATTR_GET_STATION_MAX =
 		QCA_WLAN_VENDOR_ATTR_GET_STATION_AFTER_LAST - 1,
+};
+
+/**
+ * enum qca_wlan_vendor_attr_update_sta_info - Defines attributes
+ * used by QCA_NL80211_VENDOR_SUBCMD_UPDATE_STA_INFO vendor command.
+ *
+ * @QCA_WLAN_VENDOR_ATTR_UPDATE_STA_INFO_CONNECT_CHANNELS: Type is NLA_UNSPEC.
+ * Used in STA mode. This attribute represents the list of channel center
+ * frequencies in MHz (u32) the station has learnt during the last connection
+ * or roaming attempt. This information shall not signify the channels for
+ * an explicit scan request from the user space. Host drivers can update this
+ * information to the user space in both connected and disconnected state.
+ * In the disconnected state this information shall signify the channels
+ * scanned in the last connection/roam attempt that lead to the disconnection.
+ */
+enum qca_wlan_vendor_attr_update_sta_info {
+	QCA_WLAN_VENDOR_ATTR_UPDATE_STA_INFO_INVALID = 0,
+	QCA_WLAN_VENDOR_ATTR_UPDATE_STA_INFO_CONNECT_CHANNELS = 1,
+
+	/* keep last */
+	QCA_WLAN_VENDOR_ATTR_UPDATE_STA_INFO_AFTER_LAST,
+	QCA_WLAN_VENDOR_ATTR_UPDATE_STA_INFO_MAX =
+		QCA_WLAN_VENDOR_ATTR_UPDATE_STA_INFO_AFTER_LAST - 1,
 };
 
 /**
@@ -837,6 +921,21 @@ enum qca_wlan_auth_type {
  * @QCA_WLAN_VENDOR_ATTR_GET_STATION_INFO_REMOTE_SGI_ENABLE:
  *  Remote station short GI enable/disable
  * @QCA_WLAN_VENDOR_ATTR_GET_STATION_INFO_PAD: Attribute type for padding
+ * @QCA_WLAN_VENDOR_ATTR_GET_STATION_INFO_BEACON_IES: Binary attribute
+ *  containing the raw information elements from Beacon frames. Represents
+ *  the Beacon frames of the current BSS in the connected state. When queried
+ *  in the disconnected state, these IEs correspond to the last connected BSSID.
+ * @QCA_WLAN_VENDOR_ATTR_GET_STATION_INFO_DRIVER_DISCONNECT_REASON: u32, Driver
+ *  disconnect reason for the last disconnection if the disconnection is
+ *  triggered from the host driver. The values are referred from
+ *  enum qca_disconnect_reason_codes. If the disconnect is from
+ *  peer/userspace this value is QCA_DISCONNECT_REASON_UNSPECIFIED.
+ * @QCA_WLAN_VENDOR_ATTR_GET_STATION_INFO_ASSOC_REQ_IES: Binary attribute
+ *  Applicable in AP mode only. It contains the raw information elements
+ *  from assoc request frame of the given peer station. User queries with the
+ *  mac address of peer station when it disconnects. Host driver sends
+ *  assoc request frame of the given station. Host driver doesn't provide
+ *  the IEs when the peer station is still in connected state.
  * @QCA_WLAN_VENDOR_ATTR_GET_STATION_INFO_AFTER_LAST: After last
  */
 enum qca_wlan_vendor_attr_get_station_info {
@@ -867,6 +966,18 @@ enum qca_wlan_vendor_attr_get_station_info {
 	QCA_WLAN_VENDOR_ATTR_GET_STATION_INFO_PAD,
 	QCA_WLAN_VENDOR_ATTR_GET_STATION_INFO_REMOTE_RX_RETRY_COUNT,
 	QCA_WLAN_VENDOR_ATTR_GET_STATION_INFO_REMOTE_RX_BC_MC_COUNT,
+	QCA_WLAN_VENDOR_ATTR_GET_STATION_INFO_REMOTE_TX_FAILURE,
+	QCA_WLAN_VENDOR_ATTR_GET_STATION_INFO_REMOTE_AVG_RSSI_PER_CHAIN,
+	QCA_WLAN_VENDOR_ATTR_GET_STATION_INFO_REMOTE_TX_RETRY_SUCCEED,
+	QCA_WLAN_VENDOR_ATTR_GET_STATION_INFO_REMOTE_RX_LAST_PKT_RSSI,
+	QCA_WLAN_VENDOR_ATTR_GET_STATION_INFO_REMOTE_TX_RETRY,
+	QCA_WLAN_VENDOR_ATTR_GET_STATION_INFO_REMOTE_TX_RETRY_EXHAUST,
+	QCA_WLAN_VENDOR_ATTR_GET_STATION_INFO_REMOTE_TX_TOTAL_FW,
+	QCA_WLAN_VENDOR_ATTR_GET_STATION_INFO_REMOTE_TX_RETRY_FW,
+	QCA_WLAN_VENDOR_ATTR_GET_STATION_INFO_REMOTE_TX_RETRY_EXHAUST_FW,
+	QCA_WLAN_VENDOR_ATTR_GET_STATION_INFO_BEACON_IES,
+	QCA_WLAN_VENDOR_ATTR_GET_STATION_INFO_DRIVER_DISCONNECT_REASON,
+	QCA_WLAN_VENDOR_ATTR_GET_STATION_INFO_ASSOC_REQ_IES,
 
 	/* keep last */
 	QCA_WLAN_VENDOR_ATTR_GET_STATION_INFO_AFTER_LAST,
@@ -1034,6 +1145,7 @@ enum qca_nl80211_vendor_subcmds_index {
 	QCA_NL80211_VENDOR_SUBCMD_ROAM_INDEX,
 	QCA_NL80211_VENDOR_SUBCMD_OEM_DATA_INDEX,
 	QCA_NL80211_VENDOR_SUBCMD_REQUEST_SAR_LIMITS_INDEX,
+	QCA_NL80211_VENDOR_SUBCMD_UPDATE_STA_INFO_INDEX,
 };
 
 /**
@@ -2303,24 +2415,29 @@ enum qca_wlan_vendor_attr_set_scanning_mac_oui {
  *	scan flag is set
  * @QCA_WLAN_VENDOR_ATTR_SCAN_MAC_MASK: 6-byte MAC address mask to be used with
  *	randomisation
- * @QCA_WLAN_VENDOR_ATTR_SCAN_BSSID: BSSID provided to do scan for specific BSS
+ * @QCA_WLAN_VENDOR_ATTR_SCAN_BSSID: 6-byte MAC address representing the
+ *	specific BSSID to scan for.
+ * @QCA_WLAN_VENDOR_ATTR_SCAN_DWELL_TIME: Unsigned 64-bit dwell time in
+ *	microseconds. This is a common value which applies across all
+ *	frequencies specified by QCA_WLAN_VENDOR_ATTR_SCAN_FREQUENCIES.
  */
 enum qca_wlan_vendor_attr_scan {
 	QCA_WLAN_VENDOR_ATTR_SCAN_INVALID_PARAM = 0,
-	QCA_WLAN_VENDOR_ATTR_SCAN_IE,
-	QCA_WLAN_VENDOR_ATTR_SCAN_FREQUENCIES,
-	QCA_WLAN_VENDOR_ATTR_SCAN_SSIDS,
-	QCA_WLAN_VENDOR_ATTR_SCAN_SUPP_RATES,
-	QCA_WLAN_VENDOR_ATTR_SCAN_TX_NO_CCK_RATE,
-	QCA_WLAN_VENDOR_ATTR_SCAN_FLAGS,
-	QCA_WLAN_VENDOR_ATTR_SCAN_COOKIE,
-	QCA_WLAN_VENDOR_ATTR_SCAN_STATUS,
-	QCA_WLAN_VENDOR_ATTR_SCAN_MAC,
-	QCA_WLAN_VENDOR_ATTR_SCAN_MAC_MASK,
-	QCA_WLAN_VENDOR_ATTR_SCAN_BSSID,
+	QCA_WLAN_VENDOR_ATTR_SCAN_IE = 1,
+	QCA_WLAN_VENDOR_ATTR_SCAN_FREQUENCIES = 2,
+	QCA_WLAN_VENDOR_ATTR_SCAN_SSIDS = 3,
+	QCA_WLAN_VENDOR_ATTR_SCAN_SUPP_RATES = 4,
+	QCA_WLAN_VENDOR_ATTR_SCAN_TX_NO_CCK_RATE = 5,
+	QCA_WLAN_VENDOR_ATTR_SCAN_FLAGS = 6,
+	QCA_WLAN_VENDOR_ATTR_SCAN_COOKIE = 7,
+	QCA_WLAN_VENDOR_ATTR_SCAN_STATUS = 8,
+	QCA_WLAN_VENDOR_ATTR_SCAN_MAC = 9,
+	QCA_WLAN_VENDOR_ATTR_SCAN_MAC_MASK = 10,
+	QCA_WLAN_VENDOR_ATTR_SCAN_BSSID = 11,
+	QCA_WLAN_VENDOR_ATTR_SCAN_DWELL_TIME = 12,
 	QCA_WLAN_VENDOR_ATTR_SCAN_AFTER_LAST,
 	QCA_WLAN_VENDOR_ATTR_SCAN_MAX =
-		QCA_WLAN_VENDOR_ATTR_SCAN_AFTER_LAST - 1
+	QCA_WLAN_VENDOR_ATTR_SCAN_AFTER_LAST - 1
 };
 
 /**
@@ -3831,6 +3948,12 @@ enum qca_ignore_assoc_disallowed {
  * QCA_NL80211_VENDOR_SUBCMD_SET_WIFI_CONFIGURATION and
  * QCA_NL80211_VENDOR_SUBCMD_GET_WIFI_CONFIGURATION subcommands.
  */
+#define QCA_WLAN_VENDOR_ATTR_DISCONNECT_IES\
+		QCA_WLAN_VENDOR_ATTR_CONFIG_DISCONNECT_IES
+#define QCA_WLAN_VENDOR_ATTR_BEACON_REPORT_FAIL\
+		QCA_WLAN_VENDOR_ATTR_CONFIG_BEACON_REPORT_FAIL
+#define QCA_WLAN_VENDOR_ATTR_ROAM_REASON\
+		QCA_WLAN_VENDOR_ATTR_CONFIG_ROAM_REASON
 enum qca_wlan_vendor_attr_config {
 	QCA_WLAN_VENDOR_ATTR_CONFIG_INVALID = 0,
 	/*
@@ -4145,12 +4268,25 @@ enum qca_wlan_vendor_attr_config {
 	 * take the union of IEs from both of these interfaces and send in
 	 * further disassoc/deauth frames.
 	 */
-	QCA_WLAN_VENDOR_ATTR_DISCONNECT_IES = 58,
+	QCA_WLAN_VENDOR_ATTR_CONFIG_DISCONNECT_IES = 58,
 
 	/* 8-bit unsigned value for ELNA bypass.
 	 * 1-Enable, 0-Disable
 	 */
 	QCA_WLAN_VENDOR_ATTR_CONFIG_ELNA_BYPASS = 59,
+
+	/* 8-bit unsigned value. This attribute enables/disables the host driver
+	 * to send the Beacon Report response with failure reason for the
+	 * scenarios where STA cannot honor the Beacon report request from AP.
+	 * 1-Enable, 0-Disable.
+	 */
+	QCA_WLAN_VENDOR_ATTR_CONFIG_BEACON_REPORT_FAIL = 60,
+
+	/* 8-bit unsigned value. This attribute enables/disables the host driver
+	 * to send roam reason information in the reassociation request to the
+	 * AP. 1-Enable, 0-Disable.
+	 */
+	QCA_WLAN_VENDOR_ATTR_CONFIG_ROAM_REASON = 61,
 
 	/* keep last */
 	QCA_WLAN_VENDOR_ATTR_CONFIG_AFTER_LAST,
@@ -6899,12 +7035,22 @@ enum qca_wlan_vendor_attr_rrop_info {
 enum qca_wlan_vendor_attr_rtplinst {
 	QCA_WLAN_VENDOR_ATTR_RTPLINST_INVALID = 0,
 
-	/* Primary channel number (u8) */
+	/* Primary channel number (u8).
+	 * Note: If both the driver and user space application support the
+	 * 6 GHz band, this attribute is deprecated and
+	 * QCA_WLAN_VENDOR_ATTR_RTPLINST_PRIMARY_FREQUENCY should be used. To
+	 * maintain backward compatibility,
+	 * QCA_WLAN_VENDOR_ATTR_RTPLINST_PRIMARY is still used if either the
+	 * driver or user space application or both do not support the 6 GHz
+	 * band.
+	 */
 	QCA_WLAN_VENDOR_ATTR_RTPLINST_PRIMARY = 1,
 	/* Representative Tx power in dBm (s32) with emphasis on throughput. */
 	QCA_WLAN_VENDOR_ATTR_RTPLINST_TXPOWER_THROUGHPUT = 2,
 	/* Representative Tx power in dBm (s32) with emphasis on range. */
 	QCA_WLAN_VENDOR_ATTR_RTPLINST_TXPOWER_RANGE = 3,
+	/* Primary channel center frequency (u32) in MHz */
+	QCA_WLAN_VENDOR_ATTR_RTPLINST_PRIMARY_FREQUENCY = 4,
 
 	QCA_WLAN_VENDOR_ATTR_RTPLINST_AFTER_LAST,
 	QCA_WLAN_VENDOR_ATTR_RTPLINST_MAX =
@@ -7740,6 +7886,238 @@ enum qca_wlan_vendor_attr_nan_params {
 };
 
 /**
+ * enum qca_wlan_vendor_cfr_method - QCA vendor CFR methods used by
+ * attribute QCA_WLAN_VENDOR_ATTR_PEER_CFR_METHOD as part of vendor
+ * command QCA_NL80211_VENDOR_SUBCMD_PEER_CFR_CAPTURE_CFG.
+ * @QCA_WLAN_VENDOR_CFR_METHOD_QOS_NULL: CFR method using QOS Null frame.
+ * @QCA_WLAN_VENDOR_CFR_QOS_NULL_WITH_PHASE: CFR method using QOS Null frame
+ * with phase
+ * @QCA_WLAN_VENDOR_CFR_PROBE_RESPONSE: CFR method using probe response frame
+ */
+enum qca_wlan_vendor_cfr_method {
+	QCA_WLAN_VENDOR_CFR_METHOD_QOS_NULL = 0,
+	QCA_WLAN_VENDOR_CFR_QOS_NULL_WITH_PHASE = 1,
+	QCA_WLAN_VENDOR_CFR_PROBE_RESPONSE = 2,
+};
+
+/**
+ * enum qca_wlan_vendor_cfr_capture_type - QCA vendor CFR capture type used by
+ * attribute QCA_WLAN_VENDOR_ATTR_PEER_CFR_CAPTURE_TYPE.
+ * @QCA_WLAN_VENDOR_CFR_DIRECT_FTM: Filter directed FTM ACK frames.
+ * @QCA_WLAN_VENDOR_CFR_ALL_FTM_ACK: Filter all FTM ACK frames.
+ * @QCA_WLAN_VENDOR_CFR_DIRECT_NDPA_NDP: Filter NDPA NDP directed frames.
+ * @QCA_WLAN_VENDOR_CFR_TA_RA: Filter frames based on TA/RA/Subtype which
+ * is provided by one or more of below attributes:
+ *	%QCA_WLAN_VENDOR_ATTR_PEER_CFR_GROUP_TA
+ *	%QCA_WLAN_VENDOR_ATTR_PEER_CFR_GROUP_RA
+ *	%QCA_WLAN_VENDOR_ATTR_PEER_CFR_GROUP_TA_MASK
+ *	%QCA_WLAN_VENDOR_ATTR_PEER_CFR_GROUP_RA_MASK
+ *	%QCA_WLAN_VENDOR_ATTR_PEER_CFR_GROUP_MGMT_FILTER
+ *	%QCA_WLAN_VENDOR_ATTR_PEER_CFR_GROUP_CTRL_FILTER
+ *	%QCA_WLAN_VENDOR_ATTR_PEER_CFR_GROUP_DATA_FILTER
+ * @QCA_WLAN_CFR_ALL_PACKET: Filter all packets.
+ * @QCA_WLAN_VENDOR_CFR_NDPA_NDP_ALL: Filter all NDPA NDP frames.
+ */
+enum qca_wlan_vendor_cfr_capture_type {
+	QCA_WLAN_VENDOR_CFR_DIRECT_FTM = 0,
+	QCA_WLAN_VENDOR_CFR_ALL_FTM_ACK = 1,
+	QCA_WLAN_VENDOR_CFR_DIRECT_NDPA_NDP = 2,
+	QCA_WLAN_VENDOR_CFR_TA_RA = 3,
+	QCA_WLAN_VENDOR_CFR_ALL_PACKET = 4,
+	QCA_WLAN_VENDOR_CFR_NDPA_NDP_ALL = 5,
+};
+
+/**
+ * enum qca_wlan_vendor_peer_cfr_capture_attr - Used by the vendor command
+ * QCA_NL80211_VENDOR_SUBCMD_PEER_CFR_CAPTURE_CFG to configure peer
+ * Channel Frequency Response capture parameters and enable periodic CFR
+ * capture.
+ *
+ * @QCA_WLAN_VENDOR_ATTR_CFR_PEER_MAC_ADDR: Optional (6-byte MAC address)
+ * MAC address of peer. This is for CFR version 1 only.
+ *
+ * @QCA_WLAN_VENDOR_ATTR_PEER_CFR_ENABLE: Required (flag)
+ * Enable peer CFR Capture. This attribute is mandatory to
+ * enable peer CFR capture. If this attribute is not present,
+ * peer CFR capture is disabled.
+ *
+ * @QCA_WLAN_VENDOR_ATTR_PEER_CFR_BANDWIDTH: Optional (u8)
+ * BW of measurement, attribute uses the values in enum nl80211_chan_width
+ * Supported values: 20, 40, 80, 80+80, 160.
+ * Note that all targets may not support all bandwidths.
+ * This attribute is mandatory for version 1 if attribute
+ * QCA_WLAN_VENDOR_ATTR_PEER_CFR_ENABLE is used.
+ *
+ * @QCA_WLAN_VENDOR_ATTR_PEER_CFR_PERIODICITY: Optional (u32)
+ * Periodicity of CFR measurement in msec.
+ * Periodicity should be a multiple of Base timer.
+ * Current Base timer value supported is 10 msecs (default).
+ * 0 for one shot capture.
+ * This attribute is mandatory for version 1 if attribute
+ * QCA_WLAN_VENDOR_ATTR_PEER_CFR_ENABLE is used.
+ *
+ * @QCA_WLAN_VENDOR_ATTR_PEER_CFR_METHOD: Optional (u8)
+ * Method used to capture Channel Frequency Response.
+ * Attribute uses the values defined in enum qca_wlan_vendor_cfr_method.
+ * This attribute is mandatory for version 1 if attribute
+ * QCA_WLAN_VENDOR_ATTR_PEER_CFR_ENABLE is used.
+ *
+ * @QCA_WLAN_VENDOR_ATTR_PERIODIC_CFR_CAPTURE_ENABLE: Optional (flag)
+ * Enable periodic CFR capture.
+ * This attribute is mandatory for version 1 to enable Periodic CFR capture.
+ * If this attribute is not present, periodic CFR capture is disabled.
+ *
+ * @QCA_WLAN_VENDOR_ATTR_CFR_VERSION: Optional (u8)
+ * Value is 1 or 2 since there are two versions of CFR capture. Two versions
+ * can't be enabled at same time. This attribute is mandatory if target
+ * support both versions and use one of them.
+ *
+ * @QCA_WLAN_VENDOR_ATTR_CFR_ENABLE_GROUP_BITMAP: Optional (u32)
+ * This attribute is mandatory for version 2 if
+ * QCA_WLAN_VENDOR_ATTR_PEER_CFR_GROUP_ENTRY is used.
+ * Bits 15:0 Bit fields indicating which group to be enabled.
+ * Bits 31:16 Reserved for future use.
+ *
+ * @QCA_WLAN_VENDOR_ATTR_PEER_CFR_DURATION: Optional (u32)
+ * CFR capture duration in microsecond. This attribute is mandatory for
+ * version 2 if attribute QCA_WLAN_VENDOR_ATTR_PEER_CFR_INTERVAL is used.
+ *
+ * @QCA_WLAN_VENDOR_ATTR_PEER_CFR_INTERVAL: Optional (u32)
+ * CFR capture interval in microsecond. This attribute is mandatory for
+ * version 2 if attribute QCA_WLAN_VENDOR_ATTR_PEER_CFR_DURATION is used.
+ *
+ * @QCA_WLAN_VENDOR_ATTR_PEER_CFR_CAPTURE_TYPE: Optional (u32)
+ * CFR capture type is defined in enum qca_wlan_vendor_cfr_capture_type.
+ * This attribute is mandatory for version 2.
+ *
+ * @QCA_WLAN_VENDOR_ATTR_PEER_CFR_UL_MU_MASK: Optional (u64)
+ * Bit fields indicating which user in the current UL MU
+ * transmissions are enabled for CFR capture. Bits 36 to 0 indicating
+ * user indexes for 37 users in a UL MU transmission. If bit 0 is set,
+ * then the CFR capture will happen for user index 0 in the current
+ * UL MU transmission. If bits 0,2 are set, then CFR capture for UL MU
+ * TX corresponds to user indices 0 and 2.  Bits 63:37 Reserved for future use.
+ * This is for CFR version 2 only.
+ *
+ * @QCA_WLAN_VENDOR_ATTR_PEER_CFR_FREEZE_TLV_DELAY_COUNT: Optional (u32)
+ * Indicates the number of consecutive Rx packets to be skipped
+ * before CFR capture is enabled again.
+ * This is for CFR version 2 only.
+ *
+ * @QCA_WLAN_VENDOR_ATTR_PEER_CFR_GROUP_TABLE: Nested attribute containing
+ * one or more %QCA_WLAN_VENDOR_ATTR_PEER_CFR_GROUP_ENTRY attributes.
+ *
+ * @QCA_WLAN_VENDOR_ATTR_PEER_CFR_GROUP_ENTRY: Nested attribute containing
+ * the following GROUP attributes:
+ *	%QCA_WLAN_VENDOR_ATTR_PEER_CFR_GROUP_NUMBER,
+ *	%QCA_WLAN_VENDOR_ATTR_PEER_CFR_GROUP_TA,
+ *	%QCA_WLAN_VENDOR_ATTR_PEER_CFR_GROUP_RA,
+ *	%QCA_WLAN_VENDOR_ATTR_PEER_CFR_GROUP_TA_MASK,
+ *	%QCA_WLAN_VENDOR_ATTR_PEER_CFR_GROUP_RA_MASK,
+ *	%QCA_WLAN_VENDOR_ATTR_PEER_CFR_GROUP_NSS,
+ *	%QCA_WLAN_VENDOR_ATTR_PEER_CFR_GROUP_BW,
+ *	%QCA_WLAN_VENDOR_ATTR_PEER_CFR_GROUP_MGMT_FILTER,
+ *	%QCA_WLAN_VENDOR_ATTR_PEER_CFR_GROUP_CTRL_FILTER,
+ *	%QCA_WLAN_VENDOR_ATTR_PEER_CFR_GROUP_DATA_FILTER
+ *
+ * @QCA_WLAN_VENDOR_ATTR_PEER_CFR_GROUP_NUMBER: Optional (u32)
+ * Target support multiple groups for some configurations. Group number could be
+ * any value between 0 and 15. This is for CFR version 2 only.
+ *
+ * @QCA_WLAN_VENDOR_ATTR_PEER_CFR_GROUP_TA: Optional (6-byte MAC address)
+ * Transmitter address which is used to filter packets, this MAC address takes
+ * effect with QCA_WLAN_VENDOR_ATTR_PEER_CFR_GROUP_TA_MASK.
+ * This is for CFR version 2 only.
+ *
+ * @QCA_WLAN_VENDOR_ATTR_PEER_CFR_GROUP_RA: Optional (6-byte MAC address)
+ * Receiver address which is used to filter packets, this MAC address takes
+ * effect with QCA_WLAN_VENDOR_ATTR_PEER_CFR_GROUP_RA_MASK.
+ * This is for CFR version 2 only.
+ *
+ * @QCA_WLAN_VENDOR_ATTR_PEER_CFR_GROUP_TA_MASK: Optional (6-byte MAC address)
+ * Mask of transmitter address which is used to filter packets.
+ * This is for CFR version 2 only.
+ *
+ * @QCA_WLAN_VENDOR_ATTR_PEER_CFR_GROUP_RA_MASK: Optional (6-byte MAC address)
+ * Mask of receiver address which is used to filter packets.
+ * This is for CFR version 2 only.
+ *
+ * @QCA_WLAN_VENDOR_ATTR_PEER_CFR_GROUP_NSS: Optional (u32)
+ * Indicates packets with a specific NSS will be filtered for CFR capture.
+ * This is for CFR version 2 only. This is a bitmask. Bits 7:0, CFR capture will
+ * be done for packets matching the NSS specified within this bitmask.
+ * Bits 31:8 Reserved for future use. Bits 7:0 map to NSS:
+ *     bit 0 : NSS 1
+ *     bit 1 : NSS 2
+ *     ...
+ *     bit 7 : NSS 8
+ *
+ * @QCA_WLAN_VENDOR_ATTR_PEER_CFR_GROUP_BW: Optional (u32)
+ * Indicates packets with a specific BW will be filtered for CFR capture.
+ * This is for CFR version 2 only. This is a bitmask. Bits 4:0, CFR capture
+ * will be done for packets matching the bandwidths specified within this
+ * bitmask. Bits 31:5 Reserved for future use. Bits 4:0 map to bandwidth
+ * numerated in enum nl80211_band (although not all bands may be supported
+ * by a given device).
+ *
+ * @QCA_WLAN_VENDOR_ATTR_PEER_CFR_GROUP_MGMT_FILTER: Optional (u32)
+ * Management packets matching the subtype filter categories will be
+ * filtered in by MAC for CFR capture. This is a bitmask, in which each bit
+ * represents the corresponding mgmt subtype value as per
+ * IEEE 802.11(2016) 9.2.4.1.3 Type and Subtype subfields.
+ * For example, beacon frame control type is 8, its value is 1<<8 = 0x100.
+ * This is for CFR version 2 only
+ *
+ * @QCA_WLAN_VENDOR_ATTR_PEER_CFR_GROUP_CTRL_FILTER: Optional (u32)
+ * Control packets matching the subtype filter categories will be
+ * filtered in by MAC for CFR capture. This is a bitmask, in which each bit
+ * represents the corresponding control subtype value as per
+ * IEEE 802.11(2016) 9.2.4.1.3 Type and Subtype subfields.
+ * This is for CFR version 2 only.
+ *
+ * @QCA_WLAN_VENDOR_ATTR_PEER_CFR_GROUP_DATA_FILTER: Optional (u32)
+ * Data packets matching the subtype filter categories will be
+ * filtered in by MAC for CFR capture. This is a bitmask, in which each bit
+ * represents the corresponding data subtype value as per
+ * IEEE 802.11(2016) 9.2.4.1.3 Type and Subtype subfields.
+ * This is for CFR version 2 only.
+ *
+ */
+enum qca_wlan_vendor_peer_cfr_capture_attr {
+	QCA_WLAN_VENDOR_ATTR_PEER_CFR_CAPTURE_INVALID = 0,
+	QCA_WLAN_VENDOR_ATTR_CFR_PEER_MAC_ADDR = 1,
+	QCA_WLAN_VENDOR_ATTR_PEER_CFR_ENABLE = 2,
+	QCA_WLAN_VENDOR_ATTR_PEER_CFR_BANDWIDTH = 3,
+	QCA_WLAN_VENDOR_ATTR_PEER_CFR_PERIODICITY = 4,
+	QCA_WLAN_VENDOR_ATTR_PEER_CFR_METHOD = 5,
+	QCA_WLAN_VENDOR_ATTR_PERIODIC_CFR_CAPTURE_ENABLE = 6,
+	QCA_WLAN_VENDOR_ATTR_PEER_CFR_VERSION = 7,
+	QCA_WLAN_VENDOR_ATTR_PEER_CFR_ENABLE_GROUP_BITMAP = 8,
+	QCA_WLAN_VENDOR_ATTR_PEER_CFR_DURATION = 9,
+	QCA_WLAN_VENDOR_ATTR_PEER_CFR_INTERVAL = 10,
+	QCA_WLAN_VENDOR_ATTR_PEER_CFR_CAPTURE_TYPE = 11,
+	QCA_WLAN_VENDOR_ATTR_PEER_CFR_UL_MU_MASK = 12,
+	QCA_WLAN_VENDOR_ATTR_PEER_CFR_FREEZE_TLV_DELAY_COUNT = 13,
+	QCA_WLAN_VENDOR_ATTR_PEER_CFR_GROUP_TABLE = 14,
+	QCA_WLAN_VENDOR_ATTR_PEER_CFR_GROUP_ENTRY = 15,
+	QCA_WLAN_VENDOR_ATTR_PEER_CFR_GROUP_NUMBER = 16,
+	QCA_WLAN_VENDOR_ATTR_PEER_CFR_GROUP_TA = 17,
+	QCA_WLAN_VENDOR_ATTR_PEER_CFR_GROUP_RA = 18,
+	QCA_WLAN_VENDOR_ATTR_PEER_CFR_GROUP_TA_MASK = 19,
+	QCA_WLAN_VENDOR_ATTR_PEER_CFR_GROUP_RA_MASK = 20,
+	QCA_WLAN_VENDOR_ATTR_PEER_CFR_GROUP_NSS = 21,
+	QCA_WLAN_VENDOR_ATTR_PEER_CFR_GROUP_BW = 22,
+	QCA_WLAN_VENDOR_ATTR_PEER_CFR_GROUP_MGMT_FILTER = 23,
+	QCA_WLAN_VENDOR_ATTR_PEER_CFR_GROUP_CTRL_FILTER = 24,
+	QCA_WLAN_VENDOR_ATTR_PEER_CFR_GROUP_DATA_FILTER = 25,
+
+	/* Keep last */
+	QCA_WLAN_VENDOR_ATTR_PEER_CFR_AFTER_LAST,
+	QCA_WLAN_VENDOR_ATTR_PEER_CFR_MAX =
+	QCA_WLAN_VENDOR_ATTR_PEER_CFR_AFTER_LAST - 1,
+};
+
+/**
  * enum qca_coex_config_profiles - This enum defines different types of
  * traffic streams that can be prioritized one over the other during coex
  * scenarios.
@@ -8311,4 +8689,102 @@ enum qca_vendor_attr_btc_chain_mode {
 	QCA_VENDOR_ATTR_BTC_CHAIN_MODE_LAST - 1,
 };
 
+/**
+ * enum qca_disconnect_reason_codes - Specifies driver disconnect reason codes.
+ * Used when the driver triggers the STA to disconnect from the AP.
+ *
+ * @QCA_DISCONNECT_REASON_UNSPECIFIED: The host driver triggered the
+ * disconnection with the AP due to unspecified reasons.
+ *
+ * @QCA_DISCONNECT_REASON_INTERNAL_ROAM_FAILURE: The host driver triggered the
+ * disconnection with the AP due to a roaming failure. This roaming is triggered
+ * internally (host driver/firmware).
+ *
+ * @QCA_DISCONNECT_REASON_EXTERNAL_ROAM_FAILURE: The driver disconnected from
+ * the AP when the user/external triggered roaming fails.
+ *
+ * @QCA_DISCONNECT_REASON_GATEWAY_REACHABILITY_FAILURE: This reason code is used
+ * by the host driver whenever gateway reachability failure is detected and the
+ * driver disconnects with AP.
+ *
+ * @QCA_DISCONNECT_REASON_UNSUPPORTED_CHANNEL_CSA: The driver disconnected from
+ * the AP on a channel switch announcement from it with an unsupported channel.
+ *
+ * @QCA_DISCONNECT_REASON_OPER_CHANNEL_DISABLED_INDOOR: On a concurrent AP start
+ * with indoor channels disabled and if the STA is connected on one of these
+ * disabled channels, the host driver disconnected the STA with this reason
+ * code.
+ *
+ * @QCA_DISCONNECT_REASON_OPER_CHANNEL_USER_DISABLED: Disconnection due to an
+ * explicit request from the user to disable the current operating channel.
+ *
+ * @QCA_DISCONNECT_REASON_DEVICE_RECOVERY: STA disconnected from the AP due to
+ * the internal host driver/firmware recovery.
+ *
+ * @QCA_DISCONNECT_REASON_KEY_TIMEOUT: The driver triggered the disconnection on
+ * a timeout for the key installations from the user space.
+ *
+ * @QCA_DISCONNECT_REASON_OPER_CHANNEL_BAND_CHANGE: The dDriver disconnected the
+ * STA on a band change request from the user space to a different band from the
+ * current operation channel/band.
+ *
+ * @QCA_DISCONNECT_REASON_IFACE_DOWN: The STA disconnected from the AP on an
+ * interface down trigger from the user space.
+ *
+ * @QCA_DISCONNECT_REASON_PEER_XRETRY_FAIL: The host driver disconnected the
+ * STA on getting continuous transmission failures for multiple Data frames.
+ *
+ * @QCA_DISCONNECT_REASON_PEER_INACTIVITY: The STA does a keep alive
+ * notification to the AP by transmitting NULL/G-ARP frames. This disconnection
+ * represents inactivity from AP on such transmissions.
+
+ * @QCA_DISCONNECT_REASON_SA_QUERY_TIMEOUT: This reason code is used on
+ * disconnection when SA Query times out (AP does not respond to SA Query).
+ *
+ * @QCA_DISCONNECT_REASON_BEACON_MISS_FAILURE: The host driver disconnected the
+ * STA on missing the beacons continuously from the AP.
+ *
+ * @QCA_DISCONNECT_REASON_CHANNEL_SWITCH_FAILURE: Disconnection due to STA not
+ * able to move to the channel mentioned by the AP in CSA.
+ *
+ * @QCA_DISCONNECT_REASON_USER_TRIGGERED: User triggered disconnection.
+ */
+enum qca_disconnect_reason_codes {
+	QCA_DISCONNECT_REASON_UNSPECIFIED = 0,
+	QCA_DISCONNECT_REASON_INTERNAL_ROAM_FAILURE = 1,
+	QCA_DISCONNECT_REASON_EXTERNAL_ROAM_FAILURE = 2,
+	QCA_DISCONNECT_REASON_GATEWAY_REACHABILITY_FAILURE = 3,
+	QCA_DISCONNECT_REASON_UNSUPPORTED_CHANNEL_CSA = 4,
+	QCA_DISCONNECT_REASON_OPER_CHANNEL_DISABLED_INDOOR = 5,
+	QCA_DISCONNECT_REASON_OPER_CHANNEL_USER_DISABLED = 6,
+	QCA_DISCONNECT_REASON_DEVICE_RECOVERY = 7,
+	QCA_DISCONNECT_REASON_KEY_TIMEOUT = 8,
+	QCA_DISCONNECT_REASON_OPER_CHANNEL_BAND_CHANGE = 9,
+	QCA_DISCONNECT_REASON_IFACE_DOWN = 10,
+	QCA_DISCONNECT_REASON_PEER_XRETRY_FAIL = 11,
+	QCA_DISCONNECT_REASON_PEER_INACTIVITY = 12,
+	QCA_DISCONNECT_REASON_SA_QUERY_TIMEOUT = 13,
+	QCA_DISCONNECT_REASON_BEACON_MISS_FAILURE = 14,
+	QCA_DISCONNECT_REASON_CHANNEL_SWITCH_FAILURE = 15,
+	QCA_DISCONNECT_REASON_USER_TRIGGERED = 16,
+};
+
+/**
+ * enum qca_wlan_vendor_attr_driver_disconnect_reason - Defines attributes
+ * used by %QCA_NL80211_VENDOR_SUBCMD_DRIVER_DISCONNECT_REASON vendor command.
+ *
+ * @QCA_WLAN_VENDOR_ATTR_DRIVER_DISCONNECT_REASCON_CODE: u32 attribute.
+ * This attribute represents the driver specific reason codes (local
+ * driver/firmware initiated reasons for disconnection) defined
+ * in enum qca_disconnect_reason_codes.
+ */
+enum qca_wlan_vendor_attr_driver_disconnect_reason {
+	QCA_WLAN_VENDOR_ATTR_DRIVER_DISCONNECT_REASON_INVALID = 0,
+	QCA_WLAN_VENDOR_ATTR_DRIVER_DISCONNECT_REASCON_CODE = 1,
+
+	/* keep last */
+	QCA_WLAN_VENDOR_ATTR_DRIVER_DISCONNECT_REASON_AFTER_LAST,
+	QCA_WLAN_VENDOR_ATTR_DRIVER_DISCONNECT_REASON_MAX =
+	QCA_WLAN_VENDOR_ATTR_DRIVER_DISCONNECT_REASON_AFTER_LAST - 1,
+};
 #endif
