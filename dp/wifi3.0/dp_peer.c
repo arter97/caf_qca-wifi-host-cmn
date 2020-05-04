@@ -849,6 +849,7 @@ add_ast_entry:
 				soc->ctrl_psoc,
 				peer->vdev->vdev_id,
 				peer->mac_addr.raw,
+				peer->peer_ids[0],
 				mac_addr,
 				next_node_mac,
 				flags,
@@ -1606,6 +1607,9 @@ dp_rx_peer_map_handler(struct dp_soc *soc, uint16_t peer_id,
 				dp_info("STA vdev bss_peer!!!!");
 				peer->bss_peer = 1;
 				peer->vdev->vap_bss_peer = peer;
+				qdf_mem_copy(peer->vdev->vap_bss_peer_mac_addr,
+					     peer->mac_addr.raw,
+					     QDF_MAC_ADDR_SIZE);
 			}
 
 			if (peer->vdev->opmode == wlan_op_mode_sta) {
@@ -1844,6 +1848,7 @@ static void dp_reo_desc_free(struct dp_soc *soc, void *cb_ctxt,
 	struct reo_desc_list_node *freedesc =
 		(struct reo_desc_list_node *)cb_ctxt;
 	struct dp_rx_tid *rx_tid = &freedesc->rx_tid;
+	unsigned long curr_ts = qdf_get_system_timestamp();
 
 	if ((reo_status->fl_cache_status.header.status !=
 		HAL_REO_CMD_SUCCESS) &&
@@ -1856,7 +1861,8 @@ static void dp_reo_desc_free(struct dp_soc *soc, void *cb_ctxt,
 			  freedesc->rx_tid.tid);
 	}
 	QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_INFO_HIGH,
-		  "%s: hw_qdesc_paddr: %pK, tid:%d", __func__,
+		  "%s:%lu hw_qdesc_paddr: %pK, tid:%d", __func__,
+		  curr_ts,
 		  (void *)(rx_tid->hw_qdesc_paddr), rx_tid->tid);
 	qdf_mem_unmap_nbytes_single(soc->osdev,
 		rx_tid->hw_qdesc_paddr,
@@ -2085,6 +2091,23 @@ static void dp_reo_desc_clean_up(struct dp_soc *soc,
 			     (qdf_list_node_t *)desc);
 }
 
+/*
+ * dp_reo_limit_clean_batch_sz() - Limit number REO CMD queued to cmd
+ * ring in aviod of REO hang
+ *
+ * @list_size: REO desc list size to be cleaned
+ */
+static inline void dp_reo_limit_clean_batch_sz(uint32_t *list_size)
+{
+	unsigned long curr_ts = qdf_get_system_timestamp();
+
+	if ((*list_size) > REO_DESC_FREELIST_SIZE) {
+		dp_err_log("%lu:freedesc number %d in freelist",
+			   curr_ts, *list_size);
+		/* limit the batch queue size */
+		*list_size = REO_DESC_FREELIST_SIZE;
+	}
+}
 #else
 /*
  * dp_reo_desc_clean_up() - If send cmd to REO inorder to flush
@@ -2103,6 +2126,16 @@ static void dp_reo_desc_clean_up(struct dp_soc *soc,
 		reo_status->fl_cache_status.header.status = 0;
 		dp_reo_desc_free(soc, (void *)desc, reo_status);
 	}
+}
+
+/*
+ * dp_reo_limit_clean_batch_sz() - Limit number REO CMD queued to cmd
+ * ring in aviod of REO hang
+ *
+ * @list_size: REO desc list size to be cleaned
+ */
+static inline void dp_reo_limit_clean_batch_sz(uint32_t *list_size)
+{
 }
 #endif
 
@@ -2172,6 +2205,7 @@ void dp_rx_tid_delete_cb(struct dp_soc *soc, void *cb_ctxt,
 		qdf_mem_zero(reo_status, sizeof(*reo_status));
 		reo_status->fl_cache_status.header.status = HAL_REO_CMD_DRAIN;
 		dp_reo_desc_free(soc, (void *)freedesc, reo_status);
+		DP_STATS_INC(soc, rx.err.reo_cmd_send_drain, 1);
 		return;
 	} else if (reo_status->rx_queue_status.header.status !=
 		HAL_REO_CMD_SUCCESS) {
@@ -2192,6 +2226,14 @@ void dp_rx_tid_delete_cb(struct dp_soc *soc, void *cb_ctxt,
 	freedesc->free_ts = curr_ts;
 	qdf_list_insert_back_size(&soc->reo_desc_freelist,
 		(qdf_list_node_t *)freedesc, &list_size);
+
+	/* MCL path add the desc back to reo_desc_freelist when REO FLUSH
+	 * failed. it may cause the number of REO queue pending  in free
+	 * list is even larger than REO_CMD_RING max size and lead REO CMD
+	 * flood then cause REO HW in an unexpected condition. So it's
+	 * needed to limit the number REO cmds in a batch operation.
+	 */
+	dp_reo_limit_clean_batch_sz(&list_size);
 
 	while ((qdf_list_peek_front(&soc->reo_desc_freelist,
 		(qdf_list_node_t **)&desc) == QDF_STATUS_SUCCESS) &&
@@ -2638,6 +2680,16 @@ int dp_addba_resp_tx_completion_wifi3(struct cdp_soc_t *cdp_soc,
 		goto fail;
 	}
 
+	if (dp_rx_tid_update_wifi3(peer, tid,
+				   rx_tid->ba_win_size,
+				   rx_tid->startseqnum)) {
+		dp_err("%s: failed update REO SSN", __func__);
+	}
+
+	dp_info("%s: tid %u window_size %u start_seq_num %u",
+		__func__, tid, rx_tid->ba_win_size,
+		rx_tid->startseqnum);
+
 	/* First Session */
 	if (peer->active_ba_session_cnt == 0) {
 		if (rx_tid->ba_win_size > 64 && rx_tid->ba_win_size <= 256)
@@ -2760,6 +2812,8 @@ static void dp_check_ba_buffersize(struct dp_peer *peer,
 	}
 }
 
+#define DP_RX_BA_SESSION_DISABLE  1
+
 /*
  * dp_addba_requestprocess_wifi3() - Process ADDBA request from peer
  *
@@ -2811,6 +2865,25 @@ int dp_addba_requestprocess_wifi3(struct cdp_soc_t *cdp_soc,
 		status = QDF_STATUS_E_FAILURE;
 		goto fail;
 	}
+
+	if (rx_tid->rx_ba_win_size_override == DP_RX_BA_SESSION_DISABLE) {
+		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_INFO,
+			  "%s disable BA session",
+			    __func__);
+
+		buffersize = 1;
+	} else if (rx_tid->rx_ba_win_size_override) {
+		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_INFO,
+			  "%s override BA win to %d", __func__,
+			      rx_tid->rx_ba_win_size_override);
+
+		buffersize = rx_tid->rx_ba_win_size_override;
+	} else {
+		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_INFO,
+			  "%s restore BA win %d based on addba req",
+			    __func__, buffersize);
+	}
+
 	dp_check_ba_buffersize(peer, tid, buffersize);
 
 	if (dp_rx_tid_setup_wifi3(peer, tid,
@@ -2829,6 +2902,9 @@ int dp_addba_requestprocess_wifi3(struct cdp_soc_t *cdp_soc,
 		rx_tid->statuscode = rx_tid->userstatuscode;
 	else
 		rx_tid->statuscode = IEEE80211_STATUS_SUCCESS;
+
+	if (rx_tid->rx_ba_win_size_override == DP_RX_BA_SESSION_DISABLE)
+		rx_tid->statuscode = IEEE80211_STATUS_REFUSED;
 
 	qdf_spin_unlock_bh(&rx_tid->tid_lock);
 
@@ -3040,8 +3116,6 @@ dp_set_pn_check_wifi3(struct cdp_soc_t *soc, uint8_t vdev_id,
 	params.u.upd_queue_params.update_svld = 1;
 	params.u.upd_queue_params.svld = 0;
 
-	peer->security[dp_sec_ucast].sec_type = sec_type;
-
 	switch (sec_type) {
 	case cdp_sec_type_tkip_nomic:
 	case cdp_sec_type_aes_ccmp:
@@ -3117,6 +3191,52 @@ fail:
 }
 
 
+/**
+ * dp_set_key_sec_type_wifi3() - set security mode of key
+ * @soc: Datapath soc handle
+ * @peer_mac: Datapath peer mac address
+ * @vdev_id: id of atapath vdev
+ * @vdev: Datapath vdev
+ * @pdev - data path device instance
+ * @sec_type - security type
+ * #is_unicast - key type
+ *
+ */
+
+QDF_STATUS
+dp_set_key_sec_type_wifi3(struct cdp_soc_t *soc, uint8_t vdev_id,
+			  uint8_t *peer_mac, enum cdp_sec_type sec_type,
+			  bool is_unicast)
+{
+	struct dp_peer *peer = dp_peer_find_hash_find((struct dp_soc *)soc,
+				peer_mac, 0, vdev_id);
+	QDF_STATUS status = QDF_STATUS_SUCCESS;
+	int sec_index;
+
+	if (!peer || peer->delete_in_progress) {
+		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_DEBUG,
+			  "%s: Peer is NULL!\n", __func__);
+		status = QDF_STATUS_E_FAILURE;
+		goto fail;
+	}
+
+	QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_INFO_HIGH,
+		  "key sec spec for peer %pK %pM: %s key of type %d",
+		  peer,
+		  peer->mac_addr.raw,
+		  is_unicast ? "ucast" : "mcast",
+		  sec_type);
+
+	sec_index = is_unicast ? dp_sec_ucast : dp_sec_mcast;
+	peer->security[sec_index].sec_type = sec_type;
+
+fail:
+	if (peer)
+		dp_peer_unref_delete(peer);
+
+	return status;
+}
+
 void
 dp_rx_sec_ind_handler(struct dp_soc *soc, uint16_t peer_id,
 		      enum cdp_sec_type sec_type, int is_unicast,
@@ -3181,6 +3301,65 @@ dp_rx_sec_ind_handler(struct dp_soc *soc, uint16_t peer_id,
 	 */
 
 	dp_peer_unref_del_find_by_id(peer);
+}
+
+QDF_STATUS
+dp_rx_delba_ind_handler(void *soc_handle, uint16_t peer_id,
+			uint8_t tid, uint16_t win_sz)
+{
+	struct dp_soc *soc = (struct dp_soc *)soc_handle;
+	struct dp_peer *peer;
+	struct dp_rx_tid *rx_tid;
+	QDF_STATUS status = QDF_STATUS_SUCCESS;
+
+	peer = dp_peer_find_by_id(soc, peer_id);
+
+	if (!peer) {
+		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_ERROR,
+			  "Couldn't find peer from ID %d",
+			  peer_id);
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	qdf_assert_always(tid < DP_MAX_TIDS);
+
+	rx_tid = &peer->rx_tid[tid];
+
+	if (rx_tid->hw_qdesc_vaddr_unaligned) {
+		if (!rx_tid->delba_tx_status) {
+			QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_INFO,
+				  "%s: PEER_ID: %d TID: %d, BA win: %d ",
+				  __func__, peer_id, tid, win_sz);
+
+			qdf_spin_lock_bh(&rx_tid->tid_lock);
+
+			rx_tid->delba_tx_status = 1;
+
+			rx_tid->rx_ba_win_size_override =
+			    qdf_min((uint16_t)63, win_sz);
+
+			rx_tid->delba_rcode =
+			    IEEE80211_REASON_QOS_SETUP_REQUIRED;
+
+			qdf_spin_unlock_bh(&rx_tid->tid_lock);
+
+			if (soc->cdp_soc.ol_ops->send_delba)
+				soc->cdp_soc.ol_ops->send_delba(
+					peer->vdev->pdev->soc->ctrl_psoc,
+					peer->vdev->vdev_id,
+					peer->mac_addr.raw,
+					tid,
+					rx_tid->delba_rcode);
+		}
+	} else {
+		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_ERROR,
+			  "BA session is not setup for TID:%d ", tid);
+		status = QDF_STATUS_E_FAILURE;
+	}
+
+	dp_peer_unref_del_find_by_id(peer);
+
+	return status;
 }
 
 #ifdef DP_PEER_EXTENDED_API
@@ -3500,7 +3679,7 @@ bool dp_find_peer_exist_on_other_vdev(struct cdp_soc_t *soc_hdl,
 	struct dp_vdev *vdev;
 
 	for (i = 0; i < max_bssid; i++) {
-		vdev = dp_get_vdev_from_soc_vdev_id_wifi3(soc, vdev_id);
+		vdev = dp_get_vdev_from_soc_vdev_id_wifi3(soc, i);
 		/* Need to check vdevs other than the vdev_id */
 		if (vdev_id == i || !vdev)
 			continue;
@@ -3508,9 +3687,8 @@ bool dp_find_peer_exist_on_other_vdev(struct cdp_soc_t *soc_hdl,
 					dp_pdev_to_cdp_pdev(vdev->pdev),
 					dp_vdev_to_cdp_vdev(vdev),
 					peer_addr)) {
-			QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_INFO_HIGH,
-				  "%s: Duplicate peer %pM already exist on vdev %d",
-				  __func__, peer_addr, i);
+			dp_err("%s: Duplicate peer %pM already exist on vdev %d",
+			       __func__, peer_addr, i);
 			return true;
 		}
 	}
@@ -3537,17 +3715,20 @@ bool dp_find_peer_exist(struct cdp_soc_t *soc_hdl, uint8_t pdev_id,
  * @dp_stats_cmd_cb: REO command callback function
  * @cb_ctxt: Callback context
  *
- * Return: none
+ * Return: count of tid stats cmd send succeeded
  */
-void dp_peer_rxtid_stats(struct dp_peer *peer, void (*dp_stats_cmd_cb),
+int dp_peer_rxtid_stats(struct dp_peer *peer,
+			dp_rxtid_stats_cmd_cb dp_stats_cmd_cb,
 			void *cb_ctxt)
 {
 	struct dp_soc *soc = peer->vdev->pdev->soc;
 	struct hal_reo_cmd_params params;
 	int i;
+	int stats_cmd_sent_cnt = 0;
+	QDF_STATUS status;
 
 	if (!dp_stats_cmd_cb)
-		return;
+		return stats_cmd_sent_cnt;
 
 	qdf_mem_zero(&params, sizeof(params));
 	for (i = 0; i < DP_MAX_TIDS; i++) {
@@ -3560,12 +3741,19 @@ void dp_peer_rxtid_stats(struct dp_peer *peer, void (*dp_stats_cmd_cb),
 				(uint64_t)(rx_tid->hw_qdesc_paddr) >> 32;
 
 			if (cb_ctxt) {
-				dp_reo_send_cmd(soc, CMD_GET_QUEUE_STATS,
-					&params, dp_stats_cmd_cb, cb_ctxt);
+				status = dp_reo_send_cmd(
+						soc, CMD_GET_QUEUE_STATS,
+						&params, dp_stats_cmd_cb,
+						cb_ctxt);
 			} else {
-				dp_reo_send_cmd(soc, CMD_GET_QUEUE_STATS,
-					&params, dp_stats_cmd_cb, rx_tid);
+				status = dp_reo_send_cmd(
+						soc, CMD_GET_QUEUE_STATS,
+						&params, dp_stats_cmd_cb,
+						rx_tid);
 			}
+
+			if (QDF_IS_STATUS_SUCCESS(status))
+				stats_cmd_sent_cnt++;
 
 			/* Flush REO descriptor from HW cache to update stats
 			 * in descriptor memory. This is to help debugging */
@@ -3580,6 +3768,8 @@ void dp_peer_rxtid_stats(struct dp_peer *peer, void (*dp_stats_cmd_cb),
 				NULL);
 		}
 	}
+
+	return stats_cmd_sent_cnt;
 }
 
 QDF_STATUS

@@ -269,6 +269,7 @@ enum htt_cmn_dbg_stats_type {
  * @TXRX_PDEV_CFG_PARAMS: Print pdev cfg params info
  * @TXRX_NAPI_STATS: Print NAPI scheduling statistics
  * @TXRX_SOC_INTERRUPT_STATS: Print soc interrupt stats
+ * @TXRX_HAL_REG_WRITE_STATS: Hal Reg Write stats
  */
 enum cdp_host_txrx_stats {
 	TXRX_HOST_STATS_INVALID  = -1,
@@ -286,6 +287,7 @@ enum cdp_host_txrx_stats {
 	TXRX_NAPI_STATS       = 11,
 	TXRX_SOC_INTERRUPT_STATS = 12,
 	TXRX_SOC_FSE_STATS = 13,
+	TXRX_HAL_REG_WRITE_STATS = 14,
 	TXRX_HOST_STATS_MAX,
 };
 
@@ -1188,6 +1190,7 @@ enum cdp_tx_enh_capture_mode {
 	CDP_TX_ENH_CAPTURE_DISABLED = 0,
 	CDP_TX_ENH_CAPTURE_ENABLE_ALL_PEERS,
 	CDP_TX_ENH_CAPTURE_ENDIS_PER_PEER,
+	CDP_TX_ENH_CAPTURE_MAX,
 };
 
 /*
@@ -1804,6 +1807,8 @@ struct cdp_tx_mgmt_comp_info {
  * @delayed_ba: Delayed ba flag
  * @beam_change: beam change bit in ppdu for he-information
  * @bss_color: 6 bit value for full bss color
+ * @doppler: value for doppler (will be 0 most of the times)
+ * @spatial_reuse: value for spatial reuse used in radiotap HE header
  * @user: per-User stats (array of per-user structures)
  * @mpdu_q: queue of mpdu in a ppdu
  * @mpdus: MPDU list based on enqueue sequence bitmap
@@ -1843,6 +1848,8 @@ struct cdp_tx_completion_ppdu {
 	bool delayed_ba;
 	uint8_t beam_change;
 	uint8_t bss_color;
+	uint8_t doppler;
+	uint8_t spatial_reuse;
 	struct cdp_tx_completion_ppdu_user user[CDP_MU_MAX_USERS];
 	qdf_nbuf_queue_t mpdu_q;
 	qdf_nbuf_t *mpdus;

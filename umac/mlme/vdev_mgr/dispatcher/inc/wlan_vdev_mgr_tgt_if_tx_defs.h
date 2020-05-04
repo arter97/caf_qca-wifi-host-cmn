@@ -171,6 +171,7 @@ struct tbttoffset_params {
  * @ext_csa_switch_count_offset: ECSA switch count offset in beacon frame
  * @esp_ie_offset: ESP IE offset in beacon frame
  * @mu_edca_ie_offset: Mu EDCA IE offset in beacon frame
+ * @enable_bigtk: enable bigtk or not
  * @frm: beacon template parameter
  */
 struct beacon_tmpl_params {
@@ -183,6 +184,7 @@ struct beacon_tmpl_params {
 	uint32_t ext_csa_switch_count_offset;
 	uint32_t esp_ie_offset;
 	uint32_t mu_edca_ie_offset;
+	bool enable_bigtk;
 	uint8_t *frm;
 };
 
@@ -521,6 +523,25 @@ struct vdev_down_params {
  */
 struct peer_delete_all_params {
 	uint8_t vdev_id;
+};
+
+#define AC_MAX 4
+#define WMI_MUEDCA_PARAM_MASK 0xff
+/**
+ * struct muedca_params - MU-EDCA parameters
+ * @muedca_ecwmin: CWmin in exponential form
+ * @muedca_ecwmax: CWmax in exponential form
+ * @muedca_aifsn:  AIFSN parameter
+ * @muedca_acm:    ACM parameter
+ * @muedca_timer:  MU EDCA timer value
+ */
+struct muedca_params {
+	uint32_t pdev_id;
+	uint8_t muedca_ecwmin[AC_MAX];      /* CWmin in exponential form */
+	uint8_t muedca_ecwmax[AC_MAX];      /* CWmax in exponential form */
+	uint8_t muedca_aifsn[AC_MAX];       /* AIFSN parameter */
+	uint8_t muedca_acm[AC_MAX];         /* ACM parameter */
+	uint8_t muedca_timer[AC_MAX];       /* MU EDCA timer value */
 };
 
 #endif /* __WLAN_VDEV_MGR_TX_OPS_DEFS_H__ */

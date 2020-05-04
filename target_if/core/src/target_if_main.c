@@ -83,6 +83,7 @@
 #ifdef FEATURE_COEX
 #include <target_if_coex.h>
 #endif
+#include <wlan_utility.h>
 
 #ifdef DCS_INTERFERENCE_DETECTION
 #include <target_if_dcs.h>
@@ -387,6 +388,9 @@ static void target_if_target_tx_ops_register(
 	target_tx_ops->tgt_is_tgt_type_adrastea =
 		target_is_tgt_type_adrastea;
 
+	target_tx_ops->tgt_is_tgt_type_qcn9000 =
+		target_is_tgt_type_qcn9000;
+
 	target_tx_ops->tgt_get_tgt_type =
 		lmac_get_tgt_type;
 
@@ -585,6 +589,9 @@ QDF_STATUS target_if_alloc_psoc_tgt_info(struct wlan_objmgr_psoc *psoc)
 
 	wlan_psoc_set_tgt_if_handle(psoc, tgt_psoc_info);
 	target_psoc_set_preferred_hw_mode(tgt_psoc_info, WMI_HOST_HW_MODE_MAX);
+	wlan_minidump_log(tgt_psoc_info,
+			  sizeof(*tgt_psoc_info), psoc,
+			  WLAN_MD_OBJMGR_PSOC_TGT_INFO, "target_psoc_info");
 
 	qdf_event_create(&tgt_psoc_info->info.event);
 
@@ -616,6 +623,7 @@ QDF_STATUS target_if_free_psoc_tgt_info(struct wlan_objmgr_psoc *psoc)
 
 	wlan_psoc_set_tgt_if_handle(psoc, NULL);
 
+	wlan_minidump_remove(tgt_psoc_info);
 	qdf_mem_free(tgt_psoc_info);
 
 	return QDF_STATUS_SUCCESS;
@@ -644,4 +652,9 @@ bool target_is_tgt_type_qca9888(uint32_t target_type)
 bool target_is_tgt_type_adrastea(uint32_t target_type)
 {
 	return target_type == TARGET_TYPE_ADRASTEA;
+}
+
+bool target_is_tgt_type_qcn9000(uint32_t target_type)
+{
+	return target_type == TARGET_TYPE_QCN9000;
 }

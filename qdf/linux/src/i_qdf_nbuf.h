@@ -107,6 +107,7 @@ typedef union {
  * @rx.dev.priv_cb_m.peer_cached_buf_frm: peer cached buffer
  * @rx.dev.priv_cb_m.flush_ind: flush indication
  * @rx.dev.priv_cb_m.packet_buf_pool:  packet buff bool
+ * @rx.dev.priv_cb_m.l3_hdr_pad: L3 header padding offset
  * @rx.dev.priv_cb_m.tcp_seq_num: TCP sequence number
  * @rx.dev.priv_cb_m.tcp_ack_num: TCP ACK number
  * @rx.dev.priv_cb_m.lro_ctx: LRO context
@@ -222,7 +223,8 @@ struct qdf_nbuf_cb {
 						 peer_cached_buf_frm:1,
 						 flush_ind:1,
 						 packet_buf_pool:1,
-						 reserved:12,
+						 l3_hdr_pad:3,
+						 reserved:9,
 						 reserved1:16;
 					uint32_t tcp_seq_num;
 					uint32_t tcp_ack_num;
@@ -1923,6 +1925,21 @@ static inline struct sk_buff *
 __qdf_nbuf_copy_expand(struct sk_buff *buf, int headroom, int tailroom)
 {
 	return skb_copy_expand(buf, headroom, tailroom, GFP_ATOMIC);
+}
+
+/**
+ * __qdf_nbuf_get_ref_fraglist() - get reference to fragments
+ * @buf: Network buf instance
+ *
+ * Return: void
+ */
+static inline void
+__qdf_nbuf_get_ref_fraglist(struct sk_buff *buf)
+{
+	struct sk_buff *list;
+
+	skb_walk_frags(buf, list)
+		skb_get(list);
 }
 
 /**

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017-2019 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2017-2020 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -43,6 +43,7 @@
 #define MBO_OCE_OUI 0x506f9a16
 #define MBO_OCE_OUI_SIZE 4
 #define REDUCED_WAN_METRICS_ATTR 103
+#define AP_TX_PWR_ATTR 107
 
 /* WCN IE */
 /* Microsoft OUI */
@@ -75,6 +76,19 @@
 #define OUI_LENGTH              4
 #define OUI_TYPE_BITS           24
 #define MAX_ADAPTIVE_11R_IE_LEN 8
+
+/*
+ * sae single pmk vendor specific IE details
+ * Category     Data
+ * Type         0xDD
+ * Length       0x05
+ * OUI          0x00 40 96
+ * Type         0x03
+ * Data         Don’t care (EX, 0x05)
+ */
+#define SAE_SINGLE_PMK_OUI          0x964000
+#define SAE_SINGLE_PMK_TYPE         0x03
+#define MAX_SAE_SINGLE_PMK_IE_LEN   8
 
 /* Temporary vendor specific IE for 11n pre-standard interoperability */
 #define VENDOR_HT_OUI       0x00904c
@@ -1509,6 +1523,21 @@ is_adaptive_11r_oui(uint8_t *frm)
 }
 
 /**
+ * is_sae_single_pmk_oui() - Fun to check if vendor IE is sae single pmk OUI
+ * @frm: vendor IE pointer
+ *
+ * API to check if vendor IE is sae single pmk OUI
+ *
+ * Return: true if its sae single pmk OUI
+ */
+static inline bool
+is_sae_single_pmk_oui(uint8_t *frm)
+{
+	return (frm[1] > OUI_LENGTH) && (LE_READ_4(frm + 2) ==
+		((SAE_SINGLE_PMK_TYPE << OUI_TYPE_BITS) | SAE_SINGLE_PMK_OUI));
+}
+
+/**
  * wlan_parse_rsn_ie() - parse rsn ie
  * @rsn_ie: rsn ie ptr
  * @rsn: out structure for the parsed ie
@@ -1873,4 +1902,51 @@ wlan_parse_oce_reduced_wan_metrics_ie(uint8_t *mbo_oce_ie,
 	return false;
 }
 
+/*
+ * wlan_parse_oce_ap_tx_pwr_ie() - parse oce ap tx pwr
+ * @mbo_oce_ie: MBO/OCE ie ptr
+ * @ap_tx_pwr: pointer to hold value of ap_tx_pwr in dbm
+ *
+ * Return: true if oce ap tx pwr is present, else false
+ */
+static inline bool
+wlan_parse_oce_ap_tx_pwr_ie(uint8_t *mbo_oce_ie, int8_t *ap_tx_pwr_dbm)
+{
+	uint8_t len, attribute_len, attribute_id;
+	uint8_t *ie;
+	int8_t ap_tx_power_in_2_complement;
+
+	if (!mbo_oce_ie)
+		return false;
+
+	ie = mbo_oce_ie;
+	len = ie[1];
+	ie += 2;
+
+	if (len <= MBO_OCE_OUI_SIZE)
+		return false;
+
+	ie += MBO_OCE_OUI_SIZE;
+	len -= MBO_OCE_OUI_SIZE;
+
+	while (len > 2) {
+		attribute_id = ie[0];
+		attribute_len = ie[1];
+		len -= 2;
+		if (attribute_len > len)
+			return false;
+
+		if (attribute_id == AP_TX_PWR_ATTR) {
+			ap_tx_power_in_2_complement = ie[2];
+			*ap_tx_pwr_dbm =
+				(int8_t)(256 - ap_tx_power_in_2_complement);
+			return true;
+		}
+
+		ie += (attribute_len + 2);
+		len -= attribute_len;
+	}
+
+	return false;
+}
 #endif /* _WLAN_CMN_IEEE80211_DEFS_H_ */

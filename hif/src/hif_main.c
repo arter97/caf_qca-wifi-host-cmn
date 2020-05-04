@@ -39,12 +39,17 @@
 #include "qdf_status.h"
 #include "hif_debug.h"
 #include "mp_dev.h"
-#if defined(QCA_WIFI_QCA8074) || defined(QCA_WIFI_QCA6018)
+#if defined(QCA_WIFI_QCA8074) || defined(QCA_WIFI_QCA6018) || \
+	defined(QCA_WIFI_QCA5018)
 #include "hal_api.h"
 #endif
 #include "hif_napi.h"
 #include "hif_unit_test_suspend_i.h"
 #include "qdf_module.h"
+#ifdef HIF_CE_LOG_INFO
+#include <qdf_notifier.h>
+#include <qdf_hang_event_notifier.h>
+#endif
 
 void hif_dump(struct hif_opaque_softc *hif_ctx, uint8_t cmd_id, bool start)
 {
@@ -109,6 +114,7 @@ void hif_vote_link_down(struct hif_opaque_softc *hif_ctx)
 
 	QDF_BUG(scn);
 	scn->linkstate_vote--;
+	HIF_INFO("Down_linkstate_vote %d", scn->linkstate_vote);
 	if (scn->linkstate_vote == 0)
 		hif_bus_prevent_linkdown(scn, false);
 }
@@ -130,6 +136,7 @@ void hif_vote_link_up(struct hif_opaque_softc *hif_ctx)
 
 	QDF_BUG(scn);
 	scn->linkstate_vote++;
+	HIF_INFO("Up_linkstate_vote %d", scn->linkstate_vote);
 	if (scn->linkstate_vote == 1)
 		hif_bus_prevent_linkdown(scn, true);
 }
@@ -426,6 +433,87 @@ void hif_get_cfg_from_psoc(struct hif_softc *scn,
 }
 #endif /* WLAN_CE_INTERRUPT_THRESHOLD_CONFIG */
 
+#ifdef HIF_CE_LOG_INFO
+/**
+ * hif_recovery_notifier_cb - Recovery notifier callback to log
+ *  hang event data
+ * @block: notifier block
+ * @state: state
+ * @data: notifier data
+ *
+ * Return: status
+ */
+static
+int hif_recovery_notifier_cb(struct notifier_block *block, unsigned long state,
+			     void *data)
+{
+	struct qdf_notifer_data *notif_data = data;
+	qdf_notif_block *notif_block;
+	struct hif_softc *hif_handle;
+
+	if (!data || !block)
+		return -EINVAL;
+
+	notif_block = qdf_container_of(block, qdf_notif_block, notif_block);
+
+	hif_handle = notif_block->priv_data;
+	if (!hif_handle)
+		return -EINVAL;
+
+	hif_log_ce_info(hif_handle, notif_data->hang_data,
+			&notif_data->offset);
+
+	return 0;
+}
+
+/**
+ * hif_register_recovery_notifier - Register hif recovery notifier
+ * @hif_handle: hif handle
+ *
+ * Return: status
+ */
+static
+QDF_STATUS hif_register_recovery_notifier(struct hif_softc *hif_handle)
+{
+	qdf_notif_block *hif_notifier;
+
+	if (!hif_handle)
+		return QDF_STATUS_E_FAILURE;
+
+	hif_notifier = &hif_handle->hif_recovery_notifier;
+
+	hif_notifier->notif_block.notifier_call = hif_recovery_notifier_cb;
+	hif_notifier->priv_data = hif_handle;
+	return qdf_hang_event_register_notifier(hif_notifier);
+}
+
+/**
+ * hif_unregister_recovery_notifier - Un-register hif recovery notifier
+ * @hif_handle: hif handle
+ *
+ * Return: status
+ */
+static
+QDF_STATUS hif_unregister_recovery_notifier(struct hif_softc *hif_handle)
+{
+	qdf_notif_block *hif_notifier = &hif_handle->hif_recovery_notifier;
+
+	return qdf_hang_event_unregister_notifier(hif_notifier);
+}
+#else
+static inline
+QDF_STATUS hif_register_recovery_notifier(struct hif_softc *hif_handle)
+{
+	return QDF_STATUS_SUCCESS;
+}
+
+static inline
+QDF_STATUS hif_unregister_recovery_notifier(struct hif_softc *hif_handle)
+{
+	return QDF_STATUS_SUCCESS;
+}
+#endif
+
 struct hif_opaque_softc *hif_open(qdf_device_t qdf_ctx,
 				  uint32_t mode,
 				  enum qdf_bus_type bus_type,
@@ -525,9 +613,9 @@ void hif_close(struct hif_opaque_softc *hif_ctx)
 }
 
 #if (defined(QCA_WIFI_QCA8074) || defined(QCA_WIFI_QCA6018) || \
-     defined(QCA_WIFI_QCA6290) || defined(QCA_WIFI_QCA6390) || \
-     defined(QCA_WIFI_QCN9000) || defined(QCA_WIFI_QCA6490) || \
-     defined(QCA_WIFI_QCA6750))
+	defined(QCA_WIFI_QCA6290) || defined(QCA_WIFI_QCA6390) || \
+	defined(QCA_WIFI_QCN9000) || defined(QCA_WIFI_QCA6490) || \
+	defined(QCA_WIFI_QCA6750) || defined(QCA_WIFI_QCA5018))
 static QDF_STATUS hif_hal_attach(struct hif_softc *scn)
 {
 	if (ce_srng_based(scn)) {
@@ -607,6 +695,7 @@ QDF_STATUS hif_enable(struct hif_opaque_softc *hif_ctx, struct device *dev,
 	}
 
 	hif_ut_suspend_init(scn);
+	hif_register_recovery_notifier(scn);
 
 	/*
 	 * Flag to avoid potential unallocated memory access from MSI
@@ -635,6 +724,8 @@ void hif_disable(struct hif_opaque_softc *hif_ctx, enum hif_disable_type type)
 
 	if (!scn)
 		return;
+
+	hif_unregister_recovery_notifier(scn);
 
 	hif_nointrs(scn);
 	if (scn->hif_init_done == false)
@@ -921,6 +1012,12 @@ int hif_get_device_type(uint32_t device_id,
 		*hif_type = HIF_TYPE_QCA6018;
 		*target_type = TARGET_TYPE_QCA6018;
 		HIF_INFO(" *********** QCA6018 *************\n");
+		break;
+
+	case QCA5018_DEVICE_ID:
+		*hif_type = HIF_TYPE_QCA5018;
+		*target_type = TARGET_TYPE_QCA5018;
+		HIF_INFO(" *********** qca5018 *************\n");
 		break;
 
 	default:
@@ -1218,6 +1315,19 @@ bool hif_is_target_ready(struct hif_softc *scn)
 	return true;
 }
 qdf_export_symbol(hif_is_target_ready);
+
+int hif_get_bandwidth_level(struct hif_opaque_softc *hif_handle)
+{
+	struct hif_softc *scn = HIF_GET_SOFTC(hif_handle);
+	struct hif_driver_state_callbacks *cbk = hif_get_callbacks_handle(scn);
+
+	if (cbk && cbk->get_bandwidth_level)
+		return cbk->get_bandwidth_level(cbk->context);
+
+	return 0;
+}
+
+qdf_export_symbol(hif_get_bandwidth_level);
 
 /**
  * hif_batch_send() - API to access hif specific function

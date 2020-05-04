@@ -1057,7 +1057,7 @@ static QDF_STATUS dp_rx_defrag_reo_reinject(struct dp_peer *peer,
 
 	link_desc_va = dp_rx_cookie_2_link_desc_va(soc, &buf_info);
 
-	qdf_assert(link_desc_va);
+	qdf_assert_always(link_desc_va);
 
 	msdu0 = hal_rx_msdu0_buffer_addr_lsb(soc->hal_soc, link_desc_va);
 	nbuf_len = qdf_nbuf_len(head) - RX_PKT_TLVS_LEN;
@@ -1719,7 +1719,13 @@ uint32_t dp_rx_frag_handle(struct dp_soc *soc, hal_ring_desc_t ring_desc,
 	}
 
 	/* all buffers in MSDU link belong to same pdev */
-	pdev = soc->pdev_list[rx_desc->pool_id];
+	pdev = dp_get_pdev_for_lmac_id(soc, rx_desc->pool_id);
+	if (!pdev) {
+		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_DEBUG,
+			  "pdev is null for pool_id = %d", rx_desc->pool_id);
+		return rx_bufs_used;
+	}
+
 	*mac_id = rx_desc->pool_id;
 
 	msdu = rx_desc->nbuf;

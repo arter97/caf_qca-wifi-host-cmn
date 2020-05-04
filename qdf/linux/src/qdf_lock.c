@@ -265,9 +265,10 @@ qdf_export_symbol(qdf_wake_lock_name);
  * QDF status success: if wake lock is initialized
  * QDF status failure: if wake lock was not initialized
  */
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 4, 0))
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 19, 80))
 QDF_STATUS qdf_wake_lock_create(qdf_wake_lock_t *lock, const char *name)
 {
+	qdf_mem_zero(lock, sizeof(*lock));
 	lock->priv = wakeup_source_register(lock->lock.dev, name);
 	if (!(lock->priv)) {
 		QDF_BUG(0);
@@ -387,7 +388,7 @@ qdf_export_symbol(qdf_wake_lock_release);
  * QDF status success: if wake lock is acquired
  * QDF status failure: if wake lock was not acquired
  */
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 1, 0))
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 19, 80))
 QDF_STATUS qdf_wake_lock_destroy(qdf_wake_lock_t *lock)
 {
 	wakeup_source_unregister(lock->priv);
@@ -447,7 +448,7 @@ QDF_STATUS qdf_runtime_pm_get(void)
 		return QDF_STATUS_E_INVAL;
 	}
 
-	ret = hif_pm_runtime_get(ol_sc);
+	ret = hif_pm_runtime_get(ol_sc, RTPM_ID_RESVERD);
 
 	if (ret)
 		return QDF_STATUS_E_FAILURE;
@@ -480,7 +481,7 @@ QDF_STATUS qdf_runtime_pm_put(void)
 		return QDF_STATUS_E_INVAL;
 	}
 
-	ret = hif_pm_runtime_put(ol_sc);
+	ret = hif_pm_runtime_put(ol_sc, RTPM_ID_RESVERD);
 
 	if (ret)
 		return QDF_STATUS_E_FAILURE;
@@ -579,6 +580,10 @@ qdf_export_symbol(__qdf_runtime_lock_init);
 void qdf_runtime_lock_deinit(qdf_runtime_lock_t *lock)
 {
 	void *hif_ctx = cds_get_context(QDF_MODULE_ID_HIF);
+
+	if (!lock)
+		return;
+
 	hif_runtime_lock_deinit(hif_ctx, lock->lock);
 }
 qdf_export_symbol(qdf_runtime_lock_deinit);
@@ -837,9 +842,6 @@ void qdf_lock_stats_cookie_create(struct lock_stats *stats,
 		qdf_atomic_inc(&lock_cookie_get_failures);
 		count = qdf_atomic_inc_return(&lock_cookie_untracked_num);
 		stats->cookie = (void *) DUMMY_LOCK_COOKIE;
-		QDF_TRACE(QDF_MODULE_ID_QDF, QDF_TRACE_LEVEL_DEBUG,
-			  "%s: cookie allocation failure, using dummy (%s:%d) count %d",
-			  __func__, func, line, count);
 		return;
 	}
 
