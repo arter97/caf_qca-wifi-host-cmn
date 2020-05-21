@@ -84,6 +84,24 @@ QDF_STATUS wlan_reg_read_current_country(struct wlan_objmgr_psoc *psoc,
 	return reg_read_current_country(psoc, country);
 }
 
+QDF_STATUS wlan_reg_get_max_5g_bw_from_country_code(uint16_t cc,
+						    uint16_t *max_bw_5g)
+{
+	/*
+	 * Get the max 5G bandwidth from country code
+	 */
+	return reg_get_max_5g_bw_from_country_code(cc, max_bw_5g);
+}
+
+QDF_STATUS wlan_reg_get_max_5g_bw_from_regdomain(uint16_t regdmn,
+						 uint16_t *max_bw_5g)
+{
+	/*
+	 * Get the max 5G bandwidth from regdomain pair value
+	 */
+	return reg_get_max_5g_bw_from_regdomain(regdmn, max_bw_5g);
+}
+
 #ifdef CONFIG_CHAN_NUM_API
 /**
  * wlan_reg_get_channel_state() - Get channel state from regulatory
@@ -752,6 +770,13 @@ bool wlan_reg_is_6ghz_chan_freq(uint16_t freq)
 	return reg_is_6ghz_chan_freq(freq);
 }
 
+#ifdef CONFIG_6G_FREQ_OVERLAP
+bool wlan_reg_is_range_only6g(qdf_freq_t low_freq, qdf_freq_t high_freq)
+{
+	return reg_is_range_only6g(low_freq, high_freq);
+}
+#endif
+
 uint16_t wlan_reg_min_6ghz_chan_freq(void)
 {
 	return reg_min_6ghz_chan_freq();
@@ -851,6 +876,11 @@ QDF_STATUS wlan_reg_modify_pdev_chan_range(struct wlan_objmgr_pdev *pdev)
 	return reg_modify_pdev_chan_range(pdev);
 }
 
+QDF_STATUS wlan_reg_update_pdev_wireless_modes(struct wlan_objmgr_pdev *pdev,
+					       uint32_t wireless_modes)
+{
+	return reg_update_pdev_wireless_modes(pdev, wireless_modes);
+}
 #ifdef DISABLE_UNII_SHARED_BANDS
 QDF_STATUS wlan_reg_disable_chan_coex(struct wlan_objmgr_pdev *pdev,
 				      uint8_t unii_5g_bitmap)
@@ -1026,6 +1056,8 @@ void wlan_reg_freq_width_to_chan_op_class_auto(struct wlan_objmgr_pdev *pdev,
 					     chan_num);
 }
 
+qdf_export_symbol(wlan_reg_freq_width_to_chan_op_class_auto);
+
 void wlan_reg_freq_to_chan_op_class(struct wlan_objmgr_pdev *pdev,
 				    qdf_freq_t freq,
 				    bool global_tbl_lookup,
@@ -1040,12 +1072,12 @@ void wlan_reg_freq_to_chan_op_class(struct wlan_objmgr_pdev *pdev,
 					 chan_num);
 }
 
-bool wlan_reg_country_opclass_freq_check(struct wlan_objmgr_pdev *pdev,
+bool wlan_reg_is_freq_in_country_opclass(struct wlan_objmgr_pdev *pdev,
 					 const uint8_t country[3],
 					 uint8_t op_class,
 					 qdf_freq_t chan_freq)
 {
-	return reg_country_opclass_freq_check(pdev, country,
+	return reg_is_freq_in_country_opclass(pdev, country,
 					      op_class, chan_freq);
 }
 
@@ -1082,9 +1114,9 @@ bool wlan_reg_is_6ghz_op_class(struct wlan_objmgr_pdev *pdev,
 	return reg_is_6ghz_op_class(pdev, op_class);
 }
 
-bool wlan_reg_is_6ghz_supported(struct wlan_objmgr_pdev *pdev)
+bool wlan_reg_is_6ghz_supported(struct wlan_objmgr_psoc *psoc)
 {
-	return reg_is_6ghz_supported(pdev);
+	return reg_is_6ghz_supported(psoc);
 }
 
 #ifdef HOST_OPCLASS_EXT

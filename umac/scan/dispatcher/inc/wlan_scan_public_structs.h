@@ -43,6 +43,7 @@ typedef uint32_t wlan_scan_id;
 #define SCM_CANCEL_SCAN_WAIT_ITERATION 600
 
 #define INVAL_SCAN_ID        0xFFFFFFFF
+#define CANCEL_HOST_SCAN_ID  0xFFFFFFFE
 #define INVAL_VDEV_ID        0xFFFFFFFF
 #define INVAL_PDEV_ID        0xFFFFFFFF
 
@@ -61,15 +62,16 @@ typedef uint32_t wlan_scan_id;
 #define HT_CAPABILITY_WEIGHTAGE 2
 #define VHT_CAP_WEIGHTAGE 1
 #define HE_CAP_WEIGHTAGE 2
-#define CHAN_WIDTH_WEIGHTAGE 17
+#define CHAN_WIDTH_WEIGHTAGE 12
 #define CHAN_BAND_WEIGHTAGE 2
 #define NSS_WEIGHTAGE 16
 #define BEAMFORMING_CAP_WEIGHTAGE 2
 #define PCL_WEIGHT 10
 #define CHANNEL_CONGESTION_WEIGHTAGE 5
-#define OCE_WAN_WEIGHTAGE 0
-#define BEST_CANDIDATE_MAX_WEIGHT 100
-#define MAX_INDEX_SCORE 100
+#define OCE_WAN_WEIGHTAGE 2
+#define OCE_AP_TX_POWER_WEIGHTAGE 5
+#define BEST_CANDIDATE_MAX_WEIGHT 200
+#define MAX_PCT_SCORE 100
 #define MAX_INDEX_PER_INI 4
 
 #define WLAN_GET_BITS(_val, _index, _num_bits) \
@@ -478,6 +480,7 @@ struct scan_cache_entry {
  * @pcl_weightage: PCL weightage
  * @channel_congestion_weightage: channel congestion weightage
  * @oce_wan_weightage: OCE WAN metrics weightage
+ * @oce_ap_tx_pwr_weightage: OCE AP tx power weigtage
  */
 struct  weight_config {
 	uint8_t rssi_weightage;
@@ -491,6 +494,7 @@ struct  weight_config {
 	uint8_t pcl_weightage;
 	uint8_t channel_congestion_weightage;
 	uint8_t oce_wan_weightage;
+	uint8_t oce_ap_tx_pwr_weightage;
 };
 
 /**
@@ -671,13 +675,13 @@ struct scan_filter {
 	uint8_t country[3];
 	struct qdf_mac_addr bssid_list[WLAN_SCAN_FILTER_NUM_BSSID];
 	struct wlan_ssid ssid_list[WLAN_SCAN_FILTER_NUM_SSID];
-	uint32_t chan_freq_list[QDF_MAX_NUM_CHAN];
+	uint32_t chan_freq_list[NUM_CHANNELS];
 	enum wlan_auth_type auth_type[WLAN_NUM_OF_SUPPORT_AUTH_TYPE];
 	enum wlan_enc_type enc_type[WLAN_NUM_OF_ENCRYPT_TYPE];
 	enum wlan_enc_type mc_enc_type[WLAN_NUM_OF_ENCRYPT_TYPE];
-	uint32_t pcl_freq_list[QDF_MAX_NUM_CHAN];
+	uint32_t pcl_freq_list[NUM_CHANNELS];
 	struct fils_filter_info fils_scan_filter;
-	uint8_t pcl_weight_list[QDF_MAX_NUM_CHAN];
+	uint8_t pcl_weight_list[NUM_CHANNELS];
 	struct qdf_mac_addr bssid_hint;
 };
 
@@ -1065,12 +1069,15 @@ struct scan_start_request {
  * enum scan_cancel_type - type specifiers for cancel scan request
  * @WLAN_SCAN_CANCEL_SINGLE: cancel particular scan specified by scan_id
  * @WLAN_SCAN_CANCEL_VAP_ALL: cancel all scans running on a particular vdevid
- * WLAN_SCAN_CANCEL_PDEV_ALL: cancel all scans running on parent pdev of vdevid
+ * @WLAN_SCAN_CANCEL_PDEV_ALL: cancel all scans running on parent pdev of vdevid
+ * @WLAN_SCAN_CANCEL_HOST_VDEV_ALL: Cancel all host triggered scans alone on
+ * vdev
  */
 enum scan_cancel_req_type {
 	WLAN_SCAN_CANCEL_SINGLE = 1,
 	WLAN_SCAN_CANCEL_VDEV_ALL,
 	WLAN_SCAN_CANCEL_PDEV_ALL,
+	WLAN_SCAN_CANCEL_HOST_VDEV_ALL,
 };
 
 /**
@@ -1255,7 +1262,7 @@ enum scan_cb_type {
 
 /* Set PNO */
 #define SCAN_PNO_MAX_PLAN_REQUEST   2
-#define SCAN_PNO_MAX_NETW_CHANNELS_EX  (QDF_MAX_NUM_CHAN)
+#define SCAN_PNO_MAX_NETW_CHANNELS_EX  (NUM_CHANNELS)
 #define SCAN_PNO_MAX_SUPP_NETWORKS  16
 #define SCAN_PNO_DEF_SLOW_SCAN_MULTIPLIER 6
 #define SCAN_PNO_DEF_SCAN_TIMER_REPEAT 20

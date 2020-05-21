@@ -80,102 +80,6 @@ bool scm_is_better_bss(struct scan_default_params *params,
 }
 
 /**
- * scm_limit_max_per_index_score() -check if per index score does not exceed
- * 100% (0x64). If it exceed make it 100%
- *
- * @per_index_score: per_index_score as input
- *
- * Return: per_index_score within the max limit
- */
-static uint32_t scm_limit_max_per_index_score(uint32_t per_index_score)
-{
-	uint8_t i, score;
-
-	for (i = 0; i < MAX_INDEX_PER_INI; i++) {
-		score = WLAN_GET_SCORE_PERCENTAGE(per_index_score, i);
-		if (score > MAX_INDEX_SCORE)
-			WLAN_SET_SCORE_PERCENTAGE(per_index_score,
-				MAX_INDEX_SCORE, i);
-	}
-
-	return per_index_score;
-}
-
-void scm_validate_scoring_config(struct scoring_config *score_cfg)
-{
-	int total_weight;
-
-	total_weight = score_cfg->weight_cfg.rssi_weightage +
-		       score_cfg->weight_cfg.ht_caps_weightage +
-		       score_cfg->weight_cfg.vht_caps_weightage +
-		       score_cfg->weight_cfg.chan_width_weightage +
-		       score_cfg->weight_cfg.chan_band_weightage +
-		       score_cfg->weight_cfg.nss_weightage +
-		       score_cfg->weight_cfg.beamforming_cap_weightage +
-		       score_cfg->weight_cfg.pcl_weightage +
-		       score_cfg->weight_cfg.channel_congestion_weightage +
-		       score_cfg->weight_cfg.oce_wan_weightage;
-
-	if (total_weight > BEST_CANDIDATE_MAX_WEIGHT) {
-
-		scm_err("total weight is greater than %d fallback to default values",
-			BEST_CANDIDATE_MAX_WEIGHT);
-
-		score_cfg->weight_cfg.rssi_weightage = RSSI_WEIGHTAGE;
-		score_cfg->weight_cfg.ht_caps_weightage =
-			HT_CAPABILITY_WEIGHTAGE;
-		score_cfg->weight_cfg.vht_caps_weightage = VHT_CAP_WEIGHTAGE;
-		score_cfg->weight_cfg.chan_width_weightage =
-			CHAN_WIDTH_WEIGHTAGE;
-		score_cfg->weight_cfg.chan_band_weightage =
-			CHAN_BAND_WEIGHTAGE;
-		score_cfg->weight_cfg.nss_weightage = NSS_WEIGHTAGE;
-		score_cfg->weight_cfg.beamforming_cap_weightage =
-			BEAMFORMING_CAP_WEIGHTAGE;
-		score_cfg->weight_cfg.pcl_weightage = PCL_WEIGHT;
-			score_cfg->weight_cfg.channel_congestion_weightage =
-			CHANNEL_CONGESTION_WEIGHTAGE;
-		score_cfg->weight_cfg.oce_wan_weightage = OCE_WAN_WEIGHTAGE;
-	}
-
-	score_cfg->bandwidth_weight_per_index =
-		scm_limit_max_per_index_score(
-			score_cfg->bandwidth_weight_per_index);
-	score_cfg->nss_weight_per_index =
-		scm_limit_max_per_index_score(score_cfg->nss_weight_per_index);
-	score_cfg->band_weight_per_index =
-		scm_limit_max_per_index_score(score_cfg->band_weight_per_index);
-
-
-	score_cfg->esp_qbss_scoring.score_pcnt3_to_0 =
-		scm_limit_max_per_index_score(
-			score_cfg->esp_qbss_scoring.score_pcnt3_to_0);
-	score_cfg->esp_qbss_scoring.score_pcnt7_to_4 =
-		scm_limit_max_per_index_score(
-			score_cfg->esp_qbss_scoring.score_pcnt7_to_4);
-	score_cfg->esp_qbss_scoring.score_pcnt11_to_8 =
-		scm_limit_max_per_index_score(
-			score_cfg->esp_qbss_scoring.score_pcnt11_to_8);
-	score_cfg->esp_qbss_scoring.score_pcnt15_to_12 =
-		scm_limit_max_per_index_score(
-			score_cfg->esp_qbss_scoring.score_pcnt15_to_12);
-
-	score_cfg->oce_wan_scoring.score_pcnt3_to_0 =
-		scm_limit_max_per_index_score(
-			score_cfg->oce_wan_scoring.score_pcnt3_to_0);
-	score_cfg->oce_wan_scoring.score_pcnt7_to_4 =
-		scm_limit_max_per_index_score(
-			score_cfg->oce_wan_scoring.score_pcnt7_to_4);
-	score_cfg->oce_wan_scoring.score_pcnt11_to_8 =
-		scm_limit_max_per_index_score(
-			score_cfg->oce_wan_scoring.score_pcnt11_to_8);
-	score_cfg->oce_wan_scoring.score_pcnt15_to_12 =
-		scm_limit_max_per_index_score(
-			score_cfg->oce_wan_scoring.score_pcnt15_to_12);
-
-}
-
-/**
  * scm_get_rssi_pcnt_for_slot () - calculate rssi % score based on the slot
  * index between the high rssi and low rssi threshold
  * @high_rssi_threshold: High rssi of the window
@@ -242,7 +146,7 @@ static int32_t scm_calculate_rssi_score(
 	good_bucket_size = score_param->good_rssi_bucket_size;
 	bad_bucket_size = score_param->bad_rssi_bucket_size;
 
-	total_rssi_score = (BEST_CANDIDATE_MAX_WEIGHT * rssi_weightage);
+	total_rssi_score = (MAX_PCT_SCORE * rssi_weightage);
 
 	/*
 	 * If RSSI is better than the best rssi threshold then it return full
@@ -294,7 +198,7 @@ static int32_t scm_calculate_pcl_score(int pcl_chan_weight,
 		if (pcl_score < 0)
 			pcl_score = 0;
 	}
-	return pcl_score * BEST_CANDIDATE_MAX_WEIGHT;
+	return pcl_score * MAX_PCT_SCORE;
 
 }
 
@@ -347,7 +251,7 @@ static int8_t scm_roam_calculate_prorated_pcnt_by_rssi(
 
 	/* If RSSI is greater than good rssi return full weight */
 	if (rssi > good_rssi_threshold)
-		return BEST_CANDIDATE_MAX_WEIGHT;
+		return MAX_PCT_SCORE;
 
 	same_bucket = scm_rssi_is_same_bucket(good_rssi_threshold,
 			rssi, rssi_pref_5g_rssi_thresh,
@@ -420,8 +324,7 @@ static int32_t scm_calculate_bandwidth_score(
 					SCM_20MHZ_BW_INDEX);
 
 	return (prorated_pct * score *
-		score_config->weight_cfg.chan_width_weightage) /
-		BEST_CANDIDATE_MAX_WEIGHT;
+		score_config->weight_cfg.chan_width_weightage) / MAX_PCT_SCORE;
 }
 
 /**
@@ -478,7 +381,7 @@ static int32_t scm_get_congestion_pct(struct scan_cache_entry *entry)
 		congestion = SCM_MAX_CHANNEL_UTILIZATION -
 					est_air_time_percentage;
 	} else if (entry->qbss_chan_load) {
-		ap_load = (entry->qbss_chan_load * BEST_CANDIDATE_MAX_WEIGHT);
+		ap_load = (entry->qbss_chan_load * MAX_PCT_SCORE);
 		/*
 		 * Calculate ap_load in % from qbss channel load from
 		 * 0-255 range
@@ -533,8 +436,7 @@ static int32_t scm_calculate_congestion_score(
 			   score_params->esp_qbss_scoring.score_pcnt3_to_0,
 			   SCM_SCORE_INDEX_0);
 
-	window_size = BEST_CANDIDATE_MAX_WEIGHT /
-			score_params->esp_qbss_scoring.num_slot;
+	window_size = MAX_PCT_SCORE / score_params->esp_qbss_scoring.num_slot;
 
 	/* Desired values are from 1 to 15, as 0 is for not present. so do +1 */
 	index = qdf_do_div(*congestion_pct, window_size) + 1;
@@ -585,7 +487,7 @@ static int32_t scm_calculate_nss_score(struct wlan_objmgr_psoc *psoc,
 				SCM_NSS_1x1_INDEX);
 
 	return (score_config->weight_cfg.nss_weightage * score_pct *
-		prorated_pct) / BEST_CANDIDATE_MAX_WEIGHT;
+		prorated_pct) / MAX_PCT_SCORE;
 }
 
 /**
@@ -634,6 +536,81 @@ static int32_t scm_calculate_oce_wan_score(
 	return scm_get_score_for_index(index,
 			score_params->weight_cfg.oce_wan_weightage,
 			&score_params->oce_wan_scoring);
+}
+
+/**
+ * scm_calculate_oce_ap_tx_pwr_weightage () - Calculate oce ap tx pwr weightage
+ * @entry: bss entry
+ * @score_params: bss score params
+ *
+ * Return : oce ap tx power score
+ */
+static uint32_t
+scm_calculate_oce_ap_tx_pwr_weightage(struct scan_cache_entry *entry,
+				      struct scoring_config *score_params)
+{
+	int8_t ap_tx_pwr_dbm = 0;
+	uint8_t *mbo_oce_ie, ap_tx_pwr_factor;
+	struct rssi_cfg_score *rssi_score_param;
+	int32_t best_rssi_threshold, good_rssi_threshold, bad_rssi_threshold;
+	uint32_t good_rssi_pcnt, bad_rssi_pcnt, good_bucket_size;
+	uint32_t score, normalized_ap_tx_pwr, bad_bucket_size;
+	bool ap_tx_pwr_cap_present = true;
+
+	mbo_oce_ie = util_scan_entry_mbo_oce(entry);
+	if (!wlan_parse_oce_ap_tx_pwr_ie(mbo_oce_ie, &ap_tx_pwr_dbm)) {
+		ap_tx_pwr_cap_present = false;
+		/* If no OCE AP TX pwr, consider Uplink RSSI = Downlink RSSI */
+		normalized_ap_tx_pwr = entry->rssi_raw;
+	} else {
+		/*
+		 * Normalized ap_tx_pwr =
+		 * Uplink RSSI = (STA TX Power - * (AP TX power - RSSI)) in dBm.
+		 * Currently assuming STA Tx Power to be 20dBm, though later it
+		 * need to fetched from hal-phy API.
+		 */
+		normalized_ap_tx_pwr = (20 - (ap_tx_pwr_dbm - entry->rssi_raw));
+	}
+
+	rssi_score_param = &score_params->rssi_score;
+
+	best_rssi_threshold = rssi_score_param->best_rssi_threshold * (-1);
+	good_rssi_threshold = rssi_score_param->good_rssi_threshold * (-1);
+	bad_rssi_threshold = rssi_score_param->bad_rssi_threshold * (-1);
+	good_rssi_pcnt = rssi_score_param->good_rssi_pcnt;
+	bad_rssi_pcnt = rssi_score_param->bad_rssi_pcnt;
+	good_bucket_size = rssi_score_param->good_rssi_bucket_size;
+	bad_bucket_size = rssi_score_param->bad_rssi_bucket_size;
+
+	/* Uplink RSSI is better than best rssi threshold */
+	if (normalized_ap_tx_pwr > best_rssi_threshold) {
+		ap_tx_pwr_factor = MAX_PCT_SCORE;
+	} else if (normalized_ap_tx_pwr <= bad_rssi_threshold) {
+		/* Uplink RSSI is less or equal to bad rssi threshold */
+		ap_tx_pwr_factor = rssi_score_param->bad_rssi_pcnt;
+	} else if (normalized_ap_tx_pwr > good_rssi_threshold) {
+		/* Uplink RSSI lies between best to good rssi threshold */
+		ap_tx_pwr_factor =
+			scm_get_rssi_pcnt_for_slot(best_rssi_threshold,
+				good_rssi_threshold, 100, good_rssi_pcnt,
+				good_bucket_size, normalized_ap_tx_pwr);
+	} else {
+		/* Uplink RSSI lies between good to best rssi threshold */
+		ap_tx_pwr_factor =
+			scm_get_rssi_pcnt_for_slot(good_rssi_threshold,
+				bad_rssi_threshold, good_rssi_pcnt,
+				bad_rssi_pcnt, bad_bucket_size,
+				normalized_ap_tx_pwr);
+	}
+
+	score  = score_params->weight_cfg.oce_ap_tx_pwr_weightage *
+			ap_tx_pwr_factor;
+	scm_debug("ap_tx_pwr_cap_present %d ap_tx_pwr_dbm %d rssi %d normalize_ap_tx_pwr %d score %d weight %d",
+		  ap_tx_pwr_cap_present, ap_tx_pwr_dbm, entry->rssi_raw,
+		  normalized_ap_tx_pwr, score,
+		  score_params->weight_cfg.oce_ap_tx_pwr_weightage);
+
+	return score;
 }
 
 #ifdef WLAN_POLICY_MGR_ENABLE
@@ -689,6 +666,7 @@ int scm_calculate_bss_score(struct wlan_objmgr_psoc *psoc,
 	int32_t congestion_score = 0;
 	int32_t congestion_pct = 0;
 	int32_t oce_wan_score = 0;
+	uint8_t oce_ap_tx_pwr_score;
 	uint8_t prorated_pcnt;
 	bool is_vht = false;
 	int8_t good_rssi_threshold;
@@ -766,7 +744,7 @@ int scm_calculate_bss_score(struct wlan_objmgr_psoc *psoc,
 		ap_su_beam_former = true;
 	if (is_vht && ap_su_beam_former &&
 	    (entry->rssi_raw > rssi_pref_5g_rssi_thresh) && !same_bucket)
-		beamformee_score = BEST_CANDIDATE_MAX_WEIGHT *
+		beamformee_score = MAX_PCT_SCORE *
 				weight_config->beamforming_cap_weightage;
 	score += beamformee_score;
 
@@ -805,6 +783,9 @@ int scm_calculate_bss_score(struct wlan_objmgr_psoc *psoc,
 		score += oce_wan_score;
 	}
 
+	oce_ap_tx_pwr_score =
+		scm_calculate_oce_ap_tx_pwr_weightage(entry, score_config);
+	score += oce_ap_tx_pwr_score;
 	pdev = wlan_objmgr_get_pdev_by_id(psoc, entry->pdev_id, WLAN_SCAN_ID);
 	if (!pdev) {
 		scm_err("pdev is NULL");
@@ -840,11 +821,11 @@ int scm_calculate_bss_score(struct wlan_objmgr_psoc *psoc,
 		       entry->phy_mode, entry->air_time_fraction,
 		       entry->qbss_chan_load, congestion_pct, entry->nss);
 
-	scm_nofl_debug("Scores: prorated_pcnt %d rssi %d pcl %d ht %d vht %d he %d bfee %d bw %d band %d congestion %d nss %d oce wan %d TOTAL %d",
+	scm_nofl_debug("Scores: prorated_pcnt %d rssi %d pcl %d ht %d vht %d he %d bfee %d bw %d band %d congestion %d nss %d oce wan %d oce ap tx pwr %d TOTAL %d",
 		       prorated_pcnt, rssi_score, pcl_score, ht_score,
 		       vht_score, he_score, beamformee_score, bandwidth_score,
 		       band_score, congestion_score, nss_score, oce_wan_score,
-		       score);
+		       oce_ap_tx_pwr_score, score);
 
 	entry->bss_score = score;
 	return score;

@@ -57,17 +57,17 @@
 #define DFS_ALLOW_HW_PULSES 28
 #define DFS_SET_PRI_MULTIPILER   29
 
-#define RESTRICTED_80P80_START_CHAN 132
-#define RESTRICTED_80P80_END_CHAN 161
+#define RESTRICTED_80P80_START_FREQ 5660
+#define RESTRICTED_80P80_END_FREQ 5805
 
-/* Check if the given channels are within restricted 80P80 start chan(132) and
- * end chan (161).
+/* Check if the given frequencies are within restricted 80P80 start freq(5660)
+ * and end freq (5805).
  */
-#define CHAN_WITHIN_RESTRICTED_80P80(chan, cfreq_seg2) \
-	((((chan) >= RESTRICTED_80P80_START_CHAN) && \
-	  ((chan) <= RESTRICTED_80P80_END_CHAN) && \
-	  ((cfreq_seg2) >= RESTRICTED_80P80_START_CHAN) && \
-	  ((cfreq_seg2) <= RESTRICTED_80P80_END_CHAN)) ? true : false)
+#define CHAN_WITHIN_RESTRICTED_80P80(cfreq1, cfreq2) \
+	((((cfreq1) >= RESTRICTED_80P80_START_FREQ) && \
+	  ((cfreq1) <= RESTRICTED_80P80_END_FREQ) && \
+	  ((cfreq2) >= RESTRICTED_80P80_START_FREQ) && \
+	  ((cfreq2) <= RESTRICTED_80P80_END_FREQ)) ? true : false)
 
 /*
  * Spectral IOCTLs use DFS_LAST_IOCTL as the base.
@@ -84,14 +84,14 @@
  * struct dfsreq_nolelem - NOL elements.
  * @nol_freq:          NOL channel frequency.
  * @nol_chwidth:       NOL channel width.
- * @nol_start_ticks:   OS ticks when the NOL timer started.
+ * @nol_start_us:      OS microseconds when the NOL timer started.
  * @nol_timeout_ms:    Nol timeout value in msec.
  */
 
 struct dfsreq_nolelem {
 	uint16_t        nol_freq;
 	uint16_t        nol_chwidth;
-	unsigned long   nol_start_ticks;
+	uint64_t        nol_start_us;
 	uint32_t        nol_timeout_ms;
 };
 
@@ -358,4 +358,19 @@ struct seq_store {
 	struct synthetic_seq *seq_arr[0];
 };
 #endif /* WLAN_DFS_PARTIAL_OFFLOAD && WLAN_DFS_SYNTHETIC_RADAR */
+
+/**
+ * enum dfs_rcac_sm_evt - DFS Rolling CAC SM events.
+ * @DFS_RCAC_SM_EV_RCAC_START: Event to start RCAC.
+ * @DFS_RCAC_SM_EV_RCAC_DOWN:  Event to stop RCAC.
+ * @DFS_RCAC_SM_EV_RCAC_DONE:  Event to complete RCAC.
+ * @DFS_RCAC_SM_EV_ADFS_RADAR: Event to restart RCAC after radar in agile.
+ */
+enum dfs_rcac_sm_evt {
+	DFS_RCAC_SM_EV_RCAC_START = 0,
+	DFS_RCAC_SM_EV_RCAC_STOP = 1,
+	DFS_RCAC_SM_EV_RCAC_DONE = 2,
+	DFS_RCAC_SM_EV_ADFS_RADAR_FOUND = 3,
+};
+
 #endif  /* _DFS_IOCTL_H_ */

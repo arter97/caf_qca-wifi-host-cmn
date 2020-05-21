@@ -63,6 +63,8 @@ int htt_wbm_event_record(struct htt_logger *h, uint8_t tx_status,
 
 #endif
 
+void htt_htc_pkt_pool_free(struct htt_soc *soc);
+
 #define HTT_TX_MUTEX_TYPE qdf_spinlock_t
 
 #define HTT_TX_MUTEX_INIT(_mutex)				\
@@ -94,6 +96,12 @@ int htt_wbm_event_record(struct htt_logger *h, uint8_t tx_status,
 #define HTT_FRAMECTRL_DATATYPE 0x08
 #define HTT_PPDU_DESC_MAX_DEPTH 16
 #define DP_SCAN_PEER_ID 0xFFFF
+
+#define HTT_RX_DELBA_WIN_SIZE_M    0x0000FC00
+#define HTT_RX_DELBA_WIN_SIZE_S    10
+
+#define HTT_RX_DELBA_WIN_SIZE_GET(word)		\
+	(((word) & HTT_RX_DELBA_WIN_SIZE_M) >> HTT_RX_DELBA_WIN_SIZE_S)
 
 /*
  * Set the base misclist size to HTT copy engine source ring size

@@ -1330,6 +1330,7 @@ struct hal_hw_txrx_ops qca6750_hal_hw_txrx_ops = {
 	hal_reo_setup_generic,
 	hal_setup_link_idle_list_generic,
 	hal_get_window_address_6750,
+	NULL,
 
 	/* tx */
 	hal_tx_desc_set_dscp_tid_table_id_6750,
@@ -1423,6 +1424,14 @@ struct hal_hw_txrx_ops qca6750_hal_hw_txrx_ops = {
 	NULL,
 	NULL,
 	NULL,
+	NULL,
+
+	/* rx - TLV struct offsets */
+	hal_rx_msdu_end_offset_get_generic,
+	hal_rx_attn_offset_get_generic,
+	hal_rx_msdu_start_offset_get_generic,
+	hal_rx_mpdu_start_offset_get_generic,
+	hal_rx_mpdu_end_offset_get_generic
 };
 
 struct hal_hw_srng_config hw_srng_table_6750[] = {

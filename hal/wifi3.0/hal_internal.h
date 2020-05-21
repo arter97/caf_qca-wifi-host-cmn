@@ -233,7 +233,8 @@ typedef struct hal_ring_handle *hal_ring_handle_t;
  * struct hal_reg_write_q_elem - delayed register write queue element
  * @srng: hal_srng queued for a delayed write
  * @addr: iomem address of the register
- * @val: register value at the time of delayed write enqueue
+ * @enqueue_val: register value at the time of delayed write enqueue
+ * @dequeue_val: register value at the time of delayed write dequeue
  * @valid: whether this entry is valid or not
  * @enqueue_time: enqueue time (qdf_log_timestamp)
  * @dequeue_time: dequeue time (qdf_log_timestamp)
@@ -241,7 +242,8 @@ typedef struct hal_ring_handle *hal_ring_handle_t;
 struct hal_reg_write_q_elem {
 	struct hal_srng *srng;
 	void __iomem *addr;
-	uint32_t val;
+	uint32_t enqueue_val;
+	uint32_t dequeue_val;
 	uint8_t valid;
 	qdf_time_t enqueue_time;
 	qdf_time_t dequeue_time;
@@ -334,6 +336,9 @@ struct hal_srng {
 
 	/* Interrupt batch counter threshold – in number of ring entries */
 	uint32_t intr_batch_cntr_thres_entries;
+
+	/* Applicable only for CE dest ring */
+	uint32_t prefetch_timer;
 
 	/* MSI Address */
 	qdf_dma_addr_t msi_addr;
@@ -469,6 +474,7 @@ struct hal_hw_txrx_ops {
 				uint32_t num_entries);
 	qdf_iomem_t (*hal_get_window_address)(struct hal_soc *hal_soc,
 					      qdf_iomem_t addr);
+	void (*hal_reo_set_err_dst_remap)(void *hal_soc);
 
 	/* tx */
 	void (*hal_tx_desc_set_dscp_tid_table_id)(void *desc, uint8_t id);
@@ -591,6 +597,11 @@ struct hal_hw_txrx_ops {
 	void (*hal_rx_sw_mon_desc_info_get)(hal_ring_desc_t rxdma_dst_ring_desc,
 					    hal_rx_mon_desc_info_t mon_desc_info);
 	uint8_t (*hal_rx_wbm_err_msdu_continuation_get)(void *ring_desc);
+	uint32_t (*hal_rx_msdu_end_offset_get)(void);
+	uint32_t (*hal_rx_attn_offset_get)(void);
+	uint32_t (*hal_rx_msdu_start_offset_get)(void);
+	uint32_t (*hal_rx_mpdu_start_offset_get)(void);
+	uint32_t (*hal_rx_mpdu_end_offset_get)(void);
 };
 
 /**
@@ -707,6 +718,7 @@ struct hal_soc {
 	/* read index used by worker thread to dequeue/write registers */
 	uint32_t read_idx;
 #endif
+	qdf_atomic_t active_work_cnt;
 };
 
 #ifdef FEATURE_HAL_DELAYED_REG_WRITE

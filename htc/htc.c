@@ -19,6 +19,7 @@
 #include "htc_debug.h"
 #include "htc_internal.h"
 #include "htc_credit_history.h"
+#include "htc_hang_event.h"
 #include <hif.h>
 #include <qdf_nbuf.h>           /* qdf_nbuf_t */
 #include <qdf_types.h>          /* qdf_print */
@@ -380,6 +381,8 @@ HTC_HANDLE htc_create(void *ol_sc, struct htc_init_info *pInfo,
 
 	HTC_TRACE("-htc_create: (0x%pK)", target);
 
+	htc_hang_event_notifier_register(target);
+
 	return (HTC_HANDLE) target;
 }
 
@@ -389,6 +392,7 @@ void htc_destroy(HTC_HANDLE HTCHandle)
 
 	AR_DEBUG_PRINTF(ATH_DEBUG_TRC,
 			("+htc_destroy ..  Destroying :0x%pK\n", target));
+	htc_hang_event_notifier_unregister();
 	hif_stop(htc_get_hif_device(HTCHandle));
 	if (target)
 		htc_cleanup(target);
@@ -726,6 +730,8 @@ static void reset_endpoint_states(HTC_TARGET *target)
 		INIT_HTC_PACKET_QUEUE(&pEndpoint->RxBufferHoldQueue);
 		pEndpoint->target = target;
 		pEndpoint->TxCreditFlowEnabled = (bool)htc_credit_flow;
+		pEndpoint->num_requeues_warn = 0;
+		pEndpoint->total_num_requeues = 0;
 		qdf_atomic_init(&pEndpoint->TxProcessCount);
 	}
 }
@@ -1140,14 +1146,16 @@ int htc_pm_runtime_get(HTC_HANDLE htc_handle)
 {
 	HTC_TARGET *target = GET_HTC_TARGET_FROM_HANDLE(htc_handle);
 
-	return hif_pm_runtime_get(target->hif_dev);
+	return hif_pm_runtime_get(target->hif_dev,
+				  RTPM_ID_HTC);
 }
 
 int htc_pm_runtime_put(HTC_HANDLE htc_handle)
 {
 	HTC_TARGET *target = GET_HTC_TARGET_FROM_HANDLE(htc_handle);
 
-	return hif_pm_runtime_put(target->hif_dev);
+	return hif_pm_runtime_put(target->hif_dev,
+				  RTPM_ID_HTC);
 }
 #endif
 

@@ -33,6 +33,9 @@
 #ifdef WLAN_POWER_MANAGEMENT_OFFLOAD
 #include "wmi_unified_pmo_api.h"
 #endif
+#ifdef WLAN_FEATURE_MIB_STATS
+#include "wlan_cp_stats_mc_defs.h"
+#endif
 #include "wlan_scan_public_structs.h"
 #ifdef WLAN_FEATURE_ACTION_OUI
 #include "wlan_action_oui_public_struct.h"
@@ -465,6 +468,15 @@ wmi_stop(wmi_unified_t wmi_handle);
  */
 int
 wmi_start(wmi_unified_t wmi_handle);
+
+/**
+ * wmi_is_blocked() - generic function to check if WMI is blocked
+ * @wmi_handle: handle to WMI.
+ *
+ * @Return: true, if blocked, false if not blocked
+ */
+bool
+wmi_is_blocked(wmi_unified_t wmi_handle);
 
 /**
  * API to flush all the previous packets  associated with the wmi endpoint
@@ -1978,6 +1990,18 @@ QDF_STATUS wmi_unified_phyerr_disable_cmd_send(wmi_unified_t wmi_handle);
 QDF_STATUS wmi_unified_smart_ant_enable_tx_feedback_cmd_send(
 			wmi_unified_t wmi_handle,
 			struct smart_ant_enable_tx_feedback_params *param);
+
+/**
+ *  wmi_unified_simulation_test_cmd_send() -
+ *  WMI simulation test command
+ *  @wmi_handle: handle to WMI.
+ *  @param: pointer to hold simulation test param
+ *
+ *  Return: QDF_STATUS_SUCCESS on success and QDF_STATUS_E_FAILURE for failure
+ */
+QDF_STATUS wmi_unified_simulation_test_cmd_send(wmi_unified_t wmi_handle,
+						struct simulation_test_params
+						*param);
 
 /**
  *  wmi_unified_vdev_spectral_configure_cmd_send() -
@@ -3676,6 +3700,33 @@ QDF_STATUS wmi_unified_send_obss_spatial_reuse_set_def_thresh_cmd(
 	wmi_unified_t wmi_handle,
 	struct wmi_host_obss_spatial_reuse_set_def_thresh *thresh);
 
+/**
+ * wmi_unified_send_self_srg_bss_color_bitmap_set_cmd() - Send 64-bit BSS color
+ * bitmap to be used by SRG based Spatial Reuse feature
+ * @wmi_handle: wmi handle
+ * @bitmap_0: lower 32 bits in BSS color bitmap
+ * @bitmap_1: upper 32 bits in BSS color bitmap
+ * @pdev_id: pdev ID
+ *
+ * Return: QDF_STATUS_SUCCESS on success and QDF_STATUS_E_FAILURE for failure
+ */
+QDF_STATUS wmi_unified_send_self_srg_bss_color_bitmap_set_cmd(
+	wmi_unified_t wmi_handle,  uint32_t bitmap_0,
+	uint32_t bitmap_1, uint8_t pdev_id);
+
+/**
+ * wmi_unified_send_self_srg_partial_bssid_bitmap_set_cmd() - Send 64-bit
+ * partial BSSID bitmap to be used by SRG based Spatial Reuse feature
+ * @wmi_handle: wmi handle
+ * @bitmap_0: lower 32 bits in partial BSSID bitmap
+ * @bitmap_1: upper 32 bits in partial BSSID bitmap
+ * @pdev_id: pdev ID
+ *
+ * Return: QDF_STATUS_SUCCESS on success and QDF_STATUS_E_FAILURE for failure
+ */
+QDF_STATUS wmi_unified_send_self_srg_partial_bssid_bitmap_set_cmd(
+	wmi_unified_t wmi_handle,  uint32_t bitmap_0,
+	uint32_t bitmap_1, uint8_t pdev_id);
 #endif /* OBSS_PD */
 
 /**

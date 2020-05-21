@@ -167,7 +167,7 @@ send_vdev_set_neighbour_rx_cmd_tlv(struct wmi_unified *wmi_handle,
 
 static QDF_STATUS
 extract_vdev_start_resp_tlv(struct wmi_unified *wmi_handle, void *evt_buf,
-			    wmi_host_vdev_start_resp *vdev_rsp)
+			    struct vdev_start_response *vdev_rsp)
 {
 	WMI_VDEV_START_RESP_EVENTID_param_tlvs *param_buf;
 	wmi_vdev_start_response_event_fixed_param *ev;
@@ -205,13 +205,14 @@ extract_vdev_start_resp_tlv(struct wmi_unified *wmi_handle, void *evt_buf,
 	vdev_rsp->mac_id = ev->mac_id;
 	vdev_rsp->cfgd_tx_streams = ev->cfgd_tx_streams;
 	vdev_rsp->cfgd_rx_streams = ev->cfgd_rx_streams;
+	vdev_rsp->max_allowed_tx_power = ev->max_allowed_tx_power;
 
 	return QDF_STATUS_SUCCESS;
 }
 
 static QDF_STATUS
 extract_vdev_delete_resp_tlv(struct wmi_unified *wmi_handle, void *evt_buf,
-			     struct wmi_host_vdev_delete_resp *delete_rsp)
+			     struct vdev_delete_response *delete_rsp)
 {
 	WMI_VDEV_DELETE_RESP_EVENTID_param_tlvs *param_buf;
 	wmi_vdev_delete_resp_event_fixed_param *ev;
@@ -237,7 +238,7 @@ extract_vdev_delete_resp_tlv(struct wmi_unified *wmi_handle, void *evt_buf,
 static QDF_STATUS extract_vdev_peer_delete_all_response_event_tlv(
 		wmi_unified_t wmi_hdl,
 		void *evt_buf,
-		struct wmi_host_vdev_peer_delete_all_response_event *param)
+		struct peer_delete_all_response *param)
 {
 	WMI_VDEV_DELETE_ALL_PEER_RESP_EVENTID_param_tlvs *param_buf;
 	wmi_vdev_delete_all_peer_resp_event_fixed_param *ev;
@@ -366,7 +367,7 @@ static QDF_STATUS extract_muedca_params_tlv(wmi_unified_t wmi_hdl,
 	muedca_param = param_buf->fixed_param;
 
 	muedca_param_list->pdev_id = wmi_hdl->ops->
-		convert_pdev_id_target_to_host(wmi_hdl,
+		convert_target_pdev_id_to_host(wmi_hdl,
 					       muedca_param->pdev_id);
 	for (i = 0; i < WMI_AC_MAX; i++) {
 		muedca_param_list->muedca_aifsn[i] = muedca_param->aifsn[i] &

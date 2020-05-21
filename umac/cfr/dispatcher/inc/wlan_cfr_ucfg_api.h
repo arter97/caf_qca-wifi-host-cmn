@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2019-2020 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -21,7 +21,7 @@
 
 #include <wlan_objmgr_peer_obj.h>
 #include <wlan_objmgr_pdev_obj.h>
-#include <ieee80211_ioctl.h>
+#include <wlan_cfr_public_structs.h>
 
 #define MAX_CFR_PRD        (10*60*1000)        /* 10 minutes */
 
@@ -36,6 +36,16 @@
 int ucfg_cfr_start_capture(struct wlan_objmgr_pdev *pdev,
 			   struct wlan_objmgr_peer *peer,
 			   struct cfr_capture_params *cfr_params);
+
+/**
+ * ucfg_cfr_get_capture_status() - function to populate capture status
+ * @pdev: pointer to pdev object
+ * @status: capture status
+ *
+ * Return: none
+ */
+void ucfg_cfr_get_capture_status(struct wlan_objmgr_pdev *pdev,
+				 enum cfr_capt_status *status);
 
 /**
  * ucfg_cfr_stop_capture() - function to stop cfr capture for connected client
@@ -96,6 +106,16 @@ int ucfg_cfr_set_timer(struct wlan_objmgr_pdev *pdev, uint32_t value);
  */
 int ucfg_cfr_get_timer(struct wlan_objmgr_pdev *pdev);
 
+/**
+ * ucfg_cfr_stop_indication() - User space API to write cfr stop string
+ * @vdev - pointer to vdev object
+ *
+ * Write stop string and indicate to up layer.
+ *
+ * Return: status of write CFR stop string
+ */
+QDF_STATUS ucfg_cfr_stop_indication(struct wlan_objmgr_vdev *vdev);
+
 #ifdef WLAN_ENH_CFR_ENABLE
 /* Channel capture recipe filters */
 enum capture_type {
@@ -135,7 +155,7 @@ bool ucfg_cfr_get_rcc_enabled(struct wlan_objmgr_vdev *vdev);
  * Return: status
  */
 QDF_STATUS ucfg_cfr_set_tara_config(struct wlan_objmgr_vdev *vdev,
-				    struct ieee80211_wlanconfig_cfr *params);
+				    struct cfr_wlanconfig_param *params);
 
 /**
  * ucfg_cfr_set_bw_nss() - function to configure nss and bandwidth
@@ -145,7 +165,7 @@ QDF_STATUS ucfg_cfr_set_tara_config(struct wlan_objmgr_vdev *vdev,
  * Return: status
  */
 QDF_STATUS ucfg_cfr_set_bw_nss(struct wlan_objmgr_vdev *vdev,
-			       struct ieee80211_wlanconfig_cfr *params);
+			       struct cfr_wlanconfig_param *params);
 
 /**
  * ucfg_cfr_set_frame_type_subtype() - function to configure frame type/subtype
@@ -156,7 +176,7 @@ QDF_STATUS ucfg_cfr_set_bw_nss(struct wlan_objmgr_vdev *vdev,
  */
 QDF_STATUS
 ucfg_cfr_set_frame_type_subtype(struct wlan_objmgr_vdev *vdev,
-				struct ieee80211_wlanconfig_cfr *params);
+				struct cfr_wlanconfig_param *params);
 
 /**
  * ucfg_cfr_set_capture_duration() - function to configure capture duration
@@ -167,7 +187,7 @@ ucfg_cfr_set_frame_type_subtype(struct wlan_objmgr_vdev *vdev,
  */
 QDF_STATUS
 ucfg_cfr_set_capture_duration(struct wlan_objmgr_vdev *vdev,
-			      struct ieee80211_wlanconfig_cfr *params);
+			      struct cfr_wlanconfig_param *params);
 
 /**
  * ucfg_cfr_set_capture_interval() - function to configure capture interval
@@ -178,7 +198,7 @@ ucfg_cfr_set_capture_duration(struct wlan_objmgr_vdev *vdev,
  */
 QDF_STATUS
 ucfg_cfr_set_capture_interval(struct wlan_objmgr_vdev *vdev,
-			      struct ieee80211_wlanconfig_cfr *params);
+			      struct cfr_wlanconfig_param *params);
 
 /**
  * ucfg_cfr_set_en_bitmap() - function to configure 16-bit bitmap in TA_RA mode
@@ -188,7 +208,7 @@ ucfg_cfr_set_capture_interval(struct wlan_objmgr_vdev *vdev,
  * Return: status
  */
 QDF_STATUS ucfg_cfr_set_en_bitmap(struct wlan_objmgr_vdev *vdev,
-				  struct ieee80211_wlanconfig_cfr *params);
+				  struct cfr_wlanconfig_param *params);
 
 /**
  * ucfg_cfr_set_reset_bitmap() - function to clear all 9 params for all 16
@@ -199,7 +219,7 @@ QDF_STATUS ucfg_cfr_set_en_bitmap(struct wlan_objmgr_vdev *vdev,
  * Return: status
  */
 QDF_STATUS ucfg_cfr_set_reset_bitmap(struct wlan_objmgr_vdev *vdev,
-				     struct ieee80211_wlanconfig_cfr *params);
+				     struct cfr_wlanconfig_param *params);
 
 /**
  * ucfg_cfr_set_ul_mu_user_mask() - function to configure UL MU user mask
@@ -210,7 +230,7 @@ QDF_STATUS ucfg_cfr_set_reset_bitmap(struct wlan_objmgr_vdev *vdev,
  */
 QDF_STATUS
 ucfg_cfr_set_ul_mu_user_mask(struct wlan_objmgr_vdev *vdev,
-			     struct ieee80211_wlanconfig_cfr *params);
+			     struct cfr_wlanconfig_param *params);
 
 /**
  * ucfg_cfr_set_freeze_tlv_delay_cnt() - function to configure freeze TLV delay
@@ -222,7 +242,7 @@ ucfg_cfr_set_ul_mu_user_mask(struct wlan_objmgr_vdev *vdev,
  */
 QDF_STATUS
 ucfg_cfr_set_freeze_tlv_delay_cnt(struct wlan_objmgr_vdev *vdev,
-				  struct ieee80211_wlanconfig_cfr *params);
+				  struct cfr_wlanconfig_param *params);
 
 /**
  * ucfg_cfr_committed_rcc_config() - function to commit user config
@@ -263,5 +283,16 @@ QDF_STATUS ucfg_cfr_rcc_clr_dbg_counters(struct wlan_objmgr_vdev *vdev);
  * Return: status
  */
 QDF_STATUS ucfg_cfr_rcc_dump_lut(struct wlan_objmgr_vdev *vdev);
+
+/**
+ * ucfg_cfr_subscribe_ppdu_desc() - User space interface to
+ * subscribe/unsubscribe WDI PPDU desc event
+ * @pdev: pointer to pdev_object
+ * @is_subscribe: subscribe or unsubscribei
+ *
+ * return QDF status
+ */
+QDF_STATUS ucfg_cfr_subscribe_ppdu_desc(struct wlan_objmgr_pdev *pdev,
+					bool is_subscribe);
 #endif
 #endif

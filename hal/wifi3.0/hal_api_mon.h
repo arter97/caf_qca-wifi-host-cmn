@@ -118,6 +118,16 @@
 #define HE_GI_1_6 2
 #define HE_GI_3_2 3
 
+#define HE_GI_RADIOTAP_0_8 0
+#define HE_GI_RADIOTAP_1_6 1
+#define HE_GI_RADIOTAP_3_2 2
+#define HE_GI_RADIOTAP_RESERVED 3
+
+#define HE_LTF_RADIOTAP_UNKNOWN 0
+#define HE_LTF_RADIOTAP_1_X 1
+#define HE_LTF_RADIOTAP_2_X 2
+#define HE_LTF_RADIOTAP_4_X 3
+
 #define HT_SGI_PRESENT 0x80
 
 #define HE_LTF_1_X 0
@@ -151,6 +161,7 @@
 /* Max MPDUs per status buffer */
 #define HAL_RX_MAX_MPDU 256
 #define HAL_RX_NUM_WORDS_PER_PPDU_BITMAP (HAL_RX_MAX_MPDU >> 5)
+#define HAL_RX_MAX_MPDU_H_PER_STATUS_BUFFER 16
 
 /* Max pilot count */
 #define HAL_RX_MAX_SU_EVM_COUNT 32
@@ -168,6 +179,8 @@
  * @status_buf:              for a PPDU, status buffers can span acrosss
  *                           multiple buffers, status_buf points to first
  *                           status buffer address of PPDU
+ * @drop_ppdu:               flag to indicate current destination
+ *                           ring ppdu drop
  */
 struct hal_rx_mon_desc_info {
 	uint16_t ppdu_id;
@@ -178,6 +191,7 @@ struct hal_rx_mon_desc_info {
 	uint8_t end_of_ppdu;
 	struct hal_buf_info link_desc;
 	struct hal_buf_info status_buf;
+	bool drop_ppdu;
 };
 
 /*
@@ -432,11 +446,13 @@ enum {
 /**
  * enum
  * @HAL_RX_MON_PPDU_START: PPDU start TLV is decoded in HAL
- * @HAL_RX_MON_PPDU_END: PPDU end TLV is decided in HAL
+ * @HAL_RX_MON_PPDU_END: PPDU end TLV is decoded in HAL
+ * @HAL_RX_MON_PPDU_RESET: Not PPDU start and end TLV
  */
 enum {
 	HAL_RX_MON_PPDU_START = 0,
 	HAL_RX_MON_PPDU_END,
+	HAL_RX_MON_PPDU_RESET,
 };
 
 /* struct hal_rx_ppdu_common_info  - common ppdu info
@@ -464,12 +480,10 @@ struct hal_rx_ppdu_common_info {
  * struct hal_rx_msdu_payload_info - msdu payload info
  * @first_msdu_payload: pointer to first msdu payload
  * @payload_len: payload len
- * @nbuf: status network buffer to which msdu belongs to
  */
 struct hal_rx_msdu_payload_info {
 	uint8_t *first_msdu_payload;
 	uint32_t payload_len;
-	qdf_nbuf_t nbuf;
 };
 
 /**
@@ -618,8 +632,14 @@ struct hal_rx_ppdu_info {
 	/* Id to indicate how to process mpdu */
 	uint8_t sw_frame_group_id;
 	struct hal_rx_ppdu_msdu_info rx_msdu_info[HAL_MAX_UL_MU_USERS];
-	/* first msdu payload for all mpdus in ppdu */
-	struct hal_rx_msdu_payload_info ppdu_msdu_info[HAL_RX_MAX_MPDU];
+	/* fcs passed mpdu count in rx monitor status buffer */
+	uint8_t fcs_ok_cnt;
+	/* fcs error mpdu count in rx monitor status buffer */
+	uint8_t fcs_err_cnt;
+	/* MPDU FCS passed */
+	bool is_fcs_passed;
+	/* first msdu payload for all mpdus in rx monitor status buffer */
+	struct hal_rx_msdu_payload_info ppdu_msdu_info[HAL_RX_MAX_MPDU_H_PER_STATUS_BUFFER];
 	/* evm info */
 	struct hal_rx_su_evm_info evm_info;
 	/**

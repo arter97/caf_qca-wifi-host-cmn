@@ -913,6 +913,10 @@ QDF_STATUS (*send_process_del_periodic_tx_ptrn_cmd)(wmi_unified_t wmi_handle,
 QDF_STATUS (*send_set_auto_shutdown_timer_cmd)(wmi_unified_t wmi_handle,
 						  uint32_t timer_val);
 
+QDF_STATUS
+(*send_ocl_cmd)(wmi_unified_t wmi_handle,
+		struct ocl_cmd_params *param);
+
 #ifdef WLAN_FEATURE_NAN
 QDF_STATUS (*send_nan_req_cmd)(wmi_unified_t wmi_handle,
 			struct nan_msg_params *nan_req);
@@ -1197,6 +1201,9 @@ QDF_STATUS (*send_smart_ant_set_node_config_cmd)(wmi_unified_t wmi_handle,
 		struct smart_ant_node_config_params *param);
 #endif
 
+QDF_STATUS (*send_simulation_test_cmd)(wmi_unified_t wmi_handle,
+				       struct simulation_test_params *param);
+
 QDF_STATUS (*send_smart_ant_enable_tx_feedback_cmd)(wmi_unified_t wmi_handle,
 		struct smart_ant_enable_tx_feedback_params *param);
 
@@ -1477,10 +1484,11 @@ QDF_STATUS
 #endif
 
 QDF_STATUS (*extract_vdev_start_resp)(wmi_unified_t wmi_handle, void *evt_buf,
-	wmi_host_vdev_start_resp *vdev_rsp);
+				      struct vdev_start_response *vdev_rsp);
 
-QDF_STATUS (*extract_vdev_delete_resp)(wmi_unified_t wmi_handle, void *evt_buf,
-	struct wmi_host_vdev_delete_resp *delete_rsp);
+QDF_STATUS (*extract_vdev_delete_resp)(
+				wmi_unified_t wmi_handle, void *evt_buf,
+				struct vdev_delete_response *delete_rsp);
 
 QDF_STATUS (*extract_tbttoffset_update_params)(wmi_unified_t wmi_hdl,
 					void *evt_buf, uint8_t idx,
@@ -1841,13 +1849,12 @@ QDF_STATUS (*extract_peer_delete_response_event)(
 QDF_STATUS (*extract_vdev_peer_delete_all_resp)(
 		wmi_unified_t wmi_handle,
 		void *evt_buf,
-		struct wmi_host_vdev_peer_delete_all_response_event
-						*peer_delete_all_rsp);
+		struct peer_delete_all_response *peer_delete_all_rsp);
 
 QDF_STATUS (*extract_vdev_peer_delete_all_response_event)(
 		wmi_unified_t wmi_handle,
 		void *evt_buf,
-		struct wmi_host_vdev_peer_delete_all_response_event *param);
+		struct peer_delete_all_response *param);
 
 bool (*is_management_record)(uint32_t cmd_id);
 bool (*is_diag_event)(uint32_t event_id);
@@ -2138,6 +2145,14 @@ QDF_STATUS (*send_obss_spatial_reuse_set)(wmi_unified_t wmi_handle,
 QDF_STATUS (*send_obss_spatial_reuse_set_def_thresh)(wmi_unified_t wmi_handle,
 		struct wmi_host_obss_spatial_reuse_set_def_thresh
 		*obss_spatial_reuse_param);
+
+QDF_STATUS (*send_self_srg_bss_color_bitmap_set)(
+	wmi_unified_t wmi_handle, uint32_t bitmap_0,
+	uint32_t bitmap_1, uint8_t pdev_id);
+
+QDF_STATUS (*send_self_srg_partial_bssid_bitmap_set)(
+	wmi_unified_t wmi_handle, uint32_t bitmap_0,
+	uint32_t bitmap_1, uint8_t pdev_id);
 #endif
 
 QDF_STATUS
@@ -2234,6 +2249,9 @@ QDF_STATUS (*extract_vdev_mgmt_offload_event)(
 				void *event_buf,
 				struct mgmt_offload_event_params *params);
 #endif /* WLAN_FEATURE_PKT_CAPTURE */
+
+QDF_STATUS (*multisoc_tbtt_sync_cmd)(wmi_unified_t wmi_handle,
+				     struct rnr_tbtt_multisoc_sync_param *param);
 
 #ifdef FEATURE_WLAN_TIME_SYNC_FTM
 QDF_STATUS (*send_wlan_time_sync_ftm_trigger_cmd)(wmi_unified_t wmi_handle,
