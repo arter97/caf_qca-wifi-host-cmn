@@ -178,15 +178,6 @@ static inline void hal_unlock_reg_access(struct hal_soc *soc,
 #endif
 
 #ifdef PCIE_REG_WINDOW_LOCAL_NO_CACHE
-static inline void hal_select_window(struct hal_soc *hal_soc, uint32_t offset)
-{
-	uint32_t window = (offset >> WINDOW_SHIFT) & WINDOW_VALUE_MASK;
-
-	qdf_iowrite32(hal_soc->dev_base_addr + WINDOW_REG_ADDRESS,
-		      WINDOW_ENABLE_BIT | window);
-	hal_soc->register_window = window;
-}
-
 /**
  * hal_select_window_confirm() - write remap window register and
 				 check writing result
@@ -205,17 +196,6 @@ static inline void hal_select_window_confirm(struct hal_soc *hal_soc,
 				   WINDOW_ENABLE_BIT | window);
 }
 #else
-static inline void hal_select_window(struct hal_soc *hal_soc, uint32_t offset)
-{
-	uint32_t window = (offset >> WINDOW_SHIFT) & WINDOW_VALUE_MASK;
-
-	if (window != hal_soc->register_window) {
-		qdf_iowrite32(hal_soc->dev_base_addr + WINDOW_REG_ADDRESS,
-			      WINDOW_ENABLE_BIT | window);
-		hal_soc->register_window = window;
-	}
-}
-
 static inline void hal_select_window_confirm(struct hal_soc *hal_soc,
 					     uint32_t offset)
 {
@@ -292,7 +272,7 @@ static inline void hal_write32_mb(struct hal_soc *hal_soc, uint32_t offset,
 		qdf_iowrite32(new_addr, value);
 	} else {
 		hal_lock_reg_access(hal_soc, &flags);
-		hal_select_window(hal_soc, offset);
+		hal_select_window_confirm(hal_soc, offset);
 		qdf_iowrite32(hal_soc->dev_base_addr + WINDOW_START +
 			  (offset & WINDOW_RANGE_MASK), value);
 		hal_unlock_reg_access(hal_soc, &flags);
@@ -335,7 +315,7 @@ static inline void hal_write32_mb(struct hal_soc *hal_soc, uint32_t offset,
 		qdf_iowrite32(new_addr, value);
 	} else {
 		hal_lock_reg_access(hal_soc, &flags);
-		hal_select_window(hal_soc, offset);
+		hal_select_window_confirm(hal_soc, offset);
 		qdf_iowrite32(hal_soc->dev_base_addr + WINDOW_START +
 			  (offset & WINDOW_RANGE_MASK), value);
 		hal_unlock_reg_access(hal_soc, &flags);
@@ -479,7 +459,7 @@ uint32_t hal_read32_mb(struct hal_soc *hal_soc, uint32_t offset)
 	}
 
 	hal_lock_reg_access(hal_soc, &flags);
-	hal_select_window(hal_soc, offset);
+	hal_select_window_confirm(hal_soc, offset);
 	ret = qdf_ioread32(hal_soc->dev_base_addr + WINDOW_START +
 		       (offset & WINDOW_RANGE_MASK));
 	hal_unlock_reg_access(hal_soc, &flags);
@@ -515,7 +495,7 @@ uint32_t hal_read32_mb(struct hal_soc *hal_soc, uint32_t offset)
 		ret = qdf_ioread32(new_addr);
 	} else {
 		hal_lock_reg_access(hal_soc, &flags);
-		hal_select_window(hal_soc, offset);
+		hal_select_window_confirm(hal_soc, offset);
 		ret = qdf_ioread32(hal_soc->dev_base_addr + WINDOW_START +
 			       (offset & WINDOW_RANGE_MASK));
 		hal_unlock_reg_access(hal_soc, &flags);
