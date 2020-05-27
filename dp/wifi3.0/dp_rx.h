@@ -132,6 +132,72 @@ struct dp_rx_desc {
 	(((_cookie) & RX_DESC_COOKIE_INDEX_MASK) >>	\
 			RX_DESC_COOKIE_INDEX_SHIFT)
 
+#define FRAME_MASK_IPV4_ARP   1
+#define FRAME_MASK_IPV4_DHCP  2
+#define FRAME_MASK_IPV4_EAPOL 4
+#define FRAME_MASK_IPV6_DHCP  8
+
+#ifdef DP_RX_SPECIAL_FRAME_NEED
+/**
+ * dp_rx_is_special_frame() - check is RX frame special needed
+ *
+ * @nbuf: RX skb pointer
+ * @frame_mask: the mask for speical frame needed
+ *
+ * Check is RX frame wanted matched with mask
+ *
+ * Return: true - special frame needed, false - no
+ */
+static inline
+bool dp_rx_is_special_frame(qdf_nbuf_t nbuf, uint32_t frame_mask)
+{
+	if (((frame_mask & FRAME_MASK_IPV4_ARP) &&
+	     qdf_nbuf_is_ipv4_arp_pkt(nbuf)) ||
+	    ((frame_mask & FRAME_MASK_IPV4_DHCP) &&
+	     qdf_nbuf_is_ipv4_dhcp_pkt(nbuf)) ||
+	    ((frame_mask & FRAME_MASK_IPV4_EAPOL) &&
+	     qdf_nbuf_is_ipv4_eapol_pkt(nbuf)) ||
+	    ((frame_mask & FRAME_MASK_IPV6_DHCP) &&
+	     qdf_nbuf_is_ipv6_dhcp_pkt(nbuf)))
+		return true;
+
+	return false;
+}
+
+/**
+ * dp_rx_deliver_special_frame() - Deliver the RX special frame to stack
+ *				   if matches mask
+ *
+ * @soc: Datapath soc handler
+ * @peer: pointer to DP peer
+ * @nbuf: pointer to the skb of RX frame
+ * @frame_mask: the mask for speical frame needed
+ * @rx_tlv_hdr: start of rx tlv header
+ *
+ * note: Msdu_len must have been stored in QDF_NBUF_CB_RX_PKT_LEN(nbuf) and
+ * single nbuf is expected.
+ *
+ * return: true - nbuf has been delivered to stack, false - not.
+ */
+bool dp_rx_deliver_special_frame(struct dp_soc *soc, struct dp_peer *peer,
+				 qdf_nbuf_t nbuf, uint32_t frame_mask,
+				 uint8_t *rx_tlv_hdr);
+#else
+static inline
+bool dp_rx_is_special_frame(qdf_nbuf_t nbuf, uint32_t frame_mask)
+{
+	return false;
+}
+
+static inline
+bool dp_rx_deliver_special_frame(struct dp_soc *soc, struct dp_peer *peer,
+				 qdf_nbuf_t nbuf, uint32_t frame_mask,
+				 uint8_t *rx_tlv_hdr)
+{
+	return false;
+}
+#endif
+
 /* DOC: Offset to obtain LLC hdr
  *
  * In the case of Wifi parse error
@@ -368,6 +434,11 @@ struct dp_rx_desc *dp_rx_cookie_2_va_mon_status(struct dp_soc *soc,
 	return dp_get_rx_desc_from_cookie(soc, &soc->rx_desc_status[0], cookie);
 }
 #else
+
+void dp_rx_desc_pool_init(struct dp_soc *soc, uint32_t pool_id,
+			  uint32_t pool_size,
+			  struct rx_desc_pool *rx_desc_pool);
+
 /**
  * dp_rx_cookie_2_va_rxdma_buf() - Converts cookie to a virtual address of
  *			 the Rx descriptor on Rx DMA source ring buffer
@@ -431,6 +502,16 @@ void *dp_rx_cookie_2_va_mon_status(struct dp_soc *soc, uint32_t cookie)
 }
 #endif /* RX_DESC_MULTI_PAGE_ALLOC */
 
+QDF_STATUS dp_rx_desc_pool_is_allocated(struct rx_desc_pool *rx_desc_pool);
+QDF_STATUS dp_rx_desc_pool_alloc(struct dp_soc *soc,
+				 uint32_t pool_size,
+				 struct rx_desc_pool *rx_desc_pool);
+
+void dp_rx_desc_pool_init(struct dp_soc *soc, uint32_t pool_id,
+			  uint32_t pool_size,
+			  struct rx_desc_pool *rx_desc_pool);
+void dp_rx_pdev_mon_buf_buffers_free(struct dp_pdev *pdev, uint32_t mac_id);
+
 void dp_rx_add_desc_list_to_free_list(struct dp_soc *soc,
 				union dp_rx_desc_list_elem_t **local_desc_list,
 				union dp_rx_desc_list_elem_t **tail,
@@ -444,7 +525,17 @@ uint16_t dp_rx_get_free_desc_list(struct dp_soc *soc, uint32_t pool_id,
 				union dp_rx_desc_list_elem_t **tail);
 
 
+QDF_STATUS dp_rx_pdev_desc_pool_alloc(struct dp_pdev *pdev);
+void dp_rx_pdev_desc_pool_free(struct dp_pdev *pdev);
+
+QDF_STATUS dp_rx_pdev_desc_pool_init(struct dp_pdev *pdev);
+void dp_rx_pdev_desc_pool_deinit(struct dp_pdev *pdev);
+void dp_rx_desc_pool_deinit(struct dp_soc *soc,
+			    struct rx_desc_pool *rx_desc_pool);
+
 QDF_STATUS dp_rx_pdev_attach(struct dp_pdev *pdev);
+QDF_STATUS dp_rx_pdev_buffers_alloc(struct dp_pdev *pdev);
+void dp_rx_pdev_buffers_free(struct dp_pdev *pdev);
 
 void dp_rx_pdev_detach(struct dp_pdev *pdev);
 
@@ -507,19 +598,6 @@ dp_rx_wbm_err_process(struct dp_intr *int_ctx, struct dp_soc *soc,
  */
 qdf_nbuf_t dp_rx_sg_create(qdf_nbuf_t nbuf);
 
-/*
- * dp_rx_desc_pool_alloc() - create a pool of software rx_descs
- *			     at the time of dp rx initialization
- *
- * @soc: core txrx main context
- * @pool_id: pool_id which is one of 3 mac_ids
- * @pool_size: number of Rx descriptor in the pool
- * @rx_desc_pool: rx descriptor pool pointer
- *
- * Return: QDF status
- */
-QDF_STATUS dp_rx_desc_pool_alloc(struct dp_soc *soc, uint32_t pool_id,
-				 uint32_t pool_size, struct rx_desc_pool *pool);
 
 /*
  * dp_rx_desc_nbuf_and_pool_free() - free the sw rx desc pool called during
@@ -612,6 +690,19 @@ void dp_2k_jump_handle(struct dp_soc *soc, qdf_nbuf_t nbuf, uint8_t *rx_tlv_hdr,
 		qdf_nbuf_set_next((tail), NULL);                      \
 	} while (0)
 
+#define DP_RX_MERGE_TWO_LIST(phead, ptail, chead, ctail) \
+	do {                                                          \
+		if (!(phead)) {                                       \
+			(phead) = (chead);                            \
+		} else {                                              \
+			qdf_nbuf_set_next((ptail), (chead));          \
+			QDF_NBUF_CB_RX_NUM_ELEMENTS_IN_LIST(phead) += \
+			QDF_NBUF_CB_RX_NUM_ELEMENTS_IN_LIST(chead);   \
+		}                                                     \
+		(ptail) = (ctail);                                    \
+		qdf_nbuf_set_next((ptail), NULL);                     \
+	} while (0)
+
 /*for qcn9000 emulation the pcie is complete phy and no address restrictions*/
 #if !defined(BUILD_X86) || defined(QCA_WIFI_QCN9000)
 static inline int check_x86_paddr(struct dp_soc *dp_soc, qdf_nbuf_t *rx_netbuf,
@@ -688,8 +779,9 @@ static inline int check_x86_paddr(struct dp_soc *dp_soc, qdf_nbuf_t *rx_netbuf,
  * dp_rx_cookie_2_link_desc_va() - Converts cookie to a virtual address of
  *				   the MSDU Link Descriptor
  * @soc: core txrx main context
- * @buf_info: buf_info include cookie that used to lookup virtual address of
- * link descriptor Normally this is just an index into a per SOC array.
+ * @buf_info: buf_info includes cookie that is used to lookup
+ * virtual address of link descriptor after deriving the page id
+ * and the offset or index of the desc on the associatde page.
  *
  * This is the VA of the link descriptor, that HAL layer later uses to
  * retrieve the list of MSDU's for a given MPDU.
@@ -701,16 +793,16 @@ void *dp_rx_cookie_2_link_desc_va(struct dp_soc *soc,
 				  struct hal_buf_info *buf_info)
 {
 	void *link_desc_va;
-	uint32_t bank_id = LINK_DESC_COOKIE_BANK_ID(buf_info->sw_cookie);
+	struct qdf_mem_multi_page_t *pages;
+	uint16_t page_id = LINK_DESC_COOKIE_PAGE_ID(buf_info->sw_cookie);
 
-
-	/* TODO */
-	/* Add sanity for  cookie */
-
-	link_desc_va = soc->link_desc_banks[bank_id].base_vaddr +
-		(buf_info->paddr -
-			soc->link_desc_banks[bank_id].base_paddr);
-
+	pages = &soc->link_desc_pages;
+	if (!pages)
+		return NULL;
+	if (qdf_unlikely(page_id >= pages->num_pages))
+		return NULL;
+	link_desc_va = pages->dma_pages[page_id].page_v_addr_start +
+		(buf_info->paddr - pages->dma_pages[page_id].page_p_addr);
 	return link_desc_va;
 }
 
@@ -732,16 +824,18 @@ void *dp_rx_cookie_2_mon_link_desc_va(struct dp_pdev *pdev,
 				  int mac_id)
 {
 	void *link_desc_va;
+	struct qdf_mem_multi_page_t *pages;
+	uint16_t page_id = LINK_DESC_COOKIE_PAGE_ID(buf_info->sw_cookie);
 
-	/* TODO */
-	/* Add sanity for  cookie */
+	pages = &pdev->soc->mon_link_desc_pages[mac_id];
+	if (!pages)
+		return NULL;
 
-	link_desc_va =
-	   pdev->soc->mon_link_desc_banks[mac_id][buf_info->sw_cookie]
-			.base_vaddr +
-	   (buf_info->paddr -
-	   pdev->soc->mon_link_desc_banks[mac_id][buf_info->sw_cookie]
-			.base_paddr);
+	if (qdf_unlikely(page_id >= pages->num_pages))
+		return NULL;
+
+	link_desc_va = pages->dma_pages[page_id].page_v_addr_start +
+		(buf_info->paddr - pages->dma_pages[page_id].page_p_addr);
 
 	return link_desc_va;
 }
@@ -1075,21 +1169,6 @@ void dp_rx_process_rxdma_err(struct dp_soc *soc, qdf_nbuf_t nbuf,
 			     uint8_t *rx_tlv_hdr, struct dp_peer *peer,
 			     uint8_t err_code, uint8_t mac_id);
 
-#ifdef PEER_CACHE_RX_PKTS
-/**
- * dp_rx_flush_rx_cached() - flush cached rx frames
- * @peer: peer
- * @drop: set flag to drop frames
- *
- * Return: None
- */
-void dp_rx_flush_rx_cached(struct dp_peer *peer, bool drop);
-#else
-static inline void dp_rx_flush_rx_cached(struct dp_peer *peer, bool drop)
-{
-}
-#endif
-
 #ifndef QCA_MULTIPASS_SUPPORT
 static inline
 bool dp_rx_multipass_process(struct dp_peer *peer, qdf_nbuf_t nbuf, uint8_t tid)
@@ -1128,4 +1207,81 @@ void dp_rx_deliver_to_stack(struct dp_soc *soc,
 			    qdf_nbuf_t nbuf_head,
 			    qdf_nbuf_t nbuf_tail);
 
+#ifdef QCA_OL_RX_LOCK_LESS_ACCESS
+/*
+ * dp_rx_ring_access_start()- Wrapper function to log access start of a hal ring
+ * @int_ctx: pointer to DP interrupt context
+ * @dp_soc - DP soc structure pointer
+ * @hal_ring_hdl - HAL ring handle
+ *
+ * Return: 0 on success; error on failure
+ */
+static inline int
+dp_rx_srng_access_start(struct dp_intr *int_ctx, struct dp_soc *soc,
+			hal_ring_handle_t hal_ring_hdl)
+{
+	return hal_srng_access_start_unlocked(soc->hal_soc, hal_ring_hdl);
+}
+
+/*
+ * dp_rx_ring_access_end()- Wrapper function to log access end of a hal ring
+ * @int_ctx: pointer to DP interrupt context
+ * @dp_soc - DP soc structure pointer
+ * @hal_ring_hdl - HAL ring handle
+ *
+ * Return - None
+ */
+static inline void
+dp_rx_srng_access_end(struct dp_intr *int_ctx, struct dp_soc *soc,
+		      hal_ring_handle_t hal_ring_hdl)
+{
+	hal_srng_access_end_unlocked(soc->hal_soc, hal_ring_hdl);
+}
+#else
+static inline int
+dp_rx_srng_access_start(struct dp_intr *int_ctx, struct dp_soc *soc,
+			hal_ring_handle_t hal_ring_hdl)
+{
+	return dp_srng_access_start(int_ctx, soc, hal_ring_hdl);
+}
+
+static inline void
+dp_rx_srng_access_end(struct dp_intr *int_ctx, struct dp_soc *soc,
+		      hal_ring_handle_t hal_ring_hdl)
+{
+	dp_srng_access_end(int_ctx, soc, hal_ring_hdl);
+}
+#endif
+
+/*
+ * dp_rx_wbm_sg_list_reset() - Initialize sg list
+ *
+ * This api should be called at soc init and afterevery sg processing.
+ *@soc: DP SOC handle
+ */
+static inline void dp_rx_wbm_sg_list_reset(struct dp_soc *soc)
+{
+	if (soc) {
+		soc->wbm_sg_param.wbm_is_first_msdu_in_sg = false;
+		soc->wbm_sg_param.wbm_sg_nbuf_head = NULL;
+		soc->wbm_sg_param.wbm_sg_nbuf_tail = NULL;
+		soc->wbm_sg_param.wbm_sg_desc_msdu_len = 0;
+	}
+}
+
+/*
+ * dp_rx_wbm_sg_list_deinit() - De-initialize sg list
+ *
+ * This api should be called in down path, to avoid any leak.
+ *@soc: DP SOC handle
+ */
+static inline void dp_rx_wbm_sg_list_deinit(struct dp_soc *soc)
+{
+	if (soc) {
+		if (soc->wbm_sg_param.wbm_sg_nbuf_head)
+			qdf_nbuf_list_free(soc->wbm_sg_param.wbm_sg_nbuf_head);
+
+		dp_rx_wbm_sg_list_reset(soc);
+	}
+}
 #endif /* _DP_RX_H */

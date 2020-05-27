@@ -146,7 +146,7 @@ QDF_STATUS reg_set_default_country(struct wlan_objmgr_psoc *psoc,
 		return QDF_STATUS_E_INVAL;
 	}
 
-	reg_info("setting default_country: %s", country);
+	reg_info("set default_country: %s", country);
 
 	qdf_mem_copy(psoc_reg->def_country, country, REG_ALPHA2_LEN + 1);
 
@@ -179,6 +179,7 @@ QDF_STATUS reg_set_country(struct wlan_objmgr_pdev *pdev,
 	struct wlan_objmgr_psoc *psoc;
 	struct cc_regdmn_s rd;
 	uint8_t pdev_id;
+	uint8_t phy_id;
 
 	if (!pdev) {
 		reg_err("pdev is NULL");
@@ -193,6 +194,12 @@ QDF_STATUS reg_set_country(struct wlan_objmgr_pdev *pdev,
 	pdev_id = wlan_objmgr_pdev_get_pdev_id(pdev);
 
 	psoc = wlan_pdev_get_psoc(pdev);
+
+	tx_ops = reg_get_psoc_tx_ops(psoc);
+	if (tx_ops->get_phy_id_from_pdev_id)
+		tx_ops->get_phy_id_from_pdev_id(psoc, pdev_id, &phy_id);
+	else
+		phy_id = pdev_id;
 
 	psoc_reg = reg_get_psoc_obj(psoc);
 	if (!IS_VALID_PSOC_REG_OBJ(psoc_reg)) {
@@ -227,9 +234,9 @@ QDF_STATUS reg_set_country(struct wlan_objmgr_pdev *pdev,
 
 
 	if (reg_is_world_alpha2(cc.country))
-		psoc_reg->world_country_pending[pdev_id] = true;
+		psoc_reg->world_country_pending[phy_id] = true;
 	else
-		psoc_reg->new_user_ctry_pending[pdev_id] = true;
+		psoc_reg->new_user_ctry_pending[phy_id] = true;
 
 	if (psoc_reg->offload_enabled) {
 		tx_ops = reg_get_psoc_tx_ops(psoc);
@@ -237,7 +244,7 @@ QDF_STATUS reg_set_country(struct wlan_objmgr_pdev *pdev,
 			tx_ops->set_country_code(psoc, &cc);
 		} else {
 			reg_err("country set fw handler not present");
-			psoc_reg->new_user_ctry_pending[pdev_id] = false;
+			psoc_reg->new_user_ctry_pending[phy_id] = false;
 			return QDF_STATUS_E_FAULT;
 		}
 	} else {
@@ -245,7 +252,7 @@ QDF_STATUS reg_set_country(struct wlan_objmgr_pdev *pdev,
 			pdev_priv_obj = reg_get_pdev_obj(pdev);
 			if (!IS_VALID_PDEV_REG_OBJ(pdev_priv_obj)) {
 				reg_err("reg component pdev priv is NULL");
-				psoc_reg->world_country_pending[pdev_id] =
+				psoc_reg->world_country_pending[phy_id] =
 									false;
 				return QDF_STATUS_E_INVAL;
 			}
@@ -278,7 +285,6 @@ QDF_STATUS reg_reset_country(struct wlan_objmgr_psoc *psoc)
 		return QDF_STATUS_E_INVAL;
 	}
 
-	reg_info("re-setting user country to default");
 	qdf_mem_copy(psoc_reg->cur_country,
 		     psoc_reg->def_country,
 		     REG_ALPHA2_LEN + 1);
@@ -299,7 +305,7 @@ QDF_STATUS reg_get_domain_from_country_code(v_REGDOMAIN_t *reg_domain_ptr,
 	*reg_domain_ptr = 0;
 
 	if (!country_alpha2) {
-		reg_err("Country code array is NULL");
+		reg_err("Country code is NULL");
 		return QDF_STATUS_E_FAULT;
 	}
 
@@ -466,7 +472,7 @@ QDF_STATUS reg_set_band(struct wlan_objmgr_pdev *pdev,
 	}
 
 	if (pdev_priv_obj->band_capability == band) {
-		reg_info("band is already set to %d", band);
+		reg_info("same band %d", band);
 		return QDF_STATUS_SUCCESS;
 	}
 
@@ -482,7 +488,7 @@ QDF_STATUS reg_set_band(struct wlan_objmgr_pdev *pdev,
 		return QDF_STATUS_E_INVAL;
 	}
 
-	reg_info("setting band_info: %d", band);
+	reg_info("set band_info: %d", band);
 	pdev_priv_obj->band_capability = band;
 
 	reg_compute_pdev_current_chan_list(pdev_priv_obj);
@@ -518,7 +524,7 @@ QDF_STATUS reg_get_band(struct wlan_objmgr_pdev *pdev,
 		return QDF_STATUS_E_INVAL;
 	}
 
-	reg_debug("getting band_info: %d", pdev_priv_obj->band_capability);
+	reg_debug("get band_info: %d", pdev_priv_obj->band_capability);
 	*band = pdev_priv_obj->band_capability;
 
 	return QDF_STATUS_SUCCESS;
@@ -693,11 +699,11 @@ QDF_STATUS reg_set_fcc_constraint(struct wlan_objmgr_pdev *pdev,
 	}
 
 	if (pdev_priv_obj->set_fcc_channel == fcc_constraint) {
-		reg_info("fcc_constraint is already set to %d", fcc_constraint);
+		reg_info("same fcc_constraint %d", fcc_constraint);
 		return QDF_STATUS_SUCCESS;
 	}
 
-	reg_info("setting set_fcc_channel: %d", fcc_constraint);
+	reg_info("set fcc_constraint: %d", fcc_constraint);
 	pdev_priv_obj->set_fcc_channel = fcc_constraint;
 
 	psoc = wlan_pdev_get_psoc(pdev);
@@ -861,7 +867,7 @@ void reg_program_mas_chan_list(struct wlan_objmgr_psoc *psoc,
 	QDF_STATUS status;
 	uint32_t count;
 	enum direction dir;
-	uint32_t pdev_cnt;
+	uint32_t phy_cnt;
 
 	psoc_priv_obj = reg_get_psoc_obj(psoc);
 	if (!psoc_priv_obj) {
@@ -879,12 +885,12 @@ void reg_program_mas_chan_list(struct wlan_objmgr_psoc *psoc,
 		reg_channels[count].nol_chan = false;
 	}
 
-	for (pdev_cnt = 0; pdev_cnt < PSOC_MAX_PHY_REG_CAP; pdev_cnt++) {
-		qdf_mem_copy(psoc_priv_obj->mas_chan_params[pdev_cnt].
+	for (phy_cnt = 0; phy_cnt < PSOC_MAX_PHY_REG_CAP; phy_cnt++) {
+		qdf_mem_copy(psoc_priv_obj->mas_chan_params[phy_cnt].
 			     mas_chan_list, reg_channels,
 			     NUM_CHANNELS * sizeof(struct regulatory_channel));
 
-		psoc_priv_obj->mas_chan_params[pdev_cnt].dfs_region =
+		psoc_priv_obj->mas_chan_params[phy_cnt].dfs_region =
 			dfs_region;
 	}
 
@@ -997,14 +1003,14 @@ QDF_STATUS reg_set_curr_country(struct wlan_regulatory_psoc_priv_obj *soc_reg,
 	country_code.pdev_id = pdev_id;
 
 	if (!tx_ops || !tx_ops->set_country_code) {
-		reg_err("No regulatory tx_ops for set_country_code");
+		reg_err("No regulatory tx_ops");
 		status = QDF_STATUS_E_FAULT;
 		goto error;
 	}
 
 	status = tx_ops->set_country_code(psoc, &country_code);
 	if (QDF_IS_STATUS_ERROR(status)) {
-		reg_err("Failed to send country code to firmware");
+		reg_err("Failed to send country code to fw");
 		goto error;
 	}
 

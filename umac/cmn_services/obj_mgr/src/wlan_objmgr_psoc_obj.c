@@ -25,6 +25,7 @@
 #include <wlan_objmgr_pdev_obj.h>
 #include <wlan_objmgr_vdev_obj.h>
 #include <wlan_objmgr_peer_obj.h>
+#include <wlan_objmgr_debug.h>
 #include <qdf_mem.h>
 #include <qdf_types.h>
 #include <qdf_module.h>
@@ -32,6 +33,7 @@
 #include "wlan_objmgr_psoc_obj_i.h"
 #include "wlan_objmgr_pdev_obj_i.h"
 #include "wlan_objmgr_vdev_obj_i.h"
+#include <wlan_utility.h>
 
 /**
  ** APIs to Create/Delete Global object APIs
@@ -102,6 +104,7 @@ static QDF_STATUS wlan_objmgr_psoc_obj_free(struct wlan_objmgr_psoc *psoc)
 	wlan_objmgr_psoc_peer_list_deinit(&psoc->soc_objmgr.peer_list);
 
 	qdf_spinlock_destroy(&psoc->psoc_lock);
+	wlan_minidump_remove(psoc);
 	qdf_mem_free(psoc);
 
 	return QDF_STATUS_SUCCESS;
@@ -182,7 +185,8 @@ struct wlan_objmgr_psoc *wlan_objmgr_psoc_obj_create(uint32_t phy_version,
 		wlan_objmgr_psoc_obj_delete(psoc);
 		return NULL;
 	}
-
+	wlan_minidump_log(psoc, sizeof(*psoc), psoc,
+			  WLAN_MD_OBJMGR_PSOC, "wlan_objmgr_psoc");
 	obj_mgr_info("Created psoc %d", psoc->soc_objmgr.psoc_id);
 
 	return psoc;

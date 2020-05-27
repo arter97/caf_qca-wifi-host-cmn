@@ -761,6 +761,18 @@ QDF_STATUS utils_dfs_mark_leaking_chan_for_freq(struct wlan_objmgr_pdev *pdev,
 						uint8_t temp_ch_lst_sz,
 						uint16_t *temp_ch_lst);
 #endif
+
+/**
+ * utils_dfs_can_ignore_radar_event() - check whether to skip radar event
+ * processing
+ * @pdev: Pointer to pdev structure.
+ *
+ * This function will check with policy mgr to process radar event or not based
+ * on current concurrency mode and dfs policy.
+ *
+ * Return: true - ignore radar event processing, otherwise false.
+ */
+bool utils_dfs_can_ignore_radar_event(struct wlan_objmgr_pdev *pdev);
 #else
 #ifdef CONFIG_CHAN_NUM_API
 static inline QDF_STATUS utils_dfs_mark_leaking_ch
@@ -782,6 +794,11 @@ static inline QDF_STATUS utils_dfs_mark_leaking_chan_for_freq
 	return QDF_STATUS_SUCCESS;
 }
 #endif
+static inline bool
+utils_dfs_can_ignore_radar_event(struct wlan_objmgr_pdev *pdev)
+{
+	return false;
+}
 #endif
 /**
  * utils_get_dfsdomain() - Get DFS domain.
@@ -960,4 +977,44 @@ void utils_dfs_deliver_event(struct wlan_objmgr_pdev *pdev, uint16_t freq,
  * Return: None.
  */
 void utils_dfs_reset_dfs_prevchan(struct wlan_objmgr_pdev *pdev);
+
+#ifdef QCA_SUPPORT_ADFS_RCAC
+/**
+ * utils_dfs_rcac_sm_deliver_evt() - API to post events to DFS rolling CAC SM.
+ * @pdev:           Pointer to DFS pdev object.
+ * @event:          Event to be posted to DFS RCAC SM.
+ *
+ * Return: None.
+ */
+void utils_dfs_rcac_sm_deliver_evt(struct wlan_objmgr_pdev *pdev,
+				   enum dfs_rcac_sm_evt event);
+
+/**
+ * utils_dfs_get_rcac_channel() - Get the completed Rolling CAC channel if
+ *                                available.
+ * @pdev: Pointer to DFS pdev object.
+ * @ch_params: current channel params.
+ * @target_chan: Pointer to target_chan freq.
+ *
+ * Return: QDF_STATUS.
+ */
+QDF_STATUS utils_dfs_get_rcac_channel(struct wlan_objmgr_pdev *pdev,
+				      struct ch_params *chan_params,
+				      qdf_freq_t *target_chan_freq);
+#else
+static inline
+void utils_dfs_rcac_sm_deliver_evt(struct wlan_objmgr_pdev *pdev,
+				   enum dfs_rcac_sm_evt event)
+{
+}
+
+static inline
+QDF_STATUS utils_dfs_get_rcac_channel(struct wlan_objmgr_pdev *pdev,
+				      struct ch_params *chan_params,
+				      qdf_freq_t *target_chan_freq)
+{
+	return QDF_STATUS_SUCCESS;
+}
+#endif /* QCA_SUPPORT_ADFS_RCAC */
+
 #endif /* _WLAN_DFS_UTILS_API_H_ */

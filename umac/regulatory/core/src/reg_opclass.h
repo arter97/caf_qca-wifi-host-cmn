@@ -63,6 +63,21 @@ uint8_t reg_dmn_get_opclass_from_freq_width(uint8_t *country,
 					    uint16_t behav_limit);
 
 /**
+ * reg_get_band_cap_from_op_class() - Return band capability bitmap
+ * @country: Pointer to Country code.
+ * @num_of_opclass: Number of Operating class.
+ * @opclass: Pointer to opclass.
+ *
+ * Return supported band bitmap based on the input operating class list
+ * provided.
+ *
+ * Return: Return supported band capability
+ */
+uint8_t reg_get_band_cap_from_op_class(const uint8_t *country,
+				       uint8_t num_of_opclass,
+				       const uint8_t *opclass);
+
+/**
  * reg_dmn_get_opclass_from_channe() - Print channels in op class.
  * @country: Country code.
  * @opclass: opclass.
@@ -128,6 +143,28 @@ void reg_freq_width_to_chan_op_class(struct wlan_objmgr_pdev *pdev,
 				     uint8_t *chan_num);
 
 /**
+ * reg_freq_width_to_chan_op_class_auto() - convert frequency to operating
+ * class,channel after fixing up the global_tbl_lookup and behav_limit
+ * for 6G frequencies.
+ * @pdev: pdev pointer
+ * @freq: channel frequency in mhz
+ * @chan_width: channel width
+ * @global_tbl_lookup: whether to lookup global op class tbl
+ * @behav_limit: behavior limit
+ * @op_class: operating class
+ * @chan_num: channel number
+ *
+ * Return: Void.
+ */
+void reg_freq_width_to_chan_op_class_auto(struct wlan_objmgr_pdev *pdev,
+					  qdf_freq_t freq,
+					  uint16_t chan_width,
+					  bool global_tbl_lookup,
+					  uint16_t behav_limit,
+					  uint8_t *op_class,
+					  uint8_t *chan_num);
+
+/**
  * reg_freq_to_chan_op_class() - convert frequency to oper class,
  *                                   channel
  * @pdev: pdev pointer
@@ -147,7 +184,7 @@ void reg_freq_to_chan_op_class(struct wlan_objmgr_pdev *pdev,
 			       uint8_t *chan_num);
 
 /**
- * reg_country_opclass_freq_check() - check for frequency in (tbl, oper class)
+ * reg_is_freq_in_country_opclass() - check for frequency in (tbl, oper class)
  *
  * @pdev: pdev pointer
  * @country: country from country IE
@@ -156,7 +193,7 @@ void reg_freq_to_chan_op_class(struct wlan_objmgr_pdev *pdev,
  *
  * Return: bool
  */
-bool reg_country_opclass_freq_check(struct wlan_objmgr_pdev *pdev,
+bool reg_is_freq_in_country_opclass(struct wlan_objmgr_pdev *pdev,
 				    const uint8_t country[3],
 				    uint8_t op_class,
 				    qdf_freq_t chan_freq);
@@ -174,6 +211,29 @@ uint16_t reg_get_op_class_width(struct wlan_objmgr_pdev *pdev,
 				uint8_t op_class,
 				bool global_tbl_lookup);
 
+#ifdef HOST_OPCLASS_EXT
+/**
+ * reg_country_chan_opclass_to_freq() - Convert channel number to frequency
+ * based on country code and op class
+ * @pdev: pdev object.
+ * @country: country code.
+ * @chan: IEEE Channel Number.
+ * @op_class: Opclass.
+ * @strict: flag to find channel from matched operating class code.
+ *
+ * Look up (channel, operating class) pair in country operating class tables
+ * and return the channel frequency.
+ * If not found and "strict" flag is false, try to get frequency (Mhz) by
+ * channel number only.
+ *
+ * Return: Channel center frequency else return 0.
+ */
+qdf_freq_t reg_country_chan_opclass_to_freq(struct wlan_objmgr_pdev *pdev,
+					    const uint8_t country[3],
+					    uint8_t chan, uint8_t op_class,
+					    bool strict);
+#endif
+
 /**
  * reg_chan_opclass_to_freq() - Convert channel number and opclass to frequency
  * @chan: IEEE Channel Number.
@@ -185,6 +245,19 @@ uint16_t reg_get_op_class_width(struct wlan_objmgr_pdev *pdev,
 uint16_t reg_chan_opclass_to_freq(uint8_t chan,
 				  uint8_t op_class,
 				  bool global_tbl_lookup);
+
+/**
+ * reg_chan_opclass_to_freq_auto() - Convert channel number and opclass to
+ * frequency after fixing global_tbl_lookup
+ * @chan: IEEE Channel Number.
+ * @op_class: Opclass.
+ * @global_tbl_lookup: Global table lookup.
+ *
+ * Return: Channel center frequency else return 0.
+ */
+qdf_freq_t reg_chan_opclass_to_freq_auto(uint8_t chan, uint8_t op_class,
+					 bool global_tbl_lookup);
+
 #else
 
 static inline uint16_t reg_dmn_get_chanwidth_from_opclass(
@@ -220,6 +293,14 @@ uint8_t reg_dmn_get_opclass_from_freq_width(uint8_t *country,
 	return 0;
 }
 
+static inline
+uint8_t reg_get_band_cap_from_op_class(const uint8_t *country,
+				       uint8_t num_of_opclass,
+				       const uint8_t *opclass)
+{
+	return 0;
+}
+
 static inline void reg_dmn_print_channels_in_opclass(uint8_t *country,
 						     uint8_t op_class)
 {
@@ -249,6 +330,17 @@ reg_freq_width_to_chan_op_class(struct wlan_objmgr_pdev *pdev,
 }
 
 static inline void
+reg_freq_width_to_chan_op_class_auto(struct wlan_objmgr_pdev *pdev,
+				     qdf_freq_t freq,
+				     uint16_t chan_width,
+				     bool global_tbl_lookup,
+				     uint16_t behav_limit,
+				     uint8_t *op_class,
+				     uint8_t *chan_num)
+{
+}
+
+static inline void
 reg_freq_to_chan_op_class(struct wlan_objmgr_pdev *pdev,
 			  qdf_freq_t freq,
 			  bool global_tbl_lookup,
@@ -259,11 +351,12 @@ reg_freq_to_chan_op_class(struct wlan_objmgr_pdev *pdev,
 }
 
 static inline bool
-reg_country_opclass_freq_check(struct wlan_objmgr_pdev *pdev,
+reg_is_freq_in_country_opclass(struct wlan_objmgr_pdev *pdev,
 			       const uint8_t country[3],
 			       uint8_t op_class,
 			       uint16_t chan_freq)
 {
+	return false;
 }
 
 #endif
@@ -275,10 +368,28 @@ static inline uint16_t reg_get_op_class_width(struct wlan_objmgr_pdev *pdev,
 	return 0;
 }
 
+#ifdef HOST_OPCLASS_EXT
+static inline
+qdf_freq_t reg_country_chan_opclass_to_freq(struct wlan_objmgr_pdev *pdev,
+					    const uint8_t country[3],
+					    uint8_t chan, uint8_t op_class,
+					    bool strict)
+{
+	return 0;
+}
+#endif
+
 static inline uint16_t
 reg_chan_opclass_to_freq(uint8_t chan,
 			 uint8_t op_class,
 			 bool global_tbl_lookup)
+{
+	return 0;
+}
+
+static inline qdf_freq_t
+reg_chan_opclass_to_freq_auto(uint8_t chan, uint8_t op_class,
+			      bool global_tbl_lookup)
 {
 	return 0;
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017-2019 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2017-2020 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -209,6 +209,8 @@ struct tgt_info {
 	struct wmi_host_mem_chunk mem_chunks[MAX_MEM_CHUNKS];
 	struct wlan_psoc_host_hw_mode_caps hw_mode_cap;
 	struct target_supported_modes hw_modes;
+	uint8_t pdev_id_to_phy_id_map[WLAN_UMAC_MAX_PDEVS];
+	bool is_pdevid_to_phyid_map;
 };
 
 /**
@@ -502,6 +504,13 @@ bool target_is_tgt_type_qca9888(uint32_t target_type);
  */
 bool target_is_tgt_type_adrastea(uint32_t target_type);
 
+/**
+ * target_is_tgt_type_qcn9000() - Check if the target type is QCN9000 (pine)
+ * @target_type: target type to be checked.
+ *
+ * Return: true if the target_type is QCN9000, else false.
+ */
+bool target_is_tgt_type_qcn9000(uint32_t target_type);
 
 /**
  * target_psoc_set_wlan_init_status() - set info wlan_init_status
@@ -810,6 +819,28 @@ static inline void target_psoc_set_num_radios(
 		return;
 
 	psoc_info->info.num_radios = num_radios;
+}
+
+/**
+ * target_psoc_set_pdev_id_to_phy_id_map() - set pdev to phy id mapping
+ * @psoc_info:  pointer to structure target_psoc_info
+ * @pdev_id: pdev id
+ * @phy_id: phy_id
+ *
+ * API to set pdev id to phy id mapping
+ *
+ * Return: void
+ */
+static inline void target_psoc_set_pdev_id_to_phy_id_map(
+		struct target_psoc_info *psoc_info,
+		uint8_t *phy_id_map)
+{
+	if (!psoc_info)
+		return;
+
+	psoc_info->info.is_pdevid_to_phyid_map = true;
+	qdf_mem_copy(psoc_info->info.pdev_id_to_phy_id_map, phy_id_map,
+		     PSOC_MAX_PHY_REG_CAP);
 }
 
 /**

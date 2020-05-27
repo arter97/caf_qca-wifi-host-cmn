@@ -61,6 +61,8 @@
 /* Max length of a SSID */
 #define WLAN_SSID_MAX_LEN 32
 
+#define WLAN_CACHE_ID_LEN 2
+
 /* Max sequence number */
 #define WLAN_MAX_SEQ_NUM 4096
 
@@ -276,6 +278,7 @@
  * @WLAN_UMAC_COMP_FTM_TIME_SYNC: WLAN FTM TIMESYNC
  * @WLAN_UMAC_COMP_PKT_CAPTURE:   Packet capture component
  * @WLAN_UMAC_COMP_DCS:           DCS
+ * @WLAN_IOT_SIM_COMP:            IOT Simulation component
  * @WLAN_UMAC_COMP_ID_MAX:        Maximum components in UMAC
  *
  * This id is static.
@@ -319,6 +322,7 @@ enum wlan_umac_comp_id {
 	WLAN_UMAC_COMP_FTM_TIME_SYNC      = 34,
 	WLAN_UMAC_COMP_PKT_CAPTURE        = 35,
 	WLAN_UMAC_COMP_DCS                = 36,
+	WLAN_IOT_SIM_COMP                 = 37,
 	WLAN_UMAC_COMP_ID_MAX,
 };
 

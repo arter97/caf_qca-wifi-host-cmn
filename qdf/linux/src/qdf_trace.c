@@ -1438,12 +1438,13 @@ uint8_t qdf_get_rate_limit_by_type(uint8_t type)
 
 /**
  * qdf_get_pkt_type_string() - Get the string based on pkt type
- * @subtype: packet type
+ * @type: packet type
+ * @subtype: packet subtype
  *
  * Return: String based on pkt type
  */
 static
-uint8_t *qdf_get_pkt_type_string(uint8_t subtype)
+uint8_t *qdf_get_pkt_type_string(uint8_t type, uint8_t subtype)
 {
 	switch (subtype) {
 	case QDF_PROTO_EAPOL_M1:
@@ -1464,6 +1465,12 @@ uint8_t *qdf_get_pkt_type_string(uint8_t subtype)
 		return "DHCP-A";
 	case QDF_PROTO_DHCP_NACK:
 		return "DHCP-NA";
+	case QDF_PROTO_DHCP_RELEASE:
+		return "DHCP-REL";
+	case QDF_PROTO_DHCP_INFORM:
+		return "DHCP-IN";
+	case QDF_PROTO_DHCP_DECLINE:
+		return "DHCP-DEC";
 	case QDF_PROTO_ARP_REQ:
 		return "ARP-RQ";
 	case QDF_PROTO_ARP_RES:
@@ -1473,7 +1480,18 @@ uint8_t *qdf_get_pkt_type_string(uint8_t subtype)
 	case QDF_PROTO_DNS_RES:
 		return "DNS_RS";
 	default:
-		return "UNKNOWN";
+		switch (type) {
+		case QDF_PROTO_TYPE_EAPOL:
+			return "EAP";
+		case QDF_PROTO_TYPE_DHCP:
+			return "DHCP";
+		case QDF_PROTO_TYPE_ARP:
+			return "ARP";
+		case QDF_PROTO_TYPE_DNS:
+			return "DNS";
+		default:
+			return "UNKNOWN";
+		}
 	}
 }
 
@@ -1515,28 +1533,37 @@ uint8_t *qdf_get_pkt_status_string(uint8_t status)
  * Return: none
  */
 void qdf_dp_log_proto_pkt_info(uint8_t *sa, uint8_t *da, uint8_t type,
-			       uint8_t subtype, uint8_t dir, uint8_t msdu_id,
+			       uint8_t subtype, uint8_t dir, uint16_t msdu_id,
 			       uint8_t status)
 {
 	uint8_t pkt_rate_limit;
-	static ulong last_ticks[QDF_PROTO_SUBTYPE_MAX] = {0};
+	static ulong last_ticks_tx[QDF_PROTO_SUBTYPE_MAX] = {0};
+	static ulong last_ticks_rx[QDF_PROTO_SUBTYPE_MAX] = {0};
 	ulong curr_ticks = jiffies;
 
 	pkt_rate_limit = qdf_get_rate_limit_by_type(type);
 
-	if (!time_after(curr_ticks, last_ticks[subtype] + HZ / pkt_rate_limit))
+	if ((dir == QDF_TX &&
+	     !time_after(curr_ticks,
+			 last_ticks_tx[subtype] + HZ / pkt_rate_limit)) ||
+	    (dir == QDF_RX &&
+	     !time_after(curr_ticks,
+			 last_ticks_rx[subtype] + HZ / pkt_rate_limit)))
 		return;
 
-	last_ticks[subtype] = curr_ticks;
+	if (dir == QDF_TX)
+		last_ticks_tx[subtype] = curr_ticks;
+	else
+		last_ticks_rx[subtype] = curr_ticks;
 
 	if (status == QDF_TX_RX_STATUS_INVALID)
 		qdf_nofl_info("%s %s: SA:%pM DA:%pM",
-			      qdf_get_pkt_type_string(subtype), dir ? "RX":"TX",
-			      sa, da);
+			      qdf_get_pkt_type_string(type, subtype),
+			      dir ? "RX":"TX", sa, da);
 	else
 		qdf_nofl_info("%s %s: SA:%pM DA:%pM msdu_id:%d status: %s",
-			      qdf_get_pkt_type_string(subtype), dir ? "RX":"TX",
-			      sa, da, msdu_id,
+			      qdf_get_pkt_type_string(type, subtype),
+			      dir ? "RX":"TX", sa, da, msdu_id,
 			      qdf_get_pkt_status_string(status));
 }
 
@@ -2202,6 +2229,41 @@ bool qdf_dp_proto_log_enable_check(enum qdf_proto_type pkt_type,
 		return false;
 	}
 }
+
+void qdf_dp_track_noack_check(qdf_nbuf_t nbuf, enum qdf_proto_subtype *subtype)
+{
+	enum qdf_proto_type pkt_type = qdf_dp_get_pkt_proto_type(nbuf);
+	uint16_t dp_track = 0;
+
+	switch (pkt_type) {
+	case QDF_PROTO_TYPE_EAPOL:
+		dp_track = qdf_dp_get_proto_bitmap() &
+				QDF_NBUF_PKT_TRAC_TYPE_EAPOL;
+		break;
+	case QDF_PROTO_TYPE_DHCP:
+		dp_track = qdf_dp_get_proto_bitmap() &
+				QDF_NBUF_PKT_TRAC_TYPE_DHCP;
+		break;
+	case QDF_PROTO_TYPE_ARP:
+		dp_track = qdf_dp_get_proto_bitmap() &
+					QDF_NBUF_PKT_TRAC_TYPE_ARP;
+		break;
+	case QDF_PROTO_TYPE_DNS:
+		dp_track = qdf_dp_get_proto_bitmap() &
+					QDF_NBUF_PKT_TRAC_TYPE_DNS;
+		break;
+	default:
+		break;
+	}
+
+	if (!dp_track) {
+		*subtype = QDF_PROTO_INVALID;
+		return;
+	}
+
+	*subtype = qdf_dp_get_pkt_subtype(nbuf, pkt_type);
+}
+qdf_export_symbol(qdf_dp_track_noack_check);
 
 /**
  * qdf_dp_trace_ptr() - record dptrace
@@ -3098,6 +3160,9 @@ struct category_name_info g_qdf_category_name[MAX_SUPPORTED_CATEGORY] = {
 	[QDF_MODULE_ID_MON_FILTER] = {"Monitor Filter"},
 	[QDF_MODULE_ID_ANY] = {"ANY"},
 	[QDF_MODULE_ID_PKT_CAPTURE] = {"pkt_capture"},
+	[QDF_MODULE_ID_RPTR] = {"RPTR"},
+	[QDF_MODULE_ID_6GHZ] = {"6GHZ"},
+	[QDF_MODULE_ID_IOT_SIM] = {"IOT_SIM"},
 };
 qdf_export_symbol(g_qdf_category_name);
 
@@ -3221,7 +3286,7 @@ void qdf_trace_msg_cmn(unsigned int idx,
 #if defined(WLAN_LOGGING_SOCK_SVC_ENABLE)
 		wlan_log_to_user(verbose, (char *)str_buffer,
 				 strlen(str_buffer));
-		if (qdf_likely(qdf_log_dump_at_kernel_enable))
+		if (qdf_unlikely(qdf_log_dump_at_kernel_enable))
 			print_to_console(str_buffer);
 #else
 		pr_err("%s\n", str_buffer);
@@ -3551,7 +3616,7 @@ static void set_default_trace_levels(struct category_info *cinfo)
 		[QDF_MODULE_ID_CMN_MLME] = QDF_TRACE_LEVEL_INFO,
 		[QDF_MODULE_ID_BSSCOLOR] = QDF_TRACE_LEVEL_ERROR,
 		[QDF_MODULE_ID_CFR] = QDF_TRACE_LEVEL_ERROR,
-		[QDF_MODULE_ID_TX_CAPTURE] = QDF_TRACE_LEVEL_NONE,
+		[QDF_MODULE_ID_TX_CAPTURE] = QDF_TRACE_LEVEL_FATAL,
 		[QDF_MODULE_ID_INTEROP_ISSUES_AP] = QDF_TRACE_LEVEL_NONE,
 		[QDF_MODULE_ID_BLACKLIST_MGR] = QDF_TRACE_LEVEL_NONE,
 		[QDF_MODULE_ID_QLD] = QDF_TRACE_LEVEL_ERROR,
@@ -3560,6 +3625,9 @@ static void set_default_trace_levels(struct category_info *cinfo)
 		[QDF_MODULE_ID_MON_FILTER] = QDF_TRACE_LEVEL_INFO,
 		[QDF_MODULE_ID_ANY] = QDF_TRACE_LEVEL_INFO,
 		[QDF_MODULE_ID_PKT_CAPTURE] = QDF_TRACE_LEVEL_NONE,
+		[QDF_MODULE_ID_RPTR] = QDF_TRACE_LEVEL_INFO,
+		[QDF_MODULE_ID_6GHZ] = QDF_TRACE_LEVEL_ERROR,
+		[QDF_MODULE_ID_IOT_SIM] = QDF_TRACE_LEVEL_ERROR,
 	};
 
 	for (i = 0; i < MAX_SUPPORTED_CATEGORY; i++) {

@@ -31,14 +31,19 @@
 #define DP_HTT_LOW_WM_HIT_COUNT_LEN  HTT_STATS_LOW_WM_BINS
 #define DP_HTT_HIGH_WM_HIT_COUNT_LEN  HTT_STATS_HIGH_WM_BINS
 #define DP_HTT_TX_MCS_LEN  HTT_TX_PDEV_STATS_NUM_MCS_COUNTERS
+#define DP_HTT_TX_MCS_EXT_LEN  HTT_TX_PDEV_STATS_NUM_EXTRA_MCS_COUNTERS
 #define DP_HTT_TX_SU_MCS_LEN  HTT_TX_PDEV_STATS_NUM_MCS_COUNTERS
+#define DP_HTT_TX_SU_MCS_EXT_LEN  HTT_TX_PDEV_STATS_NUM_EXTRA_MCS_COUNTERS
 #define DP_HTT_TX_MU_MCS_LEN  HTT_TX_PDEV_STATS_NUM_MCS_COUNTERS
+#define DP_HTT_TX_MU_MCS_EXT_LEN  HTT_TX_PDEV_STATS_NUM_EXTRA_MCS_COUNTERS
 #define DP_HTT_TX_NSS_LEN  HTT_TX_PDEV_STATS_NUM_SPATIAL_STREAMS
 #define DP_HTT_TX_BW_LEN  HTT_TX_PDEV_STATS_NUM_BW_COUNTERS
 #define DP_HTT_TX_PREAM_LEN  HTT_TX_PDEV_STATS_NUM_PREAMBLE_TYPES
 #define DP_HTT_TX_PDEV_GI_LEN  HTT_TX_PDEV_STATS_NUM_GI_COUNTERS
 #define DP_HTT_TX_DCM_LEN  HTT_TX_PDEV_STATS_NUM_DCM_COUNTERS
 #define DP_HTT_RX_MCS_LEN  HTT_RX_PDEV_STATS_NUM_MCS_COUNTERS
+#define DP_HTT_RX_MCS_EXT_LEN  HTT_RX_PDEV_STATS_NUM_EXTRA_MCS_COUNTERS
+#define DP_HTT_RX_PDEV_MCS_LEN_EXT HTT_RX_PDEV_STATS_NUM_MCS_COUNTERS_EXT
 #define DP_HTT_RX_NSS_LEN  HTT_RX_PDEV_STATS_NUM_SPATIAL_STREAMS
 #define DP_HTT_RX_DCM_LEN  HTT_RX_PDEV_STATS_NUM_DCM_COUNTERS
 #define DP_HTT_RX_BW_LEN  HTT_RX_PDEV_STATS_NUM_BW_COUNTERS
@@ -883,7 +888,8 @@ static inline void dp_print_tx_peer_rate_stats_tlv(uint32_t *tag_buf)
 		(htt_tx_peer_rate_stats_tlv *)tag_buf;
 	uint8_t i, j;
 	uint16_t index = 0;
-	char *tx_gi[HTT_TX_PEER_STATS_NUM_GI_COUNTERS];
+	char *tx_gi[HTT_TX_PEER_STATS_NUM_GI_COUNTERS] = {0};
+	char *tx_gi_ext[HTT_TX_PEER_STATS_NUM_GI_COUNTERS] = {0};
 	char *str_buf = qdf_mem_malloc(DP_MAX_STRING_LEN);
 
 	if (!str_buf) {
@@ -892,8 +898,14 @@ static inline void dp_print_tx_peer_rate_stats_tlv(uint32_t *tag_buf)
 		return;
 	}
 
-	for (i = 0; i < HTT_TX_PEER_STATS_NUM_GI_COUNTERS; i++)
+	for (i = 0; i < HTT_TX_PEER_STATS_NUM_GI_COUNTERS; i++) {
 		tx_gi[i] = (char *)qdf_mem_malloc(DP_MAX_STRING_LEN);
+		tx_gi_ext[i] = (char *)qdf_mem_malloc(DP_MAX_STRING_LEN);
+		if (!tx_gi[i] || !tx_gi_ext[i]) {
+			dp_err("Unable to allocate buffer for tx_gi");
+			goto fail1;
+		}
+	}
 
 	DP_PRINT_STATS("HTT_TX_PEER_RATE_STATS_TLV:");
 	DP_PRINT_STATS("tx_ldpc = %u",
@@ -910,6 +922,12 @@ static inline void dp_print_tx_peer_rate_stats_tlv(uint32_t *tag_buf)
 				DP_MAX_STRING_LEN - index,
 				" %u:%u,", i, dp_stats_buf->tx_mcs[i]);
 	}
+	for (i = 0; i <  DP_HTT_TX_MCS_EXT_LEN; i++) {
+		index += qdf_snprint(&str_buf[index],
+				DP_MAX_STRING_LEN - index,
+				" %u:%u,", i + DP_HTT_TX_MCS_LEN,
+				dp_stats_buf->tx_mcs_ext[i]);
+	}
 	DP_PRINT_STATS("tx_mcs = %s ", str_buf);
 
 	index = 0;
@@ -919,7 +937,15 @@ static inline void dp_print_tx_peer_rate_stats_tlv(uint32_t *tag_buf)
 				DP_MAX_STRING_LEN - index,
 				" %u:%u,", i, dp_stats_buf->tx_su_mcs[i]);
 	}
+	for (i = 0; i <  DP_HTT_TX_SU_MCS_EXT_LEN; i++) {
+		index += qdf_snprint(&str_buf[index],
+				DP_MAX_STRING_LEN - index,
+				" %u:%u,", i + DP_HTT_TX_SU_MCS_LEN,
+				dp_stats_buf->tx_su_mcs_ext[i]);
+	}
 	DP_PRINT_STATS("tx_su_mcs = %s ", str_buf);
+
+
 	index = 0;
 	qdf_mem_zero(str_buf, DP_MAX_STRING_LEN);
 	for (i = 0; i <  DP_HTT_TX_MU_MCS_LEN; i++) {
@@ -927,7 +953,14 @@ static inline void dp_print_tx_peer_rate_stats_tlv(uint32_t *tag_buf)
 				DP_MAX_STRING_LEN - index,
 				" %u:%u,", i, dp_stats_buf->tx_mu_mcs[i]);
 	}
+	for (i = 0; i <  DP_HTT_TX_MU_MCS_EXT_LEN; i++) {
+		index += qdf_snprint(&str_buf[index],
+				DP_MAX_STRING_LEN - index,
+				" %u:%u,", i + DP_HTT_TX_MU_MCS_LEN,
+				dp_stats_buf->tx_mu_mcs_ext[i]);
+	}
 	DP_PRINT_STATS("tx_mu_mcs = %s ", str_buf);
+
 	index = 0;
 	qdf_mem_zero(str_buf, DP_MAX_STRING_LEN);
 	for (i = 0; i <  DP_HTT_TX_NSS_LEN; i++) {
@@ -946,6 +979,7 @@ static inline void dp_print_tx_peer_rate_stats_tlv(uint32_t *tag_buf)
 				" %u:%u,", i, dp_stats_buf->tx_bw[i]);
 	}
 	DP_PRINT_STATS("tx_bw = %s ", str_buf);
+
 	index = 0;
 	qdf_mem_zero(str_buf, DP_MAX_STRING_LEN);
 	for (i = 0; i <  HTT_TX_PDEV_STATS_NUM_MCS_COUNTERS; i++) {
@@ -953,7 +987,15 @@ static inline void dp_print_tx_peer_rate_stats_tlv(uint32_t *tag_buf)
 				DP_MAX_STRING_LEN - index,
 				" %u:%u,", i, dp_stats_buf->tx_stbc[i]);
 	}
+	for (i = 0; i <  HTT_TX_PDEV_STATS_NUM_EXTRA_MCS_COUNTERS; i++) {
+		index += qdf_snprint(&str_buf[index],
+				DP_MAX_STRING_LEN - index,
+				" %u:%u,", i +  HTT_TX_PDEV_STATS_NUM_MCS_COUNTERS,
+				dp_stats_buf->tx_stbc_ext[i]);
+	}
 	DP_PRINT_STATS("tx_stbc = %s ", str_buf);
+
+
 	index = 0;
 	qdf_mem_zero(str_buf, DP_MAX_STRING_LEN);
 
@@ -975,6 +1017,17 @@ static inline void dp_print_tx_peer_rate_stats_tlv(uint32_t *tag_buf)
 		DP_PRINT_STATS("tx_gi[%u] = %s ", j, tx_gi[j]);
 	}
 
+	for (j = 0; j < HTT_TX_PEER_STATS_NUM_GI_COUNTERS; j++) {
+		index = 0;
+		for (i = 0; i <  HTT_TX_PDEV_STATS_NUM_EXTRA_MCS_COUNTERS; i++) {
+			index += qdf_snprint(&tx_gi_ext[j][index],
+					DP_MAX_STRING_LEN - index,
+					" %u:%u,", i,
+					dp_stats_buf->tx_gi_ext[j][i]);
+		}
+		DP_PRINT_STATS("tx_gi_ext[%u] = %s ", j, tx_gi_ext[j]);
+	}
+
 	index = 0;
 	qdf_mem_zero(str_buf, DP_MAX_STRING_LEN);
 	for (i = 0; i <  DP_HTT_TX_DCM_LEN; i++) {
@@ -983,9 +1036,14 @@ static inline void dp_print_tx_peer_rate_stats_tlv(uint32_t *tag_buf)
 				" %u:%u,", i, dp_stats_buf->tx_dcm[i]);
 	}
 	DP_PRINT_STATS("tx_dcm = %s\n", str_buf);
-	for (i = 0; i < HTT_TX_PEER_STATS_NUM_GI_COUNTERS; i++)
-		qdf_mem_free(tx_gi[i]);
 
+fail1:
+	for (i = 0; i < HTT_TX_PEER_STATS_NUM_GI_COUNTERS; i++) {
+		if (tx_gi[i])
+			qdf_mem_free(tx_gi[i]);
+		if (tx_gi_ext[i])
+			qdf_mem_free(tx_gi_ext[i]);
+	}
 	qdf_mem_free(str_buf);
 }
 
@@ -1001,8 +1059,9 @@ static inline void dp_print_rx_peer_rate_stats_tlv(uint32_t *tag_buf)
 		(htt_rx_peer_rate_stats_tlv *)tag_buf;
 	uint8_t i, j;
 	uint16_t index = 0;
-	char *rssi_chain[DP_HTT_PEER_NUM_SS];
-	char *rx_gi[HTT_RX_PEER_STATS_NUM_GI_COUNTERS];
+	char *rssi_chain[DP_HTT_PEER_NUM_SS] = {0};
+	char *rx_gi[HTT_RX_PEER_STATS_NUM_GI_COUNTERS] = {0};
+	char *rx_gi_ext[HTT_RX_PEER_STATS_NUM_GI_COUNTERS] = {0};
 	char *str_buf = qdf_mem_malloc(DP_MAX_STRING_LEN);
 
 	if (!str_buf) {
@@ -1011,10 +1070,22 @@ static inline void dp_print_rx_peer_rate_stats_tlv(uint32_t *tag_buf)
 		return;
 	}
 
-	for (i = 0; i < DP_HTT_PEER_NUM_SS; i++)
+	for (i = 0; i < DP_HTT_PEER_NUM_SS; i++) {
 		rssi_chain[i] = qdf_mem_malloc(DP_MAX_STRING_LEN);
-	for (i = 0; i < HTT_RX_PEER_STATS_NUM_GI_COUNTERS; i++)
+		if (!rssi_chain[i]) {
+			dp_err("Unable to allocate buffer for rssi_chain");
+			goto fail1;
+		}
+	}
+
+	for (i = 0; i < HTT_RX_PEER_STATS_NUM_GI_COUNTERS; i++) {
 		rx_gi[i] = qdf_mem_malloc(DP_MAX_STRING_LEN);
+		rx_gi_ext[i] = qdf_mem_malloc(DP_MAX_STRING_LEN);
+		if (!rx_gi[i] || !rx_gi_ext[i]) {
+			dp_err("Unable to allocate buffer for rx_gi");
+			goto fail1;
+		}
+	}
 
 	DP_PRINT_STATS("HTT_RX_PEER_RATE_STATS_TLV:");
 	DP_PRINT_STATS("nsts = %u",
@@ -1035,6 +1106,12 @@ static inline void dp_print_rx_peer_rate_stats_tlv(uint32_t *tag_buf)
 		index += qdf_snprint(&str_buf[index],
 				DP_MAX_STRING_LEN - index,
 				" %u:%u,", i, dp_stats_buf->rx_mcs[i]);
+	}
+	for (i = 0; i <  DP_HTT_RX_MCS_EXT_LEN; i++) {
+		index += qdf_snprint(&str_buf[index],
+				DP_MAX_STRING_LEN - index,
+				" %u:%u,", i + DP_HTT_RX_MCS_LEN,
+				dp_stats_buf->rx_mcs_ext[i]);
 	}
 	DP_PRINT_STATS("rx_mcs = %s ", str_buf);
 
@@ -1064,6 +1141,12 @@ static inline void dp_print_rx_peer_rate_stats_tlv(uint32_t *tag_buf)
 		index += qdf_snprint(&str_buf[index],
 				DP_MAX_STRING_LEN - index,
 				" %u:%u,", i, dp_stats_buf->rx_stbc[i]);
+	}
+	for (i = 0; i <  HTT_RX_PDEV_STATS_NUM_EXTRA_MCS_COUNTERS; i++) {
+		index += qdf_snprint(&str_buf[index],
+				DP_MAX_STRING_LEN - index,
+				" %u:%u,", i + HTT_RX_PDEV_STATS_NUM_MCS_COUNTERS,
+				dp_stats_buf->rx_stbc_ext[i]);
 	}
 	DP_PRINT_STATS("rx_stbc = %s ", str_buf);
 
@@ -1098,6 +1181,18 @@ static inline void dp_print_rx_peer_rate_stats_tlv(uint32_t *tag_buf)
 		}
 		DP_PRINT_STATS("rx_gi[%u] = %s ", j, rx_gi[j]);
 	}
+
+	for (j = 0; j < HTT_RX_PEER_STATS_NUM_GI_COUNTERS; j++) {
+		index = 0;
+		for (i = 0; i <  HTT_RX_PDEV_STATS_NUM_EXTRA_MCS_COUNTERS; i++) {
+			index += qdf_snprint(&rx_gi_ext[j][index],
+					DP_MAX_STRING_LEN - index,
+					" %u:%u,", i,
+					dp_stats_buf->rx_gi_ext[j][i]);
+		}
+		DP_PRINT_STATS("rx_gi_ext[%u] = %s ", j, rx_gi_ext[j]);
+	}
+
 	index = 0;
 	qdf_mem_zero(str_buf, DP_MAX_STRING_LEN);
 	for (i = 0; i <  DP_HTT_RX_PREAM_LEN; i++) {
@@ -1107,11 +1202,19 @@ static inline void dp_print_rx_peer_rate_stats_tlv(uint32_t *tag_buf)
 	}
 	DP_PRINT_STATS("rx_pream = %s\n", str_buf);
 
-	for (i = 0; i < DP_HTT_PEER_NUM_SS; i++)
+fail1:
+	for (i = 0; i < DP_HTT_PEER_NUM_SS; i++) {
+		if (!rssi_chain[i])
+			break;
 		qdf_mem_free(rssi_chain[i]);
-	for (i = 0; i < HTT_RX_PEER_STATS_NUM_GI_COUNTERS; i++)
-		qdf_mem_free(rx_gi[i]);
+	}
 
+	for (i = 0; i < HTT_RX_PEER_STATS_NUM_GI_COUNTERS; i++) {
+		if (rx_gi[i])
+			qdf_mem_free(rx_gi[i]);
+		if (rx_gi_ext[i])
+			qdf_mem_free(rx_gi_ext[i]);
+	}
 	qdf_mem_free(str_buf);
 }
 
@@ -2615,10 +2718,11 @@ static void dp_print_tx_pdev_rate_stats_tlv(uint32_t *tag_buf)
 		(htt_tx_pdev_rate_stats_tlv *)tag_buf;
 	uint8_t i, j;
 	uint16_t index = 0;
-	char *tx_gi[HTT_TX_PDEV_STATS_NUM_GI_COUNTERS];
-	char *ac_mu_mimo_tx_gi[HTT_TX_PDEV_STATS_NUM_GI_COUNTERS];
-	char *ax_mu_mimo_tx_gi[HTT_TX_PDEV_STATS_NUM_GI_COUNTERS];
-	char *ofdma_tx_gi[HTT_TX_PDEV_STATS_NUM_GI_COUNTERS];
+	char *tx_gi[HTT_TX_PDEV_STATS_NUM_GI_COUNTERS] = {0};
+	char *tx_gi_ext[HTT_TX_PDEV_STATS_NUM_GI_COUNTERS] = {0};
+	char *ac_mu_mimo_tx_gi[HTT_TX_PDEV_STATS_NUM_GI_COUNTERS] = {0};
+	char *ax_mu_mimo_tx_gi[HTT_TX_PDEV_STATS_NUM_GI_COUNTERS] = {0};
+	char *ofdma_tx_gi[HTT_TX_PDEV_STATS_NUM_GI_COUNTERS] = {0};
 	char *str_buf = qdf_mem_malloc(DP_MAX_STRING_LEN);
 
 	if (!str_buf) {
@@ -2628,24 +2732,25 @@ static void dp_print_tx_pdev_rate_stats_tlv(uint32_t *tag_buf)
 
 	for (i = 0; i < HTT_TX_PDEV_STATS_NUM_GI_COUNTERS; i++) {
 		tx_gi[i] = (char *)qdf_mem_malloc(DP_MAX_STRING_LEN);
-		if (!tx_gi[i]) {
+		tx_gi_ext[i] = (char *)qdf_mem_malloc(DP_MAX_STRING_LEN);
+		if (!tx_gi[i] || !tx_gi_ext[i]) {
 			dp_err("Unable to allocate buffer for tx_gi");
 			goto fail1;
 		}
 		ac_mu_mimo_tx_gi[i] = (char *)qdf_mem_malloc(DP_MAX_STRING_LEN);
 		if (!ac_mu_mimo_tx_gi[i]) {
 			dp_err("Unable to allocate buffer for ac_mu_mimo_tx_gi");
-			goto fail2;
+			goto fail1;
 		}
 		ax_mu_mimo_tx_gi[i] = (char *)qdf_mem_malloc(DP_MAX_STRING_LEN);
 		if (!ax_mu_mimo_tx_gi[i]) {
 			dp_err("Unable to allocate buffer for ax_mu_mimo_tx_gi");
-			goto fail3;
+			goto fail1;
 		}
 		ofdma_tx_gi[i] = (char *)qdf_mem_malloc(DP_MAX_STRING_LEN);
 		if (!ofdma_tx_gi[i]) {
 			dp_err("Unable to allocate buffer for ofdma_tx_gi");
-			goto fail4;
+			goto fail1;
 		}
 	}
 
@@ -2667,6 +2772,13 @@ static void dp_print_tx_pdev_rate_stats_tlv(uint32_t *tag_buf)
 		index += qdf_snprint(&str_buf[index],
 				DP_MAX_STRING_LEN - index,
 				" %u:%u,", i, dp_stats_buf->tx_mcs[i]);
+	}
+
+	for (i = 0; i <  DP_HTT_TX_MCS_EXT_LEN; i++) {
+		index += qdf_snprint(&str_buf[index],
+				DP_MAX_STRING_LEN - index,
+				" %u:%u,", i + DP_HTT_TX_MCS_LEN,
+				dp_stats_buf->tx_mcs_ext[i]);
 	}
 	DP_PRINT_STATS("tx_mcs = %s ", str_buf);
 
@@ -2715,6 +2827,12 @@ static void dp_print_tx_pdev_rate_stats_tlv(uint32_t *tag_buf)
 				DP_MAX_STRING_LEN - index,
 				" %u:%u,", i, dp_stats_buf->tx_stbc[i]);
 	}
+	for (i = 0; i <  HTT_TX_PDEV_STATS_NUM_EXTRA_MCS_COUNTERS; i++) {
+		index += qdf_snprint(&str_buf[index],
+				DP_MAX_STRING_LEN - index,
+				" %u:%u,", i + HTT_TX_PDEV_STATS_NUM_MCS_COUNTERS,
+				dp_stats_buf->tx_stbc_ext[i]);
+	}
 	DP_PRINT_STATS("tx_stbc = %s ", str_buf);
 
 	index = 0;
@@ -2736,6 +2854,18 @@ static void dp_print_tx_pdev_rate_stats_tlv(uint32_t *tag_buf)
 					dp_stats_buf->tx_gi[j][i]);
 		}
 		DP_PRINT_STATS("tx_gi[%u] = %s ", j, tx_gi[j]);
+	}
+
+	for (j = 0; j < DP_HTT_PDEV_TX_GI_LEN; j++) {
+		index = 0;
+		qdf_mem_zero(tx_gi_ext[j], DP_MAX_STRING_LEN);
+		for (i = 0; i <  HTT_TX_PDEV_STATS_NUM_EXTRA_MCS_COUNTERS; i++) {
+			index += qdf_snprint(&tx_gi_ext[j][index],
+					DP_MAX_STRING_LEN - index,
+					" %u:%u,", i,
+					dp_stats_buf->tx_gi_ext[j][i]);
+		}
+		DP_PRINT_STATS("tx_gi_ext[%u] = %s ", j, tx_gi_ext[j]);
 	}
 
 	index = 0;
@@ -2926,20 +3056,151 @@ static void dp_print_tx_pdev_rate_stats_tlv(uint32_t *tag_buf)
 			       j, ofdma_tx_gi[j]);
 	}
 
-	for (i = 0; i < HTT_TX_PDEV_STATS_NUM_GI_COUNTERS; i++)
-		qdf_mem_free(ofdma_tx_gi[i]);
+fail1:
+	for (i = 0; i < HTT_TX_PDEV_STATS_NUM_GI_COUNTERS; i++) {
+		if (tx_gi[i])
+			qdf_mem_free(tx_gi[i]);
+		if (tx_gi_ext[i])
+			qdf_mem_free(tx_gi_ext[i]);
+		if (ac_mu_mimo_tx_gi[i])
+			qdf_mem_free(ac_mu_mimo_tx_gi[i]);
+		if (ax_mu_mimo_tx_gi[i])
+			qdf_mem_free(ax_mu_mimo_tx_gi[i]);
+		if (ofdma_tx_gi[i])
+			qdf_mem_free(ofdma_tx_gi[i]);
+	}
+	qdf_mem_free(str_buf);
+}
 
-fail4:
-	for (i = 0; i < HTT_TX_PDEV_STATS_NUM_GI_COUNTERS; i++)
-		qdf_mem_free(ax_mu_mimo_tx_gi[i]);
-fail3:
-	for (i = 0; i < HTT_TX_PDEV_STATS_NUM_GI_COUNTERS; i++)
-		qdf_mem_free(ac_mu_mimo_tx_gi[i]);
-fail2:
-	for (i = 0; i < HTT_TX_PDEV_STATS_NUM_GI_COUNTERS; i++)
-		qdf_mem_free(tx_gi[i]);
+/*
+ * dp_print_rx_pdev_rate_ext_stats_tlv: display htt_rx_pdev_rate_ext_stats_tlv
+ * @tag_buf: buffer containing the tlv htt_rx_pdev_rate_ext_stats_tlv
+ *
+ * return:void
+ */
+static void dp_print_rx_pdev_rate_ext_stats_tlv(struct dp_pdev *pdev,
+						uint32_t *tag_buf)
+{
+	htt_rx_pdev_rate_ext_stats_tlv *dp_stats_buf =
+		(htt_rx_pdev_rate_ext_stats_tlv *)tag_buf;
+	uint8_t i, j;
+	uint16_t index = 0;
+	char *rx_gi_ext[HTT_RX_PDEV_STATS_NUM_GI_COUNTERS] = {0};
+	char *ul_ofdma_rx_gi_ext[HTT_TX_PDEV_STATS_NUM_GI_COUNTERS] = {0};
+	char *str_buf = qdf_mem_malloc(DP_MAX_STRING_LEN);
+
+	if (!str_buf) {
+		dp_err("Output buffer not allocated");
+		return;
+	}
+
+	for (i = 0; i < HTT_RX_PDEV_STATS_NUM_GI_COUNTERS; i++) {
+		rx_gi_ext[i] = qdf_mem_malloc(DP_MAX_STRING_LEN);
+		if (!rx_gi_ext[i]) {
+			dp_err("Unable to allocate buffer for rx_gi_ext");
+			goto fail1;
+		}
+
+		ul_ofdma_rx_gi_ext[i] = qdf_mem_malloc(DP_MAX_STRING_LEN);
+		if (!ul_ofdma_rx_gi_ext[i]) {
+			dp_err("Unable to allocate buffer for ul_ofdma_rx_gi_ext");
+			goto fail1;
+		}
+	}
+
+	index = 0;
+	qdf_mem_zero(str_buf, DP_MAX_STRING_LEN);
+	for (i = 0; i <  DP_HTT_RX_PDEV_MCS_LEN_EXT; i++) {
+		index += qdf_snprint(&str_buf[index],
+				DP_MAX_STRING_LEN - index,
+				" %u:%u,", i, dp_stats_buf->rx_mcs_ext[i]);
+	}
+	DP_PRINT_STATS("rx_mcs_ext = %s ", str_buf);
+
+	index = 0;
+	qdf_mem_zero(str_buf, DP_MAX_STRING_LEN);
+	for (i = 0; i <  DP_HTT_RX_PDEV_MCS_LEN_EXT; i++) {
+		index += qdf_snprint(&str_buf[index],
+				DP_MAX_STRING_LEN - index,
+				" %u:%u,", i, dp_stats_buf->rx_stbc_ext[i]);
+	}
+	DP_PRINT_STATS("rx_stbc_ext = %s ", str_buf);
+
+	for (j = 0; j < DP_HTT_RX_GI_LEN; j++) {
+		index = 0;
+		qdf_mem_zero(rx_gi_ext[j], DP_MAX_STRING_LEN);
+		for (i = 0; i <  DP_HTT_RX_PDEV_MCS_LEN_EXT; i++) {
+			index += qdf_snprint(&rx_gi_ext[j][index],
+					DP_MAX_STRING_LEN - index,
+					" %u:%u,", i,
+					dp_stats_buf->rx_gi_ext[j][i]);
+		}
+		DP_PRINT_STATS("rx_gi_ext[%u] = %s ", j, rx_gi_ext[j]);
+	}
+
+	index = 0;
+	qdf_mem_zero(str_buf, DP_MAX_STRING_LEN);
+	for (i = 0; i < DP_HTT_RX_PDEV_MCS_LEN_EXT; i++) {
+		index += qdf_snprint(&str_buf[index],
+				     DP_MAX_STRING_LEN - index,
+				     " %u:%u,",
+				     i, dp_stats_buf->ul_ofdma_rx_mcs_ext[i]);
+	}
+	DP_PRINT_STATS("ul_ofdma_rx_mcs_ext = %s", str_buf);
+
+	for (j = 0; j < HTT_TX_PDEV_STATS_NUM_GI_COUNTERS; j++) {
+		index = 0;
+		qdf_mem_zero(ul_ofdma_rx_gi_ext[j], DP_MAX_STRING_LEN);
+		for (i = 0; i < DP_HTT_RX_PDEV_MCS_LEN_EXT; i++) {
+			index += qdf_snprint(&ul_ofdma_rx_gi_ext[j][index],
+					     DP_MAX_STRING_LEN - index,
+					     " %u:%u,", i,
+					     dp_stats_buf->
+					     ul_ofdma_rx_gi_ext[j][i]);
+		}
+		DP_PRINT_STATS("ul_ofdma_rx_gi_ext[%u] = %s ",
+			       j, ul_ofdma_rx_gi_ext[j]);
+	}
+
+	index = 0;
+	qdf_mem_zero(str_buf, DP_MAX_STRING_LEN);
+	for (i = 0; i < DP_HTT_RX_PDEV_MCS_LEN_EXT; i++) {
+		index += qdf_snprint(&str_buf[index],
+		DP_MAX_STRING_LEN - index,
+		" %u:%u,", i,
+		dp_stats_buf->rx_11ax_su_txbf_mcs_ext[i]);
+	}
+	DP_PRINT_STATS("rx_11ax_su_txbf_mcs_ext = %s ", str_buf);
+
+	index = 0;
+	qdf_mem_zero(str_buf, DP_MAX_STRING_LEN);
+	for (i = 0; i < DP_HTT_RX_PDEV_MCS_LEN_EXT; i++) {
+		index += qdf_snprint(&str_buf[index],
+		DP_MAX_STRING_LEN - index,
+		" %u:%u,", i,
+		dp_stats_buf->rx_11ax_mu_txbf_mcs_ext[i]);
+	}
+	DP_PRINT_STATS("rx_11ax_mu_txbf_mcs_ext = %s ", str_buf);
+
+	index = 0;
+	qdf_mem_zero(str_buf, DP_MAX_STRING_LEN);
+	for (i = 0; i < DP_HTT_RX_PDEV_MCS_LEN_EXT; i++) {
+		index += qdf_snprint(&str_buf[index],
+		DP_MAX_STRING_LEN - index,
+		" %u:%u,", i,
+		dp_stats_buf->rx_11ax_dl_ofdma_mcs_ext[i]);
+	}
+	DP_PRINT_STATS("rx_11ax_dl_ofdma_mcs_ext = %s ", str_buf);
+
 
 fail1:
+	for (i = 0; i < HTT_RX_PDEV_STATS_NUM_GI_COUNTERS; i++) {
+		if (ul_ofdma_rx_gi_ext[i])
+			qdf_mem_free(ul_ofdma_rx_gi_ext[i]);
+		if (rx_gi_ext[i])
+			qdf_mem_free(rx_gi_ext[i]);
+	}
+
 	qdf_mem_free(str_buf);
 }
 
@@ -3827,6 +4088,10 @@ void dp_htt_stats_print_tag(struct dp_pdev *pdev,
 
 	case HTT_STATS_RX_PDEV_RATE_STATS_TAG:
 		dp_print_rx_pdev_rate_stats_tlv(pdev, tag_buf);
+		break;
+
+	case HTT_STATS_RX_PDEV_RATE_EXT_STATS_TAG:
+		dp_print_rx_pdev_rate_ext_stats_tlv(pdev, tag_buf);
 		break;
 
 	case HTT_STATS_TX_PDEV_SCHEDULER_TXQ_STATS_TAG:
@@ -4884,7 +5149,8 @@ dp_print_ring_stats(struct dp_pdev *pdev)
 	int mac_id;
 	int lmac_id;
 
-	if (hif_pm_runtime_get_sync(pdev->soc->hif_handle))
+	if (hif_pm_runtime_get_sync(pdev->soc->hif_handle,
+				    RTPM_ID_DP_PRINT_RING_STATS))
 		return;
 
 	dp_print_ring_stat_from_hal(pdev->soc,
@@ -4955,7 +5221,8 @@ dp_print_ring_stats(struct dp_pdev *pdev)
 					    [lmac_id],
 					    RXDMA_DST);
 	}
-	hif_pm_runtime_put(pdev->soc->hif_handle);
+	hif_pm_runtime_put(pdev->soc->hif_handle,
+			   RTPM_ID_DP_PRINT_RING_STATS);
 }
 
 /**
@@ -5131,6 +5398,45 @@ static void dp_print_nss(char *nss, uint32_t *pnss, uint32_t ss_count)
 	}
 }
 
+/**
+ * dp_print_jitter_stats(): Print per-tid jitter stats
+ * @peer: DP peer object
+ * @pdev: DP pdev object
+ *
+ * Return: void
+ */
+#ifdef WLAN_PEER_JITTER
+static void dp_print_jitter_stats(struct dp_peer *peer, struct dp_pdev *pdev)
+{
+	uint8_t tid = 0;
+
+	if (pdev && !wlan_cfg_get_dp_pdev_nss_enabled(pdev->wlan_cfg_ctx))
+		return;
+
+	DP_PRINT_STATS("Per TID Tx HW Enqueue-Comp Jitter Stats:\n");
+	for (tid = 0; tid < qdf_min(CDP_DATA_TID_MAX, DP_MAX_TIDS); tid++) {
+		struct dp_rx_tid *rx_tid = &peer->rx_tid[tid];
+
+		DP_PRINT_STATS("Node tid = %d\n"
+				"Average Jiiter            : %u (us)\n"
+				"Average Delay             : %u (us)\n"
+				"Total Average error count : %llu\n"
+				"Total Success Count       : %llu\n"
+				"Total Drop                : %llu\n",
+				rx_tid->tid,
+				rx_tid->tx_avg_jitter,
+				rx_tid->tx_avg_delay,
+				rx_tid->tx_avg_err,
+				rx_tid->tx_total_success,
+				rx_tid->tx_drop);
+	}
+}
+#else
+static void dp_print_jitter_stats(struct dp_peer *peer, struct dp_pdev *pdev)
+{
+}
+#endif /* WLAN_PEER_JITTER */
+
 void dp_print_peer_stats(struct dp_peer *peer)
 {
 	uint8_t i;
@@ -5279,6 +5585,8 @@ void dp_print_peer_stats(struct dp_peer *peer)
 		       peer->stats.tx.tx_byte_rate);
 	DP_PRINT_STATS("	Data transmitted in last sec: %d",
 		       peer->stats.tx.tx_data_rate);
+
+	dp_print_jitter_stats(peer, pdev);
 
 	DP_PRINT_STATS("Node Rx Stats:");
 	DP_PRINT_STATS("Packets Sent To Stack = %d",
@@ -5531,6 +5839,20 @@ void dp_txrx_path_stats(struct dp_soc *soc)
 			       pdev->soc->stats.rx.err.defrag_peer_uninit);
 		DP_PRINT_STATS("pkts delivered no peer %u",
 			       pdev->soc->stats.rx.err.pkt_delivered_no_peer);
+		DP_PRINT_STATS("RX invalid cookie: %d",
+			       soc->stats.rx.err.invalid_cookie);
+		DP_PRINT_STATS("2k jump delba sent: %u",
+			       pdev->soc->stats.rx.err.rx_2k_jump_delba_sent);
+		DP_PRINT_STATS("2k jump msdu to stack: %u",
+			       pdev->soc->stats.rx.err.rx_2k_jump_to_stack);
+		DP_PRINT_STATS("2k jump msdu drop: %u",
+			       pdev->soc->stats.rx.err.rx_2k_jump_drop);
+		DP_PRINT_STATS("REO err oor msdu to stack %u",
+			       pdev->soc->stats.rx.err.reo_err_oor_to_stack);
+		DP_PRINT_STATS("REO err oor msdu drop: %u",
+			       pdev->soc->stats.rx.err.reo_err_oor_drop);
+		DP_PRINT_STATS("Rx err msdu rejected: %d",
+			       soc->stats.rx.err.rejected);
 
 		DP_PRINT_STATS("Reo Statistics");
 		DP_PRINT_STATS("near_full: %u ", soc->stats.rx.near_full);
@@ -5538,6 +5860,9 @@ void dp_txrx_path_stats(struct dp_soc *soc)
 			       pdev->soc->stats.rx.err.invalid_rbm);
 		DP_PRINT_STATS("hal ring access fail: %u msdus",
 			       pdev->soc->stats.rx.err.hal_ring_access_fail);
+
+		DP_PRINT_STATS("hal ring access full fail: %u msdus",
+			       pdev->soc->stats.rx.err.hal_ring_access_full_fail);
 
 		for (error_code = 0; error_code < HAL_REO_ERR_MAX;
 				error_code++) {
@@ -5764,8 +6089,12 @@ dp_print_pdev_tx_stats(struct dp_pdev *pdev)
 	}
 	DP_PRINT_STATS("BA not received for delayed_ba: %d",
 		       pdev->stats.cdp_delayed_ba_not_recev);
-	DP_PRINT_STATS("tx_ppdu_proc: %llu\n",
-		       pdev->tx_ppdu_proc);
+	DP_PRINT_STATS("tx_ppdu_proc: %llu",
+		       pdev->stats.tx_ppdu_proc);
+	DP_PRINT_STATS("ack ba comes twice: %llu",
+		       pdev->stats.ack_ba_comes_twice);
+	DP_PRINT_STATS("ppdu dropped because of incomplete tlv: %llu",
+		       pdev->stats.ppdu_drop);
 
 	for (i = 0; i < CDP_WDI_NUM_EVENTS; i++) {
 		if (!pdev->stats.wdi_event[i])
@@ -5875,6 +6204,18 @@ dp_print_pdev_rx_mon_stats(struct dp_pdev *pdev)
 		       rx_mon_stats->dup_mon_linkdesc_cnt);
 	DP_PRINT_STATS("dup_mon_buf_cnt = %d",
 		       rx_mon_stats->dup_mon_buf_cnt);
+	DP_PRINT_STATS("mon_rx_buf_reaped = %u",
+		       rx_mon_stats->mon_rx_bufs_reaped_dest);
+	DP_PRINT_STATS("mon_rx_buf_replenished = %u",
+		       rx_mon_stats->mon_rx_bufs_replenished_dest);
+	DP_PRINT_STATS("ppdu_id_mismatch = %u",
+		       rx_mon_stats->ppdu_id_mismatch);
+	DP_PRINT_STATS("mpdu_ppdu_id_match_cnt = %d",
+		       rx_mon_stats->ppdu_id_match);
+	DP_PRINT_STATS("ppdus dropped frm status ring = %d",
+		       rx_mon_stats->status_ppdu_drop);
+	DP_PRINT_STATS("ppdus dropped frm dest ring = %d",
+		       rx_mon_stats->dest_ppdu_drop);
 	stat_ring_ppdu_ids =
 		(uint32_t *)qdf_mem_malloc(sizeof(uint32_t) * MAX_PPDU_ID_HIST);
 	dest_ring_ppdu_ids =
@@ -6009,6 +6350,8 @@ dp_print_soc_rx_stats(struct dp_soc *soc)
 		       soc->stats.rx.err.rx_invalid_peer.num);
 	DP_PRINT_STATS("HAL Ring Access Fail = %d",
 		       soc->stats.rx.err.hal_ring_access_fail);
+	DP_PRINT_STATS("HAL Ring Access Full Fail = %d",
+		       soc->stats.rx.err.hal_ring_access_full_fail);
 	DP_PRINT_STATS("MSDU Done failures = %d",
 		       soc->stats.rx.err.msdu_done_fail);
 	DP_PRINT_STATS("RX frags: %d", soc->stats.rx.rx_frags);
@@ -6033,8 +6376,29 @@ dp_print_soc_rx_stats(struct dp_soc *soc)
 	DP_PRINT_STATS("RX scatter msdu: %d",
 		       soc->stats.rx.err.scatter_msdu);
 
+	DP_PRINT_STATS("RX invalid cookie: %d",
+		       soc->stats.rx.err.invalid_cookie);
+
 	DP_PRINT_STATS("RX wait completed msdu break: %d",
 		       soc->stats.rx.msdu_scatter_wait_break);
+
+	DP_PRINT_STATS("2k jump delba sent: %d",
+		       soc->stats.rx.err.rx_2k_jump_delba_sent);
+
+	DP_PRINT_STATS("2k jump msdu to stack: %d",
+		       soc->stats.rx.err.rx_2k_jump_to_stack);
+
+	DP_PRINT_STATS("2k jump msdu drop: %d",
+		       soc->stats.rx.err.rx_2k_jump_drop);
+
+	DP_PRINT_STATS("REO err oor msdu to stack %d",
+		       soc->stats.rx.err.reo_err_oor_to_stack);
+
+	DP_PRINT_STATS("REO err oor msdu drop: %d",
+		       soc->stats.rx.err.reo_err_oor_drop);
+
+	DP_PRINT_STATS("Rx err msdu rejected: %d",
+		       soc->stats.rx.err.rejected);
 
 	for (i = 0; i < HAL_RXDMA_ERR_MAX; i++) {
 		index += qdf_snprint(&rxdma_error[index],

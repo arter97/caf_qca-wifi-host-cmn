@@ -82,10 +82,25 @@ QDF_STATUS hif_ipci_open(struct hif_softc *hif_ctx, enum qdf_bus_type bus_type)
 	return hif_ce_open(hif_ctx);
 }
 
+/**
+ * hif_ce_msi_map_ce_to_irq() - map CE to IRQ
+ * @scn: hif context
+ * @ce_id: CE Id
+ *
+ * Return: IRQ number
+ */
+static int hif_ce_msi_map_ce_to_irq(struct hif_softc *scn, int ce_id)
+{
+	struct hif_ipci_softc *ipci_scn = HIF_GET_IPCI_SOFTC(scn);
+
+	return ipci_scn->ce_msi_irq_num[ce_id];
+}
+
 int hif_ipci_bus_configure(struct hif_softc *hif_sc)
 {
 	int status = 0;
 	struct HIF_CE_state *hif_state = HIF_GET_CE_STATE(hif_sc);
+	uint8_t wake_ce_id;
 
 	hif_ce_prepare_config(hif_sc);
 
@@ -108,9 +123,18 @@ int hif_ipci_bus_configure(struct hif_softc *hif_sc)
 	if (status)
 		goto disable_wlan;
 
+	status = hif_get_wake_ce_id(hif_sc, &wake_ce_id);
+	if (status)
+		goto unconfig_ce;
+
 	status = hif_configure_irq(hif_sc);
 	if (status < 0)
 		goto unconfig_ce;
+
+	hif_sc->wake_irq = hif_ce_msi_map_ce_to_irq(hif_sc, wake_ce_id);
+
+	HIF_INFO("expecting wake from ce %d, irq %d",
+		 wake_ce_id, hif_sc->wake_irq);
 
 	A_TARGET_ACCESS_UNLIKELY(hif_sc);
 
@@ -172,7 +196,7 @@ static int hif_ce_srng_msi_free_irq(struct hif_softc *scn)
 		hif_debug("%s: (ce_id %d, msi_data %d, irq %d)", __func__,
 			  ce_id, msi_data, irq);
 
-		free_irq(irq, &ce_sc->tasklets[ce_id]);
+		pfrm_free_irq(scn->qdf_dev->dev, irq, &ce_sc->tasklets[ce_id]);
 	}
 
 	return ret;
@@ -196,7 +220,8 @@ static void hif_ipci_deconfigure_grp_irq(struct hif_softc *scn)
 			hif_ext_group->irq_requested = false;
 			for (j = 0; j < hif_ext_group->numirq; j++) {
 				irq = hif_ext_group->os_irq[j];
-				free_irq(irq, hif_ext_group);
+				pfrm_free_irq(scn->qdf_dev->dev,
+					      irq, hif_ext_group);
 			}
 			hif_ext_group->numirq = 0;
 		}
@@ -216,13 +241,6 @@ void hif_ipci_nointrs(struct hif_softc *scn)
 	hif_ipci_deconfigure_grp_irq(scn);
 
 	ret = hif_ce_srng_msi_free_irq(scn);
-	if (ret != -EINVAL) {
-		/* ce irqs freed in hif_ce_srng_msi_free_irq */
-
-		if (scn->wake_irq)
-			free_irq(scn->wake_irq, scn);
-		scn->wake_irq = 0;
-	}
 
 	scn->request_irq_done = false;
 }
@@ -271,9 +289,12 @@ void hif_ipci_prevent_linkdown(struct hif_softc *scn, bool flag)
 
 int hif_ipci_bus_suspend(struct hif_softc *scn)
 {
+	QDF_STATUS ret;
+
 	hif_apps_irqs_disable(GET_HIF_OPAQUE_HDL(scn));
 
-	if (hif_drain_tasklets(scn)) {
+	ret = hif_try_complete_tasks(scn);
+	if (QDF_IS_STATUS_ERROR(ret)) {
 		hif_apps_irqs_enable(GET_HIF_OPAQUE_HDL(scn));
 		return -EBUSY;
 	}
@@ -293,15 +314,11 @@ int hif_ipci_bus_suspend_noirq(struct hif_softc *scn)
 	if (hif_can_suspend_link(GET_HIF_OPAQUE_HDL(scn)))
 		qdf_atomic_set(&scn->link_suspended, 1);
 
-	hif_apps_wake_irq_enable(GET_HIF_OPAQUE_HDL(scn));
-
 	return 0;
 }
 
 int hif_ipci_bus_resume_noirq(struct hif_softc *scn)
 {
-	hif_apps_wake_irq_disable(GET_HIF_OPAQUE_HDL(scn));
-
 	if (hif_can_suspend_link(GET_HIF_OPAQUE_HDL(scn)))
 		qdf_atomic_set(&scn->link_suspended, 0);
 
@@ -350,20 +367,6 @@ static irqreturn_t hif_ce_interrupt_handler(int irq, void *context)
 
 extern const char *ce_name[];
 
-/**
- * hif_ce_msi_map_ce_to_irq() - map CE to IRQ
- * @scn: hif context
- * @ce_id: CE Id
- *
- * Return: IRQ number
- */
-static int hif_ce_msi_map_ce_to_irq(struct hif_softc *scn, int ce_id)
-{
-	struct hif_ipci_softc *ipci_scn = HIF_GET_IPCI_SOFTC(scn);
-
-	return ipci_scn->ce_msi_irq_num[ce_id];
-}
-
 /* hif_ce_srng_msi_irq_disable() - disable the irq for msi
  * @hif_sc: hif context
  * @ce_id: which ce to disable copy complete interrupts for
@@ -372,7 +375,9 @@ static int hif_ce_msi_map_ce_to_irq(struct hif_softc *scn, int ce_id)
  */
 static void hif_ce_srng_msi_irq_disable(struct hif_softc *hif_sc, int ce_id)
 {
-	disable_irq_nosync(hif_ce_msi_map_ce_to_irq(hif_sc, ce_id));
+	pfrm_disable_irq_nosync(hif_sc->qdf_dev->dev,
+				hif_ce_msi_map_ce_to_irq(hif_sc, ce_id));
+
 }
 
 /* hif_ce_srng_msi_irq_enable() - enable the irq for msi
@@ -383,7 +388,9 @@ static void hif_ce_srng_msi_irq_disable(struct hif_softc *hif_sc, int ce_id)
  */
 static void hif_ce_srng_msi_irq_enable(struct hif_softc *hif_sc, int ce_id)
 {
-	enable_irq(hif_ce_msi_map_ce_to_irq(hif_sc, ce_id));
+	pfrm_enable_irq(hif_sc->qdf_dev->dev,
+			hif_ce_msi_map_ce_to_irq(hif_sc, ce_id));
+
 }
 
 /* hif_ce_msi_configure_irq() - configure the irq
@@ -400,6 +407,11 @@ static int hif_ce_msi_configure_irq(struct hif_softc *scn)
 	uint32_t msi_irq_start;
 	struct HIF_CE_state *ce_sc = HIF_GET_CE_STATE(scn);
 	struct hif_ipci_softc *ipci_sc = HIF_GET_IPCI_SOFTC(scn);
+	uint8_t wake_ce_id;
+
+	ret = hif_get_wake_ce_id(scn, &wake_ce_id);
+	if (ret)
+		return ret;
 
 	/* do ce irq assignments */
 	ret = pld_get_user_msi_assignment(scn->qdf_dev->dev, "CE",
@@ -416,6 +428,7 @@ static int hif_ce_msi_configure_irq(struct hif_softc *scn)
 	 * used in the srng parameter configuration
 	 */
 	for (ce_id = 0; ce_id < scn->ce_count; ce_id++) {
+		unsigned long irqflags = IRQF_SHARED;
 		unsigned int msi_data = (ce_id % msi_data_count) +
 			msi_irq_start;
 		irq = pld_get_msi_irq(scn->qdf_dev->dev, msi_data);
@@ -427,11 +440,15 @@ static int hif_ce_msi_configure_irq(struct hif_softc *scn)
 		if (!ce_sc->tasklets[ce_id].inited)
 			continue;
 
+		if (ce_id == wake_ce_id)
+			irqflags |= IRQF_NO_SUSPEND;
+
 		ipci_sc->ce_msi_irq_num[ce_id] = irq;
-		ret = request_irq(irq, hif_ce_interrupt_handler,
-				  IRQF_SHARED,
-				  ce_name[ce_id],
-				  &ce_sc->tasklets[ce_id]);
+		ret = pfrm_request_irq(scn->qdf_dev->dev,
+				       irq, hif_ce_interrupt_handler,
+				       irqflags,
+				       ce_name[ce_id],
+				       &ce_sc->tasklets[ce_id]);
 		if (ret)
 			goto free_irq;
 	}
@@ -446,7 +463,7 @@ free_irq:
 		ce_id--;
 		msi_data = (ce_id % msi_data_count) + msi_irq_start;
 		irq = pld_get_msi_irq(scn->qdf_dev->dev, msi_data);
-		free_irq(irq, &ce_sc->tasklets[ce_id]);
+		pfrm_free_irq(scn->qdf_dev->dev, irq, &ce_sc->tasklets[ce_id]);
 	}
 
 	return ret;
@@ -461,9 +478,11 @@ free_irq:
 static void hif_exec_grp_irq_disable(struct hif_exec_context *hif_ext_group)
 {
 	int i;
+	struct hif_softc *scn = HIF_GET_SOFTC(hif_ext_group->hif);
 
 	for (i = 0; i < hif_ext_group->numirq; i++)
-		disable_irq_nosync(hif_ext_group->os_irq[i]);
+		pfrm_disable_irq_nosync(scn->qdf_dev->dev,
+					hif_ext_group->os_irq[i]);
 }
 
 /**
@@ -475,9 +494,10 @@ static void hif_exec_grp_irq_disable(struct hif_exec_context *hif_ext_group)
 static void hif_exec_grp_irq_enable(struct hif_exec_context *hif_ext_group)
 {
 	int i;
+	struct hif_softc *scn = HIF_GET_SOFTC(hif_ext_group->hif);
 
 	for (i = 0; i < hif_ext_group->numirq; i++)
-		enable_irq(hif_ext_group->os_irq[i]);
+		pfrm_enable_irq(scn->qdf_dev->dev, hif_ext_group->os_irq[i]);
 }
 
 const char *hif_ipci_get_irq_name(int irq_no)
@@ -502,11 +522,11 @@ int hif_ipci_configure_grp_irq(struct hif_softc *scn,
 
 		hif_info("request_irq = %d for grp %d",
 			 irq, hif_ext_group->grp_id);
-		ret = request_irq(irq,
-				  hif_ext_group_interrupt_handler,
-				  IRQF_SHARED | IRQF_NO_SUSPEND,
-				  "wlan_EXT_GRP",
-				  hif_ext_group);
+		ret = pfrm_request_irq(scn->qdf_dev->dev, irq,
+				       hif_ext_group_interrupt_handler,
+				       IRQF_SHARED | IRQF_NO_SUSPEND,
+				       "wlan_EXT_GRP",
+				       hif_ext_group);
 		if (ret) {
 			HIF_ERROR("%s: request_irq failed ret = %d",
 				  __func__, ret);
@@ -620,7 +640,6 @@ QDF_STATUS hif_ipci_enable_bus(struct hif_softc *ol_sc,
 	struct hif_ipci_softc *sc = HIF_GET_IPCI_SOFTC(ol_sc);
 	struct hif_opaque_softc *hif_hdl = GET_HIF_OPAQUE_HDL(ol_sc);
 	uint16_t revision_id = 0;
-	struct pci_dev *pdev = bdev;
 	struct hif_target_info *tgt_info;
 	int device_id = QCA6750_DEVICE_ID;
 
@@ -629,13 +648,19 @@ QDF_STATUS hif_ipci_enable_bus(struct hif_softc *ol_sc,
 		return QDF_STATUS_E_NOMEM;
 	}
 
+	ret = qdf_set_dma_coherent_mask(dev,
+					DMA_COHERENT_MASK_DEFAULT);
+	if (ret) {
+		HIF_ERROR("%s: failed to set dma mask error = %d",
+			  __func__, ret);
+		return ret;
+	}
+
 	sc->dev = dev;
 	tgt_info = hif_get_target_info_handle(hif_hdl);
 	hif_ipci_init_deinit_ops_attach(sc, device_id);
 	sc->hif_ipci_get_soc_info(sc, dev);
 	HIF_TRACE("%s: hif_enable_pci done", __func__);
-
-	device_disable_async_suspend(&pdev->dev);
 
 	ret = hif_get_device_type(device_id, revision_id,
 				  &hif_type, &target_type);

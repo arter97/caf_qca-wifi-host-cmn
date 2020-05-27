@@ -353,6 +353,11 @@ struct cdp_cmn_ops {
 			       HTC_HANDLE htc_handle, qdf_device_t qdf_osdev,
 			       struct ol_if_ops *ol_ops, uint16_t device_id);
 
+	QDF_STATUS (*txrx_pdev_init)(ol_txrx_soc_handle soc,
+				     HTC_HANDLE htc_handle,
+				     qdf_device_t qdf_osdev,
+				     uint8_t pdev_id);
+
 	/**
 	 * txrx_tso_soc_attach() - TSO attach handler triggered during
 	 * dynamic tso activation
@@ -761,41 +766,11 @@ struct cdp_mon_ops {
 	QDF_STATUS (*txrx_set_advance_monitor_filter)
 		(struct cdp_soc_t *soc_hdl, uint8_t pdev_id,
 		 struct cdp_monitor_filter *filter_val);
+
+	/* Configure full monitor mode */
+	QDF_STATUS
+		(*config_full_mon_mode)(struct cdp_soc_t *soc, uint8_t val);
 };
-
-#ifdef WLAN_FEATURE_PKT_CAPTURE
-struct cdp_pktcapture_ops {
-	void (*txrx_pktcapture_set_mode)
-		(struct cdp_soc_t *soc,
-		uint8_t pdev_id,
-		uint8_t mode);
-
-	uint8_t (*txrx_pktcapture_get_mode)
-		(struct cdp_soc_t *soc,
-		uint8_t pdev_id);
-
-	QDF_STATUS (*txrx_pktcapture_cb_register)
-		(struct cdp_soc_t *soc,
-		uint8_t pdev_id,
-		void *context,
-		QDF_STATUS(cb)(void *, qdf_nbuf_t));
-
-	QDF_STATUS (*txrx_pktcapture_cb_deregister)
-		(struct cdp_soc_t *soc,
-		uint8_t pdev_id);
-
-	QDF_STATUS (*txrx_pktcapture_mgmtpkt_process)
-		(struct cdp_soc_t *soc,
-		uint8_t pdev_id,
-		struct mon_rx_status *txrx_status,
-		qdf_nbuf_t nbuf, uint8_t status);
-
-	void (*txrx_pktcapture_record_channel)
-		(struct cdp_soc_t *soc,
-		uint8_t pdev_id,
-		int chan_no);
-};
-#endif /* #ifdef WLAN_FEATURE_PKT_CAPTURE */
 
 struct cdp_host_stats_ops {
 	int (*txrx_host_stats_get)(struct cdp_soc_t *soc, uint8_t vdev_id,
@@ -948,7 +923,7 @@ struct cdp_raw_ops {
 struct cdp_pflow_ops {
 	uint32_t (*pflow_update_pdev_params)(struct cdp_soc_t *soc,
 					     uint8_t pdev_id,
-					     enum _ol_ath_param_t,
+					     enum _dp_param_t,
 					     uint32_t, void *);
 };
 #endif /* PEER_FLOW_CONTROL */
@@ -1004,6 +979,7 @@ struct ol_if_ops {
 	int (*peer_add_wds_entry)(struct cdp_ctrl_objmgr_psoc *soc,
 				  uint8_t vdev_id,
 				  uint8_t *peer_macaddr,
+				  uint16_t peer_id,
 				  const uint8_t *dest_macaddr,
 				  uint8_t *next_node_mac,
 				  uint32_t flags,
@@ -1016,7 +992,8 @@ struct ol_if_ops {
 	void (*peer_del_wds_entry)(struct cdp_ctrl_objmgr_psoc *soc,
 				   uint8_t vdev_id,
 				   uint8_t *wds_macaddr,
-				   uint8_t type);
+				   uint8_t type,
+				   uint8_t delete_in_fw);
 	QDF_STATUS
 	(*lro_hash_config)(struct cdp_ctrl_objmgr_psoc *psoc, uint8_t pdev_id,
 			   struct cdp_lro_hash_config *rx_offld_hash);
@@ -1052,7 +1029,10 @@ struct ol_if_ops {
 				   uint16_t hdr_space);
 
 	uint8_t (*freq_to_channel)(struct cdp_ctrl_objmgr_psoc *psoc,
-				   uint8_t vdev_id, uint16_t freq);
+				   uint8_t pdev_id, uint16_t freq);
+
+	uint8_t (*freq_to_band)(struct cdp_ctrl_objmgr_psoc *psoc,
+				uint8_t pdev_id, uint16_t freq);
 
 #ifdef ATH_SUPPORT_NAC_RSSI
 	int (*config_fw_for_nac_rssi)(struct cdp_ctrl_objmgr_psoc *psoc,
@@ -1100,6 +1080,7 @@ struct ol_if_ops {
 	int  (*peer_ast_flowid_map)(struct cdp_ctrl_objmgr_psoc *ol_soc_handle,
 			       uint16_t peer_id, uint8_t vdev_id, uint8_t *peer_mac_addr);
 #endif
+	int (*get_soc_nss_cfg)(struct cdp_ctrl_objmgr_psoc *ol_soc_handle);
 	/* TODO: Add any other control path calls required to OL_IF/WMA layer */
 
 };
@@ -1570,11 +1551,14 @@ struct cdp_tx_delay_ops {
  * @bus_suspend: handler for bus suspend
  * @bus_resume: handler for bus resume
  * @process_wow_ack_rsp: handler for wow ack response
+ * @process_target_suspend_req: handler for target suspend request
  */
 struct cdp_bus_ops {
 	QDF_STATUS (*bus_suspend)(struct cdp_soc_t *soc_hdl, uint8_t pdev_id);
 	QDF_STATUS (*bus_resume)(struct cdp_soc_t *soc_hdl, uint8_t pdev_id);
 	void (*process_wow_ack_rsp)(struct cdp_soc_t *soc_hdl, uint8_t pdev_id);
+	void (*process_target_suspend_req)(struct cdp_soc_t *soc_hdl,
+					   uint8_t pdev_id);
 };
 #endif
 
@@ -1596,6 +1580,9 @@ struct cdp_rx_offld_ops {
  * @txrx_cfr_filter: Handler to configure host rx monitor status ring
  * @txrx_get_cfr_rcc: Handler to get CFR mode
  * @txrx_set_cfr_rcc: Handler to enable/disable CFR mode
+ * @txrx_get_cfr_dbg_stats: Handler to get debug statistics for CFR mode
+ * @txrx_clear_cfr_dbg_stats: Handler to clear debug statistics for CFR mode
+ * @txrx_enable_mon_reap_timer: Enable/Disable reap timer of monitor status ring
  */
 struct cdp_cfr_ops {
 	void (*txrx_cfr_filter)(struct cdp_soc_t *soc_hdl,
@@ -1607,6 +1594,14 @@ struct cdp_cfr_ops {
 	void (*txrx_set_cfr_rcc)(struct cdp_soc_t *soc_hdl,
 				 uint8_t pdev_id,
 				 bool enable);
+	void (*txrx_get_cfr_dbg_stats)(struct cdp_soc_t *soc_hdl,
+				       uint8_t pdev_id,
+				       struct cdp_cfr_rcc_stats *buf);
+	void (*txrx_clear_cfr_dbg_stats)(struct cdp_soc_t *soc_hdl,
+					 uint8_t pdev_id);
+	void (*txrx_enable_mon_reap_timer)(struct cdp_soc_t *soc_hdl,
+					   uint8_t pdev_id,
+					   bool enable);
 };
 #endif
 
@@ -1641,9 +1636,6 @@ struct cdp_ops {
 #endif
 #ifdef RECEIVE_OFFLOAD
 	struct cdp_rx_offld_ops     *rx_offld_ops;
-#endif
-#ifdef WLAN_FEATURE_PKT_CAPTURE
-	struct cdp_pktcapture_ops   *pktcapture_ops;
 #endif
 #if defined(WLAN_CFR_ENABLE) && defined(WLAN_ENH_CFR_ENABLE)
 	struct cdp_cfr_ops          *cfr_ops;

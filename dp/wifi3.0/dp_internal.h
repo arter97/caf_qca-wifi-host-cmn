@@ -22,7 +22,7 @@
 #include "dp_types.h"
 
 #define RX_BUFFER_SIZE_PKTLOG_LITE 1024
-
+#define DP_PEER_WDS_COUNT_INVALID UINT_MAX
 
 #define DP_RSSI_INVAL 0x80
 #define DP_RSSI_AVG_WEIGHT 2
@@ -109,6 +109,23 @@ extern uint8_t
 dp_cpu_ring_map[DP_NSS_CPU_RING_MAP_MAX][WLAN_CFG_INT_NUM_CONTEXTS_MAX];
 #endif
 
+#define DP_MAX_TIMER_EXEC_TIME_TICKS \
+		(QDF_LOG_TIMESTAMP_CYCLES_PER_10_US * 100 * 20)
+
+/**
+ * enum timer_yield_status - yield status code used in monitor mode timer.
+ * @DP_TIMER_NO_YIELD: do not yield
+ * @DP_TIMER_WORK_DONE: yield because work is done
+ * @DP_TIMER_WORK_EXHAUST: yield because work quota is exhausted
+ * @DP_TIMER_TIME_EXHAUST: yield due to time slot exhausted
+ */
+enum timer_yield_status {
+	DP_TIMER_NO_YIELD,
+	DP_TIMER_WORK_DONE,
+	DP_TIMER_WORK_EXHAUST,
+	DP_TIMER_TIME_EXHAUST,
+};
+
 #if DP_PRINT_ENABLE
 #include <stdarg.h>       /* va_list */
 #include <qdf_types.h> /* qdf_vprint */
@@ -130,7 +147,6 @@ enum {
 	/* INFO2 - include non-fundamental but infrequent events */
 	DP_PRINT_LEVEL_INFO2,
 };
-
 
 #define dp_print(level, fmt, ...) do { \
 	if (level <= g_txrx_print_level) \
@@ -1135,8 +1151,15 @@ void dp_htt_stats_print_tag(struct dp_pdev *pdev,
 void dp_htt_stats_copy_tag(struct dp_pdev *pdev, uint8_t tag_type, uint32_t *tag_buf);
 QDF_STATUS dp_h2t_3tuple_config_send(struct dp_pdev *pdev, uint32_t tuple_mask,
 				     uint8_t mac_id);
-void dp_peer_rxtid_stats(struct dp_peer *peer, void (*callback_fn),
-		void *cb_ctxt);
+/**
+ * dp_rxtid_stats_cmd_cb - function pointer for peer
+ *			   rx tid stats cmd call_back
+ */
+typedef void (*dp_rxtid_stats_cmd_cb)(struct dp_soc *soc, void *cb_ctxt,
+				      union hal_reo_status *reo_status);
+int dp_peer_rxtid_stats(struct dp_peer *peer,
+			dp_rxtid_stats_cmd_cb dp_stats_cmd_cb,
+			void *cb_ctxt);
 QDF_STATUS
 dp_set_pn_check_wifi3(struct cdp_soc_t *soc, uint8_t vdev_id,
 		      uint8_t *peer_mac, enum cdp_sec_type sec_type,
@@ -1370,13 +1393,11 @@ dp_get_lmac_id_for_pdev_id
 static inline struct dp_pdev *
 	dp_get_pdev_for_lmac_id(struct dp_soc *soc, uint32_t lmac_id)
 {
-	int i = 0;
+	uint8_t i = 0;
 
 	if (wlan_cfg_per_pdev_lmac_ring(soc->wlan_cfg_ctx)) {
 		i = wlan_cfg_get_pdev_idx(soc->wlan_cfg_ctx, lmac_id);
-		qdf_assert_always(i < MAX_PDEV_CNT);
-
-		return soc->pdev_list[i];
+		return ((i < MAX_PDEV_CNT) ? soc->pdev_list[i] : NULL);
 	}
 
 	/* Typically for MCL as there only 1 PDEV*/
@@ -1384,8 +1405,8 @@ static inline struct dp_pdev *
 }
 
 /**
- * dp_get_target_pdev_id_for_host_pdev_id() - Return target pdev corresponding
- *                                         to host pdev id
+ * dp_calculate_target_pdev_id_from_host_pdev_id() - Return target pdev
+ *                                          corresponding to host pdev id
  * @soc: soc pointer
  * @mac_for_pdev: pdev_id corresponding to host pdev for WIN, mac id for MCL
  *
@@ -1398,7 +1419,7 @@ static inline struct dp_pdev *
  * For MCL, return the offset-1 translated mac_id
  */
 static inline int
-dp_get_target_pdev_id_for_host_pdev_id
+dp_calculate_target_pdev_id_from_host_pdev_id
 	(struct dp_soc *soc, uint32_t mac_for_pdev)
 {
 	struct dp_pdev *pdev;
@@ -1410,6 +1431,30 @@ dp_get_target_pdev_id_for_host_pdev_id
 
 	/*non-MCL case, get original target_pdev mapping*/
 	return wlan_cfg_get_target_pdev_id(soc->wlan_cfg_ctx, pdev->lmac_id);
+}
+
+/**
+ * dp_get_target_pdev_id_for_host_pdev_id() - Return target pdev corresponding
+ *                                         to host pdev id
+ * @soc: soc pointer
+ * @mac_for_pdev: pdev_id corresponding to host pdev for WIN, mac id for MCL
+ *
+ * returns target pdev_id for host pdev id.
+ * For WIN, return the value stored in pdev object.
+ * For MCL, return the offset-1 translated mac_id.
+ */
+static inline int
+dp_get_target_pdev_id_for_host_pdev_id
+	(struct dp_soc *soc, uint32_t mac_for_pdev)
+{
+	struct dp_pdev *pdev;
+
+	if (!wlan_cfg_per_pdev_lmac_ring(soc->wlan_cfg_ctx))
+		return DP_SW2HW_MACID(mac_for_pdev);
+
+	pdev = soc->pdev_list[mac_for_pdev];
+
+	return pdev->target_pdev_id;
 }
 
 /**
@@ -1442,7 +1487,7 @@ dp_get_host_pdev_id_for_target_pdev_id
 	/*Get host pdev from lmac*/
 	pdev = dp_get_pdev_for_lmac_id(soc, lmac_id);
 
-	return pdev->pdev_id;
+	return pdev ? pdev->pdev_id : INVALID_PDEV_ID;
 }
 
 /*
@@ -1468,8 +1513,6 @@ static inline int dp_get_mac_id_for_mac(struct dp_soc *soc, uint32_t mac_id)
 	/* For WIN each PDEV will operate one ring, so index is zero. */
 	return 0;
 }
-
-bool dp_is_soc_reinit(struct dp_soc *soc);
 
 /*
  * dp_is_subtype_data() - check if the frame subtype is data
@@ -1715,6 +1758,55 @@ static inline void dp_srng_access_end(struct dp_intr *int_ctx,
 	return hal_srng_access_end(hal_soc, hal_ring_hdl);
 }
 #endif /* WLAN_FEATURE_DP_EVENT_HISTORY */
+
+#ifdef QCA_CACHED_RING_DESC
+/**
+ * dp_srng_dst_get_next() - Wrapper function to get next ring desc
+ * @dp_socsoc: DP Soc handle
+ * @hal_ring: opaque pointer to the HAL Destination Ring
+ *
+ * Return: HAL ring descriptor
+ */
+static inline void *dp_srng_dst_get_next(struct dp_soc *dp_soc,
+					 hal_ring_handle_t hal_ring_hdl)
+{
+	hal_soc_handle_t hal_soc = dp_soc->hal_soc;
+
+	return hal_srng_dst_get_next_cached(hal_soc, hal_ring_hdl);
+}
+
+/**
+ * dp_srng_dst_inv_cached_descs() - Wrapper function to invalidate cached
+ * descriptors
+ * @dp_socsoc: DP Soc handle
+ * @hal_ring: opaque pointer to the HAL Rx Destination ring
+ * @num_entries: Entry count
+ *
+ * Return: None
+ */
+static inline void dp_srng_dst_inv_cached_descs(struct dp_soc *dp_soc,
+						hal_ring_handle_t hal_ring_hdl,
+						uint32_t num_entries)
+{
+	hal_soc_handle_t hal_soc = dp_soc->hal_soc;
+
+	hal_srng_dst_inv_cached_descs(hal_soc, hal_ring_hdl, num_entries);
+}
+#else
+static inline void *dp_srng_dst_get_next(struct dp_soc *dp_soc,
+					 hal_ring_handle_t hal_ring_hdl)
+{
+	hal_soc_handle_t hal_soc = dp_soc->hal_soc;
+
+	return hal_srng_dst_get_next(hal_soc, hal_ring_hdl);
+}
+
+static inline void dp_srng_dst_inv_cached_descs(struct dp_soc *dp_soc,
+						hal_ring_handle_t hal_ring_hdl,
+						uint32_t num_entries)
+{
+}
+#endif /* QCA_CACHED_RING_DESC */
 
 #ifdef QCA_ENH_V3_STATS_SUPPORT
 /**
@@ -2054,4 +2146,54 @@ void dp_is_hw_dbs_enable(struct dp_soc *soc,
 #if defined(WLAN_SUPPORT_RX_FISA)
 void dp_rx_dump_fisa_table(struct dp_soc *soc);
 #endif /* WLAN_SUPPORT_RX_FISA */
+
+#ifdef MAX_ALLOC_PAGE_SIZE
+/**
+ * dp_set_page_size() - Set the max page size for hw link desc.
+ * For MCL the page size is set to OS defined value and for WIN
+ * the page size is set to the max_alloc_size cfg ini
+ * param.
+ * This is to ensure that WIN gets contiguous memory allocations
+ * as per requirement.
+ * @pages: link desc page handle
+ * @max_alloc_size: max_alloc_size
+ *
+ * Return: None
+ */
+static inline
+void dp_set_max_page_size(struct qdf_mem_multi_page_t *pages,
+			  uint32_t max_alloc_size)
+{
+	pages->page_size = qdf_page_size;
+}
+
+#else
+static inline
+void dp_set_max_page_size(struct qdf_mem_multi_page_t *pages,
+			  uint32_t max_alloc_size)
+{
+	pages->page_size = max_alloc_size;
+}
+#endif /* MAX_ALLOC_PAGE_SIZE */
+
+/**
+ * dp_rx_skip_tlvs() - Skip TLVs len + L2 hdr_offset, save in nbuf->cb
+ * @nbuf: nbuf cb to be updated
+ * @l2_hdr_offset: l2_hdr_offset
+ *
+ * Return: None
+ */
+void dp_rx_skip_tlvs(qdf_nbuf_t nbuf, uint32_t l3_padding);
+
+/**
+ * dp_soc_is_full_mon_enable () - Return if full monitor mode is enabled
+ * @soc: DP soc handle
+ *
+ * Return: Full monitor mode status
+ */
+static inline bool dp_soc_is_full_mon_enable(struct dp_pdev *pdev)
+{
+	return (pdev->soc->full_mon_mode && pdev->monitor_configured) ?
+			true : false;
+}
 #endif /* #ifndef _DP_INTERNAL_H_ */

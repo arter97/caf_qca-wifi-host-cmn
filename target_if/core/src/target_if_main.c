@@ -35,6 +35,10 @@
 #ifdef WLAN_CONV_SPECTRAL_ENABLE
 #include "target_if_spectral.h"
 #endif
+
+#ifdef WLAN_IOT_SIM_SUPPORT
+#include <target_if_iot_sim.h>
+#endif
 #include <target_if_reg.h>
 #include <target_if_scan.h>
 #include <target_if_ftm.h>
@@ -83,6 +87,7 @@
 #ifdef FEATURE_COEX
 #include <target_if_coex.h>
 #endif
+#include <wlan_utility.h>
 
 #ifdef DCS_INTERFERENCE_DETECTION
 #include <target_if_dcs.h>
@@ -307,6 +312,19 @@ static void target_if_sptrl_tx_ops_register(
 }
 #endif /* WLAN_CONV_SPECTRAL_ENABLE */
 
+#ifdef WLAN_IOT_SIM_SUPPORT
+static void target_if_iot_sim_tx_ops_register(
+				struct wlan_lmac_if_tx_ops *tx_ops)
+{
+	target_if_iot_sim_register_tx_ops(tx_ops);
+}
+#else
+static void target_if_iot_sim_tx_ops_register(
+				struct wlan_lmac_if_tx_ops *tx_ops)
+{
+}
+#endif
+
 #ifdef DIRECT_BUF_RX_ENABLE
 static void target_if_direct_buf_rx_tx_ops_register(
 				struct wlan_lmac_if_tx_ops *tx_ops)
@@ -386,6 +404,9 @@ static void target_if_target_tx_ops_register(
 
 	target_tx_ops->tgt_is_tgt_type_adrastea =
 		target_is_tgt_type_adrastea;
+
+	target_tx_ops->tgt_is_tgt_type_qcn9000 =
+		target_is_tgt_type_qcn9000;
 
 	target_tx_ops->tgt_get_tgt_type =
 		lmac_get_tgt_type;
@@ -493,6 +514,8 @@ QDF_STATUS target_if_register_tx_ops(struct wlan_lmac_if_tx_ops *tx_ops)
 	/* Components parallel to UMAC to register their TX-ops here */
 	target_if_sptrl_tx_ops_register(tx_ops);
 
+	target_if_iot_sim_tx_ops_register(tx_ops);
+
 	/* Register direct buffer rx component tx ops here */
 	target_if_direct_buf_rx_tx_ops_register(tx_ops);
 
@@ -585,6 +608,9 @@ QDF_STATUS target_if_alloc_psoc_tgt_info(struct wlan_objmgr_psoc *psoc)
 
 	wlan_psoc_set_tgt_if_handle(psoc, tgt_psoc_info);
 	target_psoc_set_preferred_hw_mode(tgt_psoc_info, WMI_HOST_HW_MODE_MAX);
+	wlan_minidump_log(tgt_psoc_info,
+			  sizeof(*tgt_psoc_info), psoc,
+			  WLAN_MD_OBJMGR_PSOC_TGT_INFO, "target_psoc_info");
 
 	qdf_event_create(&tgt_psoc_info->info.event);
 
@@ -616,6 +642,7 @@ QDF_STATUS target_if_free_psoc_tgt_info(struct wlan_objmgr_psoc *psoc)
 
 	wlan_psoc_set_tgt_if_handle(psoc, NULL);
 
+	wlan_minidump_remove(tgt_psoc_info);
 	qdf_mem_free(tgt_psoc_info);
 
 	return QDF_STATUS_SUCCESS;
@@ -644,4 +671,9 @@ bool target_is_tgt_type_qca9888(uint32_t target_type)
 bool target_is_tgt_type_adrastea(uint32_t target_type)
 {
 	return target_type == TARGET_TYPE_ADRASTEA;
+}
+
+bool target_is_tgt_type_qcn9000(uint32_t target_type)
+{
+	return target_type == TARGET_TYPE_QCN9000;
 }

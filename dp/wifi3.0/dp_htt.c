@@ -22,11 +22,11 @@
 #include "dp_peer.h"
 #include "dp_types.h"
 #include "dp_internal.h"
+#include "dp_rx.h"
 #include "dp_rx_mon.h"
 #include "htt_stats.h"
 #include "htt_ppdu_stats.h"
 #include "dp_htt.h"
-#include "dp_rx.h"
 #include "qdf_mem.h"   /* qdf_mem_malloc,free */
 #include "cdp_txrx_cmn_struct.h"
 
@@ -73,7 +73,8 @@ dp_htt_get_ppdu_sniffer_ampdu_tlv_bitmap(uint32_t bitmap)
 /*
  * dp_peer_copy_delay_stats() - copy ppdu stats to peer delayed stats.
  * @peer: Datapath peer handle
- * @ppdu: PPDU Descriptor
+ * @ppdu: User PPDU Descriptor
+ * @cur_ppdu_id: PPDU_ID
  *
  * Return: None
  *
@@ -83,17 +84,21 @@ dp_htt_get_ppdu_sniffer_ampdu_tlv_bitmap(uint32_t bitmap)
  * Ack. To populate peer stats we need successful msdu(data frame).
  * So we hold the Tx data stats on delayed_ba for stats update.
  */
-static inline void
+static void
 dp_peer_copy_delay_stats(struct dp_peer *peer,
-			 struct cdp_tx_completion_ppdu_user *ppdu)
+			 struct cdp_tx_completion_ppdu_user *ppdu,
+			 uint32_t cur_ppdu_id)
 {
 	struct dp_pdev *pdev;
 	struct dp_vdev *vdev;
 
+	if (!peer->last_delayed_ba_ppduid || !cur_ppdu_id)
+		return;
+
 	if (peer->last_delayed_ba) {
 		QDF_TRACE(QDF_MODULE_ID_TXRX, QDF_TRACE_LEVEL_ERROR,
-			  "BA not yet recv for prev delayed ppdu[%d]\n",
-			  peer->last_delayed_ba_ppduid);
+			  "BA not yet recv for prev delayed ppdu[%d] - cur ppdu[%d]",
+			  peer->last_delayed_ba_ppduid, cur_ppdu_id);
 		vdev = peer->vdev;
 		if (vdev) {
 			pdev = vdev->pdev;
@@ -485,7 +490,7 @@ htt_htc_pkt_free(struct htt_soc *soc, struct dp_htt_htc_pkt *pkt)
  * htt_htc_pkt_pool_free() - Free HTC packet pool
  * @htt_soc:	HTT SOC handle
  */
-static void
+void
 htt_htc_pkt_pool_free(struct htt_soc *soc)
 {
 	struct dp_htt_htc_pkt_union *pkt, *next;
@@ -594,6 +599,7 @@ htt_htc_misc_pkt_pool_free(struct htt_soc *soc)
 	struct dp_htt_htc_pkt_union *pkt, *next;
 	qdf_nbuf_t netbuf;
 
+	HTT_TX_MUTEX_ACQUIRE(&soc->htt_tx_mutex);
 	pkt = soc->htt_htc_pkt_misclist;
 
 	while (pkt) {
@@ -611,6 +617,7 @@ htt_htc_misc_pkt_pool_free(struct htt_soc *soc)
 		pkt = next;
 	}
 	soc->htt_htc_pkt_misclist = NULL;
+	HTT_TX_MUTEX_RELEASE(&soc->htt_tx_mutex);
 }
 
 /*
@@ -1031,6 +1038,111 @@ fail1:
 fail0:
 	return QDF_STATUS_E_FAILURE;
 }
+
+#ifdef QCA_SUPPORT_FULL_MON
+/**
+ * htt_h2t_full_mon_cfg() - Send full monitor configuarion msg to FW
+ *
+ * @htt_soc: HTT Soc handle
+ * @pdev_id: Radio id
+ * @dp_full_mon_config: enabled/disable configuration
+ *
+ * Return: Success when HTT message is sent, error on failure
+ */
+int htt_h2t_full_mon_cfg(struct htt_soc *htt_soc,
+			 uint8_t pdev_id,
+			 enum dp_full_mon_config config)
+{
+	struct htt_soc *soc = (struct htt_soc *)htt_soc;
+	struct dp_htt_htc_pkt *pkt;
+	qdf_nbuf_t htt_msg;
+	uint32_t *msg_word;
+	uint8_t *htt_logger_bufp;
+
+	htt_msg = qdf_nbuf_alloc(soc->osdev,
+				 HTT_MSG_BUF_SIZE(
+				 HTT_RX_FULL_MONITOR_MODE_SETUP_SZ),
+				 /* reserve room for the HTC header */
+				 HTC_HEADER_LEN + HTC_HDR_ALIGNMENT_PADDING,
+				 4,
+				 TRUE);
+	if (!htt_msg)
+		return QDF_STATUS_E_FAILURE;
+
+	/*
+	 * Set the length of the message.
+	 * The contribution from the HTC_HDR_ALIGNMENT_PADDING is added
+	 * separately during the below call to qdf_nbuf_push_head.
+	 * The contribution from the HTC header is added separately inside HTC.
+	 */
+	if (!qdf_nbuf_put_tail(htt_msg, HTT_RX_RING_SELECTION_CFG_SZ)) {
+		QDF_TRACE(QDF_MODULE_ID_TXRX, QDF_TRACE_LEVEL_ERROR,
+			  "%s: Failed to expand head for RX Ring Cfg msg",
+			  __func__);
+		goto fail1;
+	}
+
+	msg_word = (uint32_t *)qdf_nbuf_data(htt_msg);
+
+	/* rewind beyond alignment pad to get to the HTC header reserved area */
+	qdf_nbuf_push_head(htt_msg, HTC_HDR_ALIGNMENT_PADDING);
+
+	/* word 0 */
+	*msg_word = 0;
+	htt_logger_bufp = (uint8_t *)msg_word;
+	HTT_H2T_MSG_TYPE_SET(*msg_word, HTT_H2T_MSG_TYPE_RX_FULL_MONITOR_MODE);
+	HTT_RX_FULL_MONITOR_MODE_OPERATION_PDEV_ID_SET(
+			*msg_word, DP_SW2HW_MACID(pdev_id));
+
+	msg_word++;
+	*msg_word = 0;
+	/* word 1 */
+	if (config == DP_FULL_MON_ENABLE) {
+		HTT_RX_FULL_MONITOR_MODE_ENABLE_SET(*msg_word, true);
+		HTT_RX_FULL_MONITOR_MODE_ZERO_MPDU_SET(*msg_word, true);
+		HTT_RX_FULL_MONITOR_MODE_NON_ZERO_MPDU_SET(*msg_word, true);
+		HTT_RX_FULL_MONITOR_MODE_RELEASE_RINGS_SET(*msg_word, 0x2);
+	} else if (config == DP_FULL_MON_DISABLE) {
+		HTT_RX_FULL_MONITOR_MODE_ENABLE_SET(*msg_word, false);
+		HTT_RX_FULL_MONITOR_MODE_ZERO_MPDU_SET(*msg_word, false);
+		HTT_RX_FULL_MONITOR_MODE_NON_ZERO_MPDU_SET(*msg_word, false);
+		HTT_RX_FULL_MONITOR_MODE_RELEASE_RINGS_SET(*msg_word, 0x2);
+	}
+
+	pkt = htt_htc_pkt_alloc(soc);
+	if (!pkt) {
+		qdf_err("HTC packet allocation failed");
+		goto fail1;
+	}
+
+	pkt->soc_ctxt = NULL; /* not used during send-done callback */
+
+	SET_HTC_PACKET_INFO_TX(
+		&pkt->htc_pkt,
+		dp_htt_h2t_send_complete_free_netbuf,
+		qdf_nbuf_data(htt_msg),
+		qdf_nbuf_len(htt_msg),
+		soc->htc_endpoint,
+		HTC_TX_PACKET_TAG_RUNTIME_PUT); /* tag for no FW response msg */
+
+	SET_HTC_PACKET_NET_BUF_CONTEXT(&pkt->htc_pkt, htt_msg);
+	qdf_info("config: %d", config);
+	DP_HTT_SEND_HTC_PKT(soc, pkt, HTT_H2T_MSG_TYPE_SRING_SETUP,
+			    htt_logger_bufp);
+	return QDF_STATUS_SUCCESS;
+fail1:
+	qdf_nbuf_free(htt_msg);
+	return QDF_STATUS_E_FAILURE;
+}
+#else
+int htt_h2t_full_mon_cfg(struct htt_soc *htt_soc,
+			 uint8_t pdev_id,
+			 enum dp_full_mon_config config)
+{
+	return 0;
+}
+
+#endif
 
 /*
  * htt_h2t_rx_ring_cfg() - Send SRNG packet and TLV filter
@@ -1747,7 +1859,7 @@ int htt_h2t_rx_ring_cfg(struct htt_soc *htt_soc, int pdev_id,
 		qdf_nbuf_data(htt_msg),
 		qdf_nbuf_len(htt_msg),
 		soc->htc_endpoint,
-		1); /* tag - not relevant here */
+		HTC_TX_PACKET_TAG_RUNTIME_PUT); /* tag for no FW response msg */
 
 	SET_HTC_PACKET_NET_BUF_CONTEXT(&pkt->htc_pkt, htt_msg);
 	status = DP_HTT_SEND_HTC_PKT(soc, pkt,
@@ -2090,6 +2202,8 @@ static void dp_process_ppdu_stats_common_tlv(struct dp_pdev *pdev,
 	start_tag_buf = tag_buf;
 	ppdu_desc = (struct cdp_tx_completion_ppdu *)qdf_nbuf_data(ppdu_info->nbuf);
 
+	ppdu_desc->ppdu_id = ppdu_info->ppdu_id;
+
 	tag_buf = start_tag_buf + HTT_GET_STATS_CMN_INDEX(RING_ID_SCH_CMD_ID);
 	ppdu_info->sched_cmdid =
 		HTT_PPDU_STATS_COMMON_TLV_SCH_CMDID_GET(*tag_buf);
@@ -2101,6 +2215,8 @@ static void dp_process_ppdu_stats_common_tlv(struct dp_pdev *pdev,
 	ppdu_desc->htt_frame_type = frame_type;
 
 	frame_ctrl = ppdu_desc->frame_ctrl;
+
+	ppdu_desc->bar_ppdu_id = ppdu_info->ppdu_id;
 
 	switch (frame_type) {
 	case HTT_STATS_FTYPE_TIDQ_DATA_SU:
@@ -2118,7 +2234,6 @@ static void dp_process_ppdu_stats_common_tlv(struct dp_pdev *pdev,
 	case HTT_STATS_FTYPE_SGEN_MU_BAR:
 	case HTT_STATS_FTYPE_SGEN_BAR:
 		ppdu_desc->frame_type = CDP_PPDU_FTYPE_BAR;
-		ppdu_desc->bar_ppdu_id = ppdu_info->ppdu_id;
 	break;
 	default:
 		ppdu_desc->frame_type = CDP_PPDU_FTYPE_CTRL;
@@ -2136,10 +2251,18 @@ static void dp_process_ppdu_stats_common_tlv(struct dp_pdev *pdev,
 	if (freq != ppdu_desc->channel) {
 		soc = pdev->soc;
 		ppdu_desc->channel = freq;
+		pdev->operating_channel.freq = freq;
 		if (soc && soc->cdp_soc.ol_ops->freq_to_channel)
-			pdev->operating_channel =
-		soc->cdp_soc.ol_ops->freq_to_channel(soc->ctrl_psoc,
-						     pdev->pdev_id, freq);
+			pdev->operating_channel.num =
+			    soc->cdp_soc.ol_ops->freq_to_channel(soc->ctrl_psoc,
+								 pdev->pdev_id,
+								 freq);
+
+		if (soc && soc->cdp_soc.ol_ops->freq_to_band)
+			pdev->operating_channel.band =
+			       soc->cdp_soc.ol_ops->freq_to_band(soc->ctrl_psoc,
+								 pdev->pdev_id,
+								 freq);
 	}
 
 	ppdu_desc->phy_mode = HTT_PPDU_STATS_COMMON_TLV_PHY_MODE_GET(*tag_buf);
@@ -2147,6 +2270,10 @@ static void dp_process_ppdu_stats_common_tlv(struct dp_pdev *pdev,
 	tag_buf = start_tag_buf + HTT_GET_STATS_CMN_INDEX(RESV_NUM_UL_BEAM);
 	ppdu_desc->beam_change =
 		HTT_PPDU_STATS_COMMON_TLV_BEAM_CHANGE_GET(*tag_buf);
+	ppdu_desc->doppler =
+		HTT_PPDU_STATS_COMMON_TLV_DOPPLER_INDICATION_GET(*tag_buf);
+	ppdu_desc->spatial_reuse =
+		HTT_PPDU_STATS_COMMON_TLV_SPATIAL_REUSE_GET(*tag_buf);
 
 	dp_tx_capture_htt_frame_counter(pdev, frame_type);
 
@@ -2189,6 +2316,7 @@ static void dp_process_ppdu_stats_user_common_tlv(
 	uint8_t curr_user_index = 0;
 	struct dp_peer *peer;
 	struct dp_vdev *vdev;
+	uint32_t tlv_type = HTT_STATS_TLV_TAG_GET(*tag_buf);
 
 	ppdu_desc =
 		(struct cdp_tx_completion_ppdu *)qdf_nbuf_data(ppdu_info->nbuf);
@@ -2200,25 +2328,10 @@ static void dp_process_ppdu_stats_user_common_tlv(
 		dp_get_ppdu_info_user_index(pdev,
 					    peer_id, ppdu_info);
 	ppdu_user_desc = &ppdu_desc->user[curr_user_index];
+	ppdu_user_desc->tlv_bitmap |= (1 << tlv_type);
 
-	if (peer_id == DP_SCAN_PEER_ID) {
-		ppdu_desc->vdev_id =
-			HTT_PPDU_STATS_USER_COMMON_TLV_VAP_ID_GET(*tag_buf);
-		vdev =
-		       dp_get_vdev_from_soc_vdev_id_wifi3(pdev->soc,
-							  ppdu_desc->vdev_id);
-		if (!vdev)
-			return;
-		qdf_mem_copy(ppdu_user_desc->mac_addr, vdev->mac_addr.raw,
-			     QDF_MAC_ADDR_SIZE);
-	} else {
-		peer = dp_peer_find_by_id(pdev->soc, peer_id);
-		if (!peer)
-			return;
-		qdf_mem_copy(ppdu_user_desc->mac_addr,
-			     peer->mac_addr.raw, QDF_MAC_ADDR_SIZE);
-		dp_peer_unref_del_find_by_id(peer);
-	}
+	ppdu_desc->vdev_id =
+		HTT_PPDU_STATS_USER_COMMON_TLV_VAP_ID_GET(*tag_buf);
 
 	ppdu_user_desc->peer_id = peer_id;
 
@@ -2257,6 +2370,39 @@ static void dp_process_ppdu_stats_user_common_tlv(
 			HTT_PPDU_STATS_HOST_OPAQUE_COOKIE_GET(*tag_buf);
 		ppdu_user_desc->is_ppdu_cookie_valid = 1;
 	}
+
+	/* returning earlier causes other feilds unpopulated */
+	if (peer_id == DP_SCAN_PEER_ID) {
+		vdev =
+		       dp_get_vdev_from_soc_vdev_id_wifi3(pdev->soc,
+							  ppdu_desc->vdev_id);
+		if (!vdev)
+			return;
+		qdf_mem_copy(ppdu_user_desc->mac_addr, vdev->mac_addr.raw,
+			     QDF_MAC_ADDR_SIZE);
+	} else {
+		peer = dp_peer_find_by_id(pdev->soc, peer_id);
+		if (!peer) {
+			/*
+			 * fw sends peer_id which is about to removed but
+			 * it was already removed in host.
+			 * eg: for disassoc, fw send ppdu stats
+			 * with peer id equal to previously associated
+			 * peer's peer_id but it was removed
+			 */
+			vdev =
+			dp_get_vdev_from_soc_vdev_id_wifi3(pdev->soc,
+							   ppdu_desc->vdev_id);
+			if (!vdev)
+				return;
+			qdf_mem_copy(ppdu_user_desc->mac_addr,
+				     vdev->mac_addr.raw, QDF_MAC_ADDR_SIZE);
+			return;
+		}
+		qdf_mem_copy(ppdu_user_desc->mac_addr,
+			     peer->mac_addr.raw, QDF_MAC_ADDR_SIZE);
+		dp_peer_unref_del_find_by_id(peer);
+	}
 }
 
 
@@ -2278,6 +2424,7 @@ static void dp_process_ppdu_stats_user_rate_tlv(struct dp_pdev *pdev,
 	struct cdp_tx_completion_ppdu_user *ppdu_user_desc;
 	uint8_t curr_user_index = 0;
 	struct dp_vdev *vdev;
+	uint32_t tlv_type = HTT_STATS_TLV_TAG_GET(*tag_buf);
 
 	ppdu_desc = (struct cdp_tx_completion_ppdu *)qdf_nbuf_data(ppdu_info->nbuf);
 
@@ -2288,17 +2435,25 @@ static void dp_process_ppdu_stats_user_rate_tlv(struct dp_pdev *pdev,
 		dp_get_ppdu_info_user_index(pdev,
 					    peer_id, ppdu_info);
 	ppdu_user_desc = &ppdu_desc->user[curr_user_index];
+	ppdu_user_desc->tlv_bitmap |= (1 << tlv_type);
 	if (peer_id == DP_SCAN_PEER_ID) {
 		vdev =
 		       dp_get_vdev_from_soc_vdev_id_wifi3(pdev->soc,
 							  ppdu_desc->vdev_id);
 		if (!vdev)
 			return;
+		qdf_mem_copy(ppdu_user_desc->mac_addr, vdev->mac_addr.raw,
+			     QDF_MAC_ADDR_SIZE);
 	} else {
 		peer = dp_peer_find_by_id(pdev->soc, peer_id);
-		if (!peer)
-			return;
-		dp_peer_unref_del_find_by_id(peer);
+
+		if (peer) {
+			ppdu_desc->vdev_id = peer->vdev->vdev_id;
+			qdf_mem_copy(ppdu_user_desc->mac_addr,
+				     peer->mac_addr.raw,
+				     QDF_MAC_ADDR_SIZE);
+			dp_peer_unref_del_find_by_id(peer);
+		}
 	}
 
 	ppdu_user_desc->peer_id = peer_id;
@@ -2368,7 +2523,9 @@ static void dp_process_ppdu_stats_enq_mpdu_bitmap_64_tlv(
 	struct cdp_tx_completion_ppdu_user *ppdu_user_desc;
 	uint8_t curr_user_index = 0;
 	uint16_t peer_id;
+	struct dp_peer *peer;
 	uint32_t size = CDP_BA_64_BIT_MAP_SIZE_DWORDS;
+	uint32_t tlv_type = HTT_STATS_TLV_TAG_GET(*tag_buf);
 
 	ppdu_desc = (struct cdp_tx_completion_ppdu *)qdf_nbuf_data(ppdu_info->nbuf);
 
@@ -2377,12 +2534,16 @@ static void dp_process_ppdu_stats_enq_mpdu_bitmap_64_tlv(
 	peer_id =
 	HTT_PPDU_STATS_ENQ_MPDU_BITMAP_TLV_SW_PEER_ID_GET(*tag_buf);
 
-	if (!dp_peer_find_by_id_valid(pdev->soc, peer_id))
-		return;
-
+	peer = dp_peer_find_by_id(pdev->soc, peer_id);
 	curr_user_index = dp_get_ppdu_info_user_index(pdev, peer_id, ppdu_info);
-
 	ppdu_user_desc = &ppdu_desc->user[curr_user_index];
+	ppdu_user_desc->tlv_bitmap |= (1 << tlv_type);
+	if (peer) {
+		ppdu_desc->vdev_id = peer->vdev->vdev_id;
+		qdf_mem_copy(ppdu_user_desc->mac_addr,
+			     peer->mac_addr.raw, QDF_MAC_ADDR_SIZE);
+		dp_peer_unref_del_find_by_id(peer);
+	}
 	ppdu_user_desc->peer_id = peer_id;
 
 	ppdu_user_desc->start_seq = dp_stats_buf->start_seq;
@@ -2415,7 +2576,9 @@ static void dp_process_ppdu_stats_enq_mpdu_bitmap_256_tlv(
 	struct cdp_tx_completion_ppdu_user *ppdu_user_desc;
 	uint8_t curr_user_index = 0;
 	uint16_t peer_id;
+	struct dp_peer *peer;
 	uint32_t size = CDP_BA_256_BIT_MAP_SIZE_DWORDS;
+	uint32_t tlv_type = HTT_STATS_TLV_TAG_GET(*tag_buf);
 
 	ppdu_desc = (struct cdp_tx_completion_ppdu *)qdf_nbuf_data(ppdu_info->nbuf);
 
@@ -2424,12 +2587,16 @@ static void dp_process_ppdu_stats_enq_mpdu_bitmap_256_tlv(
 	peer_id =
 	HTT_PPDU_STATS_ENQ_MPDU_BITMAP_TLV_SW_PEER_ID_GET(*tag_buf);
 
-	if (!dp_peer_find_by_id_valid(pdev->soc, peer_id))
-		return;
-
+	peer = dp_peer_find_by_id(pdev->soc, peer_id);
 	curr_user_index = dp_get_ppdu_info_user_index(pdev, peer_id, ppdu_info);
-
 	ppdu_user_desc = &ppdu_desc->user[curr_user_index];
+	ppdu_user_desc->tlv_bitmap |= (1 << tlv_type);
+	if (peer) {
+		ppdu_desc->vdev_id = peer->vdev->vdev_id;
+		qdf_mem_copy(ppdu_user_desc->mac_addr,
+			     peer->mac_addr.raw, QDF_MAC_ADDR_SIZE);
+		dp_peer_unref_del_find_by_id(peer);
+	}
 	ppdu_user_desc->peer_id = peer_id;
 
 	ppdu_user_desc->start_seq = dp_stats_buf->start_seq;
@@ -2456,12 +2623,14 @@ static void dp_process_ppdu_stats_user_cmpltn_common_tlv(
 		struct ppdu_info *ppdu_info)
 {
 	uint16_t peer_id;
+	struct dp_peer *peer;
 	struct cdp_tx_completion_ppdu *ppdu_desc;
 	struct cdp_tx_completion_ppdu_user *ppdu_user_desc;
 	uint8_t curr_user_index = 0;
 	uint8_t bw_iter;
 	htt_ppdu_stats_user_cmpltn_common_tlv *dp_stats_buf =
 		(htt_ppdu_stats_user_cmpltn_common_tlv *)tag_buf;
+	uint32_t tlv_type = HTT_STATS_TLV_TAG_GET(*tag_buf);
 
 	ppdu_desc = (struct cdp_tx_completion_ppdu *)qdf_nbuf_data(ppdu_info->nbuf);
 
@@ -2469,13 +2638,17 @@ static void dp_process_ppdu_stats_user_cmpltn_common_tlv(
 	peer_id =
 		HTT_PPDU_STATS_USER_CMPLTN_COMMON_TLV_SW_PEER_ID_GET(*tag_buf);
 
-	if (!dp_peer_find_by_id_valid(pdev->soc, peer_id))
-		return;
-
+	peer = dp_peer_find_by_id(pdev->soc, peer_id);
 	curr_user_index = dp_get_ppdu_info_user_index(pdev, peer_id, ppdu_info);
 	ppdu_user_desc = &ppdu_desc->user[curr_user_index];
+	ppdu_user_desc->tlv_bitmap |= (1 << tlv_type);
+	if (peer) {
+		ppdu_desc->vdev_id = peer->vdev->vdev_id;
+		qdf_mem_copy(ppdu_user_desc->mac_addr,
+			     peer->mac_addr.raw, QDF_MAC_ADDR_SIZE);
+		dp_peer_unref_del_find_by_id(peer);
+	}
 	ppdu_user_desc->peer_id = peer_id;
-	ppdu_desc->last_usr_index = curr_user_index;
 
 	ppdu_user_desc->completion_status =
 		HTT_PPDU_STATS_USER_CMPLTN_COMMON_TLV_COMPLETION_STATUS_GET(
@@ -2527,10 +2700,10 @@ static void dp_process_ppdu_stats_user_cmpltn_common_tlv(
 		HTT_PPDU_STATS_USER_CMPLTN_COMMON_TLV_RTS_FAILURE_GET(*tag_buf);
 
 	/*
-	 * increase successful mpdu counter from
-	 * htt_ppdu_stats_user_cmpltn_common_tlv
+	 * on mpdu success, increase compltn_common_tlv counter
 	 */
-	ppdu_info->mpdu_compltn_common_tlv += ppdu_user_desc->mpdu_success;
+	if (ppdu_user_desc->mpdu_success)
+		ppdu_info->compltn_common_tlv++;
 
 	/*
 	 * MU BAR may send request to n users but we may received ack only from
@@ -2588,6 +2761,8 @@ static void dp_process_ppdu_stats_user_compltn_ba_bitmap_64_tlv(
 	struct cdp_tx_completion_ppdu *ppdu_desc;
 	uint8_t curr_user_index = 0;
 	uint16_t peer_id;
+	struct dp_peer *peer;
+	uint32_t tlv_type = HTT_STATS_TLV_TAG_GET(*tag_buf);
 
 	ppdu_desc = (struct cdp_tx_completion_ppdu *)qdf_nbuf_data(ppdu_info->nbuf);
 
@@ -2596,12 +2771,16 @@ static void dp_process_ppdu_stats_user_compltn_ba_bitmap_64_tlv(
 	peer_id =
 	HTT_PPDU_STATS_USER_CMPLTN_BA_BITMAP_TLV_SW_PEER_ID_GET(*tag_buf);
 
-	if (!dp_peer_find_by_id_valid(pdev->soc, peer_id))
-		return;
-
+	peer = dp_peer_find_by_id(pdev->soc, peer_id);
 	curr_user_index = dp_get_ppdu_info_user_index(pdev, peer_id, ppdu_info);
-
 	ppdu_user_desc = &ppdu_desc->user[curr_user_index];
+	ppdu_user_desc->tlv_bitmap |= (1 << tlv_type);
+	if (peer) {
+		ppdu_desc->vdev_id = peer->vdev->vdev_id;
+		qdf_mem_copy(ppdu_user_desc->mac_addr,
+			     peer->mac_addr.raw, QDF_MAC_ADDR_SIZE);
+		dp_peer_unref_del_find_by_id(peer);
+	}
 	ppdu_user_desc->peer_id = peer_id;
 
 	ppdu_user_desc->ba_seq_no = dp_stats_buf->ba_seq_no;
@@ -2629,6 +2808,8 @@ static void dp_process_ppdu_stats_user_compltn_ba_bitmap_256_tlv(
 	struct cdp_tx_completion_ppdu *ppdu_desc;
 	uint8_t curr_user_index = 0;
 	uint16_t peer_id;
+	struct dp_peer *peer;
+	uint32_t tlv_type = HTT_STATS_TLV_TAG_GET(*tag_buf);
 
 	ppdu_desc = (struct cdp_tx_completion_ppdu *)qdf_nbuf_data(ppdu_info->nbuf);
 
@@ -2637,12 +2818,16 @@ static void dp_process_ppdu_stats_user_compltn_ba_bitmap_256_tlv(
 	peer_id =
 	HTT_PPDU_STATS_USER_CMPLTN_BA_BITMAP_TLV_SW_PEER_ID_GET(*tag_buf);
 
-	if (!dp_peer_find_by_id_valid(pdev->soc, peer_id))
-		return;
-
+	peer = dp_peer_find_by_id(pdev->soc, peer_id);
 	curr_user_index = dp_get_ppdu_info_user_index(pdev, peer_id, ppdu_info);
-
 	ppdu_user_desc = &ppdu_desc->user[curr_user_index];
+	ppdu_user_desc->tlv_bitmap |= (1 << tlv_type);
+	if (peer) {
+		ppdu_desc->vdev_id = peer->vdev->vdev_id;
+		qdf_mem_copy(ppdu_user_desc->mac_addr,
+			     peer->mac_addr.raw, QDF_MAC_ADDR_SIZE);
+		dp_peer_unref_del_find_by_id(peer);
+	}
 	ppdu_user_desc->peer_id = peer_id;
 
 	ppdu_user_desc->ba_seq_no = dp_stats_buf->ba_seq_no;
@@ -2665,9 +2850,11 @@ static void dp_process_ppdu_stats_user_compltn_ack_ba_status_tlv(
 		struct ppdu_info *ppdu_info)
 {
 	uint16_t peer_id;
+	struct dp_peer *peer;
 	struct cdp_tx_completion_ppdu *ppdu_desc;
 	struct cdp_tx_completion_ppdu_user *ppdu_user_desc;
 	uint8_t curr_user_index = 0;
+	uint32_t tlv_type = HTT_STATS_TLV_TAG_GET(*tag_buf);
 
 	ppdu_desc = (struct cdp_tx_completion_ppdu *)qdf_nbuf_data(ppdu_info->nbuf);
 
@@ -2675,12 +2862,24 @@ static void dp_process_ppdu_stats_user_compltn_ack_ba_status_tlv(
 	peer_id =
 	HTT_PPDU_STATS_USER_CMPLTN_ACK_BA_STATUS_TLV_SW_PEER_ID_GET(*tag_buf);
 
-	if (!dp_peer_find_by_id_valid(pdev->soc, peer_id))
-		return;
-
+	peer = dp_peer_find_by_id(pdev->soc, peer_id);
 	curr_user_index = dp_get_ppdu_info_user_index(pdev, peer_id, ppdu_info);
-
 	ppdu_user_desc = &ppdu_desc->user[curr_user_index];
+	ppdu_user_desc->tlv_bitmap |= (1 << tlv_type);
+	if (peer) {
+		ppdu_desc->vdev_id = peer->vdev->vdev_id;
+		qdf_mem_copy(ppdu_user_desc->mac_addr,
+			     peer->mac_addr.raw, QDF_MAC_ADDR_SIZE);
+		dp_peer_unref_del_find_by_id(peer);
+	}
+	if (!ppdu_user_desc->ack_ba_tlv) {
+		ppdu_user_desc->ack_ba_tlv = 1;
+	} else {
+		pdev->stats.ack_ba_comes_twice++;
+		dp_peer_unref_del_find_by_id(peer);
+		return;
+	}
+
 	ppdu_user_desc->peer_id = peer_id;
 
 	tag_buf++;
@@ -2701,8 +2900,15 @@ static void dp_process_ppdu_stats_user_compltn_ack_ba_status_tlv(
 	tag_buf++;
 	ppdu_user_desc->success_bytes = *tag_buf;
 
-	/* increase successful mpdu counter */
-	ppdu_info->mpdu_ack_ba_tlv += ppdu_user_desc->num_mpdu;
+	/* increase ack ba tlv counter on successful mpdu */
+	if (ppdu_user_desc->num_mpdu)
+		ppdu_info->ack_ba_tlv++;
+
+	if (ppdu_user_desc->ba_size == 0) {
+		ppdu_user_desc->ba_seq_no = ppdu_user_desc->start_seq;
+		ppdu_user_desc->ba_bitmap[0] = 1;
+		ppdu_user_desc->ba_size = 1;
+	}
 }
 
 /*
@@ -2723,6 +2929,7 @@ static void dp_process_ppdu_stats_user_common_array_tlv(
 	struct cdp_tx_completion_ppdu_user *ppdu_user_desc;
 	uint8_t curr_user_index = 0;
 	struct htt_tx_ppdu_stats_info *dp_stats_buf;
+	uint32_t tlv_type = HTT_STATS_TLV_TAG_GET(*tag_buf);
 
 	ppdu_desc = (struct cdp_tx_completion_ppdu *)qdf_nbuf_data(ppdu_info->nbuf);
 
@@ -2741,6 +2948,7 @@ static void dp_process_ppdu_stats_user_common_array_tlv(
 	curr_user_index = dp_get_ppdu_info_user_index(pdev, peer_id, ppdu_info);
 
 	ppdu_user_desc = &ppdu_desc->user[curr_user_index];
+	ppdu_user_desc->tlv_bitmap |= (1 << tlv_type);
 
 	ppdu_user_desc->retry_bytes = dp_stats_buf->tx_retry_bytes;
 	ppdu_user_desc->failed_bytes = dp_stats_buf->tx_failed_bytes;
@@ -2791,6 +2999,7 @@ dp_process_ppdu_stats_user_compltn_flush_tlv(struct dp_pdev *pdev,
 	peer_id = HTT_PPDU_STATS_FLUSH_TLV_SW_PEER_ID_GET(*tag_buf);
 	tid = HTT_PPDU_STATS_FLUSH_TLV_TID_NUM_GET(*tag_buf);
 
+	ppdu_desc->num_users = 1;
 	ppdu_desc->user[0].peer_id = peer_id;
 	ppdu_desc->user[0].tid = tid;
 
@@ -2810,6 +3019,39 @@ dp_process_ppdu_stats_user_compltn_flush_tlv(struct dp_pdev *pdev,
 	dp_peer_unref_del_find_by_id(peer);
 }
 
+/**
+ * dp_process_ppdu_stats_sch_cmd_status_tlv: Process schedule command status tlv
+ * Here we are not going to process the buffer.
+ * @pdev: DP PDEV handle
+ * @ppdu_info: per ppdu tlv structure
+ *
+ * return:void
+ */
+static void
+dp_process_ppdu_stats_sch_cmd_status_tlv(struct dp_pdev *pdev,
+					 struct ppdu_info *ppdu_info)
+{
+	struct cdp_tx_completion_ppdu *ppdu_desc;
+	uint8_t num_users;
+	uint8_t i;
+
+	ppdu_desc = (struct cdp_tx_completion_ppdu *)
+				qdf_nbuf_data(ppdu_info->nbuf);
+
+	num_users = ppdu_desc->num_users;
+
+	if (ppdu_desc->frame_type == CDP_PPDU_FTYPE_BAR) {
+		for (i = 0; i < num_users; i++) {
+			if (ppdu_desc->user[i].user_pos == 0) {
+				/* update phy mode for bar frame */
+				ppdu_desc->phy_mode =
+					ppdu_desc->user[i].preamble;
+				break;
+			}
+		}
+	}
+}
+
 #ifndef WLAN_TX_PKT_CAPTURE_ENH
 /*
  * dp_deliver_mgmt_frm: Process
@@ -2824,6 +3066,9 @@ void dp_deliver_mgmt_frm(struct dp_pdev *pdev, qdf_nbuf_t nbuf)
 		dp_wdi_event_handler(WDI_EVENT_TX_MGMT_CTRL, pdev->soc,
 				     nbuf, HTT_INVALID_PEER,
 				     WDI_NO_VAL, pdev->pdev_id);
+	} else {
+		if (!pdev->bpr_enable)
+			qdf_nbuf_free(nbuf);
 	}
 }
 #endif
@@ -3033,6 +3278,9 @@ static void dp_process_ppdu_tag(struct dp_pdev *pdev, uint32_t *tag_buf,
 		dp_process_ppdu_stats_user_compltn_flush_tlv(pdev, tlv_desc,
 							     ppdu_info);
 		break;
+	case HTT_PPDU_STATS_SCH_CMD_STATUS_TLV:
+		dp_process_ppdu_stats_sch_cmd_status_tlv(pdev, ppdu_info);
+		break;
 	default:
 		break;
 	}
@@ -3059,8 +3307,8 @@ dp_ppdu_desc_user_stats_update(struct dp_pdev *pdev,
 	ppdu_desc = (struct cdp_tx_completion_ppdu *)
 		qdf_nbuf_data(ppdu_info->nbuf);
 
-	ppdu_desc->num_users = ppdu_info->last_user;
-	ppdu_desc->ppdu_id = ppdu_info->ppdu_id;
+	if (ppdu_desc->frame_type != CDP_PPDU_FTYPE_BAR)
+		ppdu_desc->ppdu_id = ppdu_info->ppdu_id;
 
 	tlv_bitmap_expected = HTT_PPDU_DEFAULT_TLV_BITMAP;
 	if (pdev->tx_sniffer_enable || pdev->mcopy_mode ||
@@ -3084,8 +3332,9 @@ dp_ppdu_desc_user_stats_update(struct dp_pdev *pdev,
 		ppdu_desc->num_mpdu += ppdu_desc->user[i].num_mpdu;
 		ppdu_desc->num_msdu += ppdu_desc->user[i].num_msdu;
 
-		peer = dp_peer_find_by_id(pdev->soc,
-					  ppdu_desc->user[i].peer_id);
+		peer = dp_peer_find_hash_find(pdev->soc,
+					      ppdu_desc->user[i].mac_addr,
+					      0, ppdu_desc->vdev_id);
 		/**
 		 * This check is to make sure peer is not deleted
 		 * after processing the TLVs.
@@ -3102,17 +3351,17 @@ dp_ppdu_desc_user_stats_update(struct dp_pdev *pdev,
 		 * Since ACK_BA_STATUS TLV come from Hardware it is
 		 * asynchronous So we need to depend on some tlv to confirm
 		 * all tlv is received for a ppdu.
-		 * So we depend on both HTT_PPDU_STATS_COMMON_TLV and
+		 * So we depend on both SCHED_CMD_STATUS_TLV and
 		 * ACK_BA_STATUS_TLV. for failure packet we won't get
 		 * ACK_BA_STATUS_TLV.
 		 */
 		if (!(ppdu_info->tlv_bitmap &
-		      (1 << HTT_PPDU_STATS_COMMON_TLV)) ||
+		      (1 << HTT_PPDU_STATS_SCH_CMD_STATUS_TLV)) ||
 		    (!(ppdu_info->tlv_bitmap &
 		       (1 << HTT_PPDU_STATS_USR_COMPLTN_ACK_BA_STATUS_TLV)) &&
 		     (ppdu_desc->user[i].completion_status ==
 		      HTT_PPDU_STATS_USER_STATUS_OK))) {
-			dp_peer_unref_del_find_by_id(peer);
+			dp_peer_unref_delete(peer);
 			continue;
 		}
 
@@ -3124,7 +3373,9 @@ dp_ppdu_desc_user_stats_update(struct dp_pdev *pdev,
 		if ((ppdu_desc->user[i].tid < CDP_DATA_TID_MAX ||
 		     (ppdu_desc->user[i].tid == CDP_DATA_NON_QOS_TID) ||
 		     (ppdu_desc->htt_frame_type ==
-		      HTT_STATS_FTYPE_SGEN_QOS_NULL)) &&
+		      HTT_STATS_FTYPE_SGEN_QOS_NULL) ||
+		     ((ppdu_desc->frame_type == CDP_PPDU_FTYPE_BAR) &&
+		      (ppdu_desc->num_mpdu > 1))) &&
 		      (ppdu_desc->frame_type != CDP_PPDU_FTYPE_CTRL)) {
 
 			dp_tx_stats_update(pdev, peer,
@@ -3133,7 +3384,7 @@ dp_ppdu_desc_user_stats_update(struct dp_pdev *pdev,
 			dp_tx_rate_stats_update(peer, &ppdu_desc->user[i]);
 		}
 
-		dp_peer_unref_del_find_by_id(peer);
+		dp_peer_unref_delete(peer);
 		tlv_bitmap_expected = tlv_bitmap_default;
 	}
 }
@@ -3212,6 +3463,7 @@ struct ppdu_info *dp_get_ppdu_desc(struct dp_pdev *pdev, uint32_t ppdu_id,
 			uint8_t tlv_type)
 {
 	struct ppdu_info *ppdu_info = NULL;
+	struct cdp_tx_completion_ppdu *ppdu_desc = NULL;
 
 	/*
 	 * Find ppdu_id node exists or not
@@ -3237,13 +3489,18 @@ struct ppdu_info *dp_get_ppdu_desc(struct dp_pdev *pdev, uint32_t ppdu_id,
 			    (1 << HTT_PPDU_STATS_SCH_CMD_STATUS_TLV)))
 				return ppdu_info;
 
+			ppdu_desc = (struct cdp_tx_completion_ppdu *)
+				qdf_nbuf_data(ppdu_info->nbuf);
+
 			/**
 			 * apart from ACK BA STATUS TLV rest all comes in order
 			 * so if tlv type not ACK BA STATUS TLV we can deliver
 			 * ppdu_info
 			 */
-			if (tlv_type ==
-			    HTT_PPDU_STATS_USR_COMPLTN_ACK_BA_STATUS_TLV)
+			if ((tlv_type ==
+			     HTT_PPDU_STATS_USR_COMPLTN_ACK_BA_STATUS_TLV) &&
+			    (ppdu_desc->htt_frame_type ==
+			     HTT_STATS_FTYPE_SGEN_MU_BAR))
 				return ppdu_info;
 
 			dp_ppdu_desc_deliver(pdev, ppdu_info);
@@ -3258,7 +3515,13 @@ struct ppdu_info *dp_get_ppdu_desc(struct dp_pdev *pdev, uint32_t ppdu_id,
 	 */
 	if (pdev->list_depth > HTT_PPDU_DESC_MAX_DEPTH) {
 		ppdu_info = TAILQ_FIRST(&pdev->ppdu_info_list);
-		dp_ppdu_desc_deliver(pdev, ppdu_info);
+		TAILQ_REMOVE(&pdev->ppdu_info_list,
+			     ppdu_info, ppdu_info_list_elem);
+		pdev->list_depth--;
+		pdev->stats.ppdu_drop++;
+		qdf_nbuf_free(ppdu_info->nbuf);
+		ppdu_info->nbuf = NULL;
+		qdf_mem_free(ppdu_info);
 	}
 
 	/*
@@ -3408,9 +3671,13 @@ static struct ppdu_info *dp_htt_process_tlv(struct dp_pdev *pdev,
 	}
 
 	if (ppdu_desc->frame_type == CDP_PPDU_FTYPE_DATA &&
-	    (ppdu_info->tlv_bitmap & (1 << HTT_PPDU_STATS_COMMON_TLV)) &&
+	    (ppdu_info->tlv_bitmap &
+	     (1 << HTT_PPDU_STATS_SCH_CMD_STATUS_TLV)) &&
 	    ppdu_desc->delayed_ba) {
 		for (i = 0; i < ppdu_desc->num_users; i++) {
+			struct cdp_delayed_tx_completion_ppdu_user *delay_ppdu;
+			uint64_t start_tsf;
+			uint64_t end_tsf;
 			uint32_t ppdu_id;
 
 			ppdu_id = ppdu_desc->ppdu_id;
@@ -3423,13 +3690,19 @@ static struct ppdu_info *dp_htt_process_tlv(struct dp_pdev *pdev,
 			if (!peer)
 				continue;
 
+			delay_ppdu = &peer->delayed_ba_ppdu_stats;
+			start_tsf = ppdu_desc->ppdu_start_timestamp;
+			end_tsf = ppdu_desc->ppdu_end_timestamp;
 			/**
 			 * save delayed ba user info
 			 */
 			if (ppdu_desc->user[i].delayed_ba) {
 				dp_peer_copy_delay_stats(peer,
-							 &ppdu_desc->user[i]);
+							 &ppdu_desc->user[i],
+							 ppdu_id);
 				peer->last_delayed_ba_ppduid = ppdu_id;
+				delay_ppdu->ppdu_start_timestamp = start_tsf;
+				delay_ppdu->ppdu_end_timestamp = end_tsf;
 			}
 			dp_peer_unref_del_find_by_id(peer);
 		}
@@ -3440,8 +3713,12 @@ static struct ppdu_info *dp_htt_process_tlv(struct dp_pdev *pdev,
 	 * copy the store peer delayed info to BAR status
 	 */
 	if (ppdu_desc->frame_type == CDP_PPDU_FTYPE_BAR &&
-	    (ppdu_info->tlv_bitmap & (1 << HTT_PPDU_STATS_COMMON_TLV))) {
+	    (ppdu_info->tlv_bitmap &
+	     (1 << HTT_PPDU_STATS_SCH_CMD_STATUS_TLV))) {
 		for (i = 0; i < ppdu_desc->bar_num_users; i++) {
+			struct cdp_delayed_tx_completion_ppdu_user *delay_ppdu;
+			uint64_t start_tsf;
+			uint64_t end_tsf;
 			peer = dp_peer_find_by_id(pdev->soc,
 						  ppdu_desc->user[i].peer_id);
 			/**
@@ -3451,12 +3728,17 @@ static struct ppdu_info *dp_htt_process_tlv(struct dp_pdev *pdev,
 			if (!peer)
 				continue;
 
+			delay_ppdu = &peer->delayed_ba_ppdu_stats;
+			start_tsf = delay_ppdu->ppdu_start_timestamp;
+			end_tsf = delay_ppdu->ppdu_end_timestamp;
+
 			if (peer->last_delayed_ba) {
 				dp_peer_copy_stats_to_bar(peer,
 							  &ppdu_desc->user[i]);
-				ppdu_desc->bar_ppdu_id = ppdu_desc->ppdu_id;
 				ppdu_desc->ppdu_id =
 					peer->last_delayed_ba_ppduid;
+				ppdu_desc->ppdu_start_timestamp = start_tsf;
+				ppdu_desc->ppdu_end_timestamp = end_tsf;
 			}
 			dp_peer_unref_del_find_by_id(peer);
 		}
@@ -3477,8 +3759,7 @@ static struct ppdu_info *dp_htt_process_tlv(struct dp_pdev *pdev,
 		/*
 		 * successful mpdu count should match with both tlv
 		 */
-		if (ppdu_info->mpdu_compltn_common_tlv !=
-		    ppdu_info->mpdu_ack_ba_tlv)
+		if (ppdu_info->compltn_common_tlv != ppdu_info->ack_ba_tlv)
 			return NULL;
 	}
 
@@ -3486,12 +3767,13 @@ static struct ppdu_info *dp_htt_process_tlv(struct dp_pdev *pdev,
 	 * Once all the TLVs for a given PPDU has been processed,
 	 * return PPDU status to be delivered to higher layer.
 	 * tlv_bitmap_expected can't be available for different frame type.
-	 * But STATS COMMON TLV is the last TLV from the FW for a ppdu.
+	 * But SCHED CMD STATS TLV is the last TLV from the FW for a ppdu.
 	 * apart from ACK BA TLV, FW sends other TLV in sequential order.
 	 * flush tlv comes separate.
 	 */
 	if ((ppdu_info->tlv_bitmap != 0 &&
-	     (ppdu_info->tlv_bitmap & (1 << HTT_PPDU_STATS_COMMON_TLV))) ||
+	     (ppdu_info->tlv_bitmap &
+	      (1 << HTT_PPDU_STATS_SCH_CMD_STATUS_TLV))) ||
 	    (ppdu_info->tlv_bitmap &
 	     (1 << HTT_PPDU_STATS_USR_COMPLTN_FLUSH_TLV)))
 		return ppdu_info;
@@ -3517,6 +3799,10 @@ static bool dp_txrx_ppdu_stats_handler(struct dp_soc *soc,
 	struct ppdu_info *ppdu_info = NULL;
 	bool free_buf = true;
 
+	if (pdev_id >= MAX_PDEV_CNT)
+		return true;
+
+	pdev = soc->pdev_list[pdev_id];
 	if (!pdev)
 		return true;
 
@@ -3665,9 +3951,10 @@ struct htt_soc *htt_soc_attach(struct dp_soc *soc, HTC_HANDLE htc_handle)
 	}
 	if (i != MAX_PDEV_CNT) {
 		for (j = 0; j < i; j++) {
-			qdf_mem_free(htt_soc->pdevid_tt[i].umac_ttt);
-			qdf_mem_free(htt_soc->pdevid_tt[i].lmac_ttt);
+			qdf_mem_free(htt_soc->pdevid_tt[j].umac_ttt);
+			qdf_mem_free(htt_soc->pdevid_tt[j].lmac_ttt);
 		}
+		qdf_mem_free(htt_soc);
 		return NULL;
 	}
 
@@ -3821,6 +4108,12 @@ static void dp_htt_bkp_event_alert(u_int32_t *msg_word, struct htt_soc *soc)
 	target_pdev_id = HTT_T2H_RX_BKPRESSURE_PDEV_ID_GET(*msg_word);
 	pdev_id = dp_get_host_pdev_id_for_target_pdev_id(soc->dp_soc,
 							 target_pdev_id);
+	if (pdev_id >= MAX_PDEV_CNT) {
+		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_DEBUG,
+			  "pdev id %d is invalid", pdev_id);
+		return;
+	}
+
 	pdev = (struct dp_pdev *)dpsoc->pdev_list[pdev_id];
 	ring_id = HTT_T2H_RX_BKPRESSURE_RINGID_GET(*msg_word);
 	hp_idx = HTT_T2H_RX_BKPRESSURE_HEAD_IDX_GET(*(msg_word + 1));
@@ -3929,7 +4222,8 @@ static void dp_htt_t2h_msg_handler(void *context, HTC_PACKET *pkt)
 			vdev_id = HTT_RX_PEER_UNMAP_VDEV_ID_GET(*msg_word);
 
 			dp_rx_peer_unmap_handler(soc->dp_soc, peer_id,
-						 vdev_id, mac_addr, 0);
+						 vdev_id, mac_addr, 0,
+						 DP_PEER_WDS_COUNT_INVALID);
 			break;
 		}
 	case HTT_T2H_MSG_TYPE_SEC_IND:
@@ -4126,6 +4420,7 @@ static void dp_htt_t2h_msg_handler(void *context, HTC_PACKET *pkt)
 			u_int16_t peer_id;
 			u_int8_t vdev_id;
 			u_int8_t is_wds;
+			u_int32_t free_wds_count;
 
 			peer_id =
 			HTT_RX_PEER_UNMAP_V2_SW_PEER_ID_GET(*msg_word);
@@ -4135,6 +4430,9 @@ static void dp_htt_t2h_msg_handler(void *context, HTC_PACKET *pkt)
 						   &mac_addr_deswizzle_buf[0]);
 			is_wds =
 			HTT_RX_PEER_UNMAP_V2_NEXT_HOP_GET(*(msg_word + 2));
+			free_wds_count =
+			HTT_RX_PEER_UNMAP_V2_PEER_WDS_FREE_COUNT_GET(*(msg_word + 4));
+
 			QDF_TRACE(QDF_MODULE_ID_TXRX,
 				  QDF_TRACE_LEVEL_INFO,
 				  "HTT_T2H_MSG_TYPE_PEER_UNMAP msg for peer id %d vdev id %d n",
@@ -4142,7 +4440,28 @@ static void dp_htt_t2h_msg_handler(void *context, HTC_PACKET *pkt)
 
 			dp_rx_peer_unmap_handler(soc->dp_soc, peer_id,
 						 vdev_id, mac_addr,
-						 is_wds);
+						 is_wds, free_wds_count);
+			break;
+		}
+	case HTT_T2H_MSG_TYPE_RX_DELBA:
+		{
+			uint16_t peer_id;
+			uint8_t tid;
+			uint8_t win_sz;
+			QDF_STATUS status;
+
+			peer_id = HTT_RX_DELBA_PEER_ID_GET(*msg_word);
+			tid = HTT_RX_DELBA_TID_GET(*msg_word);
+			win_sz = HTT_RX_DELBA_WIN_SIZE_GET(*msg_word);
+
+			status = dp_rx_delba_ind_handler(
+				soc->dp_soc,
+				peer_id, tid, win_sz);
+
+			QDF_TRACE(QDF_MODULE_ID_TXRX,
+				  QDF_TRACE_LEVEL_INFO,
+				  FL("DELBA PeerID %d BAW %d TID %d stat %d"),
+				  peer_id, win_sz, tid, status);
 			break;
 		}
 	default:
@@ -4558,7 +4877,8 @@ QDF_STATUS dp_h2t_3tuple_config_send(struct dp_pdev *pdev,
 			qdf_nbuf_data(msg),
 			qdf_nbuf_len(msg),
 			soc->htc_endpoint,
-			1);
+			/* tag for no FW response msg */
+			HTC_TX_PACKET_TAG_RUNTIME_PUT);
 
 	SET_HTC_PACKET_NET_BUF_CONTEXT(&pkt->htc_pkt, msg);
 	DP_HTT_SEND_HTC_PKT(soc, pkt, HTT_H2T_MSG_TYPE_3_TUPLE_HASH_CFG,
@@ -4647,7 +4967,8 @@ QDF_STATUS dp_h2t_cfg_stats_msg_send(struct dp_pdev *pdev,
 			dp_htt_h2t_send_complete_free_netbuf,
 			qdf_nbuf_data(msg), qdf_nbuf_len(msg),
 			soc->htc_endpoint,
-			1); /* tag - not relevant here */
+			/* tag for no FW response msg */
+			HTC_TX_PACKET_TAG_RUNTIME_PUT);
 
 	SET_HTC_PACKET_NET_BUF_CONTEXT(&pkt->htc_pkt, msg);
 	status = DP_HTT_SEND_HTC_PKT(soc, pkt, HTT_H2T_MSG_TYPE_PPDU_STATS_CFG,
@@ -4816,6 +5137,7 @@ dp_htt_rx_flow_fst_setup(struct dp_pdev *pdev,
 		qdf_nbuf_data(msg),
 		qdf_nbuf_len(msg),
 		soc->htc_endpoint,
+		/* tag for no FW response msg */
 		HTC_TX_PACKET_TAG_RUNTIME_PUT);
 
 	SET_HTC_PACKET_NET_BUF_CONTEXT(&pkt->htc_pkt, msg);
@@ -4967,6 +5289,7 @@ dp_htt_rx_flow_fse_operation(struct dp_pdev *pdev,
 		qdf_nbuf_data(msg),
 		qdf_nbuf_len(msg),
 		soc->htc_endpoint,
+		/* tag for no FW response msg */
 		HTC_TX_PACKET_TAG_RUNTIME_PUT);
 
 	SET_HTC_PACKET_NET_BUF_CONTEXT(&pkt->htc_pkt, msg);
@@ -5080,6 +5403,7 @@ dp_htt_rx_fisa_config(struct dp_pdev *pdev,
 			       qdf_nbuf_data(msg),
 			       qdf_nbuf_len(msg),
 			       soc->htc_endpoint,
+			       /* tag for no FW response msg */
 			       HTC_TX_PACKET_TAG_RUNTIME_PUT);
 
 	SET_HTC_PACKET_NET_BUF_CONTEXT(&pkt->htc_pkt, msg);

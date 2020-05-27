@@ -114,7 +114,8 @@ tgt_dfs_set_current_channel_for_freq(struct wlan_objmgr_pdev *pdev,
 				     uint8_t dfs_chan_vhtop_freq_seg1,
 				     uint8_t dfs_chan_vhtop_freq_seg2,
 				     uint16_t dfs_chan_mhz_freq_seg1,
-				     uint16_t dfs_chan_mhz_freq_seg2)
+				     uint16_t dfs_chan_mhz_freq_seg2,
+				     bool *is_channel_updated)
 {
 	struct wlan_dfs *dfs;
 
@@ -135,7 +136,8 @@ tgt_dfs_set_current_channel_for_freq(struct wlan_objmgr_pdev *pdev,
 					 dfs_chan_vhtop_freq_seg1,
 					 dfs_chan_vhtop_freq_seg2,
 					 dfs_chan_mhz_freq_seg1,
-					 dfs_chan_mhz_freq_seg2);
+					 dfs_chan_mhz_freq_seg2,
+					 is_channel_updated);
 
 	return QDF_STATUS_SUCCESS;
 }
@@ -977,9 +979,7 @@ void tgt_dfs_deinit_tmp_psoc_nol(struct wlan_objmgr_pdev *pdev)
 qdf_export_symbol(tgt_dfs_deinit_tmp_psoc_nol);
 
 void tgt_dfs_save_dfs_nol_in_psoc(struct wlan_objmgr_pdev *pdev,
-				  uint8_t pdev_id,
-				  uint16_t low_5ghz_freq,
-				  uint16_t high_5ghz_freq)
+				  uint8_t pdev_id)
 {
 	struct wlan_dfs *dfs;
 
@@ -989,13 +989,15 @@ void tgt_dfs_save_dfs_nol_in_psoc(struct wlan_objmgr_pdev *pdev,
 		return;
 	}
 
-	dfs_save_dfs_nol_in_psoc(dfs, pdev_id, low_5ghz_freq, high_5ghz_freq);
+	dfs_save_dfs_nol_in_psoc(dfs, pdev_id);
 }
 
 qdf_export_symbol(tgt_dfs_save_dfs_nol_in_psoc);
 
 void tgt_dfs_reinit_nol_from_psoc_copy(struct wlan_objmgr_pdev *pdev,
-				       uint8_t pdev_id)
+				       uint8_t pdev_id,
+				       uint16_t low_5ghz_freq,
+				       uint16_t high_5ghz_freq)
 {
 	struct wlan_dfs *dfs;
 
@@ -1005,7 +1007,10 @@ void tgt_dfs_reinit_nol_from_psoc_copy(struct wlan_objmgr_pdev *pdev,
 		return;
 	}
 
-	dfs_reinit_nol_from_psoc_copy(dfs, pdev_id);
+	dfs_reinit_nol_from_psoc_copy(dfs,
+				      pdev_id,
+				      low_5ghz_freq,
+				      high_5ghz_freq);
 }
 
 qdf_export_symbol(tgt_dfs_reinit_nol_from_psoc_copy);

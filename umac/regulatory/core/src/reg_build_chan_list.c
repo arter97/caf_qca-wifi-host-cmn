@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2019 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2014-2020 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -183,12 +183,10 @@ static void reg_do_auto_bw_correction(uint32_t num_reg_rules,
 	uint16_t new_bw;
 
 	for (count = 0; count < num_reg_rules - 1; count++) {
-		if ((reg_rule_ptr[count].end_freq ==
-		     reg_rule_ptr[count + 1].start_freq) &&
-		    ((reg_rule_ptr[count].max_bw +
-		      reg_rule_ptr[count + 1].max_bw) <= max_bw)) {
-			new_bw = reg_rule_ptr[count].max_bw +
-				reg_rule_ptr[count + 1].max_bw;
+		if (reg_rule_ptr[count].end_freq ==
+		    reg_rule_ptr[count + 1].start_freq) {
+			new_bw = QDF_MIN(max_bw, reg_rule_ptr[count].max_bw +
+					 reg_rule_ptr[count + 1].max_bw);
 			reg_rule_ptr[count].max_bw = new_bw;
 			reg_rule_ptr[count + 1].max_bw = new_bw;
 		}
@@ -822,7 +820,8 @@ void reg_propagate_mas_chan_list_to_pdev(struct wlan_objmgr_psoc *psoc,
 	struct wlan_regulatory_psoc_priv_obj *psoc_priv_obj;
 	struct wlan_regulatory_pdev_priv_obj *pdev_priv_obj;
 	enum direction *dir = arg;
-	uint32_t pdev_id;
+	uint8_t pdev_id;
+	uint8_t phy_id;
 	struct wlan_lmac_if_reg_tx_ops *reg_tx_ops;
 	struct reg_rule_info *psoc_reg_rules;
 
@@ -843,17 +842,23 @@ void reg_propagate_mas_chan_list_to_pdev(struct wlan_objmgr_psoc *psoc,
 	}
 
 	pdev_id = wlan_objmgr_pdev_get_pdev_id(pdev);
+
+	reg_tx_ops = reg_get_psoc_tx_ops(psoc);
+	if (reg_tx_ops->get_phy_id_from_pdev_id)
+		reg_tx_ops->get_phy_id_from_pdev_id(psoc, pdev_id, &phy_id);
+	else
+		phy_id = pdev_id;
+
 	reg_init_pdev_mas_chan_list(
 			pdev_priv_obj,
-			&psoc_priv_obj->mas_chan_params[pdev_id]);
-	psoc_reg_rules = &psoc_priv_obj->mas_chan_params[pdev_id].reg_rules;
+			&psoc_priv_obj->mas_chan_params[phy_id]);
+	psoc_reg_rules = &psoc_priv_obj->mas_chan_params[phy_id].reg_rules;
 	reg_save_reg_rules_to_pdev(psoc_reg_rules, pdev_priv_obj);
 	reg_modify_chan_list_for_japan(pdev);
 	pdev_priv_obj->chan_list_recvd =
-		psoc_priv_obj->chan_list_recvd[pdev_id];
+		psoc_priv_obj->chan_list_recvd[phy_id];
 	reg_compute_pdev_current_chan_list(pdev_priv_obj);
 
-	reg_tx_ops = reg_get_psoc_tx_ops(psoc);
 	if (reg_tx_ops->fill_umac_legacy_chanlist) {
 		reg_tx_ops->fill_umac_legacy_chanlist(
 				pdev, pdev_priv_obj->cur_chan_list);
@@ -923,7 +928,7 @@ reg_send_ctl_info(struct wlan_regulatory_psoc_priv_obj *soc_reg,
 		return QDF_STATUS_SUCCESS;
 
 	if (!tx_ops || !tx_ops->send_ctl_info) {
-		reg_err("No regulatory tx_ops for send_ctl_info");
+		reg_err("No regulatory tx_ops");
 		return QDF_STATUS_E_FAULT;
 	}
 
@@ -983,6 +988,7 @@ QDF_STATUS reg_process_master_chan_list(
 	wlan_objmgr_ref_dbgid dbg_id;
 	enum direction dir;
 	uint8_t phy_id;
+	uint8_t pdev_id;
 	struct wlan_objmgr_pdev *pdev;
 	struct wlan_lmac_if_reg_tx_ops *tx_ops;
 	struct reg_rule_info *reg_rules;
@@ -998,6 +1004,11 @@ QDF_STATUS reg_process_master_chan_list(
 
 	tx_ops = reg_get_psoc_tx_ops(psoc);
 	phy_id = regulat_info->phy_id;
+
+	if (tx_ops->get_pdev_id_from_phy_id)
+		tx_ops->get_pdev_id_from_phy_id(psoc, phy_id, &pdev_id);
+	else
+		pdev_id = phy_id;
 
 	if (reg_ignore_default_country(soc_reg, regulat_info)) {
 		status = reg_set_curr_country(soc_reg, regulat_info, tx_ops);
@@ -1019,7 +1030,7 @@ QDF_STATUS reg_process_master_chan_list(
 	}
 
 	if (regulat_info->status_code != REG_SET_CC_STATUS_PASS) {
-		reg_err("Setting country code failed, status code is %d",
+		reg_err("Set country code failed, status code %d",
 			regulat_info->status_code);
 
 		pdev = wlan_objmgr_get_pdev_by_id(psoc, phy_id, dbg_id);
@@ -1135,10 +1146,8 @@ QDF_STATUS reg_process_master_chan_list(
 
 	soc_reg->chan_list_recvd[phy_id] = true;
 	status = reg_send_ctl_info(soc_reg, regulat_info, tx_ops);
-	if (!QDF_IS_STATUS_SUCCESS(status)) {
-		reg_err("Failed to send ctl info to fw");
+	if (!QDF_IS_STATUS_SUCCESS(status))
 		return status;
-	}
 
 	if (soc_reg->new_user_ctry_pending[phy_id]) {
 		soc_reg->new_user_ctry_pending[phy_id] = false;
@@ -1190,7 +1199,7 @@ QDF_STATUS reg_process_master_chan_list(
 		}
 	}
 
-	pdev = wlan_objmgr_get_pdev_by_id(psoc, phy_id, dbg_id);
+	pdev = wlan_objmgr_get_pdev_by_id(psoc, pdev_id, dbg_id);
 	if (pdev) {
 		reg_propagate_mas_chan_list_to_pdev(psoc, pdev, &dir);
 		wlan_objmgr_pdev_release_ref(pdev, dbg_id);

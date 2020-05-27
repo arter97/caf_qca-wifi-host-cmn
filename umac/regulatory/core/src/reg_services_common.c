@@ -1443,9 +1443,9 @@ update_bw:
 	      ch_params->ch_width == CH_WIDTH_80P80MHZ))
 		ch_params->center_freq_seg1 = 0;
 
-	reg_debug("ch %d ch_wd %d freq0 %d freq1 %d", ch,
-		  ch_params->ch_width, ch_params->center_freq_seg0,
-		  ch_params->center_freq_seg1);
+	reg_nofl_debug("ch %d ch_wd %d freq0 %d freq1 %d", ch,
+		       ch_params->ch_width, ch_params->center_freq_seg0,
+		       ch_params->center_freq_seg1);
 }
 
 /**
@@ -1543,6 +1543,53 @@ QDF_STATUS reg_read_default_country(struct wlan_objmgr_psoc *psoc,
 
 	qdf_mem_copy(country_code, psoc_priv_obj->def_country,
 		     REG_ALPHA2_LEN + 1);
+
+	return QDF_STATUS_SUCCESS;
+}
+
+QDF_STATUS reg_get_max_5g_bw_from_country_code(uint16_t cc,
+					       uint16_t *max_bw_5g)
+{
+	uint16_t i;
+	int num_countries;
+
+	*max_bw_5g = 0;
+	reg_get_num_countries(&num_countries);
+
+	for (i = 0; i < num_countries; i++) {
+		if (g_all_countries[i].country_code == cc)
+			break;
+	}
+
+	if (i == num_countries)
+		return QDF_STATUS_E_FAILURE;
+
+	*max_bw_5g = g_all_countries[i].max_bw_5g;
+
+	return QDF_STATUS_SUCCESS;
+}
+
+QDF_STATUS reg_get_max_5g_bw_from_regdomain(uint16_t regdmn,
+					    uint16_t *max_bw_5g)
+{
+	uint16_t i;
+	int num_reg_dmn;
+
+	*max_bw_5g = 0;
+	reg_get_num_reg_dmn_pairs(&num_reg_dmn);
+
+	for (i = 0; i < num_reg_dmn; i++) {
+		if (g_reg_dmn_pairs[i].reg_dmn_pair_id == regdmn)
+			break;
+	}
+
+	if (i == num_reg_dmn)
+		return QDF_STATUS_E_FAILURE;
+
+	if (!regdomains_5g[g_reg_dmn_pairs[i].dmn_id_5g].num_reg_rules)
+		*max_bw_5g = 0;
+	else
+		*max_bw_5g = BW_160_MHZ;
 
 	return QDF_STATUS_SUCCESS;
 }
@@ -1647,7 +1694,7 @@ uint8_t reg_freq_to_chan(struct wlan_objmgr_pdev *pdev,
 	struct wlan_regulatory_pdev_priv_obj *pdev_priv_obj;
 
 	if (freq == 0) {
-		reg_err_rl("Invalid frequency %d", freq);
+		reg_err_rl("Invalid freq %d", freq);
 		return 0;
 	}
 
@@ -1869,10 +1916,8 @@ QDF_STATUS reg_program_default_cc(struct wlan_objmgr_pdev *pdev,
 
 	reg_info = (struct cur_regulatory_info *)qdf_mem_malloc
 		(sizeof(struct cur_regulatory_info));
-	if (!reg_info) {
-		reg_err("reg info is NULL");
+	if (!reg_info)
 		return QDF_STATUS_E_NOMEM;
-	}
 
 	psoc = wlan_pdev_get_psoc(pdev);
 	if (!psoc) {
@@ -1882,6 +1927,7 @@ QDF_STATUS reg_program_default_cc(struct wlan_objmgr_pdev *pdev,
 
 	reg_info->psoc = psoc;
 	reg_info->phy_id = wlan_objmgr_pdev_get_pdev_id(pdev);
+	reg_info->num_phy = 1;
 
 	if (regdmn == 0) {
 		reg_get_default_country(&regdmn);
@@ -1897,7 +1943,7 @@ QDF_STATUS reg_program_default_cc(struct wlan_objmgr_pdev *pdev,
 
 		err = reg_get_cur_reginfo(reg_info, country_index, regdmn_pair);
 		if (err == QDF_STATUS_E_FAILURE) {
-			reg_err("%s : Unable to set country code\n", __func__);
+			reg_err("Unable to set country code\n");
 			qdf_mem_free(reg_info->reg_rules_2g_ptr);
 			qdf_mem_free(reg_info->reg_rules_5g_ptr);
 			qdf_mem_free(reg_info);
@@ -1911,7 +1957,7 @@ QDF_STATUS reg_program_default_cc(struct wlan_objmgr_pdev *pdev,
 
 		err = reg_get_cur_reginfo(reg_info, country_index, regdmn_pair);
 		if (err == QDF_STATUS_E_FAILURE) {
-			reg_err("%s : Unable to set country code\n", __func__);
+			reg_err("Unable to set country code\n");
 			qdf_mem_free(reg_info->reg_rules_2g_ptr);
 			qdf_mem_free(reg_info->reg_rules_5g_ptr);
 			qdf_mem_free(reg_info);
@@ -1941,6 +1987,7 @@ QDF_STATUS reg_program_chan_list(struct wlan_objmgr_pdev *pdev,
 	struct wlan_lmac_if_reg_tx_ops *tx_ops;
 	struct wlan_regulatory_psoc_priv_obj *psoc_priv_obj;
 	uint8_t pdev_id;
+	uint8_t phy_id;
 	QDF_STATUS err;
 
 	pdev_priv_obj = reg_get_pdev_obj(pdev);
@@ -1969,8 +2016,14 @@ QDF_STATUS reg_program_chan_list(struct wlan_objmgr_pdev *pdev,
 
 		pdev_id = wlan_objmgr_pdev_get_pdev_id(pdev);
 		tx_ops = reg_get_psoc_tx_ops(psoc);
+
+		if (tx_ops->get_phy_id_from_pdev_id)
+			tx_ops->get_phy_id_from_pdev_id(psoc, pdev_id, &phy_id);
+		else
+			phy_id = pdev_id;
+
 		if (tx_ops->set_user_country_code) {
-			psoc_priv_obj->new_init_ctry_pending[pdev_id] = true;
+			psoc_priv_obj->new_init_ctry_pending[phy_id] = true;
 			return tx_ops->set_user_country_code(psoc, pdev_id, rd);
 		}
 
@@ -1979,10 +2032,8 @@ QDF_STATUS reg_program_chan_list(struct wlan_objmgr_pdev *pdev,
 
 	reg_info = (struct cur_regulatory_info *)qdf_mem_malloc
 		(sizeof(struct cur_regulatory_info));
-	if (!reg_info) {
-		reg_err("reg info is NULL");
+	if (!reg_info)
 		return QDF_STATUS_E_NOMEM;
-	}
 
 	reg_info->psoc = psoc;
 	reg_info->phy_id = wlan_objmgr_pdev_get_pdev_id(pdev);
@@ -2002,7 +2053,7 @@ QDF_STATUS reg_program_chan_list(struct wlan_objmgr_pdev *pdev,
 
 	err = reg_get_cur_reginfo(reg_info, country_index, regdmn_pair);
 	if (err == QDF_STATUS_E_FAILURE) {
-		reg_err("%s : Unable to set country code\n", __func__);
+		reg_err("Unable to set country code\n");
 		qdf_mem_free(reg_info->reg_rules_2g_ptr);
 		qdf_mem_free(reg_info->reg_rules_5g_ptr);
 		qdf_mem_free(reg_info);
@@ -2066,6 +2117,8 @@ QDF_STATUS reg_get_curr_regdomain(struct wlan_objmgr_pdev *pdev,
 	uint16_t index;
 	int num_reg_dmn;
 	uint8_t phy_id;
+	uint8_t pdev_id;
+	struct wlan_lmac_if_reg_tx_ops *tx_ops;
 
 	psoc = wlan_pdev_get_psoc(pdev);
 	psoc_priv_obj = reg_get_psoc_obj(psoc);
@@ -2074,7 +2127,14 @@ QDF_STATUS reg_get_curr_regdomain(struct wlan_objmgr_pdev *pdev,
 		return QDF_STATUS_E_INVAL;
 	}
 
-	phy_id = wlan_objmgr_pdev_get_pdev_id(pdev);
+	pdev_id = wlan_objmgr_pdev_get_pdev_id(pdev);
+
+	tx_ops = reg_get_psoc_tx_ops(psoc);
+	if (tx_ops->get_phy_id_from_pdev_id)
+		tx_ops->get_phy_id_from_pdev_id(psoc, pdev_id, &phy_id);
+	else
+		phy_id = pdev_id;
+
 	cur_regdmn->regdmn_pair_id =
 		psoc_priv_obj->mas_chan_params[phy_id].reg_dmn_pair;
 
@@ -2367,6 +2427,75 @@ bool reg_is_6ghz_chan_freq(uint16_t freq)
 	return REG_IS_6GHZ_FREQ(freq);
 }
 
+#ifdef CONFIG_6G_FREQ_OVERLAP
+/**
+ * reg_is_freq_in_between() - Check whether freq falls within low_freq and
+ * high_freq, inclusively.
+ * @low_freq - Low frequency.
+ * @high_freq - High frequency.
+ * @freq - Frequency to be checked.
+ *
+ * Return: True if freq falls within low_freq and high_freq, else false.
+ */
+static bool reg_is_freq_in_between(qdf_freq_t low_freq, qdf_freq_t high_freq,
+				   qdf_freq_t freq)
+{
+	return (low_freq <= freq && freq <= high_freq);
+}
+
+static bool reg_is_ranges_overlap(qdf_freq_t low_freq, qdf_freq_t high_freq,
+				  qdf_freq_t start_edge_freq,
+				  qdf_freq_t end_edge_freq)
+{
+	return (reg_is_freq_in_between(start_edge_freq,
+				       end_edge_freq,
+				       low_freq) ||
+		reg_is_freq_in_between(start_edge_freq,
+				       end_edge_freq,
+				       high_freq) ||
+		reg_is_freq_in_between(low_freq,
+				       high_freq,
+				       start_edge_freq) ||
+		reg_is_freq_in_between(low_freq,
+				       high_freq,
+				       end_edge_freq));
+}
+
+static bool reg_is_range_overlap_6g(qdf_freq_t low_freq,
+				    qdf_freq_t high_freq)
+{
+	return reg_is_ranges_overlap(low_freq, high_freq,
+				     SIXG_STARTING_EDGE_FREQ,
+				     SIXG_ENDING_EDGE_FREQ);
+}
+
+static bool reg_is_range_overlap_5g(qdf_freq_t low_freq,
+				    qdf_freq_t high_freq)
+{
+	return reg_is_ranges_overlap(low_freq, high_freq,
+				     FIVEG_STARTING_EDGE_FREQ,
+				     FIVEG_ENDING_EDGE_FREQ);
+}
+
+bool reg_is_range_only6g(qdf_freq_t low_freq, qdf_freq_t high_freq)
+{
+	if (low_freq >= high_freq) {
+		reg_err_rl("Low freq is greater than or equal to high freq");
+		return false;
+	}
+
+	if (reg_is_range_overlap_6g(low_freq, high_freq) &&
+	    !reg_is_range_overlap_5g(low_freq, high_freq)) {
+		reg_debug_rl("The device is 6G only");
+		return true;
+	}
+
+	reg_debug_rl("The device is not 6G only");
+
+	return false;
+}
+#endif
+
 uint16_t reg_min_6ghz_chan_freq(void)
 {
 	return REG_MIN_6GHZ_CHAN_FREQ;
@@ -2489,7 +2618,7 @@ qdf_freq_t reg_chan_band_to_freq(struct wlan_objmgr_pdev *pdev,
 	if (BAND_6G_PRESENT(band_mask)) {
 		if (BAND_2G_PRESENT(band_mask) ||
 		    BAND_5G_PRESENT(band_mask)) {
-			reg_err("Incorrect band_mask %x", band_mask);
+			reg_err_rl("Incorrect band_mask %x", band_mask);
 				return 0;
 		}
 
@@ -2518,7 +2647,7 @@ qdf_freq_t reg_chan_band_to_freq(struct wlan_objmgr_pdev *pdev,
 							max_chan);
 		}
 
-		reg_err("Incorrect band_mask %x", band_mask);
+		reg_err_rl("Incorrect band_mask %x", band_mask);
 		return 0;
 	}
 }
@@ -2625,7 +2754,7 @@ QDF_STATUS reg_enable_dfs_channels(struct wlan_objmgr_pdev *pdev,
 		return QDF_STATUS_E_INVAL;
 	}
 
-	reg_info("setting dfs_enabled: %d", enable);
+	reg_info("set dfs_enabled: %d", enable);
 
 	pdev_priv_obj->dfs_enabled = enable;
 
@@ -2743,6 +2872,24 @@ QDF_STATUS reg_modify_pdev_chan_range(struct wlan_objmgr_pdev *pdev)
 	}
 
 	return status;
+}
+
+QDF_STATUS reg_update_pdev_wireless_modes(struct wlan_objmgr_pdev *pdev,
+					  uint32_t wireless_modes)
+{
+	struct wlan_regulatory_pdev_priv_obj *pdev_priv_obj;
+
+	pdev_priv_obj = wlan_objmgr_pdev_get_comp_private_obj(pdev,
+							      WLAN_UMAC_COMP_REGULATORY);
+
+	if (!pdev_priv_obj) {
+		reg_err("reg pdev private obj is NULL");
+		return QDF_STATUS_E_FAULT;
+	}
+
+	pdev_priv_obj->wireless_modes = wireless_modes;
+
+	return QDF_STATUS_SUCCESS;
 }
 
 #ifdef DISABLE_UNII_SHARED_BANDS
@@ -3369,14 +3516,14 @@ uint8_t reg_get_channel_reg_power_for_freq(struct wlan_objmgr_pdev *pdev,
 
 	if (chan_enum == INVALID_CHANNEL) {
 		reg_err("channel is invalid");
-		return QDF_STATUS_E_FAILURE;
+		return REG_INVALID_TXPOWER;
 	}
 
 	pdev_priv_obj = reg_get_pdev_obj(pdev);
 
 	if (!IS_VALID_PDEV_REG_OBJ(pdev_priv_obj)) {
 		reg_err("reg pdev priv obj is NULL");
-		return QDF_STATUS_E_FAILURE;
+		return REG_INVALID_TXPOWER;
 	}
 
 	reg_channels = pdev_priv_obj->cur_chan_list;
@@ -3598,16 +3745,9 @@ bool reg_is_6ghz_op_class(struct wlan_objmgr_pdev *pdev, uint8_t op_class)
 		(op_class <= MAX_6GHZ_OPER_CLASS));
 }
 
-bool reg_is_6ghz_supported(struct wlan_objmgr_pdev *pdev)
+bool reg_is_6ghz_supported(struct wlan_objmgr_psoc *psoc)
 {
 	struct wlan_regulatory_psoc_priv_obj *psoc_priv_obj;
-	struct wlan_objmgr_psoc *psoc;
-
-	psoc = wlan_pdev_get_psoc(pdev);
-	if (!psoc) {
-		reg_err_rl("psoc is NULL");
-		return false;
-	}
 
 	psoc_priv_obj = reg_get_psoc_obj(psoc);
 

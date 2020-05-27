@@ -24,6 +24,7 @@
 #include <wlan_objmgr_pdev_obj.h>
 #include <wlan_objmgr_vdev_obj.h>
 #include <wlan_objmgr_peer_obj.h>
+#include <wlan_objmgr_debug.h>
 #include <qdf_mem.h>
 #include <qdf_module.h>
 #include "wlan_objmgr_global_obj_i.h"
@@ -192,6 +193,7 @@ struct wlan_objmgr_peer *wlan_objmgr_peer_obj_create(
 	peer->obj_state = WLAN_OBJ_STATE_ALLOCATED;
 	qdf_atomic_init(&peer->peer_objmgr.ref_cnt);
 	wlan_objmgr_peer_init_ref_id_debug(peer);
+	wlan_objmgr_peer_trace_init_lock(peer);
 	wlan_objmgr_peer_get_ref(peer, WLAN_OBJMGR_ID);
 	/* set vdev to peer */
 	wlan_peer_set_vdev(peer, vdev);
@@ -205,7 +207,6 @@ struct wlan_objmgr_peer *wlan_objmgr_peer_obj_create(
 	peer->peer_objmgr.print_cnt = 0;
 
 	qdf_spinlock_create(&peer->peer_lock);
-	wlan_objmgr_peer_trace_init_lock(peer);
 	/* Attach peer to psoc, psoc maintains the node table for the device */
 	if (wlan_objmgr_psoc_peer_attach(psoc, peer) !=
 					QDF_STATUS_SUCCESS) {
