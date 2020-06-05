@@ -953,8 +953,6 @@ QDF_STATUS qdf_uint16_array_parse(const char *in_str, uint16_t *out_array,
 QDF_STATUS qdf_uint8_array_parse(const char *in_str, uint8_t *out_array,
 				 qdf_size_t array_size, qdf_size_t *out_size);
 
-#define QDF_MAX_NUM_CHAN   (128)
-
 #define QDF_BCAST_MAC_ADDR (0xFF)
 #define QDF_MCAST_IPV4_MAC_ADDR (0x01)
 #define QDF_MCAST_IPV6_MAC_ADDR (0x33)
@@ -1275,6 +1273,37 @@ enum qdf_dp_tx_rx_status {
 	QDF_TX_RX_STATUS_FW_DISCARD,
 	QDF_TX_RX_STATUS_NO_ACK,
 	QDF_TX_RX_STATUS_DROP,
+	QDF_TX_RX_STATUS_MAX,
 };
 
+/**
+ * enum qdf_dp_tx_comp_status - TX COMPL packet status
+ * @QDF_TX_COMP_STATUS_OK: successfully sent + acked
+ * @QDF_TX_COMP_STATUS_STAT_DISCARD: packet not sent in FW
+ * @QDF_TX_COMP_STATUS_STAT_NO_ACK: packet sent but no ack
+ * @QDF_TX_COMP_STATUS_STAT_POSTPONE: equal HTT_TX_COMPL_IND_STAT_POSTPONE
+ * @QDF_TX_COMP_STATUS_STAT_PEER_DEL: equal HTT_TX_COMPL_IND_STAT_PEER_DEL
+ * @QDF_TX_COMP_STATUS_STAT_DROP: packet dropped in FW
+ * @QDF_TX_COMP_STATUS_STAT_INSPECT: equal HTT_TX_COMPL_IND_STAT_HOST_INSPECT
+ */
+enum qdf_dp_tx_comp_status {
+	QDF_TX_COMP_STATUS_OK,
+	QDF_TX_COMP_STATUS_STAT_DISCARD,
+	QDF_TX_COMP_STATUS_STAT_NO_ACK,
+	QDF_TX_COMP_STATUS_STAT_POSTPONE,
+	QDF_TX_COMP_STATUS_STAT_PEER_DEL,
+	QDF_TX_COMP_STATUS_STAT_DROP,
+	QDF_TX_COMP_STATUS_STAT_INSPECT,
+	QDF_TX_COMP_STATUS_STAT_MAX,
+};
+
+/**
+ * enum qdf_dp_a_status - A_STATUS
+ * @QDF_A_STATUS_ERROR: Generic error return
+ * @QDF_A_STATUS_OK: success
+ */
+enum qdf_dp_a_status {
+	QDF_A_STATUS_ERROR = -1,
+	QDF_A_STATUS_OK,
+};
 #endif /* __QDF_TYPES_H */
