@@ -1412,6 +1412,24 @@ bool hal_rx_get_fisa_timeout_6490(uint8_t *buf)
 }
 
 /**
+ * hal_rx_mpdu_start_tlv_tag_valid_6490 () - API to check if RX_MPDU_START
+ * tlv tag is valid
+ *
+ *@rx_tlv_hdr: start address of rx_pkt_tlvs
+ *
+ * Return: true if RX_MPDU_START is valied, else false.
+ */
+static uint8_t hal_rx_mpdu_start_tlv_tag_valid_6490(void *rx_tlv_hdr)
+{
+	struct rx_pkt_tlvs *rx_desc = (struct rx_pkt_tlvs *)rx_tlv_hdr;
+	uint32_t tlv_tag;
+
+	tlv_tag = HAL_RX_GET_USER_TLV32_TYPE(&rx_desc->mpdu_start_tlv);
+
+	return tlv_tag == WIFIRX_MPDU_START_E ? true : false;
+}
+
+/**
  * hal_reo_set_err_dst_remap_6490(): Function to set REO error destination
  *				     ring remap register
  * @hal_soc: Pointer to hal_soc
@@ -1553,8 +1571,16 @@ struct hal_hw_txrx_ops qca6490_hal_hw_txrx_ops = {
 	hal_rx_get_flow_agg_continuation_6490,
 	hal_rx_get_flow_agg_count_6490,
 	hal_rx_get_fisa_timeout_6490,
+	hal_rx_mpdu_start_tlv_tag_valid_6490,
 	NULL,
 	NULL,
+
+	/* rx - TLV struct offsets */
+	hal_rx_msdu_end_offset_get_generic,
+	hal_rx_attn_offset_get_generic,
+	hal_rx_msdu_start_offset_get_generic,
+	hal_rx_mpdu_start_offset_get_generic,
+	hal_rx_mpdu_end_offset_get_generic
 };
 
 struct hal_hw_srng_config hw_srng_table_6490[] = {

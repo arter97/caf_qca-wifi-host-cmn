@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2019-2020 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -68,12 +68,20 @@
 #define NUM_LUT_ENTRIES 136
 
 /* Max size :
- * 16173 = 93 bytes(csi header) + 64 bytes(cfr header) + 16016 bytes(cfr
+ * 16240 = 112 bytes(csi header) + 64 bytes(cfr header) + 16064 bytes(cfr
  * payload)
  */
-#define STREAMFS_MAX_SUBBUF_CYP 16173
+#define STREAMFS_MAX_SUBBUF_CYP 16240
 
 #define STREAMFS_NUM_SUBBUF_CYP 255
+
+/* Max size :
+ * 16886 = 310 bytes(csi header) + 192 bytes(cfr header) + 16384 bytes(cfr
+ * payload)
+ */
+#define STREAMFS_MAX_SUBBUF_PINE 16886
+
+#define STREAMFS_NUM_SUBBUF_PINE 255
 
 /*
  * @tag: ucode fills this with 0xBA

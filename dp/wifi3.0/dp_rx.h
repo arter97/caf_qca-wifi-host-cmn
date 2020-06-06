@@ -63,6 +63,35 @@
 #define DP_RX_DESC_MAGIC 0xdec0de
 
 /**
+ * enum dp_rx_desc_state
+ *
+ * @RX_DESC_REPLENISH: rx desc replenished
+ * @RX_DESC_FREELIST: rx desc in freelist
+ */
+enum dp_rx_desc_state {
+	RX_DESC_REPLENISHED,
+	RX_DESC_IN_FREELIST,
+};
+
+/**
+ * struct dp_rx_desc_dbg_info
+ *
+ * @freelist_caller: name of the function that put the
+ *  the rx desc in freelist
+ * @freelist_ts: timestamp when the rx desc is put in
+ *  a freelist
+ * @replenish_caller: name of the function that last
+ *  replenished the rx desc
+ * @replenish_ts: last replenish timestamp
+ */
+struct dp_rx_desc_dbg_info {
+	char freelist_caller[QDF_MEM_FUNC_NAME_SIZE];
+	uint64_t freelist_ts;
+	char replenish_caller[QDF_MEM_FUNC_NAME_SIZE];
+	uint64_t replenish_ts;
+};
+
+/**
  * struct dp_rx_desc
  *
  * @nbuf		: VA of the "skb" posted
@@ -87,6 +116,7 @@ struct dp_rx_desc {
 	uint8_t	 pool_id;
 #ifdef RX_DESC_DEBUG_CHECK
 	uint32_t magic;
+	struct dp_rx_desc_dbg_info *dbg_info;
 #endif
 	uint8_t	in_use:1,
 	unmapped:1;
@@ -137,6 +167,14 @@ struct dp_rx_desc {
 #define FRAME_MASK_IPV4_EAPOL 4
 #define FRAME_MASK_IPV6_DHCP  8
 
+#define dp_rx_add_to_free_desc_list(head, tail, new) \
+	__dp_rx_add_to_free_desc_list(head, tail, new, __func__)
+
+#define dp_rx_buffers_replenish(soc, mac_id, rxdma_srng, rx_desc_pool, \
+				num_buffers, desc_list, tail) \
+	__dp_rx_buffers_replenish(soc, mac_id, rxdma_srng, rx_desc_pool, \
+				  num_buffers, desc_list, tail, __func__)
+
 #ifdef DP_RX_SPECIAL_FRAME_NEED
 /**
  * dp_rx_is_special_frame() - check is RX frame special needed
@@ -172,6 +210,7 @@ bool dp_rx_is_special_frame(qdf_nbuf_t nbuf, uint32_t frame_mask)
  * @peer: pointer to DP peer
  * @nbuf: pointer to the skb of RX frame
  * @frame_mask: the mask for speical frame needed
+ * @rx_tlv_hdr: start of rx tlv header
  *
  * note: Msdu_len must have been stored in QDF_NBUF_CB_RX_PKT_LEN(nbuf) and
  * single nbuf is expected.
@@ -179,7 +218,8 @@ bool dp_rx_is_special_frame(qdf_nbuf_t nbuf, uint32_t frame_mask)
  * return: true - nbuf has been delivered to stack, false - not.
  */
 bool dp_rx_deliver_special_frame(struct dp_soc *soc, struct dp_peer *peer,
-				 qdf_nbuf_t nbuf, uint32_t frame_mask);
+				 qdf_nbuf_t nbuf, uint32_t frame_mask,
+				 uint8_t *rx_tlv_hdr);
 #else
 static inline
 bool dp_rx_is_special_frame(qdf_nbuf_t nbuf, uint32_t frame_mask)
@@ -189,7 +229,8 @@ bool dp_rx_is_special_frame(qdf_nbuf_t nbuf, uint32_t frame_mask)
 
 static inline
 bool dp_rx_deliver_special_frame(struct dp_soc *soc, struct dp_peer *peer,
-				 qdf_nbuf_t nbuf, uint32_t frame_mask)
+				 qdf_nbuf_t nbuf, uint32_t frame_mask,
+				 uint8_t *rx_tlv_hdr)
 {
 	return false;
 }
@@ -431,6 +472,11 @@ struct dp_rx_desc *dp_rx_cookie_2_va_mon_status(struct dp_soc *soc,
 	return dp_get_rx_desc_from_cookie(soc, &soc->rx_desc_status[0], cookie);
 }
 #else
+
+void dp_rx_desc_pool_init(struct dp_soc *soc, uint32_t pool_id,
+			  uint32_t pool_size,
+			  struct rx_desc_pool *rx_desc_pool);
+
 /**
  * dp_rx_cookie_2_va_rxdma_buf() - Converts cookie to a virtual address of
  *			 the Rx descriptor on Rx DMA source ring buffer
@@ -494,6 +540,16 @@ void *dp_rx_cookie_2_va_mon_status(struct dp_soc *soc, uint32_t cookie)
 }
 #endif /* RX_DESC_MULTI_PAGE_ALLOC */
 
+QDF_STATUS dp_rx_desc_pool_is_allocated(struct rx_desc_pool *rx_desc_pool);
+QDF_STATUS dp_rx_desc_pool_alloc(struct dp_soc *soc,
+				 uint32_t pool_size,
+				 struct rx_desc_pool *rx_desc_pool);
+
+void dp_rx_desc_pool_init(struct dp_soc *soc, uint32_t pool_id,
+			  uint32_t pool_size,
+			  struct rx_desc_pool *rx_desc_pool);
+void dp_rx_pdev_mon_buf_buffers_free(struct dp_pdev *pdev, uint32_t mac_id);
+
 void dp_rx_add_desc_list_to_free_list(struct dp_soc *soc,
 				union dp_rx_desc_list_elem_t **local_desc_list,
 				union dp_rx_desc_list_elem_t **tail,
@@ -507,7 +563,17 @@ uint16_t dp_rx_get_free_desc_list(struct dp_soc *soc, uint32_t pool_id,
 				union dp_rx_desc_list_elem_t **tail);
 
 
+QDF_STATUS dp_rx_pdev_desc_pool_alloc(struct dp_pdev *pdev);
+void dp_rx_pdev_desc_pool_free(struct dp_pdev *pdev);
+
+QDF_STATUS dp_rx_pdev_desc_pool_init(struct dp_pdev *pdev);
+void dp_rx_pdev_desc_pool_deinit(struct dp_pdev *pdev);
+void dp_rx_desc_pool_deinit(struct dp_soc *soc,
+			    struct rx_desc_pool *rx_desc_pool);
+
 QDF_STATUS dp_rx_pdev_attach(struct dp_pdev *pdev);
+QDF_STATUS dp_rx_pdev_buffers_alloc(struct dp_pdev *pdev);
+void dp_rx_pdev_buffers_free(struct dp_pdev *pdev);
 
 void dp_rx_pdev_detach(struct dp_pdev *pdev);
 
@@ -570,19 +636,6 @@ dp_rx_wbm_err_process(struct dp_intr *int_ctx, struct dp_soc *soc,
  */
 qdf_nbuf_t dp_rx_sg_create(qdf_nbuf_t nbuf);
 
-/*
- * dp_rx_desc_pool_alloc() - create a pool of software rx_descs
- *			     at the time of dp rx initialization
- *
- * @soc: core txrx main context
- * @pool_id: pool_id which is one of 3 mac_ids
- * @pool_size: number of Rx descriptor in the pool
- * @rx_desc_pool: rx descriptor pool pointer
- *
- * Return: QDF status
- */
-QDF_STATUS dp_rx_desc_pool_alloc(struct dp_soc *soc, uint32_t pool_id,
-				 uint32_t pool_size, struct rx_desc_pool *pool);
 
 /*
  * dp_rx_desc_nbuf_and_pool_free() - free the sw rx desc pool called during
@@ -625,19 +678,92 @@ void dp_rx_desc_pool_free(struct dp_soc *soc,
 void dp_rx_deliver_raw(struct dp_vdev *vdev, qdf_nbuf_t nbuf_list,
 				struct dp_peer *peer);
 
+#ifdef RX_DESC_DEBUG_CHECK
+/*
+ * dp_rx_desc_alloc_dbg_info() - Alloc memory for rx descriptor debug
+ *  structure
+ * @rx_desc: rx descriptor pointer
+ *
+ * Return: None
+ */
+static inline
+void dp_rx_desc_alloc_dbg_info(struct dp_rx_desc *rx_desc)
+{
+	rx_desc->dbg_info = qdf_mem_malloc(sizeof(struct dp_rx_desc_dbg_info));
+}
+
+/*
+ * dp_rx_desc_free_dbg_info() - Free rx descriptor debug
+ *  structure memory
+ * @rx_desc: rx descriptor pointer
+ *
+ * Return: None
+ */
+static inline
+void dp_rx_desc_free_dbg_info(struct dp_rx_desc *rx_desc)
+{
+	qdf_mem_free(rx_desc->dbg_info);
+}
+
+/*
+ * dp_rx_desc_update_dbg_info() - Update rx descriptor debug info
+ *  structure memory
+ * @rx_desc: rx descriptor pointer
+ *
+ * Return: None
+ */
+static
+void dp_rx_desc_update_dbg_info(struct dp_rx_desc *rx_desc,
+				const char *func_name, uint8_t flag)
+{
+	struct dp_rx_desc_dbg_info *info = rx_desc->dbg_info;
+
+	if (!info)
+		return;
+
+	if (flag == RX_DESC_REPLENISHED) {
+		qdf_str_lcopy(info->replenish_caller, func_name,
+			      QDF_MEM_FUNC_NAME_SIZE);
+		info->replenish_ts = qdf_get_log_timestamp();
+	} else {
+		qdf_str_lcopy(info->freelist_caller, func_name,
+			      QDF_MEM_FUNC_NAME_SIZE);
+		info->freelist_ts = qdf_get_log_timestamp();
+	}
+}
+#else
+
+static inline
+void dp_rx_desc_alloc_dbg_info(struct dp_rx_desc *rx_desc)
+{
+}
+
+static inline
+void dp_rx_desc_free_dbg_info(struct dp_rx_desc *rx_desc)
+{
+}
+
+static inline
+void dp_rx_desc_update_dbg_info(struct dp_rx_desc *rx_desc,
+				const char *func_name, uint8_t flag)
+{
+}
+#endif /* RX_DESC_DEBUG_CHECK */
+
 /**
  * dp_rx_add_to_free_desc_list() - Adds to a local free descriptor list
  *
  * @head: pointer to the head of local free list
  * @tail: pointer to the tail of local free list
  * @new: new descriptor that is added to the free list
+ * @func_name: caller func name
  *
  * Return: void:
  */
 static inline
-void dp_rx_add_to_free_desc_list(union dp_rx_desc_list_elem_t **head,
+void __dp_rx_add_to_free_desc_list(union dp_rx_desc_list_elem_t **head,
 				 union dp_rx_desc_list_elem_t **tail,
-				 struct dp_rx_desc *new)
+				 struct dp_rx_desc *new, const char *func_name)
 {
 	qdf_assert(head && new);
 
@@ -650,6 +776,7 @@ void dp_rx_add_to_free_desc_list(union dp_rx_desc_list_elem_t **head,
 	if (!*tail || !(*head)->next)
 		*tail = *head;
 
+	dp_rx_desc_update_dbg_info(new, func_name, RX_DESC_IN_FREELIST);
 }
 
 uint8_t dp_rx_process_invalid_peer(struct dp_soc *soc, qdf_nbuf_t nbuf,
@@ -673,6 +800,19 @@ void dp_2k_jump_handle(struct dp_soc *soc, qdf_nbuf_t nbuf, uint8_t *rx_tlv_hdr,
 		}                                                     \
 		(tail) = (elem);                                      \
 		qdf_nbuf_set_next((tail), NULL);                      \
+	} while (0)
+
+#define DP_RX_MERGE_TWO_LIST(phead, ptail, chead, ctail) \
+	do {                                                          \
+		if (!(phead)) {                                       \
+			(phead) = (chead);                            \
+		} else {                                              \
+			qdf_nbuf_set_next((ptail), (chead));          \
+			QDF_NBUF_CB_RX_NUM_ELEMENTS_IN_LIST(phead) += \
+			QDF_NBUF_CB_RX_NUM_ELEMENTS_IN_LIST(chead);   \
+		}                                                     \
+		(ptail) = (ctail);                                    \
+		qdf_nbuf_set_next((ptail), NULL);                     \
 	} while (0)
 
 /*for qcn9000 emulation the pcie is complete phy and no address restrictions*/
@@ -796,16 +936,18 @@ void *dp_rx_cookie_2_mon_link_desc_va(struct dp_pdev *pdev,
 				  int mac_id)
 {
 	void *link_desc_va;
+	struct qdf_mem_multi_page_t *pages;
+	uint16_t page_id = LINK_DESC_COOKIE_PAGE_ID(buf_info->sw_cookie);
 
-	/* TODO */
-	/* Add sanity for  cookie */
+	pages = &pdev->soc->mon_link_desc_pages[mac_id];
+	if (!pages)
+		return NULL;
 
-	link_desc_va =
-	   pdev->soc->mon_link_desc_banks[mac_id][buf_info->sw_cookie]
-			.base_vaddr +
-	   (buf_info->paddr -
-	   pdev->soc->mon_link_desc_banks[mac_id][buf_info->sw_cookie]
-			.base_paddr);
+	if (qdf_unlikely(page_id >= pages->num_pages))
+		return NULL;
+
+	link_desc_va = pages->dma_pages[page_id].page_v_addr_start +
+		(buf_info->paddr - pages->dma_pages[page_id].page_p_addr);
 
 	return link_desc_va;
 }
@@ -993,14 +1135,16 @@ void dp_rx_mon_update_protocol_flow_tag(struct dp_soc *soc,
  *	       or NULL during dp rx initialization or out of buffer
  *	       interrupt.
  * @tail: tail of descs list
+ * @func_name: name of the caller function
  * Return: return success or failure
  */
-QDF_STATUS dp_rx_buffers_replenish(struct dp_soc *dp_soc, uint32_t mac_id,
+QDF_STATUS __dp_rx_buffers_replenish(struct dp_soc *dp_soc, uint32_t mac_id,
 				 struct dp_srng *dp_rxdma_srng,
 				 struct rx_desc_pool *rx_desc_pool,
 				 uint32_t num_req_buffers,
 				 union dp_rx_desc_list_elem_t **desc_list,
-				 union dp_rx_desc_list_elem_t **tail);
+				 union dp_rx_desc_list_elem_t **tail,
+				 const char *func_name);
 
 /*
  * dp_pdev_rx_buffers_attach() - replenish rxdma ring with rx nbufs
@@ -1139,21 +1283,6 @@ void dp_rx_process_rxdma_err(struct dp_soc *soc, qdf_nbuf_t nbuf,
 			     uint8_t *rx_tlv_hdr, struct dp_peer *peer,
 			     uint8_t err_code, uint8_t mac_id);
 
-#ifdef PEER_CACHE_RX_PKTS
-/**
- * dp_rx_flush_rx_cached() - flush cached rx frames
- * @peer: peer
- * @drop: set flag to drop frames
- *
- * Return: None
- */
-void dp_rx_flush_rx_cached(struct dp_peer *peer, bool drop);
-#else
-static inline void dp_rx_flush_rx_cached(struct dp_peer *peer, bool drop)
-{
-}
-#endif
-
 #ifndef QCA_MULTIPASS_SUPPORT
 static inline
 bool dp_rx_multipass_process(struct dp_peer *peer, qdf_nbuf_t nbuf, uint8_t tid)
@@ -1192,4 +1321,81 @@ void dp_rx_deliver_to_stack(struct dp_soc *soc,
 			    qdf_nbuf_t nbuf_head,
 			    qdf_nbuf_t nbuf_tail);
 
+#ifdef QCA_OL_RX_LOCK_LESS_ACCESS
+/*
+ * dp_rx_ring_access_start()- Wrapper function to log access start of a hal ring
+ * @int_ctx: pointer to DP interrupt context
+ * @dp_soc - DP soc structure pointer
+ * @hal_ring_hdl - HAL ring handle
+ *
+ * Return: 0 on success; error on failure
+ */
+static inline int
+dp_rx_srng_access_start(struct dp_intr *int_ctx, struct dp_soc *soc,
+			hal_ring_handle_t hal_ring_hdl)
+{
+	return hal_srng_access_start_unlocked(soc->hal_soc, hal_ring_hdl);
+}
+
+/*
+ * dp_rx_ring_access_end()- Wrapper function to log access end of a hal ring
+ * @int_ctx: pointer to DP interrupt context
+ * @dp_soc - DP soc structure pointer
+ * @hal_ring_hdl - HAL ring handle
+ *
+ * Return - None
+ */
+static inline void
+dp_rx_srng_access_end(struct dp_intr *int_ctx, struct dp_soc *soc,
+		      hal_ring_handle_t hal_ring_hdl)
+{
+	hal_srng_access_end_unlocked(soc->hal_soc, hal_ring_hdl);
+}
+#else
+static inline int
+dp_rx_srng_access_start(struct dp_intr *int_ctx, struct dp_soc *soc,
+			hal_ring_handle_t hal_ring_hdl)
+{
+	return dp_srng_access_start(int_ctx, soc, hal_ring_hdl);
+}
+
+static inline void
+dp_rx_srng_access_end(struct dp_intr *int_ctx, struct dp_soc *soc,
+		      hal_ring_handle_t hal_ring_hdl)
+{
+	dp_srng_access_end(int_ctx, soc, hal_ring_hdl);
+}
+#endif
+
+/*
+ * dp_rx_wbm_sg_list_reset() - Initialize sg list
+ *
+ * This api should be called at soc init and afterevery sg processing.
+ *@soc: DP SOC handle
+ */
+static inline void dp_rx_wbm_sg_list_reset(struct dp_soc *soc)
+{
+	if (soc) {
+		soc->wbm_sg_param.wbm_is_first_msdu_in_sg = false;
+		soc->wbm_sg_param.wbm_sg_nbuf_head = NULL;
+		soc->wbm_sg_param.wbm_sg_nbuf_tail = NULL;
+		soc->wbm_sg_param.wbm_sg_desc_msdu_len = 0;
+	}
+}
+
+/*
+ * dp_rx_wbm_sg_list_deinit() - De-initialize sg list
+ *
+ * This api should be called in down path, to avoid any leak.
+ *@soc: DP SOC handle
+ */
+static inline void dp_rx_wbm_sg_list_deinit(struct dp_soc *soc)
+{
+	if (soc) {
+		if (soc->wbm_sg_param.wbm_sg_nbuf_head)
+			qdf_nbuf_list_free(soc->wbm_sg_param.wbm_sg_nbuf_head);
+
+		dp_rx_wbm_sg_list_reset(soc);
+	}
+}
 #endif /* _DP_RX_H */

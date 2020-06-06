@@ -936,6 +936,8 @@ enum qca_wlan_auth_type {
  *  mac address of peer station when it disconnects. Host driver sends
  *  assoc request frame of the given station. Host driver doesn't provide
  *  the IEs when the peer station is still in connected state.
+ * @QCA_WLAN_VENDOR_ATTR_GET_STATION_INFO_HE_OPERATION: Attribute type for
+ * sending HE operation info.
  * @QCA_WLAN_VENDOR_ATTR_GET_STATION_INFO_AFTER_LAST: After last
  */
 enum qca_wlan_vendor_attr_get_station_info {
@@ -978,6 +980,7 @@ enum qca_wlan_vendor_attr_get_station_info {
 	QCA_WLAN_VENDOR_ATTR_GET_STATION_INFO_BEACON_IES,
 	QCA_WLAN_VENDOR_ATTR_GET_STATION_INFO_DRIVER_DISCONNECT_REASON,
 	QCA_WLAN_VENDOR_ATTR_GET_STATION_INFO_ASSOC_REQ_IES,
+	QCA_WLAN_VENDOR_ATTR_GET_STATION_INFO_HE_OPERATION,
 
 	/* keep last */
 	QCA_WLAN_VENDOR_ATTR_GET_STATION_INFO_AFTER_LAST,
@@ -4086,8 +4089,14 @@ enum qca_wlan_vendor_attr_config {
 	 * wiphy.
 	 */
 	QCA_WLAN_VENDOR_ATTR_CONFIG_IFINDEX = 24,
-	/* 8-bit unsigned value to trigger QPower: 1-Enable, 0-Disable */
-	QCA_WLAN_VENDOR_ATTR_CONFIG_QPOWER = 25,
+	/*
+	 * 8-bit unsigned value to trigger Advanced Power Save Mode:
+	 * 1-Enable, 0-Disable
+	 */
+	QCA_WLAN_VENDOR_ATTR_CONFIG_ADVANCED_POWER_SAVE_MODE = 25,
+	/* Deprecated old name */
+	QCA_WLAN_VENDOR_ATTR_CONFIG_QPOWER =
+		QCA_WLAN_VENDOR_ATTR_CONFIG_ADVANCED_POWER_SAVE_MODE,
 	/*
 	 * 8-bit unsigned value to configure the driver and below layers to
 	 * ignore the assoc disallowed set by APs while connecting
@@ -6709,8 +6718,12 @@ enum qca_wlan_vendor_attr_spectral_scan {
 	 * QCA_WLAN_VENDOR_SPECTRAL_SCAN_MODE_AGILE
 	 *    Center frequency (in MHz) of the span of interest or
 	 *    for convenience, center frequency (in MHz) of any channel
-	 *    in the span of interest. If agile spectral scan is initiated
-	 *    without setting a valid frequency it returns the error code
+	 *    in the span of interest. For 80+80 MHz agile spectral scan
+	 *    request it represents center frequency (in MHz) of the primary
+	 *    80 MHz span or for convenience, center frequency (in MHz) of any
+	 *    channel in the primary 80 MHz span. If agile spectral scan is
+	 *    initiated without setting a valid frequency it returns the
+	 *    error code
 	 *    (QCA_WLAN_VENDOR_SPECTRAL_SCAN_ERR_PARAM_NOT_INITIALIZED).
 	 * u32 attribute.
 	 */
@@ -6737,6 +6750,20 @@ enum qca_wlan_vendor_attr_spectral_scan {
 	 * 1-enable, 0-disable
 	 */
 	QCA_WLAN_VENDOR_ATTR_SPECTRAL_SCAN_CONFIG_DMA_BUFFER_DEBUG = 28,
+	/* This specifies the frequency span over which spectral scan would be
+	 * carried out. Its value depends on the value of
+	 * QCA_WLAN_VENDOR_ATTR_SPECTRAL_SCAN_MODE and the relation is as
+	 * follows.
+	 * QCA_WLAN_VENDOR_SPECTRAL_SCAN_MODE_NORMAL
+	 *    Not applicable. Spectral scan would happen in the operating span.
+	 * QCA_WLAN_VENDOR_SPECTRAL_SCAN_MODE_AGILE
+	 *    This attribute is applicable only for agile spectral scan
+	 *    requests in 80+80 MHz mode. It represents center frequency (in
+	 *    MHz) of the secondary 80 MHz span or for convenience, center
+	 *    frequency (in MHz) of any channel in the secondary 80 MHz span.
+	 * u32 attribute.
+	 */
+	QCA_WLAN_VENDOR_ATTR_SPECTRAL_SCAN_CONFIG_FREQUENCY_2 = 29,
 
 	QCA_WLAN_VENDOR_ATTR_SPECTRAL_SCAN_CONFIG_AFTER_LAST,
 	QCA_WLAN_VENDOR_ATTR_SPECTRAL_SCAN_CONFIG_MAX =
@@ -6827,6 +6854,26 @@ enum qca_wlan_vendor_attr_spectral_cap {
 	 * for 80+80 MHz mode.
 	 */
 	QCA_WLAN_VENDOR_ATTR_SPECTRAL_SCAN_CAP_AGILE_SPECTRAL_80_80 = 13,
+	/* Number of spectral detectors used for scan in 20 MHz.
+	 * u32 attribute.
+	 */
+	QCA_WLAN_VENDOR_ATTR_SPECTRAL_SCAN_CAP_NUM_DETECTORS_20_MHZ = 14,
+	/* Number of spectral detectors used for scan in 40 MHz.
+	 * u32 attribute.
+	 */
+	QCA_WLAN_VENDOR_ATTR_SPECTRAL_SCAN_CAP_NUM_DETECTORS_40_MHZ = 15,
+	/* Number of spectral detectors used for scan in 80 MHz.
+	 * u32 attribute.
+	 */
+	QCA_WLAN_VENDOR_ATTR_SPECTRAL_SCAN_CAP_NUM_DETECTORS_80_MHZ = 16,
+	/* Number of spectral detectors used for scan in 160 MHz.
+	 * u32 attribute.
+	 */
+	QCA_WLAN_VENDOR_ATTR_SPECTRAL_SCAN_CAP_NUM_DETECTORS_160_MHZ = 17,
+	/* Number of spectral detectors used for scan in 80+80 MHz.
+	 * u32 attribute.
+	 */
+	QCA_WLAN_VENDOR_ATTR_SPECTRAL_SCAN_CAP_NUM_DETECTORS_80P80_MHZ = 18,
 
 	QCA_WLAN_VENDOR_ATTR_SPECTRAL_SCAN_CAP_AFTER_LAST,
 	QCA_WLAN_VENDOR_ATTR_SPECTRAL_SCAN_CAP_MAX =
@@ -8591,14 +8638,23 @@ enum qca_wlan_vendor_attr_beacon_reporting_params {
  * enum qca_wlan_vendor_attr_oem_data_params - Used by the vendor command
  * QCA_NL80211_VENDOR_SUBCMD_OEM_DATA.
  *
- * @QCA_WLAN_VENDOR_ATTR_OEM_DATA_CMD_DATA: The binary blob for the vendor
- * command QCA_NL80211_VENDOR_SUBCMD_OEM_DATA are carried through this
- * attribute.
- * NLA_BINARY attribute, the max size is 1024 bytes.
+ * @QCA_WLAN_VENDOR_ATTR_OEM_DATA_CMD_DATA: This NLA_BINARY attribute is
+ * used to set/query the data to/from the firmware. On query, the same
+ * attribute is used to carry the respective data in the reply sent by the
+ * driver to userspace. The request to set/query the data and the format of the
+ * respective data from the firmware are embedded in the attribute. The
+ * maximum size of the attribute payload is 1024 bytes.
+ * Userspace has to set the QCA_WLAN_VENDOR_ATTR_OEM_DATA_RESPONSE_EXPECTED
+ * attribute when the data is queried from the firmware.
+ *
+ * @QCA_WLAN_VENDOR_ATTR_OEM_DATA_RESPONSE_EXPECTED: This NLA_FLAG attribute
+ * is set when the userspace queries data from the firmware. This attribute
+ * should not be set when userspace sets the OEM data to the firmware.
  */
 enum qca_wlan_vendor_attr_oem_data_params {
 	QCA_WLAN_VENDOR_ATTR_OEM_DATA_INVALID = 0,
 	QCA_WLAN_VENDOR_ATTR_OEM_DATA_CMD_DATA = 1,
+	QCA_WLAN_VENDOR_ATTR_OEM_DATA_RESPONSE_EXPECTED = 3,
 
 	/* keep last */
 	QCA_WLAN_VENDOR_ATTR_OEM_DATA_PARAMS_AFTER_LAST,

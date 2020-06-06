@@ -875,9 +875,12 @@ void dfs_set_current_channel_for_freq(struct wlan_dfs *dfs,
 				      uint8_t dfs_chan_vhtop_freq_seg1,
 				      uint8_t dfs_chan_vhtop_freq_seg2,
 				      uint16_t dfs_chan_mhz_freq_seg1,
-				      uint16_t dfs_chan_mhz_freq_seg2)
-
+				      uint16_t dfs_chan_mhz_freq_seg2,
+				      bool *is_channel_updated)
 {
+	if (is_channel_updated)
+		*is_channel_updated = false;
+
 	if (!dfs) {
 		dfs_err(dfs, WLAN_DEBUG_DFS_ALWAYS,  "dfs is NULL");
 		return;
@@ -909,6 +912,9 @@ void dfs_set_current_channel_for_freq(struct wlan_dfs *dfs,
 	dfs->dfs_curchan->dfs_ch_vhtop_ch_freq_seg2 = dfs_chan_vhtop_freq_seg2;
 	dfs->dfs_curchan->dfs_ch_mhz_freq_seg1 = dfs_chan_mhz_freq_seg1;
 	dfs->dfs_curchan->dfs_ch_mhz_freq_seg2 = dfs_chan_mhz_freq_seg2;
+
+	if (is_channel_updated)
+		*is_channel_updated = true;
 }
 #endif
 
@@ -961,13 +967,19 @@ void dfs_complete_deferred_tasks(struct wlan_dfs *dfs)
 bool dfs_is_true_160mhz_supported(struct wlan_dfs *dfs)
 {
 	struct wlan_objmgr_psoc *psoc = dfs->dfs_soc_obj->psoc;
-	struct wlan_lmac_if_target_tx_ops *tx_ops;
+	struct wlan_lmac_if_target_tx_ops *tgt_tx_ops;
+	struct wlan_lmac_if_tx_ops *tx_ops;
 	uint32_t target_type;
 
+	tx_ops = wlan_psoc_get_lmac_if_txops(psoc);
+	if (!tx_ops) {
+		 dfs_info(dfs, WLAN_DEBUG_DFS_ALWAYS, "tx_ops is NULL");
+		 return false;
+	}
 	target_type = lmac_get_target_type(dfs->dfs_pdev_obj);
-	tx_ops = &psoc->soc_cb.tx_ops.target_tx_ops;
-	if (tx_ops->tgt_is_tgt_type_qcn9000)
-		return tx_ops->tgt_is_tgt_type_qcn9000(target_type);
+	tgt_tx_ops = &tx_ops->target_tx_ops;
+	if (tgt_tx_ops->tgt_is_tgt_type_qcn9000)
+		return tgt_tx_ops->tgt_is_tgt_type_qcn9000(target_type);
 	return false;
 }
 

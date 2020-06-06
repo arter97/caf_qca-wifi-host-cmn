@@ -146,7 +146,7 @@ static void wlan_serialization_destroy_cmd_pool(
 	qdf_list_node_t *node = NULL;
 	struct wlan_serialization_command_list *cmd_list;
 
-	ser_debug("Destroy cmd pool list %pk, size %d",
+	ser_debug("Destroy cmd pool list %pK, size %d",
 		  &pdev_queue->cmd_pool_list,
 		  qdf_list_size(&pdev_queue->cmd_pool_list));
 	while (!qdf_list_empty(&pdev_queue->cmd_pool_list)) {
@@ -271,7 +271,9 @@ static QDF_STATUS wlan_serialization_pdev_create_handler(
 			goto error_free;
 		}
 
-		pdev_queue->vdev_active_cmd_bitmap = 0;
+		qdf_mem_zero(pdev_queue->vdev_active_cmd_bitmap,
+			     sizeof(pdev_queue->vdev_active_cmd_bitmap));
+
 		pdev_queue->blocking_cmd_active = 0;
 		pdev_queue->blocking_cmd_waiting = 0;
 	}

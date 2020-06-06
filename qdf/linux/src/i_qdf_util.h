@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2019 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2014-2020 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -77,6 +77,8 @@ typedef wait_queue_head_t __qdf_wait_queue_head_t;
 #define __qdf_unlikely(_expr)   unlikely(_expr)
 #define __qdf_likely(_expr)     likely(_expr)
 
+#define __qdf_bitmap(name, bits) DECLARE_BITMAP(name, bits)
+
 /**
  * __qdf_set_bit() - set bit in address
  * @nr: bit number to be set
@@ -109,6 +111,18 @@ static inline unsigned long __qdf_find_first_bit(unsigned long *addr,
 					unsigned long nbits)
 {
 	return find_first_bit(addr, nbits);
+}
+
+static inline bool __qdf_bitmap_empty(unsigned long *addr,
+				      unsigned long nbits)
+{
+	return bitmap_empty(addr, nbits);
+}
+
+static inline int __qdf_bitmap_and(unsigned long *dst, unsigned long *src1,
+				   unsigned long *src2, unsigned long nbits)
+{
+	return bitmap_and(dst, src1, src2, nbits);
 }
 
 /**

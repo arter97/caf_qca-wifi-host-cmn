@@ -26,6 +26,8 @@
 #ifndef __WLAN_REG_SERVICES_API_H
 #define __WLAN_REG_SERVICES_API_H
 
+#include <reg_services_public_struct.h>
+
 #ifdef CONFIG_CHAN_NUM_API
 /**
  * wlan_reg_min_24ghz_ch_num() - Get minimum 2.4GHz channel number
@@ -142,6 +144,25 @@ bool wlan_reg_is_5ghz_ch_freq(qdf_freq_t freq);
 #define WLAN_REG_IS_6GHZ_CHAN_FREQ(freq) wlan_reg_is_6ghz_chan_freq(freq)
 bool wlan_reg_is_6ghz_chan_freq(uint16_t freq);
 
+#ifdef CONFIG_6G_FREQ_OVERLAP
+/**
+ * wlan_reg_is_range_only6g() - Check if the given low_freq and high_freq
+ * is in the 6G range.
+ * @low_freq - Low frequency.
+ * @high_freq - High frequency.
+ *
+ * Return: Return true if given low_freq and high_freq overlaps 6G range,
+ * else false.
+ */
+bool wlan_reg_is_range_only6g(qdf_freq_t low_freq, qdf_freq_t high_freq);
+#else
+static inline bool wlan_reg_is_range_only6g(qdf_freq_t low_freq,
+					    qdf_freq_t high_freq)
+{
+	return false;
+}
+#endif
+
 /**
  * wlan_reg_is_6ghz_psc_chan_freq() - Check if the given 6GHz channel frequency
  * is preferred scanning channel frequency.
@@ -174,6 +195,12 @@ uint16_t wlan_reg_max_6ghz_chan_freq(void);
 
 #define WLAN_REG_IS_6GHZ_CHAN_FREQ(freq) (false)
 static inline bool wlan_reg_is_6ghz_chan_freq(uint16_t freq)
+{
+	return false;
+}
+
+static inline bool wlan_reg_is_range_only6g(qdf_freq_t low_freq,
+					    qdf_freq_t high_freq)
 {
 	return false;
 }
@@ -310,6 +337,29 @@ QDF_STATUS wlan_reg_get_channel_list_with_power(struct wlan_objmgr_pdev *pdev,
  */
 QDF_STATUS wlan_reg_read_default_country(struct wlan_objmgr_psoc *psoc,
 				   uint8_t *country);
+
+/**
+ * wlan_reg_get_ctry_idx_max_bw_from_country_code() - Get the max 5G
+ * bandwidth from country code
+ * @cc : Country Code
+ * @max_bw_5g : Max 5G bandwidth supported by the country
+ *
+ * Return : QDF_STATUS
+ */
+
+QDF_STATUS wlan_reg_get_max_5g_bw_from_country_code(uint16_t cc,
+						    uint16_t *max_bw_5g);
+
+/**
+ * wlan_reg_get_max_5g_bw_from_regdomain() - Get the max 5G bandwidth
+ * supported by the regdomain
+ * @orig_regdmn : Regdomain Pair value
+ * @max_bw_5g : Max 5G bandwidth supported by the country
+ *
+ * Return : QDF_STATUS
+ */
+QDF_STATUS wlan_reg_get_max_5g_bw_from_regdomain(uint16_t regdmn,
+						 uint16_t *max_bw_5g);
 
 /**
  * wlan_reg_get_fcc_constraint() - Check FCC constraint on given frequency
@@ -930,6 +980,26 @@ bool wlan_reg_is_regdmn_en302502_applicable(struct wlan_objmgr_pdev *pdev);
 QDF_STATUS wlan_reg_modify_pdev_chan_range(struct wlan_objmgr_pdev *pdev);
 
 /**
+ * wlan_reg_get_phybitmap() - Get phybitmap from regulatory pdev_priv_obj
+ * @pdev: pdev pointer
+ * @phybitmap: pointer to phybitmap
+ *
+ * Return: QDF STATUS
+ */
+QDF_STATUS wlan_reg_get_phybitmap(struct wlan_objmgr_pdev *pdev,
+				  uint16_t *phybitmap);
+
+/**
+ * wlan_reg_update_pdev_wireless_modes() - Update the wireless_modes in the
+ * pdev_priv_obj with the input wireless_modes
+ * @pdev: pointer to wlan_objmgr_pdev.
+ * @wireless_modes: Wireless modes.
+ *
+ * Return : QDF_STATUS
+ */
+QDF_STATUS wlan_reg_update_pdev_wireless_modes(struct wlan_objmgr_pdev *pdev,
+					       uint32_t wireless_modes);
+/**
  * wlan_reg_disable_chan_coex() - Disable Coexisting channels based on the input
  * bitmask
  * @pdev: pointer to wlan_objmgr_pdev.
@@ -1278,11 +1348,11 @@ bool wlan_reg_is_6ghz_op_class(struct wlan_objmgr_pdev *pdev,
 
 /**
  * wlan_reg_is_6ghz_supported() - Whether 6ghz is supported
- * @pdev: pdev ptr
+ * @psoc: psoc ptr
  *
  * Return: bool
  */
-bool wlan_reg_is_6ghz_supported(struct wlan_objmgr_pdev *pdev);
+bool wlan_reg_is_6ghz_supported(struct wlan_objmgr_psoc *psoc);
 
 #ifdef HOST_OPCLASS_EXT
 /**

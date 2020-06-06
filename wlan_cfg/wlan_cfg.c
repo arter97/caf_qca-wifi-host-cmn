@@ -166,43 +166,79 @@ static const int tx_ring_mask_msi[WLAN_CFG_INT_NUM_CONTEXTS] = {
 						WLAN_CFG_TX_RING_MASK_3};
 
 static const int rx_ring_mask_msi[WLAN_CFG_INT_NUM_CONTEXTS] = {
+					0,
+					0,
+					0,
+					0,
 					WLAN_CFG_RX_RING_MASK_0,
 					WLAN_CFG_RX_RING_MASK_1,
 					WLAN_CFG_RX_RING_MASK_2,
 					WLAN_CFG_RX_RING_MASK_3};
 
 static const int rx_mon_ring_mask_msi[WLAN_CFG_INT_NUM_CONTEXTS] = {
-					0, 0, 0};
+					0,
+					0,
+					0,
+					WLAN_CFG_RX_MON_RING_MASK_0,
+					WLAN_CFG_RX_MON_RING_MASK_1,
+					WLAN_CFG_RX_MON_RING_MASK_2};
 
 static const int host2rxdma_ring_mask_msi[WLAN_CFG_INT_NUM_CONTEXTS] = {
-					0, 0, 0, 0};
+					0,
+					0,
+					0,
+					WLAN_CFG_HOST2RXDMA_RING_MASK_0,
+					WLAN_CFG_HOST2RXDMA_RING_MASK_1,
+					WLAN_CFG_HOST2RXDMA_RING_MASK_2,
+					WLAN_CFG_HOST2RXDMA_RING_MASK_3};
 
 static const int rxdma2host_ring_mask_msi[WLAN_CFG_INT_NUM_CONTEXTS] = {
-					0, 0, 0, 0};
+					0,
+					0,
+					0,
+					WLAN_CFG_RXDMA2HOST_RING_MASK_0,
+					WLAN_CFG_RXDMA2HOST_RING_MASK_1,
+					WLAN_CFG_RXDMA2HOST_RING_MASK_2,
+					WLAN_CFG_RXDMA2HOST_RING_MASK_3};
 
 static const int host2rxdma_mon_ring_mask_msi[WLAN_CFG_INT_NUM_CONTEXTS] = {
+					0,
+					0,
+					0,
 					WLAN_CFG_HOST2RXDMA_MON_RING_MASK_0,
 					WLAN_CFG_HOST2RXDMA_MON_RING_MASK_1,
 					WLAN_CFG_HOST2RXDMA_MON_RING_MASK_2};
 
 static const int rxdma2host_mon_ring_mask_msi[WLAN_CFG_INT_NUM_CONTEXTS] = {
+					0,
+					0,
+					0,
 					WLAN_CFG_RXDMA2HOST_MON_RING_MASK_0,
 					WLAN_CFG_RXDMA2HOST_MON_RING_MASK_1,
 					WLAN_CFG_RXDMA2HOST_MON_RING_MASK_2};
 
 static const int rx_err_ring_mask_msi[WLAN_CFG_INT_NUM_CONTEXTS] = {
+					0,
+					0,
+					0,
 					WLAN_CFG_RX_ERR_RING_MASK_0,
 					WLAN_CFG_RX_ERR_RING_MASK_1,
 					WLAN_CFG_RX_ERR_RING_MASK_2,
 					WLAN_CFG_RX_ERR_RING_MASK_3};
 
 static const int rx_wbm_rel_ring_mask_msi[WLAN_CFG_INT_NUM_CONTEXTS] = {
+					0,
+					0,
+					0,
 					WLAN_CFG_RX_WBM_REL_RING_MASK_0,
 					WLAN_CFG_RX_WBM_REL_RING_MASK_1,
 					WLAN_CFG_RX_WBM_REL_RING_MASK_2,
 					WLAN_CFG_RX_WBM_REL_RING_MASK_3};
 
 static const int reo_status_ring_mask_msi[WLAN_CFG_INT_NUM_CONTEXTS] = {
+					0,
+					0,
+					0,
 					WLAN_CFG_REO_STATUS_RING_MASK_0,
 					WLAN_CFG_REO_STATUS_RING_MASK_1,
 					WLAN_CFG_REO_STATUS_RING_MASK_2,
@@ -597,6 +633,18 @@ wlan_cfg_pdev_attach(struct cdp_ctrl_objmgr_psoc *psoc)
 	wlan_cfg_ctx->num_mac_rings = NUM_RXDMA_RINGS_PER_PDEV;
 
 	return wlan_cfg_ctx;
+}
+
+void wlan_cfg_set_mon_delayed_replenish_entries(
+					struct wlan_cfg_dp_soc_ctxt *cfg,
+					uint32_t val)
+{
+	cfg->delayed_replenish_entries = val;
+}
+
+int wlan_cfg_get_mon_delayed_replenish_entries(struct wlan_cfg_dp_soc_ctxt *cfg)
+{
+	return cfg->delayed_replenish_entries;
 }
 
 void wlan_cfg_pdev_detach(struct wlan_cfg_dp_pdev_ctxt *wlan_cfg_ctx)
@@ -1188,6 +1236,17 @@ wlan_cfg_get_dp_caps(struct wlan_cfg_dp_soc_ctxt *cfg,
 	default:
 		return false;
 	}
+}
+
+void wlan_cfg_set_tso_desc_attach_defer(struct wlan_cfg_dp_soc_ctxt *cfg,
+					bool val)
+{
+	cfg->is_tso_desc_attach_defer = val;
+}
+
+bool wlan_cfg_is_tso_desc_attach_defer(struct wlan_cfg_dp_soc_ctxt *cfg)
+{
+	return cfg->is_tso_desc_attach_defer;
 }
 
 #ifdef QCA_LL_TX_FLOW_CONTROL_V2

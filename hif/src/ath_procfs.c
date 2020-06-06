@@ -88,7 +88,8 @@ static ssize_t ath_procfs_diag_read(struct file *file, char __user *buf,
 	     (tgt_info->target_type == TARGET_TYPE_QCA8074V2) ||
 	     (tgt_info->target_type == TARGET_TYPE_QCN9000) ||
 	     (tgt_info->target_type == TARGET_TYPE_QCA5018) ||
-	     (tgt_info->target_type == TARGET_TYPE_QCA6018))) ||
+	     (tgt_info->target_type == TARGET_TYPE_QCA6018) ||
+	     (tgt_info->target_type == TARGET_TYPE_QCN7605))) ||
 	    (scn->bus_type ==  QDF_BUS_TYPE_IPCI &&
 	     (tgt_info->target_type == TARGET_TYPE_QCA6750)) ||
 	    ((scn->bus_type ==  QDF_BUS_TYPE_USB) &&
@@ -170,7 +171,8 @@ static ssize_t ath_procfs_diag_write(struct file *file,
 	      (tgt_info->target_type == TARGET_TYPE_QCA8074V2) ||
 	      (tgt_info->target_type == TARGET_TYPE_QCN9000) ||
 	      (tgt_info->target_type == TARGET_TYPE_QCA5018) ||
-	      (tgt_info->target_type == TARGET_TYPE_QCA6018))) ||
+	      (tgt_info->target_type == TARGET_TYPE_QCA6018) ||
+	      (tgt_info->target_type == TARGET_TYPE_QCN7605))) ||
 	    (scn->bus_type ==  QDF_BUS_TYPE_IPCI &&
 	     (tgt_info->target_type == TARGET_TYPE_QCA6750)) ||
 	    ((scn->bus_type ==  QDF_BUS_TYPE_USB) &&
@@ -204,10 +206,17 @@ out:
 		return -EIO;
 }
 
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 6, 0))
+static const struct proc_ops athdiag_fops = {
+	.proc_read = ath_procfs_diag_read,
+	.proc_write = ath_procfs_diag_write,
+};
+#else
 static const struct file_operations athdiag_fops = {
 	.read = ath_procfs_diag_read,
 	.write = ath_procfs_diag_write,
 };
+#endif
 
 /*
  * This function is called when the module is loaded

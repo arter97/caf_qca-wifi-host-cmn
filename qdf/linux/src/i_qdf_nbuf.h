@@ -108,6 +108,7 @@ typedef union {
  * @rx.dev.priv_cb_m.flush_ind: flush indication
  * @rx.dev.priv_cb_m.packet_buf_pool:  packet buff bool
  * @rx.dev.priv_cb_m.l3_hdr_pad: L3 header padding offset
+ * @rx.dev.priv_cb_m.exc_frm: exception frame
  * @rx.dev.priv_cb_m.tcp_seq_num: TCP sequence number
  * @rx.dev.priv_cb_m.tcp_ack_num: TCP ACK number
  * @rx.dev.priv_cb_m.lro_ctx: LRO context
@@ -224,7 +225,9 @@ struct qdf_nbuf_cb {
 						 flush_ind:1,
 						 packet_buf_pool:1,
 						 l3_hdr_pad:3,
-						 reserved:9,
+						 /* exception frame flag */
+						 exc_frm:1,
+						 reserved:8,
 						 reserved1:16;
 					uint32_t tcp_seq_num;
 					uint32_t tcp_ack_num;
@@ -764,10 +767,6 @@ void __qdf_nbuf_unmap_nbytes(qdf_device_t osdev, struct sk_buff *skb,
 void __qdf_nbuf_sync_for_cpu(qdf_device_t osdev, struct sk_buff *skb,
 	qdf_dma_dir_t dir);
 
-QDF_STATUS __qdf_nbuf_map_nbytes_single(
-	qdf_device_t osdev, struct sk_buff *buf, qdf_dma_dir_t dir, int nbytes);
-void __qdf_nbuf_unmap_nbytes_single(
-	qdf_device_t osdev, struct sk_buff *buf, qdf_dma_dir_t dir, int nbytes);
 void __qdf_nbuf_dma_map_info(__qdf_dma_map_t bmap, qdf_dmamap_info_t *sg);
 uint32_t __qdf_nbuf_get_frag_size(__qdf_nbuf_t nbuf, uint32_t cur_frag);
 void __qdf_nbuf_frag_info(struct sk_buff *skb, qdf_sglist_t  *sg);
@@ -2218,6 +2217,71 @@ static inline void __qdf_nbuf_orphan(struct sk_buff *skb)
 {
 	return skb_orphan(skb);
 }
+
+/**
+ * __qdf_nbuf_map_nbytes_single() - map nbytes
+ * @osdev: os device
+ * @buf: buffer
+ * @dir: direction
+ * @nbytes: number of bytes
+ *
+ * Return: QDF_STATUS
+ */
+#ifdef A_SIMOS_DEVHOST
+static inline QDF_STATUS __qdf_nbuf_map_nbytes_single(
+		qdf_device_t osdev, struct sk_buff *buf,
+		qdf_dma_dir_t dir, int nbytes)
+{
+	qdf_dma_addr_t paddr;
+
+	QDF_NBUF_CB_PADDR(buf) = paddr = buf->data;
+	return QDF_STATUS_SUCCESS;
+}
+#else
+static inline QDF_STATUS __qdf_nbuf_map_nbytes_single(
+		qdf_device_t osdev, struct sk_buff *buf,
+		qdf_dma_dir_t dir, int nbytes)
+{
+	qdf_dma_addr_t paddr;
+
+	/* assume that the OS only provides a single fragment */
+	QDF_NBUF_CB_PADDR(buf) = paddr =
+		dma_map_single(osdev->dev, buf->data,
+			       nbytes, __qdf_dma_dir_to_os(dir));
+	return dma_mapping_error(osdev->dev, paddr) ?
+		QDF_STATUS_E_FAULT : QDF_STATUS_SUCCESS;
+}
+#endif
+/**
+ * __qdf_nbuf_unmap_nbytes_single() - unmap nbytes
+ * @osdev: os device
+ * @buf: buffer
+ * @dir: direction
+ * @nbytes: number of bytes
+ *
+ * Return: none
+ */
+#if defined(A_SIMOS_DEVHOST)
+static inline void
+__qdf_nbuf_unmap_nbytes_single(qdf_device_t osdev, struct sk_buff *buf,
+			       qdf_dma_dir_t dir, int nbytes)
+{
+}
+
+#else
+static inline void
+__qdf_nbuf_unmap_nbytes_single(qdf_device_t osdev, struct sk_buff *buf,
+			       qdf_dma_dir_t dir, int nbytes)
+{
+	qdf_dma_addr_t paddr = QDF_NBUF_CB_PADDR(buf);
+
+	if (qdf_likely(paddr)) {
+		dma_unmap_single(osdev->dev, paddr, nbytes,
+				 __qdf_dma_dir_to_os(dir));
+		return;
+	}
+}
+#endif
 
 static inline struct sk_buff *
 __qdf_nbuf_queue_head_dequeue(struct sk_buff_head *skb_queue_head)
