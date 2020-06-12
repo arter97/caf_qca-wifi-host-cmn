@@ -242,10 +242,23 @@ static inline void __qdf_spin_unlock_irqrestore(__qdf_spinlock_t *lock)
  *
  * Return: nonzero if lock is held.
  */
+#ifdef CONFIG_SMP
 static inline int __qdf_spin_is_locked(__qdf_spinlock_t *lock)
 {
 	return spin_is_locked(&lock->spinlock);
 }
+#else
+static inline int __qdf_spin_is_locked(__qdf_spinlock_t *lock)
+{
+	/*
+	 * spin_is_locked is arch dependent, and on SDX55 UP platform,
+	 * below defined, and will cause unexpected ASSERT.
+	 *
+	 * #define arch_spin_is_locked(lock) ((void)(lock), 0)
+	 */
+	return 1;
+}
+#endif
 
 /**
  * __qdf_spin_trylock_bh() - spin trylock bottomhalf
