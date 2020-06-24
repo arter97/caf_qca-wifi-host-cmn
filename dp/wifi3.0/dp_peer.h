@@ -177,7 +177,7 @@ dp_get_vdev_from_soc_vdev_id_wifi3(struct dp_soc *soc,
 		}
 		qdf_spin_unlock_bh(&pdev->vdev_list_lock);
 	}
-	dp_err("Failed to find vdev for vdev_id %d", vdev_id);
+	dp_err_rl("Failed to find vdev for vdev_id %d", vdev_id);
 
 	return NULL;
 
