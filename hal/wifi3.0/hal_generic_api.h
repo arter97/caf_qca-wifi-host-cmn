@@ -101,7 +101,7 @@ void hal_tx_comp_get_status_generic(void *desc,
  * Return: void
  */
 static inline void hal_tx_desc_set_buf_addr_generic(void *desc,
-		dma_addr_t paddr, uint8_t pool_id,
+		dma_addr_t paddr, uint8_t rbm_id,
 		uint32_t desc_id, uint8_t type)
 {
 	/* Set buffer_addr_info.buffer_addr_31_0 */
@@ -114,11 +114,11 @@ static inline void hal_tx_desc_set_buf_addr_generic(void *desc,
 		HAL_TX_SM(UNIFIED_BUFFER_ADDR_INFO_1, BUFFER_ADDR_39_32,
 		       (((uint64_t) paddr) >> 32));
 
-	/* Set buffer_addr_info.return_buffer_manager = pool id */
+	/* Set buffer_addr_info.return_buffer_manager = rbm id */
 	HAL_SET_FLD(desc, UNIFIED_TCL_DATA_CMD_1,
 			 BUFFER_ADDR_INFO_BUF_ADDR_INFO) |=
 		HAL_TX_SM(UNIFIED_BUFFER_ADDR_INFO_1,
-		       RETURN_BUFFER_MANAGER, (pool_id + HAL_WBM_SW0_BM_ID));
+		       RETURN_BUFFER_MANAGER, rbm_id);
 
 	/* Set buffer_addr_info.sw_buffer_cookie = desc_id */
 	HAL_SET_FLD(desc, UNIFIED_TCL_DATA_CMD_1,
@@ -401,8 +401,10 @@ static inline void
 hal_get_mac_addr1(uint8_t *rx_mpdu_start,
 		  struct hal_rx_ppdu_info *ppdu_info)
 {
-	if (ppdu_info->sw_frame_group_id
-	    == HAL_MPDU_SW_FRAME_GROUP_MGMT_PROBE_REQ) {
+	if ((ppdu_info->sw_frame_group_id
+	     == HAL_MPDU_SW_FRAME_GROUP_MGMT_PROBE_REQ) ||
+	    (ppdu_info->sw_frame_group_id ==
+	     HAL_MPDU_SW_FRAME_GROUP_CTRL_RTS)) {
 		ppdu_info->rx_info.mac_addr1_valid =
 				HAL_RX_GET_MAC_ADDR1_VALID(rx_mpdu_start);
 
@@ -410,6 +412,13 @@ hal_get_mac_addr1(uint8_t *rx_mpdu_start,
 			HAL_RX_GET(rx_mpdu_start,
 				   RX_MPDU_INFO_15,
 				   MAC_ADDR_AD1_31_0);
+		if (ppdu_info->sw_frame_group_id ==
+		    HAL_MPDU_SW_FRAME_GROUP_CTRL_RTS) {
+			*(uint32_t *)&ppdu_info->rx_info.mac_addr1[4] =
+				HAL_RX_GET(rx_mpdu_start,
+					   RX_MPDU_INFO_16,
+					   MAC_ADDR_AD1_47_32);
+		}
 	}
 }
 #else
@@ -1513,19 +1522,20 @@ hal_rx_status_get_tlv_info_generic(void *rx_tlv_hdr, void *ppduinfo,
 	case WIFIRX_HEADER_E:
 	{
 		struct hal_rx_ppdu_common_info *com_info = &ppdu_info->com_info;
-		uint16_t mpdu_cnt = com_info->mpdu_cnt;
 
-		if (mpdu_cnt >= HAL_RX_MAX_MPDU) {
-			hal_alert("Number of MPDUs per PPDU exceeded");
+		if (ppdu_info->fcs_ok_cnt >=
+		    HAL_RX_MAX_MPDU_H_PER_STATUS_BUFFER) {
+			hal_err("Number of MPDUs(%d) per status buff exceeded",
+				ppdu_info->fcs_ok_cnt);
 			break;
 		}
+
 		/* Update first_msdu_payload for every mpdu and increment
 		 * com_info->mpdu_cnt for every WIFIRX_HEADER_E TLV
 		 */
-		ppdu_info->ppdu_msdu_info[mpdu_cnt].first_msdu_payload =
+		ppdu_info->ppdu_msdu_info[ppdu_info->fcs_ok_cnt].first_msdu_payload =
 			rx_tlv;
-		ppdu_info->ppdu_msdu_info[mpdu_cnt].payload_len = tlv_len;
-		ppdu_info->ppdu_msdu_info[mpdu_cnt].nbuf = nbuf;
+		ppdu_info->ppdu_msdu_info[ppdu_info->fcs_ok_cnt].payload_len = tlv_len;
 		ppdu_info->msdu_info.first_msdu_payload = rx_tlv;
 		ppdu_info->msdu_info.payload_len = tlv_len;
 		ppdu_info->user_id = user_id;
@@ -1539,11 +1549,8 @@ hal_rx_status_get_tlv_info_generic(void *rx_tlv_hdr, void *ppduinfo,
 	}
 	case WIFIRX_MPDU_START_E:
 	{
-		uint8_t *rx_mpdu_start =
-			(uint8_t *)rx_tlv + HAL_RX_OFFSET(UNIFIED_RX_MPDU_START_0,
-					RX_MPDU_INFO_RX_MPDU_INFO_DETAILS);
-		uint32_t ppdu_id =
-				HAL_RX_GET_PPDU_ID(rx_mpdu_start);
+		uint8_t *rx_mpdu_start = (uint8_t *)rx_tlv;
+		uint32_t ppdu_id = HAL_RX_GET_PPDU_ID(rx_mpdu_start);
 		uint8_t filter_category = 0;
 
 		ppdu_info->nac_info.fc_valid =
@@ -1592,7 +1599,7 @@ hal_rx_status_get_tlv_info_generic(void *rx_tlv_hdr, void *ppduinfo,
 		} else {
 			ppdu_info->rx_status.ppdu_len +=
 				HAL_RX_GET(rx_mpdu_start, RX_MPDU_INFO_13,
-				MPDU_LENGTH);
+					   MPDU_LENGTH);
 		}
 
 		filter_category =
@@ -1777,6 +1784,29 @@ void hal_get_hw_hptp_generic(struct hal_soc *hal_soc,
 	}
 }
 
+#if defined(WBM_IDLE_LSB_WRITE_CONFIRM_WAR)
+/**
+ * hal_wbm_idle_lsb_write_confirm() - Check and update WBM_IDLE_LINK ring LSB
+ * @srng: srng handle
+ *
+ * Return: None
+ */
+static void hal_wbm_idle_lsb_write_confirm(struct hal_srng *srng)
+{
+	if (srng->ring_id == HAL_SRNG_WBM_IDLE_LINK) {
+		while (SRNG_SRC_REG_READ(srng, BASE_LSB) !=
+		       ((unsigned int)srng->ring_base_paddr & 0xffffffff))
+				SRNG_SRC_REG_WRITE(srng, BASE_LSB,
+						   srng->ring_base_paddr &
+						   0xffffffff);
+	}
+}
+#else
+static void hal_wbm_idle_lsb_write_confirm(struct hal_srng *srng)
+{
+}
+#endif
+
 /**
  * hal_srng_src_hw_init - Private function to initialize SRNG
  * source ring HW
@@ -1804,6 +1834,8 @@ void hal_srng_src_hw_init_generic(struct hal_soc *hal,
 	}
 
 	SRNG_SRC_REG_WRITE(srng, BASE_LSB, srng->ring_base_paddr & 0xffffffff);
+	hal_wbm_idle_lsb_write_confirm(srng);
+
 	reg_val = SRNG_SM(SRNG_SRC_FLD(BASE_MSB, RING_BASE_ADDR_MSB),
 		((uint64_t)(srng->ring_base_paddr) >> 32)) |
 		SRNG_SM(SRNG_SRC_FLD(BASE_MSB, RING_SIZE),
@@ -2440,4 +2472,64 @@ hal_rx_msdu_packet_metadata_get_generic(uint8_t *buf,
 	msdu_metadata->sa_sw_peer_id =
 		HAL_RX_MSDU_END_SA_SW_PEER_ID_GET(msdu_end);
 }
-#endif /* _HAL_GENERIC_API_H_ */
+
+/**
+ * hal_rx_msdu_end_offset_get_generic(): API to get the
+ * msdu_end structure offset rx_pkt_tlv structure
+ *
+ * NOTE: API returns offset of msdu_end TLV from structure
+ * rx_pkt_tlvs
+ */
+static uint32_t hal_rx_msdu_end_offset_get_generic(void)
+{
+	return RX_PKT_TLV_OFFSET(msdu_end_tlv);
+}
+
+/**
+ * hal_rx_attn_offset_get_generic(): API to get the
+ * msdu_end structure offset rx_pkt_tlv structure
+ *
+ * NOTE: API returns offset of attn TLV from structure
+ * rx_pkt_tlvs
+ */
+static uint32_t hal_rx_attn_offset_get_generic(void)
+{
+	return RX_PKT_TLV_OFFSET(attn_tlv);
+}
+
+/**
+ * hal_rx_msdu_start_offset_get_generic(): API to get the
+ * msdu_start structure offset rx_pkt_tlv structure
+ *
+ * NOTE: API returns offset of attn TLV from structure
+ * rx_pkt_tlvs
+ */
+static uint32_t hal_rx_msdu_start_offset_get_generic(void)
+{
+	return RX_PKT_TLV_OFFSET(msdu_start_tlv);
+}
+
+/**
+ * hal_rx_mpdu_start_offset_get_generic(): API to get the
+ * mpdu_start structure offset rx_pkt_tlv structure
+ *
+ * NOTE: API returns offset of attn TLV from structure
+ * rx_pkt_tlvs
+ */
+static uint32_t	hal_rx_mpdu_start_offset_get_generic(void)
+{
+	return RX_PKT_TLV_OFFSET(mpdu_start_tlv);
+}
+
+/**
+ * hal_rx_mpdu_end_offset_get_generic(): API to get the
+ * mpdu_end structure offset rx_pkt_tlv structure
+ *
+ * NOTE: API returns offset of attn TLV from structure
+ * rx_pkt_tlvs
+ */
+static uint32_t	hal_rx_mpdu_end_offset_get_generic(void)
+{
+	return RX_PKT_TLV_OFFSET(mpdu_end_tlv);
+}
+#endif /* HAL_GENERIC_API_H_ */

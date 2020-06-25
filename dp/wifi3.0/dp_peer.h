@@ -89,6 +89,31 @@ dp_peer_find_by_id(struct dp_soc *soc,
 }
 #endif /* PEER_LOCK_REF_PROTECT */
 
+#ifdef PEER_CACHE_RX_PKTS
+/**
+ * dp_rx_flush_rx_cached() - flush cached rx frames
+ * @peer: peer
+ * @drop: set flag to drop frames
+ *
+ * Return: None
+ */
+void dp_rx_flush_rx_cached(struct dp_peer *peer, bool drop);
+#else
+static inline void dp_rx_flush_rx_cached(struct dp_peer *peer, bool drop)
+{
+}
+#endif
+
+static inline void
+dp_clear_peer_internal(struct dp_soc *soc, struct dp_peer *peer)
+{
+	qdf_spin_lock_bh(&peer->peer_info_lock);
+	peer->state = OL_TXRX_PEER_STATE_DISC;
+	qdf_spin_unlock_bh(&peer->peer_info_lock);
+
+	dp_rx_flush_rx_cached(peer, true);
+}
+
 void dp_print_ast_stats(struct dp_soc *soc);
 void dp_rx_peer_map_handler(struct dp_soc *soc, uint16_t peer_id,
 			    uint16_t hw_peer_id, uint8_t vdev_id,
@@ -96,7 +121,7 @@ void dp_rx_peer_map_handler(struct dp_soc *soc, uint16_t peer_id,
 			    uint8_t is_wds);
 void dp_rx_peer_unmap_handler(struct dp_soc *soc, uint16_t peer_id,
 			      uint8_t vdev_id, uint8_t *peer_mac_addr,
-			      uint8_t is_wds);
+			      uint8_t is_wds, uint32_t free_wds_count);
 void dp_rx_sec_ind_handler(struct dp_soc *soc, uint16_t peer_id,
 			   enum cdp_sec_type sec_type, int is_unicast,
 			   u_int32_t *michael_key, u_int32_t *rx_pn);
@@ -315,4 +340,47 @@ dp_peer_update_pkt_capture_params(ol_txrx_soc_handle soc,
 void dp_rx_tid_delete_cb(struct dp_soc *soc,
 			 void *cb_ctxt,
 			 union hal_reo_status *reo_status);
+
+#ifndef WLAN_TX_PKT_CAPTURE_ENH
+/**
+ * dp_peer_tid_queue_init() – Initialize ppdu stats queue per TID
+ * @peer: Datapath peer
+ *
+ */
+static inline void dp_peer_tid_queue_init(struct dp_peer *peer)
+{
+}
+
+/**
+ * dp_peer_tid_peer_id_update() – update peer_id to tid structure
+ * @peer: Datapath peer
+ * @peer_id: peer_id
+ *
+ */
+static inline
+void dp_peer_tid_peer_id_update(struct dp_peer *peer, uint16_t peer_id)
+{
+}
+
+/**
+ * dp_peer_tid_queue_cleanup() – remove ppdu stats queue per TID
+ * @peer: Datapath peer
+ *
+ */
+static inline void dp_peer_tid_queue_cleanup(struct dp_peer *peer)
+{
+}
+
+/**
+ * dp_peer_update_80211_hdr() – dp peer update 80211 hdr
+ * @vdev: Datapath vdev
+ * @peer: Datapath peer
+ *
+ */
+static inline void
+dp_peer_update_80211_hdr(struct dp_vdev *vdev, struct dp_peer *peer)
+{
+}
+#endif
+
 #endif /* _DP_PEER_H_ */

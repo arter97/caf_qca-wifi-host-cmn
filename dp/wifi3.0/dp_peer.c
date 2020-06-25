@@ -152,13 +152,10 @@ static int dp_peer_find_add_id_to_obj(
 	struct dp_peer *peer,
 	uint16_t peer_id)
 {
-	int i;
 
-	for (i = 0; i < MAX_NUM_PEER_ID_PER_PEER; i++) {
-		if (peer->peer_ids[i] == HTT_INVALID_PEER) {
-			peer->peer_ids[i] = peer_id;
-			return 0; /* success */
-		}
+	if (peer->peer_id == HTT_INVALID_PEER) {
+		peer->peer_id = peer_id;
+		return 0; /* success */
 	}
 	return QDF_STATUS_E_FAILURE; /* failure */
 }
@@ -533,7 +530,7 @@ static inline void dp_peer_map_ast(struct dp_soc *soc,
 	if (ast_entry || (peer->vdev && peer->vdev->proxysta_vdev)) {
 		if (soc->cdp_soc.ol_ops->peer_map_event) {
 			soc->cdp_soc.ol_ops->peer_map_event(
-			soc->ctrl_psoc, peer->peer_ids[0],
+			soc->ctrl_psoc, peer->peer_id,
 			hw_peer_id, vdev_id,
 			mac_addr, peer_type, ast_hash);
 		}
@@ -849,7 +846,7 @@ add_ast_entry:
 				soc->ctrl_psoc,
 				peer->vdev->vdev_id,
 				peer->mac_addr.raw,
-				peer->peer_ids[0],
+				peer->peer_id,
 				mac_addr,
 				next_node_mac,
 				flags,
@@ -1178,14 +1175,106 @@ void dp_peer_ast_send_wds_del(struct dp_soc *soc,
 		  peer->vdev->vdev_id, ast_entry->mac_addr.raw,
 		  ast_entry->next_hop, ast_entry->peer->mac_addr.raw);
 
+	/*
+	 * If peer delete_in_progress is set, the peer is about to get
+	 * teared down with a peer delete command to firmware,
+	 * which will cleanup all the wds ast entries.
+	 * So, no need to send explicit wds ast delete to firmware.
+	 */
 	if (ast_entry->next_hop) {
 		cdp_soc->ol_ops->peer_del_wds_entry(soc->ctrl_psoc,
 						    peer->vdev->vdev_id,
 						    ast_entry->mac_addr.raw,
-						    ast_entry->type);
+						    ast_entry->type,
+						    !peer->delete_in_progress);
 	}
 
 }
+
+#ifdef FEATURE_WDS
+/**
+ * dp_peer_ast_free_wds_entries() - Free wds ast entries associated with peer
+ * @soc: soc handle
+ * @peer: peer handle
+ *
+ * Free all the wds ast entries associated with peer
+ *
+ * Return: Number of wds ast entries freed
+ */
+static uint32_t dp_peer_ast_free_wds_entries(struct dp_soc *soc,
+					     struct dp_peer *peer)
+{
+	TAILQ_HEAD(, dp_ast_entry) ast_local_list = {0};
+	struct dp_ast_entry *ast_entry, *temp_ast_entry;
+	uint32_t num_ast = 0;
+
+	TAILQ_INIT(&ast_local_list);
+	qdf_spin_lock_bh(&soc->ast_lock);
+
+	DP_PEER_ITERATE_ASE_LIST(peer, ast_entry, temp_ast_entry) {
+		if (ast_entry->next_hop) {
+			if (ast_entry->is_mapped)
+				soc->ast_table[ast_entry->ast_idx] = NULL;
+
+			dp_peer_unlink_ast_entry(soc, ast_entry);
+			DP_STATS_INC(soc, ast.deleted, 1);
+			dp_peer_ast_hash_remove(soc, ast_entry);
+			TAILQ_INSERT_TAIL(&ast_local_list, ast_entry,
+					  ase_list_elem);
+			soc->num_ast_entries--;
+			num_ast++;
+		}
+	}
+
+	qdf_spin_unlock_bh(&soc->ast_lock);
+
+	TAILQ_FOREACH_SAFE(ast_entry, &ast_local_list, ase_list_elem,
+			   temp_ast_entry) {
+		if (ast_entry->callback)
+			ast_entry->callback(soc->ctrl_psoc,
+					    dp_soc_to_cdp_soc(soc),
+					    ast_entry->cookie,
+					    CDP_TXRX_AST_DELETED);
+
+		qdf_mem_free(ast_entry);
+	}
+
+	return num_ast;
+}
+/**
+ * dp_peer_clean_wds_entries() - Clean wds ast entries and compare
+ * @soc: soc handle
+ * @peer: peer handle
+ * @free_wds_count - number of wds entries freed by FW with peer delete
+ *
+ * Free all the wds ast entries associated with peer and compare with
+ * the value received from firmware
+ *
+ * Return: Number of wds ast entries freed
+ */
+static void
+dp_peer_clean_wds_entries(struct dp_soc *soc, struct dp_peer *peer,
+			  uint32_t free_wds_count)
+{
+	uint32_t wds_deleted = 0;
+
+	wds_deleted = dp_peer_ast_free_wds_entries(soc, peer);
+	if ((DP_PEER_WDS_COUNT_INVALID != free_wds_count) &&
+	    (free_wds_count != wds_deleted)) {
+		DP_STATS_INC(soc, ast.ast_mismatch, 1);
+		dp_alert("For peer %pK (mac: %pM)number of wds entries deleted by fw = %d during peer delete is not same as the numbers deleted by host = %d",
+			 peer, peer->mac_addr.raw, free_wds_count,
+			 wds_deleted);
+	}
+}
+
+#else
+static void
+dp_peer_clean_wds_entries(struct dp_soc *soc, struct dp_peer *peer,
+			  uint32_t free_wds_count)
+{
+}
+#endif
 
 /**
  * dp_peer_ast_free_entry_by_mac() - find ast entry by MAC address and delete
@@ -1514,6 +1603,8 @@ static inline struct dp_peer *dp_peer_find_add_id(struct dp_soc *soc,
 		if (dp_peer_find_add_id_to_obj(peer, peer_id)) {
 			/* TBDXXX: assert for now */
 			QDF_ASSERT(0);
+		} else {
+			dp_peer_tid_peer_id_update(peer, peer->peer_id);
 		}
 
 		return peer;
@@ -1574,7 +1665,7 @@ dp_rx_peer_map_handler(struct dp_soc *soc, uint16_t peer_id,
 				return;
 
 			dp_alert("AST entry not found with peer %pK peer_id %u peer_mac %pM mac_addr %pM vdev_id %u next_hop %u",
-				 peer, peer->peer_ids[0],
+				 peer, peer->peer_id,
 				 peer->mac_addr.raw, peer_mac_addr, vdev_id,
 				 is_wds);
 
@@ -1646,16 +1737,16 @@ dp_rx_peer_map_handler(struct dp_soc *soc, uint16_t peer_id,
  * @vdev_id - vdev ID
  * @mac_addr - mac address of the peer or wds entry
  * @is_wds - flag to indicate peer map event for WDS ast entry
+ * @free_wds_count - number of wds entries freed by FW with peer delete
  *
  * Return: none
  */
 void
 dp_rx_peer_unmap_handler(struct dp_soc *soc, uint16_t peer_id,
 			 uint8_t vdev_id, uint8_t *mac_addr,
-			 uint8_t is_wds)
+			 uint8_t is_wds, uint32_t free_wds_count)
 {
 	struct dp_peer *peer;
-	uint8_t i;
 
 	peer = __dp_peer_find_by_id(soc, peer_id);
 
@@ -1676,23 +1767,20 @@ dp_rx_peer_unmap_handler(struct dp_soc *soc, uint16_t peer_id,
 			return;
 
 		dp_alert("AST entry not found with peer %pK peer_id %u peer_mac %pM mac_addr %pM vdev_id %u next_hop %u",
-			 peer, peer->peer_ids[0],
+			 peer, peer->peer_id,
 			 peer->mac_addr.raw, mac_addr, vdev_id,
 			 is_wds);
 
 		return;
+	} else {
+		dp_peer_clean_wds_entries(soc, peer, free_wds_count);
 	}
 
 	dp_info("peer_unmap_event (soc:%pK) peer_id %d peer %pK",
 		soc, peer_id, peer);
 
 	soc->peer_id_to_obj_map[peer_id] = NULL;
-	for (i = 0; i < MAX_NUM_PEER_ID_PER_PEER; i++) {
-		if (peer->peer_ids[i] == peer_id) {
-			peer->peer_ids[i] = HTT_INVALID_PEER;
-			break;
-		}
-	}
+	peer->peer_id = HTT_INVALID_PEER;
 
 	/*
 	 * Reset ast flow mapping table
@@ -2381,37 +2469,6 @@ static void dp_peer_setup_remaining_tids(struct dp_peer *peer)
 }
 #else
 static void dp_peer_setup_remaining_tids(struct dp_peer *peer) {};
-#endif
-
-#ifndef WLAN_TX_PKT_CAPTURE_ENH
-/*
- * dp_peer_tid_queue_init() – Initialize ppdu stats queue per TID
- * @peer: Datapath peer
- *
- */
-static inline void dp_peer_tid_queue_init(struct dp_peer *peer)
-{
-}
-
-/*
- * dp_peer_tid_queue_cleanup() – remove ppdu stats queue per TID
- * @peer: Datapath peer
- *
- */
-static inline void dp_peer_tid_queue_cleanup(struct dp_peer *peer)
-{
-}
-
-/*
- * dp_peer_update_80211_hdr() – dp peer update 80211 hdr
- * @vdev: Datapath vdev
- * @peer: Datapath peer
- *
- */
-static inline void
-dp_peer_update_80211_hdr(struct dp_vdev *vdev, struct dp_peer *peer)
-{
-}
 #endif
 
 /*
@@ -3370,11 +3427,11 @@ QDF_STATUS dp_register_peer(struct cdp_soc_t *soc_hdl, uint8_t pdev_id,
 	struct dp_soc *soc = cdp_soc_t_to_dp_soc(soc_hdl);
 	struct dp_pdev *pdev = dp_get_pdev_from_soc_pdev_id_wifi3(soc, pdev_id);
 
-	peer = dp_find_peer_by_addr((struct cdp_pdev *)pdev,
-				    sta_desc->peer_addr.bytes);
-
 	if (!pdev)
 		return QDF_STATUS_E_FAULT;
+
+	peer = dp_find_peer_by_addr((struct cdp_pdev *)pdev,
+				    sta_desc->peer_addr.bytes);
 
 	if (!peer)
 		return QDF_STATUS_E_FAULT;
@@ -3400,15 +3457,10 @@ dp_clear_peer(struct cdp_soc_t *soc_hdl, uint8_t pdev_id,
 		return QDF_STATUS_E_FAULT;
 
 	peer = dp_find_peer_by_addr((struct cdp_pdev *)pdev, peer_addr.bytes);
-	if (!peer)
+	if (!peer || !peer->valid)
 		return QDF_STATUS_E_FAULT;
 
-	qdf_spin_lock_bh(&peer->peer_info_lock);
-	peer->state = OL_TXRX_PEER_STATE_DISC;
-	qdf_spin_unlock_bh(&peer->peer_info_lock);
-
-	dp_rx_flush_rx_cached(peer, true);
-
+	dp_clear_peer_internal(soc, peer);
 	return QDF_STATUS_SUCCESS;
 }
 

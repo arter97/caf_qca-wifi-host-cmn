@@ -158,15 +158,6 @@ static inline void hal_unlock_reg_access(struct hal_soc *soc,
 #endif
 
 #ifdef PCIE_REG_WINDOW_LOCAL_NO_CACHE
-static inline void hal_select_window(struct hal_soc *hal_soc, uint32_t offset)
-{
-	uint32_t window = (offset >> WINDOW_SHIFT) & WINDOW_VALUE_MASK;
-
-	qdf_iowrite32(hal_soc->dev_base_addr + WINDOW_REG_ADDRESS,
-		      WINDOW_ENABLE_BIT | window);
-	hal_soc->register_window = window;
-}
-
 /**
  * hal_select_window_confirm() - write remap window register and
 				 check writing result
@@ -185,17 +176,6 @@ static inline void hal_select_window_confirm(struct hal_soc *hal_soc,
 				   WINDOW_ENABLE_BIT | window);
 }
 #else
-static inline void hal_select_window(struct hal_soc *hal_soc, uint32_t offset)
-{
-	uint32_t window = (offset >> WINDOW_SHIFT) & WINDOW_VALUE_MASK;
-
-	if (window != hal_soc->register_window) {
-		qdf_iowrite32(hal_soc->dev_base_addr + WINDOW_REG_ADDRESS,
-			      WINDOW_ENABLE_BIT | window);
-		hal_soc->register_window = window;
-	}
-}
-
 static inline void hal_select_window_confirm(struct hal_soc *hal_soc,
 					     uint32_t offset)
 {
@@ -272,7 +252,7 @@ static inline void hal_write32_mb(struct hal_soc *hal_soc, uint32_t offset,
 		qdf_iowrite32(new_addr, value);
 	} else {
 		hal_lock_reg_access(hal_soc, &flags);
-		hal_select_window(hal_soc, offset);
+		hal_select_window_confirm(hal_soc, offset);
 		qdf_iowrite32(hal_soc->dev_base_addr + WINDOW_START +
 			  (offset & WINDOW_RANGE_MASK), value);
 		hal_unlock_reg_access(hal_soc, &flags);
@@ -315,7 +295,7 @@ static inline void hal_write32_mb(struct hal_soc *hal_soc, uint32_t offset,
 		qdf_iowrite32(new_addr, value);
 	} else {
 		hal_lock_reg_access(hal_soc, &flags);
-		hal_select_window(hal_soc, offset);
+		hal_select_window_confirm(hal_soc, offset);
 		qdf_iowrite32(hal_soc->dev_base_addr + WINDOW_START +
 			  (offset & WINDOW_RANGE_MASK), value);
 		hal_unlock_reg_access(hal_soc, &flags);
@@ -482,7 +462,7 @@ static inline uint32_t hal_read32_mb(struct hal_soc *hal_soc, uint32_t offset)
 	}
 
 	hal_lock_reg_access(hal_soc, &flags);
-	hal_select_window(hal_soc, offset);
+	hal_select_window_confirm(hal_soc, offset);
 	ret = qdf_ioread32(hal_soc->dev_base_addr + WINDOW_START +
 		       (offset & WINDOW_RANGE_MASK));
 	hal_unlock_reg_access(hal_soc, &flags);
@@ -518,7 +498,7 @@ uint32_t hal_read32_mb(struct hal_soc *hal_soc, uint32_t offset)
 		ret = qdf_ioread32(new_addr);
 	} else {
 		hal_lock_reg_access(hal_soc, &flags);
-		hal_select_window(hal_soc, offset);
+		hal_select_window_confirm(hal_soc, offset);
 		ret = qdf_ioread32(hal_soc->dev_base_addr + WINDOW_START +
 			       (offset & WINDOW_RANGE_MASK));
 		hal_unlock_reg_access(hal_soc, &flags);
@@ -551,6 +531,16 @@ void hal_dump_reg_write_srng_stats(hal_soc_handle_t hal_soc_hdl);
  * Return: none
  */
 void hal_dump_reg_write_stats(hal_soc_handle_t hal_soc_hdl);
+
+/**
+ * hal_get_reg_write_pending_work() - get the number of entries
+ *		pending in the workqueue to be processed.
+ * @hal_soc: HAL soc handle
+ *
+ * Returns: the number of entries pending to be processed
+ */
+int hal_get_reg_write_pending_work(void *hal_soc);
+
 #else
 static inline void hal_dump_reg_write_srng_stats(hal_soc_handle_t hal_soc_hdl)
 {
@@ -558,6 +548,11 @@ static inline void hal_dump_reg_write_srng_stats(hal_soc_handle_t hal_soc_hdl)
 
 static inline void hal_dump_reg_write_stats(hal_soc_handle_t hal_soc_hdl)
 {
+}
+
+static inline int hal_get_reg_write_pending_work(void *hal_soc)
+{
+	return 0;
 }
 #endif
 
@@ -643,6 +638,12 @@ enum hal_ring_type {
 #define HAL_SRNG_MSI_INTR				0x00020000
 #define HAL_SRNG_CACHED_DESC		0x00040000
 
+#ifdef QCA_WIFI_QCA6490
+#define HAL_SRNG_PREFETCH_TIMER 1
+#else
+#define HAL_SRNG_PREFETCH_TIMER 0
+#endif
+
 #define PN_SIZE_24 0
 #define PN_SIZE_48 1
 #define PN_SIZE_128 2
@@ -685,6 +686,9 @@ extern uint32_t hal_srng_get_entrysize(void *hal_soc, int ring_type);
  */
 uint32_t hal_srng_max_entries(void *hal_soc, int ring_type);
 
+void hal_set_low_threshold(hal_ring_handle_t hal_ring_hdl,
+				 uint32_t low_threshold);
+
 /**
  * hal_srng_dump - Dump ring status
  * @srng: hal srng pointer
@@ -706,6 +710,12 @@ struct hal_mem_info {
 	void *dev_base_addr;
 	/* dev base physical addr */
 	void *dev_base_paddr;
+	/* dev base ce virutal addr - applicable only for qca5018  */
+	/* In qca5018 CE register are outside wcss block */
+	/* using a separate address space to access CE registers */
+	void *dev_base_addr_ce;
+	/* dev base ce physical addr */
+	void *dev_base_paddr_ce;
 	/* Remote virtual pointer memory for HW/FW updates */
 	void *shadow_rdptr_mem_vaddr;
 	/* Remote physical pointer memory for HW/FW updates */
@@ -748,6 +758,8 @@ struct hal_srng_params {
 	uint32_t entry_size;
 	/* hw register base address */
 	void *hwreg_base[MAX_SRNG_REG_GROUPS];
+	/* prefetch timer config - in micro seconds */
+	uint32_t prefetch_timer;
 };
 
 /* hal_construct_shadow_config() - initialize the shadow registers for dp rings
@@ -978,50 +990,85 @@ static inline int hal_srng_access_start(hal_soc_handle_t hal_soc_hdl,
 }
 
 /**
- * hal_srng_dst_get_next - Get next entry from a destination ring and move
- * cached tail pointer
- *
+ * hal_srng_dst_get_next - Get next entry from a destination ring
  * @hal_soc: Opaque HAL SOC handle
  * @hal_ring_hdl: Destination ring pointer
  *
- * Return: Opaque pointer for next ring entry; NULL on failire
+ * Return: Opaque pointer for next ring entry; NULL on failure
  */
 static inline
 void *hal_srng_dst_get_next(void *hal_soc,
 			    hal_ring_handle_t hal_ring_hdl)
 {
 	struct hal_srng *srng = (struct hal_srng *)hal_ring_hdl;
-	struct hal_soc *soc = (struct hal_soc *)hal_soc;
 	uint32_t *desc;
-	uint32_t *desc_next;
-	uint32_t tp;
 
-	if (srng->u.dst_ring.tp != srng->u.dst_ring.cached_hp) {
-		desc = &(srng->ring_base_vaddr[srng->u.dst_ring.tp]);
-		/* TODO: Using % is expensive, but we have to do this since
-		 * size of some SRNG rings is not power of 2 (due to descriptor
-		 * sizes). Need to create separate API for rings used
-		 * per-packet, with sizes power of 2 (TCL2SW, REO2SW,
-		 * SW2RXDMA and CE rings)
-		 */
-		srng->u.dst_ring.tp = (srng->u.dst_ring.tp + srng->entry_size) %
-			srng->ring_size;
+	if (srng->u.dst_ring.tp == srng->u.dst_ring.cached_hp)
+		return NULL;
 
-		if (srng->flags & HAL_SRNG_CACHED_DESC) {
-			tp = srng->u.dst_ring.tp;
-			desc_next = &srng->ring_base_vaddr[tp];
-			qdf_mem_dma_cache_sync(soc->qdf_dev,
-					       qdf_mem_virt_to_phys(desc_next),
-					       QDF_DMA_FROM_DEVICE,
-					       (srng->entry_size *
-						sizeof(uint32_t)));
-			qdf_prefetch(desc_next);
-		}
+	desc = &srng->ring_base_vaddr[srng->u.dst_ring.tp];
+	/* TODO: Using % is expensive, but we have to do this since
+	 * size of some SRNG rings is not power of 2 (due to descriptor
+	 * sizes). Need to create separate API for rings used
+	 * per-packet, with sizes power of 2 (TCL2SW, REO2SW,
+	 * SW2RXDMA and CE rings)
+	 */
+	srng->u.dst_ring.tp = (srng->u.dst_ring.tp + srng->entry_size);
+	if (srng->u.dst_ring.tp == srng->ring_size)
+		srng->u.dst_ring.tp = 0;
 
-		return (void *)desc;
+	if (srng->flags & HAL_SRNG_CACHED_DESC) {
+		struct hal_soc *soc = (struct hal_soc *)hal_soc;
+		uint32_t *desc_next;
+		uint32_t tp;
+
+		tp = srng->u.dst_ring.tp;
+		desc_next = &srng->ring_base_vaddr[srng->u.dst_ring.tp];
+		qdf_mem_dma_cache_sync(soc->qdf_dev,
+				       qdf_mem_virt_to_phys(desc_next),
+				       QDF_DMA_FROM_DEVICE,
+				       (srng->entry_size *
+					sizeof(uint32_t)));
+		qdf_prefetch(desc_next);
 	}
 
-	return NULL;
+	return (void *)desc;
+}
+
+/**
+ * hal_srng_dst_get_next_cached - Get cached next entry
+ * @hal_soc: Opaque HAL SOC handle
+ * @hal_ring_hdl: Destination ring pointer
+ *
+ * Get next entry from a destination ring and move cached tail pointer
+ *
+ * Return: Opaque pointer for next ring entry; NULL on failure
+ */
+static inline
+void *hal_srng_dst_get_next_cached(void *hal_soc,
+				   hal_ring_handle_t hal_ring_hdl)
+{
+	struct hal_srng *srng = (struct hal_srng *)hal_ring_hdl;
+	uint32_t *desc;
+	uint32_t *desc_next;
+
+	if (srng->u.dst_ring.tp == srng->u.dst_ring.cached_hp)
+		return NULL;
+
+	desc = &srng->ring_base_vaddr[srng->u.dst_ring.tp];
+	/* TODO: Using % is expensive, but we have to do this since
+	 * size of some SRNG rings is not power of 2 (due to descriptor
+	 * sizes). Need to create separate API for rings used
+	 * per-packet, with sizes power of 2 (TCL2SW, REO2SW,
+	 * SW2RXDMA and CE rings)
+	 */
+	srng->u.dst_ring.tp = (srng->u.dst_ring.tp + srng->entry_size);
+	if (srng->u.dst_ring.tp == srng->ring_size)
+		srng->u.dst_ring.tp = 0;
+
+	desc_next = &srng->ring_base_vaddr[srng->u.dst_ring.tp];
+	qdf_prefetch(desc_next);
+	return (void *)desc;
 }
 
 /**
@@ -1140,8 +1187,70 @@ uint32_t hal_srng_dst_num_valid(void *hal_soc,
 
 	if (hp >= tp)
 		return (hp - tp) / srng->entry_size;
-	else
-		return (srng->ring_size - tp + hp) / srng->entry_size;
+
+	return (srng->ring_size - tp + hp) / srng->entry_size;
+}
+
+/**
+ * hal_srng_dst_inv_cached_descs - API to invalidate descriptors in batch mode
+ * @hal_soc: Opaque HAL SOC handle
+ * @hal_ring_hdl: Destination ring pointer
+ * @entry_count: Number of descriptors to be invalidated
+ *
+ * Invalidates a set of cached descriptors starting from tail to
+ * provided count worth
+ *
+ * Return - None
+ */
+static inline void hal_srng_dst_inv_cached_descs(void *hal_soc,
+						 hal_ring_handle_t hal_ring_hdl,
+						 uint32_t entry_count)
+{
+	struct hal_srng *srng = (struct hal_srng *)hal_ring_hdl;
+	uint32_t hp = srng->u.dst_ring.cached_hp;
+	uint32_t tp = srng->u.dst_ring.tp;
+	uint32_t sync_p = 0;
+
+	/*
+	 * If SRNG does not have cached descriptors this
+	 * API call should be a no op
+	 */
+	if (!(srng->flags & HAL_SRNG_CACHED_DESC))
+		return;
+
+	if (qdf_unlikely(entry_count == 0))
+		return;
+
+	sync_p = (entry_count - 1) * srng->entry_size;
+
+	if (hp > tp) {
+		qdf_nbuf_dma_inv_range(&srng->ring_base_vaddr[tp],
+				       &srng->ring_base_vaddr[tp + sync_p]
+				       + (srng->entry_size * sizeof(uint32_t)));
+	} else {
+		/*
+		 * We have wrapped around
+		 */
+		uint32_t wrap_cnt = ((srng->ring_size - tp) / srng->entry_size);
+
+		if (entry_count <= wrap_cnt) {
+			qdf_nbuf_dma_inv_range(&srng->ring_base_vaddr[tp],
+					       &srng->ring_base_vaddr[tp + sync_p] +
+					       (srng->entry_size * sizeof(uint32_t)));
+			return;
+		}
+
+		entry_count -= wrap_cnt;
+		sync_p = (entry_count - 1) * srng->entry_size;
+
+		qdf_nbuf_dma_inv_range(&srng->ring_base_vaddr[tp],
+				       &srng->ring_base_vaddr[srng->ring_size - srng->entry_size] +
+				       (srng->entry_size * sizeof(uint32_t)));
+
+		qdf_nbuf_dma_inv_range(&srng->ring_base_vaddr[0],
+				       &srng->ring_base_vaddr[sync_p]
+				       + (srng->entry_size * sizeof(uint32_t)));
+	}
 }
 
 /**
@@ -1389,7 +1498,8 @@ void *hal_srng_src_get_next(void *hal_soc,
 }
 
 /**
- * hal_srng_src_peek - Get next entry from a ring without moving head pointer.
+ * hal_srng_src_peek_n_get_next - Get next entry from a ring without
+ * moving head pointer.
  * hal_srng_src_get_next should be called subsequently to move the head pointer
  *
  * @hal_soc: Opaque HAL SOC handle
@@ -1398,8 +1508,8 @@ void *hal_srng_src_get_next(void *hal_soc,
  * Return: Opaque pointer for next ring entry; NULL on failire
  */
 static inline
-void *hal_srng_src_peek(hal_soc_handle_t hal_soc_hdl,
-			hal_ring_handle_t hal_ring_hdl)
+void *hal_srng_src_peek_n_get_next(hal_soc_handle_t hal_soc_hdl,
+				   hal_ring_handle_t hal_ring_hdl)
 {
 	struct hal_srng *srng = (struct hal_srng *)hal_ring_hdl;
 	uint32_t *desc;
@@ -1412,11 +1522,42 @@ void *hal_srng_src_peek(hal_soc_handle_t hal_soc_hdl,
 	 */
 	if (((srng->u.src_ring.hp + srng->entry_size) %
 		srng->ring_size) != srng->u.src_ring.cached_tp) {
-		desc = &(srng->ring_base_vaddr[srng->u.src_ring.hp]);
+		desc = &(srng->ring_base_vaddr[(srng->u.src_ring.hp +
+						srng->entry_size) %
+						srng->ring_size]);
 		return (void *)desc;
 	}
 
 	return NULL;
+}
+
+/**
+ * hal_srng_src_get_cur_hp_n_move_next () - API returns current hp
+ * and move hp to next in src ring
+ *
+ * Usage: This API should only be used at init time replenish.
+ *
+ * @hal_soc_hdl: HAL soc handle
+ * @hal_ring_hdl: Source ring pointer
+ *
+ */
+static inline void *
+hal_srng_src_get_cur_hp_n_move_next(hal_soc_handle_t hal_soc_hdl,
+				    hal_ring_handle_t hal_ring_hdl)
+{
+	struct hal_srng *srng = (struct hal_srng *)hal_ring_hdl;
+	uint32_t *cur_desc = NULL;
+	uint32_t next_hp;
+
+	cur_desc = &srng->ring_base_vaddr[(srng->u.src_ring.hp)];
+
+	next_hp = (srng->u.src_ring.hp + srng->entry_size) %
+		srng->ring_size;
+
+	if (next_hp != srng->u.src_ring.cached_tp)
+		srng->u.src_ring.hp = next_hp;
+
+	return (void *)cur_desc;
 }
 
 /**
@@ -1884,6 +2025,17 @@ static inline void hal_reo_setup(hal_soc_handle_t hal_soc_hdl,
 	struct hal_soc *hal_soc = (struct hal_soc *)hal_soc_hdl;
 
 	hal_soc->ops->hal_reo_setup(hal_soc, reoparams);
+}
+
+static inline
+void hal_compute_reo_remap_ix2_ix3(hal_soc_handle_t hal_soc_hdl,
+				   uint32_t *ring, uint32_t num_rings,
+				   uint32_t *remap1, uint32_t *remap2)
+{
+	struct hal_soc *hal_soc = (struct hal_soc *)hal_soc_hdl;
+
+	return hal_soc->ops->hal_compute_reo_remap_ix2_ix3(ring,
+					num_rings, remap1, remap2);
 }
 
 /**

@@ -53,7 +53,7 @@
 #ifndef WLAN_CRYPTO_MAX_VLANKEYIX
 #define WLAN_CRYPTO_MAX_VLANKEYIX    WLAN_CRYPTO_MAXKEYIDX
 #endif
-#define WLAN_CRYPTO_MAX_PMKID        (3)
+#define WLAN_CRYPTO_MAX_PMKID        (16)
 
 /* 40 bit wep key len */
 #define WLAN_CRYPTO_KEY_WEP40_LEN    (5)
@@ -226,6 +226,7 @@ enum wlan_crypto_key_type {
  * @ssid_len: ssid length
  * @ssid: ssid information
  * @cache_id: cache id
+ * @single_pmk_supported: SAE single pmk supported BSS
  */
 struct wlan_crypto_pmksa {
 	struct qdf_mac_addr bssid;
@@ -235,6 +236,9 @@ struct wlan_crypto_pmksa {
 	uint8_t    ssid_len;
 	uint8_t    ssid[WLAN_SSID_MAX_LEN];
 	uint8_t    cache_id[WLAN_CACHE_ID_LEN];
+#if defined(WLAN_SAE_SINGLE_PMK) && defined(WLAN_FEATURE_ROAM_OFFLOAD)
+	bool       single_pmk_supported;
+#endif
 };
 
 /**

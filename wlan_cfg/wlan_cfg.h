@@ -75,7 +75,6 @@
 #define MAX_IDLE_SCATTER_BUFS 16
 #define DP_MAX_IRQ_PER_CONTEXT 12
 #define MAX_HTT_METADATA_LEN 32
-#define MAX_NUM_PEER_ID_PER_PEER 8
 #define DP_MAX_TIDS 17
 #define DP_NON_QOS_TID 16
 #define DP_NULL_DATA_TID 17
@@ -222,7 +221,7 @@ struct wlan_cfg_dp_soc_ctxt {
 	int int_rxdma2host_ring_mask[WLAN_CFG_INT_NUM_CONTEXTS];
 	int int_host2rxdma_ring_mask[WLAN_CFG_INT_NUM_CONTEXTS];
 	int hw_macid[MAX_PDEV_CNT];
-	int hw_macid_pdev_id_map[MAX_PDEV_CNT];
+	int hw_macid_pdev_id_map[MAX_NUM_LMAC_HW];
 	int base_hw_macid;
 	bool rx_hash;
 	bool tso_enabled;
@@ -280,6 +279,8 @@ struct wlan_cfg_dp_soc_ctxt {
 	uint8_t *rx_toeplitz_hash_key;
 	uint8_t pktlog_buffer_size;
 	uint8_t is_rx_fisa_enabled;
+	bool is_tso_desc_attach_defer;
+	uint32_t delayed_replenish_entries;
 };
 
 /**
@@ -365,6 +366,28 @@ int wlan_cfg_set_rx_wbm_rel_ring_mask(struct wlan_cfg_dp_soc_ctxt *cfg,
 					int context, int mask);
 int wlan_cfg_set_reo_status_ring_mask(struct wlan_cfg_dp_soc_ctxt *cfg,
 					int context, int mask);
+
+/**
+ * wlan_cfg_set_mon_delayed_replenish_entries() - number of buffers to replenish
+ *				for monitor buffer ring at initialization
+ * @wlan_cfg_ctx - Configuration Handle
+ * @replenish_entries - number of entries to replenish at initialization
+ *
+ */
+void wlan_cfg_set_mon_delayed_replenish_entries(struct wlan_cfg_dp_soc_ctxt
+						*wlan_cfg_ctx,
+						uint32_t replenish_entries);
+
+/**
+ * wlan_cfg_get_mon_delayed_replenish_entries() - get num of buffer to replenish
+ *				for monitor buffer ring at initialization
+ * @wlan_cfg_ctx - Configuration Handle
+ * @replenish_entries - number of entries to replenish at initialization
+ *
+ * Return: delayed_replenish_entries;
+ */
+int wlan_cfg_get_mon_delayed_replenish_entries(struct wlan_cfg_dp_soc_ctxt
+					       *wlan_cfg_ctx);
 /**
  * wlan_cfg_get_num_contexts() - Number of interrupt contexts to be registered
  * @wlan_cfg_ctx - Configuration Handle
@@ -1290,3 +1313,9 @@ void wlan_cfg_fill_interrupt_mask(struct wlan_cfg_dp_soc_ctxt *wlan_cfg_ctx,
  */
 bool wlan_cfg_is_rx_fisa_enabled(struct wlan_cfg_dp_soc_ctxt *cfg);
 #endif
+
+void wlan_cfg_set_tso_desc_attach_defer(struct wlan_cfg_dp_soc_ctxt *cfg,
+					bool val);
+
+bool wlan_cfg_is_tso_desc_attach_defer(struct wlan_cfg_dp_soc_ctxt *cfg);
+

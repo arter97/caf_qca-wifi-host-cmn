@@ -205,6 +205,7 @@ extract_vdev_start_resp_tlv(struct wmi_unified *wmi_handle, void *evt_buf,
 	vdev_rsp->mac_id = ev->mac_id;
 	vdev_rsp->cfgd_tx_streams = ev->cfgd_tx_streams;
 	vdev_rsp->cfgd_rx_streams = ev->cfgd_rx_streams;
+	vdev_rsp->max_allowed_tx_power = ev->max_allowed_tx_power;
 
 	return QDF_STATUS_SUCCESS;
 }
@@ -366,7 +367,7 @@ static QDF_STATUS extract_muedca_params_tlv(wmi_unified_t wmi_hdl,
 	muedca_param = param_buf->fixed_param;
 
 	muedca_param_list->pdev_id = wmi_hdl->ops->
-		convert_pdev_id_target_to_host(wmi_hdl,
+		convert_target_pdev_id_to_host(wmi_hdl,
 					       muedca_param->pdev_id);
 	for (i = 0; i < WMI_AC_MAX; i++) {
 		muedca_param_list->muedca_aifsn[i] = muedca_param->aifsn[i] &

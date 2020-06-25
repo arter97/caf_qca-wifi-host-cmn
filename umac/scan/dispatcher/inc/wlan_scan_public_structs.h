@@ -43,6 +43,7 @@ typedef uint32_t wlan_scan_id;
 #define SCM_CANCEL_SCAN_WAIT_ITERATION 600
 
 #define INVAL_SCAN_ID        0xFFFFFFFF
+#define CANCEL_HOST_SCAN_ID  0xFFFFFFFE
 #define INVAL_VDEV_ID        0xFFFFFFFF
 #define INVAL_PDEV_ID        0xFFFFFFFF
 
@@ -61,16 +62,17 @@ typedef uint32_t wlan_scan_id;
 #define HT_CAPABILITY_WEIGHTAGE 2
 #define VHT_CAP_WEIGHTAGE 1
 #define HE_CAP_WEIGHTAGE 2
-#define CHAN_WIDTH_WEIGHTAGE 17
+#define CHAN_WIDTH_WEIGHTAGE 12
 #define CHAN_BAND_WEIGHTAGE 2
 #define NSS_WEIGHTAGE 16
 #define BEAMFORMING_CAP_WEIGHTAGE 2
 #define PCL_WEIGHT 10
 #define CHANNEL_CONGESTION_WEIGHTAGE 5
-#define OCE_WAN_WEIGHTAGE 0
+#define OCE_WAN_WEIGHTAGE 2
 #define OCE_AP_TX_POWER_WEIGHTAGE 5
-#define BEST_CANDIDATE_MAX_WEIGHT 100
-#define MAX_INDEX_SCORE 100
+#define OCE_SUBNET_ID_WEIGHTAGE 3
+#define BEST_CANDIDATE_MAX_WEIGHT 200
+#define MAX_PCT_SCORE 100
 #define MAX_INDEX_PER_INI 4
 
 #define WLAN_GET_BITS(_val, _index, _num_bits) \
@@ -480,6 +482,7 @@ struct scan_cache_entry {
  * @channel_congestion_weightage: channel congestion weightage
  * @oce_wan_weightage: OCE WAN metrics weightage
  * @oce_ap_tx_pwr_weightage: OCE AP tx power weigtage
+ * @oce_subnet_id_weightage: OCE subnet id weigtage
  */
 struct  weight_config {
 	uint8_t rssi_weightage;
@@ -494,6 +497,7 @@ struct  weight_config {
 	uint8_t channel_congestion_weightage;
 	uint8_t oce_wan_weightage;
 	uint8_t oce_ap_tx_pwr_weightage;
+	uint8_t oce_subnet_id_weightage;
 };
 
 /**
@@ -1068,12 +1072,15 @@ struct scan_start_request {
  * enum scan_cancel_type - type specifiers for cancel scan request
  * @WLAN_SCAN_CANCEL_SINGLE: cancel particular scan specified by scan_id
  * @WLAN_SCAN_CANCEL_VAP_ALL: cancel all scans running on a particular vdevid
- * WLAN_SCAN_CANCEL_PDEV_ALL: cancel all scans running on parent pdev of vdevid
+ * @WLAN_SCAN_CANCEL_PDEV_ALL: cancel all scans running on parent pdev of vdevid
+ * @WLAN_SCAN_CANCEL_HOST_VDEV_ALL: Cancel all host triggered scans alone on
+ * vdev
  */
 enum scan_cancel_req_type {
 	WLAN_SCAN_CANCEL_SINGLE = 1,
 	WLAN_SCAN_CANCEL_VDEV_ALL,
 	WLAN_SCAN_CANCEL_PDEV_ALL,
+	WLAN_SCAN_CANCEL_HOST_VDEV_ALL,
 };
 
 /**

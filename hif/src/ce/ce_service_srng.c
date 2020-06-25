@@ -417,7 +417,7 @@ ce_completed_recv_next_nolock_srng(struct CE_state *CE_state,
 	unsigned int nentries_mask = dest_ring->nentries_mask;
 	unsigned int sw_index = dest_ring->sw_index;
 	struct hif_softc *scn = CE_state->scn;
-	struct ce_srng_dest_status_desc *dest_status;
+	struct ce_srng_dest_status_desc *dest_status = NULL;
 	int nbytes;
 	struct ce_srng_dest_status_desc dest_status_info;
 
@@ -426,13 +426,13 @@ ce_completed_recv_next_nolock_srng(struct CE_state *CE_state,
 		goto done;
 	}
 
-	dest_status = hal_srng_dst_get_next(scn->hal_soc,
-						status_ring->srng_ctx);
-
+	dest_status = hal_srng_dst_peek(scn->hal_soc, status_ring->srng_ctx);
 	if (!dest_status) {
 		status = QDF_STATUS_E_FAILURE;
+		hal_srng_access_end_reap(scn->hal_soc, status_ring->srng_ctx);
 		goto done;
 	}
+
 	/*
 	 * By copying the dest_desc_info element to local memory, we could
 	 * avoid extra memory read from non-cachable memory.
@@ -440,15 +440,27 @@ ce_completed_recv_next_nolock_srng(struct CE_state *CE_state,
 	dest_status_info = *dest_status;
 	nbytes = dest_status_info.nbytes;
 	if (nbytes == 0) {
+		uint32_t hp, tp;
+
 		/*
 		 * This closes a relatively unusual race where the Host
 		 * sees the updated DRRI before the update to the
 		 * corresponding descriptor has completed. We treat this
 		 * as a descriptor that is not yet done.
 		 */
+		hal_get_sw_hptp(scn->hal_soc, status_ring->srng_ctx,
+				&hp, &tp);
+		hif_info("No data to reap, hp %d tp %d", hp, tp);
 		status = QDF_STATUS_E_FAILURE;
+		hal_srng_access_end_reap(scn->hal_soc, status_ring->srng_ctx);
 		goto done;
 	}
+
+	/*
+	 * Move the tail pointer since nbytes is non-zero and
+	 * this entry is processed.
+	 */
+	hal_srng_dst_get_next(scn->hal_soc, status_ring->srng_ctx);
 
 	dest_status->nbytes = 0;
 
@@ -474,25 +486,22 @@ ce_completed_recv_next_nolock_srng(struct CE_state *CE_state,
 	dest_ring->sw_index = sw_index;
 	status = QDF_STATUS_SUCCESS;
 
-done:
 	hal_srng_access_end(scn->hal_soc, status_ring->srng_ctx);
+	hif_record_ce_srng_desc_event(scn, CE_state->id,
+				      HIF_CE_DEST_RING_BUFFER_REAP,
+				      NULL,
+				      dest_ring->
+				      per_transfer_context[sw_index],
+				      dest_ring->sw_index, nbytes,
+				      dest_ring->srng_ctx);
 
-	if (status == QDF_STATUS_SUCCESS) {
-		hif_record_ce_srng_desc_event(scn, CE_state->id,
-					      HIF_CE_DEST_RING_BUFFER_REAP,
-					      NULL,
-					      dest_ring->
-					      per_transfer_context[sw_index],
-					      dest_ring->sw_index, nbytes,
-					      dest_ring->srng_ctx);
-
-		hif_record_ce_srng_desc_event(scn, CE_state->id,
-					      HIF_CE_DEST_STATUS_RING_REAP,
-					      (union ce_srng_desc *)dest_status,
-					      NULL,
-					      -1, 0,
-					      status_ring->srng_ctx);
-	}
+done:
+	hif_record_ce_srng_desc_event(scn, CE_state->id,
+				      HIF_CE_DEST_STATUS_RING_REAP,
+				      (union ce_srng_desc *)dest_status,
+				      NULL,
+				      -1, 0,
+				      status_ring->srng_ctx);
 
 	return status;
 }
@@ -730,8 +739,8 @@ static void ce_srng_msi_ring_params_setup(struct hif_softc *scn, uint32_t ce_id,
 }
 
 static void ce_srng_src_ring_setup(struct hif_softc *scn, uint32_t ce_id,
-			struct CE_ring_state *src_ring,
-			struct CE_attr *attr)
+				   struct CE_ring_state *src_ring,
+				   struct CE_attr *attr)
 {
 	struct hal_srng_params ring_params = {0};
 
@@ -752,6 +761,7 @@ static void ce_srng_src_ring_setup(struct hif_softc *scn, uint32_t ce_id,
 
 		ring_params.intr_timer_thres_us = 0;
 		ring_params.intr_batch_cntr_thres_entries = 1;
+		ring_params.prefetch_timer = HAL_SRNG_PREFETCH_TIMER;
 	}
 
 	src_ring->srng_ctx = hal_srng_setup(scn->hal_soc, CE_SRC, ce_id, 0,
@@ -777,8 +787,9 @@ static void ce_srng_src_ring_setup(struct hif_softc *scn, uint32_t ce_id,
  * fails to post the last entry due to the race condition.
  */
 static void ce_srng_initialize_dest_timer_interrupt_war(
-		struct CE_ring_state *dest_ring,
-		struct hal_srng_params *ring_params) {
+					struct CE_ring_state *dest_ring,
+					struct hal_srng_params *ring_params)
+{
 	int num_buffers_when_fully_posted = dest_ring->nentries - 2;
 
 	ring_params->low_threshold = num_buffers_when_fully_posted - 1;
@@ -787,9 +798,10 @@ static void ce_srng_initialize_dest_timer_interrupt_war(
 	ring_params->flags |= HAL_SRNG_LOW_THRES_INTR_ENABLE;
 }
 
-static void ce_srng_dest_ring_setup(struct hif_softc *scn, uint32_t ce_id,
-				struct CE_ring_state *dest_ring,
-				struct CE_attr *attr)
+static void ce_srng_dest_ring_setup(struct hif_softc *scn,
+				    uint32_t ce_id,
+				    struct CE_ring_state *dest_ring,
+				    struct CE_attr *attr)
 {
 	struct hal_srng_params ring_params = {0};
 	bool status_ring_timer_thresh_work_arround = true;
@@ -813,6 +825,7 @@ static void ce_srng_dest_ring_setup(struct hif_softc *scn, uint32_t ce_id,
 			ring_params.intr_batch_cntr_thres_entries = 0;
 			ring_params.flags |= HAL_SRNG_LOW_THRES_INTR_ENABLE;
 		}
+		ring_params.prefetch_timer = HAL_SRNG_PREFETCH_TIMER;
 	}
 
 	/*Dest ring is also source ring*/

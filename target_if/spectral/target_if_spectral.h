@@ -40,8 +40,11 @@
 #endif
 
 #include <spectral_defs_i.h>
+#include <wmi_unified_param.h>
 
-#define FREQ_OFFSET_10MHZ 10
+#define FREQ_OFFSET_10MHZ (10)
+#define FREQ_OFFSET_40MHZ (40)
+#define FREQ_OFFSET_80MHZ (80)
 #ifndef SPECTRAL_USE_NL_BCAST
 #define SPECTRAL_USE_NL_BCAST  (0)
 #endif
@@ -411,11 +414,17 @@ struct spectral_sscan_summary_report_gen3 {
  * @data: Report buffer
  * @noisefloor: Noise floor values
  * @reset_delay: Time taken for warm reset in us
+ * @cfreq1: center frequency 1
+ * @cfreq2: center frequency 2
+ * @ch_width: channel width
  */
 struct spectral_report {
 	uint8_t *data;
 	int32_t noisefloor[DBR_MAX_CHAINS];
 	uint32_t reset_delay;
+	uint32_t cfreq1;
+	uint32_t cfreq2;
+	uint32_t ch_width;
 };
 #endif
 /* END of spectral GEN III HW specific details */
@@ -495,31 +504,6 @@ struct spectral_fft_bin_len_adj_swar {
 };
 
 /**
- * struct spectral_fft_bin_markers_165mhz - Stores the start index and length of
- * FFT bins in 165 MHz/Restricted 80p80 mode
- * @start_pri80: Starting index of FFT bins corresponding to primary 80 MHz
- *               in 165 MHz/Restricted 80p80 mode
- * @num_pri80: Number of FFT bins corresponding to primary 80 MHz
- *             in 165 MHz/Restricted 80p80 mode
- * @start_5mhz: Starting index of FFT bins corresponding to extra 5 MHz
- *               in 165 MHz/Restricted 80p80 mode
- * @num_5mhz: Number of FFT bins corresponding to extra 5 MHz
- *             in 165 MHz/Restricted 80p80 mode
- * @start_sec80: Starting index of FFT bins corresponding to secondary 80 MHz
- *               in 165 MHz/Restricted 80p80 mode
- * @num_sec80: Number of FFT bins corresponding to secondary 80 MHz
- *             in 165 MHz/Restricted 80p80 mode
- */
-struct spectral_fft_bin_markers_165mhz {
-	size_t start_pri80;
-	size_t num_pri80;
-	size_t start_5mhz;
-	size_t num_5mhz;
-	size_t start_sec80;
-	size_t num_sec80;
-};
-
-/**
  * struct spectral_report_params - Parameters related to format of Spectral
  * report.
  * @version: This represents the report format version number within each
@@ -531,6 +515,7 @@ struct spectral_fft_bin_markers_165mhz {
  * of FFT bins.
  * @fragmentation_160: This indicates whether Spectral reports in 160/80p80 is
  * fragmented.
+ * @max_agile_ch_width: Maximum agile BW supported by the target
  * @detid_mode_table: Detector ID to Spectral scan mode table
  * @num_spectral_detectors: Total number of Spectral detectors
  * @marker: Describes the boundaries of pri80, 5 MHz and sec80 bins
@@ -540,10 +525,11 @@ struct spectral_report_params {
 	uint8_t ssumaary_padding_bytes;
 	uint8_t fft_report_hdr_len;
 	bool fragmentation_160[SPECTRAL_SCAN_MODE_MAX];
+	enum phy_ch_width max_agile_ch_width;
 	enum spectral_scan_mode detid_mode_table[SPECTRAL_DETECTOR_ID_MAX];
 	uint8_t num_spectral_detectors;
-	struct spectral_fft_bin_markers_165mhz
-		marker[SPECTRAL_REPORT_MODE_MAX][SPECTRAL_FFT_SIZE_MAX];
+	struct spectral_fft_bin_markers_160_165mhz
+				marker[SPECTRAL_SCAN_MODE_MAX];
 };
 
 /**
@@ -837,21 +823,49 @@ struct vdev_spectral_configure_params;
 struct vdev_spectral_enable_params;
 
 /**
- * struct wmi_spectral_cmd_ops - structure used holding the operations
- * related to wmi commands on spectral parameters.
+ * struct spectral_wmi_ops - structure used holding the operations
+ * related to Spectral WMI
  * @wmi_spectral_configure_cmd_send: Configure Spectral parameters
  * @wmi_spectral_enable_cmd_send: Enable/Disable Spectral
  * @wmi_spectral_crash_inject: Inject FW crash
+ * @wmi_extract_pdev_sscan_fw_cmd_fixed_param: Extract Fixed params from
+ * start scan response event
+ * @wmi_extract_pdev_sscan_fft_bin_index: Extract TLV which describes FFT
+ * bin indices from start scan response event
+ * @wmi_unified_register_event_handler: Register WMI event handler
+ * @wmi_unified_unregister_event_handler: Unregister WMI event handler
  */
-struct wmi_spectral_cmd_ops {
+struct spectral_wmi_ops {
 	QDF_STATUS (*wmi_spectral_configure_cmd_send)(
 		    wmi_unified_t wmi_hdl,
 		    struct vdev_spectral_configure_params *param);
 	QDF_STATUS (*wmi_spectral_enable_cmd_send)(
 		    wmi_unified_t wmi_hdl,
 		    struct vdev_spectral_enable_params *param);
-	QDF_STATUS(*wmi_spectral_crash_inject)(
+	QDF_STATUS (*wmi_spectral_crash_inject)(
 		wmi_unified_t wmi_handle, struct crash_inject *param);
+	QDF_STATUS (*wmi_extract_pdev_sscan_fw_cmd_fixed_param)(
+				wmi_unified_t wmi_handle, uint8_t *evt_buf,
+				struct spectral_startscan_resp_params *param);
+	QDF_STATUS (*wmi_extract_pdev_sscan_fft_bin_index)(
+			wmi_unified_t wmi_handle, uint8_t *evt_buf,
+			struct spectral_fft_bin_markers_160_165mhz *param);
+	int (*wmi_unified_register_event_handler)(
+				wmi_unified_t wmi_handle,
+				wmi_conv_event_id event_id,
+				wmi_unified_event_handler handler_func,
+				uint8_t rx_ctx);
+	int (*wmi_unified_unregister_event_handler)(wmi_unified_t wmi_handle,
+						    wmi_conv_event_id event_id);
+};
+
+/**
+ * struct spectral_tgt_ops - structure used holding the operations
+ * related to target operations
+ * @tgt_get_psoc_from_scn_hdl: Function to get psoc from scn
+ */
+struct spectral_tgt_ops {
+	struct wlan_objmgr_psoc *(*tgt_get_psoc_from_scn_hdl)(void *scn_handle);
 };
 
 /**
@@ -1058,7 +1072,6 @@ struct target_if_spectral {
 	uint8_t                                tag_sscan_summary_exp;
 	uint8_t                                tag_sscan_fft_exp;
 	uint8_t                                tlvhdr_size;
-	struct wmi_spectral_cmd_ops param_wmi_cmd_ops;
 	struct spectral_nl_cb nl_cb;
 	bool use_nl_bcast;
 	int (*send_phy_data)(struct wlan_objmgr_pdev *pdev,
@@ -1073,6 +1086,16 @@ struct target_if_spectral {
 	uint32_t prev_tstamp;
 	struct spectral_report_params rparams;
 	struct spectral_param_min_max param_min_max;
+};
+
+/**
+ * struct target_if_psoc_spectral - Target if psoc Spectral object
+ * @psoc_obj:  psoc object
+ * @wmi_ops:  Spectral WMI operations
+ */
+struct target_if_psoc_spectral {
+	struct wlan_objmgr_psoc *psoc_obj;
+	struct spectral_wmi_ops wmi_ops;
 };
 
 /**
@@ -1110,8 +1133,13 @@ struct target_if_spectral {
  * @freq: Center frequency of primary 20MHz channel in MHz
  * @vhtop_ch_freq_seg1: VHT operation first segment center frequency in MHz
  * @vhtop_ch_freq_seg2: VHT operation second segment center frequency in MHz
- * @agile_freq: Center frequency in MHz of the entire span across which Agile
- * Spectral is carried out. Applicable only for Agile Spectral samples.
+ * @agile_freq1:        Center frequency in MHz of the entire span(for 80+80 MHz
+ *                      agile Scan it is primary 80 MHz span) across which
+ *                      Agile Spectral is carried out. Applicable only for Agile
+ *                      Spectral samples.
+ * @agile_freq2:        Center frequency in MHz of the secondary 80 MHz span
+ *                      across which Agile Spectral is carried out. Applicable
+ *                      only for Agile Spectral samples in 80+80 MHz mode.
  * @freq_loading: spectral control duty cycles
  * @noise_floor:  current noise floor (except for secondary 80 segment)
  * @noise_floor_sec80:  current noise floor for secondary 80 segment
@@ -1172,7 +1200,8 @@ struct target_if_samp_msg_params {
 	uint16_t   freq;
 	uint16_t   vhtop_ch_freq_seg1;
 	uint16_t   vhtop_ch_freq_seg2;
-	uint16_t   agile_freq;
+	uint16_t   agile_freq1;
+	uint16_t   agile_freq2;
 	uint16_t   freq_loading;
 	int16_t     noise_floor;
 	int16_t     noise_floor_sec80;
@@ -1400,6 +1429,7 @@ struct target_if_spectral *get_target_if_spectral_handle_from_pdev(
 {
 	struct target_if_spectral *spectral;
 	struct wlan_objmgr_psoc *psoc;
+	struct wlan_lmac_if_rx_ops *rx_ops;
 
 	if (!pdev) {
 		spectral_err("pdev is null");
@@ -1412,10 +1442,48 @@ struct target_if_spectral *get_target_if_spectral_handle_from_pdev(
 		return NULL;
 	}
 
+	rx_ops = wlan_psoc_get_lmac_if_rxops(psoc);
+	if (!rx_ops) {
+		spectral_err("rx_ops is null");
+		return NULL;
+	}
+
 	spectral = (struct target_if_spectral *)
-		psoc->soc_cb.rx_ops.sptrl_rx_ops.sptrlro_get_target_handle(
-		pdev);
+		rx_ops->sptrl_rx_ops.sptrlro_get_pdev_target_handle(pdev);
+
 	return spectral;
+}
+
+/**
+ * get_target_if_spectral_handle_from_psoc() - Get handle to psoc target_if
+ * internal Spectral data
+ * @psoc: Pointer to psoc
+ *
+ * Return: Handle to target_if psoc internal Spectral data on success, NULL on
+ * failure
+ */
+static inline
+struct target_if_psoc_spectral *get_target_if_spectral_handle_from_psoc(
+	struct wlan_objmgr_psoc *psoc)
+{
+	struct wlan_lmac_if_rx_ops *rx_ops;
+	struct target_if_psoc_spectral *psoc_spectral;
+
+	if (!psoc) {
+		spectral_err("psoc is null");
+		return NULL;
+	}
+
+	rx_ops = wlan_psoc_get_lmac_if_rxops(psoc);
+	if (!rx_ops) {
+		spectral_err("rx_ops is null");
+		return NULL;
+	}
+
+	psoc_spectral = (struct target_if_psoc_spectral *)
+		rx_ops->sptrl_rx_ops.sptrlro_get_psoc_target_handle(psoc);
+
+	return psoc_spectral;
 }
 
 /**
@@ -1431,14 +1499,20 @@ static inline
 int16_t target_if_vdev_get_chan_freq(struct wlan_objmgr_vdev *vdev)
 {
 	struct wlan_objmgr_psoc *psoc = NULL;
+	struct wlan_lmac_if_rx_ops *rx_ops;
 
 	psoc = wlan_vdev_get_psoc(vdev);
 	if (!psoc) {
 		spectral_err("psoc is NULL");
 		return -EINVAL;
 	}
+	rx_ops = wlan_psoc_get_lmac_if_rxops(psoc);
+	if (!rx_ops) {
+		spectral_err("rx_ops is null");
+		return -EINVAL;
+	}
 
-	return psoc->soc_cb.rx_ops.sptrl_rx_ops.sptrlro_vdev_get_chan_freq(
+	return rx_ops->sptrl_rx_ops.sptrlro_vdev_get_chan_freq(
 		vdev);
 }
 
@@ -1455,6 +1529,7 @@ static inline
 int16_t target_if_vdev_get_chan_freq_seg2(struct wlan_objmgr_vdev *vdev)
 {
 	struct wlan_objmgr_psoc *psoc = NULL;
+	struct wlan_lmac_if_rx_ops *rx_ops;
 
 	psoc = wlan_vdev_get_psoc(vdev);
 	if (!psoc) {
@@ -1462,8 +1537,13 @@ int16_t target_if_vdev_get_chan_freq_seg2(struct wlan_objmgr_vdev *vdev)
 		return -EINVAL;
 	}
 
-	return psoc->soc_cb.rx_ops.sptrl_rx_ops.sptrlro_vdev_get_chan_freq_seg2(
-		vdev);
+	rx_ops = wlan_psoc_get_lmac_if_rxops(psoc);
+	if (!rx_ops) {
+		spectral_err("rx_ops is null");
+		return -EINVAL;
+	}
+
+	return rx_ops->sptrl_rx_ops.sptrlro_vdev_get_chan_freq_seg2(vdev);
 }
 
 /**
@@ -1480,6 +1560,7 @@ enum phy_ch_width target_if_vdev_get_ch_width(struct wlan_objmgr_vdev *vdev)
 {
 	struct wlan_objmgr_psoc *psoc = NULL;
 	enum phy_ch_width ch_width;
+	struct wlan_lmac_if_rx_ops *rx_ops;
 
 	psoc = wlan_vdev_get_psoc(vdev);
 	if (!psoc) {
@@ -1487,8 +1568,13 @@ enum phy_ch_width target_if_vdev_get_ch_width(struct wlan_objmgr_vdev *vdev)
 		return CH_WIDTH_INVALID;
 	}
 
-	ch_width = psoc->soc_cb.rx_ops.sptrl_rx_ops.sptrlro_vdev_get_ch_width(
-		   vdev);
+	rx_ops = wlan_psoc_get_lmac_if_rxops(psoc);
+	if (!rx_ops) {
+		spectral_err("rx_ops is null");
+		return CH_WIDTH_INVALID;
+	}
+
+	ch_width = rx_ops->sptrl_rx_ops.sptrlro_vdev_get_ch_width(vdev);
 
 	if (ch_width == CH_WIDTH_160MHZ) {
 		int16_t cfreq2;
@@ -1522,6 +1608,7 @@ int target_if_vdev_get_sec20chan_freq_mhz(
 	uint16_t *sec20chan_freq)
 {
 	struct wlan_objmgr_psoc *psoc = NULL;
+	struct wlan_lmac_if_rx_ops *rx_ops;
 
 	psoc = wlan_vdev_get_psoc(vdev);
 	if (!psoc) {
@@ -1529,7 +1616,13 @@ int target_if_vdev_get_sec20chan_freq_mhz(
 		return -EINVAL;
 	}
 
-	return psoc->soc_cb.rx_ops.sptrl_rx_ops.
+	rx_ops = wlan_psoc_get_lmac_if_rxops(psoc);
+	if (!rx_ops) {
+		spectral_err("rx_ops is null");
+		return -EINVAL;
+	}
+
+	return rx_ops->sptrl_rx_ops.
 		sptrlro_vdev_get_sec20chan_freq_mhz(vdev, sec20chan_freq);
 }
 
@@ -1547,10 +1640,17 @@ void target_if_spectral_set_rxchainmask(struct wlan_objmgr_pdev *pdev,
 	struct wlan_objmgr_psoc *psoc = NULL;
 	struct target_if_spectral *spectral = NULL;
 	enum spectral_scan_mode smode = SPECTRAL_SCAN_MODE_NORMAL;
+	struct wlan_lmac_if_rx_ops *rx_ops;
 
 	psoc = wlan_pdev_get_psoc(pdev);
 	if (!psoc) {
 		spectral_err("psoc is NULL");
+		return;
+	}
+
+	rx_ops = wlan_psoc_get_lmac_if_rxops(psoc);
+	if (!rx_ops) {
+		spectral_err("rx_ops is null");
 		return;
 	}
 
@@ -1559,7 +1659,7 @@ void target_if_spectral_set_rxchainmask(struct wlan_objmgr_pdev *pdev,
 		return;
 	}
 
-	if (psoc->soc_cb.rx_ops.sptrl_rx_ops.
+	if (rx_ops->sptrl_rx_ops.
 	    sptrlro_spectral_is_feature_disabled(psoc)) {
 		spectral_info("Spectral is disabled");
 		return;
@@ -1974,8 +2074,7 @@ void target_if_pdev_spectral_deinit(struct wlan_objmgr_pdev *pdev);
 /**
  * target_if_set_spectral_config() - Set spectral config
  * @pdev:       Pointer to pdev object
- * @threshtype: config type
- * @value:      config value
+ * @param: Spectral parameter id and value
  * @smode: Spectral scan mode
  * @err: Pointer to Spectral error code
  *
@@ -1984,8 +2083,7 @@ void target_if_pdev_spectral_deinit(struct wlan_objmgr_pdev *pdev);
  * Return: QDF_STATUS_SUCCESS in case of success, else QDF_STATUS_E_FAILURE
  */
 QDF_STATUS target_if_set_spectral_config(struct wlan_objmgr_pdev *pdev,
-					 const uint32_t threshtype,
-					 const uint32_t value,
+					 const struct spectral_cp_param *param,
 					 const enum spectral_scan_mode smode,
 					 enum spectral_cp_error_code *err);
 
@@ -2014,14 +2112,17 @@ uint32_t target_if_spectral_sops_get_params(
 
 /**
  * target_if_init_spectral_capability() - Initialize Spectral capability
+ *
  * @spectral: Pointer to Spectral target_if internal private data
+ * @target_type: target type
  *
  * This is a workaround.
  *
  * Return: QDF_STATUS
  */
 QDF_STATUS
-target_if_init_spectral_capability(struct target_if_spectral *spectral);
+target_if_init_spectral_capability(struct target_if_spectral *spectral,
+				   uint32_t target_type);
 
 /**
  * target_if_start_spectral_scan() - Start spectral scan
@@ -2131,10 +2232,6 @@ QDF_STATUS target_if_get_spectral_capinfo(struct wlan_objmgr_pdev *pdev,
  */
 QDF_STATUS target_if_get_spectral_diagstats(struct wlan_objmgr_pdev *pdev,
 					    struct spectral_diag_stats *stats);
-
-void target_if_register_wmi_spectral_cmd_ops(
-	struct wlan_objmgr_pdev *pdev,
-	struct wmi_spectral_cmd_ops *cmd_ops);
 
 QDF_STATUS
 target_if_160mhz_delivery_state_change(struct target_if_spectral *spectral,
