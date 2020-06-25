@@ -3160,6 +3160,9 @@ struct category_name_info g_qdf_category_name[MAX_SUPPORTED_CATEGORY] = {
 	[QDF_MODULE_ID_MON_FILTER] = {"Monitor Filter"},
 	[QDF_MODULE_ID_ANY] = {"ANY"},
 	[QDF_MODULE_ID_PKT_CAPTURE] = {"pkt_capture"},
+	[QDF_MODULE_ID_RPTR] = {"RPTR"},
+	[QDF_MODULE_ID_6GHZ] = {"6GHZ"},
+	[QDF_MODULE_ID_IOT_SIM] = {"IOT_SIM"},
 };
 qdf_export_symbol(g_qdf_category_name);
 
@@ -3283,7 +3286,7 @@ void qdf_trace_msg_cmn(unsigned int idx,
 #if defined(WLAN_LOGGING_SOCK_SVC_ENABLE)
 		wlan_log_to_user(verbose, (char *)str_buffer,
 				 strlen(str_buffer));
-		if (qdf_likely(qdf_log_dump_at_kernel_enable))
+		if (qdf_unlikely(qdf_log_dump_at_kernel_enable))
 			print_to_console(str_buffer);
 #else
 		pr_err("%s\n", str_buffer);
@@ -3613,7 +3616,7 @@ static void set_default_trace_levels(struct category_info *cinfo)
 		[QDF_MODULE_ID_CMN_MLME] = QDF_TRACE_LEVEL_INFO,
 		[QDF_MODULE_ID_BSSCOLOR] = QDF_TRACE_LEVEL_ERROR,
 		[QDF_MODULE_ID_CFR] = QDF_TRACE_LEVEL_ERROR,
-		[QDF_MODULE_ID_TX_CAPTURE] = QDF_TRACE_LEVEL_NONE,
+		[QDF_MODULE_ID_TX_CAPTURE] = QDF_TRACE_LEVEL_FATAL,
 		[QDF_MODULE_ID_INTEROP_ISSUES_AP] = QDF_TRACE_LEVEL_NONE,
 		[QDF_MODULE_ID_BLACKLIST_MGR] = QDF_TRACE_LEVEL_NONE,
 		[QDF_MODULE_ID_QLD] = QDF_TRACE_LEVEL_ERROR,
@@ -3622,6 +3625,9 @@ static void set_default_trace_levels(struct category_info *cinfo)
 		[QDF_MODULE_ID_MON_FILTER] = QDF_TRACE_LEVEL_INFO,
 		[QDF_MODULE_ID_ANY] = QDF_TRACE_LEVEL_INFO,
 		[QDF_MODULE_ID_PKT_CAPTURE] = QDF_TRACE_LEVEL_NONE,
+		[QDF_MODULE_ID_RPTR] = QDF_TRACE_LEVEL_INFO,
+		[QDF_MODULE_ID_6GHZ] = QDF_TRACE_LEVEL_ERROR,
+		[QDF_MODULE_ID_IOT_SIM] = QDF_TRACE_LEVEL_ERROR,
 	};
 
 	for (i = 0; i < MAX_SUPPORTED_CATEGORY; i++) {

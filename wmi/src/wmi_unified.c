@@ -2122,31 +2122,6 @@ wmi_process_fw_event_sched_thread_ctx(struct wmi_unified *wmi,
 	struct wmi_process_fw_event_params *params_buf;
 	struct scheduler_msg msg = { 0 };
 	uint32_t event_id;
-	struct target_psoc_info *tgt_hdl;
-	bool is_wmi_ready = false;
-	struct wlan_objmgr_psoc *psoc;
-
-	psoc = target_if_get_psoc_from_scn_hdl(wmi->scn_handle);
-	if (!psoc) {
-		target_if_err("psoc is null");
-		qdf_nbuf_free(ev);
-		return QDF_STATUS_E_INVAL;
-	}
-
-	tgt_hdl = wlan_psoc_get_tgt_if_handle(psoc);
-	if (!tgt_hdl) {
-		wmi_err("target_psoc_info is null");
-		qdf_nbuf_free(ev);
-		return QDF_STATUS_E_INVAL;
-	}
-
-	is_wmi_ready = target_psoc_get_wmi_ready(tgt_hdl);
-	if (!is_wmi_ready) {
-		wmi_debug("fw event recvd before ready event processed");
-		wmi_debug("therefore use worker thread");
-		wmi_process_fw_event_worker_thread_ctx(wmi, ev);
-		return QDF_STATUS_E_INVAL;
-	}
 
 	params_buf = qdf_mem_malloc(sizeof(struct wmi_process_fw_event_params));
 	if (!params_buf) {
@@ -2687,6 +2662,7 @@ void *wmi_unified_get_pdev_handle(struct wmi_soc *soc, uint32_t pdev_idx)
 	wmi_handle->wmi_endpoint_id = soc->wmi_endpoint_id[pdev_idx];
 	wmi_handle->htc_handle = soc->htc_handle;
 	wmi_handle->max_msg_len = soc->max_msg_len[pdev_idx];
+	wmi_handle->tag_crash_inject = false;
 
 	return wmi_handle;
 
@@ -3194,6 +3170,18 @@ wmi_start(wmi_unified_t wmi_handle)
 		  "WMI Start");
 	wmi_handle->wmi_stopinprogress = 0;
 	return 0;
+}
+
+/**
+ * wmi_is_blocked() - generic function to check if WMI is blocked
+ * @wmi_handle: handle to WMI.
+ *
+ * @Return: true, if blocked, false if not blocked
+ */
+bool
+wmi_is_blocked(wmi_unified_t wmi_handle)
+{
+	return (!(!wmi_handle->wmi_stopinprogress));
 }
 
 /**

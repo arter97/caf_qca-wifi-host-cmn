@@ -78,17 +78,32 @@ do {                                                   \
 #define MAX_POOL_BUFF_COUNT 10000
 
 QDF_STATUS dp_tx_desc_pool_alloc(struct dp_soc *soc, uint8_t pool_id,
-		uint16_t num_elem);
-QDF_STATUS dp_tx_desc_pool_free(struct dp_soc *soc, uint8_t pool_id);
+				 uint16_t num_elem);
+QDF_STATUS dp_tx_desc_pool_init(struct dp_soc *soc, uint8_t pool_id,
+				uint16_t num_elem);
+void dp_tx_desc_pool_free(struct dp_soc *soc, uint8_t pool_id);
+void dp_tx_desc_pool_deinit(struct dp_soc *soc, uint8_t pool_id);
+
 QDF_STATUS dp_tx_ext_desc_pool_alloc(struct dp_soc *soc, uint8_t pool_id,
-		uint16_t num_elem);
-QDF_STATUS dp_tx_ext_desc_pool_free(struct dp_soc *soc, uint8_t pool_id);
+				     uint16_t num_elem);
+QDF_STATUS dp_tx_ext_desc_pool_init(struct dp_soc *soc, uint8_t pool_id,
+				    uint16_t num_elem);
+void dp_tx_ext_desc_pool_free(struct dp_soc *soc, uint8_t pool_id);
+void dp_tx_ext_desc_pool_deinit(struct dp_soc *soc, uint8_t pool_id);
+
 QDF_STATUS dp_tx_tso_desc_pool_alloc(struct dp_soc *soc, uint8_t pool_id,
-		uint16_t num_elem);
+				     uint16_t num_elem);
+QDF_STATUS dp_tx_tso_desc_pool_init(struct dp_soc *soc, uint8_t pool_id,
+				    uint16_t num_elem);
 void dp_tx_tso_desc_pool_free(struct dp_soc *soc, uint8_t pool_id);
+void dp_tx_tso_desc_pool_deinit(struct dp_soc *soc, uint8_t pool_id);
+
 QDF_STATUS dp_tx_tso_num_seg_pool_alloc(struct dp_soc *soc, uint8_t pool_id,
 		uint16_t num_elem);
+QDF_STATUS dp_tx_tso_num_seg_pool_init(struct dp_soc *soc, uint8_t pool_id,
+				       uint16_t num_elem);
 void dp_tx_tso_num_seg_pool_free(struct dp_soc *soc, uint8_t pool_id);
+void dp_tx_tso_num_seg_pool_deinit(struct dp_soc *soc, uint8_t pool_id);
 
 #ifdef QCA_LL_TX_FLOW_CONTROL_V2
 void dp_tx_flow_control_init(struct dp_soc *);
@@ -342,6 +357,7 @@ dp_tx_desc_free(struct dp_soc *soc, struct dp_tx_desc_s *tx_desc,
 		break;
 	case FLOW_POOL_INVALID:
 		if (pool->avail_desc == pool->pool_size) {
+			dp_tx_desc_pool_deinit(soc, desc_pool_id);
 			dp_tx_desc_pool_free(soc, desc_pool_id);
 			qdf_spin_unlock_bh(&pool->flow_pool_lock);
 			QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_ERROR,
@@ -461,6 +477,7 @@ dp_tx_desc_free(struct dp_soc *soc, struct dp_tx_desc_s *tx_desc,
 		break;
 	case FLOW_POOL_INVALID:
 		if (pool->avail_desc == pool->pool_size) {
+			dp_tx_desc_pool_deinit(soc, desc_pool_id);
 			dp_tx_desc_pool_free(soc, desc_pool_id);
 			qdf_spin_unlock_bh(&pool->flow_pool_lock);
 			qdf_print("%s %d pool is freed!!",
@@ -725,6 +742,24 @@ dp_tx_is_desc_id_valid(struct dp_soc *soc, uint32_t tx_desc_id)
 	return true;
 }
 #endif /* QCA_DP_TX_DESC_ID_CHECK */
+
+#ifdef QCA_DP_TX_DESC_FAST_COMP_ENABLE
+static inline void dp_tx_desc_update_fast_comp_flag(struct dp_soc *soc,
+						    struct dp_tx_desc_s *desc,
+						    uint8_t allow_fast_comp)
+{
+	if (qdf_likely(!(desc->flags & DP_TX_DESC_FLAG_TO_FW)) &&
+	    qdf_likely(allow_fast_comp)) {
+		desc->flags |= DP_TX_DESC_FLAG_SIMPLE;
+	}
+}
+#else
+static inline void dp_tx_desc_update_fast_comp_flag(struct dp_soc *soc,
+						    struct dp_tx_desc_s *desc,
+						    uint8_t allow_fast_comp)
+{
+}
+#endif /* QCA_DP_TX_DESC_FAST_COMP_ENABLE */
 
 /**
  * dp_tx_desc_find() - find dp tx descriptor from cokie

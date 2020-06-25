@@ -26,8 +26,13 @@
 #include <init_deinit_lmac.h>
 #include <wlan_cfr_utils_api.h>
 #include <wlan_objmgr_pdev_obj.h>
-#include <target_if_cfr_8074v2.h>
 #include <target_if_cfr_6018.h>
+#ifdef CFR_USE_FIXED_FOLDER
+#include "target_if_cfr_6490.h"
+#include "wlan_reg_services_api.h"
+#else
+#include <target_if_cfr_8074v2.h>
+#endif
 
 int target_if_cfr_stop_capture(struct wlan_objmgr_pdev *pdev,
 			       struct wlan_objmgr_peer *peer)
@@ -44,6 +49,10 @@ int target_if_cfr_stop_capture(struct wlan_objmgr_pdev *pdev,
 		return -EINVAL;
 
 	pdev_wmi_handle = lmac_get_pdev_wmi_handle(pdev);
+	if (!pdev_wmi_handle) {
+		cfr_err("pdev wmi handle NULL");
+		return -EINVAL;
+	}
 	vdev = wlan_peer_get_vdev(peer);
 
 	qdf_mem_set(&param, sizeof(param), 0);
@@ -73,6 +82,9 @@ int target_if_cfr_stop_capture(struct wlan_objmgr_pdev *pdev,
 	pdev_cfrobj->dbr_evt_cnt = 0;
 	pdev_cfrobj->tx_evt_cnt  = 0;
 	pdev_cfrobj->release_cnt = 0;
+	pdev_cfrobj->tx_peer_status_cfr_fail = 0;
+	pdev_cfrobj->tx_evt_status_cfr_fail = 0;
+	pdev_cfrobj->tx_dbr_cookie_lookup_fail = 0;
 
 	return retv;
 }
@@ -87,6 +99,10 @@ int target_if_cfr_start_capture(struct wlan_objmgr_pdev *pdev,
 	int retv = 0;
 
 	pdev_wmi_handle = lmac_get_pdev_wmi_handle(pdev);
+	if (!pdev_wmi_handle) {
+		cfr_err("pdev wmi handle NULL");
+		return -EINVAL;
+	}
 	vdev = wlan_peer_get_vdev(peer);
 	qdf_mem_set(&param, sizeof(param), 0);
 
@@ -107,16 +123,22 @@ int target_if_cfr_pdev_set_param(struct wlan_objmgr_pdev *pdev,
 {
 	struct pdev_params pparam;
 	uint32_t pdev_id;
+	struct wmi_unified *pdev_wmi_handle = NULL;
 
 	pdev_id = wlan_objmgr_pdev_get_pdev_id(pdev);
 	if (pdev_id < 0)
 		return -EINVAL;
 
+	pdev_wmi_handle = lmac_get_pdev_wmi_handle(pdev);
+	if (!pdev_wmi_handle) {
+		cfr_err("pdev wmi handle NULL");
+		return -EINVAL;
+	}
 	qdf_mem_set(&pparam, sizeof(pparam), 0);
 	pparam.param_id = param_id;
 	pparam.param_value = param_value;
 
-	return wmi_unified_pdev_param_send(lmac_get_pdev_wmi_handle(pdev),
+	return wmi_unified_pdev_param_send(pdev_wmi_handle,
 					   &pparam, pdev_id);
 }
 
@@ -157,8 +179,14 @@ int target_if_cfr_get_target_type(struct wlan_objmgr_psoc *psoc)
 {
 	uint32_t target_type = 0;
 	struct wlan_lmac_if_target_tx_ops *target_type_tx_ops;
+	struct wlan_lmac_if_tx_ops *tx_ops;
 
-	target_type_tx_ops = &psoc->soc_cb.tx_ops.target_tx_ops;
+	tx_ops = wlan_psoc_get_lmac_if_txops(psoc);
+	if (!tx_ops) {
+		cfr_err("tx_ops is NULL");
+		return target_type;
+	}
+	target_type_tx_ops = &tx_ops->target_tx_ops;
 
 	if (target_type_tx_ops->tgt_get_tgt_type)
 		target_type = target_type_tx_ops->tgt_get_tgt_type(psoc);
@@ -166,12 +194,54 @@ int target_if_cfr_get_target_type(struct wlan_objmgr_psoc *psoc)
 	return target_type;
 }
 
+#ifdef CFR_USE_FIXED_FOLDER
+int target_if_cfr_init_pdev(struct wlan_objmgr_psoc *psoc,
+			    struct wlan_objmgr_pdev *pdev)
+{
+	uint32_t target_type;
+	QDF_STATUS status;
+
+	target_type = target_if_cfr_get_target_type(psoc);
+
+	if (target_type == TARGET_TYPE_QCA6490) {
+		status = cfr_6490_init_pdev(psoc, pdev);
+	} else {
+		cfr_info("unsupport chip");
+		status = QDF_STATUS_SUCCESS;
+	}
+
+	return qdf_status_to_os_return(status);
+}
+
+int target_if_cfr_deinit_pdev(struct wlan_objmgr_psoc *psoc,
+			      struct wlan_objmgr_pdev *pdev)
+{
+	uint32_t target_type;
+	QDF_STATUS status;
+
+	target_type = target_if_cfr_get_target_type(psoc);
+
+	if (target_type == TARGET_TYPE_QCA6490) {
+		status = cfr_6490_deinit_pdev(psoc, pdev);
+	} else {
+		cfr_info("unsupport chip");
+		status = QDF_STATUS_SUCCESS;
+	}
+
+	return qdf_status_to_os_return(status);
+}
+#else
 int target_if_cfr_init_pdev(struct wlan_objmgr_psoc *psoc,
 			    struct wlan_objmgr_pdev *pdev)
 {
 	uint32_t target_type;
 	struct pdev_cfr *pa;
 	struct psoc_cfr *cfr_sc;
+
+	if (wlan_cfr_is_feature_disabled(pdev)) {
+		cfr_err("cfr is disabled");
+		return QDF_STATUS_E_NOSUPPORT;
+	}
 
 	pa = wlan_objmgr_pdev_get_comp_private_obj(pdev, WLAN_UMAC_COMP_CFR);
 	if (pa == NULL)
@@ -199,7 +269,8 @@ int target_if_cfr_init_pdev(struct wlan_objmgr_psoc *psoc,
 		pa->is_cfr_capable = cfr_sc->is_cfr_capable;
 
 		return cfr_wifi2_0_init_pdev(psoc, pdev);
-	} else if (target_type == TARGET_TYPE_QCA6018) {
+	} else if ((target_type == TARGET_TYPE_QCA6018) ||
+		   (target_type == TARGET_TYPE_QCN9000)) {
 		pa->is_cfr_capable = cfr_sc->is_cfr_capable;
 		return cfr_6018_init_pdev(psoc, pdev);
 	} else
@@ -211,6 +282,11 @@ int target_if_cfr_deinit_pdev(struct wlan_objmgr_psoc *psoc,
 {
 	uint32_t target_type;
 
+	if (wlan_cfr_is_feature_disabled(pdev)) {
+		cfr_err("cfr is disabled");
+		return QDF_STATUS_E_NOSUPPORT;
+	}
+
 	target_type = target_if_cfr_get_target_type(psoc);
 
 	if (target_type == TARGET_TYPE_QCA8074V2) {
@@ -220,13 +296,76 @@ int target_if_cfr_deinit_pdev(struct wlan_objmgr_psoc *psoc,
 		   (target_type == TARGET_TYPE_QCA9888)) {
 
 		return cfr_wifi2_0_deinit_pdev(psoc, pdev);
-	} else if (target_type == TARGET_TYPE_QCA6018) {
+	} else if ((target_type == TARGET_TYPE_QCA6018) ||
+		   (target_type == TARGET_TYPE_QCN9000)) {
 		return cfr_6018_deinit_pdev(psoc, pdev);
 	} else
 		return QDF_STATUS_E_NOSUPPORT;
 }
+#endif
 
 #ifdef WLAN_ENH_CFR_ENABLE
+#ifdef QCA_WIFI_QCA6490
+static uint8_t target_if_cfr_get_mac_id(struct wlan_objmgr_pdev *pdev)
+{
+	struct wlan_objmgr_vdev *vdev;
+	struct wlan_channel *bss_chan;
+	struct pdev_cfr *pcfr;
+	uint8_t mac_id = 0;
+
+	if (!pdev) {
+		cfr_err("null pdev");
+		return mac_id;
+	}
+
+	mac_id = wlan_objmgr_pdev_get_pdev_id(pdev);
+	pcfr = wlan_objmgr_pdev_get_comp_private_obj(pdev, WLAN_UMAC_COMP_CFR);
+	if (!pcfr)  {
+		cfr_err("null pcfr");
+		return mac_id;
+	}
+
+	if (pcfr->rcc_param.vdev_id == CFR_INVALID_VDEV_ID)
+		return mac_id;
+
+	vdev = wlan_objmgr_get_vdev_by_id_from_pdev(pdev,
+						    pcfr->rcc_param.vdev_id,
+						    WLAN_CFR_ID);
+	if (!vdev) {
+		cfr_err("null vdev");
+		return mac_id;
+	}
+
+	bss_chan = wlan_vdev_mlme_get_bss_chan(vdev);
+	if (!bss_chan) {
+		cfr_info("null bss chan");
+		wlan_objmgr_vdev_release_ref(vdev, WLAN_CFR_ID);
+		return mac_id;
+	}
+
+	cfr_debug("bss freq %d", bss_chan->ch_freq);
+	if (wlan_reg_is_24ghz_ch_freq(bss_chan->ch_freq))
+		mac_id = CFR_MAC_ID_24G;
+	else
+		mac_id = CFR_MAC_ID_5G;
+
+	pcfr->rcc_param.srng_id = mac_id;
+	wlan_objmgr_vdev_release_ref(vdev, WLAN_CFR_ID);
+
+	return mac_id;
+}
+
+static uint8_t target_if_cfr_get_pdev_id(struct wlan_objmgr_pdev *pdev)
+{
+	return target_if_cfr_get_mac_id(pdev);
+}
+#else
+static uint8_t target_if_cfr_get_pdev_id(struct wlan_objmgr_pdev *pdev)
+{
+	return wlan_objmgr_pdev_get_pdev_id(pdev);
+}
+#endif /* QCA_WIFI_QCA6490 */
+
 QDF_STATUS target_if_cfr_config_rcc(struct wlan_objmgr_pdev *pdev,
 				    struct cfr_rcc_param *rcc_info)
 {
@@ -239,7 +378,7 @@ QDF_STATUS target_if_cfr_config_rcc(struct wlan_objmgr_pdev *pdev,
 		return QDF_STATUS_E_NULL_VALUE;
 	}
 
-	rcc_info->pdev_id = wlan_objmgr_pdev_get_pdev_id(pdev);
+	rcc_info->pdev_id = target_if_cfr_get_pdev_id(pdev);
 	rcc_info->num_grp_tlvs =
 		count_set_bits(rcc_info->modified_in_curr_session);
 
@@ -252,27 +391,28 @@ void target_if_cfr_default_ta_ra_config(struct cfr_rcc_param *rcc_info,
 {
 	struct ta_ra_cfr_cfg *curr_cfg = NULL;
 	int grp_id;
-
+	unsigned long bitmap = reset_cfg;
 	uint8_t def_mac[QDF_MAC_ADDR_SIZE] = {0xFF, 0xFF, 0xFF,
 		0xFF, 0xFF, 0xFF};
-	uint8_t null_mac[QDF_MAC_ADDR_SIZE] = {0, 0, 0, 0, 0, 0};
+	uint8_t null_mac[QDF_MAC_ADDR_SIZE] = {0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00};
 
 	for (grp_id = 0; grp_id < MAX_TA_RA_ENTRIES; grp_id++) {
-		if (qdf_test_bit(grp_id, (unsigned long *)&reset_cfg)) {
+		if (qdf_test_bit(grp_id, &bitmap)) {
 			curr_cfg = &rcc_info->curr[grp_id];
 			qdf_mem_copy(curr_cfg->tx_addr,
-				     def_mac, QDF_MAC_ADDR_SIZE);
+				     null_mac, QDF_MAC_ADDR_SIZE);
 			qdf_mem_copy(curr_cfg->tx_addr_mask,
-				     null_mac, QDF_MAC_ADDR_SIZE);
-			qdf_mem_copy(curr_cfg->rx_addr,
 				     def_mac, QDF_MAC_ADDR_SIZE);
-			qdf_mem_copy(curr_cfg->rx_addr_mask,
+			qdf_mem_copy(curr_cfg->rx_addr,
 				     null_mac, QDF_MAC_ADDR_SIZE);
+			qdf_mem_copy(curr_cfg->rx_addr_mask,
+				     def_mac, QDF_MAC_ADDR_SIZE);
 			curr_cfg->bw = 0xf;
 			curr_cfg->nss = 0xff;
-			curr_cfg->mgmt_subtype_filter = 0xffff;
-			curr_cfg->ctrl_subtype_filter = 0xffff;
-			curr_cfg->data_subtype_filter = 0xffff;
+			curr_cfg->mgmt_subtype_filter = 0;
+			curr_cfg->ctrl_subtype_filter = 0;
+			curr_cfg->data_subtype_filter = 0;
 			if (!allvalid) {
 				curr_cfg->valid_ta = 0;
 				curr_cfg->valid_ta_mask = 0;
@@ -300,6 +440,17 @@ void target_if_cfr_default_ta_ra_config(struct cfr_rcc_param *rcc_info,
 #endif
 
 #ifdef WLAN_ENH_CFR_ENABLE
+#ifdef CFR_USE_FIXED_FOLDER
+static void target_if_enh_cfr_add_ops(struct wlan_lmac_if_tx_ops *tx_ops)
+{
+	tx_ops->cfr_tx_ops.cfr_subscribe_ppdu_desc =
+				target_if_cfr_subscribe_ppdu_desc;
+}
+#else
+static void target_if_enh_cfr_add_ops(struct wlan_lmac_if_tx_ops *tx_ops)
+{
+}
+#endif /* CFR_USE_FIXED_FOLDER */
 static void target_if_enh_cfr_tx_ops(struct wlan_lmac_if_tx_ops *tx_ops)
 {
 	tx_ops->cfr_tx_ops.cfr_config_rcc =
@@ -316,6 +467,7 @@ static void target_if_enh_cfr_tx_ops(struct wlan_lmac_if_tx_ops *tx_ops)
 		target_if_cfr_rx_tlv_process;
 	tx_ops->cfr_tx_ops.cfr_update_global_cfg =
 		target_if_cfr_update_global_cfg;
+	target_if_enh_cfr_add_ops(tx_ops);
 }
 #else
 static void target_if_enh_cfr_tx_ops(struct wlan_lmac_if_tx_ops *tx_ops)
@@ -341,8 +493,15 @@ void target_if_cfr_tx_ops_register(struct wlan_lmac_if_tx_ops *tx_ops)
 void target_if_cfr_set_cfr_support(struct wlan_objmgr_psoc *psoc,
 				   uint8_t value)
 {
-	if (psoc->soc_cb.rx_ops.cfr_rx_ops.cfr_support_set)
-		psoc->soc_cb.rx_ops.cfr_rx_ops.cfr_support_set(psoc, value);
+	struct wlan_lmac_if_rx_ops *rx_ops;
+
+	rx_ops = wlan_psoc_get_lmac_if_rxops(psoc);
+	if (!rx_ops) {
+		cfr_err("rx_ops is NULL");
+		return;
+	}
+	if (rx_ops->cfr_rx_ops.cfr_support_set)
+		rx_ops->cfr_rx_ops.cfr_support_set(psoc, value);
 }
 
 void target_if_cfr_info_send(struct wlan_objmgr_pdev *pdev, void *head,
@@ -350,11 +509,16 @@ void target_if_cfr_info_send(struct wlan_objmgr_pdev *pdev, void *head,
 			     size_t tlen)
 {
 	struct wlan_objmgr_psoc *psoc;
+	struct wlan_lmac_if_rx_ops *rx_ops;
 
 	psoc = wlan_pdev_get_psoc(pdev);
 
-	if (psoc->soc_cb.rx_ops.cfr_rx_ops.cfr_info_send)
-		psoc->soc_cb.rx_ops.cfr_rx_ops.cfr_info_send(pdev, head, hlen,
-							     data, dlen, tail,
-							     tlen);
+	rx_ops = wlan_psoc_get_lmac_if_rxops(psoc);
+	if (!rx_ops) {
+		cfr_err("rx_ops is NULL");
+		return;
+	}
+	if (rx_ops->cfr_rx_ops.cfr_info_send)
+		rx_ops->cfr_rx_ops.cfr_info_send(pdev, head, hlen, data, dlen,
+						 tail, tlen);
 }

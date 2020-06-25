@@ -1,3 +1,4 @@
+
 /*
  * Copyright (c) 2019-2020 The Linux Foundation. All rights reserved.
  *
@@ -49,6 +50,8 @@
 #define NUM_CHAN_CAPTURE_REASON 6
 #define MAX_TA_RA_ENTRIES 16
 #define MAX_RESET_CFG_ENTRY 0xFFFF
+#define CFR_INVALID_VDEV_ID 0xff
+#define DEFAULT_SRNGID_CFR 0
 #endif
 
 enum cfrmetaversion {
@@ -88,6 +91,8 @@ enum cfrradiotype {
 	CFR_CAPTURE_RADIO_BESRA,
 	CFR_CAPTURE_RADIO_HKV2,
 	CFR_CAPTURE_RADIO_CYP,
+	CFR_CAPTURE_RADIO_HSP,
+	CFR_CAPTURE_RADIO_PINE,
 	CFR_CAPTURE_RADIO_MAX = 0xFF,
 };
 
@@ -372,6 +377,8 @@ struct ta_ra_cfr_cfg {
 /**
  * struct cfr_rcc_param - structure to store cfr config param
  * pdev_id: pdev_id for identifying the MAC
+ * vdev_id: vdev_id of current rcc configures
+ * srng_id: srng id of current rcc configures
  * capture_duration: Capture Duration field for which CFR capture has to happen,
  * in microsecond units
  * capture_interval: Capture interval field which is time in between
@@ -399,6 +406,8 @@ struct ta_ra_cfr_cfg {
  */
 struct cfr_rcc_param {
 	uint8_t pdev_id;
+	uint8_t vdev_id;
+	uint8_t srng_id;
 	uint32_t capture_duration;
 	uint32_t capture_interval;
 	uint32_t ul_mu_user_mask_lower;
@@ -426,6 +435,7 @@ struct cfr_rcc_param {
  * pdev_obj: pointer to pdev object
  * is_cfr_capable: flag to determine if cfr is enabled or not
  * cfr_timer_enable: flag to enable/disable timer
+ * chip_type: chip type which is defined in enum cfrradiotype
  * cfr_mem_chunk: Region of memory used for storing cfr data
  * cfr_max_sta_count: Maximum stations supported in one-shot capture mode
  * num_subbufs: No. of sub-buffers used in relayfs
@@ -434,12 +444,19 @@ struct cfr_rcc_param {
  * dir_ptr: Parent directory of relayfs file
  * lut: lookup table used to store asynchronous DBR and TX/RX events for
  * correlation
+ * lut_num: Number of lut
  * dbr_buf_size: Size of DBR completion buffer
  * dbr_num_bufs: No. of DBR completions
  * tx_evt_cnt: No. of TX completion events till CFR stop was issued
  * total_tx_evt_cnt: No. of Tx completion events since wifi was up
  * dbr_evt_cnt: No. of WMI DBR completion events
  * release_cnt: No. of CFR data buffers relayed to userspace
+ * tx_peer_status_cfr_fail: No. of tx events without tx status set to
+ * PEER_CFR_CAPTURE_EVT_STATUS_MASK indicating CFR capture failure on a peer.
+ * tx_evt_status_cfr_fail: No. of tx events without tx status set to
+ * CFR_TX_EVT_STATUS_MASK indicating CFR capture status failure.
+ * tx_dbr_cookie_lookup_fail: No. of dbr cookie lookup failures during tx event
+ * process.
  * rcc_param: Structure to store CFR config for the current commit session
  * global: Structure to store accumulated CFR config
  * rx_tlv_evt_cnt: Number of CFR WDI events from datapath
@@ -452,11 +469,12 @@ struct cfr_rcc_param {
  * data length was invalid
  * flush_timeout_dbr_cnt: No. of DBR completion flushed out in ageout logic
  * clear_txrx_event: No. of PPDU status TLVs over-written in LUT
- * unassoc_pool: Pool of un-associated clients used when capture method is
- * CFR_CAPTURE_METHOD_PROBE_RESPONSE
  * last_success_tstamp: DBR timestamp which indicates that both DBR and TX/RX
  * events have been received successfully.
  * cfr_dma_aborts: No. of CFR DMA aborts in ucode
+ * unassoc_pool: Pool of un-associated clients used when capture method is
+ * CFR_CAPTURE_METHOD_PROBE_RESPONSE
+ * lut_lock: Lock to protect access to cfr lookup table
  */
 /*
  * To be extended if we get more capbality info
@@ -466,6 +484,7 @@ struct pdev_cfr {
 	struct wlan_objmgr_pdev *pdev_obj;
 	uint8_t is_cfr_capable;
 	uint8_t cfr_timer_enable;
+	uint8_t chip_type;
 	struct cfr_wmi_host_mem_chunk cfr_mem_chunk;
 	uint16_t cfr_max_sta_count;
 	uint16_t cfr_current_sta_count;
@@ -473,13 +492,17 @@ struct pdev_cfr {
 	uint32_t subbuf_size;
 	qdf_streamfs_chan_t chan_ptr;
 	qdf_dentry_t dir_ptr;
-	struct look_up_table lut[MAX_LUT_ENTRIES];
+	struct look_up_table **lut;
+	uint32_t lut_num;
 	uint32_t dbr_buf_size;
 	uint32_t dbr_num_bufs;
 	uint64_t tx_evt_cnt;
 	uint64_t total_tx_evt_cnt;
 	uint64_t dbr_evt_cnt;
 	uint64_t release_cnt;
+	uint64_t tx_peer_status_cfr_fail;
+	uint64_t tx_evt_status_cfr_fail;
+	uint64_t tx_dbr_cookie_lookup_fail;
 #ifdef WLAN_ENH_CFR_ENABLE
 	struct cfr_rcc_param rcc_param;
 	struct ta_ra_cfr_cfg global[MAX_TA_RA_ENTRIES];
@@ -495,10 +518,19 @@ struct pdev_cfr {
 	uint64_t cfr_dma_aborts;
 #endif
 	struct unassoc_pool_entry unassoc_pool[MAX_CFR_ENABLED_CLIENTS];
+	qdf_spinlock_t lut_lock;
 };
 
-#define PEER_CFR_CAPTURE_ENABLE   1
-#define PEER_CFR_CAPTURE_DISABLE  0
+/**
+ * enum cfr_capt_status - CFR capture status
+ */
+enum cfr_capt_status {
+	/* Capture not in progress */
+	PEER_CFR_CAPTURE_DISABLE,
+	/* Capture in progress */
+	PEER_CFR_CAPTURE_ENABLE,
+};
+
 /**
  * struct peer_cfr - private peer object for cfr
  * peer_obj: pointer to peer_obj
@@ -569,6 +601,14 @@ QDF_STATUS wlan_cfr_pdev_close(struct wlan_objmgr_pdev *pdev);
  */
 uint8_t count_set_bits(uint32_t value);
 
+/**
+ * wlan_cfr_is_feature_disabled() - Check if cfr feature is disabled
+ * @pdev - the physical device object.
+ *
+ * Return : true if cfr is disabled, else false.
+ */
+bool wlan_cfr_is_feature_disabled(struct wlan_objmgr_pdev *pdev);
+
 #ifdef WLAN_ENH_CFR_ENABLE
 /**
  * wlan_cfr_rx_tlv_process() - Process PPDU status TLVs and store info in
@@ -580,22 +620,4 @@ uint8_t count_set_bits(uint32_t value);
  */
 void wlan_cfr_rx_tlv_process(struct wlan_objmgr_pdev *pdev, void *nbuf);
 #endif
-
-/**
- * mac2str() - convert mac address array to string
- *
- * @mac: pointer to mac array
- *
- * Return: string
- */
-static inline const char *
-mac2str(const uint8_t mac[6])
-{
-	static char str[32];
-
-	qdf_snprintf(str, sizeof(str), QDF_MAC_ADDR_STR,
-		     QDF_MAC_ADDR_ARRAY(mac));
-
-	return str;
-}
 #endif

@@ -161,15 +161,37 @@ target_if_spectral_dump_fft(uint8_t *pfft, int fftlen)
 QDF_STATUS target_if_spectral_fw_hang(struct target_if_spectral *spectral)
 {
 	struct crash_inject param;
+	struct wlan_objmgr_pdev *pdev;
+	struct wlan_objmgr_psoc *psoc;
+	struct target_if_psoc_spectral *psoc_spectral;
 
 	if (!spectral) {
 		spectral_err("Spectral LMAC object is null");
 		return QDF_STATUS_E_INVAL;
 	}
+
+	pdev = spectral->pdev_obj;
+	if (!pdev) {
+		spectral_err("pdev is null");
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	psoc = wlan_pdev_get_psoc(pdev);
+	if (!psoc) {
+		spectral_err("psoc is null");
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	psoc_spectral = get_target_if_spectral_handle_from_psoc(psoc);
+	if (!psoc_spectral) {
+		spectral_err("spectral psoc object is null");
+		return QDF_STATUS_E_FAILURE;
+	}
+
 	qdf_mem_set(&param, sizeof(param), 0);
 	param.type = 1; //RECOVERY_SIM_ASSERT
 
-	return spectral->param_wmi_cmd_ops.wmi_spectral_crash_inject(
+	return psoc_spectral->wmi_ops.wmi_spectral_crash_inject(
 		GET_WMI_HDL_FROM_PDEV(spectral->pdev_obj), &param);
 }
 
@@ -1430,6 +1452,10 @@ target_if_dump_fft_report_gen3(struct target_if_spectral *spectral,
 			uint32_t *binptr_32 = (uint32_t *)&p_fft_report->buf;
 
 			fft_bin_buf = (uint8_t *)qdf_mem_malloc(MAX_NUM_BINS);
+			if (!fft_bin_buf) {
+				spectral_err("Failed to allocate memory");
+				return;
+			}
 			for (idx = 0; idx < fft_bin_count; idx++)
 				fft_bin_buf[idx] = *(binptr_32++);
 		} else if (spectral->len_adj_swar.fftbin_size_war ==
@@ -1437,6 +1463,10 @@ target_if_dump_fft_report_gen3(struct target_if_spectral *spectral,
 			uint16_t *binptr_16 = (uint16_t *)&p_fft_report->buf;
 
 			fft_bin_buf = (uint8_t *)qdf_mem_malloc(MAX_NUM_BINS);
+			if (!fft_bin_buf) {
+				spectral_err("Failed to allocate memory");
+				return;
+			}
 			for (idx = 0; idx < fft_bin_count; idx++)
 				fft_bin_buf[idx] = *(binptr_16++);
 		} else {
@@ -1857,6 +1887,8 @@ target_if_consume_spectral_report_gen3(
 	/* Advance buf pointer to the search fft report */
 	data += sizeof(struct spectral_sscan_summary_report_gen3);
 	data += spectral->rparams.ssumaary_padding_bytes;
+	params.vhtop_ch_freq_seg1 = report->cfreq1;
+	params.vhtop_ch_freq_seg2 = report->cfreq2;
 
 	if (is_primaryseg_expected(spectral, spectral_mode)) {
 		/* RSSI is in 1/2 dBm steps, Covert it to dBm scale */
@@ -1960,11 +1992,10 @@ target_if_consume_spectral_report_gen3(
 		params.max_mag  = p_sfft->fft_peak_mag;
 
 		params.freq = p_sops->get_current_channel(spectral);
-
-		if (spectral_mode == SPECTRAL_SCAN_MODE_AGILE)
-			params.agile_freq =
-				spectral->params[spectral_mode].ss_frequency;
-
+		params.agile_freq1 = spectral->params[SPECTRAL_SCAN_MODE_AGILE].
+				     ss_frequency.cfreq1;
+		params.agile_freq2 = spectral->params[SPECTRAL_SCAN_MODE_AGILE].
+				     ss_frequency.cfreq2;
 		params.noise_floor =
 			report->noisefloor[chn_idx_lowest_enabled];
 		temp = (uint8_t *)p_fft_report + SPECTRAL_FFT_BINS_POS;
@@ -1972,6 +2003,7 @@ target_if_consume_spectral_report_gen3(
 		    [spectral_mode]) && !spectral->rparams.
 		    fragmentation_160[spectral_mode]) {
 			struct wlan_objmgr_psoc *psoc;
+			struct spectral_fft_bin_markers_160_165mhz *marker;
 
 			qdf_assert_always(spectral->pdev_obj);
 			psoc = wlan_pdev_get_psoc(spectral->pdev_obj);
@@ -1988,34 +2020,21 @@ target_if_consume_spectral_report_gen3(
 			params.max_mag_sec80        = p_sfft->fft_peak_mag;
 			params.datalen = fft_hdr_length * 2;
 			params.datalen_sec80 = fft_hdr_length * 2;
+
+			marker = &spectral->rparams.marker[spectral_mode];
+			qdf_assert_always(marker->is_valid);
+			params.bin_pwr_data = temp +
+				marker->start_pri80 * fft_bin_size;
+			params.pwr_count = marker->num_pri80;
+			params.bin_pwr_data_sec80 = temp +
+				marker->start_sec80 * fft_bin_size;
+			params.pwr_count_sec80 = marker->num_sec80;
 			if (spectral->ch_width[spectral_mode] ==
 			    CH_WIDTH_80P80MHZ && wlan_psoc_nif_fw_ext_cap_get(
 			    psoc, WLAN_SOC_RESTRICTED_80P80_SUPPORT)) {
-				struct spectral_fft_bin_markers_165mhz *marker;
-				enum spectral_report_mode rpt_mode;
-				enum spectral_fft_size fft_size;
-
-				rpt_mode = spectral->params[spectral_mode].
-					   ss_rpt_mode;
-				fft_size = spectral->params[spectral_mode].
-					   ss_fft_size;
-				marker = &spectral->rparams.marker
-					 [rpt_mode][fft_size];
-				params.bin_pwr_data = temp +
-					marker->start_pri80 * fft_bin_size;
-				params.pwr_count = marker->num_pri80;
 				params.bin_pwr_data_5mhz = temp +
 					marker->start_5mhz * fft_bin_size;
 				params.pwr_count_5mhz = marker->num_5mhz;
-				params.bin_pwr_data_sec80 = temp +
-					marker->start_sec80 * fft_bin_size;
-				params.pwr_count_sec80 = marker->num_sec80;
-			} else {
-				params.bin_pwr_data = temp;
-				params.pwr_count = fft_bin_count / 2;
-				params.pwr_count_sec80 = fft_bin_count / 2;
-				params.bin_pwr_data_sec80 = temp +
-					(fft_bin_count / 2) * fft_bin_size;
 			}
 		} else {
 			params.bin_pwr_data = temp;
@@ -2090,9 +2109,6 @@ target_if_consume_spectral_report_gen3(
 		if (spectral_debug_level & (DEBUG_SPECTRAL2 | DEBUG_SPECTRAL4))
 			target_if_dump_fft_report_gen3(spectral, spectral_mode,
 						       p_fft_report, p_sfft);
-
-		params.vhtop_ch_freq_seg1 = 0;
-		params.vhtop_ch_freq_seg2 = 0;
 
 		params.rssi_sec80 = rssi;
 
@@ -2169,6 +2185,9 @@ int target_if_spectral_process_report_gen3(
 			     qdf_min(sizeof(report.noisefloor),
 				     sizeof(payload->meta_data.noisefloor)));
 		report.reset_delay = payload->meta_data.reset_delay;
+		report.cfreq1 = payload->meta_data.cfreq1;
+		report.cfreq2 = payload->meta_data.cfreq2;
+		report.ch_width = payload->meta_data.ch_width;
 	}
 
 	if (spectral_debug_level & (DEBUG_SPECTRAL2 | DEBUG_SPECTRAL4)) {

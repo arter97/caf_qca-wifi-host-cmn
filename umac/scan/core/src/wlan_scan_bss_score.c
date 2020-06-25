@@ -41,6 +41,8 @@
 
 #define SCM_BAND_2G_INDEX                   0
 #define SCM_BAND_5G_INDEX                   1
+#define SCM_BAND_6G_INDEX                   2
+
 /* 2 and 3 are reserved */
 #define SCM_MAX_BAND_INDEX                  4
 
@@ -77,105 +79,6 @@ bool scm_is_better_bss(struct scan_default_params *params,
 			return true;
 
 	return false;
-}
-
-/**
- * scm_limit_max_per_index_score() -check if per index score does not exceed
- * 100% (0x64). If it exceed make it 100%
- *
- * @per_index_score: per_index_score as input
- *
- * Return: per_index_score within the max limit
- */
-static uint32_t scm_limit_max_per_index_score(uint32_t per_index_score)
-{
-	uint8_t i, score;
-
-	for (i = 0; i < MAX_INDEX_PER_INI; i++) {
-		score = WLAN_GET_SCORE_PERCENTAGE(per_index_score, i);
-		if (score > MAX_INDEX_SCORE)
-			WLAN_SET_SCORE_PERCENTAGE(per_index_score,
-				MAX_INDEX_SCORE, i);
-	}
-
-	return per_index_score;
-}
-
-void scm_validate_scoring_config(struct scoring_config *score_cfg)
-{
-	int total_weight;
-
-	total_weight = score_cfg->weight_cfg.rssi_weightage +
-		       score_cfg->weight_cfg.ht_caps_weightage +
-		       score_cfg->weight_cfg.vht_caps_weightage +
-		       score_cfg->weight_cfg.chan_width_weightage +
-		       score_cfg->weight_cfg.chan_band_weightage +
-		       score_cfg->weight_cfg.nss_weightage +
-		       score_cfg->weight_cfg.beamforming_cap_weightage +
-		       score_cfg->weight_cfg.pcl_weightage +
-		       score_cfg->weight_cfg.channel_congestion_weightage +
-		       score_cfg->weight_cfg.oce_wan_weightage +
-		       score_cfg->weight_cfg.oce_ap_tx_pwr_weightage;
-
-	if (total_weight > BEST_CANDIDATE_MAX_WEIGHT) {
-
-		scm_err("total weight is greater than %d fallback to default values",
-			BEST_CANDIDATE_MAX_WEIGHT);
-
-		score_cfg->weight_cfg.rssi_weightage = RSSI_WEIGHTAGE;
-		score_cfg->weight_cfg.ht_caps_weightage =
-			HT_CAPABILITY_WEIGHTAGE;
-		score_cfg->weight_cfg.vht_caps_weightage = VHT_CAP_WEIGHTAGE;
-		score_cfg->weight_cfg.chan_width_weightage =
-			CHAN_WIDTH_WEIGHTAGE;
-		score_cfg->weight_cfg.chan_band_weightage =
-			CHAN_BAND_WEIGHTAGE;
-		score_cfg->weight_cfg.nss_weightage = NSS_WEIGHTAGE;
-		score_cfg->weight_cfg.beamforming_cap_weightage =
-			BEAMFORMING_CAP_WEIGHTAGE;
-		score_cfg->weight_cfg.pcl_weightage = PCL_WEIGHT;
-			score_cfg->weight_cfg.channel_congestion_weightage =
-			CHANNEL_CONGESTION_WEIGHTAGE;
-		score_cfg->weight_cfg.oce_wan_weightage = OCE_WAN_WEIGHTAGE;
-		score_cfg->weight_cfg.oce_ap_tx_pwr_weightage =
-					OCE_AP_TX_POWER_WEIGHTAGE;
-	}
-
-	score_cfg->bandwidth_weight_per_index =
-		scm_limit_max_per_index_score(
-			score_cfg->bandwidth_weight_per_index);
-	score_cfg->nss_weight_per_index =
-		scm_limit_max_per_index_score(score_cfg->nss_weight_per_index);
-	score_cfg->band_weight_per_index =
-		scm_limit_max_per_index_score(score_cfg->band_weight_per_index);
-
-
-	score_cfg->esp_qbss_scoring.score_pcnt3_to_0 =
-		scm_limit_max_per_index_score(
-			score_cfg->esp_qbss_scoring.score_pcnt3_to_0);
-	score_cfg->esp_qbss_scoring.score_pcnt7_to_4 =
-		scm_limit_max_per_index_score(
-			score_cfg->esp_qbss_scoring.score_pcnt7_to_4);
-	score_cfg->esp_qbss_scoring.score_pcnt11_to_8 =
-		scm_limit_max_per_index_score(
-			score_cfg->esp_qbss_scoring.score_pcnt11_to_8);
-	score_cfg->esp_qbss_scoring.score_pcnt15_to_12 =
-		scm_limit_max_per_index_score(
-			score_cfg->esp_qbss_scoring.score_pcnt15_to_12);
-
-	score_cfg->oce_wan_scoring.score_pcnt3_to_0 =
-		scm_limit_max_per_index_score(
-			score_cfg->oce_wan_scoring.score_pcnt3_to_0);
-	score_cfg->oce_wan_scoring.score_pcnt7_to_4 =
-		scm_limit_max_per_index_score(
-			score_cfg->oce_wan_scoring.score_pcnt7_to_4);
-	score_cfg->oce_wan_scoring.score_pcnt11_to_8 =
-		scm_limit_max_per_index_score(
-			score_cfg->oce_wan_scoring.score_pcnt11_to_8);
-	score_cfg->oce_wan_scoring.score_pcnt15_to_12 =
-		scm_limit_max_per_index_score(
-			score_cfg->oce_wan_scoring.score_pcnt15_to_12);
-
 }
 
 /**
@@ -245,7 +148,7 @@ static int32_t scm_calculate_rssi_score(
 	good_bucket_size = score_param->good_rssi_bucket_size;
 	bad_bucket_size = score_param->bad_rssi_bucket_size;
 
-	total_rssi_score = (BEST_CANDIDATE_MAX_WEIGHT * rssi_weightage);
+	total_rssi_score = (MAX_PCT_SCORE * rssi_weightage);
 
 	/*
 	 * If RSSI is better than the best rssi threshold then it return full
@@ -297,7 +200,7 @@ static int32_t scm_calculate_pcl_score(int pcl_chan_weight,
 		if (pcl_score < 0)
 			pcl_score = 0;
 	}
-	return pcl_score * BEST_CANDIDATE_MAX_WEIGHT;
+	return pcl_score * MAX_PCT_SCORE;
 
 }
 
@@ -350,7 +253,7 @@ static int8_t scm_roam_calculate_prorated_pcnt_by_rssi(
 
 	/* If RSSI is greater than good rssi return full weight */
 	if (rssi > good_rssi_threshold)
-		return BEST_CANDIDATE_MAX_WEIGHT;
+		return MAX_PCT_SCORE;
 
 	same_bucket = scm_rssi_is_same_bucket(good_rssi_threshold,
 			rssi, rssi_pref_5g_rssi_thresh,
@@ -423,8 +326,7 @@ static int32_t scm_calculate_bandwidth_score(
 					SCM_20MHZ_BW_INDEX);
 
 	return (prorated_pct * score *
-		score_config->weight_cfg.chan_width_weightage) /
-		BEST_CANDIDATE_MAX_WEIGHT;
+		score_config->weight_cfg.chan_width_weightage) / MAX_PCT_SCORE;
 }
 
 /**
@@ -481,7 +383,7 @@ static int32_t scm_get_congestion_pct(struct scan_cache_entry *entry)
 		congestion = SCM_MAX_CHANNEL_UTILIZATION -
 					est_air_time_percentage;
 	} else if (entry->qbss_chan_load) {
-		ap_load = (entry->qbss_chan_load * BEST_CANDIDATE_MAX_WEIGHT);
+		ap_load = (entry->qbss_chan_load * MAX_PCT_SCORE);
 		/*
 		 * Calculate ap_load in % from qbss channel load from
 		 * 0-255 range
@@ -536,8 +438,7 @@ static int32_t scm_calculate_congestion_score(
 			   score_params->esp_qbss_scoring.score_pcnt3_to_0,
 			   SCM_SCORE_INDEX_0);
 
-	window_size = BEST_CANDIDATE_MAX_WEIGHT /
-			score_params->esp_qbss_scoring.num_slot;
+	window_size = MAX_PCT_SCORE / score_params->esp_qbss_scoring.num_slot;
 
 	/* Desired values are from 1 to 15, as 0 is for not present. so do +1 */
 	index = qdf_do_div(*congestion_pct, window_size) + 1;
@@ -588,7 +489,7 @@ static int32_t scm_calculate_nss_score(struct wlan_objmgr_psoc *psoc,
 				SCM_NSS_1x1_INDEX);
 
 	return (score_config->weight_cfg.nss_weightage * score_pct *
-		prorated_pct) / BEST_CANDIDATE_MAX_WEIGHT;
+		prorated_pct) / MAX_PCT_SCORE;
 }
 
 /**
@@ -685,7 +586,7 @@ scm_calculate_oce_ap_tx_pwr_weightage(struct scan_cache_entry *entry,
 
 	/* Uplink RSSI is better than best rssi threshold */
 	if (normalized_ap_tx_pwr > best_rssi_threshold) {
-		ap_tx_pwr_factor = BEST_CANDIDATE_MAX_WEIGHT;
+		ap_tx_pwr_factor = MAX_PCT_SCORE;
 	} else if (normalized_ap_tx_pwr <= bad_rssi_threshold) {
 		/* Uplink RSSI is less or equal to bad rssi threshold */
 		ap_tx_pwr_factor = rssi_score_param->bad_rssi_pcnt;
@@ -749,6 +650,35 @@ static uint32_t scm_get_sta_nss(struct wlan_objmgr_psoc *psoc,
 }
 #endif
 
+/**
+ * scm_get_band_score() - Get band prefernce weightage
+ * freq: Operating frequency of the AP
+ * @score_config: Score configuration
+ *
+ * Return : Band score for AP.
+ */
+static int
+scm_get_band_score(uint32_t freq, struct scoring_config *score_config)
+{
+	uint8_t band_index;
+	struct weight_config *weight_config;
+
+	weight_config = &score_config->weight_cfg;
+
+	if (WLAN_REG_IS_5GHZ_CH_FREQ(freq))
+		band_index = SCM_BAND_5G_INDEX;
+	else if (WLAN_REG_IS_24GHZ_CH_FREQ(freq))
+		band_index = SCM_BAND_2G_INDEX;
+	else if (WLAN_REG_IS_6GHZ_CHAN_FREQ(freq))
+		band_index = SCM_BAND_6G_INDEX;
+	else
+		return 0;
+
+	return weight_config->chan_band_weightage *
+	       WLAN_GET_SCORE_PERCENTAGE(score_config->band_weight_per_index,
+					 band_index);
+}
+
 int scm_calculate_bss_score(struct wlan_objmgr_psoc *psoc,
 		struct scan_default_params *params,
 		struct scan_cache_entry *entry,
@@ -801,8 +731,15 @@ int scm_calculate_bss_score(struct wlan_objmgr_psoc *psoc,
 	prorated_pcnt = scm_roam_calculate_prorated_pcnt_by_rssi(
 				&score_config->rssi_score, entry->rssi_raw,
 				weight_config->rssi_weightage);
-	/* If device and AP supports HT caps, extra 10% score will be added */
-	if (score_config->ht_cap && entry->ie_list.htcap)
+
+	/*
+	 * Add HT weight if HT is supported by the AP. In case
+	 * of 6 GHZ AP, HT and VHT won't be supported so that
+	 * these weightage to the same by default to match
+	 * with 2.4/5 GHZ APs where HT, VHT is supported
+	 */
+	if (score_config->ht_cap && (entry->ie_list.htcap ||
+	    WLAN_REG_IS_6GHZ_CHAN_FREQ(entry->channel.chan_freq)))
 		ht_score = prorated_pcnt *
 				weight_config->ht_caps_weightage;
 	score += ht_score;
@@ -813,11 +750,10 @@ int scm_calculate_bss_score(struct wlan_objmgr_psoc *psoc,
 	} else if (score_config->vht_cap) {
 		is_vht = true;
 	}
-	/*
-	 * If device and AP supports VHT caps, Extra 6% score will
-	 * be added to score
-	 */
-	if (is_vht && entry->ie_list.vhtcap)
+
+	/* Add VHT score to 6 GHZ AP to match with 2.4/5 GHZ APs */
+	if (is_vht && (entry->ie_list.vhtcap ||
+	    WLAN_REG_IS_6GHZ_CHAN_FREQ(entry->channel.chan_freq)))
 		vht_score = prorated_pcnt *
 				 weight_config->vht_caps_weightage;
 	score += vht_score;
@@ -845,7 +781,7 @@ int scm_calculate_bss_score(struct wlan_objmgr_psoc *psoc,
 		ap_su_beam_former = true;
 	if (is_vht && ap_su_beam_former &&
 	    (entry->rssi_raw > rssi_pref_5g_rssi_thresh) && !same_bucket)
-		beamformee_score = BEST_CANDIDATE_MAX_WEIGHT *
+		beamformee_score = MAX_PCT_SCORE *
 				weight_config->beamforming_cap_weightage;
 	score += beamformee_score;
 
@@ -858,25 +794,23 @@ int scm_calculate_bss_score(struct wlan_objmgr_psoc *psoc,
 	 */
 	if (congestion_pct < CONGESTION_THRSHOLD_FOR_BAND_OCE_SCORE) {
 		/*
-		 * If AP is on 5Ghz channel , extra weigtage is added to BSS
+		 * If AP is on 5/6 GHZ channel , extra weigtage is added to BSS
 		 * score. if RSSI is greater tha 5g rssi threshold or fall in
-		 * same bucket else give weigtage to 2.4 GH.
+		 * same bucket else give weigtage to 2.4 GHZ AP.
 		 */
 		if ((entry->rssi_raw > rssi_pref_5g_rssi_thresh) &&
 		    !same_bucket) {
-			if (WLAN_REG_IS_5GHZ_CH_FREQ(entry->channel.chan_freq))
-				band_score =
-					weight_config->chan_band_weightage *
-					    WLAN_GET_SCORE_PERCENTAGE(
-					    score_config->band_weight_per_index,
-					    SCM_BAND_5G_INDEX);
+			if (!WLAN_REG_IS_24GHZ_CH_FREQ(entry->channel.chan_freq))
+				band_score = scm_get_band_score(
+						entry->channel.chan_freq,
+						score_config);
 		} else if (WLAN_REG_IS_24GHZ_CH_FREQ(
-						entry->channel.chan_freq)) {
-			band_score = weight_config->chan_band_weightage *
-					WLAN_GET_SCORE_PERCENTAGE(
-					score_config->band_weight_per_index,
-					SCM_BAND_2G_INDEX);
+			   entry->channel.chan_freq)) {
+			band_score =
+				scm_get_band_score(entry->channel.chan_freq,
+						   score_config);
 		}
+
 		score += band_score;
 
 		oce_wan_score = scm_calculate_oce_wan_score(entry,

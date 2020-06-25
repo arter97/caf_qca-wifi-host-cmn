@@ -325,6 +325,8 @@ static const uint32_t pdev_param_tlv[] = {
 			WMI_PDEV_PARAM_SET_CONG_CTRL_MAX_MSDUS,
 	[wmi_pdev_param_enable_fw_dynamic_he_edca] =
 			WMI_PDEV_PARAM_ENABLE_FW_DYNAMIC_HE_EDCA,
+	[wmi_pdev_param_enable_srp] = WMI_PDEV_PARAM_ENABLE_SRP,
+	[wmi_pdev_param_enable_sr_prohibit] = WMI_PDEV_PARAM_ENABLE_SR_PROHIBIT,
 };
 
 /**
@@ -485,8 +487,33 @@ static const uint32_t vdev_param_tlv[] = {
 	[wmi_vdev_param_6ghz_params] = WMI_VDEV_PARAM_6GHZ_PARAMS,
 	[wmi_vdev_param_enable_disable_roam_reason_vsie] =
 				WMI_VDEV_PARAM_ENABLE_DISABLE_ROAM_REASON_VSIE,
+	[wmi_vdev_param_set_cmd_obss_pd_threshold] =
+			WMI_VDEV_PARAM_SET_CMD_OBSS_PD_THRESHOLD,
+	[wmi_vdev_param_set_cmd_obss_pd_per_ac] =
+			WMI_VDEV_PARAM_SET_CMD_OBSS_PD_PER_AC,
+	[wmi_vdev_param_enable_srp] = WMI_VDEV_PARAM_ENABLE_SRP,
 };
 #endif
+
+/**
+ * Populate the pktlog event tlv array, where
+ * the values are the FW WMI events, which host
+ * uses to communicate with FW for pktlog
+ */
+
+static const uint32_t pktlog_event_tlv[] =  {
+	[WMI_HOST_PKTLOG_EVENT_RX_BIT] = WMI_PKTLOG_EVENT_RX,
+	[WMI_HOST_PKTLOG_EVENT_TX_BIT] = WMI_PKTLOG_EVENT_TX,
+	[WMI_HOST_PKTLOG_EVENT_RCF_BIT] = WMI_PKTLOG_EVENT_RCF,
+	[WMI_HOST_PKTLOG_EVENT_RCU_BIT] = WMI_PKTLOG_EVENT_RCU,
+	[WMI_HOST_PKTLOG_EVENT_DBG_PRINT_BIT] = 0,
+	[WMI_HOST_PKTLOG_EVENT_SMART_ANTENNA_BIT] =
+		WMI_PKTLOG_EVENT_SMART_ANTENNA,
+	[WMI_HOST_PKTLOG_EVENT_H_INFO_BIT] = 0,
+	[WMI_HOST_PKTLOG_EVENT_STEERING_BIT] = 0,
+	[WMI_HOST_PKTLOG_EVENT_TX_DATA_CAPTURE_BIT] = 0,
+	[WMI_HOST_PKTLOG_EVENT_PHY_LOGGING_BIT] = WMI_PKTLOG_EVENT_PHY,
+};
 
 /**
  * convert_host_pdev_id_to_target_pdev_id() - Convert pdev_id from
@@ -2201,7 +2228,7 @@ static QDF_STATUS send_peer_based_pktlog_cmd(wmi_unified_t wmi_handle,
 static QDF_STATUS send_packet_log_enable_cmd_tlv(wmi_unified_t wmi_handle,
 			WMI_HOST_PKTLOG_EVENT PKTLOG_EVENT, uint8_t mac_id)
 {
-	int32_t ret;
+	int32_t ret, idx, max_idx;
 	wmi_pdev_pktlog_enable_cmd_fixed_param *cmd;
 	wmi_buf_t buf;
 	uint16_t len = sizeof(wmi_pdev_pktlog_enable_cmd_fixed_param);
@@ -2215,7 +2242,12 @@ static QDF_STATUS send_packet_log_enable_cmd_tlv(wmi_unified_t wmi_handle,
 		       WMITLV_TAG_STRUC_wmi_pdev_pktlog_enable_cmd_fixed_param,
 		       WMITLV_GET_STRUCT_TLVLEN
 			       (wmi_pdev_pktlog_enable_cmd_fixed_param));
-	cmd->evlist = PKTLOG_EVENT;
+	max_idx = sizeof(pktlog_event_tlv) / (sizeof(pktlog_event_tlv[0]));
+	cmd->evlist = 0;
+	for (idx = 0; idx < max_idx; idx++) {
+		if (PKTLOG_EVENT & (1 << idx))
+			cmd->evlist |=  pktlog_event_tlv[idx];
+	}
 	cmd->pdev_id = mac_id;
 	wmi_mtrace(WMI_PDEV_PKTLOG_ENABLE_CMDID, cmd->pdev_id, 0);
 	ret = wmi_unified_cmd_send(wmi_handle, buf, len,
@@ -2401,6 +2433,7 @@ static QDF_STATUS send_beacon_tmpl_send_cmd_tlv(wmi_unified_t wmi_handle,
 	cmd->ext_csa_switch_count_offset = param->ext_csa_switch_count_offset;
 	cmd->esp_ie_offset = param->esp_ie_offset;
 	cmd->mu_edca_ie_offset = param->mu_edca_ie_offset;
+	cmd->ema_params = param->ema_params;
 	cmd->buf_len = param->tmpl_len;
 
 	WMI_BEACON_PROTECTION_EN_SET(cmd->feature_enable_bitmap,
@@ -3142,6 +3175,8 @@ static QDF_STATUS send_scan_stop_cmd_tlv(wmi_unified_t wmi_handle,
 	} else if (param->req_type == WLAN_SCAN_CANCEL_SINGLE) {
 		/* Cancelling specific scan */
 		cmd->req_type = WMI_SCAN_STOP_ONE;
+	} else if (param->req_type == WLAN_SCAN_CANCEL_HOST_VDEV_ALL) {
+		cmd->req_type = WMI_SCN_STOP_HOST_VAP_ALL;
 	} else {
 		WMI_LOGE("%s: Invalid Command : ", __func__);
 		wmi_buf_free(wmi_buf);
@@ -4801,8 +4836,7 @@ static QDF_STATUS send_pno_start_cmd_tlv(wmi_unified_t wmi_handle,
 		WMI_TLV_HDR_SIZE + WMI_TLV_HDR_SIZE + WMI_TLV_HDR_SIZE +
 		WMI_TLV_HDR_SIZE + WMI_TLV_HDR_SIZE;
 
-	len += sizeof(uint32_t) * QDF_MIN(pno->networks_list[0].channel_cnt,
-					  WMI_NLO_MAX_CHAN);
+	len += sizeof(uint32_t) * pno->networks_list[0].channel_cnt;
 	len += sizeof(nlo_configured_parameters) *
 	       QDF_MIN(pno->networks_cnt, WMI_NLO_MAX_SSIDS);
 	len += sizeof(nlo_channel_prediction_cfg);
@@ -4889,8 +4923,7 @@ static QDF_STATUS send_pno_start_cmd_tlv(wmi_unified_t wmi_handle,
 	buf_ptr += cmd->no_of_ssids * sizeof(nlo_configured_parameters);
 
 	/* Copy channel info */
-	cmd->num_of_channels = QDF_MIN(pno->networks_list[0].channel_cnt,
-				       WMI_NLO_MAX_CHAN);
+	cmd->num_of_channels = pno->networks_list[0].channel_cnt;
 	WMITLV_SET_HDR(buf_ptr, WMITLV_TAG_ARRAY_UINT32,
 		       (cmd->num_of_channels * sizeof(uint32_t)));
 	buf_ptr += WMI_TLV_HDR_SIZE;
@@ -5732,10 +5765,12 @@ static QDF_STATUS send_pktlog_wmi_send_cmd_tlv(wmi_unified_t wmi_handle,
 	wmi_pdev_pktlog_disable_cmd_fixed_param *disable_cmd;
 	int len = 0;
 	wmi_buf_t buf;
+	int32_t idx, max_idx;
 
 	PKTLOG_EVENT = pktlog_event;
 	CMD_ID = cmd_id;
 
+	max_idx = sizeof(pktlog_event_tlv) / (sizeof(pktlog_event_tlv[0]));
 	switch (CMD_ID) {
 	case WMI_PDEV_PKTLOG_ENABLE_CMDID:
 		len = sizeof(*cmd);
@@ -5749,7 +5784,11 @@ static QDF_STATUS send_pktlog_wmi_send_cmd_tlv(wmi_unified_t wmi_handle,
 		       WMITLV_TAG_STRUC_wmi_pdev_pktlog_enable_cmd_fixed_param,
 		       WMITLV_GET_STRUCT_TLVLEN
 		       (wmi_pdev_pktlog_enable_cmd_fixed_param));
-		cmd->evlist = PKTLOG_EVENT;
+		cmd->evlist = 0;
+		for (idx = 0; idx < max_idx; idx++) {
+			if (PKTLOG_EVENT & (1 << idx))
+				cmd->evlist |= pktlog_event_tlv[idx];
+		}
 		cmd->enable = user_triggered ? WMI_PKTLOG_ENABLE_FORCE
 					: WMI_PKTLOG_ENABLE_AUTO;
 		cmd->pdev_id = wmi_handle->ops->convert_pdev_id_host_to_target(
@@ -6360,6 +6399,72 @@ send_periodic_chan_stats_config_cmd_tlv(wmi_unified_t wmi_handle,
 }
 
 /**
+ * send_simulation_test_cmd_tlv() - send simulation test command to fw
+ *
+ * @wmi_handle: wmi handle
+ * @param: pointer to hold simulation test parameter
+ *
+ * Return: 0 for success or error code
+ */
+static QDF_STATUS send_simulation_test_cmd_tlv(wmi_unified_t wmi_handle,
+					       struct simulation_test_params
+					       *param)
+{
+	wmi_simulation_test_cmd_fixed_param *cmd;
+	u32 wmi_buf_len;
+	wmi_buf_t buf;
+	u8 *buf_ptr;
+	u32 aligned_len = 0;
+
+	wmi_buf_len = sizeof(*cmd);
+	if (param->buf_len) {
+		aligned_len = roundup(param->buf_len, sizeof(A_UINT32));
+		wmi_buf_len += WMI_TLV_HDR_SIZE + aligned_len;
+	}
+
+	buf = wmi_buf_alloc(wmi_handle, wmi_buf_len);
+	if (!buf) {
+		WMI_LOGP("%s: wmi_buf_alloc failed", __func__);
+		return QDF_STATUS_E_NOMEM;
+	}
+
+	buf_ptr = wmi_buf_data(buf);
+	cmd = (wmi_simulation_test_cmd_fixed_param *)buf_ptr;
+	WMITLV_SET_HDR(&cmd->tlv_header,
+		       WMITLV_TAG_STRUC_wmi_simulation_test_cmd_fixed_param,
+		       WMITLV_GET_STRUCT_TLVLEN(
+					wmi_simulation_test_cmd_fixed_param));
+	cmd->pdev_id = param->pdev_id;
+	cmd->vdev_id = param->vdev_id;
+	WMI_CHAR_ARRAY_TO_MAC_ADDR(param->peer_mac, &cmd->peer_macaddr);
+	cmd->test_cmd_type = param->test_cmd_type;
+	cmd->test_subcmd_type = param->test_subcmd_type;
+	WMI_SIM_FRAME_TYPE_SET(cmd->frame_type_subtype_seq, param->frame_type);
+	WMI_SIM_FRAME_SUBTYPE_SET(cmd->frame_type_subtype_seq,
+				  param->frame_subtype);
+	WMI_SIM_FRAME_SEQ_SET(cmd->frame_type_subtype_seq, param->seq);
+	WMI_SIM_FRAME_OFFSET_SET(cmd->frame_offset_length, param->offset);
+	WMI_SIM_FRAME_LENGTH_SET(cmd->frame_offset_length, param->frame_length);
+	cmd->buf_len = param->buf_len;
+
+	if (param->buf_len) {
+		buf_ptr += sizeof(*cmd);
+		WMITLV_SET_HDR(buf_ptr, WMITLV_TAG_ARRAY_BYTE, aligned_len);
+		buf_ptr += WMI_TLV_HDR_SIZE;
+		qdf_mem_copy(buf_ptr, param->bufp, param->buf_len);
+	}
+
+	if (wmi_unified_cmd_send(wmi_handle, buf, wmi_buf_len,
+				 WMI_SIMULATION_TEST_CMDID)) {
+		WMI_LOGE("%s: Failed to send test simulation cmd", __func__);
+		wmi_buf_free(buf);
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	return QDF_STATUS_SUCCESS;
+}
+
+/**
  * send_vdev_spectral_configure_cmd_tlv() - send VDEV spectral configure
  * command to fw
  * @wmi_handle: wmi handle
@@ -6406,10 +6511,11 @@ static QDF_STATUS send_vdev_spectral_configure_cmd_tlv(wmi_unified_t wmi_handle,
 	cmd->spectral_scan_dBm_adj = param->dbm_adj;
 	cmd->spectral_scan_chn_mask = param->chn_mask;
 	cmd->spectral_scan_mode = param->mode;
-	cmd->spectral_scan_center_freq = param->center_freq;
+	cmd->spectral_scan_center_freq1 = param->center_freq1;
+	cmd->spectral_scan_center_freq2 = param->center_freq2;
+	cmd->spectral_scan_chan_width = param->chan_width;
 	/* Not used, fill with zeros */
 	cmd->spectral_scan_chan_freq = 0;
-	cmd->spectral_scan_chan_width = 0;
 
 	wmi_mtrace(WMI_VDEV_SPECTRAL_SCAN_CONFIGURE_CMDID, cmd->vdev_id, 0);
 	ret = wmi_unified_cmd_send(wmi_handle, buf, len,
@@ -6443,7 +6549,8 @@ static QDF_STATUS send_vdev_spectral_configure_cmd_tlv(wmi_unified_t wmi_handle,
 	WMI_LOGI("spectral_scan_dBm_adj = %u", param->dbm_adj);
 	WMI_LOGI("spectral_scan_chn_mask = %u", param->chn_mask);
 	WMI_LOGI("spectral_scan_mode = %u", param->mode);
-	WMI_LOGI("spectral_scan_center_freq = %u", param->center_freq);
+	WMI_LOGI("spectral_scan_center_freq1 = %u", param->center_freq1);
+	WMI_LOGI("spectral_scan_center_freq2 = %u", param->center_freq2);
 	WMI_LOGI("spectral_scan_chan_freq = %u", param->chan_freq);
 	WMI_LOGI("spectral_scan_chan_width = %u", param->chan_width);
 	WMI_LOGI("%s: Status: %d", __func__, ret);
@@ -6515,6 +6622,87 @@ static QDF_STATUS send_vdev_spectral_enable_cmd_tlv(wmi_unified_t wmi_handle,
 
 	return ret;
 }
+
+#ifdef WLAN_CONV_SPECTRAL_ENABLE
+static QDF_STATUS
+extract_pdev_sscan_fw_cmd_fixed_param_tlv(
+		wmi_unified_t wmi_handle,
+		uint8_t *event, struct spectral_startscan_resp_params *param)
+{
+	WMI_PDEV_SSCAN_FW_PARAM_EVENTID_param_tlvs *param_buf;
+	wmi_pdev_sscan_fw_cmd_fixed_param *ev;
+
+	if (!wmi_handle) {
+		WMI_LOGE("WMI handle is null");
+		return QDF_STATUS_E_INVAL;
+	}
+
+	if (!event) {
+		WMI_LOGE("WMI event is null");
+		return QDF_STATUS_E_INVAL;
+	}
+
+	if (!param) {
+		WMI_LOGE("Spectral startscan response params is null");
+		return QDF_STATUS_E_INVAL;
+	}
+
+	param_buf = (WMI_PDEV_SSCAN_FW_PARAM_EVENTID_param_tlvs *)event;
+	if (!param_buf)
+		return QDF_STATUS_E_INVAL;
+
+	ev = param_buf->fixed_param;
+	if (!ev)
+		return QDF_STATUS_E_INVAL;
+
+	param->pdev_id = wmi_handle->ops->convert_target_pdev_id_to_host(
+								wmi_handle,
+								ev->pdev_id);
+	param->smode = ev->spectral_scan_mode;
+	param->num_fft_bin_index = param_buf->num_fft_bin_index;
+	WMI_LOGD("%s:pdev id %u scan mode %u num_fft_bin_index %u", __func__,
+		 param->pdev_id, param->smode, param->num_fft_bin_index);
+
+	return QDF_STATUS_SUCCESS;
+}
+
+static QDF_STATUS
+extract_pdev_sscan_fft_bin_index_tlv(
+			wmi_unified_t wmi_handle, uint8_t *event,
+			struct spectral_fft_bin_markers_160_165mhz *param)
+{
+	WMI_PDEV_SSCAN_FW_PARAM_EVENTID_param_tlvs *param_buf;
+	wmi_pdev_sscan_fft_bin_index *ev;
+
+	param_buf = (WMI_PDEV_SSCAN_FW_PARAM_EVENTID_param_tlvs *)event;
+	if (!param_buf)
+		return QDF_STATUS_E_INVAL;
+
+	ev = param_buf->fft_bin_index;
+	if (!ev)
+		return QDF_STATUS_E_INVAL;
+
+	param->start_pri80 = WMI_SSCAN_PRI80_START_BIN_GET(ev->pri80_bins);
+	param->num_pri80 = WMI_SSCAN_PRI80_END_BIN_GET(ev->pri80_bins) -
+			   param->start_pri80 + 1;
+	param->start_sec80 = WMI_SSCAN_SEC80_START_BIN_GET(ev->sec80_bins);
+	param->num_sec80 = WMI_SSCAN_SEC80_END_BIN_GET(ev->sec80_bins) -
+			   param->start_sec80 + 1;
+	param->start_5mhz = WMI_SSCAN_MID_5MHZ_START_BIN_GET(ev->mid_5mhz_bins);
+	param->num_5mhz = WMI_SSCAN_MID_5MHZ_END_BIN_GET(ev->mid_5mhz_bins) -
+			  param->start_5mhz + 1;
+	param->is_valid = true;
+
+	WMI_LOGD("%s:start_pri80 %u, num_pri80 %u", __func__,
+		 param->start_pri80, param->num_pri80);
+	WMI_LOGD("%s:start_sec80 %u, num_sec80 %u", __func__,
+		 param->start_sec80, param->num_sec80);
+	WMI_LOGD("%s:start_5mhz %u, num_5mhz %u", __func__,
+		 param->start_5mhz, param->num_5mhz);
+
+	return QDF_STATUS_SUCCESS;
+}
+#endif /* WLAN_CONV_SPECTRAL_ENABLE */
 
 /**
  * send_thermal_mitigation_param_cmd_tlv() - configure thermal mitigation params
@@ -6727,6 +6915,15 @@ void wmi_copy_resource_config(wmi_resource_config *resource_cfg,
 	resource_cfg->num_max_sta_vdevs = tgt_res_cfg->num_max_sta_vdevs;
 	resource_cfg->max_bssid_indicator = tgt_res_cfg->max_bssid_indicator;
 	resource_cfg->max_num_group_keys = tgt_res_cfg->max_num_group_keys;
+	/* Deferred AI: Max rnr neighbors supported in multisoc case
+	 * where in SoC can support 6ghz. During WMI init of a SoC
+	 * currently there is no way to figure if another SOC is plugged in
+	 * and it can support 6Ghz.
+	 */
+	resource_cfg->max_rnr_neighbours = MAX_SUPPORTED_NEIGHBORS;
+	resource_cfg->ema_max_vap_cnt = tgt_res_cfg->ema_max_vap_cnt;
+	resource_cfg->ema_max_profile_period =
+			tgt_res_cfg->ema_max_profile_period;
 	if (tgt_res_cfg->atf_config)
 		WMI_RSRC_CFG_FLAG_ATF_CONFIG_ENABLE_SET(resource_cfg->flag1, 1);
 	if (tgt_res_cfg->mgmt_comp_evt_bundle_support)
@@ -8139,6 +8336,41 @@ QDF_STATUS send_adfs_ocac_abort_cmd_tlv(wmi_unified_t wmi_handle,
 #endif
 
 /**
+ * is_service_enabled_tlv() - Check if service enabled
+ * @param wmi_handle: wmi handle
+ * @param service_id: service identifier
+ *
+ * Return: 1 enabled, 0 disabled
+ */
+static bool is_service_enabled_tlv(wmi_unified_t wmi_handle,
+				   uint32_t service_id)
+{
+	struct wmi_soc *soc = wmi_handle->soc;
+
+	if (!soc->wmi_service_bitmap) {
+		WMI_LOGE("WMI service bit map is not saved yet");
+		return false;
+	}
+
+	/* if wmi_service_enabled was received with extended bitmap,
+	 * use WMI_SERVICE_EXT_IS_ENABLED to check the services.
+	 */
+	if (soc->wmi_ext_service_bitmap)
+		return WMI_SERVICE_EXT_IS_ENABLED(soc->wmi_service_bitmap,
+				soc->wmi_ext_service_bitmap,
+				service_id);
+
+	if (service_id >= WMI_MAX_SERVICE) {
+		WMI_LOGE("Service id %d but WMI ext service bitmap is NULL",
+			 service_id);
+		return false;
+	}
+
+	return WMI_SERVICE_IS_ENABLED(soc->wmi_service_bitmap,
+				service_id);
+}
+
+/**
  * init_cmd_send_tlv() - send initialization cmd to fw
  * @wmi_handle: wmi handle
  * @param param: pointer to wmi init param
@@ -8196,6 +8428,11 @@ static QDF_STATUS init_cmd_send_tlv(wmi_unified_t wmi_handle,
 		host_mem_chunks[idx].ptr = param->mem_chunks[idx].paddr;
 		host_mem_chunks[idx].size = param->mem_chunks[idx].len;
 		host_mem_chunks[idx].req_id = param->mem_chunks[idx].req_id;
+		if (is_service_enabled_tlv(wmi_handle,
+					   WMI_SERVICE_SUPPORT_EXTEND_ADDRESS))
+			host_mem_chunks[idx].ptr_high =
+				qdf_get_upper_32_bits(
+					param->mem_chunks[idx].paddr);
 		QDF_TRACE(QDF_MODULE_ID_ANY, QDF_TRACE_LEVEL_DEBUG,
 				"chunk %d len %d requested ,ptr  0x%x ",
 				idx, host_mem_chunks[idx].size,
@@ -8461,6 +8698,331 @@ QDF_STATUS send_obss_spatial_reuse_set_cmd_tlv(wmi_unified_t wmi_handle,
 
 	return ret;
 }
+
+/**
+ * send_self_srg_bss_color_bitmap_set_cmd_tlv() - Send 64-bit BSS color bitmap
+ * to be used by SRG based Spatial Reuse feature to the FW
+ * @wmi_handle: wmi handle
+ * @bitmap_0: lower 32 bits in BSS color bitmap
+ * @bitmap_1: upper 32 bits in BSS color bitmap
+ * @pdev_id: pdev ID
+ *
+ * Return: QDF_STATUS_SUCCESS on success and QDF_STATUS_E_FAILURE for failure
+ */
+static QDF_STATUS
+send_self_srg_bss_color_bitmap_set_cmd_tlv(
+	wmi_unified_t wmi_handle, uint32_t bitmap_0,
+	uint32_t bitmap_1, uint8_t pdev_id)
+{
+	wmi_buf_t buf;
+	wmi_pdev_srg_bss_color_bitmap_cmd_fixed_param *cmd;
+	QDF_STATUS ret;
+	uint32_t len;
+
+	len = sizeof(*cmd);
+
+	buf = wmi_buf_alloc(wmi_handle, len);
+	if (!buf)
+		return QDF_STATUS_E_FAILURE;
+
+	cmd = (wmi_pdev_srg_bss_color_bitmap_cmd_fixed_param *)
+			wmi_buf_data(buf);
+
+	WMITLV_SET_HDR(
+		&cmd->tlv_header,
+		WMITLV_TAG_STRUC_wmi_pdev_srg_bss_color_bitmap_cmd_fixed_param,
+		WMITLV_GET_STRUCT_TLVLEN
+		(wmi_pdev_srg_bss_color_bitmap_cmd_fixed_param));
+
+	cmd->pdev_id = wmi_handle->ops->convert_pdev_id_host_to_target(
+					wmi_handle, pdev_id);
+	cmd->srg_bss_color_bitmap[0] = bitmap_0;
+	cmd->srg_bss_color_bitmap[1] = bitmap_1;
+
+	ret = wmi_unified_cmd_send(
+			wmi_handle, buf, len,
+			WMI_PDEV_SET_SRG_BSS_COLOR_BITMAP_CMDID);
+
+	if (QDF_IS_STATUS_ERROR(ret)) {
+		WMI_LOGE(
+		 "WMI_PDEV_SET_SRG_BSS_COLOR_BITMAP_CMDID send returned Error %d",
+		 ret);
+		wmi_buf_free(buf);
+	}
+
+	return ret;
+}
+
+/**
+ * send_self_srg_partial_bssid_bitmap_set_cmd_tlv() - Send 64-bit partial BSSID
+ * bitmap to be used by SRG based Spatial Reuse feature to the FW
+ * @wmi_handle: wmi handle
+ * @bitmap_0: lower 32 bits in partial BSSID bitmap
+ * @bitmap_1: upper 32 bits in partial BSSID bitmap
+ * @pdev_id: pdev ID
+ *
+ * Return: QDF_STATUS_SUCCESS on success and QDF_STATUS_E_FAILURE for failure
+ */
+static QDF_STATUS
+send_self_srg_partial_bssid_bitmap_set_cmd_tlv(
+	wmi_unified_t wmi_handle, uint32_t bitmap_0,
+	uint32_t bitmap_1, uint8_t pdev_id)
+{
+	wmi_buf_t buf;
+	wmi_pdev_srg_partial_bssid_bitmap_cmd_fixed_param *cmd;
+	QDF_STATUS ret;
+	uint32_t len;
+
+	len = sizeof(*cmd);
+
+	buf = wmi_buf_alloc(wmi_handle, len);
+	if (!buf)
+		return QDF_STATUS_E_FAILURE;
+
+	cmd = (wmi_pdev_srg_partial_bssid_bitmap_cmd_fixed_param *)
+			wmi_buf_data(buf);
+
+	WMITLV_SET_HDR(
+		&cmd->tlv_header,
+		WMITLV_TAG_STRUC_wmi_pdev_srg_partial_bssid_bitmap_cmd_fixed_param,
+		WMITLV_GET_STRUCT_TLVLEN
+		(wmi_pdev_srg_partial_bssid_bitmap_cmd_fixed_param));
+
+	cmd->pdev_id = wmi_handle->ops->convert_pdev_id_host_to_target(
+					wmi_handle, pdev_id);
+
+	cmd->srg_partial_bssid_bitmap[0] = bitmap_0;
+	cmd->srg_partial_bssid_bitmap[1] = bitmap_1;
+
+	ret = wmi_unified_cmd_send(
+			wmi_handle, buf, len,
+			WMI_PDEV_SET_SRG_PARTIAL_BSSID_BITMAP_CMDID);
+
+	if (QDF_IS_STATUS_ERROR(ret)) {
+		WMI_LOGE(
+		 "WMI_PDEV_SET_SRG_PARTIAL_BSSID_BITMAP_CMDID send returned Error %d",
+		 ret);
+		wmi_buf_free(buf);
+	}
+
+	return ret;
+}
+
+/**
+ * send_self_srg_obss_color_enable_bitmap_cmd_tlv() - Send 64-bit BSS color
+ * enable bitmap to be used by SRG based Spatial Reuse feature to the FW
+ * @wmi_handle: wmi handle
+ * @bitmap_0: lower 32 bits in BSS color enable bitmap
+ * @bitmap_1: upper 32 bits in BSS color enable bitmap
+ * @pdev_id: pdev ID
+ *
+ * Return: QDF_STATUS_SUCCESS on success and QDF_STATUS_E_FAILURE for failure
+ */
+static QDF_STATUS
+send_self_srg_obss_color_enable_bitmap_cmd_tlv(
+	wmi_unified_t wmi_handle, uint32_t bitmap_0,
+	uint32_t bitmap_1, uint8_t pdev_id)
+{
+	wmi_buf_t buf;
+	wmi_pdev_srg_obss_color_enable_bitmap_cmd_fixed_param *cmd;
+	QDF_STATUS ret;
+	uint32_t len;
+
+	len = sizeof(*cmd);
+
+	buf = wmi_buf_alloc(wmi_handle, len);
+	if (!buf)
+		return QDF_STATUS_E_FAILURE;
+
+	cmd = (wmi_pdev_srg_obss_color_enable_bitmap_cmd_fixed_param *)
+			wmi_buf_data(buf);
+
+	WMITLV_SET_HDR(
+		&cmd->tlv_header,
+		WMITLV_TAG_STRUC_wmi_pdev_srg_obss_color_enable_bitmap_cmd_fixed_param,
+		WMITLV_GET_STRUCT_TLVLEN
+		(wmi_pdev_srg_obss_color_enable_bitmap_cmd_fixed_param));
+
+	cmd->pdev_id = wmi_handle->ops->convert_pdev_id_host_to_target(
+					wmi_handle, pdev_id);
+	cmd->srg_obss_en_color_bitmap[0] = bitmap_0;
+	cmd->srg_obss_en_color_bitmap[1] = bitmap_1;
+
+	ret = wmi_unified_cmd_send(
+			wmi_handle, buf, len,
+			WMI_PDEV_SET_SRG_OBSS_COLOR_ENABLE_BITMAP_CMDID);
+
+	if (QDF_IS_STATUS_ERROR(ret)) {
+		WMI_LOGE(
+		 "WMI_PDEV_SET_SRG_OBSS_COLOR_ENABLE_BITMAP_CMDID send returned Error %d",
+		 ret);
+		wmi_buf_free(buf);
+	}
+
+	return ret;
+}
+
+/**
+ * send_self_srg_obss_bssid_enable_bitmap_cmd_tlv() - Send 64-bit OBSS BSSID
+ * enable bitmap to be used by SRG based Spatial Reuse feature to the FW
+ * @wmi_handle: wmi handle
+ * @bitmap_0: lower 32 bits in BSSID enable bitmap
+ * @bitmap_1: upper 32 bits in BSSID enable bitmap
+ * @pdev_id: pdev ID
+ *
+ * Return: QDF_STATUS_SUCCESS on success and QDF_STATUS_E_FAILURE for failure
+ */
+static QDF_STATUS
+send_self_srg_obss_bssid_enable_bitmap_cmd_tlv(
+	wmi_unified_t wmi_handle, uint32_t bitmap_0,
+	uint32_t bitmap_1, uint8_t pdev_id)
+{
+	wmi_buf_t buf;
+	wmi_pdev_srg_obss_bssid_enable_bitmap_cmd_fixed_param *cmd;
+	QDF_STATUS ret;
+	uint32_t len;
+
+	len = sizeof(*cmd);
+
+	buf = wmi_buf_alloc(wmi_handle, len);
+	if (!buf)
+		return QDF_STATUS_E_FAILURE;
+
+	cmd = (wmi_pdev_srg_obss_bssid_enable_bitmap_cmd_fixed_param *)
+			wmi_buf_data(buf);
+
+	WMITLV_SET_HDR(
+		&cmd->tlv_header,
+		WMITLV_TAG_STRUC_wmi_pdev_srg_obss_bssid_enable_bitmap_cmd_fixed_param,
+		WMITLV_GET_STRUCT_TLVLEN
+		(wmi_pdev_srg_obss_bssid_enable_bitmap_cmd_fixed_param));
+
+	cmd->pdev_id = wmi_handle->ops->convert_pdev_id_host_to_target(
+					wmi_handle, pdev_id);
+	cmd->srg_obss_en_bssid_bitmap[0] = bitmap_0;
+	cmd->srg_obss_en_bssid_bitmap[1] = bitmap_1;
+
+	ret = wmi_unified_cmd_send(
+			wmi_handle, buf, len,
+			WMI_PDEV_SET_SRG_OBSS_BSSID_ENABLE_BITMAP_CMDID);
+
+	if (QDF_IS_STATUS_ERROR(ret)) {
+		WMI_LOGE(
+		 "WMI_PDEV_SET_SRG_OBSS_BSSID_ENABLE_BITMAP_CMDID send returned Error %d",
+		 ret);
+		wmi_buf_free(buf);
+	}
+
+	return ret;
+}
+
+/**
+ * send_self_non_srg_obss_color_enable_bitmap_cmd_tlv() - Send 64-bit BSS color
+ * enable bitmap to be used by Non-SRG based Spatial Reuse feature to the FW
+ * @wmi_handle: wmi handle
+ * @bitmap_0: lower 32 bits in BSS color enable bitmap
+ * @bitmap_1: upper 32 bits in BSS color enable bitmap
+ * @pdev_id: pdev ID
+ *
+ * Return: QDF_STATUS_SUCCESS on success and QDF_STATUS_E_FAILURE for failure
+ */
+static QDF_STATUS
+send_self_non_srg_obss_color_enable_bitmap_cmd_tlv(
+	wmi_unified_t wmi_handle, uint32_t bitmap_0,
+	uint32_t bitmap_1, uint8_t pdev_id)
+{
+	wmi_buf_t buf;
+	wmi_pdev_non_srg_obss_color_enable_bitmap_cmd_fixed_param *cmd;
+	QDF_STATUS ret;
+	uint32_t len;
+
+	len = sizeof(*cmd);
+
+	buf = wmi_buf_alloc(wmi_handle, len);
+	if (!buf)
+		return QDF_STATUS_E_FAILURE;
+
+	cmd = (wmi_pdev_non_srg_obss_color_enable_bitmap_cmd_fixed_param *)
+			wmi_buf_data(buf);
+
+	WMITLV_SET_HDR(
+		&cmd->tlv_header,
+		WMITLV_TAG_STRUC_wmi_pdev_non_srg_obss_color_enable_bitmap_cmd_fixed_param,
+		WMITLV_GET_STRUCT_TLVLEN
+		(wmi_pdev_non_srg_obss_color_enable_bitmap_cmd_fixed_param));
+
+	cmd->pdev_id = wmi_handle->ops->convert_pdev_id_host_to_target(
+					wmi_handle, pdev_id);
+	cmd->non_srg_obss_en_color_bitmap[0] = bitmap_0;
+	cmd->non_srg_obss_en_color_bitmap[1] = bitmap_1;
+
+	ret = wmi_unified_cmd_send(
+			wmi_handle, buf, len,
+			WMI_PDEV_SET_NON_SRG_OBSS_COLOR_ENABLE_BITMAP_CMDID);
+
+	if (QDF_IS_STATUS_ERROR(ret)) {
+		WMI_LOGE(
+		 "WMI_PDEV_SET_NON_SRG_OBSS_COLOR_ENABLE_BITMAP_CMDID send returned Error %d",
+		 ret);
+		wmi_buf_free(buf);
+	}
+
+	return ret;
+}
+
+/**
+ * send_self_non_srg_obss_bssid_enable_bitmap_cmd_tlv() - Send 64-bit OBSS BSSID
+ * enable bitmap to be used by Non-SRG based Spatial Reuse feature to the FW
+ * @wmi_handle: wmi handle
+ * @bitmap_0: lower 32 bits in BSSID enable bitmap
+ * @bitmap_1: upper 32 bits in BSSID enable bitmap
+ * @pdev_id: pdev ID
+ *
+ * Return: QDF_STATUS_SUCCESS on success and QDF_STATUS_E_FAILURE for failure
+ */
+static QDF_STATUS
+send_self_non_srg_obss_bssid_enable_bitmap_cmd_tlv(
+	wmi_unified_t wmi_handle, uint32_t bitmap_0,
+	uint32_t bitmap_1, uint8_t pdev_id)
+{
+	wmi_buf_t buf;
+	wmi_pdev_non_srg_obss_bssid_enable_bitmap_cmd_fixed_param *cmd;
+	QDF_STATUS ret;
+	uint32_t len;
+
+	len = sizeof(*cmd);
+
+	buf = wmi_buf_alloc(wmi_handle, len);
+	if (!buf)
+		return QDF_STATUS_E_FAILURE;
+
+	cmd = (wmi_pdev_non_srg_obss_bssid_enable_bitmap_cmd_fixed_param *)
+			wmi_buf_data(buf);
+
+	WMITLV_SET_HDR(
+		&cmd->tlv_header,
+		WMITLV_TAG_STRUC_wmi_pdev_non_srg_obss_bssid_enable_bitmap_cmd_fixed_param,
+		WMITLV_GET_STRUCT_TLVLEN
+		(wmi_pdev_non_srg_obss_bssid_enable_bitmap_cmd_fixed_param));
+
+	cmd->pdev_id = wmi_handle->ops->convert_pdev_id_host_to_target(
+					wmi_handle, pdev_id);
+	cmd->non_srg_obss_en_bssid_bitmap[0] = bitmap_0;
+	cmd->non_srg_obss_en_bssid_bitmap[1] = bitmap_1;
+
+	ret = wmi_unified_cmd_send(
+			wmi_handle, buf, len,
+			WMI_PDEV_SET_NON_SRG_OBSS_BSSID_ENABLE_BITMAP_CMDID);
+
+	if (QDF_IS_STATUS_ERROR(ret)) {
+		WMI_LOGE(
+		 "WMI_PDEV_SET_NON_SRG_OBSS_BSSID_ENABLE_BITMAP_CMDID send returned Error %d",
+		 ret);
+		wmi_buf_free(buf);
+	}
+
+	return ret;
+}
 #endif
 
 static
@@ -8644,40 +9206,6 @@ QDF_STATUS save_ext_service_bitmap_tlv(wmi_unified_t wmi_handle, void *evt_buf,
 
 	return QDF_STATUS_SUCCESS;
 }
-/**
- * is_service_enabled_tlv() - Check if service enabled
- * @param wmi_handle: wmi handle
- * @param service_id: service identifier
- *
- * Return: 1 enabled, 0 disabled
- */
-static bool is_service_enabled_tlv(wmi_unified_t wmi_handle,
-		uint32_t service_id)
-{
-	struct wmi_soc *soc = wmi_handle->soc;
-
-	if (!soc->wmi_service_bitmap) {
-		WMI_LOGE("WMI service bit map is not saved yet");
-		return false;
-	}
-
-	/* if wmi_service_enabled was received with extended bitmap,
-	 * use WMI_SERVICE_EXT_IS_ENABLED to check the services.
-	 */
-	if (soc->wmi_ext_service_bitmap)
-		return WMI_SERVICE_EXT_IS_ENABLED(soc->wmi_service_bitmap,
-				soc->wmi_ext_service_bitmap,
-				service_id);
-
-	if (service_id >= WMI_MAX_SERVICE) {
-		WMI_LOGE("Service id %d but WMI ext service bitmap is NULL",
-			 service_id);
-		return false;
-	}
-
-	return WMI_SERVICE_IS_ENABLED(soc->wmi_service_bitmap,
-				service_id);
-}
 
 static inline void copy_ht_cap_info(uint32_t ev_target_cap,
 		struct wlan_psoc_target_capability_info *cap)
@@ -8837,6 +9365,40 @@ static inline uint32_t convert_wireless_modes_tlv(uint32_t target_wireless_mode)
 		wireless_modes |= WMI_HOST_REGDMN_MODE_11AC_VHT80_80;
 
 	return wireless_modes;
+}
+
+/* convert_phybitmap_tlv() - Convert  WMI_REGULATORY_PHYBITMAP values sent by
+ * target to host internal REGULATORY_PHYMODE values.
+ *
+ * @target_target_phybitmap: target phybitmap received in the message.
+ *
+ * Return: returns the host internal REGULATORY_PHYMODE.
+ */
+static uint32_t convert_phybitmap_tlv(uint32_t target_phybitmap)
+{
+	uint32_t phybitmap = 0;
+
+	WMI_LOGD("Target phybitmap: 0x%x", target_phybitmap);
+
+	if (target_phybitmap & WMI_REGULATORY_PHYMODE_NO11A)
+		phybitmap |= REGULATORY_PHYMODE_NO11A;
+
+	if (target_phybitmap & WMI_REGULATORY_PHYMODE_NO11B)
+		phybitmap |= REGULATORY_PHYMODE_NO11B;
+
+	if (target_phybitmap & WMI_REGULATORY_PHYMODE_NO11G)
+		phybitmap |= REGULATORY_PHYMODE_NO11G;
+
+	if (target_phybitmap & WMI_REGULATORY_PHYMODE_NO11N)
+		phybitmap |= REGULATORY_CHAN_NO11N;
+
+	if (target_phybitmap & WMI_REGULATORY_PHYMODE_NO11AC)
+		phybitmap |= REGULATORY_PHYMODE_NO11AC;
+
+	if (target_phybitmap & WMI_REGULATORY_PHYMODE_NO11AX)
+		phybitmap |= REGULATORY_PHYMODE_NO11AX;
+
+	return phybitmap;
 }
 
 /**
@@ -10530,6 +11092,7 @@ extract_service_ready_ext2_tlv(wmi_unified_t wmi_handle, uint8_t *event,
 	param->bdf_reg_db_version_minor =
 			WMI_BDF_REG_DB_VERSION_MINOR_GET(
 				ev->reg_db_version);
+	param->chwidth_num_peer_caps = ev->chwidth_num_peer_caps;
 
 	param->num_dbr_ring_caps = param_buf->num_dma_ring_caps;
 	return QDF_STATUS_SUCCESS;
@@ -11290,7 +11853,8 @@ static QDF_STATUS extract_reg_chan_list_update_event_tlv(
 	qdf_mem_copy(reg_info->alpha2, &(chan_list_event_hdr->alpha2),
 		     REG_ALPHA2_LEN);
 	reg_info->dfs_region = chan_list_event_hdr->dfs_region;
-	reg_info->phybitmap = chan_list_event_hdr->phybitmap;
+	reg_info->phybitmap = convert_phybitmap_tlv(
+			chan_list_event_hdr->phybitmap);
 	reg_info->offload_enabled = true;
 	reg_info->num_phy = chan_list_event_hdr->num_phy;
 	reg_info->phy_id = wmi_handle->ops->convert_phy_id_target_to_host(
@@ -13054,9 +13618,14 @@ extract_roam_scan_ap_stats_tlv(wmi_unified_t wmi_handle, void *evt_buf,
 	uint8_t i;
 
 	param_buf = (WMI_ROAM_STATS_EVENTID_param_tlvs *)evt_buf;
-	if (!param_buf || ap_idx >= param_buf->num_roam_ap_info) {
-		WMI_LOGE("Invalid roam scan AP tlv ap_idx:%d total_ap:%d",
-			 ap_idx, param_buf->num_roam_ap_info);
+	if (!param_buf) {
+		wmi_err("Param buf is NULL");
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	if (ap_idx >= param_buf->num_roam_ap_info) {
+		wmi_err("Invalid roam scan AP tlv ap_idx:%d total_ap:%d",
+			ap_idx, param_buf->num_roam_ap_info);
 		return QDF_STATUS_E_FAILURE;
 	}
 
@@ -13577,10 +14146,17 @@ struct wmi_ops tlv_ops =  {
 	.send_phyerr_enable_cmd = send_phyerr_enable_cmd_tlv,
 	.send_periodic_chan_stats_config_cmd =
 		send_periodic_chan_stats_config_cmd_tlv,
+	.send_simulation_test_cmd = send_simulation_test_cmd_tlv,
 	.send_vdev_spectral_configure_cmd =
 				send_vdev_spectral_configure_cmd_tlv,
 	.send_vdev_spectral_enable_cmd =
 				send_vdev_spectral_enable_cmd_tlv,
+#ifdef WLAN_CONV_SPECTRAL_ENABLE
+	.extract_pdev_sscan_fw_cmd_fixed_param =
+				extract_pdev_sscan_fw_cmd_fixed_param_tlv,
+	.extract_pdev_sscan_fft_bin_index =
+				extract_pdev_sscan_fft_bin_index_tlv,
+#endif /* WLAN_CONV_SPECTRAL_ENABLE */
 	.send_thermal_mitigation_param_cmd =
 		send_thermal_mitigation_param_cmd_tlv,
 	.send_process_update_edca_param_cmd =
@@ -13743,6 +14319,18 @@ struct wmi_ops tlv_ops =  {
 	.send_obss_spatial_reuse_set = send_obss_spatial_reuse_set_cmd_tlv,
 	.send_obss_spatial_reuse_set_def_thresh =
 		send_obss_spatial_reuse_set_def_thresh_cmd_tlv,
+	.send_self_srg_bss_color_bitmap_set =
+		send_self_srg_bss_color_bitmap_set_cmd_tlv,
+	.send_self_srg_partial_bssid_bitmap_set =
+		send_self_srg_partial_bssid_bitmap_set_cmd_tlv,
+	.send_self_srg_obss_color_enable_bitmap =
+		send_self_srg_obss_color_enable_bitmap_cmd_tlv,
+	.send_self_srg_obss_bssid_enable_bitmap =
+		send_self_srg_obss_bssid_enable_bitmap_cmd_tlv,
+	.send_self_non_srg_obss_color_enable_bitmap =
+		send_self_non_srg_obss_color_enable_bitmap_cmd_tlv,
+	.send_self_non_srg_obss_bssid_enable_bitmap =
+		send_self_non_srg_obss_bssid_enable_bitmap_cmd_tlv,
 #endif
 	.extract_offload_bcn_tx_status_evt = extract_offload_bcn_tx_status_evt,
 	.extract_ctl_failsafe_check_ev_param =
@@ -14146,6 +14734,8 @@ event_ids[wmi_roam_scan_chan_list_id] =
 			WMI_ROAM_SCAN_CHANNEL_LIST_EVENTID;
 	event_ids[wmi_muedca_params_config_eventid] =
 			WMI_MUEDCA_PARAMS_CONFIG_EVENTID;
+	event_ids[wmi_pdev_sscan_fw_param_eventid] =
+			WMI_PDEV_SSCAN_FW_PARAM_EVENTID;
 }
 
 /**
@@ -14393,6 +14983,7 @@ static void populate_tlv_service(uint32_t *wmi_service)
 	wmi_service[wmi_service_wlm_stats_support] =
 			WMI_SERVICE_WLM_STATS_REQUEST;
 	wmi_service[wmi_service_infra_mbssid] = WMI_SERVICE_INFRA_MBSSID;
+	wmi_service[wmi_service_ema_ap_support] = WMI_SERVICE_EMA_AP_SUPPORT;
 	wmi_service[wmi_service_ul_ru26_allowed] = WMI_SERVICE_UL_RU26_ALLOWED;
 	wmi_service[wmi_service_cfr_capture_support] =
 			WMI_SERVICE_CFR_CAPTURE_SUPPORT;
@@ -14443,6 +15034,14 @@ static void populate_tlv_service(uint32_t *wmi_service)
 			WMI_SERVICE_BEACON_PROTECTION_SUPPORT;
 	wmi_service[wmi_service_sta_nan_ndi_four_port] =
 			WMI_SERVICE_NDI_NDI_STA_SUPPORT;
+	wmi_service[wmi_service_host_scan_stop_vdev_all] =
+		WMI_SERVICE_HOST_SCAN_STOP_VDEV_ALL_SUPPORT;
+	wmi_service[wmi_support_extend_address] =
+			WMI_SERVICE_SUPPORT_EXTEND_ADDRESS;
+	wmi_service[wmi_service_srg_srp_spatial_reuse_support] =
+		WMI_SERVICE_SRG_SRP_SPATIAL_REUSE_SUPPORT;
+	wmi_service[wmi_service_suiteb_roam_support] =
+			WMI_SERVICE_WPA3_SUITEB_ROAM_SUPPORT;
 }
 
 /**

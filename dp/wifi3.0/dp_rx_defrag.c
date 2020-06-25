@@ -212,7 +212,7 @@ void dp_rx_defrag_waitlist_flush(struct dp_soc *soc)
 				     rx_tid[rx_reorder->tid]);
 		qdf_spin_unlock_bh(&rx_reorder->tid_lock);
 
-		temp_peer = dp_peer_find_by_id(soc, peer->peer_ids[0]);
+		temp_peer = dp_peer_find_by_id(soc, peer->peer_id);
 		if (temp_peer == peer) {
 			qdf_spin_lock_bh(&rx_reorder->tid_lock);
 			dp_rx_reorder_flush_frag(peer, rx_reorder->tid);
@@ -1703,6 +1703,7 @@ uint32_t dp_rx_frag_handle(struct dp_soc *soc, hal_ring_desc_t ring_desc,
 	uint32_t rx_bfs = 0;
 	struct dp_pdev *pdev;
 	QDF_STATUS status = QDF_STATUS_SUCCESS;
+	struct rx_desc_pool *rx_desc_pool;
 
 	qdf_assert(soc);
 	qdf_assert(mpdu_desc_info);
@@ -1730,7 +1731,10 @@ uint32_t dp_rx_frag_handle(struct dp_soc *soc, hal_ring_desc_t ring_desc,
 
 	msdu = rx_desc->nbuf;
 
-	qdf_nbuf_unmap_single(soc->osdev, msdu,	QDF_DMA_FROM_DEVICE);
+	rx_desc_pool = &soc->rx_desc_buf[rx_desc->pool_id];
+	qdf_nbuf_unmap_nbytes_single(soc->osdev, rx_desc->nbuf,
+				     QDF_DMA_FROM_DEVICE,
+				     rx_desc_pool->buf_size);
 	rx_desc->unmapped = 1;
 
 	rx_desc->rx_buf_start = qdf_nbuf_data(msdu);
@@ -1777,7 +1781,7 @@ QDF_STATUS dp_rx_defrag_add_last_frag(struct dp_soc *soc,
 	if (!rx_reorder_array_elem) {
 		dp_verbose_debug(
 			"peer id:%d mac: %pM drop rx frame!",
-			peer->peer_ids[0],
+			peer->peer_id,
 			peer->mac_addr.raw);
 		DP_STATS_INC(soc, rx.err.defrag_peer_uninit, 1);
 		qdf_nbuf_free(nbuf);

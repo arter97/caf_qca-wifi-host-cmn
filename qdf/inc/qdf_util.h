@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2019 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2014-2020 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -45,6 +45,11 @@ typedef __qdf_wait_queue_head_t qdf_wait_queue_head_t;
  * @_expr: expression to be checked
  */
 #define qdf_likely(_expr)       __qdf_likely(_expr)
+
+/**
+ * qdf_wmb - write memory barrier.
+ */
+#define qdf_wmb()                 __qdf_wmb()
 
 /**
  * qdf_mb - read + write memory barrier.
@@ -132,6 +137,18 @@ typedef __qdf_wait_queue_head_t qdf_wait_queue_head_t;
 
 #define qdf_ewma_rx_rssi_read(rx_rssi) \
 	__qdf_ewma_rx_rssi_read(rx_rssi)
+
+#define QDF_CHAR_BIT 8
+
+/**
+ * qdf_bitmap - Define a bitmap
+ * @name: name of the bitmap
+ * @bits: num of bits in the bitmap
+ *
+ * Return: none
+ */
+#define qdf_bitmap(name, bits) __qdf_bitmap(name, bits)
+
 /**
  * qdf_set_bit() - set bit in address
  * @nr: bit number to be set
@@ -176,6 +193,27 @@ typedef __qdf_wait_queue_head_t qdf_wait_queue_head_t;
  * Return: position first set bit in addr
  */
 #define qdf_find_first_bit(addr, nbits)    __qdf_find_first_bit(addr, nbits)
+
+/**
+ * qdf_bitmap_empty() - Check if bitmap is empty
+ * @addr: Address buffer pointer
+ * @nbits: Number of bits
+ *
+ * Return: True if no bit set, else false
+ */
+#define qdf_bitmap_empty(addr, nbits)    __qdf_bitmap_empty(addr, nbits)
+
+/**
+ * qdf_bitmap_and() - AND operation on the bitmap
+ * @dst: Destination buffer pointer
+ * @src1: First source buffer pointer
+ * @src2: Second source buffer pointer
+ * @nbits: Number of bits
+ *
+ * Return: Bitwise and of src1 and src2 in dst
+ */
+#define qdf_bitmap_and(dst, src1, src2, nbits) \
+		__qdf_bitmap_and(dst, src1, src2, nbits)
 
 #define qdf_wait_queue_interruptible(wait_queue, condition) \
 		__qdf_wait_queue_interruptible(wait_queue, condition)
