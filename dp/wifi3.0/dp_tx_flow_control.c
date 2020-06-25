@@ -566,7 +566,7 @@ QDF_STATUS dp_tx_flow_pool_map(struct cdp_soc_t *handle, struct cdp_pdev *pdev,
 				uint8_t vdev_id)
 {
 	struct dp_soc *soc = (struct dp_soc *)handle;
-	int tx_ring_size = wlan_cfg_tx_ring_size(soc->wlan_cfg_ctx);
+	int tx_ring_size = wlan_cfg_get_num_tx_desc(soc->wlan_cfg_ctx);
 
 	return (dp_tx_flow_pool_map_handler((struct dp_pdev *)pdev, vdev_id,
 				FLOW_TYPE_VDEV,	vdev_id, tx_ring_size));
