@@ -97,8 +97,13 @@ static struct CE_attr host_ce_config_wlan_qcn7605[] = {
 #endif
 	/* Target autonomous HIF_memcpy */
 	{ /* CE6 */ CE_ATTR_FLAGS, 0, 0, 0, 0, NULL,},
+#ifdef REMOVE_PKT_LOG
+	/* unused */
+	{ /* CE7 */ 0, 0, 0, 0, 0, NULL,},
+#else
 	/* target->host PKTLOG */
 	{ /* CE7 */ CE_ATTR_FLAGS, 0, 0, 2048, 512, NULL,},
+#endif
 #ifdef IPA_OFFLOAD
 	/* Target to uMC */
 	{ /* CE8 */ CE_ATTR_FLAGS, 0, 0, 0, 0, NULL,},
@@ -132,8 +137,13 @@ static struct CE_pipe_config target_ce_config_wlan_qcn7605[] = {
 #endif
 	/* Reserved for target autonomous HIF_memcpy */
 	{ /* CE6 */ 6, PIPEDIR_INOUT, 32, 16384, CE_ATTR_FLAGS, 0,},
+#ifdef REMOVE_PKT_LOG
+	/* unused */
+	{ /* CE7 */ 7, PIPEDIR_IN,  2, 2048, CE_ATTR_FLAGS, 0,},
+#else
 	/* Target -> host PKTLOG */
 	{ /* CE7 */ 7, PIPEDIR_IN,  32, 2048, CE_ATTR_FLAGS, 0,},
+#endif
 #ifdef IPA_OFFLOAD
 	/* CE8 used only by IPA */
 	{ /* CE8 */ 8, PIPEDIR_IN, 128, 4096, CE_ATTR_FLAGS, 0,},
@@ -1137,7 +1147,11 @@ static struct CE_attr host_ce_config_wlan_qca6390[] = {
 	{ /* CE4 */ (CE_ATTR_FLAGS | CE_ATTR_DISABLE_INTR), 0,
 		CE_HTT_H2T_MSG_SRC_NENTRIES, 256, 0, NULL,},
 	/* target -> host PKTLOG */
+#ifdef REMOVE_PKT_LOG
+	{ /* CE5 */ 0, 0, 0, 0, 0, NULL,},
+#else
 	{ /* CE5 */ CE_ATTR_FLAGS, 0, 0, 2048, 512, NULL,},
+#endif
 	/* Target autonomous HIF_memcpy */
 	{ /* CE6 */ CE_ATTR_FLAGS, 0, 0, 0, 0, NULL,},
 	/* ce_diag, the Diagnostic Window */
@@ -1161,7 +1175,11 @@ static struct CE_pipe_config target_ce_config_wlan_qca6390[] = {
 	{ /* CE4 */ 4, PIPEDIR_OUT, 256, 256,
 		(CE_ATTR_FLAGS | CE_ATTR_DISABLE_INTR), 0,},
 	/* Target -> host PKTLOG */
+#ifdef REMOVE_PKT_LOG
+	{ /* CE5 */ 5, PIPEDIR_IN,  2, 2048, CE_ATTR_FLAGS, 0,},
+#else
 	{ /* CE5 */ 5, PIPEDIR_IN,  32, 2048, CE_ATTR_FLAGS, 0,},
+#endif
 	/* Reserved for target autonomous HIF_memcpy */
 	{ /* CE6 */ 6, PIPEDIR_INOUT, 32, 16384, CE_ATTR_FLAGS, 0,},
 	/* CE7 used only by Host */
