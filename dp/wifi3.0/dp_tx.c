@@ -1576,7 +1576,7 @@ static
 qdf_nbuf_t dp_tx_send_msdu_multiple(struct dp_vdev *vdev, qdf_nbuf_t nbuf,
 				    struct dp_tx_msdu_info_s *msdu_info)
 {
-	uint8_t i;
+	uint32_t i;
 	struct dp_pdev *pdev = vdev->pdev;
 	struct dp_soc *soc = pdev->soc;
 	struct dp_tx_desc_s *tx_desc;
@@ -1696,6 +1696,15 @@ qdf_nbuf_t dp_tx_send_msdu_multiple(struct dp_vdev *vdev, qdf_nbuf_t nbuf,
 
 				/* Check with MCL if this is needed */
 				/* nbuf = msdu_info->u.tso_info.curr_seg->nbuf; */
+			} else if (qdf_unlikely(msdu_info->num_seg - i > 1)) {
+				/*
+				 * curr_seg reach end case, if msdu_info
+				 * ->num_seg is larger than tso_seg_list
+				 * list, never to queue pkts with the
+				 * same tso segment info of which lead
+				 * memory double free
+				 */
+				dp_info("TSO seg reach end, should stop in next loop");
 			}
 		}
 
