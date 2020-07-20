@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2014-2017 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -64,4 +65,25 @@ qdf_nbuf_set_ext_cb(qdf_nbuf_t buf, void *ref)
 	__qdf_nbuf_set_ext_cb(buf, ref);
 }
 
+/**
+ * qdf_nbuf_set_rx_ipa_smmu_map() - set ipa smmu mapped flag
+ * @buf: Network buffer
+ * @value: 1 - ipa smmu mapped, 0 - ipa smmu unmapped
+ *
+ * Return: none
+ */
+static inline void qdf_nbuf_set_rx_ipa_smmu_map(qdf_nbuf_t buf, uint8_t value)
+{
+}
+
+/**
+ * qdf_nbuf_is_rx_ipa_smmu_map() - check ipa smmu map flag
+ * @buf: Network buffer
+ *
+ * Return 0 or 1
+ */
+static inline uint8_t qdf_nbuf_is_rx_ipa_smmu_map(qdf_nbuf_t buf)
+{
+	return 0;
+}
 #endif /* _QDF_NBUF_W_H */
