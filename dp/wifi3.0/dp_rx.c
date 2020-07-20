@@ -1929,6 +1929,7 @@ more_data:
 		 * Need a separate API for unmapping based on
 		 * phyiscal address
 		 */
+		dp_ipa_handle_rx_buf_smmu_mapping(soc, rx_desc->nbuf, false);
 		qdf_nbuf_unmap_single(soc->osdev, rx_desc->nbuf,
 					QDF_DMA_FROM_DEVICE);
 		rx_desc->unmapped = 1;
