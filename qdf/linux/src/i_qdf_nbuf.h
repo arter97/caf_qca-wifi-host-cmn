@@ -103,9 +103,7 @@ typedef union {
  * @rx.dev.priv_cb_w.peer_id: peer_id for RX packet
  * @rx.dev.priv_cb_w.protocol_tag:	protocol tag set by application for
  *				received packet type
- * @rx.dev.priv_cb_w.reserved1: reserved for flow tag set by application
- *				for 5 tuples received
- *
+ * @rx.dev.priv_cb_m.ipa_smmu_map: do IPA smmu map
  * @rx.dev.priv_cb_m.tcp_seq_num: TCP sequence number
  * @rx.dev.priv_cb_m.tcp_ack_num: TCP ACK number
  * @rx.dev.priv_cb_m.lro_ctx: LRO context
@@ -221,7 +219,8 @@ struct qdf_nbuf_cb {
 					 * Do not change location of this bit.
 					 */
 					uint32_t ipa_owned:1,
-						 reserved:15,
+						 ipa_smmu_map:1,
+						 reserved:14,
 						 peer_local_id:16;
 					uint32_t tcp_seq_num;
 					uint32_t tcp_ack_num;
