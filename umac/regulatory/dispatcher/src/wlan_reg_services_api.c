@@ -657,6 +657,12 @@ QDF_STATUS wlan_reg_get_chip_mode(struct wlan_objmgr_pdev *pdev,
 	return QDF_STATUS_SUCCESS;
 }
 
+QDF_STATUS wlan_reg_get_phybitmap(struct wlan_objmgr_pdev *pdev,
+				  uint16_t *phybitmap)
+{
+	return reg_get_phybitmap(pdev, phybitmap);
+}
+
 bool wlan_reg_is_11d_scan_inprogress(struct wlan_objmgr_psoc *psoc)
 {
 	return reg_is_11d_scan_inprogress(psoc);
@@ -977,6 +983,8 @@ wlan_reg_get_5g_bonded_channel_state_for_freq(struct wlan_objmgr_pdev *pdev,
 	return reg_get_5g_bonded_channel_state_for_freq(pdev, freq, bw);
 }
 
+qdf_export_symbol(wlan_reg_get_5g_bonded_channel_state_for_freq);
+
 enum channel_state
 wlan_reg_get_2g_bonded_channel_state_for_freq(struct wlan_objmgr_pdev *pdev,
 					      qdf_freq_t freq,
@@ -996,6 +1004,8 @@ void wlan_reg_set_channel_params_for_freq(struct wlan_objmgr_pdev *pdev,
 {
 	reg_set_channel_params_for_freq(pdev, freq, sec_ch_2g_freq, ch_params);
 }
+
+qdf_export_symbol(wlan_reg_set_channel_params_for_freq);
 
 enum channel_state
 wlan_reg_get_channel_state_for_freq(struct wlan_objmgr_pdev *pdev,
@@ -1114,10 +1124,12 @@ bool wlan_reg_is_6ghz_op_class(struct wlan_objmgr_pdev *pdev,
 	return reg_is_6ghz_op_class(pdev, op_class);
 }
 
+#ifdef CONFIG_REG_CLIENT
 bool wlan_reg_is_6ghz_supported(struct wlan_objmgr_psoc *psoc)
 {
 	return reg_is_6ghz_supported(psoc);
 }
+#endif
 
 #ifdef HOST_OPCLASS_EXT
 qdf_freq_t
@@ -1149,3 +1161,12 @@ qdf_freq_t wlan_reg_chan_opclass_to_freq_auto(uint8_t chan, uint8_t op_class,
 
 	return reg_chan_opclass_to_freq_auto(chan, op_class, global_tbl_lookup);
 }
+
+#ifdef CHECK_REG_PHYMODE
+enum reg_phymode wlan_reg_get_max_phymode(struct wlan_objmgr_pdev *pdev,
+					  enum reg_phymode phy_in,
+					  qdf_freq_t freq)
+{
+	return reg_get_max_phymode(pdev, phy_in, freq);
+}
+#endif /* CHECK_REG_PHYMODE */

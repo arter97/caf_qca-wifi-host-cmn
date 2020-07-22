@@ -463,6 +463,17 @@ QDF_STATUS reg_set_hal_reg_cap(
 		uint16_t phy_cnt);
 
 /**
+ * reg_update_hal_reg_cap() - Update HAL REG capabilities
+ * @psoc: psoc pointer
+ * @wireless_modes: 11AX wireless modes
+ * @phy_id: phy id
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS reg_update_hal_reg_cap(struct wlan_objmgr_psoc *psoc,
+				  uint32_t wireless_modes, uint8_t phy_id);
+
+/**
  * reg_chan_in_range() - Check if the given channel is in pdev's channel range
  * @chan_list: Pointer to regulatory channel list.
  * @low_freq_2g: Low frequency 2G.
@@ -802,6 +813,16 @@ QDF_STATUS reg_modify_pdev_chan_range(struct wlan_objmgr_pdev *pdev);
  */
 QDF_STATUS reg_update_pdev_wireless_modes(struct wlan_objmgr_pdev *pdev,
 					  uint32_t wireless_modes);
+
+/**
+ * reg_get_phybitmap() - Get phybitmap from regulatory pdev_priv_obj
+ * @pdev: pdev pointer
+ * @phybitmap: pointer to phybitmap
+ *
+ * Return: QDF STATUS
+ */
+QDF_STATUS reg_get_phybitmap(struct wlan_objmgr_pdev *pdev,
+			     uint16_t *phybitmap);
 #ifdef DISABLE_UNII_SHARED_BANDS
 /**
  * reg_disable_chan_coex() - Disable Coexisting channels based on the input
@@ -1069,12 +1090,14 @@ QDF_STATUS reg_set_6ghz_supported(struct wlan_objmgr_psoc *psoc,
 bool reg_is_6ghz_op_class(struct wlan_objmgr_pdev *pdev,
 			  uint8_t op_class);
 
+#ifdef CONFIG_REG_CLIENT
 /**
  * reg_is_6ghz_supported() - Whether 6ghz is supported
  *
  * @psoc: pointer to psoc
  */
 bool reg_is_6ghz_supported(struct wlan_objmgr_psoc *psoc);
+#endif
 
 /**
  * reg_get_unii_5g_bitmap() - get unii_5g_bitmap value
@@ -1087,5 +1110,28 @@ bool reg_is_6ghz_supported(struct wlan_objmgr_psoc *psoc);
 QDF_STATUS
 reg_get_unii_5g_bitmap(struct wlan_objmgr_pdev *pdev, uint8_t *bitmap);
 #endif
+
+#ifdef CHECK_REG_PHYMODE
+/**
+ * reg_get_max_phymode() - Recursively find the best possible phymode given a
+ * phymode, a frequency, and per-country regulations
+ * @pdev: pdev pointer
+ * @phy_in: phymode that the user requested
+ * @freq: current operating center frequency
+ *
+ * Return: maximum phymode allowed in current country that is <= phy_in
+ */
+enum reg_phymode reg_get_max_phymode(struct wlan_objmgr_pdev *pdev,
+				     enum reg_phymode phy_in,
+				     qdf_freq_t freq);
+#else
+static inline enum reg_phymode
+reg_get_max_phymode(struct wlan_objmgr_pdev *pdev,
+		    enum reg_phymode phy_in,
+		    qdf_freq_t freq)
+{
+	return REG_PHYMODE_INVALID;
+}
+#endif /* CHECK_REG_PHYMODE */
 
 #endif
