@@ -1096,6 +1096,7 @@ struct wlan_objmgr_vdev *wlan_objmgr_get_vdev_by_opmode_from_psoc_debug(
 			break;
 		}
 		wlan_vdev_obj_unlock(vdev);
+		vdev = NULL;
 	}
 	wlan_psoc_obj_unlock(psoc);
 
@@ -1135,6 +1136,7 @@ struct wlan_objmgr_vdev *wlan_objmgr_get_vdev_by_opmode_from_psoc(
 			break;
 		}
 		wlan_vdev_obj_unlock(vdev);
+		vdev = NULL;
 	}
 	wlan_psoc_obj_unlock(psoc);
 
