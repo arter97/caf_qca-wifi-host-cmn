@@ -408,11 +408,18 @@ hal_process_reg_write_q_elem(struct hal_soc *hal,
 					srng->u.src_ring.hp, false);
 		write_val = srng->u.src_ring.hp;
 	} else {
-		q_elem->dequeue_val = srng->u.dst_ring.tp;
-		hal_write_address_32_mb(hal,
-					srng->u.dst_ring.tp_addr,
-					srng->u.dst_ring.tp, false);
-		write_val = srng->u.dst_ring.tp;
+		if (srng->ring_id == HAL_SRNG_WBM2SW2_RELEASE) {
+			q_elem->dequeue_val = srng->u.dst_ring.cached_hp;
+			SRNG_DST_REG_WRITE_CONFIRM(srng, HP,
+						   srng->u.dst_ring.cached_hp);
+			write_val = srng->u.dst_ring.cached_hp;
+		} else {
+			q_elem->dequeue_val = srng->u.dst_ring.tp;
+			hal_write_address_32_mb(hal,
+						srng->u.dst_ring.tp_addr,
+						srng->u.dst_ring.tp, false);
+			write_val = srng->u.dst_ring.tp;
+		}
 	}
 
 	q_elem->valid = 0;
@@ -723,6 +730,41 @@ int hal_get_reg_write_pending_work(void *hal_soc)
 	return qdf_atomic_read(&hal->active_work_cnt);
 }
 
+/**
+ * hal_srng_dst_init_hp() - Initilaize destination ring head pointer
+ * @srng: sring pointer
+ * @vaddr: virtual address
+ */
+void hal_srng_dst_init_hp(struct hal_srng *srng,
+			  uint32_t *vaddr)
+{
+	struct hal_soc *hal_soc = srng->hal_soc;
+
+	if (!srng)
+		return;
+
+	srng->u.dst_ring.hp_addr = vaddr;
+
+	if (vaddr) {
+		*srng->u.dst_ring.hp_addr = srng->u.dst_ring.cached_hp;
+		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_ERROR,
+			  "hp_addr=%pK, cached_hp=%d, hp=%d",
+			  (void *)srng->u.dst_ring.hp_addr,
+			  srng->u.dst_ring.cached_hp,
+			  *srng->u.dst_ring.hp_addr);
+	}
+	if (pld_is_device_awake(hal_soc->qdf_dev->dev) ||
+	    hal_is_reg_write_tput_level_high(hal_soc)) {
+		qdf_atomic_inc(&hal_soc->stats.wstats.direct);
+		srng->wstats.direct++;
+		SRNG_DST_REG_WRITE_CONFIRM(srng, HP,
+					   srng->u.dst_ring.cached_hp);
+	} else {
+		hal_reg_write_enqueue(hal_soc, srng, SRNG_HP_REG_ADDR(srng, HP),
+				      srng->u.dst_ring.cached_hp);
+	}
+}
+
 #else
 static inline QDF_STATUS hal_delayed_reg_write_init(struct hal_soc *hal)
 {
@@ -731,6 +773,25 @@ static inline QDF_STATUS hal_delayed_reg_write_init(struct hal_soc *hal)
 
 static inline void hal_delayed_reg_write_deinit(struct hal_soc *hal)
 {
+}
+
+void hal_srng_dst_init_hp(struct hal_srng *srng,
+			  uint32_t *vaddr)
+{
+	if (!srng)
+		return;
+
+	srng->u.dst_ring.hp_addr = vaddr;
+	SRNG_DST_REG_WRITE_CONFIRM(srng, HP, srng->u.dst_ring.cached_hp);
+
+	if (vaddr) {
+		*srng->u.dst_ring.hp_addr = srng->u.dst_ring.cached_hp;
+		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_ERROR,
+			  "hp_addr=%pK, cached_hp=%d, hp=%d",
+			  (void *)srng->u.dst_ring.hp_addr,
+			  srng->u.dst_ring.cached_hp,
+			  *srng->u.dst_ring.hp_addr);
+	}
 }
 #endif
 
@@ -993,30 +1054,6 @@ void hal_srng_dst_set_hp_paddr(struct hal_srng *srng,
 			   paddr & 0xffffffff);
 	SRNG_DST_REG_WRITE(srng, HP_ADDR_MSB,
 			   paddr >> 32);
-}
-
-/**
- * hal_srng_dst_init_hp() - Initilaize destination ring head pointer
- * @srng: sring pointer
- * @vaddr: virtual address
- */
-void hal_srng_dst_init_hp(struct hal_srng *srng,
-			  uint32_t *vaddr)
-{
-	if (!srng)
-		return;
-
-	srng->u.dst_ring.hp_addr = vaddr;
-	SRNG_DST_REG_WRITE_CONFIRM(srng, HP, srng->u.dst_ring.cached_hp);
-
-	if (vaddr) {
-		*srng->u.dst_ring.hp_addr = srng->u.dst_ring.cached_hp;
-		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_ERROR,
-			  "hp_addr=%pK, cached_hp=%d, hp=%d",
-			  (void *)srng->u.dst_ring.hp_addr,
-			  srng->u.dst_ring.cached_hp,
-			  *srng->u.dst_ring.hp_addr);
-	}
 }
 
 /**
