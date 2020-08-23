@@ -340,6 +340,25 @@ while (0)
 #define DP_TX_HIST_STATS_PER_PDEV()
 #endif /* DISABLE_DP_STATS */
 
+#ifdef QCA_SUPPORT_PEER_ISOLATION
+#define dp_get_peer_isolation(_peer) ((_peer)->isolation)
+
+static inline void dp_set_peer_isolation(struct dp_peer *peer, bool val)
+{
+	peer->isolation = val;
+	QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_INFO,
+		  "peer:%pM isolation:%d",
+		  peer->mac_addr.raw, peer->isolation);
+}
+
+#else
+#define dp_get_peer_isolation(_peer) (0)
+
+static inline void dp_set_peer_isolation(struct dp_peer *peer, bool val)
+{
+}
+#endif /* QCA_SUPPORT_PEER_ISOLATION */
+
 #ifdef FEATURE_TSO_STATS
 /**
  * dp_init_tso_stats() - Clear tso stats
@@ -1633,6 +1652,11 @@ static inline QDF_STATUS dp_h2t_cfg_stats_msg_send(struct dp_pdev *pdev,
 		uint32_t stats_type_upload_mask, uint8_t mac_id)
 {
 	return 0;
+}
+
+static inline void
+dp_pkt_log_init(struct cdp_soc_t *soc_hdl, uint8_t pdev_id, void *scn)
+{
 }
 
 static inline void

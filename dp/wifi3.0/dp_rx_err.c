@@ -25,6 +25,7 @@
 #include "qdf_trace.h"
 #include "qdf_nbuf.h"
 #include "dp_rx_defrag.h"
+#include "dp_ipa.h"
 #ifdef FEATURE_WDS
 #include "dp_txrx_wds.h"
 #endif
@@ -266,6 +267,7 @@ dp_rx_msdus_drop(struct dp_soc *soc, hal_ring_desc_t ring_desc,
 	int i;
 	uint8_t *rx_tlv_hdr;
 	uint32_t tid;
+	struct rx_desc_pool *rx_desc_pool;
 
 	hal_rx_reo_buf_paddr_get(ring_desc, &buf_info);
 
@@ -299,8 +301,14 @@ dp_rx_msdus_drop(struct dp_soc *soc, hal_ring_desc_t ring_desc,
 			return rx_bufs_used;
 		}
 
-		qdf_nbuf_unmap_single(soc->osdev,
-				      rx_desc->nbuf, QDF_DMA_FROM_DEVICE);
+		rx_desc_pool = &soc->rx_desc_buf[rx_desc->pool_id];
+		dp_ipa_handle_rx_buf_smmu_mapping(soc, rx_desc->nbuf,
+						  rx_desc_pool->buf_size,
+						  false);
+		qdf_nbuf_unmap_nbytes_single(soc->osdev, rx_desc->nbuf,
+					     QDF_DMA_FROM_DEVICE,
+					     rx_desc_pool->buf_size);
+		rx_desc->unmapped = 1;
 
 		rx_desc->rx_buf_start = qdf_nbuf_data(rx_desc->nbuf);
 
@@ -457,6 +465,7 @@ dp_rx_reo_err_entry_process(struct dp_soc *soc,
 	uint32_t tid = DP_MAX_TIDS;
 	uint16_t peer_id;
 	struct dp_rx_desc *rx_desc;
+	struct rx_desc_pool *rx_desc_pool;
 	qdf_nbuf_t nbuf;
 	struct hal_buf_info buf_info;
 	struct hal_rx_msdu_list msdu_list;
@@ -486,8 +495,14 @@ more_msdu_link_desc:
 		pdev = dp_get_pdev_for_lmac_id(soc, rx_desc->pool_id);
 
 		nbuf = rx_desc->nbuf;
-		qdf_nbuf_unmap_single(soc->osdev,
-				      nbuf, QDF_DMA_FROM_DEVICE);
+		rx_desc_pool = &soc->rx_desc_buf[rx_desc->pool_id];
+		dp_ipa_handle_rx_buf_smmu_mapping(soc, nbuf,
+						  rx_desc_pool->buf_size,
+						  false);
+		qdf_nbuf_unmap_nbytes_single(soc->osdev, nbuf,
+					     QDF_DMA_FROM_DEVICE,
+					     rx_desc_pool->buf_size);
+		rx_desc->unmapped = 1;
 
 		QDF_NBUF_CB_RX_PKT_LEN(nbuf) = msdu_list.msdu_info[i].msdu_len;
 		rx_bufs_used++;
@@ -1783,7 +1798,14 @@ dp_rx_wbm_err_process(struct dp_intr *int_ctx, struct dp_soc *soc,
 		}
 
 		nbuf = rx_desc->nbuf;
-		qdf_nbuf_unmap_single(soc->osdev, nbuf,	QDF_DMA_FROM_DEVICE);
+		rx_desc_pool = &soc->rx_desc_buf[rx_desc->pool_id];
+		dp_ipa_handle_rx_buf_smmu_mapping(soc, nbuf,
+						  rx_desc_pool->buf_size,
+						  false);
+		qdf_nbuf_unmap_nbytes_single(soc->osdev, nbuf,
+					     QDF_DMA_FROM_DEVICE,
+					     rx_desc_pool->buf_size);
+		rx_desc->unmapped = 1;
 
 		/*
 		 * save the wbm desc info in nbuf TLV. We will need this
@@ -2087,6 +2109,7 @@ dp_rx_err_mpdu_pop(struct dp_soc *soc, uint32_t mac_id,
 	struct dp_pdev *pdev = dp_get_pdev_for_lmac_id(soc, mac_id);
 	uint32_t rx_link_buf_info[HAL_RX_BUFFINFO_NUM_DWORDS];
 	hal_rxdma_desc_t ring_desc;
+	struct rx_desc_pool *rx_desc_pool;
 
 	if (!pdev) {
 		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_DEBUG,
@@ -2157,8 +2180,17 @@ dp_rx_err_mpdu_pop(struct dp_soc *soc, uint32_t mac_id,
 						continue;
 					}
 
-					qdf_nbuf_unmap_single(soc->osdev, msdu,
-						QDF_DMA_FROM_DEVICE);
+					rx_desc_pool = &soc->
+						rx_desc_buf[rx_desc->pool_id];
+					dp_ipa_handle_rx_buf_smmu_mapping(
+							soc, msdu,
+							rx_desc_pool->buf_size,
+							false);
+					qdf_nbuf_unmap_nbytes_single(
+						soc->osdev, msdu,
+						QDF_DMA_FROM_DEVICE,
+						rx_desc_pool->buf_size);
+					rx_desc->unmapped = 1;
 
 					QDF_TRACE(QDF_MODULE_ID_DP,
 						QDF_TRACE_LEVEL_DEBUG,
@@ -2359,6 +2391,7 @@ dp_handle_wbm_internal_error(struct dp_soc *soc, void *hal_desc,
 {
 	struct hal_buf_info buf_info = {0};
 	struct dp_rx_desc *rx_desc = NULL;
+	struct rx_desc_pool *rx_desc_pool;
 	uint32_t rx_buf_cookie;
 	uint32_t rx_bufs_reaped = 0;
 	union dp_rx_desc_list_elem_t *head = NULL;
@@ -2380,9 +2413,14 @@ dp_handle_wbm_internal_error(struct dp_soc *soc, void *hal_desc,
 		rx_desc = dp_rx_cookie_2_va_rxdma_buf(soc, rx_buf_cookie);
 
 		if (rx_desc && rx_desc->nbuf) {
-			qdf_nbuf_unmap_single(soc->osdev, rx_desc->nbuf,
-					      QDF_DMA_FROM_DEVICE);
-
+			rx_desc_pool = &soc->rx_desc_buf[rx_desc->pool_id];
+			dp_ipa_handle_rx_buf_smmu_mapping(
+						soc, rx_desc->nbuf,
+						rx_desc_pool->buf_size,
+						false);
+			qdf_nbuf_unmap_nbytes_single(soc->osdev, rx_desc->nbuf,
+						     QDF_DMA_FROM_DEVICE,
+						     rx_desc_pool->buf_size);
 			rx_desc->unmapped = 1;
 
 			qdf_nbuf_free(rx_desc->nbuf);

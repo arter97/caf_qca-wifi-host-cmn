@@ -1346,6 +1346,7 @@ uint16_t wlan_reg_get_op_class_width(struct wlan_objmgr_pdev *pdev,
 bool wlan_reg_is_6ghz_op_class(struct wlan_objmgr_pdev *pdev,
 			       uint8_t op_class);
 
+#ifdef CONFIG_REG_CLIENT
 /**
  * wlan_reg_is_6ghz_supported() - Whether 6ghz is supported
  * @psoc: psoc ptr
@@ -1353,6 +1354,7 @@ bool wlan_reg_is_6ghz_op_class(struct wlan_objmgr_pdev *pdev,
  * Return: bool
  */
 bool wlan_reg_is_6ghz_supported(struct wlan_objmgr_psoc *psoc);
+#endif
 
 #ifdef HOST_OPCLASS_EXT
 /**
@@ -1402,4 +1404,28 @@ uint16_t wlan_reg_chan_opclass_to_freq(uint8_t chan,
 
 qdf_freq_t wlan_reg_chan_opclass_to_freq_auto(uint8_t chan, uint8_t op_class,
 					      bool global_tbl_lookup);
+
+#ifdef CHECK_REG_PHYMODE
+/**
+ * wlan_reg_get_max_phymode() - Find the best possible phymode given a
+ * phymode, a frequency, and per-country regulations
+ * @pdev: pdev pointer
+ * @phy_in: phymode that the user requested
+ * @freq: current operating center frequency
+ *
+ * Return: maximum phymode allowed in current country that is <= phy_in
+ */
+enum reg_phymode wlan_reg_get_max_phymode(struct wlan_objmgr_pdev *pdev,
+					  enum reg_phymode phy_in,
+					  qdf_freq_t freq);
+#else
+static inline enum reg_phymode
+wlan_reg_get_max_phymode(struct wlan_objmgr_pdev *pdev,
+			 enum reg_phymode phy_in,
+			 qdf_freq_t freq)
+{
+	return REG_PHYMODE_INVALID;
+}
+#endif /* CHECK_REG_PHYMODE */
+
 #endif

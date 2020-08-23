@@ -115,13 +115,11 @@
 #define PHYB_2G_LMAC_ID 2
 #define PHYB_2G_TARGET_PDEV_ID 2
 
-#ifndef REMOVE_PKT_LOG
 enum rx_pktlog_mode {
 	DP_RX_PKTLOG_DISABLED = 0,
 	DP_RX_PKTLOG_FULL,
 	DP_RX_PKTLOG_LITE,
 };
-#endif
 
 /* enum m_copy_mode - Available mcopy mode
  *
@@ -1328,6 +1326,10 @@ struct dp_soc {
 	/* SG supported for msdu continued packets from wbm release ring */
 	bool wbm_release_desc_rx_sg_support;
 	bool peer_map_attach_success;
+	/* Flag to disable mac1 ring interrupts */
+	bool disable_mac1_intr;
+	/* Flag to disable mac2 ring interrupts */
+	bool disable_mac2_intr;
 
 	struct {
 		/* 1st msdu in sg for msdu continued packets in wbm rel ring */
@@ -1732,10 +1734,8 @@ struct dp_pdev {
 	/* map this pdev to a particular Reo Destination ring */
 	enum cdp_host_reo_dest_ring reo_dest;
 
-#ifndef REMOVE_PKT_LOG
 	/* Packet log mode */
 	uint8_t rx_pktlog_mode;
-#endif
 
 	/* WDI event handlers */
 	struct wdi_event_subscribe_t **wdi_event_list;
@@ -2119,6 +2119,9 @@ struct dp_vdev {
 
 	/* vap bss peer mac addr */
 	uint8_t vap_bss_peer_mac_addr[QDF_MAC_ADDR_SIZE];
+
+	/* callback to collect connectivity stats */
+	ol_txrx_stats_rx_fp stats_cb;
 };
 
 
@@ -2239,6 +2242,10 @@ struct dp_peer {
 		tx_cap_enabled:1, /* Peer's tx-capture is enabled */
 		rx_cap_enabled:1, /* Peer's rx-capture is enabled */
 		valid:1; /* valid bit */
+
+#ifdef QCA_SUPPORT_PEER_ISOLATION
+	bool isolation; /* enable peer isolation for this peer */
+#endif
 
 	/* MCL specific peer local id */
 	uint16_t local_id;

@@ -686,6 +686,9 @@ extern uint32_t hal_srng_get_entrysize(void *hal_soc, int ring_type);
  */
 uint32_t hal_srng_max_entries(void *hal_soc, int ring_type);
 
+void hal_set_low_threshold(hal_ring_handle_t hal_ring_hdl,
+				 uint32_t low_threshold);
+
 /**
  * hal_srng_dump - Dump ring status
  * @srng: hal srng pointer
@@ -2022,6 +2025,17 @@ static inline void hal_reo_setup(hal_soc_handle_t hal_soc_hdl,
 	struct hal_soc *hal_soc = (struct hal_soc *)hal_soc_hdl;
 
 	hal_soc->ops->hal_reo_setup(hal_soc, reoparams);
+}
+
+static inline
+void hal_compute_reo_remap_ix2_ix3(hal_soc_handle_t hal_soc_hdl,
+				   uint32_t *ring, uint32_t num_rings,
+				   uint32_t *remap1, uint32_t *remap2)
+{
+	struct hal_soc *hal_soc = (struct hal_soc *)hal_soc_hdl;
+
+	return hal_soc->ops->hal_compute_reo_remap_ix2_ix3(ring,
+					num_rings, remap1, remap2);
 }
 
 /**
