@@ -280,6 +280,9 @@
 #define HAL_SRNG_CONFIG(_hal_soc, _ring_type) \
 			(&_hal_soc->hw_srng_table[_ring_type])
 
+#define SRNG_HP_REG_ADDR(_srng, _reg) \
+		SRNG_ ## DST ## _ADDR(_srng, _reg)
+
 enum SRNG_REGISTERS {
 DST_HP = 0,
 DST_TP,
