@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016-2019 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2016-2019, 2021 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -431,17 +431,17 @@ cdp_ipa_setup(ol_txrx_soc_handle soc, struct cdp_pdev *pdev, void *ipa_i2w_cb,
  * Return: QDF_STATUS
  */
 static inline QDF_STATUS
-cdp_ipa_cleanup(ol_txrx_soc_handle soc, uint32_t tx_pipe_handle,
-		uint32_t rx_pipe_handle)
+cdp_ipa_cleanup(ol_txrx_soc_handle soc, struct cdp_pdev *pdev,
+		uint32_t tx_pipe_handle, uint32_t rx_pipe_handle)
 {
-	if (!soc || !soc->ops || !soc->ops->ipa_ops) {
+	if (!soc || !soc->ops || !soc->ops->ipa_ops || !pdev) {
 		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_FATAL,
 			"%s invalid instance", __func__);
 		return QDF_STATUS_E_FAILURE;
 	}
 
 	if (soc->ops->ipa_ops->ipa_cleanup)
-		return soc->ops->ipa_ops->ipa_cleanup(tx_pipe_handle,
+		return soc->ops->ipa_ops->ipa_cleanup(pdev, tx_pipe_handle,
 						      rx_pipe_handle);
 
 	return QDF_STATUS_SUCCESS;
