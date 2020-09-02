@@ -532,6 +532,16 @@ static void dp_ipa_set_tx_alt_ring_doorbell_paddr(struct dp_pdev *pdev)
 	hal_srng_dst_init_hp(wbm_srng, ipa_res->tx_alt_comp_doorbell_vaddr);
 }
 
+static void dp_ipa_unmap_tx_alt_ring_doorbell_paddr(struct dp_pdev *pdev)
+{
+	struct dp_ipa_resources *ipa_res = &pdev->ipa_resource;
+	struct dp_soc *soc = pdev->soc;
+
+	if (pld_smmu_unmap(soc->osdev->dev, ipa_res->tx_alt_comp_doorbell_paddr,
+			   sizeof(uint32_t)))
+		dp_err_rl("IPA ALT TX DB smmu unmap failed");
+}
+
 #else /* !IPA_WDI3_TX_TWO_PIPES */
 static inline
 void dp_ipa_tx_alt_pool_detach(struct dp_soc *soc, struct dp_pdev *pdev) { }
@@ -548,6 +558,8 @@ static inline QDF_STATUS dp_ipa_tx_alt_ring_get_resource(struct dp_pdev *pdev)
 {
 	return QDF_STATUS_SUCCESS;
 }
+
+static void dp_ipa_unmap_tx_alt_ring_doorbell_paddr(struct dp_pdev *pdev) { }
 
 #endif /* IPA_WDI3_TX_TWO_PIPES */
 
@@ -2086,18 +2098,51 @@ QDF_STATUS dp_ipa_setup_iface(char *ifname, uint8_t *mac_addr,
  *
  * Return: QDF_STATUS
  */
-QDF_STATUS dp_ipa_cleanup(uint32_t tx_pipe_handle, uint32_t rx_pipe_handle)
+QDF_STATUS dp_ipa_cleanup(struct cdp_pdev *ppdev, uint32_t tx_pipe_handle,
+			  uint32_t rx_pipe_handle)
 {
+	QDF_STATUS status = QDF_STATUS_SUCCESS;
+	struct dp_ipa_resources *ipa_res;
+	struct dp_pdev *pdev;
+	struct dp_soc *soc;
 	int ret;
 
 	ret = qdf_ipa_wdi_disconn_pipes();
 	if (ret) {
 		dp_err("ipa_wdi_disconn_pipes: IPA pipe cleanup failed: ret=%d",
 		       ret);
-		return QDF_STATUS_E_FAILURE;
+		status = QDF_STATUS_E_FAILURE;
 	}
 
-	return QDF_STATUS_SUCCESS;
+	pdev = (struct dp_pdev *)ppdev;
+	soc = pdev->soc;
+	if (!soc) {
+		dp_err_rl("Invalid soc handle");
+		status = QDF_STATUS_E_FAILURE;
+		goto exit;
+	}
+
+	if (qdf_mem_smmu_s1_enabled(soc->osdev)) {
+		ipa_res = &pdev->ipa_resource;
+
+		/* unmap has to be the reverse order of smmu map */
+		dp_ipa_unmap_tx_alt_ring_doorbell_paddr(pdev);
+
+		ret = pld_smmu_unmap(soc->osdev->dev,
+				     ipa_res->rx_ready_doorbell_paddr,
+				     sizeof(uint32_t));
+		if (ret)
+			dp_err_rl("IPA RX DB smmu unmap failed");
+
+		ret = pld_smmu_unmap(soc->osdev->dev,
+				     ipa_res->tx_comp_doorbell_paddr,
+				     sizeof(uint32_t));
+		if (ret)
+			dp_err_rl("IPA TX DB smmu unmap failed");
+	}
+
+exit:
+	return status;
 }
 
 /**
