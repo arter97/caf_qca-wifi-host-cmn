@@ -1726,6 +1726,8 @@ QDF_STATUS dp_ipa_setup_iface(char *ifname, uint8_t *mac_addr,
 	struct dp_ipa_uc_tx_hdr uc_tx_hdr_v6;
 	int ret = -EINVAL;
 
+	qdf_mem_zero(&in, sizeof(qdf_ipa_wdi_reg_intf_in_params_t));
+
 	dp_debug("Add Partial hdr: %s, %pM", ifname, mac_addr);
 	qdf_mem_zero(&hdr_info, sizeof(qdf_ipa_wdi_hdr_info_t));
 	qdf_ether_addr_copy(uc_tx_hdr.eth.h_source, mac_addr);

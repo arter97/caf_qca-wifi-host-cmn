@@ -2424,6 +2424,20 @@ static void dp_ipa_tx_comp_srng_deinit(struct dp_soc *soc, struct dp_srng *srng,
 #else
 #define REO_DST_RING_SIZE_QCA8074 8
 #endif /* QCA_WIFI_QCA8074_VP */
+
+static int dp_ipa_tx_comp_srng_setup(struct dp_soc *soc, struct dp_srng *srng,
+				      int ring_type, int ring_num, int mac_id,
+				      uint32_t num_entries, bool cached)
+{
+	return dp_srng_setup(soc, srng, ring_type, ring_num, 0, num_entries,
+			     cached);
+}
+
+static void dp_ipa_tx_comp_srng_deinit(struct dp_soc *soc, struct dp_srng *srng,
+				       int ring_type, int ring_num)
+{
+	dp_srng_deinit(soc, srng, ring_type, ring_num);
+}
 #endif /* IPA_OFFLOAD */
 
 #ifndef FEATURE_WDS
