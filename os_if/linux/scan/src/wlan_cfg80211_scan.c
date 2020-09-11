@@ -1383,10 +1383,8 @@ int wlan_cfg80211_scan(struct wlan_objmgr_pdev *pdev,
 		}
 	}
 
-	return qdf_status_to_os_return(status);
-
 end:
-	qdf_mem_free(req);
+	wlan_objmgr_vdev_release_ref(vdev, WLAN_OSIF_ID);
 	return status;
 
 }
