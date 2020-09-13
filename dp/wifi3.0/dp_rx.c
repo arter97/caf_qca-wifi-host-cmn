@@ -1791,6 +1791,8 @@ more_data:
 
 		dp_rx_desc_nbuf_sanity_check(ring_desc, rx_desc);
 
+		dp_ipa_handle_rx_buf_smmu_mapping(soc, rx_desc->nbuf, false);
+
 		/* TODO */
 		/*
 		 * Need a separate API for unmapping based on
