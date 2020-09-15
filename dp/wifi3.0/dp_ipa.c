@@ -1451,7 +1451,7 @@ static void dp_ipa_wdi_tx_alt_pipe_params(struct dp_soc *soc,
 	uint8_t *desc_addr;
 	uint32_t desc_size;
 
-	QDF_IPA_WDI_SETUP_INFO_CLIENT(tx) = IPA_CLIENT_WLAN3_CONS;
+	QDF_IPA_WDI_SETUP_INFO_CLIENT(tx) = IPA_CLIENT_WLAN2_CONS1;
 
 	QDF_IPA_WDI_SETUP_INFO_TRANSFER_RING_BASE_PA(tx) =
 		qdf_mem_get_dma_addr(soc->osdev,
@@ -1505,7 +1505,7 @@ dp_ipa_wdi_tx_alt_pipe_smmu_params(struct dp_soc *soc,
 	uint8_t *desc_addr;
 	uint32_t desc_size;
 
-	QDF_IPA_WDI_SETUP_INFO_SMMU_CLIENT(tx_smmu) = IPA_CLIENT_WLAN3_CONS;
+	QDF_IPA_WDI_SETUP_INFO_SMMU_CLIENT(tx_smmu) = IPA_CLIENT_WLAN2_CONS1;
 
 	qdf_mem_copy(&QDF_IPA_WDI_SETUP_INFO_SMMU_TRANSFER_RING_BASE(tx_smmu),
 		     &ipa_res->tx_alt_comp_ring.sgtable,
