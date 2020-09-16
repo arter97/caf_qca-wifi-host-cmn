@@ -2379,6 +2379,43 @@ static void dp_hw_link_desc_pool_cleanup(struct dp_soc *soc)
 #define REO_DST_RING_SIZE_QCA8074 8
 #endif /* QCA_WIFI_QCA8074_VP */
 
+#ifdef IPA_WDI3_TX_TWO_PIPES
+static int dp_ipa_tx_comp_srng_setup(struct dp_soc *soc, struct dp_srng *srng,
+				      int ring_type, int ring_num, int mac_id,
+				      uint32_t num_entries, bool cached)
+{
+	/* IPA alternate TX comp ring for 2G is WBM2SW4 */
+	if (ring_num == IPA_TX_ALT_COMP_RING_IDX)
+		ring_num = 4; /* WBM2SW4 */
+
+	return dp_srng_setup(soc, srng, ring_type, ring_num, 0, num_entries,
+			     cached);
+}
+
+static void dp_ipa_tx_comp_srng_deinit(struct dp_soc *soc, struct dp_srng *srng,
+				       int ring_type, int ring_num)
+{
+	/* IPA alternate TX comp ring for 2G is WBM2SW4 */
+	if (ring_num == IPA_TX_ALT_COMP_RING_IDX)
+		ring_num = 4;
+	dp_srng_deinit(soc, srng, ring_type, ring_num);
+}
+#else /* !IPA_WDI3_TX_TWO_PIPES */
+static int dp_ipa_tx_comp_srng_setup(struct dp_soc *soc, struct dp_srng *srng,
+				      int ring_type, int ring_num, int mac_id,
+				      uint32_t num_entries, bool cached)
+{
+	return dp_srng_setup(soc, srng, ring_type, ring_num, 0, num_entries,
+			     cached);
+}
+
+static void dp_ipa_tx_comp_srng_deinit(struct dp_soc *soc, struct dp_srng *srng,
+				       int ring_type, int ring_num)
+{
+	dp_srng_deinit(soc, srng, ring_type, ring_num);
+}
+#endif /* IPA_WDI3_TX_TWO_PIPES */
+
 #else
 
 #define REO_DST_RING_SIZE_QCA6290 1024
@@ -2804,10 +2841,12 @@ static int dp_soc_cmn_setup(struct dp_soc *soc)
 			 * TBD: Set IPA WBM ring size with ini IPA UC tx buffer
 			 * count
 			 */
-			if (dp_srng_setup(soc, &soc->tx_comp_ring[i],
-					  WBM2SW_RELEASE, i, 0,
-					  tx_comp_ring_size,
-					  WLAN_CFG_DST_RING_CACHED_DESC)) {
+			if (dp_ipa_tx_comp_srng_setup(
+						soc,
+						&soc->tx_comp_ring[i],
+						WBM2SW_RELEASE, i, 0,
+						tx_comp_ring_size,
+						WLAN_CFG_DST_RING_CACHED_DESC)) {
 				QDF_TRACE(QDF_MODULE_ID_DP,
 					QDF_TRACE_LEVEL_ERROR,
 					FL("dp_srng_setup failed for tx_comp_ring[%d]"), i);
@@ -4095,8 +4134,8 @@ static void dp_soc_deinit(void *txrx_soc)
 		for (i = 0; i < soc->num_tcl_data_rings; i++) {
 			dp_srng_deinit(soc, &soc->tcl_data_ring[i],
 				       TCL_DATA, i);
-			dp_srng_deinit(soc, &soc->tx_comp_ring[i],
-				       WBM2SW_RELEASE, i);
+			dp_ipa_tx_comp_srng_deinit(soc, &soc->tx_comp_ring[i],
+						   WBM2SW_RELEASE, i);
 		}
 	}
 
