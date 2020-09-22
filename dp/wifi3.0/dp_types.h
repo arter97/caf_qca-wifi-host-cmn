@@ -720,6 +720,12 @@ struct dp_soc_stats {
 			uint32_t hal_wbm_rel_dup;
 			/* HAL RXDMA error Duplicate count */
 			uint32_t hal_rxdma_err_dup;
+			/* ipa smmu map duplicate count */
+			uint32_t ipa_smmu_map_dup;
+			/* ipa smmu unmap duplicate count */
+			uint32_t ipa_smmu_unmap_dup;
+			/* ipa smmu unmap while ipa pipes is disabled */
+			uint32_t ipa_unmap_no_pipe;
 			/* REO cmd send fail/requeue count */
 			uint32_t reo_cmd_send_fail;
 		} err;
@@ -821,6 +827,27 @@ struct htt_t2h_stats {
 	/* number of completed stats in htt_stats_msg */
 	uint32_t num_stats;
 };
+
+#ifdef IPA_OFFLOAD
+/* IPA uC datapath offload Wlan Tx resources */
+struct ipa_dp_tx_rsc {
+	/* Resource info to be passed to IPA */
+	qdf_dma_addr_t ipa_tcl_ring_base_paddr;
+	void *ipa_tcl_ring_base_vaddr;
+	uint32_t ipa_tcl_ring_size;
+	qdf_dma_addr_t ipa_tcl_hp_paddr;
+	uint32_t alloc_tx_buf_cnt;
+
+	qdf_dma_addr_t ipa_wbm_ring_base_paddr;
+	void *ipa_wbm_ring_base_vaddr;
+	uint32_t ipa_wbm_ring_size;
+	qdf_dma_addr_t ipa_wbm_tp_paddr;
+
+	/* TX buffers populated into the WBM ring */
+	void **tx_buf_pool_vaddr_unaligned;
+	qdf_dma_addr_t *tx_buf_pool_paddr_unaligned;
+};
+#endif
 
 /* SOC level structure for data path */
 struct dp_soc {
@@ -1068,25 +1095,11 @@ struct dp_soc {
 
 	void *external_txrx_handle; /* External data path handle */
 #ifdef IPA_OFFLOAD
-	/* IPA uC datapath offload Wlan Tx resources */
-	struct {
-		/* Resource info to be passed to IPA */
-		qdf_dma_addr_t ipa_tcl_ring_base_paddr;
-		void *ipa_tcl_ring_base_vaddr;
-		uint32_t ipa_tcl_ring_size;
-		qdf_dma_addr_t ipa_tcl_hp_paddr;
-		uint32_t alloc_tx_buf_cnt;
-
-		qdf_dma_addr_t ipa_wbm_ring_base_paddr;
-		void *ipa_wbm_ring_base_vaddr;
-		uint32_t ipa_wbm_ring_size;
-		qdf_dma_addr_t ipa_wbm_tp_paddr;
-
-		/* TX buffers populated into the WBM ring */
-		void **tx_buf_pool_vaddr_unaligned;
-		qdf_dma_addr_t *tx_buf_pool_paddr_unaligned;
-	} ipa_uc_tx_rsc;
-
+	struct ipa_dp_tx_rsc ipa_uc_tx_rsc;
+#ifdef IPA_WDI3_TX_TWO_PIPES
+	/* Resources for the alternative IPA TX pipe */
+	struct ipa_dp_tx_rsc ipa_uc_tx_rsc_alt;
+#endif
 	/* IPA uC datapath offload Wlan Rx resources */
 	struct {
 		/* Resource info to be passed to IPA */
@@ -1144,6 +1157,16 @@ struct dp_ipa_resources {
 	qdf_dma_addr_t tx_comp_doorbell_paddr;
 	uint32_t *tx_comp_doorbell_vaddr;
 	qdf_dma_addr_t rx_ready_doorbell_paddr;
+
+#ifdef IPA_WDI3_TX_TWO_PIPES
+	qdf_shared_mem_t tx_alt_ring;
+	uint32_t tx_alt_ring_num_alloc_buffer;
+	qdf_shared_mem_t tx_alt_comp_ring;
+
+	/* IPA UC doorbell registers paddr */
+	qdf_dma_addr_t tx_alt_comp_doorbell_paddr;
+	uint32_t *tx_alt_comp_doorbell_vaddr;
+#endif
 };
 #endif
 
