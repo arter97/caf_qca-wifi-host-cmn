@@ -34,6 +34,7 @@
 #include <host_diag_core_event.h>
 #include "host_diag_core_log.h"
 #include <qdf_event.h>
+#include <qdf_module.h>
 
 #ifdef CNSS_GENL
 #include <net/cnss_nl.h>
@@ -98,6 +99,15 @@
 #define HOST_LOG_FW_FLUSH_COMPLETE 0x003
 #define DIAG_TYPE_LOGS                 1
 #define PTT_MSG_DIAG_CMDS_TYPE    0x5050
+#define MAX_LOG_LINE 500
+
+/* default rate limit period - 2sec */
+#define PANIC_WIFILOG_PRINT_RATE_LIMIT_PERIOD (2*HZ)
+/* default burst for rate limit */
+#define PANIC_WIFILOG_PRINT_RATE_LIMIT_BURST_DEFAULT 250
+DEFINE_RATELIMIT_STATE(panic_wifilog_ratelimit,
+		       PANIC_WIFILOG_PRINT_RATE_LIMIT_PERIOD,
+		       PANIC_WIFILOG_PRINT_RATE_LIMIT_BURST_DEFAULT);
 
 struct log_msg {
 	struct list_head node;
@@ -140,8 +150,8 @@ struct pkt_stats_msg {
 
 #define MAX_FLUSH_TIMER_PERIOD_VALUE 3600000 /* maximum of 1 hour (in ms) */
 struct wlan_logging {
-	/* Log Fatal and ERROR to console */
-	bool log_to_console;
+	/* Console log levels */
+	uint32_t console_log_levels;
 	/* Number of buffers to be used for logging */
 	uint32_t num_buf;
 	uint32_t buffer_length;
@@ -151,6 +161,8 @@ struct wlan_logging {
 	struct list_head free_list;
 	/* Holds the filled nodes which needs to be indicated to APP */
 	struct list_head filled_list;
+	/* Holds nodes for console printing in case of kernel panic */
+	struct list_head panic_list;
 	/* Wait queue for Logger thread */
 	wait_queue_head_t wait_queue;
 	/* Logger thread */
@@ -436,7 +448,7 @@ int wlan_log_to_user(QDF_TRACE_LEVEL log_level, char *to_be_sent, int length)
 		wake_up_interruptible(&gwlan_logging.wait_queue);
 	}
 
-	if (gwlan_logging.log_to_console)
+	if (gwlan_logging.console_log_levels & BIT(log_level))
 		log_to_console(log_level, tbuf, to_be_sent);
 
 	return 0;
@@ -882,10 +894,12 @@ void wlan_logging_set_active(bool active)
 	gwlan_logging.is_active = active;
 }
 
-void wlan_logging_set_log_to_console(bool log_to_console)
+void wlan_set_console_log_levels(uint32_t console_log_levels)
 {
-	gwlan_logging.log_to_console = log_to_console;
+	gwlan_logging.console_log_levels = console_log_levels;
 }
+
+qdf_export_symbol(wlan_set_console_log_levels);
 
 static void flush_log_buffers_timer(void *dummy)
 {
@@ -919,6 +933,127 @@ int wlan_logging_set_flush_timer(uint32_t milliseconds)
 	return 0;
 }
 
+static int panic_wifilog_ratelimit_print(void)
+{
+	return __ratelimit(&panic_wifilog_ratelimit);
+}
+
+/**
+ * wlan_logging_dump_last_logs() - Panic notifier callback's helper function
+ *
+ * This function prints buffered logs in chunks of MAX_LOG_LINE.
+ */
+static void wlan_logging_dump_last_logs(void)
+{
+	char *log;
+	struct log_msg *plog_msg;
+	char textbuf[MAX_LOG_LINE];
+	unsigned int filled_length;
+	unsigned int text_len;
+	unsigned long flags;
+
+	/* Iterate over panic list */
+	pr_err("\n");
+	while (!list_empty(&gwlan_logging.panic_list)) {
+		plog_msg = (struct log_msg *)
+			   (gwlan_logging.panic_list.next);
+		list_del_init(gwlan_logging.panic_list.next);
+		log = &plog_msg->logbuf[sizeof(tAniHdr)];
+		filled_length = plog_msg->filled_length;
+		while (filled_length) {
+			text_len = scnprintf(textbuf,
+					     sizeof(textbuf),
+					     "%s", log);
+			if (panic_wifilog_ratelimit_print())
+				pr_err("%s\n", textbuf);
+			log += text_len;
+			filled_length -= text_len;
+		}
+		spin_lock_irqsave(&gwlan_logging.spin_lock, flags);
+		list_add_tail(&plog_msg->node,
+			      &gwlan_logging.free_list);
+		spin_unlock_irqrestore(&gwlan_logging.spin_lock, flags);
+	}
+}
+
+/**
+ * wlan_logging_panic_handler() - Panic notifier callback
+ *
+ * This function extracts log buffers in filled list and
+ * current node.Sends them to helper function for printing.
+ */
+static int wlan_logging_panic_handler(struct notifier_block *this,
+				      unsigned long event, void *ptr)
+{
+	char *log;
+	struct log_msg *plog_msg;
+	unsigned long flags;
+
+	spin_lock_irqsave(&gwlan_logging.spin_lock, flags);
+	/* Iterate over nodes queued for app */
+	while (!list_empty(&gwlan_logging.filled_list)) {
+		plog_msg = (struct log_msg *)
+			   (gwlan_logging.filled_list.next);
+		list_del_init(gwlan_logging.filled_list.next);
+		list_add_tail(&plog_msg->node,
+			      &gwlan_logging.panic_list);
+	}
+	/* Check current node */
+	if (gwlan_logging.pcur_node &&
+	    gwlan_logging.pcur_node->filled_length) {
+		plog_msg = gwlan_logging.pcur_node;
+		log = &plog_msg->logbuf[sizeof(tAniHdr)];
+		log[plog_msg->filled_length] = '\0';
+		list_add_tail(&gwlan_logging.pcur_node->node,
+			      &gwlan_logging.panic_list);
+		if (!list_empty(&gwlan_logging.free_list)) {
+			gwlan_logging.pcur_node =
+				(struct log_msg *)(gwlan_logging.free_list.next);
+			list_del_init(gwlan_logging.free_list.next);
+			gwlan_logging.pcur_node->filled_length = 0;
+		} else
+			gwlan_logging.pcur_node = NULL;
+	}
+	spin_unlock_irqrestore(&gwlan_logging.spin_lock, flags);
+
+	wlan_logging_dump_last_logs();
+
+	return NOTIFY_DONE;
+}
+
+static struct notifier_block panic_nb = {
+	.notifier_call  = wlan_logging_panic_handler,
+};
+
+int wlan_logging_notifier_init(bool dump_at_kernel_enable)
+{
+	int ret;
+
+	if (gwlan_logging.is_active &&
+	    !dump_at_kernel_enable) {
+		ret = atomic_notifier_chain_register(&panic_notifier_list,
+						     &panic_nb);
+		if (ret) {
+			QDF_TRACE_ERROR(QDF_MODULE_ID_QDF,
+					"Failed to register panic notifier");
+			return -EINVAL;
+		}
+	}
+
+	return 0;
+}
+
+int wlan_logging_notifier_deinit(bool dump_at_kernel_enable)
+{
+	if (gwlan_logging.is_active &&
+	    !dump_at_kernel_enable) {
+		atomic_notifier_chain_unregister(&panic_notifier_list,
+						 &panic_nb);
+	}
+
+	return 0;
+}
+
 static void flush_timer_init(void)
 {
 	qdf_spinlock_create(&gwlan_logging.flush_timer_lock);
@@ -938,7 +1073,7 @@ int wlan_logging_sock_init_svc(void)
 	spin_lock_init(&gwlan_logging.spin_lock);
 	spin_lock_init(&gwlan_logging.pkt_stats_lock);
 
-	gwlan_logging.log_to_console = false;
+	gwlan_logging.console_log_levels = 0;
 	gwlan_logging.num_buf = MAX_LOGMSG_COUNT;
 	gwlan_logging.buffer_length = MAX_LOGMSG_LENGTH;
 
@@ -951,6 +1086,7 @@ int wlan_logging_sock_init_svc(void)
 	spin_lock_irqsave(&gwlan_logging.spin_lock, irq_flag);
 	INIT_LIST_HEAD(&gwlan_logging.free_list);
 	INIT_LIST_HEAD(&gwlan_logging.filled_list);
+	INIT_LIST_HEAD(&gwlan_logging.panic_list);
 
 	for (i = 0; i < gwlan_logging.num_buf; i++) {
 		list_add(&gplog_msg[i].node, &gwlan_logging.free_list);
@@ -1520,6 +1656,8 @@ void wlan_register_txrx_packetdump(uint8_t pdev_id)
 
 	gtx_count = 0;
 	grx_count = 0;
+
+	csr_packetdump_timer_start();
 }
 #endif /* REMOVE_PKT_LOG */
 #endif /* FEATURE_PKTLOG */

@@ -301,7 +301,7 @@ static void cfr_iter_peer_handler(struct wlan_objmgr_pdev *pdev,
 		return;
 	}
 
-	if (pe->request == PEER_CFR_CAPTURE_ENABLE) {
+	if (pe->period && (pe->request == PEER_CFR_CAPTURE_ENABLE)) {
 		*cfr_capt_status = pe->request;
 		cfr_debug("CFR capture running for peer "
 			  QDF_MAC_ADDR_STR,
@@ -373,6 +373,93 @@ QDF_STATUS ucfg_cfr_stop_indication(struct wlan_objmgr_vdev *vdev)
 
 	return cfr_stop_indication(vdev);
 }
+
+#ifdef WLAN_CFR_ADRASTEA
+void ucfg_cfr_capture_data(struct wlan_objmgr_psoc *psoc, uint32_t vdev_id,
+			   struct csi_cfr_header *hdr, uint32_t mem_index)
+{
+	struct wlan_objmgr_vdev *vdev;
+	struct wlan_objmgr_pdev *pdev;
+	struct pdev_cfr *pcfr;
+	uint32_t end_magic_num = 0xBEAFDEAD;
+	void *vaddr, *payload;
+	u32 *rindex, *windex, payload_len;
+	QDF_STATUS status = QDF_STATUS_SUCCESS;
+
+	vdev = wlan_objmgr_get_vdev_by_id_from_psoc(psoc, vdev_id,
+						    WLAN_CFR_ID);
+	if (!vdev) {
+		cfr_err("vdev is NULL");
+		return;
+	}
+
+	pdev = wlan_vdev_get_pdev(vdev);
+	if (!pdev) {
+		cfr_err("pdev is NULL");
+		wlan_objmgr_vdev_release_ref(vdev, WLAN_CFR_ID);
+		return;
+	}
+
+	status = wlan_objmgr_pdev_try_get_ref(pdev, WLAN_CFR_ID);
+	if (status != QDF_STATUS_SUCCESS) {
+		cfr_err("Failed to get pdev reference");
+		wlan_objmgr_vdev_release_ref(vdev, WLAN_CFR_ID);
+		return;
+	}
+
+	pcfr = wlan_objmgr_pdev_get_comp_private_obj(pdev,
+						     WLAN_UMAC_COMP_CFR);
+	if (!pcfr) {
+		cfr_err("pdev is NULL");
+		goto exit;
+	}
+
+	if (!pcfr->is_cfr_capable) {
+		cfr_err("CFR not supported on this chip");
+		goto exit;
+	}
+
+	hdr->vendorid               = CFR_VENDOR_ID;
+	hdr->cfr_metadata_version   = CFR_META_VERSION_1;
+	hdr->cfr_data_version       = CFR_DATA_VERSION_1;
+	hdr->chip_type              = CFR_CAPTURE_RADIO_ADRASTEA;
+	hdr->pltform_type           = CFR_PLATFORM_TYPE_ARM;
+	hdr->Reserved               = 0;
+
+	vaddr = pcfr->cfr_mem_chunk.vaddr;
+	rindex = (u32 *)vaddr;
+	windex = rindex + 1;
+
+	/*
+	 * mem_index is having the index of the address where CFR dump wrriten,
+	 * find data pointer from mem index and start address of memory.
+	 */
+	payload = vaddr + mem_index;
+	payload_len = hdr->u.meta_v1.length;
+
+	/* Write data into streamfs */
+	tgt_cfr_info_send(pdev, hdr, sizeof(struct csi_cfr_header),
+			  payload, payload_len, &end_magic_num,
+			  sizeof(uint32_t));
+
+	/*
+	 * Updating the read index to the number of bytes read by host, it will
+	 * help in writing next capture.
+	 * ignoring 4 byte for FW magic number from the actual allocated memory
+	 * length to avoid corruption in magic number. This memory is circular
+	 * so after complation of one round, Skipping the first 8 byte as they
+	 * are for read index and write index.
+	 */
+	if (((*rindex) + payload_len) <= (pcfr->cfr_mem_chunk.len - 4))
+		(*rindex) += payload_len;
+	else if (((*rindex) + payload_len) > (pcfr->cfr_mem_chunk.len - 4))
+		(*rindex) = (payload_len + 8);
+
+exit:
+	wlan_objmgr_vdev_release_ref(vdev, WLAN_CFR_ID);
+	wlan_objmgr_pdev_release_ref(pdev, WLAN_CFR_ID);
+}
+#endif
 
 #ifdef WLAN_ENH_CFR_ENABLE
 
@@ -451,6 +538,7 @@ QDF_STATUS ucfg_cfr_set_reset_bitmap(struct wlan_objmgr_vdev *vdev,
 	return status;
 }
 
+#ifdef WLAN_ENH_CFR_ENABLE
 /*
  * This is needed only in case of m_ta_ra_filter mode.
  * After providing all the group configurations, user should provide
@@ -480,6 +568,7 @@ QDF_STATUS ucfg_cfr_set_en_bitmap(struct wlan_objmgr_vdev *vdev,
 
 	return status;
 }
+#endif
 
 /*
  * Copy user provided input for ul_mu_user_mask into cfr_rcc_param.
@@ -534,6 +623,89 @@ ucfg_cfr_set_freeze_tlv_delay_cnt(struct wlan_objmgr_vdev *vdev,
 	pcfr->rcc_param.freeze_tlv_delay_cnt_thr =
 		params->freeze_tlv_delay_cnt_thr;
 
+	wlan_objmgr_pdev_release_ref(pdev, WLAN_CFR_ID);
+
+	return status;
+}
+
+/*
+ * Configure ta_ra_filter_in_as_fp from the provided configuration into
+ * cfr_rcc_param. All fixed parameters needed to be stored into cfr_rcc_param.
+ */
+QDF_STATUS
+ucfg_cfr_set_tara_filterin_as_fp(struct wlan_objmgr_vdev *vdev,
+				 struct cfr_wlanconfig_param *params)
+{
+	struct pdev_cfr *pcfr = NULL;
+	struct wlan_objmgr_pdev *pdev = NULL;
+	QDF_STATUS status = QDF_STATUS_SUCCESS;
+
+	status = dev_sanity_check(vdev, &pdev, &pcfr);
+	if (status != QDF_STATUS_SUCCESS)
+		return status;
+
+	if (!pcfr->is_mo_marking_support) {
+		cfr_err("MO marking support not available to filter as FP/MO");
+		status = QDF_STATUS_E_NOSUPPORT;
+	} else {
+		pcfr->rcc_param.en_ta_ra_filter_in_as_fp =
+			params->en_ta_ra_filter_in_as_fp;
+	}
+	wlan_objmgr_pdev_release_ref(pdev, WLAN_CFR_ID);
+
+	return status;
+}
+
+/*
+ * Set the capture count from the provided configuration into cfr_rcc_param.
+ * All fixed parameters are needed to be stored into cfr_rcc_param.
+ */
+QDF_STATUS
+ucfg_cfr_set_capture_count(struct wlan_objmgr_vdev *vdev,
+			   struct cfr_wlanconfig_param *params)
+{
+	struct pdev_cfr *pcfr = NULL;
+	struct wlan_objmgr_pdev *pdev = NULL;
+	QDF_STATUS status = QDF_STATUS_SUCCESS;
+
+	status = dev_sanity_check(vdev, &pdev, &pcfr);
+	if (status != QDF_STATUS_SUCCESS)
+		return status;
+
+	if (!pcfr->is_cap_interval_mode_sel_support) {
+		cfr_err("Capture count support not enabled");
+		status = QDF_STATUS_E_NOSUPPORT;
+	} else {
+		pcfr->rcc_param.capture_count = params->cap_count;
+	}
+	wlan_objmgr_pdev_release_ref(pdev, WLAN_CFR_ID);
+
+	return status;
+}
+
+/*
+ * Set interval mode sel nob from the provided configuration into cfr_rcc_param.
+ * All fixed parameters are needed to be stored into cfr_rcc_param
+ */
+QDF_STATUS
+ucfg_cfr_set_capture_interval_mode_sel(struct wlan_objmgr_vdev *vdev,
+				       struct cfr_wlanconfig_param *params)
+{
+	struct pdev_cfr *pcfr = NULL;
+	struct wlan_objmgr_pdev *pdev = NULL;
+	QDF_STATUS status = QDF_STATUS_SUCCESS;
+
+	status = dev_sanity_check(vdev, &pdev, &pcfr);
+	if (status != QDF_STATUS_SUCCESS)
+		return status;
+
+	if (!pcfr->is_cap_interval_mode_sel_support) {
+		cfr_err("Capture count support not enabled");
+		status = QDF_STATUS_E_NOSUPPORT;
+	} else {
+		pcfr->rcc_param.capture_intval_mode_sel =
+			params->cap_intval_mode_sel;
+	}
 	wlan_objmgr_pdev_release_ref(pdev, WLAN_CFR_ID);
 
 	return status;
@@ -755,6 +927,10 @@ QDF_STATUS ucfg_cfr_get_cfg(struct wlan_objmgr_vdev *vdev)
 		pcfr->rcc_param.capture_duration);
 	cfr_err("capture interval : %u usec\n",
 		pcfr->rcc_param.capture_interval);
+	cfr_err("capture count : %u\n",
+		pcfr->rcc_param.capture_count);
+	cfr_err("capture interval mode sel : %u\n",
+		pcfr->rcc_param.capture_intval_mode_sel);
 	cfr_err("UL MU User mask lower : %u\n",
 		pcfr->rcc_param.ul_mu_user_mask_lower);
 	cfr_err("UL MU User mask upper : %u\n",
@@ -882,6 +1058,12 @@ QDF_STATUS ucfg_cfr_rcc_dump_dbg_counters(struct wlan_objmgr_vdev *vdev)
 		pcfr->invalid_dma_length_cnt);
 	cfr_err("flush_timeout_dbr_cnt = %llu\n",
 		pcfr->flush_timeout_dbr_cnt);
+	cfr_err("tx_peer_status_cfr_fail = %llu\n",
+		pcfr->tx_peer_status_cfr_fail);
+	cfr_err("tx_evt_status_cfr_fail = %llu\n",
+		pcfr->tx_evt_status_cfr_fail);
+	cfr_err("tx_dbr_cookie_lookup_fail = %llu\n",
+		pcfr->tx_dbr_cookie_lookup_fail);
 	cfr_err("PPDU id mismatch for same cookie:\n");
 	cfr_err("clear_txrx_event = %llu\n",
 		pcfr->clear_txrx_event);
@@ -954,6 +1136,9 @@ QDF_STATUS ucfg_cfr_rcc_clr_dbg_counters(struct wlan_objmgr_vdev *vdev)
 	pcfr->invalid_dma_length_cnt = 0;
 	pcfr->clear_txrx_event = 0;
 	pcfr->cfr_dma_aborts = 0;
+	pcfr->tx_peer_status_cfr_fail = 0;
+	pcfr->tx_evt_status_cfr_fail = 0;
+	pcfr->tx_dbr_cookie_lookup_fail = 0;
 	wlan_objmgr_pdev_release_ref(pdev, WLAN_CFR_ID);
 
 	return status;
@@ -1000,6 +1185,7 @@ static void cfr_set_filter(struct wlan_objmgr_pdev *pdev, bool enable,
 		       filter_val);
 }
 
+#ifdef WLAN_ENH_CFR_ENABLE
 /*
  * With the initiation of commit command, this handler will be triggered.
  *
@@ -1190,6 +1376,7 @@ QDF_STATUS ucfg_cfr_set_rcc_mode(struct wlan_objmgr_vdev *vdev,
 
 	return status;
 }
+#endif
 
 bool ucfg_cfr_get_rcc_enabled(struct wlan_objmgr_vdev *vdev)
 {
@@ -1208,9 +1395,12 @@ bool ucfg_cfr_get_rcc_enabled(struct wlan_objmgr_vdev *vdev)
 	return rcc_enabled;
 }
 
+#ifdef WLAN_ENH_CFR_ENABLE
 QDF_STATUS ucfg_cfr_subscribe_ppdu_desc(struct wlan_objmgr_pdev *pdev,
 					bool is_subscribe)
 {
 	return tgt_cfr_subscribe_ppdu_desc(pdev, is_subscribe);
 }
+#endif
+
 #endif

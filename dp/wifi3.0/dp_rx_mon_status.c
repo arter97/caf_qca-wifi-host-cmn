@@ -57,13 +57,15 @@ dp_rx_populate_cfr_non_assoc_sta(struct dp_pdev *pdev,
  * Called from bottom half (tasklet/NET_RX_SOFTIRQ)
  *
  * @soc: datapath soc context
+ * @int_ctx: interrupt context
  * @mac_id: mac_id on which interrupt is received
  * @quota: Number of status ring entry that can be serviced in one shot.
  *
  * @Return: Number of reaped status ring entries
  */
 static inline uint32_t
-dp_rx_mon_process(struct dp_soc *soc, uint32_t mac_id, uint32_t quota)
+dp_rx_mon_process(struct dp_soc *soc, struct dp_intr *int_ctx,
+		  uint32_t mac_id, uint32_t quota)
 {
 	return quota;
 }
@@ -218,13 +220,14 @@ dp_rx_populate_cdp_indication_ppdu_user(struct dp_pdev *pdev,
 		}
 
 		ast_entry = soc->ast_table[ast_index];
-		if (!ast_entry) {
+		if (!ast_entry || ast_entry->peer_id == HTT_INVALID_PEER) {
 			rx_stats_peruser->peer_id = HTT_INVALID_PEER;
 			continue;
 		}
 
-		peer = ast_entry->peer;
-		if (!peer || peer->peer_ids[0] == HTT_INVALID_PEER) {
+		peer = dp_peer_get_ref_by_id(soc, ast_entry->peer_id,
+					     DP_MOD_ID_RX_PPDU_STATS);
+		if (!peer) {
 			rx_stats_peruser->peer_id = HTT_INVALID_PEER;
 			continue;
 		}
@@ -279,11 +282,12 @@ dp_rx_populate_cdp_indication_ppdu_user(struct dp_pdev *pdev,
 
 		qdf_mem_copy(rx_stats_peruser->mac_addr,
 			     peer->mac_addr.raw, QDF_MAC_ADDR_SIZE);
-		rx_stats_peruser->peer_id = peer->peer_ids[0];
+		rx_stats_peruser->peer_id = peer->peer_id;
 		cdp_rx_ppdu->vdev_id = peer->vdev->vdev_id;
 		rx_stats_peruser->vdev_id = peer->vdev->vdev_id;
 		rx_stats_peruser->mu_ul_info_valid = 0;
 
+		dp_peer_unref_delete(peer, DP_MOD_ID_RX_PPDU_STATS);
 		if (cdp_rx_ppdu->u.ppdu_type == HAL_RX_TYPE_MU_OFDMA ||
 		    cdp_rx_ppdu->u.ppdu_type == HAL_RX_TYPE_MU_MIMO) {
 			if (rx_user_status->mu_ul_info_valid) {
@@ -370,13 +374,14 @@ dp_rx_populate_cdp_indication_ppdu(struct dp_pdev *pdev,
 	}
 
 	ast_entry = soc->ast_table[ast_index];
-	if (!ast_entry) {
+	if (!ast_entry || ast_entry->peer_id == HTT_INVALID_PEER) {
 		cdp_rx_ppdu->peer_id = HTT_INVALID_PEER;
 		cdp_rx_ppdu->num_users = 0;
 		goto end;
 	}
-	peer = ast_entry->peer;
-	if (!peer || peer->peer_ids[0] == HTT_INVALID_PEER) {
+	peer = dp_peer_get_ref_by_id(soc, ast_entry->peer_id,
+				     DP_MOD_ID_RX_PPDU_STATS);
+	if (!peer) {
 		cdp_rx_ppdu->peer_id = HTT_INVALID_PEER;
 		cdp_rx_ppdu->num_users = 0;
 		goto end;
@@ -384,7 +389,7 @@ dp_rx_populate_cdp_indication_ppdu(struct dp_pdev *pdev,
 
 	qdf_mem_copy(cdp_rx_ppdu->mac_addr,
 		     peer->mac_addr.raw, QDF_MAC_ADDR_SIZE);
-	cdp_rx_ppdu->peer_id = peer->peer_ids[0];
+	cdp_rx_ppdu->peer_id = peer->peer_id;
 	cdp_rx_ppdu->vdev_id = peer->vdev->vdev_id;
 
 	cdp_rx_ppdu->ppdu_id = ppdu_info->com_info.ppdu_id;
@@ -426,6 +431,8 @@ dp_rx_populate_cdp_indication_ppdu(struct dp_pdev *pdev,
 	cdp_rx_ppdu->num_msdu = 0;
 
 	dp_rx_populate_cdp_indication_ppdu_user(pdev, ppdu_info, cdp_rx_ppdu);
+
+	dp_peer_unref_delete(peer, DP_MOD_ID_RX_PPDU_STATS);
 
 	return;
 end:
@@ -473,8 +480,11 @@ static inline void dp_rx_rate_stats_update(struct dp_peer *peer,
 		mcs = ppdu_user->mcs;
 
 	} else {
+		if (ppdu->u.nss == 0)
+			nss = 0;
+		else
+			nss = ppdu->u.nss - 1;
 		mcs = ppdu->u.mcs;
-		nss = ppdu->u.nss;
 	}
 
 	ratekbps = dp_getrateindex(ppdu->u.gi,
@@ -523,17 +533,14 @@ static void dp_rx_stats_update(struct dp_pdev *pdev,
 	preamble = ppdu->u.preamble;
 	ppdu_type = ppdu->u.ppdu_type;
 
-	for (i = 0; i < ppdu->num_users; i++) {
+	for (i = 0; i < ppdu->num_users && i < CDP_MU_MAX_USERS; i++) {
 		peer = NULL;
 		ppdu_user = &ppdu->user[i];
-		if (ppdu_user->peer_id != HTT_INVALID_PEER)
-			peer = dp_peer_find_hash_find(soc, ppdu_user->mac_addr,
-						      0, ppdu_user->vdev_id);
+		peer = dp_peer_get_ref_by_id(soc, ppdu_user->peer_id,
+					     DP_MOD_ID_RX_PPDU_STATS);
 
 		if (!peer)
 			peer = pdev->invalid_peer;
-
-		ppdu->cookie = (void *)peer->wlanstats_ctx;
 
 		if (ppdu_type == HAL_RX_TYPE_SU) {
 			mcs = ppdu->u.mcs;
@@ -700,7 +707,7 @@ static void dp_rx_stats_update(struct dp_pdev *pdev,
 				     &peer->stats, ppdu->peer_id,
 				     UPDATE_PEER_STATS, pdev->pdev_id);
 #endif
-		dp_peer_unref_delete(peer);
+		dp_peer_unref_delete(peer, DP_MOD_ID_RX_PPDU_STATS);
 	}
 }
 #endif
@@ -1071,19 +1078,21 @@ dp_rx_mon_handle_cfr_mu_info(struct dp_pdev *pdev,
 		}
 
 		ast_entry = soc->ast_table[ast_index];
-		if (!ast_entry) {
+		if (!ast_entry || ast_entry->peer_id == HTT_INVALID_PEER) {
 			rx_stats_peruser->peer_id = HTT_INVALID_PEER;
 			continue;
 		}
 
-		peer = ast_entry->peer;
-		if (!peer || peer->peer_ids[0] == HTT_INVALID_PEER) {
+		peer = dp_peer_get_ref_by_id(soc, ast_entry->peer_id,
+					     DP_MOD_ID_RX_PPDU_STATS);
+		if (!peer) {
 			rx_stats_peruser->peer_id = HTT_INVALID_PEER;
 			continue;
 		}
 
 		qdf_mem_copy(rx_stats_peruser->mac_addr,
 			     peer->mac_addr.raw, QDF_MAC_ADDR_SIZE);
+		dp_peer_unref_delete(peer, DP_MOD_ID_RX_PPDU_STATS);
 	}
 
 	qdf_spin_unlock_bh(&soc->ast_lock);
@@ -1403,8 +1412,10 @@ dp_rx_handle_ppdu_stats(struct dp_soc *soc, struct dp_pdev *pdev,
 		dp_rx_mon_populate_cfr_info(pdev, ppdu_info, cdp_rx_ppdu);
 		dp_rx_populate_cdp_indication_ppdu(pdev,
 						   ppdu_info, cdp_rx_ppdu);
-		qdf_nbuf_put_tail(ppdu_nbuf,
-				  sizeof(struct cdp_rx_indication_ppdu));
+		if (!qdf_nbuf_put_tail(ppdu_nbuf,
+				       sizeof(struct cdp_rx_indication_ppdu)))
+			return;
+
 		dp_rx_stats_update(pdev, cdp_rx_ppdu);
 
 		if (cdp_rx_ppdu->peer_id != HTT_INVALID_PEER) {
@@ -1435,14 +1446,14 @@ dp_rx_handle_ppdu_stats(struct dp_soc *soc, struct dp_pdev *pdev,
 * @soc: core txrx main context
 * @ppdu_info: Structure for rx ppdu info
 * @status_nbuf: Qdf nbuf abstraction for linux skb
-* @mac_id: mac_id/pdev_id correspondinggly for MCL and WIN
+* @pdev_id: mac_id/pdev_id correspondinggly for MCL and WIN
 *
 * Return: none
 */
 static inline void
 dp_rx_process_peer_based_pktlog(struct dp_soc *soc,
 				struct hal_rx_ppdu_info *ppdu_info,
-				qdf_nbuf_t status_nbuf, uint32_t mac_id)
+				qdf_nbuf_t status_nbuf, uint32_t pdev_id)
 {
 	struct dp_peer *peer;
 	struct dp_ast_entry *ast_entry;
@@ -1452,15 +1463,19 @@ dp_rx_process_peer_based_pktlog(struct dp_soc *soc,
 	if (ast_index < wlan_cfg_get_max_ast_idx(soc->wlan_cfg_ctx)) {
 		ast_entry = soc->ast_table[ast_index];
 		if (ast_entry) {
-			peer = ast_entry->peer;
-			if (peer && (peer->peer_ids[0] != HTT_INVALID_PEER)) {
-				if (peer->peer_based_pktlog_filter) {
+			peer = dp_peer_get_ref_by_id(soc, ast_entry->peer_id,
+						     DP_MOD_ID_RX_PPDU_STATS);
+			if (peer) {
+				if ((peer->peer_id != HTT_INVALID_PEER) &&
+				    (peer->peer_based_pktlog_filter)) {
 					dp_wdi_event_handler(
 							WDI_EVENT_RX_DESC, soc,
 							status_nbuf,
-							peer->peer_ids[0],
-							WDI_NO_VAL, mac_id);
+							peer->peer_id,
+							WDI_NO_VAL, pdev_id);
 				}
+				dp_peer_unref_delete(peer,
+						     DP_MOD_ID_RX_PPDU_STATS);
 			}
 		}
 	}
@@ -1563,16 +1578,18 @@ dp_rx_mon_handle_mu_ul_info(struct hal_rx_ppdu_info *ppdu_info)
 #endif
 
 /**
-* dp_rx_mon_status_process_tlv() - Process status TLV in status
-*	buffer on Rx status Queue posted by status SRNG processing.
-* @soc: core txrx main context
-* @mac_id: mac_id which is one of 3 mac_ids _ring
-*
-* Return: none
-*/
+ * dp_rx_mon_status_process_tlv() - Process status TLV in status
+ *	buffer on Rx status Queue posted by status SRNG processing.
+ * @soc: core txrx main context
+ * @int_ctx: interrupt context
+ * @mac_id: mac_id which is one of 3 mac_ids _ring
+ * @quota: amount of work which can be done
+ *
+ * Return: none
+ */
 static inline void
-dp_rx_mon_status_process_tlv(struct dp_soc *soc, uint32_t mac_id,
-	uint32_t quota)
+dp_rx_mon_status_process_tlv(struct dp_soc *soc, struct dp_intr *int_ctx,
+			     uint32_t mac_id, uint32_t quota)
 {
 	struct dp_pdev *pdev = dp_get_pdev_for_lmac_id(soc, mac_id);
 	struct hal_rx_ppdu_info *ppdu_info;
@@ -1631,7 +1648,7 @@ dp_rx_mon_status_process_tlv(struct dp_soc *soc, uint32_t mac_id,
 				rx_tlv = hal_rx_status_get_next_tlv(rx_tlv);
 
 				if ((rx_tlv - rx_tlv_start) >=
-					RX_DATA_BUFFER_SIZE)
+					RX_MON_STATUS_BUF_SIZE)
 					break;
 
 			} while ((tlv_status == HAL_TLV_STATUS_PPDU_NOT_DONE) ||
@@ -1641,7 +1658,8 @@ dp_rx_mon_status_process_tlv(struct dp_soc *soc, uint32_t mac_id,
 		}
 		if (pdev->dp_peer_based_pktlog) {
 			dp_rx_process_peer_based_pktlog(soc, ppdu_info,
-							status_nbuf, mac_id);
+							status_nbuf,
+							pdev->pdev_id);
 		} else {
 			if (pdev->rx_pktlog_mode == DP_RX_PKTLOG_FULL)
 				pktlog_mode = WDI_EVENT_RX_DESC;
@@ -1652,7 +1670,7 @@ dp_rx_mon_status_process_tlv(struct dp_soc *soc, uint32_t mac_id,
 				dp_wdi_event_handler(pktlog_mode, soc,
 						     status_nbuf,
 						     HTT_INVALID_PEER,
-						     WDI_NO_VAL, mac_id);
+						     WDI_NO_VAL, pdev->pdev_id);
 		}
 
 		/* smart monitor vap and m_copy cannot co-exist */
@@ -1713,7 +1731,8 @@ dp_rx_mon_status_process_tlv(struct dp_soc *soc, uint32_t mac_id,
 			}
 
 			if (!soc->full_mon_mode)
-				dp_rx_mon_dest_process(soc, mac_id, quota);
+				dp_rx_mon_dest_process(soc, int_ctx, mac_id,
+						       quota);
 
 			pdev->mon_ppdu_status = DP_PPDU_STATUS_START;
 		}
@@ -1722,21 +1741,78 @@ dp_rx_mon_status_process_tlv(struct dp_soc *soc, uint32_t mac_id,
 }
 
 /*
+ * dp_rx_nbuf_prepare() - prepare RX nbuf
+ * @soc: core txrx main context
+ * @pdev: core txrx pdev context
+ *
+ * This function alloc & map nbuf for RX dma usage, retry it if failed
+ * until retry times reaches max threshold or succeeded.
+ *
+ * Return: qdf_nbuf_t pointer if succeeded, NULL if failed.
+ */
+static inline qdf_nbuf_t
+dp_rx_nbuf_prepare(struct dp_soc *soc, struct dp_pdev *pdev)
+{
+	uint8_t *buf;
+	int32_t nbuf_retry_count;
+	QDF_STATUS ret;
+	qdf_nbuf_t nbuf = NULL;
+
+	for (nbuf_retry_count = 0; nbuf_retry_count <
+		QDF_NBUF_ALLOC_MAP_RETRY_THRESHOLD;
+			nbuf_retry_count++) {
+		/* Allocate a new skb using alloc_skb */
+		nbuf = qdf_nbuf_alloc_no_recycler(RX_MON_STATUS_BUF_SIZE,
+						  RX_BUFFER_RESERVATION,
+						  RX_DATA_BUFFER_ALIGNMENT);
+
+		if (!nbuf) {
+			DP_STATS_INC(pdev, replenish.nbuf_alloc_fail, 1);
+			continue;
+		}
+
+		buf = qdf_nbuf_data(nbuf);
+
+		memset(buf, 0, RX_MON_STATUS_BUF_SIZE);
+
+		ret = qdf_nbuf_map_nbytes_single(soc->osdev, nbuf,
+						 QDF_DMA_FROM_DEVICE,
+						 RX_MON_STATUS_BUF_SIZE);
+
+		/* nbuf map failed */
+		if (qdf_unlikely(QDF_IS_STATUS_ERROR(ret))) {
+			qdf_nbuf_free(nbuf);
+			DP_STATS_INC(pdev, replenish.map_err, 1);
+			continue;
+		}
+		/* qdf_nbuf alloc and map succeeded */
+		break;
+	}
+
+	/* qdf_nbuf still alloc or map failed */
+	if (qdf_unlikely(nbuf_retry_count >=
+			QDF_NBUF_ALLOC_MAP_RETRY_THRESHOLD))
+		return NULL;
+
+	return nbuf;
+}
+
+/*
  * dp_rx_mon_status_srng_process() - Process monitor status ring
  *	post the status ring buffer to Rx status Queue for later
  *	processing when status ring is filled with status TLV.
  *	Allocate a new buffer to status ring if the filled buffer
  *	is posted.
- *
  * @soc: core txrx main context
+ * @int_ctx: interrupt context
  * @mac_id: mac_id which is one of 3 mac_ids
  * @quota: No. of ring entry that can be serviced in one shot.
 
  * Return: uint32_t: No. of ring entry that is processed.
  */
 static inline uint32_t
-dp_rx_mon_status_srng_process(struct dp_soc *soc, uint32_t mac_id,
-	uint32_t quota)
+dp_rx_mon_status_srng_process(struct dp_soc *soc, struct dp_intr *int_ctx,
+			      uint32_t mac_id, uint32_t quota)
 {
 	struct dp_pdev *pdev = dp_get_pdev_for_lmac_id(soc, mac_id);
 	hal_soc_handle_t hal_soc;
@@ -1766,7 +1842,7 @@ dp_rx_mon_status_srng_process(struct dp_soc *soc, uint32_t mac_id,
 
 	qdf_assert(hal_soc);
 
-	if (qdf_unlikely(hal_srng_access_start(hal_soc, mon_status_srng)))
+	if (qdf_unlikely(dp_srng_access_start(int_ctx, soc, mon_status_srng)))
 		goto done;
 
 	/* mon_status_ring_desc => WBM_BUFFER_RING STRUCT =>
@@ -1833,7 +1909,8 @@ dp_rx_mon_status_srng_process(struct dp_soc *soc, uint32_t mac_id,
 				 */
 				break;
 			}
-			qdf_nbuf_set_pktlen(status_nbuf, RX_DATA_BUFFER_SIZE);
+			qdf_nbuf_set_pktlen(status_nbuf,
+					    RX_MON_STATUS_BUF_SIZE);
 
 			qdf_nbuf_unmap_nbytes_single(soc->osdev, status_nbuf,
 						     QDF_DMA_FROM_DEVICE,
@@ -1906,51 +1983,43 @@ dp_rx_mon_status_srng_process(struct dp_soc *soc, uint32_t mac_id,
 	}
 done:
 
-	hal_srng_access_end(hal_soc, mon_status_srng);
+	dp_srng_access_end(int_ctx, soc, mon_status_srng);
 
 	return work_done;
 
 }
 
-/*
- * dp_rx_mon_status_process() - Process monitor status ring and
- *	TLV in status ring.
- *
- * @soc: core txrx main context
- * @mac_id: mac_id which is one of 3 mac_ids
- * @quota: No. of ring entry that can be serviced in one shot.
-
- * Return: uint32_t: No. of ring entry that is processed.
- */
 uint32_t
-dp_rx_mon_status_process(struct dp_soc *soc, uint32_t mac_id, uint32_t quota) {
+dp_rx_mon_status_process(struct dp_soc *soc, struct dp_intr *int_ctx,
+			 uint32_t mac_id, uint32_t quota)
+{
 	uint32_t work_done;
 
-	work_done = dp_rx_mon_status_srng_process(soc, mac_id, quota);
+	work_done = dp_rx_mon_status_srng_process(soc, int_ctx, mac_id, quota);
 	quota -= work_done;
-	dp_rx_mon_status_process_tlv(soc, mac_id, quota);
+	dp_rx_mon_status_process_tlv(soc, int_ctx, mac_id, quota);
 
 	return work_done;
 }
 
-/**
- * dp_mon_process() - Main monitor mode processing roution.
- *	This call monitor status ring process then monitor
- *	destination ring process.
- *	Called from the bottom half (tasklet/NET_RX_SOFTIRQ)
- * @soc: core txrx main context
- * @mac_id: mac_id which is one of 3 mac_ids
- * @quota: No. of status ring entry that can be serviced in one shot.
-
- * Return: uint32_t: No. of ring entry that is processed.
- */
+#ifndef DISABLE_MON_CONFIG
 uint32_t
-dp_mon_process(struct dp_soc *soc, uint32_t mac_id, uint32_t quota) {
+dp_mon_process(struct dp_soc *soc, struct dp_intr *int_ctx,
+	       uint32_t mac_id, uint32_t quota)
+{
 	if (qdf_unlikely(soc->full_mon_mode))
-		return dp_rx_mon_process(soc, mac_id, quota);
+		return dp_rx_mon_process(soc, int_ctx, mac_id, quota);
 
-	return dp_rx_mon_status_process(soc, mac_id, quota);
+	return dp_rx_mon_status_process(soc, int_ctx, mac_id, quota);
 }
+#else
+uint32_t
+dp_mon_process(struct dp_soc *soc, struct dp_intr *int_ctx,
+	       uint32_t mac_id, uint32_t quota)
+{
+	return 0;
+}
+#endif
 
 QDF_STATUS
 dp_rx_pdev_mon_status_buffers_alloc(struct dp_pdev *pdev, uint32_t mac_id)
@@ -2024,8 +2093,10 @@ dp_rx_pdev_mon_status_desc_pool_init(struct dp_pdev *pdev, uint32_t mac_id)
 		 pdev_id, num_entries);
 
 	rx_desc_pool->owner = HAL_RX_BUF_RBM_SW3_BM;
-	rx_desc_pool->buf_size = RX_DATA_BUFFER_SIZE;
+	rx_desc_pool->buf_size = RX_MON_STATUS_BUF_SIZE;
 	rx_desc_pool->buf_alignment = RX_DATA_BUFFER_ALIGNMENT;
+	/* Disable frag processing flag */
+	dp_rx_enable_mon_dest_frag(rx_desc_pool, false);
 
 	dp_rx_desc_pool_init(soc, mac_id, num_entries + 1, rx_desc_pool);
 
@@ -2033,8 +2104,13 @@ dp_rx_pdev_mon_status_desc_pool_init(struct dp_pdev *pdev, uint32_t mac_id)
 
 	pdev->mon_ppdu_status = DP_PPDU_STATUS_START;
 
-	qdf_mem_zero(&pdev->ppdu_info.rx_status,
-		     sizeof(pdev->ppdu_info.rx_status));
+	qdf_mem_zero(&pdev->ppdu_info, sizeof(pdev->ppdu_info));
+
+	/*
+	 * Set last_ppdu_id to HAL_INVALID_PPDU_ID in order to avoid ppdu_id
+	 * match with '0' ppdu_id from monitor status ring
+	 */
+	pdev->ppdu_info.com_info.last_ppdu_id = HAL_INVALID_PPDU_ID;
 
 	qdf_mem_zero(&pdev->rx_mon_stats, sizeof(pdev->rx_mon_stats));
 

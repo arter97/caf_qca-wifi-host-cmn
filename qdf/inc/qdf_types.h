@@ -823,6 +823,27 @@ QDF_STATUS qdf_uint64_parse(const char *int_str, uint64_t *out_int);
 #define QDF_MAC_ADDR_SIZE 6
 #define QDF_MAC_ADDR_STR "%02x:%02x:%02x:%02x:%02x:%02x"
 #define QDF_MAC_ADDR_ARRAY(a) (a)[0], (a)[1], (a)[2], (a)[3], (a)[4], (a)[5]
+
+#if defined(WLAN_TRACE_HIDE_MAC_ADDRESS)
+#define QDF_MAC_ADDR_FMT "%02x:**:**:**:%02x:%02x"
+
+/*
+ * The input data type for QDF_MAC_ADDR_REF can be pointer or an array.
+ * In case of array, compiler was throwing following warning
+ * 'address of array will always evaluate as ‘true’
+ * and if the pointer is NULL, zero is passed to the format specifier
+ * which results in zero mac address (00:**:**:**:00:00)
+ * For this reason, input data type is typecasted to (uintptr_t).
+ */
+#define QDF_MAC_ADDR_REF(a) \
+	(((uintptr_t)NULL != (uintptr_t)(a)) ? (a)[0] : 0), \
+	(((uintptr_t)NULL != (uintptr_t)(a)) ? (a)[4] : 0), \
+	(((uintptr_t)NULL != (uintptr_t)(a)) ? (a)[5] : 0)
+#else
+#define QDF_MAC_ADDR_FMT "%pM"
+#define QDF_MAC_ADDR_REF(a) (a)
+#endif /* WLAN_TRACE_HIDE_MAC_ADDRESS */
+
 #define QDF_MAC_ADDR_BCAST_INIT { { 0xff, 0xff, 0xff, 0xff, 0xff, 0xff } }
 #define QDF_MAC_ADDR_ZERO_INIT { { 0, 0, 0, 0, 0, 0 } }
 
@@ -1371,6 +1392,7 @@ enum qdf_context_mode {
  * @QDF_TX_RX_STATUS_FW_DISCARD: packet not sent
  * @QDF_TX_RX_STATUS_NO_ACK: packet sent but no ack
  * @QDF_TX_RX_STATUS_DROP: packet dropped in host
+ * @QDF_TX_RX_STATUS_DOWNLOAD_SUCC: packet delivered to target
  */
 enum qdf_dp_tx_rx_status {
 	QDF_TX_RX_STATUS_INVALID,
@@ -1378,6 +1400,38 @@ enum qdf_dp_tx_rx_status {
 	QDF_TX_RX_STATUS_FW_DISCARD,
 	QDF_TX_RX_STATUS_NO_ACK,
 	QDF_TX_RX_STATUS_DROP,
+	QDF_TX_RX_STATUS_DOWNLOAD_SUCC,
+	QDF_TX_RX_STATUS_MAX,
 };
 
+/**
+ * enum qdf_dp_tx_comp_status - TX COMPL packet status
+ * @QDF_TX_COMP_STATUS_OK: successfully sent + acked
+ * @QDF_TX_COMP_STATUS_STAT_DISCARD: packet not sent in FW
+ * @QDF_TX_COMP_STATUS_STAT_NO_ACK: packet sent but no ack
+ * @QDF_TX_COMP_STATUS_STAT_POSTPONE: equal HTT_TX_COMPL_IND_STAT_POSTPONE
+ * @QDF_TX_COMP_STATUS_STAT_PEER_DEL: equal HTT_TX_COMPL_IND_STAT_PEER_DEL
+ * @QDF_TX_COMP_STATUS_STAT_DROP: packet dropped in FW
+ * @QDF_TX_COMP_STATUS_STAT_INSPECT: equal HTT_TX_COMPL_IND_STAT_HOST_INSPECT
+ */
+enum qdf_dp_tx_comp_status {
+	QDF_TX_COMP_STATUS_OK,
+	QDF_TX_COMP_STATUS_STAT_DISCARD,
+	QDF_TX_COMP_STATUS_STAT_NO_ACK,
+	QDF_TX_COMP_STATUS_STAT_POSTPONE,
+	QDF_TX_COMP_STATUS_STAT_PEER_DEL,
+	QDF_TX_COMP_STATUS_STAT_DROP,
+	QDF_TX_COMP_STATUS_STAT_INSPECT,
+	QDF_TX_COMP_STATUS_STAT_MAX,
+};
+
+/**
+ * enum qdf_dp_a_status - A_STATUS
+ * @QDF_A_STATUS_ERROR: Generic error return
+ * @QDF_A_STATUS_OK: success
+ */
+enum qdf_dp_a_status {
+	QDF_A_STATUS_ERROR = -1,
+	QDF_A_STATUS_OK,
+};
 #endif /* __QDF_TYPES_H */

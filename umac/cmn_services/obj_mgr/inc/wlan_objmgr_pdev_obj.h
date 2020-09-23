@@ -97,6 +97,10 @@
 #define WLAN_PDEV_FEXT_CFR_EN               0x00000001
 /* EMA AP support enable */
 #define WLAN_PDEV_FEXT_EMA_AP_ENABLE        0x00000002
+/* scan radio support */
+#define WLAN_PDEV_FEXT_SCAN_RADIO           0x00000004
+/* DFS disable, valid only for scan radio supported pdevs */
+#define WLAN_PDEV_FEXT_SCAN_RADIO_DFS_DIS   0x00000008
 
 /* PDEV op flags */
    /* Enable htrate for wep and tkip */
@@ -830,6 +834,9 @@ static inline void wlan_pdev_reset_ospriv(struct wlan_objmgr_pdev *pdev)
 static inline void wlan_pdev_set_max_vdev_count(struct wlan_objmgr_pdev *pdev,
 					   uint8_t max_vdev_count)
 {
+	if (max_vdev_count > WLAN_UMAC_PDEV_MAX_VDEVS)
+		QDF_BUG(0);
+
 	pdev->pdev_objmgr.max_vdev_count = max_vdev_count;
 }
 

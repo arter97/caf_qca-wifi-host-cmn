@@ -20,18 +20,32 @@
 #include <wlan_objmgr_cmn.h>
 #include <wlan_lmac_if_def.h>
 #include <wmi_unified_param.h>
+#include "include/wlan_pdev_mlme.h"
+#include "wlan_pdev_mlme_api.h"
 
 /* Forward Declarations */
 struct wmi_iot_sim_cmd_ops;
 
 /**
+ * struct iot_sim_cbacks - IOT Sim callbacks
+ * @reg_beacon_trigger_handler: reg_beacon_trigger_handler
+ */
+struct iot_sim_cbacks {
+	void (*update_beacon_trigger)(mlme_pdev_ext_t *);
+};
+
+/**
  * iot_sim_cmd_handler() - IOT SIM frame handler function
  * @vdev - vdev object.
  * @buf - skb
+ * @tx - TRUE in case of Tx
+ * @rx_param - mgmt_rx_event_params
  *
  * Return : QDF_STATUS_E_SUCCESS/QDF_STATUS_E_FAILURE.
  */
-QDF_STATUS iot_sim_cmd_handler(struct wlan_objmgr_vdev *vdev, qdf_nbuf_t buf);
+QDF_STATUS iot_sim_cmd_handler(struct wlan_objmgr_vdev *vdev, qdf_nbuf_t buf,
+			       struct beacon_tmpl_params *bcn_param, bool tx,
+			       struct mgmt_rx_event_params *param);
 
 /**
  * wlan_iot_sim_init() - API to init iot_sim component

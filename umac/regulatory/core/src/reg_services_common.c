@@ -51,7 +51,8 @@ static const struct bonded_channel bonded_chan_40mhz_list[] = {
 	{140, 144},
 	{149, 153},
 	{157, 161},
-	{165, 169}
+	{165, 169},
+	{173, 177}
 };
 
 static const struct bonded_channel bonded_chan_80mhz_list[] = {
@@ -60,12 +61,14 @@ static const struct bonded_channel bonded_chan_80mhz_list[] = {
 	{100, 112},
 	{116, 128},
 	{132, 144},
-	{149, 161}
+	{149, 161},
+	{165, 177}
 };
 
 static const struct bonded_channel bonded_chan_160mhz_list[] = {
 	{36, 64},
-	{100, 128}
+	{100, 128},
+	{149, 177}
 };
 #endif /* CONFIG_CHAN_NUM_API */
 
@@ -85,36 +88,37 @@ static const struct bonded_channel_freq bonded_chan_40mhz_list_freq[] = {
 	{5745, 5765},
 	{5785, 5805},
 	{5825, 5845},
+	{5865, 5885},
 #ifdef CONFIG_BAND_6GHZ
-	{5945, 5965},
-	{5985, 6005},
-	{6025, 6045},
-	{6065, 6085},
-	{6105, 6125},
-	{6145, 6165},
-	{6185, 6205},
-	{6225, 6245},
-	{6265, 6285},
-	{6305, 6325},
-	{6345, 6365},
-	{6385, 6405},
-	{6425, 6445},
-	{6465, 6485},
-	{6505, 6525},
-	{6545, 6565},
-	{6585, 6605},
-	{6625, 6645},
-	{6665, 6685},
-	{6705, 6725},
-	{6745, 6765},
-	{6785, 6805},
-	{6825, 6845},
-	{6865, 6885},
-	{6905, 6925},
-	{6945, 6965},
-	{6985, 7005},
-	{7025, 7045},
-	{7065, 7085}
+	{5955, 5975},
+	{5995, 6015},
+	{6035, 6055},
+	{6075, 6095},
+	{6115, 6135},
+	{6155, 6175},
+	{6195, 6215},
+	{6235, 6255},
+	{6275, 6295},
+	{6315, 6335},
+	{6355, 6375},
+	{6395, 6415},
+	{6435, 6455},
+	{6475, 6495},
+	{6515, 6535},
+	{6555, 6575},
+	{6595, 6615},
+	{6635, 6655},
+	{6675, 6695},
+	{6715, 6735},
+	{6755, 6775},
+	{6795, 6815},
+	{6835, 6855},
+	{6875, 6895},
+	{6915, 6935},
+	{6955, 6975},
+	{6995, 7015},
+	{7035, 7055},
+	{7075, 7095}
 #endif /*CONFIG_BAND_6GHZ*/
 };
 
@@ -126,21 +130,22 @@ static const struct bonded_channel_freq bonded_chan_80mhz_list_freq[] = {
 	{5580, 5640},
 	{5660, 5720},
 	{5745, 5805},
+	{5825, 5885},
 #ifdef CONFIG_BAND_6GHZ
-	{5945, 6005},
-	{6025, 6085},
-	{6105, 6165},
-	{6185, 6245},
-	{6265, 6325},
-	{6345, 6405},
-	{6425, 6485},
-	{6505, 6565},
-	{6585, 6645},
-	{6665, 6725},
-	{6745, 6805},
-	{6825, 6885},
-	{6905, 6965},
-	{6985, 7045}
+	{5955, 6015},
+	{6035, 6095},
+	{6115, 6175},
+	{6195, 6255},
+	{6275, 6335},
+	{6355, 6415},
+	{6435, 6495},
+	{6515, 6575},
+	{6595, 6655},
+	{6675, 6735},
+	{6755, 6815},
+	{6835, 6895},
+	{6915, 6975},
+	{6995, 7055}
 #endif /*CONFIG_BAND_6GHZ*/
 };
 
@@ -148,14 +153,15 @@ static const struct bonded_channel_freq bonded_chan_80mhz_list_freq[] = {
 static const struct bonded_channel_freq bonded_chan_160mhz_list_freq[] = {
 	{5180, 5320},
 	{5500, 5640},
+	{5745, 5885},
 #ifdef CONFIG_BAND_6GHZ
-	{5945, 6085},
-	{6105, 6245},
-	{6265, 6405},
-	{6425, 6565},
-	{6585, 6725},
-	{6745, 6885},
-	{6905, 7045}
+	{5955, 6095},
+	{6115, 6255},
+	{6275, 6415},
+	{6435, 6575},
+	{6595, 6735},
+	{6755, 6895},
+	{6915, 7055}
 #endif /*CONFIG_BAND_6GHZ*/
 };
 #endif /*CONFIG_CHAN_FREQ_API*/
@@ -259,20 +265,15 @@ const struct chan_map channel_map_us[NUM_CHANNELS] = {
 	[CHAN_ENUM_5850] = {5850, 170, 2, 160},
 	[CHAN_ENUM_5855] = {5855, 171, 2, 160},
 	[CHAN_ENUM_5860] = {5860, 172, 2, 160},
-#else
-	[CHAN_ENUM_5850] = {5850, INVALID_CHANNEL_NUM, 2, 160},
-	[CHAN_ENUM_5855] = {5855, INVALID_CHANNEL_NUM, 2, 160},
-	[CHAN_ENUM_5860] = {5860, INVALID_CHANNEL_NUM, 2, 160},
 #endif
 	[CHAN_ENUM_5865] = {5865, 173, 2, 160},
 #ifdef WLAN_FEATURE_DSRC
 	[CHAN_ENUM_5870] = {5870, 174, 2, 160},
-#else
-	[CHAN_ENUM_5870] = {5870, INVALID_CHANNEL_NUM, 2, 160},
-#endif
 	[CHAN_ENUM_5875] = {5875, 175, 2, 160},
 	[CHAN_ENUM_5880] = {5880, 176, 2, 160},
+#endif
 	[CHAN_ENUM_5885] = {5885, 177, 2, 160},
+#ifdef WLAN_FEATURE_DSRC
 	[CHAN_ENUM_5890] = {5890, 178, 2, 160},
 	[CHAN_ENUM_5895] = {5895, 179, 2, 160},
 	[CHAN_ENUM_5900] = {5900, 180, 2, 160},
@@ -280,66 +281,68 @@ const struct chan_map channel_map_us[NUM_CHANNELS] = {
 	[CHAN_ENUM_5910] = {5910, 182, 2, 160},
 	[CHAN_ENUM_5915] = {5915, 183, 2, 160},
 	[CHAN_ENUM_5920] = {5920, 184, 2, 160},
+#endif /* WLAN_FEATURE_DSRC */
 #ifdef CONFIG_BAND_6GHZ
-	[CHAN_ENUM_5945] = {5945, 1, 2, 160},
-	[CHAN_ENUM_5965] = {5965, 5, 2, 160},
-	[CHAN_ENUM_5985] = {5985, 9, 2, 160},
-	[CHAN_ENUM_6005] = {6005, 13, 2, 160},
-	[CHAN_ENUM_6025] = {6025, 17, 2, 160},
-	[CHAN_ENUM_6045] = {6045, 21, 2, 160},
-	[CHAN_ENUM_6065] = {6065, 25, 2, 160},
-	[CHAN_ENUM_6085] = {6085, 29, 2, 160},
-	[CHAN_ENUM_6105] = {6105, 33, 2, 160},
-	[CHAN_ENUM_6125] = {6125, 37, 2, 160},
-	[CHAN_ENUM_6145] = {6145, 41, 2, 160},
-	[CHAN_ENUM_6165] = {6165, 45, 2, 160},
-	[CHAN_ENUM_6185] = {6185, 49, 2, 160},
-	[CHAN_ENUM_6205] = {6205, 53, 2, 160},
-	[CHAN_ENUM_6225] = {6225, 57, 2, 160},
-	[CHAN_ENUM_6245] = {6245, 61, 2, 160},
-	[CHAN_ENUM_6265] = {6265, 65, 2, 160},
-	[CHAN_ENUM_6285] = {6285, 69, 2, 160},
-	[CHAN_ENUM_6305] = {6305, 73, 2, 160},
-	[CHAN_ENUM_6325] = {6325, 77, 2, 160},
-	[CHAN_ENUM_6345] = {6345, 81, 2, 160},
-	[CHAN_ENUM_6365] = {6365, 85, 2, 160},
-	[CHAN_ENUM_6385] = {6385, 89, 2, 160},
-	[CHAN_ENUM_6405] = {6405, 93, 2, 160},
-	[CHAN_ENUM_6425] = {6425, 97, 2, 160},
-	[CHAN_ENUM_6445] = {6445, 101, 2, 160},
-	[CHAN_ENUM_6465] = {6465, 105, 2, 160},
-	[CHAN_ENUM_6485] = {6485, 109, 2, 160},
-	[CHAN_ENUM_6505] = {6505, 113, 2, 160},
-	[CHAN_ENUM_6525] = {6525, 117, 2, 160},
-	[CHAN_ENUM_6545] = {6545, 121, 2, 160},
-	[CHAN_ENUM_6565] = {6565, 125, 2, 160},
-	[CHAN_ENUM_6585] = {6585, 129, 2, 160},
-	[CHAN_ENUM_6605] = {6605, 133, 2, 160},
-	[CHAN_ENUM_6625] = {6625, 137, 2, 160},
-	[CHAN_ENUM_6645] = {6645, 141, 2, 160},
-	[CHAN_ENUM_6665] = {6665, 145, 2, 160},
-	[CHAN_ENUM_6685] = {6685, 149, 2, 160},
-	[CHAN_ENUM_6705] = {6705, 153, 2, 160},
-	[CHAN_ENUM_6725] = {6725, 157, 2, 160},
-	[CHAN_ENUM_6745] = {6745, 161, 2, 160},
-	[CHAN_ENUM_6765] = {6765, 165, 2, 160},
-	[CHAN_ENUM_6785] = {6785, 169, 2, 160},
-	[CHAN_ENUM_6805] = {6805, 173, 2, 160},
-	[CHAN_ENUM_6825] = {6825, 177, 2, 160},
-	[CHAN_ENUM_6845] = {6845, 181, 2, 160},
-	[CHAN_ENUM_6865] = {6865, 185, 2, 160},
-	[CHAN_ENUM_6885] = {6885, 189, 2, 160},
-	[CHAN_ENUM_6905] = {6905, 193, 2, 160},
-	[CHAN_ENUM_6925] = {6925, 197, 2, 160},
-	[CHAN_ENUM_6945] = {6945, 201, 2, 160},
-	[CHAN_ENUM_6965] = {6965, 205, 2, 160},
-	[CHAN_ENUM_6985] = {6985, 209, 2, 160},
-	[CHAN_ENUM_7005] = {7005, 213, 2, 160},
-	[CHAN_ENUM_7025] = {7025, 217, 2, 160},
-	[CHAN_ENUM_7045] = {7045, 221, 2, 160},
-	[CHAN_ENUM_7065] = {7065, 225, 2, 160},
-	[CHAN_ENUM_7085] = {7085, 229, 2, 160},
-	[CHAN_ENUM_7105] = {7105, 233, 2, 160}
+	[CHAN_ENUM_5935] = {5935, 2, 2, 20},
+	[CHAN_ENUM_5955] = {5955, 1, 2, 160},
+	[CHAN_ENUM_5975] = {5975, 5, 2, 160},
+	[CHAN_ENUM_5995] = {5995, 9, 2, 160},
+	[CHAN_ENUM_6015] = {6015, 13, 2, 160},
+	[CHAN_ENUM_6035] = {6035, 17, 2, 160},
+	[CHAN_ENUM_6055] = {6055, 21, 2, 160},
+	[CHAN_ENUM_6075] = {6075, 25, 2, 160},
+	[CHAN_ENUM_6095] = {6095, 29, 2, 160},
+	[CHAN_ENUM_6115] = {6115, 33, 2, 160},
+	[CHAN_ENUM_6135] = {6135, 37, 2, 160},
+	[CHAN_ENUM_6155] = {6155, 41, 2, 160},
+	[CHAN_ENUM_6175] = {6175, 45, 2, 160},
+	[CHAN_ENUM_6195] = {6195, 49, 2, 160},
+	[CHAN_ENUM_6215] = {6215, 53, 2, 160},
+	[CHAN_ENUM_6235] = {6235, 57, 2, 160},
+	[CHAN_ENUM_6255] = {6255, 61, 2, 160},
+	[CHAN_ENUM_6275] = {6275, 65, 2, 160},
+	[CHAN_ENUM_6295] = {6295, 69, 2, 160},
+	[CHAN_ENUM_6315] = {6315, 73, 2, 160},
+	[CHAN_ENUM_6335] = {6335, 77, 2, 160},
+	[CHAN_ENUM_6355] = {6355, 81, 2, 160},
+	[CHAN_ENUM_6375] = {6375, 85, 2, 160},
+	[CHAN_ENUM_6395] = {6395, 89, 2, 160},
+	[CHAN_ENUM_6415] = {6415, 93, 2, 160},
+	[CHAN_ENUM_6435] = {6435, 97, 2, 160},
+	[CHAN_ENUM_6455] = {6455, 101, 2, 160},
+	[CHAN_ENUM_6475] = {6475, 105, 2, 160},
+	[CHAN_ENUM_6495] = {6495, 109, 2, 160},
+	[CHAN_ENUM_6515] = {6515, 113, 2, 160},
+	[CHAN_ENUM_6535] = {6535, 117, 2, 160},
+	[CHAN_ENUM_6555] = {6555, 121, 2, 160},
+	[CHAN_ENUM_6575] = {6575, 125, 2, 160},
+	[CHAN_ENUM_6595] = {6595, 129, 2, 160},
+	[CHAN_ENUM_6615] = {6615, 133, 2, 160},
+	[CHAN_ENUM_6635] = {6635, 137, 2, 160},
+	[CHAN_ENUM_6655] = {6655, 141, 2, 160},
+	[CHAN_ENUM_6675] = {6675, 145, 2, 160},
+	[CHAN_ENUM_6695] = {6695, 149, 2, 160},
+	[CHAN_ENUM_6715] = {6715, 153, 2, 160},
+	[CHAN_ENUM_6735] = {6735, 157, 2, 160},
+	[CHAN_ENUM_6755] = {6755, 161, 2, 160},
+	[CHAN_ENUM_6775] = {6775, 165, 2, 160},
+	[CHAN_ENUM_6795] = {6795, 169, 2, 160},
+	[CHAN_ENUM_6815] = {6815, 173, 2, 160},
+	[CHAN_ENUM_6835] = {6835, 177, 2, 160},
+	[CHAN_ENUM_6855] = {6855, 181, 2, 160},
+	[CHAN_ENUM_6875] = {6875, 185, 2, 160},
+	[CHAN_ENUM_6895] = {6895, 189, 2, 160},
+	[CHAN_ENUM_6915] = {6915, 193, 2, 160},
+	[CHAN_ENUM_6935] = {6935, 197, 2, 160},
+	[CHAN_ENUM_6955] = {6955, 201, 2, 160},
+	[CHAN_ENUM_6975] = {6975, 205, 2, 160},
+	[CHAN_ENUM_6995] = {6995, 209, 2, 160},
+	[CHAN_ENUM_7015] = {7015, 213, 2, 160},
+	[CHAN_ENUM_7035] = {7035, 217, 2, 160},
+	[CHAN_ENUM_7055] = {7055, 221, 2, 160},
+	[CHAN_ENUM_7075] = {7075, 225, 2, 160},
+	[CHAN_ENUM_7095] = {7095, 229, 2, 160},
+	[CHAN_ENUM_7115] = {7115, 233, 2, 160}
 #endif /* CONFIG_BAND_6GHZ */
 };
 
@@ -428,14 +431,19 @@ const struct chan_map channel_map_eu[NUM_CHANNELS] = {
 	[CHAN_ENUM_5805] = {5805, 161, 2, 160},
 	[CHAN_ENUM_5825] = {5825, 165, 2, 160},
 	[CHAN_ENUM_5845] = {5845, 169, 2, 160},
+#ifdef WLAN_FEATURE_DSRC
 	[CHAN_ENUM_5850] = {5850, INVALID_CHANNEL_NUM, 2, 160},
 	[CHAN_ENUM_5855] = {5855, INVALID_CHANNEL_NUM, 2, 160},
 	[CHAN_ENUM_5860] = {5860, INVALID_CHANNEL_NUM, 2, 160},
+#endif
 	[CHAN_ENUM_5865] = {5865, 173, 2, 160},
+#ifdef WLAN_FEATURE_DSRC
 	[CHAN_ENUM_5870] = {5870, INVALID_CHANNEL_NUM, 2, 160},
 	[CHAN_ENUM_5875] = {5875, 175, 2, 160},
 	[CHAN_ENUM_5880] = {5880, 176, 2, 160},
+#endif
 	[CHAN_ENUM_5885] = {5885, 177, 2, 160},
+#ifdef WLAN_FEATURE_DSRC
 	[CHAN_ENUM_5890] = {5890, 178, 2, 160},
 	[CHAN_ENUM_5895] = {5895, 179, 2, 160},
 	[CHAN_ENUM_5900] = {5900, 180, 2, 160},
@@ -443,66 +451,68 @@ const struct chan_map channel_map_eu[NUM_CHANNELS] = {
 	[CHAN_ENUM_5910] = {5910, 182, 2, 160},
 	[CHAN_ENUM_5915] = {5915, 183, 2, 160},
 	[CHAN_ENUM_5920] = {5920, 184, 2, 160},
+#endif /* WLAN_FEATURE_DSRC */
 #ifdef CONFIG_BAND_6GHZ
-	[CHAN_ENUM_5945] = {5945, 1, 2, 160},
-	[CHAN_ENUM_5965] = {5965, 5, 2, 160},
-	[CHAN_ENUM_5985] = {5985, 9, 2, 160},
-	[CHAN_ENUM_6005] = {6005, 13, 2, 160},
-	[CHAN_ENUM_6025] = {6025, 17, 2, 160},
-	[CHAN_ENUM_6045] = {6045, 21, 2, 160},
-	[CHAN_ENUM_6065] = {6065, 25, 2, 160},
-	[CHAN_ENUM_6085] = {6085, 29, 2, 160},
-	[CHAN_ENUM_6105] = {6105, 33, 2, 160},
-	[CHAN_ENUM_6125] = {6125, 37, 2, 160},
-	[CHAN_ENUM_6145] = {6145, 41, 2, 160},
-	[CHAN_ENUM_6165] = {6165, 45, 2, 160},
-	[CHAN_ENUM_6185] = {6185, 49, 2, 160},
-	[CHAN_ENUM_6205] = {6205, 53, 2, 160},
-	[CHAN_ENUM_6225] = {6225, 57, 2, 160},
-	[CHAN_ENUM_6245] = {6245, 61, 2, 160},
-	[CHAN_ENUM_6265] = {6265, 65, 2, 160},
-	[CHAN_ENUM_6285] = {6285, 69, 2, 160},
-	[CHAN_ENUM_6305] = {6305, 73, 2, 160},
-	[CHAN_ENUM_6325] = {6325, 77, 2, 160},
-	[CHAN_ENUM_6345] = {6345, 81, 2, 160},
-	[CHAN_ENUM_6365] = {6365, 85, 2, 160},
-	[CHAN_ENUM_6385] = {6385, 89, 2, 160},
-	[CHAN_ENUM_6405] = {6405, 93, 2, 160},
-	[CHAN_ENUM_6425] = {6425, 97, 2, 160},
-	[CHAN_ENUM_6445] = {6445, 101, 2, 160},
-	[CHAN_ENUM_6465] = {6465, 105, 2, 160},
-	[CHAN_ENUM_6485] = {6485, 109, 2, 160},
-	[CHAN_ENUM_6505] = {6505, 113, 2, 160},
-	[CHAN_ENUM_6525] = {6525, 117, 2, 160},
-	[CHAN_ENUM_6545] = {6545, 121, 2, 160},
-	[CHAN_ENUM_6565] = {6565, 125, 2, 160},
-	[CHAN_ENUM_6585] = {6585, 129, 2, 160},
-	[CHAN_ENUM_6605] = {6605, 133, 2, 160},
-	[CHAN_ENUM_6625] = {6625, 137, 2, 160},
-	[CHAN_ENUM_6645] = {6645, 141, 2, 160},
-	[CHAN_ENUM_6665] = {6665, 145, 2, 160},
-	[CHAN_ENUM_6685] = {6685, 149, 2, 160},
-	[CHAN_ENUM_6705] = {6705, 153, 2, 160},
-	[CHAN_ENUM_6725] = {6725, 157, 2, 160},
-	[CHAN_ENUM_6745] = {6745, 161, 2, 160},
-	[CHAN_ENUM_6765] = {6765, 165, 2, 160},
-	[CHAN_ENUM_6785] = {6785, 169, 2, 160},
-	[CHAN_ENUM_6805] = {6805, 173, 2, 160},
-	[CHAN_ENUM_6825] = {6825, 177, 2, 160},
-	[CHAN_ENUM_6845] = {6845, 181, 2, 160},
-	[CHAN_ENUM_6865] = {6865, 185, 2, 160},
-	[CHAN_ENUM_6885] = {6885, 189, 2, 160},
-	[CHAN_ENUM_6905] = {6905, 193, 2, 160},
-	[CHAN_ENUM_6925] = {6925, 197, 2, 160},
-	[CHAN_ENUM_6945] = {6945, 201, 2, 160},
-	[CHAN_ENUM_6965] = {6965, 205, 2, 160},
-	[CHAN_ENUM_6985] = {6985, 209, 2, 160},
-	[CHAN_ENUM_7005] = {7005, 213, 2, 160},
-	[CHAN_ENUM_7025] = {7025, 217, 2, 160},
-	[CHAN_ENUM_7045] = {7045, 221, 2, 160},
-	[CHAN_ENUM_7065] = {7065, 225, 2, 160},
-	[CHAN_ENUM_7085] = {7085, 229, 2, 160},
-	[CHAN_ENUM_7105] = {7105, 233, 2, 160}
+	[CHAN_ENUM_5935] = {5935, 2, 2, 20},
+	[CHAN_ENUM_5955] = {5955, 1, 2, 160},
+	[CHAN_ENUM_5975] = {5975, 5, 2, 160},
+	[CHAN_ENUM_5995] = {5995, 9, 2, 160},
+	[CHAN_ENUM_6015] = {6015, 13, 2, 160},
+	[CHAN_ENUM_6035] = {6035, 17, 2, 160},
+	[CHAN_ENUM_6055] = {6055, 21, 2, 160},
+	[CHAN_ENUM_6075] = {6075, 25, 2, 160},
+	[CHAN_ENUM_6095] = {6095, 29, 2, 160},
+	[CHAN_ENUM_6115] = {6115, 33, 2, 160},
+	[CHAN_ENUM_6135] = {6135, 37, 2, 160},
+	[CHAN_ENUM_6155] = {6155, 41, 2, 160},
+	[CHAN_ENUM_6175] = {6175, 45, 2, 160},
+	[CHAN_ENUM_6195] = {6195, 49, 2, 160},
+	[CHAN_ENUM_6215] = {6215, 53, 2, 160},
+	[CHAN_ENUM_6235] = {6235, 57, 2, 160},
+	[CHAN_ENUM_6255] = {6255, 61, 2, 160},
+	[CHAN_ENUM_6275] = {6275, 65, 2, 160},
+	[CHAN_ENUM_6295] = {6295, 69, 2, 160},
+	[CHAN_ENUM_6315] = {6315, 73, 2, 160},
+	[CHAN_ENUM_6335] = {6335, 77, 2, 160},
+	[CHAN_ENUM_6355] = {6355, 81, 2, 160},
+	[CHAN_ENUM_6375] = {6375, 85, 2, 160},
+	[CHAN_ENUM_6395] = {6395, 89, 2, 160},
+	[CHAN_ENUM_6415] = {6415, 93, 2, 160},
+	[CHAN_ENUM_6435] = {6435, 97, 2, 160},
+	[CHAN_ENUM_6455] = {6455, 101, 2, 160},
+	[CHAN_ENUM_6475] = {6475, 105, 2, 160},
+	[CHAN_ENUM_6495] = {6495, 109, 2, 160},
+	[CHAN_ENUM_6515] = {6515, 113, 2, 160},
+	[CHAN_ENUM_6535] = {6535, 117, 2, 160},
+	[CHAN_ENUM_6555] = {6555, 121, 2, 160},
+	[CHAN_ENUM_6575] = {6575, 125, 2, 160},
+	[CHAN_ENUM_6595] = {6595, 129, 2, 160},
+	[CHAN_ENUM_6615] = {6615, 133, 2, 160},
+	[CHAN_ENUM_6635] = {6635, 137, 2, 160},
+	[CHAN_ENUM_6655] = {6655, 141, 2, 160},
+	[CHAN_ENUM_6675] = {6675, 145, 2, 160},
+	[CHAN_ENUM_6695] = {6695, 149, 2, 160},
+	[CHAN_ENUM_6715] = {6715, 153, 2, 160},
+	[CHAN_ENUM_6735] = {6735, 157, 2, 160},
+	[CHAN_ENUM_6755] = {6755, 161, 2, 160},
+	[CHAN_ENUM_6775] = {6775, 165, 2, 160},
+	[CHAN_ENUM_6795] = {6795, 169, 2, 160},
+	[CHAN_ENUM_6815] = {6815, 173, 2, 160},
+	[CHAN_ENUM_6835] = {6835, 177, 2, 160},
+	[CHAN_ENUM_6855] = {6855, 181, 2, 160},
+	[CHAN_ENUM_6875] = {6875, 185, 2, 160},
+	[CHAN_ENUM_6895] = {6895, 189, 2, 160},
+	[CHAN_ENUM_6915] = {6915, 193, 2, 160},
+	[CHAN_ENUM_6935] = {6935, 197, 2, 160},
+	[CHAN_ENUM_6955] = {6955, 201, 2, 160},
+	[CHAN_ENUM_6975] = {6975, 205, 2, 160},
+	[CHAN_ENUM_6995] = {6995, 209, 2, 160},
+	[CHAN_ENUM_7015] = {7015, 213, 2, 160},
+	[CHAN_ENUM_7035] = {7035, 217, 2, 160},
+	[CHAN_ENUM_7055] = {7055, 221, 2, 160},
+	[CHAN_ENUM_7075] = {7075, 225, 2, 160},
+	[CHAN_ENUM_7095] = {7095, 229, 2, 160},
+	[CHAN_ENUM_7115] = {7115, 233, 2, 160}
 #endif /* CONFIG_BAND_6GHZ */
 };
 
@@ -591,14 +601,19 @@ const struct chan_map channel_map_jp[NUM_CHANNELS] = {
 	[CHAN_ENUM_5805] = {5805, 161, 2, 160},
 	[CHAN_ENUM_5825] = {5825, 165, 2, 160},
 	[CHAN_ENUM_5845] = {5845, 169, 2, 160},
+#ifdef WLAN_FEATURE_DSRC
 	[CHAN_ENUM_5850] = {5850, INVALID_CHANNEL_NUM, 2, 160},
 	[CHAN_ENUM_5855] = {5855, INVALID_CHANNEL_NUM, 2, 160},
 	[CHAN_ENUM_5860] = {5860, INVALID_CHANNEL_NUM, 2, 160},
+#endif
 	[CHAN_ENUM_5865] = {5865, INVALID_CHANNEL_NUM, 2, 160},
+#ifdef WLAN_FEATURE_DSRC
 	[CHAN_ENUM_5870] = {5870, INVALID_CHANNEL_NUM, 2, 160},
 	[CHAN_ENUM_5875] = {5875, INVALID_CHANNEL_NUM, 2, 160},
 	[CHAN_ENUM_5880] = {5880, INVALID_CHANNEL_NUM, 2, 160},
+#endif
 	[CHAN_ENUM_5885] = {5885, INVALID_CHANNEL_NUM, 2, 160},
+#ifdef WLAN_FEATURE_DSRC
 	[CHAN_ENUM_5890] = {5890, INVALID_CHANNEL_NUM, 2, 160},
 	[CHAN_ENUM_5895] = {5895, INVALID_CHANNEL_NUM, 2, 160},
 	[CHAN_ENUM_5900] = {5900, INVALID_CHANNEL_NUM, 2, 160},
@@ -606,66 +621,68 @@ const struct chan_map channel_map_jp[NUM_CHANNELS] = {
 	[CHAN_ENUM_5910] = {5910, INVALID_CHANNEL_NUM, 2, 160},
 	[CHAN_ENUM_5915] = {5915, INVALID_CHANNEL_NUM, 2, 160},
 	[CHAN_ENUM_5920] = {5920, INVALID_CHANNEL_NUM, 2, 160},
+#endif /* WLAN_FEATURE_DSRC */
 #ifdef CONFIG_BAND_6GHZ
-	[CHAN_ENUM_5945] = {5945, 1, 2, 160},
-	[CHAN_ENUM_5965] = {5965, 5, 2, 160},
-	[CHAN_ENUM_5985] = {5985, 9, 2, 160},
-	[CHAN_ENUM_6005] = {6005, 13, 2, 160},
-	[CHAN_ENUM_6025] = {6025, 17, 2, 160},
-	[CHAN_ENUM_6045] = {6045, 21, 2, 160},
-	[CHAN_ENUM_6065] = {6065, 25, 2, 160},
-	[CHAN_ENUM_6085] = {6085, 29, 2, 160},
-	[CHAN_ENUM_6105] = {6105, 33, 2, 160},
-	[CHAN_ENUM_6125] = {6125, 37, 2, 160},
-	[CHAN_ENUM_6145] = {6145, 41, 2, 160},
-	[CHAN_ENUM_6165] = {6165, 45, 2, 160},
-	[CHAN_ENUM_6185] = {6185, 49, 2, 160},
-	[CHAN_ENUM_6205] = {6205, 53, 2, 160},
-	[CHAN_ENUM_6225] = {6225, 57, 2, 160},
-	[CHAN_ENUM_6245] = {6245, 61, 2, 160},
-	[CHAN_ENUM_6265] = {6265, 65, 2, 160},
-	[CHAN_ENUM_6285] = {6285, 69, 2, 160},
-	[CHAN_ENUM_6305] = {6305, 73, 2, 160},
-	[CHAN_ENUM_6325] = {6325, 77, 2, 160},
-	[CHAN_ENUM_6345] = {6345, 81, 2, 160},
-	[CHAN_ENUM_6365] = {6365, 85, 2, 160},
-	[CHAN_ENUM_6385] = {6385, 89, 2, 160},
-	[CHAN_ENUM_6405] = {6405, 93, 2, 160},
-	[CHAN_ENUM_6425] = {6425, 97, 2, 160},
-	[CHAN_ENUM_6445] = {6445, 101, 2, 160},
-	[CHAN_ENUM_6465] = {6465, 105, 2, 160},
-	[CHAN_ENUM_6485] = {6485, 109, 2, 160},
-	[CHAN_ENUM_6505] = {6505, 113, 2, 160},
-	[CHAN_ENUM_6525] = {6525, 117, 2, 160},
-	[CHAN_ENUM_6545] = {6545, 121, 2, 160},
-	[CHAN_ENUM_6565] = {6565, 125, 2, 160},
-	[CHAN_ENUM_6585] = {6585, 129, 2, 160},
-	[CHAN_ENUM_6605] = {6605, 133, 2, 160},
-	[CHAN_ENUM_6625] = {6625, 137, 2, 160},
-	[CHAN_ENUM_6645] = {6645, 141, 2, 160},
-	[CHAN_ENUM_6665] = {6665, 145, 2, 160},
-	[CHAN_ENUM_6685] = {6685, 149, 2, 160},
-	[CHAN_ENUM_6705] = {6705, 153, 2, 160},
-	[CHAN_ENUM_6725] = {6725, 157, 2, 160},
-	[CHAN_ENUM_6745] = {6745, 161, 2, 160},
-	[CHAN_ENUM_6765] = {6765, 165, 2, 160},
-	[CHAN_ENUM_6785] = {6785, 169, 2, 160},
-	[CHAN_ENUM_6805] = {6805, 173, 2, 160},
-	[CHAN_ENUM_6825] = {6825, 177, 2, 160},
-	[CHAN_ENUM_6845] = {6845, 181, 2, 160},
-	[CHAN_ENUM_6865] = {6865, 185, 2, 160},
-	[CHAN_ENUM_6885] = {6885, 189, 2, 160},
-	[CHAN_ENUM_6905] = {6905, 193, 2, 160},
-	[CHAN_ENUM_6925] = {6925, 197, 2, 160},
-	[CHAN_ENUM_6945] = {6945, 201, 2, 160},
-	[CHAN_ENUM_6965] = {6965, 205, 2, 160},
-	[CHAN_ENUM_6985] = {6985, 209, 2, 160},
-	[CHAN_ENUM_7005] = {7005, 213, 2, 160},
-	[CHAN_ENUM_7025] = {7025, 217, 2, 160},
-	[CHAN_ENUM_7045] = {7045, 221, 2, 160},
-	[CHAN_ENUM_7065] = {7065, 225, 2, 160},
-	[CHAN_ENUM_7085] = {7085, 229, 2, 160},
-	[CHAN_ENUM_7105] = {7105, 233, 2, 160}
+	[CHAN_ENUM_5935] = {5935, 2, 2, 20},
+	[CHAN_ENUM_5955] = {5955, 1, 2, 160},
+	[CHAN_ENUM_5975] = {5975, 5, 2, 160},
+	[CHAN_ENUM_5995] = {5995, 9, 2, 160},
+	[CHAN_ENUM_6015] = {6015, 13, 2, 160},
+	[CHAN_ENUM_6035] = {6035, 17, 2, 160},
+	[CHAN_ENUM_6055] = {6055, 21, 2, 160},
+	[CHAN_ENUM_6075] = {6075, 25, 2, 160},
+	[CHAN_ENUM_6095] = {6095, 29, 2, 160},
+	[CHAN_ENUM_6115] = {6115, 33, 2, 160},
+	[CHAN_ENUM_6135] = {6135, 37, 2, 160},
+	[CHAN_ENUM_6155] = {6155, 41, 2, 160},
+	[CHAN_ENUM_6175] = {6175, 45, 2, 160},
+	[CHAN_ENUM_6195] = {6195, 49, 2, 160},
+	[CHAN_ENUM_6215] = {6215, 53, 2, 160},
+	[CHAN_ENUM_6235] = {6235, 57, 2, 160},
+	[CHAN_ENUM_6255] = {6255, 61, 2, 160},
+	[CHAN_ENUM_6275] = {6275, 65, 2, 160},
+	[CHAN_ENUM_6295] = {6295, 69, 2, 160},
+	[CHAN_ENUM_6315] = {6315, 73, 2, 160},
+	[CHAN_ENUM_6335] = {6335, 77, 2, 160},
+	[CHAN_ENUM_6355] = {6355, 81, 2, 160},
+	[CHAN_ENUM_6375] = {6375, 85, 2, 160},
+	[CHAN_ENUM_6395] = {6395, 89, 2, 160},
+	[CHAN_ENUM_6415] = {6415, 93, 2, 160},
+	[CHAN_ENUM_6435] = {6435, 97, 2, 160},
+	[CHAN_ENUM_6455] = {6455, 101, 2, 160},
+	[CHAN_ENUM_6475] = {6475, 105, 2, 160},
+	[CHAN_ENUM_6495] = {6495, 109, 2, 160},
+	[CHAN_ENUM_6515] = {6515, 113, 2, 160},
+	[CHAN_ENUM_6535] = {6535, 117, 2, 160},
+	[CHAN_ENUM_6555] = {6555, 121, 2, 160},
+	[CHAN_ENUM_6575] = {6575, 125, 2, 160},
+	[CHAN_ENUM_6595] = {6595, 129, 2, 160},
+	[CHAN_ENUM_6615] = {6615, 133, 2, 160},
+	[CHAN_ENUM_6635] = {6635, 137, 2, 160},
+	[CHAN_ENUM_6655] = {6655, 141, 2, 160},
+	[CHAN_ENUM_6675] = {6675, 145, 2, 160},
+	[CHAN_ENUM_6695] = {6695, 149, 2, 160},
+	[CHAN_ENUM_6715] = {6715, 153, 2, 160},
+	[CHAN_ENUM_6735] = {6735, 157, 2, 160},
+	[CHAN_ENUM_6755] = {6755, 161, 2, 160},
+	[CHAN_ENUM_6775] = {6775, 165, 2, 160},
+	[CHAN_ENUM_6795] = {6795, 169, 2, 160},
+	[CHAN_ENUM_6815] = {6815, 173, 2, 160},
+	[CHAN_ENUM_6835] = {6835, 177, 2, 160},
+	[CHAN_ENUM_6855] = {6855, 181, 2, 160},
+	[CHAN_ENUM_6875] = {6875, 185, 2, 160},
+	[CHAN_ENUM_6895] = {6895, 189, 2, 160},
+	[CHAN_ENUM_6915] = {6915, 193, 2, 160},
+	[CHAN_ENUM_6935] = {6935, 197, 2, 160},
+	[CHAN_ENUM_6955] = {6955, 201, 2, 160},
+	[CHAN_ENUM_6975] = {6975, 205, 2, 160},
+	[CHAN_ENUM_6995] = {6995, 209, 2, 160},
+	[CHAN_ENUM_7015] = {7015, 213, 2, 160},
+	[CHAN_ENUM_7035] = {7035, 217, 2, 160},
+	[CHAN_ENUM_7055] = {7055, 221, 2, 160},
+	[CHAN_ENUM_7075] = {7075, 225, 2, 160},
+	[CHAN_ENUM_7095] = {7095, 229, 2, 160},
+	[CHAN_ENUM_7115] = {7115, 233, 2, 160}
 #endif /* CONFIG_BAND_6GHZ */
 };
 
@@ -754,14 +771,19 @@ const struct chan_map channel_map_global[NUM_CHANNELS] = {
 	[CHAN_ENUM_5805] = {5805, 161, 2, 160},
 	[CHAN_ENUM_5825] = {5825, 165, 2, 160},
 	[CHAN_ENUM_5845] = {5845, 169, 2, 160},
+#ifdef WLAN_FEATURE_DSRC
 	[CHAN_ENUM_5850] = {5850, INVALID_CHANNEL_NUM, 2, 160},
 	[CHAN_ENUM_5855] = {5855, INVALID_CHANNEL_NUM, 2, 160},
 	[CHAN_ENUM_5860] = {5860, INVALID_CHANNEL_NUM, 2, 160},
+#endif
 	[CHAN_ENUM_5865] = {5865, 173, 2, 160},
+#ifdef WLAN_FEATURE_DSRC
 	[CHAN_ENUM_5870] = {5870, INVALID_CHANNEL_NUM, 2, 160},
 	[CHAN_ENUM_5875] = {5875, INVALID_CHANNEL_NUM, 2, 160},
 	[CHAN_ENUM_5880] = {5880, INVALID_CHANNEL_NUM, 2, 160},
+#endif
 	[CHAN_ENUM_5885] = {5885, INVALID_CHANNEL_NUM, 2, 160},
+#ifdef WLAN_FEATURE_DSRC
 	[CHAN_ENUM_5890] = {5890, INVALID_CHANNEL_NUM, 2, 160},
 	[CHAN_ENUM_5895] = {5895, INVALID_CHANNEL_NUM, 2, 160},
 	[CHAN_ENUM_5900] = {5900, INVALID_CHANNEL_NUM, 2, 160},
@@ -769,66 +791,68 @@ const struct chan_map channel_map_global[NUM_CHANNELS] = {
 	[CHAN_ENUM_5910] = {5910, INVALID_CHANNEL_NUM, 2, 160},
 	[CHAN_ENUM_5915] = {5915, INVALID_CHANNEL_NUM, 2, 160},
 	[CHAN_ENUM_5920] = {5920, INVALID_CHANNEL_NUM, 2, 160},
+#endif /* WLAN_FEATURE_DSRC */
 #ifdef CONFIG_BAND_6GHZ
-	[CHAN_ENUM_5945] = {5945, 1, 2, 160},
-	[CHAN_ENUM_5965] = {5965, 5, 2, 160},
-	[CHAN_ENUM_5985] = {5985, 9, 2, 160},
-	[CHAN_ENUM_6005] = {6005, 13, 2, 160},
-	[CHAN_ENUM_6025] = {6025, 17, 2, 160},
-	[CHAN_ENUM_6045] = {6045, 21, 2, 160},
-	[CHAN_ENUM_6065] = {6065, 25, 2, 160},
-	[CHAN_ENUM_6085] = {6085, 29, 2, 160},
-	[CHAN_ENUM_6105] = {6105, 33, 2, 160},
-	[CHAN_ENUM_6125] = {6125, 37, 2, 160},
-	[CHAN_ENUM_6145] = {6145, 41, 2, 160},
-	[CHAN_ENUM_6165] = {6165, 45, 2, 160},
-	[CHAN_ENUM_6185] = {6185, 49, 2, 160},
-	[CHAN_ENUM_6205] = {6205, 53, 2, 160},
-	[CHAN_ENUM_6225] = {6225, 57, 2, 160},
-	[CHAN_ENUM_6245] = {6245, 61, 2, 160},
-	[CHAN_ENUM_6265] = {6265, 65, 2, 160},
-	[CHAN_ENUM_6285] = {6285, 69, 2, 160},
-	[CHAN_ENUM_6305] = {6305, 73, 2, 160},
-	[CHAN_ENUM_6325] = {6325, 77, 2, 160},
-	[CHAN_ENUM_6345] = {6345, 81, 2, 160},
-	[CHAN_ENUM_6365] = {6365, 85, 2, 160},
-	[CHAN_ENUM_6385] = {6385, 89, 2, 160},
-	[CHAN_ENUM_6405] = {6405, 93, 2, 160},
-	[CHAN_ENUM_6425] = {6425, 97, 2, 160},
-	[CHAN_ENUM_6445] = {6445, 101, 2, 160},
-	[CHAN_ENUM_6465] = {6465, 105, 2, 160},
-	[CHAN_ENUM_6485] = {6485, 109, 2, 160},
-	[CHAN_ENUM_6505] = {6505, 113, 2, 160},
-	[CHAN_ENUM_6525] = {6525, 117, 2, 160},
-	[CHAN_ENUM_6545] = {6545, 121, 2, 160},
-	[CHAN_ENUM_6565] = {6565, 125, 2, 160},
-	[CHAN_ENUM_6585] = {6585, 129, 2, 160},
-	[CHAN_ENUM_6605] = {6605, 133, 2, 160},
-	[CHAN_ENUM_6625] = {6625, 137, 2, 160},
-	[CHAN_ENUM_6645] = {6645, 141, 2, 160},
-	[CHAN_ENUM_6665] = {6665, 145, 2, 160},
-	[CHAN_ENUM_6685] = {6685, 149, 2, 160},
-	[CHAN_ENUM_6705] = {6705, 153, 2, 160},
-	[CHAN_ENUM_6725] = {6725, 157, 2, 160},
-	[CHAN_ENUM_6745] = {6745, 161, 2, 160},
-	[CHAN_ENUM_6765] = {6765, 165, 2, 160},
-	[CHAN_ENUM_6785] = {6785, 169, 2, 160},
-	[CHAN_ENUM_6805] = {6805, 173, 2, 160},
-	[CHAN_ENUM_6825] = {6825, 177, 2, 160},
-	[CHAN_ENUM_6845] = {6845, 181, 2, 160},
-	[CHAN_ENUM_6865] = {6865, 185, 2, 160},
-	[CHAN_ENUM_6885] = {6885, 189, 2, 160},
-	[CHAN_ENUM_6905] = {6905, 193, 2, 160},
-	[CHAN_ENUM_6925] = {6925, 197, 2, 160},
-	[CHAN_ENUM_6945] = {6945, 201, 2, 160},
-	[CHAN_ENUM_6965] = {6965, 205, 2, 160},
-	[CHAN_ENUM_6985] = {6985, 209, 2, 160},
-	[CHAN_ENUM_7005] = {7005, 213, 2, 160},
-	[CHAN_ENUM_7025] = {7025, 217, 2, 160},
-	[CHAN_ENUM_7045] = {7045, 221, 2, 160},
-	[CHAN_ENUM_7065] = {7065, 225, 2, 160},
-	[CHAN_ENUM_7085] = {7085, 229, 2, 160},
-	[CHAN_ENUM_7105] = {7105, 233, 2, 160}
+	[CHAN_ENUM_5935] = {5935, 2, 2, 20},
+	[CHAN_ENUM_5955] = {5955, 1, 2, 160},
+	[CHAN_ENUM_5975] = {5975, 5, 2, 160},
+	[CHAN_ENUM_5995] = {5995, 9, 2, 160},
+	[CHAN_ENUM_6015] = {6015, 13, 2, 160},
+	[CHAN_ENUM_6035] = {6035, 17, 2, 160},
+	[CHAN_ENUM_6055] = {6055, 21, 2, 160},
+	[CHAN_ENUM_6075] = {6075, 25, 2, 160},
+	[CHAN_ENUM_6095] = {6095, 29, 2, 160},
+	[CHAN_ENUM_6115] = {6115, 33, 2, 160},
+	[CHAN_ENUM_6135] = {6135, 37, 2, 160},
+	[CHAN_ENUM_6155] = {6155, 41, 2, 160},
+	[CHAN_ENUM_6175] = {6175, 45, 2, 160},
+	[CHAN_ENUM_6195] = {6195, 49, 2, 160},
+	[CHAN_ENUM_6215] = {6215, 53, 2, 160},
+	[CHAN_ENUM_6235] = {6235, 57, 2, 160},
+	[CHAN_ENUM_6255] = {6255, 61, 2, 160},
+	[CHAN_ENUM_6275] = {6275, 65, 2, 160},
+	[CHAN_ENUM_6295] = {6295, 69, 2, 160},
+	[CHAN_ENUM_6315] = {6315, 73, 2, 160},
+	[CHAN_ENUM_6335] = {6335, 77, 2, 160},
+	[CHAN_ENUM_6355] = {6355, 81, 2, 160},
+	[CHAN_ENUM_6375] = {6375, 85, 2, 160},
+	[CHAN_ENUM_6395] = {6395, 89, 2, 160},
+	[CHAN_ENUM_6415] = {6415, 93, 2, 160},
+	[CHAN_ENUM_6435] = {6435, 97, 2, 160},
+	[CHAN_ENUM_6455] = {6455, 101, 2, 160},
+	[CHAN_ENUM_6475] = {6475, 105, 2, 160},
+	[CHAN_ENUM_6495] = {6495, 109, 2, 160},
+	[CHAN_ENUM_6515] = {6515, 113, 2, 160},
+	[CHAN_ENUM_6535] = {6535, 117, 2, 160},
+	[CHAN_ENUM_6555] = {6555, 121, 2, 160},
+	[CHAN_ENUM_6575] = {6575, 125, 2, 160},
+	[CHAN_ENUM_6595] = {6595, 129, 2, 160},
+	[CHAN_ENUM_6615] = {6615, 133, 2, 160},
+	[CHAN_ENUM_6635] = {6635, 137, 2, 160},
+	[CHAN_ENUM_6655] = {6655, 141, 2, 160},
+	[CHAN_ENUM_6675] = {6675, 145, 2, 160},
+	[CHAN_ENUM_6695] = {6695, 149, 2, 160},
+	[CHAN_ENUM_6715] = {6715, 153, 2, 160},
+	[CHAN_ENUM_6735] = {6735, 157, 2, 160},
+	[CHAN_ENUM_6755] = {6755, 161, 2, 160},
+	[CHAN_ENUM_6775] = {6775, 165, 2, 160},
+	[CHAN_ENUM_6795] = {6795, 169, 2, 160},
+	[CHAN_ENUM_6815] = {6815, 173, 2, 160},
+	[CHAN_ENUM_6835] = {6835, 177, 2, 160},
+	[CHAN_ENUM_6855] = {6855, 181, 2, 160},
+	[CHAN_ENUM_6875] = {6875, 185, 2, 160},
+	[CHAN_ENUM_6895] = {6895, 189, 2, 160},
+	[CHAN_ENUM_6915] = {6915, 193, 2, 160},
+	[CHAN_ENUM_6935] = {6935, 197, 2, 160},
+	[CHAN_ENUM_6955] = {6955, 201, 2, 160},
+	[CHAN_ENUM_6975] = {6975, 205, 2, 160},
+	[CHAN_ENUM_6995] = {6995, 209, 2, 160},
+	[CHAN_ENUM_7015] = {7015, 213, 2, 160},
+	[CHAN_ENUM_7035] = {7035, 217, 2, 160},
+	[CHAN_ENUM_7055] = {7055, 221, 2, 160},
+	[CHAN_ENUM_7075] = {7075, 225, 2, 160},
+	[CHAN_ENUM_7095] = {7095, 229, 2, 160},
+	[CHAN_ENUM_7115] = {7115, 233, 2, 160}
 #endif /* CONFIG_BAND_6GHZ */
 };
 
@@ -917,14 +941,19 @@ const struct chan_map channel_map_china[NUM_CHANNELS] = {
 	[CHAN_ENUM_5805] = {5805, 161, 2, 160},
 	[CHAN_ENUM_5825] = {5825, 165, 2, 160},
 	[CHAN_ENUM_5845] = {5845, 169, 2, 160},
+#ifdef WLAN_FEATURE_DSRC
 	[CHAN_ENUM_5850] = {5850, INVALID_CHANNEL_NUM, 2, 160},
 	[CHAN_ENUM_5855] = {5855, INVALID_CHANNEL_NUM, 2, 160},
 	[CHAN_ENUM_5860] = {5860, INVALID_CHANNEL_NUM, 2, 160},
+#endif
 	[CHAN_ENUM_5865] = {5865, INVALID_CHANNEL_NUM, 2, 160},
+#ifdef WLAN_FEATURE_DSRC
 	[CHAN_ENUM_5870] = {5870, INVALID_CHANNEL_NUM, 2, 160},
 	[CHAN_ENUM_5875] = {5875, INVALID_CHANNEL_NUM, 2, 160},
 	[CHAN_ENUM_5880] = {5880, INVALID_CHANNEL_NUM, 2, 160},
+#endif
 	[CHAN_ENUM_5885] = {5885, INVALID_CHANNEL_NUM, 2, 160},
+#ifdef WLAN_FEATURE_DSRC
 	[CHAN_ENUM_5890] = {5890, INVALID_CHANNEL_NUM, 2, 160},
 	[CHAN_ENUM_5895] = {5895, INVALID_CHANNEL_NUM, 2, 160},
 	[CHAN_ENUM_5900] = {5900, INVALID_CHANNEL_NUM, 2, 160},
@@ -932,66 +961,68 @@ const struct chan_map channel_map_china[NUM_CHANNELS] = {
 	[CHAN_ENUM_5910] = {5910, INVALID_CHANNEL_NUM, 2, 160},
 	[CHAN_ENUM_5915] = {5915, INVALID_CHANNEL_NUM, 2, 160},
 	[CHAN_ENUM_5920] = {5920, INVALID_CHANNEL_NUM, 2, 160},
+#endif /* WLAN_FEATURE_DSRC */
 #ifdef CONFIG_BAND_6GHZ
-	[CHAN_ENUM_5945] = {5945, 1, 2, 160},
-	[CHAN_ENUM_5965] = {5965, 5, 2, 160},
-	[CHAN_ENUM_5985] = {5985, 9, 2, 160},
-	[CHAN_ENUM_6005] = {6005, 13, 2, 160},
-	[CHAN_ENUM_6025] = {6025, 17, 2, 160},
-	[CHAN_ENUM_6045] = {6045, 21, 2, 160},
-	[CHAN_ENUM_6065] = {6065, 25, 2, 160},
-	[CHAN_ENUM_6085] = {6085, 29, 2, 160},
-	[CHAN_ENUM_6105] = {6105, 33, 2, 160},
-	[CHAN_ENUM_6125] = {6125, 37, 2, 160},
-	[CHAN_ENUM_6145] = {6145, 41, 2, 160},
-	[CHAN_ENUM_6165] = {6165, 45, 2, 160},
-	[CHAN_ENUM_6185] = {6185, 49, 2, 160},
-	[CHAN_ENUM_6205] = {6205, 53, 2, 160},
-	[CHAN_ENUM_6225] = {6225, 57, 2, 160},
-	[CHAN_ENUM_6245] = {6245, 61, 2, 160},
-	[CHAN_ENUM_6265] = {6265, 65, 2, 160},
-	[CHAN_ENUM_6285] = {6285, 69, 2, 160},
-	[CHAN_ENUM_6305] = {6305, 73, 2, 160},
-	[CHAN_ENUM_6325] = {6325, 77, 2, 160},
-	[CHAN_ENUM_6345] = {6345, 81, 2, 160},
-	[CHAN_ENUM_6365] = {6365, 85, 2, 160},
-	[CHAN_ENUM_6385] = {6385, 89, 2, 160},
-	[CHAN_ENUM_6405] = {6405, 93, 2, 160},
-	[CHAN_ENUM_6425] = {6425, 97, 2, 160},
-	[CHAN_ENUM_6445] = {6445, 101, 2, 160},
-	[CHAN_ENUM_6465] = {6465, 105, 2, 160},
-	[CHAN_ENUM_6485] = {6485, 109, 2, 160},
-	[CHAN_ENUM_6505] = {6505, 113, 2, 160},
-	[CHAN_ENUM_6525] = {6525, 117, 2, 160},
-	[CHAN_ENUM_6545] = {6545, 121, 2, 160},
-	[CHAN_ENUM_6565] = {6565, 125, 2, 160},
-	[CHAN_ENUM_6585] = {6585, 129, 2, 160},
-	[CHAN_ENUM_6605] = {6605, 133, 2, 160},
-	[CHAN_ENUM_6625] = {6625, 137, 2, 160},
-	[CHAN_ENUM_6645] = {6645, 141, 2, 160},
-	[CHAN_ENUM_6665] = {6665, 145, 2, 160},
-	[CHAN_ENUM_6685] = {6685, 149, 2, 160},
-	[CHAN_ENUM_6705] = {6705, 153, 2, 160},
-	[CHAN_ENUM_6725] = {6725, 157, 2, 160},
-	[CHAN_ENUM_6745] = {6745, 161, 2, 160},
-	[CHAN_ENUM_6765] = {6765, 165, 2, 160},
-	[CHAN_ENUM_6785] = {6785, 169, 2, 160},
-	[CHAN_ENUM_6805] = {6805, 173, 2, 160},
-	[CHAN_ENUM_6825] = {6825, 177, 2, 160},
-	[CHAN_ENUM_6845] = {6845, 181, 2, 160},
-	[CHAN_ENUM_6865] = {6865, 185, 2, 160},
-	[CHAN_ENUM_6885] = {6885, 189, 2, 160},
-	[CHAN_ENUM_6905] = {6905, 193, 2, 160},
-	[CHAN_ENUM_6925] = {6925, 197, 2, 160},
-	[CHAN_ENUM_6945] = {6945, 201, 2, 160},
-	[CHAN_ENUM_6965] = {6965, 205, 2, 160},
-	[CHAN_ENUM_6985] = {6985, 209, 2, 160},
-	[CHAN_ENUM_7005] = {7005, 213, 2, 160},
-	[CHAN_ENUM_7025] = {7025, 217, 2, 160},
-	[CHAN_ENUM_7045] = {7045, 221, 2, 160},
-	[CHAN_ENUM_7065] = {7065, 225, 2, 160},
-	[CHAN_ENUM_7085] = {7085, 229, 2, 160},
-	[CHAN_ENUM_7105] = {7105, 233, 2, 160}
+	[CHAN_ENUM_5935] = {5935, 2, 2, 20},
+	[CHAN_ENUM_5955] = {5955, 1, 2, 160},
+	[CHAN_ENUM_5975] = {5975, 5, 2, 160},
+	[CHAN_ENUM_5995] = {5995, 9, 2, 160},
+	[CHAN_ENUM_6015] = {6015, 13, 2, 160},
+	[CHAN_ENUM_6035] = {6035, 17, 2, 160},
+	[CHAN_ENUM_6055] = {6055, 21, 2, 160},
+	[CHAN_ENUM_6075] = {6075, 25, 2, 160},
+	[CHAN_ENUM_6095] = {6095, 29, 2, 160},
+	[CHAN_ENUM_6115] = {6115, 33, 2, 160},
+	[CHAN_ENUM_6135] = {6135, 37, 2, 160},
+	[CHAN_ENUM_6155] = {6155, 41, 2, 160},
+	[CHAN_ENUM_6175] = {6175, 45, 2, 160},
+	[CHAN_ENUM_6195] = {6195, 49, 2, 160},
+	[CHAN_ENUM_6215] = {6215, 53, 2, 160},
+	[CHAN_ENUM_6235] = {6235, 57, 2, 160},
+	[CHAN_ENUM_6255] = {6255, 61, 2, 160},
+	[CHAN_ENUM_6275] = {6275, 65, 2, 160},
+	[CHAN_ENUM_6295] = {6295, 69, 2, 160},
+	[CHAN_ENUM_6315] = {6315, 73, 2, 160},
+	[CHAN_ENUM_6335] = {6335, 77, 2, 160},
+	[CHAN_ENUM_6355] = {6355, 81, 2, 160},
+	[CHAN_ENUM_6375] = {6375, 85, 2, 160},
+	[CHAN_ENUM_6395] = {6395, 89, 2, 160},
+	[CHAN_ENUM_6415] = {6415, 93, 2, 160},
+	[CHAN_ENUM_6435] = {6435, 97, 2, 160},
+	[CHAN_ENUM_6455] = {6455, 101, 2, 160},
+	[CHAN_ENUM_6475] = {6475, 105, 2, 160},
+	[CHAN_ENUM_6495] = {6495, 109, 2, 160},
+	[CHAN_ENUM_6515] = {6515, 113, 2, 160},
+	[CHAN_ENUM_6535] = {6535, 117, 2, 160},
+	[CHAN_ENUM_6555] = {6555, 121, 2, 160},
+	[CHAN_ENUM_6575] = {6575, 125, 2, 160},
+	[CHAN_ENUM_6595] = {6595, 129, 2, 160},
+	[CHAN_ENUM_6615] = {6615, 133, 2, 160},
+	[CHAN_ENUM_6635] = {6635, 137, 2, 160},
+	[CHAN_ENUM_6655] = {6655, 141, 2, 160},
+	[CHAN_ENUM_6675] = {6675, 145, 2, 160},
+	[CHAN_ENUM_6695] = {6695, 149, 2, 160},
+	[CHAN_ENUM_6715] = {6715, 153, 2, 160},
+	[CHAN_ENUM_6735] = {6735, 157, 2, 160},
+	[CHAN_ENUM_6755] = {6755, 161, 2, 160},
+	[CHAN_ENUM_6775] = {6775, 165, 2, 160},
+	[CHAN_ENUM_6795] = {6795, 169, 2, 160},
+	[CHAN_ENUM_6815] = {6815, 173, 2, 160},
+	[CHAN_ENUM_6835] = {6835, 177, 2, 160},
+	[CHAN_ENUM_6855] = {6855, 181, 2, 160},
+	[CHAN_ENUM_6875] = {6875, 185, 2, 160},
+	[CHAN_ENUM_6895] = {6895, 189, 2, 160},
+	[CHAN_ENUM_6915] = {6915, 193, 2, 160},
+	[CHAN_ENUM_6935] = {6935, 197, 2, 160},
+	[CHAN_ENUM_6955] = {6955, 201, 2, 160},
+	[CHAN_ENUM_6975] = {6975, 205, 2, 160},
+	[CHAN_ENUM_6995] = {6995, 209, 2, 160},
+	[CHAN_ENUM_7015] = {7015, 213, 2, 160},
+	[CHAN_ENUM_7035] = {7035, 217, 2, 160},
+	[CHAN_ENUM_7055] = {7055, 221, 2, 160},
+	[CHAN_ENUM_7075] = {7075, 225, 2, 160},
+	[CHAN_ENUM_7095] = {7095, 229, 2, 160},
+	[CHAN_ENUM_7115] = {7115, 233, 2, 160}
 #endif /* CONFIG_BAND_6GHZ */
 };
 
@@ -1016,7 +1047,7 @@ void reg_init_channel_map(enum dfs_reg dfs_region)
 		channel_map = channel_map_china;
 		break;
 	case DFS_KR_REGION:
-		channel_map = channel_map_eu;
+		channel_map = channel_map_global;
 		break;
 	}
 }
@@ -1050,10 +1081,17 @@ uint16_t reg_get_bw_value(enum phy_ch_width bw)
 struct wlan_lmac_if_reg_tx_ops *reg_get_psoc_tx_ops(
 		struct wlan_objmgr_psoc *psoc)
 {
-	return &((psoc->soc_cb.tx_ops.reg_ops));
+	struct wlan_lmac_if_tx_ops *tx_ops;
+
+	tx_ops = wlan_psoc_get_lmac_if_txops(psoc);
+	if (!tx_ops) {
+		reg_err("tx_ops is NULL");
+		return NULL;
+	}
+
+	return &tx_ops->reg_ops;
 }
 
-#ifdef CONFIG_CHAN_NUM_API
 QDF_STATUS reg_get_channel_list_with_power(struct wlan_objmgr_pdev *pdev,
 					   struct channel_power *ch_list,
 					   uint8_t *num_chan)
@@ -1094,6 +1132,7 @@ QDF_STATUS reg_get_channel_list_with_power(struct wlan_objmgr_pdev *pdev,
 	return QDF_STATUS_SUCCESS;
 }
 
+#ifdef CONFIG_CHAN_NUM_API
 enum channel_enum reg_get_chan_enum(uint8_t chan_num)
 {
 	uint32_t count;
@@ -1509,22 +1548,6 @@ void reg_set_channel_params(struct wlan_objmgr_pdev *pdev,
 }
 #endif /* CONFIG_CHAN_NUM_API */
 
-QDF_STATUS reg_get_curr_band(struct wlan_objmgr_pdev *pdev,
-			     enum band_info *band)
-{
-	struct wlan_regulatory_pdev_priv_obj *pdev_reg;
-
-	pdev_reg = reg_get_pdev_obj(pdev);
-	if (!IS_VALID_PDEV_REG_OBJ(pdev_reg)) {
-		reg_err("pdev reg component is NULL");
-		return QDF_STATUS_E_INVAL;
-	}
-
-	*band = pdev_reg->band_capability;
-
-	return QDF_STATUS_SUCCESS;
-}
-
 QDF_STATUS reg_read_default_country(struct wlan_objmgr_psoc *psoc,
 				    uint8_t *country_code)
 {
@@ -1586,10 +1609,7 @@ QDF_STATUS reg_get_max_5g_bw_from_regdomain(uint16_t regdmn,
 	if (i == num_reg_dmn)
 		return QDF_STATUS_E_FAILURE;
 
-	if (!regdomains_5g[g_reg_dmn_pairs[i].dmn_id_5g].num_reg_rules)
-		*max_bw_5g = 0;
-	else
-		*max_bw_5g = BW_160_MHZ;
+	*max_bw_5g = regdomains_5g[g_reg_dmn_pairs[i].dmn_id_5g].max_bw;
 
 	return QDF_STATUS_SUCCESS;
 }
@@ -1684,6 +1704,15 @@ bool reg_is_dfs_ch(struct wlan_objmgr_pdev *pdev,
 
 	return ch_state == CHANNEL_STATE_DFS;
 }
+
+bool reg_is_disable_ch(struct wlan_objmgr_pdev *pdev, uint8_t chan)
+{
+	enum channel_state ch_state;
+
+	ch_state = reg_get_channel_state(pdev, chan);
+
+	return ch_state == CHANNEL_STATE_DISABLE;
+}
 #endif /* CONFIG_CHAN_NUM_API */
 
 uint8_t reg_freq_to_chan(struct wlan_objmgr_pdev *pdev,
@@ -1750,16 +1779,25 @@ static uint16_t reg_compute_chan_to_freq(struct wlan_objmgr_pdev *pdev,
 		return 0;
 	}
 
+	if (min_chan_range < MIN_CHANNEL || max_chan_range > MAX_CHANNEL) {
+		reg_err_rl("Channel range is invalid");
+		return 0;
+	}
+
 	chan_list = pdev_priv_obj->mas_chan_list;
 
 	for (count = min_chan_range; count <= max_chan_range; count++) {
-		if (REG_IS_49GHZ_FREQ(chan_list[count].center_freq)) {
-			if (chan_list[count].chan_num == chan_num)
+		if ((chan_list[count].state != CHANNEL_STATE_DISABLE) &&
+		    !(chan_list[count].chan_flags & REGULATORY_CHAN_DISABLED)) {
+			if (REG_IS_49GHZ_FREQ(chan_list[count].center_freq)) {
+				if (chan_list[count].chan_num == chan_num)
+					break;
+				continue;
+			} else if ((chan_list[count].chan_num >= chan_num) &&
+				   (chan_list[count].chan_num !=
+							INVALID_CHANNEL_NUM))
 				break;
-			continue;
-		} else if ((chan_list[count].chan_num >= chan_num) &&
-			   (chan_list[count].chan_num != INVALID_CHANNEL_NUM))
-			break;
+		}
 	}
 
 	if (count == max_chan_range + 1)
@@ -1808,7 +1846,6 @@ uint16_t reg_legacy_chan_to_freq(struct wlan_objmgr_pdev *pdev,
 					max_chan_range);
 }
 
-#ifdef CONFIG_CHAN_NUM_API
 qdf_freq_t reg_chan_to_freq(struct wlan_objmgr_pdev *pdev,
 			    uint8_t chan_num)
 {
@@ -1845,6 +1882,7 @@ qdf_freq_t reg_chan_to_freq(struct wlan_objmgr_pdev *pdev,
 	return 0;
 }
 
+#ifdef CONFIG_CHAN_NUM_API
 bool reg_chan_is_49ghz(struct wlan_objmgr_pdev *pdev, uint8_t chan_num)
 {
 	qdf_freq_t freq = 0;
@@ -2146,7 +2184,7 @@ QDF_STATUS reg_get_curr_regdomain(struct wlan_objmgr_pdev *pdev,
 	}
 
 	if (index == num_reg_dmn) {
-		reg_err_rl("invalid regdomain");
+		reg_debug_rl("invalid regdomain");
 		return QDF_STATUS_E_FAILURE;
 	}
 
@@ -2259,6 +2297,28 @@ QDF_STATUS reg_set_hal_reg_cap(
 	qdf_mem_copy(psoc_priv_obj->reg_cap, reg_cap,
 		     phy_cnt *
 		     sizeof(struct wlan_psoc_host_hal_reg_capabilities_ext));
+
+	return QDF_STATUS_SUCCESS;
+}
+
+QDF_STATUS reg_update_hal_reg_cap(struct wlan_objmgr_psoc *psoc,
+				  uint32_t wireless_modes, uint8_t phy_id)
+{
+	struct wlan_regulatory_psoc_priv_obj *psoc_priv_obj;
+
+	if (!psoc) {
+		reg_err("psoc is null");
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	psoc_priv_obj = reg_get_psoc_obj(psoc);
+
+	if (!IS_VALID_PSOC_REG_OBJ(psoc_priv_obj)) {
+		reg_err("psoc reg component is NULL");
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	psoc_priv_obj->reg_cap[phy_id].wireless_modes |= wireless_modes;
 
 	return QDF_STATUS_SUCCESS;
 }
@@ -2513,7 +2573,7 @@ bool reg_is_6ghz_psc_chan_freq(uint16_t freq)
 		return false;
 	}
 
-	if (!(((freq - SIXG_STARTING_FREQ) + (FREQ_LEFT_SHIFT)) %
+	if (!(((freq - SIX_GHZ_NON_ORPHAN_START_FREQ) + FREQ_LEFT_SHIFT) %
 	      (FREQ_TO_CHAN_SCALE * NUM_80MHZ_BAND_IN_6G))) {
 		return true;
 	}
@@ -2521,6 +2581,44 @@ bool reg_is_6ghz_psc_chan_freq(uint16_t freq)
 	reg_debug_rl("Channel freq %d MHz is not a 6GHz PSC frequency", freq);
 
 	return false;
+}
+
+/**
+ * reg_is_freq_indoor() - Check if the input frequency is an indoor frequency.
+ * @pdev: Pointer to pdev.
+ * @freq: Channel frequency.
+ *
+ * Return: Return true if the input frequency is indoor, else false.
+ */
+static bool reg_is_freq_indoor(struct wlan_objmgr_pdev *pdev, qdf_freq_t freq)
+{
+	struct regulatory_channel *cur_chan_list;
+	struct wlan_regulatory_pdev_priv_obj *pdev_priv_obj;
+	enum channel_enum chan_enum;
+
+	pdev_priv_obj = reg_get_pdev_obj(pdev);
+
+	if (!IS_VALID_PDEV_REG_OBJ(pdev_priv_obj)) {
+		reg_err("reg pdev priv obj is NULL");
+		return false;
+	}
+
+	chan_enum = reg_get_chan_enum_for_freq(freq);
+
+	if (chan_enum == INVALID_CHANNEL) {
+		reg_err_rl("Invalid chan enum %d", chan_enum);
+		return false;
+	}
+
+	cur_chan_list = pdev_priv_obj->cur_chan_list;
+
+	return (cur_chan_list[chan_enum].chan_flags &
+		REGULATORY_CHAN_INDOOR_ONLY);
+}
+
+bool reg_is_6g_freq_indoor(struct wlan_objmgr_pdev *pdev, qdf_freq_t freq)
+{
+	return (REG_IS_6GHZ_FREQ(freq) && reg_is_freq_indoor(pdev, freq));
 }
 
 /**
@@ -2788,6 +2886,23 @@ bool reg_is_regdmn_en302502_applicable(struct wlan_objmgr_pdev *pdev)
 	return reg_en302_502_regdmn(cur_reg_dmn.regdmn_pair_id);
 }
 
+QDF_STATUS reg_get_phybitmap(struct wlan_objmgr_pdev *pdev,
+			     uint16_t *phybitmap)
+{
+	struct wlan_regulatory_pdev_priv_obj *pdev_priv_obj;
+
+	pdev_priv_obj = reg_get_pdev_obj(pdev);
+
+	if (!pdev_priv_obj) {
+		reg_err("reg pdev private obj is NULL");
+		return QDF_STATUS_E_FAULT;
+	}
+
+	*phybitmap = pdev_priv_obj->phybitmap;
+
+	return QDF_STATUS_SUCCESS;
+}
+
 QDF_STATUS reg_modify_pdev_chan_range(struct wlan_objmgr_pdev *pdev)
 {
 	struct wlan_regulatory_pdev_priv_obj *pdev_priv_obj;
@@ -2884,7 +2999,7 @@ QDF_STATUS reg_update_pdev_wireless_modes(struct wlan_objmgr_pdev *pdev,
 
 	if (!pdev_priv_obj) {
 		reg_err("reg pdev private obj is NULL");
-		return QDF_STATUS_E_FAULT;
+		return QDF_STATUS_E_INVAL;
 	}
 
 	pdev_priv_obj->wireless_modes = wireless_modes;
@@ -3064,6 +3179,29 @@ enum channel_state reg_get_channel_state_for_freq(struct wlan_objmgr_pdev *pdev,
 	}
 
 	return pdev_priv_obj->cur_chan_list[ch_idx].state;
+}
+
+static uint32_t reg_get_channel_flags_for_freq(struct wlan_objmgr_pdev *pdev,
+					       qdf_freq_t freq)
+{
+	enum channel_enum chan_enum;
+	struct wlan_regulatory_pdev_priv_obj *pdev_priv_obj;
+
+	chan_enum = reg_get_chan_enum_for_freq(freq);
+
+	if (chan_enum == INVALID_CHANNEL) {
+		reg_err("chan freq is not valid");
+		return REGULATORY_CHAN_INVALID;
+	}
+
+	pdev_priv_obj = reg_get_pdev_obj(pdev);
+
+	if (!IS_VALID_PDEV_REG_OBJ(pdev_priv_obj)) {
+		reg_err("pdev reg obj is NULL");
+		return REGULATORY_CHAN_INVALID;
+	}
+
+	return pdev_priv_obj->cur_chan_list[chan_enum].chan_flags;
 }
 
 /**
@@ -3304,7 +3442,6 @@ static void reg_set_5g_channel_params_for_freq(struct wlan_objmgr_pdev *pdev,
 	 * state. Also return the maximum bandwidth supported by the channel.
 	 */
 
-	enum phy_ch_width next_lower_bw;
 	enum channel_state chan_state = CHANNEL_STATE_ENABLE;
 	enum channel_state chan_state2 = CHANNEL_STATE_ENABLE;
 	const struct bonded_channel_freq *bonded_chan_ptr = NULL;
@@ -3321,11 +3458,8 @@ static void reg_set_5g_channel_params_for_freq(struct wlan_objmgr_pdev *pdev,
 		else
 			ch_params->ch_width = CH_WIDTH_160MHZ;
 	}
-	next_lower_bw = ch_params->ch_width;
 
 	while (ch_params->ch_width != CH_WIDTH_INVALID) {
-		ch_params->ch_width = next_lower_bw;
-		next_lower_bw = get_next_lower_bw[ch_params->ch_width];
 		bonded_chan_ptr = NULL;
 		bonded_chan_ptr2 = NULL;
 		chan_state = reg_get_5g_bonded_channel_for_freq(
@@ -3347,18 +3481,13 @@ static void reg_set_5g_channel_params_for_freq(struct wlan_objmgr_pdev *pdev,
 
 		if ((chan_state != CHANNEL_STATE_ENABLE) &&
 		    (chan_state != CHANNEL_STATE_DFS))
-			continue;
+			goto update_bw;
 		if (ch_params->ch_width <= CH_WIDTH_20MHZ) {
 			ch_params->sec_ch_offset = NO_SEC_CH;
 			ch_params->mhz_freq_seg0 = freq;
-			if (reg_is_6ghz_chan_freq(ch_params->mhz_freq_seg0))
 				ch_params->center_freq_seg0 =
-				(ch_params->mhz_freq_seg0 -
-				 SIXG_STARTING_FREQ) / FREQ_TO_CHAN_SCALE;
-			else
-				ch_params->center_freq_seg0 =
-				(ch_params->mhz_freq_seg0 -
-				 FIVEG_STARTING_FREQ) / FREQ_TO_CHAN_SCALE;
+				reg_freq_to_chan(pdev,
+						 ch_params->mhz_freq_seg0);
 			break;
 		} else if (ch_params->ch_width >= CH_WIDTH_40MHZ) {
 			reg_get_5g_bonded_chan_array_for_freq(
@@ -3366,7 +3495,7 @@ static void reg_set_5g_channel_params_for_freq(struct wlan_objmgr_pdev *pdev,
 			QDF_ARRAY_SIZE(bonded_chan_40mhz_list_freq),
 			&bonded_chan_ptr2);
 			if (!bonded_chan_ptr || !bonded_chan_ptr2)
-				continue;
+				goto update_bw;
 			if (freq == bonded_chan_ptr2->start_freq)
 				ch_params->sec_ch_offset = LOW_PRIMARY_CH;
 			else
@@ -3375,42 +3504,30 @@ static void reg_set_5g_channel_params_for_freq(struct wlan_objmgr_pdev *pdev,
 			ch_params->mhz_freq_seg0 =
 				(bonded_chan_ptr->start_freq +
 				 bonded_chan_ptr->end_freq) / 2;
-			if (reg_is_6ghz_chan_freq(ch_params->mhz_freq_seg0))
 				ch_params->center_freq_seg0 =
-				(ch_params->mhz_freq_seg0 -
-				 SIXG_STARTING_FREQ) / FREQ_TO_CHAN_SCALE;
-			else
-				ch_params->center_freq_seg0 =
-				(ch_params->mhz_freq_seg0 -
-				 FIVEG_STARTING_FREQ) / FREQ_TO_CHAN_SCALE;
+				reg_freq_to_chan(pdev,
+						 ch_params->mhz_freq_seg0);
 			break;
 		}
+update_bw:
+		ch_params->ch_width = get_next_lower_bw[ch_params->ch_width];
 	}
 
 	if (ch_params->ch_width == CH_WIDTH_160MHZ) {
 		ch_params->mhz_freq_seg1 = ch_params->mhz_freq_seg0;
-		if (reg_is_6ghz_chan_freq(ch_params->mhz_freq_seg1))
 			ch_params->center_freq_seg1 =
-			(ch_params->mhz_freq_seg1 - SIXG_STARTING_FREQ) /
-			 FREQ_TO_CHAN_SCALE;
-		else
-			ch_params->center_freq_seg1 =
-			(ch_params->mhz_freq_seg1 - FIVEG_STARTING_FREQ) /
-			 FREQ_TO_CHAN_SCALE;
+				reg_freq_to_chan(pdev,
+						 ch_params->mhz_freq_seg1);
+
 		chan_state = reg_get_5g_bonded_channel_for_freq(
 				pdev, freq, CH_WIDTH_80MHZ, &bonded_chan_ptr);
 		if (bonded_chan_ptr) {
 			ch_params->mhz_freq_seg0 =
 				(bonded_chan_ptr->start_freq +
 				 bonded_chan_ptr->end_freq) / 2;
-			if (reg_is_6ghz_chan_freq(ch_params->mhz_freq_seg0))
 				ch_params->center_freq_seg0 =
-				(ch_params->mhz_freq_seg0 -
-				 SIXG_STARTING_FREQ) / FREQ_TO_CHAN_SCALE;
-			else
-				ch_params->center_freq_seg0 =
-				(ch_params->mhz_freq_seg0 -
-				 FIVEG_STARTING_FREQ) / FREQ_TO_CHAN_SCALE;
+				reg_freq_to_chan(pdev,
+						 ch_params->mhz_freq_seg0);
 		}
 	}
 
@@ -3533,12 +3650,53 @@ uint8_t reg_get_channel_reg_power_for_freq(struct wlan_objmgr_pdev *pdev,
 
 bool reg_is_dfs_for_freq(struct wlan_objmgr_pdev *pdev, qdf_freq_t freq)
 {
-	enum channel_state ch_state;
+	uint32_t chan_flags;
 
-	ch_state = reg_get_channel_state_for_freq(pdev, freq);
+	chan_flags = reg_get_channel_flags_for_freq(pdev, freq);
 
-	return ch_state == CHANNEL_STATE_DFS;
+	return chan_flags & REGULATORY_CHAN_RADAR;
 }
+
+#ifdef CONFIG_REG_CLIENT
+/**
+ * reg_get_psoc_mas_chan_list () - Get psoc master channel list
+ * @pdev: pointer to pdev object
+ * @psoc: pointer to psoc object
+ *
+ * Return: psoc master chanel list
+ */
+static struct regulatory_channel *reg_get_psoc_mas_chan_list(
+						struct wlan_objmgr_pdev *pdev,
+						struct wlan_objmgr_psoc *psoc)
+{
+	struct wlan_regulatory_psoc_priv_obj *soc_reg;
+	uint8_t pdev_id;
+	uint8_t phy_id;
+	struct wlan_lmac_if_reg_tx_ops *reg_tx_ops;
+
+	soc_reg = reg_get_psoc_obj(psoc);
+	if (!soc_reg) {
+		reg_err("reg psoc private obj is NULL");
+		return NULL;
+	}
+	pdev_id = wlan_objmgr_pdev_get_pdev_id(pdev);
+
+	reg_tx_ops = reg_get_psoc_tx_ops(psoc);
+	if (reg_tx_ops->get_phy_id_from_pdev_id)
+		reg_tx_ops->get_phy_id_from_pdev_id(psoc, pdev_id, &phy_id);
+	else
+		phy_id = pdev_id;
+
+	return soc_reg->mas_chan_params[phy_id].mas_chan_list;
+}
+#else
+static inline struct regulatory_channel *reg_get_psoc_mas_chan_list(
+						struct wlan_objmgr_pdev *pdev,
+						struct wlan_objmgr_psoc *psoc)
+{
+	return NULL;
+}
+#endif
 
 void reg_update_nol_ch_for_freq(struct wlan_objmgr_pdev *pdev,
 				uint16_t *chan_freq_list,
@@ -3546,7 +3704,7 @@ void reg_update_nol_ch_for_freq(struct wlan_objmgr_pdev *pdev,
 				bool nol_chan)
 {
 	enum channel_enum chan_enum;
-	struct regulatory_channel *mas_chan_list;
+	struct regulatory_channel *mas_chan_list, *psoc_mas_chan_list;
 	struct wlan_regulatory_pdev_priv_obj *pdev_priv_obj;
 	struct wlan_objmgr_psoc *psoc;
 	uint16_t i;
@@ -3564,6 +3722,8 @@ void reg_update_nol_ch_for_freq(struct wlan_objmgr_pdev *pdev,
 		return;
 	}
 
+	psoc_mas_chan_list = reg_get_psoc_mas_chan_list(pdev, psoc);
+
 	mas_chan_list = pdev_priv_obj->mas_chan_list;
 	for (i = 0; i < num_chan; i++) {
 		chan_enum = reg_get_chan_enum_for_freq(chan_freq_list[i]);
@@ -3573,6 +3733,8 @@ void reg_update_nol_ch_for_freq(struct wlan_objmgr_pdev *pdev,
 			continue;
 		}
 		mas_chan_list[chan_enum].nol_chan = nol_chan;
+		if (psoc_mas_chan_list)
+			psoc_mas_chan_list[chan_enum].nol_chan = nol_chan;
 	}
 
 	reg_compute_pdev_current_chan_list(pdev_priv_obj);
@@ -3667,6 +3829,14 @@ enum reg_wifi_band reg_freq_to_band(qdf_freq_t freq)
 	return REG_BAND_UNKNOWN;
 }
 
+bool reg_is_disable_for_freq(struct wlan_objmgr_pdev *pdev, qdf_freq_t freq)
+{
+	enum channel_state ch_state;
+
+	ch_state = reg_get_channel_state_for_freq(pdev, freq);
+
+	return ch_state == CHANNEL_STATE_DISABLE;
+}
 #endif /* CONFIG_CHAN_FREQ_API */
 
 uint8_t  reg_get_max_tx_power(struct wlan_objmgr_pdev *pdev)
@@ -3739,12 +3909,24 @@ QDF_STATUS reg_set_6ghz_supported(struct wlan_objmgr_psoc *psoc, bool val)
 	return QDF_STATUS_SUCCESS;
 }
 
-bool reg_is_6ghz_op_class(struct wlan_objmgr_pdev *pdev, uint8_t op_class)
+QDF_STATUS
+reg_set_5dot9_ghz_supported(struct wlan_objmgr_psoc *psoc, bool val)
 {
-	return ((op_class >= MIN_6GHZ_OPER_CLASS) &&
-		(op_class <= MAX_6GHZ_OPER_CLASS));
+	struct wlan_regulatory_psoc_priv_obj *psoc_priv_obj;
+
+	psoc_priv_obj = reg_get_psoc_obj(psoc);
+
+	if (!IS_VALID_PSOC_REG_OBJ(psoc_priv_obj)) {
+		reg_err("psoc reg component is NULL");
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	psoc_priv_obj->five_dot_nine_ghz_supported = val;
+
+	return QDF_STATUS_SUCCESS;
 }
 
+#ifdef CONFIG_REG_CLIENT
 bool reg_is_6ghz_supported(struct wlan_objmgr_psoc *psoc)
 {
 	struct wlan_regulatory_psoc_priv_obj *psoc_priv_obj;
@@ -3757,6 +3939,70 @@ bool reg_is_6ghz_supported(struct wlan_objmgr_psoc *psoc)
 	}
 
 	return psoc_priv_obj->six_ghz_supported;
+}
+#endif
+
+bool reg_is_5dot9_ghz_supported(struct wlan_objmgr_psoc *psoc)
+{
+	struct wlan_regulatory_psoc_priv_obj *psoc_priv_obj;
+
+	psoc_priv_obj = reg_get_psoc_obj(psoc);
+
+	if (!IS_VALID_PSOC_REG_OBJ(psoc_priv_obj)) {
+		reg_err("psoc reg component is NULL");
+		return  false;
+	}
+
+	return psoc_priv_obj->five_dot_nine_ghz_supported;
+}
+
+bool reg_is_fcc_regdmn(struct wlan_objmgr_pdev *pdev)
+{
+	struct cur_regdmn_info cur_reg_dmn;
+	QDF_STATUS status;
+
+	status = reg_get_curr_regdomain(pdev, &cur_reg_dmn);
+	if (status != QDF_STATUS_SUCCESS) {
+		reg_err_rl("Failed to get reg domain");
+		return false;
+	}
+
+	return reg_fcc_regdmn(cur_reg_dmn.dmn_id_5g);
+}
+
+bool reg_is_5dot9_ghz_freq(struct wlan_objmgr_pdev *pdev, qdf_freq_t freq)
+{
+	struct wlan_regulatory_pdev_priv_obj *pdev_priv_obj;
+
+	pdev_priv_obj = reg_get_pdev_obj(pdev);
+
+	if (!IS_VALID_PDEV_REG_OBJ(pdev_priv_obj)) {
+		reg_err("reg pdev priv obj is NULL");
+		return false;
+	}
+
+	return (freq >= channel_map_us[MIN_5DOT9_CHANNEL].center_freq &&
+		freq <= channel_map_us[MAX_5DOT9_CHANNEL].center_freq);
+}
+
+bool reg_is_5dot9_ghz_chan_allowed_master_mode(struct wlan_objmgr_pdev *pdev)
+{
+	struct wlan_objmgr_psoc *psoc;
+	struct wlan_regulatory_psoc_priv_obj *psoc_priv_obj;
+
+	if (!pdev) {
+		reg_alert("pdev is NULL");
+		return true;
+	}
+	psoc = wlan_pdev_get_psoc(pdev);
+
+	psoc_priv_obj = reg_get_psoc_obj(psoc);
+	if (!IS_VALID_PSOC_REG_OBJ(psoc_priv_obj)) {
+		reg_alert("psoc reg component is NULL");
+		return true;
+	}
+
+	return psoc_priv_obj->enable_5dot9_ghz_chan_in_master_mode;
 }
 
 #ifdef DISABLE_UNII_SHARED_BANDS
@@ -3773,5 +4019,103 @@ reg_get_unii_5g_bitmap(struct wlan_objmgr_pdev *pdev, uint8_t *bitmap)
 	*bitmap =  pdev_priv_obj->unii_5g_bitmap;
 
 	return QDF_STATUS_SUCCESS;
+}
+#endif
+
+#ifdef CHECK_REG_PHYMODE
+/**
+ * reg_is_phymode_allowed() - Check if requested phymode is unallowed
+ * @phy_in: phymode that the user requested
+ * @phymode_bitmap: bitmap of unallowed phymodes for specific country
+ *
+ * Return: true if phymode is not allowed, else false
+ */
+static bool reg_is_phymode_unallowed(enum reg_phymode phy_in,
+				     uint32_t phymode_bitmap)
+{
+	if (!phymode_bitmap)
+		return false;
+
+	if (phy_in == REG_PHYMODE_11AX)
+		return phymode_bitmap & REGULATORY_PHYMODE_NO11AX;
+	else if (phy_in == REG_PHYMODE_11AC)
+		return phymode_bitmap & REGULATORY_PHYMODE_NO11AC;
+	else if (phy_in == REG_PHYMODE_11N)
+		return phymode_bitmap & REGULATORY_CHAN_NO11N;
+	else if (phy_in == REG_PHYMODE_11G)
+		return phymode_bitmap & REGULATORY_PHYMODE_NO11G;
+	else if (phy_in == REG_PHYMODE_11A)
+		return phymode_bitmap & REGULATORY_PHYMODE_NO11A;
+	else if (phy_in == REG_PHYMODE_11B)
+		return phymode_bitmap & REGULATORY_PHYMODE_NO11B;
+	else
+		return true;
+
+}
+
+enum reg_phymode reg_get_max_phymode(struct wlan_objmgr_pdev *pdev,
+				     enum reg_phymode phy_in,
+				     qdf_freq_t freq)
+{
+	struct wlan_regulatory_pdev_priv_obj *pdev_priv_obj;
+	uint32_t phymode_bitmap;
+	enum reg_phymode current_phymode = phy_in;
+
+	pdev_priv_obj = reg_get_pdev_obj(pdev);
+	if (!IS_VALID_PDEV_REG_OBJ(pdev_priv_obj)) {
+		reg_err("pdev reg component is NULL");
+		return REG_PHYMODE_INVALID;
+	}
+
+	phymode_bitmap = pdev_priv_obj->phybitmap;
+
+	while (1) {
+		if (reg_is_phymode_unallowed(current_phymode, phymode_bitmap)) {
+			if (current_phymode == REG_PHYMODE_11N) {
+				if (REG_IS_24GHZ_CH_FREQ(freq))
+					current_phymode = REG_PHYMODE_11G;
+				else
+					current_phymode = REG_PHYMODE_11A;
+			} else if (current_phymode == REG_PHYMODE_11A ||
+				   current_phymode == REG_PHYMODE_11B) {
+				reg_err("Couldn't find a suitable phymode");
+				return REG_PHYMODE_INVALID;
+			} else if (current_phymode > REG_PHYMODE_MAX) {
+				reg_err("Unknown phymode");
+				return REG_PHYMODE_INVALID;
+			} else {
+				current_phymode--;
+			}
+		} else {
+			return current_phymode;
+		}
+	}
+}
+#endif /* CHECK_REG_PHYMODE */
+
+#ifdef CONFIG_REG_CLIENT
+enum band_info reg_band_bitmap_to_band_info(uint32_t band_bitmap)
+{
+	if ((band_bitmap & BIT(REG_BAND_2G)) &&
+	    (band_bitmap & BIT(REG_BAND_5G)) &&
+	    (band_bitmap & BIT(REG_BAND_6G)))
+		return BAND_ALL;
+	else if ((band_bitmap & BIT(REG_BAND_5G)) &&
+		 (band_bitmap & BIT(REG_BAND_6G)))
+		return BAND_5G;
+	else if ((band_bitmap & BIT(REG_BAND_2G)) &&
+		 (band_bitmap & BIT(REG_BAND_6G)))
+		return BAND_2G;
+	else if ((band_bitmap & BIT(REG_BAND_2G)) &&
+		 (band_bitmap & BIT(REG_BAND_5G)))
+		return BAND_ALL;
+	else if (band_bitmap & BIT(REG_BAND_2G))
+		return BAND_2G;
+	else if (band_bitmap & BIT(REG_BAND_5G))
+		return BAND_5G;
+	else if (band_bitmap & BIT(REG_BAND_6G))
+		return BAND_2G;
+	else
+		return BAND_UNKNOWN;
 }
 #endif

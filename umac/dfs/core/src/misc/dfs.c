@@ -967,13 +967,19 @@ void dfs_complete_deferred_tasks(struct wlan_dfs *dfs)
 bool dfs_is_true_160mhz_supported(struct wlan_dfs *dfs)
 {
 	struct wlan_objmgr_psoc *psoc = dfs->dfs_soc_obj->psoc;
-	struct wlan_lmac_if_target_tx_ops *tx_ops;
+	struct wlan_lmac_if_target_tx_ops *tgt_tx_ops;
+	struct wlan_lmac_if_tx_ops *tx_ops;
 	uint32_t target_type;
 
+	tx_ops = wlan_psoc_get_lmac_if_txops(psoc);
+	if (!tx_ops) {
+		 dfs_info(dfs, WLAN_DEBUG_DFS_ALWAYS, "tx_ops is NULL");
+		 return false;
+	}
 	target_type = lmac_get_target_type(dfs->dfs_pdev_obj);
-	tx_ops = &psoc->soc_cb.tx_ops.target_tx_ops;
-	if (tx_ops->tgt_is_tgt_type_qcn9000)
-		return tx_ops->tgt_is_tgt_type_qcn9000(target_type);
+	tgt_tx_ops = &tx_ops->target_tx_ops;
+	if (tgt_tx_ops->tgt_is_tgt_type_qcn9000)
+		return tgt_tx_ops->tgt_is_tgt_type_qcn9000(target_type);
 	return false;
 }
 
@@ -988,5 +994,76 @@ bool dfs_is_restricted_80p80mhz_supported(struct wlan_dfs *dfs)
 uint8_t dfs_get_agile_detector_id(struct wlan_dfs *dfs)
 {
 	return dfs->dfs_agile_detector_id;
+}
+#endif
+
+#ifdef QCA_SUPPORT_DFS_CHAN_POSTNOL
+void dfs_set_postnol_freq(struct wlan_dfs *dfs, qdf_freq_t postnol_freq)
+{
+	dfs_info(dfs, WLAN_DEBUG_DFS_ALWAYS,
+		 "dfs_chan_postnol_freq configured as %d", postnol_freq);
+
+	dfs->dfs_chan_postnol_freq = postnol_freq;
+}
+
+void dfs_set_postnol_mode(struct wlan_dfs *dfs, uint8_t postnol_mode)
+{
+	if (dfs->dfs_chan_postnol_cfreq2) {
+		dfs_info(dfs, WLAN_DEBUG_DFS_ALWAYS,
+			 "postNOL cfreq2 has been set,reset it to change mode");
+		return;
+	}
+
+	switch (postnol_mode) {
+	case DFS_CHWIDTH_20_VAL:
+		dfs->dfs_chan_postnol_mode = CH_WIDTH_20MHZ;
+		break;
+	case DFS_CHWIDTH_40_VAL:
+		dfs->dfs_chan_postnol_mode = CH_WIDTH_40MHZ;
+		break;
+	case DFS_CHWIDTH_80_VAL:
+		dfs->dfs_chan_postnol_mode = CH_WIDTH_80MHZ;
+		break;
+	case DFS_CHWIDTH_160_VAL:
+		dfs->dfs_chan_postnol_mode = CH_WIDTH_160MHZ;
+		break;
+	default:
+		dfs_err(dfs, WLAN_DEBUG_DFS_ALWAYS,
+			"Invalid postNOL mode configured");
+		return;
+	}
+
+	dfs_info(dfs, WLAN_DEBUG_DFS_ALWAYS,
+		 "DFS postnol mode configured as %d",
+		 dfs->dfs_chan_postnol_mode);
+}
+
+void dfs_set_postnol_cfreq2(struct wlan_dfs *dfs, qdf_freq_t postnol_cfreq2)
+{
+	dfs_info(dfs, WLAN_DEBUG_DFS_ALWAYS,
+		 "dfs_chan_postnol_cfreq2 configured as %d", postnol_cfreq2);
+
+	dfs->dfs_chan_postnol_cfreq2 = postnol_cfreq2;
+
+	if (postnol_cfreq2) {
+		dfs_info(dfs, WLAN_DEBUG_DFS_ALWAYS,
+			 "postNOL cfreq2 is set, changing mode to 80P80");
+		dfs->dfs_chan_postnol_mode = CH_WIDTH_80P80MHZ;
+	}
+}
+
+void dfs_get_postnol_freq(struct wlan_dfs *dfs, qdf_freq_t *postnol_freq)
+{
+	*postnol_freq = dfs->dfs_chan_postnol_freq;
+}
+
+void dfs_get_postnol_mode(struct wlan_dfs *dfs, uint8_t *postnol_mode)
+{
+	*postnol_mode = dfs->dfs_chan_postnol_mode;
+}
+
+void dfs_get_postnol_cfreq2(struct wlan_dfs *dfs, qdf_freq_t *postnol_cfreq2)
+{
+	*postnol_cfreq2 = dfs->dfs_chan_postnol_cfreq2;
 }
 #endif

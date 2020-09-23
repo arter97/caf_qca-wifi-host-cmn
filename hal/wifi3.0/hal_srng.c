@@ -273,6 +273,12 @@ error:
 
 static void hal_target_based_configure(struct hal_soc *hal)
 {
+	/**
+	 * Indicate Initialization of srngs to avoid force wake
+	 * as umac power collapse is not enabled yet
+	 */
+	hal->init_phase = true;
+
 	switch (hal->target_type) {
 #ifdef QCA_WIFI_QCA6290
 	case TARGET_TYPE_QCA6290:
@@ -290,6 +296,7 @@ static void hal_target_based_configure(struct hal_soc *hal)
 	case TARGET_TYPE_QCA6490:
 		hal->use_register_windowing = true;
 		hal_qca6490_attach(hal);
+		hal->init_phase = false;
 	break;
 #endif
 #ifdef QCA_WIFI_QCA6750
@@ -330,6 +337,8 @@ static void hal_target_based_configure(struct hal_soc *hal)
 #endif
 #ifdef QCA_WIFI_QCA5018
 	case TARGET_TYPE_QCA5018:
+		hal->use_register_windowing = true;
+		hal->static_window_map = true;
 		hal_qca5018_attach(hal);
 	break;
 #endif
@@ -452,7 +461,10 @@ static void hal_reg_write_work(void *arg)
 	uint32_t *addr;
 
 	q_elem = &hal->reg_write_queue[(hal->read_idx)];
+	q_elem->work_scheduled_time = qdf_get_log_timestamp();
 
+	/* Make sure q_elem consistent in the memory for multi-cores */
+	qdf_rmb();
 	if (!q_elem->valid)
 		return;
 
@@ -465,7 +477,11 @@ static void hal_reg_write_work(void *arg)
 		return;
 	}
 
-	while (q_elem->valid) {
+	while (true) {
+		qdf_rmb();
+		if (!q_elem->valid)
+			break;
+
 		q_elem->dequeue_time = qdf_get_log_timestamp();
 		ring_id = q_elem->srng->ring_id;
 		addr = q_elem->addr;
@@ -559,6 +575,17 @@ static void hal_reg_write_enqueue(struct hal_soc *hal_soc,
 	 */
 	qdf_wmb();
 	q_elem->valid = true;
+
+	/*
+	 * After all other fields in the q_elem has been updated
+	 * in memory successfully, the valid flag needs to be updated
+	 * in memory in time too.
+	 * Else there is a chance that the dequeuing worker thread
+	 * might read stale valid flag and the work will be bypassed
+	 * for this round. And if there is no other work scheduled
+	 * later, this hal register writing won't be updated any more.
+	 */
+	qdf_wmb();
 
 	srng->reg_write_in_progress  = true;
 	qdf_atomic_inc(&hal_soc->active_work_cnt);
@@ -732,7 +759,8 @@ void *hal_attach(struct hif_opaque_softc *hif_handle, qdf_device_t qdf_dev)
 		goto fail0;
 	}
 	hal->hif_handle = hif_handle;
-	hal->dev_base_addr = hif_get_dev_ba(hif_handle);
+	hal->dev_base_addr = hif_get_dev_ba(hif_handle); /* UMAC */
+	hal->dev_base_addr_ce = hif_get_dev_ba_ce(hif_handle); /* CE */
 	hal->qdf_dev = qdf_dev;
 	hal->shadow_rdptr_mem_vaddr = (uint32_t *)qdf_mem_alloc_consistent(
 		qdf_dev, qdf_dev->dev, sizeof(*(hal->shadow_rdptr_mem_vaddr)) *
@@ -771,12 +799,6 @@ void *hal_attach(struct hif_opaque_softc *hif_handle, qdf_device_t qdf_dev)
 	hal_target_based_configure(hal);
 
 	hal_reg_write_fail_history_init(hal);
-
-	/**
-	 * Indicate Initialization of srngs to avoid force wake
-	 * as umac power collapse is not enabled yet
-	 */
-	hal->init_phase = true;
 
 	qdf_minidump_log(hal, sizeof(*hal), "hal_soc");
 
@@ -1295,6 +1317,15 @@ extern void hal_get_srng_params(hal_soc_handle_t hal_soc_hdl,
 		ring_params->hwreg_base[i] = srng->hwreg_base[i];
 }
 qdf_export_symbol(hal_get_srng_params);
+
+void hal_set_low_threshold(hal_ring_handle_t hal_ring_hdl,
+				 uint32_t low_threshold)
+{
+	struct hal_srng *srng = (struct hal_srng *)hal_ring_hdl;
+	srng->u.src_ring.low_threshold = low_threshold * srng->entry_size;
+}
+qdf_export_symbol(hal_set_low_threshold);
+
 
 #ifdef FORCE_WAKE
 void hal_set_init_phase(hal_soc_handle_t soc, bool init_phase)

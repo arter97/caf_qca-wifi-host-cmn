@@ -113,6 +113,18 @@ static inline unsigned long __qdf_find_first_bit(unsigned long *addr,
 	return find_first_bit(addr, nbits);
 }
 
+static inline bool __qdf_bitmap_empty(unsigned long *addr,
+				      unsigned long nbits)
+{
+	return bitmap_empty(addr, nbits);
+}
+
+static inline int __qdf_bitmap_and(unsigned long *dst, unsigned long *src1,
+				   unsigned long *src2, unsigned long nbits)
+{
+	return bitmap_and(dst, src1, src2, nbits);
+}
+
 /**
  * __qdf_set_macaddr_broadcast() - set a QDF MacAddress to the 'broadcast'
  * @mac_addr: pointer to the qdf MacAddress to set to broadcast
@@ -169,15 +181,19 @@ static inline bool __qdf_is_macaddr_equal(struct qdf_mac_addr *mac_addr1,
  * Setting it to blank as feature is not intended to be supported
  * on linux version less than 4.3
  */
-#if LINUX_VERSION_CODE  < KERNEL_VERSION(4, 3, 0) || \
-	LINUX_VERSION_CODE  >= KERNEL_VERSION(4, 11, 0)
+#if LINUX_VERSION_CODE  < KERNEL_VERSION(4, 3, 0)
 #define __QDF_DECLARE_EWMA(name, _factor, _weight)
 
 #define __qdf_ewma_tx_lag int
 #define __qdf_ewma_rx_rssi int
 #else
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 11, 0)
+#define __QDF_DECLARE_EWMA(name, _factor, _weight) \
+	DECLARE_EWMA(name, ilog2(_factor), _weight)
+#else
 #define __QDF_DECLARE_EWMA(name, _factor, _weight) \
 	DECLARE_EWMA(name, _factor, _weight)
+#endif
 
 #define __qdf_ewma_tx_lag struct ewma_tx_lag
 #define __qdf_ewma_rx_rssi struct ewma_rx_rssi
@@ -252,8 +268,7 @@ static inline bool __qdf_is_macaddr_equal(struct qdf_mac_addr *mac_addr1,
 
 #define __qdf_roundup(x, y) roundup(x, y)
 
-#if LINUX_VERSION_CODE  < KERNEL_VERSION(4, 3, 0) || \
-	LINUX_VERSION_CODE  >= KERNEL_VERSION(4, 11, 0)
+#if LINUX_VERSION_CODE  < KERNEL_VERSION(4, 3, 0)
 #define  __qdf_ewma_tx_lag_init(tx_lag)
 #define  __qdf_ewma_tx_lag_add(tx_lag, value)
 #define  __qdf_ewma_tx_lag_read(tx_lag)

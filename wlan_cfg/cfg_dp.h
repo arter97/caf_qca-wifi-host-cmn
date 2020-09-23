@@ -54,7 +54,11 @@
 #define WLAN_CFG_PER_PDEV_RX_RING 0
 #define WLAN_CFG_PER_PDEV_LMAC_RING 0
 #define WLAN_LRO_ENABLE 0
+#ifdef QCA_WIFI_QCA6750
+#define WLAN_CFG_MAC_PER_TARGET 1
+#else
 #define WLAN_CFG_MAC_PER_TARGET 2
+#endif
 #ifdef IPA_OFFLOAD
 /* Size of TCL TX Ring */
 #if defined(TX_TO_NPEERS_INC_TX_DESCS)
@@ -103,6 +107,14 @@
 #define WLAN_CFG_INT_TIMER_THRESHOLD_OTHER 8
 #endif
 
+#define WLAN_CFG_RX_PENDING_HL_THRESHOLD 0x60000
+#define WLAN_CFG_RX_PENDING_HL_THRESHOLD_MIN 0
+#define WLAN_CFG_RX_PENDING_HL_THRESHOLD_MAX 0x80000
+
+#define WLAN_CFG_RX_PENDING_LO_THRESHOLD 0x60000
+#define WLAN_CFG_RX_PENDING_LO_THRESHOLD_MIN 100
+#define WLAN_CFG_RX_PENDING_LO_THRESHOLD_MAX 0x80000
+
 #define WLAN_CFG_INT_TIMER_THRESHOLD_WBM_RELEASE_RING 256
 #define WLAN_CFG_INT_TIMER_THRESHOLD_REO_RING 512
 
@@ -118,10 +130,10 @@
 #define WLAN_CFG_TX_COMP_RING_SIZE_MIN 512
 #define WLAN_CFG_TX_COMP_RING_SIZE_MAX 0x80000
 
-#define WLAN_CFG_NUM_TX_DESC_MIN  1024
+#define WLAN_CFG_NUM_TX_DESC_MIN  16
 #define WLAN_CFG_NUM_TX_DESC_MAX  32768
 
-#define WLAN_CFG_NUM_TX_EXT_DESC_MIN  1024
+#define WLAN_CFG_NUM_TX_EXT_DESC_MIN  16
 #define WLAN_CFG_NUM_TX_EXT_DESC_MAX  0x80000
 
 #define WLAN_CFG_INT_BATCH_THRESHOLD_TX_MIN 1
@@ -222,9 +234,9 @@
 #define WLAN_CFG_REO_DST_RING_SIZE_MIN 1024
 #define WLAN_CFG_REO_DST_RING_SIZE_MAX 2048
 
-#define WLAN_CFG_REO_REINJECT_RING_SIZE 32
+#define WLAN_CFG_REO_REINJECT_RING_SIZE 128
 #define WLAN_CFG_REO_REINJECT_RING_SIZE_MIN 32
-#define WLAN_CFG_REO_REINJECT_RING_SIZE_MAX 32
+#define WLAN_CFG_REO_REINJECT_RING_SIZE_MAX 128
 
 #define WLAN_CFG_RX_RELEASE_RING_SIZE 1024
 #define WLAN_CFG_RX_RELEASE_RING_SIZE_MIN 8
@@ -307,6 +319,9 @@
 #define WLAN_CFG_RX_SW_DESC_WEIGHT_SIZE 1
 #define WLAN_CFG_RX_SW_DESC_WEIGHT_SIZE_MIN 1
 #define WLAN_CFG_RX_SW_DESC_WEIGHT_SIZE_MAX 1
+#define WLAN_CFG_RX_SW_DESC_NUM_SIZE 4096
+#define WLAN_CFG_RX_SW_DESC_NUM_SIZE_MIN 4096
+#define WLAN_CFG_RX_SW_DESC_NUM_SIZE_MAX 4096
 
 /**
  * For low memory AP cases using 1 will reduce the rx descriptors memory req
@@ -315,6 +330,9 @@
 #define WLAN_CFG_RX_SW_DESC_WEIGHT_SIZE 1
 #define WLAN_CFG_RX_SW_DESC_WEIGHT_SIZE_MIN 1
 #define WLAN_CFG_RX_SW_DESC_WEIGHT_SIZE_MAX 3
+#define WLAN_CFG_RX_SW_DESC_NUM_SIZE 4096
+#define WLAN_CFG_RX_SW_DESC_NUM_SIZE_MIN 1024
+#define WLAN_CFG_RX_SW_DESC_NUM_SIZE_MAX 12288
 
 /**
  * AP use cases need to allocate more RX Descriptors than the number of
@@ -327,6 +345,9 @@
 #define WLAN_CFG_RX_SW_DESC_WEIGHT_SIZE 3
 #define WLAN_CFG_RX_SW_DESC_WEIGHT_SIZE_MIN 1
 #define WLAN_CFG_RX_SW_DESC_WEIGHT_SIZE_MAX 3
+#define WLAN_CFG_RX_SW_DESC_NUM_SIZE 12288
+#define WLAN_CFG_RX_SW_DESC_NUM_SIZE_MIN 4096
+#define WLAN_CFG_RX_SW_DESC_NUM_SIZE_MAX 12288
 #endif //QCA_HOST2FW_RXBUF_RING
 
 #define WLAN_CFG_RX_FLOW_SEARCH_TABLE_SIZE 16384
@@ -336,6 +357,10 @@
 #define WLAN_CFG_PKTLOG_BUFFER_SIZE 10
 #define WLAN_CFG_PKTLOG_MIN_BUFFER_SIZE 1
 #define WLAN_CFG_PKTLOG_MAX_BUFFER_SIZE 10
+
+#define WLAN_CFG_NUM_REO_RINGS_MAP 0xF
+#define WLAN_CFG_NUM_REO_RINGS_MAP_MIN 0x1
+#define WLAN_CFG_NUM_REO_RINGS_MAP_MAX 0xF
 
 /* DP INI Declerations */
 #define CFG_DP_HTT_PACKET_TYPE \
@@ -506,6 +531,49 @@
 		WLAN_CFG_PER_PDEV_LMAC_RING_MAX, \
 		WLAN_CFG_PER_PDEV_LMAC_RING, \
 		CFG_VALUE_OR_DEFAULT, "DP pdev LMAC ring")
+/*
+ * <ini>
+ * dp_rx_pending_hl_threshold - High threshold of frame number to start
+ * frame dropping scheme
+ * @Min: 0
+ * @Max: 524288
+ * @Default: 393216
+ *
+ * This ini entry is used to set a high limit threshold to start frame
+ * dropping scheme
+ *
+ * Usage: External
+ *
+ * </ini>
+ */
+#define CFG_DP_RX_PENDING_HL_THRESHOLD \
+		CFG_INI_UINT("dp_rx_pending_hl_threshold", \
+		WLAN_CFG_RX_PENDING_HL_THRESHOLD_MIN, \
+		WLAN_CFG_RX_PENDING_HL_THRESHOLD_MAX, \
+		WLAN_CFG_RX_PENDING_HL_THRESHOLD, \
+		CFG_VALUE_OR_DEFAULT, "DP rx pending hl threshold")
+
+/*
+ * <ini>
+ * dp_rx_pending_lo_threshold - Low threshold of frame number to stop
+ * frame dropping scheme
+ * @Min: 100
+ * @Max: 524288
+ * @Default: 393216
+ *
+ * This ini entry is used to set a low limit threshold to stop frame
+ * dropping scheme
+ *
+ * Usage: External
+ *
+ * </ini>
+ */
+#define CFG_DP_RX_PENDING_LO_THRESHOLD \
+		CFG_INI_UINT("dp_rx_pending_lo_threshold", \
+		WLAN_CFG_RX_PENDING_LO_THRESHOLD_MIN, \
+		WLAN_CFG_RX_PENDING_LO_THRESHOLD_MAX, \
+		WLAN_CFG_RX_PENDING_LO_THRESHOLD, \
+		CFG_VALUE_OR_DEFAULT, "DP rx pending lo threshold")
 
 #define CFG_DP_BASE_HW_MAC_ID \
 		CFG_INI_UINT("dp_base_hw_macid", \
@@ -551,7 +619,53 @@
 #define CFG_DP_NAPI \
 	CFG_INI_BOOL("dp_napi_enabled", PLATFORM_VALUE(true, false), \
 	"DP Napi Enabled")
+/*
+ * <ini>
+ * gEnableP2pIpTcpUdpChecksumOffload - Enable checksum offload for P2P mode
+ * @Min: 0
+ * @Max: 1
+ * @Default: 1
+ *
+ * This ini entry is used to enable/disable TX checksum(UDP/TCP) for P2P modes.
+ * This includes P2P device mode, P2P client mode and P2P GO mode.
+ * The feature is enabled by default. To disable TX checksum for P2P, add the
+ * following entry in ini file:
+ * gEnableP2pIpTcpUdpChecksumOffload=0
+ *
+ * Usage: External
+ *
+ * </ini>
+ */
+#define CFG_DP_P2P_TCP_UDP_CKSUM_OFFLOAD \
+		CFG_INI_BOOL("gEnableP2pIpTcpUdpChecksumOffload", true, \
+		"DP TCP UDP Checksum Offload for P2P mode (device/cli/go)")
 
+/*
+ * <ini>
+ * gEnableNanIpTcpUdpChecksumOffload - Enable checksum offload for NAN mode
+ * @Min: 0
+ * @Max: 1
+ * @Default: 1
+ *
+ * Usage: External
+ *
+ * </ini>
+ */
+#define CFG_DP_NAN_TCP_UDP_CKSUM_OFFLOAD \
+		CFG_INI_BOOL("gEnableNanIpTcpUdpChecksumOffload", true, \
+		"DP TCP UDP Checksum Offload for NAN mode")
+
+/*
+ * <ini>
+ * gEnableIpTcpUdpChecksumOffload - Enable checksum offload
+ * @Min: 0
+ * @Max: 1
+ * @Default: 1
+ *
+ * Usage: External
+ *
+ * </ini>
+ */
 #define CFG_DP_TCP_UDP_CKSUM_OFFLOAD \
 	CFG_INI_BOOL("gEnableIpTcpUdpChecksumOffload", true, \
 	"DP TCP UDP Checksum Offload")
@@ -750,6 +864,13 @@
 		WLAN_CFG_RX_SW_DESC_WEIGHT_SIZE, \
 		CFG_VALUE_OR_DEFAULT, "DP RX SW DESC weight")
 
+#define CFG_DP_RX_SW_DESC_NUM \
+		CFG_INI_UINT("dp_rx_sw_desc_num", \
+		WLAN_CFG_RX_SW_DESC_NUM_SIZE_MIN, \
+		WLAN_CFG_RX_SW_DESC_NUM_SIZE_MAX, \
+		WLAN_CFG_RX_SW_DESC_NUM_SIZE, \
+		CFG_VALUE_OR_DEFAULT, "DP RX SW DESC num")
+
 #define CFG_DP_RX_FLOW_SEARCH_TABLE_SIZE \
 	CFG_INI_UINT("dp_rx_flow_search_table_size", \
 		WLAN_CFG_RX_FLOW_SEARCH_TABLE_SIZE_MIN, \
@@ -809,6 +930,21 @@
 		CFG_INI_BOOL("full_mon_mode", \
 		false, "Full Monitor mode support")
 
+#define CFG_DP_REO_RINGS_MAP \
+		CFG_INI_UINT("dp_reo_rings_map", \
+		WLAN_CFG_NUM_REO_RINGS_MAP_MIN, \
+		WLAN_CFG_NUM_REO_RINGS_MAP_MAX, \
+		WLAN_CFG_NUM_REO_RINGS_MAP, \
+		CFG_VALUE_OR_DEFAULT, "REO Destination Rings Mapping")
+
+#define CFG_DP_PEER_EXT_STATS \
+		CFG_INI_BOOL("peer_ext_stats", \
+		false, "Peer extended stats")
+
+#define CFG_DP_RX_BUFF_POOL_ENABLE \
+	CFG_INI_BOOL("dp_rx_buff_prealloc_pool", false, \
+		     "Enable/Disable DP RX emergency buffer pool support")
+
 #define CFG_DP \
 		CFG(CFG_DP_HTT_PACKET_TYPE) \
 		CFG(CFG_DP_INT_BATCH_THRESHOLD_OTHER) \
@@ -844,6 +980,8 @@
 		CFG(CFG_DP_PEER_FLOW_CTRL) \
 		CFG(CFG_DP_NAPI) \
 		CFG(CFG_DP_TCP_UDP_CKSUM_OFFLOAD) \
+		CFG(CFG_DP_NAN_TCP_UDP_CKSUM_OFFLOAD) \
+		CFG(CFG_DP_P2P_TCP_UDP_CKSUM_OFFLOAD) \
 		CFG(CFG_DP_DEFRAG_TIMEOUT_CHECK) \
 		CFG(CFG_DP_WBM_RELEASE_RING) \
 		CFG(CFG_DP_TCL_CMD_CREDIT_RING) \
@@ -875,6 +1013,7 @@
 		CFG(CFG_DP_AP_STA_SECURITY_SEPERATION) \
 		CFG(CFG_DP_ENABLE_DATA_STALL_DETECTION) \
 		CFG(CFG_DP_RX_SW_DESC_WEIGHT) \
+		CFG(CFG_DP_RX_SW_DESC_NUM) \
 		CFG(CFG_DP_RX_FLOW_SEARCH_TABLE_SIZE) \
 		CFG(CFG_DP_RX_FLOW_TAG_ENABLE) \
 		CFG(CFG_DP_RX_FLOW_SEARCH_TABLE_PER_PDEV) \
@@ -882,6 +1021,11 @@
 		CFG(CFG_DP_RXDMA_MONITOR_RX_DROP_THRESHOLD) \
 		CFG(CFG_DP_PKTLOG_BUFFER_SIZE) \
 		CFG(CFG_DP_RX_FISA_ENABLE) \
-		CFG(CFG_DP_FULL_MON_MODE)
+		CFG(CFG_DP_FULL_MON_MODE) \
+		CFG(CFG_DP_REO_RINGS_MAP) \
+		CFG(CFG_DP_PEER_EXT_STATS) \
+		CFG(CFG_DP_RX_BUFF_POOL_ENABLE) \
+		CFG(CFG_DP_RX_PENDING_HL_THRESHOLD) \
+		CFG(CFG_DP_RX_PENDING_LO_THRESHOLD)
 
 #endif /* _CFG_DP_H_ */

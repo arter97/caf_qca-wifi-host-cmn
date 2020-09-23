@@ -27,16 +27,6 @@
 
 #include <qdf_nbuf.h>
 
-/**
- * struct mac_ssid - mac ssid structure
- * @length: ssid length
- * @mac_ssid: ssid
- */
-struct mlme_mac_ssid {
-	uint8_t length;
-	uint8_t mac_ssid[WLAN_SSID_MAX_LEN];
-} qdf_packed;
-
 /** slot time long */
 #define WLAN_MLME_VDEV_SLOT_TIME_LONG   0x1
 /** slot time short */
@@ -467,7 +457,7 @@ struct vdev_start_params {
 	uint32_t disable_hw_ack;
 	bool hidden_ssid;
 	bool pmf_enabled;
-	struct mlme_mac_ssid ssid;
+	struct wlan_ssid ssid;
 	uint32_t num_noa_descriptors;
 	uint32_t preferred_rx_streams;
 	uint32_t preferred_tx_streams;
@@ -501,6 +491,7 @@ struct vdev_set_params {
  * @pdev_id: pdev id on pdev for this vdev
  * @mbssid_flags: MBSS IE flags indicating vdev type
  * @vdevid_trans: id of transmitting vdev for MBSS IE
+ * @special_vdev_mode: indicates special vdev mode
  */
 struct vdev_create_params {
 	uint8_t vdev_id;
@@ -511,6 +502,7 @@ struct vdev_create_params {
 	uint32_t pdev_id;
 	uint32_t mbssid_flags;
 	uint8_t vdevid_trans;
+	bool special_vdev_mode;
 };
 
 /**

@@ -21,6 +21,7 @@
 
 #include <hal_api.h>
 
+#define HAL_INVALID_PPDU_ID    0xFFFFFFFF
 #define HAL_RX_OFFSET(block, field) block##_##field##_OFFSET
 #define HAL_RX_LSB(block, field) block##_##field##_LSB
 #define HAL_RX_MASk(block, field) block##_##field##_MASK
@@ -38,6 +39,14 @@
 #ifndef RX_MONITOR_BUFFER_SIZE
 #define RX_MONITOR_BUFFER_SIZE  2048
 #endif
+
+/* MONITOR STATUS BUFFER SIZE = 1536 data bytes, buffer allocation of 2k bytes
+ * including skb shared info and buffer alignment.
+ */
+#define RX_MON_STATUS_BASE_BUF_SIZE    2048
+#define RX_MON_STATUS_BUF_ALIGN  128
+#define RX_MON_STATUS_BUF_SIZE  (RX_MON_STATUS_BASE_BUF_SIZE - \
+				 RX_MON_STATUS_BUF_ALIGN - QDF_SHINFO_SIZE)
 
 /* HAL_RX_NON_QOS_TID = NON_QOS_TID which is 16 */
 #define HAL_RX_NON_QOS_TID 16
@@ -71,6 +80,34 @@ struct hal_wbm_err_desc_info {
 		pool_id:2,
 		msdu_continued:1,
 		reserved_2:2;
+};
+
+/**
+ * hal_rx_mon_dest_buf_info: Structure to hold rx mon dest buffer info
+ * @first_buffer: First buffer of MSDU
+ * @last_buffer: Last buffer of MSDU
+ * @is_decap_raw: Is RAW Frame
+ * @reserved_1: Reserved
+ *
+ * MSDU with continuation:
+ *  -----------------------------------------------------------
+ * | first_buffer:1   | first_buffer: 0 | ... | first_buffer: 0 |
+ * | last_buffer :0   | last_buffer : 0 | ... | last_buffer : 0 |
+ * | is_decap_raw:1/0 |      Same as earlier  |  Same as earlier|
+ *  -----------------------------------------------------------
+ *
+ * Single buffer MSDU:
+ *  ------------------
+ * | first_buffer:1   |
+ * | last_buffer :1   |
+ * | is_decap_raw:1/0 |
+ *  ------------------
+ */
+struct hal_rx_mon_dest_buf_info {
+	uint8_t first_buffer:1,
+		last_buffer:1,
+		is_decap_raw:1,
+		reserved_1:5;
 };
 
 /**
@@ -228,6 +265,24 @@ enum hal_rx_ret_buf_manager {
 		(paddr_hi << BUFFER_ADDR_INFO_1_BUFFER_ADDR_39_32_LSB) & \
 		BUFFER_ADDR_INFO_1_BUFFER_ADDR_39_32_MASK)
 
+#define HAL_RX_COOKIE_INVALID_MASK	0x80000000
+
+/*
+ * macro to get the invalid bit for sw cookie
+ */
+#define HAL_RX_BUF_COOKIE_INVALID_GET(buff_addr_info) \
+		((*(((unsigned int *)buff_addr_info) + \
+		(BUFFER_ADDR_INFO_1_SW_BUFFER_COOKIE_OFFSET >> 2))) & \
+		HAL_RX_COOKIE_INVALID_MASK)
+
+/*
+ * macro to set the invalid bit for sw cookie
+ */
+#define HAL_RX_BUF_COOKIE_INVALID_SET(buff_addr_info) \
+		((*(((unsigned int *)buff_addr_info) + \
+		(BUFFER_ADDR_INFO_1_SW_BUFFER_COOKIE_OFFSET >> 2))) |= \
+		HAL_RX_COOKIE_INVALID_MASK)
+
 /*
  * macro to set the cookie into the rxdma ring entry
  */
@@ -282,6 +337,28 @@ enum hal_rx_ret_buf_manager {
 		BUFFER_ADDR_INFO_1_RETURN_BUFFER_MANAGER_MASK,	\
 		BUFFER_ADDR_INFO_1_RETURN_BUFFER_MANAGER_LSB))
 
+#define HAL_RX_LINK_COOKIE_INVALID_MASK 0x40000000
+
+#define HAL_RX_BUF_LINK_COOKIE_INVALID_GET(buff_addr_info) \
+		((*(((unsigned int *)buff_addr_info) + \
+		(BUFFER_ADDR_INFO_1_SW_BUFFER_COOKIE_OFFSET >> 2))) & \
+		HAL_RX_LINK_COOKIE_INVALID_MASK)
+
+#define HAL_RX_BUF_LINK_COOKIE_INVALID_SET(buff_addr_info) \
+		((*(((unsigned int *)buff_addr_info) + \
+		(BUFFER_ADDR_INFO_1_SW_BUFFER_COOKIE_OFFSET >> 2))) |= \
+		HAL_RX_LINK_COOKIE_INVALID_MASK)
+
+#define HAL_RX_REO_BUF_LINK_COOKIE_INVALID_GET(reo_desc)	\
+		(HAL_RX_BUF_LINK_COOKIE_INVALID_GET(&		\
+		(((struct reo_destination_ring *)	\
+			reo_desc)->buf_or_link_desc_addr_info)))
+
+#define HAL_RX_REO_BUF_LINK_COOKIE_INVALID_SET(reo_desc)	\
+		(HAL_RX_BUF_LINK_COOKIE_INVALID_SET(&		\
+		(((struct reo_destination_ring *)	\
+			reo_desc)->buf_or_link_desc_addr_info)))
+
 /* TODO: Convert the following structure fields accesseses to offsets */
 
 #define HAL_RX_REO_BUFFER_ADDR_39_32_GET(reo_desc)	\
@@ -292,6 +369,16 @@ enum hal_rx_ret_buf_manager {
 #define HAL_RX_REO_BUFFER_ADDR_31_0_GET(reo_desc)	\
 	(HAL_RX_BUFFER_ADDR_31_0_GET(&			\
 	(((struct reo_destination_ring *)		\
+		reo_desc)->buf_or_link_desc_addr_info)))
+
+#define HAL_RX_REO_BUF_COOKIE_INVALID_GET(reo_desc)	\
+	(HAL_RX_BUF_COOKIE_INVALID_GET(&		\
+	(((struct reo_destination_ring *)	\
+		reo_desc)->buf_or_link_desc_addr_info)))
+
+#define HAL_RX_REO_BUF_COOKIE_INVALID_SET(reo_desc)	\
+	(HAL_RX_BUF_COOKIE_INVALID_SET(&		\
+	(((struct reo_destination_ring *)	\
 		reo_desc)->buf_or_link_desc_addr_info)))
 
 #define HAL_RX_REO_BUF_COOKIE_GET(reo_desc)	\
@@ -1833,6 +1920,9 @@ static inline void hal_rx_msdu_list_get(hal_soc_handle_t hal_soc_hdl,
 		/* num_msdus received in mpdu descriptor may be incorrect
 		 * sometimes due to HW issue. Check msdu buffer address also
 		 */
+		if (!i && (HAL_RX_BUFFER_ADDR_31_0_GET(
+			&msdu_details[i].buffer_addr_info_details) == 0))
+			break;
 		if (HAL_RX_BUFFER_ADDR_31_0_GET(
 			&msdu_details[i].buffer_addr_info_details) == 0) {
 			/* set the last msdu bit in the prev msdu_desc_info */
@@ -2982,6 +3072,42 @@ static inline void hal_rx_wbm_err_info_get_from_tlv(uint8_t *buf,
 }
 
 /**
+ * hal_rx_mon_dest_set_buffer_info_to_tlv(): Save the mon dest frame info
+ *      into the reserved bytes of rx_tlv_hdr.
+ * @buf: start of rx_tlv_hdr
+ * @buf_info: hal_rx_mon_dest_buf_info structure
+ *
+ * Return: void
+ */
+static inline
+void hal_rx_mon_dest_set_buffer_info_to_tlv(uint8_t *buf,
+			struct hal_rx_mon_dest_buf_info *buf_info)
+{
+	struct rx_pkt_tlvs *pkt_tlvs = (struct rx_pkt_tlvs *)buf;
+
+	qdf_mem_copy(pkt_tlvs->rx_padding0, buf_info,
+		     sizeof(struct hal_rx_mon_dest_buf_info));
+}
+
+/**
+ * hal_rx_mon_dest_get_buffer_info_from_tlv(): Retrieve mon dest frame info
+ *      from the reserved bytes of rx_tlv_hdr.
+ * @buf: start of rx_tlv_hdr
+ * @buf_info: hal_rx_mon_dest_buf_info structure
+ *
+ * Return: void
+ */
+static inline
+void hal_rx_mon_dest_get_buffer_info_from_tlv(uint8_t *buf,
+			struct hal_rx_mon_dest_buf_info *buf_info)
+{
+	struct rx_pkt_tlvs *pkt_tlvs = (struct rx_pkt_tlvs *)buf;
+
+	qdf_mem_copy(buf_info, pkt_tlvs->rx_padding0,
+		     sizeof(struct hal_rx_mon_dest_buf_info));
+}
+
+/**
  * hal_rx_wbm_err_msdu_continuation_get(): Get wbm msdu continuation
  * bit from wbm release ring descriptor
  * @wbm_desc: wbm ring descriptor
@@ -3670,7 +3796,10 @@ hal_rx_mpdu_start_tlv_tag_valid(hal_soc_handle_t hal_soc_hdl,
 {
 	struct hal_soc *hal = (struct hal_soc *)hal_soc_hdl;
 
-	return hal->ops->hal_rx_mpdu_start_tlv_tag_valid(rx_tlv_hdr);
+	if (hal->ops->hal_rx_mpdu_start_tlv_tag_valid)
+		return hal->ops->hal_rx_mpdu_start_tlv_tag_valid(rx_tlv_hdr);
+
+	return 0;
 }
 
 /**

@@ -541,7 +541,10 @@ wlan_cfg_soc_attach(struct cdp_ctrl_objmgr_psoc *psoc)
 	wlan_cfg_ctx->peer_flow_ctrl_enabled =
 			cfg_get(psoc, CFG_DP_PEER_FLOW_CTRL);
 	wlan_cfg_ctx->napi_enabled = cfg_get(psoc, CFG_DP_NAPI);
-	/*Enable checksum offload by default*/
+	wlan_cfg_ctx->p2p_tcp_udp_checksumoffload =
+			cfg_get(psoc, CFG_DP_P2P_TCP_UDP_CKSUM_OFFLOAD);
+	wlan_cfg_ctx->nan_tcp_udp_checksumoffload =
+			cfg_get(psoc, CFG_DP_NAN_TCP_UDP_CKSUM_OFFLOAD);
 	wlan_cfg_ctx->tcp_udp_checksumoffload =
 			cfg_get(psoc, CFG_DP_TCP_UDP_CKSUM_OFFLOAD);
 	wlan_cfg_ctx->per_pkt_trace = cfg_get(psoc, CFG_DP_PER_PKT_LOGGING);
@@ -590,6 +593,8 @@ wlan_cfg_soc_attach(struct cdp_ctrl_objmgr_psoc *psoc)
 		cfg_get(psoc, CFG_DP_AP_STA_SECURITY_SEPERATION);
 	wlan_cfg_ctx->rx_sw_desc_weight = cfg_get(psoc,
 						   CFG_DP_RX_SW_DESC_WEIGHT);
+	wlan_cfg_ctx->rx_sw_desc_num = cfg_get(psoc,
+						   CFG_DP_RX_SW_DESC_NUM);
 	wlan_cfg_ctx->rx_toeplitz_hash_key = (uint8_t *)rx_fst_toeplitz_key;
 	wlan_cfg_ctx->rx_flow_max_search = WLAN_CFG_RX_FST_MAX_SEARCH;
 	wlan_cfg_ctx->is_rx_flow_tag_enabled =
@@ -603,6 +608,15 @@ wlan_cfg_soc_attach(struct cdp_ctrl_objmgr_psoc *psoc)
 	wlan_cfg_ctx->mon_drop_thresh =
 		cfg_get(psoc, CFG_DP_RXDMA_MONITOR_RX_DROP_THRESHOLD);
 	wlan_cfg_ctx->is_rx_fisa_enabled = cfg_get(psoc, CFG_DP_RX_FISA_ENABLE);
+	wlan_cfg_ctx->reo_rings_mapping = cfg_get(psoc, CFG_DP_REO_RINGS_MAP);
+	wlan_cfg_ctx->pext_stats_enabled = cfg_get(psoc, CFG_DP_PEER_EXT_STATS);
+	wlan_cfg_ctx->is_rx_buff_pool_enabled =
+			cfg_get(psoc, CFG_DP_RX_BUFF_POOL_ENABLE);
+	wlan_cfg_ctx->rx_pending_high_threshold =
+			cfg_get(psoc, CFG_DP_RX_PENDING_HL_THRESHOLD);
+	wlan_cfg_ctx->rx_pending_low_threshold =
+			cfg_get(psoc, CFG_DP_RX_PENDING_LO_THRESHOLD);
+
 	return wlan_cfg_ctx;
 }
 
@@ -873,6 +887,18 @@ int wlan_cfg_per_pdev_tx_ring(struct wlan_cfg_dp_soc_ctxt *cfg)
 	return cfg->per_pdev_tx_ring;
 }
 
+uint32_t
+wlan_cfg_rx_pending_hl_threshold(struct wlan_cfg_dp_soc_ctxt *cfg)
+{
+	return cfg->rx_pending_high_threshold;
+}
+
+uint32_t
+wlan_cfg_rx_pending_lo_threshold(struct wlan_cfg_dp_soc_ctxt *cfg)
+{
+	return cfg->rx_pending_low_threshold;
+}
+
 int wlan_cfg_per_pdev_lmac_ring(struct wlan_cfg_dp_soc_ctxt *cfg)
 {
 	return cfg->per_pdev_lmac_ring;
@@ -1101,6 +1127,16 @@ int wlan_cfg_get_int_timer_threshold_mon(struct wlan_cfg_dp_soc_ctxt *cfg)
 	return cfg->int_timer_threshold_mon;
 }
 
+int wlan_cfg_get_p2p_checksum_offload(struct wlan_cfg_dp_soc_ctxt *cfg)
+{
+	return cfg->p2p_tcp_udp_checksumoffload;
+}
+
+int wlan_cfg_get_nan_checksum_offload(struct wlan_cfg_dp_soc_ctxt *cfg)
+{
+	return cfg->nan_tcp_udp_checksumoffload;
+}
+
 int wlan_cfg_get_checksum_offload(struct wlan_cfg_dp_soc_ctxt *cfg)
 {
 	return cfg->tcp_udp_checksumoffload;
@@ -1210,6 +1246,18 @@ int
 wlan_cfg_get_dp_soc_rx_sw_desc_weight(struct wlan_cfg_dp_soc_ctxt *cfg)
 {
 	return cfg->rx_sw_desc_weight;
+}
+
+int
+wlan_cfg_get_dp_soc_rx_sw_desc_num(struct wlan_cfg_dp_soc_ctxt *cfg)
+{
+	return cfg->rx_sw_desc_num;
+}
+
+uint32_t
+wlan_cfg_get_reo_rings_mapping(struct wlan_cfg_dp_soc_ctxt *cfg)
+{
+	return cfg->reo_rings_mapping;
 }
 
 bool
@@ -1343,3 +1391,28 @@ wlan_cfg_is_rx_mon_protocol_flow_tag_enabled(struct wlan_cfg_dp_soc_ctxt *cfg)
 {
 	return cfg->is_rx_mon_protocol_flow_tag_enabled;
 }
+
+void
+wlan_cfg_set_peer_ext_stats(struct wlan_cfg_dp_soc_ctxt *cfg,
+			    bool val)
+{
+	cfg->pext_stats_enabled = val;
+}
+
+bool
+wlan_cfg_is_peer_ext_stats_enabled(struct wlan_cfg_dp_soc_ctxt *cfg)
+{
+	return cfg->pext_stats_enabled;
+}
+
+#ifdef WLAN_FEATURE_RX_PREALLOC_BUFFER_POOL
+bool wlan_cfg_is_rx_buffer_pool_enabled(struct wlan_cfg_dp_soc_ctxt *cfg)
+{
+	return cfg->is_rx_buff_pool_enabled;
+}
+#else
+bool wlan_cfg_is_rx_buffer_pool_enabled(struct wlan_cfg_dp_soc_ctxt *cfg)
+{
+	return false;
+}
+#endif /* WLAN_FEATURE_RX_PREALLOC_BUFFER_POOL */

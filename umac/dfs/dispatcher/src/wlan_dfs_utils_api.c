@@ -771,11 +771,12 @@ static void utils_dfs_get_channel_list(struct wlan_objmgr_pdev *pdev,
 {
 	struct dfs_channel *tmp_chan_list = NULL;
 	struct wlan_dfs *dfs;
+	bool is_curchan_6g;
 	bool is_curchan_5g;
 	bool is_curchan_24g;
 	bool is_curchan_49g;
-	uint32_t chan_num;
-	uint32_t center_freq;
+	uint8_t chan_num;
+	uint16_t center_freq;
 	uint16_t flagext;
 	int i, j = 0;
 
@@ -793,6 +794,7 @@ static void utils_dfs_get_channel_list(struct wlan_objmgr_pdev *pdev,
 
 	chan_num = dfs->dfs_curchan->dfs_ch_ieee;
 	center_freq = dfs->dfs_curchan->dfs_ch_freq;
+	is_curchan_6g = WLAN_REG_IS_6GHZ_CHAN_FREQ(center_freq);
 	is_curchan_5g = WLAN_REG_IS_5GHZ_CH_FREQ(center_freq);
 	is_curchan_24g = WLAN_REG_IS_24GHZ_CH_FREQ(center_freq);
 	is_curchan_49g = WLAN_REG_IS_49GHZ_FREQ(center_freq);
@@ -805,7 +807,9 @@ static void utils_dfs_get_channel_list(struct wlan_objmgr_pdev *pdev,
 		if (!dfs_mlme_check_allowed_prim_chanlist(pdev, center_freq))
 			continue;
 
-		if ((is_curchan_5g) && WLAN_REG_IS_5GHZ_CH_FREQ(center_freq)) {
+		if (((is_curchan_5g) || is_curchan_6g) &&
+		    (WLAN_REG_IS_5GHZ_CH_FREQ(center_freq) ||
+		     WLAN_REG_IS_6GHZ_CHAN_FREQ(center_freq))) {
 			chan_list[j].dfs_ch_ieee = chan_num;
 			chan_list[j].dfs_ch_freq = center_freq;
 			chan_list[j].dfs_ch_flagext = flagext;
@@ -858,8 +862,8 @@ static void utils_dfs_get_channel_list(struct wlan_objmgr_pdev *pdev,
 
 	chan_num = dfs->dfs_curchan->dfs_ch_ieee;
 	center_freq = dfs->dfs_curchan->dfs_ch_freq;
-	is_curchan_5g = WLAN_REG_IS_5GHZ_CH(chan_num);
-	is_curchan_24g = WLAN_REG_IS_24GHZ_CH(chan_num);
+	is_curchan_5g = WLAN_REG_IS_5GHZ_CH_FREQ(center_freq);
+	is_curchan_24g = WLAN_REG_IS_24GHZ_CH_FREQ(center_freq);
 	is_curchan_49g = WLAN_REG_IS_49GHZ_FREQ(center_freq);
 
 	for (i = 0; i < *num_chan; i++) {
@@ -870,13 +874,13 @@ static void utils_dfs_get_channel_list(struct wlan_objmgr_pdev *pdev,
 		if (!dfs_mlme_check_allowed_prim_chanlist(pdev, chan_num))
 			continue;
 
-		if ((is_curchan_5g) && WLAN_REG_IS_5GHZ_CH(chan_num)) {
+		if ((is_curchan_5g) && WLAN_REG_IS_5GHZ_CH_FREQ(center_freq)) {
 			chan_list[j].dfs_ch_ieee = chan_num;
 			chan_list[j].dfs_ch_freq = center_freq;
 			chan_list[j].dfs_ch_flagext = flagext;
 			j++;
 		} else if ((is_curchan_24g) &&
-				WLAN_REG_IS_24GHZ_CH(chan_num)) {
+				WLAN_REG_IS_24GHZ_CH_FREQ(center_freq)) {
 			chan_list[j].dfs_ch_ieee = chan_num;
 			chan_list[j].dfs_ch_freq = center_freq;
 			j++;
@@ -1553,6 +1557,17 @@ QDF_STATUS utils_dfs_is_spoof_check_failed(struct wlan_objmgr_pdev *pdev,
 }
 
 qdf_export_symbol(utils_dfs_is_spoof_check_failed);
+
+bool utils_dfs_is_spoof_done(struct wlan_objmgr_pdev *pdev)
+{
+	struct wlan_dfs *dfs;
+
+	dfs = wlan_pdev_get_dfs_obj(pdev);
+	if (!dfs)
+		return false;
+
+	return !!dfs->dfs_spoof_test_done;
+}
 #endif
 
 int dfs_get_num_chans(void)
@@ -1619,9 +1634,10 @@ void utils_dfs_reset_dfs_prevchan(struct wlan_objmgr_pdev *pdev)
 	dfs_reset_dfs_prevchan(dfs);
 }
 
-#ifdef QCA_SUPPORT_ADFS_RCAC
-void utils_dfs_rcac_sm_deliver_evt(struct wlan_objmgr_pdev *pdev,
-				   enum dfs_rcac_sm_evt event)
+#ifdef QCA_SUPPORT_AGILE_DFS
+
+void utils_dfs_agile_sm_deliver_evt(struct wlan_objmgr_pdev *pdev,
+				    enum dfs_agile_sm_evt event)
 {
 	struct wlan_dfs *dfs;
 	void *event_data;
@@ -1635,17 +1651,19 @@ void utils_dfs_rcac_sm_deliver_evt(struct wlan_objmgr_pdev *pdev,
 		return;
 	}
 
-	if (!dfs_is_agile_rcac_enabled(dfs))
+	if (!dfs_is_agile_cac_enabled(dfs))
 		return;
 
 	event_data = (void *)dfs;
 
-	dfs_rcac_sm_deliver_evt(dfs->dfs_soc_obj,
-				event,
-				0,
-				event_data);
+	dfs_agile_sm_deliver_evt(dfs->dfs_soc_obj,
+				 event,
+				 0,
+				 event_data);
 }
+#endif
 
+#ifdef QCA_SUPPORT_ADFS_RCAC
 QDF_STATUS utils_dfs_get_rcac_channel(struct wlan_objmgr_pdev *pdev,
 				      struct ch_params *chan_params,
 				      qdf_freq_t *target_chan_freq)
@@ -1668,6 +1686,11 @@ QDF_STATUS utils_dfs_get_rcac_channel(struct wlan_objmgr_pdev *pdev,
 		return status;
 
 	*target_chan_freq = dfs->dfs_rcac_param.rcac_pri_freq;
+
+	/* Do not modify the input ch_params if no RCAC channel is present. */
+	if (!*target_chan_freq)
+		return status;
+
 	*chan_params = dfs->dfs_rcac_param.rcac_ch_params;
 
 	return QDF_STATUS_SUCCESS;

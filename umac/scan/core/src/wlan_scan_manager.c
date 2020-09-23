@@ -190,9 +190,14 @@ static void scm_scan_post_event(struct wlan_objmgr_vdev *vdev,
 			event->requester);
 	qdf_spin_unlock_bh(&scan->lock);
 
+	scm_listener_duration_init(scan);
+
 	/* notify all interested handlers */
-	for (i = 0; i < listeners->count; i++)
+	for (i = 0; i < listeners->count; i++) {
+		scm_listener_cb_exe_dur_start(scan, i);
 		listeners->cb[i].func(vdev, event, listeners->cb[i].arg);
+		scm_listener_cb_exe_dur_end(scan, i);
+	}
 	qdf_mem_free(listeners);
 }
 
@@ -560,7 +565,7 @@ int scm_scan_get_burst_duration(int max_ch_time, bool miracast_enabled)
 	return burst_duration;
 }
 
-#define SCM_ACTIVE_DWELL_TIME_NAN      40
+#define SCM_ACTIVE_DWELL_TIME_NAN      60
 #define SCM_ACTIVE_DWELL_TIME_SAP      40
 
 /**
@@ -645,6 +650,10 @@ static void scm_req_update_concurrency_params(struct wlan_objmgr_vdev *vdev,
 		req->scan_req.min_rest_time = req->scan_req.max_rest_time;
 	}
 
+	if (policy_mgr_current_concurrency_is_mcc(psoc))
+		req->scan_req.min_rest_time =
+			scan_obj->scan_def.conc_max_rest_time;
+
 	/*
 	 * If scan req for SAP (ACS Sacn) use dwell_time_active_def as dwell
 	 * time for 2g channels instead of dwell_time_active_2g
@@ -704,7 +713,13 @@ static void scm_req_update_concurrency_params(struct wlan_objmgr_vdev *vdev,
 				break;
 			}
 
-			if (ndi_present) {
+			if (go_present && sta_active) {
+				req->scan_req.burst_duration =
+					req->scan_req.dwell_time_active;
+				break;
+			}
+
+			if (ndi_present || (p2p_cli_present && sta_active)) {
 				req->scan_req.burst_duration = 0;
 				break;
 			}
@@ -772,8 +787,7 @@ static void scm_req_update_concurrency_params(struct wlan_objmgr_vdev *vdev,
 
 	if (ndi_present) {
 		req->scan_req.dwell_time_active =
-			QDF_MIN(req->scan_req.dwell_time_active,
-				SCM_ACTIVE_DWELL_TIME_NAN);
+						SCM_ACTIVE_DWELL_TIME_NAN;
 		req->scan_req.dwell_time_active_2g =
 			QDF_MIN(req->scan_req.dwell_time_active_2g,
 			SCM_ACTIVE_DWELL_TIME_NAN);
@@ -1291,6 +1305,8 @@ scm_scan_req_update_params(struct wlan_objmgr_vdev *vdev,
 	      req->scan_req.scan_type != SCAN_TYPE_RRM)
 		scm_req_update_concurrency_params(vdev, req, scan_obj);
 
+	if (req->scan_req.scan_type == SCAN_TYPE_RRM)
+		req->scan_req.scan_ctrl_flags_ext |= SCAN_FLAG_EXT_RRM_SCAN_IND;
 	/*
 	 * Set wide band flag if enabled. This will cause
 	 * phymode TLV being sent to FW.
@@ -1704,6 +1720,12 @@ scm_scan_event_handler(struct scheduler_msg *msg)
 	vdev = event_info->vdev;
 	event = &(event_info->event);
 
+	scan = wlan_vdev_get_scan_obj(vdev);
+
+	scm_duration_init(scan);
+
+	scm_event_duration_start(scan);
+
 	scm_debug("vdevid:%d, type:%d, reason:%d, freq:%d, reqstr:%d, scanid:%d",
 		  event->vdev_id, event->type, event->reason, event->chan_freq,
 		  event->requester, event->scan_id);
@@ -1757,7 +1779,6 @@ scm_scan_event_handler(struct scheduler_msg *msg)
 		goto exit;
 	}
 
-	scan = wlan_vdev_get_scan_obj(vdev);
 	if (scan)
 		scm_scan_update_scan_event(scan, event, scan_start_req);
 
@@ -1774,12 +1795,16 @@ scm_scan_event_handler(struct scheduler_msg *msg)
 		break;
 	}
 
+	scm_to_post_scan_duration_set(scan);
 	/* Notify all interested parties */
 	scm_scan_post_event(vdev, event);
 
 exit:
 	/* free event info memory */
 	qdf_mem_free(event_info);
+
+	scm_event_duration_end(scan);
+
 	wlan_objmgr_vdev_release_ref(vdev, WLAN_SCAN_ID);
 
 	return QDF_STATUS_SUCCESS;

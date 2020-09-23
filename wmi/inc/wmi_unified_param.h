@@ -28,6 +28,11 @@
 #ifdef FEATURE_WLAN_TDLS
 #include <wlan_tdls_public_structs.h>
 #endif
+#ifdef WLAN_CONV_SPECTRAL_ENABLE
+#include <wlan_spectral_public_structs.h>
+#endif /* WLAN_CONV_SPECTRAL_ENABLE */
+#include <wlan_vdev_mgr_tgt_if_tx_defs.h>
+#include <wlan_vdev_mgr_tgt_if_rx_defs.h>
 
 #define MAC_MAX_KEY_LENGTH 32
 #define MAC_PN_LENGTH 8
@@ -667,24 +672,20 @@ struct channel_param {
  * struct oem_data - oem data to be sent to firmware
  * @vdev_id: Unique identifier assigned to the vdev
  * @data_len: len of data
+ * @pdev_id: pdev id to identify the pdev
+ * @pdev_vdev_flag: 0 when vdev is valid, 1 when pdev is valid
+ * @is_host_pdev_id: 1 for host pdev id, 0 otherwise
  * @data: the pointer to the buffer containing data
  */
 struct oem_data {
 	uint8_t vdev_id;
 	size_t data_len;
+	uint8_t pdev_id;
+	bool pdev_vdev_flag;
+	bool is_host_pdev_id;
 	uint8_t *data;
 };
 #endif
-
-/**
- * struct mac_ssid - mac ssid structure
- * @length:
- * @mac_ssid[WMI_MAC_MAX_SSID_LENGTH]:
- */
-struct mac_ssid {
-	uint8_t length;
-	uint8_t mac_ssid[WMI_MAC_MAX_SSID_LENGTH];
-} qdf_packed;
 
 /**
  * enum nss_chains_band_info - Band info for dynamic nss, chains change feature
@@ -1084,6 +1085,7 @@ struct peer_assoc_params {
 	uint32_t peer_he_rx_mcs_set[WMI_HOST_MAX_HE_RATE_SET];
 	uint32_t peer_he_tx_mcs_set[WMI_HOST_MAX_HE_RATE_SET];
 	struct wmi_host_ppe_threshold peer_ppet;
+	u_int8_t peer_bsscolor_rept_info;
 };
 
 /**
@@ -1304,6 +1306,7 @@ struct tx_send_params {
  * @tx_param: TX send parameters
  * @tx_params_valid: Flag that indicates if TX params are valid
  * @use_6mbps: specify whether management frame to transmit should
+ * @tx_flags: additional configuration flags for mgmt frames
  *  use 6 Mbps rather than 1 Mbps min rate(for 5GHz band or P2P)
  */
 struct wmi_mgmt_params {
@@ -1319,6 +1322,7 @@ struct wmi_mgmt_params {
 	struct tx_send_params tx_param;
 	bool tx_params_valid;
 	uint8_t use_6mbps;
+	uint32_t tx_flags;
 };
 
 /**
@@ -1688,6 +1692,8 @@ struct roam_fils_params {
  * device is considered to be inactive
  * @is_sae_same_pmk: Flag to indicate fw whether WLAN_SAE_SINGLE_PMK feature is
  * enable or not
+ * @enable_ft_im_roaming: Flag to enable/disable FT-IM roaming upon receiving
+ * deauth
  * @roam_inactive_data_packet_count: Maximum allowed data packets count during
  * roam_scan_inactivity_time.
  * @roam_scan_period_after_inactivity: Roam scan period in ms after device is
@@ -1717,6 +1723,7 @@ struct roam_offload_scan_params {
 	uint32_t rct_validity_timer;
 	bool is_adaptive_11r;
 	bool is_sae_same_pmk;
+	bool enable_ft_im_roaming;
 #endif
 	uint32_t min_delay_btw_roam_scans;
 	uint32_t roam_trigger_reason_bitmask;
@@ -1746,7 +1753,7 @@ struct roam_offload_scan_params {
  * @auth_bit_field: auth bit field for matching WPA IE
  */
 struct wifi_epno_network_params {
-	struct mac_ssid  ssid;
+	struct wlan_ssid  ssid;
 	int8_t       rssi_threshold;
 	uint8_t      flags;
 	uint8_t      auth_bit_field;
@@ -2536,7 +2543,7 @@ struct stats_ext_params {
  */
 struct wmi_host_mem_chunk {
 	uint32_t *vaddr;
-	uint32_t paddr;
+	qdf_dma_addr_t paddr;
 	qdf_dma_mem_context(memctx);
 	uint32_t len;
 	uint32_t req_id;
@@ -2788,11 +2795,13 @@ struct peer_chan_width_switch_info {
 /**
  * struct peer_chan_width_switch_params - Peer channel width capability wrapper
  * @num_peers: Total number of peers connected to AP
+ * @max_peers_per_cmd: Peer limit per WMI command
  * @chan_width_peer_list: List of capabilities for all connected peers
  */
 
 struct peer_chan_width_switch_params {
 	uint32_t num_peers;
+	uint32_t max_peers_per_cmd;
 	struct peer_chan_width_switch_info *chan_width_peer_list;
 };
 
@@ -2904,37 +2913,6 @@ struct smart_ant_enable_tx_feedback_params {
 };
 
 /**
- * struct simulation_test_params
- * pdev_id: pdev id
- * vdev_id: vdev id
- * peer_macaddr: peer MAC address
- * test_cmd_type: test command type
- * test_subcmd_type: test command sub type
- * frame_type: frame type
- * frame_subtype: frame subtype
- * seq: sequence number
- * offset: Frame content offset
- * frame_length: Frame content length
- * buf_len: Buffer length
- * bufp: buffer
- */
-struct simulation_test_params {
-	u32 pdev_id;
-	u32 vdev_id;
-	u8 peer_mac[QDF_MAC_ADDR_SIZE];
-	u32 test_cmd_type;
-	u32 test_subcmd_type;
-	u8 frame_type;
-	u8 frame_subtype;
-	u8 seq;
-	u8 reserved;
-	u16 offset;
-	u16 frame_length;
-	u32 buf_len;
-	u8 *bufp;
-};
-
-/**
  * struct vdev_spectral_configure_params - SPectral config params
  * @vdev_id: VDEV id
  * @count: count
@@ -2956,7 +2934,8 @@ struct simulation_test_params {
  * @dbm_adj: DBM adjust
  * @chn_mask: chain mask
  * @mode: Mode
- * @center_freq: Center frequency
+ * @center_freq1: Center frequency 1
+ * @center_freq2: Center frequency 2
  * @chan_freq: Primary channel frequency
  * @chan_width: Channel width
  */
@@ -2981,7 +2960,8 @@ struct vdev_spectral_configure_params {
 	uint16_t dbm_adj;
 	uint16_t chn_mask;
 	uint16_t mode;
-	uint16_t center_freq;
+	uint16_t center_freq1;
+	uint16_t center_freq2;
 	uint16_t chan_freq;
 	uint16_t chan_width;
 };
@@ -3003,6 +2983,49 @@ struct vdev_spectral_enable_params {
 	uint8_t enabled;
 	uint8_t mode;
 };
+
+#ifdef WLAN_CONV_SPECTRAL_ENABLE
+/**
+ * struct spectral_fft_bin_markers_160_165mhz - Stores the start index
+ * and length of FFT bins in 165 MHz/Restricted 80p80 or 160 MHz
+ * mode in targets with a single Spectral detector
+ * @is_valid: Indicates whether this structure holds valid data
+ * @start_pri80: Starting index of FFT bins corresponding to primary 80 MHz
+ *               in 165 MHz/Restricted 80p80 or 160 MHz mode
+ * @num_pri80: Number of FFT bins corresponding to primary 80 MHz
+ *             in 165 MHz/Restricted 80p80 or 160 MHz mode
+ * @start_5mhz: Starting index of FFT bins corresponding to extra 5 MHz
+ *               in 165 MHz/Restricted 80p80 mode
+ * @num_5mhz: Number of FFT bins corresponding to extra 5 MHz
+ *             in 165 MHz/Restricted 80p80 mode
+ * @start_sec80: Starting index of FFT bins corresponding to secondary 80 MHz
+ *               in 165 MHz/Restricted 80p80 or 160 MHz mode
+ * @num_sec80: Number of FFT bins corresponding to secondary 80 MHz
+ *             in 165 MHz/Restricted 80p80 or 160 MHz mode
+ */
+struct spectral_fft_bin_markers_160_165mhz {
+	bool is_valid;
+	uint16_t start_pri80;
+	uint16_t num_pri80;
+	uint16_t start_5mhz;
+	uint16_t num_5mhz;
+	uint16_t start_sec80;
+	uint16_t num_sec80;
+};
+
+/**
+ * struct spectral_startscan_resp_params - Params from the event send by
+ * FW as a response to the scan start command
+ * @pdev_id: Pdev id
+ * @smode: Spectral scan mode
+ * @num_fft_bin_index: Number of TLVs with FFT bin start and end indices
+ */
+struct spectral_startscan_resp_params {
+	uint32_t pdev_id;
+	enum spectral_scan_mode smode;
+	uint8_t num_fft_bin_index;
+};
+#endif
 
 /**
  * struct pdev_set_regdomain_params - PDEV set reg domain params
@@ -3846,6 +3869,7 @@ struct rx_reorder_queue_remove_params {
  * @num_peer_adv_stats: number of peer adv stats
  * @num_mib_stats: number of mib stats
  * @num_mib_extd_stats: number of extended mib stats
+ * @num_peer_stats_info_ext: number of peer extended stats info
  * @last_event: specify if the current event is the last event
  */
 typedef struct {
@@ -3863,6 +3887,7 @@ typedef struct {
 	uint32_t num_peer_adv_stats;
 	uint32_t num_mib_stats;
 	uint32_t num_mib_extd_stats;
+	uint32_t num_peer_stats_info_ext;
 	uint32_t last_event;
 } wmi_host_stats_event;
 
@@ -4603,8 +4628,15 @@ typedef enum {
 #if defined(WLAN_DFS_PARTIAL_OFFLOAD) && defined(HOST_DFS_SPOOF_TEST)
 	wmi_host_dfs_status_check_event_id,
 #endif
+#ifdef WLAN_SUPPORT_TWT
 	wmi_twt_enable_complete_event_id,
 	wmi_twt_disable_complete_event_id,
+	wmi_twt_add_dialog_complete_event_id,
+	wmi_twt_del_dialog_complete_event_id,
+	wmi_twt_pause_dialog_complete_event_id,
+	wmi_twt_resume_dialog_complete_event_id,
+	wmi_twt_session_stats_event_id,
+#endif
 	wmi_apf_get_vdev_work_memory_resp_event_id,
 	wmi_roam_scan_stats_event_id,
 	wmi_vdev_ocac_complete_event_id,
@@ -4648,6 +4680,11 @@ typedef enum {
 #endif
 	wmi_roam_scan_chan_list_id,
 	wmi_muedca_params_config_eventid,
+	wmi_pdev_sscan_fw_param_eventid,
+	wmi_roam_cap_report_event_id,
+	wmi_vdev_bcn_latency_event_id,
+	wmi_vdev_disconnect_event_id,
+	wmi_peer_create_conf_event_id,
 	wmi_events_max,
 } wmi_conv_event_id;
 
@@ -4815,6 +4852,9 @@ typedef enum {
 	wmi_pdev_param_enable_fw_dynamic_he_edca,
 	wmi_pdev_param_enable_srp,
 	wmi_pdev_param_enable_sr_prohibit,
+	wmi_pdev_param_sr_trigger_margin,
+	wmi_pdev_param_pream_punct_bw,
+	wmi_pdev_param_enable_mbssid_ctrl_frame,
 	wmi_pdev_param_max,
 } wmi_conv_pdev_params_id;
 
@@ -4953,6 +4993,8 @@ typedef enum {
 	wmi_vdev_param_enable_disable_roam_reason_vsie,
 	wmi_vdev_param_set_cmd_obss_pd_threshold,
 	wmi_vdev_param_set_cmd_obss_pd_per_ac,
+	wmi_vdev_param_enable_srp,
+	wmi_vdev_param_nan_config_features,
 } wmi_conv_vdev_param_id;
 
 /**
@@ -5167,6 +5209,16 @@ typedef enum {
 	wmi_service_sta_nan_ndi_four_port,
 	wmi_service_host_scan_stop_vdev_all,
 	wmi_service_ema_ap_support,
+	wmi_support_extend_address,
+	wmi_service_srg_srp_spatial_reuse_support,
+	wmi_service_suiteb_roam_support,
+	wmi_service_no_interband_mcc_support,
+	wmi_service_dual_sta_roam_support,
+	wmi_service_peer_create_conf,
+	wmi_service_configure_roam_trigger_param_support,
+	wmi_service_5dot9_ghz_support,
+	wmi_service_cfr_ta_ra_as_fp_support,
+	wmi_service_cfr_capture_count_support,
 	wmi_services_max,
 } wmi_conv_service_ids;
 #define WMI_SERVICE_UNAVAILABLE 0xFFFF
@@ -5306,6 +5358,8 @@ struct wmi_host_fw_abi_ver {
  * @max_rnr_neighbours: Max supported RNR neighbors in multisoc APs
  * @ema_max_vap_cnt: Number of maximum EMA tx-vaps at any instance of time
  * @ema_max_profile_period: Maximum EMA profile periodicity on any pdev
+ * @max_ndp_sessions: Max ndp sessions support
+ * @max_ndi: max number of ndi host supports
  */
 typedef struct {
 	uint32_t num_vdevs;
@@ -5407,6 +5461,8 @@ typedef struct {
 	uint32_t max_rnr_neighbours;
 	uint32_t ema_max_vap_cnt;
 	uint32_t ema_max_profile_period;
+	uint32_t max_ndp_sessions;
+	uint32_t max_ndi;
 } target_resource_config;
 
 /**
@@ -7635,6 +7691,10 @@ struct wmi_roam_scan_stats_res {
  * @validity_interval:     Preferred candidate list validity interval in ms
  * @candidate_list_count:  Number of candidates in BTM request.
  * @btm_resp_status:       Status code of the BTM response.
+ * @btm_bss_termination_timeout: BTM BSS termination timeout value
+ * in milli seconds
+ * @btm_mbo_assoc_retry_timeout: BTM MBO assoc retry timeout value in
+ * milli seconds
  */
 struct wmi_roam_btm_trigger_data {
 	uint32_t btm_request_mode;
@@ -7642,6 +7702,8 @@ struct wmi_roam_btm_trigger_data {
 	uint32_t validity_interval;
 	uint32_t candidate_list_count;
 	uint32_t btm_resp_status;
+	uint32_t btm_bss_termination_timeout;
+	uint32_t btm_mbo_assoc_retry_timeout;
 };
 
 /**
@@ -7674,6 +7736,27 @@ struct wmi_roam_deauth_trigger_data {
 };
 
 /**
+ * struct wmi_roam_wtc_btm_trigger_data - wtc btm roaming trigger related
+ * parameters
+ * @roaming_mode: Roaming Mode
+ * @vsie_trigger_reason: Roam trigger reason present in btm request
+ * @sub_code: Sub code present in btm request
+ * @wtc_mode: WTC mode
+ * @wtc_scan_mode: WTC scan mode
+ * @wtc_rssi_th: Connected AP threshold
+ * @wtc_candi_rssi_th: Candidate AP threshold
+ */
+struct wmi_roam_wtc_btm_trigger_data {
+	uint32_t roaming_mode;
+	uint32_t vsie_trigger_reason;
+	uint32_t sub_code;
+	uint32_t wtc_mode;
+	uint32_t wtc_scan_mode;
+	uint32_t wtc_rssi_th;
+	uint32_t wtc_candi_rssi_th;
+};
+
+/**
  *  struct wmi_roam_candidate_info - Roam scan candidate APs related info
  *  @timestamp:   Host timestamp in millisecs
  *  @type:        0 - Candidate AP; 1 - Current connected AP.
@@ -7685,6 +7768,12 @@ struct wmi_roam_deauth_trigger_data {
  *  @rssi_score:  AP RSSI score
  *  @total_score: Total score of the candidate AP.
  *  @etp:         Estimated throughput value of the AP in Mbps
+ *  @bl_reason:   Blacklist reason
+ *  @bl_source:   Source of adding AP to BL
+ *  @bl_timestamp:This timestamp indicates the time when AP added
+ *  to blacklist.
+ *  @bl_original_timeout: Original timeout value in milli seconds
+ *  when AP added to BL
  */
 struct wmi_roam_candidate_info {
 	uint32_t timestamp;
@@ -7697,6 +7786,10 @@ struct wmi_roam_candidate_info {
 	uint32_t rssi_score;
 	uint32_t total_score;
 	uint32_t etp;
+	uint32_t bl_reason;
+	uint32_t bl_source;
+	uint32_t bl_timestamp;
+	uint32_t bl_original_timeout;
 };
 
 /**
@@ -7764,6 +7857,7 @@ struct wmi_neighbor_report_data {
  * @cu_trig_data:       BSS Load roam trigger parameters.
  * @rssi_trig_data:     RSSI trigger related info.
  * @deauth_trig_data:   Deauth roam trigger related info
+ * @wtc_btm_trig_data:  WTC BTM roam trigger related info
  */
 struct wmi_roam_trigger_info {
 	bool present;
@@ -7776,6 +7870,7 @@ struct wmi_roam_trigger_info {
 		struct wmi_roam_cu_trigger_data cu_trig_data;
 		struct wmi_roam_rssi_trigger_data rssi_trig_data;
 		struct wmi_roam_deauth_trigger_data deauth_trig_data;
+		struct wmi_roam_wtc_btm_trigger_data wtc_btm_trig_data;
 	};
 };
 

@@ -212,6 +212,15 @@ void wlan_util_change_map_index(unsigned long *map, uint8_t id, uint8_t set);
 bool wlan_util_map_index_is_set(unsigned long *map, uint8_t id);
 
 /**
+ * wlan_util_map_is_any_index_set() - Check if any bit is set in given bitmap
+ * @map: bitmap
+ * @nbytes: number of bytes in bitmap
+ *
+ * Return: true, if any of the bit is set, otherwise false
+ */
+bool wlan_util_map_is_any_index_set(unsigned long *map, unsigned long nbytes);
+
+/**
  * wlan_pdev_chan_change_pending_vdevs() - function to test/set channel change
  *                                         pending flag
  * @pdev: pdev object
@@ -226,6 +235,23 @@ bool wlan_util_map_index_is_set(unsigned long *map, uint8_t id);
 QDF_STATUS wlan_pdev_chan_change_pending_vdevs(struct wlan_objmgr_pdev *pdev,
 					       unsigned long *vdev_id_map,
 					       wlan_objmgr_ref_dbgid dbg_id);
+
+/**
+ * wlan_pdev_chan_change_pending_vdevs_down() - function to test/set down
+ *                                              change pending flag
+ * @pdev: pdev object
+ * @vdev_id_map: bitmap to derive channel change vdevs
+ * @ref_id: object manager ref id
+ *
+ * This function test/set channel change pending flag
+ *
+ * Return: QDF_STATUS_SUCCESS, if it iterates through all vdevs,
+ *         otherwise QDF_STATUS_E_FAILURE
+ */
+QDF_STATUS wlan_pdev_chan_change_pending_vdevs_down(
+					struct wlan_objmgr_pdev *pdev,
+					unsigned long *vdev_id_map,
+					wlan_objmgr_ref_dbgid dbg_id);
 
 /**
  * wlan_chan_eq() - function to check whether both channels are same

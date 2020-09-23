@@ -75,7 +75,6 @@
 #define MAX_IDLE_SCATTER_BUFS 16
 #define DP_MAX_IRQ_PER_CONTEXT 12
 #define MAX_HTT_METADATA_LEN 32
-#define MAX_NUM_PEER_ID_PER_PEER 8
 #define DP_MAX_TIDS 17
 #define DP_NON_QOS_TID 16
 #define DP_NULL_DATA_TID 17
@@ -141,6 +140,8 @@ struct wlan_srng_cfg {
  * @rawmode_enabled: Flag indicating if RAW mode is enabled
  * @peer_flow_ctrl_enabled: Flag indicating if peer flow control is enabled
  * @napi_enabled: enable/disable interrupt mode for reaping tx and rx packets
+ * @p2p_tcp_udp_checksumoffload: enable/disable checksum offload for P2P mode
+ * @nan_tcp_udp_checksumoffload: enable/disable checksum offload for NAN mode
  * @tcp_udp_checksumoffload: enable/disable checksum offload
  * @nss_cfg: nss configuration
  * @rx_defrag_min_timeout: rx defrag minimum timeout
@@ -183,6 +184,11 @@ struct wlan_srng_cfg {
  *                        5 tuple flow entry
  * @pktlog_buffer_size: packet log buffer size
  * @is_rx_fisa_enabled: flag to enable/disable FISA Rx
+ * @pext_stats_enabled: Flag to enable and disabled peer extended stats
+ * @is_rx_buff_pool_enabled: flag to enable/disable emergency RX buffer
+ *                           pool support
+ * @rx_pending_high_threshold: threshold of starting pkt drop
+ * @rx_pending_low_threshold: threshold of stopping pkt drop
  */
 struct wlan_cfg_dp_soc_ctxt {
 	int num_int_ctxts;
@@ -235,6 +241,8 @@ struct wlan_cfg_dp_soc_ctxt {
 	bool rawmode_enabled;
 	bool peer_flow_ctrl_enabled;
 	bool napi_enabled;
+	bool p2p_tcp_udp_checksumoffload;
+	bool nan_tcp_udp_checksumoffload;
 	bool tcp_udp_checksumoffload;
 	bool defrag_timeout_check;
 	int nss_cfg;
@@ -272,6 +280,7 @@ struct wlan_cfg_dp_soc_ctxt {
 	bool tx_comp_enable_eol_data_check;
 #endif /* WLAN_FEATURE_RX_SOFTIRQ_TIME_LIMIT */
 	int rx_sw_desc_weight;
+	int rx_sw_desc_num;
 	bool is_rx_mon_protocol_flow_tag_enabled;
 	bool is_rx_flow_tag_enabled;
 	bool is_rx_flow_search_table_per_pdev;
@@ -282,6 +291,11 @@ struct wlan_cfg_dp_soc_ctxt {
 	uint8_t is_rx_fisa_enabled;
 	bool is_tso_desc_attach_defer;
 	uint32_t delayed_replenish_entries;
+	uint32_t reo_rings_mapping;
+	bool pext_stats_enabled;
+	bool is_rx_buff_pool_enabled;
+	uint32_t rx_pending_high_threshold;
+	uint32_t rx_pending_low_threshold;
 };
 
 /**
@@ -858,6 +872,24 @@ int wlan_cfg_get_rx_dma_buf_ring_size(
 		struct wlan_cfg_dp_pdev_ctxt *wlan_cfg_pdev_ctx);
 
 /*
+ * wlan_cfg_rx_pending_hl_threshold() - Return high threshold of rx pending
+ * @wlan_cfg_pdev_ctx
+ *
+ * Return: rx_pending_high_threshold
+ */
+uint32_t
+wlan_cfg_rx_pending_hl_threshold(struct wlan_cfg_dp_soc_ctxt *cfg);
+
+/*
+ * wlan_cfg_rx_pending_lo_threshold() - Return low threshold of rx pending
+ * @wlan_cfg_pdev_ctx
+ *
+ * Return: rx_pending_low_threshold
+ */
+uint32_t
+wlan_cfg_rx_pending_lo_threshold(struct wlan_cfg_dp_soc_ctxt *cfg);
+
+/*
  * wlan_cfg_get_num_mac_rings() - Return the number of MAC RX DMA rings
  * per pdev
  * @wlan_cfg_pdev_ctx
@@ -997,6 +1029,22 @@ int wlan_cfg_get_int_timer_threshold_mon(struct wlan_cfg_dp_soc_ctxt *cfg);
  * Return: Checksum offload enable or disable
  */
 int wlan_cfg_get_checksum_offload(struct wlan_cfg_dp_soc_ctxt *cfg);
+
+/*
+ * wlan_cfg_get_nan_checksum_offload - Get checksum offload enable/disable val
+ * @wlan_cfg_soc_ctx
+ *
+ * Return: Checksum offload enable or disable value for NAN mode
+ */
+int wlan_cfg_get_nan_checksum_offload(struct wlan_cfg_dp_soc_ctxt *cfg);
+
+/*
+ * wlan_cfg_get_p2p_checksum_offload - Get checksum offload enable/disable val
+ * @wlan_cfg_soc_ctx
+ *
+ * Return: Checksum offload enable or disable value for P2P mode
+ */
+int wlan_cfg_get_p2p_checksum_offload(struct wlan_cfg_dp_soc_ctxt *cfg);
 
 /*
  * wlan_cfg_tx_ring_size - Get Tx DMA ring size (TCL Data Ring)
@@ -1159,6 +1207,15 @@ int
 wlan_cfg_get_dp_soc_rx_sw_desc_weight(struct wlan_cfg_dp_soc_ctxt *cfg);
 
 /*
+ * wlan_cfg_get_dp_soc_rx_sw_desc_num - Get rx sw desc num
+ * @wlan_cfg_soc_ctx
+ *
+ * Return: rx_sw_desc_num
+ */
+int
+wlan_cfg_get_dp_soc_rx_sw_desc_num(struct wlan_cfg_dp_soc_ctxt *cfg);
+
+/*
  * wlan_cfg_get_dp_caps - Get dp capablities
  * @wlan_cfg_soc_ctx
  * @dp_caps: enum for dp capablities
@@ -1313,6 +1370,16 @@ void wlan_cfg_fill_interrupt_mask(struct wlan_cfg_dp_soc_ctxt *wlan_cfg_ctx,
  * Return: true if enabled, false otherwise.
  */
 bool wlan_cfg_is_rx_fisa_enabled(struct wlan_cfg_dp_soc_ctxt *cfg);
+
+/**
+ * wlan_cfg_is_rx_buffer_pool_enabled() - Get RX buffer pool enabled flag
+ *
+ *
+ * @cfg: soc configuration context
+ *
+ * Return: true if enabled, false otherwise.
+ */
+bool wlan_cfg_is_rx_buffer_pool_enabled(struct wlan_cfg_dp_soc_ctxt *cfg);
 #endif
 
 void wlan_cfg_set_tso_desc_attach_defer(struct wlan_cfg_dp_soc_ctxt *cfg,
@@ -1320,3 +1387,35 @@ void wlan_cfg_set_tso_desc_attach_defer(struct wlan_cfg_dp_soc_ctxt *cfg,
 
 bool wlan_cfg_is_tso_desc_attach_defer(struct wlan_cfg_dp_soc_ctxt *cfg);
 
+/**
+ * wlan_cfg_get_reo_rings_mapping() - Get Reo destination ring bitmap
+ *
+ *
+ * @cfg: soc configuration context
+ *
+ * Return: reo ring bitmap.
+ */
+uint32_t wlan_cfg_get_reo_rings_mapping(struct wlan_cfg_dp_soc_ctxt *cfg);
+
+/**
+ * wlan_cfg_set_peer_ext_stats() - set peer extended stats
+ *
+ * @wlan_cfg_dp_soc_ctxt: soc configuration context
+ * @val: Flag value read from INI
+ *
+ * Return: void
+ */
+void
+wlan_cfg_set_peer_ext_stats(struct wlan_cfg_dp_soc_ctxt *cfg,
+			    bool val);
+
+/**
+ * wlan_cfg_is_peer_ext_stats_enabled() - Check if peer extended
+ *                                        stats are enabled
+ *
+ * @wlan_cfg_dp_soc_ctxt: soc configuration context
+ *
+ * Return: bool
+ */
+bool
+wlan_cfg_is_peer_ext_stats_enabled(struct wlan_cfg_dp_soc_ctxt *cfg);

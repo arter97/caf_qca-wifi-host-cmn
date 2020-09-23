@@ -168,13 +168,20 @@ static QDF_STATUS __dp_rx_desc_nbuf_free(struct dp_soc *soc,
 		offset = i % num_desc_per_page;
 		rx_desc_elem = dp_rx_desc_find(page_id, offset, rx_desc_pool);
 		rx_desc = &rx_desc_elem->rx_desc;
+		dp_rx_desc_free_dbg_info(rx_desc);
 		if (rx_desc->in_use) {
 			nbuf = rx_desc->nbuf;
 			if (!rx_desc->unmapped) {
-				dp_ipa_handle_rx_buf_smmu_mapping(soc, nbuf,
-								  false);
-				qdf_nbuf_unmap_single(soc->osdev, nbuf,
-						      QDF_DMA_BIDIRECTIONAL);
+				dp_ipa_handle_rx_buf_smmu_mapping(
+							soc, nbuf,
+							rx_desc_pool->buf_size,
+							false);
+				qdf_nbuf_unmap_nbytes_single(
+							soc->osdev,
+							rx_desc->nbuf,
+							QDF_DMA_BIDIRECTIONAL,
+							rx_desc_pool->buf_size);
+				rx_desc->unmapped = 1;
 			}
 			qdf_nbuf_free(nbuf);
 		}
@@ -222,6 +229,10 @@ void dp_rx_desc_pool_deinit(struct dp_soc *soc,
 
 	rx_desc_pool->freelist = NULL;
 	rx_desc_pool->pool_size = 0;
+
+	/* Deinitialize rx mon desr frag flag */
+	rx_desc_pool->rx_mon_dest_frag_enable = false;
+
 	qdf_spin_unlock_bh(&rx_desc_pool->lock);
 	qdf_spinlock_destroy(&rx_desc_pool->lock);
 }
@@ -321,11 +332,15 @@ void dp_rx_desc_nbuf_and_pool_free(struct dp_soc *soc, uint32_t pool_id,
 			nbuf = rx_desc_pool->array[i].rx_desc.nbuf;
 
 			if (!(rx_desc_pool->array[i].rx_desc.unmapped)) {
-				dp_ipa_handle_rx_buf_smmu_mapping(soc, nbuf,
-								  false);
-
-				qdf_nbuf_unmap_single(soc->osdev, nbuf,
-						      QDF_DMA_FROM_DEVICE);
+				dp_ipa_handle_rx_buf_smmu_mapping(
+							soc, nbuf,
+							rx_desc_pool->buf_size,
+							false);
+				qdf_nbuf_unmap_nbytes_single(
+							soc->osdev, nbuf,
+							QDF_DMA_FROM_DEVICE,
+							rx_desc_pool->buf_size);
+				rx_desc_pool->array[i].rx_desc.unmapped = 1;
 			}
 			qdf_nbuf_free(nbuf);
 		}
@@ -347,17 +362,56 @@ void dp_rx_desc_nbuf_free(struct dp_soc *soc,
 			nbuf = rx_desc_pool->array[i].rx_desc.nbuf;
 
 			if (!(rx_desc_pool->array[i].rx_desc.unmapped)) {
-				dp_ipa_handle_rx_buf_smmu_mapping(soc, nbuf,
-								  false);
-
-				qdf_nbuf_unmap_single(soc->osdev, nbuf,
-						      QDF_DMA_FROM_DEVICE);
+				dp_ipa_handle_rx_buf_smmu_mapping(
+						soc, nbuf,
+						rx_desc_pool->buf_size,
+						false);
+				qdf_nbuf_unmap_nbytes_single(
+							soc->osdev, nbuf,
+							QDF_DMA_FROM_DEVICE,
+							rx_desc_pool->buf_size);
+				rx_desc_pool->array[i].rx_desc.unmapped = 1;
 			}
 			qdf_nbuf_free(nbuf);
 		}
 	}
 	qdf_spin_unlock_bh(&rx_desc_pool->lock);
 }
+
+/**
+ * dp_rx_desc_frag_free() - Free desc frag buffer
+ *
+ * @soc: core txrx main context
+ * @rx_desc_pool: rx descriptor pool pointer
+ *
+ * Return: None
+ */
+#ifdef DP_RX_MON_MEM_FRAG
+void dp_rx_desc_frag_free(struct dp_soc *soc,
+			  struct rx_desc_pool *rx_desc_pool)
+{
+	qdf_dma_addr_t paddr;
+	qdf_frag_t vaddr;
+	int i;
+
+	qdf_spin_lock_bh(&rx_desc_pool->lock);
+	for (i = 0; i < rx_desc_pool->pool_size; i++) {
+		if (rx_desc_pool->array[i].rx_desc.in_use) {
+			paddr = rx_desc_pool->array[i].rx_desc.paddr_buf_start;
+			vaddr = rx_desc_pool->array[i].rx_desc.rx_buf_start;
+
+			if (!(rx_desc_pool->array[i].rx_desc.unmapped)) {
+				qdf_mem_unmap_page(soc->osdev, paddr,
+						   rx_desc_pool->buf_size,
+						   QDF_DMA_FROM_DEVICE);
+				rx_desc_pool->array[i].rx_desc.unmapped = 1;
+			}
+			qdf_frag_free(vaddr);
+		}
+	}
+	qdf_spin_unlock_bh(&rx_desc_pool->lock);
+}
+#endif
 
 void dp_rx_desc_pool_free(struct dp_soc *soc,
 			  struct rx_desc_pool *rx_desc_pool)
@@ -372,6 +426,10 @@ void dp_rx_desc_pool_deinit(struct dp_soc *soc,
 
 	rx_desc_pool->freelist = NULL;
 	rx_desc_pool->pool_size = 0;
+
+	/* Deinitialize rx mon desr frag flag */
+	rx_desc_pool->rx_mon_dest_frag_enable = false;
+
 	qdf_spin_unlock_bh(&rx_desc_pool->lock);
 	qdf_spinlock_destroy(&rx_desc_pool->lock);
 }
@@ -445,6 +503,7 @@ void dp_rx_add_desc_list_to_free_list(struct dp_soc *soc,
 	rx_desc_pool->freelist = *local_desc_list;
 	(*tail)->next = temp_list;
 	*tail = NULL;
+	*local_desc_list = NULL;
 
 	qdf_spin_unlock_bh(&rx_desc_pool->lock);
 }

@@ -240,6 +240,11 @@ bool wlan_util_map_index_is_set(unsigned long *map, uint8_t id)
 	return qdf_test_bit(id, map);
 }
 
+bool wlan_util_map_is_any_index_set(unsigned long *map, unsigned long nbytes)
+{
+	return !qdf_bitmap_empty(map, QDF_CHAR_BIT * nbytes);
+}
+
 static void wlan_vdev_chan_change_pending(struct wlan_objmgr_pdev *pdev,
 					  void *object, void *arg)
 {
@@ -276,6 +281,48 @@ QDF_STATUS wlan_pdev_chan_change_pending_vdevs(struct wlan_objmgr_pdev *pdev,
 
 	wlan_objmgr_pdev_iterate_obj_list(pdev, WLAN_VDEV_OP,
 					  wlan_vdev_chan_change_pending,
+					  vdev_id_map, 0, dbg_id);
+
+	return QDF_STATUS_SUCCESS;
+}
+
+static void wlan_vdev_down_pending(struct wlan_objmgr_pdev *pdev,
+				   void *object, void *arg)
+{
+	struct wlan_objmgr_vdev *vdev = (struct wlan_objmgr_vdev *)object;
+	unsigned long *vdev_id_map = (unsigned long *)arg;
+	uint8_t id = 0;
+	struct wlan_objmgr_psoc *psoc;
+
+	psoc = wlan_pdev_get_psoc(pdev);
+	if (!psoc)
+		return;
+
+	wlan_vdev_obj_lock(vdev);
+	if (wlan_vdev_mlme_is_init_state(vdev) != QDF_STATUS_SUCCESS) {
+		id = wlan_vdev_get_id(vdev);
+		/* Invalid vdev id */
+		if (id >= wlan_psoc_get_max_vdev_count(psoc)) {
+			wlan_vdev_obj_unlock(vdev);
+			return;
+		}
+
+		wlan_util_change_map_index(vdev_id_map, id, 1);
+	}
+
+	wlan_vdev_obj_unlock(vdev);
+}
+
+QDF_STATUS wlan_pdev_chan_change_pending_vdevs_down(
+					struct wlan_objmgr_pdev *pdev,
+					unsigned long *vdev_id_map,
+					wlan_objmgr_ref_dbgid dbg_id)
+{
+	if (!pdev)
+		return QDF_STATUS_E_INVAL;
+
+	wlan_objmgr_pdev_iterate_obj_list(pdev, WLAN_VDEV_OP,
+					  wlan_vdev_down_pending,
 					  vdev_id_map, 0, dbg_id);
 
 	return QDF_STATUS_SUCCESS;

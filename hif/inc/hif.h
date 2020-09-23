@@ -315,12 +315,16 @@ struct hif_opaque_softc {
 /**
  * enum hif_event_type - Type of DP events to be recorded
  * @HIF_EVENT_IRQ_TRIGGER: IRQ trigger event
+ * @HIF_EVENT_TIMER_ENTRY: Monitor Timer entry event
+ * @HIF_EVENT_TIMER_EXIT: Monitor Timer exit event
  * @HIF_EVENT_BH_SCHED: NAPI POLL scheduled event
  * @HIF_EVENT_SRNG_ACCESS_START: hal ring access start event
  * @HIF_EVENT_SRNG_ACCESS_END: hal ring access end event
  */
 enum hif_event_type {
 	HIF_EVENT_IRQ_TRIGGER,
+	HIF_EVENT_TIMER_ENTRY,
+	HIF_EVENT_TIMER_EXIT,
 	HIF_EVENT_BH_SCHED,
 	HIF_EVENT_SRNG_ACCESS_START,
 	HIF_EVENT_SRNG_ACCESS_END,
@@ -380,6 +384,24 @@ void hif_hist_record_event(struct hif_opaque_softc *hif_ctx,
 			   uint8_t intr_grp_id);
 
 /**
+ * hif_event_history_init() - Initialize SRNG event history buffers
+ * @hif_ctx: HIF opaque context
+ * @id: context group ID for which history is recorded
+ *
+ * Returns: None
+ */
+void hif_event_history_init(struct hif_opaque_softc *hif_ctx, uint8_t id);
+
+/**
+ * hif_event_history_deinit() - De-initialize SRNG event history buffers
+ * @hif_ctx: HIF opaque context
+ * @id: context group ID for which history is recorded
+ *
+ * Returns: None
+ */
+void hif_event_history_deinit(struct hif_opaque_softc *hif_ctx, uint8_t id);
+
+/**
  * hif_record_event() - Wrapper function to form and record DP event
  * @hif_ctx: HIF opaque context
  * @intr_grp_id: interrupt group ID registered with hif
@@ -404,8 +426,9 @@ static inline void hif_record_event(struct hif_opaque_softc *hif_ctx,
 	event.tp = tp;
 	event.type = type;
 
-	return hif_hist_record_event(hif_ctx, &event,
-				     intr_grp_id);
+	hif_hist_record_event(hif_ctx, &event, intr_grp_id);
+
+	return;
 }
 
 #else
@@ -416,6 +439,16 @@ static inline void hif_record_event(struct hif_opaque_softc *hif_ctx,
 				    uint32_t hp,
 				    uint32_t tp,
 				    enum hif_event_type type)
+{
+}
+
+static inline void hif_event_history_init(struct hif_opaque_softc *hif_ctx,
+					  uint8_t id)
+{
+}
+
+static inline void hif_event_history_deinit(struct hif_opaque_softc *hif_ctx,
+					    uint8_t id)
 {
 }
 #endif /* WLAN_FEATURE_DP_EVENT_HISTORY */
@@ -633,15 +666,25 @@ bool hif_is_polled_mode_enabled(struct hif_opaque_softc *hif_ctx);
 void hif_enable_fastpath(struct hif_opaque_softc *hif_ctx);
 bool hif_is_fastpath_mode_enabled(struct hif_opaque_softc *hif_ctx);
 void *hif_get_ce_handle(struct hif_opaque_softc *hif_ctx, int ret);
-int hif_ce_fastpath_cb_register(struct hif_opaque_softc *hif_ctx,
-				fastpath_msg_handler handler, void *context);
+
+/**
+ * hif_ce_fastpath_cb_register() - Register callback for fastpath msg handler
+ * @handler: Callback funtcion
+ * @context: handle for callback function
+ *
+ * Return: QDF_STATUS_SUCCESS on success or QDF_STATUS_E_FAILURE
+ */
+QDF_STATUS hif_ce_fastpath_cb_register(
+		struct hif_opaque_softc *hif_ctx,
+		fastpath_msg_handler handler, void *context);
 #else
-static inline int hif_ce_fastpath_cb_register(struct hif_opaque_softc *hif_ctx,
-					      fastpath_msg_handler handler,
-					      void *context)
+static inline QDF_STATUS hif_ce_fastpath_cb_register(
+		struct hif_opaque_softc *hif_ctx,
+		fastpath_msg_handler handler, void *context)
 {
 	return QDF_STATUS_E_FAILURE;
 }
+
 static inline void *hif_get_ce_handle(struct hif_opaque_softc *hif_ctx, int ret)
 {
 	return NULL;
@@ -957,6 +1000,7 @@ bool hif_pm_runtime_is_suspended(struct hif_opaque_softc *hif_ctx);
 int hif_pm_runtime_get_monitor_wake_intr(struct hif_opaque_softc *hif_ctx);
 void hif_pm_runtime_set_monitor_wake_intr(struct hif_opaque_softc *hif_ctx,
 					  int val);
+void hif_pm_runtime_check_and_request_resume(struct hif_opaque_softc *hif_ctx);
 void hif_pm_runtime_mark_dp_rx_busy(struct hif_opaque_softc *hif_ctx);
 int hif_pm_runtime_is_dp_rx_busy(struct hif_opaque_softc *hif_ctx);
 qdf_time_t hif_pm_runtime_get_dp_rx_busy_mark(struct hif_opaque_softc *hif_ctx);
@@ -1018,6 +1062,9 @@ hif_pm_runtime_get_monitor_wake_intr(struct hif_opaque_softc *hif_ctx)
 { return 0; }
 static inline void
 hif_pm_runtime_set_monitor_wake_intr(struct hif_opaque_softc *hif_ctx, int val)
+{ return; }
+static inline void
+hif_pm_runtime_check_and_request_resume(struct hif_opaque_softc *hif_ctx)
 { return; }
 static inline void
 hif_pm_runtime_mark_dp_rx_busy(struct hif_opaque_softc *hif_ctx) {};
@@ -1129,6 +1176,28 @@ int hif_apps_wake_irq_enable(struct hif_opaque_softc *hif_ctx);
  */
 int hif_apps_wake_irq_disable(struct hif_opaque_softc *hif_ctx);
 
+/**
+ * hif_apps_enable_irq_wake() - Enables the irq wake from the APPS side
+ * @hif_ctx: an opaque HIF handle to use
+ *
+ * This function always applies to the APPS side kernel interrupt handling
+ * to wake the system from suspend.
+ *
+ * Return: errno
+ */
+int hif_apps_enable_irq_wake(struct hif_opaque_softc *hif_ctx);
+
+/**
+ * hif_apps_disable_irq_wake() - Disables the wake irq from the APPS side
+ * @hif_ctx: an opaque HIF handle to use
+ *
+ * This function always applies to the APPS side kernel interrupt handling
+ * to disable the wake irq.
+ *
+ * Return: errno
+ */
+int hif_apps_disable_irq_wake(struct hif_opaque_softc *hif_ctx);
+
 #ifdef FEATURE_RUNTIME_PM
 int hif_pre_runtime_suspend(struct hif_opaque_softc *hif_ctx);
 void hif_pre_runtime_resume(struct hif_opaque_softc *hif_ctx);
@@ -1200,11 +1269,31 @@ typedef uint32_t (*ext_intr_handler)(void *, uint32_t);
 int32_t hif_get_int_ctx_irq_num(struct hif_opaque_softc *softc,
 				uint8_t id);
 
-uint32_t hif_configure_ext_group_interrupts(struct hif_opaque_softc *hif_ctx);
-uint32_t  hif_register_ext_group(struct hif_opaque_softc *hif_ctx,
-		uint32_t numirq, uint32_t irq[], ext_intr_handler handler,
-		void *cb_ctx, const char *context_name,
-		enum hif_exec_type type, uint32_t scale);
+/**
+ * hif_configure_ext_group_interrupts() - Congigure ext group intrrupts
+ * @hif_ctx: hif opaque context
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS hif_configure_ext_group_interrupts(struct hif_opaque_softc *hif_ctx);
+
+/**
+ * hif_register_ext_group() - API to register external group
+ * interrupt handler.
+ * @hif_ctx : HIF Context
+ * @numirq: number of irq's in the group
+ * @irq: array of irq values
+ * @handler: callback interrupt handler function
+ * @cb_ctx: context to passed in callback
+ * @type: napi vs tasklet
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS hif_register_ext_group(struct hif_opaque_softc *hif_ctx,
+				  uint32_t numirq, uint32_t irq[],
+				  ext_intr_handler handler,
+				  void *cb_ctx, const char *context_name,
+				  enum hif_exec_type type, uint32_t scale);
 
 void hif_deregister_exec_group(struct hif_opaque_softc *hif_ctx,
 				const char *context_name);
@@ -1309,6 +1398,7 @@ void hif_allow_link_low_power_states(struct hif_opaque_softc *hif)
 #endif
 
 void *hif_get_dev_ba(struct hif_opaque_softc *hif_handle);
+void *hif_get_dev_ba_ce(struct hif_opaque_softc *hif_handle);
 
 /**
  * hif_set_initial_wakeup_cb() - set the initial wakeup event handler function
@@ -1425,6 +1515,21 @@ void hif_srng_init_phase(struct hif_opaque_softc *hif_ctx,
 {
 }
 #endif /* FORCE_WAKE */
+
+#ifdef HIF_IPCI
+/**
+ * hif_shutdown_notifier_cb - Call back for shutdown notifier
+ * @ctx: hif handle
+ *
+ * Return:  None
+ */
+void hif_shutdown_notifier_cb(void *ctx);
+#else
+static inline
+void hif_shutdown_notifier_cb(void *ctx)
+{
+}
+#endif /* HIF_IPCI */
 
 #ifdef HIF_CE_LOG_INFO
 /**

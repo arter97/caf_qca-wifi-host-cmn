@@ -75,7 +75,8 @@ extract_nan_event_rsp_tlv(wmi_unified_t wmi_handle, void *evt_buf,
 	}
 	nan_msg_hdr = (nan_msg_header_t *)event->data;
 
-	if (!wmi_service_enabled(wmi_handle, wmi_service_nan_dbs_support)) {
+	if (!wmi_service_enabled(wmi_handle, wmi_service_nan_dbs_support) &&
+	    !wmi_service_enabled(wmi_handle, wmi_service_nan_disable_support)) {
 		evt_params->evt_type = nan_event_id_generic_rsp;
 		return QDF_STATUS_SUCCESS;
 	}
@@ -741,6 +742,13 @@ static QDF_STATUS extract_ndp_ind_tlv(wmi_unified_t wmi_handle,
 		WMI_LOGE("FW message ndp app info length %d more than TLV hdr %d",
 			 fixed_params->ndp_app_info_len,
 			 event->num_ndp_app_info);
+		return QDF_STATUS_E_INVAL;
+	}
+
+	if (fixed_params->nan_scid_len > event->num_ndp_scid) {
+		WMI_LOGE("FW msg ndp scid info len %d more than TLV hdr %d",
+			 fixed_params->nan_scid_len,
+			 event->num_ndp_scid);
 		return QDF_STATUS_E_INVAL;
 	}
 

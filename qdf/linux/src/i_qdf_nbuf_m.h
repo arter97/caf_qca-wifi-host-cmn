@@ -73,6 +73,14 @@
 	 (((struct qdf_nbuf_cb *)((skb)->cb))->u.rx.dev.priv_cb_m. \
 	 l3_hdr_pad)
 
+#define  QDF_NBUF_CB_RX_PACKET_EXC_FRAME(skb) \
+	 (((struct qdf_nbuf_cb *)((skb)->cb))->u.rx.dev.priv_cb_m. \
+	 exc_frm)
+
+#define  QDF_NBUF_CB_RX_PACKET_IPA_SMMU_MAP(skb) \
+	 (((struct qdf_nbuf_cb *)((skb)->cb))->u.rx.dev.priv_cb_m. \
+	 ipa_smmu_map)
+
 #define __qdf_nbuf_ipa_owned_get(skb) \
 	QDF_NBUF_CB_TX_IPA_OWNED(skb)
 

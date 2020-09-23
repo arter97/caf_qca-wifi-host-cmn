@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017-2019 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2017-2020 The Linux Foundation. All rights reserved.
  *
  *
  * Permission to use, copy, modify, and/or distribute this software for
@@ -26,27 +26,30 @@
 #ifndef __WLAN_REG_UCFG_API_H
 #define __WLAN_REG_UCFG_API_H
 
+#include <reg_services_public_struct.h>
+
 typedef QDF_STATUS (*reg_event_cb)(void *status_struct);
 
 /**
  * ucfg_reg_set_band() - Sets the band information for the PDEV
  * @pdev: The physical pdev to set the band for
- * @band: The set band parameter to configure for the physical device
+ * @band_bitmap: The band bitmap parameter (over reg_wifi_band) to configure
+ *	for the physical device
  *
  * Return: QDF_STATUS
  */
 QDF_STATUS ucfg_reg_set_band(struct wlan_objmgr_pdev *pdev,
-			     enum band_info band);
+			     uint32_t band_bitmap);
 
 /**
  * ucfg_reg_get_band() - Gets the band information for the PDEV
  * @pdev: The physical pdev to get the band for
- * @band: The band parameter of the physical device
+ * @band_bitmap: The band parameter of the physical device
  *
  * Return: QDF_STATUS
  */
 QDF_STATUS ucfg_reg_get_band(struct wlan_objmgr_pdev *pdev,
-			     enum band_info *band);
+			     uint32_t *band_bitmap);
 
 /**
  * ucfg_reg_notify_sap_event() - Notify regulatory domain for sap event
@@ -175,15 +178,6 @@ QDF_STATUS ucfg_reg_set_country(struct wlan_objmgr_pdev *dev,
  */
 QDF_STATUS ucfg_reg_reset_country(struct wlan_objmgr_psoc *psoc);
 
-/**
- * ucfg_reg_get_curr_band() - Get the current band capability
- * @pdev: The physical dev to get default country from
- * @band: buffer to populate the band into
- *
- * Return: QDF_STATUS
- */
-QDF_STATUS ucfg_reg_get_curr_band(struct wlan_objmgr_pdev *pdev,
-		enum band_info *band);
 /**
  * ucfg_reg_enable_dfs_channels() - Enable the use of DFS channels
  * @pdev: The physical dev to enable DFS channels for
@@ -371,6 +365,17 @@ struct wlan_psoc_host_hal_reg_capabilities_ext *ucfg_reg_get_hal_reg_cap(
 QDF_STATUS ucfg_reg_set_hal_reg_cap(struct wlan_objmgr_psoc *psoc,
 			struct wlan_psoc_host_hal_reg_capabilities_ext *reg_cap,
 			uint16_t phy_cnt);
+
+/**
+ * ucfg_reg_update_hal_reg_cap() - update hal reg cap
+ * @psoc: psoc ptr
+ * @wireless_modes: 11AX wireless modes
+ * @phy_id: phy id
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS ucfg_reg_update_hal_reg_cap(struct wlan_objmgr_psoc *psoc,
+				       uint32_t wireless_modes, uint8_t phy_id);
 
 /**
  * ucfg_set_ignore_fw_reg_offload_ind() - API to set ignore regdb offload ind

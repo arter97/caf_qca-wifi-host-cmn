@@ -65,6 +65,7 @@ static QDF_STATUS vdev_mgr_create_param_update(
 	param->subtype = mlme_obj->mgmt.generic.subtype;
 	param->mbssid_flags = mbss->mbssid_flags;
 	param->vdevid_trans = mbss->vdevid_trans;
+	param->special_vdev_mode = mlme_obj->mgmt.generic.special_vdev_mode;
 
 	return QDF_STATUS_SUCCESS;
 }
@@ -160,13 +161,13 @@ static QDF_STATUS vdev_mgr_start_param_update(
 						     des_chan->ch_cfreq2,
 						     &is_dfs_chan_updated);
 
-	/* The RCAC state machine should be stopped only once for the channel
+	/* The Agile state machine should be stopped only once for the channel
 	 * change. If  the same channel is being sent to the FW then do
 	 * not send unnecessary STOP to the state machine.
 	 */
 	if (is_dfs_chan_updated)
-		utils_dfs_rcac_sm_deliver_evt(pdev,
-					      DFS_RCAC_SM_EV_RCAC_STOP);
+		utils_dfs_agile_sm_deliver_evt(pdev,
+					       DFS_AGILE_SM_EV_AGILE_STOP);
 
 	param->beacon_interval = mlme_obj->proto.generic.beacon_interval;
 	param->dtim_period = mlme_obj->proto.generic.dtim_period;
@@ -206,8 +207,7 @@ static QDF_STATUS vdev_mgr_start_param_update(
 		param->hidden_ssid = mlme_obj->mgmt.ap.hidden_ssid;
 		param->cac_duration_ms = mlme_obj->mgmt.ap.cac_duration_ms;
 	}
-	wlan_vdev_mlme_get_ssid(vdev, param->ssid.mac_ssid,
-				&param->ssid.length);
+	wlan_vdev_mlme_get_ssid(vdev, param->ssid.ssid, &param->ssid.length);
 
 	if (des_chan->ch_phymode == WLAN_PHYMODE_11AC_VHT80 ||
 	    des_chan->ch_phymode == WLAN_PHYMODE_11AXA_HE80) {
@@ -377,6 +377,7 @@ QDF_STATUS vdev_mgr_up_send(struct vdev_mlme_obj *mlme_obj)
 	struct wlan_objmgr_vdev *vdev;
 	struct config_fils_params fils_param = {0};
 	uint8_t is_6g_sap_fd_enabled;
+	bool is_non_tx_vdev;
 
 	if (!mlme_obj) {
 		mlme_err("VDEV_MLME is NULL");
@@ -410,9 +411,19 @@ QDF_STATUS vdev_mgr_up_send(struct vdev_mlme_obj *mlme_obj)
 	is_6g_sap_fd_enabled = wlan_vdev_mlme_feat_ext_cap_get(vdev,
 					WLAN_VDEV_FEXT_FILS_DISC_6G_SAP);
 	mlme_debug("SAP FD enabled %d", is_6g_sap_fd_enabled);
+
+	/*
+	 * In case of a non-tx vdev, 'profile_num' must be greater
+	 * than 0 indicating one or more non-tx vdev and 'profile_idx'
+	 * must be in the range [1, 2^n] where n is the max bssid
+	 * indicator
+	 */
+	is_non_tx_vdev = param.profile_num && param.profile_idx;
+
 	if (opmode == QDF_SAP_MODE && mlme_obj->vdev->vdev_mlme.des_chan &&
 	    WLAN_REG_IS_6GHZ_CHAN_FREQ(
-			mlme_obj->vdev->vdev_mlme.des_chan->ch_freq)) {
+			mlme_obj->vdev->vdev_mlme.des_chan->ch_freq) &&
+		!is_non_tx_vdev) {
 		fils_param.vdev_id = wlan_vdev_get_id(mlme_obj->vdev);
 		if (is_6g_sap_fd_enabled) {
 			fils_param.fd_period = DEFAULT_FILS_DISCOVERY_PERIOD;

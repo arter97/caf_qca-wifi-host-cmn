@@ -37,6 +37,21 @@
 #define DP_TX_DESC_ID_OFFSET_MASK  0x00001F
 #define DP_TX_DESC_ID_OFFSET_OS    0
 
+/**
+ * Compilation assert on tx desc size
+ *
+ * if assert is hit please update POOL_MASK,
+ * PAGE_MASK according to updated size
+ *
+ * for current PAGE mask allowed size range of tx_desc
+ * is between 128 and 256
+ */
+QDF_COMPILE_TIME_ASSERT(dp_tx_desc_size,
+			((sizeof(struct dp_tx_desc_s)) <=
+			 (PAGE_SIZE >> DP_TX_DESC_ID_PAGE_OS)) &&
+			((sizeof(struct dp_tx_desc_s)) >
+			 (PAGE_SIZE >> (DP_TX_DESC_ID_PAGE_OS + 1))));
+
 #ifdef QCA_LL_TX_FLOW_CONTROL_V2
 #define TX_DESC_LOCK_CREATE(lock)
 #define TX_DESC_LOCK_DESTROY(lock)
@@ -357,6 +372,7 @@ dp_tx_desc_free(struct dp_soc *soc, struct dp_tx_desc_s *tx_desc,
 		break;
 	case FLOW_POOL_INVALID:
 		if (pool->avail_desc == pool->pool_size) {
+			dp_tx_desc_pool_deinit(soc, desc_pool_id);
 			dp_tx_desc_pool_free(soc, desc_pool_id);
 			qdf_spin_unlock_bh(&pool->flow_pool_lock);
 			QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_ERROR,
@@ -476,6 +492,7 @@ dp_tx_desc_free(struct dp_soc *soc, struct dp_tx_desc_s *tx_desc,
 		break;
 	case FLOW_POOL_INVALID:
 		if (pool->avail_desc == pool->pool_size) {
+			dp_tx_desc_pool_deinit(soc, desc_pool_id);
 			dp_tx_desc_pool_free(soc, desc_pool_id);
 			qdf_spin_unlock_bh(&pool->flow_pool_lock);
 			qdf_print("%s %d pool is freed!!",

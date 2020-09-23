@@ -436,6 +436,42 @@ static bool scm_bss_is_connected(struct scan_cache_entry *entry)
 		return true;
 	return false;
 }
+
+static bool scm_bss_is_nontx_of_conn_bss(struct scan_cache_entry *entry,
+					 struct scan_dbs *scan_db)
+{
+	int i;
+	struct scan_cache_node *cur_node = NULL;
+	struct scan_cache_node *next_node = NULL;
+
+	if (!entry->mbssid_info.profile_num)
+		return false;
+
+	for (i = 0 ; i < SCAN_HASH_SIZE; i++) {
+		cur_node = scm_get_next_node(scan_db,
+					     &scan_db->scan_hash_tbl[i], NULL);
+		while (cur_node) {
+			if (!memcmp(entry->mbssid_info.trans_bssid,
+				    cur_node->entry->bssid.bytes,
+				    QDF_MAC_ADDR_SIZE)) {
+				if (scm_bss_is_connected(cur_node->entry)) {
+					scm_scan_entry_put_ref(scan_db,
+							       cur_node,
+							       true);
+					return true;
+				}
+			}
+
+			next_node = scm_get_next_node(scan_db,
+					&scan_db->scan_hash_tbl[i], cur_node);
+			cur_node = next_node;
+			next_node = NULL;
+		}
+	}
+
+	return false;
+}
+
 void scm_age_out_entries(struct wlan_objmgr_psoc *psoc,
 	struct scan_dbs *scan_db)
 {
@@ -454,7 +490,9 @@ void scm_age_out_entries(struct wlan_objmgr_psoc *psoc,
 		cur_node = scm_get_next_node(scan_db,
 			&scan_db->scan_hash_tbl[i], NULL);
 		while (cur_node) {
-			if (!scm_bss_is_connected(cur_node->entry))
+			if (!scm_bss_is_connected(cur_node->entry) &&
+			    !scm_bss_is_nontx_of_conn_bss(cur_node->entry,
+							  scan_db))
 				scm_check_and_age_out(scan_db, cur_node,
 					def_param->scan_cache_aging_time);
 			next_node = scm_get_next_node(scan_db,
@@ -811,7 +849,7 @@ static QDF_STATUS scm_add_update_entry(struct wlan_objmgr_psoc *psoc,
 					  &dup_node);
 
 	security_type = scan_params->security_type;
-	scm_nofl_debug("Received %s: %pM \"%.*s\" freq %d rssi %d tsf_delta %u seq %d snr %d phy %d hidden %d mismatch %d %s%s%s%s pdev %d",
+	scm_nofl_debug("Received %s: %pM \"%.*s\" freq %d rssi %d tsf_delta %u seq %d snr %d phy %d hidden %d mismatch %d %s%s%s%s pdev %d boot_time %llu ns",
 		       (scan_params->frm_subtype == MGMT_SUBTYPE_PROBE_RESP) ?
 		       "prb rsp" : "bcn", scan_params->bssid.bytes,
 		       scan_params->ssid.length, scan_params->ssid.ssid,
@@ -824,7 +862,8 @@ static QDF_STATUS scm_add_update_entry(struct wlan_objmgr_psoc *psoc,
 		       security_type & SCAN_SECURITY_TYPE_RSN ? "[RSN]" : "",
 		       security_type & SCAN_SECURITY_TYPE_WAPI ? "[WAPI]" : "",
 		       security_type & SCAN_SECURITY_TYPE_WEP ? "[WEP]" : "",
-		       wlan_objmgr_pdev_get_pdev_id(pdev));
+		       wlan_objmgr_pdev_get_pdev_id(pdev),
+		       scan_params->boottime_ns);
 
 	if (scan_obj->cb.inform_beacon)
 		scan_obj->cb.inform_beacon(pdev, scan_params);
@@ -955,12 +994,21 @@ QDF_STATUS __scm_handle_bcn_probe(struct scan_bcn_probe_event *bcn)
 			qdf_mem_free(scan_node);
 			continue;
 		}
-
+		/* Do not add invalid channel entry as kernel will reject it */
+		if (scan_obj->drop_bcn_on_invalid_freq &&
+		    wlan_reg_is_disable_for_freq(pdev,
+					scan_entry->channel.chan_freq)) {
+			scm_nofl_debug("Drop frame for invalid freq %d: %pM Seq Num: %d RSSI %d",
+				       scan_entry->channel.chan_freq,
+				       scan_entry->bssid.bytes,
+				       scan_entry->seq_num,
+				       scan_entry->rssi_raw);
+			util_scan_free_cache_entry(scan_entry);
+			qdf_mem_free(scan_node);
+			continue;
+		}
 		if (scan_obj->cb.update_beacon)
 			scan_obj->cb.update_beacon(pdev, scan_entry);
-
-		if (wlan_reg_11d_enabled_on_host(psoc))
-			scm_11d_handle_country_info(psoc, pdev, scan_entry);
 
 		status = scm_add_update_entry(psoc, pdev, scan_entry);
 		if (QDF_IS_STATUS_ERROR(status)) {
@@ -999,82 +1047,6 @@ QDF_STATUS scm_handle_bcn_probe(struct scheduler_msg *msg)
 	}
 
 	return __scm_handle_bcn_probe(msg->bodyptr);
-}
-
-/**
- * scm_list_insert_sorted() - add the entries in scan_list in sorted way
- * @psoc: psoc ptr
- * @filter: scan filter
- * @scan_node: node entry to be inserted
- * @scan_list: Temp scan list
- *
- * Add the entries in scan_list in sorted way considering
- * cap_val and prefer val. The node is copy of original scan entry and
- * thus no lock is required.
- *
- * Return: void
- */
-static void scm_list_insert_sorted(struct wlan_objmgr_psoc *psoc,
-	struct scan_filter *filter,
-	struct scan_cache_node *scan_node,
-	qdf_list_t *scan_list)
-{
-	struct scan_cache_node *cur_node;
-	qdf_list_node_t *cur_lst = NULL, *next_lst = NULL;
-	struct scan_default_params *params;
-	int pcl_chan_weight = 0;
-
-	params = wlan_scan_psoc_get_def_params(psoc);
-	if (!params) {
-		scm_err("wlan_scan_psoc_get_def_params failed");
-		return;
-	}
-	if (filter->num_of_pcl_channels > 0 &&
-			(scan_node->entry->rssi_raw > SCM_PCL_RSSI_THRESHOLD)) {
-		if (scm_get_pcl_weight_of_channel(
-					scan_node->entry->channel.chan_freq,
-					filter, &pcl_chan_weight,
-					filter->pcl_weight_list)) {
-			scm_debug("pcl freq %d pcl_chan_weight %d",
-				  scan_node->entry->channel.chan_freq,
-				  pcl_chan_weight);
-		}
-	}
-	if (params->is_bssid_hint_priority &&
-	    !qdf_mem_cmp(filter->bssid_hint.bytes,
-			 scan_node->entry->bssid.bytes,
-			 QDF_MAC_ADDR_SIZE))
-		scan_node->entry->bss_score = BEST_CANDIDATE_MAX_BSS_SCORE;
-	else
-		scm_calculate_bss_score(psoc, params,
-					scan_node->entry, pcl_chan_weight);
-
-	if (qdf_list_empty(scan_list)) {
-		qdf_list_insert_front(scan_list, &scan_node->node);
-		return;
-	}
-
-	qdf_list_peek_front(scan_list, &cur_lst);
-
-	while (cur_lst) {
-		cur_node = qdf_container_of(cur_lst,
-				struct scan_cache_node, node);
-		if (scm_is_better_bss(params,
-		   scan_node->entry, cur_node->entry)) {
-			qdf_list_insert_before(scan_list,
-				&scan_node->node,
-				&cur_node->node);
-			break;
-		}
-		qdf_list_peek_next(scan_list,
-			cur_lst, &next_lst);
-		cur_lst = next_lst;
-		next_lst = NULL;
-	}
-
-	if (!cur_lst)
-		qdf_list_insert_back(scan_list,
-			&scan_node->node);
 }
 
 /**
@@ -1121,11 +1093,7 @@ scm_scan_apply_filter_get_entry(struct wlan_objmgr_psoc *psoc,
 	qdf_mem_copy(&scan_node->entry->neg_sec_info,
 		&security, sizeof(scan_node->entry->neg_sec_info));
 
-	if (!filter || !filter->bss_scoring_required)
-		qdf_list_insert_front(scan_list,
-			&scan_node->node);
-	else
-		scm_list_insert_sorted(psoc, filter, scan_node, scan_list);
+	qdf_list_insert_front(scan_list, &scan_node->node);
 
 	return QDF_STATUS_SUCCESS;
 }

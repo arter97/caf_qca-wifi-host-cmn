@@ -69,6 +69,9 @@ void htc_dump_counter_info(HTC_HANDLE HTCHandle)
 {
 	HTC_TARGET *target = GET_HTC_TARGET_FROM_HANDLE(HTCHandle);
 
+	if (!target)
+		return;
+
 	AR_DEBUG_PRINTF(ATH_DEBUG_ERR,
 			("\n%s: ce_send_cnt = %d, TX_comp_cnt = %d\n",
 			 __func__, target->ce_send_cnt, target->TX_comp_cnt));
@@ -863,6 +866,7 @@ static QDF_STATUS htc_issue_packets(HTC_TARGET *target,
 		htc_issue_tx_bundle_stats_inc(target);
 
 		target->ce_send_cnt++;
+		pEndpoint->htc_send_cnt++;
 
 		if (qdf_unlikely(QDF_IS_STATUS_ERROR(status))) {
 			if (status != QDF_STATUS_E_RESOURCES) {
@@ -896,6 +900,7 @@ static QDF_STATUS htc_issue_packets(HTC_TARGET *target,
 				LOCK_HTC_TX(target);
 			}
 			target->ce_send_cnt--;
+			pEndpoint->htc_send_cnt--;
 			pEndpoint->ul_outstanding_cnt--;
 			HTC_PACKET_REMOVE(&pEndpoint->TxLookupQueue, pPacket);
 			htc_packet_set_magic_cookie(pPacket, 0);
@@ -2242,7 +2247,6 @@ static HTC_PACKET *htc_lookup_tx_packet(HTC_TARGET *target,
 	LOCK_HTC_EP_TX_LOOKUP(pEndpoint);
 
 	LOCK_HTC_TX(target);
-
 	/* mark that HIF has indicated the send complete for another packet */
 	pEndpoint->ul_outstanding_cnt--;
 
@@ -2321,6 +2325,7 @@ QDF_STATUS htc_tx_completion_handler(void *Context,
 
 	pEndpoint = &target->endpoint[EpID];
 	target->TX_comp_cnt++;
+	pEndpoint->htc_comp_cnt++;
 
 	do {
 		pPacket = htc_lookup_tx_packet(target, pEndpoint, netbuf);
@@ -2441,6 +2446,9 @@ void htc_kick_queues(void *context)
 	HTC_TARGET *target = (HTC_TARGET *)context;
 	HTC_ENDPOINT *endpoint = NULL;
 
+	if (hif_pm_runtime_get_sync(target->hif_dev, RTPM_ID_HTC))
+		return;
+
 	for (i = 0; i < ENDPOINT_MAX; i++) {
 		endpoint = &target->endpoint[i];
 
@@ -2455,6 +2463,8 @@ void htc_kick_queues(void *context)
 	}
 
 	hif_fastpath_resume(target->hif_dev);
+
+	hif_pm_runtime_put(target->hif_dev, RTPM_ID_HTC);
 }
 #endif
 

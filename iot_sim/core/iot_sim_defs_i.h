@@ -26,6 +26,7 @@
 #include <qdf_timer.h>
 #include <wbuf.h>
 #include <wlan_iot_sim_utils_api.h>
+#include <wlan_iot_sim_public_structs.h>
 
 #define iot_sim_fatal(format, args...) \
 	QDF_TRACE_FATAL(QDF_MODULE_ID_IOT_SIM, format, ## args)
@@ -74,7 +75,9 @@
 #define N_FRAME_TYPE 0x4
 #define N_FRAME_SUBTYPE 0xF
 #define MAX_SEQ 0x4
+#define MAX_PEER_COUNT 0x2
 #define MAX_ACTION 0x3
+#define RX_STATUS_SIZE 0x96
 #define IOT_SIM_DEBUGFS_FILE_NUM 3
 #define FRAME_TYPE_IS_BEACON(type, subtype) ((type) == 0 && (subtype) == 8)
 #define FRAME_TYPE_IS_ACTION(type, subtype) ((type) == 0 && (subtype) == 13)
@@ -111,6 +114,11 @@ struct iot_sim_rule {
 	bool drop;
 	uint16_t delay_dur;
 	uint8_t rule_bitmap;
+	qdf_nbuf_t nbuf_list[2];
+	qdf_nbuf_t sec_buf;
+	struct qdf_delayed_work *dwork;
+	struct mgmt_rx_event_params *rx_param;
+	qdf_spinlock_t iot_sim_delay_lock;
 };
 
 /*
@@ -132,13 +140,12 @@ struct iot_sim_rule_per_seq {
  * @addr - address of peer
  * @iot_sim_lock - spinlock
  * @rule_per_seq - array of iot_sim_rule_per_seq
- * @p_list - list variable
+ * @list - list variable
  */
 struct iot_sim_rule_per_peer {
+	qdf_list_node_t node;
 	struct qdf_mac_addr addr;
-	qdf_spinlock_t iot_sim_lock;
 	struct iot_sim_rule_per_seq *rule_per_seq[MAX_SEQ];
-	qdf_list_t p_list;
 };
 
 /**
@@ -146,17 +153,16 @@ struct iot_sim_rule_per_peer {
  * @pdev_obj:Reference to pdev global object
  * @iot_sim_peer_list: peer list for peer specific rules
  * @bcast_peer: broadcast peer entry for storing rules for all peers
- * @p_iot_sim_target_handle: handle to iot_sim target_if
- * @iot_sim_operation_handler: callback for iot sim operation handler
  */
 struct iot_sim_context {
 	struct wlan_objmgr_pdev *pdev_obj;
 	/* IOT_SIM Peer list & Bcast Peer */
 	struct iot_sim_rule_per_peer *iot_sim_peer_list, bcast_peer;
-	void *p_iot_sim_target_handle;
+	qdf_list_t peer_list;
+	qdf_spinlock_t iot_sim_lock;
 	struct iot_sim_debugfs iot_sim_dbgfs_ctx;
-	QDF_STATUS (*iot_sim_operation_handler)(struct wlan_objmgr_pdev *pdev,
-						wbuf_t wbuf);
+	void (*iot_sim_update_beacon_trigger)(mlme_pdev_ext_t *);
+	qdf_nbuf_t bcn_buf;
 };
 
 /* enum iot_sim_operations - iot sim operations
@@ -168,11 +174,31 @@ struct iot_sim_context {
  * @IOT_SIM_MAX_OPERATION - iot sim max operation
  */
 enum iot_sim_operations {
-	INVALID_OPERATION,
-	CONTENT_CHANGE = 1,
+	CONTENT_CHANGE,
 	DROP,
 	DELAY,
 	IOT_SIM_MAX_OPERATION
+};
+
+/* enum iot_sim_subcmd - iot sim FW related subcommands
+ *
+ * @ADD_RULE - Add Rule
+ * @DEL_RULE - Delete Rule
+ * @ADD_RULE_ACTION - Add rule for action frame
+ * @DEL_RULE_ACTION - Del rule for action frame
+ * @IOT_SIM_MAX_SUBCMD - iot sim max subcmd
+ */
+enum iot_sim_subcmd {
+	ADD_RULE = 0,
+	DEL_RULE,
+	ADD_RULE_ACTION,
+	DEL_RULE_ACTION,
+	IOT_SIM_MAX_SUBCMD,
+};
+
+struct iot_sim_cb_context {
+	struct iot_sim_context *isc;
+	struct iot_sim_rule *piot_sim_rule;
 };
 
 #endif /* _IOT_SIM_DEFS_I_H_ */

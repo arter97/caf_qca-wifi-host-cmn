@@ -74,6 +74,29 @@ register_dfs_precac_auto_chan_callbacks_freq(struct dfs_to_mlme *mlme_callback)
 #endif
 #endif
 
+/**
+ * register_dfs_postnol_csa_callback - Register postNOL channel switch callbacks
+ * @mlme_callback: Pointer to dfs_to_mlme.
+ */
+#ifndef QCA_MCL_DFS_SUPPORT
+#ifdef QCA_SUPPORT_DFS_CHAN_POSTNOL
+static inline void
+register_dfs_postnol_csa_callback(struct dfs_to_mlme *mlme_callback)
+{
+	if (!mlme_callback)
+		return;
+
+	mlme_callback->mlme_postnol_chan_switch =
+		mlme_dfs_postnol_chan_switch;
+}
+#else
+static inline void
+register_dfs_postnol_csa_callback(struct dfs_to_mlme *mlme_callback)
+{
+}
+#endif
+#endif
+
 /*
  * register_dfs_callbacks_for_freq() - Register dfs callbacks.
  * @mlme_callback: Pointer to dfs_to_mlme.
@@ -149,6 +172,7 @@ void register_dfs_callbacks(void)
 	register_dfs_precac_auto_chan_callbacks_freq(tmp_dfs_to_mlme);
 	/* Register freq based callbacks */
 	register_dfs_callbacks_for_freq(tmp_dfs_to_mlme);
+	register_dfs_postnol_csa_callback(tmp_dfs_to_mlme);
 }
 #else
 void register_dfs_callbacks(void)
@@ -198,8 +222,8 @@ static QDF_STATUS dfs_psoc_obj_create_notification(struct wlan_objmgr_psoc *psoc
 	/* Initialize Rolling CAC timer */
 	dfs_rcac_timer_init(dfs_soc_obj);
 
-	/* DFS Rolling CAC SM initialization */
-	dfs_rcac_sm_create(dfs_soc_obj);
+	/* DFS Agile SM initialization */
+	dfs_agile_sm_create(dfs_soc_obj);
 
 	dfs_debug(NULL, WLAN_DEBUG_DFS1,
 		"DFS obj attach to psoc successfully");
@@ -228,8 +252,8 @@ static QDF_STATUS dfs_psoc_obj_destroy_notification(struct wlan_objmgr_psoc *pso
 		return QDF_STATUS_E_FAILURE;
 	}
 
-	/* Delete DFS Rolling CAC SM */
-	dfs_rcac_sm_destroy(dfs_soc_obj);
+	/* Delete DFS Agile SM */
+	dfs_agile_sm_destroy(dfs_soc_obj);
 
 	dfs_rcac_timer_deinit(dfs_soc_obj);
 	dfs_zero_cac_timer_detach(dfs_soc_obj);
@@ -369,6 +393,7 @@ QDF_STATUS wlan_dfs_pdev_obj_create_notification(struct wlan_objmgr_pdev *pdev,
 	struct wlan_dfs *dfs = NULL;
 	struct wlan_objmgr_psoc *psoc;
 	struct wlan_lmac_if_dfs_tx_ops *dfs_tx_ops;
+	struct dfs_soc_priv_obj *dfs_soc_obj;
 	uint8_t pdev_id;
 	QDF_STATUS status;
 	bool is_5ghz = false;
@@ -429,6 +454,9 @@ QDF_STATUS wlan_dfs_pdev_obj_create_notification(struct wlan_objmgr_pdev *pdev,
 	dfs->dfs_is_offload_enabled = dfs_tx_ops->dfs_is_tgt_offload(psoc);
 	dfs_info(dfs, WLAN_DEBUG_DFS_ALWAYS, "dfs_offload %d",
 		 dfs->dfs_is_offload_enabled);
+	dfs_soc_obj = wlan_objmgr_psoc_get_comp_private_obj(psoc,
+							    WLAN_UMAC_COMP_DFS);
+	dfs->dfs_soc_obj = dfs_soc_obj;
 	dfs_agile_soc_obj_init(dfs, psoc);
 
 	if (dfs_attach(dfs) == 1) {
@@ -468,7 +496,8 @@ QDF_STATUS wlan_dfs_pdev_obj_destroy_notification(struct wlan_objmgr_pdev *pdev,
 
 static void dfs_scan_serialization_comp_info_cb(
 		struct wlan_objmgr_vdev *vdev,
-		union wlan_serialization_rules_info *comp_info)
+		union wlan_serialization_rules_info *comp_info,
+		struct wlan_serialization_command *cmd)
 {
 	struct wlan_dfs *dfs = NULL;
 	struct wlan_objmgr_pdev *pdev;

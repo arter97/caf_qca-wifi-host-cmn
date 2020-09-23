@@ -2071,12 +2071,12 @@ wmi_is_event_critical(struct wmi_unified *wmi_handle, uint32_t event_id)
 	return false;
 }
 
-static void wmi_discard_fw_event(struct scheduler_msg *msg)
+static QDF_STATUS wmi_discard_fw_event(struct scheduler_msg *msg)
 {
 	struct wmi_process_fw_event_params *event_param;
 
 	if (!msg->bodyptr)
-		return;
+		return QDF_STATUS_E_INVAL;
 
 	event_param = (struct wmi_process_fw_event_params *)msg->bodyptr;
 	qdf_nbuf_free(event_param->evt_buf);
@@ -2084,6 +2084,8 @@ static void wmi_discard_fw_event(struct scheduler_msg *msg)
 	msg->bodyptr = NULL;
 	msg->bodyval = 0;
 	msg->type = 0;
+
+	return QDF_STATUS_SUCCESS;
 }
 
 static QDF_STATUS wmi_process_fw_event_handler(struct scheduler_msg *msg)
@@ -2122,31 +2124,6 @@ wmi_process_fw_event_sched_thread_ctx(struct wmi_unified *wmi,
 	struct wmi_process_fw_event_params *params_buf;
 	struct scheduler_msg msg = { 0 };
 	uint32_t event_id;
-	struct target_psoc_info *tgt_hdl;
-	bool is_wmi_ready = false;
-	struct wlan_objmgr_psoc *psoc;
-
-	psoc = target_if_get_psoc_from_scn_hdl(wmi->scn_handle);
-	if (!psoc) {
-		target_if_err("psoc is null");
-		qdf_nbuf_free(ev);
-		return QDF_STATUS_E_INVAL;
-	}
-
-	tgt_hdl = wlan_psoc_get_tgt_if_handle(psoc);
-	if (!tgt_hdl) {
-		wmi_err("target_psoc_info is null");
-		qdf_nbuf_free(ev);
-		return QDF_STATUS_E_INVAL;
-	}
-
-	is_wmi_ready = target_psoc_get_wmi_ready(tgt_hdl);
-	if (!is_wmi_ready) {
-		wmi_debug("fw event recvd before ready event processed");
-		wmi_debug("therefore use worker thread");
-		wmi_process_fw_event_worker_thread_ctx(wmi, ev);
-		return QDF_STATUS_E_INVAL;
-	}
 
 	params_buf = qdf_mem_malloc(sizeof(struct wmi_process_fw_event_params));
 	if (!params_buf) {
@@ -2335,7 +2312,7 @@ QDF_STATUS wmi_unified_cmd_send_over_qmi(struct wmi_unified *wmi_handle,
 
 	qdf_mem_zero(qdf_nbuf_data(buf), sizeof(WMI_CMD_HDR));
 	WMI_SET_FIELD(qdf_nbuf_data(buf), WMI_CMD_HDR, COMMANDID, cmd_id);
-	wmi_debug("Sending WMI_CMD_ID: %d over qmi", cmd_id);
+	wmi_debug("Sending WMI_CMD_ID: 0x%x over qmi", cmd_id);
 	status = qdf_wmi_send_recv_qmi(qdf_nbuf_data(buf),
 				       buflen + sizeof(WMI_CMD_HDR),
 				       wmi_handle,
@@ -2900,6 +2877,11 @@ void wmi_unified_detach(struct wmi_unified *wmi_handle)
 		soc->wmi_ext_service_bitmap = NULL;
 	}
 
+	if (soc->wmi_ext2_service_bitmap) {
+		qdf_mem_free(soc->wmi_ext2_service_bitmap);
+		soc->wmi_ext2_service_bitmap = NULL;
+	}
+
 	/* Decrease the ref count once refcount infra is present */
 	soc->wmi_psoc = NULL;
 	qdf_mem_free(soc);
@@ -3141,6 +3123,19 @@ bool wmi_is_target_suspended(struct wmi_unified *wmi_handle)
 {
 	return qdf_atomic_read(&wmi_handle->is_target_suspended);
 }
+qdf_export_symbol(wmi_is_target_suspended);
+
+#ifdef WLAN_FEATURE_WMI_SEND_RECV_QMI
+void wmi_set_qmi_stats(wmi_unified_t wmi_handle, bool val)
+{
+	wmi_handle->is_qmi_stats_enabled = val;
+}
+
+bool wmi_is_qmi_stats_enabled(struct wmi_unified *wmi_handle)
+{
+	return wmi_handle->is_qmi_stats_enabled;
+}
+#endif
 
 /**
  * WMI API to set crash injection state
