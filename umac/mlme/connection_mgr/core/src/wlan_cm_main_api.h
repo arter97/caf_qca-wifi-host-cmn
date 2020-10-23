@@ -69,6 +69,23 @@ cm_handle_connect_req_in_non_init_state(struct cnx_mgr *cm_ctx,
 					enum wlan_cm_sm_state cm_state_substate);
 
 /**
+ * cm_handle_discon_req_in_non_connected_state() - Handle disconnect req in non
+ * connected state.
+ * @cm_ctx: connection manager context
+ * @cm_req: cm request
+ * @cm_state_substate: state of CM SM
+ *
+ * Context: Can be called only while handling connection manager event
+ *          ie holding state machine lock
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS
+cm_handle_discon_req_in_non_connected_state(struct cnx_mgr *cm_ctx,
+					struct cm_disconnect_req *cm_req,
+					enum wlan_cm_sm_state cm_state_substate);
+
+/**
  * cm_connect_scan_start() - This API will be called to initiate the connect
  * scan if no candidate are found in scan db.
  * @cm_ctx: connection manager context
@@ -357,6 +374,18 @@ QDF_STATUS cm_disconnect_rsp(struct wlan_objmgr_vdev *vdev,
  */
 void cm_initiate_internal_disconnect(struct cnx_mgr *cm_ctx);
 
+/**
+ * cm_send_disconnect_resp() - Initiate disconnect resp for the cm_id
+ * @cm_ctx: connection manager context
+ * @cm_id: cm id to send disconnect resp for
+ *
+ * Context: Can be called from any context. Hold the SM lock while calling this
+ * api.
+ *
+ * Return: void
+ */
+void cm_send_disconnect_resp(struct cnx_mgr *cm_ctx, wlan_cm_id cm_id);
+
 /*************** UTIL APIs ****************/
 
 /**
@@ -474,6 +503,18 @@ QDF_STATUS
 cm_fill_bss_info_in_connect_rsp_by_cm_id(struct cnx_mgr *cm_ctx,
 					 wlan_cm_id cm_id,
 					 struct wlan_cm_connect_rsp *resp);
+
+#if defined(WLAN_SAE_SINGLE_PMK) && defined(WLAN_FEATURE_ROAM_OFFLOAD)
+bool cm_is_cm_id_current_candidate_single_pmk(struct cnx_mgr *cm_ctx,
+					      wlan_cm_id cm_id);
+#else
+static inline
+bool cm_is_cm_id_current_candidate_single_pmk(struct cnx_mgr *cm_ctx,
+					      wlan_cm_id cm_id)
+{
+	return false;
+}
+#endif
 
 /**
  * cm_flush_pending_request() - Flush all pending requests matching flush prefix

@@ -1805,11 +1805,16 @@ static bool wmi_is_legacy_d0wow_disable_cmd(wmi_buf_t buf, uint32_t cmd_id)
 #endif
 
 #ifdef WMI_INTERFACE_SEQUENCE_CHECK
+static inline void wmi_interface_sequence_reset(struct wmi_unified *wmi_handle)
+{
+	wmi_handle->wmi_sequence = 0;
+	wmi_handle->wmi_exp_sequence = 0;
+}
+
 static inline void wmi_interface_sequence_init(struct wmi_unified *wmi_handle)
 {
 	qdf_spinlock_create(&wmi_handle->wmi_seq_lock);
-	wmi_handle->wmi_sequence = 0;
-	wmi_handle->wmi_exp_sequence = 0;
+	wmi_interface_sequence_reset(wmi_handle);
 }
 
 static inline void wmi_interface_sequence_deinit(struct wmi_unified *wmi_handle)
@@ -1867,6 +1872,10 @@ static inline void wmi_interface_sequence_check(struct wmi_unified *wmi_handle,
 	}
 }
 #else
+static inline void wmi_interface_sequence_reset(struct wmi_unified *wmi_handle)
+{
+}
+
 static inline void wmi_interface_sequence_init(struct wmi_unified *wmi_handle)
 {
 }
@@ -2481,9 +2490,7 @@ static void wmi_control_diag_rx(void *ctx, HTC_PACKET *htc_packet)
 
 	wmi_handle = soc->wmi_pdev[0];
 	if (!wmi_handle) {
-		WMI_LOGE
-		("unable to get wmi_handle for diag event end point id:%d\n",
-		 htc_packet->Endpoint);
+		wmi_err("unable to get wmi_handle for diag event end point id:%d", htc_packet->Endpoint);
 		qdf_nbuf_free(evt_buf);
 		return;
 	}
@@ -2878,6 +2885,7 @@ void *wmi_unified_get_pdev_handle(struct wmi_soc *soc, uint32_t pdev_idx)
 	wmi_handle->htc_handle = soc->htc_handle;
 	wmi_handle->max_msg_len = soc->max_msg_len[pdev_idx];
 	wmi_handle->tag_crash_inject = false;
+	wmi_interface_sequence_reset(wmi_handle);
 
 	return wmi_handle;
 
@@ -3298,24 +3306,12 @@ wmi_unified_connect_htc_service(struct wmi_unified *wmi_handle,
 }
 
 #ifdef WLAN_FEATURE_WMI_DIAG_OVER_CE7
-/**
- * wmi_diag_connect_pdev_htc_service()
- * WMI DIAG API to get connect to HTC service
- *
- * @wmi_handle: handle to WMI.
- * @htc_handle: handle to HTC
- *
- * @Return: QDF_STATUS
- */
 QDF_STATUS wmi_diag_connect_pdev_htc_service(struct wmi_unified *wmi_handle,
 					     HTC_HANDLE htc_handle)
 {
 	QDF_STATUS status;
-	struct htc_service_connect_resp response;
-	struct htc_service_connect_req connect;
-
-	OS_MEMZERO(&connect, sizeof(connect));
-	OS_MEMZERO(&response, sizeof(response));
+	struct htc_service_connect_resp response = {0};
+	struct htc_service_connect_req connect = {0};
 
 	/* meta data is unused for now */
 	connect.pMetaData = NULL;

@@ -11419,6 +11419,7 @@ static struct cdp_ipa_ops dp_ops_ipa = {
 	.ipa_set_doorbell_paddr = dp_ipa_set_doorbell_paddr,
 	.ipa_op_response = dp_ipa_op_response,
 	.ipa_register_op_cb = dp_ipa_register_op_cb,
+	.ipa_deregister_op_cb = dp_ipa_deregister_op_cb,
 	.ipa_get_stat = dp_ipa_get_stat,
 	.ipa_tx_data_frame = dp_tx_send_ipa_data_frame,
 	.ipa_enable_autonomy = dp_ipa_enable_autonomy,
@@ -13400,6 +13401,33 @@ static void dp_soc_cfg_attach(struct dp_soc *soc)
 	}
 }
 
+static inline  void dp_pdev_set_default_reo(struct dp_pdev *pdev)
+{
+	struct dp_soc *soc = pdev->soc;
+
+	switch (pdev->pdev_id) {
+	case 0:
+		pdev->reo_dest =
+			wlan_cfg_radio0_default_reo_get(soc->wlan_cfg_ctx);
+		break;
+
+	case 1:
+		pdev->reo_dest =
+			wlan_cfg_radio1_default_reo_get(soc->wlan_cfg_ctx);
+		break;
+
+	case 2:
+		pdev->reo_dest =
+			wlan_cfg_radio2_default_reo_get(soc->wlan_cfg_ctx);
+		break;
+
+	default:
+		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_ERROR,
+			  "Invalid pdev_id %d for reo selection", pdev->pdev_id);
+		break;
+	}
+}
+
 static inline QDF_STATUS dp_pdev_init(struct cdp_soc_t *txrx_soc,
 				      HTC_HANDLE htc_handle,
 				      qdf_device_t qdf_osdev,
@@ -13519,7 +13547,7 @@ static inline QDF_STATUS dp_pdev_init(struct cdp_soc_t *txrx_soc,
 	dp_pcp_tid_map_setup(pdev);
 
 	/* set the reo destination during initialization */
-	pdev->reo_dest = pdev->pdev_id + 1;
+	dp_pdev_set_default_reo(pdev);
 
 	/*
 	 * initialize ppdu tlv list

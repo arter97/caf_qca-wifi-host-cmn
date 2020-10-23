@@ -242,8 +242,8 @@ cm_fill_connect_resp_from_req(struct wlan_cm_connect_rsp *resp,
 }
 
 /**
- * cm_connect_inform_os_if_connect_complete() - Fill fail connect resp from req
- * and indicate same to osif
+ * cm_handle_connect_flush() - Fill fail connect resp from req and indicate
+ * same to osif
  * @cm_ctx: connection manager context
  * @cm_req: cm request
  *
@@ -252,8 +252,7 @@ cm_fill_connect_resp_from_req(struct wlan_cm_connect_rsp *resp,
  * Return: void
  */
 static void
-cm_connect_inform_os_if_connect_complete(struct cnx_mgr *cm_ctx,
-					 struct cm_req *cm_req)
+cm_handle_connect_flush(struct cnx_mgr *cm_ctx, struct cm_req *cm_req)
 {
 	struct wlan_cm_connect_rsp *resp;
 
@@ -271,6 +270,27 @@ cm_connect_inform_os_if_connect_complete(struct cnx_mgr *cm_ctx,
 
 	mlme_cm_osif_connect_complete(cm_ctx->vdev, resp);
 	qdf_mem_free(resp);
+}
+
+/**
+ * cm_handle_disconnect_flush() - Fill disconnect resp from req and indicate
+ * same to osif
+ * @cm_ctx: connection manager context
+ * @cm_req: cm request
+ *
+ * Context: Can be called from APIs holding cm request list lock
+ *
+ * Return: void
+ */
+static void
+cm_handle_disconnect_flush(struct cnx_mgr *cm_ctx, struct cm_req *cm_req)
+{
+	struct wlan_cm_discon_rsp resp;
+
+	resp.req.cm_id = cm_req->cm_id;
+	resp.req.req = cm_req->discon_req.req;
+
+	mlme_cm_osif_disconnect_complete(cm_ctx->vdev, &resp);
 }
 
 static void cm_remove_cmd_from_serialization(struct cnx_mgr *cm_ctx,
@@ -320,8 +340,8 @@ cm_flush_pending_request(struct cnx_mgr *cm_ctx, uint32_t flush_prefix)
 
 		prefix = CM_ID_GET_PREFIX(cm_req->cm_id);
 
-		/* Only remove the pending requests matching the prefix */
-		if ((prefix & flush_prefix) != prefix ||
+		/* Only remove the pending requests matching the flush prefix */
+		if (prefix != flush_prefix ||
 		    cm_req->cm_id == cm_ctx->active_cm_id) {
 			cur_node = next_node;
 			next_node = NULL;
@@ -329,12 +349,11 @@ cm_flush_pending_request(struct cnx_mgr *cm_ctx, uint32_t flush_prefix)
 		}
 
 		if (prefix == CONNECT_REQ_PREFIX) {
-			cm_connect_inform_os_if_connect_complete(cm_ctx,
-								 cm_req);
+			cm_handle_connect_flush(cm_ctx, cm_req);
 			cm_ctx->connect_count--;
 			cm_free_connect_req_mem(&cm_req->connect_req);
 		} else {
-			/* Todo:- fill disconnect rsp and inform OSIF */
+			cm_handle_disconnect_flush(cm_ctx, cm_req);
 			cm_ctx->disconnect_count--;
 		}
 		mlme_debug(CM_PREFIX_FMT,
@@ -382,6 +401,42 @@ cm_fill_bss_info_in_connect_rsp_by_cm_id(struct cnx_mgr *cm_ctx,
 
 	return QDF_STATUS_E_FAILURE;
 }
+
+#if defined(WLAN_SAE_SINGLE_PMK) && defined(WLAN_FEATURE_ROAM_OFFLOAD)
+bool cm_is_cm_id_current_candidate_single_pmk(struct cnx_mgr *cm_ctx,
+					      wlan_cm_id cm_id)
+{
+	qdf_list_node_t *cur_node = NULL, *next_node = NULL;
+	struct cm_req *cm_req;
+	uint32_t prefix = CM_ID_GET_PREFIX(cm_id);
+	struct scan_cache_node *candidate;
+	bool is_single_pmk = false;
+
+	if (prefix != CONNECT_REQ_PREFIX)
+		return is_single_pmk;
+
+	cm_req_lock_acquire(cm_ctx);
+	qdf_list_peek_front(&cm_ctx->req_list, &cur_node);
+	while (cur_node) {
+		qdf_list_peek_next(&cm_ctx->req_list, cur_node, &next_node);
+		cm_req = qdf_container_of(cur_node, struct cm_req, node);
+
+		if (cm_req->cm_id == cm_id) {
+			candidate = cm_req->connect_req.cur_candidate;
+			if (candidate &&
+			    util_scan_entry_single_pmk(candidate->entry))
+				is_single_pmk = true;
+			break;
+		}
+
+		cur_node = next_node;
+		next_node = NULL;
+	}
+	cm_req_lock_release(cm_ctx);
+
+	return is_single_pmk;
+}
+#endif
 
 QDF_STATUS cm_add_req_to_list_and_indicate_osif(struct cnx_mgr *cm_ctx,
 						struct cm_req *cm_req,
