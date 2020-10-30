@@ -9649,6 +9649,14 @@ static QDF_STATUS send_stats_ext_req_cmd_tlv(wmi_unified_t wmi_handle,
 	wmi_buf_t buf;
 	size_t len;
 	uint8_t *buf_ptr;
+	uint16_t max_wmi_msg_size = wmi_get_max_msg_len(wmi_handle);
+
+	if (preq->request_data_len > (max_wmi_msg_size - WMI_TLV_HDR_SIZE -
+				      sizeof(*cmd))) {
+		wmi_err("Data length=%d is greater than max wmi msg size",
+			preq->request_data_len);
+		return QDF_STATUS_E_FAILURE;
+	}
 
 	len = sizeof(*cmd) + WMI_TLV_HDR_SIZE + preq->request_data_len;
 
@@ -17178,6 +17186,13 @@ static QDF_STATUS extract_ndp_ind_tlv(wmi_unified_t wmi_handle,
 		WMI_LOGE("FW message ndp app info length %d more than TLV hdr %d",
 			 fixed_params->ndp_app_info_len,
 			 event->num_ndp_app_info);
+		return QDF_STATUS_E_INVAL;
+	}
+
+	if (fixed_params->nan_scid_len > event->num_ndp_scid) {
+		WMI_LOGE("FW msg ndp scid info len %d more than TLV hdr %d",
+			 fixed_params->nan_scid_len,
+			 event->num_ndp_scid);
 		return QDF_STATUS_E_INVAL;
 	}
 
