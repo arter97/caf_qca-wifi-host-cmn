@@ -204,6 +204,10 @@ struct hif_softc {
 	atomic_t link_suspended;
 	uint32_t *vaddr_rri_on_ddr;
 	qdf_dma_addr_t paddr_rri_on_ddr;
+#ifdef CONFIG_BYPASS_QMI
+	uint32_t *vaddr_qmi_bypass;
+	qdf_dma_addr_t paddr_qmi_bypass;
+#endif
 	int linkstate_vote;
 	bool fastpath_mode_on;
 	atomic_t tasklet_from_intr;
@@ -259,6 +263,7 @@ struct hif_softc {
 	/* Should the unlzay support for interrupt delivery be disabled */
 	/* Flag to indicate whether bus is suspended */
 	bool bus_suspended;
+	bool pktlog_init;
 };
 
 static inline
@@ -331,6 +336,8 @@ void hif_shutdown_device(struct hif_opaque_softc *hif_ctx);
 int hif_bus_configure(struct hif_softc *scn);
 void hif_cancel_deferred_target_sleep(struct hif_softc *scn);
 int hif_config_ce(struct hif_softc *scn);
+int hif_config_ce_pktlog(struct hif_opaque_softc *hif_ctx);
+int hif_config_ce_by_id(struct hif_softc *scn, int pipe_num);
 void hif_unconfig_ce(struct hif_softc *scn);
 void hif_ce_prepare_config(struct hif_softc *scn);
 QDF_STATUS hif_ce_open(struct hif_softc *scn);
@@ -381,6 +388,47 @@ void hif_wlan_disable(struct hif_softc *scn);
 int hif_target_sleep_state_adjust(struct hif_softc *scn,
 					 bool sleep_ok,
 					 bool wait_for_it);
+
+#ifdef DP_MEM_PRE_ALLOC
+void *hif_mem_alloc_consistent_unaligned(struct hif_softc *scn,
+					 qdf_size_t size,
+					 qdf_dma_addr_t *paddr,
+					 uint32_t ring_type,
+					 uint8_t *is_mem_prealloc);
+
+void hif_mem_free_consistent_unaligned(struct hif_softc *scn,
+				       qdf_size_t size,
+				       void *vaddr,
+				       qdf_dma_addr_t paddr,
+				       qdf_dma_context_t memctx,
+				       uint8_t is_mem_prealloc);
+#else
+static inline
+void *hif_mem_alloc_consistent_unaligned(struct hif_softc *scn,
+					 qdf_size_t size,
+					 qdf_dma_addr_t *paddr,
+					 uint32_t ring_type,
+					 uint8_t *is_mem_prealloc)
+{
+	return qdf_mem_alloc_consistent(scn->qdf_dev,
+					scn->qdf_dev->dev,
+					size,
+					paddr);
+}
+
+static inline
+void hif_mem_free_consistent_unaligned(struct hif_softc *scn,
+				       qdf_size_t size,
+				       void *vaddr,
+				       qdf_dma_addr_t paddr,
+				       qdf_dma_context_t memctx,
+				       uint8_t is_mem_prealloc)
+{
+	return qdf_mem_free_consistent(scn->qdf_dev, scn->qdf_dev->dev,
+				       size, vaddr, paddr, memctx);
+}
+#endif
+
 /**
  * hif_get_rx_ctx_id() - Returns NAPI instance ID based on CE ID
  * @ctx_id: Rx CE context ID
@@ -423,4 +471,5 @@ void hif_uninit_rri_on_ddr(struct hif_softc *scn);
 static inline
 void hif_uninit_rri_on_ddr(struct hif_softc *scn) {}
 #endif
+void hif_cleanup_static_buf_to_target(struct hif_softc *scn);
 #endif /* __HIF_MAIN_H__ */

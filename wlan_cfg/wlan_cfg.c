@@ -330,7 +330,7 @@ struct wlan_srng_cfg g_wlan_srng_cfg[MAX_RING_TYPES];
 /* REO_DST ring configuration */
 struct wlan_srng_cfg wlan_srng_reo_cfg = {
 	.timer_threshold = WLAN_CFG_INT_TIMER_THRESHOLD_REO_RING,
-	.batch_count_threshold = 0,
+	.batch_count_threshold = WLAN_CFG_INT_BATCH_THRESHOLD_REO_RING,
 	.low_threshold = 0,
 };
 
@@ -624,6 +624,12 @@ wlan_cfg_soc_attach(struct cdp_ctrl_objmgr_psoc *psoc)
 	wlan_cfg_ctx->fst_in_cmem = cfg_get(psoc, CFG_DP_RX_FST_IN_CMEM);
 	wlan_cfg_ctx->tx_per_pkt_vdev_id_check =
 			cfg_get(psoc, CFG_DP_TX_PER_PKT_VDEV_ID_CHECK);
+	wlan_cfg_ctx->radio0_rx_default_reo =
+			cfg_get(psoc, CFG_DP_RX_RADIO_0_DEFAULT_REO);
+	wlan_cfg_ctx->radio1_rx_default_reo =
+			cfg_get(psoc, CFG_DP_RX_RADIO_1_DEFAULT_REO);
+	wlan_cfg_ctx->radio2_rx_default_reo =
+			cfg_get(psoc, CFG_DP_RX_RADIO_2_DEFAULT_REO);
 
 	return wlan_cfg_ctx;
 }
@@ -1459,3 +1465,17 @@ bool wlan_cfg_is_swlm_enabled(struct wlan_cfg_dp_soc_ctxt *cfg)
 	return false;
 }
 #endif
+uint8_t wlan_cfg_radio0_default_reo_get(struct wlan_cfg_dp_soc_ctxt *cfg)
+{
+	return cfg->radio0_rx_default_reo;
+}
+
+uint8_t wlan_cfg_radio1_default_reo_get(struct wlan_cfg_dp_soc_ctxt *cfg)
+{
+	return cfg->radio1_rx_default_reo;
+}
+
+uint8_t wlan_cfg_radio2_default_reo_get(struct wlan_cfg_dp_soc_ctxt *cfg)
+{
+	return cfg->radio2_rx_default_reo;
+}

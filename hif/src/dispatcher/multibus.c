@@ -60,6 +60,7 @@ static void hif_initialize_default_ops(struct hif_softc *hif_sc)
 	bus_ops->hif_grp_irq_configure = &hif_dummy_grp_irq_configure;
 	bus_ops->hif_config_irq_affinity =
 		&hif_dummy_config_irq_affinity;
+	bus_ops->hif_config_irq_by_ceid = &hif_dummy_config_irq_by_ceid;
 }
 
 #define NUM_OPS (sizeof(struct hif_bus_ops) / sizeof(void *))
@@ -82,7 +83,7 @@ static QDF_STATUS hif_verify_basic_ops(struct hif_softc *hif_sc)
 
 	for (i = 0; i < NUM_OPS; i++) {
 		if (!ops_array[i]) {
-			HIF_ERROR("%s: function %d is null", __func__, i);
+			hif_err("ops_array[%d] is null", i);
 			status = QDF_STATUS_E_NOSUPPORT;
 		}
 	}
@@ -153,7 +154,7 @@ QDF_STATUS hif_bus_open(struct hif_softc *hif_sc,
 	}
 
 	if (status != QDF_STATUS_SUCCESS) {
-		HIF_ERROR("%s: %d not supported", __func__, bus_type);
+		hif_err("bus_type: %d not supported", bus_type);
 		return status;
 	}
 
@@ -567,4 +568,9 @@ qdf_export_symbol(hif_needs_bmi);
 void hif_config_irq_affinity(struct hif_softc *hif_sc)
 {
 	hif_sc->bus_ops.hif_config_irq_affinity(hif_sc);
+}
+
+int hif_config_irq_by_ceid(struct hif_softc *hif_sc, int ce_id)
+{
+	return hif_sc->bus_ops.hif_config_irq_by_ceid(hif_sc, ce_id);
 }

@@ -1198,12 +1198,16 @@ scm_update_channel_list(struct scan_start_request *req,
 	}
 
 	req->scan_req.chan_list.num_chan = num_scan_channels;
-	/* Dont upadte the channel list for SAP mode */
+	/* Dont update the channel list:
+	 * - if not STA mode and
+	 * - if scan mode is set to SCAN_MODE_6G_NO_OPERATION
+	 */
 	op_mode = wlan_vdev_mlme_get_opmode(req->vdev);
 	if (op_mode != QDF_SAP_MODE &&
 	    op_mode != QDF_P2P_DEVICE_MODE &&
 	    op_mode != QDF_P2P_CLIENT_MODE &&
-	    op_mode != QDF_P2P_GO_MODE) {
+	    op_mode != QDF_P2P_GO_MODE &&
+	    scan_obj->scan_def.scan_mode_6g != SCAN_MODE_6G_NO_OPERATION) {
 		scm_update_6ghz_channel_list(req->vdev,
 					     &req->scan_req.chan_list,
 					     scan_obj);
@@ -1229,6 +1233,7 @@ scm_scan_req_update_params(struct wlan_objmgr_vdev *vdev,
 	struct chan_list *custom_chan_list;
 	struct wlan_objmgr_pdev *pdev;
 	uint8_t pdev_id;
+	enum QDF_OPMODE op_mode;
 
 	/* Ensure correct number of probes are sent on active channel */
 	if (!req->scan_req.repeat_probe_time)
@@ -1340,7 +1345,9 @@ scm_scan_req_update_params(struct wlan_objmgr_vdev *vdev,
 	else if (!req->scan_req.chan_list.num_chan)
 		ucfg_scan_init_chanlist_params(req, 0, NULL, NULL);
 
-	if (scan_obj->scan_def.scan_mode_6g != SCAN_MODE_6G_NO_CHANNEL)
+	op_mode = wlan_vdev_mlme_get_opmode(vdev);
+	if (scan_obj->scan_def.scan_mode_6g != SCAN_MODE_6G_NO_CHANNEL &&
+	    op_mode == QDF_STA_MODE)
 		scm_add_rnr_info(pdev, req);
 	scm_update_channel_list(req, scan_obj);
 }
@@ -1797,7 +1804,8 @@ scm_scan_event_handler(struct scheduler_msg *msg)
 	case SCAN_EVENT_TYPE_COMPLETED:
 		if (event->reason == SCAN_REASON_COMPLETED)
 			scm_11d_decide_country_code(vdev);
-		/* fall through to release the command */
+		/* release the command */
+		/* fallthrough */
 	case SCAN_EVENT_TYPE_START_FAILED:
 	case SCAN_EVENT_TYPE_DEQUEUED:
 		scm_release_serialization_command(vdev, event->scan_id);

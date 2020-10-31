@@ -176,8 +176,25 @@ static void log_packet_info(HTC_TARGET *target, HTC_PACKET *pPacket)
 		qdf_nbuf_push_head(netbuf, sizeof(HTC_FRAME_HDR));
 	}
 }
+
+/**
+ * htc_inc_runtime_cnt: Increment htc runtime count
+ * @target: handle of HTC context
+ *
+ * Return: None
+ */
+static inline
+void htc_inc_runtime_cnt(HTC_TARGET *target)
+{
+	qdf_atomic_inc(&target->htc_runtime_cnt);
+}
 #else
 static void log_packet_info(HTC_TARGET *target, HTC_PACKET *pPacket)
+{
+}
+
+static inline
+void htc_inc_runtime_cnt(HTC_TARGET *target)
 {
 }
 #endif
@@ -716,6 +733,7 @@ static QDF_STATUS htc_issue_packets(HTC_TARGET *target,
 	uint8_t *buf = NULL;
 	int (*update_ep_padding_credit)(void *, int);
 	void *ctx = NULL;
+	bool rt_put_in_resp;
 
 	update_ep_padding_credit =
 			pEndpoint->EpCallBacks.ep_padding_credit_update;
@@ -726,6 +744,7 @@ static QDF_STATUS htc_issue_packets(HTC_TARGET *target,
 			("+htc_issue_packets: Queue: %pK, Pkts %d\n", pPktQueue,
 			 HTC_PACKET_QUEUE_DEPTH(pPktQueue)));
 	while (true) {
+		rt_put_in_resp = false;
 		if (HTC_TX_BUNDLE_ENABLED(target) &&
 		    HTC_PACKET_QUEUE_DEPTH(pPktQueue) >=
 		    HTC_MIN_MSG_PER_BUNDLE) {
@@ -738,6 +757,7 @@ static QDF_STATUS htc_issue_packets(HTC_TARGET *target,
 					    (pEndpoint) < 1)
 						break;
 				}
+				/* fallthrough */
 			case QDF_BUS_TYPE_USB:
 				htc_issue_packets_bundle(target,
 							pEndpoint,
@@ -837,6 +857,12 @@ static QDF_STATUS htc_issue_packets(HTC_TARGET *target,
 		 */
 		if (pPacket->PktInfo.AsTx.Tag == HTC_TX_PACKET_TAG_RUNTIME_PUT)
 			rt_put = true;
+		else if (pPacket->PktInfo.AsTx.Tag ==
+			 HTC_TX_PACKET_TAG_RTPM_PUT_RC) {
+			rt_put_in_resp = true;
+			htc_inc_runtime_cnt(target);
+		}
+
 #if DEBUG_BUNDLE
 		qdf_print(" Send single EP%d buffer size:0x%x, total:0x%x.",
 			  pEndpoint->Id,
@@ -855,6 +881,8 @@ static QDF_STATUS htc_issue_packets(HTC_TARGET *target,
 				       netbuf, data_attr);
 
 		if (status != QDF_STATUS_SUCCESS) {
+			if (rt_put_in_resp)
+				htc_dec_return_runtime_cnt((void *)target);
 			if (pEndpoint->EpCallBacks.ep_padding_credit_update) {
 				if (used_extra_tx_credit) {
 					ctx = pEndpoint->EpCallBacks.pContext;
@@ -1573,6 +1601,7 @@ static enum HTC_SEND_QUEUE_RESULT htc_try_send(HTC_TARGET *target,
 					pEndpoint->total_num_requeues++;
 					pEndpoint->num_requeues_warn = 0;
 				}
+				/* fallthrough */
 			default:
 				QDF_TRACE(QDF_MODULE_ID_HIF, QDF_TRACE_LEVEL_INFO,
 					  "htc_issue_packets, failed status:%d"

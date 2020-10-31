@@ -204,6 +204,8 @@
 #define WLAN_SOC_F_BCAST_TWT           0x04000000
        /* WDS Extended support */
 #define WLAN_SOC_F_WDS_EXTENDED        0x08000000
+/* Peer create response */
+#define WLAN_SOC_F_PEER_CREATE_RESP    0x10000000
 
 
 /* PSOC op flags */
@@ -351,7 +353,6 @@ struct wlan_soc_timer {
  * @soc_cb:                south bound callbacks
  * @soc_timer:             soc timer for inactivity
  * @soc_concurrency:       concurrency info
- * @wlan_active_vdevs[]:   List of active VDEVs
  * @soc_comp_priv_obj[]:   component private object pointers
  * @obj_status[]:          component object status
  * @obj_state:             object state
@@ -366,7 +367,6 @@ struct wlan_objmgr_psoc {
 	struct wlan_soc_southbound_cb soc_cb;
 	struct wlan_soc_timer soc_timer;
 	struct wlan_concurrency_info soc_concurrency; /*TODO */
-	uint8_t wlan_active_vdevs[WLAN_UMAC_PSOC_MAX_VDEVS];
 	void *soc_comp_priv_obj[WLAN_UMAC_MAX_COMPONENTS];
 	QDF_STATUS obj_status[WLAN_UMAC_MAX_COMPONENTS];
 	WLAN_OBJ_STATE obj_state;

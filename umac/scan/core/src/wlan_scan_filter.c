@@ -207,6 +207,7 @@ static bool scm_chk_crypto_params(struct scan_filter *filter,
 	security->ucastcipherset =
 		ap_crypto->ucastcipherset & filter->ucastcipherset;
 	security->key_mgmt = ap_crypto->key_mgmt & filter->key_mgmt;
+	security->rsn_caps = ap_crypto->rsn_caps;
 
 	return true;
 }
@@ -374,6 +375,7 @@ static bool scm_check_wapi(struct scan_filter *filter,
 	security->ucastcipherset =
 		ap_crypto->ucastcipherset & filter->ucastcipherset;
 	security->key_mgmt = ap_crypto->key_mgmt & filter->key_mgmt;
+	security->rsn_caps = ap_crypto->rsn_caps;
 	qdf_mem_free(ap_crypto);
 
 	return true;
@@ -410,6 +412,7 @@ static bool scm_match_any_security(struct scan_filter *filter,
 		security->mcastcipherset = ap_crypto->mcastcipherset;
 		security->ucastcipherset = ap_crypto->ucastcipherset;
 		security->key_mgmt = ap_crypto->key_mgmt;
+		security->rsn_caps = ap_crypto->rsn_caps;
 		QDF_SET_PARAM(security->authmodeset, WLAN_CRYPTO_AUTH_RSNA);
 		match = true;
 		goto free;
@@ -426,6 +429,7 @@ static bool scm_match_any_security(struct scan_filter *filter,
 		security->mcastcipherset = ap_crypto->mcastcipherset;
 		security->ucastcipherset = ap_crypto->ucastcipherset;
 		security->key_mgmt = ap_crypto->key_mgmt;
+		security->rsn_caps = ap_crypto->rsn_caps;
 		QDF_SET_PARAM(security->authmodeset, WLAN_CRYPTO_AUTH_WPA);
 		match = true;
 		goto free;
@@ -443,6 +447,7 @@ static bool scm_match_any_security(struct scan_filter *filter,
 		security->mcastcipherset = ap_crypto->mcastcipherset;
 		security->ucastcipherset = ap_crypto->ucastcipherset;
 		security->key_mgmt = ap_crypto->key_mgmt;
+		security->rsn_caps = ap_crypto->rsn_caps;
 		QDF_SET_PARAM(security->authmodeset, WLAN_CRYPTO_AUTH_WAPI);
 		match = true;
 		goto free;
@@ -499,7 +504,8 @@ static bool scm_is_security_match(struct scan_filter *filter,
 			match = scm_check_open(filter, db_entry, security);
 			if (match)
 				break;
-		/* If not OPEN, then check WEP match so fall through */
+		/* If not OPEN, then check WEP match */
+		/* fallthrough */
 		case WLAN_CRYPTO_AUTH_SHARED:
 			match = scm_check_wep(filter, db_entry, security);
 			break;
@@ -569,13 +575,13 @@ static bool scm_is_fils_config_match(struct scan_filter *filter,
 
 	for (i = 1; i <= indication_ie->realm_identifiers_cnt; i++) {
 		if (!qdf_mem_cmp(filter->fils_scan_filter.fils_realm,
-				 data, REAM_HASH_LEN))
+				 data, REALM_HASH_LEN))
 			return true;
 		/* Max realm count reached */
 		if (indication_ie->realm_identifiers_cnt == i)
 			break;
 
-		data = data + REAM_HASH_LEN;
+		data = data + REALM_HASH_LEN;
 	}
 
 	return false;

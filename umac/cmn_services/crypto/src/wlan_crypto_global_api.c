@@ -2408,7 +2408,7 @@ wlan_crypto_wpa_keymgmt_to_suite(uint32_t keymgmt)
  * cipher algorithm.  Where appropriate we also
  * record any key length.
  */
-static int32_t wlan_crypto_wpa_suite_to_cipher(uint8_t *sel)
+static int32_t wlan_crypto_wpa_suite_to_cipher(const uint8_t *sel)
 {
 	uint32_t w = LE_READ_4(sel);
 	int32_t status = -1;
@@ -2429,7 +2429,7 @@ static int32_t wlan_crypto_wpa_suite_to_cipher(uint8_t *sel)
  * Convert a WPA key management/authentication algorithm
  * to an internal code.
  */
-static int32_t wlan_crypto_wpa_suite_to_keymgmt(uint8_t *sel)
+static int32_t wlan_crypto_wpa_suite_to_keymgmt(const uint8_t *sel)
 {
 	uint32_t w = LE_READ_4(sel);
 	int32_t status = -1;
@@ -2452,7 +2452,7 @@ static int32_t wlan_crypto_wpa_suite_to_keymgmt(uint8_t *sel)
  * cipher algorithm.  Where appropriate we also
  * record any key length.
  */
-static int32_t wlan_crypto_rsn_suite_to_cipher(uint8_t *sel)
+static int32_t wlan_crypto_rsn_suite_to_cipher(const uint8_t *sel)
 {
 	uint32_t w = LE_READ_4(sel);
 	int32_t status = -1;
@@ -2486,7 +2486,7 @@ static int32_t wlan_crypto_rsn_suite_to_cipher(uint8_t *sel)
  * Convert an RSN key management/authentication algorithm
  * to an internal code.
  */
-static int32_t wlan_crypto_rsn_suite_to_keymgmt(uint8_t *sel)
+static int32_t wlan_crypto_rsn_suite_to_keymgmt(const uint8_t *sel)
 {
 	uint32_t w = LE_READ_4(sel);
 	int32_t status = -1;
@@ -2535,18 +2535,9 @@ static int32_t wlan_crypto_rsn_suite_to_keymgmt(uint8_t *sel)
 	return status;
 }
 
-/**
- * wlan_crypto_wpaie_check - called by mlme to check the wpaie
- * @crypto params: crypto params
- * @iebuf: ie buffer
- *
- * This function gets called by mlme to check the contents of wpa is
- * matching with given crypto params
- *
- * Return: QDF_STATUS_SUCCESS - in case of success
- */
 QDF_STATUS wlan_crypto_wpaie_check(struct wlan_crypto_params *crypto_params,
-					uint8_t *frm){
+				   const uint8_t *frm)
+{
 	uint8_t len = frm[1];
 	int32_t w;
 	int n;
@@ -2617,18 +2608,9 @@ QDF_STATUS wlan_crypto_wpaie_check(struct wlan_crypto_params *crypto_params,
 	return QDF_STATUS_SUCCESS;
 }
 
-/**
- * wlan_crypto_rsnie_check - called by mlme to check the rsnie
- * @crypto params: crypto params
- * @iebuf: ie buffer
- *
- * This function gets called by mlme to check the contents of wpa is
- * matching with given crypto params
- *
- * Return: QDF_STATUS_SUCCESS - in case of success
- */
 QDF_STATUS wlan_crypto_rsnie_check(struct wlan_crypto_params *crypto_params,
-					uint8_t *frm){
+				   const uint8_t *frm)
+{
 	uint8_t len = frm[1];
 	int32_t w;
 	int n;
@@ -2760,19 +2742,25 @@ QDF_STATUS wlan_crypto_rsnie_check(struct wlan_crypto_params *crypto_params,
 			return QDF_STATUS_E_INVAL;
 		}
 		/*TODO: Save pmkid in params for further reference */
+	} else if (len == 1) {
+		crypto_err("PMKID is truncated");
+		return QDF_STATUS_E_INVAL;
 	}
 
 	/* BIP */
-	if (!len &&
-	    (crypto_params->rsn_caps & WLAN_CRYPTO_RSN_CAP_MFP_ENABLED)) {
+	if (!len) {
 		/* when no BIP mentioned and MFP capable use CMAC as default*/
-		SET_MGMT_CIPHER(crypto_params, WLAN_CRYPTO_CIPHER_AES_CMAC);
+		if (crypto_params->rsn_caps & WLAN_CRYPTO_RSN_CAP_MFP_ENABLED)
+			SET_MGMT_CIPHER(crypto_params,
+					WLAN_CRYPTO_CIPHER_AES_CMAC);
 		return QDF_STATUS_SUCCESS;
-	} else if (len >= 4) {
-		w = wlan_crypto_rsn_suite_to_cipher(frm);
-		frm += 4, len -= 4;
-		SET_MGMT_CIPHER(crypto_params, w);
+	} else if (len < 4) {
+		crypto_err("Mgmt cipher is truncated");
+		return QDF_STATUS_E_INVAL;
 	}
+	w = wlan_crypto_rsn_suite_to_cipher(frm);
+	frm += 4, len -= 4;
+	SET_MGMT_CIPHER(crypto_params, w);
 
 	return QDF_STATUS_SUCCESS;
 }
@@ -3047,8 +3035,6 @@ add_rsn_caps:
 			WLAN_CRYPTO_ADDSHORT(frm, 1);
 			qdf_mem_copy(frm, pmksa->pmkid, PMKID_LEN);
 			frm += PMKID_LEN;
-		} else {
-			WLAN_CRYPTO_ADDSHORT(frm, 0);
 		}
 	}
 
@@ -3118,7 +3104,7 @@ bool wlan_crypto_rsn_info(struct wlan_objmgr_vdev *vdev,
 /*
  * Convert an WAPI CIPHER suite to to an internal code.
  */
-static int32_t wlan_crypto_wapi_suite_to_cipher(uint8_t *sel)
+static int32_t wlan_crypto_wapi_suite_to_cipher(const uint8_t *sel)
 {
 	uint32_t w = LE_READ_4(sel);
 	int32_t status = -1;
@@ -3135,7 +3121,7 @@ static int32_t wlan_crypto_wapi_suite_to_cipher(uint8_t *sel)
  * Convert an WAPI key management/authentication algorithm
  * to an internal code.
  */
-static int32_t wlan_crypto_wapi_keymgmt(u_int8_t *sel)
+static int32_t wlan_crypto_wapi_keymgmt(const u_int8_t *sel)
 {
 	uint32_t w = LE_READ_4(sel);
 	int32_t status = -1;
@@ -3149,18 +3135,9 @@ static int32_t wlan_crypto_wapi_keymgmt(u_int8_t *sel)
 
 	return status;
 }
-/**
- * wlan_crypto_wapiie_check - called by mlme to check the wapiie
- * @crypto params: crypto params
- * @iebuf: ie buffer
- *
- * This function gets called by mlme to check the contents of wapi is
- * matching with given crypto params
- *
- * Return: QDF_STATUS_SUCCESS - in case of success
- */
+
 QDF_STATUS wlan_crypto_wapiie_check(struct wlan_crypto_params *crypto_params,
-					uint8_t *frm)
+				    const uint8_t *frm)
 {
 	uint8_t len = frm[1];
 	int32_t w;
@@ -4095,9 +4072,9 @@ send_res:
 	return match;
 }
 
-static QDF_STATUS
+QDF_STATUS
 wlan_get_crypto_params_from_rsn_ie(struct wlan_crypto_params *crypto_params,
-				   uint8_t *ie_ptr, uint16_t ie_len)
+				   const uint8_t *ie_ptr, uint16_t ie_len)
 {
 	const uint8_t *rsn_ie = NULL;
 	QDF_STATUS status;
@@ -4109,7 +4086,7 @@ wlan_get_crypto_params_from_rsn_ie(struct wlan_crypto_params *crypto_params,
 		return QDF_STATUS_E_INVAL;
 	}
 
-	status = wlan_crypto_rsnie_check(crypto_params, (uint8_t *)rsn_ie);
+	status = wlan_crypto_rsnie_check(crypto_params, rsn_ie);
 	if (QDF_STATUS_SUCCESS != status) {
 		crypto_err("RSN IE check failed");
 		return status;
@@ -4118,9 +4095,9 @@ wlan_get_crypto_params_from_rsn_ie(struct wlan_crypto_params *crypto_params,
 	return QDF_STATUS_SUCCESS;
 }
 
-static QDF_STATUS
+QDF_STATUS
 wlan_get_crypto_params_from_wpa_ie(struct wlan_crypto_params *crypto_params,
-				   uint8_t *ie_ptr, uint16_t ie_len)
+				   const uint8_t *ie_ptr, uint16_t ie_len)
 {
 	const uint8_t *wpa_ie = NULL;
 	uint32_t wpa_oui;
@@ -4136,7 +4113,7 @@ wlan_get_crypto_params_from_wpa_ie(struct wlan_crypto_params *crypto_params,
 		return QDF_STATUS_E_INVAL;
 	}
 
-	status = wlan_crypto_wpaie_check(crypto_params, (uint8_t *)wpa_ie);
+	status = wlan_crypto_wpaie_check(crypto_params, wpa_ie);
 	if (QDF_STATUS_SUCCESS != status) {
 		crypto_err("WPA IE check failed");
 		return status;
@@ -4144,6 +4121,32 @@ wlan_get_crypto_params_from_wpa_ie(struct wlan_crypto_params *crypto_params,
 
 	return QDF_STATUS_SUCCESS;
 }
+
+#ifdef FEATURE_WLAN_WAPI
+QDF_STATUS
+wlan_get_crypto_params_from_wapi_ie(struct wlan_crypto_params *crypto_params,
+				    const uint8_t *ie_ptr, uint16_t ie_len)
+{
+	const uint8_t *wapi_ie;
+	QDF_STATUS status;
+
+	qdf_mem_zero(crypto_params, sizeof(*crypto_params));
+	wapi_ie = wlan_get_ie_ptr_from_eid(WLAN_ELEMID_WAPI, ie_ptr, ie_len);
+	if (!wapi_ie) {
+		crypto_debug("WAPI ie not present");
+		return QDF_STATUS_E_INVAL;
+	}
+
+	status = wlan_crypto_wapiie_check(crypto_params, wapi_ie);
+	if (QDF_IS_STATUS_ERROR(status)) {
+		crypto_err("WAPI IE check failed");
+		return status;
+	}
+
+	return QDF_STATUS_SUCCESS;
+}
+#endif
+
 /**
  * wlan_crypto_check_rsn_match - called by ucfg to check for RSN match
  * @psoc: psoc pointer
@@ -4259,6 +4262,27 @@ wlan_crypto_reset_prarams(struct wlan_crypto_params *params)
 	params->mgmtcipherset = 0;
 	params->key_mgmt = 0;
 	params->rsn_caps = 0;
+}
+
+uint8_t *
+wlan_crypto_parse_rsnxe_ie(uint8_t *rsnxe_ie, uint8_t *cap_len)
+{
+	uint8_t len;
+	uint8_t *ie;
+
+	if (!rsnxe_ie)
+		return NULL;
+
+	ie = rsnxe_ie;
+	len = ie[1];
+	ie += 2;
+
+	if (!len)
+		return NULL;
+
+	*cap_len = ie[0] & 0xf;
+
+	return ie;
 }
 
 QDF_STATUS wlan_set_vdev_crypto_prarams_from_ie(struct wlan_objmgr_vdev *vdev,

@@ -30,7 +30,7 @@
  */
 void hif_dummy_bus_prevent_linkdown(struct hif_softc *scn, bool flag)
 {
-	HIF_DBG("wlan: %s pcie power collapse ignored",
+	hif_debug("wlan: %s pcie power collapse ignored",
 			(flag ? "disable" : "enable"));
 }
 
@@ -357,8 +357,7 @@ int hif_dummy_bus_reset_resume(struct hif_softc *hif_ctx)
 
 int hif_dummy_map_ce_to_irq(struct hif_softc *scn, int ce_id)
 {
-	HIF_ERROR("%s: hif_map_ce_to_irq is not implemented on this platform",
-		  __func__);
+	hif_err("hif_map_ce_to_irq is not implemented on this platform");
 	QDF_BUG(0);
 	return -(1);
 }
@@ -376,4 +375,15 @@ int hif_dummy_addr_in_boundary(struct hif_softc *scn, uint32_t offset)
  */
 void hif_dummy_config_irq_affinity(struct hif_softc *scn)
 {
+}
+
+/**
+ * hif_dummy_config_irq_by_ceid - dummy call
+ * @scn: hif context
+ * @ce_id : copy engine id
+ * Return: 0
+ */
+int hif_dummy_config_irq_by_ceid(struct hif_softc *scn, int ce_id)
+{
+	return 0;
 }

@@ -31,6 +31,12 @@
 #define CM_ID_INVALID 0xFFFFFFFF
 typedef uint32_t wlan_cm_id;
 
+/* Diconnect active timeout */
+#define DISCONNECT_TIMEOUT   STOP_RESPONSE_TIMER + DELETE_RESPONSE_TIMER + 1000
+
+/* Diconnect command wait timeout */
+#define CM_DISCONNECT_CMD_TIMEOUT DISCONNECT_TIMEOUT + 2000
+
 /**
  * struct wlan_cm_wep_key_params - store wep key info
  * @key: key info
@@ -57,7 +63,7 @@ struct wlan_cm_wep_key_params {
  * @akm_suites: AKM suites bitmask
  * @wep_keys: static WEP keys, if not NULL points to an array of
  *	MAX_WEP_KEYS WEP keys
- * @pmf_cap: Pmf capability
+ * @rsn_caps: rsn caps
  * @mgmt_ciphers: mgmt cipher bitmask
  */
 struct wlan_cm_connect_crypto_info {
@@ -67,7 +73,7 @@ struct wlan_cm_connect_crypto_info {
 	uint32_t ciphers_pairwise;
 	uint32_t akm_suites;
 	struct wlan_cm_wep_key_params wep_keys;
-	enum wlan_pmf_cap pmf_cap;
+	uint16_t rsn_caps;
 	uint32_t mgmt_ciphers;
 };
 
@@ -75,7 +81,6 @@ struct wlan_cm_connect_crypto_info {
 #define WLAN_CM_FILS_MAX_KEYNAME_NAI_LENGTH 253
 #define WLAN_CM_FILS_MAX_REALM_LEN 255
 #define WLAN_CM_FILS_MAX_RRK_LENGTH 64
-#define WLAN_CM_FILS_MAX_RIK_LENGTH CM_FILS_MAX_RRK_LENGTH
 
 /**
  * struct wlan_fils_con_info - fils connect req info
@@ -107,7 +112,10 @@ struct wlan_fils_con_info {
  * @CM_OSIF_DISCONNECT: Disconnect req initiated by OSIF or north bound
  * @CM_PEER_DISCONNECT: Disconnect req initiated by peer sending deauth/disassoc
  * only for this localy generated will be false while indicating to kernel
- * @CM_SB_DISCONNECT: Disconnect req initiated by South bound/VDEV mgr/Peer mgr
+ * @CM_SB_DISCONNECT: Disconnect initiated from firmware. eg HB failure,
+ * sta kickout etc
+ * @CM_MLME_DISCONNECT: Disconnect req initiated by mlme. eg VDEV mgr or any
+ * other mlme component.
  * @CM_INTERNAL_DISCONNECT: Internal disconnect initiated by Connection manager
  * on receiving the back to back commands
  * @CM_ROAM_DISCONNECT: Disconnect req due to HO failure
@@ -120,6 +128,7 @@ enum wlan_cm_source {
 	CM_OSIF_DISCONNECT,
 	CM_PEER_DISCONNECT,
 	CM_SB_DISCONNECT,
+	CM_MLME_DISCONNECT,
 	CM_INTERNAL_DISCONNECT,
 	CM_ROAM_DISCONNECT,
 	CM_SOURCE_MAX,
@@ -138,6 +147,13 @@ enum wlan_cm_source {
  * @crypto: crypto related info
  * @assoc_ie:Additional assoc IE to be appended in assoc req
  *           (Include RSN/WPA/WAPI/WPS ies)
+ * @scan_ie: Default scan ie to be used in the uncast probe req and connect scan
+ * @force_rsne_override: force the arbitrary rsne received in connect req to be
+ * used with out validation, used for the scenarios where the device is used
+ * as a testbed device with special functionality and not recommended
+ * for production.
+ * @dot11mode_filter: dot11mode filter used to restrict connection to
+ * 11n/11ac/11ax.
  * @ht_caps: ht capability
  * @ht_caps_mask: mask of valid ht caps
  * @vht_caps: vht capability
@@ -154,6 +170,9 @@ struct wlan_cm_connect_req {
 	uint32_t chan_freq;
 	struct wlan_cm_connect_crypto_info crypto;
 	struct element_info assoc_ie;
+	struct element_info scan_ie;
+	bool force_rsne_override;
+	enum dot11_mode_filter dot11mode_filter;
 	uint16_t ht_caps;
 	uint16_t ht_caps_mask;
 	uint32_t vht_caps;
@@ -168,11 +187,20 @@ struct wlan_cm_connect_req {
  * vdev mgr
  * @vdev_id: vdev id
  * @cm_id: Connect manager id
+ * @force_rsne_override: force the arbitrary rsne received in connect req to be
+ * used with out validation, used for the scenarios where the device is used
+ * as a testbed device with special functionality and not recommended
+ * for production.
+ * @assoc_ie: assoc ie to be used in assoc req
+ * @scan_ie: Default scan ie to be used in the uncast probe req
  * @bss: scan entry for the candidate
  */
 struct wlan_cm_vdev_connect_req {
 	uint8_t vdev_id;
 	wlan_cm_id cm_id;
+	bool force_rsne_override;
+	struct element_info assoc_ie;
+	struct element_info scan_ie;
 	struct scan_cache_node *bss;
 };
 
@@ -188,7 +216,7 @@ struct wlan_cm_vdev_connect_req {
 struct wlan_cm_disconnect_req {
 	uint8_t vdev_id;
 	enum wlan_cm_source source;
-	uint16_t reason_code;
+	enum wlan_reason_code reason_code;
 	struct qdf_mac_addr bssid;
 };
 
@@ -206,6 +234,10 @@ struct wlan_cm_vdev_discon_req {
 /*
  * enum wlan_cm_connect_fail_reason: connection manager connect fail reason
  * @CM_NO_CANDIDATE_FOUND: No candidate found
+ * @CM_ABORT_DUE_TO_NEW_REQ_RECVD: Aborted as new command is received and
+ * @CM_BSS_SELECT_IND_FAILED: Failed BSS select indication
+ * State machine is not able to handle as state has changed due to new command.
+ * @CM_PEER_CREATE_FAILED: peer create failed
  * @CM_JOIN_FAILED: Failed in joining state
  * (BSS peer creation or other handling)
  * @CM_JOIN_TIMEOUT: Did not receive beacon or probe response after unicast
@@ -216,10 +248,14 @@ struct wlan_cm_vdev_discon_req {
  * @CM_ASSOC_TIMEOUT: No Assoc resp from AP
  * @CM_HW_MODE_FAILURE: failed to change HW mode
  * @CM_SER_FAILURE: Failed to serialize command
+ * @CM_SER_TIMEOUT: Serialization cmd timeout
  * @CM_GENERIC_FAILURE: Generic failure apart from above
  */
 enum wlan_cm_connect_fail_reason {
 	CM_NO_CANDIDATE_FOUND,
+	CM_ABORT_DUE_TO_NEW_REQ_RECVD,
+	CM_BSS_SELECT_IND_FAILED,
+	CM_PEER_CREATE_FAILED,
 	CM_JOIN_FAILED,
 	CM_JOIN_TIMEOUT,
 	CM_AUTH_FAILED,
@@ -228,6 +264,7 @@ enum wlan_cm_connect_fail_reason {
 	CM_ASSOC_TIMEOUT,
 	CM_HW_MODE_FAILURE,
 	CM_SER_FAILURE,
+	CM_SER_TIMEOUT,
 	CM_GENERIC_FAILURE,
 };
 
@@ -295,19 +332,22 @@ struct wlan_connect_rsp_ies {
  * OSIF
  * @vdev_id: vdev id
  * @cm_id: Connect manager id
+ * @bssid: BSSID of the ap
+ * @ssid: SSID of the connection
+ * @freq: Channel frequency
  * @connect_status: connect status success or failure
  * @reason: connect fail reason, valid only in case of failure
  * @reason_code: protocol reason code of the connect failure
  * @aid: aid
  * @connect_ies: connect related IE required by osif to send to kernel
  * @is_fils_connection: is fils connection
- * @bssid: BSSID of the ap
- * @ssid: SSID of the connection
- * @freq: Channel frequency
  */
 struct wlan_cm_connect_rsp {
 	uint8_t vdev_id;
 	wlan_cm_id cm_id;
+	struct qdf_mac_addr bssid;
+	struct wlan_ssid ssid;
+	qdf_freq_t freq;
 	QDF_STATUS connect_status;
 	enum wlan_cm_connect_fail_reason reason;
 	uint8_t reason_code;
@@ -316,9 +356,6 @@ struct wlan_cm_connect_rsp {
 #ifdef WLAN_FEATURE_FILS_SK
 	bool is_fils_connection;
 #endif
-	struct qdf_mac_addr bssid;
-	struct wlan_ssid ssid;
-	qdf_freq_t freq;
 };
 
 

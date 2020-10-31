@@ -244,11 +244,9 @@ void dp_peer_find_hash_add(struct dp_soc *soc, struct dp_peer *peer)
 	index = dp_peer_find_hash_index(soc, &peer->mac_addr);
 	qdf_spin_lock_bh(&soc->peer_hash_lock);
 
-	if (dp_peer_get_ref(soc, peer, DP_MOD_ID_CONFIG) !=
-			QDF_STATUS_SUCCESS) {
-		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_INFO,
-			  "unable to get peer reference at MAP mac "QDF_MAC_ADDR_FMT,
-			  peer ? QDF_MAC_ADDR_REF(peer->mac_addr.raw) : NULL);
+	if (QDF_IS_STATUS_ERROR(dp_peer_get_ref(soc, peer, DP_MOD_ID_CONFIG))) {
+		dp_err("unable to get peer ref at MAP mac: "QDF_MAC_ADDR_FMT,
+		       QDF_MAC_ADDR_REF(peer->mac_addr.raw));
 		qdf_spin_unlock_bh(&soc->peer_hash_lock);
 		return;
 	}
@@ -277,11 +275,9 @@ void dp_peer_vdev_list_add(struct dp_soc *soc, struct dp_vdev *vdev,
 			   struct dp_peer *peer)
 {
 	qdf_spin_lock_bh(&vdev->peer_list_lock);
-	if (dp_peer_get_ref(soc, peer, DP_MOD_ID_CONFIG) !=
-			QDF_STATUS_SUCCESS) {
-		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_INFO,
-			  "unable to get peer reference at MAP mac "QDF_MAC_ADDR_FMT,
-			  peer ? QDF_MAC_ADDR_REF(peer->mac_addr.raw) : NULL);
+	if (QDF_IS_STATUS_ERROR(dp_peer_get_ref(soc, peer, DP_MOD_ID_CONFIG))) {
+		dp_err("unable to get peer ref at MAP mac: "QDF_MAC_ADDR_FMT,
+		       QDF_MAC_ADDR_REF(peer->mac_addr.raw));
 		qdf_spin_unlock_bh(&vdev->peer_list_lock);
 		return;
 	}
@@ -348,12 +344,9 @@ void dp_peer_find_id_to_obj_add(struct dp_soc *soc,
 
 	qdf_spin_lock_bh(&soc->peer_map_lock);
 
-	if (dp_peer_get_ref(soc, peer, DP_MOD_ID_CONFIG) !=
-			QDF_STATUS_SUCCESS) {
-		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_INFO,
-			  "unable to get peer reference at MAP mac "QDF_MAC_ADDR_FMT" peer_id %u",
-			  peer ? QDF_MAC_ADDR_REF(peer->mac_addr.raw) : NULL, peer_id);
-
+	if (QDF_IS_STATUS_ERROR(dp_peer_get_ref(soc, peer, DP_MOD_ID_CONFIG))) {
+		dp_err("unable to get peer ref at MAP mac: "QDF_MAC_ADDR_FMT" peer_id %u",
+		       QDF_MAC_ADDR_REF(peer->mac_addr.raw), peer_id);
 		qdf_spin_unlock_bh(&soc->peer_map_lock);
 		return;
 	}
@@ -1248,8 +1241,12 @@ void dp_peer_del_ast(struct dp_soc *soc, struct dp_ast_entry *ast_entry)
 
 	ast_entry->delete_in_progress = true;
 
-	peer = dp_peer_get_ref_by_id(soc, ast_entry->peer_id,
-				     DP_MOD_ID_AST);
+	/* In teardown del ast is called after setting logical delete state
+	 * use __dp_peer_get_ref_by_id to get the reference irrespective of
+	 * state
+	 */
+	peer = __dp_peer_get_ref_by_id(soc, ast_entry->peer_id,
+				       DP_MOD_ID_AST);
 
 	dp_peer_ast_send_wds_del(soc, ast_entry, peer);
 
@@ -1503,13 +1500,16 @@ void dp_peer_ast_send_wds_del(struct dp_soc *soc,
 		  ast_entry->next_hop, ast_entry->peer_id);
 
 	/*
-	 * If peer is NULL, the peer is about to get
+	 * If peer state is logical delete, the peer is about to get
 	 * teared down with a peer delete command to firmware,
 	 * which will cleanup all the wds ast entries.
 	 * So, no need to send explicit wds ast delete to firmware.
 	 */
 	if (ast_entry->next_hop) {
-		if (peer)
+		if (peer && dp_peer_state_cmp(peer,
+					      DP_PEER_STATE_LOGICAL_DELETE))
+			delete_in_fw = false;
+		else
 			delete_in_fw = true;
 
 		cdp_soc->ol_ops->peer_del_wds_entry(soc->ctrl_psoc,

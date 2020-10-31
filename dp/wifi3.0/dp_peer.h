@@ -511,16 +511,16 @@ dp_peer_update_state(struct dp_soc *soc,
 		break;
 
 	default:
+		qdf_spin_unlock_bh(&peer->peer_state_lock);
 		dp_alert("Invalid peer state %u for peer "QDF_MAC_ADDR_FMT,
 			 state, QDF_MAC_ADDR_REF(peer->mac_addr.raw));
-		qdf_spin_unlock_bh(&peer->peer_state_lock);
 		return;
 	}
+	peer->peer_state = state;
+	qdf_spin_unlock_bh(&peer->peer_state_lock);
 	dp_info("Updating peer state from %u to %u mac "QDF_MAC_ADDR_FMT"\n",
 		peer_state, state,
 		QDF_MAC_ADDR_REF(peer->mac_addr.raw));
-	peer->peer_state = state;
-	qdf_spin_unlock_bh(&peer->peer_state_lock);
 }
 
 void dp_print_ast_stats(struct dp_soc *soc);
@@ -823,10 +823,19 @@ static inline void dp_peer_delete_ast_entries(struct dp_soc *soc,
 {
 	struct dp_ast_entry *ast_entry, *temp_ast_entry;
 
+	/*
+	 * Delete peer self ast entry. This is done to handle scenarios
+	 * where peer is freed before peer map is received(for ex in case
+	 * of auth disallow due to ACL) in such cases self ast is not added
+	 * to peer->ast_list.
+	 */
+	if (peer->self_ast_entry) {
+		dp_peer_del_ast(soc, peer->self_ast_entry);
+		peer->self_ast_entry = NULL;
+	}
+
 	DP_PEER_ITERATE_ASE_LIST(peer, ast_entry, temp_ast_entry)
 		dp_peer_del_ast(soc, ast_entry);
-
-	peer->self_ast_entry = NULL;
 }
 #else
 static inline void dp_peer_delete_ast_entries(struct dp_soc *soc,

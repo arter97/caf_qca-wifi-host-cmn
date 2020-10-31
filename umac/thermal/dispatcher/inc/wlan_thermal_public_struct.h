@@ -1,5 +1,4 @@
-/*
- * Copyright (c) 2012-2015, 2020, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2020, The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -15,7 +14,23 @@
  */
 
 /**
- * DOC: wlan_cfg80211_cm_roam_rsp.c
- *
- * This file maintains definitaions of roam response apis.
+ * DOC: declare the thermal public structure
  */
+#ifndef _WLAN_THERMAL_PUBLIC_STRUCT_H_
+#define _WLAN_THERMAL_PUBLIC_STRUCT_H_
+
+/**
+ * enum thermal_throttle_level - firmware offload throttle level
+ * @THERMAL_FULLPERF: no any throtting
+ * @THERMAL_MITIGATION: throtting tx to do mitigation
+ * @THERMAL_SHUTOFF: shut down the tx completely
+ * @THERMAL_UNKNOWN: unknown level from target.
+ */
+enum thermal_throttle_level {
+	 THERMAL_FULLPERF,
+	 THERMAL_MITIGATION,
+	 THERMAL_SHUTOFF,
+	 THERMAL_UNKNOWN,
+};
+
+#endif /* _WLAN_THERMAL_PUBLIC_STRUCT_H_ */

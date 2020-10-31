@@ -15,7 +15,7 @@
  */
 
 /**
- * DOC: wlan_cfg80211_cm_disconnect_rsp.c
+ * DOC: osif_cm_disconnect_rsp.c
  *
  * This file maintains definitaions of disconnect response
  * fucntions.
@@ -23,9 +23,9 @@
 
 #include <wlan_cfg80211.h>
 #include <linux/wireless.h>
-#include "wlan_cfg80211_cm_rsp.h"
+#include "osif_cm_rsp.h"
 #include "wlan_osif_priv.h"
-#include "wlan_cfg80211_cm_util.h"
+#include "osif_cm_util.h"
 
 /**
  * osif_validate_disconnect_and_reset_src_id() - Validate disconnection
@@ -97,32 +97,70 @@ osif_cm_indicate_disconnect(struct net_device *dev,
 }
 #endif
 
+static enum ieee80211_reasoncode
+osif_cm_get_disconnect_reason(struct vdev_osif_priv *osif_priv, uint16_t reason)
+{
+	enum ieee80211_reasoncode ieee80211_reason = WLAN_REASON_UNSPECIFIED;
+
+	osif_priv->cm_info.last_disconnect_reason =
+					osif_cm_mac_to_qca_reason(reason);
+	if (reason < REASON_PROP_START)
+		ieee80211_reason = reason;
+	/*
+	 * Applications expect reason code as 0 for beacon miss failure
+	 * due to backward compatibility. So send ieee80211_reason as 0.
+	 */
+	if (reason == REASON_BEACON_MISSED)
+		ieee80211_reason = 0;
+
+	return ieee80211_reason;
+}
+
 QDF_STATUS osif_disconnect_handler(struct wlan_objmgr_vdev *vdev,
 				   struct wlan_cm_discon_rsp *rsp)
 {
-	enum ieee80211_reasoncode ieee80211_reason = rsp->req.req.reason_code;
+	enum ieee80211_reasoncode ieee80211_reason;
 	struct vdev_osif_priv *osif_priv = wlan_vdev_get_ospriv(vdev);
 	bool locally_generated = true;
 	QDF_STATUS status = QDF_STATUS_SUCCESS;
 
-	osif_info("%s(vdevid-%d): Disconnected, bssid: " QDF_MAC_ADDR_FMT " cm_id %d source %d reason_code %d locally_generated %d",
-		  osif_priv->wdev->netdev->name,
-		  rsp->req.req.vdev_id,
-		  QDF_MAC_ADDR_REF(rsp->req.req.bssid.bytes),
-		  rsp->req.cm_id, rsp->req.req.source,
-		  rsp->req.req.reason_code,
-		  locally_generated);
+	ieee80211_reason =
+		osif_cm_get_disconnect_reason(osif_priv,
+					      rsp->req.req.reason_code);
+
+	osif_nofl_info("%s(vdevid-%d): " QDF_MAC_ADDR_FMT " %sdisconnect " QDF_MAC_ADDR_FMT " cm_id %d source %d reason:%u %s vendor:%u %s",
+		       osif_priv->wdev->netdev->name,
+		       rsp->req.req.vdev_id,
+		       QDF_MAC_ADDR_REF(wlan_vdev_mlme_get_macaddr(vdev)),
+		       locally_generated ? "locally-generated " : "",
+		       QDF_MAC_ADDR_REF(rsp->req.req.bssid.bytes),
+		       rsp->req.cm_id, rsp->req.req.source, ieee80211_reason,
+		       ucfg_cm_reason_code_to_str(rsp->req.req.reason_code),
+		       osif_priv->cm_info.last_disconnect_reason,
+		       osif_cm_qca_reason_to_str(osif_priv->cm_info.last_disconnect_reason));
+
+	/* Unlink bss if disconnect is from peer or south bound */
+	if (rsp->req.req.source == CM_PEER_DISCONNECT ||
+	    rsp->req.req.source == CM_SB_DISCONNECT)
+		osif_cm_unlink_bss(vdev, osif_priv, &rsp->req.req.bssid,
+				   NULL, 0);
 
 	status = osif_validate_disconnect_and_reset_src_id(osif_priv, rsp);
-	if (QDF_IS_STATUS_ERROR(status))
+	if (QDF_IS_STATUS_ERROR(status)) {
+		osif_cm_disconnect_comp_ind(vdev, rsp, OSIF_NOT_HANDLED);
 		return status;
+	}
 
 	if (rsp->req.req.source == CM_PEER_DISCONNECT)
 		locally_generated = false;
 
+	osif_cm_disconnect_comp_ind(vdev, rsp, OSIF_PRE_USERSPACE_UPDATE);
 	osif_cm_indicate_disconnect(osif_priv->wdev->netdev, ieee80211_reason,
 				    locally_generated, rsp->ap_discon_ie.ptr,
 				    rsp->ap_discon_ie.len, GFP_KERNEL);
+
+	osif_cm_disconnect_comp_ind(vdev, rsp, OSIF_POST_USERSPACE_UPDATE);
+	qdf_event_set(&osif_priv->cm_info.disconnect_complete);
 
 	return status;
 }

@@ -769,6 +769,21 @@ QDF_STATUS wmi_unified_process_ll_stats_get_cmd(wmi_unified_t wmi_handle,
 
 	return QDF_STATUS_E_FAILURE;
 }
+
+#ifdef FEATURE_CLUB_LL_STATS_AND_GET_STATION
+QDF_STATUS wmi_process_unified_ll_stats_get_sta_cmd(
+				wmi_unified_t wmi_handle,
+				const struct ll_stats_get_params *get_req,
+				bool is_always_over_qmi)
+{
+	if (wmi_handle->ops->send_unified_ll_stats_get_sta_cmd)
+		return wmi_handle->ops->send_unified_ll_stats_get_sta_cmd(
+						wmi_handle, get_req,
+						is_always_over_qmi);
+
+	return QDF_STATUS_E_FAILURE;
+}
+#endif
 #endif /* WLAN_FEATURE_LINK_LAYER_STATS */
 
 QDF_STATUS wmi_unified_congestion_request_cmd(wmi_unified_t wmi_handle,
@@ -1004,6 +1019,16 @@ QDF_STATUS wmi_unified_fw_test_cmd(wmi_unified_t wmi_handle,
 
 	return QDF_STATUS_E_FAILURE;
 
+}
+
+QDF_STATUS wmi_unified_wfa_test_cmd(wmi_unified_t wmi_handle,
+				    struct set_wfatest_params *wmi_wfatest)
+{
+	if (wmi_handle->ops->send_wfa_test_cmd)
+		return wmi_handle->ops->send_wfa_test_cmd(wmi_handle,
+							  wmi_wfatest);
+
+	return QDF_STATUS_E_FAILURE;
 }
 
 QDF_STATUS wmi_unified_unit_test_cmd(wmi_unified_t wmi_handle,
@@ -2202,7 +2227,8 @@ wmi_extract_chan_stats(wmi_unified_t wmi_handle, void *evt_buf,
 }
 
 QDF_STATUS wmi_extract_thermal_stats(wmi_unified_t wmi_handle, void *evt_buf,
-				     uint32_t *temp, uint32_t *level,
+				     uint32_t *temp,
+				     enum thermal_throttle_level *level,
 				     uint32_t *pdev_id)
 {
 	if (wmi_handle->ops->extract_thermal_stats)
@@ -3309,6 +3335,47 @@ wmi_unified_extract_cp_stats_more_pending(wmi_unified_t wmi_handle,
 		return wmi_handle->ops->extract_cp_stats_more_pending(wmi_handle,
 								      evt_buf,
 								      more_flag);
+
+	return QDF_STATUS_E_FAILURE;
+}
+
+/**
+ * wmi_unified_send_vdev_tsf_tstamp_action_cmd() - send vdev tsf action command
+ * @wmi: wmi handle
+ * @vdev_id: vdev id
+ *
+ * TSF_TSTAMP_READ_VALUE is the only operation supported
+ * Return: QDF_STATUS_SUCCESS for success or erro code
+ */
+QDF_STATUS wmi_unified_send_vdev_tsf_tstamp_action_cmd(wmi_unified_t wmi_hdl,
+						       uint8_t vdev_id)
+{
+	wmi_unified_t wmi_handle = wmi_hdl;
+
+	if (wmi_handle->ops->send_vdev_tsf_tstamp_action_cmd)
+		return wmi_handle->ops->send_vdev_tsf_tstamp_action_cmd(
+						wmi_handle, vdev_id);
+
+	return QDF_STATUS_E_FAILURE;
+}
+
+/**
+ * wmi_extract_vdev_tsf_report_event() - extract vdev tsf report from event
+ * @wmi_handle: wmi handle
+ * @param evt_buf: pointer to event buffer
+ * @wmi_host_tsf_event param: Pointer to hold event info
+ *
+ * Return: QDF_STATUS_SUCCESS on success and QDF_STATUS_E_FAILURE for failure
+ */
+QDF_STATUS wmi_extract_vdev_tsf_report_event(wmi_unified_t wmi_hdl,
+					     uint8_t *evt_buf,
+					     struct wmi_host_tsf_event *param)
+{
+	wmi_unified_t wmi_handle = wmi_hdl;
+
+	if (wmi_handle->ops->extract_vdev_tsf_report_event)
+		return wmi_handle->ops->extract_vdev_tsf_report_event(
+						wmi_handle, evt_buf, param);
 
 	return QDF_STATUS_E_FAILURE;
 }

@@ -62,7 +62,9 @@
  *                 TWT slots for STAs. (units = milliseconds)
  * @remove_sta_slot_interval: Inrerval between decisions making to remove TWT
  *                 slot of STAs. (units = milliseconds)
- * @flags: Flag to enable or disable capabilities, example bcast twt.
+ * @b_twt_enable: Enable or disable broadcast TWT.
+ * @b_twt_legacy_mbss_enable: Enable or disable legacy MBSSID TWT.
+ * @b_twt_ax_mbss_enable: Enable or disable 11AX MBSSID TWT.
  */
 struct wmi_twt_enable_param {
 	uint32_t pdev_id;
@@ -82,7 +84,9 @@ struct wmi_twt_enable_param {
 	uint32_t mode_check_interval;
 	uint32_t add_sta_slot_interval;
 	uint32_t remove_sta_slot_interval;
-	uint32_t flags;
+	uint32_t b_twt_enable:1,
+		 b_twt_legacy_mbss_enable:1,
+		 b_twt_ax_mbss_enable:1;
 };
 
 /* status code of enabling TWT
@@ -397,6 +401,7 @@ struct wmi_twt_pause_dialog_cmd_param {
  *                          request/response frame
  * WMI_HOST_PAUSE_TWT_STATUS_UNKNOWN_ERROR: pausing TWT dialog failed with an
  *                          unknown reason
+ * WMI_HOST_PAUSE_TWT_STATUS_ALREADY_PAUSED: TWT dialog already in paused state
  */
 enum WMI_HOST_PAUSE_TWT_STATUS {
 	WMI_HOST_PAUSE_TWT_STATUS_OK,
@@ -406,6 +411,7 @@ enum WMI_HOST_PAUSE_TWT_STATUS {
 	WMI_HOST_PAUSE_TWT_STATUS_NO_RESOURCE,
 	WMI_HOST_PAUSE_TWT_STATUS_NO_ACK,
 	WMI_HOST_PAUSE_TWT_STATUS_UNKNOWN_ERROR,
+	WMI_HOST_PAUSE_TWT_STATUS_ALREADY_PAUSED,
 };
 
 /** struct wmi_twt_pause_dialog_complete_event_param -

@@ -1417,6 +1417,7 @@ target_if_init_spectral_param_min_max(
 		param_min_max->fft_size_max[CH_WIDTH_20MHZ] =
 				SPECTRAL_PARAM_FFT_SIZE_MAX_GEN3_DEFAULT;
 		if (target_type == TARGET_TYPE_QCN9000 ||
+		    target_type == TARGET_TYPE_QCN9100 ||
 		    target_type == TARGET_TYPE_QCA5018 ||
 		    target_type == TARGET_TYPE_QCA6490) {
 			param_min_max->fft_size_max[CH_WIDTH_40MHZ] =
@@ -1603,6 +1604,7 @@ target_if_init_spectral_capability(struct target_if_spectral *spectral,
 	pcap->num_detectors_40mhz = 1;
 	pcap->num_detectors_80mhz = 1;
 	if (target_type == TARGET_TYPE_QCN9000 ||
+	    target_type == TARGET_TYPE_QCN9100 ||
 	    target_type == TARGET_TYPE_QCA6490) {
 		pcap->num_detectors_160mhz = 1;
 		pcap->num_detectors_80p80mhz = 1;
@@ -2186,8 +2188,7 @@ target_if_spectral_len_adj_swar_init(struct spectral_fft_bin_len_adj_swar *swar,
 		swar->null_fftbin_adj = 0;
 	}
 
-	if ((target_type == TARGET_TYPE_QCA8074V2) ||
-	    (target_type == TARGET_TYPE_QCN9100))
+	if (target_type == TARGET_TYPE_QCA8074V2)
 		swar->packmode_fftbin_size_adj = 1;
 	else
 		swar->packmode_fftbin_size_adj = 0;
@@ -2217,6 +2218,7 @@ target_if_spectral_report_params_init(
 	 * needs to use them they have to add proper initial values.
 	 */
 	if (target_type == TARGET_TYPE_QCN9000 ||
+	    target_type == TARGET_TYPE_QCN9100 ||
 	    target_type == TARGET_TYPE_QCA5018 ||
 	    target_type == TARGET_TYPE_QCA6750 ||
 	    target_type == TARGET_TYPE_QCA6490) {
@@ -2257,6 +2259,7 @@ target_if_spectral_report_params_init(
 	rparams->detid_mode_table[SPECTRAL_DETECTOR_ID_0] =
 						SPECTRAL_SCAN_MODE_NORMAL;
 	if (target_type == TARGET_TYPE_QCN9000 ||
+	    target_type == TARGET_TYPE_QCN9100 ||
 	    target_type == TARGET_TYPE_QCA6490) {
 		rparams->detid_mode_table[SPECTRAL_DETECTOR_ID_1] =
 						SPECTRAL_SCAN_MODE_AGILE;
@@ -4546,7 +4549,6 @@ target_if_stop_spectral_scan(struct wlan_objmgr_pdev *pdev,
 
 	spectral->send_single_packet = 0;
 	spectral->sc_spectral_scan = 0;
-	spectral->vdev_id[smode] = WLAN_INVALID_VDEV_ID;
 
 	qdf_spin_unlock(&spectral->spectral_lock);
 
