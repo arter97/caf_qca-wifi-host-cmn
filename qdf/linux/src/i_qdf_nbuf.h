@@ -772,6 +772,20 @@ __qdf_nbuf_alloc(__qdf_device_t osdev, size_t size, int reserve, int align,
 __qdf_nbuf_t __qdf_nbuf_alloc_no_recycler(size_t size, int reserve, int align,
 					  const char *func, uint32_t line);
 
+/**
+ * __qdf_nbuf_clone() - clone the nbuf (copy is readonly)
+ * @skb: Pointer to network buffer
+ *
+ * if GFP_ATOMIC is overkill then we can check whether its
+ * called from interrupt context and then do it or else in
+ * normal case use GFP_KERNEL
+ *
+ * example     use "in_irq() || irqs_disabled()"
+ *
+ * Return: cloned skb
+ */
+__qdf_nbuf_t __qdf_nbuf_clone(__qdf_nbuf_t nbuf);
+
 void __qdf_nbuf_free(struct sk_buff *skb);
 QDF_STATUS __qdf_nbuf_map(__qdf_device_t osdev,
 			struct sk_buff *skb, qdf_dma_dir_t dir);
@@ -1023,33 +1037,21 @@ uint8_t __qdf_nbuf_get_exemption_type(struct sk_buff *skb);
 void __qdf_nbuf_ref(struct sk_buff *skb);
 int __qdf_nbuf_shared(struct sk_buff *skb);
 
+/**
+ * __qdf_nbuf_get_nr_frags() - return the number of fragments in an skb,
+ * @skb: sk buff
+ *
+ * Return: number of fragments
+ */
+static inline size_t __qdf_nbuf_get_nr_frags(struct sk_buff *skb)
+{
+	return skb_shinfo(skb)->nr_frags;
+}
+
 /*
  * qdf_nbuf_pool_delete() implementation - do nothing in linux
  */
 #define __qdf_nbuf_pool_delete(osdev)
-
-/**
- * __qdf_nbuf_clone() - clone the nbuf (copy is readonly)
- * @skb: Pointer to network buffer
- *
- * if GFP_ATOMIC is overkill then we can check whether its
- * called from interrupt context and then do it or else in
- * normal case use GFP_KERNEL
- *
- * example     use "in_irq() || irqs_disabled()"
- *
- * Return: cloned skb
- */
-static inline struct sk_buff *__qdf_nbuf_clone(struct sk_buff *skb)
-{
-	struct sk_buff *skb_new = NULL;
-
-	skb_new = skb_clone(skb, GFP_ATOMIC);
-	if (skb_new)
-		__qdf_nbuf_count_inc(skb_new);
-
-	return skb_new;
-}
 
 /**
  * __qdf_nbuf_copy() - returns a private copy of the skb
@@ -1065,9 +1067,9 @@ static inline struct sk_buff *__qdf_nbuf_copy(struct sk_buff *skb)
 	struct sk_buff *skb_new = NULL;
 
 	skb_new = skb_copy(skb, GFP_ATOMIC);
-	if (skb_new)
+	if (skb_new) {
 		__qdf_nbuf_count_inc(skb_new);
-
+	}
 	return skb_new;
 }
 
@@ -1374,8 +1376,8 @@ __qdf_nbuf_append_ext_list(struct sk_buff *skb_head,
 			struct sk_buff *ext_list, size_t ext_len)
 {
 	skb_shinfo(skb_head)->frag_list = ext_list;
-	skb_head->data_len = ext_len;
-	skb_head->len += skb_head->data_len;
+	skb_head->data_len += ext_len;
+	skb_head->len += ext_len;
 }
 
 /**
@@ -1724,23 +1726,6 @@ struct sk_buff *__qdf_nbuf_queue_remove(__qdf_nbuf_queue_t *qhead)
 }
 
 /**
- * __qdf_nbuf_queue_free() - free a queue
- * @qhead: head of queue
- *
- * Return: QDF status
- */
-static inline QDF_STATUS
-__qdf_nbuf_queue_free(__qdf_nbuf_queue_t *qhead)
-{
-	__qdf_nbuf_t  buf = NULL;
-
-	while ((buf = __qdf_nbuf_queue_remove(qhead)) != NULL)
-		__qdf_nbuf_free(buf);
-	return QDF_STATUS_SUCCESS;
-}
-
-
-/**
  * __qdf_nbuf_queue_first() - returns the first skb in the queue
  * @qhead: head of queue
  *
@@ -1890,7 +1875,15 @@ __qdf_nbuf_linearize(struct sk_buff *skb)
 static inline struct sk_buff *
 __qdf_nbuf_unshare(struct sk_buff *skb)
 {
-	return skb_unshare(skb, GFP_ATOMIC);
+	struct sk_buff *skb_new;
+
+	__qdf_frag_count_dec(__qdf_nbuf_get_nr_frags(skb));
+
+	skb_new = skb_unshare(skb, GFP_ATOMIC);
+	if (skb_new)
+		__qdf_frag_count_inc(__qdf_nbuf_get_nr_frags(skb_new));
+
+	return skb_new;
 }
 
 /**
@@ -2058,17 +2051,6 @@ static inline size_t
 __qdf_nbuf_headlen(struct sk_buff *skb)
 {
 	return skb_headlen(skb);
-}
-
-/**
- * __qdf_nbuf_get_nr_frags() - return the number of fragments in an skb,
- * @skb: sk buff
- *
- * Return: number of fragments
- */
-static inline size_t __qdf_nbuf_get_nr_frags(struct sk_buff *skb)
-{
-	return skb_shinfo(skb)->nr_frags;
 }
 
 /**
@@ -2448,6 +2430,41 @@ QDF_STATUS __qdf_nbuf_move_frag_page_offset(__qdf_nbuf_t nbuf, uint8_t idx,
 void __qdf_nbuf_add_rx_frag(__qdf_frag_t buf, __qdf_nbuf_t nbuf,
 			    int offset, int frag_len,
 			    unsigned int truesize, bool take_frag_ref);
+
+/**
+ * __qdf_nbuf_set_mark() - Set nbuf mark
+ * @buf: Pointer to nbuf
+ * @mark: Value to set mark
+ *
+ * Return: None
+ */
+static inline void __qdf_nbuf_set_mark(__qdf_nbuf_t buf, uint32_t mark)
+{
+	buf->mark = mark;
+}
+
+/**
+ * __qdf_nbuf_get_mark() - Get nbuf mark
+ * @buf: Pointer to nbuf
+ *
+ * Return: Value of mark
+ */
+static inline uint32_t __qdf_nbuf_get_mark(__qdf_nbuf_t buf)
+{
+	return buf->mark;
+}
+
+/**
+ * __qdf_nbuf_get_data_len() - Return the size of the nbuf from
+ * the data pointer to the end pointer
+ * @nbuf: qdf_nbuf_t
+ *
+ * Return: size of skb from data pointer to end pointer
+ */
+static inline qdf_size_t __qdf_nbuf_get_data_len(__qdf_nbuf_t nbuf)
+{
+	return (skb_end_pointer(nbuf) - nbuf->data);
+}
 
 #ifdef CONFIG_NBUF_AP_PLATFORM
 #include <i_qdf_nbuf_w.h>

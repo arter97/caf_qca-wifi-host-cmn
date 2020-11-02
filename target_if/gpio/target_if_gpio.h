@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012-2015, 2020 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2020, The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -15,13 +15,23 @@
  */
 
 /**
- * DOC: wlan_cfg80211_cm_util.h
- *
- * This header file maintains declarations of connect, disconnect, roam
- * common apis.
+ * DOC: offload lmac interface APIs for gpio cfg
  */
+#ifndef __TARGET_IF_GPIO_CFG_H__
+#define __TARGET_IF_GPIO_CFG_H__
 
-#ifndef __WLAN_CFG80211_CM_UTIL_H
-#define __WLAN_CFG80211_CM_UTIL_H
+#ifdef WLAN_FEATURE_GPIO_CFG
+#include <qdf_status.h>
+struct wlan_lmac_if_tx_ops;
 
-#endif /* __WLAN_CFG80211_CM_UTIL_H */
+/**
+ * target_if_gpio_register_tx_ops() - register tx ops funcs
+ * @tx_ops: pointer to gpio tx ops
+ *
+ * Return: QDF_STATUS_SUCCESS on success, QDF_STATUS_E_** on error
+ */
+QDF_STATUS
+target_if_gpio_register_tx_ops(struct wlan_lmac_if_tx_ops *tx_ops);
+
+#endif /* WLAN_FEATURE_GPIO_CFG */
+#endif /* __TARGET_IF_GPIO_CFG_H__ */

@@ -124,6 +124,11 @@ static int init_deinit_service_ready_event_handler(ol_scn_t scn_handle,
 	if (wmi_service_enabled(wmi_handle, wmi_service_infra_mbssid))
 		wlan_psoc_nif_fw_ext_cap_set(psoc, WLAN_SOC_CEXT_MBSS_IE);
 
+	if (wmi_service_enabled(wmi_handle,
+				wmi_service_mbss_param_in_vdev_start_support))
+		wlan_psoc_nif_fw_ext_cap_set(psoc,
+					     WLAN_SOC_CEXT_MBSS_PARAM_IN_START);
+
 	if (wmi_service_enabled(wmi_handle, wmi_service_dynamic_hw_mode))
 		wlan_psoc_nif_fw_ext_cap_set(psoc, WLAN_SOC_CEXT_DYNAMIC_HW_MODE);
 
@@ -204,6 +209,11 @@ static int init_deinit_service_ready_event_handler(ol_scn_t scn_handle,
 	cdp_soc_set_param(wlan_psoc_get_dp_handle(psoc),
 			  DP_SOC_PARAM_MSDU_EXCEPTION_DESC,
 			  tgt_hdl->info.target_caps.num_msdu_desc);
+
+	/* Send CMEM FSE support to DP layer */
+	if (wmi_service_enabled(wmi_handle, wmi_service_fse_cmem_alloc_support))
+		cdp_soc_set_param(wlan_psoc_get_dp_handle(psoc),
+				  DP_SOC_PARAM_CMEM_FSE_SUPPORT, 1);
 
 	if (wmi_service_enabled(wmi_handle, wmi_service_ext_msg)) {
 		target_if_debug("Wait for EXT message");

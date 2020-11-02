@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012-2015, 2020 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2020, The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -14,14 +14,27 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/**
- * DOC: wlan_cfg80211_cm_rsp.h
- *
- * This header file maintains declarations of connect, disconnect, roam
- * response apis.
+/*
+ * DOC: contains interface manager public api
  */
 
-#ifndef __WLAN_CFG80211_CM_RSP_H
-#define __WLAN_CFG80211_CM_RSP_H
+#ifndef _WLAN_IF_MGR_API_H_
+#define _WLAN_IF_MGR_API_H_
 
-#endif /* __WLAN_CFG80211_CM_RSP_H */
+#include "wlan_objmgr_psoc_obj.h"
+#include "wlan_objmgr_vdev_obj.h"
+#include "wlan_if_mgr_public_struct.h"
+
+/**
+ * if_mgr_deliver_event() - interface mgr event handler
+ * @vdev: vdev object
+ * @event: interface mangaer event
+ * @event_data: Interface mgr event data
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS if_mgr_deliver_event(struct wlan_objmgr_vdev *vdev,
+				enum wlan_if_mgr_evt event,
+				struct if_mgr_event_data *event_data);
+
+#endif

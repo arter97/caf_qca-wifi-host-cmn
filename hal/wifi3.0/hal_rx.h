@@ -40,13 +40,15 @@
 #define RX_MONITOR_BUFFER_SIZE  2048
 #endif
 
-/* MONITOR STATUS BUFFER SIZE = 1536 data bytes, buffer allocation of 2k bytes
- * including skb shared info and buffer alignment.
+/* MONITOR STATUS BUFFER SIZE = 1408 data bytes, buffer allocation of 2k bytes
+ * including buffer reservation, buffer alignment and skb shared info size.
  */
 #define RX_MON_STATUS_BASE_BUF_SIZE    2048
 #define RX_MON_STATUS_BUF_ALIGN  128
+#define RX_MON_STATUS_BUF_RESERVATION  128
 #define RX_MON_STATUS_BUF_SIZE  (RX_MON_STATUS_BASE_BUF_SIZE - \
-				 RX_MON_STATUS_BUF_ALIGN - QDF_SHINFO_SIZE)
+				 (RX_MON_STATUS_BUF_RESERVATION + \
+				  RX_MON_STATUS_BUF_ALIGN + QDF_SHINFO_SIZE))
 
 /* HAL_RX_NON_QOS_TID = NON_QOS_TID which is 16 */
 #define HAL_RX_NON_QOS_TID 16
@@ -3369,6 +3371,32 @@ hal_rx_msdu_flow_idx_get(hal_soc_handle_t hal_soc_hdl,
 }
 
 /**
+ * hal_rx_msdu_get_reo_destination_indication: API to get reo
+ * destination index from rx_msdu_end TLV
+ * @buf: pointer to the start of RX PKT TLV headers
+ * @reo_destination_indication: pointer to return value of
+ * reo_destination_indication
+ *
+ * Return: reo_destination_indication value from MSDU END TLV
+ */
+static inline void
+hal_rx_msdu_get_reo_destination_indication(hal_soc_handle_t hal_soc_hdl,
+					   uint8_t *buf,
+					   uint32_t *reo_destination_indication)
+{
+	struct hal_soc *hal_soc = (struct hal_soc *)hal_soc_hdl;
+
+	if ((!hal_soc) || (!hal_soc->ops)) {
+		hal_err("hal handle is NULL");
+		QDF_BUG(0);
+		return;
+	}
+
+	hal_soc->ops->hal_rx_msdu_get_reo_destination_indication(buf,
+						reo_destination_indication);
+}
+
+/**
  * hal_rx_msdu_flow_idx_timeout: API to get flow index timeout
  * from rx_msdu_end TLV
  * @buf: pointer to the start of RX PKT TLV headers
@@ -3844,6 +3872,23 @@ void hal_rx_get_next_msdu_link_desc_buf_addr_info(
 	}
 
 	*next_addr_info = msdu_link->next_msdu_link_desc_addr_info;
+}
+
+/**
+ * hal_rx_clear_next_msdu_link_desc_buf_addr_info(): clear next msdu link desc
+ *						     buffer addr info
+ * @link_desc_va: pointer to current msdu link Desc
+ *
+ * return: None
+ */
+static inline
+void hal_rx_clear_next_msdu_link_desc_buf_addr_info(void *link_desc_va)
+{
+	struct rx_msdu_link *msdu_link = link_desc_va;
+
+	if (msdu_link)
+		qdf_mem_zero(&msdu_link->next_msdu_link_desc_addr_info,
+			     sizeof(msdu_link->next_msdu_link_desc_addr_info));
 }
 
 /**

@@ -221,6 +221,8 @@ struct HIF_CE_state {
 	struct CE_handle *ce_diag;
 	struct ce_stats stats;
 	struct ce_ops *ce_services;
+	struct service_to_pipe *tgt_svc_map;
+	int sz_tgt_svc_map;
 };
 
 /*
@@ -301,7 +303,7 @@ struct ce_index {
  * @ce_info: CE info
  */
 struct hang_event_info {
-	uint32_t tlv_header;
+	uint16_t tlv_header;
 	uint8_t active_tasklet_count;
 	uint8_t active_grp_tasklet_cnt;
 	uint8_t ce_count;

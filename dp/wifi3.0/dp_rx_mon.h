@@ -26,7 +26,10 @@
  */
 #define MON_BUF_MIN_ENTRIES 64
 
-/* The maxinum buffer length allocated for radio tap */
+/*
+ * The maximum headroom reserved for monitor destination buffer to
+ * accomodate radiotap header and protocol flow tag
+ */
 #ifdef DP_RX_MON_MEM_FRAG
 /*
  *----------------------------------
@@ -37,14 +40,34 @@
  * actual offset, data gets written to actual offset after updating
  * radiotap HDR.
  */
-#define MAX_MONITOR_HEADER (256)
+#define DP_RX_MON_MAX_MONITOR_HEADER (256)
 #else
-#define MAX_MONITOR_HEADER (512)
+#define DP_RX_MON_MAX_MONITOR_HEADER (512)
 #endif
+
+/* The maximum buffer length allocated for radiotap for monitor status buffer */
+#define MAX_MONITOR_HEADER (512)
 
 /* l2 header pad byte in case of Raw frame is Zero and 2 in non raw */
 #define DP_RX_MON_RAW_L2_HDR_PAD_BYTE (0)
 #define DP_RX_MON_NONRAW_L2_HDR_PAD_BYTE (2)
+
+/**
+ * enum dp_mon_reap_status - monitor status ring ppdu status
+ *
+ * @DP_MON_STATUS_NO_DMA - DMA not done for status ring entry
+ * @DP_MON_STATUS_MATCH - status and dest ppdu id mathes
+ * @DP_MON_STATUS_LAG - status ppdu id is lagging
+ * @DP_MON_STATUS_LEAD - status ppdu id is leading
+ * @DP_MON_STATUS_REPLENISH - status ring entry is NULL
+ */
+enum dp_mon_reap_status {
+	DP_MON_STATUS_NO_DMA,
+	DP_MON_STATUS_MATCH,
+	DP_MON_STATUS_LAG,
+	DP_MON_STATUS_LEAD,
+	DP_MON_STATUS_REPLENISH
+};
 
 /*
  * dp_rx_mon_status_process() - Process monitor status ring and
@@ -99,6 +122,19 @@ void dp_rx_pdev_mon_status_buffers_free(struct dp_pdev *pdev, uint32_t mac_id);
 QDF_STATUS
 dp_rx_pdev_mon_buf_buffers_alloc(struct dp_pdev *pdev, uint32_t mac_id,
 				 bool delayed_replenish);
+
+/**
+ * dp_rx_mon_handle_status_buf_done () - Handle DMA not done case for
+ * monitor status ring
+ *
+ * @pdev: DP pdev handle
+ * @mon_status_srng: Monitor status SRNG
+ *
+ * Return: enum dp_mon_reap_status
+ */
+enum dp_mon_reap_status
+dp_rx_mon_handle_status_buf_done(struct dp_pdev *pdev,
+				 void *mon_status_srng);
 
 #ifdef QCA_SUPPORT_FULL_MON
 
@@ -253,12 +289,15 @@ dp_rx_mon_link_desc_return(struct dp_pdev *dp_pdev,
  *
  * @total_len: pointer to remaining data length.
  * @frag_len: pointer to data length in this fragment.
-*/
+ * @l2_hdr_pad: l2 header padding
+ */
 static inline void dp_mon_adjust_frag_len(uint32_t *total_len,
-					  uint32_t *frag_len)
+					  uint32_t *frag_len,
+					  uint16_t l2_hdr_pad)
 {
 	if (*total_len >= (RX_MONITOR_BUFFER_SIZE - RX_PKT_TLVS_LEN)) {
-		*frag_len = RX_MONITOR_BUFFER_SIZE - RX_PKT_TLVS_LEN;
+		*frag_len = RX_MONITOR_BUFFER_SIZE - RX_PKT_TLVS_LEN -
+					l2_hdr_pad;
 		*total_len -= *frag_len;
 	} else {
 		*frag_len = *total_len;
@@ -382,8 +421,8 @@ QDF_STATUS dp_rx_mon_alloc_parent_buffer(qdf_nbuf_t *head_msdu)
 	 * |     64 B            |  Length(128 B) |
 	 * --------------------------------------
 	 */
-	*head_msdu = qdf_nbuf_alloc_no_recycler(MAX_MONITOR_HEADER,
-						MAX_MONITOR_HEADER, 4);
+	*head_msdu = qdf_nbuf_alloc_no_recycler(DP_RX_MON_MAX_MONITOR_HEADER,
+						DP_RX_MON_MAX_MONITOR_HEADER, 4);
 
 	if (!(*head_msdu))
 		return QDF_STATUS_E_FAILURE;
@@ -596,6 +635,24 @@ uint8_t *dp_rx_mon_get_buffer_data(struct dp_rx_desc *rx_desc)
 {
 	return rx_desc->rx_buf_start;
 }
+
+/**
+ * dp_rx_mon_get_nbuf_80211_hdr() - Get 80211 hdr from nbuf
+ * @nbuf: qdf_nbuf_t
+ *
+ * This function must be called after moving radiotap header.
+ *
+ * Return: Ptr pointing to 80211 header or NULL.
+ */
+static inline
+qdf_frag_t dp_rx_mon_get_nbuf_80211_hdr(qdf_nbuf_t nbuf)
+{
+	/* Return NULL if nr_frag is Zero */
+	if (!qdf_nbuf_get_nr_frags(nbuf))
+		return NULL;
+
+	return qdf_nbuf_get_frag_addr(nbuf, 0);
+}
 #else
 
 #define DP_RX_MON_GET_NBUF_FROM_DESC(rx_desc) \
@@ -648,22 +705,6 @@ dp_rx_mon_parse_desc_buffer(struct dp_soc *dp_soc,
 			    qdf_frag_t rx_desc_tlv,
 			    bool *is_frag_non_raw_p, void *data)
 {
-	if (msdu_info->msdu_flags & HAL_MSDU_F_MSDU_CONTINUATION) {
-		if (!*(is_frag_p)) {
-			*total_frag_len_p = msdu_info->msdu_len;
-			*is_frag_p = true;
-		}
-		dp_mon_adjust_frag_len(total_frag_len_p, frag_len_p);
-	} else {
-		if (*is_frag_p) {
-			dp_mon_adjust_frag_len(
-				total_frag_len_p, frag_len_p);
-		} else {
-			*frag_len_p = msdu_info->msdu_len;
-		}
-		*is_frag_p = false;
-	}
-
 	/*
 	 * HW structures call this L3 header padding
 	 * -- even though this is actually the offset
@@ -672,6 +713,23 @@ dp_rx_mon_parse_desc_buffer(struct dp_soc *dp_soc,
 	 */
 	*l2_hdr_offset_p =
 	hal_rx_msdu_end_l3_hdr_padding_get(dp_soc->hal_soc, data);
+
+	if (msdu_info->msdu_flags & HAL_MSDU_F_MSDU_CONTINUATION) {
+		if (!*(is_frag_p)) {
+			*total_frag_len_p = msdu_info->msdu_len;
+			*is_frag_p = true;
+		}
+		dp_mon_adjust_frag_len(total_frag_len_p, frag_len_p,
+				       *l2_hdr_offset_p);
+	} else {
+		if (*is_frag_p) {
+			dp_mon_adjust_frag_len(total_frag_len_p, frag_len_p,
+					       *l2_hdr_offset_p);
+		} else {
+			*frag_len_p = msdu_info->msdu_len;
+		}
+		*is_frag_p = false;
+	}
 }
 
 static inline void dp_rx_mon_buffer_set_pktlen(qdf_nbuf_t msdu, uint32_t size)
@@ -718,6 +776,12 @@ uint8_t *dp_rx_mon_get_buffer_data(struct dp_rx_desc *rx_desc)
 	if (qdf_likely(msdu))
 		data = qdf_nbuf_data(msdu);
 	return data;
+}
+
+static inline
+qdf_frag_t dp_rx_mon_get_nbuf_80211_hdr(qdf_nbuf_t nbuf)
+{
+	return qdf_nbuf_data(nbuf);
 }
 #endif
 

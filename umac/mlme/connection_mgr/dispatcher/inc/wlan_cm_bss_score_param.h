@@ -39,6 +39,7 @@
  * @oce_wan_weightage: OCE WAN metrics weightage
  * @oce_ap_tx_pwr_weightage: OCE AP tx power weigtage
  * @oce_subnet_id_weightage: OCE subnet id weigtage
+ * @sae_pk_ap_weightage: SAE-PK AP weigtage
  */
 struct weight_cfg {
 	uint8_t rssi_weightage;
@@ -54,6 +55,7 @@ struct weight_cfg {
 	uint8_t oce_wan_weightage;
 	uint8_t oce_ap_tx_pwr_weightage;
 	uint8_t oce_subnet_id_weightage;
+	uint8_t sae_pk_ap_weightage;
 };
 
 /**
@@ -200,6 +202,7 @@ void wlan_cm_calculate_bss_score(struct wlan_objmgr_pdev *pdev,
 void wlan_cm_init_score_config(struct wlan_objmgr_psoc *psoc,
 			       struct scoring_cfg *score_cfg);
 
+#ifdef CONN_MGR_ADV_FEATURE
 /**
  * wlan_cm_set_check_assoc_disallowed() - Set check assoc disallowed param
  * @psoc: pointer to psoc object
@@ -210,4 +213,14 @@ void wlan_cm_init_score_config(struct wlan_objmgr_psoc *psoc,
 void wlan_cm_set_check_assoc_disallowed(struct wlan_objmgr_psoc *psoc,
 					bool value);
 
+/**
+ * wlan_cm_get_check_assoc_disallowed() - get check assoc disallowed param
+ * @psoc: pointer to psoc object
+ * @value: value to be filled
+ *
+ * Return: void
+ */
+void wlan_cm_get_check_assoc_disallowed(struct wlan_objmgr_psoc *psoc,
+					bool *value);
+#endif
 #endif

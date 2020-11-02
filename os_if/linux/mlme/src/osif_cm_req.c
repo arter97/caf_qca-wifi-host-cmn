@@ -15,31 +15,65 @@
  */
 
 /**
- * DOC: wlan_cfg80211_cm_req.c
+ * DOC: osif_cm_req.c
  *
  * This file maintains definitaions of connect, disconnect, roam
  * request apis.
  */
 
-#include "wlan_cfg80211_cm_req.h"
+#include "wlan_osif_priv.h"
+#include "osif_cm_req.h"
 #include "wlan_cm_ucfg_api.h"
 #include "wlan_nl_to_crypto_params.h"
 #include <wlan_cfg80211.h>
+#include "osif_cm_util.h"
 
-static void wlan_osif_free_wep_key_params(
-				struct wlan_cm_connect_req *connect_req)
+static void osif_cm_free_wep_key_params(struct wlan_cm_connect_req *connect_req)
 {
 	if (connect_req->crypto.wep_keys.key) {
+		qdf_mem_zero(connect_req->crypto.wep_keys.key,
+			     connect_req->crypto.wep_keys.key_len);
 		qdf_mem_free(connect_req->crypto.wep_keys.key);
 		connect_req->crypto.wep_keys.key = NULL;
 	}
 	if (connect_req->crypto.wep_keys.seq) {
+		qdf_mem_zero(connect_req->crypto.wep_keys.seq,
+			     connect_req->crypto.wep_keys.seq_len);
 		qdf_mem_free(connect_req->crypto.wep_keys.seq);
 		connect_req->crypto.wep_keys.seq = NULL;
 	}
 }
 
-static QDF_STATUS wlan_osif_set_wep_key_params(
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 9, 0)
+static QDF_STATUS
+osif_cm_update_wep_seq_info(struct wlan_cm_connect_req *connect_req,
+			    struct cfg80211_connect_params *req)
+{
+	if (req->crypto.wep_keys->seq_len) {
+		connect_req->crypto.wep_keys.seq_len =
+						req->crypto.wep_keys->seq_len;
+		connect_req->crypto.wep_keys.seq =
+			qdf_mem_malloc(connect_req->crypto.wep_keys.seq_len);
+		if (!connect_req->crypto.wep_keys.seq) {
+			osif_cm_free_wep_key_params(connect_req);
+			return QDF_STATUS_E_NOMEM;
+		}
+		qdf_mem_copy(connect_req->crypto.wep_keys.seq,
+			     req->crypto.wep_keys->seq,
+			     connect_req->crypto.wep_keys.seq_len);
+	}
+	return QDF_STATUS_SUCCESS;
+}
+#else
+static inline QDF_STATUS
+osif_cm_update_wep_seq_info(struct wlan_cm_connect_req *connect_req,
+			    struct cfg80211_connect_params *req)
+{
+	return QDF_STATUS_SUCCESS;
+}
+#endif
+
+static QDF_STATUS osif_cm_set_wep_key_params(
 				struct wlan_cm_connect_req *connect_req,
 				struct cfg80211_connect_params *req)
 {
@@ -57,26 +91,11 @@ static QDF_STATUS wlan_osif_set_wep_key_params(
 	qdf_mem_copy(connect_req->crypto.wep_keys.key, req->key,
 		     connect_req->crypto.wep_keys.key_len);
 
-	if (req->crypto.wep_keys->seq_len) {
-		connect_req->crypto.wep_keys.seq_len =
-						req->crypto.wep_keys->seq_len;
-		connect_req->crypto.wep_keys.seq =
-			qdf_mem_malloc(connect_req->crypto.wep_keys.seq_len);
-		if (!connect_req->crypto.wep_keys.seq) {
-			qdf_mem_free(connect_req->crypto.wep_keys.key);
-			connect_req->crypto.wep_keys.key = NULL;
-			return QDF_STATUS_E_NOMEM;
-		}
-		qdf_mem_copy(connect_req->crypto.wep_keys.seq,
-			     req->crypto.wep_keys->seq,
-			     connect_req->crypto.wep_keys.seq_len);
-	}
-
-	return QDF_STATUS_SUCCESS;
+	return osif_cm_update_wep_seq_info(connect_req, req);
 }
 
-static void wlan_osif_set_auth_type(struct wlan_cm_connect_req *connect_req,
-				    struct cfg80211_connect_params *req)
+static void osif_cm_set_auth_type(struct wlan_cm_connect_req *connect_req,
+				  struct cfg80211_connect_params *req)
 {
 	wlan_crypto_auth_mode crypto_auth_type =
 			osif_nl_to_crypto_auth_type(req->auth_type);
@@ -88,7 +107,7 @@ static void wlan_osif_set_auth_type(struct wlan_cm_connect_req *connect_req,
 			crypto_auth_type = WLAN_CRYPTO_AUTH_WPA;
 		else
 			crypto_auth_type = WLAN_CRYPTO_AUTH_RSNA;
-	} else if (!req->crypto.wpa_versions) {
+	} else if (!req->crypto.n_ciphers_pairwise) {
 		crypto_auth_type = WLAN_CRYPTO_AUTH_OPEN;
 	}
 
@@ -96,8 +115,8 @@ static void wlan_osif_set_auth_type(struct wlan_cm_connect_req *connect_req,
 }
 
 static
-QDF_STATUS wlan_osif_set_crypto_params(struct wlan_cm_connect_req *connect_req,
-				       struct cfg80211_connect_params *req)
+QDF_STATUS osif_cm_set_crypto_params(struct wlan_cm_connect_req *connect_req,
+				     struct cfg80211_connect_params *req)
 {
 	uint32_t i = 0;
 	QDF_STATUS status;
@@ -106,7 +125,7 @@ QDF_STATUS wlan_osif_set_crypto_params(struct wlan_cm_connect_req *connect_req,
 
 	connect_req->crypto.wpa_versions = req->crypto.wpa_versions;
 
-	wlan_osif_set_auth_type(connect_req, req);
+	osif_cm_set_auth_type(connect_req, req);
 
 	if (req->crypto.cipher_group)
 		cipher = osif_nl_to_crypto_cipher_type(cipher);
@@ -141,7 +160,7 @@ QDF_STATUS wlan_osif_set_crypto_params(struct wlan_cm_connect_req *connect_req,
 	}
 
 	/* Fill WEP Key information */
-	status = wlan_osif_set_wep_key_params(connect_req, req);
+	status = osif_cm_set_wep_key_params(connect_req, req);
 	if (QDF_IS_STATUS_ERROR(status))
 		osif_err("set wep key params failed");
 
@@ -149,7 +168,7 @@ QDF_STATUS wlan_osif_set_crypto_params(struct wlan_cm_connect_req *connect_req,
 }
 
 #ifdef WLAN_FEATURE_FILS_SK
-static bool wlan_osif_is_fils_auth_type(enum nl80211_auth_type auth_type)
+static bool osif_cm_is_fils_auth_type(enum nl80211_auth_type auth_type)
 {
 	switch (auth_type) {
 	case NL80211_AUTHTYPE_FILS_SK:
@@ -161,7 +180,7 @@ static bool wlan_osif_is_fils_auth_type(enum nl80211_auth_type auth_type)
 	}
 }
 
-static bool wlan_osif_is_akm_suite_fils(uint32_t key_mgmt)
+static bool osif_cm_is_akm_suite_fils(uint32_t key_mgmt)
 {
 	switch (key_mgmt) {
 	case WLAN_AKM_SUITE_FILS_SHA256:
@@ -174,12 +193,12 @@ static bool wlan_osif_is_akm_suite_fils(uint32_t key_mgmt)
 	}
 }
 
-static bool wlan_osif_is_conn_type_fils(struct cfg80211_connect_params *req)
+static bool osif_cm_is_conn_type_fils(struct cfg80211_connect_params *req)
 {
 	int num_akm_suites = req->crypto.n_akm_suites;
 	uint32_t key_mgmt = req->crypto.akm_suites[0];
 	bool is_fils_auth_type =
-		wlan_osif_is_fils_auth_type(req->auth_type);
+		osif_cm_is_fils_auth_type(req->auth_type);
 
 	if (num_akm_suites <= 0)
 		return false;
@@ -191,7 +210,7 @@ static bool wlan_osif_is_conn_type_fils(struct cfg80211_connect_params *req)
 	    req->auth_type != NL80211_AUTHTYPE_OPEN_SYSTEM)
 		return false;
 
-	if (!wlan_osif_is_akm_suite_fils(key_mgmt))
+	if (!osif_cm_is_akm_suite_fils(key_mgmt))
 		return false;
 
 	osif_debug("Fils Auth %d AKM %d", req->auth_type, key_mgmt);
@@ -199,12 +218,11 @@ static bool wlan_osif_is_conn_type_fils(struct cfg80211_connect_params *req)
 	return true;
 }
 
-static QDF_STATUS wlan_osif_set_fils_info(
-				struct wlan_cm_connect_req *connect_req,
-				struct cfg80211_connect_params *req)
+static QDF_STATUS osif_cm_set_fils_info(struct wlan_cm_connect_req *connect_req,
+					struct cfg80211_connect_params *req)
 {
 	connect_req->fils_info.is_fils_connection =
-					wlan_osif_is_conn_type_fils(req);
+					osif_cm_is_conn_type_fils(req);
 	connect_req->fils_info.username_len = req->fils_erp_username_len;
 
 	if (connect_req->fils_info.username_len >
@@ -242,43 +260,46 @@ static QDF_STATUS wlan_osif_set_fils_info(
 	return QDF_STATUS_SUCCESS;
 }
 #else
-static inline QDF_STATUS wlan_osif_set_fils_info(
-				struct wlan_cm_connect_req *connect_req,
-				struct cfg80211_connect_params *req)
+static inline
+QDF_STATUS osif_cm_set_fils_info(struct wlan_cm_connect_req *connect_req,
+				 struct cfg80211_connect_params *req)
 {
 	return QDF_STATUS_SUCCESS;
 }
 #endif
 
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 7, 0))
-static inline void wlan_osif_set_prev_bssid(
-				struct wlan_cm_connect_req *connect_req,
-				struct cfg80211_connect_params *req)
+static inline void
+osif_cm_set_prev_bssid(struct wlan_cm_connect_req *connect_req,
+		       struct cfg80211_connect_params *req)
 {
 	qdf_mem_copy(connect_req->prev_bssid.bytes, req->prev_bssid,
 		     QDF_MAC_ADDR_SIZE);
 }
 
-static inline void osif_dump_prev_bssid(struct cfg80211_connect_params *req)
+static inline void osif_cm_dump_prev_bssid(struct cfg80211_connect_params *req)
 {
 	if (req->prev_bssid)
-		osif_nofl_debug("prev BSSID %pM", req->prev_bssid);
+		osif_nofl_debug("prev BSSID "QDF_MAC_ADDR_FMT,
+				QDF_MAC_ADDR_REF(req->prev_bssid));
 }
 
 #else
-static inline void wlan_osif_set_prev_bssid(
-				struct wlan_cm_connect_req *connect_req,
-				struct cfg80211_connect_params *req);
+static inline void
+osif_cm_set_prev_bssid(struct wlan_cm_connect_req *connect_req,
+		       struct cfg80211_connect_params *req)
+{
+}
 
-static inline void osif_dump_prev_bssid(struct cfg80211_connect_params *req)
+static inline void osif_cm_dump_prev_bssid(struct cfg80211_connect_params *req)
 {
 }
 
 #endif
 
-static inline void osif_dump_connect_req(struct net_device *dev,
-					 uint8_t vdev_id,
-					 struct cfg80211_connect_params *req)
+static inline void osif_cm_dump_connect_req(struct net_device *dev,
+					    uint8_t vdev_id,
+					    struct cfg80211_connect_params *req)
 {
 	uint32_t i;
 
@@ -292,10 +313,12 @@ static inline void osif_dump_connect_req(struct net_device *dev,
 			req->crypto.cipher_group, req->mfp,
 			req->channel_hint ? req->channel_hint->center_freq : 0);
 	if (req->bssid)
-		osif_nofl_debug("BSSID %pM", req->bssid);
+		osif_nofl_debug("BSSID "QDF_MAC_ADDR_FMT,
+				QDF_MAC_ADDR_REF(req->bssid));
 	if (req->bssid_hint)
-		osif_nofl_debug("BSSID hint %pM", req->bssid_hint);
-	osif_dump_prev_bssid(req);
+		osif_nofl_debug("BSSID hint "QDF_MAC_ADDR_FMT,
+				QDF_MAC_ADDR_REF(req->bssid_hint));
+	osif_cm_dump_prev_bssid(req);
 
 	for (i = 0; i < req->crypto.n_akm_suites; i++)
 		osif_nofl_debug("akm[%d] = %x", i, req->crypto.akm_suites[i]);
@@ -305,31 +328,34 @@ static inline void osif_dump_connect_req(struct net_device *dev,
 				req->crypto.ciphers_pairwise[i]);
 }
 
-int wlan_osif_cfg80211_connect(struct net_device *dev,
-			       struct wlan_objmgr_vdev *vdev,
-			       struct cfg80211_connect_params *req)
+int osif_cm_connect(struct net_device *dev, struct wlan_objmgr_vdev *vdev,
+		    struct cfg80211_connect_params *req)
 {
 	struct wlan_cm_connect_req *connect_req;
 	const u8 *bssid_hint = req->bssid_hint;
 	uint8_t vdev_id = vdev->vdev_objmgr.vdev_id;
 	QDF_STATUS status;
 
-	osif_dump_connect_req(dev, vdev_id, req);
+	osif_cm_dump_connect_req(dev, vdev_id, req);
+
+	status = osif_cm_reset_id_and_src(vdev);
+	if (QDF_IS_STATUS_ERROR(status))
+		return qdf_status_to_os_return(status);
 
 	connect_req = qdf_mem_malloc(sizeof(*connect_req));
 	if (!connect_req)
 		return -ENOMEM;
 
 	connect_req->vdev_id = vdev_id;
-	connect_req->source = CM_OSIF_CONENCT_REQ;
+	connect_req->source = CM_OSIF_CONNECT;
 	if (req->bssid)
 		qdf_mem_copy(connect_req->bssid.bytes, req->bssid,
 			     QDF_MAC_ADDR_SIZE);
 	else if (bssid_hint)
-		qdf_mem_copy(connect_req->bssid.bytes, req->bssid_hint,
+		qdf_mem_copy(connect_req->bssid_hint.bytes, req->bssid_hint,
 			     QDF_MAC_ADDR_SIZE);
 
-	wlan_osif_set_prev_bssid(connect_req, req);
+	osif_cm_set_prev_bssid(connect_req, req);
 
 	connect_req->ssid.length = req->ssid_len;
 	if (connect_req->ssid.length > WLAN_SSID_MAX_LEN) {
@@ -340,15 +366,12 @@ int wlan_osif_cfg80211_connect(struct net_device *dev,
 	qdf_mem_copy(connect_req->ssid.ssid, req->ssid,
 		     connect_req->ssid.length);
 
-	qdf_mem_copy(connect_req->bssid_hint.bytes, bssid_hint,
-		     QDF_MAC_ADDR_SIZE);
-
 	if (req->channel)
 		connect_req->chan_freq = req->channel->center_freq;
 	else
 		connect_req->chan_freq = 0;
 
-	status = wlan_osif_set_crypto_params(connect_req, req);
+	status = osif_cm_set_crypto_params(connect_req, req);
 	if (QDF_IS_STATUS_ERROR(status))
 		goto connect_start_fail;
 
@@ -368,11 +391,11 @@ int wlan_osif_cfg80211_connect(struct net_device *dev,
 	qdf_mem_copy(connect_req->assoc_ie.ptr, req->ie,
 		     connect_req->assoc_ie.len);
 
-	status = wlan_osif_set_fils_info(connect_req, req);
+	status = osif_cm_set_fils_info(connect_req, req);
 	if (QDF_IS_STATUS_ERROR(status))
 		goto connect_start_fail;
 
-	status = ucfg_wlan_cm_start_connect(vdev, connect_req);
+	status = ucfg_cm_start_connect(vdev, connect_req);
 	if (QDF_IS_STATUS_ERROR(status))
 		osif_err("Connect failed with status %d", status);
 
@@ -381,37 +404,80 @@ connect_start_fail:
 		qdf_mem_free(connect_req->assoc_ie.ptr);
 		connect_req->assoc_ie.ptr = NULL;
 	}
-	wlan_osif_free_wep_key_params(connect_req);
+	osif_cm_free_wep_key_params(connect_req);
 	qdf_mem_free(connect_req);
 
 	return qdf_status_to_os_return(status);
 }
 
-int wlan_osif_cfg80211_disconnect(struct net_device *dev,
-				  struct wlan_objmgr_vdev *vdev,
-				  uint16_t reason)
+static QDF_STATUS osif_cm_send_disconnect(struct wlan_objmgr_vdev *vdev,
+					  uint16_t reason)
 {
-	struct wlan_cm_disconnect_req *req;
-	uint8_t vdev_id = vdev->vdev_objmgr.vdev_id;
 	QDF_STATUS status;
+	struct wlan_cm_disconnect_req *req;
+
+	status = osif_cm_reset_id_and_src(vdev);
+	if (QDF_IS_STATUS_ERROR(status))
+		return qdf_status_to_os_return(status);
 
 	req = qdf_mem_malloc(sizeof(*req));
 	if (!req)
-		return -ENOMEM;
+		return QDF_STATUS_E_NOMEM;
 
-	/* print reason in string */
-	osif_info("%s(vdevid-%d): Received Disconnect reason:%d",
-		  dev->name, vdev_id, reason);
-
-	req->vdev_id = vdev_id;
+	req->vdev_id = wlan_vdev_get_id(vdev);
 	req->source = CM_OSIF_DISCONNECT;
 	req->reason_code = reason;
-	status = ucfg_wlan_cm_start_disconnect(vdev, req);
+	status = ucfg_cm_start_disconnect(vdev, req);
+	qdf_mem_free(req);
+
+	return status;
+}
+
+int osif_cm_disconnect(struct net_device *dev, struct wlan_objmgr_vdev *vdev,
+		       uint16_t reason)
+{
+	uint8_t vdev_id = wlan_vdev_get_id(vdev);
+	QDF_STATUS status;
+
+	osif_info("%s(vdevid-%d): Received Disconnect reason:%d %s",
+		  dev->name, vdev_id, reason,
+		  ucfg_cm_reason_code_to_str(reason));
+
+	status = osif_cm_send_disconnect(vdev, reason);
 	if (QDF_IS_STATUS_ERROR(status))
 		osif_err("Disconnect failed with status %d", status);
-
-	qdf_mem_free(req);
 
 	return qdf_status_to_os_return(status);
 }
 
+int osif_cm_disconnect_sync(struct wlan_objmgr_vdev *vdev, uint16_t reason)
+{
+	uint8_t vdev_id = wlan_vdev_get_id(vdev);
+	struct vdev_osif_priv *osif_priv = wlan_vdev_get_ospriv(vdev);
+	QDF_STATUS status;
+
+	if (ucfg_cm_is_vdev_disconnected(vdev))
+		return 0;
+
+	if (!osif_priv) {
+		osif_err("vdev %d invalid vdev osif priv", vdev_id);
+		return -EINVAL;
+	}
+
+	osif_info("vdevid-%d: Received Disconnect reason:%d %s",
+		  vdev_id, reason, ucfg_cm_reason_code_to_str(reason));
+
+	qdf_event_reset(&osif_priv->cm_info.disconnect_complete);
+	status = osif_cm_send_disconnect(vdev, reason);
+	if (QDF_IS_STATUS_ERROR(status)) {
+		osif_err("Disconnect failed with status %d", status);
+		return qdf_status_to_os_return(status);
+	}
+
+	status = qdf_wait_single_event(&osif_priv->cm_info.disconnect_complete,
+				       CM_DISCONNECT_CMD_TIMEOUT);
+	if (QDF_IS_STATUS_ERROR(status))
+		osif_err("Disconnect timeout with status %d", status);
+
+	return qdf_status_to_os_return(status);
+}

@@ -136,8 +136,9 @@ static inline bool dp_rx_mcast_echo_check(struct dp_soc *soc,
 			qdf_spin_unlock_bh(&soc->ast_lock);
 			QDF_TRACE(QDF_MODULE_ID_DP,
 				QDF_TRACE_LEVEL_INFO,
-				"Detected DBDC Root AP %pM, %d %d",
-				&data[QDF_MAC_ADDR_SIZE], vdev->pdev->pdev_id,
+				"Detected DBDC Root AP "QDF_MAC_ADDR_FMT", %d %d",
+				QDF_MAC_ADDR_REF(&data[QDF_MAC_ADDR_SIZE]),
+				vdev->pdev->pdev_id,
 				ase->pdev_id);
 			return false;
 		}
@@ -147,8 +148,8 @@ static inline bool dp_rx_mcast_echo_check(struct dp_soc *soc,
 			qdf_spin_unlock_bh(&soc->ast_lock);
 			QDF_TRACE(QDF_MODULE_ID_DP,
 				QDF_TRACE_LEVEL_INFO,
-				"received pkt with same src mac %pM",
-				&data[QDF_MAC_ADDR_SIZE]);
+				"received pkt with same src mac "QDF_MAC_ADDR_FMT,
+				QDF_MAC_ADDR_REF(&data[QDF_MAC_ADDR_SIZE]));
 
 			return true;
 		}
@@ -296,19 +297,24 @@ dp_rx_msdus_drop(struct dp_soc *soc, hal_ring_desc_t ring_desc,
 	uint8_t *rx_tlv_hdr;
 	uint32_t tid;
 	struct rx_desc_pool *rx_desc_pool;
+	struct dp_rx_desc *rx_desc;
+	/* First field in REO Dst ring Desc is buffer_addr_info */
+	void *buf_addr_info = ring_desc;
+	struct buffer_addr_info cur_link_desc_addr_info = { 0 };
+	struct buffer_addr_info next_link_desc_addr_info = { 0 };
 
 	hal_rx_reo_buf_paddr_get(ring_desc, &buf_info);
 
 	link_desc_va = dp_rx_cookie_2_link_desc_va(soc, &buf_info);
 
+more_msdu_link_desc:
 	/* No UNMAP required -- this is "malloc_consistent" memory */
 	hal_rx_msdu_list_get(soc->hal_soc, link_desc_va, &msdu_list,
 			     &mpdu_desc_info->msdu_count);
 
-	for (i = 0; (i < mpdu_desc_info->msdu_count) && quota--; i++) {
-		struct dp_rx_desc *rx_desc =
-			dp_rx_cookie_2_va_rxdma_buf(soc,
-			msdu_list.sw_cookie[i]);
+	for (i = 0; (i < mpdu_desc_info->msdu_count); i++) {
+		rx_desc = dp_rx_cookie_2_va_rxdma_buf(soc,
+						      msdu_list.sw_cookie[i]);
 
 		qdf_assert_always(rx_desc);
 
@@ -357,9 +363,38 @@ dp_rx_msdus_drop(struct dp_soc *soc, hal_ring_desc_t ring_desc,
 					    &pdev->free_list_tail, rx_desc);
 	}
 
-	/* Return link descriptor through WBM ring (SW2WBM)*/
-	dp_rx_link_desc_return(soc, ring_desc, HAL_BM_ACTION_PUT_IN_IDLE_LIST);
+	/*
+	 * If the msdu's are spread across multiple link-descriptors,
+	 * we cannot depend solely on the msdu_count(e.g., if msdu is
+	 * spread across multiple buffers).Hence, it is
+	 * necessary to check the next link_descriptor and release
+	 * all the msdu's that are part of it.
+	 */
+	hal_rx_get_next_msdu_link_desc_buf_addr_info(
+			link_desc_va,
+			&next_link_desc_addr_info);
 
+	if (hal_rx_is_buf_addr_info_valid(
+				&next_link_desc_addr_info)) {
+		/* Clear the next link desc info for the current link_desc */
+		hal_rx_clear_next_msdu_link_desc_buf_addr_info(link_desc_va);
+
+		dp_rx_link_desc_return_by_addr(soc, buf_addr_info,
+					       HAL_BM_ACTION_PUT_IN_IDLE_LIST);
+		hal_rx_buffer_addr_info_get_paddr(
+				&next_link_desc_addr_info,
+				&buf_info);
+		cur_link_desc_addr_info = next_link_desc_addr_info;
+		buf_addr_info = &cur_link_desc_addr_info;
+
+		link_desc_va =
+			dp_rx_cookie_2_link_desc_va(soc, &buf_info);
+
+		goto more_msdu_link_desc;
+	}
+	quota--;
+	dp_rx_link_desc_return_by_addr(soc, buf_addr_info,
+				       HAL_BM_ACTION_PUT_IN_IDLE_LIST);
 	return rx_bufs_used;
 }
 
@@ -403,8 +438,8 @@ dp_rx_pn_error_handle(struct dp_soc *soc, hal_ring_desc_t ring_desc,
 		 * TODO: Check for peer specific policies & set peer_pn_policy
 		 */
 		QDF_TRACE(QDF_MODULE_ID_TXRX, QDF_TRACE_LEVEL_ERROR,
-			"discard rx due to PN error for peer  %pK  %pM",
-			peer, peer->mac_addr.raw);
+			"discard rx due to PN error for peer  %pK  "QDF_MAC_ADDR_FMT,
+			peer, QDF_MAC_ADDR_REF(peer->mac_addr.raw));
 
 		dp_peer_unref_delete(peer, DP_MOD_ID_RX_ERR);
 	}
@@ -587,28 +622,35 @@ process_next_msdu:
 		tail_nbuf = NULL;
 	}
 
-	if (msdu_processed < mpdu_desc_info->msdu_count) {
-		hal_rx_get_next_msdu_link_desc_buf_addr_info(
-						link_desc_va,
-						&next_link_desc_addr_info);
+	/*
+	 * If the msdu's are spread across multiple link-descriptors,
+	 * we cannot depend solely on the msdu_count(e.g., if msdu is
+	 * spread across multiple buffers).Hence, it is
+	 * necessary to check the next link_descriptor and release
+	 * all the msdu's that are part of it.
+	 */
+	hal_rx_get_next_msdu_link_desc_buf_addr_info(
+			link_desc_va,
+			&next_link_desc_addr_info);
 
-		if (hal_rx_is_buf_addr_info_valid(
+	if (hal_rx_is_buf_addr_info_valid(
 				&next_link_desc_addr_info)) {
-			dp_rx_link_desc_return_by_addr(
-					soc,
-					buf_addr_info,
-					HAL_BM_ACTION_PUT_IN_IDLE_LIST);
+		/* Clear the next link desc info for the current link_desc */
+		hal_rx_clear_next_msdu_link_desc_buf_addr_info(link_desc_va);
+		dp_rx_link_desc_return_by_addr(
+				soc,
+				buf_addr_info,
+				HAL_BM_ACTION_PUT_IN_IDLE_LIST);
 
-			hal_rx_buffer_addr_info_get_paddr(
-						&next_link_desc_addr_info,
-						&buf_info);
-			link_desc_va =
-				dp_rx_cookie_2_link_desc_va(soc, &buf_info);
-			cur_link_desc_addr_info = next_link_desc_addr_info;
-			buf_addr_info = &cur_link_desc_addr_info;
+		hal_rx_buffer_addr_info_get_paddr(
+				&next_link_desc_addr_info,
+				&buf_info);
+		link_desc_va =
+			dp_rx_cookie_2_link_desc_va(soc, &buf_info);
+		cur_link_desc_addr_info = next_link_desc_addr_info;
+		buf_addr_info = &cur_link_desc_addr_info;
 
-			goto more_msdu_link_desc;
-		}
+		goto more_msdu_link_desc;
 	}
 
 	dp_rx_link_desc_return_by_addr(soc, buf_addr_info,
@@ -1481,7 +1523,7 @@ dp_rx_err_ring_record_entry(struct dp_soc *soc, uint64_t paddr,
 	struct dp_buf_info_record *record;
 	uint32_t idx;
 
-	if (qdf_unlikely(soc->rx_err_ring_history))
+	if (qdf_unlikely(!soc->rx_err_ring_history))
 		return;
 
 	idx = dp_history_get_next_index(&soc->rx_err_ring_history->index,

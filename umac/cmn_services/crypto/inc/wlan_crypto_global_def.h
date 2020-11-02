@@ -181,7 +181,14 @@ typedef enum wlan_crypto_rsn_cap {
 	WLAN_CRYPTO_RSN_CAP_PREAUTH       = 0x01,
 	WLAN_CRYPTO_RSN_CAP_MFP_ENABLED   = 0x80,
 	WLAN_CRYPTO_RSN_CAP_MFP_REQUIRED  = 0x40,
+	WLAN_CRYPTO_RSN_CAP_OCV_SUPPORTED  = 0x4000,
 } wlan_crypto_rsn_cap;
+
+enum wlan_crypto_rsnx_cap {
+	WLAN_CRYPTO_RSNX_CAP_PROTECTED_TWT = 0x10,
+	WLAN_CRYPTO_RSNX_CAP_SAE_H2E = 0x20,
+	WLAN_CRYPTO_RSNX_CAP_SAE_PK = 0x40,
+};
 
 typedef enum wlan_crypto_key_mgmt {
 	WLAN_CRYPTO_KEY_MGMT_IEEE8021X             = 0,

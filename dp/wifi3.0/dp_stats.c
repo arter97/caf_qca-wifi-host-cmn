@@ -4338,20 +4338,24 @@ dp_vdev_peer_stats_update_protocol_cnt_free_peer:
 		dp_peer_unref_delete(peer, DP_MOD_ID_GENERIC_STATS);
 }
 
-void dp_peer_stats_update_protocol_cnt(struct cdp_soc_t *soc,
+void dp_peer_stats_update_protocol_cnt(struct cdp_soc_t *soc_hdl,
 				       int8_t vdev_id,
 				       qdf_nbuf_t nbuf,
 				       bool is_egress,
 				       bool is_rx)
 {
+	struct dp_soc *soc = cdp_soc_t_to_dp_soc(soc_hdl);
 	struct dp_vdev *vdev;
 
-	vdev = dp_get_vdev_from_soc_vdev_id_wifi3((struct dp_soc *)soc,
-						  vdev_id);
-	if (qdf_likely(!vdev->peer_protocol_count_track))
+	vdev = dp_vdev_get_ref_by_id(soc, vdev_id, DP_MOD_ID_GENERIC_STATS);
+	if (!vdev)
 		return;
-	dp_vdev_peer_stats_update_protocol_cnt(vdev, nbuf, NULL, is_egress,
-					       is_rx);
+
+	if (qdf_likely(vdev->peer_protocol_count_track))
+		dp_vdev_peer_stats_update_protocol_cnt(vdev, nbuf, NULL,
+						       is_egress, is_rx);
+
+	dp_vdev_unref_delete(soc, vdev, DP_MOD_ID_GENERIC_STATS);
 }
 #endif
 
@@ -4387,6 +4391,33 @@ QDF_STATUS dp_peer_stats_notify(struct dp_pdev *dp_pdev, struct dp_peer *peer)
 				     (void *)&peer_stats_intf, 0,
 				     WDI_NO_VAL, dp_pdev->pdev_id);
 	}
+
+	return QDF_STATUS_SUCCESS;
+}
+
+QDF_STATUS dp_peer_qos_stats_notify(struct dp_pdev *dp_pdev,
+				    struct cdp_rx_stats_ppdu_user *ppdu_user)
+{
+	struct cdp_interface_peer_qos_stats qos_stats_intf;
+
+	if (ppdu_user->peer_id == HTT_INVALID_PEER) {
+		dp_err("Invalid peer id");
+		return QDF_STATUS_E_FAILURE;
+	}
+	qdf_mem_zero(&qos_stats_intf, sizeof(qos_stats_intf));
+
+	qdf_mem_copy(qos_stats_intf.peer_mac, ppdu_user->mac_addr,
+		     QDF_MAC_ADDR_SIZE);
+	qos_stats_intf.frame_control = ppdu_user->frame_control;
+	qos_stats_intf.frame_control_info_valid =
+			ppdu_user->frame_control_info_valid;
+	qos_stats_intf.qos_control = ppdu_user->qos_control;
+	qos_stats_intf.qos_control_info_valid =
+			ppdu_user->qos_control_info_valid;
+	qos_stats_intf.vdev_id = ppdu_user->vdev_id;
+	dp_wdi_event_handler(WDI_EVENT_PEER_QOS_STATS, dp_pdev->soc,
+			     (void *)&qos_stats_intf, 0,
+			     WDI_NO_VAL, dp_pdev->pdev_id);
 
 	return QDF_STATUS_SUCCESS;
 }
@@ -5309,6 +5340,8 @@ void dp_print_tx_rates(struct dp_vdev *vdev)
 	DP_PRINT_STATS("LDPC = %d", pdev->stats.tx.ldpc);
 	DP_PRINT_STATS("Retries = %d", pdev->stats.tx.retries);
 	DP_PRINT_STATS("Last ack rssi = %d\n", pdev->stats.tx.last_ack_rssi);
+	DP_PRINT_STATS("Number of PPDU's with Punctured Preamble = %d",
+			   pdev->stats.tx.pream_punct_cnt);
 
 	DP_PRINT_STATS("Aggregation:\n");
 	DP_PRINT_STATS("Number of Msdu's Part of Ampdus = %d",
@@ -5491,8 +5524,8 @@ dp_accumulate_delay_tid_stats(struct dp_soc *soc,
  *
  * Return: void
  */
-void dp_peer_print_delay_stats(struct dp_pdev *pdev,
-			       struct dp_peer *peer)
+void dp_peer_print_tx_delay_stats(struct dp_pdev *pdev,
+				  struct dp_peer *peer)
 {
 	struct cdp_peer_ext_stats *pext_stats;
 	struct dp_soc *soc = NULL;
@@ -5525,18 +5558,54 @@ void dp_peer_print_delay_stats(struct dp_pdev *pdev,
 					      &hist_stats, tid,
 					      CDP_HIST_TYPE_HW_COMP_DELAY);
 		dp_print_hist_stats(&hist_stats, CDP_HIST_TYPE_HW_COMP_DELAY);
-		qdf_mem_zero(&hist_stats, sizeof(*(&hist_stats)));
+	}
+}
 
+/*
+ * dp_peer_print_rx_delay_stats(): Print peer delay stats
+ * @soc: DP SoC handle
+ * @peer: DP peer handle
+ *
+ * Return: void
+ */
+void dp_peer_print_rx_delay_stats(struct dp_pdev *pdev,
+				  struct dp_peer *peer)
+{
+	struct cdp_peer_ext_stats *pext_stats;
+	struct dp_soc *soc = NULL;
+	struct cdp_hist_stats hist_stats;
+	uint8_t tid;
+
+	if (!pdev || !pdev->soc)
+		return;
+
+	soc = pdev->soc;
+	if (!wlan_cfg_is_peer_ext_stats_enabled(soc->wlan_cfg_ctx))
+		return;
+
+	pext_stats = peer->pext_stats;
+	if (!pext_stats)
+		return;
+
+	for (tid = 0; tid < CDP_MAX_DATA_TIDS; tid++) {
+		DP_PRINT_STATS("----TID: %d----", tid);
 		DP_PRINT_STATS("Rx Reap2stack Deliver Delay:");
+		qdf_mem_zero(&hist_stats, sizeof(*(&hist_stats)));
 		dp_accumulate_delay_tid_stats(soc, pext_stats->delay_stats,
 					      &hist_stats, tid,
 					      CDP_HIST_TYPE_REAP_STACK);
 		dp_print_hist_stats(&hist_stats, CDP_HIST_TYPE_REAP_STACK);
 	}
 }
+
 #else
-static inline void dp_peer_print_delay_stats(struct dp_pdev *pdev,
-					     struct dp_peer *peer)
+static inline void dp_peer_print_tx_delay_stats(struct dp_pdev *pdev,
+						struct dp_peer *peer)
+{
+}
+
+static inline void dp_peer_print_rx_delay_stats(struct dp_pdev *pdev,
+						struct dp_peer *peer)
 {
 }
 #endif
@@ -5682,6 +5751,7 @@ void dp_print_peer_stats(struct dp_peer *peer)
 		       peer->stats.tx.tx_data_rate);
 
 	dp_print_jitter_stats(peer, pdev);
+	dp_peer_print_tx_delay_stats(pdev, peer);
 
 	DP_PRINT_STATS("Node Rx Stats:");
 	DP_PRINT_STATS("Packets Sent To Stack = %d",
@@ -5800,7 +5870,7 @@ void dp_print_peer_stats(struct dp_peer *peer)
 	DP_PRINT_STATS("Multipass Rx Packet Drop = %d",
 		       peer->stats.rx.multipass_rx_pkt_drop);
 
-	dp_peer_print_delay_stats(pdev, peer);
+	dp_peer_print_rx_delay_stats(pdev, peer);
 }
 
 void dp_print_per_ring_stats(struct dp_soc *soc)
@@ -5861,6 +5931,8 @@ void dp_txrx_path_stats(struct dp_soc *soc)
 			       pdev->stats.tx_i.dropped.ring_full);
 		DP_PRINT_STATS("Enqueue fail: %u",
 			       pdev->stats.tx_i.dropped.enqueue_fail);
+		DP_PRINT_STATS("Pkt dropped in vdev-id check: %u",
+			       pdev->stats.tx_i.dropped.fail_per_pkt_vdev_id_check);
 		DP_PRINT_STATS("DMA Error: %u",
 			       pdev->stats.tx_i.dropped.dma_error);
 
@@ -5936,9 +6008,9 @@ void dp_txrx_path_stats(struct dp_soc *soc)
 			       pdev->soc->stats.rx.err.defrag_peer_uninit);
 		DP_PRINT_STATS("pkts delivered no peer %u",
 			       pdev->soc->stats.rx.err.pkt_delivered_no_peer);
-		DP_PRINT_STATS("RX stale cookie: %d",
-			       soc->stats.rx.err.invalid_cookie);
 		DP_PRINT_STATS("RX invalid cookie: %d",
+			       soc->stats.rx.err.invalid_cookie);
+		DP_PRINT_STATS("RX stale cookie: %d",
 			       soc->stats.rx.err.stale_cookie);
 		DP_PRINT_STATS("2k jump delba sent: %u",
 			       pdev->soc->stats.rx.err.rx_2k_jump_delba_sent);
@@ -6102,6 +6174,8 @@ dp_print_pdev_tx_stats(struct dp_pdev *pdev)
 		       pdev->stats.tx_i.dropped.desc_na.num);
 	DP_PRINT_STATS("	HW enqueue failed= %d",
 		       pdev->stats.tx_i.dropped.enqueue_fail);
+	DP_PRINT_STATS("	Pkt dropped in vdev-id check= %d",
+		       pdev->stats.tx_i.dropped.fail_per_pkt_vdev_id_check);
 	DP_PRINT_STATS("	Resources Full = %d",
 		       pdev->stats.tx_i.dropped.res_full);
 	DP_PRINT_STATS("	FW removed Pkts = %u",
@@ -6149,6 +6223,11 @@ dp_print_pdev_tx_stats(struct dp_pdev *pdev)
 		       pdev->stats.tx_i.mcast_en.dropped_send_fail);
 	DP_PRINT_STATS("	Unicast sent = %d",
 		       pdev->stats.tx_i.mcast_en.ucast);
+	DP_PRINT_STATS("IGMP Mcast Enhancement:");
+	DP_PRINT_STATS("	IGMP packets received = %d",
+		       pdev->stats.tx_i.igmp_mcast_en.igmp_rcvd);
+	DP_PRINT_STATS("	Converted to uncast = %d",
+		       pdev->stats.tx_i.igmp_mcast_en.igmp_ucast_converted);
 	DP_PRINT_STATS("Raw:");
 	DP_PRINT_STATS("	Packets = %d",
 		       pdev->stats.tx_i.raw.raw_pkt.num);
@@ -6158,6 +6237,8 @@ dp_print_pdev_tx_stats(struct dp_pdev *pdev)
 		       pdev->stats.tx_i.raw.dma_map_error);
 	DP_PRINT_STATS("        RAW pkt type[!data] error = %d",
 		       pdev->stats.tx_i.raw.invalid_raw_pkt_datatype);
+	DP_PRINT_STATS("        Frags count overflow  error = %d",
+		       pdev->stats.tx_i.raw.num_frags_overflow_err);
 	DP_PRINT_STATS("Reinjected:");
 	DP_PRINT_STATS("	Packets = %d",
 		       pdev->stats.tx_i.reinject_pkts.num);
@@ -6319,6 +6400,8 @@ dp_print_pdev_rx_mon_stats(struct dp_pdev *pdev)
 		       rx_mon_stats->dest_mpdu_done);
 	DP_PRINT_STATS("tlv_tag_status_err_cnt = %u",
 		       rx_mon_stats->tlv_tag_status_err);
+	DP_PRINT_STATS("mon status DMA not done WAR count= %u",
+		       rx_mon_stats->status_buf_done_war);
 	DP_PRINT_STATS("dest_mpdu_drop_cnt = %d",
 		       rx_mon_stats->dest_mpdu_drop);
 	DP_PRINT_STATS("dup_mon_linkdesc_cnt = %d",

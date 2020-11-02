@@ -68,6 +68,7 @@ typedef void *hif_handle_t;
 #define HIF_TYPE_QCA6490 22
 #define HIF_TYPE_QCA6750 23
 #define HIF_TYPE_QCA5018 24
+#define HIF_TYPE_QCN9100 25
 
 #define DMA_COHERENT_MASK_DEFAULT   37
 
@@ -328,6 +329,7 @@ enum hif_event_type {
 	HIF_EVENT_BH_SCHED,
 	HIF_EVENT_SRNG_ACCESS_START,
 	HIF_EVENT_SRNG_ACCESS_END,
+	/* Do check hif_hist_skip_event_record when adding new events */
 };
 
 #ifdef WLAN_FEATURE_DP_EVENT_HISTORY
@@ -359,6 +361,16 @@ struct hif_event_record {
 };
 
 /**
+ * struct hif_event_misc - history related misc info
+ * @last_irq_index: last irq event index in history
+ * @last_irq_ts: last irq timestamp
+ */
+struct hif_event_misc {
+	int32_t last_irq_index;
+	uint64_t last_irq_ts;
+};
+
+/**
  * struct hif_event_history - history for one interrupt group
  * @index: index to store new event
  * @event: event entry
@@ -368,6 +380,7 @@ struct hif_event_record {
  */
 struct hif_event_history {
 	qdf_atomic_t index;
+	struct hif_event_misc misc;
 	struct hif_event_record event[HIF_EVENT_HIST_MAX];
 };
 
@@ -570,6 +583,8 @@ struct htc_callbacks {
  * @is_load_unload_in_progress: Query if driver state Load/Unload in Progress
  * @is_driver_unloading: Query if driver is unloading.
  * @get_bandwidth_level: Query current bandwidth level for the driver
+ * @prealloc_get_consistent_mem_unligned: get prealloc unaligned consistent mem
+ * @prealloc_put_consistent_mem_unligned: put unaligned consistent mem to pool
  * This Structure provides callback pointer for HIF to query hdd for driver
  * states.
  */
@@ -581,6 +596,10 @@ struct hif_driver_state_callbacks {
 	bool (*is_driver_unloading)(void *context);
 	bool (*is_target_ready)(void *context);
 	int (*get_bandwidth_level)(void *context);
+	void *(*prealloc_get_consistent_mem_unaligned)(qdf_size_t size,
+						       qdf_dma_addr_t *paddr,
+						       uint32_t ring_type);
+	void (*prealloc_put_consistent_mem_unaligned)(void *vaddr);
 };
 
 /* This API detaches the HTC layer from the HIF device */
@@ -994,8 +1013,6 @@ int hif_pm_runtime_prevent_suspend(struct hif_opaque_softc *ol_sc,
 		struct hif_pm_runtime_lock *lock);
 int hif_pm_runtime_allow_suspend(struct hif_opaque_softc *ol_sc,
 		struct hif_pm_runtime_lock *lock);
-int hif_pm_runtime_prevent_suspend_timeout(struct hif_opaque_softc *ol_sc,
-		struct hif_pm_runtime_lock *lock, unsigned int delay);
 bool hif_pm_runtime_is_suspended(struct hif_opaque_softc *hif_ctx);
 int hif_pm_runtime_get_monitor_wake_intr(struct hif_opaque_softc *hif_ctx);
 void hif_pm_runtime_set_monitor_wake_intr(struct hif_opaque_softc *hif_ctx,
@@ -1050,10 +1067,6 @@ static inline int hif_pm_runtime_prevent_suspend(struct hif_opaque_softc *ol_sc,
 { return 0; }
 static inline int hif_pm_runtime_allow_suspend(struct hif_opaque_softc *ol_sc,
 		struct hif_pm_runtime_lock *lock)
-{ return 0; }
-static inline int
-hif_pm_runtime_prevent_suspend_timeout(struct hif_opaque_softc *ol_sc,
-		struct hif_pm_runtime_lock *lock, unsigned int delay)
 { return 0; }
 static inline bool hif_pm_runtime_is_suspended(struct hif_opaque_softc *hif_ctx)
 { return false; }

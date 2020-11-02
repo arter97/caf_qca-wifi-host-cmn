@@ -31,14 +31,14 @@
 #include "wlan_scan_api.h"
 
 /**
- * ucfg_scan_register_requester() - assigns requester ID to caller and
- * registers scan event call back handler
+ * ucfg_scan_register_requester() - Public ucfg API, assigns requester ID
+ * to caller and registers scan event call back handler
  * @psoc:       psoc object
  * @module_name:name of requester module
  * @event_cb:   event callback function pointer
  * @arg:        argument to @event_cb
  *
- * API, allows other components to allocate requester id
+ * API, allows other components to allocate requester id.
  * Normally used by modules at init time to register their callback
  * and get one requester id. @event_cb will be invoked for
  * all scan events whose requester id matches with @requester.
@@ -46,23 +46,29 @@
  * Return: assigned non zero requester id for success
  *         zero (0) for failure
  */
-wlan_scan_requester
+static inline wlan_scan_requester
 ucfg_scan_register_requester(struct wlan_objmgr_psoc *psoc,
-	uint8_t *module_name, scan_event_handler event_cb, void *arg);
+	uint8_t *module_name, scan_event_handler event_cb, void *arg)
+{
+	return wlan_scan_register_requester(psoc, module_name, event_cb, arg);
+}
 
 /**
- * ucfg_scan_unregister_requester() -reclaims previously allocated requester ID
+ * ucfg_scan_unregister_requester() -Public ucfg API, reclaims previously
+ * allocated requester ID
  * @psoc:       psoc object
  * @requester:  requester ID to reclaim.
  *
- * API, reclaims previously allocated requester id by
- * ucfg_scan_get_req_id_reg_cb()
+ * API, reclaims previously allocated requester id.
  *
  * Return: void
  */
+static inline
 void ucfg_scan_unregister_requester(struct wlan_objmgr_psoc *psoc,
-	wlan_scan_requester requester);
-
+	wlan_scan_requester requester)
+{
+	return wlan_scan_unregister_requester(psoc, requester);
+}
 
 /**
  * ucfg_get_scan_requester_name()- returns module name of requester ID owner
@@ -76,18 +82,19 @@ void ucfg_scan_unregister_requester(struct wlan_objmgr_psoc *psoc,
 uint8_t *ucfg_get_scan_requester_name(struct wlan_objmgr_psoc *psoc,
 	wlan_scan_requester requester);
 
-
-
 /**
- * ucfg_scan_get_scan_id() - allocates scan ID
+ * ucfg_scan_get_scan_id() - Public ucfg API to allocate scan ID
  * @psoc: psoc object
  *
- * API, allocates a new scan id for caller
+ * Public ucfg API, allocates a new scan id for caller
  *
  * Return: newly allocated scan ID
  */
-wlan_scan_id
-ucfg_scan_get_scan_id(struct wlan_objmgr_psoc *psoc);
+static inline
+wlan_scan_id ucfg_scan_get_scan_id(struct wlan_objmgr_psoc *psoc)
+{
+	return wlan_scan_get_scan_id(psoc);
+}
 
 #ifdef FEATURE_WLAN_SCAN_PNO
 /**
@@ -171,15 +178,17 @@ ucfg_scan_get_pno_match(struct wlan_objmgr_vdev *vdev)
 QDF_STATUS ucfg_scm_scan_free_scan_request_mem(struct scan_start_request *req);
 
 /**
- * ucfg_scan_start() - Public API to start a scan
+ * ucfg_scan_start() - ucfg Public API to start a scan
  * @req: start scan req params
  *
- * The Public API to start a scan. Post a msg to target_if queue
+ * The ucfg public API to start a scan. Post a msg to target_if queue
  *
- * Return: 0 for success or error code.
+ * Return: QDF_STATUS
  */
-QDF_STATUS
-ucfg_scan_start(struct scan_start_request *req);
+static inline QDF_STATUS ucfg_scan_start(struct scan_start_request *req)
+{
+	return wlan_scan_start(req);
+}
 
 /**
  * ucfg_scan_set_psoc_enable() - Public API to enable scans for psoc
@@ -309,16 +318,19 @@ ucfg_scan_config_hidden_ssid_for_bssid(struct wlan_objmgr_pdev *pdev,
 	return QDF_STATUS_SUCCESS;
 }
 #endif /* WLAN_DFS_CHAN_HIDDEN_SSID */
+
 /**
- * ucfg_scan_cancel() - Public API to stop a scan
+ * ucfg_scan_cancel() - ucfg Public API to cancel the scan
  * @req: stop scan request params
  *
- * The Public API to stop a scan. Post a msg to target_if queue
+ * The ucfg public API to stop a scan. Post a msg to target_if queue
  *
- * Return: 0 for success or error code.
+ * Return: QDF_STATUS.
  */
-QDF_STATUS
-ucfg_scan_cancel(struct scan_cancel_request *req);
+static inline QDF_STATUS ucfg_scan_cancel(struct scan_cancel_request *req)
+{
+	return wlan_scan_cancel(req);
+}
 
 /**
  * ucfg_scan_cancel_sync() - Public API to stop a scan and wait
@@ -449,17 +461,20 @@ ucfg_scan_unregister_event_handler(struct wlan_objmgr_pdev *pdev,
 	scan_event_handler event_cb, void *arg);
 
 /**
- * ucfg_scan_init_default_params() - get the defaults scan params
+ * ucfg_scan_init_default_params() - Public ucfg API to initialize scan params
  * @vdev: vdev object
  * @req: scan request object
  *
- * get the defaults scan params
+ * Public ucfg API to initialize scan start request with defaults scan params
  *
  * Return: QDF_STATUS_SUCCESS or error code
  */
-QDF_STATUS
+static inline QDF_STATUS
 ucfg_scan_init_default_params(struct wlan_objmgr_vdev *vdev,
-	struct scan_start_request *req);
+	struct scan_start_request *req)
+{
+	return wlan_scan_init_default_params(vdev, req);
+}
 
 /**
  * ucfg_scan_init_ssid_params() - initialize scan request ssid list
@@ -737,6 +752,65 @@ void ucfg_scan_cfg_get_active_2g_dwelltime(struct wlan_objmgr_psoc *psoc,
 {
 	return wlan_scan_cfg_get_active_2g_dwelltime(psoc, dwell_time);
 }
+
+#ifdef CONFIG_BAND_6GHZ
+/**
+ * ucfg_scan_cfg_set_active_6g_dwelltime() - API to set scan active 6g dwelltime
+ * @psoc: pointer to psoc object
+ * @dwell_time: scan active dwell time
+ *
+ * Return: QDF_STATUS
+ */
+static inline
+QDF_STATUS ucfg_scan_cfg_set_active_6g_dwelltime(struct wlan_objmgr_psoc *psoc,
+						 uint32_t dwell_time)
+{
+	return wlan_scan_cfg_set_active_6g_dwelltime(psoc, dwell_time);
+}
+
+/**
+ * ucfg_scan_cfg_get_passive_6g_dwelltime() - API to get passive 6g dwelltime
+ * @psoc: pointer to psoc object
+ * @dwell_time: scan passive 6g dwelltime
+ *
+ * Return: QDF_STATUS
+ */
+static inline
+QDF_STATUS ucfg_scan_cfg_get_passive_6g_dwelltime(struct wlan_objmgr_psoc *psoc,
+						  uint32_t *dwell_time)
+{
+	return wlan_scan_cfg_get_passive_6g_dwelltime(psoc, dwell_time);
+}
+
+/**
+ * ucfg_scan_cfg_set_passive_6g_dwelltime() - API to set scan passive 6g
+ *                                            dwelltime
+ * @psoc: pointer to psoc object
+ * @dwell_time: scan passive dwell time
+ *
+ * Return: QDF_STATUS
+ */
+static inline
+QDF_STATUS ucfg_scan_cfg_set_passive_6g_dwelltime(struct wlan_objmgr_psoc *psoc,
+						  uint32_t dwell_time)
+{
+	return wlan_scan_cfg_set_passive_6g_dwelltime(psoc, dwell_time);
+}
+
+/**
+ * ucfg_scan_cfg_get_active_6g_dwelltime() - API to get active 6g dwelltime
+ * @psoc: pointer to psoc object
+ * @dwell_time: scan active 6g dwelltime
+ *
+ * Return: QDF_STATUS
+ */
+static inline
+QDF_STATUS ucfg_scan_cfg_get_active_6g_dwelltime(struct wlan_objmgr_psoc *psoc,
+						 uint32_t *dwell_time)
+{
+	return wlan_scan_cfg_get_active_6g_dwelltime(psoc, dwell_time);
+}
+#endif
 
 /**
  * ucfg_scan_cfg_get_conc_active_dwelltime() - Get concurrent active dwelltime

@@ -25,6 +25,7 @@
 #include <wmi_unified_param.h>
 #include <wlan_iot_sim_utils_api.h>
 #include <wlan_lmac_if_api.h>
+#include <wlan_objmgr_peer_obj.h>
 
 /*
  * iot_sim_oper_to_str - function to return iot sim operation string
@@ -197,8 +198,8 @@ iot_sim_add_peer(struct iot_sim_context *isc, struct qdf_mac_addr *mac)
 					   (struct iot_sim_rule_per_peer));
 		if (!peer_rule) {
 			iot_sim_err("Memory alloc failed for peer: "
-				    QDF_MAC_ADDR_STR,
-				    QDF_MAC_ADDR_ARRAY(mac->bytes));
+				    QDF_FULL_MAC_FMT,
+				    QDF_FULL_MAC_REF(mac->bytes));
 			goto rel_lock;
 		}
 
@@ -207,8 +208,8 @@ iot_sim_add_peer(struct iot_sim_context *isc, struct qdf_mac_addr *mac)
 					      &peer_rule->node);
 		if (QDF_IS_STATUS_ERROR(status)) {
 			iot_sim_err("peer_list enqueue failed for peer "
-				    QDF_MAC_ADDR_STR,
-				    QDF_MAC_ADDR_ARRAY(mac->bytes));
+				    QDF_FULL_MAC_FMT,
+				    QDF_FULL_MAC_REF(mac->bytes));
 			qdf_mem_free(peer_rule);
 			peer_rule = NULL;
 		}
@@ -518,6 +519,38 @@ iot_sim_get_index_for_action_frm(uint8_t *frm, uint8_t *cat_type,
 			return QDF_STATUS_E_FAULT;
 		}
 		break;
+	case IEEE80211_ACTION_CAT_RADIO:
+		*cat_type = CAT_RADIO;
+		*act_type = action;
+		break;
+	case IEEE80211_ACTION_CAT_FAST_BSS_TRNST:
+		*cat_type = CAT_FAST_BSS_TRNST;
+		*act_type = action;
+		break;
+	case IEEE80211_ACTION_CAT_SPECTRUM:
+		*cat_type = CAT_SPECTRUM;
+		*act_type = action;
+		break;
+	case IEEE80211_ACTION_CAT_QOS:
+		*cat_type = CAT_QOS;
+		*act_type = action;
+		break;
+	case IEEE80211_ACTION_CAT_DLS:
+		*cat_type = CAT_DLS;
+		*act_type = action;
+		break;
+	case IEEE80211_ACTION_CAT_HT:
+		*cat_type = CAT_HT;
+		*act_type = action;
+		break;
+	case IEEE80211_ACTION_CAT_WNM:
+		*cat_type = CAT_WNM;
+		*act_type = action;
+		break;
+	case IEEE80211_ACTION_CAT_VHT:
+		*cat_type = CAT_VHT;
+		*act_type = action;
+		break;
 	default:
 		return QDF_STATUS_E_FAULT;
 	}
@@ -771,6 +804,11 @@ iot_sim_del_rule(struct iot_sim_rule_per_seq **s_e,
 		qdf_mem_free((*f_e)->dwork);
 		qdf_nbuf_free((*f_e)->nbuf_list[0]);
 		(*f_e)->nbuf_list[0] = NULL;
+		if ((*f_e)->peer) {
+			wlan_objmgr_peer_release_ref((*f_e)->peer,
+						     WLAN_IOT_SIM_ID);
+			(*f_e)->peer = NULL;
+		}
 		qdf_nbuf_free((*f_e)->nbuf_list[1]);
 		(*f_e)->nbuf_list[1] = NULL;
 		(*f_e)->sec_buf = NULL;
@@ -827,8 +865,8 @@ iot_sim_delete_rule_for_mac(struct iot_sim_context *isc,
 	if (qdf_is_macaddr_zero(mac))
 		iot_sim_info("Rule deletion for all peers");
 	else
-		iot_sim_info("Rule deletion for " QDF_MAC_ADDR_STR,
-			     QDF_MAC_ADDR_ARRAY(mac->bytes));
+		iot_sim_info("Rule deletion for " QDF_FULL_MAC_FMT,
+			     QDF_FULL_MAC_REF(mac->bytes));
 
 	iot_sim_debug("oper:%s seq: %hu %s:%hu/%hu",
 		      iot_sim_oper_to_str(oper), seq,
@@ -889,6 +927,11 @@ static void iot_sim_delay_cb(void *ctxt)
 {
 	struct wlan_objmgr_psoc *psoc = NULL;
 	struct iot_sim_cb_context *context = ctxt;
+	uint8_t *buf;
+	struct ieee80211_frame *wh;
+	struct qdf_mac_addr *mac_addr;
+	struct mgmt_rx_event_params *param = context->piot_sim_rule->rx_param;
+	struct wlan_objmgr_peer **peer = &context->piot_sim_rule->peer;
 
 	qdf_spin_lock_bh(&context->piot_sim_rule->iot_sim_delay_lock);
 	qdf_spin_lock_bh(&context->isc->iot_sim_lock);
@@ -898,14 +941,30 @@ static void iot_sim_delay_cb(void *ctxt)
 	mgmt_txrx_rx_handler(psoc, context->piot_sim_rule->sec_buf,
 			     context->piot_sim_rule->rx_param);
 	qdf_spin_lock_bh(&context->isc->iot_sim_lock);
+	if (*peer) {
+		wlan_objmgr_peer_release_ref(*peer, WLAN_IOT_SIM_ID);
+		*peer = NULL;
+	}
 	if (context->piot_sim_rule->nbuf_list[1]) {
 		context->piot_sim_rule->nbuf_list[0] =
 					context->piot_sim_rule->nbuf_list[1];
+		buf = qdf_nbuf_data(context->piot_sim_rule->nbuf_list[0]);
+		wh = (struct ieee80211_frame *)buf;
+		mac_addr = (struct qdf_mac_addr *)wh->i_addr2;
+		*peer = wlan_objmgr_get_peer(psoc, param->pdev_id,
+					     (uint8_t *)mac_addr,
+					     WLAN_IOT_SIM_ID);
+
 		if (!qdf_delayed_work_start(context->piot_sim_rule->dwork,
 					    context->
 					    piot_sim_rule->delay_dur)) {
 			iot_sim_err("delayed_work_start failed");
 			qdf_nbuf_free(context->piot_sim_rule->nbuf_list[0]);
+			if (*peer) {
+				wlan_objmgr_peer_release_ref(*peer,
+							     WLAN_IOT_SIM_ID);
+				*peer = NULL;
+			}
 			qdf_mem_free(context->piot_sim_rule->
 				     rx_param->rx_params);
 			qdf_mem_free(context->piot_sim_rule->rx_param);
@@ -991,6 +1050,7 @@ iot_sim_add_rule(struct iot_sim_rule_per_seq **s_e,
 
 		(*f_e)->nbuf_list[0] = NULL;
 		(*f_e)->nbuf_list[1] = NULL;
+		(*f_e)->peer = NULL;
 		iot_sim_err("delayed_work_created");
 		qdf_spinlock_create(&((*f_e)->iot_sim_delay_lock));
 	}
@@ -1072,8 +1132,8 @@ iot_sim_add_rule_for_mac(struct iot_sim_context *isc,
 		if (qdf_is_macaddr_zero(mac))
 			iot_sim_info("Rule addition for all peers");
 		else
-			iot_sim_info("Rule addition for " QDF_MAC_ADDR_STR,
-				     QDF_MAC_ADDR_ARRAY(mac->bytes));
+			iot_sim_info("Rule addition for " QDF_FULL_MAC_FMT,
+				     QDF_FULL_MAC_REF(mac->bytes));
 
 		iot_sim_info("oper:%s seq: %hu %s:%hu/%hu delay:%hu",
 			     iot_sim_oper_to_str(oper), seq,
@@ -1289,8 +1349,8 @@ iot_sim_parse_user_input_delay(struct iot_sim_context *isc,
 	if (argv[5])
 		status = qdf_mac_parse(argv[5], addr);
 
-	iot_sim_err("delay rule mac address " QDF_MAC_ADDR_STR,
-		    QDF_MAC_ADDR_ARRAY(addr->bytes));
+	iot_sim_err("delay rule mac address " QDF_FULL_MAC_FMT,
+		    QDF_FULL_MAC_REF(addr->bytes));
 
 	return status;
 err:
@@ -1479,8 +1539,8 @@ iot_sim_parse_user_input_drop(struct iot_sim_context *isc,
 	if (argv[5])
 		status = qdf_mac_parse(argv[5], addr);
 
-	iot_sim_err("drop rule mac address " QDF_MAC_ADDR_STR,
-		    QDF_MAC_ADDR_ARRAY(addr->bytes));
+	iot_sim_err("drop rule mac address " QDF_FULL_MAC_FMT,
+		    QDF_FULL_MAC_REF(addr->bytes));
 
 	return status;
 err:

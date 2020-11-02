@@ -27,7 +27,8 @@ void cm_set_state(struct cnx_mgr *cm_ctx, enum wlan_cm_sm_state state)
 	if (state < WLAN_CM_S_MAX)
 		cm_ctx->sm.cm_state = state;
 	else
-		mlme_err("mlme state (%d) is invalid", state);
+		mlme_err("vdev %d mlme state (%d) is invalid",
+			 wlan_vdev_get_id(cm_ctx->vdev), state);
 }
 
 void cm_set_substate(struct cnx_mgr *cm_ctx, enum wlan_cm_sm_state substate)
@@ -35,7 +36,8 @@ void cm_set_substate(struct cnx_mgr *cm_ctx, enum wlan_cm_sm_state substate)
 	if ((substate > WLAN_CM_S_MAX) && (substate < WLAN_CM_SS_MAX))
 		cm_ctx->sm.cm_substate = substate;
 	else
-		mlme_err(" mlme sub state (%d) is invalid", substate);
+		mlme_err("vdev %d mlme sub state (%d) is invalid",
+			 wlan_vdev_get_id(cm_ctx->vdev), substate);
 }
 
 void cm_sm_state_update(struct cnx_mgr *cm_ctx,
@@ -43,7 +45,8 @@ void cm_sm_state_update(struct cnx_mgr *cm_ctx,
 			enum wlan_cm_sm_state substate)
 {
 	if (!cm_ctx) {
-		mlme_err("cm_ctx is NULL");
+		mlme_err("vdev %d cm_ctx is NULL",
+			 wlan_vdev_get_id(cm_ctx->vdev));
 		return;
 	}
 
@@ -90,29 +93,49 @@ static bool cm_state_init_event(void *ctx, uint16_t event,
 				uint16_t data_len, void *data)
 {
 	struct cnx_mgr *cm_ctx = ctx;
-	bool status;
+	bool event_handled;
+	QDF_STATUS status;
+	struct cm_disconnect_req *req;
 
 	switch (event) {
 	case WLAN_CM_SM_EV_CONNECT_REQ:
+		status = cm_add_connect_req_to_list(cm_ctx, data);
+		if (QDF_IS_STATUS_ERROR(status)) {
+			/* if fail to add req return failure */
+			event_handled = false;
+			break;
+		}
 		cm_sm_transition_to(cm_ctx, WLAN_CM_S_CONNECTING);
-		cm_sm_deliver_event(cm_ctx, WLAN_CM_SM_EV_CONNECT_START,
-				    data_len, data);
-		status = true;
+		cm_sm_deliver_event_sync(cm_ctx, WLAN_CM_SM_EV_CONNECT_START,
+					 data_len, data);
+		event_handled = true;
 		break;
 	case WLAN_CM_SM_EV_CONNECT_FAILURE:
 		cm_connect_complete(cm_ctx, data);
-		status = true;
+		event_handled = true;
 		break;
 	case WLAN_CM_SM_EV_DISCONNECT_DONE:
 		cm_disconnect_complete(cm_ctx, data);
-		status = true;
+		event_handled = true;
+		break;
+	case WLAN_CM_SM_EV_DISCONNECT_REQ:
+		status = cm_add_disconnect_req_to_list(cm_ctx, data);
+		if (QDF_IS_STATUS_ERROR(status)) {
+			/* if fail to add req return failure */
+			event_handled = false;
+			break;
+		}
+
+		req = data;
+		cm_send_disconnect_resp(cm_ctx, req->cm_id);
+		event_handled = true;
 		break;
 	default:
-		status = false;
+		event_handled = false;
 		break;
 	}
 
-	return status;
+	return event_handled;
 }
 
 /**
@@ -157,20 +180,20 @@ static bool cm_state_connecting_event(void *ctx, uint16_t event,
 				      uint16_t data_len, void *data)
 {
 	struct cnx_mgr *cm_ctx = ctx;
-	bool status;
+	bool event_handled;
 
 	switch (event) {
 	case WLAN_CM_SM_EV_CONNECT_START:
 		cm_sm_transition_to(cm_ctx, WLAN_CM_SS_JOIN_PENDING);
-		cm_sm_deliver_event(cm_ctx, event, data_len, data);
-		status = true;
+		cm_sm_deliver_event_sync(cm_ctx, event, data_len, data);
+		event_handled = true;
 		break;
 	default:
-		status = false;
+		event_handled = false;
 		break;
 	}
 
-	return status;
+	return event_handled;
 }
 
 /**
@@ -215,25 +238,49 @@ static bool cm_state_connected_event(void *ctx, uint16_t event,
 				     uint16_t data_len, void *data)
 {
 	struct cnx_mgr *cm_ctx = ctx;
-	bool status;
+	bool event_handled;
+	QDF_STATUS status;
 
 	switch (event) {
+	case WLAN_CM_SM_EV_CONNECT_REQ:
+		status = cm_handle_connect_req_in_non_init_state(cm_ctx, data,
+							WLAN_CM_S_CONNECTED);
+		if (QDF_IS_STATUS_ERROR(status)) {
+			event_handled = false;
+			break;
+		}
+		cm_sm_transition_to(cm_ctx, WLAN_CM_S_CONNECTING);
+		cm_sm_deliver_event_sync(cm_ctx,
+					 WLAN_CM_SM_EV_CONNECT_START,
+					 data_len, data);
+		event_handled = true;
+		break;
+	case WLAN_CM_SM_EV_DISCONNECT_ACTIVE:
+		cm_disconnect_active(cm_ctx, data);
+		event_handled = true;
+		break;
 	case WLAN_CM_SM_EV_CONNECT_SUCCESS:
 		cm_connect_complete(cm_ctx, data);
-		status = true;
+		event_handled = true;
 		break;
 	case WLAN_CM_SM_EV_DISCONNECT_REQ:
+		status = cm_add_disconnect_req_to_list(cm_ctx, data);
+		if (QDF_IS_STATUS_ERROR(status)) {
+			/* if fail to add req return failure */
+			event_handled = false;
+			break;
+		}
 		cm_sm_transition_to(cm_ctx, WLAN_CM_S_DISCONNECTING);
-		cm_sm_deliver_event(cm_ctx, WLAN_CM_SM_EV_DISCONNECT_START,
-				    data_len, data);
-		status = true;
+		cm_sm_deliver_event_sync(cm_ctx, WLAN_CM_SM_EV_DISCONNECT_START,
+					 data_len, data);
+		event_handled = true;
 		break;
 	default:
-		status = false;
+		event_handled = false;
 		break;
 	}
 
-	return status;
+	return event_handled;
 }
 
 /**
@@ -278,28 +325,54 @@ static bool cm_state_disconnecting_event(void *ctx, uint16_t event,
 					 uint16_t data_len, void *data)
 {
 	struct cnx_mgr *cm_ctx = ctx;
-	bool status;
+	bool event_handled;
+	QDF_STATUS status;
 
 	switch (event) {
+	case WLAN_CM_SM_EV_CONNECT_REQ:
+		status = cm_handle_connect_req_in_non_init_state(cm_ctx, data,
+						WLAN_CM_S_DISCONNECTING);
+		if (QDF_IS_STATUS_ERROR(status)) {
+			event_handled = false;
+			break;
+		}
+		cm_sm_transition_to(cm_ctx, WLAN_CM_S_CONNECTING);
+		cm_sm_deliver_event_sync(cm_ctx,
+					 WLAN_CM_SM_EV_CONNECT_START,
+					 data_len, data);
+		event_handled = true;
+		break;
 	case WLAN_CM_SM_EV_DISCONNECT_START:
 		cm_disconnect_start(cm_ctx, data);
-		status = true;
+		event_handled = true;
 		break;
 	case WLAN_CM_SM_EV_DISCONNECT_ACTIVE:
 		cm_disconnect_active(cm_ctx, data);
-		status = true;
+		event_handled = true;
 		break;
 	case WLAN_CM_SM_EV_DISCONNECT_DONE:
 		cm_sm_transition_to(cm_ctx, WLAN_CM_S_INIT);
-		cm_sm_deliver_event(cm_ctx, event, data_len, data);
-		status = true;
+		cm_sm_deliver_event_sync(cm_ctx, event, data_len, data);
+		event_handled = true;
+		break;
+	case WLAN_CM_SM_EV_DISCONNECT_REQ:
+		status = cm_handle_discon_req_in_non_connected_state(cm_ctx,
+						data, WLAN_CM_S_DISCONNECTING);
+		if (QDF_IS_STATUS_ERROR(status)) {
+			event_handled = false;
+			break;
+		}
+		cm_sm_deliver_event_sync(cm_ctx,
+					 WLAN_CM_SM_EV_DISCONNECT_START,
+					 data_len, data);
+		event_handled = true;
 		break;
 	default:
-		status = false;
+		event_handled = false;
 		break;
 	}
 
-	return status;
+	return event_handled;
 }
 
 /**
@@ -347,42 +420,97 @@ static bool cm_subst_join_pending_event(void *ctx, uint16_t event,
 					uint16_t data_len, void *data)
 {
 	struct cnx_mgr *cm_ctx = ctx;
-	bool status;
-	QDF_STATUS qdf_status = QDF_STATUS_SUCCESS;
+	bool event_handled;
+	QDF_STATUS status = QDF_STATUS_SUCCESS;
 
 	switch (event) {
+	case WLAN_CM_SM_EV_CONNECT_REQ:
+		status =
+			cm_handle_connect_req_in_non_init_state(cm_ctx, data,
+						WLAN_CM_SS_JOIN_PENDING);
+		if (QDF_IS_STATUS_ERROR(status)) {
+			event_handled = false;
+			break;
+		}
+		cm_sm_deliver_event_sync(cm_ctx,
+					 WLAN_CM_SM_EV_CONNECT_START,
+					 data_len, data);
+		event_handled = true;
+		break;
 	case WLAN_CM_SM_EV_CONNECT_START:
 		cm_connect_start(cm_ctx, data);
-		status = true;
+		event_handled = true;
 		break;
 	case WLAN_CM_SM_EV_CONNECT_ACTIVE:
+		/* check if cm id is valid for the current req */
+		if (!cm_check_cmid_match_list_head(cm_ctx, data)) {
+			event_handled = false;
+			break;
+		}
 		cm_sm_transition_to(cm_ctx, WLAN_CM_SS_JOIN_ACTIVE);
-		cm_sm_deliver_event(cm_ctx, event, data_len, data);
-		status = true;
+		cm_sm_deliver_event_sync(cm_ctx, event, data_len, data);
+		event_handled = true;
+		break;
+	case WLAN_CM_SM_EV_HW_MODE_SUCCESS:
+	case WLAN_CM_SM_EV_HW_MODE_FAILURE:
+		/* check if cm id is valid for the current req */
+		if (!cm_check_cmid_match_list_head(cm_ctx, data)) {
+			event_handled = false;
+			break;
+		}
+		cm_handle_hw_mode_change(cm_ctx, data, event);
+		event_handled = true;
 		break;
 	case WLAN_CM_SM_EV_SCAN:
 		cm_sm_transition_to(cm_ctx, WLAN_CM_SS_SCAN);
-		cm_sm_deliver_event(cm_ctx, event, data_len, data);
-		status = true;
+		cm_sm_deliver_event_sync(cm_ctx, event, data_len, data);
+		event_handled = true;
 		break;
 	case WLAN_CM_SM_EV_SCAN_FAILURE:
-		qdf_status = QDF_STATUS_E_FAILURE;
+		status = QDF_STATUS_E_FAILURE;
 		/* Fall through after setting status failure */
+		/* fallthrough */
 	case WLAN_CM_SM_EV_SCAN_SUCCESS:
-		cm_connect_scan_resp(cm_ctx, data, qdf_status);
-		status = true;
+		cm_connect_scan_resp(cm_ctx, data, status);
+		event_handled = true;
 		break;
 	case WLAN_CM_SM_EV_CONNECT_FAILURE:
+		/* check if connect resp cm id is valid for the current req */
+		if (!cm_connect_resp_cmid_match_list_head(cm_ctx, data)) {
+			event_handled = false;
+			break;
+		}
 		cm_sm_transition_to(cm_ctx, WLAN_CM_S_INIT);
-		cm_sm_deliver_event(cm_ctx, event, data_len, data);
-		status = true;
+		cm_sm_deliver_event_sync(cm_ctx, event, data_len, data);
+		event_handled = true;
+		break;
+	case WLAN_CM_SM_EV_DISCONNECT_ACTIVE:
+		cm_disconnect_active(cm_ctx, data);
+		event_handled = true;
+		break;
+	case WLAN_CM_SM_EV_DISCONNECT_DONE:
+		cm_disconnect_complete(cm_ctx, data);
+		event_handled = true;
+		break;
+	case WLAN_CM_SM_EV_DISCONNECT_REQ:
+		status = cm_handle_discon_req_in_non_connected_state(cm_ctx,
+						data, WLAN_CM_SS_JOIN_PENDING);
+		if (QDF_IS_STATUS_ERROR(status)) {
+			event_handled = false;
+			break;
+		}
+		cm_sm_transition_to(cm_ctx, WLAN_CM_S_DISCONNECTING);
+		cm_sm_deliver_event_sync(cm_ctx,
+					 WLAN_CM_SM_EV_DISCONNECT_START,
+					 data_len, data);
+		event_handled = true;
 		break;
 	default:
-		status = false;
+		event_handled = false;
 		break;
 	}
 
-	return status;
+	return event_handled;
 }
 
 /**
@@ -430,25 +558,65 @@ static bool cm_subst_scan_event(void *ctx, uint16_t event,
 				uint16_t data_len, void *data)
 {
 	struct cnx_mgr *cm_ctx = ctx;
-	bool status;
+	bool event_handled;
+	QDF_STATUS status;
 
 	switch (event) {
+	case WLAN_CM_SM_EV_CONNECT_REQ:
+		status = cm_handle_connect_req_in_non_init_state(cm_ctx, data,
+							WLAN_CM_SS_SCAN);
+		if (QDF_IS_STATUS_ERROR(status)) {
+			event_handled = false;
+			break;
+		}
+		cm_sm_transition_to(cm_ctx, WLAN_CM_SS_JOIN_PENDING);
+		cm_sm_deliver_event_sync(cm_ctx,
+					 WLAN_CM_SM_EV_CONNECT_START,
+					 data_len, data);
+		event_handled = true;
+		break;
 	case WLAN_CM_SM_EV_SCAN:
 		cm_connect_scan_start(cm_ctx, data);
-		status = true;
+		event_handled = true;
 		break;
 	case WLAN_CM_SM_EV_SCAN_SUCCESS:
 	case WLAN_CM_SM_EV_SCAN_FAILURE:
+		/* check if scan id is valid for the current req */
+		if (!cm_check_scanid_match_list_head(cm_ctx, data)) {
+			event_handled = false;
+			break;
+		}
 		cm_sm_transition_to(cm_ctx, WLAN_CM_SS_JOIN_PENDING);
-		cm_sm_deliver_event(cm_ctx, event, data_len, data);
-		status = true;
+		cm_sm_deliver_event_sync(cm_ctx, event, data_len, data);
+		event_handled = true;
+		break;
+	case WLAN_CM_SM_EV_DISCONNECT_ACTIVE:
+		cm_disconnect_active(cm_ctx, data);
+		event_handled = true;
+		break;
+	case WLAN_CM_SM_EV_DISCONNECT_DONE:
+		cm_disconnect_complete(cm_ctx, data);
+		event_handled = true;
+		break;
+	case WLAN_CM_SM_EV_DISCONNECT_REQ:
+		status = cm_handle_discon_req_in_non_connected_state(cm_ctx,
+						data, WLAN_CM_SS_SCAN);
+		if (QDF_IS_STATUS_ERROR(status)) {
+			event_handled = false;
+			break;
+		}
+		cm_sm_transition_to(cm_ctx, WLAN_CM_S_DISCONNECTING);
+		cm_sm_deliver_event_sync(cm_ctx,
+					 WLAN_CM_SM_EV_DISCONNECT_START,
+					 data_len, data);
+		event_handled = true;
 		break;
 	default:
-		status = false;
+		event_handled = false;
 		break;
 	}
 
-	return status;
+	return event_handled;
 }
 
 /**
@@ -496,33 +664,93 @@ static bool cm_subst_join_active_event(void *ctx, uint16_t event,
 				       uint16_t data_len, void *data)
 {
 	struct cnx_mgr *cm_ctx = ctx;
-	bool status;
+	bool event_handled;
+	QDF_STATUS status;
 
 	switch (event) {
+	case WLAN_CM_SM_EV_CONNECT_REQ:
+		status = cm_handle_connect_req_in_non_init_state(cm_ctx, data,
+							WLAN_CM_SS_JOIN_ACTIVE);
+		if (QDF_IS_STATUS_ERROR(status)) {
+			event_handled = false;
+			break;
+		}
+		cm_sm_transition_to(cm_ctx, WLAN_CM_SS_JOIN_PENDING);
+		cm_sm_deliver_event_sync(cm_ctx,
+					 WLAN_CM_SM_EV_CONNECT_START,
+					 data_len, data);
+		event_handled = true;
+		break;
 	case WLAN_CM_SM_EV_CONNECT_ACTIVE:
 		cm_connect_active(cm_ctx, data);
-		status = true;
+		event_handled = true;
 		break;
 	case WLAN_CM_SM_EV_CONNECT_SUCCESS:
+		/* check if connect resp cm id is valid for the current req */
+		if (!cm_connect_resp_cmid_match_list_head(cm_ctx, data)) {
+			event_handled = false;
+			break;
+		}
 		cm_sm_transition_to(cm_ctx, WLAN_CM_S_CONNECTED);
-		cm_sm_deliver_event(cm_ctx, event, data_len, data);
-		status = true;
+		cm_sm_deliver_event_sync(cm_ctx, event, data_len, data);
+		event_handled = true;
 		break;
 	case WLAN_CM_SM_EV_CONNECT_GET_NEXT_CANDIDATE:
+		/* check if connect resp cm id is valid for the current req */
+		if (!cm_connect_resp_cmid_match_list_head(cm_ctx, data)) {
+			event_handled = false;
+			break;
+		}
 		cm_try_next_candidate(cm_ctx, data);
-		status = true;
+		event_handled = true;
 		break;
 	case WLAN_CM_SM_EV_CONNECT_FAILURE:
+		/* check if connect resp cm id is valid for the current req */
+		if (!cm_connect_resp_cmid_match_list_head(cm_ctx, data)) {
+			event_handled = false;
+			break;
+		}
 		cm_sm_transition_to(cm_ctx, WLAN_CM_S_INIT);
-		cm_sm_deliver_event(cm_ctx, event, data_len, data);
-		status = true;
+		cm_sm_deliver_event_sync(cm_ctx, event, data_len, data);
+		event_handled = true;
+		break;
+	case WLAN_CM_SM_EV_BSS_SELECT_IND_SUCCESS:
+		/* check if cm id is valid for the current req */
+		if (!cm_check_cmid_match_list_head(cm_ctx, data)) {
+			event_handled = false;
+			break;
+		}
+		cm_peer_create_on_bss_select_ind_resp(cm_ctx, data);
+		event_handled = true;
+		break;
+	case WLAN_CM_SM_EV_BSS_CREATE_PEER_SUCCESS:
+		/* check if cm id is valid for the current req */
+		if (!cm_check_cmid_match_list_head(cm_ctx, data)) {
+			event_handled = false;
+			break;
+		}
+		cm_resume_connect_after_peer_create(cm_ctx, data);
+		event_handled = true;
+		break;
+	case WLAN_CM_SM_EV_DISCONNECT_REQ:
+		status = cm_handle_discon_req_in_non_connected_state(cm_ctx,
+						data, WLAN_CM_SS_JOIN_ACTIVE);
+		if (QDF_IS_STATUS_ERROR(status)) {
+			event_handled = false;
+			break;
+		}
+		cm_sm_transition_to(cm_ctx, WLAN_CM_S_DISCONNECTING);
+		cm_sm_deliver_event_sync(cm_ctx,
+					 WLAN_CM_SM_EV_DISCONNECT_START,
+					 data_len, data);
+		event_handled = true;
 		break;
 	default:
-		status = false;
+		event_handled = false;
 		break;
 	}
 
-	return status;
+	return event_handled;
 }
 
 struct wlan_sm_state_info cm_sm_info[] = {
@@ -626,7 +854,6 @@ struct wlan_sm_state_info cm_sm_info[] = {
 		cm_subst_join_active_exit,
 		cm_subst_join_active_event
 	},
-#ifdef WLAN_FEATURE_HOST_ROAM
 	{
 		(uint8_t)WLAN_CM_SS_PREAUTH,
 		(uint8_t)WLAN_CM_S_ROAMING,
@@ -647,8 +874,6 @@ struct wlan_sm_state_info cm_sm_info[] = {
 		cm_subst_reassoc_exit,
 		cm_subst_reassoc_event
 	},
-#endif
-#ifdef WLAN_FEATURE_ROAM_OFFLOAD
 	{
 		(uint8_t)WLAN_CM_SS_ROAM_STARTED,
 		(uint8_t)WLAN_CM_S_ROAMING,
@@ -669,7 +894,6 @@ struct wlan_sm_state_info cm_sm_info[] = {
 		cm_subst_roam_sync_exit,
 		cm_subst_roam_sync_event
 	},
-#endif
 	{
 		(uint8_t)WLAN_CM_SS_MAX,
 		(uint8_t)WLAN_SM_ENGINE_STATE_NONE,
@@ -687,9 +911,13 @@ static const char *cm_sm_event_names[] = {
 	"EV_SCAN",
 	"EV_SCAN_SUCCESS",
 	"EV_SCAN_FAILURE",
+	"EV_HW_MODE_SUCCESS",
+	"EV_HW_MODE_FAILURE",
 	"EV_CONNECT_START",
 	"EV_CONNECT_ACTIVE",
 	"EV_CONNECT_SUCCESS",
+	"EV_BSS_SELECT_IND_SUCCESS",
+	"EV_BSS_CREATE_PEER_SUCCESS",
 	"EV_CONNECT_GET_NXT_CANDIDATE",
 	"EV_CONNECT_FAILURE",
 	"EV_DISCONNECT_REQ",
@@ -765,11 +993,10 @@ static void cm_sm_print_state(struct cnx_mgr *cm_ctx)
 			cm_sm_info[state].name, cm_sm_info[substate].name);
 }
 
-QDF_STATUS wlan_cm_sm_deliver_evt(struct wlan_objmgr_vdev *vdev,
-				  enum wlan_cm_sm_evt event,
-				  uint16_t data_len, void *data)
+QDF_STATUS cm_sm_deliver_event(struct wlan_objmgr_vdev *vdev,
+			       enum wlan_cm_sm_evt event,
+			       uint16_t data_len, void *data)
 {
-	struct vdev_mlme_obj *vdev_mlme;
 	QDF_STATUS status;
 	enum wlan_cm_sm_state state_entry, state_exit;
 	enum wlan_cm_sm_state substate_entry, substate_exit;
@@ -777,16 +1004,15 @@ QDF_STATUS wlan_cm_sm_deliver_evt(struct wlan_objmgr_vdev *vdev,
 	struct cnx_mgr *cm_ctx;
 
 	if (op_mode != QDF_STA_MODE && op_mode != QDF_P2P_CLIENT_MODE) {
-		mlme_err("Invalid mode %d", op_mode);
+		mlme_err("vdev %d Invalid mode %d",
+			 wlan_vdev_get_id(vdev), op_mode);
 		return QDF_STATUS_E_NOSUPPORT;
 	}
 
-	vdev_mlme = wlan_vdev_mlme_get_cmpt_obj(vdev);
-	if (!vdev_mlme || !vdev_mlme->cnx_mgr_ctx) {
-		mlme_err("vdev mlme or cm ctx is NULL");
+	cm_ctx = cm_get_cm_ctx(vdev);
+	if (!cm_ctx)
 		return QDF_STATUS_E_FAILURE;
-	}
-	cm_ctx = vdev_mlme->cnx_mgr_ctx;
+
 	cm_lock_acquire(cm_ctx);
 
 	/* store entry state and sub state for prints */
@@ -794,7 +1020,7 @@ QDF_STATUS wlan_cm_sm_deliver_evt(struct wlan_objmgr_vdev *vdev,
 	substate_entry = cm_get_sub_state(cm_ctx);
 	cm_sm_print_state_event(cm_ctx, event);
 
-	status = cm_sm_deliver_event(cm_ctx, event, data_len, data);
+	status = cm_sm_deliver_event_sync(cm_ctx, event, data_len, data);
 	/* Take exit state, exit substate for prints */
 	state_exit = cm_get_state(cm_ctx);
 	substate_exit = cm_get_sub_state(cm_ctx);
@@ -811,8 +1037,8 @@ QDF_STATUS cm_sm_create(struct cnx_mgr *cm_ctx)
 	struct wlan_sm *sm;
 	uint8_t name[WLAN_SM_ENGINE_MAX_NAME];
 
-	qdf_snprintf(name, sizeof(name), "CM-VDEV-%d",
-		     wlan_vdev_get_id(cm_ctx->vdev));
+	qdf_scnprintf(name, sizeof(name), "CM-VDEV-%d",
+		      wlan_vdev_get_id(cm_ctx->vdev));
 	sm = wlan_sm_create(name, cm_ctx,
 			    WLAN_CM_S_INIT,
 			    cm_sm_info,
@@ -820,7 +1046,8 @@ QDF_STATUS cm_sm_create(struct cnx_mgr *cm_ctx)
 			    cm_sm_event_names,
 			    QDF_ARRAY_SIZE(cm_sm_event_names));
 	if (!sm) {
-		mlme_err("CM MLME SM allocation failed");
+		mlme_err("vdev %d CM State Machine allocation failed",
+			 wlan_vdev_get_id(cm_ctx->vdev));
 		return QDF_STATUS_E_NOMEM;
 	}
 	cm_ctx->sm.sm_hdl = sm;

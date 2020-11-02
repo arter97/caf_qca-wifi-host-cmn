@@ -23,6 +23,8 @@
 #include "dp_types.h"
 
 
+#define DP_INVALID_VDEV_ID 0xFF
+
 #define DP_TX_MAX_NUM_FRAGS 6
 
 #define DP_TX_DESC_FLAG_SIMPLE		0x1
@@ -35,6 +37,9 @@
 #define DP_TX_DESC_FLAG_ME		0x80
 #define DP_TX_DESC_FLAG_TDLS_FRAME	0x100
 #define DP_TX_DESC_FLAG_ALLOCATED	0x200
+#define DP_TX_DESC_FLAG_MESH_MODE	0x400
+
+#define DP_TX_EXT_DESC_FLAG_METADATA_VALID 0x1
 
 #define DP_TX_FREE_SINGLE_BUF(soc, buf)                  \
 do {                                                           \
@@ -58,6 +63,10 @@ do {                                                           \
 	#endif /* TX_PER_VDEV_DESC_POOL */
 #endif /* TX_PER_PDEV_DESC_POOL */
 #define DP_TX_QUEUE_MASK 0x3
+
+/* number of dwords for htt_tx_msdu_desc_ext2_t */
+#define DP_TX_MSDU_INFO_META_DATA_DWORDS 7
+
 /**
  * struct dp_tx_frag_info_s
  * @vaddr: hlos vritual address for buffer
@@ -144,14 +153,17 @@ struct dp_tx_msdu_info_s {
 	struct dp_tx_queue tx_queue;
 	uint32_t num_seg;
 	uint8_t tid;
+	uint8_t exception_fw;
+	uint8_t is_tx_sniffer;
+	uint8_t search_type;
 	union {
 		struct qdf_tso_info_t tso_info;
 		struct dp_tx_sg_info_s sg_info;
 	} u;
-	uint32_t meta_data[7];
-	uint8_t exception_fw;
+	uint32_t meta_data[DP_TX_MSDU_INFO_META_DATA_DWORDS];
 	uint16_t ppdu_cookie;
-	uint8_t is_tx_sniffer;
+	uint16_t ast_idx;
+	uint16_t ast_hash;
 };
 
 /**
@@ -179,8 +191,6 @@ QDF_STATUS dp_tx_tso_cmn_desc_pool_alloc(struct dp_soc *soc,
 QDF_STATUS dp_tx_tso_cmn_desc_pool_init(struct dp_soc *soc,
 					uint8_t num_pool,
 					uint16_t num_desc);
-QDF_STATUS dp_tx_pdev_detach(struct dp_pdev *pdev);
-QDF_STATUS dp_tx_pdev_attach(struct dp_pdev *pdev);
 
 void dp_tx_tso_cmn_desc_pool_deinit(struct dp_soc *soc, uint8_t num_pool);
 void dp_tx_tso_cmn_desc_pool_free(struct dp_soc *soc, uint8_t num_pool);
@@ -221,9 +231,18 @@ QDF_STATUS dp_tx_pdev_init(struct dp_pdev *pdev);
 
 qdf_nbuf_t dp_tx_send(struct cdp_soc_t *soc, uint8_t vdev_id, qdf_nbuf_t nbuf);
 
+qdf_nbuf_t dp_tx_send_vdev_id_check(struct cdp_soc_t *soc, uint8_t vdev_id,
+				    qdf_nbuf_t nbuf);
+
 qdf_nbuf_t dp_tx_send_exception(struct cdp_soc_t *soc, uint8_t vdev_id,
 				qdf_nbuf_t nbuf,
 				struct cdp_tx_exception_metadata *tx_exc);
+
+qdf_nbuf_t dp_tx_send_exception_vdev_id_check(struct cdp_soc_t *soc,
+					      uint8_t vdev_id,
+					      qdf_nbuf_t nbuf,
+				struct cdp_tx_exception_metadata *tx_exc);
+
 qdf_nbuf_t dp_tx_send_mesh(struct cdp_soc_t *soc, uint8_t vdev_id,
 			   qdf_nbuf_t nbuf);
 qdf_nbuf_t
@@ -275,6 +294,9 @@ uint32_t dp_tx_comp_handler(struct dp_intr *int_ctx, struct dp_soc *soc,
 
 QDF_STATUS
 dp_tx_prepare_send_me(struct dp_vdev *vdev, qdf_nbuf_t nbuf);
+
+QDF_STATUS
+dp_tx_prepare_send_igmp_me(struct dp_vdev *vdev, qdf_nbuf_t nbuf);
 
 #ifndef FEATURE_WDS
 static inline void dp_tx_mec_handler(struct dp_vdev *vdev, uint8_t *status)

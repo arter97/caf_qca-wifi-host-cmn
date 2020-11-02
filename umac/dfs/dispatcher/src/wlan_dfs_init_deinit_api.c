@@ -109,7 +109,6 @@ register_dfs_callbacks_for_freq(struct dfs_to_mlme *mlme_callback)
 	if (!mlme_callback)
 		return;
 
-	mlme_callback->mlme_mark_dfs_for_freq = mlme_dfs_mark_dfs_for_freq;
 	mlme_callback->mlme_find_dot11_chan_for_freq =
 		mlme_dfs_find_dot11_chan_for_freq;
 	mlme_callback->mlme_get_dfs_channels_for_freq =
@@ -161,11 +160,15 @@ void register_dfs_callbacks(void)
 		mlme_dfs_bringdown_vaps;
 	tmp_dfs_to_mlme->mlme_dfs_deliver_event =
 		mlme_dfs_deliver_event;
+	tmp_dfs_to_mlme->mlme_is_inter_band_chan_switch_allowed =
+		mlme_is_inter_band_chan_switch_allowed;
 
 	tmp_dfs_to_mlme->mlme_acquire_radar_mode_switch_lock =
 		mlme_acquire_radar_mode_switch_lock;
 	tmp_dfs_to_mlme->mlme_release_radar_mode_switch_lock =
 		mlme_release_radar_mode_switch_lock;
+	tmp_dfs_to_mlme->mlme_mark_dfs =
+		mlme_dfs_mark_dfs;
 	/*
 	 * Register precac auto channel switch feature related callbacks
 	 */
@@ -318,7 +321,9 @@ QDF_STATUS dfs_init(void)
 	}
 
 	status = qdf_print_set_category_verbose(qdf_get_pidx(),
-			QDF_MODULE_ID_DFS, QDF_TRACE_LEVEL_INFO, true);
+						QDF_MODULE_ID_DFS,
+						QDF_TRACE_LEVEL_DEBUG,
+						true);
 
 	if (QDF_IS_STATUS_ERROR(status)) {
 		dfs_err(NULL, WLAN_DEBUG_DFS_ALWAYS,
@@ -397,6 +402,8 @@ QDF_STATUS wlan_dfs_pdev_obj_create_notification(struct wlan_objmgr_pdev *pdev,
 	uint8_t pdev_id;
 	QDF_STATUS status;
 	bool is_5ghz = false;
+	bool is_6ghz_only_pdev;
+	qdf_freq_t low_5g, high_5g;
 
 	if (!pdev) {
 		dfs_err(dfs, WLAN_DEBUG_DFS_ALWAYS,  "null pdev");
@@ -407,6 +414,17 @@ QDF_STATUS wlan_dfs_pdev_obj_create_notification(struct wlan_objmgr_pdev *pdev,
 	if (!psoc) {
 		dfs_err(dfs, WLAN_DEBUG_DFS_ALWAYS,  "null psoc");
 		return QDF_STATUS_E_FAILURE;
+	}
+
+	wlan_reg_get_freq_range(pdev, NULL, NULL, &low_5g, &high_5g);
+	is_6ghz_only_pdev = wlan_reg_is_range_only6g(low_5g, high_5g);
+
+	if (is_6ghz_only_pdev) {
+		pdev_id = wlan_objmgr_pdev_get_pdev_id(pdev);
+		dfs_info(dfs, WLAN_DEBUG_DFS_ALWAYS,
+			 "Do not allocate DFS object for 6G, pdev_id = %d",
+			 pdev_id);
+		return QDF_STATUS_SUCCESS;
 	}
 
 	dfs_tx_ops = wlan_psoc_get_dfs_txops(psoc);

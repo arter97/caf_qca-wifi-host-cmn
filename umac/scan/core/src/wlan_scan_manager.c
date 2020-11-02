@@ -638,14 +638,24 @@ static void scm_req_update_concurrency_params(struct wlan_objmgr_vdev *vdev,
 	 * 2.if DBS is supported and SAP is not on 2g,
 	 * do not reset active dwell time for 2g.
 	 */
+
+	/*
+	 * For SAP, the dwell time cannot exceed 32 ms as it can't go
+	 * offchannel more than 32 ms. For Go, since we
+	 * advertise NOA, GO can have regular dwell time which is 40 ms.
+	 */
 	if ((ap_present && sap_peer_count) ||
 	    (go_present && go_peer_count)) {
-		if (policy_mgr_is_hw_dbs_capable(psoc) &&
-		    policy_mgr_is_sap_go_on_2g(psoc)) {
-			req->scan_req.dwell_time_active_2g =
-				QDF_MIN(req->scan_req.dwell_time_active,
-					(SCAN_CTS_DURATION_MS_MAX -
-					SCAN_ROAM_SCAN_CHANNEL_SWITCH_TIME));
+		if ((policy_mgr_is_hw_dbs_capable(psoc) &&
+		     policy_mgr_is_sap_go_on_2g(psoc)) ||
+		     !policy_mgr_is_hw_dbs_capable(psoc)) {
+			if (ap_present)
+				req->scan_req.dwell_time_active_2g =
+					QDF_MIN(req->scan_req.dwell_time_active,
+						(SCAN_CTS_DURATION_MS_MAX -
+						SCAN_ROAM_SCAN_CHANNEL_SWITCH_TIME));
+			else
+				req->scan_req.dwell_time_active_2g = 0;
 		}
 		req->scan_req.min_rest_time = req->scan_req.max_rest_time;
 	}
@@ -1039,11 +1049,7 @@ static void scm_update_rnr_info(struct wlan_objmgr_psoc *psoc,
 		freq = chan_list->chan[i].freq;
 
 		chan = scm_get_chan_meta(psoc, freq);
-		if (!chan) {
-			scm_debug("Failed to get meta, freq %d", freq);
-			continue;
-		}
-		if (qdf_list_empty(&chan->rnr_list))
+		if (!chan || qdf_list_empty(&chan->rnr_list))
 			continue;
 
 		qdf_list_peek_front(&chan->rnr_list, &cur_node);
@@ -1132,6 +1138,7 @@ scm_update_channel_list(struct scan_start_request *req,
 	bool p2p_search = false;
 	bool skip_dfs_ch = true;
 	uint32_t first_freq;
+	enum QDF_OPMODE op_mode;
 
 	pdev = wlan_vdev_get_pdev(req->vdev);
 
@@ -1191,8 +1198,16 @@ scm_update_channel_list(struct scan_start_request *req,
 	}
 
 	req->scan_req.chan_list.num_chan = num_scan_channels;
-	/* Dont upadte the channel list for SAP mode */
-	if (wlan_vdev_mlme_get_opmode(req->vdev) != QDF_SAP_MODE) {
+	/* Dont update the channel list:
+	 * - if not STA mode and
+	 * - if scan mode is set to SCAN_MODE_6G_NO_OPERATION
+	 */
+	op_mode = wlan_vdev_mlme_get_opmode(req->vdev);
+	if (op_mode != QDF_SAP_MODE &&
+	    op_mode != QDF_P2P_DEVICE_MODE &&
+	    op_mode != QDF_P2P_CLIENT_MODE &&
+	    op_mode != QDF_P2P_GO_MODE &&
+	    scan_obj->scan_def.scan_mode_6g != SCAN_MODE_6G_NO_OPERATION) {
 		scm_update_6ghz_channel_list(req->vdev,
 					     &req->scan_req.chan_list,
 					     scan_obj);
@@ -1218,6 +1233,7 @@ scm_scan_req_update_params(struct wlan_objmgr_vdev *vdev,
 	struct chan_list *custom_chan_list;
 	struct wlan_objmgr_pdev *pdev;
 	uint8_t pdev_id;
+	enum QDF_OPMODE op_mode;
 
 	/* Ensure correct number of probes are sent on active channel */
 	if (!req->scan_req.repeat_probe_time)
@@ -1329,7 +1345,9 @@ scm_scan_req_update_params(struct wlan_objmgr_vdev *vdev,
 	else if (!req->scan_req.chan_list.num_chan)
 		ucfg_scan_init_chanlist_params(req, 0, NULL, NULL);
 
-	if (scan_obj->scan_def.scan_mode_6g != SCAN_MODE_6G_NO_CHANNEL)
+	op_mode = wlan_vdev_mlme_get_opmode(vdev);
+	if (scan_obj->scan_def.scan_mode_6g != SCAN_MODE_6G_NO_CHANNEL &&
+	    op_mode == QDF_STA_MODE)
 		scm_add_rnr_info(pdev, req);
 	scm_update_channel_list(req, scan_obj);
 }
@@ -1786,7 +1804,8 @@ scm_scan_event_handler(struct scheduler_msg *msg)
 	case SCAN_EVENT_TYPE_COMPLETED:
 		if (event->reason == SCAN_REASON_COMPLETED)
 			scm_11d_decide_country_code(vdev);
-		/* fall through to release the command */
+		/* release the command */
+		/* fallthrough */
 	case SCAN_EVENT_TYPE_START_FAILED:
 	case SCAN_EVENT_TYPE_DEQUEUED:
 		scm_release_serialization_command(vdev, event->scan_id);

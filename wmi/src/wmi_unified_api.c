@@ -376,7 +376,6 @@ QDF_STATUS wmi_crash_inject(wmi_unified_t wmi_handle,
 	return QDF_STATUS_E_FAILURE;
 }
 
-#ifdef FEATURE_FW_LOG_PARSING
 QDF_STATUS
 wmi_unified_dbglog_cmd_send(wmi_unified_t wmi_handle,
 			    struct dbglog_params *dbglog_param)
@@ -388,7 +387,6 @@ wmi_unified_dbglog_cmd_send(wmi_unified_t wmi_handle,
 	return QDF_STATUS_E_FAILURE;
 }
 qdf_export_symbol(wmi_unified_dbglog_cmd_send);
-#endif
 
 QDF_STATUS
 wmi_unified_vdev_set_param_send(wmi_unified_t wmi_handle,
@@ -771,6 +769,21 @@ QDF_STATUS wmi_unified_process_ll_stats_get_cmd(wmi_unified_t wmi_handle,
 
 	return QDF_STATUS_E_FAILURE;
 }
+
+#ifdef FEATURE_CLUB_LL_STATS_AND_GET_STATION
+QDF_STATUS wmi_process_unified_ll_stats_get_sta_cmd(
+				wmi_unified_t wmi_handle,
+				const struct ll_stats_get_params *get_req,
+				bool is_always_over_qmi)
+{
+	if (wmi_handle->ops->send_unified_ll_stats_get_sta_cmd)
+		return wmi_handle->ops->send_unified_ll_stats_get_sta_cmd(
+						wmi_handle, get_req,
+						is_always_over_qmi);
+
+	return QDF_STATUS_E_FAILURE;
+}
+#endif
 #endif /* WLAN_FEATURE_LINK_LAYER_STATS */
 
 QDF_STATUS wmi_unified_congestion_request_cmd(wmi_unified_t wmi_handle,
@@ -1006,6 +1019,16 @@ QDF_STATUS wmi_unified_fw_test_cmd(wmi_unified_t wmi_handle,
 
 	return QDF_STATUS_E_FAILURE;
 
+}
+
+QDF_STATUS wmi_unified_wfa_test_cmd(wmi_unified_t wmi_handle,
+				    struct set_wfatest_params *wmi_wfatest)
+{
+	if (wmi_handle->ops->send_wfa_test_cmd)
+		return wmi_handle->ops->send_wfa_test_cmd(wmi_handle,
+							  wmi_wfatest);
+
+	return QDF_STATUS_E_FAILURE;
 }
 
 QDF_STATUS wmi_unified_unit_test_cmd(wmi_unified_t wmi_handle,
@@ -1594,7 +1617,7 @@ bool wmi_service_enabled(wmi_unified_t wmi_handle, uint32_t service_id)
 				wmi_handle->services[service_id]);
 		}
 	} else {
-		WMI_LOGI("Service %d not supported", service_id);
+		wmi_info("Service %d not supported", service_id);
 	}
 
 	return false;
@@ -2105,6 +2128,17 @@ wmi_extract_composite_phyerr(wmi_unified_t wmi_handle, void *evt_buf,
 }
 
 QDF_STATUS
+wmi_extract_pmf_bcn_protect_stats(wmi_unified_t wmi_handle, void *evt_buf,
+				  wmi_host_pmf_bcn_protect_stats *bcn_stats)
+{
+	if (wmi_handle->ops->extract_pmf_bcn_protect_stats)
+		return wmi_handle->ops->extract_pmf_bcn_protect_stats(
+				wmi_handle, evt_buf, bcn_stats);
+
+	return QDF_STATUS_E_FAILURE;
+}
+
+QDF_STATUS
 wmi_extract_unit_test(wmi_unified_t wmi_handle, void *evt_buf,
 		      wmi_unit_test_event *unit_test, uint32_t maxspace)
 {
@@ -2287,6 +2321,18 @@ QDF_STATUS wmi_extract_vdev_nac_rssi_stats(
 	if (wmi_handle->ops->extract_vdev_nac_rssi_stats)
 		return wmi_handle->ops->extract_vdev_nac_rssi_stats(wmi_handle,
 				evt_buf, vdev_nac_rssi_stats);
+
+	return QDF_STATUS_E_FAILURE;
+}
+
+QDF_STATUS wmi_extract_vdev_prb_fils_stats(
+		wmi_unified_t wmi_handle, void *evt_buf,
+		uint32_t index,
+		struct wmi_host_vdev_prb_fils_stats *vdev_prb_fils_stats)
+{
+	if (wmi_handle->ops->extract_vdev_prb_fils_stats)
+		return wmi_handle->ops->extract_vdev_prb_fils_stats(wmi_handle,
+				evt_buf, index, vdev_prb_fils_stats);
 
 	return QDF_STATUS_E_FAILURE;
 }
@@ -3276,6 +3322,18 @@ QDF_STATUS wmi_unified_send_cp_stats_cmd(wmi_unified_t wmi_handle,
 	if (wmi_handle->ops->send_cp_stats_cmd)
 		return wmi_handle->ops->send_cp_stats_cmd(wmi_handle, buf_ptr,
 							  buf_len);
+
+	return QDF_STATUS_E_FAILURE;
+}
+
+QDF_STATUS
+wmi_unified_extract_cp_stats_more_pending(wmi_unified_t wmi_handle,
+					  void *evt_buf, uint32_t *more_flag)
+{
+	if (wmi_handle->ops->extract_cp_stats_more_pending)
+		return wmi_handle->ops->extract_cp_stats_more_pending(wmi_handle,
+								      evt_buf,
+								      more_flag);
 
 	return QDF_STATUS_E_FAILURE;
 }

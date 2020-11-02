@@ -189,6 +189,8 @@ struct wlan_srng_cfg {
  *                           pool support
  * @rx_pending_high_threshold: threshold of starting pkt drop
  * @rx_pending_low_threshold: threshold of stopping pkt drop
+ * @is_swlm_enabled: flag to enable/disable SWLM
+ * @tx_per_pkt_vdev_id_check: Enable tx perpkt vdev id check
  */
 struct wlan_cfg_dp_soc_ctxt {
 	int num_int_ctxts;
@@ -244,6 +246,7 @@ struct wlan_cfg_dp_soc_ctxt {
 	bool p2p_tcp_udp_checksumoffload;
 	bool nan_tcp_udp_checksumoffload;
 	bool tcp_udp_checksumoffload;
+	bool legacy_mode_checksumoffload_disable;
 	bool defrag_timeout_check;
 	int nss_cfg;
 	uint32_t tx_flow_stop_queue_threshold;
@@ -296,6 +299,13 @@ struct wlan_cfg_dp_soc_ctxt {
 	bool is_rx_buff_pool_enabled;
 	uint32_t rx_pending_high_threshold;
 	uint32_t rx_pending_low_threshold;
+	bool is_poll_mode_enabled;
+	uint8_t is_swlm_enabled;
+	bool fst_in_cmem;
+	bool tx_per_pkt_vdev_id_check;
+	uint8_t radio0_rx_default_reo;
+	uint8_t radio1_rx_default_reo;
+	uint8_t radio2_rx_default_reo;
 };
 
 /**
@@ -1350,6 +1360,28 @@ bool
 wlan_cfg_is_rx_mon_protocol_flow_tag_enabled(struct wlan_cfg_dp_soc_ctxt *cfg);
 
 /**
+ * wlan_cfg_set_tx_per_pkt_vdev_id_check() - set flag to enable perpkt
+ *                                              vdev id check in tx.
+ * @wlan_cfg_dp_soc_ctxt: soc configuration context
+ * @val: feature flag value
+ *
+ * Return: None
+ */
+void
+wlan_cfg_set_tx_per_pkt_vdev_id_check(struct wlan_cfg_dp_soc_ctxt *cfg,
+				      bool val);
+
+/**
+ * wlan_cfg_is_tx_per_pkt_vdev_id_check_enabled() - get flag to check if
+ *                              perpkt vdev id check is enabled in tx.
+ * @wlan_cfg_dp_soc_ctxt: soc configuration context
+ *
+ * Return: true if feature is enabled, false otherwise
+ */
+bool
+wlan_cfg_is_tx_per_pkt_vdev_id_check_enabled(struct wlan_cfg_dp_soc_ctxt *cfg);
+
+/**
  * wlan_cfg_fill_interrupt_mask() - set interrupt mask
  *
  * @wlan_cfg_dp_soc_ctxt: soc configuration context
@@ -1380,7 +1412,6 @@ bool wlan_cfg_is_rx_fisa_enabled(struct wlan_cfg_dp_soc_ctxt *cfg);
  * Return: true if enabled, false otherwise.
  */
 bool wlan_cfg_is_rx_buffer_pool_enabled(struct wlan_cfg_dp_soc_ctxt *cfg);
-#endif
 
 void wlan_cfg_set_tso_desc_attach_defer(struct wlan_cfg_dp_soc_ctxt *cfg,
 					bool val);
@@ -1419,3 +1450,55 @@ wlan_cfg_set_peer_ext_stats(struct wlan_cfg_dp_soc_ctxt *cfg,
  */
 bool
 wlan_cfg_is_peer_ext_stats_enabled(struct wlan_cfg_dp_soc_ctxt *cfg);
+
+/**
+ * wlan_cfg_is_poll_mode_enabled() - Check if poll mode is enabled
+ *
+ * @wlan_cfg_dp_soc_ctxt: soc configuration context
+ *
+ * Return: bool
+ */
+
+bool wlan_cfg_is_poll_mode_enabled(struct wlan_cfg_dp_soc_ctxt *cfg);
+
+/**
+ * wlan_cfg_is_fst_in_cmem_enabled() - Check if FST in CMEM is enabled
+ * @cfg: soc configuration context
+ *
+ * Return: true if enabled, false otherwise.
+ */
+bool wlan_cfg_is_fst_in_cmem_enabled(struct wlan_cfg_dp_soc_ctxt *cfg);
+
+/**
+ * wlan_cfg_is_swlm_enabled() - Get SWLMenabled flag
+ * @cfg: soc configuration context
+ *
+ * Return: true if enabled, false otherwise.
+ */
+bool wlan_cfg_is_swlm_enabled(struct wlan_cfg_dp_soc_ctxt *cfg);
+
+#endif
+
+/**
+ * wlan_cfg_radio0_default_reo_get -  Get Radio0 default REO
+ * @cfg: soc configuration context
+ *
+ * Return: .
+ */
+uint8_t wlan_cfg_radio0_default_reo_get(struct wlan_cfg_dp_soc_ctxt *cfg);
+
+/**
+ * wlan_cfg_radio1_default_reo_get - Get Radio1 default REO
+ * @cfg: soc configuration context
+ *
+ * Return: .
+ */
+uint8_t wlan_cfg_radio1_default_reo_get(struct wlan_cfg_dp_soc_ctxt *cfg);
+
+/**
+ * wlan_cfg_radio2_default_reo_get() - Get Radio2 default REO
+ * @cfg: soc configuration context
+ *
+ * Return: .
+ */
+uint8_t wlan_cfg_radio2_default_reo_get(struct wlan_cfg_dp_soc_ctxt *cfg);

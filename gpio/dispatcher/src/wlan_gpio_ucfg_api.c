@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012-2015, 2020, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2020, The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -15,7 +15,24 @@
  */
 
 /**
- * DOC: wlan_cfg80211_cm_roam_rsp.c
- *
- * This file maintains definitaions of roam response apis.
+ * DOC: This file contains gpio north bound interface definitions
  */
+#include <wlan_gpio_ucfg_api.h>
+#include <wlan_gpio_tgt_api.h>
+#include "qdf_module.h"
+
+QDF_STATUS
+ucfg_set_gpio_config(struct wlan_objmgr_psoc *psoc,
+		     struct gpio_config_params *param)
+{
+	return tgt_set_gpio_config_req(psoc, param);
+}
+qdf_export_symbol(ucfg_set_gpio_config);
+
+QDF_STATUS
+ucfg_set_gpio_output(struct wlan_objmgr_psoc *psoc,
+		     struct gpio_output_params *param)
+{
+	return tgt_set_gpio_output_req(psoc, param);
+}
+qdf_export_symbol(ucfg_set_gpio_output);

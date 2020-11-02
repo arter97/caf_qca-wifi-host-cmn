@@ -26,6 +26,7 @@
 #include "cfg_ucfg_api.h"
 #include "wlan_cm_bss_score_param.h"
 #include "wlan_scan_api.h"
+#include "wlan_crypto_global_api.h"
 
 #define CM_20MHZ_BW_INDEX                  0
 #define CM_40MHZ_BW_INDEX                  1
@@ -82,6 +83,7 @@
 #define CM_OCE_WAN_WEIGHTAGE 2
 #define CM_OCE_AP_TX_POWER_WEIGHTAGE 5
 #define CM_OCE_SUBNET_ID_WEIGHTAGE 3
+#define CM_SAE_PK_AP_WEIGHTAGE 3
 #define CM_BEST_CANDIDATE_MAX_WEIGHT 200
 #define CM_MAX_PCT_SCORE 100
 #define CM_MAX_INDEX_PER_INI 4
@@ -116,7 +118,7 @@ static bool cm_is_better_bss(struct scan_cache_entry *bss1,
  * @bucket_size: bucket size of the window
  * @bss_rssi: Input rssi for which value need to be calculated
  *
- * Return : rssi pct to use for the given rssi
+ * Return: rssi pct to use for the given rssi
  */
 static inline
 int8_t cm_get_rssi_pcnt_for_slot(int32_t high_rssi_threshold,
@@ -151,7 +153,7 @@ int8_t cm_get_rssi_pcnt_for_slot(int32_t high_rssi_threshold,
  * @rssi: rssi of the AP
  * @rssi_weightage: rssi_weightage out of total weightage
  *
- * Return : rssi score
+ * Return: rssi score
  */
 static int32_t cm_calculate_rssi_score(struct rssi_config_score *score_param,
 				       int32_t rssi, uint8_t rssi_weightage)
@@ -204,32 +206,6 @@ static int32_t cm_calculate_rssi_score(struct rssi_config_score *score_param,
 }
 
 /**
- * cm_calculate_pcl_score() - Calculate PCL score based on PCL weightage
- * @pcl_chan_weight: pcl weight of BSS channel
- * @pcl_weightage: PCL _weightage out of total weightage
- *
- * Return : pcl score
- */
-static int32_t cm_calculate_pcl_score(int pcl_chan_weight,
-				      uint8_t pcl_weightage)
-{
-	int32_t pcl_score = 0;
-	int32_t temp_pcl_chan_weight = 0;
-
-	if (pcl_chan_weight) {
-		temp_pcl_chan_weight =
-			(CM_MAX_WEIGHT_OF_PCL_CHANNELS - pcl_chan_weight);
-		temp_pcl_chan_weight = qdf_do_div(temp_pcl_chan_weight,
-					  CM_PCL_GROUPS_WEIGHT_DIFFERENCE);
-		pcl_score = pcl_weightage - temp_pcl_chan_weight;
-		if (pcl_score < 0)
-			pcl_score = 0;
-	}
-
-	return pcl_score * CM_MAX_PCT_SCORE;
-}
-
-/**
  * cm_rssi_is_same_bucket() - check if both rssi fall in same bucket
  * @rssi_top_thresh: high rssi threshold of the the window
  * @low_rssi_threshold: low rssi of the window
@@ -237,7 +213,7 @@ static int32_t cm_calculate_pcl_score(int pcl_chan_weight,
  * @rssi_ref2: rssi ref two
  * @bucket_size: bucket size of the window
  *
- * Return : true if both fall in same window
+ * Return: true if both fall in same window
  */
 static inline bool cm_rssi_is_same_bucket(int8_t rssi_top_thresh,
 					  int8_t rssi_ref1, int8_t rssi_ref2,
@@ -262,7 +238,7 @@ static inline bool cm_rssi_is_same_bucket(int8_t rssi_top_thresh,
  * If rssi is greater than good threshold return 100, if less than bad return 0,
  * if between good and bad, return prorated rssi score for the index.
  *
- * Return : rssi prorated score
+ * Return: rssi prorated score
  */
 static int8_t cm_roam_calculate_prorated_pcnt_by_rssi(
 	struct rssi_config_score *score_param,
@@ -306,7 +282,7 @@ static int8_t cm_roam_calculate_prorated_pcnt_by_rssi(
  * @phy_config: psoc phy configs
  * @prorated_pct: prorated % to return dependent on RSSI
  *
- * Return : bw score
+ * Return: bw score
  */
 static int32_t cm_calculate_bandwidth_score(struct scan_cache_entry *entry,
 					    struct scoring_cfg *score_config,
@@ -364,7 +340,7 @@ static int32_t cm_calculate_bandwidth_score(struct scan_cache_entry *entry,
  * @weightage: weigtage for the param
  * @score: per slot score
  *
- * Return : score for the index
+ * Return: score for the index
  */
 static int32_t cm_get_score_for_index(uint8_t index,
 				      uint8_t weightage,
@@ -392,7 +368,7 @@ static int32_t cm_get_score_for_index(uint8_t index,
  * cm_get_congestion_pct() - Calculate congestion pct from esp/qbss load
  * @entry: bss information
  *
- * Return : congestion pct
+ * Return: congestion pct
  */
 static int32_t cm_get_congestion_pct(struct scan_cache_entry *entry)
 {
@@ -430,7 +406,7 @@ static int32_t cm_get_congestion_pct(struct scan_cache_entry *entry)
  * @score_params: bss score params
  * @congestion_pct: congestion pct
  *
- * Return : congestion score
+ * Return: congestion score
  */
 static int32_t cm_calculate_congestion_score(struct scan_cache_entry *entry,
 					     struct scoring_cfg *score_params,
@@ -439,6 +415,7 @@ static int32_t cm_calculate_congestion_score(struct scan_cache_entry *entry,
 	uint32_t window_size;
 	uint8_t index;
 	int32_t good_rssi_threshold;
+	uint8_t chan_congestion_weight;
 
 	*congestion_pct = cm_get_congestion_pct(entry);
 
@@ -453,15 +430,18 @@ static int32_t cm_calculate_congestion_score(struct scan_cache_entry *entry,
 	good_rssi_threshold =
 		score_params->rssi_score.good_rssi_threshold * (-1);
 
+	chan_congestion_weight =
+		score_params->weight_config.channel_congestion_weightage;
+
 	/* For bad zone rssi get score from last index */
 	if (entry->rssi_raw <= good_rssi_threshold)
 		return cm_get_score_for_index(
 			score_params->esp_qbss_scoring.num_slot,
-			score_params->weight_config.channel_congestion_weightage,
+			chan_congestion_weight,
 			&score_params->esp_qbss_scoring);
 
 	if (!*congestion_pct)
-		return score_params->weight_config.channel_congestion_weightage *
+		return chan_congestion_weight *
 			   CM_GET_SCORE_PERCENTAGE(
 			   score_params->esp_qbss_scoring.score_pcnt3_to_0,
 			   CM_SCORE_INDEX_0);
@@ -476,8 +456,8 @@ static int32_t cm_calculate_congestion_score(struct scan_cache_entry *entry,
 		index = score_params->esp_qbss_scoring.num_slot;
 
 	return cm_get_score_for_index(index,
-		score_params->weight_config.channel_congestion_weightage,
-		&score_params->esp_qbss_scoring);
+				      chan_congestion_weight,
+				      &score_params->esp_qbss_scoring);
 }
 
 /**
@@ -487,7 +467,7 @@ static int32_t cm_calculate_congestion_score(struct scan_cache_entry *entry,
  * @ap_nss: ap nss
  * @prorated_pct: prorated % to return dependent on RSSI
  *
- * Return : nss score
+ * Return: nss score
  */
 static int32_t cm_calculate_nss_score(struct wlan_objmgr_psoc *psoc,
 				      struct scoring_cfg *score_config,
@@ -523,12 +503,94 @@ static int32_t cm_calculate_nss_score(struct wlan_objmgr_psoc *psoc,
 		prorated_pct) / CM_MAX_PCT_SCORE;
 }
 
+#ifdef WLAN_POLICY_MGR_ENABLE
+static uint32_t cm_get_sta_nss(struct wlan_objmgr_psoc *psoc,
+			       qdf_freq_t bss_channel_freq,
+			       uint8_t vdev_nss_2g, uint8_t vdev_nss_5g)
+{
+	/*
+	 * If station support nss as 2*2 but AP support NSS as 1*1,
+	 * this AP will be given half weight compare to AP which are having
+	 * NSS as 2*2.
+	 */
+
+	if (policy_mgr_is_chnl_in_diff_band(
+	    psoc, bss_channel_freq) &&
+	    policy_mgr_is_hw_dbs_capable(psoc) &&
+	    !(policy_mgr_is_hw_dbs_2x2_capable(psoc)))
+		return 1;
+
+	return (WLAN_REG_IS_24GHZ_CH_FREQ(bss_channel_freq) ?
+		vdev_nss_2g :
+		vdev_nss_5g);
+}
+#else
+static uint32_t cm_get_sta_nss(struct wlan_objmgr_psoc *psoc,
+			       qdf_freq_t bss_channel_freq,
+			       uint8_t vdev_nss_2g, uint8_t vdev_nss_5g)
+{
+	return (WLAN_REG_IS_24GHZ_CH_FREQ(bss_channel_freq) ?
+		vdev_nss_2g :
+		vdev_nss_5g);
+}
+#endif
+
+#ifdef CONN_MGR_ADV_FEATURE
+static bool
+cm_get_pcl_weight_of_channel(uint32_t chan_freq,
+			     struct pcl_freq_weight_list *pcl_lst,
+			     int *pcl_chan_weight)
+{
+	int i;
+	bool found = false;
+
+	if (!pcl_lst)
+		return found;
+
+	for (i = 0; i < pcl_lst->num_of_pcl_channels; i++) {
+		if (pcl_lst->pcl_freq_list[i] == chan_freq) {
+			*pcl_chan_weight = pcl_lst->pcl_weight_list[i];
+			found = true;
+			break;
+		}
+	}
+
+	return found;
+}
+
+/**
+ * cm_calculate_pcl_score() - Calculate PCL score based on PCL weightage
+ * @pcl_chan_weight: pcl weight of BSS channel
+ * @pcl_weightage: PCL _weightage out of total weightage
+ *
+ * Return: pcl score
+ */
+static int32_t cm_calculate_pcl_score(int pcl_chan_weight,
+				      uint8_t pcl_weightage)
+{
+	int32_t pcl_score = 0;
+	int32_t temp_pcl_chan_weight = 0;
+
+	if (pcl_chan_weight) {
+		temp_pcl_chan_weight =
+			(CM_MAX_WEIGHT_OF_PCL_CHANNELS - pcl_chan_weight);
+		temp_pcl_chan_weight = qdf_do_div(
+					temp_pcl_chan_weight,
+					CM_PCL_GROUPS_WEIGHT_DIFFERENCE);
+		pcl_score = pcl_weightage - temp_pcl_chan_weight;
+		if (pcl_score < 0)
+			pcl_score = 0;
+	}
+
+	return pcl_score * CM_MAX_PCT_SCORE;
+}
+
 /**
  * cm_calculate_oce_wan_score() - Calculate oce wan score
  * @entry: bss information
  * @score_params: bss score params
  *
- * Return : oce wan score
+ * Return: oce wan score
  */
 static int32_t cm_calculate_oce_wan_score(
 	struct scan_cache_entry *entry,
@@ -576,7 +638,7 @@ static int32_t cm_calculate_oce_wan_score(
  * @score_params: bss score params
  * @oce_subnet_id_present: check if subnet id subelement is present in OCE IE
  *
- * Return : oce subnet id score
+ * Return: oce subnet id score
  */
 static uint32_t
 cm_calculate_oce_subnet_id_weightage(struct scan_cache_entry *entry,
@@ -598,12 +660,42 @@ cm_calculate_oce_subnet_id_weightage(struct scan_cache_entry *entry,
 }
 
 /**
+ * cm_calculate_sae_pk_ap_weightage() - Calculate SAE-PK AP weightage
+ * @entry: bss entry
+ * @score_params: bss score params
+ * @sae_pk_cap_present: sae_pk cap presetn in RSNXE capability field
+ *
+ * Return: SAE-PK AP weightage score
+ */
+static uint32_t
+cm_calculate_sae_pk_ap_weightage(struct scan_cache_entry *entry,
+				 struct scoring_cfg *score_params,
+				 bool *sae_pk_cap_present)
+{
+	uint8_t *rsnxe_ie, *rsnxe_cap, cap_len;
+
+	rsnxe_ie = util_scan_entry_rsnxe(entry);
+
+	rsnxe_cap = wlan_crypto_parse_rsnxe_ie(rsnxe_ie, &cap_len);
+
+	if (!rsnxe_cap)
+		return 0;
+
+	*sae_pk_cap_present = *rsnxe_cap & WLAN_CRYPTO_RSNX_CAP_SAE_PK;
+	if (*sae_pk_cap_present)
+		return score_params->weight_config.sae_pk_ap_weightage *
+			CM_MAX_PCT_SCORE;
+
+	return 0;
+}
+
+/**
  * cm_calculate_oce_ap_tx_pwr_weightage() - Calculate oce ap tx pwr weightage
  * @entry: bss entry
  * @score_params: bss score params
  * @ap_tx_pwr_dbm: pointer to hold ap tx power
  *
- * Return : oce ap tx power score
+ * Return: oce ap tx power score
  */
 static uint32_t
 cm_calculate_oce_ap_tx_pwr_weightage(struct scan_cache_entry *entry,
@@ -629,7 +721,8 @@ cm_calculate_oce_ap_tx_pwr_weightage(struct scan_cache_entry *entry,
 		 * Currently assuming STA Tx Power to be 20dBm, though later it
 		 * need to fetched from hal-phy API.
 		 */
-		normalized_ap_tx_pwr = (20 - (*ap_tx_pwr_dbm - entry->rssi_raw));
+		normalized_ap_tx_pwr =
+			(20 - (*ap_tx_pwr_dbm - entry->rssi_raw));
 	}
 
 	rssi_score_param = &score_params->rssi_score;
@@ -651,16 +744,19 @@ cm_calculate_oce_ap_tx_pwr_weightage(struct scan_cache_entry *entry,
 	} else if (normalized_ap_tx_pwr > good_rssi_threshold) {
 		/* Uplink RSSI lies between best to good rssi threshold */
 		ap_tx_pwr_factor =
-			cm_get_rssi_pcnt_for_slot(best_rssi_threshold,
-				good_rssi_threshold, 100, good_rssi_pcnt,
-				good_bucket_size, normalized_ap_tx_pwr);
+			cm_get_rssi_pcnt_for_slot(
+					best_rssi_threshold,
+					good_rssi_threshold, 100,
+					good_rssi_pcnt,
+					good_bucket_size, normalized_ap_tx_pwr);
 	} else {
 		/* Uplink RSSI lies between good to best rssi threshold */
 		ap_tx_pwr_factor =
-			cm_get_rssi_pcnt_for_slot(good_rssi_threshold,
-				bad_rssi_threshold, good_rssi_pcnt,
-				bad_rssi_pcnt, bad_bucket_size,
-				normalized_ap_tx_pwr);
+			cm_get_rssi_pcnt_for_slot(
+					good_rssi_threshold,
+					bad_rssi_threshold, good_rssi_pcnt,
+					bad_rssi_pcnt, bad_bucket_size,
+					normalized_ap_tx_pwr);
 	}
 
 	score  = score_params->weight_config.oce_ap_tx_pwr_weightage *
@@ -669,36 +765,105 @@ cm_calculate_oce_ap_tx_pwr_weightage(struct scan_cache_entry *entry,
 	return score;
 }
 
-#ifdef WLAN_POLICY_MGR_ENABLE
-
-static uint32_t cm_get_sta_nss(struct wlan_objmgr_psoc *psoc,
-			       qdf_freq_t bss_channel_freq,
-			       uint8_t vdev_nss_2g, uint8_t vdev_nss_5g)
+static bool cm_is_assoc_allowed(struct psoc_mlme_obj *mlme_psoc_obj,
+				struct scan_cache_entry *entry)
 {
-	/*
-	 * If station support nss as 2*2 but AP support NSS as 1*1,
-	 * this AP will be given half weight compare to AP which are having
-	 * NSS as 2*2.
-	 */
+	uint8_t reason;
+	uint8_t *mbo_oce;
+	bool check_assoc_disallowed;
 
-	if (policy_mgr_is_chnl_in_diff_band(
-	    psoc, bss_channel_freq) &&
-	    policy_mgr_is_hw_dbs_capable(psoc) &&
-	    !(policy_mgr_is_hw_dbs_2x2_capable(psoc)))
-		return 1;
+	mbo_oce = util_scan_entry_mbo_oce(entry);
 
-	return (WLAN_REG_IS_24GHZ_CH_FREQ(bss_channel_freq) ?
-		vdev_nss_2g :
-		vdev_nss_5g);
+	check_assoc_disallowed =
+	   mlme_psoc_obj->psoc_cfg.score_config.check_assoc_disallowed;
+
+	if (check_assoc_disallowed &&
+	    wlan_parse_oce_assoc_disallowed_ie(mbo_oce, &reason)) {
+		mlme_nofl_debug("Candidate("QDF_MAC_ADDR_FMT" freq %d): rssi %d, assoc disallowed set in MBO/OCE IE reason %d",
+				QDF_MAC_ADDR_REF(entry->bssid.bytes),
+				entry->channel.chan_freq,
+				entry->rssi_raw, reason);
+		return false;
+	}
+
+	return true;
 }
-#else
-static uint32_t cm_get_sta_nss(struct wlan_objmgr_psoc *psoc,
-			       qdf_freq_t bss_channel_freq,
-			       uint8_t vdev_nss_2g, uint8_t vdev_nss_5g)
+
+void wlan_cm_set_check_assoc_disallowed(struct wlan_objmgr_psoc *psoc,
+					bool value)
 {
-	return (WLAN_REG_IS_24GHZ_CH_FREQ(bss_channel_freq) ?
-		vdev_nss_2g :
-		vdev_nss_5g);
+	struct psoc_mlme_obj *mlme_psoc_obj;
+
+	mlme_psoc_obj = wlan_psoc_mlme_get_cmpt_obj(psoc);
+	if (!mlme_psoc_obj)
+		return;
+
+	mlme_psoc_obj->psoc_cfg.score_config.check_assoc_disallowed = value;
+}
+
+void wlan_cm_get_check_assoc_disallowed(struct wlan_objmgr_psoc *psoc,
+					bool *value)
+{
+	struct psoc_mlme_obj *mlme_psoc_obj;
+
+	mlme_psoc_obj = wlan_psoc_mlme_get_cmpt_obj(psoc);
+	if (!mlme_psoc_obj) {
+		*value = false;
+		return;
+	}
+
+	*value = mlme_psoc_obj->psoc_cfg.score_config.check_assoc_disallowed;
+}
+
+#else
+static bool
+cm_get_pcl_weight_of_channel(uint32_t chan_freq,
+			     struct pcl_freq_weight_list *pcl_lst,
+			     int *pcl_chan_weight)
+{
+	return false;
+}
+
+static int32_t cm_calculate_pcl_score(int pcl_chan_weight,
+				      uint8_t pcl_weightage)
+{
+	return 0;
+}
+
+static int32_t cm_calculate_oce_wan_score(struct scan_cache_entry *entry,
+					  struct scoring_cfg *score_params)
+{
+	return 0;
+}
+
+static uint32_t
+cm_calculate_oce_subnet_id_weightage(struct scan_cache_entry *entry,
+				     struct scoring_cfg *score_params,
+				     bool *oce_subnet_id_present)
+{
+	return 0;
+}
+
+static uint32_t
+cm_calculate_sae_pk_ap_weightage(struct scan_cache_entry *entry,
+				 struct scoring_cfg *score_params,
+				 bool *sae_pk_cap_present)
+{
+	return 0;
+}
+
+static uint32_t
+cm_calculate_oce_ap_tx_pwr_weightage(struct scan_cache_entry *entry,
+				     struct scoring_cfg *score_params,
+				     int8_t *ap_tx_pwr_dbm)
+{
+	return 0;
+}
+
+static inline bool cm_is_assoc_allowed(struct psoc_mlme_obj *mlme_psoc_obj,
+				       struct scan_cache_entry *entry)
+{
+	return true;
 }
 #endif
 
@@ -707,7 +872,7 @@ static uint32_t cm_get_sta_nss(struct wlan_objmgr_psoc *psoc,
  * freq: Operating frequency of the AP
  * @score_config: Score configuration
  *
- * Return : Band score for AP.
+ * Return: Band score for AP.
  */
 static int
 cm_get_band_score(uint32_t freq, struct scoring_cfg *score_config)
@@ -751,7 +916,9 @@ static int cm_calculate_bss_score(struct wlan_objmgr_psoc *psoc,
 	int32_t oce_wan_score = 0;
 	uint8_t oce_ap_tx_pwr_score = 0;
 	uint8_t oce_subnet_id_score = 0;
+	uint32_t sae_pk_score = 0;
 	bool oce_subnet_id_present = 0;
+	bool sae_pk_cap_present = 0;
 	int8_t ap_tx_pwr_dbm = 0;
 	uint8_t prorated_pcnt;
 	bool is_vht = false;
@@ -777,8 +944,9 @@ static int cm_calculate_bss_score(struct wlan_objmgr_psoc *psoc,
 	if (score_config->is_bssid_hint_priority && bssid_hint &&
 	    qdf_is_macaddr_equal(bssid_hint, &entry->bssid)) {
 		entry->bss_score = CM_BEST_CANDIDATE_MAX_BSS_SCORE;
-		mlme_nofl_debug("Candidate(%pM freq %d): rssi %d BSSID hint given, give max score %d",
-				entry->bssid.bytes, entry->channel.chan_freq,
+		mlme_nofl_debug("Candidate("QDF_MAC_ADDR_FMT" freq %d): rssi %d BSSID hint given, give max score %d",
+				QDF_MAC_ADDR_REF(entry->bssid.bytes),
+				entry->channel.chan_freq,
 				entry->rssi_raw,
 				CM_BEST_CANDIDATE_MAX_BSS_SCORE);
 		return CM_BEST_CANDIDATE_MAX_BSS_SCORE;
@@ -892,6 +1060,10 @@ static int cm_calculate_bss_score(struct wlan_objmgr_psoc *psoc,
 						&oce_subnet_id_present);
 	score += oce_subnet_id_score;
 
+	sae_pk_score = cm_calculate_sae_pk_ap_weightage(entry, score_config,
+							&sae_pk_cap_present);
+	score += sae_pk_score;
+
 	sta_nss = cm_get_sta_nss(psoc, entry->channel.chan_freq,
 				 phy_config->vdev_nss_24g,
 				 phy_config->vdev_nss_5g);
@@ -905,46 +1077,27 @@ static int cm_calculate_bss_score(struct wlan_objmgr_psoc *psoc,
 					   prorated_pcnt, sta_nss);
 	score += nss_score;
 
-	mlme_nofl_debug("Candidate(%pM freq %d): rssi %d HT %d VHT %d HE %d su bfer %d phy %d  air time frac %d qbss %d cong_pct %d NSS %d ap_tx_pwr_dbm %d oce_subnet_id_present %d prorated_pcnt %d",
-			entry->bssid.bytes, entry->channel.chan_freq,
+	mlme_nofl_debug("Candidate("QDF_MAC_ADDR_FMT" freq %d): rssi %d HT %d VHT %d HE %d su bfer %d phy %d  air time frac %d qbss %d cong_pct %d NSS %d ap_tx_pwr_dbm %d oce_subnet_id_present %d sae_pk_cap_present %d prorated_pcnt %d",
+			QDF_MAC_ADDR_REF(entry->bssid.bytes),
+			entry->channel.chan_freq,
 			entry->rssi_raw, util_scan_entry_htcap(entry) ? 1 : 0,
 			util_scan_entry_vhtcap(entry) ? 1 : 0,
 			util_scan_entry_hecap(entry) ? 1 : 0, ap_su_beam_former,
 			entry->phy_mode, entry->air_time_fraction,
 			entry->qbss_chan_load, congestion_pct, entry->nss,
-			ap_tx_pwr_dbm, oce_subnet_id_present, prorated_pcnt);
+			ap_tx_pwr_dbm, oce_subnet_id_present,
+			sae_pk_cap_present, prorated_pcnt);
 
-	mlme_nofl_debug("Scores: rssi %d pcl %d ht %d vht %d he %d bfee %d bw %d band %d congestion %d nss %d oce wan %d oce ap tx pwr %d subnet %d TOTAL %d",
+	mlme_nofl_debug("Scores: rssi %d pcl %d ht %d vht %d he %d bfee %d bw %d band %d congestion %d nss %d oce wan %d oce ap tx pwr %d subnet %d sae_pk %d TOTAL %d",
 			rssi_score, pcl_score, ht_score,
 			vht_score, he_score, beamformee_score, bandwidth_score,
 			band_score, congestion_score, nss_score, oce_wan_score,
-			oce_ap_tx_pwr_score, oce_subnet_id_score, score);
+			oce_ap_tx_pwr_score, oce_subnet_id_score,
+			sae_pk_score, score);
 
 	entry->bss_score = score;
 
 	return score;
-}
-
-static bool
-cm_get_pcl_weight_of_channel(uint32_t chan_freq,
-			     struct pcl_freq_weight_list *pcl_lst,
-			     int *pcl_chan_weight)
-{
-	int i;
-	bool found = false;
-
-	if (!pcl_lst)
-		return found;
-
-	for (i = 0; i < pcl_lst->num_of_pcl_channels; i++) {
-		if (pcl_lst->pcl_freq_list[i] == chan_freq) {
-			*pcl_chan_weight = pcl_lst->pcl_weight_list[i];
-			found = true;
-			break;
-		}
-	}
-
-	return found;
 }
 
 static void cm_list_insert_sorted(qdf_list_t *scan_list,
@@ -969,29 +1122,6 @@ static void cm_list_insert_sorted(qdf_list_t *scan_list,
 
 	if (!cur_node)
 		qdf_list_insert_back(scan_list, &scan_entry->node);
-}
-
-static bool cm_is_assoc_allowed(struct psoc_mlme_obj *mlme_psoc_obj,
-				struct scan_cache_entry *entry)
-{
-	uint8_t reason;
-	uint8_t *mbo_oce;
-	bool check_assoc_disallowed;
-
-	mbo_oce = util_scan_entry_mbo_oce(entry);
-
-	check_assoc_disallowed =
-	   mlme_psoc_obj->psoc_cfg.score_config.check_assoc_disallowed;
-
-	if (check_assoc_disallowed &&
-	    wlan_parse_oce_assoc_disallowed_ie(mbo_oce, &reason)) {
-		mlme_nofl_debug("Candidate(%pM freq %d): rssi %d, assoc disallowed set in MBO/OCE IE reason %d",
-				entry->bssid.bytes, entry->channel.chan_freq,
-				entry->rssi_raw, reason);
-		return false;
-	}
-
-	return true;
 }
 
 void wlan_cm_calculate_bss_score(struct wlan_objmgr_pdev *pdev,
@@ -1076,8 +1206,8 @@ void wlan_cm_calculate_bss_score(struct wlan_objmgr_pdev *pdev,
 			/* add min score so that it is added back in the end */
 			scan_entry->entry->bss_score =
 					CM_AVOID_CANDIDATE_MIN_SCORE;
-			mlme_nofl_debug("Candidate(%pM freq %d): rssi %d, is in Avoidlist, give min score %d",
-					scan_entry->entry->bssid.bytes,
+			mlme_nofl_debug("Candidate("QDF_MAC_ADDR_FMT" freq %d): rssi %d, is in Avoidlist, give min score %d",
+					QDF_MAC_ADDR_REF(scan_entry->entry->bssid.bytes),
 					scan_entry->entry->channel.chan_freq,
 					scan_entry->entry->rssi_raw,
 					scan_entry->entry->bss_score);
@@ -1086,8 +1216,8 @@ void wlan_cm_calculate_bss_score(struct wlan_objmgr_pdev *pdev,
 		/* Remove node from current locaion to add node back shorted */
 		status = qdf_list_remove_node(scan_list, cur_node);
 		if (QDF_IS_STATUS_ERROR(status)) {
-			mlme_err("failed to remove node for BSS %pM from scan list",
-				 scan_entry->entry->bssid.bytes);
+			mlme_err("failed to remove node for BSS "QDF_MAC_ADDR_FMT" from scan list",
+				 QDF_MAC_ADDR_REF(scan_entry->entry->bssid.bytes));
 			return;
 		}
 
@@ -1097,8 +1227,8 @@ void wlan_cm_calculate_bss_score(struct wlan_objmgr_pdev *pdev,
 		 */
 		if (blacklist_action == CM_BLM_REMOVE) {
 			if (assoc_allowed)
-				mlme_nofl_debug("Candidate(%pM freq %d): rssi %d, is in Blacklist, remove entry",
-					scan_entry->entry->bssid.bytes,
+				mlme_nofl_debug("Candidate("QDF_MAC_ADDR_FMT" freq %d): rssi %d, is in Blacklist, remove entry",
+					QDF_MAC_ADDR_REF(scan_entry->entry->bssid.bytes),
 					scan_entry->entry->channel.chan_freq,
 					scan_entry->entry->rssi_raw);
 			util_scan_free_cache_entry(scan_entry->entry);
@@ -1158,6 +1288,8 @@ void wlan_cm_init_score_config(struct wlan_objmgr_psoc *psoc,
 				cfg_get(psoc, CFG_OCE_AP_TX_PWR_WEIGHTAGE);
 	score_cfg->weight_config.oce_subnet_id_weightage =
 				cfg_get(psoc, CFG_OCE_SUBNET_ID_WEIGHTAGE);
+	score_cfg->weight_config.sae_pk_ap_weightage =
+				cfg_get(psoc, CFG_SAE_PK_AP_WEIGHTAGE);
 
 	total_weight =  score_cfg->weight_config.rssi_weightage +
 			score_cfg->weight_config.ht_caps_weightage +
@@ -1171,7 +1303,8 @@ void wlan_cm_init_score_config(struct wlan_objmgr_psoc *psoc,
 			score_cfg->weight_config.channel_congestion_weightage +
 			score_cfg->weight_config.oce_wan_weightage +
 			score_cfg->weight_config.oce_ap_tx_pwr_weightage +
-			score_cfg->weight_config.oce_subnet_id_weightage;
+			score_cfg->weight_config.oce_subnet_id_weightage +
+			score_cfg->weight_config.sae_pk_ap_weightage;
 
 	/*
 	 * If configured weights are greater than max weight,
@@ -1203,6 +1336,8 @@ void wlan_cm_init_score_config(struct wlan_objmgr_psoc *psoc,
 						CM_OCE_AP_TX_POWER_WEIGHTAGE;
 		score_cfg->weight_config.oce_subnet_id_weightage =
 						CM_OCE_SUBNET_ID_WEIGHTAGE;
+		score_cfg->weight_config.sae_pk_ap_weightage =
+						CM_SAE_PK_AP_WEIGHTAGE;
 	}
 
 	score_cfg->rssi_score.best_rssi_threshold =
@@ -1266,17 +1401,5 @@ void wlan_cm_init_score_config(struct wlan_objmgr_psoc *psoc,
 			cfg_get(psoc, CFG_SCORING_BAND_WEIGHT_PER_IDX));
 	score_cfg->is_bssid_hint_priority =
 			cfg_get(psoc, CFG_IS_BSSID_HINT_PRIORITY);
-	score_cfg->check_assoc_disallowed = false;
-}
-
-void wlan_cm_set_check_assoc_disallowed(struct wlan_objmgr_psoc *psoc,
-					bool value)
-{
-	struct psoc_mlme_obj *mlme_psoc_obj;
-
-	mlme_psoc_obj = wlan_psoc_mlme_get_cmpt_obj(psoc);
-	if (!mlme_psoc_obj)
-		return;
-
-	mlme_psoc_obj->psoc_cfg.score_config.check_assoc_disallowed = value;
+	score_cfg->check_assoc_disallowed = true;
 }

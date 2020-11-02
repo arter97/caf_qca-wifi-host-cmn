@@ -317,7 +317,7 @@ dp_tx_desc_free(struct dp_soc *soc, struct dp_tx_desc_s *tx_desc,
 	enum netif_action_type act = WLAN_WAKE_ALL_NETIF_QUEUE;
 
 	qdf_spin_lock_bh(&pool->flow_pool_lock);
-	tx_desc->vdev = NULL;
+	tx_desc->vdev_id = DP_INVALID_VDEV_ID;
 	tx_desc->nbuf = NULL;
 	tx_desc->flags = 0;
 	dp_tx_put_desc_flow_pool(pool, tx_desc);
@@ -477,7 +477,7 @@ dp_tx_desc_free(struct dp_soc *soc, struct dp_tx_desc_s *tx_desc,
 	struct dp_tx_desc_pool_s *pool = &soc->tx_desc[desc_pool_id];
 
 	qdf_spin_lock_bh(&pool->flow_pool_lock);
-	tx_desc->vdev = NULL;
+	tx_desc->vdev_id = DP_INVALID_VDEV_ID;
 	tx_desc->nbuf = NULL;
 	tx_desc->flags = 0;
 	dp_tx_put_desc_flow_pool(pool, tx_desc);
@@ -526,16 +526,19 @@ static inline bool
 dp_tx_desc_thresh_reached(struct cdp_soc_t *soc_hdl, uint8_t vdev_id)
 {
 	struct dp_soc *soc = cdp_soc_t_to_dp_soc(soc_hdl);
-	struct dp_vdev *vdev = dp_get_vdev_from_soc_vdev_id_wifi3(soc,
-								  vdev_id);
+	struct dp_vdev *vdev = dp_vdev_get_ref_by_id(soc, vdev_id,
+						     DP_MOD_ID_CDP);
 	struct dp_tx_desc_pool_s *pool;
+	bool status;
 
 	if (!vdev)
 		return false;
 
 	pool = vdev->pool;
+	status = dp_tx_is_threshold_reached(pool, pool->avail_desc);
+	dp_vdev_unref_delete(soc, vdev, DP_MOD_ID_CDP);
 
-	return  dp_tx_is_threshold_reached(pool, pool->avail_desc);
+	return status;
 }
 #else /* QCA_LL_TX_FLOW_CONTROL_V2 */
 
@@ -655,7 +658,7 @@ dp_tx_desc_free(struct dp_soc *soc, struct dp_tx_desc_s *tx_desc,
 		uint8_t desc_pool_id)
 {
 	struct dp_tx_desc_pool_s *pool = NULL;
-	tx_desc->vdev = NULL;
+	tx_desc->vdev_id = DP_INVALID_VDEV_ID;
 	tx_desc->nbuf = NULL;
 	tx_desc->flags = 0;
 
@@ -985,7 +988,8 @@ dp_tx_me_alloc_buf(struct dp_pdev *pdev)
 }
 
 /*
- * dp_tx_me_free_buf() - Free me descriptor and add it to pool
+ * dp_tx_me_free_buf() - Unmap the buffer holding the dest
+ * address, free me descriptor and add it to the free-pool
  * @pdev: DP_PDEV handle for datapath
  * @buf : Allocated ME BUF
  *
@@ -994,6 +998,20 @@ dp_tx_me_alloc_buf(struct dp_pdev *pdev)
 static inline void
 dp_tx_me_free_buf(struct dp_pdev *pdev, struct dp_tx_me_buf_t *buf)
 {
+	/*
+	 * If the buf containing mac address was mapped,
+	 * it must be unmapped before freeing the me_buf.
+	 * The "paddr_macbuf" member in the me_buf structure
+	 * holds the mapped physical address and it must be
+	 * set to 0 after unmapping.
+	 */
+	if (buf->paddr_macbuf) {
+		qdf_mem_unmap_nbytes_single(pdev->soc->osdev,
+					    buf->paddr_macbuf,
+					    QDF_DMA_TO_DEVICE,
+					    QDF_MAC_ADDR_SIZE);
+		buf->paddr_macbuf = 0;
+	}
 	qdf_spin_lock_bh(&pdev->tx_mutex);
 	buf->next = pdev->me_buf.freelist;
 	pdev->me_buf.freelist = buf;

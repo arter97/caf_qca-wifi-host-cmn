@@ -140,6 +140,8 @@
 #define WLAN_SOC_NSS_RATIO_TO_HOST_SUPPORT 0x00200000
 	/* EMA AP Support */
 #define WLAN_SOC_CEXT_EMA_AP           0x00400000
+	/* MBSS PARAM IN START REQ Support */
+#define WLAN_SOC_CEXT_MBSS_PARAM_IN_START   0x00800000
 
 /* feature_flags */
 	/* CONF: ATH FF enabled */
@@ -198,6 +200,11 @@
 #define WLAN_SOC_F_TESTMODE_ENABLE     0x01000000
 	/* Dynamic HW mode swithch enable */
 #define WLAN_SOC_F_DYNAMIC_HW_MODE     0x02000000
+	/* Broadcast TWT support enable */
+#define WLAN_SOC_F_BCAST_TWT           0x04000000
+       /* WDS Extended support */
+#define WLAN_SOC_F_WDS_EXTENDED        0x08000000
+
 
 /* PSOC op flags */
 
@@ -344,7 +351,6 @@ struct wlan_soc_timer {
  * @soc_cb:                south bound callbacks
  * @soc_timer:             soc timer for inactivity
  * @soc_concurrency:       concurrency info
- * @wlan_active_vdevs[]:   List of active VDEVs
  * @soc_comp_priv_obj[]:   component private object pointers
  * @obj_status[]:          component object status
  * @obj_state:             object state
@@ -359,7 +365,6 @@ struct wlan_objmgr_psoc {
 	struct wlan_soc_southbound_cb soc_cb;
 	struct wlan_soc_timer soc_timer;
 	struct wlan_concurrency_info soc_concurrency; /*TODO */
-	uint8_t wlan_active_vdevs[WLAN_UMAC_PSOC_MAX_VDEVS];
 	void *soc_comp_priv_obj[WLAN_UMAC_MAX_COMPONENTS];
 	QDF_STATUS obj_status[WLAN_UMAC_MAX_COMPONENTS];
 	WLAN_OBJ_STATE obj_state;

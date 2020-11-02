@@ -274,8 +274,8 @@ util_scan_get_chan_from_he_6g_params(struct wlan_objmgr_pdev *pdev,
 						band_mask);
 	if (scan_obj->drop_bcn_on_invalid_freq &&
 	    wlan_reg_is_disable_for_freq(pdev, *chan_freq)) {
-		scm_debug_rl("%pM: Drop as invalid channel %d freq %d in HE 6Ghz params",
-			     scan_params->bssid.bytes,
+		scm_debug_rl(QDF_MAC_ADDR_FMT": Drop as invalid channel %d freq %d in HE 6Ghz params",
+			     QDF_MAC_ADDR_REF(scan_params->bssid.bytes),
 			     he_6g_params->primary_channel, *chan_freq);
 		return QDF_STATUS_E_INVAL;
 	}
@@ -955,8 +955,8 @@ util_scan_populate_bcn_ie_list(struct wlan_objmgr_pdev *pdev,
 			/* Drop if invalid freq */
 			if (scan_obj->drop_bcn_on_invalid_freq &&
 			    wlan_reg_is_disable_for_freq(pdev, *chan_freq)) {
-				scm_debug_rl("%pM: Drop as invalid channel %d freq %d in DS IE",
-					     scan_params->bssid.bytes,
+				scm_debug_rl(QDF_MAC_ADDR_FMT": Drop as invalid channel %d freq %d in DS IE",
+					     QDF_MAC_ADDR_REF(scan_params->bssid.bytes),
 					     chan_idx, *chan_freq);
 				return QDF_STATUS_E_INVAL;
 			}
@@ -1043,8 +1043,8 @@ util_scan_populate_bcn_ie_list(struct wlan_objmgr_pdev *pdev,
 			/* Drop if invalid freq */
 			if (scan_obj->drop_bcn_on_invalid_freq &&
 			    wlan_reg_is_disable_for_freq(pdev, *chan_freq)) {
-				scm_debug_rl("%pM: Drop as invalid channel %d freq %d in HT_INFO IE",
-					     scan_params->bssid.bytes,
+				scm_debug_rl(QDF_MAC_ADDR_FMT": Drop as invalid channel %d freq %d in HT_INFO IE",
+					     QDF_MAC_ADDR_REF(scan_params->bssid.bytes),
 					     chan_idx, *chan_freq);
 				return QDF_STATUS_E_INVAL;
 			}
@@ -1104,6 +1104,11 @@ util_scan_populate_bcn_ie_list(struct wlan_objmgr_pdev *pdev,
 			if (ie->ie_len < WLAN_FILS_INDICATION_IE_MIN_LEN)
 				goto err;
 			scan_params->ie_list.fils_indication = (uint8_t *)ie;
+			break;
+		case WLAN_ELEMID_RSNXE:
+			if (!ie->ie_len)
+				goto err;
+			scan_params->ie_list.rsnxe = (uint8_t *)ie;
 			break;
 		case WLAN_ELEMID_EXTN_ELEM:
 			status = util_scan_parse_extn_ie(scan_params, ie);
@@ -1606,8 +1611,8 @@ util_scan_gen_scan_entry(struct wlan_objmgr_pdev *pdev,
 	status = util_scan_populate_bcn_ie_list(pdev, scan_entry, &chan_freq,
 						band_mask);
 	if (QDF_IS_STATUS_ERROR(status)) {
-		scm_debug("%pM: failed to parse beacon IE",
-			  scan_entry->bssid.bytes);
+		scm_debug(QDF_MAC_ADDR_FMT": failed to parse beacon IE",
+			  QDF_MAC_ADDR_REF(scan_entry->bssid.bytes));
 		qdf_mem_free(scan_entry->raw_frame.ptr);
 		qdf_mem_free(scan_entry);
 		return QDF_STATUS_E_FAILURE;
@@ -1944,6 +1949,9 @@ static QDF_STATUS util_scan_parse_mbssid(struct wlan_objmgr_pdev *pdev,
 				     QDF_MAC_ADDR_SIZE);
 			qdf_mem_copy(hdr->i_addr3, new_bssid,
 				     QDF_MAC_ADDR_SIZE);
+			bcn = (struct wlan_bcn_frame *)(new_frame + sizeof(struct wlan_frame_hdr));
+			/* update the non-tx capability */
+			qdf_mem_copy(&bcn->capability, subelement + 4, 2);
 			/* Copy the new ie generated from MBSSID profile*/
 			qdf_mem_copy(new_frame +
 					offsetof(struct wlan_bcn_frame, ie) +

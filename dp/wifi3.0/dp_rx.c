@@ -483,62 +483,6 @@ dp_rx_deliver_raw(struct dp_vdev *vdev, qdf_nbuf_t nbuf_list,
 	vdev->osif_rx(vdev->osif_vdev, deliver_list_head);
 }
 
-
-#ifdef DP_LFR
-/*
- * In case of LFR, data of a new peer might be sent up
- * even before peer is added.
- */
-static inline struct dp_vdev *
-dp_get_vdev_from_peer(struct dp_soc *soc,
-			uint16_t peer_id,
-			struct dp_peer *peer,
-			struct hal_rx_mpdu_desc_info mpdu_desc_info)
-{
-	struct dp_vdev *vdev;
-	uint8_t vdev_id;
-
-	if (unlikely(!peer)) {
-		if (peer_id != HTT_INVALID_PEER) {
-			vdev_id = DP_PEER_METADATA_VDEV_ID_GET(
-					mpdu_desc_info.peer_meta_data);
-			QDF_TRACE(QDF_MODULE_ID_DP,
-				QDF_TRACE_LEVEL_DEBUG,
-				FL("PeerID %d not found use vdevID %d"),
-				peer_id, vdev_id);
-			vdev = dp_get_vdev_from_soc_vdev_id_wifi3(soc,
-								  vdev_id);
-		} else {
-			QDF_TRACE(QDF_MODULE_ID_DP,
-				QDF_TRACE_LEVEL_DEBUG,
-				FL("Invalid PeerID %d"),
-				peer_id);
-			return NULL;
-		}
-	} else {
-		vdev = peer->vdev;
-	}
-	return vdev;
-}
-#else
-static inline struct dp_vdev *
-dp_get_vdev_from_peer(struct dp_soc *soc,
-			uint16_t peer_id,
-			struct dp_peer *peer,
-			struct hal_rx_mpdu_desc_info mpdu_desc_info)
-{
-	if (unlikely(!peer)) {
-		QDF_TRACE(QDF_MODULE_ID_DP,
-			QDF_TRACE_LEVEL_DEBUG,
-			FL("Peer not found for peerID %d"),
-			peer_id);
-		return NULL;
-	} else {
-		return peer->vdev;
-	}
-}
-#endif
-
 #ifndef FEATURE_WDS
 static void
 dp_rx_da_learn(struct dp_soc *soc,
@@ -765,7 +709,7 @@ void dp_rx_fill_mesh_stats(struct dp_vdev *vdev, qdf_nbuf_t nbuf,
 					rx_info->rs_keyix);
 	}
 
-	rx_info->rs_rssi = hal_rx_msdu_start_get_rssi(rx_tlv_hdr);
+	rx_info->rs_rssi = peer->stats.rx.rssi;
 
 	soc = vdev->pdev->soc;
 	primary_chan_num = hal_rx_msdu_start_get_freq(rx_tlv_hdr);
@@ -1396,6 +1340,89 @@ static inline int dp_rx_drop_nbuf_list(struct dp_pdev *pdev,
 	return num_dropped;
 }
 
+#ifdef QCA_SUPPORT_WDS_EXTENDED
+/**
+ * dp_rx_wds_ext() - Make different lists for 4-address and 3-address frames
+ * @nbuf_head: skb list head
+ * @vdev: vdev
+ * @peer: peer
+ * @peer_id: peer id of new received frame
+ * @vdev_id: vdev_id of new received frame
+ *
+ * Return: true if peer_ids are different.
+ */
+static inline bool
+dp_rx_is_list_ready(qdf_nbuf_t nbuf_head,
+		    struct dp_vdev *vdev,
+		    struct dp_peer *peer,
+		    uint16_t peer_id,
+		    uint8_t vdev_id)
+{
+	if (nbuf_head && peer && (peer->peer_id != peer_id))
+		return true;
+
+	return false;
+}
+
+/**
+ * dp_rx_deliver_to_stack_ext() - Deliver to netdev per sta
+ * @soc: core txrx main context
+ * @vdev: vdev
+ * @peer: peer
+ * @nbuf_head: skb list head
+ *
+ * Return: true if packet is delivered to netdev per STA.
+ */
+static inline bool
+dp_rx_deliver_to_stack_ext(struct dp_soc *soc, struct dp_vdev *vdev,
+			   struct dp_peer *peer, qdf_nbuf_t nbuf_head)
+{
+	/*
+	 * When extended WDS is disabled, frames are sent to AP netdevice.
+	 */
+	if (qdf_likely(!vdev->wds_ext_enabled))
+		return false;
+
+	/*
+	 * There can be 2 cases:
+	 * 1. Send frame to parent netdev if its not for netdev per STA
+	 * 2. If frame is meant for netdev per STA:
+	 *    a. Send frame to appropriate netdev using registered fp.
+	 *    b. If fp is NULL, drop the frames.
+	 */
+	if (!peer->wds_ext.init)
+		return false;
+
+	if (peer->osif_rx)
+		peer->osif_rx(peer->wds_ext.osif_peer, nbuf_head);
+	else
+		dp_rx_drop_nbuf_list(vdev->pdev, nbuf_head);
+
+	return true;
+}
+
+#else
+static inline bool
+dp_rx_is_list_ready(qdf_nbuf_t nbuf_head,
+		    struct dp_vdev *vdev,
+		    struct dp_peer *peer,
+		    uint16_t peer_id,
+		    uint8_t vdev_id)
+{
+	if (nbuf_head && vdev && (vdev->vdev_id != vdev_id))
+		return true;
+
+	return false;
+}
+
+static inline bool
+dp_rx_deliver_to_stack_ext(struct dp_soc *soc, struct dp_vdev *vdev,
+			   struct dp_peer *peer, qdf_nbuf_t nbuf_head)
+{
+	return false;
+}
+#endif
+
 #ifdef PEER_CACHE_RX_PKTS
 /**
  * dp_rx_flush_rx_cached() - flush cached rx frames
@@ -1544,6 +1571,10 @@ static void dp_rx_check_delivery_to_stack(struct dp_soc *soc,
 					  struct dp_peer *peer,
 					  qdf_nbuf_t nbuf_head)
 {
+	if (qdf_unlikely(dp_rx_deliver_to_stack_ext(soc, vdev,
+						    peer, nbuf_head)))
+		return;
+
 	/* Function pointer initialized only when FISA is enabled */
 	if (vdev->osif_fisa_rx)
 		/* on failure send it via regular path */
@@ -1919,7 +1950,7 @@ void dp_rx_deliver_to_stack_no_peer(struct dp_soc *soc, qdf_nbuf_t nbuf)
 {
 	uint16_t peer_id;
 	uint8_t vdev_id;
-	struct dp_vdev *vdev;
+	struct dp_vdev *vdev = NULL;
 	uint32_t l2_hdr_offset = 0;
 	uint16_t msdu_len = 0;
 	uint32_t pkt_len = 0;
@@ -1932,7 +1963,7 @@ void dp_rx_deliver_to_stack_no_peer(struct dp_soc *soc, qdf_nbuf_t nbuf)
 		goto deliver_fail;
 
 	vdev_id = QDF_NBUF_CB_RX_VDEV_ID(nbuf);
-	vdev = dp_get_vdev_from_soc_vdev_id_wifi3(soc, vdev_id);
+	vdev = dp_vdev_get_ref_by_id(soc, vdev_id, DP_MOD_ID_RX);
 	if (!vdev || vdev->delete.pending || !vdev->osif_rx)
 		goto deliver_fail;
 
@@ -1958,6 +1989,7 @@ void dp_rx_deliver_to_stack_no_peer(struct dp_soc *soc, qdf_nbuf_t nbuf)
 		    vdev->osif_rx(vdev->osif_vdev, nbuf))
 			goto deliver_fail;
 		DP_STATS_INC(soc, rx.err.pkt_delivered_no_peer, 1);
+		dp_vdev_unref_delete(soc, vdev, DP_MOD_ID_RX);
 		return;
 	}
 
@@ -1965,6 +1997,8 @@ deliver_fail:
 	DP_STATS_INC_PKT(soc, rx.err.rx_invalid_peer, 1,
 			 QDF_NBUF_CB_RX_PKT_LEN(nbuf));
 	qdf_nbuf_free(nbuf);
+	if (vdev)
+		dp_vdev_unref_delete(soc, vdev, DP_MOD_ID_RX);
 }
 #else
 static inline
@@ -2113,6 +2147,26 @@ dp_rx_ring_record_entry(struct dp_soc *soc, uint8_t ring_num,
 }
 #endif
 
+#ifdef WLAN_DP_FEATURE_SW_LATENCY_MGR
+/**
+ * dp_rx_update_stats() - Update soc level rx packet count
+ * @soc: DP soc handle
+ * @nbuf: nbuf received
+ *
+ * Returns: none
+ */
+static inline void dp_rx_update_stats(struct dp_soc *soc,
+				      qdf_nbuf_t nbuf)
+{
+	DP_STATS_INC_PKT(soc, rx.ingress, 1,
+			 QDF_NBUF_CB_RX_PKT_LEN(nbuf));
+}
+#else
+static inline void dp_rx_update_stats(struct dp_soc *soc,
+				      qdf_nbuf_t nbuf)
+{
+}
+#endif
 /**
  * dp_rx_process() - Brain of the Rx processing functionality
  *		     Called from the bottom half (tasklet/NET_RX_SOFTIRQ)
@@ -2477,8 +2531,10 @@ done:
 
 		rx_tlv_hdr = qdf_nbuf_data(nbuf);
 		vdev_id = QDF_NBUF_CB_RX_VDEV_ID(nbuf);
+		peer_id =  QDF_NBUF_CB_RX_PEER_ID(nbuf);
 
-		if (deliver_list_head && vdev && (vdev->vdev_id != vdev_id)) {
+		if (dp_rx_is_list_ready(deliver_list_head, vdev, peer,
+					peer_id, vdev_id)) {
 			dp_rx_deliver_to_stack(soc, vdev, peer,
 					       deliver_list_head,
 					       deliver_list_tail);
@@ -2489,8 +2545,6 @@ done:
 		/* Get TID from struct cb->tid_val, save to tid */
 		if (qdf_nbuf_is_rx_chfrag_start(nbuf))
 			tid = qdf_nbuf_get_tid_val(nbuf);
-
-		peer_id =  QDF_NBUF_CB_RX_PEER_ID(nbuf);
 
 		if (qdf_unlikely(!peer)) {
 			peer = dp_peer_get_ref_by_id(soc, peer_id,
@@ -2526,6 +2580,13 @@ done:
 			DP_STATS_INC(soc, rx.err.invalid_vdev, 1);
 			continue;
 		}
+
+		/* when hlos tid override is enabled, save tid in
+		 * skb->priority
+		 */
+		if (qdf_unlikely(vdev->skip_sw_tid_classification &
+					DP_TXRX_HLOS_TID_OVERRIDE_ENABLED))
+			qdf_nbuf_set_priority(nbuf, tid);
 
 		rx_pdev = vdev->pdev;
 		DP_RX_TID_SAVE(nbuf, tid);
@@ -2738,6 +2799,7 @@ done:
 
 		dp_rx_fill_gro_info(soc, rx_tlv_hdr, nbuf, &rx_ol_pkt_cnt);
 
+		dp_rx_update_stats(soc, nbuf);
 		DP_RX_LIST_APPEND(deliver_list_head,
 				  deliver_list_tail,
 				  nbuf);
@@ -3051,12 +3113,16 @@ void dp_rx_enable_mon_dest_frag(struct rx_desc_pool *rx_desc_pool,
 				bool is_mon_dest_desc)
 {
 	rx_desc_pool->rx_mon_dest_frag_enable = is_mon_dest_desc;
+	if (is_mon_dest_desc)
+		dp_alert("Feature DP_RX_MON_MEM_FRAG for mon_dest is enabled");
 }
 #else
 void dp_rx_enable_mon_dest_frag(struct rx_desc_pool *rx_desc_pool,
 				bool is_mon_dest_desc)
 {
 	rx_desc_pool->rx_mon_dest_frag_enable = false;
+	if (is_mon_dest_desc)
+		dp_alert("Feature DP_RX_MON_MEM_FRAG for mon_dest is disabled");
 }
 #endif
 
@@ -3093,6 +3159,7 @@ dp_rx_pdev_desc_pool_alloc(struct dp_pdev *pdev)
 	rx_desc_pool = &soc->rx_desc_buf[mac_for_pdev];
 	rx_sw_desc_num = wlan_cfg_get_dp_soc_rx_sw_desc_num(soc->wlan_cfg_ctx);
 
+	rx_desc_pool->desc_type = DP_RX_DESC_BUF_TYPE;
 	status = dp_rx_desc_pool_alloc(soc,
 				       rx_sw_desc_num,
 				       rx_desc_pool);

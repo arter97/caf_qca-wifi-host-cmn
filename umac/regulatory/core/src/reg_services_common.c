@@ -1092,46 +1092,6 @@ struct wlan_lmac_if_reg_tx_ops *reg_get_psoc_tx_ops(
 	return &tx_ops->reg_ops;
 }
 
-QDF_STATUS reg_get_channel_list_with_power(struct wlan_objmgr_pdev *pdev,
-					   struct channel_power *ch_list,
-					   uint8_t *num_chan)
-{
-	int i, count;
-	struct regulatory_channel *reg_channels;
-	struct wlan_regulatory_pdev_priv_obj *pdev_priv_obj;
-
-	if (!num_chan || !ch_list) {
-		reg_err("chan_list or num_ch is NULL");
-		return QDF_STATUS_E_FAILURE;
-	}
-
-	pdev_priv_obj = reg_get_pdev_obj(pdev);
-
-	if (!IS_VALID_PDEV_REG_OBJ(pdev_priv_obj)) {
-		reg_err("reg pdev priv obj is NULL");
-		return QDF_STATUS_E_FAILURE;
-	}
-
-	/* set the current channel list */
-	reg_channels = pdev_priv_obj->cur_chan_list;
-
-	for (i = 0, count = 0; i < NUM_CHANNELS; i++) {
-		if (reg_channels[i].state &&
-		    reg_channels[i].chan_flags != REGULATORY_CHAN_DISABLED) {
-			ch_list[count].chan_num =
-				reg_channels[i].chan_num;
-			ch_list[count].center_freq =
-				reg_channels[i].center_freq;
-			ch_list[count++].tx_power =
-				reg_channels[i].tx_power;
-		}
-	}
-
-	*num_chan = count;
-
-	return QDF_STATUS_SUCCESS;
-}
-
 #ifdef CONFIG_CHAN_NUM_API
 enum channel_enum reg_get_chan_enum(uint8_t chan_num)
 {
@@ -2481,13 +2441,6 @@ static inline bool BAND_5G_PRESENT(uint8_t band_mask)
 	return !!(band_mask & (BIT(REG_BAND_5G)));
 }
 
-#ifdef CONFIG_BAND_6GHZ
-bool reg_is_6ghz_chan_freq(uint16_t freq)
-{
-	return REG_IS_6GHZ_FREQ(freq);
-}
-
-#ifdef CONFIG_6G_FREQ_OVERLAP
 /**
  * reg_is_freq_in_between() - Check whether freq falls within low_freq and
  * high_freq, inclusively.
@@ -2521,20 +2474,32 @@ static bool reg_is_ranges_overlap(qdf_freq_t low_freq, qdf_freq_t high_freq,
 				       end_edge_freq));
 }
 
-static bool reg_is_range_overlap_6g(qdf_freq_t low_freq,
-				    qdf_freq_t high_freq)
+bool reg_is_range_overlap_2g(qdf_freq_t low_freq, qdf_freq_t high_freq)
 {
 	return reg_is_ranges_overlap(low_freq, high_freq,
-				     SIXG_STARTING_EDGE_FREQ,
-				     SIXG_ENDING_EDGE_FREQ);
+				     TWO_GIG_STARTING_EDGE_FREQ,
+				     TWO_GIG_ENDING_EDGE_FREQ);
 }
 
-static bool reg_is_range_overlap_5g(qdf_freq_t low_freq,
-				    qdf_freq_t high_freq)
+bool reg_is_range_overlap_5g(qdf_freq_t low_freq, qdf_freq_t high_freq)
 {
 	return reg_is_ranges_overlap(low_freq, high_freq,
-				     FIVEG_STARTING_EDGE_FREQ,
-				     FIVEG_ENDING_EDGE_FREQ);
+				     FIVE_GIG_STARTING_EDGE_FREQ,
+				     FIVE_GIG_ENDING_EDGE_FREQ);
+}
+
+#ifdef CONFIG_BAND_6GHZ
+bool reg_is_6ghz_chan_freq(uint16_t freq)
+{
+	return REG_IS_6GHZ_FREQ(freq);
+}
+
+#ifdef CONFIG_6G_FREQ_OVERLAP
+bool reg_is_range_overlap_6g(qdf_freq_t low_freq, qdf_freq_t high_freq)
+{
+	return reg_is_ranges_overlap(low_freq, high_freq,
+				     SIX_GIG_STARTING_EDGE_FREQ,
+				     SIX_GIG_ENDING_EDGE_FREQ);
 }
 
 bool reg_is_range_only6g(qdf_freq_t low_freq, qdf_freq_t high_freq)
@@ -2619,6 +2584,99 @@ static bool reg_is_freq_indoor(struct wlan_objmgr_pdev *pdev, qdf_freq_t freq)
 bool reg_is_6g_freq_indoor(struct wlan_objmgr_pdev *pdev, qdf_freq_t freq)
 {
 	return (REG_IS_6GHZ_FREQ(freq) && reg_is_freq_indoor(pdev, freq));
+}
+
+/**
+ * reg_get_max_psd() - Get max PSD.
+ * @freq: Channel frequency.
+ * @bw: Channel bandwidth.
+ * @reg_ap: Regulatory 6G AP type.
+ * @reg_client: Regulatory 6G client type.
+ * @tx_power: Pointer to tx-power.
+ *
+ * Return: Return QDF_STATUS_SUCCESS, if PSD is filled for 6G TPE IE
+ * else return QDF_STATUS_E_FAILURE.
+ */
+static QDF_STATUS reg_get_max_psd(qdf_freq_t freq,
+				  uint16_t bw,
+				  enum reg_6g_ap_type reg_ap,
+				  enum reg_6g_client_type reg_client,
+				  uint8_t *tx_power)
+{
+	if (reg_ap == REG_INDOOR_AP) {
+		switch (reg_client) {
+		case REG_DEFAULT_CLIENT:
+			*tx_power = REG_PSD_MAX_TXPOWER_FOR_DEFAULT_CLIENT;
+			return QDF_STATUS_SUCCESS;
+		case REG_SUBORDINATE_CLIENT:
+			*tx_power = REG_PSD_MAX_TXPOWER_FOR_SUBORDINATE_CLIENT;
+			return QDF_STATUS_SUCCESS;
+		default:
+			reg_err_rl("Invalid client type");
+			return QDF_STATUS_E_FAILURE;
+		}
+	}
+
+	return QDF_STATUS_E_FAILURE;
+}
+
+/**
+ * reg_get_max_txpower_for_eirp() - Get max EIRP.
+ * @pdev: Pointer to pdev.
+ * @freq: Channel frequency.
+ * @bw: Channel bandwidth.
+ * @reg_ap: Regulatory 6G AP type.
+ * @reg_client: Regulatory client type.
+ * @tx_power: Pointer to tx-power.
+ *
+ * Return: Return QDF_STATUS_SUCCESS, if EIRP is filled for 6G TPE IE
+ * else return QDF_STATUS_E_FAILURE.
+ */
+static QDF_STATUS reg_get_max_eirp(struct wlan_objmgr_pdev *pdev,
+				   qdf_freq_t freq,
+				   uint16_t bw,
+				   enum reg_6g_ap_type reg_ap,
+				   enum reg_6g_client_type reg_client,
+				   uint8_t *tx_power)
+{
+	if (reg_ap == REG_INDOOR_AP) {
+		switch (reg_client) {
+		case REG_DEFAULT_CLIENT:
+			*tx_power = reg_get_channel_reg_power_for_freq(pdev,
+								       freq);
+			return QDF_STATUS_SUCCESS;
+		case REG_SUBORDINATE_CLIENT:
+			*tx_power = REG_EIRP_MAX_TXPOWER_FOR_SUBORDINATE_CLIENT;
+			return QDF_STATUS_SUCCESS;
+		default:
+			reg_err_rl("Invalid client type");
+			return QDF_STATUS_E_FAILURE;
+		}
+	}
+
+	return QDF_STATUS_E_FAILURE;
+}
+
+QDF_STATUS reg_get_max_txpower_for_6g_tpe(struct wlan_objmgr_pdev *pdev,
+					  qdf_freq_t freq, uint8_t bw,
+					  enum reg_6g_ap_type reg_ap,
+					  enum reg_6g_client_type reg_client,
+					  bool is_psd,
+					  uint8_t *tx_power)
+{
+	if (!REG_IS_6GHZ_FREQ(freq)) {
+		reg_err_rl("%d is not a 6G channel frequency", freq);
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	/*
+	 * For now, there is support only for Indoor AP and we have only
+	 * LPI power values.
+	 */
+	if (is_psd)
+		return reg_get_max_psd(freq, bw, reg_ap, reg_client, tx_power);
+
+	return reg_get_max_eirp(pdev, freq, bw, reg_ap, reg_client, tx_power);
 }
 
 /**
@@ -3107,6 +3165,7 @@ QDF_STATUS reg_get_channel_list_with_power_for_freq(struct wlan_objmgr_pdev
 		    !(reg_channels[i].chan_flags & REGULATORY_CHAN_DISABLED)) {
 			ch_list[count].center_freq =
 				reg_channels[i].center_freq;
+			ch_list[count].chan_num = reg_channels[i].chan_num;
 			ch_list[count++].tx_power =
 				reg_channels[i].tx_power;
 		}
@@ -3446,9 +3505,24 @@ static void reg_set_5g_channel_params_for_freq(struct wlan_objmgr_pdev *pdev,
 	enum channel_state chan_state2 = CHANNEL_STATE_ENABLE;
 	const struct bonded_channel_freq *bonded_chan_ptr = NULL;
 	const struct bonded_channel_freq *bonded_chan_ptr2 = NULL;
+	struct wlan_regulatory_pdev_priv_obj *pdev_priv_obj;
+	enum channel_enum chan_enum, sec_5g_chan_enum;
+	uint16_t max_bw, bw_80, sec_5g_freq_max_bw = 0;
 
 	if (!ch_params) {
 		reg_err("ch_params is NULL");
+		return;
+	}
+
+	chan_enum = reg_get_chan_enum_for_freq(freq);
+	if (chan_enum == INVALID_CHANNEL) {
+		reg_err("chan freq is not valid");
+		return;
+	}
+
+	pdev_priv_obj = reg_get_pdev_obj(pdev);
+	if (!IS_VALID_PDEV_REG_OBJ(pdev_priv_obj)) {
+		reg_err("reg pdev priv obj is NULL");
 		return;
 	}
 
@@ -3459,7 +3533,30 @@ static void reg_set_5g_channel_params_for_freq(struct wlan_objmgr_pdev *pdev,
 			ch_params->ch_width = CH_WIDTH_160MHZ;
 	}
 
+	max_bw = pdev_priv_obj->cur_chan_list[chan_enum].max_bw;
+	bw_80 = reg_get_bw_value(CH_WIDTH_80MHZ);
+
+	if (ch_params->ch_width == CH_WIDTH_80P80MHZ) {
+		sec_5g_chan_enum =
+			reg_get_chan_enum_for_freq(ch_params->mhz_freq_seg1 -
+					NEAREST_20MHZ_CHAN_FREQ_OFFSET);
+		if (sec_5g_chan_enum == INVALID_CHANNEL) {
+			reg_err("secondary channel freq is not valid");
+			return;
+		}
+
+		sec_5g_freq_max_bw =
+			pdev_priv_obj->cur_chan_list[sec_5g_chan_enum].max_bw;
+	}
+
 	while (ch_params->ch_width != CH_WIDTH_INVALID) {
+		if (ch_params->ch_width == CH_WIDTH_80P80MHZ) {
+			if ((max_bw < bw_80) || (sec_5g_freq_max_bw < bw_80))
+				goto update_bw;
+		} else if (max_bw < reg_get_bw_value(ch_params->ch_width)) {
+			goto update_bw;
+		}
+
 		bonded_chan_ptr = NULL;
 		bonded_chan_ptr2 = NULL;
 		chan_state = reg_get_5g_bonded_channel_for_freq(
@@ -3553,6 +3650,21 @@ static void reg_set_2g_channel_params_for_freq(struct wlan_objmgr_pdev *pdev,
 					       uint16_t sec_ch_2g_freq)
 {
 	enum channel_state chan_state = CHANNEL_STATE_ENABLE;
+	struct wlan_regulatory_pdev_priv_obj *pdev_priv_obj;
+	enum channel_enum chan_enum;
+	uint16_t max_bw;
+
+	chan_enum = reg_get_chan_enum_for_freq(oper_freq);
+	if (chan_enum == INVALID_CHANNEL) {
+		reg_err("chan freq is not valid");
+		return;
+	}
+
+	pdev_priv_obj = reg_get_pdev_obj(pdev);
+	if (!IS_VALID_PDEV_REG_OBJ(pdev_priv_obj)) {
+		reg_err("reg pdev priv obj is NULL");
+		return;
+	}
 
 	if (ch_params->ch_width >= CH_WIDTH_MAX)
 		ch_params->ch_width = CH_WIDTH_40MHZ;
@@ -3565,7 +3677,12 @@ static void reg_set_2g_channel_params_for_freq(struct wlan_objmgr_pdev *pdev,
 			sec_ch_2g_freq = oper_freq - 20;
 	}
 
+	max_bw = pdev_priv_obj->cur_chan_list[chan_enum].max_bw;
+
 	while (ch_params->ch_width != CH_WIDTH_INVALID) {
+		if (max_bw < reg_get_bw_value(ch_params->ch_width))
+			goto update_bw;
+
 		chan_state =
 		reg_get_2g_bonded_channel_state_for_freq(pdev, oper_freq,
 							 sec_ch_2g_freq,
@@ -3602,7 +3719,7 @@ static void reg_set_2g_channel_params_for_freq(struct wlan_objmgr_pdev *pdev,
 			}
 			break;
 		}
-
+update_bw:
 		ch_params->ch_width = get_next_lower_bw[ch_params->ch_width];
 	}
 	/* Overwrite mhz_freq_seg1 and center_freq_seg1 to 0 for 2.4 Ghz */

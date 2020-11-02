@@ -34,10 +34,6 @@
 #define WLAN_CFG_MAX_ALLOC_SIZE_MIN 0x80000
 #define WLAN_CFG_MAX_ALLOC_SIZE_MAX 0x200000
 
-#define WLAN_CFG_NUM_TCL_DATA_RINGS 3
-#define WLAN_CFG_NUM_TCL_DATA_RINGS_MIN 3
-#define WLAN_CFG_NUM_TCL_DATA_RINGS_MAX 3
-
 #if defined(QCA_LL_TX_FLOW_CONTROL_V2) || \
 	defined(QCA_LL_PDEV_TX_FLOW_CONTROL)
 #define WLAN_CFG_TX_FLOW_START_QUEUE_OFFSET 10
@@ -98,13 +94,21 @@
 
 /* Interrupt Mitigation - Batch threshold in terms of number of frames */
 #define WLAN_CFG_INT_BATCH_THRESHOLD_TX 1
-#define WLAN_CFG_INT_BATCH_THRESHOLD_RX 1
 #define WLAN_CFG_INT_BATCH_THRESHOLD_OTHER 1
 
 /* Interrupt Mitigation - Timer threshold in us */
 #define WLAN_CFG_INT_TIMER_THRESHOLD_TX 8
-#define WLAN_CFG_INT_TIMER_THRESHOLD_RX 8
 #define WLAN_CFG_INT_TIMER_THRESHOLD_OTHER 8
+
+#ifdef WLAN_DP_PER_RING_TYPE_CONFIG
+#define WLAN_CFG_INT_BATCH_THRESHOLD_RX \
+		WLAN_CFG_INT_BATCH_THRESHOLD_REO_RING
+#define WLAN_CFG_INT_TIMER_THRESHOLD_RX \
+		WLAN_CFG_INT_TIMER_THRESHOLD_REO_RING
+#else
+#define WLAN_CFG_INT_BATCH_THRESHOLD_RX 1
+#define WLAN_CFG_INT_TIMER_THRESHOLD_RX 8
+#endif
 #endif
 
 #define WLAN_CFG_RX_PENDING_HL_THRESHOLD 0x60000
@@ -117,6 +121,7 @@
 
 #define WLAN_CFG_INT_TIMER_THRESHOLD_WBM_RELEASE_RING 256
 #define WLAN_CFG_INT_TIMER_THRESHOLD_REO_RING 512
+#define WLAN_CFG_INT_BATCH_THRESHOLD_REO_RING 0
 
 #define WLAN_CFG_PER_PDEV_RX_RING_MIN 0
 #define WLAN_CFG_PER_PDEV_RX_RING_MAX 0
@@ -139,7 +144,7 @@
 #define WLAN_CFG_INT_BATCH_THRESHOLD_TX_MIN 1
 #define WLAN_CFG_INT_BATCH_THRESHOLD_TX_MAX 256
 
-#define WLAN_CFG_INT_BATCH_THRESHOLD_RX_MIN 1
+#define WLAN_CFG_INT_BATCH_THRESHOLD_RX_MIN 0
 #define WLAN_CFG_INT_BATCH_THRESHOLD_RX_MAX 128
 
 #define WLAN_CFG_INT_BATCH_THRESHOLD_REO_RING_MIN 1
@@ -361,6 +366,13 @@
 #define WLAN_CFG_NUM_REO_RINGS_MAP 0xF
 #define WLAN_CFG_NUM_REO_RINGS_MAP_MIN 0x1
 #define WLAN_CFG_NUM_REO_RINGS_MAP_MAX 0xF
+
+#define WLAN_CFG_RADIO_0_DEFAULT_REO 0x1
+#define WLAN_CFG_RADIO_1_DEFAULT_REO 0x2
+#define WLAN_CFG_RADIO_2_DEFAULT_REO 0x3
+
+#define WLAN_CFG_RADIO_DEFAULT_REO_MIN 0x1
+#define WLAN_CFG_RADIO_DEFAULT_REO_MAX 0x4
 
 /* DP INI Declerations */
 #define CFG_DP_HTT_PACKET_TYPE \
@@ -891,6 +903,10 @@
 	CFG_INI_BOOL("dp_rx_monitor_protocol_flow_tag_enable", true, \
 		     "Enable/Disable Rx Protocol & Flow tags in Monitor mode")
 
+#define CFG_DP_TX_PER_PKT_VDEV_ID_CHECK \
+	CFG_INI_BOOL("dp_tx_allow_per_pkt_vdev_id_check", false, \
+		     "Enable/Disable tx Per Pkt vdev id check")
+
 /*
  * <ini>
  * dp_rx_fisa_enable - Control Rx datapath FISA
@@ -937,13 +953,80 @@
 		WLAN_CFG_NUM_REO_RINGS_MAP, \
 		CFG_VALUE_OR_DEFAULT, "REO Destination Rings Mapping")
 
+#define CFG_DP_RX_RADIO_0_DEFAULT_REO \
+		CFG_INI_UINT("dp_rx_radio0_default_reo", \
+		WLAN_CFG_RADIO_DEFAULT_REO_MIN, \
+		WLAN_CFG_RADIO_DEFAULT_REO_MAX, \
+		WLAN_CFG_RADIO_0_DEFAULT_REO, \
+		CFG_VALUE_OR_DEFAULT, "Radio0 to REO destination default mapping")
+
+#define CFG_DP_RX_RADIO_1_DEFAULT_REO \
+		CFG_INI_UINT("dp_rx_radio1_default_reo", \
+		WLAN_CFG_RADIO_DEFAULT_REO_MIN, \
+		WLAN_CFG_RADIO_DEFAULT_REO_MAX, \
+		WLAN_CFG_RADIO_1_DEFAULT_REO, \
+		CFG_VALUE_OR_DEFAULT, "Radio1 to REO destination default mapping")
+
+#define CFG_DP_RX_RADIO_2_DEFAULT_REO \
+		CFG_INI_UINT("dp_rx_radio2_default_reo", \
+		WLAN_CFG_RADIO_DEFAULT_REO_MIN, \
+		WLAN_CFG_RADIO_DEFAULT_REO_MAX, \
+		WLAN_CFG_RADIO_2_DEFAULT_REO, \
+		CFG_VALUE_OR_DEFAULT, "Radio2 to REO destination default mapping")
+
 #define CFG_DP_PEER_EXT_STATS \
 		CFG_INI_BOOL("peer_ext_stats", \
 		false, "Peer extended stats")
+/*
+ * <ini>
+ * legacy_mode_csum_disable - Disable csum offload for legacy 802.11abg modes
+ * @Min: 0
+ * @Max: 1
+ * @Default: 0
+ *
+ * This ini is used to disable HW checksum offload capability for legacy
+ * connections
+ *
+ * Related: gEnableIpTcpUdpChecksumOffload should be enabled
+ *
+ * Usage: Internal
+ *
+ * </ini>
+ */
+
+#define CFG_DP_LEGACY_MODE_CSUM_DISABLE \
+	CFG_INI_BOOL("legacy_mode_csum_disable", false, \
+		     "Enable/Disable legacy mode checksum")
 
 #define CFG_DP_RX_BUFF_POOL_ENABLE \
 	CFG_INI_BOOL("dp_rx_buff_prealloc_pool", false, \
 		     "Enable/Disable DP RX emergency buffer pool support")
+
+#define CFG_DP_POLL_MODE_ENABLE \
+		CFG_INI_BOOL("dp_poll_mode_enable", false, \
+		"Enable/Disable Polling mode for data path")
+
+#define CFG_DP_RX_FST_IN_CMEM \
+	CFG_INI_BOOL("dp_rx_fst_in_cmem", false, \
+		     "Enable/Disable flow search table in CMEM")
+/*
+ * <ini>
+ * gEnableSWLM - Control DP Software latency manager
+ * @Min: 0
+ * @Max: 1
+ * @Default: 0
+ *
+ * This ini is used to enable DP Software latency Manager
+ *
+ * Supported Feature: STA,P2P and SAP IPA disabled terminating
+ *
+ * Usage: Internal
+ *
+ * </ini>
+ */
+#define CFG_DP_SWLM_ENABLE \
+	CFG_INI_BOOL("gEnableSWLM", false, \
+		     "Enable/Disable DP SWLM")
 
 #define CFG_DP \
 		CFG(CFG_DP_HTT_PACKET_TYPE) \
@@ -1026,6 +1109,13 @@
 		CFG(CFG_DP_PEER_EXT_STATS) \
 		CFG(CFG_DP_RX_BUFF_POOL_ENABLE) \
 		CFG(CFG_DP_RX_PENDING_HL_THRESHOLD) \
-		CFG(CFG_DP_RX_PENDING_LO_THRESHOLD)
-
+		CFG(CFG_DP_RX_PENDING_LO_THRESHOLD) \
+		CFG(CFG_DP_LEGACY_MODE_CSUM_DISABLE) \
+		CFG(CFG_DP_POLL_MODE_ENABLE) \
+		CFG(CFG_DP_SWLM_ENABLE) \
+		CFG(CFG_DP_TX_PER_PKT_VDEV_ID_CHECK) \
+		CFG(CFG_DP_RX_FST_IN_CMEM) \
+		CFG(CFG_DP_RX_RADIO_0_DEFAULT_REO) \
+		CFG(CFG_DP_RX_RADIO_1_DEFAULT_REO) \
+		CFG(CFG_DP_RX_RADIO_2_DEFAULT_REO)
 #endif /* _CFG_DP_H_ */

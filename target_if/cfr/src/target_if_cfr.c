@@ -79,6 +79,12 @@ int target_if_cfr_stop_capture(struct wlan_objmgr_pdev *pdev,
 		"Release count = %llu",
 		pdev_cfrobj->dbr_evt_cnt, pdev_cfrobj->tx_evt_cnt,
 		pdev_cfrobj->release_cnt);
+	cfr_err("tx_peer_status_cfr_fail = %llu",
+		pdev_cfrobj->tx_peer_status_cfr_fail = 0);
+	cfr_err("tx_evt_status_cfr_fail = %llu",
+		pdev_cfrobj->tx_evt_status_cfr_fail);
+	cfr_err("tx_dbr_cookie_lookup_fail = %llu",
+		pdev_cfrobj->tx_dbr_cookie_lookup_fail);
 
 	pdev_cfrobj->dbr_evt_cnt = 0;
 	pdev_cfrobj->tx_evt_cnt  = 0;
@@ -196,6 +202,92 @@ int target_if_cfr_get_target_type(struct wlan_objmgr_psoc *psoc)
 }
 
 #ifdef CFR_USE_FIXED_FOLDER
+static QDF_STATUS target_if_cfr_init_target(struct wlan_objmgr_psoc *psoc,
+					    struct wlan_objmgr_pdev *pdev,
+					    uint32_t target)
+{
+	struct pdev_cfr *cfr_pdev;
+	struct psoc_cfr *cfr_psoc;
+	struct wmi_unified *wmi_handle = NULL;
+	bool cfr_capable;
+	QDF_STATUS status;
+
+	if (!psoc || !pdev) {
+		cfr_err("null pdev or psoc");
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	cfr_pdev = wlan_objmgr_pdev_get_comp_private_obj(pdev,
+							 WLAN_UMAC_COMP_CFR);
+	if (!cfr_pdev) {
+		cfr_err("null pdev cfr");
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	cfr_psoc = wlan_objmgr_psoc_get_comp_private_obj(psoc,
+							 WLAN_UMAC_COMP_CFR);
+
+	if (!cfr_psoc) {
+		cfr_err("null psoc cfr");
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	wmi_handle = lmac_get_pdev_wmi_handle(pdev);
+	if (!wmi_handle) {
+		cfr_err("null wmi handle");
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	if (wlan_cfr_is_feature_disabled(pdev)) {
+		cfr_pdev->is_cfr_capable = 0;
+		cfr_psoc->is_cfr_capable = 0;
+		cfr_info("cfr disabled");
+		return QDF_STATUS_SUCCESS;
+	}
+
+	cfr_capable = wmi_service_enabled(wmi_handle,
+					  wmi_service_cfr_capture_support);
+	cfr_pdev->is_cfr_capable = cfr_capable;
+	cfr_psoc->is_cfr_capable = cfr_capable;
+	if (!cfr_capable) {
+		cfr_err("FW doesn't support CFR");
+		return QDF_STATUS_SUCCESS;
+	}
+
+	status = cfr_enh_init_pdev(psoc, pdev);
+	if (target == TARGET_TYPE_QCA6490)
+		cfr_pdev->chip_type = CFR_CAPTURE_RADIO_HSP;
+	else if (target == TARGET_TYPE_QCA6750)
+		cfr_pdev->chip_type = CFR_CAPTURE_RADIO_MOSELLE;
+
+	return status;
+}
+
+static QDF_STATUS target_if_cfr_deinit_target(struct wlan_objmgr_psoc *psoc,
+					      struct wlan_objmgr_pdev *pdev)
+{
+	struct pdev_cfr *pcfr;
+
+	if (!psoc || !pdev) {
+		cfr_err("null pdev or psoc");
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	pcfr = wlan_objmgr_pdev_get_comp_private_obj(pdev,
+						     WLAN_UMAC_COMP_CFR);
+	if (!pcfr) {
+		cfr_err("null pdev cfr");
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	if (!pcfr->is_cfr_capable) {
+		cfr_info("cfr disabled or FW not support");
+		return QDF_STATUS_SUCCESS;
+	}
+
+	return cfr_enh_deinit_pdev(psoc, pdev);
+}
+
 int target_if_cfr_init_pdev(struct wlan_objmgr_psoc *psoc,
 			    struct wlan_objmgr_pdev *pdev)
 {
@@ -204,8 +296,10 @@ int target_if_cfr_init_pdev(struct wlan_objmgr_psoc *psoc,
 
 	target_type = target_if_cfr_get_target_type(psoc);
 
-	if (target_type == TARGET_TYPE_QCA6490) {
-		status = cfr_6490_init_pdev(psoc, pdev);
+	if (target_type == TARGET_TYPE_QCA6490 ||
+	    target_type == TARGET_TYPE_QCA6750) {
+		status = target_if_cfr_init_target(psoc,
+						   pdev, target_type);
 	} else if (target_type == TARGET_TYPE_ADRASTEA) {
 		status = cfr_adrastea_init_pdev(psoc, pdev);
 	} else {
@@ -224,8 +318,9 @@ int target_if_cfr_deinit_pdev(struct wlan_objmgr_psoc *psoc,
 
 	target_type = target_if_cfr_get_target_type(psoc);
 
-	if (target_type == TARGET_TYPE_QCA6490) {
-		status = cfr_6490_deinit_pdev(psoc, pdev);
+	if (target_type == TARGET_TYPE_QCA6490 ||
+	    target_type == TARGET_TYPE_QCA6750) {
+		status = target_if_cfr_deinit_target(psoc, pdev);
 	} else if (target_type == TARGET_TYPE_ADRASTEA) {
 		status = cfr_adrastea_deinit_pdev(psoc, pdev);
 	} else {
@@ -275,7 +370,9 @@ int target_if_cfr_init_pdev(struct wlan_objmgr_psoc *psoc,
 
 		return cfr_wifi2_0_init_pdev(psoc, pdev);
 	} else if ((target_type == TARGET_TYPE_QCA6018) ||
-		   (target_type == TARGET_TYPE_QCN9000)) {
+		   (target_type == TARGET_TYPE_QCN9000) ||
+		   (target_type == TARGET_TYPE_QCN9100) ||
+		   (target_type == TARGET_TYPE_QCA5018)) {
 		pa->is_cfr_capable = cfr_sc->is_cfr_capable;
 		return cfr_enh_init_pdev(psoc, pdev);
 	} else
@@ -302,7 +399,9 @@ int target_if_cfr_deinit_pdev(struct wlan_objmgr_psoc *psoc,
 
 		return cfr_wifi2_0_deinit_pdev(psoc, pdev);
 	} else if ((target_type == TARGET_TYPE_QCA6018) ||
-		   (target_type == TARGET_TYPE_QCN9000)) {
+		   (target_type == TARGET_TYPE_QCN9000) ||
+		   (target_type == TARGET_TYPE_QCN9100) ||
+		   (target_type == TARGET_TYPE_QCA5018)) {
 		return cfr_enh_deinit_pdev(psoc, pdev);
 	} else
 		return QDF_STATUS_E_NOSUPPORT;

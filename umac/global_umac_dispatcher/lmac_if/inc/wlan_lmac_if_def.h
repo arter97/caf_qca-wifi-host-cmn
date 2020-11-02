@@ -974,6 +974,7 @@ struct wlan_lmac_if_dfs_tx_ops {
  * @tgt_is_tgt_type_qca9888: To check QCA9888 target type.
  * @tgt_is_tgt_type_adrastea: To check QCS40X target type.
  * @tgt_is_tgt_type_qcn9000: To check QCN9000 (Pine) target type.
+ * @tgt_is_tgt_type_qcn9100: To check QCN9100 (Spruce) target type.
  * @tgt_get_tgt_type:        Get target type
  * @tgt_get_tgt_version:     Get target version
  * @tgt_get_tgt_revision:    Get target revision
@@ -985,6 +986,7 @@ struct wlan_lmac_if_target_tx_ops {
 	bool (*tgt_is_tgt_type_qca9888)(uint32_t);
 	bool (*tgt_is_tgt_type_adrastea)(uint32_t);
 	bool (*tgt_is_tgt_type_qcn9000)(uint32_t);
+	bool (*tgt_is_tgt_type_qcn9100)(uint32_t);
 	uint32_t (*tgt_get_tgt_type)(struct wlan_objmgr_psoc *psoc);
 	uint32_t (*tgt_get_tgt_version)(struct wlan_objmgr_psoc *psoc);
 	uint32_t (*tgt_get_tgt_revision)(struct wlan_objmgr_psoc *psoc);
@@ -1035,6 +1037,23 @@ struct wlan_lmac_if_coex_tx_ops {
 };
 #endif
 
+#ifdef WLAN_FEATURE_GPIO_CFG
+struct gpio_config_params;
+struct gpio_output_params;
+
+/**
+ * struct wlan_lmac_if_gpio_tx_ops - south bound tx function pointers for gpio
+ * @set_gpio_config: function pointert to send gpio config to fw
+ * @set_gpio_output: function pointert to send gpio output to fw
+ */
+struct wlan_lmac_if_gpio_tx_ops {
+	QDF_STATUS (*set_gpio_config)(struct wlan_objmgr_psoc *psoc,
+				      struct gpio_config_params *param);
+	QDF_STATUS (*set_gpio_output)(struct wlan_objmgr_psoc *psoc,
+				      struct gpio_output_params *param);
+};
+#endif
+
 /**
  * struct wlan_lmac_if_tx_ops - south bound tx function pointers
  * @mgmt_txrx_tx_ops: mgmt txrx tx ops
@@ -1043,6 +1062,7 @@ struct wlan_lmac_if_coex_tx_ops {
  * @green_ap_tx_ops: green_ap tx_ops
  * @cp_stats_tx_ops: cp stats tx_ops
  * @coex_ops: coex tx_ops
+ * @gpio_ops: gpio tx_ops
  *
  * Callback function tabled to be registered with umac.
  * umac will use the functional table to send events/frames to wmi
@@ -1123,6 +1143,10 @@ struct wlan_lmac_if_tx_ops {
 
 #ifdef FEATURE_COEX
 	struct wlan_lmac_if_coex_tx_ops coex_ops;
+#endif
+
+#ifdef WLAN_FEATURE_GPIO_CFG
+	struct wlan_lmac_if_gpio_tx_ops gpio_ops;
 #endif
 };
 

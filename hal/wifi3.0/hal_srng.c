@@ -40,6 +40,9 @@ void hal_qca6490_attach(struct hal_soc *hal);
 #ifdef QCA_WIFI_QCN9000
 void hal_qcn9000_attach(struct hal_soc *hal);
 #endif
+#ifdef QCA_WIFI_QCN9100
+void hal_qcn9100_attach(struct hal_soc *hal);
+#endif
 #ifdef QCA_WIFI_QCA6750
 void hal_qca6750_attach(struct hal_soc *hal);
 #endif
@@ -264,8 +267,8 @@ static void hal_validate_shadow_register(struct hal_soc *hal,
 	}
 	return;
 error:
-	qdf_print("%s: baddr %pK, desination %pK, shadow_address %pK s0offset %pK index %x",
-		  __func__, hal->dev_base_addr, destination, shadow_address,
+	qdf_print("baddr %pK, desination %pK, shadow_address %pK s0offset %pK index %x",
+		  hal->dev_base_addr, destination, shadow_address,
 		  shadow_0_offset, index);
 	QDF_BUG(0);
 	return;
@@ -322,6 +325,18 @@ static void hal_target_based_configure(struct hal_soc *hal)
 	case TARGET_TYPE_QCA6018:
 		hal_qca8074v2_attach(hal);
 	break;
+#endif
+
+#if defined(QCA_WIFI_QCN9100)
+	case TARGET_TYPE_QCN9100:
+		hal->use_register_windowing = true;
+		/*
+		 * Static window map  is enabled for qcn9000 to use 2mb bar
+		 * size and use multiple windows to write into registers.
+		 */
+		hal->static_window_map = true;
+		hal_qcn9100_attach(hal);
+		break;
 #endif
 
 #ifdef QCA_WIFI_QCN9000
@@ -955,28 +970,32 @@ void hal_reo_read_write_ctrl_ix(hal_soc_handle_t hal_soc_hdl, bool read,
 			reg_offset =
 				HWIO_REO_R0_DESTINATION_RING_CTRL_IX_0_ADDR(
 						SEQ_WCSS_UMAC_REO_REG_OFFSET);
-			HAL_REG_WRITE_CONFIRM(hal, reg_offset, *ix0);
+			HAL_REG_WRITE_CONFIRM_RETRY(hal, reg_offset,
+						    *ix0, true);
 		}
 
 		if (ix1) {
 			reg_offset =
 				HWIO_REO_R0_DESTINATION_RING_CTRL_IX_1_ADDR(
 						SEQ_WCSS_UMAC_REO_REG_OFFSET);
-			HAL_REG_WRITE(hal, reg_offset, *ix1);
+			HAL_REG_WRITE_CONFIRM_RETRY(hal, reg_offset,
+						    *ix1, true);
 		}
 
 		if (ix2) {
 			reg_offset =
 				HWIO_REO_R0_DESTINATION_RING_CTRL_IX_2_ADDR(
 						SEQ_WCSS_UMAC_REO_REG_OFFSET);
-			HAL_REG_WRITE_CONFIRM(hal, reg_offset, *ix2);
+			HAL_REG_WRITE_CONFIRM_RETRY(hal, reg_offset,
+						    *ix2, true);
 		}
 
 		if (ix3) {
 			reg_offset =
 				HWIO_REO_R0_DESTINATION_RING_CTRL_IX_3_ADDR(
 						SEQ_WCSS_UMAC_REO_REG_OFFSET);
-			HAL_REG_WRITE_CONFIRM(hal, reg_offset, *ix3);
+			HAL_REG_WRITE_CONFIRM_RETRY(hal, reg_offset,
+						    *ix3, true);
 		}
 	}
 }
