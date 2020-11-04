@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2017 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2014-2020 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -114,6 +114,7 @@ QDF_STATUS qdf_event_set(qdf_event_t *event)
 		return QDF_STATUS_E_INVAL;
 	}
 
+	event->done = true;
 	complete(&event->complete);
 
 	return QDF_STATUS_SUCCESS;
@@ -154,6 +155,7 @@ QDF_STATUS qdf_event_reset(qdf_event_t *event)
 	}
 
 	/* (re)initialize event */
+	event->done = false;
 	INIT_COMPLETION(event->complete);
 	return QDF_STATUS_SUCCESS;
 }
@@ -288,8 +290,10 @@ void qdf_complete_wait_events(void)
 		event_node = qdf_container_of(list_node,
 						struct qdf_evt_node, node);
 
-		event_node->pevent->force_set = true;
-		qdf_event_set(event_node->pevent);
+		if (!event_node->pevent->done) {
+			event_node->pevent->force_set = true;
+			qdf_event_set(event_node->pevent);
+		}
 
 		status = qdf_list_peek_next(&qdf_wait_event_list,
 					&event_node->node, &list_node);
