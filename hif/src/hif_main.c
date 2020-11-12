@@ -1627,6 +1627,9 @@ QDF_STATUS hif_send_single(struct hif_opaque_softc *osc, qdf_nbuf_t msdu,
 	if (!ce_tx_hdl)
 		return QDF_STATUS_E_NULL_VALUE;
 
+	if (!ce_tx_hdl)
+		return QDF_STATUS_E_NULL_VALUE;
+
 	return ce_send_single((struct CE_handle *)ce_tx_hdl, msdu, transfer_id,
 			len);
 }
