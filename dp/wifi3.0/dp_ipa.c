@@ -512,6 +512,9 @@ static void dp_ipa_set_tx_alt_ring_doorbell_paddr(struct dp_pdev *pdev)
 			soc->tx_comp_ring[IPA_TX_ALT_COMP_RING_IDX].hal_srng;
 	uint32_t tx_comp_doorbell_dmaaddr;
 
+	if (!ipa_res->tx_alt_comp_doorbell_paddr)
+		return;
+
 	ipa_res->tx_alt_comp_doorbell_vaddr =
 				ioremap(ipa_res->tx_alt_comp_doorbell_paddr, 4);
 
@@ -537,7 +540,8 @@ static void dp_ipa_unmap_tx_alt_ring_doorbell_paddr(struct dp_pdev *pdev)
 	struct dp_ipa_resources *ipa_res = &pdev->ipa_resource;
 	struct dp_soc *soc = pdev->soc;
 
-	if (pld_smmu_unmap(soc->osdev->dev, ipa_res->tx_alt_comp_doorbell_paddr,
+	if (ipa_res->tx_alt_comp_doorbell_paddr &&
+	    pld_smmu_unmap(soc->osdev->dev, ipa_res->tx_alt_comp_doorbell_paddr,
 			   sizeof(uint32_t)))
 		dp_err_rl("IPA ALT TX DB smmu unmap failed");
 }
