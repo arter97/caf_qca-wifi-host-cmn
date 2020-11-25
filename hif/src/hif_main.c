@@ -1587,6 +1587,9 @@ qdf_nbuf_t hif_batch_send(struct hif_opaque_softc *osc, qdf_nbuf_t msdu,
 {
 	void *ce_tx_hdl = hif_get_ce_handle(osc, CE_HTT_TX_CE);
 
+	if (!ce_tx_hdl)
+		return NULL;
+
 	return ce_batch_send((struct CE_handle *)ce_tx_hdl, msdu, transfer_id,
 			len, sendhead);
 }
@@ -1623,6 +1626,9 @@ QDF_STATUS hif_send_single(struct hif_opaque_softc *osc, qdf_nbuf_t msdu,
 			   uint32_t transfer_id, u_int32_t len)
 {
 	void *ce_tx_hdl = hif_get_ce_handle(osc, CE_HTT_TX_CE);
+
+	if (!ce_tx_hdl)
+		return QDF_STATUS_E_NULL_VALUE;
 
 	if (!ce_tx_hdl)
 		return QDF_STATUS_E_NULL_VALUE;
