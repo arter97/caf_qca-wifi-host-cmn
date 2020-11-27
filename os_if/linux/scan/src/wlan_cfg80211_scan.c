@@ -689,9 +689,9 @@ wlan_schedule_scan_start_request(struct wlan_objmgr_pdev *pdev,
 			qdf_list_insert_back(&osif_scan->scan_req_q,
 					     &scan_req->node);
 		} else {
-			osif_err("scan req failed with error %d", status);
+			cfg80211_err("scan req failed with error %d", status);
 			if (status == QDF_STATUS_E_RESOURCES)
-				osif_err("HO is in progress.So defer the scan by informing busy");
+				cfg80211_err("HO is in progress.So defer the scan by informing busy");
 		}
 	} else {
 		ucfg_scm_scan_free_scan_request_mem(scan_start_req);
