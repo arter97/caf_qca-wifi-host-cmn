@@ -2448,6 +2448,11 @@ QDF_STATUS (*send_vdev_tsf_tstamp_action_cmd)(wmi_unified_t wmi,
 QDF_STATUS (*extract_vdev_tsf_report_event)(wmi_unified_t wmi_handle,
 					    void *evt_buf,
 					    struct wmi_host_tsf_event *param);
+#ifdef WMI_AP_SUPPORT
+QDF_STATUS (*set_radio_tx_mode_select_cmd)(
+				wmi_unified_t wmi,
+				struct wmi_pdev_enable_tx_mode_selection *param);
+#endif
 };
 
 /* Forward declartion for psoc*/
@@ -2503,6 +2508,10 @@ struct wmi_unified {
 	qdf_nbuf_queue_t event_queue;
 	qdf_work_t rx_event_work;
 	qdf_workqueue_t *wmi_rx_work_queue;
+	qdf_spinlock_t diag_eventq_lock;
+	qdf_nbuf_queue_t diag_event_queue;
+	qdf_work_t rx_diag_event_work;
+	uint32_t wmi_rx_diag_events_dropped;
 	int wmi_stop_in_progress;
 	struct wmi_host_abi_version fw_abi_version;
 	struct wmi_host_abi_version final_abi_vers;
@@ -2549,6 +2558,8 @@ struct wmi_unified {
 	uint32_t *cmd_phy_id_map;
 	uint32_t *evt_phy_id_map;
 #ifdef WMI_INTERFACE_SEQUENCE_CHECK
+	/* wmi sequence stop */
+	bool wmi_sequence_stop;
 	/* wmi next transmit sequence number */
 	uint32_t wmi_sequence;
 	/* wmi completion expected sequence number */

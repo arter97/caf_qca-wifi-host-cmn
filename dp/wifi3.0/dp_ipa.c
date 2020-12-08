@@ -309,6 +309,8 @@ static void dp_tx_ipa_uc_detach(struct dp_soc *soc, struct dp_pdev *pdev)
 		if (!nbuf)
 			continue;
 		qdf_nbuf_unmap_single(soc->osdev, nbuf, QDF_DMA_BIDIRECTIONAL);
+		qdf_mem_dp_tx_skb_cnt_dec();
+		qdf_mem_dp_tx_skb_dec(qdf_nbuf_get_data_len(nbuf));
 		qdf_nbuf_free(nbuf);
 		soc->ipa_uc_tx_rsc.tx_buf_pool_vaddr_unaligned[idx] =
 						(void *)NULL;
@@ -442,6 +444,8 @@ static int dp_tx_ipa_uc_attach(struct dp_soc *soc, struct dp_pdev *pdev)
 		qdf_nbuf_map_single(soc->osdev, nbuf,
 				    QDF_DMA_BIDIRECTIONAL);
 		buffer_paddr = qdf_nbuf_get_frag_paddr(nbuf, 0);
+		qdf_mem_dp_tx_skb_cnt_inc();
+		qdf_mem_dp_tx_skb_inc(qdf_nbuf_get_data_len(nbuf));
 
 		paddr_lo = ((uint64_t)buffer_paddr & 0x00000000ffffffff);
 		paddr_hi = ((uint64_t)buffer_paddr & 0x0000001f00000000) >> 32;
@@ -1778,6 +1782,7 @@ QDF_STATUS dp_ipa_enable_pipes(struct cdp_soc_t *soc_hdl, uint8_t pdev_id)
 	return QDF_STATUS_SUCCESS;
 }
 
+#ifdef DEVICE_FORCE_WAKE_ENABLED
 /*
  * dp_ipa_get_tx_comp_pending_check() - Check if tx completions are pending.
  * @soc: DP pdev Context
@@ -1805,6 +1810,7 @@ static bool dp_ipa_get_tx_comp_pending_check(struct dp_soc *soc)
 
 	return (soc->ipa_uc_tx_rsc.alloc_tx_buf_cnt != buf_cnt);
 }
+#endif
 
 QDF_STATUS dp_ipa_disable_pipes(struct cdp_soc_t *soc_hdl, uint8_t pdev_id)
 {
@@ -1819,6 +1825,15 @@ QDF_STATUS dp_ipa_disable_pipes(struct cdp_soc_t *soc_hdl, uint8_t pdev_id)
 		return QDF_STATUS_E_FAILURE;
 	}
 
+	/*
+	 * The tx completions pending check will trigger register read
+	 * for HP and TP of wbm2sw2 ring. There is a possibility for
+	 * these reg read to cause a NOC error if UMAC is in low power
+	 * state. The WAR is to sleep for the drain timeout without checking
+	 * for the pending tx completions. This WAR can be replaced with
+	 * poll logic for HP/TP difference once force wake is in place.
+	 */
+#ifdef DEVICE_FORCE_WAKE_ENABLED
 	while (dp_ipa_get_tx_comp_pending_check(soc)) {
 		qdf_sleep(TX_COMP_DRAIN_WAIT_MS);
 		timeout -= TX_COMP_DRAIN_WAIT_MS;
@@ -1827,6 +1842,9 @@ QDF_STATUS dp_ipa_disable_pipes(struct cdp_soc_t *soc_hdl, uint8_t pdev_id)
 			break;
 		}
 	}
+#else
+	qdf_sleep(timeout);
+#endif
 
 	result = qdf_ipa_wdi_disable_pipes();
 	if (result) {

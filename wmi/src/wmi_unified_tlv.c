@@ -2419,7 +2419,14 @@ static QDF_STATUS send_beacon_tmpl_send_cmd_tlv(wmi_unified_t wmi_handle,
 
 	WMITLV_SET_HDR(buf_ptr, WMITLV_TAG_ARRAY_BYTE, param->tmpl_len_aligned);
 	buf_ptr += WMI_TLV_HDR_SIZE;
-	qdf_mem_copy(buf_ptr, param->frm, param->tmpl_len);
+
+	/* for big endian host, copy engine byte_swap is enabled
+	 * But the frame content is in network byte order
+	 * Need to byte swap the frame content - so when copy engine
+	 * does byte_swap - target gets frame content in the correct order
+	 */
+	WMI_HOST_IF_MSG_COPY_CHAR_ARRAY(buf_ptr, param->frm,
+					param->tmpl_len);
 
 	wmi_mtrace(WMI_BCN_TMPL_CMDID, cmd->vdev_id, 0);
 	ret = wmi_unified_cmd_send(wmi_handle,
@@ -3514,7 +3521,13 @@ static QDF_STATUS send_mgmt_cmd_tlv(wmi_unified_t wmi_handle,
 	WMITLV_SET_HDR(bufp, WMITLV_TAG_ARRAY_BYTE, roundup(bufp_len,
 							    sizeof(uint32_t)));
 	bufp += WMI_TLV_HDR_SIZE;
-	qdf_mem_copy(bufp, param->pdata, bufp_len);
+
+	/* for big endian host, copy engine byte_swap is enabled
+	 * But the frame content is in network byte order
+	 * Need to byte swap the frame content - so when copy engine
+	 * does byte_swap - target gets frame content in the correct order
+	 */
+	WMI_HOST_IF_MSG_COPY_CHAR_ARRAY(bufp, param->pdata, bufp_len);
 
 	status = qdf_nbuf_map_single(qdf_ctx, param->tx_frame,
 				     QDF_DMA_TO_DEVICE);
@@ -7222,6 +7235,8 @@ void wmi_copy_resource_config(wmi_resource_config *resource_cfg,
 	WMI_RSRC_CFG_HOST_SERVICE_FLAG_HOST_SUPPORT_MULTI_RADIO_EVTS_PER_RADIO_SET(
 		resource_cfg->host_service_flags, 1);
 
+	WMI_RSRC_CFG_FLAG_VIDEO_OVER_WIFI_ENABLE_SET(
+		resource_cfg->flag1, tgt_res_cfg->carrier_vow_optimization);
 }
 
 /* copy_hw_mode_id_in_init_cmd() - Helper routine to copy hw_mode in init cmd
@@ -8773,7 +8788,6 @@ static QDF_STATUS init_cmd_send_tlv(wmi_unified_t wmi_handle,
 	WMITLV_SET_HDR(&cmd->tlv_header,
 			WMITLV_TAG_STRUC_wmi_init_cmd_fixed_param,
 			WMITLV_GET_STRUCT_TLVLEN(wmi_init_cmd_fixed_param));
-
 	wmi_copy_resource_config(resource_cfg, param->res_cfg);
 	WMITLV_SET_HDR(&resource_cfg->tlv_header,
 			WMITLV_TAG_STRUC_wmi_resource_config,
@@ -12450,7 +12464,10 @@ static QDF_STATUS send_user_country_code_cmd_tlv(wmi_unified_t wmi_handle,
 				rd->cc.alpha[2]);
 	} else if (rd->flags == REGDMN_IS_SET) {
 		cmd->countrycode_type = WMI_COUNTRYCODE_DOMAIN_CODE;
-		cmd->country_code.domain_code = rd->cc.regdmn_id;
+		WMI_SET_BITS(cmd->country_code.domain_code, 0, 16,
+			     rd->cc.regdmn.reg_2g_5g_pair_id);
+		WMI_SET_BITS(cmd->country_code.domain_code, 16, 16,
+			     rd->cc.regdmn.sixg_superdmn_id);
 	}
 
 	wmi_mtrace(WMI_SET_INIT_COUNTRY_CMDID, NO_SESSION, 0);
@@ -15196,6 +15213,8 @@ static void populate_tlv_service(uint32_t *wmi_service)
 			WMI_SERVICE_FSE_CMEM_ALLOC_SUPPORT;
 	wmi_service[wmi_service_scan_conf_per_ch_support] =
 			WMI_SERVICE_SCAN_CONFIG_PER_CHANNEL;
+	wmi_service[wmi_service_csa_beacon_template] =
+			WMI_SERVICE_CSA_BEACON_TEMPLATE;
 
 	wmi_populate_service_get_sta_in_ll_stats_req(wmi_service);
 }

@@ -30,6 +30,7 @@
 #include "wlan_blm_api.h"
 #include "wlan_cm_roam_api.h"
 #endif
+#include <wlan_utility.h>
 
 static void
 cm_fill_failure_resp_from_cm_id(struct cnx_mgr *cm_ctx,
@@ -67,6 +68,103 @@ static QDF_STATUS cm_connect_cmd_timeout(struct cnx_mgr *cm_ctx,
 	return status;
 }
 
+#ifdef WLAN_CM_USE_SPINLOCK
+static QDF_STATUS cm_activate_connect_req_flush_cb(struct scheduler_msg *msg)
+{
+	struct wlan_serialization_command *cmd = msg->bodyptr;
+
+	if (!cmd || !cmd->vdev) {
+		mlme_err("Null input cmd:%pK", cmd);
+		return QDF_STATUS_E_INVAL;
+	}
+
+	wlan_objmgr_vdev_release_ref(cmd->vdev, WLAN_MLME_CM_ID);
+	return QDF_STATUS_SUCCESS;
+}
+
+static QDF_STATUS cm_activate_connect_req_sched_cb(struct scheduler_msg *msg)
+{
+	struct wlan_serialization_command *cmd = msg->bodyptr;
+	struct wlan_objmgr_vdev *vdev;
+	struct cnx_mgr *cm_ctx;
+	QDF_STATUS ret = QDF_STATUS_E_FAILURE;
+
+	if (!cmd) {
+		mlme_err("cmd is null");
+		return QDF_STATUS_E_INVAL;
+	}
+
+	vdev = cmd->vdev;
+	if (!vdev) {
+		mlme_err("vdev is null");
+		return QDF_STATUS_E_INVAL;
+	}
+
+	cm_ctx = cm_get_cm_ctx(vdev);
+	if (!cm_ctx)
+		return QDF_STATUS_E_INVAL;
+
+	ret = cm_sm_deliver_event(vdev,
+				  WLAN_CM_SM_EV_CONNECT_ACTIVE,
+				  sizeof(wlan_cm_id),
+				  &cmd->cmd_id);
+
+	/*
+	 * Called from scheduler context hence posting failure
+	 */
+	if (QDF_IS_STATUS_ERROR(ret)) {
+		mlme_err(CM_PREFIX_FMT "Activation failed for cmd:%d",
+			 CM_PREFIX_REF(wlan_vdev_get_id(vdev), cmd->cmd_id),
+			 cmd->cmd_type);
+		cm_connect_handle_event_post_fail(cm_ctx, cmd->cmd_id);
+	}
+
+	wlan_objmgr_vdev_release_ref(vdev, WLAN_MLME_CM_ID);
+	return ret;
+}
+
+static QDF_STATUS
+cm_activate_connect_req(struct wlan_serialization_command *cmd)
+{
+	struct wlan_objmgr_vdev *vdev = cmd->vdev;
+	struct scheduler_msg msg = {0};
+	QDF_STATUS ret;
+
+	msg.bodyptr = cmd;
+	msg.callback = cm_activate_connect_req_sched_cb;
+	msg.flush_callback = cm_activate_connect_req_flush_cb;
+
+	ret = wlan_objmgr_vdev_try_get_ref(vdev, WLAN_MLME_CM_ID);
+	if (QDF_IS_STATUS_ERROR(ret))
+		return ret;
+
+	ret = scheduler_post_message(QDF_MODULE_ID_MLME,
+				     QDF_MODULE_ID_MLME,
+				     QDF_MODULE_ID_MLME, &msg);
+
+	if (QDF_IS_STATUS_ERROR(ret)) {
+		mlme_err(CM_PREFIX_FMT "Failed to post scheduler_msg",
+			 CM_PREFIX_REF(wlan_vdev_get_id(vdev), cmd->cmd_id));
+		wlan_objmgr_vdev_release_ref(vdev, WLAN_MLME_CM_ID);
+		return ret;
+	}
+	mlme_debug(CM_PREFIX_FMT "Cmd act in sched cmd type:%d",
+		   CM_PREFIX_REF(wlan_vdev_get_id(vdev), cmd->cmd_id),
+		   cmd->cmd_type);
+
+	return ret;
+}
+#else
+static QDF_STATUS
+cm_activate_connect_req(struct wlan_serialization_command *cmd)
+{
+	return cm_sm_deliver_event(cmd->vdev,
+				   WLAN_CM_SM_EV_CONNECT_ACTIVE,
+				   sizeof(wlan_cm_id),
+				   &cmd->cmd_id);
+}
+#endif
+
 static QDF_STATUS
 cm_ser_connect_cb(struct wlan_serialization_command *cmd,
 		  enum wlan_serialization_cb_reason reason)
@@ -95,10 +193,7 @@ cm_ser_connect_cb(struct wlan_serialization_command *cmd,
 		 * as lock is already acquired by the requester.
 		 */
 		if (cmd->activation_reason == SER_PENDING_TO_ACTIVE)
-			status = cm_sm_deliver_event(vdev,
-						   WLAN_CM_SM_EV_CONNECT_ACTIVE,
-						   sizeof(wlan_cm_id),
-						   &cmd->cmd_id);
+			status = cm_activate_connect_req(cmd);
 		else
 			status = cm_sm_deliver_event_sync(cm_ctx,
 						   WLAN_CM_SM_EV_CONNECT_ACTIVE,
@@ -730,7 +825,6 @@ static void cm_update_security_filter(struct scan_filter *filter,
 	filter->mgmtcipherset = req->crypto.mgmt_ciphers;
 	cm_set_pmf_caps(req, filter);
 }
-
 static inline void cm_set_fils_wep_key(struct cnx_mgr *cm_ctx,
 				       struct wlan_cm_connect_resp *resp)
 {}
@@ -740,7 +834,8 @@ static inline void cm_set_fils_wep_key(struct cnx_mgr *cm_ctx,
 static void cm_connect_prepare_scan_filter(struct wlan_objmgr_pdev *pdev,
 					   struct cnx_mgr *cm_ctx,
 					   struct cm_connect_req *cm_req,
-					   struct scan_filter *filter)
+					   struct scan_filter *filter,
+					   bool security_valid_for_6ghz)
 {
 	if (!qdf_is_macaddr_zero(&cm_req->req.bssid)) {
 		filter->num_of_bssid = 1;
@@ -757,6 +852,10 @@ static void cm_connect_prepare_scan_filter(struct wlan_objmgr_pdev *pdev,
 		filter->chan_freq_list[0] = cm_req->req.chan_freq;
 	}
 
+	/* Security is not valid for 6Ghz so ignore 6Ghz APs */
+	if (!security_valid_for_6ghz)
+		filter->ignore_6ghz_channel = true;
+
 	cm_update_security_filter(filter, &cm_req->req);
 	cm_update_advance_filter(pdev, cm_ctx, filter, cm_req);
 }
@@ -770,12 +869,35 @@ static QDF_STATUS cm_connect_get_candidates(struct wlan_objmgr_pdev *pdev,
 	enum QDF_OPMODE op_mode;
 	qdf_list_t *candidate_list;
 	uint8_t vdev_id = wlan_vdev_get_id(cm_ctx->vdev);
+	bool security_valid_for_6ghz;
+	const uint8_t *rsnxe;
 
 	filter = qdf_mem_malloc(sizeof(*filter));
 	if (!filter)
 		return QDF_STATUS_E_NOMEM;
 
-	cm_connect_prepare_scan_filter(pdev, cm_ctx, cm_req, filter);
+	rsnxe = wlan_get_ie_ptr_from_eid(WLAN_ELEMID_RSNXE,
+					 cm_req->req.assoc_ie.ptr,
+					 cm_req->req.assoc_ie.len);
+	security_valid_for_6ghz =
+		wlan_cm_6ghz_allowed_for_akm(wlan_pdev_get_psoc(pdev),
+					     cm_req->req.crypto.akm_suites,
+					     cm_req->req.crypto.rsn_caps,
+					     rsnxe, cm_req->req.sae_pwe);
+
+	/*
+	 * Ignore connect req if the freq is provided and its 6Ghz and
+	 * security is not valid for 6Ghz
+	 */
+	if (cm_req->req.chan_freq && !security_valid_for_6ghz &&
+	    WLAN_REG_IS_6GHZ_CHAN_FREQ(cm_req->req.chan_freq)) {
+		mlme_info(CM_PREFIX_FMT "6ghz freq (%d) given and 6Ghz not allowed for the security in connect req",
+			  CM_PREFIX_REF(vdev_id, cm_req->cm_id),
+			  cm_req->req.chan_freq);
+		return QDF_STATUS_E_INVAL;
+	}
+	cm_connect_prepare_scan_filter(pdev, cm_ctx, cm_req, filter,
+				       security_valid_for_6ghz);
 
 	candidate_list = wlan_scan_get_result(pdev, filter);
 	if (candidate_list) {

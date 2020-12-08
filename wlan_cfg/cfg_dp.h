@@ -218,6 +218,14 @@
 #define WLAN_CFG_NUM_REO_DEST_RING_MIN 4
 #define WLAN_CFG_NUM_REO_DEST_RING_MAX 4
 
+#define WLAN_CFG_NSS_NUM_TCL_DATA_RINGS 2
+#define WLAN_CFG_NSS_NUM_TCL_DATA_RINGS_MIN 1
+#define WLAN_CFG_NSS_NUM_TCL_DATA_RINGS_MAX 3
+
+#define WLAN_CFG_NSS_NUM_REO_DEST_RING 2
+#define WLAN_CFG_NSS_NUM_REO_DEST_RING_MIN 1
+#define WLAN_CFG_NSS_NUM_REO_DEST_RING_MAX 3
+
 #define WLAN_CFG_WBM_RELEASE_RING_SIZE 1024
 #define WLAN_CFG_WBM_RELEASE_RING_SIZE_MIN 64
 #define WLAN_CFG_WBM_RELEASE_RING_SIZE_MAX 1024
@@ -473,6 +481,20 @@
 		WLAN_CFG_NUM_TCL_DATA_RINGS, \
 		CFG_VALUE_OR_DEFAULT, "DP TCL Data Rings")
 
+#define CFG_DP_NSS_REO_DEST_RINGS \
+		CFG_INI_UINT("dp_nss_reo_dest_rings", \
+		WLAN_CFG_NSS_NUM_REO_DEST_RING_MIN, \
+		WLAN_CFG_NSS_NUM_REO_DEST_RING_MAX, \
+		WLAN_CFG_NSS_NUM_REO_DEST_RING, \
+		CFG_VALUE_OR_DEFAULT, "DP NSS REO Destination Rings")
+
+#define CFG_DP_NSS_TCL_DATA_RINGS \
+		CFG_INI_UINT("dp_nss_tcl_data_rings", \
+		WLAN_CFG_NSS_NUM_TCL_DATA_RINGS_MIN, \
+		WLAN_CFG_NSS_NUM_TCL_DATA_RINGS_MAX, \
+		WLAN_CFG_NSS_NUM_TCL_DATA_RINGS, \
+		CFG_VALUE_OR_DEFAULT, "DP NSS TCL Data Rings")
+
 #define CFG_DP_TX_DESC \
 		CFG_INI_UINT("dp_tx_desc", \
 		WLAN_CFG_NUM_TX_DESC_MIN, \
@@ -604,6 +626,22 @@
 	CFG_INI_BOOL("LROEnable", WLAN_LRO_ENABLE, \
 	"DP LRO Enable")
 
+/*
+ * <ini>
+ * CFG_DP_SG - Enable the SG feature standalonely
+ * @Min: 0
+ * @Max: 1
+ * @Default: 1
+ *
+ * This ini entry is used to enable/disable SG feature standalonely.
+ * Also does Rome support SG on TX, lithium does not.
+ * For example the lithium does not support SG on UDP frames.
+ * Which is able to handle SG only for TSO frames(in case TSO is enabled).
+ *
+ * Usage: External
+ *
+ * </ini>
+ */
 #define CFG_DP_SG \
 	CFG_INI_BOOL("dp_sg_support", false, \
 	"DP SG Enable")
@@ -1059,6 +1097,8 @@
 		CFG(CFG_DP_MAX_PEER_ID) \
 		CFG(CFG_DP_REO_DEST_RINGS) \
 		CFG(CFG_DP_TCL_DATA_RINGS) \
+		CFG(CFG_DP_NSS_REO_DEST_RINGS) \
+		CFG(CFG_DP_NSS_TCL_DATA_RINGS) \
 		CFG(CFG_DP_TX_DESC) \
 		CFG(CFG_DP_TX_EXT_DESC) \
 		CFG(CFG_DP_TX_EXT_DESC_POOLS) \

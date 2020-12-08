@@ -305,6 +305,12 @@ wlan_reg_is_6g_freq_indoor(struct wlan_objmgr_pdev *pdev, qdf_freq_t freq)
 	return false;
 }
 
+static inline bool wlan_reg_is_range_overlap_6g(qdf_freq_t low_freq,
+						qdf_freq_t high_freq)
+{
+	return false;
+}
+
 static inline QDF_STATUS
 wlan_reg_get_max_txpower_for_6g_tpe(struct wlan_objmgr_pdev *pdev,
 				    qdf_freq_t freq, uint8_t bw,
@@ -1326,6 +1332,17 @@ bool wlan_reg_is_passive_or_disable_for_freq(struct wlan_objmgr_pdev *pdev,
  * Return: true or false
  */
 bool wlan_reg_is_disable_for_freq(struct wlan_objmgr_pdev *pdev,
+				  qdf_freq_t freq);
+
+/**
+ * wlan_reg_is_passive_for_freq() - Check the channel flags to see if the
+ * passive flag is set
+ * @pdev: pdev ptr
+ * @freq: Channel center frequency
+ *
+ * Return: true or false
+ */
+bool wlan_reg_is_passive_for_freq(struct wlan_objmgr_pdev *pdev,
 				  qdf_freq_t freq);
 
 /**
