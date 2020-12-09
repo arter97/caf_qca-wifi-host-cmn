@@ -950,10 +950,28 @@ out:
 	qdf_nbuf_pull_head(mpdu, RX_PKT_TLVS_LEN);
 	msg.nbuf = mpdu;
 	msg.vdev_id = vdev->vdev_id;
-	if (pdev->soc->cdp_soc.ol_ops->rx_invalid_peer)
+
+	/*
+	 * NOTE: Only valid for HKv1.
+	 * If smart monitor mode is enabled on RE, we are getting invalid
+	 * peer frames with RA as STA mac of RE and the TA not matching
+	 * with any NAC list or the the BSSID.Such frames need to dropped
+	 * in order to avoid HM_WDS false addition.
+	 */
+	if (pdev->soc->cdp_soc.ol_ops->rx_invalid_peer) {
+		if (!soc->hw_nac_monitor_support &&
+		    pdev->filter_neighbour_peers &&
+		    vdev->opmode == wlan_op_mode_sta) {
+			QDF_TRACE(QDF_MODULE_ID_DP,
+				  QDF_TRACE_LEVEL_WARN,
+				  "Drop inv peer pkts with STA RA:%pm",
+				   wh->i_addr1);
+			goto free;
+		}
 		pdev->soc->cdp_soc.ol_ops->rx_invalid_peer(
 				(struct cdp_ctrl_objmgr_psoc *)soc->ctrl_psoc,
 				pdev->pdev_id, &msg);
+	}
 
 free:
 	/* Drop and free packet */
@@ -1177,6 +1195,7 @@ static inline bool dp_rx_adjust_nbuf_len(qdf_nbuf_t nbuf, uint16_t *mpdu_len)
 /**
  * dp_rx_sg_create() - create a frag_list for MSDUs which are spread across
  *		     multiple nbufs.
+ * @soc: DP SOC handle
  * @nbuf: pointer to the first msdu of an amsdu.
  *
  * This function implements the creation of RX frag_list for cases
@@ -1184,7 +1203,7 @@ static inline bool dp_rx_adjust_nbuf_len(qdf_nbuf_t nbuf, uint16_t *mpdu_len)
  *
  * Return: returns the head nbuf which contains complete frag_list.
  */
-qdf_nbuf_t dp_rx_sg_create(qdf_nbuf_t nbuf)
+qdf_nbuf_t dp_rx_sg_create(struct dp_soc *soc, qdf_nbuf_t nbuf)
 {
 	qdf_nbuf_t parent, frag_list, next = NULL;
 	uint16_t frag_list_len = 0;
@@ -1229,6 +1248,18 @@ qdf_nbuf_t dp_rx_sg_create(qdf_nbuf_t nbuf)
 	 */
 	qdf_nbuf_set_rx_chfrag_start(parent, 1);
 	last_nbuf = dp_rx_adjust_nbuf_len(parent, &mpdu_len);
+
+	/*
+	 * HW issue:  MSDU cont bit is set but reported MPDU length can fit
+	 * in to single buffer
+	 *
+	 * Increment error stats and avoid SG list creation
+	 */
+	if (last_nbuf) {
+		DP_STATS_INC(soc, rx.err.msdu_continuation_err, 1);
+		qdf_nbuf_pull_head(parent, RX_PKT_TLVS_LEN);
+		return parent;
+	}
 
 	/*
 	 * this is where we set the length of the fragments which are
@@ -2348,6 +2379,9 @@ more_data:
 		status = dp_rx_desc_nbuf_sanity_check(ring_desc, rx_desc);
 		if (qdf_unlikely(QDF_IS_STATUS_ERROR(status))) {
 			DP_STATS_INC(soc, rx.err.nbuf_sanity_fail, 1);
+			dp_info_rl("Nbuf sanity check failure!");
+			dp_rx_dump_info_and_assert(soc, hal_ring_hdl,
+						   ring_desc, rx_desc);
 			rx_desc->in_err_state = 1;
 			hal_srng_dst_get_next(hal_soc, hal_ring_hdl);
 			continue;
@@ -2448,6 +2482,9 @@ more_data:
 
 		qdf_nbuf_set_tid_val(rx_desc->nbuf,
 				     HAL_RX_REO_QUEUE_NUMBER_GET(ring_desc));
+		qdf_nbuf_set_rx_reo_dest_ind(
+				rx_desc->nbuf,
+				HAL_RX_REO_MSDU_REO_DST_IND_GET(ring_desc));
 
 		QDF_NBUF_CB_RX_PKT_LEN(rx_desc->nbuf) = msdu_desc_info.msdu_len;
 
@@ -2662,7 +2699,7 @@ done:
 			qdf_nbuf_pull_head(nbuf, RX_PKT_TLVS_LEN);
 		} else if (qdf_nbuf_is_rx_chfrag_cont(nbuf)) {
 			msdu_len = QDF_NBUF_CB_RX_PKT_LEN(nbuf);
-			nbuf = dp_rx_sg_create(nbuf);
+			nbuf = dp_rx_sg_create(soc, nbuf);
 			next = nbuf->next;
 
 			if (qdf_nbuf_is_raw_frame(nbuf)) {

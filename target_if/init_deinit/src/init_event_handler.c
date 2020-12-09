@@ -98,8 +98,6 @@ static int init_deinit_service_ready_event_handler(ol_scn_t scn_handle,
 		wlan_psoc_nif_op_flag_set(psoc, WLAN_SOC_OP_VHT_INVALID_CAP);
 	}
 
-	target_if_ext_res_cfg_enable(psoc, tgt_hdl, event);
-
 	if (wmi_service_enabled(wmi_handle, wmi_service_tt))
 		wlan_psoc_nif_fw_ext_cap_set(psoc, WLAN_SOC_CEXT_TT_SUPPORT);
 
@@ -167,6 +165,11 @@ static int init_deinit_service_ready_event_handler(ol_scn_t scn_handle,
 	if (wmi_service_enabled(wmi_handle, wmi_service_rx_fse_support))
 		wlan_psoc_nif_fw_ext_cap_set(psoc,
 					     WLAN_SOC_CEXT_RX_FSE_SUPPORT);
+
+	if (wmi_service_enabled(wmi_handle,
+				wmi_service_scan_conf_per_ch_support))
+		wlan_psoc_nif_fw_ext_cap_set(psoc,
+					     WLAN_SOC_CEXT_SCAN_PER_CH_CONFIG);
 
 	/* override derived value, if it exceeds max peer count */
 	if ((wlan_psoc_get_max_peer_count(psoc) >

@@ -290,7 +290,7 @@ static inline void hal_write32_mb(struct hal_soc *hal_soc, uint32_t offset,
 	if (!hal_soc->init_phase) {
 		ret = hif_force_wake_request(hal_soc->hif_handle);
 		if (ret) {
-			hal_err("Wake up request failed");
+			hal_err_rl("Wake up request failed");
 			qdf_check_state_before_panic();
 			return;
 		}
@@ -600,6 +600,11 @@ uint32_t hal_read32_mb_cmem(struct hal_soc *hal_soc, uint32_t offset)
 }
 #endif
 
+/* Max times allowed for register writing retry */
+#define HAL_REG_WRITE_RETRY_MAX		5
+/* Delay milliseconds for each time retry */
+#define HAL_REG_WRITE_RETRY_DELAY	1
+
 #ifdef GENERIC_SHADOW_REGISTER_ACCESS_ENABLE
 /* To check shadow config index range between 0..31 */
 #define HAL_SHADOW_REG_INDEX_LOW 32
@@ -682,7 +687,6 @@ static inline QDF_STATUS hal_write32_mb_shadow_confirm(
 	int i;
 	QDF_STATUS ret;
 	uint32_t shadow_reg_offset;
-	uint32_t read_value;
 	int shadow_config_index;
 	bool is_reg_offset_present = false;
 
@@ -705,9 +709,8 @@ static inline QDF_STATUS hal_write32_mb_shadow_confirm(
 	}
 	if (is_reg_offset_present) {
 		ret = hal_poll_dirty_bit_reg(hal, shadow_config_index);
-		read_value = hal_read32_mb(hal, reg_offset);
-		hal_info("Shadow retry:reg 0x%x val 0x%x readval 0x%x ret %d",
-			 reg_offset, value, read_value, ret);
+		hal_info("Shadow write:reg 0x%x val 0x%x ret %d",
+			 reg_offset, value, ret);
 		if (QDF_IS_STATUS_ERROR(ret)) {
 			HAL_STATS_INC(hal, shadow_reg_write_fail, 1);
 			return ret;
@@ -716,23 +719,6 @@ static inline QDF_STATUS hal_write32_mb_shadow_confirm(
 	}
 	return ret;
 }
-
-#else /* GENERIC_SHADOW_REGISTER_ACCESS_ENABLE */
-
-static inline QDF_STATUS hal_write32_mb_shadow_confirm(
-	struct hal_soc *hal_soc,
-	uint32_t offset,
-	uint32_t value)
-{
-	return QDF_STATUS_SUCCESS;
-}
-
-#endif /* GENERIC_SHADOW_REGISTER_ACCESS_ENABLE */
-
-/* Max times allowed for register writing retry */
-#define HAL_REG_WRITE_RETRY_MAX		5
-/* Delay milliseconds for each time retry */
-#define HAL_REG_WRITE_RETRY_DELAY	1
 
 /**
  * hal_write32_mb_confirm_retry() - write register with confirming and
@@ -754,9 +740,21 @@ static inline void hal_write32_mb_confirm_retry(struct hal_soc *hal_soc,
 						uint32_t value,
 						bool recovery)
 {
+	QDF_STATUS ret;
+
+	ret = hal_write32_mb_shadow_confirm(hal_soc, offset, value);
+	if (QDF_IS_STATUS_ERROR(ret) && recovery)
+		qdf_trigger_self_recovery(NULL, QDF_HAL_REG_WRITE_FAILURE);
+}
+#else /* GENERIC_SHADOW_REGISTER_ACCESS_ENABLE */
+
+static inline void hal_write32_mb_confirm_retry(struct hal_soc *hal_soc,
+						uint32_t offset,
+						uint32_t value,
+						bool recovery)
+{
 	uint8_t retry_cnt = 0;
 	uint32_t read_value;
-	QDF_STATUS ret;
 
 	while (retry_cnt <= HAL_REG_WRITE_RETRY_MAX) {
 		hal_write32_mb_confirm(hal_soc, offset, value);
@@ -771,13 +769,10 @@ static inline void hal_write32_mb_confirm_retry(struct hal_soc *hal_soc,
 		retry_cnt++;
 	}
 
-	if (retry_cnt > HAL_REG_WRITE_RETRY_MAX) {
-		ret = hal_write32_mb_shadow_confirm(hal_soc, offset, value);
-		if (QDF_IS_STATUS_ERROR(ret) && recovery)
-			qdf_trigger_self_recovery(
-				NULL, QDF_HAL_REG_WRITE_FAILURE);
-	}
+	if (retry_cnt > HAL_REG_WRITE_RETRY_MAX && recovery)
+		qdf_trigger_self_recovery(NULL, QDF_HAL_REG_WRITE_FAILURE);
 }
+#endif /* GENERIC_SHADOW_REGISTER_ACCESS_ENABLE */
 
 #ifdef FEATURE_HAL_DELAYED_REG_WRITE
 /**
@@ -1099,6 +1094,15 @@ extern void *hal_srng_setup(void *hal_soc, int ring_type, int ring_num,
 #define HAL_REO_ERR_REMAP_IX0(_VALUE, _OFFSET) \
 	((_VALUE) << \
 	 (HWIO_REO_R0_ERROR_DESTINATION_MAPPING_IX_0_ERROR_ ## \
+	  DESTINATION_RING_ ## _OFFSET ## _SHFT))
+
+/*
+ * Macro to access HWIO_REO_R0_ERROR_DESTINATION_RING_CTRL_IX_1
+ * to map destination to rings
+ */
+#define HAL_REO_ERR_REMAP_IX1(_VALUE, _OFFSET) \
+	((_VALUE) << \
+	 (HWIO_REO_R0_ERROR_DESTINATION_MAPPING_IX_1_ERROR_ ## \
 	  DESTINATION_RING_ ## _OFFSET ## _SHFT))
 
 /*
@@ -1938,9 +1942,11 @@ hal_srng_access_end_unlocked(void *hal_soc, hal_ring_handle_t hal_ring_hdl)
 		 * hence written to a shared memory location that is read by FW
 		 */
 		if (srng->ring_dir == HAL_SRNG_SRC_RING) {
-			*(srng->u.src_ring.hp_addr) = srng->u.src_ring.hp;
+			*srng->u.src_ring.hp_addr =
+				qdf_cpu_to_le32(srng->u.src_ring.hp);
 		} else {
-			*(srng->u.dst_ring.tp_addr) = srng->u.dst_ring.tp;
+			*srng->u.dst_ring.tp_addr =
+				qdf_cpu_to_le32(srng->u.dst_ring.tp);
 		}
 	} else {
 		if (srng->ring_dir == HAL_SRNG_SRC_RING)
@@ -2611,4 +2617,16 @@ static inline QDF_STATUS hal_construct_shadow_regs(void *hal_soc)
 	return QDF_STATUS_SUCCESS;
 }
 #endif /* GENERIC_SHADOW_REGISTER_ACCESS_ENABLE */
+
+#ifdef FEATURE_HAL_DELAYED_REG_WRITE
+/**
+ * hal_flush_reg_write_work() - flush all writes from register write queue
+ * @arg: hal_soc pointer
+ *
+ * Return: None
+ */
+void hal_flush_reg_write_work(hal_soc_handle_t hal_handle);
+#else
+static inline void hal_flush_reg_write_work(hal_soc_handle_t hal_handle) { }
+#endif
 #endif /* _HAL_APIH_ */

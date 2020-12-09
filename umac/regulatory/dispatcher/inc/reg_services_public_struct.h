@@ -36,7 +36,7 @@
 #define REG_PSD_MAX_TXPOWER_FOR_SUBORDINATE_CLIENT  5    /* dBm */
 #define REG_EIRP_MAX_TXPOWER_FOR_SUBORDINATE_CLIENT 24   /* dBm */
 #else
-#define REG_MAX_CHANNELS_PER_OPERATING_CLASS  25
+#define REG_MAX_CHANNELS_PER_OPERATING_CLASS        28
 #endif
 
 #define REG_MAX_SUPP_OPER_CLASSES 32
@@ -294,7 +294,7 @@ enum channel_enum {
 	CHAN_ENUM_2467,
 	CHAN_ENUM_2472,
 	CHAN_ENUM_2484,
-
+#ifdef CONFIG_49GHZ_CHAN
 	CHAN_ENUM_4912,
 	CHAN_ENUM_4915,
 	CHAN_ENUM_4917,
@@ -337,7 +337,7 @@ enum channel_enum {
 	CHAN_ENUM_5057,
 	CHAN_ENUM_5060,
 	CHAN_ENUM_5080,
-
+#endif /* CONFIG_49GHZ_CHAN */
 	CHAN_ENUM_5180,
 	CHAN_ENUM_5200,
 	CHAN_ENUM_5220,
@@ -457,9 +457,17 @@ enum channel_enum {
 	MAX_24GHZ_CHANNEL = CHAN_ENUM_2484,
 	NUM_24GHZ_CHANNELS = (MAX_24GHZ_CHANNEL - MIN_24GHZ_CHANNEL + 1),
 
+	INVALID_CHANNEL = 0xBAD,
+
+#ifdef CONFIG_49GHZ_CHAN
 	MIN_49GHZ_CHANNEL = CHAN_ENUM_4912,
 	MAX_49GHZ_CHANNEL = CHAN_ENUM_5080,
 	NUM_49GHZ_CHANNELS = (MAX_49GHZ_CHANNEL - MIN_49GHZ_CHANNEL + 1),
+#else
+	MIN_49GHZ_CHANNEL = INVALID_CHANNEL,
+	MAX_49GHZ_CHANNEL = INVALID_CHANNEL,
+	NUM_49GHZ_CHANNELS = 0,
+#endif /* CONFIG_49GHZ_CHAN */
 
 	MIN_5GHZ_CHANNEL = CHAN_ENUM_5180,
 	MAX_5GHZ_CHANNEL = CHAN_ENUM_5885,
@@ -479,7 +487,11 @@ enum channel_enum {
 	MAX_5DOT9_CHANNEL = CHAN_ENUM_5885,
 	NUM_5DOT9_CHANNELS = (MAX_5DOT9_CHANNEL - MIN_5DOT9_CHANNEL + 1),
 
-	INVALID_CHANNEL = 0xBAD,
+#ifdef CONFIG_49GHZ_CHAN
+#define BAND_5GHZ_START_CHANNEL MIN_49GHZ_CHANNEL
+#else
+#define BAND_5GHZ_START_CHANNEL MIN_5GHZ_CHANNEL
+#endif /* CONFIG_49GHZ_CHAN */
 
 #ifdef DISABLE_UNII_SHARED_BANDS
 	MIN_UNII_1_BAND_CHANNEL = CHAN_ENUM_5180,
@@ -888,6 +900,7 @@ struct cur_reg_rule {
  * @num_phy: number of phy
  * @phy_id: phy id
  * @reg_dmn_pair: reg domain pair
+ * @reg_6g_superid: 6G super domain id
  * @ctry_code: country code
  * @alpha2: country alpha2
  * @offload_enabled: offload enabled
@@ -908,6 +921,7 @@ struct cur_regulatory_info {
 	uint8_t num_phy;
 	uint8_t phy_id;
 	uint16_t reg_dmn_pair;
+	uint16_t reg_6g_superid;
 	uint16_t ctry_code;
 	uint8_t alpha2[REG_ALPHA2_LEN + 1];
 	bool offload_enabled;
@@ -1081,7 +1095,7 @@ struct mas_chan_params {
 	char current_country[REG_ALPHA2_LEN + 1];
 	uint16_t def_region_domain;
 	uint16_t def_country_code;
-	uint16_t reg_dmn_pair;
+	uint32_t reg_dmn_pair;
 	uint16_t ctry_code;
 	struct reg_rule_info reg_rules;
 };
@@ -1102,15 +1116,19 @@ enum cc_regdmn_flag {
 
 /**
  * struct cc_regdmn_s: User country code or regdomain
- * @country_code: Country code
- * @regdmn_id:    Regdomain pair ID
- * @alpha:        Country ISO
- * @flags:        Regdomain flags
+ * @country_code:     Country code
+ * @reg_2g_5g_pair_id:  Regdomain pair ID (2Ghz + 5Ghz domain pair)
+ * @sixg_superdmn_id: 6Ghz super domain id
+ * @alpha:            Country ISO
+ * @flags:            Regdomain flags
  */
 struct cc_regdmn_s {
 	union {
 		uint16_t country_code;
-		uint16_t regdmn_id;
+		struct {
+			uint16_t reg_2g_5g_pair_id;
+			uint16_t sixg_superdmn_id;
+		} regdmn;
 		uint8_t alpha[REG_ALPHA2_LEN + 1];
 	} cc;
 	uint8_t flags;

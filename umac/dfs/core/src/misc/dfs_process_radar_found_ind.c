@@ -759,7 +759,8 @@ uint8_t dfs_get_bonding_channels_for_freq(struct wlan_dfs *dfs,
 		 * zero and "dfs_precac_secondary_freq" holds the secondary
 		 * frequency.
 		 */
-		if (dfs_is_precac_timer_running(dfs))
+		if (dfs_is_legacy_precac_enabled(dfs) &&
+		    dfs_is_precac_timer_running(dfs))
 			center_freq = dfs->dfs_precac_secondary_freq_mhz;
 		else
 			center_freq = curchan->dfs_ch_mhz_freq_seg2;
@@ -1273,9 +1274,9 @@ bool dfs_is_radarsource_agile(struct wlan_dfs *dfs,
 			      struct radar_found_info *radar_found)
 {
 	bool is_radar_from_agile_dfs =
-	    (dfs_is_agile_precac_enabled(dfs) ||
+	    ((dfs_is_agile_precac_enabled(dfs) &&
+	      dfs_is_precac_timer_running(dfs)) ||
 	     dfs_is_agile_rcac_enabled(dfs)) &&
-	     dfs_is_precac_timer_running(dfs) &&
 	    (radar_found->detector_id == dfs_get_agile_detector_id(dfs));
 	bool is_radar_from_zero_wait_dfs =
 	    (dfs_is_legacy_precac_enabled(dfs) &&

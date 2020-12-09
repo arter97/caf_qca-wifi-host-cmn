@@ -154,9 +154,13 @@ enum wlan_cm_source {
  * for production.
  * @dot11mode_filter: dot11mode filter used to restrict connection to
  * 11n/11ac/11ax.
- * @ht_caps: ht capability
+ * @sae_pwe: SAE mechanism for PWE derivation
+ *           0 = hunting-and-pecking loop only
+ *           1 = hash-to-element only
+ *           2 = both hunting-and-pecking loop and hash-to-element enabled
+ * @ht_caps: ht capability information bit mask
  * @ht_caps_mask: mask of valid ht caps
- * @vht_caps: vht capability
+ * @vht_caps: vht capability information bit mask
  * @vht_caps_mask: mask of valid vht caps
  * @fils_info: Fills related connect info
  */
@@ -173,6 +177,7 @@ struct wlan_cm_connect_req {
 	struct element_info scan_ie;
 	bool force_rsne_override;
 	enum dot11_mode_filter dot11mode_filter;
+	uint8_t sae_pwe;
 	uint16_t ht_caps;
 	uint16_t ht_caps_mask;
 	uint32_t vht_caps;
@@ -191,17 +196,29 @@ struct wlan_cm_connect_req {
  * used with out validation, used for the scenarios where the device is used
  * as a testbed device with special functionality and not recommended
  * for production.
+ * @ht_caps: ht capability
+ * @ht_caps_mask: mask of valid ht caps
+ * @vht_caps: vht capability
+ * @vht_caps_mask: mask of valid vht caps
  * @assoc_ie: assoc ie to be used in assoc req
  * @scan_ie: Default scan ie to be used in the uncast probe req
  * @bss: scan entry for the candidate
+ * @fils_info: Fills related connect info
  */
 struct wlan_cm_vdev_connect_req {
 	uint8_t vdev_id;
 	wlan_cm_id cm_id;
 	bool force_rsne_override;
+	uint16_t ht_caps;
+	uint16_t ht_caps_mask;
+	uint32_t vht_caps;
+	uint32_t vht_caps_mask;
 	struct element_info assoc_ie;
 	struct element_info scan_ie;
 	struct scan_cache_node *bss;
+#ifdef WLAN_FEATURE_FILS_SK
+	struct wlan_fils_con_info *fils_info;
+#endif
 };
 
 /**
@@ -311,9 +328,9 @@ struct fils_connect_rsp_params {
 
 /**
  * struct connect_rsp_ies - connect rsp ies stored in vdev filled during connect
- * @bcn_probe_rsp: beacon or probe rsp of connected AP
- * @assoc_req: assoc req send during conenct
- * @assoc_rsq: assoc rsp received during connection
+ * @bcn_probe_rsp: Raw beacon or probe rsp of connected AP
+ * @assoc_req: assoc req IE pointer send during conenct
+ * @assoc_rsq: assoc rsp IE received during connection
  * @ric_resp_ie: ric ie from assoc resp received during connection
  * @fills_ie: fills connection ie received during connection
  */
@@ -337,12 +354,12 @@ struct wlan_connect_rsp_ies {
  * @freq: Channel frequency
  * @connect_status: connect status success or failure
  * @reason: connect fail reason, valid only in case of failure
- * @reason_code: protocol reason code of the connect failure
+ * @status_code: protocol status code received in auth/assoc resp
  * @aid: aid
  * @connect_ies: connect related IE required by osif to send to kernel
  * @is_fils_connection: is fils connection
  */
-struct wlan_cm_connect_rsp {
+struct wlan_cm_connect_resp {
 	uint8_t vdev_id;
 	wlan_cm_id cm_id;
 	struct qdf_mac_addr bssid;
@@ -350,7 +367,7 @@ struct wlan_cm_connect_rsp {
 	qdf_freq_t freq;
 	QDF_STATUS connect_status;
 	enum wlan_cm_connect_fail_reason reason;
-	uint8_t reason_code;
+	enum wlan_status_code status_code;
 	uint8_t aid;
 	struct wlan_connect_rsp_ies connect_ies;
 #ifdef WLAN_FEATURE_FILS_SK

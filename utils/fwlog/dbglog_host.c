@@ -1328,6 +1328,16 @@ int dbglog_set_mod_log_lvl(wmi_unified_t wmi_handle, uint32_t mod_log_lvl)
 	return 0;
 }
 
+int dbglog_set_mod_wow_log_lvl(wmi_unified_t wmi_handle, uint32_t mod_log_lvl)
+{
+	/* set the global module level to log_lvl */
+	wma_config_debug_module_cmd(wmi_handle,
+				    WMI_DEBUG_LOG_PARAM_WOW_MOD_ENABLE_BITMAP,
+				    mod_log_lvl, NULL, 0);
+
+	return 0;
+}
+
 void
 dbglog_set_vap_enable_bitmap(wmi_unified_t wmi_handle,
 			     uint32_t vap_enable_bitmap)
@@ -4496,7 +4506,7 @@ int dbglog_init(wmi_unified_t wmi_handle)
 		wmi_unified_register_event_handler(wmi_handle,
 						   wmi_dbg_msg_event_id,
 						   dbglog_parse_debug_logs,
-						   WMA_RX_WORK_CTX);
+						   WMI_RX_DIAG_WORK_CTX);
 	if (QDF_IS_STATUS_ERROR(res))
 		return A_ERROR;
 
@@ -4504,14 +4514,14 @@ int dbglog_init(wmi_unified_t wmi_handle)
 	res = wmi_unified_register_event_handler(wmi_handle,
 						 wmi_diag_container_event_id,
 						 fw_diag_data_event_handler,
-						 WMA_RX_WORK_CTX);
+						 WMI_RX_DIAG_WORK_CTX);
 	if (QDF_IS_STATUS_ERROR(res))
 		return A_ERROR;
 
 	/* Register handler for new FW diag  Event, LOG, MSG combined */
 	res = wmi_unified_register_event_handler(wmi_handle, wmi_diag_event_id,
 						 diag_fw_handler,
-						 WMA_RX_WORK_CTX);
+						 WMI_RX_DIAG_WORK_CTX);
 	if (QDF_IS_STATUS_ERROR(res))
 		return A_ERROR;
 

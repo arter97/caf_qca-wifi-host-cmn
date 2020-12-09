@@ -229,6 +229,11 @@ enum wlan_crypto_key_type {
 				(_c == WLAN_CRYPTO_CIPHER_WEP_40) || \
 				(_c == WLAN_CRYPTO_CIPHER_WEP_104))
 
+#define DEFAULT_KEYMGMT_6G_MASK 0xFFFFFFFF
+
+/* AKM wlan_crypto_key_mgmt 0-8, 12-15 and 24 are not allowed. */
+#define ALLOWED_KEYMGMT_6G_MASK 0xFEFF0E00
+
 /*
  * enum fils_erp_cryptosuite: this enum defines the cryptosuites used
  * to calculate auth tag and auth tag length as defined by RFC 6696 5.3.1
@@ -244,6 +249,17 @@ enum fils_erp_cryptosuite {
 };
 
 /**
+ * struct mobility_domain_params - structure containing
+ *				   mobility domain info
+ * @mdie_present: mobility domain present or not
+ * @mobility_domain: mobility domain
+ */
+struct mobility_domain_params {
+	uint8_t mdie_present;
+	uint16_t mobility_domain;
+};
+
+/**
  * struct wlan_crypto_pmksa - structure of crypto to contain pmkid
  * @bssid: bssid for which pmkid is saved
  * @pmkid: pmkid info
@@ -253,6 +269,7 @@ enum fils_erp_cryptosuite {
  * @ssid: ssid information
  * @cache_id: cache id
  * @single_pmk_supported: SAE single pmk supported BSS
+ * @mdid: structure to contain mobility domain parameters
  */
 struct wlan_crypto_pmksa {
 	struct qdf_mac_addr bssid;
@@ -265,6 +282,7 @@ struct wlan_crypto_pmksa {
 #if defined(WLAN_SAE_SINGLE_PMK) && defined(WLAN_FEATURE_ROAM_OFFLOAD)
 	bool       single_pmk_supported;
 #endif
+	struct mobility_domain_params mdid;
 };
 
 /**

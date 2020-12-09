@@ -721,8 +721,8 @@ bool wlan_crypto_check_wpa_match(struct wlan_objmgr_psoc *psoc,
  *
  * Return: pointer to RSNXE capability or NULL
  */
-uint8_t *
-wlan_crypto_parse_rsnxe_ie(uint8_t *rsnxe_ie, uint8_t *cap_len);
+const uint8_t *
+wlan_crypto_parse_rsnxe_ie(const uint8_t *rsnxe_ie, uint8_t *cap_len);
 
 /**
  * wlan_get_crypto_params_from_wapi_ie - Function to get crypto params
@@ -1026,6 +1026,20 @@ QDF_STATUS wlan_crypto_pmksa_flush(struct wlan_crypto_params *crypto_params);
 QDF_STATUS wlan_crypto_set_del_pmksa(struct wlan_objmgr_vdev *vdev,
 				     struct wlan_crypto_pmksa *pmksa,
 				     bool set);
+
+/**
+ * wlan_crypto_update_pmk_cache_ft - Updates the mobility domain information
+ * for a BSSID in the PMKSA Cache table.
+ * @vdev: vdev
+ * @pmksa: pmksa to be updated.
+ *
+ * This function gets called from ucfg to update pmksa with mdid.
+ * And flush the matching mdid entries.
+ *
+ * Return: QDF_STATUS_SUCCESS - in case of success
+ */
+QDF_STATUS wlan_crypto_update_pmk_cache_ft(struct wlan_objmgr_vdev *vdev,
+					   struct wlan_crypto_pmksa *pmksa);
 
 #if defined(WLAN_SAE_SINGLE_PMK) && defined(WLAN_FEATURE_ROAM_OFFLOAD)
 /**

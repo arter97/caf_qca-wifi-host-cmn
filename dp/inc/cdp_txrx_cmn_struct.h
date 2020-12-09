@@ -2345,6 +2345,7 @@ struct cdp_monitor_filter {
  * @cfg_dp_ce_classify_enable: get CE classify enable config
  * @cfg_dp_disable_intra_bss_fwd: get intra bss fwd config
  * @cfg_dp_pktlog_buffer_size: get packet log buffer size config
+ * @cfg_dp_wow_check_rx_pending: get wow rx pending frame check config
  */
 enum cdp_dp_cfg {
 	cfg_dp_enable_data_stall,
@@ -2356,6 +2357,7 @@ enum cdp_dp_cfg {
 	cfg_dp_tso_enable,
 	cfg_dp_lro_enable,
 	cfg_dp_gro_enable,
+	cfg_dp_sg_enable,
 	cfg_dp_tx_flow_start_queue_offset,
 	cfg_dp_tx_flow_stop_queue_threshold,
 	cfg_dp_ipa_uc_tx_buf_size,
@@ -2366,6 +2368,7 @@ enum cdp_dp_cfg {
 	cfg_dp_ce_classify_enable,
 	cfg_dp_disable_intra_bss_fwd,
 	cfg_dp_pktlog_buffer_size,
+	cfg_dp_wow_check_rx_pending,
 };
 
 /**
@@ -2439,6 +2442,7 @@ enum cdp_flow_protocol_type {
 struct cdp_rx_flow_tuple_info {
 #ifdef WLAN_SUPPORT_RX_FISA
 	uint8_t tuple_populated;
+	uint8_t is_exception;
 #endif
 	uint32_t dest_ip_127_96;
 	uint32_t dest_ip_95_64;

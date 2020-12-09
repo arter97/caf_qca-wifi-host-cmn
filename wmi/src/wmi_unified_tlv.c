@@ -64,6 +64,19 @@
 #include <wmi_unified_vdev_api.h>
 #include <wmi_unified_vdev_tlv.h>
 
+/*
+ * If FW supports WMI_SERVICE_SCAN_CONFIG_PER_CHANNEL,
+ * then channel_list may fill the upper 12 bits with channel flags,
+ * while using only the lower 20 bits for channel frequency.
+ * If FW doesn't support WMI_SERVICE_SCAN_CONFIG_PER_CHANNEL,
+ * then channel_list only holds the frequency value.
+ */
+#define CHAN_LIST_FLAG_MASK_POS 20
+#define TARGET_SET_FREQ_IN_CHAN_LIST_TLV(buf, freq) \
+			((buf) |= ((freq) & WMI_SCAN_CHANNEL_FREQ_MASK))
+#define TARGET_SET_FLAGS_IN_CHAN_LIST_TLV(buf, flags) \
+			((buf) |= ((flags) << CHAN_LIST_FLAG_MASK_POS))
+
 /* HTC service ids for WMI for multi-radio */
 static const uint32_t multi_svc_ids[] = {WMI_CONTROL_SVC,
 				WMI_CONTROL_SVC_WMAC1,
@@ -2406,7 +2419,14 @@ static QDF_STATUS send_beacon_tmpl_send_cmd_tlv(wmi_unified_t wmi_handle,
 
 	WMITLV_SET_HDR(buf_ptr, WMITLV_TAG_ARRAY_BYTE, param->tmpl_len_aligned);
 	buf_ptr += WMI_TLV_HDR_SIZE;
-	qdf_mem_copy(buf_ptr, param->frm, param->tmpl_len);
+
+	/* for big endian host, copy engine byte_swap is enabled
+	 * But the frame content is in network byte order
+	 * Need to byte swap the frame content - so when copy engine
+	 * does byte_swap - target gets frame content in the correct order
+	 */
+	WMI_HOST_IF_MSG_COPY_CHAR_ARRAY(buf_ptr, param->frm,
+					param->tmpl_len);
 
 	wmi_mtrace(WMI_BCN_TMPL_CMDID, cmd->vdev_id, 0);
 	ret = wmi_unified_cmd_send(wmi_handle,
@@ -2974,8 +2994,12 @@ static QDF_STATUS send_scan_start_cmd_tlv(wmi_unified_t wmi_handle,
 
 	buf_ptr += sizeof(*cmd);
 	tmp_ptr = (uint32_t *) (buf_ptr + WMI_TLV_HDR_SIZE);
-	for (i = 0; i < params->chan_list.num_chan; ++i)
-		tmp_ptr[i] = params->chan_list.chan[i].freq;
+	for (i = 0; i < params->chan_list.num_chan; ++i) {
+		TARGET_SET_FREQ_IN_CHAN_LIST_TLV(tmp_ptr[i],
+					params->chan_list.chan[i].freq);
+		TARGET_SET_FLAGS_IN_CHAN_LIST_TLV(tmp_ptr[i],
+					params->chan_list.chan[i].flags);
+	}
 
 	WMITLV_SET_HDR(buf_ptr,
 		       WMITLV_TAG_ARRAY_UINT32,
@@ -3497,7 +3521,13 @@ static QDF_STATUS send_mgmt_cmd_tlv(wmi_unified_t wmi_handle,
 	WMITLV_SET_HDR(bufp, WMITLV_TAG_ARRAY_BYTE, roundup(bufp_len,
 							    sizeof(uint32_t)));
 	bufp += WMI_TLV_HDR_SIZE;
-	qdf_mem_copy(bufp, param->pdata, bufp_len);
+
+	/* for big endian host, copy engine byte_swap is enabled
+	 * But the frame content is in network byte order
+	 * Need to byte swap the frame content - so when copy engine
+	 * does byte_swap - target gets frame content in the correct order
+	 */
+	WMI_HOST_IF_MSG_COPY_CHAR_ARRAY(bufp, param->pdata, bufp_len);
 
 	status = qdf_nbuf_map_single(qdf_ctx, param->tx_frame,
 				     QDF_DMA_TO_DEVICE);
@@ -7205,6 +7235,8 @@ void wmi_copy_resource_config(wmi_resource_config *resource_cfg,
 	WMI_RSRC_CFG_HOST_SERVICE_FLAG_HOST_SUPPORT_MULTI_RADIO_EVTS_PER_RADIO_SET(
 		resource_cfg->host_service_flags, 1);
 
+	WMI_RSRC_CFG_FLAG_VIDEO_OVER_WIFI_ENABLE_SET(
+		resource_cfg->flag1, tgt_res_cfg->carrier_vow_optimization);
 }
 
 /* copy_hw_mode_id_in_init_cmd() - Helper routine to copy hw_mode in init cmd
@@ -8224,8 +8256,7 @@ wmi_fill_ocv_frame_type(uint32_t host_frmtype, uint32_t *ocv_frmtype)
 		break;
 
 	default:
-		WMI_LOGE("%s: invalid command type cmd %d",
-			 __func__, host_frmtype);
+		wmi_err("Invalid command type cmd %d", host_frmtype);
 		return QDF_STATUS_E_FAILURE;
 	}
 
@@ -8332,7 +8363,7 @@ QDF_STATUS send_wfa_test_cmd_tlv(wmi_unified_t wmi_handle,
 	wmi_mtrace(WMI_WFA_CONFIG_CMDID, wmi_wfatest->vdev_id, 0);
 	if (wmi_unified_cmd_send(wmi_handle, wmi_buf, len,
 				 WMI_WFA_CONFIG_CMDID)) {
-		WMI_LOGP("%s: failed to send wfa test command", __func__);
+		wmi_err("Failed to send wfa test command");
 		goto error;
 	}
 
@@ -8757,7 +8788,6 @@ static QDF_STATUS init_cmd_send_tlv(wmi_unified_t wmi_handle,
 	WMITLV_SET_HDR(&cmd->tlv_header,
 			WMITLV_TAG_STRUC_wmi_init_cmd_fixed_param,
 			WMITLV_GET_STRUCT_TLVLEN(wmi_init_cmd_fixed_param));
-
 	wmi_copy_resource_config(resource_cfg, param->res_cfg);
 	WMITLV_SET_HDR(&resource_cfg->tlv_header,
 			WMITLV_TAG_STRUC_wmi_resource_config,
@@ -12434,7 +12464,10 @@ static QDF_STATUS send_user_country_code_cmd_tlv(wmi_unified_t wmi_handle,
 				rd->cc.alpha[2]);
 	} else if (rd->flags == REGDMN_IS_SET) {
 		cmd->countrycode_type = WMI_COUNTRYCODE_DOMAIN_CODE;
-		cmd->country_code.domain_code = rd->cc.regdmn_id;
+		WMI_SET_BITS(cmd->country_code.domain_code, 0, 16,
+			     rd->cc.regdmn.reg_2g_5g_pair_id);
+		WMI_SET_BITS(cmd->country_code.domain_code, 16, 16,
+			     rd->cc.regdmn.sixg_superdmn_id);
 	}
 
 	wmi_mtrace(WMI_SET_INIT_COUNTRY_CMDID, NO_SESSION, 0);
@@ -13737,7 +13770,7 @@ extract_roam_result_stats_tlv(wmi_unified_t wmi_handle, void *evt_buf,
 	src_data = &param_buf->roam_result[idx];
 
 	dst->present = true;
-	dst->status = src_data->roam_status ? false : true;
+	dst->status = src_data->roam_status;
 	dst->timestamp = src_data->timestamp;
 	dst->fail_reason = src_data->roam_fail_reason;
 
@@ -14075,6 +14108,42 @@ extract_vdev_tsf_report_event_tlv(wmi_unified_t wmi_handle, void *evt_buf,
 	evt = param_buf->fixed_param;
 	param->tsf = ((uint64_t)(evt->tsf_high) << 32) | evt->tsf_low;
 	param->vdev_id = evt->vdev_id;
+
+	return QDF_STATUS_SUCCESS;
+}
+
+/**
+ * extract_pdev_csa_switch_count_status_tlv() - extract pdev csa switch count
+ *					      status tlv
+ * @wmi_handle: wmi handle
+ * @param evt_buf: pointer to event buffer
+ * @param param: Pointer to hold csa switch count status event param
+ *
+ * Return: QDF_STATUS_SUCCESS for success or error code
+ */
+static QDF_STATUS extract_pdev_csa_switch_count_status_tlv(
+				wmi_unified_t wmi_handle,
+				void *evt_buf,
+				struct pdev_csa_switch_count_status *param)
+{
+	WMI_PDEV_CSA_SWITCH_COUNT_STATUS_EVENTID_param_tlvs *param_buf;
+	wmi_pdev_csa_switch_count_status_event_fixed_param *csa_status;
+
+	param_buf = (WMI_PDEV_CSA_SWITCH_COUNT_STATUS_EVENTID_param_tlvs *)
+		     evt_buf;
+	if (!param_buf) {
+		wmi_err("Invalid CSA status event");
+		return QDF_STATUS_E_INVAL;
+	}
+
+	csa_status = param_buf->fixed_param;
+
+	param->pdev_id = wmi_handle->ops->convert_pdev_id_target_to_host(
+							wmi_handle,
+							csa_status->pdev_id);
+	param->current_switch_count = csa_status->current_switch_count;
+	param->num_vdevs = csa_status->num_vdevs;
+	param->vdev_ids = param_buf->vdev_ids;
 
 	return QDF_STATUS_SUCCESS;
 }
@@ -14435,6 +14504,8 @@ struct wmi_ops tlv_ops =  {
 				extract_cp_stats_more_pending_tlv,
 	.send_vdev_tsf_tstamp_action_cmd = send_vdev_tsf_tstamp_action_cmd_tlv,
 	.extract_vdev_tsf_report_event = extract_vdev_tsf_report_event_tlv,
+	.extract_pdev_csa_switch_count_status =
+		extract_pdev_csa_switch_count_status_tlv,
 };
 
 /**
@@ -15178,6 +15249,10 @@ static void populate_tlv_service(uint32_t *wmi_service)
 			WMI_SERVICE_MBSS_PARAM_IN_VDEV_START_SUPPORT;
 	wmi_service[wmi_service_fse_cmem_alloc_support] =
 			WMI_SERVICE_FSE_CMEM_ALLOC_SUPPORT;
+	wmi_service[wmi_service_scan_conf_per_ch_support] =
+			WMI_SERVICE_SCAN_CONFIG_PER_CHANNEL;
+	wmi_service[wmi_service_csa_beacon_template] =
+			WMI_SERVICE_CSA_BEACON_TEMPLATE;
 
 	wmi_populate_service_get_sta_in_ll_stats_req(wmi_service);
 }

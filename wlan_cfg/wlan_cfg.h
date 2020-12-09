@@ -191,6 +191,7 @@ struct wlan_srng_cfg {
  * @rx_pending_low_threshold: threshold of stopping pkt drop
  * @is_swlm_enabled: flag to enable/disable SWLM
  * @tx_per_pkt_vdev_id_check: Enable tx perpkt vdev id check
+ * @wow_check_rx_pending_enable: Enable RX frame pending check in WoW
  */
 struct wlan_cfg_dp_soc_ctxt {
 	int num_int_ctxts;
@@ -198,9 +199,11 @@ struct wlan_cfg_dp_soc_ctxt {
 	int max_alloc_size;
 	int per_pdev_tx_ring;
 	int num_tcl_data_rings;
+	int num_nss_tcl_data_rings;
 	int per_pdev_rx_ring;
 	int per_pdev_lmac_ring;
 	int num_reo_dest_rings;
+	int num_nss_reo_dest_rings;
 	int num_tx_desc_pool;
 	int num_tx_ext_desc_pool;
 	int num_tx_desc;
@@ -306,6 +309,7 @@ struct wlan_cfg_dp_soc_ctxt {
 	uint8_t radio0_rx_default_reo;
 	uint8_t radio1_rx_default_reo;
 	uint8_t radio2_rx_default_reo;
+	bool wow_check_rx_pending_enable;
 };
 
 /**
@@ -674,12 +678,20 @@ uint32_t wlan_cfg_max_alloc_size(struct wlan_cfg_dp_soc_ctxt *wlan_cfg_ctx);
 int wlan_cfg_per_pdev_tx_ring(struct wlan_cfg_dp_soc_ctxt *wlan_cfg_ctx);
 
 /*
- * wlan_cfg_num_tcl_data_rings() - Number of TCL Data rings supported by device
+ * wlan_cfg_num_tcl_data_rings() - Number of TCL Data rings (HOST mode)
  * @wlan_cfg_ctx
  *
  * Return: num_tcl_data_rings
  */
 int wlan_cfg_num_tcl_data_rings(struct wlan_cfg_dp_soc_ctxt *wlan_cfg_ctx);
+
+/*
+ * wlan_cfg_num_nss_tcl_data_rings() - Number of TCL Data rings (NSS offload)
+ * @wlan_cfg_ctx
+ *
+ * Return: num_tcl_data_rings
+ */
+int wlan_cfg_num_nss_tcl_data_rings(struct wlan_cfg_dp_soc_ctxt *wlan_cfg_ctx);
 
 /*
  * wlan_cfg_per_pdev_rx_ring() - Return true if Rx rings are mapped as
@@ -700,12 +712,20 @@ int wlan_cfg_per_pdev_rx_ring(struct wlan_cfg_dp_soc_ctxt *wlan_cfg_ctx);
 int wlan_cfg_per_pdev_lmac_ring(struct wlan_cfg_dp_soc_ctxt *wlan_cfg_ctx);
 
 /*
- * wlan_cfg_num_reo_dest_rings() - Number of REO Data rings supported by device
+ * wlan_cfg_num_reo_dest_rings() - Number of REO Data rings (HOST mode)
  * @wlan_cfg_ctx - Configuration Handle
  *
  * Return: num_reo_dest_rings
  */
 int wlan_cfg_num_reo_dest_rings(struct wlan_cfg_dp_soc_ctxt *wlan_cfg_ctx);
+
+/*
+ * wlan_cfg_num_nss_reo_dest_rings() - Number of REO Data rings (NSS offload)
+ * @wlan_cfg_ctx - Configuration Handle
+ *
+ * Return: num_reo_dest_rings
+ */
+int wlan_cfg_num_nss_reo_dest_rings(struct wlan_cfg_dp_soc_ctxt *wlan_cfg_ctx);
 
 /*
  * wlan_cfg_pkt_type() - Default 802.11 encapsulation type
@@ -1502,3 +1522,11 @@ uint8_t wlan_cfg_radio1_default_reo_get(struct wlan_cfg_dp_soc_ctxt *cfg);
  * Return: .
  */
 uint8_t wlan_cfg_radio2_default_reo_get(struct wlan_cfg_dp_soc_ctxt *cfg);
+
+/**
+ * wlan_cfg_set_rxdma1_enable() - Enable rxdma1
+ * @cfg: soc configuration context
+ *
+ * Return: .
+ */
+void wlan_cfg_set_rxdma1_enable(struct wlan_cfg_dp_soc_ctxt *wlan_cfg_ctx);

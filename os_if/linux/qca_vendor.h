@@ -790,6 +790,14 @@ enum qca_wlan_vendor_hang_reason {
 	 * the FW on a specific VDEV.
 	 */
 	QCA_WLAN_HANG_VDEV_PEER_DELETE_ALL_RESPONSE_TIMED_OUT = 22,
+	/* WMI sequence mismatch between WMI command and Tx completion */
+	QCA_WLAN_HANG_WMI_BUF_SEQUENCE_MISMATCH = 23,
+	/* Write to Device HAL register failed */
+	QCA_WLAN_HANG_REG_WRITE_FAILURE = 24,
+	/* No credit left to send the wow_wakeup_from_sleep to firmware */
+	QCA_WLAN_HANG_SUSPEND_NO_CREDIT = 25,
+	/* Bus failure */
+	QCA_WLAN_HANG_BUS_FAILURE = 26,
 };
 
 /**
@@ -3736,6 +3744,15 @@ enum qca_wlan_vendor_attr_nd_offload {
  *	%QCA_WLAN_VENDOR_ATTR_THERMAL_LEVEL and
  *	%QCA_WLAN_VENDOR_ATTR_THERMAL_COMPLETION_WINDOW attributes from
  *	userspace.
+ * @QCA_WLAN_VENDOR_FEATURE_ADAPTIVE_11R: Device supports Adaptive 11r.
+ *	With Adaptive 11r feature, access points advertise the vendor
+ *	specific IEs and MDE but do not include FT AKM in the RSNE.
+ *	The Adaptive 11r supported stations are expected to identify
+ *	such vendor specific IEs and connect to the AP in FT mode though
+ *	the profile is configured in non-FT mode.
+ *	The driver-based SME cases also need to have this support for
+ *	Adaptive 11r to handle the connection and roaming scenarios.
+ *	This flag indicates the support for the same to the user space.
  * @NUM_QCA_WLAN_VENDOR_FEATURES: Number of assigned feature bits
  */
 enum qca_wlan_vendor_features {
@@ -3751,6 +3768,7 @@ enum qca_wlan_vendor_features {
 	QCA_WLAN_VENDOR_FEATURE_11AX = 9,
 	QCA_WLAN_VENDOR_FEATURE_6GHZ_SUPPORT = 10,
 	QCA_WLAN_VENDOR_FEATURE_THERMAL_CONFIG = 11,
+	QCA_WLAN_VENDOR_FEATURE_ADAPTIVE_11R = 12,
 
 	NUM_QCA_WLAN_VENDOR_FEATURES /* keep last */
 };
@@ -6753,32 +6771,59 @@ enum qca_wlan_vendor_acs_select_reason {
  *
  * @QCA_WLAN_VENDOR_ATTR_GPIO_PARAM_PINNUM: Required (u32)
  * value to specify the gpio number.
- * This is required, when %QCA_WLAN_VENDOR_ATTR_GPIO_PARAM_COMMAND is
+ * Required, when %QCA_WLAN_VENDOR_ATTR_GPIO_PARAM_COMMAND is
  * %QCA_WLAN_VENDOR_GPIO_CONFIG or %.QCA_WLAN_VENDOR_GPIO_OUTPUT.
  *
  * @QCA_WLAN_VENDOR_ATTR_GPIO_PARAM_VALUE: Required (u32)
  * value to specify the gpio output level, please refer to enum qca_gpio_value
  * to get the available value that this item can use.
- * This is required, when %QCA_WLAN_VENDOR_ATTR_GPIO_PARAM_COMMAND is
+ * Required, when %QCA_WLAN_VENDOR_ATTR_GPIO_PARAM_COMMAND is
  * %QCA_WLAN_VENDOR_GPIO_OUTPUT.
  *
- * @QCA_WLAN_VENDOR_ATTR_GPIO_PARAM_PULL_TYPE: Required (u32)
+ * @QCA_WLAN_VENDOR_ATTR_GPIO_PARAM_PULL_TYPE: Optional (u32)
  * value to specify the gpio pull type, please refer to enum qca_gpio_pull_type
  * to get the available value that this item can use.
- * This is required, when %QCA_WLAN_VENDOR_ATTR_GPIO_PARAM_COMMAND is
- * %QCA_WLAN_VENDOR_GPIO_CONFIG.
+ * Required, when %QCA_WLAN_VENDOR_ATTR_GPIO_PARAM_COMMAND is
+ * %QCA_WLAN_VENDOR_GPIO_CONFIG and
+ * %QCA_WLAN_VENDOR_ATTR_GPIO_PARAM_INTERNAL_CONFIG attribute is not present.
+ * Optional when %QCA_WLAN_VENDOR_ATTR_GPIO_PARAM_INTERNAL_CONFIG
+ * attribute is present.
  *
- * @QCA_WLAN_VENDOR_ATTR_GPIO_PARAM_INTR_MODE: Required (u32)
+ * @QCA_WLAN_VENDOR_ATTR_GPIO_PARAM_INTR_MODE: Optional (u32)
  * value to specify the gpio interrupt mode, please refer to enum
  * qca_gpio_interrupt_mode to get the available value that this item can use.
- * This is required, when %QCA_WLAN_VENDOR_ATTR_GPIO_PARAM_COMMAND is
- * %QCA_WLAN_VENDOR_GPIO_CONFIG.
+ * Required, when %QCA_WLAN_VENDOR_ATTR_GPIO_PARAM_COMMAND is
+ * %QCA_WLAN_VENDOR_GPIO_CONFIG and
+ * %QCA_WLAN_VENDOR_ATTR_GPIO_PARAM_INTERNAL_CONFIG attribute is not present.
+ * Optional when %QCA_WLAN_VENDOR_ATTR_GPIO_PARAM_INTERNAL_CONFIG
+ * attribute is present.
  *
- * @QCA_WLAN_VENDOR_ATTR_GPIO_PARAM_DIR: Required (u32)
+ * @QCA_WLAN_VENDOR_ATTR_GPIO_PARAM_DIR: Optional (u32)
  * value to specify the gpio direction, please refer to enum qca_gpio_direction
  * to get the available value that this item can use.
- * This is required, when %QCA_WLAN_VENDOR_ATTR_GPIO_PARAM_COMMAND is
- * %QCA_WLAN_VENDOR_GPIO_CONFIG.
+ * Required, when %QCA_WLAN_VENDOR_ATTR_GPIO_PARAM_COMMAND is
+ * %QCA_WLAN_VENDOR_GPIO_CONFIG and
+ * %QCA_WLAN_VENDOR_ATTR_GPIO_PARAM_INTERNAL_CONFIG attribute is not present.
+ * Optional when %QCA_WLAN_VENDOR_ATTR_GPIO_PARAM_INTERNAL_CONFIG
+ * attribute is present.
+ *
+ * @QCA_WLAN_VENDOR_ATTR_GPIO_PARAM_MUX_CONFIG: Optional (u32)
+ * Value to specify the mux config. Meaning of a given value is dependent
+ * on the target chipset and gpio pin. Must be of the range 0-15.
+ * Optional when %QCA_WLAN_VENDOR_ATTR_GPIO_PARAM_COMMAND is
+ * %QCA_WLAN_VENDOR_GPIO_CONFIG. Defaults to 0.
+ *
+ * @QCA_WLAN_VENDOR_ATTR_GPIO_PARAM_DRIVE: Optional (u32)
+ * Value to specify the drive, Refer to enum qca_gpio_drive.
+ * Optional when %QCA_WLAN_VENDOR_ATTR_GPIO_PARAM_COMMAND is
+ * %QCA_WLAN_VENDOR_GPIO_CONFIG. Defaults to QCA_WLAN_GPIO_DRIVE_2MA(0).
+ *
+ * @QCA_WLAN_VENDOR_ATTR_GPIO_PARAM_INTERNAL_CONFIG: Optional (flag)
+ * Optional when %QCA_WLAN_VENDOR_ATTR_GPIO_PARAM_COMMAND is
+ * %QCA_WLAN_VENDOR_GPIO_CONFIG. When present this attribute signals that all
+ * other parameters for the given GPIO will be obtained from internal
+ * configuration. Only %QCA_WLAN_VENDOR_ATTR_GPIO_PARAM_PINNUM must be
+ * specified to indicate the GPIO pin being configured.
  */
 enum qca_wlan_gpio_attr {
 	QCA_WLAN_VENDOR_ATTR_GPIO_PARAM_INVALID = 0,
@@ -6794,6 +6839,12 @@ enum qca_wlan_gpio_attr {
 	QCA_WLAN_VENDOR_ATTR_GPIO_PARAM_INTR_MODE = 5,
 	/* Unsigned 32-bit attribute for GPIO direction to configure */
 	QCA_WLAN_VENDOR_ATTR_GPIO_PARAM_DIR = 6,
+	/* Unsigned 32-bit attribute for GPIO mux config */
+	QCA_WLAN_VENDOR_ATTR_GPIO_PARAM_MUX_CONFIG = 7,
+	/* Unsigned 32-bit attribute for GPIO drive */
+	QCA_WLAN_VENDOR_ATTR_GPIO_PARAM_DRIVE = 8,
+	/* Flag attribute for using internal gpio configuration */
+	QCA_WLAN_VENDOR_ATTR_GPIO_PARAM_INTERNAL_CONFIG = 9,
 
 	/* keep last */
 	QCA_WLAN_VENDOR_ATTR_GPIO_PARAM_LAST,
@@ -6866,6 +6917,30 @@ enum qca_gpio_interrupt_mode {
 	QCA_WLAN_GPIO_INTMODE_LEVEL_LOW = 4,
 	QCA_WLAN_GPIO_INTMODE_LEVEL_HIGH = 5,
 	QCA_WLAN_GPIO_INTMODE_MAX,
+};
+
+/**
+ * enum gpio_drive - GPIO drive
+ * @QCA_WLAN_GPIO_DRIVE_2MA: drive 2MA
+ * @QCA_WLAN_GPIO_DRIVE_4MA: drive 4MA
+ * @QCA_WLAN_GPIO_DRIVE_6MA: drive 6MA
+ * @QCA_WLAN_GPIO_DRIVE_8MA: drive 8MA
+ * @QCA_WLAN_GPIO_DRIVE_10MA: drive 10MA
+ * @QCA_WLAN_GPIO_DRIVE_12MA: drive 12MA
+ * @QCA_WLAN_GPIO_DRIVE_14MA: drive 14MA
+ * @QCA_WLAN_GPIO_DRIVE_16MA: drive 16MA
+ * @QCA_WLAN_GPIO_DRIVE_MAX: invalid gpio drive
+ */
+enum qca_gpio_drive {
+	QCA_WLAN_GPIO_DRIVE_2MA = 0,
+	QCA_WLAN_GPIO_DRIVE_4MA = 1,
+	QCA_WLAN_GPIO_DRIVE_6MA = 2,
+	QCA_WLAN_GPIO_DRIVE_8MA = 3,
+	QCA_WLAN_GPIO_DRIVE_10MA = 4,
+	QCA_WLAN_GPIO_DRIVE_12MA = 5,
+	QCA_WLAN_GPIO_DRIVE_14MA = 6,
+	QCA_WLAN_GPIO_DRIVE_16MA = 7,
+	QCA_WLAN_GPIO_DRIVE_MAX,
 };
 
 /**
@@ -8113,6 +8188,15 @@ enum qca_wlan_vendor_attr_wifi_test_config {
 	 * configuration is valid until AP restart.
 	 */
 	QCA_WLAN_VENDOR_ATTR_WIFI_TEST_CONFIG_FILS_DISCOVERY_FRAMES_TX = 44,
+
+	/* 8-bit unsigned value to configure the driver/firmware to enable or
+	 * disable full bandwidth UL MU-MIMO subfield in the HE PHY capabilities
+	 * information field.
+	 * 0 - Disable full bandwidth UL MU-MIMO subfield
+	 * 1 - Enable full bandwidth UL MU-MIMO subfield
+	 * This attribute is used to configure the testbed device.
+	 */
+	QCA_WLAN_VENDOR_ATTR_WIFI_TEST_CONFIG_FULL_BW_UL_MU_MIMO = 45,
 
 	/* keep last */
 	QCA_WLAN_VENDOR_ATTR_WIFI_TEST_CONFIG_AFTER_LAST,

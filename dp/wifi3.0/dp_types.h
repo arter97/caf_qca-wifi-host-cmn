@@ -75,6 +75,7 @@
 
 #if defined(WLAN_MAX_PDEVS) && (WLAN_MAX_PDEVS == 1)
 #define MAX_PDEV_CNT 1
+#define WLAN_DP_RESET_MON_BUF_RING_FILTER
 #else
 #define MAX_PDEV_CNT 3
 #endif
@@ -889,6 +890,12 @@ struct dp_soc_stats {
 		uint32_t near_full;
 		/* Break ring reaping as not all scattered msdu received */
 		uint32_t msdu_scatter_wait_break;
+		/* Number of bar frames received */
+		uint32_t bar_frame;
+		/* Number of frames routed from rxdma */
+		uint32_t rxdma2rel_route_drop;
+		/* Number of frames routed from reo*/
+		uint32_t reo2rel_route_drop;
 
 		struct {
 			/* Invalid RBM error count */
@@ -970,6 +977,8 @@ struct dp_soc_stats {
 			uint32_t nbuf_sanity_fail;
 			/* Duplicate link desc refilled */
 			uint32_t dup_refill_link_desc;
+			/* Incorrect msdu continuation bit in MSDU desc */
+			uint32_t msdu_continuation_err;
 		} err;
 
 		/* packet count per core - per ring */
@@ -1092,7 +1101,7 @@ struct rx_buff_pool {
  * value being power of 2.
  */
 #define DP_RX_HIST_MAX 2048
-#define DP_RX_ERR_HIST_MAX 4096
+#define DP_RX_ERR_HIST_MAX 2048
 #define DP_RX_REINJECT_HIST_MAX 1024
 
 QDF_COMPILE_TIME_ASSERT(rx_history_size,
@@ -1400,6 +1409,8 @@ struct dp_soc {
 	uint8_t num_tcl_data_rings;
 
 	/* TCL CMD_CREDIT ring */
+	bool init_tcl_cmd_cred_ring;
+
 	/* It is used as credit based ring on QCN9000 else command ring */
 	struct dp_srng tcl_cmd_credit_ring;
 
@@ -1536,6 +1547,8 @@ struct dp_soc {
 	qdf_timer_t int_timer;
 	uint8_t intr_mode;
 	uint8_t lmac_polled_mode;
+	qdf_timer_t mon_vdev_timer;
+	uint8_t mon_vdev_timer_state;
 
 	qdf_list_t reo_desc_freelist;
 	qdf_spinlock_t reo_desc_freelist_lock;
@@ -2045,6 +2058,7 @@ struct dp_pdev {
 	uint16_t md_data_filter;
 
 	qdf_atomic_t num_tx_outstanding;
+	int32_t tx_descs_max;
 
 	qdf_atomic_t num_tx_exception;
 

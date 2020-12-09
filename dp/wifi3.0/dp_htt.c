@@ -621,7 +621,8 @@ static inline QDF_STATUS DP_HTT_SEND_HTC_PKT(struct htt_soc *soc,
 	status = htc_send_pkt(soc->htc_soc, &pkt->htc_pkt);
 	if (status == QDF_STATUS_SUCCESS)
 		htt_htc_misc_pkt_list_add(soc, pkt);
-
+	else
+		soc->stats.fail_count++;
 	return status;
 }
 
@@ -643,6 +644,7 @@ htt_htc_misc_pkt_pool_free(struct htt_soc *soc)
 		if (htc_packet_get_magic_cookie(&(pkt->u.pkt.htc_pkt)) !=
 		    HTC_PACKET_MAGIC_COOKIE) {
 			pkt = next;
+			soc->stats.skip_count++;
 			continue;
 		}
 		netbuf = (qdf_nbuf_t) (pkt->u.pkt.htc_pkt.pNetBufContext);
@@ -659,6 +661,8 @@ htt_htc_misc_pkt_pool_free(struct htt_soc *soc)
 	}
 	soc->htt_htc_pkt_misclist = NULL;
 	HTT_TX_MUTEX_RELEASE(&soc->htt_tx_mutex);
+	dp_info("HTC Packets, fail count = %d, skip count = %d",
+		soc->stats.fail_count, soc->stats.skip_count);
 }
 
 /*
@@ -1024,7 +1028,7 @@ int htt_srng_setup(struct htt_soc *soc, int mac_id,
 	msg_word++;
 	*msg_word = 0;
 	HTT_SRING_SETUP_RING_MSI_DATA_SET(*msg_word,
-		srng_params.msi_data);
+		qdf_cpu_to_le32(srng_params.msi_data));
 
 	/* word 11 */
 	msg_word++;
@@ -1299,9 +1303,6 @@ int htt_h2t_rx_ring_cfg(struct htt_soc *htt_soc, int pdev_id,
 
 	HTT_RX_RING_SELECTION_CFG_STATUS_TLV_SET(*msg_word,
 		!!(srng_params.flags & HAL_SRNG_MSI_SWAP));
-
-	HTT_RX_RING_SELECTION_CFG_PKT_TLV_SET(*msg_word,
-		!!(srng_params.flags & HAL_SRNG_DATA_TLV_SWAP));
 
 	HTT_RX_RING_SELECTION_CFG_RX_OFFSETS_VALID_SET(*msg_word,
 						htt_tlv_filter->offset_valid);

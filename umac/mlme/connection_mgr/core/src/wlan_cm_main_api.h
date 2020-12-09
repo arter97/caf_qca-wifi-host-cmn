@@ -26,6 +26,7 @@
 #include "wlan_cm_main.h"
 #include "wlan_cm_sm.h"
 #include <include/wlan_mlme_cmn.h>
+#include <wlan_crypto_global_api.h>
 #ifdef WLAN_FEATURE_INTERFACE_MGR
 #include <wlan_if_mgr_api.h>
 #endif
@@ -145,7 +146,7 @@ void wlan_cm_scan_cb(struct wlan_objmgr_vdev *vdev,
  * Return: bool
  */
 bool cm_connect_resp_cmid_match_list_head(struct cnx_mgr *cm_ctx,
-					  struct wlan_cm_connect_rsp *resp);
+					  struct wlan_cm_connect_resp *resp);
 
 /**
  * cm_connect_active() - This API would be called after the connect
@@ -167,7 +168,7 @@ QDF_STATUS cm_connect_active(struct cnx_mgr *cm_ctx, wlan_cm_id *cm_id);
  * Return: QDF status
  */
 QDF_STATUS cm_try_next_candidate(struct cnx_mgr *cm_ctx,
-				 struct wlan_cm_connect_rsp *connect_resp);
+				 struct wlan_cm_connect_resp *connect_resp);
 
 /**
  * cm_peer_create_on_bss_select_ind_resp() - Called to create peer
@@ -222,7 +223,7 @@ QDF_STATUS cm_bss_peer_create_rsp(struct wlan_objmgr_vdev *vdev,
  * Return: QDF_STATUS
  */
 QDF_STATUS cm_connect_rsp(struct wlan_objmgr_vdev *vdev,
-			  struct wlan_cm_connect_rsp *resp);
+			  struct wlan_cm_connect_resp *resp);
 
 /**
  * cm_connect_complete() - This API would be called after connect complete
@@ -235,7 +236,7 @@ QDF_STATUS cm_connect_rsp(struct wlan_objmgr_vdev *vdev,
  * Return: QDF status
  */
 QDF_STATUS cm_connect_complete(struct cnx_mgr *cm_ctx,
-			       struct wlan_cm_connect_rsp *resp);
+			       struct wlan_cm_connect_resp *resp);
 
 /**
  * cm_add_connect_req_to_list() - add connect req to the connection manager
@@ -363,6 +364,20 @@ QDF_STATUS cm_disconnect_start_req(struct wlan_objmgr_vdev *vdev,
 				   struct wlan_cm_disconnect_req *req);
 
 /**
+ * cm_disconnect_start_req_sync() - disconnect request with wait till
+ * completed
+ * @vdev: vdev pointer
+ * @req: disconnect req
+ *
+ * Context: Only call for north bound disconnect req, if wait till complete
+ * is required, e.g. during vdev delete. Do not call from scheduler context.
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS cm_disconnect_start_req_sync(struct wlan_objmgr_vdev *vdev,
+					struct wlan_cm_disconnect_req *req);
+
+/**
  * cm_bss_peer_delete_req() - Connection manager bss peer delete
  * request
  * @vdev: VDEV object
@@ -439,17 +454,10 @@ void cm_send_disconnect_resp(struct cnx_mgr *cm_ctx, wlan_cm_id cm_id);
  *
  * Return: bool
  */
-#ifdef CONN_MGR_ADV_FEATURE
 static inline bool cm_ser_get_blocking_cmd(void)
 {
 	return true;
 }
-#else
-static inline bool cm_ser_get_blocking_cmd(void)
-{
-	return false;
-}
-#endif
 
 /**
  * cm_get_cm_id() - Get unique cm id for connect/disconnect request
@@ -481,6 +489,58 @@ struct cnx_mgr *cm_get_cm_ctx_fl(struct wlan_objmgr_vdev *vdev,
  * Return: void
  */
 void cm_reset_active_cm_id(struct wlan_objmgr_vdev *vdev, wlan_cm_id cm_id);
+
+#ifdef CRYPTO_SET_KEY_CONVERGED
+/**
+ * cm_set_key() - set wep or fils key on connection completion
+ * @cm_ctx: connection manager context
+ * @unicast: if key is unicast
+ * @key_idx: Key index
+ * @bssid: bssid of the connected AP
+ *
+ * Return: void
+ */
+QDF_STATUS cm_set_key(struct cnx_mgr *cm_ctx, bool unicast,
+		      uint8_t key_idx, struct qdf_mac_addr *bssid);
+#endif
+
+#ifdef CONN_MGR_ADV_FEATURE
+/**
+ * cm_store_wep_key() - store wep keys in crypto on connect active
+ * @cm_ctx: connection manager context
+ * @crypto: connection crypto info
+ * @cm_id: cm_id of the connection
+ *
+ * Return: void
+ */
+void cm_store_wep_key(struct cnx_mgr *cm_ctx,
+		      struct wlan_cm_connect_crypto_info *crypto,
+		      wlan_cm_id cm_id);
+#else
+static inline void cm_store_wep_key(struct cnx_mgr *cm_ctx,
+				    struct wlan_cm_connect_crypto_info *crypto,
+				    wlan_cm_id cm_id)
+{}
+#endif
+
+#ifdef WLAN_FEATURE_FILS_SK
+/**
+ * cm_store_fils_key() - store fils keys in crypto on connection complete
+ * @cm_ctx: connection manager context
+ * @unicast: if key is unicast
+ * @key_id: Key index
+ * @key_length: key length
+ * @key: key data
+ * @bssid: bssid of the connected AP
+ * @cm_id: cm_id of the connection
+ *
+ * Return: void
+ */
+void cm_store_fils_key(struct cnx_mgr *cm_ctx, bool unicast,
+		       uint8_t key_id, uint16_t key_length,
+		       uint8_t *key, struct qdf_mac_addr *bssid,
+		       wlan_cm_id cm_id);
+#endif
 
 /**
  * cm_check_cmid_match_list_head() - check if list head command matches the
@@ -547,7 +607,7 @@ QDF_STATUS cm_delete_req_from_list(struct cnx_mgr *cm_ctx, wlan_cm_id cm_id);
 QDF_STATUS
 cm_fill_bss_info_in_connect_rsp_by_cm_id(struct cnx_mgr *cm_ctx,
 					 wlan_cm_id cm_id,
-					 struct wlan_cm_connect_rsp *resp);
+					 struct wlan_cm_connect_resp *resp);
 
 #if defined(WLAN_SAE_SINGLE_PMK) && defined(WLAN_FEATURE_ROAM_OFFLOAD)
 bool cm_is_cm_id_current_candidate_single_pmk(struct cnx_mgr *cm_ctx,
@@ -564,13 +624,15 @@ bool cm_is_cm_id_current_candidate_single_pmk(struct cnx_mgr *cm_ctx,
 /**
  * cm_flush_pending_request() - Flush all pending requests matching flush prefix
  * @cm_ctx: connection manager context
- * @flush_prefix: prefix for the type of command to flush
+ * @prefix: prefix for the type of command to flush
+ * @only_failed_req: flush only the failed pending req
  *
  * Context: Can be called from any context.
  *
  * Return: void
  */
-void cm_flush_pending_request(struct cnx_mgr *cm_ctx, uint32_t flush_prefix);
+void cm_flush_pending_request(struct cnx_mgr *cm_ctx, uint32_t prefix,
+			      bool only_failed_req);
 
 /**
  * cm_remove_cmd() - Remove cmd from req list and serialization

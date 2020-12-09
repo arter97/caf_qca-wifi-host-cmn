@@ -1629,158 +1629,6 @@ struct mobility_domain_info {
 	uint16_t mobility_domain;
 };
 
-#ifndef ROAM_OFFLOAD_V1
-#define WMI_HOST_ROAM_OFFLOAD_NUM_MCS_SET     (16)
-
-/* This TLV will be filled only in case roam offload
- * for wpa2-psk/pmkid/ese/11r is enabled */
-typedef struct {
-	uint32_t rssi_cat_gap;          /* gap for every category bucket */
-	uint32_t prefer_5g;             /* prefer select 5G candidate */
-	uint32_t select_5g_margin;
-	uint32_t reassoc_failure_timeout;       /* reassoc failure timeout */
-	uint32_t capability;
-	uint32_t ht_caps_info;
-	uint32_t ampdu_param;
-	uint32_t ht_ext_cap;
-	uint32_t ht_txbf;
-	uint32_t asel_cap;
-	uint32_t qos_enabled;
-	uint32_t qos_caps;
-	uint32_t wmm_caps;
-	/* since this is 4 byte aligned, we don't declare it as tlv array */
-	uint32_t mcsset[WMI_HOST_ROAM_OFFLOAD_NUM_MCS_SET >> 2];
-	uint32_t ho_delay_for_rx;
-	uint32_t roam_preauth_retry_count;
-	uint32_t roam_preauth_no_ack_timeout;
-} roam_offload_param;
-
-#define WMI_FILS_MAX_RRK_LENGTH 64
-#define WMI_FILS_MAX_RIK_LENGTH WMI_FILS_MAX_RRK_LENGTH
-#define WMI_FILS_MAX_REALM_LENGTH 256
-#define WMI_FILS_MAX_USERNAME_LENGTH 16
-#define WMI_FILS_FT_MAX_LEN 48
-
-/**
- * struct roam_fils_params - Roam FILS params
- * @username: username
- * @username_length: username length
- * @next_erp_seq_num: next ERP sequence number
- * @rrk: RRK
- * @rrk_length: length of @rrk
- * @rik: RIK
- * @rik_length: length of @rik
- * @realm: realm
- * @realm_len: length of @realm
- * @fils_ft: xx_key for FT-FILS connection
- * @fils_ft_len: length of FT-FILS
- */
-struct roam_fils_params {
-	uint8_t username[WMI_FILS_MAX_USERNAME_LENGTH];
-	uint32_t username_length;
-	uint32_t next_erp_seq_num;
-	uint8_t rrk[WMI_FILS_MAX_RRK_LENGTH];
-	uint32_t rrk_length;
-	uint8_t rik[WMI_FILS_MAX_RIK_LENGTH];
-	uint32_t rik_length;
-	uint8_t realm[WMI_FILS_MAX_REALM_LENGTH];
-	uint32_t realm_len;
-	uint8_t fils_ft[WMI_FILS_FT_MAX_LEN];
-	uint8_t fils_ft_len;
-};
-
-/* struct roam_offload_scan_params - structure
- *     containing roaming offload scan parameters
- * @is_roam_req_valid: flag to tell whether roam req
- *                     is valid or NULL
- * @mode: stores flags for scan
- * @vdev_id: vdev id
- * @roam_offload_enabled: flag for offload enable
- * @disable_self_roam: disable roaming to self BSSID
- * @psk_pmk: pre shared key/pairwise master key
- * @pmk_len: length of PMK
- * @prefer_5ghz: prefer select 5G candidate
- * @roam_rssi_cat_gap: gap for every category bucket
- * @select_5ghz_margin: select 5 Ghz margin
- * @krk: KRK
- * @btk: BTK
- * @reassoc_failure_timeout: reassoc failure timeout
- * @rokh_id_length: r0kh id length
- * @rokh_id: r0kh id
- * @roam_key_mgmt_offload_enabled: roam offload flag
- * @auth_mode: authentication mode
- * @fw_okc: use OKC in firmware
- * @fw_pmksa_cache: use PMKSA cache in firmware
- * @is_ese_assoc: flag to determine ese assoc
- * @mdid: mobility domain info
- * @roam_offload_params: roam offload tlv params
- * @min_delay_btw_roam_scans: Delay btw two scans
- * @roam_trigger_reason_bitmask: Roam reason bitmark
- * @roam_offload_params: roam offload tlv params, unused
- *     in non tlv target, only for roam offload feature
- * @assoc_ie_length: Assoc IE length
- * @assoc_ie: Assoc IE buffer
- * @add_fils_tlv: add FILS TLV boolean
- * @roam_fils_params: roam fils params
- * @rct_validity_timer: duration value for which the entries in
- * roam candidate table are valid
- * @roam_scan_inactivity_time: inactivity monitoring time in ms for which the
- * device is considered to be inactive
- * @is_sae_same_pmk: Flag to indicate fw whether WLAN_SAE_SINGLE_PMK feature is
- * enable or not
- * @enable_ft_im_roaming: Flag to enable/disable FT-IM roaming upon receiving
- * deauth
- * @roam_inactive_data_packet_count: Maximum allowed data packets count during
- * roam_scan_inactivity_time.
- * @roam_scan_period_after_inactivity: Roam scan period in ms after device is
- * in inactive state.
- */
-struct roam_offload_scan_params {
-	uint8_t is_roam_req_valid;
-	uint32_t mode;
-	uint32_t vdev_id;
-#ifdef WLAN_FEATURE_ROAM_OFFLOAD
-	uint8_t roam_offload_enabled;
-	bool disable_self_roam;
-	uint8_t psk_pmk[WMI_ROAM_SCAN_PSK_SIZE];
-	uint32_t pmk_len;
-	uint8_t prefer_5ghz;
-	uint8_t roam_rssi_cat_gap;
-	uint8_t select_5ghz_margin;
-	uint8_t krk[WMI_KRK_KEY_LEN];
-	uint8_t btk[WMI_BTK_KEY_LEN];
-	uint32_t reassoc_failure_timeout;
-	uint32_t rokh_id_length;
-	uint8_t rokh_id[WMI_ROAM_R0KH_ID_MAX_LEN];
-	uint8_t roam_key_mgmt_offload_enabled;
-	int auth_mode;
-	bool fw_okc;
-	bool fw_pmksa_cache;
-	uint32_t rct_validity_timer;
-	bool is_adaptive_11r;
-	bool is_sae_same_pmk;
-	bool enable_ft_im_roaming;
-#endif
-	uint32_t min_delay_btw_roam_scans;
-	uint32_t roam_trigger_reason_bitmask;
-	bool is_ese_assoc;
-	bool is_11r_assoc;
-	struct mobility_domain_info mdid;
-#ifdef WLAN_FEATURE_ROAM_OFFLOAD
-	roam_offload_param roam_offload_params;
-#endif
-	uint32_t assoc_ie_length;
-	uint8_t  assoc_ie[MAX_ASSOC_IE_LENGTH];
-	bool add_fils_tlv;
-	uint32_t roam_scan_inactivity_time;
-	uint32_t roam_inactive_data_packet_count;
-	uint32_t roam_scan_period_after_inactivity;
-#ifdef WLAN_FEATURE_FILS_SK
-	struct roam_fils_params roam_fils_params;
-#endif
-};
-#endif
-
 /**
  * struct wifi_epno_network - enhanced pno network block
  * @ssid: ssid
@@ -2887,12 +2735,14 @@ struct peer_chan_width_switch_info {
  * struct peer_chan_width_switch_params - Peer channel width capability wrapper
  * @num_peers: Total number of peers connected to AP
  * @max_peers_per_cmd: Peer limit per WMI command
+ * @vdev_id: vdev id
  * @chan_width_peer_list: List of capabilities for all connected peers
  */
 
 struct peer_chan_width_switch_params {
 	uint32_t num_peers;
 	uint32_t max_peers_per_cmd;
+	uint32_t vdev_id;
 	struct peer_chan_width_switch_info *chan_width_peer_list;
 };
 
@@ -3747,6 +3597,52 @@ enum gpio_value {
 };
 
 /**
+ * enum gpio_init_enable - GPIO init enable
+ * @WMI_HOST_GPIO_INIT_DISABLE: Disable INIT
+ * @WMI_HOST_GPIO_INIT_ENABLE: Enable INIT
+ * @WMI_HOST_GPIO_INIT_MAX: invalid gpio init_enable
+ */
+enum gpio_init_enable {
+	WMI_HOST_GPIO_INIT_DISABLE = 0,
+	WMI_HOST_GPIO_INIT_ENABLE = 1,
+	WMI_HOST_GPIO_INIT_MAX,
+};
+
+/**
+ * enum gpio_drive - GPIO drive
+ * @WMI_HOST_GPIO_DRIVE_2MA: drive 2MA
+ * @WMI_HOST_GPIO_DRIVE_4MA: drive 4MA
+ * @WMI_HOST_GPIO_DRIVE_6MA: drive 6MA
+ * @WMI_HOST_GPIO_DRIVE_8MA: drive 8MA
+ * @WMI_HOST_GPIO_DRIVE_10MA: drive 10MA
+ * @WMI_HOST_GPIO_DRIVE_12MA: drive 12MA
+ * @WMI_HOST_GPIO_DRIVE_14MA: drive 14MA
+ * @WMI_HOST_GPIO_DRIVE_16MA: drive 16MA
+ * @WMI_HOST_GPIO_DRIVE_MAX: invalid gpio drive
+ */
+enum gpio_drive {
+	WMI_HOST_GPIO_DRIVE_2MA = 0,
+	WMI_HOST_GPIO_DRIVE_4MA = 1,
+	WMI_HOST_GPIO_DRIVE_6MA = 2,
+	WMI_HOST_GPIO_DRIVE_8MA = 3,
+	WMI_HOST_GPIO_DRIVE_10MA = 4,
+	WMI_HOST_GPIO_DRIVE_12MA = 5,
+	WMI_HOST_GPIO_DRIVE_14MA = 6,
+	WMI_HOST_GPIO_DRIVE_16MA = 7,
+	WMI_HOST_GPIO_DRIVE_MAX,
+};
+
+/**
+ * enum gpio_mux_config - GPIO mux_config
+ * @WMI_HOST_GPIO_MUX_DEFAULT: Default mux value
+ * @WMI_HOST_GPIO_MUX_MAX: maximum allowed gpio mux_config
+ */
+enum gpio_mux_config {
+	WMI_HOST_GPIO_MUX_DEFAULT = 0,
+	WMI_HOST_GPIO_MUX_MAX = 15,
+};
+
+/**
  * struct wmi_host_gpio_input_event - GPIO input event structure
  * @gpio_num: GPIO number which changed state
  */
@@ -3766,6 +3662,9 @@ struct gpio_config_params {
 	enum gpio_direction pin_dir;
 	enum gpio_pull_type pin_pull_type;
 	enum gpio_interrupt_mode pin_intr_mode;
+	enum gpio_mux_config mux_config_val;
+	enum gpio_drive drive;
+	enum gpio_init_enable init_enable;
 };
 
 /**
@@ -5416,6 +5315,8 @@ typedef enum {
 #ifdef FEATURE_CLUB_LL_STATS_AND_GET_STATION
 	wmi_service_get_station_in_ll_stats_req,
 #endif
+	wmi_service_scan_conf_per_ch_support,
+	wmi_service_csa_beacon_template,
 	wmi_services_max,
 } wmi_conv_service_ids;
 #define WMI_SERVICE_UNAVAILABLE 0xFFFF
@@ -5430,6 +5331,7 @@ typedef enum {
  * @WMI_DBGLOG_MOD_LOG_LEVEL: Enable MODULE level debug
  * @WMI_DBGLOG_TYPE: set type of the debug output
  * @WMI_DBGLOG_REPORT_ENABLE: Enable Disable debug
+ * @WMI_DBGLOG_MOD_WOW_LOG_LEVEL: set the WOW MODULE debug loglevel
  */
 typedef enum {
 	WMI_DBGLOG_LOG_LEVEL = 0x1,
@@ -5439,7 +5341,8 @@ typedef enum {
 	WMI_DBGLOG_MODULE_DISABLE,
 	WMI_DBGLOG_MOD_LOG_LEVEL,
 	WMI_DBGLOG_TYPE,
-	WMI_DBGLOG_REPORT_ENABLE
+	WMI_DBGLOG_REPORT_ENABLE,
+	WMI_DBGLOG_MOD_WOW_LOG_LEVEL
 } WMI_DBG_PARAM;
 
 /**
@@ -5557,6 +5460,7 @@ struct wmi_host_fw_abi_ver {
  * @ema_max_profile_period: Maximum EMA profile periodicity on any pdev
  * @max_ndp_sessions: Max ndp sessions support
  * @max_ndi: max number of ndi host supports
+ * @carrier_vow_optmization: configure vow-optimization for carrier-usecase
  */
 typedef struct {
 	uint32_t num_vdevs;
@@ -5660,6 +5564,7 @@ typedef struct {
 	uint32_t ema_max_profile_period;
 	uint32_t max_ndp_sessions;
 	uint32_t max_ndi;
+	bool carrier_vow_optimization;
 } target_resource_config;
 
 /**
@@ -8045,13 +7950,14 @@ struct wmi_roam_scan_data {
  * struct wmi_roam_result - Roam result related info.
  * @present:            Flag to check if the roam result tlv is present
  * @timestamp:          Host timestamp in millisecs
- * @status:             0 - Roaming is success ; 1 - Roaming failed
+ * @status:             0 - Roaming is success ; 1 - Roaming failed ;
+ * 2 - No roam
  * @fail_reason:        One of WMI_ROAM_FAIL_REASON_ID
  */
 struct wmi_roam_result {
 	bool present;
 	uint32_t timestamp;
-	bool status;
+	uint32_t status;
 	uint32_t fail_reason;
 };
 
@@ -8567,6 +8473,16 @@ enum wmi_host_tbtt_offset_cmd_type {
 struct wmi_raw_event_buffer {
 	void *evt_raw_buf;
 	void *evt_processed_buf;
+};
+
+/**
+ * struct wmi_pdev_enable_tx_mode_selection - fw tx mode selection
+ * @pdev_id: radio id
+ * @enable_tx_mode_selection: flag to enable tx mode selection
+ */
+struct wmi_pdev_enable_tx_mode_selection {
+	uint32_t pdev_id;
+	uint32_t enable_tx_mode_selection;
 };
 
 #endif /* _WMI_UNIFIED_PARAM_H_ */

@@ -137,46 +137,6 @@ QDF_STATUS wlan_dcs_cmd_send(struct wlan_objmgr_psoc *psoc,
 }
 
 /**
- * wlan_dcs_disable_cmd_send() - send dcs disable command to target_if layer
- * @psoc: psoc pointer
- * @pdev_id: pdev_id
- * @is_host_pdev_id: pdev_id is host id or not
- *
- * The function gets called to send dcs disable command to FW
- *
- * return: QDF_STATUS_SUCCESS for success or error code
- */
-static QDF_STATUS wlan_dcs_disable_cmd_send(struct wlan_objmgr_psoc *psoc,
-					    uint32_t pdev_id,
-					    bool is_host_pdev_id)
-{
-	struct wlan_target_if_dcs_tx_ops *dcs_tx_ops;
-	struct dcs_pdev_priv_obj *dcs_pdev_priv;
-
-	if (!psoc) {
-		dcs_err("psoc is null");
-		return QDF_STATUS_E_NULL_VALUE;
-	}
-
-	dcs_pdev_priv = wlan_dcs_get_pdev_private_obj(psoc, pdev_id);
-	if (!dcs_pdev_priv) {
-		dcs_err("dcs pdev private object is null");
-		return QDF_STATUS_E_NULL_VALUE;
-	}
-
-	dcs_tx_ops = target_if_dcs_get_tx_ops(psoc);
-	if (dcs_tx_ops->dcs_cmd_send) {
-		dcs_info("dcs_enable: %u, pdev_id: %u", 0, pdev_id);
-		return dcs_tx_ops->dcs_cmd_send(psoc,
-						pdev_id,
-						is_host_pdev_id,
-						0);
-	}
-
-	return QDF_STATUS_SUCCESS;
-}
-
-/**
  * wlan_dcs_im_copy_stats() - dcs target interference mitigation statistics copy
  * @prev_stats: previous statistics pointer
  * @curr_stats: current statistics pointer
@@ -283,6 +243,7 @@ wlan_dcs_wlan_interference_process(
 	uint32_t cycle_count_delta = 0;
 	uint32_t tx_frame_delta = 0;
 	uint32_t rx_frame_delta = 0;
+	uint32_t my_bss_rx_delta = 0;
 	uint32_t reg_total_cu = 0;
 	uint32_t reg_tx_cu = 0;
 	uint32_t reg_rx_cu = 0;
@@ -325,11 +286,7 @@ wlan_dcs_wlan_interference_process(
 	    (curr_stats->reg_tsf32 <= prev_stats->reg_tsf32)) {
 		if (unlikely(dcs_host_params.dcs_debug >= DCS_DEBUG_VERBOSE))
 			dcs_debug("ignoring due to negative TSF value");
-
-		/* Copy the current stats to previous stats for next run */
-		wlan_dcs_im_copy_stats(prev_stats, curr_stats);
-
-		goto end;
+		goto copy_stats;
 	}
 
 	reg_tsf_delta = curr_stats->reg_tsf32 - prev_stats->reg_tsf32;
@@ -342,11 +299,7 @@ wlan_dcs_wlan_interference_process(
 		curr_stats->mib_stats.reg_rxclr_cnt) {
 		if (unlikely(dcs_host_params.dcs_debug >= DCS_DEBUG_VERBOSE))
 			dcs_debug("ignoring due to negative rxclr count");
-
-		/* Copy the current stats to previous stats for next run */
-		wlan_dcs_im_copy_stats(prev_stats, curr_stats);
-
-		goto end;
+		goto copy_stats;
 	}
 
 	rxclr_delta = curr_stats->mib_stats.reg_rxclr_cnt -
@@ -362,18 +315,57 @@ wlan_dcs_wlan_interference_process(
 	cycle_count_delta = curr_stats->mib_stats.reg_cycle_cnt -
 				prev_stats->mib_stats.reg_cycle_cnt;
 
+	my_bss_rx_delta = curr_stats->my_bss_rx_cycle_count -
+				prev_stats->my_bss_rx_cycle_count;
+
 	if (unlikely(dcs_host_params.dcs_debug >= DCS_DEBUG_VERBOSE))
-		dcs_debug("rxclr_delta: %u, rxclr_ext_delta: %u, tx_frame_delta: %u, rx_frame_delta: %u, cycle_count_delta: %u",
-			  rxclr_delta, rxclr_ext_delta,
-			  tx_frame_delta, rx_frame_delta, cycle_count_delta);
+		dcs_debug("rxclr_delta: %u, rxclr_ext_delta: %u, tx_frame_delta: %u, rx_frame_delta: %u, cycle_count_delta: %u, my_bss_rx_delta: %u",
+			  rxclr_delta, rxclr_ext_delta, tx_frame_delta,
+			  rx_frame_delta, cycle_count_delta, my_bss_rx_delta);
 
 	if (0 == (cycle_count_delta >> 8)) {
-		wlan_dcs_im_copy_stats(prev_stats, curr_stats);
 		if (unlikely(dcs_host_params.dcs_debug >= DCS_DEBUG_VERBOSE))
 			dcs_debug("cycle count NULL --Investigate--");
-
-		goto end;
+		goto copy_stats;
 	}
+
+	/* Update user stats */
+	wlan_dcs_pdev_obj_lock(dcs_pdev_priv);
+	if (dcs_pdev_priv->dcs_host_params.user_request_count) {
+		struct wlan_host_dcs_im_user_stats *p_user_stats =
+					     &p_dcs_im_stats->user_dcs_im_stats;
+
+		p_user_stats->cycle_count += cycle_count_delta;
+		p_user_stats->rxclr_count += rxclr_delta;
+		p_user_stats->rx_frame_count += rx_frame_delta;
+		p_user_stats->my_bss_rx_cycle_count += my_bss_rx_delta;
+		if (0 == p_user_stats->max_rssi &&
+		    0 == p_user_stats->min_rssi) {
+			p_user_stats->max_rssi = curr_stats->last_ack_rssi;
+			p_user_stats->min_rssi = curr_stats->last_ack_rssi;
+		} else {
+			if (curr_stats->last_ack_rssi > p_user_stats->max_rssi)
+				p_user_stats->max_rssi =
+						      curr_stats->last_ack_rssi;
+			if (curr_stats->last_ack_rssi < p_user_stats->min_rssi)
+				p_user_stats->min_rssi =
+						      curr_stats->last_ack_rssi;
+		}
+		dcs_pdev_priv->dcs_host_params.user_request_count--;
+		if (0 == dcs_pdev_priv->dcs_host_params.user_request_count)
+			dcs_pdev_priv->dcs_host_params.notify_user = 1;
+	}
+	wlan_dcs_pdev_obj_unlock(dcs_pdev_priv);
+
+	/*
+	 * For below scenario, will ignore dcs event data and won't do
+	 * interference detection algorithm calculation:
+	 * 1: Current SAP channel isn't on 5G band
+	 * 2: In the process of ACS
+	 * 3: In the process of dcs disabling dcs_restart_delay time duration
+	 */
+	if (!dcs_host_params.dcs_algorithm_process)
+		goto copy_stats;
 
 	/*
 	 * Total channel utiliztaion is the amount of time RXCLR is
@@ -549,14 +541,13 @@ wlan_dcs_wlan_interference_process(
 	/* Count the current run too */
 	p_dcs_im_stats->im_samp_cnt++;
 
-	/* Copy the stats for next cycle */
-	wlan_dcs_im_copy_stats(prev_stats, curr_stats);
-
 	if (unlikely(dcs_host_params.dcs_debug >= DCS_DEBUG_VERBOSE))
 		dcs_debug("intfr_count: %u, sample_count: %u",
 			  p_dcs_im_stats->im_intfr_cnt,
 			  p_dcs_im_stats->im_samp_cnt);
-
+copy_stats:
+	 /* Copy the stats for next cycle */
+	wlan_dcs_im_copy_stats(prev_stats, curr_stats);
 end:
 	return start_dcs_cbk_handler;
 }
@@ -586,13 +577,10 @@ void wlan_dcs_disable_timer_fn(void *dcs_timer_args)
 	}
 
 	dcs_pdev_priv = &dcs_psoc_priv->dcs_pdev_priv[pdev_id];
-
-	qdf_mem_set(&dcs_pdev_priv->dcs_im_stats,
-		    sizeof(dcs_pdev_priv->dcs_im_stats), 0);
 	dcs_pdev_priv->dcs_freq_ctrl_params.disable_delay_process = false;
 
 	dcs_info("dcs disable timeout, enable dcs detection again");
-	wlan_dcs_cmd_send(psoc, pdev_id, true);
+	wlan_dcs_set_algorithm_process(psoc, pdev_id, true);
 }
 
 /**
@@ -649,9 +637,10 @@ static void wlan_dcs_frequency_control(struct wlan_objmgr_psoc *psoc,
 
 	/*
 	 * Before start dcs callback handler or disable dcs for some time,
-	 * need to send dcs command to disable dcs detection firstly.
+	 * need to ignore dcs event data and won't do interference detection
+	 * algorithm calculation for disabling dcs detection firstly.
 	 */
-	wlan_dcs_disable_cmd_send(psoc, event->dcs_param.pdev_id, true);
+	wlan_dcs_set_algorithm_process(psoc, event->dcs_param.pdev_id, false);
 
 	if (disable_dcs_sometime) {
 		dcs_freq_ctrl_params->disable_delay_process = true;
@@ -698,9 +687,10 @@ wlan_dcs_process(struct wlan_objmgr_psoc *psoc, struct dcs_stats_event *event)
 
 	if (unlikely(dcs_pdev_priv->dcs_host_params.dcs_debug
 			>= DCS_DEBUG_VERBOSE))
-		dcs_debug("dcs_enable: %u, interference_type: %u",
+		dcs_debug("dcs_enable: %u, interference_type: %u, pdev_id: %u",
 			  dcs_pdev_priv->dcs_host_params.dcs_enable,
-			  event->dcs_param.interference_type);
+			  event->dcs_param.interference_type,
+			  event->dcs_param.pdev_id);
 
 	if (!dcs_pdev_priv->dcs_host_params.dcs_enable)
 		return QDF_STATUS_SUCCESS;
@@ -714,6 +704,13 @@ wlan_dcs_process(struct wlan_objmgr_psoc *psoc, struct dcs_stats_event *event)
 				wlan_dcs_wlan_interference_process(
 							&event->wlan_stat,
 							dcs_pdev_priv);
+		if (dcs_pdev_priv->user_cb &&
+		    dcs_pdev_priv->dcs_host_params.notify_user) {
+			dcs_pdev_priv->dcs_host_params.notify_user = 0;
+			dcs_pdev_priv->user_cb(dcs_pdev_priv->requestor_vdev_id,
+				 &dcs_pdev_priv->dcs_im_stats.user_dcs_im_stats,
+				 0);
+		}
 		if (start_dcs_cbk_handler)
 			wlan_dcs_frequency_control(psoc,
 						   dcs_pdev_priv,
@@ -749,4 +746,21 @@ void wlan_dcs_clear(struct wlan_objmgr_psoc *psoc, uint32_t pdev_id)
 		    MAX_DCS_TIME_RECORD * sizeof(unsigned long), 0);
 	dcs_pdev_priv->dcs_freq_ctrl_params.dcs_happened_count = 0;
 	dcs_pdev_priv->dcs_freq_ctrl_params.disable_delay_process = false;
+	wlan_dcs_set_algorithm_process(psoc, pdev_id, false);
+}
+
+void wlan_dcs_set_algorithm_process(struct wlan_objmgr_psoc *psoc,
+				    uint32_t pdev_id,
+				    bool dcs_algorithm_process)
+{
+	struct dcs_pdev_priv_obj *dcs_pdev_priv;
+
+	dcs_pdev_priv = wlan_dcs_get_pdev_private_obj(psoc, pdev_id);
+	if (!dcs_pdev_priv) {
+		dcs_err("dcs pdev private object is null");
+		return;
+	}
+
+	dcs_pdev_priv->dcs_host_params.dcs_algorithm_process =
+							dcs_algorithm_process;
 }

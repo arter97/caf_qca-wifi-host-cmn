@@ -523,10 +523,10 @@ struct wlan_lmac_if_sa_api_tx_ops {
  * a successful commit session.
  */
 struct wlan_lmac_if_cfr_tx_ops {
-	int (*cfr_init_pdev)(struct wlan_objmgr_psoc *psoc,
-			     struct wlan_objmgr_pdev *pdev);
-	int (*cfr_deinit_pdev)(struct wlan_objmgr_psoc *psoc,
-			       struct wlan_objmgr_pdev *pdev);
+	QDF_STATUS (*cfr_init_pdev)(struct wlan_objmgr_psoc *psoc,
+				    struct wlan_objmgr_pdev *pdev);
+	QDF_STATUS (*cfr_deinit_pdev)(struct wlan_objmgr_psoc *psoc,
+				      struct wlan_objmgr_pdev *pdev);
 	int (*cfr_enable_cfr_timer)(struct wlan_objmgr_pdev *pdev,
 				    uint32_t cfr_timer);
 	int (*cfr_start_capture)(struct wlan_objmgr_pdev *pdev,
@@ -1181,6 +1181,8 @@ struct wlan_lmac_if_reg_rx_ops {
 					  uint32_t wireless_modes);
 	bool
 	(*reg_is_range_only6g)(qdf_freq_t low_freq, qdf_freq_t high_freq);
+	bool
+	(*reg_is_range_overlap_6g)(qdf_freq_t low_freq, qdf_freq_t high_freq);
 	QDF_STATUS (*reg_disable_chan_coex)(struct wlan_objmgr_pdev *pdev,
 					    uint8_t unii_5g_bitmap);
 	bool (*reg_ignore_fw_reg_offload_ind)(struct wlan_objmgr_psoc *psoc);

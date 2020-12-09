@@ -113,6 +113,7 @@ typedef union {
  * @rx.dev.priv_cb_m.l3_hdr_pad: L3 header padding offset
  * @rx.dev.priv_cb_m.exc_frm: exception frame
  * @rx.dev.priv_cb_m.ipa_smmu_map: do IPA smmu map
+ * @rx.dev.priv_cb_m.reo_dest_ind: reo destination indication
  * @rx.dev.priv_cb_m.tcp_seq_num: TCP sequence number
  * @rx.dev.priv_cb_m.tcp_ack_num: TCP ACK number
  * @rx.dev.priv_cb_m.lro_ctx: LRO context
@@ -191,6 +192,7 @@ typedef union {
  *                       +          (TXRX)|(HTT)|(HTC)|(HIF)|(CE)|(FREE)]
  * @tx.trace.is_packet_priv:
  * @tx.trace.packet_track: {NBUF_TX_PKT_[(DATA)|(MGMT)]_TRACK}
+ * @tx.trace.to_fw: Flag to indicate send this packet to FW
  * @tx.trace.proto_type: bitmap of NBUF_PKT_TRAC_TYPE[(EAPOL)|(DHCP)|
  *                          + (MGMT_ACTION)] - 4 bits
  * @tx.trace.dp_trace: flag (Datapath trace)
@@ -232,7 +234,8 @@ struct qdf_nbuf_cb {
 						 /* exception frame flag */
 						 exc_frm:1,
 						 ipa_smmu_map:1,
-						 reserved:7,
+						 reo_dest_ind:5,
+						 reserved:2,
 						 reserved1:16;
 					uint32_t tcp_seq_num;
 					uint32_t tcp_ack_num;
@@ -272,8 +275,8 @@ struct qdf_nbuf_cb {
 			union {
 				uint8_t packet_state;
 				uint8_t dp_trace:1,
-					packet_track:4,
-					rsrvd:3;
+					packet_track:3,
+					rsrvd:4;
 			} trace;
 			uint16_t vdev_id:8,
 				 tid_val:4,
@@ -303,7 +306,9 @@ struct qdf_nbuf_cb {
 						uint8_t bi_map:1,
 							reserved:7;
 					} dma_option;
-					uint8_t reserved[3];
+					uint8_t flag_notify_comp:1,
+						rsvd:7;
+					uint8_t reserved[2];
 				} priv_cb_m;
 			} dev;
 			uint8_t ftype;
@@ -318,14 +323,15 @@ struct qdf_nbuf_cb {
 						flag_chfrag_cont:1,
 						flag_chfrag_end:1,
 						flag_ext_header:1,
-						flag_notify_comp:1;
+						reserved:1;
 				} bits;
 				uint8_t u8;
 			} flags;
 			struct {
 				uint8_t packet_state:7,
 					is_packet_priv:1;
-				uint8_t packet_track:4,
+				uint8_t packet_track:3,
+					to_fw:1,
 					proto_type:4;
 				uint8_t dp_trace:1,
 					is_bcast:1,
@@ -463,8 +469,6 @@ QDF_COMPILE_TIME_ASSERT(qdf_nbuf_cb_size,
 		((skb)->cb))->u.tx.flags.bits.flag_nbuf)
 #define QDF_NBUF_CB_TX_NUM_EXTRA_FRAGS(skb) \
 	(((struct qdf_nbuf_cb *)((skb)->cb))->u.tx.flags.bits.num)
-#define QDF_NBUF_CB_TX_EXTRA_FRAG_FLAGS_NOTIFY_COMP(skb) \
-	(((struct qdf_nbuf_cb *)((skb)->cb))->u.tx.flags.bits.flag_notify_comp)
 #define QDF_NBUF_CB_TX_EXTRA_FRAG_FLAGS_CHFRAG_START(skb) \
 	(((struct qdf_nbuf_cb *) \
 	((skb)->cb))->u.tx.flags.bits.flag_chfrag_start)
@@ -493,6 +497,10 @@ QDF_COMPILE_TIME_ASSERT(qdf_nbuf_cb_size,
 #define QDF_NBUF_CB_TX_PACKET_TRACK(skb)\
 	(((struct qdf_nbuf_cb *) \
 		((skb)->cb))->u.tx.trace.packet_track)
+
+#define QDF_NBUF_CB_TX_PACKET_TO_FW(skb)\
+	(((struct qdf_nbuf_cb *) \
+		((skb)->cb))->u.tx.trace.to_fw)
 
 #define QDF_NBUF_CB_RX_PACKET_TRACK(skb)\
 		(((struct qdf_nbuf_cb *) \
@@ -2228,6 +2236,47 @@ static inline void __qdf_nbuf_orphan(struct sk_buff *skb)
 	return skb_orphan(skb);
 }
 
+#ifdef CONFIG_WLAN_SYSFS_MEM_STATS
+/**
+ * __qdf_record_nbuf_nbytes() - add or subtract the size of the nbuf
+ * from the total skb mem and DP tx/rx skb mem
+ * @nbytes: number of bytes
+ * @dir: direction
+ * @is_mapped: is mapped or unmapped memory
+ *
+ * Return: none
+ */
+static inline void __qdf_record_nbuf_nbytes(
+	int nbytes, qdf_dma_dir_t dir, bool is_mapped)
+{
+	if (is_mapped) {
+		if (dir == QDF_DMA_TO_DEVICE) {
+			qdf_mem_dp_tx_skb_cnt_inc();
+			qdf_mem_dp_tx_skb_inc(nbytes);
+		} else if (dir == QDF_DMA_FROM_DEVICE) {
+			qdf_mem_dp_rx_skb_cnt_inc();
+			qdf_mem_dp_rx_skb_inc(nbytes);
+		}
+		qdf_mem_skb_total_inc(nbytes);
+	} else {
+		if (dir == QDF_DMA_TO_DEVICE) {
+			qdf_mem_dp_tx_skb_cnt_dec();
+			qdf_mem_dp_tx_skb_dec(nbytes);
+		} else if (dir == QDF_DMA_FROM_DEVICE) {
+			qdf_mem_dp_rx_skb_cnt_dec();
+			qdf_mem_dp_rx_skb_dec(nbytes);
+		}
+		qdf_mem_skb_total_dec(nbytes);
+	}
+}
+
+#else /* CONFIG_WLAN_SYSFS_MEM_STATS */
+static inline void __qdf_record_nbuf_nbytes(
+	int nbytes, qdf_dma_dir_t dir, bool is_mapped)
+{
+}
+#endif /* CONFIG_WLAN_SYSFS_MEM_STATS */
+
 /**
  * __qdf_nbuf_map_nbytes_single() - map nbytes
  * @osdev: os device
@@ -2253,13 +2302,17 @@ static inline QDF_STATUS __qdf_nbuf_map_nbytes_single(
 		qdf_dma_dir_t dir, int nbytes)
 {
 	qdf_dma_addr_t paddr;
+	QDF_STATUS ret;
 
 	/* assume that the OS only provides a single fragment */
 	QDF_NBUF_CB_PADDR(buf) = paddr =
 		dma_map_single(osdev->dev, buf->data,
 			       nbytes, __qdf_dma_dir_to_os(dir));
-	return dma_mapping_error(osdev->dev, paddr) ?
+	ret =  dma_mapping_error(osdev->dev, paddr) ?
 		QDF_STATUS_E_FAULT : QDF_STATUS_SUCCESS;
+	if (QDF_IS_STATUS_SUCCESS(ret))
+		__qdf_record_nbuf_nbytes(nbytes, dir, true);
+	return ret;
 }
 #endif
 /**
@@ -2286,6 +2339,7 @@ __qdf_nbuf_unmap_nbytes_single(qdf_device_t osdev, struct sk_buff *buf,
 	qdf_dma_addr_t paddr = QDF_NBUF_CB_PADDR(buf);
 
 	if (qdf_likely(paddr)) {
+		__qdf_record_nbuf_nbytes(nbytes, dir, false);
 		dma_unmap_single(osdev->dev, paddr, nbytes,
 				 __qdf_dma_dir_to_os(dir));
 		return;

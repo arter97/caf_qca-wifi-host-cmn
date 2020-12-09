@@ -27,7 +27,43 @@
 #include "osif_cm_rsp.h"
 #include "wlan_cfg80211_scan.h"
 
-static struct osif_cm_ops *osif_cm_legacy_ops;
+enum qca_sta_connect_fail_reason_codes
+osif_cm_mac_to_qca_connect_fail_reason(enum wlan_status_code internal_reason)
+{
+	enum qca_sta_connect_fail_reason_codes reason = 0;
+
+	if (internal_reason < STATUS_PROP_START)
+		return reason;
+
+	switch (internal_reason) {
+	case STATUS_NO_NETWORK_FOUND:
+		reason = QCA_STA_CONNECT_FAIL_REASON_NO_BSS_FOUND;
+		break;
+	case STATUS_AUTH_TX_FAIL:
+		reason = QCA_STA_CONNECT_FAIL_REASON_AUTH_TX_FAIL;
+		break;
+	case STATUS_AUTH_NO_ACK_RECEIVED:
+		reason = QCA_STA_CONNECT_FAIL_REASON_AUTH_NO_ACK_RECEIVED;
+		break;
+	case STATUS_AUTH_NO_RESP_RECEIVED:
+		reason = QCA_STA_CONNECT_FAIL_REASON_AUTH_NO_RESP_RECEIVED;
+		break;
+	case STATUS_ASSOC_TX_FAIL:
+		reason = QCA_STA_CONNECT_FAIL_REASON_ASSOC_REQ_TX_FAIL;
+		break;
+	case STATUS_ASSOC_NO_ACK_RECEIVED:
+		reason = QCA_STA_CONNECT_FAIL_REASON_ASSOC_NO_ACK_RECEIVED;
+		break;
+	case STATUS_ASSOC_NO_RESP_RECEIVED:
+		reason = QCA_STA_CONNECT_FAIL_REASON_ASSOC_NO_RESP_RECEIVED;
+		break;
+	default:
+		osif_debug("QCA code not present for internal status code %d",
+			   internal_reason);
+	}
+
+	return reason;
+}
 
 const char *
 osif_cm_qca_reason_to_str(enum qca_disconnect_reason_codes reason)
@@ -67,9 +103,10 @@ osif_cm_mac_to_qca_reason(enum wlan_reason_code internal_reason)
 
 	switch (internal_reason) {
 	case REASON_HOST_TRIGGERED_ROAM_FAILURE:
+	case REASON_FW_TRIGGERED_ROAM_FAILURE:
 		reason = QCA_DISCONNECT_REASON_INTERNAL_ROAM_FAILURE;
 		break;
-	case REASON_FW_TRIGGERED_ROAM_FAILURE:
+	case REASON_USER_TRIGGERED_ROAM_FAILURE:
 		reason = QCA_DISCONNECT_REASON_EXTERNAL_ROAM_FAILURE;
 		break;
 	case REASON_GATEWAY_REACHABILITY_FAILURE:
@@ -114,9 +151,6 @@ osif_cm_mac_to_qca_reason(enum wlan_reason_code internal_reason)
 	case REASON_BEACON_MISSED:
 		reason = QCA_DISCONNECT_REASON_BEACON_MISS_FAILURE;
 		break;
-	case REASON_USER_TRIGGERED_ROAM_FAILURE:
-		reason = QCA_DISCONNECT_REASON_USER_TRIGGERED;
-		break;
 	default:
 		osif_debug("No QCA reason code for mac reason: %u",
 			   internal_reason);
@@ -125,6 +159,9 @@ osif_cm_mac_to_qca_reason(enum wlan_reason_code internal_reason)
 
 	return reason;
 }
+
+#ifdef FEATURE_CM_ENABLE
+static struct osif_cm_ops *osif_cm_legacy_ops;
 
 void osif_cm_reset_id_and_src_no_lock(struct vdev_osif_priv *osif_priv)
 {
@@ -156,7 +193,7 @@ QDF_STATUS osif_cm_reset_id_and_src(struct wlan_objmgr_vdev *vdev)
  */
 static QDF_STATUS
 osif_cm_connect_complete_cb(struct wlan_objmgr_vdev *vdev,
-			    struct wlan_cm_connect_rsp *rsp)
+			    struct wlan_cm_connect_resp *rsp)
 {
 	return osif_connect_handler(vdev, rsp);
 }
@@ -170,7 +207,7 @@ osif_cm_connect_complete_cb(struct wlan_objmgr_vdev *vdev,
  */
 static QDF_STATUS
 osif_cm_failed_candidate_cb(struct wlan_objmgr_vdev *vdev,
-			    struct wlan_cm_connect_rsp *rsp)
+			    struct wlan_cm_connect_resp *rsp)
 {
 	return osif_failed_candidate_handler(vdev, rsp);
 }
@@ -300,7 +337,6 @@ QDF_STATUS osif_cm_osif_priv_init(struct wlan_objmgr_vdev *vdev)
 {
 	struct vdev_osif_priv *osif_priv = wlan_vdev_get_ospriv(vdev);
 	enum QDF_OPMODE mode = wlan_vdev_mlme_get_opmode(vdev);
-	QDF_STATUS status;
 
 	if (mode != QDF_STA_MODE && mode != QDF_P2P_CLIENT_MODE)
 		return QDF_STATUS_SUCCESS;
@@ -312,19 +348,7 @@ QDF_STATUS osif_cm_osif_priv_init(struct wlan_objmgr_vdev *vdev)
 
 	qdf_spinlock_create(&osif_priv->cm_info.cmd_id_lock);
 
-	status = qdf_event_create(&osif_priv->cm_info.disconnect_complete);
-	if (QDF_IS_STATUS_ERROR(status)) {
-		osif_err("failed to create disconnect complete event fro vdev %d",
-			 wlan_vdev_get_id(vdev));
-		goto event_create_fail;
-	}
-
-	return status;
-
-event_create_fail:
-	qdf_spinlock_destroy(&osif_priv->cm_info.cmd_id_lock);
-
-	return status;
+	return QDF_STATUS_SUCCESS;
 }
 
 QDF_STATUS osif_cm_osif_priv_deinit(struct wlan_objmgr_vdev *vdev)
@@ -339,14 +363,13 @@ QDF_STATUS osif_cm_osif_priv_deinit(struct wlan_objmgr_vdev *vdev)
 		osif_err("Invalid vdev osif priv");
 		return QDF_STATUS_E_INVAL;
 	}
-	qdf_event_destroy(&osif_priv->cm_info.disconnect_complete);
 	qdf_spinlock_destroy(&osif_priv->cm_info.cmd_id_lock);
 
 	return QDF_STATUS_SUCCESS;
 }
 
 QDF_STATUS osif_cm_connect_comp_ind(struct wlan_objmgr_vdev *vdev,
-				    struct wlan_cm_connect_rsp *rsp,
+				    struct wlan_cm_connect_resp *rsp,
 				    enum osif_cb_type type)
 {
 	osif_cm_connect_comp_cb cb = NULL;
@@ -401,4 +424,4 @@ void osif_cm_reset_legacy_cb(void)
 {
 	osif_cm_legacy_ops = NULL;
 }
-
+#endif

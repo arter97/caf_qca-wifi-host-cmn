@@ -305,6 +305,12 @@ wlan_reg_is_6g_freq_indoor(struct wlan_objmgr_pdev *pdev, qdf_freq_t freq)
 	return false;
 }
 
+static inline bool wlan_reg_is_range_overlap_6g(qdf_freq_t low_freq,
+						qdf_freq_t high_freq)
+{
+	return false;
+}
+
 static inline QDF_STATUS
 wlan_reg_get_max_txpower_for_6g_tpe(struct wlan_objmgr_pdev *pdev,
 				    qdf_freq_t freq, uint8_t bw,
@@ -349,6 +355,7 @@ qdf_freq_t wlan_reg_chan_band_to_freq(struct wlan_objmgr_pdev *pdev,
 				      uint8_t chan,
 				      uint8_t band_mask);
 
+#ifdef CONFIG_49GHZ_CHAN
 /**
  * wlan_reg_is_49ghz_freq() - Check if the given channel frequency is 4.9GHz
  * @freq: Channel frequency
@@ -357,6 +364,15 @@ qdf_freq_t wlan_reg_chan_band_to_freq(struct wlan_objmgr_pdev *pdev,
  */
 #define WLAN_REG_IS_49GHZ_FREQ(freq) wlan_reg_is_49ghz_freq(freq)
 bool wlan_reg_is_49ghz_freq(qdf_freq_t freq);
+
+#else
+
+#define WLAN_REG_IS_49GHZ_FREQ(freq) (false)
+static inline bool wlan_reg_is_49ghz_freq(qdf_freq_t freq)
+{
+	return false;
+}
+#endif /* CONFIG_49GHZ_CHAN */
 
 /**
  * wlan_reg_ch_num() - Get channel number from channel enum
@@ -1316,6 +1332,17 @@ bool wlan_reg_is_passive_or_disable_for_freq(struct wlan_objmgr_pdev *pdev,
  * Return: true or false
  */
 bool wlan_reg_is_disable_for_freq(struct wlan_objmgr_pdev *pdev,
+				  qdf_freq_t freq);
+
+/**
+ * wlan_reg_is_passive_for_freq() - Check the channel flags to see if the
+ * passive flag is set
+ * @pdev: pdev ptr
+ * @freq: Channel center frequency
+ *
+ * Return: true or false
+ */
+bool wlan_reg_is_passive_for_freq(struct wlan_objmgr_pdev *pdev,
 				  qdf_freq_t freq);
 
 /**

@@ -119,17 +119,6 @@
 typedef qdf_nbuf_t wmi_buf_t;
 #define wmi_buf_data(_buf) qdf_nbuf_data(_buf)
 
-#define WMI_LOGD(args ...) \
-	QDF_TRACE(QDF_MODULE_ID_WMI, QDF_TRACE_LEVEL_DEBUG, ## args)
-#define WMI_LOGI(args ...) \
-	QDF_TRACE(QDF_MODULE_ID_WMI, QDF_TRACE_LEVEL_INFO, ## args)
-#define WMI_LOGW(args ...) \
-	QDF_TRACE(QDF_MODULE_ID_WMI, QDF_TRACE_LEVEL_WARN, ## args)
-#define WMI_LOGE(args ...) \
-	QDF_TRACE(QDF_MODULE_ID_WMI, QDF_TRACE_LEVEL_ERROR, ## args)
-#define WMI_LOGP(args ...) \
-	QDF_TRACE(QDF_MODULE_ID_WMI, QDF_TRACE_LEVEL_FATAL, ## args)
-
 /* Number of bits to shift to combine 32 bit integer to 64 bit */
 #define WMI_LOWER_BITS_SHIFT_32	0x20
 
@@ -155,13 +144,15 @@ enum wmi_target_type {
  * @WMI_RX_WORK_CTX: work queue context execution provided by WMI layer
  * @WMI_RX_UMAC_CTX: execution context provided by umac layer
  * @WMI_RX_SERIALIZER_CTX: Execution context is serialized thread context
+ * @WMI_RX_DIAG_WORK_CTX: work queue execution context for FW diag events
  *
  */
 enum wmi_rx_exec_ctx {
 	WMI_RX_WORK_CTX,
 	WMI_RX_UMAC_CTX,
 	WMI_RX_TASKLET_CTX = WMI_RX_UMAC_CTX,
-	WMI_RX_SERIALIZER_CTX = 2
+	WMI_RX_SERIALIZER_CTX = 2,
+	WMI_RX_DIAG_WORK_CTX
 };
 
 /**
@@ -600,6 +591,14 @@ wmi_is_blocked(wmi_unified_t wmi_handle);
  */
 void
 wmi_flush_endpoint(wmi_unified_t wmi_handle);
+
+/**
+ * API to stop wmi sequence check
+ *
+ * @param wmi_handle      : handle to WMI.
+ */
+void
+wmi_interface_sequence_stop(wmi_unified_t wmi_handle);
 
 /**
  * wmi_pdev_id_conversion_enable() - API to enable pdev_id and phy_id
@@ -4236,4 +4235,18 @@ QDF_STATUS wmi_unified_send_vdev_tsf_tstamp_action_cmd(wmi_unified_t wmi_hdl,
 QDF_STATUS wmi_extract_vdev_tsf_report_event(wmi_unified_t wmi_hdl,
 					     uint8_t *evt_buf,
 					     struct wmi_host_tsf_event *param);
+
+/**
+ * wmi_extract_pdev_csa_switch_count_status() - extract CSA switch count status
+ * from event
+ * @wmi_handle: wmi handle
+ * @evt_buf: pointer to event buffer
+ * @param: Pointer to CSA switch count status param
+ *
+ * Return: QDF_STATUS_SUCCESS on success and QDF_STATUS_E_FAILURE for failure
+ */
+QDF_STATUS wmi_extract_pdev_csa_switch_count_status(
+		wmi_unified_t wmi_handle,
+		void *evt_buf,
+		struct pdev_csa_switch_count_status *param);
 #endif /* _WMI_UNIFIED_API_H_ */

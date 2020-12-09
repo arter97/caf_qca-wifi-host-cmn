@@ -54,12 +54,14 @@ enum wlan_dcs_debug_level {
  * struct pdev_dcs_im_stats - define dcs interference mitigation
  *                            stats in pdev object
  * @prev_dcs_im_stats: previous statistics at last time
+ * @user_dcs_im_stats: statistics requested from userspace
  * @im_intfr_cnt: number of times the interference is
  *                detected within detection window
  * @im_sample_cnt: sample counter
  */
 struct pdev_dcs_im_stats {
 	struct wlan_host_dcs_im_tgt_stats prev_dcs_im_stats;
+	struct wlan_host_dcs_im_user_stats user_dcs_im_stats;
 	uint8_t im_intfr_cnt;
 	uint8_t im_samp_cnt;
 };
@@ -68,6 +70,7 @@ struct pdev_dcs_im_stats {
  * struct pdev_dcs_params - define dcs configuration parameter in pdev object
  * @dcs_enable_cfg: dcs enable from ini config
  * @dcs_enable: dcs enable from ucfg config
+ * @dcs_algorithm_process: do dcs algorithm process or not
  * @dcs_debug: dcs debug trace level
  * @phy_err_penalty: phy error penalty
  * @phy_err_threshold: phy error threshold
@@ -77,10 +80,13 @@ struct pdev_dcs_im_stats {
  * @intfr_detection_threshold: interference detection threshold
  * @intfr_detection_window: interference sampling window
  * @tx_err_threshold: transmission failure rate threshold
+ * @user_request_count: counter of stats requested from userspace
+ * @notify_user: whether to notify userspace
  */
 struct pdev_dcs_params {
 	uint8_t dcs_enable_cfg;
 	uint8_t dcs_enable;
+	bool dcs_algorithm_process;
 	enum wlan_dcs_debug_level dcs_debug;
 	uint32_t phy_err_penalty;
 	uint32_t phy_err_threshold;
@@ -90,6 +96,8 @@ struct pdev_dcs_params {
 	uint32_t intfr_detection_threshold;
 	uint32_t intfr_detection_window;
 	uint32_t tx_err_threshold;
+	uint32_t user_request_count;
+	uint8_t notify_user;
 };
 
 /**
@@ -138,6 +146,9 @@ struct psoc_dcs_cbk {
  * @dcs_freq_ctrl_params: dcs frequency control parameter
  * @dcs_disable_timer: dcs disable timer
  * @dcs_timer_args: dcs disable timer args
+ * @lock: lock to protect dcs pdev priv
+ * @requestor_vdev_id: user request vdev id
+ * @user_cb: user request callback
  */
 struct dcs_pdev_priv_obj {
 	struct pdev_dcs_params dcs_host_params;
@@ -145,6 +156,11 @@ struct dcs_pdev_priv_obj {
 	struct pdev_dcs_freq_ctrl_params dcs_freq_ctrl_params;
 	qdf_timer_t dcs_disable_timer;
 	struct pdev_dcs_timer_args dcs_timer_args;
+	qdf_spinlock_t lock;
+	uint8_t requestor_vdev_id;
+	void (*user_cb)(uint8_t vdev_id,
+			struct wlan_host_dcs_im_user_stats *stats,
+			int status);
 };
 
 /**
@@ -237,4 +253,42 @@ void wlan_dcs_disable_timer_fn(void *dcs_timer_args);
  * Return: None
  */
 void wlan_dcs_clear(struct wlan_objmgr_psoc *psoc, uint32_t pdev_id);
+
+/**
+ * wlan_dcs_set_algorithm_process() - config dcs event data to do algorithm
+ * process or not
+ * @psoc: psoc pointer
+ * @pdev_id: pdev_id
+ * @dcs_algorithm_process: dcs algorithm process
+ *
+ * The function gets called to config dcs event data to do algorithm
+ * process or not
+ *
+ * Return: None
+ */
+void wlan_dcs_set_algorithm_process(struct wlan_objmgr_psoc *psoc,
+				    uint32_t pdev_id,
+				    bool dcs_algorithm_process);
+
+/*
+ * wlan_dcs_pdev_obj_lock() - private API to acquire spinlock at pdev
+ * @dcs_pdev: pointer to dcs pdev object
+ *
+ * Return: void
+ */
+static inline void wlan_dcs_pdev_obj_lock(struct dcs_pdev_priv_obj *dcs_pdev)
+{
+	qdf_spin_lock_bh(&dcs_pdev->lock);
+}
+
+/**
+ * wlan_dcs_pdev_obj_unlock() - private api to release spinlock at pdev
+ * @dcs_pdev: pointer to dcs pdev object
+ *
+ * Return: void
+ */
+static inline void wlan_dcs_pdev_obj_unlock(struct dcs_pdev_priv_obj *dcs_pdev)
+{
+	qdf_spin_unlock_bh(&dcs_pdev->lock);
+}
 #endif  /* _WLAN_DCS_H_ */

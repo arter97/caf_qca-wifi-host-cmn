@@ -348,6 +348,7 @@ osif_cm_fill_connect_params(struct wlan_cm_connect_req *req,
 	}
 	req->dot11mode_filter = params->dot11mode_filter;
 	req->force_rsne_override = params->force_rsne_override;
+	req->sae_pwe = params->sae_pwe;
 }
 
 static void osif_cm_free_connect_req(struct wlan_cm_connect_req *connect_req)
@@ -374,7 +375,28 @@ int osif_cm_connect(struct net_device *dev, struct wlan_objmgr_vdev *vdev,
 	const u8 *bssid_hint = req->bssid_hint;
 	uint8_t vdev_id = vdev->vdev_objmgr.vdev_id;
 	QDF_STATUS status;
+	struct qdf_mac_addr bssid = QDF_MAC_ADDR_BCAST_INIT;
+	struct wlan_objmgr_vdev *temp_vdev;
 
+	if (req->bssid)
+		qdf_mem_copy(bssid.bytes, req->bssid,
+			     QDF_MAC_ADDR_SIZE);
+	else if (bssid_hint)
+		qdf_mem_copy(bssid.bytes, req->bssid_hint,
+			     QDF_MAC_ADDR_SIZE);
+
+	temp_vdev = wlan_objmgr_get_vdev_by_macaddr_from_pdev(
+						wlan_vdev_get_pdev(vdev),
+						bssid.bytes,
+						WLAN_OSIF_CM_ID);
+
+	if (temp_vdev) {
+		osif_err("vdev %d already exist with same mac address"
+			 QDF_MAC_ADDR_FMT, wlan_vdev_get_id(temp_vdev),
+			 QDF_MAC_ADDR_REF(bssid.bytes));
+		wlan_objmgr_vdev_release_ref(temp_vdev, WLAN_OSIF_CM_ID);
+		return -EINVAL;
+	}
 	osif_cm_dump_connect_req(dev, vdev_id, req);
 
 	status = osif_cm_reset_id_and_src(vdev);
@@ -399,6 +421,7 @@ int osif_cm_connect(struct net_device *dev, struct wlan_objmgr_vdev *vdev,
 	connect_req->ssid.length = req->ssid_len;
 	if (connect_req->ssid.length > WLAN_SSID_MAX_LEN) {
 		osif_err("Invalid ssid len %zu", req->ssid_len);
+		osif_cm_free_connect_req(connect_req);
 		return -EINVAL;
 	}
 
@@ -489,31 +512,12 @@ int osif_cm_disconnect(struct net_device *dev, struct wlan_objmgr_vdev *vdev,
 int osif_cm_disconnect_sync(struct wlan_objmgr_vdev *vdev, uint16_t reason)
 {
 	uint8_t vdev_id = wlan_vdev_get_id(vdev);
-	struct vdev_osif_priv *osif_priv = wlan_vdev_get_ospriv(vdev);
 	QDF_STATUS status;
-
-	if (ucfg_cm_is_vdev_disconnected(vdev))
-		return 0;
-
-	if (!osif_priv) {
-		osif_err("vdev %d invalid vdev osif priv", vdev_id);
-		return -EINVAL;
-	}
 
 	osif_info("vdevid-%d: Received Disconnect reason:%d %s",
 		  vdev_id, reason, ucfg_cm_reason_code_to_str(reason));
 
-	qdf_event_reset(&osif_priv->cm_info.disconnect_complete);
-	status = osif_cm_send_disconnect(vdev, reason);
-	if (QDF_IS_STATUS_ERROR(status)) {
-		osif_err("Disconnect failed with status %d", status);
-		return qdf_status_to_os_return(status);
-	}
-
-	status = qdf_wait_single_event(&osif_priv->cm_info.disconnect_complete,
-				       CM_DISCONNECT_CMD_TIMEOUT);
-	if (QDF_IS_STATUS_ERROR(status))
-		osif_err("Disconnect timeout with status %d", status);
+	status = ucfg_cm_disconnect_sync(vdev, CM_OSIF_DISCONNECT, reason);
 
 	return qdf_status_to_os_return(status);
 }

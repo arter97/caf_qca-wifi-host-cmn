@@ -27,9 +27,13 @@
 
 #define DP_TX_MAX_NUM_FRAGS 6
 
-#define DP_TX_DESC_FLAG_SIMPLE		0x1
+/*
+ * DP_TX_DESC_FLAG_FRAG flags should always be defined to 0x1
+ * please do not change this flag's definition
+ */
+#define DP_TX_DESC_FLAG_FRAG		0x1
 #define DP_TX_DESC_FLAG_TO_FW		0x2
-#define DP_TX_DESC_FLAG_FRAG		0x4
+#define DP_TX_DESC_FLAG_SIMPLE		0x4
 #define DP_TX_DESC_FLAG_RAW		0x8
 #define DP_TX_DESC_FLAG_MESH		0x10
 #define DP_TX_DESC_FLAG_QUEUED_TX	0x20
@@ -155,15 +159,12 @@ struct dp_tx_msdu_info_s {
 	uint8_t tid;
 	uint8_t exception_fw;
 	uint8_t is_tx_sniffer;
-	uint8_t search_type;
 	union {
 		struct qdf_tso_info_t tso_info;
 		struct dp_tx_sg_info_s sg_info;
 	} u;
 	uint32_t meta_data[DP_TX_MSDU_INFO_META_DATA_DWORDS];
 	uint16_t ppdu_cookie;
-	uint16_t ast_idx;
-	uint16_t ast_hash;
 };
 
 /**
@@ -333,6 +334,27 @@ bool dp_tx_multipass_process(struct dp_soc *soc, struct dp_vdev *vdev,
 
 void dp_tx_vdev_multipass_deinit(struct dp_vdev *vdev);
 #endif
+
+/**
+ * dp_tx_hw_to_qdf()- convert hw status to qdf status
+ * @status: hw status
+ *
+ * Return: qdf tx rx status
+ */
+static inline enum qdf_dp_tx_rx_status dp_tx_hw_to_qdf(uint16_t status)
+{
+	switch (status) {
+	case HAL_TX_TQM_RR_FRAME_ACKED:
+		return QDF_TX_RX_STATUS_OK;
+	case HAL_TX_TQM_RR_REM_CMD_REM:
+	case HAL_TX_TQM_RR_REM_CMD_TX:
+	case HAL_TX_TQM_RR_REM_CMD_NOTX:
+	case HAL_TX_TQM_RR_REM_CMD_AGED:
+		return QDF_TX_RX_STATUS_FW_DISCARD;
+	default:
+		return QDF_TX_RX_STATUS_DEFAULT;
+	}
+}
 
 /**
  * dp_tx_get_queue() - Returns Tx queue IDs to be used for this Tx frame

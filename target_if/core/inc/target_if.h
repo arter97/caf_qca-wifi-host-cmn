@@ -185,6 +185,7 @@ struct target_version_info {
  * @hw_mode_caps: HW mode caps of preferred mode
  * @mem_chunks: allocated memory blocks for FW
  * @scan_radio_caps: scan radio capabilities
+ * @device_mode: Global Device mode
  */
 struct tgt_info {
 	struct host_fw_ver version;
@@ -215,6 +216,7 @@ struct tgt_info {
 	uint8_t pdev_id_to_phy_id_map[WLAN_UMAC_MAX_PDEVS];
 	bool is_pdevid_to_phyid_map;
 	struct wlan_psoc_host_scan_radio_caps *scan_radio_caps;
+	uint32_t device_mode;
 };
 
 /**
@@ -240,6 +242,7 @@ struct tgt_info {
  * @smart_log_enable: Enable Smart Logs feature
  * @cfr_support_enable: CFR support enable
  * @set_pktlog_checksum: Set the pktlog checksum from FW ready event to pl_dev
+ * @csa_switch_count_status: CSA event handler
  */
 struct target_ops {
 	QDF_STATUS (*ext_resource_config_enable)
@@ -302,6 +305,9 @@ struct target_ops {
 		 struct target_psoc_info *tgt_info, uint8_t *event);
 	void (*set_pktlog_checksum)
 		(struct wlan_objmgr_pdev *pdev, uint32_t checksum);
+	int (*csa_switch_count_status)(
+		struct wlan_objmgr_psoc *psoc,
+		struct pdev_csa_switch_count_status csa_status);
 };
 
 
@@ -2114,6 +2120,26 @@ static inline void target_if_add_11ax_modes(struct wlan_objmgr_psoc *psoc,
 #endif
 
 /**
+ * target_if_csa_switch_count_status - Calls a function to process CSA event
+ * @psoc:  psoc object
+ * @tgt_hdl: target_psoc_info pointer
+ * @csa_status: CSA switch count status event param
+ *
+ * Return: 0 on success, -1 on failure
+ */
+static inline int target_if_csa_switch_count_status(
+		struct wlan_objmgr_psoc *psoc,
+		struct target_psoc_info *tgt_hdl,
+		struct pdev_csa_switch_count_status csa_status)
+{
+	if (tgt_hdl->tif_ops && tgt_hdl->tif_ops->csa_switch_count_status)
+		return tgt_hdl->tif_ops->csa_switch_count_status(
+				psoc, csa_status);
+
+	return -1;
+}
+
+/**
  * target_if_set_default_config - Set default config in init command
  * @psoc:  psoc object
  * @tgt_hdl: target_psoc_info pointer
@@ -2513,4 +2539,38 @@ static inline void target_psoc_get_mu_max_users(
 	mu_caps->mumimo_ul = service_ext2_param->max_users_ul_mumimo;
 }
 
+/**
+ * target_psoc_set_device_mode() - set global device_mode
+ * @psoc_info: pointer to structure target_psoc_info
+ * @device_mode: device mode mission monitor/ftm etc
+ *
+ * API to set global device mode
+ *
+ * Return: void
+ */
+static inline void target_psoc_set_device_mode
+		(struct target_psoc_info *psoc_info, uint32_t device_mode)
+{
+	if (!psoc_info)
+		return;
+
+	psoc_info->info.device_mode = device_mode;
+}
+
+/**
+ * target_psoc_get_device_mode() - get info device_mode
+ * @psoc_info: pointer to structure target_psoc_info
+ *
+ * API to get device_mode
+ *
+ * Return: enum QDF_GLOBAL_MODE
+ */
+static inline enum QDF_GLOBAL_MODE target_psoc_get_device_mode
+		(struct target_psoc_info *psoc_info)
+{
+	if (!psoc_info)
+		return QDF_GLOBAL_MAX_MODE;
+
+	return psoc_info->info.device_mode;
+}
 #endif

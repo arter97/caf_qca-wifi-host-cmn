@@ -645,6 +645,7 @@ dp_rx_wbm_err_process(struct dp_intr *int_ctx, struct dp_soc *soc,
 /**
  * dp_rx_sg_create() - create a frag_list for MSDUs which are spread across
  *		     multiple nbufs.
+ * @soc: core txrx main context
  * @nbuf: pointer to the first msdu of an amsdu.
  *
  * This function implements the creation of RX frag_list for cases
@@ -652,7 +653,7 @@ dp_rx_wbm_err_process(struct dp_intr *int_ctx, struct dp_soc *soc,
  *
  * Return: returns the head nbuf which contains complete frag_list.
  */
-qdf_nbuf_t dp_rx_sg_create(qdf_nbuf_t nbuf);
+qdf_nbuf_t dp_rx_sg_create(struct dp_soc *soc, qdf_nbuf_t nbuf);
 
 
 /*
@@ -1284,7 +1285,7 @@ int dp_wds_rx_policy_check(uint8_t *rx_tlv_hdr, struct dp_vdev *vdev,
  * @soc: core txrx main context
  * @hal_ring: opaque pointer to the HAL Rx Ring, which will be serviced
  * @ring_desc: opaque pointer to the RX ring descriptor
- * @rx_desc: host rs descriptor
+ * @rx_desc: host rx descriptor
  *
  * Return: void
  */

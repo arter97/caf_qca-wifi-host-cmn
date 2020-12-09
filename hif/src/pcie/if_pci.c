@@ -54,6 +54,7 @@
 #include "pci_api.h"
 #include "ahb_api.h"
 #include "wlan_cfg.h"
+#include "qdf_hang_event_notifier.h"
 
 /* Maximum ms timeout for host to wake up target */
 #define PCIE_WAKE_TIMEOUT 1000
@@ -2299,6 +2300,7 @@ int hif_pci_bus_suspend(struct hif_softc *scn)
 	return 0;
 }
 
+#ifdef PCI_LINK_STATUS_SANITY
 /**
  * __hif_check_link_status() - API to check if PCIe link is active/not
  * @scn: HIF Context
@@ -2337,6 +2339,40 @@ static int __hif_check_link_status(struct hif_softc *scn)
 	pld_is_pci_link_down(sc->dev);
 	return -EACCES;
 }
+#else
+static inline int __hif_check_link_status(struct hif_softc *scn)
+{
+	return 0;
+}
+#endif
+
+
+#ifdef HIF_BUS_LOG_INFO
+void hif_log_pcie_info(struct hif_softc *scn, uint8_t *data,
+		       unsigned int *offset)
+{
+	struct hif_pci_softc *sc = HIF_GET_PCI_SOFTC(scn);
+	struct hang_event_bus_info info = {0};
+	size_t size;
+
+	if (!sc) {
+		hif_err("HIF Bus Context is Invalid");
+		return;
+	}
+
+	pfrm_read_config_word(sc->pdev, PCI_DEVICE_ID, &info.dev_id);
+
+	size = sizeof(info);
+	QDF_HANG_EVT_SET_HDR(&info.tlv_header, HANG_EVT_TAG_BUS_INFO,
+			     size - QDF_HANG_EVENT_TLV_HDR_SIZE);
+
+	if (*offset + size > QDF_WLAN_HANG_FW_OFFSET)
+		return;
+
+	qdf_mem_copy(data + *offset, &info, size);
+	*offset = *offset + size;
+}
+#endif
 
 /**
  * hif_pci_bus_resume(): prepare hif for resume
@@ -2795,6 +2831,9 @@ static void hif_ce_srng_msi_irq_disable(struct hif_softc *hif_sc, int ce_id)
 
 static void hif_ce_srng_msi_irq_enable(struct hif_softc *hif_sc, int ce_id)
 {
+	if (__hif_check_link_status(hif_sc))
+		return;
+
 	pfrm_enable_irq(hif_sc->qdf_dev->dev,
 			hif_ce_msi_map_ce_to_irq(hif_sc, ce_id));
 }

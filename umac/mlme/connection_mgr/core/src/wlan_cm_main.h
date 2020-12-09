@@ -24,6 +24,7 @@
 #define __WLAN_CM_MAIN_H__
 
 #include "include/wlan_vdev_mlme.h"
+#include <qdf_event.h>
 
 #ifdef FEATURE_CM_ENABLE
 #include <wlan_cm_public_struct.h>
@@ -100,7 +101,6 @@ struct cm_state_sm {
  * @cm_id: Connect manager id
  * @scan_id: scan id for scan for ssid
  * @req: connect req from osif
- * @rsn_ie: rsn_ie in connect req
  * @candidate_list: candidate list
  * @cur_candidate: current candidate
  * @cur_candidate_retries: attempts for current candidate
@@ -110,7 +110,6 @@ struct cm_connect_req {
 	wlan_cm_id cm_id;
 	wlan_scan_id scan_id;
 	struct wlan_cm_connect_req req;
-	struct element_info rsn_ie;
 	qdf_list_t *candidate_list;
 	struct scan_cache_node *cur_candidate;
 	uint8_t cur_candidate_retries;
@@ -131,12 +130,16 @@ struct cm_disconnect_req {
  * struct cm_req - connect manager req
  * @node: connection manager req node
  * @cm_id: cm id
+ * @failed_req: set if req failed before serialization,
+ * with a commands pending before it, ie this is the latest command which failed
+ * but still some operation(req) is pending.
  * @connect_req: connect req
  * @disconnect_req: disconnect req
  */
 struct cm_req {
 	qdf_list_node_t node;
 	wlan_cm_id cm_id;
+	bool failed_req;
 	union {
 		struct cm_connect_req connect_req;
 		struct cm_disconnect_req discon_req;
@@ -175,6 +178,7 @@ struct connect_ies {
  * @global_cmd_id: global cmd id for getting cm id for connect/disconnect req
  * @max_connect_attempts: Max attempts to be tried for a connect req
  * @scan_requester_id: scan requester id.
+ * @disconnect_complete: disconnect completion wait event
  */
 struct cnx_mgr {
 	struct wlan_objmgr_vdev *vdev;
@@ -193,6 +197,7 @@ struct cnx_mgr {
 	qdf_atomic_t global_cmd_id;
 	uint8_t max_connect_attempts;
 	wlan_scan_requester scan_requester_id;
+	qdf_event_t disconnect_complete;
 };
 
 /**

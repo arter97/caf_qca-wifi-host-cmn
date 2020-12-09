@@ -116,6 +116,142 @@ static inline void cm_req_lock_release(struct cnx_mgr *cm_ctx)
 }
 #endif /* WLAN_CM_USE_SPINLOCK */
 
+#ifdef CRYPTO_SET_KEY_CONVERGED
+QDF_STATUS cm_set_key(struct cnx_mgr *cm_ctx, bool unicast,
+		      uint8_t key_idx, struct qdf_mac_addr *bssid)
+{
+	enum wlan_crypto_cipher_type cipher;
+	struct wlan_crypto_key *crypto_key;
+	uint8_t wep_key_idx = 0;
+
+	cipher = wlan_crypto_get_cipher(cm_ctx->vdev, unicast, key_idx);
+	if (IS_WEP_CIPHER(cipher)) {
+		wep_key_idx = wlan_crypto_get_default_key_idx(cm_ctx->vdev,
+							      !unicast);
+		crypto_key = wlan_crypto_get_key(cm_ctx->vdev, wep_key_idx);
+		qdf_mem_copy(crypto_key->macaddr, bssid->bytes,
+			     QDF_MAC_ADDR_SIZE);
+	} else {
+		crypto_key = wlan_crypto_get_key(cm_ctx->vdev, key_idx);
+	}
+
+	return wlan_crypto_set_key_req(cm_ctx->vdev, crypto_key, (unicast ?
+				       WLAN_CRYPTO_KEY_TYPE_UNICAST :
+				       WLAN_CRYPTO_KEY_TYPE_GROUP));
+}
+#endif
+
+#ifdef CONN_MGR_ADV_FEATURE
+void cm_store_wep_key(struct cnx_mgr *cm_ctx,
+		      struct wlan_cm_connect_crypto_info *crypto,
+		      wlan_cm_id cm_id)
+{
+	struct wlan_crypto_key *crypto_key = NULL;
+	QDF_STATUS status;
+	enum wlan_crypto_cipher_type cipher_type;
+	struct wlan_cm_wep_key_params *wep_keys;
+
+	if (!(crypto->ciphers_pairwise & (1 << WLAN_CRYPTO_CIPHER_WEP_40 |
+					  1 << WLAN_CRYPTO_CIPHER_WEP_104)))
+		return;
+
+	if (crypto->ciphers_pairwise & 1 << WLAN_CRYPTO_CIPHER_WEP_40)
+		cipher_type = WLAN_CRYPTO_CIPHER_WEP_40;
+	else
+		cipher_type = WLAN_CRYPTO_CIPHER_WEP_104;
+
+	wep_keys = &crypto->wep_keys;
+	status = wlan_crypto_validate_key_params(cipher_type,
+						 wep_keys->key_idx,
+						 wep_keys->key_len,
+						 wep_keys->seq_len);
+	if (QDF_IS_STATUS_ERROR(status)) {
+		mlme_err(CM_PREFIX_FMT "Invalid key params",
+			 CM_PREFIX_REF(wlan_vdev_get_id(cm_ctx->vdev), cm_id));
+		return;
+	}
+
+	crypto_key = wlan_crypto_get_key(cm_ctx->vdev, wep_keys->key_idx);
+	if (!crypto_key) {
+		crypto_key = qdf_mem_malloc(sizeof(*crypto_key));
+		if (!crypto_key)
+			return;
+
+		status = wlan_crypto_save_key(cm_ctx->vdev, wep_keys->key_idx,
+					      crypto_key);
+		if (QDF_IS_STATUS_ERROR(status)) {
+			mlme_err(CM_PREFIX_FMT "Failed to save key",
+				 CM_PREFIX_REF(wlan_vdev_get_id(cm_ctx->vdev),
+					       cm_id));
+			qdf_mem_free(crypto_key);
+			return;
+		}
+	}
+	qdf_mem_zero(crypto_key, sizeof(*crypto_key));
+	crypto_key->cipher_type = cipher_type;
+	crypto_key->keylen = wep_keys->key_len;
+	crypto_key->keyix = wep_keys->key_idx;
+	qdf_mem_copy(&crypto_key->keyval[0], wep_keys->key, wep_keys->key_len);
+	qdf_mem_copy(&crypto_key->keyrsc[0], wep_keys->seq, wep_keys->seq_len);
+	mlme_debug(CM_PREFIX_FMT "cipher_type %d key_len %d, seq_len %d",
+		   CM_PREFIX_REF(wlan_vdev_get_id(cm_ctx->vdev), cm_id),
+		   crypto_key->cipher_type, wep_keys->key_len,
+		   wep_keys->seq_len);
+}
+#endif
+
+#ifdef WLAN_FEATURE_FILS_SK
+void cm_store_fils_key(struct cnx_mgr *cm_ctx, bool unicast,
+		       uint8_t key_id, uint16_t key_length,
+		       uint8_t *key, struct qdf_mac_addr *bssid,
+		       wlan_cm_id cm_id)
+{
+	struct wlan_crypto_key *crypto_key = NULL;
+	QDF_STATUS status;
+	uint8_t i;
+	int32_t cipher;
+	enum wlan_crypto_cipher_type cipher_type = WLAN_CRYPTO_CIPHER_NONE;
+
+	if (unicast)
+		cipher = wlan_crypto_get_param(cm_ctx->vdev,
+					       WLAN_CRYPTO_PARAM_UCAST_CIPHER);
+	else
+		cipher = wlan_crypto_get_param(cm_ctx->vdev,
+					       WLAN_CRYPTO_PARAM_MCAST_CIPHER);
+
+	for (i = 0; i <= WLAN_CRYPTO_CIPHER_MAX; i++) {
+		if (QDF_HAS_PARAM(cipher, i)) {
+			cipher_type = i;
+			break;
+		}
+	}
+	crypto_key = wlan_crypto_get_key(cm_ctx->vdev, key_id);
+	if (!crypto_key) {
+		crypto_key = qdf_mem_malloc(sizeof(*crypto_key));
+		if (!crypto_key)
+			return;
+		status = wlan_crypto_save_key(cm_ctx->vdev, key_id, crypto_key);
+		if (QDF_IS_STATUS_ERROR(status)) {
+			mlme_err(CM_PREFIX_FMT "Failed to save key",
+				 CM_PREFIX_REF(wlan_vdev_get_id(cm_ctx->vdev),
+					       cm_id));
+			qdf_mem_free(crypto_key);
+			return;
+		}
+	}
+	qdf_mem_zero(crypto_key, sizeof(*crypto_key));
+	crypto_key->cipher_type = cipher_type;
+	crypto_key->keylen = key_length;
+	crypto_key->keyix = key_id;
+	qdf_mem_copy(&crypto_key->keyval[0], key, key_length);
+	qdf_mem_copy(crypto_key->macaddr, bssid->bytes, QDF_MAC_ADDR_SIZE);
+	mlme_debug(CM_PREFIX_FMT "cipher_type %d key_len %d, key_id %d mac:" QDF_MAC_ADDR_FMT,
+		   CM_PREFIX_REF(wlan_vdev_get_id(cm_ctx->vdev), cm_id),
+		   crypto_key->cipher_type, crypto_key->keylen,
+		   crypto_key->keyix, QDF_MAC_ADDR_REF(crypto_key->macaddr));
+}
+#endif
+
 bool cm_check_cmid_match_list_head(struct cnx_mgr *cm_ctx, wlan_cm_id *cm_id)
 {
 	qdf_list_node_t *cur_node = NULL;
@@ -218,7 +354,7 @@ struct cm_req *cm_get_req_by_cm_id_fl(struct cnx_mgr *cm_ctx, wlan_cm_id cm_id,
  * Return: void
  */
 static void
-cm_fill_connect_resp_from_req(struct wlan_cm_connect_rsp *resp,
+cm_fill_connect_resp_from_req(struct wlan_cm_connect_resp *resp,
 			      struct cm_req *cm_req)
 {
 	struct scan_cache_node *candidate;
@@ -254,7 +390,7 @@ cm_fill_connect_resp_from_req(struct wlan_cm_connect_rsp *resp,
 static void
 cm_handle_connect_flush(struct cnx_mgr *cm_ctx, struct cm_req *cm_req)
 {
-	struct wlan_cm_connect_rsp *resp;
+	struct wlan_cm_connect_resp *resp;
 
 	resp = qdf_mem_malloc(sizeof(*resp));
 	if (!resp)
@@ -285,8 +421,9 @@ cm_handle_connect_flush(struct cnx_mgr *cm_ctx, struct cm_req *cm_req)
 static void
 cm_handle_disconnect_flush(struct cnx_mgr *cm_ctx, struct cm_req *cm_req)
 {
-	struct wlan_cm_discon_rsp resp = {0};
+	struct wlan_cm_discon_rsp resp;
 
+	qdf_mem_zero(&resp, sizeof(resp));
 	resp.req.cm_id = cm_req->cm_id;
 	resp.req.req = cm_req->discon_req.req;
 
@@ -326,11 +463,12 @@ static void cm_remove_cmd_from_serialization(struct cnx_mgr *cm_ctx,
 }
 
 void
-cm_flush_pending_request(struct cnx_mgr *cm_ctx, uint32_t flush_prefix)
+cm_flush_pending_request(struct cnx_mgr *cm_ctx, uint32_t prefix,
+			 bool only_failed_req)
 {
 	qdf_list_node_t *cur_node = NULL, *next_node = NULL;
 	struct cm_req *cm_req;
-	uint32_t prefix;
+	uint32_t req_prefix;
 
 	cm_req_lock_acquire(cm_ctx);
 	qdf_list_peek_front(&cm_ctx->req_list, &cur_node);
@@ -338,17 +476,18 @@ cm_flush_pending_request(struct cnx_mgr *cm_ctx, uint32_t flush_prefix)
 		qdf_list_peek_next(&cm_ctx->req_list, cur_node, &next_node);
 		cm_req = qdf_container_of(cur_node, struct cm_req, node);
 
-		prefix = CM_ID_GET_PREFIX(cm_req->cm_id);
+		req_prefix = CM_ID_GET_PREFIX(cm_req->cm_id);
 
 		/* Only remove the pending requests matching the flush prefix */
-		if (prefix != flush_prefix ||
-		    cm_req->cm_id == cm_ctx->active_cm_id) {
-			cur_node = next_node;
-			next_node = NULL;
-			continue;
-		}
+		if (req_prefix != prefix ||
+		    cm_req->cm_id == cm_ctx->active_cm_id)
+			goto next;
 
-		if (prefix == CONNECT_REQ_PREFIX) {
+		/* If only_failed_req is set flush only failed req */
+		if (only_failed_req && !cm_req->failed_req)
+			goto next;
+
+		if (req_prefix == CONNECT_REQ_PREFIX) {
 			cm_handle_connect_flush(cm_ctx, cm_req);
 			cm_ctx->connect_count--;
 			cm_free_connect_req_mem(&cm_req->connect_req);
@@ -362,7 +501,7 @@ cm_flush_pending_request(struct cnx_mgr *cm_ctx, uint32_t flush_prefix)
 		cm_remove_cmd_from_serialization(cm_ctx, cm_req->cm_id);
 		qdf_list_remove_node(&cm_ctx->req_list, &cm_req->node);
 		qdf_mem_free(cm_req);
-
+next:
 		cur_node = next_node;
 		next_node = NULL;
 	}
@@ -373,7 +512,7 @@ cm_flush_pending_request(struct cnx_mgr *cm_ctx, uint32_t flush_prefix)
 QDF_STATUS
 cm_fill_bss_info_in_connect_rsp_by_cm_id(struct cnx_mgr *cm_ctx,
 					 wlan_cm_id cm_id,
-					 struct wlan_cm_connect_rsp *resp)
+					 struct wlan_cm_connect_resp *resp)
 {
 	qdf_list_node_t *cur_node = NULL, *next_node = NULL;
 	struct cm_req *cm_req;
