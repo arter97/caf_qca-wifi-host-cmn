@@ -148,6 +148,7 @@ enum precac_chan_state {
  * @bw:                Bandwidth of the precac entry.
  * @dfs:               Pointer to wlan_dfs structure.
  * @tree_root:         Tree root node with 80MHz channel key.
+ * @non_dfs_subch_count: Number of non DFS subchannels in the entry.
  */
 struct dfs_precac_entry {
 	TAILQ_ENTRY(dfs_precac_entry) pe_list;
@@ -158,13 +159,14 @@ struct dfs_precac_entry {
 	uint16_t            bw;
 	struct wlan_dfs     *dfs;
 	struct precac_tree_node *tree_root;
+	uint8_t             non_dfs_subch_count;
 };
 
 /**
  * dfs_zero_cac_timer_init() - Initialize zero-cac timers
  * @dfs_soc_obj: Pointer to DFS SOC object structure.
  */
-#if !defined(QCA_MCL_DFS_SUPPORT)
+#if defined(ATH_SUPPORT_ZERO_CAC_DFS) && !defined(QCA_MCL_DFS_SUPPORT)
 void dfs_zero_cac_timer_init(struct dfs_soc_priv_obj *dfs_soc_obj);
 #else
 static inline void
@@ -308,7 +310,7 @@ static inline void dfs_zero_cac_reset(struct wlan_dfs *dfs)
  * dfs_zero_cac_timer_detach() - Free Zero cac DFS variables.
  * @dfs_soc_obj: Pointer to dfs_soc_priv_obj structure.
  */
-#if !defined(QCA_MCL_DFS_SUPPORT)
+#if defined(ATH_SUPPORT_ZERO_CAC_DFS) && !defined(QCA_MCL_DFS_SUPPORT)
 void dfs_zero_cac_timer_detach(struct dfs_soc_priv_obj *dfs_soc_obj);
 #else
 static inline void
@@ -557,26 +559,33 @@ void dfs_find_vht80_chan_for_precac_for_freq(struct wlan_dfs *dfs,
 /**
  * dfs_find_pdev_for_agile_precac() - Find pdev to select channel for precac.
  * @pdev: Pointer to wlan_objmgr_pdev structure.
- * @cur_precac_dfs_index: current precac index
+ * @cur_agile_dfs_index: current agile dfs index
  */
 void dfs_find_pdev_for_agile_precac(struct wlan_objmgr_pdev *pdev,
-				    uint8_t *cur_precac_dfs_index);
+				    uint8_t *cur_agile_dfs_index);
 
 /**
  * dfs_prepare_agile_precac_chan() - Send Agile set request for given pdev.
  * @dfs: Pointer to wlan_dfs structure.
+ * @is_chan_found: True if a channel is available for PreCAC, false otherwise.
  */
-void dfs_prepare_agile_precac_chan(struct wlan_dfs *dfs);
+void dfs_prepare_agile_precac_chan(struct wlan_dfs *dfs, bool *is_chan_found);
 
 /**
  * dfs_process_ocac_complete() - Process Off-Channel CAC complete indication.
  * @pdev :Pointer to wlan_objmgr_pdev structure.
  * @ocac_status: Off channel CAC complete status
- * @center_freq : Center Frequency of O-CAC done indication.
+ * @center_freq1 : For 20/40/80/160Mhz, it is the center of the corresponding
+ * band. For 80P80/165MHz, it is the center of the left 80MHz.
+ * @center_freq2 : It is valid and non-zero only for 80P80/165MHz. It indicates
+ * the Center Frequency of the right 80MHz segment.
+ * @chwidth : Width of the channel for which OCAC completion is received.
  */
 void dfs_process_ocac_complete(struct wlan_objmgr_pdev *pdev,
 			       uint32_t ocac_status,
-			       uint32_t center_freq);
+			       uint32_t center_freq1,
+			       uint32_t center_freq2,
+			       enum phy_ch_width chwidth);
 
 /**
  * dfs_get_ieeechan_for_agilecac() - Find an IEEE channel for agile CAC.
@@ -646,18 +655,21 @@ void dfs_set_fw_adfs_support(struct wlan_dfs *dfs,
 			     bool fw_adfs_support_non_160);
 #else
 static inline void dfs_find_pdev_for_agile_precac(struct wlan_objmgr_pdev *pdev,
-						  uint8_t *cur_precac_dfs_index)
+						  uint8_t *cur_agile_dfs_index)
 {
 }
 
-static inline void dfs_prepare_agile_precac_chan(struct wlan_dfs *dfs)
+static inline void dfs_prepare_agile_precac_chan(struct wlan_dfs *dfs,
+						 bool *is_chan_found)
 {
 }
 
 static inline void
 dfs_process_ocac_complete(struct wlan_objmgr_pdev *pdev,
 			  uint32_t ocac_status,
-			  uint32_t center_freq)
+			  uint32_t center_freq1,
+			  uint32_t center_freq2,
+			  enum phy_ch_width chwidth)
 {
 }
 
@@ -1241,14 +1253,14 @@ dfs_rcac_timer_deinit(struct dfs_soc_priv_obj *dfs_soc_obj)
 }
 #endif
 
-#ifdef QCA_SUPPORT_ADFS_RCAC
-#define DFS_RCAC_SM_SPIN_LOCK(_soc_obj) \
-	qdf_spin_lock_bh(&((_soc_obj)->dfs_rcac_sm_lock))
-#define DFS_RCAC_SM_SPIN_UNLOCK(_soc_obj) \
-	qdf_spin_unlock_bh(&((_soc_obj)->dfs_rcac_sm_lock))
+#ifdef QCA_SUPPORT_AGILE_DFS
+#define DFS_AGILE_SM_SPIN_LOCK(_soc_obj) \
+	qdf_spin_lock_bh(&((_soc_obj)->dfs_agile_sm_lock))
+#define DFS_AGILE_SM_SPIN_UNLOCK(_soc_obj) \
+	qdf_spin_unlock_bh(&((_soc_obj)->dfs_agile_sm_lock))
 
 /**
- * dfs_rcac_sm_deliver_evt() - Deliver the event to RCAC SM.
+ * dfs_agile_sm_deliver_evt() - Deliver the event to AGILE SM.
  * @dfs_soc_obj: Pointer to DFS soc object that holds the SM handle.
  * @event: Event ID.
  * @event_data_len: Length of event data.
@@ -1256,29 +1268,67 @@ dfs_rcac_timer_deinit(struct dfs_soc_priv_obj *dfs_soc_obj)
  *
  * Return: Success if event is handled, else failure.
  */
-QDF_STATUS dfs_rcac_sm_deliver_evt(struct dfs_soc_priv_obj *dfs_soc_obj,
-				   enum dfs_rcac_sm_evt event,
-				   uint16_t event_data_len,
-				   void *event_data);
+QDF_STATUS dfs_agile_sm_deliver_evt(struct dfs_soc_priv_obj *dfs_soc_obj,
+				    enum dfs_agile_sm_evt event,
+				    uint16_t event_data_len,
+				    void *event_data);
 
 /**
- * dfs_rcac_sm_create() - Create the Rolling CAC state machine.
+ * dfs_agile_sm_create() - Create the AGILE state machine.
  * @dfs_soc_obj: Pointer to dfs_soc object that holds the SM handle.
  *
  * Return: QDF_STATUS_SUCCESS if successful, else failure status.
  */
-QDF_STATUS dfs_rcac_sm_create(struct dfs_soc_priv_obj *dfs_soc_obj);
+QDF_STATUS dfs_agile_sm_create(struct dfs_soc_priv_obj *dfs_soc_obj);
 
 /**
- * dfs_rcac_sm_destroy() - Destroy the Rolling CAC state machine.
+ * dfs_agile_sm_destroy() - Destroy the AGILE state machine.
  * @dfs_soc_obj: Pointer to dfs_soc object that holds the SM handle.
  *
  * Return: QDF_STATUS_SUCCESS if successful, else failure status.
  */
-QDF_STATUS dfs_rcac_sm_destroy(struct dfs_soc_priv_obj *dfs_soc_obj);
+QDF_STATUS dfs_agile_sm_destroy(struct dfs_soc_priv_obj *dfs_soc_obj);
 
 /**
- * dfs_is_agile_rcac_enabled() - Determine if Rolling CAC is supported or not.
+ * dfs_is_agile_cac_enabled() - Determine if Agile PreCAC/RCAC is enabled.
+ * @dfs: Pointer to struct wlan_dfs.
+ *
+ * Return: True if either Agile PreCAC/RCAC is enabled, false otherwise.
+ */
+bool dfs_is_agile_cac_enabled(struct wlan_dfs *dfs);
+
+#else
+
+static inline
+QDF_STATUS dfs_agile_sm_deliver_evt(struct dfs_soc_priv_obj *dfs_soc_obj,
+				    enum dfs_agile_sm_evt event,
+				    uint16_t event_data_len,
+				    void *event_data)
+{
+	return QDF_STATUS_SUCCESS;
+}
+
+static inline
+QDF_STATUS dfs_agile_sm_create(struct dfs_soc_priv_obj *dfs_soc_obj)
+{
+	return QDF_STATUS_SUCCESS;
+}
+
+static inline
+QDF_STATUS dfs_agile_sm_destroy(struct dfs_soc_priv_obj *dfs_soc_obj)
+{
+	return QDF_STATUS_SUCCESS;
+}
+
+static inline bool dfs_is_agile_cac_enabled(struct wlan_dfs *dfs)
+{
+	return false;
+}
+#endif /* QCA_SUPPORT_AGILE_DFS */
+
+#ifdef QCA_SUPPORT_ADFS_RCAC
+/**
+ * dfs_is_agile_rcac_enabled() - Determine if Rolling CAC is enabled or not.
  * @dfs: Pointer to struct wlan_dfs.
  *
  * Following are the conditions needed to assertain that rolling CAC
@@ -1302,28 +1352,20 @@ bool dfs_is_agile_rcac_enabled(struct wlan_dfs *dfs);
  */
 void dfs_prepare_agile_rcac_channel(struct wlan_dfs *dfs,
 				    bool *is_rcac_chan_available);
+/**
+ * dfs_start_agile_rcac_timer() - Start Agile RCAC timer.
+ * @dfs: Pointer to struct wlan_dfs.
+ *
+ */
+void dfs_start_agile_rcac_timer(struct wlan_dfs *dfs);
+
+/**
+ * dfs_stop_agile_rcac_timer() - Stop Agile RCAC timer.
+ * @dfs: Pointer to struct wlan_dfs.
+ *
+ */
+void dfs_stop_agile_rcac_timer(struct wlan_dfs *dfs);
 #else
-static inline
-QDF_STATUS dfs_rcac_sm_deliver_evt(struct dfs_soc_priv_obj *dfs_soc_obj,
-				   enum dfs_rcac_sm_evt event,
-				   uint16_t event_data_len,
-				   void *event_data)
-{
-	return QDF_STATUS_SUCCESS;
-}
-
-static inline
-QDF_STATUS dfs_rcac_sm_create(struct dfs_soc_priv_obj *dfs_soc_obj)
-{
-	return QDF_STATUS_SUCCESS;
-}
-
-static inline
-QDF_STATUS dfs_rcac_sm_destroy(struct dfs_soc_priv_obj *dfs_soc_obj)
-{
-	return QDF_STATUS_SUCCESS;
-}
-
 static inline bool dfs_is_agile_rcac_enabled(struct wlan_dfs *dfs)
 {
 	return false;
@@ -1334,6 +1376,82 @@ dfs_prepare_agile_rcac_channel(struct wlan_dfs *dfs,
 			       bool *is_rcac_chan_available)
 {
 }
+
+static inline void dfs_start_agile_rcac_timer(struct wlan_dfs *dfs)
+{
+}
+
+static inline void dfs_stop_agile_rcac_timer(struct wlan_dfs *dfs)
+{
+}
 #endif /* QCA_SUPPORT_ADFS_RCAC */
 
+#if defined(QCA_SUPPORT_AGILE_DFS) || defined(ATH_SUPPORT_ZERO_CAC_DFS) || \
+	defined(QCA_SUPPORT_ADFS_RCAC)
+/**
+ * dfs_process_radar_ind_on_agile_chan() - Process radar indication event on
+ * agile channel.
+ * @dfs: Pointer to wlan_dfs structure.
+ * @radar_found: Pointer to radar_found_info structure.
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS
+dfs_process_radar_ind_on_agile_chan(struct wlan_dfs *dfs,
+				    struct radar_found_info *radar_found);
+#else
+static inline QDF_STATUS
+dfs_process_radar_ind_on_agile_chan(struct wlan_dfs *dfs,
+				    struct radar_found_info *radar_found)
+{
+	return QDF_STATUS_E_FAILURE;
+}
+#endif
+
+#ifdef ATH_SUPPORT_ZERO_CAC_DFS
+/**
+ * dfs_precac_status_for_channel() - Find the preCAC status of the given
+ * channel.
+ *
+ * @dfs: Pointer to wlan_dfs dfs.
+ * @deschan: DFS channel to check preCAC status.
+ *
+ * Return:
+ * DFS_NO_PRECAC_COMPLETED_CHANS - 0 preCAC completed channels.
+ * DFS_PRECAC_COMPLETED_CHAN - Given channel is preCAC completed.
+ * DFS_PRECAC_REQUIRED_CHAN - Given channel requires preCAC.
+ */
+enum precac_status_for_chan
+dfs_precac_status_for_channel(struct wlan_dfs *dfs,
+			      struct dfs_channel *deschan);
+#else
+static inline enum precac_status_for_chan
+dfs_precac_status_for_channel(struct wlan_dfs *dfs,
+			      struct dfs_channel *deschan)
+{
+	return DFS_INVALID_PRECAC_STATUS;
+}
+#endif
+
+#if (defined(QCA_SUPPORT_AGILE_DFS) || defined(QCA_SUPPORT_ADFS_RCAC)) && \
+	defined(WLAN_DFS_TRUE_160MHZ_SUPPORT) && defined(WLAN_DFS_FULL_OFFLOAD)
+/**
+ * dfs_translate_radar_params_for_agile_chan() - Translate radar params from
+ * 160MHz synthesizer model to 80MHz synthesizer model for Agile channel.
+ * @dfs: Pointer to wlan_dfs dfs.
+ * @r_info: Radar found parameters received from FW that are converted to 80MHz
+ * syntesizer model(both input and output).
+ *
+ * Return: void.
+ */
+
+void dfs_translate_radar_params_for_agile_chan(struct wlan_dfs *dfs,
+					       struct radar_found_info *r_info);
+#else
+static inline void
+dfs_translate_radar_params_for_agile_chan(struct wlan_dfs *dfs,
+					  struct radar_found_info *r_info)
+{
+}
+#endif
 #endif /* _DFS_ZERO_CAC_H_ */

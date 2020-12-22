@@ -20,6 +20,7 @@
 #include <scheduler_core.h>
 #include <qdf_atomic.h>
 #include <qdf_module.h>
+#include <qdf_platform.h>
 
 QDF_STATUS scheduler_disable(void)
 {
@@ -31,6 +32,11 @@ QDF_STATUS scheduler_disable(void)
 	QDF_BUG(sched_ctx);
 	if (!sched_ctx)
 		return QDF_STATUS_E_INVAL;
+
+	if (!sched_ctx->sch_thread) {
+		sched_debug("Scheduler already disabled");
+		return QDF_STATUS_SUCCESS;
+	}
 
 	/* send shutdown signal to scheduler thread */
 	qdf_atomic_set_bit(MC_SHUTDOWN_EVENT_MASK, &sched_ctx->sch_event_flag);
@@ -63,6 +69,11 @@ static inline void scheduler_watchdog_notify(struct scheduler_ctx *sched)
 static void scheduler_watchdog_timeout(void *arg)
 {
 	struct scheduler_ctx *sched = arg;
+
+	if (qdf_is_recovering()) {
+		sched_debug("Recovery is in progress ignore timeout");
+		return;
+	}
 
 	scheduler_watchdog_notify(sched);
 	if (sched->sch_thread)
@@ -158,6 +169,7 @@ QDF_STATUS scheduler_init(void)
 	qdf_spinlock_create(&sched_ctx->sch_thread_lock);
 	qdf_init_waitqueue_head(&sched_ctx->sch_wait_queue);
 	sched_ctx->sch_event_flag = 0;
+	sched_ctx->timeout = SCHEDULER_WATCHDOG_TIMEOUT;
 	qdf_timer_init(NULL,
 		       &sched_ctx->watchdog_timer,
 		       &scheduler_watchdog_timeout,
@@ -458,7 +470,10 @@ QDF_STATUS scheduler_timer_q_mq_handler(struct scheduler_msg *msg)
 	if (msg->reserved != SYS_MSG_COOKIE || msg->type != SYS_MSG_ID_MC_TIMER)
 		return sched_ctx->legacy_sys_handler(msg);
 
-	timer_callback = msg->callback;
+	/* scheduler_msg_process_fn_t and qdf_mc_timer_callback_t have
+	 * different parameters and return type
+	 */
+	timer_callback = (qdf_mc_timer_callback_t)msg->callback;
 	QDF_BUG(timer_callback);
 	if (!timer_callback)
 		return QDF_STATUS_E_FAILURE;
@@ -504,6 +519,17 @@ QDF_STATUS scheduler_scan_mq_handler(struct scheduler_msg *msg)
 	scan_q_msg_handler(msg);
 
 	return QDF_STATUS_SUCCESS;
+}
+
+void scheduler_set_watchdog_timeout(uint32_t timeout)
+{
+	struct scheduler_ctx *sched_ctx = scheduler_get_context();
+
+	QDF_BUG(sched_ctx);
+	if (!sched_ctx)
+		return;
+
+	sched_ctx->timeout = timeout;
 }
 
 QDF_STATUS scheduler_register_wma_legacy_handler(scheduler_msg_process_fn_t
@@ -635,7 +661,7 @@ void scheduler_mc_timer_callback(qdf_mc_timer_t *timer)
 	/* serialize to scheduler controller thread */
 	msg.type = SYS_MSG_ID_MC_TIMER;
 	msg.reserved = SYS_MSG_COOKIE;
-	msg.callback = callback;
+	msg.callback = (scheduler_msg_process_fn_t)callback;
 	msg.bodyptr = user_data;
 	msg.bodyval = 0;
 

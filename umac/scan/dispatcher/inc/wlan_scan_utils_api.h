@@ -310,6 +310,20 @@ util_scan_entry_phymode(struct scan_cache_entry *scan_entry)
 }
 
 /**
+ * util_scan_entry_nss() - function to read nss of scan entry
+ * @scan_entry: scan entry
+ *
+ * API, function to read nss of scan entry
+ *
+ * Return: nss
+ */
+static inline u_int8_t
+util_scan_entry_nss(struct scan_cache_entry *scan_entry)
+{
+	return scan_entry->nss;
+}
+
+/**
  * util_is_ssid_match() - to check if ssid match
  * @ssid1: ssid 1
  * @ssid2: ssid 2
@@ -642,6 +656,7 @@ util_scan_copy_beacon_data(struct scan_cache_entry *new_entry,
 {
 	u_int8_t *new_ptr, *old_ptr;
 	struct ie_list *ie_lst;
+	uint8_t i;
 
 	new_entry->raw_frame.ptr =
 		qdf_mem_malloc_atomic(scan_entry->raw_frame.len);
@@ -694,6 +709,8 @@ util_scan_copy_beacon_data(struct scan_cache_entry *new_entry,
 	ie_lst->vhtop = conv_ptr(ie_lst->vhtop, old_ptr, new_ptr);
 	ie_lst->opmode = conv_ptr(ie_lst->opmode, old_ptr, new_ptr);
 	ie_lst->cswrp = conv_ptr(ie_lst->cswrp, old_ptr, new_ptr);
+	for (i = 0; i < WLAN_MAX_NUM_TPE_IE; i++)
+		ie_lst->tpe[i] = conv_ptr(ie_lst->tpe[i], old_ptr, new_ptr);
 	ie_lst->widebw = conv_ptr(ie_lst->widebw, old_ptr, new_ptr);
 	ie_lst->txpwrenvlp = conv_ptr(ie_lst->txpwrenvlp, old_ptr, new_ptr);
 	ie_lst->bwnss_map = conv_ptr(ie_lst->bwnss_map, old_ptr, new_ptr);
@@ -709,6 +726,7 @@ util_scan_copy_beacon_data(struct scan_cache_entry *new_entry,
 	ie_lst->extender = conv_ptr(ie_lst->extender, old_ptr, new_ptr);
 	ie_lst->adaptive_11r = conv_ptr(ie_lst->adaptive_11r, old_ptr, new_ptr);
 	ie_lst->single_pmk = conv_ptr(ie_lst->single_pmk, old_ptr, new_ptr);
+	ie_lst->rsnxe = conv_ptr(ie_lst->rsnxe, old_ptr, new_ptr);
 
 	return QDF_STATUS_SUCCESS;
 }
@@ -1481,6 +1499,20 @@ util_scan_entry_heop(struct scan_cache_entry *scan_entry)
 }
 
 /**
+ * util_scan_entry_tpe() - function to read tpe ie
+ * @scan_entry: scan entry
+ *
+ * API, function to read tpe ie
+ *
+ * Return, tpe ie or NULL if ie is not present
+ */
+static inline uint8_t**
+util_scan_entry_tpe(struct scan_cache_entry *scan_entry)
+{
+	return scan_entry->ie_list.tpe;
+}
+
+/**
  * util_scan_entry_muedca() - function to read MU-EDCA IE
  * @scan_entry: scan entry
  *
@@ -1598,6 +1630,20 @@ static inline uint8_t *
 util_scan_entry_mbo_oce(struct scan_cache_entry *scan_entry)
 {
 	return scan_entry->ie_list.mbo_oce;
+}
+
+/**
+ * util_scan_entry_rsnxe() - function to read RSNXE ie
+ * @scan_entry: scan entry
+ *
+ * API, function to read RSNXE ie
+ *
+ * Return: RSNXE ie
+ */
+static inline uint8_t *
+util_scan_entry_rsnxe(struct scan_cache_entry *scan_entry)
+{
+	return scan_entry->ie_list.rsnxe;
 }
 
 /**

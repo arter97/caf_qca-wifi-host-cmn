@@ -55,6 +55,16 @@ static inline void qdf_nbuf_ipa_priv_set(qdf_nbuf_t buf, uint32_t priv)
 	__qdf_nbuf_ipa_priv_set(buf, priv);
 }
 
+static inline void qdf_nbuf_tx_notify_comp_set(qdf_nbuf_t buf, uint8_t val)
+{
+	QDF_NBUF_CB_TX_EXTRA_FRAG_FLAGS_NOTIFY_COMP(buf) = val;
+}
+
+static inline uint8_t qdf_nbuf_tx_notify_comp_get(qdf_nbuf_t buf)
+{
+	return QDF_NBUF_CB_TX_EXTRA_FRAG_FLAGS_NOTIFY_COMP(buf);
+}
+
 /**
  * qdf_nbuf_set_rx_protocol_tag()
  * @buf: Network buffer
@@ -118,5 +128,53 @@ static inline void qdf_nbuf_set_exc_frame(qdf_nbuf_t buf, uint8_t value)
 static inline uint8_t qdf_nbuf_is_exc_frame(qdf_nbuf_t buf)
 {
 	return QDF_NBUF_CB_RX_PACKET_EXC_FRAME(buf);
+}
+
+/**
+ * qdf_nbuf_set_rx_ipa_smmu_map() - set ipa smmu mapped flag
+ * @buf: Network buffer
+ * @value: 1 - ipa smmu mapped, 0 - ipa smmu unmapped
+ *
+ * Return: none
+ */
+static inline void qdf_nbuf_set_rx_ipa_smmu_map(qdf_nbuf_t buf,
+						uint8_t value)
+{
+	QDF_NBUF_CB_RX_PACKET_IPA_SMMU_MAP(buf) = value;
+}
+
+/**
+ * qdf_nbuf_is_rx_ipa_smmu_map() - check ipa smmu map flag
+ * @buf: Network buffer
+ *
+ * Return 0 or 1
+ */
+static inline uint8_t qdf_nbuf_is_rx_ipa_smmu_map(qdf_nbuf_t buf)
+{
+	return QDF_NBUF_CB_RX_PACKET_IPA_SMMU_MAP(buf);
+}
+
+/**
+ * qdf_nbuf_set_rx_reo_dest_ind() - set reo destination indication
+ * @buf: Network buffer
+ * @value: reo destination indication value to set
+ *
+ * Return: none
+ */
+static inline void qdf_nbuf_set_rx_reo_dest_ind(qdf_nbuf_t buf,
+						uint8_t value)
+{
+	QDF_NBUF_CB_RX_PACKET_REO_DEST_IND(buf) = value;
+}
+
+/**
+ * qdf_nbuf_get_rx_reo_dest_ind() - get reo destination indication
+ * @buf: Network buffer
+ *
+ * Return reo destination indication value (0 ~ 31)
+ */
+static inline uint8_t qdf_nbuf_get_rx_reo_dest_ind(qdf_nbuf_t buf)
+{
+	return QDF_NBUF_CB_RX_PACKET_REO_DEST_IND(buf);
 }
 #endif /* _QDF_NBUF_M_H */

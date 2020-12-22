@@ -27,16 +27,6 @@
 
 #include <qdf_nbuf.h>
 
-/**
- * struct mac_ssid - mac ssid structure
- * @length: ssid length
- * @mac_ssid: ssid
- */
-struct mlme_mac_ssid {
-	uint8_t length;
-	uint8_t mac_ssid[WLAN_SSID_MAX_LEN];
-} qdf_packed;
-
 /** slot time long */
 #define WLAN_MLME_VDEV_SLOT_TIME_LONG   0x1
 /** slot time short */
@@ -371,6 +361,7 @@ struct config_fils_params {
  * @lower32: Lower 32 bits in the 1st 64-bit value
  * @higher32: Higher 32 bits in the 1st 64-bit value
  * @lower32_2: Lower 32 bits in the 2nd 64-bit value
+ * @higher32_2: Higher 32 bits in the 2nd 64-bit value
  */
 struct config_ratemask_params {
 	uint8_t vdev_id;
@@ -378,6 +369,7 @@ struct config_ratemask_params {
 	uint32_t lower32;
 	uint32_t higher32;
 	uint32_t lower32_2;
+	uint32_t higher32_2;
 };
 
 /**
@@ -458,6 +450,8 @@ struct vdev_scan_nac_rssi_params {
  * @channel_param: Channel params required by target.
  * @bcn_tx_rate_code: Beacon tx rate code.
  * @ldpc_rx_enabled: Enable/Disable LDPC RX for this vdev
+ * @mbssid_flags: MBSSID flags to FW
+ * @vdevid_trans: Tx VDEV ID
  */
 struct vdev_start_params {
 	uint8_t vdev_id;
@@ -467,7 +461,7 @@ struct vdev_start_params {
 	uint32_t disable_hw_ack;
 	bool hidden_ssid;
 	bool pmf_enabled;
-	struct mlme_mac_ssid ssid;
+	struct wlan_ssid ssid;
 	uint32_t num_noa_descriptors;
 	uint32_t preferred_rx_streams;
 	uint32_t preferred_tx_streams;
@@ -477,6 +471,8 @@ struct vdev_start_params {
 	struct mlme_channel_param channel;
 	enum mlme_bcn_tx_rate_code bcn_tx_rate_code;
 	bool ldpc_rx_enabled;
+	uint32_t mbssid_flags;
+	uint8_t vdevid_trans;
 };
 
 /**
@@ -501,6 +497,7 @@ struct vdev_set_params {
  * @pdev_id: pdev id on pdev for this vdev
  * @mbssid_flags: MBSS IE flags indicating vdev type
  * @vdevid_trans: id of transmitting vdev for MBSS IE
+ * @special_vdev_mode: indicates special vdev mode
  */
 struct vdev_create_params {
 	uint8_t vdev_id;
@@ -511,6 +508,7 @@ struct vdev_create_params {
 	uint32_t pdev_id;
 	uint32_t mbssid_flags;
 	uint8_t vdevid_trans;
+	bool special_vdev_mode;
 };
 
 /**

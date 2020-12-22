@@ -26,6 +26,7 @@
 #include "hif.h"
 #include "cepci.h"
 #include "ce_main.h"
+#include "hif_runtime_pm.h"
 
 #ifdef FORCE_WAKE
 /**
@@ -52,9 +53,9 @@ struct hif_ipci_stats {
 };
 
 /* Register to wake the UMAC from power collapse */
-#define PCIE_SOC_PCIE_REG_PCIE_SCRATCH_0_SOC_PCIE_REG 0x4040
+#define PCIE_SOC_PCIE_REG_PCIE_SCRATCH_0_SOC_PCIE_REG (0x01E04000 + 0x40)
 /* Register used for handshake mechanism to validate UMAC is awake */
-#define PCIE_PCIE_LOCAL_REG_PCIE_SOC_WAKE_PCIE_LOCAL_REG 0x3004
+#define PCIE_PCIE_LOCAL_REG_PCIE_SOC_WAKE_PCIE_LOCAL_REG (0x01E00000 + 0x3004)
 /* Timeout duration to validate UMAC wake status */
 #ifdef HAL_CONFIG_SLUB_DEBUG_ON
 #define FORCE_WAKE_DELAY_TIMEOUT_MS 500
@@ -76,6 +77,9 @@ struct hif_ipci_softc {
 	uint32_t register_window;
 	qdf_spinlock_t register_access_lock;
 	qdf_spinlock_t irq_lock;
+#ifdef FEATURE_RUNTIME_PM
+	struct hif_runtime_pm_ctx rpm_ctx;
+#endif
 
 	void (*hif_ipci_get_soc_info)(struct hif_ipci_softc *sc,
 				      struct device *dev);

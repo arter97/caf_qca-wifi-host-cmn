@@ -1002,7 +1002,7 @@ static QDF_STATUS target_if_dbr_replenish_ring(struct wlan_objmgr_pdev *pdev,
 			struct direct_buf_rx_module_param *mod_param,
 			void *aligned_vaddr, uint32_t cookie)
 {
-	uint64_t *ring_entry;
+	uint32_t *ring_entry;
 	uint32_t dw_lo, dw_hi = 0, map_status;
 	void *hal_soc, *srng;
 	qdf_dma_addr_t paddr;
@@ -1067,7 +1067,9 @@ static QDF_STATUS target_if_dbr_replenish_ring(struct wlan_objmgr_pdev *pdev,
 	dw_lo = (uint64_t)paddr & 0xFFFFFFFF;
 	WMI_HOST_DBR_RING_ADDR_HI_SET(dw_hi, (uint64_t)paddr >> 32);
 	WMI_HOST_DBR_DATA_ADDR_HI_HOST_DATA_SET(dw_hi, cookie);
-	*ring_entry = (uint64_t)dw_hi << 32 | dw_lo;
+	*ring_entry = qdf_cpu_to_le32(dw_lo);
+	ring_entry++;
+	*ring_entry = qdf_cpu_to_le32(dw_hi);
 	hal_srng_access_end(hal_soc, srng);
 
 	return QDF_STATUS_SUCCESS;
@@ -1620,6 +1622,12 @@ static QDF_STATUS target_if_get_dbr_data(struct wlan_objmgr_pdev *pdev,
 	*cookie = WMI_HOST_DBR_DATA_ADDR_HI_HOST_DATA_GET(
 				dbr_rsp->dbr_entries[idx].paddr_hi);
 	dbr_data->vaddr = target_if_dbr_vaddr_lookup(mod_param, paddr, *cookie);
+
+	if (!dbr_data->vaddr) {
+		direct_buf_rx_err("dbr vaddr lookup failed, vaddr NULL");
+		return QDF_STATUS_E_FAILURE;
+	}
+
 	dbr_data->cookie = *cookie;
 	dbr_data->paddr = paddr;
 	direct_buf_rx_debug("Cookie = %d Vaddr look up = %pK",
@@ -2009,7 +2017,7 @@ QDF_STATUS target_if_deinit_dbr_ring(struct wlan_objmgr_pdev *pdev,
 QDF_STATUS target_if_direct_buf_rx_register_events(
 				struct wlan_objmgr_psoc *psoc)
 {
-	int ret;
+	QDF_STATUS ret;
 
 	if (!psoc || !GET_WMI_HDL_FROM_PSOC(psoc)) {
 		direct_buf_rx_err("psoc or psoc->tgt_if_handle is null");
@@ -2022,7 +2030,7 @@ QDF_STATUS target_if_direct_buf_rx_register_events(
 			target_if_direct_buf_rx_rsp_event_handler,
 			WMI_RX_UMAC_CTX);
 
-	if (ret)
+	if (QDF_IS_STATUS_ERROR(ret))
 		direct_buf_rx_debug("event handler not supported, ret=%d", ret);
 
 	return QDF_STATUS_SUCCESS;
@@ -2076,6 +2084,13 @@ QDF_STATUS target_if_direct_buf_rx_print_ring_stat(
 			mod_param =
 				&dbr_pdev_obj->dbr_mod_param[mod_idx][srng_id];
 			dbr_ring_cfg = mod_param->dbr_ring_cfg;
+			if (!dbr_ring_cfg) {
+				direct_buf_rx_info("dbr_ring_cfg is NULL");
+				direct_buf_rx_info("mod id %d mod %s", mod_idx,
+						   g_dbr_module_name[mod_idx].
+						   module_name_str);
+				continue;
+			}
 			srng = dbr_ring_cfg->srng;
 			hal_get_sw_hptp(hal_soc, srng, &tp, &hp);
 			direct_buf_rx_debug("|%11d|%14s|%10x|%10x|",

@@ -56,6 +56,10 @@ QDF_STATUS hif_initialize_pci_ops(struct hif_softc *hif_sc)
 	bus_ops->hif_nointrs = &hif_pci_nointrs;
 	bus_ops->hif_enable_bus = &hif_pci_enable_bus;
 	bus_ops->hif_disable_bus = &hif_pci_disable_bus;
+#ifdef FEATURE_RUNTIME_PM
+	bus_ops->hif_bus_get_rpm_ctx = &hif_pci_get_rpm_ctx;
+	bus_ops->hif_bus_get_dev = &hif_pci_get_dev;
+#endif
 	bus_ops->hif_bus_configure = &hif_pci_bus_configure;
 	bus_ops->hif_get_config_item = &hif_dummy_get_config_item;
 	bus_ops->hif_set_mailbox_swap = &hif_dummy_set_mailbox_swap;
@@ -68,6 +72,8 @@ QDF_STATUS hif_initialize_pci_ops(struct hif_softc *hif_sc)
 	bus_ops->hif_irq_enable = &hif_pci_irq_enable;
 	bus_ops->hif_dump_registers = &hif_pci_dump_registers;
 	bus_ops->hif_dump_target_memory = &hif_ce_dump_target_memory;
+	bus_ops->hif_reg_read32 = &hif_pci_reg_read32;
+	bus_ops->hif_reg_write32 = &hif_pci_reg_write32;
 	bus_ops->hif_ipa_get_ce_resource = &hif_ce_ipa_get_ce_resource;
 	bus_ops->hif_mask_interrupt_call = &hif_dummy_mask_interrupt_call;
 	bus_ops->hif_enable_power_management =
@@ -87,6 +93,31 @@ QDF_STATUS hif_initialize_pci_ops(struct hif_softc *hif_sc)
 
 	bus_ops->hif_config_irq_affinity =
 		&hif_pci_config_irq_affinity;
+	bus_ops->hif_config_irq_by_ceid = &hif_ce_msi_configure_irq_by_ceid;
+	bus_ops->hif_log_bus_info = &hif_log_pcie_info;
+
+	return QDF_STATUS_SUCCESS;
+}
+
+/**
+ * hif_update_irq_ops_with_pci() - reinitialize the pci ops
+ * for hybrid bus type device qcn9100 ie.connected to pci slot
+ * but act as ahb bus device from host perspective
+ *
+ * @hif_sc: hif_softc to get bus ops
+ *
+ * Return: QDF_STATUS_SUCCESS
+ */
+QDF_STATUS hif_update_irq_ops_with_pci(struct hif_softc *hif_sc)
+{
+	struct hif_bus_ops *bus_ops = &hif_sc->bus_ops;
+
+	bus_ops->hif_grp_irq_configure = &hif_pci_configure_grp_irq;
+	bus_ops->hif_nointrs = &hif_pci_nointrs;
+	bus_ops->hif_irq_disable = &hif_pci_irq_disable;
+	bus_ops->hif_irq_enable = &hif_pci_irq_enable;
+	bus_ops->hif_disable_isr = &hif_pci_disable_isr;
+
 	return QDF_STATUS_SUCCESS;
 }
 

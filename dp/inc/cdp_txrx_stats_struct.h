@@ -25,6 +25,7 @@
 #define _CDP_TXRX_STATS_STRUCT_H_
 
 #include <qdf_types.h>
+#include <cdp_txrx_hist_struct.h>
 
 #define TXRX_STATS_LEVEL_OFF   0
 #define TXRX_STATS_LEVEL_BASIC 1
@@ -42,7 +43,7 @@
 #endif
 
 /* 1 additional MCS is for invalid values */
-#define MAX_MCS (12 + 1)
+#define MAX_MCS (14 + 1)
 #define MAX_MCS_11A 8
 #define MAX_MCS_11B 7
 #define MAX_MCS_11AC 12
@@ -75,6 +76,11 @@
 #define CDP_MAX_TX_COMP_RINGS 3  /* max tx completion rings */
 #define CDP_MAX_TX_TQM_STATUS 9  /* max tx tqm completion status */
 #define CDP_MAX_TX_HTT_STATUS 7  /* max tx htt completion status */
+
+/*
+ * Max of TxRx context
+ */
+#define CDP_MAX_TXRX_CTX CDP_MAX_RX_RINGS
 
 /* TID level VoW stats macros
  * to add and get stats
@@ -183,6 +189,20 @@ enum cdp_ru_index {
 	RU_242_INDEX,
 	RU_484_INDEX,
 	RU_996_INDEX,
+	RU_INDEX_MAX,
+};
+
+struct cdp_ru_debug {
+	char *ru_type;
+};
+
+static const struct cdp_ru_debug cdp_ru_string[RU_INDEX_MAX] = {
+	{ "RU_26" },
+	{ "RU_52" },
+	{ "RU_106" },
+	{ "RU_242" },
+	{ "RU_484" },
+	{ "RU_996" }
 };
 
 #ifdef FEATURE_TSO_STATS
@@ -202,6 +222,101 @@ enum cdp_packet_type {
 	DOT11_AC = 3,
 	DOT11_AX = 4,
 	DOT11_MAX = 5,
+};
+
+#define MCS_VALID 1
+#define MCS_INVALID 0
+
+#define CDP_MAX_MCS_STRING_LEN 34
+/*
+ * struct cdp_rate_debug
+ *
+ * @mcs_type: print string for a given mcs
+ * @valid: valid mcs rate?
+ */
+struct cdp_rate_debug {
+	char mcs_type[CDP_MAX_MCS_STRING_LEN];
+	uint8_t valid;
+};
+
+static const struct cdp_rate_debug cdp_rate_string[DOT11_MAX][MAX_MCS] = {
+	{
+		{"OFDM 48 Mbps", MCS_VALID},
+		{"OFDM 24 Mbps", MCS_VALID},
+		{"OFDM 12 Mbps", MCS_VALID},
+		{"OFDM 6 Mbps ", MCS_VALID},
+		{"OFDM 54 Mbps", MCS_VALID},
+		{"OFDM 36 Mbps", MCS_VALID},
+		{"OFDM 18 Mbps", MCS_VALID},
+		{"OFDM 9 Mbps ", MCS_VALID},
+		{"INVALID ", MCS_INVALID},
+		{"INVALID ", MCS_INVALID},
+		{"INVALID ", MCS_INVALID},
+		{"INVALID ", MCS_INVALID},
+		{"INVALID ", MCS_INVALID},
+	},
+	{
+		{"CCK 11 Mbps Long  ", MCS_VALID},
+		{"CCK 5.5 Mbps Long ", MCS_VALID},
+		{"CCK 2 Mbps Long   ", MCS_VALID},
+		{"CCK 1 Mbps Long   ", MCS_VALID},
+		{"CCK 11 Mbps Short ", MCS_VALID},
+		{"CCK 5.5 Mbps Short", MCS_VALID},
+		{"CCK 2 Mbps Short  ", MCS_VALID},
+		{"INVALID ", MCS_INVALID},
+		{"INVALID ", MCS_INVALID},
+		{"INVALID ", MCS_INVALID},
+		{"INVALID ", MCS_INVALID},
+		{"INVALID ", MCS_INVALID},
+		{"INVALID ", MCS_INVALID},
+	},
+	{
+		{"HT MCS 0 (BPSK 1/2)  ", MCS_VALID},
+		{"HT MCS 1 (QPSK 1/2)  ", MCS_VALID},
+		{"HT MCS 2 (QPSK 3/4)  ", MCS_VALID},
+		{"HT MCS 3 (16-QAM 1/2)", MCS_VALID},
+		{"HT MCS 4 (16-QAM 3/4)", MCS_VALID},
+		{"HT MCS 5 (64-QAM 2/3)", MCS_VALID},
+		{"HT MCS 6 (64-QAM 3/4)", MCS_VALID},
+		{"HT MCS 7 (64-QAM 5/6)", MCS_VALID},
+		{"INVALID ", MCS_INVALID},
+		{"INVALID ", MCS_INVALID},
+		{"INVALID ", MCS_INVALID},
+		{"INVALID ", MCS_INVALID},
+		{"INVALID ", MCS_INVALID},
+	},
+	{
+		{"VHT MCS 0 (BPSK 1/2)     ", MCS_VALID},
+		{"VHT MCS 1 (QPSK 1/2)     ", MCS_VALID},
+		{"VHT MCS 2 (QPSK 3/4)     ", MCS_VALID},
+		{"VHT MCS 3 (16-QAM 1/2)   ", MCS_VALID},
+		{"VHT MCS 4 (16-QAM 3/4)   ", MCS_VALID},
+		{"VHT MCS 5 (64-QAM 2/3)   ", MCS_VALID},
+		{"VHT MCS 6 (64-QAM 3/4)   ", MCS_VALID},
+		{"VHT MCS 7 (64-QAM 5/6)   ", MCS_VALID},
+		{"VHT MCS 8 (256-QAM 3/4)  ", MCS_VALID},
+		{"VHT MCS 9 (256-QAM 5/6)  ", MCS_VALID},
+		{"VHT MCS 10 (1024-QAM 3/4)", MCS_VALID},
+		{"VHT MCS 11 (1024-QAM 5/6)", MCS_VALID},
+		{"INVALID ", MCS_INVALID},
+	},
+	{
+		{"HE MCS 0 (BPSK 1/2)     ", MCS_VALID},
+		{"HE MCS 1 (QPSK 1/2)     ", MCS_VALID},
+		{"HE MCS 2 (QPSK 3/4)     ", MCS_VALID},
+		{"HE MCS 3 (16-QAM 1/2)   ", MCS_VALID},
+		{"HE MCS 4 (16-QAM 3/4)   ", MCS_VALID},
+		{"HE MCS 5 (64-QAM 2/3)   ", MCS_VALID},
+		{"HE MCS 6 (64-QAM 3/4)   ", MCS_VALID},
+		{"HE MCS 7 (64-QAM 5/6)   ", MCS_VALID},
+		{"HE MCS 8 (256-QAM 3/4)  ", MCS_VALID},
+		{"HE MCS 9 (256-QAM 5/6)  ", MCS_VALID},
+		{"HE MCS 10 (1024-QAM 3/4)", MCS_VALID},
+		{"HE MCS 11 (1024-QAM 5/6)", MCS_VALID},
+		{"HE MCS 12 (4096-QAM 3/4)", MCS_VALID},
+		{"HE MCS 13 (4096-QAM 5/6)", MCS_VALID},
+		{"INVALID ", MCS_INVALID},
+	}
 };
 
 /*
@@ -246,6 +361,8 @@ enum WDI_EVENT {
 	WDI_EVENT_PEER_FLUSH_RATE_STATS,
 	WDI_EVENT_FLUSH_RATE_STATS_REQ,
 	WDI_EVENT_RX_MPDU,
+	WDI_EVENT_HMWDS_AST_ADD_STATUS,
+	WDI_EVENT_PEER_QOS_STATS,
 	/* End of new event items */
 	WDI_EVENT_LAST
 };
@@ -509,6 +626,45 @@ struct cdp_tid_stats {
 					    [CDP_MAX_DATA_TIDS];
 };
 
+/*
+ * struct cdp_delay_tx_stats: Tx delay stats
+ * @tx_swq_delay: software enqueue delay
+ * @hwtx_delay: HW enque to completion delay
+ */
+struct cdp_delay_tx_stats {
+	struct cdp_hist_stats    tx_swq_delay;
+	struct cdp_hist_stats    hwtx_delay;
+};
+
+/*
+ * struct cdp_delay_rx_stats: Rx delay stats
+ * @to_stack_delay: To stack delay
+ */
+struct cdp_delay_rx_stats {
+	struct cdp_hist_stats    to_stack_delay;
+};
+
+/*
+ * struct cdp_delay_tid_stats: Delay tid stats
+ * @tx_delay: Tx delay related stats
+ * @rx_delay: Rx delay related stats
+ */
+struct cdp_delay_tid_stats {
+	struct cdp_delay_tx_stats  tx_delay;
+	struct cdp_delay_rx_stats  rx_delay;
+};
+
+/*
+ * cdp_peer_ext_stats: Peer extended stats
+ * @delay_stats: Per TID delay stats
+ */
+struct cdp_peer_ext_stats {
+	struct cdp_delay_tid_stats delay_stats[CDP_MAX_DATA_TIDS]
+						[CDP_MAX_TXRX_CTX];
+
+	/*Customer can add MSDU level Tx/Rx stats */
+};
+
 /* struct cdp_pkt_info - packet info
  * @num: no of packets
  * @bytes: total no of bytes
@@ -723,6 +879,7 @@ struct protocol_trace_count {
  * @tx_byte_rate: Bytes Trasmitted in last one sec
  * @tx_data_rate: Data Transmitted in last one sec
  * @sgi_count[MAX_GI]: SGI count
+ * @pream_punct_cnt: Preamble Punctured count
  * @nss[SS_COUNT]: Packet count for different num_spatial_stream values
  * @bw[MAX_BW]: Packet Count for different bandwidths
  * @wme_ac_type[WME_AC_MAX]: Wireless Multimedia type Count
@@ -769,6 +926,7 @@ struct protocol_trace_count {
  * @ru_tones: RU tones size
  * @ru_loc: pkt info for RU location 26/ 52/ 106/ 242/ 484 counter
  * @num_ppdu_cookie_valid : Number of comp received with valid ppdu cookie
+ * @tx_success_twt: Successful Tx Packets in TWT session
  */
 struct cdp_tx_stats {
 	struct cdp_pkt_info comp_pkt;
@@ -805,6 +963,7 @@ struct cdp_tx_stats {
 	uint32_t tx_data_ucast_rate;
 	struct cdp_pkt_type pkt_type[DOT11_MAX];
 	uint32_t sgi_count[MAX_GI];
+	uint32_t pream_punct_cnt;
 
 	uint32_t nss[SS_COUNT];
 
@@ -859,6 +1018,7 @@ struct cdp_tx_stats {
 
 	uint32_t num_ppdu_cookie_valid;
 	uint32_t no_ack_count[QDF_PROTO_SUBTYPE_MAX];
+	struct cdp_pkt_info tx_success_twt;
 };
 
 /* struct cdp_rx_stats - rx Level Stats
@@ -923,6 +1083,7 @@ struct cdp_tx_stats {
  * @last_rssi: Previous rssi
  * @multipass_rx_pkt_drop: Dropped multipass rx pkt
  * @rx_mpdu_cnt: rx mpdu count per MCS rate
+ * @to_stack_twt: Total packets sent up the stack in TWT session
  */
 struct cdp_rx_stats {
 	struct cdp_pkt_info to_stack;
@@ -991,6 +1152,7 @@ struct cdp_rx_stats {
 	uint8_t last_rssi;
 	uint32_t multipass_rx_pkt_drop;
 	uint32_t rx_mpdu_cnt[MAX_MCS];
+	struct cdp_pkt_info to_stack_twt;
 };
 
 /* struct cdp_tx_ingress_stats - Tx ingress Stats
@@ -1001,6 +1163,7 @@ struct cdp_rx_stats {
  * @bcast: Number of broadcast packets
  * @raw_pkt: Total Raw packets
  * @dma_map_error: DMA map error
+ * @num_frags_overflow_err: msdu's nbuf count exceeds num of segemnts
  * @num_seg: No of segments in TSO packets
  * @tso_pkt:total no of TSO packets
  * @non_tso_pkts: non - TSO packets
@@ -1018,6 +1181,8 @@ struct cdp_rx_stats {
  * @ucast: total unicast packets transmitted
  * @fail_seg_alloc: Segment allocation failure
  * @clone_fail: NBUF clone failure
+ * @igmp_rcvd: igmp pkts received for conversion to ucast pkts
+ * @igmp_ucast_converted: unicast pkts sent as part of VoW IGMP improvements
  * @dropped_pkt: Total scatter gather packets
  * @desc_na: Desc Not Available
  * @exc_desc_na: Exception desc Not Available
@@ -1025,6 +1190,7 @@ struct cdp_rx_stats {
  * @enqueue_fail: hw enqueue fail
  * @dma_error: dma fail
  * @res_full: Resource Full: Congestion Control
+ * @fail_per_pkt_vdev_id_check: Per pkt vdev id check
  * @exception_fw: packets sent to fw
  * @completion_fw: packets completions received from fw
  * @cce_classified:Number of packets classified by CCE
@@ -1043,6 +1209,7 @@ struct cdp_tx_ingress_stats {
 		struct cdp_pkt_info raw_pkt;
 		uint32_t dma_map_error;
 		uint32_t invalid_raw_pkt_datatype;
+		uint32_t num_frags_overflow_err;
 	} raw;
 
 	/* Scatter Gather packet info */
@@ -1065,6 +1232,12 @@ struct cdp_tx_ingress_stats {
 		uint32_t clone_fail;
 	} mcast_en;
 
+	/* IGMP Multicast Enhancement packets info */
+	struct {
+		uint32_t igmp_rcvd;
+		uint32_t igmp_ucast_converted;
+	} igmp_mcast_en;
+
 	/* Packets dropped on the Tx side */
 	struct {
 		struct cdp_pkt_info dropped_pkt;
@@ -1076,6 +1249,7 @@ struct cdp_tx_ingress_stats {
 		uint32_t res_full;
 		/* headroom insufficient */
 		uint32_t headroom_insufficient;
+		uint32_t fail_per_pkt_vdev_id_check;
 	} dropped;
 
 	/* Mesh packets info */
@@ -1114,6 +1288,23 @@ struct cdp_peer_stats {
 	struct cdp_rx_stats rx;
 };
 
+/* struct cdp_peer_tid_stats - Per peer and per TID stats
+ * @tx_avg_jitter: tx average jitter
+ * @tx_avg_delay: tx average delay
+ * @tx_avg_err: tx average error
+ * @tx_total_success: tx total success
+ * @tx_drop: tx drop
+ */
+struct cdp_peer_tid_stats {
+#ifdef WLAN_PEER_JITTER
+	uint32_t tx_avg_jitter;
+	uint32_t tx_avg_delay;
+	uint64_t tx_avg_err;
+	uint64_t tx_total_success;
+	uint64_t tx_drop;
+#endif
+};
+
 /* struct cdp_interface_peer_stats - interface structure for txrx peer stats
  * @peer_mac: peer mac address
  * @vdev_id : vdev_id for the peer
@@ -1141,6 +1332,23 @@ struct cdp_interface_peer_stats {
 	uint32_t rx_byte_count;
 	uint32_t per;
 	uint32_t ack_rssi;
+};
+
+/* struct cdp_interface_peer_qos_stats - interface structure for peer qos stats
+ * @peer_mac: peer mac address
+ * @frame_control: frame control field
+ * @qos_control: qos control field
+ * @frame_control_info_valid: frame_control valid
+ * @qos_control_info_valid: qos_control valid
+ * @vdev_id : vdev_id for the peer
+ */
+struct cdp_interface_peer_qos_stats {
+	uint8_t  peer_mac[QDF_MAC_ADDR_SIZE];
+	uint16_t frame_control;
+	uint16_t qos_control;
+	uint8_t  frame_control_info_valid;
+	uint8_t  qos_control_info_valid;
+	uint8_t  vdev_id;
 };
 
 /* Tx completions per interrupt */
@@ -1644,6 +1852,7 @@ struct cdp_cfr_rcc_stats {
  * @pkts: total packets replenished
  * @rxdma_err: rxdma errors for replenished
  * @nbuf_alloc_fail: nbuf alloc failed
+ * @frag_alloc_fail: frag alloc failed
  * @map_err: Mapping failure
  * @x86_fail: x86 failures
  * @low_thresh_intrs: low threshold interrupts
@@ -1672,6 +1881,7 @@ struct cdp_cfr_rcc_stats {
  * @tx_ppdu_proc: stats counter for tx ppdu processed
  * @ack_ba_comes_twice: stats counter for ack_ba_comes twice
  * @ppdu_drop: stats counter for ppdu_desc drop once threshold reached
+ * @ppdu_wrap_drop: stats counter for ppdu desc drop on wrap around
  */
 struct cdp_pdev_stats {
 	struct {
@@ -1688,6 +1898,7 @@ struct cdp_pdev_stats {
 		struct cdp_pkt_info pkts;
 		uint32_t rxdma_err;
 		uint32_t nbuf_alloc_fail;
+		uint32_t frag_alloc_fail;
 		uint32_t map_err;
 		uint32_t x86_fail;
 		uint32_t low_thresh_intrs;
@@ -1738,10 +1949,31 @@ struct cdp_pdev_stats {
 	uint64_t tx_ppdu_proc;
 	uint64_t ack_ba_comes_twice;
 	uint64_t ppdu_drop;
+	uint64_t ppdu_wrap_drop;
+
+	struct {
+		uint64_t num_bufs_consumed;
+		uint64_t num_pool_bufs_replenish;
+		uint64_t num_bufs_alloc_success;
+	} rx_buffer_pool;
+};
+
+/* struct cdp_peer_hmwds_ast_add_status - hmwds peer ast add status
+ * @vdev_id: vdev id
+ * @status: ast add status
+ * @peer_mac: peer mac address
+ * @ast_mac: ast node mac address
+ */
+struct cdp_peer_hmwds_ast_add_status {
+	uint32_t vdev_id;
+	uint32_t status;
+	uint8_t  peer_mac[QDF_MAC_ADDR_SIZE];
+	uint8_t  ast_mac[QDF_MAC_ADDR_SIZE];
 };
 
 enum cdp_soc_param_t {
 	DP_SOC_PARAM_MSDU_EXCEPTION_DESC,
+	DP_SOC_PARAM_CMEM_FSE_SUPPORT,
 	DP_SOC_PARAM_MAX,
 };
 

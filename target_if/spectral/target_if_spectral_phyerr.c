@@ -972,7 +972,8 @@ target_if_process_phyerr_gen2(struct target_if_spectral *spectral,
 		params.max_exp = 0;
 		params.peak = 0;
 		params.bin_pwr_data = (uint8_t *)pfft;
-		params.freq = p_sops->get_current_channel(spectral);
+		params.freq = p_sops->get_current_channel(spectral,
+							  params.smode);
 		params.freq_loading = 0;
 
 		params.interf_list.count = 0;
@@ -1393,6 +1394,7 @@ target_if_dump_fft_report_gen3(struct target_if_spectral *spectral,
 	size_t fft_bin_size;
 	size_t fft_bin_len_inband_tfer = 0;
 	uint8_t *fft_bin_buf = NULL;
+	size_t fft_bin_buf_size;
 
 	fft_bin_len = fft_hdr_length - spectral->rparams.fft_report_hdr_len;
 	fft_bin_count = target_if_spectral_get_bin_count_after_len_adj(
@@ -1443,6 +1445,8 @@ target_if_dump_fft_report_gen3(struct target_if_spectral *spectral,
 	spectral_debug("fft_avgpwr_db = %u", p_sfft->fft_avgpwr_db);
 	spectral_debug("fft_relpwr_db = %u", p_sfft->fft_relpwr_db);
 
+	fft_bin_buf_size = fft_bin_count;
+
 	if (fft_bin_count > 0) {
 		int idx;
 
@@ -1450,29 +1454,56 @@ target_if_dump_fft_report_gen3(struct target_if_spectral *spectral,
 		if (spectral->len_adj_swar.fftbin_size_war ==
 				SPECTRAL_FFTBIN_SIZE_WAR_4BYTE_TO_1BYTE) {
 			uint32_t *binptr_32 = (uint32_t *)&p_fft_report->buf;
+			uint16_t *fft_bin_buf_16 = NULL;
 
-			fft_bin_buf = (uint8_t *)qdf_mem_malloc(MAX_NUM_BINS);
-			if (!fft_bin_buf) {
+			/* Useful width of FFT bin is 10 bits, increasing it to
+			 * byte boundary makes it 2 bytes. Hence, buffer to be
+			 * allocated should be of size fft_bin_count
+			 * multiplied by 2.
+			 */
+			fft_bin_buf_size <<= 1;
+
+			fft_bin_buf_16 = (uint16_t *)qdf_mem_malloc(
+						fft_bin_buf_size);
+			if (!fft_bin_buf_16) {
 				spectral_err("Failed to allocate memory");
 				return;
 			}
+
 			for (idx = 0; idx < fft_bin_count; idx++)
-				fft_bin_buf[idx] = *(binptr_32++);
+				fft_bin_buf_16[idx] =
+					*((uint16_t *)binptr_32++);
+
+			fft_bin_buf = (uint8_t *)fft_bin_buf_16;
 		} else if (spectral->len_adj_swar.fftbin_size_war ==
 				SPECTRAL_FFTBIN_SIZE_WAR_2BYTE_TO_1BYTE) {
 			uint16_t *binptr_16 = (uint16_t *)&p_fft_report->buf;
+			uint16_t *fft_bin_buf_16 = NULL;
 
-			fft_bin_buf = (uint8_t *)qdf_mem_malloc(MAX_NUM_BINS);
-			if (!fft_bin_buf) {
+			/* Useful width of FFT bin is 10 bits, increasing it to
+			 * byte boundary makes it 2 bytes. Hence, buffer to be
+			 * allocated should be of size fft_bin_count
+			 * multiplied by 2.
+			 */
+			fft_bin_buf_size <<= 1;
+
+			fft_bin_buf_16 = (uint16_t *)qdf_mem_malloc(
+						fft_bin_buf_size);
+			if (!fft_bin_buf_16) {
 				spectral_err("Failed to allocate memory");
 				return;
 			}
+
 			for (idx = 0; idx < fft_bin_count; idx++)
-				fft_bin_buf[idx] = *(binptr_16++);
+				fft_bin_buf_16[idx] = *(binptr_16++);
+
+			fft_bin_buf = (uint8_t *)fft_bin_buf_16;
 		} else {
 			fft_bin_buf = (uint8_t *)&p_fft_report->buf;
 		}
-		target_if_spectral_hexdump(fft_bin_buf, fft_bin_count);
+
+		spectral_debug("FFT bin buffer size = %zu", fft_bin_buf_size);
+		target_if_spectral_hexdump(fft_bin_buf, fft_bin_buf_size);
 		if ((spectral->len_adj_swar.fftbin_size_war !=
 				SPECTRAL_FFTBIN_SIZE_NO_WAR) && fft_bin_buf)
 			qdf_mem_free(fft_bin_buf);
@@ -1857,6 +1888,7 @@ target_if_consume_spectral_report_gen3(
 	QDF_STATUS ret;
 	enum spectral_scan_mode spectral_mode = SPECTRAL_SCAN_MODE_INVALID;
 	uint8_t *temp;
+	bool finite_scan = false;
 
 	/* Process Spectral scan summary report */
 	if (target_if_verify_sig_and_tag_gen3(
@@ -1876,10 +1908,30 @@ target_if_consume_spectral_report_gen3(
 
 	spectral_mode = target_if_get_spectral_mode(detector_id,
 						    &spectral->rparams);
-	if (spectral_mode == SPECTRAL_SCAN_MODE_INVALID) {
+	if (spectral_mode >= SPECTRAL_SCAN_MODE_MAX) {
 		spectral_err_rl("No valid Spectral mode for detector id %u",
 				detector_id);
 		goto fail;
+	}
+
+	/* Drop the sample if Spectral is not active for the current mode */
+	if (!p_sops->is_spectral_active(spectral, spectral_mode))
+		return -EINVAL;
+
+	ret = target_if_spectral_is_finite_scan(spectral, spectral_mode,
+						&finite_scan);
+	if (QDF_IS_STATUS_ERROR(ret)) {
+		spectral_err_rl("Failed to check scan is finite");
+		goto fail;
+	}
+
+	if (finite_scan) {
+		ret = target_if_spectral_finite_scan_update(spectral,
+							    spectral_mode);
+		if (QDF_IS_STATUS_ERROR(ret)) {
+			spectral_err_rl("Failed to update scan count");
+			goto fail;
+		}
 	}
 
 	target_if_consume_sscan_summary_report_gen3(data, &sscan_report_fields,
@@ -1970,7 +2022,7 @@ target_if_consume_spectral_report_gen3(
 
 		params.rssi         = rssi;
 
-		vdev = target_if_spectral_get_vdev(spectral);
+		vdev = target_if_spectral_get_vdev(spectral, spectral_mode);
 		if (!vdev) {
 			spectral_info("First vdev is NULL");
 			reset_160mhz_delivery_state_machine(
@@ -1991,7 +2043,8 @@ target_if_consume_spectral_report_gen3(
 
 		params.max_mag  = p_sfft->fft_peak_mag;
 
-		params.freq = p_sops->get_current_channel(spectral);
+		params.freq = p_sops->get_current_channel(spectral,
+							  spectral_mode);
 		params.agile_freq1 = spectral->params[SPECTRAL_SCAN_MODE_AGILE].
 				     ss_frequency.cfreq1;
 		params.agile_freq2 = spectral->params[SPECTRAL_SCAN_MODE_AGILE].
@@ -2022,7 +2075,10 @@ target_if_consume_spectral_report_gen3(
 			params.datalen_sec80 = fft_hdr_length * 2;
 
 			marker = &spectral->rparams.marker[spectral_mode];
-			qdf_assert_always(marker->is_valid);
+			if (!marker->is_valid) {
+				/* update stats */
+				goto fail_no_print;
+			}
 			params.bin_pwr_data = temp +
 				marker->start_pri80 * fft_bin_size;
 			params.pwr_count = marker->num_pri80;
@@ -2112,7 +2168,7 @@ target_if_consume_spectral_report_gen3(
 
 		params.rssi_sec80 = rssi;
 
-		vdev = target_if_spectral_get_vdev(spectral);
+		vdev = target_if_spectral_get_vdev(spectral, spectral_mode);
 		if (!vdev) {
 			spectral_info("First vdev is NULL");
 			reset_160mhz_delivery_state_machine
@@ -2159,6 +2215,7 @@ target_if_consume_spectral_report_gen3(
 	return 0;
  fail:
 	spectral_err_rl("Error while processing Spectral report");
+fail_no_print:
 	if (spectral_mode != SPECTRAL_SCAN_MODE_INVALID)
 		reset_160mhz_delivery_state_machine(spectral, spectral_mode);
 	return -EPERM;

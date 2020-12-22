@@ -208,7 +208,7 @@ static void reg_modify_chan_list_for_dfs_channels(
 		return;
 
 	for (chan_enum = 0; chan_enum < NUM_CHANNELS; chan_enum++) {
-		if (chan_list[chan_enum].state == CHANNEL_STATE_DFS) {
+		if (chan_list[chan_enum].chan_flags & REGULATORY_CHAN_RADAR) {
 			chan_list[chan_enum].state = CHANNEL_STATE_DISABLE;
 			chan_list[chan_enum].chan_flags |=
 				REGULATORY_CHAN_DISABLED;
@@ -253,18 +253,43 @@ static void reg_modify_chan_list_for_indoor_channels(
 	}
 }
 
-/**
- * reg_modify_chan_list_for_band() - Based on the input band value, either
- * disable 2GHz or 5GHz channels.
- * @chan_list: Pointer to regulatory channel list.
- * @band_val: Input band value.
- */
-static void reg_modify_chan_list_for_band(struct regulatory_channel *chan_list,
-					  enum band_info band_val)
+#ifdef CONFIG_BAND_6GHZ
+static void reg_modify_chan_list_for_band_6G(
+					struct regulatory_channel *chan_list)
 {
 	enum channel_enum chan_enum;
 
-	if (band_val == BAND_2G) {
+	reg_debug("disabling 6G");
+	for (chan_enum = MIN_6GHZ_CHANNEL;
+	     chan_enum <= MAX_6GHZ_CHANNEL; chan_enum++) {
+		chan_list[chan_enum].chan_flags |=
+			REGULATORY_CHAN_DISABLED;
+		chan_list[chan_enum].state = CHANNEL_STATE_DISABLE;
+	}
+}
+#else
+static inline void reg_modify_chan_list_for_band_6G(
+					struct regulatory_channel *chan_list)
+{
+}
+#endif
+
+/**
+ * reg_modify_chan_list_for_band() - Based on the input band bitmap, either
+ * disable 2GHz, 5GHz, or 6GHz channels.
+ * @chan_list: Pointer to regulatory channel list.
+ * @band_bitmap: Input bitmap of reg_wifi_band values.
+ */
+static void reg_modify_chan_list_for_band(struct regulatory_channel *chan_list,
+					  uint32_t band_bitmap)
+{
+	enum channel_enum chan_enum;
+
+	if (!band_bitmap)
+		return;
+
+	if (!(band_bitmap & BIT(REG_BAND_5G))) {
+		reg_debug("disabling 5G");
 		for (chan_enum = MIN_5GHZ_CHANNEL;
 		     chan_enum <= MAX_5GHZ_CHANNEL; chan_enum++) {
 			chan_list[chan_enum].chan_flags |=
@@ -273,7 +298,8 @@ static void reg_modify_chan_list_for_band(struct regulatory_channel *chan_list,
 		}
 	}
 
-	if (band_val == BAND_5G) {
+	if (!(band_bitmap & BIT(REG_BAND_2G))) {
+		reg_debug("disabling 2G");
 		for (chan_enum = MIN_24GHZ_CHANNEL;
 		     chan_enum <= MAX_24GHZ_CHANNEL; chan_enum++) {
 			chan_list[chan_enum].chan_flags |=
@@ -281,6 +307,10 @@ static void reg_modify_chan_list_for_band(struct regulatory_channel *chan_list,
 			chan_list[chan_enum].state = CHANNEL_STATE_DISABLE;
 		}
 	}
+
+	if (!(band_bitmap & BIT(REG_BAND_6G)))
+		reg_modify_chan_list_for_band_6G(chan_list);
+
 }
 
 /**
@@ -613,6 +643,62 @@ reg_modify_chan_list_for_srd_channels(struct wlan_objmgr_pdev *pdev,
 }
 #endif
 
+/**
+ * reg_modify_chan_list_for_5dot9_ghz_channels() - Modify 5.9 GHz channels
+ * in FCC
+ * @pdev: Pointer to pdev object
+ * @chan_list: Current channel list
+ *
+ * This function disables 5.9 GHz channels if service bit
+ * wmi_service_5dot9_ghz_support is not set or the reg db is not offloaded
+ * to FW. If service bit is set but ini enable_5dot9_ghz_chan_in_master_mode
+ * is not set, it converts these channels to passive in FCC regulatory domain.
+ * If both service bit and ini are set, the channels remain enabled.
+ */
+static void
+reg_modify_chan_list_for_5dot9_ghz_channels(struct wlan_objmgr_pdev *pdev,
+					    struct regulatory_channel
+					    *chan_list)
+{
+	enum channel_enum chan_enum;
+	struct wlan_objmgr_psoc *psoc;
+
+	psoc = wlan_pdev_get_psoc(pdev);
+
+	if (!reg_is_fcc_regdmn(pdev))
+		return;
+
+	if (!reg_is_5dot9_ghz_supported(psoc) ||
+	    !reg_is_regdb_offloaded(psoc)) {
+		for (chan_enum = 0; chan_enum < NUM_CHANNELS; chan_enum++) {
+			if (reg_is_5dot9_ghz_freq(pdev, chan_list[chan_enum].
+						  center_freq)) {
+				chan_list[chan_enum].state =
+					CHANNEL_STATE_DISABLE;
+				chan_list[chan_enum].chan_flags =
+					REGULATORY_CHAN_DISABLED;
+			}
+		}
+		return;
+	}
+
+	if (reg_is_5dot9_ghz_chan_allowed_master_mode(pdev))
+		return;
+
+	for (chan_enum = 0; chan_enum < NUM_CHANNELS; chan_enum++) {
+		if (chan_list[chan_enum].chan_flags & REGULATORY_CHAN_DISABLED)
+			continue;
+
+		if (reg_is_5dot9_ghz_freq(pdev,
+					  chan_list[chan_enum].center_freq)) {
+			chan_list[chan_enum].state =
+				CHANNEL_STATE_DFS;
+			chan_list[chan_enum].chan_flags |=
+				REGULATORY_CHAN_NO_IR;
+		}
+	}
+}
+
 #ifdef DISABLE_UNII_SHARED_BANDS
 /**
  * reg_is_reg_unii_band_1_set() - Check UNII bitmap
@@ -775,6 +861,13 @@ void reg_compute_pdev_current_chan_list(struct wlan_regulatory_pdev_priv_obj
 
 	reg_modify_chan_list_for_srd_channels(pdev_priv_obj->pdev_ptr,
 					      pdev_priv_obj->cur_chan_list);
+
+	reg_modify_chan_list_for_5dot9_ghz_channels(pdev_priv_obj->pdev_ptr,
+						    pdev_priv_obj->
+						    cur_chan_list);
+
+	reg_modify_chan_list_for_max_chwidth(pdev_priv_obj->pdev_ptr,
+					     pdev_priv_obj->cur_chan_list);
 }
 
 void reg_reset_reg_rules(struct reg_rule_info *reg_rules)
@@ -857,6 +950,8 @@ void reg_propagate_mas_chan_list_to_pdev(struct wlan_objmgr_psoc *psoc,
 	reg_modify_chan_list_for_japan(pdev);
 	pdev_priv_obj->chan_list_recvd =
 		psoc_priv_obj->chan_list_recvd[phy_id];
+
+	reg_update_max_phymode_chwidth_for_pdev(pdev);
 	reg_compute_pdev_current_chan_list(pdev_priv_obj);
 
 	if (reg_tx_ops->fill_umac_legacy_chanlist) {
@@ -869,6 +964,40 @@ void reg_propagate_mas_chan_list_to_pdev(struct wlan_objmgr_psoc *psoc,
 			reg_send_scheduler_msg_sb(psoc, pdev);
 	}
 }
+
+/**
+ * reg_populate_49g_band_channels() - For all the valid 4.9GHz regdb channels
+ * in the master channel list, find the regulatory rules and call
+ * reg_fill_channel_info() to populate master channel list with txpower,
+ * antennagain, BW info, etc.
+ * @reg_rule_5g: Pointer to regulatory rule.
+ * @num_5g_reg_rules: Number of regulatory rules.
+ * @min_bw_5g: Minimum regulatory bandwidth.
+ * @mas_chan_list: Pointer to the master channel list.
+ */
+#ifdef CONFIG_49GHZ_CHAN
+static void
+reg_populate_49g_band_channels(struct cur_reg_rule *reg_rule_5g,
+			       uint32_t num_5g_reg_rules,
+			       uint16_t min_bw_5g,
+			       struct regulatory_channel *mas_chan_list)
+{
+	reg_populate_band_channels(MIN_49GHZ_CHANNEL,
+				   MAX_49GHZ_CHANNEL,
+				   reg_rule_5g,
+				   num_5g_reg_rules,
+				   min_bw_5g,
+				   mas_chan_list);
+}
+#else
+static void
+reg_populate_49g_band_channels(struct cur_reg_rule *reg_rule_5g,
+			       uint32_t num_5g_reg_rules,
+			       uint16_t min_bw_5g,
+			       struct regulatory_channel *mas_chan_list)
+{
+}
+#endif /* CONFIG_49GHZ_CHAN */
 
 /**
  * reg_populate_6g_band_channels() - For all the valid 6GHz regdb channels
@@ -1066,7 +1195,8 @@ QDF_STATUS reg_process_master_chan_list(
 			REGULATORY_CHAN_DISABLED;
 		mas_chan_list[chan_enum].state =
 			CHANNEL_STATE_DISABLE;
-		mas_chan_list[chan_enum].nol_chan = false;
+		if (!soc_reg->retain_nol_across_regdmn_update)
+			mas_chan_list[chan_enum].nol_chan = false;
 	}
 
 	soc_reg->num_phy = regulat_info->num_phy;
@@ -1134,10 +1264,10 @@ QDF_STATUS reg_process_master_chan_list(
 		reg_populate_band_channels(MIN_5GHZ_CHANNEL, MAX_5GHZ_CHANNEL,
 					   reg_rule_5g, num_5g_reg_rules,
 					   min_bw_5g, mas_chan_list);
-		reg_populate_band_channels(MIN_49GHZ_CHANNEL,
-					   MAX_49GHZ_CHANNEL,
-					   reg_rule_5g, num_5g_reg_rules,
-					   min_bw_5g, mas_chan_list);
+		reg_populate_49g_band_channels(reg_rule_5g,
+					       num_5g_reg_rules,
+					       min_bw_5g,
+					       mas_chan_list);
 		reg_populate_6g_band_channels(reg_rule_5g,
 					      num_5g_reg_rules,
 					      min_bw_5g,

@@ -31,8 +31,24 @@
  *
  */
 #define USER_BUF_LEN (1 + 2 + 2 + 2 + MAX_BUFFER_SIZE + 6)
-#define IOT_SIM_SET_OP_BIT(bitmap, oper) ((bitmap) |= 1 << (oper))
-#define IOT_SIM_CLEAR_OP_BIT(bitmap, oper) (((bitmap) &= ~(1 << (oper))) == 0)
+/*
+ *		IOT SIM User Buf Format for Drop
+ * ++++++++++++++++++++++++++++++++++++++++++++++++++++++
+ * |FrmType/subtype| Seq |category|action| drop |MacAddr|
+ * ++++++++++++++++++++++++++++++++++++++++++++++++++++++
+ * |   2Characters |2char| 2chars |2chars| 1char|17chars|
+ *
+ */
+#define USER_BUF_LEN_DROP (2 + 2 + 2 + 2 + 1 + 17)
+/*
+ *		IOT SIM User Buf Format for Drop
+ * ++++++++++++++++++++++++++++++++++++++++++++++++++++++
+ * |FrmType/subtype| Seq |category|action| delay |MacAddr|
+ * ++++++++++++++++++++++++++++++++++++++++++++++++++++++
+ * |   2Characters |2char| 2chars |2chars| 4char|17chars|
+ *
+ */
+#define USER_BUF_LEN_DELAY (2 + 2 + 2 + 2 + 4 + 17)
 
 /**
  * wlan_iot_sim_pdev_obj_create_handler() - handler for pdev object create
@@ -69,6 +85,7 @@ QDF_STATUS wlan_iot_sim_pdev_obj_destroy_handler(struct wlan_objmgr_pdev *pdev,
  * @frm: action frame
  * @cat: action frame category
  * @act: action frame details
+ * @rx: TRUE if its getting called in the rx path
  *
  * Provides the simulation database index for the action frame.
  *
@@ -76,12 +93,26 @@ QDF_STATUS wlan_iot_sim_pdev_obj_destroy_handler(struct wlan_objmgr_pdev *pdev,
  *         QDF_STATUS_E_FAILURE on failure
  */
 QDF_STATUS iot_sim_get_index_for_action_frm(uint8_t *frm, uint8_t *cat,
-					    uint8_t *act);
+					    uint8_t *act, bool rx);
+
+/**
+ * iot_sim_find_peer_from_mac - function to find the iot sim peer data
+ *                              based on the mac address provided
+ *
+ * @isc: iot_sim pdev private object
+ * @mac: mac address of the peer
+ * Return: iot_sim_rule_per_peer reference if exists else NULL
+ */
+struct iot_sim_rule_per_peer *
+iot_sim_find_peer_from_mac(struct iot_sim_context *isc,
+			   struct qdf_mac_addr *mac);
 
 /**
  * iot_sim_frame_update() - Management frame update
  * @pdev: reference to global pdev object
  * @nbuf: frame buffer
+ * @tx: TRUE in case of tx
+ * @rx_param: mgmt_rx_event_params
  *
  * This function updates the outgoing management frame with
  * the content stored in iot_sim_context.
@@ -89,7 +120,11 @@ QDF_STATUS iot_sim_get_index_for_action_frm(uint8_t *frm, uint8_t *cat,
  * Return: QDF_STATUS_SUCCESS on success
  * QDF_STATUS_E_FAILURE on failure
  */
-QDF_STATUS iot_sim_frame_update(struct wlan_objmgr_pdev *pdev, qdf_nbuf_t nbuf);
+QDF_STATUS iot_sim_frame_update(struct wlan_objmgr_pdev *pdev,
+				qdf_nbuf_t nbuf,
+				struct beacon_tmpl_params *param,
+				bool tx,
+				struct mgmt_rx_event_params *rx_param);
 
 /*
  * iot_sim_get_ctx_from_pdev() - API to get iot_sim context object
@@ -115,15 +150,44 @@ iot_sim_get_ctx_from_pdev(struct wlan_objmgr_pdev *pdev)
 	return isc;
 }
 
+/*
+ * iot_sim_delete_rule_for_mac - function to delete content change rule
+ *                               for given peer mac
+ * @isc: iot sim context
+ * @oper: iot sim operation
+ * @seq: authentication sequence number, mostly 0 for non-authentication frame
+ * @type: 802.11 frame type
+ * @subtype: 802.11 frame subtype
+ * @mac: peer mac address
+ * @action: action frame or not
+ *
+ * Return: QDF_STATUS_SUCCESS on success, QDF_STATUS_E_FAILURE otherwise
+ */
 QDF_STATUS
 iot_sim_delete_rule_for_mac(struct iot_sim_context *isc,
 			    enum iot_sim_operations oper,
-			    unsigned short seq,
-			    unsigned char type,
-			    unsigned char subtype,
+			    uint16_t seq, uint8_t type,
+			    uint8_t subtype,
 			    struct qdf_mac_addr *mac,
-			    uint8_t cat, uint8_t act, bool action);
-
+			    bool action);
+/*
+ * iot_sim_parse_user_input_content_change - function to parse user input into
+ *					     predefined format for content
+ *					     change operation. All arguments
+ *					     passed will be filled upon success
+ * @isc: iot sim context
+ * @userbuf: local copy of user input
+ * @count: length of userbuf
+ * @t_st: address of type variable
+ * @seq: address of seq variable
+ * @offset: address of offset variable
+ * @length: address of length variable
+ * @content: double pointer to storage to store frame content after processing
+ * @mac: pointer to mac address
+ *
+ * Return: QDF_STATUS_SUCCESS on success
+ *	   QDF_STATUS_E_FAILURE otherwise
+ */
 QDF_STATUS
 iot_sim_parse_user_input_content_change(struct iot_sim_context *isc,
 					char *userbuf, ssize_t count,

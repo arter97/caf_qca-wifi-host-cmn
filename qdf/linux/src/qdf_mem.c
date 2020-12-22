@@ -28,7 +28,6 @@
 #include "qdf_mc_timer.h"
 #include "qdf_module.h"
 #include <qdf_trace.h>
-#include "qdf_atomic.h"
 #include "qdf_str.h"
 #include "qdf_talloc.h"
 #include <linux/debugfs.h>
@@ -36,11 +35,7 @@
 #include <linux/string.h>
 #include <qdf_list.h>
 
-#if defined(CONFIG_CNSS)
-#include <net/cnss.h>
-#endif
-
-#ifdef CONFIG_WCNSS_MEM_PRE_ALLOC
+#if IS_ENABLED(CONFIG_WCNSS_MEM_PRE_ALLOC)
 #include <net/cnss_prealloc.h>
 #endif
 
@@ -64,11 +59,35 @@ static bool is_initial_mem_debug_disabled;
  * @kmalloc: total kmalloc allocations
  * @dma: total dma allocations
  * @skb: total skb allocations
+ * @skb_total: total skb allocations in host driver
+ * @dp_tx_skb: total Tx skb allocations in datapath
+ * @dp_rx_skb: total Rx skb allocations in datapath
+ * @skb_mem_max: high watermark for skb allocations
+ * @dp_tx_skb_mem_max: high watermark for Tx DP skb allocations
+ * @dp_rx_skb_mem_max: high watermark for Rx DP skb allocations
+ * @dp_tx_skb_count: DP Tx buffer count
+ * @dp_tx_skb_count_max: High watermark for DP Tx buffer count
+ * @dp_rx_skb_count: DP Rx buffer count
+ * @dp_rx_skb_count_max: High watermark for DP Rx buffer count
+ * @tx_descs_outstanding: Current pending Tx descs count
+ * @tx_descs_max: High watermark for pending Tx descs count
  */
 static struct __qdf_mem_stat {
 	qdf_atomic_t kmalloc;
 	qdf_atomic_t dma;
 	qdf_atomic_t skb;
+	qdf_atomic_t skb_total;
+	qdf_atomic_t dp_tx_skb;
+	qdf_atomic_t dp_rx_skb;
+	int32_t skb_mem_max;
+	int32_t dp_tx_skb_mem_max;
+	int32_t dp_rx_skb_mem_max;
+	qdf_atomic_t dp_tx_skb_count;
+	int32_t dp_tx_skb_count_max;
+	qdf_atomic_t dp_rx_skb_count;
+	int32_t dp_rx_skb_count_max;
+	qdf_atomic_t tx_descs_outstanding;
+	int32_t tx_descs_max;
 } qdf_mem_stat;
 
 #ifdef MEMORY_DEBUG
@@ -77,6 +96,7 @@ static struct __qdf_mem_stat {
 enum list_type {
 	LIST_TYPE_MEM = 0,
 	LIST_TYPE_DMA = 1,
+	LIST_TYPE_NBUF = 2,
 	LIST_TYPE_MAX,
 };
 
@@ -104,6 +124,13 @@ static struct major_alloc_priv dma_priv = {
 	/* List type set to DMA */
 	LIST_TYPE_DMA,
 	/* initial threshold to list APIs which allocates dma >= 50 times */
+	50
+};
+
+static struct major_alloc_priv nbuf_priv = {
+	/* List type set to NBUF */
+	LIST_TYPE_NBUF,
+	/* initial threshold to list APIs which allocates nbuf >= 50 times */
 	50
 };
 
@@ -703,6 +730,181 @@ static ssize_t qdf_major_alloc_set_threshold(struct file *file,
 	return buf_size;
 }
 
+/**
+ * qdf_print_major_nbuf_allocs() - output agnostic nbuf print logic
+ * @threshold: the threshold value set by uset to list top allocations
+ * @print: the print adapter function
+ * @print_priv: the private data to be consumed by @print
+ * @mem_print: pointer to function which prints the memory allocation data
+ *
+ * Return: None
+ */
+static void
+qdf_print_major_nbuf_allocs(uint32_t threshold,
+			    qdf_abstract_print print,
+			    void *print_priv,
+			    void (*mem_print)(struct __qdf_mem_info *,
+					      qdf_abstract_print,
+					      void *, uint32_t))
+{
+	uint32_t nbuf_iter;
+	unsigned long irq_flag = 0;
+	QDF_NBUF_TRACK *p_node;
+	QDF_NBUF_TRACK *p_prev;
+	struct __qdf_mem_info table[QDF_MEM_STAT_TABLE_SIZE];
+	struct qdf_mem_header meta;
+	bool is_full;
+
+	qdf_mem_zero(table, sizeof(table));
+	qdf_mem_debug_print_header(print, print_priv, threshold);
+
+	if (is_initial_mem_debug_disabled)
+		return;
+
+	qdf_rl_info("major nbuf print with threshold %u", threshold);
+
+	for (nbuf_iter = 0; nbuf_iter < QDF_NET_BUF_TRACK_MAX_SIZE;
+	     nbuf_iter++) {
+		qdf_nbuf_acquire_track_lock(nbuf_iter, irq_flag);
+		p_node = qdf_nbuf_get_track_tbl(nbuf_iter);
+		while (p_node) {
+			meta.line = p_node->line_num;
+			meta.size = p_node->size;
+			meta.caller = NULL;
+			meta.time = p_node->time;
+			qdf_str_lcopy(meta.func, p_node->func_name,
+				      QDF_MEM_FUNC_NAME_SIZE);
+
+			is_full = qdf_mem_meta_table_insert(table, &meta);
+
+			if (is_full) {
+				(*mem_print)(table, print,
+					     print_priv, threshold);
+				qdf_mem_zero(table, sizeof(table));
+			}
+
+			p_prev = p_node;
+			p_node = p_node->p_next;
+		}
+		qdf_nbuf_release_track_lock(nbuf_iter, irq_flag);
+	}
+
+	(*mem_print)(table, print, print_priv, threshold);
+
+	qdf_rl_info("major nbuf print end");
+}
+
+/**
+ * qdf_major_nbuf_alloc_show() - print sequential callback
+ * @seq: seq_file handle
+ * @v: current iterator
+ *
+ * Return: 0 - success
+ */
+static int qdf_major_nbuf_alloc_show(struct seq_file *seq, void *v)
+{
+	struct major_alloc_priv *priv = (struct major_alloc_priv *)seq->private;
+
+	if (!priv) {
+		qdf_err("priv is null");
+		return -EINVAL;
+	}
+
+	qdf_print_major_nbuf_allocs(priv->threshold,
+				    seq_printf_printer,
+				    seq,
+				    qdf_print_major_alloc);
+
+	return 0;
+}
+
+/**
+ * qdf_nbuf_seq_start() - sequential callback to start
+ * @seq: seq_file handle
+ * @pos: The start position of the sequence
+ *
+ * Return: iterator pointer, or NULL if iteration is complete
+ */
+static void *qdf_nbuf_seq_start(struct seq_file *seq, loff_t *pos)
+{
+	enum qdf_debug_domain domain = *pos;
+
+	if (domain > QDF_DEBUG_NBUF_DOMAIN)
+		return NULL;
+
+	return pos;
+}
+
+/**
+ * qdf_nbuf_seq_next() - next sequential callback
+ * @seq: seq_file handle
+ * @v: the current iterator
+ * @pos: the current position
+ *
+ * Get the next node and release previous node.
+ *
+ * Return: iterator pointer, or NULL if iteration is complete
+ */
+static void *qdf_nbuf_seq_next(struct seq_file *seq, void *v, loff_t *pos)
+{
+	++*pos;
+
+	return qdf_nbuf_seq_start(seq, pos);
+}
+
+/**
+ * qdf_nbuf_seq_stop() - stop sequential callback
+ * @seq: seq_file handle
+ * @v: current iterator
+ *
+ * Return: None
+ */
+static void qdf_nbuf_seq_stop(struct seq_file *seq, void *v) { }
+
+/* sequential file operation table created to track major skb allocs */
+static const struct seq_operations qdf_major_nbuf_allocs_seq_ops = {
+	.start = qdf_nbuf_seq_start,
+	.next = qdf_nbuf_seq_next,
+	.stop = qdf_nbuf_seq_stop,
+	.show = qdf_major_nbuf_alloc_show,
+};
+
+static int qdf_major_nbuf_allocs_open(struct inode *inode, struct file *file)
+{
+	void *private = inode->i_private;
+	struct seq_file *seq;
+	int rc;
+
+	rc = seq_open(file, &qdf_major_nbuf_allocs_seq_ops);
+	if (rc == 0) {
+		seq = file->private_data;
+		seq->private = private;
+	}
+	return rc;
+}
+
+static ssize_t qdf_major_nbuf_alloc_set_threshold(struct file *file,
+						  const char __user *user_buf,
+						  size_t count,
+						  loff_t *pos)
+{
+	char buf[32];
+	ssize_t buf_size;
+	uint32_t threshold;
+	struct seq_file *seq = file->private_data;
+	struct major_alloc_priv *priv = (struct major_alloc_priv *)seq->private;
+
+	buf_size = min(count, (sizeof(buf) - 1));
+	if (buf_size <= 0)
+		return 0;
+	if (copy_from_user(buf, user_buf, buf_size))
+		return -EFAULT;
+	buf[buf_size] = '\0';
+	if (!kstrtou32(buf, 10, &threshold))
+		priv->threshold = threshold;
+	return buf_size;
+}
+
 /* file operation table for listing major allocs */
 static const struct file_operations fops_qdf_major_allocs = {
 	.owner = THIS_MODULE,
@@ -720,6 +922,16 @@ static const struct file_operations fops_qdf_mem_debugfs = {
 	.read = seq_read,
 	.llseek = seq_lseek,
 	.release = seq_release,
+};
+
+/* file operation table for listing major allocs */
+static const struct file_operations fops_qdf_nbuf_major_allocs = {
+	.owner = THIS_MODULE,
+	.open = qdf_major_nbuf_allocs_open,
+	.read = seq_read,
+	.llseek = seq_lseek,
+	.release = seq_release,
+	.write = qdf_major_nbuf_alloc_set_threshold,
 };
 
 static QDF_STATUS qdf_mem_debug_debugfs_init(void)
@@ -747,6 +959,12 @@ static QDF_STATUS qdf_mem_debug_debugfs_init(void)
 			    qdf_mem_debugfs_root,
 			    &dma_priv,
 			    &fops_qdf_major_allocs);
+
+	debugfs_create_file("major_nbuf_allocs",
+			    0600,
+			    qdf_mem_debugfs_root,
+			    &nbuf_priv,
+			    &fops_qdf_nbuf_major_allocs);
 
 	return QDF_STATUS_SUCCESS;
 }
@@ -848,6 +1066,83 @@ void qdf_mem_skb_inc(qdf_size_t size)
 void qdf_mem_skb_dec(qdf_size_t size)
 {
 	qdf_atomic_sub(size, &qdf_mem_stat.skb);
+}
+
+void qdf_mem_skb_total_inc(qdf_size_t size)
+{
+	int32_t skb_mem_max = 0;
+
+	qdf_atomic_add(size, &qdf_mem_stat.skb_total);
+	skb_mem_max = qdf_atomic_read(&qdf_mem_stat.skb_total);
+	if (qdf_mem_stat.skb_mem_max < skb_mem_max)
+		qdf_mem_stat.skb_mem_max = skb_mem_max;
+}
+
+void qdf_mem_skb_total_dec(qdf_size_t size)
+{
+	qdf_atomic_sub(size, &qdf_mem_stat.skb_total);
+}
+
+void qdf_mem_dp_tx_skb_inc(qdf_size_t size)
+{
+	int32_t curr_dp_tx_skb_mem_max = 0;
+
+	qdf_atomic_add(size, &qdf_mem_stat.dp_tx_skb);
+	curr_dp_tx_skb_mem_max = qdf_atomic_read(&qdf_mem_stat.dp_tx_skb);
+	if (qdf_mem_stat.dp_tx_skb_mem_max < curr_dp_tx_skb_mem_max)
+		qdf_mem_stat.dp_tx_skb_mem_max = curr_dp_tx_skb_mem_max;
+}
+
+void qdf_mem_dp_tx_skb_dec(qdf_size_t size)
+{
+	qdf_atomic_sub(size, &qdf_mem_stat.dp_tx_skb);
+}
+
+void qdf_mem_dp_rx_skb_inc(qdf_size_t size)
+{
+	int32_t curr_dp_rx_skb_mem_max = 0;
+
+	qdf_atomic_add(size, &qdf_mem_stat.dp_rx_skb);
+	curr_dp_rx_skb_mem_max = qdf_atomic_read(&qdf_mem_stat.dp_rx_skb);
+	if (qdf_mem_stat.dp_rx_skb_mem_max < curr_dp_rx_skb_mem_max)
+		qdf_mem_stat.dp_rx_skb_mem_max = curr_dp_rx_skb_mem_max;
+}
+
+void qdf_mem_dp_rx_skb_dec(qdf_size_t size)
+{
+	qdf_atomic_sub(size, &qdf_mem_stat.dp_rx_skb);
+}
+
+void qdf_mem_dp_tx_skb_cnt_inc(void)
+{
+	int32_t curr_dp_tx_skb_count_max = 0;
+
+	qdf_atomic_add(1, &qdf_mem_stat.dp_tx_skb_count);
+	curr_dp_tx_skb_count_max =
+		qdf_atomic_read(&qdf_mem_stat.dp_tx_skb_count);
+	if (qdf_mem_stat.dp_tx_skb_count_max < curr_dp_tx_skb_count_max)
+		qdf_mem_stat.dp_tx_skb_count_max = curr_dp_tx_skb_count_max;
+}
+
+void qdf_mem_dp_tx_skb_cnt_dec(void)
+{
+	qdf_atomic_sub(1, &qdf_mem_stat.dp_tx_skb_count);
+}
+
+void qdf_mem_dp_rx_skb_cnt_inc(void)
+{
+	int32_t curr_dp_rx_skb_count_max = 0;
+
+	qdf_atomic_add(1, &qdf_mem_stat.dp_rx_skb_count);
+	curr_dp_rx_skb_count_max =
+		qdf_atomic_read(&qdf_mem_stat.dp_rx_skb_count);
+	if (qdf_mem_stat.dp_rx_skb_count_max < curr_dp_rx_skb_count_max)
+		qdf_mem_stat.dp_rx_skb_count_max = curr_dp_rx_skb_count_max;
+}
+
+void qdf_mem_dp_rx_skb_cnt_dec(void)
+{
+	qdf_atomic_sub(1, &qdf_mem_stat.dp_rx_skb_count);
 }
 #endif
 
@@ -1037,7 +1332,7 @@ void __qdf_mempool_free(qdf_device_t osdev, __qdf_mempool_t pool, void *buf)
 }
 qdf_export_symbol(__qdf_mempool_free);
 
-#ifdef CONFIG_WCNSS_MEM_PRE_ALLOC
+#if IS_ENABLED(CONFIG_WCNSS_MEM_PRE_ALLOC)
 /**
  * qdf_mem_prealloc_get() - conditionally pre-allocate memory
  * @size: the number of bytes to allocate
@@ -1652,6 +1947,31 @@ void qdf_mem_multi_pages_free(qdf_device_t osdev,
 qdf_export_symbol(qdf_mem_multi_pages_free);
 #endif
 
+void qdf_mem_multi_pages_zero(struct qdf_mem_multi_page_t *pages,
+			      bool cacheable)
+{
+	unsigned int page_idx;
+	struct qdf_mem_dma_page_t *dma_pages;
+
+	if (!pages->page_size)
+		pages->page_size = qdf_page_size;
+
+	if (cacheable) {
+		for (page_idx = 0; page_idx < pages->num_pages; page_idx++)
+			qdf_mem_zero(pages->cacheable_pages[page_idx],
+				     pages->page_size);
+	} else {
+		dma_pages = pages->dma_pages;
+		for (page_idx = 0; page_idx < pages->num_pages; page_idx++) {
+			qdf_mem_zero(dma_pages->page_v_addr_start,
+				     pages->page_size);
+			dma_pages++;
+		}
+	}
+}
+
+qdf_export_symbol(qdf_mem_multi_pages_zero);
+
 void __qdf_mem_free(void *ptr)
 {
 	if (!ptr)
@@ -2263,6 +2583,7 @@ void qdf_mem_init(void)
 {
 	qdf_mem_debug_init();
 	qdf_net_buf_debug_init();
+	qdf_frag_debug_init();
 	qdf_mem_debugfs_init();
 	qdf_mem_debug_debugfs_init();
 }
@@ -2272,6 +2593,7 @@ void qdf_mem_exit(void)
 {
 	qdf_mem_debug_debugfs_exit();
 	qdf_mem_debugfs_exit();
+	qdf_frag_debug_exit();
 	qdf_net_buf_debug_exit();
 	qdf_mem_debug_exit();
 }
@@ -2320,4 +2642,109 @@ int32_t qdf_skb_mem_stats_read(void)
 }
 
 qdf_export_symbol(qdf_skb_mem_stats_read);
+
+int32_t qdf_skb_total_mem_stats_read(void)
+{
+	return qdf_atomic_read(&qdf_mem_stat.skb_total);
+}
+
+qdf_export_symbol(qdf_skb_total_mem_stats_read);
+
+int32_t qdf_skb_max_mem_stats_read(void)
+{
+	return qdf_mem_stat.skb_mem_max;
+}
+
+qdf_export_symbol(qdf_skb_max_mem_stats_read);
+
+int32_t qdf_dp_tx_skb_mem_stats_read(void)
+{
+	return qdf_atomic_read(&qdf_mem_stat.dp_tx_skb);
+}
+
+qdf_export_symbol(qdf_dp_tx_skb_mem_stats_read);
+
+int32_t qdf_dp_rx_skb_mem_stats_read(void)
+{
+	return qdf_atomic_read(&qdf_mem_stat.dp_rx_skb);
+}
+
+qdf_export_symbol(qdf_dp_rx_skb_mem_stats_read);
+
+int32_t qdf_mem_dp_tx_skb_cnt_read(void)
+{
+	return qdf_atomic_read(&qdf_mem_stat.dp_tx_skb_count);
+}
+
+qdf_export_symbol(qdf_mem_dp_tx_skb_cnt_read);
+
+int32_t qdf_mem_dp_tx_skb_max_cnt_read(void)
+{
+	return qdf_mem_stat.dp_tx_skb_count_max;
+}
+
+qdf_export_symbol(qdf_mem_dp_tx_skb_max_cnt_read);
+
+int32_t qdf_mem_dp_rx_skb_cnt_read(void)
+{
+	return qdf_atomic_read(&qdf_mem_stat.dp_rx_skb_count);
+}
+
+qdf_export_symbol(qdf_mem_dp_rx_skb_cnt_read);
+
+int32_t qdf_mem_dp_rx_skb_max_cnt_read(void)
+{
+	return qdf_mem_stat.dp_rx_skb_count_max;
+}
+
+qdf_export_symbol(qdf_mem_dp_rx_skb_max_cnt_read);
+
+int32_t qdf_dp_tx_skb_max_mem_stats_read(void)
+{
+	return qdf_mem_stat.dp_tx_skb_mem_max;
+}
+
+qdf_export_symbol(qdf_dp_tx_skb_max_mem_stats_read);
+
+int32_t qdf_dp_rx_skb_max_mem_stats_read(void)
+{
+	return qdf_mem_stat.dp_rx_skb_mem_max;
+}
+
+qdf_export_symbol(qdf_dp_rx_skb_max_mem_stats_read);
+
+int32_t qdf_mem_tx_desc_cnt_read(void)
+{
+	return qdf_atomic_read(&qdf_mem_stat.tx_descs_outstanding);
+}
+
+qdf_export_symbol(qdf_mem_tx_desc_cnt_read);
+
+int32_t qdf_mem_tx_desc_max_read(void)
+{
+	return qdf_mem_stat.tx_descs_max;
+}
+
+qdf_export_symbol(qdf_mem_tx_desc_max_read);
+
+void qdf_mem_tx_desc_cnt_update(qdf_atomic_t pending_tx_descs,
+				int32_t tx_descs_max)
+{
+	qdf_mem_stat.tx_descs_outstanding = pending_tx_descs;
+	qdf_mem_stat.tx_descs_max = tx_descs_max;
+}
+
+qdf_export_symbol(qdf_mem_tx_desc_cnt_update);
+
+void qdf_mem_stats_init(void)
+{
+	qdf_mem_stat.skb_mem_max = 0;
+	qdf_mem_stat.dp_tx_skb_mem_max = 0;
+	qdf_mem_stat.dp_rx_skb_mem_max = 0;
+	qdf_mem_stat.dp_tx_skb_count_max = 0;
+	qdf_mem_stat.dp_rx_skb_count_max = 0;
+	qdf_mem_stat.tx_descs_max = 0;
+}
+
+qdf_export_symbol(qdf_mem_stats_init);
 

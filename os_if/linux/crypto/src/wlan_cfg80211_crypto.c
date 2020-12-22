@@ -67,7 +67,8 @@ static void wlan_cfg80211_translate_key(struct wlan_objmgr_vdev *vdev,
 				     vdev->vdev_mlme.macaddr,
 				     QDF_MAC_ADDR_SIZE);
 	}
-	osif_debug("mac %pM", crypto_key->macaddr);
+	osif_debug("mac "QDF_MAC_ADDR_FMT,
+		   QDF_MAC_ADDR_REF(crypto_key->macaddr));
 }
 
 int wlan_cfg80211_store_key(struct wlan_objmgr_vdev *vdev,
@@ -150,7 +151,7 @@ int wlan_cfg80211_crypto_add_key(struct wlan_objmgr_vdev *vdev,
 	return qdf_status_to_os_return(status);
 }
 
-#ifdef CONFIG_CRYPTO_COMPONENT
+#ifdef WLAN_CONV_CRYPTO_SUPPORTED
 int wlan_cfg80211_set_default_key(struct wlan_objmgr_vdev *vdev,
 				  uint8_t key_index, struct qdf_mac_addr *bssid)
 {

@@ -40,6 +40,9 @@ void hal_qca6490_attach(struct hal_soc *hal);
 #ifdef QCA_WIFI_QCN9000
 void hal_qcn9000_attach(struct hal_soc *hal);
 #endif
+#ifdef QCA_WIFI_QCN9100
+void hal_qcn9100_attach(struct hal_soc *hal);
+#endif
 #ifdef QCA_WIFI_QCA6750
 void hal_qca6750_attach(struct hal_soc *hal);
 #endif
@@ -158,6 +161,79 @@ static void hal_update_srng_hp_tp_address(struct hal_soc *hal_soc,
 
 }
 
+#ifdef GENERIC_SHADOW_REGISTER_ACCESS_ENABLE
+void hal_set_one_target_reg_config(struct hal_soc *hal,
+				   uint32_t target_reg_offset,
+				   int list_index)
+{
+	int i = list_index;
+
+	qdf_assert_always(i < MAX_GENERIC_SHADOW_REG);
+	hal->list_shadow_reg_config[i].target_register =
+		target_reg_offset;
+	hal->num_generic_shadow_regs_configured++;
+}
+
+qdf_export_symbol(hal_set_one_target_reg_config);
+
+#define REO_R0_DESTINATION_RING_CTRL_ADDR_OFFSET 0x4
+#define MAX_REO_REMAP_SHADOW_REGS 4
+QDF_STATUS hal_set_shadow_regs(void *hal_soc)
+{
+	uint32_t target_reg_offset;
+	struct hal_soc *hal = (struct hal_soc *)hal_soc;
+	int i;
+	struct hal_hw_srng_config *srng_config =
+		&hal->hw_srng_table[WBM2SW_RELEASE];
+
+	target_reg_offset =
+		HWIO_REO_R0_DESTINATION_RING_CTRL_IX_0_ADDR(
+			SEQ_WCSS_UMAC_REO_REG_OFFSET);
+
+	for (i = 0; i < MAX_REO_REMAP_SHADOW_REGS; i++) {
+		hal_set_one_target_reg_config(hal, target_reg_offset, i);
+		target_reg_offset += REO_R0_DESTINATION_RING_CTRL_ADDR_OFFSET;
+	}
+
+	target_reg_offset = srng_config->reg_start[HP_OFFSET_IN_REG_START];
+	target_reg_offset += (srng_config->reg_size[HP_OFFSET_IN_REG_START]
+			      * HAL_IPA_TX_COMP_RING_IDX);
+
+	hal_set_one_target_reg_config(hal, target_reg_offset, i);
+	return QDF_STATUS_SUCCESS;
+}
+
+qdf_export_symbol(hal_set_shadow_regs);
+
+QDF_STATUS hal_construct_shadow_regs(void *hal_soc)
+{
+	struct hal_soc *hal = (struct hal_soc *)hal_soc;
+	int shadow_config_index = hal->num_shadow_registers_configured;
+	int i;
+	int num_regs = hal->num_generic_shadow_regs_configured;
+
+	for (i = 0; i < num_regs; i++) {
+		qdf_assert_always(shadow_config_index < MAX_SHADOW_REGISTERS);
+		hal->shadow_config[shadow_config_index].addr =
+			hal->list_shadow_reg_config[i].target_register;
+		hal->list_shadow_reg_config[i].shadow_config_index =
+			shadow_config_index;
+		hal->list_shadow_reg_config[i].va =
+			SHADOW_REGISTER(shadow_config_index) +
+			(uintptr_t)hal->dev_base_addr;
+		hal_debug("target_reg %x, shadow register 0x%x shadow_index 0x%x",
+			  hal->shadow_config[shadow_config_index].addr,
+			  SHADOW_REGISTER(shadow_config_index),
+			  shadow_config_index);
+		shadow_config_index++;
+		hal->num_shadow_registers_configured++;
+	}
+	return QDF_STATUS_SUCCESS;
+}
+
+qdf_export_symbol(hal_construct_shadow_regs);
+#endif
+
 QDF_STATUS hal_set_one_shadow_config(void *hal_soc,
 				     int ring_type,
 				     int ring_num)
@@ -199,7 +275,7 @@ QDF_STATUS hal_set_one_shadow_config(void *hal_soc,
 
 qdf_export_symbol(hal_set_one_shadow_config);
 
-QDF_STATUS hal_construct_shadow_config(void *hal_soc)
+QDF_STATUS hal_construct_srng_shadow_regs(void *hal_soc)
 {
 	int ring_type, ring_num;
 	struct hal_soc *hal = (struct hal_soc *)hal_soc;
@@ -224,7 +300,7 @@ QDF_STATUS hal_construct_shadow_config(void *hal_soc)
 	return QDF_STATUS_SUCCESS;
 }
 
-qdf_export_symbol(hal_construct_shadow_config);
+qdf_export_symbol(hal_construct_srng_shadow_regs);
 
 void hal_get_shadow_config(void *hal_soc,
 	struct pld_shadow_reg_v2_cfg **shadow_config,
@@ -264,8 +340,8 @@ static void hal_validate_shadow_register(struct hal_soc *hal,
 	}
 	return;
 error:
-	qdf_print("%s: baddr %pK, desination %pK, shadow_address %pK s0offset %pK index %x",
-		  __func__, hal->dev_base_addr, destination, shadow_address,
+	qdf_print("baddr %pK, desination %pK, shadow_address %pK s0offset %pK index %x",
+		  hal->dev_base_addr, destination, shadow_address,
 		  shadow_0_offset, index);
 	QDF_BUG(0);
 	return;
@@ -322,6 +398,18 @@ static void hal_target_based_configure(struct hal_soc *hal)
 	case TARGET_TYPE_QCA6018:
 		hal_qca8074v2_attach(hal);
 	break;
+#endif
+
+#if defined(QCA_WIFI_QCN9100)
+	case TARGET_TYPE_QCN9100:
+		hal->use_register_windowing = true;
+		/*
+		 * Static window map  is enabled for qcn9000 to use 2mb bar
+		 * size and use multiple windows to write into registers.
+		 */
+		hal->static_window_map = true;
+		hal_qcn9100_attach(hal);
+		break;
 #endif
 
 #ifdef QCA_WIFI_QCN9000
@@ -459,6 +547,7 @@ static void hal_reg_write_work(void *arg)
 	uint64_t delta_us;
 	uint8_t ring_id;
 	uint32_t *addr;
+	uint32_t num_processed = 0;
 
 	q_elem = &hal->reg_write_queue[(hal->read_idx)];
 	q_elem->work_scheduled_time = qdf_get_log_timestamp();
@@ -496,26 +585,34 @@ static void hal_reg_write_work(void *arg)
 		hal_verbose_debug("read_idx %u srng 0x%x, addr 0x%pK dequeue_val %u sched delay %llu us",
 				  hal->read_idx, ring_id, addr, write_val, delta_us);
 
-		qdf_atomic_dec(&hal->active_work_cnt);
+		num_processed++;
 		hal->read_idx = (hal->read_idx + 1) &
 					(HAL_REG_WRITE_QUEUE_LEN - 1);
 		q_elem = &hal->reg_write_queue[(hal->read_idx)];
 	}
 
 	hif_allow_link_low_power_states(hal->hif_handle);
+	/*
+	 * Decrement active_work_cnt by the number of elements dequeued after
+	 * hif_allow_link_low_power_states.
+	 * This makes sure that hif_try_complete_tasks will wait till we make
+	 * the bus access in hif_allow_link_low_power_states. This will avoid
+	 * race condition between delayed register worker and bus suspend
+	 * (system suspend or runtime suspend).
+	 *
+	 * The following decrement should be done at the end!
+	 */
+	qdf_atomic_sub(num_processed, &hal->active_work_cnt);
 }
 
-/**
- * hal_flush_reg_write_work() - flush all writes from regiter write queue
- * @arg: hal_soc pointer
- *
- * Return: None
- */
-static inline void hal_flush_reg_write_work(struct hal_soc *hal)
+static void __hal_flush_reg_write_work(struct hal_soc *hal)
 {
 	qdf_cancel_work(&hal->reg_write_work);
-	qdf_flush_work(&hal->reg_write_work);
-	qdf_flush_workqueue(0, hal->reg_write_wq);
+
+}
+
+void hal_flush_reg_write_work(hal_soc_handle_t hal_handle)
+{	__hal_flush_reg_write_work((struct hal_soc *)hal_handle);
 }
 
 /**
@@ -651,7 +748,9 @@ static QDF_STATUS hal_delayed_reg_write_init(struct hal_soc *hal)
  */
 static void hal_delayed_reg_write_deinit(struct hal_soc *hal)
 {
-	hal_flush_reg_write_work(hal);
+	__hal_flush_reg_write_work(hal);
+
+	qdf_flush_workqueue(0, hal->reg_write_wq);
 	qdf_destroy_workqueue(0, hal->reg_write_wq);
 	qdf_mem_free(hal->reg_write_queue);
 }
@@ -955,28 +1054,32 @@ void hal_reo_read_write_ctrl_ix(hal_soc_handle_t hal_soc_hdl, bool read,
 			reg_offset =
 				HWIO_REO_R0_DESTINATION_RING_CTRL_IX_0_ADDR(
 						SEQ_WCSS_UMAC_REO_REG_OFFSET);
-			HAL_REG_WRITE_CONFIRM(hal, reg_offset, *ix0);
+			HAL_REG_WRITE_CONFIRM_RETRY(hal, reg_offset,
+						    *ix0, true);
 		}
 
 		if (ix1) {
 			reg_offset =
 				HWIO_REO_R0_DESTINATION_RING_CTRL_IX_1_ADDR(
 						SEQ_WCSS_UMAC_REO_REG_OFFSET);
-			HAL_REG_WRITE(hal, reg_offset, *ix1);
+			HAL_REG_WRITE_CONFIRM_RETRY(hal, reg_offset,
+						    *ix1, true);
 		}
 
 		if (ix2) {
 			reg_offset =
 				HWIO_REO_R0_DESTINATION_RING_CTRL_IX_2_ADDR(
 						SEQ_WCSS_UMAC_REO_REG_OFFSET);
-			HAL_REG_WRITE_CONFIRM(hal, reg_offset, *ix2);
+			HAL_REG_WRITE_CONFIRM_RETRY(hal, reg_offset,
+						    *ix2, true);
 		}
 
 		if (ix3) {
 			reg_offset =
 				HWIO_REO_R0_DESTINATION_RING_CTRL_IX_3_ADDR(
 						SEQ_WCSS_UMAC_REO_REG_OFFSET);
-			HAL_REG_WRITE_CONFIRM(hal, reg_offset, *ix3);
+			HAL_REG_WRITE_CONFIRM_RETRY(hal, reg_offset,
+						    *ix3, true);
 		}
 	}
 }
@@ -996,18 +1099,26 @@ void hal_srng_dst_set_hp_paddr(struct hal_srng *srng,
 }
 
 /**
- * hal_srng_dst_init_hp() - Initilaize destination ring head pointer
+ * hal_srng_dst_init_hp() - Initialize destination ring head
+ * pointer
+ * @hal_soc: hal_soc handle
  * @srng: sring pointer
  * @vaddr: virtual address
  */
-void hal_srng_dst_init_hp(struct hal_srng *srng,
+void hal_srng_dst_init_hp(struct hal_soc_handle *hal_soc,
+			  struct hal_srng *srng,
 			  uint32_t *vaddr)
 {
+	uint32_t reg_offset;
+	struct hal_soc *hal = (struct hal_soc *)hal_soc;
+
 	if (!srng)
 		return;
 
 	srng->u.dst_ring.hp_addr = vaddr;
-	SRNG_DST_REG_WRITE_CONFIRM(srng, HP, srng->u.dst_ring.cached_hp);
+	reg_offset = SRNG_DST_ADDR(srng, HP) - hal->dev_base_addr;
+	HAL_REG_WRITE_CONFIRM_RETRY(
+		hal, reg_offset, srng->u.dst_ring.cached_hp, true);
 
 	if (vaddr) {
 		*srng->u.dst_ring.hp_addr = srng->u.dst_ring.cached_hp;

@@ -822,16 +822,29 @@ uint16_t utils_dfs_get_cur_rd(struct wlan_objmgr_pdev *pdev);
  * @is_spoof_check_failed: pointer containing the status.
  *
  * Return: QDF_STATUS.
+
+ * utils_dfs_is_spoof_done() - get spoof check status.
+ * @pdev: pdev ptr
+ *
+ * Return: True if dfs_spoof_test_done is set.
  */
 #if defined(WLAN_DFS_PARTIAL_OFFLOAD) && defined(HOST_DFS_SPOOF_TEST)
 QDF_STATUS utils_dfs_is_spoof_check_failed(struct wlan_objmgr_pdev *pdev,
 					   bool *is_spoof_check_failed);
+
+bool utils_dfs_is_spoof_done(struct wlan_objmgr_pdev *pdev);
 #else
 static inline
 QDF_STATUS utils_dfs_is_spoof_check_failed(struct wlan_objmgr_pdev *pdev,
 					   bool *is_spoof_check_failed)
 {
 	return QDF_STATUS_SUCCESS;
+}
+
+static inline
+bool utils_dfs_is_spoof_done(struct wlan_objmgr_pdev *pdev)
+{
+	return true;
 }
 #endif
 
@@ -978,17 +991,25 @@ void utils_dfs_deliver_event(struct wlan_objmgr_pdev *pdev, uint16_t freq,
  */
 void utils_dfs_reset_dfs_prevchan(struct wlan_objmgr_pdev *pdev);
 
-#ifdef QCA_SUPPORT_ADFS_RCAC
+#ifdef QCA_SUPPORT_AGILE_DFS
 /**
- * utils_dfs_rcac_sm_deliver_evt() - API to post events to DFS rolling CAC SM.
- * @pdev:           Pointer to DFS pdev object.
- * @event:          Event to be posted to DFS RCAC SM.
+ * utils_dfs_agile_sm_deliver_evt() - API to post events to DFS Agile SM.
+ * @pdev: Pointer to DFS pdev object.
+ * @event: Event to be posted to DFS AGILE SM.
  *
  * Return: None.
  */
-void utils_dfs_rcac_sm_deliver_evt(struct wlan_objmgr_pdev *pdev,
-				   enum dfs_rcac_sm_evt event);
+void utils_dfs_agile_sm_deliver_evt(struct wlan_objmgr_pdev *pdev,
+				    enum dfs_agile_sm_evt event);
+#else
+static inline
+void utils_dfs_agile_sm_deliver_evt(struct wlan_objmgr_pdev *pdev,
+				    enum dfs_agile_sm_evt event)
+{
+}
+#endif/*QCA_SUPPORT_AGILE_DFS*/
 
+#ifdef QCA_SUPPORT_ADFS_RCAC
 /**
  * utils_dfs_get_rcac_channel() - Get the completed Rolling CAC channel if
  *                                available.
@@ -1003,12 +1024,6 @@ QDF_STATUS utils_dfs_get_rcac_channel(struct wlan_objmgr_pdev *pdev,
 				      qdf_freq_t *target_chan_freq);
 #else
 static inline
-void utils_dfs_rcac_sm_deliver_evt(struct wlan_objmgr_pdev *pdev,
-				   enum dfs_rcac_sm_evt event)
-{
-}
-
-static inline
 QDF_STATUS utils_dfs_get_rcac_channel(struct wlan_objmgr_pdev *pdev,
 				      struct ch_params *chan_params,
 				      qdf_freq_t *target_chan_freq)
@@ -1017,4 +1032,79 @@ QDF_STATUS utils_dfs_get_rcac_channel(struct wlan_objmgr_pdev *pdev,
 }
 #endif /* QCA_SUPPORT_ADFS_RCAC */
 
+#ifdef ATH_SUPPORT_ZERO_CAC_DFS
+/**
+ * utils_dfs_precac_status_for_channel() - API to find the preCAC status
+ * of the given channel.
+ * @pdev: Pointer to DFS pdev object.
+ * @deschan: Pointer to desired channel of wlan_channel structure.
+ */
+enum precac_status_for_chan
+utils_dfs_precac_status_for_channel(struct wlan_objmgr_pdev *pdev,
+				    struct wlan_channel *deschan);
+#else
+static inline enum precac_status_for_chan
+utils_dfs_precac_status_for_channel(struct wlan_objmgr_pdev *pdev,
+				    struct wlan_channel *deschan)
+{
+	return DFS_INVALID_PRECAC_STATUS;
+}
+#endif
+
+#if defined(WLAN_DISP_CHAN_INFO)
+/**
+ * utils_dfs_get_chan_dfs_state() - Get the channel state array of the channels
+ * in a radio.
+ * @pdev: Pointer to the pdev.
+ * @dfs_ch_s: Output channel state array of the dfs channels in the radio.
+ *
+ * Return: QDF_STATUS.
+ */
+QDF_STATUS utils_dfs_get_chan_dfs_state(struct wlan_objmgr_pdev *pdev,
+					enum channel_dfs_state *dfs_ch_s);
+
+/**
+ * utils_dfs_update_chan_state_array() - Update the channel state of the dfs
+ * channel indicated by the frequency. The dfs event is converted to
+ * appropriate dfs state.
+ * @pdev: Pointer to the pdev.
+ * @freq: Input frequency.
+ * @event: Input dfs event.
+ *
+ * Return: QDF_STATUS.
+ */
+QDF_STATUS utils_dfs_update_chan_state_array(struct wlan_objmgr_pdev *pdev,
+					     qdf_freq_t freq,
+					     enum WLAN_DFS_EVENTS event);
+
+/**
+ * dfs_init_chan_state_array() - Initialize the dfs channel state array.
+ *
+ * @pdev: Pointer to the pdev.
+ *
+ * Return: QDF_STATUS.
+ */
+QDF_STATUS dfs_init_chan_state_array(struct wlan_objmgr_pdev *pdev);
+#else
+static inline
+QDF_STATUS utils_dfs_get_chan_dfs_state(struct wlan_objmgr_pdev *pdev,
+					enum channel_dfs_state *dfs_ch_s)
+{
+	return QDF_STATUS_E_NOSUPPORT;
+}
+
+static inline
+QDF_STATUS utils_dfs_update_chan_state_array(struct wlan_objmgr_pdev *pdev,
+					     uint16_t freq,
+					     enum WLAN_DFS_EVENTS event)
+{
+	return QDF_STATUS_E_NOSUPPORT;
+}
+
+static inline
+QDF_STATUS dfs_init_chan_state_array(struct wlan_objmgr_pdev *pdev)
+{
+	return QDF_STATUS_E_NOSUPPORT;
+}
+#endif /* WLAN_DISP_CHAN_INFO */
 #endif /* _WLAN_DFS_UTILS_API_H_ */

@@ -74,15 +74,6 @@ bool reg_chan_has_dfs_attribute(struct wlan_objmgr_pdev *pdev, uint8_t ch);
  * Return: true if channel is passive or disabled, else false.
  */
 bool reg_is_passive_or_disable_ch(struct wlan_objmgr_pdev *pdev, uint8_t chan);
-
-/**
- * reg_is_disable_ch() - Check if the given channel in disable state
- * @pdev: Pointer to pdev
- * @chan: channel number
- *
- * Return: True if channel state is disabled, else false
- */
-bool reg_is_disable_ch(struct wlan_objmgr_pdev *pdev, uint8_t chan);
 #else
 static inline bool
 reg_chan_has_dfs_attribute(struct wlan_objmgr_pdev *pdev, uint8_t ch)
@@ -92,12 +83,6 @@ reg_chan_has_dfs_attribute(struct wlan_objmgr_pdev *pdev, uint8_t ch)
 
 static inline bool
 reg_is_passive_or_disable_ch(struct wlan_objmgr_pdev *pdev, uint8_t chan)
-{
-	return false;
-}
-
-static inline bool
-reg_is_disable_ch(struct wlan_objmgr_pdev *pdev, uint8_t chan)
 {
 	return false;
 }
@@ -126,15 +111,6 @@ bool reg_chan_has_dfs_attribute_for_freq(struct wlan_objmgr_pdev *pdev,
  */
 bool reg_is_passive_or_disable_for_freq(struct wlan_objmgr_pdev *pdev,
 					qdf_freq_t freq);
-/**
- * reg_is_disable_for_freq() - Check if the given channel frequency in
- * disable state
- * @pdev: Pointer to pdev
- * @freq: Channel frequency
- *
- * Return: True if channel state is disabled, else false
- */
-bool reg_is_disable_for_freq(struct wlan_objmgr_pdev *pdev, qdf_freq_t freq);
 #else
 static inline bool
 reg_chan_has_dfs_attribute_for_freq(struct wlan_objmgr_pdev *pdev,
@@ -146,12 +122,6 @@ reg_chan_has_dfs_attribute_for_freq(struct wlan_objmgr_pdev *pdev,
 static inline bool
 reg_is_passive_or_disable_for_freq(struct wlan_objmgr_pdev *pdev,
 				   qdf_freq_t freq)
-{
-	return false;
-}
-
-static inline bool
-reg_is_disable_for_freq(struct wlan_objmgr_pdev *pdev, qdf_freq_t freq)
 {
 	return false;
 }
@@ -218,20 +188,20 @@ QDF_STATUS reg_cache_channel_state(struct wlan_objmgr_pdev *pdev,
 /**
  * reg_set_band() - Sets the band information for the PDEV
  * @pdev: The physical dev to set the band for
- * @band: The set band parameters to configure for the physical device
+ * @band_bitmap: The set band parameters to configure for the physical device
  *
  * Return: QDF_STATUS
  */
-QDF_STATUS reg_set_band(struct wlan_objmgr_pdev *pdev, enum band_info band);
+QDF_STATUS reg_set_band(struct wlan_objmgr_pdev *pdev, uint32_t band_bitmap);
 
 /**
  * reg_get_band() - Get the band information for the PDEV
  * @pdev: The physical dev to get the band for
- * @band: The band parameters of the physical device
+ * @band_bitmap: The band parameters of the physical device
  *
  * Return: QDF_STATUS
  */
-QDF_STATUS reg_get_band(struct wlan_objmgr_pdev *pdev, enum band_info *band);
+QDF_STATUS reg_get_band(struct wlan_objmgr_pdev *pdev, uint32_t *band_bitmap);
 
 /**
  * reg_set_fcc_constraint() - Apply fcc constraints on channels 12/13
@@ -329,14 +299,6 @@ QDF_STATUS reg_get_domain_from_country_code(v_REGDOMAIN_t *reg_domain_ptr,
  */
 QDF_STATUS reg_set_config_vars(struct wlan_objmgr_psoc *psoc,
 			       struct reg_config_vars config_vars);
-
-/**
- * reg_is_regdb_offloaded() - is regdb offloaded
- * @psoc: Pointer to psoc object
- *
- * Return: true if regdb is offloaded, else false
- */
-bool reg_is_regdb_offloaded(struct wlan_objmgr_psoc *psoc);
 
 /**
  * reg_program_mas_chan_list() - Program the master channel list
@@ -448,11 +410,6 @@ static inline QDF_STATUS reg_set_config_vars(struct wlan_objmgr_psoc *psoc,
 					     struct reg_config_vars config_vars)
 {
 	return QDF_STATUS_SUCCESS;
-}
-
-static inline bool reg_is_regdb_offloaded(struct wlan_objmgr_psoc *psoc)
-{
-	return false;
 }
 
 static inline void reg_program_mas_chan_list(
@@ -657,4 +614,5 @@ static inline void set_disable_channel_state(
 {
 }
 #endif
+
 #endif

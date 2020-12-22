@@ -289,27 +289,29 @@ bool wlan_crypto_is_mmie_valid(struct wlan_objmgr_vdev *vdev,
 
 /**
  * wlan_crypto_wpaie_check - called by mlme to check the wpaie
- * @crypto params: crypto params
- * @iebuf: ie buffer
+ * @crypto_params: crypto params
+ * @frm: ie buffer
  *
  * This function gets called by mlme to check the contents of wpa is
  * matching with given crypto params
  *
  * Return: QDF_STATUS_SUCCESS - in case of success
  */
-QDF_STATUS wlan_crypto_wpaie_check(struct wlan_crypto_params *, uint8_t *frm);
+QDF_STATUS wlan_crypto_wpaie_check(struct wlan_crypto_params *crypto_params,
+				   const uint8_t *frm);
 
 /**
  * wlan_crypto_rsnie_check - called by mlme to check the rsnie
- * @crypto params: crypto params
- * @iebuf: ie buffer
+ * @crypto_params: crypto params
+ * @frm: ie buffer
  *
  * This function gets called by mlme to check the contents of rsn is
  * matching with given crypto params
  *
  * Return: QDF_STATUS_SUCCESS - in case of success
  */
-QDF_STATUS wlan_crypto_rsnie_check(struct wlan_crypto_params *, uint8_t *frm);
+QDF_STATUS wlan_crypto_rsnie_check(struct wlan_crypto_params *crypto_params,
+				   const uint8_t *frm);
 /**
  * wlan_crypto_build_wpaie - called by mlme to build wpaie
  * @vdev: vdev
@@ -352,8 +354,8 @@ uint8_t *wlan_crypto_build_rsnie(struct wlan_objmgr_vdev *vdev,
 
 /**
  * wlan_crypto_wapiie_check - called by mlme to check the wapiie
- * @crypto params: crypto params
- * @iebuf: ie buffer
+ * @crypto_params: crypto params
+ * @frm: ie buffer
  *
  * This function gets called by mlme to check the contents of wapi is
  * matching with given crypto params
@@ -361,7 +363,7 @@ uint8_t *wlan_crypto_build_rsnie(struct wlan_objmgr_vdev *vdev,
  * Return: QDF_STATUS_SUCCESS - in case of success
  */
 QDF_STATUS wlan_crypto_wapiie_check(struct wlan_crypto_params *crypto_params,
-					uint8_t *frm);
+				    const uint8_t *frm);
 
 /**
  * wlan_crypto_build_wapiie - called by mlme to build wapi ie
@@ -713,6 +715,74 @@ bool wlan_crypto_check_wpa_match(struct wlan_objmgr_psoc *psoc,
 				 peer_crypto_params);
 
 /**
+ * wlan_crypto_parse_rsnxe_ie() - parse RSNXE IE
+ * @rsnxe_ie: RSNXE IE pointer
+ * @cap_len: pointer to hold len of ext capability
+ *
+ * Return: pointer to RSNXE capability or NULL
+ */
+const uint8_t *
+wlan_crypto_parse_rsnxe_ie(const uint8_t *rsnxe_ie, uint8_t *cap_len);
+
+/**
+ * wlan_get_crypto_params_from_wapi_ie - Function to get crypto params
+ * from wapi ie
+ * @crypto_params: return crypto parameters
+ * @ie_ptr: pointer to IEs
+ * @ie_len: IE length
+ *
+ * This function is used to get the crypto parameters from wapi ie
+ *
+ * Context: Any context.
+ * Return: QDF_STATUS
+ */
+#ifdef FEATURE_WLAN_WAPI
+QDF_STATUS
+wlan_get_crypto_params_from_wapi_ie(struct wlan_crypto_params *crypto_params,
+				    const uint8_t *ie_ptr, uint16_t ie_len);
+
+#else
+static inline QDF_STATUS
+wlan_get_crypto_params_from_wapi_ie(struct wlan_crypto_params *crypto_params,
+				    const uint8_t *ie_ptr, uint16_t ie_len)
+{
+	return QDF_STATUS_E_NOSUPPORT;
+}
+#endif
+
+/**
+ * wlan_get_crypto_params_from_wpa_ie - Function to get crypto params
+ * from wpa ie
+ * @crypto_params: return crypto parameters
+ * @ie_ptr: pointer to IEs
+ * @ie_len: IE length
+ *
+ * This function is used to get the crypto parameters from wpa ie
+ *
+ * Context: Any context.
+ * Return: QDF_STATUS
+ */
+QDF_STATUS
+wlan_get_crypto_params_from_wpa_ie(struct wlan_crypto_params *crypto_params,
+				   const uint8_t *ie_ptr, uint16_t ie_len);
+
+/**
+ * wlan_get_crypto_params_from_rsn_ie - Function to get crypto params
+ * from rsn ie
+ * @crypto_params: return crypto parameters
+ * @ie_ptr: pointer to IEs
+ * @ie_len: IE length
+ *
+ * This function is used to get the crypto parameters from rsn ie
+ *
+ * Context: Any context.
+ * Return: QDF_STATUS
+ */
+QDF_STATUS
+wlan_get_crypto_params_from_rsn_ie(struct wlan_crypto_params *crypto_params,
+				   const uint8_t *ie_ptr, uint16_t ie_len);
+
+/**
  * wlan_set_vdev_crypto_prarams_from_ie - Sets vdev crypto params from IE info
  * @vdev: vdev pointer
  * @ie_ptr: pointer to IE
@@ -846,6 +916,26 @@ struct wlan_crypto_key *wlan_crypto_get_key(struct wlan_objmgr_vdev *vdev,
 QDF_STATUS wlan_crypto_set_key_req(struct wlan_objmgr_vdev *vdev,
 				   struct wlan_crypto_key *req,
 				   enum wlan_crypto_key_type key_type);
+
+/**
+ * wlan_crypto_free_vdev_key - Free keys for vdev
+ * @vdev: vdev object
+ *
+ * This function frees keys stored in vdev crypto object.
+ *
+ * Return: None
+ */
+void wlan_crypto_free_vdev_key(struct wlan_objmgr_vdev *vdev);
+
+/**
+ * wlan_crypto_reset_vdev_params - Reset params for vdev
+ * @vdev: vdev object
+ *
+ * This function reset params stored in vdev crypto object.
+ *
+ * Return: None
+ */
+void wlan_crypto_reset_vdev_params(struct wlan_objmgr_vdev *vdev);
 #else
 static inline void wlan_crypto_update_set_key_peer(
 						struct wlan_objmgr_vdev *vdev,
@@ -874,6 +964,14 @@ QDF_STATUS wlan_crypto_set_key_req(struct wlan_objmgr_vdev *vdev,
 				   enum wlan_crypto_key_type key_type)
 {
 	return QDF_STATUS_SUCCESS;
+}
+
+static inline void wlan_crypto_free_vdev_key(struct wlan_objmgr_vdev *vdev)
+{
+}
+
+static inline void wlan_crypto_reset_vdev_prarams(struct wlan_objmgr_vdev *vdev)
+{
 }
 #endif /* CRYPTO_SET_KEY_CONVERGED */
 
@@ -904,6 +1002,21 @@ wlan_crypto_get_pmksa(struct wlan_objmgr_vdev *vdev,
 		      struct qdf_mac_addr *bssid);
 
 /**
+ * wlan_crypto_get_fils_pmksa  - Get the PMKSA for FILS
+ * SSID, if the SSID and cache id matches
+ * @vdev:     Pointer with VDEV object
+ * @cache_id: Cache id
+ * @ssid:     Pointer to ssid
+ * @ssid_len: SSID length
+ *
+ * Return: PMKSA entry if the cache id and SSID matches
+ */
+struct wlan_crypto_pmksa *
+wlan_crypto_get_fils_pmksa(struct wlan_objmgr_vdev *vdev,
+			   uint8_t *cache_id, uint8_t *ssid,
+			   uint8_t ssid_len);
+
+/**
  * wlan_crypto_pmksa_flush - called to flush saved pmksa
  * @crypto_params: crypto_params
  *
@@ -927,6 +1040,20 @@ QDF_STATUS wlan_crypto_pmksa_flush(struct wlan_crypto_params *crypto_params);
 QDF_STATUS wlan_crypto_set_del_pmksa(struct wlan_objmgr_vdev *vdev,
 				     struct wlan_crypto_pmksa *pmksa,
 				     bool set);
+
+/**
+ * wlan_crypto_update_pmk_cache_ft - Updates the mobility domain information
+ * for a BSSID in the PMKSA Cache table.
+ * @vdev: vdev
+ * @pmksa: pmksa to be updated.
+ *
+ * This function gets called from ucfg to update pmksa with mdid.
+ * And flush the matching mdid entries.
+ *
+ * Return: QDF_STATUS_SUCCESS - in case of success
+ */
+QDF_STATUS wlan_crypto_update_pmk_cache_ft(struct wlan_objmgr_vdev *vdev,
+					   struct wlan_crypto_pmksa *pmksa);
 
 #if defined(WLAN_SAE_SINGLE_PMK) && defined(WLAN_FEATURE_ROAM_OFFLOAD)
 /**
@@ -966,4 +1093,24 @@ void wlan_crypto_set_sae_single_pmk_bss_cap(struct wlan_objmgr_vdev *vdev,
 }
 #endif
 
+#ifdef WLAN_FEATURE_FILS_SK
+/**
+ * lim_create_fils_rik()- This API create rik using rrk coming from
+ * supplicant.
+ * @rrk: input rrk
+ * @rrk_len: rrk length
+ * @rik: Created rik
+ * @rik_len: rik length to be filled
+ *
+ * rIK = KDF (K, S), where
+ * K = rRK and
+ * S = rIK Label + "\0" + cryptosuite + length
+ * The rIK Label is the 8-bit ASCII string:
+ * Re-authentication Integrity Key@ietf.org
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS wlan_crypto_create_fils_rik(uint8_t *rrk, uint8_t rrk_len,
+				       uint8_t *rik, uint32_t *rik_len);
+#endif /* WLAN_FEATURE_FILS_SK */
 #endif /* end of _WLAN_CRYPTO_GLOBAL_API_H_ */

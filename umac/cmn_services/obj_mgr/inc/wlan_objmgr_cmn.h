@@ -267,6 +267,19 @@ typedef void (*wlan_objmgr_peer_status_handler)(
  * @FTM_TIME_SYNC_ID:           ftm time sync operations
  * @WLAN_PKT_CAPTURE_ID         Packet capture operations
  * @WLAN_DCS_ID:                DCS operations
+ * @WLAN_IOT_SIM_ID:            IOT Simulation feature
+ * @WLAN_MLME_CM_ID             Connection Manager reference ID
+ * @WLAN_IF_MGR_ID:             Interface manager reference ID
+ * @WLAN_OSIF_SCAN_ID:          SCAN operations in OS IF
+ * @WLAN_OSIF_MGMT_ID:          MGMT frame operations in OS IF
+ * @WLAN_OSIF_STATS_ID:         STATS request operations in OS IF
+ * @WLAN_OSIF_NAN_ID:           NAN operations in OS IF
+ * @WLAN_OSIF_P2P_ID:           P2P operations in OS IF
+ * @WLAN_OSIF_OCB_ID:           OCB operations in OS IF
+ * @WLAN_OSIF_SPECTRAL_ID:      spectal operations in OS IF
+ * @WLAN_OSIF_POWER_ID:         power operations in OS IF
+ * @WLAN_OSIF_TDLS_ID:          TDLS operations in OS IF
+ * @WLAN_OSIF_CM_ID:            Connection manager osif reference id
  * @WLAN_REF_ID_MAX:            Max id used to generate ref count tracking array
  */
  /* New value added to the enum must also be reflected in function
@@ -349,6 +362,20 @@ typedef enum {
 	FTM_TIME_SYNC_ID       = 73,
 	WLAN_PKT_CAPTURE_ID   = 74,
 	WLAN_DCS_ID           = 75,
+	WLAN_IOT_SIM_ID       = 76,
+	WLAN_MLME_CM_ID       = 77,
+	WLAN_IF_MGR_ID        = 78,
+	/* Create WLAN_OSIF sub id based on functionality */
+	WLAN_OSIF_SCAN_ID     = 79,
+	WLAN_OSIF_MGMT_ID     = 80,
+	WLAN_OSIF_STATS_ID    = 81,
+	WLAN_OSIF_NAN_ID      = 82,
+	WLAN_OSIF_P2P_ID      = 83,
+	WLAN_OSIF_OCB_ID      = 84,
+	WLAN_OSIF_SPECTRAL_ID = 85,
+	WLAN_OSIF_POWER_ID    = 86,
+	WLAN_OSIF_TDLS_ID     = 87,
+	WLAN_OSIF_CM_ID       = 88,
 	WLAN_REF_ID_MAX,
 } wlan_objmgr_ref_dbgid;
 
@@ -360,9 +387,9 @@ typedef enum {
  * Please note to add new string in the array at index equal to
  * its enum value in wlan_objmgr_ref_dbgid.
  */
-static inline char *string_from_dbgid(wlan_objmgr_ref_dbgid id)
+static inline const char *string_from_dbgid(wlan_objmgr_ref_dbgid id)
 {
-	static const char *strings[] = { "WLAN_OBJMGR_ID",
+	static const char *strings[WLAN_REF_ID_MAX] = { "WLAN_OBJMGR_ID",
 					"WLAN_MLME_SB_ID",
 					"WLAN_MLME_NB_ID",
 					"WLAN_MGMT_SB_ID",
@@ -438,9 +465,25 @@ static inline char *string_from_dbgid(wlan_objmgr_ref_dbgid id)
 					"FTM_TIME_SYNC_ID",
 					"WLAN_PKT_CAPTURE_ID",
 					"WLAN_DCS_ID",
-					"WLAN_REF_ID_MAX"};
+					"WLAN_IOT_SIM_ID",
+					"WLAN_MLME_CM_ID",
+					"WLAN_IF_MGR_ID",
+					"WLAN_OSIF_SCAN_ID",
+					"WLAN_OSIF_MGMT_ID",
+					"WLAN_OSIF_STATS_ID",
+					"WLAN_OSIF_NAN_ID",
+					"WLAN_OSIF_P2P_ID",
+					"WLAN_OSIF_OCB_ID",
+					"WLAN_OSIF_SPECTRAL_ID",
+					"WLAN_OSIF_POWER_ID",
+					"WLAN_OSIF_TDLS_ID",
+					"WLAN_OSIF_CM_ID",
+					};
 
-	return (char *)strings[id];
+	if (id >= WLAN_REF_ID_MAX)
+		return "Unknown";
+
+	return strings[id];
 }
 
 #ifdef WLAN_OBJMGR_DEBUG

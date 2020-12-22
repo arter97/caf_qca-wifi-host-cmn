@@ -211,6 +211,9 @@ struct dfs_bangradar_params {
 #define DFS_RANDOM_CH_FLAG_RESTRICTED_80P80_ENABLED 0x0200
 						       /* 0000 0010 0000 0000 */
 
+/* Flag to exclude all 6GHz channels */
+#define DFS_RANDOM_CH_FLAG_NO_6GHZ_CH          0x00400 /* 0000 0100 0000 0000 */
+
 /**
  * struct wlan_dfs_caps - DFS capability structure.
  * @wlan_dfs_ext_chan_ok:         Can radar be detected on the extension chan?
@@ -277,20 +280,26 @@ struct wlan_dfs_phyerr_param {
 /**
  * enum WLAN_DFS_EVENTS - DFS Events that will be sent to userspace
  * @WLAN_EV_RADAR_DETECTED: Radar is detected
+ * @WLAN_EV_CAC_RESET:      CAC started or CAC completed status is reset
  * @WLAN_EV_CAC_STARTED:    CAC timer has started
  * @WLAN_EV_CAC_COMPLETED:  CAC timer completed
  * @WLAN_EV_NOL_STARTED:    NOL started
  * @WLAN_EV_NOL_FINISHED:   NOL Completed
+ * @WLAN_EV_PCAC_STARTED:   PreCAC Started
+ * @WLAN_EV_PCAC_COMPLETED: PreCAC Completed
  *
  * DFS events such as radar detected, CAC started,
  * CAC completed, NOL started, NOL finished
  */
 enum WLAN_DFS_EVENTS {
 	WLAN_EV_RADAR_DETECTED,
+	WLAN_EV_CAC_RESET,
 	WLAN_EV_CAC_STARTED,
 	WLAN_EV_CAC_COMPLETED,
 	WLAN_EV_NOL_STARTED,
 	WLAN_EV_NOL_FINISHED,
+	WLAN_EV_PCAC_STARTED,
+	WLAN_EV_PCAC_COMPLETED,
 };
 
 #if defined(WLAN_DFS_PARTIAL_OFFLOAD) && defined(WLAN_DFS_SYNTHETIC_RADAR)
@@ -360,17 +369,37 @@ struct seq_store {
 #endif /* WLAN_DFS_PARTIAL_OFFLOAD && WLAN_DFS_SYNTHETIC_RADAR */
 
 /**
- * enum dfs_rcac_sm_evt - DFS Rolling CAC SM events.
- * @DFS_RCAC_SM_EV_RCAC_START: Event to start RCAC.
- * @DFS_RCAC_SM_EV_RCAC_DOWN:  Event to stop RCAC.
- * @DFS_RCAC_SM_EV_RCAC_DONE:  Event to complete RCAC.
- * @DFS_RCAC_SM_EV_ADFS_RADAR: Event to restart RCAC after radar in agile.
+ * enum dfs_agile_sm_evt - DFS Agile SM events.
+ * @DFS_AGILE_SM_EV_AGILE_START: Event to start AGILE PreCAC/RCAC.
+ * @DFS_AGILE_SM_EV_AGILE_DOWN:  Event to stop AGILE PreCAC/RCAC..
+ * @DFS_AGILE_SM_EV_AGILE_DONE:  Event to complete AGILE PreCAC/RCAC..
+ * @DFS_AGILE_SM_EV_ADFS_RADAR: Event to restart AGILE PreCAC/RCAC after radar.
  */
-enum dfs_rcac_sm_evt {
-	DFS_RCAC_SM_EV_RCAC_START = 0,
-	DFS_RCAC_SM_EV_RCAC_STOP = 1,
-	DFS_RCAC_SM_EV_RCAC_DONE = 2,
-	DFS_RCAC_SM_EV_ADFS_RADAR_FOUND = 3,
+enum dfs_agile_sm_evt {
+	DFS_AGILE_SM_EV_AGILE_START = 0,
+	DFS_AGILE_SM_EV_AGILE_STOP =  1,
+	DFS_AGILE_SM_EV_AGILE_DONE =  2,
+	DFS_AGILE_SM_EV_ADFS_RADAR =  3,
+};
+
+/**
+ * enum precac_status_for_chan - preCAC status for channels.
+ * @DFS_NO_PRECAC_COMPLETED_CHANS: None of the channels are preCAC completed.
+ * @DFS_PRECAC_COMPLETED_CHAN: A given channel is preCAC completed.
+ * @DFS_PRECAC_REQUIRED_CHAN:  A given channel required preCAC.
+ * @DFS_INVALID_PRECAC_STATUS: Invalid status.
+ *
+ * Note: "DFS_NO_PRECAC_COMPLETED_CHANS" has more priority than
+ * "DFS_PRECAC_COMPLETED_CHAN". This is because if the preCAC list does not
+ * have any channel that completed preCAC, "DFS_NO_PRECAC_COMPLETED_CHANS"
+ * is returned and search for preCAC completion (DFS_PRECAC_COMPLETED_CHAN)
+ * for a given channel is not done.
+ */
+enum precac_status_for_chan {
+	DFS_NO_PRECAC_COMPLETED_CHANS,
+	DFS_PRECAC_COMPLETED_CHAN,
+	DFS_PRECAC_REQUIRED_CHAN,
+	DFS_INVALID_PRECAC_STATUS,
 };
 
 #endif  /* _DFS_IOCTL_H_ */

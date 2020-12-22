@@ -53,6 +53,10 @@
 #include <wlan_dfs_tgt_api.h>
 #include <wlan_dfs_ioctl.h>
 
+#ifdef WLAN_IOT_SIM_SUPPORT
+#include <wlan_iot_sim_public_structs.h>
+#endif
+
 /* Number of dev type: Direct attach and Offload */
 #define MAX_DEV_TYPE 2
 
@@ -110,6 +114,12 @@ typedef struct wake_lock_stats stats_wake_lock;
  * control plane statistics component
  * @cp_stats_attach:	function pointer to register events from FW
  * @cp_stats_detach:	function pointer to unregister events from FW
+ * @inc_wake_lock_stats: function pointer to increase wake lock stats
+ * @send_req_stats: function pointer to send request stats command to FW
+ * @send_req_peer_stats: function pointer to send request peer stats command
+ *                       to FW
+ * @set_pdev_stats_update_period: function pointer to set pdev stats update
+ *                                period to FW
  */
 struct wlan_lmac_if_cp_stats_tx_ops {
 	QDF_STATUS (*cp_stats_attach)(struct wlan_objmgr_psoc *psoc);
@@ -120,6 +130,11 @@ struct wlan_lmac_if_cp_stats_tx_ops {
 	QDF_STATUS (*send_req_stats)(struct wlan_objmgr_psoc *psoc,
 				     enum stats_req_type type,
 				     stats_req_info *req);
+	QDF_STATUS (*send_req_peer_stats)(struct wlan_objmgr_psoc *psoc,
+					  stats_req_info *req);
+	QDF_STATUS (*set_pdev_stats_update_period)(
+					struct wlan_objmgr_psoc *psoc,
+					uint8_t pdev_id, uint32_t val);
 };
 
 /**
@@ -405,15 +420,6 @@ struct wlan_lmac_if_p2p_tx_ops {
 
 /**
  * struct wlan_lmac_if_atf_tx_ops - ATF specific tx function pointers
- * @atf_node_unblock:             Resume node
- * @atf_set_enable_disable:       Set atf enable/disable
- * @atf_tokens_used:              Get used atf tokens
- * @atf_get_unused_txtoken:       Get unused atf tokens
- * @atf_peer_resume:              Resume peer
- * @atf_tokens_unassigned:        Set unassigned atf tockens
- * @atf_capable_peer:             Set atf state change
- * @atf_airtime_estimate:         Get estimated airtime
- * @atf_debug_peerstate:          Get peer state
  * @atf_enable_disable:           Set atf peer stats enable/disable
  * @atf_ssid_sched_policy:        Set ssid schedule policy
  * @atf_set:                      Set atf
@@ -421,37 +427,13 @@ struct wlan_lmac_if_p2p_tx_ops {
  * @atf_set_group_ac:             Set atf Group AC
  * @atf_send_peer_request:        Send peer requests
  * @atf_set_bwf:                  Set bandwidth fairness
- * @atf_peer_buf_held:            Get buffer held
  * @atf_get_peer_airtime:         Get peer airtime
- * @atf_get_chbusyper:            Get channel busy
  * @atf_open:                     ATF open
- * @atf_register_event_handler    ATF register wmi event handlers
- * @atf_unregister_event_handler  ATF unregister wmi event handlers
+ * @atf_register_event_handler:   ATF register wmi event handlers
+ * @atf_unregister_event_handler: ATF unregister wmi event handlers
+ * @atf_set_ppdu_stats:           ATF set ppdu stats to get ATF stats
  */
 struct wlan_lmac_if_atf_tx_ops {
-	void (*atf_node_unblock)(struct wlan_objmgr_pdev *pdev,
-				 struct wlan_objmgr_peer *peer);
-	void (*atf_set_enable_disable)(struct wlan_objmgr_pdev *pdev,
-				       uint8_t value);
-	uint8_t (*atf_tokens_used)(struct wlan_objmgr_pdev *pdev,
-				   struct wlan_objmgr_peer *peer);
-	void (*atf_get_unused_txtoken)(struct wlan_objmgr_pdev *pdev,
-				       struct wlan_objmgr_peer *peer,
-				       int *unused_token);
-	void (*atf_peer_resume)(struct wlan_objmgr_pdev *pdev,
-				struct wlan_objmgr_peer *peer);
-	void (*atf_tokens_unassigned)(struct wlan_objmgr_pdev *pdev,
-				      uint32_t tokens_unassigned);
-	void (*atf_capable_peer)(struct wlan_objmgr_pdev *pdev,
-				 struct wlan_objmgr_peer *peer,
-				 uint8_t val, uint8_t atfstate_change);
-	uint32_t (*atf_airtime_estimate)(struct wlan_objmgr_pdev *pdev,
-					 struct wlan_objmgr_peer *peer,
-					 uint32_t tput,
-					 uint32_t *possible_tput);
-	uint32_t (*atf_debug_peerstate)(struct wlan_objmgr_pdev *pdev,
-					struct wlan_objmgr_peer *peer,
-					struct atf_peerstate *peerstate);
 	int32_t (*atf_enable_disable)(struct wlan_objmgr_vdev *vdev,
 				      uint8_t value);
 	int32_t (*atf_ssid_sched_policy)(struct wlan_objmgr_vdev *vdev,
@@ -470,12 +452,12 @@ struct wlan_lmac_if_atf_tx_ops {
 					 uint8_t atf_tput_based);
 	int32_t (*atf_set_bwf)(struct wlan_objmgr_pdev *pdev,
 			       struct pdev_bwf_req *bwf_req);
-	uint32_t (*atf_peer_buf_held)(struct wlan_objmgr_peer *peer);
 	uint32_t (*atf_get_peer_airtime)(struct wlan_objmgr_peer *peer);
-	uint32_t (*atf_get_chbusyper)(struct wlan_objmgr_pdev *pdev);
 	void (*atf_open)(struct wlan_objmgr_psoc *psoc);
 	void (*atf_register_event_handler)(struct wlan_objmgr_psoc *psoc);
 	void (*atf_unregister_event_handler)(struct wlan_objmgr_psoc *psoc);
+	void (*atf_set_ppdu_stats)(struct wlan_objmgr_pdev *pdev,
+				   uint8_t value);
 };
 #endif
 
@@ -546,10 +528,10 @@ struct wlan_lmac_if_sa_api_tx_ops {
  * a successful commit session.
  */
 struct wlan_lmac_if_cfr_tx_ops {
-	int (*cfr_init_pdev)(struct wlan_objmgr_psoc *psoc,
-			     struct wlan_objmgr_pdev *pdev);
-	int (*cfr_deinit_pdev)(struct wlan_objmgr_psoc *psoc,
-			       struct wlan_objmgr_pdev *pdev);
+	QDF_STATUS (*cfr_init_pdev)(struct wlan_objmgr_psoc *psoc,
+				    struct wlan_objmgr_pdev *pdev);
+	QDF_STATUS (*cfr_deinit_pdev)(struct wlan_objmgr_psoc *psoc,
+				      struct wlan_objmgr_pdev *pdev);
 	int (*cfr_enable_cfr_timer)(struct wlan_objmgr_pdev *pdev,
 				    uint32_t cfr_timer);
 	int (*cfr_start_capture)(struct wlan_objmgr_pdev *pdev,
@@ -629,6 +611,7 @@ struct wlan_lmac_if_sptrl_tx_ops {
 					 enum spectral_scan_mode smode);
 	QDF_STATUS (*sptrlto_start_spectral_scan)
 					(struct wlan_objmgr_pdev *pdev,
+					 uint8_t vdev_id,
 					 const enum spectral_scan_mode smode,
 					 enum spectral_cp_error_code *err);
 	QDF_STATUS (*sptrlto_stop_spectral_scan)
@@ -676,12 +659,16 @@ struct wlan_lmac_if_sptrl_tx_ops {
 };
 #endif /* WLAN_CONV_SPECTRAL_ENABLE */
 
-struct simulation_test_params;
-
+#ifdef WLAN_IOT_SIM_SUPPORT
+/**
+ * struct wlan_lmac_if_iot_sim_tx_ops - iot_sim south bound Tx operations
+ * @iot_sim_send_cmd: To send wmi simulation command
+ **/
 struct wlan_lmac_if_iot_sim_tx_ops {
 	QDF_STATUS (*iot_sim_send_cmd)(struct wlan_objmgr_pdev *pdev,
 				       struct simulation_test_params *param);
 };
+#endif
 
 #ifdef WIFI_POS_CONVERGED
 /*
@@ -690,12 +677,25 @@ struct wlan_lmac_if_iot_sim_tx_ops {
  * @data_req_tx: function pointer to send wifi_pos req to firmware
  * @wifi_pos_register_events: function pointer to register wifi_pos events
  * @wifi_pos_deregister_events: function pointer to deregister wifi_pos events
+ * @wifi_pos_convert_pdev_id_host_to_target: function pointer to get target
+ * pdev_id from host pdev_id.
+ * @wifi_pos_convert_pdev_id_target_to_host: function pointer to get host
+ * pdev_id from target pdev_id.
+ * @wifi_pos_get_vht_ch_width: Function pointer to get max supported bw by FW
  */
 struct wlan_lmac_if_wifi_pos_tx_ops {
 	QDF_STATUS (*data_req_tx)(struct wlan_objmgr_pdev *pdev,
 				  struct oem_data_req *req);
 	QDF_STATUS (*wifi_pos_register_events)(struct wlan_objmgr_psoc *psoc);
 	QDF_STATUS (*wifi_pos_deregister_events)(struct wlan_objmgr_psoc *psoc);
+	QDF_STATUS (*wifi_pos_convert_pdev_id_host_to_target)(
+			struct wlan_objmgr_psoc *psoc, uint32_t host_pdev_id,
+			uint32_t *target_pdev_id);
+	QDF_STATUS (*wifi_pos_convert_pdev_id_target_to_host)(
+			struct wlan_objmgr_psoc *psoc, uint32_t target_pdev_id,
+			uint32_t *host_pdev_id);
+	QDF_STATUS (*wifi_pos_get_vht_ch_width)(struct wlan_objmgr_psoc *psoc,
+						enum phy_ch_width *ch_width);
 };
 #endif
 
@@ -943,6 +943,7 @@ struct wlan_lmac_if_dfs_tx_ops {
  * @tgt_is_tgt_type_qca9888: To check QCA9888 target type.
  * @tgt_is_tgt_type_adrastea: To check QCS40X target type.
  * @tgt_is_tgt_type_qcn9000: To check QCN9000 (Pine) target type.
+ * @tgt_is_tgt_type_qcn9100: To check QCN9100 (Spruce) target type.
  * @tgt_get_tgt_type:        Get target type
  * @tgt_get_tgt_version:     Get target version
  * @tgt_get_tgt_revision:    Get target revision
@@ -954,6 +955,7 @@ struct wlan_lmac_if_target_tx_ops {
 	bool (*tgt_is_tgt_type_qca9888)(uint32_t);
 	bool (*tgt_is_tgt_type_adrastea)(uint32_t);
 	bool (*tgt_is_tgt_type_qcn9000)(uint32_t);
+	bool (*tgt_is_tgt_type_qcn9100)(uint32_t);
 	uint32_t (*tgt_get_tgt_type)(struct wlan_objmgr_psoc *psoc);
 	uint32_t (*tgt_get_tgt_version)(struct wlan_objmgr_psoc *psoc);
 	uint32_t (*tgt_get_tgt_revision)(struct wlan_objmgr_psoc *psoc);
@@ -1004,6 +1006,23 @@ struct wlan_lmac_if_coex_tx_ops {
 };
 #endif
 
+#ifdef WLAN_FEATURE_GPIO_CFG
+struct gpio_config_params;
+struct gpio_output_params;
+
+/**
+ * struct wlan_lmac_if_gpio_tx_ops - south bound tx function pointers for gpio
+ * @set_gpio_config: function pointert to send gpio config to fw
+ * @set_gpio_output: function pointert to send gpio output to fw
+ */
+struct wlan_lmac_if_gpio_tx_ops {
+	QDF_STATUS (*set_gpio_config)(struct wlan_objmgr_psoc *psoc,
+				      struct gpio_config_params *param);
+	QDF_STATUS (*set_gpio_output)(struct wlan_objmgr_psoc *psoc,
+				      struct gpio_output_params *param);
+};
+#endif
+
 /**
  * struct wlan_lmac_if_tx_ops - south bound tx function pointers
  * @mgmt_txrx_tx_ops: mgmt txrx tx ops
@@ -1012,6 +1031,7 @@ struct wlan_lmac_if_coex_tx_ops {
  * @green_ap_tx_ops: green_ap tx_ops
  * @cp_stats_tx_ops: cp stats tx_ops
  * @coex_ops: coex tx_ops
+ * @gpio_ops: gpio tx_ops
  *
  * Callback function tabled to be registered with umac.
  * umac will use the functional table to send events/frames to wmi
@@ -1028,7 +1048,9 @@ struct wlan_lmac_if_tx_ops {
 #ifdef CONVERGED_P2P_ENABLE
 	struct wlan_lmac_if_p2p_tx_ops p2p;
 #endif
+#ifdef WLAN_IOT_SIM_SUPPORT
 	struct wlan_lmac_if_iot_sim_tx_ops iot_sim_tx_ops;
+#endif
 #ifdef QCA_SUPPORT_SON
 	struct wlan_lmac_if_son_tx_ops son_tx_ops;
 #endif
@@ -1091,6 +1113,10 @@ struct wlan_lmac_if_tx_ops {
 #ifdef FEATURE_COEX
 	struct wlan_lmac_if_coex_tx_ops coex_ops;
 #endif
+
+#ifdef WLAN_FEATURE_GPIO_CFG
+	struct wlan_lmac_if_gpio_tx_ops gpio_ops;
+#endif
 };
 
 /**
@@ -1136,6 +1162,8 @@ struct wlan_lmac_if_reg_rx_ops {
 			bool val);
 	QDF_STATUS (*reg_set_6ghz_supported)(struct wlan_objmgr_psoc *psoc,
 					     bool val);
+	QDF_STATUS (*reg_set_5dot9_ghz_supported)(struct wlan_objmgr_psoc
+						  *psoc, bool val);
 	QDF_STATUS (*get_dfs_region)(struct wlan_objmgr_pdev *pdev,
 			enum dfs_reg *dfs_reg);
 	QDF_STATUS (*reg_ch_avoid_event_handler)(struct wlan_objmgr_psoc *psoc,
@@ -1158,6 +1186,8 @@ struct wlan_lmac_if_reg_rx_ops {
 					  uint32_t wireless_modes);
 	bool
 	(*reg_is_range_only6g)(qdf_freq_t low_freq, qdf_freq_t high_freq);
+	bool
+	(*reg_is_range_overlap_6g)(qdf_freq_t low_freq, qdf_freq_t high_freq);
 	QDF_STATUS (*reg_disable_chan_coex)(struct wlan_objmgr_pdev *pdev,
 					    uint8_t unii_5g_bitmap);
 	bool (*reg_ignore_fw_reg_offload_ind)(struct wlan_objmgr_psoc *psoc);
@@ -1198,36 +1228,23 @@ struct wlan_lmac_if_p2p_rx_ops {
 
 /**
  * struct wlan_lmac_if_atf_rx_ops - ATF south bound rx function pointers
- * @atf_get_atf_commit:                Get ATF commit state
  * @atf_get_fmcap:                     Get firmware capability for ATF
- * @atf_get_obss_scale:                Get OBSS scale
  * @atf_get_mode:                      Get mode of ATF
  * @atf_get_msdu_desc:                 Get msdu desc for ATF
  * @atf_get_max_vdevs:                 Get maximum vdevs for a Radio
  * @atf_get_peers:                     Get number of peers for a radio
  * @atf_get_tput_based:                Get throughput based enabled/disabled
  * @atf_get_logging:                   Get logging enabled/disabled
- * @atf_update_buf_held:               Set Num buf held by subgroup
  * @atf_get_ssidgroup:                 Get ssid group state
  * @atf_get_vdev_ac_blk_cnt:           Get AC block count for vdev
  * @atf_get_peer_blk_txbitmap:         Get peer tx traffic AC bitmap
  * @atf_get_vdev_blk_txtraffic:        Get vdev tx traffic block state
  * @atf_get_sched:                     Get ATF scheduled policy
- * @atf_get_tx_tokens:                 Get Tx tokens
- * @atf_buf_distribute:                Distribute Buffers
- * @atf_get_tx_tokens_common:          Get common tx tokens
- * @atf_get_shadow_alloted_tx_tokens:  Get shadow alloted tx tokens
  * @atf_get_peer_stats:                Get atf peer stats
- * @atf_adjust_subgroup_txtokens:      Adjust tokens based on actual duration
- * @atf_account_subgroup_txtokens:     Estimate tx time & update subgroup tokens
- * @atf_subgroup_free_buf:             On tx completion, update num buf held
- * @atf_update_subgroup_tidstate:      TID state (Paused/unpaused) of node
- * @atf_get_subgroup_airtime:          Get subgroup airtime
  * @atf_get_token_allocated:           Get atf token allocated
  * @atf_get_token_utilized:            Get atf token utilized
  * @atf_set_sched:                     Set ATF schedule policy
  * @atf_set_fmcap:                     Set firmware capability for ATF
- * @atf_set_obss_scale:                Set ATF obss scale
  * @atf_set_msdu_desc:                 Set msdu desc
  * @atf_set_max_vdevs:                 Set maximum vdevs number
  * @atf_set_peers:                     Set peers number
@@ -1237,54 +1254,28 @@ struct wlan_lmac_if_p2p_rx_ops {
  * @atf_peer_unblk_txtraffic:          Unblock peer tx traffic
  * @atf_set_token_allocated:           Set atf token allocated
  * @atf_set_token_utilized:            Set atf token utilized
+ * @atf_process_ppdu_stats:            Process PPDU stats to get ATF stats
+ * @atf_is_stats_enabled:              Check ATF stats enabled or not
  */
 struct wlan_lmac_if_atf_rx_ops {
-	uint8_t (*atf_get_atf_commit)(struct wlan_objmgr_pdev *pdev);
 	uint32_t (*atf_get_fmcap)(struct wlan_objmgr_psoc *psoc);
-	uint32_t (*atf_get_obss_scale)(struct wlan_objmgr_pdev *pdev);
 	uint32_t (*atf_get_mode)(struct wlan_objmgr_psoc *psoc);
 	uint32_t (*atf_get_msdu_desc)(struct wlan_objmgr_psoc *psoc);
 	uint32_t (*atf_get_max_vdevs)(struct wlan_objmgr_psoc *psoc);
 	uint32_t (*atf_get_peers)(struct wlan_objmgr_psoc *psoc);
 	uint32_t (*atf_get_tput_based)(struct wlan_objmgr_pdev *pdev);
 	uint32_t (*atf_get_logging)(struct wlan_objmgr_pdev *pdev);
-	void*   (*atf_update_buf_held)(struct wlan_objmgr_peer *peer,
-				       int8_t ac);
 	uint32_t (*atf_get_ssidgroup)(struct wlan_objmgr_pdev *pdev);
 	uint32_t (*atf_get_vdev_ac_blk_cnt)(struct wlan_objmgr_vdev *vdev);
 	uint8_t (*atf_get_peer_blk_txbitmap)(struct wlan_objmgr_peer *peer);
 	uint8_t (*atf_get_vdev_blk_txtraffic)(struct wlan_objmgr_vdev *vdev);
 	uint32_t (*atf_get_sched)(struct wlan_objmgr_pdev *pdev);
-	uint32_t (*atf_get_tx_tokens)(struct wlan_objmgr_peer *peer);
-	uint32_t (*atf_buf_distribute)(struct wlan_objmgr_pdev *pdev,
-				       struct wlan_objmgr_peer *peer,
-				       int8_t ac);
-	uint32_t (*atf_get_txtokens_common)(struct wlan_objmgr_pdev *pdev);
-	uint32_t (*atf_get_shadow_alloted_tx_tokens)(
-						struct wlan_objmgr_pdev *pdev);
 	void (*atf_get_peer_stats)(struct wlan_objmgr_peer *peer,
 				   struct atf_stats *stats);
-	QDF_STATUS
-	(*atf_adjust_subgroup_txtokens)(struct wlan_objmgr_peer *pr,
-					uint8_t ac, uint32_t actual_duration,
-					uint32_t est_duration);
-	QDF_STATUS
-	(*atf_account_subgroup_txtokens)(struct wlan_objmgr_peer *pr,
-					 uint8_t ac,
-					 uint32_t duration);
-	QDF_STATUS
-	(*atf_subgroup_free_buf)(uint16_t buf_acc_size, void *bf_atf_sg);
-	QDF_STATUS
-	(*atf_update_subgroup_tidstate)(struct wlan_objmgr_peer *peer,
-					uint8_t atf_nodepaused);
-	uint8_t (*atf_get_subgroup_airtime)(struct wlan_objmgr_peer *peer,
-					    uint8_t ac);
 	uint16_t (*atf_get_token_allocated)(struct wlan_objmgr_peer *peer);
 	uint16_t (*atf_get_token_utilized)(struct wlan_objmgr_peer *peer);
 	void (*atf_set_sched)(struct wlan_objmgr_pdev *pdev, uint32_t value);
 	void (*atf_set_fmcap)(struct wlan_objmgr_psoc *psoc, uint32_t value);
-	void (*atf_set_obss_scale)(struct wlan_objmgr_pdev *pdev,
-				   uint32_t value);
 	void (*atf_set_msdu_desc)(struct wlan_objmgr_psoc *psoc,
 				  uint32_t value);
 	void (*atf_set_max_vdevs)(struct wlan_objmgr_psoc *psoc,
@@ -1301,7 +1292,10 @@ struct wlan_lmac_if_atf_rx_ops {
 	void (*atf_set_token_allocated)(struct wlan_objmgr_peer *peer,
 					uint16_t value);
 	void (*atf_set_token_utilized)(struct wlan_objmgr_peer *peer,
-					uint16_t value);
+				       uint16_t value);
+	void (*atf_process_ppdu_stats)(struct wlan_objmgr_pdev *pdev,
+				       qdf_nbuf_t msg);
+	uint8_t (*atf_is_stats_enabled)(struct wlan_objmgr_pdev *pdev);
 };
 #endif
 
@@ -1371,12 +1365,19 @@ struct wlan_lmac_if_sa_api_rx_ops {
  * struct wlan_lmac_if_cfr_rx_ops - CFR south bound rx function pointers
  * @cfr_support_set: Set the CFR support based on FW advert
  * @cfr_info_send: Send cfr info to upper layers
+ * @cfr_capture_count_support_set: Set the capture_count support based on FW
+ * advert
+ * @cfr_mo_marking_support_set: Set MO marking supported based on FW advert
  */
 struct wlan_lmac_if_cfr_rx_ops {
 	void (*cfr_support_set)(struct wlan_objmgr_psoc *psoc, uint32_t value);
 	uint32_t (*cfr_info_send)(struct wlan_objmgr_pdev *pdev, void *head,
 				  size_t hlen, void *data, size_t dlen,
 				  void *tail, size_t tlen);
+	QDF_STATUS (*cfr_capture_count_support_set)(
+			struct wlan_objmgr_psoc *psoc, uint32_t value);
+	QDF_STATUS (*cfr_mo_marking_support_set)(struct wlan_objmgr_psoc *psoc,
+						 uint32_t value);
 };
 #endif
 
@@ -1407,10 +1408,23 @@ struct wlan_lmac_if_sptrl_rx_ops {
 };
 #endif /* WLAN_CONV_SPECTRAL_ENABLE */
 
+#ifdef WLAN_IOT_SIM_SUPPORT
+struct iot_sim_cbacks;
+/**
+ * wlan_lmac_if_iot_sim_rx_ops: iot_sim rx operations
+ * iot_sim_cmd_handler: Applies iot_sim rule in outgoing and incoming frames
+ * iot_sim_register_cb: callback registration with iot_sim
+ **/
 struct wlan_lmac_if_iot_sim_rx_ops {
 	QDF_STATUS (*iot_sim_cmd_handler)(struct wlan_objmgr_vdev *vdev,
-					  qdf_nbuf_t n_buf);
+					  qdf_nbuf_t n_buf,
+					  struct beacon_tmpl_params *bcn_param,
+					  bool tx,
+					  struct mgmt_rx_event_params *param);
+	QDF_STATUS (*iot_sim_register_cb)(struct wlan_objmgr_pdev *pdev,
+					  struct iot_sim_cbacks *cb);
 };
+#endif
 
 #ifdef WIFI_POS_CONVERGED
 /**
@@ -1479,7 +1493,16 @@ struct wlan_lmac_if_wifi_pos_rx_ops {
  * @dfs_reinit_nol_from_psoc_copy:    Reinit DFS NOL from the PSOC NOL copy.
  * @dfs_reinit_precac_lists:          Reinit precac lists from other pdev.
  * @dfs_complete_deferred_tasks:      Process mode switch completion in DFS.
- * @dfs_rcac_sm_deliver_evt:          API to post events to DFS rolling CAC SM.
+ * @dfs_is_agile_rcac_enabled:        Checks if Agile RCAC is enabled.
+ * @dfs_agile_sm_deliver_evt:         API to post events to DFS Agile  SM.
+ * @dfs_set_postnol_freq:             API to set frequency to switch, post NOL.
+ * @dfs_set_postnol_mode:             API to set phymode to switch to, post NOL.
+ * @dfs_set_postnol_cfreq2            API to set secondary center frequency to
+ *                                    switch to, post NOL.
+ * @dfs_get_postnol_freq:             API to get frequency to switch, post NOL.
+ * @dfs_get_postnol_mode:             API to get phymode to switch to, post NOL.
+ * @dfs_get_postnol_cfreq2:           API to get secondary center frequency to
+ *                                    switch to, post NOL.
  */
 struct wlan_lmac_if_dfs_rx_ops {
 	QDF_STATUS (*dfs_get_radars)(struct wlan_objmgr_pdev *pdev);
@@ -1671,9 +1694,25 @@ struct wlan_lmac_if_dfs_rx_ops {
 					qdf_freq_t rcac_freq);
 	QDF_STATUS (*dfs_get_rcac_freq)(struct wlan_objmgr_pdev *pdev,
 					qdf_freq_t *rcac_freq);
-	void (*dfs_rcac_sm_deliver_evt)(struct wlan_objmgr_pdev *pdev,
-					enum dfs_rcac_sm_evt event);
 	bool (*dfs_is_agile_rcac_enabled)(struct wlan_objmgr_pdev *pdev);
+#endif
+#ifdef QCA_SUPPORT_AGILE_DFS
+	void (*dfs_agile_sm_deliver_evt)(struct wlan_objmgr_pdev *pdev,
+					 enum dfs_agile_sm_evt event);
+#endif
+#ifdef QCA_SUPPORT_DFS_CHAN_POSTNOL
+	QDF_STATUS (*dfs_set_postnol_freq)(struct wlan_objmgr_pdev *pdev,
+					   qdf_freq_t postnol_freq);
+	QDF_STATUS (*dfs_set_postnol_mode)(struct wlan_objmgr_pdev *pdev,
+					   uint8_t postnol_mode);
+	QDF_STATUS (*dfs_set_postnol_cfreq2)(struct wlan_objmgr_pdev *pdev,
+					     qdf_freq_t postnol_cfreq2);
+	QDF_STATUS (*dfs_get_postnol_freq)(struct wlan_objmgr_pdev *pdev,
+					   qdf_freq_t *postnol_freq);
+	QDF_STATUS (*dfs_get_postnol_mode)(struct wlan_objmgr_pdev *pdev,
+					   uint8_t *postnol_mode);
+	QDF_STATUS (*dfs_get_postnol_cfreq2)(struct wlan_objmgr_pdev *pdev,
+					     qdf_freq_t *postnol_cfreq2);
 #endif
 };
 
@@ -1714,8 +1753,8 @@ struct wlan_lmac_if_mlme_rx_ops {
 	QDF_STATUS (*vdev_mgr_multi_vdev_restart_resp)(
 					struct wlan_objmgr_psoc *psoc,
 					struct multi_vdev_restart_resp *rsp);
-#ifdef FEATURE_VDEV_RSP_WAKELOCK
-	struct vdev_mlme_wakelock *(*psoc_get_wakelock_info)(
+#ifdef FEATURE_VDEV_OPS_WAKELOCK
+	struct psoc_mlme_wakelock *(*psoc_get_wakelock_info)(
 				    struct wlan_objmgr_psoc *psoc);
 #endif
 	struct vdev_response_timer *(*psoc_get_vdev_response_timer_info)(
@@ -1752,11 +1791,13 @@ struct wlan_lmac_if_rx_ops {
 	 */
 	 struct wlan_lmac_if_mgmt_txrx_rx_ops mgmt_txrx_rx_ops;
 	 struct wlan_lmac_if_scan_rx_ops scan;
+
 #ifdef CONVERGED_P2P_ENABLE
 	struct wlan_lmac_if_p2p_rx_ops p2p;
 #endif
+#ifdef WLAN_IOT_SIM_SUPPORT
 	struct wlan_lmac_if_iot_sim_rx_ops iot_sim_rx_ops;
-
+#endif
 #ifdef WLAN_ATF_ENABLE
 	struct wlan_lmac_if_atf_rx_ops atf_rx_ops;
 #endif

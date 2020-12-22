@@ -343,7 +343,7 @@ qdf_export_symbol(qdf_trace_deinit);
  *
  * Return: None
  */
-void qdf_trace(uint8_t module, uint8_t code, uint16_t session, uint32_t data)
+void qdf_trace(uint8_t module, uint16_t code, uint16_t session, uint32_t data)
 {
 	tp_qdf_trace_record rec = NULL;
 	unsigned long flags;
@@ -1557,14 +1557,16 @@ void qdf_dp_log_proto_pkt_info(uint8_t *sa, uint8_t *da, uint8_t type,
 		last_ticks_rx[subtype] = curr_ticks;
 
 	if (status == QDF_TX_RX_STATUS_INVALID)
-		qdf_nofl_info("%s %s: SA:%pM DA:%pM",
-			      qdf_get_pkt_type_string(type, subtype),
-			      dir ? "RX":"TX", sa, da);
+		qdf_nofl_debug("%s %s: SA:"QDF_MAC_ADDR_FMT" DA:"QDF_MAC_ADDR_FMT,
+			       qdf_get_pkt_type_string(type, subtype),
+			       dir ? "RX":"TX", QDF_MAC_ADDR_REF(sa),
+			       QDF_MAC_ADDR_REF(da));
 	else
-		qdf_nofl_info("%s %s: SA:%pM DA:%pM msdu_id:%d status: %s",
-			      qdf_get_pkt_type_string(type, subtype),
-			      dir ? "RX":"TX", sa, da, msdu_id,
-			      qdf_get_pkt_status_string(status));
+		qdf_nofl_debug("%s %s: SA:"QDF_MAC_ADDR_FMT" DA:"QDF_MAC_ADDR_FMT" msdu_id:%d status: %s",
+			       qdf_get_pkt_type_string(type, subtype),
+			       dir ? "RX":"TX", QDF_MAC_ADDR_REF(sa),
+			       QDF_MAC_ADDR_REF(da), msdu_id,
+			       qdf_get_pkt_status_string(status));
 }
 
 qdf_export_symbol(qdf_dp_log_proto_pkt_info);
@@ -2084,14 +2086,14 @@ void qdf_dp_display_proto_pkt(struct qdf_dp_trace_record_s *record,
 	loc = qdf_dp_trace_fill_meta_str(prepend_str, sizeof(prepend_str),
 					 index, info, record);
 	DPTRACE_PRINT("%s [%d] [%s] SA: "
-		      QDF_MAC_ADDR_STR " %s DA: "
-		      QDF_MAC_ADDR_STR,
+		      QDF_MAC_ADDR_FMT " %s DA: "
+		      QDF_MAC_ADDR_FMT,
 		      prepend_str,
 		      buf->vdev_id,
 		      qdf_dp_subtype_to_str(buf->subtype),
-		      QDF_MAC_ADDR_ARRAY(buf->sa.bytes),
+		      QDF_MAC_ADDR_REF(buf->sa.bytes),
 		      qdf_dp_dir_to_str(buf->dir),
-		      QDF_MAC_ADDR_ARRAY(buf->da.bytes));
+		      QDF_MAC_ADDR_REF(buf->da.bytes));
 }
 qdf_export_symbol(qdf_dp_display_proto_pkt);
 
@@ -2265,23 +2267,6 @@ void qdf_dp_track_noack_check(qdf_nbuf_t nbuf, enum qdf_proto_subtype *subtype)
 }
 qdf_export_symbol(qdf_dp_track_noack_check);
 
-enum qdf_dp_tx_rx_status qdf_dp_get_status_from_htt(uint8_t status)
-{
-	switch (status) {
-	case QDF_TX_COMP_STATUS_OK:
-		return QDF_TX_RX_STATUS_OK;
-	case QDF_TX_COMP_STATUS_STAT_DISCARD:
-	case QDF_TX_COMP_STATUS_STAT_DROP:
-		return QDF_TX_RX_STATUS_FW_DISCARD;
-	case QDF_TX_COMP_STATUS_STAT_NO_ACK:
-		return QDF_TX_RX_STATUS_NO_ACK;
-	default:
-		return QDF_TX_RX_STATUS_MAX;
-	}
-}
-
-qdf_export_symbol(qdf_dp_get_status_from_htt);
-
 enum qdf_dp_tx_rx_status qdf_dp_get_status_from_a_status(uint8_t status)
 {
 	if (status == QDF_A_STATUS_ERROR)
@@ -2291,23 +2276,12 @@ enum qdf_dp_tx_rx_status qdf_dp_get_status_from_a_status(uint8_t status)
 	else
 		return QDF_TX_RX_STATUS_MAX;
 }
-
 qdf_export_symbol(qdf_dp_get_status_from_a_status);
 
-/**
- * qdf_dp_trace_ptr() - record dptrace
- * @code: dptrace code
- * @pdev_id: pdev_id
- * @data: data
- * @size: size of data
- * @msdu_id: msdu_id
- * @status: return status
- *
- * Return: none
- */
 void qdf_dp_trace_ptr(qdf_nbuf_t nbuf, enum QDF_DP_TRACE_ID code,
 		uint8_t pdev_id, uint8_t *data, uint8_t size,
-		uint16_t msdu_id, uint16_t status)
+		uint16_t msdu_id, uint16_t buf_arg_status,
+		enum qdf_dp_tx_rx_status qdf_tx_status)
 {
 	struct qdf_dp_trace_ptr_buf buf;
 	int buf_size = sizeof(struct qdf_dp_trace_ptr_buf);
@@ -2316,12 +2290,12 @@ void qdf_dp_trace_ptr(qdf_nbuf_t nbuf, enum QDF_DP_TRACE_ID code,
 	pkt_type = qdf_dp_get_pkt_proto_type(nbuf);
 	if ((code == QDF_DP_TRACE_FREE_PACKET_PTR_RECORD ||
 	     code == QDF_DP_TRACE_LI_DP_FREE_PACKET_PTR_RECORD) &&
-	    qdf_dp_proto_log_enable_check(pkt_type, status))
+	    qdf_dp_proto_log_enable_check(pkt_type, qdf_tx_status))
 		qdf_dp_log_proto_pkt_info(nbuf->data + QDF_NBUF_SRC_MAC_OFFSET,
 					 nbuf->data + QDF_NBUF_DEST_MAC_OFFSET,
 					 pkt_type,
 					 qdf_dp_get_pkt_subtype(nbuf, pkt_type),
-					 QDF_TX, msdu_id, status);
+					 QDF_TX, msdu_id, qdf_tx_status);
 
 	if (qdf_dp_enable_check(nbuf, code, QDF_TX) == false)
 		return;
@@ -2331,7 +2305,7 @@ void qdf_dp_trace_ptr(qdf_nbuf_t nbuf, enum QDF_DP_TRACE_ID code,
 
 	qdf_mem_copy(&buf.cookie, data, size);
 	buf.msdu_id = msdu_id;
-	buf.status = status;
+	buf.status = buf_arg_status;
 	qdf_dp_add_record(code, pdev_id, (uint8_t *)&buf, buf_size, NULL, 0,
 			  QDF_NBUF_CB_DP_TRACE_PRINT(nbuf));
 }
@@ -2575,14 +2549,14 @@ static void qdf_dpt_display_proto_pkt_debugfs(qdf_debugfs_file_t file,
 	loc = qdf_dp_trace_fill_meta_str(prepend_str, sizeof(prepend_str),
 					 index, 0, record);
 	qdf_debugfs_printf(file, "%s [%d] [%s] SA: "
-			   QDF_MAC_ADDR_STR " %s DA: "
-			   QDF_MAC_ADDR_STR,
+			   QDF_MAC_ADDR_FMT " %s DA: "
+			   QDF_MAC_ADDR_FMT,
 			   prepend_str,
 			   buf->vdev_id,
 			   qdf_dp_subtype_to_str(buf->subtype),
-			   QDF_MAC_ADDR_ARRAY(buf->sa.bytes),
+			   QDF_MAC_ADDR_REF(buf->sa.bytes),
 			   qdf_dp_dir_to_str(buf->dir),
-			   QDF_MAC_ADDR_ARRAY(buf->da.bytes));
+			   QDF_MAC_ADDR_REF(buf->da.bytes));
 	qdf_debugfs_printf(file, "\n");
 }
 
@@ -2852,26 +2826,27 @@ QDF_STATUS qdf_dpt_dump_stats_debugfs(qdf_debugfs_file_t file,
 			break;
 
 		case QDF_DP_TRACE_HDD_TX_TIMEOUT:
-			qdf_debugfs_printf(file, "DPT: %04d: %s %s\n",
-				i, p_record.time,
-				qdf_dp_code_to_string(p_record.code));
-			qdf_debugfs_printf(file, "%s: HDD TX Timeout\n");
+			qdf_debugfs_printf(
+					file, "DPT: %04d: %llu %s\n",
+					i, p_record.time,
+					qdf_dp_code_to_string(p_record.code));
+			qdf_debugfs_printf(file, "HDD TX Timeout\n");
 			break;
 
 		case QDF_DP_TRACE_HDD_SOFTAP_TX_TIMEOUT:
-			qdf_debugfs_printf(file, "%04d: %s %s\n",
-				i, p_record.time,
-				qdf_dp_code_to_string(p_record.code));
-			qdf_debugfs_printf(file,
-					   "%s: HDD  SoftAP TX Timeout\n");
+			qdf_debugfs_printf(
+					file, "DPT: %04d: %llu %s\n",
+					i, p_record.time,
+					qdf_dp_code_to_string(p_record.code));
+			qdf_debugfs_printf(file, "HDD SoftAP TX Timeout\n");
 			break;
 
 		case QDF_DP_TRACE_CE_FAST_PACKET_ERR_RECORD:
-			qdf_debugfs_printf(file, "DPT: %04d: %s %s\n",
-				i, p_record.time,
-				qdf_dp_code_to_string(p_record.code));
-			qdf_debugfs_printf(file,
-					   "%s: CE Fast Packet Error\n");
+			qdf_debugfs_printf(
+					file, "DPT: %04d: %llu %s\n",
+					i, p_record.time,
+					qdf_dp_code_to_string(p_record.code));
+			qdf_debugfs_printf(file, "CE Fast Packet Error\n");
 			break;
 
 		case QDF_DP_TRACE_MAX:
@@ -3192,6 +3167,10 @@ struct category_name_info g_qdf_category_name[MAX_SUPPORTED_CATEGORY] = {
 	[QDF_MODULE_ID_RPTR] = {"RPTR"},
 	[QDF_MODULE_ID_6GHZ] = {"6GHZ"},
 	[QDF_MODULE_ID_IOT_SIM] = {"IOT_SIM"},
+	[QDF_MODULE_ID_MSCS] = {"MSCS"},
+	[QDF_MODULE_ID_GPIO] = {"GPIO_CFG"},
+	[QDF_MODULE_ID_IFMGR] = {"IF_MGR"},
+	[QDF_MODULE_ID_DIAG] = {"DIAG"},
 };
 qdf_export_symbol(g_qdf_category_name);
 
@@ -3229,9 +3208,86 @@ void qdf_trace_display(void)
 }
 qdf_export_symbol(qdf_trace_display);
 
+#ifdef WLAN_MAX_LOGS_PER_SEC
+static qdf_time_t __log_window_end;
+static qdf_atomic_t __log_window_count;
+uint32_t qdf_rl_print_count = WLAN_MAX_LOGS_PER_SEC;
+uint32_t qdf_rl_print_time = 1;
+uint32_t qdf_rl_print_supressed;
+
+/**
+ * qdf_detected_excessive_logging() - Excessive logging detected
+ *
+ * Track logging count using a quasi-tumbling window.
+ * If the max logging count for a given window is exceeded,
+ * return true else fails.
+ *
+ * Return: true/false
+ */
+bool qdf_detected_excessive_logging(void)
+{
+	qdf_time_t now = qdf_system_ticks();
+	bool excessive_prints = false;
+
+	/*
+	 * If 'now' is more recent than the end of the window, reset.
+	 *
+	 * Note: This is not thread safe, and can result in more than one reset.
+	 * For our purposes, this is fine.
+	 */
+	if (!qdf_atomic_read(&__log_window_count)) {
+		__log_window_end = now + (qdf_system_ticks_per_sec * qdf_rl_print_time);
+	} else if (qdf_system_time_after(now, __log_window_end)) {
+		__log_window_end = now + (qdf_system_ticks_per_sec * qdf_rl_print_time);
+		qdf_atomic_set(&__log_window_count, 0);
+	}
+
+	if (qdf_atomic_inc_return(&__log_window_count) > qdf_rl_print_count)
+		excessive_prints = true;
+
+	return excessive_prints;
+}
+
+void qdf_rl_print_count_set(uint32_t rl_print_count)
+{
+	qdf_rl_print_count = rl_print_count;
+}
+
+qdf_export_symbol(qdf_rl_print_count_set);
+
+void qdf_rl_print_time_set(uint32_t rl_print_time)
+{
+	qdf_rl_print_time = rl_print_time;
+}
+
+qdf_export_symbol(qdf_rl_print_time_set);
+
+static inline void qdf_rl_print_supressed_log(void)
+{
+	if (qdf_rl_print_supressed) {
+		pr_err("QDF Ratelimiting: %d prints supressed",
+		       qdf_rl_print_supressed);
+		qdf_rl_print_supressed = 0;
+	}
+}
+
+static inline void qdf_rl_print_supressed_inc(void)
+{
+	qdf_rl_print_supressed++;
+}
+#else
+#define qdf_rl_print_supressed_log()
+#define qdf_rl_print_supressed_inc()
+#endif /* WLAN_MAX_LOGS_PER_SEC */
+
 #ifdef QDF_TRACE_PRINT_ENABLE
 static inline void print_to_console(char *str_buffer)
 {
+	if (qdf_detected_excessive_logging()) {
+		qdf_rl_print_supressed_inc();
+		return;
+	}
+	qdf_rl_print_supressed_log();
 	pr_err("%s\n", str_buffer);
 }
 #else
@@ -3273,13 +3329,17 @@ void qdf_trace_msg_cmn(unsigned int idx,
 
 	/* Check if category passed is valid */
 	if (category < 0 || category >= MAX_SUPPORTED_CATEGORY) {
-		pr_info("%s: Invalid category: %d\n", __func__, category);
+		vscnprintf(str_buffer, QDF_TRACE_BUFFER_SIZE, str_format, val);
+		pr_info("%s: Invalid category: %d, log: %s\n",
+			__func__, category, str_buffer);
 		return;
 	}
 
 	/* Check if verbose mask is valid */
 	if (verbose < 0 || verbose >= QDF_TRACE_LEVEL_MAX) {
-		pr_info("%s: Invalid verbose level %d\n", __func__, verbose);
+		vscnprintf(str_buffer, QDF_TRACE_BUFFER_SIZE, str_format, val);
+		pr_info("%s: Invalid verbose level %d, log: %s\n",
+			__func__, verbose, str_buffer);
 		return;
 	}
 
@@ -3657,6 +3717,10 @@ static void set_default_trace_levels(struct category_info *cinfo)
 		[QDF_MODULE_ID_RPTR] = QDF_TRACE_LEVEL_INFO,
 		[QDF_MODULE_ID_6GHZ] = QDF_TRACE_LEVEL_ERROR,
 		[QDF_MODULE_ID_IOT_SIM] = QDF_TRACE_LEVEL_ERROR,
+		[QDF_MODULE_ID_MSCS] = QDF_TRACE_LEVEL_INFO,
+		[QDF_MODULE_ID_GPIO] = QDF_TRACE_LEVEL_NONE,
+		[QDF_MODULE_ID_IFMGR] = QDF_TRACE_LEVEL_ERROR,
+		[QDF_MODULE_ID_DIAG] = QDF_TRACE_LEVEL_ERROR,
 	};
 
 	for (i = 0; i < MAX_SUPPORTED_CATEGORY; i++) {

@@ -290,8 +290,7 @@ static inline void wlan_crypto_put_be64(u8 *a, u64 val)
 #define CLEAR_PARAM(__param, __val)  ((__param) &= ((~1) << (__val)))
 
 
-#define RESET_AUTHMODE(_param)       ((_param)->authmodeset = \
-					(1 << WLAN_CRYPTO_AUTH_OPEN))
+#define RESET_AUTHMODE(_param)       ((_param)->authmodeset = 0)
 
 #define SET_AUTHMODE(_param, _mode)  ((_param)->authmodeset |= (1 << (_mode)))
 #define HAS_AUTHMODE(_param, _mode)  ((_param)->authmodeset &  (1 << (_mode)))
@@ -310,8 +309,7 @@ static inline void wlan_crypto_put_be64(u8 *a, u64 val)
 		(((_param1)->authmodeset & (_param2)->authmodeset) != 0)
 
 
-#define RESET_UCAST_CIPHERS(_param)   ((_param)->ucastcipherset =\
-					(1 << WLAN_CRYPTO_CIPHER_NONE))
+#define RESET_UCAST_CIPHERS(_param)   ((_param)->ucastcipherset = 0)
 #define SET_UCAST_CIPHER(_param, _c)  ((_param)->ucastcipherset |= (1 << (_c)))
 #define HAS_UCAST_CIPHER(_param, _c)  ((_param)->ucastcipherset & (1 << (_c)))
 
@@ -332,8 +330,7 @@ static inline void wlan_crypto_put_be64(u8 *a, u64 val)
 #define UCIPHER_IS_SMS4(_param)    \
 		HAS_UCAST_CIPHER((_param), WLAN_CRYPTO_CIPHER_WAPI_SMS4)
 
-#define RESET_MCAST_CIPHERS(_param)   ((_param)->mcastcipherset = \
-					(1 << WLAN_CRYPTO_CIPHER_NONE))
+#define RESET_MCAST_CIPHERS(_param)   ((_param)->mcastcipherset = 0)
 #define SET_MCAST_CIPHER(_param, _c)  ((_param)->mcastcipherset |= (1 << (_c)))
 #define HAS_MCAST_CIPHER(_param, _c)  ((_param)->mcastcipherset & (1 << (_c)))
 #define HAS_ANY_MCAST_CIPHER(_param)  ((_param)->mcastcipherset)
@@ -520,6 +517,12 @@ static inline uint8_t ieee80211_hdrsize(const void *data)
 			== WLAN_FC0_STYPE_QOS_DATA))) {
 		size += sizeof(uint16_t);
 		/* Qos frame with Order bit set indicates an HTC frame */
+		if (hdr->i_fc[1] & WLAN_FC1_ORDER)
+			size += (sizeof(uint8_t)*4);
+	}
+	if (((WLAN_FC0_GET_STYPE(hdr->i_fc[0])
+			== WLAN_FC0_STYPE_ACTION))) {
+		/* Action frame with Order bit set indicates an HTC frame */
 		if (hdr->i_fc[1] & WLAN_FC1_ORDER)
 			size += (sizeof(uint8_t)*4);
 	}

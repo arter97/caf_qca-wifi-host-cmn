@@ -21,9 +21,6 @@
 #include "spectral_ol_api_i.h"
 #include <qdf_mem.h>
 #include <qdf_types.h>
-#ifdef DA_SUPPORT
-#include "spectral_da_api_i.h"
-#endif
 #include <wlan_spectral_public_structs.h>
 #include <wlan_cfg80211_spectral.h>
 #include <cfg_ucfg_api.h>
@@ -32,6 +29,7 @@
  * spectral_get_vdev() - Get pointer to vdev to be used for Spectral
  * operations
  * @pdev: Pointer to pdev
+ * @vdev_id: vdev_id
  *
  * Spectral operates on pdev. However, in order to retrieve some WLAN
  * properties, a vdev is required. To facilitate this, the function returns the
@@ -50,14 +48,17 @@
  * Return: Pointer to vdev on success, NULL on failure
  */
 static struct wlan_objmgr_vdev*
-spectral_get_vdev(struct wlan_objmgr_pdev *pdev)
+spectral_get_vdev(struct wlan_objmgr_pdev *pdev, uint8_t vdev_id)
 {
 	struct wlan_objmgr_vdev *vdev = NULL;
 
 	qdf_assert_always(pdev);
 
-	vdev = wlan_objmgr_pdev_get_first_vdev(pdev, WLAN_SPECTRAL_ID);
-
+	if (vdev_id == WLAN_INVALID_VDEV_ID)
+		vdev = wlan_objmgr_pdev_get_first_vdev(pdev, WLAN_SPECTRAL_ID);
+	else
+		vdev = wlan_objmgr_get_vdev_by_id_from_pdev(pdev, vdev_id,
+							    WLAN_SPECTRAL_ID);
 	if (!vdev) {
 		spectral_warn("Unable to get first vdev of pdev");
 		return NULL;
@@ -79,30 +80,22 @@ spectral_get_vdev(struct wlan_objmgr_pdev *pdev)
 static void
 spectral_register_cfg80211_handlers(struct wlan_objmgr_pdev *pdev)
 {
-	wlan_cfg80211_register_spectral_cmd_handler(
-		pdev,
-		SPECTRAL_SCAN_START_HANDLER_IDX,
-		wlan_cfg80211_spectral_scan_config_and_start);
-	wlan_cfg80211_register_spectral_cmd_handler(
-		pdev,
-		SPECTRAL_SCAN_STOP_HANDLER_IDX,
-		wlan_cfg80211_spectral_scan_stop);
-	wlan_cfg80211_register_spectral_cmd_handler(
-		pdev,
-		SPECTRAL_SCAN_GET_CONFIG_HANDLER_IDX,
-		wlan_cfg80211_spectral_scan_get_config);
-	wlan_cfg80211_register_spectral_cmd_handler(
-		pdev,
-		SPECTRAL_SCAN_GET_DIAG_STATS_HANDLER_IDX,
-		wlan_cfg80211_spectral_scan_get_diag_stats);
-	wlan_cfg80211_register_spectral_cmd_handler(
-		pdev,
-		SPECTRAL_SCAN_GET_CAP_HANDLER_IDX,
-		wlan_cfg80211_spectral_scan_get_cap);
-	wlan_cfg80211_register_spectral_cmd_handler(
-		pdev,
-		SPECTRAL_SCAN_GET_STATUS_HANDLER_IDX,
-		wlan_cfg80211_spectral_scan_get_status);
+	struct spectral_cfg80211_vendor_cmd_handlers handlers = {0};
+
+	handlers.wlan_cfg80211_spectral_scan_start =
+			wlan_cfg80211_spectral_scan_config_and_start;
+	handlers.wlan_cfg80211_spectral_scan_stop =
+			wlan_cfg80211_spectral_scan_stop;
+	handlers.wlan_cfg80211_spectral_scan_get_config =
+			wlan_cfg80211_spectral_scan_get_config;
+	handlers.wlan_cfg80211_spectral_scan_get_diag_stats =
+			wlan_cfg80211_spectral_scan_get_diag_stats;
+	handlers.wlan_cfg80211_spectral_scan_get_cap =
+			wlan_cfg80211_spectral_scan_get_cap;
+	handlers.wlan_cfg80211_spectral_scan_get_status =
+			wlan_cfg80211_spectral_scan_get_status;
+
+	wlan_cfg80211_register_spectral_cmd_handler(pdev, &handlers);
 }
 #else
 static void
@@ -318,7 +311,7 @@ spectral_control_cmn(struct wlan_objmgr_pdev *pdev,
 			 * Check if any of the inactive Rx antenna
 			 * chains is set active in spectral chainmask
 			 */
-			vdev = spectral_get_vdev(pdev);
+			vdev = spectral_get_vdev(pdev, sscan_req->vdev_id);
 			if (!vdev)
 				goto bad;
 
@@ -406,7 +399,8 @@ spectral_control_cmn(struct wlan_objmgr_pdev *pdev,
 
 	case SPECTRAL_ACTIVATE_SCAN:
 		err = &sscan_req->action_req.sscan_err_code;
-		ret = sc->sptrlc_start_spectral_scan(pdev, smode, err);
+		ret = sc->sptrlc_start_spectral_scan(pdev, sscan_req->vdev_id,
+						     smode, err);
 		if (QDF_IS_STATUS_ERROR(ret))
 			goto bad;
 		break;
@@ -440,7 +434,7 @@ spectral_control_cmn(struct wlan_objmgr_pdev *pdev,
 		{
 			uint32_t chan_width;
 
-			vdev = spectral_get_vdev(pdev);
+			vdev = spectral_get_vdev(pdev, sscan_req->vdev_id);
 			if (!vdev)
 				goto bad;
 
@@ -498,26 +492,6 @@ spectral_ctx_deinit(struct spectral_context *sc)
 	}
 }
 
-#ifdef DA_SUPPORT
-/**
- * wlan_spectral_init_da() - init context of DA devices
- *
- * init context of DA device
- *
- * Return: void
- */
-static void
-wlan_spectral_init_da(struct spectral_context *sc)
-{
-	spectral_ctx_init_da(sc);
-}
-#else
-static void
-wlan_spectral_init_da(struct spectral_context *sc)
-{
-}
-#endif
-
 QDF_STATUS
 wlan_spectral_psoc_obj_create_handler(struct wlan_objmgr_psoc *psoc, void *arg)
 {
@@ -543,8 +517,6 @@ wlan_spectral_psoc_obj_create_handler(struct wlan_objmgr_psoc *psoc, void *arg)
 	sc->psoc_obj = psoc;
 	if (wlan_objmgr_psoc_get_dev_type(psoc) == WLAN_DEV_OL)
 		spectral_ctx_init_ol(sc);
-	else if (wlan_objmgr_psoc_get_dev_type(psoc) == WLAN_DEV_DA)
-		wlan_spectral_init_da(sc);
 	wlan_objmgr_psoc_component_obj_attach(psoc, WLAN_UMAC_COMP_SPECTRAL,
 					      (void *)sc, QDF_STATUS_SUCCESS);
 

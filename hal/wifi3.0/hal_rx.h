@@ -21,6 +21,7 @@
 
 #include <hal_api.h>
 
+#define HAL_INVALID_PPDU_ID    0xFFFFFFFF
 #define HAL_RX_OFFSET(block, field) block##_##field##_OFFSET
 #define HAL_RX_LSB(block, field) block##_##field##_LSB
 #define HAL_RX_MASk(block, field) block##_##field##_MASK
@@ -38,6 +39,16 @@
 #ifndef RX_MONITOR_BUFFER_SIZE
 #define RX_MONITOR_BUFFER_SIZE  2048
 #endif
+
+/* MONITOR STATUS BUFFER SIZE = 1408 data bytes, buffer allocation of 2k bytes
+ * including buffer reservation, buffer alignment and skb shared info size.
+ */
+#define RX_MON_STATUS_BASE_BUF_SIZE    2048
+#define RX_MON_STATUS_BUF_ALIGN  128
+#define RX_MON_STATUS_BUF_RESERVATION  128
+#define RX_MON_STATUS_BUF_SIZE  (RX_MON_STATUS_BASE_BUF_SIZE - \
+				 (RX_MON_STATUS_BUF_RESERVATION + \
+				  RX_MON_STATUS_BUF_ALIGN + QDF_SHINFO_SIZE))
 
 /* HAL_RX_NON_QOS_TID = NON_QOS_TID which is 16 */
 #define HAL_RX_NON_QOS_TID 16
@@ -71,6 +82,34 @@ struct hal_wbm_err_desc_info {
 		pool_id:2,
 		msdu_continued:1,
 		reserved_2:2;
+};
+
+/**
+ * hal_rx_mon_dest_buf_info: Structure to hold rx mon dest buffer info
+ * @first_buffer: First buffer of MSDU
+ * @last_buffer: Last buffer of MSDU
+ * @is_decap_raw: Is RAW Frame
+ * @reserved_1: Reserved
+ *
+ * MSDU with continuation:
+ *  -----------------------------------------------------------
+ * | first_buffer:1   | first_buffer: 0 | ... | first_buffer: 0 |
+ * | last_buffer :0   | last_buffer : 0 | ... | last_buffer : 0 |
+ * | is_decap_raw:1/0 |      Same as earlier  |  Same as earlier|
+ *  -----------------------------------------------------------
+ *
+ * Single buffer MSDU:
+ *  ------------------
+ * | first_buffer:1   |
+ * | last_buffer :1   |
+ * | is_decap_raw:1/0 |
+ *  ------------------
+ */
+struct hal_rx_mon_dest_buf_info {
+	uint8_t first_buffer:1,
+		last_buffer:1,
+		is_decap_raw:1,
+		reserved_1:5;
 };
 
 /**
@@ -147,12 +186,14 @@ enum hal_rx_msdu_desc_flags {
  *                      [2] AMPDU flag
  *			[3] raw_ampdu
  * @peer_meta_data:	Upper bits containing peer id, vdev id
+ * @bar_frame: indicates if received frame is a bar frame
  */
 struct hal_rx_mpdu_desc_info {
 	uint16_t msdu_count;
 	uint16_t mpdu_seq; /* 12 bits for length */
 	uint32_t mpdu_flags;
 	uint32_t peer_meta_data; /* sw progamed meta-data:MAC Id & peer Id */
+	uint16_t bar_frame;
 };
 
 /**
@@ -228,6 +269,24 @@ enum hal_rx_ret_buf_manager {
 		(paddr_hi << BUFFER_ADDR_INFO_1_BUFFER_ADDR_39_32_LSB) & \
 		BUFFER_ADDR_INFO_1_BUFFER_ADDR_39_32_MASK)
 
+#define HAL_RX_COOKIE_INVALID_MASK	0x80000000
+
+/*
+ * macro to get the invalid bit for sw cookie
+ */
+#define HAL_RX_BUF_COOKIE_INVALID_GET(buff_addr_info) \
+		((*(((unsigned int *)buff_addr_info) + \
+		(BUFFER_ADDR_INFO_1_SW_BUFFER_COOKIE_OFFSET >> 2))) & \
+		HAL_RX_COOKIE_INVALID_MASK)
+
+/*
+ * macro to set the invalid bit for sw cookie
+ */
+#define HAL_RX_BUF_COOKIE_INVALID_SET(buff_addr_info) \
+		((*(((unsigned int *)buff_addr_info) + \
+		(BUFFER_ADDR_INFO_1_SW_BUFFER_COOKIE_OFFSET >> 2))) |= \
+		HAL_RX_COOKIE_INVALID_MASK)
+
 /*
  * macro to set the cookie into the rxdma ring entry
  */
@@ -282,6 +341,28 @@ enum hal_rx_ret_buf_manager {
 		BUFFER_ADDR_INFO_1_RETURN_BUFFER_MANAGER_MASK,	\
 		BUFFER_ADDR_INFO_1_RETURN_BUFFER_MANAGER_LSB))
 
+#define HAL_RX_LINK_COOKIE_INVALID_MASK 0x40000000
+
+#define HAL_RX_BUF_LINK_COOKIE_INVALID_GET(buff_addr_info) \
+		((*(((unsigned int *)buff_addr_info) + \
+		(BUFFER_ADDR_INFO_1_SW_BUFFER_COOKIE_OFFSET >> 2))) & \
+		HAL_RX_LINK_COOKIE_INVALID_MASK)
+
+#define HAL_RX_BUF_LINK_COOKIE_INVALID_SET(buff_addr_info) \
+		((*(((unsigned int *)buff_addr_info) + \
+		(BUFFER_ADDR_INFO_1_SW_BUFFER_COOKIE_OFFSET >> 2))) |= \
+		HAL_RX_LINK_COOKIE_INVALID_MASK)
+
+#define HAL_RX_REO_BUF_LINK_COOKIE_INVALID_GET(reo_desc)	\
+		(HAL_RX_BUF_LINK_COOKIE_INVALID_GET(&		\
+		(((struct reo_destination_ring *)	\
+			reo_desc)->buf_or_link_desc_addr_info)))
+
+#define HAL_RX_REO_BUF_LINK_COOKIE_INVALID_SET(reo_desc)	\
+		(HAL_RX_BUF_LINK_COOKIE_INVALID_SET(&		\
+		(((struct reo_destination_ring *)	\
+			reo_desc)->buf_or_link_desc_addr_info)))
+
 /* TODO: Convert the following structure fields accesseses to offsets */
 
 #define HAL_RX_REO_BUFFER_ADDR_39_32_GET(reo_desc)	\
@@ -292,6 +373,16 @@ enum hal_rx_ret_buf_manager {
 #define HAL_RX_REO_BUFFER_ADDR_31_0_GET(reo_desc)	\
 	(HAL_RX_BUFFER_ADDR_31_0_GET(&			\
 	(((struct reo_destination_ring *)		\
+		reo_desc)->buf_or_link_desc_addr_info)))
+
+#define HAL_RX_REO_BUF_COOKIE_INVALID_GET(reo_desc)	\
+	(HAL_RX_BUF_COOKIE_INVALID_GET(&		\
+	(((struct reo_destination_ring *)	\
+		reo_desc)->buf_or_link_desc_addr_info)))
+
+#define HAL_RX_REO_BUF_COOKIE_INVALID_SET(reo_desc)	\
+	(HAL_RX_BUF_COOKIE_INVALID_SET(&		\
+	(((struct reo_destination_ring *)	\
 		reo_desc)->buf_or_link_desc_addr_info)))
 
 #define HAL_RX_REO_BUF_COOKIE_GET(reo_desc)	\
@@ -337,6 +428,11 @@ enum hal_rx_ret_buf_manager {
 	HAL_RX_MPDU_RETRY_BIT_GET(mpdu_info_ptr) |	\
 	HAL_RX_MPDU_AMPDU_FLAG_GET(mpdu_info_ptr) |	\
 	HAL_RX_MPDU_RAW_MPDU_GET(mpdu_info_ptr))
+
+#define HAL_RX_MPDU_BAR_FRAME_GET(mpdu_info_ptr) \
+	((mpdu_info_ptr[RX_MPDU_DESC_INFO_0_BAR_FRAME_OFFSET >> 2] & \
+	RX_MPDU_DESC_INFO_0_BAR_FRAME_MASK) >> \
+	RX_MPDU_DESC_INFO_0_BAR_FRAME_LSB)
 
 
 #define HAL_RX_MSDU_PKT_LENGTH_GET(msdu_info_ptr)		\
@@ -415,6 +511,10 @@ enum hal_rx_ret_buf_manager {
 		RX_MSDU_DESC_INFO_0_DA_IDX_TIMEOUT_OFFSET)) &	\
 		RX_MSDU_DESC_INFO_0_DA_IDX_TIMEOUT_MASK)
 
+#define HAL_RX_REO_MSDU_REO_DST_IND_GET(reo_desc)	\
+	(HAL_RX_MSDU_REO_DST_IND_GET(&		\
+	(((struct reo_destination_ring *)	\
+	   reo_desc)->rx_msdu_desc_info_details)))
 
 #define HAL_RX_MSDU_FLAGS_GET(msdu_info_ptr) \
 	(HAL_RX_FIRST_MSDU_IN_MPDU_FLAG_GET(msdu_info_ptr) | \
@@ -465,6 +565,7 @@ static inline void hal_rx_mpdu_desc_info_get(void *desc_addr,
 	mpdu_desc_info->mpdu_flags = HAL_RX_MPDU_FLAGS_GET(mpdu_info);
 	mpdu_desc_info->peer_meta_data =
 		HAL_RX_MPDU_DESC_PEER_META_DATA_GET(mpdu_info);
+	mpdu_desc_info->bar_frame = HAL_RX_MPDU_BAR_FRAME_GET(mpdu_info);
 }
 
 /*
@@ -1833,6 +1934,9 @@ static inline void hal_rx_msdu_list_get(hal_soc_handle_t hal_soc_hdl,
 		/* num_msdus received in mpdu descriptor may be incorrect
 		 * sometimes due to HW issue. Check msdu buffer address also
 		 */
+		if (!i && (HAL_RX_BUFFER_ADDR_31_0_GET(
+			&msdu_details[i].buffer_addr_info_details) == 0))
+			break;
 		if (HAL_RX_BUFFER_ADDR_31_0_GET(
 			&msdu_details[i].buffer_addr_info_details) == 0) {
 			/* set the last msdu bit in the prev msdu_desc_info */
@@ -2982,6 +3086,42 @@ static inline void hal_rx_wbm_err_info_get_from_tlv(uint8_t *buf,
 }
 
 /**
+ * hal_rx_mon_dest_set_buffer_info_to_tlv(): Save the mon dest frame info
+ *      into the reserved bytes of rx_tlv_hdr.
+ * @buf: start of rx_tlv_hdr
+ * @buf_info: hal_rx_mon_dest_buf_info structure
+ *
+ * Return: void
+ */
+static inline
+void hal_rx_mon_dest_set_buffer_info_to_tlv(uint8_t *buf,
+			struct hal_rx_mon_dest_buf_info *buf_info)
+{
+	struct rx_pkt_tlvs *pkt_tlvs = (struct rx_pkt_tlvs *)buf;
+
+	qdf_mem_copy(pkt_tlvs->rx_padding0, buf_info,
+		     sizeof(struct hal_rx_mon_dest_buf_info));
+}
+
+/**
+ * hal_rx_mon_dest_get_buffer_info_from_tlv(): Retrieve mon dest frame info
+ *      from the reserved bytes of rx_tlv_hdr.
+ * @buf: start of rx_tlv_hdr
+ * @buf_info: hal_rx_mon_dest_buf_info structure
+ *
+ * Return: void
+ */
+static inline
+void hal_rx_mon_dest_get_buffer_info_from_tlv(uint8_t *buf,
+			struct hal_rx_mon_dest_buf_info *buf_info)
+{
+	struct rx_pkt_tlvs *pkt_tlvs = (struct rx_pkt_tlvs *)buf;
+
+	qdf_mem_copy(buf_info, pkt_tlvs->rx_padding0,
+		     sizeof(struct hal_rx_mon_dest_buf_info));
+}
+
+/**
  * hal_rx_wbm_err_msdu_continuation_get(): Get wbm msdu continuation
  * bit from wbm release ring descriptor
  * @wbm_desc: wbm ring descriptor
@@ -3240,6 +3380,32 @@ hal_rx_msdu_flow_idx_get(hal_soc_handle_t hal_soc_hdl,
 	struct hal_soc *hal_soc = (struct hal_soc *)hal_soc_hdl;
 
 	return hal_soc->ops->hal_rx_msdu_flow_idx_get(buf);
+}
+
+/**
+ * hal_rx_msdu_get_reo_destination_indication: API to get reo
+ * destination index from rx_msdu_end TLV
+ * @buf: pointer to the start of RX PKT TLV headers
+ * @reo_destination_indication: pointer to return value of
+ * reo_destination_indication
+ *
+ * Return: reo_destination_indication value from MSDU END TLV
+ */
+static inline void
+hal_rx_msdu_get_reo_destination_indication(hal_soc_handle_t hal_soc_hdl,
+					   uint8_t *buf,
+					   uint32_t *reo_destination_indication)
+{
+	struct hal_soc *hal_soc = (struct hal_soc *)hal_soc_hdl;
+
+	if ((!hal_soc) || (!hal_soc->ops)) {
+		hal_err("hal handle is NULL");
+		QDF_BUG(0);
+		return;
+	}
+
+	hal_soc->ops->hal_rx_msdu_get_reo_destination_indication(buf,
+						reo_destination_indication);
 }
 
 /**
@@ -3718,6 +3884,23 @@ void hal_rx_get_next_msdu_link_desc_buf_addr_info(
 	}
 
 	*next_addr_info = msdu_link->next_msdu_link_desc_addr_info;
+}
+
+/**
+ * hal_rx_clear_next_msdu_link_desc_buf_addr_info(): clear next msdu link desc
+ *						     buffer addr info
+ * @link_desc_va: pointer to current msdu link Desc
+ *
+ * return: None
+ */
+static inline
+void hal_rx_clear_next_msdu_link_desc_buf_addr_info(void *link_desc_va)
+{
+	struct rx_msdu_link *msdu_link = link_desc_va;
+
+	if (msdu_link)
+		qdf_mem_zero(&msdu_link->next_msdu_link_desc_addr_info,
+			     sizeof(msdu_link->next_msdu_link_desc_addr_info));
 }
 
 /**

@@ -30,7 +30,7 @@
  */
 void hif_dummy_bus_prevent_linkdown(struct hif_softc *scn, bool flag)
 {
-	HIF_DBG("wlan: %s pcie power collapse ignored",
+	hif_debug("wlan: %s pcie power collapse ignored",
 			(flag ? "disable" : "enable"));
 }
 
@@ -168,13 +168,13 @@ int hif_dummy_bus_configure(struct hif_softc *hif_sc)
  * @config: configuration value to set
  * @config_len: configuration length
  *
- * Return: 0 for success
+ * Return: QDF_STATUS_SUCCESS for success
  */
 QDF_STATUS
 hif_dummy_get_config_item(struct hif_softc *hif_sc,
 		     int opcode, void *config, uint32_t config_len)
 {
-	return 0;
+	return QDF_STATUS_SUCCESS;
 }
 
 /**
@@ -287,6 +287,18 @@ void hif_dummy_dump_target_memory(struct hif_softc *hif_sc, void *ramdump_base,
 {
 }
 
+uint32_t hif_dummy_bus_reg_read32(struct hif_softc *hif_sc,
+				  uint32_t offset)
+{
+	return 0;
+}
+
+void hif_dummy_bus_reg_write32(struct hif_softc *hif_sc,
+			       uint32_t offset,
+			       uint32_t value)
+{
+}
+
 /**
  * hif_dummy_ipa_get_ce_resource - dummy call
  * @scn: HIF context
@@ -357,8 +369,7 @@ int hif_dummy_bus_reset_resume(struct hif_softc *hif_ctx)
 
 int hif_dummy_map_ce_to_irq(struct hif_softc *scn, int ce_id)
 {
-	HIF_ERROR("%s: hif_map_ce_to_irq is not implemented on this platform",
-		  __func__);
+	hif_err("hif_map_ce_to_irq is not implemented on this platform");
 	QDF_BUG(0);
 	return -(1);
 }
@@ -376,4 +387,29 @@ int hif_dummy_addr_in_boundary(struct hif_softc *scn, uint32_t offset)
  */
 void hif_dummy_config_irq_affinity(struct hif_softc *scn)
 {
+}
+
+/**
+ * hif_dummy_config_irq_by_ceid - dummy call
+ * @scn: hif context
+ * @ce_id : copy engine id
+ * Return: 0
+ */
+int hif_dummy_config_irq_by_ceid(struct hif_softc *scn, int ce_id)
+{
+	return 0;
+}
+
+/**
+ * hif_dummy_log_bus_info - dummy call
+ * @scn: hif context
+ * @data: hang event data buffer
+ * @offset: offset at which data needs to be written
+ *
+ * Return: bool
+ */
+bool hif_dummy_log_bus_info(struct hif_softc *scn, uint8_t *data,
+			    unsigned int *offset)
+{
+	return false;
 }

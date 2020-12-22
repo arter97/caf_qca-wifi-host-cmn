@@ -34,7 +34,7 @@
  *
  * Return: success/failure of init
  */
-int tgt_cfr_init_pdev(struct wlan_objmgr_pdev *pdev);
+QDF_STATUS tgt_cfr_init_pdev(struct wlan_objmgr_pdev *pdev);
 
 /**
  * tgt_cfr_deinit_pdev() - API that de-registers CFR to handlers.
@@ -42,7 +42,7 @@ int tgt_cfr_init_pdev(struct wlan_objmgr_pdev *pdev);
  *
  * Return: success/failure of de-init
  */
-int tgt_cfr_deinit_pdev(struct wlan_objmgr_pdev *pdev);
+QDF_STATUS tgt_cfr_deinit_pdev(struct wlan_objmgr_pdev *pdev);
 
 /**
  * tgt_cfr_get_target_type() - API to determine target type.
@@ -90,6 +90,27 @@ tgt_cfr_enable_cfr_timer(struct wlan_objmgr_pdev *pdev, uint32_t cfr_timer);
  * @value: value to be set
  */
 void tgt_cfr_support_set(struct wlan_objmgr_psoc *psoc, uint32_t value);
+
+/**
+ * tgt_cfr_capture_count_support_set() - API to set capture_count support
+ * @psoc: pointer to psoc_object
+ * @value: value to be set
+ *
+ * Return: success/failure
+ */
+QDF_STATUS
+tgt_cfr_capture_count_support_set(struct wlan_objmgr_psoc *psoc,
+				  uint32_t value);
+
+/**
+ * tgt_cfr_mo_marking_support_set() - API to set MO marking support
+ * @psoc: pointer to psoc_object
+ * @value: value to be set
+ *
+ * Return: success/failure
+ */
+QDF_STATUS
+tgt_cfr_mo_marking_support_set(struct wlan_objmgr_psoc *psoc, uint32_t value);
 
 /**
  * tgt_cfr_info_send() - API to send cfr info

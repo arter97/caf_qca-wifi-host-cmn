@@ -181,7 +181,7 @@ QDF_STATUS wmi_extract_vdev_tdls_ev_param(wmi_unified_t wmi_handle,
 }
 #endif /* FEATURE_WLAN_TDLS */
 
-#ifdef FEATURE_BLACKLIST_MGR
+#if defined(WLAN_FEATURE_ROAM_OFFLOAD) && defined(FEATURE_BLACKLIST_MGR)
 QDF_STATUS
 wmi_unified_send_reject_ap_list(struct wmi_unified *wmi_handle,
 				struct reject_ap_params *reject_params)
@@ -411,16 +411,6 @@ QDF_STATUS wmi_unified_peer_unmap_conf_send(wmi_unified_t wmi_handle,
 	if (wmi_handle->ops->send_peer_unmap_conf_cmd)
 		return wmi_handle->ops->send_peer_unmap_conf_cmd(wmi_handle,
 				  vdev_id, peer_id_cnt, peer_id_list);
-
-	return QDF_STATUS_E_FAILURE;
-}
-
-QDF_STATUS
-wmi_unified_send_ocl_cmd(wmi_unified_t wmi_handle,
-			 struct ocl_cmd_params *param)
-{
-	if (wmi_handle->ops->send_ocl_cmd)
-		return wmi_handle->ops->send_ocl_cmd(wmi_handle, param);
 
 	return QDF_STATUS_E_FAILURE;
 }

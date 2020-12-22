@@ -214,7 +214,7 @@ struct wmi_unified_pmk_cache {
 	uint32_t            pmkid_len;
 	uint8_t             pmkid[WMI_UNIFIED_MAX_PMKID_LEN];
 	wmi_host_mac_addr   bssid;
-	struct mac_ssid     ssid;
+	struct wlan_ssid    ssid;
 	uint32_t            cache_id;
 	uint32_t            cat_flag;
 	uint32_t            action_flag;
@@ -361,16 +361,6 @@ struct set_arp_stats {
 struct get_arp_stats {
 	uint8_t pkt_type;
 	uint32_t vdev_id;
-};
-
-/**
- * struct ocl_cmd_params - OCL command params
- * @vdev_id: Virtual AP device identifier
- * @en_dis_chain: enable/disable dynamic/static OCL mode
- */
-struct ocl_cmd_params {
-	uint32_t vdev_id;
-	uint32_t en_dis_chain;
 };
 
 #endif /* _WMI_UNIFIED_STA_PARAM_H_ */

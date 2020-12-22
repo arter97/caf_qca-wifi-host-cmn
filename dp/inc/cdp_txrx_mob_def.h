@@ -285,6 +285,12 @@ struct txrx_pdev_cfg_param_t {
 	uint32_t uc_tx_partition_base;
 	/* IP, TCP and UDP checksum offload */
 	bool ip_tcp_udp_checksum_offload;
+	/* IP, TCP and UDP checksum offload for NAN Mode */
+	bool nan_ip_tcp_udp_checksum_offload;
+	/* IP, TCP and UDP checksum offload for P2P Mode*/
+	bool p2p_ip_tcp_udp_checksum_offload;
+	/* Checksum offload override flag for Legcay modes */
+	bool legacy_mode_csum_disable;
 	/* Rx processing in thread from TXRX */
 	bool enable_rxthread;
 	/* CE classification enabled through INI */
@@ -309,6 +315,7 @@ struct txrx_pdev_cfg_param_t {
 	bool gro_enable;
 	bool tso_enable;
 	bool lro_enable;
+	bool sg_enable;
 	bool enable_data_stall_detection;
 	bool enable_flow_steering;
 	bool disable_intra_bss_fwd;

@@ -98,8 +98,6 @@ static int init_deinit_service_ready_event_handler(ol_scn_t scn_handle,
 		wlan_psoc_nif_op_flag_set(psoc, WLAN_SOC_OP_VHT_INVALID_CAP);
 	}
 
-	target_if_ext_res_cfg_enable(psoc, tgt_hdl, event);
-
 	if (wmi_service_enabled(wmi_handle, wmi_service_tt))
 		wlan_psoc_nif_fw_ext_cap_set(psoc, WLAN_SOC_CEXT_TT_SUPPORT);
 
@@ -123,6 +121,11 @@ static int init_deinit_service_ready_event_handler(ol_scn_t scn_handle,
 
 	if (wmi_service_enabled(wmi_handle, wmi_service_infra_mbssid))
 		wlan_psoc_nif_fw_ext_cap_set(psoc, WLAN_SOC_CEXT_MBSS_IE);
+
+	if (wmi_service_enabled(wmi_handle,
+				wmi_service_mbss_param_in_vdev_start_support))
+		wlan_psoc_nif_fw_ext_cap_set(psoc,
+					     WLAN_SOC_CEXT_MBSS_PARAM_IN_START);
 
 	if (wmi_service_enabled(wmi_handle, wmi_service_dynamic_hw_mode))
 		wlan_psoc_nif_fw_ext_cap_set(psoc, WLAN_SOC_CEXT_DYNAMIC_HW_MODE);
@@ -163,6 +166,15 @@ static int init_deinit_service_ready_event_handler(ol_scn_t scn_handle,
 		wlan_psoc_nif_fw_ext_cap_set(psoc,
 					     WLAN_SOC_CEXT_RX_FSE_SUPPORT);
 
+	if (wmi_service_enabled(wmi_handle,
+				wmi_service_scan_conf_per_ch_support))
+		wlan_psoc_nif_fw_ext_cap_set(psoc,
+					     WLAN_SOC_CEXT_SCAN_PER_CH_CONFIG);
+
+	if (wmi_service_enabled(wmi_handle, wmi_service_csa_beacon_template))
+		wlan_psoc_nif_fw_ext_cap_set(psoc,
+					     WLAN_SOC_CEXT_CSA_TX_OFFLOAD);
+
 	/* override derived value, if it exceeds max peer count */
 	if ((wlan_psoc_get_max_peer_count(psoc) >
 		tgt_hdl->info.wlan_res_cfg.num_active_peers) &&
@@ -198,11 +210,17 @@ static int init_deinit_service_ready_event_handler(ol_scn_t scn_handle,
 
 	target_if_reg_set_offloaded_info(psoc);
 	target_if_reg_set_6ghz_info(psoc);
+	target_if_reg_set_5dot9_ghz_info(psoc);
 
 	/* Send num_msdu_desc to DP layer */
 	cdp_soc_set_param(wlan_psoc_get_dp_handle(psoc),
 			  DP_SOC_PARAM_MSDU_EXCEPTION_DESC,
 			  tgt_hdl->info.target_caps.num_msdu_desc);
+
+	/* Send CMEM FSE support to DP layer */
+	if (wmi_service_enabled(wmi_handle, wmi_service_fse_cmem_alloc_support))
+		cdp_soc_set_param(wlan_psoc_get_dp_handle(psoc),
+				  DP_SOC_PARAM_CMEM_FSE_SUPPORT, 1);
 
 	if (wmi_service_enabled(wmi_handle, wmi_service_ext_msg)) {
 		target_if_debug("Wait for EXT message");
@@ -280,6 +298,13 @@ static int init_deinit_service_ext2_ready_event_handler(ol_scn_t scn_handle,
 	}
 
 	target_if_add_11ax_modes(psoc, tgt_hdl);
+
+	err_code = init_deinit_populate_scan_radio_cap_ext2(wmi_handle, event,
+							    info);
+	if (err_code) {
+		target_if_err("failed to populate scan radio cap ext2");
+		goto exit;
+	}
 
 	/* send init command */
 	init_deinit_set_send_init_cmd(psoc, tgt_hdl);
