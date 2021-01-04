@@ -75,6 +75,7 @@
 #define WMI_IPV4_ADDR_LEN       4
 #define WMI_KEEP_ALIVE_NULL_PKT              1
 #define WMI_KEEP_ALIVE_UNSOLICIT_ARP_RSP     2
+#define WMI_KEEP_ALIVE_MGMT_FRAME            5
 #define WMI_MAC_MAX_KEY_LENGTH          32
 #define WMI_KRK_KEY_LEN     16
 #ifdef WLAN_FEATURE_ROAM_OFFLOAD
@@ -4725,6 +4726,7 @@ typedef enum {
 	wmi_twt_del_dialog_complete_event_id,
 	wmi_twt_pause_dialog_complete_event_id,
 	wmi_twt_resume_dialog_complete_event_id,
+	wmi_twt_nudge_dialog_complete_event_id,
 	wmi_twt_session_stats_event_id,
 #endif
 	wmi_apf_get_vdev_work_memory_resp_event_id,
@@ -5086,6 +5088,8 @@ typedef enum {
 	wmi_vdev_param_set_cmd_obss_pd_per_ac,
 	wmi_vdev_param_enable_srp,
 	wmi_vdev_param_nan_config_features,
+	wmi_vdev_param_enable_disable_rtt_responder_role,
+	wmi_vdev_param_enable_disable_rtt_initiator_role,
 } wmi_conv_vdev_param_id;
 
 /**

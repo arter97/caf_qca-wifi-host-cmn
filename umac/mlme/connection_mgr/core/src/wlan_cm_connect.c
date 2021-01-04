@@ -869,10 +869,20 @@ static QDF_STATUS cm_connect_get_candidates(struct wlan_objmgr_pdev *pdev,
 	uint8_t vdev_id = wlan_vdev_get_id(cm_ctx->vdev);
 	bool security_valid_for_6ghz;
 	const uint8_t *rsnxe;
+	uint8_t wsc_oui[OUI_LENGTH];
+	uint32_t oui_cpu;
+	bool is_wps = false;
 
 	filter = qdf_mem_malloc(sizeof(*filter));
 	if (!filter)
 		return QDF_STATUS_E_NOMEM;
+
+	oui_cpu = qdf_be32_to_cpu(WSC_OUI);
+	qdf_mem_copy(wsc_oui, &oui_cpu, OUI_LENGTH);
+	if (wlan_get_vendor_ie_ptr_from_oui(wsc_oui, OUI_LENGTH,
+					    cm_req->req.assoc_ie.ptr,
+					    cm_req->req.assoc_ie.len))
+		is_wps = true;
 
 	rsnxe = wlan_get_ie_ptr_from_eid(WLAN_ELEMID_RSNXE,
 					 cm_req->req.assoc_ie.ptr,
@@ -881,7 +891,8 @@ static QDF_STATUS cm_connect_get_candidates(struct wlan_objmgr_pdev *pdev,
 		wlan_cm_6ghz_allowed_for_akm(wlan_pdev_get_psoc(pdev),
 					     cm_req->req.crypto.akm_suites,
 					     cm_req->req.crypto.rsn_caps,
-					     rsnxe, cm_req->req.sae_pwe);
+					     rsnxe, cm_req->req.sae_pwe,
+					     is_wps);
 
 	/*
 	 * Ignore connect req if the freq is provided and its 6Ghz and
@@ -1098,7 +1109,11 @@ QDF_STATUS cm_connect_start(struct cnx_mgr *cm_ctx,
 	}
 
 	cm_inform_if_mgr_connect_start(cm_ctx->vdev);
-	mlme_cm_connect_start_ind(cm_ctx->vdev, &cm_req->req);
+	status = mlme_cm_connect_start_ind(cm_ctx->vdev, &cm_req->req);
+	if (QDF_IS_STATUS_ERROR(status)) {
+		reason = CM_NO_CANDIDATE_FOUND;
+		goto connect_err;
+	}
 
 	status = cm_connect_get_candidates(pdev, cm_ctx, cm_req);
 	/* In case of status pending connect will continue after scan */

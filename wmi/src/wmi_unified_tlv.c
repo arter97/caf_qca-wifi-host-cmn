@@ -510,6 +510,10 @@ static const uint32_t vdev_param_tlv[] = {
 	[wmi_vdev_param_enable_srp] = WMI_VDEV_PARAM_ENABLE_SRP,
 	[wmi_vdev_param_nan_config_features] =
 			WMI_VDEV_PARAM_ENABLE_DISABLE_NAN_CONFIG_FEATURES,
+	[wmi_vdev_param_enable_disable_rtt_responder_role] =
+			WMI_VDEV_PARAM_ENABLE_DISABLE_RTT_RESPONDER_ROLE,
+	[wmi_vdev_param_enable_disable_rtt_initiator_role] =
+			WMI_VDEV_PARAM_ENABLE_DISABLE_RTT_INITIATOR_ROLE,
 };
 #endif
 
@@ -723,7 +727,7 @@ QDF_STATUS wmi_unified_cmd_send_pm_chk(struct wmi_unified *wmi_handle,
 	if (!wmi_is_qmi_stats_enabled(wmi_handle))
 		goto send_over_wmi;
 
-	if (wmi_is_target_suspended(wmi_handle)) {
+	if (wmi_is_target_suspend_acked(wmi_handle)) {
 		if (QDF_IS_STATUS_SUCCESS(
 		    wmi_unified_cmd_send_over_qmi(wmi_handle, buf,
 						  buflen, cmd_id)))
@@ -8821,6 +8825,12 @@ static QDF_STATUS init_cmd_send_tlv(wmi_unified_t wmi_handle,
 			(sizeof(wlan_host_memory_chunk) *
 			 param->num_mem_chunks));
 
+	wmi_debug("num peers: %d , num offload peers: %d, num vdevs: %d, num tids: %d, num tdls conn tb entries: %d, num tdls vdevs: %d",
+		 resource_cfg->num_peers, resource_cfg->num_offload_peers,
+		 resource_cfg->num_vdevs, resource_cfg->num_tids,
+		 resource_cfg->num_tdls_conn_table_entries,
+		 resource_cfg->num_tdls_vdevs);
+
 	/* Fill hw mode id config */
 	buf_ptr = copy_hw_mode_in_init_cmd(wmi_handle, buf_ptr, &len, param);
 
@@ -11423,6 +11433,8 @@ wmi_tgt_thermal_level_to_host(uint32_t level)
 		return THERMAL_MITIGATION;
 	case WMI_THERMAL_SHUTOFF:
 		return THERMAL_SHUTOFF;
+	case WMI_THERMAL_SHUTDOWN_TGT:
+		return THERMAL_SHUTDOWN_TARGET;
 	default:
 		return THERMAL_UNKNOWN;
 	}
@@ -14821,6 +14833,8 @@ static void populate_tlv_events_id(uint32_t *event_ids)
 		WMI_TWT_PAUSE_DIALOG_COMPLETE_EVENTID;
 	event_ids[wmi_twt_resume_dialog_complete_event_id] =
 		WMI_TWT_RESUME_DIALOG_COMPLETE_EVENTID;
+	event_ids[wmi_twt_nudge_dialog_complete_event_id] =
+		WMI_TWT_NUDGE_DIALOG_COMPLETE_EVENTID;
 	event_ids[wmi_twt_session_stats_event_id] =
 		WMI_TWT_SESSION_STATS_EVENTID;
 #endif
