@@ -44,12 +44,19 @@
  */
 #define MAPPED_REF_OFF 0x4063
 
+/* Register to wake the UMAC from power collapse */
+#define PCIE_SOC_PCIE_REG_PCIE_SCRATCH_0_SOC_PCIE_REG (0x01E04000 + 0x40)
+/* Register used for handshake mechanism to validate UMAC is awake */
+#define PCIE_PCIE_LOCAL_REG_PCIE_SOC_WAKE_PCIE_LOCAL_REG (0x01E00000 + 0x3004)
+
+/* Timeout duration in ms to validate UMAC wake status */
 #ifdef HAL_CONFIG_SLUB_DEBUG_ON
-#define FORCE_WAKE_DELAY_TIMEOUT 100
+#define FORCE_WAKE_DELAY_TIMEOUT 500
 #else
 #define FORCE_WAKE_DELAY_TIMEOUT 50
 #endif /* HAL_CONFIG_SLUB_DEBUG_ON */
 
+/* Validate UMAC status every 5ms */
 #define FORCE_WAKE_DELAY_MS 5
 
 #ifdef ENABLE_VERBOSE_DEBUG
@@ -115,71 +122,6 @@ static inline void hal_reg_write_result_check(struct hal_soc *hal_soc,
 	}
 }
 
-#ifndef QCA_WIFI_QCA6390
-static inline int hal_force_wake_request(struct hal_soc *soc)
-{
-	return 0;
-}
-
-static inline int hal_force_wake_release(struct hal_soc *soc)
-{
-	return 0;
-}
-
-static inline void hal_lock_reg_access(struct hal_soc *soc,
-				       unsigned long *flags)
-{
-	qdf_spin_lock_irqsave(&soc->register_access_lock);
-}
-
-static inline void hal_unlock_reg_access(struct hal_soc *soc,
-					 unsigned long *flags)
-{
-	qdf_spin_unlock_irqrestore(&soc->register_access_lock);
-}
-
-#else
-static inline int hal_force_wake_request(struct hal_soc *soc)
-{
-	int ret;
-
-	ret = pld_force_wake_request_sync(soc->qdf_dev->dev,
-					  FORCE_WAKE_DELAY_TIMEOUT * 1000);
-	if (ret) {
-		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_ERROR,
-			  "%s: Request send failed %d\n", __func__, ret);
-		return -EINVAL;
-	}
-
-	/* If device's M1 state-change event races here, it can be ignored,
-	 * as the device is expected to immediately move from M2 to M0
-	 * without entering low power state.
-	 */
-	if (!pld_is_device_awake(soc->qdf_dev->dev))
-		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_INFO_LOW,
-			  "%s: state-change event races, ignore\n", __func__);
-
-	return 0;
-}
-
-static inline int hal_force_wake_release(struct hal_soc *soc)
-{
-	return pld_force_wake_release(soc->qdf_dev->dev);
-}
-
-static inline void hal_lock_reg_access(struct hal_soc *soc,
-				       unsigned long *flags)
-{
-	pld_lock_reg_window(soc->qdf_dev->dev, flags);
-}
-
-static inline void hal_unlock_reg_access(struct hal_soc *soc,
-					 unsigned long *flags)
-{
-	pld_unlock_reg_window(soc->qdf_dev->dev, flags);
-}
-#endif
-
 #ifdef PCIE_REG_WINDOW_LOCAL_NO_CACHE
 /**
  * hal_select_window_confirm() - write window register and
@@ -217,6 +159,172 @@ static inline void hal_select_window_confirm(struct hal_soc *hal_soc,
 }
 #endif
 
+#ifndef QCA_WIFI_QCA6390
+static inline int hal_force_wake_request(struct hal_soc *soc)
+{
+	return 0;
+}
+
+static inline int hal_force_wake_release(struct hal_soc *soc)
+{
+	return 0;
+}
+
+static inline void hal_lock_reg_access(struct hal_soc *soc,
+				       unsigned long *flags)
+{
+	qdf_spin_lock_irqsave(&soc->register_access_lock);
+}
+
+static inline void hal_unlock_reg_access(struct hal_soc *soc,
+					 unsigned long *flags)
+{
+	qdf_spin_unlock_irqrestore(&soc->register_access_lock);
+}
+
+#else /* QCA_WIFI_QCA6390 */
+static inline void hal_lock_reg_access(struct hal_soc *soc,
+				       unsigned long *flags)
+{
+	pld_lock_reg_window(soc->qdf_dev->dev, flags);
+}
+
+static inline void hal_unlock_reg_access(struct hal_soc *soc,
+					 unsigned long *flags)
+{
+	pld_unlock_reg_window(soc->qdf_dev->dev, flags);
+}
+
+static inline void hal_write32_mb_reg_window(struct hal_soc *soc,
+					     uint32_t offset,
+					     uint32_t value)
+{
+	unsigned long flags;
+
+	if (!soc->use_register_windowing ||
+	    offset < MAX_UNWINDOWED_ADDRESS) {
+		qdf_iowrite32(soc->dev_base_addr + offset, value);
+	} else {
+		hal_lock_reg_access(soc, &flags);
+		hal_select_window_confirm(soc, offset);
+		qdf_iowrite32(soc->dev_base_addr + WINDOW_START +
+			      (offset & WINDOW_RANGE_MASK), value);
+		hal_unlock_reg_access(soc, &flags);
+	}
+}
+
+static inline uint32_t hal_read32_mb_reg_window(struct hal_soc *soc,
+						uint32_t offset)
+{
+	unsigned long flags;
+	uint32_t ret;
+
+	if (!soc->use_register_windowing ||
+	    offset < MAX_UNWINDOWED_ADDRESS) {
+		return qdf_ioread32(soc->dev_base_addr + offset);
+	}
+
+	hal_lock_reg_access(soc, &flags);
+	hal_select_window_confirm(soc, offset);
+	ret = qdf_ioread32(soc->dev_base_addr + WINDOW_START +
+			   (offset & WINDOW_RANGE_MASK));
+	hal_unlock_reg_access(soc, &flags);
+
+	return ret;
+}
+
+#ifdef DEVICE_FORCE_WAKE_ENABLE
+
+#define HAL_POLL_UMAC_WAKE 0x2
+static inline int hal_force_wake_umac_polling(struct hal_soc *soc)
+{
+	uint32_t timeout;
+	uint32_t value;
+
+	hal_write32_mb_reg_window(
+		soc,
+		PCIE_PCIE_LOCAL_REG_PCIE_SOC_WAKE_PCIE_LOCAL_REG, 1);
+
+	/*
+	 * Do not reset the timeout
+	 * total_wake_time = MHI_WAKE_TIME + PCI_WAKE_TIME < 50 ms
+	 */
+	timeout = 0;
+	do {
+		value = hal_read32_mb_reg_window(
+				soc,
+				PCIE_SOC_PCIE_REG_PCIE_SCRATCH_0_SOC_PCIE_REG);
+		if (value == HAL_POLL_UMAC_WAKE)
+			break;
+		qdf_mdelay(FORCE_WAKE_DELAY_MS);
+		timeout += FORCE_WAKE_DELAY_MS;
+	} while (timeout <= FORCE_WAKE_DELAY_TIMEOUT);
+
+	if (value != HAL_POLL_UMAC_WAKE) {
+		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_ERROR,
+			  "soc_force_wake_failure: polled value %d", value);
+		return -ETIMEDOUT;
+	}
+
+	return 0;
+}
+
+static inline void hal_force_wake_umac_clear(struct hal_soc *soc)
+{
+	hal_write32_mb_reg_window(
+		soc, PCIE_PCIE_LOCAL_REG_PCIE_SOC_WAKE_PCIE_LOCAL_REG,
+		0);
+}
+
+#else /* DEVICE_FORCE_WAKE_ENABLE */
+static inline int hal_force_wake_umac_polling(struct hal_soc *soc)
+{
+	return 0;
+}
+
+static inline void hal_force_wake_umac_clear(struct hal_soc *soc) {}
+#endif /* DEVICE_FORCE_WAKE_ENABLE */
+
+static inline int hal_force_wake_request(struct hal_soc *soc)
+{
+	int ret;
+
+	ret = pld_force_wake_request_sync(soc->qdf_dev->dev,
+					  FORCE_WAKE_DELAY_TIMEOUT * 1000);
+	if (ret) {
+		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_ERROR,
+			  "%s: Request send failed %d\n", __func__, ret);
+		return -EINVAL;
+	}
+
+	/* If device's M1 state-change event races here, it can be ignored,
+	 * as the device is expected to immediately move from M2 to M0
+	 * without entering low power state.
+	 */
+	if (!pld_is_device_awake(soc->qdf_dev->dev))
+		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_INFO_LOW,
+			  "%s: state-change event races, ignore\n", __func__);
+
+	return hal_force_wake_umac_polling(soc);
+}
+
+static inline int hal_force_wake_release(struct hal_soc *soc)
+{
+	int ret;
+
+	ret = pld_force_wake_release(soc->qdf_dev->dev);
+	if (ret) {
+		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_ERROR,
+			  "force wake release failure");
+		return ret;
+	}
+
+	hal_force_wake_umac_clear(soc);
+
+	return 0;
+}
+#endif /* QCA_WIFI_QCA6390 */
+
 /**
  * note1: WINDOW_RANGE_MASK = (1 << WINDOW_SHIFT) -1
  * note2: 1 << WINDOW_SHIFT = MAX_UNWINDOWED_ADDRESS
@@ -244,7 +352,7 @@ static inline void hal_write32_mb(struct hal_soc *hal_soc, uint32_t offset,
 
 #define hal_write32_mb_confirm(_hal_soc, _offset, _value) \
 			hal_write32_mb(_hal_soc, _offset, _value)
-#else
+#else /* QCA_WIFI_QCA6390 */
 static inline void hal_write32_mb(struct hal_soc *hal_soc, uint32_t offset,
 				  uint32_t value)
 {
@@ -324,7 +432,7 @@ static inline void hal_write32_mb_confirm(struct hal_soc *hal_soc,
 		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_ERROR,
 			  "%s: Wake up release failed\n", __func__);
 }
-#endif
+#endif /* QCA_WIFI_QCA6390 */
 
 /**
  * hal_write_address_32_mb - write a value to a register
@@ -389,7 +497,7 @@ static inline uint32_t hal_read_address_32_mb(struct hal_soc *soc,
 	ret = hal_read32_mb(soc, offset);
 	return ret;
 }
-#else
+#else /* QCA_WIFI_QCA6390 */
 static inline uint32_t hal_read32_mb(struct hal_soc *hal_soc, uint32_t offset)
 {
 	uint32_t ret;
@@ -434,7 +542,7 @@ static inline uint32_t hal_read_address_32_mb(struct hal_soc *soc,
 	ret = hal_read32_mb(soc, offset);
 	return ret;
 }
-#endif
+#endif /* QCA_WIFI_QCA6390 */
 
 #include "hif_io32.h"
 
