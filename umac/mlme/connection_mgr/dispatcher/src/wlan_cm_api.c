@@ -101,6 +101,12 @@ void wlan_cm_set_max_connect_attempts(struct wlan_objmgr_vdev *vdev,
 	cm_set_max_connect_attempts(vdev, max_connect_attempts);
 }
 
+void wlan_cm_set_max_connect_timeout(struct wlan_objmgr_vdev *vdev,
+				     uint32_t max_connect_timeout)
+{
+	cm_set_max_connect_timeout(vdev, max_connect_timeout);
+}
+
 bool wlan_cm_is_vdev_connecting(struct wlan_objmgr_vdev *vdev)
 {
 	return cm_is_vdev_connecting(vdev);
@@ -124,6 +130,24 @@ bool wlan_cm_is_vdev_disconnected(struct wlan_objmgr_vdev *vdev)
 bool wlan_cm_is_vdev_roaming(struct wlan_objmgr_vdev *vdev)
 {
 	return cm_is_vdev_roaming(vdev);
+}
+
+enum wlan_cm_active_request_type
+wlan_cm_get_active_req_type(struct wlan_objmgr_vdev *vdev)
+{
+	return cm_get_active_req_type(vdev);
+}
+
+bool wlan_cm_get_active_connect_req(struct wlan_objmgr_vdev *vdev,
+				    struct wlan_cm_vdev_connect_req *req)
+{
+	return cm_get_active_connect_req(vdev, req);
+}
+
+bool wlan_cm_get_active_disconnect_req(struct wlan_objmgr_vdev *vdev,
+				       struct wlan_cm_vdev_discon_req *req)
+{
+	return cm_get_active_disconnect_req(vdev, req);
 }
 
 const char *wlan_cm_reason_code_to_str(enum wlan_reason_code reason)
@@ -206,3 +230,10 @@ void wlan_cm_hw_mode_change_resp(struct wlan_objmgr_pdev *pdev, uint8_t vdev_id,
 	cm_hw_mode_change_resp(pdev, vdev_id, cm_id, status);
 }
 #endif /* ifdef POLICY_MGR_ENABLE */
+
+#ifdef SM_ENG_HIST_ENABLE
+void wlan_cm_sm_history_print(struct wlan_objmgr_vdev *vdev)
+{
+	return cm_sm_history_print(vdev);
+}
+#endif

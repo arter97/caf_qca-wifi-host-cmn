@@ -3690,7 +3690,8 @@ static void reg_set_2g_channel_params_for_freq(struct wlan_objmgr_pdev *pdev,
 		reg_get_2g_bonded_channel_state_for_freq(pdev, oper_freq,
 							 sec_ch_2g_freq,
 							 ch_params->ch_width);
-		if (chan_state == CHANNEL_STATE_ENABLE) {
+		if ((chan_state == CHANNEL_STATE_ENABLE) ||
+		    (chan_state == CHANNEL_STATE_DFS)) {
 			if (ch_params->ch_width == CH_WIDTH_40MHZ) {
 				if (oper_freq < sec_ch_2g_freq)
 					ch_params->sec_ch_offset =
@@ -4151,16 +4152,7 @@ reg_get_unii_5g_bitmap(struct wlan_objmgr_pdev *pdev, uint8_t *bitmap)
 }
 #endif
 
-#ifdef CHECK_REG_PHYMODE
-/**
- * reg_is_phymode_allowed() - Check if requested phymode is unallowed
- * @phy_in: phymode that the user requested
- * @phymode_bitmap: bitmap of unallowed phymodes for specific country
- *
- * Return: true if phymode is not allowed, else false
- */
-static bool reg_is_phymode_unallowed(enum reg_phymode phy_in,
-				     uint32_t phymode_bitmap)
+bool reg_is_phymode_unallowed(enum reg_phymode phy_in, uint32_t phymode_bitmap)
 {
 	if (!phymode_bitmap)
 		return false;
@@ -4182,6 +4174,7 @@ static bool reg_is_phymode_unallowed(enum reg_phymode phy_in,
 
 }
 
+#ifdef CHECK_REG_PHYMODE
 enum reg_phymode reg_get_max_phymode(struct wlan_objmgr_pdev *pdev,
 				     enum reg_phymode phy_in,
 				     qdf_freq_t freq)
@@ -4248,3 +4241,99 @@ enum band_info reg_band_bitmap_to_band_info(uint32_t band_bitmap)
 		return BAND_UNKNOWN;
 }
 #endif
+
+#if defined(CONFIG_BAND_6GHZ)
+QDF_STATUS
+reg_set_cur_6g_ap_pwr_type(struct wlan_objmgr_pdev *pdev,
+			   enum reg_6g_ap_type reg_cur_6g_ap_pwr_type)
+{
+	struct wlan_regulatory_pdev_priv_obj *pdev_priv_obj;
+
+	pdev_priv_obj = reg_get_pdev_obj(pdev);
+	if (!IS_VALID_PDEV_REG_OBJ(pdev_priv_obj)) {
+		reg_err("pdev reg component is NULL");
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	if (reg_cur_6g_ap_pwr_type > REG_MAX_SUPP_AP_TYPE) {
+		reg_err("Unsupported 6G AP power type");
+		return QDF_STATUS_E_FAILURE;
+	}
+	/* should we validate the input reg_cur_6g_ap_type? */
+	pdev_priv_obj->reg_cur_6g_ap_pwr_type = reg_cur_6g_ap_pwr_type;
+	return QDF_STATUS_SUCCESS;
+}
+
+QDF_STATUS
+reg_get_cur_6g_ap_pwr_type(struct wlan_objmgr_pdev *pdev,
+			   enum reg_6g_ap_type *reg_cur_6g_ap_pwr_type)
+{
+	struct wlan_regulatory_pdev_priv_obj *pdev_priv_obj;
+
+	pdev_priv_obj = reg_get_pdev_obj(pdev);
+	if (!IS_VALID_PDEV_REG_OBJ(pdev_priv_obj)) {
+		reg_err("pdev reg component is NULL");
+		return QDF_STATUS_E_FAILURE;
+	}
+	*reg_cur_6g_ap_pwr_type = pdev_priv_obj->reg_cur_6g_ap_pwr_type;
+	return QDF_STATUS_SUCCESS;
+}
+
+QDF_STATUS
+reg_get_cur_6g_client_type(struct wlan_objmgr_pdev *pdev,
+			   enum reg_6g_client_type
+			   *reg_cur_6g_client_mobility_type)
+{
+	struct wlan_regulatory_pdev_priv_obj *pdev_priv_obj;
+
+	pdev_priv_obj = reg_get_pdev_obj(pdev);
+	if (!IS_VALID_PDEV_REG_OBJ(pdev_priv_obj)) {
+		reg_err("pdev reg component is NULL");
+		return QDF_STATUS_E_FAILURE;
+	}
+	*reg_cur_6g_client_mobility_type =
+	    pdev_priv_obj->reg_cur_6g_client_mobility_type;
+	return QDF_STATUS_SUCCESS;
+}
+
+QDF_STATUS reg_get_rnr_tpe_usable(struct wlan_objmgr_pdev *pdev,
+				  bool *reg_rnr_tpe_usable)
+{
+	struct wlan_regulatory_pdev_priv_obj *pdev_priv_obj;
+
+	pdev_priv_obj = reg_get_pdev_obj(pdev);
+	if (!IS_VALID_PDEV_REG_OBJ(pdev_priv_obj)) {
+		reg_err("pdev reg component is NULL");
+		return QDF_STATUS_E_FAILURE;
+	}
+	*reg_rnr_tpe_usable = pdev_priv_obj->reg_rnr_tpe_usable;
+	return QDF_STATUS_SUCCESS;
+}
+
+QDF_STATUS reg_get_unspecified_ap_usable(struct wlan_objmgr_pdev *pdev,
+					 bool *reg_unspecified_ap_usable)
+{
+	struct wlan_regulatory_pdev_priv_obj *pdev_priv_obj;
+
+	pdev_priv_obj = reg_get_pdev_obj(pdev);
+	if (!IS_VALID_PDEV_REG_OBJ(pdev_priv_obj)) {
+		reg_err("pdev reg component is NULL");
+		return QDF_STATUS_E_FAILURE;
+	}
+	*reg_unspecified_ap_usable = pdev_priv_obj->reg_unspecified_ap_usable;
+	return QDF_STATUS_SUCCESS;
+}
+#endif
+
+bool reg_is_regdb_offloaded(struct wlan_objmgr_psoc *psoc)
+{
+	struct wlan_regulatory_psoc_priv_obj *psoc_priv_obj;
+
+	psoc_priv_obj = reg_get_psoc_obj(psoc);
+	if (!psoc_priv_obj) {
+		reg_err("reg psoc private obj is NULL");
+		return false;
+	}
+
+	return psoc_priv_obj->offload_enabled;
+}

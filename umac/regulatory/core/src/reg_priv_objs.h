@@ -161,6 +161,14 @@ struct wlan_regulatory_psoc_priv_obj {
  * @band_capability: bitmap of bands enabled, using enum reg_wifi_band as the
  *	bit position value
  * @reg_6g_superid: 6Ghz super domain id
+ * @reg_cur_6g_ap_pwr_type: 6G AP type ie VLP/SP/LPI.
+ * @reg_cur_6g_client_mobility_type: 6G client type ie Default/Subordinate.
+ * @reg_rnr_tpe_usable: Indicates whether RNR IE is applicable for current reg
+ * domain.
+ * @reg_unspecified_ap_usable: Indicates if the AP type mentioned is not part of
+ * 802.11 standard.
+ * @max_phymode: The maximum phymode supported by the device and regulatory.
+ * @max_chwidth: The maximum bandwidth corresponding to the maximum phymode.
  */
 struct wlan_regulatory_pdev_priv_obj {
 	struct regulatory_channel cur_chan_list[NUM_CHANNELS];
@@ -200,6 +208,16 @@ struct wlan_regulatory_pdev_priv_obj {
 	qdf_spinlock_t reg_rules_lock;
 	bool chan_list_recvd;
 	bool pdev_opened;
+#if defined(CONFIG_BAND_6GHZ)
+	enum reg_6g_ap_type reg_cur_6g_ap_pwr_type;
+	enum reg_6g_client_type reg_cur_6g_client_mobility_type;
+	bool reg_rnr_tpe_usable;
+	bool reg_unspecified_ap_usable;
+#endif
+#ifdef CONFIG_HOST_FIND_CHAN
+	enum reg_phymode max_phymode;
+	enum phy_ch_width max_chwidth;
+#endif
 };
 
 /**

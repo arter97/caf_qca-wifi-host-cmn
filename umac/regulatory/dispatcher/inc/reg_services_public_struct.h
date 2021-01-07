@@ -538,12 +538,15 @@ enum channel_state {
  * enum reg_6g_ap_type - Regulatory AP type for regulatory info subfield.
  * @REG_INDOOR_AP: Indoor AP
  * @REG_STANDARD_POWER_AP: Standard Power AP
+ * @REG_MAX_SUPP_AP_TYPE: Current maximum AP power typer supported in the IEEE
+ * standard.
  * @REG_MAX_AP_TYPE: Maximum value possible for (3 bits) regulatory info
  * sub-field in the 6G HE Operation IE
  */
 enum reg_6g_ap_type {
 	REG_INDOOR_AP = 0,
 	REG_STANDARD_POWER_AP = 1,
+	REG_MAX_SUPP_AP_TYPE = REG_STANDARD_POWER_AP,
 	REG_MAX_AP_TYPE = 7,
 };
 
@@ -776,6 +779,7 @@ enum country_src {
  * @max_bw: max bandwidth
  * @nol_chan: whether channel is nol
  * @nol_history: Set NOL-History when STA vap detects RADAR.
+ * @is_chan_hop_blocked: Whether channel is blocked for ACS hopping.
  */
 struct regulatory_channel {
 	qdf_freq_t center_freq;
@@ -788,6 +792,9 @@ struct regulatory_channel {
 	uint8_t ant_gain;
 	bool nol_chan;
 	bool nol_history;
+#ifdef CONFIG_HOST_FIND_CHAN
+	bool is_chan_hop_blocked;
+#endif
 };
 
 /**

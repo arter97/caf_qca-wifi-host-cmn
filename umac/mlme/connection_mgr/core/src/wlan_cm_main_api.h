@@ -733,6 +733,18 @@ void cm_set_max_connect_attempts(struct wlan_objmgr_vdev *vdev,
 				 uint8_t max_connect_attempts);
 
 /**
+ * cm_set_max_connect_timeout() - Set max connect timeout
+ * @vdev: vdev pointer
+ * @max_connect_timeout: max connect timeout to be set.
+ *
+ * Set max connect timeout.
+ *
+ * Return: void
+ */
+void cm_set_max_connect_timeout(struct wlan_objmgr_vdev *vdev,
+				uint32_t max_connect_timeout);
+
+/**
  * cm_is_vdev_connecting() - check if vdev is in conneting state
  * @vdev: vdev pointer
  *
@@ -771,6 +783,41 @@ bool cm_is_vdev_disconnected(struct wlan_objmgr_vdev *vdev);
  * Return: bool
  */
 bool cm_is_vdev_roaming(struct wlan_objmgr_vdev *vdev);
+
+/**
+ * cm_get_active_req_type() - CM active req type
+ * @vdev: vdev pointer
+ *
+ * Return: CM active req type
+ */
+enum wlan_cm_active_request_type
+cm_get_active_req_type(struct wlan_objmgr_vdev *vdev);
+
+/**
+ * cm_get_active_connect_req() - Get copy of active connect request
+ * @vdev: vdev pointer
+ * @req: pointer to the copy of the active connect request
+ * *
+ * Context: Should be called only in the conext of the
+ * cm request activation
+ *
+ * Return: true and connect req if any request is active
+ */
+bool cm_get_active_connect_req(struct wlan_objmgr_vdev *vdev,
+			       struct wlan_cm_vdev_connect_req *req);
+
+/**
+ * cm_get_active_disconnect_req() - Get copy of active disconnect request
+ * @vdev: vdev pointer
+ * @req: pointer to the copy of the active disconnect request
+ * *
+ * Context: Should be called only in the conext of the
+ * cm request activation
+ *
+ * Return: true and disconnect req if any request is active
+ */
+bool cm_get_active_disconnect_req(struct wlan_objmgr_vdev *vdev,
+				  struct wlan_cm_vdev_discon_req *req);
 
 /*
  * cm_connect_handle_event_post_fail() - initiate connect failure if msg posting

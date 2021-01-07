@@ -75,6 +75,7 @@
 #define WMI_IPV4_ADDR_LEN       4
 #define WMI_KEEP_ALIVE_NULL_PKT              1
 #define WMI_KEEP_ALIVE_UNSOLICIT_ARP_RSP     2
+#define WMI_KEEP_ALIVE_MGMT_FRAME            5
 #define WMI_MAC_MAX_KEY_LENGTH          32
 #define WMI_KRK_KEY_LEN     16
 #ifdef WLAN_FEATURE_ROAM_OFFLOAD
@@ -1324,6 +1325,7 @@ struct tx_send_params {
  * @use_6mbps: specify whether management frame to transmit should
  * @tx_flags: additional configuration flags for mgmt frames
  *  use 6 Mbps rather than 1 Mbps min rate(for 5GHz band or P2P)
+ * @peer_rssi: peer RSSI value
  */
 struct wmi_mgmt_params {
 	void *tx_frame;
@@ -1339,6 +1341,7 @@ struct wmi_mgmt_params {
 	bool tx_params_valid;
 	uint8_t use_6mbps;
 	uint32_t tx_flags;
+	int8_t peer_rssi;
 };
 
 /**
@@ -4723,6 +4726,7 @@ typedef enum {
 	wmi_twt_del_dialog_complete_event_id,
 	wmi_twt_pause_dialog_complete_event_id,
 	wmi_twt_resume_dialog_complete_event_id,
+	wmi_twt_nudge_dialog_complete_event_id,
 	wmi_twt_session_stats_event_id,
 #endif
 	wmi_apf_get_vdev_work_memory_resp_event_id,
@@ -5084,6 +5088,8 @@ typedef enum {
 	wmi_vdev_param_set_cmd_obss_pd_per_ac,
 	wmi_vdev_param_enable_srp,
 	wmi_vdev_param_nan_config_features,
+	wmi_vdev_param_enable_disable_rtt_responder_role,
+	wmi_vdev_param_enable_disable_rtt_initiator_role,
 } wmi_conv_vdev_param_id;
 
 /**
@@ -5317,6 +5323,8 @@ typedef enum {
 #endif
 	wmi_service_scan_conf_per_ch_support,
 	wmi_service_csa_beacon_template,
+	wmi_service_twt_bcast_req_support,
+	wmi_service_twt_bcast_resp_support,
 	wmi_services_max,
 } wmi_conv_service_ids;
 #define WMI_SERVICE_UNAVAILABLE 0xFFFF

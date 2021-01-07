@@ -510,6 +510,10 @@ static const uint32_t vdev_param_tlv[] = {
 	[wmi_vdev_param_enable_srp] = WMI_VDEV_PARAM_ENABLE_SRP,
 	[wmi_vdev_param_nan_config_features] =
 			WMI_VDEV_PARAM_ENABLE_DISABLE_NAN_CONFIG_FEATURES,
+	[wmi_vdev_param_enable_disable_rtt_responder_role] =
+			WMI_VDEV_PARAM_ENABLE_DISABLE_RTT_RESPONDER_ROLE,
+	[wmi_vdev_param_enable_disable_rtt_initiator_role] =
+			WMI_VDEV_PARAM_ENABLE_DISABLE_RTT_INITIATOR_ROLE,
 };
 #endif
 
@@ -723,7 +727,7 @@ QDF_STATUS wmi_unified_cmd_send_pm_chk(struct wmi_unified *wmi_handle,
 	if (!wmi_is_qmi_stats_enabled(wmi_handle))
 		goto send_over_wmi;
 
-	if (wmi_is_target_suspended(wmi_handle)) {
+	if (wmi_is_target_suspend_acked(wmi_handle)) {
 		if (QDF_IS_STATUS_SUCCESS(
 		    wmi_unified_cmd_send_over_qmi(wmi_handle, buf,
 						  buflen, cmd_id)))
@@ -3451,6 +3455,7 @@ static QDF_STATUS send_mgmt_cmd_tlv(wmi_unified_t wmi_handle,
 	cmd->buf_len = bufp_len;
 	cmd->tx_params_valid = param->tx_params_valid;
 	cmd->tx_flags = param->tx_flags;
+	cmd->peer_rssi = param->peer_rssi;
 
 	wmi_mgmt_cmd_record(wmi_handle, WMI_MGMT_TX_SEND_CMDID,
 			bufp, cmd->vdev_id, cmd->chanfreq);
@@ -3517,6 +3522,7 @@ static QDF_STATUS send_mgmt_cmd_tlv(wmi_unified_t wmi_handle,
 
 	cmd->desc_id = param->desc_id;
 	cmd->chanfreq = param->chanfreq;
+	cmd->peer_rssi = param->peer_rssi;
 	bufp += sizeof(wmi_mgmt_tx_send_cmd_fixed_param);
 	WMITLV_SET_HDR(bufp, WMITLV_TAG_ARRAY_BYTE, roundup(bufp_len,
 							    sizeof(uint32_t)));
@@ -4455,8 +4461,15 @@ static QDF_STATUS send_setup_install_key_cmd_tlv(wmi_unified_t wmi_handle,
 	WMITLV_SET_HDR(buf_ptr, WMITLV_TAG_ARRAY_BYTE,
 		       roundup(key_params->key_len, sizeof(uint32_t)));
 	key_data = (uint8_t *) (buf_ptr + WMI_TLV_HDR_SIZE);
-	qdf_mem_copy((void *)key_data,
-		     (const void *)key_params->key_data, key_params->key_len);
+
+	/* for big endian host, copy engine byte_swap is enabled
+	 * But key_data is in network byte order
+	 * Need to byte swap the key_data - so when copy engine
+	 * does byte_swap - target gets key_data in the correct order
+	 */
+	WMI_HOST_IF_MSG_COPY_CHAR_ARRAY((void *)key_data,
+					(const void *)key_params->key_data,
+					key_params->key_len);
 	qdf_mem_copy(&cmd->key_rsc_counter, &key_params->key_rsc_ctr,
 		     sizeof(wmi_key_seq_counter));
 	cmd->key_len = key_params->key_len;
@@ -8819,6 +8832,12 @@ static QDF_STATUS init_cmd_send_tlv(wmi_unified_t wmi_handle,
 			(sizeof(wlan_host_memory_chunk) *
 			 param->num_mem_chunks));
 
+	wmi_debug("num peers: %d , num offload peers: %d, num vdevs: %d, num tids: %d, num tdls conn tb entries: %d, num tdls vdevs: %d",
+		 resource_cfg->num_peers, resource_cfg->num_offload_peers,
+		 resource_cfg->num_vdevs, resource_cfg->num_tids,
+		 resource_cfg->num_tdls_conn_table_entries,
+		 resource_cfg->num_tdls_vdevs);
+
 	/* Fill hw mode id config */
 	buf_ptr = copy_hw_mode_in_init_cmd(wmi_handle, buf_ptr, &len, param);
 
@@ -11421,6 +11440,8 @@ wmi_tgt_thermal_level_to_host(uint32_t level)
 		return THERMAL_MITIGATION;
 	case WMI_THERMAL_SHUTOFF:
 		return THERMAL_SHUTOFF;
+	case WMI_THERMAL_SHUTDOWN_TGT:
+		return THERMAL_SHUTDOWN_TARGET;
 	default:
 		return THERMAL_UNKNOWN;
 	}
@@ -14819,6 +14840,8 @@ static void populate_tlv_events_id(uint32_t *event_ids)
 		WMI_TWT_PAUSE_DIALOG_COMPLETE_EVENTID;
 	event_ids[wmi_twt_resume_dialog_complete_event_id] =
 		WMI_TWT_RESUME_DIALOG_COMPLETE_EVENTID;
+	event_ids[wmi_twt_nudge_dialog_complete_event_id] =
+		WMI_TWT_NUDGE_DIALOG_COMPLETE_EVENTID;
 	event_ids[wmi_twt_session_stats_event_id] =
 		WMI_TWT_SESSION_STATS_EVENTID;
 #endif
@@ -15253,7 +15276,12 @@ static void populate_tlv_service(uint32_t *wmi_service)
 			WMI_SERVICE_SCAN_CONFIG_PER_CHANNEL;
 	wmi_service[wmi_service_csa_beacon_template] =
 			WMI_SERVICE_CSA_BEACON_TEMPLATE;
-
+#ifdef WLAN_SUPPORT_TWT
+	wmi_service[wmi_service_twt_bcast_req_support] =
+			WMI_SERVICE_BROADCAST_TWT_REQUESTER;
+	wmi_service[wmi_service_twt_bcast_resp_support] =
+			WMI_SERVICE_BROADCAST_TWT_RESPONDER;
+#endif
 	wmi_populate_service_get_sta_in_ll_stats_req(wmi_service);
 }
 

@@ -85,6 +85,10 @@
 #include <wlan_cm_roam_public_struct.h>
 #endif
 
+#ifdef WMI_AP_SUPPORT
+#include <wmi_unified_ap_params.h>
+#endif
+
 #define WMI_UNIFIED_MAX_EVENT 0x100
 
 #ifdef WMI_EXT_DBG
@@ -375,6 +379,11 @@ QDF_STATUS
 QDF_STATUS
 (*extract_roam_initial_info)(wmi_unified_t wmi_handle, void *evt_buf,
 			     struct roam_initial_data *dst, uint8_t idx);
+
+QDF_STATUS
+(*extract_roam_msg_info)(wmi_unified_t wmi_handle, void *evt_buf,
+			 struct roam_msg_info *dst, uint8_t idx);
+
 #endif
 
 QDF_STATUS (*send_vdev_create_cmd)(wmi_unified_t wmi_handle,
@@ -2200,6 +2209,9 @@ QDF_STATUS (*send_twt_del_dialog_cmd)(wmi_unified_t wmi_handle,
 QDF_STATUS (*send_twt_pause_dialog_cmd)(wmi_unified_t wmi_handle,
 			struct wmi_twt_pause_dialog_cmd_param *params);
 
+QDF_STATUS (*send_twt_nudge_dialog_cmd)(wmi_unified_t wmi_handle,
+			struct wmi_twt_nudge_dialog_cmd_param *params);
+
 QDF_STATUS (*send_twt_resume_dialog_cmd)(wmi_unified_t wmi_handle,
 			struct wmi_twt_resume_dialog_cmd_param *params);
 
@@ -2237,6 +2249,10 @@ QDF_STATUS (*extract_twt_del_dialog_comp_event)(wmi_unified_t wmi_handle,
 QDF_STATUS (*extract_twt_pause_dialog_comp_event)(wmi_unified_t wmi_handle,
 		uint8_t *evt_buf,
 		struct wmi_twt_pause_dialog_complete_event_param *params);
+
+QDF_STATUS (*extract_twt_nudge_dialog_comp_event)(wmi_unified_t wmi_handle,
+		uint8_t *evt_buf,
+		struct wmi_twt_nudge_dialog_complete_event_param *params);
 
 QDF_STATUS (*extract_twt_resume_dialog_comp_event)(wmi_unified_t wmi_handle,
 		uint8_t *evt_buf,
@@ -2452,6 +2468,10 @@ QDF_STATUS (*extract_vdev_tsf_report_event)(wmi_unified_t wmi_handle,
 QDF_STATUS (*set_radio_tx_mode_select_cmd)(
 				wmi_unified_t wmi,
 				struct wmi_pdev_enable_tx_mode_selection *param);
+QDF_STATUS (*send_lcr_cmd)(wmi_unified_t wmi_handle,
+			   struct wmi_wifi_pos_lcr_info *lcr_info);
+QDF_STATUS (*send_lci_cmd)(wmi_unified_t wmi_handle,
+			   struct wifi_pos_lci_info *lci_info);
 #endif
 };
 
@@ -2527,6 +2547,7 @@ struct wmi_unified {
 #endif /*WMI_INTERFACE_EVENT_LOGGING */
 
 	qdf_atomic_t is_target_suspended;
+	qdf_atomic_t is_target_suspend_acked;
 #ifdef WLAN_FEATURE_WMI_SEND_RECV_QMI
 	bool is_qmi_stats_enabled;
 #endif

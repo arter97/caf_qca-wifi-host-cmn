@@ -119,6 +119,8 @@ struct wlan_fils_con_info {
  * @CM_INTERNAL_DISCONNECT: Internal disconnect initiated by Connection manager
  * on receiving the back to back commands
  * @CM_ROAM_DISCONNECT: Disconnect req due to HO failure
+ * @CM_OSIF_CFG_CONNECT: Connect request initiated due to config change
+ * @CM_OSIF_CFG_DISCONNECT: Disconnect request initiated due to config change
  * @CM_SOURCE_MAX: max value of connection manager source
  * @CM_SOURCE_INVALID: Invalid connection manager req source
  */
@@ -131,6 +133,8 @@ enum wlan_cm_source {
 	CM_MLME_DISCONNECT,
 	CM_INTERNAL_DISCONNECT,
 	CM_ROAM_DISCONNECT,
+	CM_OSIF_CFG_CONNECT,
+	CM_OSIF_CFG_DISCONNECT,
 	CM_SOURCE_MAX,
 	CM_SOURCE_INVALID = CM_SOURCE_MAX,
 };
@@ -385,6 +389,18 @@ struct wlan_cm_connect_resp {
 struct wlan_cm_discon_rsp {
 	struct wlan_cm_vdev_discon_req req;
 	struct element_info ap_discon_ie;
+};
+
+/*
+ * enum wlan_cm_active_request_type: CM active req type
+ * @CM_NONE: No active serialisation command
+ * @CM_CONNECT_ACTIVE: Connect active in serialisation
+ * @CM_DISCONNECT_ACTIVE: DicConnect active in serialisation
+ */
+enum wlan_cm_active_request_type {
+	CM_NONE,
+	CM_CONNECT_ACTIVE,
+	CM_DISCONNECT_ACTIVE,
 };
 
 #endif /* FEATURE_CM_ENABLE */

@@ -46,6 +46,10 @@
 #include "mp_dev.h"
 #include "hif_debug.h"
 
+#if (defined(QCA_WIFI_QCA6390) || defined(QCA_WIFI_QCA6490))
+#include "hal_api.h"
+#endif
+
 #include "if_pci_internal.h"
 #include "ce_tasklet.h"
 #include "targaddrs.h"
@@ -55,6 +59,7 @@
 #include "ahb_api.h"
 #include "wlan_cfg.h"
 #include "qdf_hang_event_notifier.h"
+#include "qdf_platform.h"
 
 /* Maximum ms timeout for host to wake up target */
 #define PCIE_WAKE_TIMEOUT 1000
@@ -2348,7 +2353,7 @@ static inline int __hif_check_link_status(struct hif_softc *scn)
 
 
 #ifdef HIF_BUS_LOG_INFO
-void hif_log_pcie_info(struct hif_softc *scn, uint8_t *data,
+bool hif_log_pcie_info(struct hif_softc *scn, uint8_t *data,
 		       unsigned int *offset)
 {
 	struct hif_pci_softc *sc = HIF_GET_PCI_SOFTC(scn);
@@ -2357,7 +2362,7 @@ void hif_log_pcie_info(struct hif_softc *scn, uint8_t *data,
 
 	if (!sc) {
 		hif_err("HIF Bus Context is Invalid");
-		return;
+		return false;
 	}
 
 	pfrm_read_config_word(sc->pdev, PCI_DEVICE_ID, &info.dev_id);
@@ -2367,10 +2372,18 @@ void hif_log_pcie_info(struct hif_softc *scn, uint8_t *data,
 			     size - QDF_HANG_EVENT_TLV_HDR_SIZE);
 
 	if (*offset + size > QDF_WLAN_HANG_FW_OFFSET)
-		return;
+		return false;
 
 	qdf_mem_copy(data + *offset, &info, size);
 	*offset = *offset + size;
+
+	if (info.dev_id == sc->devid)
+		return false;
+
+	qdf_recovery_reason_update(QCA_HANG_BUS_FAILURE);
+	qdf_get_bus_reg_dump(scn->qdf_dev->dev, data,
+			     (QDF_WLAN_HANG_FW_OFFSET - size));
+	return true;
 }
 #endif
 
@@ -2426,8 +2439,12 @@ int hif_pci_bus_resume_noirq(struct hif_softc *scn)
 {
 	hif_apps_wake_irq_disable(GET_HIF_OPAQUE_HDL(scn));
 
-	if (hif_can_suspend_link(GET_HIF_OPAQUE_HDL(scn)))
-		qdf_atomic_set(&scn->link_suspended, 0);
+	/* a vote for link up can come in the middle of the ongoing resume
+	 * process. hence, clear the link suspend flag once
+	 * hif_bus_resume_noirq() succeeds since PCIe link is already resumed
+	 * by this time
+	 */
+	qdf_atomic_set(&scn->link_suspended, 0);
 
 	return 0;
 }
@@ -3170,6 +3187,34 @@ int hif_pci_configure_grp_irq(struct hif_softc *scn,
 	hif_ext_group->irq_requested = true;
 	return 0;
 }
+
+#if (defined(QCA_WIFI_QCA6390) || defined(QCA_WIFI_QCA6490))
+uint32_t hif_pci_reg_read32(struct hif_softc *hif_sc,
+			    uint32_t offset)
+{
+	return hal_read32_mb(hif_sc->hal_soc, offset);
+}
+
+void hif_pci_reg_write32(struct hif_softc *hif_sc,
+			 uint32_t offset,
+			 uint32_t value)
+{
+	hal_write32_mb(hif_sc->hal_soc, offset, value);
+}
+#else
+/* TODO: Need to implement other chips carefully */
+uint32_t hif_pci_reg_read32(struct hif_softc *hif_sc,
+			    uint32_t offset)
+{
+	return 0;
+}
+
+void hif_pci_reg_write32(struct hif_softc *hif_sc,
+			 uint32_t offset,
+			 uint32_t value)
+{
+}
+#endif
 
 /**
  * hif_configure_irq() - configure interrupt
