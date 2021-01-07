@@ -2160,34 +2160,34 @@ void dfs_destroy_object(struct wlan_dfs *dfs);
  */
 void dfs_detach(struct wlan_dfs *dfs);
 
+#ifdef QCA_SUPPORT_DFS_CAC
 /**
- * dfs_cac_valid_reset() - Cancels the dfs_cac_valid_timer timer.
+ * dfs_stacac_stop() - Clear the STA CAC timer.
  * @dfs: Pointer to wlan_dfs structure.
- * @prevchan_ieee: Prevchan number.
- * @prevchan_flags: Prevchan flags.
  */
-#ifdef CONFIG_CHAN_NUM_API
-void dfs_cac_valid_reset(struct wlan_dfs *dfs,
-		uint8_t prevchan_ieee,
-		uint32_t prevchan_flags);
-#endif
+void dfs_stacac_stop(struct wlan_dfs *dfs);
 
 /**
- * dfs_cac_valid_reset_for_freq() - Cancels the dfs_cac_valid_timer timer.
+ * dfs_is_cac_required() - Check if DFS CAC is required for the current channel.
  * @dfs: Pointer to wlan_dfs structure.
- * @prevchan_chan: Prevchan frequency
- * @prevchan_flags: Prevchan flags.
+ * @cur_chan: Pointer to current channel of dfs_channel structure.
+ * @prev_chan: Pointer to previous channel of dfs_channel structure.
+ * @continue_current_cac: If AP can start CAC then this variable indicates
+ * whether to continue with the current CAC or restart the CAC. This variable
+ * is valid only if this function returns true.
+ *
+ * Return: true if AP requires CAC or can continue current CAC, else false.
  */
-#ifdef CONFIG_CHAN_FREQ_API
-void dfs_cac_valid_reset_for_freq(struct wlan_dfs *dfs,
-				  uint16_t prevchan_freq,
-				  uint32_t prevchan_flags);
-#endif
+bool dfs_is_cac_required(struct wlan_dfs *dfs,
+			 struct dfs_channel *cur_chan,
+			 struct dfs_channel *prev_chan,
+			 bool *continue_current_cac);
 
 /**
  * dfs_cac_stop() - Clear the AP CAC timer.
  * @dfs: Pointer to wlan_dfs structure.
  */
+
 void dfs_cac_stop(struct wlan_dfs *dfs);
 
 /**
@@ -2202,6 +2202,131 @@ void dfs_cancel_cac_timer(struct wlan_dfs *dfs);
  */
 void dfs_start_cac_timer(struct wlan_dfs *dfs);
 
+/**
+ * dfs_cac_valid_reset_for_freq() - Cancels the dfs_cac_valid_timer timer.
+ * @dfs: Pointer to wlan_dfs structure.
+ * @prevchan_chan: Prevchan frequency
+ * @prevchan_flags: Prevchan flags.
+ */
+#ifdef CONFIG_CHAN_FREQ_API
+void dfs_cac_valid_reset_for_freq(struct wlan_dfs *dfs,
+				  uint16_t prevchan_freq,
+				  uint32_t prevchan_flags);
+#endif
+
+/**
+ * dfs_get_override_cac_timeout() -  Get override CAC timeout value.
+ * @dfs: Pointer to DFS object.
+ * @cac_timeout: Pointer to save the CAC timeout value.
+ */
+int dfs_get_override_cac_timeout(struct wlan_dfs *dfs,
+				 int *cac_timeout);
+
+/**
+ * dfs_override_cac_timeout() -  Override the default CAC timeout.
+ * @dfs: Pointer to DFS object.
+ * @cac_timeout: CAC timeout value.
+ */
+int dfs_override_cac_timeout(struct wlan_dfs *dfs,
+			     int cac_timeout);
+
+/**
+ * dfs_is_ap_cac_timer_running() - Returns the dfs cac timer.
+ * @dfs: Pointer to wlan_dfs structure.
+ */
+int dfs_is_ap_cac_timer_running(struct wlan_dfs *dfs);
+
+/**
+ * dfs_cac_timer_attach() - Initialize cac timers.
+ * @dfs: Pointer to wlan_dfs structure.
+ */
+void dfs_cac_timer_attach(struct wlan_dfs *dfs);
+
+/**
+ * dfs_cac_timer_reset() - Cancel dfs cac timers.
+ * @dfs: Pointer to wlan_dfs structure.
+ */
+void dfs_cac_timer_reset(struct wlan_dfs *dfs);
+
+/**
+ * dfs_cac_timer_detach() - Free dfs cac timers.
+ * @dfs: Pointer to wlan_dfs structure.
+ */
+void dfs_cac_timer_detach(struct wlan_dfs *dfs);
+#else
+static inline
+void dfs_stacac_stop(struct wlan_dfs *dfs)
+{
+}
+
+static inline
+bool dfs_is_cac_required(struct wlan_dfs *dfs,
+			 struct dfs_channel *cur_chan,
+			 struct dfs_channel *prev_chan,
+			 bool *continue_current_cac)
+{
+	return false;
+}
+
+static inline
+void dfs_cac_stop(struct wlan_dfs *dfs)
+{
+}
+
+static inline
+void dfs_cancel_cac_timer(struct wlan_dfs *dfs)
+{
+}
+
+static inline
+void dfs_start_cac_timer(struct wlan_dfs *dfs)
+{
+}
+
+#ifdef CONFIG_CHAN_FREQ_API
+static inline
+void dfs_cac_valid_reset_for_freq(struct wlan_dfs *dfs,
+				  uint16_t prevchan_freq,
+				  uint32_t prevchan_flags)
+{
+}
+#endif
+
+static inline
+int dfs_get_override_cac_timeout(struct wlan_dfs *dfs,
+				 int *cac_timeout)
+{
+	return 0;
+}
+
+static inline
+int dfs_override_cac_timeout(struct wlan_dfs *dfs,
+			     int cac_timeout)
+{
+	return 0;
+}
+
+static inline
+int dfs_is_ap_cac_timer_running(struct wlan_dfs *dfs)
+{
+	return 0;
+}
+
+static inline
+void dfs_cac_timer_attach(struct wlan_dfs *dfs)
+{
+}
+
+static inline
+void dfs_cac_timer_reset(struct wlan_dfs *dfs)
+{
+}
+
+static inline
+void dfs_cac_timer_detach(struct wlan_dfs *dfs)
+{
+}
+#endif
 /**
  * dfs_set_update_nol_flag() - Sets update_nol flag.
  * @dfs: Pointer to wlan_dfs structure.
@@ -2229,12 +2354,6 @@ int dfs_get_use_nol(struct wlan_dfs *dfs);
 int dfs_get_nol_timeout(struct wlan_dfs *dfs);
 
 /**
- * dfs_is_ap_cac_timer_running() - Returns the dfs cac timer.
- * @dfs: Pointer to wlan_dfs structure.
- */
-int dfs_is_ap_cac_timer_running(struct wlan_dfs *dfs);
-
-/**
  * dfs_control()- Used to process ioctls related to DFS.
  * @dfs: Pointer to wlan_dfs structure.
  * @id: Command type.
@@ -2257,22 +2376,6 @@ int dfs_control(struct wlan_dfs *dfs,
  */
 void dfs_getnol(struct wlan_dfs *dfs,
 		void *dfs_nolinfo);
-
-/**
- * dfs_get_override_cac_timeout() -  Get override CAC timeout value.
- * @dfs: Pointer to DFS object.
- * @cac_timeout: Pointer to save the CAC timeout value.
- */
-int dfs_get_override_cac_timeout(struct wlan_dfs *dfs,
-		int *cac_timeout);
-
-/**
- * dfs_override_cac_timeout() -  Override the default CAC timeout.
- * @dfs: Pointer to DFS object.
- * @cac_timeout: CAC timeout value.
- */
-int dfs_override_cac_timeout(struct wlan_dfs *dfs,
-		int cac_timeout);
 
 /**
  * dfs_clear_nolhistory() - unmarks WLAN_CHAN_CLR_HISTORY_RADAR flag for
@@ -2344,23 +2447,6 @@ static inline int dfs_radar_disable(struct wlan_dfs *dfs)
 int dfs_get_debug_info(struct wlan_dfs *dfs,
 		void *data);
 
-/**
- * dfs_cac_timer_attach() - Initialize cac timers.
- * @dfs: Pointer to wlan_dfs structure.
- */
-void dfs_cac_timer_attach(struct wlan_dfs *dfs);
-
-/**
- * dfs_cac_timer_reset() - Cancel dfs cac timers.
- * @dfs: Pointer to wlan_dfs structure.
- */
-void dfs_cac_timer_reset(struct wlan_dfs *dfs);
-
-/**
- * dfs_cac_timer_detach() - Free dfs cac timers.
- * @dfs: Pointer to wlan_dfs structure.
- */
-void dfs_cac_timer_detach(struct wlan_dfs *dfs);
 
 /**
  * dfs_nol_timer_init() - Initialize NOL timers.
@@ -2385,12 +2471,6 @@ void dfs_nol_detach(struct wlan_dfs *dfs);
  * @dfs: Pointer to wlan_dfs structure.
  */
 void dfs_print_nolhistory(struct wlan_dfs *dfs);
-
-/**
- * dfs_stacac_stop() - Clear the STA CAC timer.
- * @dfs: Pointer to wlan_dfs structure.
- */
-void dfs_stacac_stop(struct wlan_dfs *dfs);
 
 /**
  * dfs_find_precac_secondary_vht80_chan() - Get a VHT80 channel with the
@@ -2823,22 +2903,6 @@ bool dfs_process_nol_ie_bitmap(struct wlan_dfs *dfs, uint8_t nol_ie_bandwidth,
 #endif
 
 /**
- * dfs_is_cac_required() - Check if DFS CAC is required for the current channel.
- * @dfs: Pointer to wlan_dfs structure.
- * @cur_chan: Pointer to current channel of dfs_channel structure.
- * @prev_chan: Pointer to previous channel of dfs_channel structure.
- * @continue_current_cac: If AP can start CAC then this variable indicates
- * whether to continue with the current CAC or restart the CAC. This variable
- * is valid only if this function returns true.
- *
- * Return: true if AP requires CAC or can continue current CAC, else false.
- */
-bool dfs_is_cac_required(struct wlan_dfs *dfs,
-			 struct dfs_channel *cur_chan,
-			 struct dfs_channel *prev_chan,
-			 bool *continue_current_cac);
-
-/**
  * dfs_task_testtimer_reset() - stop dfs test timer.
  * @dfs: Pointer to wlan_dfs structure.
  */
@@ -2888,6 +2952,11 @@ static inline int dfs_is_disable_radar_marking_set(struct wlan_dfs *dfs,
  */
 #if defined(WLAN_DFS_FULL_OFFLOAD) && defined(QCA_DFS_NOL_OFFLOAD)
 bool dfs_get_disable_radar_marking(struct wlan_dfs *dfs);
+#else
+static inline bool dfs_get_disable_radar_marking(struct wlan_dfs *dfs)
+{
+	return false;
+}
 #endif
 
 /**
@@ -3097,4 +3166,37 @@ static inline void dfs_postnol_attach(struct wlan_dfs *dfs)
 {
 }
 #endif
+
+#ifdef CONFIG_HOST_FIND_CHAN
+/**
+ * wlan_is_chan_radar() - Checks if a given dfs channel is in NOL or not.
+ * @dfs: Pointer to wlan_dfs structure.
+ * @chan: Pointer to the dfs channel structure.
+ *
+ * Return: True if the channel has detected radar, else false.
+ */
+bool wlan_is_chan_radar(struct wlan_dfs *dfs, struct dfs_channel *chan);
+
+/**
+ * wlan_is_chan_history_radar() - Checks if a given dfs channel is in NOL
+ * history or not.
+ * @dfs: Pointer to wlan_dfs structure.
+ * @chan: Pointer to the dfs channel structure.
+ *
+ * Return: True if the channel is marked as radar history, else false.
+ */
+bool wlan_is_chan_history_radar(struct wlan_dfs *dfs, struct dfs_channel *chan);
+#else
+static inline bool
+wlan_is_chan_radar(struct wlan_dfs *dfs, struct dfs_channel *chan)
+{
+	return false;
+}
+
+static inline bool
+wlan_is_chan_history_radar(struct wlan_dfs *dfs, struct dfs_channel *chan)
+{
+	return false;
+}
+#endif /* CONFIG_HOST_FIND_CHAN */
 #endif  /* _DFS_H_ */
