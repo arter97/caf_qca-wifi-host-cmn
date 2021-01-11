@@ -119,15 +119,15 @@ QDF_STATUS ucfg_reg_get_current_cc(struct wlan_objmgr_pdev *pdev,
 #ifdef CONFIG_REG_CLIENT
 
 QDF_STATUS ucfg_reg_set_band(struct wlan_objmgr_pdev *pdev,
-			     enum band_info band)
+			     uint32_t band_bitmap)
 {
-	return reg_set_band(pdev, band);
+	return reg_set_band(pdev, band_bitmap);
 }
 
 QDF_STATUS ucfg_reg_get_band(struct wlan_objmgr_pdev *pdev,
-			     enum band_info *band)
+			     uint32_t *band_bitmap)
 {
-	return reg_get_band(pdev, band);
+	return reg_get_band(pdev, band_bitmap);
 }
 
 /**
@@ -227,13 +227,6 @@ QDF_STATUS ucfg_reg_enable_dfs_channels(struct wlan_objmgr_pdev *pdev,
 	return reg_enable_dfs_channels(pdev, dfs_enable);
 }
 
-QDF_STATUS ucfg_reg_get_curr_band(struct wlan_objmgr_pdev *pdev,
-				  enum band_info *band)
-{
-	return reg_get_curr_band(pdev, band);
-
-}
-
 void ucfg_reg_register_chan_change_callback(struct wlan_objmgr_psoc *psoc,
 					    void *cbk, void *arg)
 {
@@ -256,6 +249,12 @@ enum country_src ucfg_reg_get_cc_and_src(struct wlan_objmgr_psoc *psoc,
 
 void ucfg_reg_unit_simulate_ch_avoid(struct wlan_objmgr_psoc *psoc,
 	struct ch_avoid_ind_type *ch_avoid)
+{
+	reg_process_ch_avoid_event(psoc, ch_avoid);
+}
+
+void ucfg_reg_ch_avoid(struct wlan_objmgr_psoc *psoc,
+		       struct ch_avoid_ind_type *ch_avoid)
 {
 	reg_process_ch_avoid_event(psoc, ch_avoid);
 }

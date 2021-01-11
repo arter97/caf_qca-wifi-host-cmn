@@ -31,6 +31,7 @@
 #include <target_if.h>
 #include <wlan_vdev_mlme_main.h>
 #include <wmi_unified_vdev_api.h>
+#include <target_if_psoc_wake_lock.h>
 
 static inline
 void target_if_vdev_mgr_handle_recovery(struct wlan_objmgr_psoc *psoc,
@@ -47,7 +48,7 @@ void target_if_vdev_mgr_handle_recovery(struct wlan_objmgr_psoc *psoc,
 				wlan_psoc_get_id(psoc), vdev_id);
 }
 
-void target_if_vdev_mgr_rsp_timer_cb(struct vdev_response_timer *vdev_rsp)
+void target_if_vdev_mgr_rsp_timer_cb(void *arg)
 {
 	struct wlan_objmgr_psoc *psoc;
 	struct wlan_lmac_if_mlme_rx_ops *rx_ops;
@@ -55,6 +56,7 @@ void target_if_vdev_mgr_rsp_timer_cb(struct vdev_response_timer *vdev_rsp)
 	struct vdev_stop_response stop_rsp = {0};
 	struct vdev_delete_response del_rsp = {0};
 	struct peer_delete_all_response peer_del_all_rsp = {0};
+	struct vdev_response_timer *vdev_rsp = arg;
 	enum qdf_hang_reason recovery_reason;
 	uint8_t vdev_id;
 	uint16_t rsp_pos = RESPONSE_BIT_MAX;
@@ -199,8 +201,16 @@ target_if_vdev_mgr_rsp_cb_mc_ctx(void *arg)
 
 	msg.type = SYS_MSG_ID_MC_TIMER;
 	msg.reserved = SYS_MSG_COOKIE;
-	msg.callback = target_if_vdev_mgr_rsp_timer_cb;
-	msg.bodyptr = vdev_rsp;
+
+	/* msg.callback will explicitly cast back to qdf_mc_timer_callback_t
+	 * in scheduler_timer_q_mq_handler.
+	 * but in future we do not want to introduce more this kind of
+	 * typecast by properly using QDF MC timer for MCC from get go in
+	 * common code.
+	 */
+	msg.callback =
+		(scheduler_msg_process_fn_t)target_if_vdev_mgr_rsp_timer_cb;
+	msg.bodyptr = arg;
 	msg.bodyval = 0;
 	msg.flush_callback = target_if_vdev_mgr_rsp_flush_cb;
 
@@ -419,7 +429,7 @@ static int target_if_vdev_mgr_delete_response_handler(ol_scn_t scn,
 	}
 
 	status = rx_ops->vdev_mgr_delete_response(psoc, &vdev_del_resp);
-
+	target_if_wake_lock_timeout_release(psoc, DELETE_WAKELOCK);
 err:
 	return qdf_status_to_os_return(status);
 }
@@ -703,7 +713,7 @@ static int target_if_vdev_mgr_multi_vdev_restart_resp_handler(
 QDF_STATUS target_if_vdev_mgr_wmi_event_register(
 				struct wlan_objmgr_psoc *psoc)
 {
-	int retval = 0;
+	QDF_STATUS retval = QDF_STATUS_SUCCESS;
 	struct wmi_unified *wmi_handle;
 
 	if (!psoc) {
@@ -722,7 +732,7 @@ QDF_STATUS target_if_vdev_mgr_wmi_event_register(
 				wmi_vdev_stopped_event_id,
 				target_if_vdev_mgr_stop_response_handler,
 				VDEV_RSP_RX_CTX);
-	if (retval)
+	if (QDF_IS_STATUS_ERROR(retval))
 		mlme_err("failed to register for stop response");
 
 	retval = wmi_unified_register_event_handler(
@@ -730,7 +740,7 @@ QDF_STATUS target_if_vdev_mgr_wmi_event_register(
 				wmi_vdev_delete_resp_event_id,
 				target_if_vdev_mgr_delete_response_handler,
 				VDEV_RSP_RX_CTX);
-	if (retval)
+	if (QDF_IS_STATUS_ERROR(retval))
 		mlme_err("failed to register for delete response");
 
 	retval = wmi_unified_register_event_handler(
@@ -738,7 +748,7 @@ QDF_STATUS target_if_vdev_mgr_wmi_event_register(
 				wmi_vdev_start_resp_event_id,
 				target_if_vdev_mgr_start_response_handler,
 				VDEV_RSP_RX_CTX);
-	if (retval)
+	if (QDF_IS_STATUS_ERROR(retval))
 		mlme_err("failed to register for start response");
 
 	retval = wmi_unified_register_event_handler(
@@ -746,7 +756,7 @@ QDF_STATUS target_if_vdev_mgr_wmi_event_register(
 			wmi_peer_delete_all_response_event_id,
 			target_if_vdev_mgr_peer_delete_all_response_handler,
 			VDEV_RSP_RX_CTX);
-	if (retval)
+	if (QDF_IS_STATUS_ERROR(retval))
 		mlme_err("failed to register for peer delete all response");
 
 	retval = wmi_unified_register_event_handler(
@@ -754,10 +764,10 @@ QDF_STATUS target_if_vdev_mgr_wmi_event_register(
 			wmi_pdev_multi_vdev_restart_response_event_id,
 			target_if_vdev_mgr_multi_vdev_restart_resp_handler,
 			VDEV_RSP_RX_CTX);
-	if (retval)
+	if (QDF_IS_STATUS_ERROR(retval))
 		mlme_err("failed to register for multivdev restart response");
 
-	return qdf_status_from_os_return(retval);
+	return retval;
 }
 
 QDF_STATUS target_if_vdev_mgr_wmi_event_unregister(

@@ -65,8 +65,9 @@ QDF_STATUS dp_rx_desc_pool_alloc(struct dp_soc *soc,
 	desc_size = sizeof(*rx_desc_elem);
 	rx_desc_pool->elem_size = desc_size;
 
-	qdf_mem_multi_pages_alloc(soc->osdev, &rx_desc_pool->desc_pages,
-				  desc_size, num_elem, 0, true);
+	dp_desc_multi_pages_mem_alloc(soc, rx_desc_pool->desc_type,
+				      &rx_desc_pool->desc_pages,
+				      desc_size, num_elem, 0, true);
 	if (!rx_desc_pool->desc_pages.num_pages) {
 		qdf_err("Multi page alloc fail,size=%d, elem=%d",
 			desc_size, num_elem);
@@ -147,22 +148,21 @@ union dp_rx_desc_list_elem_t *dp_rx_desc_find(uint16_t page_id, uint16_t offset,
 		rx_desc_pool->elem_size * offset;
 }
 
-static QDF_STATUS __dp_rx_desc_nbuf_free(struct dp_soc *soc,
-					 struct rx_desc_pool *rx_desc_pool)
+static QDF_STATUS dp_rx_desc_nbuf_collect(struct dp_soc *soc,
+					  struct rx_desc_pool *rx_desc_pool,
+					  qdf_nbuf_t *nbuf_unmap_list,
+					  qdf_nbuf_t *nbuf_free_list)
 {
 	uint32_t i, num_desc, page_id, offset, num_desc_per_page;
 	union dp_rx_desc_list_elem_t *rx_desc_elem;
 	struct dp_rx_desc *rx_desc;
-	qdf_nbuf_t nbuf;
 
-	if (qdf_unlikely(!(rx_desc_pool->
-					desc_pages.cacheable_pages))) {
+	if (qdf_unlikely(!(rx_desc_pool->desc_pages.cacheable_pages))) {
 		qdf_err("No pages found on this desc pool");
 		return QDF_STATUS_E_INVAL;
 	}
 	num_desc = rx_desc_pool->pool_size;
-	num_desc_per_page =
-		rx_desc_pool->desc_pages.num_element_per_page;
+	num_desc_per_page = rx_desc_pool->desc_pages.num_element_per_page;
 	for (i = 0; i < num_desc; i++) {
 		page_id = i / num_desc_per_page;
 		offset = i % num_desc_per_page;
@@ -170,47 +170,73 @@ static QDF_STATUS __dp_rx_desc_nbuf_free(struct dp_soc *soc,
 		rx_desc = &rx_desc_elem->rx_desc;
 		dp_rx_desc_free_dbg_info(rx_desc);
 		if (rx_desc->in_use) {
-			nbuf = rx_desc->nbuf;
 			if (!rx_desc->unmapped) {
-				dp_ipa_handle_rx_buf_smmu_mapping(
-							soc, nbuf,
-							rx_desc_pool->buf_size,
-							false);
-				qdf_nbuf_unmap_nbytes_single(
-							soc->osdev,
-							rx_desc->nbuf,
-							QDF_DMA_BIDIRECTIONAL,
-							rx_desc_pool->buf_size);
+
+				DP_RX_HEAD_APPEND(*nbuf_unmap_list,
+						  rx_desc->nbuf);
 				rx_desc->unmapped = 1;
+			} else {
+				DP_RX_HEAD_APPEND(*nbuf_free_list,
+						  rx_desc->nbuf);
 			}
-			qdf_nbuf_free(nbuf);
 		}
 	}
-
 	return QDF_STATUS_SUCCESS;
+}
+
+static void dp_rx_desc_nbuf_cleanup(struct dp_soc *soc,
+				    qdf_nbuf_t nbuf_unmap_list,
+				    qdf_nbuf_t nbuf_free_list,
+				    uint16_t buf_size)
+{
+	qdf_nbuf_t nbuf = nbuf_unmap_list;
+	qdf_nbuf_t next;
+
+	while (nbuf) {
+		next = nbuf->next;
+		if (dp_ipa_handle_rx_buf_smmu_mapping(soc, nbuf, buf_size,
+						      false))
+			dp_info_rl("Unable to unmap nbuf: %pK", nbuf);
+		qdf_nbuf_unmap_nbytes_single(soc->osdev, nbuf,
+					     QDF_DMA_BIDIRECTIONAL, buf_size);
+		qdf_nbuf_free(nbuf);
+		nbuf = next;
+	}
+
+	nbuf = nbuf_free_list;
+	while (nbuf) {
+		next = nbuf->next;
+		qdf_nbuf_free(nbuf);
+		nbuf = next;
+	}
 }
 
 void dp_rx_desc_nbuf_and_pool_free(struct dp_soc *soc, uint32_t pool_id,
 				   struct rx_desc_pool *rx_desc_pool)
 {
-	QDF_STATUS qdf_status;
+	qdf_nbuf_t nbuf_unmap_list = NULL;
+	qdf_nbuf_t nbuf_free_list = NULL;
 
 	qdf_spin_lock_bh(&rx_desc_pool->lock);
-	qdf_status = __dp_rx_desc_nbuf_free(soc, rx_desc_pool);
-	if (QDF_IS_STATUS_SUCCESS(qdf_status))
-		dp_rx_desc_pool_free(soc, rx_desc_pool);
-
+	dp_rx_desc_nbuf_collect(soc, rx_desc_pool,
+				&nbuf_unmap_list, &nbuf_free_list);
 	qdf_spin_unlock_bh(&rx_desc_pool->lock);
-
+	dp_rx_desc_nbuf_cleanup(soc, nbuf_unmap_list, nbuf_free_list,
+				rx_desc_pool->buf_size);
 	qdf_spinlock_destroy(&rx_desc_pool->lock);
 }
 
 void dp_rx_desc_nbuf_free(struct dp_soc *soc,
 			  struct rx_desc_pool *rx_desc_pool)
 {
+	qdf_nbuf_t nbuf_unmap_list = NULL;
+	qdf_nbuf_t nbuf_free_list = NULL;
 	qdf_spin_lock_bh(&rx_desc_pool->lock);
-	__dp_rx_desc_nbuf_free(soc, rx_desc_pool);
+	dp_rx_desc_nbuf_collect(soc, rx_desc_pool,
+				&nbuf_unmap_list, &nbuf_free_list);
 	qdf_spin_unlock_bh(&rx_desc_pool->lock);
+	dp_rx_desc_nbuf_cleanup(soc, nbuf_unmap_list, nbuf_free_list,
+				rx_desc_pool->buf_size);
 }
 
 void dp_rx_desc_pool_free(struct dp_soc *soc,
@@ -218,8 +244,9 @@ void dp_rx_desc_pool_free(struct dp_soc *soc,
 {
 	if (qdf_unlikely(!(rx_desc_pool->desc_pages.cacheable_pages)))
 		return;
-	qdf_mem_multi_pages_free(soc->osdev,
-				 &rx_desc_pool->desc_pages, 0, true);
+
+	dp_desc_multi_pages_mem_free(soc, rx_desc_pool->desc_type,
+				     &rx_desc_pool->desc_pages, 0, true);
 }
 
 void dp_rx_desc_pool_deinit(struct dp_soc *soc,
@@ -229,6 +256,10 @@ void dp_rx_desc_pool_deinit(struct dp_soc *soc,
 
 	rx_desc_pool->freelist = NULL;
 	rx_desc_pool->pool_size = 0;
+
+	/* Deinitialize rx mon desr frag flag */
+	rx_desc_pool->rx_mon_dest_frag_enable = false;
+
 	qdf_spin_unlock_bh(&rx_desc_pool->lock);
 	qdf_spinlock_destroy(&rx_desc_pool->lock);
 }
@@ -374,6 +405,41 @@ void dp_rx_desc_nbuf_free(struct dp_soc *soc,
 	qdf_spin_unlock_bh(&rx_desc_pool->lock);
 }
 
+/**
+ * dp_rx_desc_frag_free() - Free desc frag buffer
+ *
+ * @soc: core txrx main context
+ * @rx_desc_pool: rx descriptor pool pointer
+ *
+ * Return: None
+ */
+#ifdef DP_RX_MON_MEM_FRAG
+void dp_rx_desc_frag_free(struct dp_soc *soc,
+			  struct rx_desc_pool *rx_desc_pool)
+{
+	qdf_dma_addr_t paddr;
+	qdf_frag_t vaddr;
+	int i;
+
+	qdf_spin_lock_bh(&rx_desc_pool->lock);
+	for (i = 0; i < rx_desc_pool->pool_size; i++) {
+		if (rx_desc_pool->array[i].rx_desc.in_use) {
+			paddr = rx_desc_pool->array[i].rx_desc.paddr_buf_start;
+			vaddr = rx_desc_pool->array[i].rx_desc.rx_buf_start;
+
+			if (!(rx_desc_pool->array[i].rx_desc.unmapped)) {
+				qdf_mem_unmap_page(soc->osdev, paddr,
+						   rx_desc_pool->buf_size,
+						   QDF_DMA_FROM_DEVICE);
+				rx_desc_pool->array[i].rx_desc.unmapped = 1;
+			}
+			qdf_frag_free(vaddr);
+		}
+	}
+	qdf_spin_unlock_bh(&rx_desc_pool->lock);
+}
+#endif
+
 void dp_rx_desc_pool_free(struct dp_soc *soc,
 			  struct rx_desc_pool *rx_desc_pool)
 {
@@ -387,6 +453,10 @@ void dp_rx_desc_pool_deinit(struct dp_soc *soc,
 
 	rx_desc_pool->freelist = NULL;
 	rx_desc_pool->pool_size = 0;
+
+	/* Deinitialize rx mon desr frag flag */
+	rx_desc_pool->rx_mon_dest_frag_enable = false;
+
 	qdf_spin_unlock_bh(&rx_desc_pool->lock);
 	qdf_spinlock_destroy(&rx_desc_pool->lock);
 }

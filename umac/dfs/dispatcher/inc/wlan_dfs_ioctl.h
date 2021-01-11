@@ -360,17 +360,37 @@ struct seq_store {
 #endif /* WLAN_DFS_PARTIAL_OFFLOAD && WLAN_DFS_SYNTHETIC_RADAR */
 
 /**
- * enum dfs_rcac_sm_evt - DFS Rolling CAC SM events.
- * @DFS_RCAC_SM_EV_RCAC_START: Event to start RCAC.
- * @DFS_RCAC_SM_EV_RCAC_DOWN:  Event to stop RCAC.
- * @DFS_RCAC_SM_EV_RCAC_DONE:  Event to complete RCAC.
- * @DFS_RCAC_SM_EV_ADFS_RADAR: Event to restart RCAC after radar in agile.
+ * enum dfs_agile_sm_evt - DFS Agile SM events.
+ * @DFS_AGILE_SM_EV_AGILE_START: Event to start AGILE PreCAC/RCAC.
+ * @DFS_AGILE_SM_EV_AGILE_DOWN:  Event to stop AGILE PreCAC/RCAC..
+ * @DFS_AGILE_SM_EV_AGILE_DONE:  Event to complete AGILE PreCAC/RCAC..
+ * @DFS_AGILE_SM_EV_ADFS_RADAR: Event to restart AGILE PreCAC/RCAC after radar.
  */
-enum dfs_rcac_sm_evt {
-	DFS_RCAC_SM_EV_RCAC_START = 0,
-	DFS_RCAC_SM_EV_RCAC_STOP = 1,
-	DFS_RCAC_SM_EV_RCAC_DONE = 2,
-	DFS_RCAC_SM_EV_ADFS_RADAR_FOUND = 3,
+enum dfs_agile_sm_evt {
+	DFS_AGILE_SM_EV_AGILE_START = 0,
+	DFS_AGILE_SM_EV_AGILE_STOP =  1,
+	DFS_AGILE_SM_EV_AGILE_DONE =  2,
+	DFS_AGILE_SM_EV_ADFS_RADAR =  3,
+};
+
+/**
+ * enum precac_status_for_chan - preCAC status for channels.
+ * @DFS_NO_PRECAC_COMPLETED_CHANS: None of the channels are preCAC completed.
+ * @DFS_PRECAC_COMPLETED_CHAN: A given channel is preCAC completed.
+ * @DFS_PRECAC_REQUIRED_CHAN:  A given channel required preCAC.
+ * @DFS_INVALID_PRECAC_STATUS: Invalid status.
+ *
+ * Note: "DFS_NO_PRECAC_COMPLETED_CHANS" has more priority than
+ * "DFS_PRECAC_COMPLETED_CHAN". This is because if the preCAC list does not
+ * have any channel that completed preCAC, "DFS_NO_PRECAC_COMPLETED_CHANS"
+ * is returned and search for preCAC completion (DFS_PRECAC_COMPLETED_CHAN)
+ * for a given channel is not done.
+ */
+enum precac_status_for_chan {
+	DFS_NO_PRECAC_COMPLETED_CHANS,
+	DFS_PRECAC_COMPLETED_CHAN,
+	DFS_PRECAC_REQUIRED_CHAN,
+	DFS_INVALID_PRECAC_STATUS,
 };
 
 #endif  /* _DFS_IOCTL_H_ */

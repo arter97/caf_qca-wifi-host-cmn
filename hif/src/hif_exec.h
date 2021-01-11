@@ -54,7 +54,6 @@ struct hif_execution_ops {
  *					hif_tasklet_exec_context
  *
  * @context: context for the handler function to use.
- * @evt_hist: a pointer to the DP event history
  * @context_name: a pointer to a const string for debugging.
  *		this should help whenever there could be ambiguity
  *		in what type of context the void* context points to
@@ -89,7 +88,6 @@ struct hif_exec_context {
 	const char *context_name;
 	void *context;
 	ext_intr_handler handler;
-	struct hif_event_history *evt_hist;
 
 	bool (*work_complete)(struct hif_exec_context *, int work_done);
 	void (*irq_enable)(struct hif_exec_context *);
@@ -186,6 +184,14 @@ void hif_pci_irq_set_affinity_hint(
 void hif_pci_ce_irq_set_affinity_hint(
 	struct hif_softc *scn);
 
+/**
+ * hif_pci_ce_irq_remove_affinity_hint() - remove affinity for the irq
+ * @irq: irq number to remove affinity from
+ */
+static inline void hif_pci_ce_irq_remove_affinity_hint(int irq)
+{
+	hif_irq_affinity_remove(irq);
+}
 #else
 static inline void hif_pci_irq_set_affinity_hint(
 	struct hif_exec_context *hif_ext_group)
@@ -194,6 +200,10 @@ static inline void hif_pci_irq_set_affinity_hint(
 
 static inline void hif_pci_ce_irq_set_affinity_hint(
 	struct hif_softc *scn)
+{
+}
+
+static inline void hif_pci_ce_irq_remove_affinity_hint(int irq)
 {
 }
 #endif /* ifdef HIF_CPU_PERF_AFFINE_MASK */

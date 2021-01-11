@@ -240,69 +240,69 @@ static void hal_rx_dump_msdu_start_tlv_6490(void *msdustart, uint8_t dbg_level)
 {
 	struct rx_msdu_start *msdu_start = (struct rx_msdu_start *)msdustart;
 
-	hal_verbose_debug(
-			  "rx_msdu_start tlv (1/2) - "
-			  "rxpcu_mpdu_filter_in_category: %x "
-			  "sw_frame_group_id: %x "
-			  "phy_ppdu_id: %x "
-			  "msdu_length: %x "
-			  "ipsec_esp: %x "
-			  "l3_offset: %x "
-			  "ipsec_ah: %x "
-			  "l4_offset: %x "
-			  "msdu_number: %x "
-			  "decap_format: %x "
-			  "ipv4_proto: %x "
-			  "ipv6_proto: %x "
-			  "tcp_proto: %x "
-			  "udp_proto: %x "
-			  "ip_frag: %x "
-			  "tcp_only_ack: %x "
-			  "da_is_bcast_mcast: %x "
-			  "ip4_protocol_ip6_next_header: %x "
-			  "toeplitz_hash_2_or_4: %x "
-			  "flow_id_toeplitz: %x "
-			  "user_rssi: %x "
-			  "pkt_type: %x "
-			  "stbc: %x "
-			  "sgi: %x "
-			  "rate_mcs: %x "
-			  "receive_bandwidth: %x "
-			  "reception_type: %x "
-			  "ppdu_start_timestamp: %u ",
-			  msdu_start->rxpcu_mpdu_filter_in_category,
-			  msdu_start->sw_frame_group_id,
-			  msdu_start->phy_ppdu_id,
-			  msdu_start->msdu_length,
-			  msdu_start->ipsec_esp,
-			  msdu_start->l3_offset,
-			  msdu_start->ipsec_ah,
-			  msdu_start->l4_offset,
-			  msdu_start->msdu_number,
-			  msdu_start->decap_format,
-			  msdu_start->ipv4_proto,
-			  msdu_start->ipv6_proto,
-			  msdu_start->tcp_proto,
-			  msdu_start->udp_proto,
-			  msdu_start->ip_frag,
-			  msdu_start->tcp_only_ack,
-			  msdu_start->da_is_bcast_mcast,
-			  msdu_start->ip4_protocol_ip6_next_header,
-			  msdu_start->toeplitz_hash_2_or_4,
-			  msdu_start->flow_id_toeplitz,
-			  msdu_start->user_rssi,
-			  msdu_start->pkt_type,
-			  msdu_start->stbc,
-			  msdu_start->sgi,
-			  msdu_start->rate_mcs,
-			  msdu_start->receive_bandwidth,
-			  msdu_start->reception_type,
-			  msdu_start->ppdu_start_timestamp);
+	__QDF_TRACE_RL(dbg_level, QDF_MODULE_ID_DP,
+		       "rx_msdu_start tlv (1/2) - "
+		       "rxpcu_mpdu_filter_in_category: %x "
+		       "sw_frame_group_id: %x "
+		       "phy_ppdu_id: %x "
+		       "msdu_length: %x "
+		       "ipsec_esp: %x "
+		       "l3_offset: %x "
+		       "ipsec_ah: %x "
+		       "l4_offset: %x "
+		       "msdu_number: %x "
+		       "decap_format: %x "
+		       "ipv4_proto: %x "
+		       "ipv6_proto: %x "
+		       "tcp_proto: %x "
+		       "udp_proto: %x "
+		       "ip_frag: %x "
+		       "tcp_only_ack: %x "
+		       "da_is_bcast_mcast: %x "
+		       "ip4_protocol_ip6_next_header: %x "
+		       "toeplitz_hash_2_or_4: %x "
+		       "flow_id_toeplitz: %x "
+		       "user_rssi: %x "
+		       "pkt_type: %x "
+		       "stbc: %x "
+		       "sgi: %x "
+		       "rate_mcs: %x "
+		       "receive_bandwidth: %x "
+		       "reception_type: %x "
+		       "ppdu_start_timestamp: %u ",
+		       msdu_start->rxpcu_mpdu_filter_in_category,
+		       msdu_start->sw_frame_group_id,
+		       msdu_start->phy_ppdu_id,
+		       msdu_start->msdu_length,
+		       msdu_start->ipsec_esp,
+		       msdu_start->l3_offset,
+		       msdu_start->ipsec_ah,
+		       msdu_start->l4_offset,
+		       msdu_start->msdu_number,
+		       msdu_start->decap_format,
+		       msdu_start->ipv4_proto,
+		       msdu_start->ipv6_proto,
+		       msdu_start->tcp_proto,
+		       msdu_start->udp_proto,
+		       msdu_start->ip_frag,
+		       msdu_start->tcp_only_ack,
+		       msdu_start->da_is_bcast_mcast,
+		       msdu_start->ip4_protocol_ip6_next_header,
+		       msdu_start->toeplitz_hash_2_or_4,
+		       msdu_start->flow_id_toeplitz,
+		       msdu_start->user_rssi,
+		       msdu_start->pkt_type,
+		       msdu_start->stbc,
+		       msdu_start->sgi,
+		       msdu_start->rate_mcs,
+		       msdu_start->receive_bandwidth,
+		       msdu_start->reception_type,
+		       msdu_start->ppdu_start_timestamp);
 
-	hal_verbose_debug(
-			  "rx_msdu_start tlv (2/2) - "
-			  "sw_phy_meta_data: %x ",
-			  msdu_start->sw_phy_meta_data);
+	__QDF_TRACE_RL(dbg_level, QDF_MODULE_ID_DP,
+		       "rx_msdu_start tlv (2/2) - "
+		       "sw_phy_meta_data: %x ",
+		       msdu_start->sw_phy_meta_data);
 }
 
 /**
@@ -318,115 +318,115 @@ static void hal_rx_dump_msdu_end_tlv_6490(void *msduend,
 {
 	struct rx_msdu_end *msdu_end = (struct rx_msdu_end *)msduend;
 
-	QDF_TRACE(QDF_MODULE_ID_DP, dbg_level,
-		  "rx_msdu_end tlv (1/3) - "
-		  "rxpcu_mpdu_filter_in_category: %x "
-		  "sw_frame_group_id: %x "
-		  "phy_ppdu_id: %x "
-		  "ip_hdr_chksum: %x "
-		  "tcp_udp_chksum: %x "
-		  "key_id_octet: %x "
-		  "cce_super_rule: %x "
-		  "cce_classify_not_done_truncat: %x "
-		  "cce_classify_not_done_cce_dis: %x "
-		  "ext_wapi_pn_63_48: %x "
-		  "ext_wapi_pn_95_64: %x "
-		  "ext_wapi_pn_127_96: %x "
-		  "reported_mpdu_length: %x "
-		  "first_msdu: %x "
-		  "last_msdu: %x "
-		  "sa_idx_timeout: %x "
-		  "da_idx_timeout: %x "
-		  "msdu_limit_error: %x "
-		  "flow_idx_timeout: %x "
-		  "flow_idx_invalid: %x "
-		  "wifi_parser_error: %x "
-		  "amsdu_parser_error: %x",
-		  msdu_end->rxpcu_mpdu_filter_in_category,
-		  msdu_end->sw_frame_group_id,
-		  msdu_end->phy_ppdu_id,
-		  msdu_end->ip_hdr_chksum,
-		  msdu_end->tcp_udp_chksum,
-		  msdu_end->key_id_octet,
-		  msdu_end->cce_super_rule,
-		  msdu_end->cce_classify_not_done_truncate,
-		  msdu_end->cce_classify_not_done_cce_dis,
-		  msdu_end->ext_wapi_pn_63_48,
-		  msdu_end->ext_wapi_pn_95_64,
-		  msdu_end->ext_wapi_pn_127_96,
-		  msdu_end->reported_mpdu_length,
-		  msdu_end->first_msdu,
-		  msdu_end->last_msdu,
-		  msdu_end->sa_idx_timeout,
-		  msdu_end->da_idx_timeout,
-		  msdu_end->msdu_limit_error,
-		  msdu_end->flow_idx_timeout,
-		  msdu_end->flow_idx_invalid,
-		  msdu_end->wifi_parser_error,
-		  msdu_end->amsdu_parser_error);
+	__QDF_TRACE_RL(dbg_level, QDF_MODULE_ID_DP,
+		       "rx_msdu_end tlv (1/3) - "
+		       "rxpcu_mpdu_filter_in_category: %x "
+		       "sw_frame_group_id: %x "
+		       "phy_ppdu_id: %x "
+		       "ip_hdr_chksum: %x "
+		       "tcp_udp_chksum: %x "
+		       "key_id_octet: %x "
+		       "cce_super_rule: %x "
+		       "cce_classify_not_done_truncat: %x "
+		       "cce_classify_not_done_cce_dis: %x "
+		       "ext_wapi_pn_63_48: %x "
+		       "ext_wapi_pn_95_64: %x "
+		       "ext_wapi_pn_127_96: %x "
+		       "reported_mpdu_length: %x "
+		       "first_msdu: %x "
+		       "last_msdu: %x "
+		       "sa_idx_timeout: %x "
+		       "da_idx_timeout: %x "
+		       "msdu_limit_error: %x "
+		       "flow_idx_timeout: %x "
+		       "flow_idx_invalid: %x "
+		       "wifi_parser_error: %x "
+		       "amsdu_parser_error: %x",
+		       msdu_end->rxpcu_mpdu_filter_in_category,
+		       msdu_end->sw_frame_group_id,
+		       msdu_end->phy_ppdu_id,
+		       msdu_end->ip_hdr_chksum,
+		       msdu_end->tcp_udp_chksum,
+		       msdu_end->key_id_octet,
+		       msdu_end->cce_super_rule,
+		       msdu_end->cce_classify_not_done_truncate,
+		       msdu_end->cce_classify_not_done_cce_dis,
+		       msdu_end->ext_wapi_pn_63_48,
+		       msdu_end->ext_wapi_pn_95_64,
+		       msdu_end->ext_wapi_pn_127_96,
+		       msdu_end->reported_mpdu_length,
+		       msdu_end->first_msdu,
+		       msdu_end->last_msdu,
+		       msdu_end->sa_idx_timeout,
+		       msdu_end->da_idx_timeout,
+		       msdu_end->msdu_limit_error,
+		       msdu_end->flow_idx_timeout,
+		       msdu_end->flow_idx_invalid,
+		       msdu_end->wifi_parser_error,
+		       msdu_end->amsdu_parser_error);
 
-	QDF_TRACE(QDF_MODULE_ID_DP, dbg_level,
-		  "rx_msdu_end tlv (2/3)- "
-		  "sa_is_valid: %x "
-		  "da_is_valid: %x "
-		  "da_is_mcbc: %x "
-		  "l3_header_padding: %x "
-		  "ipv6_options_crc: %x "
-		  "tcp_seq_number: %x "
-		  "tcp_ack_number: %x "
-		  "tcp_flag: %x "
-		  "lro_eligible: %x "
-		  "window_size: %x "
-		  "da_offset: %x "
-		  "sa_offset: %x "
-		  "da_offset_valid: %x "
-		  "sa_offset_valid: %x "
-		  "rule_indication_31_0: %x "
-		  "rule_indication_63_32: %x "
-		  "sa_idx: %x "
-		  "da_idx: %x "
-		  "msdu_drop: %x "
-		  "reo_destination_indication: %x "
-		  "flow_idx: %x "
-		  "fse_metadata: %x "
-		  "cce_metadata: %x "
-		  "sa_sw_peer_id: %x ",
-		  msdu_end->sa_is_valid,
-		  msdu_end->da_is_valid,
-		  msdu_end->da_is_mcbc,
-		  msdu_end->l3_header_padding,
-		  msdu_end->ipv6_options_crc,
-		  msdu_end->tcp_seq_number,
-		  msdu_end->tcp_ack_number,
-		  msdu_end->tcp_flag,
-		  msdu_end->lro_eligible,
-		  msdu_end->window_size,
-		  msdu_end->da_offset,
-		  msdu_end->sa_offset,
-		  msdu_end->da_offset_valid,
-		  msdu_end->sa_offset_valid,
-		  msdu_end->rule_indication_31_0,
-		  msdu_end->rule_indication_63_32,
-		  msdu_end->sa_idx,
-		  msdu_end->da_idx_or_sw_peer_id,
-		  msdu_end->msdu_drop,
-		  msdu_end->reo_destination_indication,
-		  msdu_end->flow_idx,
-		  msdu_end->fse_metadata,
-		  msdu_end->cce_metadata,
-		  msdu_end->sa_sw_peer_id);
-	QDF_TRACE(QDF_MODULE_ID_DP, dbg_level,
-		  "rx_msdu_end tlv (3/3)"
-		  "aggregation_count %x "
-		  "flow_aggregation_continuation %x "
-		  "fisa_timeout %x "
-		  "cumulative_l4_checksum %x "
-		  "cumulative_ip_length %x",
-		  msdu_end->aggregation_count,
-		  msdu_end->flow_aggregation_continuation,
-		  msdu_end->fisa_timeout,
-		  msdu_end->cumulative_l4_checksum,
-		  msdu_end->cumulative_ip_length);
+	__QDF_TRACE_RL(dbg_level, QDF_MODULE_ID_DP,
+		       "rx_msdu_end tlv (2/3)- "
+		       "sa_is_valid: %x "
+		       "da_is_valid: %x "
+		       "da_is_mcbc: %x "
+		       "l3_header_padding: %x "
+		       "ipv6_options_crc: %x "
+		       "tcp_seq_number: %x "
+		       "tcp_ack_number: %x "
+		       "tcp_flag: %x "
+		       "lro_eligible: %x "
+		       "window_size: %x "
+		       "da_offset: %x "
+		       "sa_offset: %x "
+		       "da_offset_valid: %x "
+		       "sa_offset_valid: %x "
+		       "rule_indication_31_0: %x "
+		       "rule_indication_63_32: %x "
+		       "sa_idx: %x "
+		       "da_idx: %x "
+		       "msdu_drop: %x "
+		       "reo_destination_indication: %x "
+		       "flow_idx: %x "
+		       "fse_metadata: %x "
+		       "cce_metadata: %x "
+		       "sa_sw_peer_id: %x ",
+		       msdu_end->sa_is_valid,
+		       msdu_end->da_is_valid,
+		       msdu_end->da_is_mcbc,
+		       msdu_end->l3_header_padding,
+		       msdu_end->ipv6_options_crc,
+		       msdu_end->tcp_seq_number,
+		       msdu_end->tcp_ack_number,
+		       msdu_end->tcp_flag,
+		       msdu_end->lro_eligible,
+		       msdu_end->window_size,
+		       msdu_end->da_offset,
+		       msdu_end->sa_offset,
+		       msdu_end->da_offset_valid,
+		       msdu_end->sa_offset_valid,
+		       msdu_end->rule_indication_31_0,
+		       msdu_end->rule_indication_63_32,
+		       msdu_end->sa_idx,
+		       msdu_end->da_idx_or_sw_peer_id,
+		       msdu_end->msdu_drop,
+		       msdu_end->reo_destination_indication,
+		       msdu_end->flow_idx,
+		       msdu_end->fse_metadata,
+		       msdu_end->cce_metadata,
+		       msdu_end->sa_sw_peer_id);
+	__QDF_TRACE_RL(dbg_level, QDF_MODULE_ID_DP,
+		       "rx_msdu_end tlv (3/3)"
+		       "aggregation_count %x "
+		       "flow_aggregation_continuation %x "
+		       "fisa_timeout %x "
+		       "cumulative_l4_checksum %x "
+		       "cumulative_ip_length %x",
+		       msdu_end->aggregation_count,
+		       msdu_end->flow_aggregation_continuation,
+		       msdu_end->fisa_timeout,
+		       msdu_end->cumulative_l4_checksum,
+		       msdu_end->cumulative_ip_length);
 }
 
 /*
@@ -1215,6 +1215,24 @@ static inline uint32_t hal_rx_msdu_flow_idx_get_6490(uint8_t *buf)
 }
 
 /**
+ * hal_rx_msdu_get_reo_destination_indication_6490: API to get
+ * reo_destination_indication from rx_msdu_end TLV
+ * @buf: pointer to the start of RX PKT TLV headers
+ * @reo_destination_indication: pointer to return value of reo_destination_indication
+ *
+ * Return: none
+ */
+static inline void
+hal_rx_msdu_get_reo_destination_indication_6490(uint8_t *buf,
+						uint32_t *reo_destination_indication)
+{
+	struct rx_pkt_tlvs *pkt_tlvs = (struct rx_pkt_tlvs *)buf;
+	struct rx_msdu_end *msdu_end = &pkt_tlvs->msdu_end_tlv.rx_msdu_end;
+
+	*reo_destination_indication = HAL_RX_MSDU_END_REO_DEST_IND_GET(msdu_end);
+}
+
+/**
  * hal_rx_msdu_flow_idx_invalid_6490: API to get flow index invalid
  * from rx_msdu_end TLV
  * @buf: pointer to the start of RX PKT TLV headers
@@ -1745,7 +1763,11 @@ struct hal_hw_txrx_ops qca6490_hal_hw_txrx_ops = {
 	hal_rx_mpdu_start_offset_get_generic,
 	hal_rx_mpdu_end_offset_get_generic,
 	hal_rx_flow_setup_fse_6490,
-	hal_compute_reo_remap_ix2_ix3_6490
+	hal_compute_reo_remap_ix2_ix3_6490,
+	NULL,
+	NULL,
+	NULL,
+	hal_rx_msdu_get_reo_destination_indication_6490
 };
 
 struct hal_hw_srng_config hw_srng_table_6490[] = {

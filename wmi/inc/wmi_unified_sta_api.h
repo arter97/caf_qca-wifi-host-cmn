@@ -72,7 +72,7 @@ QDF_STATUS
 wmi_unified_vdev_set_gtx_cfg_cmd(wmi_unified_t wmi_handle, uint32_t if_id,
 				 struct wmi_gtx_config *gtx_info);
 
-#ifdef FEATURE_BLACKLIST_MGR
+#if defined(WLAN_FEATURE_ROAM_OFFLOAD) && defined(FEATURE_BLACKLIST_MGR)
 /**
  * wmi_unified_send_reject_ap_list() - send the reject ap list maintained by
  * BLM to FW for roaming cases.
@@ -451,18 +451,5 @@ QDF_STATUS wmi_unified_peer_unmap_conf_send(wmi_unified_t wmi_handle,
 					    uint8_t vdev_id,
 					    uint32_t peer_id_cnt,
 					    uint16_t *peer_id_list);
-
-/**
- * wmi_unified_send_ocl_cmd() - send OCL command
- * @wmi_handle: wmi handle
- * @param: OCL commang parameters
- *
- * Send WMI_SET_OCL_CMDID parameters to fw.
- *
- * Return: QDF_STATUS_SUCCESS on success, QDF_STATUS_E_** on error
- */
-QDF_STATUS
-wmi_unified_send_ocl_cmd(wmi_unified_t wmi_handle,
-			 struct ocl_cmd_params *param);
 
 #endif /* _WMI_UNIFIED_STA_API_H_ */

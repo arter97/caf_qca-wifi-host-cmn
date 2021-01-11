@@ -96,6 +96,15 @@ QDF_STATUS dp_ipa_register_op_cb(struct cdp_soc_t *soc_hdl, uint8_t pdev_id,
 				 ipa_uc_op_cb_type op_cb, void *usr_ctxt);
 
 /**
+ * dp_ipa_register_op_cb() - Deregister OP handler function
+ * @soc_hdl - data path soc handle
+ * @pdev_id - device instance id
+ *
+ * Return: none
+ */
+void dp_ipa_deregister_op_cb(struct cdp_soc_t *soc_hdl, uint8_t pdev_id);
+
+/**
  * dp_ipa_get_stat() - Get firmware wdi status
  * @soc_hdl - data path soc handle
  * @pdev_id - device instance id
@@ -186,8 +195,9 @@ QDF_STATUS dp_ipa_setup(struct cdp_soc_t *soc_hdl, uint8_t pdev_id,
 			bool is_rm_enabled, uint32_t *tx_pipe_handle,
 			uint32_t *rx_pipe_handle);
 #endif /* CONFIG_IPA_WDI_UNIFIED_API */
-QDF_STATUS dp_ipa_cleanup(uint32_t tx_pipe_handle,
-		uint32_t rx_pipe_handle);
+QDF_STATUS dp_ipa_cleanup(struct cdp_soc_t *soc_hdl, uint8_t pdev_id,
+			  uint32_t tx_pipe_handle,
+			  uint32_t rx_pipe_handle);
 QDF_STATUS dp_ipa_remove_header(char *name);
 int dp_ipa_add_header_info(char *ifname, uint8_t *mac_addr,
 		uint8_t session_id, bool is_ipv6_enabled);
@@ -248,6 +258,28 @@ bool dp_ipa_is_mdm_platform(void);
 
 qdf_nbuf_t dp_ipa_handle_rx_reo_reinject(struct dp_soc *soc, qdf_nbuf_t nbuf);
 
+/**
+ * dp_ipa_tx_buf_smmu_mapping() - Create SMMU mappings for IPA
+ *				  allocated TX buffers
+ * @soc_hdl: handle to the soc
+ * @pdev_id: pdev id number, to get the handle
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS dp_ipa_tx_buf_smmu_mapping(
+	struct cdp_soc_t *soc_hdl, uint8_t pdev_id);
+
+/**
+ * dp_ipa_tx_buf_smmu_unmapping() - Release SMMU mappings for IPA
+ *				    allocated TX buffers
+ * @soc_hdl: handle to the soc
+ * @pdev_id: pdev id number, to get the handle
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS dp_ipa_tx_buf_smmu_unmapping(
+	struct cdp_soc_t *soc_hdl, uint8_t pdev_id);
+
 #else
 static inline int dp_ipa_uc_detach(struct dp_soc *soc, struct dp_pdev *pdev)
 {
@@ -277,6 +309,18 @@ static inline qdf_nbuf_t dp_ipa_handle_rx_reo_reinject(struct dp_soc *soc,
 						       qdf_nbuf_t nbuf)
 {
 	return nbuf;
+}
+
+static inline QDF_STATUS dp_ipa_tx_buf_smmu_mapping(struct cdp_soc_t *soc_hdl,
+						    uint8_t pdev_id)
+{
+	return QDF_STATUS_SUCCESS;
+}
+
+static inline QDF_STATUS dp_ipa_tx_buf_smmu_unmapping(struct cdp_soc_t *soc_hdl,
+						      uint8_t pdev_id)
+{
+	return QDF_STATUS_SUCCESS;
 }
 
 #endif

@@ -465,7 +465,7 @@ QDF_STATUS tgt_dfs_set_agile_precac_state(struct wlan_objmgr_pdev *pdev,
 			 */
 			if (!agile_precac_state)
 				dfs->dfs_agile_precac_freq_mhz = 0;
-			if (dfs_soc->cur_precac_dfs_index == i)
+			if (dfs_soc->cur_agile_dfs_index == i)
 				is_precac_running_on_given_pdev = true;
 		}
 	}
@@ -510,7 +510,7 @@ QDF_STATUS tgt_dfs_set_agile_precac_state(struct wlan_objmgr_pdev *pdev,
 			 */
 			if (!agile_precac_state)
 				dfs->dfs_agile_precac_freq = 0;
-			if (dfs_soc->cur_precac_dfs_index == i)
+			if (dfs_soc->cur_agile_dfs_index == i)
 				is_precac_running_on_given_pdev = true;
 		}
 	}
@@ -556,7 +556,9 @@ QDF_STATUS tgt_dfs_ocac_complete(struct wlan_objmgr_pdev *pdev,
 	}
 
 	dfs_process_ocac_complete(pdev, adfs_status->ocac_status,
-				  adfs_status->center_freq);
+				  adfs_status->center_freq1,
+				  adfs_status->center_freq2,
+				  adfs_status->chan_width);
 
 	return  QDF_STATUS_SUCCESS;
 }
@@ -652,9 +654,8 @@ QDF_STATUS tgt_dfs_process_radar_ind(struct wlan_objmgr_pdev *pdev,
 		return status;
 	}
 
-	dfs->dfs_radar_found_for_fo = 1;
+	dfs_translate_radar_params(dfs, radar_found);
 	status = dfs_process_radar_ind(dfs, radar_found);
-	dfs->dfs_radar_found_for_fo = 0;
 
 	return status;
 }

@@ -119,6 +119,27 @@ QDF_STATUS reg_get_opclass_details(struct wlan_objmgr_pdev *pdev,
 				   uint8_t *n_opclasses,
 				   uint8_t max_supp_op_class,
 				   bool global_tbl_lookup);
+
+/**
+ * reg_is_5ghz_op_class() - Check if the input opclass is a 5GHz opclass.
+ * @country: Country code.
+ * @op_class: Operating class.
+ *
+ * Return: Return true if input the opclass is a 5GHz opclass,
+ * else return false.
+ */
+bool reg_is_5ghz_op_class(const uint8_t *country, uint8_t op_class);
+
+/**
+ * reg_is_2ghz_op_class() - Check if the input opclass is a 2.4GHz opclass.
+ * @country: Country code.
+ * @op_class: Operating class.
+ *
+ * Return: Return true if input the opclass is a 2.4GHz opclass,
+ * else return false.
+ */
+bool reg_is_2ghz_op_class(const uint8_t *country, uint8_t op_class);
+
 #ifdef CONFIG_CHAN_FREQ_API
 
 /**
@@ -316,6 +337,18 @@ QDF_STATUS reg_get_opclass_details(struct wlan_objmgr_pdev *pdev,
 	return QDF_STATUS_E_FAILURE;
 }
 
+static inline
+bool reg_is_5ghz_op_class(const uint8_t *country, uint8_t op_class)
+{
+	return false;
+}
+
+static inline
+bool reg_is_2ghz_op_class(const uint8_t *country, uint8_t op_class)
+{
+	return false;
+}
+
 #ifdef CONFIG_CHAN_FREQ_API
 
 static inline void
@@ -393,6 +426,20 @@ reg_chan_opclass_to_freq_auto(uint8_t chan, uint8_t op_class,
 {
 	return 0;
 }
-
 #endif
+
+/**
+ * reg_dmn_get_chanwidth_from_opclass_auto()- Get channel width for the
+ * given channel and opclass. If not found then search it in the global
+ * op class.
+ * @country - Country
+ * @channel - Channel for which channel spacing is required
+ * @opclass - Opclass to search from.
+ *
+ * Return: valid channel spacing if found. If not found then
+ * return 0.
+ */
+uint16_t reg_dmn_get_chanwidth_from_opclass_auto(uint8_t *country,
+						 uint8_t channel,
+						 uint8_t opclass);
 #endif

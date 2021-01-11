@@ -140,6 +140,8 @@ typedef struct _HTC_ENDPOINT {
 	qdf_timer_t ul_poll_timer;
 	int ul_poll_timer_active;
 	int ul_outstanding_cnt;
+	uint32_t htc_send_cnt;
+	uint32_t htc_comp_cnt;
 	/* Need to call HIF to fetch rx?  (Not currently supported.) */
 	int dl_is_polled;
 	/* not currently supported */
@@ -258,6 +260,10 @@ typedef struct _HTC_TARGET {
 	/* flag to enable packet send debug */
 	bool htc_pkt_dbg;
 
+#ifdef FEATURE_RUNTIME_PM
+	/* Runtime count for H2T msg with response */
+	qdf_atomic_t htc_runtime_cnt;
+#endif
 } HTC_TARGET;
 
 

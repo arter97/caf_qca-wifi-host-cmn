@@ -48,6 +48,11 @@ struct hif_bus_ops {
 				      const struct hif_bus_id *bid,
 				      enum hif_enable_type type);
 	void (*hif_disable_bus)(struct hif_softc *hif_sc);
+#ifdef FEATURE_RUNTIME_PM
+	struct hif_runtime_pm_ctx *(*hif_bus_get_rpm_ctx)(
+						struct hif_softc *hif_sc);
+	struct device *(*hif_bus_get_dev)(struct hif_softc *hif_sc);
+#endif
 	int (*hif_bus_configure)(struct hif_softc *hif_sc);
 	QDF_STATUS (*hif_get_config_item)(struct hif_softc *hif_sc,
 			     int opcode, void *config, uint32_t config_len);
@@ -81,6 +86,7 @@ struct hif_bus_ops {
 	int (*hif_addr_in_boundary)(struct hif_softc *scn, uint32_t offset);
 	bool (*hif_needs_bmi)(struct hif_softc *hif_sc);
 	void (*hif_config_irq_affinity)(struct hif_softc *hif_sc);
+	int (*hif_config_irq_by_ceid)(struct hif_softc *hif_sc, int ce_id);
 };
 
 #ifdef HIF_SNOC
@@ -89,7 +95,7 @@ int hif_snoc_get_context_size(void);
 #else
 static inline QDF_STATUS hif_initialize_snoc_ops(struct hif_bus_ops *hif_sc)
 {
-	HIF_ERROR("%s: not supported", __func__);
+	hif_warn("not supported");
 	return QDF_STATUS_E_NOSUPPORT;
 }
 /**
@@ -105,11 +111,19 @@ static inline int hif_snoc_get_context_size(void)
 
 #ifdef HIF_PCI
 QDF_STATUS hif_initialize_pci_ops(struct hif_softc *hif_sc);
+QDF_STATUS hif_update_irq_ops_with_pci(struct hif_softc *hif_sc);
 int hif_pci_get_context_size(void);
 #else
 static inline QDF_STATUS hif_initialize_pci_ops(struct hif_softc *hif_sc)
 {
-	HIF_ERROR("%s: not supported", __func__);
+	hif_warn("not supported");
+	return QDF_STATUS_E_NOSUPPORT;
+}
+
+static inline
+QDF_STATUS hif_update_irq_ops_with_pci(struct hif_softc *hif_sc)
+{
+	hif_err("not supported");
 	return QDF_STATUS_E_NOSUPPORT;
 }
 /**
@@ -141,7 +155,7 @@ int hif_ipci_get_context_size(void);
 #else
 static inline QDF_STATUS hif_initialize_ipci_ops(struct hif_softc *hif_sc)
 {
-	HIF_ERROR("%s: not supported", __func__);
+	hif_warn("not supported");
 	return QDF_STATUS_E_NOSUPPORT;
 }
 
@@ -167,7 +181,7 @@ int hif_ahb_get_context_size(void);
  */
 static inline QDF_STATUS hif_initialize_ahb_ops(struct hif_bus_ops *bus_ops)
 {
-	HIF_ERROR("%s: not supported", __func__);
+	hif_warn("not supported");
 	return QDF_STATUS_E_NOSUPPORT;
 }
 
@@ -194,7 +208,7 @@ int hif_sdio_get_context_size(void);
 
 static inline QDF_STATUS hif_initialize_sdio_ops(struct hif_softc *hif_sc)
 {
-	HIF_ERROR("%s: not supported", __func__);
+	hif_warn("not supported");
 	return QDF_STATUS_E_NOSUPPORT;
 }
 
@@ -217,7 +231,7 @@ int hif_usb_get_context_size(void);
 #else
 static inline QDF_STATUS hif_initialize_usb_ops(struct hif_bus_ops *bus_ops)
 {
-	HIF_ERROR("%s: not supported", __func__);
+	hif_warn("not supported");
 	return QDF_STATUS_E_NOSUPPORT;
 }
 /**
@@ -241,4 +255,13 @@ static inline int hif_usb_get_context_size(void)
  * Return: None
  */
 void hif_config_irq_affinity(struct hif_softc *hif_sc);
+
+/**
+ * hif_config_irq_by_ceid() - register irq by CE id
+ * @hif_sc - hif context
+ * @ce_id - Copy Engine id for which the irq need to be configured
+ *
+ * Return: 0 on success, negative value on error.
+ */
+int hif_config_irq_by_ceid(struct hif_softc *hif_sc, int ce_id);
 #endif /* _MULTIBUS_H_ */

@@ -217,11 +217,67 @@ uint8_t hal_rx_mpdu_start_tlv_tag_valid_5018(void *rx_tlv_hdr)
 	return tlv_tag == WIFIRX_MPDU_START_E ? true : false;
 }
 
+/**
+ * hal_rx_wbm_err_msdu_continuation_get_5018 () - API to check if WBM
+ * msdu continuation bit is set
+ *
+ *@wbm_desc: wbm release ring descriptor
+ *
+ * Return: true if msdu continuation bit is set.
+ */
+uint8_t hal_rx_wbm_err_msdu_continuation_get_5018(void *wbm_desc)
+{
+	uint32_t comp_desc =
+		*(uint32_t *)(((uint8_t *)wbm_desc) +
+				WBM_RELEASE_RING_3_MSDU_CONTINUATION_OFFSET);
+
+	return (comp_desc & WBM_RELEASE_RING_3_MSDU_CONTINUATION_MASK) >>
+		WBM_RELEASE_RING_3_MSDU_CONTINUATION_LSB;
+}
+
 static
 void hal_compute_reo_remap_ix2_ix3_5018(uint32_t *ring, uint32_t num_rings,
 					uint32_t *remap1, uint32_t *remap2)
 {
 	switch (num_rings) {
+	case 1:
+		*remap1 = HAL_REO_REMAP_IX2(ring[0], 16) |
+				HAL_REO_REMAP_IX2(ring[0], 17) |
+				HAL_REO_REMAP_IX2(ring[0], 18) |
+				HAL_REO_REMAP_IX2(ring[0], 19) |
+				HAL_REO_REMAP_IX2(ring[0], 20) |
+				HAL_REO_REMAP_IX2(ring[0], 21) |
+				HAL_REO_REMAP_IX2(ring[0], 22) |
+				HAL_REO_REMAP_IX2(ring[0], 23);
+
+		*remap2 = HAL_REO_REMAP_IX3(ring[0], 24) |
+				HAL_REO_REMAP_IX3(ring[0], 25) |
+				HAL_REO_REMAP_IX3(ring[0], 26) |
+				HAL_REO_REMAP_IX3(ring[0], 27) |
+				HAL_REO_REMAP_IX3(ring[0], 28) |
+				HAL_REO_REMAP_IX3(ring[0], 29) |
+				HAL_REO_REMAP_IX3(ring[0], 30) |
+				HAL_REO_REMAP_IX3(ring[0], 31);
+		break;
+	case 2:
+		*remap1 = HAL_REO_REMAP_IX2(ring[0], 16) |
+				HAL_REO_REMAP_IX2(ring[0], 17) |
+				HAL_REO_REMAP_IX2(ring[1], 18) |
+				HAL_REO_REMAP_IX2(ring[1], 19) |
+				HAL_REO_REMAP_IX2(ring[0], 20) |
+				HAL_REO_REMAP_IX2(ring[0], 21) |
+				HAL_REO_REMAP_IX2(ring[1], 22) |
+				HAL_REO_REMAP_IX2(ring[1], 23);
+
+		*remap2 = HAL_REO_REMAP_IX3(ring[0], 24) |
+				HAL_REO_REMAP_IX3(ring[0], 25) |
+				HAL_REO_REMAP_IX3(ring[1], 26) |
+				HAL_REO_REMAP_IX3(ring[1], 27) |
+				HAL_REO_REMAP_IX3(ring[0], 28) |
+				HAL_REO_REMAP_IX3(ring[0], 29) |
+				HAL_REO_REMAP_IX3(ring[1], 30) |
+				HAL_REO_REMAP_IX3(ring[1], 31);
+		break;
 	case 3:
 		*remap1 = HAL_REO_REMAP_IX2(ring[0], 16) |
 				HAL_REO_REMAP_IX2(ring[1], 17) |
@@ -273,6 +329,50 @@ void hal_rx_proc_phyrx_other_receive_info_tlv_5018(void *rx_tlv_hdr,
 						   void *ppdu_info_hdl)
 {
 }
+
+#if defined(WLAN_CFR_ENABLE) && defined(WLAN_ENH_CFR_ENABLE)
+static inline
+void hal_rx_get_bb_info_5018(void *rx_tlv,
+			     void *ppdu_info_hdl)
+{
+	struct hal_rx_ppdu_info *ppdu_info  = ppdu_info_hdl;
+
+	ppdu_info->cfr_info.bb_captured_channel =
+		HAL_RX_GET(rx_tlv, RXPCU_PPDU_END_INFO_3, BB_CAPTURED_CHANNEL);
+
+	ppdu_info->cfr_info.bb_captured_timeout =
+		HAL_RX_GET(rx_tlv, RXPCU_PPDU_END_INFO_3, BB_CAPTURED_TIMEOUT);
+
+	ppdu_info->cfr_info.bb_captured_reason =
+		HAL_RX_GET(rx_tlv, RXPCU_PPDU_END_INFO_3, BB_CAPTURED_REASON);
+}
+
+static inline
+void hal_rx_get_rtt_info_5018(void *rx_tlv,
+			      void *ppdu_info_hdl)
+{
+	struct hal_rx_ppdu_info *ppdu_info  = ppdu_info_hdl;
+
+	ppdu_info->cfr_info.rx_location_info_valid =
+	HAL_RX_GET(rx_tlv, PHYRX_PKT_END_13_RX_PKT_END_DETAILS,
+		   RX_LOCATION_INFO_DETAILS_RX_LOCATION_INFO_VALID);
+
+	ppdu_info->cfr_info.rtt_che_buffer_pointer_low32 =
+	HAL_RX_GET(rx_tlv,
+		   PHYRX_PKT_END_12_RX_PKT_END_DETAILS_RX_LOCATION_INFO_DETAILS,
+		   RTT_CHE_BUFFER_POINTER_LOW32);
+
+	ppdu_info->cfr_info.rtt_che_buffer_pointer_high8 =
+	HAL_RX_GET(rx_tlv,
+		   PHYRX_PKT_END_11_RX_PKT_END_DETAILS_RX_LOCATION_INFO_DETAILS,
+		   RTT_CHE_BUFFER_POINTER_HIGH8);
+
+	ppdu_info->cfr_info.chan_capture_status =
+	HAL_RX_GET(rx_tlv,
+		   PHYRX_PKT_END_13_RX_PKT_END_DETAILS_RX_LOCATION_INFO_DETAILS,
+		   RESERVED_8);
+}
+#endif
 
 /**
  * hal_rx_dump_msdu_start_tlv_5018() : dump RX msdu_start TLV in structured
@@ -1641,8 +1741,13 @@ struct hal_hw_txrx_ops qca5018_hal_hw_txrx_ops = {
 	hal_rx_msdu_get_flow_params_5018,
 	hal_rx_tlv_get_tcp_chksum_5018,
 	hal_rx_get_rx_sequence_5018,
+#if defined(WLAN_CFR_ENABLE) && defined(WLAN_ENH_CFR_ENABLE)
+	hal_rx_get_bb_info_5018,
+	hal_rx_get_rtt_info_5018,
+#else
 	NULL,
 	NULL,
+#endif
 	/* rx - msdu fast path info fields */
 	hal_rx_msdu_packet_metadata_get_5018,
 	NULL,
@@ -1653,7 +1758,7 @@ struct hal_hw_txrx_ops qca5018_hal_hw_txrx_ops = {
 	NULL,
 	hal_rx_mpdu_start_tlv_tag_valid_5018,
 	NULL,
-	NULL,
+	hal_rx_wbm_err_msdu_continuation_get_5018,
 
 	/* rx - TLV struct offsets */
 	hal_rx_msdu_end_offset_get_generic,
@@ -1662,7 +1767,11 @@ struct hal_hw_txrx_ops qca5018_hal_hw_txrx_ops = {
 	hal_rx_mpdu_start_offset_get_generic,
 	hal_rx_mpdu_end_offset_get_generic,
 	hal_rx_flow_setup_fse_5018,
-	hal_compute_reo_remap_ix2_ix3_5018
+	hal_compute_reo_remap_ix2_ix3_5018,
+	NULL,
+	NULL,
+	NULL,
+	NULL
 };
 
 struct hal_hw_srng_config hw_srng_table_5018[] = {

@@ -39,6 +39,10 @@ QDF_STATUS hif_pci_enable_bus(struct hif_softc *scn,
 			const struct hif_bus_id *bid,
 			enum hif_enable_type type);
 void hif_pci_disable_bus(struct hif_softc *scn);
+#ifdef FEATURE_RUNTIME_PM
+struct hif_runtime_pm_ctx *hif_pci_get_rpm_ctx(struct hif_softc *hif_sc);
+struct device *hif_pci_get_dev(struct hif_softc *hif_sc);
+#endif
 int hif_pci_bus_configure(struct hif_softc *scn);
 void hif_pci_irq_disable(struct hif_softc *scn, int ce_id);
 void hif_pci_irq_enable(struct hif_softc *scn, int ce_id);
@@ -63,4 +67,5 @@ const char *hif_pci_get_irq_name(int irq_no);
  * Return: None
  */
 void hif_pci_config_irq_affinity(struct hif_softc *scn);
+int hif_ce_msi_configure_irq_by_ceid(struct hif_softc *scn, int ce_id);
 #endif /* _PCI_API_H_ */

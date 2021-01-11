@@ -184,6 +184,7 @@ struct target_version_info {
  * @num_mem_chunks: number of mem chunks allocated
  * @hw_mode_caps: HW mode caps of preferred mode
  * @mem_chunks: allocated memory blocks for FW
+ * @scan_radio_caps: scan radio capabilities
  */
 struct tgt_info {
 	struct host_fw_ver version;
@@ -213,6 +214,7 @@ struct tgt_info {
 	struct target_supported_modes hw_modes;
 	uint8_t pdev_id_to_phy_id_map[WLAN_UMAC_MAX_PDEVS];
 	bool is_pdevid_to_phyid_map;
+	struct wlan_psoc_host_scan_radio_caps *scan_radio_caps;
 };
 
 /**
@@ -332,6 +334,20 @@ struct target_pdev_info {
 	int32_t pdev_idx;
 	int32_t phy_idx;
 	void *feature_ptr;
+};
+
+/**
+ * struct target_mu_caps - max number of users per-PPDU for OFDMA/MU-MIMO
+ * @ofdma_dl: max users for Downlink OFDMA transmissions
+ * @ofdma_ul: max users for Uplink OFDMA transmissions
+ * @mumimo_dl: max users for Downlink MU-MIMO transmissions
+ * @mumimo_ul: max users for Uplink MU-MIMO transmissions
+ */
+struct target_mu_caps {
+	uint16_t ofdma_dl;
+	uint16_t ofdma_ul;
+	uint16_t mumimo_dl;
+	uint16_t mumimo_ul;
 };
 
 
@@ -513,6 +529,14 @@ bool target_is_tgt_type_adrastea(uint32_t target_type);
  * Return: true if the target_type is QCN9000, else false.
  */
 bool target_is_tgt_type_qcn9000(uint32_t target_type);
+
+/**
+ * target_is_tgt_type_qcn9100() - Check if the target type is QCN9100 (Spruce)
+ * @target_type: target type to be checked.
+ *
+ * Return: true if the target_type is QCN9100, else false.
+ */
+bool target_is_tgt_type_qcn9100(uint32_t target_type);
 
 /**
  * target_psoc_set_wlan_init_status() - set info wlan_init_status
@@ -1354,6 +1378,23 @@ static inline uint32_t target_psoc_get_num_dbr_ring_caps
 }
 
 /**
+ * target_psoc_get_num_scan_radio_caps() - get no of scan_radio_caps
+ * @psoc_info:  pointer to structure target_psoc_info
+ *
+ * API to get num_scan_radio_caps
+ *
+ * Return: no of scan_radio_caps
+ */
+static inline uint32_t target_psoc_get_num_scan_radio_caps
+		(struct target_psoc_info *psoc_info)
+{
+	if (!psoc_info)
+		return 0;
+
+	return psoc_info->info.service_ext2_param.num_scan_radio_caps;
+}
+
+/**
  * target_psoc_get_mac_phy_cap_for_mode() - get mac_phy_cap for a hw-mode
  * @psoc_info:  pointer to structure target_psoc_info
  *
@@ -1430,6 +1471,23 @@ static inline struct wlan_psoc_host_dbr_ring_caps
 		return NULL;
 
 	return psoc_info->info.dbr_ring_cap;
+}
+
+/**
+ * target_psoc_get_scan_radio_caps() - get scan_radio_cap
+ * @psoc_info:  pointer to structure target_psoc_info
+ *
+ * API to get scan_radio_cap
+ *
+ * Return: structure pointer to wlan_psoc_host_scan_radio_caps
+ */
+static inline struct wlan_psoc_host_scan_radio_caps
+	*target_psoc_get_scan_radio_caps(struct target_psoc_info *psoc_info)
+{
+	if (!psoc_info)
+		return NULL;
+
+	return psoc_info->info.scan_radio_caps;
 }
 
 /**
@@ -2307,6 +2365,17 @@ static inline int32_t target_psoc_get_num_hw_modes
 }
 
 #ifdef WLAN_SUPPORT_TWT
+#ifdef WLAN_TWT_AP_PDEV_COUNT_NUM_PHY
+static inline void target_if_set_twt_ap_pdev_count
+		(struct tgt_info *info, struct target_psoc_info *tgt_hdl)
+{
+	if (!tgt_hdl)
+		return;
+
+	info->wlan_res_cfg.twt_ap_pdev_count =
+					info->service_ext_param.num_phy;
+}
+#else
 static inline void target_if_set_twt_ap_pdev_count
 		(struct tgt_info *info, struct target_psoc_info *tgt_hdl)
 {
@@ -2316,6 +2385,7 @@ static inline void target_if_set_twt_ap_pdev_count
 	info->wlan_res_cfg.twt_ap_pdev_count =
 					target_psoc_get_num_radios(tgt_hdl);
 }
+#endif /* WLAN_TWT_AP_PDEV_COUNT_NUM_PHY */
 #else
 static inline void target_if_set_twt_ap_pdev_count
 		(struct tgt_info *info, struct target_psoc_info *tgt_hdl)
@@ -2368,4 +2438,79 @@ static inline uint32_t target_psoc_get_chan_width_switch_num_peers(
 
 	return psoc_info->info.service_ext2_param.chwidth_num_peer_caps;
 }
+
+/**
+ * target_if_is_scan_radio_supported() - API to check scan radio
+ * support for the given radio
+ * @pdev: pointer to pdev
+ * @is_scan_radio_supported: pointer to scan radio support flag
+ *
+ * API to check scan radio support for the given radio
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS
+target_pdev_is_scan_radio_supported(struct wlan_objmgr_pdev *pdev,
+				    bool *is_scan_radio_supported);
+
+/**
+ * target_pdev_scan_radio_is_dfs_enabled() - API to check
+ * whether DFS needs to be enabled/disabled for scan radio.
+ * @pdev:  pointer to pdev
+ * @is_dfs_en: Pointer to DFS enable flag
+ *
+ * API to check whether DFS needs to be enabled/disabled for
+ * scan radio. This API should be used only for a scan radio
+ * pdev.
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS
+target_pdev_scan_radio_is_dfs_enabled(struct wlan_objmgr_pdev *pdev,
+				      bool *is_dfs_en);
+
+/**
+ * target_psoc_get_preamble_puncture_cap() - Get Preamble Puncturing capability
+ * @psoc_info: pointer to structure target_psoc_info
+ *
+ * API to get the target capability for Preamble Punctured Tx
+ *
+ * Return: target capability for Preamble Punctured Tx.
+ */
+static inline uint32_t target_psoc_get_preamble_puncture_cap(
+					    struct target_psoc_info *psoc_info)
+{
+	if (!psoc_info)
+		return 0;
+
+	return psoc_info->info.service_ext2_param.preamble_puncture_bw_cap;
+}
+
+/**
+ * target_psoc_get_mu_max_users() - Get max users for MU transmissions
+ * @psoc_info: pointer to structure target_psoc_info
+ * @mu_caps: pointer to structure for max OFDMA/MU-MIMO users per-PPDU
+ *
+ * API to get the max number of users per-PPDU supported for Uplink/Downlink
+ * MU transmissions.
+ *
+ * Return: void
+ */
+static inline void target_psoc_get_mu_max_users(
+					struct target_psoc_info *psoc_info,
+					struct target_mu_caps *mu_caps)
+{
+	struct wlan_psoc_host_service_ext2_param *service_ext2_param;
+
+	if (!psoc_info || !mu_caps)
+		return;
+
+	service_ext2_param = &psoc_info->info.service_ext2_param;
+
+	mu_caps->ofdma_dl = service_ext2_param->max_users_dl_ofdma;
+	mu_caps->ofdma_ul = service_ext2_param->max_users_ul_ofdma;
+	mu_caps->mumimo_dl = service_ext2_param->max_users_dl_mumimo;
+	mu_caps->mumimo_ul = service_ext2_param->max_users_ul_mumimo;
+}
+
 #endif

@@ -75,6 +75,10 @@
 #define WLAN_CRYPTO_WPI_SMS4_PADLEN  (1)
 #define WLAN_CRYPTO_WPI_SMS4_MICLEN  (16)
 
+/* FILS definitions */
+#define WLAN_CRYPTO_FILS_OPTIONAL_DATA_LEN 3
+#define WLAN_CRYPTO_FILS_RIK_LABEL "Re-authentication Integrity Key@ietf.org"
+
 /* key used for xmit */
 #define WLAN_CRYPTO_KEY_XMIT         (0x01)
 /* key used for recv */
@@ -177,7 +181,14 @@ typedef enum wlan_crypto_rsn_cap {
 	WLAN_CRYPTO_RSN_CAP_PREAUTH       = 0x01,
 	WLAN_CRYPTO_RSN_CAP_MFP_ENABLED   = 0x80,
 	WLAN_CRYPTO_RSN_CAP_MFP_REQUIRED  = 0x40,
+	WLAN_CRYPTO_RSN_CAP_OCV_SUPPORTED  = 0x4000,
 } wlan_crypto_rsn_cap;
+
+enum wlan_crypto_rsnx_cap {
+	WLAN_CRYPTO_RSNX_CAP_PROTECTED_TWT = 0x10,
+	WLAN_CRYPTO_RSNX_CAP_SAE_H2E = 0x20,
+	WLAN_CRYPTO_RSNX_CAP_SAE_PK = 0x40,
+};
 
 typedef enum wlan_crypto_key_mgmt {
 	WLAN_CRYPTO_KEY_MGMT_IEEE8021X             = 0,
@@ -217,6 +228,21 @@ enum wlan_crypto_key_type {
 #define IS_WEP_CIPHER(_c)      ((_c == WLAN_CRYPTO_CIPHER_WEP) || \
 				(_c == WLAN_CRYPTO_CIPHER_WEP_40) || \
 				(_c == WLAN_CRYPTO_CIPHER_WEP_104))
+
+/*
+ * enum fils_erp_cryptosuite: this enum defines the cryptosuites used
+ * to calculate auth tag and auth tag length as defined by RFC 6696 5.3.1
+ * @HMAC_SHA256_64: sha256 with auth tag len as 64 bits
+ * @HMAC_SHA256_128: sha256 with auth tag len as 128 bits
+ * @HMAC_SHA256_256: sha256 with auth tag len as 256 bits
+ */
+enum fils_erp_cryptosuite {
+	INVALID_CRYPTO = 0, /* reserved */
+	HMAC_SHA256_64,
+	HMAC_SHA256_128,
+	HMAC_SHA256_256,
+};
+
 /**
  * struct wlan_crypto_pmksa - structure of crypto to contain pmkid
  * @bssid: bssid for which pmkid is saved
