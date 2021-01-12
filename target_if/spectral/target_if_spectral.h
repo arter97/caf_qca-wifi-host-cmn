@@ -829,6 +829,7 @@ struct vdev_spectral_enable_params;
  * bin indices from start scan response event
  * @wmi_unified_register_event_handler: Register WMI event handler
  * @wmi_unified_unregister_event_handler: Unregister WMI event handler
+ * @wmi_service_enabled: API to check whether a given WMI service is enabled
  */
 struct spectral_wmi_ops {
 	QDF_STATUS (*wmi_spectral_configure_cmd_send)(
@@ -853,6 +854,8 @@ struct spectral_wmi_ops {
 	QDF_STATUS (*wmi_unified_unregister_event_handler)(
 				wmi_unified_t wmi_handle,
 				wmi_conv_event_id event_id);
+	bool (*wmi_service_enabled)(wmi_unified_t wmi_handle,
+				    uint32_t service_id);
 };
 
 /**
@@ -1234,6 +1237,19 @@ struct target_if_samp_msg_params {
 	uint32_t raw_timestamp_sec80;
 	uint32_t reset_delay;
 	uint32_t target_reset_count;
+};
+
+/**
+ * struct target_if_spectral_agile_mode_cap - Structure to hold agile
+ * Spetcral scan capability
+ * @agile_spectral_cap: agile Spectral scan capability for 20/40/80 MHz
+ * @agile_spectral_cap_160: agile Spectral scan capability for 160 MHz
+ * @agile_spectral_cap_80p80: agile Spectral scan capability for 80+80 MHz
+ */
+struct target_if_spectral_agile_mode_cap {
+	bool agile_spectral_cap;
+	bool agile_spectral_cap_160;
+	bool agile_spectral_cap_80p80;
 };
 
 #ifdef WLAN_CONV_SPECTRAL_ENABLE
@@ -1642,6 +1658,75 @@ int target_if_vdev_get_sec20chan_freq_mhz(
 }
 
 /**
+ * target_if_spectral_is_feature_disabled_psoc() - Check if Spectral feature is
+ * disabled for a given psoc
+ * @psoc: Pointer to psoc
+ *
+ * Return: true or false
+ */
+static inline
+bool target_if_spectral_is_feature_disabled_psoc(struct wlan_objmgr_psoc *psoc)
+{
+	struct wlan_lmac_if_rx_ops *rx_ops;
+
+	if (!psoc) {
+		spectral_err("psoc is NULL");
+		return true;
+	}
+
+	rx_ops = wlan_psoc_get_lmac_if_rxops(psoc);
+	if (!rx_ops) {
+		spectral_err("rx_ops is null");
+		return true;
+	}
+
+	if (rx_ops->sptrl_rx_ops.
+	    sptrlro_spectral_is_feature_disabled_psoc)
+		return rx_ops->sptrl_rx_ops.
+		       sptrlro_spectral_is_feature_disabled_psoc(psoc);
+
+	return true;
+}
+
+/**
+ * target_if_spectral_is_feature_disabled_pdev() - Check if Spectral feature is
+ * disabled for a given pdev
+ * @pdev: Pointer to pdev
+ *
+ * Return: true or false
+ */
+static inline
+bool target_if_spectral_is_feature_disabled_pdev(struct wlan_objmgr_pdev *pdev)
+{
+	struct wlan_lmac_if_rx_ops *rx_ops;
+	struct wlan_objmgr_psoc *psoc;
+
+	if (!pdev) {
+		spectral_err("pdev is NULL");
+		return true;
+	}
+
+	psoc = wlan_pdev_get_psoc(pdev);
+	if (!psoc) {
+		spectral_err("psoc is NULL");
+		return true;
+	}
+
+	rx_ops = wlan_psoc_get_lmac_if_rxops(psoc);
+	if (!rx_ops) {
+		spectral_err("rx_ops is null");
+		return true;
+	}
+
+	if (rx_ops->sptrl_rx_ops.
+	    sptrlro_spectral_is_feature_disabled_pdev)
+		return rx_ops->sptrl_rx_ops.
+		       sptrlro_spectral_is_feature_disabled_pdev(pdev);
+
+	return true;
+}
+
+/**
  * target_if_spectral_set_rxchainmask() - Set Spectral Rx chainmask
  * @pdev: Pointer to pdev
  * @spectral_rx_chainmask: Spectral Rx chainmask
@@ -1675,8 +1760,8 @@ void target_if_spectral_set_rxchainmask(struct wlan_objmgr_pdev *pdev,
 	}
 
 	if (rx_ops->sptrl_rx_ops.
-	    sptrlro_spectral_is_feature_disabled(psoc)) {
-		spectral_info("Spectral is disabled");
+	    sptrlro_spectral_is_feature_disabled_pdev(pdev)) {
+		spectral_info("Spectral feature is disabled");
 		return;
 	}
 

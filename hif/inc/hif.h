@@ -916,6 +916,19 @@ struct hif_opaque_softc *hif_open(qdf_device_t qdf_ctx,
 				  struct hif_driver_state_callbacks *cbk,
 				  struct wlan_objmgr_psoc *psoc);
 
+/**
+ * hif_init_dma_mask() - Set dma mask for the dev
+ * @dev: dev for which DMA mask is to be set
+ * @bus_type: bus type for the target
+ *
+ * This API sets the DMA mask for the device. before the datapath
+ * memory pre-allocation is done. If the DMA mask is not set before
+ * requesting the DMA memory, kernel defaults to a 32-bit DMA mask,
+ * and does not utilize the full device capability.
+ *
+ * Return: 0 - success, non-zero on failure.
+ */
+int hif_init_dma_mask(struct device *dev, enum qdf_bus_type bus_type);
 void hif_close(struct hif_opaque_softc *hif_ctx);
 QDF_STATUS hif_enable(struct hif_opaque_softc *hif_ctx, struct device *dev,
 		      void *bdev, const struct hif_bus_id *bid,
@@ -1014,6 +1027,8 @@ int hif_pm_runtime_prevent_suspend(struct hif_opaque_softc *ol_sc,
 int hif_pm_runtime_allow_suspend(struct hif_opaque_softc *ol_sc,
 		struct hif_pm_runtime_lock *lock);
 bool hif_pm_runtime_is_suspended(struct hif_opaque_softc *hif_ctx);
+void hif_pm_runtime_suspend_lock(struct hif_opaque_softc *hif_ctx);
+void hif_pm_runtime_suspend_unlock(struct hif_opaque_softc *hif_ctx);
 int hif_pm_runtime_get_monitor_wake_intr(struct hif_opaque_softc *hif_ctx);
 void hif_pm_runtime_set_monitor_wake_intr(struct hif_opaque_softc *hif_ctx,
 					  int val);
@@ -1070,6 +1085,12 @@ static inline int hif_pm_runtime_allow_suspend(struct hif_opaque_softc *ol_sc,
 { return 0; }
 static inline bool hif_pm_runtime_is_suspended(struct hif_opaque_softc *hif_ctx)
 { return false; }
+static inline void
+hif_pm_runtime_suspend_lock(struct hif_opaque_softc *hif_ctx)
+{ return; }
+static inline void
+hif_pm_runtime_suspend_unlock(struct hif_opaque_softc *hif_ctx)
+{ return; }
 static inline int
 hif_pm_runtime_get_monitor_wake_intr(struct hif_opaque_softc *hif_ctx)
 { return 0; }

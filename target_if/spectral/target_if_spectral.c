@@ -43,6 +43,316 @@ struct target_if_spectral_ops spectral_ops;
 int spectral_debug_level = DEBUG_SPECTRAL;
 struct spectral_tgt_ops ops_tgt;
 
+#ifdef SPECTRAL_MODULIZED_ENABLE
+/**
+ * target_if_spectral_wmi_service_enabled() - API to check whether a
+ * given WMI service is enabled
+ * @psoc: Pointer to psoc
+ * @wmi_handle: WMI handle
+ * @service_id: service id
+ *
+ * Return: true or false
+ */
+static
+bool target_if_spectral_wmi_service_enabled(struct wlan_objmgr_psoc *psoc,
+					    wmi_unified_t wmi_handle,
+					    uint32_t service_id)
+{
+	struct target_if_psoc_spectral *psoc_spectral;
+
+	if (!psoc) {
+		spectral_err("psoc is null");
+		return false;
+	}
+
+	if (!wmi_handle) {
+		spectral_err("wmi handle is null");
+		return false;
+	}
+
+	psoc_spectral = get_target_if_spectral_handle_from_psoc(psoc);
+	if (!psoc_spectral) {
+		spectral_err("psoc spectral object is null");
+		return false;
+	}
+
+	return psoc_spectral->wmi_ops.wmi_service_enabled(wmi_handle,
+							  service_id);
+}
+#else
+/**
+ * target_if_spectral_wmi_service_enabled() - API to check whether a
+ * given WMI service is enabled
+ * @psoc: Pointer to psoc
+ * @wmi_handle: WMI handle
+ * @service_id: service id
+ *
+ * Return: true or false
+ */
+static
+bool target_if_spectral_wmi_service_enabled(struct wlan_objmgr_psoc *psoc,
+					    wmi_unified_t wmi_handle,
+					    uint32_t service_id)
+{
+	return wmi_service_enabled(wmi_handle, service_id);
+}
+#endif /* SPECTRAL_MODULIZED_ENABLE */
+
+/**
+ * target_if_spectral_get_normal_mode_cap() - API to get normal
+ * Spectral scan capability of a given pdev
+ * @pdev: pdev handle
+ * @normal_mode_disable: Pointer to caller variable
+ *
+ * API to get normal Spectral scan mode capability a given pdev.
+ * This information is derived from the WMI service
+ * "WMI_SERVICE_SPECTRAL_SCAN_DISABLED".
+ *
+ * Return: QDF_STATUS on success
+ */
+static QDF_STATUS
+target_if_spectral_get_normal_mode_cap(struct wlan_objmgr_pdev *pdev,
+				       bool *normal_mode_disable)
+{
+	struct wlan_objmgr_psoc *psoc;
+	struct wmi_unified *wmi_handle;
+	struct target_if_psoc_spectral *psoc_spectral;
+
+	if (!pdev) {
+		spectral_err("pdev is null");
+		return QDF_STATUS_E_INVAL;
+	}
+
+	psoc = wlan_pdev_get_psoc(pdev);
+	if (!psoc) {
+		spectral_err("psoc is null");
+		return QDF_STATUS_E_INVAL;
+	}
+
+	psoc_spectral = get_target_if_spectral_handle_from_psoc(psoc);
+	if (!psoc_spectral) {
+		spectral_err("psoc spectral object is null");
+		return QDF_STATUS_E_INVAL;
+	}
+
+	wmi_handle =  get_wmi_unified_hdl_from_psoc(psoc);
+	if (!wmi_handle) {
+		spectral_err("wmi handle is null");
+		return QDF_STATUS_E_INVAL;
+	}
+
+	*normal_mode_disable = target_if_spectral_wmi_service_enabled(psoc,
+				wmi_handle, wmi_service_spectral_scan_disabled);
+
+	return QDF_STATUS_SUCCESS;
+}
+
+/**
+ * target_if_spectral_get_agile_mode_cap() - API to check agile
+ * Spectral scan mode capability of a given pdev.
+ * @pdev: pdev handle
+ * @agile_cap: Pointer to caller variable
+ *
+ * API to check agile Spectral scan mode is disabled for a given pdev.
+ * This information is derived from the chain mask table entries.
+ *
+ * Return: QDF_STATUS on success
+ */
+static QDF_STATUS
+target_if_spectral_get_agile_mode_cap(
+			struct wlan_objmgr_pdev *pdev,
+			struct target_if_spectral_agile_mode_cap *agile_cap)
+{
+	struct wlan_objmgr_psoc *psoc;
+	struct target_psoc_info *tgt_psoc_info;
+	struct wlan_psoc_host_mac_phy_caps *mac_phy_cap_arr;
+	struct wlan_psoc_host_mac_phy_caps *mac_phy_cap;
+	uint8_t pdev_id, i;
+	uint32_t table_id;
+	struct wlan_psoc_host_service_ext_param *ext_svc_param;
+	struct wlan_psoc_host_chainmask_table *table;
+
+	if (!pdev) {
+		spectral_err("pdev is null");
+		return QDF_STATUS_E_INVAL;
+	}
+
+	psoc = wlan_pdev_get_psoc(pdev);
+	if (!psoc) {
+		spectral_err("psoc is null");
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	tgt_psoc_info = wlan_psoc_get_tgt_if_handle(psoc);
+	if (!tgt_psoc_info) {
+		spectral_err("target_psoc_info is null");
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	mac_phy_cap_arr = target_psoc_get_mac_phy_cap(tgt_psoc_info);
+	if (!mac_phy_cap_arr) {
+		spectral_err("mac phy cap array is null");
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	pdev_id = wlan_objmgr_pdev_get_pdev_id(pdev);
+	mac_phy_cap = &mac_phy_cap_arr[pdev_id];
+	table_id = mac_phy_cap->chainmask_table_id;
+	ext_svc_param = target_psoc_get_service_ext_param(tgt_psoc_info);
+	if (!ext_svc_param) {
+		spectral_err("Extended service ready params null");
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	table =  &ext_svc_param->chainmask_table[table_id];
+
+	for (i = 0; i < table->num_valid_chainmasks; i++) {
+		agile_cap->agile_spectral_cap |=
+			table->cap_list[i].supports_aSpectral;
+		agile_cap->agile_spectral_cap_160 |=
+			table->cap_list[i].supports_aSpectral_160;
+	}
+
+	agile_cap->agile_spectral_cap_80p80 = agile_cap->agile_spectral_cap_160;
+
+	return QDF_STATUS_SUCCESS;
+}
+
+/**
+ * target_if_spectral_init_pdev_feature_cap_per_mode() - API to initialize
+ * Spectral scan pdev feature caps for a given Spectral mode
+ * @pdev: pdev handle
+ * @smode: Spectral scan mode
+ *
+ * Return: QDF_STATUS_SUCCESS on success, QDF_STATUS_E_FAILURE/
+ * QDF_STATUS_E_INVAL on failure
+ */
+static QDF_STATUS
+target_if_spectral_init_pdev_feature_cap_per_mode(struct wlan_objmgr_pdev *pdev,
+						  enum spectral_scan_mode smode)
+{
+	struct wlan_objmgr_psoc *psoc;
+	bool normal_mode_disable;
+	struct target_if_spectral_agile_mode_cap agile_cap = { 0 };
+	QDF_STATUS status;
+
+	if (!pdev) {
+		spectral_err("pdev is null");
+		return QDF_STATUS_E_INVAL;
+	}
+
+	psoc = wlan_pdev_get_psoc(pdev);
+	if (!psoc) {
+		spectral_err("psoc is null");
+		return QDF_STATUS_E_INVAL;
+	}
+
+	switch (smode) {
+	case SPECTRAL_SCAN_MODE_NORMAL:
+		if (target_if_spectral_is_feature_disabled_psoc(psoc)) {
+			wlan_pdev_nif_feat_ext_cap_set(
+				pdev, WLAN_PDEV_FEXT_NORMAL_SPECTRAL_SCAN_DIS);
+
+			return QDF_STATUS_SUCCESS;
+		}
+
+		status = target_if_spectral_get_normal_mode_cap(
+				pdev, &normal_mode_disable);
+		if (QDF_IS_STATUS_ERROR(status)) {
+			spectral_err("Failed to get normal spectral scan caps");
+			return QDF_STATUS_E_FAILURE;
+		}
+
+		if (normal_mode_disable)
+			wlan_pdev_nif_feat_ext_cap_set(
+				pdev, WLAN_PDEV_FEXT_NORMAL_SPECTRAL_SCAN_DIS);
+		else
+			wlan_pdev_nif_feat_ext_cap_clear(
+				pdev, WLAN_PDEV_FEXT_NORMAL_SPECTRAL_SCAN_DIS);
+		break;
+
+	case SPECTRAL_SCAN_MODE_AGILE:
+		if (target_if_spectral_is_feature_disabled_psoc(psoc)) {
+			wlan_pdev_nif_feat_ext_cap_set(
+			  pdev, WLAN_PDEV_FEXT_AGILE_SPECTRAL_SCAN_DIS);
+			wlan_pdev_nif_feat_ext_cap_set(
+			  pdev, WLAN_PDEV_FEXT_AGILE_SPECTRAL_SCAN_160_DIS);
+			wlan_pdev_nif_feat_ext_cap_set(
+			  pdev, WLAN_PDEV_FEXT_AGILE_SPECTRAL_SCAN_80P80_DIS);
+
+			return QDF_STATUS_SUCCESS;
+		}
+		status = target_if_spectral_get_agile_mode_cap(
+				pdev, &agile_cap);
+		if (QDF_IS_STATUS_ERROR(status)) {
+			spectral_err("Failed to get agile Spectral capability");
+			return QDF_STATUS_E_FAILURE;
+		}
+
+		if (!agile_cap.agile_spectral_cap)
+			wlan_pdev_nif_feat_ext_cap_set(
+			  pdev, WLAN_PDEV_FEXT_AGILE_SPECTRAL_SCAN_DIS);
+		else
+			wlan_pdev_nif_feat_ext_cap_clear(
+			  pdev, WLAN_PDEV_FEXT_AGILE_SPECTRAL_SCAN_DIS);
+
+		if (!agile_cap.agile_spectral_cap_160)
+			wlan_pdev_nif_feat_ext_cap_set(
+			  pdev, WLAN_PDEV_FEXT_AGILE_SPECTRAL_SCAN_160_DIS);
+		else
+			wlan_pdev_nif_feat_ext_cap_clear(
+			  pdev, WLAN_PDEV_FEXT_AGILE_SPECTRAL_SCAN_160_DIS);
+
+		if (!agile_cap.agile_spectral_cap_80p80)
+			wlan_pdev_nif_feat_ext_cap_set(
+			  pdev, WLAN_PDEV_FEXT_AGILE_SPECTRAL_SCAN_80P80_DIS);
+		else
+			wlan_pdev_nif_feat_ext_cap_clear(
+			  pdev, WLAN_PDEV_FEXT_AGILE_SPECTRAL_SCAN_80P80_DIS);
+
+		break;
+
+	default:
+		spectral_err("Invalid Spectral scan mode %d", smode);
+		return QDF_STATUS_E_INVAL;
+	}
+
+	return QDF_STATUS_SUCCESS;
+}
+
+/**
+ * target_if_spectral_init_pdev_feature_caps() - API to initialize
+ * Spectral scan pdev feature caps for a given pdev
+ * @pdev: pdev handle
+ *
+ * API initialize normal and agile Spectral scan pdev
+ * feature caps for a given pdev.
+ *
+ * Return: QDF_STATUS_SUCCESS on success, QDF_STATUS_E_INVAL on failure
+ */
+static QDF_STATUS
+target_if_spectral_init_pdev_feature_caps(struct wlan_objmgr_pdev *pdev)
+{
+	enum spectral_scan_mode smode;
+
+	if (!pdev) {
+		spectral_err("pdev is NULL!");
+		return QDF_STATUS_E_INVAL;
+	}
+
+	smode = SPECTRAL_SCAN_MODE_NORMAL;
+	for (; smode < SPECTRAL_SCAN_MODE_MAX; smode++) {
+		QDF_STATUS status;
+
+		status = target_if_spectral_init_pdev_feature_cap_per_mode(
+				pdev, smode);
+		if (QDF_IS_STATUS_ERROR(status))
+			return QDF_STATUS_E_INVAL;
+	}
+
+	return QDF_STATUS_SUCCESS;
+}
+
 static void target_if_spectral_get_firstvdev_pdev(struct wlan_objmgr_pdev *pdev,
 						  void *obj, void *arg)
 {
@@ -1516,11 +1826,6 @@ target_if_init_spectral_capability(struct target_if_spectral *spectral,
 	struct target_psoc_info *tgt_psoc_info;
 	struct wlan_psoc_host_service_ext_param *ext_svc_param;
 	struct spectral_caps *pcap = &spectral->capability;
-	struct wlan_psoc_host_mac_phy_caps *mac_phy_cap_arr = NULL;
-	struct wlan_psoc_host_mac_phy_caps *mac_phy_cap = NULL;
-	struct wlan_psoc_host_chainmask_table *table;
-	int j;
-	uint32_t table_id;
 
 	pdev = spectral->pdev_obj;
 	psoc = wlan_pdev_get_psoc(pdev);
@@ -1544,41 +1849,17 @@ target_if_init_spectral_capability(struct target_if_spectral *spectral,
 	pcap = &spectral->capability;
 	pcap->phydiag_cap = 1;
 	pcap->radar_cap = 1;
-	pcap->spectral_cap = 1;
-	pcap->advncd_spectral_cap = 1;
+	pcap->spectral_cap = wlan_pdev_nif_feat_ext_cap_get(
+			pdev, WLAN_PDEV_FEXT_NORMAL_SPECTRAL_SCAN_DIS);
+	pcap->advncd_spectral_cap = pcap->spectral_cap;
 	pcap->hw_gen = spectral->spectral_gen;
-	if (spectral->spectral_gen >= SPECTRAL_GEN3) {
-		mac_phy_cap_arr = target_psoc_get_mac_phy_cap(tgt_psoc_info);
-		if (!mac_phy_cap_arr) {
-			spectral_err("mac phy cap array is null");
-			return QDF_STATUS_E_FAILURE;
-		}
 
-		mac_phy_cap = &mac_phy_cap_arr[pdev_id];
-		if (!mac_phy_cap) {
-			spectral_err("mac phy cap is null");
-			return QDF_STATUS_E_FAILURE;
-		}
-
-		table_id = mac_phy_cap->chainmask_table_id;
-		table =  &ext_svc_param->chainmask_table[table_id];
-		if (!table) {
-			spectral_err("chainmask table not found");
-			return QDF_STATUS_E_FAILURE;
-		}
-
-		for (j = 0; j < table->num_valid_chainmasks; j++) {
-			pcap->agile_spectral_cap |=
-				table->cap_list[j].supports_aSpectral;
-			pcap->agile_spectral_cap_160 |=
-				table->cap_list[j].supports_aSpectral_160;
-		}
-		pcap->agile_spectral_cap_80p80 = pcap->agile_spectral_cap_160;
-	} else {
-		pcap->agile_spectral_cap = false;
-		pcap->agile_spectral_cap_160 = false;
-		pcap->agile_spectral_cap_80p80 = false;
-	}
+	pcap->agile_spectral_cap = !wlan_pdev_nif_feat_ext_cap_get(
+			pdev, WLAN_PDEV_FEXT_AGILE_SPECTRAL_SCAN_DIS);
+	pcap->agile_spectral_cap_160 = !wlan_pdev_nif_feat_ext_cap_get(
+			pdev, WLAN_PDEV_FEXT_AGILE_SPECTRAL_SCAN_160_DIS);
+	pcap->agile_spectral_cap_80p80 = !wlan_pdev_nif_feat_ext_cap_get(
+			pdev, WLAN_PDEV_FEXT_AGILE_SPECTRAL_SCAN_80P80_DIS);
 
 	if (scaling_params) {
 		for (param_idx = 0; param_idx < num_bin_scaling_params;
@@ -4532,6 +4813,16 @@ target_if_stop_spectral_scan(struct wlan_objmgr_pdev *pdev,
 	struct target_if_spectral_ops *p_sops;
 	struct target_if_spectral *spectral;
 
+	if (!pdev) {
+		spectral_err("pdev object is NULL");
+		return QDF_STATUS_E_INVAL;
+	}
+
+	if (target_if_spectral_is_feature_disabled_pdev(pdev)) {
+		spectral_info("Spectral feature is disabled");
+		return QDF_STATUS_COMP_DISABLED;
+	}
+
 	if (!err) {
 		spectral_err("Error code argument is null");
 		QDF_ASSERT(0);
@@ -4545,10 +4836,6 @@ target_if_stop_spectral_scan(struct wlan_objmgr_pdev *pdev,
 		return QDF_STATUS_E_FAILURE;
 	}
 
-	if (!pdev) {
-		spectral_err("pdev object is NUll ");
-		return QDF_STATUS_E_FAILURE;
-	}
 	spectral = get_target_if_spectral_handle_from_pdev(pdev);
 	if (!spectral) {
 		spectral_err("Spectral LMAC object is NUll ");
@@ -4591,23 +4878,33 @@ target_if_is_spectral_active(struct wlan_objmgr_pdev *pdev,
 	struct target_if_spectral *spectral = NULL;
 	struct target_if_spectral_ops *p_sops = NULL;
 
+	if (!pdev) {
+		spectral_err("pdev is null");
+		return false;
+	}
+
+	if (target_if_spectral_is_feature_disabled_pdev(pdev)) {
+		spectral_info("Spectral feature is disabled");
+		return false;
+	}
+
 	spectral = get_target_if_spectral_handle_from_pdev(pdev);
 
 	if (!spectral) {
 		spectral_err("SPECTRAL : Module doesn't exist");
-		return QDF_STATUS_E_FAILURE;
+		return false;
 	}
 
 	p_sops = GET_TARGET_IF_SPECTRAL_OPS(spectral);
 
 	if (!p_sops) {
 		spectral_err("p_sops is null");
-		return QDF_STATUS_E_FAILURE;
+		return false;
 	}
 
 	if (smode >= SPECTRAL_SCAN_MODE_MAX) {
 		spectral_err("Invalid Spectral mode %u", smode);
-		return QDF_STATUS_E_FAILURE;
+		return false;
 	}
 
 	return p_sops->is_spectral_active(spectral, smode);
@@ -4633,19 +4930,19 @@ target_if_is_spectral_enabled(struct wlan_objmgr_pdev *pdev,
 
 	if (!spectral) {
 		spectral_err("SPECTRAL : Module doesn't exist");
-		return QDF_STATUS_E_FAILURE;
+		return false;
 	}
 
 	p_sops = GET_TARGET_IF_SPECTRAL_OPS(spectral);
 
 	if (!p_sops) {
 		spectral_err("p_sops is null");
-		return QDF_STATUS_E_FAILURE;
+		return false;
 	}
 
 	if (smode >= SPECTRAL_SCAN_MODE_MAX) {
 		spectral_err("Invalid Spectral mode %u", smode);
-		return QDF_STATUS_E_FAILURE;
+		return false;
 	}
 
 	return p_sops->is_spectral_enabled(spectral, smode);
@@ -5741,6 +6038,8 @@ target_if_sptrl_register_tx_ops(struct wlan_lmac_if_tx_ops *tx_ops)
 		target_if_spectral_register_events;
 	tx_ops->sptrl_tx_ops.sptrlto_unregister_events =
 		target_if_spectral_unregister_events;
+	tx_ops->sptrl_tx_ops.sptrlto_init_pdev_feature_caps =
+		target_if_spectral_init_pdev_feature_caps;
 
 	target_if_sptrl_debug_register_tx_ops(tx_ops);
 }
