@@ -4422,7 +4422,6 @@ QDF_STATUS dp_peer_qos_stats_notify(struct dp_pdev *dp_pdev,
 
 	return QDF_STATUS_SUCCESS;
 }
-#endif
 
 #ifdef QCA_ENH_V3_STATS_SUPPORT
 /**
