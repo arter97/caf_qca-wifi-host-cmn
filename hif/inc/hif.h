@@ -26,6 +26,7 @@ extern "C" {
 /* Header files */
 #include <qdf_status.h>
 #include "qdf_nbuf.h"
+#include "qdf_types.h"
 #include "qdf_lro.h"
 #include "ol_if_athvar.h"
 #include <linux/platform_device.h>
@@ -548,6 +549,8 @@ struct hif_driver_state_callbacks {
 	bool (*is_load_unload_in_progress)(void *context);
 	bool (*is_driver_unloading)(void *context);
 	bool (*is_target_ready)(void *context);
+	void (*trigger_ssr_from_hif)(void *context, enum qdf_hang_reason reason,
+				     const char *func, const uint32_t line);
 };
 
 /* This API detaches the HTC layer from the HIF device */
