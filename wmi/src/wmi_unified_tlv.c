@@ -5036,8 +5036,7 @@ QDF_STATUS send_roam_scan_offload_mode_cmd_tlv(wmi_unified_t wmi_handle,
 				roam_offload_11i =
 				     (wmi_roam_11i_offload_tlv_param *) buf_ptr;
 
-				if (roam_req->roam_key_mgmt_offload_enabled &&
-				    roam_req->fw_okc) {
+				if (roam_req->fw_okc) {
 					WMI_SET_ROAM_OFFLOAD_OKC_ENABLED
 						(roam_offload_11i->flags);
 					WMI_LOGI("LFR3:OKC enabled");
@@ -5046,8 +5045,7 @@ QDF_STATUS send_roam_scan_offload_mode_cmd_tlv(wmi_unified_t wmi_handle,
 						(roam_offload_11i->flags);
 					WMI_LOGI("LFR3:OKC disabled");
 				}
-				if (roam_req->roam_key_mgmt_offload_enabled &&
-				    roam_req->fw_pmksa_cache) {
+				if (roam_req->fw_pmksa_cache) {
 					WMI_SET_ROAM_OFFLOAD_PMK_CACHE_ENABLED
 						(roam_offload_11i->flags);
 					WMI_LOGI("LFR3:PMKSA caching enabled");
