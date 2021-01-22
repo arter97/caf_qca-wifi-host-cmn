@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012-2015, 2020 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012-2015,2020-2021 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -274,8 +274,9 @@ static inline void
 osif_cm_set_prev_bssid(struct wlan_cm_connect_req *connect_req,
 		       const struct cfg80211_connect_params *req)
 {
-	qdf_mem_copy(connect_req->prev_bssid.bytes, req->prev_bssid,
-		     QDF_MAC_ADDR_SIZE);
+	if (req->prev_bssid)
+		qdf_mem_copy(connect_req->prev_bssid.bytes, req->prev_bssid,
+			     QDF_MAC_ADDR_SIZE);
 }
 
 static inline
@@ -349,6 +350,10 @@ osif_cm_fill_connect_params(struct wlan_cm_connect_req *req,
 	req->dot11mode_filter = params->dot11mode_filter;
 	req->force_rsne_override = params->force_rsne_override;
 	req->sae_pwe = params->sae_pwe;
+
+	if (!qdf_is_macaddr_zero((struct qdf_mac_addr *)&params->prev_bssid))
+		qdf_copy_macaddr(&req->prev_bssid,
+				 (struct qdf_mac_addr *)&params->prev_bssid);
 }
 
 static void osif_cm_free_connect_req(struct wlan_cm_connect_req *connect_req)

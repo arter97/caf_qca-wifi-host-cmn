@@ -287,6 +287,18 @@ void hif_dummy_dump_target_memory(struct hif_softc *hif_sc, void *ramdump_base,
 {
 }
 
+uint32_t hif_dummy_bus_reg_read32(struct hif_softc *hif_sc,
+				  uint32_t offset)
+{
+	return 0;
+}
+
+void hif_dummy_bus_reg_write32(struct hif_softc *hif_sc,
+			       uint32_t offset,
+			       uint32_t value)
+{
+}
+
 /**
  * hif_dummy_ipa_get_ce_resource - dummy call
  * @scn: HIF context
@@ -394,9 +406,10 @@ int hif_dummy_config_irq_by_ceid(struct hif_softc *scn, int ce_id)
  * @data: hang event data buffer
  * @offset: offset at which data needs to be written
  *
- * Return: None
+ * Return: bool
  */
-void hif_dummy_log_bus_info(struct hif_softc *scn, uint8_t *data,
+bool hif_dummy_log_bus_info(struct hif_softc *scn, uint8_t *data,
 			    unsigned int *offset)
 {
+	return false;
 }

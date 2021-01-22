@@ -162,11 +162,20 @@ struct pcl_freq_weight_list {
  * enum cm_blacklist_action - action taken by blacklist manager for the bssid
  * @CM_BLM_NO_ACTION: No operation to be taken for the BSSID in the scan list.
  * @CM_BLM_REMOVE: Remove the BSSID from the scan list (AP is blacklisted)
+ * This param is a way to inform the caller that this BSSID is blacklisted
+ * but it is a driver blacklist and we can connect to them if required.
+ * @CM_BLM_FORCE_REMOVE: Forcefully remove the BSSID from scan list.
+ * This param is introduced as we want to differentiate between optional
+ * mandatory blacklisting. Driver blacklisting is optional and won't
+ * fail any CERT or protocol violations as it is internal implementation.
+ * hence FORCE_REMOVE will mean that driver cannot connect to this BSSID
+ * in any situation.
  * @CM_BLM_AVOID: Add the Ap at last of the scan list (AP to Avoid)
  */
 enum cm_blacklist_action {
 	CM_BLM_NO_ACTION,
 	CM_BLM_REMOVE,
+	CM_BLM_FORCE_REMOVE,
 	CM_BLM_AVOID,
 };
 
@@ -227,13 +236,15 @@ void wlan_cm_init_score_config(struct wlan_objmgr_psoc *psoc,
  * @rsn_caps: rsn caps
  * @rsnxe: rsnxe pointer if present
  * @sae_pwe: support for SAE password
+ * @is_wps: if security is WPS
  *
  * Return: bool
  */
 #ifdef CONFIG_BAND_6GHZ
 bool wlan_cm_6ghz_allowed_for_akm(struct wlan_objmgr_psoc *psoc,
 				  uint32_t key_mgmt, uint16_t rsn_caps,
-				  const uint8_t *rsnxe, uint8_t sae_pwe);
+				  const uint8_t *rsnxe, uint8_t sae_pwe,
+				  bool is_wps);
 
 /**
  * wlan_cm_set_check_6ghz_security() - Set check 6Ghz security
@@ -284,7 +295,8 @@ uint32_t wlan_cm_get_6ghz_key_mgmt_mask(struct wlan_objmgr_psoc *psoc);
 static inline bool
 wlan_cm_6ghz_allowed_for_akm(struct wlan_objmgr_psoc *psoc,
 			     uint32_t key_mgmt, uint16_t rsn_caps,
-			     const uint8_t *rsnxe, uint8_t sae_pwe)
+			     const uint8_t *rsnxe, uint8_t sae_pwe,
+			     bool is_wps)
 {
 	return true;
 }

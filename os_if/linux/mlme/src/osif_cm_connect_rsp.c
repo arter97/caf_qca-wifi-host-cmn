@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012-2015, 2020 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012-2015, 2020-2021 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -33,7 +33,7 @@
  * osif_validate_connect_and_reset_src_id() - Validate connect response and
  * resets source and id
  * @osif_priv: Pointer to vdev osif priv
- * @cm_id: Command id received in the connect response
+ * @rsp: Connection manager connect response
  *
  * This function validates connect response and if the connect
  * response is valid, resets the source and id of the command
@@ -43,19 +43,21 @@
  */
 static QDF_STATUS
 osif_validate_connect_and_reset_src_id(struct vdev_osif_priv *osif_priv,
-					    wlan_cm_id cm_id)
+				       struct wlan_cm_connect_resp *rsp)
 {
 	QDF_STATUS status = QDF_STATUS_SUCCESS;
 	/*
-	 * Send to kernel only if last osif cmd type is connect and
-	 * cookie match else drop. If cookie match reset the cookie
-	 * and source.
+	 * Send to kernel only if last osif cookie match and
+	 * source is CM_OSIF_CONNECT or CM_OSIF_CFG_CONNECT with failure
+	 * else drop. If cookie match reset the cookie and source.
 	 */
 	qdf_spinlock_acquire(&osif_priv->cm_info.cmd_id_lock);
-	if (cm_id != osif_priv->cm_info.last_id ||
-	    osif_priv->cm_info.last_source != CM_OSIF_CONNECT) {
+	if (rsp->cm_id != osif_priv->cm_info.last_id ||
+	    (osif_priv->cm_info.last_source != CM_OSIF_CONNECT &&
+	    !(osif_priv->cm_info.last_source == CM_OSIF_CFG_CONNECT &&
+	    QDF_IS_STATUS_ERROR(rsp->connect_status)))) {
 		osif_debug("Ignore as cm_id(%d)/src(%d) didn't match stored cm_id(%d)/src(%d)",
-			   cm_id, CM_OSIF_CONNECT,
+			   rsp->cm_id, CM_OSIF_CONNECT,
 			   osif_priv->cm_info.last_id,
 			   osif_priv->cm_info.last_source);
 		status = QDF_STATUS_E_INVAL;
@@ -304,6 +306,7 @@ osif_get_statuscode(enum wlan_status_code status)
  * @dev: network device
  * @bss: bss info
  * @connect_rsp: Connection manager connect response
+ * @vdev: pointer to vdev
  *
  * This API is used as wrapper to send FILS key/sequence number
  * params etc. to supplicant in case of FILS connection
@@ -312,7 +315,8 @@ osif_get_statuscode(enum wlan_status_code status)
  * Return: None
  */
 static void osif_connect_done(struct net_device *dev, struct cfg80211_bss *bss,
-			      struct wlan_cm_connect_resp *rsp)
+			      struct wlan_cm_connect_resp *rsp,
+			      struct wlan_objmgr_vdev *vdev)
 {
 	struct cfg80211_connect_resp_params conn_rsp_params;
 	enum ieee80211_statuscode status = WLAN_STATUS_SUCCESS;
@@ -341,16 +345,18 @@ static void osif_connect_done(struct net_device *dev, struct cfg80211_bss *bss,
 		conn_rsp_params.bss = bss;
 		osif_populate_fils_params(&conn_rsp_params,
 					  rsp->connect_ies.fils_ie);
-		/* save GTK */
+		osif_cm_save_gtk(vdev, rsp);
 	}
 
 	cfg80211_connect_done(dev, &conn_rsp_params, GFP_KERNEL);
-	/* hlp data for DHCP */
+	if (rsp->connect_ies.fils_ie && rsp->connect_ies.fils_ie->hlp_data_len)
+		osif_cm_set_hlp_data(dev, vdev, rsp);
 }
 #else /* CFG80211_CONNECT_DONE */
 static inline void
 osif_connect_done(struct net_device *dev, struct cfg80211_bss *bss,
-		  struct wlan_cm_connect_resp *rsp)
+		  struct wlan_cm_connect_resp *rsp,
+		  struct wlan_objmgr_vdev *vdev)
 { }
 #endif /* CFG80211_CONNECT_DONE */
 #endif /* WLAN_FEATURE_FILS_SK */
@@ -364,6 +370,7 @@ osif_connect_done(struct net_device *dev, struct cfg80211_bss *bss,
  * @dev: network device
  * @bss: bss info
  * @connect_rsp: Connection manager connect response
+ * @vdev: pointer to vdev
  *
  * The API is a wrapper to send connection status to supplicant
  *
@@ -372,13 +379,14 @@ osif_connect_done(struct net_device *dev, struct cfg80211_bss *bss,
  */
 static int osif_update_connect_results(struct net_device *dev,
 				       struct cfg80211_bss *bss,
-				       struct wlan_cm_connect_resp *rsp)
+				       struct wlan_cm_connect_resp *rsp,
+				       struct wlan_objmgr_vdev *vdev)
 {
 	if (!rsp->is_fils_connection) {
 		osif_debug("fils IE is NULL");
 		return -EINVAL;
 	}
-	osif_connect_done(dev, bss, rsp);
+	osif_connect_done(dev, bss, rsp, vdev);
 
 	return 0;
 }
@@ -386,7 +394,8 @@ static int osif_update_connect_results(struct net_device *dev,
 
 static inline int osif_update_connect_results(struct net_device *dev,
 					      struct cfg80211_bss *bss,
-					      struct wlan_cm_connect_resp *rsp)
+					      struct wlan_cm_connect_resp *rsp,
+					      struct wlan_objmgr_vdev *vdev)
 {
 	return -EINVAL;
 }
@@ -408,7 +417,8 @@ static void osif_indcate_connect_results(struct wlan_objmgr_vdev *vdev,
 					    rsp->ssid.length);
 	}
 
-	if (osif_update_connect_results(osif_priv->wdev->netdev, bss, rsp))
+	if (osif_update_connect_results(osif_priv->wdev->netdev, bss,
+					rsp, vdev))
 		osif_connect_bss(osif_priv->wdev->netdev, bss, rsp);
 }
 #else  /* CFG80211_CONNECT_BSS */
@@ -465,7 +475,7 @@ QDF_STATUS osif_connect_handler(struct wlan_objmgr_vdev *vdev,
 		osif_cm_unlink_bss(vdev, osif_priv, &rsp->bssid, rsp->ssid.ssid,
 				   rsp->ssid.length);
 
-	status = osif_validate_connect_and_reset_src_id(osif_priv, rsp->cm_id);
+	status = osif_validate_connect_and_reset_src_id(osif_priv, rsp);
 	if (QDF_IS_STATUS_ERROR(status)) {
 		osif_cm_connect_comp_ind(vdev, rsp, OSIF_NOT_HANDLED);
 		return status;

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012-2015, 2020, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012-2015, 2020-2021, The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -33,6 +33,8 @@
 
 #define CONNECT_REQ_PREFIX          0x00C00000
 #define DISCONNECT_REQ_PREFIX       0x00D00000
+#define ROAM_REQ_PREFIX             0x00F00000
+
 #define CM_ID_MASK                  0x0000FFFF
 
 #define CM_ID_GET_PREFIX(cm_id)     cm_id & 0xFFFF0000
@@ -480,6 +482,18 @@ struct cnx_mgr *cm_get_cm_ctx_fl(struct wlan_objmgr_vdev *vdev,
 #define cm_get_cm_ctx(vdev) \
 	cm_get_cm_ctx_fl(vdev, __func__, __LINE__)
 
+cm_ext_t *cm_get_ext_hdl_fl(struct wlan_objmgr_vdev *vdev,
+			    const char *func, uint32_t line);
+
+/**
+ * cm_get_ext_hdl() - Get connection manager ext context from vdev
+ * @vdev: vdev object pointer
+ *
+ * Return: pointer to connection manager ext context
+ */
+#define cm_get_ext_hdl(vdev) \
+	cm_get_ext_hdl_fl(vdev, __func__, __LINE__)
+
 /**
  * cm_reset_active_cm_id() - Reset active cm_id from cm context, if its same as
  * passed cm_id
@@ -733,6 +747,18 @@ void cm_set_max_connect_attempts(struct wlan_objmgr_vdev *vdev,
 				 uint8_t max_connect_attempts);
 
 /**
+ * cm_set_max_connect_timeout() - Set max connect timeout
+ * @vdev: vdev pointer
+ * @max_connect_timeout: max connect timeout to be set.
+ *
+ * Set max connect timeout.
+ *
+ * Return: void
+ */
+void cm_set_max_connect_timeout(struct wlan_objmgr_vdev *vdev,
+				uint32_t max_connect_timeout);
+
+/**
  * cm_is_vdev_connecting() - check if vdev is in conneting state
  * @vdev: vdev pointer
  *
@@ -747,6 +773,15 @@ bool cm_is_vdev_connecting(struct wlan_objmgr_vdev *vdev);
  * Return: bool
  */
 bool cm_is_vdev_connected(struct wlan_objmgr_vdev *vdev);
+
+/**
+ * cm_is_vdev_active() - check if vdev is in active state ie conneted or roaming
+ * state
+ * @vdev: vdev pointer
+ *
+ * Return: bool
+ */
+bool cm_is_vdev_active(struct wlan_objmgr_vdev *vdev);
 
 /**
  * cm_is_vdev_disconnecting() - check if vdev is in disconneting state
@@ -771,6 +806,81 @@ bool cm_is_vdev_disconnected(struct wlan_objmgr_vdev *vdev);
  * Return: bool
  */
 bool cm_is_vdev_roaming(struct wlan_objmgr_vdev *vdev);
+
+#ifdef WLAN_FEATURE_ROAM_OFFLOAD
+/**
+ * cm_is_vdev_roam_started() - check if vdev is in roaming state and
+ * roam started sub stated
+ * @vdev: vdev pointer
+ *
+ * Return: bool
+ */
+bool cm_is_vdev_roam_started(struct wlan_objmgr_vdev *vdev);
+
+/**
+ * cm_is_vdev_roam_sync_inprogress() - check if vdev is in roaming state
+ * and roam sync substate
+ * @vdev: vdev pointer
+ *
+ * Return: bool
+ */
+bool cm_is_vdev_roam_sync_inprogress(struct wlan_objmgr_vdev *vdev);
+#endif
+
+#ifdef WLAN_FEATURE_HOST_ROAM
+/**
+ * cm_is_vdev_roam_preauth_state() - check if vdev is in roaming state and
+ * preauth is in progress
+ * @vdev: vdev pointer
+ *
+ * Return: bool
+ */
+bool cm_is_vdev_roam_preauth_state(struct wlan_objmgr_vdev *vdev);
+
+/**
+ * cm_is_vdev_roam_reassoc_state() - check if vdev is in roaming state
+ * and reassoc is in progress
+ * @vdev: vdev pointer
+ *
+ * Return: bool
+ */
+bool cm_is_vdev_roam_reassoc_state(struct wlan_objmgr_vdev *vdev);
+#endif
+
+/**
+ * cm_get_active_req_type() - CM active req type
+ * @vdev: vdev pointer
+ *
+ * Return: CM active req type
+ */
+enum wlan_cm_active_request_type
+cm_get_active_req_type(struct wlan_objmgr_vdev *vdev);
+
+/**
+ * cm_get_active_connect_req() - Get copy of active connect request
+ * @vdev: vdev pointer
+ * @req: pointer to the copy of the active connect request
+ * *
+ * Context: Should be called only in the conext of the
+ * cm request activation
+ *
+ * Return: true and connect req if any request is active
+ */
+bool cm_get_active_connect_req(struct wlan_objmgr_vdev *vdev,
+			       struct wlan_cm_vdev_connect_req *req);
+
+/**
+ * cm_get_active_disconnect_req() - Get copy of active disconnect request
+ * @vdev: vdev pointer
+ * @req: pointer to the copy of the active disconnect request
+ * *
+ * Context: Should be called only in the conext of the
+ * cm request activation
+ *
+ * Return: true and disconnect req if any request is active
+ */
+bool cm_get_active_disconnect_req(struct wlan_objmgr_vdev *vdev,
+				  struct wlan_cm_vdev_discon_req *req);
 
 /*
  * cm_connect_handle_event_post_fail() - initiate connect failure if msg posting
@@ -814,4 +924,43 @@ struct cm_req *cm_get_req_by_scan_id(struct cnx_mgr *cm_ctx,
 wlan_cm_id cm_get_cm_id_by_scan_id(struct cnx_mgr *cm_ctx,
 				   wlan_scan_id scan_id);
 
+/**
+ * cm_update_scan_mlme_on_disconnect() - update the scan mlme info
+ * on disconnect completion
+ * @vdev: Object manager vdev
+ * @req: Disconnect request
+ *
+ * Return: void
+ */
+void
+cm_update_scan_mlme_on_disconnect(struct wlan_objmgr_vdev *vdev,
+				  struct cm_disconnect_req *req);
+
+/**
+ * cm_calculate_scores() - Score the candidates obtained from scan
+ * manager after filtering
+ * @pdev: Object manager pdev
+ * @filter: Scan filter params
+ * @list: List of candidates to be scored
+ *
+ * Return: void
+ */
+void cm_calculate_scores(struct wlan_objmgr_pdev *pdev,
+			 struct scan_filter *filter, qdf_list_t *list);
+
+/**
+ * cm_req_lock_acquire() - Acquire connection manager request lock
+ * @cm_ctx: Connection manager context
+ *
+ * Return: void
+ */
+void cm_req_lock_acquire(struct cnx_mgr *cm_ctx);
+
+/**
+ * cm_req_lock_release() - Release connection manager request lock
+ * @cm_ctx: Connection manager context
+ *
+ * Return: void
+ */
+void cm_req_lock_release(struct cnx_mgr *cm_ctx);
 #endif /* __WLAN_CM_MAIN_API_H__ */

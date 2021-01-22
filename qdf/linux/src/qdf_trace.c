@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2020 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2014-2021 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -114,7 +114,11 @@ static tp_qdf_dp_trace_cb qdf_dp_trace_cb_table[QDF_DP_TRACE_MAX + 1];
  */
 void qdf_snprintf(char *str_buffer, unsigned int size, char *str_format, ...)
 {
-	snprintf(str_buffer, size, str_format);
+	va_list args;
+
+	va_start(args, str_format);
+	vsnprintf(str_buffer, size, str_format, args);
+	va_end(args);
 }
 qdf_export_symbol(qdf_snprintf);
 
@@ -1557,16 +1561,16 @@ void qdf_dp_log_proto_pkt_info(uint8_t *sa, uint8_t *da, uint8_t type,
 		last_ticks_rx[subtype] = curr_ticks;
 
 	if (status == QDF_TX_RX_STATUS_INVALID)
-		qdf_nofl_debug("%s %s: SA:"QDF_MAC_ADDR_FMT" DA:"QDF_MAC_ADDR_FMT,
-			       qdf_get_pkt_type_string(type, subtype),
-			       dir ? "RX":"TX", QDF_MAC_ADDR_REF(sa),
-			       QDF_MAC_ADDR_REF(da));
+		qdf_nofl_info("%s %s: SA:" QDF_MAC_ADDR_FMT " DA:" QDF_MAC_ADDR_FMT,
+			      qdf_get_pkt_type_string(type, subtype),
+			      dir ? "RX" : "TX", QDF_MAC_ADDR_REF(sa),
+			      QDF_MAC_ADDR_REF(da));
 	else
-		qdf_nofl_debug("%s %s: SA:"QDF_MAC_ADDR_FMT" DA:"QDF_MAC_ADDR_FMT" msdu_id:%d status: %s",
-			       qdf_get_pkt_type_string(type, subtype),
-			       dir ? "RX":"TX", QDF_MAC_ADDR_REF(sa),
-			       QDF_MAC_ADDR_REF(da), msdu_id,
-			       qdf_get_pkt_status_string(status));
+		qdf_nofl_info("%s %s: SA:" QDF_MAC_ADDR_FMT " DA:" QDF_MAC_ADDR_FMT " msdu_id:%d status: %s",
+			      qdf_get_pkt_type_string(type, subtype),
+			      dir ? "RX" : "TX", QDF_MAC_ADDR_REF(sa),
+			      QDF_MAC_ADDR_REF(da), msdu_id,
+			      qdf_get_pkt_status_string(status));
 }
 
 qdf_export_symbol(qdf_dp_log_proto_pkt_info);
@@ -3139,7 +3143,6 @@ struct category_name_info g_qdf_category_name[MAX_SUPPORTED_CATEGORY] = {
 	[QDF_MODULE_ID_DIRECT_BUF_RX] = {"DIRECT_BUF_RX"},
 	[QDF_MODULE_ID_DISA] = {"disa"},
 	[QDF_MODULE_ID_GREEN_AP] = {"GREEN_AP"},
-	[QDF_MODULE_ID_EXTAP] = {"EXTAP"},
 	[QDF_MODULE_ID_FD] = {"FILS discovery"},
 	[QDF_MODULE_ID_FTM] = {"FTM"},
 	[QDF_MODULE_ID_OCB] = {"OCB"},
@@ -3155,14 +3158,13 @@ struct category_name_info g_qdf_category_name[MAX_SUPPORTED_CATEGORY] = {
 	[QDF_MODULE_ID_CMN_MLME] = {"CMN_MLME"},
 	[QDF_MODULE_ID_BSSCOLOR] = {"BSSCOLOR"},
 	[QDF_MODULE_ID_CFR] = {"CFR"},
-	[QDF_MODULE_ID_TX_CAPTURE] = {"TX_CAPTURE_ENHANCE"},
+	[QDF_MODULE_ID_DP_TX_CAPTURE] = {"TX_CAPTURE_ENHANCE"},
 	[QDF_MODULE_ID_INTEROP_ISSUES_AP] = {"INTEROP_ISSUES_AP"},
 	[QDF_MODULE_ID_BLACKLIST_MGR] = {"blm"},
 	[QDF_MODULE_ID_QLD] = {"QLD"},
 	[QDF_MODULE_ID_DYNAMIC_MODE_CHG] = {"Dynamic Mode Change"},
 	[QDF_MODULE_ID_COEX] = {"COEX"},
 	[QDF_MODULE_ID_MON_FILTER] = {"Monitor Filter"},
-	[QDF_MODULE_ID_ANY] = {"ANY"},
 	[QDF_MODULE_ID_PKT_CAPTURE] = {"pkt_capture"},
 	[QDF_MODULE_ID_RPTR] = {"RPTR"},
 	[QDF_MODULE_ID_6GHZ] = {"6GHZ"},
@@ -3170,6 +3172,27 @@ struct category_name_info g_qdf_category_name[MAX_SUPPORTED_CATEGORY] = {
 	[QDF_MODULE_ID_MSCS] = {"MSCS"},
 	[QDF_MODULE_ID_GPIO] = {"GPIO_CFG"},
 	[QDF_MODULE_ID_IFMGR] = {"IF_MGR"},
+	[QDF_MODULE_ID_DIAG] = {"DIAG"},
+	[QDF_MODULE_ID_DP_INIT] = {"DP_INIT"},
+	[QDF_MODULE_ID_DP_TX] = {"DP_TX"},
+	[QDF_MODULE_ID_DP_RX] = {"DP_RX"},
+	[QDF_MODULE_ID_DP_STATS] = {"DP_STATS"},
+	[QDF_MODULE_ID_DP_HTT] = {"DP_HTT"},
+	[QDF_MODULE_ID_DP_PEER] = {"DP_PEER"},
+	[QDF_MODULE_ID_DP_RX_ERROR] = {"DP_RX_ERROR"},
+	[QDF_MODULE_ID_DP_HTT_TX_STATS] = {"DP_HTT_TX_STATS"},
+	[QDF_MODULE_ID_DP_RX_MON_STATUS] = {"DP_RX_MON_STATUS"},
+	[QDF_MODULE_ID_DP_RX_MON_DEST] = {"DP_RX_MON_DEST"},
+	[QDF_MODULE_ID_DP_REO] = {"DP_REO"},
+	[QDF_MODULE_ID_DP_TX_COMP] = {"DP_TX_COMP"},
+	[QDF_MODULE_ID_DP_VDEV] = {"DP_VDEV"},
+	[QDF_MODULE_ID_DP_CDP] = {"DP_CDP"},
+	[QDF_MODULE_ID_TSO] = {"TSO"},
+	[QDF_MODULE_ID_ME] = {"ME"},
+	[QDF_MODULE_ID_QWRAP] = {"QWRAP"},
+	[QDF_MODULE_ID_DBDC_REP] = {"DBDC_REP"},
+	[QDF_MODULE_ID_EXT_AP] = {"EXT_AP"},
+	[QDF_MODULE_ID_ANY] = {"ANY"},
 };
 qdf_export_symbol(g_qdf_category_name);
 
@@ -3207,9 +3230,86 @@ void qdf_trace_display(void)
 }
 qdf_export_symbol(qdf_trace_display);
 
+#ifdef WLAN_MAX_LOGS_PER_SEC
+static qdf_time_t __log_window_end;
+static qdf_atomic_t __log_window_count;
+uint32_t qdf_rl_print_count = WLAN_MAX_LOGS_PER_SEC;
+uint32_t qdf_rl_print_time = 1;
+uint32_t qdf_rl_print_supressed;
+
+/**
+ * qdf_detected_excessive_logging() - Excessive logging detected
+ *
+ * Track logging count using a quasi-tumbling window.
+ * If the max logging count for a given window is exceeded,
+ * return true else fails.
+ *
+ * Return: true/false
+ */
+bool qdf_detected_excessive_logging(void)
+{
+	qdf_time_t now = qdf_system_ticks();
+	bool excessive_prints = false;
+
+	/*
+	 * If 'now' is more recent than the end of the window, reset.
+	 *
+	 * Note: This is not thread safe, and can result in more than one reset.
+	 * For our purposes, this is fine.
+	 */
+	if (!qdf_atomic_read(&__log_window_count)) {
+		__log_window_end = now + (qdf_system_ticks_per_sec * qdf_rl_print_time);
+	} else if (qdf_system_time_after(now, __log_window_end)) {
+		__log_window_end = now + (qdf_system_ticks_per_sec * qdf_rl_print_time);
+		qdf_atomic_set(&__log_window_count, 0);
+	}
+
+	if (qdf_atomic_inc_return(&__log_window_count) > qdf_rl_print_count)
+		excessive_prints = true;
+
+	return excessive_prints;
+}
+
+void qdf_rl_print_count_set(uint32_t rl_print_count)
+{
+	qdf_rl_print_count = rl_print_count;
+}
+
+qdf_export_symbol(qdf_rl_print_count_set);
+
+void qdf_rl_print_time_set(uint32_t rl_print_time)
+{
+	qdf_rl_print_time = rl_print_time;
+}
+
+qdf_export_symbol(qdf_rl_print_time_set);
+
+static inline void qdf_rl_print_supressed_log(void)
+{
+	if (qdf_rl_print_supressed) {
+		pr_err("QDF Ratelimiting: %d prints supressed",
+		       qdf_rl_print_supressed);
+		qdf_rl_print_supressed = 0;
+	}
+}
+
+static inline void qdf_rl_print_supressed_inc(void)
+{
+	qdf_rl_print_supressed++;
+}
+#else
+#define qdf_rl_print_supressed_log()
+#define qdf_rl_print_supressed_inc()
+#endif /* WLAN_MAX_LOGS_PER_SEC */
+
 #ifdef QDF_TRACE_PRINT_ENABLE
 static inline void print_to_console(char *str_buffer)
 {
+	if (qdf_detected_excessive_logging()) {
+		qdf_rl_print_supressed_inc();
+		return;
+	}
+	qdf_rl_print_supressed_log();
 	pr_err("%s\n", str_buffer);
 }
 #else
@@ -3614,7 +3714,6 @@ static void set_default_trace_levels(struct category_info *cinfo)
 		[QDF_MODULE_ID_DISA] = QDF_TRACE_LEVEL_NONE,
 		[QDF_MODULE_ID_GREEN_AP] = QDF_TRACE_LEVEL_ERROR,
 		[QDF_MODULE_ID_FTM] = QDF_TRACE_LEVEL_ERROR,
-		[QDF_MODULE_ID_EXTAP] = QDF_TRACE_LEVEL_NONE,
 		[QDF_MODULE_ID_FD] = QDF_TRACE_LEVEL_ERROR,
 		[QDF_MODULE_ID_OCB] = QDF_TRACE_LEVEL_ERROR,
 		[QDF_MODULE_ID_IPA] = QDF_TRACE_LEVEL_NONE,
@@ -3627,14 +3726,13 @@ static void set_default_trace_levels(struct category_info *cinfo)
 		[QDF_MODULE_ID_CMN_MLME] = QDF_TRACE_LEVEL_INFO,
 		[QDF_MODULE_ID_BSSCOLOR] = QDF_TRACE_LEVEL_ERROR,
 		[QDF_MODULE_ID_CFR] = QDF_TRACE_LEVEL_ERROR,
-		[QDF_MODULE_ID_TX_CAPTURE] = QDF_TRACE_LEVEL_FATAL,
+		[QDF_MODULE_ID_DP_TX_CAPTURE] = QDF_TRACE_LEVEL_FATAL,
 		[QDF_MODULE_ID_INTEROP_ISSUES_AP] = QDF_TRACE_LEVEL_NONE,
 		[QDF_MODULE_ID_BLACKLIST_MGR] = QDF_TRACE_LEVEL_NONE,
 		[QDF_MODULE_ID_QLD] = QDF_TRACE_LEVEL_ERROR,
 		[QDF_MODULE_ID_DYNAMIC_MODE_CHG] = QDF_TRACE_LEVEL_INFO,
 		[QDF_MODULE_ID_COEX] = QDF_TRACE_LEVEL_ERROR,
 		[QDF_MODULE_ID_MON_FILTER] = QDF_TRACE_LEVEL_INFO,
-		[QDF_MODULE_ID_ANY] = QDF_TRACE_LEVEL_INFO,
 		[QDF_MODULE_ID_PKT_CAPTURE] = QDF_TRACE_LEVEL_NONE,
 		[QDF_MODULE_ID_RPTR] = QDF_TRACE_LEVEL_INFO,
 		[QDF_MODULE_ID_6GHZ] = QDF_TRACE_LEVEL_ERROR,
@@ -3642,6 +3740,27 @@ static void set_default_trace_levels(struct category_info *cinfo)
 		[QDF_MODULE_ID_MSCS] = QDF_TRACE_LEVEL_INFO,
 		[QDF_MODULE_ID_GPIO] = QDF_TRACE_LEVEL_NONE,
 		[QDF_MODULE_ID_IFMGR] = QDF_TRACE_LEVEL_ERROR,
+		[QDF_MODULE_ID_DIAG] = QDF_TRACE_LEVEL_ERROR,
+		[QDF_MODULE_ID_DP_INIT] = QDF_TRACE_LEVEL_FATAL,
+		[QDF_MODULE_ID_DP_TX] = QDF_TRACE_LEVEL_FATAL,
+		[QDF_MODULE_ID_DP_RX] = QDF_TRACE_LEVEL_FATAL,
+		[QDF_MODULE_ID_DP_STATS] = QDF_TRACE_LEVEL_FATAL,
+		[QDF_MODULE_ID_DP_HTT] = QDF_TRACE_LEVEL_FATAL,
+		[QDF_MODULE_ID_DP_PEER] = QDF_TRACE_LEVEL_FATAL,
+		[QDF_MODULE_ID_DP_RX_ERROR] = QDF_TRACE_LEVEL_FATAL,
+		[QDF_MODULE_ID_DP_HTT_TX_STATS] = QDF_TRACE_LEVEL_FATAL,
+		[QDF_MODULE_ID_DP_RX_MON_STATUS] = QDF_TRACE_LEVEL_FATAL,
+		[QDF_MODULE_ID_DP_RX_MON_DEST] = QDF_TRACE_LEVEL_FATAL,
+		[QDF_MODULE_ID_DP_REO] = QDF_TRACE_LEVEL_FATAL,
+		[QDF_MODULE_ID_DP_TX_COMP] = QDF_TRACE_LEVEL_FATAL,
+		[QDF_MODULE_ID_DP_VDEV] = QDF_TRACE_LEVEL_FATAL,
+		[QDF_MODULE_ID_DP_CDP] = QDF_TRACE_LEVEL_FATAL,
+		[QDF_MODULE_ID_TSO] = QDF_TRACE_LEVEL_FATAL,
+		[QDF_MODULE_ID_ME] = QDF_TRACE_LEVEL_INFO,
+		[QDF_MODULE_ID_QWRAP] = QDF_TRACE_LEVEL_FATAL,
+		[QDF_MODULE_ID_DBDC_REP] = QDF_TRACE_LEVEL_FATAL,
+		[QDF_MODULE_ID_EXT_AP] = QDF_TRACE_LEVEL_NONE,
+		[QDF_MODULE_ID_ANY] = QDF_TRACE_LEVEL_INFO,
 	};
 
 	for (i = 0; i < MAX_SUPPORTED_CATEGORY; i++) {

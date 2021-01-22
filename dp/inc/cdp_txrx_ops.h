@@ -1122,6 +1122,9 @@ struct ol_if_ops {
 				   uint8_t *peer_mac_addr);
 #endif
 #ifdef DP_MEM_PRE_ALLOC
+	void *(*dp_prealloc_get_context)(uint32_t ctxt_type);
+
+	QDF_STATUS(*dp_prealloc_put_context)(uint32_t ctxt_type, void *vaddr);
 	void *(*dp_prealloc_get_consistent)(uint32_t *size,
 					    void **base_vaddr_unaligned,
 					    qdf_dma_addr_t *paddr_unaligned,
@@ -1190,6 +1193,7 @@ struct ol_if_ops {
  *			 for this particular vdev.
  * @set_swlm_enable: Enable or Disable Software Latency Manager.
  * @is_swlm_enabled: Check if Software latency manager is enabled or not.
+ * @display_txrx_hw_info: Dump the DP rings info
  *
  * Function pointers for miscellaneous soc/pdev/vdev related operations.
  */
@@ -1278,6 +1282,7 @@ struct cdp_misc_ops {
 	QDF_STATUS (*set_swlm_enable)(struct cdp_soc_t *soc_hdl,
 				      uint8_t val);
 	uint8_t (*is_swlm_enabled)(struct cdp_soc_t *soc_hdl);
+	void (*display_txrx_hw_info)(struct cdp_soc_t *soc_hdl);
 };
 
 /**

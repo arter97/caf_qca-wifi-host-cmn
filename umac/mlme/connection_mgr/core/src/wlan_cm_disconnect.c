@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012-2015, 2020, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012-2015,2020-2021 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -342,7 +342,6 @@ QDF_STATUS cm_disconnect_start(struct cnx_mgr *cm_ctx,
 		return QDF_STATUS_E_INVAL;
 	}
 
-	/* disconnect TDLS, P2P roc cleanup */
 	cm_inform_if_mgr_disconnect_start(cm_ctx->vdev);
 	cm_vdev_scan_cancel(wlan_vdev_get_pdev(cm_ctx->vdev), cm_ctx->vdev);
 	mlme_cm_osif_disconnect_start_ind(cm_ctx->vdev);
@@ -356,7 +355,7 @@ QDF_STATUS cm_disconnect_start(struct cnx_mgr *cm_ctx,
 	return QDF_STATUS_SUCCESS;
 }
 
-static void
+void
 cm_update_scan_mlme_on_disconnect(struct wlan_objmgr_vdev *vdev,
 				  struct cm_disconnect_req *req)
 {
@@ -517,7 +516,8 @@ cm_handle_discon_req_in_non_connected_state(struct cnx_mgr *cm_ctx,
 	 * been received, hence skip the non-osif disconnect request.
 	 */
 	if (cur_state == WLAN_CM_S_CONNECTING &&
-	    cm_req->req.source != CM_OSIF_DISCONNECT) {
+	    (cm_req->req.source != CM_OSIF_DISCONNECT &&
+	    cm_req->req.source != CM_OSIF_CFG_DISCONNECT)) {
 		mlme_info("Vdev %d ignore disconnect req from source %d in state %d",
 			  wlan_vdev_get_id(cm_ctx->vdev), cm_req->req.source,
 			  cm_state_substate);

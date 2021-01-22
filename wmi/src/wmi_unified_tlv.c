@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016-2020 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -343,6 +343,7 @@ static const uint32_t pdev_param_tlv[] = {
 	[wmi_pdev_param_sr_trigger_margin] = WMI_PDEV_PARAM_SR_TRIGGER_MARGIN,
 	[wmi_pdev_param_pream_punct_bw] = WMI_PDEV_PARAM_SET_PREAM_PUNCT_BW,
 	[wmi_pdev_param_enable_mbssid_ctrl_frame] = WMI_PDEV_PARAM_ENABLE_MBSSID_CTRL_FRAME,
+	[wmi_pdev_param_set_mesh_params] = WMI_PDEV_PARAM_SET_MESH_PARAMS,
 };
 
 /**
@@ -510,6 +511,10 @@ static const uint32_t vdev_param_tlv[] = {
 	[wmi_vdev_param_enable_srp] = WMI_VDEV_PARAM_ENABLE_SRP,
 	[wmi_vdev_param_nan_config_features] =
 			WMI_VDEV_PARAM_ENABLE_DISABLE_NAN_CONFIG_FEATURES,
+	[wmi_vdev_param_enable_disable_rtt_responder_role] =
+			WMI_VDEV_PARAM_ENABLE_DISABLE_RTT_RESPONDER_ROLE,
+	[wmi_vdev_param_enable_disable_rtt_initiator_role] =
+			WMI_VDEV_PARAM_ENABLE_DISABLE_RTT_INITIATOR_ROLE,
 };
 #endif
 
@@ -723,7 +728,7 @@ QDF_STATUS wmi_unified_cmd_send_pm_chk(struct wmi_unified *wmi_handle,
 	if (!wmi_is_qmi_stats_enabled(wmi_handle))
 		goto send_over_wmi;
 
-	if (wmi_is_target_suspended(wmi_handle)) {
+	if (wmi_is_target_suspend_acked(wmi_handle)) {
 		if (QDF_IS_STATUS_SUCCESS(
 		    wmi_unified_cmd_send_over_qmi(wmi_handle, buf,
 						  buflen, cmd_id)))
@@ -3451,6 +3456,7 @@ static QDF_STATUS send_mgmt_cmd_tlv(wmi_unified_t wmi_handle,
 	cmd->buf_len = bufp_len;
 	cmd->tx_params_valid = param->tx_params_valid;
 	cmd->tx_flags = param->tx_flags;
+	cmd->peer_rssi = param->peer_rssi;
 
 	wmi_mgmt_cmd_record(wmi_handle, WMI_MGMT_TX_SEND_CMDID,
 			bufp, cmd->vdev_id, cmd->chanfreq);
@@ -3517,6 +3523,7 @@ static QDF_STATUS send_mgmt_cmd_tlv(wmi_unified_t wmi_handle,
 
 	cmd->desc_id = param->desc_id;
 	cmd->chanfreq = param->chanfreq;
+	cmd->peer_rssi = param->peer_rssi;
 	bufp += sizeof(wmi_mgmt_tx_send_cmd_fixed_param);
 	WMITLV_SET_HDR(bufp, WMITLV_TAG_ARRAY_BYTE, roundup(bufp_len,
 							    sizeof(uint32_t)));
@@ -4455,8 +4462,15 @@ static QDF_STATUS send_setup_install_key_cmd_tlv(wmi_unified_t wmi_handle,
 	WMITLV_SET_HDR(buf_ptr, WMITLV_TAG_ARRAY_BYTE,
 		       roundup(key_params->key_len, sizeof(uint32_t)));
 	key_data = (uint8_t *) (buf_ptr + WMI_TLV_HDR_SIZE);
-	qdf_mem_copy((void *)key_data,
-		     (const void *)key_params->key_data, key_params->key_len);
+
+	/* for big endian host, copy engine byte_swap is enabled
+	 * But key_data is in network byte order
+	 * Need to byte swap the key_data - so when copy engine
+	 * does byte_swap - target gets key_data in the correct order
+	 */
+	WMI_HOST_IF_MSG_COPY_CHAR_ARRAY((void *)key_data,
+					(const void *)key_params->key_data,
+					key_params->key_len);
 	qdf_mem_copy(&cmd->key_rsc_counter, &key_params->key_rsc_ctr,
 		     sizeof(wmi_key_seq_counter));
 	cmd->key_len = key_params->key_len;
@@ -8819,6 +8833,12 @@ static QDF_STATUS init_cmd_send_tlv(wmi_unified_t wmi_handle,
 			(sizeof(wlan_host_memory_chunk) *
 			 param->num_mem_chunks));
 
+	wmi_debug("num peers: %d , num offload peers: %d, num vdevs: %d, num tids: %d, num tdls conn tb entries: %d, num tdls vdevs: %d",
+		 resource_cfg->num_peers, resource_cfg->num_offload_peers,
+		 resource_cfg->num_vdevs, resource_cfg->num_tids,
+		 resource_cfg->num_tdls_conn_table_entries,
+		 resource_cfg->num_tdls_vdevs);
+
 	/* Fill hw mode id config */
 	buf_ptr = copy_hw_mode_in_init_cmd(wmi_handle, buf_ptr, &len, param);
 
@@ -11421,6 +11441,8 @@ wmi_tgt_thermal_level_to_host(uint32_t level)
 		return THERMAL_MITIGATION;
 	case WMI_THERMAL_SHUTOFF:
 		return THERMAL_SHUTOFF;
+	case WMI_THERMAL_SHUTDOWN_TGT:
+		return THERMAL_SHUTDOWN_TARGET;
 	default:
 		return THERMAL_UNKNOWN;
 	}
@@ -11776,6 +11798,54 @@ static uint16_t wmi_set_htc_tx_tag_tlv(wmi_unified_t wmi_handle,
 	return htc_tx_tag;
 }
 
+#ifdef CONFIG_BAND_6GHZ
+static struct cur_reg_rule
+*create_ext_reg_rules_from_wmi(uint32_t num_reg_rules,
+		wmi_regulatory_rule_ext_struct *wmi_reg_rule)
+{
+	struct cur_reg_rule *reg_rule_ptr;
+	uint32_t count;
+
+	if (!num_reg_rules)
+		return NULL;
+
+	reg_rule_ptr = qdf_mem_malloc(num_reg_rules *
+				      sizeof(*reg_rule_ptr));
+
+	if (!reg_rule_ptr)
+		return NULL;
+
+	for (count = 0; count < num_reg_rules; count++) {
+		reg_rule_ptr[count].start_freq =
+			WMI_REG_RULE_START_FREQ_GET(
+					wmi_reg_rule[count].freq_info);
+		reg_rule_ptr[count].end_freq =
+			WMI_REG_RULE_END_FREQ_GET(
+					wmi_reg_rule[count].freq_info);
+		reg_rule_ptr[count].max_bw =
+			WMI_REG_RULE_MAX_BW_GET(
+					wmi_reg_rule[count].bw_pwr_info);
+		reg_rule_ptr[count].reg_power =
+			WMI_REG_RULE_REG_POWER_GET(
+					wmi_reg_rule[count].bw_pwr_info);
+		reg_rule_ptr[count].ant_gain =
+			WMI_REG_RULE_ANTENNA_GAIN_GET(
+					wmi_reg_rule[count].bw_pwr_info);
+		reg_rule_ptr[count].flags =
+			WMI_REG_RULE_FLAGS_GET(
+					wmi_reg_rule[count].flag_info);
+		reg_rule_ptr[count].psd_flag =
+			WMI_REG_RULE_PSD_FLAG_GET(
+					wmi_reg_rule[count].psd_power_info);
+		reg_rule_ptr[count].psd_eirp =
+			WMI_REG_RULE_PSD_EIRP_GET(
+					wmi_reg_rule[count].psd_power_info);
+	}
+
+	return reg_rule_ptr;
+}
+#endif
+
 static struct cur_reg_rule
 *create_reg_rules_from_wmi(uint32_t num_reg_rules,
 		wmi_regulatory_rule_struct *wmi_reg_rule)
@@ -11815,6 +11885,316 @@ static struct cur_reg_rule
 
 	return reg_rule_ptr;
 }
+
+static enum cc_setting_code wmi_reg_status_to_reg_status(
+				WMI_REG_SET_CC_STATUS_CODE wmi_status_code)
+{
+	if (wmi_status_code == WMI_REG_SET_CC_STATUS_PASS)
+		return REG_SET_CC_STATUS_PASS;
+	else if (wmi_status_code == WMI_REG_CURRENT_ALPHA2_NOT_FOUND)
+		return REG_CURRENT_ALPHA2_NOT_FOUND;
+	else if (wmi_status_code == WMI_REG_INIT_ALPHA2_NOT_FOUND)
+		return REG_INIT_ALPHA2_NOT_FOUND;
+	else if (wmi_status_code == WMI_REG_SET_CC_CHANGE_NOT_ALLOWED)
+		return REG_SET_CC_CHANGE_NOT_ALLOWED;
+	else if (wmi_status_code == WMI_REG_SET_CC_STATUS_NO_MEMORY)
+		return REG_SET_CC_STATUS_NO_MEMORY;
+	else if (wmi_status_code == WMI_REG_SET_CC_STATUS_FAIL)
+		return REG_SET_CC_STATUS_FAIL;
+
+	wmi_debug("Unknown reg status code from WMI");
+	return REG_SET_CC_STATUS_FAIL;
+}
+
+#ifdef CONFIG_BAND_6GHZ
+static QDF_STATUS extract_reg_chan_list_ext_update_event_tlv(
+	wmi_unified_t wmi_handle, uint8_t *evt_buf,
+	struct cur_regulatory_info *reg_info, uint32_t len)
+{
+	uint32_t i, j;
+	WMI_REG_CHAN_LIST_CC_EXT_EVENTID_param_tlvs *param_buf;
+	wmi_reg_chan_list_cc_event_ext_fixed_param *ext_chan_list_event_hdr;
+	wmi_regulatory_rule_ext_struct *ext_wmi_reg_rule;
+	uint32_t num_2g_reg_rules, num_5g_reg_rules;
+	uint32_t num_6g_reg_rules_ap[REG_CURRENT_MAX_AP_TYPE];
+	uint32_t *num_6g_reg_rules_client[REG_CURRENT_MAX_AP_TYPE];
+	uint32_t total_reg_rules = 0;
+
+	param_buf = (WMI_REG_CHAN_LIST_CC_EXT_EVENTID_param_tlvs *)evt_buf;
+	if (!param_buf) {
+		wmi_err("invalid channel list event buf");
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	ext_chan_list_event_hdr = param_buf->fixed_param;
+
+	reg_info->num_2g_reg_rules = ext_chan_list_event_hdr->num_2g_reg_rules;
+	reg_info->num_5g_reg_rules = ext_chan_list_event_hdr->num_5g_reg_rules;
+	reg_info->num_6g_reg_rules_ap[REG_STANDARD_POWER_AP] =
+		ext_chan_list_event_hdr->num_6g_reg_rules_ap_sp;
+	reg_info->num_6g_reg_rules_ap[REG_INDOOR_AP] =
+		ext_chan_list_event_hdr->num_6g_reg_rules_ap_lpi;
+	reg_info->num_6g_reg_rules_ap[REG_VERY_LOW_POWER_AP] =
+		ext_chan_list_event_hdr->num_6g_reg_rules_ap_vlp;
+
+	wmi_debug("num reg rules from fw");
+	wmi_debug("AP SP %d, LPI %d, VLP %d",
+		  reg_info->num_6g_reg_rules_ap[REG_STANDARD_POWER_AP],
+		  reg_info->num_6g_reg_rules_ap[REG_INDOOR_AP],
+		  reg_info->num_6g_reg_rules_ap[REG_VERY_LOW_POWER_AP]);
+
+	for (i = 0; i < REG_MAX_CLIENT_TYPE; i++) {
+		reg_info->num_6g_reg_rules_client[REG_STANDARD_POWER_AP][i] =
+			ext_chan_list_event_hdr->num_6g_reg_rules_client_sp[i];
+		reg_info->num_6g_reg_rules_client[REG_INDOOR_AP][i] =
+			ext_chan_list_event_hdr->num_6g_reg_rules_client_lpi[i];
+		reg_info->num_6g_reg_rules_client[REG_VERY_LOW_POWER_AP][i] =
+			ext_chan_list_event_hdr->num_6g_reg_rules_client_vlp[i];
+		wmi_debug("client %d SP %d, LPI %d, VLP %d", i,
+			ext_chan_list_event_hdr->num_6g_reg_rules_client_sp[i],
+			ext_chan_list_event_hdr->num_6g_reg_rules_client_lpi[i],
+			ext_chan_list_event_hdr->num_6g_reg_rules_client_vlp[i]);
+	}
+
+	num_2g_reg_rules = reg_info->num_2g_reg_rules;
+	total_reg_rules += num_2g_reg_rules;
+	num_5g_reg_rules = reg_info->num_5g_reg_rules;
+	total_reg_rules += num_5g_reg_rules;
+	for (i = 0; i < REG_CURRENT_MAX_AP_TYPE; i++) {
+		num_6g_reg_rules_ap[i] = reg_info->num_6g_reg_rules_ap[i];
+		if (num_6g_reg_rules_ap[i] > MAX_6G_REG_RULES) {
+			wmi_err_rl("Invalid num_6g_reg_rules_ap: %u",
+				   num_6g_reg_rules_ap[i]);
+			return QDF_STATUS_E_FAILURE;
+		}
+		total_reg_rules += num_6g_reg_rules_ap[i];
+		num_6g_reg_rules_client[i] =
+			reg_info->num_6g_reg_rules_client[i];
+	}
+
+	for (i = 0; i < REG_MAX_CLIENT_TYPE; i++) {
+		total_reg_rules +=
+			num_6g_reg_rules_client[REG_STANDARD_POWER_AP][i];
+		total_reg_rules += num_6g_reg_rules_client[REG_INDOOR_AP][i];
+		total_reg_rules +=
+			num_6g_reg_rules_client[REG_VERY_LOW_POWER_AP][i];
+		if ((num_6g_reg_rules_client[REG_STANDARD_POWER_AP][i] >
+		     MAX_6G_REG_RULES) ||
+		    (num_6g_reg_rules_client[REG_INDOOR_AP][i] >
+		     MAX_6G_REG_RULES) ||
+		    (num_6g_reg_rules_client[REG_VERY_LOW_POWER_AP][i] >
+		     MAX_6G_REG_RULES)) {
+			wmi_err_rl("Invalid num_6g_reg_rules_client_sp: %u, num_6g_reg_rules_client_lpi: %u, num_6g_reg_rules_client_vlp: %u, client %d",
+				num_6g_reg_rules_client[REG_STANDARD_POWER_AP][i],
+				num_6g_reg_rules_client[REG_INDOOR_AP][i],
+				num_6g_reg_rules_client[REG_VERY_LOW_POWER_AP][i],
+				i);
+			return QDF_STATUS_E_FAILURE;
+		}
+	}
+
+	if (total_reg_rules != param_buf->num_reg_rule_array) {
+		wmi_err_rl("Total reg rules %u does not match event params num reg rule %u",
+			   total_reg_rules, param_buf->num_reg_rule_array);
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	if ((num_2g_reg_rules > MAX_REG_RULES) ||
+	    (num_5g_reg_rules > MAX_REG_RULES)) {
+		wmi_err_rl("Invalid num_2g_reg_rules: %u, num_5g_reg_rules: %u",
+			   num_2g_reg_rules, num_5g_reg_rules);
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	if ((num_6g_reg_rules_ap[REG_STANDARD_POWER_AP] > MAX_6G_REG_RULES) ||
+	    (num_6g_reg_rules_ap[REG_INDOOR_AP] > MAX_6G_REG_RULES) ||
+	    (num_6g_reg_rules_ap[REG_VERY_LOW_POWER_AP] > MAX_6G_REG_RULES)) {
+		wmi_err_rl("Invalid num_6g_reg_rules_ap_sp: %u, num_6g_reg_rules_ap_lpi: %u, num_6g_reg_rules_ap_vlp: %u",
+			   num_6g_reg_rules_ap[REG_STANDARD_POWER_AP],
+			   num_6g_reg_rules_ap[REG_INDOOR_AP],
+			   num_6g_reg_rules_ap[REG_VERY_LOW_POWER_AP]);
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	if (param_buf->num_reg_rule_array >
+		(WMI_SVC_MSG_MAX_SIZE - sizeof(*ext_chan_list_event_hdr)) /
+		sizeof(*ext_wmi_reg_rule)) {
+		wmi_err_rl("Invalid ext_num_reg_rule_array: %u",
+			   param_buf->num_reg_rule_array);
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	qdf_mem_copy(reg_info->alpha2, &ext_chan_list_event_hdr->alpha2,
+		     REG_ALPHA2_LEN);
+	reg_info->dfs_region = ext_chan_list_event_hdr->dfs_region;
+	reg_info->phybitmap = convert_phybitmap_tlv(
+			ext_chan_list_event_hdr->phybitmap);
+	reg_info->offload_enabled = true;
+	reg_info->num_phy = ext_chan_list_event_hdr->num_phy;
+	reg_info->phy_id = wmi_handle->ops->convert_phy_id_target_to_host(
+				wmi_handle, ext_chan_list_event_hdr->phy_id);
+	reg_info->ctry_code = ext_chan_list_event_hdr->country_id;
+	reg_info->reg_dmn_pair = ext_chan_list_event_hdr->domain_code;
+
+	reg_info->status_code =
+		wmi_reg_status_to_reg_status(ext_chan_list_event_hdr->
+								status_code);
+
+	reg_info->min_bw_2g = ext_chan_list_event_hdr->min_bw_2g;
+	reg_info->max_bw_2g = ext_chan_list_event_hdr->max_bw_2g;
+	reg_info->min_bw_5g = ext_chan_list_event_hdr->min_bw_5g;
+	reg_info->max_bw_5g = ext_chan_list_event_hdr->max_bw_5g;
+	reg_info->min_bw_6g_ap[REG_STANDARD_POWER_AP] =
+		ext_chan_list_event_hdr->min_bw_6g_ap_sp;
+	reg_info->max_bw_6g_ap[REG_STANDARD_POWER_AP] =
+		ext_chan_list_event_hdr->max_bw_6g_ap_sp;
+	reg_info->min_bw_6g_ap[REG_INDOOR_AP] =
+		ext_chan_list_event_hdr->min_bw_6g_ap_lpi;
+	reg_info->max_bw_6g_ap[REG_INDOOR_AP] =
+		ext_chan_list_event_hdr->max_bw_6g_ap_lpi;
+	reg_info->min_bw_6g_ap[REG_VERY_LOW_POWER_AP] =
+		ext_chan_list_event_hdr->min_bw_6g_ap_vlp;
+	reg_info->max_bw_6g_ap[REG_VERY_LOW_POWER_AP] =
+		ext_chan_list_event_hdr->max_bw_6g_ap_vlp;
+
+	for (i = 0; i < REG_MAX_CLIENT_TYPE; i++) {
+		reg_info->min_bw_6g_client[REG_STANDARD_POWER_AP][i] =
+			ext_chan_list_event_hdr->min_bw_6g_client_sp[i];
+		reg_info->max_bw_6g_client[REG_STANDARD_POWER_AP][i] =
+			ext_chan_list_event_hdr->max_bw_6g_client_sp[i];
+		reg_info->min_bw_6g_client[REG_INDOOR_AP][i] =
+			ext_chan_list_event_hdr->min_bw_6g_client_lpi[i];
+		reg_info->max_bw_6g_client[REG_INDOOR_AP][i] =
+			ext_chan_list_event_hdr->max_bw_6g_client_lpi[i];
+		reg_info->min_bw_6g_client[REG_VERY_LOW_POWER_AP][i] =
+			ext_chan_list_event_hdr->min_bw_6g_client_vlp[i];
+		reg_info->max_bw_6g_client[REG_VERY_LOW_POWER_AP][i] =
+			ext_chan_list_event_hdr->max_bw_6g_client_vlp[i];
+	}
+
+	wmi_debug("num_phys = %u and phy_id = %u",
+		  reg_info->num_phy, reg_info->phy_id);
+
+	wmi_debug("cc %s dfs %d BW: min_2g %d max_2g %d min_5g %d max_5g %d",
+		  reg_info->alpha2, reg_info->dfs_region, reg_info->min_bw_2g,
+		  reg_info->max_bw_2g, reg_info->min_bw_5g,
+		  reg_info->max_bw_5g);
+
+	wmi_debug("min_bw_6g_ap_sp %d max_bw_6g_ap_sp %d min_bw_6g_ap_lpi %d max_bw_6g_ap_lpi %d min_bw_6g_ap_vlp %d max_bw_6g_ap_vlp %d",
+		  reg_info->min_bw_6g_ap[REG_STANDARD_POWER_AP],
+		  reg_info->max_bw_6g_ap[REG_STANDARD_POWER_AP],
+		  reg_info->min_bw_6g_ap[REG_INDOOR_AP],
+		  reg_info->max_bw_6g_ap[REG_INDOOR_AP],
+		  reg_info->min_bw_6g_ap[REG_VERY_LOW_POWER_AP],
+		  reg_info->max_bw_6g_ap[REG_VERY_LOW_POWER_AP]);
+
+	wmi_debug("min_bw_6g_def_cli_sp %d max_bw_6g_def_cli_sp %d min_bw_6g_def_cli_lpi %d max_bw_6g_def_cli_lpi %d min_bw_6g_def_cli_vlp %d max_bw_6g_def_cli_vlp %d",
+		  reg_info->min_bw_6g_client[REG_STANDARD_POWER_AP][REG_DEFAULT_CLIENT],
+		  reg_info->max_bw_6g_client[REG_STANDARD_POWER_AP][REG_DEFAULT_CLIENT],
+		  reg_info->min_bw_6g_client[REG_INDOOR_AP][REG_DEFAULT_CLIENT],
+		  reg_info->max_bw_6g_client[REG_INDOOR_AP][REG_DEFAULT_CLIENT],
+		  reg_info->min_bw_6g_client[REG_VERY_LOW_POWER_AP][REG_DEFAULT_CLIENT],
+		  reg_info->max_bw_6g_client[REG_VERY_LOW_POWER_AP][REG_DEFAULT_CLIENT]);
+
+	wmi_debug("min_bw_6g_sub_client_sp %d max_bw_6g_sub_client_sp %d min_bw_6g_sub_client_lpi %d max_bw_6g_sub_client_lpi %d min_bw_6g_sub_client_vlp %d max_bw_6g_sub_client_vlp %d",
+		  reg_info->min_bw_6g_client[REG_STANDARD_POWER_AP][REG_SUBORDINATE_CLIENT],
+		  reg_info->max_bw_6g_client[REG_STANDARD_POWER_AP][REG_SUBORDINATE_CLIENT],
+		  reg_info->min_bw_6g_client[REG_INDOOR_AP][REG_SUBORDINATE_CLIENT],
+		  reg_info->max_bw_6g_client[REG_INDOOR_AP][REG_SUBORDINATE_CLIENT],
+		  reg_info->min_bw_6g_client[REG_VERY_LOW_POWER_AP][REG_SUBORDINATE_CLIENT],
+		  reg_info->max_bw_6g_client[REG_VERY_LOW_POWER_AP][REG_SUBORDINATE_CLIENT]);
+
+	wmi_debug("num_2g_reg_rules %d num_5g_reg_rules %d",
+		  num_2g_reg_rules, num_5g_reg_rules);
+
+	wmi_debug("num_6g_ap_sp_reg_rules %d num_6g_ap_lpi_reg_rules %d num_6g_ap_vlp_reg_rules %d",
+		  reg_info->num_6g_reg_rules_ap[REG_STANDARD_POWER_AP],
+		  reg_info->num_6g_reg_rules_ap[REG_INDOOR_AP],
+		  reg_info->num_6g_reg_rules_ap[REG_VERY_LOW_POWER_AP]);
+
+	wmi_debug("num_6g_def_cli_sp_reg_rules %d num_6g_def_cli_lpi_reg_rules %d num_6g_def_cli_vlp_reg_rules %d",
+		  reg_info->num_6g_reg_rules_client[REG_STANDARD_POWER_AP][REG_DEFAULT_CLIENT],
+		  reg_info->num_6g_reg_rules_client[REG_INDOOR_AP][REG_DEFAULT_CLIENT],
+		  reg_info->num_6g_reg_rules_client[REG_VERY_LOW_POWER_AP][REG_DEFAULT_CLIENT]);
+
+	wmi_debug("num_6g_sub_cli_sp_reg_rules %d num_6g_sub_cli_lpi_reg_rules %d num_6g_sub_cli_vlp_reg_rules %d",
+		  reg_info->num_6g_reg_rules_client[REG_STANDARD_POWER_AP][REG_SUBORDINATE_CLIENT],
+		  reg_info->num_6g_reg_rules_client[REG_INDOOR_AP][REG_SUBORDINATE_CLIENT],
+		  reg_info->num_6g_reg_rules_client[REG_VERY_LOW_POWER_AP][REG_SUBORDINATE_CLIENT]);
+
+	ext_wmi_reg_rule =
+		(wmi_regulatory_rule_ext_struct *)
+			((uint8_t *)ext_chan_list_event_hdr +
+			sizeof(wmi_reg_chan_list_cc_event_ext_fixed_param) +
+			WMI_TLV_HDR_SIZE);
+	reg_info->reg_rules_2g_ptr =
+		create_ext_reg_rules_from_wmi(num_2g_reg_rules,
+					      ext_wmi_reg_rule);
+	ext_wmi_reg_rule += num_2g_reg_rules;
+	reg_info->reg_rules_5g_ptr =
+		create_ext_reg_rules_from_wmi(num_5g_reg_rules,
+					      ext_wmi_reg_rule);
+	ext_wmi_reg_rule += num_5g_reg_rules;
+
+	for (i = 0; i < REG_CURRENT_MAX_AP_TYPE; i++) {
+		reg_info->reg_rules_6g_ap_ptr[i] =
+			create_ext_reg_rules_from_wmi(num_6g_reg_rules_ap[i],
+						      ext_wmi_reg_rule);
+
+		ext_wmi_reg_rule += num_6g_reg_rules_ap[i];
+	}
+
+	for (j = 0; j < REG_CURRENT_MAX_AP_TYPE; j++) {
+		for (i = 0; i < REG_MAX_CLIENT_TYPE; i++) {
+			reg_info->reg_rules_6g_client_ptr[j][i] =
+				create_ext_reg_rules_from_wmi(
+					num_6g_reg_rules_client[j][i],
+					ext_wmi_reg_rule);
+
+			ext_wmi_reg_rule += num_6g_reg_rules_client[j][i];
+		}
+	}
+
+	reg_info->client_type = ext_chan_list_event_hdr->client_type;
+	reg_info->rnr_tpe_usable = ext_chan_list_event_hdr->rnr_tpe_usable;
+	reg_info->unspecified_ap_usable =
+		ext_chan_list_event_hdr->unspecified_ap_usable;
+	reg_info->domain_code_6g_ap[REG_STANDARD_POWER_AP] =
+		ext_chan_list_event_hdr->domain_code_6g_ap_sp;
+	reg_info->domain_code_6g_ap[REG_INDOOR_AP] =
+		ext_chan_list_event_hdr->domain_code_6g_ap_lpi;
+	reg_info->domain_code_6g_ap[REG_VERY_LOW_POWER_AP] =
+		ext_chan_list_event_hdr->domain_code_6g_ap_vlp;
+
+	wmi_debug("client type %d", reg_info->client_type);
+	wmi_debug("RNR TPE usable %d", reg_info->rnr_tpe_usable);
+	wmi_debug("unspecified AP usable %d", reg_info->unspecified_ap_usable);
+	wmi_debug("domain code AP SP %d, LPI %d, VLP %d",
+		  reg_info->domain_code_6g_ap[REG_STANDARD_POWER_AP],
+		  reg_info->domain_code_6g_ap[REG_INDOOR_AP],
+		  reg_info->domain_code_6g_ap[REG_VERY_LOW_POWER_AP]);
+
+	for (i = 0; i < REG_MAX_CLIENT_TYPE; i++) {
+		reg_info->domain_code_6g_client[REG_STANDARD_POWER_AP][i] =
+			ext_chan_list_event_hdr->domain_code_6g_client_sp[i];
+		reg_info->domain_code_6g_client[REG_INDOOR_AP][i] =
+			ext_chan_list_event_hdr->domain_code_6g_client_lpi[i];
+		reg_info->domain_code_6g_client[REG_VERY_LOW_POWER_AP][i] =
+			ext_chan_list_event_hdr->domain_code_6g_client_vlp[i];
+		wmi_debug("domain code client %d SP %d, LPI %d, VLP %d", i,
+			reg_info->domain_code_6g_client[REG_STANDARD_POWER_AP][i],
+			reg_info->domain_code_6g_client[REG_INDOOR_AP][i],
+			reg_info->domain_code_6g_client[REG_VERY_LOW_POWER_AP][i]);
+	}
+
+	reg_info->domain_code_6g_super_id =
+		ext_chan_list_event_hdr->domain_code_6g_super_id;
+
+	wmi_debug("processed regulatory extended channel list");
+
+	return QDF_STATUS_SUCCESS;
+}
+#endif
 
 static QDF_STATUS extract_reg_chan_list_update_event_tlv(
 	wmi_unified_t wmi_handle, uint8_t *evt_buf,
@@ -11867,23 +12247,9 @@ static QDF_STATUS extract_reg_chan_list_update_event_tlv(
 				wmi_handle, chan_list_event_hdr->phy_id);
 	reg_info->ctry_code = chan_list_event_hdr->country_id;
 	reg_info->reg_dmn_pair = chan_list_event_hdr->domain_code;
-	if (chan_list_event_hdr->status_code == WMI_REG_SET_CC_STATUS_PASS)
-		reg_info->status_code = REG_SET_CC_STATUS_PASS;
-	else if (chan_list_event_hdr->status_code ==
-		 WMI_REG_CURRENT_ALPHA2_NOT_FOUND)
-		reg_info->status_code = REG_CURRENT_ALPHA2_NOT_FOUND;
-	else if (chan_list_event_hdr->status_code ==
-		 WMI_REG_INIT_ALPHA2_NOT_FOUND)
-		reg_info->status_code = REG_INIT_ALPHA2_NOT_FOUND;
-	else if (chan_list_event_hdr->status_code ==
-		 WMI_REG_SET_CC_CHANGE_NOT_ALLOWED)
-		reg_info->status_code = REG_SET_CC_CHANGE_NOT_ALLOWED;
-	else if (chan_list_event_hdr->status_code ==
-		 WMI_REG_SET_CC_STATUS_NO_MEMORY)
-		reg_info->status_code = REG_SET_CC_STATUS_NO_MEMORY;
-	else if (chan_list_event_hdr->status_code ==
-		 WMI_REG_SET_CC_STATUS_FAIL)
-		reg_info->status_code = REG_SET_CC_STATUS_FAIL;
+
+	reg_info->status_code =
+		wmi_reg_status_to_reg_status(chan_list_event_hdr->status_code);
 
 	reg_info->min_bw_2g = chan_list_event_hdr->min_bw_2g;
 	reg_info->max_bw_2g = chan_list_event_hdr->max_bw_2g;
@@ -14112,6 +14478,42 @@ extract_vdev_tsf_report_event_tlv(wmi_unified_t wmi_handle, void *evt_buf,
 	return QDF_STATUS_SUCCESS;
 }
 
+/**
+ * extract_pdev_csa_switch_count_status_tlv() - extract pdev csa switch count
+ *					      status tlv
+ * @wmi_handle: wmi handle
+ * @param evt_buf: pointer to event buffer
+ * @param param: Pointer to hold csa switch count status event param
+ *
+ * Return: QDF_STATUS_SUCCESS for success or error code
+ */
+static QDF_STATUS extract_pdev_csa_switch_count_status_tlv(
+				wmi_unified_t wmi_handle,
+				void *evt_buf,
+				struct pdev_csa_switch_count_status *param)
+{
+	WMI_PDEV_CSA_SWITCH_COUNT_STATUS_EVENTID_param_tlvs *param_buf;
+	wmi_pdev_csa_switch_count_status_event_fixed_param *csa_status;
+
+	param_buf = (WMI_PDEV_CSA_SWITCH_COUNT_STATUS_EVENTID_param_tlvs *)
+		     evt_buf;
+	if (!param_buf) {
+		wmi_err("Invalid CSA status event");
+		return QDF_STATUS_E_INVAL;
+	}
+
+	csa_status = param_buf->fixed_param;
+
+	param->pdev_id = wmi_handle->ops->convert_pdev_id_target_to_host(
+							wmi_handle,
+							csa_status->pdev_id);
+	param->current_switch_count = csa_status->current_switch_count;
+	param->num_vdevs = csa_status->num_vdevs;
+	param->vdev_ids = param_buf->vdev_ids;
+
+	return QDF_STATUS_SUCCESS;
+}
+
 struct wmi_ops tlv_ops =  {
 	.send_vdev_create_cmd = send_vdev_create_cmd_tlv,
 	.send_vdev_delete_cmd = send_vdev_delete_cmd_tlv,
@@ -14353,6 +14755,10 @@ struct wmi_ops tlv_ops =  {
 	.send_dfs_phyerr_offload_dis_cmd = send_dfs_phyerr_offload_dis_cmd_tlv,
 	.extract_reg_chan_list_update_event =
 		extract_reg_chan_list_update_event_tlv,
+#ifdef CONFIG_BAND_6GHZ
+	.extract_reg_chan_list_ext_update_event =
+		extract_reg_chan_list_ext_update_event_tlv,
+#endif
 #ifdef WLAN_SUPPORT_RF_CHARACTERIZATION
 	.extract_num_rf_characterization_entries =
 		extract_num_rf_characterization_entries_tlv,
@@ -14468,6 +14874,8 @@ struct wmi_ops tlv_ops =  {
 				extract_cp_stats_more_pending_tlv,
 	.send_vdev_tsf_tstamp_action_cmd = send_vdev_tsf_tstamp_action_cmd_tlv,
 	.extract_vdev_tsf_report_event = extract_vdev_tsf_report_event_tlv,
+	.extract_pdev_csa_switch_count_status =
+		extract_pdev_csa_switch_count_status_tlv,
 };
 
 /**
@@ -14696,6 +15104,8 @@ static void populate_tlv_events_id(uint32_t *event_ids)
 	event_ids[wmi_vdev_ocac_complete_event_id] =
 				WMI_VDEV_ADFS_OCAC_COMPLETE_EVENTID;
 	event_ids[wmi_reg_chan_list_cc_event_id] = WMI_REG_CHAN_LIST_CC_EVENTID;
+	event_ids[wmi_reg_chan_list_cc_ext_event_id] =
+					WMI_REG_CHAN_LIST_CC_EXT_EVENTID;
 	event_ids[wmi_inst_rssi_stats_event_id] = WMI_INST_RSSI_STATS_EVENTID;
 	event_ids[wmi_pdev_tpc_config_event_id] = WMI_PDEV_TPC_CONFIG_EVENTID;
 	event_ids[wmi_peer_sta_ps_statechg_event_id] =
@@ -14781,8 +15191,12 @@ static void populate_tlv_events_id(uint32_t *event_ids)
 		WMI_TWT_PAUSE_DIALOG_COMPLETE_EVENTID;
 	event_ids[wmi_twt_resume_dialog_complete_event_id] =
 		WMI_TWT_RESUME_DIALOG_COMPLETE_EVENTID;
+	event_ids[wmi_twt_nudge_dialog_complete_event_id] =
+		WMI_TWT_NUDGE_DIALOG_COMPLETE_EVENTID;
 	event_ids[wmi_twt_session_stats_event_id] =
 		WMI_TWT_SESSION_STATS_EVENTID;
+	event_ids[wmi_twt_notify_event_id] =
+		WMI_TWT_NOTIFY_EVENTID;
 #endif
 	event_ids[wmi_apf_get_vdev_work_memory_resp_event_id] =
 		WMI_BPF_GET_VDEV_WORK_MEMORY_RESP_EVENTID;
@@ -14864,6 +15278,8 @@ event_ids[wmi_roam_scan_chan_list_id] =
 			WMI_PEER_CREATE_CONF_EVENTID;
 	event_ids[wmi_pdev_cp_fwstats_eventid] =
 			WMI_CTRL_PATH_STATS_EVENTID;
+	event_ids[wmi_vdev_send_big_data_p2_eventid] =
+			WMI_VDEV_SEND_BIG_DATA_P2_EVENTID;
 }
 
 #ifdef WLAN_FEATURE_LINK_LAYER_STATS
@@ -15215,7 +15631,14 @@ static void populate_tlv_service(uint32_t *wmi_service)
 			WMI_SERVICE_SCAN_CONFIG_PER_CHANNEL;
 	wmi_service[wmi_service_csa_beacon_template] =
 			WMI_SERVICE_CSA_BEACON_TEMPLATE;
-
+#ifdef WLAN_SUPPORT_TWT
+	wmi_service[wmi_service_twt_bcast_req_support] =
+			WMI_SERVICE_BROADCAST_TWT_REQUESTER;
+	wmi_service[wmi_service_twt_bcast_resp_support] =
+			WMI_SERVICE_BROADCAST_TWT_RESPONDER;
+#endif
+	wmi_service[wmi_service_spectral_scan_disabled] =
+			WMI_SERVICE_SPECTRAL_SCAN_DISABLED;
 	wmi_populate_service_get_sta_in_ll_stats_req(wmi_service);
 }
 

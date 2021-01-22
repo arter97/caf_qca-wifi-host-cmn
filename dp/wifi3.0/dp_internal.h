@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016-2020 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -652,8 +652,8 @@ static inline void dp_update_pdev_stats(struct dp_pdev *tgtobj,
 			srcobj->tx.dropped.fw_reason3;
 	tgtobj->stats.tx.dropped.age_out += srcobj->tx.dropped.age_out;
 	tgtobj->stats.rx.err.mic_err += srcobj->rx.err.mic_err;
-	if (srcobj->rx.rssi != 0)
-		tgtobj->stats.rx.rssi = srcobj->rx.rssi;
+	if (srcobj->rx.snr != 0)
+		tgtobj->stats.rx.snr = srcobj->rx.snr;
 	tgtobj->stats.rx.rx_rate = srcobj->rx.rx_rate;
 	tgtobj->stats.rx.err.decrypt_err += srcobj->rx.err.decrypt_err;
 	tgtobj->stats.rx.non_ampdu_cnt += srcobj->rx.non_ampdu_cnt;
@@ -871,8 +871,8 @@ static inline void dp_update_vdev_stats(struct dp_soc *soc,
 			srcobj->stats.tx.dropped.fw_reason3;
 	tgtobj->tx.dropped.age_out += srcobj->stats.tx.dropped.age_out;
 	tgtobj->rx.err.mic_err += srcobj->stats.rx.err.mic_err;
-	if (srcobj->stats.rx.rssi != 0)
-		tgtobj->rx.rssi = srcobj->stats.rx.rssi;
+	if (srcobj->stats.rx.snr != 0)
+		tgtobj->rx.snr = srcobj->stats.rx.snr;
 	tgtobj->rx.rx_rate = srcobj->stats.rx.rx_rate;
 	tgtobj->rx.err.decrypt_err += srcobj->stats.rx.err.decrypt_err;
 	tgtobj->rx.non_ampdu_cnt += srcobj->stats.rx.non_ampdu_cnt;
@@ -983,8 +983,8 @@ static inline void dp_update_vdev_stats(struct dp_soc *soc,
 		DP_STATS_AGGR(_tgtobj, _srcobj, tx.dropped.age_out); \
 								\
 		DP_STATS_AGGR(_tgtobj, _srcobj, rx.err.mic_err); \
-		if (_srcobj->stats.rx.rssi != 0) \
-			DP_STATS_UPD_STRUCT(_tgtobj, _srcobj, rx.rssi); \
+		if (_srcobj->stats.rx.snr != 0) \
+			DP_STATS_UPD_STRUCT(_tgtobj, _srcobj, rx.snr); \
 		DP_STATS_UPD_STRUCT(_tgtobj, _srcobj, rx.rx_rate); \
 		DP_STATS_AGGR(_tgtobj, _srcobj, rx.err.decrypt_err); \
 		DP_STATS_AGGR(_tgtobj, _srcobj, rx.non_ampdu_cnt); \
@@ -2328,10 +2328,18 @@ void dp_rx_dump_fisa_table(struct dp_soc *soc);
  */
 void dp_rx_fst_update_cmem_params(struct dp_soc *soc, uint16_t num_entries,
 				  uint32_t cmem_ba_lo, uint32_t cmem_ba_hi);
+
+void
+dp_rx_fst_update_pm_suspend_status(struct dp_soc *soc, bool suspended);
 #else
 static inline void
 dp_rx_fst_update_cmem_params(struct dp_soc *soc, uint16_t num_entries,
 			     uint32_t cmem_ba_lo, uint32_t cmem_ba_hi)
+{
+}
+
+static inline void
+dp_rx_fst_update_pm_suspend_status(struct dp_soc *soc, bool suspended)
 {
 }
 #endif /* WLAN_SUPPORT_RX_FISA */
@@ -2517,6 +2525,29 @@ QDF_STATUS dp_wds_ext_set_peer_rx(ol_txrx_soc_handle soc,
 #endif /* QCA_SUPPORT_WDS_EXTENDED */
 
 #ifdef DP_MEM_PRE_ALLOC
+
+/**
+ * dp_context_alloc_mem() - allocate memory for DP context
+ * @soc: datapath soc handle
+ * @ctxt_type: DP context type
+ * @ctxt_size: DP context size
+ *
+ * Return: DP context address
+ */
+void *dp_context_alloc_mem(struct dp_soc *soc, enum dp_ctxt_type ctxt_type,
+			   size_t ctxt_size);
+
+/**
+ * dp_context_free_mem() - Free memory of DP context
+ * @soc: datapath soc handle
+ * @ctxt_type: DP context type
+ * @vaddr: Address of context memory
+ *
+ * Return: None
+ */
+void dp_context_free_mem(struct dp_soc *soc, enum dp_ctxt_type ctxt_type,
+			 void *vaddr);
+
 /**
  * dp_desc_multi_pages_mem_alloc() - alloc memory over multiple pages
  * @soc: datapath soc handle
@@ -2563,6 +2594,20 @@ void dp_desc_multi_pages_mem_free(struct dp_soc *soc,
 				  bool cacheable);
 
 #else
+static inline
+void *dp_context_alloc_mem(struct dp_soc *soc, enum dp_ctxt_type ctxt_type,
+			   size_t ctxt_size)
+{
+	return qdf_mem_malloc(ctxt_size);
+}
+
+static inline
+void dp_context_free_mem(struct dp_soc *soc, enum dp_ctxt_type ctxt_type,
+			 void *vaddr)
+{
+	qdf_mem_free(vaddr);
+}
+
 static inline
 void dp_desc_multi_pages_mem_alloc(struct dp_soc *soc,
 				   enum dp_desc_type desc_type,

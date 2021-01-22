@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2020 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2013-2021 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -21,9 +21,6 @@
 #include <linux/interrupt.h>
 #include <linux/if_arp.h>
 #include <linux/of_pci.h>
-#ifdef CONFIG_PCI_MSM
-#include <linux/msm_pcie.h>
-#endif
 #include <linux/version.h>
 #include "hif_io32.h"
 #include "if_pci.h"
@@ -46,6 +43,10 @@
 #include "mp_dev.h"
 #include "hif_debug.h"
 
+#if (defined(QCA_WIFI_QCA6390) || defined(QCA_WIFI_QCA6490))
+#include "hal_api.h"
+#endif
+
 #include "if_pci_internal.h"
 #include "ce_tasklet.h"
 #include "targaddrs.h"
@@ -55,6 +56,7 @@
 #include "ahb_api.h"
 #include "wlan_cfg.h"
 #include "qdf_hang_event_notifier.h"
+#include "qdf_platform.h"
 
 /* Maximum ms timeout for host to wake up target */
 #define PCIE_WAKE_TIMEOUT 1000
@@ -2246,9 +2248,9 @@ struct device *hif_pci_get_dev(struct hif_softc *scn)
 
 #define OL_ATH_PCI_PM_CONTROL 0x44
 
-#if defined(CONFIG_PCI_MSM)
+#ifdef CONFIG_PLD_PCIE_CNSS
 /**
- * hif_bus_prevent_linkdown(): allow or permit linkdown
+ * hif_pci_prevent_linkdown(): allow or permit linkdown
  * @flag: true prevents linkdown, false allows
  *
  * Calls into the platform driver to vote against taking down the
@@ -2270,8 +2272,6 @@ void hif_pci_prevent_linkdown(struct hif_softc *scn, bool flag)
 #else
 void hif_pci_prevent_linkdown(struct hif_softc *scn, bool flag)
 {
-	hif_info("wlan: %s pcie power collapse", (flag ? "disable" : "enable"));
-	hif_runtime_prevent_linkdown(scn, flag);
 }
 #endif
 
@@ -2348,7 +2348,7 @@ static inline int __hif_check_link_status(struct hif_softc *scn)
 
 
 #ifdef HIF_BUS_LOG_INFO
-void hif_log_pcie_info(struct hif_softc *scn, uint8_t *data,
+bool hif_log_pcie_info(struct hif_softc *scn, uint8_t *data,
 		       unsigned int *offset)
 {
 	struct hif_pci_softc *sc = HIF_GET_PCI_SOFTC(scn);
@@ -2357,7 +2357,7 @@ void hif_log_pcie_info(struct hif_softc *scn, uint8_t *data,
 
 	if (!sc) {
 		hif_err("HIF Bus Context is Invalid");
-		return;
+		return false;
 	}
 
 	pfrm_read_config_word(sc->pdev, PCI_DEVICE_ID, &info.dev_id);
@@ -2367,10 +2367,18 @@ void hif_log_pcie_info(struct hif_softc *scn, uint8_t *data,
 			     size - QDF_HANG_EVENT_TLV_HDR_SIZE);
 
 	if (*offset + size > QDF_WLAN_HANG_FW_OFFSET)
-		return;
+		return false;
 
 	qdf_mem_copy(data + *offset, &info, size);
 	*offset = *offset + size;
+
+	if (info.dev_id == sc->devid)
+		return false;
+
+	qdf_recovery_reason_update(QCA_HANG_BUS_FAILURE);
+	qdf_get_bus_reg_dump(scn->qdf_dev->dev, data,
+			     (QDF_WLAN_HANG_FW_OFFSET - size));
+	return true;
 }
 #endif
 
@@ -2426,8 +2434,12 @@ int hif_pci_bus_resume_noirq(struct hif_softc *scn)
 {
 	hif_apps_wake_irq_disable(GET_HIF_OPAQUE_HDL(scn));
 
-	if (hif_can_suspend_link(GET_HIF_OPAQUE_HDL(scn)))
-		qdf_atomic_set(&scn->link_suspended, 0);
+	/* a vote for link up can come in the middle of the ongoing resume
+	 * process. hence, clear the link suspend flag once
+	 * hif_bus_resume_noirq() succeeds since PCIe link is already resumed
+	 * by this time
+	 */
+	qdf_atomic_set(&scn->link_suspended, 0);
 
 	return 0;
 }
@@ -2485,16 +2497,6 @@ void hif_pci_reset_soc(struct hif_softc *hif_sc)
 #endif
 }
 
-#ifdef CONFIG_PCI_MSM
-static inline void hif_msm_pcie_debug_info(struct hif_pci_softc *sc)
-{
-	msm_pcie_debug_info(sc->pdev, 13, 1, 0, 0, 0);
-	msm_pcie_debug_info(sc->pdev, 13, 2, 0, 0, 0);
-}
-#else
-static inline void hif_msm_pcie_debug_info(struct hif_pci_softc *sc) {};
-#endif
-
 /**
  * hif_log_soc_wakeup_timeout() - API to log PCIe and SOC Info
  * @sc: HIF PCIe Context
@@ -2545,7 +2547,6 @@ static int hif_log_soc_wakeup_timeout(struct hif_pci_softc *sc)
 							RTC_STATE_ADDRESS));
 
 	hif_info("wakeup target");
-	hif_msm_pcie_debug_info(sc);
 
 	if (!cfg->enable_self_recovery)
 		QDF_BUG(0);
@@ -2916,6 +2917,7 @@ static int hif_ce_msi_configure_irq(struct hif_softc *scn)
 
 		scn->wake_irq = pld_get_msi_irq(scn->qdf_dev->dev,
 						msi_irq_start);
+		scn->wake_irq_type = HIF_PM_MSI_WAKE;
 
 		ret = pfrm_request_irq(scn->qdf_dev->dev, scn->wake_irq,
 				       hif_wake_interrupt_handler,
@@ -2977,6 +2979,7 @@ free_wake_irq:
 		pfrm_free_irq(scn->qdf_dev->dev,
 			      scn->wake_irq, scn->qdf_dev->dev);
 		scn->wake_irq = 0;
+		scn->wake_irq_type = HIF_PM_INVALID_WAKE;
 	}
 
 	return ret;
@@ -3170,6 +3173,34 @@ int hif_pci_configure_grp_irq(struct hif_softc *scn,
 	hif_ext_group->irq_requested = true;
 	return 0;
 }
+
+#if (defined(QCA_WIFI_QCA6390) || defined(QCA_WIFI_QCA6490))
+uint32_t hif_pci_reg_read32(struct hif_softc *hif_sc,
+			    uint32_t offset)
+{
+	return hal_read32_mb(hif_sc->hal_soc, offset);
+}
+
+void hif_pci_reg_write32(struct hif_softc *hif_sc,
+			 uint32_t offset,
+			 uint32_t value)
+{
+	hal_write32_mb(hif_sc->hal_soc, offset, value);
+}
+#else
+/* TODO: Need to implement other chips carefully */
+uint32_t hif_pci_reg_read32(struct hif_softc *hif_sc,
+			    uint32_t offset)
+{
+	return 0;
+}
+
+void hif_pci_reg_write32(struct hif_softc *hif_sc,
+			 uint32_t offset,
+			 uint32_t value)
+{
+}
+#endif
 
 /**
  * hif_configure_irq() - configure interrupt

@@ -1646,7 +1646,7 @@ wmi_buf_alloc_debug(wmi_unified_t wmi_handle, uint32_t len,
 {
 	wmi_buf_t wmi_buf;
 
-	if (roundup(len + WMI_MIN_HEAD_ROOM, 4) > wmi_handle->max_msg_len) {
+	if (roundup(len + sizeof(WMI_CMD_HDR), 4) > wmi_handle->max_msg_len) {
 		QDF_ASSERT(0);
 		return NULL;
 	}
@@ -1687,7 +1687,7 @@ wmi_buf_t wmi_buf_alloc_fl(wmi_unified_t wmi_handle, uint32_t len,
 {
 	wmi_buf_t wmi_buf;
 
-	if (roundup(len + WMI_MIN_HEAD_ROOM, 4) > wmi_handle->max_msg_len) {
+	if (roundup(len + sizeof(WMI_CMD_HDR), 4) > wmi_handle->max_msg_len) {
 		QDF_DEBUG_PANIC("Invalid length %u (via %s:%u)",
 				len, func, line);
 		return NULL;
@@ -2578,18 +2578,11 @@ static int __wmi_process_qmi_fw_event(void *wmi_cb_ctx, void *buf, int len)
 	struct wmi_unified *wmi_handle = wmi_cb_ctx;
 	wmi_buf_t evt_buf;
 	uint32_t evt_id;
-	int wmi_msg_len;
 
 	if (!wmi_handle || !buf)
 		return -EINVAL;
 
-	/**
-	 * Subtract WMI_MIN_HEAD_ROOM from received QMI event length to get
-	 * wmi message length
-	 */
-	wmi_msg_len = len - WMI_MIN_HEAD_ROOM;
-
-	evt_buf = wmi_buf_alloc(wmi_handle, wmi_msg_len);
+	evt_buf = wmi_buf_alloc(wmi_handle, len);
 	if (!evt_buf)
 		return -ENOMEM;
 
@@ -3117,6 +3110,7 @@ void *wmi_unified_attach(void *scn_handle,
 
 	qdf_atomic_init(&wmi_handle->pending_cmds);
 	qdf_atomic_init(&wmi_handle->is_target_suspended);
+	qdf_atomic_init(&wmi_handle->is_target_suspend_acked);
 	qdf_atomic_init(&wmi_handle->num_stats_over_qmi);
 	wmi_runtime_pm_init(wmi_handle);
 	wmi_interface_logging_init(wmi_handle, WMI_HOST_PDEV_ID_0);
@@ -3182,6 +3176,7 @@ void wmi_unified_detach(struct wmi_unified *wmi_handle)
 						&soc->wmi_pdev[i]->event_queue);
 			}
 
+			qdf_flush_work(&soc->wmi_pdev[i]->rx_diag_event_work);
 			buf = qdf_nbuf_queue_remove(
 					&soc->wmi_pdev[i]->diag_event_queue);
 			while (buf) {
@@ -3253,6 +3248,16 @@ wmi_unified_remove_work(struct wmi_unified *wmi_handle)
 		buf = qdf_nbuf_queue_remove(&wmi_handle->event_queue);
 	}
 	qdf_spin_unlock_bh(&wmi_handle->eventq_lock);
+
+	/* Remove diag events work */
+	qdf_flush_work(&wmi_handle->rx_diag_event_work);
+	qdf_spin_lock_bh(&wmi_handle->diag_eventq_lock);
+	buf = qdf_nbuf_queue_remove(&wmi_handle->diag_event_queue);
+	while (buf) {
+		qdf_nbuf_free(buf);
+		buf = qdf_nbuf_queue_remove(&wmi_handle->diag_event_queue);
+	}
+	qdf_spin_unlock_bh(&wmi_handle->diag_eventq_lock);
 }
 
 /**
@@ -3505,6 +3510,19 @@ void wmi_set_target_suspend(wmi_unified_t wmi_handle, A_BOOL val)
 }
 
 /**
+ * wmi_set_target_suspend_acked() -  WMI API to set target suspend acked flag
+ *
+ * @wmi_handle: handle to WMI.
+ * @val: target suspend command acked flag.
+ *
+ * @Return: none.
+ */
+void wmi_set_target_suspend_acked(wmi_unified_t wmi_handle, A_BOOL val)
+{
+	qdf_atomic_set(&wmi_handle->is_target_suspend_acked, val);
+}
+
+/**
  * wmi_is_target_suspended() - WMI API to check target suspend state
  * @wmi_handle: handle to WMI.
  *
@@ -3517,6 +3535,21 @@ bool wmi_is_target_suspended(struct wmi_unified *wmi_handle)
 	return qdf_atomic_read(&wmi_handle->is_target_suspended);
 }
 qdf_export_symbol(wmi_is_target_suspended);
+
+/**
+ * wmi_is_target_suspend_acked() - WMI API to check target suspend command is
+ *                                 acked or not
+ * @wmi_handle: handle to WMI.
+ *
+ * WMI API to check whether the target suspend command is acked or not
+ *
+ * Return: true if target suspend command is acked, else false.
+ */
+bool wmi_is_target_suspend_acked(struct wmi_unified *wmi_handle)
+{
+	return qdf_atomic_read(&wmi_handle->is_target_suspend_acked);
+}
+qdf_export_symbol(wmi_is_target_suspend_acked);
 
 #ifdef WLAN_FEATURE_WMI_SEND_RECV_QMI
 void wmi_set_qmi_stats(wmi_unified_t wmi_handle, bool val)
@@ -3627,4 +3660,14 @@ void wmi_pdev_id_conversion_enable(wmi_unified_t wmi_handle,
 		wmi_handle->ops->wmi_pdev_id_conversion_enable(wmi_handle,
 							       pdev_id_map,
 							       size);
+}
+
+int __wmi_validate_handle(wmi_unified_t wmi_handle, const char *func)
+{
+        if (!wmi_handle) {
+                wmi_err("Invalid WMI handle (via %s)", func);
+                return -EINVAL;
+        }
+
+        return 0;
 }

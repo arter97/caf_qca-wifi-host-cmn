@@ -31,7 +31,8 @@
 #else
 struct htt_logger;
 static inline
-void htt_interface_logging_init(struct htt_logger **htt_logger_handle)
+void htt_interface_logging_init(struct htt_logger **htt_logger_handle,
+				struct cdp_ctrl_objmgr_psoc *ctrl_psoc)
 {
 }
 
@@ -140,6 +141,20 @@ void htt_htc_pkt_pool_free(struct htt_soc *soc);
 #define MAX_SCHED_STARVE 100000
 #define WRAP_DROP_TSF_DELTA 10000
 #define MAX_TSF_32 0xFFFFFFFF
+
+#define dp_htt_alert(params...) QDF_TRACE_FATAL(QDF_MODULE_ID_DP_HTT, params)
+#define dp_htt_err(params...) QDF_TRACE_ERROR(QDF_MODULE_ID_DP_HTT, params)
+#define dp_htt_warn(params...) QDF_TRACE_WARN(QDF_MODULE_ID_DP_HTT, params)
+#define dp_htt_info(params...) \
+	__QDF_TRACE_FL(QDF_TRACE_LEVEL_INFO_HIGH, QDF_MODULE_ID_DP_HTT, ## params)
+#define dp_htt_debug(params...) QDF_TRACE_DEBUG(QDF_MODULE_ID_DP_HTT, params)
+
+#define dp_htt_tx_stats_alert(params...) QDF_TRACE_FATAL(QDF_MODULE_ID_DP_HTT_TX_STATS, params)
+#define dp_htt_tx_stats_err(params...) QDF_TRACE_ERROR(QDF_MODULE_ID_DP_HTT_TX_STATS, params)
+#define dp_htt_tx_stats_warn(params...) QDF_TRACE_WARN(QDF_MODULE_ID_DP_HTT_TX_STATS, params)
+#define dp_htt_tx_stats_info(params...) \
+	__QDF_TRACE_FL(QDF_TRACE_LEVEL_INFO_HIGH, QDF_MODULE_ID_DP_HTT_TX_STATS, ## params)
+#define dp_htt_tx_stats_debug(params...) QDF_TRACE_DEBUG(QDF_MODULE_ID_DP_HTT_TX_STATS, params)
 
 /**
  * enum dp_full_mon_config - enum to enable/disable full monitor mode

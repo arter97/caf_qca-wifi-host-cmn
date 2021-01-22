@@ -142,6 +142,8 @@
 #define WLAN_REQUEST_IE_MAX_LEN                  255
 #define WLAN_RM_CAPABILITY_IE_MAX_LEN            5
 #define WLAN_RNR_IE_MIN_LEN                      5
+#define WLAN_TPE_IE_MIN_LEN                      2
+#define WLAN_MAX_NUM_TPE_IE                      2
 
 /* HT capability flags */
 #define WLAN_HTCAP_C_ADVCODING             0x0001
@@ -1828,6 +1830,8 @@ is_bwnss_oui(uint8_t *frm)
 	return (frm[1] > 3) && (LE_READ_4(frm + 2) ==
 		((ATH_OUI_BW_NSS_MAP_TYPE << 24) | ATH_OUI));
 }
+
+#define WLAN_BWNSS_MAP_OFFSET 6
 
 /**
  * is_he_cap_oui() - If vendor IE is HE CAP OUI

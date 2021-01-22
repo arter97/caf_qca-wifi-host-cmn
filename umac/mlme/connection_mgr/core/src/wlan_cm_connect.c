@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012-2015, 2020, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012-2015, 2020-2021 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -19,7 +19,6 @@
  */
 
 #include "wlan_cm_main_api.h"
-#include "wlan_cm_bss_score_param.h"
 #include "wlan_scan_api.h"
 #include "wlan_cm_sm.h"
 #ifdef WLAN_POLICY_MGR_ENABLE
@@ -233,8 +232,6 @@ cm_ser_connect_cb(struct wlan_serialization_command *cmd,
 	return status;
 }
 
-#define CONNECT_TIMEOUT       30000
-
 static QDF_STATUS cm_ser_connect_req(struct wlan_objmgr_pdev *pdev,
 				     struct cnx_mgr *cm_ctx,
 				     struct cm_connect_req *cm_req)
@@ -256,7 +253,7 @@ static QDF_STATUS cm_ser_connect_req(struct wlan_objmgr_pdev *pdev,
 	cmd.cmd_cb = cm_ser_connect_cb;
 	cmd.source = WLAN_UMAC_COMP_MLME;
 	cmd.is_high_priority = false;
-	cmd.cmd_timeout_duration = CONNECT_TIMEOUT;
+	cmd.cmd_timeout_duration = cm_ctx->connect_timeout;
 	cmd.vdev = cm_ctx->vdev;
 	cmd.is_blocking = cm_ser_get_blocking_cmd();
 
@@ -414,47 +411,7 @@ static QDF_STATUS cm_check_for_hw_mode_change(struct wlan_objmgr_psoc *psoc,
 						     connect_id);
 }
 
-static void
-cm_get_pcl_chan_weigtage_for_sta(struct wlan_objmgr_pdev *pdev,
-				 struct pcl_freq_weight_list *pcl_lst)
-{
-	enum QDF_OPMODE opmode = QDF_STA_MODE;
-	enum policy_mgr_con_mode pm_mode;
-	uint32_t num_entries = 0;
-	QDF_STATUS status;
 
-	if (!pcl_lst)
-		return;
-
-	if (policy_mgr_map_concurrency_mode(&opmode, &pm_mode)) {
-		status = policy_mgr_get_pcl(wlan_pdev_get_psoc(pdev), pm_mode,
-					    pcl_lst->pcl_freq_list,
-					    &num_entries,
-					    pcl_lst->pcl_weight_list,
-					    NUM_CHANNELS);
-		if (QDF_IS_STATUS_ERROR(status))
-			return;
-		pcl_lst->num_of_pcl_channels = num_entries;
-	}
-}
-
-static void cm_calculate_scores(struct wlan_objmgr_pdev *pdev,
-				struct scan_filter *filter, qdf_list_t *list)
-{
-	struct pcl_freq_weight_list *pcl_lst = NULL;
-
-	if (!filter->num_of_bssid) {
-		pcl_lst = qdf_mem_malloc(sizeof(*pcl_lst));
-		cm_get_pcl_chan_weigtage_for_sta(pdev, pcl_lst);
-		if (pcl_lst && !pcl_lst->num_of_pcl_channels) {
-			qdf_mem_free(pcl_lst);
-			pcl_lst = NULL;
-		}
-	}
-	wlan_cm_calculate_bss_score(pdev, pcl_lst, list, &filter->bssid_hint);
-	if (pcl_lst)
-		qdf_mem_free(pcl_lst);
-}
 #else
 
 static inline
@@ -465,12 +422,6 @@ QDF_STATUS cm_check_for_hw_mode_change(struct wlan_objmgr_psoc *psoc,
 	return QDF_STATUS_E_ALREADY;
 }
 
-static inline
-void cm_calculate_scores(struct wlan_objmgr_pdev *pdev,
-			 struct scan_filter *filter, qdf_list_t *list)
-{
-	wlan_cm_calculate_bss_score(pdev, NULL, list, &filter->bssid_hint);
-}
 #endif /* WLAN_POLICY_MGR_ENABLE */
 
 static inline void cm_delete_pmksa_for_bssid(struct cnx_mgr *cm_ctx,
@@ -561,23 +512,9 @@ static void cm_update_fils_scan_filter(struct scan_filter *filter,
 		     REALM_HASH_LEN);
 }
 
-static inline bool cm_is_fils_connection(struct cnx_mgr *cm_ctx,
-					 struct wlan_cm_connect_resp *resp)
+static inline bool cm_is_fils_connection(struct wlan_cm_connect_resp *resp)
 {
-	int32_t key_mgmt;
-
-	key_mgmt = wlan_crypto_get_param(cm_ctx->vdev,
-					 WLAN_CRYPTO_PARAM_KEY_MGMT);
-
-	if (!(key_mgmt & (1 << WLAN_CRYPTO_KEY_MGMT_FILS_SHA256 |
-			  1 << WLAN_CRYPTO_KEY_MGMT_FILS_SHA384 |
-			  1 << WLAN_CRYPTO_KEY_MGMT_FT_FILS_SHA256 |
-			  1 << WLAN_CRYPTO_KEY_MGMT_FT_FILS_SHA384)))
-		return false;
-
-	resp->is_fils_connection = true;
-
-	return true;
+	return resp->is_fils_connection;
 }
 
 static QDF_STATUS cm_set_fils_key(struct cnx_mgr *cm_ctx,
@@ -605,8 +542,7 @@ static inline void cm_update_fils_scan_filter(struct scan_filter *filter,
 					      struct cm_connect_req *cm_req)
 { }
 
-static inline bool cm_is_fils_connection(struct cnx_mgr *cm_ctx,
-					 struct wlan_cm_connect_resp *resp)
+static inline bool cm_is_fils_connection(struct wlan_cm_connect_resp *resp)
 {
 	return false;
 }
@@ -769,7 +705,7 @@ static void cm_set_fils_wep_key(struct cnx_mgr *cm_ctx,
 	struct qdf_mac_addr broadcast_mac = QDF_MAC_ADDR_BCAST_INIT;
 
 	/* Check and set FILS keys */
-	if (cm_is_fils_connection(cm_ctx, resp)) {
+	if (cm_is_fils_connection(resp)) {
 		cm_set_fils_key(cm_ctx, resp);
 		return;
 	}
@@ -825,6 +761,7 @@ static void cm_update_security_filter(struct scan_filter *filter,
 	filter->mgmtcipherset = req->crypto.mgmt_ciphers;
 	cm_set_pmf_caps(req, filter);
 }
+
 static inline void cm_set_fils_wep_key(struct cnx_mgr *cm_ctx,
 				       struct wlan_cm_connect_resp *resp)
 {}
@@ -871,10 +808,20 @@ static QDF_STATUS cm_connect_get_candidates(struct wlan_objmgr_pdev *pdev,
 	uint8_t vdev_id = wlan_vdev_get_id(cm_ctx->vdev);
 	bool security_valid_for_6ghz;
 	const uint8_t *rsnxe;
+	uint8_t wsc_oui[OUI_LENGTH];
+	uint32_t oui_cpu;
+	bool is_wps = false;
 
 	filter = qdf_mem_malloc(sizeof(*filter));
 	if (!filter)
 		return QDF_STATUS_E_NOMEM;
+
+	oui_cpu = qdf_be32_to_cpu(WSC_OUI);
+	qdf_mem_copy(wsc_oui, &oui_cpu, OUI_LENGTH);
+	if (wlan_get_vendor_ie_ptr_from_oui(wsc_oui, OUI_LENGTH,
+					    cm_req->req.assoc_ie.ptr,
+					    cm_req->req.assoc_ie.len))
+		is_wps = true;
 
 	rsnxe = wlan_get_ie_ptr_from_eid(WLAN_ELEMID_RSNXE,
 					 cm_req->req.assoc_ie.ptr,
@@ -883,7 +830,8 @@ static QDF_STATUS cm_connect_get_candidates(struct wlan_objmgr_pdev *pdev,
 		wlan_cm_6ghz_allowed_for_akm(wlan_pdev_get_psoc(pdev),
 					     cm_req->req.crypto.akm_suites,
 					     cm_req->req.crypto.rsn_caps,
-					     rsnxe, cm_req->req.sae_pwe);
+					     rsnxe, cm_req->req.sae_pwe,
+					     is_wps);
 
 	/*
 	 * Ignore connect req if the freq is provided and its 6Ghz and
@@ -1100,7 +1048,11 @@ QDF_STATUS cm_connect_start(struct cnx_mgr *cm_ctx,
 	}
 
 	cm_inform_if_mgr_connect_start(cm_ctx->vdev);
-	mlme_cm_connect_start_ind(cm_ctx->vdev, &cm_req->req);
+	status = mlme_cm_connect_start_ind(cm_ctx->vdev, &cm_req->req);
+	if (QDF_IS_STATUS_ERROR(status)) {
+		reason = CM_NO_CANDIDATE_FOUND;
+		goto connect_err;
+	}
 
 	status = cm_connect_get_candidates(pdev, cm_ctx, cm_req);
 	/* In case of status pending connect will continue after scan */
@@ -1427,9 +1379,31 @@ static void cm_copy_fils_info(struct wlan_cm_vdev_connect_req *req,
 {
 	req->fils_info = &cm_req->connect_req.req.fils_info;
 }
+
+static inline void cm_set_fils_connection(struct cnx_mgr *cm_ctx,
+					  struct wlan_cm_connect_resp *resp)
+{
+	int32_t key_mgmt;
+
+	key_mgmt = wlan_crypto_get_param(cm_ctx->vdev,
+					 WLAN_CRYPTO_PARAM_KEY_MGMT);
+
+	if (!(key_mgmt & (1 << WLAN_CRYPTO_KEY_MGMT_FILS_SHA256 |
+			  1 << WLAN_CRYPTO_KEY_MGMT_FILS_SHA384 |
+			  1 << WLAN_CRYPTO_KEY_MGMT_FT_FILS_SHA256 |
+			  1 << WLAN_CRYPTO_KEY_MGMT_FT_FILS_SHA384)))
+		resp->is_fils_connection = false;
+	else
+		resp->is_fils_connection = true;
+}
 #else
 static inline void cm_copy_fils_info(struct wlan_cm_vdev_connect_req *req,
 				     struct cm_req *cm_req)
+{
+}
+
+static inline void cm_set_fils_connection(struct cnx_mgr *cm_ctx,
+					  struct wlan_cm_connect_resp *resp)
 {
 }
 #endif
@@ -1567,6 +1541,7 @@ QDF_STATUS cm_connect_complete(struct cnx_mgr *cm_ctx,
 		return QDF_STATUS_SUCCESS;
 
 	sm_state = cm_get_state(cm_ctx);
+	cm_set_fils_connection(cm_ctx, resp);
 	if (QDF_IS_STATUS_SUCCESS(resp->connect_status) &&
 	    sm_state == WLAN_CM_S_CONNECTED) {
 		cm_update_scan_db_on_connect_success(cm_ctx, resp);
@@ -1594,10 +1569,6 @@ QDF_STATUS cm_connect_complete(struct cnx_mgr *cm_ctx,
 					wlan_vdev_get_pdev(cm_ctx->vdev),
 					&bss_info, &mlme_info);
 	}
-	/*
-	 * update fils/wep key and inform legacy, update bcn filter,
-	 * start OBSS scan for open mode.
-	 */
 
 	mlme_debug(CM_PREFIX_FMT,
 		   CM_PREFIX_REF(wlan_vdev_get_id(cm_ctx->vdev),

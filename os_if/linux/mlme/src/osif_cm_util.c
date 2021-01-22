@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012-2015, 2020 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012-2015, 2020-2021 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -199,6 +199,20 @@ osif_cm_connect_complete_cb(struct wlan_objmgr_vdev *vdev,
 }
 
 /**
+ * osif_cm_reassoc_complete_cb() - Reassoc complete callback
+ * @vdev: vdev pointer
+ * @rsp: Reassoc response
+ *
+ * Return: QDF_STATUS
+ */
+static QDF_STATUS
+osif_cm_reassoc_complete_cb(struct wlan_objmgr_vdev *vdev,
+			    struct wlan_cm_roam_resp *rsp)
+{
+	return osif_reassoc_handler(vdev, rsp);
+}
+
+/**
  * osif_cm_failed_candidate_cb() - Callback to indicate failed candidate
  * @vdev: vdev pointer
  * @rsp: connect response
@@ -266,8 +280,9 @@ void osif_cm_unlink_bss(struct wlan_objmgr_vdev *vdev,
 	struct wiphy *wiphy = osif_priv->wdev->wiphy;
 	struct scan_filter *filter;
 
-	__wlan_cfg80211_unlink_bss_list(wiphy, bssid->bytes,
-					ssid_len ? ssid : NULL, ssid_len);
+	__wlan_cfg80211_unlink_bss_list(wiphy, wlan_vdev_get_pdev(vdev),
+					bssid->bytes, ssid_len ? ssid : NULL,
+					ssid_len);
 	filter = qdf_mem_malloc(sizeof(*filter));
 	if (!filter)
 		return;
@@ -314,6 +329,7 @@ static struct mlme_cm_ops cm_ops = {
 	.mlme_cm_update_id_and_src_cb = osif_cm_update_id_and_src_cb,
 	.mlme_cm_disconnect_complete_cb = osif_cm_disconnect_complete_cb,
 	.mlme_cm_disconnect_start_cb = osif_cm_disconnect_start_cb,
+	.mlme_cm_reassoc_complete_cb = osif_cm_reassoc_complete_cb,
 };
 
 /**
@@ -383,6 +399,21 @@ QDF_STATUS osif_cm_connect_comp_ind(struct wlan_objmgr_vdev *vdev,
 	return ret;
 }
 
+QDF_STATUS osif_cm_reassoc_comp_ind(struct wlan_objmgr_vdev *vdev,
+				    struct wlan_cm_roam_resp *rsp,
+				    enum osif_cb_type type)
+{
+	osif_cm_reassoc_comp_cb cb = NULL;
+	QDF_STATUS ret = QDF_STATUS_SUCCESS;
+
+	if (osif_cm_legacy_ops)
+		cb = osif_cm_legacy_ops->reassoc_complete_cb;
+	if (cb)
+		ret = cb(vdev, rsp, type);
+
+	return ret;
+}
+
 QDF_STATUS osif_cm_disconnect_comp_ind(struct wlan_objmgr_vdev *vdev,
 				       struct wlan_cm_discon_rsp *rsp,
 				       enum osif_cb_type type)
@@ -410,6 +441,37 @@ QDF_STATUS osif_cm_netif_queue_ind(struct wlan_objmgr_vdev *vdev,
 		cb = osif_cm_legacy_ops->netif_queue_control_cb;
 	if (cb)
 		ret = cb(vdev, action, reason);
+
+	return ret;
+}
+#endif
+
+#ifdef WLAN_FEATURE_FILS_SK
+QDF_STATUS osif_cm_save_gtk(struct wlan_objmgr_vdev *vdev,
+			    struct wlan_cm_connect_resp *rsp)
+{
+	osif_cm_save_gtk_cb cb = NULL;
+	QDF_STATUS ret = QDF_STATUS_SUCCESS;
+
+	if (osif_cm_legacy_ops)
+		cb = osif_cm_legacy_ops->save_gtk_cb;
+	if (cb)
+		ret = cb(vdev, rsp);
+
+	return ret;
+}
+
+QDF_STATUS osif_cm_set_hlp_data(struct net_device *dev,
+				struct wlan_objmgr_vdev *vdev,
+				struct wlan_cm_connect_resp *rsp)
+{
+	osif_cm_set_hlp_data_cb cb = NULL;
+	QDF_STATUS ret = QDF_STATUS_SUCCESS;
+
+	if (osif_cm_legacy_ops)
+		cb = osif_cm_legacy_ops->set_hlp_data_cb;
+	if (cb)
+		ret = cb(dev, vdev, rsp);
 
 	return ret;
 }

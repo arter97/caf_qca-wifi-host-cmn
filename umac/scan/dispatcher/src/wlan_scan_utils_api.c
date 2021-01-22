@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017-2020 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2017-2021 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -736,7 +736,12 @@ util_scan_parse_rnr_ie(struct scan_cache_entry *scan_entry,
 		scm_debug("tbtt_count %d, tbtt_length %d, fieldtype %d",
 			  tbtt_count, tbtt_length, fieldtype);
 		data += sizeof(struct neighbor_ap_info_field);
-		for (i = 0; i < (tbtt_count + 1) ; i++) {
+
+		if (tbtt_count > TBTT_INFO_COUNT)
+			break;
+
+		for (i = 0; i < (tbtt_count + 1) &&
+		     data < ((uint8_t *)ie + rnr_ie_len + 2); i++) {
 			if (i < MAX_RNR_BSS)
 				util_scan_update_rnr(
 					&scan_entry->rnr.bss_info[i],
@@ -866,7 +871,8 @@ util_scan_parse_vendor_ie(struct scan_cache_entry *scan_params,
 		 * Bandwidth-NSS map has sub-type & version.
 		 * hence copy data just after version byte
 		 */
-		scan_params->ie_list.bwnss_map = (((uint8_t *)ie) + 8);
+		if (ie->ie_len > WLAN_BWNSS_MAP_OFFSET)
+			scan_params->ie_list.bwnss_map = (((uint8_t *)ie) + 8);
 	} else if (is_mbo_oce_oui((uint8_t *)ie)) {
 		scan_params->ie_list.mbo_oce = (uint8_t *)ie;
 	} else if (is_extender_oui((uint8_t *)ie)) {
@@ -901,6 +907,7 @@ util_scan_populate_bcn_ie_list(struct wlan_objmgr_pdev *pdev,
 	uint8_t chan_idx;
 	struct wlan_scan_obj *scan_obj;
 	struct wlan_objmgr_psoc *psoc;
+	uint8_t tpe_idx = 0;
 
 	psoc = wlan_pdev_get_psoc(pdev);
 	if (!psoc) {
@@ -1094,6 +1101,13 @@ util_scan_populate_bcn_ie_list(struct wlan_objmgr_pdev *pdev,
 			if (QDF_IS_STATUS_ERROR(status))
 				goto err_status;
 			break;
+		case WLAN_ELEMID_VHT_TX_PWR_ENVLP:
+			if (ie->ie_len < WLAN_TPE_IE_MIN_LEN)
+				goto err;
+			if (tpe_idx >= WLAN_MAX_NUM_TPE_IE)
+				goto err;
+			scan_params->ie_list.tpe[tpe_idx++] = (uint8_t *)ie;
+			break;
 		case WLAN_ELEMID_CHAN_SWITCH_WRAP:
 			scan_params->ie_list.cswrp = (uint8_t *)ie;
 			/* Go to next sub IE */
@@ -1192,7 +1206,8 @@ static void util_scan_update_esp_data(struct wlan_esp_ie *esp_information,
 		return;
 	}
 
-	for (i = 0; i < total_elements; i++) {
+	for (i = 0; i < total_elements &&
+	     data < ((uint8_t *)esp_ie + esp_ie->esp_len + 3); i++) {
 		esp_info = (struct wlan_esp_info *)data;
 		if (esp_info->access_category == ESP_AC_BK) {
 			qdf_mem_copy(&esp_information->esp_info_AC_BK,

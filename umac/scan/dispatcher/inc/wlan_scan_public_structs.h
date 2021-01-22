@@ -58,6 +58,8 @@ typedef uint32_t wlan_scan_id;
 #define PROBE_REQ_BITMAP_LEN 8
 #define MAX_PROBE_REQ_OUIS 16
 
+#define TBTT_INFO_COUNT 16
+
 /* forward declaration */
 struct wlan_objmgr_vdev;
 struct wlan_objmgr_pdev;
@@ -111,6 +113,7 @@ struct channel_info {
  * @vhtcap:     pointer to vhtcap ie
  * @vhtop:      pointer to vhtop ie
  * @opmode:     pointer to opmode ie
+ * @tpe:        array of pointers to transmit power envelope ie
  * @cswrp:      pointer to channel switch announcement wrapper ie
  * @widebw:     pointer to wide band channel switch sub ie
  * @txpwrenvlp: pointer to tx power envelop sub ie
@@ -158,6 +161,7 @@ struct ie_list {
 	uint8_t *vhtcap;
 	uint8_t *vhtop;
 	uint8_t *opmode;
+	uint8_t *tpe[WLAN_MAX_NUM_TPE_IE];
 	uint8_t *cswrp;
 	uint8_t *widebw;
 	uint8_t *txpwrenvlp;
@@ -694,22 +698,25 @@ struct probe_req_whitelist_attr {
 };
 
 /**
- * Set this flag for a 6g channel to scan it only if an RNR IE is found
- * with that channel while scanning 2g/5g bands
+ * enum scan_flags: scan flags
+ * @FLAG_SCAN_ONLY_IF_RNR_FOUND: Set this flag for a 6g channel to scan it only
+ *  if an RNR IE is found with that channel while scanning 2g/5g bands.
  */
-#define FLAG_SCAN_ONLY_IF_RNR_FOUND 0x1
+enum scan_flags {
+	FLAG_SCAN_ONLY_IF_RNR_FOUND = 0x1,
+};
 
 /**
  * struct chan_info - channel information
  * @freq: frequency to scan
  * @phymode: phymode in which @frequency should be scanned
- * @flags: Flags to define channel property. Firmware can use this info for
- *  different operations, e.g.: scan
+ * @flags: Flags to define channel property as defined @enum scan_flags.
+ *  Firmware can use this info for different operations, e.g.: scan
  */
 struct chan_info {
 	qdf_freq_t freq;
-	uint32_t phymode;
-	uint8_t flags;
+	enum scan_phy_mode phymode;
+	enum scan_flags flags;
 };
 
 /**
@@ -1386,9 +1393,14 @@ struct channel_list_db {
  * rnr_chan_weight - RNR channel weightage
  * @chan_freq: channel frequency
  * @weight: weightage of the channel
+ * @phymode: phymode in which @frequency should be scanned
+ * @flags: Flags to define channel property as defined @enum scan_flags.
+ *  Firmware can use this info for different operations, e.g.: scan
  */
 struct rnr_chan_weight {
 	uint32_t chan_freq;
 	uint32_t weight;
+	enum scan_phy_mode phymode;
+	enum scan_flags flags;
 };
 #endif

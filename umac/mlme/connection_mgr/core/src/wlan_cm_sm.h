@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012-2015, 2020, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012-2015,2020-2021 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -46,17 +46,21 @@
  * @WLAN_CM_SM_EV_DISCONNECT_START:       Start disconnect sequence
  * @WLAN_CM_SM_EV_DISCONNECT_ACTIVE:      Process disconnect after in active cmd
  * @WLAN_CM_SM_EV_DISCONNECT_DONE:        Disconnect done event
- * @WLAN_CM_SM_EV_ROAM_START:             Roam start event
- * @WLAN_CM_SM_EV_ROAM_SYNC:              Roam sync event
+ * @WLAN_CM_SM_EV_ROAM_START:             Roam start event for LFR2 and LFR3
+ * @WLAN_CM_SM_EV_ROAM_SYNC:              Roam sync event fro LFR3
  * @WLAN_CM_SM_EV_ROAM_INVOKE_FAIL:       Roam invoke fail event
  * @WLAN_CM_SM_EV_ROAM_HO_FAIL:           Hand off failed event
  * @WLAN_CM_SM_EV_PREAUTH_DONE:           Preauth is completed
  * @WLAN_CM_SM_EV_GET_NEXT_PREAUTH_AP:    Get next candidate as preauth failed
  * @WLAN_CM_SM_EV_PREAUTH_FAIL:           Preauth failed for all candidate
  * @WLAN_CM_SM_EV_START_REASSOC:          Start reassoc after preauth done
+ * @WLAN_CM_SM_EV_REASSOC_ACTIVE:         Reassoc request activated
  * @WLAN_CM_SM_EV_REASSOC_DONE:           Reassoc completed
  * @WLAN_CM_SM_EV_REASSOC_FAILURE:        Reassoc failed
  * @WLAN_CM_SM_EV_ROAM_COMPLETE:          Roaming completed
+ * @WLAN_CM_SM_EV_ROAM_REQ:               LFR3/FW roam - Roam req from FW
+ *                                        LFR2/Host roam - Roam req from host/FW
+ * @WLAN_CM_SM_EV_ROAM_INVOKE:            Host initiated LFR3/FW roam req
  * @WLAN_CM_SM_EV_MAX:                    Max event
  */
 enum wlan_cm_sm_evt {
@@ -85,9 +89,12 @@ enum wlan_cm_sm_evt {
 	WLAN_CM_SM_EV_GET_NEXT_PREAUTH_AP = 22,
 	WLAN_CM_SM_EV_PREAUTH_FAIL = 23,
 	WLAN_CM_SM_EV_START_REASSOC = 24,
-	WLAN_CM_SM_EV_REASSOC_DONE = 25,
-	WLAN_CM_SM_EV_REASSOC_FAILURE = 26,
-	WLAN_CM_SM_EV_ROAM_COMPLETE = 27,
+	WLAN_CM_SM_EV_REASSOC_ACTIVE = 25,
+	WLAN_CM_SM_EV_REASSOC_DONE = 26,
+	WLAN_CM_SM_EV_REASSOC_FAILURE = 27,
+	WLAN_CM_SM_EV_ROAM_COMPLETE = 28,
+	WLAN_CM_SM_EV_ROAM_REQ = 29,
+	WLAN_CM_SM_EV_ROAM_INVOKE = 30,
 	WLAN_CM_SM_EV_MAX,
 };
 
@@ -122,14 +129,7 @@ QDF_STATUS cm_sm_destroy(struct cnx_mgr *cm_ctx);
  * Return: void
  */
 #ifdef SM_ENG_HIST_ENABLE
-static inline void cm_sm_history_print(struct cnx_mgr *cm_ctx)
-{
-	return wlan_sm_print_history(cm_ctx->sm.sm_hdl);
-}
-#else
-static inline void cm_sm_history_print(struct cnx_mgr *cm_ctx)
-{
-}
+void cm_sm_history_print(struct wlan_objmgr_vdev *vdev);
 #endif
 
 #ifdef WLAN_CM_USE_SPINLOCK
@@ -171,7 +171,7 @@ cm_lock_destroy(struct cnx_mgr *cm_ctx)
  */
 static inline void cm_lock_acquire(struct cnx_mgr *cm_ctx)
 {
-	qdf_spinlock_acquire(&cm_ctx->sm.cm_sm_lock);
+	qdf_spin_lock_bh(&cm_ctx->sm.cm_sm_lock);
 }
 
 /**
@@ -184,7 +184,7 @@ static inline void cm_lock_acquire(struct cnx_mgr *cm_ctx)
  */
 static inline void cm_lock_release(struct cnx_mgr *cm_ctx)
 {
-	qdf_spinlock_release(&cm_ctx->sm.cm_sm_lock);
+	qdf_spin_unlock_bh(&cm_ctx->sm.cm_sm_lock);
 }
 #else
 static inline void

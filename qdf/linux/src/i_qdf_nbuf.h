@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2020 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2014-2021 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -2236,6 +2236,19 @@ static inline void __qdf_nbuf_orphan(struct sk_buff *skb)
 	return skb_orphan(skb);
 }
 
+/**
+ * __qdf_nbuf_get_end_offset() - Return the size of the nbuf from
+ * head pointer to end pointer
+ * @nbuf: qdf_nbuf_t
+ *
+ * Return: size of network buffer from head pointer to end
+ * pointer
+ */
+static inline unsigned int __qdf_nbuf_get_end_offset(__qdf_nbuf_t nbuf)
+{
+	return skb_end_offset(nbuf);
+}
+
 #ifdef CONFIG_WLAN_SYSFS_MEM_STATS
 /**
  * __qdf_record_nbuf_nbytes() - add or subtract the size of the nbuf
@@ -2311,7 +2324,8 @@ static inline QDF_STATUS __qdf_nbuf_map_nbytes_single(
 	ret =  dma_mapping_error(osdev->dev, paddr) ?
 		QDF_STATUS_E_FAULT : QDF_STATUS_SUCCESS;
 	if (QDF_IS_STATUS_SUCCESS(ret))
-		__qdf_record_nbuf_nbytes(nbytes, dir, true);
+		__qdf_record_nbuf_nbytes(__qdf_nbuf_get_end_offset(buf),
+					 dir, true);
 	return ret;
 }
 #endif
@@ -2339,7 +2353,8 @@ __qdf_nbuf_unmap_nbytes_single(qdf_device_t osdev, struct sk_buff *buf,
 	qdf_dma_addr_t paddr = QDF_NBUF_CB_PADDR(buf);
 
 	if (qdf_likely(paddr)) {
-		__qdf_record_nbuf_nbytes(nbytes, dir, false);
+		__qdf_record_nbuf_nbytes(
+			__qdf_nbuf_get_end_offset(buf), dir, false);
 		dma_unmap_single(osdev->dev, paddr, nbytes,
 				 __qdf_dma_dir_to_os(dir));
 		return;
@@ -2518,6 +2533,17 @@ static inline uint32_t __qdf_nbuf_get_mark(__qdf_nbuf_t buf)
 static inline qdf_size_t __qdf_nbuf_get_data_len(__qdf_nbuf_t nbuf)
 {
 	return (skb_end_pointer(nbuf) - nbuf->data);
+}
+
+/**
+ * __qdf_nbuf_get_gso_segs() - Return the number of gso segments
+ * @skb: Pointer to network buffer
+ *
+ * Return: Return the number of gso segments
+ */
+static inline uint16_t __qdf_nbuf_get_gso_segs(struct sk_buff *skb)
+{
+	return skb_shinfo(skb)->gso_segs;
 }
 
 #ifdef CONFIG_NBUF_AP_PLATFORM

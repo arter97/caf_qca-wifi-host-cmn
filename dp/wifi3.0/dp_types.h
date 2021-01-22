@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016-2020 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -365,6 +365,20 @@ struct dp_rx_nbuf_frag_info {
 		qdf_nbuf_t nbuf;
 		qdf_frag_t vaddr;
 	} virt_addr;
+};
+
+/**
+ * enum dp_ctxt - context type
+ * @DP_PDEV_TYPE: PDEV context
+ * @DP_RX_RING_HIST_TYPE: Datapath rx ring history
+ * @DP_RX_ERR_RING_HIST_TYPE: Datapath rx error ring history
+ * @DP_RX_REINJECT_RING_HIST_TYPE: Datapath reinject ring history
+ */
+enum dp_ctxt_type {
+	DP_PDEV_TYPE,
+	DP_RX_RING_HIST_TYPE,
+	DP_RX_ERR_RING_HIST_TYPE,
+	DP_RX_REINJECT_RING_HIST_TYPE,
 };
 
 /**
@@ -979,6 +993,10 @@ struct dp_soc_stats {
 			uint32_t dup_refill_link_desc;
 			/* Incorrect msdu continuation bit in MSDU desc */
 			uint32_t msdu_continuation_err;
+			/* REO OOR eapol drop count */
+			uint32_t reo_err_oor_eapol_drop;
+			/* Non Eapol packet drop count due to peer not authorized  */
+			uint32_t peer_unauth_rx_pkt_drop;
 		} err;
 
 		/* packet count per core - per ring */
@@ -1571,6 +1589,8 @@ struct dp_soc {
 		void *ipa_wbm_ring_base_vaddr;
 		uint32_t ipa_wbm_ring_size;
 		qdf_dma_addr_t ipa_wbm_tp_paddr;
+		/* WBM2SW HP shadow paddr */
+		qdf_dma_addr_t ipa_wbm_hp_shadow_paddr;
 
 		/* TX buffers populated into the WBM ring */
 		void **tx_buf_pool_vaddr_unaligned;
@@ -2311,6 +2331,8 @@ struct dp_pdev {
 	/* HTT stats debugfs params */
 	struct pdev_htt_stats_dbgfs_cfg *dbgfs_cfg;
 #endif
+	/* Flag to inidicate monitor rings are initialized */
+	uint8_t pdev_mon_init;
 };
 
 struct dp_peer;
@@ -2384,6 +2406,9 @@ struct dp_vdev {
 	 * skipped
 	 */
 	uint8_t skip_sw_tid_classification;
+
+	/* Flag to enable peer authorization */
+	uint8_t peer_authorize;
 
 	/* AST hash value for BSS peer in HW valid for STA VAP*/
 	uint16_t bss_ast_hash;
@@ -2978,6 +3003,8 @@ struct dp_rx_fst {
 	struct dp_soc *soc_hdl;
 	qdf_atomic_t fse_cache_flush_posted;
 	qdf_timer_t fse_cache_flush_timer;
+	/* Allow FSE cache flush cmd to FW */
+	bool fse_cache_flush_allow;
 	struct fse_cache_flush_history cache_fl_rec[MAX_FSE_CACHE_FL_HST];
 	/* FISA DP stats */
 	struct dp_fisa_stats stats;
@@ -2992,6 +3019,7 @@ struct dp_rx_fst {
 	qdf_event_t cmem_resp_event;
 	bool flow_deletion_supported;
 	bool fst_in_cmem;
+	bool pm_suspended;
 };
 
 #endif /* WLAN_SUPPORT_RX_FISA */

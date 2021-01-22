@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016-2020 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -144,6 +144,8 @@
 #define WLAN_SOC_CEXT_MBSS_PARAM_IN_START   0x00800000
 /* Per channel scan config flags support */
 #define WLAN_SOC_CEXT_SCAN_PER_CH_CONFIG    0x01000000
+	/* CAPABILITY: csa offload in case of AP */
+#define WLAN_SOC_CEXT_CSA_TX_OFFLOAD      0x02000000
 
 /* feature_flags */
 	/* CONF: ATH FF enabled */
@@ -196,8 +198,8 @@
 #define WLAN_SOC_F_BTCOEX_SUPPORT      0x00200000
 	/* HOST 80211 enable*/
 #define WLAN_SOC_F_HOST_80211_ENABLE   0x00400000
-	/* Spectral disable */
-#define WLAN_SOC_F_SPECTRAL_DISABLE    0x00800000
+	/* Spectral disable from INI */
+#define WLAN_SOC_F_SPECTRAL_INI_DISABLE    0x00800000
 	/* FTM testmode enable */
 #define WLAN_SOC_F_TESTMODE_ENABLE     0x01000000
 	/* Dynamic HW mode swithch enable */
@@ -208,6 +210,8 @@
 #define WLAN_SOC_F_WDS_EXTENDED        0x08000000
 /* Peer create response */
 #define WLAN_SOC_F_PEER_CREATE_RESP    0x10000000
+/* Strict channel mode */
+#define WLAN_SOC_F_STRICT_CHANNEL      0x20000000
 
 
 /* PSOC op flags */

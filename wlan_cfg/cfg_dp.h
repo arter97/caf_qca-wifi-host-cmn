@@ -111,13 +111,21 @@
 #endif
 #endif
 
-#define WLAN_CFG_RX_PENDING_HL_THRESHOLD 0x60000
-#define WLAN_CFG_RX_PENDING_HL_THRESHOLD_MIN 0
-#define WLAN_CFG_RX_PENDING_HL_THRESHOLD_MAX 0x80000
+#ifdef NBUF_MEMORY_DEBUG
+#define WLAN_CFG_RX_PENDING_THRESHOLD_DEFAULT 0x60000
+#else
+#define WLAN_CFG_RX_PENDING_THRESHOLD_DEFAULT 0xD0000
+#endif
 
-#define WLAN_CFG_RX_PENDING_LO_THRESHOLD 0x60000
+#define WLAN_CFG_RX_PENDING_HL_THRESHOLD \
+		WLAN_CFG_RX_PENDING_THRESHOLD_DEFAULT
+#define WLAN_CFG_RX_PENDING_HL_THRESHOLD_MIN 0
+#define WLAN_CFG_RX_PENDING_HL_THRESHOLD_MAX 0x200000
+
+#define WLAN_CFG_RX_PENDING_LO_THRESHOLD \
+		WLAN_CFG_RX_PENDING_THRESHOLD_DEFAULT
 #define WLAN_CFG_RX_PENDING_LO_THRESHOLD_MIN 100
-#define WLAN_CFG_RX_PENDING_LO_THRESHOLD_MAX 0x80000
+#define WLAN_CFG_RX_PENDING_LO_THRESHOLD_MAX 0x200000
 
 #define WLAN_CFG_INT_TIMER_THRESHOLD_WBM_RELEASE_RING 256
 #define WLAN_CFG_INT_TIMER_THRESHOLD_REO_RING 512
@@ -1083,6 +1091,27 @@
 		CFG_INI_BOOL("wow_check_rx_pending_enable", \
 		false, \
 		"enable rx frame pending check in WoW mode")
+#define CFG_DP_DELAY_MON_REPLENISH \
+		CFG_INI_BOOL("delay_mon_replenish", \
+		true, "Delay Monitor Replenish")
+
+/*
+ * <ini>
+ * gForceRX64BA - enable force 64 blockack mode for RX
+ * @Min: 0
+ * @Max: 1
+ * @Default: 0
+ *
+ * This ini is used to control DP Software to use 64 blockack
+ * for RX direction forcibly
+ *
+ * Usage: Internal
+ *
+ * </ini>
+ */
+#define CFG_FORCE_RX_64_BA \
+		CFG_INI_BOOL("gForceRX64BA", \
+		false, "Enable/Disable force 64 blockack in RX side")
 
 #define CFG_DP \
 		CFG(CFG_DP_HTT_PACKET_TYPE) \
@@ -1176,5 +1205,7 @@
 		CFG(CFG_DP_RX_RADIO_0_DEFAULT_REO) \
 		CFG(CFG_DP_RX_RADIO_1_DEFAULT_REO) \
 		CFG(CFG_DP_RX_RADIO_2_DEFAULT_REO) \
-		CFG(CFG_DP_WOW_CHECK_RX_PENDING)
+		CFG(CFG_DP_WOW_CHECK_RX_PENDING) \
+		CFG(CFG_FORCE_RX_64_BA) \
+		CFG(CFG_DP_DELAY_MON_REPLENISH)
 #endif /* _CFG_DP_H_ */
