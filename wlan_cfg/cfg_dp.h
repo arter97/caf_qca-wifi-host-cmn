@@ -111,13 +111,21 @@
 #endif
 #endif
 
-#define WLAN_CFG_RX_PENDING_HL_THRESHOLD 0x60000
-#define WLAN_CFG_RX_PENDING_HL_THRESHOLD_MIN 0
-#define WLAN_CFG_RX_PENDING_HL_THRESHOLD_MAX 0x80000
+#ifdef NBUF_MEMORY_DEBUG
+#define WLAN_CFG_RX_PENDING_THRESHOLD_DEFAULT 0x60000
+#else
+#define WLAN_CFG_RX_PENDING_THRESHOLD_DEFAULT 0xD0000
+#endif
 
-#define WLAN_CFG_RX_PENDING_LO_THRESHOLD 0x60000
+#define WLAN_CFG_RX_PENDING_HL_THRESHOLD \
+		WLAN_CFG_RX_PENDING_THRESHOLD_DEFAULT
+#define WLAN_CFG_RX_PENDING_HL_THRESHOLD_MIN 0
+#define WLAN_CFG_RX_PENDING_HL_THRESHOLD_MAX 0x200000
+
+#define WLAN_CFG_RX_PENDING_LO_THRESHOLD \
+		WLAN_CFG_RX_PENDING_THRESHOLD_DEFAULT
 #define WLAN_CFG_RX_PENDING_LO_THRESHOLD_MIN 100
-#define WLAN_CFG_RX_PENDING_LO_THRESHOLD_MAX 0x80000
+#define WLAN_CFG_RX_PENDING_LO_THRESHOLD_MAX 0x200000
 
 #define WLAN_CFG_INT_TIMER_THRESHOLD_WBM_RELEASE_RING 256
 #define WLAN_CFG_INT_TIMER_THRESHOLD_REO_RING 512
@@ -1018,35 +1026,23 @@
 		false, \
 		"enable rx frame pending check in WoW mode")
 
-#define WLAN_CFG_SEND_ALL_ICMP_REQ_TO_FW (-1)
-#define WLAN_CFG_SEND_ICMP_REQ_TO_FW 0
-#define WLAN_CFG_SEND_ICMP_REQ_TO_FW_MIN (-1)
-#define WLAN_CFG_SEND_ICMP_REQ_TO_FW_MAX 100000
-
 /*
  * <ini>
- * send_icmp_pkt_to_fw - Send ICMP Request packet to FW.
- * @Min: -1
- * @Max:  100000
+ * gForceRX64BA - enable force 64 blockack mode for RX
+ * @Min: 0
+ * @Max: 1
  * @Default: 0
  *
- * This ini is used to control DP Software to send ICMP request packets to FW
- * at certain interval (in milliseconds).
- * The value 0 is used to disable sending the ICMP requests to FW.
- * The value -1 is used to send all ICMP requests to FW.
- * Any value greater than zero indicates the time interval (in milliseconds)
- * at which ICMP requests should be sent to FW.
+ * This ini is used to control DP Software to use 64 blockack
+ * for RX direction forcibly
  *
- * Usage: External
+ * Usage: Internal
  *
  * </ini>
  */
-#define CFG_DP_SEND_ICMP_REQ_TO_FW \
-	CFG_INI_INT("send_icmp_req_to_fw", \
-		    WLAN_CFG_SEND_ICMP_REQ_TO_FW_MIN, \
-		    WLAN_CFG_SEND_ICMP_REQ_TO_FW_MAX, \
-		    WLAN_CFG_SEND_ICMP_REQ_TO_FW, \
-		    CFG_VALUE_OR_DEFAULT, "Send ICMP Request packets to FW")
+#define CFG_FORCE_RX_64_BA \
+		CFG_INI_BOOL("gForceRX64BA", \
+		false, "Enable/Disable force 64 blockack in RX side")
 
 #define CFG_DP \
 		CFG(CFG_DP_HTT_PACKET_TYPE) \
@@ -1136,5 +1132,5 @@
 		CFG(CFG_DP_TX_PER_PKT_VDEV_ID_CHECK) \
 		CFG(CFG_DP_RX_FST_IN_CMEM) \
 		CFG(CFG_DP_WOW_CHECK_RX_PENDING) \
-		CFG(CFG_DP_SEND_ICMP_REQ_TO_FW)
+		CFG(CFG_FORCE_RX_64_BA)
 #endif /* _CFG_DP_H_ */

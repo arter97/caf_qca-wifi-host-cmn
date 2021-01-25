@@ -143,7 +143,6 @@ struct dp_tx_queue {
  * @exception_fw: Duplicate frame to be sent to firmware
  * @ppdu_cookie: 16-bit ppdu_cookie that has to be replayed back in completions
  * @ix_tx_sniffer: Indicates if the packet has to be sniffed
- * @send_to_fw: Send the packet to FW, without HTT meta data
  *
  * This structure holds the complete MSDU information needed to program the
  * Hardware TCL and MSDU extension descriptors for different frame types
@@ -165,7 +164,6 @@ struct dp_tx_msdu_info_s {
 	uint16_t ppdu_cookie;
 	uint16_t ast_idx;
 	uint16_t ast_hash;
-	uint8_t send_to_fw;
 };
 
 /**
@@ -529,4 +527,17 @@ QDF_STATUS dp_peer_set_tx_capture_enabled(struct dp_pdev *pdev,
 #endif
 void dp_tx_desc_flush(struct dp_pdev *pdev, struct dp_vdev *vdev,
 		      bool force_free);
+
+#ifdef WLAN_FEATURE_PKT_CAPTURE_LITHIUM
+void dp_send_completion_to_pkt_capture(struct dp_soc *soc,
+				       struct dp_tx_desc_s *desc,
+				       struct hal_tx_completion_status *ts);
+#else
+static inline void
+dp_send_completion_to_pkt_capture(struct dp_soc *soc,
+				  struct dp_tx_desc_s *desc,
+				  struct hal_tx_completion_status *ts)
+{
+}
+#endif
 #endif

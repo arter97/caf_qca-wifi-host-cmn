@@ -587,6 +587,8 @@ wlan_cfg_soc_attach(struct cdp_ctrl_objmgr_psoc *psoc)
 						   CFG_DP_RXDMA_ERR_DST_RING);
 	wlan_cfg_ctx->enable_data_stall_detection =
 		cfg_get(psoc, CFG_DP_ENABLE_DATA_STALL_DETECTION);
+	wlan_cfg_ctx->enable_force_rx_64_ba =
+		cfg_get(psoc, CFG_FORCE_RX_64_BA);
 	wlan_cfg_ctx->tx_flow_start_queue_offset =
 		cfg_get(psoc, CFG_DP_TX_FLOW_START_QUEUE_OFFSET);
 	wlan_cfg_ctx->tx_flow_stop_queue_threshold =
@@ -626,8 +628,6 @@ wlan_cfg_soc_attach(struct cdp_ctrl_objmgr_psoc *psoc)
 			cfg_get(psoc, CFG_DP_TX_PER_PKT_VDEV_ID_CHECK);
 	wlan_cfg_ctx->wow_check_rx_pending_enable =
 			cfg_get(psoc, CFG_DP_WOW_CHECK_RX_PENDING);
-	wlan_cfg_ctx->send_icmp_req_to_fw =
-			cfg_get(psoc, CFG_DP_SEND_ICMP_REQ_TO_FW);
 
 	return wlan_cfg_ctx;
 }
@@ -1464,9 +1464,7 @@ bool wlan_cfg_is_swlm_enabled(struct wlan_cfg_dp_soc_ctxt *cfg)
 }
 #endif
 
-#ifdef WLAN_DP_FEATURE_SEND_ICMP_TO_FW
-int wlan_cfg_send_icmp_req_to_fw(struct wlan_cfg_dp_soc_ctxt *cfg)
+bool wlan_cfg_is_dp_force_rx_64_ba(struct wlan_cfg_dp_soc_ctxt *cfg)
 {
-	return cfg->send_icmp_req_to_fw;
+	return cfg->enable_force_rx_64_ba;
 }
-#endif /* WLAN_DP_FEATURE_SEND_ICMP_TO_FW */
