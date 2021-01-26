@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017-2020 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2017-2021 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -818,9 +818,9 @@ static void dp_rx_frag_pull_hdr(qdf_nbuf_t nbuf, uint16_t hdrsize)
  *
  * Construct a nbuf fraglist
  *
- * Returns: None
+ * Returns: QDF status
  */
-static void
+static QDF_STATUS
 dp_rx_construct_fraglist(struct dp_peer *peer,
 		qdf_nbuf_t head, uint16_t hdrsize)
 {
@@ -829,6 +829,17 @@ dp_rx_construct_fraglist(struct dp_peer *peer,
 	uint32_t len = 0;
 
 	while (msdu) {
+		/*
+		 * Broadcast and multicast frames should never be fragmented.
+		 * Iterating through all msdus and dropping fragments if even
+		 * one of them has mcast/bcast destination address.
+		 */
+		if (hal_rx_msdu_is_wlan_mcast(msdu)) {
+			QDF_TRACE(QDF_MODULE_ID_TXRX, QDF_TRACE_LEVEL_ERROR,
+				  "Dropping multicast/broadcast fragments");
+			return QDF_STATUS_E_FAILURE;
+		}
+
 		dp_rx_frag_pull_hdr(msdu, hdrsize);
 		len += qdf_nbuf_len(msdu);
 		msdu = qdf_nbuf_next(msdu);
@@ -844,6 +855,8 @@ dp_rx_construct_fraglist(struct dp_peer *peer,
 		  (uint32_t)qdf_nbuf_len(head),
 		  (uint32_t)qdf_nbuf_len(rx_nbuf),
 		  (uint32_t)(head->data_len));
+
+	return QDF_STATUS_SUCCESS;
 }
 
 /**
@@ -1312,7 +1325,8 @@ static QDF_STATUS dp_rx_defrag(struct dp_peer *peer, unsigned tid,
 
 	/* Convert the header to 802.3 header */
 	dp_rx_defrag_nwifi_to_8023(frag_list_head, hdr_space);
-	dp_rx_construct_fraglist(peer, frag_list_head, hdr_space);
+	if (dp_rx_construct_fraglist(peer, frag_list_head, hdr_space))
+		return QDF_STATUS_E_DEFRAG_ERROR;
 
 	return QDF_STATUS_SUCCESS;
 }
