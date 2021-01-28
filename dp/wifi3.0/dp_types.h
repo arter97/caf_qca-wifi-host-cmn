@@ -1007,7 +1007,9 @@ struct dp_soc_stats {
 			uint32_t reo_err_oor_eapol_drop;
 			/* Non Eapol packet drop count due to peer not authorized  */
 			uint32_t peer_unauth_rx_pkt_drop;
-		} err;
+			/* EAPOL drop count in intrabss scenario */
+			uint32_t intrabss_eapol_drop;
+	        } err;
 
 		/* packet count per core - per ring */
 		uint64_t ring_packets[NR_CPUS][MAX_REO_DEST_RINGS];
