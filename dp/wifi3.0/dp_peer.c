@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016-2020 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -3266,6 +3266,8 @@ QDF_STATUS dp_peer_state_update(struct cdp_pdev *pdev_handle, uint8_t *peer_mac,
 		return QDF_STATUS_E_FAILURE;
 	}
 	peer->state = state;
+
+	peer->authorize = (state == OL_TXRX_PEER_STATE_AUTH) ? 1 : 0;
 
 	dp_info("peer %pK state %d", peer, peer->state);
 	/* ref_cnt is incremented inside dp_peer_find_hash_find().
