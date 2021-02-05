@@ -2220,4 +2220,16 @@ static inline bool dp_soc_is_full_mon_enable(struct dp_pdev *pdev)
 	return (pdev->soc->full_mon_mode && pdev->monitor_configured) ?
 			true : false;
 }
+
+/**
+ * dp_peer_flush_frags() - Flush all fragments for a particular
+ *  peer
+ * @soc_hdl - data path soc handle
+ * @vdev_id - vdev id
+ * @peer_addr - peer mac address
+ *
+ * Return: None
+ */
+void dp_peer_flush_frags(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
+			 uint8_t *peer_mac);
 #endif /* #ifndef _DP_INTERNAL_H_ */
