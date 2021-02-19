@@ -789,6 +789,8 @@ struct dp_soc_stats {
 			uint32_t rejected;
 			/* Non Eapol pkt drop cnt due to peer not authorized */
 			uint32_t peer_unauth_rx_pkt_drop;
+			/* EAPOL drop count in intrabss scenario */
+			uint32_t intrabss_eapol_drop;
 			/* Stale link desc cookie count*/
 			uint32_t invalid_link_cookie;
 		} err;
