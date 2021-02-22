@@ -344,6 +344,9 @@ static const uint32_t pdev_param_tlv[] = {
 	[wmi_pdev_param_pream_punct_bw] = WMI_PDEV_PARAM_SET_PREAM_PUNCT_BW,
 	[wmi_pdev_param_enable_mbssid_ctrl_frame] = WMI_PDEV_PARAM_ENABLE_MBSSID_CTRL_FRAME,
 	[wmi_pdev_param_set_mesh_params] = WMI_PDEV_PARAM_SET_MESH_PARAMS,
+	[wmi_pdev_param_mpd_userpd_ssr] = WMI_PDEV_PARAM_MPD_USERPD_SSR,
+	[wmi_pdev_param_low_latency_mode] =
+			WMI_PDEV_PARAM_LOW_LATENCY_SCHED_MODE,
 };
 
 /**
@@ -518,6 +521,10 @@ static const uint32_t vdev_param_tlv[] = {
 };
 #endif
 
+#ifndef WMI_PKTLOG_EVENT_CBF
+#define WMI_PKTLOG_EVENT_CBF 0x100
+#endif
+
 /**
  * Populate the pktlog event tlv array, where
  * the values are the FW WMI events, which host
@@ -536,6 +543,7 @@ static const uint32_t pktlog_event_tlv[] =  {
 	[WMI_HOST_PKTLOG_EVENT_STEERING_BIT] = 0,
 	[WMI_HOST_PKTLOG_EVENT_TX_DATA_CAPTURE_BIT] = 0,
 	[WMI_HOST_PKTLOG_EVENT_PHY_LOGGING_BIT] = WMI_PKTLOG_EVENT_PHY,
+	[WMI_HOST_PKTLOG_EVENT_CBF_BIT] = WMI_PKTLOG_EVENT_CBF,
 };
 
 /**
@@ -1000,6 +1008,9 @@ static inline void copy_channel_info(
 
 	if (req->channel.dfs_set_cfreq2)
 		WMI_SET_CHANNEL_FLAG(chan, WMI_CHAN_FLAG_DFS_CFREQ2);
+
+	if (req->channel.is_stadfs_en)
+		WMI_SET_CHANNEL_FLAG(chan, WMI_CHAN_FLAG_STA_DFS);
 
 	/* According to firmware both reg power and max tx power
 	 * on set channel power is used and set it to max reg
@@ -1607,7 +1618,8 @@ send_pdev_utf_cmd_tlv(wmi_unified_t wmi_handle,
 			       (chunk_len + sizeof(segHdrInfo)));
 		cmd += WMI_TLV_HDR_SIZE;
 		memcpy(cmd, &segHdrInfo, sizeof(segHdrInfo));   /* 4 bytes */
-		memcpy(&cmd[sizeof(segHdrInfo)], bufpos, chunk_len);
+		WMI_HOST_IF_MSG_COPY_CHAR_ARRAY(&cmd[sizeof(segHdrInfo)],
+						bufpos, chunk_len);
 
 		wmi_mtrace(WMI_PDEV_UTF_CMDID, NO_SESSION, 0);
 		ret = wmi_unified_cmd_send(wmi_handle, buf,
@@ -1871,10 +1883,10 @@ static QDF_STATUS send_wow_enable_cmd_tlv(wmi_unified_t wmi_handle,
 		cmd->pause_iface_config = WOW_IFACE_PAUSE_DISABLED;
 	cmd->flags = param->flags;
 
-	wmi_debug("suspend type: %s flag is 0x%x",
-		  cmd->pause_iface_config == WOW_IFACE_PAUSE_ENABLED ?
-		  "WOW_IFACE_PAUSE_ENABLED" : "WOW_IFACE_PAUSE_DISABLED",
-		  cmd->flags);
+	wmi_info("suspend type: %s flag is 0x%x",
+		 cmd->pause_iface_config == WOW_IFACE_PAUSE_ENABLED ?
+		 "WOW_IFACE_PAUSE_ENABLED" : "WOW_IFACE_PAUSE_DISABLED",
+		 cmd->flags);
 
 	wmi_mtrace(WMI_WOW_ENABLE_CMDID, NO_SESSION, 0);
 	ret = wmi_unified_cmd_send(wmi_handle, buf, len,
@@ -2645,6 +2657,7 @@ static QDF_STATUS send_peer_assoc_cmd_tlv(wmi_unified_t wmi_handle,
 	WMITLV_SET_HDR(buf_ptr, WMITLV_TAG_STRUC_wmi_vht_rate_set,
 		       WMITLV_GET_STRUCT_TLVLEN(wmi_vht_rate_set));
 
+	cmd->auth_mode = param->akm;
 	cmd->peer_nss = param->peer_nss;
 
 	/* Update bandwidth-NSS mapping */
@@ -4775,8 +4788,9 @@ static void wmi_set_pno_channel_prediction(uint8_t *buf_ptr,
 
 /**
  * send_cp_stats_cmd_tlv() - Send cp stats wmi command
- * @buf_ptr:      Buffer passed by upper layers
- * @buf_len:	  Length of passed buffer by upper layer
+ * @wmi_handle: wmi handle
+ * @buf_ptr: Buffer passed by upper layers
+ * @buf_len: Length of passed buffer by upper layer
  *
  * Copy the buffer passed by the upper layers and send it
  * down to the firmware.
@@ -6234,6 +6248,8 @@ static inline void copy_custom_aggr_bitmap(
 					   param->rx_aggr_size_disable);
 	WMI_VDEV_CUSTOM_TX_AC_EN_SET(cmd->enable_bitmap,
 				     param->tx_ac_enable);
+	WMI_VDEV_CUSTOM_AGGR_256_BA_EN_SET(cmd->enable_bitmap,
+					   param->aggr_ba_enable);
 }
 
 /**
@@ -7132,6 +7148,9 @@ void wmi_copy_resource_config(wmi_resource_config *resource_cfg,
 			resource_cfg->flag1, 1);
 	if (tgt_res_cfg->cce_disable)
 		WMI_RSRC_CFG_FLAG_TCL_CCE_DISABLE_SET(resource_cfg->flag1, 1);
+	if (tgt_res_cfg->enable_pci_gen)
+		WMI_RSRC_CFG_FLAG_PCIE_GEN_SWITCH_CAPABLITY_SET(
+			resource_cfg->flag1, 1);
 	if (tgt_res_cfg->eapol_minrate_set) {
 		WMI_RSRC_CFG_FLAG_EAPOL_REKEY_MINRATE_SUPPORT_ENABLE_SET(
 			resource_cfg->flag1, 1);
@@ -7251,6 +7270,13 @@ void wmi_copy_resource_config(wmi_resource_config *resource_cfg,
 
 	WMI_RSRC_CFG_FLAG_VIDEO_OVER_WIFI_ENABLE_SET(
 		resource_cfg->flag1, tgt_res_cfg->carrier_vow_optimization);
+
+	if (tgt_res_cfg->is_sap_connected_d3wow_enabled)
+		WMI_RSRC_CFG_FLAGS2_IS_SAP_CONNECTED_D3WOW_ENABLED_SET(
+			resource_cfg->flags2, 1);
+	if (tgt_res_cfg->is_go_connected_d3wow_enabled)
+		WMI_RSRC_CFG_FLAGS2_IS_GO_CONNECTED_D3WOW_ENABLED_SET(
+			resource_cfg->flags2, 1);
 }
 
 /* copy_hw_mode_id_in_init_cmd() - Helper routine to copy hw_mode in init cmd
@@ -11911,7 +11937,7 @@ static QDF_STATUS extract_reg_chan_list_ext_update_event_tlv(
 	wmi_unified_t wmi_handle, uint8_t *evt_buf,
 	struct cur_regulatory_info *reg_info, uint32_t len)
 {
-	uint32_t i, j;
+	uint32_t i;
 	WMI_REG_CHAN_LIST_CC_EXT_EVENTID_param_tlvs *param_buf;
 	wmi_reg_chan_list_cc_event_ext_fixed_param *ext_chan_list_event_hdr;
 	wmi_regulatory_rule_ext_struct *ext_wmi_reg_rule;
@@ -12136,23 +12162,53 @@ static QDF_STATUS extract_reg_chan_list_ext_update_event_tlv(
 					      ext_wmi_reg_rule);
 	ext_wmi_reg_rule += num_5g_reg_rules;
 
-	for (i = 0; i < REG_CURRENT_MAX_AP_TYPE; i++) {
-		reg_info->reg_rules_6g_ap_ptr[i] =
-			create_ext_reg_rules_from_wmi(num_6g_reg_rules_ap[i],
+	reg_info->reg_rules_6g_ap_ptr[REG_STANDARD_POWER_AP] =
+			create_ext_reg_rules_from_wmi(num_6g_reg_rules_ap
+						      [REG_STANDARD_POWER_AP],
 						      ext_wmi_reg_rule);
+	ext_wmi_reg_rule += num_6g_reg_rules_ap[REG_STANDARD_POWER_AP];
 
-		ext_wmi_reg_rule += num_6g_reg_rules_ap[i];
+	reg_info->reg_rules_6g_ap_ptr[REG_INDOOR_AP] =
+			create_ext_reg_rules_from_wmi(num_6g_reg_rules_ap
+						      [REG_INDOOR_AP],
+						      ext_wmi_reg_rule);
+	ext_wmi_reg_rule += num_6g_reg_rules_ap[REG_INDOOR_AP];
+
+	reg_info->reg_rules_6g_ap_ptr[REG_VERY_LOW_POWER_AP] =
+			create_ext_reg_rules_from_wmi(num_6g_reg_rules_ap
+						      [REG_VERY_LOW_POWER_AP],
+						      ext_wmi_reg_rule);
+	ext_wmi_reg_rule += num_6g_reg_rules_ap[REG_VERY_LOW_POWER_AP];
+
+	for (i = 0; i < REG_MAX_CLIENT_TYPE; i++) {
+		reg_info->reg_rules_6g_client_ptr[REG_STANDARD_POWER_AP][i] =
+			create_ext_reg_rules_from_wmi(
+						num_6g_reg_rules_client
+						[REG_STANDARD_POWER_AP][i],
+						ext_wmi_reg_rule);
+
+		ext_wmi_reg_rule +=
+			num_6g_reg_rules_client[REG_STANDARD_POWER_AP][i];
 	}
 
-	for (j = 0; j < REG_CURRENT_MAX_AP_TYPE; j++) {
-		for (i = 0; i < REG_MAX_CLIENT_TYPE; i++) {
-			reg_info->reg_rules_6g_client_ptr[j][i] =
-				create_ext_reg_rules_from_wmi(
-					num_6g_reg_rules_client[j][i],
-					ext_wmi_reg_rule);
+	for (i = 0; i < REG_MAX_CLIENT_TYPE; i++) {
+		reg_info->reg_rules_6g_client_ptr[REG_INDOOR_AP][i] =
+			create_ext_reg_rules_from_wmi(
+				num_6g_reg_rules_client[REG_INDOOR_AP][i],
+				ext_wmi_reg_rule);
 
-			ext_wmi_reg_rule += num_6g_reg_rules_client[j][i];
-		}
+		ext_wmi_reg_rule += num_6g_reg_rules_client[REG_INDOOR_AP][i];
+	}
+
+	for (i = 0; i < REG_MAX_CLIENT_TYPE; i++) {
+		reg_info->reg_rules_6g_client_ptr[REG_VERY_LOW_POWER_AP][i] =
+			create_ext_reg_rules_from_wmi(
+						num_6g_reg_rules_client
+						[REG_VERY_LOW_POWER_AP][i],
+						ext_wmi_reg_rule);
+
+		ext_wmi_reg_rule +=
+			num_6g_reg_rules_client[REG_VERY_LOW_POWER_AP][i];
 	}
 
 	reg_info->client_type = ext_chan_list_event_hdr->client_type;
@@ -12190,6 +12246,7 @@ static QDF_STATUS extract_reg_chan_list_ext_update_event_tlv(
 	reg_info->domain_code_6g_super_id =
 		ext_chan_list_event_hdr->domain_code_6g_super_id;
 
+	wmi_debug("super domain id %d", reg_info->domain_code_6g_super_id);
 	wmi_debug("processed regulatory extended channel list");
 
 	return QDF_STATUS_SUCCESS;
@@ -14514,6 +14571,72 @@ static QDF_STATUS extract_pdev_csa_switch_count_status_tlv(
 	return QDF_STATUS_SUCCESS;
 }
 
+/**
+ * send_set_tpc_power_cmd_tlv() - Sends the set TPC power level to FW
+ * @wmi_handle: wmi handle
+ * @param: Pointer to hold TX power info
+ *
+ * Return: QDF_STATUS_SUCCESS for success or error code
+ */
+static QDF_STATUS send_set_tpc_power_cmd_tlv(wmi_unified_t wmi_handle,
+					     uint8_t vdev_id,
+					     struct reg_tpc_power_info *param)
+{
+	wmi_buf_t buf;
+	wmi_vdev_set_tpc_power_fixed_param *tpc_power_info_param;
+	wmi_vdev_ch_power_info *ch_power_info;
+	uint8_t *buf_ptr;
+	uint16_t idx;
+	uint32_t len;
+	QDF_STATUS ret;
+
+	len = sizeof(wmi_vdev_set_tpc_power_fixed_param) + WMI_TLV_HDR_SIZE;
+	len += (sizeof(wmi_vdev_ch_power_info) * param->num_pwr_levels);
+
+	buf = wmi_buf_alloc(wmi_handle, len);
+	if (!buf)
+		return QDF_STATUS_E_NOMEM;
+
+	buf_ptr = (uint8_t *)wmi_buf_data(buf);
+	tpc_power_info_param = (wmi_vdev_set_tpc_power_fixed_param *)buf_ptr;
+
+	WMITLV_SET_HDR(&tpc_power_info_param->tlv_header,
+		WMITLV_TAG_STRUC_wmi_vdev_set_tpc_power_cmd_fixed_param,
+		WMITLV_GET_STRUCT_TLVLEN(wmi_vdev_set_tpc_power_fixed_param));
+
+	tpc_power_info_param->vdev_id = vdev_id;
+	tpc_power_info_param->psd_power = param->is_psd_power;
+	tpc_power_info_param->eirp_power = param->eirp_power;
+	tpc_power_info_param->power_type_6ghz = param->power_type_6g;
+
+	buf_ptr += sizeof(wmi_vdev_set_tpc_power_fixed_param);
+	WMITLV_SET_HDR(buf_ptr, WMITLV_TAG_ARRAY_STRUC,
+		       param->num_pwr_levels * sizeof(wmi_vdev_ch_power_info));
+
+	buf_ptr += WMI_TLV_HDR_SIZE;
+	ch_power_info = (wmi_vdev_ch_power_info *)buf_ptr;
+
+	for (idx = 0; idx < param->num_pwr_levels; ++idx) {
+		WMITLV_SET_HDR(&ch_power_info[idx].tlv_header,
+			WMITLV_TAG_STRUC_wmi_vdev_ch_power_info,
+			WMITLV_GET_STRUCT_TLVLEN(wmi_vdev_ch_power_info));
+		ch_power_info[idx].chan_cfreq =
+			param->chan_power_info[idx].chan_cfreq;
+		ch_power_info[idx].tx_power =
+			param->chan_power_info[idx].tx_power;
+		buf_ptr += sizeof(wmi_vdev_ch_power_info);
+	}
+
+	wmi_mtrace(WMI_VDEV_SET_TPC_POWER_CMDID, vdev_id, 0);
+	ret = wmi_unified_cmd_send(wmi_handle, buf, len,
+				   WMI_VDEV_SET_TPC_POWER_CMDID);
+	if (QDF_IS_STATUS_ERROR(ret))
+		wmi_buf_free(buf);
+
+
+	return ret;
+}
+
 struct wmi_ops tlv_ops =  {
 	.send_vdev_create_cmd = send_vdev_create_cmd_tlv,
 	.send_vdev_delete_cmd = send_vdev_delete_cmd_tlv,
@@ -14870,12 +14993,16 @@ struct wmi_ops tlv_ops =  {
 	.send_roam_scan_ch_list_req_cmd = send_roam_scan_ch_list_req_cmd_tlv,
 	.send_injector_config_cmd = send_injector_config_cmd_tlv,
 	.send_cp_stats_cmd = send_cp_stats_cmd_tlv,
+#ifdef WLAN_SUPPORT_INFRA_CTRL_PATH_STATS
+	.extract_infra_cp_stats = extract_infra_cp_stats_tlv,
+#endif /* WLAN_SUPPORT_INFRA_CTRL_PATH_STATS */
 	.extract_cp_stats_more_pending =
 				extract_cp_stats_more_pending_tlv,
 	.send_vdev_tsf_tstamp_action_cmd = send_vdev_tsf_tstamp_action_cmd_tlv,
 	.extract_vdev_tsf_report_event = extract_vdev_tsf_report_event_tlv,
 	.extract_pdev_csa_switch_count_status =
 		extract_pdev_csa_switch_count_status_tlv,
+	.send_set_tpc_power_cmd = send_set_tpc_power_cmd_tlv,
 };
 
 /**
@@ -15636,10 +15763,25 @@ static void populate_tlv_service(uint32_t *wmi_service)
 			WMI_SERVICE_BROADCAST_TWT_REQUESTER;
 	wmi_service[wmi_service_twt_bcast_resp_support] =
 			WMI_SERVICE_BROADCAST_TWT_RESPONDER;
+	wmi_service[wmi_service_twt_nudge] =
+			WMI_SERVICE_TWT_NUDGE;
+	wmi_service[wmi_service_all_twt] =
+			WMI_SERVICE_TWT_ALL_DIALOG_ID;
+	wmi_service[wmi_service_twt_statistics] =
+			WMI_SERVICE_TWT_STATS;
 #endif
 	wmi_service[wmi_service_spectral_scan_disabled] =
 			WMI_SERVICE_SPECTRAL_SCAN_DISABLED;
 	wmi_populate_service_get_sta_in_ll_stats_req(wmi_service);
+
+	wmi_service[wmi_service_wapi_concurrency_supported] =
+			WMI_SERVICE_WAPI_CONCURRENCY_SUPPORTED;
+	wmi_service[wmi_service_sap_connected_d3_wow] =
+			WMI_SERVICE_SAP_CONNECTED_D3WOW;
+	wmi_service[wmi_service_go_connected_d3_wow] =
+			WMI_SERVICE_SAP_CONNECTED_D3WOW;
+	wmi_service[wmi_service_ext_tpc_reg_support] =
+			WMI_SERVICE_EXT_TPC_REG_SUPPORT;
 }
 
 /**
