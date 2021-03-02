@@ -50,18 +50,6 @@
 #define SHADOW_REGISTER(x) 0
 #endif /* QCA_WIFI_QCA6390 || QCA_WIFI_QCA6490 || QCA_WIFI_QCA6750 */
 
-#define MAX_UNWINDOWED_ADDRESS 0x80000
-#if defined(QCA_WIFI_QCA6390) || defined(QCA_WIFI_QCA6490) || \
-    defined(QCA_WIFI_QCN9000) || defined(QCA_WIFI_QCA6750)
-#define WINDOW_ENABLE_BIT 0x40000000
-#else
-#define WINDOW_ENABLE_BIT 0x80000000
-#endif
-#define WINDOW_REG_ADDRESS 0x310C
-#define WINDOW_SHIFT 19
-#define WINDOW_VALUE_MASK 0x3F
-#define WINDOW_START MAX_UNWINDOWED_ADDRESS
-#define WINDOW_RANGE_MASK 0x7FFFF
 /*
  * BAR + 4K is always accessible, any access outside this
  * space requires force wake procedure.
@@ -290,7 +278,7 @@ static inline void hal_write32_mb(struct hal_soc *hal_soc, uint32_t offset,
 		ret = hif_force_wake_request(hal_soc->hif_handle);
 		if (ret) {
 			hal_err_rl("Wake up request failed");
-			qdf_check_state_before_panic();
+			qdf_check_state_before_panic(__func__, __LINE__);
 			return;
 		}
 	}
@@ -315,7 +303,7 @@ static inline void hal_write32_mb(struct hal_soc *hal_soc, uint32_t offset,
 		ret = hif_force_wake_release(hal_soc->hif_handle);
 		if (ret) {
 			hal_err("Wake up release failed");
-			qdf_check_state_before_panic();
+			qdf_check_state_before_panic(__func__, __LINE__);
 			return;
 		}
 	}
@@ -350,7 +338,7 @@ static inline void hal_write32_mb_confirm(struct hal_soc *hal_soc,
 		ret = hif_force_wake_request(hal_soc->hif_handle);
 		if (ret) {
 			hal_err("Wake up request failed");
-			qdf_check_state_before_panic();
+			qdf_check_state_before_panic(__func__, __LINE__);
 			return;
 		}
 	}
@@ -385,7 +373,7 @@ static inline void hal_write32_mb_confirm(struct hal_soc *hal_soc,
 		ret = hif_force_wake_release(hal_soc->hif_handle);
 		if (ret) {
 			hal_err("Wake up release failed");
-			qdf_check_state_before_panic();
+			qdf_check_state_before_panic(__func__, __LINE__);
 			return;
 		}
 	}
@@ -451,7 +439,8 @@ static inline void hal_srng_write_address_32_mb(struct hal_soc *hal_soc,
 {
 	qdf_iowrite32(addr, value);
 }
-#elif defined(FEATURE_HAL_DELAYED_REG_WRITE)
+#elif defined(FEATURE_HAL_DELAYED_REG_WRITE) || \
+	defined(FEATURE_HAL_DELAYED_REG_WRITE_V2)
 static inline void hal_srng_write_address_32_mb(struct hal_soc *hal_soc,
 						struct hal_srng *srng,
 						void __iomem *addr,
@@ -537,7 +526,7 @@ uint32_t hal_read32_mb(struct hal_soc *hal_soc, uint32_t offset)
 	if ((!hal_soc->init_phase) &&
 	    hif_force_wake_request(hal_soc->hif_handle)) {
 		hal_err("Wake up request failed");
-		qdf_check_state_before_panic();
+		qdf_check_state_before_panic(__func__, __LINE__);
 		return 0;
 	}
 
@@ -560,7 +549,7 @@ uint32_t hal_read32_mb(struct hal_soc *hal_soc, uint32_t offset)
 	if ((!hal_soc->init_phase) &&
 	    hif_force_wake_release(hal_soc->hif_handle)) {
 		hal_err("Wake up release failed");
-		qdf_check_state_before_panic();
+		qdf_check_state_before_panic(__func__, __LINE__);
 		return 0;
 	}
 
@@ -773,7 +762,8 @@ static inline void hal_write32_mb_confirm_retry(struct hal_soc *hal_soc,
 }
 #endif /* GENERIC_SHADOW_REGISTER_ACCESS_ENABLE */
 
-#ifdef FEATURE_HAL_DELAYED_REG_WRITE
+#if defined(FEATURE_HAL_DELAYED_REG_WRITE) || \
+	defined(FEATURE_HAL_DELAYED_REG_WRITE_V2)
 /**
  * hal_dump_reg_write_srng_stats() - dump SRNG reg write stats
  * @hal_soc: HAL soc handle
@@ -857,35 +847,6 @@ void *hal_attach(struct hif_opaque_softc *hif_handle, qdf_device_t qdf_dev);
  *
  */
 extern void hal_detach(void *hal_soc);
-
-/* SRNG type to be passed in APIs hal_srng_get_entrysize and hal_srng_setup */
-enum hal_ring_type {
-	REO_DST = 0,
-	REO_EXCEPTION = 1,
-	REO_REINJECT = 2,
-	REO_CMD = 3,
-	REO_STATUS = 4,
-	TCL_DATA = 5,
-	TCL_CMD_CREDIT = 6,
-	TCL_STATUS = 7,
-	CE_SRC = 8,
-	CE_DST = 9,
-	CE_DST_STATUS = 10,
-	WBM_IDLE_LINK = 11,
-	SW2WBM_RELEASE = 12,
-	WBM2SW_RELEASE = 13,
-	RXDMA_BUF = 14,
-	RXDMA_DST = 15,
-	RXDMA_MONITOR_BUF = 16,
-	RXDMA_MONITOR_STATUS = 17,
-	RXDMA_MONITOR_DST = 18,
-	RXDMA_MONITOR_DESC = 19,
-	DIR_BUF_RX_DMA_SRC = 20,
-#ifdef WLAN_FEATURE_CIF_CFR
-	WIFI_POS_SRC,
-#endif
-	MAX_RING_TYPES
-};
 
 #define HAL_SRNG_LMAC_RING 0x80000000
 /* SRNG flags passed in hal_srng_params.flags */
@@ -2751,7 +2712,9 @@ static inline QDF_STATUS hal_construct_shadow_regs(void *hal_soc)
  * Return: None
  */
 void hal_flush_reg_write_work(hal_soc_handle_t hal_handle);
+
 #else
 static inline void hal_flush_reg_write_work(hal_soc_handle_t hal_handle) { }
 #endif
+
 #endif /* _HAL_APIH_ */

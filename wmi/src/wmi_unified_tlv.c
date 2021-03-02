@@ -345,6 +345,8 @@ static const uint32_t pdev_param_tlv[] = {
 	[wmi_pdev_param_enable_mbssid_ctrl_frame] = WMI_PDEV_PARAM_ENABLE_MBSSID_CTRL_FRAME,
 	[wmi_pdev_param_set_mesh_params] = WMI_PDEV_PARAM_SET_MESH_PARAMS,
 	[wmi_pdev_param_mpd_userpd_ssr] = WMI_PDEV_PARAM_MPD_USERPD_SSR,
+	[wmi_pdev_param_low_latency_mode] =
+			WMI_PDEV_PARAM_LOW_LATENCY_SCHED_MODE,
 };
 
 /**
@@ -519,6 +521,10 @@ static const uint32_t vdev_param_tlv[] = {
 };
 #endif
 
+#ifndef WMI_PKTLOG_EVENT_CBF
+#define WMI_PKTLOG_EVENT_CBF 0x100
+#endif
+
 /**
  * Populate the pktlog event tlv array, where
  * the values are the FW WMI events, which host
@@ -537,6 +543,7 @@ static const uint32_t pktlog_event_tlv[] =  {
 	[WMI_HOST_PKTLOG_EVENT_STEERING_BIT] = 0,
 	[WMI_HOST_PKTLOG_EVENT_TX_DATA_CAPTURE_BIT] = 0,
 	[WMI_HOST_PKTLOG_EVENT_PHY_LOGGING_BIT] = WMI_PKTLOG_EVENT_PHY,
+	[WMI_HOST_PKTLOG_EVENT_CBF_BIT] = WMI_PKTLOG_EVENT_CBF,
 };
 
 /**
@@ -1611,7 +1618,8 @@ send_pdev_utf_cmd_tlv(wmi_unified_t wmi_handle,
 			       (chunk_len + sizeof(segHdrInfo)));
 		cmd += WMI_TLV_HDR_SIZE;
 		memcpy(cmd, &segHdrInfo, sizeof(segHdrInfo));   /* 4 bytes */
-		memcpy(&cmd[sizeof(segHdrInfo)], bufpos, chunk_len);
+		WMI_HOST_IF_MSG_COPY_CHAR_ARRAY(&cmd[sizeof(segHdrInfo)],
+						bufpos, chunk_len);
 
 		wmi_mtrace(WMI_PDEV_UTF_CMDID, NO_SESSION, 0);
 		ret = wmi_unified_cmd_send(wmi_handle, buf,
@@ -1875,10 +1883,10 @@ static QDF_STATUS send_wow_enable_cmd_tlv(wmi_unified_t wmi_handle,
 		cmd->pause_iface_config = WOW_IFACE_PAUSE_DISABLED;
 	cmd->flags = param->flags;
 
-	wmi_debug("suspend type: %s flag is 0x%x",
-		  cmd->pause_iface_config == WOW_IFACE_PAUSE_ENABLED ?
-		  "WOW_IFACE_PAUSE_ENABLED" : "WOW_IFACE_PAUSE_DISABLED",
-		  cmd->flags);
+	wmi_info("suspend type: %s flag is 0x%x",
+		 cmd->pause_iface_config == WOW_IFACE_PAUSE_ENABLED ?
+		 "WOW_IFACE_PAUSE_ENABLED" : "WOW_IFACE_PAUSE_DISABLED",
+		 cmd->flags);
 
 	wmi_mtrace(WMI_WOW_ENABLE_CMDID, NO_SESSION, 0);
 	ret = wmi_unified_cmd_send(wmi_handle, buf, len,
@@ -4780,8 +4788,9 @@ static void wmi_set_pno_channel_prediction(uint8_t *buf_ptr,
 
 /**
  * send_cp_stats_cmd_tlv() - Send cp stats wmi command
- * @buf_ptr:      Buffer passed by upper layers
- * @buf_len:	  Length of passed buffer by upper layer
+ * @wmi_handle: wmi handle
+ * @buf_ptr: Buffer passed by upper layers
+ * @buf_len: Length of passed buffer by upper layer
  *
  * Copy the buffer passed by the upper layers and send it
  * down to the firmware.
@@ -5109,6 +5118,60 @@ static QDF_STATUS send_pno_start_cmd_tlv(wmi_unified_t wmi_handle,
 	return QDF_STATUS_SUCCESS;
 }
 
+/**
+ * is_service_enabled_tlv() - Check if service enabled
+ * @param wmi_handle: wmi handle
+ * @param service_id: service identifier
+ *
+ * Return: 1 enabled, 0 disabled
+ */
+static bool is_service_enabled_tlv(wmi_unified_t wmi_handle,
+				   uint32_t service_id)
+{
+	struct wmi_soc *soc = wmi_handle->soc;
+
+	if (!soc->wmi_service_bitmap) {
+		wmi_err("WMI service bit map is not saved yet");
+		return false;
+	}
+
+	/* if wmi_service_enabled was received with extended2 bitmap,
+	 * use WMI_SERVICE_EXT2_IS_ENABLED to check the services.
+	 */
+	if (soc->wmi_ext2_service_bitmap) {
+		if (!soc->wmi_ext_service_bitmap) {
+			wmi_err("WMI service ext bit map is not saved yet");
+			return false;
+		}
+		return WMI_SERVICE_EXT2_IS_ENABLED(soc->wmi_service_bitmap,
+				soc->wmi_ext_service_bitmap,
+				soc->wmi_ext2_service_bitmap,
+				service_id);
+	}
+
+	if (service_id >= WMI_MAX_EXT_SERVICE) {
+		wmi_err("Service id %d but WMI ext2 service bitmap is NULL",
+			service_id);
+		return false;
+	}
+	/* if wmi_service_enabled was received with extended bitmap,
+	 * use WMI_SERVICE_EXT_IS_ENABLED to check the services.
+	 */
+	if (soc->wmi_ext_service_bitmap)
+		return WMI_SERVICE_EXT_IS_ENABLED(soc->wmi_service_bitmap,
+				soc->wmi_ext_service_bitmap,
+				service_id);
+
+	if (service_id >= WMI_MAX_SERVICE) {
+		wmi_err("Service id %d but WMI ext service bitmap is NULL",
+			service_id);
+		return false;
+	}
+
+	return WMI_SERVICE_IS_ENABLED(soc->wmi_service_bitmap,
+				service_id);
+}
+
 #ifdef WLAN_FEATURE_LINK_LAYER_STATS
 /**
  * send_process_ll_stats_clear_cmd_tlv() - clear link layer stats
@@ -5278,20 +5341,19 @@ static QDF_STATUS send_process_ll_stats_get_cmd_tlv(wmi_unified_t wmi_handle,
  *                                           station request
  * @wmi_handle: wmi handle
  * @get_req: ll stats get request command params
- * @is_always_over_qmi: flag to send stats request always over qmi
  *
  * Return: QDF_STATUS_SUCCESS for success or error code
  */
 static QDF_STATUS send_unified_ll_stats_get_sta_cmd_tlv(
 				wmi_unified_t wmi_handle,
-				const struct ll_stats_get_params *get_req,
-				bool is_always_over_qmi)
+				const struct ll_stats_get_params *get_req)
 {
 	wmi_request_unified_ll_get_sta_cmd_fixed_param *unified_cmd;
 	int32_t len;
 	wmi_buf_t buf;
 	void *buf_ptr;
 	QDF_STATUS ret;
+	bool is_ll_get_sta_stats_over_qmi;
 
 	len = sizeof(*unified_cmd);
 	buf = wmi_buf_alloc(wmi_handle, len);
@@ -5331,7 +5393,16 @@ static QDF_STATUS send_unified_ll_stats_get_sta_cmd_tlv(
 
 	wmi_mtrace(WMI_REQUEST_UNIFIED_LL_GET_STA_CMDID, get_req->vdev_id, 0);
 
-	if (is_always_over_qmi && wmi_is_qmi_stats_enabled(wmi_handle)) {
+	/**
+	 * FW support for LL_get_sta command. True represents the unified
+	 * ll_get_sta command should be sent over QMI always irrespective of
+	 * WOW state.
+	 */
+	is_ll_get_sta_stats_over_qmi = is_service_enabled_tlv(
+			wmi_handle,
+			WMI_SERVICE_UNIFIED_LL_GET_STA_OVER_QMI_SUPPORT);
+
+	if (is_ll_get_sta_stats_over_qmi) {
 		ret = wmi_unified_cmd_send_over_qmi(
 					wmi_handle, buf, len,
 					WMI_REQUEST_UNIFIED_LL_GET_STA_CMDID);
@@ -6239,6 +6310,8 @@ static inline void copy_custom_aggr_bitmap(
 					   param->rx_aggr_size_disable);
 	WMI_VDEV_CUSTOM_TX_AC_EN_SET(cmd->enable_bitmap,
 				     param->tx_ac_enable);
+	WMI_VDEV_CUSTOM_AGGR_256_BA_EN_SET(cmd->enable_bitmap,
+					   param->aggr_ba_enable);
 }
 
 /**
@@ -7137,6 +7210,9 @@ void wmi_copy_resource_config(wmi_resource_config *resource_cfg,
 			resource_cfg->flag1, 1);
 	if (tgt_res_cfg->cce_disable)
 		WMI_RSRC_CFG_FLAG_TCL_CCE_DISABLE_SET(resource_cfg->flag1, 1);
+	if (tgt_res_cfg->enable_pci_gen)
+		WMI_RSRC_CFG_FLAG_PCIE_GEN_SWITCH_CAPABLITY_SET(
+			resource_cfg->flag1, 1);
 	if (tgt_res_cfg->eapol_minrate_set) {
 		WMI_RSRC_CFG_FLAG_EAPOL_REKEY_MINRATE_SUPPORT_ENABLE_SET(
 			resource_cfg->flag1, 1);
@@ -7256,6 +7332,13 @@ void wmi_copy_resource_config(wmi_resource_config *resource_cfg,
 
 	WMI_RSRC_CFG_FLAG_VIDEO_OVER_WIFI_ENABLE_SET(
 		resource_cfg->flag1, tgt_res_cfg->carrier_vow_optimization);
+
+	if (tgt_res_cfg->is_sap_connected_d3wow_enabled)
+		WMI_RSRC_CFG_FLAGS2_IS_SAP_CONNECTED_D3WOW_ENABLED_SET(
+			resource_cfg->flags2, 1);
+	if (tgt_res_cfg->is_go_connected_d3wow_enabled)
+		WMI_RSRC_CFG_FLAGS2_IS_GO_CONNECTED_D3WOW_ENABLED_SET(
+			resource_cfg->flags2, 1);
 }
 
 /* copy_hw_mode_id_in_init_cmd() - Helper routine to copy hw_mode in init cmd
@@ -8708,60 +8791,6 @@ QDF_STATUS send_adfs_ocac_abort_cmd_tlv(wmi_unified_t wmi_handle,
 	return QDF_STATUS_SUCCESS;
 }
 #endif
-
-/**
- * is_service_enabled_tlv() - Check if service enabled
- * @param wmi_handle: wmi handle
- * @param service_id: service identifier
- *
- * Return: 1 enabled, 0 disabled
- */
-static bool is_service_enabled_tlv(wmi_unified_t wmi_handle,
-				   uint32_t service_id)
-{
-	struct wmi_soc *soc = wmi_handle->soc;
-
-	if (!soc->wmi_service_bitmap) {
-		wmi_err("WMI service bit map is not saved yet");
-		return false;
-	}
-
-	/* if wmi_service_enabled was received with extended2 bitmap,
-	 * use WMI_SERVICE_EXT2_IS_ENABLED to check the services.
-	 */
-	if (soc->wmi_ext2_service_bitmap) {
-		if (!soc->wmi_ext_service_bitmap) {
-			wmi_err("WMI service ext bit map is not saved yet");
-			return false;
-		}
-		return WMI_SERVICE_EXT2_IS_ENABLED(soc->wmi_service_bitmap,
-				soc->wmi_ext_service_bitmap,
-				soc->wmi_ext2_service_bitmap,
-				service_id);
-	}
-
-	if (service_id >= WMI_MAX_EXT_SERVICE) {
-		wmi_err("Service id %d but WMI ext2 service bitmap is NULL",
-			 service_id);
-		return false;
-	}
-	/* if wmi_service_enabled was received with extended bitmap,
-	 * use WMI_SERVICE_EXT_IS_ENABLED to check the services.
-	 */
-	if (soc->wmi_ext_service_bitmap)
-		return WMI_SERVICE_EXT_IS_ENABLED(soc->wmi_service_bitmap,
-				soc->wmi_ext_service_bitmap,
-				service_id);
-
-	if (service_id >= WMI_MAX_SERVICE) {
-		wmi_err("Service id %d but WMI ext service bitmap is NULL",
-			 service_id);
-		return false;
-	}
-
-	return WMI_SERVICE_IS_ENABLED(soc->wmi_service_bitmap,
-				service_id);
-}
 
 /**
  * init_cmd_send_tlv() - send initialization cmd to fw
@@ -14941,6 +14970,9 @@ struct wmi_ops tlv_ops =  {
 	.send_roam_scan_ch_list_req_cmd = send_roam_scan_ch_list_req_cmd_tlv,
 	.send_injector_config_cmd = send_injector_config_cmd_tlv,
 	.send_cp_stats_cmd = send_cp_stats_cmd_tlv,
+#ifdef WLAN_SUPPORT_INFRA_CTRL_PATH_STATS
+	.extract_infra_cp_stats = extract_infra_cp_stats_tlv,
+#endif /* WLAN_SUPPORT_INFRA_CTRL_PATH_STATS */
 	.extract_cp_stats_more_pending =
 				extract_cp_stats_more_pending_tlv,
 	.send_vdev_tsf_tstamp_action_cmd = send_vdev_tsf_tstamp_action_cmd_tlv,
@@ -15361,7 +15393,6 @@ static void wmi_populate_service_get_sta_in_ll_stats_req(uint32_t *wmi_service)
 	wmi_service[wmi_service_get_station_in_ll_stats_req] =
 				WMI_SERVICE_UNIFIED_LL_GET_STA_CMD_SUPPORT;
 }
-
 #else
 static void wmi_populate_service_get_sta_in_ll_stats_req(uint32_t *wmi_service)
 {
@@ -15691,6 +15722,8 @@ static void populate_tlv_service(uint32_t *wmi_service)
 			WMI_SERVICE_CFR_TA_RA_AS_FP_SUPPORT;
 	wmi_service[wmi_service_cfr_capture_count_support] =
 			WMI_SERVICE_CFR_CAPTURE_COUNT_SUPPORT;
+	wmi_service[wmi_service_ocv_support] =
+			WMI_SERVICE_OCV_SUPPORT;
 	wmi_service[wmi_service_ll_stats_per_chan_rx_tx_time] =
 			WMI_SERVICE_LL_STATS_PER_CHAN_RX_TX_TIME_SUPPORT;
 	wmi_service[wmi_service_thermal_multi_client_support] =
@@ -15718,6 +15751,17 @@ static void populate_tlv_service(uint32_t *wmi_service)
 	wmi_service[wmi_service_spectral_scan_disabled] =
 			WMI_SERVICE_SPECTRAL_SCAN_DISABLED;
 	wmi_populate_service_get_sta_in_ll_stats_req(wmi_service);
+
+	wmi_service[wmi_service_wapi_concurrency_supported] =
+			WMI_SERVICE_WAPI_CONCURRENCY_SUPPORTED;
+	wmi_service[wmi_service_sap_connected_d3_wow] =
+			WMI_SERVICE_SAP_CONNECTED_D3WOW;
+	wmi_service[wmi_service_go_connected_d3_wow] =
+			WMI_SERVICE_SAP_CONNECTED_D3WOW;
+	wmi_service[wmi_service_ext_tpc_reg_support] =
+			WMI_SERVICE_EXT_TPC_REG_SUPPORT;
+	wmi_service[wmi_service_ndi_txbf_support] =
+			WMI_SERVICE_NDI_TXBF_SUPPORT;
 }
 
 /**
