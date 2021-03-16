@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2020 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2018-2021 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -325,7 +325,7 @@
 #define WLAN_CFG_RX_SW_DESC_WEIGHT_SIZE_MIN 1
 #define WLAN_CFG_RX_SW_DESC_WEIGHT_SIZE_MAX 1
 #define WLAN_CFG_RX_SW_DESC_NUM_SIZE 4096
-#define WLAN_CFG_RX_SW_DESC_NUM_SIZE_MIN 4096
+#define WLAN_CFG_RX_SW_DESC_NUM_SIZE_MIN 1024
 #define WLAN_CFG_RX_SW_DESC_NUM_SIZE_MAX 4096
 
 /**
