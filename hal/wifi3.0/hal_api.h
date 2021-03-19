@@ -50,18 +50,6 @@
 #define SHADOW_REGISTER(x) 0
 #endif /* QCA_WIFI_QCA6390 || QCA_WIFI_QCA6490 || QCA_WIFI_QCA6750 */
 
-#define MAX_UNWINDOWED_ADDRESS 0x80000
-#if defined(QCA_WIFI_QCA6390) || defined(QCA_WIFI_QCA6490) || \
-    defined(QCA_WIFI_QCN9000) || defined(QCA_WIFI_QCA6750)
-#define WINDOW_ENABLE_BIT 0x40000000
-#else
-#define WINDOW_ENABLE_BIT 0x80000000
-#endif
-#define WINDOW_REG_ADDRESS 0x310C
-#define WINDOW_SHIFT 19
-#define WINDOW_VALUE_MASK 0x3F
-#define WINDOW_START MAX_UNWINDOWED_ADDRESS
-#define WINDOW_RANGE_MASK 0x7FFFF
 /*
  * BAR + 4K is always accessible, any access outside this
  * space requires force wake procedure.
@@ -290,7 +278,7 @@ static inline void hal_write32_mb(struct hal_soc *hal_soc, uint32_t offset,
 		ret = hif_force_wake_request(hal_soc->hif_handle);
 		if (ret) {
 			hal_err_rl("Wake up request failed");
-			qdf_check_state_before_panic();
+			qdf_check_state_before_panic(__func__, __LINE__);
 			return;
 		}
 	}
@@ -315,7 +303,7 @@ static inline void hal_write32_mb(struct hal_soc *hal_soc, uint32_t offset,
 		ret = hif_force_wake_release(hal_soc->hif_handle);
 		if (ret) {
 			hal_err("Wake up release failed");
-			qdf_check_state_before_panic();
+			qdf_check_state_before_panic(__func__, __LINE__);
 			return;
 		}
 	}
@@ -350,7 +338,7 @@ static inline void hal_write32_mb_confirm(struct hal_soc *hal_soc,
 		ret = hif_force_wake_request(hal_soc->hif_handle);
 		if (ret) {
 			hal_err("Wake up request failed");
-			qdf_check_state_before_panic();
+			qdf_check_state_before_panic(__func__, __LINE__);
 			return;
 		}
 	}
@@ -385,7 +373,7 @@ static inline void hal_write32_mb_confirm(struct hal_soc *hal_soc,
 		ret = hif_force_wake_release(hal_soc->hif_handle);
 		if (ret) {
 			hal_err("Wake up release failed");
-			qdf_check_state_before_panic();
+			qdf_check_state_before_panic(__func__, __LINE__);
 			return;
 		}
 	}
@@ -538,7 +526,7 @@ uint32_t hal_read32_mb(struct hal_soc *hal_soc, uint32_t offset)
 	if ((!hal_soc->init_phase) &&
 	    hif_force_wake_request(hal_soc->hif_handle)) {
 		hal_err("Wake up request failed");
-		qdf_check_state_before_panic();
+		qdf_check_state_before_panic(__func__, __LINE__);
 		return 0;
 	}
 
@@ -561,7 +549,7 @@ uint32_t hal_read32_mb(struct hal_soc *hal_soc, uint32_t offset)
 	if ((!hal_soc->init_phase) &&
 	    hif_force_wake_release(hal_soc->hif_handle)) {
 		hal_err("Wake up release failed");
-		qdf_check_state_before_panic();
+		qdf_check_state_before_panic(__func__, __LINE__);
 		return 0;
 	}
 

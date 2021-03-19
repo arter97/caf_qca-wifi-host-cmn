@@ -242,7 +242,7 @@ static QDF_STATUS cm_ser_connect_req(struct wlan_objmgr_pdev *pdev,
 	cmd.is_high_priority = false;
 	cmd.cmd_timeout_duration = cm_ctx->connect_timeout;
 	cmd.vdev = cm_ctx->vdev;
-	cmd.is_blocking = cm_ser_get_blocking_cmd();
+	cmd.is_blocking = true;
 
 	ser_cmd_status = wlan_serialization_request(&cmd);
 	switch (ser_cmd_status) {
@@ -948,8 +948,8 @@ static QDF_STATUS cm_connect_get_candidates(struct wlan_objmgr_pdev *pdev,
 	return QDF_STATUS_SUCCESS;
 }
 
-#ifdef WLAN_FEATURE_INTERFACE_MGR
-static QDF_STATUS cm_validate_candidate(struct cnx_mgr *cm_ctx,
+static
+QDF_STATUS cm_if_mgr_validate_candidate(struct cnx_mgr *cm_ctx,
 					struct scan_cache_entry *scan_entry)
 {
 	struct if_mgr_event_data event_data = {0};
@@ -964,7 +964,7 @@ static QDF_STATUS cm_validate_candidate(struct cnx_mgr *cm_ctx,
 }
 
 static QDF_STATUS
-cm_inform_if_mgr_connect_complete(struct wlan_objmgr_vdev *vdev,
+cm_if_mgr_inform_connect_complete(struct wlan_objmgr_vdev *vdev,
 				  QDF_STATUS connect_status)
 {
 	struct if_mgr_event_data *connect_complete;
@@ -982,33 +982,10 @@ cm_inform_if_mgr_connect_complete(struct wlan_objmgr_vdev *vdev,
 }
 
 static QDF_STATUS
-cm_inform_if_mgr_connect_start(struct wlan_objmgr_vdev *vdev)
+cm_if_mgr_inform_connect_start(struct wlan_objmgr_vdev *vdev)
 {
 	return if_mgr_deliver_event(vdev, WLAN_IF_MGR_EV_CONNECT_START, NULL);
 }
-
-#else
-static inline
-QDF_STATUS cm_validate_candidate(struct cnx_mgr *cm_ctx,
-				 struct scan_cache_entry *scan_entry)
-{
-	return QDF_STATUS_SUCCESS;
-}
-
-static inline QDF_STATUS
-cm_inform_if_mgr_connect_complete(struct wlan_objmgr_vdev *vdev,
-				  QDF_STATUS connect_status)
-{
-	return QDF_STATUS_SUCCESS;
-}
-
-static inline QDF_STATUS
-cm_inform_if_mgr_connect_start(struct wlan_objmgr_vdev *vdev)
-{
-	return QDF_STATUS_SUCCESS;
-}
-
-#endif
 
 QDF_STATUS
 cm_handle_connect_req_in_non_init_state(struct cnx_mgr *cm_ctx,
@@ -1115,7 +1092,7 @@ QDF_STATUS cm_connect_start(struct cnx_mgr *cm_ctx,
 	 * this is called from Scan for ssid
 	 */
 	if (!cm_req->scan_id) {
-		cm_inform_if_mgr_connect_start(cm_ctx->vdev);
+		cm_if_mgr_inform_connect_start(cm_ctx->vdev);
 		status = mlme_cm_connect_start_ind(cm_ctx->vdev, &cm_req->req);
 		if (QDF_IS_STATUS_ERROR(status)) {
 			reason = CM_NO_CANDIDATE_FOUND;
@@ -1217,7 +1194,7 @@ static QDF_STATUS cm_get_valid_candidate(struct cnx_mgr *cm_ctx,
 				   cur_node, &next_node);
 		scan_node = qdf_container_of(cur_node, struct scan_cache_node,
 					     node);
-		status = cm_validate_candidate(cm_ctx, scan_node->entry);
+		status = cm_if_mgr_validate_candidate(cm_ctx, scan_node->entry);
 		if (QDF_IS_STATUS_SUCCESS(status)) {
 			new_candidate = scan_node;
 			break;
@@ -1463,7 +1440,7 @@ cm_resume_connect_after_peer_create(struct cnx_mgr *cm_ctx, wlan_cm_id *cm_id)
 	QDF_STATUS status;
 	struct security_info *neg_sec_info;
 	uint16_t rsn_caps;
-	uint8_t country_code[REG_ALPHA2_LEN + 1];
+	uint8_t country_code[REG_ALPHA2_LEN + 1] = {0};
 	struct wlan_objmgr_psoc *psoc;
 
 	psoc = wlan_pdev_get_psoc(wlan_vdev_get_pdev(cm_ctx->vdev));
@@ -1604,7 +1581,7 @@ QDF_STATUS cm_connect_complete(struct cnx_mgr *cm_ctx,
 
 	mlme_cm_connect_complete_ind(cm_ctx->vdev, resp);
 	mlme_cm_osif_connect_complete(cm_ctx->vdev, resp);
-	cm_inform_if_mgr_connect_complete(cm_ctx->vdev, resp->connect_status);
+	cm_if_mgr_inform_connect_complete(cm_ctx->vdev, resp->connect_status);
 	cm_inform_blm_connect_complete(cm_ctx->vdev, resp);
 
 	/* Update scan entry in case connect is success or fails with bssid */
@@ -1626,7 +1603,7 @@ QDF_STATUS cm_connect_complete(struct cnx_mgr *cm_ctx,
 	mlme_debug(CM_PREFIX_FMT,
 		   CM_PREFIX_REF(wlan_vdev_get_id(cm_ctx->vdev),
 				 resp->cm_id));
-	cm_remove_cmd(cm_ctx, resp->cm_id);
+	cm_remove_cmd(cm_ctx, &resp->cm_id);
 
 	return QDF_STATUS_SUCCESS;
 }
@@ -1853,10 +1830,10 @@ cm_allocate_and_copy_ies_and_keys(struct wlan_cm_connect_req *target,
 				  struct wlan_cm_connect_req *source)
 {
 	/* Reset the copied pointers of target */
-	source->assoc_ie.ptr = NULL;
-	source->crypto.wep_keys.key = NULL;
-	source->crypto.wep_keys.seq = NULL;
-	source->scan_ie.ptr = NULL;
+	target->assoc_ie.ptr = NULL;
+	target->crypto.wep_keys.key = NULL;
+	target->crypto.wep_keys.seq = NULL;
+	target->scan_ie.ptr = NULL;
 
 	if (source->scan_ie.ptr) {
 		target->scan_ie.ptr = qdf_mem_malloc(source->scan_ie.len);

@@ -419,7 +419,7 @@ static void osif_cm_free_connect_req(struct wlan_cm_connect_req *connect_req)
 {
 	if (connect_req->scan_ie.ptr) {
 		qdf_mem_free(connect_req->scan_ie.ptr);
-		connect_req->assoc_ie.ptr = NULL;
+		connect_req->scan_ie.ptr = NULL;
 	}
 
 	if (connect_req->assoc_ie.ptr) {
@@ -494,8 +494,9 @@ int osif_cm_connect(struct net_device *dev, struct wlan_objmgr_vdev *vdev,
 
 	if (req->channel)
 		connect_req->chan_freq = req->channel->center_freq;
-	else
-		connect_req->chan_freq = 0;
+
+	if (req->channel_hint)
+		connect_req->chan_freq_hint = req->channel_hint->center_freq;
 
 	status = osif_cm_set_crypto_params(connect_req, req);
 	if (QDF_IS_STATUS_ERROR(status))

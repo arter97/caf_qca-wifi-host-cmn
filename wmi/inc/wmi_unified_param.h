@@ -5085,6 +5085,7 @@ typedef enum {
 	wmi_service_5dot9_ghz_support,
 	wmi_service_cfr_ta_ra_as_fp_support,
 	wmi_service_cfr_capture_count_support,
+	wmi_service_ocv_support,
 	wmi_service_ll_stats_per_chan_rx_tx_time,
 	wmi_service_thermal_multi_client_support,
 	wmi_service_mbss_param_in_vdev_start_support,
@@ -5106,6 +5107,7 @@ typedef enum {
 	wmi_service_sap_connected_d3_wow,
 	wmi_service_go_connected_d3_wow,
 	wmi_service_ext_tpc_reg_support,
+	wmi_service_ndi_txbf_support,
 	wmi_services_max,
 } wmi_conv_service_ids;
 #define WMI_SERVICE_UNAVAILABLE 0xFFFF

@@ -27,9 +27,7 @@
 #include "wlan_cm_sm.h"
 #include <include/wlan_mlme_cmn.h>
 #include <wlan_crypto_global_api.h>
-#ifdef WLAN_FEATURE_INTERFACE_MGR
 #include <wlan_if_mgr_api.h>
-#endif
 #ifdef WLAN_CM_USE_SPINLOCK
 #include <scheduler_api.h>
 #endif
@@ -436,10 +434,17 @@ void cm_send_disconnect_resp(struct cnx_mgr *cm_ctx, wlan_cm_id cm_id);
  *
  * Return: bool
  */
+#ifdef CONN_MGR_ADV_FEATURE
 static inline bool cm_ser_get_blocking_cmd(void)
 {
 	return true;
 }
+#else
+static inline bool cm_ser_get_blocking_cmd(void)
+{
+	return false;
+}
+#endif
 
 /**
  * cm_get_cm_id() - Get unique cm id for connect/disconnect request
@@ -672,7 +677,7 @@ void cm_flush_pending_request(struct cnx_mgr *cm_ctx, uint32_t prefix,
  *
  * Return: void
  */
-void cm_remove_cmd(struct cnx_mgr *cm_ctx, wlan_cm_id cm_id);
+void cm_remove_cmd(struct cnx_mgr *cm_ctx, wlan_cm_id *cm_id);
 
 /**
  * cm_add_req_to_list_and_indicate_osif() - Add the request to request list in
