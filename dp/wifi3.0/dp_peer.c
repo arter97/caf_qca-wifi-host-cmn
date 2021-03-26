@@ -3762,7 +3762,7 @@ QDF_STATUS dp_peer_ext_stats_ctx_alloc(struct dp_soc *soc,
 	uint8_t tid, ctx_id;
 
 	if (!soc || !peer) {
-		dp_warn("Null soc%x or peer%x", soc, peer);
+		dp_warn("Null soc %p or peer %p", soc, peer);
 		return QDF_STATUS_E_INVAL;
 	}
 

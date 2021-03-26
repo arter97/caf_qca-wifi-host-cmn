@@ -394,7 +394,7 @@ static QDF_STATUS dp_mon_filter_check_co_exist(struct dp_pdev *pdev)
 			  FL("mcopy mode can't exist with modes\n"
 			     "Monitor Mode:%d\n"
 			     "Smart Monitor Mode:%d"),
-			      pdev->monitor_vdev,
+			      pdev->monitor_configured,
 			      pdev->neighbour_peers_added);
 		return QDF_STATUS_E_FAILURE;
 	}
