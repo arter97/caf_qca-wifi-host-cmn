@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2020 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2018-2021 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -247,9 +247,10 @@ struct vdev_mlme_mgmt_ap {
 
 /**
  * struct vdev_mlme_mgmt_sta - sta specific vdev mlme mgmt cfg
- * @.
+ * @he_mcs_12_13_map: map to indicate mcs12/13 caps of peer&dut
  */
 struct vdev_mlme_mgmt_sta {
+	uint16_t he_mcs_12_13_map;
 };
 
 /**
@@ -438,6 +439,7 @@ enum vdev_start_resp_type {
  *                                      request command
  * @mlme_vdev_start_continue:           callback to initiate operations on
  *                                      LMAC/FW start response
+ * @mlme_vdev_sta_conn_start:           callback to initiate STA connection
  * @mlme_vdev_up_send:                  callback to initiate actions of VDEV
  *                                      MLME up operation
  * @mlme_vdev_notify_up_complete:       callback to notify VDEV MLME on moving
@@ -460,6 +462,9 @@ enum vdev_start_resp_type {
  * @mlme_vdev_is_newchan_no_cac:        callback to check CAC is required
  * @mlme_vdev_ext_peer_delete_all_rsp:  callback to initiate actions for
  *                                      vdev mlme peer delete all response
+ * @mlme_vdev_dfs_cac_wait_notify:      callback to notify about CAC state
+ * @mlme_vdev_csa_complete:             callback to indicate CSA complete
+ * @mlme_vdev_sta_disconn_start:        callback to initiate STA disconnection
  */
 struct vdev_mlme_ops {
 	QDF_STATUS (*mlme_vdev_validate_basic_params)(
@@ -531,6 +536,14 @@ struct vdev_mlme_ops {
 	QDF_STATUS (*mlme_vdev_ext_peer_delete_all_rsp)(
 				struct vdev_mlme_obj *vdev_mlme,
 				struct peer_delete_all_response *rsp);
+	QDF_STATUS (*mlme_vdev_dfs_cac_wait_notify)(
+				struct vdev_mlme_obj *vdev_mlme);
+	QDF_STATUS (*mlme_vdev_csa_complete)(
+				struct vdev_mlme_obj *vdev_mlme);
+	QDF_STATUS (*mlme_vdev_sta_disconn_start)(
+				struct vdev_mlme_obj *vdev_mlme,
+				uint16_t event_data_len, void *event_data);
+
 };
 
 /**
@@ -544,6 +557,7 @@ struct vdev_mlme_ops {
  * @vdev: Pointer to vdev objmgr
  * @ops:                  VDEV MLME callback table
  * @ext_vdev_ptr:         VDEV MLME legacy pointer
+ * @reg_tpc_obj:          Regulatory transmit power info
  * @vdev_rt: VDEV response timer
  * @vdev_wakelock:  vdev wakelock sub structure
  */
@@ -561,6 +575,7 @@ struct vdev_mlme_obj {
 	struct wlan_objmgr_vdev *vdev;
 	struct vdev_mlme_ops *ops;
 	mlme_vdev_ext_t *ext_vdev_ptr;
+	struct reg_tpc_power_info reg_tpc_obj;
 };
 
 /**
@@ -914,4 +929,61 @@ static inline bool wlan_vdev_mlme_is_special_vdev(
 
 	return vdev_mlme->mgmt.generic.special_vdev_mode;
 }
+
+#ifdef WLAN_FEATURE_11AX
+/**
+ * wlan_vdev_mlme_set_he_mcs_12_13_map() - set he mcs12/13 map
+ * @vdev: VDEV object
+ * @he_mcs_12_13_map: he mcs12/13 map from self&peer
+ *
+ * API to set he mcs 12/13 map
+ *
+ * Return: void
+ */
+static inline void wlan_vdev_mlme_set_he_mcs_12_13_map(
+				struct wlan_objmgr_vdev *vdev,
+				uint16_t he_mcs_12_13_map)
+{
+	struct vdev_mlme_obj *vdev_mlme;
+
+	vdev_mlme = wlan_vdev_mlme_get_cmpt_obj(vdev);
+	if (!vdev_mlme)
+		return;
+
+	vdev_mlme->mgmt.sta.he_mcs_12_13_map = he_mcs_12_13_map;
+}
+
+/**
+ * wlan_vdev_mlme_get_he_mcs_12_13_map() - get he mcs12/13 map
+ * @vdev: VDEV object
+ *
+ * API to get he mcs12/13 support capability
+ *
+ * Return:
+ * @he_mcs_12_13_map: he mcs12/13 map
+ */
+static inline uint16_t wlan_vdev_mlme_get_he_mcs_12_13_map(
+				struct wlan_objmgr_vdev *vdev)
+{
+	struct vdev_mlme_obj *vdev_mlme;
+
+	vdev_mlme = wlan_vdev_mlme_get_cmpt_obj(vdev);
+	if (!vdev_mlme)
+		return 0;
+
+	return vdev_mlme->mgmt.sta.he_mcs_12_13_map;
+}
+#else
+static inline void wlan_vdev_mlme_set_he_mcs_12_13_map(
+				struct wlan_objmgr_vdev *vdev,
+				uint16_t he_mcs_12_13_map)
+{
+}
+
+static inline uint16_t wlan_vdev_mlme_get_he_mcs_12_13_map(
+				struct wlan_objmgr_vdev *vdev)
+{
+	return 0;
+}
+#endif
 #endif

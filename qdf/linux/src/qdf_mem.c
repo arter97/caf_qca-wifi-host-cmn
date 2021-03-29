@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2020 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2014-2021 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -28,7 +28,6 @@
 #include "qdf_mc_timer.h"
 #include "qdf_module.h"
 #include <qdf_trace.h>
-#include "qdf_atomic.h"
 #include "qdf_str.h"
 #include "qdf_talloc.h"
 #include <linux/debugfs.h>
@@ -60,11 +59,35 @@ static bool is_initial_mem_debug_disabled;
  * @kmalloc: total kmalloc allocations
  * @dma: total dma allocations
  * @skb: total skb allocations
+ * @skb_total: total skb allocations in host driver
+ * @dp_tx_skb: total Tx skb allocations in datapath
+ * @dp_rx_skb: total Rx skb allocations in datapath
+ * @skb_mem_max: high watermark for skb allocations
+ * @dp_tx_skb_mem_max: high watermark for Tx DP skb allocations
+ * @dp_rx_skb_mem_max: high watermark for Rx DP skb allocations
+ * @dp_tx_skb_count: DP Tx buffer count
+ * @dp_tx_skb_count_max: High watermark for DP Tx buffer count
+ * @dp_rx_skb_count: DP Rx buffer count
+ * @dp_rx_skb_count_max: High watermark for DP Rx buffer count
+ * @tx_descs_outstanding: Current pending Tx descs count
+ * @tx_descs_max: High watermark for pending Tx descs count
  */
 static struct __qdf_mem_stat {
 	qdf_atomic_t kmalloc;
 	qdf_atomic_t dma;
 	qdf_atomic_t skb;
+	qdf_atomic_t skb_total;
+	qdf_atomic_t dp_tx_skb;
+	qdf_atomic_t dp_rx_skb;
+	int32_t skb_mem_max;
+	int32_t dp_tx_skb_mem_max;
+	int32_t dp_rx_skb_mem_max;
+	qdf_atomic_t dp_tx_skb_count;
+	int32_t dp_tx_skb_count_max;
+	qdf_atomic_t dp_rx_skb_count;
+	int32_t dp_rx_skb_count_max;
+	qdf_atomic_t tx_descs_outstanding;
+	int32_t tx_descs_max;
 } qdf_mem_stat;
 
 #ifdef MEMORY_DEBUG
@@ -88,27 +111,6 @@ enum list_type {
 struct major_alloc_priv {
 	enum list_type type;
 	uint32_t threshold;
-};
-
-static struct major_alloc_priv mem_priv = {
-	/* List type set to mem */
-	LIST_TYPE_MEM,
-	/* initial threshold to list APIs which allocates mem >= 50 times */
-	50
-};
-
-static struct major_alloc_priv dma_priv = {
-	/* List type set to DMA */
-	LIST_TYPE_DMA,
-	/* initial threshold to list APIs which allocates dma >= 50 times */
-	50
-};
-
-static struct major_alloc_priv nbuf_priv = {
-	/* List type set to NBUF */
-	LIST_TYPE_NBUF,
-	/* initial threshold to list APIs which allocates nbuf >= 50 times */
-	50
 };
 
 static qdf_list_t qdf_mem_domains[QDF_DEBUG_DOMAIN_COUNT];
@@ -302,41 +304,6 @@ qdf_mem_header_assert_valid(struct qdf_mem_header *header,
 
 	QDF_MEMDEBUG_PANIC("Fatal memory error detected @ %s:%d", func, line);
 }
-#endif /* MEMORY_DEBUG */
-
-u_int8_t prealloc_disabled = 1;
-qdf_declare_param(prealloc_disabled, byte);
-qdf_export_symbol(prealloc_disabled);
-
-#if defined WLAN_DEBUGFS
-
-/* Debugfs root directory for qdf_mem */
-static struct dentry *qdf_mem_debugfs_root;
-
-#ifdef MEMORY_DEBUG
-static int qdf_err_printer(void *priv, const char *fmt, ...)
-{
-	va_list args;
-
-	va_start(args, fmt);
-	QDF_VTRACE(QDF_MODULE_ID_QDF, QDF_TRACE_LEVEL_ERROR, (char *)fmt, args);
-	va_end(args);
-
-	return 0;
-}
-
-static int seq_printf_printer(void *priv, const char *fmt, ...)
-{
-	struct seq_file *file = priv;
-	va_list args;
-
-	va_start(args, fmt);
-	seq_vprintf(file, fmt, args);
-	seq_puts(file, "\n");
-	va_end(args);
-
-	return 0;
-}
 
 /**
  * struct __qdf_mem_info - memory statistics
@@ -383,81 +350,6 @@ static void qdf_mem_debug_print_header(qdf_abstract_print print,
 	      " count    size     total    filename     caller    timestamp");
 	print(print_priv,
 	      "--------------------------------------------------------------");
-}
-
-/**
- * qdf_mem_meta_table_print() - memory metadata table print logic
- * @table: the memory metadata table to print
- * @print: the print adapter function
- * @print_priv: the private data to be consumed by @print
- * @threshold: the threshold value set by user to list top allocations
- *
- * Return: None
- */
-static void qdf_mem_meta_table_print(struct __qdf_mem_info *table,
-				     qdf_abstract_print print,
-				     void *print_priv,
-				     uint32_t threshold)
-{
-	int i;
-	char debug_str[QDF_DEBUG_STRING_SIZE];
-	size_t len = 0;
-	char *debug_prefix = "WLAN_BUG_RCA: memory leak detected";
-
-	len += qdf_scnprintf(debug_str, sizeof(debug_str) - len,
-			     "%s", debug_prefix);
-
-	for (i = 0; i < QDF_MEM_STAT_TABLE_SIZE; i++) {
-		if (!table[i].count)
-			break;
-
-		print(print_priv,
-		      "%6u x %5u = %7uB @ %s:%u   %pS %llu",
-		      table[i].count,
-		      table[i].size,
-		      table[i].count * table[i].size,
-		      table[i].func,
-		      table[i].line, table[i].caller,
-		      table[i].time);
-		len += qdf_scnprintf(debug_str + len,
-				     sizeof(debug_str) - len,
-				     " @ %s:%u %pS",
-				     table[i].func,
-				     table[i].line,
-				     table[i].caller);
-	}
-	print(print_priv, "%s", debug_str);
-}
-
-/**
- * qdf_print_major_alloc() - memory metadata table print logic
- * @table: the memory metadata table to print
- * @print: the print adapter function
- * @print_priv: the private data to be consumed by @print
- * @threshold: the threshold value set by uset to list top allocations
- *
- * Return: None
- */
-static void qdf_print_major_alloc(struct __qdf_mem_info *table,
-				  qdf_abstract_print print,
-				  void *print_priv,
-				  uint32_t threshold)
-{
-	int i;
-
-	for (i = 0; i < QDF_MEM_STAT_TABLE_SIZE; i++) {
-		if (!table[i].count)
-			break;
-		if (table[i].count >= threshold)
-			print(print_priv,
-			      "%6u x %5u = %7uB @ %s:%u   %pS %llu",
-			      table[i].count,
-			      table[i].size,
-			      table[i].count * table[i].size,
-			      table[i].func,
-			      table[i].line, table[i].caller,
-			      table[i].time);
-	}
 }
 
 /**
@@ -542,6 +434,117 @@ static void qdf_mem_domain_print(qdf_list_t *domain,
 	qdf_spin_unlock(&qdf_mem_list_lock);
 
 	(*mem_print)(table, print, print_priv, threshold);
+}
+
+/**
+ * qdf_mem_meta_table_print() - memory metadata table print logic
+ * @table: the memory metadata table to print
+ * @print: the print adapter function
+ * @print_priv: the private data to be consumed by @print
+ * @threshold: the threshold value set by user to list top allocations
+ *
+ * Return: None
+ */
+static void qdf_mem_meta_table_print(struct __qdf_mem_info *table,
+				     qdf_abstract_print print,
+				     void *print_priv,
+				     uint32_t threshold)
+{
+	int i;
+	char debug_str[QDF_DEBUG_STRING_SIZE];
+	size_t len = 0;
+	char *debug_prefix = "WLAN_BUG_RCA: memory leak detected";
+
+	len += qdf_scnprintf(debug_str, sizeof(debug_str) - len,
+			     "%s", debug_prefix);
+
+	for (i = 0; i < QDF_MEM_STAT_TABLE_SIZE; i++) {
+		if (!table[i].count)
+			break;
+
+		print(print_priv,
+		      "%6u x %5u = %7uB @ %s:%u   %pS %llu",
+		      table[i].count,
+		      table[i].size,
+		      table[i].count * table[i].size,
+		      table[i].func,
+		      table[i].line, table[i].caller,
+		      table[i].time);
+		len += qdf_scnprintf(debug_str + len,
+				     sizeof(debug_str) - len,
+				     " @ %s:%u %pS",
+				     table[i].func,
+				     table[i].line,
+				     table[i].caller);
+	}
+	print(print_priv, "%s", debug_str);
+}
+
+static int qdf_err_printer(void *priv, const char *fmt, ...)
+{
+	va_list args;
+
+	va_start(args, fmt);
+	QDF_VTRACE(QDF_MODULE_ID_QDF, QDF_TRACE_LEVEL_ERROR, (char *)fmt, args);
+	va_end(args);
+
+	return 0;
+}
+
+#endif /* MEMORY_DEBUG */
+
+u_int8_t prealloc_disabled = 1;
+qdf_declare_param(prealloc_disabled, byte);
+qdf_export_symbol(prealloc_disabled);
+
+#if defined WLAN_DEBUGFS
+
+/* Debugfs root directory for qdf_mem */
+static struct dentry *qdf_mem_debugfs_root;
+
+#ifdef MEMORY_DEBUG
+static int seq_printf_printer(void *priv, const char *fmt, ...)
+{
+	struct seq_file *file = priv;
+	va_list args;
+
+	va_start(args, fmt);
+	seq_vprintf(file, fmt, args);
+	seq_puts(file, "\n");
+	va_end(args);
+
+	return 0;
+}
+
+/**
+ * qdf_print_major_alloc() - memory metadata table print logic
+ * @table: the memory metadata table to print
+ * @print: the print adapter function
+ * @print_priv: the private data to be consumed by @print
+ * @threshold: the threshold value set by uset to list top allocations
+ *
+ * Return: None
+ */
+static void qdf_print_major_alloc(struct __qdf_mem_info *table,
+				  qdf_abstract_print print,
+				  void *print_priv,
+				  uint32_t threshold)
+{
+	int i;
+
+	for (i = 0; i < QDF_MEM_STAT_TABLE_SIZE; i++) {
+		if (!table[i].count)
+			break;
+		if (table[i].count >= threshold)
+			print(print_priv,
+			      "%6u x %5u = %7uB @ %s:%u   %pS %llu",
+			      table[i].count,
+			      table[i].size,
+			      table[i].count * table[i].size,
+			      table[i].func,
+			      table[i].line, table[i].caller,
+			      table[i].time);
+	}
 }
 
 /**
@@ -911,6 +914,27 @@ static const struct file_operations fops_qdf_nbuf_major_allocs = {
 	.write = qdf_major_nbuf_alloc_set_threshold,
 };
 
+static struct major_alloc_priv mem_priv = {
+	/* List type set to mem */
+	LIST_TYPE_MEM,
+	/* initial threshold to list APIs which allocates mem >= 50 times */
+	50
+};
+
+static struct major_alloc_priv dma_priv = {
+	/* List type set to DMA */
+	LIST_TYPE_DMA,
+	/* initial threshold to list APIs which allocates dma >= 50 times */
+	50
+};
+
+static struct major_alloc_priv nbuf_priv = {
+	/* List type set to NBUF */
+	LIST_TYPE_NBUF,
+	/* initial threshold to list APIs which allocates nbuf >= 50 times */
+	50
+};
+
 static QDF_STATUS qdf_mem_debug_debugfs_init(void)
 {
 	if (is_initial_mem_debug_disabled)
@@ -1043,6 +1067,83 @@ void qdf_mem_skb_inc(qdf_size_t size)
 void qdf_mem_skb_dec(qdf_size_t size)
 {
 	qdf_atomic_sub(size, &qdf_mem_stat.skb);
+}
+
+void qdf_mem_skb_total_inc(qdf_size_t size)
+{
+	int32_t skb_mem_max = 0;
+
+	qdf_atomic_add(size, &qdf_mem_stat.skb_total);
+	skb_mem_max = qdf_atomic_read(&qdf_mem_stat.skb_total);
+	if (qdf_mem_stat.skb_mem_max < skb_mem_max)
+		qdf_mem_stat.skb_mem_max = skb_mem_max;
+}
+
+void qdf_mem_skb_total_dec(qdf_size_t size)
+{
+	qdf_atomic_sub(size, &qdf_mem_stat.skb_total);
+}
+
+void qdf_mem_dp_tx_skb_inc(qdf_size_t size)
+{
+	int32_t curr_dp_tx_skb_mem_max = 0;
+
+	qdf_atomic_add(size, &qdf_mem_stat.dp_tx_skb);
+	curr_dp_tx_skb_mem_max = qdf_atomic_read(&qdf_mem_stat.dp_tx_skb);
+	if (qdf_mem_stat.dp_tx_skb_mem_max < curr_dp_tx_skb_mem_max)
+		qdf_mem_stat.dp_tx_skb_mem_max = curr_dp_tx_skb_mem_max;
+}
+
+void qdf_mem_dp_tx_skb_dec(qdf_size_t size)
+{
+	qdf_atomic_sub(size, &qdf_mem_stat.dp_tx_skb);
+}
+
+void qdf_mem_dp_rx_skb_inc(qdf_size_t size)
+{
+	int32_t curr_dp_rx_skb_mem_max = 0;
+
+	qdf_atomic_add(size, &qdf_mem_stat.dp_rx_skb);
+	curr_dp_rx_skb_mem_max = qdf_atomic_read(&qdf_mem_stat.dp_rx_skb);
+	if (qdf_mem_stat.dp_rx_skb_mem_max < curr_dp_rx_skb_mem_max)
+		qdf_mem_stat.dp_rx_skb_mem_max = curr_dp_rx_skb_mem_max;
+}
+
+void qdf_mem_dp_rx_skb_dec(qdf_size_t size)
+{
+	qdf_atomic_sub(size, &qdf_mem_stat.dp_rx_skb);
+}
+
+void qdf_mem_dp_tx_skb_cnt_inc(void)
+{
+	int32_t curr_dp_tx_skb_count_max = 0;
+
+	qdf_atomic_add(1, &qdf_mem_stat.dp_tx_skb_count);
+	curr_dp_tx_skb_count_max =
+		qdf_atomic_read(&qdf_mem_stat.dp_tx_skb_count);
+	if (qdf_mem_stat.dp_tx_skb_count_max < curr_dp_tx_skb_count_max)
+		qdf_mem_stat.dp_tx_skb_count_max = curr_dp_tx_skb_count_max;
+}
+
+void qdf_mem_dp_tx_skb_cnt_dec(void)
+{
+	qdf_atomic_sub(1, &qdf_mem_stat.dp_tx_skb_count);
+}
+
+void qdf_mem_dp_rx_skb_cnt_inc(void)
+{
+	int32_t curr_dp_rx_skb_count_max = 0;
+
+	qdf_atomic_add(1, &qdf_mem_stat.dp_rx_skb_count);
+	curr_dp_rx_skb_count_max =
+		qdf_atomic_read(&qdf_mem_stat.dp_rx_skb_count);
+	if (qdf_mem_stat.dp_rx_skb_count_max < curr_dp_rx_skb_count_max)
+		qdf_mem_stat.dp_rx_skb_count_max = curr_dp_rx_skb_count_max;
+}
+
+void qdf_mem_dp_rx_skb_cnt_dec(void)
+{
+	qdf_atomic_sub(1, &qdf_mem_stat.dp_rx_skb_count);
 }
 #endif
 
@@ -1679,6 +1780,12 @@ static void qdf_mem_debug_exit(void) {}
 void *qdf_mem_malloc_atomic_fl(size_t size, const char *func, uint32_t line)
 {
 	void *ptr;
+
+	if (!size || size > QDF_MEM_MAX_MALLOC) {
+		qdf_nofl_err("Cannot malloc %zu bytes @ %s:%d", size, func,
+			     line);
+		return NULL;
+	}
 
 	ptr = qdf_mem_prealloc_get(size);
 	if (ptr)
@@ -2542,4 +2649,109 @@ int32_t qdf_skb_mem_stats_read(void)
 }
 
 qdf_export_symbol(qdf_skb_mem_stats_read);
+
+int32_t qdf_skb_total_mem_stats_read(void)
+{
+	return qdf_atomic_read(&qdf_mem_stat.skb_total);
+}
+
+qdf_export_symbol(qdf_skb_total_mem_stats_read);
+
+int32_t qdf_skb_max_mem_stats_read(void)
+{
+	return qdf_mem_stat.skb_mem_max;
+}
+
+qdf_export_symbol(qdf_skb_max_mem_stats_read);
+
+int32_t qdf_dp_tx_skb_mem_stats_read(void)
+{
+	return qdf_atomic_read(&qdf_mem_stat.dp_tx_skb);
+}
+
+qdf_export_symbol(qdf_dp_tx_skb_mem_stats_read);
+
+int32_t qdf_dp_rx_skb_mem_stats_read(void)
+{
+	return qdf_atomic_read(&qdf_mem_stat.dp_rx_skb);
+}
+
+qdf_export_symbol(qdf_dp_rx_skb_mem_stats_read);
+
+int32_t qdf_mem_dp_tx_skb_cnt_read(void)
+{
+	return qdf_atomic_read(&qdf_mem_stat.dp_tx_skb_count);
+}
+
+qdf_export_symbol(qdf_mem_dp_tx_skb_cnt_read);
+
+int32_t qdf_mem_dp_tx_skb_max_cnt_read(void)
+{
+	return qdf_mem_stat.dp_tx_skb_count_max;
+}
+
+qdf_export_symbol(qdf_mem_dp_tx_skb_max_cnt_read);
+
+int32_t qdf_mem_dp_rx_skb_cnt_read(void)
+{
+	return qdf_atomic_read(&qdf_mem_stat.dp_rx_skb_count);
+}
+
+qdf_export_symbol(qdf_mem_dp_rx_skb_cnt_read);
+
+int32_t qdf_mem_dp_rx_skb_max_cnt_read(void)
+{
+	return qdf_mem_stat.dp_rx_skb_count_max;
+}
+
+qdf_export_symbol(qdf_mem_dp_rx_skb_max_cnt_read);
+
+int32_t qdf_dp_tx_skb_max_mem_stats_read(void)
+{
+	return qdf_mem_stat.dp_tx_skb_mem_max;
+}
+
+qdf_export_symbol(qdf_dp_tx_skb_max_mem_stats_read);
+
+int32_t qdf_dp_rx_skb_max_mem_stats_read(void)
+{
+	return qdf_mem_stat.dp_rx_skb_mem_max;
+}
+
+qdf_export_symbol(qdf_dp_rx_skb_max_mem_stats_read);
+
+int32_t qdf_mem_tx_desc_cnt_read(void)
+{
+	return qdf_atomic_read(&qdf_mem_stat.tx_descs_outstanding);
+}
+
+qdf_export_symbol(qdf_mem_tx_desc_cnt_read);
+
+int32_t qdf_mem_tx_desc_max_read(void)
+{
+	return qdf_mem_stat.tx_descs_max;
+}
+
+qdf_export_symbol(qdf_mem_tx_desc_max_read);
+
+void qdf_mem_tx_desc_cnt_update(qdf_atomic_t pending_tx_descs,
+				int32_t tx_descs_max)
+{
+	qdf_mem_stat.tx_descs_outstanding = pending_tx_descs;
+	qdf_mem_stat.tx_descs_max = tx_descs_max;
+}
+
+qdf_export_symbol(qdf_mem_tx_desc_cnt_update);
+
+void qdf_mem_stats_init(void)
+{
+	qdf_mem_stat.skb_mem_max = 0;
+	qdf_mem_stat.dp_tx_skb_mem_max = 0;
+	qdf_mem_stat.dp_rx_skb_mem_max = 0;
+	qdf_mem_stat.dp_tx_skb_count_max = 0;
+	qdf_mem_stat.dp_rx_skb_count_max = 0;
+	qdf_mem_stat.tx_descs_max = 0;
+}
+
+qdf_export_symbol(qdf_mem_stats_init);
 

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017-2020 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2017-2021 The Linux Foundation. All rights reserved.
  *
  *
  * Permission to use, copy, modify, and/or distribute this software for
@@ -566,6 +566,7 @@ struct cdp_cmn_ops {
 					  ol_txrx_rx_fp rx,
 					  ol_osif_peer_handle osif_peer);
 #endif /* QCA_SUPPORT_WDS_EXTENDED */
+	void (*txrx_drain)(ol_txrx_soc_handle soc);
 };
 
 struct cdp_ctrl_ops {
@@ -952,8 +953,6 @@ struct cdp_wds_ops {
 };
 
 struct cdp_raw_ops {
-	int (*txrx_get_nwifi_mode)(struct cdp_soc_t *soc, uint8_t vdev_id);
-
 	QDF_STATUS
 	(*rsim_get_astentry)(struct cdp_soc_t *soc, uint8_t vdev_id,
 			     qdf_nbuf_t *pnbuf, struct cdp_raw_ast *raw_ast);
@@ -1122,6 +1121,9 @@ struct ol_if_ops {
 				   uint8_t *peer_mac_addr);
 #endif
 #ifdef DP_MEM_PRE_ALLOC
+	void *(*dp_prealloc_get_context)(uint32_t ctxt_type);
+
+	QDF_STATUS(*dp_prealloc_put_context)(uint32_t ctxt_type, void *vaddr);
 	void *(*dp_prealloc_get_consistent)(uint32_t *size,
 					    void **base_vaddr_unaligned,
 					    qdf_dma_addr_t *paddr_unaligned,
@@ -1146,12 +1148,20 @@ struct ol_if_ops {
 	QDF_STATUS(*nss_stats_clr)(struct cdp_ctrl_objmgr_psoc *psoc,
 				   uint8_t vdev_id);
 	int (*dp_rx_get_pending)(ol_txrx_soc_handle soc);
+	void (*dp_rx_sched_refill_thread)(ol_txrx_soc_handle soc);
 	/* TODO: Add any other control path calls required to OL_IF/WMA layer */
 #ifdef QCA_SUPPORT_WDS_EXTENDED
 	void (*rx_wds_ext_peer_learn)(struct cdp_ctrl_objmgr_psoc *ctrl_psoc,
 				      uint16_t peer_id, uint8_t vdev_id,
 				      uint8_t *peer_macaddr);
 #endif /* QCA_SUPPORT_WDS_EXTENDED */
+#ifdef WLAN_SUPPORT_MESH_LATENCY
+	QDF_STATUS(*peer_update_mesh_latency_params)(
+			     struct cdp_ctrl_objmgr_psoc *psoc,
+				   uint8_t vdev_id, uint8_t *peer_mac, uint8_t tid,
+				   uint32_t service_interval, uint32_t burst_size,
+				   uint8_t add_or_sub, uint8_t ac);
+#endif
 };
 
 #ifdef DP_PEER_EXTENDED_API
@@ -1190,6 +1200,7 @@ struct ol_if_ops {
  *			 for this particular vdev.
  * @set_swlm_enable: Enable or Disable Software Latency Manager.
  * @is_swlm_enabled: Check if Software latency manager is enabled or not.
+ * @display_txrx_hw_info: Dump the DP rings info
  *
  * Function pointers for miscellaneous soc/pdev/vdev related operations.
  */
@@ -1272,12 +1283,14 @@ struct cdp_misc_ops {
 					     struct cdp_txrx_ext_stats *req);
 	QDF_STATUS (*request_rx_hw_stats)(struct cdp_soc_t *soc_hdl,
 					  uint8_t vdev_id);
+	void (*reset_rx_hw_ext_stats)(struct cdp_soc_t *soc_hdl);
 	QDF_STATUS (*vdev_inform_ll_conn)(struct cdp_soc_t *soc_hdl,
 					  uint8_t vdev_id,
 					  enum vdev_ll_conn_actions action);
 	QDF_STATUS (*set_swlm_enable)(struct cdp_soc_t *soc_hdl,
 				      uint8_t val);
 	uint8_t (*is_swlm_enabled)(struct cdp_soc_t *soc_hdl);
+	void (*display_txrx_hw_info)(struct cdp_soc_t *soc_hdl);
 };
 
 /**
@@ -1707,6 +1720,20 @@ struct cdp_mscs_ops {
 };
 #endif
 
+#ifdef WLAN_SUPPORT_MESH_LATENCY
+/**
+ * struct cdp_mesh_latency_ops - data path ops for Mesh latency
+ * @mesh_latency_update_peer_parameter:
+ */
+struct cdp_mesh_latency_ops {
+	QDF_STATUS (*mesh_latency_update_peer_parameter)(
+			struct cdp_soc_t *soc,
+			uint8_t *dest_mac, uint32_t service_interval,
+			uint32_t burst_size, uint16_t priority,
+			uint8_t add_or_sub);
+};
+#endif
+
 struct cdp_ops {
 	struct cdp_cmn_ops          *cmn_drv_ops;
 	struct cdp_ctrl_ops         *ctrl_ops;
@@ -1744,6 +1771,9 @@ struct cdp_ops {
 #endif
 #ifdef WLAN_SUPPORT_MSCS
 	struct cdp_mscs_ops         *mscs_ops;
+#endif
+#ifdef WLAN_SUPPORT_MESH_LATENCY
+	struct cdp_mesh_latency_ops         *mesh_latency_ops;
 #endif
 
 };

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2020 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2014-2021 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -67,23 +67,25 @@ static const struct reg_dmn_op_class_map_t global_op_class[] = {
 	{123, 40, BW40_HIGH_PRIMARY, BIT(BEHAV_BW40_HIGH_PRIMARY), 5000,
 	 {104, 112, 120, 128, 136, 144} },
 	{125, 20, BW20, BIT(BEHAV_NONE), 5000,
-	 {149, 153, 157, 161, 165, 169} },
+	 {149, 153, 157, 161, 165, 169, 173, 177} },
 	{126, 40, BW40_LOW_PRIMARY, BIT(BEHAV_BW40_LOW_PRIMARY), 5000,
-	 {149, 157} },
+	 {149, 157, 165, 173} },
 	{127, 40, BW40_HIGH_PRIMARY, BIT(BEHAV_BW40_HIGH_PRIMARY), 5000,
-	 {153, 161} },
+	 {153, 161, 169, 177} },
 	{128, 80, BW80, BIT(BEHAV_NONE), 5000,
 	 {36, 40, 44, 48, 52, 56, 60, 64,
-	  100, 104, 108, 112, 116, 120, 124,
-	  128, 132, 136, 140, 144,
-	  149, 153, 157, 161} },
+	  100, 104, 108, 112, 116, 120, 124, 128,
+	  132, 136, 140, 144, 149, 153, 157, 161,
+	  165, 169, 173, 177} },
 	{129, 160, BW80, BIT(BEHAV_NONE), 5000,
 	 {36, 40, 44, 48, 52, 56, 60, 64,
-	  100, 104, 108, 112, 116, 120, 124, 128} },
+	  100, 104, 108, 112, 116, 120, 124, 128,
+	  149, 153, 157, 161, 165, 169, 173, 177} },
 	{130, 80, BW80, BIT(BEHAV_BW80_PLUS), 5000,
 	 {36, 40, 44, 48, 52, 56, 60, 64,
 	  100, 104, 108, 112, 116, 120, 124, 128,
-	  132, 136, 140, 144, 149, 153, 157, 161} },
+	  132, 136, 140, 144, 149, 153, 157, 161,
+	  165, 169, 173, 177} },
 
 #ifdef CONFIG_BAND_6GHZ
 	{131, 20, BW20, BIT(BEHAV_NONE), 5950,
@@ -545,6 +547,8 @@ void reg_freq_width_to_chan_op_class_auto(struct wlan_objmgr_pdev *pdev,
 		global_tbl_lookup = true;
 		if (chan_width == BW_40_MHZ)
 			behav_limit = BIT(BEHAV_NONE);
+	} else if (reg_is_5dot9_ghz_freq(pdev, freq)) {
+		global_tbl_lookup = true;
 	} else {
 		global_tbl_lookup = false;
 	}
@@ -758,6 +762,13 @@ qdf_freq_t reg_chan_opclass_to_freq_auto(uint8_t chan, uint8_t op_class,
 {
 	if ((op_class >= MIN_6GHZ_OPER_CLASS) &&
 	    (op_class <= MAX_6GHZ_OPER_CLASS)) {
+		global_tbl_lookup = true;
+	} else {
+		qdf_freq_t freq = reg_chan_opclass_to_freq(chan,
+				op_class,
+				global_tbl_lookup);
+		if (freq)
+			return freq;
 		global_tbl_lookup = true;
 	}
 

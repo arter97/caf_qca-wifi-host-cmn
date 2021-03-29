@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016-2020 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
  *
  *
  * Permission to use, copy, modify, and/or distribute this software for
@@ -451,27 +451,6 @@ QDF_STATUS utils_dfs_get_nol_chfreq_and_chwidth(struct wlan_objmgr_pdev *pdev,
 		int index);
 
 /**
- * utils_dfs_get_random_channel() - Get random channel.
- * @pdev: Pointer to DFS pdev object.
- * @flags: random channel selection flags.
- * @ch_params: current channel params.
- * @hw_mode: current operating mode.
- * @target_chan: Pointer to target_chan.
- * @acs_info: acs range info.
- *
- * wrapper function for get_random_chan(). this
- * function called from outside of dfs component.
- *
- * Return: QDF_STATUS
- */
-#ifdef CONFIG_CHAN_NUM_API
-QDF_STATUS utils_dfs_get_random_channel(struct wlan_objmgr_pdev *pdev,
-		uint16_t flags, struct ch_params *ch_params,
-		uint32_t *hw_mode, uint8_t *target_chan,
-		struct dfs_acs_info *acs_info);
-#endif
-
-/**
  * utils_dfs_get_random_channel_for_freq() - Get random channel.
  * @pdev: Pointer to DFS pdev object.
  * @flags: random channel selection flags.
@@ -495,29 +474,7 @@ utils_dfs_get_random_channel_for_freq(struct wlan_objmgr_pdev *pdev,
 #endif
 
 /**
- * utils_dfs_get_vdev_random_channel() - Get random channel for vdev
- * @pdev: Pointer to DFS pdev object.
- * @vdev: vdev of the request
- * @flags: random channel selection flags.
- * @ch_params: current channel params.
- * @hw_mode: current operating mode.
- * @target_chan: Pointer to target_chan.
- * @acs_info: acs range info.
- *
- * Get random channel based on vdev interface type. If the vdev is null,
- * the function will get random channel by SAP interface type.
- *
- * Return: QDF_STATUS
- */
-#ifdef CONFIG_CHAN_NUM_API
-QDF_STATUS utils_dfs_get_vdev_random_channel(
-	struct wlan_objmgr_pdev *pdev, struct wlan_objmgr_vdev *vdev,
-	uint16_t flags, struct ch_params *ch_params, uint32_t *hw_mode,
-	uint8_t *target_chan, struct dfs_acs_info *acs_info);
-#endif
-
-/**
- * utils_dfs_get_vdev_random_channel() - Get random channel for vdev
+ * utils_dfs_get_vdev_random_channel_for_freq() - Get random channel for vdev
  * @pdev: Pointer to DFS pdev object.
  * @vdev: vdev of the request
  * @flags: random channel selection flags.
@@ -531,31 +488,11 @@ QDF_STATUS utils_dfs_get_vdev_random_channel(
  *
  * Return: QDF_STATUS
  */
-
 #ifdef CONFIG_CHAN_FREQ_API
 QDF_STATUS utils_dfs_get_vdev_random_channel_for_freq(
 	struct wlan_objmgr_pdev *pdev, struct wlan_objmgr_vdev *vdev,
 	uint16_t flags, struct ch_params *ch_params, uint32_t *hw_mode,
 	uint16_t *target_chan_freq, struct dfs_acs_info *acs_info);
-#endif
-
-/**
- * utils_dfs_bw_reduced_channel() - Get BW reduced channel.
- * @pdev: Pointer to DFS pdev object.
- * @ch_params: current channel params.
- * @hw_mode: current operating mode.
- * @target_chan: Pointer to target_chan.
- *
- * wrapper function for get bw_reduced_channel. this
- * function called from outside of dfs component.
- *
- * Return: QDF_STATUS
- */
-#ifdef CONFIG_CHAN_NUM_API
-QDF_STATUS utils_dfs_bw_reduced_channel(struct wlan_objmgr_pdev *pdev,
-					struct ch_params *ch_params,
-					uint32_t *hw_mode,
-					uint8_t *target_chan);
 #endif
 
 /**
@@ -874,7 +811,6 @@ void utils_dfs_get_chan_list(struct wlan_objmgr_pdev *pdev,
  */
 void utils_dfs_get_nol_history_chan_list(struct wlan_objmgr_pdev *pdev,
 					 void *clist, uint32_t *num_chan);
-
 /**
  * utils_dfs_reg_update_nol_history_ch() - set nol history channel
  *
@@ -1051,4 +987,60 @@ utils_dfs_precac_status_for_channel(struct wlan_objmgr_pdev *pdev,
 }
 #endif
 
+#if defined(WLAN_DISP_CHAN_INFO)
+/**
+ * utils_dfs_get_chan_dfs_state() - Get the channel state array of the channels
+ * in a radio.
+ * @pdev: Pointer to the pdev.
+ * @dfs_ch_s: Output channel state array of the dfs channels in the radio.
+ *
+ * Return: QDF_STATUS.
+ */
+QDF_STATUS utils_dfs_get_chan_dfs_state(struct wlan_objmgr_pdev *pdev,
+					enum channel_dfs_state *dfs_ch_s);
+
+/**
+ * utils_dfs_update_chan_state_array() - Update the channel state of the dfs
+ * channel indicated by the frequency. The dfs event is converted to
+ * appropriate dfs state.
+ * @pdev: Pointer to the pdev.
+ * @freq: Input frequency.
+ * @event: Input dfs event.
+ *
+ * Return: QDF_STATUS.
+ */
+QDF_STATUS utils_dfs_update_chan_state_array(struct wlan_objmgr_pdev *pdev,
+					     qdf_freq_t freq,
+					     enum WLAN_DFS_EVENTS event);
+
+/**
+ * dfs_init_chan_state_array() - Initialize the dfs channel state array.
+ *
+ * @pdev: Pointer to the pdev.
+ *
+ * Return: QDF_STATUS.
+ */
+QDF_STATUS dfs_init_chan_state_array(struct wlan_objmgr_pdev *pdev);
+#else
+static inline
+QDF_STATUS utils_dfs_get_chan_dfs_state(struct wlan_objmgr_pdev *pdev,
+					enum channel_dfs_state *dfs_ch_s)
+{
+	return QDF_STATUS_E_NOSUPPORT;
+}
+
+static inline
+QDF_STATUS utils_dfs_update_chan_state_array(struct wlan_objmgr_pdev *pdev,
+					     uint16_t freq,
+					     enum WLAN_DFS_EVENTS event)
+{
+	return QDF_STATUS_E_NOSUPPORT;
+}
+
+static inline
+QDF_STATUS dfs_init_chan_state_array(struct wlan_objmgr_pdev *pdev)
+{
+	return QDF_STATUS_E_NOSUPPORT;
+}
+#endif /* WLAN_DISP_CHAN_INFO */
 #endif /* _WLAN_DFS_UTILS_API_H_ */

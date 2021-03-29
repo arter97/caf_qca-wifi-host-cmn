@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2020 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2014-2021 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -211,7 +211,7 @@ QDF_STATUS reg_set_country(struct wlan_objmgr_pdev *pdev,
 		if (psoc_reg->cc_src == SOURCE_USERSPACE ||
 		    psoc_reg->cc_src == SOURCE_CORE) {
 			reg_debug("country is not different");
-			return QDF_STATUS_SUCCESS;
+			return QDF_STATUS_E_INVAL;
 		}
 	}
 
@@ -258,10 +258,11 @@ QDF_STATUS reg_set_country(struct wlan_objmgr_pdev *pdev,
 			}
 			if (reg_is_world_ctry_code(
 				    pdev_priv_obj->def_region_domain))
-				rd.cc.regdmn_id =
+				rd.cc.regdmn.reg_2g_5g_pair_id =
 					pdev_priv_obj->def_region_domain;
 			else
-				rd.cc.regdmn_id = DEFAULT_WORLD_REGDMN;
+				rd.cc.regdmn.reg_2g_5g_pair_id =
+							DEFAULT_WORLD_REGDMN;
 			rd.flags = REGDMN_IS_SET;
 		} else {
 			qdf_mem_copy(rd.cc.alpha, cc.country,
@@ -368,7 +369,7 @@ bool reg_is_dsrc_chan(struct wlan_objmgr_pdev *pdev, uint8_t chan)
 	if (!REG_IS_5GHZ_CH(chan))
 		return false;
 
-	freq = reg_chan_to_freq(pdev, chan);
+	freq = reg_legacy_chan_to_freq(pdev, chan);
 
 	if (!(freq >= REG_DSRC_START_FREQ && freq <= REG_DSRC_END_FREQ))
 		return false;
@@ -424,7 +425,7 @@ bool reg_is_etsi13_srd_chan(struct wlan_objmgr_pdev *pdev, uint8_t chan)
 	if (!REG_IS_5GHZ_CH(chan))
 		return false;
 
-	freq = reg_chan_to_freq(pdev, chan);
+	freq = reg_legacy_chan_to_freq(pdev, chan);
 
 	if (!(freq >= REG_ETSI13_SRD_START_FREQ &&
 	      freq <= REG_ETSI13_SRD_END_FREQ))
@@ -518,7 +519,6 @@ QDF_STATUS reg_get_band(struct wlan_objmgr_pdev *pdev,
 #ifdef DISABLE_CHANNEL_LIST
 QDF_STATUS reg_restore_cached_channels(struct wlan_objmgr_pdev *pdev)
 {
-	struct wlan_regulatory_psoc_priv_obj *psoc_priv_obj;
 	struct wlan_regulatory_pdev_priv_obj *pdev_priv_obj;
 	struct wlan_objmgr_psoc *psoc;
 	QDF_STATUS status;
@@ -535,13 +535,31 @@ QDF_STATUS reg_restore_cached_channels(struct wlan_objmgr_pdev *pdev)
 		return QDF_STATUS_E_INVAL;
 	}
 
-	psoc_priv_obj = reg_get_psoc_obj(psoc);
-	if (!IS_VALID_PSOC_REG_OBJ(psoc_priv_obj)) {
-		reg_err("psoc reg component is NULL");
+	pdev_priv_obj->disable_cached_channels = false;
+	reg_compute_pdev_current_chan_list(pdev_priv_obj);
+	status = reg_send_scheduler_msg_sb(psoc, pdev);
+	return status;
+}
+
+QDF_STATUS reg_disable_cached_channels(struct wlan_objmgr_pdev *pdev)
+{
+	struct wlan_regulatory_pdev_priv_obj *pdev_priv_obj;
+	struct wlan_objmgr_psoc *psoc;
+	QDF_STATUS status;
+
+	pdev_priv_obj = reg_get_pdev_obj(pdev);
+	if (!IS_VALID_PDEV_REG_OBJ(pdev_priv_obj)) {
+		reg_err("pdev reg component is NULL");
 		return QDF_STATUS_E_INVAL;
 	}
 
-	pdev_priv_obj->disable_cached_channels = false;
+	psoc = wlan_pdev_get_psoc(pdev);
+	if (!psoc) {
+		reg_err("psoc is NULL");
+		return QDF_STATUS_E_INVAL;
+	}
+
+	pdev_priv_obj->disable_cached_channels = true;
 	reg_compute_pdev_current_chan_list(pdev_priv_obj);
 	status = reg_send_scheduler_msg_sb(psoc, pdev);
 	return status;
@@ -660,11 +678,6 @@ QDF_STATUS reg_cache_channel_state(struct wlan_objmgr_pdev *pdev,
 	return QDF_STATUS_SUCCESS;
 }
 #endif /* CONFIG_CHAN_NUM_API */
-void set_disable_channel_state(
-	struct wlan_regulatory_pdev_priv_obj *pdev_priv_obj)
-{
-	pdev_priv_obj->disable_cached_channels = pdev_priv_obj->sap_state;
-}
 #endif
 
 #ifdef CONFIG_REG_CLIENT
@@ -810,19 +823,6 @@ QDF_STATUS reg_set_config_vars(struct wlan_objmgr_psoc *psoc,
 	wlan_objmgr_psoc_release_ref(psoc, WLAN_REGULATORY_SB_ID);
 
 	return status;
-}
-
-bool reg_is_regdb_offloaded(struct wlan_objmgr_psoc *psoc)
-{
-	struct wlan_regulatory_psoc_priv_obj *psoc_priv_obj;
-
-	psoc_priv_obj = reg_get_psoc_obj(psoc);
-	if (!psoc_priv_obj) {
-		reg_err("reg psoc private obj is NULL");
-		return false;
-	}
-
-	return psoc_priv_obj->offload_enabled;
 }
 
 void reg_program_mas_chan_list(struct wlan_objmgr_psoc *psoc,

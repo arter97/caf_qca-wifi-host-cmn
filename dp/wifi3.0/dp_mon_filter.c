@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2020-2021 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -115,10 +115,8 @@ dp_mon_ht2_rx_ring_cfg(struct dp_soc *soc,
 	if (srng_type == DP_MON_FILTER_SRNG_TYPE_RXDMA_MONITOR_STATUS)
 		dp_is_hw_dbs_enable(soc, &max_mac_rings);
 
-	QDF_TRACE(QDF_MODULE_ID_MON_FILTER, QDF_TRACE_LEVEL_INFO,
-			FL("srng type %d Max_mac_rings %d "),
-			srng_type,
-			max_mac_rings);
+	dp_mon_filter_info("%pK: srng type %d Max_mac_rings %d ",
+			   soc, srng_type, max_mac_rings);
 
 	/*
 	 * Loop through all MACs per radio and set the filter to the individual
@@ -324,8 +322,8 @@ dp_mon_filter_reset_mon_srng(struct dp_soc *soc, struct dp_pdev *pdev,
 
 	if (dp_mon_ht2_rx_ring_cfg(soc, pdev, mon_srng_type,
 				   &tlv_filter) != QDF_STATUS_SUCCESS) {
-		QDF_TRACE(QDF_MODULE_ID_MON_FILTER, QDF_TRACE_LEVEL_ERROR,
-			  FL("Monitor destinatin ring filter setting failed"));
+		dp_mon_filter_err("%pK: Monitor destinatin ring filter setting failed",
+				  soc);
 	}
 }
 
@@ -347,12 +345,11 @@ static QDF_STATUS dp_mon_filter_check_co_exist(struct dp_pdev *pdev)
 	if ((pdev->rx_enh_capture_mode != CDP_RX_ENH_CAPTURE_DISABLED) &&
 	    ((pdev->neighbour_peers_added && pdev->monitor_vdev) ||
 		 pdev->mcopy_mode)) {
-		 QDF_TRACE(QDF_MODULE_ID_MON_FILTER, QDF_TRACE_LEVEL_ERROR,
-			   FL("Rx Capture mode can't exist with modes:\n"
-			     "Smart Monitor Mode:%d\n"
-			     "M_Copy Mode:%d"),
-			      pdev->neighbour_peers_added,
-			      pdev->mcopy_mode);
+		dp_mon_filter_err("%pK:Rx Capture mode can't exist with modes:\n"
+				  "Smart Monitor Mode:%d\n"
+				  "M_Copy Mode:%d", pdev->soc,
+				  pdev->neighbour_peers_added,
+				  pdev->mcopy_mode);
 		return QDF_STATUS_E_FAILURE;
 	}
 
@@ -361,12 +358,11 @@ static QDF_STATUS dp_mon_filter_check_co_exist(struct dp_pdev *pdev)
 	 */
 	if ((pdev->monitor_vdev && pdev->monitor_configured) &&
 	    (pdev->mcopy_mode || pdev->neighbour_peers_added)) {
-		QDF_TRACE(QDF_MODULE_ID_MON_FILTER, QDF_TRACE_LEVEL_ERROR,
-			  FL("Monitor mode can't exist with modes\n"
-			     "M_Copy Mode:%d\n"
-			     "Smart Monitor Mode:%d"),
-			      pdev->mcopy_mode,
-			      pdev->neighbour_peers_added);
+		dp_mon_filter_err("%pK: Monitor mode can't exist with modes\n"
+				  "M_Copy Mode:%d\n"
+				  "Smart Monitor Mode:%d",
+				  pdev->soc, pdev->mcopy_mode,
+				  pdev->neighbour_peers_added);
 		return QDF_STATUS_E_FAILURE;
 	}
 
@@ -375,11 +371,10 @@ static QDF_STATUS dp_mon_filter_check_co_exist(struct dp_pdev *pdev)
 	 */
 	if (pdev->neighbour_peers_added &&
 	    ((pdev->mcopy_mode) || pdev->monitor_configured)) {
-		QDF_TRACE(QDF_MODULE_ID_MON_FILTER, QDF_TRACE_LEVEL_ERROR,
-			  FL("Smart Monitor mode can't exist with modes\n"
-			     "M_Copy Mode:%d\n"
-			     "Monitor Mode:%d"),
-			      pdev->mcopy_mode,
+		dp_mon_filter_err("%pk: Smart Monitor mode can't exist with modes\n"
+				  "M_Copy Mode:%d\n"
+				  "Monitor Mode:%d",
+				  pdev->soc, pdev->mcopy_mode,
 			      pdev->monitor_configured);
 		return QDF_STATUS_E_FAILURE;
 	}
@@ -390,12 +385,11 @@ static QDF_STATUS dp_mon_filter_check_co_exist(struct dp_pdev *pdev)
 	 */
 	if (pdev->mcopy_mode &&
 	    (pdev->monitor_vdev || pdev->neighbour_peers_added)) {
-		QDF_TRACE(QDF_MODULE_ID_MON_FILTER, QDF_TRACE_LEVEL_ERROR,
-			  FL("mcopy mode can't exist with modes\n"
-			     "Monitor Mode:%d\n"
-			     "Smart Monitor Mode:%d"),
-			      pdev->monitor_vdev,
-			      pdev->neighbour_peers_added);
+		dp_mon_filter_err("%pK: mcopy mode can't exist with modes\n"
+				  "Monitor Mode:%pK\n"
+				  "Smart Monitor Mode:%d",
+				  pdev->soc, pdev->monitor_vdev,
+				  pdev->neighbour_peers_added);
 		return QDF_STATUS_E_FAILURE;
 	}
 
@@ -404,14 +398,13 @@ static QDF_STATUS dp_mon_filter_check_co_exist(struct dp_pdev *pdev)
 	 * the enable modes.
 	 */
 	if ((pdev->rx_pktlog_mode != DP_RX_PKTLOG_DISABLED) &&
-	    (pdev->monitor_vdev || pdev->monitor_configured)) {
-		QDF_TRACE(QDF_MODULE_ID_MON_FILTER, QDF_TRACE_LEVEL_ERROR,
-			  FL("Rx pktlog full/lite can't exist with modes\n"
-			     "Monitor Mode:%d"),
-			      pdev->monitor_configured);
+	     !pdev->rx_pktlog_cbf &&
+	     (pdev->monitor_vdev || pdev->monitor_configured)) {
+		dp_mon_filter_err("%pK: Rx pktlog full/lite can't exist with modes\n"
+				  "Monitor Mode:%d", pdev->soc,
+				  pdev->monitor_configured);
 		return QDF_STATUS_E_FAILURE;
 	}
-
 	return QDF_STATUS_SUCCESS;
 }
 #else
@@ -423,10 +416,9 @@ static QDF_STATUS dp_mon_filter_check_co_exist(struct dp_pdev *pdev)
 	 */
 	if ((pdev->rx_pktlog_mode != DP_RX_PKTLOG_DISABLED) &&
 	    (pdev->monitor_vdev || pdev->monitor_configured)) {
-		QDF_TRACE(QDF_MODULE_ID_MON_FILTER, QDF_TRACE_LEVEL_ERROR,
-			  FL("Rx pktlog full/lite can't exist with modes\n"
-			     "Monitor Mode:%d"),
-			      pdev->monitor_configured);
+		 dp_mon_filter_err("%pK: Rx pktlog full/lite can't exist with modes\n"
+				   "Monitor Mode:%d", pdev->soc,
+				   pdev->monitor_configured);
 		return QDF_STATUS_E_FAILURE;
 	}
 
@@ -509,6 +501,64 @@ static void dp_mon_filter_set_status_cmn(struct dp_pdev *pdev,
 	}
 }
 
+/**
+ * dp_mon_filter_set_status_cbf() - Set the cbf status filters
+ * @pdev: DP pdev handle
+ * @filter: Dp mon filters
+ *
+ * Return: void
+ */
+static void dp_mon_filter_set_status_cbf(struct dp_pdev *pdev,
+					 struct dp_mon_filter *filter)
+{
+	filter->tlv_filter.mpdu_start = 1;
+	filter->tlv_filter.msdu_start = 0;
+	filter->tlv_filter.packet = 0;
+	filter->tlv_filter.msdu_end = 0;
+	filter->tlv_filter.mpdu_end = 0;
+	filter->tlv_filter.attention = 0;
+	filter->tlv_filter.ppdu_start = 1;
+	filter->tlv_filter.ppdu_end = 1;
+	filter->tlv_filter.ppdu_end_user_stats = 1;
+	filter->tlv_filter.ppdu_end_user_stats_ext = 1;
+	filter->tlv_filter.ppdu_end_status_done = 1;
+	filter->tlv_filter.enable_fp = 1;
+	filter->tlv_filter.enable_md = 0;
+	filter->tlv_filter.fp_mgmt_filter = FILTER_MGMT_ACT_NO_ACK;
+	filter->tlv_filter.fp_ctrl_filter = 0;
+	filter->tlv_filter.fp_data_filter = 0;
+	filter->tlv_filter.offset_valid = false;
+	filter->tlv_filter.enable_mo = 0;
+}
+
+/**
+ * dp_mon_filter_set_cbf_cmn() - Set the common cbf mode filters
+ * @pdev: DP pdev handle
+ * @filter: Dp mon filters
+ *
+ * Return: void
+ */
+static void dp_mon_filter_set_cbf_cmn(struct dp_pdev *pdev,
+				      struct dp_mon_filter *filter)
+{
+	filter->tlv_filter.mpdu_start = 1;
+	filter->tlv_filter.msdu_start = 1;
+	filter->tlv_filter.packet = 1;
+	filter->tlv_filter.msdu_end = 1;
+	filter->tlv_filter.mpdu_end = 1;
+	filter->tlv_filter.attention = 1;
+	filter->tlv_filter.ppdu_start = 0;
+	filter->tlv_filter.ppdu_end =  0;
+	filter->tlv_filter.ppdu_end_user_stats = 0;
+	filter->tlv_filter.ppdu_end_user_stats_ext = 0;
+	filter->tlv_filter.ppdu_end_status_done = 0;
+	filter->tlv_filter.enable_fp = 1;
+	filter->tlv_filter.enable_md = 0;
+	filter->tlv_filter.fp_mgmt_filter = FILTER_MGMT_ACT_NO_ACK;
+	filter->tlv_filter.offset_valid = false;
+	filter->tlv_filter.enable_mo = 0;
+}
+
 #ifdef FEATURE_PERPKT_INFO
 /**
  * dp_mon_filter_setup_enhanced_stats() - Setup the enhanced stats filter
@@ -522,8 +572,7 @@ void dp_mon_filter_setup_enhanced_stats(struct dp_pdev *pdev)
 				DP_MON_FILTER_SRNG_TYPE_RXDMA_MONITOR_STATUS;
 
 	if (!pdev) {
-		QDF_TRACE(QDF_MODULE_ID_MON_FILTER, QDF_TRACE_LEVEL_ERROR,
-			  FL("pdev Context is null"));
+		dp_mon_filter_err("pdev Context is null");
 		return;
 	}
 
@@ -546,8 +595,7 @@ void dp_mon_filter_reset_enhanced_stats(struct dp_pdev *pdev)
 	enum dp_mon_filter_srng_type srng_type =
 				DP_MON_FILTER_SRNG_TYPE_RXDMA_MONITOR_STATUS;
 	if (!pdev) {
-		QDF_TRACE(QDF_MODULE_ID_MON_FILTER, QDF_TRACE_LEVEL_ERROR,
-			  FL("pdev Context is null"));
+		dp_mon_filter_err("pdev Context is null");
 		return;
 	}
 
@@ -567,15 +615,13 @@ void dp_mon_filter_setup_mcopy_mode(struct dp_pdev *pdev)
 				DP_MON_FILTER_SRNG_TYPE_RXDMA_MONITOR_STATUS;
 
 	if (!pdev) {
-		QDF_TRACE(QDF_MODULE_ID_MON_FILTER, QDF_TRACE_LEVEL_ERROR,
-			  FL("pdev Context is null"));
+		dp_mon_filter_err("pdev Context is null");
 		return;
 	}
 
 	soc = pdev->soc;
 	if (!soc) {
-		QDF_TRACE(QDF_MODULE_ID_MON_FILTER, QDF_TRACE_LEVEL_ERROR,
-			  FL("Soc Context is null"));
+		dp_mon_filter_err("Soc Context is null");
 		return;
 	}
 
@@ -625,15 +671,13 @@ void dp_mon_filter_reset_mcopy_mode(struct dp_pdev *pdev)
 				DP_MON_FILTER_SRNG_TYPE_RXDMA_MONITOR_STATUS;
 
 	if (!pdev) {
-		QDF_TRACE(QDF_MODULE_ID_MON_FILTER, QDF_TRACE_LEVEL_ERROR,
-			  FL("pdev Context is null"));
+		dp_mon_filter_err("pdev Context is null");
 		return;
 	}
 
 	soc = pdev->soc;
 	if (!soc) {
-		QDF_TRACE(QDF_MODULE_ID_MON_FILTER, QDF_TRACE_LEVEL_ERROR,
-			  FL("Soc Context is null"));
+		dp_mon_filter_err("Soc Context is null");
 		return;
 	}
 
@@ -661,15 +705,13 @@ void dp_mon_filter_setup_smart_monitor(struct dp_pdev *pdev)
 				DP_MON_FILTER_SRNG_TYPE_RXDMA_MONITOR_STATUS;
 
 	if (!pdev) {
-		QDF_TRACE(QDF_MODULE_ID_MON_FILTER, QDF_TRACE_LEVEL_ERROR,
-			  FL("pdev Context is null"));
+		dp_mon_filter_err("pdev Context is null");
 		return;
 	}
 
 	soc = pdev->soc;
 	if (!soc) {
-		QDF_TRACE(QDF_MODULE_ID_MON_FILTER, QDF_TRACE_LEVEL_ERROR,
-			  FL("Soc Context is null"));
+		dp_mon_filter_err("Soc Context is null");
 		return;
 	}
 
@@ -698,8 +740,7 @@ void dp_mon_filter_reset_smart_monitor(struct dp_pdev *pdev)
 	enum dp_mon_filter_srng_type srng_type =
 				DP_MON_FILTER_SRNG_TYPE_RXDMA_MONITOR_STATUS;
 	if (!pdev) {
-		QDF_TRACE(QDF_MODULE_ID_MON_FILTER, QDF_TRACE_LEVEL_ERROR,
-			  FL("pdev Context is null"));
+		dp_mon_filter_err("pdev Context is null");
 		return;
 	}
 
@@ -721,15 +762,13 @@ void dp_mon_filter_setup_rx_enh_capture(struct dp_pdev *pdev)
 				DP_MON_FILTER_SRNG_TYPE_RXDMA_MONITOR_STATUS;
 
 	if (!pdev) {
-		QDF_TRACE(QDF_MODULE_ID_MON_FILTER, QDF_TRACE_LEVEL_ERROR,
-			  FL("pdev Context is null"));
+		dp_mon_filter_err("pdev Context is null");
 		return;
 	}
 
 	soc = pdev->soc;
 	if (!soc) {
-		QDF_TRACE(QDF_MODULE_ID_MON_FILTER, QDF_TRACE_LEVEL_ERROR,
-			  FL("Soc Context is null"));
+		dp_mon_filter_err("Soc Context is null");
 		return;
 	}
 
@@ -798,15 +837,13 @@ void dp_mon_filter_reset_rx_enh_capture(struct dp_pdev *pdev)
 				DP_MON_FILTER_SRNG_TYPE_RXDMA_MONITOR_STATUS;
 
 	if (!pdev) {
-		QDF_TRACE(QDF_MODULE_ID_MON_FILTER, QDF_TRACE_LEVEL_ERROR,
-			  FL("pdev Context is null"));
+		dp_mon_filter_err("pdev Context is null");
 		return;
 	}
 
 	soc = pdev->soc;
 	if (!soc) {
-		QDF_TRACE(QDF_MODULE_ID_MON_FILTER, QDF_TRACE_LEVEL_ERROR,
-			  FL("Soc Context is null"));
+		dp_mon_filter_err("Soc Context is null");
 		return;
 	}
 
@@ -833,15 +870,13 @@ void dp_mon_filter_setup_mon_mode(struct dp_pdev *pdev)
 				DP_MON_FILTER_SRNG_TYPE_RXDMA_MONITOR_STATUS;
 
 	if (!pdev) {
-		QDF_TRACE(QDF_MODULE_ID_MON_FILTER, QDF_TRACE_LEVEL_ERROR,
-			  FL("pdev Context is null"));
+		dp_mon_filter_err("pdev Context is null");
 		return;
 	}
 
 	soc = pdev->soc;
 	if (!soc) {
-		QDF_TRACE(QDF_MODULE_ID_MON_FILTER, QDF_TRACE_LEVEL_ERROR,
-			  FL("Soc Context is null"));
+		dp_mon_filter_err("Soc Context is null");
 		return;
 	}
 
@@ -882,15 +917,13 @@ void dp_mon_filter_reset_mon_mode(struct dp_pdev *pdev)
 				DP_MON_FILTER_SRNG_TYPE_RXDMA_MONITOR_STATUS;
 
 	if (!pdev) {
-		QDF_TRACE(QDF_MODULE_ID_MON_FILTER, QDF_TRACE_LEVEL_ERROR,
-			  FL("pdev Context is null"));
+		dp_mon_filter_err("pdev Context is null");
 		return;
 	}
 
 	soc = pdev->soc;
 	if (!soc) {
-		QDF_TRACE(QDF_MODULE_ID_MON_FILTER, QDF_TRACE_LEVEL_ERROR,
-			  FL("Soc Context is null"));
+		dp_mon_filter_err("Soc Context is null");
 		return;
 	}
 
@@ -915,8 +948,7 @@ void dp_mon_filter_setup_rx_pkt_log_full(struct dp_pdev *pdev)
 	enum dp_mon_filter_srng_type srng_type =
 				DP_MON_FILTER_SRNG_TYPE_RXDMA_MONITOR_STATUS;
 	if (!pdev) {
-		QDF_TRACE(QDF_MODULE_ID_MON_FILTER, QDF_TRACE_LEVEL_ERROR,
-			  FL("pdev Context is null"));
+		dp_mon_filter_err("pdev Context is null");
 		return;
 	}
 
@@ -946,8 +978,7 @@ void dp_mon_filter_reset_rx_pkt_log_full(struct dp_pdev *pdev)
 	enum dp_mon_filter_srng_type srng_type =
 				DP_MON_FILTER_SRNG_TYPE_RXDMA_MONITOR_STATUS;
 	if (!pdev) {
-		QDF_TRACE(QDF_MODULE_ID_MON_FILTER, QDF_TRACE_LEVEL_ERROR,
-			  FL("pdev Context is null"));
+		dp_mon_filter_err("pdev Context is null");
 		return;
 	}
 
@@ -965,8 +996,7 @@ void dp_mon_filter_setup_rx_pkt_log_lite(struct dp_pdev *pdev)
 	enum dp_mon_filter_srng_type srng_type =
 				DP_MON_FILTER_SRNG_TYPE_RXDMA_MONITOR_STATUS;
 	if (!pdev) {
-		QDF_TRACE(QDF_MODULE_ID_MON_FILTER, QDF_TRACE_LEVEL_ERROR,
-			  FL("pdev Context is null"));
+		dp_mon_filter_err("pdev Context is null");
 		return;
 	}
 
@@ -989,14 +1019,116 @@ void dp_mon_filter_reset_rx_pkt_log_lite(struct dp_pdev *pdev)
 	enum dp_mon_filter_srng_type srng_type =
 				DP_MON_FILTER_SRNG_TYPE_RXDMA_MONITOR_STATUS;
 	if (!pdev) {
-		QDF_TRACE(QDF_MODULE_ID_MON_FILTER, QDF_TRACE_LEVEL_ERROR,
-			  FL("pdev Context is null"));
+		dp_mon_filter_err("pdev Context is null");
 		return;
 	}
 
 	pdev->filter[mode][srng_type] = filter;
 }
+
+/**
+ * dp_mon_filter_setup_rx_pkt_log_cbf() - Setup the Rx pktlog CBF mode filter
+ * @pdev: DP pdev handle
+ */
+void dp_mon_filter_setup_rx_pkt_log_cbf(struct dp_pdev *pdev)
+{
+	struct dp_mon_filter filter = {0};
+	struct dp_soc *soc = NULL;
+	enum dp_mon_filter_mode mode = DP_MON_FILTER_PKT_LOG_CBF_MODE;
+	enum dp_mon_filter_srng_type srng_type =
+				DP_MON_FILTER_SRNG_TYPE_RXDMA_MONITOR_STATUS;
+
+	if (!pdev) {
+		dp_mon_filter_err("pdev Context is null");
+		return;
+	}
+
+	soc = pdev->soc;
+	if (!soc) {
+		dp_mon_filter_err("Soc Context is null");
+		return;
+	}
+
+	/* Enabled the filter */
+	filter.valid = true;
+	dp_mon_filter_set_status_cbf(pdev, &filter);
+	dp_mon_filter_show_filter(pdev, mode, &filter);
+	pdev->filter[mode][srng_type] = filter;
+
+	/* Clear the filter as the same filter will be used to set the
+	 * monitor status ring
+	 */
+	qdf_mem_zero(&(filter), sizeof(struct dp_mon_filter));
+
+	filter.valid = true;
+	dp_mon_filter_set_cbf_cmn(pdev, &filter);
+	dp_mon_filter_show_filter(pdev, mode, &filter);
+
+	srng_type = ((soc->wlan_cfg_ctx->rxdma1_enable) ?
+			DP_MON_FILTER_SRNG_TYPE_RXDMA_MON_BUF :
+			DP_MON_FILTER_SRNG_TYPE_RXDMA_BUF);
+	pdev->filter[mode][srng_type] = filter;
+}
+
+/**
+ * dp_mon_filter_reset_rx_pktlog_cbf() - Reset the Rx pktlog CBF mode filter
+ * @pdev: DP pdev handle
+ */
+void dp_mon_filter_reset_rx_pktlog_cbf(struct dp_pdev *pdev)
+{
+	struct dp_mon_filter filter = {0};
+	struct dp_soc *soc = NULL;
+	enum dp_mon_filter_mode mode = DP_MON_FILTER_PKT_LOG_CBF_MODE;
+	enum dp_mon_filter_srng_type srng_type =
+				DP_MON_FILTER_SRNG_TYPE_RXDMA_BUF;
+	if (!pdev) {
+		QDF_TRACE(QDF_MODULE_ID_MON_FILTER, QDF_TRACE_LEVEL_ERROR,
+			  FL("pdev Context is null"));
+		return;
+	}
+
+	soc = pdev->soc;
+	if (!soc) {
+		QDF_TRACE(QDF_MODULE_ID_MON_FILTER, QDF_TRACE_LEVEL_ERROR,
+			  FL("Soc Context is null"));
+		return;
+	}
+
+	srng_type = ((soc->wlan_cfg_ctx->rxdma1_enable) ?
+			DP_MON_FILTER_SRNG_TYPE_RXDMA_MON_BUF :
+			DP_MON_FILTER_SRNG_TYPE_RXDMA_BUF);
+	pdev->filter[mode][srng_type] = filter;
+
+	srng_type = DP_MON_FILTER_SRNG_TYPE_RXDMA_MONITOR_STATUS;
+	pdev->filter[mode][srng_type] = filter;
+}
 #endif /* WDI_EVENT_ENABLE */
+
+#ifdef WLAN_DP_RESET_MON_BUF_RING_FILTER
+/**
+ * dp_mon_should_reset_buf_ring_filter() - Reset the monitor buf ring filter
+ * @pdev: DP PDEV handle
+ *
+ * WIN has targets which does not support monitor mode, but still do the
+ * monitor mode init/deinit, only the rxdma1_enable flag will be set to 0.
+ * MCL need to do the monitor buffer ring filter reset always, but this is
+ * not needed for WIN targets where rxdma1 is not enabled (the indicator
+ * that monitor mode is not enabled.
+ * This function is used as WAR till WIN cleans up the monitor mode
+ * function for targets where monitor mode is not enabled.
+ *
+ * Returns: true
+ */
+static inline bool dp_mon_should_reset_buf_ring_filter(struct dp_pdev *pdev)
+{
+	return (pdev->monitor_vdev) ? true : false;
+}
+#else
+static inline bool dp_mon_should_reset_buf_ring_filter(struct dp_pdev *pdev)
+{
+	return false;
+}
+#endif
 
 /**
  * dp_mon_filter_update() - Setup the monitor filter setting for a srng
@@ -1015,15 +1147,13 @@ QDF_STATUS dp_mon_filter_update(struct dp_pdev *pdev)
 	QDF_STATUS status = QDF_STATUS_SUCCESS;
 
 	if (!pdev) {
-		QDF_TRACE(QDF_MODULE_ID_MON_FILTER, QDF_TRACE_LEVEL_ERROR,
-			  FL("pdev Context is null"));
+		dp_mon_filter_err("pdev Context is null");
 		return QDF_STATUS_E_FAILURE;
 	}
 
 	soc = pdev->soc;
 	if (!soc) {
-		QDF_TRACE(QDF_MODULE_ID_MON_FILTER, QDF_TRACE_LEVEL_ERROR,
-			  FL("Soc Context is null"));
+		dp_mon_filter_err("Soc Context is null");
 		return QDF_STATUS_E_FAILURE;
 	}
 
@@ -1044,7 +1174,7 @@ QDF_STATUS dp_mon_filter_update(struct dp_pdev *pdev)
 	dp_mon_filter_ht2_setup(soc, pdev, mon_srng_type, &filter);
 
 	mon_mode_set = filter.valid;
-	if (mon_mode_set) {
+	if (dp_mon_should_reset_buf_ring_filter(pdev) || mon_mode_set) {
 		status = dp_mon_ht2_rx_ring_cfg(soc, pdev,
 						mon_srng_type,
 						&filter.tlv_filter);
@@ -1061,8 +1191,8 @@ QDF_STATUS dp_mon_filter_update(struct dp_pdev *pdev)
 	}
 
 	if (status != QDF_STATUS_SUCCESS) {
-		QDF_TRACE(QDF_MODULE_ID_MON_FILTER, QDF_TRACE_LEVEL_ERROR,
-			  FL("Monitor destination ring filter setting failed"));
+		dp_mon_filter_err("%pK: Monitor destination ring filter setting failed",
+				  soc);
 		return QDF_STATUS_E_FAILURE;
 	}
 
@@ -1086,8 +1216,8 @@ QDF_STATUS dp_mon_filter_update(struct dp_pdev *pdev)
 	if (dp_mon_ht2_rx_ring_cfg(soc, pdev,
 				   DP_MON_FILTER_SRNG_TYPE_RXDMA_MONITOR_STATUS,
 				   &filter.tlv_filter) != QDF_STATUS_SUCCESS) {
-		QDF_TRACE(QDF_MODULE_ID_MON_FILTER, QDF_TRACE_LEVEL_ERROR,
-			  FL("Monitor status ring filter setting failed"));
+		dp_mon_filter_err("%pK: Monitor status ring filter setting failed",
+				  soc);
 		dp_mon_filter_reset_mon_srng(soc, pdev, mon_srng_type);
 		return QDF_STATUS_E_FAILURE;
 	}
@@ -1106,8 +1236,7 @@ void dp_mon_filter_dealloc(struct dp_pdev *pdev)
 	struct dp_mon_filter **mon_filter = NULL;
 
 	if (!pdev) {
-		QDF_TRACE(QDF_MODULE_ID_MON_FILTER, QDF_TRACE_LEVEL_ERROR,
-			  FL("pdev Context is null"));
+		dp_mon_filter_err("pdev Context is null");
 		return;
 	}
 
@@ -1117,8 +1246,7 @@ void dp_mon_filter_dealloc(struct dp_pdev *pdev)
 	 * Check if the monitor filters are already allocated to the pdev.
 	 */
 	if (!mon_filter) {
-		QDF_TRACE(QDF_MODULE_ID_MON_FILTER, QDF_TRACE_LEVEL_ERROR,
-			  FL("Found NULL memmory for the Monitor filter"));
+		dp_mon_filter_err("Found NULL memmory for the Monitor filter");
 		return;
 	}
 
@@ -1149,8 +1277,7 @@ struct dp_mon_filter **dp_mon_filter_alloc(struct dp_pdev *pdev)
 	enum dp_mon_filter_mode mode;
 
 	if (!pdev) {
-		QDF_TRACE(QDF_MODULE_ID_MON_FILTER, QDF_TRACE_LEVEL_ERROR,
-			  FL("pdev Context is null"));
+		dp_mon_filter_err("pdev Context is null");
 		return NULL;
 	}
 
@@ -1158,8 +1285,7 @@ struct dp_mon_filter **dp_mon_filter_alloc(struct dp_pdev *pdev)
 			(sizeof(struct dp_mon_filter *) *
 			 DP_MON_FILTER_MAX_MODE));
 	if (!mon_filter) {
-		QDF_TRACE(QDF_MODULE_ID_MON_FILTER, QDF_TRACE_LEVEL_ERROR,
-			  FL("Monitor filter mem allocation failed"));
+		dp_mon_filter_err("Monitor filter mem allocation failed");
 		return NULL;
 	}
 

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017-2020, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -30,6 +30,9 @@
 #include "dp_tx.h"
 #include "dp_rx.h"
 #include "dp_ipa.h"
+
+/* Ring index for WBM2SW2 release ring */
+#define IPA_TX_COMP_RING_IDX HAL_IPA_TX_COMP_RING_IDX
 
 /* Hard coded config parameters until dp_ops_cfg.cfg_attach implemented */
 #define CFG_IPA_UC_TX_BUF_SIZE_DEFAULT            (2048)
@@ -97,9 +100,6 @@ static QDF_STATUS __dp_ipa_handle_buf_smmu_mapping(struct dp_soc *soc,
 						   bool create)
 {
 	qdf_mem_info_t mem_map_table = {0};
-
-	if (!qdf_ipa_is_ready())
-		return QDF_STATUS_SUCCESS;
 
 	qdf_update_mem_map_table(soc->osdev, &mem_map_table,
 				 qdf_nbuf_get_frag_paddr(nbuf, 0),
@@ -199,6 +199,9 @@ static QDF_STATUS dp_ipa_handle_rx_buf_pool_smmu_mapping(struct dp_soc *soc,
 	struct dp_rx_desc *rx_desc;
 	qdf_nbuf_t nbuf;
 
+	if (!qdf_ipa_is_ready())
+		return QDF_STATUS_SUCCESS;
+
 	if (!qdf_mem_smmu_s1_enabled(soc->osdev))
 		return QDF_STATUS_SUCCESS;
 
@@ -248,6 +251,9 @@ static QDF_STATUS dp_ipa_handle_rx_buf_pool_smmu_mapping(struct dp_soc *soc,
 	uint8_t pdev_id;
 	qdf_nbuf_t nbuf;
 	int i;
+
+	if (!qdf_ipa_is_ready())
+		return QDF_STATUS_SUCCESS;
 
 	if (!qdf_mem_smmu_s1_enabled(soc->osdev))
 		return QDF_STATUS_SUCCESS;
@@ -306,6 +312,8 @@ static void dp_tx_ipa_uc_detach(struct dp_soc *soc, struct dp_pdev *pdev)
 		if (!nbuf)
 			continue;
 		qdf_nbuf_unmap_single(soc->osdev, nbuf, QDF_DMA_BIDIRECTIONAL);
+		qdf_mem_dp_tx_skb_cnt_dec();
+		qdf_mem_dp_tx_skb_dec(qdf_nbuf_get_end_offset(nbuf));
 		qdf_nbuf_free(nbuf);
 		soc->ipa_uc_tx_rsc.tx_buf_pool_vaddr_unaligned[idx] =
 						(void *)NULL;
@@ -439,6 +447,8 @@ static int dp_tx_ipa_uc_attach(struct dp_soc *soc, struct dp_pdev *pdev)
 		qdf_nbuf_map_single(soc->osdev, nbuf,
 				    QDF_DMA_BIDIRECTIONAL);
 		buffer_paddr = qdf_nbuf_get_frag_paddr(nbuf, 0);
+		qdf_mem_dp_tx_skb_cnt_inc();
+		qdf_mem_dp_tx_skb_inc(qdf_nbuf_get_end_offset(nbuf));
 
 		paddr_lo = ((uint64_t)buffer_paddr & 0x00000000ffffffff);
 		paddr_hi = ((uint64_t)buffer_paddr & 0x0000001f00000000) >> 32;
@@ -579,6 +589,9 @@ int dp_ipa_ring_resource_setup(struct dp_soc *soc,
 						srng_params.ring_base_vaddr;
 	soc->ipa_uc_tx_rsc.ipa_wbm_ring_size =
 		(srng_params.num_entries * srng_params.entry_size) << 2;
+	soc->ipa_uc_tx_rsc.ipa_wbm_hp_shadow_paddr =
+		hal_srng_get_hp_addr(hal_soc_to_hal_soc_handle(hal_soc),
+				     hal_srng_to_hal_ring_handle(hal_srng));
 	addr_offset = (unsigned long)(hal_srng->u.dst_ring.tp_addr) -
 		      (unsigned long)(hal_soc->dev_base_addr);
 	soc->ipa_uc_tx_rsc.ipa_wbm_tp_paddr =
@@ -740,18 +753,38 @@ QDF_STATUS dp_ipa_get_resource(struct cdp_soc_t *soc_hdl, uint8_t pdev_id)
 	return QDF_STATUS_SUCCESS;
 }
 
+static void dp_ipa_set_tx_doorbell_paddr(struct dp_soc *soc,
+					 struct dp_ipa_resources *ipa_res)
+{
+	struct hal_srng *wbm_srng = (struct hal_srng *)
+			soc->tx_comp_ring[IPA_TX_COMP_RING_IDX].hal_srng;
+
+	hal_srng_dst_set_hp_paddr_confirm(wbm_srng,
+					  ipa_res->tx_comp_doorbell_paddr);
+
+	dp_info("paddr %pK vaddr %pK",
+		(void *)ipa_res->tx_comp_doorbell_paddr,
+		(void *)ipa_res->tx_comp_doorbell_vaddr);
+}
+
+#ifdef IPA_SET_RESET_TX_DB_PA
+#define DP_IPA_SET_TX_DB_PADDR(soc, ipa_res)
+#else
+#define DP_IPA_SET_TX_DB_PADDR(soc, ipa_res) \
+		dp_ipa_set_tx_doorbell_paddr(soc, ipa_res)
+#endif
+
 QDF_STATUS dp_ipa_set_doorbell_paddr(struct cdp_soc_t *soc_hdl, uint8_t pdev_id)
 {
 	struct dp_soc *soc = cdp_soc_t_to_dp_soc(soc_hdl);
 	struct dp_pdev *pdev =
 		dp_get_pdev_from_soc_pdev_id_wifi3(soc, pdev_id);
 	struct dp_ipa_resources *ipa_res;
-	struct hal_srng *wbm_srng = (struct hal_srng *)
-			soc->tx_comp_ring[IPA_TX_COMP_RING_IDX].hal_srng;
 	struct hal_srng *reo_srng = (struct hal_srng *)
 			soc->reo_dest_ring[IPA_REO_DEST_RING_IDX].hal_srng;
 	uint32_t tx_comp_doorbell_dmaaddr;
 	uint32_t rx_ready_doorbell_dmaaddr;
+	int ret = 0;
 
 	if (!pdev) {
 		dp_err("Invalid instance");
@@ -770,20 +803,22 @@ QDF_STATUS dp_ipa_set_doorbell_paddr(struct cdp_soc_t *soc_hdl, uint8_t pdev_id)
 				ioremap(ipa_res->tx_comp_doorbell_paddr, 4);
 
 	if (qdf_mem_smmu_s1_enabled(soc->osdev)) {
-		pld_smmu_map(soc->osdev->dev, ipa_res->tx_comp_doorbell_paddr,
-			     &tx_comp_doorbell_dmaaddr, sizeof(uint32_t));
+		ret = pld_smmu_map(soc->osdev->dev,
+				   ipa_res->tx_comp_doorbell_paddr,
+				   &tx_comp_doorbell_dmaaddr,
+				   sizeof(uint32_t));
 		ipa_res->tx_comp_doorbell_paddr = tx_comp_doorbell_dmaaddr;
+		qdf_assert_always(!ret);
 
-		pld_smmu_map(soc->osdev->dev, ipa_res->rx_ready_doorbell_paddr,
-			     &rx_ready_doorbell_dmaaddr, sizeof(uint32_t));
+		ret = pld_smmu_map(soc->osdev->dev,
+				   ipa_res->rx_ready_doorbell_paddr,
+				   &rx_ready_doorbell_dmaaddr,
+				   sizeof(uint32_t));
 		ipa_res->rx_ready_doorbell_paddr = rx_ready_doorbell_dmaaddr;
+		qdf_assert_always(!ret);
 	}
 
-	hal_srng_dst_set_hp_paddr(wbm_srng, ipa_res->tx_comp_doorbell_paddr);
-
-	dp_info("paddr %pK vaddr %pK",
-		(void *)ipa_res->tx_comp_doorbell_paddr,
-		(void *)ipa_res->tx_comp_doorbell_vaddr);
+	DP_IPA_SET_TX_DB_PADDR(soc, ipa_res);
 
 	/*
 	 * For RX, REO module on Napier/Hastings does reordering on incoming
@@ -792,7 +827,8 @@ QDF_STATUS dp_ipa_set_doorbell_paddr(struct cdp_soc_t *soc_hdl, uint8_t pdev_id)
 	 * to IPA.
 	 * Set the doorbell addr for the REO ring.
 	 */
-	hal_srng_dst_set_hp_paddr(reo_srng, ipa_res->rx_ready_doorbell_paddr);
+	hal_srng_dst_set_hp_paddr_confirm(reo_srng,
+					  ipa_res->rx_ready_doorbell_paddr);
 	return QDF_STATUS_SUCCESS;
 }
 
@@ -1224,8 +1260,8 @@ QDF_STATUS dp_ipa_setup(struct cdp_soc_t *soc_hdl, uint8_t pdev_id,
 	qdf_ipa_wdi_pipe_setup_info_t *tx = NULL;
 	qdf_ipa_wdi_pipe_setup_info_t *rx = NULL;
 	qdf_ipa_wdi_pipe_setup_info_smmu_t *tx_smmu;
-	qdf_ipa_wdi_pipe_setup_info_smmu_t *rx_smmu;
-	qdf_ipa_wdi_conn_in_params_t pipe_in;
+	qdf_ipa_wdi_pipe_setup_info_smmu_t *rx_smmu = NULL;
+	qdf_ipa_wdi_conn_in_params_t *pipe_in = NULL;
 	qdf_ipa_wdi_conn_out_params_t pipe_out;
 	int ret;
 
@@ -1238,22 +1274,25 @@ QDF_STATUS dp_ipa_setup(struct cdp_soc_t *soc_hdl, uint8_t pdev_id,
 	if (!wlan_cfg_is_ipa_enabled(soc->wlan_cfg_ctx))
 		return QDF_STATUS_SUCCESS;
 
-	qdf_mem_zero(&pipe_in, sizeof(pipe_in));
+	pipe_in = qdf_mem_malloc(sizeof(*pipe_in));
+	if (!pipe_in)
+		return QDF_STATUS_E_NOMEM;
+
 	qdf_mem_zero(&pipe_out, sizeof(pipe_out));
 
 	if (is_smmu_enabled)
-		QDF_IPA_WDI_CONN_IN_PARAMS_SMMU_ENABLED(&pipe_in) = true;
+		QDF_IPA_WDI_CONN_IN_PARAMS_SMMU_ENABLED(pipe_in) = true;
 	else
-		QDF_IPA_WDI_CONN_IN_PARAMS_SMMU_ENABLED(&pipe_in) = false;
+		QDF_IPA_WDI_CONN_IN_PARAMS_SMMU_ENABLED(pipe_in) = false;
 
-	dp_setup_mcc_sys_pipes(sys_in, &pipe_in);
+	dp_setup_mcc_sys_pipes(sys_in, pipe_in);
 
 	/* TX PIPE */
-	if (QDF_IPA_WDI_CONN_IN_PARAMS_SMMU_ENABLED(&pipe_in)) {
-		tx_smmu = &QDF_IPA_WDI_CONN_IN_PARAMS_TX_SMMU(&pipe_in);
+	if (QDF_IPA_WDI_CONN_IN_PARAMS_SMMU_ENABLED(pipe_in)) {
+		tx_smmu = &QDF_IPA_WDI_CONN_IN_PARAMS_TX_SMMU(pipe_in);
 		tx_cfg = &QDF_IPA_WDI_SETUP_INFO_SMMU_EP_CFG(tx_smmu);
 	} else {
-		tx = &QDF_IPA_WDI_CONN_IN_PARAMS_TX(&pipe_in);
+		tx = &QDF_IPA_WDI_CONN_IN_PARAMS_TX(pipe_in);
 		tx_cfg = &QDF_IPA_WDI_SETUP_INFO_EP_CFG(tx);
 	}
 
@@ -1277,11 +1316,11 @@ QDF_STATUS dp_ipa_setup(struct cdp_soc_t *soc_hdl, uint8_t pdev_id,
 		dp_ipa_wdi_tx_params(soc, ipa_res, tx, over_gsi);
 
 	/* RX PIPE */
-	if (QDF_IPA_WDI_CONN_IN_PARAMS_SMMU_ENABLED(&pipe_in)) {
-		rx_smmu = &QDF_IPA_WDI_CONN_IN_PARAMS_RX_SMMU(&pipe_in);
+	if (QDF_IPA_WDI_CONN_IN_PARAMS_SMMU_ENABLED(pipe_in)) {
+		rx_smmu = &QDF_IPA_WDI_CONN_IN_PARAMS_RX_SMMU(pipe_in);
 		rx_cfg = &QDF_IPA_WDI_SETUP_INFO_SMMU_EP_CFG(rx_smmu);
 	} else {
-		rx = &QDF_IPA_WDI_CONN_IN_PARAMS_RX(&pipe_in);
+		rx = &QDF_IPA_WDI_CONN_IN_PARAMS_RX(pipe_in);
 		rx_cfg = &QDF_IPA_WDI_SETUP_INFO_EP_CFG(rx);
 	}
 
@@ -1306,16 +1345,17 @@ QDF_STATUS dp_ipa_setup(struct cdp_soc_t *soc_hdl, uint8_t pdev_id,
 	else
 		dp_ipa_wdi_rx_params(soc, ipa_res, rx, over_gsi);
 
-	QDF_IPA_WDI_CONN_IN_PARAMS_NOTIFY(&pipe_in) = ipa_w2i_cb;
-	QDF_IPA_WDI_CONN_IN_PARAMS_PRIV(&pipe_in) = ipa_priv;
+	QDF_IPA_WDI_CONN_IN_PARAMS_NOTIFY(pipe_in) = ipa_w2i_cb;
+	QDF_IPA_WDI_CONN_IN_PARAMS_PRIV(pipe_in) = ipa_priv;
 
 	/* Connect WDI IPA PIPEs */
-	ret = qdf_ipa_wdi_conn_pipes(&pipe_in, &pipe_out);
+	ret = qdf_ipa_wdi_conn_pipes(pipe_in, &pipe_out);
 
 	if (ret) {
 		QDF_TRACE(QDF_MODULE_ID_TXRX, QDF_TRACE_LEVEL_ERROR,
 			  "%s: ipa_wdi_conn_pipes: IPA pipe setup failed: ret=%d",
 			  __func__, ret);
+		qdf_mem_free(pipe_in);
 		return QDF_STATUS_E_FAILURE;
 	}
 
@@ -1333,6 +1373,7 @@ QDF_STATUS dp_ipa_setup(struct cdp_soc_t *soc_hdl, uint8_t pdev_id,
 		QDF_IPA_WDI_CONN_OUT_PARAMS_IS_DB_DDR_MAPPED(&pipe_out);
 
 	soc->ipa_first_tx_db_access = true;
+	qdf_mem_free(pipe_in);
 
 	return QDF_STATUS_SUCCESS;
 }
@@ -1699,14 +1740,12 @@ QDF_STATUS dp_ipa_cleanup(struct cdp_soc_t *soc_hdl, uint8_t pdev_id,
 		ret = pld_smmu_unmap(soc->osdev->dev,
 				     ipa_res->rx_ready_doorbell_paddr,
 				     sizeof(uint32_t));
-		if (ret)
-			dp_err_rl("IPA RX DB smmu unmap failed");
+		qdf_assert_always(!ret);
 
 		ret = pld_smmu_unmap(soc->osdev->dev,
 				     ipa_res->tx_comp_doorbell_paddr,
 				     sizeof(uint32_t));
-		if (ret)
-			dp_err_rl("IPA TX DB smmu unmap failed");
+		qdf_assert_always(!ret);
 	}
 
 exit:
@@ -1735,6 +1774,36 @@ QDF_STATUS dp_ipa_cleanup_iface(char *ifname, bool is_ipv6_enabled)
 	return QDF_STATUS_SUCCESS;
 }
 
+#ifdef IPA_SET_RESET_TX_DB_PA
+static
+QDF_STATUS dp_ipa_reset_tx_doorbell_pa(struct dp_soc *soc,
+				       struct dp_ipa_resources *ipa_res)
+{
+	hal_ring_handle_t wbm_srng =
+			soc->tx_comp_ring[IPA_TX_COMP_RING_IDX].hal_srng;
+	qdf_dma_addr_t hp_addr;
+
+	if (!wbm_srng)
+		return QDF_STATUS_E_FAILURE;
+
+	hp_addr = soc->ipa_uc_tx_rsc.ipa_wbm_hp_shadow_paddr;
+
+	hal_srng_dst_set_hp_paddr_confirm((struct hal_srng *)wbm_srng, hp_addr);
+
+	dp_info("Reset WBM HP addr paddr: %pK", (void *)hp_addr);
+
+	return QDF_STATUS_SUCCESS;
+}
+
+#define DP_IPA_EP_SET_TX_DB_PA(soc, ipa_res) \
+				dp_ipa_set_tx_doorbell_paddr((soc), (ipa_res))
+#define DP_IPA_RESET_TX_DB_PA(soc, ipa_res) \
+				dp_ipa_reset_tx_doorbell_pa((soc), (ipa_res))
+#else
+#define DP_IPA_EP_SET_TX_DB_PA(soc, ipa_res)
+#define DP_IPA_RESET_TX_DB_PA(soc, ipa_res)
+#endif
+
 QDF_STATUS dp_ipa_enable_pipes(struct cdp_soc_t *soc_hdl, uint8_t pdev_id)
 {
 	struct dp_soc *soc = cdp_soc_t_to_dp_soc(soc_hdl);
@@ -1753,6 +1822,7 @@ QDF_STATUS dp_ipa_enable_pipes(struct cdp_soc_t *soc_hdl, uint8_t pdev_id)
 	ipa_res = &pdev->ipa_resource;
 
 	qdf_atomic_set(&soc->ipa_pipes_enabled, 1);
+	DP_IPA_EP_SET_TX_DB_PA(soc, ipa_res);
 	dp_ipa_handle_rx_buf_pool_smmu_mapping(soc, pdev, true);
 
 	result = qdf_ipa_wdi_enable_pipes();
@@ -1761,12 +1831,15 @@ QDF_STATUS dp_ipa_enable_pipes(struct cdp_soc_t *soc_hdl, uint8_t pdev_id)
 			  "%s: Enable WDI PIPE fail, code %d",
 			  __func__, result);
 		qdf_atomic_set(&soc->ipa_pipes_enabled, 0);
+		DP_IPA_RESET_TX_DB_PA(soc, ipa_res);
 		dp_ipa_handle_rx_buf_pool_smmu_mapping(soc, pdev, false);
 		return QDF_STATUS_E_FAILURE;
 	}
 
 	if (soc->ipa_first_tx_db_access) {
-		hal_srng_dst_init_hp(wbm_srng, ipa_res->tx_comp_doorbell_vaddr);
+		hal_srng_dst_init_hp(
+			soc->hal_soc, wbm_srng,
+			ipa_res->tx_comp_doorbell_vaddr);
 		soc->ipa_first_tx_db_access = false;
 	}
 
@@ -1779,11 +1852,22 @@ QDF_STATUS dp_ipa_disable_pipes(struct cdp_soc_t *soc_hdl, uint8_t pdev_id)
 	struct dp_pdev *pdev =
 		dp_get_pdev_from_soc_pdev_id_wifi3(soc, pdev_id);
 	QDF_STATUS result;
+	struct dp_ipa_resources *ipa_res;
 
 	if (!pdev) {
 		dp_err("Invalid instance");
 		return QDF_STATUS_E_FAILURE;
 	}
+
+	ipa_res = &pdev->ipa_resource;
+
+	qdf_sleep(TX_COMP_DRAIN_WAIT_TIMEOUT_MS);
+	/*
+	 * Reset the tx completion doorbell address before invoking IPA disable
+	 * pipes API to ensure that there is no access to IPA tx doorbell
+	 * address post disable pipes.
+	 */
+	DP_IPA_RESET_TX_DB_PA(soc, ipa_res);
 
 	result = qdf_ipa_wdi_disable_pipes();
 	if (result) {

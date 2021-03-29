@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2019-2021 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -48,6 +48,10 @@
  */
 #define CORRELATE_TX_EV_MODULE_ID 1
 
+#define get_u16_lsb(value) (uint16_t)(value)
+#define get_u16_msb(value) (uint16_t)(((uint32_t)value) >> 16)
+#define get_gain_db(value) ((value) & 0xFF)
+
 /**
  * target_if_cfr_init_pdev() - Inits cfr pdev and registers necessary handlers.
  * @psoc: pointer to psoc object
@@ -55,8 +59,9 @@
  *
  * Return: Registration status for necessary handlers
  */
-int target_if_cfr_init_pdev(struct wlan_objmgr_psoc *psoc,
-			    struct wlan_objmgr_pdev *pdev);
+QDF_STATUS
+target_if_cfr_init_pdev(struct wlan_objmgr_psoc *psoc,
+			struct wlan_objmgr_pdev *pdev);
 
 /**
  * target_if_cfr_deinit_pdev() - De-inits corresponding pdev and handlers.
@@ -65,8 +70,9 @@ int target_if_cfr_init_pdev(struct wlan_objmgr_psoc *psoc,
  *
  * Return: De-registration status for necessary handlers
  */
-int target_if_cfr_deinit_pdev(struct wlan_objmgr_psoc *psoc,
-			      struct wlan_objmgr_pdev *pdev);
+QDF_STATUS
+target_if_cfr_deinit_pdev(struct wlan_objmgr_psoc *psoc,
+			  struct wlan_objmgr_pdev *pdev);
 
 /**
  * target_if_cfr_tx_ops_register() - Registers tx ops for cfr module
@@ -87,13 +93,12 @@ int target_if_cfr_enable_cfr_timer(struct wlan_objmgr_pdev *pdev,
 /**
  * target_if_cfr_pdev_set_param() - Function to set params for cfr config
  * @pdev: pointer to pdev object
- * @param_id: param id which has to be set
  * @param_value: value of param being set
  *
  * Return: success/failure of setting param
  */
-int target_if_cfr_pdev_set_param(struct wlan_objmgr_pdev *pdev,
-				 uint32_t param_id, uint32_t param_value);
+int target_if_cfr_periodic_peer_cfr_enable(struct wlan_objmgr_pdev *pdev,
+					   uint32_t param_value);
 /**
  * target_if_cfr_start_capture() - Function to start cfr capture for a peer
  * @pdev: pointer to pdev object

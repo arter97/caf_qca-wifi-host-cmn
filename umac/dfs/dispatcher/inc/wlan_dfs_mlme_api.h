@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016-2020 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
  *
  *
  * Permission to use, copy, modify, and/or distribute this software for
@@ -51,6 +51,19 @@ void dfs_mlme_mark_dfs(struct wlan_objmgr_pdev *pdev,
 			uint16_t freq,
 			uint16_t vhtop_ch_freq_seg2,
 			uint64_t flags);
+
+#if defined(WLAN_DFS_PARTIAL_OFFLOAD) && defined(HOST_DFS_SPOOF_TEST)
+/**
+ * dfs_mlme_proc_spoof_success() - Process Spoof Completion status
+ * @pdev: Pointer to DFS pdev object.
+ */
+void dfs_mlme_proc_spoof_success(struct wlan_objmgr_pdev *pdev);
+#else
+static inline void
+dfs_mlme_proc_spoof_success(struct wlan_objmgr_pdev *pdev)
+{
+}
+#endif
 
 /**
  * dfs_mlme_start_csa() - Sends CSA in ieeeChan
@@ -442,7 +455,14 @@ bool dfs_mlme_is_inter_band_chan_switch_allowed(struct wlan_objmgr_pdev *pdev);
  *
  * Return: void.
  */
+#ifdef QCA_HW_MODE_SWITCH
 void dfs_mlme_acquire_radar_mode_switch_lock(struct wlan_objmgr_pdev *pdev);
+#else
+static inline
+void dfs_mlme_acquire_radar_mode_switch_lock(struct wlan_objmgr_pdev *pdev)
+{
+}
+#endif
 
 /**
  * dfs_mlme_release_radar_mode_switch_lock() - Release lock taken for radar
@@ -451,5 +471,12 @@ void dfs_mlme_acquire_radar_mode_switch_lock(struct wlan_objmgr_pdev *pdev);
  *
  * Return: void.
  */
+#ifdef QCA_HW_MODE_SWITCH
 void dfs_mlme_release_radar_mode_switch_lock(struct wlan_objmgr_pdev *pdev);
+#else
+static inline
+void dfs_mlme_release_radar_mode_switch_lock(struct wlan_objmgr_pdev *pdev)
+{
+}
+#endif
 #endif /* _WLAN_DFS_MLME_API_H_ */

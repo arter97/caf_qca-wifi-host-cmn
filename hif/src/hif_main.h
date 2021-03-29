@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2020 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2013-2021 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -89,7 +89,7 @@
 #define QCA6290_EMULATION_DEVICE_ID (0xabcd)
 #define QCA6290_DEVICE_ID (0x1100)
 #define QCN9000_DEVICE_ID (0x1104)
-#define QCN9100_DEVICE_ID (0xFFFB)
+#define QCN6122_DEVICE_ID (0xFFFB)
 #define QCA6390_EMULATION_DEVICE_ID (0x0108)
 #define QCA6390_DEVICE_ID (0x1101)
 /* TODO: change IDs for HastingsPrime */
@@ -99,6 +99,10 @@
 /* TODO: change IDs for Moselle */
 #define QCA6750_EMULATION_DEVICE_ID (0x010c)
 #define QCA6750_DEVICE_ID (0x1105)
+
+/* TODO: change IDs for Hamilton */
+#define WCN7850_EMULATION_DEVICE_ID (0xfffa)
+#define WCN7850_DEVICE_ID (0x1107)
 
 #define ADRASTEA_DEVICE_ID_P2_E12 (0x7021)
 #define AR9887_DEVICE_ID    (0x0050)
@@ -143,6 +147,22 @@ struct hif_ce_stats {
 	int ce_ring_delta_fail_count;
 };
 
+#ifdef HIF_DETECTION_LATENCY_ENABLE
+struct hif_latency_detect {
+	qdf_timer_t detect_latency_timer;
+	uint32_t detect_latency_timer_timeout;
+	bool is_timer_started;
+	bool enable_detection;
+	/* threshold when stall happens */
+	uint32_t detect_latency_threshold;
+	int ce2_tasklet_sched_cpuid;
+	qdf_time_t ce2_tasklet_sched_time;
+	qdf_time_t ce2_tasklet_exec_time;
+	qdf_time_t credit_request_time;
+	qdf_time_t credit_report_time;
+};
+#endif
+
 /*
  * Note: For MCL, #if defined (HIF_CONFIG_SLUB_DEBUG_ON) needs to be checked
  * for defined here
@@ -186,7 +206,7 @@ struct hif_softc {
 	/* Packet statistics */
 	struct hif_ce_stats pkt_stats;
 	enum hif_target_status target_status;
-	uint64_t event_disable_mask;
+	uint64_t event_enable_mask;
 
 	struct targetdef_s *targetdef;
 	struct ce_reg_def *target_ce_def;
@@ -204,6 +224,10 @@ struct hif_softc {
 	atomic_t link_suspended;
 	uint32_t *vaddr_rri_on_ddr;
 	qdf_dma_addr_t paddr_rri_on_ddr;
+#ifdef CONFIG_BYPASS_QMI
+	uint32_t *vaddr_qmi_bypass;
+	qdf_dma_addr_t paddr_qmi_bypass;
+#endif
 	int linkstate_vote;
 	bool fastpath_mode_on;
 	atomic_t tasklet_from_intr;
@@ -226,6 +250,7 @@ struct hif_softc {
 	uint32_t hif_attribute;
 	int wake_irq;
 	int disable_wake_irq;
+	hif_pm_wake_irq_type wake_irq_type;
 	void (*initial_wakeup_cb)(void *);
 	void *initial_wakeup_priv;
 #ifdef REMOVE_PKT_LOG
@@ -260,6 +285,13 @@ struct hif_softc {
 	/* Flag to indicate whether bus is suspended */
 	bool bus_suspended;
 	bool pktlog_init;
+#ifdef FEATURE_RUNTIME_PM
+	/* Variable to track the link state change in RTPM */
+	qdf_atomic_t pm_link_state;
+#endif
+#ifdef HIF_DETECTION_LATENCY_ENABLE
+	struct hif_latency_detect latency_detect;
+#endif
 };
 
 static inline
@@ -315,7 +347,7 @@ static inline void hif_set_event_hist_mask(struct hif_opaque_softc *hif_handle)
 {
 	struct hif_softc *scn = (struct hif_softc *)hif_handle;
 
-	scn->event_disable_mask = HIF_EVENT_HIST_DISABLE_MASK;
+	scn->event_enable_mask = HIF_EVENT_HIST_ENABLE_MASK;
 }
 #else
 static inline void hif_set_event_hist_mask(struct hif_opaque_softc *hif_handle)
@@ -467,4 +499,5 @@ void hif_uninit_rri_on_ddr(struct hif_softc *scn);
 static inline
 void hif_uninit_rri_on_ddr(struct hif_softc *scn) {}
 #endif
+void hif_cleanup_static_buf_to_target(struct hif_softc *scn);
 #endif /* __HIF_MAIN_H__ */

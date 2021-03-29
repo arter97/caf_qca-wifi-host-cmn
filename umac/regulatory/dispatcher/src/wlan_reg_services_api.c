@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017-2020 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2017-2021 The Linux Foundation. All rights reserved.
  *
  *
  * Permission to use, copy, modify, and/or distribute this software for
@@ -85,20 +85,6 @@ QDF_STATUS wlan_reg_get_max_5g_bw_from_regdomain(uint16_t regdmn,
 }
 
 #ifdef CONFIG_CHAN_NUM_API
-/**
- * wlan_reg_get_channel_state() - Get channel state from regulatory
- * @ch: channel number.
- *
- * Return: channel state
- */
-enum channel_state wlan_reg_get_channel_state(struct wlan_objmgr_pdev *pdev,
-					      uint8_t ch)
-{
-	/*
-	 * Get channel state from regulatory
-	 */
-	return reg_get_channel_state(pdev, ch);
-}
 
 bool
 wlan_reg_chan_has_dfs_attribute(struct wlan_objmgr_pdev *pdev, uint8_t ch)
@@ -138,24 +124,6 @@ enum channel_state wlan_reg_get_2g_bonded_channel_state(
 	 * Get channel state from regulatory
 	 */
 	return reg_get_2g_bonded_channel_state(pdev, ch, sec_ch, bw);
-}
-
-/**
- * wlan_reg_set_channel_params() - Sets channel parameteres for given bandwidth
- * @ch: channel number.
- * @ch_params: pointer to the channel parameters.
- *
- * Return: None
- */
-void wlan_reg_set_channel_params(struct wlan_objmgr_pdev *pdev, uint8_t ch,
-				 uint8_t sec_ch_2g,
-				 struct ch_params *ch_params)
-{
-	/*
-	 * Set channel parameters like center frequency for a bonded channel
-	 * state. Also return the maximum bandwidth supported by the channel.
-	 */
-	reg_set_channel_params(pdev, ch, sec_ch_2g, ch_params);
 }
 #endif /* CONFIG_CHAN_NUM_API */
 
@@ -216,29 +184,6 @@ uint16_t wlan_reg_get_bw_value(enum phy_ch_width bw)
 }
 
 qdf_export_symbol(wlan_reg_get_bw_value);
-
-#ifdef CONFIG_CHAN_NUM_API
-/**
- * wlan_reg_get_bonded_channel_state() - Get 2G bonded channel state
- * @ch: channel number.
- * @bw: channel band width
- *
- * Return: channel state
- */
-enum channel_state
-wlan_reg_get_bonded_channel_state(struct wlan_objmgr_pdev *pdev,
-				  uint8_t ch,
-				  enum phy_ch_width bw, uint8_t sec_ch)
-{
-	if (WLAN_REG_IS_24GHZ_CH(ch))
-		return reg_get_2g_bonded_channel_state(pdev, ch,
-						       sec_ch, bw);
-	else
-		return reg_get_5g_bonded_channel_state(pdev, ch,
-						       bw);
-}
-
-#endif /* CONFIG_CHAN_NUM_API */
 
 /**
  * wlan_reg_set_dfs_region () - Get the current dfs region
@@ -440,6 +385,36 @@ QDF_STATUS wlan_regulatory_deinit(void)
 	return ret_status;
 }
 
+#ifdef CONFIG_BAND_6GHZ
+static void
+regulatory_assign_register_master_ext_handler(struct wlan_objmgr_psoc *psoc,
+					struct wlan_lmac_if_reg_tx_ops *tx_ops)
+{
+	if (tx_ops->register_master_ext_handler)
+		tx_ops->register_master_ext_handler(psoc, NULL);
+}
+
+static void
+regulatory_assign_unregister_master_ext_handler(struct wlan_objmgr_psoc *psoc,
+					struct wlan_lmac_if_reg_tx_ops *tx_ops)
+{
+	if (tx_ops->unregister_master_ext_handler)
+		tx_ops->unregister_master_ext_handler(psoc, NULL);
+}
+#else
+static inline void
+regulatory_assign_register_master_ext_handler(struct wlan_objmgr_psoc *psoc,
+					struct wlan_lmac_if_reg_tx_ops *tx_ops)
+{
+}
+
+static inline void
+regulatory_assign_unregister_master_ext_handler(struct wlan_objmgr_psoc *psoc,
+					struct wlan_lmac_if_reg_tx_ops *tx_ops)
+{
+}
+#endif
+
 QDF_STATUS regulatory_psoc_open(struct wlan_objmgr_psoc *psoc)
 {
 	struct wlan_lmac_if_reg_tx_ops *tx_ops;
@@ -447,6 +422,7 @@ QDF_STATUS regulatory_psoc_open(struct wlan_objmgr_psoc *psoc)
 	tx_ops = reg_get_psoc_tx_ops(psoc);
 	if (tx_ops->register_master_handler)
 		tx_ops->register_master_handler(psoc, NULL);
+	regulatory_assign_register_master_ext_handler(psoc, tx_ops);
 	if (tx_ops->register_11d_new_cc_handler)
 		tx_ops->register_11d_new_cc_handler(psoc, NULL);
 	if (tx_ops->register_ch_avoid_event_handler)
@@ -464,6 +440,7 @@ QDF_STATUS regulatory_psoc_close(struct wlan_objmgr_psoc *psoc)
 		tx_ops->unregister_11d_new_cc_handler(psoc, NULL);
 	if (tx_ops->unregister_master_handler)
 		tx_ops->unregister_master_handler(psoc, NULL);
+	regulatory_assign_unregister_master_ext_handler(psoc, tx_ops);
 	if (tx_ops->unregister_ch_avoid_event_handler)
 		tx_ops->unregister_ch_avoid_event_handler(psoc, NULL);
 
@@ -551,14 +528,6 @@ uint8_t wlan_reg_freq_to_chan(struct wlan_objmgr_pdev *pdev,
 }
 
 qdf_export_symbol(wlan_reg_freq_to_chan);
-
-qdf_freq_t wlan_reg_chan_to_freq(struct wlan_objmgr_pdev *pdev,
-				 uint8_t chan_num)
-{
-	return reg_chan_to_freq(pdev, chan_num);
-}
-
-qdf_export_symbol(wlan_reg_chan_to_freq);
 
 qdf_freq_t wlan_reg_legacy_chan_to_freq(struct wlan_objmgr_pdev *pdev,
 					uint8_t chan_num)
@@ -716,6 +685,8 @@ wlan_reg_get_tx_ops(struct wlan_objmgr_psoc *psoc)
 	return reg_get_psoc_tx_ops(psoc);
 }
 
+qdf_export_symbol(wlan_reg_get_tx_ops);
+
 QDF_STATUS wlan_reg_get_curr_regdomain(struct wlan_objmgr_pdev *pdev,
 		struct cur_regdmn_info *cur_regdmn)
 {
@@ -766,18 +737,6 @@ qdf_freq_t wlan_reg_max_5ghz_chan_freq(void)
 }
 #endif /* CONFIG_CHAN_FREQ_API */
 
-#ifdef CONFIG_CHAN_NUM_API
-bool wlan_reg_is_24ghz_ch(uint8_t chan)
-{
-	return reg_is_24ghz_ch(chan);
-}
-
-bool wlan_reg_is_5ghz_ch(uint8_t chan)
-{
-	return reg_is_5ghz_ch(chan);
-}
-#endif /* CONFIG_CHAN_NUM_API */
-
 bool wlan_reg_is_24ghz_ch_freq(qdf_freq_t freq)
 {
 	return reg_is_24ghz_ch_freq(freq);
@@ -796,6 +755,11 @@ bool wlan_reg_is_range_overlap_2g(qdf_freq_t low_freq, qdf_freq_t high_freq)
 bool wlan_reg_is_range_overlap_5g(qdf_freq_t low_freq, qdf_freq_t high_freq)
 {
 	return reg_is_range_overlap_5g(low_freq, high_freq);
+}
+
+bool wlan_reg_is_freq_indoor(struct wlan_objmgr_pdev *pdev, qdf_freq_t freq)
+{
+	return reg_is_freq_indoor(pdev, freq);
 }
 
 #ifdef CONFIG_BAND_6GHZ
@@ -872,10 +836,12 @@ qdf_freq_t wlan_reg_chan_band_to_freq(struct wlan_objmgr_pdev *pdev,
 
 qdf_export_symbol(wlan_reg_chan_band_to_freq);
 
+#ifdef CONFIG_49GHZ_CHAN
 bool wlan_reg_is_49ghz_freq(qdf_freq_t freq)
 {
 	return reg_is_49ghz_freq(freq);
 }
+#endif /* CONFIG_49GHZ_CHAN */
 
 uint8_t wlan_reg_ch_num(uint32_t ch_enum)
 {
@@ -904,17 +870,6 @@ enum band_info wlan_reg_chan_to_band(uint8_t chan_num)
 }
 
 qdf_export_symbol(wlan_reg_chan_to_band);
-
-/**
- * wlan_reg_get_chan_enum() - Get channel enum for given channel number
- * @chan_num: Channel number
- *
- * Return: Channel enum
- */
-enum channel_enum wlan_reg_get_chan_enum(uint8_t chan_num)
-{
-	return reg_get_chan_enum(chan_num);
-}
 #endif /* CONFIG_CHAN_NUM_API */
 
 bool wlan_reg_is_regdmn_en302502_applicable(struct wlan_objmgr_pdev *pdev)
@@ -962,6 +917,12 @@ enum channel_enum wlan_reg_get_chan_enum_for_freq(qdf_freq_t freq)
 	return reg_get_chan_enum_for_freq(freq);
 }
 
+bool wlan_reg_is_freq_present_in_cur_chan_list(struct wlan_objmgr_pdev *pdev,
+					       qdf_freq_t freq)
+{
+	return reg_is_freq_present_in_cur_chan_list(pdev, freq);
+}
+
 bool wlan_reg_is_etsi13_srd_chan_for_freq(struct wlan_objmgr_pdev *pdev,
 					  qdf_freq_t freq)
 {
@@ -1007,6 +968,12 @@ bool wlan_reg_is_disable_for_freq(struct wlan_objmgr_pdev *pdev,
 				  qdf_freq_t freq)
 {
 	return reg_is_disable_for_freq(pdev, freq);
+}
+
+bool wlan_reg_is_passive_for_freq(struct wlan_objmgr_pdev *pdev,
+				  qdf_freq_t freq)
+{
+	return reg_is_passive_for_freq(pdev, freq);
 }
 
 QDF_STATUS
@@ -1252,3 +1219,75 @@ enum band_info wlan_reg_band_bitmap_to_band_info(uint32_t band_bitmap)
 	return reg_band_bitmap_to_band_info(band_bitmap);
 }
 #endif
+
+#if defined(CONFIG_BAND_6GHZ)
+QDF_STATUS wlan_reg_get_rnr_tpe_usable(struct wlan_objmgr_pdev *pdev,
+				       bool *reg_rnr_tpe_usable)
+{
+	return reg_get_rnr_tpe_usable(pdev, reg_rnr_tpe_usable);
+}
+
+QDF_STATUS wlan_reg_get_unspecified_ap_usable(struct wlan_objmgr_pdev *pdev,
+					      bool *reg_unspecified_ap_usable)
+{
+	return reg_get_unspecified_ap_usable(pdev, reg_unspecified_ap_usable);
+}
+
+QDF_STATUS
+wlan_reg_get_cur_6g_client_type(struct wlan_objmgr_pdev *pdev,
+				enum reg_6g_client_type
+				*reg_cur_6g_client_mobility_type)
+{
+	return reg_get_cur_6g_client_type(pdev,
+					  reg_cur_6g_client_mobility_type);
+}
+
+bool wlan_reg_is_6g_psd_power(struct wlan_objmgr_pdev *pdev)
+{
+	return reg_is_6g_psd_power(pdev);
+}
+
+QDF_STATUS wlan_reg_get_6g_chan_ap_power(struct wlan_objmgr_pdev *pdev,
+					 qdf_freq_t chan_freq, bool *is_psd,
+					 uint16_t *tx_power,
+					 uint16_t *eirp_psd_power)
+{
+	return reg_get_6g_chan_ap_power(pdev, chan_freq, is_psd,
+					tx_power, eirp_psd_power);
+}
+
+QDF_STATUS
+wlan_reg_get_client_power_for_connecting_ap(struct wlan_objmgr_pdev *pdev,
+					    enum reg_6g_ap_type ap_type,
+					    qdf_freq_t chan_freq,
+					    bool *is_psd, uint16_t *tx_power,
+					    uint16_t *eirp_psd_power)
+{
+	return reg_get_client_power_for_connecting_ap(pdev, ap_type, chan_freq,
+						      is_psd, tx_power,
+						      eirp_psd_power);
+}
+
+QDF_STATUS
+wlan_reg_get_client_power_for_6ghz_ap(struct wlan_objmgr_pdev *pdev,
+				      enum reg_6g_client_type client_type,
+				      qdf_freq_t chan_freq,
+				      bool *is_psd, uint16_t *tx_power,
+				      uint16_t *eirp_psd_power)
+{
+	return reg_get_client_power_for_6ghz_ap(pdev, client_type, chan_freq,
+						is_psd, tx_power,
+						eirp_psd_power);
+}
+
+enum reg_6g_ap_type
+wlan_reg_decide_6g_ap_pwr_type(struct wlan_objmgr_pdev *pdev)
+{
+	return reg_decide_6g_ap_pwr_type(pdev);
+}
+#endif /* CONFIG_BAND_6GHZ */
+
+bool wlan_reg_is_ext_tpc_supported(struct wlan_objmgr_psoc *psoc)
+{
+	return reg_is_ext_tpc_supported(psoc);
+}

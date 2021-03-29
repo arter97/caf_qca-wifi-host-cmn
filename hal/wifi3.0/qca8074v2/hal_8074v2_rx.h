@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016-2020 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -286,6 +286,20 @@
 			      HWIO_REO_R0_GENERAL_ENABLE_ADDR( \
 			      SEQ_WCSS_UMAC_REO_REG_OFFSET), \
 			      (reg_val)); \
+		(reg_val) = \
+		HAL_REG_READ((soc), \
+			     HWIO_REO_R0_DESTINATION_RING_ALT_CTRL_IX_0_ADDR(	\
+			     SEQ_WCSS_UMAC_REO_REG_OFFSET)); \
+		(reg_val) &= \
+			~(HWIO_REO_R0_DESTINATION_RING_ALT_CTRL_IX_0_DEST_RING_ALT_MAPPING_0_BMSK); \
+		(reg_val) |= \
+			HAL_SM(HWIO_REO_R0_DESTINATION_RING_ALT_CTRL_IX_0, \
+			       DEST_RING_ALT_MAPPING_0, \
+			       (reo_params)->alt_dst_ind_0); \
+		HAL_REG_WRITE((soc), \
+			      HWIO_REO_R0_DESTINATION_RING_ALT_CTRL_IX_0_ADDR( \
+			      SEQ_WCSS_UMAC_REO_REG_OFFSET), \
+			      (reg_val)); \
 	} while (0)
 
 #define HAL_RX_MSDU_DESC_INFO_GET(msdu_details_ptr) \
@@ -545,6 +559,36 @@ void hal_rx_get_rtt_info_8074v2(void *rx_tlv,
 	HAL_RX_GET(rx_tlv,
 		   PHYRX_PKT_END_13_RX_PKT_END_DETAILS_RX_LOCATION_INFO_DETAILS,
 		   RESERVED_8);
+
+	ppdu_info->cfr_info.rx_start_ts =
+	HAL_RX_GET(rx_tlv,
+		   PHYRX_PKT_END_9_RX_PKT_END_DETAILS_RX_LOCATION_INFO_DETAILS,
+		   RX_START_TS);
+
+	ppdu_info->cfr_info.rtt_cfo_measurement = (int16_t)
+	HAL_RX_GET(rx_tlv,
+		   PHYRX_PKT_END_13_RX_PKT_END_DETAILS_RX_LOCATION_INFO_DETAILS,
+		   RTT_CFO_MEASUREMENT);
+
+	ppdu_info->cfr_info.agc_gain_info0 =
+	HAL_RX_GET(rx_tlv,
+		   PHYRX_PKT_END_1_RX_PKT_END_DETAILS,
+		   PHY_TIMESTAMP_1_LOWER_32);
+
+	ppdu_info->cfr_info.agc_gain_info1 =
+	HAL_RX_GET(rx_tlv,
+		   PHYRX_PKT_END_2_RX_PKT_END_DETAILS,
+		   PHY_TIMESTAMP_1_UPPER_32);
+
+	ppdu_info->cfr_info.agc_gain_info2 =
+	HAL_RX_GET(rx_tlv,
+		   PHYRX_PKT_END_3_RX_PKT_END_DETAILS,
+		   PHY_TIMESTAMP_2_LOWER_32);
+
+	ppdu_info->cfr_info.agc_gain_info3 =
+	HAL_RX_GET(rx_tlv,
+		   PHYRX_PKT_END_4_RX_PKT_END_DETAILS,
+		   PHY_TIMESTAMP_2_UPPER_32);
 }
 #endif
 

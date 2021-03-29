@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016-2020 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -573,8 +573,7 @@ hal_rx_status_get_tlv_info_generic(void *rx_tlv_hdr, void *ppduinfo,
 		ppdu_info->rx_status.chan_freq =
 			(HAL_RX_GET(rx_tlv, RX_PPDU_START_1,
 				SW_PHY_META_DATA) & 0xFFFF0000)>>16;
-		if (ppdu_info->rx_status.chan_num &&
-		    ppdu_info->rx_status.chan_freq) {
+		if (ppdu_info->rx_status.chan_num) {
 			ppdu_info->rx_status.chan_freq =
 				hal_rx_radiotap_num_to_freq(
 				ppdu_info->rx_status.chan_num,
@@ -594,9 +593,8 @@ hal_rx_status_get_tlv_info_generic(void *rx_tlv_hdr, void *ppduinfo,
 		break;
 
 	case WIFIRX_PPDU_END_E:
-		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_DEBUG,
-			"[%s][%d] ppdu_end_e len=%d",
-				__func__, __LINE__, tlv_len);
+		dp_nofl_debug("[%s][%d] ppdu_end_e len=%d",
+			      __func__, __LINE__, tlv_len);
 		/* This is followed by sub-TLVs of PPDU_END */
 		ppdu_info->rx_state = HAL_RX_MON_PPDU_END;
 		break;
@@ -903,7 +901,7 @@ hal_rx_status_get_tlv_info_generic(void *rx_tlv_hdr, void *ppduinfo,
 		case TARGET_TYPE_QCA6018:
 		case TARGET_TYPE_QCA5018:
 		case TARGET_TYPE_QCN9000:
-		case TARGET_TYPE_QCN9100:
+		case TARGET_TYPE_QCN6122:
 #ifdef QCA_WIFI_QCA6390
 		case TARGET_TYPE_QCA6390:
 #endif
@@ -1449,53 +1447,45 @@ hal_rx_status_get_tlv_info_generic(void *rx_tlv_hdr, void *ppduinfo,
 		rssi_value = HAL_RX_GET(rssi_info_tlv,
 					RECEIVE_RSSI_INFO_0, RSSI_PRI20_CHAIN0);
 		ppdu_info->rx_status.rssi[0] = rssi_value;
-		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_DEBUG,
-			  "RSSI_PRI20_CHAIN0: %d\n", rssi_value);
+		dp_nofl_debug("RSSI_PRI20_CHAIN0: %d\n", rssi_value);
 
 		rssi_value = HAL_RX_GET(rssi_info_tlv,
 					RECEIVE_RSSI_INFO_2, RSSI_PRI20_CHAIN1);
 		ppdu_info->rx_status.rssi[1] = rssi_value;
-		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_DEBUG,
-			  "RSSI_PRI20_CHAIN1: %d\n", rssi_value);
+		dp_nofl_debug("RSSI_PRI20_CHAIN1: %d\n", rssi_value);
 
 		rssi_value = HAL_RX_GET(rssi_info_tlv,
 					RECEIVE_RSSI_INFO_4, RSSI_PRI20_CHAIN2);
 		ppdu_info->rx_status.rssi[2] = rssi_value;
-		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_DEBUG,
-			  "RSSI_PRI20_CHAIN2: %d\n", rssi_value);
+		dp_nofl_debug("RSSI_PRI20_CHAIN2: %d\n", rssi_value);
 
 		rssi_value = HAL_RX_GET(rssi_info_tlv,
 					RECEIVE_RSSI_INFO_6, RSSI_PRI20_CHAIN3);
 		ppdu_info->rx_status.rssi[3] = rssi_value;
-		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_DEBUG,
-			  "RSSI_PRI20_CHAIN3: %d\n", rssi_value);
+		dp_nofl_debug("RSSI_PRI20_CHAIN3: %d\n", rssi_value);
 
 		rssi_value = HAL_RX_GET(rssi_info_tlv,
 					RECEIVE_RSSI_INFO_8, RSSI_PRI20_CHAIN4);
 		ppdu_info->rx_status.rssi[4] = rssi_value;
-		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_DEBUG,
-			  "RSSI_PRI20_CHAIN4: %d\n", rssi_value);
+		dp_nofl_debug("RSSI_PRI20_CHAIN4: %d\n", rssi_value);
 
 		rssi_value = HAL_RX_GET(rssi_info_tlv,
 					RECEIVE_RSSI_INFO_10,
 					RSSI_PRI20_CHAIN5);
 		ppdu_info->rx_status.rssi[5] = rssi_value;
-		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_DEBUG,
-			  "RSSI_PRI20_CHAIN5: %d\n", rssi_value);
+		dp_nofl_debug("RSSI_PRI20_CHAIN5: %d\n", rssi_value);
 
 		rssi_value = HAL_RX_GET(rssi_info_tlv,
 					RECEIVE_RSSI_INFO_12,
 					RSSI_PRI20_CHAIN6);
 		ppdu_info->rx_status.rssi[6] = rssi_value;
-		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_DEBUG,
-			  "RSSI_PRI20_CHAIN6: %d\n", rssi_value);
+		dp_nofl_debug("RSSI_PRI20_CHAIN6: %d\n", rssi_value);
 
 		rssi_value = HAL_RX_GET(rssi_info_tlv,
 					RECEIVE_RSSI_INFO_14,
 					RSSI_PRI20_CHAIN7);
 		ppdu_info->rx_status.rssi[7] = rssi_value;
-		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_DEBUG,
-			  "RSSI_PRI20_CHAIN7: %d\n", rssi_value);
+		dp_nofl_debug("RSSI_PRI20_CHAIN7: %d\n", rssi_value);
 		break;
 	}
 	case WIFIPHYRX_OTHER_RECEIVE_INFO_E:
@@ -1642,6 +1632,22 @@ hal_rx_status_get_tlv_info_generic(void *rx_tlv_hdr, void *ppduinfo,
 	return HAL_TLV_STATUS_PPDU_NOT_DONE;
 }
 
+static void hal_setup_reo_swap(struct hal_soc *soc)
+{
+	uint32_t reg_val;
+
+	reg_val = HAL_REG_READ(soc, HWIO_REO_R0_CACHE_CTL_CONFIG_ADDR(
+		SEQ_WCSS_UMAC_REO_REG_OFFSET));
+
+	reg_val |= HAL_SM(HWIO_REO_R0_CACHE_CTL_CONFIG, WRITE_STRUCT_SWAP, 1);
+	reg_val |= HAL_SM(HWIO_REO_R0_CACHE_CTL_CONFIG, READ_STRUCT_SWAP, 1);
+
+#if defined(QDF_BIG_ENDIAN_MACHINE)
+	HAL_REG_WRITE(soc, HWIO_REO_R0_CACHE_CTL_CONFIG_ADDR(
+		SEQ_WCSS_UMAC_REO_REG_OFFSET), reg_val);
+#endif
+}
+
 /**
  * hal_reo_setup - Initialize HW REO block
  *
@@ -1665,6 +1671,9 @@ static void hal_reo_setup_generic(struct hal_soc *soc,
 	/* TODO: Error destination ring setting is left to default.
 	 * Default setting is to send all errors to release ring.
 	 */
+
+	/* Set the reo descriptor swap bits in case of BIG endian platform */
+	hal_setup_reo_swap(soc);
 
 	HAL_REG_WRITE(soc,
 		HWIO_REO_R0_AGING_THRESHOLD_IX_0_ADDR(
@@ -1813,7 +1822,8 @@ void hal_srng_src_hw_init_generic(struct hal_soc *hal,
 			SRNG_SM(SRNG_SRC_FLD(MSI1_BASE_MSB,
 			MSI1_ENABLE), 1);
 		SRNG_SRC_REG_WRITE(srng, MSI1_BASE_MSB, reg_val);
-		SRNG_SRC_REG_WRITE(srng, MSI1_DATA, srng->msi_data);
+		SRNG_SRC_REG_WRITE(srng, MSI1_DATA,
+				   qdf_cpu_to_le32(srng->msi_data));
 	}
 
 	SRNG_SRC_REG_WRITE(srng, BASE_LSB, srng->ring_base_paddr & 0xffffffff);
@@ -1928,7 +1938,8 @@ void hal_srng_dst_hw_init_generic(struct hal_soc *hal,
 			SRNG_SM(SRNG_DST_FLD(MSI1_BASE_MSB,
 			MSI1_ENABLE), 1);
 		SRNG_DST_REG_WRITE(srng, MSI1_BASE_MSB, reg_val);
-		SRNG_DST_REG_WRITE(srng, MSI1_DATA, srng->msi_data);
+		SRNG_DST_REG_WRITE(srng, MSI1_DATA,
+				   qdf_cpu_to_le32(srng->msi_data));
 	}
 
 	SRNG_DST_REG_WRITE(srng, BASE_LSB, srng->ring_base_paddr & 0xffffffff);
@@ -2515,4 +2526,11 @@ static uint32_t	hal_rx_mpdu_end_offset_get_generic(void)
 {
 	return RX_PKT_TLV_OFFSET(mpdu_end_tlv);
 }
+
+#ifndef NO_RX_PKT_HDR_TLV
+static uint32_t	hal_rx_pkt_tlv_offset_get_generic(void)
+{
+	return RX_PKT_TLV_OFFSET(pkt_hdr_tlv);
+}
+#endif
 #endif /* HAL_GENERIC_API_H_ */

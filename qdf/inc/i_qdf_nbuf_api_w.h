@@ -143,4 +143,26 @@ static inline uint8_t qdf_nbuf_is_rx_ipa_smmu_map(qdf_nbuf_t buf)
 {
 	return 0;
 }
+
+/**
+ * qdf_nbuf_set_rx_reo_dest_ind() - set reo destination indication
+ * @buf: Network buffer
+ * @value: reo destination indication value to set
+ *
+ * Return: none
+ */
+static inline void qdf_nbuf_set_rx_reo_dest_ind(qdf_nbuf_t buf,
+						uint8_t value)
+{
+}
+
+static inline void qdf_nbuf_tx_notify_comp_set(qdf_nbuf_t buf, uint8_t val)
+{
+}
+
+static inline uint8_t qdf_nbuf_tx_notify_comp_get(qdf_nbuf_t buf)
+{
+	return 0;
+}
+
 #endif /* _QDF_NBUF_W_H */

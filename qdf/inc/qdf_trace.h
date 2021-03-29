@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2020 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2014-2021 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -596,6 +596,59 @@ QDF_STATUS qdf_trace_spin_lock_init(void)
 #endif
 #endif
 
+#ifdef WLAN_MAX_LOGS_PER_SEC
+/**
+ * qdf_detected_excessive_logging() - Excessive logging detected
+ *
+ * Track logging count using a quasi-tumbling window.
+ * If the max logging count for a given window is exceeded,
+ * return true else fails.
+ *
+ * Return: true/false
+ */
+bool qdf_detected_excessive_logging(void);
+
+/**
+ * qdf_rl_print_count_set() - set the ratelimiting print count
+ * @rl_print_time: ratelimiting print count
+ *
+ * Return: none
+ */
+void qdf_rl_print_count_set(uint32_t rl_print_count);
+
+/**
+ * qdf_rl_print_time_set() - set the ratelimiting print time
+ * @rl_print_time: ratelimiting print time
+ *
+ * Return: none
+ */
+void qdf_rl_print_time_set(uint32_t rl_print_time);
+
+/**
+ * qdf_rl_print_supressed_log() - print the supressed logs count
+ *
+ * Return: none
+ */
+void qdf_rl_print_supressed_log(void);
+
+/**
+ * qdf_rl_print_supressed_inc() - increment the supressed logs count
+ *
+ * Return: none
+ */
+void qdf_rl_print_supressed_inc(void);
+
+#else /* WLAN_MAX_LOGS_PER_SEC */
+static inline bool qdf_detected_excessive_logging(void)
+{
+	return false;
+}
+static inline void qdf_rl_print_count_set(uint32_t rl_print_count) {}
+static inline void qdf_rl_print_time_set(uint32_t rl_print_time) {}
+static inline void qdf_rl_print_supressed_log(void) {}
+static inline void qdf_rl_print_supressed_inc(void) {}
+#endif /* WLAN_MAX_LOGS_PER_SEC */
+
 #ifdef ENABLE_MTRACE_LOG
 /**
  * qdf_mtrace_log() - Logs a message tracepoint to DIAG
@@ -791,9 +844,22 @@ enum qdf_dp_tx_rx_status qdf_dp_get_status_from_htt(uint8_t status);
  * Return : the status that from qdf_dp_tx_rx_status
  */
 enum qdf_dp_tx_rx_status qdf_dp_get_status_from_a_status(uint8_t status);
+/**
+ * qdf_dp_trace_ptr() - record dptrace
+ * @code: dptrace code
+ * @pdev_id: pdev_id
+ * @data: data
+ * @size: size of data
+ * @msdu_id: msdu_id
+ * @status: return status
+ * @qdf_tx_status: qdf tx rx status
+ *
+ * Return: none
+ */
 void qdf_dp_trace_ptr(qdf_nbuf_t nbuf, enum QDF_DP_TRACE_ID code,
 		      uint8_t pdev_id, uint8_t *data, uint8_t size,
-		      uint16_t msdu_id, uint16_t status);
+		      uint16_t msdu_id, uint16_t buf_arg_status,
+		      enum qdf_dp_tx_rx_status qdf_tx_status);
 void qdf_dp_trace_throttle_live_mode(bool high_bw_request);
 
 /**
@@ -1534,19 +1600,23 @@ int qdf_sprint_symbol(char *buffer, void *addr);
  * @name: String to identify this entry
  */
 static inline
-void qdf_minidump_log(void *start_addr, size_t size, const char *name)
+void qdf_minidump_log(void *start_addr,
+		      const size_t size, const char *name)
 {
 	__qdf_minidump_log(start_addr, size, name);
 }
 
 /**
  * qdf_minidump_remove() - Remove memory address from minidump
- * @addr: Start address of the memory previously added
+ * @start_addr: Start address of the memory previously added
+ * @size: Size in bytes
+ * @name: String to identify this entry
  */
 static inline
-void qdf_minidump_remove(void *addr)
+void qdf_minidump_remove(void *start_addr,
+			 const size_t size, const char *name)
 {
-	__qdf_minidump_remove(addr);
+	__qdf_minidump_remove(start_addr, size, name);
 }
 
 #endif /* __QDF_TRACE_H */

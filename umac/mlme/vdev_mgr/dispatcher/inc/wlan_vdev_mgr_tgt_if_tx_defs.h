@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2019-2021 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -265,6 +265,7 @@ struct fils_discovery_tmpl_params {
  * @allow_ht: HT allowed in chan
  * @allow_vht: VHT allowed on chan
  * @set_agile: is agile mode
+ * @is_stadfs_en: STA DFS enabled
  * @phy_mode: phymode (vht80 or ht40 or ...)
  * @cfreq1: centre frequency on primary
  * @cfreq2: centre frequency on secondary
@@ -285,7 +286,8 @@ struct mlme_channel_param {
 		is_chan_passive:1,
 		allow_ht:1,
 		allow_vht:1,
-		set_agile:1;
+		set_agile:1,
+		is_stadfs_en:1;
 	enum wlan_phymode phy_mode;
 	uint32_t cfreq1;
 	uint32_t cfreq2;
@@ -299,9 +301,13 @@ struct mlme_channel_param {
 /**
  * struct vdev_mlme_mvr_param - Multiple vdev restart params
  * @phymode: phymode information
+ * @preferred_tx_streams: preferred tx streams for VAP
+ * @preferred_rx_streams: preferred rx streams for VAP
  */
 struct vdev_mlme_mvr_param {
 	uint32_t phymode;
+	uint32_t preferred_tx_streams;
+	uint32_t preferred_rx_streams;
 };
 
 /**
@@ -388,7 +394,8 @@ struct set_custom_aggr_size_params {
 		 tx_aggr_size_disable:1,
 		 rx_aggr_size_disable:1,
 		 tx_ac_enable:1,
-		 reserved:26;
+		 aggr_ba_enable:1,
+		 reserved:25;
 };
 
 /**

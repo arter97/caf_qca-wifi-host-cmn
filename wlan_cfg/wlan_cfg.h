@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2020 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2013-2021 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -157,8 +157,10 @@ struct wlan_srng_cfg {
  * @rxdma_err_dst_ring: rxdma error detination ring size
  * @raw_mode_war: enable/disable raw mode war
  * @enable_data_stall_detection: flag to enable data stall detection
+ * @enable_force_rx_64_ba: flag to enable force 64 blockack in RX
  * @disable_intra_bss_fwd: flag to disable intra bss forwarding
  * @rxdma1_enable: flag to indicate if rxdma1 is enabled
+ * @delay_mon_replenish: delay monitor buffer replenish
  * @tx_desc_limit_0: tx_desc limit for 5G H
  * @tx_desc_limit_1: tx_desc limit for 2G
  * @tx_desc_limit_2: tx_desc limit for 5G L
@@ -187,10 +189,13 @@ struct wlan_srng_cfg {
  * @pext_stats_enabled: Flag to enable and disabled peer extended stats
  * @is_rx_buff_pool_enabled: flag to enable/disable emergency RX buffer
  *                           pool support
+ * @is_rx_refill_buff_pool_enabled: flag to enable/disable RX refill buffer
+ *                           pool support
  * @rx_pending_high_threshold: threshold of starting pkt drop
  * @rx_pending_low_threshold: threshold of stopping pkt drop
  * @is_swlm_enabled: flag to enable/disable SWLM
  * @tx_per_pkt_vdev_id_check: Enable tx perpkt vdev id check
+ * @wow_check_rx_pending_enable: Enable RX frame pending check in WoW
  */
 struct wlan_cfg_dp_soc_ctxt {
 	int num_int_ctxts;
@@ -198,9 +203,11 @@ struct wlan_cfg_dp_soc_ctxt {
 	int max_alloc_size;
 	int per_pdev_tx_ring;
 	int num_tcl_data_rings;
+	int num_nss_tcl_data_rings;
 	int per_pdev_rx_ring;
 	int per_pdev_lmac_ring;
 	int num_reo_dest_rings;
+	int num_nss_reo_dest_rings;
 	int num_tx_desc_pool;
 	int num_tx_ext_desc_pool;
 	int num_tx_desc;
@@ -266,8 +273,10 @@ struct wlan_cfg_dp_soc_ctxt {
 	uint32_t per_pkt_trace;
 	bool raw_mode_war;
 	bool enable_data_stall_detection;
+	bool enable_force_rx_64_ba;
 	bool disable_intra_bss_fwd;
 	bool rxdma1_enable;
+	bool delay_mon_replenish;
 	int max_ast_idx;
 	int tx_desc_limit_0;
 	int tx_desc_limit_1;
@@ -297,6 +306,7 @@ struct wlan_cfg_dp_soc_ctxt {
 	uint32_t reo_rings_mapping;
 	bool pext_stats_enabled;
 	bool is_rx_buff_pool_enabled;
+	bool is_rx_refill_buff_pool_enabled;
 	uint32_t rx_pending_high_threshold;
 	uint32_t rx_pending_low_threshold;
 	bool is_poll_mode_enabled;
@@ -306,6 +316,7 @@ struct wlan_cfg_dp_soc_ctxt {
 	uint8_t radio0_rx_default_reo;
 	uint8_t radio1_rx_default_reo;
 	uint8_t radio2_rx_default_reo;
+	bool wow_check_rx_pending_enable;
 };
 
 /**
@@ -674,12 +685,20 @@ uint32_t wlan_cfg_max_alloc_size(struct wlan_cfg_dp_soc_ctxt *wlan_cfg_ctx);
 int wlan_cfg_per_pdev_tx_ring(struct wlan_cfg_dp_soc_ctxt *wlan_cfg_ctx);
 
 /*
- * wlan_cfg_num_tcl_data_rings() - Number of TCL Data rings supported by device
+ * wlan_cfg_num_tcl_data_rings() - Number of TCL Data rings (HOST mode)
  * @wlan_cfg_ctx
  *
  * Return: num_tcl_data_rings
  */
 int wlan_cfg_num_tcl_data_rings(struct wlan_cfg_dp_soc_ctxt *wlan_cfg_ctx);
+
+/*
+ * wlan_cfg_num_nss_tcl_data_rings() - Number of TCL Data rings (NSS offload)
+ * @wlan_cfg_ctx
+ *
+ * Return: num_tcl_data_rings
+ */
+int wlan_cfg_num_nss_tcl_data_rings(struct wlan_cfg_dp_soc_ctxt *wlan_cfg_ctx);
 
 /*
  * wlan_cfg_per_pdev_rx_ring() - Return true if Rx rings are mapped as
@@ -700,12 +719,20 @@ int wlan_cfg_per_pdev_rx_ring(struct wlan_cfg_dp_soc_ctxt *wlan_cfg_ctx);
 int wlan_cfg_per_pdev_lmac_ring(struct wlan_cfg_dp_soc_ctxt *wlan_cfg_ctx);
 
 /*
- * wlan_cfg_num_reo_dest_rings() - Number of REO Data rings supported by device
+ * wlan_cfg_num_reo_dest_rings() - Number of REO Data rings (HOST mode)
  * @wlan_cfg_ctx - Configuration Handle
  *
  * Return: num_reo_dest_rings
  */
 int wlan_cfg_num_reo_dest_rings(struct wlan_cfg_dp_soc_ctxt *wlan_cfg_ctx);
+
+/*
+ * wlan_cfg_num_nss_reo_dest_rings() - Number of REO Data rings (NSS offload)
+ * @wlan_cfg_ctx - Configuration Handle
+ *
+ * Return: num_reo_dest_rings
+ */
+int wlan_cfg_num_nss_reo_dest_rings(struct wlan_cfg_dp_soc_ctxt *wlan_cfg_ctx);
 
 /*
  * wlan_cfg_pkt_type() - Default 802.11 encapsulation type
@@ -1413,6 +1440,17 @@ bool wlan_cfg_is_rx_fisa_enabled(struct wlan_cfg_dp_soc_ctxt *cfg);
  */
 bool wlan_cfg_is_rx_buffer_pool_enabled(struct wlan_cfg_dp_soc_ctxt *cfg);
 
+/**
+ * wlan_cfg_is_rx_refill_buffer_pool_enabled() - Get RX refill buffer pool enabled flag
+ *
+ *
+ * @cfg: soc configuration context
+ *
+ * Return: true if enabled, false otherwise.
+ */
+bool wlan_cfg_is_rx_refill_buffer_pool_enabled(struct wlan_cfg_dp_soc_ctxt *cfg);
+
+
 void wlan_cfg_set_tso_desc_attach_defer(struct wlan_cfg_dp_soc_ctxt *cfg,
 					bool val);
 
@@ -1477,6 +1515,13 @@ bool wlan_cfg_is_fst_in_cmem_enabled(struct wlan_cfg_dp_soc_ctxt *cfg);
  */
 bool wlan_cfg_is_swlm_enabled(struct wlan_cfg_dp_soc_ctxt *cfg);
 
+/**
+ * wlan_cfg_is_dp_force_rx_64_ba() - Get force use 64 BA flag
+ * @cfg: config context
+ *
+ * Return: force use 64 BA flag
+ */
+bool wlan_cfg_is_dp_force_rx_64_ba(struct wlan_cfg_dp_soc_ctxt *cfg);
 #endif
 
 /**
@@ -1502,3 +1547,30 @@ uint8_t wlan_cfg_radio1_default_reo_get(struct wlan_cfg_dp_soc_ctxt *cfg);
  * Return: .
  */
 uint8_t wlan_cfg_radio2_default_reo_get(struct wlan_cfg_dp_soc_ctxt *cfg);
+
+/**
+ * wlan_cfg_set_rxdma1_enable() - Enable rxdma1
+ * @cfg: soc configuration context
+ *
+ * Return: .
+ */
+void wlan_cfg_set_rxdma1_enable(struct wlan_cfg_dp_soc_ctxt *wlan_cfg_ctx);
+
+/**
+ * wlan_cfg_is_delay_mon_replenish() - Get if delayed monitor replenish
+ * is enabled
+ * @cfg: soc configuration context
+ *
+ * Return: .
+ */
+void
+wlan_cfg_set_delay_mon_replenish(struct wlan_cfg_dp_soc_ctxt *cfg, bool val);
+/**
+ * wlan_cfg_set_delay_mon_replenish() - Set delayed monitor replenish
+ * @cfg: soc configuration context
+ * @val: val to set
+ *
+ * Return: .
+ */
+bool
+wlan_cfg_is_delay_mon_replenish(struct wlan_cfg_dp_soc_ctxt *cfg);

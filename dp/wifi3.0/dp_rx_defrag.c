@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017-2020 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2017-2021 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -164,8 +164,7 @@ void dp_rx_defrag_waitlist_flush(struct dp_soc *soc)
 
 	TAILQ_INIT(&temp_list);
 
-	QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_DEBUG,
-		  FL("Current time  %u"), now_ms);
+	dp_debug("Current time  %u", now_ms);
 
 	qdf_spin_lock_bh(&soc->rx.defrag.defrag_lock);
 	TAILQ_FOREACH_SAFE(rx_reorder, &soc->rx.defrag.waitlist,
@@ -765,18 +764,22 @@ static QDF_STATUS dp_rx_defrag_tkip_demic(const uint8_t *key,
 					qdf_nbuf_t msdu, uint16_t hdrlen)
 {
 	QDF_STATUS status;
-	uint32_t pktlen = 0;
+	uint32_t pktlen = 0, prev_data_len;
 	uint8_t mic[IEEE80211_WEP_MICLEN];
 	uint8_t mic0[IEEE80211_WEP_MICLEN];
-	qdf_nbuf_t prev = NULL, next;
+	qdf_nbuf_t prev = NULL, prev0, next;
+	uint8_t len0 = 0;
 
 	next = msdu;
+	prev0 = msdu;
 	while (next) {
 		pktlen += (qdf_nbuf_len(next) - hdrlen);
 		prev = next;
 		dp_debug("pktlen %u",
 			 (uint32_t)(qdf_nbuf_len(next) - hdrlen));
 		next = qdf_nbuf_next(next);
+		if (next && !qdf_nbuf_next(next))
+			prev0 = prev;
 	}
 
 	if (!prev) {
@@ -785,10 +788,30 @@ static QDF_STATUS dp_rx_defrag_tkip_demic(const uint8_t *key,
 		return QDF_STATUS_E_DEFRAG_ERROR;
 	}
 
-	qdf_nbuf_copy_bits(prev, qdf_nbuf_len(prev) - dp_f_tkip.ic_miclen,
-			   dp_f_tkip.ic_miclen, (caddr_t)mic0);
-	qdf_nbuf_trim_tail(prev, dp_f_tkip.ic_miclen);
+	prev_data_len = qdf_nbuf_len(prev) - hdrlen;
+	if (prev_data_len < dp_f_tkip.ic_miclen) {
+		if (prev0 == prev) {
+			QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_ERROR,
+				  "%s Fragments don't have MIC header !\n", __func__);
+			return QDF_STATUS_E_DEFRAG_ERROR;
+		}
+		len0 = dp_f_tkip.ic_miclen - (uint8_t)prev_data_len;
+		qdf_nbuf_copy_bits(prev0, qdf_nbuf_len(prev0) - len0, len0,
+				   (caddr_t)mic0);
+		qdf_nbuf_trim_tail(prev0, len0);
+	}
+
+	qdf_nbuf_copy_bits(prev, (qdf_nbuf_len(prev) -
+			   (dp_f_tkip.ic_miclen - len0)),
+			   (dp_f_tkip.ic_miclen - len0),
+			   (caddr_t)(&mic0[len0]));
+	qdf_nbuf_trim_tail(prev, (dp_f_tkip.ic_miclen - len0));
 	pktlen -= dp_f_tkip.ic_miclen;
+
+	if (((qdf_nbuf_len(prev) - hdrlen) == 0) && prev != msdu) {
+		qdf_nbuf_free(prev);
+		qdf_nbuf_set_next(prev0, NULL);
+	}
 
 	status = dp_rx_defrag_mic(key, msdu, hdrlen,
 				pktlen, mic);
@@ -825,9 +848,8 @@ static void dp_rx_frag_pull_hdr(qdf_nbuf_t nbuf, uint16_t hdrsize)
 
 	qdf_nbuf_pull_head(nbuf, RX_PKT_TLVS_LEN + hdrsize);
 
-	QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_DEBUG,
-		  "%s: final pktlen %d .11len %d",
-		  __func__, (uint32_t)qdf_nbuf_len(nbuf), hdrsize);
+	dp_debug("final pktlen %d .11len %d",
+		 (uint32_t)qdf_nbuf_len(nbuf), hdrsize);
 }
 
 /*
@@ -917,12 +939,10 @@ dp_rx_construct_fraglist(struct dp_peer *peer, int tid, qdf_nbuf_t head,
 	qdf_nbuf_set_next(head, NULL);
 	qdf_nbuf_set_is_frag(head, 1);
 
-	QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_DEBUG,
-		  "%s: head len %d ext len %d data len %d ",
-		  __func__,
-		  (uint32_t)qdf_nbuf_len(head),
-		  (uint32_t)qdf_nbuf_len(rx_nbuf),
-		  (uint32_t)(head->data_len));
+	dp_debug("head len %d ext len %d data len %d ",
+		 (uint32_t)qdf_nbuf_len(head),
+		 (uint32_t)qdf_nbuf_len(rx_nbuf),
+		 (uint32_t)(head->data_len));
 
 	return QDF_STATUS_SUCCESS;
 }
@@ -1310,7 +1330,7 @@ static QDF_STATUS dp_rx_defrag_reo_reinject(struct dp_peer *peer,
 
 	paddr = qdf_nbuf_get_frag_paddr(head, 0);
 
-	ret = check_x86_paddr(soc, &head, &paddr, rx_desc_pool);
+	ret = dp_check_paddr(soc, &head, &paddr, rx_desc_pool);
 
 	if (ret == QDF_STATUS_E_FAILURE) {
 		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_ERROR,
@@ -1378,8 +1398,7 @@ static QDF_STATUS dp_rx_defrag_reo_reinject(struct dp_peer *peer,
 	hal_srng_access_end(soc->hal_soc, hal_srng);
 
 	DP_STATS_INC(soc, rx.reo_reinject, 1);
-	QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_DEBUG,
-		  "%s: reinjection done !", __func__);
+	dp_debug("reinjection done !");
 	return QDF_STATUS_SUCCESS;
 }
 #endif
@@ -1520,8 +1539,10 @@ static QDF_STATUS dp_rx_defrag(struct dp_peer *peer, unsigned tid,
 
 	/* Convert the header to 802.3 header */
 	dp_rx_defrag_nwifi_to_8023(soc, peer, tid, frag_list_head, hdr_space);
-	if (dp_rx_construct_fraglist(peer, tid, frag_list_head, hdr_space))
-		return QDF_STATUS_E_DEFRAG_ERROR;
+	if (qdf_nbuf_next(frag_list_head)) {
+		if (dp_rx_construct_fraglist(peer, tid, frag_list_head, hdr_space))
+			return QDF_STATUS_E_DEFRAG_ERROR;
+	}
 
 	return QDF_STATUS_SUCCESS;
 }
@@ -1702,8 +1723,8 @@ dp_rx_defrag_store_fragment(struct dp_soc *soc,
 
 	rx_reorder_array_elem = peer->rx_tid[tid].array;
 	if (!rx_reorder_array_elem) {
-		QDF_TRACE(QDF_MODULE_ID_TXRX, QDF_TRACE_LEVEL_ERROR,
-			  "Rcvd Fragmented pkt before peer_tid is setup");
+		dp_err_rl("Rcvd Fragmented pkt before tid setup for peer %pK",
+			  peer);
 		goto discard_frag;
 	}
 
@@ -1925,8 +1946,8 @@ uint32_t dp_rx_frag_handle(struct dp_soc *soc, hal_ring_desc_t ring_desc,
 	/* all buffers in MSDU link belong to same pdev */
 	pdev = dp_get_pdev_for_lmac_id(soc, rx_desc->pool_id);
 	if (!pdev) {
-		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_DEBUG,
-			  "pdev is null for pool_id = %d", rx_desc->pool_id);
+		dp_nofl_debug("pdev is null for pool_id = %d",
+			      rx_desc->pool_id);
 		return rx_bufs_used;
 	}
 

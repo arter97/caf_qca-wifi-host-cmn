@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017-2020 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2017-2021 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -556,6 +556,7 @@ static bool scm_is_fils_config_match(struct scan_filter *filter,
 	int i;
 	struct fils_indication_ie *indication_ie;
 	uint8_t *data;
+	uint8_t *end_ptr;
 
 	if (!filter->fils_scan_filter.realm_check)
 		return true;
@@ -566,22 +567,27 @@ static bool scm_is_fils_config_match(struct scan_filter *filter,
 	indication_ie =
 		(struct fils_indication_ie *)db_entry->ie_list.fils_indication;
 
+	end_ptr = (uint8_t *)indication_ie + indication_ie->len + 2;
 	data = indication_ie->variable_data;
-	if (indication_ie->is_cache_id_present)
+
+	if (indication_ie->is_cache_id_present &&
+	    (data + CACHE_IDENTIFIER_LEN) <= end_ptr)
 		data += CACHE_IDENTIFIER_LEN;
 
-	if (indication_ie->is_hessid_present)
+	if (indication_ie->is_hessid_present &&
+	    (data + HESSID_LEN) <= end_ptr)
 		data += HESSID_LEN;
 
-	for (i = 1; i <= indication_ie->realm_identifiers_cnt; i++) {
+	for (i = 1; i <= indication_ie->realm_identifiers_cnt &&
+	     (data + REALM_HASH_LEN) <= end_ptr; i++) {
 		if (!qdf_mem_cmp(filter->fils_scan_filter.fils_realm,
-				 data, REAM_HASH_LEN))
+				 data, REALM_HASH_LEN))
 			return true;
 		/* Max realm count reached */
 		if (indication_ie->realm_identifiers_cnt == i)
 			break;
 
-		data = data + REAM_HASH_LEN;
+		data = data + REALM_HASH_LEN;
 	}
 
 	return false;
@@ -646,6 +652,10 @@ bool scm_filter_match(struct wlan_objmgr_psoc *psoc,
 		return false;
 
 	if (filter->dot11mode && !scm_check_dot11mode(db_entry, filter))
+		return false;
+
+	if (filter->ignore_6ghz_channel &&
+	    WLAN_REG_IS_6GHZ_CHAN_FREQ(db_entry->channel.chan_freq))
 		return false;
 
 	if (filter->age_threshold && filter->age_threshold <

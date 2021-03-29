@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016-2020 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -24,7 +24,17 @@
 
 #define DP_INVALID_PEER_ID 0xffff
 
+#define DP_PEER_MAX_MEC_IDX 1024	/* maximum index for MEC table */
+#define DP_PEER_MAX_MEC_ENTRY 4096	/* maximum MEC entries in MEC table */
+
 #define DP_FW_PEER_STATS_CMP_TIMEOUT_MSEC 5000
+
+#define dp_peer_alert(params...) QDF_TRACE_FATAL(QDF_MODULE_ID_DP_PEER, params)
+#define dp_peer_err(params...) QDF_TRACE_ERROR(QDF_MODULE_ID_DP_PEER, params)
+#define dp_peer_warn(params...) QDF_TRACE_WARN(QDF_MODULE_ID_DP_PEER, params)
+#define dp_peer_info(params...) \
+	__QDF_TRACE_FL(QDF_TRACE_LEVEL_INFO_HIGH, QDF_MODULE_ID_DP_PEER, ## params)
+#define dp_peer_debug(params...) QDF_TRACE_DEBUG(QDF_MODULE_ID_DP_PEER, params)
 
 typedef void dp_peer_iter_func(struct dp_soc *soc, struct dp_peer *peer,
 			       void *arg);
@@ -594,6 +604,59 @@ void dp_peer_unlink_ast_entry(struct dp_soc *soc,
 			      struct dp_ast_entry *ast_entry,
 			      struct dp_peer *peer);
 
+/**
+ * dp_peer_mec_detach_entry() - Detach the MEC entry
+ * @soc: SoC handle
+ * @mecentry: MEC entry of the node
+ * @ptr: pointer to free list
+ *
+ * The MEC entry is detached from MEC table and added to free_list
+ * to free the object outside lock
+ *
+ * Return: None
+ */
+void dp_peer_mec_detach_entry(struct dp_soc *soc, struct dp_mec_entry *mecentry,
+			      void *ptr);
+
+/**
+ * dp_peer_mec_free_list() - free the MEC entry from free_list
+ * @soc: SoC handle
+ * @ptr: pointer to free list
+ *
+ * Return: None
+ */
+void dp_peer_mec_free_list(struct dp_soc *soc, void *ptr);
+
+/**
+ * dp_peer_mec_add_entry()
+ * @soc: SoC handle
+ * @vdev: vdev to which mec node belongs
+ * @mac_addr: MAC address of mec node
+ *
+ * This function allocates and adds MEC entry to MEC table.
+ * It assumes caller has taken the mec lock to protect the access to these
+ * tables
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS dp_peer_mec_add_entry(struct dp_soc *soc,
+				 struct dp_vdev *vdev,
+				 uint8_t *mac_addr);
+
+/**
+ * dp_peer_mec_hash_find_by_pdevid() - Find MEC entry by MAC address
+ * within pdev
+ * @soc: SoC handle
+ *
+ * It assumes caller has taken the mec_lock to protect the access to
+ * MEC hash table
+ *
+ * Return: MEC entry
+ */
+struct dp_mec_entry *dp_peer_mec_hash_find_by_pdevid(struct dp_soc *soc,
+						     uint8_t pdev_id,
+						     uint8_t *mec_mac_addr);
+
 #define DP_AST_ASSERT(_condition) \
 	do { \
 		if (!(_condition)) { \
@@ -840,6 +903,44 @@ static inline void dp_peer_delete_ast_entries(struct dp_soc *soc,
 #else
 static inline void dp_peer_delete_ast_entries(struct dp_soc *soc,
 					      struct dp_peer *peer)
+{
+}
+#endif
+
+#ifdef FEATURE_MEC
+/**
+ * dp_peer_mec_spinlock_create() - Create the MEC spinlock
+ * @soc: SoC handle
+ *
+ * Return: none
+ */
+void dp_peer_mec_spinlock_create(struct dp_soc *soc);
+
+/**
+ * dp_peer_mec_spinlock_destroy() - Destroy the MEC spinlock
+ * @soc: SoC handle
+ *
+ * Return: none
+ */
+void dp_peer_mec_spinlock_destroy(struct dp_soc *soc);
+
+/**
+ * dp_peer_mec_flush_entries() - Delete all mec entries in table
+ * @soc: Datapath SOC
+ *
+ * Return: None
+ */
+void dp_peer_mec_flush_entries(struct dp_soc *soc);
+#else
+static inline void dp_peer_mec_spinlock_create(struct dp_soc *soc)
+{
+}
+
+static inline void dp_peer_mec_spinlock_destroy(struct dp_soc *soc)
+{
+}
+
+static inline void dp_peer_mec_flush_entries(struct dp_soc *soc)
 {
 }
 #endif

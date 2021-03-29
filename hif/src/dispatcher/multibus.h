@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016-2018, 2020 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2016-2018, 2020-2021 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -69,6 +69,11 @@ struct hif_bus_ops {
 	void (*hif_dump_target_memory)(struct hif_softc *hif_sc,
 				       void *ramdump_base,
 				       uint32_t address, uint32_t size);
+	uint32_t (*hif_reg_read32)(struct hif_softc *hif_sc,
+				   uint32_t offset);
+	void (*hif_reg_write32)(struct hif_softc *hif_sc,
+				uint32_t offset,
+				uint32_t value);
 	void (*hif_ipa_get_ce_resource)(struct hif_softc *hif_sc,
 					qdf_shared_mem_t **ce_sr,
 					uint32_t *sr_ring_size,
@@ -87,6 +92,10 @@ struct hif_bus_ops {
 	bool (*hif_needs_bmi)(struct hif_softc *hif_sc);
 	void (*hif_config_irq_affinity)(struct hif_softc *hif_sc);
 	int (*hif_config_irq_by_ceid)(struct hif_softc *hif_sc, int ce_id);
+	bool (*hif_log_bus_info)(struct hif_softc *scn, uint8_t *data,
+				 unsigned int *offset);
+	int (*hif_enable_grp_irqs)(struct hif_softc *scn);
+	int (*hif_disable_grp_irqs)(struct hif_softc *scn);
 };
 
 #ifdef HIF_SNOC
@@ -264,4 +273,24 @@ void hif_config_irq_affinity(struct hif_softc *hif_sc);
  * Return: 0 on success, negative value on error.
  */
 int hif_config_irq_by_ceid(struct hif_softc *hif_sc, int ce_id);
+
+#ifdef HIF_BUS_LOG_INFO
+/**
+ * hif_log_bus_info() - API to log bus related info
+ * @scn: hif handle
+ * @data: hang event data buffer
+ * @offset: offset at which data needs to be written
+ *
+ * Return:  true if bus_id is invalid else false
+ */
+bool hif_log_bus_info(struct hif_softc *scn, uint8_t *data,
+		      unsigned int *offset);
+#else
+static inline
+bool hif_log_bus_info(struct hif_softc *scn, uint8_t *data,
+		      unsigned int *offset)
+{
+	return false;
+}
+#endif
 #endif /* _MULTIBUS_H_ */

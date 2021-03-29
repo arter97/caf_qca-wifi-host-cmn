@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2019-2021 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -247,6 +247,26 @@ QDF_STATUS mlme_vdev_ops_ext_hdl_multivdev_restart_resp(
 }
 
 #ifdef FEATURE_CM_ENABLE
+QDF_STATUS mlme_cm_ext_hdl_create(struct cnx_mgr *cm_ctx)
+{
+	QDF_STATUS ret = QDF_STATUS_SUCCESS;
+
+	if (glbl_ops && glbl_ops->mlme_cm_ext_hdl_create_cb)
+		ret = glbl_ops->mlme_cm_ext_hdl_create_cb(cm_ctx);
+
+	return ret;
+}
+
+QDF_STATUS mlme_cm_ext_hdl_destroy(struct cnx_mgr *cm_ctx)
+{
+	QDF_STATUS ret = QDF_STATUS_SUCCESS;
+
+	if (glbl_ops && glbl_ops->mlme_cm_ext_hdl_destroy_cb)
+		ret = glbl_ops->mlme_cm_ext_hdl_destroy_cb(cm_ctx);
+
+	return ret;
+}
+
 QDF_STATUS mlme_cm_connect_start_ind(struct wlan_objmgr_vdev *vdev,
 				     struct wlan_cm_connect_req *req)
 {
@@ -292,8 +312,30 @@ QDF_STATUS mlme_cm_connect_req(struct wlan_objmgr_vdev *vdev,
 	return ret;
 }
 
+QDF_STATUS mlme_cm_roam_start_ind(struct wlan_objmgr_vdev *vdev,
+				  struct wlan_cm_roam_req *req)
+{
+	QDF_STATUS ret = QDF_STATUS_SUCCESS;
+
+	if ((glbl_ops) && glbl_ops->mlme_cm_ext_roam_start_ind_cb)
+		ret = glbl_ops->mlme_cm_ext_roam_start_ind_cb(vdev, req);
+
+	return ret;
+}
+
+QDF_STATUS mlme_cm_reassoc_req(struct wlan_objmgr_vdev *vdev,
+			       struct wlan_cm_vdev_reassoc_req *req)
+{
+	QDF_STATUS ret = QDF_STATUS_SUCCESS;
+
+	if ((glbl_ops) && glbl_ops->mlme_cm_ext_reassoc_req_cb)
+		ret = glbl_ops->mlme_cm_ext_reassoc_req_cb(vdev, req);
+
+	return ret;
+}
+
 QDF_STATUS mlme_cm_connect_complete_ind(struct wlan_objmgr_vdev *vdev,
-					struct wlan_cm_connect_rsp *rsp)
+					struct wlan_cm_connect_resp *rsp)
 {
 	QDF_STATUS ret = QDF_STATUS_SUCCESS;
 
@@ -357,7 +399,7 @@ QDF_STATUS mlme_cm_vdev_down_req(struct wlan_objmgr_vdev *vdev)
 }
 
 QDF_STATUS mlme_cm_osif_connect_complete(struct wlan_objmgr_vdev *vdev,
-				    struct wlan_cm_connect_rsp *rsp)
+				    struct wlan_cm_connect_resp *rsp)
 {
 	QDF_STATUS ret = QDF_STATUS_SUCCESS;
 
@@ -369,7 +411,7 @@ QDF_STATUS mlme_cm_osif_connect_complete(struct wlan_objmgr_vdev *vdev,
 
 QDF_STATUS
 mlme_cm_osif_failed_candidate_ind(struct wlan_objmgr_vdev *vdev,
-				  struct wlan_cm_connect_rsp *rsp)
+				  struct wlan_cm_connect_resp *rsp)
 {
 	QDF_STATUS ret = QDF_STATUS_SUCCESS;
 
@@ -417,6 +459,29 @@ QDF_STATUS mlme_cm_osif_disconnect_start_ind(struct wlan_objmgr_vdev *vdev)
 	return ret;
 }
 
+#ifdef WLAN_FEATURE_ROAM_OFFLOAD
+QDF_STATUS mlme_cm_osif_roam_start_ind(struct wlan_objmgr_vdev *vdev)
+{
+	QDF_STATUS ret = QDF_STATUS_SUCCESS;
+
+	if (glbl_cm_ops &&
+	    glbl_cm_ops->mlme_cm_roam_start_cb)
+		ret = glbl_cm_ops->mlme_cm_roam_start_cb(vdev);
+
+	return ret;
+}
+
+QDF_STATUS mlme_cm_osif_roam_abort_ind(struct wlan_objmgr_vdev *vdev)
+{
+	QDF_STATUS ret = QDF_STATUS_SUCCESS;
+
+	if (glbl_cm_ops &&
+	    glbl_cm_ops->mlme_cm_roam_abort_cb)
+		ret = glbl_cm_ops->mlme_cm_roam_abort_cb(vdev);
+
+	return ret;
+}
+#endif
 void mlme_set_osif_cm_cb(osif_cm_get_global_ops_cb osif_cm_ops)
 {
 	glbl_cm_ops_cb = osif_cm_ops;

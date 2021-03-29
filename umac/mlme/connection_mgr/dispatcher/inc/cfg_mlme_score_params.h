@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012-2020, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012-2021, The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -1061,7 +1061,7 @@
  * BSSID.
  * @Min: 0
  * @Max: 1
- * @Default: 1
+ * @Default: 1 - AP and 0 - non AP
  *
  * This ini is used to give priority to BSS for connection which comes
  * as part of bssid_hint
@@ -1076,9 +1076,90 @@
  */
 #define CFG_IS_BSSID_HINT_PRIORITY CFG_INI_UINT(\
 			"is_bssid_hint_priority",\
-			0, 1, 0,\
+			0, 1, \
+			PLATFORM_VALUE(0, 1), \
 			CFG_VALUE_OR_DEFAULT, \
 			"Set priority for connection with bssid_hint")
+
+/*
+ * <ini>
+ * vendor_roam_score_algorithm - Algorithm to calculate AP score
+ * @Min: false
+ * @Max: true
+ * @Default: false
+ *
+ * By default the value is false and default roam algorithm will be used.
+ * When the value is true, the V2 roaming algorithm will be used:
+ * For this V2 algo, AP score calculation is based on ETP and below equation:
+ * AP Score = (RSSIfactor * rssiweight(0.65)) + (CUfactor *cuweight(0.35))
+ *
+ * Related: None
+ *
+ * Supported Feature: roam score algorithm
+ *
+ * Usage: External
+ *
+ * </ini>
+ */
+#define CFG_VENDOR_ROAM_SCORE_ALGORITHM \
+	CFG_INI_BOOL("vendor_roam_score_algorithm", false, \
+	"Roam candidate selection score algorithm")
+
+#ifdef CONFIG_BAND_6GHZ
+/*
+ * <ini>
+ * check_6ghz_security - Enable check for 6Ghz allowed security
+ * BSSID.
+ * @Min: 0
+ * @Max: 1
+ * @Default: 0
+ *
+ * This ini is used to Enable check for 6Ghz allowed security. If enabled
+ * only WPA3 and other allowed security will be allowed for 6Ghz connection
+ *
+ * Related: None
+ *
+ * Supported Feature: STA
+ *
+ * Usage: External
+ *
+ * </ini>
+ */
+#define CFG_CHECK_6GHZ_SECURITY CFG_INI_BOOL(\
+				"check_6ghz_security", 0, \
+				"Enable check for 6Ghz allowed security")
+/*
+ * <ini>
+ * key_mgmt_mask_6ghz - AKM bit mask (@wlan_crypto_key_mgmt) allowed in 6Ghz
+ * channel
+ * @Min: 0
+ * @Max: 0xffffffff
+ * @Default: 0xffffffff
+ *
+ * This ini is used to set allowed AKM check for 6Ghz. If enabled
+ * only only AKM bits allowed will be used to connect to candidate.
+ * valid only if check_6ghz_security is 0. By default all AKM are allowed
+ *
+ * Related: check_6Ghz_security
+ *
+ * Supported Feature: STA
+ *
+ * Usage: External
+ *
+ * </ini>
+ */
+#define CFG_6GHZ_ALLOWED_AKM_MASK CFG_INI_UINT(\
+			"key_mgmt_mask_6ghz",\
+			0, DEFAULT_KEYMGMT_6G_MASK, DEFAULT_KEYMGMT_6G_MASK,\
+			CFG_VALUE_OR_DEFAULT, \
+			"Set priority for connection with bssid_hint")
+
+#define CFG_6GHZ_CONFIG \
+	CFG(CFG_CHECK_6GHZ_SECURITY) \
+	CFG(CFG_6GHZ_ALLOWED_AKM_MASK)
+#else
+#define CFG_6GHZ_CONFIG
+#endif
 
 #define CFG_MLME_SCORE_ALL \
 	CFG(CFG_SCORING_RSSI_WEIGHTAGE) \
@@ -1116,6 +1197,8 @@
 	CFG(CFG_SCORING_OCE_WAN_SCORE_IDX_7_TO_4) \
 	CFG(CFG_SCORING_OCE_WAN_SCORE_IDX_11_TO_8) \
 	CFG(CFG_SCORING_OCE_WAN_SCORE_IDX_15_TO_12) \
-	CFG(CFG_IS_BSSID_HINT_PRIORITY)
+	CFG(CFG_IS_BSSID_HINT_PRIORITY) \
+	CFG(CFG_VENDOR_ROAM_SCORE_ALGORITHM) \
+	CFG_6GHZ_CONFIG
 
 #endif /* __CFG_MLME_SCORE_PARAMS_H */

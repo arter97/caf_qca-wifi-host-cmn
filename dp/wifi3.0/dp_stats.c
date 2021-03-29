@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017-2020 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2017-2021 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -70,6 +70,12 @@
 #define DP_REO_ERR_LENGTH (6 * HAL_REO_ERR_MAX)
 #define STATS_PROC_TIMEOUT        (HZ / 1000)
 
+#define dp_stats_alert(params...) QDF_TRACE_FATAL(QDF_MODULE_ID_DP_STATS, params)
+#define dp_stats_err(params...) QDF_TRACE_ERROR(QDF_MODULE_ID_DP_STATS, params)
+#define dp_stats_warn(params...) QDF_TRACE_WARN(QDF_MODULE_ID_DP_STATS, params)
+#define dp_stats_info(params...) \
+	__QDF_TRACE_FL(QDF_TRACE_LEVEL_INFO_HIGH, QDF_MODULE_ID_DP_STATS, ## params)
+#define dp_stats_debug(params...) QDF_TRACE_DEBUG(QDF_MODULE_ID_DP_STATS, params)
 
 static const struct cdp_rate_debug dp_ppdu_rate_string[DOT11_MAX][MAX_MCS] = {
 	{
@@ -85,6 +91,8 @@ static const struct cdp_rate_debug dp_ppdu_rate_string[DOT11_MAX][MAX_MCS] = {
 		{"HE MCS 9 (256-QAM 5/6)  ", MCS_VALID},
 		{"HE MCS 10 (1024-QAM 3/4)", MCS_VALID},
 		{"HE MCS 11 (1024-QAM 5/6)", MCS_VALID},
+		{"HE MCS 12 (4096-QAM 3/4)", MCS_VALID},
+		{"HE MCS 13 (4096-QAM 5/6)", MCS_VALID},
 		{"INVALID ", MCS_VALID},
 	}
 };
@@ -104,6 +112,8 @@ dp_mu_rate_string[RX_TYPE_MU_MAX][MAX_MCS] = {
 		{"HE MU-MIMO MCS 9 (256-QAM 5/6)  ", MCS_VALID},
 		{"HE MU-MIMO MCS 10 (1024-QAM 3/4)", MCS_VALID},
 		{"HE MU-MIMO MCS 11 (1024-QAM 5/6)", MCS_VALID},
+		{"HE MU-MIMO MCS 12 (4096-QAM 3/4)", MCS_VALID},
+		{"HE MU-MIMO MCS 13 (4096-QAM 5/6)", MCS_VALID},
 		{"INVALID ", MCS_VALID},
 	},
 	{
@@ -119,6 +129,8 @@ dp_mu_rate_string[RX_TYPE_MU_MAX][MAX_MCS] = {
 		{"HE OFDMA MCS 9 (256-QAM 5/6)  ", MCS_VALID},
 		{"HE OFDMA MCS 10 (1024-QAM 3/4)", MCS_VALID},
 		{"HE OFDMA MCS 11 (1024-QAM 5/6)", MCS_VALID},
+		{"HE OFDMA MCS 12 (4096-QAM 3/4)", MCS_VALID},
+		{"HE OFDMA MCS 13 (4096-QAM 5/6)", MCS_VALID},
 		{"INVALID ", MCS_VALID},
 	},
 };
@@ -304,8 +316,7 @@ static inline void dp_print_tx_pdev_stats_urrn_tlv_v(uint32_t *tag_buf)
 	char *urrn_stats = qdf_mem_malloc(DP_MAX_STRING_LEN);
 
 	if (!urrn_stats) {
-		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_ERROR,
-			  FL("Output buffer not allocated"));
+		dp_stats_err("Output buffer not allocated");
 		return;
 	}
 
@@ -336,8 +347,7 @@ static inline void dp_print_tx_pdev_stats_flush_tlv_v(uint32_t *tag_buf)
 	char *flush_errs = qdf_mem_malloc(DP_MAX_STRING_LEN);
 
 	if (!flush_errs) {
-		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_ERROR,
-			  FL("Output buffer not allocated"));
+		dp_stats_err("Output buffer not allocated");
 		return;
 	}
 
@@ -370,8 +380,7 @@ static inline void dp_print_tx_pdev_stats_sifs_tlv_v(uint32_t *tag_buf)
 	char *sifs_status = qdf_mem_malloc(DP_MAX_STRING_LEN);
 
 	if (!sifs_status) {
-		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_ERROR,
-			  FL("Output buffer not allocated"));
+		dp_stats_err("Output buffer not allocated");
 		return;
 	}
 
@@ -403,8 +412,7 @@ static inline void dp_print_tx_pdev_stats_phy_err_tlv_v(uint32_t *tag_buf)
 	char *phy_errs = qdf_mem_malloc(DP_MAX_STRING_LEN);
 
 	if (!phy_errs) {
-		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_ERROR,
-			  FL("Output buffer not allocated"));
+		dp_stats_err("Output buffer not allocated");
 		return;
 	}
 
@@ -435,8 +443,7 @@ static inline void dp_print_hw_stats_intr_misc_tlv(uint32_t *tag_buf)
 	char *hw_intr_name = qdf_mem_malloc(DP_MAX_STRING_LEN);
 
 	if (!hw_intr_name) {
-		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_ERROR,
-			  FL("Output buffer not allocated"));
+		dp_stats_err("Output buffer not allocated");
 		return;
 	}
 
@@ -469,8 +476,7 @@ static inline void dp_print_hw_stats_wd_timeout_tlv(uint32_t *tag_buf)
 	char *hw_module_name = qdf_mem_malloc(DP_MAX_STRING_LEN);
 
 	if (!hw_module_name) {
-		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_ERROR,
-			  FL("Output buffer not allocated"));
+		dp_stats_err("Output buffer not allocated");
 		return;
 	}
 
@@ -565,8 +571,7 @@ static inline void dp_print_tx_tid_stats_tlv(uint32_t *tag_buf)
 	char *tid_name = qdf_mem_malloc(DP_MAX_STRING_LEN);
 
 	if (!tid_name) {
-		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_ERROR,
-			  FL("Output buffer not allocated"));
+		dp_stats_err("Output buffer not allocated");
 		return;
 	}
 
@@ -621,8 +626,7 @@ static inline void dp_print_tx_tid_stats_v1_tlv(uint32_t *tag_buf)
 	char *tid_name = qdf_mem_malloc(DP_MAX_STRING_LEN);
 
 	if (!tid_name) {
-		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_ERROR,
-			  FL("Output buffer not allocated"));
+		dp_stats_err("Output buffer not allocated");
 		return;
 	}
 
@@ -677,8 +681,7 @@ static inline void dp_print_rx_tid_stats_tlv(uint32_t *tag_buf)
 	char *tid_name = qdf_mem_malloc(DP_MAX_STRING_LEN);
 
 	if (!tid_name) {
-		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_ERROR,
-			  FL("Output buffer not allocated"));
+		dp_stats_err("Output buffer not allocated");
 		return;
 	}
 
@@ -717,8 +720,7 @@ static inline void dp_print_counter_tlv(uint32_t *tag_buf)
 	char *counter_name = qdf_mem_malloc(DP_MAX_STRING_LEN);
 
 	if (!counter_name) {
-		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_ERROR,
-			  FL("Output buffer not allocated"));
+		dp_stats_err("Output buffer not allocated");
 		return;
 	}
 
@@ -979,8 +981,7 @@ static inline void dp_print_rx_peer_rate_stats_tlv(uint32_t *tag_buf)
 	char *str_buf = qdf_mem_malloc(DP_MAX_STRING_LEN);
 
 	if (!str_buf) {
-		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_ERROR,
-			  FL("Output buffer not allocated"));
+		dp_stats_err("Output buffer not allocated");
 		return;
 	}
 
@@ -1267,8 +1268,7 @@ static inline void dp_print_tx_hwq_difs_latency_stats_tlv_v(uint32_t *tag_buf)
 	char *difs_latency_hist = qdf_mem_malloc(DP_MAX_STRING_LEN);
 
 	if (!difs_latency_hist) {
-		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_ERROR,
-			  FL("Output buffer not allocated"));
+		dp_stats_err("Output buffer not allocated");
 		return;
 	}
 
@@ -1305,8 +1305,7 @@ static inline void dp_print_tx_hwq_cmd_result_stats_tlv_v(uint32_t *tag_buf)
 	char *cmd_result = qdf_mem_malloc(DP_MAX_STRING_LEN);
 
 	if (!cmd_result) {
-		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_ERROR,
-			  FL("Output buffer not allocated"));
+		dp_stats_err("Output buffer not allocated");
 		return;
 	}
 
@@ -1338,8 +1337,7 @@ static inline void dp_print_tx_hwq_cmd_stall_stats_tlv_v(uint32_t *tag_buf)
 	char *cmd_stall_status = qdf_mem_malloc(DP_MAX_STRING_LEN);
 
 	if (!cmd_stall_status) {
-		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_ERROR,
-			  FL("Output buffer not allocated"));
+		dp_stats_err("Output buffer not allocated");
 		return;
 	}
 
@@ -1372,8 +1370,7 @@ static inline void dp_print_tx_hwq_fes_result_stats_tlv_v(uint32_t *tag_buf)
 	char *fes_result = qdf_mem_malloc(DP_MAX_STRING_LEN);
 
 	if (!fes_result) {
-		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_ERROR,
-			  FL("Output buffer not allocated"));
+		dp_stats_err("Output buffer not allocated");
 		return;
 	}
 
@@ -1758,8 +1755,7 @@ static inline void dp_print_sched_txq_cmd_posted_tlv_v(uint32_t *tag_buf)
 	char *sched_cmd_posted = qdf_mem_malloc(DP_MAX_STRING_LEN);
 
 	if (!sched_cmd_posted) {
-		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_ERROR,
-			  FL("Output buffer not allocated"));
+		dp_stats_err("Output buffer not allocated");
 		return;
 	}
 
@@ -1792,8 +1788,7 @@ static inline void dp_print_sched_txq_cmd_reaped_tlv_v(uint32_t *tag_buf)
 	char *sched_cmd_reaped = qdf_mem_malloc(DP_MAX_STRING_LEN);
 
 	if (!sched_cmd_reaped) {
-		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_ERROR,
-			  FL("Output buffer not allocated"));
+		dp_stats_err("Output buffer not allocated");
 		return;
 	}
 
@@ -1899,8 +1894,7 @@ static inline void dp_print_tx_tqm_gen_mpdu_stats_tlv_v(uint32_t *tag_buf)
 	char *gen_mpdu_end_reason = qdf_mem_malloc(DP_MAX_STRING_LEN);
 
 	if (!gen_mpdu_end_reason) {
-		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_ERROR,
-			  FL("Output buffer not allocated"));
+		dp_stats_err("Output buffer not allocated");
 		return;
 	}
 
@@ -1934,8 +1928,7 @@ static inline void dp_print_tx_tqm_list_mpdu_stats_tlv_v(uint32_t *tag_buf)
 	char *list_mpdu_end_reason = qdf_mem_malloc(DP_MAX_STRING_LEN);
 
 	if (!list_mpdu_end_reason) {
-		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_ERROR,
-			  FL("Output buffer not allocated"));
+		dp_stats_err("Output buffer not allocated");
 		return;
 	}
 
@@ -1970,8 +1963,7 @@ static inline void dp_print_tx_tqm_list_mpdu_cnt_tlv_v(uint32_t *tag_buf)
 	char *list_mpdu_cnt_hist = qdf_mem_malloc(DP_MAX_STRING_LEN);
 
 	if (!list_mpdu_cnt_hist) {
-		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_ERROR,
-			  FL("Output buffer not allocated"));
+		dp_stats_err("Output buffer not allocated");
 		return;
 	}
 
@@ -2420,8 +2412,7 @@ static inline void dp_print_ring_if_stats_tlv(uint32_t *tag_buf)
 	char *wm_hit_count = qdf_mem_malloc(DP_MAX_STRING_LEN);
 
 	if (!wm_hit_count) {
-		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_ERROR,
-			  FL("Output buffer not allocated"));
+		dp_stats_err("Output buffer not allocated");
 		return;
 	}
 
@@ -2503,8 +2494,7 @@ static inline void dp_print_sfm_client_user_tlv_v(uint32_t *tag_buf)
 	char *dwords_used_by_user_n = qdf_mem_malloc(DP_MAX_STRING_LEN);
 
 	if (!dwords_used_by_user_n) {
-		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_ERROR,
-			  FL("Output buffer not allocated"));
+		dp_stats_err("Output buffer not allocated");
 		return;
 	}
 
@@ -3479,8 +3469,7 @@ static inline void dp_print_rx_soc_fw_refill_ring_empty_tlv_v(uint32_t *tag_buf)
 	char *refill_ring_empty_cnt = qdf_mem_malloc(DP_MAX_STRING_LEN);
 
 	if (!refill_ring_empty_cnt) {
-		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_ERROR,
-			  FL("Output buffer not allocated"));
+		dp_stats_err("Output buffer not allocated");
 		return;
 	}
 
@@ -3516,8 +3505,7 @@ static inline void dp_print_rx_soc_fw_refill_ring_num_refill_tlv_v(
 	char *refill_ring_num_refill = qdf_mem_malloc(DP_MAX_STRING_LEN);
 
 	if (!refill_ring_num_refill) {
-		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_ERROR,
-			  FL("Output buffer not allocated"));
+		dp_stats_err("Output buffer not allocated");
 		return;
 	}
 
@@ -3672,8 +3660,7 @@ static inline void dp_print_rx_pdev_fw_ring_mpdu_err_tlv_v(uint32_t *tag_buf)
 	char *fw_ring_mpdu_err = qdf_mem_malloc(DP_MAX_STRING_LEN);
 
 	if (!fw_ring_mpdu_err) {
-		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_ERROR,
-			  FL("Output buffer not allocated"));
+		dp_stats_err("Output buffer not allocated");
 		return;
 	}
 
@@ -3704,8 +3691,7 @@ static inline void dp_print_rx_pdev_fw_mpdu_drop_tlv_v(uint32_t *tag_buf)
 	char *fw_mpdu_drop = qdf_mem_malloc(DP_MAX_STRING_LEN);
 
 	if (!fw_mpdu_drop) {
-		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_ERROR,
-			  FL("Output buffer not allocated"));
+		dp_stats_err("Output buffer not allocated");
 		return;
 	}
 
@@ -4369,10 +4355,10 @@ QDF_STATUS dp_peer_stats_notify(struct dp_pdev *dp_pdev, struct dp_peer *peer)
 		return QDF_STATUS_E_FAULT;
 
 	qdf_mem_zero(&peer_stats_intf, sizeof(peer_stats_intf));
-	if (peer_stats->rx.last_rssi != peer_stats->rx.rssi)
+	if (peer_stats->rx.last_snr != peer_stats->rx.snr)
 		peer_stats_intf.rssi_changed = true;
 
-	if ((peer_stats->rx.rssi && peer_stats_intf.rssi_changed) ||
+	if ((peer_stats->rx.snr && peer_stats_intf.rssi_changed) ||
 	    (peer_stats->tx.tx_rate &&
 	     peer_stats->tx.tx_rate != peer_stats->tx.last_tx_rate)) {
 		qdf_mem_copy(peer_stats_intf.peer_mac, peer->mac_addr.raw,
@@ -4380,7 +4366,7 @@ QDF_STATUS dp_peer_stats_notify(struct dp_pdev *dp_pdev, struct dp_peer *peer)
 		peer_stats_intf.vdev_id = peer->vdev->vdev_id;
 		peer_stats_intf.last_peer_tx_rate = peer_stats->tx.last_tx_rate;
 		peer_stats_intf.peer_tx_rate = peer_stats->tx.tx_rate;
-		peer_stats_intf.peer_rssi = peer_stats->rx.rssi;
+		peer_stats_intf.peer_rssi = peer_stats->rx.snr;
 		peer_stats_intf.tx_packet_count = peer_stats->tx.ucast.num;
 		peer_stats_intf.rx_packet_count = peer_stats->rx.to_stack.num;
 		peer_stats_intf.tx_byte_count = peer_stats->tx.tx_success.bytes;
@@ -5012,23 +4998,30 @@ dp_print_ring_stat_from_hal(struct dp_soc *soc,  struct dp_srng *srng,
 	uint32_t headp;
 	int32_t hw_headp = -1;
 	int32_t hw_tailp = -1;
+	uint32_t ring_usage;
 	const char *ring_name;
 	struct hal_soc *hal_soc;
 
 	if (soc && srng && srng->hal_srng) {
 		hal_soc = (struct hal_soc *)soc->hal_soc;
 		ring_name = dp_srng_get_str_from_hal_ring_type(ring_type);
-
 		hal_get_sw_hptp(soc->hal_soc, srng->hal_srng, &tailp, &headp);
+		ring_usage = hal_get_ring_usage(srng->hal_srng,
+						ring_type, &headp, &tailp);
 
-		DP_PRINT_STATS("%s:SW:Head pointer = %d Tail Pointer = %d\n",
-			       ring_name, headp, tailp);
+		DP_PRINT_STATS("%s:SW: Head = %d Tail = %d Ring Usage = %u",
+			       ring_name, headp, tailp, ring_usage);
 
 		hal_get_hw_hptp(soc->hal_soc, srng->hal_srng, &hw_headp,
 				&hw_tailp, ring_type);
-
-		DP_PRINT_STATS("%s:HW:Head pointer = %d Tail Pointer = %d\n",
-			       ring_name, hw_headp, hw_tailp);
+		ring_usage = 0;
+		if (hw_headp >= 0 && tailp >= 0)
+			ring_usage =
+				hal_get_ring_usage(
+					srng->hal_srng, ring_type,
+					&hw_headp, &hw_tailp);
+		DP_PRINT_STATS("%s:HW: Head = %d Tail = %d Ring Usage = %u",
+			       ring_name, hw_headp, hw_tailp, ring_usage);
 	}
 }
 
@@ -5127,6 +5120,9 @@ dp_print_ring_stats(struct dp_pdev *pdev)
 				    RTPM_ID_DP_PRINT_RING_STATS))
 		return;
 
+	dp_print_ring_stat_from_hal(pdev->soc,
+				    &pdev->soc->wbm_idle_link_ring,
+				    WBM_IDLE_LINK);
 	dp_print_ring_stat_from_hal(pdev->soc,
 				    &pdev->soc->reo_exception_ring,
 				    REO_EXCEPTION);
@@ -6022,6 +6018,8 @@ void dp_txrx_path_stats(struct dp_soc *soc)
 			       pdev->soc->stats.rx.err.reo_err_oor_to_stack);
 		DP_PRINT_STATS("REO err oor msdu drop: %u",
 			       pdev->soc->stats.rx.err.reo_err_oor_drop);
+		DP_PRINT_STATS("REO err oor eapol drop: %u",
+			       pdev->soc->stats.rx.err.reo_err_oor_eapol_drop);
 		DP_PRINT_STATS("Rx err msdu rejected: %d",
 			       soc->stats.rx.err.rejected);
 		DP_PRINT_STATS("Rx raw frame dropped: %d",
@@ -6048,6 +6046,8 @@ void dp_txrx_path_stats(struct dp_soc *soc)
 
 		DP_PRINT_STATS("hal ring access full fail: %u msdus",
 			       pdev->soc->stats.rx.err.hal_ring_access_full_fail);
+
+		DP_PRINT_STATS("Rx BAR frames:%d", soc->stats.rx.bar_frame);
 
 		for (error_code = 0; error_code < HAL_REO_ERR_MAX;
 				error_code++) {
@@ -6174,6 +6174,10 @@ dp_print_pdev_tx_stats(struct dp_pdev *pdev)
 		       pdev->stats.tx_i.dropped.desc_na.num);
 	DP_PRINT_STATS("	HW enqueue failed= %d",
 		       pdev->stats.tx_i.dropped.enqueue_fail);
+	DP_PRINT_STATS("        Descriptor alloc fail = %d",
+		       pdev->stats.tx_i.dropped.desc_na_exc_alloc_fail.num);
+	DP_PRINT_STATS("        Tx outstanding too many = %d",
+		       pdev->stats.tx_i.dropped.desc_na_exc_outstand.num);
 	DP_PRINT_STATS("	Pkt dropped in vdev-id check= %d",
 		       pdev->stats.tx_i.dropped.fail_per_pkt_vdev_id_check);
 	DP_PRINT_STATS("	Resources Full = %d",
@@ -6548,6 +6552,8 @@ dp_print_soc_rx_stats(struct dp_soc *soc)
 		       soc->stats.rx.err.defrag_peer_uninit);
 	DP_PRINT_STATS("Pkts delivered no peer = %d",
 		       soc->stats.rx.err.pkt_delivered_no_peer);
+	DP_PRINT_STATS("Pkts drop due to no peer auth :%d",
+		       soc->stats.rx.err.peer_unauth_rx_pkt_drop);
 	DP_PRINT_STATS("Invalid Pdev = %d",
 		       soc->stats.rx.err.invalid_pdev);
 	DP_PRINT_STATS("Invalid Peer = %d",
@@ -6605,6 +6611,9 @@ dp_print_soc_rx_stats(struct dp_soc *soc)
 	DP_PRINT_STATS("REO err oor msdu drop: %d",
 		       soc->stats.rx.err.reo_err_oor_drop);
 
+	DP_PRINT_STATS("REO err oor eapol drop: %d",
+		       soc->stats.rx.err.reo_err_oor_eapol_drop);
+
 	DP_PRINT_STATS("Rx err msdu rejected: %d",
 		       soc->stats.rx.err.rejected);
 
@@ -6613,6 +6622,9 @@ dp_print_soc_rx_stats(struct dp_soc *soc)
 
 	DP_PRINT_STATS("Rx nbuf sanity fail: %d",
 		       soc->stats.rx.err.nbuf_sanity_fail);
+
+	DP_PRINT_STATS("Rx err msdu continuation err: %d",
+		       soc->stats.rx.err.msdu_continuation_err);
 
 	for (i = 0; i < HAL_RXDMA_ERR_MAX; i++) {
 		index += qdf_snprint(&rxdma_error[index],
@@ -6630,6 +6642,12 @@ dp_print_soc_rx_stats(struct dp_soc *soc)
 	DP_PRINT_STATS("REO Error(0-14):%s", reo_error);
 	DP_PRINT_STATS("REO CMD SEND FAIL: %d",
 		       soc->stats.rx.err.reo_cmd_send_fail);
+
+	DP_PRINT_STATS("Rx BAR frames:%d", soc->stats.rx.bar_frame);
+	DP_PRINT_STATS("Rxdma2rel route drop:%d",
+		       soc->stats.rx.rxdma2rel_route_drop);
+	DP_PRINT_STATS("Reo2rel route drop:%d",
+		       soc->stats.rx.reo2rel_route_drop);
 }
 
 #ifdef FEATURE_TSO_STATS

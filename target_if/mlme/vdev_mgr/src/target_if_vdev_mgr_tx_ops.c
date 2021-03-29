@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2019-2021 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -306,6 +306,12 @@ target_if_vdev_mlme_id_2_wmi(uint32_t cfg_id)
 	case WLAN_MLME_CFG_RX_DECAP_TYPE:
 		wmi_id = wmi_vdev_param_rx_decap_type;
 		break;
+	case WLAN_MLME_CFG_ENABLE_DISABLE_RTT_RESPONDER_ROLE:
+		wmi_id = wmi_vdev_param_enable_disable_rtt_responder_role;
+		break;
+	case WLAN_MLME_CFG_ENABLE_DISABLE_RTT_INITIATOR_ROLE:
+		wmi_id = wmi_vdev_param_enable_disable_rtt_initiator_role;
+		break;
 	default:
 		wmi_id = cfg_id;
 		break;
@@ -481,7 +487,7 @@ static QDF_STATUS target_if_vdev_mgr_start_send(
 							  START_RESPONSE_BIT);
 	} else {
 		target_if_vdev_start_link_handler(vdev,
-						  param->channel.dfs_set);
+						  param->is_restart);
 	}
 	return status;
 }

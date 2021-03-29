@@ -127,6 +127,9 @@ struct per_slot_score {
  * @band_weight_per_index: band weight per index
  * @is_bssid_hint_priority: True if bssid_hint is given priority
  * @check_assoc_disallowed: Should assoc be disallowed if MBO OCE IE indicate so
+ * @vendor_roam_score_algorithm: Preferred ETP vendor roam score algorithm
+ * @check_6ghz_security: check security for 6Ghz candidate
+ * @key_mgmt_mask_6ghz: user configurable mask for 6ghz AKM
  */
 struct scoring_cfg {
 	struct weight_cfg weight_config;
@@ -136,8 +139,11 @@ struct scoring_cfg {
 	uint32_t bandwidth_weight_per_index;
 	uint32_t nss_weight_per_index;
 	uint32_t band_weight_per_index;
-	bool is_bssid_hint_priority;
-	bool check_assoc_disallowed;
+	uint8_t is_bssid_hint_priority:1,
+		 check_assoc_disallowed:1,
+		 vendor_roam_score_algorithm:1,
+		 check_6ghz_security:1;
+	uint32_t key_mgmt_mask_6ghz;
 };
 
 /**
@@ -156,12 +162,33 @@ struct pcl_freq_weight_list {
  * enum cm_blacklist_action - action taken by blacklist manager for the bssid
  * @CM_BLM_NO_ACTION: No operation to be taken for the BSSID in the scan list.
  * @CM_BLM_REMOVE: Remove the BSSID from the scan list (AP is blacklisted)
+ * This param is a way to inform the caller that this BSSID is blacklisted
+ * but it is a driver blacklist and we can connect to them if required.
+ * @CM_BLM_FORCE_REMOVE: Forcefully remove the BSSID from scan list.
+ * This param is introduced as we want to differentiate between optional
+ * mandatory blacklisting. Driver blacklisting is optional and won't
+ * fail any CERT or protocol violations as it is internal implementation.
+ * hence FORCE_REMOVE will mean that driver cannot connect to this BSSID
+ * in any situation.
  * @CM_BLM_AVOID: Add the Ap at last of the scan list (AP to Avoid)
  */
 enum cm_blacklist_action {
 	CM_BLM_NO_ACTION,
 	CM_BLM_REMOVE,
+	CM_BLM_FORCE_REMOVE,
 	CM_BLM_AVOID,
+};
+
+/**
+ * struct etp_params - params for estimated throughput
+ * @airtime_fraction: Portion of airtime available for outbound transmissions
+ * @data_ppdu_dur_target_us: Expected duration of a single PPDU, in us
+ * @ba_window_size: Block ack window size of the transmitter
+ */
+struct etp_params {
+	uint32_t airtime_fraction;
+	uint32_t data_ppdu_dur_target_us;
+	uint32_t ba_window_size;
 };
 
 #ifdef FEATURE_BLACKLIST_MGR
@@ -201,6 +228,102 @@ void wlan_cm_calculate_bss_score(struct wlan_objmgr_pdev *pdev,
  */
 void wlan_cm_init_score_config(struct wlan_objmgr_psoc *psoc,
 			       struct scoring_cfg *score_cfg);
+
+/**
+ * wlan_cm_6ghz_allowed_for_akm() - check if 6Ghz channel can be allowed for AKM
+ * @psoc: pointer to psoc object
+ * @key_mgmt: key mgmt used
+ * @rsn_caps: rsn caps
+ * @rsnxe: rsnxe pointer if present
+ * @sae_pwe: support for SAE password
+ * @is_wps: if security is WPS
+ *
+ * Return: bool
+ */
+#ifdef CONFIG_BAND_6GHZ
+bool wlan_cm_6ghz_allowed_for_akm(struct wlan_objmgr_psoc *psoc,
+				  uint32_t key_mgmt, uint16_t rsn_caps,
+				  const uint8_t *rsnxe, uint8_t sae_pwe,
+				  bool is_wps);
+
+/**
+ * wlan_cm_set_check_6ghz_security() - Set check 6Ghz security
+ * @psoc: pointer to psoc object
+ * @value: value to be set
+ *
+ * Return: void
+ */
+void wlan_cm_set_check_6ghz_security(struct wlan_objmgr_psoc *psoc,
+				     bool value);
+
+/**
+ * wlan_cm_reset_check_6ghz_security() - reset check 6Ghz security to orignal
+ * value
+ * @psoc: pointer to psoc object
+ *
+ * Return: void
+ */
+void wlan_cm_reset_check_6ghz_security(struct wlan_objmgr_psoc *psoc);
+
+/**
+ * wlan_cm_get_check_6ghz_security() - Get 6Ghz allowe AKM mask
+ * @psoc: pointer to psoc object
+ * @value: value to be set
+ *
+ * Return: value
+ */
+bool wlan_cm_get_check_6ghz_security(struct wlan_objmgr_psoc *psoc);
+
+/**
+ * wlan_cm_set_6ghz_key_mgmt_mask() - Set 6Ghz allowe AKM mask
+ * @psoc: pointer to psoc object
+ *
+ * Return: void
+ */
+void wlan_cm_set_6ghz_key_mgmt_mask(struct wlan_objmgr_psoc *psoc,
+				    uint32_t value);
+
+/**
+ * wlan_cm_get_6ghz_key_mgmt_mask() - Get 6Ghz allowe AKM mask
+ * @psoc: pointer to psoc object
+ *
+ * Return: value
+ */
+uint32_t wlan_cm_get_6ghz_key_mgmt_mask(struct wlan_objmgr_psoc *psoc);
+
+#else
+static inline bool
+wlan_cm_6ghz_allowed_for_akm(struct wlan_objmgr_psoc *psoc,
+			     uint32_t key_mgmt, uint16_t rsn_caps,
+			     const uint8_t *rsnxe, uint8_t sae_pwe,
+			     bool is_wps)
+{
+	return true;
+}
+
+static inline
+void wlan_cm_set_check_6ghz_security(struct wlan_objmgr_psoc *psoc,
+				     bool value) {}
+
+static inline
+void wlan_cm_reset_check_6ghz_security(struct wlan_objmgr_psoc *psoc) {}
+
+static inline
+bool wlan_cm_get_check_6ghz_security(struct wlan_objmgr_psoc *psoc)
+{
+	return false;
+}
+
+static inline
+void wlan_cm_set_6ghz_key_mgmt_mask(struct wlan_objmgr_psoc *psoc,
+				    uint32_t value) {}
+
+static inline
+uint32_t wlan_cm_get_6ghz_key_mgmt_mask(struct wlan_objmgr_psoc *psoc)
+{
+	return DEFAULT_KEYMGMT_6G_MASK;
+}
+#endif
 
 #ifdef CONN_MGR_ADV_FEATURE
 /**

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016-2020 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
  *
  *
  * Permission to use, copy, modify, and/or distribute this software for
@@ -75,7 +75,7 @@ register_dfs_precac_auto_chan_callbacks_freq(struct dfs_to_mlme *mlme_callback)
 #endif
 
 /**
- * register_dfs_postnol_csa_callback - Register postNOL channel switch callbacks
+ * register_dfs_postnol_csa_callback - Register CSA callback
  * @mlme_callback: Pointer to dfs_to_mlme.
  */
 #ifndef QCA_MCL_DFS_SUPPORT
@@ -169,6 +169,8 @@ void register_dfs_callbacks(void)
 		mlme_release_radar_mode_switch_lock;
 	tmp_dfs_to_mlme->mlme_mark_dfs =
 		mlme_dfs_mark_dfs;
+	tmp_dfs_to_mlme->mlme_proc_spoof_success =
+		mlme_dfs_proc_spoof_success;
 	/*
 	 * Register precac auto channel switch feature related callbacks
 	 */
@@ -500,11 +502,11 @@ QDF_STATUS wlan_dfs_pdev_obj_destroy_notification(struct wlan_objmgr_pdev *pdev,
 
 	/* DFS is NULL during unload. should we call this function before */
 	if (dfs) {
+		dfs_detach(dfs);
 		global_dfs_to_mlme.pdev_component_obj_detach(pdev,
 				WLAN_UMAC_COMP_DFS,
 				(void *)dfs);
 
-		dfs_detach(dfs);
 		dfs->dfs_pdev_obj = NULL;
 		dfs_destroy_object(dfs);
 	}

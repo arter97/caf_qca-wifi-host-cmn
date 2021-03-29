@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012-2015, 2020, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012-2015, 2020-2021, The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -24,12 +24,15 @@
 #define __WLAN_CM_MAIN_H__
 
 #include "include/wlan_vdev_mlme.h"
+#include <qdf_event.h>
 
 #ifdef FEATURE_CM_ENABLE
 #include <wlan_cm_public_struct.h>
 
 /* Max candidate/attempts to be tried to connect */
 #define CM_MAX_CONNECT_ATTEMPTS 5
+#define CM_MAX_CONNECT_TIMEOUT 10000
+
 /*
  * Default max retry attempts to be tried for a candidate.
  * In SAE connection this value will be overwritten from the sae_connect_retries
@@ -99,10 +102,7 @@ struct cm_state_sm {
  * struct cm_connect_req - connect req stored in connect manager
  * @cm_id: Connect manager id
  * @scan_id: scan id for scan for ssid
- * @scan_timer: timer for scan for ssid to get completed
- * @hw_mode_timer: timer for hw mode chane to get completed
  * @req: connect req from osif
- * @rsn_ie: rsn_ie in connect req
  * @candidate_list: candidate list
  * @cur_candidate: current candidate
  * @cur_candidate_retries: attempts for current candidate
@@ -111,14 +111,25 @@ struct cm_state_sm {
 struct cm_connect_req {
 	wlan_cm_id cm_id;
 	wlan_scan_id scan_id;
-	qdf_timer_t scan_timer;
-	qdf_timer_t hw_mode_timer;
 	struct wlan_cm_connect_req req;
-	struct element_info rsn_ie;
 	qdf_list_t *candidate_list;
 	struct scan_cache_node *cur_candidate;
 	uint8_t cur_candidate_retries;
 	uint8_t connect_attempts;
+};
+
+/**
+ * struct cm_roam_req - roam req stored in connect manager
+ * @cm_id: Connect manager id
+ * @req: roam req from osif
+ * @candidate_list: candidate list
+ * @cur_candidate: current candidate
+ */
+struct cm_roam_req {
+	wlan_cm_id cm_id;
+	struct wlan_cm_roam_req req;
+	qdf_list_t *candidate_list;
+	struct scan_cache_node *cur_candidate;
 };
 
 /**
@@ -135,15 +146,21 @@ struct cm_disconnect_req {
  * struct cm_req - connect manager req
  * @node: connection manager req node
  * @cm_id: cm id
+ * @failed_req: set if req failed before serialization,
+ * with a commands pending before it, ie this is the latest command which failed
+ * but still some operation(req) is pending.
  * @connect_req: connect req
- * @disconnect_req: disconnect req
+ * @discon_req: disconnect req
+ * @roam_req: roam req
  */
 struct cm_req {
 	qdf_list_node_t node;
 	wlan_cm_id cm_id;
+	bool failed_req;
 	union {
 		struct cm_connect_req connect_req;
 		struct cm_disconnect_req discon_req;
+		struct cm_roam_req roam_req;
 	};
 };
 
@@ -164,10 +181,63 @@ struct connect_ies {
 };
 
 /**
+ * enum cm_req_del_type - Context in which a request is removed from
+ * connection manager request list
+ * @CM_REQ_DEL_ACTIVE: Remove request from active queue
+ * @CM_REQ_DEL_PENDING: Remove request from pending queue
+ * @CM_REQ_DEL_FLUSH: Request removed due to request list flush
+ */
+enum cm_req_del_type {
+	CM_REQ_DEL_ACTIVE,
+	CM_REQ_DEL_PENDING,
+	CM_REQ_DEL_FLUSH,
+	CM_REQ_DEL_MAX,
+};
+
+#ifdef SM_ENG_HIST_ENABLE
+
+#define CM_REQ_HISTORY_SIZE 30
+
+/**
+ * struct cm_req_history_info - History element structure
+ * @cm_id: Request id
+ * @add_time: Timestamp when the request was added to the list
+ * @del_time: Timestamp when the request was removed from list
+ * @add_cm_state: Conn_SM state when req was added
+ * @del_cm_state: Conn_SM state when req was deleted
+ * @del_type: Context in which delete was triggered. i.e active removal,
+ * pending removal or flush from queue.
+ */
+struct cm_req_history_info {
+	wlan_cm_id cm_id;
+	uint64_t add_time;
+	uint64_t del_time;
+	enum wlan_cm_sm_state add_cm_state;
+	enum wlan_cm_sm_state del_cm_state;
+	enum cm_req_del_type del_type;
+};
+
+/**
+ * struct cm_req_history - Connection manager history
+ * @cm_req_hist_lock: CM request history lock
+ * @index: Index of next entry that will be updated
+ * @data: Array of history element
+ */
+struct cm_req_history {
+	qdf_spinlock_t cm_req_hist_lock;
+	uint8_t index;
+	struct cm_req_history_info data[CM_REQ_HISTORY_SIZE];
+};
+#endif
+
+/**
  * struct cnx_mgr - connect manager req
  * @vdev: vdev back pointer
  * @sm: state machine
  * @active_cm_id: cm_id of the active command, if any active command present
+ * @preauth_in_progress: is roaming in preauth state, set during preauth state,
+ * this is used to get which command to flush from serialization during
+ * host roaming.
  * @req_list: connect/disconnect req list
  * @cm_req_lock: lock to manupulate/read the cm req list
  * @disconnect_count: disconnect count
@@ -178,11 +248,17 @@ struct connect_ies {
  * connect req
  * @global_cmd_id: global cmd id for getting cm id for connect/disconnect req
  * @max_connect_attempts: Max attempts to be tried for a connect req
+ * @connect_timeout: Connect timeout value in milliseconds
+ * @scan_requester_id: scan requester id.
+ * @disconnect_complete: disconnect completion wait event
+ * @ext_cm_ptr: connection manager ext pointer
+ * @history: Holds the connection manager history
  */
 struct cnx_mgr {
 	struct wlan_objmgr_vdev *vdev;
 	struct cm_state_sm sm;
 	wlan_cm_id active_cm_id;
+	bool preauth_in_progress;
 	qdf_list_t req_list;
 #ifdef WLAN_CM_USE_SPINLOCK
 	qdf_spinlock_t cm_req_lock;
@@ -195,6 +271,19 @@ struct cnx_mgr {
 	struct connect_ies req_ie;
 	qdf_atomic_t global_cmd_id;
 	uint8_t max_connect_attempts;
+	uint32_t connect_timeout;
+	wlan_scan_requester scan_requester_id;
+	qdf_event_t disconnect_complete;
+	cm_ext_t *ext_cm_ptr;
+#ifdef SM_ENG_HIST_ENABLE
+	struct cm_req_history req_history;
+#endif
+#ifndef CONN_MGR_ADV_FEATURE
+	void (*cm_candidate_advance_filter)(struct wlan_objmgr_vdev *vdev,
+					    struct scan_filter *filter);
+	void (*cm_candidate_list_custom_sort)(struct wlan_objmgr_vdev *vdev,
+					      qdf_list_t *list);
+#endif
 };
 
 /**

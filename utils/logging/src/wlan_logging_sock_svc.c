@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2020 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2014-2021 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -308,62 +308,48 @@ static int wlan_add_user_log_time_stamp(char *tbuf, size_t tbuf_sz, uint64_t ts)
 }
 
 #ifdef WLAN_MAX_LOGS_PER_SEC
-static qdf_time_t __log_window_end_ticks;
-static qdf_atomic_t __log_window_count;
-
-/**
- * assert_on_excessive_logging() - Check for and panic on excessive logging
- *
- * Track logging count using a quasi-tumbling window, 1 second long. If the max
- * logging count for a given window is exceeded, panic.
- *
- * Return: None
- */
-static void assert_on_excessive_logging(void)
+static inline void wlan_panic_on_excessive_logging(void)
 {
-	qdf_time_t now = qdf_system_ticks();
-
-	/*
-	 * If 'now' is more recent than the end of the window, reset.
-	 *
-	 * Note: This is not thread safe, and can result in more than one reset.
-	 * For our purposes, this is fine.
-	 */
-	if (!qdf_atomic_read(&__log_window_count)) {
-		__log_window_end_ticks = now + qdf_system_ticks_per_sec;
-	} else if (qdf_system_time_after(now, __log_window_end_ticks)) {
-		__log_window_end_ticks = now + qdf_system_ticks_per_sec;
-		qdf_atomic_set(&__log_window_count, 0);
-	}
-
-	/* this _is_ thread safe, and results in at most one panic */
-	if (qdf_atomic_inc_return(&__log_window_count) == WLAN_MAX_LOGS_PER_SEC)
+	if (qdf_detected_excessive_logging())
 		QDF_DEBUG_PANIC("Exceeded %d logs per second",
 				WLAN_MAX_LOGS_PER_SEC);
 }
 #else
-static inline void assert_on_excessive_logging(void) { }
+static inline void wlan_panic_on_excessive_logging(void) {}
 #endif /* WLAN_MAX_LOGS_PER_SEC */
 
+#ifdef QDF_TRACE_PRINT_ENABLE
+static inline void
+log_to_console(QDF_TRACE_LEVEL level, const char *timestamp, const char *msg)
+{
+	if (qdf_detected_excessive_logging()) {
+		qdf_rl_print_supressed_inc();
+		return;
+	}
+
+	qdf_rl_print_supressed_log();
+	pr_err("%s %s\n", timestamp, msg);
+}
+#else
 static inline void
 log_to_console(QDF_TRACE_LEVEL level, const char *timestamp, const char *msg)
 {
 	switch (level) {
 	case QDF_TRACE_LEVEL_FATAL:
 		pr_alert("%s %s\n", timestamp, msg);
-		assert_on_excessive_logging();
+		wlan_panic_on_excessive_logging();
 		break;
 	case QDF_TRACE_LEVEL_ERROR:
 		pr_err("%s %s\n", timestamp, msg);
-		assert_on_excessive_logging();
+		wlan_panic_on_excessive_logging();
 		break;
 	case QDF_TRACE_LEVEL_WARN:
 		pr_warn("%s %s\n", timestamp, msg);
-		assert_on_excessive_logging();
+		wlan_panic_on_excessive_logging();
 		break;
 	case QDF_TRACE_LEVEL_INFO:
 		pr_info("%s %s\n", timestamp, msg);
-		assert_on_excessive_logging();
+		wlan_panic_on_excessive_logging();
 		break;
 	case QDF_TRACE_LEVEL_INFO_HIGH:
 	case QDF_TRACE_LEVEL_INFO_MED:
@@ -374,6 +360,7 @@ log_to_console(QDF_TRACE_LEVEL level, const char *timestamp, const char *msg)
 		break;
 	}
 }
+#endif
 
 int wlan_log_to_user(QDF_TRACE_LEVEL log_level, char *to_be_sent, int length)
 {
@@ -1060,12 +1047,21 @@ static void flush_timer_init(void)
 	gwlan_logging.flush_timer_period = 0;
 }
 
+static void flush_timer_deinit(void)
+{
+	gwlan_logging.is_flush_timer_initialized = false;
+	qdf_spin_lock(&gwlan_logging.flush_timer_lock);
+	qdf_timer_stop(&gwlan_logging.flush_timer);
+	qdf_timer_free(&gwlan_logging.flush_timer);
+	qdf_spin_unlock(&gwlan_logging.flush_timer_lock);
+	qdf_spinlock_destroy(&gwlan_logging.flush_timer_lock);
+}
+
 int wlan_logging_sock_init_svc(void)
 {
 	int i = 0, j, pkt_stats_size;
 	unsigned long irq_flag;
 
-	flush_timer_init();
 	spin_lock_init(&gwlan_logging.spin_lock);
 	spin_lock_init(&gwlan_logging.pkt_stats_lock);
 
@@ -1091,6 +1087,8 @@ int wlan_logging_sock_init_svc(void)
 				  (gwlan_logging.free_list.next);
 	list_del_init(gwlan_logging.free_list.next);
 	spin_unlock_irqrestore(&gwlan_logging.spin_lock, irq_flag);
+
+	flush_timer_init();
 
 	/* Initialize the pktStats data structure here */
 	pkt_stats_size = sizeof(struct pkt_stats_msg);
@@ -1160,22 +1158,13 @@ err2:
 	vfree(gpkt_stats_buffers);
 	gpkt_stats_buffers = NULL;
 err1:
+	flush_timer_deinit();
 	spin_lock_irqsave(&gwlan_logging.spin_lock, irq_flag);
 	gwlan_logging.pcur_node = NULL;
 	spin_unlock_irqrestore(&gwlan_logging.spin_lock, irq_flag);
 	free_log_msg_buffer();
 
 	return -ENOMEM;
-}
-
-static void flush_timer_deinit(void)
-{
-	gwlan_logging.is_flush_timer_initialized = false;
-	qdf_spin_lock(&gwlan_logging.flush_timer_lock);
-	qdf_timer_stop(&gwlan_logging.flush_timer);
-	qdf_timer_free(&gwlan_logging.flush_timer);
-	qdf_spin_unlock(&gwlan_logging.flush_timer_lock);
-	qdf_spinlock_destroy(&gwlan_logging.flush_timer_lock);
 }
 
 int wlan_logging_sock_deinit_svc(void)
@@ -1199,10 +1188,6 @@ int wlan_logging_sock_deinit_svc(void)
 	wake_up_interruptible(&gwlan_logging.wait_queue);
 	wait_for_completion(&gwlan_logging.shutdown_comp);
 
-	spin_lock_irqsave(&gwlan_logging.spin_lock, irq_flag);
-	gwlan_logging.pcur_node = NULL;
-	spin_unlock_irqrestore(&gwlan_logging.spin_lock, irq_flag);
-
 	spin_lock_irqsave(&gwlan_logging.pkt_stats_lock, irq_flag);
 	gwlan_logging.pkt_stats_pcur_node = NULL;
 	gwlan_logging.pkt_stats_msg_idx = 0;
@@ -1212,11 +1197,17 @@ int wlan_logging_sock_deinit_svc(void)
 			dev_kfree_skb(gpkt_stats_buffers[i].skb);
 	}
 	spin_unlock_irqrestore(&gwlan_logging.pkt_stats_lock, irq_flag);
-
 	vfree(gpkt_stats_buffers);
 	gpkt_stats_buffers = NULL;
-	free_log_msg_buffer();
+
+	/* Delete the Flush timer then mark pcur_node NULL */
 	flush_timer_deinit();
+
+	spin_lock_irqsave(&gwlan_logging.spin_lock, irq_flag);
+	gwlan_logging.pcur_node = NULL;
+	spin_unlock_irqrestore(&gwlan_logging.spin_lock, irq_flag);
+
+	free_log_msg_buffer();
 
 	return 0;
 }

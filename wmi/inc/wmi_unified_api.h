@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2020 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2013-2021 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -32,6 +32,7 @@
 #include "wlan_mgmt_txrx_utils_api.h"
 #include <wlan_dfs_public_struct.h>
 #include <wlan_crypto_global_def.h>
+#include "wlan_thermal_public_struct.h"
 #ifdef WLAN_POWER_MANAGEMENT_OFFLOAD
 #include "wmi_unified_pmo_api.h"
 #endif
@@ -118,17 +119,6 @@
 typedef qdf_nbuf_t wmi_buf_t;
 #define wmi_buf_data(_buf) qdf_nbuf_data(_buf)
 
-#define WMI_LOGD(args ...) \
-	QDF_TRACE(QDF_MODULE_ID_WMI, QDF_TRACE_LEVEL_DEBUG, ## args)
-#define WMI_LOGI(args ...) \
-	QDF_TRACE(QDF_MODULE_ID_WMI, QDF_TRACE_LEVEL_INFO, ## args)
-#define WMI_LOGW(args ...) \
-	QDF_TRACE(QDF_MODULE_ID_WMI, QDF_TRACE_LEVEL_WARN, ## args)
-#define WMI_LOGE(args ...) \
-	QDF_TRACE(QDF_MODULE_ID_WMI, QDF_TRACE_LEVEL_ERROR, ## args)
-#define WMI_LOGP(args ...) \
-	QDF_TRACE(QDF_MODULE_ID_WMI, QDF_TRACE_LEVEL_FATAL, ## args)
-
 /* Number of bits to shift to combine 32 bit integer to 64 bit */
 #define WMI_LOWER_BITS_SHIFT_32	0x20
 
@@ -154,13 +144,15 @@ enum wmi_target_type {
  * @WMI_RX_WORK_CTX: work queue context execution provided by WMI layer
  * @WMI_RX_UMAC_CTX: execution context provided by umac layer
  * @WMI_RX_SERIALIZER_CTX: Execution context is serialized thread context
+ * @WMI_RX_DIAG_WORK_CTX: work queue execution context for FW diag events
  *
  */
 enum wmi_rx_exec_ctx {
 	WMI_RX_WORK_CTX,
 	WMI_RX_UMAC_CTX,
 	WMI_RX_TASKLET_CTX = WMI_RX_UMAC_CTX,
-	WMI_RX_SERIALIZER_CTX = 2
+	WMI_RX_SERIALIZER_CTX = 2,
+	WMI_RX_DIAG_WORK_CTX
 };
 
 /**
@@ -505,6 +497,13 @@ int wmi_get_pending_cmds(wmi_unified_t wmi_handle);
 void wmi_set_target_suspend(wmi_unified_t wmi_handle, bool val);
 
 /**
+ *  WMI API to set target suspend command acked flag
+ *  @param wmi_handle      : handle to WMI.
+ *  @param val             : suspend command acked flag boolean
+ */
+void wmi_set_target_suspend_acked(wmi_unified_t wmi_handle, bool val);
+
+/**
  * wmi_is_target_suspended() - WMI API to check target suspend state
  * @wmi_handle: handle to WMI.
  *
@@ -513,6 +512,17 @@ void wmi_set_target_suspend(wmi_unified_t wmi_handle, bool val);
  * Return: true if target is suspended, else false.
  */
 bool wmi_is_target_suspended(struct wmi_unified *wmi_handle);
+
+/**
+ * wmi_is_target_suspend_acked() - WMI API to check target suspend command is
+ *                                 acked or not
+ * @wmi_handle: handle to WMI.
+ *
+ * WMI API to check whether the target suspend command is acked or not
+ *
+ * Return: true if target suspend command is acked, else false.
+ */
+bool wmi_is_target_suspend_acked(struct wmi_unified *wmi_handle);
 
 #ifdef WLAN_FEATURE_WMI_SEND_RECV_QMI
 /**
@@ -599,6 +609,14 @@ wmi_is_blocked(wmi_unified_t wmi_handle);
  */
 void
 wmi_flush_endpoint(wmi_unified_t wmi_handle);
+
+/**
+ * API to stop wmi sequence check
+ *
+ * @param wmi_handle      : handle to WMI.
+ */
+void
+wmi_interface_sequence_stop(wmi_unified_t wmi_handle);
 
 /**
  * wmi_pdev_id_conversion_enable() - API to enable pdev_id and phy_id
@@ -1473,14 +1491,12 @@ QDF_STATUS wmi_unified_process_ll_stats_get_cmd(wmi_unified_t wmi_handle,
  *                                              get station request
  * @wmi_handle: wmi handle
  * @get_req: unified ll stats and get station request command params
- * @is_always_over_qmi: flag to send stats request always over qmi
  *
  * Return: QDF_STATUS_SUCCESS on success and QDF_STATUS_E_FAILURE for failure
  */
 QDF_STATUS wmi_process_unified_ll_stats_get_sta_cmd(
 				wmi_unified_t wmi_handle,
-				const struct ll_stats_get_params *get_req,
-				bool is_always_over_qmi);
+				const struct ll_stats_get_params *get_req);
 #endif /* FEATURE_CLUB_LL_STATS_AND_GET_STATION */
 #endif /* WLAN_FEATURE_LINK_LAYER_STATS */
 
@@ -2947,13 +2963,14 @@ wmi_extract_chan_stats(wmi_unified_t wmi_handle, void *evt_buf,
  * @wmi_handle: wmi handle
  * @evt_buf: Pointer to event buffer
  * @temp: Pointer to hold extracted temperature
- * @level: Pointer to hold extracted level
+ * @level: Pointer to hold extracted level in host enum
  * @pdev_id: Pointer to hold extracted pdev_id
  *
  * Return: QDF_STATUS_SUCCESS on success and QDF_STATUS_E_FAILURE for failure
  */
 QDF_STATUS wmi_extract_thermal_stats(wmi_unified_t wmi_handle, void *evt_buf,
-				     uint32_t *temp, uint32_t *level,
+				     uint32_t *temp,
+				     enum thermal_throttle_level *level,
 				     uint32_t *pdev_id);
 
 /**
@@ -4198,6 +4215,7 @@ wmi_unified_send_injector_frame_config_cmd(wmi_unified_t wmi_handle,
 QDF_STATUS wmi_unified_send_cp_stats_cmd(wmi_unified_t wmi_handle,
 					 void *buf_ptr, uint32_t buf_len);
 
+
 /**
  * wmi_unified_extract_cp_stats_more_pending() - extract more flag
  * @wmi_handle: wmi handle
@@ -4211,5 +4229,66 @@ QDF_STATUS wmi_unified_send_cp_stats_cmd(wmi_unified_t wmi_handle,
 QDF_STATUS
 wmi_unified_extract_cp_stats_more_pending(wmi_unified_t wmi_handle,
 					  void *evt_buf, uint32_t *more_flag);
+
+/**
+ * wmi_unified_send_vdev_tsf_tstamp_action_cmd() - send vdev tsf action command
+ * @wmi: wmi handle
+ * @vdev_id: vdev id
+ *
+ * TSF_TSTAMP_READ_VALUE is the only operation supported
+ * Return: QDF_STATUS_SUCCESS for success or error code
+ */
+QDF_STATUS wmi_unified_send_vdev_tsf_tstamp_action_cmd(wmi_unified_t wmi_hdl,
+						       uint8_t vdev_id);
+
+/**
+ * wmi_extract_vdev_tsf_report_event() - extract vdev tsf report from event
+ * @wmi_handle: wmi handle
+ * @param evt_buf: pointer to event buffer
+ * @wmi_host_tsf_event param: Pointer to hold event info
+ *
+ * Return: QDF_STATUS_SUCCESS on success and QDF_STATUS_E_FAILURE for failure
+ */
+QDF_STATUS wmi_extract_vdev_tsf_report_event(wmi_unified_t wmi_hdl,
+					     uint8_t *evt_buf,
+					     struct wmi_host_tsf_event *param);
+
+/**
+ * wmi_extract_pdev_csa_switch_count_status() - extract CSA switch count status
+ * from event
+ * @wmi_handle: wmi handle
+ * @evt_buf: pointer to event buffer
+ * @param: Pointer to CSA switch count status param
+ *
+ * Return: QDF_STATUS_SUCCESS on success and QDF_STATUS_E_FAILURE for failure
+ */
+QDF_STATUS wmi_extract_pdev_csa_switch_count_status(
+		wmi_unified_t wmi_handle,
+		void *evt_buf,
+		struct pdev_csa_switch_count_status *param);
+
+/**
+ * wmi_validate_handle() - Validate WMI handle
+ * @wmi_handle: wmi handle
+ *
+ * This function will log on error and hence caller should not log on error
+ *
+ * Return: errno if WMI handle is NULL; 0 otherwise
+ */
+#define wmi_validate_handle(wmi_handle) \
+        __wmi_validate_handle(wmi_handle, __func__)
+int __wmi_validate_handle(wmi_unified_t wmi_handle, const char *func);
+
+/**
+ * wmi_unified_send_set_tpc_power_cmd() - send set transmit power info
+ * @wmi_handle: wmi handle
+ * @vdev_id: vdev id
+ * @param: regulatory TPC info
+ *
+ * Return: QDF_STATUS_SUCCESS for success or error code
+ */
+QDF_STATUS wmi_unified_send_set_tpc_power_cmd(wmi_unified_t wmi_handle,
+					      uint8_t vdev_id,
+					      struct reg_tpc_power_info *param);
 
 #endif /* _WMI_UNIFIED_API_H_ */

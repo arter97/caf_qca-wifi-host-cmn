@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2019-2021 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -62,6 +62,7 @@ int ucfg_cfr_start_capture(struct wlan_objmgr_pdev *pdev,
 	int status;
 	struct pdev_cfr *pa;
 	struct peer_cfr *pe;
+	struct wlan_objmgr_psoc *psoc;
 
 	pa = wlan_objmgr_pdev_get_comp_private_obj(pdev, WLAN_UMAC_COMP_CFR);
 	if (NULL == pa) {
@@ -81,11 +82,14 @@ int ucfg_cfr_start_capture(struct wlan_objmgr_pdev *pdev,
 		return -EINVAL;
 	}
 
-	if ((params->period < 0) || (params->period > MAX_CFR_PRD) ||
-		(params->period % 10)) {
-		cfr_err("Invalid period value: %d", params->period);
+	psoc = wlan_pdev_get_psoc(pdev);
+	if (!psoc) {
+		cfr_err("psoc is null!");
 		return -EINVAL;
 	}
+
+	if (!(tgt_cfr_validate_period(psoc, params->period)))
+		return -EINVAL;
 
 	if (!(params->period) && (pa->cfr_timer_enable)) {
 		cfr_err("Single shot capture is not allowed during periodic capture");
@@ -424,7 +428,7 @@ void ucfg_cfr_capture_data(struct wlan_objmgr_psoc *psoc, uint32_t vdev_id,
 	hdr->cfr_data_version       = CFR_DATA_VERSION_1;
 	hdr->chip_type              = CFR_CAPTURE_RADIO_ADRASTEA;
 	hdr->pltform_type           = CFR_PLATFORM_TYPE_ARM;
-	hdr->Reserved               = 0;
+	hdr->cfr_metadata_len       = sizeof(struct cfr_metadata_version_1);
 
 	vaddr = pcfr->cfr_mem_chunk.vaddr;
 	rindex = (u32 *)vaddr;
@@ -463,7 +467,7 @@ exit:
 
 #ifdef WLAN_ENH_CFR_ENABLE
 
-static inline
+static
 QDF_STATUS dev_sanity_check(struct wlan_objmgr_vdev *vdev,
 			    struct wlan_objmgr_pdev **ppdev,
 			    struct pdev_cfr **ppcfr)

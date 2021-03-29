@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017-2020 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2017-2021 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -356,9 +356,8 @@ void hal_rx_reo_ent_buf_paddr_get(hal_rxdma_desc_t rx_desc,
 	buf_info->sw_cookie = HAL_RX_BUF_COOKIE_GET(buf_addr_info);
 	buf_info->rbm = HAL_RX_BUF_RBM_GET(buf_addr_info);
 
-	QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_DEBUG,
-		"[%s][%d] ReoAddr=%pK, addrInfo=%pK, paddr=0x%llx, loopcnt=%d",
-		__func__, __LINE__, reo_ent_ring, buf_addr_info,
+	dp_nofl_debug("[%s][%d] ReoAddr=%pK, addrInfo=%pK, paddr=0x%llx, loopcnt=%d",
+		      __func__, __LINE__, reo_ent_ring, buf_addr_info,
 	(unsigned long long)buf_info->paddr, loop_cnt);
 }
 
@@ -407,10 +406,9 @@ void hal_rx_mon_msdu_link_desc_set(hal_soc_handle_t hal_soc_hdl,
 		((uint64_t)
 		(HAL_RX_BUFFER_ADDR_39_32_GET(buf_addr_info)) << 32));
 
-	QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_DEBUG,
-		"[%s][%d] src_srng_desc=%pK, buf_addr=0x%llx, cookie=0x%llx",
-		__func__, __LINE__, src_srng_desc, (unsigned long long)paddr,
-		(unsigned long long)p_buffer_addr_info->sw_buffer_cookie);
+	dp_nofl_debug("[%s][%d] src_srng_desc=%pK, buf_addr=0x%llx, cookie=0x%llx",
+		      __func__, __LINE__, src_srng_desc, (unsigned long long)paddr,
+		      (unsigned long long)p_buffer_addr_info->sw_buffer_cookie);
 
 	/* Structure copy !!! */
 	*wbm_srng_buffer_addr_info =
@@ -601,6 +599,12 @@ struct hal_rx_ppdu_cfr_info {
 	uint8_t rtt_che_buffer_pointer_high8;
 	uint32_t rtt_che_buffer_pointer_low32;
 	struct hal_rx_ppdu_cfr_user_info cfr_user_info[HAL_MAX_UL_MU_USERS];
+	int16_t rtt_cfo_measurement;
+	uint32_t agc_gain_info0;
+	uint32_t agc_gain_info1;
+	uint32_t agc_gain_info2;
+	uint32_t agc_gain_info3;
+	uint32_t rx_start_ts;
 };
 #else
 struct hal_rx_ppdu_cfr_info {};

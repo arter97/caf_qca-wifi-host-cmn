@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016-2020 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -287,6 +287,18 @@ void hif_dummy_dump_target_memory(struct hif_softc *hif_sc, void *ramdump_base,
 {
 }
 
+uint32_t hif_dummy_bus_reg_read32(struct hif_softc *hif_sc,
+				  uint32_t offset)
+{
+	return 0;
+}
+
+void hif_dummy_bus_reg_write32(struct hif_softc *hif_sc,
+			       uint32_t offset,
+			       uint32_t value)
+{
+}
+
 /**
  * hif_dummy_ipa_get_ce_resource - dummy call
  * @scn: HIF context
@@ -386,4 +398,38 @@ void hif_dummy_config_irq_affinity(struct hif_softc *scn)
 int hif_dummy_config_irq_by_ceid(struct hif_softc *scn, int ce_id)
 {
 	return 0;
+}
+
+/**
+ * hif_dummy_log_bus_info - dummy call
+ * @scn: hif context
+ * @data: hang event data buffer
+ * @offset: offset at which data needs to be written
+ *
+ * Return: bool
+ */
+bool hif_dummy_log_bus_info(struct hif_softc *scn, uint8_t *data,
+			    unsigned int *offset)
+{
+	return false;
+}
+
+/**
+ * hif_dummy_enable_grp_irqs - dummy call
+ * @scn: hif context
+ * Return: EOPNOTSUPP
+ */
+int hif_dummy_enable_grp_irqs(struct hif_softc *scn)
+{
+	return -EOPNOTSUPP;
+}
+
+/**
+ * hif_dummy_disable_grp_irqs - dummy call
+ * @scn: hif context
+ * Return: EOPNOTSUPP
+ */
+int hif_dummy_disable_grp_irqs(struct hif_softc *scn)
+{
+	return -EOPNOTSUPP;
 }

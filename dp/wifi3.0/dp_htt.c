@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016-2020 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -44,7 +44,7 @@
 #define HTT_PID_BIT_MASK 0x3
 
 #define DP_EXT_MSG_LENGTH 2048
-
+#define HTT_HEADER_LEN 16
 #define HTT_MGMT_CTRL_TLV_HDR_RESERVERD_LEN 16
 
 #define HTT_SHIFT_UPPER_TIMESTAMP 32
@@ -153,6 +153,7 @@ dp_peer_copy_delay_stats(struct dp_peer *peer,
 
 	peer->delayed_ba_ppdu_stats.user_pos = ppdu->user_pos;
 	peer->delayed_ba_ppdu_stats.mu_group_id = ppdu->mu_group_id;
+	peer->delayed_ba_ppdu_stats.mcs = ppdu->mcs;
 
 	peer->last_delayed_ba = true;
 
@@ -199,6 +200,7 @@ dp_peer_copy_stats_to_bar(struct dp_peer *peer,
 
 	ppdu->user_pos = peer->delayed_ba_ppdu_stats.user_pos;
 	ppdu->mu_group_id = peer->delayed_ba_ppdu_stats.mu_group_id;
+	ppdu->mcs = peer->delayed_ba_ppdu_stats.mcs;
 
 	peer->last_delayed_ba = false;
 
@@ -464,6 +466,71 @@ dp_tx_stats_update(struct dp_pdev *pdev, struct dp_peer *peer,
 }
 #endif
 
+QDF_STATUS dp_rx_populate_cbf_hdr(struct dp_soc *soc,
+				  uint32_t mac_id,
+				  uint32_t event,
+				  qdf_nbuf_t mpdu,
+				  uint32_t msdu_timestamp)
+{
+	uint32_t data_size, hdr_size, ppdu_id, align4byte;
+	struct dp_pdev *pdev = dp_get_pdev_for_lmac_id(soc, mac_id);
+	uint32_t *msg_word;
+
+	if (!pdev)
+		return QDF_STATUS_E_INVAL;
+
+	ppdu_id = pdev->ppdu_info.com_info.ppdu_id;
+
+	hdr_size = HTT_T2H_PPDU_STATS_IND_HDR_SIZE
+		+ qdf_offsetof(htt_ppdu_stats_rx_mgmtctrl_payload_tlv, payload);
+
+	data_size = qdf_nbuf_len(mpdu);
+
+	qdf_nbuf_push_head(mpdu, hdr_size);
+
+	msg_word = (uint32_t *)qdf_nbuf_data(mpdu);
+	/*
+	 * Populate the PPDU Stats Indication header
+	 */
+	HTT_H2T_MSG_TYPE_SET(*msg_word, HTT_T2H_MSG_TYPE_PPDU_STATS_IND);
+	HTT_T2H_PPDU_STATS_MAC_ID_SET(*msg_word, mac_id);
+	HTT_T2H_PPDU_STATS_PDEV_ID_SET(*msg_word, pdev->pdev_id);
+	align4byte = ((data_size +
+		qdf_offsetof(htt_ppdu_stats_rx_mgmtctrl_payload_tlv, payload)
+		+ 3) >> 2) << 2;
+	HTT_T2H_PPDU_STATS_PAYLOAD_SIZE_SET(*msg_word, align4byte);
+	msg_word++;
+	HTT_T2H_PPDU_STATS_PPDU_ID_SET(*msg_word, ppdu_id);
+	msg_word++;
+
+	*msg_word = msdu_timestamp;
+	msg_word++;
+	/* Skip reserved field */
+	msg_word++;
+	/*
+	 * Populate MGMT_CTRL Payload TLV first
+	 */
+	HTT_STATS_TLV_TAG_SET(*msg_word,
+			      HTT_PPDU_STATS_RX_MGMTCTRL_PAYLOAD_TLV);
+
+	align4byte = ((data_size - sizeof(htt_tlv_hdr_t) +
+		qdf_offsetof(htt_ppdu_stats_rx_mgmtctrl_payload_tlv, payload)
+		+ 3) >> 2) << 2;
+	HTT_STATS_TLV_LENGTH_SET(*msg_word, align4byte);
+	msg_word++;
+
+	HTT_PPDU_STATS_RX_MGMTCTRL_TLV_FRAME_LENGTH_SET(
+		*msg_word, data_size);
+	msg_word++;
+
+	dp_wdi_event_handler(event, soc, (void *)mpdu,
+			     HTT_INVALID_PEER, WDI_NO_VAL, pdev->pdev_id);
+
+	qdf_nbuf_pull_head(mpdu, hdr_size);
+
+	return QDF_STATUS_SUCCESS;
+}
+
 #ifdef WLAN_TX_PKT_CAPTURE_ENH
 #include "dp_tx_capture.h"
 #else
@@ -621,7 +688,8 @@ static inline QDF_STATUS DP_HTT_SEND_HTC_PKT(struct htt_soc *soc,
 	status = htc_send_pkt(soc->htc_soc, &pkt->htc_pkt);
 	if (status == QDF_STATUS_SUCCESS)
 		htt_htc_misc_pkt_list_add(soc, pkt);
-
+	else
+		soc->stats.fail_count++;
 	return status;
 }
 
@@ -643,15 +711,15 @@ htt_htc_misc_pkt_pool_free(struct htt_soc *soc)
 		if (htc_packet_get_magic_cookie(&(pkt->u.pkt.htc_pkt)) !=
 		    HTC_PACKET_MAGIC_COOKIE) {
 			pkt = next;
+			soc->stats.skip_count++;
 			continue;
 		}
 		netbuf = (qdf_nbuf_t) (pkt->u.pkt.htc_pkt.pNetBufContext);
 		qdf_nbuf_unmap(soc->osdev, netbuf, QDF_DMA_TO_DEVICE);
 
 		soc->stats.htc_pkt_free++;
-		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_INFO_LOW,
-			 "%s: Pkt free count %d",
-			 __func__, soc->stats.htc_pkt_free);
+		dp_htt_info("%pK: Pkt free count %d",
+			    soc->dp_soc, soc->stats.htc_pkt_free);
 
 		qdf_nbuf_free(netbuf);
 		qdf_mem_free(pkt);
@@ -659,6 +727,8 @@ htt_htc_misc_pkt_pool_free(struct htt_soc *soc)
 	}
 	soc->htt_htc_pkt_misclist = NULL;
 	HTT_TX_MUTEX_RELEASE(&soc->htt_tx_mutex);
+	dp_info("HTC Packets, fail count = %d, skip count = %d",
+		soc->stats.fail_count, soc->stats.skip_count);
 }
 
 /*
@@ -1024,7 +1094,7 @@ int htt_srng_setup(struct htt_soc *soc, int mac_id,
 	msg_word++;
 	*msg_word = 0;
 	HTT_SRING_SETUP_RING_MSI_DATA_SET(*msg_word,
-		srng_params.msi_data);
+		qdf_cpu_to_le32(srng_params.msi_data));
 
 	/* word 11 */
 	msg_word++;
@@ -1299,9 +1369,6 @@ int htt_h2t_rx_ring_cfg(struct htt_soc *htt_soc, int pdev_id,
 
 	HTT_RX_RING_SELECTION_CFG_STATUS_TLV_SET(*msg_word,
 		!!(srng_params.flags & HAL_SRNG_MSI_SWAP));
-
-	HTT_RX_RING_SELECTION_CFG_PKT_TLV_SET(*msg_word,
-		!!(srng_params.flags & HAL_SRNG_DATA_TLV_SWAP));
 
 	HTT_RX_RING_SELECTION_CFG_RX_OFFSETS_VALID_SET(*msg_word,
 						htt_tlv_filter->offset_valid);
@@ -1980,18 +2047,20 @@ dp_htt_stats_dbgfs_send_msg(struct dp_pdev *pdev, uint32_t *msg_word,
 	/* send 5th word of HTT msg to upper layer */
 	dbgfs_cfg.msg_word = (msg_word + 4);
 	dbgfs_cfg.m = pdev->dbgfs_cfg->m;
-	msg_len = qdf_min(msg_len, (uint32_t)DP_EXT_MSG_LENGTH);
+
+	/* stats message length + 16 size of HTT header*/
+	msg_len = qdf_min(msg_len + HTT_HEADER_LEN, (uint32_t)DP_EXT_MSG_LENGTH);
 
 	if (pdev->dbgfs_cfg->htt_stats_dbgfs_msg_process)
 		pdev->dbgfs_cfg->htt_stats_dbgfs_msg_process(&dbgfs_cfg,
-							     (msg_len + 4));
+							     (msg_len - HTT_HEADER_LEN));
 
 	/* Get TLV Done bit from 4th msg word */
 	done = HTT_T2H_EXT_STATS_CONF_TLV_DONE_GET(*(msg_word + 3));
 	if (done) {
 		if (qdf_event_set(&pdev->dbgfs_cfg->htt_stats_dbgfs_event))
-			QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_ERROR,
-				  "Failed to set event for debugfs htt stats");
+			dp_htt_err("%pK: Failed to set event for debugfs htt stats"
+				   , pdev->soc);
 	}
 }
 #else
@@ -2452,6 +2521,8 @@ static void dp_process_ppdu_stats_user_common_tlv(
 		HTT_PPDU_STATS_USER_COMMON_TLV_MPDUS_TRIED_GET(*tag_buf);
 	}
 
+	ppdu_user_desc->is_seq_num_valid =
+	HTT_PPDU_STATS_USER_COMMON_TLV_IS_SQNUM_VALID_IN_BUFFER_GET(*tag_buf);
 	tag_buf++;
 
 	ppdu_user_desc->qos_ctrl =
@@ -3283,7 +3354,7 @@ dp_process_ppdu_stats_tx_mgmtctrl_payload_tlv(struct dp_pdev *pdev,
 	if (pdev->tx_capture_enabled) {
 		head_size = sizeof(struct cdp_tx_mgmt_comp_info);
 		if (qdf_unlikely(qdf_nbuf_headroom(tag_buf) < head_size)) {
-			qdf_err("Fail to get headroom h_sz %d h_avail %d\n",
+			qdf_err("Fail to get headroom h_sz %zu h_avail %d\n",
 				head_size, qdf_nbuf_headroom(tag_buf));
 			qdf_assert_always(0);
 			return QDF_STATUS_E_NOMEM;
@@ -3554,6 +3625,7 @@ dp_ppdu_desc_user_stats_update(struct dp_pdev *pdev,
 		if (!peer)
 			continue;
 
+		ppdu_desc->user[i].is_bss_peer = peer->bss_peer;
 		/*
 		 * different frame like DATA, BAR or CTRL has different
 		 * tlv bitmap expected. Apart from ACK_BA_STATUS TLV, we
@@ -3766,16 +3838,14 @@ struct ppdu_info *dp_get_ppdu_desc(struct dp_pdev *pdev, uint32_t ppdu_id,
 					(struct cdp_tx_completion_ppdu *)
 					qdf_nbuf_data(ppdu_info->nbuf);
 				tmp_user = &tmp_ppdu_desc->user[0];
-				QDF_TRACE(QDF_MODULE_ID_TX_CAPTURE,
-					  QDF_TRACE_LEVEL_INFO_MED,
-					  "S_PID [%d] S_TSF[%u] TLV_BITMAP[0x%x] [CMPLTN - %d ACK_BA - %d] CS[%d] - R_PID[%d] R_TSF[%u] R_TLV_TAG[0x%x]\n",
-					  ppdu_info->ppdu_id,
-					  ppdu_info->tsf_l32,
-					  ppdu_info->tlv_bitmap,
-					  tmp_user->completion_status,
-					  ppdu_info->compltn_common_tlv,
-					  ppdu_info->ack_ba_tlv,
-					  ppdu_id, tsf_l32, tlv_type);
+				dp_htt_tx_stats_info("S_PID [%d] S_TSF[%u] TLV_BITMAP[0x%x] [CMPLTN - %d ACK_BA - %d] CS[%d] - R_PID[%d] R_TSF[%u] R_TLV_TAG[0x%x]\n",
+						     ppdu_info->ppdu_id,
+						     ppdu_info->tsf_l32,
+						     ppdu_info->tlv_bitmap,
+						     tmp_user->completion_status,
+						     ppdu_info->compltn_common_tlv,
+						     ppdu_info->ack_ba_tlv,
+						     ppdu_id, tsf_l32, tlv_type);
 				qdf_nbuf_free(ppdu_info->nbuf);
 				ppdu_info->nbuf = NULL;
 				qdf_mem_free(ppdu_info);
@@ -4114,6 +4184,7 @@ static bool dp_txrx_ppdu_stats_handler(struct dp_soc *soc,
 	    !pdev->mcopy_mode && !pdev->bpr_enable)
 		return free_buf;
 
+	qdf_spin_lock_bh(&pdev->ppdu_stats_lock);
 	ppdu_info = dp_htt_process_tlv(pdev, htt_t2h_msg);
 
 	if (pdev->mgmtctrl_frm_info.mgmt_buf) {
@@ -4129,6 +4200,8 @@ static bool dp_txrx_ppdu_stats_handler(struct dp_soc *soc,
 	pdev->mgmtctrl_frm_info.mgmt_buf = NULL;
 	pdev->mgmtctrl_frm_info.mgmt_buf_len = 0;
 	pdev->mgmtctrl_frm_info.ppdu_id = 0;
+
+	qdf_spin_unlock_bh(&pdev->ppdu_stats_lock);
 
 	return free_buf;
 }
@@ -4293,8 +4366,10 @@ dp_ppdu_stats_ind_handler(struct htt_soc *soc,
 	dp_wdi_event_handler(WDI_EVENT_LITE_T2H, soc->dp_soc,
 			     htt_t2h_msg, HTT_INVALID_PEER, WDI_NO_VAL,
 			     pdev_id);
+
 	free_buf = dp_txrx_ppdu_stats_handler(soc->dp_soc, pdev_id,
 					      htt_t2h_msg);
+
 	return free_buf;
 }
 #else
@@ -4413,8 +4488,7 @@ static void dp_htt_bkp_event_alert(u_int32_t *msg_word, struct htt_soc *soc)
 	pdev_id = dp_get_host_pdev_id_for_target_pdev_id(soc->dp_soc,
 							 target_pdev_id);
 	if (pdev_id >= MAX_PDEV_CNT) {
-		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_DEBUG,
-			  "pdev id %d is invalid", pdev_id);
+		dp_htt_debug("%pK: pdev id %d is invalid", soc, pdev_id);
 		return;
 	}
 
@@ -4447,6 +4521,34 @@ static void dp_htt_bkp_event_alert(u_int32_t *msg_word, struct htt_soc *soc)
 	dp_print_ring_stats(pdev);
 	dp_print_napi_stats(pdev->soc);
 }
+
+#ifdef WLAN_FEATURE_PKT_CAPTURE_V2
+/*
+ * dp_offload_ind_handler() - offload msg handler
+ * @htt_soc: HTT SOC handle
+ * @msg_word: Pointer to payload
+ *
+ * Return: None
+ */
+static void
+dp_offload_ind_handler(struct htt_soc *soc, uint32_t *msg_word)
+{
+	u_int8_t pdev_id;
+	u_int8_t target_pdev_id;
+
+	target_pdev_id = HTT_T2H_PPDU_STATS_PDEV_ID_GET(*msg_word);
+	pdev_id = dp_get_host_pdev_id_for_target_pdev_id(soc->dp_soc,
+							 target_pdev_id);
+	dp_wdi_event_handler(WDI_EVENT_PKT_CAPTURE_OFFLOAD_TX_DATA, soc->dp_soc,
+			     msg_word, HTT_INVALID_VDEV, WDI_NO_VAL,
+			     pdev_id);
+}
+#else
+static void
+dp_offload_ind_handler(struct htt_soc *soc, uint32_t *msg_word)
+{
+}
+#endif
 
 /*
  * dp_htt_t2h_msg_handler() - Generic Target to host Msg/event handler
@@ -4795,6 +4897,12 @@ static void dp_htt_t2h_msg_handler(void *context, HTC_PACKET *pkt)
 
 			dp_rx_fst_update_cmem_params(soc->dp_soc, num_entries,
 						     cmem_ba_lo, cmem_ba_hi);
+			break;
+		}
+	case HTT_T2H_MSG_TYPE_TX_OFFLOAD_DELIVER_IND:
+		{
+			dp_offload_ind_handler(soc, msg_word);
+			break;
 		}
 	default:
 		break;
@@ -4897,7 +5005,7 @@ htt_htc_soc_attach(struct htt_soc *soc)
 
 	hif_save_htc_htt_config_endpoint(dpsoc->hif_handle, soc->htc_endpoint);
 
-	htt_interface_logging_init(&soc->htt_logger_handle);
+	htt_interface_logging_init(&soc->htt_logger_handle, soc->ctrl_psoc);
 	dp_hif_update_pipe_callback(soc->dp_soc, (void *)soc,
 		dp_htt_hif_t2h_hp_callback, DP_HTT_T2H_HP_PIPE);
 
@@ -5047,12 +5155,12 @@ QDF_STATUS dp_h2t_ext_stats_msg_send(struct dp_pdev *pdev,
 		return QDF_STATUS_E_FAILURE;
 	}
 
-	QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_INFO,
-		"-----%s:%d----\n cookie <-> %d\n config_param_0 %u\n"
-		"config_param_1 %u\n config_param_2 %u\n"
-		"config_param_4 %u\n -------------",
-		__func__, __LINE__, cookie_val, config_param_0,
-		config_param_1, config_param_2,	config_param_3);
+	dp_htt_tx_stats_info("%pK: cookie <-> %d\n config_param_0 %u\n"
+			     "config_param_1 %u\n config_param_2 %u\n"
+			     "config_param_4 %u\n -------------",
+			     pdev->soc, cookie_val,
+			     config_param_0,
+			     config_param_1, config_param_2, config_param_3);
 
 	msg_word = (uint32_t *) qdf_nbuf_data(msg);
 
@@ -5180,9 +5288,8 @@ QDF_STATUS dp_h2t_3tuple_config_send(struct dp_pdev *pdev,
 		return QDF_STATUS_E_FAILURE;
 	}
 
-	QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_INFO,
-		  "config_param_sent %s:%d 0x%x for target_pdev %d\n -------------",
-		  __func__, __LINE__, tuple_mask, target_pdev_id);
+	dp_htt_info("%pK: config_param_sent 0x%x for target_pdev %d\n -------------",
+		    pdev->soc, tuple_mask, target_pdev_id);
 
 	msg_word = (uint32_t *)qdf_nbuf_data(msg);
 	qdf_nbuf_push_head(msg, HTC_HDR_ALIGNMENT_PADDING);
@@ -5249,8 +5356,8 @@ QDF_STATUS dp_h2t_cfg_stats_msg_send(struct dp_pdev *pdev,
 			HTC_HEADER_LEN + HTC_HDR_ALIGNMENT_PADDING, 4, true);
 
 	if (!msg) {
-		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_ERROR,
-		"Fail to allocate HTT_H2T_PPDU_STATS_CFG_MSG_SZ msg buffer");
+		dp_htt_err("%pK: Fail to allocate HTT_H2T_PPDU_STATS_CFG_MSG_SZ msg buffer"
+			   , pdev->soc);
 		qdf_assert(0);
 		return QDF_STATUS_E_NOMEM;
 	}
@@ -5271,8 +5378,8 @@ QDF_STATUS dp_h2t_cfg_stats_msg_send(struct dp_pdev *pdev,
 	 * The contribution from the HTC header is added separately inside HTC.
 	 */
 	if (qdf_nbuf_put_tail(msg, HTT_H2T_PPDU_STATS_CFG_MSG_SZ) == NULL) {
-		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_ERROR,
-				"Failed to expand head for HTT_CFG_STATS");
+		dp_htt_err("%pK: Failed to expand head for HTT_CFG_STATS"
+			   , pdev->soc);
 		qdf_nbuf_free(msg);
 		return QDF_STATUS_E_FAILURE;
 	}
@@ -5288,8 +5395,7 @@ QDF_STATUS dp_h2t_cfg_stats_msg_send(struct dp_pdev *pdev,
 
 	pkt = htt_htc_pkt_alloc(soc);
 	if (!pkt) {
-		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_ERROR,
-				"Fail to allocate dp_htt_htc_pkt buffer");
+		dp_htt_err("%pK: Fail to allocate dp_htt_htc_pkt buffer", pdev->soc);
 		qdf_assert(0);
 		qdf_nbuf_free(msg);
 		return QDF_STATUS_E_NOMEM;

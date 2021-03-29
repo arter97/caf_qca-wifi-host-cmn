@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012-2015, 2020, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012-2015, 2020-2021, The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -35,6 +35,13 @@ QDF_STATUS ucfg_cm_start_disconnect(struct wlan_objmgr_vdev *vdev,
 	return cm_disconnect_start_req(vdev, req);
 }
 
+QDF_STATUS ucfg_cm_disconnect_sync(struct wlan_objmgr_vdev *vdev,
+				   enum wlan_cm_source source,
+				   enum wlan_reason_code reason_code)
+{
+	return wlan_cm_disconnect_sync(vdev, source, reason_code);
+}
+
 bool ucfg_cm_is_vdev_connecting(struct wlan_objmgr_vdev *vdev)
 {
 	return cm_is_vdev_connecting(vdev);
@@ -43,6 +50,11 @@ bool ucfg_cm_is_vdev_connecting(struct wlan_objmgr_vdev *vdev)
 bool ucfg_cm_is_vdev_connected(struct wlan_objmgr_vdev *vdev)
 {
 	return cm_is_vdev_connected(vdev);
+}
+
+bool ucfg_cm_is_vdev_active(struct wlan_objmgr_vdev *vdev)
+{
+	return cm_is_vdev_active(vdev);
 }
 
 bool ucfg_cm_is_vdev_disconnecting(struct wlan_objmgr_vdev *vdev)
@@ -59,3 +71,28 @@ bool ucfg_cm_is_vdev_roaming(struct wlan_objmgr_vdev *vdev)
 {
 	return cm_is_vdev_roaming(vdev);
 }
+
+#ifdef WLAN_FEATURE_ROAM_OFFLOAD
+bool ucfg_cm_is_vdev_roam_started(struct wlan_objmgr_vdev *vdev)
+{
+	return cm_is_vdev_roam_started(vdev);
+}
+
+bool ucfg_cm_is_vdev_roam_sync_inprogress(struct wlan_objmgr_vdev *vdev)
+{
+	return cm_is_vdev_roam_sync_inprogress(vdev);
+}
+#endif
+
+#ifdef WLAN_FEATURE_HOST_ROAM
+bool ucfg_cm_is_vdev_roam_preauth_state(struct wlan_objmgr_vdev *vdev)
+{
+	return cm_is_vdev_roam_preauth_state(vdev);
+}
+
+bool ucfg_cm_is_vdev_roam_reassoc_state(struct wlan_objmgr_vdev *vdev)
+{
+	return cm_is_vdev_roam_reassoc_state(vdev);
+}
+#endif
+

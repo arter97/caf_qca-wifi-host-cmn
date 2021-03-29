@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2019-2021 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -23,8 +23,6 @@
 #include <wlan_objmgr_pdev_obj.h>
 #include <wlan_cfr_public_structs.h>
 #include <wlan_cfr_utils_api.h>
-
-#define MAX_CFR_PRD        (10*60*1000)        /* 10 minutes */
 
 /**
  * ucfg_cfr_start_capture() - function to start cfr capture for connected client

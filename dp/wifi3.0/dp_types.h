@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016-2020 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -75,6 +75,7 @@
 
 #if defined(WLAN_MAX_PDEVS) && (WLAN_MAX_PDEVS == 1)
 #define MAX_PDEV_CNT 1
+#define WLAN_DP_RESET_MON_BUF_RING_FILTER
 #else
 #define MAX_PDEV_CNT 3
 #endif
@@ -364,6 +365,20 @@ struct dp_rx_nbuf_frag_info {
 		qdf_nbuf_t nbuf;
 		qdf_frag_t vaddr;
 	} virt_addr;
+};
+
+/**
+ * enum dp_ctxt - context type
+ * @DP_PDEV_TYPE: PDEV context
+ * @DP_RX_RING_HIST_TYPE: Datapath rx ring history
+ * @DP_RX_ERR_RING_HIST_TYPE: Datapath rx error ring history
+ * @DP_RX_REINJECT_RING_HIST_TYPE: Datapath reinject ring history
+ */
+enum dp_ctxt_type {
+	DP_PDEV_TYPE,
+	DP_RX_RING_HIST_TYPE,
+	DP_RX_ERR_RING_HIST_TYPE,
+	DP_RX_REINJECT_RING_HIST_TYPE,
 };
 
 /**
@@ -836,6 +851,11 @@ struct dp_soc_stats {
 		uint32_t ast_mismatch;
 	} ast;
 
+	struct {
+		uint32_t added;
+		uint32_t deleted;
+	} mec;
+
 	/* SOC level TX stats */
 	struct {
 		/* Total packets transmitted */
@@ -889,6 +909,12 @@ struct dp_soc_stats {
 		uint32_t near_full;
 		/* Break ring reaping as not all scattered msdu received */
 		uint32_t msdu_scatter_wait_break;
+		/* Number of bar frames received */
+		uint32_t bar_frame;
+		/* Number of frames routed from rxdma */
+		uint32_t rxdma2rel_route_drop;
+		/* Number of frames routed from reo*/
+		uint32_t reo2rel_route_drop;
 
 		struct {
 			/* Invalid RBM error count */
@@ -970,6 +996,12 @@ struct dp_soc_stats {
 			uint32_t nbuf_sanity_fail;
 			/* Duplicate link desc refilled */
 			uint32_t dup_refill_link_desc;
+			/* Incorrect msdu continuation bit in MSDU desc */
+			uint32_t msdu_continuation_err;
+			/* REO OOR eapol drop count */
+			uint32_t reo_err_oor_eapol_drop;
+			/* Non Eapol packet drop count due to peer not authorized  */
+			uint32_t peer_unauth_rx_pkt_drop;
 		} err;
 
 		/* packet count per core - per ring */
@@ -1058,6 +1090,25 @@ struct dp_ast_entry {
 	TAILQ_ENTRY(dp_ast_entry) hash_list_elem;
 };
 
+/*
+ * dp_mec_entry
+ *
+ * @mac_addr:  MAC Address for this MEC entry
+ * @is_active: flag to indicate active data traffic on this node
+ *             (used for aging out/expiry)
+ * @pdev_id: pdev ID
+ * @vdev_id: vdev ID
+ * @hash_list_elem: node in soc MEC hash list (mac address used as hash)
+ */
+struct dp_mec_entry {
+	union dp_align_mac_addr mac_addr;
+	bool is_active;
+	uint8_t pdev_id;
+	uint8_t vdev_id;
+
+	TAILQ_ENTRY(dp_mec_entry) hash_list_elem;
+};
+
 /* SOC level htt stats */
 struct htt_t2h_stats {
 	/* lock to protect htt_stats_msg update */
@@ -1087,12 +1138,22 @@ struct rx_buff_pool {
 	bool is_initialized;
 };
 
+struct rx_refill_buff_pool {
+	qdf_nbuf_t buf_head;
+	qdf_nbuf_t buf_tail;
+	qdf_spinlock_t bufq_lock;
+	uint32_t bufq_len;
+	uint32_t max_bufq_len;
+	bool in_rx_refill_lock;
+	bool is_initialized;
+};
+
 /*
  * The logic for get current index of these history is dependent on this
  * value being power of 2.
  */
 #define DP_RX_HIST_MAX 2048
-#define DP_RX_ERR_HIST_MAX 4096
+#define DP_RX_ERR_HIST_MAX 2048
 #define DP_RX_REINJECT_HIST_MAX 1024
 
 QDF_COMPILE_TIME_ASSERT(rx_history_size,
@@ -1400,6 +1461,8 @@ struct dp_soc {
 	uint8_t num_tcl_data_rings;
 
 	/* TCL CMD_CREDIT ring */
+	bool init_tcl_cmd_cred_ring;
+
 	/* It is used as credit based ring on QCN9000 else command ring */
 	struct dp_srng tcl_cmd_credit_ring;
 
@@ -1516,7 +1579,6 @@ struct dp_soc {
 		unsigned idx_bits;
 		TAILQ_HEAD(, dp_ast_entry) * bins;
 	} ast_hash;
-
 	struct dp_rx_history *rx_ring_history[MAX_REO_DEST_RINGS];
 	struct dp_rx_err_history *rx_err_ring_history;
 	struct dp_rx_reinject_history *rx_reinject_ring_history;
@@ -1536,6 +1598,8 @@ struct dp_soc {
 	qdf_timer_t int_timer;
 	uint8_t intr_mode;
 	uint8_t lmac_polled_mode;
+	qdf_timer_t mon_vdev_timer;
+	uint8_t mon_vdev_timer_state;
 
 	qdf_list_t reo_desc_freelist;
 	qdf_spinlock_t reo_desc_freelist_lock;
@@ -1558,6 +1622,8 @@ struct dp_soc {
 		void *ipa_wbm_ring_base_vaddr;
 		uint32_t ipa_wbm_ring_size;
 		qdf_dma_addr_t ipa_wbm_tp_paddr;
+		/* WBM2SW HP shadow paddr */
+		qdf_dma_addr_t ipa_wbm_hp_shadow_paddr;
 
 		/* TX buffers populated into the WBM ring */
 		void **tx_buf_pool_vaddr_unaligned;
@@ -1671,6 +1737,7 @@ struct dp_soc {
 
 	/* RX buffer params */
 	struct rx_buff_pool rx_buff_pool[MAX_PDEV_CNT];
+	struct rx_refill_buff_pool rx_refill_buff_pool;
 	/* Save recent operation related variable */
 	struct dp_last_op_info last_op_info;
 	TAILQ_HEAD(, dp_peer) inactive_peer_list;
@@ -1685,6 +1752,27 @@ struct dp_soc {
 
 #ifdef WLAN_DP_FEATURE_SW_LATENCY_MGR
 	struct dp_swlm swlm;
+#endif
+#ifdef FEATURE_RUNTIME_PM
+	/* Dp runtime refcount */
+	qdf_atomic_t dp_runtime_refcount;
+#endif
+	/* Invalid buffer that allocated for RX buffer */
+	qdf_nbuf_queue_t invalid_buf_queue;
+
+#ifdef FEATURE_MEC
+	/** @mec_lock: spinlock for MEC table */
+	qdf_spinlock_t mec_lock;
+	/** @mec_cnt: number of active mec entries */
+	qdf_atomic_t mec_cnt;
+	struct {
+		/** @mask: mask bits */
+		uint32_t mask;
+		/** @idx_bits: index to shift bits */
+		uint32_t idx_bits;
+		/** @bins: MEC table */
+		TAILQ_HEAD(, dp_mec_entry) * bins;
+	} mec_hash;
 #endif
 };
 
@@ -2045,6 +2133,7 @@ struct dp_pdev {
 	uint16_t md_data_filter;
 
 	qdf_atomic_t num_tx_outstanding;
+	int32_t tx_descs_max;
 
 	qdf_atomic_t num_tx_exception;
 
@@ -2125,6 +2214,8 @@ struct dp_pdev {
 
 	/* Packet log mode */
 	uint8_t rx_pktlog_mode;
+	/* Enable pktlog logging cbf */
+	bool rx_pktlog_cbf;
 
 	/* WDI event handlers */
 	struct wdi_event_subscribe_t **wdi_event_list;
@@ -2162,6 +2253,10 @@ struct dp_pdev {
 #ifdef ATH_SUPPORT_NAC_RSSI
 	bool nac_rssi_filtering;
 #endif
+
+	/* ppdu_stats lock for queue concurrency between cores*/
+	qdf_spinlock_t ppdu_stats_lock;
+
 	/* list of ppdu tlvs */
 	TAILQ_HEAD(, ppdu_info) ppdu_info_list;
 	TAILQ_HEAD(, ppdu_info) sched_comp_ppdu_list;
@@ -2297,6 +2392,8 @@ struct dp_pdev {
 	/* HTT stats debugfs params */
 	struct pdev_htt_stats_dbgfs_cfg *dbgfs_cfg;
 #endif
+	/* Flag to inidicate monitor rings are initialized */
+	uint8_t pdev_mon_init;
 };
 
 struct dp_peer;
@@ -2370,6 +2467,9 @@ struct dp_vdev {
 	 * skipped
 	 */
 	uint8_t skip_sw_tid_classification;
+
+	/* Flag to enable peer authorization */
+	uint8_t peer_authorize;
 
 	/* AST hash value for BSS peer in HW valid for STA VAP*/
 	uint16_t bss_ast_hash;
@@ -2549,6 +2649,15 @@ struct dp_vdev {
 	qdf_atomic_t ref_cnt;
 	qdf_atomic_t mod_refs[DP_MOD_ID_MAX];
 	uint8_t num_latency_critical_conn;
+#ifdef WLAN_SUPPORT_MESH_LATENCY
+	uint8_t peer_tid_latency_enabled;
+	/* tid latency configuration parameters */
+	struct {
+		uint32_t service_interval;
+		uint32_t burst_size;
+		uint8_t latency_tid;
+	} mesh_tid_latency_config;
+#endif
 };
 
 
@@ -2668,6 +2777,26 @@ struct dp_wds_ext_peer {
 	unsigned long init;
 };
 #endif /* QCA_SUPPORT_WDS_EXTENDED */
+
+#ifdef WLAN_SUPPORT_MESH_LATENCY
+/*Advanced Mesh latency feature based macros */
+/*
+ * struct dp_peer_mesh_latency parameter - Mesh latency related
+ * parameters. This data is updated per peer per TID based on
+ * the flow tuple classification in external rule database
+ * during packet processing.
+ * @service_interval - Service interval associated with TID
+ * @burst_size - Burst size additive over multiple flows
+ * @ac - custom ac derived from service interval
+ * @msduq - MSDU queue number within TID
+ */
+struct dp_peer_mesh_latency_parameter {
+	uint32_t service_interval;
+	uint32_t burst_size;
+	uint8_t ac;
+	uint8_t msduq;
+};
+#endif
 
 /* Peer structure for data path state */
 struct dp_peer {
@@ -2793,6 +2922,9 @@ struct dp_peer {
 #ifdef QCA_SUPPORT_WDS_EXTENDED
 	struct dp_wds_ext_peer wds_ext;
 	ol_txrx_rx_fp osif_rx;
+#endif
+#ifdef WLAN_SUPPORT_MESH_LATENCY
+	struct dp_peer_mesh_latency_parameter mesh_latency_params[DP_MAX_TIDS];
 #endif
 };
 
@@ -2924,6 +3056,7 @@ struct dp_fisa_rx_sw_ft {
 	/* CMEM parameters */
 	uint32_t cmem_offset;
 	uint32_t metadata;
+	uint32_t reo_dest_indication;
 };
 
 #define DP_RX_GET_SW_FT_ENTRY_SIZE sizeof(struct dp_fisa_rx_sw_ft)
@@ -2963,6 +3096,8 @@ struct dp_rx_fst {
 	struct dp_soc *soc_hdl;
 	qdf_atomic_t fse_cache_flush_posted;
 	qdf_timer_t fse_cache_flush_timer;
+	/* Allow FSE cache flush cmd to FW */
+	bool fse_cache_flush_allow;
 	struct fse_cache_flush_history cache_fl_rec[MAX_FSE_CACHE_FL_HST];
 	/* FISA DP stats */
 	struct dp_fisa_stats stats;
@@ -2977,6 +3112,7 @@ struct dp_rx_fst {
 	qdf_event_t cmem_resp_event;
 	bool flow_deletion_supported;
 	bool fst_in_cmem;
+	bool pm_suspended;
 };
 
 #endif /* WLAN_SUPPORT_RX_FISA */
@@ -2999,4 +3135,9 @@ QDF_STATUS dp_hw_link_desc_pool_banks_alloc(struct dp_soc *soc,
 					    uint32_t mac_id);
 void dp_link_desc_ring_replenish(struct dp_soc *soc, uint32_t mac_id);
 
+#ifdef WLAN_FEATURE_RX_PREALLOC_BUFFER_POOL
+void dp_rx_refill_buff_pool_enqueue(struct dp_soc *soc);
+#else
+static inline void dp_rx_refill_buff_pool_enqueue(struct dp_soc *soc) {}
+#endif
 #endif /* _DP_TYPES_H_ */

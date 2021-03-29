@@ -111,13 +111,21 @@
 #endif
 #endif
 
-#define WLAN_CFG_RX_PENDING_HL_THRESHOLD 0x60000
-#define WLAN_CFG_RX_PENDING_HL_THRESHOLD_MIN 0
-#define WLAN_CFG_RX_PENDING_HL_THRESHOLD_MAX 0x80000
+#ifdef NBUF_MEMORY_DEBUG
+#define WLAN_CFG_RX_PENDING_THRESHOLD_DEFAULT 0x60000
+#else
+#define WLAN_CFG_RX_PENDING_THRESHOLD_DEFAULT 0xD0000
+#endif
 
-#define WLAN_CFG_RX_PENDING_LO_THRESHOLD 0x60000
+#define WLAN_CFG_RX_PENDING_HL_THRESHOLD \
+		WLAN_CFG_RX_PENDING_THRESHOLD_DEFAULT
+#define WLAN_CFG_RX_PENDING_HL_THRESHOLD_MIN 0
+#define WLAN_CFG_RX_PENDING_HL_THRESHOLD_MAX 0x200000
+
+#define WLAN_CFG_RX_PENDING_LO_THRESHOLD \
+		WLAN_CFG_RX_PENDING_THRESHOLD_DEFAULT
 #define WLAN_CFG_RX_PENDING_LO_THRESHOLD_MIN 100
-#define WLAN_CFG_RX_PENDING_LO_THRESHOLD_MAX 0x80000
+#define WLAN_CFG_RX_PENDING_LO_THRESHOLD_MAX 0x200000
 
 #define WLAN_CFG_INT_TIMER_THRESHOLD_WBM_RELEASE_RING 256
 #define WLAN_CFG_INT_TIMER_THRESHOLD_REO_RING 512
@@ -218,6 +226,14 @@
 #define WLAN_CFG_NUM_REO_DEST_RING_MIN 4
 #define WLAN_CFG_NUM_REO_DEST_RING_MAX 4
 
+#define WLAN_CFG_NSS_NUM_TCL_DATA_RINGS 2
+#define WLAN_CFG_NSS_NUM_TCL_DATA_RINGS_MIN 1
+#define WLAN_CFG_NSS_NUM_TCL_DATA_RINGS_MAX 3
+
+#define WLAN_CFG_NSS_NUM_REO_DEST_RING 2
+#define WLAN_CFG_NSS_NUM_REO_DEST_RING_MIN 1
+#define WLAN_CFG_NSS_NUM_REO_DEST_RING_MAX 3
+
 #define WLAN_CFG_WBM_RELEASE_RING_SIZE 1024
 #define WLAN_CFG_WBM_RELEASE_RING_SIZE_MIN 64
 #define WLAN_CFG_WBM_RELEASE_RING_SIZE_MAX 1024
@@ -252,9 +268,9 @@
 #define WLAN_CFG_RX_RELEASE_RING_SIZE_MAX 8192
 #endif
 
-#define WLAN_CFG_REO_EXCEPTION_RING_SIZE 128
+#define WLAN_CFG_REO_EXCEPTION_RING_SIZE 256
 #define WLAN_CFG_REO_EXCEPTION_RING_SIZE_MIN 128
-#define WLAN_CFG_REO_EXCEPTION_RING_SIZE_MAX 128
+#define WLAN_CFG_REO_EXCEPTION_RING_SIZE_MAX 512
 
 #define WLAN_CFG_REO_CMD_RING_SIZE 128
 #define WLAN_CFG_REO_CMD_RING_SIZE_MIN 64
@@ -358,6 +374,7 @@
 #define WLAN_CFG_RX_FLOW_SEARCH_TABLE_SIZE 16384
 #define WLAN_CFG_RX_FLOW_SEARCH_TABLE_SIZE_MIN 1
 #define WLAN_CFG_RX_FLOW_SEARCH_TABLE_SIZE_MAX 16384
+#define WLAN_CFG_RX_FLOW_SEARCH_TABLE_SIZE_DEFAULT 128
 
 #define WLAN_CFG_PKTLOG_BUFFER_SIZE 10
 #define WLAN_CFG_PKTLOG_MIN_BUFFER_SIZE 1
@@ -472,6 +489,20 @@
 		WLAN_CFG_NUM_TCL_DATA_RINGS_MAX, \
 		WLAN_CFG_NUM_TCL_DATA_RINGS, \
 		CFG_VALUE_OR_DEFAULT, "DP TCL Data Rings")
+
+#define CFG_DP_NSS_REO_DEST_RINGS \
+		CFG_INI_UINT("dp_nss_reo_dest_rings", \
+		WLAN_CFG_NSS_NUM_REO_DEST_RING_MIN, \
+		WLAN_CFG_NSS_NUM_REO_DEST_RING_MAX, \
+		WLAN_CFG_NSS_NUM_REO_DEST_RING, \
+		CFG_VALUE_OR_DEFAULT, "DP NSS REO Destination Rings")
+
+#define CFG_DP_NSS_TCL_DATA_RINGS \
+		CFG_INI_UINT("dp_nss_tcl_data_rings", \
+		WLAN_CFG_NSS_NUM_TCL_DATA_RINGS_MIN, \
+		WLAN_CFG_NSS_NUM_TCL_DATA_RINGS_MAX, \
+		WLAN_CFG_NSS_NUM_TCL_DATA_RINGS, \
+		CFG_VALUE_OR_DEFAULT, "DP NSS TCL Data Rings")
 
 #define CFG_DP_TX_DESC \
 		CFG_INI_UINT("dp_tx_desc", \
@@ -903,7 +934,7 @@
 	CFG_INI_UINT("dp_rx_flow_search_table_size", \
 		WLAN_CFG_RX_FLOW_SEARCH_TABLE_SIZE_MIN, \
 		WLAN_CFG_RX_FLOW_SEARCH_TABLE_SIZE_MAX, \
-		WLAN_CFG_RX_FLOW_SEARCH_TABLE_SIZE, \
+		WLAN_CFG_RX_FLOW_SEARCH_TABLE_SIZE_DEFAULT, \
 		CFG_VALUE_OR_DEFAULT, \
 		"DP Rx Flow Search Table Size in number of entries")
 
@@ -928,7 +959,7 @@
  * dp_rx_fisa_enable - Control Rx datapath FISA
  * @Min: 0
  * @Max: 1
- * @Default: 0
+ * @Default: 1
  *
  * This ini is used to enable DP Rx FISA feature
  *
@@ -936,12 +967,12 @@
  *
  * Supported Feature: STA,P2P and SAP IPA disabled terminating
  *
- * Usage: Internal/External
+ * Usage: Internal
  *
  * </ini>
  */
 #define CFG_DP_RX_FISA_ENABLE \
-	CFG_INI_BOOL("dp_rx_fisa_enable", false, \
+	CFG_INI_BOOL("dp_rx_fisa_enable", true, \
 		     "Enable/Disable DP Rx FISA")
 
 #define CFG_DP_RXDMA_MONITOR_RX_DROP_THRESHOLD \
@@ -998,7 +1029,8 @@
  * legacy_mode_csum_disable - Disable csum offload for legacy 802.11abg modes
  * @Min: 0
  * @Max: 1
- * @Default: 0
+ * @Default: Default value indicating if checksum should be disabled for
+ * legacy WLAN modes
  *
  * This ini is used to disable HW checksum offload capability for legacy
  * connections
@@ -1009,14 +1041,22 @@
  *
  * </ini>
  */
+#ifndef DP_LEGACY_MODE_CSM_DEFAULT_DISABLE
+#define DP_LEGACY_MODE_CSM_DEFAULT_DISABLE 1
+#endif
 
 #define CFG_DP_LEGACY_MODE_CSUM_DISABLE \
-	CFG_INI_BOOL("legacy_mode_csum_disable", false, \
+	CFG_INI_BOOL("legacy_mode_csum_disable", \
+		     DP_LEGACY_MODE_CSM_DEFAULT_DISABLE, \
 		     "Enable/Disable legacy mode checksum")
 
 #define CFG_DP_RX_BUFF_POOL_ENABLE \
 	CFG_INI_BOOL("dp_rx_buff_prealloc_pool", false, \
 		     "Enable/Disable DP RX emergency buffer pool support")
+
+#define CFG_DP_RX_REFILL_BUFF_POOL_ENABLE \
+	CFG_INI_BOOL("dp_rx_refill_buff_pool", false, \
+		     "Enable/Disable DP RX refill buffer pool support")
 
 #define CFG_DP_POLL_MODE_ENABLE \
 		CFG_INI_BOOL("dp_poll_mode_enable", false, \
@@ -1043,6 +1083,45 @@
 #define CFG_DP_SWLM_ENABLE \
 	CFG_INI_BOOL("gEnableSWLM", false, \
 		     "Enable/Disable DP SWLM")
+/*
+ * <ini>
+ * wow_check_rx_pending_enable - control to check RX frames pending in Wow
+ * @Min: 0
+ * @Max: 1
+ * @Default: 0
+ *
+ * This ini is used to control DP Software to perform RX pending check
+ * before entering WoW mode
+ *
+ * Usage: Internal
+ *
+ * </ini>
+ */
+#define CFG_DP_WOW_CHECK_RX_PENDING \
+		CFG_INI_BOOL("wow_check_rx_pending_enable", \
+		false, \
+		"enable rx frame pending check in WoW mode")
+#define CFG_DP_DELAY_MON_REPLENISH \
+		CFG_INI_BOOL("delay_mon_replenish", \
+		true, "Delay Monitor Replenish")
+
+/*
+ * <ini>
+ * gForceRX64BA - enable force 64 blockack mode for RX
+ * @Min: 0
+ * @Max: 1
+ * @Default: 0
+ *
+ * This ini is used to control DP Software to use 64 blockack
+ * for RX direction forcibly
+ *
+ * Usage: Internal
+ *
+ * </ini>
+ */
+#define CFG_FORCE_RX_64_BA \
+		CFG_INI_BOOL("gForceRX64BA", \
+		false, "Enable/Disable force 64 blockack in RX side")
 
 #define CFG_DP \
 		CFG(CFG_DP_HTT_PACKET_TYPE) \
@@ -1057,6 +1136,8 @@
 		CFG(CFG_DP_MAX_PEER_ID) \
 		CFG(CFG_DP_REO_DEST_RINGS) \
 		CFG(CFG_DP_TCL_DATA_RINGS) \
+		CFG(CFG_DP_NSS_REO_DEST_RINGS) \
+		CFG(CFG_DP_NSS_TCL_DATA_RINGS) \
 		CFG(CFG_DP_TX_DESC) \
 		CFG(CFG_DP_TX_EXT_DESC) \
 		CFG(CFG_DP_TX_EXT_DESC_POOLS) \
@@ -1124,6 +1205,7 @@
 		CFG(CFG_DP_REO_RINGS_MAP) \
 		CFG(CFG_DP_PEER_EXT_STATS) \
 		CFG(CFG_DP_RX_BUFF_POOL_ENABLE) \
+		CFG(CFG_DP_RX_REFILL_BUFF_POOL_ENABLE) \
 		CFG(CFG_DP_RX_PENDING_HL_THRESHOLD) \
 		CFG(CFG_DP_RX_PENDING_LO_THRESHOLD) \
 		CFG(CFG_DP_LEGACY_MODE_CSUM_DISABLE) \
@@ -1133,5 +1215,8 @@
 		CFG(CFG_DP_RX_FST_IN_CMEM) \
 		CFG(CFG_DP_RX_RADIO_0_DEFAULT_REO) \
 		CFG(CFG_DP_RX_RADIO_1_DEFAULT_REO) \
-		CFG(CFG_DP_RX_RADIO_2_DEFAULT_REO)
+		CFG(CFG_DP_RX_RADIO_2_DEFAULT_REO) \
+		CFG(CFG_DP_WOW_CHECK_RX_PENDING) \
+		CFG(CFG_FORCE_RX_64_BA) \
+		CFG(CFG_DP_DELAY_MON_REPLENISH)
 #endif /* _CFG_DP_H_ */
