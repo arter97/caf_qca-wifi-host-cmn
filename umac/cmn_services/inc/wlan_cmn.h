@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016-2020 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -77,6 +77,9 @@
 
 /* Invalid free descriptor count */
 #define WLAN_INVALID_MGMT_DESC_COUNT 0xFFFFFFFF
+
+/* Max fw report pdev id */
+#define WLAN_UMAC_MAX_RP_PID 2
 
 /* 802.11 cap info */
 #define WLAN_CAPINFO_ESS               0x0001

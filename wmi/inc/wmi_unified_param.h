@@ -4278,6 +4278,7 @@ typedef struct {
  * @fcsBad:
  * @noBeacons:
  * @mib_int_count:
+ * @pdev_id: pdev id
  */
 typedef struct {
 	int32_t chan_nf;
@@ -4294,6 +4295,7 @@ typedef struct {
 	uint32_t	fcsBad;
 	uint32_t	noBeacons;
 	uint32_t	mib_int_count;
+	uint32_t pdev_id;
 } wmi_host_pdev_stats;
 
 /**

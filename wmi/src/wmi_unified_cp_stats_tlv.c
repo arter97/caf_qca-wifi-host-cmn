@@ -300,6 +300,7 @@ extract_pdev_stats_tlv(wmi_unified_t wmi_handle, void *evt_buf, uint32_t index,
 
 	param_buf = (WMI_UPDATE_STATS_EVENTID_param_tlvs *) evt_buf;
 	ev_param = (wmi_stats_event_fixed_param *) param_buf->fixed_param;
+	pdev_stats->pdev_id = ev_param->pdev_id;
 
 	data = param_buf->data;
 
