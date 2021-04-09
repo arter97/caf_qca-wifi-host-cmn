@@ -1972,6 +1972,14 @@ done:
 	while (nbuf) {
 		next = nbuf->next;
 		rx_tlv_hdr = qdf_nbuf_data(nbuf);
+
+		if (qdf_unlikely(hal_rx_attn_msdu_len_err_get(rx_tlv_hdr))) {
+			DP_STATS_INC(soc, rx.err.msdu_len_err, 1);
+			qdf_nbuf_free(nbuf);
+			nbuf = next;
+			continue;
+		}
+
 		/* Get TID from struct cb->tid_val, save to tid */
 		if (qdf_nbuf_is_rx_chfrag_start(nbuf))
 			tid = qdf_nbuf_get_tid_val(nbuf);
