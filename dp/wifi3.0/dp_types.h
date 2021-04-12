@@ -1106,6 +1106,16 @@ struct rx_buff_pool {
 	bool is_initialized;
 };
 
+struct rx_refill_buff_pool {
+	qdf_nbuf_t buf_head;
+	qdf_nbuf_t buf_tail;
+	qdf_spinlock_t bufq_lock;
+	uint32_t bufq_len;
+	uint32_t max_bufq_len;
+	bool in_rx_refill_lock;
+	bool is_initialized;
+};
+
 /*
  * The logic for get current index of these history is dependent on this
  * value being power of 2.
@@ -1692,6 +1702,7 @@ struct dp_soc {
 
 	/* RX buffer params */
 	struct rx_buff_pool rx_buff_pool[MAX_PDEV_CNT];
+	struct rx_refill_buff_pool rx_refill_buff_pool;
 	/* Save recent operation related variable */
 	struct dp_last_op_info last_op_info;
 	TAILQ_HEAD(, dp_peer) inactive_peer_list;
@@ -1706,6 +1717,10 @@ struct dp_soc {
 
 #ifdef WLAN_DP_FEATURE_SW_LATENCY_MGR
 	struct dp_swlm swlm;
+#endif
+#ifdef FEATURE_RUNTIME_PM
+	/* Dp runtime refcount */
+	qdf_atomic_t dp_runtime_refcount;
 #endif
 };
 
@@ -3024,4 +3039,9 @@ QDF_STATUS dp_hw_link_desc_pool_banks_alloc(struct dp_soc *soc,
 					    uint32_t mac_id);
 void dp_link_desc_ring_replenish(struct dp_soc *soc, uint32_t mac_id);
 
+#ifdef WLAN_FEATURE_RX_PREALLOC_BUFFER_POOL
+void dp_rx_refill_buff_pool_enqueue(struct dp_soc *soc);
+#else
+static inline void dp_rx_refill_buff_pool_enqueue(struct dp_soc *soc) {}
+#endif
 #endif /* _DP_TYPES_H_ */
