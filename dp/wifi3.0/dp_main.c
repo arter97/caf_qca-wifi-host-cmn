@@ -94,7 +94,7 @@ cdp_dump_flow_pool_info(struct cdp_soc_t *soc)
 #define DEINIT_RX_HW_STATS_LOCK(_soc) /* no op */
 #endif
 
-#ifdef DP_PEER_EXTENDED_API
+#if defined(DP_PEER_EXTENDED_API) || defined(WLAN_DP_PENDING_MEM_FLUSH)
 #define SET_PEER_REF_CNT_ONE(_peer) \
 	qdf_atomic_set(&(_peer)->ref_cnt, 1)
 #else
@@ -1802,7 +1802,7 @@ int dp_srng_access_start(struct dp_intr *int_ctx, struct dp_soc *dp_soc,
 	uint8_t ring_id;
 
 	if (!int_ctx)
-		return hal_srng_access_start(hal_soc, hal_ring_hdl);
+		return dp_hal_srng_access_start(hal_soc, hal_ring_hdl);
 
 	hal_get_sw_hptp(hal_soc, hal_ring_hdl, &tp, &hp);
 	ring_id = hal_srng_ring_id_get(hal_ring_hdl);
@@ -1810,7 +1810,7 @@ int dp_srng_access_start(struct dp_intr *int_ctx, struct dp_soc *dp_soc,
 	hif_record_event(dp_soc->hif_handle, int_ctx->dp_intr_id,
 			 ring_id, hp, tp, HIF_EVENT_SRNG_ACCESS_START);
 
-	return hal_srng_access_start(hal_soc, hal_ring_hdl);
+	return dp_hal_srng_access_start(hal_soc, hal_ring_hdl);
 }
 
 void dp_srng_access_end(struct dp_intr *int_ctx, struct dp_soc *dp_soc,
@@ -1821,7 +1821,7 @@ void dp_srng_access_end(struct dp_intr *int_ctx, struct dp_soc *dp_soc,
 	uint8_t ring_id;
 
 	if (!int_ctx)
-		return hal_srng_access_end(hal_soc, hal_ring_hdl);
+		return dp_hal_srng_access_end(hal_soc, hal_ring_hdl);
 
 	hal_get_sw_hptp(hal_soc, hal_ring_hdl, &tp, &hp);
 	ring_id = hal_srng_ring_id_get(hal_ring_hdl);
@@ -1829,7 +1829,7 @@ void dp_srng_access_end(struct dp_intr *int_ctx, struct dp_soc *dp_soc,
 	hif_record_event(dp_soc->hif_handle, int_ctx->dp_intr_id,
 			 ring_id, hp, tp, HIF_EVENT_SRNG_ACCESS_END);
 
-	return hal_srng_access_end(hal_soc, hal_ring_hdl);
+	return dp_hal_srng_access_end(hal_soc, hal_ring_hdl);
 }
 
 static inline void dp_srng_record_timer_entry(struct dp_soc *dp_soc,
@@ -4435,20 +4435,21 @@ static void dp_htt_ppdu_stats_detach(struct dp_pdev *pdev)
 static void dp_pdev_flush_pending_vdevs(struct dp_pdev *pdev)
 {
 	struct dp_vdev *vdev = NULL;
+	struct dp_soc *soc = pdev->soc;
+
+	if (TAILQ_EMPTY(&soc->inactive_vdev_list))
+		return;
 
 	while (true) {
-		qdf_spin_lock_bh(&pdev->vdev_list_lock);
-		TAILQ_FOREACH(vdev, &pdev->vdev_list, vdev_list_elem) {
-			if (vdev->delete.pending)
+		qdf_spin_lock_bh(&soc->inactive_vdev_list_lock);
+		TAILQ_FOREACH(vdev, &soc->inactive_vdev_list,
+			      inactive_list_elem) {
+			if (vdev->pdev == pdev)
 				break;
 		}
-		qdf_spin_unlock_bh(&pdev->vdev_list_lock);
+		qdf_spin_unlock_bh(&soc->inactive_vdev_list_lock);
 
-		/*
-		 * vdev will be freed when all peers get cleanup,
-		 * dp_delete_pending_vdev will remove vdev from vdev_list
-		 * in pdev.
-		 */
+		/* vdev will be freed when all peers get cleanup */
 		if (vdev)
 			dp_vdev_flush_peers((struct cdp_vdev *)vdev, 0);
 		else
@@ -5309,6 +5310,8 @@ dp_soc_attach_target_wifi3(struct cdp_soc_t *cdp_soc)
 
 	DP_STATS_INIT(soc);
 
+	dp_runtime_init(soc);
+
 	/* initialize work queue for stats processing */
 	qdf_create_work(0, &soc->htt_stats.work, htt_t2h_stats_handler, soc);
 
@@ -5620,9 +5623,9 @@ static inline void dp_vdev_register_tx_handler(struct dp_vdev *vdev,
 	else
 		txrx_ops->tx.tx_exception = dp_tx_send_exception;
 
-	dp_alert("Configure tx_vdev_id_chk_handler Feature Flag: %d and mode:%d for vdev_id:%d",
-		 wlan_cfg_is_tx_per_pkt_vdev_id_check_enabled(soc->wlan_cfg_ctx),
-		 vdev->opmode, vdev->vdev_id);
+	dp_info("Configure tx_vdev_id_chk_handler Feature Flag: %d and mode:%d for vdev_id:%d",
+		wlan_cfg_is_tx_per_pkt_vdev_id_check_enabled(soc->wlan_cfg_ctx),
+		vdev->opmode, vdev->vdev_id);
 }
 
 /**
@@ -9975,11 +9978,25 @@ void dp_update_rx_soft_irq_limit_params(struct dp_soc *soc,
 		soc->wlan_cfg_ctx->rx_enable_eol_data_check,
 		soc->wlan_cfg_ctx->rx_hp_oos_update_limit);
 }
+
+static void dp_update_soft_irq_limits(struct dp_soc *soc, uint32_t tx_limit,
+				      uint32_t rx_limit)
+{
+	soc->wlan_cfg_ctx->tx_comp_loop_pkt_limit = tx_limit;
+	soc->wlan_cfg_ctx->rx_reap_loop_pkt_limit = rx_limit;
+}
+
 #else
 static inline
 void dp_update_rx_soft_irq_limit_params(struct dp_soc *soc,
 					struct cdp_config_params *params)
 { }
+
+static inline
+void dp_update_soft_irq_limits(struct dp_soc *soc, uint32_t tx_limit,
+			       uint32_t rx_limit)
+{
+}
 #endif /* WLAN_FEATURE_RX_SOFTIRQ_TIME_LIMIT */
 
 /**
@@ -11013,6 +11030,32 @@ dp_config_full_mon_mode(struct cdp_soc_t *soc_handle,
 }
 #endif
 
+#if defined(FEATURE_RUNTIME_PM) || defined(DP_POWER_SAVE)
+static void dp_drain_txrx(struct cdp_soc_t *soc_handle)
+{
+	struct dp_soc *soc = (struct dp_soc *)soc_handle;
+	uint32_t cur_tx_limit, cur_rx_limit;
+	uint32_t budget = 0xffff;
+	int i;
+
+	cur_tx_limit = soc->wlan_cfg_ctx->tx_comp_loop_pkt_limit;
+	cur_rx_limit = soc->wlan_cfg_ctx->rx_reap_loop_pkt_limit;
+
+	/* Temporarily increase soft irq limits when going to drain
+	 * the UMAC/LMAC SRNGs and restore them after polling.
+	 * Though the budget is on higher side, the TX/RX reaping loops
+	 * will not execute longer as both TX and RX would be suspended
+	 * by the time this API is called.
+	 */
+	dp_update_soft_irq_limits(soc, budget, budget);
+
+	for (i = 0; i < wlan_cfg_get_num_contexts(soc->wlan_cfg_ctx); i++)
+		dp_service_srngs(&soc->intr_ctx[i], budget);
+
+	dp_update_soft_irq_limits(soc, cur_tx_limit, cur_rx_limit);
+}
+#endif
+
 static struct cdp_cmn_ops dp_ops_cmn = {
 	.txrx_soc_attach_target = dp_soc_attach_target_wifi3,
 	.txrx_vdev_attach = dp_vdev_attach_wifi3,
@@ -11111,6 +11154,10 @@ static struct cdp_cmn_ops dp_ops_cmn = {
 	.get_wds_ext_peer_id = dp_wds_ext_get_peer_id,
 	.set_wds_ext_peer_rx = dp_wds_ext_set_peer_rx,
 #endif /* QCA_SUPPORT_WDS_EXTENDED */
+
+#if defined(FEATURE_RUNTIME_PM) || defined(DP_POWER_SAVE)
+	.txrx_drain = dp_drain_txrx,
+#endif
 };
 
 static struct cdp_ctrl_ops dp_ops_ctrl = {
@@ -11266,6 +11313,12 @@ static QDF_STATUS dp_runtime_suspend(struct cdp_soc_t *soc_hdl, uint8_t pdev_id)
 		return QDF_STATUS_E_AGAIN;
 	}
 
+	if (dp_runtime_get_refcount(soc)) {
+		dp_info("refcount: %d", dp_runtime_get_refcount(soc));
+
+		return QDF_STATUS_E_AGAIN;
+	}
+
 	if (soc->intr_mode == DP_INTR_POLL)
 		qdf_timer_stop(&soc->int_timer);
 
@@ -11293,9 +11346,12 @@ void dp_flush_ring_hptp(struct dp_soc *soc, hal_ring_handle_t hal_srng)
 		hal_srng_access_end(soc->hal_soc, hal_srng);
 
 		hal_srng_set_flush_last_ts(hal_srng);
+		dp_debug("flushed");
 	}
 }
 
+#define DP_FLUSH_WAIT_CNT 10
+#define DP_RUNTIME_SUSPEND_WAIT_MS 10
 /**
  * dp_runtime_resume() - ensure DP is ready to runtime resume
  * @soc_hdl: Datapath soc handle
@@ -11308,10 +11364,20 @@ void dp_flush_ring_hptp(struct dp_soc *soc, hal_ring_handle_t hal_srng)
 static QDF_STATUS dp_runtime_resume(struct cdp_soc_t *soc_hdl, uint8_t pdev_id)
 {
 	struct dp_soc *soc = cdp_soc_t_to_dp_soc(soc_hdl);
-	int i;
+	int i, suspend_wait = 0;
 
 	if (soc->intr_mode == DP_INTR_POLL)
 		qdf_timer_mod(&soc->int_timer, DP_INTR_POLL_TIMER_MS);
+
+	/*
+	 * Wait until dp runtime refcount becomes zero or time out, then flush
+	 * pending tx for runtime suspend.
+	 */
+	while (dp_runtime_get_refcount(soc) &&
+	       suspend_wait < DP_FLUSH_WAIT_CNT) {
+		qdf_sleep(DP_RUNTIME_SUSPEND_WAIT_MS);
+		suspend_wait++;
+	}
 
 	for (i = 0; i < MAX_TCL_DATA_RINGS; i++) {
 		dp_flush_ring_hptp(soc, soc->tcl_data_ring[i].hal_srng);
@@ -11536,7 +11602,7 @@ static void dp_rx_hw_stats_cb(struct dp_soc *soc, void *cb_ctxt,
 		soc->ext_stats.rx_mpdu_received +=
 					queue_status->mpdu_frms_cnt;
 		soc->ext_stats.rx_mpdu_missed +=
-					queue_status->late_recv_mpdu_cnt;
+					queue_status->hole_cnt;
 	}
 	qdf_spin_unlock_bh(&soc->rx_hw_stats_lock);
 }
@@ -11631,6 +11697,21 @@ out:
 
 	return status;
 }
+
+/**
+ * dp_reset_rx_hw_ext_stats - Reset rx hardware ext stats
+ * @soc_hdl: soc handle
+ *
+ * Return: None
+ */
+static
+void dp_reset_rx_hw_ext_stats(struct cdp_soc_t *soc_hdl)
+{
+	struct dp_soc *soc = (struct dp_soc *)soc_hdl;
+
+	soc->ext_stats.rx_mpdu_received = 0;
+	soc->ext_stats.rx_mpdu_missed = 0;
+}
 #endif /* WLAN_FEATURE_STATS_EXT */
 
 #ifdef DP_PEER_EXTENDED_API
@@ -11656,6 +11737,7 @@ static struct cdp_misc_ops dp_ops_misc = {
 #ifdef WLAN_FEATURE_STATS_EXT
 	.txrx_ext_stats_request = dp_txrx_ext_stats_request,
 	.request_rx_hw_stats = dp_request_rx_hw_stats,
+	.reset_rx_hw_ext_stats = dp_reset_rx_hw_ext_stats,
 #endif /* WLAN_FEATURE_STATS_EXT */
 	.vdev_inform_ll_conn = dp_vdev_inform_ll_conn,
 #ifdef WLAN_DP_FEATURE_SW_LATENCY_MGR
