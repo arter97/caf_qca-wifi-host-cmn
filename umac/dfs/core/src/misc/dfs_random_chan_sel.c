@@ -1152,7 +1152,7 @@ static uint16_t dfs_get_rand_from_lst_for_freq(struct wlan_dfs *dfs,
 	i = (rand_byte + qdf_mc_timer_get_system_ticks()) % num_chan;
 
 	dfs_info(dfs, WLAN_DEBUG_DFS_RANDOM_CHAN,
-		 "random channel %d", freq_lst[i]);
+		 "random chan freq %d", freq_lst[i]);
 
 	return freq_lst[i];
 }
@@ -1443,10 +1443,11 @@ static void dfs_apply_rules_for_freq(struct wlan_dfs *dfs,
 	uint8_t num_channels = 0;
 
 	dfs_debug(dfs, WLAN_DEBUG_DFS_RANDOM_CHAN, "flags %d", flags);
-	flag_no_weather = (dfs_region == DFS_ETSI_REGION_VAL) ?
+	flag_no_weather = (dfs_region == DFS_ETSI_REGION) ?
 		flags & DFS_RANDOM_CH_FLAG_NO_WEATHER_CH : 0;
 
-	if (dfs_region == DFS_MKK_REGION_VAL) {
+	if (dfs_region == DFS_MKK_REGION ||
+	    dfs_region == DFS_MKKN_REGION) {
 		flag_no_lower_5g = flags & DFS_RANDOM_CH_FLAG_NO_LOWER_5G_CH;
 		flag_no_upper_5g = flags & DFS_RANDOM_CH_FLAG_NO_UPEER_5G_CH;
 		flag_no_japan_w53 = flags & DFS_RANDOM_CH_FLAG_NO_JAPAN_W53_CH;
@@ -1619,7 +1620,7 @@ uint16_t dfs_prepare_random_channel_for_freq(struct wlan_dfs *dfs,
 	dfs_apply_rules_for_freq(dfs, flags, random_chan_freq_list,
 				 &random_chan_cnt, chan_list, chan_cnt,
 				 dfs_region, acs_info);
-	flag_no_weather = (dfs_region == DFS_ETSI_REGION_VAL) ?
+	flag_no_weather = (dfs_region == DFS_ETSI_REGION) ?
 		flags & DFS_RANDOM_CH_FLAG_NO_WEATHER_CH : 0;
 
 	/* list adjusted after leakage has been marked */
@@ -1653,7 +1654,7 @@ uint16_t dfs_prepare_random_channel_for_freq(struct wlan_dfs *dfs,
 				if (leakage_adjusted_lst[i] == 0)
 					continue;
 				dfs_debug(dfs, WLAN_DEBUG_DFS_RANDOM_CHAN,
-					  "Channel=%d added to available list",
+					  "Chan freq =%d added to available list",
 					  leakage_adjusted_lst[i]);
 				final_lst[final_cnt] = leakage_adjusted_lst[i];
 				final_cnt++;
@@ -1701,7 +1702,7 @@ uint16_t dfs_prepare_random_channel_for_freq(struct wlan_dfs *dfs,
 		     DFS_ADJACENT_WEATHER_RADAR_CHANNEL_FREQ) &&
 		    (*chan_wd == DFS_CH_WIDTH_40MHZ)) {
 			dfs_debug(dfs, WLAN_DEBUG_DFS_RANDOM_CHAN,
-				  "skip weather adjacent ch=%d\n",
+				  "skip weather adjacent ch freq =%d\n",
 				  target_freq);
 			continue;
 		}

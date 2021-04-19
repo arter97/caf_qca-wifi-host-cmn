@@ -76,6 +76,8 @@
 #define dp_rx_warn(params...) QDF_TRACE_WARN(QDF_MODULE_ID_DP_RX, params)
 #define dp_rx_info(params...) \
 	__QDF_TRACE_FL(QDF_TRACE_LEVEL_INFO_HIGH, QDF_MODULE_ID_DP_RX, ## params)
+#define dp_rx_info_rl(params...) \
+	__QDF_TRACE_RL(QDF_TRACE_LEVEL_INFO_HIGH, QDF_MODULE_ID_DP_RX, ## params)
 #define dp_rx_debug(params...) QDF_TRACE_DEBUG(QDF_MODULE_ID_DP_RX, params)
 
 /**
@@ -585,11 +587,29 @@ dp_rx_cookie_check_and_invalidate(hal_ring_desc_t ring_desc)
 	HAL_RX_REO_BUF_COOKIE_INVALID_SET(ring_desc);
 	return QDF_STATUS_SUCCESS;
 }
+
+/**
+ * dp_rx_cookie_reset_invalid_bit() - Reset the invalid bit of the cookie
+ *  field in ring descriptor
+ * @ring_desc: ring descriptor
+ *
+ * Return: None
+ */
+static inline void
+dp_rx_cookie_reset_invalid_bit(hal_ring_desc_t ring_desc)
+{
+	HAL_RX_REO_BUF_COOKIE_INVALID_RESET(ring_desc);
+}
 #else
 static inline QDF_STATUS
 dp_rx_cookie_check_and_invalidate(hal_ring_desc_t ring_desc)
 {
 	return QDF_STATUS_SUCCESS;
+}
+
+static inline void
+dp_rx_cookie_reset_invalid_bit(hal_ring_desc_t ring_desc)
+{
 }
 #endif
 

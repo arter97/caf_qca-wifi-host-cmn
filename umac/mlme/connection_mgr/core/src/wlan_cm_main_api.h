@@ -56,6 +56,16 @@
 QDF_STATUS cm_connect_start(struct cnx_mgr *cm_ctx, struct cm_connect_req *req);
 
 /**
+ * cm_if_mgr_inform_connect_complete() - inform ifmanager the connect complete
+ * @vdev: vdev for which connect cmpleted
+ * @connect_status: connect status
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS cm_if_mgr_inform_connect_complete(struct wlan_objmgr_vdev *vdev,
+					     QDF_STATUS connect_status);
+
+/**
  * cm_handle_connect_req_in_non_init_state() - Handle connect request in non
  * init state.
  * @cm_ctx: connection manager context
@@ -516,6 +526,17 @@ void cm_store_wep_key(struct cnx_mgr *cm_ctx,
 		      struct wlan_cm_connect_crypto_info *crypto,
 		      wlan_cm_id cm_id);
 
+/**
+ * cm_inform_blm_connect_complete() - inform bsl about connect complete
+ * @vdev: vdev
+ * @resp: connect resp
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS
+cm_inform_blm_connect_complete(struct wlan_objmgr_vdev *vdev,
+			       struct wlan_cm_connect_resp *resp);
+
 static inline QDF_STATUS
 cm_peer_create_on_bss_select_ind_resp(struct cnx_mgr *cm_ctx,
 				      wlan_cm_id *cm_id)
@@ -534,6 +555,13 @@ static inline void cm_store_wep_key(struct cnx_mgr *cm_ctx,
 				    struct wlan_cm_connect_crypto_info *crypto,
 				    wlan_cm_id cm_id)
 {}
+
+static inline QDF_STATUS
+cm_inform_blm_connect_complete(struct wlan_objmgr_vdev *vdev,
+			       struct wlan_cm_connect_resp *resp)
+{
+	return QDF_STATUS_SUCCESS;
+}
 
 /**
  * cm_peer_create_on_bss_select_ind_resp() - Called to create peer
@@ -673,11 +701,11 @@ void cm_flush_pending_request(struct cnx_mgr *cm_ctx, uint32_t prefix,
 /**
  * cm_remove_cmd() - Remove cmd from req list and serialization
  * @cm_ctx: connection manager context
- * @cm_id: cm id of connect/disconnect req
+ * @cm_id_to_remove: cm id of connect/disconnect/roam req
  *
  * Return: void
  */
-void cm_remove_cmd(struct cnx_mgr *cm_ctx, wlan_cm_id *cm_id);
+void cm_remove_cmd(struct cnx_mgr *cm_ctx, wlan_cm_id *cm_id_to_remove);
 
 /**
  * cm_add_req_to_list_and_indicate_osif() - Add the request to request list in

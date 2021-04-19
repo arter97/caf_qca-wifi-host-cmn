@@ -38,6 +38,8 @@
 #define dp_rx_err_warn(params...) QDF_TRACE_WARN(QDF_MODULE_ID_DP_RX_ERROR, params)
 #define dp_rx_err_info(params...) \
 	__QDF_TRACE_FL(QDF_TRACE_LEVEL_INFO_HIGH, QDF_MODULE_ID_DP_RX_ERROR, ## params)
+#define dp_rx_err_info_rl(params...) \
+	__QDF_TRACE_RL(QDF_TRACE_LEVEL_INFO_HIGH, QDF_MODULE_ID_DP_RX_ERROR, ## params)
 #define dp_rx_err_debug(params...) QDF_TRACE_DEBUG(QDF_MODULE_ID_DP_RX_ERROR, params)
 
 #ifndef QCA_HOST_MODE_WIFI_DISABLED
@@ -54,6 +56,8 @@ bool dp_rx_mcast_echo_check(struct dp_soc *soc,
 	struct dp_vdev *vdev = peer->vdev;
 	struct dp_pdev *pdev = vdev->pdev;
 	struct dp_mec_entry *mecentry = NULL;
+	struct dp_ast_entry *ase = NULL;
+	uint16_t sa_idx = 0;
 	uint8_t *data;
 	/*
 	 * Multicast Echo Check is required only if vdev is STA and
@@ -66,6 +70,7 @@ bool dp_rx_mcast_echo_check(struct dp_soc *soc,
 		return false;
 
 	data = qdf_nbuf_data(nbuf);
+
 	/*
 	 * if the received pkts src mac addr matches with vdev
 	 * mac address then drop the pkt as it is looped back
@@ -84,11 +89,42 @@ bool dp_rx_mcast_echo_check(struct dp_soc *soc,
 	if (qdf_unlikely(vdev->isolation_vdev))
 		return false;
 
-	/* if the received pkts src mac addr matches with the
+	/*
+	 * if the received pkts src mac addr matches with the
 	 * wired PCs MAC addr which is behind the STA or with
 	 * wireless STAs MAC addr which are behind the Repeater,
 	 * then drop the pkt as it is looped back
 	 */
+	if (hal_rx_msdu_end_sa_is_valid_get(soc->hal_soc, rx_tlv_hdr)) {
+		sa_idx = hal_rx_msdu_end_sa_idx_get(soc->hal_soc, rx_tlv_hdr);
+
+		if ((sa_idx < 0) ||
+		    (sa_idx >= wlan_cfg_get_max_ast_idx(soc->wlan_cfg_ctx))) {
+			QDF_TRACE(QDF_MODULE_ID_TXRX, QDF_TRACE_LEVEL_ERROR,
+				  "invalid sa_idx: %d", sa_idx);
+			qdf_assert_always(0);
+		}
+
+		qdf_spin_lock_bh(&soc->ast_lock);
+		ase = soc->ast_table[sa_idx];
+
+		/*
+		 * this check was not needed since MEC is not dependent on AST,
+		 * but if we dont have this check SON has some issues in
+		 * dual backhaul scenario. in APS SON mode, client connected
+		 * to RE 2G and sends multicast packets. the RE sends it to CAP
+		 * over 5G backhaul. the CAP loopback it on 2G to RE.
+		 * On receiving in 2G STA vap, we assume that client has roamed
+		 * and kickout the client.
+		 */
+		if (ase && (ase->peer_id != peer->peer_id)) {
+			qdf_spin_unlock_bh(&soc->ast_lock);
+			goto drop;
+		}
+
+		qdf_spin_unlock_bh(&soc->ast_lock);
+	}
+
 	qdf_spin_lock_bh(&soc->mec_lock);
 
 	mecentry = dp_peer_mec_hash_find_by_pdevid(soc, pdev->pdev_id,
@@ -100,6 +136,7 @@ bool dp_rx_mcast_echo_check(struct dp_soc *soc,
 
 	qdf_spin_unlock_bh(&soc->mec_lock);
 
+drop:
 	dp_rx_err_info("%pK: received pkt with same src mac " QDF_MAC_ADDR_FMT,
 		       soc, QDF_MAC_ADDR_REF(&data[QDF_MAC_ADDR_SIZE]));
 
@@ -504,6 +541,7 @@ dp_rx_reo_err_entry_process(struct dp_soc *soc,
 	qdf_nbuf_t head_nbuf = NULL;
 	qdf_nbuf_t tail_nbuf = NULL;
 	uint16_t msdu_processed = 0;
+	bool ret;
 
 	peer_id = DP_PEER_METADATA_PEER_ID_GET(
 					mpdu_desc_info->peer_meta_data);
@@ -522,6 +560,14 @@ more_msdu_link_desc:
 		pdev = dp_get_pdev_for_lmac_id(soc, rx_desc->pool_id);
 
 		nbuf = rx_desc->nbuf;
+		ret = dp_rx_desc_paddr_sanity_check(rx_desc,
+						    msdu_list.paddr[i]);
+		if (!ret) {
+			DP_STATS_INC(soc, rx.err.nbuf_sanity_fail, 1);
+			rx_desc->in_err_state = 1;
+			continue;
+		}
+
 		rx_desc_pool = &soc->rx_desc_buf[rx_desc->pool_id];
 		dp_ipa_handle_rx_buf_smmu_mapping(soc, nbuf,
 						  rx_desc_pool->buf_size,
@@ -766,12 +812,26 @@ void dp_rx_err_handle_bar(struct dp_soc *soc,
 			       start_seq_num);
 }
 
+/**
+ * dp_rx_bar_frame_handle() - Function to handle err BAR frames
+ * @soc: core DP main context
+ * @ring_desc: Hal ring desc
+ * @rx_desc: dp rx desc
+ * @mpdu_desc_info: mpdu desc info
+ *
+ * Handle the error BAR frames received. Ensure the SOC level
+ * stats are updated based on the REO error code. The BAR frames
+ * are further processed by updating the Rx tids with the start
+ * sequence number (SSN) and BA window size. Desc is returned
+ * to the free desc list
+ *
+ * Return: none
+ */
 static void
 dp_rx_bar_frame_handle(struct dp_soc *soc,
 		       hal_ring_desc_t ring_desc,
 		       struct dp_rx_desc *rx_desc,
-		       struct hal_rx_mpdu_desc_info *mpdu_desc_info,
-		       uint8_t error)
+		       struct hal_rx_mpdu_desc_info *mpdu_desc_info)
 {
 	qdf_nbuf_t nbuf;
 	struct dp_pdev *pdev;
@@ -780,6 +840,7 @@ dp_rx_bar_frame_handle(struct dp_soc *soc,
 	uint16_t peer_id;
 	uint8_t *rx_tlv_hdr;
 	uint32_t tid;
+	uint8_t reo_err_code;
 
 	nbuf = rx_desc->nbuf;
 	rx_desc_pool = &soc->rx_desc_buf[rx_desc->pool_id];
@@ -803,24 +864,25 @@ dp_rx_bar_frame_handle(struct dp_soc *soc,
 	if (!peer)
 		goto next;
 
+	reo_err_code = HAL_RX_REO_ERROR_GET(ring_desc);
 	dp_info("BAR frame: peer = "QDF_MAC_ADDR_FMT
 		" peer_id = %d"
 		" tid = %u"
 		" SSN = %d"
-		" error status = %d",
+		" error code = %d",
 		QDF_MAC_ADDR_REF(peer->mac_addr.raw),
 		peer->peer_id,
 		tid,
 		mpdu_desc_info->mpdu_seq,
-		error);
+		reo_err_code);
 
-	switch (error) {
+	switch (reo_err_code) {
 	case HAL_REO_ERR_BAR_FRAME_2K_JUMP:
 		/* fallthrough */
 	case HAL_REO_ERR_BAR_FRAME_OOR:
 		dp_rx_err_handle_bar(soc, peer, nbuf);
 		DP_STATS_INC(soc,
-			     rx.err.reo_error[error], 1);
+			     rx.err.reo_error[reo_err_code], 1);
 		break;
 	default:
 		DP_STATS_INC(soc, rx.bar_frame, 1);
@@ -1315,8 +1377,8 @@ dp_rx_process_rxdma_err(struct dp_soc *soc, qdf_nbuf_t nbuf,
 
 	vdev = peer->vdev;
 	if (!vdev) {
-		dp_rx_err_err("%pK: INVALID vdev %pK OR osif_rx", soc,
-			      vdev);
+		dp_rx_err_info_rl("%pK: INVALID vdev %pK OR osif_rx", soc,
+				 vdev);
 		/* Drop & free packet */
 		qdf_nbuf_free(nbuf);
 		DP_STATS_INC(soc, rx.err.invalid_vdev, 1);
@@ -1707,14 +1769,11 @@ dp_rx_err_process(struct dp_intr *int_ctx, struct dp_soc *soc,
 			dp_rx_bar_frame_handle(soc,
 					       ring_desc,
 					       rx_desc,
-					       &mpdu_desc_info,
-					       error);
+					       &mpdu_desc_info);
 
 			rx_bufs_reaped[mac_id] += 1;
 			goto next_entry;
 		}
-
-		dp_info_rl("Got pkt with REO ERROR: %d", error);
 
 		if (mpdu_desc_info.mpdu_flags & HAL_MPDU_F_FRAGMENT) {
 			/*
@@ -2195,6 +2254,9 @@ done:
 							  peer_id, tid);
 					break;
 				case HAL_REO_ERR_REGULAR_FRAME_OOR:
+					if (peer)
+						DP_STATS_INC(peer,
+							     rx.err.oor_err, 1);
 					if (hal_rx_msdu_end_first_msdu_get(soc->hal_soc,
 									   rx_tlv_hdr)) {
 						peer_id =
@@ -2218,6 +2280,14 @@ done:
 						dp_rx_err_handle_bar(soc,
 								     peer,
 								     nbuf);
+					qdf_nbuf_free(nbuf);
+					break;
+
+				case HAL_REO_ERR_PN_CHECK_FAILED:
+				case HAL_REO_ERR_PN_ERROR_HANDLING_FLAG_SET:
+					if (peer)
+						DP_STATS_INC(peer,
+							     rx.err.pn_err, 1);
 					qdf_nbuf_free(nbuf);
 					break;
 

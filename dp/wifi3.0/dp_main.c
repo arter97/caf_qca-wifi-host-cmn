@@ -417,6 +417,7 @@ const int dp_stats_mapping_table[][STATS_TYPE_MAX] = {
 	{TXRX_FW_STATS_INVALID, TXRX_SOC_INTERRUPT_STATS},
 	{TXRX_FW_STATS_INVALID, TXRX_SOC_FSE_STATS},
 	{TXRX_FW_STATS_INVALID, TXRX_HAL_REG_WRITE_STATS},
+	{TXRX_FW_STATS_INVALID, TXRX_SOC_REO_HW_DESC_DUMP},
 	{HTT_DBG_EXT_STATS_PDEV_RX_RATE_EXT, TXRX_HOST_STATS_INVALID}
 };
 
@@ -3509,17 +3510,6 @@ static void dp_soc_reset_intr_mask(struct dp_soc *soc)
 		wlan_cfg_set_rx_err_ring_mask(soc->wlan_cfg_ctx,
 					      group_number, 0);
 	}
-
-	/* reset interrupt mask for offloaded rxdma2host ring
-	 * for IPQ5018 platform.
-	 * disable_mac1_intr is set only for IPQ5018 target.
-	 */
-	if (soc->disable_mac1_intr) {
-		grp_mask = &soc->wlan_cfg_ctx->int_rxdma2host_ring_mask[0];
-		group_number = dp_srng_find_ring_in_mask(0x0, grp_mask);
-		wlan_cfg_set_rxdma2host_ring_mask(soc->wlan_cfg_ctx,
-						  group_number, 0x0);
-	}
 }
 
 #ifdef IPA_OFFLOAD
@@ -5813,7 +5803,6 @@ static QDF_STATUS dp_vdev_attach_wifi3(struct cdp_soc_t *cdp_soc,
 	qdf_spinlock_create(&vdev->peer_list_lock);
 	TAILQ_INIT(&vdev->peer_list);
 	dp_peer_multipass_list_init(vdev);
-
 	if ((soc->intr_mode == DP_INTR_POLL) &&
 	    wlan_cfg_get_num_contexts(soc->wlan_cfg_ctx) != 0) {
 		if ((pdev->vdev_count == 0) ||
@@ -5856,8 +5845,12 @@ static QDF_STATUS dp_vdev_attach_wifi3(struct cdp_soc_t *cdp_soc,
 
 	dp_tx_vdev_attach(vdev);
 
-	if (pdev->vdev_count == 1)
-		dp_lro_hash_setup(soc, pdev);
+	if (!pdev->is_lro_hash_configured) {
+		if (QDF_IS_STATUS_SUCCESS(dp_lro_hash_setup(soc, pdev)))
+			pdev->is_lro_hash_configured = true;
+		else
+			dp_err("LRO hash setup failure!");
+	}
 
 	dp_info("Created vdev %pK ("QDF_MAC_ADDR_FMT")", vdev,
 		QDF_MAC_ADDR_REF(vdev->mac_addr.raw));
@@ -6120,6 +6113,7 @@ static QDF_STATUS dp_vdev_detach_wifi3(struct cdp_soc_t *cdp_soc,
 	if (vdev->opmode != wlan_op_mode_monitor)
 		dp_vdev_pdev_list_remove(soc, pdev, vdev);
 
+	pdev->vdev_count--;
 	/* release reference taken above for find */
 	dp_vdev_unref_delete(soc, vdev, DP_MOD_ID_CDP);
 
@@ -7701,8 +7695,6 @@ static void dp_vdev_set_monitor_mode_buf_rings(struct dp_pdev *pdev)
 	uint32_t num_entries;
 	struct dp_soc *soc = pdev->soc;
 
-	dp_soc_config_full_mon_mode(pdev, DP_FULL_MON_ENABLE);
-
 	/* If delay monitor replenish is disabled, allocate link descriptor
 	 * monitor ring buffers of ring size.
 	 */
@@ -7769,6 +7761,8 @@ static QDF_STATUS dp_vdev_set_monitor_mode(struct cdp_soc_t *dp_soc,
 	 * for lite monitor required configuration done through
 	 * dp_set_pdev_param
 	 */
+
+	dp_soc_config_full_mon_mode(pdev, DP_FULL_MON_ENABLE);
 	if (special_monitor) {
 		status = QDF_STATUS_SUCCESS;
 		goto fail;
@@ -8277,8 +8271,7 @@ static void dp_pdev_getstats(struct cdp_pdev *pdev_handle,
 	stats->rx_bytes = pdev->stats.rx.unicast.bytes +
 		pdev->stats.rx.multicast.bytes +
 		pdev->stats.rx.bcast.bytes;
-	stats->rx_errors = pdev->stats.err.desc_alloc_fail +
-		pdev->stats.err.ip_csum_err +
+	stats->rx_errors = pdev->stats.err.ip_csum_err +
 		pdev->stats.err.tcp_udp_csum_err +
 		pdev->stats.rx.err.mic_err +
 		pdev->stats.rx.err.decrypt_err +
@@ -8631,6 +8624,10 @@ dp_print_host_stats(struct dp_vdev *vdev,
 	case TXRX_HAL_REG_WRITE_STATS:
 		hal_dump_reg_write_stats(pdev->soc->hal_soc);
 		hal_dump_reg_write_srng_stats(pdev->soc->hal_soc);
+		break;
+	case TXRX_SOC_REO_HW_DESC_DUMP:
+		dp_get_rx_reo_queue_info((struct cdp_soc_t *)pdev->soc,
+					 vdev->vdev_id);
 		break;
 	default:
 		dp_info("Wrong Input For TxRx Host Stats");
@@ -14128,6 +14125,8 @@ static void dp_soc_cfg_init(struct dp_soc *soc)
 		break;
 	case TARGET_TYPE_QCA5018:
 	case TARGET_TYPE_QCN6122:
+		wlan_cfg_set_mon_delayed_replenish_entries(soc->wlan_cfg_ctx,
+							   MON_BUF_MIN_ENTRIES);
 		wlan_cfg_set_reo_dst_ring_size(soc->wlan_cfg_ctx,
 					       REO_DST_RING_SIZE_QCA8074);
 		soc->ast_override_support = 1;
