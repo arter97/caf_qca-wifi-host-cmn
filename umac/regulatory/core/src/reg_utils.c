@@ -211,7 +211,7 @@ QDF_STATUS reg_set_country(struct wlan_objmgr_pdev *pdev,
 		if (psoc_reg->cc_src == SOURCE_USERSPACE ||
 		    psoc_reg->cc_src == SOURCE_CORE) {
 			reg_debug("country is not different");
-			return QDF_STATUS_SUCCESS;
+			return QDF_STATUS_E_INVAL;
 		}
 	}
 
@@ -352,34 +352,7 @@ bool reg_is_dsrc_freq(qdf_freq_t freq)
 	return true;
 }
 #endif  /*CONFIG_CHAN_FREQ_API*/
-
-#ifdef CONFIG_CHAN_NUM_API
-bool reg_is_dsrc_chan(struct wlan_objmgr_pdev *pdev, uint8_t chan)
-{
-	struct wlan_regulatory_pdev_priv_obj *pdev_priv_obj;
-	qdf_freq_t freq = 0;
-
-	pdev_priv_obj = reg_get_pdev_obj(pdev);
-
-	if (!IS_VALID_PDEV_REG_OBJ(pdev_priv_obj)) {
-		reg_err("reg pdev priv obj is NULL");
-		return false;
-	}
-
-	if (!REG_IS_5GHZ_CH(chan))
-		return false;
-
-	freq = reg_legacy_chan_to_freq(pdev, chan);
-
-	if (!(freq >= REG_DSRC_START_FREQ && freq <= REG_DSRC_END_FREQ))
-		return false;
-
-	return true;
-}
-#endif /* CONFIG_CHAN_NUM_API */
-
 #else
-
 bool reg_is_etsi13_regdmn(struct wlan_objmgr_pdev *pdev)
 {
 	struct cur_regdmn_info cur_reg_dmn;
@@ -741,6 +714,43 @@ bool reg_get_fcc_constraint(struct wlan_objmgr_pdev *pdev, uint32_t freq)
 
 	return true;
 }
+
+#ifdef CONFIG_BAND_6GHZ
+/**
+ * reg_is_afc_available() - check if the automated frequency control system is
+ * available, function will need to be updated once AFC is implemented
+ * @pdev: Pointer to pdev structure
+ *
+ * Return: false since the AFC system is not yet available
+ */
+static bool reg_is_afc_available(struct wlan_objmgr_pdev *pdev)
+{
+	return false;
+}
+
+enum reg_6g_ap_type reg_decide_6g_ap_pwr_type(struct wlan_objmgr_pdev *pdev)
+{
+	struct wlan_regulatory_pdev_priv_obj *pdev_priv_obj;
+	enum reg_6g_ap_type ap_pwr_type = REG_INDOOR_AP;
+
+	pdev_priv_obj = reg_get_pdev_obj(pdev);
+	if (!IS_VALID_PDEV_REG_OBJ(pdev_priv_obj)) {
+		reg_err("pdev reg component is NULL");
+		return REG_VERY_LOW_POWER_AP;
+	}
+
+	if (reg_is_afc_available(pdev))
+		ap_pwr_type = REG_STANDARD_POWER_AP;
+	else if (pdev_priv_obj->reg_6g_superid != FCC1_6G &&
+		 pdev_priv_obj->reg_6g_superid != FCC1_6G_CL)
+		ap_pwr_type = REG_VERY_LOW_POWER_AP;
+
+	reg_set_cur_6g_ap_pwr_type(pdev, ap_pwr_type);
+	reg_compute_pdev_current_chan_list(pdev_priv_obj);
+
+	return ap_pwr_type;
+}
+#endif /* CONFIG_BAND_6GHZ */
 
 #endif /* CONFIG_REG_CLIENT */
 

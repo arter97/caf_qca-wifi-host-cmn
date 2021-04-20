@@ -534,16 +534,6 @@ static QDF_STATUS extract_twt_add_dialog_comp_additional_parameters
 
 	ev = param_buf->fixed_param;
 
-	/*
-	 * For Alternate values from AP, Firmware sends additional params
-	 * with WMI_HOST_ADD_TWT_STATUS_DENIED
-	 */
-	if (ev->status != WMI_HOST_ADD_TWT_STATUS_OK &&
-	    ev->status != WMI_HOST_ADD_TWT_STATUS_DENIED) {
-		wmi_err("Status of add dialog complete is not success");
-		return QDF_STATUS_E_INVAL;
-	}
-
 	if (idx >= param_buf->num_twt_params) {
 		wmi_err("Invalid idx %d while num_twt_params = %d",
 			 idx, param_buf->num_twt_params);
@@ -609,6 +599,8 @@ wmi_get_converted_twt_del_dialog_status(WMI_DEL_TWT_STATUS_T tgt_status)
 		return WMI_HOST_DEL_TWT_STATUS_PEER_INIT_TEARDOWN;
 	case WMI_DEL_TWT_STATUS_ROAMING:
 		return WMI_HOST_DEL_TWT_STATUS_ROAMING;
+	case WMI_DEL_TWT_STATUS_CONCURRENCY:
+		return WMI_HOST_DEL_TWT_STATUS_CONCURRENCY;
 	default:
 		return WMI_HOST_DEL_TWT_STATUS_UNKNOWN_ERROR;
 	}

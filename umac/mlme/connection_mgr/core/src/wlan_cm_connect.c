@@ -20,6 +20,7 @@
 
 #include "wlan_cm_main_api.h"
 #include "wlan_scan_api.h"
+#include "wlan_cm_roam.h"
 #include "wlan_cm_sm.h"
 #ifdef WLAN_POLICY_MGR_ENABLE
 #include "wlan_policy_mgr_api.h"
@@ -560,7 +561,7 @@ static inline QDF_STATUS cm_set_fils_key(struct cnx_mgr *cm_ctx,
 }
 #endif /* WLAN_FEATURE_FILS_SK */
 
-static QDF_STATUS
+QDF_STATUS
 cm_inform_blm_connect_complete(struct wlan_objmgr_vdev *vdev,
 			       struct wlan_cm_connect_resp *resp)
 {
@@ -715,12 +716,6 @@ static void cm_set_fils_wep_key(struct cnx_mgr *cm_ctx,
 	cm_set_key(cm_ctx, false, 0, &broadcast_mac);
 }
 #else
-static inline QDF_STATUS
-cm_inform_blm_connect_complete(struct wlan_objmgr_vdev *vdev,
-			       struct wlan_cm_connect_resp *resp)
-{
-	return QDF_STATUS_SUCCESS;
-}
 
 static inline
 bool cm_is_retry_with_same_candidate(struct cnx_mgr *cm_ctx,
@@ -734,7 +729,12 @@ static inline void cm_update_advance_filter(struct wlan_objmgr_pdev *pdev,
 					    struct cnx_mgr *cm_ctx,
 					    struct scan_filter *filter,
 					    struct cm_connect_req *cm_req)
-{ }
+{
+	struct wlan_objmgr_vdev *vdev = cm_ctx->vdev;
+
+	if (cm_ctx->cm_candidate_advance_filter)
+		cm_ctx->cm_candidate_advance_filter(vdev, filter);
+}
 
 static void cm_update_security_filter(struct scan_filter *filter,
 				      struct wlan_cm_connect_req *req)
@@ -912,7 +912,7 @@ static QDF_STATUS cm_connect_get_candidates(struct wlan_objmgr_pdev *pdev,
 
 	op_mode = wlan_vdev_mlme_get_opmode(cm_ctx->vdev);
 	if (num_bss && op_mode == QDF_STA_MODE)
-		cm_calculate_scores(pdev, filter, candidate_list);
+		cm_calculate_scores(cm_ctx, pdev, filter, candidate_list);
 	qdf_mem_free(filter);
 
 	if (!candidate_list || !qdf_list_size(candidate_list)) {
@@ -963,9 +963,8 @@ QDF_STATUS cm_if_mgr_validate_candidate(struct cnx_mgr *cm_ctx,
 				    &event_data);
 }
 
-static QDF_STATUS
-cm_if_mgr_inform_connect_complete(struct wlan_objmgr_vdev *vdev,
-				  QDF_STATUS connect_status)
+QDF_STATUS cm_if_mgr_inform_connect_complete(struct wlan_objmgr_vdev *vdev,
+					     QDF_STATUS connect_status)
 {
 	struct if_mgr_event_data *connect_complete;
 
@@ -994,6 +993,11 @@ cm_handle_connect_req_in_non_init_state(struct cnx_mgr *cm_ctx,
 {
 	switch (cm_state_substate) {
 	case WLAN_CM_S_ROAMING:
+		/* for FW roam/LFR3 remove the req from the list */
+		if (cm_roam_offload_enabled(wlan_vdev_get_psoc(cm_ctx->vdev)))
+			cm_flush_pending_request(cm_ctx, ROAM_REQ_PREFIX,
+						 false);
+		/* fallthrough */
 	case WLAN_CM_S_CONNECTED:
 	case WLAN_CM_SS_JOIN_ACTIVE:
 		/*
@@ -1367,6 +1371,8 @@ QDF_STATUS cm_connect_active(struct cnx_mgr *cm_ctx, wlan_cm_id *cm_id)
 	cm_ctx->active_cm_id = *cm_id;
 	req = &cm_req->connect_req.req;
 	wlan_vdev_mlme_set_ssid(cm_ctx->vdev, req->ssid.ssid, req->ssid.length);
+	/* free vdev keys before setting crypto params */
+	wlan_crypto_free_vdev_key(cm_ctx->vdev);
 	cm_fill_vdev_crypto_params(cm_ctx, req);
 	cm_store_wep_key(cm_ctx, &req->crypto, *cm_id);
 
@@ -1562,6 +1568,7 @@ QDF_STATUS cm_connect_complete(struct cnx_mgr *cm_ctx,
 	enum wlan_cm_sm_state sm_state;
 	struct bss_info bss_info;
 	struct mlme_info mlme_info;
+	bool send_ind = true;
 
 	/*
 	 * If the entry is not present in the list, it must have been cleared
@@ -1579,10 +1586,17 @@ QDF_STATUS cm_connect_complete(struct cnx_mgr *cm_ctx,
 		cm_set_fils_wep_key(cm_ctx, resp);
 	}
 
-	mlme_cm_connect_complete_ind(cm_ctx->vdev, resp);
-	mlme_cm_osif_connect_complete(cm_ctx->vdev, resp);
-	cm_if_mgr_inform_connect_complete(cm_ctx->vdev, resp->connect_status);
-	cm_inform_blm_connect_complete(cm_ctx->vdev, resp);
+	/* In case of reassoc failure no need to inform osif/legacy/ifmanager */
+	if (resp->is_reassoc && QDF_IS_STATUS_ERROR(resp->connect_status))
+		send_ind = false;
+
+	if (send_ind) {
+		mlme_cm_connect_complete_ind(cm_ctx->vdev, resp);
+		mlme_cm_osif_connect_complete(cm_ctx->vdev, resp);
+		cm_if_mgr_inform_connect_complete(cm_ctx->vdev,
+						  resp->connect_status);
+		cm_inform_blm_connect_complete(cm_ctx->vdev, resp);
+	}
 
 	/* Update scan entry in case connect is success or fails with bssid */
 	if (!qdf_is_macaddr_zero(&resp->bssid)) {

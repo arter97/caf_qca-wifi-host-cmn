@@ -303,6 +303,10 @@ struct wmi_twt_add_dialog_param {
  * WMI_HOST_ADD_TWT_STATUS_DENIED: AP did not accept the request
  * WMI_HOST_ADD_TWT_STATUS_UNKNOWN_ERROR: adding TWT dialog failed with
  *                                 an unknown reason
+ * WMI_HOST_ADD_TWT_STATUS_AP_PARAMS_NOT_IN_RANGE: peer AP wake interval,
+ *                                 duration not in range
+ * WMI_HOST_ADD_TWT_STATUS_AP_IE_VALIDATION_FAILED:
+ *                                 peer AP IE Validation Failed
  */
 enum WMI_HOST_ADD_TWT_STATUS {
 	WMI_HOST_ADD_TWT_STATUS_OK,
@@ -315,6 +319,8 @@ enum WMI_HOST_ADD_TWT_STATUS {
 	WMI_HOST_ADD_TWT_STATUS_NO_RESPONSE,
 	WMI_HOST_ADD_TWT_STATUS_DENIED,
 	WMI_HOST_ADD_TWT_STATUS_UNKNOWN_ERROR,
+	WMI_HOST_ADD_TWT_STATUS_AP_PARAMS_NOT_IN_RANGE,
+	WMI_HOST_ADD_TWT_STATUS_AP_IE_VALIDATION_FAILED
 };
 
 /**
@@ -399,6 +405,8 @@ struct wmi_twt_del_dialog_param {
  * unknown reason
  * @WMI_HOST_DEL_TWT_STATUS_PEER_INIT_TEARDOWN: Peer initiated TWT teardown
  * @WMI_HOST_DEL_TWT_STATUS_ROAMING: TWT teardown due to roaming.
+ * @WMI_HOST_DEL_TWT_STATUS_CONCURRENCY: TWT session teardown due to
+ * concurrent session comming up.
  */
 enum WMI_HOST_DEL_TWT_STATUS {
 	WMI_HOST_DEL_TWT_STATUS_OK,
@@ -410,6 +418,7 @@ enum WMI_HOST_DEL_TWT_STATUS {
 	WMI_HOST_DEL_TWT_STATUS_UNKNOWN_ERROR,
 	WMI_HOST_DEL_TWT_STATUS_PEER_INIT_TEARDOWN,
 	WMI_HOST_DEL_TWT_STATUS_ROAMING,
+	WMI_HOST_DEL_TWT_STATUS_CONCURRENCY,
 };
 
 /**

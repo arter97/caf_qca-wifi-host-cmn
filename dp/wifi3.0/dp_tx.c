@@ -2316,7 +2316,6 @@ qdf_nbuf_t dp_tx_send_msdu_multiple(struct dp_vdev *vdev, qdf_nbuf_t nbuf,
 				    tid_tx_stats[tx_q->ring_id][msdu_info->tid];
 			tid_stats->swdrop_cnt[TX_HW_ENQUEUE]++;
 
-			dp_tx_desc_release(tx_desc, tx_q->desc_pool_id);
 			if (msdu_info->frm_type == dp_tx_frm_me) {
 				hw_enq_fail++;
 				if (hw_enq_fail == msdu_info->num_seg) {
@@ -2365,6 +2364,7 @@ qdf_nbuf_t dp_tx_send_msdu_multiple(struct dp_vdev *vdev, qdf_nbuf_t nbuf,
 				continue;
 			}
 
+			dp_tx_desc_release(tx_desc, tx_q->desc_pool_id);
 			goto done;
 		}
 
@@ -3355,7 +3355,7 @@ void dp_tx_reinject_handler(struct dp_soc *soc,
 				  ((is_mcast && peer->wds_ecm.wds_tx_mcast_4addr) ||
 				   (is_ucast && peer->wds_ecm.wds_tx_ucast_4addr))))) {
 #else
-			((peer->bss_peer &&
+			((peer->bss_peer && vdev->osif_proxy_arp &&
 			  !(vdev->osif_proxy_arp(vdev->osif_vdev, nbuf))))) {
 #endif
 				peer_id = DP_INVALID_PEER;
@@ -4279,20 +4279,14 @@ void dp_tx_process_htt_completion(struct dp_soc *soc,
 	 * continue to next descriptor
 	 */
 	if ((tx_desc->vdev_id == DP_INVALID_VDEV_ID) && !tx_desc->flags) {
-		QDF_TRACE(QDF_MODULE_ID_DP,
-				QDF_TRACE_LEVEL_INFO,
-				"Descriptor freed in vdev_detach %d",
-				tx_desc->id);
+		dp_tx_comp_info_rl("Descriptor freed in vdev_detach %d", tx_desc->id);
 		return;
 	}
 
 	pdev = tx_desc->pdev;
 
 	if (qdf_unlikely(tx_desc->pdev->is_pdev_down)) {
-		QDF_TRACE(QDF_MODULE_ID_DP,
-				QDF_TRACE_LEVEL_INFO,
-				"pdev in down state %d",
-				tx_desc->id);
+		dp_tx_comp_info_rl("pdev in down state %d", tx_desc->id);
 		dp_tx_comp_free_buf(soc, tx_desc);
 		dp_tx_desc_release(tx_desc, tx_desc->pool_id);
 		return;
@@ -4542,14 +4536,14 @@ more_data:
 			if (qdf_unlikely
 				((tx_desc->vdev_id == DP_INVALID_VDEV_ID) &&
 				 !tx_desc->flags)) {
-				dp_tx_comp_info("Descriptor freed in vdev_detach %d",
-						tx_desc_id);
+				dp_tx_comp_info_rl("Descriptor freed in vdev_detach %d",
+						   tx_desc_id);
 				continue;
 			}
 
 			if (qdf_unlikely(tx_desc->pdev->is_pdev_down)) {
-				dp_tx_comp_info("pdev in down state %d",
-						tx_desc_id);
+				dp_tx_comp_info_rl("pdev in down state %d",
+						   tx_desc_id);
 
 				dp_tx_comp_free_buf(soc, tx_desc);
 				dp_tx_desc_release(tx_desc, tx_desc->pool_id);
