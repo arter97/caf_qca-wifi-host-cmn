@@ -3201,7 +3201,8 @@ int hif_wlan_enable(struct hif_softc *scn)
 
 #define CE_EPPING_USES_IRQ true
 
-void hif_ce_prepare_epping_config(struct HIF_CE_state *hif_state)
+void hif_ce_prepare_epping_config(struct hif_softc *scn,
+				  struct HIF_CE_state *hif_state)
 {
 	if (CE_EPPING_USES_IRQ)
 		hif_state->host_ce_config = host_ce_config_wlan_epping_irq;
@@ -3211,6 +3212,7 @@ void hif_ce_prepare_epping_config(struct HIF_CE_state *hif_state)
 	hif_state->target_ce_config_sz = sizeof(target_ce_config_wlan_epping);
 	target_shadow_reg_cfg = target_shadow_reg_cfg_epping;
 	shadow_cfg_sz = sizeof(target_shadow_reg_cfg_epping);
+	scn->ce_count = EPPING_HOST_CE_COUNT;
 }
 #endif
 
@@ -3274,7 +3276,7 @@ void hif_ce_prepare_config(struct hif_softc *scn)
 	scn->ce_count = HOST_CE_COUNT;
 	/* if epping is enabled we need to use the epping configuration. */
 	if (QDF_IS_EPPING_ENABLED(mode)) {
-		hif_ce_prepare_epping_config(hif_state);
+		hif_ce_prepare_epping_config(scn, hif_state);
 		return;
 	}
 
@@ -3962,6 +3964,9 @@ u32 shadow_sr_wr_ind_addr(struct hif_softc *scn, u32 ctrl_addr)
 	switch (ce) {
 	case 0:
 		addr = SHADOW_VALUE0;
+		break;
+	case 3:
+		addr = SHADOW_VALUE3;
 		break;
 	case 4:
 		addr = SHADOW_VALUE4;

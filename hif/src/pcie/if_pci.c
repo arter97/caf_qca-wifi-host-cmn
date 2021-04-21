@@ -3331,6 +3331,8 @@ static void hif_pci_init_reg_windowing_support(struct hif_pci_softc *sc,
 {
 	switch (target_type) {
 	case TARGET_TYPE_QCN7605:
+	case TARGET_TYPE_QCA6490:
+	case TARGET_TYPE_QCA6390:
 		sc->use_register_windowing = true;
 		qdf_spinlock_create(&sc->register_access_lock);
 		sc->register_window = 0;
@@ -3584,6 +3586,24 @@ bool hif_pci_needs_bmi(struct hif_softc *scn)
 
 #ifdef FORCE_WAKE
 #ifdef DEVICE_FORCE_WAKE_ENABLE
+
+/**
+ * HIF_POLL_UMAC_WAKE poll value to indicate if UMAC is powered up
+ * Update the below macro with FW defined one.
+ */
+#define HIF_POLL_UMAC_WAKE 0x2
+
+/**
+ * hif_force_wake_request(): Enable the force wake recipe
+ * @hif_handle: HIF handle
+ *
+ * Bring MHI to M0 state and force wake the UMAC by asserting the
+ * soc wake reg. Poll the scratch reg to check if its set to
+ * HIF_POLL_UMAC_WAKE. The polled value may return 0x1 in case UMAC
+ * is powered down.
+ *
+ * Return: 0 if handshake is successful or ETIMEDOUT in case of failure
+ */
 int hif_force_wake_request(struct hif_opaque_softc *hif_handle)
 {
 	uint32_t timeout, value;
@@ -3611,15 +3631,8 @@ int hif_force_wake_request(struct hif_opaque_softc *hif_handle)
 		hif_info("state-change event races, ignore");
 
 	HIF_STATS_INC(pci_scn, mhi_force_wake_success, 1);
-	hif_write32_mb(scn,
-		       scn->mem +
-		       PCIE_SOC_PCIE_REG_PCIE_SCRATCH_0_SOC_PCIE_REG,
-		       0);
-	hif_write32_mb(scn,
-		       scn->mem +
-		       PCIE_PCIE_LOCAL_REG_PCIE_SOC_WAKE_PCIE_LOCAL_REG,
-		       1);
-
+	hif_write32_mb(scn, scn->mem +
+		       PCIE_PCIE_LOCAL_REG_PCIE_SOC_WAKE_PCIE_LOCAL_REG, 1);
 	HIF_STATS_INC(pci_scn, soc_force_wake_register_write_success, 1);
 	/*
 	 * do not reset the timeout
@@ -3627,23 +3640,43 @@ int hif_force_wake_request(struct hif_opaque_softc *hif_handle)
 	 */
 	timeout = 0;
 	do {
-		value =
-		hif_read32_mb(scn,
-			      scn->mem +
-			      PCIE_SOC_PCIE_REG_PCIE_SCRATCH_0_SOC_PCIE_REG);
-		if (value)
+		value = hif_read32_mb(
+				scn, scn->mem +
+				PCIE_SOC_PCIE_REG_PCIE_SCRATCH_0_SOC_PCIE_REG);
+		hif_info("pcie scratch reg read value = %x", value);
+		if (value == HIF_POLL_UMAC_WAKE)
 			break;
 		qdf_mdelay(FORCE_WAKE_DELAY_MS);
 		timeout += FORCE_WAKE_DELAY_MS;
 	} while (timeout <= FORCE_WAKE_DELAY_TIMEOUT_MS);
 
-	if (!value) {
-		hif_err("failed handshake mechanism");
+	if (value != HIF_POLL_UMAC_WAKE) {
+		hif_err("failed force wake handshake mechanism");
 		HIF_STATS_INC(pci_scn, soc_force_wake_failure, 1);
 		return -ETIMEDOUT;
 	}
 
 	HIF_STATS_INC(pci_scn, soc_force_wake_success, 1);
+	return 0;
+}
+
+int hif_force_wake_release(struct hif_opaque_softc *hif_handle)
+{
+	int ret;
+	struct hif_softc *scn = (struct hif_softc *)hif_handle;
+	struct hif_pci_softc *pci_scn = HIF_GET_PCI_SOFTC(scn);
+
+	ret = pld_force_wake_release(scn->qdf_dev->dev);
+	if (ret) {
+		hif_err("force wake release failure");
+		HIF_STATS_INC(pci_scn, mhi_force_wake_release_failure, 1);
+		return ret;
+	}
+
+	HIF_STATS_INC(pci_scn, mhi_force_wake_release_success, 1);
+	hif_write32_mb(scn, scn->mem +
+		       PCIE_PCIE_LOCAL_REG_PCIE_SOC_WAKE_PCIE_LOCAL_REG, 0);
+	HIF_STATS_INC(pci_scn, soc_force_wake_release_success, 1);
 	return 0;
 }
 
@@ -3683,7 +3716,6 @@ int hif_force_wake_request(struct hif_opaque_softc *hif_handle)
 
 	return 0;
 }
-#endif /* DEVICE_FORCE_WAKE_ENABLE */
 
 int hif_force_wake_release(struct hif_opaque_softc *hif_handle)
 {
@@ -3699,13 +3731,9 @@ int hif_force_wake_release(struct hif_opaque_softc *hif_handle)
 	}
 
 	HIF_STATS_INC(pci_scn, mhi_force_wake_release_success, 1);
-	hif_write32_mb(scn,
-		       scn->mem +
-		       PCIE_PCIE_LOCAL_REG_PCIE_SOC_WAKE_PCIE_LOCAL_REG,
-		       0);
-	HIF_STATS_INC(pci_scn, soc_force_wake_release_success, 1);
 	return 0;
 }
+#endif /* DEVICE_FORCE_WAKE_ENABLE */
 
 void hif_print_pci_stats(struct hif_pci_softc *pci_handle)
 {
