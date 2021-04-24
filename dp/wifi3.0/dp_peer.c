@@ -2773,13 +2773,8 @@ void dp_rx_tid_delete_cb(struct dp_soc *soc, void *cb_ctxt,
 			 * In case of MCL path add the desc back to the free
 			 * desc list and defer deletion.
 			 */
-<<<<<<< HEAD
-			dp_info_rl("fail to send REO cmd to flush cache: tid %d",
-				   rx_tid->tid);
-=======
 			dp_info_rl("%s: fail to send REO cmd to flush cache: tid %d",
 				   __func__, rx_tid->tid);
->>>>>>> 83a7452... qcacmn: Break from the desc_freelist loop on REO cmd enqueue failure
 			dp_reo_desc_clean_up(soc, desc, &reo_status);
 			DP_STATS_INC(soc, rx.err.reo_cmd_send_fail, 1);
 			break;
