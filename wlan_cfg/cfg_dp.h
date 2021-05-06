@@ -40,7 +40,6 @@
 #define WLAN_CFG_TX_FLOW_STOP_QUEUE_TH 15
 #else
 #define WLAN_CFG_TX_FLOW_START_QUEUE_OFFSET 0
-#define WLAN_CFG_TX_FLOW_STOP_QUEUE_TH 0
 #endif
 
 #define WLAN_CFG_PER_PDEV_TX_RING_MIN 0
@@ -48,13 +47,7 @@
 
 #if defined(WLAN_MAX_PDEVS) && (WLAN_MAX_PDEVS == 1)
 #define WLAN_CFG_PER_PDEV_RX_RING 0
-#define WLAN_CFG_PER_PDEV_LMAC_RING 0
 #define WLAN_LRO_ENABLE 0
-#ifdef QCA_WIFI_QCA6750
-#define WLAN_CFG_MAC_PER_TARGET 1
-#else
-#define WLAN_CFG_MAC_PER_TARGET 2
-#endif
 #ifdef IPA_OFFLOAD
 /* Size of TCL TX Ring */
 #if defined(TX_TO_NPEERS_INC_TX_DESCS)
@@ -72,8 +65,6 @@
 #define WLAN_CFG_IPA_UC_RX_IND_RING_COUNT 1024
 #else
 #define WLAN_CFG_TX_RING_SIZE 512
-#define WLAN_CFG_PER_PDEV_TX_RING 1
-#define WLAN_CFG_IPA_UC_TX_BUF_SIZE 0
 #define WLAN_CFG_IPA_UC_TX_PARTITION_BASE 0
 #define WLAN_CFG_IPA_UC_RX_IND_RING_COUNT 0
 #endif
@@ -84,30 +75,18 @@
 /* Tx Descriptor and Tx Extension Descriptor pool sizes */
 #define WLAN_CFG_NUM_TX_DESC  4096
 #define WLAN_CFG_NUM_TX_EXT_DESC 4096
-#else
-#define WLAN_CFG_TX_COMP_RING_SIZE 1024
-
-/* Tx Descriptor and Tx Extension Descriptor pool sizes */
-#define WLAN_CFG_NUM_TX_DESC  1024
-#define WLAN_CFG_NUM_TX_EXT_DESC 1024
 #endif
 
 /* Interrupt Mitigation - Batch threshold in terms of number of frames */
-#define WLAN_CFG_INT_BATCH_THRESHOLD_TX 1
 #define WLAN_CFG_INT_BATCH_THRESHOLD_OTHER 1
 
 /* Interrupt Mitigation - Timer threshold in us */
-#define WLAN_CFG_INT_TIMER_THRESHOLD_TX 8
-#define WLAN_CFG_INT_TIMER_THRESHOLD_OTHER 8
 
 #ifdef WLAN_DP_PER_RING_TYPE_CONFIG
 #define WLAN_CFG_INT_BATCH_THRESHOLD_RX \
 		WLAN_CFG_INT_BATCH_THRESHOLD_REO_RING
 #define WLAN_CFG_INT_TIMER_THRESHOLD_RX \
 		WLAN_CFG_INT_TIMER_THRESHOLD_REO_RING
-#else
-#define WLAN_CFG_INT_BATCH_THRESHOLD_RX 1
-#define WLAN_CFG_INT_TIMER_THRESHOLD_RX 8
 #endif
 #endif
 

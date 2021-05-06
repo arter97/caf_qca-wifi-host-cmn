@@ -32,17 +32,15 @@
  * This mask defines how many transmit frames account for 1 NAPI work unit
  * 0 means each tx completion is 1 unit
  */
-#define DP_TX_NAPI_BUDGET_DIV_MASK 0
 
 /* PPDU Stats Configuration - Configure bitmask for enabling tx ppdu tlv's */
-#define DP_PPDU_TXLITE_STATS_BITMASK_CFG 0x3FFF
 
 #define NUM_RXDMA_RINGS_PER_PDEV 2
 
 /*Maximum Number of LMAC instances*/
 #define MAX_NUM_LMAC_HW	2
 #else
-#define WLAN_CFG_DST_RING_CACHED_DESC 1
+#define WLAN_CFG_DST_RING_CACHED_DESC 0
 #define MAX_PDEV_CNT 3
 #define WLAN_CFG_INT_NUM_CONTEXTS 11
 #define NUM_RXDMA_RINGS_PER_PDEV 1
@@ -64,8 +62,6 @@
 
 /* DP process status */
 #if defined(MAX_PDEV_CNT) && (MAX_PDEV_CNT == 1)
-#define CONFIG_PROCESS_RX_STATUS 1
-#define CONFIG_PROCESS_TX_STATUS 1
 #else
 #define CONFIG_PROCESS_RX_STATUS 0
 #define CONFIG_PROCESS_TX_STATUS 0
