@@ -7605,7 +7605,7 @@ void dp_aggregate_pdev_stats(struct dp_pdev *pdev)
 	struct dp_vdev *vdev = NULL;
 	struct dp_soc *soc;
 	struct cdp_vdev_stats *vdev_stats =
-			qdf_mem_malloc(sizeof(struct cdp_vdev_stats));
+			qdf_mem_malloc_atomic(sizeof(struct cdp_vdev_stats));
 
 	if (!vdev_stats) {
 		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_ERROR,
