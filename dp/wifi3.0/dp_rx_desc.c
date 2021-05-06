@@ -384,7 +384,8 @@ void dp_rx_desc_nbuf_free(struct dp_soc *soc,
 
 	qdf_spin_lock_bh(&rx_desc_pool->lock);
 	for (i = 0; i < rx_desc_pool->pool_size; i++) {
-		if (rx_desc_pool->array[i].rx_desc.in_use) {
+		if (rx_desc_pool->array[i].rx_desc.in_use &&
+		    rx_desc_pool->array[i].rx_desc.nbuf) {
 			nbuf = rx_desc_pool->array[i].rx_desc.nbuf;
 
 			if (!(rx_desc_pool->array[i].rx_desc.unmapped)) {
@@ -399,6 +400,8 @@ void dp_rx_desc_nbuf_free(struct dp_soc *soc,
 				rx_desc_pool->array[i].rx_desc.unmapped = 1;
 			}
 			qdf_nbuf_free(nbuf);
+			rx_desc_pool->array[i].rx_desc.nbuf = NULL;
+			rx_desc_pool->array[i].rx_desc.in_use = false;
 		}
 	}
 	qdf_spin_unlock_bh(&rx_desc_pool->lock);
