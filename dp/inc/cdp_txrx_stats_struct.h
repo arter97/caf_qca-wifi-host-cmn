@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016-2020 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -120,18 +120,18 @@
 #define CDP_FC_IS_RETRY_SET(_fc) \
 	((_fc) & qdf_cpu_to_le16(CDP_FCTL_RETRY))
 
-#define INVALID_RSSI 255
+#define CDP_INVALID_SNR 255
 
-#define CDP_RSSI_MULTIPLIER BIT(8)
-#define CDP_RSSI_MUL(x, mul) ((x) * (mul))
-#define CDP_RSSI_RND(x, mul) ((((x) % (mul)) >= ((mul) / 2)) ?\
+#define CDP_SNR_MULTIPLIER BIT(8)
+#define CDP_SNR_MUL(x, mul) ((x) * (mul))
+#define CDP_SNR_RND(x, mul) ((((x) % (mul)) >= ((mul) / 2)) ?\
 	((x) + ((mul) - 1)) / (mul) : (x) / (mul))
 
-#define CDP_RSSI_OUT(x) (CDP_RSSI_RND((x), CDP_RSSI_MULTIPLIER))
-#define CDP_RSSI_IN(x)  (CDP_RSSI_MUL((x), CDP_RSSI_MULTIPLIER))
-#define CDP_RSSI_AVG(x, y) ((((x) << 2) + (y) - (x)) >> 2)
+#define CDP_SNR_OUT(x) (CDP_SNR_RND((x), CDP_SNR_MULTIPLIER))
+#define CDP_SNR_IN(x)  (CDP_SNR_MUL((x), CDP_SNR_MULTIPLIER))
+#define CDP_SNR_AVG(x, y) ((((x) << 2) + (y) - (x)) >> 2)
 
-#define CDP_RSSI_UPDATE_AVG(x, y) x = CDP_RSSI_AVG((x), CDP_RSSI_IN((y)))
+#define CDP_SNR_UPDATE_AVG(x, y) x = CDP_SNR_AVG((x), CDP_SNR_IN((y)))
 
 /*Max SU EVM count */
 #define DP_RX_MAX_SU_EVM_COUNT 32
@@ -350,6 +350,7 @@ enum WDI_EVENT {
 	WDI_EVENT_TX_DATA,
 	WDI_EVENT_RX_DATA,
 	WDI_EVENT_TX_MGMT_CTRL,
+	WDI_EVENT_TX_PKT_CAPTURE,
 	WDI_EVENT_HTT_STATS,
 	WDI_EVENT_TX_BEACON,
 	WDI_EVENT_PEER_STATS,
@@ -366,6 +367,7 @@ enum WDI_EVENT {
 	WDI_EVENT_PKT_CAPTURE_TX_DATA,
 	WDI_EVENT_PKT_CAPTURE_RX_DATA,
 	WDI_EVENT_PKT_CAPTURE_OFFLOAD_TX_DATA,
+	WDI_EVENT_RX_CBF,
 	/* End of new event items */
 	WDI_EVENT_LAST
 };
@@ -473,6 +475,12 @@ struct cdp_rx_ppdu_cfr_info {
 	uint8_t chan_capture_status;
 	uint8_t rtt_che_buffer_pointer_high8;
 	uint32_t rtt_che_buffer_pointer_low32;
+	int16_t rtt_cfo_measurement;
+	uint32_t agc_gain_info0;
+	uint32_t agc_gain_info1;
+	uint32_t agc_gain_info2;
+	uint32_t agc_gain_info3;
+	uint32_t rx_start_ts;
 };
 #endif
 /*
@@ -797,7 +805,7 @@ enum cdp_peer_stats_type {
 	cdp_peer_rx_ratecode,
 	cdp_peer_rx_ucast,
 	cdp_peer_rx_flags,
-	cdp_peer_rx_avg_rssi,
+	cdp_peer_rx_avg_snr,
 	cdp_peer_stats_max,
 };
 
@@ -823,7 +831,7 @@ typedef union cdp_peer_stats_buf {
 	uint32_t last_rx_rate;
 	uint32_t rx_ratecode;
 	uint32_t rx_flags;
-	uint32_t rx_avg_rssi;
+	uint32_t rx_avg_snr;
 } cdp_peer_stats_param_t; /* Max union size 16 bytes */
 
 /**
@@ -1057,7 +1065,7 @@ struct cdp_tx_stats {
  * @non_amsdu_cnt: Number of MSDUs with no MSDU level aggregation
  * @amsdu_cnt: Number of MSDUs part of AMSDU
  * @bar_recv_cnt: Number of bar received
- * @avg_rssi: Average rssi
+ * @avg_snr: Average snr
  * @rx_rate: Rx rate
  * @last_rx_rate: Previous rx rate
  * @rnd_avg_rx_rate: Rounded average rx rate
@@ -1081,9 +1089,9 @@ struct cdp_tx_stats {
  * @rx_discard: packets discard in rx
  * @rx_ratecode: Rx rate code of last frame
  * @rx_flags: rx flags
- * @rx_rssi_measured_time: Time at which rssi is measured
- * @rssi: RSSI of received signal
- * @last_rssi: Previous rssi
+ * @rx_snr_measured_time: Time at which snr is measured
+ * @snr: SNR of received signal
+ * @last_snr: Previous snr
  * @multipass_rx_pkt_drop: Dropped multipass rx pkt
  * @rx_mpdu_cnt: rx mpdu count per MCS rate
  * @to_stack_twt: Total packets sent up the stack in TWT session
@@ -1129,7 +1137,7 @@ struct cdp_rx_stats {
 	uint32_t non_amsdu_cnt;
 	uint32_t amsdu_cnt;
 	uint32_t bar_recv_cnt;
-	uint32_t avg_rssi;
+	uint32_t avg_snr;
 	uint32_t rx_rate;
 	uint32_t last_rx_rate;
 	uint32_t rnd_avg_rx_rate;
@@ -1150,9 +1158,9 @@ struct cdp_rx_stats {
 	uint32_t rx_discard;
 	uint32_t rx_ratecode;
 	uint32_t rx_flags;
-	uint32_t rx_rssi_measured_time;
-	uint8_t rssi;
-	uint8_t last_rssi;
+	uint32_t rx_snr_measured_time;
+	uint8_t snr;
+	uint8_t last_snr;
 	uint32_t multipass_rx_pkt_drop;
 	uint32_t rx_mpdu_cnt[MAX_MCS];
 	struct cdp_pkt_info to_stack_twt;
@@ -1961,6 +1969,11 @@ struct cdp_pdev_stats {
 		uint64_t num_pool_bufs_replenish;
 		uint64_t num_bufs_alloc_success;
 	} rx_buffer_pool;
+
+	struct {
+		uint64_t num_bufs_refilled;
+		uint64_t num_bufs_allocated;
+	} rx_refill_buff_pool;
 };
 
 /* struct cdp_peer_hmwds_ast_add_status - hmwds peer ast add status

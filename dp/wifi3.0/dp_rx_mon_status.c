@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017-2020 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2017-2021 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -550,9 +550,9 @@ static inline void dp_rx_rate_stats_update(struct dp_peer *peer,
 	if (!peer || !ppdu)
 		return;
 
-	if (ppdu->u.ppdu_type != HAL_RX_TYPE_SU) {
-		ppdu_user = &ppdu->user[user];
+	ppdu_user = &ppdu->user[user];
 
+	if (ppdu->u.ppdu_type != HAL_RX_TYPE_SU) {
 		if (ppdu_user->nss == 0)
 			nss = 0;
 		else
@@ -575,8 +575,13 @@ static inline void dp_rx_rate_stats_update(struct dp_peer *peer,
 				   &rix,
 				   &ratecode);
 
-	if (!ratekbps)
+	if (!ratekbps) {
+		ppdu->rix = 0;
+		ppdu->rx_ratekbps = 0;
+		ppdu->rx_ratecode = 0;
+		ppdu_user->rx_ratekbps = 0;
 		return;
+	}
 
 	ppdu->rix = rix;
 	DP_STATS_UPD(peer, rx.last_rx_rate, ratekbps);
@@ -585,8 +590,7 @@ static inline void dp_rx_rate_stats_update(struct dp_peer *peer,
 	DP_STATS_UPD(peer, rx.rnd_avg_rx_rate, ppdu_rx_rate);
 	ppdu->rx_ratekbps = ratekbps;
 	ppdu->rx_ratecode = ratecode;
-	if (ppdu->u.ppdu_type != HAL_RX_TYPE_SU)
-		ppdu_user->rx_ratekbps = ratekbps;
+	ppdu_user->rx_ratekbps = ratekbps;
 
 	if (peer->vdev)
 		peer->vdev->stats.rx.last_rx_rate = ratekbps;
@@ -652,14 +656,14 @@ static void dp_rx_stats_update(struct dp_pdev *pdev,
 					       soc, ppdu->u.bw);
 		}
 
-		DP_STATS_UPD(peer, rx.rssi, (ppdu->rssi + pkt_bw_offset));
+		DP_STATS_UPD(peer, rx.snr, (ppdu->rssi + pkt_bw_offset));
 
-		if (peer->stats.rx.avg_rssi == INVALID_RSSI)
-			peer->stats.rx.avg_rssi =
-				CDP_RSSI_IN(peer->stats.rx.rssi);
+		if (peer->stats.rx.avg_snr == CDP_INVALID_SNR)
+			peer->stats.rx.avg_snr =
+				CDP_SNR_IN(peer->stats.rx.snr);
 		else
-			CDP_RSSI_UPDATE_AVG(peer->stats.rx.avg_rssi,
-					    peer->stats.rx.rssi);
+			CDP_SNR_UPDATE_AVG(peer->stats.rx.avg_snr,
+					   peer->stats.rx.snr);
 
 		if ((preamble == DOT11_A) || (preamble == DOT11_B))
 			nss = 1;
@@ -776,7 +780,7 @@ static void dp_rx_stats_update(struct dp_pdev *pdev,
 		if (ppdu->tid != HAL_TID_INVALID)
 			DP_STATS_INC(peer, rx.wme_ac_type[ac], num_msdu);
 		dp_peer_stats_notify(pdev, peer);
-		DP_STATS_UPD(peer, rx.last_rssi, ppdu->rssi);
+		DP_STATS_UPD(peer, rx.last_snr, ppdu->rssi);
 
 		dp_peer_qos_stats_notify(pdev, ppdu_user);
 		if (peer == pdev->invalid_peer)
@@ -897,8 +901,7 @@ dp_rx_mcopy_handle_last_mpdu(struct dp_soc *soc, struct dp_pdev *pdev,
 			if (!nbuf_clone) {
 				QDF_TRACE(QDF_MODULE_ID_TXRX,
 					  QDF_TRACE_LEVEL_ERROR,
-					  "Failed to clone nbuf",
-					  __func__, __LINE__);
+					  "Failed to clone nbuf");
 				goto end1;
 			}
 
@@ -1025,8 +1028,7 @@ dp_rx_process_mcopy_mode(struct dp_soc *soc, struct dp_pdev *pdev,
 		nbuf_clone = qdf_nbuf_clone(status_nbuf);
 		if (!nbuf_clone) {
 			QDF_TRACE(QDF_MODULE_ID_TXRX, QDF_TRACE_LEVEL_ERROR,
-				  "Failed to clone nbuf",
-				  __func__, __LINE__);
+				  "Failed to clone nbuf");
 			goto end;
 		}
 
@@ -1255,6 +1257,18 @@ dp_rx_mon_populate_cfr_info(struct dp_pdev *pdev,
 		= ppdu_info->cfr_info.rtt_che_buffer_pointer_high8;
 	cfr_info->rtt_che_buffer_pointer_low32
 		= ppdu_info->cfr_info.rtt_che_buffer_pointer_low32;
+	cfr_info->rtt_cfo_measurement
+		= (int16_t)ppdu_info->cfr_info.rtt_cfo_measurement;
+	cfr_info->agc_gain_info0
+		= ppdu_info->cfr_info.agc_gain_info0;
+	cfr_info->agc_gain_info1
+		= ppdu_info->cfr_info.agc_gain_info1;
+	cfr_info->agc_gain_info2
+		= ppdu_info->cfr_info.agc_gain_info2;
+	cfr_info->agc_gain_info3
+		= ppdu_info->cfr_info.agc_gain_info3;
+	cfr_info->rx_start_ts
+		= ppdu_info->cfr_info.rx_start_ts;
 }
 
 /**

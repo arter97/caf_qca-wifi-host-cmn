@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2019-2021 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -51,6 +51,7 @@
  *
  * @mlme_cm_disconnect_start_cb: Disconnect start callback
  * @vdev: vdev pointer
+ *
  */
 struct mlme_cm_ops {
 	QDF_STATUS (*mlme_cm_connect_complete_cb)(
@@ -98,6 +99,8 @@ struct mlme_cm_ops {
  *                                          required by serialization
  * @mlme_multi_vdev_restart_resp:           callback to process multivdev
  *                                          restart response
+ * @mlme_cm_ext_hdl_create_cb:              callback to create ext cm context
+ * @mlme_cm_ext_hdl_destroy_cb:             callback to destroy ext cm context
  * @mlme_cm_ext_connect_start_ind_cb:       callback to indicate connect start
  * @mlme_cm_ext_bss_select_ind_cb:          callback to indicate candidate
  *                                          select for connect
@@ -114,6 +117,9 @@ struct mlme_cm_ops {
  * @mlme_cm_ext_disconnect_complete_ind_cb: callback to indicate disconnect
  *                                          complete
  * @mlme_cm_ext_vdev_down_req_cb:           callback to send vdev down to FW
+ * @mlme_cm_ext_roam_start_ind_cb:          callback to indicate roam start
+ * @mlme_cm_ext_reassoc_req_cb:             callback for reassoc request to
+ *                                          VDEV/PEER SM
  */
 struct mlme_ext_ops {
 	QDF_STATUS (*mlme_psoc_ext_hdl_create)(
@@ -146,6 +152,8 @@ struct mlme_ext_ops {
 				struct wlan_objmgr_psoc *psoc,
 				struct multi_vdev_restart_resp *resp);
 #ifdef FEATURE_CM_ENABLE
+	QDF_STATUS (*mlme_cm_ext_hdl_create_cb)(struct cnx_mgr *cm_ctx);
+	QDF_STATUS (*mlme_cm_ext_hdl_destroy_cb)(struct cnx_mgr *cm_ctx);
 	QDF_STATUS (*mlme_cm_ext_connect_start_ind_cb)(
 				struct wlan_objmgr_vdev *vdev,
 				struct wlan_cm_connect_req *req);
@@ -173,6 +181,12 @@ struct mlme_ext_ops {
 				struct wlan_cm_discon_rsp *rsp);
 	QDF_STATUS (*mlme_cm_ext_vdev_down_req_cb)(
 				struct wlan_objmgr_vdev *vdev);
+	QDF_STATUS (*mlme_cm_ext_roam_start_ind_cb)(
+				struct wlan_objmgr_vdev *vdev,
+				struct wlan_cm_roam_req *req);
+	QDF_STATUS (*mlme_cm_ext_reassoc_req_cb)(
+				struct wlan_objmgr_vdev *vdev,
+				struct wlan_cm_vdev_reassoc_req *req);
 #endif
 };
 
@@ -374,6 +388,24 @@ QDF_STATUS mlme_vdev_ops_ext_hdl_delete_rsp(struct wlan_objmgr_psoc *psoc,
 
 #ifdef FEATURE_CM_ENABLE
 /**
+ * mlme_cm_ext_hdl_create() - Connection manager callback to create ext
+ * context
+ * @cm_ctx: common cm context object
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS mlme_cm_ext_hdl_create(struct cnx_mgr *cm_ctx);
+
+/**
+ * mlme_cm_ext_hdl_destroy() - Connection manager callback to destroy ext
+ * context
+ * @cm_ctx: common cm context object
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS mlme_cm_ext_hdl_destroy(struct cnx_mgr *cm_ctx);
+
+/**
  * mlme_cm_connect_start_ind() - Connection manager ext Connect start indication
  * @vdev: VDEV object
  * @req: Connection manager connect request
@@ -429,6 +461,29 @@ QDF_STATUS mlme_cm_connect_req(struct wlan_objmgr_vdev *vdev,
  */
 QDF_STATUS mlme_cm_connect_complete_ind(struct wlan_objmgr_vdev *vdev,
 					struct wlan_cm_connect_resp *rsp);
+
+/**
+ * mlme_cm_roam_start_ind() - Connection manager ext Connect start indication
+ * @vdev: VDEV object
+ * @req: Connection manager roam request
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS mlme_cm_roam_start_ind(struct wlan_objmgr_vdev *vdev,
+				  struct wlan_cm_roam_req *req);
+
+/**
+ * mlme_cm_reassoc_req() - Connection manager ext reassoc request
+ * @vdev: VDEV object
+ * @req: Vdev reassoc request
+ *
+ * Context: The req is on stack, so the API need to make a copy, if it want to
+ * use the req after return.
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS mlme_cm_reassoc_req(struct wlan_objmgr_vdev *vdev,
+			       struct wlan_cm_vdev_reassoc_req *req);
 
 /**
  * mlme_cm_disconnect_start_ind() - Connection manager ext disconnect start

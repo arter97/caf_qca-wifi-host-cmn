@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012-2015, 2020 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012-2015, 2020-2021 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -265,10 +265,13 @@ void osif_cm_unlink_bss(struct wlan_objmgr_vdev *vdev,
 {
 	struct wiphy *wiphy = osif_priv->wdev->wiphy;
 	struct scan_filter *filter;
+	QDF_STATUS status;
 
-	__wlan_cfg80211_unlink_bss_list(wiphy, wlan_vdev_get_pdev(vdev),
+	status = __wlan_cfg80211_unlink_bss_list(wiphy, wlan_vdev_get_pdev(vdev),
 					bssid->bytes, ssid_len ? ssid : NULL,
 					ssid_len);
+	if (QDF_IS_STATUS_ERROR(status))
+		return;
 	filter = qdf_mem_malloc(sizeof(*filter));
 	if (!filter)
 		return;
@@ -411,6 +414,37 @@ QDF_STATUS osif_cm_netif_queue_ind(struct wlan_objmgr_vdev *vdev,
 		cb = osif_cm_legacy_ops->netif_queue_control_cb;
 	if (cb)
 		ret = cb(vdev, action, reason);
+
+	return ret;
+}
+#endif
+
+#ifdef WLAN_FEATURE_FILS_SK
+QDF_STATUS osif_cm_save_gtk(struct wlan_objmgr_vdev *vdev,
+			    struct wlan_cm_connect_resp *rsp)
+{
+	osif_cm_save_gtk_cb cb = NULL;
+	QDF_STATUS ret = QDF_STATUS_SUCCESS;
+
+	if (osif_cm_legacy_ops)
+		cb = osif_cm_legacy_ops->save_gtk_cb;
+	if (cb)
+		ret = cb(vdev, rsp);
+
+	return ret;
+}
+
+QDF_STATUS osif_cm_set_hlp_data(struct net_device *dev,
+				struct wlan_objmgr_vdev *vdev,
+				struct wlan_cm_connect_resp *rsp)
+{
+	osif_cm_set_hlp_data_cb cb = NULL;
+	QDF_STATUS ret = QDF_STATUS_SUCCESS;
+
+	if (osif_cm_legacy_ops)
+		cb = osif_cm_legacy_ops->set_hlp_data_cb;
+	if (cb)
+		ret = cb(dev, vdev, rsp);
 
 	return ret;
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017-2020 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2017-2021 The Linux Foundation. All rights reserved.
  *
  *
  * Permission to use, copy, modify, and/or distribute this software for
@@ -360,15 +360,6 @@ bool reg_is_dfs_ch(struct wlan_objmgr_pdev *pdev, uint8_t chan);
 uint8_t reg_freq_to_chan(struct wlan_objmgr_pdev *pdev, qdf_freq_t freq);
 
 /**
- * reg_chan_to_freq() - Get frequency from channel number
- * @pdev: Pointer to pdev
- * @chan_num: Channel number
- *
- * Return: Channel frequency if success, otherwise 0
- */
-qdf_freq_t reg_chan_to_freq(struct wlan_objmgr_pdev *pdev, uint8_t chan_num);
-
-/**
  * reg_legacy_chan_to_freq() - Get freq from chan noumber, for 2G and 5G
  * @pdev: Pointer to pdev
  * @chan_num: Channel number
@@ -578,6 +569,15 @@ bool reg_is_range_overlap_2g(qdf_freq_t low_freq, qdf_freq_t high_freq);
  * else false.
  */
 bool reg_is_range_overlap_5g(qdf_freq_t low_freq, qdf_freq_t high_freq);
+
+/**
+ * reg_is_freq_indoor() - Check if the input frequency is an indoor frequency.
+ * @pdev: Pointer to pdev.
+ * @freq: Channel frequency.
+ *
+ * Return: Return true if the input frequency is indoor, else false.
+ */
+bool reg_is_freq_indoor(struct wlan_objmgr_pdev *pdev, qdf_freq_t freq);
 
 #ifdef CONFIG_BAND_6GHZ
 /**
@@ -1362,6 +1362,90 @@ QDF_STATUS reg_get_rnr_tpe_usable(struct wlan_objmgr_pdev *pdev,
  */
 QDF_STATUS reg_get_unspecified_ap_usable(struct wlan_objmgr_pdev *pdev,
 					 bool *reg_unspecified_ap_usable);
+
+/**
+ * reg_is_6g_psd_power() - Checks if pdev has PSD power
+ *
+ * @pdev: pdev ptr
+ *
+ * Return: true if PSD power or false otherwise
+ */
+bool reg_is_6g_psd_power(struct wlan_objmgr_pdev *pdev);
+
+/**
+ * reg_get_6g_chan_ap_power() - Finds the TX power for the given channel
+ *	frequency, taking the AP's current power level into account
+ *
+ * @pdev: pdev ptr
+ * @chan_freq: channel frequency
+ * @is_psd: is channel PSD or not
+ * @tx_power: transmit power to fill for chan_freq
+ * @eirp_psd_power: EIRP PSD power, will only be filled if is_psd is true
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS reg_get_6g_chan_ap_power(struct wlan_objmgr_pdev *pdev,
+				    qdf_freq_t chan_freq, bool *is_psd,
+				    uint16_t *tx_power,
+				    uint16_t *eirp_psd_power);
+
+/**
+ * reg_get_client_power_for_connecting_ap() - Find the channel information when
+ *	device is operating as a client
+ *
+ * @pdev: pdev ptr
+ * @ap_type: type of AP that device is connected to
+ * @chan_freq: channel frequency
+ * @is_psd: is channel PSD or not
+ * @tx_power: transmit power to fill for chan_freq
+ * @eirp_psd_power: EIRP power, will only be filled if is_psd is true
+ *
+ * This function is meant to be called to find the channel frequency power
+ * information for a client when the device is operating as a client. It will
+ * fill in the parameter is_psd, tx_power, and eirp_psd_power. eirp_psd_power
+ * will only be filled if the channel is PSD.
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS reg_get_client_power_for_connecting_ap(struct wlan_objmgr_pdev *pdev,
+						  enum reg_6g_ap_type ap_type,
+						  qdf_freq_t chan_freq,
+						  bool *is_psd,
+						  uint16_t *tx_power,
+						  uint16_t *eirp_psd_power);
+
+/**
+ * reg_get_client_power_for_6ghz_ap() - Find the channel information when
+ *	device is operating as a 6GHz AP
+ *
+ * @pdev: pdev ptr
+ * @client_type: type of client that is connected to our AP
+ * @chan_freq: channel frequency
+ * @is_psd: is channel PSD or not
+ * @tx_power: transmit power to fill for chan_freq
+ * @eirp_psd_power: EIRP power, will only be filled if is_psd is true
+ *
+ * This function is meant to be called to find the channel frequency power
+ * information for a client when the device is operating as an AP. It will fill
+ * in the parameter is_psd, tx_power, and eirp_psd_power. eirp_psd_power will
+ * only be filled if the channel is PSD.
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS reg_get_client_power_for_6ghz_ap(struct wlan_objmgr_pdev *pdev,
+					    enum reg_6g_client_type client_type,
+					    qdf_freq_t chan_freq,
+					    bool *is_psd, uint16_t *tx_power,
+					    uint16_t *eirp_psd_power);
+
+/**
+ * reg_decide_6g_ap_pwr_type() - Decide which power mode AP should operate in
+ *
+ * @pdev: pdev ptr
+ *
+ * Return: AP power type
+ */
+enum reg_6g_ap_type reg_decide_6g_ap_pwr_type(struct wlan_objmgr_pdev *pdev);
 #else
 static inline QDF_STATUS
 reg_set_cur_6g_ap_pwr_type(struct wlan_objmgr_pdev *pdev,
@@ -1401,6 +1485,57 @@ QDF_STATUS reg_get_unspecified_ap_usable(struct wlan_objmgr_pdev *pdev,
 {
 	*reg_unspecified_ap_usable = false;
 	return QDF_STATUS_E_NOSUPPORT;
+}
+
+static inline
+bool reg_is_6g_psd_power(struct wlan_objmgr_pdev *pdev)
+{
+	return false;
+}
+
+static inline
+QDF_STATUS reg_get_6g_chan_ap_power(struct wlan_objmgr_pdev *pdev,
+				    qdf_freq_t chan_freq, bool *is_psd,
+				    uint16_t *tx_power,
+				    uint16_t *eirp_psd_power)
+{
+	*is_psd = false;
+	*eirp_psd_power = 0;
+	*tx_power = 0;
+	return QDF_STATUS_E_NOSUPPORT;
+}
+
+static inline
+QDF_STATUS reg_get_client_power_for_connecting_ap(struct wlan_objmgr_pdev *pdev,
+						  enum reg_6g_ap_type ap_type,
+						  qdf_freq_t chan_freq,
+						  bool *is_psd,
+						  uint16_t *tx_power,
+						  uint16_t *eirp_psd_power)
+{
+	*is_psd = false;
+	*tx_power = 0;
+	*eirp_psd_power = 0;
+	return QDF_STATUS_E_NOSUPPORT;
+}
+
+static inline
+QDF_STATUS reg_get_client_power_for_6ghz_ap(struct wlan_objmgr_pdev *pdev,
+					    enum reg_6g_client_type client_type,
+					    qdf_freq_t chan_freq,
+					    bool *is_psd, uint16_t *tx_power,
+					    uint16_t *eirp_psd_power)
+{
+	*is_psd = false;
+	*tx_power = 0;
+	*eirp_psd_power = 0;
+	return QDF_STATUS_E_NOSUPPORT;
+}
+
+static inline enum reg_6g_ap_type
+reg_decide_6g_ap_pwr_type(struct wlan_objmgr_pdev *pdev)
+{
+	return REG_INDOOR_AP;
 }
 #endif
 
@@ -1464,4 +1599,23 @@ bool reg_is_phymode_unallowed(enum reg_phymode phy_in, uint32_t phymode_bitmap);
  * Return: true if regdb is offloaded, else false
  */
 bool reg_is_regdb_offloaded(struct wlan_objmgr_psoc *psoc);
+
+/**
+ * reg_set_ext_tpc_supported() - Set if FW supports new WMI command for TPC
+ * @psoc: Pointer to psoc
+ * @val: value
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS reg_set_ext_tpc_supported(struct wlan_objmgr_psoc *psoc,
+				     bool val);
+
+/**
+ * reg_is_ext_tpc_supported() - Whether FW supports new WMI command for TPC
+ *
+ * @psoc: pointer to psoc
+ *
+ * Return: true if FW supports the new TPC command, else false
+ */
+bool reg_is_ext_tpc_supported(struct wlan_objmgr_psoc *psoc);
 #endif

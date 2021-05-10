@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012-2015, 2020 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012-2015,2020-2021 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -44,13 +44,28 @@
  *           0 = hunting-and-pecking loop only
  *           1 = hash-to-element only
  *           2 = both hunting-and-pecking loop and hash-to-element enabled
+ * @prev_bssid: Previous bssid in case of roam scenario
  */
 struct osif_connect_params {
 	struct element_info scan_ie;
 	bool force_rsne_override;
 	enum dot11_mode_filter dot11mode_filter;
 	uint8_t sae_pwe;
+	struct qdf_mac_addr prev_bssid;
 };
+
+#if defined(WLAN_FEATURE_FILS_SK) && \
+	(defined(CFG80211_FILS_SK_OFFLOAD_SUPPORT) || \
+		 (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 12, 0)))
+/**
+ * osif_cm_get_fils_auth_type() - get fils auth type
+ * @auth: nl auth type
+ *
+ * Return: enum wlan_fils_auth_type
+ */
+enum wlan_fils_auth_type
+osif_cm_get_fils_auth_type(enum nl80211_auth_type auth);
+#endif
 
 /**
  * osif_cm_connect() - Connect start request

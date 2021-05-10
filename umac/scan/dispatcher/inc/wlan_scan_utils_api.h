@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017-2020 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2017-2021 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -241,7 +241,7 @@ util_scan_entry_reset_timestamp(struct scan_cache_entry *scan_entry)
 	} while (0)
 
 #define WLAN_SNR_EP_MULTIPLIER BIT(7) /* pow2 to optimize out * and / */
-#define WLAN_SNR_DUMMY_MARKER  0x127
+#define WLAN_SNR_DUMMY_MARKER  127
 #define SNR_LPF_THRESHOLD      0
 #define WLAN_SNR_LPF_LEN       10
 
@@ -716,7 +716,9 @@ util_scan_copy_beacon_data(struct scan_cache_entry *new_entry,
 	ie_lst->bwnss_map = conv_ptr(ie_lst->bwnss_map, old_ptr, new_ptr);
 	ie_lst->mdie = conv_ptr(ie_lst->mdie, old_ptr, new_ptr);
 	ie_lst->hecap = conv_ptr(ie_lst->hecap, old_ptr, new_ptr);
+	ie_lst->hecap_6g = conv_ptr(ie_lst->hecap_6g, old_ptr, new_ptr);
 	ie_lst->heop = conv_ptr(ie_lst->heop, old_ptr, new_ptr);
+	ie_lst->srp = conv_ptr(ie_lst->srp, old_ptr, new_ptr);
 	ie_lst->fils_indication = conv_ptr(ie_lst->fils_indication,
 					   old_ptr, new_ptr);
 	ie_lst->esp = conv_ptr(ie_lst->esp, old_ptr, new_ptr);

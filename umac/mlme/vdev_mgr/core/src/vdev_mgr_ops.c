@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2019-2021 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -121,7 +121,7 @@ static QDF_STATUS vdev_mgr_start_param_update(
 {
 	struct wlan_channel *des_chan;
 	uint32_t dfs_reg;
-	bool set_agile = false, dfs_set_cfreq2 = false;
+	bool set_agile = false, dfs_set_cfreq2 = false, is_stadfs_en = false;
 	struct wlan_objmgr_vdev *vdev;
 	struct wlan_objmgr_pdev *pdev;
 	enum QDF_OPMODE op_mode;
@@ -174,6 +174,8 @@ static QDF_STATUS vdev_mgr_start_param_update(
 		utils_dfs_agile_sm_deliver_evt(pdev,
 					       DFS_AGILE_SM_EV_AGILE_STOP);
 
+	is_stadfs_en = tgt_dfs_is_stadfs_enabled(pdev);
+	param->channel.is_stadfs_en = is_stadfs_en;
 	param->beacon_interval = mlme_obj->proto.generic.beacon_interval;
 	param->dtim_period = mlme_obj->proto.generic.dtim_period;
 	param->disable_hw_ack = mlme_obj->mgmt.generic.disable_hw_ack;
@@ -191,8 +193,12 @@ static QDF_STATUS vdev_mgr_start_param_update(
 	param->channel.mhz = des_chan->ch_freq;
 	param->channel.half_rate = mlme_obj->mgmt.rate_info.half_rate;
 	param->channel.quarter_rate = mlme_obj->mgmt.rate_info.quarter_rate;
-	param->channel.dfs_set = wlan_reg_is_dfs_for_freq(pdev,
-							  des_chan->ch_freq);
+
+	if (vdev_mgr_is_opmode_sap_or_p2p_go(op_mode))
+		param->channel.dfs_set = wlan_reg_is_dfs_for_freq(
+							pdev,
+							des_chan->ch_freq);
+
 	param->channel.is_chan_passive =
 		utils_is_dfs_chan_for_freq(pdev, param->channel.mhz);
 	param->channel.allow_ht = mlme_obj->proto.ht_info.allow_ht;

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012-2015, 2020 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012-2015, 2020-2021 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -153,6 +153,36 @@ typedef QDF_STATUS
 				   struct wlan_cm_connect_resp *rsp,
 				   enum osif_cb_type type);
 
+#ifdef WLAN_FEATURE_FILS_SK
+/**
+ * typedef osif_cm_save_gtk_cb  - save gtk callback
+ * @vdev: vdev pointer
+ * @rsp: connect response
+ *
+ * this callback save gtk to the legacy module
+ *
+ * context: any context.
+ * return: qdf_status
+ */
+typedef QDF_STATUS (*osif_cm_save_gtk_cb)(struct wlan_objmgr_vdev *vdev,
+					  struct wlan_cm_connect_resp *rsp);
+
+/**
+ * typedef osif_cm_set_hlp_data_cb  - set hlp data for dhcp callback
+ * @dev: pointer to net device
+ * @vdev: vdev pointer
+ * @rsp: connect response
+ *
+ * this callback sets hlp data for dhcp to the legacy module
+ *
+ * context: any context.
+ * return: qdf_status
+ */
+typedef QDF_STATUS (*osif_cm_set_hlp_data_cb)(struct net_device *dev,
+					      struct wlan_objmgr_vdev *vdev,
+					      struct wlan_cm_connect_resp *rsp);
+#endif
+
 /**
  * typedef  osif_cm_disconnect_comp_cb: Disonnect complete callback
  * @vdev: vdev pointer
@@ -215,18 +245,24 @@ void osif_cm_unlink_bss(struct wlan_objmgr_vdev *vdev,
 
 /**
  * osif_cm_ops: connection manager legacy callbacks
- * osif_cm_connect_comp_cb: callback for connect complete to legacy
+ * @osif_cm_connect_comp_cb: callback for connect complete to legacy
  * modules
- *  osif_cm_disconnect_comp_cb: callback for disconnect complete to
+ * @osif_cm_disconnect_comp_cb: callback for disconnect complete to
  * legacy modules
- * osif_cm_netif_queue_ctrl_cb: callback to legacy module to take
+ * @osif_cm_netif_queue_ctrl_cb: callback to legacy module to take
  * actions on netif queue
+ * @save_gtk_cb : callback to legacy module to save gtk
+ * @set_hlp_data_cb: callback to legacy module to save hlp data
  */
 struct osif_cm_ops {
 	osif_cm_connect_comp_cb connect_complete_cb;
 	osif_cm_disconnect_comp_cb disconnect_complete_cb;
 #ifdef CONN_MGR_ADV_FEATURE
 	osif_cm_netif_queue_ctrl_cb netif_queue_control_cb;
+#endif
+#ifdef WLAN_FEATURE_FILS_SK
+	osif_cm_save_gtk_cb save_gtk_cb;
+	osif_cm_set_hlp_data_cb set_hlp_data_cb;
 #endif
 };
 
@@ -279,6 +315,37 @@ QDF_STATUS osif_cm_netif_queue_ind(struct wlan_objmgr_vdev *vdev,
 				   enum netif_action_type action,
 				   enum netif_reason_type reason);
 #endif
+
+#ifdef WLAN_FEATURE_FILS_SK
+/**
+ * osif_cm_save_gtk() - Function to save gtk in legacy module
+ * @vdev: vdev pointer
+ * @rsp: Pointer to connect response
+ *
+ * This function saves gtk in legacy module
+ *
+ * Context: Any context.
+ * Return: QDF_STATUS
+ */
+QDF_STATUS osif_cm_save_gtk(struct wlan_objmgr_vdev *vdev,
+			    struct wlan_cm_connect_resp *rsp);
+
+/**
+ * osif_cm_set_hlp_data() - Function to set hlp data for dhcp in legacy module
+ * @dev: Pointer to net device
+ * @vdev: vdev pointer
+ * @rsp: Pointer to connect response
+ *
+ * This function sets hlp data for dhcp in legacy module
+ *
+ * Context: Any context.
+ * Return: QDF_STATUS
+ */
+QDF_STATUS osif_cm_set_hlp_data(struct net_device *dev,
+				struct wlan_objmgr_vdev *vdev,
+				struct wlan_cm_connect_resp *rsp);
+#endif
+
 /**
  * osif_cm_set_legacy_cb() - Sets legacy callbacks to osif
  * @osif_legacy_ops:  Function pointer to legacy ops structure

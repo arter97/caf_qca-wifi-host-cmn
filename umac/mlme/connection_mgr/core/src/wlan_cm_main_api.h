@@ -27,12 +27,15 @@
 #include "wlan_cm_sm.h"
 #include <include/wlan_mlme_cmn.h>
 #include <wlan_crypto_global_api.h>
-#ifdef WLAN_FEATURE_INTERFACE_MGR
 #include <wlan_if_mgr_api.h>
+#ifdef WLAN_CM_USE_SPINLOCK
+#include <scheduler_api.h>
 #endif
 
 #define CONNECT_REQ_PREFIX          0x00C00000
 #define DISCONNECT_REQ_PREFIX       0x00D00000
+#define ROAM_REQ_PREFIX             0x00F00000
+
 #define CM_ID_MASK                  0x0000FFFF
 
 #define CM_ID_GET_PREFIX(cm_id)     cm_id & 0xFFFF0000
@@ -171,18 +174,6 @@ QDF_STATUS cm_try_next_candidate(struct cnx_mgr *cm_ctx,
 				 struct wlan_cm_connect_resp *connect_resp);
 
 /**
- * cm_peer_create_on_bss_select_ind_resp() - Called to create peer
- * if bss select inidication's resp was success
- * @cm_ctx: connection manager context
- * @cm_id: Connection mgr ID assigned to this connect request.
- *
- * Return: QDF status
- */
-QDF_STATUS
-cm_peer_create_on_bss_select_ind_resp(struct cnx_mgr *cm_ctx,
-				      wlan_cm_id *cm_id);
-
-/**
  * cm_resume_connect_after_peer_create() - Called after bss create rsp
  * @cm_ctx: connection manager context
  * @cm_id: Connection mgr ID assigned to this connect request.
@@ -191,17 +182,6 @@ cm_peer_create_on_bss_select_ind_resp(struct cnx_mgr *cm_ctx,
  */
 QDF_STATUS
 cm_resume_connect_after_peer_create(struct cnx_mgr *cm_ctx, wlan_cm_id *cm_id);
-
-/**
- * cm_bss_select_ind_rsp() - Connection manager resp for bss
- * select indication
- * @vdev: vdev pointer
- * @status: Status
- *
- * Return: QDF_STATUS
- */
-QDF_STATUS cm_bss_select_ind_rsp(struct wlan_objmgr_vdev *vdev,
-				 QDF_STATUS status);
 
 /**
  * cm_bss_peer_create_rsp() - handle bss peer create response
@@ -454,10 +434,17 @@ void cm_send_disconnect_resp(struct cnx_mgr *cm_ctx, wlan_cm_id cm_id);
  *
  * Return: bool
  */
+#ifdef CONN_MGR_ADV_FEATURE
 static inline bool cm_ser_get_blocking_cmd(void)
 {
 	return true;
 }
+#else
+static inline bool cm_ser_get_blocking_cmd(void)
+{
+	return false;
+}
+#endif
 
 /**
  * cm_get_cm_id() - Get unique cm id for connect/disconnect request
@@ -479,6 +466,18 @@ struct cnx_mgr *cm_get_cm_ctx_fl(struct wlan_objmgr_vdev *vdev,
  */
 #define cm_get_cm_ctx(vdev) \
 	cm_get_cm_ctx_fl(vdev, __func__, __LINE__)
+
+cm_ext_t *cm_get_ext_hdl_fl(struct wlan_objmgr_vdev *vdev,
+			    const char *func, uint32_t line);
+
+/**
+ * cm_get_ext_hdl() - Get connection manager ext context from vdev
+ * @vdev: vdev object pointer
+ *
+ * Return: pointer to connection manager ext context
+ */
+#define cm_get_ext_hdl(vdev) \
+	cm_get_ext_hdl_fl(vdev, __func__, __LINE__)
 
 /**
  * cm_reset_active_cm_id() - Reset active cm_id from cm context, if its same as
@@ -516,11 +515,48 @@ QDF_STATUS cm_set_key(struct cnx_mgr *cm_ctx, bool unicast,
 void cm_store_wep_key(struct cnx_mgr *cm_ctx,
 		      struct wlan_cm_connect_crypto_info *crypto,
 		      wlan_cm_id cm_id);
+
+static inline QDF_STATUS
+cm_peer_create_on_bss_select_ind_resp(struct cnx_mgr *cm_ctx,
+				      wlan_cm_id *cm_id)
+{
+	return QDF_STATUS_SUCCESS;
+}
+
+static inline
+QDF_STATUS cm_bss_select_ind_rsp(struct wlan_objmgr_vdev *vdev,
+				 QDF_STATUS status)
+{
+	return QDF_STATUS_SUCCESS;
+}
 #else
 static inline void cm_store_wep_key(struct cnx_mgr *cm_ctx,
 				    struct wlan_cm_connect_crypto_info *crypto,
 				    wlan_cm_id cm_id)
 {}
+
+/**
+ * cm_peer_create_on_bss_select_ind_resp() - Called to create peer
+ * if bss select inidication's resp was success
+ * @cm_ctx: connection manager context
+ * @cm_id: Connection mgr ID assigned to this connect request.
+ *
+ * Return: QDF status
+ */
+QDF_STATUS
+cm_peer_create_on_bss_select_ind_resp(struct cnx_mgr *cm_ctx,
+				      wlan_cm_id *cm_id);
+
+/**
+ * cm_bss_select_ind_rsp() - Connection manager resp for bss
+ * select indication
+ * @vdev: vdev pointer
+ * @status: Status
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS cm_bss_select_ind_rsp(struct wlan_objmgr_vdev *vdev,
+				 QDF_STATUS status);
 #endif
 
 #ifdef WLAN_FEATURE_FILS_SK
@@ -641,7 +677,7 @@ void cm_flush_pending_request(struct cnx_mgr *cm_ctx, uint32_t prefix,
  *
  * Return: void
  */
-void cm_remove_cmd(struct cnx_mgr *cm_ctx, wlan_cm_id cm_id);
+void cm_remove_cmd(struct cnx_mgr *cm_ctx, wlan_cm_id *cm_id);
 
 /**
  * cm_add_req_to_list_and_indicate_osif() - Add the request to request list in
@@ -910,4 +946,121 @@ struct cm_req *cm_get_req_by_scan_id(struct cnx_mgr *cm_ctx,
 wlan_cm_id cm_get_cm_id_by_scan_id(struct cnx_mgr *cm_ctx,
 				   wlan_scan_id scan_id);
 
+/**
+ * cm_update_scan_mlme_on_disconnect() - update the scan mlme info
+ * on disconnect completion
+ * @vdev: Object manager vdev
+ * @req: Disconnect request
+ *
+ * Return: void
+ */
+void
+cm_update_scan_mlme_on_disconnect(struct wlan_objmgr_vdev *vdev,
+				  struct cm_disconnect_req *req);
+
+/**
+ * cm_calculate_scores() - Score the candidates obtained from scan
+ * manager after filtering
+ * @pdev: Object manager pdev
+ * @filter: Scan filter params
+ * @list: List of candidates to be scored
+ *
+ * Return: void
+ */
+void cm_calculate_scores(struct wlan_objmgr_pdev *pdev,
+			 struct scan_filter *filter, qdf_list_t *list);
+
+/**
+ * cm_req_lock_acquire() - Acquire connection manager request lock
+ * @cm_ctx: Connection manager context
+ *
+ * Return: void
+ */
+void cm_req_lock_acquire(struct cnx_mgr *cm_ctx);
+
+/**
+ * cm_req_lock_release() - Release connection manager request lock
+ * @cm_ctx: Connection manager context
+ *
+ * Return: void
+ */
+void cm_req_lock_release(struct cnx_mgr *cm_ctx);
+
+#ifdef SM_ENG_HIST_ENABLE
+/**
+ * cm_req_history_add() - Save request history
+ * @cm_ctx: Connection manager context
+ * @cm_req: Connection manager request
+ *
+ * Return: void
+ */
+void cm_req_history_add(struct cnx_mgr *cm_ctx,
+			struct cm_req *cm_req);
+/**
+ * cm_req_history_del() - Update history on request deletion
+ * @cm_ctx: Connection manager context
+ * @cm_req: Connection manager request
+ * @del_type: Context in which the request is deleted
+ *
+ * Return: void
+ */
+void cm_req_history_del(struct cnx_mgr *cm_ctx,
+			struct cm_req *cm_req,
+			enum cm_req_del_type del_type);
+
+/**
+ * cm_history_init() - Initialize the history data struct
+ * @cm_ctx: Connection manager context
+ *
+ * Return: void
+ */
+void cm_req_history_init(struct cnx_mgr *cm_ctx);
+
+/**
+ * cm_history_deinit() - Deinitialize the history data struct
+ * @cm_ctx: Connection manager context
+ *
+ * Return: void
+ */
+void cm_req_history_deinit(struct cnx_mgr *cm_ctx);
+
+/**
+ * cm_history_print() - Print the history data struct
+ * @cm_ctx: Connection manager context
+ *
+ * Return: void
+ */
+void cm_req_history_print(struct cnx_mgr *cm_ctx);
+extern struct wlan_sm_state_info cm_sm_info[];
+#else
+static inline
+void cm_req_history_add(struct cnx_mgr *cm_ctx,
+			struct cm_req *cm_req)
+{}
+
+static inline
+void cm_req_history_del(struct cnx_mgr *cm_ctx,
+			struct cm_req *cm_req,
+			enum cm_req_del_type del_type)
+{}
+
+static inline void cm_req_history_init(struct cnx_mgr *cm_ctx)
+{}
+
+static inline void cm_req_history_deinit(struct cnx_mgr *cm_ctx)
+{}
+
+static inline void cm_req_history_print(struct cnx_mgr *cm_ctx)
+{}
+#endif
+
+#ifdef WLAN_CM_USE_SPINLOCK
+/**
+ * cm_activate_cmd_req_flush_cb() - Callback when the scheduler msg is flushed
+ * @msg: scheduler message
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS cm_activate_cmd_req_flush_cb(struct scheduler_msg *msg);
+#endif
 #endif /* __WLAN_CM_MAIN_API_H__ */

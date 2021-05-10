@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2020 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2013-2021 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -17,9 +17,6 @@
 #include <linux/slab.h>
 #include <linux/interrupt.h>
 #include <linux/if_arp.h>
-#ifdef CONFIG_PCI_MSM
-#include <linux/msm_pcie.h>
-#endif
 #include "hif_io32.h"
 #include "if_ipci.h"
 #include "hif.h"
@@ -150,6 +147,7 @@ int hif_ipci_bus_configure(struct hif_softc *hif_sc)
 		goto unconfig_ce;
 
 	hif_sc->wake_irq = hif_ce_msi_map_ce_to_irq(hif_sc, wake_ce_id);
+	hif_sc->wake_irq_type = HIF_PM_CE_WAKE;
 
 	hif_info("expecting wake from ce %d, irq %d",
 		 wake_ce_id, hif_sc->wake_irq);
@@ -287,7 +285,7 @@ void hif_ipci_disable_bus(struct hif_softc *scn)
 	hif_info("X");
 }
 
-#if defined(CONFIG_PCI_MSM)
+#ifdef CONFIG_PLD_PCIE_CNSS
 void hif_ipci_prevent_linkdown(struct hif_softc *scn, bool flag)
 {
 	int errno;
@@ -302,8 +300,6 @@ void hif_ipci_prevent_linkdown(struct hif_softc *scn, bool flag)
 #else
 void hif_ipci_prevent_linkdown(struct hif_softc *scn, bool flag)
 {
-	hif_info("wlan: %s pcie power collapse", (flag ? "disable" : "enable"));
-	hif_runtime_prevent_linkdown(scn, flag);
 }
 #endif
 
@@ -717,7 +713,11 @@ int hif_force_wake_request(struct hif_opaque_softc *hif_handle)
 	HIF_STATS_INC(ipci_scn, mhi_force_wake_request_vote, 1);
 	while (!pld_is_device_awake(scn->qdf_dev->dev) &&
 	       timeout <= FORCE_WAKE_DELAY_TIMEOUT_MS) {
-		qdf_mdelay(FORCE_WAKE_DELAY_MS);
+		if (qdf_in_interrupt())
+			qdf_mdelay(FORCE_WAKE_DELAY_MS);
+		else
+			qdf_sleep(FORCE_WAKE_DELAY_MS);
+
 		timeout += FORCE_WAKE_DELAY_MS;
 	}
 
@@ -774,3 +774,14 @@ void hif_print_ipci_stats(struct hif_ipci_softc *ipci_handle)
 		  ipci_handle->stats.soc_force_wake_release_success);
 }
 #endif /* FORCE_WAKE */
+
+#ifdef FEATURE_HAL_DELAYED_REG_WRITE
+int hif_prevent_link_low_power_states(struct hif_opaque_softc *hif)
+{
+	return 0;
+}
+
+void hif_allow_link_low_power_states(struct hif_opaque_softc *hif)
+{
+}
+#endif

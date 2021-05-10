@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2020 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2013-2021 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -302,8 +302,8 @@ bool hif_ce_service_should_yield(struct hif_softc *scn,
 {
 	bool yield, time_limit_reached, rxpkt_thresh_reached = 0;
 
-	time_limit_reached =
-		sched_clock() > ce_state->ce_service_yield_time ? 1 : 0;
+	time_limit_reached = qdf_time_sched_clock() >
+					ce_state->ce_service_yield_time ? 1 : 0;
 
 	if (!time_limit_reached)
 		rxpkt_thresh_reached = hif_max_num_receives_reached
@@ -1089,8 +1089,9 @@ more_watermarks:
 			goto more_completions;
 		} else {
 			if (!ce_srng_based(scn)) {
-				hif_err(
-					"Potential infinite loop detected during Rx processing nentries_mask:0x%x sw read_idx:0x%x hw read_idx:0x%x",
+				hif_err_rl(
+					"Potential infinite loop detected during Rx processing id:%u nentries_mask:0x%x sw read_idx:0x%x hw read_idx:0x%x",
+					CE_state->id,
 					CE_state->dest_ring->nentries_mask,
 					CE_state->dest_ring->sw_index,
 					CE_DEST_RING_READ_IDX_GET(scn,
@@ -1107,10 +1108,13 @@ more_watermarks:
 			goto more_completions;
 		} else {
 			if (!ce_srng_based(scn)) {
-				hif_err(
-					"Potential infinite loop detected during send completion nentries_mask:0x%x sw read_idx:0x%x hw read_idx:0x%x",
+				hif_err_rl(
+					"Potential infinite loop detected during send completion id:%u mask:0x%x sw read_idx:0x%x hw_index:0x%x write_index: 0x%x hw read_idx:0x%x",
+					CE_state->id,
 					CE_state->src_ring->nentries_mask,
 					CE_state->src_ring->sw_index,
+					CE_state->src_ring->hw_index,
+					CE_state->src_ring->write_index,
 					CE_SRC_RING_READ_IDX_GET(scn,
 							 CE_state->ctrl_addr));
 			}
@@ -1148,7 +1152,7 @@ int ce_per_engine_service(struct hif_softc *scn, unsigned int CE_id)
 	/* Clear force_break flag and re-initialize receive_count to 0 */
 	CE_state->receive_count = 0;
 	CE_state->force_break = 0;
-	CE_state->ce_service_start_time = sched_clock();
+	CE_state->ce_service_start_time = qdf_time_sched_clock();
 	CE_state->ce_service_yield_time =
 		CE_state->ce_service_start_time +
 		hif_get_ce_service_max_yield_time(

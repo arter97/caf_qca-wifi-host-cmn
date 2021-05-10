@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017-2020 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2017-2021 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -29,6 +29,11 @@
 #include "wlan_cfg.h"
 #include "dp_internal.h"
 #include "dp_rx_buffer_pool.h"
+
+#ifndef IEEE80211_FCO_SUBTYPE_ACTION_NO_ACK
+#define IEEE80211_FCO_SUBTYPE_ACTION_NO_ACK 0xe0
+#endif
+
 #ifdef WLAN_TX_PKT_CAPTURE_ENH
 #include "dp_rx_mon_feature.h"
 
@@ -205,7 +210,9 @@ dp_rx_mon_mpdu_pop(struct dp_soc *soc, uint32_t mac_id,
 		if (qdf_unlikely((rxdma_err == HAL_RXDMA_ERR_FLUSH_REQUEST) ||
 		   (rxdma_err == HAL_RXDMA_ERR_MPDU_LENGTH) ||
 		   (rxdma_err == HAL_RXDMA_ERR_OVERFLOW) ||
-		   (rxdma_err == HAL_RXDMA_ERR_FCS && dp_pdev->mcopy_mode))) {
+		   (rxdma_err == HAL_RXDMA_ERR_FCS && dp_pdev->mcopy_mode) ||
+		   (rxdma_err == HAL_RXDMA_ERR_FCS &&
+		    dp_pdev->rx_pktlog_cbf))) {
 			drop_mpdu = true;
 			dp_pdev->rx_mon_stats.dest_mpdu_drop++;
 		}
@@ -349,10 +356,7 @@ dp_rx_mon_mpdu_pop(struct dp_soc *soc, uint32_t mac_id,
 						     replenish.nbuf_alloc_fail,
 						     1);
 					qdf_frag_free(rx_desc_tlv);
-					QDF_TRACE(QDF_MODULE_ID_DP,
-						  QDF_TRACE_LEVEL_DEBUG,
-						  "[%s] failed to allocate parent buffer to hold all frag",
-						  __func__);
+					dp_rx_mon_dest_debug("failed to allocate parent buffer to hold all frag");
 					drop_mpdu = true;
 					goto next_msdu;
 				}
@@ -375,10 +379,9 @@ dp_rx_mon_mpdu_pop(struct dp_soc *soc, uint32_t mac_id,
 			if (!is_frag)
 				msdu_cnt--;
 
-			QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_DEBUG,
-				  "%s total_len %u frag_len %u flags %u",
-				  __func__, total_frag_len, frag_len,
-				  msdu_list.msdu_info[i].msdu_flags);
+			dp_rx_mon_dest_debug("total_len %u frag_len %u flags %u",
+					     total_frag_len, frag_len,
+				      msdu_list.msdu_info[i].msdu_flags);
 
 			rx_pkt_offset = SIZE_OF_MONITOR_TLV;
 
@@ -1233,7 +1236,7 @@ void dp_rx_mon_update_pf_tag_to_buf_headroom(struct dp_soc *soc,
 
 	/* Headroom must be double of PF_TAG_SIZE as we copy it 1stly to head */
 	if (qdf_unlikely(qdf_nbuf_headroom(nbuf) < (DP_RX_MON_TOT_PF_TAG_LEN * 2))) {
-		dp_err("Nbuf avail Headroom[%d] < 2 * DP_RX_MON_PF_TAG_TOT_LEN[%d]",
+		dp_err("Nbuf avail Headroom[%d] < 2 * DP_RX_MON_PF_TAG_TOT_LEN[%lu]",
 		       qdf_nbuf_headroom(nbuf), DP_RX_MON_TOT_PF_TAG_LEN);
 		return;
 	}
@@ -1247,7 +1250,7 @@ void dp_rx_mon_update_pf_tag_to_buf_headroom(struct dp_soc *soc,
 	while (ext_list) {
 		/* Headroom must be double of PF_TAG_SIZE as we copy it 1stly to head */
 		if (qdf_unlikely(qdf_nbuf_headroom(ext_list) < (DP_RX_MON_TOT_PF_TAG_LEN * 2))) {
-			dp_err("Fraglist Nbuf avail Headroom[%d] < 2 * DP_RX_MON_PF_TAG_TOT_LEN[%d]",
+			dp_err("Fraglist Nbuf avail Headroom[%d] < 2 * DP_RX_MON_PF_TAG_TOT_LEN[%lu]",
 			       qdf_nbuf_headroom(ext_list), DP_RX_MON_TOT_PF_TAG_LEN);
 			ext_list = qdf_nbuf_queue_next(ext_list);
 			continue;
@@ -1390,6 +1393,76 @@ qdf_nbuf_t dp_rx_mon_restitch_mpdu(struct dp_soc *soc, uint32_t mac_id,
 }
 #endif
 
+#ifdef DP_MON_RSSI_IN_DBM
+/*
+ * dp_rx_mon_rssi_convert(): convert rssi_comb from unit dBm to dB
+ *		to match with radiotap further conversion requirement
+ * @rx_status: monitor mode rx status pointer
+ *
+ * Return: none
+ */
+static inline
+void dp_rx_mon_rssi_convert(struct mon_rx_status *rx_status)
+{
+	rx_status->rssi_comb = rx_status->rssi_comb -
+				rx_status->chan_noise_floor;
+}
+#else
+static inline
+void dp_rx_mon_rssi_convert(struct mon_rx_status *rx_status)
+{
+}
+#endif
+
+/*
+ * dp_rx_mon_process_dest_pktlog(): function to log packet contents to
+ * pktlog buffer and send to pktlog module
+ * @soc: DP soc
+ * @mac_id: MAC ID
+ * @mpdu: MPDU buf
+ * Return: status: 0 - Success, non-zero: Failure
+ */
+static QDF_STATUS dp_rx_mon_process_dest_pktlog(struct dp_soc *soc,
+						uint32_t mac_id,
+						qdf_nbuf_t mpdu)
+{
+	uint32_t event, msdu_timestamp;
+	struct dp_pdev *pdev = dp_get_pdev_for_lmac_id(soc, mac_id);
+	void *data;
+	struct ieee80211_frame *wh;
+	uint8_t type, subtype;
+
+	if (!pdev)
+		return QDF_STATUS_E_INVAL;
+
+	if (pdev->rx_pktlog_cbf) {
+		if (qdf_nbuf_get_nr_frags(mpdu))
+			data = qdf_nbuf_get_frag_addr(mpdu, 0);
+		else
+			data = qdf_nbuf_data(mpdu);
+
+		/* CBF logging required, doesn't matter if it is a full mode
+		 * or lite mode.
+		 * Need to look for mpdu with:
+		 * TYPE = ACTION, SUBTYPE = NO ACK in the header
+		 */
+		event = WDI_EVENT_RX_CBF;
+
+		wh = (struct ieee80211_frame *)data;
+		type = (wh)->i_fc[0] & IEEE80211_FC0_TYPE_MASK;
+		subtype = (wh)->i_fc[0] & IEEE80211_FC0_SUBTYPE_MASK;
+		if (type == IEEE80211_FC0_TYPE_MGT &&
+		    subtype == IEEE80211_FCO_SUBTYPE_ACTION_NO_ACK) {
+			msdu_timestamp = pdev->ppdu_info.rx_status.tsft;
+			dp_rx_populate_cbf_hdr(soc,
+					       mac_id, event,
+					       mpdu,
+					       msdu_timestamp);
+		}
+	}
+	return QDF_STATUS_SUCCESS;
+}
+
 /*
  * dp_rx_mon_deliver(): function to deliver packets to stack
  * @soc: DP soc
@@ -1407,7 +1480,8 @@ QDF_STATUS dp_rx_mon_deliver(struct dp_soc *soc, uint32_t mac_id,
 	qdf_nbuf_t mon_skb, skb_next;
 	qdf_nbuf_t mon_mpdu = NULL;
 
-	if (!pdev || (!pdev->monitor_vdev && !pdev->mcopy_mode))
+	if (!pdev || (!pdev->monitor_vdev && !pdev->mcopy_mode &&
+		      !pdev->rx_pktlog_cbf))
 		goto mon_deliver_fail;
 
 	/* restitch mon MPDU for delivery via monitor interface */
@@ -1419,6 +1493,8 @@ QDF_STATUS dp_rx_mon_deliver(struct dp_soc *soc, uint32_t mac_id,
 		dp_info("MPDU restitch failed, free buffers");
 		goto mon_deliver_fail;
 	}
+
+	dp_rx_mon_process_dest_pktlog(soc, mac_id, mon_mpdu);
 
 	/* monitor vap cannot be present when mcopy is enabled
 	 * hence same skb can be consumed
@@ -1433,6 +1509,8 @@ QDF_STATUS dp_rx_mon_deliver(struct dp_soc *soc, uint32_t mac_id,
 		pdev->ppdu_info.rx_status.device_id = soc->device_id;
 		pdev->ppdu_info.rx_status.chan_noise_floor =
 			pdev->chan_noise_floor;
+		/* convert rssi_comb from dBm to positive dB value */
+		dp_rx_mon_rssi_convert(&pdev->ppdu_info.rx_status);
 
 		dp_handle_tx_capture(soc, pdev, mon_mpdu);
 

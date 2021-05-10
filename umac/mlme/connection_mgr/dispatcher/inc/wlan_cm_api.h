@@ -280,6 +280,28 @@ bool wlan_cm_is_vdev_roam_reassoc_state(struct wlan_objmgr_vdev *vdev)
 bool wlan_cm_get_active_connect_req(struct wlan_objmgr_vdev *vdev,
 				    struct wlan_cm_vdev_connect_req *req);
 
+#ifdef WLAN_FEATURE_HOST_ROAM
+/**
+ * wlan_cm_get_active_reassoc_req() - Get copy of active reassoc request
+ * @vdev: vdev pointer
+ * @req: pointer to the copy of the active reassoc request
+ * *
+ * Context: Should be called only in the conext of the
+ * cm request activation
+ *
+ * Return: true and reassoc req if any request is active
+ */
+bool wlan_cm_get_active_reassoc_req(struct wlan_objmgr_vdev *vdev,
+				    struct wlan_cm_vdev_reassoc_req *req);
+#else
+static inline
+bool wlan_cm_get_active_reassoc_req(struct wlan_objmgr_vdev *vdev,
+				    struct wlan_cm_vdev_reassoc_req *req)
+{
+	return false;
+}
+#endif
+
 /**
  * wlan_cm_get_active_disconnect_req() - Get copy of active disconnect request
  * @vdev: vdev pointer
@@ -315,6 +337,25 @@ const char *wlan_cm_reason_code_to_str(enum wlan_reason_code reason);
 enum wlan_cm_active_request_type
 wlan_cm_get_active_req_type(struct wlan_objmgr_vdev *vdev);
 
+#ifdef WLAN_FEATURE_HOST_ROAM
+/**
+ * wlan_cm_reassoc_rsp() - Connection manager reassoc response
+ * @vdev: vdev pointer
+ * @resp: Connect response
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS wlan_cm_reassoc_rsp(struct wlan_objmgr_vdev *vdev,
+			       struct wlan_cm_connect_resp *resp);
+#else
+static inline
+QDF_STATUS wlan_cm_reassoc_rsp(struct wlan_objmgr_vdev *vdev,
+			       struct wlan_cm_connect_resp *resp)
+{
+	return QDF_STATUS_SUCCESS;
+}
+#endif
+
 /**
  * wlan_cm_hw_mode_change_resp() - HW mode change response
  * @pdev: pdev pointer
@@ -329,6 +370,7 @@ void wlan_cm_hw_mode_change_resp(struct wlan_objmgr_pdev *pdev, uint8_t vdev_id,
 				 wlan_cm_id cm_id, QDF_STATUS status);
 #endif /* ifdef POLICY_MGR_ENABLE */
 
+#ifdef SM_ENG_HIST_ENABLE
 /**
  * wlan_cm_sm_history_print() - Prints SM history
  * @vdev: Objmgr vdev
@@ -337,13 +379,26 @@ void wlan_cm_hw_mode_change_resp(struct wlan_objmgr_pdev *pdev, uint8_t vdev_id,
  *
  * Return: void
  */
-#ifdef SM_ENG_HIST_ENABLE
 void wlan_cm_sm_history_print(struct wlan_objmgr_vdev *vdev);
+
+/**
+ * wlan_cm_req_history_print() - Prints CM request history
+ * @vdev: Objmgr vdev
+ *
+ * API to print CM request history
+ *
+ * Return: void
+ */
+void wlan_cm_req_history_print(struct wlan_objmgr_vdev *vdev);
 #else
 static inline void wlan_cm_sm_history_print(struct wlan_objmgr_vdev *vdev)
 {
 }
+
+static inline void wlan_cm_req_history_print(struct wlan_objmgr_vdev *vdev)
+{}
 #endif
+
 #else
 
 #ifdef WLAN_POLICY_MGR_ENABLE

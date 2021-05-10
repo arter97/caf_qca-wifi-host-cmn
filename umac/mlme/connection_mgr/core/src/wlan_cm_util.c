@@ -22,13 +22,21 @@
 #include "wlan_scan_api.h"
 #include "wlan_cm_public_struct.h"
 #include "wlan_serialization_api.h"
+#include "wlan_cm_bss_score_param.h"
+#ifdef WLAN_POLICY_MGR_ENABLE
+#include <wlan_policy_mgr_api.h>
+#endif
+#include "wlan_cm_roam.h"
 
 static uint32_t cm_get_prefix_for_cm_id(enum wlan_cm_source source) {
 	switch (source) {
 	case CM_OSIF_CONNECT:
-	case CM_ROAMING:
 	case CM_OSIF_CFG_CONNECT:
 		return CONNECT_REQ_PREFIX;
+	case CM_ROAMING_HOST:
+	case CM_ROAMING_FW:
+	case CM_ROAMING_NUD_FAILURE:
+		return ROAM_REQ_PREFIX;
 	default:
 		return DISCONNECT_REQ_PREFIX;
 	}
@@ -65,6 +73,22 @@ struct cnx_mgr *cm_get_cm_ctx_fl(struct wlan_objmgr_vdev *vdev,
 	return cm_ctx;
 }
 
+cm_ext_t *cm_get_ext_hdl_fl(struct wlan_objmgr_vdev *vdev,
+			    const char *func, uint32_t line)
+{
+	struct cnx_mgr *cm_ctx;
+	cm_ext_t *ext_ctx = NULL;
+
+	cm_ctx = cm_get_cm_ctx_fl(vdev, func, line);
+	if (cm_ctx)
+		ext_ctx = cm_ctx->ext_cm_ptr;
+
+	if (!ext_ctx)
+		mlme_nofl_err("%s:%u: vdev %d cm ext ctx is NULL", func, line,
+			      wlan_vdev_get_id(vdev));
+	return ext_ctx;
+}
+
 void cm_reset_active_cm_id(struct wlan_objmgr_vdev *vdev, wlan_cm_id cm_id)
 {
 	struct cnx_mgr *cm_ctx;
@@ -88,7 +112,7 @@ void cm_reset_active_cm_id(struct wlan_objmgr_vdev *vdev, wlan_cm_id cm_id)
  *
  * return: void
  */
-static inline void cm_req_lock_acquire(struct cnx_mgr *cm_ctx)
+inline void cm_req_lock_acquire(struct cnx_mgr *cm_ctx)
 {
 	qdf_spinlock_acquire(&cm_ctx->cm_req_lock);
 }
@@ -101,17 +125,31 @@ static inline void cm_req_lock_acquire(struct cnx_mgr *cm_ctx)
  *
  * return: void
  */
-static inline void cm_req_lock_release(struct cnx_mgr *cm_ctx)
+inline void cm_req_lock_release(struct cnx_mgr *cm_ctx)
 {
 	qdf_spinlock_release(&cm_ctx->cm_req_lock);
 }
+
+QDF_STATUS cm_activate_cmd_req_flush_cb(struct scheduler_msg *msg)
+{
+	struct wlan_serialization_command *cmd = msg->bodyptr;
+
+	if (!cmd || !cmd->vdev) {
+		mlme_err("Null input cmd:%pK", cmd);
+		return QDF_STATUS_E_INVAL;
+	}
+
+	wlan_objmgr_vdev_release_ref(cmd->vdev, WLAN_MLME_CM_ID);
+	return QDF_STATUS_SUCCESS;
+}
+
 #else
-static inline void cm_req_lock_acquire(struct cnx_mgr *cm_ctx)
+inline void cm_req_lock_acquire(struct cnx_mgr *cm_ctx)
 {
 	qdf_mutex_acquire(&cm_ctx->cm_req_lock);
 }
 
-static inline void cm_req_lock_release(struct cnx_mgr *cm_ctx)
+inline void cm_req_lock_release(struct cnx_mgr *cm_ctx)
 {
 	qdf_mutex_release(&cm_ctx->cm_req_lock);
 }
@@ -251,6 +289,16 @@ void cm_store_fils_key(struct cnx_mgr *cm_ctx, bool unicast,
 		   crypto_key->cipher_type, crypto_key->keylen,
 		   crypto_key->keyix, QDF_MAC_ADDR_REF(crypto_key->macaddr));
 }
+static void cm_set_fils_connection_from_req(struct wlan_cm_connect_req *req,
+					    struct wlan_cm_connect_resp *resp)
+{
+	resp->is_fils_connection = req->fils_info.is_fils_connection;
+}
+#else
+static inline
+void cm_set_fils_connection_from_req(struct wlan_cm_connect_req *req,
+				     struct wlan_cm_connect_resp *resp)
+{}
 #endif
 
 bool cm_check_cmid_match_list_head(struct cnx_mgr *cm_ctx, wlan_cm_id *cm_id)
@@ -376,6 +424,9 @@ cm_fill_connect_resp_from_req(struct wlan_cm_connect_resp *resp,
 		resp->freq = req->chan_freq;
 
 	resp->ssid = req->ssid;
+	resp->is_wps_connection = req->is_wps_connection;
+	resp->is_osen_connection = req->is_osen_connection;
+	cm_set_fils_connection_from_req(req, resp);
 }
 
 /**
@@ -443,6 +494,8 @@ static void cm_remove_cmd_from_serialization(struct cnx_mgr *cm_ctx,
 
 	if (prefix == CONNECT_REQ_PREFIX)
 		cmd_info.cmd_type = WLAN_SER_CMD_VDEV_CONNECT;
+	else if (prefix == ROAM_REQ_PREFIX)
+		cmd_info.cmd_type = WLAN_SER_CMD_VDEV_REASSOC;
 	else
 		cmd_info.cmd_type = WLAN_SER_CMD_VDEV_DISCONNECT;
 
@@ -496,6 +549,8 @@ cm_flush_pending_request(struct cnx_mgr *cm_ctx, uint32_t prefix,
 			cm_handle_disconnect_flush(cm_ctx, cm_req);
 			cm_ctx->disconnect_count--;
 		}
+
+		cm_req_history_del(cm_ctx, cm_req, CM_REQ_DEL_FLUSH);
 		mlme_debug(CM_PREFIX_FMT,
 			   CM_PREFIX_REF(wlan_vdev_get_id(cm_ctx->vdev),
 					 cm_req->cm_id));
@@ -597,8 +652,10 @@ QDF_STATUS cm_add_req_to_list_and_indicate_osif(struct cnx_mgr *cm_ctx,
 	qdf_list_insert_front(&cm_ctx->req_list, &cm_req->node);
 	if (prefix == CONNECT_REQ_PREFIX)
 		cm_ctx->connect_count++;
-	else
+	else if (prefix == DISCONNECT_REQ_PREFIX)
 		cm_ctx->disconnect_count++;
+
+	cm_req_history_add(cm_ctx, cm_req);
 	cm_req_lock_release(cm_ctx);
 	mlme_debug(CM_PREFIX_FMT,
 		   CM_PREFIX_REF(wlan_vdev_get_id(cm_ctx->vdev),
@@ -670,9 +727,17 @@ cm_delete_req_from_list(struct cnx_mgr *cm_ctx, wlan_cm_id cm_id)
 	if (prefix == CONNECT_REQ_PREFIX) {
 		cm_ctx->connect_count--;
 		cm_free_connect_req_mem(&cm_req->connect_req);
+	} else if (prefix == ROAM_REQ_PREFIX) {
+		cm_free_roam_req_mem(&cm_req->roam_req);
 	} else {
 		cm_ctx->disconnect_count--;
 	}
+
+	if (cm_id == cm_ctx->active_cm_id)
+		cm_req_history_del(cm_ctx, cm_req, CM_REQ_DEL_ACTIVE);
+	else
+		cm_req_history_del(cm_ctx, cm_req, CM_REQ_DEL_PENDING);
+
 	mlme_debug(CM_PREFIX_FMT,
 		   CM_PREFIX_REF(wlan_vdev_get_id(cm_ctx->vdev),
 				 cm_req->cm_id));
@@ -683,7 +748,7 @@ cm_delete_req_from_list(struct cnx_mgr *cm_ctx, wlan_cm_id cm_id)
 	return QDF_STATUS_SUCCESS;
 }
 
-void cm_remove_cmd(struct cnx_mgr *cm_ctx, wlan_cm_id cm_id)
+void cm_remove_cmd(struct cnx_mgr *cm_ctx, wlan_cm_id *cm_id)
 {
 	struct wlan_objmgr_psoc *psoc;
 	QDF_STATUS status;
@@ -691,15 +756,15 @@ void cm_remove_cmd(struct cnx_mgr *cm_ctx, wlan_cm_id cm_id)
 	psoc = wlan_vdev_get_psoc(cm_ctx->vdev);
 	if (!psoc) {
 		mlme_err(CM_PREFIX_FMT "Failed to find psoc",
-			 CM_PREFIX_REF(wlan_vdev_get_id(cm_ctx->vdev), cm_id));
+			 CM_PREFIX_REF(wlan_vdev_get_id(cm_ctx->vdev), *cm_id));
 		return;
 	}
 
-	status = cm_delete_req_from_list(cm_ctx, cm_id);
+	status = cm_delete_req_from_list(cm_ctx, *cm_id);
 	if (QDF_IS_STATUS_ERROR(status))
 		return;
 
-	cm_remove_cmd_from_serialization(cm_ctx, cm_id);
+	cm_remove_cmd_from_serialization(cm_ctx, *cm_id);
 }
 
 void cm_vdev_scan_cancel(struct wlan_objmgr_pdev *pdev,
@@ -1023,6 +1088,9 @@ cm_get_active_req_type(struct wlan_objmgr_vdev *vdev)
 	uint32_t active_req_prefix = 0;
 
 	cm_ctx = cm_get_cm_ctx(vdev);
+	if (!cm_ctx)
+		return CM_NONE;
+
 	cm_id = cm_ctx->active_cm_id;
 
 	if (cm_id != CM_ID_INVALID)
@@ -1032,6 +1100,8 @@ cm_get_active_req_type(struct wlan_objmgr_vdev *vdev)
 		return CM_CONNECT_ACTIVE;
 	else if (active_req_prefix == DISCONNECT_REQ_PREFIX)
 		return CM_DISCONNECT_ACTIVE;
+	else if (active_req_prefix == ROAM_REQ_PREFIX)
+		return CM_ROAM_ACTIVE;
 	else
 		return CM_NONE;
 }
@@ -1046,6 +1116,8 @@ bool cm_get_active_connect_req(struct wlan_objmgr_vdev *vdev,
 	uint32_t cm_id_prefix;
 
 	cm_ctx = cm_get_cm_ctx(vdev);
+	if (!cm_ctx)
+		return status;
 
 	cm_req_lock_acquire(cm_ctx);
 	qdf_list_peek_front(&cm_ctx->req_list, &cur_node);
@@ -1060,6 +1132,10 @@ bool cm_get_active_connect_req(struct wlan_objmgr_vdev *vdev,
 			req->vdev_id = wlan_vdev_get_id(vdev);
 			req->cm_id = cm_req->connect_req.cm_id;
 			req->bss =  cm_req->connect_req.cur_candidate;
+			req->is_wps_connection =
+				cm_req->connect_req.req.is_wps_connection;
+			req->is_osen_connection =
+				cm_req->connect_req.req.is_osen_connection;
 			status = true;
 			cm_req_lock_release(cm_ctx);
 			return status;
@@ -1083,6 +1159,8 @@ bool cm_get_active_disconnect_req(struct wlan_objmgr_vdev *vdev,
 	uint32_t cm_id_prefix;
 
 	cm_ctx = cm_get_cm_ctx(vdev);
+	if (!cm_ctx)
+		return status;
 
 	cm_req_lock_acquire(cm_ctx);
 	qdf_list_peek_front(&cm_ctx->req_list, &cur_node);
@@ -1163,3 +1241,161 @@ wlan_cm_id cm_get_cm_id_by_scan_id(struct cnx_mgr *cm_ctx,
 	return CM_ID_INVALID;
 }
 
+#ifdef WLAN_POLICY_MGR_ENABLE
+static void
+cm_get_pcl_chan_weigtage_for_sta(struct wlan_objmgr_pdev *pdev,
+				 struct pcl_freq_weight_list *pcl_lst)
+{
+	enum QDF_OPMODE opmode = QDF_STA_MODE;
+	enum policy_mgr_con_mode pm_mode;
+	uint32_t num_entries = 0;
+	QDF_STATUS status;
+
+	if (!pcl_lst)
+		return;
+
+	if (policy_mgr_map_concurrency_mode(&opmode, &pm_mode)) {
+		status = policy_mgr_get_pcl(wlan_pdev_get_psoc(pdev), pm_mode,
+					    pcl_lst->pcl_freq_list,
+					    &num_entries,
+					    pcl_lst->pcl_weight_list,
+					    NUM_CHANNELS);
+		if (QDF_IS_STATUS_ERROR(status))
+			return;
+		pcl_lst->num_of_pcl_channels = num_entries;
+	}
+}
+
+void cm_calculate_scores(struct wlan_objmgr_pdev *pdev,
+			 struct scan_filter *filter, qdf_list_t *list)
+{
+	struct pcl_freq_weight_list *pcl_lst = NULL;
+
+	if (!filter->num_of_bssid) {
+		pcl_lst = qdf_mem_malloc(sizeof(*pcl_lst));
+		cm_get_pcl_chan_weigtage_for_sta(pdev, pcl_lst);
+		if (pcl_lst && !pcl_lst->num_of_pcl_channels) {
+			qdf_mem_free(pcl_lst);
+			pcl_lst = NULL;
+		}
+	}
+	wlan_cm_calculate_bss_score(pdev, pcl_lst, list, &filter->bssid_hint);
+	if (pcl_lst)
+		qdf_mem_free(pcl_lst);
+}
+#else
+inline
+void cm_calculate_scores(struct wlan_objmgr_pdev *pdev,
+			 struct scan_filter *filter, qdf_list_t *list)
+{
+	wlan_cm_calculate_bss_score(pdev, NULL, list, &filter->bssid_hint);
+}
+#endif
+
+#ifdef SM_ENG_HIST_ENABLE
+static const char *cm_id_to_string(wlan_cm_id cm_id)
+{
+	uint32_t prefix = CM_ID_GET_PREFIX(cm_id);
+
+	switch (prefix) {
+	case CONNECT_REQ_PREFIX:
+		return "CONNECT";
+	case DISCONNECT_REQ_PREFIX:
+		return "DISCONNECT";
+	case ROAM_REQ_PREFIX:
+		return "ROAM";
+	default:
+		return "INVALID";
+	}
+}
+
+void cm_req_history_add(struct cnx_mgr *cm_ctx,
+			struct cm_req *cm_req)
+{
+	struct cm_req_history *history = &cm_ctx->req_history;
+	struct cm_req_history_info *data;
+
+	qdf_spin_lock_bh(&history->cm_req_hist_lock);
+	data = &history->data[history->index];
+	history->index++;
+	history->index %= CM_REQ_HISTORY_SIZE;
+
+	qdf_mem_zero(data, sizeof(*data));
+	data->cm_id = cm_req->cm_id;
+	data->add_time = qdf_get_log_timestamp();
+	data->add_cm_state = cm_get_state(cm_ctx);
+	qdf_spin_unlock_bh(&history->cm_req_hist_lock);
+}
+
+void cm_req_history_del(struct cnx_mgr *cm_ctx,
+			struct cm_req *cm_req,
+			enum cm_req_del_type del_type)
+{
+	uint8_t i, idx;
+	struct cm_req_history_info *data;
+	struct cm_req_history *history = &cm_ctx->req_history;
+
+	qdf_spin_lock_bh(&history->cm_req_hist_lock);
+	for (i = 0; i < CM_REQ_HISTORY_SIZE; i++) {
+		if (history->index < i)
+			idx = CM_REQ_HISTORY_SIZE + history->index - i;
+		else
+			idx = history->index - i;
+
+		data = &history->data[idx];
+		if (data->cm_id == cm_req->cm_id) {
+			data->del_time = qdf_get_log_timestamp();
+			data->del_cm_state = cm_get_state(cm_ctx);
+			data->del_type = del_type;
+			break;
+		}
+
+		if (!data->cm_id)
+			break;
+	}
+	qdf_spin_unlock_bh(&history->cm_req_hist_lock);
+}
+
+void cm_req_history_init(struct cnx_mgr *cm_ctx)
+{
+	qdf_spinlock_create(&cm_ctx->req_history.cm_req_hist_lock);
+	qdf_mem_zero(&cm_ctx->req_history, sizeof(struct cm_req_history));
+}
+
+void cm_req_history_deinit(struct cnx_mgr *cm_ctx)
+{
+	qdf_spinlock_destroy(&cm_ctx->req_history.cm_req_hist_lock);
+}
+
+static inline void cm_req_history_print_entry(uint16_t idx,
+					      struct cm_req_history_info *data)
+{
+	if (!data->cm_id)
+		return;
+
+	mlme_nofl_err("    |%6u | 0x%016llx | 0x%016llx |%12s | 0x%08x |%15s |%15s |%8u",
+		      idx, data->add_time, data->del_time,
+		      cm_id_to_string(data->cm_id), data->cm_id,
+		      cm_sm_info[data->add_cm_state].name,
+		      cm_sm_info[data->del_cm_state].name,
+		      data->del_type);
+}
+
+void cm_req_history_print(struct cnx_mgr *cm_ctx)
+{
+	struct cm_req_history *history = &cm_ctx->req_history;
+	uint8_t i, idx;
+
+	mlme_nofl_err("CM Request history is as below");
+	mlme_nofl_err("|%6s |%19s |%19s |%12s |%11s |%15s |%15s |%8s",
+		      "Index", "Add Time", "Del Time", "Req type",
+		      "Cm Id", "Add State", "Del State", "Del Type");
+
+	qdf_spin_lock_bh(&history->cm_req_hist_lock);
+	for (i = 0; i < CM_REQ_HISTORY_SIZE; i++) {
+		idx = (history->index + i) % CM_REQ_HISTORY_SIZE;
+		cm_req_history_print_entry(idx, &history->data[idx]);
+	}
+	qdf_spin_unlock_bh(&history->cm_req_hist_lock);
+}
+#endif

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016-2020 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -230,11 +230,8 @@ dp_pdev_nbuf_alloc_and_map_replenish(struct dp_soc *dp_soc,
 		return QDF_STATUS_E_NOMEM;
 	}
 
-	ret = qdf_nbuf_map_nbytes_single(dp_soc->osdev,
-					 (nbuf_frag_info_t->virt_addr).nbuf,
-					 QDF_DMA_FROM_DEVICE,
-					 rx_desc_pool->buf_size);
-
+	ret = dp_rx_buffer_pool_nbuf_map(dp_soc, rx_desc_pool,
+					 nbuf_frag_info_t);
 	if (qdf_unlikely(QDF_IS_STATUS_ERROR(ret))) {
 		dp_rx_buffer_pool_nbuf_free(dp_soc,
 			(nbuf_frag_info_t->virt_addr).nbuf, mac_id);
@@ -246,19 +243,10 @@ dp_pdev_nbuf_alloc_and_map_replenish(struct dp_soc *dp_soc,
 	nbuf_frag_info_t->paddr =
 		qdf_nbuf_get_frag_paddr((nbuf_frag_info_t->virt_addr).nbuf, 0);
 
-	dp_ipa_handle_rx_buf_smmu_mapping(dp_soc,
-			(qdf_nbuf_t)((nbuf_frag_info_t->virt_addr).nbuf),
-					  rx_desc_pool->buf_size,
-					  true);
-
-	ret = check_x86_paddr(dp_soc, &((nbuf_frag_info_t->virt_addr).nbuf),
-			      &nbuf_frag_info_t->paddr,
-			      rx_desc_pool);
+	ret = dp_check_paddr(dp_soc, &((nbuf_frag_info_t->virt_addr).nbuf),
+			     &nbuf_frag_info_t->paddr,
+			     rx_desc_pool);
 	if (ret == QDF_STATUS_E_FAILURE) {
-		qdf_nbuf_unmap_nbytes_single(dp_soc->osdev,
-					     (nbuf_frag_info_t->virt_addr).nbuf,
-					     QDF_DMA_FROM_DEVICE,
-					     rx_desc_pool->buf_size);
 		DP_STATS_INC(dp_pdev, replenish.x86_fail, 1);
 		return QDF_STATUS_E_ADDRNOTAVAIL;
 	}
@@ -315,6 +303,7 @@ QDF_STATUS __dp_rx_buffers_replenish(struct dp_soc *dp_soc, uint32_t mac_id,
 		    dp_soc, num_req_buffers);
 
 	hal_srng_access_start(dp_soc->hal_soc, rxdma_srng);
+
 	num_entries_avail = hal_srng_src_num_avail(dp_soc->hal_soc,
 						   rxdma_srng,
 						   sync_hw_ptr);
@@ -360,6 +349,8 @@ QDF_STATUS __dp_rx_buffers_replenish(struct dp_soc *dp_soc, uint32_t mac_id,
 
 
 	count = 0;
+
+	dp_rx_refill_buff_pool_lock(dp_soc);
 
 	while (count < num_req_buffers) {
 		/* Flag is set while pdev rx_desc_pool initialization */
@@ -417,7 +408,11 @@ QDF_STATUS __dp_rx_buffers_replenish(struct dp_soc *dp_soc, uint32_t mac_id,
 
 	}
 
+	dp_rx_refill_buff_pool_unlock(dp_soc);
+
 	hal_srng_access_end(dp_soc->hal_soc, rxdma_srng);
+
+	dp_rx_schedule_refill_thread(dp_soc);
 
 	dp_verbose_debug("replenished buffers %d, rx desc added back to free list %u",
 			 count, num_desc_to_free);
@@ -716,7 +711,8 @@ void dp_rx_fill_mesh_stats(struct dp_vdev *vdev, qdf_nbuf_t nbuf,
 					rx_info->rs_keyix);
 	}
 
-	rx_info->rs_rssi = peer->stats.rx.rssi;
+	rx_info->rs_snr = peer->stats.rx.snr;
+	rx_info->rs_rssi = rx_info->rs_snr + DP_DEFAULT_NOISEFLOOR;
 
 	soc = vdev->pdev->soc;
 	primary_chan_num = hal_rx_msdu_start_get_freq(rx_tlv_hdr);
@@ -739,12 +735,13 @@ void dp_rx_fill_mesh_stats(struct dp_vdev *vdev, qdf_nbuf_t nbuf,
 	qdf_nbuf_set_rx_fctx_type(nbuf, (void *)rx_info, CB_FTYPE_MESH_RX_INFO);
 
 	QDF_TRACE(QDF_MODULE_ID_TXRX, QDF_TRACE_LEVEL_INFO_MED,
-		FL("Mesh rx stats: flags %x, rssi %x, chn %x, rate %x, kix %x"),
+		FL("Mesh rx stats: flags %x, rssi %x, chn %x, rate %x, kix %x, snr %x"),
 						rx_info->rs_flags,
 						rx_info->rs_rssi,
 						rx_info->rs_channel,
 						rx_info->rs_ratephy1,
-						rx_info->rs_keyix);
+						rx_info->rs_keyix,
+						rx_info->rs_snr);
 
 }
 
@@ -2204,7 +2201,7 @@ static inline void dp_rx_update_stats(struct dp_soc *soc,
 }
 #endif
 
-#ifdef WLAN_FEATURE_PKT_CAPTURE_LITHIUM
+#ifdef WLAN_FEATURE_PKT_CAPTURE_V2
 /**
  * dp_rx_deliver_to_pkt_capture() - deliver rx packet to packet capture
  * @soc : dp_soc handle
@@ -2216,12 +2213,40 @@ static inline void dp_rx_update_stats(struct dp_soc *soc,
  * This function is used to deliver rx packet to packet capture
  */
 void dp_rx_deliver_to_pkt_capture(struct dp_soc *soc,  struct dp_pdev *pdev,
-				  uint16_t peer_id, uint32_t ppdu_id,
+				  uint16_t peer_id, uint32_t is_offload,
 				  qdf_nbuf_t netbuf)
 {
 	dp_wdi_event_handler(WDI_EVENT_PKT_CAPTURE_RX_DATA, soc, netbuf,
-			     peer_id, WDI_NO_VAL, pdev->pdev_id);
+			     peer_id, is_offload, pdev->pdev_id);
 }
+
+void dp_rx_deliver_to_pkt_capture_no_peer(struct dp_soc *soc, qdf_nbuf_t nbuf,
+					  uint32_t is_offload)
+{
+	uint16_t msdu_len = 0;
+	uint16_t peer_id, vdev_id;
+	uint32_t pkt_len = 0;
+	uint8_t *rx_tlv_hdr;
+	uint32_t l2_hdr_offset = 0;
+	struct hal_rx_msdu_metadata msdu_metadata;
+
+	peer_id = QDF_NBUF_CB_RX_PEER_ID(nbuf);
+	vdev_id = QDF_NBUF_CB_RX_VDEV_ID(nbuf);
+	rx_tlv_hdr = qdf_nbuf_data(nbuf);
+	hal_rx_msdu_metadata_get(soc->hal_soc, rx_tlv_hdr, &msdu_metadata);
+	msdu_len = QDF_NBUF_CB_RX_PKT_LEN(nbuf);
+	pkt_len = msdu_len + msdu_metadata.l3_hdr_pad +
+		  RX_PKT_TLVS_LEN;
+	l2_hdr_offset =
+		hal_rx_msdu_end_l3_hdr_padding_get(soc->hal_soc, rx_tlv_hdr);
+
+	qdf_nbuf_set_pktlen(nbuf, pkt_len);
+	dp_rx_skip_tlvs(nbuf, msdu_metadata.l3_hdr_pad);
+
+	dp_wdi_event_handler(WDI_EVENT_PKT_CAPTURE_RX_DATA, soc, nbuf,
+			     HTT_INVALID_VDEV, is_offload, 0);
+}
+
 #endif
 
 /**
@@ -2285,6 +2310,7 @@ uint32_t dp_rx_process(struct dp_intr *int_ctx, hal_ring_handle_t hal_ring_hdl,
 	QDF_STATUS status;
 	qdf_nbuf_t ebuf_head;
 	qdf_nbuf_t ebuf_tail;
+	uint8_t pkt_capture_offload = 0;
 
 	DP_HIST_INIT();
 
@@ -2480,6 +2506,10 @@ more_data:
 		QDF_NBUF_CB_RX_VDEV_ID(rx_desc->nbuf) =
 			DP_PEER_METADATA_VDEV_ID_GET(peer_mdata);
 
+		/* to indicate whether this msdu is rx offload */
+		pkt_capture_offload =
+			DP_PEER_METADATA_OFFLOAD_GET(peer_mdata);
+
 		/*
 		 * save msdu flags first, last and continuation msdu in
 		 * nbuf->cb, also save mcbc, is_da_valid, is_sa_valid and
@@ -2630,9 +2660,34 @@ done:
 
 		if (qdf_likely(peer)) {
 			vdev = peer->vdev;
+
+			/*
+			 * In encryption mode, all data packets except
+			 * EAPOL frames should be dropped when peer is not
+			 * authenticated. Thie feature is enabled for all peers
+			 * under this vdev when peer_authorize flag is set.
+			 */
+			if (qdf_unlikely(vdev->peer_authorize)) {
+				if (qdf_unlikely(vdev->sec_type != cdp_sec_type_none)) {
+					/*
+					 * Allow only EAPOL frames
+					 */
+					if (qdf_unlikely(!peer->authorize &&
+								!qdf_nbuf_is_ipv4_eapol_pkt(nbuf))) {
+						qdf_nbuf_free(nbuf);
+						nbuf = next;
+						DP_STATS_INC(soc, rx.err.peer_unauth_rx_pkt_drop, 1);
+						continue;
+					}
+				}
+			}
+
 		} else {
 			nbuf->next = NULL;
-			dp_rx_deliver_to_stack_no_peer(soc, nbuf);
+			dp_rx_deliver_to_pkt_capture_no_peer(
+					soc, nbuf, pkt_capture_offload);
+			if (!pkt_capture_offload)
+				dp_rx_deliver_to_stack_no_peer(soc, nbuf);
 			nbuf = next;
 			continue;
 		}
@@ -2875,10 +2930,12 @@ done:
 	if (qdf_likely(deliver_list_head)) {
 		if (qdf_likely(peer)) {
 			dp_rx_deliver_to_pkt_capture(soc, vdev->pdev, peer_id,
-						     0, deliver_list_head);
-			dp_rx_deliver_to_stack(soc, vdev, peer,
-					       deliver_list_head,
-					       deliver_list_tail);
+						     pkt_capture_offload,
+						     deliver_list_head);
+			if (!pkt_capture_offload)
+				dp_rx_deliver_to_stack(soc, vdev, peer,
+						       deliver_list_head,
+						       deliver_list_tail);
 		}
 		else {
 			nbuf = deliver_list_head;
@@ -2980,15 +3037,10 @@ dp_pdev_nbuf_alloc_and_map(struct dp_soc *dp_soc,
 	nbuf_frag_info_t->paddr =
 		qdf_nbuf_get_frag_paddr((nbuf_frag_info_t->virt_addr).nbuf, 0);
 
-	ret = check_x86_paddr(dp_soc, &((nbuf_frag_info_t->virt_addr).nbuf),
-			      &nbuf_frag_info_t->paddr,
-			      rx_desc_pool);
+	ret = dp_check_paddr(dp_soc, &((nbuf_frag_info_t->virt_addr).nbuf),
+			     &nbuf_frag_info_t->paddr,
+			     rx_desc_pool);
 	if (ret == QDF_STATUS_E_FAILURE) {
-		qdf_nbuf_unmap_nbytes_single(dp_soc->osdev,
-					     (nbuf_frag_info_t->virt_addr).nbuf,
-					     QDF_DMA_FROM_DEVICE,
-					     rx_desc_pool->buf_size);
-		qdf_nbuf_free((nbuf_frag_info_t->virt_addr).nbuf);
 		dp_err("nbuf check x86 failed");
 		DP_STATS_INC(dp_pdev, replenish.x86_fail, 1);
 		return ret;
