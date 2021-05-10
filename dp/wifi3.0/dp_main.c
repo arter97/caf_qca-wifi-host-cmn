@@ -258,6 +258,12 @@ static inline void
 dp_enable_mon_reap_timer(struct cdp_soc_t *soc_hdl, uint8_t pdev_id,
 			 bool enable);
 #endif
+static QDF_STATUS dp_init_tx_ring_pair_by_index(struct dp_soc *soc,
+						uint8_t index);
+static void dp_deinit_tx_pair_by_index(struct dp_soc *soc, int index);
+static void dp_free_tx_ring_pair_by_index(struct dp_soc *soc, uint8_t index);
+static QDF_STATUS dp_alloc_tx_ring_pair_by_index(struct dp_soc *soc,
+						 uint8_t index);
 static inline bool
 dp_is_enable_reap_timer_non_pkt(struct dp_pdev *pdev);
 static uint8_t dp_soc_ring_if_nss_offloaded(struct dp_soc *soc,
@@ -3248,6 +3254,93 @@ void dp_link_desc_ring_replenish(struct dp_soc *soc, uint32_t mac_id)
 #define REO_DST_RING_SIZE_QCN9000 8
 #endif /* CONFIG_WIFI_EMULATION_WIFI_3_0 */
 
+#ifdef IPA_WDI3_TX_TWO_PIPES
+static int dp_ipa_get_tx_alt_comp_ring_num(int ring_num)
+{
+	/* IPA alternate TX comp ring for 2G is WBM2SW4 */
+	if (ring_num == IPA_TX_ALT_COMP_RING_IDX)
+		ring_num = 4;
+
+	return ring_num;
+}
+
+#ifdef DP_MEMORY_OPT
+static int dp_ipa_init_alt_tx_ring(struct dp_soc *soc)
+{
+	return dp_init_tx_ring_pair_by_index(soc, IPA_TX_ALT_RING_IDX);
+}
+
+static void dp_ipa_deinit_alt_tx_ring(struct dp_soc *soc)
+{
+	dp_deinit_tx_pair_by_index(soc, IPA_TX_ALT_RING_IDX);
+}
+
+static int dp_ipa_alloc_alt_tx_ring(struct dp_soc *soc)
+{
+	return dp_alloc_tx_ring_pair_by_index(soc, IPA_TX_ALT_RING_IDX);
+}
+
+static void dp_ipa_free_alt_tx_ring(struct dp_soc *soc)
+{
+	dp_free_tx_ring_pair_by_index(soc, IPA_TX_ALT_RING_IDX);
+}
+
+#else /* !DP_MEMORY_OPT */
+static int dp_ipa_init_alt_tx_ring(struct dp_soc *soc)
+{
+	return 0;
+}
+
+static void dp_ipa_deinit_alt_tx_ring(struct dp_soc *soc)
+{
+}
+
+static int dp_ipa_alloc_alt_tx_ring(struct dp_soc *soc)
+{
+	return 0
+}
+
+static void dp_ipa_free_alt_tx_ring(struct dp_soc *soc)
+{
+}
+#endif /* DP_MEMORY_OPT */
+
+static void dp_ipa_hal_tx_init_alt_data_ring(struct dp_soc *soc)
+{
+	hal_tx_init_data_ring(soc->hal_soc,
+			      soc->tcl_data_ring[IPA_TX_ALT_RING_IDX].hal_srng);
+}
+
+#else /* !IPA_WDI3_TX_TWO_PIPES */
+static int dp_ipa_get_tx_alt_comp_ring_num(int ring_num)
+{
+	return ring_num;
+}
+
+static int dp_ipa_init_alt_tx_ring(struct dp_soc *soc)
+{
+	return 0;
+}
+
+static void dp_ipa_deinit_alt_tx_ring(struct dp_soc *soc)
+{
+}
+
+static int dp_ipa_alloc_alt_tx_ring(struct dp_soc *soc)
+{
+	return 0;
+}
+
+static void dp_ipa_free_alt_tx_ring(struct dp_soc *soc)
+{
+}
+
+static void dp_ipa_hal_tx_init_alt_data_ring(struct dp_soc *soc)
+{
+}
+
+#endif /* IPA_WDI3_TX_TWO_PIPES */
+
 #else
 
 #define REO_DST_RING_SIZE_QCA6290 1024
@@ -3258,6 +3351,34 @@ void dp_link_desc_ring_replenish(struct dp_soc *soc, uint32_t mac_id)
 #define REO_DST_RING_SIZE_QCA8074 8
 #define REO_DST_RING_SIZE_QCN9000 8
 #endif /* CONFIG_WIFI_EMULATION_WIFI_3_0 */
+
+static int dp_ipa_init_alt_tx_ring(struct dp_soc *soc)
+{
+	return 0;
+}
+
+static void dp_ipa_deinit_alt_tx_ring(struct dp_soc *soc)
+{
+}
+
+static int dp_ipa_alloc_alt_tx_ring(struct dp_soc *soc)
+{
+	return 0;
+}
+
+static void dp_ipa_free_alt_tx_ring(struct dp_soc *soc)
+{
+}
+
+static int dp_ipa_get_tx_alt_comp_ring_num(int ring_num)
+{
+	return ring_num;
+}
+
+static void dp_ipa_hal_tx_init_alt_data_ring(struct dp_soc *soc)
+{
+}
+
 #endif /* IPA_OFFLOAD */
 
 /*
@@ -3539,6 +3660,28 @@ bool dp_reo_remap_config(struct dp_soc *soc, uint32_t *remap1, uint32_t *remap2)
 	return true;
 }
 
+#ifdef IPA_WDI3_TX_TWO_PIPES
+static bool dp_ipa_is_alt_tx_ring(int index)
+{
+	return index == IPA_TX_ALT_RING_IDX;
+}
+
+static bool dp_ipa_is_alt_tx_comp_ring(int index)
+{
+	return index == IPA_TX_ALT_COMP_RING_IDX;
+}
+#else /* !IPA_WDI3_TX_TWO_PIPES */
+static bool dp_ipa_is_alt_tx_ring(int index)
+{
+	return false;
+}
+
+static bool dp_ipa_is_alt_tx_comp_ring(int index)
+{
+	return false;
+}
+#endif /* IPA_WDI3_TX_TWO_PIPES */
+
 /**
  * dp_ipa_get_tx_ring_size() - Get Tx ring size for IPA
  *
@@ -3549,7 +3692,8 @@ bool dp_reo_remap_config(struct dp_soc *soc, uint32_t *remap1, uint32_t *remap2)
  */
 static void dp_ipa_get_tx_ring_size(int tx_ring_num, int *tx_ipa_ring_sz)
 {
-	if (tx_ring_num == IPA_TCL_DATA_RING_IDX)
+	if (tx_ring_num == IPA_TCL_DATA_RING_IDX ||
+	    dp_ipa_is_alt_tx_ring(tx_ring_num))
 		*tx_ipa_ring_sz = WLAN_CFG_IPA_TX_RING_SIZE;
 }
 
@@ -3564,7 +3708,8 @@ static void dp_ipa_get_tx_ring_size(int tx_ring_num, int *tx_ipa_ring_sz)
 static void dp_ipa_get_tx_comp_ring_size(int tx_comp_ring_num,
 					 int *tx_comp_ipa_ring_sz)
 {
-	if (tx_comp_ring_num == IPA_TCL_DATA_RING_IDX)
+	if (tx_comp_ring_num == IPA_TCL_DATA_RING_IDX ||
+	    dp_ipa_is_alt_tx_comp_ring(tx_comp_ring_num))
 		*tx_comp_ipa_ring_sz = WLAN_CFG_IPA_TX_COMP_RING_SIZE;
 }
 #else
@@ -3784,6 +3929,8 @@ static inline void dp_create_ext_stats_event(struct dp_soc *soc)
 
 static void dp_deinit_tx_pair_by_index(struct dp_soc *soc, int index)
 {
+	int ring_num;
+
 	wlan_minidump_remove(soc->tcl_data_ring[index].base_vaddr_unaligned,
 			     soc->tcl_data_ring[index].alloc_size,
 			     soc->ctrl_psoc,
@@ -3796,12 +3943,16 @@ static void dp_deinit_tx_pair_by_index(struct dp_soc *soc, int index)
 			     soc->ctrl_psoc,
 			     WLAN_MD_DP_SRNG_TX_COMP,
 			     "tcl_comp_ring");
-	dp_srng_deinit(soc, &soc->tx_comp_ring[index], WBM2SW_RELEASE, index);
+	ring_num = dp_ipa_get_tx_alt_comp_ring_num(index);
+	dp_srng_deinit(soc, &soc->tx_comp_ring[index], WBM2SW_RELEASE,
+		       ring_num);
 }
 
 static QDF_STATUS dp_init_tx_ring_pair_by_index(struct dp_soc *soc,
 						uint8_t index)
 {
+	int ring_num;
+
 	if (dp_srng_init(soc, &soc->tcl_data_ring[index], TCL_DATA, index, 0)) {
 		dp_err("dp_srng_init failed for tcl_data_ring");
 		goto fail1;
@@ -3812,8 +3963,9 @@ static QDF_STATUS dp_init_tx_ring_pair_by_index(struct dp_soc *soc,
 			  WLAN_MD_DP_SRNG_TCL_DATA,
 			  "tcl_data_ring");
 
+	ring_num = dp_ipa_get_tx_alt_comp_ring_num(index);
 	if (dp_srng_init(soc, &soc->tx_comp_ring[index], WBM2SW_RELEASE,
-			 index, 0)) {
+			 ring_num, 0)) {
 		dp_err("dp_srng_init failed for tx_comp_ring");
 		goto fail1;
 	}
@@ -7762,7 +7914,6 @@ static QDF_STATUS dp_vdev_set_monitor_mode(struct cdp_soc_t *dp_soc,
 	 * dp_set_pdev_param
 	 */
 
-	dp_soc_config_full_mon_mode(pdev, DP_FULL_MON_ENABLE);
 	if (special_monitor) {
 		status = QDF_STATUS_SUCCESS;
 		goto fail;
@@ -7778,6 +7929,7 @@ static QDF_STATUS dp_vdev_set_monitor_mode(struct cdp_soc_t *dp_soc,
 
 	pdev->monitor_configured = true;
 
+	dp_soc_config_full_mon_mode(pdev, DP_FULL_MON_ENABLE);
 	dp_mon_filter_setup_mon_mode(pdev);
 	status = dp_mon_filter_update(pdev);
 	if (status != QDF_STATUS_SUCCESS) {
@@ -9267,6 +9419,9 @@ static QDF_STATUS dp_set_pdev_param(struct cdp_soc_t *cdp_soc, uint8_t pdev_id,
 	case CDP_SET_ATF_STATS_ENABLE:
 		dp_set_atf_stats_enable(pdev,
 					val.cdp_pdev_param_atf_stats_enable);
+		break;
+	case CDP_CONFIG_SPECIAL_VAP:
+		dp_vdev_set_monitor_mode_buf_rings(pdev);
 		break;
 	default:
 		return QDF_STATUS_E_INVAL;
@@ -11448,6 +11603,7 @@ static void dp_drain_txrx(struct cdp_soc_t *soc_handle)
 	struct dp_soc *soc = (struct dp_soc *)soc_handle;
 	uint32_t cur_tx_limit, cur_rx_limit;
 	uint32_t budget = 0xffff;
+	uint32_t val;
 	int i;
 
 	cur_tx_limit = soc->wlan_cfg_ctx->tx_comp_loop_pkt_limit;
@@ -11465,6 +11621,12 @@ static void dp_drain_txrx(struct cdp_soc_t *soc_handle)
 		dp_service_srngs(&soc->intr_ctx[i], budget);
 
 	dp_update_soft_irq_limits(soc, cur_tx_limit, cur_rx_limit);
+
+	/* Do a dummy read at offset 0; this will ensure all
+	 * pendings writes(HP/TP) are flushed before read returns.
+	 */
+	val = HAL_REG_READ((struct hal_soc *)soc->hal_soc, 0);
+	dp_debug("Register value at offset 0: %u\n", val);
 }
 #endif
 
@@ -13514,8 +13676,10 @@ static void dp_pdev_srng_deinit(struct dp_pdev *pdev)
 	dp_srng_deinit(soc, &soc->rx_refill_buf_ring[pdev->lmac_id], RXDMA_BUF,
 		       pdev->lmac_id);
 
-	if (wlan_cfg_is_ipa_enabled(soc->wlan_cfg_ctx))
+	if (wlan_cfg_is_ipa_enabled(soc->wlan_cfg_ctx)) {
 		dp_deinit_tx_pair_by_index(soc, IPA_TCL_DATA_RING_IDX);
+		dp_ipa_deinit_alt_tx_ring(soc);
+	}
 
 	for (i = 0; i < NUM_RXDMA_RINGS_PER_PDEV; i++) {
 		int lmac_id = dp_get_lmac_id_for_pdev_id(soc, i, pdev->pdev_id);
@@ -13556,6 +13720,9 @@ static QDF_STATUS dp_pdev_srng_init(struct dp_pdev *pdev)
 
 	if (wlan_cfg_is_ipa_enabled(soc->wlan_cfg_ctx)) {
 		if (dp_init_tx_ring_pair_by_index(soc, IPA_TCL_DATA_RING_IDX))
+			goto fail1;
+
+		if (dp_ipa_init_alt_tx_ring(soc))
 			goto fail1;
 	}
 
@@ -13606,8 +13773,10 @@ static void dp_pdev_srng_free(struct dp_pdev *pdev)
 	dp_srng_free(soc, &soc->rx_refill_buf_ring[pdev->lmac_id]);
 	dp_mon_rings_free(pdev);
 
-	if (wlan_cfg_is_ipa_enabled(soc->wlan_cfg_ctx))
+	if (wlan_cfg_is_ipa_enabled(soc->wlan_cfg_ctx)) {
 		dp_free_tx_ring_pair_by_index(soc, IPA_TCL_DATA_RING_IDX);
+		dp_ipa_free_alt_tx_ring(soc);
+	}
 
 	for (i = 0; i < NUM_RXDMA_RINGS_PER_PDEV; i++) {
 		int lmac_id = dp_get_lmac_id_for_pdev_id(soc, i, pdev->pdev_id);
@@ -13647,6 +13816,9 @@ static QDF_STATUS dp_pdev_srng_alloc(struct dp_pdev *pdev)
 
 	if (wlan_cfg_is_ipa_enabled(soc->wlan_cfg_ctx)) {
 		if (dp_alloc_tx_ring_pair_by_index(soc, IPA_TCL_DATA_RING_IDX))
+			goto fail1;
+
+		if (dp_ipa_alloc_alt_tx_ring(soc))
 			goto fail1;
 	}
 
@@ -14290,9 +14462,11 @@ static QDF_STATUS dp_pdev_init(struct cdp_soc_t *txrx_soc,
 	}
 
 	/* Initialize descriptors in TCL Rings used by IPA */
-	if (wlan_cfg_is_ipa_enabled(soc->wlan_cfg_ctx))
+	if (wlan_cfg_is_ipa_enabled(soc->wlan_cfg_ctx)) {
 		hal_tx_init_data_ring(soc->hal_soc,
 				      soc->tcl_data_ring[IPA_TCL_DATA_RING_IDX].hal_srng);
+		dp_ipa_hal_tx_init_alt_data_ring(soc);
+	}
 
 	/*
 	 * Initialize command/credit ring descriptor
