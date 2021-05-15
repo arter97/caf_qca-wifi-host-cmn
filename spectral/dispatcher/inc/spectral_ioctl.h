@@ -24,6 +24,10 @@
 #define AH_MAX_CHAINS 3
 #endif
 
+#ifndef __packed
+#define __packed    __attribute__((__packed__))
+#endif
+
 /*
  * ioctl defines
  */
