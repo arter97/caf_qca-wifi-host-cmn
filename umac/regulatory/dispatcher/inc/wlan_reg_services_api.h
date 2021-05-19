@@ -449,17 +449,6 @@ QDF_STATUS wlan_reg_read_current_country(struct wlan_objmgr_psoc *psoc,
 
 #ifdef CONFIG_CHAN_NUM_API
 /**
- * wlan_reg_chan_has_dfs_attribute() - check channel has dfs attribute flag
- * @ch: channel number.
- *
- * This API get chan initial dfs attribute from regdomain
- *
- * Return: true if chan is dfs, otherwise false
- */
-bool
-wlan_reg_chan_has_dfs_attribute(struct wlan_objmgr_pdev *pdev, uint8_t ch);
-
-/**
  * wlan_reg_is_etsi13_srd_chan () - Checks if the ch is ETSI13 srd ch or not
  * @pdev: pdev ptr
  * @chan_num: channel
@@ -634,7 +623,7 @@ uint16_t wlan_reg_dmn_get_opclass_from_channel(uint8_t *country,
  */
 uint8_t wlan_reg_get_opclass_from_freq_width(uint8_t *country,
 					     qdf_freq_t freq,
-					     uint8_t ch_width,
+					     uint16_t ch_width,
 					     uint16_t behav_limit);
 
 /**
@@ -921,7 +910,7 @@ bool wlan_reg_11d_enabled_on_host(struct wlan_objmgr_psoc *psoc);
  * Return: QDF STATUS
  */
 QDF_STATUS wlan_reg_get_chip_mode(struct wlan_objmgr_pdev *pdev,
-		uint32_t *chip_mode);
+		uint64_t *chip_mode);
 
 /**
  * wlan_reg_is_11d_scan_inprogress() - checks 11d scan status
@@ -1161,6 +1150,26 @@ wlan_reg_get_2g_bonded_channel_state_for_freq(struct wlan_objmgr_pdev *pdev,
 enum channel_state
 wlan_reg_get_channel_state_for_freq(struct wlan_objmgr_pdev *pdev,
 				    qdf_freq_t freq);
+
+/**
+ * wlan_reg_fill_channel_list() - Fills the reg_channel_list (list of channels)
+ * @pdev: Pointer to struct wlan_objmgr_pdev.
+ * @freq: Center frequency of the primary channel in MHz
+ * @sec_ch_2g_freq: Secondary channel center frequency.
+ * @ch_width: Channel width of type 'enum phy_ch_width'.
+ * @band_center_320: Center frequency of 320MHZ channel.
+ * @chan_list: Pointer to struct reg_channel_list to be filled (Output param).
+ *
+ * Return: None
+ */
+#ifdef WLAN_FEATURE_11BE
+void wlan_reg_fill_channel_list(struct wlan_objmgr_pdev *pdev,
+				qdf_freq_t freq,
+				qdf_freq_t sec_ch_2g_freq,
+				enum phy_ch_width ch_width,
+				qdf_freq_t band_center_320,
+				struct reg_channel_list *chan_list);
+#endif
 
 /**
  * wlan_reg_set_channel_params_for_freq() - Sets channel parameteres for

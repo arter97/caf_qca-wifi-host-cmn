@@ -85,13 +85,6 @@ QDF_STATUS wlan_reg_get_max_5g_bw_from_regdomain(uint16_t regdmn,
 }
 
 #ifdef CONFIG_CHAN_NUM_API
-
-bool
-wlan_reg_chan_has_dfs_attribute(struct wlan_objmgr_pdev *pdev, uint8_t ch)
-{
-	return reg_chan_has_dfs_attribute(pdev, ch);
-}
-
 /**
  * wlan_reg_get_5g_bonded_channel_state() - Get 5G bonded channel state
  * @ch: channel number.
@@ -218,7 +211,7 @@ uint8_t wlan_reg_get_band_cap_from_op_class(const uint8_t *country,
 
 uint8_t wlan_reg_get_opclass_from_freq_width(uint8_t *country,
 					     qdf_freq_t freq,
-					     uint8_t ch_width,
+					     uint16_t ch_width,
 					     uint16_t behav_limit)
 {
 	return reg_dmn_get_opclass_from_freq_width(country, freq, ch_width,
@@ -609,7 +602,7 @@ bool wlan_reg_get_fcc_constraint(struct wlan_objmgr_pdev *pdev, uint32_t freq)
 }
 
 QDF_STATUS wlan_reg_get_chip_mode(struct wlan_objmgr_pdev *pdev,
-		uint32_t *chip_mode)
+		uint64_t *chip_mode)
 {
 	struct wlan_regulatory_pdev_priv_obj *pdev_priv_obj;
 
@@ -1001,6 +994,19 @@ void wlan_reg_set_channel_params_for_freq(struct wlan_objmgr_pdev *pdev,
 }
 
 qdf_export_symbol(wlan_reg_set_channel_params_for_freq);
+
+#ifdef WLAN_FEATURE_11BE
+void wlan_reg_fill_channel_list(struct wlan_objmgr_pdev *pdev,
+				qdf_freq_t freq,
+				qdf_freq_t sec_ch_2g_freq,
+				enum phy_ch_width ch_width,
+				qdf_freq_t band_center_320,
+				struct reg_channel_list *chan_list)
+{
+	reg_fill_channel_list(pdev, freq, sec_ch_2g_freq, ch_width,
+			      band_center_320, chan_list);
+}
+#endif
 
 enum channel_state
 wlan_reg_get_channel_state_for_freq(struct wlan_objmgr_pdev *pdev,

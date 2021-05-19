@@ -128,6 +128,10 @@
 #define DP_TXRX_HLOS_TID_OVERRIDE_ENABLED 0x2
 #define DP_TX_MESH_ENABLED 0x4
 
+#ifdef WLAN_SUPPORT_RX_FISA
+#define FISA_FLOW_MAX_AGGR_COUNT        16 /* max flow aggregate count */
+#endif
+
 enum rx_pktlog_mode {
 	DP_RX_PKTLOG_DISABLED = 0,
 	DP_RX_PKTLOG_FULL,
@@ -379,6 +383,7 @@ enum dp_ctxt_type {
 	DP_RX_RING_HIST_TYPE,
 	DP_RX_ERR_RING_HIST_TYPE,
 	DP_RX_REINJECT_RING_HIST_TYPE,
+	DP_FISA_RX_FT_TYPE,
 };
 
 /**
@@ -692,6 +697,7 @@ struct dp_rx_tid {
 	uint8_t pn_size;
 	/* REO TID queue descriptors */
 	void *hw_qdesc_vaddr_unaligned;
+	void *hw_qdesc_vaddr_aligned;
 	qdf_dma_addr_t hw_qdesc_paddr_unaligned;
 	qdf_dma_addr_t hw_qdesc_paddr;
 	uint32_t hw_qdesc_alloc_size;
@@ -815,6 +821,9 @@ struct reo_desc_list_node {
 	struct dp_rx_tid rx_tid;
 	bool resend_update_reo_cmd;
 	uint32_t pending_ext_desc_size;
+#ifdef REO_QDESC_HISTORY
+	uint8_t peer_mac[QDF_MAC_ADDR_SIZE];
+#endif
 };
 
 #ifdef WLAN_FEATURE_DP_EVENT_HISTORY
@@ -1333,6 +1342,29 @@ struct dp_swlm {
 };
 #endif
 
+#ifdef IPA_OFFLOAD
+/* IPA uC datapath offload Wlan Tx resources */
+struct ipa_dp_tx_rsc {
+	/* Resource info to be passed to IPA */
+	qdf_dma_addr_t ipa_tcl_ring_base_paddr;
+	void *ipa_tcl_ring_base_vaddr;
+	uint32_t ipa_tcl_ring_size;
+	qdf_dma_addr_t ipa_tcl_hp_paddr;
+	uint32_t alloc_tx_buf_cnt;
+
+	qdf_dma_addr_t ipa_wbm_ring_base_paddr;
+	void *ipa_wbm_ring_base_vaddr;
+	uint32_t ipa_wbm_ring_size;
+	qdf_dma_addr_t ipa_wbm_tp_paddr;
+	/* WBM2SW HP shadow paddr */
+	qdf_dma_addr_t ipa_wbm_hp_shadow_paddr;
+
+	/* TX buffers populated into the WBM ring */
+	void **tx_buf_pool_vaddr_unaligned;
+	qdf_dma_addr_t *tx_buf_pool_paddr_unaligned;
+};
+#endif
+
 /* SOC level structure for data path */
 struct dp_soc {
 	/**
@@ -1609,26 +1641,11 @@ struct dp_soc {
 
 	void *external_txrx_handle; /* External data path handle */
 #ifdef IPA_OFFLOAD
-	/* IPA uC datapath offload Wlan Tx resources */
-	struct {
-		/* Resource info to be passed to IPA */
-		qdf_dma_addr_t ipa_tcl_ring_base_paddr;
-		void *ipa_tcl_ring_base_vaddr;
-		uint32_t ipa_tcl_ring_size;
-		qdf_dma_addr_t ipa_tcl_hp_paddr;
-		uint32_t alloc_tx_buf_cnt;
-
-		qdf_dma_addr_t ipa_wbm_ring_base_paddr;
-		void *ipa_wbm_ring_base_vaddr;
-		uint32_t ipa_wbm_ring_size;
-		qdf_dma_addr_t ipa_wbm_tp_paddr;
-		/* WBM2SW HP shadow paddr */
-		qdf_dma_addr_t ipa_wbm_hp_shadow_paddr;
-
-		/* TX buffers populated into the WBM ring */
-		void **tx_buf_pool_vaddr_unaligned;
-		qdf_dma_addr_t *tx_buf_pool_paddr_unaligned;
-	} ipa_uc_tx_rsc;
+	struct ipa_dp_tx_rsc ipa_uc_tx_rsc;
+#ifdef IPA_WDI3_TX_TWO_PIPES
+	/* Resources for the alternative IPA TX pipe */
+	struct ipa_dp_tx_rsc ipa_uc_tx_rsc_alt;
+#endif
 
 	/* IPA uC datapath offload Wlan Rx resources */
 	struct {
@@ -1794,6 +1811,16 @@ struct dp_ipa_resources {
 	qdf_dma_addr_t rx_ready_doorbell_paddr;
 
 	bool is_db_ddr_mapped;
+
+#ifdef IPA_WDI3_TX_TWO_PIPES
+	qdf_shared_mem_t tx_alt_ring;
+	uint32_t tx_alt_ring_num_alloc_buffer;
+	qdf_shared_mem_t tx_alt_comp_ring;
+
+	/* IPA UC doorbell registers paddr */
+	qdf_dma_addr_t tx_alt_comp_doorbell_paddr;
+	uint32_t *tx_alt_comp_doorbell_vaddr;
+#endif
 };
 #endif
 
@@ -2377,6 +2404,9 @@ struct dp_pdev {
 	struct hal_rx_mon_desc_info *mon_desc;
 #endif
 	qdf_nbuf_t mcopy_status_nbuf;
+
+	/* flag to indicate whether LRO hash command has been sent to FW */
+	uint8_t is_lro_hash_configured;
 
 	/* Flag to hold on to monitor destination ring */
 	bool hold_mon_dest_ring;
@@ -3014,11 +3044,33 @@ enum fisa_aggr_ret {
 	FISA_FLUSH_FLOW
 };
 
+/**
+ * struct fisa_pkt_hist_elem - FISA Packet history element
+ * @ts: timestamp indicating when the packet was received by FISA framework.
+ * @tlvs: record of TLVS for the packet coming to FISA framework
+ */
+struct fisa_pkt_hist_elem {
+	qdf_time_t ts;
+	struct rx_pkt_tlvs tlvs;
+};
+
+/**
+ * struct fisa_pkt_hist - FISA Packet history structure
+ * @hist_elem: array of hist elements
+ * @idx: index indicating the next location to be used in the array.
+ */
+struct fisa_pkt_hist {
+	struct fisa_pkt_hist_elem hist_elem[FISA_FLOW_MAX_AGGR_COUNT];
+	uint32_t idx;
+};
+
 struct dp_fisa_rx_sw_ft {
 	/* HAL Rx Flow Search Entry which matches HW definition */
 	void *hw_fse;
-	/* Toeplitz hash value */
+	/* hash value */
 	uint32_t flow_hash;
+	/* toeplitz hash value*/
+	uint32_t flow_id_toeplitz;
 	/* Flow index, equivalent to hash value truncated to FST size */
 	uint32_t flow_id;
 	/* Stats tracking for this flow */
@@ -3057,6 +3109,11 @@ struct dp_fisa_rx_sw_ft {
 	uint32_t cmem_offset;
 	uint32_t metadata;
 	uint32_t reo_dest_indication;
+	qdf_time_t flow_init_ts;
+	qdf_time_t last_accessed_ts;
+#ifdef WLAN_SUPPORT_RX_FISA_HIST
+	struct fisa_pkt_hist pkt_hist;
+#endif
 };
 
 #define DP_RX_GET_SW_FT_ENTRY_SIZE sizeof(struct dp_fisa_rx_sw_ft)

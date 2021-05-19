@@ -141,6 +141,17 @@ extern const struct chan_map channel_map_jp[];
 extern const struct chan_map channel_map_china[];
 extern const struct chan_map channel_map_global[];
 
+#ifdef WLAN_FEATURE_11BE
+#define ALL_SCHANS_PUNC 0x0000 /* all subchannels punctured */
+#endif
+/**
+ * get_next_lower_bandwidth() - Get next lower bandwidth
+ * @ch_width: Channel width
+ *
+ * Return: Channel width
+ */
+enum phy_ch_width get_next_lower_bandwidth(enum phy_ch_width ch_width);
+
 #ifdef CONFIG_CHAN_NUM_API
 /**
  * reg_get_chan_enum() - Get channel enum for given channel number
@@ -456,7 +467,7 @@ QDF_STATUS reg_set_hal_reg_cap(
  * Return: QDF_STATUS
  */
 QDF_STATUS reg_update_hal_reg_cap(struct wlan_objmgr_psoc *psoc,
-				  uint32_t wireless_modes, uint8_t phy_id);
+				  uint64_t wireless_modes, uint8_t phy_id);
 
 /**
  * reg_chan_in_range() - Check if the given channel is in pdev's channel range
@@ -989,6 +1000,32 @@ void reg_set_channel_params_for_freq(struct wlan_objmgr_pdev *pdev,
 				     qdf_freq_t sec_ch_2g_freq,
 				     struct ch_params *ch_params);
 
+/**
+ * reg_fill_channel_list() - Fills an array of ch_params (list of
+ * channels) for the given channel width and primary freq.
+ * If 320 band_center is given, ch_params corresponding to the
+ * given band_center is filled.
+ *
+ * @pdev: Pointer to pdev
+ * @freq: Center frequency of the primary channel in MHz
+ * @sec_ch_2g_freq: Secondary 2G channel frequency in MHZ
+ * @ch_width: Input channel width.
+ * @band_center: Center frequency of the 320MHZ channel.
+ * @chan_list: Pointer to struct reg_channel_list to be filled (Output).
+ * The caller is supposed to provide enough storage for the elements
+ * in the list.
+ *
+ * Return: None
+ */
+#ifdef WLAN_FEATURE_11BE
+void
+reg_fill_channel_list(struct wlan_objmgr_pdev *pdev,
+		      qdf_freq_t freq,
+		      qdf_freq_t sec_ch_2g_freq,
+		      enum phy_ch_width ch_width,
+		      qdf_freq_t band_center_320,
+		      struct reg_channel_list *chan_list);
+#endif
 /**
  * reg_get_channel_reg_power_for_freq() - Get the txpower for the given channel
  * @pdev: Pointer to pdev
@@ -1580,6 +1617,29 @@ bool reg_is_ext_tpc_supported(struct wlan_objmgr_psoc *psoc);
  */
 const struct bonded_channel_freq *
 reg_get_bonded_chan_entry(qdf_freq_t freq, enum phy_ch_width chwidth);
+
+/**
+ * reg_set_2g_channel_params_for_freq() - set the 2.4G bonded channel parameters
+ * @oper_freq: operating channel
+ * @ch_params: channel parameters
+ * @sec_ch_2g_freq: 2.4G secondary channel
+ *
+ * Return: void
+ */
+void reg_set_2g_channel_params_for_freq(struct wlan_objmgr_pdev *pdev,
+					uint16_t oper_freq,
+					struct ch_params *ch_params,
+					uint16_t sec_ch_2g_freq);
+
+/**
+ * reg_combine_channel_states() - Get minimum of channel state1 and state2
+ * @chan_state1: Channel state1
+ * @chan_state2: Channel state2
+ *
+ * Return: Channel state
+ */
+enum channel_state reg_combine_channel_states(enum channel_state chan_state1,
+					      enum channel_state chan_state2);
 
 #if defined(CONFIG_BAND_6GHZ) && defined(CONFIG_REG_CLIENT)
 /**

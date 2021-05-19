@@ -78,6 +78,9 @@
 /* Invalid free descriptor count */
 #define WLAN_INVALID_MGMT_DESC_COUNT 0xFFFFFFFF
 
+/* Max fw report pdev id */
+#define WLAN_UMAC_MAX_RP_PID 2
+
 /* 802.11 cap info */
 #define WLAN_CAPINFO_ESS               0x0001
 #define WLAN_CAPINFO_IBSS              0x0002
@@ -552,6 +555,7 @@ enum wlan_phymode {
  * @CH_WIDTH_80P80HZ: 80+80 mhz width
  * @CH_WIDTH_5MHZ: 5 mhz width
  * @CH_WIDTH_10MHZ: 10 mhz width
+ * @CH_WIDTH_320MHZ: 320 mhz width
  * @CH_WIDTH_INVALID: invalid width
  * @CH_WIDTH_MAX: max possible width
  */
