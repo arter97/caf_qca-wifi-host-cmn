@@ -195,8 +195,8 @@ static QDF_STATUS __dp_ipa_tx_buf_smmu_mapping(
 		if (!nbuf)
 			continue;
 		buf_len = qdf_nbuf_get_data_len(nbuf);
-		return __dp_ipa_handle_buf_smmu_mapping(
-				soc, nbuf, buf_len, create);
+		ret = __dp_ipa_handle_buf_smmu_mapping(soc, nbuf, buf_len,
+						       create);
 	}
 
 	return ret;
@@ -682,7 +682,6 @@ static QDF_STATUS dp_ipa_tx_alt_buf_smmu_mapping(struct dp_soc *soc,
 		buf_len = qdf_nbuf_get_data_len(nbuf);
 		ret = __dp_ipa_handle_buf_smmu_mapping(
 				soc, nbuf, buf_len, create);
-		qdf_assert_always(!ret);
 	}
 
 	return ret;
@@ -1759,7 +1758,8 @@ QDF_STATUS dp_ipa_disable_autonomy(struct cdp_soc_t *soc_hdl, uint8_t pdev_id)
 /* This should be configurable per H/W configuration enable status */
 #define L3_HEADER_PADDING	2
 
-#ifdef CONFIG_IPA_WDI_UNIFIED_API
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 10, 0)) || \
+	defined(CONFIG_IPA_WDI_UNIFIED_API)
 
 #ifndef QCA_LL_TX_FLOW_CONTROL_V2
 static inline void dp_setup_mcc_sys_pipes(

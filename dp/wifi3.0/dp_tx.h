@@ -46,6 +46,8 @@
 #define DP_TX_DESC_FLAG_ALLOCATED	0x200
 #define DP_TX_DESC_FLAG_MESH_MODE	0x400
 #define DP_TX_DESC_FLAG_UNMAP_DONE	0x800
+#define DP_TX_DESC_FLAG_TX_COMP_ERR	0x1000
+#define DP_TX_DESC_FLAG_FLUSH		0x2000
 
 #define DP_TX_EXT_DESC_FLAG_METADATA_VALID 0x1
 
@@ -77,6 +79,7 @@ do {                                                           \
 
 #define dp_tx_alert(params...) QDF_TRACE_FATAL(QDF_MODULE_ID_DP_TX, params)
 #define dp_tx_err(params...) QDF_TRACE_ERROR(QDF_MODULE_ID_DP_TX, params)
+#define dp_tx_err_rl(params...) QDF_TRACE_ERROR_RL(QDF_MODULE_ID_DP_TX, params)
 #define dp_tx_warn(params...) QDF_TRACE_WARN(QDF_MODULE_ID_DP_TX, params)
 #define dp_tx_info(params...) \
 	__QDF_TRACE_FL(QDF_TRACE_LEVEL_INFO_HIGH, QDF_MODULE_ID_DP_TX, ## params)
