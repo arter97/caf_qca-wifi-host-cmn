@@ -2281,6 +2281,13 @@ done:
 		rx_tlv_hdr = qdf_nbuf_data(nbuf);
 		vdev_id = QDF_NBUF_CB_RX_VDEV_ID(nbuf);
 
+		if (qdf_unlikely(hal_rx_attn_msdu_len_err_get(rx_tlv_hdr))) {
+			DP_STATS_INC(soc, rx.err.msdu_len_err, 1);
+			qdf_nbuf_free(nbuf);
+			nbuf = next;
+			continue;
+		}
+
 		if (deliver_list_head && vdev && (vdev->vdev_id != vdev_id)) {
 			dp_rx_deliver_to_stack(soc, vdev, peer,
 					       deliver_list_head,
