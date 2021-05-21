@@ -5127,75 +5127,6 @@ bool hif_pci_needs_bmi(struct hif_softc *scn)
 #define HIF_POLL_UMAC_WAKE 0x2
 
 /**
- * hif_force_wake_reg_write() - If init_phase is disabled then UMAC
- * force wake is needed and the reg access might be windowed
- * @hal_soc: hal_soc handle
- * @offset: register offset
- * @value: value to be written to given reg offset
- *
- * Reg write might be windowed or not depending on the offset provided
- *
- * Return: none
- */
-static void hif_force_wake_reg_write(struct hal_soc *hal_soc, uint32_t offset,
-				     uint32_t value)
-{
-	qdf_iomem_t new_addr;
-	unsigned long flags;
-
-	hal_lock_reg_access(hal_soc, &flags);
-
-	if (!hal_soc->use_register_windowing ||
-	    offset < MAX_UNWINDOWED_ADDRESS) {
-		qdf_iowrite32(hal_soc->dev_base_addr + offset, value);
-	} else if (hal_soc->static_window_map) {
-		new_addr = hal_get_window_address(hal_soc,
-						  hal_soc->dev_base_addr + offset);
-		qdf_iowrite32(new_addr, value);
-	} else {
-		hal_select_window_confirm(hal_soc, offset);
-		qdf_iowrite32(hal_soc->dev_base_addr + WINDOW_START +
-			      (offset & WINDOW_RANGE_MASK), value);
-	}
-	hal_unlock_reg_access(hal_soc, &flags);
-}
-
-/**
- * hif_force_wake_reg_read() - If init_phase is disabled then UMAC
- * force wake is needed and the reg read might be windowed
- * @hal_soc: hal_soc handle
- * @offset: register offset
- *
- * Reg read might be windowed or not depending on the offset provided
- *
- * Return: value read from reg offset
- */
-
-static uint32_t hif_force_wake_reg_read(
-        struct hal_soc *hal_soc, uint32_t offset)
-{
-	uint32_t value;
-	qdf_iomem_t new_addr;
-	unsigned long flags;
-
-	if (!hal_soc->use_register_windowing ||
-	    offset < MAX_UNWINDOWED_ADDRESS) {
-		value = qdf_ioread32(hal_soc->dev_base_addr + offset);
-	} else if (hal_soc->static_window_map) {
-		new_addr = hal_get_window_address(hal_soc,
-						  hal_soc->dev_base_addr + offset);
-		value = qdf_ioread32(new_addr);
-	} else {
-		hal_lock_reg_access(hal_soc, &flags);
-		hal_select_window_confirm(hal_soc, offset);
-		value = qdf_ioread32(hal_soc->dev_base_addr + WINDOW_START +
-                                     (offset & WINDOW_RANGE_MASK));
-		hal_unlock_reg_access(hal_soc, &flags);
-	}
-	return value;
-} 
-
-/**
  * hif_force_wake_request(): Enable the force wake recipe
  * @hif_handle: HIF handle
  *
@@ -5211,7 +5142,6 @@ int hif_force_wake_request(struct hif_opaque_softc *hif_handle)
 	uint32_t timeout = 0, value;
 	struct hif_softc *scn = (struct hif_softc *)hif_handle;
 	struct hif_pci_softc *pci_scn = HIF_GET_PCI_SOFTC(scn);
-	struct hal_soc *hal_soc = (struct hal_soc *)scn->hal_soc;
 
 	HIF_STATS_INC(pci_scn, mhi_force_wake_request_vote, 1);
 
@@ -5234,21 +5164,18 @@ int hif_force_wake_request(struct hif_opaque_softc *hif_handle)
 		hif_info("state-change event races, ignore");
 
 	HIF_STATS_INC(pci_scn, mhi_force_wake_success, 1);
-	hif_force_wake_reg_write(hal_soc,
-				 PCIE_PCIE_LOCAL_REG_PCIE_SOC_WAKE_PCIE_LOCAL_REG,
-				 1);
+	hif_write32_mb(scn, scn->mem + PCIE_REG_WAKE_UMAC_OFFSET, 1);
 	HIF_STATS_INC(pci_scn, soc_force_wake_register_write_success, 1);
-
-	value = hif_force_wake_reg_read(
-			hal_soc, PCIE_PCIE_LOCAL_REG_PCIE_SOC_WAKE_PCIE_LOCAL_REG);
-
 	/*
 	 * do not reset the timeout
 	 * total_wake_time = MHI_WAKE_TIME + PCI_WAKE_TIME < 50ms
 	 */
+	timeout = 0;
 	do {
-		value = hif_force_wake_reg_read(
-				hal_soc, PCIE_SOC_PCIE_REG_PCIE_SCRATCH_0_SOC_PCIE_REG);
+		value = hif_read32_mb(
+				scn, scn->mem +
+				PCIE_SOC_PCIE_REG_PCIE_SCRATCH_0_SOC_PCIE_REG);
+		hif_info("pcie scratch reg read value = %x", value);
 		if (value == HIF_POLL_UMAC_WAKE)
 			break;
 		qdf_mdelay(FORCE_WAKE_DELAY_MS);
@@ -5270,7 +5197,6 @@ int hif_force_wake_release(struct hif_opaque_softc *hif_handle)
 	int ret;
 	struct hif_softc *scn = (struct hif_softc *)hif_handle;
 	struct hif_pci_softc *pci_scn = HIF_GET_PCI_SOFTC(scn);
-	struct hal_soc *hal_soc = (struct hal_soc *)scn->hal_soc;
 
 	ret = pld_force_wake_release(scn->qdf_dev->dev);
 	if (ret) {
@@ -5280,8 +5206,7 @@ int hif_force_wake_release(struct hif_opaque_softc *hif_handle)
 	}
 
 	HIF_STATS_INC(pci_scn, mhi_force_wake_release_success, 1);
-	hif_force_wake_reg_write(
-		hal_soc, PCIE_PCIE_LOCAL_REG_PCIE_SOC_WAKE_PCIE_LOCAL_REG, 0);
+	hif_write32_mb(scn, scn->mem + PCIE_REG_WAKE_UMAC_OFFSET, 0);
 	HIF_STATS_INC(pci_scn, soc_force_wake_release_success, 1);
 	return 0;
 }
@@ -5333,9 +5258,6 @@ int hif_force_wake_release(struct hif_opaque_softc *hif_handle)
 	}
 
 	HIF_STATS_INC(pci_scn, mhi_force_wake_release_success, 1);
-	hif_write32_mb(scn, scn->mem +
-		       PCIE_PCIE_LOCAL_REG_PCIE_SOC_WAKE_PCIE_LOCAL_REG, 0);
-	HIF_STATS_INC(pci_scn, soc_force_wake_release_success, 1);
 	return 0;
 }
 #endif /* DEVICE_FORCE_WAKE_ENABLE */
