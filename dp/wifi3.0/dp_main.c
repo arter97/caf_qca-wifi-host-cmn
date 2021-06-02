@@ -416,6 +416,7 @@ const int dp_stats_mapping_table[][STATS_TYPE_MAX] = {
 	{TXRX_FW_STATS_INVALID, TXRX_SOC_INTERRUPT_STATS},
 	{TXRX_FW_STATS_INVALID, TXRX_SOC_FSE_STATS},
 	{TXRX_FW_STATS_INVALID, TXRX_HAL_REG_WRITE_STATS},
+	{TXRX_FW_STATS_INVALID, TXRX_SOC_REO_HW_DESC_DUMP},
 	{HTT_DBG_EXT_STATS_PDEV_RX_RATE_EXT, TXRX_HOST_STATS_INVALID}
 };
 
@@ -4644,6 +4645,7 @@ static void dp_pdev_deinit(struct cdp_pdev *txrx_pdev, int force)
 	dp_rx_pdev_buffers_free(pdev);
 	dp_rx_pdev_mon_desc_pool_deinit(pdev);
 	dp_rx_pdev_desc_pool_deinit(pdev);
+	dp_pdev_bkp_stats_detach(pdev);
 	dp_htt_ppdu_stats_detach(pdev);
 	dp_tx_ppdu_stats_detach(pdev);
 	qdf_event_destroy(&pdev->fw_peer_stats_event);
@@ -8602,6 +8604,10 @@ dp_print_host_stats(struct dp_vdev *vdev,
 		hal_dump_reg_write_stats(pdev->soc->hal_soc);
 		hal_dump_reg_write_srng_stats(pdev->soc->hal_soc);
 		break;
+	case TXRX_SOC_REO_HW_DESC_DUMP:
+		dp_get_rx_reo_queue_info((struct cdp_soc_t *)pdev->soc,
+					 vdev->vdev_id);
+		break;
 	default:
 		dp_info("Wrong Input For TxRx Host Stats");
 		dp_txrx_stats_help();
@@ -12280,6 +12286,7 @@ static struct cdp_peer_ops dp_ops_peer = {
 	.get_vdev_by_peer_addr = dp_get_vdev_by_peer_addr,
 	.peer_get_peer_mac_addr = dp_peer_get_peer_mac_addr,
 	.get_peer_state = dp_get_peer_state,
+	.peer_flush_frags = dp_peer_flush_frags,
 };
 #endif
 
@@ -14303,6 +14310,12 @@ static QDF_STATUS dp_pdev_init(struct cdp_soc_t *txrx_soc,
 		goto fail9;
 	}
 
+	if (dp_pdev_bkp_stats_attach(pdev) != QDF_STATUS_SUCCESS) {
+		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_ERROR,
+			  FL("dp_pdev_bkp_stats_attach failed"));
+		goto fail10;
+	}
+
 	/* initialize sw rx descriptors */
 	dp_rx_pdev_desc_pool_init(pdev);
 	/* initialize sw monitor rx descriptors */
@@ -14321,6 +14334,8 @@ static QDF_STATUS dp_pdev_init(struct cdp_soc_t *txrx_soc,
 		qdf_skb_total_mem_stats_read());
 
 	return QDF_STATUS_SUCCESS;
+fail10:
+	dp_rx_fst_detach(soc, pdev);
 fail9:
 	dp_ipa_uc_detach(soc, pdev);
 fail8:

@@ -2249,6 +2249,72 @@ void dp_rx_deliver_to_pkt_capture_no_peer(struct dp_soc *soc, qdf_nbuf_t nbuf,
 
 #endif
 
+#if defined(FEATURE_MCL_REPEATER) && defined(FEATURE_MEC)
+/**
+ * dp_rx_mec_check_wrapper() - wrapper to dp_rx_mcast_echo_check
+ * @soc: core DP main context
+ * @peer: dp peer handler
+ * @rx_tlv_hdr: start of the rx TLV header
+ * @nbuf: pkt buffer
+ *
+ * Return: bool (true if it is a looped back pkt else false)
+ */
+static inline bool dp_rx_mec_check_wrapper(struct dp_soc *soc,
+					   struct dp_peer *peer,
+					   uint8_t *rx_tlv_hdr,
+					   qdf_nbuf_t nbuf)
+{
+	return dp_rx_mcast_echo_check(soc, peer, rx_tlv_hdr, nbuf);
+}
+#else
+static inline bool dp_rx_mec_check_wrapper(struct dp_soc *soc,
+					   struct dp_peer *peer,
+					   uint8_t *rx_tlv_hdr,
+					   qdf_nbuf_t nbuf)
+{
+	return false;
+}
+#endif
+
+#ifdef DISABLE_EAPOL_INTRABSS_FWD
+/*
+ * dp_rx_intrabss_fwd_wrapper() - Wrapper API for intrabss fwd. For EAPOL
+ *  pkt with DA not equal to vdev mac addr, fwd is not allowed.
+ * @soc: core txrx main context
+ * @ta_peer: source peer entry
+ * @rx_tlv_hdr: start address of rx tlvs
+ * @nbuf: nbuf that has to be intrabss forwarded
+ * @msdu_metadata: msdu metadata
+ *
+ * Return: true if it is forwarded else false
+ */
+static inline
+bool dp_rx_intrabss_fwd_wrapper(struct dp_soc *soc, struct dp_peer *ta_peer,
+				uint8_t *rx_tlv_hdr, qdf_nbuf_t nbuf,
+				struct hal_rx_msdu_metadata msdu_metadata)
+{
+	if (qdf_unlikely(qdf_nbuf_is_ipv4_eapol_pkt(nbuf) &&
+			 qdf_mem_cmp(qdf_nbuf_data(nbuf) +
+				     QDF_NBUF_DEST_MAC_OFFSET,
+				     ta_peer->vdev->mac_addr.raw,
+				     QDF_MAC_ADDR_SIZE))) {
+		qdf_nbuf_free(nbuf);
+		DP_STATS_INC(soc, rx.err.intrabss_eapol_drop, 1);
+		return true;
+	}
+
+	return dp_rx_intrabss_fwd(soc, ta_peer, rx_tlv_hdr, nbuf,
+				  msdu_metadata);
+}
+
+#define DP_RX_INTRABSS_FWD(soc, peer, rx_tlv_hdr, nbuf, msdu_metadata) \
+		dp_rx_intrabss_fwd_wrapper(soc, peer, rx_tlv_hdr, nbuf, \
+					   msdu_metadata)
+#else
+#define DP_RX_INTRABSS_FWD(soc, peer, rx_tlv_hdr, nbuf, msdu_metadata) \
+		dp_rx_intrabss_fwd(soc, peer, rx_tlv_hdr, nbuf, msdu_metadata)
+#endif
+
 /**
  * dp_rx_process() - Brain of the Rx processing functionality
  *		     Called from the bottom half (tasklet/NET_RX_SOFTIRQ)
@@ -2900,15 +2966,24 @@ done:
 
 			/* Intrabss-fwd */
 			if (dp_rx_check_ap_bridge(vdev))
-				if (dp_rx_intrabss_fwd(soc,
-							peer,
-							rx_tlv_hdr,
-							nbuf,
-							msdu_metadata)) {
+				if (DP_RX_INTRABSS_FWD(soc, peer, rx_tlv_hdr,
+						       nbuf, msdu_metadata)) {
 					nbuf = next;
 					tid_stats->intrabss_cnt++;
 					continue; /* Get next desc */
 				}
+
+			if (qdf_unlikely(dp_rx_mec_check_wrapper(soc,
+								 peer,
+								 rx_tlv_hdr,
+								 nbuf))) {
+				/* this is a looped back MCBC pkt,drop it */
+				DP_STATS_INC_PKT(peer, rx.mec_drop, 1,
+						 QDF_NBUF_CB_RX_PKT_LEN(nbuf));
+				qdf_nbuf_free(nbuf);
+				nbuf = next;
+				continue;
+			}
 		}
 
 		dp_rx_fill_gro_info(soc, rx_tlv_hdr, nbuf, &rx_ol_pkt_cnt);
