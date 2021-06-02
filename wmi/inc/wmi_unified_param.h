@@ -4931,6 +4931,9 @@ typedef enum {
 	wmi_vdev_param_nan_config_features,
 	wmi_vdev_param_enable_disable_rtt_responder_role,
 	wmi_vdev_param_enable_disable_rtt_initiator_role,
+#ifdef WLAN_FEATURE_11BE
+	wmi_vdev_param_set_ehtop,
+#endif
 } wmi_conv_vdev_param_id;
 
 /**
@@ -5186,6 +5189,14 @@ typedef enum {
 	wmi_service_dcs_awgn_int_support,
 #ifdef WLAN_FEATURE_IGMP_OFFLOAD
 	wmi_service_igmp_offload_support,
+#endif
+#ifdef WLAN_FEATURE_11BE
+	wmi_service_11be,
+#endif
+#ifdef WLAN_FEATURE_11AX
+#ifdef FEATURE_WLAN_TDLS
+	wmi_service_tdls_ax_support,
+#endif
 #endif
 	wmi_services_max,
 } wmi_conv_service_ids;
@@ -5700,6 +5711,9 @@ typedef enum {
 	WMI_HOST_RATE_PREAMBLE_HT,
 	WMI_HOST_RATE_PREAMBLE_VHT,
 	WMI_HOST_RATE_PREAMBLE_HE,
+#ifdef WLAN_FEATURE_11BE
+	WMI_HOST_RATE_PREAMBLE_EHT,
+#endif
 } WMI_HOST_RATE_PREAMBLE;
 
 #define WMI_HOST_FIXED_RATE_NONE	(0xff)
@@ -6080,8 +6094,9 @@ typedef enum {
 	WMI_HOST_TP_SCALE_50	= 1,	/* 50% of max (-3 dBm) */
 	WMI_HOST_TP_SCALE_25	= 2,	/* 25% of max (-6 dBm) */
 	WMI_HOST_TP_SCALE_12	= 3,	/* 12% of max (-9 dBm) */
-	WMI_HOST_TP_SCALE_MIN	= 4,	/* min, but still on   */
-	WMI_HOST_TP_SCALE_SIZE   = 5,	/* max num of enum	*/
+	WMI_HOST_TP_SCALE_6	= 4,	/* 6% of max (-12 dBm) */
+	WMI_HOST_TP_SCALE_MIN	= 5,	/* min, but still on   */
+	WMI_HOST_TP_SCALE_SIZE  = 6,	/* max num of enum	*/
 } WMI_HOST_TP_SCALE;
 enum {
 	WMI_HOST_RATEPWR_TABLE_OPS_SET,

@@ -94,7 +94,7 @@ dp_rx_mon_handle_status_buf_done(struct dp_pdev *pdev,
 	rx_buf_cookie = HAL_RX_BUF_COOKIE_GET(ring_entry);
 	rx_desc = dp_rx_cookie_2_va_mon_status(soc, rx_buf_cookie);
 
-	qdf_assert(rx_desc);
+	qdf_assert_always(rx_desc);
 
 	status_nbuf = rx_desc->nbuf;
 
@@ -1480,6 +1480,11 @@ dp_rx_handle_ppdu_stats(struct dp_soc *soc, struct dp_pdev *pdev,
 			}
 		}
 		qdf_spin_unlock_bh(&pdev->neighbour_peer_mutex);
+	} else {
+		dp_info("Neighbour peers RSSI update failed! fc_valid = %d, to_ds_flag = %d and mac_addr2_valid = %d",
+			ppdu_info->nac_info.fc_valid,
+			ppdu_info->nac_info.to_ds_flag,
+			ppdu_info->nac_info.mac_addr2_valid);
 	}
 
 	/* need not generate wdi event when mcopy, cfr rcc mode and
@@ -1504,8 +1509,9 @@ dp_rx_handle_ppdu_stats(struct dp_soc *soc, struct dp_pdev *pdev,
 				   sizeof(struct cdp_rx_indication_ppdu),
 				   0, 0, FALSE);
 	if (ppdu_nbuf) {
-		cdp_rx_ppdu = (struct cdp_rx_indication_ppdu *)ppdu_nbuf->data;
+		cdp_rx_ppdu = (struct cdp_rx_indication_ppdu *)qdf_nbuf_data(ppdu_nbuf);
 
+		qdf_mem_zero(cdp_rx_ppdu, sizeof(struct cdp_rx_indication_ppdu));
 		dp_rx_mon_populate_cfr_info(pdev, ppdu_info, cdp_rx_ppdu);
 		dp_rx_populate_cdp_indication_ppdu(pdev,
 						   ppdu_info, cdp_rx_ppdu);
@@ -1971,7 +1977,7 @@ dp_rx_mon_status_srng_process(struct dp_soc *soc, struct dp_intr *int_ctx,
 			rx_desc = dp_rx_cookie_2_va_mon_status(soc,
 				rx_buf_cookie);
 
-			qdf_assert(rx_desc);
+			qdf_assert_always(rx_desc);
 
 			status_nbuf = rx_desc->nbuf;
 
@@ -2494,7 +2500,7 @@ dp_mon_status_srng_drop_for_mac(struct dp_pdev *pdev, uint32_t mac_id,
 			rx_desc = dp_rx_cookie_2_va_mon_status(soc,
 							       rx_buf_cookie);
 
-			qdf_assert(rx_desc);
+			qdf_assert_always(rx_desc);
 
 			status_nbuf = rx_desc->nbuf;
 
