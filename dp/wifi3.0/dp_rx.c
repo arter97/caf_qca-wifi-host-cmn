@@ -206,7 +206,7 @@ QDF_STATUS __dp_rx_buffers_replenish(struct dp_soc *dp_soc, uint32_t mac_id,
 
 		if (qdf_unlikely(!rx_netbuf)) {
 			DP_STATS_INC(dp_pdev, replenish.nbuf_alloc_fail, 1);
-			continue;
+			break;
 		}
 
 		ret = qdf_nbuf_map_single(dp_soc->osdev, rx_netbuf,
@@ -264,10 +264,10 @@ QDF_STATUS __dp_rx_buffers_replenish(struct dp_soc *dp_soc, uint32_t mac_id,
 	hal_srng_access_end(dp_soc->hal_soc, rxdma_srng);
 
 	dp_verbose_debug("replenished buffers %d, rx desc added back to free list %u",
-			 num_req_buffers, num_desc_to_free);
+			 count, num_desc_to_free);
 
-	DP_STATS_INC_PKT(dp_pdev, replenish.pkts, num_req_buffers,
-			(RX_BUFFER_SIZE * num_req_buffers));
+	DP_STATS_INC_PKT(dp_pdev, replenish.pkts, count,
+			 (RX_BUFFER_SIZE * count));
 
 free_descs:
 	DP_STATS_INC(dp_pdev, buf_freelist, num_desc_to_free);
@@ -1707,6 +1707,41 @@ void dp_rx_deliver_to_stack_no_peer(struct dp_soc *soc, qdf_nbuf_t nbuf)
 }
 #endif
 
+#ifdef DISABLE_EAPOL_INTRABSS_FWD
+/*
+ * dp_rx_intrabss_fwd_wrapper() - Wrapper API for intrabss fwd. For EAPOL
+ *  pkt with DA not equal to vdev mac addr, fwd is not allowed.
+ * @soc: core txrx main context
+ * @ta_peer: source peer entry
+ * @rx_tlv_hdr: start address of rx tlvs
+ * @nbuf: nbuf that has to be intrabss forwarded
+ *
+ * Return: true if it is forwarded else false
+ */
+static inline
+bool dp_rx_intrabss_fwd_wrapper(struct dp_soc *soc, struct dp_peer *ta_peer,
+				uint8_t *rx_tlv_hdr, qdf_nbuf_t nbuf)
+{
+	if (qdf_unlikely(qdf_nbuf_is_ipv4_eapol_pkt(nbuf) &&
+			 qdf_mem_cmp(qdf_nbuf_data(nbuf) +
+				     QDF_NBUF_DEST_MAC_OFFSET,
+				     ta_peer->vdev->mac_addr.raw,
+				     QDF_MAC_ADDR_SIZE))) {
+		qdf_nbuf_free(nbuf);
+		DP_STATS_INC(soc, rx.err.intrabss_eapol_drop, 1);
+		return true;
+	}
+
+	return dp_rx_intrabss_fwd(soc, ta_peer, rx_tlv_hdr, nbuf);
+
+}
+#define DP_RX_INTRABSS_FWD(soc, peer, rx_tlv_hdr, nbuf) \
+		dp_rx_intrabss_fwd_wrapper(soc, peer, rx_tlv_hdr, nbuf)
+#else
+#define DP_RX_INTRABSS_FWD(soc, peer, rx_tlv_hdr, nbuf) \
+		dp_rx_intrabss_fwd(soc, peer, rx_tlv_hdr, nbuf)
+#endif
+
 /**
  * dp_rx_srng_get_num_pending() - get number of pending entries
  * @hal_soc: hal soc opaque pointer
@@ -2052,6 +2087,14 @@ done:
 	while (nbuf) {
 		next = nbuf->next;
 		rx_tlv_hdr = qdf_nbuf_data(nbuf);
+
+		if (qdf_unlikely(hal_rx_attn_msdu_len_err_get(rx_tlv_hdr))) {
+			DP_STATS_INC(soc, rx.err.msdu_len_err, 1);
+			qdf_nbuf_free(nbuf);
+			nbuf = next;
+			continue;
+		}
+
 		/* Get TID from struct cb->tid_val, save to tid */
 		if (qdf_nbuf_is_rx_chfrag_start(nbuf))
 			tid = qdf_nbuf_get_tid_val(nbuf);
@@ -2215,6 +2258,23 @@ done:
 			continue;
 		}
 
+		/*
+		 * Drop non-EAPOL frames from unauthorized peer.
+		 */
+		if (qdf_likely(peer) && qdf_unlikely(!peer->authorize)) {
+			bool is_eapol = qdf_nbuf_is_ipv4_eapol_pkt(nbuf) ||
+					qdf_nbuf_is_ipv4_wapi_pkt(nbuf);
+
+			if (!is_eapol) {
+				DP_STATS_INC(soc,
+					     rx.err.peer_unauth_rx_pkt_drop,
+					     1);
+				qdf_nbuf_free(nbuf);
+				nbuf = next;
+				continue;
+			}
+		}
+
 		if (soc->process_rx_status)
 			dp_rx_cksum_offload(vdev->pdev, nbuf, rx_tlv_hdr);
 
@@ -2271,10 +2331,8 @@ done:
 
 			/* Intrabss-fwd */
 			if (dp_rx_check_ap_bridge(vdev))
-				if (dp_rx_intrabss_fwd(soc,
-							peer,
-							rx_tlv_hdr,
-							nbuf)) {
+				if (DP_RX_INTRABSS_FWD(soc, peer, rx_tlv_hdr,
+						       nbuf)) {
 					nbuf = next;
 					tid_stats->intrabss_cnt++;
 					continue; /* Get next desc */
