@@ -2136,6 +2136,7 @@ done:
 					     1);
 				qdf_nbuf_free(nbuf);
 				nbuf = next;
+				dp_peer_unref_del_find_by_id(peer);
 				continue;
 			}
 		}
