@@ -67,8 +67,12 @@ $(HOST_CMN_CONVG_NLINK)/src/wlan_nlink_srv.o \
 $(HOST_QAL_SRC)/linux/src/qal_devcfg.o \
 $(HOST_QAL_SRC)/linux/src/qal_vbus_dev.o \
 $(HOST_QAL_SRC)/linux/src/qal_notifier.o \
-$(HOST_QAL_SRC)/linux/src/qal_devnode.o \
-$(HOST_QAL_SRC)/linux/src/qal_bridge.o \
+$(HOST_QAL_SRC)/linux/src/qal_devnode.o
+
+ifneq ($(strip ${DISABLE_QAL_BRIDGE}),1)
+qdf-objs += $(HOST_QAL_SRC)/linux/src/qal_bridge.o
+endif
+
 #linux/src/qdf_net.o \
 #linux/src/qdf_net_event.o \
 #linux/src/qdf_net_ioctl.o
