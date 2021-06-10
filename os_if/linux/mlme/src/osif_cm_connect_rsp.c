@@ -227,7 +227,7 @@ static void __osif_connect_bss(struct net_device *dev,
 
 	cfg80211_connect_bss(dev, rsp->bssid.bytes, bss,
 			     req_ptr, req_len, rsp_ptr, rsp_len, status,
-			     GFP_KERNEL, nl_timeout_reason);
+			     GFP_ATOMIC, nl_timeout_reason);
 }
 #else /* CFG80211_CONNECT_TIMEOUT_REASON_CODE */
 
@@ -259,7 +259,7 @@ static void __osif_connect_bss(struct net_device *dev,
 
 	cfg80211_connect_bss(dev, rsp->bssid.bytes, bss,
 			     req_ptr, req_len, rsp_ptr, rsp_len,
-			     status, GFP_KERNEL);
+			     status, GFP_ATOMIC);
 }
 #endif /* CFG80211_CONNECT_TIMEOUT_REASON_CODE */
 
