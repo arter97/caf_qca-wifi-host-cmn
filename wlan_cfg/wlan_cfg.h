@@ -42,7 +42,11 @@
 /*Maximum Number of LMAC instances*/
 #define MAX_NUM_LMAC_HW	2
 #else
+
+#ifndef WLAN_CFG_DST_RING_CACHED_DESC
 #define WLAN_CFG_DST_RING_CACHED_DESC 1
+#endif
+
 #define MAX_PDEV_CNT 3
 #define WLAN_CFG_INT_NUM_CONTEXTS 11
 #define NUM_RXDMA_RINGS_PER_PDEV 1
