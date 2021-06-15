@@ -445,6 +445,11 @@ bool wlan_reg_is_dfs_ch(struct wlan_objmgr_pdev *pdev,
 	return reg_is_dfs_ch(pdev, chan);
 }
 
+bool wlan_reg_is_indoor_chan(struct wlan_objmgr_pdev *pdev, uint32_t chan)
+{
+	return reg_is_indoor_chan(pdev, chan);
+}
+
 bool wlan_reg_is_passive_or_disable_ch(struct wlan_objmgr_pdev *pdev,
 				       uint32_t chan)
 {
