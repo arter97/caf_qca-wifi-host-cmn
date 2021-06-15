@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017-2018 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2017-2018, 2021 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -414,6 +414,15 @@ bool wlan_reg_is_etsi13_regdmn(struct wlan_objmgr_pdev *pdev);
 bool
 wlan_reg_is_etsi13_srd_chan_allowed_master_mode(struct wlan_objmgr_pdev *pdev,
 					        enum QDF_OPMODE vdev_opmode);
+
+/**
+ * reg_is_nan_allowed_on_indoor() - Check if nan is allowed on indoor channels
+ *
+ * @pdev: Pointer to pdev
+ *
+ * Return: true or false
+ */
+bool wlan_reg_is_nan_allowed_on_indoor(struct wlan_objmgr_pdev *pdev);
 
 /**
  * wlan_reg_is_passive_or_disable_ch () - Checks chan state for passive

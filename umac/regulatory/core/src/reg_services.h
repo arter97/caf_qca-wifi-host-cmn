@@ -756,4 +756,11 @@ QDF_STATUS reg_set_ignore_fw_reg_offload_ind(struct wlan_objmgr_psoc *psoc);
  */
 bool reg_get_ignore_fw_reg_offload_ind(struct wlan_objmgr_psoc *psoc);
 
+/**
+ * reg_is_nan_allowed_on_indoor() - Check if nan is allowed on indoor channels
+ *
+ * @pdev: Pointer to pdev
+ */
+bool reg_is_nan_allowed_on_indoor(struct wlan_objmgr_pdev *pdev);
+
 #endif
