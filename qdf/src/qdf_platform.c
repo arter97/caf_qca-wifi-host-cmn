@@ -148,3 +148,9 @@ bool qdf_is_drv_connected(void)
 	return is_drv_connected_cb();
 }
 qdf_export_symbol(qdf_is_drv_connected);
+
+void qdf_check_state_before_panic(const char *func, const uint32_t line)
+{
+	if (!qdf_is_recovering() && !qdf_is_fw_down())
+		QDF_DEBUG_PANIC_FL(func, line, "");
+}

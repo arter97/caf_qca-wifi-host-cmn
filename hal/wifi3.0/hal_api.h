@@ -23,6 +23,8 @@
 #include "qdf_util.h"
 #include "qdf_atomic.h"
 #include "hal_internal.h"
+#include "qdf_platform.h"
+
 #define MAX_UNWINDOWED_ADDRESS 0x80000
 #ifdef QCA_WIFI_QCA6390
 #define WINDOW_ENABLE_BIT 0x40000000
@@ -255,7 +257,7 @@ static inline void hal_write32_mb(struct hal_soc *hal_soc, uint32_t offset,
 			QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_ERROR,
 				  "%s: Wake up request failed %d\n",
 				  __func__, ret);
-			QDF_BUG(0);
+			qdf_check_state_before_panic(__func__, __LINE__);
 			return;
 		}
 	}
@@ -294,7 +296,7 @@ static inline void hal_write32_mb_confirm(struct hal_soc *hal_soc,
 			QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_ERROR,
 				  "%s: Wake up request failed %d\n",
 				  __func__, ret);
-			QDF_BUG(0);
+			qdf_check_state_before_panic(__func__, __LINE__);
 			return;
 		}
 	}
