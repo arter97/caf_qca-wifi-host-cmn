@@ -2853,6 +2853,7 @@ static void dp_soc_interrupt_detach(struct cdp_soc_t *txrx_soc)
 	if (soc->intr_mode == DP_INTR_POLL) {
 		qdf_timer_free(&soc->int_timer);
 	} else {
+		hif_deconfigure_ext_group_interrupts(soc->hif_handle);
 		hif_deregister_exec_group(soc->hif_handle, "dp_intr");
 	}
 
@@ -4540,7 +4541,7 @@ static void dp_soc_tx_hw_desc_history_attach(struct dp_soc *soc)
 {
 	soc->tx_hw_desc_history = dp_context_alloc_mem(
 			soc, DP_TX_HW_DESC_HIST_TYPE,
-			sizeof(struct dp_tx_hw_desc_evt));
+			sizeof(*soc->tx_hw_desc_history));
 	if (soc->tx_hw_desc_history)
 		soc->tx_hw_desc_history->index = 0;
 }

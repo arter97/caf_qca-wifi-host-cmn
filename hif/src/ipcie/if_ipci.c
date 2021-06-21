@@ -225,7 +225,7 @@ static int hif_ce_srng_msi_free_irq(struct hif_softc *scn)
  *
  * Return: none
  */
-static void hif_ipci_deconfigure_grp_irq(struct hif_softc *scn)
+void hif_ipci_deconfigure_grp_irq(struct hif_softc *scn)
 {
 	int i, j, irq;
 	struct HIF_CE_state *hif_state = HIF_GET_CE_STATE(scn);
@@ -881,6 +881,9 @@ int hif_prevent_link_low_power_states(struct hif_opaque_softc *hif)
 	struct hif_softc *scn = HIF_GET_SOFTC(hif);
 	struct hif_ipci_softc *ipci_scn = HIF_GET_IPCI_SOFTC(scn);
 	uint32_t timeout = 0;
+
+	if (pld_is_pci_ep_awake(scn->qdf_dev->dev) == -ENOTSUPP)
+		return 0;
 
 	while (pld_is_pci_ep_awake(scn->qdf_dev->dev) &&
 	       timeout <= EP_WAKE_RESET_DELAY_TIMEOUT_US) {

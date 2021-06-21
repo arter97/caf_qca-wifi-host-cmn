@@ -1081,10 +1081,12 @@ enum hif_ep_vote_type {
 /**
  * enum hif_ep_vote_access - hif ep vote access
  * HIF_EP_VOTE_ACCESS_ENABLE: Enable ep voting
+ * HIF_EP_VOTE_INTERMEDIATE_ACCESS: allow during transistion
  * HIF_EP_VOTE_ACCESS_DISABLE: disable ep voting
  */
 enum hif_ep_vote_access {
 	HIF_EP_VOTE_ACCESS_ENABLE,
+	HIF_EP_VOTE_INTERMEDIATE_ACCESS,
 	HIF_EP_VOTE_ACCESS_DISABLE
 };
 
@@ -1493,6 +1495,14 @@ int32_t hif_get_int_ctx_irq_num(struct hif_opaque_softc *softc,
  * Return: QDF_STATUS
  */
 QDF_STATUS hif_configure_ext_group_interrupts(struct hif_opaque_softc *hif_ctx);
+
+/**
+ * hif_deconfigure_ext_group_interrupts() - Deconfigure ext group intrrupts
+ * @hif_ctx: hif opaque context
+ *
+ * Return: None
+ */
+void hif_deconfigure_ext_group_interrupts(struct hif_opaque_softc *hif_ctx);
 
 /**
  * hif_register_ext_group() - API to register external group
