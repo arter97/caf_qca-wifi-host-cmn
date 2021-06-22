@@ -219,5 +219,15 @@ bool qdf_is_drv_connected(void);
 void qdf_register_drv_connected_callback(qdf_is_drv_connected_callback
 					 is_drv_connected);
 
+/**
+ * qdf_check_state_before_panic() - API to check if FW is down
+ * or driver is in recovery before calling assert
+ * @func: Caller function pointer used for debug information
+ * @line: Caller function line number
+ *
+ * Return: none
+ */
+void qdf_check_state_before_panic(const char *func, const uint32_t line);
+
 #endif /*_QDF_PLATFORM_H*/
 
