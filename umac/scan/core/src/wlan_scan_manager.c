@@ -34,7 +34,7 @@
 #include <wlan_policy_mgr_api.h>
 #endif
 #include <wlan_dfs_utils_api.h>
-#include <wlan_scan_cfg.h>
+#include <cfg_scan.h>
 
 QDF_STATUS
 scm_scan_free_scan_request_mem(struct scan_start_request *req)
@@ -445,8 +445,8 @@ scm_update_dbs_scan_ctrl_ext_flag(struct scan_start_request *req)
 								PM_NDI_MODE,
 								NULL);
 
-	if (ndi_present && !policy_mgr_is_hw_dbs_2x2_capable(psoc)) {
-		scm_debug("NDP present go for DBS scan");
+	if (ndi_present || policy_mgr_is_hw_dbs_2x2_capable(psoc)) {
+		scm_debug("NDP present or HW 2x2 capable, go for DBS scan");
 		goto end;
 	}
 
@@ -455,6 +455,7 @@ scm_update_dbs_scan_ctrl_ext_flag(struct scan_start_request *req)
 		scan_dbs_policy = SCAN_DBS_POLICY_FORCE_NONDBS;
 		goto end;
 	}
+
 	if ((req->scan_req.scan_policy_low_power) ||
 	    (req->scan_req.scan_policy_low_span)) {
 		scm_debug("low power/span scan received, going for dbs scan");
@@ -790,6 +791,13 @@ static void scm_req_update_concurrency_params(struct wlan_objmgr_vdev *vdev,
 			SCM_ACTIVE_DWELL_TIME_NAN);
 		scm_debug("NDP active modify dwell time 2ghz %d",
 			req->scan_req.dwell_time_active_2g);
+	}
+
+	if (sta_active) {
+		req->scan_req.dwell_time_active_6g =
+				scan_obj->scan_def.active_dwell_time_6g_conc;
+		req->scan_req.dwell_time_passive_6g =
+				scan_obj->scan_def.passive_dwell_time_6g_conc;
 	}
 }
 
@@ -1627,4 +1635,37 @@ QDF_STATUS scm_scan_cancel_flush_callback(struct scheduler_msg *msg)
 	qdf_mem_free(req);
 
 	return QDF_STATUS_SUCCESS;
+}
+
+void scm_disable_obss_pdev_scan(struct wlan_objmgr_psoc *psoc,
+				struct wlan_objmgr_pdev *pdev)
+{
+	struct wlan_objmgr_vdev *vdev;
+	struct wlan_scan_obj *scan_obj;
+	struct scan_vdev_obj *scan_vdev_obj;
+	QDF_STATUS status;
+
+	scan_obj = wlan_psoc_get_scan_obj(psoc);
+	if (!scan_obj) {
+		scm_err("scan object null");
+		return;
+	}
+
+	if (scan_obj->obss_scan_offload) {
+		vdev = wlan_objmgr_pdev_get_first_vdev(pdev, WLAN_SCAN_ID);
+		if (!vdev)
+			return;
+
+		scan_vdev_obj = wlan_get_vdev_scan_obj(vdev);
+		if (!scan_vdev_obj) {
+			scm_err("null scan_vdev_obj");
+			wlan_objmgr_vdev_release_ref(vdev, WLAN_SCAN_ID);
+			return;
+		}
+
+		status = tgt_scan_obss_disable(vdev);
+		if (QDF_IS_STATUS_ERROR(status))
+			scm_err("disable obss scan failed");
+		wlan_objmgr_vdev_release_ref(vdev, WLAN_SCAN_ID);
+	}
 }

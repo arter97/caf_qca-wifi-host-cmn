@@ -498,7 +498,7 @@ static void wifi_pos_pdev_iterator(struct wlan_objmgr_psoc *psoc,
 	wifi_pos_ch = &chan_list->chan_info[chan_list->num_channels];
 
 	ch_info = (struct channel_power *)qdf_mem_malloc(
-			sizeof(*ch_info) * MAX_CHANNELS);
+			sizeof(*ch_info) * NUM_CHANNELS);
 	if (!ch_info) {
 		wifi_pos_err("ch_info is null");
 		return;
@@ -509,6 +509,12 @@ static void wifi_pos_pdev_iterator(struct wlan_objmgr_psoc *psoc,
 
 	if (QDF_IS_STATUS_ERROR(status)) {
 		wifi_pos_err("Failed to get valid channel list");
+		qdf_mem_free(ch_info);
+		return;
+	}
+
+	if ((chan_list->num_channels + num_channels) > NUM_CHANNELS) {
+		wifi_pos_err("Invalid number of channels");
 		qdf_mem_free(ch_info);
 		return;
 	}
@@ -540,7 +546,7 @@ static void wifi_pos_get_ch_info(struct wlan_objmgr_psoc *psoc,
 	wlan_objmgr_iterate_obj_list(psoc, WLAN_PDEV_OP,
 				     wifi_pos_pdev_iterator,
 				     chan_list, true, WLAN_WIFI_POS_CORE_ID);
-	wifi_pos_notice("num channels: %d", chan_list->num_channels);
+	wifi_pos_debug("num channels: %d", chan_list->num_channels);
 }
 
 #else
@@ -768,7 +774,7 @@ static QDF_STATUS wifi_pos_process_app_reg_req(struct wlan_objmgr_psoc *psoc,
 		return QDF_STATUS_E_INVAL;
 	}
 
-	wifi_pos_err("Received App Req Req pid(%d), len(%d)",
+	wifi_pos_debug("Received App Req Req pid(%d), len(%d)",
 			req->pid, req->buf_len);
 
 	sign_str = (char *)req->buf;
