@@ -1,10 +1,10 @@
 /*
- * Copyright (c) 2017-2020, The Linux Foundation. All rights reserved.
- * 
+ * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
+ *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
  * copyright notice and this permission notice appear in all copies.
- * 
+ *
  * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
  * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
  * MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
@@ -27,6 +27,16 @@
 /* Adding delay before disabling ipa pipes if any Tx Completions are pending */
 #define TX_COMP_DRAIN_WAIT_MS	50
 #define TX_COMP_DRAIN_WAIT_TIMEOUT_MS	100
+
+#ifdef IPA_WDI3_TX_TWO_PIPES
+#define IPA_TX_ALT_RING_IDX 1
+/*
+ * must be same as IPA_TX_ALT_RING_IDX as tcl and wbm ring
+ * are initialized with same index as a pair.
+ */
+#define IPA_TX_ALT_COMP_RING_IDX 1
+#define IPA_SESSION_ID_SHIFT 1
+#endif
 
 /**
  * struct dp_ipa_uc_tx_hdr - full tx header registered to IPA hardware
@@ -149,7 +159,8 @@ QDF_STATUS dp_ipa_enable_autonomy(struct cdp_soc_t *soc_hdl, uint8_t pdev_id);
  */
 QDF_STATUS dp_ipa_disable_autonomy(struct cdp_soc_t *soc_hdl, uint8_t pdev_id);
 
-#ifdef CONFIG_IPA_WDI_UNIFIED_API
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 10, 0)) || \
+	defined(CONFIG_IPA_WDI_UNIFIED_API)
 /**
  * dp_ipa_setup() - Setup and connect IPA pipes
  * @soc_hdl - data path soc handle
@@ -283,6 +294,65 @@ QDF_STATUS dp_ipa_tx_buf_smmu_mapping(
 QDF_STATUS dp_ipa_tx_buf_smmu_unmapping(
 	struct cdp_soc_t *soc_hdl, uint8_t pdev_id);
 
+#ifndef QCA_OL_DP_SRNG_LOCK_LESS_ACCESS
+static inline void
+dp_ipa_rx_buf_smmu_mapping_lock(struct dp_soc *soc)
+{
+	if (soc->ipa_rx_buf_map_lock_initialized)
+		qdf_spin_lock_bh(&soc->ipa_rx_buf_map_lock);
+}
+
+static inline void
+dp_ipa_rx_buf_smmu_mapping_unlock(struct dp_soc *soc)
+{
+	if (soc->ipa_rx_buf_map_lock_initialized)
+		qdf_spin_unlock_bh(&soc->ipa_rx_buf_map_lock);
+}
+
+static inline void
+dp_ipa_reo_ctx_buf_mapping_lock(struct dp_soc *soc,
+				uint32_t reo_ring_num)
+{
+	if (!soc->ipa_reo_ctx_lock_required[reo_ring_num])
+		return;
+
+	qdf_spin_lock_bh(&soc->ipa_rx_buf_map_lock);
+}
+
+static inline void
+dp_ipa_reo_ctx_buf_mapping_unlock(struct dp_soc *soc,
+				  uint32_t reo_ring_num)
+{
+	if (!soc->ipa_reo_ctx_lock_required[reo_ring_num])
+		return;
+
+	qdf_spin_unlock_bh(&soc->ipa_rx_buf_map_lock);
+}
+#else
+
+static inline void
+dp_ipa_rx_buf_smmu_mapping_lock(struct dp_soc *soc)
+{
+}
+
+static inline void
+dp_ipa_rx_buf_smmu_mapping_unlock(struct dp_soc *soc)
+{
+}
+
+static inline void
+dp_ipa_reo_ctx_buf_mapping_lock(struct dp_soc *soc,
+				uint32_t reo_ring_num)
+{
+}
+
+static inline void
+dp_ipa_reo_ctx_buf_mapping_unlock(struct dp_soc *soc,
+				  uint32_t reo_ring_num)
+{
+}
+#endif
+
 #else
 static inline int dp_ipa_uc_detach(struct dp_soc *soc, struct dp_pdev *pdev)
 {
@@ -306,6 +376,28 @@ static inline QDF_STATUS dp_ipa_handle_rx_buf_smmu_mapping(struct dp_soc *soc,
 							   bool create)
 {
 	return QDF_STATUS_SUCCESS;
+}
+
+static inline void
+dp_ipa_rx_buf_smmu_mapping_lock(struct dp_soc *soc)
+{
+}
+
+static inline void
+dp_ipa_rx_buf_smmu_mapping_unlock(struct dp_soc *soc)
+{
+}
+
+static inline void
+dp_ipa_reo_ctx_buf_mapping_lock(struct dp_soc *soc,
+				uint32_t reo_ring_num)
+{
+}
+
+static inline void
+dp_ipa_reo_ctx_buf_mapping_unlock(struct dp_soc *soc,
+				  uint32_t reo_ring_num)
+{
 }
 
 static inline qdf_nbuf_t dp_ipa_handle_rx_reo_reinject(struct dp_soc *soc,

@@ -1066,6 +1066,8 @@ QDF_STATUS wlan_crypto_setkey(struct wlan_objmgr_vdev *vdev,
 	qdf_mem_copy(key->keyval, req_key->keydata, sizeof(key->keyval));
 	key->valid = 1;
 	if ((IS_MGMT_CIPHER(req_key->type))) {
+		uint32_t mgmt_cipher = 0;
+
 		if (HAS_CIPHER_CAP(crypto_params,
 					WLAN_CRYPTO_CAP_PMF_OFFLOAD) ||
 					is_bigtk(req_key->keyix)) {
@@ -1074,7 +1076,8 @@ QDF_STATUS wlan_crypto_setkey(struct wlan_objmgr_vdev *vdev,
 						key, macaddr, req_key->type);
 			}
 		}
-		wlan_crypto_set_mgmtcipher(crypto_params, req_key->type);
+		QDF_SET_PARAM(mgmt_cipher, req_key->type);
+		wlan_crypto_set_mgmtcipher(crypto_params, mgmt_cipher);
 		status = wlan_crypto_set_igtk_key(key);
 		return status;
 	} else if (IS_FILS_CIPHER(req_key->type)) {
@@ -1427,6 +1430,7 @@ QDF_STATUS wlan_crypto_delkey(struct wlan_objmgr_vdev *vdev,
 	/* Zero-out local key variables */
 	qdf_mem_zero(key, sizeof(struct wlan_crypto_key));
 	qdf_mem_free(key);
+	key = NULL;
 
 ret_rel_ref:
 	if (peer)
@@ -1607,6 +1611,7 @@ QDF_STATUS wlan_crypto_encap(struct wlan_objmgr_vdev *vdev,
 
 	if (peer)
 		wlan_objmgr_peer_release_ref(peer, WLAN_CRYPTO_ID);
+	peer = NULL;
 
 	if (qdf_is_macaddr_group((struct qdf_mac_addr *)mac_addr)) {
 		crypto_params = wlan_crypto_vdev_get_comp_params(vdev,
@@ -1621,31 +1626,28 @@ QDF_STATUS wlan_crypto_encap(struct wlan_objmgr_vdev *vdev,
 			return QDF_STATUS_E_INVAL;
 
 	} else {
-		struct wlan_objmgr_peer *peer;
-		uint8_t pdev_id;
-
-		pdev_id = wlan_objmgr_pdev_get_pdev_id(
-				wlan_vdev_get_pdev(vdev));
 		peer = wlan_objmgr_get_peer_by_mac_n_vdev(psoc, pdev_id,
 							  bssid_mac, mac_addr,
 							  WLAN_CRYPTO_ID);
-
 		if (!peer) {
 			crypto_err("crypto_priv NULL");
 			return QDF_STATUS_E_INVAL;
 		}
 		crypto_params = wlan_crypto_peer_get_comp_params(peer,
 								&crypto_priv);
-		wlan_objmgr_peer_release_ref(peer, WLAN_CRYPTO_ID);
 
 		if (!crypto_priv) {
 			crypto_err("crypto_priv NULL");
-			return QDF_STATUS_E_INVAL;
+			status = QDF_STATUS_E_INVAL;
+			goto err;
 		}
 
 		key = crypto_priv->key[crypto_priv->def_tx_keyid];
-		if (!key)
-			return QDF_STATUS_E_INVAL;
+		if (!key) {
+			crypto_err("Key is NULL");
+			status = QDF_STATUS_E_INVAL;
+			goto err;
+		}
 	}
 	if (opmode == QDF_MONITOR_MODE)
 		hdrlen = ieee80211_hdrsize((uint8_t *)qdf_nbuf_data(wbuf));
@@ -1657,6 +1659,10 @@ QDF_STATUS wlan_crypto_encap(struct wlan_objmgr_vdev *vdev,
 	cipher_table = (struct wlan_crypto_cipher *)key->cipher_table;
 	status = cipher_table->encap(key, wbuf, encapdone,
 				     hdrlen);
+
+err:
+	if (peer)
+		wlan_objmgr_peer_release_ref(peer, WLAN_CRYPTO_ID);
 
 	return status;
 }
@@ -1725,6 +1731,7 @@ QDF_STATUS wlan_crypto_decap(struct wlan_objmgr_vdev *vdev,
 
 	if (peer)
 		wlan_objmgr_peer_release_ref(peer, WLAN_CRYPTO_ID);
+	peer = NULL;
 
 	if (qdf_is_macaddr_group((struct qdf_mac_addr *)mac_addr)) {
 		crypto_params = wlan_crypto_vdev_get_comp_params(vdev,
@@ -1737,13 +1744,7 @@ QDF_STATUS wlan_crypto_decap(struct wlan_objmgr_vdev *vdev,
 		key = crypto_priv->key[keyid];
 		if (!key)
 			return QDF_STATUS_E_INVAL;
-
 	} else {
-		struct wlan_objmgr_peer *peer;
-		uint8_t pdev_id;
-
-		pdev_id = wlan_objmgr_pdev_get_pdev_id(
-				wlan_vdev_get_pdev(vdev));
 		peer = wlan_objmgr_get_peer_by_mac_n_vdev(
 					psoc, pdev_id, bssid_mac,
 					mac_addr, WLAN_CRYPTO_ID);
@@ -1754,20 +1755,33 @@ QDF_STATUS wlan_crypto_decap(struct wlan_objmgr_vdev *vdev,
 
 		crypto_params = wlan_crypto_peer_get_comp_params(peer,
 								&crypto_priv);
-		wlan_objmgr_peer_release_ref(peer, WLAN_CRYPTO_ID);
 
 		if (!crypto_priv) {
 			crypto_err("crypto_priv NULL");
-			return QDF_STATUS_E_INVAL;
+			status = QDF_STATUS_E_INVAL;
+			goto err;
 		}
 
 		key = crypto_priv->key[keyid];
-		if (!key)
-			return QDF_STATUS_E_INVAL;
+		if (!key) {
+			crypto_err("Key is NULL");
+			status = QDF_STATUS_E_INVAL;
+			goto err;
+		}
 	}
+
+	if (!key->valid || !key->cipher_table) {
+		status = QDF_STATUS_E_INVAL;
+		goto err;
+	}
+
 	/* if tkip, is counter measures enabled, then drop the frame */
 	cipher_table = (struct wlan_crypto_cipher *)key->cipher_table;
 	status = cipher_table->decap(key, wbuf, tid, hdrlen);
+
+err:
+	if (peer)
+		wlan_objmgr_peer_release_ref(peer, WLAN_CRYPTO_ID);
 
 	return status;
 }
@@ -2636,6 +2650,10 @@ static int32_t wlan_crypto_rsn_suite_to_keymgmt(const uint8_t *sel)
 		return WLAN_CRYPTO_KEY_MGMT_DPP;
 	case RSN_AUTH_KEY_MGMT_FT_802_1X_SUITE_B_384:
 		return WLAN_CRYPTO_KEY_MGMT_FT_IEEE8021X_SHA384;
+	case RSN_AUTH_KEY_MGMT_FT_PSK_SHA384:
+		return WLAN_CRYPTO_KEY_MGMT_FT_PSK_SHA384;
+	case RSN_AUTH_KEY_MGMT_PSK_SHA384:
+		return WLAN_CRYPTO_KEY_MGMT_PSK_SHA384;
 	}
 
 	return status;
@@ -2782,9 +2800,8 @@ QDF_STATUS wlan_crypto_rsnie_check(struct wlan_crypto_params *crypto_params,
 
 		for (; n > 0; n--) {
 			w = wlan_crypto_rsn_suite_to_cipher(frm);
-			if (w < 0)
-				return QDF_STATUS_E_INVAL;
-			SET_UCAST_CIPHER(crypto_params, w);
+			if (w >= 0)
+				SET_UCAST_CIPHER(crypto_params, w);
 			frm += 4, len -= 4;
 		}
 	} else {
@@ -2813,9 +2830,8 @@ QDF_STATUS wlan_crypto_rsnie_check(struct wlan_crypto_params *crypto_params,
 
 		for (; n > 0; n--) {
 			w = wlan_crypto_rsn_suite_to_keymgmt(frm);
-			if (w < 0)
-				return QDF_STATUS_E_INVAL;
-			SET_KEY_MGMT(crypto_params, w);
+			if (w >= 0)
+				SET_KEY_MGMT(crypto_params, w);
 			frm += 4, len -= 4;
 		}
 	} else {
@@ -4065,124 +4081,6 @@ void wlan_crypto_restore_keys(struct wlan_objmgr_vdev *vdev)
 						 psoc,
 						 WLAN_CRYPTO_ID);
 	}
-}
-
-/**
- * wlan_crypto_check_open_none - called by ucfg to check for open security
- * @psoc: psoc pointer
- * @vdev_id: vdev id
- *
- * This function gets called from ucfg to check open security.
- *
- * Return: true or false
- */
-bool wlan_crypto_check_open_none(struct wlan_objmgr_psoc *psoc, uint8_t vdev_id)
-{
-	struct wlan_crypto_comp_priv *crypto_priv;
-	struct wlan_crypto_params *crypto_params;
-	struct wlan_objmgr_vdev *vdev;
-	bool match = true;
-
-	if (!psoc) {
-		crypto_err("PSOC is NULL");
-		return false;
-	}
-	vdev = wlan_objmgr_get_vdev_by_id_from_psoc(psoc, vdev_id,
-						    WLAN_CRYPTO_ID);
-	if (!vdev) {
-		crypto_err("vdev is NULL");
-		return false;
-	}
-
-	crypto_priv = (struct wlan_crypto_comp_priv *)
-		       wlan_get_vdev_crypto_obj(vdev);
-
-	if (!crypto_priv) {
-		crypto_err("crypto_priv NULL");
-		match = false;
-		goto send_res;
-	}
-
-	crypto_params = &crypto_priv->crypto_params;
-
-	if (crypto_params->mcastcipherset != WLAN_CRYPTO_CIPHER_NONE) {
-		match = false;
-		goto send_res;
-	}
-
-	if ((crypto_params->authmodeset != WLAN_CRYPTO_AUTH_AUTO) &&
-	    (crypto_params->authmodeset != WLAN_CRYPTO_AUTH_NONE))
-		match = false;
-
-send_res:
-	wlan_objmgr_vdev_release_ref(vdev, WLAN_CRYPTO_ID);
-
-	return match;
-}
-
-/**
- * wlan_crypto_check_wep - called by ucfg to check for WEP security
- * @psoc: psoc pointer
- * @vdev_id: vdev id
- *
- * This function gets called from ucfg to check WEP security.
- *
- * Return: true or false
- */
-bool wlan_crypto_check_wep(struct wlan_objmgr_psoc *psoc, uint8_t vdev_id)
-{
-	struct wlan_crypto_comp_priv *crypto_priv;
-	struct wlan_crypto_params *crypto_params;
-	struct wlan_objmgr_vdev *vdev;
-	bool match = true;
-
-	if (!psoc) {
-		crypto_err("PSOC is NULL");
-		return false;
-	}
-	vdev = wlan_objmgr_get_vdev_by_id_from_psoc(psoc, vdev_id,
-						    WLAN_CRYPTO_ID);
-	if (!vdev) {
-		crypto_err("vdev is NULL");
-		return false;
-	}
-
-	crypto_priv = (struct wlan_crypto_comp_priv *)
-		       wlan_get_vdev_crypto_obj(vdev);
-
-	if (!crypto_priv) {
-		crypto_err("crypto_priv NULL");
-		match = false;
-		goto send_res;
-	}
-
-	crypto_params = &crypto_priv->crypto_params;
-
-	if ((crypto_params->ucastcipherset != WLAN_CRYPTO_CIPHER_WEP) &&
-	    (crypto_params->ucastcipherset != WLAN_CRYPTO_CIPHER_WEP_40) &&
-	    (crypto_params->ucastcipherset != WLAN_CRYPTO_CIPHER_WEP_104)) {
-		match = false;
-		goto send_res;
-	}
-	if ((crypto_params->mcastcipherset != WLAN_CRYPTO_CIPHER_WEP) &&
-	    (crypto_params->mcastcipherset != WLAN_CRYPTO_CIPHER_WEP_40) &&
-	    (crypto_params->mcastcipherset != WLAN_CRYPTO_CIPHER_WEP_104)) {
-		match = false;
-		goto send_res;
-	}
-	if (crypto_params->ucastcipherset != crypto_params->mcastcipherset) {
-		match = false;
-		goto send_res;
-	}
-	if ((crypto_params->authmodeset != WLAN_CRYPTO_AUTH_AUTO) &&
-	    (crypto_params->authmodeset != WLAN_CRYPTO_AUTH_OPEN) &&
-	    (crypto_params->authmodeset != WLAN_CRYPTO_AUTH_SHARED)) {
-		match = false;
-	}
-send_res:
-	wlan_objmgr_vdev_release_ref(vdev, WLAN_CRYPTO_ID);
-
-	return match;
 }
 
 QDF_STATUS

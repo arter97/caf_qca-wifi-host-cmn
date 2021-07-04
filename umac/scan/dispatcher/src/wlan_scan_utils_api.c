@@ -26,6 +26,9 @@
 #include <../../core/src/wlan_scan_cache_db.h>
 #include <../../core/src/wlan_scan_main.h>
 #include <wlan_reg_services_api.h>
+#if defined(WLAN_SAE_SINGLE_PMK) && defined(WLAN_FEATURE_ROAM_OFFLOAD)
+#include <wlan_mlme_api.h>
+#endif
 
 #define MAX_IE_LEN 1024
 #define SHORT_SSID_LEN 4
@@ -1094,16 +1097,17 @@ util_scan_populate_bcn_ie_list(struct wlan_objmgr_pdev *pdev,
 			if (ie->ie_len != WLAN_DS_PARAM_IE_MAX_LEN)
 				return QDF_STATUS_E_INVAL;
 			scan_params->ie_list.ds_param = (uint8_t *)ie;
-			chan_idx =
-				((struct ds_ie *)ie)->cur_chan;
+			chan_idx = ((struct ds_ie *)ie)->cur_chan;
 			*chan_freq = wlan_reg_chan_band_to_freq(pdev, chan_idx,
 								band_mask);
 			/* Drop if invalid freq */
 			if (scan_obj->drop_bcn_on_invalid_freq &&
-			    wlan_reg_is_disable_for_freq(pdev, *chan_freq)) {
-				scm_debug_rl(QDF_MAC_ADDR_FMT": Drop as invalid channel %d freq %d in DS IE",
-					     QDF_MAC_ADDR_REF(scan_params->bssid.bytes),
-					     chan_idx, *chan_freq);
+			    !wlan_reg_is_freq_present_in_cur_chan_list(pdev,
+								*chan_freq)) {
+				scm_debug(QDF_MAC_ADDR_FMT": Drop as invalid chan %d in DS IE, freq %d, band_mask %d",
+					  QDF_MAC_ADDR_REF(
+						  scan_params->bssid.bytes),
+					  chan_idx, *chan_freq, band_mask);
 				return QDF_STATUS_E_INVAL;
 			}
 			break;
@@ -1154,15 +1158,22 @@ util_scan_populate_bcn_ie_list(struct wlan_objmgr_pdev *pdev,
 			scan_params->erp = ((struct erp_ie *)ie)->value;
 			break;
 		case WLAN_ELEMID_HTCAP_ANA:
-			if (ie->ie_len != sizeof(struct htcap_cmn_ie))
-				goto err;
-			scan_params->ie_list.htcap =
+			if (ie->ie_len == sizeof(struct htcap_cmn_ie)) {
+				scan_params->ie_list.htcap =
 				(uint8_t *)&(((struct htcap_ie *)ie)->ie);
+			}
 			break;
 		case WLAN_ELEMID_RSN:
-			if (ie->ie_len < WLAN_RSN_IE_MIN_LEN)
-				goto err;
-			scan_params->ie_list.rsn = (uint8_t *)ie;
+			/*
+			 * For security cert TC, RSNIE length can be 1 but if
+			 * beacon is dropped, old entry will remain in scan
+			 * cache and cause cert TC failure as connection with
+			 * old entry with valid RSN IE will pass.
+			 * So instead of dropping the frame, do not store the
+			 * RSN pointer so that old entry is overwritten.
+			 */
+			if (ie->ie_len >= WLAN_RSN_IE_MIN_LEN)
+				scan_params->ie_list.rsn = (uint8_t *)ie;
 			break;
 		case WLAN_ELEMID_XRATES:
 			if (ie->ie_len > WLAN_EXT_SUPPORTED_RATES_IE_MAX_LEN)
@@ -1875,6 +1886,37 @@ static bool util_is_noninh_ie(uint8_t elem_id,
 
 	return false;
 }
+
+/*
+ * util_scan_find_noninheritance_ie() - find noninheritance information element
+ * This block of code is to identify if there is any non-inheritance element
+ * present as part of the nontransmitted BSSID profile.
+ * @elem_id: element id
+ * @ies: pointer consisting of IEs
+ * @len: IE length
+ *
+ * Return: NULL if the element ID is not found or if IE pointer is NULL else
+ * pointer to the first byte of the requested element
+ */
+static uint8_t
+*util_scan_find_noninheritance_ie(uint8_t elem_id, uint8_t *ies,
+				  int32_t len)
+{
+	if (!ies)
+		return NULL;
+
+	while (len >= MIN_IE_LEN && len >= ies[TAG_LEN_POS] + MIN_IE_LEN) {
+		if ((ies[ID_POS] == elem_id) &&
+		    (ies[ELEM_ID_EXTN_POS] ==
+		     WLAN_EXTN_ELEMID_NONINHERITANCE)) {
+			return ies;
+		}
+		len -= ies[TAG_LEN_POS] + MIN_IE_LEN;
+		ies += ies[TAG_LEN_POS] + MIN_IE_LEN;
+	}
+
+	return NULL;
+}
 #endif
 
 /*
@@ -1920,11 +1962,10 @@ static void util_gen_new_bssid(uint8_t *bssid, uint8_t max_bssid,
 }
 
 /*
- * util_scan_noninheritance() - This block of code is to identify if
- * there is any non-inheritance element present as part of the nontransmitted
- * BSSID profile. If it is found then Host need not inherit those list of
- * element IDs and list of element ID extensions from the transmitted BSSID
- * profile.
+ * util_parse_noninheritance_list() - This block of code will be executed only
+ * if there is a valid non inheritance IE present in the nontx profile.
+ * Host need not inherit those list of element IDs and list of element ID
+ * extensions from the transmitted BSSID profile.
  * Since non-inheritance element is an element ID extension, it should
  * be part of extension element. So first we need to find if there are
  * any extension element present in the nontransmitted BSSID profile.
@@ -1953,15 +1994,14 @@ static void util_gen_new_bssid(uint8_t *bssid, uint8_t max_bssid,
  * @non_inheritance_ie: Non inheritance IE information
  */
 
-static void util_scan_noninheritance(uint8_t *extn_elem,
-				     uint8_t **elem_list,
-				     uint8_t **extn_elem_list,
-				     struct non_inheritance_ie *ninh)
+static void util_parse_noninheritance_list(uint8_t *extn_elem,
+					   uint8_t **elem_list,
+					   uint8_t **extn_elem_list,
+					   struct non_inheritance_ie *ninh)
 {
 	int8_t extn_rem_len = 0;
 
-	if ((extn_elem[ELEM_ID_EXTN_POS] == WLAN_EXTN_ELEMID_NONINHERITANCE) &&
-	    (extn_elem[ELEM_ID_LIST_LEN_POS] < extn_elem[TAG_LEN_POS])) {
+	if (extn_elem[ELEM_ID_LIST_LEN_POS] < extn_elem[TAG_LEN_POS]) {
 		/*
 		 * extn_rem_len represents the number of bytes after
 		 * the length subfield of list of Element IDs.
@@ -2070,12 +2110,12 @@ static uint32_t util_gen_new_ie(uint8_t *ie, uint32_t ielen,
 		}
 	}
 
-	extn_elem = util_scan_find_ie(WLAN_ELEMID_EXTN_ELEM,
-				      sub_copy, subie_len);
+	extn_elem = util_scan_find_noninheritance_ie(WLAN_ELEMID_EXTN_ELEM,
+						     sub_copy, subie_len);
 
 	if (extn_elem && extn_elem[TAG_LEN_POS]) {
-		util_scan_noninheritance(extn_elem, &elem_list,
-					 &extn_elem_list, &ninh);
+		util_parse_noninheritance_list(extn_elem, &elem_list,
+					       &extn_elem_list, &ninh);
 	}
 
 	/* go through IEs in ie (skip SSID) and subelement,
@@ -2619,7 +2659,7 @@ static QDF_STATUS util_scan_parse_mbssid(struct wlan_objmgr_pdev *pdev,
 						     sizeof(mbssid_info));
 				}
 				qdf_mem_free(new_frame);
-				scm_err("failed to generate a scan entry");
+				scm_err_rl("failed to generate a scan entry");
 				break;
 			}
 			/* scan entry makes its own copy so free the frame*/
@@ -2657,7 +2697,7 @@ util_scan_parse_beacon_frame(struct wlan_objmgr_pdev *pdev,
 	struct wlan_frame_hdr *hdr;
 	uint8_t *mbssid_ie = NULL;
 	uint32_t ie_len = 0;
-	QDF_STATUS status;
+	QDF_STATUS status = QDF_STATUS_E_FAILURE;
 	struct scan_mbssid_info mbssid_info = { 0 };
 
 	hdr = (struct wlan_frame_hdr *)frame;
@@ -2670,6 +2710,10 @@ util_scan_parse_beacon_frame(struct wlan_objmgr_pdev *pdev,
 	mbssid_ie = util_scan_find_ie(WLAN_ELEMID_MULTIPLE_BSSID,
 				      (uint8_t *)&bcn->ie, ie_len);
 	if (mbssid_ie) {
+		if (mbssid_ie[1] <= 0) {
+			scm_debug("MBSSID IE length is wrong %d", mbssid_ie[1]);
+			return status;
+		}
 		qdf_mem_copy(&mbssid_info.trans_bssid,
 			     hdr->i_addr3, QDF_MAC_ADDR_SIZE);
 		mbssid_info.profile_count = 1 << mbssid_ie[2];
@@ -2753,3 +2797,15 @@ bool util_is_scan_completed(struct scan_event *event, bool *success)
 	return false;
 }
 
+#if defined(WLAN_SAE_SINGLE_PMK) && defined(WLAN_FEATURE_ROAM_OFFLOAD)
+bool
+util_scan_entry_single_pmk(struct wlan_objmgr_psoc *psoc,
+			   struct scan_cache_entry *scan_entry)
+{
+	if (scan_entry->ie_list.single_pmk &&
+	    wlan_mlme_is_sae_single_pmk_enabled(psoc))
+		return true;
+
+	return false;
+}
+#endif
