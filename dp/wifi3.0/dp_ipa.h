@@ -21,7 +21,6 @@
 #ifdef IPA_OFFLOAD
 
 #define DP_IPA_MAX_IFACE	3
-#define IPA_TX_COMP_RING_IDX	2
 #define IPA_REO_DEST_RING_IDX	3
 #define IPA_RX_REFILL_BUF_RING_IDX	2
 
@@ -186,8 +185,9 @@ QDF_STATUS dp_ipa_setup(struct cdp_soc_t *soc_hdl, uint8_t pdev_id,
 			bool is_rm_enabled, uint32_t *tx_pipe_handle,
 			uint32_t *rx_pipe_handle);
 #endif /* CONFIG_IPA_WDI_UNIFIED_API */
-QDF_STATUS dp_ipa_cleanup(uint32_t tx_pipe_handle,
-		uint32_t rx_pipe_handle);
+QDF_STATUS dp_ipa_cleanup(struct cdp_soc_t *soc_hdl, uint8_t pdev_id,
+			  uint32_t tx_pipe_handle,
+			  uint32_t rx_pipe_handle);
 QDF_STATUS dp_ipa_remove_header(char *name);
 int dp_ipa_add_header_info(char *ifname, uint8_t *mac_addr,
 		uint8_t session_id, bool is_ipv6_enabled);
@@ -239,6 +239,7 @@ int dp_ipa_ring_resource_setup(struct dp_soc *soc,
 		struct dp_pdev *pdev);
 QDF_STATUS dp_ipa_handle_rx_buf_smmu_mapping(struct dp_soc *soc,
 					     qdf_nbuf_t nbuf,
+					     uint32_t size,
 					     bool create);
 
 bool dp_reo_remap_config(struct dp_soc *soc, uint32_t *remap1,
@@ -246,6 +247,7 @@ bool dp_reo_remap_config(struct dp_soc *soc, uint32_t *remap1,
 bool dp_ipa_is_mdm_platform(void);
 
 qdf_nbuf_t dp_ipa_handle_rx_reo_reinject(struct dp_soc *soc, qdf_nbuf_t nbuf);
+
 
 #else
 static inline int dp_ipa_uc_detach(struct dp_soc *soc, struct dp_pdev *pdev)
@@ -266,6 +268,7 @@ static inline int dp_ipa_ring_resource_setup(struct dp_soc *soc,
 
 static inline QDF_STATUS dp_ipa_handle_rx_buf_smmu_mapping(struct dp_soc *soc,
 							   qdf_nbuf_t nbuf,
+							   uint32_t size,
 							   bool create)
 {
 	return QDF_STATUS_SUCCESS;

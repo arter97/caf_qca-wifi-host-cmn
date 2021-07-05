@@ -2235,10 +2235,13 @@ static inline void dp_reo_limit_clean_batch_sz(uint32_t *list_size)
  * @desc: desc with resend update cmd flag set
  * @rx_tid: Desc RX tid associated with update cmd for resetting
  * valid field to 0 in h/w
+ *
+ * Return: QDF status
  */
-static void dp_resend_update_reo_cmd(struct dp_soc *soc,
-				     struct reo_desc_list_node *desc,
-				     struct dp_rx_tid *rx_tid)
+static QDF_STATUS
+dp_resend_update_reo_cmd(struct dp_soc *soc,
+			 struct reo_desc_list_node *desc,
+			 struct dp_rx_tid *rx_tid)
 {
 	struct hal_reo_cmd_params params;
 
@@ -2267,7 +2270,10 @@ static void dp_resend_update_reo_cmd(struct dp_soc *soc,
 				     (qdf_list_node_t *)desc);
 		dp_err_log("failed to send reo cmd CMD_UPDATE_RX_REO_QUEUE");
 		DP_STATS_INC(soc, rx.err.reo_cmd_send_fail, 1);
+		return QDF_STATUS_E_FAILURE;
 	}
+
+	return QDF_STATUS_SUCCESS;
 }
 
 /*
@@ -2288,6 +2294,7 @@ void dp_rx_tid_delete_cb(struct dp_soc *soc, void *cb_ctxt,
 	unsigned long curr_ts = qdf_get_system_timestamp();
 	uint32_t desc_size, tot_desc_size;
 	struct hal_reo_cmd_params params;
+	bool flush_failure = false;
 
 	if (reo_status->rx_queue_status.header.status == HAL_REO_CMD_DRAIN) {
 		qdf_mem_zero(reo_status, sizeof(*reo_status));
@@ -2298,11 +2305,10 @@ void dp_rx_tid_delete_cb(struct dp_soc *soc, void *cb_ctxt,
 	} else if (reo_status->rx_queue_status.header.status !=
 		HAL_REO_CMD_SUCCESS) {
 		/* Should not happen normally. Just print error for now */
-		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_ERROR,
-			  "%s: Rx tid HW desc deletion failed(%d): tid %d",
-			  __func__,
-			  reo_status->rx_queue_status.header.status,
-			  freedesc->rx_tid.tid);
+		dp_info_rl("%s: Rx tid HW desc deletion failed(%d): tid %d",
+			   __func__,
+			   reo_status->rx_queue_status.header.status,
+			   freedesc->rx_tid.tid);
 	}
 
 	QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_INFO_LOW,
@@ -2337,13 +2343,19 @@ void dp_rx_tid_delete_cb(struct dp_soc *soc, void *cb_ctxt,
 
 		/* First process descs with resend_update_reo_cmd set */
 		if (desc->resend_update_reo_cmd) {
-			dp_resend_update_reo_cmd(soc, desc, rx_tid);
-			continue;
+			if (dp_resend_update_reo_cmd(soc, desc, rx_tid) !=
+			    QDF_STATUS_SUCCESS)
+				break;
+			else
+				continue;
 		}
 
 		/* Flush and invalidate REO descriptor from HW cache: Base and
 		 * extension descriptors should be flushed separately */
-		tot_desc_size = rx_tid->hw_qdesc_alloc_size;
+		if (desc->pending_ext_desc_size)
+			tot_desc_size = desc->pending_ext_desc_size;
+		else
+			tot_desc_size = rx_tid->hw_qdesc_alloc_size;
 		/* Get base descriptor size by passing non-qos TID */
 		desc_size = hal_get_reo_qdesc_size(soc->hal_soc, 0,
 						   DP_NON_QOS_TID);
@@ -2362,12 +2374,21 @@ void dp_rx_tid_delete_cb(struct dp_soc *soc, void *cb_ctxt,
 							&params,
 							NULL,
 							NULL)) {
-				dp_err_rl("fail to send CMD_CACHE_FLUSH:"
-					  "tid %d desc %pK", rx_tid->tid,
-					  (void *)(rx_tid->hw_qdesc_paddr));
-				DP_STATS_INC(soc, rx.err.reo_cmd_send_fail, 1);
+				dp_info_rl("fail to send CMD_CACHE_FLUSH:"
+					   "tid %d desc %pK", rx_tid->tid,
+					   (void *)(rx_tid->hw_qdesc_paddr));
+				desc->pending_ext_desc_size = tot_desc_size +
+								      desc_size;
+				dp_reo_desc_clean_up(soc, desc, reo_status);
+				flush_failure = true;
+				break;
 			}
 		}
+
+		if (flush_failure)
+			break;
+		else
+			desc->pending_ext_desc_size = desc_size;
 
 		/* Flush base descriptor */
 		qdf_mem_zero(&params, sizeof(params));
@@ -2392,10 +2413,11 @@ void dp_rx_tid_delete_cb(struct dp_soc *soc, void *cb_ctxt,
 			 * In case of MCL path add the desc back to the free
 			 * desc list and defer deletion.
 			 */
-			dp_err_log("%s: fail to send REO cmd to flush cache: tid %d",
+			dp_info_rl("%s: fail to send REO cmd to flush cache: tid %d",
 				   __func__, rx_tid->tid);
 			dp_reo_desc_clean_up(soc, desc, &reo_status);
 			DP_STATS_INC(soc, rx.err.reo_cmd_send_fail, 1);
+			break;
 		}
 	}
 	qdf_spin_unlock_bh(&soc->reo_desc_freelist_lock);
@@ -3515,6 +3537,8 @@ QDF_STATUS dp_peer_state_update(struct cdp_soc_t *soc_hdl, uint8_t *peer_mac,
 	}
 	peer->state = state;
 
+	peer->authorize = (state == OL_TXRX_PEER_STATE_AUTH) ? 1 : 0;
+
 	dp_info("peer %pK state %d", peer, peer->state);
 	/* ref_cnt is incremented inside dp_peer_find_hash_find().
 	 * Decrement it here.
@@ -3867,4 +3891,31 @@ bool dp_peer_find_by_id_valid(struct dp_soc *soc, uint16_t peer_id)
 	}
 
 	return false;
+}
+
+void dp_peer_flush_frags(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
+			 uint8_t *peer_mac)
+{
+	struct dp_soc *soc = cdp_soc_t_to_dp_soc(soc_hdl);
+	struct dp_peer *peer = dp_peer_find_hash_find(soc, peer_mac, 0,
+						      vdev_id);
+	struct dp_rx_tid *rx_tid;
+	uint8_t tid;
+
+	if (!peer)
+		return;
+
+	dp_info("Flushing fragments for peer " QDF_MAC_ADDR_FMT,
+		QDF_MAC_ADDR_REF(peer->mac_addr.raw));
+
+	for (tid = 0; tid < DP_MAX_TIDS; tid++) {
+		rx_tid = &peer->rx_tid[tid];
+
+		qdf_spin_lock_bh(&rx_tid->tid_lock);
+		dp_rx_defrag_waitlist_remove(peer, tid);
+		dp_rx_reorder_flush_frag(peer, tid);
+		qdf_spin_unlock_bh(&rx_tid->tid_lock);
+	}
+
+	dp_peer_unref_delete(peer);
 }

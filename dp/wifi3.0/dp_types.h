@@ -115,13 +115,11 @@
 #define PHYB_2G_LMAC_ID 2
 #define PHYB_2G_TARGET_PDEV_ID 2
 
-#ifndef REMOVE_PKT_LOG
 enum rx_pktlog_mode {
 	DP_RX_PKTLOG_DISABLED = 0,
 	DP_RX_PKTLOG_FULL,
 	DP_RX_PKTLOG_LITE,
 };
-#endif
 
 /* enum m_copy_mode - Available mcopy mode
  *
@@ -610,6 +608,9 @@ struct dp_rx_tid {
 	uint32_t curr_seq_num;
 	uint32_t curr_frag_num;
 
+	/* head PN number */
+	uint64_t pn128[2];
+
 	uint32_t defrag_timeout_ms;
 	uint16_t dialogtoken;
 	uint16_t statuscode;
@@ -703,6 +704,7 @@ struct reo_desc_list_node {
 	unsigned long free_ts;
 	struct dp_rx_tid rx_tid;
 	bool resend_update_reo_cmd;
+	uint32_t pending_ext_desc_size;
 };
 
 #ifdef WLAN_FEATURE_DP_EVENT_HISTORY
@@ -849,6 +851,12 @@ struct dp_soc_stats {
 			uint32_t reo_err_oor_sg_count;
 			/* RX msdu rejected count on delivery to vdev stack_fn*/
 			uint32_t rejected;
+			/* Non Eapol pkt drop cnt due to peer not authorized */
+			uint32_t peer_unauth_rx_pkt_drop;
+			/* EAPOL drop count in intrabss scenario */
+			uint32_t intrabss_eapol_drop;
+			/* MSDU len err count */
+			uint32_t msdu_len_err;
 		} err;
 
 		/* packet count per core - per ring */
@@ -1736,10 +1744,8 @@ struct dp_pdev {
 	/* map this pdev to a particular Reo Destination ring */
 	enum cdp_host_reo_dest_ring reo_dest;
 
-#ifndef REMOVE_PKT_LOG
 	/* Packet log mode */
 	uint8_t rx_pktlog_mode;
-#endif
 
 	/* WDI event handlers */
 	struct wdi_event_subscribe_t **wdi_event_list;

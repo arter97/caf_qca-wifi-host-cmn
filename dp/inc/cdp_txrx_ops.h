@@ -1463,6 +1463,9 @@ struct cdp_throttle_ops {
  * @ipa_register_op_cb:
  * @ipa_get_stat:
  * @ipa_tx_data_frame:
+ * @ipa_tx_buf_smmu_mapping: Create SMMU mappings for Tx
+ * @ipa_tx_buf_smmu_unmapping: Release SMMU mappings for Tx
+ * buffers to IPA
  */
 struct cdp_ipa_ops {
 	QDF_STATUS (*ipa_get_resource)(struct cdp_soc_t *soc_hdl,
@@ -1511,8 +1514,9 @@ struct cdp_ipa_ops {
 				bool is_rm_enabled, uint32_t *tx_pipe_handle,
 				uint32_t *rx_pipe_handle);
 #endif /* CONFIG_IPA_WDI_UNIFIED_API */
-	QDF_STATUS (*ipa_cleanup)(uint32_t tx_pipe_handle,
-		uint32_t rx_pipe_handle);
+	QDF_STATUS (*ipa_cleanup)(struct cdp_soc_t *soc_hdl, uint8_t pdev_id,
+				  uint32_t tx_pipe_handle,
+				  uint32_t rx_pipe_handle);
 	QDF_STATUS (*ipa_setup_iface)(char *ifname, uint8_t *mac_addr,
 		qdf_ipa_client_type_t prod_client,
 		qdf_ipa_client_type_t cons_client,
@@ -1526,6 +1530,10 @@ struct cdp_ipa_ops {
 		uint32_t max_supported_bw_mbps);
 	bool (*ipa_rx_intrabss_fwd)(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
 				    qdf_nbuf_t nbuf, bool *fwd_success);
+	QDF_STATUS (*ipa_tx_buf_smmu_mapping)(struct cdp_soc_t *soc_hdl,
+					      uint8_t pdev_id);
+	QDF_STATUS (*ipa_tx_buf_smmu_unmapping)(struct cdp_soc_t *soc_hdl,
+						uint8_t pdev_id);
 };
 #endif
 

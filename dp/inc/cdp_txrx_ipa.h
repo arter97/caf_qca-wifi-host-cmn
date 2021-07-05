@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016-2019 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2016-2020 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -427,14 +427,15 @@ cdp_ipa_setup(ol_txrx_soc_handle soc, uint8_t pdev_id, void *ipa_i2w_cb,
 /**
  * cdp_ipa_cleanup() - Disconnect IPA pipes
  * @soc: data path soc handle
+ * @pdev_id: handle to the device instance number
  * @tx_pipe_handle: Tx pipe handle
  * @rx_pipe_handle: Rx pipe handle
  *
  * Return: QDF_STATUS
  */
 static inline QDF_STATUS
-cdp_ipa_cleanup(ol_txrx_soc_handle soc, uint32_t tx_pipe_handle,
-		uint32_t rx_pipe_handle)
+cdp_ipa_cleanup(ol_txrx_soc_handle soc, uint8_t pdev_id,
+		uint32_t tx_pipe_handle, uint32_t rx_pipe_handle)
 {
 	if (!soc || !soc->ops || !soc->ops->ipa_ops) {
 		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_FATAL,
@@ -443,7 +444,8 @@ cdp_ipa_cleanup(ol_txrx_soc_handle soc, uint32_t tx_pipe_handle,
 	}
 
 	if (soc->ops->ipa_ops->ipa_cleanup)
-		return soc->ops->ipa_ops->ipa_cleanup(tx_pipe_handle,
+		return soc->ops->ipa_ops->ipa_cleanup(soc, pdev_id,
+						      tx_pipe_handle,
 						      rx_pipe_handle);
 
 	return QDF_STATUS_SUCCESS;
@@ -609,6 +611,56 @@ cdp_ipa_rx_intrabss_fwd(ol_txrx_soc_handle soc, uint8_t vdev_id,
 	return false;
 }
 
+/**
+ * cdp_ipa_tx_buf_smmu_mapping() - Create SMMU mappings for Tx
+ *				   buffers allocated to IPA
+ * @soc: data path soc handle
+ * @pdev_id: device instance id
+ *
+ * Create SMMU mappings for Tx buffers allocated to IPA
+ *
+ * return QDF_STATUS_SUCCESS
+ */
+static inline QDF_STATUS
+cdp_ipa_tx_buf_smmu_mapping(ol_txrx_soc_handle soc, uint8_t pdev_id)
+{
+	if (!soc || !soc->ops || !soc->ops->ipa_ops) {
+		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_FATAL,
+			  "%s invalid instance", __func__);
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	if (soc->ops->ipa_ops->ipa_tx_buf_smmu_mapping)
+		return soc->ops->ipa_ops->ipa_tx_buf_smmu_mapping(soc, pdev_id);
+
+	return QDF_STATUS_SUCCESS;
+}
+
+/**
+ * cdp_ipa_tx_buf_smmu_unmapping() - Release SMMU mappings for Tx
+ *				     buffers allocated to IPA
+ * @soc: data path soc handle
+ * @pdev_id: device instance id
+ *
+ * Release SMMU mappings for Tx buffers allocated to IPA
+ *
+ * return QDF_STATUS_SUCCESS
+ */
+static inline QDF_STATUS
+cdp_ipa_tx_buf_smmu_unmapping(ol_txrx_soc_handle soc, uint8_t pdev_id)
+{
+	if (!soc || !soc->ops || !soc->ops->ipa_ops) {
+		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_FATAL,
+			  "%s invalid instance", __func__);
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	if (soc->ops->ipa_ops->ipa_tx_buf_smmu_unmapping)
+		return soc->ops->ipa_ops->ipa_tx_buf_smmu_unmapping(soc,
+								    pdev_id);
+
+	return QDF_STATUS_SUCCESS;
+}
 #endif /* IPA_OFFLOAD */
 
 #endif /* _CDP_TXRX_IPA_H_ */

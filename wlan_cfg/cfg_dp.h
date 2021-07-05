@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2020 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2018-2021 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -307,6 +307,9 @@
 #define WLAN_CFG_RX_SW_DESC_WEIGHT_SIZE 1
 #define WLAN_CFG_RX_SW_DESC_WEIGHT_SIZE_MIN 1
 #define WLAN_CFG_RX_SW_DESC_WEIGHT_SIZE_MAX 1
+#define WLAN_CFG_RX_SW_DESC_NUM_SIZE 4096
+#define WLAN_CFG_RX_SW_DESC_NUM_SIZE_MIN 1024
+#define WLAN_CFG_RX_SW_DESC_NUM_SIZE_MAX 4096
 
 /**
  * For low memory AP cases using 1 will reduce the rx descriptors memory req
@@ -315,6 +318,9 @@
 #define WLAN_CFG_RX_SW_DESC_WEIGHT_SIZE 1
 #define WLAN_CFG_RX_SW_DESC_WEIGHT_SIZE_MIN 1
 #define WLAN_CFG_RX_SW_DESC_WEIGHT_SIZE_MAX 3
+#define WLAN_CFG_RX_SW_DESC_NUM_SIZE 4096
+#define WLAN_CFG_RX_SW_DESC_NUM_SIZE_MIN 1024
+#define WLAN_CFG_RX_SW_DESC_NUM_SIZE_MAX 12288
 
 /**
  * AP use cases need to allocate more RX Descriptors than the number of
@@ -327,6 +333,9 @@
 #define WLAN_CFG_RX_SW_DESC_WEIGHT_SIZE 3
 #define WLAN_CFG_RX_SW_DESC_WEIGHT_SIZE_MIN 1
 #define WLAN_CFG_RX_SW_DESC_WEIGHT_SIZE_MAX 3
+#define WLAN_CFG_RX_SW_DESC_NUM_SIZE 12288
+#define WLAN_CFG_RX_SW_DESC_NUM_SIZE_MIN 4096
+#define WLAN_CFG_RX_SW_DESC_NUM_SIZE_MAX 12288
 #endif //QCA_HOST2FW_RXBUF_RING
 
 #define WLAN_CFG_RX_FLOW_SEARCH_TABLE_SIZE 16384
@@ -750,6 +759,13 @@
 		WLAN_CFG_RX_SW_DESC_WEIGHT_SIZE, \
 		CFG_VALUE_OR_DEFAULT, "DP RX SW DESC weight")
 
+#define CFG_DP_RX_SW_DESC_NUM \
+		CFG_INI_UINT("dp_rx_sw_desc_num", \
+		WLAN_CFG_RX_SW_DESC_NUM_SIZE_MIN, \
+		WLAN_CFG_RX_SW_DESC_NUM_SIZE_MAX, \
+		WLAN_CFG_RX_SW_DESC_NUM_SIZE, \
+		CFG_VALUE_OR_DEFAULT, "DP RX SW DESC num")
+
 #define CFG_DP_RX_FLOW_SEARCH_TABLE_SIZE \
 	CFG_INI_UINT("dp_rx_flow_search_table_size", \
 		WLAN_CFG_RX_FLOW_SEARCH_TABLE_SIZE_MIN, \
@@ -875,6 +891,7 @@
 		CFG(CFG_DP_AP_STA_SECURITY_SEPERATION) \
 		CFG(CFG_DP_ENABLE_DATA_STALL_DETECTION) \
 		CFG(CFG_DP_RX_SW_DESC_WEIGHT) \
+		CFG(CFG_DP_RX_SW_DESC_NUM) \
 		CFG(CFG_DP_RX_FLOW_SEARCH_TABLE_SIZE) \
 		CFG(CFG_DP_RX_FLOW_TAG_ENABLE) \
 		CFG(CFG_DP_RX_FLOW_SEARCH_TABLE_PER_PDEV) \

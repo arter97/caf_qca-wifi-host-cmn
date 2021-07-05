@@ -260,7 +260,8 @@ QDF_STATUS __dp_rx_buffers_replenish(struct dp_soc *dp_soc, uint32_t mac_id,
 
 		paddr = qdf_nbuf_get_frag_paddr(rx_netbuf, 0);
 
-		dp_ipa_handle_rx_buf_smmu_mapping(dp_soc, rx_netbuf, true);
+		dp_ipa_handle_rx_buf_smmu_mapping(dp_soc, rx_netbuf,
+						  buf_size, true);
 		/*
 		 * check if the physical address of nbuf->data is
 		 * less then 0x50000000 then free the nbuf and try
@@ -1899,6 +1900,44 @@ void dp_rx_set_hdr_pad(qdf_nbuf_t nbuf, uint32_t l3_padding)
 }
 #endif
 
+#ifdef DISABLE_EAPOL_INTRABSS_FWD
+/*
+ * dp_rx_intrabss_fwd_wrapper() - Wrapper API for intrabss fwd. For EAPOL
+ *  pkt with DA not equal to vdev mac addr, fwd is not allowed.
+ * @soc: core txrx main context
+ * @ta_peer: source peer entry
+ * @rx_tlv_hdr: start address of rx tlvs
+ * @nbuf: nbuf that has to be intrabss forwarded
+ * @msdu_metadata: msdu metadata
+ *
+ * Return: true if it is forwarded else false
+ */
+static inline
+bool dp_rx_intrabss_fwd_wrapper(struct dp_soc *soc, struct dp_peer *ta_peer,
+				uint8_t *rx_tlv_hdr, qdf_nbuf_t nbuf,
+				struct hal_rx_msdu_metadata msdu_metadata)
+{
+	if (qdf_unlikely(qdf_nbuf_is_ipv4_eapol_pkt(nbuf) &&
+			 qdf_mem_cmp(qdf_nbuf_data(nbuf) +
+				     QDF_NBUF_DEST_MAC_OFFSET,
+				     ta_peer->vdev->mac_addr.raw,
+				     QDF_MAC_ADDR_SIZE))) {
+		qdf_nbuf_free(nbuf);
+		DP_STATS_INC(soc, rx.err.intrabss_eapol_drop, 1);
+		return true;
+	}
+
+	return dp_rx_intrabss_fwd(soc, ta_peer, rx_tlv_hdr, nbuf,
+				  msdu_metadata);
+
+}
+#define DP_RX_INTRABSS_FWD(soc, peer, rx_tlv_hdr, nbuf, msdu_metadata) \
+		dp_rx_intrabss_fwd_wrapper(soc, peer, rx_tlv_hdr, nbuf, \
+					   msdu_metadata)
+#else
+#define DP_RX_INTRABSS_FWD(soc, peer, rx_tlv_hdr, nbuf, msdu_metadata) \
+		dp_rx_intrabss_fwd(soc, peer, rx_tlv_hdr, nbuf, msdu_metadata)
+#endif
 
 /**
  * dp_rx_process() - Brain of the Rx processing functionality
@@ -2027,6 +2066,11 @@ more_data:
 		if (QDF_IS_STATUS_ERROR(status)) {
 			if (qdf_unlikely(rx_desc && rx_desc->nbuf)) {
 				qdf_assert_always(rx_desc->unmapped);
+				dp_ipa_handle_rx_buf_smmu_mapping(
+							soc,
+							rx_desc->nbuf,
+							RX_DATA_BUFFER_SIZE,
+							false);
 				qdf_nbuf_unmap_nbytes_single(
 							soc->osdev,
 							rx_desc->nbuf,
@@ -2169,6 +2213,9 @@ more_data:
 		 * in case double skb unmap happened.
 		 */
 		rx_desc_pool = &soc->rx_desc_buf[rx_desc->pool_id];
+		dp_ipa_handle_rx_buf_smmu_mapping(soc, rx_desc->nbuf,
+						  rx_desc_pool->buf_size,
+						  false);
 		qdf_nbuf_unmap_nbytes_single(soc->osdev, rx_desc->nbuf,
 					     QDF_DMA_FROM_DEVICE,
 					     rx_desc_pool->buf_size);
@@ -2233,6 +2280,13 @@ done:
 		next = nbuf->next;
 		rx_tlv_hdr = qdf_nbuf_data(nbuf);
 		vdev_id = QDF_NBUF_CB_RX_VDEV_ID(nbuf);
+
+		if (qdf_unlikely(hal_rx_attn_msdu_len_err_get(rx_tlv_hdr))) {
+			DP_STATS_INC(soc, rx.err.msdu_len_err, 1);
+			qdf_nbuf_free(nbuf);
+			nbuf = next;
+			continue;
+		}
 
 		if (deliver_list_head && vdev && (vdev->vdev_id != vdev_id)) {
 			dp_rx_deliver_to_stack(soc, vdev, peer,
@@ -2413,6 +2467,23 @@ done:
 			continue;
 		}
 
+		/*
+		 * Drop non-EAPOL frames from unauthorized peer.
+		 */
+		if (qdf_likely(peer) && qdf_unlikely(!peer->authorize)) {
+			bool is_eapol = qdf_nbuf_is_ipv4_eapol_pkt(nbuf) ||
+					qdf_nbuf_is_ipv4_wapi_pkt(nbuf);
+
+			if (!is_eapol) {
+				DP_STATS_INC(soc,
+					     rx.err.peer_unauth_rx_pkt_drop,
+					     1);
+				qdf_nbuf_free(nbuf);
+				nbuf = next;
+				continue;
+			}
+		}
+
 		if (soc->process_rx_status)
 			dp_rx_cksum_offload(vdev->pdev, nbuf, rx_tlv_hdr);
 
@@ -2478,7 +2549,7 @@ done:
 
 			/* Intrabss-fwd */
 			if (dp_rx_check_ap_bridge(vdev))
-				if (dp_rx_intrabss_fwd(soc,
+				if (DP_RX_INTRABSS_FWD(soc,
 							peer,
 							rx_tlv_hdr,
 							nbuf,
@@ -2735,7 +2806,10 @@ dp_pdev_rx_buffers_attach(struct dp_soc *dp_soc, uint32_t mac_id,
 						     desc_list->rx_desc.cookie,
 						     rx_desc_pool->owner);
 
-			dp_ipa_handle_rx_buf_smmu_mapping(dp_soc, nbuf, true);
+			dp_ipa_handle_rx_buf_smmu_mapping(
+						dp_soc, nbuf,
+						rx_desc_pool->buf_size,
+						true);
 
 			desc_list = next;
 		}
@@ -2774,7 +2848,7 @@ dp_rx_pdev_desc_pool_alloc(struct dp_pdev *pdev)
 {
 	struct dp_soc *soc = pdev->soc;
 	uint32_t rxdma_entries;
-	uint32_t rx_sw_desc_weight;
+	uint32_t rx_sw_desc_num;
 	struct dp_srng *dp_rxdma_srng;
 	struct rx_desc_pool *rx_desc_pool;
 	uint32_t status = QDF_STATUS_SUCCESS;
@@ -2791,10 +2865,10 @@ dp_rx_pdev_desc_pool_alloc(struct dp_pdev *pdev)
 	rxdma_entries = dp_rxdma_srng->num_entries;
 
 	rx_desc_pool = &soc->rx_desc_buf[mac_for_pdev];
-	rx_sw_desc_weight = wlan_cfg_get_dp_soc_rx_sw_desc_weight(soc->wlan_cfg_ctx);
+	rx_sw_desc_num = wlan_cfg_get_dp_soc_rx_sw_desc_num(soc->wlan_cfg_ctx);
 
 	status = dp_rx_desc_pool_alloc(soc,
-				       rx_sw_desc_weight * rxdma_entries,
+				       rx_sw_desc_num,
 				       rx_desc_pool);
 	if (status != QDF_STATUS_SUCCESS)
 		return status;
@@ -2831,7 +2905,7 @@ QDF_STATUS dp_rx_pdev_desc_pool_init(struct dp_pdev *pdev)
 	int mac_for_pdev = pdev->lmac_id;
 	struct dp_soc *soc = pdev->soc;
 	uint32_t rxdma_entries;
-	uint32_t rx_sw_desc_weight;
+	uint32_t rx_sw_desc_num;
 	struct dp_srng *dp_rxdma_srng;
 	struct rx_desc_pool *rx_desc_pool;
 
@@ -2850,16 +2924,15 @@ QDF_STATUS dp_rx_pdev_desc_pool_init(struct dp_pdev *pdev)
 
 	soc->process_rx_status = CONFIG_PROCESS_RX_STATUS;
 
-	rx_sw_desc_weight =
-	wlan_cfg_get_dp_soc_rx_sw_desc_weight(soc->wlan_cfg_ctx);
+	rx_sw_desc_num =
+	wlan_cfg_get_dp_soc_rx_sw_desc_num(soc->wlan_cfg_ctx);
 
 	rx_desc_pool->owner = DP_WBM2SW_RBM;
 	rx_desc_pool->buf_size = RX_DATA_BUFFER_SIZE;
 	rx_desc_pool->buf_alignment = RX_DATA_BUFFER_ALIGNMENT;
 
 	dp_rx_desc_pool_init(soc, mac_for_pdev,
-			     rx_sw_desc_weight * rxdma_entries,
-			     rx_desc_pool);
+			     rx_sw_desc_num, rx_desc_pool);
 	return QDF_STATUS_SUCCESS;
 }
 

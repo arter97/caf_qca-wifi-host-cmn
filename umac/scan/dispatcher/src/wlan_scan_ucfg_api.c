@@ -430,6 +430,12 @@ ucfg_scan_set_custom_scan_chan_list(struct wlan_objmgr_pdev *pdev,
 }
 
 QDF_STATUS
+ucfg_scm_scan_free_scan_request_mem(struct scan_start_request *req)
+{
+	return scm_scan_free_scan_request_mem(req);
+}
+
+QDF_STATUS
 ucfg_scan_start(struct scan_start_request *req)
 {
 	struct scheduler_msg msg = {0};
@@ -950,6 +956,7 @@ wlan_scan_global_init(struct wlan_objmgr_psoc *psoc,
 	scan_obj->drop_bcn_on_chan_mismatch =
 			 cfg_get(psoc, CFG_DROP_BCN_ON_CHANNEL_MISMATCH);
 	scan_obj->disable_timeout = false;
+	scan_obj->obss_scan_offload = false;
 	scan_obj->scan_def.active_dwell =
 			 cfg_get(psoc, CFG_ACTIVE_MAX_CHANNEL_TIME);
 	/* the ini is disallow DFS channel scan if ini is 1, so negate that */
@@ -1548,16 +1555,18 @@ ucfg_scan_suspend_handler(struct wlan_objmgr_psoc *psoc, void *arg)
 	struct wlan_objmgr_pdev *pdev = NULL;
 	QDF_STATUS status = QDF_STATUS_SUCCESS;
 	int i;
-
 	ucfg_scan_psoc_set_disable(psoc, REASON_SUSPEND);
+
 	/* Check all pdev */
 	for (i = 0; i < WLAN_UMAC_MAX_PDEVS; i++) {
 		pdev = wlan_objmgr_get_pdev_by_id(psoc, i, WLAN_SCAN_ID);
 		if (!pdev)
 			continue;
 		if (ucfg_scan_get_pdev_status(pdev) !=
-		    SCAN_NOT_IN_PROGRESS)
+		    SCAN_NOT_IN_PROGRESS) {
 			status = ucfg_scan_cancel_pdev_scan(pdev);
+			scm_disable_obss_pdev_scan(psoc, pdev);
+		}
 		wlan_objmgr_pdev_release_ref(pdev, WLAN_SCAN_ID);
 		if (QDF_IS_STATUS_ERROR(status)) {
 			scm_err("failed to cancel scan for pdev_id %d", i);
@@ -1923,6 +1932,19 @@ ucfg_scan_get_global_config(struct wlan_objmgr_psoc *psoc,
 	}
 
 	return status;
+}
+
+void ucfg_scan_set_obss_scan_offload(struct wlan_objmgr_psoc *psoc, bool value)
+{
+	struct wlan_scan_obj *scan_obj;
+
+	scan_obj = wlan_psoc_get_scan_obj(psoc);
+	if (!scan_obj) {
+		scm_err("NULL scan obj");
+		return;
+	}
+
+	scan_obj->obss_scan_offload = value;
 }
 
 #ifdef FEATURE_WLAN_SCAN_PNO

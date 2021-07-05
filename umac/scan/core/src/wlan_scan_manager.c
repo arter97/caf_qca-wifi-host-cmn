@@ -937,7 +937,7 @@ static void scm_sort_6ghz_channel_list(struct wlan_objmgr_vdev *vdev,
 	uint8_t i, j = 0, max, tmp_list_count;
 	struct meta_rnr_channel *channel;
 	struct chan_info temp_list[MAX_6GHZ_CHANNEL];
-	struct rnr_chan_weight *rnr_chan_info, *temp;
+	struct rnr_chan_weight *rnr_chan_info, temp;
 	uint32_t weight;
 	struct wlan_objmgr_psoc *psoc;
 
@@ -1864,4 +1864,37 @@ QDF_STATUS scm_scan_cancel_flush_callback(struct scheduler_msg *msg)
 	qdf_mem_free(req);
 
 	return QDF_STATUS_SUCCESS;
+}
+
+void scm_disable_obss_pdev_scan(struct wlan_objmgr_psoc *psoc,
+				struct wlan_objmgr_pdev *pdev)
+{
+	struct wlan_objmgr_vdev *vdev;
+	struct wlan_scan_obj *scan_obj;
+	struct scan_vdev_obj *scan_vdev_obj;
+	QDF_STATUS status;
+
+	scan_obj = wlan_psoc_get_scan_obj(psoc);
+	if (!scan_obj) {
+		scm_err("scan object null");
+		return;
+	}
+
+	if (scan_obj->obss_scan_offload) {
+		vdev = wlan_objmgr_pdev_get_first_vdev(pdev, WLAN_SCAN_ID);
+		if (!vdev)
+			return;
+
+		scan_vdev_obj = wlan_get_vdev_scan_obj(vdev);
+		if (!scan_vdev_obj) {
+			scm_err("null scan_vdev_obj");
+			wlan_objmgr_vdev_release_ref(vdev, WLAN_SCAN_ID);
+			return;
+		}
+
+		status = tgt_scan_obss_disable(vdev);
+		if (QDF_IS_STATUS_ERROR(status))
+			scm_err("disable obss scan failed");
+		wlan_objmgr_vdev_release_ref(vdev, WLAN_SCAN_ID);
+	}
 }

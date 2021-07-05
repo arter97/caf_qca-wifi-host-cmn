@@ -31,6 +31,9 @@
 #include "dp_rx.h"
 #include "dp_ipa.h"
 
+/* Ring index for WBM2SW2 release ring */
+#define IPA_TX_COMP_RING_IDX HAL_IPA_TX_COMP_RING_IDX
+
 /* Hard coded config parameters until dp_ops_cfg.cfg_attach implemented */
 #define CFG_IPA_UC_TX_BUF_SIZE_DEFAULT            (2048)
 
@@ -93,13 +96,14 @@ static void dp_ipa_reo_remap_history_add(uint32_t ix0_val, uint32_t ix2_val,
 
 static QDF_STATUS __dp_ipa_handle_buf_smmu_mapping(struct dp_soc *soc,
 						   qdf_nbuf_t nbuf,
+						   uint32_t size,
 						   bool create)
 {
 	qdf_mem_info_t mem_map_table = {0};
 
 	qdf_update_mem_map_table(soc->osdev, &mem_map_table,
 				 qdf_nbuf_get_frag_paddr(nbuf, 0),
-				 skb_end_pointer(nbuf) - nbuf->data);
+				 size);
 
 	if (create)
 		qdf_ipa_wdi_create_smmu_mapping(1, &mem_map_table);
@@ -111,6 +115,7 @@ static QDF_STATUS __dp_ipa_handle_buf_smmu_mapping(struct dp_soc *soc,
 
 QDF_STATUS dp_ipa_handle_rx_buf_smmu_mapping(struct dp_soc *soc,
 					     qdf_nbuf_t nbuf,
+					     uint32_t size,
 					     bool create)
 {
 	struct dp_pdev *pdev;
@@ -129,7 +134,7 @@ QDF_STATUS dp_ipa_handle_rx_buf_smmu_mapping(struct dp_soc *soc,
 	if (!qdf_atomic_read(&soc->ipa_pipes_enabled))
 		return QDF_STATUS_SUCCESS;
 
-	return __dp_ipa_handle_buf_smmu_mapping(soc, nbuf, create);
+	return __dp_ipa_handle_buf_smmu_mapping(soc, nbuf, size, create);
 }
 
 #ifdef RX_DESC_MULTI_PAGE_ALLOC
@@ -165,7 +170,8 @@ static QDF_STATUS dp_ipa_handle_rx_buf_pool_smmu_mapping(struct dp_soc *soc,
 			continue;
 		nbuf = rx_desc->nbuf;
 
-		__dp_ipa_handle_buf_smmu_mapping(soc, nbuf, create);
+		__dp_ipa_handle_buf_smmu_mapping(soc, nbuf,
+						 rx_pool->buf_size, create);
 	}
 	qdf_spin_unlock_bh(&rx_pool->lock);
 
@@ -195,7 +201,8 @@ static QDF_STATUS dp_ipa_handle_rx_buf_pool_smmu_mapping(struct dp_soc *soc,
 
 		nbuf = rx_pool->array[i].rx_desc.nbuf;
 
-		__dp_ipa_handle_buf_smmu_mapping(soc, nbuf, create);
+		__dp_ipa_handle_buf_smmu_mapping(soc, nbuf,
+						 rx_pool->buf_size, create);
 	}
 	qdf_spin_unlock_bh(&rx_pool->lock);
 
@@ -225,7 +232,10 @@ static void dp_tx_ipa_uc_detach(struct dp_soc *soc, struct dp_pdev *pdev)
 			continue;
 
 		if (qdf_mem_smmu_s1_enabled(soc->osdev))
-			__dp_ipa_handle_buf_smmu_mapping(soc, nbuf, false);
+			__dp_ipa_handle_buf_smmu_mapping(
+					soc, nbuf,
+					skb_end_pointer(nbuf) - nbuf->data,
+					false);
 
 		qdf_nbuf_unmap_single(soc->osdev, nbuf, QDF_DMA_BIDIRECTIONAL);
 		qdf_nbuf_free(nbuf);
@@ -372,7 +382,10 @@ static int dp_tx_ipa_uc_attach(struct dp_soc *soc, struct dp_pdev *pdev)
 			= (void *)nbuf;
 
 		if (qdf_mem_smmu_s1_enabled(soc->osdev))
-			__dp_ipa_handle_buf_smmu_mapping(soc, nbuf, true);
+			__dp_ipa_handle_buf_smmu_mapping(
+							 soc, nbuf,
+							 skb_end_pointer(nbuf) - nbuf->data,
+							 true);
 	}
 
 	hal_srng_access_end_unlocked(soc->hal_soc,
@@ -1560,23 +1573,55 @@ QDF_STATUS dp_ipa_setup_iface(char *ifname, uint8_t *mac_addr,
 
 /**
  * dp_ipa_cleanup() - Disconnect IPA pipes
+ * @soc_hdl: dp soc handle
+ * @pdev_id: dp pdev id
  * @tx_pipe_handle: Tx pipe handle
  * @rx_pipe_handle: Rx pipe handle
  *
  * Return: QDF_STATUS
  */
-QDF_STATUS dp_ipa_cleanup(uint32_t tx_pipe_handle, uint32_t rx_pipe_handle)
+QDF_STATUS dp_ipa_cleanup(struct cdp_soc_t *soc_hdl, uint8_t pdev_id,
+			  uint32_t tx_pipe_handle, uint32_t rx_pipe_handle)
 {
+	struct dp_soc *soc = cdp_soc_t_to_dp_soc(soc_hdl);
+	QDF_STATUS status = QDF_STATUS_SUCCESS;
+	struct dp_ipa_resources *ipa_res;
+	struct dp_pdev *pdev;
 	int ret;
 
 	ret = qdf_ipa_wdi_disconn_pipes();
 	if (ret) {
 		dp_err("ipa_wdi_disconn_pipes: IPA pipe cleanup failed: ret=%d",
 		       ret);
-		return QDF_STATUS_E_FAILURE;
+		status = QDF_STATUS_E_FAILURE;
 	}
 
-	return QDF_STATUS_SUCCESS;
+	pdev = dp_get_pdev_from_soc_pdev_id_wifi3(soc, pdev_id);
+	if (qdf_unlikely(!pdev)) {
+		dp_err_rl("Invalid pdev for pdev_id %d", pdev_id);
+		status = QDF_STATUS_E_FAILURE;
+		goto exit;
+	}
+
+	if (qdf_mem_smmu_s1_enabled(soc->osdev)) {
+		ipa_res = &pdev->ipa_resource;
+
+		/* unmap has to be the reverse order of smmu map */
+		ret = pld_smmu_unmap(soc->osdev->dev,
+				     ipa_res->rx_ready_doorbell_paddr,
+				     sizeof(uint32_t));
+		if (ret)
+			dp_err_rl("IPA RX DB smmu unmap failed");
+
+		ret = pld_smmu_unmap(soc->osdev->dev,
+				     ipa_res->tx_comp_doorbell_paddr,
+				     sizeof(uint32_t));
+		if (ret)
+			dp_err_rl("IPA TX DB smmu unmap failed");
+	}
+
+exit:
+	return status;
 }
 
 /**
@@ -1632,7 +1677,9 @@ QDF_STATUS dp_ipa_enable_pipes(struct cdp_soc_t *soc_hdl, uint8_t pdev_id)
 	}
 
 	if (soc->ipa_first_tx_db_access) {
-		hal_srng_dst_init_hp(wbm_srng, ipa_res->tx_comp_doorbell_vaddr);
+		hal_srng_dst_init_hp(
+			soc->hal_soc, wbm_srng,
+			ipa_res->tx_comp_doorbell_vaddr);
 		soc->ipa_first_tx_db_access = false;
 	}
 

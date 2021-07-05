@@ -507,26 +507,6 @@ static void dp_pkt_log_con_service(struct cdp_soc_t *soc_hdl,
 }
 
 /**
- * dp_get_num_rx_contexts() - get number of RX contexts
- * @soc_hdl: cdp opaque soc handle
- *
- * Return: number of RX contexts
- */
-static int dp_get_num_rx_contexts(struct cdp_soc_t *soc_hdl)
-{
-	int i;
-	int num_rx_contexts = 0;
-
-	struct dp_soc *soc = (struct dp_soc *)soc_hdl;
-
-	for (i = 0; i < wlan_cfg_get_num_contexts(soc->wlan_cfg_ctx); i++)
-		if (wlan_cfg_get_rx_ring_mask(soc->wlan_cfg_ctx, i))
-			num_rx_contexts++;
-
-	return num_rx_contexts;
-}
-
-/**
  * dp_pktlogmod_exit() - API to cleanup pktlog info
  * @pdev: Pdev handle
  *
@@ -550,7 +530,34 @@ static void dp_pktlogmod_exit(struct dp_pdev *pdev)
 	pktlogmod_exit(scn);
 	pdev->pkt_log_init = false;
 }
+#else
+static void dp_pkt_log_con_service(struct cdp_soc_t *soc_hdl,
+				   uint8_t pdev_id, void *scn)
+{
+}
+
+static void dp_pktlogmod_exit(struct dp_pdev *handle) { }
 #endif
+/**
+ * dp_get_num_rx_contexts() - get number of RX contexts
+ * @soc_hdl: cdp opaque soc handle
+ *
+ * Return: number of RX contexts
+ */
+static int dp_get_num_rx_contexts(struct cdp_soc_t *soc_hdl)
+{
+	int i;
+	int num_rx_contexts = 0;
+
+	struct dp_soc *soc = (struct dp_soc *)soc_hdl;
+
+	for (i = 0; i < wlan_cfg_get_num_contexts(soc->wlan_cfg_ctx); i++)
+		if (wlan_cfg_get_rx_ring_mask(soc->wlan_cfg_ctx, i))
+			num_rx_contexts++;
+
+	return num_rx_contexts;
+}
+
 #else
 static void dp_pktlogmod_exit(struct dp_pdev *handle) { }
 
@@ -2207,7 +2214,6 @@ static QDF_STATUS dp_soc_interrupt_attach(struct cdp_soc_t *txrx_soc)
 	}
 
 	hif_configure_ext_group_interrupts(soc->hif_handle);
-	hif_config_irq_set_perf_affinity_hint(soc->hif_handle);
 
 	return QDF_STATUS_SUCCESS;
 }
@@ -10312,7 +10318,7 @@ static struct cdp_ipa_ops dp_ops_ipa = {
 	.ipa_enable_pipes = dp_ipa_enable_pipes,
 	.ipa_disable_pipes = dp_ipa_disable_pipes,
 	.ipa_set_perf_level = dp_ipa_set_perf_level,
-	.ipa_rx_intrabss_fwd = dp_ipa_rx_intrabss_fwd
+	.ipa_rx_intrabss_fwd = dp_ipa_rx_intrabss_fwd,
 };
 #endif
 
@@ -10470,6 +10476,7 @@ static struct cdp_peer_ops dp_ops_peer = {
 	.get_vdev_by_peer_addr = dp_get_vdev_by_peer_addr,
 	.peer_get_peer_mac_addr = dp_peer_get_peer_mac_addr,
 	.get_peer_state = dp_get_peer_state,
+	.peer_flush_frags = dp_peer_flush_frags,
 };
 #endif
 

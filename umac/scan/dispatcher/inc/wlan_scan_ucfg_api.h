@@ -163,6 +163,14 @@ ucfg_scan_get_pno_match(struct wlan_objmgr_vdev *vdev)
 }
 #endif /* FEATURE_WLAN_SCAN_PNO */
 /**
+ * ucfg_scm_scan_free_scan_request_mem() - Free scan request memory
+ * @req: scan_start_request object
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS ucfg_scm_scan_free_scan_request_mem(struct scan_start_request *req);
+
+/**
  * ucfg_scan_start() - Public API to start a scan
  * @req: start scan req params
  *
@@ -248,6 +256,15 @@ ucfg_scan_set_global_config(struct wlan_objmgr_psoc *psoc,
 QDF_STATUS
 ucfg_scan_get_global_config(struct wlan_objmgr_psoc *psoc,
 		enum scan_config config, uint32_t *val);
+
+/**
+ * ucfg_scan_set_obss_scan_offload() - Public API to set obss scan flag
+ * @psoc: psoc context
+ * @val: the value to be set
+ *
+ * Return: void.
+ */
+void ucfg_scan_set_obss_scan_offload(struct wlan_objmgr_psoc *psoc, bool value);
 
 /**
  * ucfg_scan_set_wide_band_scan() - Public API to disable/enable wide band scan
