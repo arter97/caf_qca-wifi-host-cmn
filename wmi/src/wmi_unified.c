@@ -1987,6 +1987,19 @@ void wmi_unified_detach(struct wmi_unified *wmi_handle)
 
 	qdf_spinlock_destroy(&wmi_handle->eventq_lock);
 	qdf_spinlock_destroy(&wmi_handle->ctx_lock);
+
+#ifdef WMI_TLV_AND_NON_TLV_SUPPORT
+	if (wmi_handle->wmi_service_bitmap) {
+		qdf_mem_free(wmi_handle->wmi_service_bitmap);
+		wmi_handle->wmi_service_bitmap = NULL;
+	}
+
+	if (wmi_handle->wmi_ext_service_bitmap) {
+		qdf_mem_free(wmi_handle->wmi_ext_service_bitmap);
+		wmi_handle->wmi_ext_service_bitmap = NULL;
+	}
+#endif
+
 	OS_FREE(wmi_handle);
 	wmi_handle = NULL;
 }
