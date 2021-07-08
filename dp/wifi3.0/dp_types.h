@@ -849,6 +849,8 @@ struct ipa_dp_tx_rsc {
 	void *ipa_wbm_ring_base_vaddr;
 	uint32_t ipa_wbm_ring_size;
 	qdf_dma_addr_t ipa_wbm_tp_paddr;
+	/* WBM2SW HP shadow paddr */
+	qdf_dma_addr_t ipa_wbm_hp_shadow_paddr;
 
 	/* TX buffers populated into the WBM ring */
 	void **tx_buf_pool_vaddr_unaligned;
@@ -1123,6 +1125,7 @@ struct dp_soc {
 	} ipa_uc_rx_rsc;
 
 	qdf_atomic_t ipa_pipes_enabled;
+	bool ipa_first_tx_db_access;
 #endif
 
 	/* Smart monitor capability for HKv2 */
