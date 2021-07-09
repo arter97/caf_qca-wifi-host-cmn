@@ -2818,6 +2818,7 @@ static void wmi_rx_diag_event_work(void *arg)
 	struct wmi_unified *wmi = arg;
 	qdf_timer_t wd_timer;
 	struct wmi_wq_dbg_info info;
+	int budget = 128;
 
 	if (!wmi) {
 		wmi_err("Invalid WMI handle");
@@ -2838,11 +2839,18 @@ static void wmi_rx_diag_event_work(void *arg)
 		info.task = qdf_get_current_task();
 		__wmi_control_rx(wmi, buf);
 		qdf_timer_stop(&wd_timer);
+
+		if (--budget == 0)
+			break;
+
 		qdf_spin_lock_bh(&wmi->diag_eventq_lock);
 		buf = qdf_nbuf_queue_remove(&wmi->diag_event_queue);
 		qdf_spin_unlock_bh(&wmi->diag_eventq_lock);
 	}
 	qdf_timer_free(&wd_timer);
+
+	if (qdf_nbuf_queue_len(&wmi->diag_event_queue))
+		qdf_sched_work(0, &wmi->rx_diag_event_work);
 }
 
 #ifdef FEATURE_RUNTIME_PM
