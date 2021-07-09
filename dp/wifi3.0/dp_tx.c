@@ -4231,10 +4231,9 @@ dp_tx_comp_process_desc_list(struct dp_soc *soc,
 			 * performance impact so avoided the wrapper call here
 			 */
 			next = desc->next;
-			qdf_mem_unmap_nbytes_single(soc->osdev,
-						    desc->dma_addr,
-						    QDF_DMA_TO_DEVICE,
-						    desc->length);
+			qdf_nbuf_unmap_nbytes_single(soc->osdev, desc->nbuf,
+						     QDF_DMA_TO_DEVICE,
+						     desc->nbuf->len);
 			qdf_nbuf_free(desc->nbuf);
 			dp_tx_desc_free(soc, desc, desc->pool_id);
 			desc = next;
