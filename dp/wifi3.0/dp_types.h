@@ -787,6 +787,8 @@ struct dp_soc_stats {
 			uint32_t reo_err_oor_sg_count;
 			/* RX msdu rejected count on delivery to vdev stack_fn*/
 			uint32_t rejected;
+			/* EAPOL drop count in intrabss scenario */
+			uint32_t intrabss_eapol_drop;
 			/* Stale link desc cookie count*/
 			uint32_t invalid_link_cookie;
 			/* Non Eapol pkt drop cnt due to peer not authorized */
