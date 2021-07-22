@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017-2020 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2017-2021 The Linux Foundation. All rights reserved.
  *
  *
  * Permission to use, copy, modify, and/or distribute this software for
@@ -129,13 +129,24 @@ reg_is_passive_or_disable_for_freq(struct wlan_objmgr_pdev *pdev,
 
 #ifdef DISABLE_CHANNEL_LIST
 /**
- * reg_restore_cached_channels() - Cache the current state of the channels
+ * reg_disable_cached_channels() - Disable cached channels
+ * @pdev: The physical dev to cache the channels for
+ */
+QDF_STATUS reg_disable_cached_channels(struct wlan_objmgr_pdev *pdev);
+/**
+ * reg_restore_cached_channels() - Restore disabled cached channels
  * @pdev: The physical dev to cache the channels for
  */
 QDF_STATUS reg_restore_cached_channels(struct wlan_objmgr_pdev *pdev);
 #else
 static inline
 QDF_STATUS reg_restore_cached_channels(struct wlan_objmgr_pdev *pdev)
+{
+	return QDF_STATUS_SUCCESS;
+}
+
+static inline
+QDF_STATUS reg_disable_cached_channels(struct wlan_objmgr_pdev *pdev)
 {
 	return QDF_STATUS_SUCCESS;
 }
@@ -262,6 +273,14 @@ bool reg_is_world_alpha2(uint8_t *alpha2);
 bool reg_is_us_alpha2(uint8_t *alpha2);
 
 /**
+ * reg_is_etsi_alpha2 - is country code in EU
+ * @alpha2: country code pointer
+ *
+ * Return: true or false
+ */
+bool reg_is_etsi_alpha2(uint8_t *alpha2);
+
+/**
  * reg_set_country() - Set the current regulatory country
  * @pdev: pdev device for country information
  * @country: country value
@@ -289,6 +308,22 @@ QDF_STATUS reg_reset_country(struct wlan_objmgr_psoc *psoc);
 QDF_STATUS reg_get_domain_from_country_code(v_REGDOMAIN_t *reg_domain_ptr,
 					    const uint8_t *country_alpha2,
 					    enum country_src source);
+
+#ifdef CONFIG_REG_CLIENT
+/**
+ * reg_get_6g_power_type_for_ctry() - Return power type for 6G based on cntry IE
+ * @ap_ctry: ptr to country string in country IE
+ * @sta_ctry: ptr to sta programmed country
+ * @pwr_type_6g: ptr to 6G power type
+ * @ctry_code_match: Check for country IE and sta country code match
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS
+reg_get_6g_power_type_for_ctry(uint8_t *ap_ctry, uint8_t *sta_ctry,
+			       enum reg_6g_ap_type *pwr_type_6g,
+			       bool *ctry_code_match);
+#endif
 
 /**
  * reg_set_config_vars () - set configration variables
@@ -379,6 +414,41 @@ QDF_STATUS reg_set_curr_country(
 bool reg_ignore_default_country(struct wlan_regulatory_psoc_priv_obj *soc_reg,
 				struct cur_regulatory_info *regulat_info);
 
+#ifdef CONFIG_BAND_6GHZ
+/**
+ * reg_decide_6g_ap_pwr_type() - Decide which power mode AP should operate in
+ *
+ * @pdev: pdev ptr
+ *
+ * Return: AP power type
+ */
+enum reg_6g_ap_type reg_decide_6g_ap_pwr_type(struct wlan_objmgr_pdev *pdev);
+
+/**
+ * reg_set_ap_pwr_and_update_chan_list() - Set the AP power mode and recompute
+ * the current channel list
+ *
+ * @pdev: pdev ptr
+ * @ap_pwr_type: the AP power type to update to
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS reg_set_ap_pwr_and_update_chan_list(struct wlan_objmgr_pdev *pdev,
+					       enum reg_6g_ap_type ap_pwr_type);
+#else
+static inline enum reg_6g_ap_type
+reg_decide_6g_ap_pwr_type(struct wlan_objmgr_pdev *pdev)
+{
+	return REG_CURRENT_MAX_AP_TYPE;
+}
+
+static inline
+QDF_STATUS reg_set_ap_pwr_and_update_chan_list(struct wlan_objmgr_pdev *pdev,
+					       enum reg_6g_ap_type ap_pwr_type)
+{
+	return QDF_STATUS_E_NOSUPPORT;
+}
+#endif /* CONFIG_BAND_6GHZ */
 #else
 static inline QDF_STATUS reg_read_current_country(struct wlan_objmgr_psoc *psoc,
 						  uint8_t *country_code)
@@ -392,6 +462,11 @@ static inline bool reg_is_world_alpha2(uint8_t *alpha2)
 }
 
 static inline bool reg_is_us_alpha2(uint8_t *alpha2)
+{
+	return false;
+}
+
+static inline bool reg_is_etsi_alpha2(uint8_t *alpha2)
 {
 	return false;
 }
@@ -477,7 +552,19 @@ bool reg_get_fcc_constraint(struct wlan_objmgr_pdev *pdev, uint32_t freq)
 	return false;
 }
 
-#endif
+static inline enum reg_6g_ap_type
+reg_decide_6g_ap_pwr_type(struct wlan_objmgr_pdev *pdev)
+{
+	return REG_CURRENT_MAX_AP_TYPE;
+}
+
+static inline
+QDF_STATUS reg_set_ap_pwr_and_update_chan_list(struct wlan_objmgr_pdev *pdev,
+					       enum reg_6g_ap_type ap_pwr_type)
+{
+	return QDF_STATUS_E_NOSUPPORT;
+}
+#endif /* CONFIG_REG_CLIENT */
 
 #if defined(WLAN_FEATURE_DSRC) && defined(CONFIG_REG_CLIENT)
 /**
@@ -611,20 +698,6 @@ static inline bool reg_is_etsi13_srd_chan(struct wlan_objmgr_pdev *pdev,
 					  uint8_t chan)
 {
 	return false;
-}
-#endif
-
-#if defined(DISABLE_CHANNEL_LIST) && defined(CONFIG_REG_CLIENT)
-/**
- * set_disable_channel_state() - Set disable channel state flag
- * @pdev_priv_obj: Pointer to pdev object
- */
-void set_disable_channel_state(
-	struct wlan_regulatory_pdev_priv_obj *pdev_priv_obj);
-#else
-static inline void set_disable_channel_state(
-	struct wlan_regulatory_pdev_priv_obj *pdev_priv_obj)
-{
 }
 #endif
 

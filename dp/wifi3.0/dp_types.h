@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016-2020 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -127,6 +127,16 @@
 #define DP_TX_HW_DSCP_TID_MAP_VALID 0x1
 #define DP_TXRX_HLOS_TID_OVERRIDE_ENABLED 0x2
 #define DP_TX_MESH_ENABLED 0x4
+
+#ifdef WLAN_SUPPORT_RX_FISA
+#define FISA_FLOW_MAX_AGGR_COUNT        16 /* max flow aggregate count */
+#endif
+
+#ifdef WLAN_FEATURE_RX_PREALLOC_BUFFER_POOL
+#define DP_RX_REFILL_BUFF_POOL_SIZE  2048
+#define DP_RX_REFILL_BUFF_POOL_BURST 64
+#define DP_RX_REFILL_THRD_THRESHOLD  512
+#endif
 
 enum rx_pktlog_mode {
 	DP_RX_PKTLOG_DISABLED = 0,
@@ -370,9 +380,22 @@ struct dp_rx_nbuf_frag_info {
 /**
  * enum dp_ctxt - context type
  * @DP_PDEV_TYPE: PDEV context
+ * @DP_RX_RING_HIST_TYPE: Datapath rx ring history
+ * @DP_RX_ERR_RING_HIST_TYPE: Datapath rx error ring history
+ * @DP_RX_REINJECT_RING_HIST_TYPE: Datapath reinject ring history
+ * @DP_RX_REFILL_RING_HIST_TYPE: Datapath rx refill ring history
+ * @DP_TX_HW_DESC_HIST_TYPE: Datapath TX HW descriptor history
  */
 enum dp_ctxt_type {
-	DP_PDEV_TYPE
+	DP_PDEV_TYPE,
+	DP_RX_RING_HIST_TYPE,
+	DP_RX_ERR_RING_HIST_TYPE,
+	DP_RX_REINJECT_RING_HIST_TYPE,
+	DP_TX_TCL_HIST_TYPE,
+	DP_TX_COMP_HIST_TYPE,
+	DP_FISA_RX_FT_TYPE,
+	DP_RX_REFILL_RING_HIST_TYPE,
+	DP_TX_HW_DESC_HIST_TYPE,
 };
 
 /**
@@ -686,6 +709,7 @@ struct dp_rx_tid {
 	uint8_t pn_size;
 	/* REO TID queue descriptors */
 	void *hw_qdesc_vaddr_unaligned;
+	void *hw_qdesc_vaddr_aligned;
 	qdf_dma_addr_t hw_qdesc_paddr_unaligned;
 	qdf_dma_addr_t hw_qdesc_paddr;
 	uint32_t hw_qdesc_alloc_size;
@@ -809,7 +833,26 @@ struct reo_desc_list_node {
 	struct dp_rx_tid rx_tid;
 	bool resend_update_reo_cmd;
 	uint32_t pending_ext_desc_size;
+#ifdef REO_QDESC_HISTORY
+	uint8_t peer_mac[QDF_MAC_ADDR_SIZE];
+#endif
 };
+
+#ifdef WLAN_DP_FEATURE_DEFERRED_REO_QDESC_DESTROY
+#define REO_DESC_DEFERRED_FREELIST_SIZE 256
+#define REO_DESC_DEFERRED_FREE_MS 30000
+
+struct reo_desc_deferred_freelist_node {
+	qdf_list_node_t node;
+	unsigned long free_ts;
+	void *hw_qdesc_vaddr_unaligned;
+	qdf_dma_addr_t hw_qdesc_paddr;
+	uint32_t hw_qdesc_alloc_size;
+#ifdef REO_QDESC_HISTORY
+	uint8_t peer_mac[QDF_MAC_ADDR_SIZE];
+#endif /* REO_QDESC_HISTORY */
+};
+#endif /* WLAN_DP_FEATURE_DEFERRED_REO_QDESC_DESTROY */
 
 #ifdef WLAN_FEATURE_DP_EVENT_HISTORY
 /**
@@ -963,6 +1006,10 @@ struct dp_soc_stats {
 			uint32_t rx_2k_jump_to_stack;
 			/* RX 2k jump msdu dropped count */
 			uint32_t rx_2k_jump_drop;
+			/* REO ERR msdu buffer received */
+			uint32_t reo_err_msdu_buf_rcved;
+			/* REO ERR msdu buffer with invalid coookie received */
+			uint32_t reo_err_msdu_buf_invalid_cookie;
 			/* REO OOR msdu drop count */
 			uint32_t reo_err_oor_drop;
 			/* REO OOR msdu indicated to stack count */
@@ -981,8 +1028,16 @@ struct dp_soc_stats {
 			uint32_t nbuf_sanity_fail;
 			/* Duplicate link desc refilled */
 			uint32_t dup_refill_link_desc;
-			/* REO OOR eapol drop count */
-			uint32_t reo_err_oor_eapol_drop;
+			/* count of start sequence (ssn) updates */
+			uint32_t ssn_update_count;
+			/* count of bar handling fail */
+			uint32_t bar_handle_fail_count;
+			/* EAPOL drop count in intrabss scenario */
+			uint32_t intrabss_eapol_drop;
+			/* Non Eapol pkt drop cnt due to peer not authorized */
+			uint32_t peer_unauth_rx_pkt_drop;
+			/* MSDU len err count */
+			uint32_t msdu_len_err;
 		} err;
 
 		/* packet count per core - per ring */
@@ -1100,6 +1155,36 @@ struct rx_buff_pool {
 	bool is_initialized;
 };
 
+struct rx_refill_buff_pool {
+	bool is_initialized;
+	uint16_t head;
+	uint16_t tail;
+	struct dp_pdev *dp_pdev;
+	uint16_t max_bufq_len;
+	qdf_nbuf_t buf_elem[2048];
+};
+
+#ifdef DP_TX_HW_DESC_HISTORY
+#define DP_TX_HW_DESC_HIST_MAX 6144
+
+struct dp_tx_hw_desc_evt {
+	uint8_t tcl_desc[HAL_TX_DESC_LEN_BYTES];
+	uint64_t posted;
+	uint32_t hp;
+	uint32_t tp;
+};
+
+/* struct dp_tx_hw_desc_history - TX HW desc hisotry
+ * @index: Index where the last entry is written
+ * @entry: history entries
+ */
+struct dp_tx_hw_desc_history {
+	uint64_t index;
+	struct dp_tx_hw_desc_evt entry[DP_TX_HW_DESC_HIST_MAX];
+};
+#endif
+
+#ifdef WLAN_FEATURE_DP_RX_RING_HISTORY
 /*
  * The logic for get current index of these history is dependent on this
  * value being power of 2.
@@ -1107,6 +1192,7 @@ struct rx_buff_pool {
 #define DP_RX_HIST_MAX 2048
 #define DP_RX_ERR_HIST_MAX 4096
 #define DP_RX_REINJECT_HIST_MAX 1024
+#define DP_RX_REFILL_HIST_MAX 2048
 
 QDF_COMPILE_TIME_ASSERT(rx_history_size,
 			(DP_RX_HIST_MAX &
@@ -1117,6 +1203,10 @@ QDF_COMPILE_TIME_ASSERT(rx_err_history_size,
 QDF_COMPILE_TIME_ASSERT(rx_reinject_history_size,
 			(DP_RX_REINJECT_HIST_MAX &
 			 (DP_RX_REINJECT_HIST_MAX - 1)) == 0);
+QDF_COMPILE_TIME_ASSERT(rx_refill_history_size,
+			(DP_RX_REFILL_HIST_MAX &
+			(DP_RX_REFILL_HIST_MAX - 1)) == 0);
+
 
 /**
  * struct dp_buf_info_record - ring buffer info
@@ -1125,6 +1215,22 @@ QDF_COMPILE_TIME_ASSERT(rx_reinject_history_size,
  */
 struct dp_buf_info_record {
 	struct hal_buf_info hbi;
+	uint64_t timestamp;
+};
+
+/**
+ * struct dp_refill_info_record - ring refill buffer info
+ * @hp: HP value after refill
+ * @tp: cached tail value during refill
+ * @num_req: number of buffers requested to refill
+ * @num_refill: number of buffers refilled to ring
+ * @timestamp: timestamp when this entry was recorded
+ */
+struct dp_refill_info_record {
+	uint32_t hp;
+	uint32_t tp;
+	uint32_t num_req;
+	uint32_t num_refill;
 	uint64_t timestamp;
 };
 
@@ -1154,6 +1260,52 @@ struct dp_rx_reinject_history {
 	qdf_atomic_t index;
 	struct dp_buf_info_record entry[DP_RX_REINJECT_HIST_MAX];
 };
+
+/* struct dp_rx_refill_history - rx buf refill hisotry
+ * @index: Index where the last entry is written
+ * @entry: history entries
+ */
+struct dp_rx_refill_history {
+	qdf_atomic_t index;
+	struct dp_refill_info_record entry[DP_RX_REFILL_HIST_MAX];
+};
+
+#endif
+
+enum dp_tx_event_type {
+	DP_TX_DESC_INVAL_EVT = 0,
+	DP_TX_DESC_MAP,
+	DP_TX_DESC_COOKIE,
+	DP_TX_DESC_FLUSH,
+	DP_TX_DESC_UNMAP,
+	DP_TX_COMP_UNMAP,
+	DP_TX_COMP_UNMAP_ERR,
+	DP_TX_COMP_MSDU_EXT,
+};
+
+#ifdef WLAN_FEATURE_DP_TX_DESC_HISTORY
+/* Size must be in 2 power, for bitwise index rotation */
+#define DP_TX_TCL_HISTORY_SIZE 0x4000
+#define DP_TX_COMP_HISTORY_SIZE 0x4000
+
+struct dp_tx_desc_event {
+	qdf_nbuf_t skb;
+	dma_addr_t paddr;
+	uint32_t sw_cookie;
+	enum dp_tx_event_type type;
+	uint64_t ts;
+};
+
+struct dp_tx_tcl_history {
+	qdf_atomic_t index;
+	struct dp_tx_desc_event entry[DP_TX_TCL_HISTORY_SIZE];
+};
+
+struct dp_tx_comp_history {
+	qdf_atomic_t index;
+	struct dp_tx_desc_event entry[DP_TX_COMP_HISTORY_SIZE];
+};
+#endif /* WLAN_FEATURE_DP_TX_DESC_HISTORY */
 
 /* structure to record recent operation related variable */
 struct dp_last_op_info {
@@ -1251,6 +1403,8 @@ struct dp_swlm_stats {
  *			      ending the coalescing.
  * @tcl.coalesce_end_time: End timestamp for current coalescing session
  * @tcl.bytes_coalesced: Num bytes coalesced in the current session
+ * @tcl.tx_pkt_thresh: Threshold for TX packet count, to begin TCL register
+ *		       write coalescing
  */
 struct dp_swlm_params {
 	struct {
@@ -1264,6 +1418,7 @@ struct dp_swlm_params {
 		uint32_t tx_thresh_multiplier;
 		uint64_t coalesce_end_time;
 		uint32_t bytes_coalesced;
+		uint32_t tx_pkt_thresh;
 	} tcl;
 };
 
@@ -1520,6 +1675,12 @@ struct dp_soc {
 	/* SoC level data path statistics */
 	struct dp_soc_stats stats;
 
+	/* timestamp to keep track of msdu buffers received on reo err ring */
+	uint64_t rx_route_err_start_pkt_ts;
+
+	/* Num RX Route err in a given window to keep track of rate of errors */
+	uint32_t rx_route_err_in_window;
+
 	/* Enable processing of Tx completion status words */
 	bool process_tx_status;
 	bool process_rx_status;
@@ -1530,9 +1691,21 @@ struct dp_soc {
 		TAILQ_HEAD(, dp_ast_entry) * bins;
 	} ast_hash;
 
+#ifdef DP_TX_HW_DESC_HISTORY
+	struct dp_tx_hw_desc_history *tx_hw_desc_history;
+#endif
+
+#ifdef WLAN_FEATURE_DP_RX_RING_HISTORY
 	struct dp_rx_history *rx_ring_history[MAX_REO_DEST_RINGS];
+	struct dp_rx_refill_history *rx_refill_ring_history[MAX_PDEV_CNT];
 	struct dp_rx_err_history *rx_err_ring_history;
 	struct dp_rx_reinject_history *rx_reinject_ring_history;
+#endif
+
+#ifdef WLAN_FEATURE_DP_TX_DESC_HISTORY
+	struct dp_tx_tcl_history *tx_tcl_history;
+	struct dp_tx_comp_history *tx_comp_history;
+#endif
 
 	qdf_spinlock_t ast_lock;
 	/*Timer for AST entry ageout maintainance */
@@ -1573,6 +1746,8 @@ struct dp_soc {
 		void *ipa_wbm_ring_base_vaddr;
 		uint32_t ipa_wbm_ring_size;
 		qdf_dma_addr_t ipa_wbm_tp_paddr;
+		/* WBM2SW HP shadow paddr */
+		qdf_dma_addr_t ipa_wbm_hp_shadow_paddr;
 
 		/* TX buffers populated into the WBM ring */
 		void **tx_buf_pool_vaddr_unaligned;
@@ -1596,6 +1771,9 @@ struct dp_soc {
 
 	qdf_atomic_t ipa_pipes_enabled;
 	bool ipa_first_tx_db_access;
+	qdf_spinlock_t ipa_rx_buf_map_lock;
+	bool ipa_rx_buf_map_lock_initialized;
+	uint8_t ipa_reo_ctx_lock_required[MAX_REO_DEST_RINGS];
 #endif
 
 #ifdef WLAN_FEATURE_STATS_EXT
@@ -1686,6 +1864,7 @@ struct dp_soc {
 
 	/* RX buffer params */
 	struct rx_buff_pool rx_buff_pool[MAX_PDEV_CNT];
+	struct rx_refill_buff_pool rx_refill_buff_pool;
 	/* Save recent operation related variable */
 	struct dp_last_op_info last_op_info;
 	TAILQ_HEAD(, dp_peer) inactive_peer_list;
@@ -1700,6 +1879,16 @@ struct dp_soc {
 
 #ifdef WLAN_DP_FEATURE_SW_LATENCY_MGR
 	struct dp_swlm swlm;
+#endif
+#ifdef FEATURE_RUNTIME_PM
+	/* Dp runtime refcount */
+	qdf_atomic_t dp_runtime_refcount;
+#endif
+
+#ifdef WLAN_DP_FEATURE_DEFERRED_REO_QDESC_DESTROY
+	qdf_list_t reo_desc_deferred_freelist;
+	qdf_spinlock_t reo_desc_deferred_freelist_lock;
+	bool reo_desc_deferred_freelist_init;
 #endif
 };
 
@@ -2297,6 +2486,9 @@ struct dp_pdev {
 	struct hal_rx_mon_desc_info *mon_desc;
 #endif
 	qdf_nbuf_t mcopy_status_nbuf;
+
+	/* flag to indicate whether LRO hash command has been sent to FW */
+	uint8_t is_lro_hash_configured;
 
 	/* Flag to hold on to monitor destination ring */
 	bool hold_mon_dest_ring;
@@ -2897,11 +3089,33 @@ enum fisa_aggr_ret {
 	FISA_FLUSH_FLOW
 };
 
+/**
+ * struct fisa_pkt_hist_elem - FISA Packet history element
+ * @ts: timestamp indicating when the packet was received by FISA framework.
+ * @tlvs: record of TLVS for the packet coming to FISA framework
+ */
+struct fisa_pkt_hist_elem {
+	qdf_time_t ts;
+	struct rx_pkt_tlvs tlvs;
+};
+
+/**
+ * struct fisa_pkt_hist - FISA Packet history structure
+ * @hist_elem: array of hist elements
+ * @idx: index indicating the next location to be used in the array.
+ */
+struct fisa_pkt_hist {
+	struct fisa_pkt_hist_elem hist_elem[FISA_FLOW_MAX_AGGR_COUNT];
+	uint32_t idx;
+};
+
 struct dp_fisa_rx_sw_ft {
 	/* HAL Rx Flow Search Entry which matches HW definition */
 	void *hw_fse;
-	/* Toeplitz hash value */
+	/* hash value */
 	uint32_t flow_hash;
+	/* toeplitz hash value*/
+	uint32_t flow_id_toeplitz;
 	/* Flow index, equivalent to hash value truncated to FST size */
 	uint32_t flow_id;
 	/* Stats tracking for this flow */
@@ -2940,6 +3154,11 @@ struct dp_fisa_rx_sw_ft {
 	uint32_t cmem_offset;
 	uint32_t metadata;
 	uint32_t reo_dest_indication;
+	qdf_time_t flow_init_ts;
+	qdf_time_t last_accessed_ts;
+#ifdef WLAN_SUPPORT_RX_FISA_HIST
+	struct fisa_pkt_hist *pkt_hist;
+#endif
 };
 
 #define DP_RX_GET_SW_FT_ENTRY_SIZE sizeof(struct dp_fisa_rx_sw_ft)
@@ -2979,6 +3198,8 @@ struct dp_rx_fst {
 	struct dp_soc *soc_hdl;
 	qdf_atomic_t fse_cache_flush_posted;
 	qdf_timer_t fse_cache_flush_timer;
+	/* Allow FSE cache flush cmd to FW */
+	bool fse_cache_flush_allow;
 	struct fse_cache_flush_history cache_fl_rec[MAX_FSE_CACHE_FL_HST];
 	/* FISA DP stats */
 	struct dp_fisa_stats stats;
@@ -2993,6 +3214,7 @@ struct dp_rx_fst {
 	qdf_event_t cmem_resp_event;
 	bool flow_deletion_supported;
 	bool fst_in_cmem;
+	bool pm_suspended;
 };
 
 #endif /* WLAN_SUPPORT_RX_FISA */
@@ -3015,4 +3237,9 @@ QDF_STATUS dp_hw_link_desc_pool_banks_alloc(struct dp_soc *soc,
 					    uint32_t mac_id);
 void dp_link_desc_ring_replenish(struct dp_soc *soc, uint32_t mac_id);
 
+#ifdef WLAN_FEATURE_RX_PREALLOC_BUFFER_POOL
+void dp_rx_refill_buff_pool_enqueue(struct dp_soc *soc);
+#else
+static inline void dp_rx_refill_buff_pool_enqueue(struct dp_soc *soc) {}
+#endif
 #endif /* _DP_TYPES_H_ */

@@ -50,6 +50,10 @@
 #define HTT_SHIFT_UPPER_TIMESTAMP 32
 #define HTT_MASK_UPPER_TIMESTAMP 0xFFFFFFFF00000000
 
+#define HTT_HTC_PKT_STATUS_SUCCESS \
+	((pkt->htc_pkt.Status != QDF_STATUS_E_CANCELED) && \
+	(pkt->htc_pkt.Status != QDF_STATUS_E_RESOURCES))
+
 /*
  * dp_htt_get_ppdu_sniffer_ampdu_tlv_bitmap() - Get ppdu stats tlv
  * bitmap for sniffer mode
@@ -619,7 +623,7 @@ static inline QDF_STATUS DP_HTT_SEND_HTC_PKT(struct htt_soc *soc,
 	htt_command_record(soc->htt_logger_handle, cmd, buf);
 
 	status = htc_send_pkt(soc->htc_soc, &pkt->htc_pkt);
-	if (status == QDF_STATUS_SUCCESS)
+	if (status == QDF_STATUS_SUCCESS && HTT_HTC_PKT_STATUS_SUCCESS)
 		htt_htc_misc_pkt_list_add(soc, pkt);
 	else
 		soc->stats.fail_count++;
@@ -4452,6 +4456,34 @@ static void dp_htt_bkp_event_alert(u_int32_t *msg_word, struct htt_soc *soc)
 	dp_print_napi_stats(pdev->soc);
 }
 
+#ifdef WLAN_FEATURE_PKT_CAPTURE_V2
+/*
+ * dp_offload_ind_handler() - offload msg handler
+ * @htt_soc: HTT SOC handle
+ * @msg_word: Pointer to payload
+ *
+ * Return: None
+ */
+static void
+dp_offload_ind_handler(struct htt_soc *soc, uint32_t *msg_word)
+{
+	u_int8_t pdev_id;
+	u_int8_t target_pdev_id;
+
+	target_pdev_id = HTT_T2H_PPDU_STATS_PDEV_ID_GET(*msg_word);
+	pdev_id = dp_get_host_pdev_id_for_target_pdev_id(soc->dp_soc,
+							 target_pdev_id);
+	dp_wdi_event_handler(WDI_EVENT_PKT_CAPTURE_OFFLOAD_TX_DATA, soc->dp_soc,
+			     msg_word, HTT_INVALID_VDEV, WDI_NO_VAL,
+			     pdev_id);
+}
+#else
+static void
+dp_offload_ind_handler(struct htt_soc *soc, uint32_t *msg_word)
+{
+}
+#endif
+
 /*
  * dp_htt_t2h_msg_handler() - Generic Target to host Msg/event handler
  * @context:	Opaque context (HTT SOC handle)
@@ -4799,6 +4831,12 @@ static void dp_htt_t2h_msg_handler(void *context, HTC_PACKET *pkt)
 
 			dp_rx_fst_update_cmem_params(soc->dp_soc, num_entries,
 						     cmem_ba_lo, cmem_ba_hi);
+			break;
+		}
+	case HTT_T2H_MSG_TYPE_TX_OFFLOAD_DELIVER_IND:
+		{
+			dp_offload_ind_handler(soc, msg_word);
+			break;
 		}
 	default:
 		break;

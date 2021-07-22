@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016-2018, 2020 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2016-2018, 2020-2021 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -65,6 +65,7 @@ struct hif_bus_ops {
 	void (*hif_irq_enable)(struct hif_softc *hif_sc, int ce_id);
 	int (*hif_grp_irq_configure)(struct hif_softc *hif_sc,
 				     struct hif_exec_context *exec);
+	void (*hif_grp_irq_deconfigure)(struct hif_softc *hif_sc);
 	int (*hif_dump_registers)(struct hif_softc *hif_sc);
 	void (*hif_dump_target_memory)(struct hif_softc *hif_sc,
 				       void *ramdump_base,
@@ -88,6 +89,8 @@ struct hif_bus_ops {
 	void (*hif_config_irq_affinity)(struct hif_softc *hif_sc);
 	void (*hif_log_bus_info)(struct hif_softc *scn, uint8_t *data,
 				 unsigned int *offset);
+	int (*hif_enable_grp_irqs)(struct hif_softc *scn);
+	int (*hif_disable_grp_irqs)(struct hif_softc *scn);
 };
 
 #ifdef HIF_SNOC
@@ -226,6 +229,7 @@ static inline int hif_sdio_get_context_size(void)
 
 int hif_grp_irq_configure(struct hif_softc *hif_sc,
 			  struct hif_exec_context *hif_exec);
+void hif_grp_irq_deconfigure(struct hif_softc *hif_sc);
 #ifdef HIF_USB
 QDF_STATUS hif_initialize_usb_ops(struct hif_bus_ops *bus_ops);
 int hif_usb_get_context_size(void);

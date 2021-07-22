@@ -51,6 +51,8 @@
 	QDF_TRACE_EXIT(QDF_MODULE_ID_TARGET_IF, "exit")
 #define target_if_err_rl(params...) \
 	QDF_TRACE_ERROR_RL(QDF_MODULE_ID_TARGET_IF, params)
+#define target_if_debug_rl(params...) \
+	QDF_TRACE_DEBUG_RL(QDF_MODULE_ID_TARGET_IF, params)
 
 
 #define targetif_nofl_fatal(params...) \
@@ -2537,4 +2539,50 @@ static inline void target_psoc_get_mu_max_users(
 	mu_caps->mumimo_ul = service_ext2_param->max_users_ul_mumimo;
 }
 
+/**
+ * target_if_set_reg_cc_ext_supp() - Set reg_cc_ext_supp capability
+ * in WMI_INIT_CMD based on host capability of reg_cc_ext_event.
+ *
+ * @tgt_hdl: Pointer to struct target_psoc_info.
+ * @psoc: Pointer to struct wlan_objmgr_psoc.
+ *
+ */
+void target_if_set_reg_cc_ext_supp(struct target_psoc_info *tgt_hdl,
+				   struct wlan_objmgr_psoc *psoc);
+
+/**
+ * target_psoc_set_twt_ack_cap() - Set twt ack capability
+ *
+ * @psoc_info: Pointer to struct target_psoc_info.
+ * @val: twt ack cap value
+ *
+ * Return: None
+ *
+ */
+static inline
+void target_psoc_set_twt_ack_cap(struct target_psoc_info *psoc_info, bool val)
+{
+	if (!psoc_info)
+		return;
+
+	psoc_info->info.service_ext2_param.twt_ack_support_cap = val;
+}
+
+/**
+ * target_psoc_get_twt_ack_cap() - Get twt ack capability
+ *
+ * @psoc_info: Pointer to struct target_psoc_info.
+ * @val: twt ack cap value
+ *
+ * Return: None
+ *
+ */
+static inline
+void target_psoc_get_twt_ack_cap(struct target_psoc_info *psoc_info, bool *val)
+{
+	if (!psoc_info)
+		return;
+
+	*val = psoc_info->info.service_ext2_param.twt_ack_support_cap;
+}
 #endif

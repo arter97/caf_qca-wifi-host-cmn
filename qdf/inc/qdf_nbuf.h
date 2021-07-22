@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2020 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2014-2021 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -3384,6 +3384,18 @@ static inline uint32_t qdf_nbuf_get_tso_num_seg(qdf_nbuf_t nbuf)
 }
 
 /**
+ * qdf_nbuf_get_gso_segs() - Return the number of gso segments in
+ * nbuf
+ * @nbuf: Network buffer
+ *
+ * Return: number of gso segments in nbuf
+ */
+static inline uint16_t qdf_nbuf_get_gso_segs(qdf_nbuf_t nbuf)
+{
+	return __qdf_nbuf_get_gso_segs(nbuf);
+}
+
+/**
  * qdf_nbuf_inc_users() - function to increment the number of
  * users referencing this network buffer
  *
@@ -3955,6 +3967,20 @@ static inline void qdf_net_buf_debug_release_frag(qdf_nbuf_t buf,
 {
 }
 #endif /* NBUF_FRAG_MEMORY_DEBUG */
+
+#ifdef NBUF_MEMORY_DEBUG
+/**
+ * qdf_set_smmu_fault_state() - Set smmu fault sate
+ * @smmu_fault_state: state of the wlan smmy
+ *
+ * Return: void
+ */
+void qdf_set_smmu_fault_state(bool smmu_fault_state);
+#else
+static inline void qdf_set_smmu_fault_state(bool smmu_fault_state)
+{
+}
+#endif
 
 #ifdef MEMORY_DEBUG
 /**

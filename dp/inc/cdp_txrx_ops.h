@@ -58,6 +58,17 @@ enum cdp_nac_param_cmd {
 	CDP_NAC_PARAM_LIST,
 };
 
+#define CDP_DELBA_INTERVAL_MS 3000
+/**
+ * enum cdp_delba_rcode - CDP reason code for sending DELBA
+ * @CDP_DELBA_REASON_NONE: None
+ * @CDP_DELBA_2K_JUMP: Sending DELBA from 2k_jump_handle
+ */
+enum cdp_delba_rcode {
+	CDP_DELBA_REASON_NONE = 0,
+	CDP_DELBA_2K_JUMP,
+};
+
 /**
  * enum vdev_peer_protocol_enter_exit - whether ingress or egress
  * @CDP_VDEV_PEER_PROTOCOL_IS_INGRESS: ingress
@@ -566,6 +577,7 @@ struct cdp_cmn_ops {
 					  ol_txrx_rx_fp rx,
 					  ol_osif_peer_handle osif_peer);
 #endif /* QCA_SUPPORT_WDS_EXTENDED */
+	void (*txrx_drain)(ol_txrx_soc_handle soc);
 };
 
 struct cdp_ctrl_ops {
@@ -1096,12 +1108,14 @@ struct ol_if_ops {
 	 * @vdev_id: dp vdev id
 	 * @peer_macaddr: Peer mac addr
 	 * @tid: Tid number
+	 * @reason_code: Reason code
+	 * @cdp_rcode: CDP reason code for sending DELBA
 	 *
 	 * Return: 0 for success, non-zero for failure
 	 */
 	int (*send_delba)(struct cdp_ctrl_objmgr_psoc *psoc, uint8_t vdev_id,
 			  uint8_t *peer_macaddr, uint8_t tid,
-			  uint8_t reason_code);
+			  uint8_t reason_code, uint8_t cdp_rcode);
 
 	int
 	(*peer_delete_multiple_wds_entries)(struct cdp_ctrl_objmgr_psoc *psoc,
@@ -1149,6 +1163,7 @@ struct ol_if_ops {
 	QDF_STATUS(*nss_stats_clr)(struct cdp_ctrl_objmgr_psoc *psoc,
 				   uint8_t vdev_id);
 	int (*dp_rx_get_pending)(ol_txrx_soc_handle soc);
+	void (*dp_rx_sched_refill_thread)(ol_txrx_soc_handle soc);
 	/* TODO: Add any other control path calls required to OL_IF/WMA layer */
 #ifdef QCA_SUPPORT_WDS_EXTENDED
 	void (*rx_wds_ext_peer_learn)(struct cdp_ctrl_objmgr_psoc *ctrl_psoc,
@@ -1276,6 +1291,7 @@ struct cdp_misc_ops {
 					     struct cdp_txrx_ext_stats *req);
 	QDF_STATUS (*request_rx_hw_stats)(struct cdp_soc_t *soc_hdl,
 					  uint8_t vdev_id);
+	void (*reset_rx_hw_ext_stats)(struct cdp_soc_t *soc_hdl);
 	QDF_STATUS (*vdev_inform_ll_conn)(struct cdp_soc_t *soc_hdl,
 					  uint8_t vdev_id,
 					  enum vdev_ll_conn_actions action);
@@ -1366,6 +1382,8 @@ struct cdp_peer_ops {
 					 uint8_t *peer_mac, bool val);
 	void (*set_peer_as_tdls_peer)(struct cdp_soc_t *soc, uint8_t vdev_id,
 				      uint8_t *peer_mac, bool val);
+	void (*peer_flush_frags)(struct cdp_soc_t *soc_hdl,
+				 uint8_t vdev_id, uint8_t *peer_mac);
 };
 
 /**

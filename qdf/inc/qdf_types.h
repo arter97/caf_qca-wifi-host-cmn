@@ -210,10 +210,13 @@ typedef struct qdf_shared_mem {
  * on expiry
  * @QDF_TIMER_TYPE_WAKE_APPS: Non deferrable timer which will cause CPU to
  * wake up on expiry
+ * @QDF_TIMER_TYPE_SW_SPIN: Deferrable&Pinned SW timer, it will not cause cpu
+ * to wake up on expiry and be able to queue on assigned cpu by add_timer_on
  */
 typedef enum {
 	QDF_TIMER_TYPE_SW,
-	QDF_TIMER_TYPE_WAKE_APPS
+	QDF_TIMER_TYPE_WAKE_APPS,
+	QDF_TIMER_TYPE_SW_SPIN
 } QDF_TIMER_TYPE;
 
 /**
@@ -1348,6 +1351,10 @@ enum qdf_suspend_type {
  * @QDF_WMI_BUF_SEQUENCE_MISMATCH: WMI Tx completion buffer sequence mismatch
  * @QDF_HAL_REG_WRITE_FAILURE: HAL register writing failures
  * @QDF_SUSPEND_NO_CREDIT: host lack of credit after suspend
+ * @QDF_TASKLET_CREDIT_LATENCY_DETECT: tasklet or credit latency happened
+ * @QDF_RX_REG_PKT_ROUTE_ERR: MSDU buf errors exceed thresh in REO err path
+ * @QDF_VDEV_SM_OUT_OF_SYNC: Vdev SM is out of sync and connect req received
+ * when already connected
  */
 enum qdf_hang_reason {
 	QDF_REASON_UNSPECIFIED,
@@ -1373,6 +1380,9 @@ enum qdf_hang_reason {
 	QDF_WMI_BUF_SEQUENCE_MISMATCH,
 	QDF_HAL_REG_WRITE_FAILURE,
 	QDF_SUSPEND_NO_CREDIT,
+	QDF_TASKLET_CREDIT_LATENCY_DETECT,
+	QDF_RX_REG_PKT_ROUTE_ERR,
+	QDF_VDEV_SM_OUT_OF_SYNC,
 };
 
 /**

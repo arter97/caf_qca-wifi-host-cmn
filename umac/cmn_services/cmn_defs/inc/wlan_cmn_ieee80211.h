@@ -142,6 +142,17 @@
 #define WLAN_RM_CAPABILITY_IE_MAX_LEN            5
 #define WLAN_RNR_IE_MIN_LEN                      5
 
+/* Wide band channel switch IE length */
+#define WLAN_WIDE_BW_CHAN_SWITCH_IE_LEN          3
+
+/* Number of max TX power elements supported plus size of Transmit Power
+ * Information element.
+ */
+#define WLAN_TPE_IE_MAX_LEN                      9
+
+/* Max channel switch time IE length */
+#define WLAN_MAX_CHAN_SWITCH_TIME_IE_LEN         4
+
 /* HT capability flags */
 #define WLAN_HTCAP_C_ADVCODING             0x0001
 #define WLAN_HTCAP_C_CHWIDTH40             0x0002
@@ -425,6 +436,7 @@ enum element_ie {
  * @WLAN_EXTN_ELEMID_HECAP:  HE capabilities IE
  * @WLAN_EXTN_ELEMID_HEOP:   HE Operation IE
  * @WLAN_EXTN_ELEMID_MUEDCA: MU-EDCA IE
+ * @WLAN_EXTN_ELEMID_NONINHERITANCE: Non inheritance IE
  * @WLAN_EXTN_ELEMID_HE_6G_CAP: HE 6GHz Band Capabilities IE
  * @WLAN_EXTN_ELEMID_SRP:    spatial reuse parameter IE
  */
@@ -434,6 +446,7 @@ enum extn_element_ie {
 	WLAN_EXTN_ELEMID_HEOP        = 36,
 	WLAN_EXTN_ELEMID_MUEDCA      = 38,
 	WLAN_EXTN_ELEMID_SRP         = 39,
+	WLAN_EXTN_ELEMID_NONINHERITANCE = 56,
 	WLAN_EXTN_ELEMID_HE_6G_CAP   = 59,
 	WLAN_EXTN_ELEMID_ESP         = 11,
 };
@@ -1827,6 +1840,8 @@ is_bwnss_oui(uint8_t *frm)
 	return (frm[1] > 3) && (LE_READ_4(frm + 2) ==
 		((ATH_OUI_BW_NSS_MAP_TYPE << 24) | ATH_OUI));
 }
+
+#define WLAN_BWNSS_MAP_OFFSET 6
 
 /**
  * is_he_cap_oui() - If vendor IE is HE CAP OUI

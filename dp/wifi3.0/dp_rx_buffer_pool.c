@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2020-2021 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -17,13 +17,14 @@
  */
 
 #include "dp_rx_buffer_pool.h"
+#include "dp_ipa.h"
 
 #ifndef DP_RX_BUFFER_POOL_SIZE
 #define DP_RX_BUFFER_POOL_SIZE 128
 #endif
 
-#ifndef DP_RX_BUFFER_POOL_ALLOC_THRES
-#define DP_RX_BUFFER_POOL_ALLOC_THRES 1
+#ifndef DP_RX_BUFF_POOL_ALLOC_THRES
+#define DP_RX_BUFF_POOL_ALLOC_THRES 1
 #endif
 
 #ifdef WLAN_FEATURE_RX_PREALLOC_BUFFER_POOL
@@ -35,7 +36,7 @@ bool dp_rx_buffer_pool_refill(struct dp_soc *soc, qdf_nbuf_t nbuf, u8 mac_id)
 	qdf_nbuf_t next_nbuf, first_nbuf, refill_nbuf;
 	bool consumed = false;
 
-	if (!bufpool->is_initialized)
+	if (!bufpool->is_initialized || !pdev)
 		return consumed;
 
 	/* process only buffers of RXDMA ring */
@@ -101,12 +102,102 @@ void dp_rx_buffer_pool_nbuf_free(struct dp_soc *soc, qdf_nbuf_t nbuf, u8 mac_id)
 	buff_pool = &soc->rx_buff_pool[mac_id];
 
 	if (qdf_likely(qdf_nbuf_queue_head_qlen(&buff_pool->emerg_nbuf_q) >=
-		       DP_RX_BUFFER_POOL_SIZE))
+		       DP_RX_BUFFER_POOL_SIZE) ||
+	    !buff_pool->is_initialized)
 		return qdf_nbuf_free(nbuf);
 
 	qdf_nbuf_reset(nbuf, RX_BUFFER_RESERVATION,
 		       rx_desc_pool->buf_alignment);
 	qdf_nbuf_queue_head_enqueue_tail(&buff_pool->emerg_nbuf_q, nbuf);
+}
+
+void dp_rx_refill_buff_pool_enqueue(struct dp_soc *soc)
+{
+	struct rx_desc_pool *rx_desc_pool;
+	struct rx_refill_buff_pool *buff_pool;
+	qdf_device_t dev;
+	qdf_nbuf_t nbuf;
+	QDF_STATUS ret;
+	int count, i;
+	uint16_t num_refill;
+	uint16_t total_num_refill;
+	uint16_t total_count = 0;
+	uint16_t head, tail;
+
+	if (!soc)
+		return;
+
+	dev = soc->osdev;
+	buff_pool = &soc->rx_refill_buff_pool;
+	rx_desc_pool = &soc->rx_desc_buf[0];
+	if (!buff_pool->is_initialized)
+		return;
+
+	head = buff_pool->head;
+	tail = buff_pool->tail;
+	if (tail > head)
+		total_num_refill = (tail - head - 1);
+	else
+		total_num_refill = (DP_RX_REFILL_BUFF_POOL_SIZE - head +
+				    tail - 1);
+
+	while (total_num_refill) {
+		if (total_num_refill > DP_RX_REFILL_BUFF_POOL_BURST)
+			num_refill = DP_RX_REFILL_BUFF_POOL_BURST;
+		else
+			num_refill = total_num_refill;
+
+		count = 0;
+		for (i = 0; i < num_refill; i++) {
+			nbuf = qdf_nbuf_alloc(dev, rx_desc_pool->buf_size,
+					      RX_BUFFER_RESERVATION,
+					      rx_desc_pool->buf_alignment,
+					      FALSE);
+			if (qdf_unlikely(!nbuf))
+				continue;
+
+			ret = qdf_nbuf_map_nbytes_single(dev, nbuf,
+							 QDF_DMA_FROM_DEVICE,
+							 rx_desc_pool->buf_size);
+			if (qdf_unlikely(QDF_IS_STATUS_ERROR(ret))) {
+				qdf_nbuf_free(nbuf);
+				continue;
+			}
+
+			buff_pool->buf_elem[head++] = nbuf;
+			head &= (DP_RX_REFILL_BUFF_POOL_SIZE - 1);
+			count++;
+		}
+
+		if (count) {
+			buff_pool->head = head;
+			total_num_refill -= count;
+			total_count += count;
+		}
+	}
+
+	DP_STATS_INC(buff_pool->dp_pdev,
+		     rx_refill_buff_pool.num_bufs_refilled,
+		     total_count);
+}
+
+static inline qdf_nbuf_t dp_rx_refill_buff_pool_dequeue_nbuf(struct dp_soc *soc)
+{
+	struct rx_refill_buff_pool *buff_pool = &soc->rx_refill_buff_pool;
+	qdf_nbuf_t nbuf = NULL;
+	uint16_t head, tail;
+
+	head = buff_pool->head;
+	tail = buff_pool->tail;
+
+	if (head == tail)
+		return NULL;
+
+	nbuf = buff_pool->buf_elem[tail++];
+	tail &= (DP_RX_REFILL_BUFF_POOL_SIZE - 1);
+	buff_pool->tail = tail;
+
+	return nbuf;
 }
 
 qdf_nbuf_t
@@ -118,6 +209,13 @@ dp_rx_buffer_pool_nbuf_alloc(struct dp_soc *soc, uint32_t mac_id,
 	struct rx_buff_pool *buff_pool;
 	struct dp_srng *dp_rxdma_srng;
 	qdf_nbuf_t nbuf;
+
+	nbuf = dp_rx_refill_buff_pool_dequeue_nbuf(soc);
+	if (qdf_likely(nbuf)) {
+		DP_STATS_INC(dp_pdev,
+			     rx_refill_buff_pool.num_bufs_allocated, 1);
+		return nbuf;
+	}
 
 	if (!wlan_cfg_per_pdev_lmac_ring(soc->wlan_cfg_ctx))
 		mac_id = dp_pdev->lmac_id;
@@ -152,12 +250,77 @@ dp_rx_buffer_pool_nbuf_alloc(struct dp_soc *soc, uint32_t mac_id,
 	return nbuf;
 }
 
+QDF_STATUS
+dp_rx_buffer_pool_nbuf_map(struct dp_soc *soc,
+			   struct rx_desc_pool *rx_desc_pool,
+			   struct dp_rx_nbuf_frag_info *nbuf_frag_info_t)
+{
+	QDF_STATUS ret = QDF_STATUS_SUCCESS;
+
+	if (!QDF_NBUF_CB_PADDR((nbuf_frag_info_t->virt_addr).nbuf))
+		ret = qdf_nbuf_map_nbytes_single(soc->osdev,
+						 (nbuf_frag_info_t->virt_addr).nbuf,
+						 QDF_DMA_FROM_DEVICE,
+						 rx_desc_pool->buf_size);
+
+	return ret;
+}
+
+static void dp_rx_refill_buff_pool_init(struct dp_soc *soc, u8 mac_id)
+{
+	struct rx_desc_pool *rx_desc_pool = &soc->rx_desc_buf[mac_id];
+	qdf_nbuf_t nbuf;
+	struct rx_refill_buff_pool *buff_pool = &soc->rx_refill_buff_pool;
+	QDF_STATUS ret;
+	uint16_t head = 0;
+	int i;
+
+	if (!wlan_cfg_is_rx_refill_buffer_pool_enabled(soc->wlan_cfg_ctx)) {
+		dp_err("RX refill buffer pool support is disabled");
+		buff_pool->is_initialized = false;
+		return;
+	}
+
+	buff_pool->max_bufq_len = DP_RX_REFILL_BUFF_POOL_SIZE;
+	buff_pool->dp_pdev = dp_get_pdev_for_lmac_id(soc, 0);
+	buff_pool->tail = 0;
+
+	for (i = 0; i < (buff_pool->max_bufq_len - 1); i++) {
+		nbuf = qdf_nbuf_alloc(soc->osdev, rx_desc_pool->buf_size,
+				      RX_BUFFER_RESERVATION,
+				      rx_desc_pool->buf_alignment, FALSE);
+		if (!nbuf)
+			continue;
+
+		ret = qdf_nbuf_map_nbytes_single(soc->osdev, nbuf,
+						 QDF_DMA_FROM_DEVICE,
+						 rx_desc_pool->buf_size);
+		if (qdf_unlikely(QDF_IS_STATUS_ERROR(ret))) {
+			qdf_nbuf_free(nbuf);
+			continue;
+		}
+
+		buff_pool->buf_elem[head] = nbuf;
+		head++;
+	}
+
+	buff_pool->head =  head;
+
+	dp_info("RX refill buffer pool required allocation: %u actual allocation: %u",
+		buff_pool->max_bufq_len,
+		buff_pool->head);
+
+	buff_pool->is_initialized = true;
+}
+
 void dp_rx_buffer_pool_init(struct dp_soc *soc, u8 mac_id)
 {
 	struct rx_desc_pool *rx_desc_pool = &soc->rx_desc_buf[mac_id];
 	struct rx_buff_pool *buff_pool = &soc->rx_buff_pool[mac_id];
 	qdf_nbuf_t nbuf;
 	int i;
+
+	dp_rx_refill_buff_pool_init(soc, mac_id);
 
 	if (!wlan_cfg_is_rx_buffer_pool_enabled(soc->wlan_cfg_ctx)) {
 		dp_err("RX buffer pool support is disabled");
@@ -187,10 +350,36 @@ void dp_rx_buffer_pool_init(struct dp_soc *soc, u8 mac_id)
 	buff_pool->is_initialized = true;
 }
 
+static void dp_rx_refill_buff_pool_deinit(struct dp_soc *soc, u8 mac_id)
+{
+	struct rx_refill_buff_pool *buff_pool = &soc->rx_refill_buff_pool;
+	struct rx_desc_pool *rx_desc_pool = &soc->rx_desc_buf[mac_id];
+	qdf_nbuf_t nbuf;
+	uint32_t count = 0;
+
+	if (!buff_pool->is_initialized)
+		return;
+
+	while ((nbuf = dp_rx_refill_buff_pool_dequeue_nbuf(soc))) {
+		qdf_nbuf_unmap_nbytes_single(soc->osdev, nbuf,
+					     QDF_DMA_BIDIRECTIONAL,
+					     rx_desc_pool->buf_size);
+		qdf_nbuf_free(nbuf);
+		count++;
+	}
+
+	dp_info("Rx refill buffers freed during deinit %u head: %u, tail: %u",
+		count, buff_pool->head, buff_pool->tail);
+
+	buff_pool->is_initialized = false;
+}
+
 void dp_rx_buffer_pool_deinit(struct dp_soc *soc, u8 mac_id)
 {
 	struct rx_buff_pool *buff_pool = &soc->rx_buff_pool[mac_id];
 	qdf_nbuf_t nbuf;
+
+	dp_rx_refill_buff_pool_deinit(soc, mac_id);
 
 	if (!buff_pool->is_initialized)
 		return;

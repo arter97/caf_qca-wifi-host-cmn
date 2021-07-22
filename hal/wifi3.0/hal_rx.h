@@ -288,6 +288,14 @@ enum hal_rx_ret_buf_manager {
 		HAL_RX_COOKIE_INVALID_MASK)
 
 /*
+ * macro to reset the invalid bit for sw cookie
+ */
+#define HAL_RX_BUF_COOKIE_INVALID_RESET(buff_addr_info) \
+		((*(((unsigned int *)buff_addr_info) + \
+		(BUFFER_ADDR_INFO_1_SW_BUFFER_COOKIE_OFFSET >> 2))) &= \
+		~HAL_RX_COOKIE_INVALID_MASK)
+
+/*
  * macro to set the cookie into the rxdma ring entry
  */
 #define HAL_RXDMA_COOKIE_SET(buff_addr_info, cookie) \
@@ -389,6 +397,11 @@ enum hal_rx_ret_buf_manager {
 	(HAL_RX_BUF_COOKIE_GET(&		\
 	(((struct reo_destination_ring *)	\
 		reo_desc)->buf_or_link_desc_addr_info)))
+
+#define HAL_RX_REO_BUF_COOKIE_INVALID_RESET(reo_desc)	\
+		(HAL_RX_BUF_COOKIE_INVALID_RESET(&		\
+		(((struct reo_destination_ring *)	\
+			reo_desc)->buf_or_link_desc_addr_info)))
 
 #define HAL_RX_MPDU_SEQUENCE_NUMBER_GET(mpdu_info_ptr)	\
 	((mpdu_info_ptr					\
@@ -4021,5 +4034,27 @@ uint32_t hal_rx_attn_offset_get(hal_soc_handle_t hal_soc_hdl)
 	}
 
 	return hal_soc->ops->hal_rx_attn_offset_get();
+}
+
+#define HAL_RX_ATTN_MSDU_LEN_ERR_GET(_rx_attn)		\
+	(_HAL_MS((*_OFFSET_TO_WORD_PTR(_rx_attn,	\
+		RX_ATTENTION_1_MSDU_LENGTH_ERR_OFFSET)),	\
+		RX_ATTENTION_1_MSDU_LENGTH_ERR_MASK,		\
+		RX_ATTENTION_1_MSDU_LENGTH_ERR_LSB))
+
+/**
+ * hal_rx_attn_msdu_len_err_get(): Get msdu_len_err value from
+ *  rx attention tlvs
+ * @buf: pointer to rx pkt tlvs hdr
+ *
+ * Return: msdu_len_err value
+ */
+static inline uint32_t
+hal_rx_attn_msdu_len_err_get(uint8_t *buf)
+{
+	struct rx_pkt_tlvs *pkt_tlvs = (struct rx_pkt_tlvs *)buf;
+	struct rx_attention *rx_attn = &pkt_tlvs->attn_tlv.rx_attn;
+
+	return HAL_RX_ATTN_MSDU_LEN_ERR_GET(rx_attn);
 }
 #endif /* _HAL_RX_H */

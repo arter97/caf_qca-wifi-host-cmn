@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2019-2021 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -191,8 +191,12 @@ static QDF_STATUS vdev_mgr_start_param_update(
 	param->channel.mhz = des_chan->ch_freq;
 	param->channel.half_rate = mlme_obj->mgmt.rate_info.half_rate;
 	param->channel.quarter_rate = mlme_obj->mgmt.rate_info.quarter_rate;
-	param->channel.dfs_set = wlan_reg_is_dfs_for_freq(pdev,
-							  des_chan->ch_freq);
+
+	if (op_mode == QDF_SAP_MODE || op_mode == QDF_P2P_GO_MODE)
+		param->channel.dfs_set = wlan_reg_is_dfs_for_freq(
+							pdev,
+							des_chan->ch_freq);
+
 	param->channel.is_chan_passive =
 		utils_is_dfs_chan_for_freq(pdev, param->channel.mhz);
 	param->channel.allow_ht = mlme_obj->proto.ht_info.allow_ht;
@@ -366,12 +370,9 @@ static QDF_STATUS vdev_mgr_up_param_update(
 	param->vdev_id = wlan_vdev_get_id(vdev);
 	param->assoc_id = mlme_obj->proto.sta.assoc_id;
 	mbss = &mlme_obj->mgmt.mbss_11ax;
-	if (mbss->profile_idx) {
-		param->profile_idx = mbss->profile_idx;
-		param->profile_num = mbss->profile_num;
-		qdf_mem_copy(param->trans_bssid, mbss->trans_bssid,
-			     QDF_MAC_ADDR_SIZE);
-	}
+	param->profile_idx = mbss->profile_idx;
+	param->profile_num = mbss->profile_num;
+	qdf_mem_copy(param->trans_bssid, mbss->trans_bssid, QDF_MAC_ADDR_SIZE);
 
 	return QDF_STATUS_SUCCESS;
 }
