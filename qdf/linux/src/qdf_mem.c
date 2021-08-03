@@ -493,9 +493,50 @@ static int qdf_err_printer(void *priv, const char *fmt, ...)
 
 #endif /* MEMORY_DEBUG */
 
-u_int8_t prealloc_disabled = 1;
-qdf_declare_param(prealloc_disabled, byte);
+bool prealloc_disabled = 1;
+qdf_declare_param(prealloc_disabled, bool);
 qdf_export_symbol(prealloc_disabled);
+
+int qdf_mem_malloc_flags(void)
+{
+	if (in_interrupt() || irqs_disabled() || in_atomic())
+		return GFP_ATOMIC;
+
+	return GFP_KERNEL;
+}
+
+qdf_export_symbol(qdf_mem_malloc_flags);
+
+/**
+ * qdf_prealloc_disabled_config_get() - Get the user configuration of
+ *                                       prealloc_disabled
+ *
+ * Return: value of prealloc_disabled qdf module argument
+ */
+bool qdf_prealloc_disabled_config_get(void)
+{
+	return prealloc_disabled;
+}
+
+qdf_export_symbol(qdf_prealloc_disabled_config_get);
+
+#ifdef QCA_WIFI_MODULE_PARAMS_FROM_INI
+/**
+ * qdf_prealloc_disabled_config_set() - Set prealloc_disabled
+ * @str_value: value of the module param
+ *
+ * This function will set qdf module param prealloc_disabled
+ *
+ * Return: QDF_STATUS_SUCCESS on Success
+ */
+QDF_STATUS qdf_prealloc_disabled_config_set(const char *str_value)
+{
+	QDF_STATUS status;
+
+	status = qdf_bool_parse(str_value, &prealloc_disabled);
+	return status;
+}
+#endif
 
 #if defined WLAN_DEBUGFS
 
@@ -1334,6 +1375,14 @@ void __qdf_mempool_free(qdf_device_t osdev, __qdf_mempool_t pool, void *buf)
 qdf_export_symbol(__qdf_mempool_free);
 
 #if IS_ENABLED(CONFIG_WCNSS_MEM_PRE_ALLOC)
+static bool qdf_might_be_prealloc(void *ptr)
+{
+	if (ksize(ptr) > WCNSS_PRE_ALLOC_GET_THRESHOLD)
+		return true;
+	else
+		return false;
+}
+
 /**
  * qdf_mem_prealloc_get() - conditionally pre-allocate memory
  * @size: the number of bytes to allocate
@@ -1365,6 +1414,11 @@ static inline bool qdf_mem_prealloc_put(void *ptr)
 	return wcnss_prealloc_put(ptr);
 }
 #else
+static bool qdf_might_be_prealloc(void *ptr)
+{
+	return false;
+}
+
 static inline void *qdf_mem_prealloc_get(size_t size)
 {
 	return NULL;
@@ -1375,14 +1429,6 @@ static inline bool qdf_mem_prealloc_put(void *ptr)
 	return false;
 }
 #endif /* CONFIG_WCNSS_MEM_PRE_ALLOC */
-
-static int qdf_mem_malloc_flags(void)
-{
-	if (in_interrupt() || irqs_disabled() || in_atomic())
-		return GFP_ATOMIC;
-
-	return GFP_KERNEL;
-}
 
 /* External Function implementation */
 #ifdef MEMORY_DEBUG
@@ -1403,6 +1449,24 @@ bool qdf_mem_debug_config_get(void)
 	return mem_debug_disabled;
 }
 #endif /* DISABLE_MEM_DBG_LOAD_CONFIG */
+
+/**
+ * qdf_mem_debug_disabled_set() - Set mem_debug_disabled
+ * @str_value: value of the module param
+ *
+ * This function will se qdf module param mem_debug_disabled
+ *
+ * Return: QDF_STATUS_SUCCESS on Success
+ */
+#ifdef QCA_WIFI_MODULE_PARAMS_FROM_INI
+QDF_STATUS qdf_mem_debug_disabled_config_set(const char *str_value)
+{
+	QDF_STATUS status;
+
+	status = qdf_bool_parse(str_value, &mem_debug_disabled);
+	return status;
+}
+#endif
 
 /**
  * qdf_mem_debug_init() - initialize qdf memory debug functionality
@@ -1984,8 +2048,10 @@ void __qdf_mem_free(void *ptr)
 	if (!ptr)
 		return;
 
-	if (qdf_mem_prealloc_put(ptr))
-		return;
+	if (qdf_might_be_prealloc(ptr)) {
+		if (qdf_mem_prealloc_put(ptr))
+			return;
+	}
 
 	qdf_mem_kmalloc_dec(ksize(ptr));
 
@@ -2018,6 +2084,33 @@ void *__qdf_mem_malloc(size_t size, const char *func, uint32_t line)
 }
 
 qdf_export_symbol(__qdf_mem_malloc);
+
+#ifdef QCA_WIFI_MODULE_PARAMS_FROM_INI
+void __qdf_untracked_mem_free(void *ptr)
+{
+	if (!ptr)
+		return;
+
+	kfree(ptr);
+}
+
+void *__qdf_untracked_mem_malloc(size_t size, const char *func, uint32_t line)
+{
+	void *ptr;
+
+	if (!size || size > QDF_MEM_MAX_MALLOC) {
+		qdf_nofl_err("Cannot malloc %zu bytes @ %s:%d", size, func,
+			     line);
+		return NULL;
+	}
+
+	ptr = kzalloc(size, qdf_mem_malloc_flags());
+	if (!ptr)
+		return NULL;
+
+	return ptr;
+}
+#endif
 
 void *qdf_aligned_malloc_fl(uint32_t *size,
 			    void **vaddr_unaligned,

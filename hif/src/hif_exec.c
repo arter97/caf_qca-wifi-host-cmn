@@ -405,7 +405,7 @@ void hif_print_napi_stats(struct hif_opaque_softc *hif_ctx)
 	 */
 	char hist_str[(QCA_NAPI_NUM_BUCKETS * 11) + 1] = {'\0'};
 
-	QDF_TRACE(QDF_MODULE_ID_HIF, QDF_TRACE_LEVEL_ERROR,
+	QDF_TRACE(QDF_MODULE_ID_HIF, QDF_TRACE_LEVEL_INFO_HIGH,
 		  "NAPI[#]CPU[#] |scheds |polls  |comps  |dones  |t-lim  |max(us)|hist(500us buckets)");
 
 	for (i = 0;
@@ -421,7 +421,7 @@ void hif_print_napi_stats(struct hif_opaque_softc *hif_ctx)
 						    hist_str,
 						    sizeof(hist_str));
 			QDF_TRACE(QDF_MODULE_ID_HIF,
-				  QDF_TRACE_LEVEL_ERROR,
+				  QDF_TRACE_LEVEL_INFO_HIGH,
 				  "NAPI[%d]CPU[%d]: %7u %7u %7u %7u %7u %7llu %s",
 				  i, j,
 				  napi_stats->napi_schedules,
@@ -834,6 +834,21 @@ QDF_STATUS hif_configure_ext_group_interrupts(struct hif_opaque_softc *hif_ctx)
 }
 
 qdf_export_symbol(hif_configure_ext_group_interrupts);
+
+void hif_deconfigure_ext_group_interrupts(struct hif_opaque_softc *hif_ctx)
+{
+	struct hif_softc *scn = HIF_GET_SOFTC(hif_ctx);
+
+	if (!scn || !scn->ext_grp_irq_configured) {
+		hif_err("scn(%pk) is NULL or grp irq not configured", scn);
+		return;
+	}
+
+	hif_grp_irq_deconfigure(scn);
+	scn->ext_grp_irq_configured = false;
+}
+
+qdf_export_symbol(hif_deconfigure_ext_group_interrupts);
 
 #ifdef WLAN_SUSPEND_RESUME_TEST
 /**

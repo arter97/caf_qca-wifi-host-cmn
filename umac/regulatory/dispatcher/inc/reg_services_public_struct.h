@@ -24,6 +24,10 @@
 #ifndef __REG_SERVICES_PUBLIC_STRUCT_H_
 #define __REG_SERVICES_PUBLIC_STRUCT_H_
 
+#ifdef CONFIG_AFC_SUPPORT
+#include <wlan_reg_afc.h>
+#endif
+
 #define REG_SBS_SEPARATION_THRESHOLD 100
 
 #ifdef CONFIG_BAND_6GHZ
@@ -479,14 +483,14 @@ enum channel_enum {
 #endif /* CONFIG_49GHZ_CHAN */
 
 	MIN_5GHZ_CHANNEL = CHAN_ENUM_5180,
+#ifdef WLAN_FEATURE_DSRC
+	MAX_5GHZ_CHANNEL = CHAN_ENUM_5920,
+#else
 	MAX_5GHZ_CHANNEL = CHAN_ENUM_5885,
+#endif
 	NUM_5GHZ_CHANNELS = (MAX_5GHZ_CHANNEL - MIN_5GHZ_CHANNEL + 1),
 
 #ifdef WLAN_FEATURE_DSRC
-	MIN_5GHZ_CHANNEL = CHAN_ENUM_5180,
-	MAX_5GHZ_CHANNEL = CHAN_ENUM_5920,
-	NUM_5GHZ_CHANNELS = (MAX_5GHZ_CHANNEL - MIN_5GHZ_CHANNEL + 1),
-
 	MIN_DSRC_CHANNEL = CHAN_ENUM_5850,
 	MAX_DSRC_CHANNEL = CHAN_ENUM_5920,
 	NUM_DSRC_CHANNELS = (MAX_DSRC_CHANNEL - MIN_DSRC_CHANNEL + 1),
@@ -704,6 +708,9 @@ enum behav_limit {
  * @behav_limit: OR of bitmaps of enum behav_limit
  * @start_freq: starting frequency
  * @channels: channel set
+ * @cfis: Set of center frequency indices. Center for 40/80/160/320MHz band
+ *         channel opclasses. For 20MHz the list is empty as it is  already
+ *         available in @channels variable.
  */
 struct reg_dmn_op_class_map_t {
 	uint8_t op_class;
@@ -712,6 +719,7 @@ struct reg_dmn_op_class_map_t {
 	uint16_t behav_limit;
 	qdf_freq_t start_freq;
 	uint8_t channels[REG_MAX_CHANNELS_PER_OPERATING_CLASS];
+	uint8_t cfis[REG_MAX_CHANNELS_PER_OPERATING_CLASS];
 };
 
 /**
@@ -802,6 +810,97 @@ enum country_src {
 	SOURCE_11D
 };
 
+#ifdef WLAN_FEATURE_GET_USABLE_CHAN_LIST
+/**
+ * enum iftype - (virtual) interface types
+ *
+ * @IFTYPE_UNSPECIFIED: unspecified type, driver decides
+ * @IFTYPE_ADHOC: independent BSS member
+ * @IFTYPE_STATION: managed BSS member
+ * @IFTYPE_AP: access point
+ * @IFTYPE_AP_VLAN: VLAN interface for access points; VLAN interfaces
+ *      are a bit special in that they must always be tied to a pre-existing
+ *      AP type interface.
+ * @IFTYPE_WDS: wireless distribution interface
+ * @IFTYPE_MONITOR: monitor interface receiving all frames
+ * @IFTYPE_MESH_POINT: mesh point
+ * @IFTYPE_P2P_CLIENT: P2P client
+ * @IFTYPE_P2P_GO: P2P group owner
+ * @IFTYPE_P2P_DEVICE: P2P device interface type, this is not a netdev
+ *      and therefore can't be created in the normal ways, use the
+ *      %NL80211_CMD_START_P2P_DEVICE and %NL80211_CMD_STOP_P2P_DEVICE
+ *      commands to create and destroy one
+ * @IF_TYPE_OCB: Outside Context of a BSS
+ *      This mode corresponds to the MIB variable dot11OCBActivated=true
+ * @IF_TYPE_NAN: NAN mode
+ * @IFTYPE_MAX: highest interface type number currently defined
+ * @NUM_IFTYPES: number of defined interface types
+ *
+ * These values are used with the %NL80211_ATTR_IFTYPE
+ * to set the type of an interface.
+ *
+ */
+enum iftype {
+	IFTYPE_UNSPECIFIED,
+	IFTYPE_ADHOC,
+	IFTYPE_STATION,
+	IFTYPE_AP,
+	IFTYPE_AP_VLAN,
+	IFTYPE_WDS,
+	IFTYPE_MONITOR,
+	IFTYPE_MESH_POINT,
+	IFTYPE_P2P_CLIENT,
+	IFTYPE_P2P_GO,
+	IFTYPE_P2P_DEVICE,
+	IFTYPE_OCB,
+	IFTYPE_NAN,
+
+	/* keep last */
+	NUM_IFTYPES,
+	IFTYPE_MAX = NUM_IFTYPES - 1
+};
+
+/**
+ * usable_channels_filter - Filters to get usable channels
+ * FILTER_CELLULAR_COEX: Avoid lte coex channels
+ * FILTER_WLAN_CONCURRENCY: Avoid con channels
+ **/
+enum usable_channels_filter {
+	FILTER_CELLULAR_COEX = 0,
+	FILTER_WLAN_CONCURRENCY = 1,
+};
+
+/**
+ * get_usable_chan_res_params - Usable channels resp params
+ * freq : center freq
+ * seg0_freq : seg0 freq
+ * seg1_freq: seg1 freq
+ * bw : bandwidth
+ * state: channel state
+ * iface_mode_mask: interface mode mask
+ **/
+struct get_usable_chan_res_params {
+	qdf_freq_t freq;
+	uint32_t seg0_freq;
+	uint32_t seg1_freq;
+	enum phy_ch_width bw;
+	uint32_t iface_mode_mask;
+	enum channel_state state;
+};
+
+/**
+ * get_usable_chan_req_params - Usable channels req params
+ * band_mask : band mask
+ * iface_mode_mask: interface mode mask
+ * filter_mask: filter mask
+ **/
+struct get_usable_chan_req_params {
+	uint32_t band_mask;
+	uint32_t iface_mode_mask;
+	uint32_t filter_mask;
+};
+#endif
+
 /**
  * struct regulatory_channel
  * @center_freq: center frequency
@@ -814,6 +913,9 @@ enum country_src {
  * @nol_chan: whether channel is nol
  * @nol_history: Set NOL-History when STA vap detects RADAR.
  * @is_chan_hop_blocked: Whether channel is blocked for ACS hopping.
+ * @ht40intol_flags: Contains Flags to indicate whether the 40PLUS/40MINUS
+ *                   version of the channel is blocked by ACS due to
+ *                   intolerance.
  * @psd_flag: is PSD channel or not
  * @psd_eirp: PSD power level
  */
@@ -830,6 +932,7 @@ struct regulatory_channel {
 	bool nol_history;
 #ifdef CONFIG_HOST_FIND_CHAN
 	bool is_chan_hop_blocked;
+	uint8_t ht40intol_flags;
 #endif
 #ifdef CONFIG_BAND_6GHZ
 	bool psd_flag;
@@ -1379,4 +1482,67 @@ struct reg_tpc_power_info {
 	struct chan_power_info chan_power_info[MAX_NUM_PWR_LEVEL];
 };
 
+#ifdef FEATURE_WLAN_CH_AVOID_EXT
+typedef struct unsafe_ch_list avoid_ch_ext_list;
+/**
+ * struct chan_5g_center_freq
+ * @center_freq_20: center frequency of max 200Mhz
+ * @center_freq_40: center frequency of max 40Mhz
+ * @center_freq_80: center frequency of max 80Mhz
+ * @center_freq_160: center frequency of max 160Mhz
+ */
+struct chan_5g_center_freq {
+	qdf_freq_t center_freq_20;
+	qdf_freq_t center_freq_40;
+	qdf_freq_t center_freq_80;
+	qdf_freq_t center_freq_160;
+};
+
+#define INVALID_CENTER_FREQ 0
+/*MAX 5g channel numbers, not include dsrc*/
+#define MAX_5G_CHAN_NUM 28
+
+#endif
+
+#ifdef CONFIG_AFC_SUPPORT
+/* enum reg_afc_cmd_type - Type of AFC command sent to FW
+ * @REG_AFC_CMD_SERV_RESP_READY : Server response is ready
+ */
+enum reg_afc_cmd_type {
+	REG_AFC_CMD_SERV_RESP_READY = 1,
+};
+
+/* enum reg_afc_serv_resp_format - Indicate the format in which afc_serv_format
+ * is written in FW memory
+ * @REG_AFC_SERV_RESP_FORMAT_JSON - Server response in JSON format
+ * @REG_AFC_SERV_RESP_FORMAT_BINARY - Server response in BINARY format
+ */
+enum reg_afc_serv_resp_format {
+	REG_AFC_SERV_RESP_FORMAT_JSON = 0,
+	REG_AFC_SERV_RESP_FORMAT_BINARY = 1,
+};
+
+/**
+ * struct reg_afc_resp_rx_ind_info - regulatory AFC indication info
+ * @cmd_type: Type of AFC command send to FW
+ * @serv_resp_format: AFC server response format
+ */
+struct reg_afc_resp_rx_ind_info {
+	enum reg_afc_cmd_type cmd_type;
+	enum reg_afc_serv_resp_format serv_resp_format;
+};
+
+/**
+ * afc_req_rx_evt_handler() - Function prototype of AFC request received event
+ * handler
+ * @pdev: Pointer to pdev
+ * @afc_par_req: Pointer to AFC partial request
+ * @arg: Pointer to void (opaque) argument object
+ *
+ * Return: void
+ */
+typedef void (*afc_req_rx_evt_handler)(struct wlan_objmgr_pdev *pdev,
+				       struct wlan_afc_host_partial_request *afc_par_req,
+				       void *arg);
+#endif
 #endif

@@ -98,23 +98,65 @@ reg_process_master_chan_list_ext(struct cur_regulatory_info *reg_info);
  */
 QDF_STATUS reg_process_master_chan_list(struct cur_regulatory_info *reg_info);
 
+/**
+ * reg_get_current_chan_list() - provide the pdev current channel list
+ * @pdev: pdev pointer
+ * @chan_list: channel list pointer
+ *
+ * Return: QDF_STATUS
+ */
 QDF_STATUS reg_get_current_chan_list(struct wlan_objmgr_pdev *pdev,
 				     struct regulatory_channel *chan_list);
 
+#if defined(CONFIG_AFC_SUPPORT) && defined(CONFIG_BAND_6GHZ)
 /**
- * reg_update_nol_history_ch() - Set nol-history flag for the channels in the
- * list.
+ * reg_get_6g_ap_master_chan_list() - Get  an ap  master channel list depending
+ * on * ap power type
+ * @ap_pwr_type: Power type (LPI/VLP/SP)
+ * @chan_list: Pointer to the channel list. The output channel list
  *
- * @pdev: Pdev ptr.
- * @ch_list: Input channel list.
- * @num_ch: Number of channels.
- * @nol_history_ch: NOL-History flag.
- *
- * Return: void
+ * Return: QDF_STATUS
  */
-void reg_update_nol_history_ch(struct wlan_objmgr_pdev *pdev,
-			       uint8_t *chan_list,
-			       uint8_t num_chan,
-			       bool nol_history_chan);
+QDF_STATUS reg_get_6g_ap_master_chan_list(struct wlan_objmgr_pdev *pdev,
+					  enum reg_6g_ap_type ap_pwr_type,
+					  struct regulatory_channel *chan_list);
 
+/**
+ * reg_get_6g_afc_chan_list() - provide the pdev afc channel list
+ * @pdev: pdev pointer
+ * @chan_list: channel list pointer
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS reg_get_6g_afc_chan_list(struct wlan_objmgr_pdev *pdev,
+				    struct regulatory_channel *chan_list);
+/**
+ * reg_psd_2_eirp() - Calculate EIRP from PSD and bandwidth
+ * channel list
+ * @pdev: pdev pointer
+ * @psd: Power Spectral Density in dBm/MHz
+ * @ch_bw: Bandwdith of a channel in MHz (20/40/80/160/320 etc)
+ * @eirp:  EIRP power  in dBm
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS reg_psd_2_eirp(struct wlan_objmgr_pdev *pdev,
+			  int16_t psd,
+			  uint16_t ch_bw,
+			  int16_t *eirp);
+#endif
+
+#ifdef CONFIG_REG_CLIENT
+/**
+ * reg_get_secondary_current_chan_list() - provide the pdev secondary current
+ * channel list
+ * @pdev: pdev pointer
+ * @chan_list: channel list pointer
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS
+reg_get_secondary_current_chan_list(struct wlan_objmgr_pdev *pdev,
+				    struct regulatory_channel *chan_list);
+#endif
 #endif

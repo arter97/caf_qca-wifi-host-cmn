@@ -208,6 +208,10 @@ struct wlan_objmgr_vdev *wlan_objmgr_vdev_obj_create(
 	wlan_vdev_mlme_set_macaddr(vdev, params->macaddr);
 	/* set MAT address */
 	wlan_vdev_mlme_set_mataddr(vdev, params->mataddr);
+	/* set MLD address */
+	wlan_vdev_mlme_set_mldaddr(vdev, params->mldaddr);
+	/* set link address */
+	wlan_vdev_mlme_set_linkaddr(vdev, params->macaddr);
 	/* Set create flags */
 	vdev->vdev_objmgr.c_flags = params->flags;
 	/* store os-specific pointer */
@@ -302,9 +306,10 @@ static QDF_STATUS wlan_objmgr_vdev_obj_destroy(struct wlan_objmgr_vdev *vdev)
 	obj_mgr_debug("Physically deleting vdev %d", vdev_id);
 
 	if (vdev->obj_state != WLAN_OBJ_STATE_LOGICALLY_DELETED) {
-		obj_mgr_err("VDEV object delete is not invoked vdevid:%d objstate:%d",
-			    wlan_vdev_get_id(vdev), vdev->obj_state);
+		obj_mgr_alert("VDEV object delete is not invoked vdevid:%d objstate:%d",
+			      wlan_vdev_get_id(vdev), vdev->obj_state);
 		WLAN_OBJMGR_BUG(0);
+		return QDF_STATUS_E_FAILURE;
 	}
 
 	wlan_minidump_remove(vdev, sizeof(*vdev), wlan_vdev_get_psoc(vdev),

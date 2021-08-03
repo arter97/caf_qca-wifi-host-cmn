@@ -23,7 +23,6 @@
 #ifndef __WLAN_CM_SM_H__
 #define __WLAN_CM_SM_H__
 
-#ifdef FEATURE_CM_ENABLE
 #include <wlan_sm_engine.h>
 
 /**
@@ -64,6 +63,10 @@
  * @WLAN_CM_SM_EV_ROAM_INVOKE:            Host initiated LFR3/FW roam req
  * @WLAN_CM_SM_EV_ROAM_ABORT:             Roam abort
  * @WLAN_CM_SM_EV_ROAM_DONE:              Roam done
+ * @WLAN_CM_SM_EV_PREAUTH_ACTIVE:         Preauth active
+ * @WLAN_CM_SM_EV_PREAUTH_RESP:           Preauth response
+ * @WLAN_CM_SM_EV_REASSOC_TIMER：         Reassoc timer expired
+ * @WLAN_CM_SM_EV_HO_ROAM_DISCONNECT_DONE: Disconnect done for hands off/roaming
  * @WLAN_CM_SM_EV_MAX:                    Max event
  */
 enum wlan_cm_sm_evt {
@@ -100,6 +103,10 @@ enum wlan_cm_sm_evt {
 	WLAN_CM_SM_EV_ROAM_INVOKE = 30,
 	WLAN_CM_SM_EV_ROAM_ABORT = 31,
 	WLAN_CM_SM_EV_ROAM_DONE = 32,
+	WLAN_CM_SM_EV_PREAUTH_ACTIVE = 33,
+	WLAN_CM_SM_EV_PREAUTH_RESP = 34,
+	WLAN_CM_SM_EV_REASSOC_TIMER = 35,
+	WLAN_CM_SM_EV_HO_ROAM_DISCONNECT_DONE = 36,
 	WLAN_CM_SM_EV_MAX,
 };
 
@@ -333,6 +340,4 @@ QDF_STATUS cm_sm_deliver_event_sync(struct cnx_mgr *cm_ctx,
 QDF_STATUS  cm_sm_deliver_event(struct wlan_objmgr_vdev *vdev,
 				enum wlan_cm_sm_evt event,
 				uint16_t data_len, void *data);
-
-#endif /* FEATURE_CM_ENABLE */
 #endif /* __WLAN_CM_SM_H__ */

@@ -25,8 +25,10 @@
 /* Include Files */
 #include "qdf_str.h"
 #include <qdf_trace.h>
+#include <qdf_parse.h>
 #include <qdf_module.h>
 #include <qdf_util.h>
+#include <qdf_mem.h>
 
 /* macro to map qdf trace levels into the bitmask */
 #define QDF_TRACE_LEVEL_TO_MODULE_BITMASK(_level) ((1 << (_level)))
@@ -103,6 +105,28 @@ static struct s_qdf_dp_trace_data g_qdf_dp_trace_data;
 static tp_qdf_dp_trace_cb qdf_dp_trace_cb_table[QDF_DP_TRACE_MAX + 1];
 #endif
 
+#ifdef QCA_WIFI_MODULE_PARAMS_FROM_INI
+#define QDF_PARAM_STR_LENGTH 40
+
+enum qdf_num_module_param {
+	MEM_DEBUG_DISABLED,
+	QDF_DBG_MASK,
+	PREALLOC_DISABLED,
+	QDF_LOG_DUMP_AT_KERNEL_ENABLE,
+	QDF_DBG_ARR,
+	QDF_LOG_FLUSH_TIMER_PERIOD,
+	QDF_PARAM_MAX,
+};
+
+static char qdf_module_param[QDF_PARAM_MAX][QDF_PARAM_STR_LENGTH] = {
+	"mem_debug_disabled",
+	"qdf_dbg_mask",
+	"prealloc_disabled",
+	"qdf_log_dump_at_kernel_enable",
+	"qdf_dbg_arr",
+	"qdf_log_flush_timer_period",
+};
+#endif
 /**
  * qdf_snprintf() - wrapper function to snprintf
  * @str_buffer: string Buffer
@@ -1607,7 +1631,7 @@ static bool qdf_log_icmpv6_pkt(uint8_t vdev_id, struct sk_buff *skb,
 			QDF_DP_TRACE_ICMPv6_PACKET_RECORD,
 			vdev_id, (skb->data + QDF_NBUF_SRC_MAC_OFFSET),
 			(skb->data + QDF_NBUF_DEST_MAC_OFFSET),
-			QDF_PROTO_TYPE_ICMPv6, subtype, dir, pdev_id, false));
+			QDF_PROTO_TYPE_ICMPv6, subtype, dir, pdev_id, false, 0));
 
 		switch (subtype) {
 		case QDF_PROTO_ICMPV6_REQ:
@@ -1650,12 +1674,23 @@ static bool qdf_log_icmp_pkt(uint8_t vdev_id, struct sk_buff *skb,
 			     enum qdf_proto_dir dir, uint8_t pdev_id)
 {
 	enum qdf_proto_subtype proto_subtype;
+	uint8_t *data = NULL;
+	uint16_t seq_num = 0;
+	uint16_t icmp_id = 0;
+	uint32_t proto_priv_data = 0;
 
 	if ((qdf_dp_get_proto_bitmap() & QDF_NBUF_PKT_TRAC_TYPE_ICMP) &&
 	    (qdf_nbuf_is_icmp_pkt(skb) == true)) {
 
 		QDF_NBUF_CB_DP_TRACE_PRINT(skb) = false;
 		proto_subtype = qdf_nbuf_get_icmp_subtype(skb);
+
+		data = qdf_nbuf_data(skb);
+		icmp_id = qdf_cpu_to_be16(*(uint16_t *)(data + ICMP_ID_OFFSET));
+		seq_num = qdf_cpu_to_be16(*(uint16_t *)(data + ICMP_SEQ_NUM_OFFSET));
+
+		proto_priv_data |= ((proto_priv_data | ((uint32_t)icmp_id)) << 16);
+		proto_priv_data |= (uint32_t)seq_num;
 
 		if (QDF_TX == dir)
 			QDF_NBUF_CB_TX_DP_TRACE(skb) = 1;
@@ -1670,7 +1705,7 @@ static bool qdf_log_icmp_pkt(uint8_t vdev_id, struct sk_buff *skb,
 					       QDF_NBUF_DEST_MAC_OFFSET,
 					       QDF_PROTO_TYPE_ICMP,
 					       proto_subtype, dir, pdev_id,
-					       false));
+					       false, proto_priv_data));
 
 		if (proto_subtype == QDF_PROTO_ICMP_REQ)
 			g_qdf_dp_trace_data.icmp_req++;
@@ -1733,7 +1768,7 @@ static bool qdf_log_eapol_pkt(uint8_t vdev_id, struct sk_buff *skb,
 					       skb->data +
 					       QDF_NBUF_DEST_MAC_OFFSET,
 					       QDF_PROTO_TYPE_EAPOL, subtype,
-					       dir, pdev_id, true));
+					       dir, pdev_id, true, 0));
 
 		switch (subtype) {
 		case QDF_PROTO_EAPOL_M1:
@@ -1808,7 +1843,7 @@ static bool qdf_log_dhcp_pkt(uint8_t vdev_id, struct sk_buff *skb,
 					       skb->data +
 					       QDF_NBUF_DEST_MAC_OFFSET,
 					       QDF_PROTO_TYPE_DHCP, subtype,
-					       dir, pdev_id, true));
+					       dir, pdev_id, true, 0));
 
 		switch (subtype) {
 		case QDF_PROTO_DHCP_DISCOVER:
@@ -1869,7 +1904,7 @@ static bool qdf_log_arp_pkt(uint8_t vdev_id, struct sk_buff *skb,
 					       QDF_NBUF_DEST_MAC_OFFSET,
 					       QDF_PROTO_TYPE_ARP,
 					       proto_subtype, dir, pdev_id,
-					       true));
+					       true, 0));
 
 		if (QDF_PROTO_ARP_REQ == proto_subtype)
 			g_qdf_dp_trace_data.arp_req++;
@@ -2091,24 +2126,25 @@ void qdf_dp_display_proto_pkt(struct qdf_dp_trace_record_s *record,
 	loc = qdf_dp_trace_fill_meta_str(prepend_str, sizeof(prepend_str),
 					 index, info, record);
 	DPTRACE_PRINT("%s [%d] [%s] SA: "
-		      QDF_MAC_ADDR_FMT " %s DA: "
-		      QDF_MAC_ADDR_FMT,
+		      QDF_MAC_ADDR_FMT " %s DA:"
+		      QDF_MAC_ADDR_FMT " proto priv data = %08x",
 		      prepend_str,
 		      buf->vdev_id,
 		      qdf_dp_subtype_to_str(buf->subtype),
 		      QDF_MAC_ADDR_REF(buf->sa.bytes),
 		      qdf_dp_dir_to_str(buf->dir),
-		      QDF_MAC_ADDR_REF(buf->da.bytes));
+		      QDF_MAC_ADDR_REF(buf->da.bytes),
+		      buf->proto_priv_data);
 }
 qdf_export_symbol(qdf_dp_display_proto_pkt);
 
 void qdf_dp_trace_proto_pkt(enum QDF_DP_TRACE_ID code, uint8_t vdev_id,
 		uint8_t *sa, uint8_t *da, enum qdf_proto_type type,
 		enum qdf_proto_subtype subtype, enum qdf_proto_dir dir,
-		uint8_t pdev_id, bool print)
+		uint8_t pdev_id, bool print, uint32_t proto_priv_data)
 {
 	struct qdf_dp_trace_proto_buf buf;
-	int buf_size = sizeof(struct qdf_dp_trace_ptr_buf);
+	int buf_size = sizeof(struct qdf_dp_trace_proto_buf);
 
 	if (qdf_dp_enable_check(NULL, code, dir) == false)
 		return;
@@ -2122,6 +2158,7 @@ void qdf_dp_trace_proto_pkt(enum QDF_DP_TRACE_ID code, uint8_t vdev_id,
 	buf.type = type;
 	buf.subtype = subtype;
 	buf.vdev_id = vdev_id;
+	buf.proto_priv_data = proto_priv_data;
 	qdf_dp_add_record(code, pdev_id,
 			  (uint8_t *)&buf, buf_size, NULL, 0, print);
 }
@@ -3193,6 +3230,9 @@ struct category_name_info g_qdf_category_name[MAX_SUPPORTED_CATEGORY] = {
 	[QDF_MODULE_ID_QWRAP] = {"QWRAP"},
 	[QDF_MODULE_ID_DBDC_REP] = {"DBDC_REP"},
 	[QDF_MODULE_ID_EXT_AP] = {"EXT_AP"},
+	[QDF_MODULE_ID_MLO] = {"MLO_MGR"},
+	[QDF_MODULE_ID_MLOIE] = {"MLOIE"},
+	[QDF_MODULE_ID_MBSS] = {"MBSS"},
 	[QDF_MODULE_ID_ANY] = {"ANY"},
 };
 qdf_export_symbol(g_qdf_category_name);
@@ -3761,6 +3801,9 @@ static void set_default_trace_levels(struct category_info *cinfo)
 		[QDF_MODULE_ID_QWRAP] = QDF_TRACE_LEVEL_FATAL,
 		[QDF_MODULE_ID_DBDC_REP] = QDF_TRACE_LEVEL_FATAL,
 		[QDF_MODULE_ID_EXT_AP] = QDF_TRACE_LEVEL_NONE,
+		[QDF_MODULE_ID_MLO] = QDF_TRACE_LEVEL_INFO,
+		[QDF_MODULE_ID_MLOIE] = QDF_TRACE_LEVEL_INFO,
+		[QDF_MODULE_ID_MBSS] = QDF_TRACE_LEVEL_ERROR,
 		[QDF_MODULE_ID_ANY] = QDF_TRACE_LEVEL_INFO,
 	};
 
@@ -3802,6 +3845,65 @@ void qdf_shared_print_ctrl_init(void)
 			"LOG_SHARED_OBJ");
 }
 qdf_export_symbol(qdf_shared_print_ctrl_init);
+#endif
+
+#ifdef QCA_WIFI_MODULE_PARAMS_FROM_INI
+QDF_STATUS qdf_module_param_handler(void *context, const char *str_param,
+				    const char *str)
+{
+	QDF_STATUS status = QDF_STATUS_E_FAILURE;
+	uint16_t param = 0;
+	uint32_t flush_tmr_prd;
+	bool dump_flag;
+
+	while (param < QDF_PARAM_MAX) {
+		if (qdf_str_eq(qdf_module_param[param], str_param)) {
+			switch (param) {
+			case MEM_DEBUG_DISABLED:
+				status = qdf_mem_debug_disabled_config_set(str);
+				break;
+			case QDF_DBG_MASK:
+				status = qdf_int32_parse(str, &qdf_dbg_mask);
+				break;
+			case PREALLOC_DISABLED:
+				status = qdf_prealloc_disabled_config_set(str);
+				break;
+			case QDF_LOG_DUMP_AT_KERNEL_ENABLE:
+				status = qdf_bool_parse(str, &dump_flag);
+				qdf_log_dump_at_kernel_enable = dump_flag;
+				break;
+			case QDF_DBG_ARR:
+				qdf_dbg_arr[0] = (char *)str;
+				status = QDF_STATUS_SUCCESS;
+				break;
+			case QDF_LOG_FLUSH_TIMER_PERIOD:
+				status = qdf_uint32_parse(str, &flush_tmr_prd);
+				qdf_log_flush_timer_period = flush_tmr_prd;
+				break;
+			default:
+				break;
+			}
+			return status;
+		}
+		param++;
+	}
+
+	return QDF_STATUS_SUCCESS;
+}
+
+void qdf_initialize_module_param_from_ini(void)
+{
+	QDF_STATUS status;
+	char *path = QDF_WIFI_MODULE_PARAMS_FILE;
+
+	status = qdf_ini_parse(path, NULL, qdf_module_param_handler, NULL);
+	if (QDF_IS_STATUS_ERROR(status)) {
+		QDF_TRACE_ERROR(QDF_MODULE_ID_QDF,
+				"Failed to parse *.ini file @ %s; status:%d",
+				path, status);
+		return;
+	}
+}
 #endif
 
 QDF_STATUS qdf_print_set_category_verbose(unsigned int idx,

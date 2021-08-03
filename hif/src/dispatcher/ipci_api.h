@@ -206,6 +206,14 @@ int hif_ipci_configure_grp_irq(
 			struct hif_exec_context *exec);
 
 /**
+ * hif_ipci_deconfigure_grp_irq() - deconfigure HW block irq
+ * @scn: hif context
+ *
+ * Return: None
+ */
+void hif_ipci_deconfigure_grp_irq(struct hif_softc *scn);
+
+/**
  * hif_ipci_display_stats() - display stats
  * @hif_ctx: hif context
  *
@@ -249,6 +257,37 @@ const char *hif_ipci_get_irq_name(int irq_no);
  * Return: 0 if success, error code if failure
  */
 int hif_ipci_enable_grp_irqs(struct hif_softc *scn);
+
+#ifdef HIF_CPU_PERF_AFFINE_MASK
+/** hif_ipci_config_irq_affinity() - set the irq affinity
+ * @scn: hif context
+ *
+ * set irq affinity hint for wlan irqs to gold cores only for
+ * defconfig builds.
+ *
+ * return: none
+ */
+void hif_ipci_config_irq_affinity(struct hif_softc *scn);
+#endif
+
+#ifdef HIF_CPU_CLEAR_AFFINITY
+/**
+ * hif_ipci_config_irq_clear_cpu_affinity() - Remove cpu affinity of IRQ
+ * @scn: HIF handle
+ * @intr_ctxt_id: interrupt group index
+ * @cpu: CPU core to clear
+ *
+ * Return: None
+ */
+void hif_ipci_config_irq_clear_cpu_affinity(struct hif_softc *scn,
+					    int intr_ctxt_id, int cpu);
+#else
+static inline
+void hif_ipci_config_irq_clear_cpu_affinity(struct hif_softc *scn,
+					    int intr_ctxt_id, int cpu)
+{
+}
+#endif
 
 /**
  * hif_ipci_disable_grp_irqs(): disable grp IRQs

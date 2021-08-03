@@ -485,6 +485,74 @@ struct cdp_rx_mic_err_info {
 	uint16_t vdev_id;
 };
 
+#ifdef WLAN_SUPPORT_SCS
+/* SCS Procedure data structures
+ */
+#define IEEE80211_SCS_MAX_SIZE        10
+#define IEEE80211_IPV4_LEN 4
+#define IEEE80211_IPV6_LEN 16
+
+struct cdp_tclas_tuple_ipv4 {
+	u_int8_t  version;
+	uint8_t  src_ip[IEEE80211_IPV4_LEN];
+	uint8_t  dst_ip[IEEE80211_IPV4_LEN];
+	u_int16_t src_port;
+	u_int16_t dst_port;
+	u_int8_t  dscp;
+	u_int8_t  protocol;
+	u_int8_t  reserved;
+} __packed;
+
+struct cdp_tclas_tuple_ipv6 {
+	u_int8_t version;
+	u_int8_t  src_ip[IEEE80211_IPV6_LEN];
+	u_int8_t  dst_ip[IEEE80211_IPV6_LEN];
+	u_int16_t src_port;
+	u_int16_t dst_port;
+	u_int8_t  type4_dscp;
+	u_int8_t  next_header;
+	u_int8_t  flow_label[3];
+} __packed;
+
+struct cdp_tclas_tuple_ipsec {
+	u_int8_t protocol_number;
+	u_int8_t protocol_instance;
+	u_int8_t filter_len;
+	u_int8_t *filter_mask;
+	u_int8_t *filter_val;
+} __packed;
+
+struct cdp_tclas_tuple {
+	uint8_t type;
+	uint8_t mask;
+	union {
+		union {
+			struct cdp_tclas_tuple_ipv4 v4;
+			struct cdp_tclas_tuple_ipv6 v6;
+		} type4;
+		struct cdp_tclas_tuple_ipsec ips;
+	} tclas;
+} __packed;
+
+/**
+ * struct cdp_scs_params - SCS parameters
+ * obtained from handshake
+ * @scsid  - SCS ID
+ * @access_priority - User Access Priority
+ * containing tid value.
+ * @tclas_elements - Number of TCLAS elements
+ * @tclas - TCLAS tuple parameters
+ * @tclas_processing - TCLAS processing value
+ */
+struct cdp_scs_params {
+	uint8_t scsid;
+	uint8_t access_priority;
+	uint8_t tclas_elements;
+	struct cdp_tclas_tuple tclas[IEEE80211_SCS_MAX_SIZE];
+	uint8_t tclas_process;
+};
+#endif
+
 #ifdef WLAN_SUPPORT_MSCS
 /**
  * struct cdp_mscs_params - MSCS parameters obtained
@@ -1046,6 +1114,7 @@ enum cdp_peer_param_type {
  * @CDP_MONITOR_FREQUENCY: monitor frequency
  * @CDP_CONFIG_BSS_COLOR: configure bss color
  * @CDP_SET_ATF_STATS_ENABLE: set ATF stats flag
+ * @CDP_CONFIG_SPECIAL_VAP: Configure Special vap
  */
 enum cdp_pdev_param_type {
 	CDP_CONFIG_DEBUG_SNIFFER,
@@ -1076,6 +1145,7 @@ enum cdp_pdev_param_type {
 	CDP_MONITOR_FREQUENCY,
 	CDP_CONFIG_BSS_COLOR,
 	CDP_SET_ATF_STATS_ENABLE,
+	CDP_CONFIG_SPECIAL_VAP,
 };
 
 /*
@@ -1137,6 +1207,7 @@ enum cdp_pdev_param_type {
  * @cdp_pdev_param_fltr_none: filter no data
  * @cdp_pdev_param_monitor_chan: monitor channel
  * @cdp_pdev_param_atf_stats_enable: ATF stats enable
+ * @cdp_pdev_param_config_special_vap: Configure Special vap
  *
  * @cdp_psoc_param_en_rate_stats: set rate stats enable/disable
  * @cdp_psoc_param_en_nss_cfg: set nss cfg
@@ -1207,6 +1278,7 @@ typedef union cdp_config_param_t {
 	uint32_t cdp_pdev_param_en_perpkt_txstats;
 	uint32_t cdp_pdev_param_tx_pending;
 	bool cdp_pdev_param_atf_stats_enable;
+	bool cdp_pdev_param_config_special_vap;
 
 	/* psoc params */
 	bool cdp_psoc_param_en_rate_stats;

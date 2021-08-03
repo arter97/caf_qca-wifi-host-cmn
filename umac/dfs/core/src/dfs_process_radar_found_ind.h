@@ -94,14 +94,6 @@ dfs_flush_additional_pulses(struct wlan_dfs *dfs)
 #define LEFT_CH   1
 #define RIGHT_CH  2
 
-#ifdef CONFIG_CHAN_NUM_API
-/* Next channel number offset's from center channel number */
-#define DFS_5GHZ_NEXT_CHAN_OFFSET  2
-#define DFS_5GHZ_2ND_CHAN_OFFSET   6
-#define DFS_5GHZ_3RD_CHAN_OFFSET  10
-#define DFS_5GHZ_4TH_CHAN_OFFSET  14
-#endif
-
 #ifdef CONFIG_CHAN_FREQ_API
 /* Next channel frequency offsets from center channel frequency */
 #define DFS_5GHZ_NEXT_CHAN_FREQ_OFFSET  10
@@ -205,25 +197,6 @@ dfs_process_radar_ind_on_home_chan(struct wlan_dfs *dfs,
 void dfs_radarfound_action_generic(struct wlan_dfs *dfs, uint8_t seg_id);
 
 /**
- * dfs_get_bonding_channels() - Get bonding channels.
- * @dfs:         Pointer to wlan_dfs structure.
- * @curchan:     Pointer to dfs_channels to know width and primary channel.
- * @segment_id:  Segment id, useful for 80+80/160 MHz operating band.
- * @detector_id: Detector id, used to find if radar is detected on
- *               Agile detector.
- * @channels:    Pointer to save radar affected channels.
- *
- * Return: Number of channels.
- */
-#ifdef CONFIG_CHAN_NUM_API
-uint8_t dfs_get_bonding_channels(struct wlan_dfs *dfs,
-				 struct dfs_channel *curchan,
-				 uint32_t segment_id,
-				 uint8_t detector_id,
-				 uint8_t *channels);
-#endif
-
-/**
  * dfs_get_bonding_channels_for_freq() - Get bonding channels.
  * @dfs:         Pointer to wlan_dfs structure.
  * @curchan:     Pointer to dfs_channels to know width and primary channel.
@@ -308,18 +281,6 @@ void dfs_reset_bangradar(struct wlan_dfs *dfs);
 void dfs_send_csa_to_current_chan(struct wlan_dfs *dfs);
 
 /**
- * dfs_get_bonding_channels_without_seg_info() - Get bonding channels in chan
- * @chan: Pointer to dfs_channel structure.
- * @channels: channel array holding list of bonded channels.
- *
- * Return: number of sub channels in the input channel.
- */
-#ifdef CONFIG_CHAN_NUM_API
-uint8_t dfs_get_bonding_channels_without_seg_info(struct dfs_channel *chan,
-						  uint8_t *channels);
-#endif
-
-/**
  * dfs_get_bonding_channel_without_seg_info_for_freq() - Get bonding channels
  * in chan.
  * @chan: Pointer to dfs_channel structure.
@@ -355,6 +316,21 @@ dfs_set_nol_subchannel_marking(struct wlan_dfs *dfs,
 int
 dfs_get_nol_subchannel_marking(struct wlan_dfs *dfs,
 			       bool *nol_subchannel_marking);
+
+#ifdef WLAN_DFS_FULL_OFFLOAD
+/**
+ * dfs_inc_num_radar - Increment radar detect stats for FO.
+ *
+ * @dfs: Pointer to the wlan_dfs object.
+ *
+ * Return: void.
+ */
+void dfs_inc_num_radar(struct wlan_dfs *dfs);
+#else
+static inline void dfs_inc_num_radar(struct wlan_dfs *dfs)
+{
+}
+#endif
 
 #if defined(WLAN_DFS_TRUE_160MHZ_SUPPORT) && defined(WLAN_DFS_FULL_OFFLOAD)
 #define DFS_80P80MHZ_SECOND_SEG_OFFSET 85

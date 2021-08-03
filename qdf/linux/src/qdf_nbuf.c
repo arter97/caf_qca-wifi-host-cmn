@@ -106,6 +106,13 @@ static struct qdf_track_timer alloc_track_timer;
 #define QDF_NBUF_ALLOC_EXPIRE_CNT_THRESHOLD  50
 #endif
 
+#ifdef NBUF_MEMORY_DEBUG
+/* SMMU crash indication*/
+static qdf_atomic_t smmu_crashed;
+/* Number of nbuf not added to history*/
+unsigned long g_histroy_add_drop;
+#endif
+
 /* Packet Counter */
 static uint32_t nbuf_tx_mgmt[QDF_NBUF_TX_PKT_STATE_MAX];
 static uint32_t nbuf_tx_data[QDF_NBUF_TX_PKT_STATE_MAX];
@@ -447,6 +454,9 @@ void qdf_nbuf_frag_count_inc(qdf_nbuf_t nbuf)
 	uint32_t num_nr_frags;
 	uint32_t total_num_nr_frags;
 
+	if (qdf_likely(is_initial_mem_debug_disabled))
+		return;
+
 	num_nr_frags = qdf_nbuf_get_nr_frags(nbuf);
 	qdf_assert_always(num_nr_frags <= QDF_NBUF_MAX_FRAGS);
 
@@ -471,6 +481,9 @@ void  qdf_nbuf_frag_count_dec(qdf_nbuf_t nbuf)
 	qdf_nbuf_t ext_list;
 	uint32_t num_nr_frags;
 	uint32_t total_num_nr_frags;
+
+	if (qdf_likely(is_initial_mem_debug_disabled))
+		return;
 
 	if (qdf_nbuf_get_users(nbuf) > 1)
 		return;
@@ -735,7 +748,9 @@ struct qdf_nbuf_event {
 	qdf_dma_addr_t iova;
 };
 
+#ifndef QDF_NBUF_HISTORY_SIZE
 #define QDF_NBUF_HISTORY_SIZE 4096
+#endif
 static qdf_atomic_t qdf_nbuf_history_index;
 static struct qdf_nbuf_event qdf_nbuf_history[QDF_NBUF_HISTORY_SIZE];
 
@@ -757,6 +772,11 @@ qdf_nbuf_history_add(qdf_nbuf_t nbuf, const char *func, uint32_t line,
 						   QDF_NBUF_HISTORY_SIZE);
 	struct qdf_nbuf_event *event = &qdf_nbuf_history[idx];
 
+	if (qdf_atomic_read(&smmu_crashed)) {
+		g_histroy_add_drop++;
+		return;
+	}
+
 	event->nbuf = nbuf;
 	qdf_str_lcopy(event->func, func, QDF_MEM_FUNC_NAME_SIZE);
 	event->line = line;
@@ -767,6 +787,14 @@ qdf_nbuf_history_add(qdf_nbuf_t nbuf, const char *func, uint32_t line,
 	else
 		event->iova = 0;
 }
+
+void qdf_set_smmu_fault_state(bool smmu_fault_state)
+{
+	qdf_atomic_set(&smmu_crashed, smmu_fault_state);
+	if (!smmu_fault_state)
+		g_histroy_add_drop = 0;
+}
+qdf_export_symbol(qdf_set_smmu_fault_state);
 #endif /* NBUF_MEMORY_DEBUG */
 
 #ifdef NBUF_MAP_UNMAP_DEBUG
@@ -4485,42 +4513,6 @@ qdf_nbuf_update_radiotap_he_mu_other_flags(struct mon_rx_status *rx_status,
 #define IEEE80211_RADIOTAP_TX_STATUS 0
 #define IEEE80211_RADIOTAP_RETRY_COUNT 1
 
-/**
- * This is the length for radiotap, combined length
- * (Mandatory part struct ieee80211_radiotap_header + RADIOTAP_HEADER_LEN)
- * cannot be more than available headroom_sz.
- * increase this when we add more radiotap elements.
- * Number after '+' indicates maximum possible increase due to alignment
- */
-
-#define RADIOTAP_VHT_FLAGS_LEN (12 + 1)
-#define RADIOTAP_HE_FLAGS_LEN (12 + 1)
-#define RADIOTAP_HE_MU_FLAGS_LEN (8 + 1)
-#define RADIOTAP_HE_MU_OTHER_FLAGS_LEN (18 + 1)
-#define RADIOTAP_FIXED_HEADER_LEN 17
-#define RADIOTAP_HT_FLAGS_LEN 3
-#define RADIOTAP_AMPDU_STATUS_LEN (8 + 3)
-#define RADIOTAP_VENDOR_NS_LEN \
-	(sizeof(struct qdf_radiotap_vendor_ns_ath) + 1)
-/* This is Radio Tap Header Extension Length.
- * 4 Bytes for Extended it_present bit map +
- * 4 bytes padding for alignment
- */
-#define RADIOTAP_HEADER_EXT_LEN (2 * sizeof(uint32_t))
-#define RADIOTAP_HEADER_LEN (sizeof(struct ieee80211_radiotap_header) + \
-				RADIOTAP_FIXED_HEADER_LEN + \
-				RADIOTAP_HT_FLAGS_LEN + \
-				RADIOTAP_VHT_FLAGS_LEN + \
-				RADIOTAP_AMPDU_STATUS_LEN + \
-				RADIOTAP_HE_FLAGS_LEN + \
-				RADIOTAP_HE_MU_FLAGS_LEN + \
-				RADIOTAP_HE_MU_OTHER_FLAGS_LEN + \
-				RADIOTAP_VENDOR_NS_LEN + \
-				RADIOTAP_HEADER_EXT_LEN)
-
-#define IEEE80211_RADIOTAP_HE 23
-#define IEEE80211_RADIOTAP_HE_MU	24
-#define IEEE80211_RADIOTAP_HE_MU_OTHER	25
 uint8_t ATH_OUI[] = {0x00, 0x03, 0x7f}; /* Atheros OUI */
 
 /**
@@ -4995,6 +4987,9 @@ QDF_STATUS qdf_nbuf_move_frag_page_offset_debug(qdf_nbuf_t nbuf, uint8_t idx,
 	p_fragp = qdf_nbuf_get_frag_addr(nbuf, idx);
 	result = __qdf_nbuf_move_frag_page_offset(nbuf, idx, offset);
 
+	if (qdf_likely(is_initial_mem_debug_disabled))
+		return result;
+
 	n_fragp = qdf_nbuf_get_frag_addr(nbuf, idx);
 
 	/*
@@ -5020,6 +5015,9 @@ void qdf_nbuf_add_rx_frag_debug(qdf_frag_t buf, qdf_nbuf_t nbuf,
 	__qdf_nbuf_add_rx_frag(buf, nbuf, offset,
 			       frag_len, truesize, take_frag_ref);
 
+	if (qdf_likely(is_initial_mem_debug_disabled))
+		return;
+
 	num_nr_frags = qdf_nbuf_get_nr_frags(nbuf);
 
 	qdf_assert_always(num_nr_frags <= QDF_NBUF_MAX_FRAGS);
@@ -5043,6 +5041,9 @@ void qdf_net_buf_debug_acquire_frag(qdf_nbuf_t buf, const char *func,
 	uint32_t idx = 0;
 	qdf_nbuf_t ext_list;
 	qdf_frag_t p_frag;
+
+	if (qdf_likely(is_initial_mem_debug_disabled))
+		return;
 
 	if (qdf_unlikely(!buf))
 		return;
@@ -5089,6 +5090,9 @@ void qdf_net_buf_debug_release_frag(qdf_nbuf_t buf, const char *func,
 	qdf_nbuf_t ext_list;
 	uint32_t idx = 0;
 	qdf_frag_t p_frag;
+
+	if (qdf_likely(is_initial_mem_debug_disabled))
+		return;
 
 	if (qdf_unlikely(!buf))
 		return;

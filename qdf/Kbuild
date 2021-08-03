@@ -31,7 +31,11 @@ INCS += -I$(obj)/$(HOST_CMN_CONVG_PTT)/inc \
 
 obj-m += qdf.o
 
-EXTRA_CFLAGS+= $(INCS) $(COPTS) -Wno-unused-function
+inc_file := $(obj)/$(DEPTH)/qdf_inc_opts
+inc_var := $(shell echo $(INCS) > $(inc_file))
+var := "@$(inc_file)"
+
+EXTRA_CFLAGS+= $(var) $(COPTS) -Wno-unused-function
 
 ifeq ($(strip ${QCA_PARTNER_MAKE_F_SUPPORT}),1)
 MOD_CFLAGS = -D"KBUILD_STR(s)=\#s" -D"KBUILD_BASENAME=KBUILD_STR(qdf.mod)"  -D"KBUILD_MODNAME=KBUILD_STR(qdf)"
@@ -75,7 +79,8 @@ $(HOST_QAL_SRC)/linux/src/qal_bridge.o \
 #linux/src/qdf_net_wext.o
 
 ifeq ($(MEMORY_DEBUG),1)
-qdf-objs += src/qdf_debug_domain.o
+qdf-objs += src/qdf_debug_domain.o \
+    src/qdf_tracker.o
 endif
 
 ifeq ($(LOGGING_UTILS_SUPPORT),1)

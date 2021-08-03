@@ -77,82 +77,9 @@
 #else
 #define WLAN_CFG_MAX_CE_COUNT 12
 #endif
-
-const char *dp_irqname[WLAN_CFG_MAX_PCIE_GROUPS][WLAN_CFG_INT_NUM_CONTEXTS] = {
-{
-"pci0_wlan_grp_dp_0",
-"pci0_wlan_grp_dp_1",
-"pci0_wlan_grp_dp_2",
-"pci0_wlan_grp_dp_3",
-"pci0_wlan_grp_dp_4",
-"pci0_wlan_grp_dp_5",
-"pci0_wlan_grp_dp_6",
-#if !defined(WLAN_MAX_PDEVS)
-"pci0_wlan_grp_dp_7",
-"pci0_wlan_grp_dp_8",
-"pci0_wlan_grp_dp_9",
-"pci0_wlan_grp_dp_10",
-#endif
-},
-{
-"pci1_wlan_grp_dp_0",
-"pci1_wlan_grp_dp_1",
-"pci1_wlan_grp_dp_2",
-"pci1_wlan_grp_dp_3",
-"pci1_wlan_grp_dp_4",
-"pci1_wlan_grp_dp_5",
-"pci1_wlan_grp_dp_6",
-#if !defined(WLAN_MAX_PDEVS)
-"pci1_wlan_grp_dp_7",
-"pci1_wlan_grp_dp_8",
-"pci1_wlan_grp_dp_9",
-"pci1_wlan_grp_dp_10",
-#endif
-}
-};
-
-const char *ce_irqname[WLAN_CFG_MAX_PCIE_GROUPS][WLAN_CFG_MAX_CE_COUNT] = {
-{
-"pci0_wlan_ce_0",
-"pci0_wlan_ce_1",
-"pci0_wlan_ce_2",
-"pci0_wlan_ce_3",
-"pci0_wlan_ce_4",
-"pci0_wlan_ce_5",
-"pci0_wlan_ce_6",
-"pci0_wlan_ce_7",
-"pci0_wlan_ce_8",
-"pci0_wlan_ce_9",
-"pci0_wlan_ce_10",
-"pci0_wlan_ce_11",
-#ifdef QCA_WIFI_QCN9224
-"pci0_wlan_ce_12",
-"pci0_wlan_ce_13",
-"pci0_wlan_ce_14",
-"pci0_wlan_ce_15",
-#endif
-},
-{
-"pci1_wlan_ce_0",
-"pci1_wlan_ce_1",
-"pci1_wlan_ce_2",
-"pci1_wlan_ce_3",
-"pci1_wlan_ce_4",
-"pci1_wlan_ce_5",
-"pci1_wlan_ce_6",
-"pci1_wlan_ce_7",
-"pci1_wlan_ce_8",
-"pci1_wlan_ce_9",
-"pci1_wlan_ce_10",
-"pci1_wlan_ce_11",
-#ifdef QCA_WIFI_QCN9224
-"pci0_wlan_ce_12",
-"pci0_wlan_ce_13",
-"pci0_wlan_ce_14",
-"pci0_wlan_ce_15",
-#endif
-}
-};
+#define DP_IRQ_NAME_LEN 25
+char dp_irqname[WLAN_CFG_MAX_PCIE_GROUPS][WLAN_CFG_INT_NUM_CONTEXTS][DP_IRQ_NAME_LEN] = {};
+char ce_irqname[WLAN_CFG_MAX_PCIE_GROUPS][WLAN_CFG_MAX_CE_COUNT][DP_IRQ_NAME_LEN] = {};
 
 #if defined(WLAN_MAX_PDEVS) && (WLAN_MAX_PDEVS == 1)
 static inline int hif_get_pci_slot(struct hif_softc *scn)
@@ -166,35 +93,14 @@ static inline int hif_get_pci_slot(struct hif_softc *scn)
 #else
 static inline int hif_get_pci_slot(struct hif_softc *scn)
 {
-	uint32_t pci_id;
-	struct hif_opaque_softc *hif_hdl = GET_HIF_OPAQUE_HDL(scn);
-	struct hif_target_info *tgt_info = hif_get_target_info_handle(hif_hdl);
-	uint32_t target_type = tgt_info->target_type;
-	struct device_node *mhi_node;
-	struct device_node *pcierp_node;
-	struct device_node *pcie_node;
+	int pci_slot = pld_get_pci_slot(scn->qdf_dev->dev);
 
-	switch (target_type) {
-	case TARGET_TYPE_QCN9000:
-	case TARGET_TYPE_QCN9224:
-		/* of_node stored in qdf_dev points to the mhi node */
-		mhi_node = scn->qdf_dev->dev->of_node;
-		/*
-		 * pcie id is stored in the main pci node which has to be taken
-		 * from the second parent of mhi_node.
-		 */
-		pcierp_node = mhi_node->parent;
-		pcie_node = pcierp_node->parent;
-		qal_devnode_fetch_pci_domain_id(pcie_node, &pci_id);
-		if (pci_id < 0 || pci_id >= WLAN_CFG_MAX_PCIE_GROUPS) {
-			hif_err("pci_id: %d is invalid", pci_id);
-			QDF_ASSERT(0);
-			return 0;
-		}
-		return pci_id;
-	default:
-		/* Send pci_id 0 for all other targets */
+	if (pci_slot < 0) {
+		hif_err("Invalid PCI SLOT %d", pci_slot);
+		qdf_assert_always(0);
 		return 0;
+	} else {
+		return pci_slot;
 	}
 }
 #endif
@@ -1728,6 +1634,7 @@ int hif_pci_bus_configure(struct hif_softc *hif_sc)
 	/* todo: consider replacing this with an srng field */
 	if (((hif_sc->target_info.target_type == TARGET_TYPE_QCA8074) ||
 	     (hif_sc->target_info.target_type == TARGET_TYPE_QCA8074V2) ||
+	     (hif_sc->target_info.target_type == TARGET_TYPE_QCA9574) ||
 	     (hif_sc->target_info.target_type == TARGET_TYPE_QCA5018) ||
 	     (hif_sc->target_info.target_type == TARGET_TYPE_QCN6122) ||
 	     (hif_sc->target_info.target_type == TARGET_TYPE_QCA6018)) &&
@@ -1750,6 +1657,7 @@ int hif_pci_bus_configure(struct hif_softc *hif_sc)
 
 	if (((hif_sc->target_info.target_type == TARGET_TYPE_QCA8074) ||
 	     (hif_sc->target_info.target_type == TARGET_TYPE_QCA8074V2) ||
+	     (hif_sc->target_info.target_type == TARGET_TYPE_QCA9574) ||
 	     (hif_sc->target_info.target_type == TARGET_TYPE_QCA5018) ||
 	     (hif_sc->target_info.target_type == TARGET_TYPE_QCN6122) ||
 	     (hif_sc->target_info.target_type == TARGET_TYPE_QCA6018)) &&
@@ -2058,7 +1966,7 @@ end:
 static int hif_ce_srng_msi_free_irq(struct hif_softc *scn)
 {
 	int ret;
-	int ce_id, irq;
+	int ce_id, irq, irq_id;
 	uint32_t msi_data_start;
 	uint32_t msi_data_count;
 	uint32_t msi_irq_start;
@@ -2083,13 +1991,14 @@ static int hif_ce_srng_msi_free_irq(struct hif_softc *scn)
 		if (!ce_sc->tasklets[ce_id].inited)
 			continue;
 
-		msi_data = (ce_id % msi_data_count) + msi_irq_start;
+		irq_id = scn->int_assignment->msi_idx[ce_id];
+		msi_data = irq_id + msi_irq_start;
 		irq = pld_get_msi_irq(scn->qdf_dev->dev, msi_data);
 
-		hif_pci_ce_irq_remove_affinity_hint(irq);
+		hif_ce_irq_remove_affinity_hint(irq);
 
-		hif_debug("%s: (ce_id %d, msi_data %d, irq %d)", __func__,
-			  ce_id, msi_data, irq);
+		hif_debug("%s: (ce_id %d, irq_id %d, msi_data %d, irq %d)",
+			  __func__, irq_id, ce_id, msi_data, irq);
 
 		pfrm_free_irq(scn->qdf_dev->dev, irq, &ce_sc->tasklets[ce_id]);
 	}
@@ -2097,7 +2006,7 @@ static int hif_ce_srng_msi_free_irq(struct hif_softc *scn)
 	return ret;
 }
 
-static void hif_pci_deconfigure_grp_irq(struct hif_softc *scn)
+void hif_pci_deconfigure_grp_irq(struct hif_softc *scn)
 {
 	int i, j, irq;
 	struct HIF_CE_state *hif_state = HIF_GET_CE_STATE(scn);
@@ -2137,6 +2046,7 @@ void hif_pci_nointrs(struct hif_softc *scn)
 	struct hif_pci_softc *sc = HIF_GET_PCI_SOFTC(scn);
 	struct HIF_CE_state *hif_state = HIF_GET_CE_STATE(scn);
 
+	scn->free_irq_done = true;
 	ce_unregister_irq(hif_state, CE_ALL_BITMAP);
 
 	if (scn->request_irq_done == false)
@@ -2875,6 +2785,7 @@ int hif_ce_msi_configure_irq_by_ceid(struct hif_softc *scn, int ce_id)
 	uint32_t msi_data_start;
 	uint32_t msi_data_count;
 	unsigned int msi_data;
+	int irq_id;
 	uint32_t msi_irq_start;
 	struct HIF_CE_state *ce_sc = HIF_GET_CE_STATE(scn);
 	struct hif_pci_softc *pci_sc = HIF_GET_PCI_SOFTC(scn);
@@ -2888,21 +2799,32 @@ int hif_ce_msi_configure_irq_by_ceid(struct hif_softc *scn, int ce_id)
 					  &msi_data_count, &msi_data_start,
 					  &msi_irq_start);
 
+	if (ret) {
+		hif_err("Failed to get CE msi config");
+		return -EINVAL;
+	}
+
+	irq_id = scn->int_assignment->msi_idx[ce_id];
 	/* needs to match the ce_id -> irq data mapping
 	 * used in the srng parameter configuration
 	 */
 	pci_slot = hif_get_pci_slot(scn);
-	msi_data = (ce_id % msi_data_count) + msi_irq_start;
+	msi_data = irq_id + msi_irq_start;
 	irq = pld_get_msi_irq(scn->qdf_dev->dev, msi_data);
-	hif_debug("%s: (ce_id %d, msi_data %d, irq %d tasklet %pK)",
-		__func__, ce_id, msi_data, irq,
-		&ce_sc->tasklets[ce_id]);
+	hif_debug("%s: (ce_id %d, irq_id %d, msi_data %d, irq %d tasklet %pK)",
+		  __func__, ce_id, irq_id, msi_data, irq,
+		  &ce_sc->tasklets[ce_id]);
 
 	/* implies the ce is also initialized */
 	if (!ce_sc->tasklets[ce_id].inited)
 		goto skip;
 
 	pci_sc->ce_msi_irq_num[ce_id] = irq;
+
+	qdf_scnprintf(ce_irqname[pci_slot][ce_id],
+		      DP_IRQ_NAME_LEN, "pci%u_wlan_ce_%u",
+		      pci_slot, ce_id);
+
 	ret = pfrm_request_irq(scn->qdf_dev->dev,
 			       irq, hif_ce_interrupt_handler, IRQF_SHARED,
 			       ce_irqname[pci_slot][ce_id],
@@ -2923,7 +2845,6 @@ static int hif_ce_msi_configure_irq(struct hif_softc *scn)
 	uint32_t msi_irq_start;
 	struct HIF_CE_state *ce_sc = HIF_GET_CE_STATE(scn);
 	struct CE_attr *host_ce_conf = ce_sc->host_ce_config;
-	int pci_slot;
 
 	if (!scn->disable_wake_irq) {
 		/* do wake irq assignment */
@@ -2966,7 +2887,6 @@ static int hif_ce_msi_configure_irq(struct hif_softc *scn)
 	/* needs to match the ce_id -> irq data mapping
 	 * used in the srng parameter configuration
 	 */
-	pci_slot = hif_get_pci_slot(scn);
 	for (ce_id = 0; ce_id < scn->ce_count; ce_id++) {
 		if (host_ce_conf[ce_id].flags & CE_ATTR_DISABLE_INTR)
 			continue;
@@ -3141,6 +3061,44 @@ void hif_pci_ce_irq_set_affinity_hint(
 }
 #endif /* #ifdef HIF_CPU_PERF_AFFINE_MASK */
 
+#ifdef HIF_CPU_CLEAR_AFFINITY
+void hif_pci_config_irq_clear_cpu_affinity(struct hif_softc *scn,
+					   int intr_ctxt_id, int cpu)
+{
+	struct HIF_CE_state *hif_state = HIF_GET_CE_STATE(scn);
+	struct hif_exec_context *hif_ext_group;
+	int i, ret;
+
+	if (intr_ctxt_id < hif_state->hif_num_extgroup) {
+		hif_ext_group = hif_state->hif_ext_group[intr_ctxt_id];
+
+		for (i = 0; i < hif_ext_group->numirq; i++) {
+			qdf_cpumask_setall(&hif_ext_group->new_cpu_mask[i]);
+			qdf_cpumask_clear_cpu(cpu,
+					      &hif_ext_group->new_cpu_mask[i]);
+			qdf_dev_modify_irq_status(hif_ext_group->os_irq[i],
+						  IRQ_NO_BALANCING, 0);
+			ret = qdf_dev_set_irq_affinity(hif_ext_group->os_irq[i],
+						       (struct qdf_cpu_mask *)
+						       &hif_ext_group->
+						       new_cpu_mask[i]);
+			qdf_dev_modify_irq_status(hif_ext_group->os_irq[i],
+						  0, IRQ_NO_BALANCING);
+			if (ret)
+				hif_err("Set affinity %*pbl fails for IRQ %d ",
+					qdf_cpumask_pr_args(&hif_ext_group->
+							    new_cpu_mask[i]),
+					hif_ext_group->os_irq[i]);
+			else
+				hif_debug("Set affinity %*pbl for IRQ: %d",
+					  qdf_cpumask_pr_args(&hif_ext_group->
+							      new_cpu_mask[i]),
+					  hif_ext_group->os_irq[i]);
+		}
+	}
+}
+#endif
+
 void hif_pci_config_irq_affinity(struct hif_softc *scn)
 {
 	int i;
@@ -3176,8 +3134,13 @@ int hif_pci_configure_grp_irq(struct hif_softc *scn,
 		if (scn->irq_unlazy_disable)
 			qdf_dev_set_irq_status_flags(irq,
 						     QDF_IRQ_DISABLE_UNLAZY);
+
 		hif_debug("request_irq = %d for grp %d",
 			  irq, hif_ext_group->grp_id);
+
+		qdf_scnprintf(dp_irqname[pci_slot][hif_ext_group->grp_id],
+			      DP_IRQ_NAME_LEN, "pci%u_wlan_grp_dp_%u",
+			      pci_slot, hif_ext_group->grp_id);
 		ret = pfrm_request_irq(
 				scn->qdf_dev->dev, irq,
 				hif_ext_group_interrupt_handler,
@@ -3260,6 +3223,7 @@ int hif_configure_irq(struct hif_softc *scn)
 	case TARGET_TYPE_QCA8074V2:
 	case TARGET_TYPE_QCA6018:
 	case TARGET_TYPE_QCA5018:
+	case TARGET_TYPE_QCA9574:
 		ret = hif_ahb_configure_irq(sc);
 		break;
 	default:
@@ -3375,6 +3339,20 @@ static void hif_pci_get_soc_info_pld(struct hif_pci_softc *sc,
 	sc->mem = info.v_addr;
 	sc->ce_sc.ol_sc.mem    = info.v_addr;
 	sc->ce_sc.ol_sc.mem_pa = info.p_addr;
+	sc->device_version.family_number = info.device_version.family_number;
+	sc->device_version.device_number = info.device_version.device_number;
+	sc->device_version.major_version = info.device_version.major_version;
+	sc->device_version.minor_version = info.device_version.minor_version;
+
+	hif_info("%s: fam num %u dev ver %u maj ver %u min ver %u\n", __func__,
+		 sc->device_version.family_number,
+		 sc->device_version.device_number,
+		 sc->device_version.major_version,
+		 sc->device_version.minor_version);
+
+	/* dev_mem_info[0] is for CMEM */
+	scn->cmem_start = info.dev_mem_info[0].start;
+	scn->cmem_size = info.dev_mem_info[0].size;
 	scn->target_info.target_version = info.soc_id;
 	scn->target_info.target_revision = 0;
 }
@@ -3399,7 +3377,6 @@ static bool hif_is_pld_based_target(struct hif_pci_softc *sc,
 	case AR6320_DEVICE_ID:
 	case QCN7605_DEVICE_ID:
 	case WCN7850_DEVICE_ID:
-	case WCN7850_EMULATION_DEVICE_ID:
 		return true;
 	}
 	return false;
@@ -3727,8 +3704,7 @@ int hif_force_wake_request(struct hif_opaque_softc *hif_handle)
 		hif_info("state-change event races, ignore");
 
 	HIF_STATS_INC(pci_scn, mhi_force_wake_success, 1);
-	hif_write32_mb(scn, scn->mem +
-		       PCIE_PCIE_LOCAL_REG_PCIE_SOC_WAKE_PCIE_LOCAL_REG, 1);
+	hif_write32_mb(scn, scn->mem + PCIE_REG_WAKE_UMAC_OFFSET, 1);
 	HIF_STATS_INC(pci_scn, soc_force_wake_register_write_success, 1);
 	/*
 	 * do not reset the timeout
@@ -3770,8 +3746,7 @@ int hif_force_wake_release(struct hif_opaque_softc *hif_handle)
 	}
 
 	HIF_STATS_INC(pci_scn, mhi_force_wake_release_success, 1);
-	hif_write32_mb(scn, scn->mem +
-		       PCIE_PCIE_LOCAL_REG_PCIE_SOC_WAKE_PCIE_LOCAL_REG, 0);
+	hif_write32_mb(scn, scn->mem + PCIE_REG_WAKE_UMAC_OFFSET, 0);
 	HIF_STATS_INC(pci_scn, soc_force_wake_release_success, 1);
 	return 0;
 }

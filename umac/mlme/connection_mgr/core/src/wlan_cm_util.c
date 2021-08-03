@@ -27,6 +27,7 @@
 #include <wlan_policy_mgr_api.h>
 #endif
 #include "wlan_cm_roam.h"
+#include <qdf_platform.h>
 
 static uint32_t cm_get_prefix_for_cm_id(enum wlan_cm_source source) {
 	switch (source) {
@@ -236,6 +237,26 @@ void cm_store_wep_key(struct cnx_mgr *cm_ctx,
 		   CM_PREFIX_REF(wlan_vdev_get_id(cm_ctx->vdev), cm_id),
 		   crypto_key->cipher_type, wep_keys->key_len,
 		   wep_keys->seq_len);
+}
+
+void cm_trigger_panic_on_cmd_timeout(struct wlan_objmgr_vdev *vdev)
+{
+	struct wlan_objmgr_psoc *psoc;
+
+	psoc = wlan_vdev_get_psoc(vdev);
+	if (!psoc)
+		return;
+
+	if (qdf_is_recovering() || qdf_is_fw_down())
+		return;
+
+	qdf_trigger_self_recovery(psoc, QDF_ACTIVE_LIST_TIMEOUT);
+}
+
+#else
+void cm_trigger_panic_on_cmd_timeout(struct wlan_objmgr_vdev *vdev)
+{
+	QDF_ASSERT(0);
 }
 #endif
 
@@ -631,13 +652,27 @@ cm_fill_bss_info_in_connect_rsp_by_cm_id(struct cnx_mgr *cm_ctx,
 bool cm_is_cm_id_current_candidate_single_pmk(struct cnx_mgr *cm_ctx,
 					      wlan_cm_id cm_id)
 {
+	struct wlan_objmgr_psoc *psoc;
 	qdf_list_node_t *cur_node = NULL, *next_node = NULL;
 	struct cm_req *cm_req;
 	uint32_t prefix = CM_ID_GET_PREFIX(cm_id);
+	int32_t akm;
 	struct scan_cache_node *candidate;
 	bool is_single_pmk = false;
 
+	psoc = wlan_vdev_get_psoc(cm_ctx->vdev);
+	if (!psoc) {
+		mlme_err(CM_PREFIX_FMT "Failed to find psoc",
+			 CM_PREFIX_REF(wlan_vdev_get_id(cm_ctx->vdev),
+				       cm_id));
+		return is_single_pmk;
+	}
+
 	if (prefix != CONNECT_REQ_PREFIX)
+		return is_single_pmk;
+
+	akm = wlan_crypto_get_param(cm_ctx->vdev, WLAN_CRYPTO_PARAM_KEY_MGMT);
+	if (!QDF_HAS_PARAM(akm, WLAN_CRYPTO_KEY_MGMT_SAE))
 		return is_single_pmk;
 
 	cm_req_lock_acquire(cm_ctx);
@@ -649,7 +684,7 @@ bool cm_is_cm_id_current_candidate_single_pmk(struct cnx_mgr *cm_ctx,
 		if (cm_req->cm_id == cm_id) {
 			candidate = cm_req->connect_req.cur_candidate;
 			if (candidate &&
-			    util_scan_entry_single_pmk(candidate->entry))
+			    util_scan_entry_single_pmk(psoc, candidate->entry))
 				is_single_pmk = true;
 			break;
 		}

@@ -35,7 +35,8 @@
 #define HAL_IPA_TX_COMP_RING_IDX 2
 
 /* calculate the register address offset from bar0 of shadow register x */
-#if defined(QCA_WIFI_QCA6390) || defined(QCA_WIFI_QCA6490)
+#if defined(QCA_WIFI_QCA6390) || defined(QCA_WIFI_QCA6490) || \
+    defined(QCA_WIFI_WCN7850)
 #define SHADOW_REGISTER_START_ADDRESS_OFFSET 0x000008FC
 #define SHADOW_REGISTER_END_ADDRESS_OFFSET \
 	((SHADOW_REGISTER_START_ADDRESS_OFFSET) + (4 * (MAX_SHADOW_REGISTERS)))
@@ -60,6 +61,8 @@
  * OFFSET = 4K - 32 bytes = 0xFE0
  */
 #define MAPPED_REF_OFF 0xFE0
+
+#define HAL_OFFSET(block, field) block ## _ ## field ## _OFFSET
 
 #ifdef ENABLE_VERBOSE_DEBUG
 static inline void
@@ -125,7 +128,8 @@ static inline void hal_reg_write_result_check(struct hal_soc *hal_soc,
 	}
 }
 
-#if !defined(QCA_WIFI_QCA6390) && !defined(QCA_WIFI_QCA6490)
+#if !defined(QCA_WIFI_QCA6390) && !defined(QCA_WIFI_QCA6490) && \
+    !defined(QCA_WIFI_WCN7850)
 static inline void hal_lock_reg_access(struct hal_soc *soc,
 				       unsigned long *flags)
 {
@@ -230,7 +234,7 @@ static inline void hal_tx_init_cmd_credit_ring(hal_soc_handle_t hal_soc_hdl,
  *                            that window would be a bug
  */
 #if !defined(QCA_WIFI_QCA6390) && !defined(QCA_WIFI_QCA6490) && \
-    !defined(QCA_WIFI_QCA6750)
+    !defined(QCA_WIFI_QCA6750) && !defined(QCA_WIFI_WCN7850)
 static inline void hal_write32_mb(struct hal_soc *hal_soc, uint32_t offset,
 				  uint32_t value)
 {
@@ -463,7 +467,7 @@ static inline void hal_srng_write_address_32_mb(struct hal_soc *hal_soc,
 #endif
 
 #if !defined(QCA_WIFI_QCA6390) && !defined(QCA_WIFI_QCA6490) && \
-    !defined(QCA_WIFI_QCA6750)
+    !defined(QCA_WIFI_QCA6750) && !defined(QCA_WIFI_WCN7850)
 /**
  * hal_read32_mb() - Access registers to read configuration
  * @hal_soc: hal soc handle
@@ -861,7 +865,7 @@ extern void hal_detach(void *hal_soc);
 #define HAL_SRNG_MSI_INTR				0x00020000
 #define HAL_SRNG_CACHED_DESC		0x00040000
 
-#ifdef QCA_WIFI_QCA6490
+#if defined(QCA_WIFI_QCA6490)  || defined(QCA_WIFI_WCN7850)
 #define HAL_SRNG_PREFETCH_TIMER 1
 #else
 #define HAL_SRNG_PREFETCH_TIMER 0
@@ -947,6 +951,8 @@ struct hal_mem_info {
 	void *shadow_wrptr_mem_vaddr;
 	/* Shared physical memory for ring pointer updates from host to FW */
 	void *shadow_wrptr_mem_paddr;
+	/* lmac srng start id */
+	uint8_t lmac_srng_start_id;
 };
 
 /* SRNG parameters to be passed to hal_srng_setup */
@@ -983,6 +989,20 @@ struct hal_srng_params {
 	void *hwreg_base[MAX_SRNG_REG_GROUPS];
 	/* prefetch timer config - in micro seconds */
 	uint32_t prefetch_timer;
+#ifdef WLAN_FEATURE_NEAR_FULL_IRQ
+	/* Near full IRQ support flag */
+	uint32_t nf_irq_support;
+	/* MSI2 Address */
+	qdf_dma_addr_t msi2_addr;
+	/* MSI2 data */
+	uint32_t msi2_data;
+	/* Critical threshold */
+	uint16_t crit_thresh;
+	/* High threshold */
+	uint16_t high_thresh;
+	/* Safe threshold */
+	uint16_t safe_thresh;
+#endif
 };
 
 /* hal_construct_srng_shadow_regs() - initialize the shadow
@@ -1019,6 +1039,28 @@ QDF_STATUS hal_set_one_shadow_config(void *hal_soc, int ring_type,
 extern void hal_get_shadow_config(void *hal_soc,
 				  struct pld_shadow_reg_v2_cfg **shadow_config,
 				  int *num_shadow_registers_configured);
+
+#ifdef WLAN_FEATURE_NEAR_FULL_IRQ
+/**
+ * hal_srng_is_near_full_irq_supported() - Check if srng supports near full irq
+ * @hal_soc: HAL SoC handle [To be validated by caller]
+ * @ring_type: srng type
+ * @ring_num: The index of the srng (of the same type)
+ *
+ * Return: true, if srng support near full irq trigger
+ *	false, if the srng does not support near full irq support.
+ */
+bool hal_srng_is_near_full_irq_supported(hal_soc_handle_t hal_soc,
+					 int ring_type, int ring_num);
+#else
+static inline
+bool hal_srng_is_near_full_irq_supported(hal_soc_handle_t hal_soc,
+					 int ring_type, int ring_num)
+{
+	return false;
+}
+#endif
+
 /**
  * hal_srng_setup - Initialize HW SRNG ring.
  *
@@ -1049,7 +1091,16 @@ extern void *hal_srng_setup(void *hal_soc, int ring_type, int ring_num,
 #define REO_REMAP_SW4 4
 #define REO_REMAP_RELEASE 5
 #define REO_REMAP_FW 6
-#define REO_REMAP_UNUSED 7
+/*
+ * In Beryllium: 4 bits REO destination ring value is defined as: 0: TCL
+ * 1:SW1  2:SW2  3:SW3  4:SW4  5:Release  6:FW(WIFI)  7:SW5
+ * 8:SW6 9:SW7  10:SW8  11: NOT_USED.
+ *
+ */
+#define REO_REMAP_SW5 7
+#define REO_REMAP_SW6 8
+#define REO_REMAP_SW7 9
+#define REO_REMAP_SW8 10
 
 /*
  * Macro to access HWIO_REO_R0_ERROR_DESTINATION_RING_CTRL_IX_0
@@ -1440,6 +1491,32 @@ void *hal_srng_dst_get_next_cached(void *hal_soc,
 	return (void *)desc;
 }
 
+static inline int hal_srng_lock(hal_ring_handle_t hal_ring_hdl)
+{
+	struct hal_srng *srng = (struct hal_srng *)hal_ring_hdl;
+
+	if (qdf_unlikely(!hal_ring_hdl)) {
+		qdf_print("error: invalid hal_ring\n");
+		return -EINVAL;
+	}
+
+	SRNG_LOCK(&(srng->lock));
+	return 0;
+}
+
+static inline int hal_srng_unlock(hal_ring_handle_t hal_ring_hdl)
+{
+	struct hal_srng *srng = (struct hal_srng *)hal_ring_hdl;
+
+	if (qdf_unlikely(!hal_ring_hdl)) {
+		qdf_print("error: invalid hal_ring\n");
+		return -EINVAL;
+	}
+
+	SRNG_UNLOCK(&(srng->lock));
+	return 0;
+}
+
 /**
  * hal_srng_dst_get_next_hp - Get next entry from a destination ring and move
  * cached head pointer
@@ -1528,6 +1605,9 @@ void *hal_srng_dst_peek_sync_locked(hal_soc_handle_t hal_soc_hdl,
 
 	return ring_desc_ptr;
 }
+
+#define hal_srng_dst_num_valid_nolock(hal_soc, hal_ring_hdl, sync_hw_ptr) \
+		hal_srng_dst_num_valid(hal_soc, hal_ring_hdl, sync_hw_ptr)
 
 /**
  * hal_srng_dst_num_valid - Returns number of valid entries (to be processed
@@ -1794,6 +1874,9 @@ hal_srng_src_done_val(void *hal_soc, hal_ring_handle_t hal_ring_hdl)
  * hal_get_entrysize_from_srng() - Retrieve ring entry size
  * @hal_ring_hdl: Source ring pointer
  *
+ * srng->entry_size value is in 4 byte dwords so left shifting
+ * this by 2 to return the value of entry_size in bytes.
+ *
  * Return: uint8_t
  */
 static inline
@@ -1801,7 +1884,7 @@ uint8_t hal_get_entrysize_from_srng(hal_ring_handle_t hal_ring_hdl)
 {
 	struct hal_srng *srng = (struct hal_srng *)hal_ring_hdl;
 
-	return srng->entry_size;
+	return srng->entry_size << 2;
 }
 
 /**
@@ -1827,6 +1910,47 @@ void hal_get_sw_hptp(void *hal_soc, hal_ring_handle_t hal_ring_hdl,
 		*headp = *srng->u.dst_ring.hp_addr;
 	}
 }
+
+#if defined(CLEAR_SW2TCL_CONSUMED_DESC)
+/**
+ * hal_srng_src_get_next_consumed - Get the next desc if consumed by HW
+ *
+ * @hal_soc: Opaque HAL SOC handle
+ * @hal_ring_hdl: Source ring pointer
+ *
+ * Return: pointer to descriptor if consumed by HW, else NULL
+ */
+static inline
+void *hal_srng_src_get_next_consumed(void *hal_soc,
+				     hal_ring_handle_t hal_ring_hdl)
+{
+	struct hal_srng *srng = (struct hal_srng *)hal_ring_hdl;
+	uint32_t *desc = NULL;
+	/* TODO: Using % is expensive, but we have to do this since
+	 * size of some SRNG rings is not power of 2 (due to descriptor
+	 * sizes). Need to create separate API for rings used
+	 * per-packet, with sizes power of 2 (TCL2SW, REO2SW,
+	 * SW2RXDMA and CE rings)
+	 */
+	uint32_t next_entry = (srng->last_desc_cleared + srng->entry_size) %
+			      srng->ring_size;
+
+	if (next_entry != srng->u.src_ring.cached_tp) {
+		desc = &srng->ring_base_vaddr[next_entry];
+		srng->last_desc_cleared = next_entry;
+	}
+
+	return desc;
+}
+
+#else
+static inline
+void *hal_srng_src_get_next_consumed(void *hal_soc,
+				     hal_ring_handle_t hal_ring_hdl)
+{
+	return NULL;
+}
+#endif /* CLEAR_SW2TCL_CONSUMED_DESC */
 
 /**
  * hal_srng_src_get_next - Get next entry from a source ring and move cached tail pointer
@@ -2264,23 +2388,6 @@ uint32_t hal_get_reo_qdesc_align(hal_soc_handle_t hal_soc_hdl)
 }
 
 /**
- * hal_reo_qdesc_setup - Setup HW REO queue descriptor
- *
- * @hal_soc: Opaque HAL SOC handle
- * @ba_window_size: BlockAck window size
- * @start_seq: Starting sequence number
- * @hw_qdesc_vaddr: Virtual address of REO queue descriptor memory
- * @hw_qdesc_paddr: Physical address of REO queue descriptor memory
- * @pn_type: PN type (one of the types defined in 'enum hal_pn_type')
- *
- */
-void hal_reo_qdesc_setup(hal_soc_handle_t hal_soc_hdl,
-			 int tid, uint32_t ba_window_size,
-			 uint32_t start_seq, void *hw_qdesc_vaddr,
-			 qdf_dma_addr_t hw_qdesc_paddr,
-			 int pn_type);
-
-/**
  * hal_srng_get_hp_addr - Get head pointer physical address
  *
  * @hal_soc: Opaque HAL SOC handle
@@ -2372,24 +2479,6 @@ void hal_get_meminfo(hal_soc_handle_t hal_soc_hdl, struct hal_mem_info *mem);
  */
 uint32_t hal_get_target_type(hal_soc_handle_t hal_soc_hdl);
 
-/**
- * hal_get_ba_aging_timeout - Retrieve BA aging timeout
- *
- * @hal_soc: Opaque HAL SOC handle
- * @ac: Access category
- * @value: timeout duration in millisec
- */
-void hal_get_ba_aging_timeout(hal_soc_handle_t hal_soc_hdl, uint8_t ac,
-			      uint32_t *value);
-/**
- * hal_set_aging_timeout - Set BA aging timeout
- *
- * @hal_soc: Opaque HAL SOC handle
- * @ac: Access category in millisec
- * @value: timeout duration value
- */
-void hal_set_ba_aging_timeout(hal_soc_handle_t hal_soc_hdl, uint8_t ac,
-			      uint32_t value);
 /**
  * hal_srng_dst_hw_init - Private function to initialize SRNG
  * destination ring HW
@@ -2725,6 +2814,25 @@ static inline void hal_reo_set_err_dst_remap(hal_soc_handle_t hal_soc_hdl)
 		hal_soc->ops->hal_reo_set_err_dst_remap(hal_soc);
 }
 
+/**
+ * hal_reo_enable_pn_in_dest() - Subscribe for previous PN for 2k-jump or
+ *			OOR error frames
+ * @hal_soc_hdl: Opaque HAL soc handle
+ *
+ * Return: true if feature is enabled,
+ *	false, otherwise.
+ */
+static inline uint8_t
+hal_reo_enable_pn_in_dest(hal_soc_handle_t hal_soc_hdl)
+{
+	struct hal_soc *hal_soc = (struct hal_soc *)hal_soc_hdl;
+
+	if (hal_soc->ops->hal_reo_enable_pn_in_dest)
+		return hal_soc->ops->hal_reo_enable_pn_in_dest(hal_soc);
+
+	return 0;
+}
+
 #ifdef GENERIC_SHADOW_REGISTER_ACCESS_ENABLE
 
 /**
@@ -2832,5 +2940,22 @@ uint32_t hal_get_ring_usage(
 	}
 	ring_usage = (100 * num_valid) / srng->num_entries;
 	return ring_usage;
+}
+
+/**
+ * hal_cmem_write() - function for CMEM buffer writing
+ * @hal_soc_hdl: HAL SOC handle
+ * @offset: CMEM address
+ * @value: value to write
+ *
+ * Return: None.
+ */
+static inline void hal_cmem_write(hal_soc_handle_t hal_soc_hdl,
+				  uint32_t offset,
+				  uint32_t value)
+{
+	struct hal_soc *hal = (struct hal_soc *)hal_soc_hdl;
+
+	hal_write32_mb(hal, offset, value);
 }
 #endif /* _HAL_APIH_ */

@@ -51,6 +51,9 @@
 #define get_u16_lsb(value) (uint16_t)(value)
 #define get_u16_msb(value) (uint16_t)(((uint32_t)value) >> 16)
 #define get_gain_db(value) ((value) & 0xFF)
+#define get_gain_table_idx(value) (((value) >> 8) & 0x3)
+
+#define INVALID_PHASE_DELTA 0xFFFF
 
 /**
  * target_if_cfr_init_pdev() - Inits cfr pdev and registers necessary handlers.
@@ -160,6 +163,17 @@ target_if_cfr_set_mo_marking_support(struct wlan_objmgr_psoc *psoc,
 				     uint8_t value);
 
 /**
+ * target_if_cfr_set_aoa_for_rcc_support() - Function to set AoA for RCC
+ * @psoc: pointer to psoc object
+ * @value: value to be set
+ *
+ * Return: success/failure
+ */
+QDF_STATUS
+target_if_cfr_set_aoa_for_rcc_support(struct wlan_objmgr_psoc *psoc,
+				      uint8_t value);
+
+/**
  * target_if_cfr_info_send() - Function to send cfr info to upper layers
  * @pdev: pointer to pdev object
  * @head: pointer to cfr info head
@@ -173,6 +187,17 @@ void target_if_cfr_info_send(struct wlan_objmgr_pdev *pdev, void *head,
 			     size_t hlen, void *data, size_t dlen, void *tail,
 			     size_t tlen);
 
+/**
+ * target_if_cfr_fill_header() - Function to fill cfr header cmn section
+ * @hdr: pointer to the csi_cfr_header
+ * @is_wifi_2_0: flag to indicate legacy and non legacy radio
+ * @target_type: target type of the radio
+ * @is_rcc: flag to denote fill header request from periodic cfr/rcc
+ */
+void target_if_cfr_fill_header(struct csi_cfr_header *hdr,
+			       bool is_wifi_2_0,
+			       uint32_t target_type,
+			       bool is_rcc);
 #ifdef WIFI_TARGET_TYPE_2_0
 /**
  * cfr_wifi2_0_init_pdev() - Function to init legacy pdev

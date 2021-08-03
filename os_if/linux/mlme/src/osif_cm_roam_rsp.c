@@ -75,7 +75,7 @@ static void osif_roamed_ind(struct net_device *dev, struct cfg80211_bss *bss,
 	info.req_ie_len = req_ie_len;
 	info.resp_ie = resp_ie;
 	info.resp_ie_len = resp_ie_len;
-	cfg80211_roamed(dev, &info, GFP_KERNEL);
+	cfg80211_roamed(dev, &info, qdf_mem_malloc_flags());
 }
 #else
 static inline void osif_roamed_ind(struct net_device *dev,
@@ -85,7 +85,7 @@ static inline void osif_roamed_ind(struct net_device *dev,
 				   size_t resp_ie_len)
 {
 	cfg80211_roamed_bss(dev, bss, req_ie, req_ie_len, resp_ie, resp_ie_len,
-			    GFP_KERNEL);
+			    qdf_mem_malloc_flags());
 }
 #endif
 
@@ -240,7 +240,7 @@ static int osif_send_roam_auth_event(struct wlan_objmgr_vdev *vdev,
 			sizeof(uint16_t) + sizeof(uint8_t) +
 			(9 * NLMSG_HDRLEN) + fils_params_len,
 			QCA_NL80211_VENDOR_SUBCMD_KEY_MGMT_ROAM_AUTH_INDEX,
-			GFP_KERNEL);
+			qdf_mem_malloc_flags());
 
 	if (!skb) {
 		osif_err("cfg80211_vendor_event_alloc failed");
@@ -341,7 +341,7 @@ static int osif_send_roam_auth_event(struct wlan_objmgr_vdev *vdev,
 		}
 	}
 
-	cfg80211_vendor_event(skb, GFP_KERNEL);
+	cfg80211_vendor_event(skb, qdf_mem_malloc_flags());
 	return 0;
 
 nla_put_failure:
@@ -386,7 +386,6 @@ void osif_indicate_reassoc_results(struct wlan_objmgr_vdev *vdev,
 	struct cfg80211_bss *bss;
 	struct ieee80211_channel *chan;
 	struct wlan_objmgr_psoc *psoc;
-	bool roam_offload = false;
 
 	if (QDF_IS_STATUS_ERROR(rsp->connect_status))
 		return;
@@ -395,8 +394,6 @@ void osif_indicate_reassoc_results(struct wlan_objmgr_vdev *vdev,
 	if (!psoc)
 		return;
 
-	ucfg_mlme_is_roam_scan_offload_enabled(psoc, &roam_offload);
-
 	chan = ieee80211_get_channel(osif_priv->wdev->wiphy,
 				     rsp->freq);
 	bss = wlan_cfg80211_get_bss(osif_priv->wdev->wiphy, chan,
@@ -404,7 +401,7 @@ void osif_indicate_reassoc_results(struct wlan_objmgr_vdev *vdev,
 				    rsp->ssid.length);
 	if (!bss)
 		osif_warn("not able to find bss");
-	if (!roam_offload || rsp->is_ft)
+	if (rsp->is_ft)
 		osif_cm_get_assoc_req_ie_data(&rsp->connect_ies.assoc_req,
 					      &req_len, &req_ie);
 	else
@@ -418,4 +415,32 @@ void osif_indicate_reassoc_results(struct wlan_objmgr_vdev *vdev,
 
 	osif_update_fils_hlp_data(dev, vdev, rsp);
 }
-#endif
+
+QDF_STATUS
+osif_pmksa_candidate_notify(struct wlan_objmgr_vdev *vdev,
+			    struct qdf_mac_addr *bssid,
+			    int index, bool preauth)
+{
+	struct vdev_osif_priv *osif_priv = wlan_vdev_get_ospriv(vdev);
+	struct wireless_dev *wdev;
+
+	if (!osif_priv) {
+		osif_err("Invalid vdev osif priv");
+		return QDF_STATUS_E_INVAL;
+	}
+
+	wdev = osif_priv->wdev;
+	if (!wdev) {
+		osif_err("wdev is null");
+		return QDF_STATUS_E_INVAL;
+	}
+
+	osif_debug("is going to notify supplicant of:");
+	osif_info(QDF_MAC_ADDR_FMT, QDF_MAC_ADDR_REF(bssid->bytes));
+
+	cfg80211_pmksa_candidate_notify(wdev->netdev, index,
+					bssid->bytes,
+					preauth, qdf_mem_malloc_flags());
+	return QDF_STATUS_SUCCESS;
+}
+#endif /* CONN_MGR_ADV_FEATURE */

@@ -25,13 +25,15 @@
 
 #include "include/wlan_vdev_mlme.h"
 #include <qdf_event.h>
-
-#ifdef FEATURE_CM_ENABLE
 #include <wlan_cm_public_struct.h>
 
 /* Max candidate/attempts to be tried to connect */
 #define CM_MAX_CONNECT_ATTEMPTS 5
-#define CM_MAX_CONNECT_TIMEOUT 10000
+/*
+ * Default connect timeout to consider 3 sec join timeout + 5 sec auth timeout +
+ * 2 sec assoc timeout + 5 sec buffer for vdev related timeouts.
+ */
+#define CM_MAX_PER_CANDIDATE_CONNECT_TIMEOUT 15000
 
 /*
  * Default max retry attempts to be tried for a candidate.
@@ -107,6 +109,7 @@ struct cm_state_sm {
  * @cur_candidate: current candidate
  * @cur_candidate_retries: attempts for current candidate
  * @connect_attempts: number of connect attempts tried
+ * @connect_active_time: timestamp when connect became active
  */
 struct cm_connect_req {
 	wlan_cm_id cm_id;
@@ -116,6 +119,7 @@ struct cm_connect_req {
 	struct scan_cache_node *cur_candidate;
 	uint8_t cur_candidate_retries;
 	uint8_t connect_attempts;
+	qdf_time_t connect_active_time;
 };
 
 /**
@@ -124,12 +128,16 @@ struct cm_connect_req {
  * @req: roam req from osif
  * @candidate_list: candidate list
  * @cur_candidate: current candidate
+ * @num_preauth_retry: retry times for the same candidate
  */
 struct cm_roam_req {
 	wlan_cm_id cm_id;
 	struct wlan_cm_roam_req req;
 	qdf_list_t *candidate_list;
 	struct scan_cache_node *cur_candidate;
+#ifdef WLAN_FEATURE_PREAUTH_ENABLE
+	uint8_t num_preauth_retry;
+#endif
 };
 
 /**
@@ -162,22 +170,6 @@ struct cm_req {
 		struct cm_disconnect_req discon_req;
 		struct cm_roam_req roam_req;
 	};
-};
-
-/**
- * struct connect_ies - connect related ies stored in vdev, set by osif/user
- * @auth_ft_ies: auth ft ies received during preauth phase
- * @reassoc_ft_ies: reassoc ft ies received during reassoc phase
- * @cck_ie: cck ie for cck connection
- * @discon_ie: disconnect ie to be sent in disassoc/deauth req
- */
-struct connect_ies {
-	struct element_info auth_ft_ies;
-	struct element_info reassoc_ft_ies;
-#ifdef FEATURE_WLAN_ESE
-	struct element_info cck_ie;
-#endif
-	struct element_info discon_ie;
 };
 
 /**
@@ -244,8 +236,6 @@ struct cm_req_history {
  * @connect_count: connect count
  * @force_rsne_override: if QCA_WLAN_VENDOR_ATTR_CONFIG_RSN_IE is set by
  * framework
- * @req_ie: request ies for connect/disconnect set by osif/user separately from
- * connect req
  * @global_cmd_id: global cmd id for getting cm id for connect/disconnect req
  * @max_connect_attempts: Max attempts to be tried for a connect req
  * @connect_timeout: Connect timeout value in milliseconds
@@ -268,7 +258,6 @@ struct cnx_mgr {
 	uint8_t disconnect_count;
 	uint8_t connect_count;
 	bool force_rsne_override;
-	struct connect_ies req_ie;
 	qdf_atomic_t global_cmd_id;
 	uint8_t max_connect_attempts;
 	uint32_t connect_timeout;
@@ -307,18 +296,4 @@ QDF_STATUS wlan_cm_init(struct vdev_mlme_obj *vdev_mlme);
  *         FAILURE, if deletion fails
  */
 QDF_STATUS wlan_cm_deinit(struct vdev_mlme_obj *vdev_mlme);
-#else
-
-static inline QDF_STATUS wlan_cm_init(struct vdev_mlme_obj *vdev_mlme)
-{
-	return QDF_STATUS_SUCCESS;
-}
-
-static inline QDF_STATUS wlan_cm_deinit(struct vdev_mlme_obj *vdev_mlme)
-{
-	return QDF_STATUS_SUCCESS;
-}
-
-#endif /* FEATURE_CM_ENABLE */
-
 #endif /* __WLAN_CM_MAIN_H__ */

@@ -358,11 +358,13 @@ int hif_ahb_configure_grp_irq(struct hif_softc *scn,
 		hif_ext_group->os_irq[j] = irq;
 	}
 
-	qdf_spin_lock_irqsave(&hif_ext_group->irq_lock);
-
 	for (j = 0; j < hif_ext_group->numirq; j++) {
 		irq = hif_ext_group->os_irq[j];
+
+		qdf_spin_lock_irqsave(&hif_ext_group->irq_lock);
 		qdf_dev_set_irq_status_flags(irq, QDF_IRQ_DISABLE_UNLAZY);
+		qdf_spin_unlock_irqrestore(&hif_ext_group->irq_lock);
+
 		ret = pfrm_request_irq(scn->qdf_dev->dev,
 				       irq, hif_ext_group_interrupt_handler,
 				       IRQF_TRIGGER_RISING,
@@ -374,13 +376,11 @@ int hif_ahb_configure_grp_irq(struct hif_softc *scn,
 			goto end;
 		}
 	}
-	qdf_spin_unlock_irqrestore(&hif_ext_group->irq_lock);
 
 	qdf_spin_lock_irqsave(&hif_ext_group->irq_lock);
 	hif_ext_group->irq_requested = true;
-
-end:
 	qdf_spin_unlock_irqrestore(&hif_ext_group->irq_lock);
+end:
 	return ret;
 }
 
@@ -520,6 +520,7 @@ void hif_ahb_disable_bus(struct hif_softc *scn)
 		/* Should not be executed on 8074 platform */
 		if ((tgt_info->target_type != TARGET_TYPE_QCA8074) &&
 		    (tgt_info->target_type != TARGET_TYPE_QCA8074V2) &&
+		    (tgt_info->target_type != TARGET_TYPE_QCA9574) &&
 		    (tgt_info->target_type != TARGET_TYPE_QCA5018) &&
 		    (tgt_info->target_type != TARGET_TYPE_QCN6122) &&
 		    (tgt_info->target_type != TARGET_TYPE_QCA6018)) {
@@ -665,6 +666,7 @@ QDF_STATUS hif_ahb_enable_bus(struct hif_softc *ol_sc,
 
 	if ((tgt_info->target_type != TARGET_TYPE_QCA8074) &&
 			(tgt_info->target_type != TARGET_TYPE_QCA8074V2) &&
+			(tgt_info->target_type != TARGET_TYPE_QCA9574) &&
 			(tgt_info->target_type != TARGET_TYPE_QCA5018) &&
 			(tgt_info->target_type != TARGET_TYPE_QCN6122) &&
 			(tgt_info->target_type != TARGET_TYPE_QCA6018)) {
@@ -685,6 +687,7 @@ QDF_STATUS hif_ahb_enable_bus(struct hif_softc *ol_sc,
 err_target_sync:
 	if ((tgt_info->target_type != TARGET_TYPE_QCA8074) &&
 	    (tgt_info->target_type != TARGET_TYPE_QCA8074V2) &&
+	    (tgt_info->target_type != TARGET_TYPE_QCA9574) &&
 	    (tgt_info->target_type != TARGET_TYPE_QCN6122) &&
 	    (tgt_info->target_type != TARGET_TYPE_QCA5018) &&
 	    (tgt_info->target_type != TARGET_TYPE_QCA6018)) {
@@ -729,6 +732,7 @@ void hif_ahb_nointrs(struct hif_softc *scn)
 	struct HIF_CE_state *hif_state = HIF_GET_CE_STATE(scn);
 	struct CE_attr *host_ce_conf = hif_state->host_ce_config;
 
+	scn->free_irq_done = true;
 	ce_unregister_irq(hif_state, CE_ALL_BITMAP);
 
 	if (scn->request_irq_done == false)
@@ -797,6 +801,7 @@ void hif_ahb_irq_enable(struct hif_softc *scn, int ce_id)
 			hif_write32_mb(scn, mem + reg_offset, regval);
 			if (tgt_info->target_type == TARGET_TYPE_QCA8074 ||
 			    tgt_info->target_type == TARGET_TYPE_QCA8074V2 ||
+			    tgt_info->target_type == TARGET_TYPE_QCA9574 ||
 			    tgt_info->target_type == TARGET_TYPE_QCA5018 ||
 			    tgt_info->target_type == TARGET_TYPE_QCA6018) {
 				/* Enable destination ring interrupts for
@@ -849,6 +854,7 @@ void hif_ahb_irq_disable(struct hif_softc *scn, int ce_id)
 			hif_write32_mb(scn, mem + reg_offset, regval);
 			if (tgt_info->target_type == TARGET_TYPE_QCA8074 ||
 			    tgt_info->target_type == TARGET_TYPE_QCA8074V2 ||
+			    tgt_info->target_type == TARGET_TYPE_QCA9574 ||
 			    tgt_info->target_type == TARGET_TYPE_QCA5018 ||
 			    tgt_info->target_type == TARGET_TYPE_QCA6018) {
 				/* Disable destination ring interrupts for

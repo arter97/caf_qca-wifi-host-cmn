@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016-2020 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -281,6 +281,7 @@ typedef void (*wlan_objmgr_peer_status_handler)(
  * @WLAN_OSIF_TDLS_ID:          TDLS operations in OS IF
  * @WLAN_OSIF_CM_ID:            Connection manager osif reference id
  * @WLAN_TXRX_STREAMS_ID:       Preferred TX & RX streams operations
+ * @WLAN_MLO_MGR_ID:            MLO manager reference id
  * @WLAN_REF_ID_MAX:            Max id used to generate ref count tracking array
  */
  /* New value added to the enum must also be reflected in function
@@ -378,6 +379,8 @@ typedef enum {
 	WLAN_OSIF_TDLS_ID     = 87,
 	WLAN_OSIF_CM_ID       = 88,
 	WLAN_TXRX_STREAMS_ID  = 89,
+	WLAN_MLO_MGR_ID       = 90,
+	WLAN_MBSS_ID          = 91,
 	WLAN_REF_ID_MAX,
 } wlan_objmgr_ref_dbgid;
 
@@ -481,6 +484,8 @@ static inline const char *string_from_dbgid(wlan_objmgr_ref_dbgid id)
 					"WLAN_OSIF_TDLS_ID",
 					"WLAN_OSIF_CM_ID",
 					"WLAN_TXRX_STREAMS_ID",
+					"WLAN_MLO_MGR_ID",
+					"WLAN_MBSS_ID"
 					};
 
 	if (id >= WLAN_REF_ID_MAX)
@@ -494,7 +499,10 @@ static inline const char *string_from_dbgid(wlan_objmgr_ref_dbgid id)
 #else
 #define WLAN_OBJMGR_BUG(val)
 #endif
+
+#ifndef WLAN_OBJMGR_RATELIMIT_THRESH
 #define WLAN_OBJMGR_RATELIMIT_THRESH 2
+#endif
 
 #ifdef WLAN_OBJMGR_REF_ID_TRACE
 #define WLAN_OBJMGR_TRACE_FUNC_SIZE 30

@@ -25,6 +25,7 @@
 #include "if_meta_hdr.h"
 #endif
 #include "dp_internal.h"
+#include "hal_tx.h"
 
 #define DP_INVALID_VDEV_ID 0xFF
 
@@ -46,6 +47,8 @@
 #define DP_TX_DESC_FLAG_ALLOCATED	0x200
 #define DP_TX_DESC_FLAG_MESH_MODE	0x400
 #define DP_TX_DESC_FLAG_UNMAP_DONE	0x800
+#define DP_TX_DESC_FLAG_TX_COMP_ERR	0x1000
+#define DP_TX_DESC_FLAG_FLUSH		0x2000
 
 #define DP_TX_EXT_DESC_FLAG_METADATA_VALID 0x1
 
@@ -77,6 +80,7 @@ do {                                                           \
 
 #define dp_tx_alert(params...) QDF_TRACE_FATAL(QDF_MODULE_ID_DP_TX, params)
 #define dp_tx_err(params...) QDF_TRACE_ERROR(QDF_MODULE_ID_DP_TX, params)
+#define dp_tx_err_rl(params...) QDF_TRACE_ERROR_RL(QDF_MODULE_ID_DP_TX, params)
 #define dp_tx_warn(params...) QDF_TRACE_WARN(QDF_MODULE_ID_DP_TX, params)
 #define dp_tx_info(params...) \
 	__QDF_TRACE_FL(QDF_TRACE_LEVEL_INFO_HIGH, QDF_MODULE_ID_DP_TX, ## params)
@@ -429,6 +433,7 @@ static inline void dp_tx_get_queue(struct dp_vdev *vdev,
 
 	dp_tx_debug("pool_id:%d ring_id: %d",
 		    queue->desc_pool_id, queue->ring_id);
+
 }
 
 /*
@@ -447,21 +452,8 @@ static inline hal_ring_handle_t dp_tx_get_hal_ring_hdl(struct dp_soc *soc,
 	return soc->tcl_data_ring[ring_id].hal_srng;
 }
 
-/*
- * dp_tx_get_rbm_id()- Get the RBM ID for data transmission completion.
- * @dp_soc - DP soc structure pointer
- * @ring_id - Transmit Queue/ring_id to be used when XPS is enabled
- *
- * Return - HAL ring handle
- */
-static inline uint8_t dp_tx_get_rbm_id(struct dp_soc *doc,
-				       uint8_t ring_id)
-{
-	return (ring_id ? HAL_WBM_SW0_BM_ID + (ring_id - 1) :
-			  HAL_WBM_SW2_BM_ID);
-}
-
 #else /* QCA_OL_TX_MULTIQ_SUPPORT */
+
 static inline void dp_tx_get_queue(struct dp_vdev *vdev,
 				   qdf_nbuf_t nbuf, struct dp_tx_queue *queue)
 {
@@ -469,20 +461,14 @@ static inline void dp_tx_get_queue(struct dp_vdev *vdev,
 	queue->desc_pool_id = DP_TX_GET_DESC_POOL_ID(vdev);
 	queue->ring_id = DP_TX_GET_RING_ID(vdev);
 
-	dp_tx_debug("pool_id:%d ring_id: %d",
-		    queue->desc_pool_id, queue->ring_id);
+	dp_tx_debug("pool_id:%d ring_id: %d skb %pK ",
+		    queue->desc_pool_id, queue->ring_id, nbuf);
 }
 
 static inline hal_ring_handle_t dp_tx_get_hal_ring_hdl(struct dp_soc *soc,
 						       uint8_t ring_id)
 {
 	return soc->tcl_data_ring[ring_id].hal_srng;
-}
-
-static inline uint8_t dp_tx_get_rbm_id(struct dp_soc *soc,
-				       uint8_t ring_id)
-{
-	return (ring_id + HAL_WBM_SW0_BM_ID);
 }
 #endif
 
@@ -673,4 +659,151 @@ dp_send_completion_to_pkt_capture(struct dp_soc *soc,
 {
 }
 #endif
+
+#ifndef QCA_HOST_MODE_WIFI_DISABLED
+#ifdef WLAN_DP_FEATURE_SW_LATENCY_MGR
+/**
+ * dp_tx_update_stats() - Update soc level tx stats
+ * @soc: DP soc handle
+ * @nbuf: packet being transmitted
+ *
+ * Returns: none
+ */
+void dp_tx_update_stats(struct dp_soc *soc,
+			qdf_nbuf_t nbuf);
+
+/**
+ * dp_tx_attempt_coalescing() - Check and attempt TCL register write coalescing
+ * @soc: Datapath soc handle
+ * @tx_desc: tx packet descriptor
+ * @tid: TID for pkt transmission
+ *
+ * Returns: 1, if coalescing is to be done
+ *	    0, if coalescing is not to be done
+ */
+int
+dp_tx_attempt_coalescing(struct dp_soc *soc, struct dp_vdev *vdev,
+			 struct dp_tx_desc_s *tx_desc,
+			 uint8_t tid);
+
+/**
+ * dp_tx_ring_access_end() - HAL ring access end for data transmission
+ * @soc: Datapath soc handle
+ * @hal_ring_hdl: HAL ring handle
+ * @coalesce: Coalesce the current write or not
+ *
+ * Returns: none
+ */
+void
+dp_tx_ring_access_end(struct dp_soc *soc, hal_ring_handle_t hal_ring_hdl,
+		      int coalesce);
+#else
+/**
+ * dp_tx_update_stats() - Update soc level tx stats
+ * @soc: DP soc handle
+ * @nbuf: packet being transmitted
+ *
+ * Returns: none
+ */
+static inline void dp_tx_update_stats(struct dp_soc *soc,
+				      qdf_nbuf_t nbuf) { }
+static inline void
+dp_tx_ring_access_end(struct dp_soc *soc, hal_ring_handle_t hal_ring_hdl,
+		      int coalesce)
+{
+	dp_tx_hal_ring_access_end(soc, hal_ring_hdl);
+}
+
+static inline int
+dp_tx_attempt_coalescing(struct dp_soc *soc, struct dp_vdev *vdev,
+			 struct dp_tx_desc_s *tx_desc,
+			 uint8_t tid)
+{
+	return 0;
+}
+
+#endif /* WLAN_DP_FEATURE_SW_LATENCY_MGR */
+
+#ifdef FEATURE_RUNTIME_PM
+void
+dp_tx_ring_access_end_wrapper(struct dp_soc *soc,
+			      hal_ring_handle_t hal_ring_hdl,
+			      int coalesce);
+#else
+static inline void
+dp_tx_ring_access_end_wrapper(struct dp_soc *soc,
+			      hal_ring_handle_t hal_ring_hdl,
+			      int coalesce)
+{
+	dp_tx_ring_access_end(soc, hal_ring_hdl, coalesce);
+}
+#endif
+#endif /* QCA_HOST_MODE_WIFI_DISABLED */
+
+#ifdef DP_TX_HW_DESC_HISTORY
+static inline void
+dp_tx_hw_desc_update_evt(uint8_t *hal_tx_desc_cached,
+			 hal_ring_handle_t hal_ring_hdl,
+			 struct dp_soc *soc)
+{
+	struct dp_tx_hw_desc_evt *evt;
+	uint64_t idx = 0;
+
+	if (!soc->tx_hw_desc_history)
+		return;
+
+	idx = ++soc->tx_hw_desc_history->index;
+	if (idx == DP_TX_HW_DESC_HIST_MAX)
+		soc->tx_hw_desc_history->index = 0;
+	idx = qdf_do_div_rem(idx, DP_TX_HW_DESC_HIST_MAX);
+
+	evt = &soc->tx_hw_desc_history->entry[idx];
+	qdf_mem_copy(evt->tcl_desc, hal_tx_desc_cached, HAL_TX_DESC_LEN_BYTES);
+	evt->posted = qdf_get_log_timestamp();
+	hal_get_sw_hptp(soc->hal_soc, hal_ring_hdl, &evt->tp, &evt->hp);
+}
+#else
+static inline void
+dp_tx_hw_desc_update_evt(uint8_t *hal_tx_desc_cached,
+			 hal_ring_handle_t hal_ring_hdl,
+			 struct dp_soc *soc)
+{
+}
+#endif
+
+#ifdef WLAN_FEATURE_TSF_UPLINK_DELAY
+/**
+ * dp_set_delta_tsf() - Set delta_tsf to dp_soc structure
+ * @soc_hdl: cdp soc pointer
+ * @vdev_id: vdev id
+ * @delta_tsf: difference between TSF clock and qtimer
+ *
+ * Return: None
+ */
+void dp_set_delta_tsf(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
+		      uint32_t delta_tsf);
+
+/**
+ * dp_set_tsf_report_ul_delay() - Enable or disable reporting uplink delay
+ * @soc_hdl: cdp soc pointer
+ * @vdev_id: vdev id
+ * @enable: true to enable and false to disable
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS dp_set_tsf_ul_delay_report(struct cdp_soc_t *soc_hdl,
+				      uint8_t vdev_id, bool enable);
+
+/**
+ * dp_get_uplink_delay() - Get uplink delay value
+ * @soc_hdl: cdp soc pointer
+ * @vdev_id: vdev id
+ * @val: pointer to save uplink delay value
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS dp_get_uplink_delay(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
+			       uint32_t *val);
+#endif /* WLAN_FEATURE_TSF_UPLINK_TSF */
+
 #endif

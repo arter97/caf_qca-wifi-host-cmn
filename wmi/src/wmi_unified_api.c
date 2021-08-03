@@ -727,6 +727,16 @@ QDF_STATUS wmi_unified_pno_stop_cmd(wmi_unified_t wmi_handle, uint8_t vdev_id)
 	return QDF_STATUS_E_FAILURE;
 }
 
+QDF_STATUS wmi_unified_obss_disable_cmd(wmi_unified_t wmi_handle,
+					uint8_t vdev_id)
+{
+	if (wmi_handle->ops->send_obss_disable_cmd)
+		return wmi_handle->ops->send_obss_disable_cmd(wmi_handle,
+							      vdev_id);
+
+	return QDF_STATUS_E_FAILURE;
+}
+
 #ifdef FEATURE_WLAN_SCAN_PNO
 QDF_STATUS wmi_unified_pno_start_cmd(wmi_unified_t wmi_handle,
 				     struct pno_scan_req_params *pno)
@@ -3241,6 +3251,20 @@ wmi_unified_extract_vdev_mgmt_offload_event(
 }
 #endif /* WLAN_FEATURE_PKT_CAPTURE */
 
+#ifdef WLAN_FEATURE_PKT_CAPTURE_V2
+QDF_STATUS
+wmi_unified_extract_smart_monitor_event(
+				wmi_unified_t wmi, void *evt_buf,
+				struct smu_event_params *params)
+{
+	if (wmi->ops->extract_smart_monitor_event)
+		return wmi->ops->extract_smart_monitor_event(wmi, evt_buf,
+							     params);
+
+	return QDF_STATUS_E_FAILURE;
+}
+#endif /* WLAN_FEATURE_PKT_CAPTURE_V2 */
+
 QDF_STATUS
 wmi_unified_extract_roam_result_stats(wmi_unified_t wmi, void *buf,
 				      struct wmi_roam_result *dst,
@@ -3413,6 +3437,20 @@ QDF_STATUS wmi_unified_send_set_tpc_power_cmd(wmi_unified_t wmi_handle,
 	return QDF_STATUS_E_FAILURE;
 }
 
+#ifdef CONFIG_AFC_SUPPORT
+QDF_STATUS
+wmi_unified_send_afc_cmd(wmi_unified_t wmi_handle, uint8_t pdev_id,
+			 struct reg_afc_resp_rx_ind_info *param)
+{
+	if (wmi_handle->ops->send_afc_cmd)
+		return wmi_handle->ops->send_afc_cmd(wmi_handle,
+						     pdev_id,
+						     param);
+
+	return QDF_STATUS_E_FAILURE;
+}
+#endif
+
 QDF_STATUS
 wmi_extract_dpd_status_ev_param(wmi_unified_t wmi_handle,
 				void *evt_buf,
@@ -3420,6 +3458,18 @@ wmi_extract_dpd_status_ev_param(wmi_unified_t wmi_handle,
 {
 	if (wmi_handle->ops->extract_dpd_status_ev_param)
 		return wmi_handle->ops->extract_dpd_status_ev_param(
+				wmi_handle, evt_buf, param);
+
+	return QDF_STATUS_E_FAILURE;
+}
+
+QDF_STATUS
+wmi_extract_halphy_cal_status_ev_param(wmi_unified_t wmi_handle,
+				       void *evt_buf,
+				       struct wmi_host_pdev_get_halphy_cal_status_event *param)
+{
+	if (wmi_handle->ops->extract_halphy_cal_status_ev_param)
+		return wmi_handle->ops->extract_halphy_cal_status_ev_param(
 				wmi_handle, evt_buf, param);
 
 	return QDF_STATUS_E_FAILURE;

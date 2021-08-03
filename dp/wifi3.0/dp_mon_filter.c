@@ -371,7 +371,7 @@ static QDF_STATUS dp_mon_filter_check_co_exist(struct dp_pdev *pdev)
 	 */
 	if (pdev->neighbour_peers_added &&
 	    ((pdev->mcopy_mode) || pdev->monitor_configured)) {
-		dp_mon_filter_err("%pk: Smart Monitor mode can't exist with modes\n"
+		dp_mon_filter_err("%pK: Smart Monitor mode can't exist with modes\n"
 				  "M_Copy Mode:%d\n"
 				  "Monitor Mode:%d",
 				  pdev->soc, pdev->mcopy_mode,
@@ -1181,12 +1181,14 @@ QDF_STATUS dp_mon_filter_update(struct dp_pdev *pdev)
 	} else {
 		/*
 		 * For WIN case the monitor buffer ring is used and it does need
-		 * reset when monitor mode gets disabled.
+		 * reset when monitor mode gets enabled/disabled.
 		 */
 		if (soc->wlan_cfg_ctx->rxdma1_enable) {
-			status = dp_mon_ht2_rx_ring_cfg(soc, pdev,
+			if (pdev->monitor_configured || mon_mode_set) {
+				status = dp_mon_ht2_rx_ring_cfg(soc, pdev,
 							mon_srng_type,
 							&filter.tlv_filter);
+			}
 		}
 	}
 

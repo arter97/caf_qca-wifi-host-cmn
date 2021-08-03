@@ -121,16 +121,34 @@
 #endif
 
 #define DFS_IS_CHANNEL_WEATHER_RADAR(_f) (((_f) >= 5600) && ((_f) <= 5650))
-#ifdef CONFIG_CHAN_NUM_API
-#define DFS_IS_CHAN_JAPAN_INDOOR(_ch)    (((_ch) >= 36)  && ((_ch) <= 64))
-#define DFS_IS_CHAN_JAPAN_W53(_ch)       (((_ch) >= 52)  && ((_ch) <= 64))
-#define DFS_IS_CHAN_JAPAN_OUTDOOR(_ch)   (((_ch) >= 100) && ((_ch) <= 140))
-#endif
 
 #ifdef CONFIG_CHAN_FREQ_API
 #define DFS_IS_CHAN_JAPAN_INDOOR_FREQ(_ch)(((_ch) >= 5180)  && ((_ch) <= 5320))
-#define DFS_IS_CHAN_JAPAN_OUTDOOR_FREQ(_ch)(((_ch) >= 5500) && ((_ch) <= 5700))
+#define DFS_IS_CHAN_JAPAN_OUTDOOR_FREQ(_ch)(((_ch) >= 5500) && ((_ch) <= 5720))
 #define DFS_IS_CHAN_JAPAN_W53_FREQ(_ch)    (((_ch) >= 5260)  && ((_ch) <= 5320))
+/*
+ * Spur or leakage transmissions is observed in Spruce HW in
+ * frequencies from 5260MHz to 5320MHz when one of the following
+ * conditions is true,
+ * i) The AP is transmitting in 52/56/60/64 in 80MHz mode and then the  AP
+ * moves to the adjacent channel 36/44/48 in 80MHz mode and starts
+ * transmitting.
+ * ii) The AP is transmitting in 36/44/48/52/56/60/64 in 160MHz mode and then
+ * the  AP moves to the adjacent channel 36/44/48 in 80MHz mode and starts
+ * transmitting.
+ * Hence, center frequencies from 5260MHz to 5320MHz in Spruce HW are called
+ * Spruce Spur 80MHz Frequencies and, center frequencies from 5180MHz and
+ * 5320MHz except 5200MHz are called Spruce Spur 160MHz Frequencies.
+ */
+/* Channels 52/56/60/64 in 80MHz */
+#define DFS_IS_CHAN_SPRUCE_SPUR_FREQ_80MHZ(_ch) \
+		(((_ch) >= 5260) && ((_ch) <= 5320))
+/* 36/44/48/52/56/60/64 in 160MHz mode */
+#define DFS_IS_CHAN_SPRUCE_SPUR_FREQ_160MHZ(_ch) \
+		(((_ch) >= 5180) && ((_ch) <= 5320) && ((_ch) != 5200))
+/* Avoid channels 36/44/48 */
+#define DFS_IS_SPRUCE_SPUR_AVOID_FREQS(_ch) \
+		(((_ch) >= 5180) && ((_ch) <= 5240) && ((_ch) != 5200))
 #endif
 
 /**
@@ -179,26 +197,6 @@ struct dfs_matrix_tx_leak_info {
 	struct dfs_tx_leak_info chan_matrix[CHAN_ENUM_5720 -
 					    CHAN_ENUM_5180 + 1];
 };
-#endif
-
-/**
- * dfs_mark_leaking_ch() - to mark channel leaking in to nol
- * @dfs: dfs handler.
- * @ch_width: channel width
- * @temp_ch_lst_sz: the target channel list
- * @temp_ch_lst: the target channel list
- *
- * This function removes the channels from temp channel list that
- * (if selected as target channel) will cause leakage in one of
- * the NOL channels
- *
- * Return: QDF_STATUS
- */
-#ifdef CONFIG_CHAN_NUM_API
-QDF_STATUS dfs_mark_leaking_ch(struct wlan_dfs *dfs,
-		enum phy_ch_width ch_width,
-		uint8_t temp_ch_lst_sz,
-		uint8_t *temp_ch_lst);
 #endif
 
 /**

@@ -220,6 +220,8 @@ typedef enum wlan_crypto_key_mgmt {
 	WLAN_CRYPTO_KEY_MGMT_OWE                   = 22,
 	WLAN_CRYPTO_KEY_MGMT_DPP                   = 23,
 	WLAN_CRYPTO_KEY_MGMT_FT_IEEE8021X_SHA384   = 24,
+	WLAN_CRYPTO_KEY_MGMT_FT_PSK_SHA384         = 25,
+	WLAN_CRYPTO_KEY_MGMT_PSK_SHA384            = 26,
 	/** Keep WLAN_CRYPTO_KEY_MGMT_MAX at the end. */
 	WLAN_CRYPTO_KEY_MGMT_MAX   = WLAN_CRYPTO_KEY_MGMT_FT_IEEE8021X_SHA384,
 } wlan_crypto_key_mgmt;
@@ -235,8 +237,8 @@ enum wlan_crypto_key_type {
 
 #define DEFAULT_KEYMGMT_6G_MASK 0xFFFFFFFF
 
-/* AKM wlan_crypto_key_mgmt 0-8, 12-15 and 24 are not allowed. */
-#define ALLOWED_KEYMGMT_6G_MASK 0xFEFF0E00
+/* AKM wlan_crypto_key_mgmt 1, 6, 8, 25 and 26 are not allowed. */
+#define ALLOWED_KEYMGMT_6G_MASK 0x01FFFEBD
 
 /*
  * enum fils_erp_cryptosuite: this enum defines the cryptosuites used
@@ -420,6 +422,8 @@ struct wlan_crypto_req_key {
  * @defaultkey: function pointer to set default key
  * @set_key: converged function pointer to set key in hw
  * @getpn: function pointer to get current pn value of peer
+ * @register_events: function pointer to register wmi event handler
+ * @deregister_events: function pointer to deregister wmi event handler
  */
 
 struct wlan_lmac_if_crypto_tx_ops {
@@ -439,6 +443,8 @@ struct wlan_lmac_if_crypto_tx_ops {
 			      enum wlan_crypto_key_type key_type);
 	QDF_STATUS(*getpn)(struct wlan_objmgr_vdev *vdev,
 			   uint8_t *macaddr, uint32_t key_type);
+	QDF_STATUS (*register_events)(struct wlan_objmgr_psoc *psoc);
+	QDF_STATUS (*deregister_events)(struct wlan_objmgr_psoc *psoc);
 };
 
 /**

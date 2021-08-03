@@ -186,7 +186,7 @@ typedef struct s_qdf_trace_data {
 #define MAX_QDF_DP_TRACE_RECORDS       2000
 #endif
 
-#define QDF_DP_TRACE_RECORD_SIZE       40
+#define QDF_DP_TRACE_RECORD_SIZE       50 /* bytes */
 #define INVALID_QDF_DP_TRACE_ADDR      0xffffffff
 #define QDF_DP_TRACE_VERBOSITY_HIGH		4
 #define QDF_DP_TRACE_VERBOSITY_MEDIUM		3
@@ -350,6 +350,8 @@ struct qdf_dp_trace_ptr_buf {
  * @type: packet type
  * @subtype: packet subtype
  * @dir: direction
+ * @proto_priv_data: protocol private data
+ * can be stored in this.
  */
 struct qdf_dp_trace_proto_buf {
 	struct qdf_mac_addr sa;
@@ -358,6 +360,11 @@ struct qdf_dp_trace_proto_buf {
 	uint8_t type;
 	uint8_t subtype;
 	uint8_t dir;
+	/* for ICMP priv data is bit offset 38 to 42
+	 * 38-40 ICMP_ICMP_ID and
+	 * 40-42 ICMP_SEQ_NUM_OFFSET
+	 */
+	uint32_t proto_priv_data;
 };
 
 /**
@@ -537,6 +544,8 @@ enum qdf_dpt_debugfs_state {
 	QDF_DPT_DEBUGFS_STATE_SHOW_IN_PROGRESS,
 	QDF_DPT_DEBUGFS_STATE_SHOW_COMPLETE,
 };
+
+#define QDF_WIFI_MODULE_PARAMS_FILE "wifi_module_param.ini"
 
 typedef void (*tp_qdf_trace_cb)(void *p_mac, tp_qdf_trace_record, uint16_t);
 typedef void (*tp_qdf_state_info_cb) (char **buf, uint16_t *size);
@@ -899,14 +908,15 @@ uint8_t qdf_dp_get_no_of_record(void);
  * @dir: direction
  * @pdev_id: pdev id
  * @print: to print this proto pkt or not
- *
+ * @proto_priv_data: protocol specific private
+ * data.
  * Return: none
  */
 void
 qdf_dp_trace_proto_pkt(enum QDF_DP_TRACE_ID code, uint8_t vdev_id,
 	uint8_t *sa, uint8_t *da, enum qdf_proto_type type,
 	enum qdf_proto_subtype subtype, enum qdf_proto_dir dir,
-	uint8_t pdev_id, bool print);
+	uint8_t pdev_id, bool print, uint32_t proto_priv_data);
 
 void qdf_dp_trace_disable_live_mode(void);
 void qdf_dp_trace_enable_live_mode(void);
@@ -1426,6 +1436,24 @@ int qdf_print_ctrl_register(const struct category_info *cinfo,
 			    void *custom_ctx,
 			    const char *pctrl_name);
 
+#ifdef QCA_WIFI_MODULE_PARAMS_FROM_INI
+/**
+ * qdf_update_module_param() - Update qdf module params
+ *
+ *
+ * Read the file which has wifi module params, parse and update
+ * qdf module params.
+ *
+ * Return: void
+ */
+void qdf_initialize_module_param_from_ini(void);
+#else
+static inline
+void qdf_initialize_module_param_from_ini(void)
+{
+}
+#endif
+
 /**
  * qdf_shared_print_ctrl_init() - Initialize the shared print ctrl obj with
  *                                all categories set to the default level
@@ -1564,6 +1592,30 @@ QDF_STATUS qdf_print_set_node_flag(unsigned int idx,
  */
 bool qdf_print_get_node_flag(unsigned int idx);
 
+#endif
+
+#ifdef QCA_WIFI_MODULE_PARAMS_FROM_INI
+/**
+ * qdf_module_param_handler() - Function to store module params
+ *
+ * @context : NULL, unused.
+ * @key : Name of the module param
+ * @value: Value of the module param
+ *
+ * Handler function to be called from qdf_ini_parse()
+ * function when a valid parameter is found in a file.
+ *
+ * Return : QDF_STATUS_SUCCESS on Success
+ */
+QDF_STATUS qdf_module_param_handler(void *context, const char *key,
+				    const char *value);
+#else
+static inline
+QDF_STATUS qdf_module_param_handler(void *context, const char *key,
+				    const char *value)
+{
+	return QDF_STATUS_SUCCESS;
+}
 #endif
 
 /**

@@ -210,6 +210,8 @@ static int hif_ce_srng_msi_free_irq(struct hif_softc *scn)
 		msi_data = (ce_id % msi_data_count) + msi_irq_start;
 		irq = pld_get_msi_irq(scn->qdf_dev->dev, msi_data);
 
+		hif_ce_irq_remove_affinity_hint(irq);
+
 		hif_debug("%s: (ce_id %d, msi_data %d, irq %d)", __func__,
 			  ce_id, msi_data, irq);
 
@@ -225,7 +227,7 @@ static int hif_ce_srng_msi_free_irq(struct hif_softc *scn)
  *
  * Return: none
  */
-static void hif_ipci_deconfigure_grp_irq(struct hif_softc *scn)
+void hif_ipci_deconfigure_grp_irq(struct hif_softc *scn)
 {
 	int i, j, irq;
 	struct HIF_CE_state *hif_state = HIF_GET_CE_STATE(scn);
@@ -250,6 +252,7 @@ void hif_ipci_nointrs(struct hif_softc *scn)
 	int ret;
 	struct HIF_CE_state *hif_state = HIF_GET_CE_STATE(scn);
 
+	scn->free_irq_done = true;
 	ce_unregister_irq(hif_state, CE_ALL_BITMAP);
 
 	if (scn->request_irq_done == false)
@@ -371,6 +374,22 @@ fail:
 
 int hif_ipci_bus_suspend_noirq(struct hif_softc *scn)
 {
+	/*
+	 * If it is system suspend case and wake-IRQ received
+	 * just before Kernel issuing suspend_noirq, that must
+	 * have scheduled CE2 tasklet, so suspend activity can
+	 * be aborted.
+	 * Similar scenario for runtime suspend case, would be
+	 * handled by hif_pm_runtime_check_and_request_resume
+	 * in hif_ce_interrupt_handler.
+	 *
+	 */
+	if (!hif_pm_runtime_get_monitor_wake_intr(GET_HIF_OPAQUE_HDL(scn)) &&
+	    hif_get_num_active_tasklets(scn)) {
+		hif_err("Tasklets are pending, abort sys suspend_noirq");
+		return -EBUSY;
+	}
+
 	return 0;
 }
 
@@ -558,6 +577,102 @@ const char *hif_ipci_get_irq_name(int irq_no)
 	return "pci-dummy";
 }
 
+#ifdef HIF_CPU_PERF_AFFINE_MASK
+static void hif_ipci_ce_irq_set_affinity_hint(struct hif_softc *scn)
+{
+	int ret;
+	unsigned int cpus;
+	struct HIF_CE_state *ce_sc = HIF_GET_CE_STATE(scn);
+	struct hif_ipci_softc *ipci_sc = HIF_GET_IPCI_SOFTC(scn);
+	struct CE_attr *host_ce_conf;
+	int ce_id;
+	qdf_cpu_mask ce_cpu_mask;
+
+	host_ce_conf = ce_sc->host_ce_config;
+	qdf_cpumask_clear(&ce_cpu_mask);
+
+	qdf_for_each_online_cpu(cpus) {
+		if (qdf_topology_physical_package_id(cpus) ==
+			CPU_CLUSTER_TYPE_PERF) {
+			qdf_cpumask_set_cpu(cpus,
+					    &ce_cpu_mask);
+		}
+	}
+	if (qdf_cpumask_empty(&ce_cpu_mask)) {
+		hif_err_rl("Empty cpu_mask, unable to set CE IRQ affinity");
+		return;
+	}
+	for (ce_id = 0; ce_id < scn->ce_count; ce_id++) {
+		if (host_ce_conf[ce_id].flags & CE_ATTR_DISABLE_INTR)
+			continue;
+		qdf_cpumask_clear(&ipci_sc->ce_irq_cpu_mask[ce_id]);
+		qdf_cpumask_copy(&ipci_sc->ce_irq_cpu_mask[ce_id],
+				 &ce_cpu_mask);
+		qdf_dev_modify_irq_status(ipci_sc->ce_msi_irq_num[ce_id],
+					  IRQ_NO_BALANCING, 0);
+		ret = qdf_dev_set_irq_affinity(
+		       ipci_sc->ce_msi_irq_num[ce_id],
+		       (struct qdf_cpu_mask *)&ipci_sc->ce_irq_cpu_mask[ce_id]);
+		qdf_dev_modify_irq_status(ipci_sc->ce_msi_irq_num[ce_id],
+					  0, IRQ_NO_BALANCING);
+		if (ret)
+			hif_err_rl("Set affinity %*pbl fails for CE IRQ %d",
+				   qdf_cpumask_pr_args(
+					&ipci_sc->ce_irq_cpu_mask[ce_id]),
+					ipci_sc->ce_msi_irq_num[ce_id]);
+		else
+			hif_debug_rl("Set affinity %*pbl for CE IRQ: %d",
+				     qdf_cpumask_pr_args(
+				     &ipci_sc->ce_irq_cpu_mask[ce_id]),
+				     ipci_sc->ce_msi_irq_num[ce_id]);
+	}
+}
+
+void hif_ipci_config_irq_affinity(struct hif_softc *scn)
+{
+	hif_core_ctl_set_boost(true);
+	/* Set IRQ affinity for CE interrupts*/
+	hif_ipci_ce_irq_set_affinity_hint(scn);
+}
+#endif /* #ifdef HIF_CPU_PERF_AFFINE_MASK */
+
+#ifdef HIF_CPU_CLEAR_AFFINITY
+void hif_ipci_config_irq_clear_cpu_affinity(struct hif_softc *scn,
+					    int intr_ctxt_id, int cpu)
+{
+	struct HIF_CE_state *hif_state = HIF_GET_CE_STATE(scn);
+	struct hif_exec_context *hif_ext_group;
+	int i, ret;
+
+	if (intr_ctxt_id < hif_state->hif_num_extgroup) {
+		hif_ext_group = hif_state->hif_ext_group[intr_ctxt_id];
+		for (i = 0; i < hif_ext_group->numirq; i++) {
+			qdf_cpumask_setall(&hif_ext_group->new_cpu_mask[i]);
+			qdf_cpumask_clear_cpu(cpu,
+					      &hif_ext_group->new_cpu_mask[i]);
+			qdf_dev_modify_irq_status(hif_ext_group->os_irq[i],
+						  IRQ_NO_BALANCING, 0);
+			ret = qdf_dev_set_irq_affinity(hif_ext_group->os_irq[i],
+						       (struct qdf_cpu_mask *)
+						       &hif_ext_group->
+						       new_cpu_mask[i]);
+			qdf_dev_modify_irq_status(hif_ext_group->os_irq[i],
+						  0, IRQ_NO_BALANCING);
+			if (ret)
+				hif_err("Set affinity %*pbl fails for IRQ %d ",
+					qdf_cpumask_pr_args(&hif_ext_group->
+							    new_cpu_mask[i]),
+					hif_ext_group->os_irq[i]);
+			else
+				hif_debug("Set affinity %*pbl for IRQ: %d",
+					  qdf_cpumask_pr_args(&hif_ext_group->
+							      new_cpu_mask[i]),
+					  hif_ext_group->os_irq[0]);
+		}
+	}
+}
+#endif
+
 int hif_ipci_configure_grp_irq(struct hif_softc *scn,
 			       struct hif_exec_context *hif_ext_group)
 {
@@ -593,8 +708,6 @@ int hif_ipci_configure_grp_irq(struct hif_softc *scn,
 int hif_configure_irq(struct hif_softc *scn)
 {
 	int ret = 0;
-
-	hif_info("E");
 
 	if (hif_is_polled_mode_enabled(GET_HIF_OPAQUE_HDL(scn))) {
 		scn->request_irq_done = false;
@@ -819,20 +932,105 @@ void hif_print_ipci_stats(struct hif_ipci_softc *ipci_handle)
 #ifdef FEATURE_HAL_DELAYED_REG_WRITE
 int hif_prevent_link_low_power_states(struct hif_opaque_softc *hif)
 {
+	struct hif_softc *scn = HIF_GET_SOFTC(hif);
+	struct hif_ipci_softc *ipci_scn = HIF_GET_IPCI_SOFTC(scn);
+	uint32_t start_time = 0, curr_time = 0;
+	uint32_t count = 0;
+
+	if (pld_is_pci_ep_awake(scn->qdf_dev->dev) == -ENOTSUPP)
+		return 0;
+
+	start_time = curr_time = qdf_system_ticks_to_msecs(qdf_system_ticks());
+	while (pld_is_pci_ep_awake(scn->qdf_dev->dev) &&
+	       curr_time <= start_time + EP_WAKE_RESET_DELAY_TIMEOUT_MS) {
+		if (count < EP_VOTE_POLL_TIME_CNT) {
+			qdf_udelay(EP_VOTE_POLL_TIME_US);
+			count++;
+		} else {
+			qdf_sleep_us(EP_WAKE_RESET_DELAY_US);
+		}
+		curr_time = qdf_system_ticks_to_msecs(qdf_system_ticks());
+	}
+
+
+	if (pld_is_pci_ep_awake(scn->qdf_dev->dev)) {
+		hif_err_rl(" EP state reset is not done to prevent l1");
+		ipci_scn->ep_awake_reset_fail++;
+		return 0;
+	}
+
+	if (pld_prevent_l1(scn->qdf_dev->dev)) {
+		hif_err_rl("pld prevent l1 failed");
+		ipci_scn->prevent_l1_fail++;
+		return 0;
+	}
+
+	count = 0;
+	ipci_scn->prevent_l1 = true;
+	start_time = curr_time = qdf_system_ticks_to_msecs(qdf_system_ticks());
+	while (!pld_is_pci_ep_awake(scn->qdf_dev->dev) &&
+	       curr_time <= start_time + EP_WAKE_DELAY_TIMEOUT_MS) {
+		if (count < EP_VOTE_POLL_TIME_CNT) {
+			qdf_udelay(EP_WAKE_RESET_DELAY_US);
+			count++;
+		} else {
+			qdf_sleep_us(EP_WAKE_DELAY_US);
+		}
+
+		curr_time = qdf_system_ticks_to_msecs(qdf_system_ticks());
+	}
+
+	if (pld_is_pci_ep_awake(scn->qdf_dev->dev) <= 0) {
+		hif_err_rl("Unable to wakeup pci ep");
+		ipci_scn->ep_awake_set_fail++;
+		return  0;
+	}
+
 	return 0;
 }
 
 void hif_allow_link_low_power_states(struct hif_opaque_softc *hif)
 {
+	struct hif_softc *scn = HIF_GET_SOFTC(hif);
+	struct hif_ipci_softc *ipci_scn = HIF_GET_IPCI_SOFTC(scn);
+
+	if (qdf_likely(ipci_scn->prevent_l1)) {
+		pld_allow_l1(scn->qdf_dev->dev);
+		ipci_scn->prevent_l1 = false;
+	}
 }
 #endif
 
 int hif_ipci_enable_grp_irqs(struct hif_softc *scn)
 {
-	return hif_apps_grp_irqs_enable(GET_HIF_OPAQUE_HDL(scn));
+	struct hif_ipci_softc *ipci_scn = HIF_GET_IPCI_SOFTC(scn);
+	int status;
+
+	if (!ipci_scn->grp_irqs_disabled) {
+		hif_err("Unbalanced group IRQs Enable called");
+		qdf_assert_always(0);
+	}
+
+	status = hif_apps_grp_irqs_enable(GET_HIF_OPAQUE_HDL(scn));
+	if (!status)
+		ipci_scn->grp_irqs_disabled = false;
+
+	return status;
 }
 
 int hif_ipci_disable_grp_irqs(struct hif_softc *scn)
 {
-	return hif_apps_grp_irqs_disable(GET_HIF_OPAQUE_HDL(scn));
+	struct hif_ipci_softc *ipci_scn = HIF_GET_IPCI_SOFTC(scn);
+	int status;
+
+	if (ipci_scn->grp_irqs_disabled) {
+		hif_err("Unbalanced group IRQs disable called");
+		qdf_assert_always(0);
+	}
+
+	status = hif_apps_grp_irqs_disable(GET_HIF_OPAQUE_HDL(scn));
+	if (!status)
+		ipci_scn->grp_irqs_disabled = true;
+
+	return status;
 }

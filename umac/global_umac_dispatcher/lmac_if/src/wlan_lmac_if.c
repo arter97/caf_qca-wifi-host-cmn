@@ -255,6 +255,8 @@ wlan_lmac_if_cfr_rx_ops_register(struct wlan_lmac_if_rx_ops *rx_ops)
 	cfr_rx_ops->cfr_capture_count_support_set =
 		tgt_cfr_capture_count_support_set;
 	cfr_rx_ops->cfr_mo_marking_support_set = tgt_cfr_mo_marking_support_set;
+	cfr_rx_ops->cfr_aoa_for_rcc_support_set =
+		tgt_cfr_aoa_for_rcc_support_set;
 }
 #else
 static void
@@ -303,7 +305,7 @@ static inline void wlan_lmac_if_register_master_list_ext_handler(
 }
 #endif
 
-#if defined(CONFIG_BAND_6GHZ) && defined(CONFIG_REG_CLIENT)
+#if defined(CONFIG_BAND_6GHZ)
 static void wlan_lmac_if_register_6g_edge_chan_supp(
 					struct wlan_lmac_if_rx_ops *rx_ops)
 {
@@ -418,28 +420,6 @@ static void wlan_lmac_if_umac_rx_ops_register_p2p(
 				struct wlan_lmac_if_rx_ops *rx_ops)
 {
 }
-#endif
-
-/*
- * register_precac_auto_chan_rx_ops_ieee() - Register auto chan switch rx ops
- * for IEEE channel based APIs.
- * rx_ops: Pointer to wlan_lmac_if_dfs_rx_ops
- */
-#ifdef DFS_COMPONENT_ENABLE
-#if defined(WLAN_DFS_PRECAC_AUTO_CHAN_SUPPORT) && defined(CONFIG_CHAN_NUM_API)
-static inline void
-register_precac_auto_chan_rx_ops_ieee(struct wlan_lmac_if_dfs_rx_ops *rx_ops)
-{
-	if (!rx_ops)
-		return;
-	rx_ops->dfs_get_precac_chan_state = ucfg_dfs_get_precac_chan_state;
-}
-#else
-static inline void
-register_precac_auto_chan_rx_ops_ieee(struct wlan_lmac_if_dfs_rx_ops *rx_ops)
-{
-}
-#endif
 #endif
 
 /*
@@ -647,7 +627,6 @@ wlan_lmac_if_umac_dfs_rx_ops_register(struct wlan_lmac_if_rx_ops *rx_ops)
 	dfs_rx_ops->dfs_complete_deferred_tasks =
 		tgt_dfs_complete_deferred_tasks;
 	register_precac_auto_chan_rx_ops(dfs_rx_ops);
-	register_precac_auto_chan_rx_ops_ieee(dfs_rx_ops);
 	register_precac_auto_chan_rx_ops_freq(dfs_rx_ops);
 	register_dfs_rx_ops_for_freq(dfs_rx_ops);
 	register_rcac_dfs_rx_ops(dfs_rx_ops);

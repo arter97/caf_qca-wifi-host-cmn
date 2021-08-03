@@ -50,6 +50,10 @@
 #define HTT_SHIFT_UPPER_TIMESTAMP 32
 #define HTT_MASK_UPPER_TIMESTAMP 0xFFFFFFFF00000000
 
+#define HTT_HTC_PKT_STATUS_SUCCESS \
+	((pkt->htc_pkt.Status != QDF_STATUS_E_CANCELED) && \
+	(pkt->htc_pkt.Status != QDF_STATUS_E_RESOURCES))
+
 /*
  * dp_htt_get_ppdu_sniffer_ampdu_tlv_bitmap() - Get ppdu stats tlv
  * bitmap for sniffer mode
@@ -602,6 +606,15 @@ htt_htc_pkt_pool_free(struct htt_soc *soc)
 	soc->htt_htc_pkt_freelist = NULL;
 }
 
+#ifdef ENABLE_CE4_COMP_DISABLE_HTT_HTC_MISC_LIST
+
+static void
+htt_htc_misc_pkt_list_add(struct htt_soc *soc, struct dp_htt_htc_pkt *pkt)
+{
+}
+
+#else  /* ENABLE_CE4_COMP_DISABLE_HTT_HTC_MISC_LIST */
+
 /*
  * htt_htc_misc_pkt_list_trim() - trim misc list
  * @htt_soc: HTT SOC handle
@@ -664,6 +677,8 @@ htt_htc_misc_pkt_list_add(struct htt_soc *soc, struct dp_htt_htc_pkt *pkt)
 	htt_htc_misc_pkt_list_trim(soc, misclist_trim_level);
 }
 
+#endif  /* ENABLE_CE4_COMP_DISABLE_HTT_HTC_MISC_LIST */
+
 /**
  * DP_HTT_SEND_HTC_PKT() - Send htt packet from host
  * @soc : HTT SOC handle
@@ -682,7 +697,7 @@ static inline QDF_STATUS DP_HTT_SEND_HTC_PKT(struct htt_soc *soc,
 	htt_command_record(soc->htt_logger_handle, cmd, buf);
 
 	status = htc_send_pkt(soc->htc_soc, &pkt->htc_pkt);
-	if (status == QDF_STATUS_SUCCESS)
+	if (status == QDF_STATUS_SUCCESS && HTT_HTC_PKT_STATUS_SUCCESS)
 		htt_htc_misc_pkt_list_add(soc, pkt);
 	else
 		soc->stats.fail_count++;
@@ -774,6 +789,7 @@ dp_htt_h2t_send_complete_free_netbuf(
 	qdf_nbuf_free(netbuf);
 }
 
+#ifdef ENABLE_CE4_COMP_DISABLE_HTT_HTC_MISC_LIST
 /*
  * dp_htt_h2t_send_complete() - H2T completion handler
  * @context:	Opaque context (HTT SOC handle)
@@ -782,8 +798,35 @@ dp_htt_h2t_send_complete_free_netbuf(
 static void
 dp_htt_h2t_send_complete(void *context, HTC_PACKET *htc_pkt)
 {
+	struct htt_soc *soc =  (struct htt_soc *) context;
+	struct dp_htt_htc_pkt *htt_pkt;
+	qdf_nbuf_t netbuf;
+
+	htt_pkt = container_of(htc_pkt, struct dp_htt_htc_pkt, htc_pkt);
+
+	/* process (free or keep) the netbuf that held the message */
+	netbuf = (qdf_nbuf_t) htc_pkt->pNetBufContext;
+	/*
+	 * adf sendcomplete is required for windows only
+	 */
+	/* qdf_nbuf_set_sendcompleteflag(netbuf, TRUE); */
+	/* free the htt_htc_pkt / HTC_PACKET object */
+	qdf_nbuf_free(netbuf);
+	htt_htc_pkt_free(soc, htt_pkt);
+}
+
+#else /* ENABLE_CE4_COMP_DISABLE_HTT_HTC_MISC_LIST */
+
+/*
+ *  * dp_htt_h2t_send_complete() - H2T completion handler
+ *   * @context:    Opaque context (HTT SOC handle)
+ *    * @htc_pkt:    HTC packet
+ *     */
+static void
+dp_htt_h2t_send_complete(void *context, HTC_PACKET *htc_pkt)
+{
 	void (*send_complete_part2)(
-		void *soc, QDF_STATUS status, qdf_nbuf_t msdu);
+	     void *soc, QDF_STATUS status, qdf_nbuf_t msdu);
 	struct htt_soc *soc =  (struct htt_soc *) context;
 	struct dp_htt_htc_pkt *htt_pkt;
 	qdf_nbuf_t netbuf;
@@ -796,15 +839,17 @@ dp_htt_h2t_send_complete(void *context, HTC_PACKET *htc_pkt)
 	netbuf = (qdf_nbuf_t) htc_pkt->pNetBufContext;
 	/*
 	 * adf sendcomplete is required for windows only
-	 */
+	*/
 	/* qdf_nbuf_set_sendcompleteflag(netbuf, TRUE); */
-	if (send_complete_part2) {
+	if (send_complete_part2){
 		send_complete_part2(
-			htt_pkt->soc_ctxt, htc_pkt->Status, netbuf);
+		    htt_pkt->soc_ctxt, htc_pkt->Status, netbuf);
 	}
 	/* free the htt_htc_pkt / HTC_PACKET object */
 	htt_htc_pkt_free(soc, htt_pkt);
 }
+
+#endif /* ENABLE_CE4_COMP_DISABLE_HTT_HTC_MISC_LIST */
 
 /*
  * htt_h2t_ver_req_msg() - Send HTT version request message to target
@@ -1235,7 +1280,7 @@ int htt_h2t_full_mon_cfg(struct htt_soc *htt_soc,
 		HTC_TX_PACKET_TAG_RUNTIME_PUT); /* tag for no FW response msg */
 
 	SET_HTC_PACKET_NET_BUF_CONTEXT(&pkt->htc_pkt, htt_msg);
-	qdf_info("config: %d", config);
+	qdf_debug("config: %d", config);
 	DP_HTT_SEND_HTC_PKT(soc, pkt, HTT_H2T_MSG_TYPE_SRING_SETUP,
 			    htt_logger_bufp);
 	return QDF_STATUS_SUCCESS;
@@ -2462,6 +2507,10 @@ static void dp_process_ppdu_stats_common_tlv(struct dp_pdev *pdev,
 
 	/* Ack time stamp is same as end time stamp*/
 	ppdu_desc->ack_timestamp = ppdu_desc->ppdu_end_timestamp;
+
+	tag_buf = start_tag_buf + HTT_GET_STATS_CMN_INDEX(BSSCOLOR_OBSS_PSR);
+	ppdu_desc->bss_color =
+		HTT_PPDU_STATS_COMMON_TLV_BSS_COLOR_ID_GET(*tag_buf);
 }
 
 /*
@@ -4057,9 +4106,6 @@ static struct ppdu_info *dp_htt_process_tlv(struct dp_pdev *pdev,
 		if (!ppdu_info)
 			return NULL;
 
-		ppdu_info->ppdu_desc->bss_color =
-			pdev->rx_mon_recv_status.bsscolor;
-
 		ppdu_info->ppdu_id = ppdu_id;
 		ppdu_info->tlv_bitmap |= (1 << tlv_type);
 
@@ -4271,7 +4317,6 @@ error:
 	soc->htt_stats.num_stats = 0;
 	qdf_spin_unlock_bh(&soc->htt_stats.lock);
 	return;
-
 }
 
 /*
@@ -4443,14 +4488,276 @@ static bool time_allow_print(unsigned long *htt_ring_tt, u_int8_t ring_id)
 }
 
 static void dp_htt_alert_print(enum htt_t2h_msg_type msg_type,
-			       u_int8_t pdev_id, u_int8_t ring_id,
+			       struct dp_pdev *pdev, u_int8_t ring_id,
 			       u_int16_t hp_idx, u_int16_t tp_idx,
 			       u_int32_t bkp_time, char *ring_stype)
 {
-	dp_alert("msg_type: %d pdev_id: %d ring_type: %s ",
-		 msg_type, pdev_id, ring_stype);
+	dp_alert("seq_num %u msg_type: %d pdev_id: %d ring_type: %s ",
+		 pdev->bkp_stats.seq_num, msg_type, pdev->pdev_id, ring_stype);
 	dp_alert("ring_id: %d hp_idx: %d tp_idx: %d bkpressure_time_ms: %d ",
 		 ring_id, hp_idx, tp_idx, bkp_time);
+}
+
+/**
+ * dp_get_srng_ring_state_from_hal(): Get hal level ring stats
+ * @soc: DP_SOC handle
+ * @srng: DP_SRNG handle
+ * @ring_type: srng src/dst ring
+ *
+ * Return: void
+ */
+static QDF_STATUS
+dp_get_srng_ring_state_from_hal(struct dp_soc *soc,
+				struct dp_pdev *pdev,
+				struct dp_srng *srng,
+				enum hal_ring_type ring_type,
+				struct dp_srng_ring_state *state)
+{
+	struct hal_soc *hal_soc;
+
+	if (!soc || !srng || !srng->hal_srng || !state)
+		return QDF_STATUS_E_INVAL;
+
+	hal_soc = (struct hal_soc *)soc->hal_soc;
+
+	hal_get_sw_hptp(soc->hal_soc, srng->hal_srng, &state->sw_tail,
+			&state->sw_head);
+
+	hal_get_hw_hptp(soc->hal_soc, srng->hal_srng, &state->hw_head,
+			&state->hw_tail, ring_type);
+
+	state->ring_type = ring_type;
+
+	return QDF_STATUS_SUCCESS;
+}
+
+/**
+ * dp_queue_srng_ring_stats(): Print pdev hal level ring stats
+ * @pdev: DP_pdev handle
+ *
+ * Return: void
+ */
+static void dp_queue_ring_stats(struct dp_pdev *pdev)
+{
+	uint32_t i;
+	int mac_id;
+	int lmac_id;
+	uint32_t j = 0;
+	struct dp_soc_srngs_state * soc_srngs_state = NULL;
+	QDF_STATUS status;
+
+	soc_srngs_state = qdf_mem_malloc(sizeof(struct dp_soc_srngs_state));
+	if (!soc_srngs_state) {
+		dp_htt_alert("Memory alloc failed for back pressure event");
+		return;
+	}
+
+	status = dp_get_srng_ring_state_from_hal
+				(pdev->soc, pdev,
+				 &pdev->soc->reo_exception_ring,
+				 REO_EXCEPTION,
+				 &soc_srngs_state->ring_state[j]);
+
+	if (status == QDF_STATUS_SUCCESS)
+		qdf_assert_always(++j < DP_MAX_SRNGS);
+
+	status = dp_get_srng_ring_state_from_hal
+				(pdev->soc, pdev,
+				 &pdev->soc->reo_reinject_ring,
+				 REO_REINJECT,
+				 &soc_srngs_state->ring_state[j]);
+
+	if (status == QDF_STATUS_SUCCESS)
+		qdf_assert_always(++j < DP_MAX_SRNGS);
+
+	status = dp_get_srng_ring_state_from_hal
+				(pdev->soc, pdev,
+				 &pdev->soc->reo_cmd_ring,
+				 REO_CMD,
+				 &soc_srngs_state->ring_state[j]);
+
+	if (status == QDF_STATUS_SUCCESS)
+		qdf_assert_always(++j < DP_MAX_SRNGS);
+
+	status = dp_get_srng_ring_state_from_hal
+				(pdev->soc, pdev,
+				 &pdev->soc->reo_status_ring,
+				 REO_STATUS,
+				 &soc_srngs_state->ring_state[j]);
+
+	if (status == QDF_STATUS_SUCCESS)
+		qdf_assert_always(++j < DP_MAX_SRNGS);
+
+	status = dp_get_srng_ring_state_from_hal
+				(pdev->soc, pdev,
+				 &pdev->soc->rx_rel_ring,
+				 WBM2SW_RELEASE,
+				 &soc_srngs_state->ring_state[j]);
+
+	if (status == QDF_STATUS_SUCCESS)
+		qdf_assert_always(++j < DP_MAX_SRNGS);
+
+	status = dp_get_srng_ring_state_from_hal
+				(pdev->soc, pdev,
+				 &pdev->soc->tcl_cmd_credit_ring,
+				 TCL_CMD_CREDIT,
+				 &soc_srngs_state->ring_state[j]);
+
+	if (status == QDF_STATUS_SUCCESS)
+		qdf_assert_always(++j < DP_MAX_SRNGS);
+
+	status = dp_get_srng_ring_state_from_hal
+				(pdev->soc, pdev,
+				 &pdev->soc->tcl_status_ring,
+				 TCL_STATUS,
+				 &soc_srngs_state->ring_state[j]);
+
+	if (status == QDF_STATUS_SUCCESS)
+		qdf_assert_always(++j < DP_MAX_SRNGS);
+
+	status = dp_get_srng_ring_state_from_hal
+				(pdev->soc, pdev,
+				 &pdev->soc->wbm_desc_rel_ring,
+				 SW2WBM_RELEASE,
+				 &soc_srngs_state->ring_state[j]);
+
+	if (status == QDF_STATUS_SUCCESS)
+		qdf_assert_always(++j < DP_MAX_SRNGS);
+
+	for (i = 0; i < MAX_REO_DEST_RINGS; i++) {
+		status = dp_get_srng_ring_state_from_hal
+				(pdev->soc, pdev,
+				 &pdev->soc->reo_dest_ring[i],
+				 REO_DST,
+				 &soc_srngs_state->ring_state[j]);
+
+		if (status == QDF_STATUS_SUCCESS)
+			qdf_assert_always(++j < DP_MAX_SRNGS);
+	}
+
+	for (i = 0; i < pdev->soc->num_tcl_data_rings; i++) {
+		status = dp_get_srng_ring_state_from_hal
+				(pdev->soc, pdev,
+				 &pdev->soc->tcl_data_ring[i],
+				 TCL_DATA,
+				 &soc_srngs_state->ring_state[j]);
+
+		if (status == QDF_STATUS_SUCCESS)
+			qdf_assert_always(++j < DP_MAX_SRNGS);
+	}
+
+	for (i = 0; i < MAX_TCL_DATA_RINGS; i++) {
+		status = dp_get_srng_ring_state_from_hal
+				(pdev->soc, pdev,
+				 &pdev->soc->tx_comp_ring[i],
+				 WBM2SW_RELEASE,
+				 &soc_srngs_state->ring_state[j]);
+
+		if (status == QDF_STATUS_SUCCESS)
+			qdf_assert_always(++j < DP_MAX_SRNGS);
+	}
+
+	lmac_id = dp_get_lmac_id_for_pdev_id(pdev->soc, 0, pdev->pdev_id);
+	status = dp_get_srng_ring_state_from_hal
+				(pdev->soc, pdev,
+				 &pdev->soc->rx_refill_buf_ring
+				 [lmac_id],
+				 RXDMA_BUF,
+				 &soc_srngs_state->ring_state[j]);
+
+	if (status == QDF_STATUS_SUCCESS)
+		qdf_assert_always(++j < DP_MAX_SRNGS);
+
+	status = dp_get_srng_ring_state_from_hal
+				(pdev->soc, pdev,
+				 &pdev->rx_refill_buf_ring2,
+				 RXDMA_BUF,
+				 &soc_srngs_state->ring_state[j]);
+
+	if (status == QDF_STATUS_SUCCESS)
+		qdf_assert_always(++j < DP_MAX_SRNGS);
+
+
+	for (i = 0; i < MAX_RX_MAC_RINGS; i++) {
+		dp_get_srng_ring_state_from_hal
+				(pdev->soc, pdev,
+				 &pdev->rx_mac_buf_ring[i],
+				 RXDMA_BUF,
+				 &soc_srngs_state->ring_state[j]);
+
+		if (status == QDF_STATUS_SUCCESS)
+			qdf_assert_always(++j < DP_MAX_SRNGS);
+	}
+
+	for (mac_id = 0; mac_id < NUM_RXDMA_RINGS_PER_PDEV; mac_id++) {
+		lmac_id = dp_get_lmac_id_for_pdev_id(pdev->soc,
+						     mac_id, pdev->pdev_id);
+
+		if (pdev->soc->wlan_cfg_ctx->rxdma1_enable) {
+			status = dp_get_srng_ring_state_from_hal
+				(pdev->soc, pdev,
+				 &pdev->soc->rxdma_mon_buf_ring[lmac_id],
+				 RXDMA_MONITOR_BUF,
+				 &soc_srngs_state->ring_state[j]);
+
+			if (status == QDF_STATUS_SUCCESS)
+				qdf_assert_always(++j < DP_MAX_SRNGS);
+
+			status = dp_get_srng_ring_state_from_hal
+				(pdev->soc, pdev,
+				 &pdev->soc->rxdma_mon_dst_ring[lmac_id],
+				 RXDMA_MONITOR_DST,
+				 &soc_srngs_state->ring_state[j]);
+
+			if (status == QDF_STATUS_SUCCESS)
+				qdf_assert_always(++j < DP_MAX_SRNGS);
+
+			status = dp_get_srng_ring_state_from_hal
+				(pdev->soc, pdev,
+				 &pdev->soc->rxdma_mon_desc_ring[lmac_id],
+				 RXDMA_MONITOR_DESC,
+				 &soc_srngs_state->ring_state[j]);
+
+			if (status == QDF_STATUS_SUCCESS)
+				qdf_assert_always(++j < DP_MAX_SRNGS);
+		}
+
+		status = dp_get_srng_ring_state_from_hal
+			(pdev->soc, pdev,
+			 &pdev->soc->rxdma_mon_status_ring[lmac_id],
+			 RXDMA_MONITOR_STATUS,
+			 &soc_srngs_state->ring_state[j]);
+
+		if (status == QDF_STATUS_SUCCESS)
+			qdf_assert_always(++j < DP_MAX_SRNGS);
+	}
+
+	for (i = 0; i < NUM_RXDMA_RINGS_PER_PDEV; i++)	{
+		lmac_id = dp_get_lmac_id_for_pdev_id(pdev->soc,
+						     i, pdev->pdev_id);
+
+		status = dp_get_srng_ring_state_from_hal
+				(pdev->soc, pdev,
+				 &pdev->soc->rxdma_err_dst_ring
+				 [lmac_id],
+				 RXDMA_DST,
+				 &soc_srngs_state->ring_state[j]);
+
+		if (status == QDF_STATUS_SUCCESS)
+			qdf_assert_always(++j < DP_MAX_SRNGS);
+	}
+	soc_srngs_state->max_ring_id = j;
+
+	qdf_spin_lock_bh(&pdev->bkp_stats.list_lock);
+
+	soc_srngs_state->seq_num = pdev->bkp_stats.seq_num;
+	TAILQ_INSERT_TAIL(&pdev->bkp_stats.list, soc_srngs_state,
+			  list_elem);
+	pdev->bkp_stats.seq_num++;
+	qdf_spin_unlock_bh(&pdev->bkp_stats.list_lock);
+
+	qdf_queue_work(0, pdev->bkp_stats.work_queue,
+		       &pdev->bkp_stats.work);
 }
 
 /*
@@ -4499,23 +4806,22 @@ static void dp_htt_bkp_event_alert(u_int32_t *msg_word, struct htt_soc *soc)
 	case HTT_SW_RING_TYPE_UMAC:
 		if (!time_allow_print(radio_tt->umac_ttt, ring_id))
 			return;
-		dp_htt_alert_print(msg_type, pdev_id, ring_id, hp_idx, tp_idx,
+		dp_htt_alert_print(msg_type, pdev, ring_id, hp_idx, tp_idx,
 				   bkp_time, "HTT_SW_RING_TYPE_UMAC");
 	break;
 	case HTT_SW_RING_TYPE_LMAC:
 		if (!time_allow_print(radio_tt->lmac_ttt, ring_id))
 			return;
-		dp_htt_alert_print(msg_type, pdev_id, ring_id, hp_idx, tp_idx,
+		dp_htt_alert_print(msg_type, pdev, ring_id, hp_idx, tp_idx,
 				   bkp_time, "HTT_SW_RING_TYPE_LMAC");
 	break;
 	default:
-		dp_htt_alert_print(msg_type, pdev_id, ring_id, hp_idx, tp_idx,
+		dp_htt_alert_print(msg_type, pdev, ring_id, hp_idx, tp_idx,
 				   bkp_time, "UNKNOWN");
 	break;
 	}
 
-	dp_print_ring_stats(pdev);
-	dp_print_napi_stats(pdev->soc);
+	dp_queue_ring_stats(pdev);
 }
 
 #ifdef WLAN_FEATURE_PKT_CAPTURE_V2
@@ -5844,4 +6150,114 @@ dp_htt_rx_fisa_config(struct dp_pdev *pdev,
 	}
 
 	return status;
+}
+
+/**
+ * dp_bk_pressure_stats_handler(): worker function to print back pressure
+ *				   stats
+ *
+ * @context : argument to work function
+ */
+static void dp_bk_pressure_stats_handler(void *context)
+{
+	struct dp_pdev *pdev = (struct dp_pdev *)context;
+	struct dp_soc_srngs_state *soc_srngs_state, *soc_srngs_state_next;
+	const char *ring_name;
+	int i;
+	struct dp_srng_ring_state *ring_state;
+
+	TAILQ_HEAD(, dp_soc_srngs_state) soc_srngs_state_list;
+
+	TAILQ_INIT(&soc_srngs_state_list);
+	qdf_spin_lock_bh(&pdev->bkp_stats.list_lock);
+	TAILQ_CONCAT(&soc_srngs_state_list, &pdev->bkp_stats.list,
+		     list_elem);
+	qdf_spin_unlock_bh(&pdev->bkp_stats.list_lock);
+
+	TAILQ_FOREACH_SAFE(soc_srngs_state, &soc_srngs_state_list,
+			   list_elem, soc_srngs_state_next) {
+		TAILQ_REMOVE(&soc_srngs_state_list, soc_srngs_state,
+			     list_elem);
+
+		DP_PRINT_STATS("### START BKP stats for seq_num %u ###",
+			       soc_srngs_state->seq_num);
+		for (i = 0; i < soc_srngs_state->max_ring_id; i++) {
+			ring_state = &soc_srngs_state->ring_state[i];
+			ring_name = dp_srng_get_str_from_hal_ring_type
+						(ring_state->ring_type);
+			DP_PRINT_STATS("%s: SW:Head pointer = %d Tail Pointer = %d\n",
+				       ring_name,
+				       ring_state->sw_head,
+				       ring_state->sw_tail);
+
+			DP_PRINT_STATS("%s: HW:Head pointer = %d Tail Pointer = %d\n",
+				       ring_name,
+				       ring_state->hw_head,
+				       ring_state->hw_tail);
+		}
+
+		DP_PRINT_STATS("### BKP stats for seq_num %u COMPLETE ###",
+			       soc_srngs_state->seq_num);
+		qdf_mem_free(soc_srngs_state);
+	}
+	dp_print_napi_stats(pdev->soc);
+}
+
+/*
+ * dp_pdev_bkp_stats_detach() - detach resources for back pressure stats
+ *				processing
+ * @pdev: Datapath PDEV handle
+ *
+ */
+void dp_pdev_bkp_stats_detach(struct dp_pdev *pdev)
+{
+	struct dp_soc_srngs_state *ring_state, *ring_state_next;
+
+	if (!pdev->bkp_stats.work_queue)
+		return;
+
+	qdf_flush_workqueue(0, pdev->bkp_stats.work_queue);
+	qdf_destroy_workqueue(0, pdev->bkp_stats.work_queue);
+	qdf_flush_work(&pdev->bkp_stats.work);
+	qdf_disable_work(&pdev->bkp_stats.work);
+	qdf_spin_lock_bh(&pdev->bkp_stats.list_lock);
+	TAILQ_FOREACH_SAFE(ring_state, &pdev->bkp_stats.list,
+			   list_elem, ring_state_next) {
+		TAILQ_REMOVE(&pdev->bkp_stats.list, ring_state,
+			     list_elem);
+		qdf_mem_free(ring_state);
+	}
+	qdf_spin_unlock_bh(&pdev->bkp_stats.list_lock);
+	qdf_spinlock_destroy(&pdev->bkp_stats.list_lock);
+}
+
+/*
+ * dp_pdev_bkp_stats_attach() - attach resources for back pressure stats
+ *				processing
+ * @pdev: Datapath PDEV handle
+ *
+ * Return: QDF_STATUS_SUCCESS: Success
+ *         QDF_STATUS_E_NOMEM: Error
+ */
+QDF_STATUS dp_pdev_bkp_stats_attach(struct dp_pdev *pdev)
+{
+	TAILQ_INIT(&pdev->bkp_stats.list);
+	pdev->bkp_stats.seq_num = 0;
+
+	qdf_create_work(0, &pdev->bkp_stats.work,
+			dp_bk_pressure_stats_handler, pdev);
+
+	pdev->bkp_stats.work_queue =
+		qdf_alloc_unbound_workqueue("dp_bkp_work_queue");
+	if (!pdev->bkp_stats.work_queue)
+		goto fail;
+
+	qdf_spinlock_create(&pdev->bkp_stats.list_lock);
+	return QDF_STATUS_SUCCESS;
+
+fail:
+	dp_htt_alert("BKP stats attach failed");
+	qdf_flush_work(&pdev->bkp_stats.work);
+	qdf_disable_work(&pdev->bkp_stats.work);
+	return QDF_STATUS_E_FAILURE;
 }

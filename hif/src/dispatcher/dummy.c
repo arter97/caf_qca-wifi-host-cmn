@@ -263,6 +263,16 @@ int hif_dummy_grp_irq_configure(struct hif_softc *hif_sc,
 }
 
 /**
+ * hif_dummy_grp_irq_deconfigure - dummy call
+ * hif_sc: hif context
+ *
+ * Return: none
+ */
+void hif_dummy_grp_irq_deconfigure(struct hif_softc *hif_sc)
+{
+}
+
+/**
  * hif_dummy_dump_registers - dummy call
  * hif_sc: hif context
  *
@@ -398,6 +408,19 @@ void hif_dummy_config_irq_affinity(struct hif_softc *scn)
 int hif_dummy_config_irq_by_ceid(struct hif_softc *scn, int ce_id)
 {
 	return 0;
+}
+
+/**
+ * hif_config_irq_clear_affinity() - dummy call
+ * @scn: HIF handle
+ * @intr_ctxt_id: interrupt group index
+ * @cpu: CPU core to clear
+ *
+ * Return: None
+ */
+void hif_dummy_config_irq_clear_cpu_affinity(struct hif_softc *scn,
+					     int intr_ctxt_id, int cpu)
+{
 }
 
 /**

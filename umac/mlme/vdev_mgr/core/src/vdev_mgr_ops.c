@@ -66,6 +66,9 @@ static QDF_STATUS vdev_mgr_create_param_update(
 	param->mbssid_flags = mbss->mbssid_flags;
 	param->vdevid_trans = mbss->vdevid_trans;
 	param->special_vdev_mode = mlme_obj->mgmt.generic.special_vdev_mode;
+#ifdef WLAN_FEATURE_11BE_MLO
+	WLAN_ADDR_COPY(param->mlo_mac, wlan_vdev_mlme_get_mldaddr(vdev));
+#endif
 
 	return QDF_STATUS_SUCCESS;
 }
@@ -112,6 +115,24 @@ static inline bool vdev_mgr_is_opmode_sap_or_p2p_go(enum QDF_OPMODE op_mode)
 static inline bool vdev_mgr_is_49G_5G_6G_chan_freq(uint16_t chan_freq)
 {
 	return true;
+}
+#endif
+
+#ifdef WLAN_FEATURE_11BE
+static void
+vdev_mgr_start_param_update_11be(struct vdev_mlme_obj *mlme_obj,
+				 struct vdev_start_params *param,
+				 struct wlan_channel *des_chan)
+{
+	param->eht_ops = mlme_obj->proto.eht_ops_info.eht_ops;
+	param->channel.puncture_pattern = des_chan->puncture_bitmap;
+}
+#else
+static void
+vdev_mgr_start_param_update_11be(struct vdev_mlme_obj *mlme_obj,
+				 struct vdev_start_params *param,
+				 struct wlan_channel *des_chan)
+{
 }
 #endif
 
@@ -188,6 +209,8 @@ static QDF_STATUS vdev_mgr_start_param_update(
 	param->regdomain = dfs_reg;
 	param->he_ops = mlme_obj->proto.he_ops_info.he_ops;
 
+	vdev_mgr_start_param_update_11be(mlme_obj, param, des_chan);
+
 	param->channel.chan_id = des_chan->ch_ieee;
 	param->channel.pwr = mlme_obj->mgmt.generic.tx_power;
 	param->channel.mhz = des_chan->ch_freq;
@@ -237,7 +260,16 @@ static QDF_STATUS vdev_mgr_start_param_update(
 		param->channel.dfs_set_cfreq2 = dfs_set_cfreq2;
 		param->channel.set_agile = set_agile;
 	}
-
+/* WLAN_FEATURE_11BE_MLO macro is termporary,
+ *  will be removed once MLO testing is complete
+ */
+#ifdef WLAN_FEATURE_11BE_MLO
+	if (wlan_vdev_mlme_is_mlo_vdev(vdev)) {
+		param->mlo_flags.mlo_enabled = 1;
+		if (!wlan_vdev_mlme_is_mlo_link_vdev(vdev))
+			param->mlo_flags.mlo_assoc_link = 1;
+	}
+#endif
 	wlan_objmgr_pdev_release_ref(pdev, WLAN_MLME_SB_ID);
 	return QDF_STATUS_SUCCESS;
 }
@@ -372,12 +404,9 @@ static QDF_STATUS vdev_mgr_up_param_update(
 	param->vdev_id = wlan_vdev_get_id(vdev);
 	param->assoc_id = mlme_obj->proto.sta.assoc_id;
 	mbss = &mlme_obj->mgmt.mbss_11ax;
-	if (mbss->profile_idx) {
-		param->profile_idx = mbss->profile_idx;
-		param->profile_num = mbss->profile_num;
-		qdf_mem_copy(param->trans_bssid, mbss->trans_bssid,
-			     QDF_MAC_ADDR_SIZE);
-	}
+	param->profile_idx = mbss->profile_idx;
+	param->profile_num = mbss->profile_num;
+	qdf_mem_copy(param->trans_bssid, mbss->trans_bssid, QDF_MAC_ADDR_SIZE);
 
 	return QDF_STATUS_SUCCESS;
 }

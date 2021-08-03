@@ -30,7 +30,6 @@
 struct mlme_ext_ops *glbl_ops;
 mlme_get_global_ops_cb glbl_ops_cb;
 
-#ifdef FEATURE_CM_ENABLE
 struct mlme_cm_ops *glbl_cm_ops;
 osif_cm_get_global_ops_cb glbl_cm_ops_cb;
 
@@ -45,15 +44,6 @@ static void mlme_cm_ops_deinit(void)
 	if (glbl_cm_ops_cb)
 		glbl_cm_ops = NULL;
 }
-#else
-static inline void mlme_cm_ops_init(void)
-{
-}
-
-static inline void mlme_cm_ops_deinit(void)
-{
-}
-#endif
 
 QDF_STATUS wlan_cmn_mlme_init(void)
 {
@@ -246,7 +236,6 @@ QDF_STATUS mlme_vdev_ops_ext_hdl_multivdev_restart_resp(
 	return ret;
 }
 
-#ifdef FEATURE_CM_ENABLE
 QDF_STATUS mlme_cm_ext_hdl_create(struct wlan_objmgr_vdev *vdev,
 				  cm_ext_t **ext_cm_ptr)
 {
@@ -461,6 +450,33 @@ QDF_STATUS mlme_cm_osif_disconnect_start_ind(struct wlan_objmgr_vdev *vdev)
 	return ret;
 }
 
+#ifdef CONN_MGR_ADV_FEATURE
+QDF_STATUS mlme_cm_osif_roam_sync_ind(struct wlan_objmgr_vdev *vdev)
+{
+	QDF_STATUS ret = QDF_STATUS_SUCCESS;
+
+	if (glbl_cm_ops &&
+	    glbl_cm_ops->mlme_cm_roam_sync_cb)
+		ret = glbl_cm_ops->mlme_cm_roam_sync_cb(vdev);
+
+	return ret;
+}
+
+QDF_STATUS mlme_cm_osif_pmksa_candidate_notify(struct wlan_objmgr_vdev *vdev,
+					       struct qdf_mac_addr *bssid,
+					       int index, bool preauth)
+{
+	QDF_STATUS ret = QDF_STATUS_SUCCESS;
+
+	if (glbl_cm_ops &&
+	    glbl_cm_ops->mlme_cm_pmksa_candidate_notify_cb)
+		ret = glbl_cm_ops->mlme_cm_pmksa_candidate_notify_cb(
+						vdev, bssid, index, preauth);
+
+	return ret;
+}
+#endif
+
 #ifdef WLAN_FEATURE_ROAM_OFFLOAD
 QDF_STATUS mlme_cm_osif_roam_start_ind(struct wlan_objmgr_vdev *vdev)
 {
@@ -484,17 +500,6 @@ QDF_STATUS mlme_cm_osif_roam_abort_ind(struct wlan_objmgr_vdev *vdev)
 	return ret;
 }
 
-QDF_STATUS mlme_cm_osif_roam_sync_ind(struct wlan_objmgr_vdev *vdev)
-{
-	QDF_STATUS ret = QDF_STATUS_SUCCESS;
-
-	if (glbl_cm_ops &&
-	    glbl_cm_ops->mlme_cm_roam_sync_cb)
-		ret = glbl_cm_ops->mlme_cm_roam_sync_cb(vdev);
-
-	return ret;
-}
-
 QDF_STATUS
 mlme_cm_osif_roam_complete(struct wlan_objmgr_vdev *vdev)
 {
@@ -506,13 +511,42 @@ mlme_cm_osif_roam_complete(struct wlan_objmgr_vdev *vdev)
 
 	return ret;
 }
-
 #endif
+
+#ifdef WLAN_FEATURE_PREAUTH_ENABLE
+QDF_STATUS
+mlme_cm_osif_ft_preauth_complete(struct wlan_objmgr_vdev *vdev,
+				 struct wlan_preauth_rsp *rsp)
+{
+	QDF_STATUS ret = QDF_STATUS_SUCCESS;
+
+	if (glbl_cm_ops &&
+	    glbl_cm_ops->mlme_cm_ft_preauth_cmpl_cb)
+		ret = glbl_cm_ops->mlme_cm_ft_preauth_cmpl_cb(vdev, rsp);
+
+	return ret;
+}
+
+#ifdef FEATURE_WLAN_ESE
+QDF_STATUS
+mlme_cm_osif_cckm_preauth_complete(struct wlan_objmgr_vdev *vdev,
+				   struct wlan_preauth_rsp *rsp)
+{
+	QDF_STATUS ret = QDF_STATUS_SUCCESS;
+
+	if (glbl_cm_ops &&
+	    glbl_cm_ops->mlme_cm_cckm_preauth_cmpl_cb)
+		ret = glbl_cm_ops->mlme_cm_cckm_preauth_cmpl_cb(vdev, rsp);
+
+	return ret;
+}
+#endif
+#endif
+
 void mlme_set_osif_cm_cb(osif_cm_get_global_ops_cb osif_cm_ops)
 {
 	glbl_cm_ops_cb = osif_cm_ops;
 }
-#endif
 
 void mlme_set_ops_register_cb(mlme_get_global_ops_cb ops_cb)
 {

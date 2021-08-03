@@ -179,6 +179,38 @@
 #define QDF_MON_STATUS_MPDU_FCS_BMAP_NWORDS 8
 
 /**
+ * This is the length for radiotap, combined length
+ * (Mandatory part struct ieee80211_radiotap_header + RADIOTAP_HEADER_LEN)
+ * cannot be more than available headroom_sz.
+ * increase this when we add more radiotap elements.
+ * Number after '+' indicates maximum possible increase due to alignment
+ */
+#define RADIOTAP_VHT_FLAGS_LEN (12 + 1)
+#define RADIOTAP_HE_FLAGS_LEN (12 + 1)
+#define RADIOTAP_HE_MU_FLAGS_LEN (8 + 1)
+#define RADIOTAP_HE_MU_OTHER_FLAGS_LEN (18 + 1)
+#define RADIOTAP_FIXED_HEADER_LEN 17
+#define RADIOTAP_HT_FLAGS_LEN 3
+#define RADIOTAP_AMPDU_STATUS_LEN (8 + 3)
+#define RADIOTAP_VENDOR_NS_LEN \
+	(sizeof(struct qdf_radiotap_vendor_ns_ath) + 1)
+/* This is Radio Tap Header Extension Length.
+ * 4 Bytes for Extended it_present bit map +
+ * 4 bytes padding for alignment
+ */
+#define RADIOTAP_HEADER_EXT_LEN (2 * sizeof(uint32_t))
+#define RADIOTAP_HEADER_LEN (RADIOTAP_BASE_HEADER_LEN + \
+				RADIOTAP_FIXED_HEADER_LEN + \
+				RADIOTAP_HT_FLAGS_LEN + \
+				RADIOTAP_VHT_FLAGS_LEN + \
+				RADIOTAP_AMPDU_STATUS_LEN + \
+				RADIOTAP_HE_FLAGS_LEN + \
+				RADIOTAP_HE_MU_FLAGS_LEN + \
+				RADIOTAP_HE_MU_OTHER_FLAGS_LEN + \
+				RADIOTAP_VENDOR_NS_LEN + \
+				RADIOTAP_HEADER_EXT_LEN)
+
+/**
  * struct mon_rx_status - This will have monitor mode rx_status extracted from
  * htt_rx_desc used later to update radiotap information.
  * @tsft: Time Synchronization Function timer
@@ -477,6 +509,7 @@ struct qdf_radiotap_vendor_ns_ath {
 #define IPV4_DST_PORT_OFFSET          36
 
 /* IPV4 ICMP Related Mask */
+#define ICMP_ID_OFFSET                38
 #define ICMP_SEQ_NUM_OFFSET           40
 #define ICMP_SUBTYPE_OFFSET           34
 #define ICMP_REQUEST                  0x08
@@ -4065,6 +4098,20 @@ static inline qdf_ktime_t qdf_nbuf_net_timedelta(qdf_ktime_t t)
 	return __qdf_nbuf_net_timedelta(t);
 }
 #endif /* ENHANCED_OS_ABSTRACTION */
+
+#ifdef NBUF_MEMORY_DEBUG
+/**
+ * qdf_set_smmu_fault_state() - Set smmu fault sate
+ * @smmu_fault_state: state of the wlan smmy
+ *
+ * Return: void
+ */
+void qdf_set_smmu_fault_state(bool smmu_fault_state);
+#else
+static inline void qdf_set_smmu_fault_state(bool smmu_fault_state)
+{
+}
+#endif
 
 #ifdef CONFIG_NBUF_AP_PLATFORM
 #include <i_qdf_nbuf_api_w.h>

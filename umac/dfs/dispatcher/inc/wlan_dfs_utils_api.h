@@ -85,21 +85,6 @@
 extern struct dfs_to_mlme global_dfs_to_mlme;
 
 /**
- * utils_dfs_cac_valid_reset() - Cancels the dfs_cac_valid_timer timer.
- * @pdev: Pointer to DFS pdev object.
- * @prevchan_ieee: Prevchan number.
- * @prevchan_flags: Prevchan flags.
- *
- * Wrapper function for dfs_cac_valid_reset(). This function called from
- * outside of DFS component.
- */
-#ifdef CONFIG_CHAN_NUM_API
-QDF_STATUS utils_dfs_cac_valid_reset(struct wlan_objmgr_pdev *pdev,
-		uint8_t prevchan_ieee,
-		uint32_t prevchan_flags);
-#endif
-
-/**
  * utils_dfs_cac_valid_reset_for_freq() - Cancels the dfs_cac_valid_timer timer.
  * @pdev: Pointer to DFS pdev object.
  * @prevchan_freq: Prevchan frequency.
@@ -141,17 +126,6 @@ bool utils_dfs_is_freq_in_nol(struct wlan_objmgr_pdev *pdev, uint32_t freq);
 QDF_STATUS utils_dfs_reset_precaclists(struct wlan_objmgr_pdev *pdev);
 
 /**
- * utils_dfs_unmark_precac_nol() - Clears precac channel marked as NOL.
- * @pdev: Pointer to DFS pdev object.
- * @chan: channel to be unmarked as NOL.
- *
- * Return void.
- */
-#ifdef CONFIG_CHAN_NUM_API
-void utils_dfs_unmark_precac_nol(struct wlan_objmgr_pdev *pdev, uint8_t chan);
-#endif
-
-/**
  * utils_dfs_unmark_precac_nol_for_freq() - Clears precac channel marked as NOL.
  * @pdev: Pointer to DFS pdev object.
  * @chan_freq: channel freq to be unmarked as NOL.
@@ -187,30 +161,12 @@ QDF_STATUS utils_dfs_start_precac_timer(struct wlan_objmgr_pdev *pdev);
 
 #ifdef WLAN_DFS_PRECAC_AUTO_CHAN_SUPPORT
 /**
- * utils_dfs_precac_decide_pref_chan() - Choose preferred channel
- * @pdev: Pointer to DFS pdev object.
- * @ch_ieee: Pointer to channel number.
- * @mode: Configured PHY mode.
- *
- * Wrapper function for dfs_decide_precac_preferred_chan(). This
- * function called from outside of dfs component.
- *
- * Return: True if intermediate channel needs to configure. False otherwise.
- */
-#ifdef CONFIG_CHAN_NUM_API
-bool
-utils_dfs_precac_decide_pref_chan(struct wlan_objmgr_pdev *pdev,
-				  uint8_t *ch_ieee,
-				  enum wlan_phymode mode);
-#endif
-
-/**
- * utils_dfs_precac_decide_pref_chan() - Choose preferred channel
+ * utils_dfs_precac_decide_pref_chan_for_freq() - Choose preferred channel
  * @pdev: Pointer to DFS pdev object.
  * @ch_freq: Pointer to channel frequency.
  * @mode: Configured PHY mode.
  *
- * Wrapper function for dfs_decide_precac_preferred_chan(). This
+ * Wrapper function for dfs_decide_precac_preferred_chan_for_freq(). This
  * function called from outside of dfs component.
  *
  * Return: True if intermediate channel needs to configure. False otherwise.
@@ -269,6 +225,34 @@ QDF_STATUS utils_dfs_stacac_stop(struct wlan_objmgr_pdev *pdev);
  */
 QDF_STATUS utils_dfs_get_usenol(struct wlan_objmgr_pdev *pdev,
 		uint16_t *usenol);
+/*
+ * utils_dfs_radar_disable() - Disables the radar.
+ * @pdev: Pointer to DFS pdev object.
+ *
+ * Return: true if Spruce spur WAR is applicable else false.
+ *
+ * Spur or leakage transmissions is observed in Spruce HW in
+ * frequencies from 5260MHz to 5320MHz when one of the following
+ * conditions is true,
+ * i) The AP is transmitting in 52/56/60/64 in 80MHz mode and then the  AP
+ * moves to the adjacent channel 36/44/48 in 80MHz mode and starts
+ * transmitting.
+ * ii) The AP is transmitting in 36/44/48/52/56/60/64 in 160MHz mode and then
+ * the  AP moves to the adjacent channel 36/44/48 in 80MHz mode and starts
+ * transmitting.
+ *
+ * Hence, the spruce spur WAR becomes applicable when,
+ * a) the target is Spruce,
+ * b) the primary channel is 52/56/60/64, and the home channel width is 80MHz.
+ * c) or, the primary channel is 36/44/48/52/56/60/64 and the home channel width
+ *    is 160MHz.
+ *
+ * When the conditions (a) and (b) or (c) is true, random channel selection
+ * should make sure to prevent moving to the adjacent channels 36/44/48 in
+ * 80MHz mode. Failing to do so will cause spur transmissions in channel 52
+ * through 64.
+ */
+bool utils_dfs_is_spruce_spur_war_applicable(struct wlan_objmgr_pdev *pdev);
 
 /**
  * utils_dfs_radar_disable() - Disables the radar.
@@ -593,23 +577,6 @@ static inline bool utils_is_dfs_chan_for_freq(struct wlan_objmgr_pdev *pdev,
 bool utils_is_dfs_cfreq2_ch(struct wlan_objmgr_pdev *pdev);
 
 /**
- * utils_dfs_reg_update_nol_ch() - set nol channel
- *
- * @pdev: pdev ptr
- * @ch_list: channel list to be returned
- * @num_ch: number of channels
- * @nol_ch: nol flag
- *
- * Return: void
- */
-#ifdef CONFIG_CHAN_NUM_API
-void utils_dfs_reg_update_nol_ch(struct wlan_objmgr_pdev *pdev,
-		uint8_t *ch_list,
-		uint8_t num_ch,
-		bool nol_ch);
-#endif
-
-/**
  * utils_dfs_reg_update_nol_chan_for_freq() - set nol channel
  *
  * @pdev: pdev ptr
@@ -661,25 +628,6 @@ QDF_STATUS utils_dfs_update_cur_chan_flags(struct wlan_objmgr_pdev *pdev,
 
 #ifdef QCA_MCL_DFS_SUPPORT
 /**
- * utils_dfs_mark_leaking_ch() - to mark channel leaking in to nol
- * @pdev: Pointer to pdev structure.
- * @ch_width: channel width
- * @temp_ch_lst_sz: the target channel list
- * @temp_ch_lst: the target channel list
- *
- * This function removes the channels from temp channel list that
- * (if selected as target channel) will cause leakage in one of
- * the NOL channels
- *
- * Return: QDF_STATUS
- */
-#ifdef CONFIG_CHAN_NUM_API
-QDF_STATUS utils_dfs_mark_leaking_ch(struct wlan_objmgr_pdev *pdev,
-	enum phy_ch_width ch_width,
-	uint8_t temp_ch_lst_sz,
-	uint8_t *temp_ch_lst);
-#endif
-/**
  * utils_dfs_mark_leaking_chan_for_freq() - to mark channel leaking in to nol
  * @pdev: Pointer to pdev structure.
  * @ch_width: channel width
@@ -711,16 +659,6 @@ QDF_STATUS utils_dfs_mark_leaking_chan_for_freq(struct wlan_objmgr_pdev *pdev,
  */
 bool utils_dfs_can_ignore_radar_event(struct wlan_objmgr_pdev *pdev);
 #else
-#ifdef CONFIG_CHAN_NUM_API
-static inline QDF_STATUS utils_dfs_mark_leaking_ch
-	(struct wlan_objmgr_pdev *pdev,
-	enum phy_ch_width ch_width,
-	uint8_t temp_ch_lst_sz,
-	uint8_t *temp_ch_lst)
-{
-	return QDF_STATUS_SUCCESS;
-}
-#endif
 #ifdef CONFIG_CHAN_FREQ_API
 static inline QDF_STATUS utils_dfs_mark_leaking_chan_for_freq
 	(struct wlan_objmgr_pdev *pdev,
@@ -811,22 +749,6 @@ void utils_dfs_get_chan_list(struct wlan_objmgr_pdev *pdev,
  */
 void utils_dfs_get_nol_history_chan_list(struct wlan_objmgr_pdev *pdev,
 					 void *clist, uint32_t *num_chan);
-/**
- * utils_dfs_reg_update_nol_history_ch() - set nol history channel
- *
- * @pdev: pdev ptr
- * @ch_list: channel list to be returned
- * @num_ch: number of channels
- * @nol_history_ch: nol history flag
- *
- * Return: void
- */
-#ifdef CONFIG_CHAN_NUM_API
-void utils_dfs_reg_update_nol_history_ch(struct wlan_objmgr_pdev *pdev,
-					 uint8_t *ch_list,
-					 uint8_t num_ch,
-					 bool nol_history_ch);
-#endif
 
 /**
  * utils_dfs_reg_update_nol_history_chan_for_freq() - set nol history channel
@@ -868,6 +790,8 @@ bool utils_dfs_is_cac_required(struct wlan_objmgr_pdev *pdev,
  * @continue_current_cac: If AP can start CAC then this variable indicates
  * whether to continue with the current CAC or restart the CAC. This variable
  * is valid only if this function returns true.
+ * @is_vap_restart: Flag to indicate if vap is restarted/started.
+ * True: VAP restart. False: VAP start
  *
  * This API checks if the dfs_curchan is a subset of the dfs_prevchan.
  * dfs_curchan and dfs_prevchan are updated after start response by
@@ -877,7 +801,8 @@ bool utils_dfs_is_cac_required(struct wlan_objmgr_pdev *pdev,
  */
 bool
 utils_dfs_is_cac_required_on_dfs_curchan(struct wlan_objmgr_pdev *pdev,
-					 bool *continue_current_cac);
+					 bool *continue_current_cac,
+					 bool is_vap_restart);
 
 /** utils_dfs_is_precac_done() - Check if precac has been done in chosen channel
  * @pdev: Pointer to DFS pdev object.
