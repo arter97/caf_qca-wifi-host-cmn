@@ -23,6 +23,8 @@
 #ifndef _VDEV_MLME_SM_H_
 #define _VDEV_MLME_SM_H_
 
+#include <wlan_dfs_utils_api.h>
+
 /**
  * mlme_vdev_sm_deliver_event() - Delivers event to VDEV MLME SM
  * @vdev_mlme: MLME VDEV comp object
@@ -620,6 +622,19 @@ static inline QDF_STATUS mlme_vdev_dfs_cac_wait_notify(
 		ret = vdev_mlme->ops->mlme_vdev_dfs_cac_wait_notify(vdev_mlme);
 
 	return ret;
+}
+
+/**
+ * mlme_vdev_chan_switch_disable_notify_dfs - Notifies DFS when channel
+ * switch is disabled
+ * @vdev_mlme: VDEV MLME comp object
+ *
+ * Return: QDF_STATUS.
+ */
+static inline QDF_STATUS mlme_vdev_chan_switch_disable_notify_dfs(
+					struct vdev_mlme_obj *vdev_mlme)
+{
+	return utils_dfs_radar_enable(wlan_vdev_get_pdev(vdev_mlme->vdev));
 }
 
 #ifdef VDEV_SM_LOCK_SUPPORT
