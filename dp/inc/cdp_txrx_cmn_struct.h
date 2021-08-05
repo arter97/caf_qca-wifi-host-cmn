@@ -1219,6 +1219,7 @@ enum cdp_pdev_param_type {
  * @cdp_psoc_param_en_nss_cfg: set nss cfg
  *
  * @cdp_enable_tx_checksum: Flag to specify if HW Tx checksum enabled
+ * @cdp_ipa_enabled : set ipa mode
  */
 typedef union cdp_config_param_t {
 	/* peer params */
@@ -1296,6 +1297,7 @@ typedef union cdp_config_param_t {
 	bool cdp_enable_tx_checksum;
 
 	bool cdp_skip_bar_update;
+	bool cdp_ipa_enabled;
 } cdp_config_param_type;
 
 /**
@@ -1419,12 +1421,14 @@ enum cdp_vdev_param_type {
  * @CDP_SET_NSS_CFG: set nss cfg
  * @CDP_SET_PREFERRED_HW_MODE: set preferred hw mode
  * @CDP_CFG_PEER_EXT_STATS: Peer extended stats mode.
+ * @CDP_IPA_ENABLE : set IPA enable mode.
  */
 enum cdp_psoc_param_type {
 	CDP_ENABLE_RATE_STATS,
 	CDP_SET_NSS_CFG,
 	CDP_SET_PREFERRED_HW_MODE,
 	CDP_CFG_PEER_EXT_STATS,
+	CDP_IPA_ENABLE,
 };
 
 #define TXRX_FW_STATS_TXSTATS                     1
