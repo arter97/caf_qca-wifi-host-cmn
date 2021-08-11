@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012-2017 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012-2021 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -69,6 +69,8 @@ struct wifi_pos_req_msg;
 
 #ifndef OEM_DATA_RSP_SIZE
 #define OEM_DATA_RSP_SIZE 1724
+/* Header + VHT80 CIR * 2 chains */
+#define OEM_DATA_DMA_BUFF_SIZE (64 + 512 * 4 * 2)
 #endif
 
 /**
