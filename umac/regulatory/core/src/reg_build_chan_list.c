@@ -731,8 +731,8 @@ static void reg_modify_chan_list_for_cached_channels(
 	if (pdev_priv_obj->disable_cached_channels) {
 		for (i = 0; i < num_cache_channels; i++)
 			for (j = 0; j < NUM_CHANNELS; j++)
-				if (cache_chan_list[i].chan_num ==
-							chan_list[j].chan_num) {
+				if (cache_chan_list[i].center_freq ==
+				    chan_list[j].center_freq) {
 					chan_list[j].state =
 							CHANNEL_STATE_DISABLE;
 					chan_list[j].chan_flags |=
@@ -1047,15 +1047,38 @@ static void
 reg_populate_secondary_cur_chan_list(struct wlan_regulatory_pdev_priv_obj
 				     *pdev_priv_obj)
 {
-	qdf_mem_copy(pdev_priv_obj->secondary_cur_chan_list,
-		     pdev_priv_obj->cur_chan_list,
-		     (NUM_CHANNELS - NUM_6GHZ_CHANNELS) *
-		     sizeof(struct regulatory_channel));
-	qdf_mem_copy(&pdev_priv_obj->
+	struct wlan_objmgr_psoc *psoc;
+	struct wlan_lmac_if_reg_tx_ops *reg_tx_ops;
+
+	psoc = wlan_pdev_get_psoc(pdev_priv_obj->pdev_ptr);
+	if (!psoc) {
+		reg_err("psoc is NULL");
+		return;
+	}
+
+	reg_tx_ops = reg_get_psoc_tx_ops(psoc);
+	if (!reg_tx_ops) {
+		reg_err("reg_tx_ops null");
+		return;
+	}
+	if (reg_tx_ops->register_master_ext_handler &&
+	    wlan_psoc_nif_fw_ext_cap_get(psoc, WLAN_SOC_EXT_EVENT_SUPPORTED)) {
+		qdf_mem_copy(pdev_priv_obj->secondary_cur_chan_list,
+			     pdev_priv_obj->cur_chan_list,
+			     (NUM_CHANNELS - NUM_6GHZ_CHANNELS) *
+			     sizeof(struct regulatory_channel));
+
+		qdf_mem_copy(&pdev_priv_obj->
 		     secondary_cur_chan_list[MIN_6GHZ_CHANNEL],
 		     pdev_priv_obj->mas_chan_list_6g_ap
 		     [pdev_priv_obj->reg_cur_6g_ap_pwr_type],
 		     NUM_6GHZ_CHANNELS * sizeof(struct regulatory_channel));
+	} else {
+		qdf_mem_copy(pdev_priv_obj->secondary_cur_chan_list,
+			     pdev_priv_obj->cur_chan_list,
+			     (NUM_CHANNELS) *
+			     sizeof(struct regulatory_channel));
+	}
 }
 #else /* CONFIG_REG_CLIENT */
 static void
@@ -2548,4 +2571,135 @@ reg_get_secondary_current_chan_list(struct wlan_objmgr_pdev *pdev,
 
 	return QDF_STATUS_SUCCESS;
 }
+#endif
+
+#if defined(CONFIG_AFC_SUPPORT) && defined(CONFIG_BAND_6GHZ)
+QDF_STATUS reg_get_6g_ap_master_chan_list(struct wlan_objmgr_pdev *pdev,
+					  enum reg_6g_ap_type ap_pwr_type,
+					  struct regulatory_channel *chan_list)
+{
+	struct wlan_regulatory_pdev_priv_obj *pdev_priv_obj;
+	struct regulatory_channel *master_chan_list_6g;
+
+	pdev_priv_obj = reg_get_pdev_obj(pdev);
+
+	if (!IS_VALID_PDEV_REG_OBJ(pdev_priv_obj)) {
+		reg_err("reg pdev private obj is NULL");
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	if (ap_pwr_type >= REG_CURRENT_MAX_AP_TYPE)
+		return QDF_STATUS_E_FAILURE;
+
+	master_chan_list_6g = pdev_priv_obj->mas_chan_list_6g_ap[ap_pwr_type];
+	qdf_mem_copy(chan_list, master_chan_list_6g,
+		     NUM_6GHZ_CHANNELS * sizeof(struct regulatory_channel));
+
+	return QDF_STATUS_SUCCESS;
+}
+
+QDF_STATUS reg_get_6g_afc_chan_list(struct wlan_objmgr_pdev *pdev,
+				    struct regulatory_channel *chan_list)
+{
+	struct wlan_regulatory_pdev_priv_obj *pdev_priv_obj;
+	struct regulatory_channel *afc_chan_list;
+
+	pdev_priv_obj = reg_get_pdev_obj(pdev);
+
+	if (!IS_VALID_PDEV_REG_OBJ(pdev_priv_obj)) {
+		reg_err("reg pdev private obj is NULL");
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	afc_chan_list = pdev_priv_obj->afc_chan_list;
+	qdf_mem_copy(chan_list, afc_chan_list,
+		     NUM_6GHZ_CHANNELS * sizeof(struct regulatory_channel));
+
+	return QDF_STATUS_SUCCESS;
+}
+
+#ifdef WLAN_FEATURE_11BE
+QDF_STATUS reg_psd_2_eirp(struct wlan_objmgr_pdev *pdev,
+			  int16_t psd,
+			  uint16_t ch_bw,
+			  int16_t *eirp)
+{
+	struct wlan_regulatory_pdev_priv_obj *pdev_priv_obj;
+	int16_t ten_log_bw;
+
+	pdev_priv_obj = reg_get_pdev_obj(pdev);
+
+	if (!IS_VALID_PDEV_REG_OBJ(pdev_priv_obj)) {
+		reg_err("reg pdev private obj is NULL");
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	/**
+	 * EIRP = PSD + 10 * log10(CH_BW)
+	 */
+	switch (ch_bw) {
+	case BW_20_MHZ:
+		ten_log_bw = 13; /*  10* 1.30102 = 13.0102 */
+		break;
+	case BW_40_MHZ:
+		ten_log_bw = 16; /* 10* 1.60205 = 16.0205 */
+		break;
+	case BW_80_MHZ:
+		ten_log_bw = 19; /* 10* 1.90308 = 19.0308 */
+		break;
+	case BW_160_MHZ:
+		ten_log_bw = 22; /* 10* 2.20411 = 22.0411 */
+		break;
+	case BW_320_MHZ:
+		ten_log_bw = 25; /* 10* 2.50514 = 25.0514 */
+		break;
+	default:
+		reg_err("Invalid input bandwidth %hd", ch_bw);
+		return QDF_STATUS_E_FAILURE;
+	}
+	*eirp = psd + ten_log_bw;
+
+	return QDF_STATUS_SUCCESS;
+}
+#else
+QDF_STATUS reg_psd_2_eirp(struct wlan_objmgr_pdev *pdev,
+			  int16_t psd,
+			  uint16_t ch_bw,
+			  int16_t *eirp)
+{
+	struct wlan_regulatory_pdev_priv_obj *pdev_priv_obj;
+	int16_t ten_log_bw;
+
+	pdev_priv_obj = reg_get_pdev_obj(pdev);
+
+	if (!IS_VALID_PDEV_REG_OBJ(pdev_priv_obj)) {
+		reg_err("reg pdev private obj is NULL");
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	/**
+	 * EIRP = PSD + 10 * log10(CH_BW)
+	 */
+	switch (ch_bw) {
+	case BW_20_MHZ:
+		ten_log_bw = 13; /*  10* 1.30102 = 13.0102 */
+		break;
+	case BW_40_MHZ:
+		ten_log_bw = 16; /* 10* 1.60205 = 16.0205 */
+		break;
+	case BW_80_MHZ:
+		ten_log_bw = 19; /* 10* 1.90308 = 19.0308 */
+		break;
+	case BW_160_MHZ:
+		ten_log_bw = 22; /* 10* 2.20411 = 22.0411 */
+		break;
+	default:
+		reg_err("Invalid input bandwidth %hd", ch_bw);
+		return QDF_STATUS_E_FAILURE;
+	}
+	*eirp = psd + ten_log_bw;
+
+	return QDF_STATUS_SUCCESS;
+}
+#endif
 #endif

@@ -266,6 +266,7 @@ struct wlan_vdev_create_params {
  * @ch_cfreq2:    channel center frequency for secondary
  * @ch_width:     Channel width.
  * @ch_phymode:   Channel phymode.
+ * @puncture_bitmap:   Puncture bitmap per 20MHz.
  */
 struct wlan_channel {
 	uint16_t     ch_freq;
@@ -279,6 +280,9 @@ struct wlan_channel {
 	uint32_t     ch_cfreq2;
 	enum phy_ch_width ch_width;
 	enum wlan_phymode ch_phymode;
+#ifdef WLAN_FEATURE_11BE
+	uint16_t     puncture_bitmap;
+#endif
 };
 
 /**
@@ -813,6 +817,21 @@ static inline uint8_t wlan_vdev_get_id(struct wlan_objmgr_vdev *vdev)
 static inline uint8_t wlan_vdev_get_link_id(struct wlan_objmgr_vdev *vdev)
 {
 	return vdev->vdev_mlme.mlo_link_id;
+}
+
+/**
+ * wlan_vdev_set_link_id() - set vdev mlo link id
+ * @vdev: VDEV object
+ * @link_id: link id
+ *
+ * API to set vdev mlo link id
+ *
+ * Return: void
+ */
+static inline void wlan_vdev_set_link_id(struct wlan_objmgr_vdev *vdev,
+					 uint8_t link_id)
+{
+	vdev->vdev_mlme.mlo_link_id = link_id;
 }
 #else
 static inline uint8_t wlan_vdev_get_link_id(struct wlan_objmgr_vdev *vdev)

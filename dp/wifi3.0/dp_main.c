@@ -105,6 +105,12 @@ cdp_dump_flow_pool_info(struct cdp_soc_t *soc)
 #define SET_PEER_REF_CNT_ONE(_peer)
 #endif
 
+QDF_COMPILE_TIME_ASSERT(max_rx_rings_check,
+			MAX_REO_DEST_RINGS == CDP_MAX_RX_RINGS);
+
+QDF_COMPILE_TIME_ASSERT(max_tx_rings_check,
+			MAX_TCL_DATA_RINGS == CDP_MAX_TX_COMP_RINGS);
+
 #define dp_init_alert(params...) QDF_TRACE_FATAL(QDF_MODULE_ID_DP_INIT, params)
 #define dp_init_err(params...) QDF_TRACE_ERROR(QDF_MODULE_ID_DP_INIT, params)
 #define dp_init_warn(params...) QDF_TRACE_WARN(QDF_MODULE_ID_DP_INIT, params)
@@ -1221,27 +1227,273 @@ static int dp_srng_find_ring_in_mask(int ring_num, uint8_t *grp_mask)
 	return -QDF_STATUS_E_NOENT;
 }
 
-static int dp_srng_calculate_msi_group(struct dp_soc *soc,
-				       enum hal_ring_type ring_type,
-				       int ring_num)
+/**
+ * dp_is_msi_group_number_invalid() - check msi_group_number valid or not
+ * @msi_group_number: MSI group number.
+ * @msi_data_count: MSI data count.
+ *
+ * Return: true if msi_group_number is invalid.
+ */
+#ifdef WLAN_ONE_MSI_VECTOR
+static bool dp_is_msi_group_number_invalid(int msi_group_number,
+					   int msi_data_count)
 {
-	uint8_t *grp_mask;
+	return false;
+}
+#else
+static bool dp_is_msi_group_number_invalid(int msi_group_number,
+					   int msi_data_count)
+{
+	return msi_group_number > msi_data_count;
+}
+#endif
+
+#ifdef WLAN_FEATURE_NEAR_FULL_IRQ
+/**
+ * dp_is_reo_ring_num_in_nf_grp1() - Check if the current reo ring is part of
+ *				rx_near_full_grp1 mask
+ * @soc: Datapath SoC Handle
+ * @ring_num: REO ring number
+ *
+ * Return: 1 if the ring_num belongs to reo_nf_grp1,
+ *	   0, otherwise.
+ */
+static inline int
+dp_is_reo_ring_num_in_nf_grp1(struct dp_soc *soc, int ring_num)
+{
+	return (WLAN_CFG_RX_NEAR_FULL_IRQ_MASK_1 & (1 << ring_num));
+}
+
+/**
+ * dp_is_reo_ring_num_in_nf_grp2() - Check if the current reo ring is part of
+ *				rx_near_full_grp2 mask
+ * @soc: Datapath SoC Handle
+ * @ring_num: REO ring number
+ *
+ * Return: 1 if the ring_num belongs to reo_nf_grp2,
+ *	   0, otherwise.
+ */
+static inline int
+dp_is_reo_ring_num_in_nf_grp2(struct dp_soc *soc, int ring_num)
+{
+	return (WLAN_CFG_RX_NEAR_FULL_IRQ_MASK_2 & (1 << ring_num));
+}
+
+/**
+ * dp_srng_get_near_full_irq_mask() - Get near-full irq mask for a particular
+ *				ring type and number
+ * @soc: Datapath SoC handle
+ * @ring_type: SRNG type
+ * @ring_num: ring num
+ *
+ * Return: near ful irq mask pointer
+ */
+static inline
+uint8_t *dp_srng_get_near_full_irq_mask(struct dp_soc *soc,
+					enum hal_ring_type ring_type,
+					int ring_num)
+{
+	uint8_t *nf_irq_mask = NULL;
 
 	switch (ring_type) {
 	case WBM2SW_RELEASE:
-		/* dp_tx_comp_handler - soc->tx_comp_ring */
-		if (ring_num < 3)
-			grp_mask = &soc->wlan_cfg_ctx->int_tx_ring_mask[0];
-
-		/* dp_rx_wbm_err_process - soc->rx_rel_ring */
-		else if (ring_num == 3) {
-			/* sw treats this as a separate ring type */
-			grp_mask = &soc->wlan_cfg_ctx->
-				int_rx_wbm_rel_ring_mask[0];
-			ring_num = 0;
-		} else {
+		if (ring_num != WBM2SW_REL_ERR_RING_NUM) {
+			nf_irq_mask = &soc->wlan_cfg_ctx->
+					int_tx_ring_near_full_irq_mask[0];
+		}
+		break;
+	case REO_DST:
+		if (dp_is_reo_ring_num_in_nf_grp1(soc, ring_num))
+			nf_irq_mask =
+			&soc->wlan_cfg_ctx->int_rx_ring_near_full_irq_1_mask[0];
+		else if (dp_is_reo_ring_num_in_nf_grp2(soc, ring_num))
+			nf_irq_mask =
+			&soc->wlan_cfg_ctx->int_rx_ring_near_full_irq_2_mask[0];
+		else
 			qdf_assert(0);
-			return -QDF_STATUS_E_NOENT;
+		break;
+	default:
+		break;
+	}
+
+	return nf_irq_mask;
+}
+
+/**
+ * dp_srng_set_msi2_ring_params() - Set the msi2 addr/data in the ring params
+ * @soc: Datapath SoC handle
+ * @ring_params: srng params handle
+ * @msi2_addr: MSI2 addr to be set for the SRNG
+ * @msi2_data: MSI2 data to be set for the SRNG
+ *
+ * Return: None
+ */
+static inline
+void dp_srng_set_msi2_ring_params(struct dp_soc *soc,
+				  struct hal_srng_params *ring_params,
+				  qdf_dma_addr_t msi2_addr,
+				  uint32_t msi2_data)
+{
+	ring_params->msi2_addr = msi2_addr;
+	ring_params->msi2_data = msi2_data;
+}
+
+/**
+ * dp_srng_msi2_setup() - Setup MSI2 details for near full IRQ of an SRNG
+ * @soc: Datapath SoC handle
+ * @ring_params: ring_params for SRNG
+ * @ring_type: SENG type
+ * @ring_num: ring number for the SRNG
+ * @nf_msi_grp_num: near full msi group number
+ *
+ * Return: None
+ */
+static inline void
+dp_srng_msi2_setup(struct dp_soc *soc,
+		   struct hal_srng_params *ring_params,
+		   int ring_type, int ring_num, int nf_msi_grp_num)
+{
+	uint32_t msi_data_start, msi_irq_start, addr_low, addr_high;
+	int msi_data_count, ret;
+
+	ret = pld_get_user_msi_assignment(soc->osdev->dev, "DP",
+					  &msi_data_count, &msi_data_start,
+					  &msi_irq_start);
+	if (ret)
+		return;
+
+	if (nf_msi_grp_num < 0) {
+		dp_init_info("%pK: ring near full IRQ not part of an ext_group; ring_type: %d,ring_num %d",
+			     soc, ring_type, ring_num);
+		ring_params->msi2_addr = 0;
+		ring_params->msi2_data = 0;
+		return;
+	}
+
+	if (dp_is_msi_group_number_invalid(nf_msi_grp_num, msi_data_count)) {
+		dp_init_warn("%pK: 2 msi_groups will share an msi for near full IRQ; msi_group_num %d",
+			     soc, nf_msi_grp_num);
+		QDF_ASSERT(0);
+	}
+
+	pld_get_msi_address(soc->osdev->dev, &addr_low, &addr_high);
+
+	ring_params->nf_irq_support = 1;
+	ring_params->msi2_addr = addr_low;
+	ring_params->msi2_addr |= (qdf_dma_addr_t)(((uint64_t)addr_high) << 32);
+	ring_params->msi2_data = (nf_msi_grp_num % msi_data_count)
+		+ msi_data_start;
+	ring_params->flags |= HAL_SRNG_MSI_INTR;
+}
+
+/* Percentage of ring entries considered as nearly full */
+#define DP_NF_HIGH_THRESH_PERCENTAGE	75
+/* Percentage of ring entries considered as critically full */
+#define DP_NF_CRIT_THRESH_PERCENTAGE	90
+/* Percentage of ring entries considered as safe threshold */
+#define DP_NF_SAFE_THRESH_PERCENTAGE	50
+
+/**
+ * dp_srng_configure_nf_interrupt_thresholds() - Configure the thresholds for
+ *			near full irq
+ * @soc: Datapath SoC handle
+ * @ring_params: ring params for SRNG
+ * @ring_type: ring type
+ */
+static inline void
+dp_srng_configure_nf_interrupt_thresholds(struct dp_soc *soc,
+					  struct hal_srng_params *ring_params,
+					  int ring_type)
+{
+	if (ring_params->nf_irq_support) {
+		ring_params->high_thresh = (ring_params->num_entries *
+					    DP_NF_HIGH_THRESH_PERCENTAGE) / 100;
+		ring_params->crit_thresh = (ring_params->num_entries *
+					    DP_NF_CRIT_THRESH_PERCENTAGE) / 100;
+		ring_params->safe_thresh = (ring_params->num_entries *
+					    DP_NF_SAFE_THRESH_PERCENTAGE) /100;
+	}
+}
+
+/**
+ * dp_srng_set_nf_thresholds() - Set the near full thresholds to srng data
+ *			structure from the ring params
+ * @soc: Datapath SoC handle
+ * @srng: SRNG handle
+ * @ring_params: ring params for a SRNG
+ *
+ * Return: None
+ */
+static inline void
+dp_srng_set_nf_thresholds(struct dp_soc *soc, struct dp_srng *srng,
+			  struct hal_srng_params *ring_params)
+{
+	srng->crit_thresh = ring_params->crit_thresh;
+	srng->safe_thresh = ring_params->safe_thresh;
+}
+
+#else
+static inline
+uint8_t *dp_srng_get_near_full_irq_mask(struct dp_soc *soc,
+					enum hal_ring_type ring_type,
+					int ring_num)
+{
+	return NULL;
+}
+
+static inline
+void dp_srng_set_msi2_ring_params(struct dp_soc *soc,
+				  struct hal_srng_params *ring_params,
+				  qdf_dma_addr_t msi2_addr,
+				  uint32_t msi2_data)
+{
+}
+
+static inline void
+dp_srng_msi2_setup(struct dp_soc *soc,
+		   struct hal_srng_params *ring_params,
+		   int ring_type, int ring_num, int nf_msi_grp_num)
+{
+}
+
+static inline void
+dp_srng_configure_nf_interrupt_thresholds(struct dp_soc *soc,
+					  struct hal_srng_params *ring_params,
+					  int ring_type)
+{
+}
+
+static inline void
+dp_srng_set_nf_thresholds(struct dp_soc *soc, struct dp_srng *srng,
+			  struct hal_srng_params *ring_params)
+{
+}
+#endif
+
+static int dp_srng_calculate_msi_group(struct dp_soc *soc,
+				       enum hal_ring_type ring_type,
+				       int ring_num,
+				       int *reg_msi_grp_num,
+				       bool nf_irq_support,
+				       int *nf_msi_grp_num)
+{
+	struct wlan_cfg_dp_soc_ctxt *cfg_ctx = soc->wlan_cfg_ctx;
+	uint8_t *grp_mask, *nf_irq_mask = NULL;
+	bool nf_irq_enabled = false;
+
+	switch (ring_type) {
+	case WBM2SW_RELEASE:
+		if (ring_num == WBM2SW_REL_ERR_RING_NUM) {
+			/* dp_rx_wbm_err_process - soc->rx_rel_ring */
+			grp_mask = &cfg_ctx->int_rx_wbm_rel_ring_mask[0];
+			ring_num = 0;
+		} else { /* dp_tx_comp_handler - soc->tx_comp_ring */
+			grp_mask = &soc->wlan_cfg_ctx->int_tx_ring_mask[0];
+			nf_irq_mask = dp_srng_get_near_full_irq_mask(soc,
+								     ring_type,
+								     ring_num);
+			if (nf_irq_mask)
+				nf_irq_enabled = true;
 		}
 	break;
 
@@ -1253,6 +1505,10 @@ static int dp_srng_calculate_msi_group(struct dp_soc *soc,
 	case REO_DST:
 		/* dp_rx_process - soc->reo_dest_ring */
 		grp_mask = &soc->wlan_cfg_ctx->int_rx_ring_mask[0];
+		nf_irq_mask = dp_srng_get_near_full_irq_mask(soc, ring_type,
+							     ring_num);
+		if (nf_irq_mask)
+			nf_irq_enabled = true;
 	break;
 
 	case REO_STATUS:
@@ -1305,7 +1561,14 @@ static int dp_srng_calculate_msi_group(struct dp_soc *soc,
 	break;
 	}
 
-	return dp_srng_find_ring_in_mask(ring_num, grp_mask);
+	*reg_msi_grp_num = dp_srng_find_ring_in_mask(ring_num, grp_mask);
+
+	if (nf_irq_support && nf_irq_enabled) {
+		*nf_msi_grp_num = dp_srng_find_ring_in_mask(ring_num,
+							    nf_irq_mask);
+	}
+
+	return QDF_STATUS_SUCCESS;
 }
 
 /*
@@ -1355,34 +1618,19 @@ static int dp_get_num_msi_available(struct dp_soc *soc, int interrupt_mode)
 }
 #endif
 
-/**
- * dp_is_msi_group_number_invalid() - check msi_group_number valid or not
- * @msi_group_number: MSI group number.
- * @msi_data_count: MSI data count.
- *
- * Return: true if msi_group_number is valid.
- */
-#ifdef WLAN_ONE_MSI_VECTOR
-static bool dp_is_msi_group_number_invalid(int msi_group_number,
-					   int msi_data_count)
-{
-	return false;
-}
-#else
-static bool dp_is_msi_group_number_invalid(int msi_group_number,
-					   int msi_data_count)
-{
-	return msi_group_number > msi_data_count;
-}
-#endif
-
 static void dp_srng_msi_setup(struct dp_soc *soc, struct hal_srng_params
 			      *ring_params, int ring_type, int ring_num)
 {
-	int msi_group_number;
+	int reg_msi_grp_num;
+	/*
+	 * nf_msi_grp_num needs to be initialized with negative value,
+	 * to avoid configuring near-full msi for WBM2SW3 ring
+	 */
+	int nf_msi_grp_num = -1;
 	int msi_data_count;
 	int ret;
 	uint32_t msi_data_start, msi_irq_start, addr_low, addr_high;
+	bool nf_irq_support;
 
 	ret = pld_get_user_msi_assignment(soc->osdev->dev, "DP",
 					    &msi_data_count, &msi_data_start,
@@ -1391,20 +1639,33 @@ static void dp_srng_msi_setup(struct dp_soc *soc, struct hal_srng_params
 	if (ret)
 		return;
 
-	msi_group_number = dp_srng_calculate_msi_group(soc, ring_type,
-						       ring_num);
-	if (msi_group_number < 0) {
+	nf_irq_support = hal_srng_is_near_full_irq_supported(soc->hal_soc,
+							     ring_type,
+							     ring_num);
+	ret = dp_srng_calculate_msi_group(soc, ring_type, ring_num,
+					  &reg_msi_grp_num,
+					  nf_irq_support,
+					  &nf_msi_grp_num);
+	if (ret < 0) {
 		dp_init_info("%pK: ring not part of an ext_group; ring_type: %d,ring_num %d",
 			     soc, ring_type, ring_num);
 		ring_params->msi_addr = 0;
 		ring_params->msi_data = 0;
+		dp_srng_set_msi2_ring_params(soc, ring_params, 0, 0);
 		return;
 	}
 
-	if (dp_is_msi_group_number_invalid(msi_group_number, msi_data_count)) {
-		dp_init_warn("%pK: 2 msi_groups will share an msi; msi_group_num %d",
-			     soc, msi_group_number);
+	if (reg_msi_grp_num < 0) {
+		dp_init_info("%pK: ring not part of an ext_group; ring_type: %d,ring_num %d",
+			     soc, ring_type, ring_num);
+		ring_params->msi_addr = 0;
+		ring_params->msi_data = 0;
+		goto configure_msi2;
+	}
 
+	if (dp_is_msi_group_number_invalid(reg_msi_grp_num, msi_data_count)) {
+		dp_init_warn("%pK: 2 msi_groups will share an msi; msi_group_num %d",
+			     soc, reg_msi_grp_num);
 		QDF_ASSERT(0);
 	}
 
@@ -1412,9 +1673,22 @@ static void dp_srng_msi_setup(struct dp_soc *soc, struct hal_srng_params
 
 	ring_params->msi_addr = addr_low;
 	ring_params->msi_addr |= (qdf_dma_addr_t)(((uint64_t)addr_high) << 32);
-	ring_params->msi_data = (msi_group_number % msi_data_count)
+	ring_params->msi_data = (reg_msi_grp_num % msi_data_count)
 		+ msi_data_start;
 	ring_params->flags |= HAL_SRNG_MSI_INTR;
+
+	dp_debug("ring type %u ring_num %u msi->data %u msi_addr %llx",
+		 ring_type, ring_num, ring_params->msi_data,
+		 (uint64_t)ring_params->msi_addr);
+
+configure_msi2:
+	if (!nf_irq_support) {
+		dp_srng_set_msi2_ring_params(soc, ring_params, 0, 0);
+		return;
+	}
+
+	dp_srng_msi2_setup(soc, ring_params, ring_type, ring_num,
+			   nf_msi_grp_num);
 }
 
 #ifdef FEATURE_AST
@@ -1576,6 +1850,8 @@ dp_srng_configure_interrupt_thresholds(struct dp_soc *soc,
 			soc->wlan_srng_cfg[ring_type].low_threshold;
 	if (ring_params->low_threshold)
 		ring_params->flags |= HAL_SRNG_LOW_THRES_INTR_ENABLE;
+
+	dp_srng_configure_nf_interrupt_thresholds(soc, ring_params, ring_type);
 }
 #else
 static void
@@ -1841,6 +2117,27 @@ static void dp_srng_free(struct dp_soc *soc, struct dp_srng *srng)
 	srng->hal_srng = NULL;
 }
 
+#ifdef DISABLE_MON_RING_MSI_CFG
+/*
+ * dp_skip_msi_cfg() - Check if msi cfg has to be skipped for ring_type
+ * @ring_type: sring type
+ *
+ * Return: True if msi cfg should be skipped for srng type else false
+ */
+static inline bool dp_skip_msi_cfg(int ring_type)
+{
+	if (ring_type == RXDMA_MONITOR_STATUS)
+		return true;
+
+	return false;
+}
+#else
+static inline bool dp_skip_msi_cfg(int ring_type)
+{
+	return false;
+}
+#endif
+
 /*
  * dp_srng_init() - Initialize SRNG
  * @soc  : Data path soc handle
@@ -1878,14 +2175,14 @@ static QDF_STATUS dp_srng_init(struct dp_soc *soc, struct dp_srng *srng,
 		(void *)ring_params.ring_base_paddr,
 		ring_params.num_entries);
 
-	if (soc->intr_mode == DP_INTR_MSI) {
+	if (soc->intr_mode == DP_INTR_MSI && !dp_skip_msi_cfg(ring_type)) {
 		dp_srng_msi_setup(soc, &ring_params, ring_type, ring_num);
 		dp_verbose_debug("Using MSI for ring_type: %d, ring_num %d",
 				 ring_type, ring_num);
-
 	} else {
 		ring_params.msi_data = 0;
 		ring_params.msi_addr = 0;
+		dp_srng_set_msi2_ring_params(soc, &ring_params, 0, 0);
 		dp_verbose_debug("Skipping MSI for ring_type: %d, ring_num %d",
 				 ring_type, ring_num);
 	}
@@ -1893,6 +2190,8 @@ static QDF_STATUS dp_srng_init(struct dp_soc *soc, struct dp_srng *srng,
 	dp_srng_configure_interrupt_thresholds(soc, &ring_params,
 					       ring_type, ring_num,
 					       srng->num_entries);
+
+	dp_srng_set_nf_thresholds(soc, srng, &ring_params);
 
 	if (srng->cached)
 		ring_params.flags |= HAL_SRNG_CACHED_DESC;
@@ -2146,6 +2445,30 @@ static int dp_process_lmac_rings(struct dp_intr *int_ctx, int total_budget)
 budget_done:
 	return total_budget - budget;
 }
+
+#ifdef WLAN_FEATURE_NEAR_FULL_IRQ
+/**
+ * dp_service_near_full_srngs() - Bottom half handler to process the near
+ *				full IRQ on a SRNG
+ * @dp_ctx: Datapath SoC handle
+ * @dp_budget: Number of SRNGs which can be processed in a single attempt
+ *		without rescheduling
+ *
+ * Return: remaining budget/quota for the soc device
+ */
+static uint32_t dp_service_near_full_srngs(void *dp_ctx, uint32_t dp_budget)
+{
+	struct dp_intr *int_ctx = (struct dp_intr *)dp_ctx;
+	struct dp_soc *soc = int_ctx->soc;
+
+	/*
+	 * dp_service_near_full_srngs arch ops should be initialized always
+	 * if the NEAR FULL IRQ feature is enabled.
+	 */
+	return soc->arch_ops.dp_service_near_full_srngs(soc, int_ctx,
+							dp_budget);
+}
+#endif
 
 #ifndef QCA_HOST_MODE_WIFI_DISABLED
 
@@ -2722,6 +3045,15 @@ static void dp_soc_interrupt_map_calculate_msi(struct dp_soc *soc,
 					soc->wlan_cfg_ctx, intr_ctx_num);
 	int host2rxdma_mon_ring_mask = wlan_cfg_get_host2rxdma_mon_ring_mask(
 					soc->wlan_cfg_ctx, intr_ctx_num);
+	int rx_near_full_grp_1_mask =
+		wlan_cfg_get_rx_near_full_grp_1_mask(soc->wlan_cfg_ctx,
+						     intr_ctx_num);
+	int rx_near_full_grp_2_mask =
+		wlan_cfg_get_rx_near_full_grp_2_mask(soc->wlan_cfg_ctx,
+						     intr_ctx_num);
+	int tx_ring_near_full_mask =
+		wlan_cfg_get_tx_ring_near_full_mask(soc->wlan_cfg_ctx,
+						    intr_ctx_num);
 
 	unsigned int vector =
 		(intr_ctx_num % msi_vector_count) + msi_vector_start;
@@ -2731,7 +3063,9 @@ static void dp_soc_interrupt_map_calculate_msi(struct dp_soc *soc,
 
 	if (tx_mask | rx_mask | rx_mon_mask | rx_err_ring_mask |
 	    rx_wbm_rel_ring_mask | reo_status_ring_mask | rxdma2host_ring_mask |
-	    host2rxdma_ring_mask | host2rxdma_mon_ring_mask)
+	    host2rxdma_ring_mask | host2rxdma_mon_ring_mask |
+	    rx_near_full_grp_1_mask | rx_near_full_grp_2_mask |
+	    tx_ring_near_full_mask)
 		irq_id_map[num_irq++] =
 			pld_get_msi_irq(soc->osdev->dev, vector);
 
@@ -2758,6 +3092,36 @@ static void dp_soc_interrupt_map_calculate(struct dp_soc *soc, int intr_ctx_num,
 				msi_vector_count, msi_vector_start);
 }
 
+#ifdef WLAN_FEATURE_NEAR_FULL_IRQ
+/**
+ * dp_soc_near_full_interrupt_attach() - Register handler for DP near fill irq
+ * @soc: DP soc handle
+ * @num_irq: IRQ number
+ * @irq_id_map: IRQ map
+ * intr_id: interrupt context ID
+ *
+ * Return: 0 for success. nonzero for failure.
+ */
+static inline int
+dp_soc_near_full_interrupt_attach(struct dp_soc *soc, int num_irq,
+				  int irq_id_map[], int intr_id)
+{
+	return hif_register_ext_group(soc->hif_handle,
+				      num_irq, irq_id_map,
+				      dp_service_near_full_srngs,
+				      &soc->intr_ctx[intr_id], "dp_nf_intr",
+				      HIF_EXEC_NAPI_TYPE,
+				      QCA_NAPI_DEF_SCALE_BIN_SHIFT);
+}
+#else
+static inline int
+dp_soc_near_full_interrupt_attach(struct dp_soc *soc, int num_irq,
+				  int *irq_id_map, int intr_id)
+{
+	return 0;
+}
+#endif
+
 /*
  * dp_soc_interrupt_attach() - Register handlers for DP interrupts
  * @txrx_soc: DP SOC handle
@@ -2774,6 +3138,7 @@ static QDF_STATUS dp_soc_interrupt_attach(struct cdp_soc_t *txrx_soc)
 
 	int i = 0;
 	int num_irq = 0;
+	int rx_err_ring_intr_ctxt_id = HIF_MAX_GROUP;
 
 	qdf_mem_set(&soc->mon_intr_id_lmac_map,
 		    sizeof(soc->mon_intr_id_lmac_map), DP_MON_INVALID_LMAC_ID);
@@ -2803,6 +3168,15 @@ static QDF_STATUS dp_soc_interrupt_attach(struct cdp_soc_t *txrx_soc)
 		int host2rxdma_mon_ring_mask =
 			wlan_cfg_get_host2rxdma_mon_ring_mask(
 				soc->wlan_cfg_ctx, i);
+		int rx_near_full_grp_1_mask =
+			wlan_cfg_get_rx_near_full_grp_1_mask(soc->wlan_cfg_ctx,
+							     i);
+		int rx_near_full_grp_2_mask =
+			wlan_cfg_get_rx_near_full_grp_2_mask(soc->wlan_cfg_ctx,
+							     i);
+		int tx_ring_near_full_mask =
+			wlan_cfg_get_tx_ring_near_full_mask(soc->wlan_cfg_ctx,
+							    i);
 
 		soc->intr_ctx[i].dp_intr_id = i;
 		soc->intr_ctx[i].tx_ring_mask = tx_mask;
@@ -2815,6 +3189,12 @@ static QDF_STATUS dp_soc_interrupt_attach(struct cdp_soc_t *txrx_soc)
 		soc->intr_ctx[i].reo_status_ring_mask = reo_status_ring_mask;
 		soc->intr_ctx[i].host2rxdma_mon_ring_mask =
 			 host2rxdma_mon_ring_mask;
+		soc->intr_ctx[i].rx_near_full_grp_1_mask =
+						rx_near_full_grp_1_mask;
+		soc->intr_ctx[i].rx_near_full_grp_2_mask =
+						rx_near_full_grp_2_mask;
+		soc->intr_ctx[i].tx_ring_near_full_mask =
+						tx_ring_near_full_mask;
 
 		soc->intr_ctx[i].soc = soc;
 
@@ -2823,10 +3203,20 @@ static QDF_STATUS dp_soc_interrupt_attach(struct cdp_soc_t *txrx_soc)
 		dp_soc_interrupt_map_calculate(soc, i, &irq_id_map[0],
 					       &num_irq);
 
-		ret = hif_register_ext_group(soc->hif_handle,
+		if (rx_near_full_grp_1_mask | rx_near_full_grp_2_mask |
+		    tx_ring_near_full_mask) {
+			dp_soc_near_full_interrupt_attach(soc, num_irq,
+							  irq_id_map, i);
+		} else {
+			ret = hif_register_ext_group(soc->hif_handle,
 				num_irq, irq_id_map, dp_service_srngs,
 				&soc->intr_ctx[i], "dp_intr",
-				HIF_EXEC_NAPI_TYPE, QCA_NAPI_DEF_SCALE_BIN_SHIFT);
+				HIF_EXEC_NAPI_TYPE,
+				QCA_NAPI_DEF_SCALE_BIN_SHIFT);
+		}
+
+		dp_debug(" int ctx %u num_irq %u irq_id_map %u %u",
+			 i, num_irq, irq_id_map[0], irq_id_map[1]);
 
 		if (ret) {
 			dp_init_err("%pK: failed, ret = %d", soc, ret);
@@ -2836,9 +3226,15 @@ static QDF_STATUS dp_soc_interrupt_attach(struct cdp_soc_t *txrx_soc)
 
 		hif_event_history_init(soc->hif_handle, i);
 		soc->intr_ctx[i].lro_ctx = qdf_lro_init();
+
+		if (rx_err_ring_mask)
+			rx_err_ring_intr_ctxt_id = i;
 	}
 
 	hif_configure_ext_group_interrupts(soc->hif_handle);
+	if (rx_err_ring_intr_ctxt_id != HIF_MAX_GROUP)
+		hif_config_irq_clear_cpu_affinity(soc->hif_handle,
+						  rx_err_ring_intr_ctxt_id, 0);
 
 	return QDF_STATUS_SUCCESS;
 }
@@ -2859,6 +3255,7 @@ static void dp_soc_interrupt_detach(struct cdp_soc_t *txrx_soc)
 	} else {
 		hif_deconfigure_ext_group_interrupts(soc->hif_handle);
 		hif_deregister_exec_group(soc->hif_handle, "dp_intr");
+		hif_deregister_exec_group(soc->hif_handle, "dp_nf_intr");
 	}
 
 	for (i = 0; i < wlan_cfg_get_num_contexts(soc->wlan_cfg_ctx); i++) {
@@ -2871,6 +3268,9 @@ static void dp_soc_interrupt_detach(struct cdp_soc_t *txrx_soc)
 		soc->intr_ctx[i].rxdma2host_ring_mask = 0;
 		soc->intr_ctx[i].host2rxdma_ring_mask = 0;
 		soc->intr_ctx[i].host2rxdma_mon_ring_mask = 0;
+		soc->intr_ctx[i].rx_near_full_grp_1_mask = 0;
+		soc->intr_ctx[i].rx_near_full_grp_2_mask = 0;
+		soc->intr_ctx[i].tx_ring_near_full_mask = 0;
 
 		hif_event_history_deinit(soc->hif_handle, i);
 		qdf_lro_deinit(soc->intr_ctx[i].lro_ctx);
@@ -3300,6 +3700,8 @@ void dp_link_desc_ring_replenish(struct dp_soc *soc, uint32_t mac_id)
 }
 
 #ifdef IPA_OFFLOAD
+#define USE_1_IPA_RX_REO_RING 1
+#define USE_2_IPA_RX_REO_RINGS 2
 #define REO_DST_RING_SIZE_QCA6290 1023
 #ifndef CONFIG_WIFI_EMULATION_WIFI_3_0
 #define REO_DST_RING_SIZE_QCA8074 1023
@@ -3310,15 +3712,6 @@ void dp_link_desc_ring_replenish(struct dp_soc *soc, uint32_t mac_id)
 #endif /* CONFIG_WIFI_EMULATION_WIFI_3_0 */
 
 #ifdef IPA_WDI3_TX_TWO_PIPES
-static int dp_ipa_get_tx_alt_comp_ring_num(int ring_num)
-{
-	/* IPA alternate TX comp ring for 2G is WBM2SW4 */
-	if (ring_num == IPA_TX_ALT_COMP_RING_IDX)
-		ring_num = 4;
-
-	return ring_num;
-}
-
 #ifdef DP_MEMORY_OPT
 static int dp_ipa_init_alt_tx_ring(struct dp_soc *soc)
 {
@@ -3367,11 +3760,6 @@ static void dp_ipa_hal_tx_init_alt_data_ring(struct dp_soc *soc)
 }
 
 #else /* !IPA_WDI3_TX_TWO_PIPES */
-static int dp_ipa_get_tx_alt_comp_ring_num(int ring_num)
-{
-	return ring_num;
-}
-
 static int dp_ipa_init_alt_tx_ring(struct dp_soc *soc)
 {
 	return 0;
@@ -3423,11 +3811,6 @@ static int dp_ipa_alloc_alt_tx_ring(struct dp_soc *soc)
 
 static void dp_ipa_free_alt_tx_ring(struct dp_soc *soc)
 {
-}
-
-static int dp_ipa_get_tx_alt_comp_ring_num(int ring_num)
-{
-	return ring_num;
 }
 
 static void dp_ipa_hal_tx_init_alt_data_ring(struct dp_soc *soc)
@@ -3578,7 +3961,7 @@ static void dp_soc_reset_intr_mask(struct dp_soc *soc)
 		if (group_number < 0) {
 			dp_init_debug("%pK: ring not part of any group; ring_type: %d,ring_num %d",
 				      soc, WBM2SW_RELEASE, j);
-			return;
+			continue;
 		}
 
 		mask = wlan_cfg_get_tx_ring_mask(soc->wlan_cfg_ctx, group_number);
@@ -3613,7 +3996,7 @@ static void dp_soc_reset_intr_mask(struct dp_soc *soc)
 		if (group_number < 0) {
 			dp_init_debug("%pK: ring not part of any group; ring_type: %d,ring_num %d",
 				      soc, REO_DST, j);
-			return;
+			continue;
 		}
 
 		mask =  wlan_cfg_get_rx_ring_mask(soc->wlan_cfg_ctx, group_number);
@@ -3651,7 +4034,7 @@ static void dp_soc_reset_intr_mask(struct dp_soc *soc)
 		if (group_number < 0) {
 			dp_init_debug("%pK: ring not part of any group; ring_type: %d,ring_num %d",
 				      soc, REO_DST, lmac_id);
-			return;
+			continue;
 		}
 
 		/* set the interrupt mask for offloaded ring */
@@ -3680,7 +4063,7 @@ static void dp_soc_reset_intr_mask(struct dp_soc *soc)
 		if (group_number < 0) {
 			dp_init_debug("%pK: ring not part of any group; ring_type: %d,ring_num %d",
 				      soc, REO_EXCEPTION, j);
-			return;
+			continue;
 		}
 
 		wlan_cfg_set_rx_err_ring_mask(soc->wlan_cfg_ctx,
@@ -3706,10 +4089,27 @@ static void dp_soc_reset_intr_mask(struct dp_soc *soc)
  */
 bool dp_reo_remap_config(struct dp_soc *soc, uint32_t *remap1, uint32_t *remap2)
 {
-	uint32_t ring[4] = {REO_REMAP_SW1, REO_REMAP_SW2,
-						REO_REMAP_SW3};
-	hal_compute_reo_remap_ix2_ix3(soc->hal_soc, ring,
-				      3, remap1, remap2);
+	uint32_t ring[8] = {REO_REMAP_SW1, REO_REMAP_SW2, REO_REMAP_SW3};
+	int target_type;
+
+	target_type = hal_get_target_type(soc->hal_soc);
+
+	switch (target_type) {
+	case TARGET_TYPE_WCN7850:
+		hal_compute_reo_remap_ix2_ix3(soc->hal_soc, ring,
+					      soc->num_reo_dest_rings -
+					      USE_2_IPA_RX_REO_RINGS, remap1,
+					      remap2);
+		break;
+
+	default:
+		hal_compute_reo_remap_ix2_ix3(soc->hal_soc, ring,
+					      soc->num_reo_dest_rings -
+					      USE_1_IPA_RX_REO_RING, remap1,
+					      remap2);
+		break;
+	}
+
 	dp_debug("remap1 %x remap2 %x", *remap1, *remap2);
 
 	return true;
@@ -3897,6 +4297,7 @@ static bool dp_reo_remap_config(struct dp_soc *soc,
 	case dp_nss_cfg_dbtc:
 		/* return false if both or all are offloaded to NSS */
 		return false;
+
 	}
 
 	dp_debug("remap1 %x remap2 %x offload_radio %u",
@@ -3991,31 +4392,66 @@ static inline void dp_create_ext_stats_event(struct dp_soc *soc)
 
 static void dp_deinit_tx_pair_by_index(struct dp_soc *soc, int index)
 {
-	int ring_num;
+	int tcl_ring_num, wbm_ring_num;
+
+	wlan_cfg_get_tcl_wbm_ring_num_for_index(index,
+						&tcl_ring_num,
+						&wbm_ring_num);
+
+	if (tcl_ring_num == -1 || wbm_ring_num == -1) {
+		dp_err("incorrect tcl/wbm ring num for index %u", index);
+		return;
+	}
 
 	wlan_minidump_remove(soc->tcl_data_ring[index].base_vaddr_unaligned,
 			     soc->tcl_data_ring[index].alloc_size,
 			     soc->ctrl_psoc,
 			     WLAN_MD_DP_SRNG_TCL_DATA,
 			     "tcl_data_ring");
-	dp_srng_deinit(soc, &soc->tcl_data_ring[index], TCL_DATA, index);
+	dp_info("index %u tcl %u wbm %u", index, tcl_ring_num, wbm_ring_num);
+	dp_srng_deinit(soc, &soc->tcl_data_ring[index], TCL_DATA,
+		       tcl_ring_num);
 
 	wlan_minidump_remove(soc->tx_comp_ring[index].base_vaddr_unaligned,
 			     soc->tx_comp_ring[index].alloc_size,
 			     soc->ctrl_psoc,
 			     WLAN_MD_DP_SRNG_TX_COMP,
 			     "tcl_comp_ring");
-	ring_num = dp_ipa_get_tx_alt_comp_ring_num(index);
 	dp_srng_deinit(soc, &soc->tx_comp_ring[index], WBM2SW_RELEASE,
-		       ring_num);
+		       wbm_ring_num);
 }
 
+/**
+ * dp_init_tx_ring_pair_by_index() - The function inits tcl data/wbm completion
+ * ring pair
+ * @soc: DP soc pointer
+ * @index: index of soc->tcl_data or soc->tx_comp to initialize
+ *
+ * Return: QDF_STATUS_SUCCESS on success, error code otherwise.
+ */
 static QDF_STATUS dp_init_tx_ring_pair_by_index(struct dp_soc *soc,
 						uint8_t index)
 {
-	int ring_num;
+	int tcl_ring_num, wbm_ring_num;
 
-	if (dp_srng_init(soc, &soc->tcl_data_ring[index], TCL_DATA, index, 0)) {
+	if (index >= MAX_TCL_DATA_RINGS) {
+		dp_err("unexpected index!");
+		QDF_BUG(0);
+		goto fail1;
+	}
+
+	wlan_cfg_get_tcl_wbm_ring_num_for_index(index,
+						&tcl_ring_num,
+						&wbm_ring_num);
+
+	if (tcl_ring_num == -1 || wbm_ring_num == -1) {
+		dp_err("incorrect tcl/wbm ring num for index %u", index);
+		goto fail1;
+	}
+
+	dp_info("index %u tcl %u wbm %u", index, tcl_ring_num, wbm_ring_num);
+	if (dp_srng_init(soc, &soc->tcl_data_ring[index], TCL_DATA,
+			 tcl_ring_num, 0)) {
 		dp_err("dp_srng_init failed for tcl_data_ring");
 		goto fail1;
 	}
@@ -4025,9 +4461,8 @@ static QDF_STATUS dp_init_tx_ring_pair_by_index(struct dp_soc *soc,
 			  WLAN_MD_DP_SRNG_TCL_DATA,
 			  "tcl_data_ring");
 
-	ring_num = dp_ipa_get_tx_alt_comp_ring_num(index);
 	if (dp_srng_init(soc, &soc->tx_comp_ring[index], WBM2SW_RELEASE,
-			 ring_num, 0)) {
+			 wbm_ring_num, 0)) {
 		dp_err("dp_srng_init failed for tx_comp_ring");
 		goto fail1;
 	}
@@ -4045,10 +4480,19 @@ fail1:
 
 static void dp_free_tx_ring_pair_by_index(struct dp_soc *soc, uint8_t index)
 {
+	dp_debug("index %u", index);
 	dp_srng_free(soc, &soc->tcl_data_ring[index]);
 	dp_srng_free(soc, &soc->tx_comp_ring[index]);
 }
 
+/**
+ * dp_alloc_tx_ring_pair_by_index() - The function allocs tcl data/wbm2sw
+ * ring pair for the given "index"
+ * @soc: DP soc pointer
+ * @index: index of soc->tcl_data or soc->tx_comp to initialize
+ *
+ * Return: QDF_STATUS_SUCCESS on success, error code otherwise.
+ */
 static QDF_STATUS dp_alloc_tx_ring_pair_by_index(struct dp_soc *soc,
 						 uint8_t index)
 {
@@ -4057,6 +4501,13 @@ static QDF_STATUS dp_alloc_tx_ring_pair_by_index(struct dp_soc *soc,
 	struct wlan_cfg_dp_soc_ctxt *soc_cfg_ctx = soc->wlan_cfg_ctx;
 	int cached = 0;
 
+	if (index >= MAX_TCL_DATA_RINGS) {
+		dp_err("unexpected index!");
+		QDF_BUG(0);
+		goto fail1;
+	}
+
+	dp_debug("index %u", index);
 	tx_ring_size = wlan_cfg_tx_ring_size(soc_cfg_ctx);
 	dp_ipa_get_tx_ring_size(index, &tx_ring_size, soc_cfg_ctx);
 
@@ -6287,6 +6738,8 @@ static QDF_STATUS dp_vdev_detach_wifi3(struct cdp_soc_t *cdp_soc,
 	else if (hif_get_target_status(soc->hif_handle) == TARGET_STATUS_RESET)
 		dp_vdev_flush_peers((struct cdp_vdev *)vdev, true);
 
+	/* indicate that the vdev needs to be deleted */
+	vdev->delete.pending = 1;
 	dp_rx_vdev_detach(vdev);
 	/*
 	 * move it after dp_rx_vdev_detach(),
@@ -6319,8 +6772,6 @@ static QDF_STATUS dp_vdev_detach_wifi3(struct cdp_soc_t *cdp_soc,
 		qdf_mem_free(vdev->vdev_dp_ext_handle);
 		vdev->vdev_dp_ext_handle = NULL;
 	}
-	/* indicate that the vdev needs to be deleted */
-	vdev->delete.pending = 1;
 	vdev->delete.callback = callback;
 	vdev->delete.context = cb_context;
 
@@ -7094,6 +7545,140 @@ fail0:
 }
 #endif /* ATH_SUPPORT_NAC_RSSI || ATH_SUPPORT_NAC */
 
+#ifdef WLAN_SUPPORT_SCS
+/*
+ * dp_enable_scs_params - Enable/Disable SCS procedures
+ * @soc - Datapath soc handle
+ * @peer_mac - STA Mac address
+ * @vdev_id - ID of the vdev handle
+ * @active - Flag to set SCS active/inactive
+ * return type - QDF_STATUS - Success/Invalid
+ */
+static QDF_STATUS
+dp_enable_scs_params(struct cdp_soc_t *soc_hdl, struct qdf_mac_addr
+		     *peer_mac,
+		     uint8_t vdev_id,
+		     bool is_active)
+{
+	struct dp_peer *peer;
+	QDF_STATUS status = QDF_STATUS_E_INVAL;
+	struct dp_soc *soc = (struct dp_soc *)soc_hdl;
+
+	peer = dp_peer_find_hash_find(soc, peer_mac->bytes, 0, vdev_id,
+				      DP_MOD_ID_CDP);
+
+	if (!peer) {
+		dp_err("Peer is NULL!");
+		goto fail;
+	}
+
+	peer->scs_is_active = is_active;
+	status = QDF_STATUS_SUCCESS;
+
+fail:
+	if (peer)
+		dp_peer_unref_delete(peer, DP_MOD_ID_CDP);
+	return status;
+}
+
+/*
+ * @brief dp_copy_scs_params - SCS Parameters sent by STA
+ * is copied from the cdp layer to the dp layer
+ * These parameters are then used by the peer
+ * for traffic classification.
+ *
+ * @param peer - peer struct
+ * @param scs_params - cdp layer params
+ * @idx - SCS_entry index obtained from the
+ * node database with a given SCSID
+ * @return void
+ */
+void
+dp_copy_scs_params(struct dp_peer *peer,
+		   struct cdp_scs_params *scs_params,
+		   uint8_t idx)
+{
+	uint8_t tidx = 0;
+	uint8_t tclas_elem;
+
+	peer->scs[idx].scsid = scs_params->scsid;
+	peer->scs[idx].access_priority =
+		scs_params->access_priority;
+	peer->scs[idx].tclas_elements =
+		scs_params->tclas_elements;
+	peer->scs[idx].tclas_process =
+		scs_params->tclas_process;
+
+	tclas_elem = peer->scs[idx].tclas_elements;
+
+	while (tidx < tclas_elem) {
+		qdf_mem_copy(&peer->scs[idx].tclas[tidx],
+			     &scs_params->tclas[tidx],
+			     sizeof(struct cdp_tclas_tuple));
+		tidx++;
+	}
+}
+
+/*
+ * @brief dp_record_scs_params() - Copying the SCS params to a
+ * peer based database.
+ *
+ * @soc - Datapath soc handle
+ * @peer_mac - STA Mac address
+ * @vdev_id - ID of the vdev handle
+ * @scs_params - Structure having SCS parameters obtained
+ * from handshake
+ * @idx - SCS_entry index obtained from the
+ * node database with a given SCSID
+ * @scs_sessions - Total # of SCS sessions active
+ *
+ * @details
+ * SCS parameters sent by the STA in
+ * the SCS Request to the AP. The AP makes a note of these
+ * parameters while sending the MSDUs to the STA, to
+ * send the downlink traffic with correct User priority.
+ *
+ * return type - QDF_STATUS - Success/Invalid
+ */
+static QDF_STATUS
+dp_record_scs_params(struct cdp_soc_t *soc_hdl, struct qdf_mac_addr
+		     *peer_mac,
+		     uint8_t vdev_id,
+		     struct cdp_scs_params *scs_params,
+		     uint8_t idx,
+		     uint8_t scs_sessions)
+{
+	struct dp_peer *peer;
+	QDF_STATUS status = QDF_STATUS_E_INVAL;
+	struct dp_soc *soc = (struct dp_soc *)soc_hdl;
+
+	peer = dp_peer_find_hash_find(soc, peer_mac->bytes, 0, vdev_id,
+				      DP_MOD_ID_CDP);
+
+	if (!peer) {
+		dp_err("Peer is NULL!");
+		goto fail;
+	}
+
+	if (idx >= IEEE80211_SCS_MAX_NO_OF_ELEM)
+		goto fail;
+
+	/* SCS procedure for the peer is activated
+	 * as soon as we get this information from
+	 * the control path, unless explicitly disabled.
+	 */
+	peer->scs_is_active = 1;
+	dp_copy_scs_params(peer, scs_params, idx);
+	status = QDF_STATUS_SUCCESS;
+	peer->no_of_scs_sessions = scs_sessions;
+
+fail:
+	if (peer)
+		dp_peer_unref_delete(peer, DP_MOD_ID_CDP);
+	return status;
+}
+#endif
+
 #ifdef WLAN_SUPPORT_MSCS
 /*
  * dp_record_mscs_params - MSCS parameters sent by the STA in
@@ -7637,9 +8222,11 @@ void dp_get_os_rx_handles_from_vdev_wifi3(struct cdp_soc_t *soc_hdl,
 	struct dp_vdev *vdev = dp_vdev_get_ref_by_id(soc, vdev_id,
 						     DP_MOD_ID_CDP);
 
-	if (!vdev)
+	if (qdf_unlikely(!vdev)) {
+		*stack_fn_p = NULL;
+		*osif_vdev_p = NULL;
 		return;
-
+	}
 	*stack_fn_p = vdev->osif_rx_stack;
 	*osif_vdev_p = vdev->osif_vdev;
 	dp_vdev_unref_delete(soc, vdev, DP_MOD_ID_CDP);
@@ -9608,7 +10195,7 @@ static QDF_STATUS dp_get_vdev_param(struct cdp_soc_t *cdp_soc, uint8_t vdev_id,
 		break;
 #endif
 	default:
-		dp_cdp_err("%pk: param value %d is wrong\n",
+		dp_cdp_err("%pK: param value %d is wrong",
 			   soc, param);
 		dp_vdev_unref_delete(soc, vdev, DP_MOD_ID_CDP);
 		return QDF_STATUS_E_FAILURE;
@@ -10058,6 +10645,30 @@ static QDF_STATUS dp_txrx_update_vdev_host_stats(struct cdp_soc_t *soc_hdl,
 	}
 
 	dp_vdev_unref_delete(soc, vdev, DP_MOD_ID_CDP);
+	return QDF_STATUS_SUCCESS;
+}
+
+/* dp_txrx_get_soc_stats - will return cdp_soc_stats
+ * @soc_hdl: soc handle
+ * @soc_stats: buffer to hold the values
+ *
+ * return: status success/failure
+ */
+static QDF_STATUS
+dp_txrx_get_soc_stats(struct cdp_soc_t *soc_hdl,
+		      struct cdp_soc_stats *soc_stats)
+{
+	struct dp_soc *soc = (struct dp_soc *)soc_hdl;
+
+	soc_stats->tx.egress = soc->stats.tx.egress;
+	soc_stats->rx.ingress = soc->stats.rx.ingress;
+	soc_stats->rx.err_ring_pkts = soc->stats.rx.err_ring_pkts;
+	soc_stats->rx.rx_frags = soc->stats.rx.rx_frags;
+	soc_stats->rx.reo_reinject = soc->stats.rx.reo_reinject;
+	soc_stats->rx.bar_frame = soc->stats.rx.bar_frame;
+	soc_stats->rx.err.rx_rejected = soc->stats.rx.err.rejected;
+	soc_stats->rx.err.rx_raw_frm_drop = soc->stats.rx.err.raw_frm_drop;
+
 	return QDF_STATUS_SUCCESS;
 }
 
@@ -11843,6 +12454,10 @@ static struct cdp_ctrl_ops dp_ops_ctrl = {
 #ifdef WLAN_SUPPORT_MSCS
 	.txrx_record_mscs_params = dp_record_mscs_params,
 #endif
+#ifdef WLAN_SUPPORT_SCS
+	.txrx_enable_scs_params = dp_enable_scs_params,
+	.txrx_record_scs_params = dp_record_scs_params,
+#endif
 	.set_key = dp_set_michael_key,
 	.txrx_get_vdev_param = dp_get_vdev_param,
 	.enable_peer_based_pktlog = dp_enable_peer_based_pktlog,
@@ -11865,6 +12480,11 @@ static struct cdp_ctrl_ops dp_ops_ctrl = {
 	.txrx_update_peer_pkt_capture_params =
 		 dp_peer_update_pkt_capture_params,
 #endif /* WLAN_TX_PKT_CAPTURE_ENH || WLAN_RX_PKT_CAPTURE_ENH */
+#ifdef WLAN_FEATURE_TSF_UPLINK_DELAY
+	.txrx_set_delta_tsf = dp_set_delta_tsf,
+	.txrx_set_tsf_ul_delay_report = dp_set_tsf_ul_delay_report,
+	.txrx_get_uplink_delay = dp_get_uplink_delay,
+#endif
 };
 
 static struct cdp_me_ops dp_ops_me = {
@@ -11896,6 +12516,7 @@ static struct cdp_host_stats_ops dp_ops_host_stats = {
 	.txrx_stats_publish = dp_txrx_stats_publish,
 	.txrx_get_vdev_stats  = dp_txrx_get_vdev_stats,
 	.txrx_get_peer_stats = dp_txrx_get_peer_stats,
+	.txrx_get_soc_stats = dp_txrx_get_soc_stats,
 	.txrx_get_peer_stats_param = dp_txrx_get_peer_stats_param,
 	.txrx_reset_peer_stats = dp_txrx_reset_peer_stats,
 	.txrx_get_pdev_stats = dp_txrx_get_pdev_stats,
@@ -12705,9 +13326,9 @@ static uint32_t
 dp_get_link_desc_id_start(uint16_t arch_id)
 {
 	switch (arch_id) {
-	case LITHIUM_DP:
+	case CDP_ARCH_TYPE_LI:
 		return LINK_DESC_ID_START_21_BITS_COOKIE;
-	case BERYLLIUM_DP:
+	case CDP_ARCH_TYPE_BE:
 		return LINK_DESC_ID_START_20_BITS_COOKIE;
 	default:
 		dp_err("unkonwn arch_id 0x%x", arch_id);
@@ -12899,6 +13520,7 @@ void *dp_soc_init(struct dp_soc *soc, HTC_HANDLE htc_handle,
 		dp_init_err("%pK: dp_interrupt assignment failed", soc);
 		goto fail4;
 	}
+
 	wlan_cfg_fill_interrupt_mask(soc->wlan_cfg_ctx, num_dp_msi,
 				     soc->intr_mode, is_monitor_mode);
 
@@ -13007,6 +13629,8 @@ void *dp_soc_init(struct dp_soc *soc, HTC_HANDLE htc_handle,
 	hal_reo_setup(soc->hal_soc, &reo_params);
 
 	hal_reo_set_err_dst_remap(soc->hal_soc);
+
+	soc->features.pn_in_reo_dest = hal_reo_enable_pn_in_dest(soc->hal_soc);
 
 	qdf_atomic_set(&soc->cmn_init_done, 1);
 
@@ -14128,7 +14752,8 @@ static QDF_STATUS dp_soc_srng_init(struct dp_soc *soc)
 			  "reo_reinject_ring");
 
 	/* Rx release ring */
-	if (dp_srng_init(soc, &soc->rx_rel_ring, WBM2SW_RELEASE, 3, 0)) {
+	if (dp_srng_init(soc, &soc->rx_rel_ring, WBM2SW_RELEASE,
+			 WBM2SW_REL_ERR_RING_NUM, 0)) {
 		dp_init_err("%pK: dp_srng_init failed for rx_rel_ring", soc);
 		goto fail1;
 	}
@@ -14472,6 +15097,19 @@ static void dp_soc_cfg_init(struct dp_soc *soc)
 		soc->disable_mac2_intr = 1;
 		soc->wbm_release_desc_rx_sg_support = 1;
 		break;
+	case TARGET_TYPE_QCN9224:
+		wlan_cfg_set_mon_delayed_replenish_entries(soc->wlan_cfg_ctx,
+							   MON_BUF_MIN_ENTRIES);
+		wlan_cfg_set_reo_dst_ring_size(soc->wlan_cfg_ctx,
+					       REO_DST_RING_SIZE_QCA8074);
+		soc->ast_override_support = 1;
+		soc->da_war_enabled = false;
+		wlan_cfg_set_raw_mode_war(soc->wlan_cfg_ctx, false);
+		soc->hw_nac_monitor_support = 1;
+		soc->per_tid_basize_max_tid = 8;
+		soc->wbm_release_desc_rx_sg_support = 1;
+
+		break;
 	default:
 		qdf_print("%s: Unknown tgt type %d\n", __func__, target_type);
 		qdf_assert_always(0);
@@ -14527,6 +15165,12 @@ static void dp_soc_cfg_attach(struct dp_soc *soc)
 		wlan_cfg_set_tso_desc_attach_defer(soc->wlan_cfg_ctx, 1);
 		wlan_cfg_set_reo_dst_ring_size(soc->wlan_cfg_ctx,
 					       REO_DST_RING_SIZE_QCN9000);
+		wlan_cfg_set_rxdma1_enable(soc->wlan_cfg_ctx);
+		break;
+	case TARGET_TYPE_QCN9224:
+		wlan_cfg_set_tso_desc_attach_defer(soc->wlan_cfg_ctx, 1);
+		wlan_cfg_set_reo_dst_ring_size(soc->wlan_cfg_ctx,
+					       REO_DST_RING_SIZE_QCA8074);
 		wlan_cfg_set_rxdma1_enable(soc->wlan_cfg_ctx);
 		break;
 	default:

@@ -24,6 +24,10 @@
 #ifndef __REG_SERVICES_PUBLIC_STRUCT_H_
 #define __REG_SERVICES_PUBLIC_STRUCT_H_
 
+#ifdef CONFIG_AFC_SUPPORT
+#include <wlan_reg_afc.h>
+#endif
+
 #define REG_SBS_SEPARATION_THRESHOLD 100
 
 #ifdef CONFIG_BAND_6GHZ
@@ -704,6 +708,9 @@ enum behav_limit {
  * @behav_limit: OR of bitmaps of enum behav_limit
  * @start_freq: starting frequency
  * @channels: channel set
+ * @cfis: Set of center frequency indices. Center for 40/80/160/320MHz band
+ *         channel opclasses. For 20MHz the list is empty as it is  already
+ *         available in @channels variable.
  */
 struct reg_dmn_op_class_map_t {
 	uint8_t op_class;
@@ -712,6 +719,7 @@ struct reg_dmn_op_class_map_t {
 	uint16_t behav_limit;
 	qdf_freq_t start_freq;
 	uint8_t channels[REG_MAX_CHANNELS_PER_OPERATING_CLASS];
+	uint8_t cfis[REG_MAX_CHANNELS_PER_OPERATING_CLASS];
 };
 
 /**
@@ -1496,4 +1504,45 @@ struct chan_5g_center_freq {
 
 #endif
 
+#ifdef CONFIG_AFC_SUPPORT
+/* enum reg_afc_cmd_type - Type of AFC command sent to FW
+ * @REG_AFC_CMD_SERV_RESP_READY : Server response is ready
+ */
+enum reg_afc_cmd_type {
+	REG_AFC_CMD_SERV_RESP_READY = 1,
+};
+
+/* enum reg_afc_serv_resp_format - Indicate the format in which afc_serv_format
+ * is written in FW memory
+ * @REG_AFC_SERV_RESP_FORMAT_JSON - Server response in JSON format
+ * @REG_AFC_SERV_RESP_FORMAT_BINARY - Server response in BINARY format
+ */
+enum reg_afc_serv_resp_format {
+	REG_AFC_SERV_RESP_FORMAT_JSON = 0,
+	REG_AFC_SERV_RESP_FORMAT_BINARY = 1,
+};
+
+/**
+ * struct reg_afc_resp_rx_ind_info - regulatory AFC indication info
+ * @cmd_type: Type of AFC command send to FW
+ * @serv_resp_format: AFC server response format
+ */
+struct reg_afc_resp_rx_ind_info {
+	enum reg_afc_cmd_type cmd_type;
+	enum reg_afc_serv_resp_format serv_resp_format;
+};
+
+/**
+ * afc_req_rx_evt_handler() - Function prototype of AFC request received event
+ * handler
+ * @pdev: Pointer to pdev
+ * @afc_par_req: Pointer to AFC partial request
+ * @arg: Pointer to void (opaque) argument object
+ *
+ * Return: void
+ */
+typedef void (*afc_req_rx_evt_handler)(struct wlan_objmgr_pdev *pdev,
+				       struct wlan_afc_host_partial_request *afc_par_req,
+				       void *arg);
+#endif
 #endif

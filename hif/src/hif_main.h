@@ -217,6 +217,7 @@ struct hif_softc {
 	bool hif_init_done;
 	bool request_irq_done;
 	bool ext_grp_irq_configured;
+	bool free_irq_done;
 	uint8_t ce_latency_stats;
 	/* Packet statistics */
 	struct hif_ce_stats pkt_stats;
@@ -349,6 +350,18 @@ void hif_get_cmem_info(struct hif_opaque_softc *hif_hdl,
 
 	*cmem_start = sc->cmem_start;
 	*cmem_size = sc->cmem_size;
+}
+
+/**
+ * hif_get_num_active_tasklets() - get the number of active
+ *		tasklets pending to be completed.
+ * @scn: HIF context
+ *
+ * Returns: the number of tasklets which are active
+ */
+static inline int hif_get_num_active_tasklets(struct hif_softc *scn)
+{
+	return qdf_atomic_read(&scn->active_tasklet_cnt);
 }
 
 /**

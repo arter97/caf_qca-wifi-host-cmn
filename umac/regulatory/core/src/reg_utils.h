@@ -129,27 +129,6 @@ QDF_STATUS reg_cache_channel_freq_state(struct wlan_objmgr_pdev *pdev,
 }
 #endif /* defined(DISABLE_CHANNEL_LIST) && defined(CONFIG_CHAN_FREQ_API) */
 
-#if defined(DISABLE_CHANNEL_LIST) && defined(CONFIG_CHAN_NUM_API)
-/**
- * reg_cache_channel_state() - Cache the current state of the channels
- * @pdev: The physical dev to cache the channels for
- * @channel_list: List of the channels for which states needs to be cached
- * @num_channels: Number of channels in the list
- *
- */
-QDF_STATUS reg_cache_channel_state(struct wlan_objmgr_pdev *pdev,
-				   uint32_t *channel_list,
-				   uint32_t num_channels);
-#else
-static inline
-QDF_STATUS reg_cache_channel_state(struct wlan_objmgr_pdev *pdev,
-				   uint32_t *channel_list,
-				   uint32_t num_channels)
-{
-	return QDF_STATUS_SUCCESS;
-}
-#endif /* defined (DISABLE_CHANNEL_LIST) && defined(CONFIG_CHAN_NUM_API) */
-
 #ifdef CONFIG_REG_CLIENT
 /**
  * reg_set_band() - Sets the band information for the PDEV
@@ -263,6 +242,22 @@ QDF_STATUS reg_reset_country(struct wlan_objmgr_psoc *psoc);
 QDF_STATUS reg_get_domain_from_country_code(v_REGDOMAIN_t *reg_domain_ptr,
 					    const uint8_t *country_alpha2,
 					    enum country_src source);
+
+#ifdef CONFIG_REG_CLIENT
+/**
+ * reg_get_6g_power_type_for_ctry() - Return power type for 6G based on cntry IE
+ * @ap_ctry: ptr to country string in country IE
+ * @sta_ctry: ptr to sta programmed country
+ * @pwr_type_6g: ptr to 6G power type
+ * @ctry_code_match: Check for country IE and sta country code match
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS
+reg_get_6g_power_type_for_ctry(uint8_t *ap_ctry, uint8_t *sta_ctry,
+			       enum reg_6g_ap_type *pwr_type_6g,
+			       bool *ctry_code_match);
+#endif
 
 /**
  * reg_set_config_vars () - set configration variables

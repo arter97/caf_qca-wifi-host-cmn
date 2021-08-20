@@ -414,6 +414,8 @@ typedef bool (*qdf_irqlocked_func_t)(void *);
  * @QDF_MODULE_ID_DBDC_REP: DBDC repeater module ID
  * @QDF_MODULE_ID_EXT_AP: Extended AP module ID
  * @QDF_MODULE_ID_MLO: MLO Manager module ID
+ * @QDF_MODULE_ID_MLOIE: MLO related IE protocol processing module ID
+ * @QDF_MODULE_ID_MBSS: MBSS Framework module ID
  * @QDF_MODULE_ID_ANY: anything
  * @QDF_MODULE_ID_MAX: Max place holder module ID
  *
@@ -565,6 +567,8 @@ typedef enum {
 	QDF_MODULE_ID_DBDC_REP,
 	QDF_MODULE_ID_EXT_AP,
 	QDF_MODULE_ID_MLO,
+	QDF_MODULE_ID_MLOIE,
+	QDF_MODULE_ID_MBSS,
 	QDF_MODULE_ID_ANY,
 	QDF_MODULE_ID_MAX,
 } QDF_MODULE_ID;
@@ -1394,6 +1398,8 @@ enum qdf_suspend_type {
  * @QCA_HANG_BUS_FAILURE: Bus failure
  * @QDF_TASKLET_CREDIT_LATENCY_DETECT: tasklet or credit latency happened
  * @QDF_RX_REG_PKT_ROUTE_ERR: MSDU buf errors exceed thresh in REO err path
+ * @QDF_VDEV_SM_OUT_OF_SYNC: Vdev SM is out of sync and connect req received
+ * when already connected
  */
 enum qdf_hang_reason {
 	QDF_REASON_UNSPECIFIED,
@@ -1422,6 +1428,7 @@ enum qdf_hang_reason {
 	QCA_HANG_BUS_FAILURE,
 	QDF_TASKLET_CREDIT_LATENCY_DETECT,
 	QDF_RX_REG_PKT_ROUTE_ERR,
+	QDF_VDEV_SM_OUT_OF_SYNC,
 };
 
 /**

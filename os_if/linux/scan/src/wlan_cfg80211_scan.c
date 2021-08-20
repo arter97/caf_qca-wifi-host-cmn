@@ -1512,6 +1512,14 @@ int wlan_cfg80211_scan(struct wlan_objmgr_vdev *vdev,
 	if (qdf_is_macaddr_zero(&req->scan_req.bssid_list[0]))
 		qdf_set_macaddr_broadcast(&req->scan_req.bssid_list[0]);
 
+	if (params->scan_f_2ghz && !params->scan_f_5ghz) {
+		req->scan_req.scan_f_2ghz = true;
+		req->scan_req.scan_f_5ghz = false;
+	} else if (!params->scan_f_2ghz && params->scan_f_5ghz) {
+		req->scan_req.scan_f_2ghz = false;
+		req->scan_req.scan_f_5ghz = true;
+	}
+
 	if (request->n_channels) {
 #ifdef WLAN_POLICY_MGR_ENABLE
 		bool ap_or_go_present =
@@ -1540,17 +1548,26 @@ int wlan_cfg80211_scan(struct wlan_objmgr_vdev *vdev,
 					continue;
 			}
 #endif
-			req->scan_req.chan_list.chan[num_chan].freq = c_freq;
-			band = util_scan_scm_freq_to_band(c_freq);
-			if (band == WLAN_BAND_2_4_GHZ)
-				req->scan_req.chan_list.chan[num_chan].phymode =
-					SCAN_PHY_MODE_11G;
-			else
-				req->scan_req.chan_list.chan[num_chan].phymode =
-					SCAN_PHY_MODE_11A;
-			num_chan++;
-			if (num_chan >= NUM_CHANNELS)
-				break;
+
+			if ((req->scan_req.scan_f_2ghz &&
+			     WLAN_REG_IS_24GHZ_CH_FREQ(c_freq)) ||
+			    (req->scan_req.scan_f_5ghz &&
+			     (WLAN_REG_IS_5GHZ_CH_FREQ(c_freq) ||
+			      WLAN_REG_IS_49GHZ_FREQ(c_freq) ||
+			      WLAN_REG_IS_6GHZ_CHAN_FREQ(c_freq)))) {
+				req->scan_req.chan_list.chan[num_chan].freq =
+									c_freq;
+				band = util_scan_scm_freq_to_band(c_freq);
+				if (band == WLAN_BAND_2_4_GHZ)
+					req->scan_req.chan_list.chan[num_chan].phymode =
+						SCAN_PHY_MODE_11G;
+				else
+					req->scan_req.chan_list.chan[num_chan].phymode =
+						SCAN_PHY_MODE_11A;
+				num_chan++;
+				if (num_chan >= NUM_CHANNELS)
+					break;
+			}
 		}
 	}
 	if (!num_chan) {
@@ -1829,7 +1846,7 @@ wlan_get_ieee80211_channel(struct wiphy *wiphy,
 
 	chan = ieee80211_get_channel(wiphy, chan_freq);
 	if (!chan)
-		osif_err("chan is NULL, freq: %d", chan_freq);
+		osif_err_rl("chan is NULL, freq: %d", chan_freq);
 
 	return chan;
 }
@@ -2003,10 +2020,10 @@ void wlan_cfg80211_inform_bss_frame(struct wlan_objmgr_pdev *pdev,
 	bss_data.chan = wlan_get_ieee80211_channel(wiphy, pdev,
 		scan_params->channel.chan_freq);
 	if (!bss_data.chan) {
-		osif_err("Channel not found for bss "QDF_MAC_ADDR_FMT" seq %d chan_freq %d",
-			 QDF_MAC_ADDR_REF(bss_data.mgmt->bssid),
-			 scan_params->seq_num,
-			 scan_params->channel.chan_freq);
+		osif_err_rl("Channel not found for bss " QDF_MAC_ADDR_FMT " seq %d chan_freq %d",
+			    QDF_MAC_ADDR_REF(bss_data.mgmt->bssid),
+			    scan_params->seq_num,
+			    scan_params->channel.chan_freq);
 		qdf_mem_free(bss_data.mgmt);
 		return;
 	}

@@ -440,6 +440,23 @@ bool wlan_reg_get_fcc_constraint(struct wlan_objmgr_pdev *pdev, uint32_t freq);
 QDF_STATUS wlan_reg_read_current_country(struct wlan_objmgr_psoc *psoc,
 				   uint8_t *country);
 
+#ifdef CONFIG_REG_CLIENT
+/**
+ * wlan_reg_get_6g_power_type_for_ctry() - Return power type for 6G based
+ * on country IE
+ * @ap_ctry: ptr to country string in country IE
+ * @sta_ctry: ptr to sta programmed country
+ * @pwr_type_6g: ptr to 6G power type
+ * @ctry_code_match: Check for country IE and sta country code match
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS
+wlan_reg_get_6g_power_type_for_ctry(uint8_t *ap_ctry, uint8_t *sta_ctry,
+				    enum reg_6g_ap_type *pwr_type_6g,
+				    bool *ctry_code_match);
+#endif
+
 #ifdef CONFIG_CHAN_FREQ_API
 /**
  * wlan_reg_is_etsi13_srd_chan_for_freq () - Checks if the ch is ETSI13 srd ch
@@ -512,6 +529,46 @@ QDF_STATUS wlan_reg_get_current_chan_list(struct wlan_objmgr_pdev *pdev,
 QDF_STATUS wlan_reg_get_secondary_current_chan_list(
 					struct wlan_objmgr_pdev *pdev,
 					struct regulatory_channel *chan_list);
+#endif
+
+#if defined(CONFIG_AFC_SUPPORT) && defined(CONFIG_BAND_6GHZ)
+/**
+ * wlan_reg_get_6g_ap_master_chan_list() - provide  the appropriate ap master
+ * channel list
+ * @pdev: pdev pointer
+ * @ap_pwr_type: The ap power type (LPI/VLP/SP)
+ * @chan_list: channel list pointer
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS wlan_reg_get_6g_ap_master_chan_list(struct wlan_objmgr_pdev *pdev,
+					       enum reg_6g_ap_type ap_pwr_type,
+					       struct regulatory_channel *chan_list);
+
+/**
+ * wlan_reg_get_6g_afc_chan_list() - provide the pdev afc channel list
+ * @pdev: pdev pointer
+ * @chan_list: channel list pointer
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS wlan_reg_get_6g_afc_chan_list(struct wlan_objmgr_pdev *pdev,
+					 struct regulatory_channel *chan_list);
+
+/**
+ * wlan_reg_psd_2_eirp() - Calculate EIRP from PSD and bandwidth
+ * channel list
+ * @pdev: pdev pointer
+ * @psd: Power Spectral Density in dBm/MHz
+ * @ch_bw: Bandwidth of a channel in MHz (20/40/80/160/320 etc)
+ * @eirp:  EIRP power  in dBm
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS wlan_reg_psd_2_eirp(struct wlan_objmgr_pdev *pdev,
+			       int16_t psd,
+			       uint16_t ch_bw,
+			       int16_t *eirp);
 #endif
 
 /**

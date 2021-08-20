@@ -114,6 +114,7 @@ uint32_t dp_rx_process_li(struct dp_intr *int_ctx,
 	qdf_nbuf_t ebuf_head;
 	qdf_nbuf_t ebuf_tail;
 	uint8_t pkt_capture_offload = 0;
+	int max_reap_limit;
 
 	DP_HIST_INIT();
 
@@ -137,6 +138,7 @@ more_data:
 	num_rx_bufs_reaped = 0;
 	ebuf_head = NULL;
 	ebuf_tail = NULL;
+	max_reap_limit = dp_rx_get_loop_pkt_limit(soc);
 
 	qdf_mem_zero(rx_bufs_reaped, sizeof(rx_bufs_reaped));
 	qdf_mem_zero(&mpdu_desc_info, sizeof(mpdu_desc_info));
@@ -186,7 +188,7 @@ more_data:
 					   ring_desc, rx_desc);
 		if (QDF_IS_STATUS_ERROR(status)) {
 			if (qdf_unlikely(rx_desc && rx_desc->nbuf)) {
-				qdf_assert_always(rx_desc->unmapped);
+				qdf_assert_always(!rx_desc->unmapped);
 				dp_ipa_reo_ctx_buf_mapping_lock(soc,
 								reo_ring_num);
 				dp_ipa_handle_rx_buf_smmu_mapping(
@@ -383,7 +385,8 @@ more_data:
 		 * then allow break.
 		 */
 		if (is_prev_msdu_last &&
-		    dp_rx_reap_loop_pkt_limit_hit(soc, num_rx_bufs_reaped))
+		    dp_rx_reap_loop_pkt_limit_hit(soc, num_rx_bufs_reaped,
+						  max_reap_limit))
 			break;
 	}
 done:
@@ -631,7 +634,8 @@ done:
 		/*
 		 * Drop non-EAPOL frames from unauthorized peer.
 		 */
-		if (qdf_likely(peer) && qdf_unlikely(!peer->authorize)) {
+		if (qdf_likely(peer) && qdf_unlikely(!peer->authorize) &&
+		    !qdf_nbuf_is_raw_frame(nbuf)) {
 			bool is_eapol = qdf_nbuf_is_ipv4_eapol_pkt(nbuf) ||
 					qdf_nbuf_is_ipv4_wapi_pkt(nbuf);
 

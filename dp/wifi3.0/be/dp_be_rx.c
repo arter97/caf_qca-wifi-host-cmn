@@ -100,6 +100,8 @@ uint32_t dp_rx_process_be(struct dp_intr *int_ctx,
 	qdf_nbuf_t ebuf_head;
 	qdf_nbuf_t ebuf_tail;
 	uint8_t pkt_capture_offload = 0;
+	struct dp_srng *rx_ring = &soc->reo_dest_ring[reo_ring_num];
+	int max_reap_limit, ring_near_full;
 
 	DP_HIST_INIT();
 
@@ -123,12 +125,17 @@ more_data:
 	num_rx_bufs_reaped = 0;
 	ebuf_head = NULL;
 	ebuf_tail = NULL;
+	ring_near_full = 0;
+	max_reap_limit = dp_rx_get_loop_pkt_limit(soc);
 
 	qdf_mem_zero(rx_bufs_reaped, sizeof(rx_bufs_reaped));
 	qdf_mem_zero(&mpdu_desc_info, sizeof(mpdu_desc_info));
 	qdf_mem_zero(&msdu_desc_info, sizeof(msdu_desc_info));
 	qdf_mem_zero(head, sizeof(head));
 	qdf_mem_zero(tail, sizeof(tail));
+
+	ring_near_full = _dp_srng_test_and_update_nf_params(soc, rx_ring,
+							    &max_reap_limit);
 
 	if (qdf_unlikely(dp_rx_srng_access_start(int_ctx, soc, hal_ring_hdl))) {
 		/*
@@ -168,7 +175,7 @@ more_data:
 			break;
 		}
 
-		rx_desc = (struct dp_rx_desc *)(uintptr_t)
+		rx_desc = (struct dp_rx_desc *)
 				hal_rx_get_reo_desc_va(ring_desc);
 		dp_rx_desc_sw_cc_check(soc, rx_buf_cookie, &rx_desc);
 
@@ -176,7 +183,7 @@ more_data:
 					   ring_desc, rx_desc);
 		if (QDF_IS_STATUS_ERROR(status)) {
 			if (qdf_unlikely(rx_desc && rx_desc->nbuf)) {
-				qdf_assert_always(rx_desc->unmapped);
+				qdf_assert_always(!rx_desc->unmapped);
 				dp_ipa_reo_ctx_buf_mapping_lock(
 							soc,
 							reo_ring_num);
@@ -376,7 +383,8 @@ more_data:
 		 * then allow break.
 		 */
 		if (is_prev_msdu_last &&
-		    dp_rx_reap_loop_pkt_limit_hit(soc, num_rx_bufs_reaped))
+		    dp_rx_reap_loop_pkt_limit_hit(soc, num_rx_bufs_reaped,
+						  max_reap_limit))
 			break;
 	}
 done:
@@ -617,7 +625,8 @@ done:
 		/*
 		 * Drop non-EAPOL frames from unauthorized peer.
 		 */
-		if (qdf_likely(peer) && qdf_unlikely(!peer->authorize)) {
+		if (qdf_likely(peer) && qdf_unlikely(!peer->authorize) &&
+		    !qdf_nbuf_is_raw_frame(nbuf)) {
 			bool is_eapol = qdf_nbuf_is_ipv4_eapol_pkt(nbuf) ||
 					qdf_nbuf_is_ipv4_wapi_pkt(nbuf);
 
@@ -722,6 +731,17 @@ done:
 	if (qdf_likely(peer))
 		dp_peer_unref_delete(peer, DP_MOD_ID_RX);
 
+	/*
+	 * If we are processing in near-full condition, there are 3 scenario
+	 * 1) Ring entries has reached critical state
+	 * 2) Ring entries are still near high threshold
+	 * 3) Ring entries are below the safe level
+	 *
+	 * One more loop will move the state to normal processing and yield
+	 */
+	if (ring_near_full)
+		goto more_data;
+
 	if (dp_rx_enable_eol_data_check(soc) && rx_bufs_used) {
 		if (quota) {
 			num_pending =
@@ -801,8 +821,7 @@ dp_rx_desc_pool_init_be_cc(struct dp_soc *soc,
 
 		rx_desc_elem->rx_desc.cookie =
 			dp_cc_desc_id_generate(page_desc->ppt_index,
-					       page_desc->avail_entry_index,
-					       true);
+					       page_desc->avail_entry_index);
 		rx_desc_elem->rx_desc.pool_id = pool_id;
 		rx_desc_elem->rx_desc.in_use = 0;
 		rx_desc_elem = rx_desc_elem->next;
@@ -857,8 +876,7 @@ dp_rx_desc_pool_init_be_cc(struct dp_soc *soc,
 
 		rx_desc_pool->array[i].rx_desc.cookie =
 			dp_cc_desc_id_generate(page_desc->ppt_index,
-					       page_desc->avail_entry_index,
-					       true);
+					       page_desc->avail_entry_index);
 
 		rx_desc_pool->array[i].rx_desc.pool_id = pool_id;
 		rx_desc_pool->array[i].rx_desc.in_use = 0;
@@ -884,6 +902,11 @@ dp_rx_desc_pool_deinit_be_cc(struct dp_soc *soc,
 
 	be_soc = dp_get_be_soc_from_dp_soc(soc);
 	page_desc_list = &be_soc->rx_spt_page_desc[pool_id];
+
+	if (!page_desc_list->num_spt_pages) {
+		dp_warn("page_desc_list is empty for pool_id %d", pool_id);
+		return;
+	}
 
 	/* cleanup for each page */
 	page_desc = page_desc_list->spt_page_list_head;
@@ -944,7 +967,7 @@ QDF_STATUS dp_wbm_get_rx_desc_from_hal_desc_be(struct dp_soc *soc,
 		uint32_t cookie = HAL_RX_BUF_COOKIE_GET(ring_desc);
 
 		*r_rx_desc = (struct dp_rx_desc *)
-				dp_cc_desc_find(soc, cookie, true);
+				dp_cc_desc_find(soc, cookie);
 	}
 
 	return QDF_STATUS_SUCCESS;
@@ -969,7 +992,7 @@ QDF_STATUS dp_wbm_get_rx_desc_from_hal_desc_be(struct dp_soc *soc,
 	uint32_t cookie = HAL_RX_BUF_COOKIE_GET(ring_desc);
 
 	*r_rx_desc = (struct dp_rx_desc *)
-			dp_cc_desc_find(soc, cookie, true);
+			dp_cc_desc_find(soc, cookie);
 
 	return QDF_STATUS_SUCCESS;
 }
@@ -978,5 +1001,26 @@ QDF_STATUS dp_wbm_get_rx_desc_from_hal_desc_be(struct dp_soc *soc,
 struct dp_rx_desc *dp_rx_desc_cookie_2_va_be(struct dp_soc *soc,
 					     uint32_t cookie)
 {
-	return (struct dp_rx_desc *)dp_cc_desc_find(soc, cookie, true);
+	return (struct dp_rx_desc *)dp_cc_desc_find(soc, cookie);
 }
+
+#ifdef WLAN_FEATURE_NEAR_FULL_IRQ
+uint32_t dp_rx_nf_process(struct dp_intr *int_ctx,
+			  hal_ring_handle_t hal_ring_hdl,
+			  uint8_t reo_ring_num,
+			  uint32_t quota)
+{
+	struct dp_soc *soc = int_ctx->soc;
+	struct dp_srng *rx_ring = &soc->reo_dest_ring[reo_ring_num];
+	uint32_t work_done = 0;
+
+	if (dp_srng_get_near_full_level(soc, rx_ring) <
+			DP_SRNG_THRESH_NEAR_FULL)
+		return 0;
+
+	qdf_atomic_set(&rx_ring->near_full, 1);
+	work_done++;
+
+	return work_done;
+}
+#endif

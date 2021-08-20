@@ -72,8 +72,9 @@
 #define WME_AC_VO    3    /* voice */
 #define WME_AC_MAX   4    /* MAX AC Value */
 
-#define CDP_MAX_RX_RINGS 4  /* max rx rings */
-#define CDP_MAX_TX_COMP_RINGS 3  /* max tx completion rings */
+#define CDP_MAX_RX_RINGS 8  /* max rx rings */
+#define CDP_MAX_TX_COMP_RINGS 5 /* max tx/completion rings */
+
 #define CDP_MAX_TX_TQM_STATUS 9  /* max tx tqm completion status */
 #define CDP_MAX_TX_HTT_STATUS 7  /* max tx htt completion status */
 
@@ -1365,6 +1366,7 @@ struct cdp_peer_tid_stats {
 /* struct cdp_interface_peer_stats - interface structure for txrx peer stats
  * @peer_mac: peer mac address
  * @vdev_id : vdev_id for the peer
+ * @rssi_changed: denotes rssi is changed
  * @last_peer_tx_rate: peer tx rate for last transmission
  * @peer_tx_rate: tx rate for current transmission
  * @peer_rssi: current rssi value of peer
@@ -1374,7 +1376,7 @@ struct cdp_peer_tid_stats {
  * @rx_byte_count: rx byte count
  * @per: per error rate
  * @ack_rssi: RSSI of the last ack received
- * @rssi_changed: denotes rssi is changed
+ * @free_buff: free tx descriptor count
  */
 struct cdp_interface_peer_stats {
 	uint8_t  peer_mac[QDF_MAC_ADDR_SIZE];
@@ -1389,6 +1391,7 @@ struct cdp_interface_peer_stats {
 	uint32_t rx_byte_count;
 	uint32_t per;
 	uint32_t ack_rssi;
+	uint32_t free_buff;
 };
 
 /* struct cdp_interface_peer_qos_stats - interface structure for peer qos stats
@@ -1899,6 +1902,36 @@ struct cdp_cfr_rcc_stats {
 struct cdp_cfr_rcc_stats {
 };
 #endif
+
+/* struct cdp_soc_stats - soc stats
+ * @tx.egress: Total packets transmitted
+ * @rx.ingress: Total rx packets count
+ * @rx.err_ring_pkts: Total Packets in Rx Error ring
+ * @rx.rx_frags: No of Fragments
+ * @rx.reo_reinject: No of reinjected packets
+ * @rx.bar_frame: Number of bar frames received
+ * @rx.err.rejected: RX msdu rejected count on delivery to vdev stack_fn
+ * @rx.err.raw_frm_drop: RX raw frame dropped count
+ */
+struct cdp_soc_stats {
+	struct {
+		struct cdp_pkt_info egress;
+	} tx;
+
+	struct {
+		struct cdp_pkt_info ingress;
+		uint32_t err_ring_pkts;
+		uint32_t rx_frags;
+		uint32_t reo_reinject;
+		uint32_t bar_frame;
+
+		struct {
+			uint32_t rx_rejected;
+			uint32_t rx_raw_frm_drop;
+		} err;
+	} rx;
+};
+
 /* struct cdp_pdev_stats - pdev stats
  * @msdu_not_done: packets dropped because msdu done bit not set
  * @mec:Multicast Echo check

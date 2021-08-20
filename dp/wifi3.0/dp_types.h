@@ -97,9 +97,8 @@
 
 #define MAX_TXDESC_POOLS 4
 #define MAX_RXDESC_POOLS 4
-#define MAX_REO_DEST_RINGS 4
+
 #define EXCEPTION_DEST_RING_ID 0
-#define MAX_TCL_DATA_RINGS 4
 #define MAX_IDLE_SCATTER_BUFS 16
 #define DP_MAX_IRQ_PER_CONTEXT 12
 #define DEFAULT_HW_PEER_ID 0xffff
@@ -413,6 +412,7 @@ enum dp_ctxt_type {
  * @DP_RX_DESC_BUF_TYPE: DP RX SW descriptor
  * @DP_RX_DESC_STATUS_TYPE: DP RX SW descriptor for monitor status
  * @DP_HW_LINK_DESC_TYPE: DP HW link descriptor
+ * @DP_HW_CC_SPT_PAGE_TYPE: DP pages for HW CC secondary page table
  */
 enum dp_desc_type {
 	DP_TX_DESC_TYPE,
@@ -423,9 +423,7 @@ enum dp_desc_type {
 	DP_RX_DESC_BUF_TYPE,
 	DP_RX_DESC_STATUS_TYPE,
 	DP_HW_LINK_DESC_TYPE,
-#ifdef CONFIG_BERYLLIUM
 	DP_HW_CC_SPT_PAGE_TYPE,
-#endif
 };
 
 /**
@@ -664,6 +662,10 @@ struct dp_txrx_pool_stats {
  * @cached: is the srng ring memory cached or un-cached memory
  * @irq: irq number of the srng ring
  * @num_entries: number of entries in the srng ring
+ * @is_mem_prealloc: Is this srng memeory pre-allocated
+ * @crit_thresh: Critical threshold for near-full processing of this srng
+ * @safe_thresh: Safe threshold for near-full processing of this srng
+ * @near_full: Flag to indicate srng is near-full
  */
 struct dp_srng {
 	hal_ring_handle_t hal_srng;
@@ -677,6 +679,11 @@ struct dp_srng {
 	uint32_t num_entries;
 #ifdef DP_MEM_PRE_ALLOC
 	uint8_t is_mem_prealloc;
+#endif
+#ifdef WLAN_FEATURE_NEAR_FULL_IRQ
+	uint16_t crit_thresh;
+	uint16_t safe_thresh;
+	qdf_atomic_t near_full;
 #endif
 };
 
@@ -795,8 +802,10 @@ struct dp_rx_tid {
  * @num_reo_status_ring_masks: interrupts with reo_status_ring_mask set
  * @num_rxdma2host_ring_masks: interrupts with rxdma2host_ring_mask set
  * @num_host2rxdma_ring_masks: interrupts with host2rxdma_ring_mask set
- * @num_host2rxdma_ring_masks: interrupts with host2rxdma_ring_mask set
+ * @num_rx_ring_near_full_masks: Near-full interrupts for REO DST ring
+ * @num_tx_comp_ring_near_full_masks: Near-full interrupts for TX completion
  * @num_masks: total number of times the interrupt was received
+ * @num_masks: total number of times the near full interrupt was received
  *
  * Counter for individual masks are incremented only if there are any packets
  * on that ring.
@@ -810,6 +819,11 @@ struct dp_intr_stats {
 	uint32_t num_reo_status_ring_masks;
 	uint32_t num_rxdma2host_ring_masks;
 	uint32_t num_host2rxdma_ring_masks;
+	uint32_t num_rx_ring_near_full_masks[MAX_REO_DEST_RINGS];
+	uint32_t num_tx_comp_ring_near_full_masks[MAX_TCL_DATA_RINGS];
+	uint32_t num_rx_wbm_rel_ring_near_full_masks;
+	uint32_t num_reo_status_ring_near_full_masks;
+	uint32_t num_near_full_masks;
 	uint32_t num_masks;
 };
 
@@ -827,6 +841,12 @@ struct dp_intr {
 	uint8_t host2rxdma_ring_mask; /* Host to RXDMA buffer ring */
 	/* Host to RXDMA monitor  buffer ring */
 	uint8_t host2rxdma_mon_ring_mask;
+	/* RX REO rings near full interrupt mask */
+	uint8_t rx_near_full_grp_1_mask;
+	/* RX REO rings near full interrupt mask */
+	uint8_t rx_near_full_grp_2_mask;
+	/* WBM TX completion rings near full interrupt mask */
+	uint8_t tx_ring_near_full_mask;
 	struct dp_soc *soc;    /* Reference to SoC structure ,
 				to get DMA ring handles */
 	qdf_lro_ctx_t lro_ctx;
@@ -1058,6 +1078,8 @@ struct dp_soc_stats {
 			uint32_t bar_handle_fail_count;
 			/* EAPOL drop count in intrabss scenario */
 			uint32_t intrabss_eapol_drop;
+			/* PN check failed for 2K-jump or OOR error */
+			uint32_t pn_in_dest_check_fail;
 			/* MSDU len err count */
 			uint32_t msdu_len_err;
 		} err;
@@ -1529,7 +1551,10 @@ enum dp_context_type {
  * @tx_hw_enqueue: enqueue TX data to HW
  * @tx_comp_get_params_from_hal_desc: get software tx descriptor and release
  * 				      source from HAL desc for wbm release ring
+ * @dp_service_near_full_srngs: Handler for servicing the near full IRQ
  * @txrx_set_vdev_param: target specific ops while setting vdev params
+ * @dp_srng_test_and_update_nf_params: Check if the srng is in near full state
+ *				and set the near-full params.
  */
 struct dp_arch_ops {
 	/* INIT/DEINIT Arch Ops */
@@ -1560,7 +1585,7 @@ struct dp_arch_ops {
 				  uint8_t reo_ring_num, uint32_t quota);
 
 	QDF_STATUS (*dp_tx_desc_pool_init)(struct dp_soc *soc,
-					   uint16_t pool_desc_num,
+					   uint16_t num_elem,
 					   uint8_t pool_id);
 	void (*dp_tx_desc_pool_deinit)(
 				struct dp_soc *soc,
@@ -1581,6 +1606,9 @@ struct dp_arch_ops {
 
 	struct dp_rx_desc *(*dp_rx_desc_cookie_2_va)(struct dp_soc *soc,
 						     uint32_t cookie);
+	uint32_t (*dp_service_near_full_srngs)(struct dp_soc *soc,
+					       struct dp_intr *int_ctx,
+					       uint32_t dp_budget);
 
 	/* Control Arch Ops */
 	QDF_STATUS (*txrx_set_vdev_param)(struct dp_soc *soc,
@@ -1590,6 +1618,17 @@ struct dp_arch_ops {
 
 	/* Misc Arch Ops */
 	qdf_size_t (*txrx_get_context_size)(enum dp_context_type);
+	int (*dp_srng_test_and_update_nf_params)(struct dp_soc *soc,
+						 struct dp_srng *dp_srng,
+						 int *max_reap_limit);
+};
+
+/**
+ * struct dp_soc_features: Data structure holding the SOC level feature flags.
+ * @pn_in_reo_dest: PN provided by hardware in the REO destination ring.
+ */
+struct dp_soc_features {
+	uint8_t pn_in_reo_dest;
 };
 
 /* SOC level structure for data path */
@@ -2068,6 +2107,9 @@ struct dp_soc {
 	uint64_t cmem_base;
 	/* CMEM size in bytes */
 	uint64_t cmem_size;
+
+	/* SOC level feature flags */
+	struct dp_soc_features features;
 };
 
 #ifdef IPA_OFFLOAD
@@ -2990,8 +3032,18 @@ struct dp_vdev {
 		uint8_t latency_tid;
 	} mesh_tid_latency_config;
 #endif
-};
 
+#ifdef WLAN_FEATURE_TSF_UPLINK_DELAY
+	/* Indicate if uplink delay report is enabled or not */
+	qdf_atomic_t ul_delay_report;
+	/* Delta between TQM clock and TSF clock */
+	uint32_t delta_tsf;
+	/* accumulative delay for every TX completion */
+	qdf_atomic_t ul_delay_accum;
+	/* accumulative number of packets delay has accumulated */
+	qdf_atomic_t ul_pkts_accum;
+#endif /* WLAN_FEATURE_TSF_UPLINK_DELAY */
+};
 
 enum {
 	dp_sec_mcast = 0,
@@ -3070,6 +3122,16 @@ struct dp_peer_ast_params {
 	uint8_t flowQ;
 };
 
+#ifdef WLAN_SUPPORT_SCS
+/* SCS procedures macros */
+/* SCS Procedures - SCS parameters
+ * obtained from SCS request are stored
+ * in a peer based database for traffic
+ * classification.
+ */
+#define IEEE80211_SCS_MAX_NO_OF_ELEM 10
+#endif
+
 #ifdef WLAN_SUPPORT_MSCS
 /*MSCS Procedure based macros */
 #define IEEE80211_MSCS_MAX_ELEM_SIZE    5
@@ -3117,14 +3179,18 @@ struct dp_wds_ext_peer {
  * parameters. This data is updated per peer per TID based on
  * the flow tuple classification in external rule database
  * during packet processing.
- * @service_interval - Service interval associated with TID
- * @burst_size - Burst size additive over multiple flows
+ * @service_interval_dl - Service interval associated with TID in DL
+ * @burst_size_dl - Burst size additive over multiple flows in DL
+ * @service_interval_ul - Service interval associated with TID in UL
+ * @burst_size_ul - Burst size additive over multiple flows in UL
  * @ac - custom ac derived from service interval
  * @msduq - MSDU queue number within TID
  */
 struct dp_peer_mesh_latency_parameter {
-	uint32_t service_interval;
-	uint32_t burst_size;
+	uint32_t service_interval_dl;
+	uint32_t burst_size_dl;
+	uint32_t service_interval_ul;
+	uint32_t burst_size_ul;
 	uint8_t ac;
 	uint8_t msduq;
 };
@@ -3247,6 +3313,11 @@ struct dp_peer {
 
 	uint8_t peer_state;
 	qdf_spinlock_t peer_state_lock;
+#ifdef WLAN_SUPPORT_SCS
+	struct cdp_scs_params scs[IEEE80211_SCS_MAX_NO_OF_ELEM];
+	bool scs_is_active;
+	uint8_t no_of_scs_sessions;
+#endif
 #ifdef WLAN_SUPPORT_MSCS
 	struct dp_peer_mscs_parameter mscs_ipv4_parameter, mscs_ipv6_parameter;
 	bool mscs_active;
