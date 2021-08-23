@@ -2726,28 +2726,6 @@ done:
 
 		if (qdf_likely(peer)) {
 			vdev = peer->vdev;
-
-			/*
-			 * In encryption mode, all data packets except
-			 * EAPOL frames should be dropped when peer is not
-			 * authenticated. Thie feature is enabled for all peers
-			 * under this vdev when peer_authorize flag is set.
-			 */
-			if (qdf_unlikely(vdev->peer_authorize)) {
-				if (qdf_unlikely(vdev->sec_type != cdp_sec_type_none)) {
-					/*
-					 * Allow only EAPOL frames
-					 */
-					if (qdf_unlikely(!peer->authorize &&
-								!qdf_nbuf_is_ipv4_eapol_pkt(nbuf))) {
-						qdf_nbuf_free(nbuf);
-						nbuf = next;
-						DP_STATS_INC(soc, rx.err.peer_unauth_rx_pkt_drop, 1);
-						continue;
-					}
-				}
-			}
-
 		} else {
 			nbuf->next = NULL;
 			dp_rx_deliver_to_pkt_capture_no_peer(
@@ -2787,17 +2765,25 @@ done:
 		 * Check if DMA completed -- msdu_done is the last bit
 		 * to be written
 		 */
-		if (qdf_unlikely(!qdf_nbuf_is_rx_chfrag_cont(nbuf) &&
-				 !hal_rx_attn_msdu_done_get(rx_tlv_hdr))) {
-			dp_err("MSDU DONE failure");
-			DP_STATS_INC(soc, rx.err.msdu_done_fail, 1);
-			hal_rx_dump_pkt_tlvs(hal_soc, rx_tlv_hdr,
-					     QDF_TRACE_LEVEL_INFO);
-			tid_stats->fail_cnt[MSDU_DONE_FAILURE]++;
-			qdf_nbuf_free(nbuf);
-			qdf_assert(0);
-			nbuf = next;
-			continue;
+		if (qdf_likely(!qdf_nbuf_is_rx_chfrag_cont(nbuf))) {
+			if(qdf_unlikely(!hal_rx_attn_msdu_done_get(
+							rx_tlv_hdr))) {
+				dp_err_rl("MSDU DONE failure");
+				DP_STATS_INC(soc, rx.err.msdu_done_fail, 1);
+				hal_rx_dump_pkt_tlvs(hal_soc, rx_tlv_hdr,
+						     QDF_TRACE_LEVEL_INFO);
+				tid_stats->fail_cnt[MSDU_DONE_FAILURE]++;
+				qdf_assert(0);
+				qdf_nbuf_free(nbuf);
+				nbuf = next;
+				continue;
+			} else if (qdf_unlikely(hal_rx_attn_msdu_len_err_get(
+								rx_tlv_hdr))) {
+				DP_STATS_INC(soc, rx.err.msdu_len_err, 1);
+				qdf_nbuf_free(nbuf);
+				nbuf = next;
+				continue;
+			}
 		}
 
 		DP_HIST_PACKET_COUNT_INC(vdev->pdev->pdev_id);
@@ -2903,6 +2889,23 @@ done:
 			qdf_nbuf_free(nbuf);
 			nbuf = next;
 			continue;
+		}
+
+		/*
+		 * Drop non-EAPOL frames from unauthorized peer.
+		 */
+		if (qdf_likely(peer) && qdf_unlikely(!peer->authorize)) {
+			bool is_eapol = qdf_nbuf_is_ipv4_eapol_pkt(nbuf) ||
+					qdf_nbuf_is_ipv4_wapi_pkt(nbuf);
+
+			if (!is_eapol) {
+				DP_STATS_INC(soc,
+					     rx.err.peer_unauth_rx_pkt_drop,
+					     1);
+				qdf_nbuf_free(nbuf);
+				nbuf = next;
+				continue;
+			}
 		}
 
 		if (soc->process_rx_status)
