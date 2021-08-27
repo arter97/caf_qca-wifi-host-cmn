@@ -440,6 +440,7 @@ struct dp_srng *dp_get_rxdma_ring(struct dp_pdev *pdev, int lmac_id)
  * 2.4GHz band uses lmac_id = 1
  * 5GHz/6GHz band uses lmac_id=0
  */
+#define DP_INVALID_LMAC_ID	(-1)
 #define DP_MON_INVALID_LMAC_ID	(-1)
 #define DP_MON_2G_LMAC_ID	1
 #define DP_MON_5G_LMAC_ID	0
@@ -2340,11 +2341,13 @@ dp_get_pdev_from_soc_pdev_id_wifi3(struct dp_soc *soc,
  * @tid: TID
  * @ba_window_size: BlockAck window size
  * @start_seq: Starting sequence number
+ * @bar_update: BAR update triggered
  *
  * Return: QDF_STATUS code
  */
 QDF_STATUS dp_rx_tid_update_wifi3(struct dp_peer *peer, int tid, uint32_t
-					 ba_window_size, uint32_t start_seq);
+					 ba_window_size, uint32_t start_seq,
+					 bool bar_update);
 
 /**
  * dp_get_peer_mac_list(): function to get peer mac list of vdev

@@ -40,13 +40,17 @@ extern "C" {
 #endif
 #include "cfg_ucfg_api.h"
 #include "qdf_dev.h"
+#include <wlan_init_cfg.h>
+
 #define ENABLE_MBOX_DUMMY_SPACE_FEATURE 1
 
 typedef void __iomem *A_target_id_t;
 typedef void *hif_handle_t;
 
 #if defined(HIF_IPCI) && defined(FEATURE_HAL_DELAYED_REG_WRITE)
-#define HIF_WORK_DRAIN_WAIT_CNT 10
+#define HIF_WORK_DRAIN_WAIT_CNT 50
+
+#define HIF_EP_WAKE_RESET_WAIT_CNT 10
 #endif
 
 #define HIF_TYPE_AR6002   2
@@ -75,6 +79,7 @@ typedef void *hif_handle_t;
 #define HIF_TYPE_QCN6122 25
 #define HIF_TYPE_WCN7850 26
 #define HIF_TYPE_QCN9224 27
+#define HIF_TYPE_QCA9574 28
 
 #define DMA_COHERENT_MASK_DEFAULT   37
 
@@ -130,10 +135,15 @@ struct CE_state;
 #else
 #define CE_COUNT_MAX 12
 #endif
-#define HIF_MAX_GRP_IRQ 16
 
 #ifndef HIF_MAX_GROUP
-#define HIF_MAX_GROUP 7
+#define HIF_MAX_GROUP WLAN_CFG_INT_NUM_CONTEXTS
+#endif
+
+#ifdef CONFIG_BERYLLIUM
+#define HIF_MAX_GRP_IRQ 25
+#else
+#define HIF_MAX_GRP_IRQ 16
 #endif
 
 #ifndef NAPI_YIELD_BUDGET_BASED
@@ -359,11 +369,12 @@ enum hif_system_pm_state {
 };
 
 #ifdef WLAN_FEATURE_DP_EVENT_HISTORY
+#define HIF_NUM_INT_CONTEXTS		HIF_MAX_GROUP
 
 #if defined(HIF_CONFIG_SLUB_DEBUG_ON) || defined(HIF_CE_DEBUG_DATA_BUF)
 /* HIF_EVENT_HIST_MAX should always be power of 2 */
 #define HIF_EVENT_HIST_MAX		512
-#define HIF_NUM_INT_CONTEXTS		HIF_MAX_GROUP
+
 #define HIF_EVENT_HIST_ENABLE_MASK	0x3F
 
 static inline uint64_t hif_get_log_timestamp(void)
@@ -374,7 +385,6 @@ static inline uint64_t hif_get_log_timestamp(void)
 #else
 
 #define HIF_EVENT_HIST_MAX		32
-#define HIF_NUM_INT_CONTEXTS		HIF_MAX_GROUP
 /* Enable IRQ TRIGGER, NAPI SCHEDULE, SRNG ACCESS START */
 #define HIF_EVENT_HIST_ENABLE_MASK	0x19
 
@@ -686,6 +696,25 @@ hif_needs_bmi(struct hif_opaque_softc *hif_ctx)
 	return false;
 }
 #endif /* WLAN_FEATURE_BMI */
+
+#ifdef HIF_CPU_CLEAR_AFFINITY
+/**
+ * hif_config_irq_clear_cpu_affinity() - Remove cpu affinity of IRQ
+ * @scn: HIF handle
+ * @intr_ctxt_id: interrupt group index
+ * @cpu: CPU core to clear
+ *
+ * Return: None
+ */
+void hif_config_irq_clear_cpu_affinity(struct hif_opaque_softc *scn,
+				       int intr_ctxt_id, int cpu);
+#else
+static inline
+void hif_config_irq_clear_cpu_affinity(struct hif_opaque_softc *scn,
+				       int intr_ctxt_id, int cpu)
+{
+}
+#endif
 
 /*
  * APIs to handle HIF specific diagnostic read accesses. These APIs are
@@ -1418,6 +1447,7 @@ int hif_apps_enable_irqs_except_wake_irq(struct hif_opaque_softc *hif_ctx);
 int hif_apps_disable_irqs_except_wake_irq(struct hif_opaque_softc *hif_ctx);
 
 #ifdef FEATURE_RUNTIME_PM
+void hif_print_runtime_pm_prevent_list(struct hif_opaque_softc *hif_ctx);
 int hif_pre_runtime_suspend(struct hif_opaque_softc *hif_ctx);
 void hif_pre_runtime_resume(struct hif_opaque_softc *hif_ctx);
 int hif_runtime_suspend(struct hif_opaque_softc *hif_ctx);
@@ -1425,6 +1455,10 @@ int hif_runtime_resume(struct hif_opaque_softc *hif_ctx);
 void hif_process_runtime_suspend_success(struct hif_opaque_softc *hif_ctx);
 void hif_process_runtime_suspend_failure(struct hif_opaque_softc *hif_ctx);
 void hif_process_runtime_resume_success(struct hif_opaque_softc *hif_ctx);
+#else
+static inline void
+hif_print_runtime_pm_prevent_list(struct hif_opaque_softc *hif_ctx)
+{}
 #endif
 
 int hif_get_irq_num(struct hif_opaque_softc *scn, int *irq, uint32_t size);
@@ -1725,6 +1759,7 @@ hif_softc_to_hif_opaque_softc(struct hif_softc *hif_handle)
 
 #if defined(HIF_IPCI) && defined(FEATURE_HAL_DELAYED_REG_WRITE)
 QDF_STATUS hif_try_prevent_ep_vote_access(struct hif_opaque_softc *hif_ctx);
+void hif_set_ep_intermediate_vote_access(struct hif_opaque_softc *hif_ctx);
 void hif_allow_ep_vote_access(struct hif_opaque_softc *hif_ctx);
 void hif_set_ep_vote_access(struct hif_opaque_softc *hif_ctx,
 			    uint8_t type, uint8_t access);
@@ -1735,6 +1770,11 @@ static inline QDF_STATUS
 hif_try_prevent_ep_vote_access(struct hif_opaque_softc *hif_ctx)
 {
 	return QDF_STATUS_SUCCESS;
+}
+
+static inline void
+hif_set_ep_intermediate_vote_access(struct hif_opaque_softc *hif_ctx)
+{
 }
 
 static inline void

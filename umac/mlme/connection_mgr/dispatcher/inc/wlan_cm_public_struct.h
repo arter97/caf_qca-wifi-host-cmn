@@ -23,10 +23,12 @@
 #ifndef __WLAN_CM_PUBLIC_STRUCT_H__
 #define __WLAN_CM_PUBLIC_STRUCT_H__
 
-#ifdef FEATURE_CM_ENABLE
 #include <wlan_scan_public_structs.h>
 #include "wlan_crypto_global_def.h"
 #include "qdf_status.h"
+#ifdef WLAN_FEATURE_11BE_MLO
+#include <wlan_mlo_mgr_public_structs.h>
+#endif
 
 #define CM_ID_INVALID 0xFFFFFFFF
 typedef uint32_t wlan_cm_id;
@@ -34,8 +36,11 @@ typedef uint32_t wlan_cm_id;
 /* Diconnect active timeout */
 #define DISCONNECT_TIMEOUT   STOP_RESPONSE_TIMER + DELETE_RESPONSE_TIMER + 1000
 
-/* Diconnect command wait timeout */
-#define CM_DISCONNECT_CMD_TIMEOUT DISCONNECT_TIMEOUT + 2000
+/*
+ * Disconnect command wait timeout VDEV timeouts + 5 sec buff for current active
+ * command to complete
+ */
+#define CM_DISCONNECT_CMD_TIMEOUT DISCONNECT_TIMEOUT + 5000
 
 /**
  * struct wlan_cm_wep_key_params - store wep key info
@@ -189,6 +194,8 @@ enum wlan_cm_source {
  * @vht_caps: vht capability information bit mask
  * @vht_caps_mask: mask of valid vht caps
  * @fils_info: Fills related connect info
+ * @is_non_assoc_link: non assoc link
+ * @ml_parnter_info: ml partner link info
  */
 struct wlan_cm_connect_req {
 	uint8_t vdev_id;
@@ -214,6 +221,10 @@ struct wlan_cm_connect_req {
 #ifdef WLAN_FEATURE_FILS_SK
 	struct wlan_fils_con_info fils_info;
 #endif
+	bool is_non_assoc_link;
+#ifdef WLAN_FEATURE_11BE_MLO
+	struct mlo_partner_info ml_parnter_info;
+#endif
 };
 
 /**
@@ -235,6 +246,8 @@ struct wlan_cm_connect_req {
  * @scan_ie: Default scan ie to be used in the uncast probe req
  * @bss: scan entry for the candidate
  * @fils_info: Fills related connect info
+ * @is_non_assoc_link: non assoc link
+ * @ml_parnter_info: ml partner link info
  */
 struct wlan_cm_vdev_connect_req {
 	uint8_t vdev_id;
@@ -251,6 +264,10 @@ struct wlan_cm_vdev_connect_req {
 	struct scan_cache_node *bss;
 #ifdef WLAN_FEATURE_FILS_SK
 	struct wlan_fils_con_info *fils_info;
+#endif
+	bool is_non_assoc_link;
+#ifdef WLAN_FEATURE_11BE_MLO
+	struct mlo_partner_info ml_parnter_info;
 #endif
 };
 
@@ -298,12 +315,14 @@ struct wlan_cm_vdev_reassoc_req {
  * propitiatory will be used to send in
  * QCA_WLAN_VENDOR_ATTR_GET_STATION_INFO_DRIVER_DISCONNECT_REASON
  * @bssid: bssid of AP
+ * @is_no_disassoc_disconnect: Is disassoc required
  */
 struct wlan_cm_disconnect_req {
 	uint8_t vdev_id;
 	enum wlan_cm_source source;
 	enum wlan_reason_code reason_code;
 	struct qdf_mac_addr bssid;
+	bool is_no_disassoc_disconnect;
 };
 
 /**
@@ -467,6 +486,7 @@ struct wlan_roam_sync_info {
  * @connect_ies: connect related IE required by osif to send to kernel
  * @roaming_info: roam sync info received
  * @is_fils_connection: is fils connection
+ * @ml_parnter_info: ml partner link info
  */
 struct wlan_cm_connect_resp {
 	uint8_t vdev_id;
@@ -488,6 +508,9 @@ struct wlan_cm_connect_resp {
 #endif
 #ifdef WLAN_FEATURE_FILS_SK
 	bool is_fils_connection;
+#endif
+#ifdef WLAN_FEATURE_11BE_MLO
+	struct mlo_partner_info ml_parnter_info;
 #endif
 };
 
@@ -567,7 +590,5 @@ enum wlan_cm_active_request_type {
 	CM_DISCONNECT_ACTIVE,
 	CM_ROAM_ACTIVE,
 };
-
-#endif /* FEATURE_CM_ENABLE */
 
 #endif /* __WLAN_CM_PUBLIC_STRUCT_H__ */

@@ -237,6 +237,7 @@ wlan_pno_global_init(struct wlan_objmgr_psoc *psoc,
 
 	pno_def = &scan_obj->pno_cfg;
 	qdf_wake_lock_create(&pno_def->pno_wake_lock, "wlan_pno_wl");
+	qdf_runtime_lock_init(&pno_def->pno_runtime_pm_lock);
 	mawc_cfg = &pno_def->mawc_params;
 	pno_def->channel_prediction = cfg_get(psoc, CFG_PNO_CHANNEL_PREDICTION);
 	pno_def->top_k_num_of_channels =
@@ -277,6 +278,7 @@ wlan_pno_global_init(struct wlan_objmgr_psoc *psoc,
 static QDF_STATUS
 wlan_pno_global_deinit(struct wlan_scan_obj *scan_obj)
 {
+	qdf_runtime_lock_deinit(&scan_obj->pno_cfg.pno_runtime_pm_lock);
 	qdf_wake_lock_destroy(&scan_obj->pno_cfg.pno_wake_lock);
 
 	return QDF_STATUS_SUCCESS;
@@ -1042,12 +1044,12 @@ is_chan_enabled_for_scan(struct regulatory_channel *reg_chan,
 	if (reg_chan->nol_chan)
 		return false;
 	/* 2 GHz channel */
-	if ((util_scan_scm_chan_to_band(reg_chan->chan_num) ==
+	if ((util_scan_scm_freq_to_band(reg_chan->center_freq) ==
 			WLAN_BAND_2_4_GHZ) &&
 			((reg_chan->center_freq < low_2g) ||
 			(reg_chan->center_freq > high_2g)))
 		return false;
-	else if ((util_scan_scm_chan_to_band(reg_chan->chan_num) ==
+	else if ((util_scan_scm_freq_to_band(reg_chan->center_freq) ==
 				WLAN_BAND_5_GHZ) &&
 		 ((reg_chan->center_freq < low_5g) ||
 		  (reg_chan->center_freq > high_5g)))
@@ -1116,6 +1118,8 @@ ucfg_scan_init_chanlist_params(struct scan_start_request *req,
 					reg_chan_list[idx].center_freq)) ||
 			     (req->scan_req.scan_f_5ghz &&
 			      (WLAN_REG_IS_5GHZ_CH_FREQ(
+					reg_chan_list[idx].center_freq) ||
+			       WLAN_REG_IS_49GHZ_FREQ(
 					reg_chan_list[idx].center_freq) ||
 			       WLAN_REG_IS_6GHZ_CHAN_FREQ(
 					reg_chan_list[idx].center_freq)))))

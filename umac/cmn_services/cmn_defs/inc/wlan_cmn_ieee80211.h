@@ -79,6 +79,7 @@
 /* QCA OUI (in little endian) */
 #define QCA_OUI 0xf0fd8c
 #define QCA_OUI_WHC_TYPE  0x00
+#define QCA_OUI_WHC_REPT_TYPE 0x01
 
 /* Extender vendor specific IE */
 #define QCA_OUI_EXTENDER_TYPE           0x03
@@ -470,6 +471,7 @@ enum element_ie {
  * @WLAN_EXTN_ELEMID_HE_6G_CAP: HE 6GHz Band Capabilities IE
  * @WLAN_EXTN_ELEMID_SRP:    spatial reuse parameter IE
  * @WLAN_EXTN_ELEMID_NONINHERITANCE: Non inheritance IE
+ * @WLAN_EXTN_ELEMID_MULTI_LINK: Multi link IE
  * @WLAN_EXTN_ELEMID_EHTCAP: EHT Capabilities IE
  * @WLAN_EXTN_ELEMID_EHTOP: EHT Operation IE
  */
@@ -482,6 +484,9 @@ enum extn_element_ie {
 	WLAN_EXTN_ELEMID_NONINHERITANCE = 56,
 	WLAN_EXTN_ELEMID_HE_6G_CAP   = 59,
 	WLAN_EXTN_ELEMID_ESP         = 11,
+#ifdef WLAN_FEATURE_11BE_MLO
+	WLAN_EXTN_ELEMID_MULTI_LINK  = 252,
+#endif
 #ifdef WLAN_FEATURE_11BE
 	WLAN_EXTN_ELEMID_EHTCAP      = 253,
 	WLAN_EXTN_ELEMID_EHTOP       = 254,
@@ -1461,6 +1466,7 @@ struct wlan_ie_ehtcaps {
  * @chan_freq_seg0: EHT Channel Centre Frequency Segment 0
  * @chan_freq_seg1: EHT Channel Centre Frequency Segment 1
  * @minimum_rate: EHT Minimum Rate
+ * @puncture_pattern: per 20MHz puncturing bitmap
  */
 struct wlan_ie_ehtops {
 	uint8_t elem_id;
@@ -1473,6 +1479,7 @@ struct wlan_ie_ehtops {
 	uint8_t chan_freq_seg0;
 	uint8_t chan_freq_seg1;
 	uint8_t minimum_rate;
+	uint16_t puncture_pattern;
 } qdf_packed;
 #endif
 
@@ -1888,6 +1895,23 @@ is_qca_son_oui(uint8_t *frm, uint8_t whc_subtype)
 	return (frm[1] > 4) && (LE_READ_4(frm + 2) ==
 		((QCA_OUI_WHC_TYPE << 24) | QCA_OUI)) &&
 		(*(frm + 6) == whc_subtype);
+}
+
+/**
+ * is_qca_son_rept_oui() - If vendor IE is QCA WHC repeater type
+ * @frm: vendor IE pointer
+ * @whc_subtype: subtype
+ *
+ * API to check if vendor IE is QCA WHC REPT
+ *
+ * Return: true if its QCA WHC REPT IE
+ */
+static inline bool
+is_qca_son_rept_oui(u_int8_t *frm, u_int8_t whc_subtype)
+{
+	return ((frm[1] > 4) && (LE_READ_4(frm + 2) ==
+		((QCA_OUI_WHC_REPT_TYPE << 24) | QCA_OUI)) &&
+		(*(frm + 6) == whc_subtype));
 }
 
 /**
