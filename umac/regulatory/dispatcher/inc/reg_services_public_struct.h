@@ -180,31 +180,105 @@ enum op_class_table_num {
  * @CHAN_ENUM_5057: channel with freq 5057
  * @CHAN_ENUM_5060: channel with freq 5060
  * @CHAN_ENUM_5080: channel with freq 5080
+ * @CHAN_ENUM_5175: channel with freq 5175
  * @CHAN_ENUM_5180: channel with freq 5180
+ * @CHAN_ENUM_5185: channel with freq 5185
+ * @CHAN_ENUM_5190: channel with freq 5190
+ * @CHAN_ENUM_5195: channel with freq 5195
  * @CHAN_ENUM_5200: channel with freq 5200
+ * @CHAN_ENUM_5205: channel with freq 5205
+ * @CHAN_ENUM_5210: channel with freq 5210
+ * @CHAN_ENUM_5215: channel with freq 5215
  * @CHAN_ENUM_5220: channel with freq 5220
+ * @CHAN_ENUM_5225: channel with freq 5225
+ * @CHAN_ENUM_5230: channel with freq 5230
+ * @CHAN_ENUM_5235: channel with freq 5235
  * @CHAN_ENUM_5240: channel with freq 5240
+ * @CHAN_ENUM_5245: channel with freq 5245
+ * @CHAN_ENUM_5250: channel with freq 5250
+ * @CHAN_ENUM_5255: channel with freq 5255
  * @CHAN_ENUM_5260: channel with freq 5260
+ * @CHAN_ENUM_5265: channel with freq 5265
+ * @CHAN_ENUM_5270: channel with freq 5270
+ * @CHAN_ENUM_5275: channel with freq 5275
  * @CHAN_ENUM_5280: channel with freq 5280
+ * @CHAN_ENUM_5285: channel with freq 5285
+ * @CHAN_ENUM_5290: channel with freq 5290
+ * @CHAN_ENUM_5295: channel with freq 5295
  * @CHAN_ENUM_5300: channel with freq 5300
+ * @CHAN_ENUM_5305: channel with freq 5305
+ * @CHAN_ENUM_5310: channel with freq 5310
+ * @CHAN_ENUM_5315: channel with freq 5315
  * @CHAN_ENUM_5320: channel with freq 5320
+ * @CHAN_ENUM_5325: channel with freq 5325
+ * @CHAN_ENUM_5495: channel with freq 5495
  * @CHAN_ENUM_5500: channel with freq 5500
+ * @CHAN_ENUM_5505: channel with freq 5505
+ * @CHAN_ENUM_5510: channel with freq 5510
+ * @CHAN_ENUM_5515: channel with freq 5515
  * @CHAN_ENUM_5520: channel with freq 5520
+ * @CHAN_ENUM_5525: channel with freq 5525
+ * @CHAN_ENUM_5530: channel with freq 5530
+ * @CHAN_ENUM_5535: channel with freq 5535
  * @CHAN_ENUM_5540: channel with freq 5540
+ * @CHAN_ENUM_5545: channel with freq 5545
+ * @CHAN_ENUM_5550: channel with freq 5550
+ * @CHAN_ENUM_5555: channel with freq 5555
  * @CHAN_ENUM_5560: channel with freq 5560
+ * @CHAN_ENUM_5565: channel with freq 5565
+ * @CHAN_ENUM_5570: channel with freq 5570
+ * @CHAN_ENUM_5575: channel with freq 5575
  * @CHAN_ENUM_5580: channel with freq 5580
+ * @CHAN_ENUM_5585: channel with freq 5585
+ * @CHAN_ENUM_5590: channel with freq 5590
+ * @CHAN_ENUM_5595: channel with freq 5595
  * @CHAN_ENUM_5600: channel with freq 5600
+ * @CHAN_ENUM_5605: channel with freq 5605
+ * @CHAN_ENUM_5610: channel with freq 5610
+ * @CHAN_ENUM_5615: channel with freq 5615
  * @CHAN_ENUM_5620: channel with freq 5620
+ * @CHAN_ENUM_5625: channel with freq 5625
+ * @CHAN_ENUM_5630: channel with freq 5630
+ * @CHAN_ENUM_5635: channel with freq 5635
  * @CHAN_ENUM_5640: channel with freq 5640
+ * @CHAN_ENUM_5645: channel with freq 5645
+ * @CHAN_ENUM_5650: channel with freq 5650
+ * @CHAN_ENUM_5655: channel with freq 5655
  * @CHAN_ENUM_5660: channel with freq 5660
+ * @CHAN_ENUM_5665: channel with freq 5665
+ * @CHAN_ENUM_5670: channel with freq 5670
+ * @CHAN_ENUM_5675: channel with freq 5675
  * @CHAN_ENUM_5680: channel with freq 5680
+ * @CHAN_ENUM_5685: channel with freq 5685
+ * @CHAN_ENUM_5690: channel with freq 5690
+ * @CHAN_ENUM_5695: channel with freq 5695
  * @CHAN_ENUM_5700: channel with freq 5700
+ * @CHAN_ENUM_5705: channel with freq 5705
+ * @CHAN_ENUM_5710: channel with freq 5710
+ * @CHAN_ENUM_5715: channel with freq 5715
  * @CHAN_ENUM_5720: channel with freq 5720
+ * @CHAN_ENUM_5725: channel with freq 5725
+ * @CHAN_ENUM_5740: channel with freq 5740
  * @CHAN_ENUM_5745: channel with freq 5745
+ * @CHAN_ENUM_5750: channel with freq 5750
+ * @CHAN_ENUM_5755: channel with freq 5755
+ * @CHAN_ENUM_5760: channel with freq 5760
  * @CHAN_ENUM_5765: channel with freq 5765
+ * @CHAN_ENUM_5770: channel with freq 5770
+ * @CHAN_ENUM_5775: channel with freq 5775
+ * @CHAN_ENUM_5780: channel with freq 5780
  * @CHAN_ENUM_5785: channel with freq 5785
+ * @CHAN_ENUM_5790: channel with freq 5790
+ * @CHAN_ENUM_5795: channel with freq 5795
+ * @CHAN_ENUM_5800: channel with freq 5800
  * @CHAN_ENUM_5805: channel with freq 5805
+ * @CHAN_ENUM_5810: channel with freq 5810
+ * @CHAN_ENUM_5815: channel with freq 5815
+ * @CHAN_ENUM_5820: channel with freq 5820
  * @CHAN_ENUM_5825: channel with freq 5825
+ * @CHAN_ENUM_5830: channel with freq 5830
+ * @CHAN_ENUM_5835: channel with freq 5835
+ * @CHAN_ENUM_5840: channel with freq 5840
  * @CHAN_ENUM_5845: channel with freq 5845
  * @CHAN_ENUM_5850: channel with freq 5850
  * @CHAN_ENUM_5855: channel with freq 5855
@@ -341,46 +415,190 @@ enum channel_enum {
 	CHAN_ENUM_5060,
 	CHAN_ENUM_5080,
 #endif /* CONFIG_49GHZ_CHAN */
+#ifdef CONFIG_HALF_QUARTER_RATE_FOR_ALL_CHANS
+	CHAN_ENUM_5175,
+#endif
 	CHAN_ENUM_5180,
+#ifdef CONFIG_HALF_QUARTER_RATE_FOR_ALL_CHANS
+	CHAN_ENUM_5185,
+	CHAN_ENUM_5190,
+	CHAN_ENUM_5195,
+#endif
 	CHAN_ENUM_5200,
+#ifdef CONFIG_HALF_QUARTER_RATE_FOR_ALL_CHANS
+	CHAN_ENUM_5205,
+	CHAN_ENUM_5210,
+	CHAN_ENUM_5215,
+#endif
 	CHAN_ENUM_5220,
+#ifdef CONFIG_HALF_QUARTER_RATE_FOR_ALL_CHANS
+	CHAN_ENUM_5225,
+	CHAN_ENUM_5230,
+	CHAN_ENUM_5235,
+#endif
 	CHAN_ENUM_5240,
+#ifdef CONFIG_HALF_QUARTER_RATE_FOR_ALL_CHANS
+	CHAN_ENUM_5245,
+	CHAN_ENUM_5250,
+	CHAN_ENUM_5255,
+#endif
 	CHAN_ENUM_5260,
+#ifdef CONFIG_HALF_QUARTER_RATE_FOR_ALL_CHANS
+	CHAN_ENUM_5265,
+	CHAN_ENUM_5270,
+	CHAN_ENUM_5275,
+#endif
 	CHAN_ENUM_5280,
+#ifdef CONFIG_HALF_QUARTER_RATE_FOR_ALL_CHANS
+	CHAN_ENUM_5285,
+	CHAN_ENUM_5290,
+	CHAN_ENUM_5295,
+#endif
 	CHAN_ENUM_5300,
+#ifdef CONFIG_HALF_QUARTER_RATE_FOR_ALL_CHANS
+	CHAN_ENUM_5305,
+	CHAN_ENUM_5310,
+	CHAN_ENUM_5315,
+#endif
 	CHAN_ENUM_5320,
+#ifdef CONFIG_HALF_QUARTER_RATE_FOR_ALL_CHANS
+	CHAN_ENUM_5325,
+	CHAN_ENUM_5495,
+#endif
 	CHAN_ENUM_5500,
+#ifdef CONFIG_HALF_QUARTER_RATE_FOR_ALL_CHANS
+	CHAN_ENUM_5505,
+	CHAN_ENUM_5510,
+	CHAN_ENUM_5515,
+#endif
 	CHAN_ENUM_5520,
+#ifdef CONFIG_HALF_QUARTER_RATE_FOR_ALL_CHANS
+	CHAN_ENUM_5525,
+	CHAN_ENUM_5530,
+	CHAN_ENUM_5535,
+#endif
 	CHAN_ENUM_5540,
+#ifdef CONFIG_HALF_QUARTER_RATE_FOR_ALL_CHANS
+	CHAN_ENUM_5545,
+	CHAN_ENUM_5550,
+	CHAN_ENUM_5555,
+#endif
 	CHAN_ENUM_5560,
+#ifdef CONFIG_HALF_QUARTER_RATE_FOR_ALL_CHANS
+	CHAN_ENUM_5565,
+	CHAN_ENUM_5570,
+	CHAN_ENUM_5575,
+#endif
 	CHAN_ENUM_5580,
+#ifdef CONFIG_HALF_QUARTER_RATE_FOR_ALL_CHANS
+	CHAN_ENUM_5585,
+	CHAN_ENUM_5590,
+	CHAN_ENUM_5595,
+#endif
 	CHAN_ENUM_5600,
+#ifdef CONFIG_HALF_QUARTER_RATE_FOR_ALL_CHANS
+	CHAN_ENUM_5605,
+	CHAN_ENUM_5610,
+	CHAN_ENUM_5615,
+#endif
 	CHAN_ENUM_5620,
+#ifdef CONFIG_HALF_QUARTER_RATE_FOR_ALL_CHANS
+	CHAN_ENUM_5625,
+	CHAN_ENUM_5630,
+	CHAN_ENUM_5635,
+#endif
 	CHAN_ENUM_5640,
+#ifdef CONFIG_HALF_QUARTER_RATE_FOR_ALL_CHANS
+	CHAN_ENUM_5645,
+	CHAN_ENUM_5650,
+	CHAN_ENUM_5655,
+#endif
 	CHAN_ENUM_5660,
+#ifdef CONFIG_HALF_QUARTER_RATE_FOR_ALL_CHANS
+	CHAN_ENUM_5665,
+	CHAN_ENUM_5670,
+	CHAN_ENUM_5675,
+#endif
 	CHAN_ENUM_5680,
+#ifdef CONFIG_HALF_QUARTER_RATE_FOR_ALL_CHANS
+	CHAN_ENUM_5685,
+	CHAN_ENUM_5690,
+	CHAN_ENUM_5695,
+#endif
 	CHAN_ENUM_5700,
+#ifdef CONFIG_HALF_QUARTER_RATE_FOR_ALL_CHANS
+	CHAN_ENUM_5705,
+	CHAN_ENUM_5710,
+	CHAN_ENUM_5715,
+#endif
 	CHAN_ENUM_5720,
+#ifdef CONFIG_HALF_QUARTER_RATE_FOR_ALL_CHANS
+	CHAN_ENUM_5725,
+	CHAN_ENUM_5740,
+#endif
 	CHAN_ENUM_5745,
+#ifdef CONFIG_HALF_QUARTER_RATE_FOR_ALL_CHANS
+	CHAN_ENUM_5750,
+	CHAN_ENUM_5755,
+	CHAN_ENUM_5760,
+#endif
 	CHAN_ENUM_5765,
+#ifdef CONFIG_HALF_QUARTER_RATE_FOR_ALL_CHANS
+	CHAN_ENUM_5770,
+	CHAN_ENUM_5775,
+	CHAN_ENUM_5780,
+#endif
 	CHAN_ENUM_5785,
+#ifdef CONFIG_HALF_QUARTER_RATE_FOR_ALL_CHANS
+	CHAN_ENUM_5790,
+	CHAN_ENUM_5795,
+	CHAN_ENUM_5800,
+#endif
 	CHAN_ENUM_5805,
+#ifdef CONFIG_HALF_QUARTER_RATE_FOR_ALL_CHANS
+	CHAN_ENUM_5810,
+	CHAN_ENUM_5815,
+	CHAN_ENUM_5820,
+#endif
 	CHAN_ENUM_5825,
+#ifdef CONFIG_HALF_QUARTER_RATE_FOR_ALL_CHANS
+	CHAN_ENUM_5830,
+	CHAN_ENUM_5835,
+	CHAN_ENUM_5840,
+#endif
 	CHAN_ENUM_5845,
+#ifdef CONFIG_HALF_QUARTER_RATE_FOR_ALL_CHANS
+	CHAN_ENUM_5850,
+	CHAN_ENUM_5855,
+	CHAN_ENUM_5860,
+#else
 #ifdef WLAN_FEATURE_DSRC
 	CHAN_ENUM_5850,
 	CHAN_ENUM_5855,
 	CHAN_ENUM_5860,
 #endif
+#endif
 	CHAN_ENUM_5865,
+#ifdef CONFIG_HALF_QUARTER_RATE_FOR_ALL_CHANS
+	CHAN_ENUM_5870,
+	CHAN_ENUM_5875,
+	CHAN_ENUM_5880,
+#else
 #ifdef WLAN_FEATURE_DSRC
 	CHAN_ENUM_5870,
 	CHAN_ENUM_5875,
 	CHAN_ENUM_5880,
 #endif
+#endif
 	CHAN_ENUM_5885,
+#ifdef CONFIG_HALF_QUARTER_RATE_FOR_ALL_CHANS
+	CHAN_ENUM_5890,
+#else
 #ifdef WLAN_FEATURE_DSRC
 	CHAN_ENUM_5890,
+#endif
+#endif
+#ifdef WLAN_FEATURE_DSRC
 	CHAN_ENUM_5895,
 	CHAN_ENUM_5900,
 	CHAN_ENUM_5905,
@@ -472,8 +690,16 @@ enum channel_enum {
 	NUM_49GHZ_CHANNELS = 0,
 #endif /* CONFIG_49GHZ_CHAN */
 
+#ifdef CONFIG_HALF_QUARTER_RATE_FOR_ALL_CHANS
+	MIN_5GHZ_CHANNEL = CHAN_ENUM_5175,
+#else
 	MIN_5GHZ_CHANNEL = CHAN_ENUM_5180,
+#endif
+#ifdef CONFIG_HALF_QUARTER_RATE_FOR_ALL_CHANS
+	MAX_5GHZ_CHANNEL = CHAN_ENUM_5890,
+#else
 	MAX_5GHZ_CHANNEL = CHAN_ENUM_5885,
+#endif
 	NUM_5GHZ_CHANNELS = (MAX_5GHZ_CHANNEL - MIN_5GHZ_CHANNEL + 1),
 
 #ifdef WLAN_FEATURE_DSRC
@@ -487,7 +713,11 @@ enum channel_enum {
 #endif
 
 	MIN_5DOT9_CHANNEL = CHAN_ENUM_5845,
+#ifdef CONFIG_HALF_QUARTER_RATE_FOR_ALL_CHANS
+	MAX_5DOT9_CHANNEL = CHAN_ENUM_5890,
+#else
 	MAX_5DOT9_CHANNEL = CHAN_ENUM_5885,
+#endif
 	NUM_5DOT9_CHANNELS = (MAX_5DOT9_CHANNEL - MIN_5DOT9_CHANNEL + 1),
 
 #ifdef CONFIG_49GHZ_CHAN
