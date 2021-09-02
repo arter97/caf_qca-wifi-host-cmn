@@ -38,6 +38,13 @@
 #include "cepci.h"
 #include "ce_main.h"
 
+#ifdef CONFIG_PCI_LOW_POWER_INT_REG
+/* PCIe low power interrupt mask register */
+#define PCIE_LOW_POWER_INT_MASK_OFFSET	0x38044
+#define INTR_L1SS			BIT(3)
+#define INTR_CLKPM			BIT(4)
+#endif
+
 /* An address (e.g. of a buffer) in Copy Engine space. */
 
 #define HIF_MAX_TASKLET_NUM 11

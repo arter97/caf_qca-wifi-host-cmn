@@ -2731,6 +2731,65 @@ static int hif_mark_wake_irq_wakeable(struct hif_softc *scn)
 	return 0;
 }
 
+#ifdef CONFIG_PCI_LOW_POWER_INT_REG
+/**
+ * hif_pci_config_low_power_int_register(): configure pci low power
+ * interrupt  register.
+ * @enable: true to enable the bits, false clear.
+ *
+ * Configure the bits INTR_L1SS and INTR_CLKPM of
+ * PCIE_LOW_POWER_INT_MASK register.
+ *
+ * Return: n/a
+ */
+static void hif_pci_config_low_power_int_register(struct hif_softc *scn,
+						  bool enable)
+{
+	void *address;
+	uint32_t value;
+	struct hif_opaque_softc *hif_hdl = GET_HIF_OPAQUE_HDL(scn);
+	struct hif_target_info *tgt_info = hif_get_target_info_handle(hif_hdl);
+	uint32_t target_type = tgt_info->target_type;
+
+	/*
+	 * Only configure the bits INTR_L1SS and INTR_CLKPM of
+	 * PCIE_LOW_POWER_INT_MASK register for QCA6174 for high
+	 * consumption issue. NFA344A power consumption is above 80mA
+	 * after entering Modern Standby. But the power will drop to normal
+	 * after PERST# de-assert.
+	 */
+	if ((target_type == TARGET_TYPE_AR6320) ||
+	    (target_type == TARGET_TYPE_AR6320V1) ||
+	    (target_type == TARGET_TYPE_AR6320V2) ||
+	    (target_type == TARGET_TYPE_AR6320V3)) {
+		hif_info("Configure PCI low power int mask register");
+
+		address = scn->mem + PCIE_LOW_POWER_INT_MASK_OFFSET;
+
+		/* Configure bit3 INTR_L1SS */
+		value = hif_read32_mb(scn, address);
+		if (enable)
+			value |= INTR_L1SS;
+		else
+			value &= ~INTR_L1SS;
+		hif_write32_mb(scn, address, value);
+
+		/* Configure bit4 INTR_CLKPM */
+		value = hif_read32_mb(scn, address);
+		if (enable)
+			value |= INTR_CLKPM;
+		else
+			value &= ~INTR_CLKPM;
+		hif_write32_mb(scn, address, value);
+	}
+}
+#else
+static inline void hif_pci_config_low_power_int_register(struct hif_softc *scn,
+							 bool enable)
+{
+}
+#endif
+
 /**
  * hif_pci_bus_suspend(): prepare hif for suspend
  *
@@ -2740,11 +2799,27 @@ static int hif_mark_wake_irq_wakeable(struct hif_softc *scn)
  */
 int hif_pci_bus_suspend(struct hif_softc *scn)
 {
+	int ret = 0;
+
 	if (hif_can_suspend_link(GET_HIF_OPAQUE_HDL(scn)))
-		return 0;
+		goto done;
 
 	/* pci link is staying up; enable wake irq */
-	return hif_mark_wake_irq_wakeable(scn);
+	ret = hif_mark_wake_irq_wakeable(scn);
+	if (ret) {
+		HIF_ERROR("%s: Fail to mark wake irq", __func__);
+		return ret;
+	}
+
+done:
+	/*
+	 * Only need clear the bits INTR_L1SS/INTR_CLKPM after suspend.
+	 * No need do enable bits after resume, as firmware will restore
+	 * the bits after resume.
+	 */
+	hif_pci_config_low_power_int_register(scn, false);
+
+	return ret;
 }
 
 /**
