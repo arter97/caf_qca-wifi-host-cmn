@@ -2957,6 +2957,7 @@ static QDF_STATUS send_scan_start_cmd_tlv(wmi_unified_t wmi_handle,
 	cmd->dwell_time_active = params->dwell_time_active;
 	cmd->dwell_time_active_2g = params->dwell_time_active_2g;
 	cmd->dwell_time_passive = params->dwell_time_passive;
+	cmd->min_dwell_time_6ghz = params->min_dwell_time_6g;
 	cmd->dwell_time_active_6ghz = params->dwell_time_active_6g;
 	cmd->dwell_time_passive_6ghz = params->dwell_time_passive_6g;
 	cmd->scan_start_offset = params->scan_offset_time;
@@ -7324,6 +7325,10 @@ void wmi_copy_resource_config(wmi_resource_config *resource_cfg,
 		tgt_res_cfg->is_reg_cc_ext_event_supported);
 
 	wmi_set_nan_channel_support(resource_cfg);
+
+	if (tgt_res_cfg->twt_ack_support_cap)
+		WMI_RSRC_CFG_HOST_SERVICE_FLAG_STA_TWT_SYNC_EVT_SUPPORT_SET(
+			resource_cfg->host_service_flags, 1);
 }
 
 /* copy_hw_mode_id_in_init_cmd() - Helper routine to copy hw_mode in init cmd
