@@ -192,7 +192,7 @@ osif_connect_timeout(struct net_device *dev, const u8 *bssid,
 
 	osif_debug("nl_timeout_reason %d", nl_timeout_reason);
 
-	cfg80211_connect_timeout(dev, bssid, NULL, 0, GFP_KERNEL,
+	cfg80211_connect_timeout(dev, bssid, NULL, 0, GFP_ATOMIC,
 				 nl_timeout_reason);
 }
 
