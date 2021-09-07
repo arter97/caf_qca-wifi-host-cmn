@@ -2530,6 +2530,14 @@ QDF_STATUS (*send_big_data_stats_request_cmd)(
 QDF_STATUS (*extract_dpd_status_ev_param)(wmi_unified_t wmi_handle,
 					  void *evt_buf,
 					  struct wmi_host_pdev_get_dpd_status_event *param);
+
+QDF_STATUS (*send_set_halphy_cal)(wmi_unified_t wmi_handle,
+				  struct wmi_host_send_set_halphy_cal_info *param);
+
+QDF_STATUS
+(*extract_halphy_cal_ev_param)(wmi_unified_t wmi_handle,
+			       void *evt_buf,
+			       struct wmi_host_pdev_set_halphy_cal_event *param);
 };
 
 /* Forward declartion for psoc*/

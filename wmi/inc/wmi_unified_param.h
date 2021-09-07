@@ -4547,6 +4547,7 @@ typedef enum {
 	wmi_pdev_cp_fwstats_eventid,
 	wmi_vdev_send_big_data_p2_eventid,
 	wmi_pdev_get_dpd_status_event_id,
+	wmi_pdev_set_halphy_cal_event_id,
 	wmi_events_max,
 } wmi_conv_event_id;
 
@@ -5115,6 +5116,7 @@ typedef enum {
 	wmi_service_disable_upper_6g_edge_ch_supp,
 #endif
 	wmi_service_dcs_awgn_int_support,
+	wmi_service_halphy_cal_enable_disable_support,
 	wmi_services_max,
 } wmi_conv_service_ids;
 #define WMI_SERVICE_UNAVAILABLE 0xFFFF
@@ -7868,4 +7870,51 @@ struct wmi_host_pdev_get_dpd_status_event {
 	uint32_t pdev_id;
 	enum wmi_host_dpd_status dpd_status;
 };
+
+/**
+ * enum wmi_host_set_halphy_cal_chan_sel - channel select values for
+ *                                         set halphy cal
+ * @WMI_HOST_SET_HALPHY_CAL_HOME_CHANNEL: Home channel
+ * @WMI_HOST_SET_HALPHY_CAL_SCAN_CHANNEL: Scan channel
+ * @WMI_HOST_SET_HALPHY_CAL_BOTH_CHANNELS: Both (Home + Scan) channels
+ */
+enum wmi_host_set_halphy_cal_chan_sel {
+	WMI_HOST_SET_HALPHY_CAL_HOME_CHANNEL = 0,
+	WMI_HOST_SET_HALPHY_CAL_SCAN_CHANNEL = 1,
+	WMI_HOST_SET_HALPHY_CAL_BOTH_CHANNELS = 2,
+};
+
+/**
+ * struct wmi_host_send_set_halphy_cal_info
+ * @pdev_id: pdev id
+ * @value: bmap value
+ * @chan_Sel: channel for calibration - HOME/SCAN/BOTH
+ */
+struct wmi_host_send_set_halphy_cal_info {
+	uint8_t pdev_id;
+	uint32_t value;
+	enum wmi_host_set_halphy_cal_chan_sel chan_sel;
+};
+
+/**
+ * wmi_host_set_halphy_cal_status - status values from
+ *                                 WMI_PDEV_SET_HALPHY_CAL_BMAP_EVENTID
+ * @WMI_HOST_SET_HALPHY_CAL_STATUS_SUCCESS: set halphy cal success
+ * @WMI_HOST_SET_HALPHY_CAL_STATUS_FAIL: set halphy cal failure
+ */
+enum wmi_host_set_halphy_cal_status {
+	WMI_HOST_SET_HALPHY_CAL_STATUS_SUCCESS = 0,
+	WMI_HOST_SET_HALPHY_CAL_STATUS_FAIL = 1,
+};
+
+/**
+ * struct wmi_host_send_set_halphy_cal_event
+ * @pdev_id: pdev id
+ * @status: PASS/FAIL
+ */
+struct wmi_host_pdev_set_halphy_cal_event {
+	uint32_t pdev_id;
+	enum wmi_host_set_halphy_cal_status status;
+};
+
 #endif /* _WMI_UNIFIED_PARAM_H_ */
