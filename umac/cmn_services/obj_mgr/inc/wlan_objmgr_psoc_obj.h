@@ -146,6 +146,12 @@
 #define WLAN_SOC_CEXT_SCAN_PER_CH_CONFIG    0x01000000
 	/* CAPABILITY: csa offload in case of AP */
 #define WLAN_SOC_CEXT_CSA_TX_OFFLOAD      0x02000000
+	/* AP initiator mode supported in staggered beacon mode */
+#define WLAN_SOC_RTT_AP_INITIATOR_STAGGERED_MODE_SUPPORTED 0x04000000
+	/* AP initiator mode supported in burst beacon mode */
+#define WLAN_SOC_RTT_AP_INITIATOR_BURSTED_MODE_SUPPORTED 0x08000000
+	/* ext cc event supported by fw */
+#define WLAN_SOC_EXT_EVENT_SUPPORTED      0x010000000
 
 /* feature_flags */
 	/* CONF: ATH FF enabled */
@@ -190,8 +196,6 @@
 #define WLAN_SOC_F_DOT11D              0x00020000
 	/* Beacon offload */
 #define WLAN_SOC_F_BCN_OFFLOAD         0x00040000
-	/* QWRAP enable */
-#define WLAN_SOC_F_QWRAP_ENABLE        0x00080000
 	/* LTEU support */
 #define WLAN_SOC_F_LTEU_SUPPORT        0x00100000
 	/* BT coext support */

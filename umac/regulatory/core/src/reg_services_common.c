@@ -23,6 +23,10 @@
 
 #include <wlan_cmn.h>
 #include <reg_services_public_struct.h>
+#ifdef CONFIG_AFC_SUPPORT
+#include <wlan_reg_services_api.h>
+#include "reg_opclass.h"
+#endif
 #include <wlan_objmgr_psoc_obj.h>
 #include <qdf_lock.h>
 #include "reg_priv_objs.h"
@@ -41,40 +45,6 @@
 #endif
 
 const struct chan_map *channel_map;
-#ifdef CONFIG_CHAN_NUM_API
-static const struct bonded_channel bonded_chan_40mhz_list[] = {
-	{36, 40},
-	{44, 48},
-	{52, 56},
-	{60, 64},
-	{100, 104},
-	{108, 112},
-	{116, 120},
-	{124, 128},
-	{132, 136},
-	{140, 144},
-	{149, 153},
-	{157, 161},
-	{165, 169},
-	{173, 177}
-};
-
-static const struct bonded_channel bonded_chan_80mhz_list[] = {
-	{36, 48},
-	{52, 64},
-	{100, 112},
-	{116, 128},
-	{132, 144},
-	{149, 161},
-	{165, 177}
-};
-
-static const struct bonded_channel bonded_chan_160mhz_list[] = {
-	{36, 64},
-	{100, 128},
-	{149, 177}
-};
-#endif /* CONFIG_CHAN_NUM_API */
 
 #ifdef CONFIG_CHAN_FREQ_API
 /* bonded_chan_40mhz_list_freq - List of 40MHz bonnded channel frequencies */
@@ -1120,6 +1090,34 @@ void reg_init_channel_map(enum dfs_reg dfs_region)
 	}
 }
 
+#ifdef WLAN_FEATURE_11BE
+uint16_t reg_get_bw_value(enum phy_ch_width bw)
+{
+	switch (bw) {
+	case CH_WIDTH_20MHZ:
+		return 20;
+	case CH_WIDTH_40MHZ:
+		return 40;
+	case CH_WIDTH_80MHZ:
+		return 80;
+	case CH_WIDTH_160MHZ:
+		return 160;
+	case CH_WIDTH_80P80MHZ:
+		return 160;
+	case CH_WIDTH_INVALID:
+		return 0;
+	case CH_WIDTH_5MHZ:
+		return 5;
+	case CH_WIDTH_10MHZ:
+		return 10;
+	case CH_WIDTH_320MHZ:
+	case CH_WIDTH_MAX:
+		return 320;
+	default:
+		return 0;
+	}
+}
+#else
 uint16_t reg_get_bw_value(enum phy_ch_width bw)
 {
 	switch (bw) {
@@ -1145,6 +1143,7 @@ uint16_t reg_get_bw_value(enum phy_ch_width bw)
 		return 0;
 	}
 }
+#endif
 
 struct wlan_lmac_if_reg_tx_ops *reg_get_psoc_tx_ops(
 		struct wlan_objmgr_psoc *psoc)
@@ -1159,241 +1158,6 @@ struct wlan_lmac_if_reg_tx_ops *reg_get_psoc_tx_ops(
 
 	return &tx_ops->reg_ops;
 }
-
-#ifdef CONFIG_CHAN_NUM_API
-enum channel_enum reg_get_chan_enum(uint8_t chan_num)
-{
-	uint32_t count;
-
-	for (count = 0; count < NUM_CHANNELS; count++)
-		if (channel_map[count].chan_num == chan_num)
-			return count;
-
-	reg_err_rl("invalid channel number %d", chan_num);
-
-	return INVALID_CHANNEL;
-}
-
-enum channel_state reg_get_channel_state(struct wlan_objmgr_pdev *pdev,
-					 uint8_t ch)
-{
-	enum channel_enum ch_idx;
-	struct wlan_regulatory_pdev_priv_obj *pdev_priv_obj;
-
-	ch_idx = reg_get_chan_enum(ch);
-
-	if (ch_idx == INVALID_CHANNEL)
-		return CHANNEL_STATE_INVALID;
-
-	pdev_priv_obj = reg_get_pdev_obj(pdev);
-
-	if (!IS_VALID_PDEV_REG_OBJ(pdev_priv_obj)) {
-		reg_err("pdev reg obj is NULL");
-		return CHANNEL_STATE_INVALID;
-	}
-
-	return pdev_priv_obj->cur_chan_list[ch_idx].state;
-}
-
-/**
- * reg_get_5g_bonded_chan_array() - get ptr to bonded channel
- * @pdev: Pointer to pdev structure
- * @oper_ch: operating channel number
- * @bonded_chan_ar: bonded channel array
- * @array_size; Array size
- * @bonded_chan_ptr_ptr: bonded channel ptr ptr
- *
- * Return: bonded channel state
- */
-static enum channel_state reg_get_5g_bonded_chan_array(
-		struct wlan_objmgr_pdev *pdev,
-		uint8_t oper_chan,
-		const struct bonded_channel bonded_chan_ar[],
-		uint16_t array_size,
-		const struct bonded_channel **bonded_chan_ptr_ptr)
-{
-	int i;
-	uint8_t chan_num;
-	const struct bonded_channel *bonded_chan_ptr = NULL;
-	enum channel_state chan_state = CHANNEL_STATE_INVALID;
-	enum channel_state temp_chan_state;
-
-	for (i = 0; i < array_size; i++) {
-		if ((oper_chan >= bonded_chan_ar[i].start_ch) &&
-		    (oper_chan <= bonded_chan_ar[i].end_ch)) {
-			bonded_chan_ptr = &bonded_chan_ar[i];
-			break;
-		}
-	}
-
-	if (!bonded_chan_ptr)
-		return chan_state;
-
-	*bonded_chan_ptr_ptr = bonded_chan_ptr;
-	chan_num =  bonded_chan_ptr->start_ch;
-	while (chan_num <= bonded_chan_ptr->end_ch) {
-		temp_chan_state = reg_get_channel_state(pdev, chan_num);
-		if (temp_chan_state < chan_state)
-			chan_state = temp_chan_state;
-		chan_num = chan_num + 4;
-	}
-
-	return chan_state;
-}
-
-enum channel_state reg_get_5g_bonded_channel(
-		struct wlan_objmgr_pdev *pdev, uint8_t chan_num,
-		enum phy_ch_width ch_width,
-		const struct bonded_channel **bonded_chan_ptr_ptr)
-{
-	if (ch_width == CH_WIDTH_80P80MHZ)
-		return reg_get_5g_bonded_chan_array(pdev, chan_num,
-				bonded_chan_80mhz_list,
-				QDF_ARRAY_SIZE(bonded_chan_80mhz_list),
-				bonded_chan_ptr_ptr);
-	else if (ch_width == CH_WIDTH_160MHZ)
-		return reg_get_5g_bonded_chan_array(pdev, chan_num,
-				bonded_chan_160mhz_list,
-				QDF_ARRAY_SIZE(bonded_chan_160mhz_list),
-				bonded_chan_ptr_ptr);
-	else if (ch_width == CH_WIDTH_80MHZ)
-		return reg_get_5g_bonded_chan_array(pdev, chan_num,
-				bonded_chan_80mhz_list,
-				QDF_ARRAY_SIZE(bonded_chan_80mhz_list),
-				bonded_chan_ptr_ptr);
-	else if (ch_width == CH_WIDTH_40MHZ)
-		return reg_get_5g_bonded_chan_array(pdev, chan_num,
-				bonded_chan_40mhz_list,
-				QDF_ARRAY_SIZE(bonded_chan_40mhz_list),
-				bonded_chan_ptr_ptr);
-	else
-		return reg_get_channel_state(pdev, chan_num);
-}
-
-enum channel_state reg_get_5g_bonded_channel_state(
-		struct wlan_objmgr_pdev *pdev,
-		uint8_t ch, enum phy_ch_width bw)
-{
-	enum channel_enum ch_indx;
-	enum channel_state chan_state;
-	struct regulatory_channel *reg_channels;
-	struct wlan_regulatory_pdev_priv_obj *pdev_priv_obj;
-	bool bw_enabled = false;
-	const struct bonded_channel *bonded_chan_ptr = NULL;
-
-	if (bw > CH_WIDTH_80P80MHZ) {
-		reg_err("bw passed is not good");
-		return CHANNEL_STATE_INVALID;
-	}
-
-	chan_state = reg_get_5g_bonded_channel(pdev, ch, bw, &bonded_chan_ptr);
-
-	if ((chan_state == CHANNEL_STATE_INVALID) ||
-	    (chan_state == CHANNEL_STATE_DISABLE))
-		return chan_state;
-
-	pdev_priv_obj = reg_get_pdev_obj(pdev);
-
-	if (!IS_VALID_PDEV_REG_OBJ(pdev_priv_obj)) {
-		reg_err("pdev reg obj is NULL");
-		return CHANNEL_STATE_INVALID;
-	}
-	reg_channels = pdev_priv_obj->cur_chan_list;
-
-	ch_indx = reg_get_chan_enum(ch);
-	if (ch_indx == INVALID_CHANNEL)
-		return CHANNEL_STATE_INVALID;
-	if (bw == CH_WIDTH_5MHZ)
-		bw_enabled = true;
-	else if (bw == CH_WIDTH_10MHZ)
-		bw_enabled = (reg_channels[ch_indx].min_bw <= 10) &&
-			(reg_channels[ch_indx].max_bw >= 10);
-	else if (bw == CH_WIDTH_20MHZ)
-		bw_enabled = (reg_channels[ch_indx].min_bw <= 20) &&
-			(reg_channels[ch_indx].max_bw >= 20);
-	else if (bw == CH_WIDTH_40MHZ)
-		bw_enabled = (reg_channels[ch_indx].min_bw <= 40) &&
-			(reg_channels[ch_indx].max_bw >= 40);
-	else if (bw == CH_WIDTH_80MHZ)
-		bw_enabled = (reg_channels[ch_indx].min_bw <= 80) &&
-			(reg_channels[ch_indx].max_bw >= 80);
-	else if (bw == CH_WIDTH_160MHZ)
-		bw_enabled = (reg_channels[ch_indx].min_bw <= 160) &&
-			(reg_channels[ch_indx].max_bw >= 160);
-	else if (bw == CH_WIDTH_80P80MHZ)
-		bw_enabled = (reg_channels[ch_indx].min_bw <= 80) &&
-			(reg_channels[ch_indx].max_bw >= 80);
-
-	if (bw_enabled)
-		return chan_state;
-	else
-		return CHANNEL_STATE_DISABLE;
-}
-
-enum channel_state reg_get_2g_bonded_channel_state(
-		struct wlan_objmgr_pdev *pdev,
-		uint8_t oper_ch, uint8_t sec_ch,
-		enum phy_ch_width bw)
-{
-	enum channel_enum chan_idx;
-	enum channel_state chan_state;
-	struct regulatory_channel *reg_channels;
-	struct wlan_regulatory_pdev_priv_obj *pdev_priv_obj;
-	bool bw_enabled = false;
-	enum channel_state chan_state2 = CHANNEL_STATE_INVALID;
-
-	if (bw > CH_WIDTH_40MHZ)
-		return CHANNEL_STATE_INVALID;
-
-	if (bw == CH_WIDTH_40MHZ) {
-		if ((sec_ch + 4 != oper_ch) &&
-		    (oper_ch + 4 != sec_ch))
-			return CHANNEL_STATE_INVALID;
-		chan_state2 = reg_get_channel_state(pdev, sec_ch);
-		if (chan_state2 == CHANNEL_STATE_INVALID)
-			return chan_state2;
-	}
-
-	pdev_priv_obj = reg_get_pdev_obj(pdev);
-
-	if (!IS_VALID_PDEV_REG_OBJ(pdev_priv_obj)) {
-		reg_err("reg pdev priv obj is NULL");
-		return CHANNEL_STATE_INVALID;
-	}
-
-	reg_channels = pdev_priv_obj->cur_chan_list;
-
-	chan_state = reg_get_channel_state(pdev, oper_ch);
-	if (chan_state2 < chan_state)
-		chan_state = chan_state2;
-
-	if ((chan_state == CHANNEL_STATE_INVALID) ||
-	    (chan_state == CHANNEL_STATE_DISABLE))
-		return chan_state;
-
-	chan_idx = reg_get_chan_enum(oper_ch);
-	if (chan_idx == INVALID_CHANNEL)
-		return CHANNEL_STATE_INVALID;
-	if (bw == CH_WIDTH_5MHZ)
-		bw_enabled = true;
-	else if (bw == CH_WIDTH_10MHZ)
-		bw_enabled = (reg_channels[chan_idx].min_bw <= 10) &&
-			(reg_channels[chan_idx].max_bw >= 10);
-	else if (bw == CH_WIDTH_20MHZ)
-		bw_enabled = (reg_channels[chan_idx].min_bw <= 20) &&
-			(reg_channels[chan_idx].max_bw >= 20);
-	else if (bw == CH_WIDTH_40MHZ)
-		bw_enabled = (reg_channels[chan_idx].min_bw <= 40) &&
-			(reg_channels[chan_idx].max_bw >= 40);
-
-	if (bw_enabled)
-		return chan_state;
-	else
-		return CHANNEL_STATE_DISABLE;
-
-	return CHANNEL_STATE_ENABLE;
-}
-#endif /* CONFIG_CHAN_NUM_API */
 
 /**
  * reg_combine_channel_states() - Get minimum of channel state1 and state2
@@ -1411,171 +1175,6 @@ enum channel_state reg_combine_channel_states(enum channel_state chan_state1,
 	else
 		return min(chan_state1, chan_state2);
 }
-
-#ifdef CONFIG_CHAN_NUM_API
-/**
- * reg_set_5g_channel_params () - Sets channel parameteres for given bandwidth
- * @ch: channel number.
- * @ch_params: pointer to the channel parameters.
- *
- * Return: None
- */
-static void reg_set_5g_channel_params(struct wlan_objmgr_pdev *pdev,
-				      uint8_t ch,
-				      struct ch_params *ch_params)
-{
-	/*
-	 * Set channel parameters like center frequency for a bonded channel
-	 * state. Also return the maximum bandwidth supported by the channel.
-	 */
-
-	enum channel_state chan_state = CHANNEL_STATE_ENABLE;
-	enum channel_state chan_state2 = CHANNEL_STATE_ENABLE;
-	const struct bonded_channel *bonded_chan_ptr = NULL;
-	const struct bonded_channel *bonded_chan_ptr2 = NULL;
-
-	if (!ch_params) {
-		reg_err("ch_params is NULL");
-		return;
-	}
-
-	if (ch_params->ch_width >= CH_WIDTH_MAX) {
-		if (ch_params->center_freq_seg1 != 0)
-			ch_params->ch_width = CH_WIDTH_80P80MHZ;
-		else
-			ch_params->ch_width = CH_WIDTH_160MHZ;
-	}
-
-	while (ch_params->ch_width != CH_WIDTH_INVALID) {
-		bonded_chan_ptr = NULL;
-		bonded_chan_ptr2 = NULL;
-		chan_state = reg_get_5g_bonded_channel(
-				pdev, ch, ch_params->ch_width,
-				&bonded_chan_ptr);
-
-		chan_state = reg_get_5g_bonded_channel_state(
-				pdev, ch, ch_params->ch_width);
-
-		if (ch_params->ch_width == CH_WIDTH_80P80MHZ) {
-			chan_state2 = reg_get_5g_bonded_channel_state(
-					pdev, ch_params->center_freq_seg1 - 2,
-					CH_WIDTH_80MHZ);
-
-			chan_state = reg_combine_channel_states(
-					chan_state, chan_state2);
-		}
-
-		if ((chan_state != CHANNEL_STATE_ENABLE) &&
-		    (chan_state != CHANNEL_STATE_DFS))
-			goto update_bw;
-
-		if (ch_params->ch_width <= CH_WIDTH_20MHZ) {
-			ch_params->sec_ch_offset = NO_SEC_CH;
-			ch_params->center_freq_seg0 = ch;
-			break;
-		} else if (ch_params->ch_width >= CH_WIDTH_40MHZ) {
-			reg_get_5g_bonded_chan_array(
-					pdev, ch, bonded_chan_40mhz_list,
-					QDF_ARRAY_SIZE(bonded_chan_40mhz_list),
-					&bonded_chan_ptr2);
-			if (!bonded_chan_ptr || !bonded_chan_ptr2)
-				goto update_bw;
-			if (ch == bonded_chan_ptr2->start_ch)
-				ch_params->sec_ch_offset = LOW_PRIMARY_CH;
-			else
-				ch_params->sec_ch_offset = HIGH_PRIMARY_CH;
-
-			ch_params->center_freq_seg0 =
-				(bonded_chan_ptr->start_ch +
-				 bonded_chan_ptr->end_ch) / 2;
-			break;
-		}
-update_bw:
-		ch_params->ch_width =
-		    get_next_lower_bandwidth(ch_params->ch_width);
-	}
-
-	if (ch_params->ch_width == CH_WIDTH_160MHZ) {
-		ch_params->center_freq_seg1 = ch_params->center_freq_seg0;
-		chan_state = reg_get_5g_bonded_channel(
-				pdev, ch, CH_WIDTH_80MHZ, &bonded_chan_ptr);
-		if (bonded_chan_ptr)
-			ch_params->center_freq_seg0 =
-				(bonded_chan_ptr->start_ch +
-				 bonded_chan_ptr->end_ch) / 2;
-	}
-
-	/* Overwrite center_freq_seg1 to 0 for non 160 and 80+80 width */
-	if (!(ch_params->ch_width == CH_WIDTH_160MHZ ||
-	      ch_params->ch_width == CH_WIDTH_80P80MHZ))
-		ch_params->center_freq_seg1 = 0;
-
-	reg_nofl_debug("ch %d ch_wd %d freq0 %d freq1 %d", ch,
-		       ch_params->ch_width, ch_params->center_freq_seg0,
-		       ch_params->center_freq_seg1);
-}
-
-/**
- * reg_set_2g_channel_params() - set the 2.4G bonded channel parameters
- * @oper_ch: operating channel
- * @ch_params: channel parameters
- * @sec_ch_2g: 2.4G secondary channel
- *
- * Return: void
- */
-static void reg_set_2g_channel_params(struct wlan_objmgr_pdev *pdev,
-				      uint16_t oper_ch,
-				      struct ch_params *ch_params,
-				      uint16_t sec_ch_2g)
-{
-	enum channel_state chan_state = CHANNEL_STATE_ENABLE;
-
-	if (ch_params->ch_width >= CH_WIDTH_MAX)
-		ch_params->ch_width = CH_WIDTH_40MHZ;
-	if ((reg_get_bw_value(ch_params->ch_width) > 20) && !sec_ch_2g) {
-		if (oper_ch >= 1 && oper_ch <= 5)
-			sec_ch_2g = oper_ch + 4;
-		else if (oper_ch >= 6 && oper_ch <= 13)
-			sec_ch_2g = oper_ch - 4;
-	}
-
-	while (ch_params->ch_width != CH_WIDTH_INVALID) {
-		chan_state = reg_get_2g_bonded_channel_state(
-				pdev, oper_ch, sec_ch_2g, ch_params->ch_width);
-		if (chan_state == CHANNEL_STATE_ENABLE) {
-			if (ch_params->ch_width == CH_WIDTH_40MHZ) {
-				if (oper_ch < sec_ch_2g)
-					ch_params->sec_ch_offset =
-						LOW_PRIMARY_CH;
-				else
-					ch_params->sec_ch_offset =
-						HIGH_PRIMARY_CH;
-				ch_params->center_freq_seg0 =
-					(oper_ch + sec_ch_2g) / 2;
-			} else {
-				ch_params->sec_ch_offset = NO_SEC_CH;
-				ch_params->center_freq_seg0 = oper_ch;
-			}
-			break;
-		}
-
-		ch_params->ch_width =
-		    get_next_lower_bandwidth(ch_params->ch_width);
-	}
-	/* Overwrite center_freq_seg1 to 0 for 2.4 Ghz */
-	ch_params->center_freq_seg1 = 0;
-}
-
-void reg_set_channel_params(struct wlan_objmgr_pdev *pdev,
-			    uint8_t ch, uint8_t sec_ch_2g,
-			    struct ch_params *ch_params)
-{
-	if (REG_IS_5GHZ_CH(ch))
-		reg_set_5g_channel_params(pdev, ch, ch_params);
-	else if  (REG_IS_24GHZ_CH(ch))
-		reg_set_2g_channel_params(pdev, ch, ch_params, sec_ch_2g);
-}
-#endif /* CONFIG_CHAN_NUM_API */
 
 QDF_STATUS reg_read_default_country(struct wlan_objmgr_psoc *psoc,
 				    uint8_t *country_code)
@@ -1672,77 +1271,6 @@ void reg_set_dfs_region(struct wlan_objmgr_pdev *pdev,
 
 	reg_init_channel_map(dfs_reg);
 }
-
-#ifdef CONFIG_CHAN_NUM_API
-uint32_t reg_get_channel_reg_power(struct wlan_objmgr_pdev *pdev,
-				   uint8_t chan_num)
-{
-	enum channel_enum chan_enum;
-	struct wlan_regulatory_pdev_priv_obj *pdev_priv_obj;
-	struct regulatory_channel *reg_channels;
-
-	chan_enum = reg_get_chan_enum(chan_num);
-
-	if (chan_enum == INVALID_CHANNEL) {
-		reg_err("channel is invalid");
-		return QDF_STATUS_E_FAILURE;
-	}
-
-	pdev_priv_obj = reg_get_pdev_obj(pdev);
-
-	if (!IS_VALID_PDEV_REG_OBJ(pdev_priv_obj)) {
-		reg_err("reg pdev priv obj is NULL");
-		return QDF_STATUS_E_FAILURE;
-	}
-
-	reg_channels = pdev_priv_obj->cur_chan_list;
-
-	return reg_channels[chan_enum].tx_power;
-}
-
-qdf_freq_t reg_get_channel_freq(struct wlan_objmgr_pdev *pdev,
-				uint8_t chan_num)
-{
-	enum channel_enum chan_enum;
-	struct wlan_regulatory_pdev_priv_obj *pdev_priv_obj;
-	struct regulatory_channel *reg_channels;
-
-	chan_enum = reg_get_chan_enum(chan_num);
-
-	if (chan_enum == INVALID_CHANNEL)
-		return CHANNEL_STATE_INVALID;
-
-	pdev_priv_obj = reg_get_pdev_obj(pdev);
-
-	if (!IS_VALID_PDEV_REG_OBJ(pdev_priv_obj)) {
-		reg_err("reg pdev priv obj is NULL");
-		return QDF_STATUS_E_FAILURE;
-	}
-
-	reg_channels = pdev_priv_obj->cur_chan_list;
-
-	return reg_channels[chan_enum].center_freq;
-}
-
-bool reg_is_dfs_ch(struct wlan_objmgr_pdev *pdev,
-		   uint8_t chan)
-{
-	enum channel_state ch_state;
-
-	ch_state = reg_get_channel_state(pdev, chan);
-
-	return ch_state == CHANNEL_STATE_DFS;
-}
-
-bool reg_is_disable_ch(struct wlan_objmgr_pdev *pdev, uint8_t chan)
-{
-	enum channel_state ch_state;
-
-	ch_state = reg_get_channel_state(pdev, chan);
-
-	return ch_state == CHANNEL_STATE_DISABLE;
-}
-#endif /* CONFIG_CHAN_NUM_API */
 
 uint8_t reg_freq_to_chan(struct wlan_objmgr_pdev *pdev,
 			 qdf_freq_t freq)
@@ -1874,52 +1402,6 @@ uint16_t reg_legacy_chan_to_freq(struct wlan_objmgr_pdev *pdev,
 					min_chan_range,
 					max_chan_range);
 }
-
-#ifdef CONFIG_CHAN_NUM_API
-bool reg_chan_is_49ghz(struct wlan_objmgr_pdev *pdev, uint8_t chan_num)
-{
-	qdf_freq_t freq = 0;
-
-	freq = reg_legacy_chan_to_freq(pdev, chan_num);
-
-	return REG_IS_49GHZ_FREQ(freq) ? true : false;
-}
-
-void reg_update_nol_ch(struct wlan_objmgr_pdev *pdev,
-		       uint8_t *chan_list,
-		       uint8_t num_chan,
-		       bool nol_chan)
-{
-	enum channel_enum chan_enum;
-	struct regulatory_channel *mas_chan_list;
-	struct wlan_regulatory_pdev_priv_obj *pdev_priv_obj;
-	uint16_t i;
-
-	if (!num_chan || !chan_list) {
-		reg_err("chan_list or num_ch is NULL");
-		return;
-	}
-
-	pdev_priv_obj = reg_get_pdev_obj(pdev);
-	if (!pdev_priv_obj) {
-		reg_err("reg psoc private obj is NULL");
-		return;
-	}
-
-	mas_chan_list = pdev_priv_obj->mas_chan_list;
-	for (i = 0; i < num_chan; i++) {
-		chan_enum = reg_get_chan_enum(chan_list[i]);
-		if (chan_enum == INVALID_CHANNEL) {
-			reg_err("Invalid ch in nol list, chan %d",
-				chan_list[i]);
-			continue;
-		}
-		mas_chan_list[chan_enum].nol_chan = nol_chan;
-	}
-
-	reg_compute_pdev_current_chan_list(pdev_priv_obj);
-}
-#endif /* CONFIG_CHAN_NUM_API */
 
 QDF_STATUS reg_program_default_cc(struct wlan_objmgr_pdev *pdev,
 				  uint16_t regdmn)
@@ -2384,47 +1866,6 @@ bool reg_chan_in_range(struct regulatory_channel *chan_list,
 	else
 		return false;
 }
-
-#ifdef CONFIG_CHAN_NUM_API
-void reg_update_nol_history_ch(struct wlan_objmgr_pdev *pdev,
-			       uint8_t *chan_list, uint8_t num_chan,
-			       bool nol_history_chan)
-{
-	enum channel_enum chan_enum;
-	struct regulatory_channel *mas_chan_list;
-	struct regulatory_channel *cur_chan_list;
-	struct wlan_regulatory_pdev_priv_obj *pdev_priv_obj;
-	uint16_t i;
-
-	if (!num_chan || !chan_list) {
-		reg_err("chan_list or num_ch is NULL");
-		return;
-	}
-
-	pdev_priv_obj = wlan_objmgr_pdev_get_comp_private_obj(
-			pdev, WLAN_UMAC_COMP_REGULATORY);
-
-	if (!pdev_priv_obj) {
-		reg_err("reg psoc private obj is NULL");
-		return;
-	}
-
-	mas_chan_list = pdev_priv_obj->mas_chan_list;
-	cur_chan_list = pdev_priv_obj->cur_chan_list;
-
-	for (i = 0; i < num_chan; i++) {
-		chan_enum = reg_get_chan_enum(chan_list[i]);
-		if (chan_enum == INVALID_CHANNEL) {
-			reg_err("Invalid ch in nol list, chan %d",
-				chan_list[i]);
-			continue;
-		}
-		mas_chan_list[chan_enum].nol_history = nol_history_chan;
-		cur_chan_list[chan_enum].nol_history = nol_history_chan;
-	}
-}
-
-#endif /* CONFIG_CHAN_NUM_API */
 
 bool reg_is_24ghz_ch_freq(uint32_t freq)
 {
@@ -2906,32 +2347,10 @@ qdf_freq_t reg_ch_to_freq(uint32_t ch_enum)
 	return REG_CH_TO_FREQ(ch_enum);
 }
 
-#ifdef CONFIG_CHAN_NUM_API
-bool reg_is_channel_valid_5g_sbs(uint8_t curchan, uint8_t newchan)
-{
-	return REG_IS_CHANNEL_VALID_5G_SBS(curchan, newchan);
-}
-
-uint8_t reg_min_24ghz_ch_num(void)
-{
-	return REG_MIN_24GHZ_CH_NUM;
-}
-
-uint8_t reg_max_24ghz_ch_num(void)
-{
-	return REG_MAX_24GHZ_CH_NUM;
-}
-
-uint8_t reg_min_5ghz_ch_num(void)
-{
-	return REG_MIN_5GHZ_CH_NUM;
-}
-
 uint8_t reg_max_5ghz_ch_num(void)
 {
 	return REG_MAX_5GHZ_CH_NUM;
 }
-#endif /* CONFIG_CHAN_NUM_API */
 
 #ifdef CONFIG_CHAN_FREQ_API
 qdf_freq_t reg_min_24ghz_chan_freq(void)
@@ -3912,7 +3331,7 @@ static uint32_t reg_get_channel_flags_from_secondary_list_for_freq(
 	chan_enum = reg_get_chan_enum_for_freq(freq);
 
 	if (chan_enum == INVALID_CHANNEL) {
-		reg_err("chan freq is not valid");
+		reg_err_rl("chan freq %u is not valid", freq);
 		return REGULATORY_CHAN_INVALID;
 	}
 
@@ -3946,6 +3365,11 @@ reg_get_5g_bonded_chan_array_for_freq(struct wlan_objmgr_pdev *pdev,
 	enum channel_state chan_state = CHANNEL_STATE_INVALID;
 	enum channel_state temp_chan_state;
 
+	if (!bonded_chan_ptr) {
+		reg_debug("bonded chan ptr is NULL");
+		return chan_state;
+	}
+
 	chan_cfreq =  bonded_chan_ptr->start_freq;
 	while (chan_cfreq <= bonded_chan_ptr->end_freq) {
 		temp_chan_state = reg_get_channel_state_for_freq(pdev,
@@ -3956,37 +3380,6 @@ reg_get_5g_bonded_chan_array_for_freq(struct wlan_objmgr_pdev *pdev,
 	}
 
 	return chan_state;
-}
-
-/**
- * reg_get_5g_bonded_channel_for_freq()- Return the channel state for a
- * 5G or 6G channel frequency based on the channel width and bonded channel
- * @pdev: Pointer to pdev.
- * @freq: Channel center frequency.
- * @ch_width: Channel Width.
- * @bonded_chan_ptr_ptr: Pointer to bonded_channel_freq.
- *
- * Return: Channel State
- */
-enum channel_state
-reg_get_5g_bonded_channel_for_freq(struct wlan_objmgr_pdev *pdev,
-				   uint16_t freq,
-				   enum phy_ch_width ch_width,
-				   const struct bonded_channel_freq
-				   **bonded_chan_ptr_ptr)
-
-{
-	if (ch_width == CH_WIDTH_20MHZ)
-		return reg_get_channel_state_for_freq(pdev, freq);
-
-	/* Fetch the bonded_chan_ptr for width greater than 20MHZ. */
-	*bonded_chan_ptr_ptr = reg_get_bonded_chan_entry(freq, ch_width);
-
-	if (!(*bonded_chan_ptr_ptr))
-		return CHANNEL_STATE_INVALID;
-
-	return reg_get_5g_bonded_chan_array_for_freq(pdev, freq,
-						     *bonded_chan_ptr_ptr);
 }
 
 enum channel_state
@@ -4002,7 +3395,7 @@ reg_get_5g_bonded_channel_state_for_freq(struct wlan_objmgr_pdev *pdev,
 	const struct bonded_channel_freq *bonded_chan_ptr = NULL;
 
 	if (bw > CH_WIDTH_80P80MHZ) {
-		reg_err_rl("bw passed is not good");
+		reg_err_rl("bw (%d) passed is not good", bw);
 		return CHANNEL_STATE_INVALID;
 	}
 
@@ -4473,6 +3866,78 @@ reg_fill_channel_list(struct wlan_objmgr_pdev *pdev,
 	 */
 	reg_fill_pre320mhz_channel(pdev, chan_list, in_ch_width, freq,
 				   sec_ch_2g_freq);
+}
+#endif
+
+#if defined(WLAN_FEATURE_11BE) && defined(CONFIG_REG_CLIENT)
+enum channel_state
+reg_get_5g_bonded_channel_for_freq(struct wlan_objmgr_pdev *pdev,
+				   uint16_t freq,
+				   enum phy_ch_width ch_width,
+				   const struct bonded_channel_freq
+				   **bonded_chan_ptr_ptr)
+{
+	if (ch_width == CH_WIDTH_20MHZ)
+		return reg_get_channel_state_for_freq(pdev, freq);
+
+	if (ch_width == CH_WIDTH_320MHZ) {
+		uint8_t num_bonded_pairs;
+		uint16_t array_size =
+				QDF_ARRAY_SIZE(bonded_chan_320mhz_list_freq);
+		const struct bonded_channel_freq *bonded_ch_ptr[2] = {
+								NULL, NULL};
+		uint16_t punct_pattern;
+
+		/* For now sending band center freq as 0 */
+		num_bonded_pairs =
+			reg_get_320_bonded_chan_array(
+						pdev, freq, 0,
+						bonded_chan_320mhz_list_freq,
+						array_size, bonded_ch_ptr);
+		if (!num_bonded_pairs) {
+			reg_info("No 320MHz bonded pair for freq %d", freq);
+			return CHANNEL_STATE_INVALID;
+		}
+		/* Taking only first bonded pair */
+		*bonded_chan_ptr_ptr = bonded_ch_ptr[0];
+
+		return reg_get_320_bonded_channel_state(pdev, freq,
+							bonded_ch_ptr[0],
+							ch_width,
+							&punct_pattern);
+	} else {
+		*bonded_chan_ptr_ptr = reg_get_bonded_chan_entry(freq,
+								 ch_width);
+		if (!(*bonded_chan_ptr_ptr))
+			return CHANNEL_STATE_INVALID;
+
+		return reg_get_5g_bonded_chan_array_for_freq(
+							pdev, freq,
+							*bonded_chan_ptr_ptr);
+	}
+}
+#else
+enum channel_state
+reg_get_5g_bonded_channel_for_freq(struct wlan_objmgr_pdev *pdev,
+				   uint16_t freq,
+				   enum phy_ch_width ch_width,
+				   const struct bonded_channel_freq
+				   **bonded_chan_ptr_ptr)
+
+{
+	if (ch_width == CH_WIDTH_20MHZ)
+		return reg_get_channel_state_for_freq(pdev, freq);
+
+	/* Fetch the bonded_chan_ptr for width greater than 20MHZ. */
+	*bonded_chan_ptr_ptr = reg_get_bonded_chan_entry(freq, ch_width);
+
+	if (!(*bonded_chan_ptr_ptr)) {
+		reg_debug_rl("bonded_chan_ptr_ptr is NULL");
+		return CHANNEL_STATE_INVALID;
+	}
+
+	return reg_get_5g_bonded_chan_array_for_freq(pdev, freq,
+						     *bonded_chan_ptr_ptr);
 }
 #endif
 
@@ -5359,6 +4824,779 @@ reg_get_cur_6g_ap_pwr_type(struct wlan_objmgr_pdev *pdev,
 	return QDF_STATUS_SUCCESS;
 }
 
+#ifdef CONFIG_AFC_SUPPORT
+/**
+ * get_reg_rules_for_pdev() - Get the pointer to the reg rules for the pdev
+ * @pdev: Pointer to pdev
+ *
+ * Return: Pointer to Standard Power regulatory rules
+ */
+static struct reg_rule_info *
+reg_get_reg_rules_for_pdev(struct wlan_objmgr_pdev *pdev)
+{
+	struct wlan_objmgr_psoc *psoc;
+	struct wlan_regulatory_psoc_priv_obj *psoc_reg_priv;
+	uint8_t phy_id;
+	struct reg_rule_info *psoc_reg_rules;
+
+	psoc = wlan_pdev_get_psoc(pdev);
+	psoc_reg_priv = reg_get_psoc_obj(psoc);
+	phy_id = wlan_objmgr_pdev_get_pdev_id(pdev);
+	psoc_reg_rules = &psoc_reg_priv->mas_chan_params[phy_id].reg_rules;
+
+	return psoc_reg_rules;
+}
+
+/**
+ * reg_is_empty_range() - If both left, right frquency edges in the input range
+ * are zero then the range is empty, else not.
+ * @in_range: Pointer to input range
+ *
+ * Return: True if the range is empty, else false
+ */
+static bool reg_is_empty_range(struct freq_range *in_range)
+{
+	return !in_range->left && !in_range->right;
+}
+
+struct freq_range
+reg_init_freq_range(qdf_freq_t left, qdf_freq_t right)
+{
+	struct freq_range out_range;
+
+	out_range.left = left;
+	out_range.right = right;
+
+	return out_range;
+}
+
+/**
+ * reg_assign_vars_with_range_vals() - Assign input variables with the values of
+ * the range variable values
+ * @in_range: Pointer to input range object
+ * @left: Pointer to the first variable to get the value of left frequency edge
+ * @right: Pointer to the second variable to get the value of right frequency
+ *         edge
+ *
+ * Return: void
+ */
+static void
+reg_assign_vars_with_range_vals(struct freq_range *in_range,
+				qdf_freq_t *left,
+				qdf_freq_t *right)
+{
+	*left = in_range->left;
+	*right = in_range->right;
+}
+
+/**
+ * reg_intersect_ranges() - Intersect two ranges and return the intesected range
+ * @first: Pointer to first input range
+ * @second: Pointer to second input range
+ *
+ * Return: Intersected output range
+ */
+static struct freq_range
+reg_intersect_ranges(struct freq_range *first_range,
+		     struct freq_range *second_range)
+{
+	struct freq_range out_range;
+	qdf_freq_t l_freq;
+	qdf_freq_t r_freq;
+
+	/* validate if the ranges are proper */
+
+	l_freq = QDF_MAX(first_range->left, second_range->left);
+	r_freq = QDF_MIN(first_range->right, second_range->right);
+
+	if (l_freq > r_freq) {
+		l_freq = 0;
+		l_freq = 0;
+
+		reg_debug("Ranges do not overlap first= [%u, %u], second = [%u, %u]",
+			  first_range->left,
+			  first_range->right,
+			  second_range->left,
+			  second_range->right);
+	}
+
+	out_range.left = l_freq;
+	out_range.right = r_freq;
+
+	return out_range;
+}
+
+/**
+ * reg_act_sp_rule_cb -  A function pointer type that calculate something
+ * from the input frequency range
+ * @rule_fr: Pointer to frequencey range
+ * @arg: Pointer to generic argument (a.k.a. context)
+ *
+ * Return: Void
+ */
+typedef void (*reg_act_sp_rule_cb)(struct freq_range *rule_fr,
+				   void *arg);
+
+/**
+ * reg_iterate_sp_rules() - Iterate through the Standard Power reg rules, for
+ * every reg rule call the call back function to take some action or calculate
+ * something
+ * @pdev: Pointer to pdev
+ * @pdev_priv_obj: Pointer to pdev private object
+ * @action_on_sp_rule: A function pointer to take some action or calculate
+ * something for every sp rule
+ * @arg: Pointer to opque object (argument/context)
+ *
+ * Return: Void
+ */
+static void reg_iterate_sp_rules(struct wlan_objmgr_pdev *pdev,
+				 struct wlan_regulatory_pdev_priv_obj *pdev_priv_obj,
+				 reg_act_sp_rule_cb sp_rule_action,
+				 void *arg)
+{
+	struct cur_reg_rule *p_sp_reg_rule;
+	struct reg_rule_info *psoc_reg_rules;
+	uint8_t n_6g_sp_ap_reg_rules;
+	qdf_freq_t low_5g;
+	qdf_freq_t high_5g;
+	uint8_t i;
+	struct freq_range chip_range;
+
+	psoc_reg_rules = reg_get_reg_rules_for_pdev(pdev);
+	n_6g_sp_ap_reg_rules = psoc_reg_rules->num_of_6g_ap_reg_rules[REG_STANDARD_POWER_AP];
+	p_sp_reg_rule = psoc_reg_rules->reg_rules_6g_ap[REG_STANDARD_POWER_AP];
+
+	low_5g = pdev_priv_obj->range_5g_low;
+	high_5g = pdev_priv_obj->range_5g_high;
+
+	chip_range = reg_init_freq_range(low_5g, high_5g);
+
+	reg_debug("chip_range = [%u, %u]", low_5g, high_5g);
+	reg_debug("Num_6g_rules = %u", n_6g_sp_ap_reg_rules);
+
+	for (i = 0; i < n_6g_sp_ap_reg_rules; i++) {
+		struct freq_range sp_range;
+		struct freq_range out_range;
+
+		sp_range = reg_init_freq_range(p_sp_reg_rule->start_freq,
+					       p_sp_reg_rule->end_freq);
+		reg_debug("Rule:[%u, %u]",
+			  p_sp_reg_rule->start_freq,
+			  p_sp_reg_rule->end_freq);
+		out_range = reg_intersect_ranges(&chip_range, &sp_range);
+
+		if (sp_rule_action)
+			sp_rule_action(&out_range, arg);
+
+		p_sp_reg_rule++;
+	}
+}
+
+/**
+ * reg_afc_incr_num_ranges() - Increment the number of frequency ranges
+ * @p_range: Pointer to frequency range
+ * @num_freq_ranges: Pointer to number of frequency ranges. This needs to be
+ * (Actual type: uint8_t *num_freq_ranges)
+ * incremented by the function
+ *
+ * Return: Void
+ */
+static void reg_afc_incr_num_ranges(struct freq_range *p_range,
+				    void *num_freq_ranges)
+{
+	if (!reg_is_empty_range(p_range))
+		(*(uint8_t *)num_freq_ranges)++;
+}
+
+/**
+ * reg_get_num_sp_freq_ranges() - Find the number of reg rules from the Standard
+ * power regulatory rules
+ * @pdev: Pointer to pdev
+ *
+ * Return: number of frequency ranges
+ */
+static uint8_t reg_get_num_sp_freq_ranges(struct wlan_objmgr_pdev *pdev,
+					  struct wlan_regulatory_pdev_priv_obj *pdev_priv_obj)
+{
+	uint8_t num_freq_ranges;
+
+	num_freq_ranges = 0;
+	reg_iterate_sp_rules(pdev,
+			     pdev_priv_obj,
+			     reg_afc_incr_num_ranges,
+			     &num_freq_ranges);
+
+	reg_debug("Num_freq_ranges=%u", num_freq_ranges);
+	return num_freq_ranges;
+}
+
+/**
+ * reg_afc_get_intersected_ranges() - Get the intersected range into range obj
+ * @rule_fr: Pointer to the rule for frequency range
+ * @arg: Pointer to opaque object (argument/context)
+ * (Actual type: struct wlan_afc_freq_range_obj **p_range_obj)
+ * incremented by the function
+ *
+ * Return: Void
+ */
+static void reg_afc_get_intersected_ranges(struct freq_range *rule_fr,
+					   void *arg)
+{
+	struct wlan_afc_freq_range_obj *p_range;
+	struct wlan_afc_freq_range_obj **pp_range;
+
+	pp_range = (struct wlan_afc_freq_range_obj **)arg;
+	p_range = *pp_range;
+
+	if (!reg_is_empty_range(rule_fr)) {
+		reg_assign_vars_with_range_vals(rule_fr,
+						&p_range->lowfreq,
+						&p_range->highfreq);
+		reg_debug("Range = [%u, %u]", p_range->lowfreq, p_range->highfreq);
+		(*pp_range)++;
+	}
+}
+
+/**
+ * reg_cp_freq_ranges() - Copy frequency ranges  from the Standard power
+ * regulatory rules
+ * @pdev: Pointer to pdev
+ * @pdev_priv_obj: Pointer to pdev private object
+ * @num_freq_ranges: Number of frequency ranges
+ * @p_range_obj: Pointer to range object
+ *
+ * Return: void
+ */
+static void reg_cp_freq_ranges(struct wlan_objmgr_pdev *pdev,
+			       struct wlan_regulatory_pdev_priv_obj *pdev_priv_obj,
+			       uint8_t num_freq_ranges,
+			       struct wlan_afc_freq_range_obj *p_range_obj)
+{
+	struct wlan_afc_freq_range_obj *p_range;
+
+	reg_debug("Num freq ranges = %u", num_freq_ranges);
+
+	p_range = p_range_obj;
+	reg_iterate_sp_rules(pdev,
+			     pdev_priv_obj,
+			     reg_afc_get_intersected_ranges,
+			     &p_range);
+}
+
+/**
+ * reg_get_frange_list_len() - Calculate the length of the list of the
+ * frequency ranges
+ * @num_freq_ranges: Number of frequency ranges
+ *
+ * Return: Length of the frequency range list
+ */
+static uint16_t reg_get_frange_list_len(uint8_t num_freq_ranges)
+{
+	uint16_t frange_lst_len;
+
+	if (!num_freq_ranges)
+		reg_err("AFC:There is no freq ranges");
+
+	frange_lst_len =
+		sizeof(struct wlan_afc_frange_list) +
+		sizeof(struct wlan_afc_freq_range_obj) * num_freq_ranges;
+
+	return frange_lst_len;
+}
+
+/**
+ * reg_get_opclasses_array_len() - Calculate the length of the array of
+ * opclasses objects
+ * @num_opclasses: The number of opclasses
+ * @chansize_lst: The array of sizes of channel lists
+ *
+ * Return: Length of the array of opclass object
+ */
+static uint16_t reg_get_opclasses_array_len(struct wlan_objmgr_pdev *pdev,
+					    uint8_t num_opclasses,
+					    uint8_t *chansize_lst)
+{
+	uint16_t opclasses_arr_len = 0;
+	uint16_t i;
+
+	for (i = 0; i < num_opclasses; i++) {
+		opclasses_arr_len +=
+			sizeof(struct wlan_afc_opclass_obj) +
+			sizeof(uint8_t) * chansize_lst[i];
+	}
+
+	return opclasses_arr_len;
+}
+
+/**
+ * reg_get_afc_req_length() - Calculate the length of the AFC partial request
+ * @num_opclasses: The number of opclasses
+ * @num_freq_ranges: The number of frequency ranges
+ * @chansize_lst: The array of sizes of channel lists
+ *
+ * Return: Length of the partial AFC request
+ */
+static uint16_t reg_get_afc_req_length(struct wlan_objmgr_pdev *pdev,
+				       uint8_t num_opclasses,
+				       uint8_t num_freq_ranges,
+				       uint8_t *chansize_lst)
+{
+	uint16_t afc_req_len;
+	uint16_t frange_lst_len;
+	uint16_t fixed_param_len;
+	uint16_t num_opclasses_len;
+	uint16_t opclasses_arr_len;
+
+	fixed_param_len = sizeof(struct wlan_afc_host_req_fixed_params);
+	frange_lst_len = reg_get_frange_list_len(num_freq_ranges);
+	num_opclasses_len = sizeof(struct wlan_afc_num_opclasses);
+	opclasses_arr_len = reg_get_opclasses_array_len(pdev,
+							num_opclasses,
+							chansize_lst);
+
+	afc_req_len =
+		fixed_param_len +
+		frange_lst_len +
+		num_opclasses_len +
+		opclasses_arr_len;
+
+	return afc_req_len;
+}
+
+/**
+ * reg_fill_afc_fixed_params() - Fill the AFC fixed params
+ * @p_fixed_params: Pointer to afc fixed params object
+ * @afc_req_len: Length of the partial AFC request
+ *
+ * Return: Void
+ */
+static inline void
+reg_fill_afc_fixed_params(struct wlan_afc_host_req_fixed_params *p_fixed_params,
+			  uint16_t afc_req_len)
+{
+	p_fixed_params->req_length = afc_req_len;
+	p_fixed_params->req_id = DEFAULT_REQ_ID;
+	p_fixed_params->min_des_power = DEFAULT_MIN_POWER;
+}
+
+/**
+ * reg_fill_afc_freq_ranges() - Fill the AFC fixed params
+ * @pdev: Pointer to pdev
+ * @pdev_priv_obj: Pointer to pdev private object
+ * @p_frange_lst: Pointer to frequency range list
+ * @num_freq_ranges: Number of frequency ranges
+ *
+ * Return: Void
+ */
+static inline void
+reg_fill_afc_freq_ranges(struct wlan_objmgr_pdev *pdev,
+			 struct wlan_regulatory_pdev_priv_obj *pdev_priv_obj,
+			 struct wlan_afc_frange_list *p_frange_lst,
+			 uint8_t num_freq_ranges)
+{
+	struct wlan_afc_freq_range_obj *p_range_obj;
+
+	p_frange_lst->num_ranges = num_freq_ranges;
+
+	p_range_obj = &p_frange_lst->range_objs[0];
+
+	reg_cp_freq_ranges(pdev, pdev_priv_obj, num_freq_ranges, p_range_obj);
+}
+
+/**
+ * reg_fill_afc_opclass_obj() - Fill the opclass object and return pointer to
+ *                              next AFC opclass object
+ * @p_obj_opclass_obj: Pointer to opclass object
+ * @opclass: Operating class
+ * @num_chans: Number of channels in the opclass
+ * @p_chan_lst: Pointer to channel list
+ *
+ * Return: Pointer to the next AFC opclass object
+ */
+static struct wlan_afc_opclass_obj *
+reg_fill_afc_opclass_obj(struct wlan_afc_opclass_obj *p_obj_opclass_obj,
+			 uint8_t opclass,
+			 uint8_t num_chans,
+			 uint8_t *p_chan_lst)
+{
+	uint16_t len_obj;
+	uint8_t *out_p;
+	uint8_t *src, *dst;
+	uint8_t copy_len;
+
+	p_obj_opclass_obj->opclass_num_cfis = num_chans;
+	p_obj_opclass_obj->opclass = opclass;
+	src = p_chan_lst;
+	dst = p_obj_opclass_obj->cfis;
+	copy_len = num_chans * sizeof(uint8_t);
+
+	qdf_mem_copy(dst, src, copy_len);
+
+	len_obj = sizeof(struct wlan_afc_opclass_obj) + copy_len;
+	out_p = (uint8_t *)p_obj_opclass_obj + len_obj;
+
+	return (struct wlan_afc_opclass_obj *)out_p;
+}
+
+/**
+ * reg_fill_afc_opclasses_arr() - Fill the array of opclass objects
+ * @num_opclasses: The number of opclasses
+ * @opclass_lst: The array of Operating classes
+ * @chansize_lst: The array of sizes of channel lists
+ * @channel_lists: The array of channel lists
+ * @p_opclass_obj_arr: Pointer to the first opclass object
+ *
+ * Return: Void
+ */
+static inline void
+reg_fill_afc_opclasses_arr(struct wlan_objmgr_pdev *pdev,
+			   uint8_t num_opclasses,
+			   uint8_t *opclass_lst,
+			   uint8_t *chansize_lst,
+			   uint8_t *channel_lists[],
+			   struct wlan_afc_opclass_obj *p_opclass_obj_arr)
+{
+	uint16_t i;
+	struct wlan_afc_opclass_obj *p_opclass_obj;
+
+	p_opclass_obj = p_opclass_obj_arr;
+
+	for (i = 0; i < num_opclasses; i++) {
+		p_opclass_obj = reg_fill_afc_opclass_obj(p_opclass_obj,
+							 opclass_lst[i],
+							 chansize_lst[i],
+							 channel_lists[i]);
+	}
+}
+
+/**
+ * reg_next_opcls_ptr() - Get the pointer to the next opclass object
+ * @p_cur_opcls_obj: Pointer to the current operating class object
+ * @num_cfis: number of center frequencey indices
+ *
+ * Return: Pointer to next opclss object
+ */
+static struct wlan_afc_opclass_obj *
+reg_next_opcls_ptr(struct wlan_afc_opclass_obj *p_cur_opcls_obj,
+		   uint8_t num_cfis)
+{
+	uint8_t cur_obj_sz;
+	uint8_t fixed_opcls_sz;
+	struct wlan_afc_opclass_obj *p_next_opcls_obj;
+	uint8_t *p_tmp_next;
+
+	fixed_opcls_sz = sizeof(struct wlan_afc_opclass_obj);
+	cur_obj_sz = fixed_opcls_sz + num_cfis * sizeof(uint8_t);
+	p_tmp_next = (uint8_t *)p_cur_opcls_obj + cur_obj_sz;
+	p_next_opcls_obj = (struct wlan_afc_opclass_obj *)p_tmp_next;
+
+	return p_next_opcls_obj;
+}
+
+void reg_print_partial_afc_req_info(struct wlan_objmgr_pdev *pdev,
+				    struct wlan_afc_host_partial_request *afc_req)
+{
+	struct wlan_afc_host_req_fixed_params *p_fixed_params;
+	struct wlan_afc_frange_list *p_frange_lst;
+	struct wlan_afc_num_opclasses *p_num_opclasses;
+	uint8_t i;
+	uint8_t j;
+	uint16_t frange_lst_len;
+	uint8_t num_opclasses;
+	struct wlan_afc_opclass_obj *p_obj_opclass_arr;
+	struct wlan_afc_opclass_obj *p_opclass_obj;
+	uint8_t num_freq_ranges;
+	uint8_t *p_temp;
+
+	p_fixed_params = &afc_req->fixed_params;
+	reg_debug("req_length=%hu", p_fixed_params->req_length);
+	reg_debug("req_id=%llu", p_fixed_params->req_id);
+	reg_debug("min_des_power=%hd", p_fixed_params->min_des_power);
+
+	p_temp = (uint8_t *)p_fixed_params;
+	p_temp += sizeof(*p_fixed_params);
+	p_frange_lst = (struct wlan_afc_frange_list *)p_temp;
+	reg_debug("num_ranges=%hhu", p_frange_lst->num_ranges);
+	for (i = 0; i < p_frange_lst->num_ranges; i++) {
+		struct wlan_afc_freq_range_obj *p_range_obj;
+
+		p_range_obj = &p_frange_lst->range_objs[i];
+		reg_debug("lowfreq=%hu", p_range_obj->lowfreq);
+		reg_debug("highfreq=%hu", p_range_obj->highfreq);
+	}
+
+	num_freq_ranges = p_frange_lst->num_ranges;
+	frange_lst_len = reg_get_frange_list_len(num_freq_ranges);
+	p_temp += frange_lst_len;
+	p_num_opclasses = (struct wlan_afc_num_opclasses *)p_temp;
+	num_opclasses = p_num_opclasses->num_opclasses;
+	reg_debug("num_opclasses=%hhu", num_opclasses);
+
+	p_temp += sizeof(*p_num_opclasses);
+	p_obj_opclass_arr = (struct wlan_afc_opclass_obj *)p_temp;
+	p_opclass_obj = p_obj_opclass_arr;
+	for (i = 0; i < num_opclasses; i++) {
+		uint8_t opclass = p_opclass_obj->opclass;
+		uint8_t num_cfis = p_opclass_obj->opclass_num_cfis;
+		uint8_t *cfis = p_opclass_obj->cfis;
+
+		reg_debug("opclass[%hhu]=%hhu", i, opclass);
+		reg_debug("num_cfis[%hhu]=%hhu", i, num_cfis);
+		reg_debug("[");
+		for (j = 0; j < num_cfis; j++)
+			reg_debug("%hhu,", cfis[j]);
+		reg_debug("]");
+
+		p_opclass_obj = reg_next_opcls_ptr(p_opclass_obj, num_cfis);
+	}
+}
+
+/**
+ * reg_get_frange_filled_buf() - Allocate and fill the frange buffer and return
+ * the buffer. Also return the number of frequence ranges
+ * @pdev: Pointer to pdev
+ * @pdev_priv_obj: Pointer to pdev private object
+ * @num_freq_ranges: Pointer to number of frequency ranges (output param)
+ *
+ * Return: Pointer to the frange buffer
+ */
+static struct wlan_afc_frange_list *
+reg_get_frange_filled_buf(struct wlan_objmgr_pdev *pdev,
+			  struct wlan_regulatory_pdev_priv_obj *pdev_priv_obj,
+			  uint8_t *num_freq_ranges)
+{
+	uint16_t frange_lst_len;
+	struct wlan_afc_frange_list *p_frange_lst_local;
+
+	*num_freq_ranges =  reg_get_num_sp_freq_ranges(pdev, pdev_priv_obj);
+	frange_lst_len = reg_get_frange_list_len(*num_freq_ranges);
+
+	p_frange_lst_local = qdf_mem_malloc(frange_lst_len);
+	if (!p_frange_lst_local)
+		return NULL;
+
+	reg_fill_afc_freq_ranges(pdev,
+				 pdev_priv_obj,
+				 p_frange_lst_local,
+				 *num_freq_ranges);
+	return p_frange_lst_local;
+}
+
+QDF_STATUS
+reg_get_partial_afc_req_info(struct wlan_objmgr_pdev *pdev,
+			     struct wlan_afc_host_partial_request **afc_req)
+{
+	/* allocate the memory for the partial request */
+	struct wlan_afc_host_partial_request *temp_afc_req;
+	struct wlan_afc_host_req_fixed_params *p_fixed_params;
+	struct wlan_afc_frange_list *p_frange_lst_local;
+	struct wlan_afc_frange_list *p_frange_lst_afc;
+	struct wlan_afc_num_opclasses *p_num_opclasses;
+	uint16_t afc_req_len;
+	uint16_t frange_lst_len;
+	uint8_t num_freq_ranges;
+	uint8_t num_opclasses;
+	struct wlan_afc_opclass_obj *p_obj_opclass_arr;
+
+	uint8_t *opclass_lst;
+	uint8_t *chansize_lst;
+	uint8_t **channel_lists;
+	QDF_STATUS status;
+	struct wlan_regulatory_pdev_priv_obj *pdev_priv_obj;
+
+	temp_afc_req = NULL;
+	pdev_priv_obj = reg_get_pdev_obj(pdev);
+	if (!IS_VALID_PDEV_REG_OBJ(pdev_priv_obj)) {
+		reg_err("pdev reg component is NULL");
+		status = QDF_STATUS_E_INVAL;
+		goto handle_invalid_priv_object;
+	}
+
+	p_frange_lst_local = reg_get_frange_filled_buf(pdev,
+						       pdev_priv_obj,
+						       &num_freq_ranges);
+	if (!p_frange_lst_local) {
+		reg_err("Frange lst not allocated");
+		status = QDF_STATUS_E_NOMEM;
+		goto handle_invalid_priv_object;
+	}
+
+	status = reg_dmn_get_6g_opclasses_and_channels(pdev,
+						       p_frange_lst_local,
+						       &num_opclasses,
+						       &opclass_lst,
+						       &chansize_lst,
+						       &channel_lists);
+	if (status != QDF_STATUS_SUCCESS) {
+		reg_err("Opclasses and chans not allocated");
+		status = QDF_STATUS_E_NOMEM;
+		goto free_frange_lst_local;
+	}
+
+	afc_req_len = reg_get_afc_req_length(pdev,
+					     num_opclasses,
+					     num_freq_ranges,
+					     chansize_lst);
+
+	temp_afc_req = qdf_mem_malloc(afc_req_len);
+	if (!temp_afc_req) {
+		reg_err("AFC request not allocated");
+		status = QDF_STATUS_E_NOMEM;
+		goto free_opcls_chan_mem;
+	}
+
+	p_fixed_params = &temp_afc_req->fixed_params;
+	reg_fill_afc_fixed_params(p_fixed_params, afc_req_len);
+
+	/* frange list is already filled just copy it */
+	frange_lst_len = reg_get_frange_list_len(num_freq_ranges);
+	p_frange_lst_afc = (struct wlan_afc_frange_list *)&p_fixed_params[1];
+	qdf_mem_copy(p_frange_lst_afc, p_frange_lst_local, frange_lst_len);
+
+	p_num_opclasses = (struct wlan_afc_num_opclasses *)
+	    ((char *)(p_frange_lst_afc) + frange_lst_len);
+	p_num_opclasses->num_opclasses = num_opclasses;
+
+	p_obj_opclass_arr = (struct wlan_afc_opclass_obj *)&p_num_opclasses[1];
+	reg_fill_afc_opclasses_arr(pdev,
+				   num_opclasses,
+				   opclass_lst,
+				   chansize_lst,
+				   channel_lists,
+				   p_obj_opclass_arr);
+free_opcls_chan_mem:
+	reg_dmn_free_6g_opclasses_and_channels(pdev,
+					       num_opclasses,
+					       opclass_lst,
+					       chansize_lst,
+					       channel_lists);
+
+free_frange_lst_local:
+	qdf_mem_free(p_frange_lst_local);
+
+handle_invalid_priv_object:
+	*afc_req = temp_afc_req;
+
+	return status;
+}
+
+/**
+ * reg_dmn_set_afc_req_id() - Set the request ID in the AFC partial request
+ *                            object
+ * @afc_req: pointer to AFC partial request
+ * @req_id: AFC request ID
+ *
+ * Return: Void
+ */
+static
+void reg_dmn_set_afc_req_id(struct wlan_afc_host_partial_request *afc_req,
+			    uint64_t req_id)
+{
+	struct wlan_afc_host_req_fixed_params *p_fixed_params;
+
+	p_fixed_params = &afc_req->fixed_params;
+	p_fixed_params->req_id = req_id;
+}
+
+/**
+ * reg_send_afc_partial_request() - Send AFC partial request to registered
+ * recipient
+ * @pdev: Pointer to pdev
+ * @afc_req: Pointer to afc partial request
+ *
+ * Return: void
+ */
+static
+void reg_send_afc_partial_request(struct wlan_objmgr_pdev *pdev,
+				  struct wlan_afc_host_partial_request *afc_req)
+{
+	afc_req_rx_evt_handler cbf;
+	void *arg;
+	struct wlan_regulatory_pdev_priv_obj *pdev_priv_obj;
+
+	pdev_priv_obj = reg_get_pdev_obj(pdev);
+	if (!IS_VALID_PDEV_REG_OBJ(pdev_priv_obj)) {
+		reg_err("pdev reg component is NULL");
+		return;
+	}
+
+	qdf_spin_lock_bh(&pdev_priv_obj->afc_cb_lock);
+	cbf = pdev_priv_obj->afc_cb_obj.func;
+	if (cbf) {
+		arg = pdev_priv_obj->afc_cb_obj.arg;
+		cbf(pdev, afc_req, arg);
+	}
+	qdf_spin_unlock_bh(&pdev_priv_obj->afc_cb_lock);
+}
+
+QDF_STATUS reg_afc_start(struct wlan_objmgr_pdev *pdev, uint64_t req_id)
+{
+	struct wlan_afc_host_partial_request *afc_req;
+	QDF_STATUS status;
+
+	status = reg_get_partial_afc_req_info(pdev, &afc_req);
+	if (status != QDF_STATUS_SUCCESS) {
+		reg_err("Creating AFC Request failed");
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	reg_dmn_set_afc_req_id(afc_req, req_id);
+
+	reg_print_partial_afc_req_info(pdev, afc_req);
+
+	reg_send_afc_partial_request(pdev, afc_req);
+
+	qdf_mem_free(afc_req);
+
+	return QDF_STATUS_SUCCESS;
+}
+
+QDF_STATUS reg_register_afc_req_rx_callback(struct wlan_objmgr_pdev *pdev,
+					    afc_req_rx_evt_handler cbf,
+					    void *arg)
+{
+	struct wlan_regulatory_pdev_priv_obj *pdev_priv_obj;
+
+	pdev_priv_obj = reg_get_pdev_obj(pdev);
+	if (!IS_VALID_PDEV_REG_OBJ(pdev_priv_obj)) {
+		reg_err("pdev reg component is NULL");
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	qdf_spin_lock_bh(&pdev_priv_obj->afc_cb_lock);
+	pdev_priv_obj->afc_cb_obj.func = cbf;
+	pdev_priv_obj->afc_cb_obj.arg = arg;
+	qdf_spin_unlock_bh(&pdev_priv_obj->afc_cb_lock);
+	reg_debug("afc_event_cb: 0x%pK, arg: 0x%pK", cbf, arg);
+
+	return QDF_STATUS_SUCCESS;
+}
+
+QDF_STATUS reg_unregister_afc_req_rx_callback(struct wlan_objmgr_pdev *pdev,
+					      afc_req_rx_evt_handler cbf)
+{
+	struct wlan_regulatory_pdev_priv_obj *pdev_priv_obj;
+
+	pdev_priv_obj = reg_get_pdev_obj(pdev);
+	if (!IS_VALID_PDEV_REG_OBJ(pdev_priv_obj)) {
+		reg_err("pdev reg component is NULL");
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	qdf_spin_lock_bh(&pdev_priv_obj->afc_cb_lock);
+	if (pdev_priv_obj->afc_cb_obj.func == cbf) {
+		pdev_priv_obj->afc_cb_obj.func = NULL;
+		pdev_priv_obj->afc_cb_obj.arg = NULL;
+	} else {
+		reg_err("cb function=0x%pK not found", cbf);
+	}
+	qdf_spin_unlock_bh(&pdev_priv_obj->afc_cb_lock);
+
+	return QDF_STATUS_SUCCESS;
+}
+
+#endif /* CONFIG_AFC_SUPPORT */
+
 QDF_STATUS
 reg_get_cur_6g_client_type(struct wlan_objmgr_pdev *pdev,
 			   enum reg_6g_client_type
@@ -5410,7 +5648,7 @@ QDF_STATUS reg_get_unspecified_ap_usable(struct wlan_objmgr_pdev *pdev,
 	return QDF_STATUS_SUCCESS;
 }
 
-static QDF_STATUS
+QDF_STATUS
 reg_find_txpower_from_6g_list(qdf_freq_t freq,
 			      struct regulatory_channel *chan_list,
 			      uint16_t *txpower)
@@ -5456,7 +5694,7 @@ bool reg_is_6g_psd_power(struct wlan_objmgr_pdev *pdev)
 	return false;
 }
 
-static QDF_STATUS
+QDF_STATUS
 reg_get_6g_chan_psd_eirp_power(qdf_freq_t freq,
 			       struct regulatory_channel *mas_chan_list,
 			       uint16_t *eirp_psd_power)
@@ -5646,7 +5884,7 @@ bool reg_is_ext_tpc_supported(struct wlan_objmgr_psoc *psoc)
 	return psoc_priv_obj->is_ext_tpc_supported;
 }
 
-#if defined(CONFIG_BAND_6GHZ) && defined(CONFIG_REG_CLIENT)
+#if defined(CONFIG_BAND_6GHZ)
 QDF_STATUS
 reg_set_lower_6g_edge_ch_supp(struct wlan_objmgr_psoc *psoc, bool val)
 {
@@ -5707,5 +5945,282 @@ bool reg_is_upper_6g_edge_ch_disabled(struct wlan_objmgr_psoc *psoc)
 	}
 
 	return psoc_priv_obj->is_upper_6g_edge_ch_disabled;
+}
+#endif
+
+#ifdef FEATURE_WLAN_CH_AVOID_EXT
+/**
+ * reg_process_ch_avoid_freq_ext() - Update extended avoid frequencies in
+ * psoc_priv_obj
+ * @psoc: Pointer to psoc structure
+ * @pdev: pointer to pdev object
+ *
+ * Return: None
+ */
+static QDF_STATUS
+reg_process_ch_avoid_freq_ext(struct wlan_objmgr_psoc *psoc,
+			      struct wlan_objmgr_pdev *pdev)
+{
+	uint32_t i;
+	struct wlan_regulatory_psoc_priv_obj *psoc_priv_obj;
+	uint8_t start_channel;
+	uint8_t end_channel;
+	struct ch_avoid_freq_type *range;
+	enum channel_enum ch_loop;
+	enum channel_enum start_ch_idx;
+	enum channel_enum end_ch_idx;
+	struct wlan_regulatory_pdev_priv_obj *pdev_priv_obj;
+
+	pdev_priv_obj = reg_get_pdev_obj(pdev);
+
+	if (!pdev_priv_obj) {
+		reg_err("reg pdev private obj is NULL");
+		return QDF_STATUS_E_FAILURE;
+	}
+	psoc_priv_obj = reg_get_psoc_obj(psoc);
+	if (!psoc_priv_obj) {
+		reg_err("reg psoc private obj is NULL");
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	if (pdev_priv_obj->avoid_chan_ext_list.chan_cnt > 0) {
+		uint32_t len;
+
+		len = sizeof(pdev_priv_obj->avoid_chan_ext_list.chan_freq_list);
+		pdev_priv_obj->avoid_chan_ext_list.chan_cnt = 0;
+		qdf_mem_zero(&pdev_priv_obj->avoid_chan_ext_list.chan_freq_list,
+			     len);
+	}
+
+	for (i = 0; i < psoc_priv_obj->avoid_freq_ext_list.ch_avoid_range_cnt;
+		i++) {
+		if (pdev_priv_obj->avoid_chan_ext_list.chan_cnt >=
+		    NUM_CHANNELS) {
+			reg_debug("ext avoid channel list full");
+			break;
+		}
+
+		start_ch_idx = INVALID_CHANNEL;
+		end_ch_idx = INVALID_CHANNEL;
+		range = &psoc_priv_obj->avoid_freq_ext_list.avoid_freq_range[i];
+
+		start_channel = reg_freq_to_chan(pdev, range->start_freq);
+		end_channel = reg_freq_to_chan(pdev, range->end_freq);
+		reg_debug("start: freq %d, ch %d, end: freq %d, ch %d",
+			  range->start_freq, start_channel, range->end_freq,
+			  end_channel);
+
+		/* do not process frequency bands that are not mapped to
+		 * predefined channels
+		 */
+		if (start_channel == 0 || end_channel == 0)
+			continue;
+
+		for (ch_loop = 0; ch_loop < NUM_CHANNELS;
+			ch_loop++) {
+			if (REG_CH_TO_FREQ(ch_loop) >= range->start_freq) {
+				start_ch_idx = ch_loop;
+				break;
+			}
+		}
+		for (ch_loop = 0; ch_loop < NUM_CHANNELS;
+			ch_loop++) {
+			if (REG_CH_TO_FREQ(ch_loop) >= range->end_freq) {
+				end_ch_idx = ch_loop;
+				if (REG_CH_TO_FREQ(ch_loop) > range->end_freq)
+					end_ch_idx--;
+				break;
+			}
+		}
+
+		if (start_ch_idx == INVALID_CHANNEL ||
+		    end_ch_idx == INVALID_CHANNEL)
+			continue;
+
+		for (ch_loop = start_ch_idx; ch_loop <= end_ch_idx;
+			ch_loop++) {
+			pdev_priv_obj->avoid_chan_ext_list.chan_freq_list
+			[pdev_priv_obj->avoid_chan_ext_list.chan_cnt++] =
+			REG_CH_TO_FREQ(ch_loop);
+
+			if (pdev_priv_obj->avoid_chan_ext_list.chan_cnt >=
+				NUM_CHANNELS) {
+				reg_debug("avoid freq ext list full");
+				break;
+			}
+		}
+		/* if start == end for 5G, meanwhile it only have one valid
+		 * channel updated, then disable 20M by default around
+		 * this center freq. For example input [5805-5805], it
+		 * will disable 20Mhz around 5805, then the range change
+		 * to [5705-5815], otherwise, not sure about how many width
+		 * need to disabled for such case.
+		 */
+		if ((ch_loop - start_ch_idx) == 1 &&
+		    (range->end_freq - range->start_freq == 0) &&
+			reg_is_5ghz_ch_freq(range->start_freq)) {
+			range->start_freq = range->start_freq - HALF_20MHZ_BW;
+			range->end_freq = range->end_freq + HALF_20MHZ_BW;
+		}
+	}
+
+	return QDF_STATUS_SUCCESS;
+}
+
+/**
+ * reg_update_avoid_ch_ext() - Updates the current channel list that block out
+ * by extended avoid frequency list
+ * @psoc: Pointer to psoc structure
+ * @object: Pointer to pdev structure
+ * @arg: List of arguments
+ *
+ * Return: None
+ */
+static void
+reg_update_avoid_ch_ext(struct wlan_objmgr_psoc *psoc,
+			void *object, void *arg)
+{
+	struct wlan_objmgr_pdev *pdev = (struct wlan_objmgr_pdev *)object;
+	struct wlan_regulatory_psoc_priv_obj *psoc_priv_obj;
+	struct wlan_regulatory_pdev_priv_obj *pdev_priv_obj;
+	QDF_STATUS status;
+
+	psoc_priv_obj = reg_get_psoc_obj(psoc);
+	if (!psoc_priv_obj) {
+		reg_err("reg psoc private obj is NULL");
+		return;
+	}
+
+	pdev_priv_obj = reg_get_pdev_obj(pdev);
+
+	if (!IS_VALID_PDEV_REG_OBJ(pdev_priv_obj)) {
+		reg_err("reg pdev priv obj is NULL");
+		return;
+	}
+
+	if (psoc_priv_obj->ch_avoid_ext_ind) {
+		status = reg_process_ch_avoid_freq_ext(psoc, pdev);
+		if (QDF_IS_STATUS_ERROR(status))
+			psoc_priv_obj->ch_avoid_ext_ind = false;
+	}
+
+	reg_compute_pdev_current_chan_list(pdev_priv_obj);
+	status = reg_send_scheduler_msg_sb(psoc, pdev);
+
+	if (QDF_IS_STATUS_ERROR(status))
+		reg_err("channel change msg schedule failed");
+}
+
+QDF_STATUS
+reg_process_ch_avoid_ext_event(struct wlan_objmgr_psoc *psoc,
+			       struct ch_avoid_ind_type *ch_avoid_event)
+{
+	uint32_t i;
+	struct wlan_regulatory_psoc_priv_obj *psoc_priv_obj;
+	QDF_STATUS status;
+	struct ch_avoid_freq_type *range;
+
+	psoc_priv_obj = reg_get_psoc_obj(psoc);
+	if (!psoc_priv_obj) {
+		reg_err("reg psoc private obj is NULL");
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	reg_debug("freq range count %d", ch_avoid_event->ch_avoid_range_cnt);
+
+	qdf_mem_zero(&psoc_priv_obj->avoid_freq_ext_list,
+		     sizeof(struct ch_avoid_ind_type));
+
+	for (i = 0; i < ch_avoid_event->ch_avoid_range_cnt; i++) {
+		range = &psoc_priv_obj->avoid_freq_ext_list.avoid_freq_range[i];
+		range->start_freq =
+			ch_avoid_event->avoid_freq_range[i].start_freq;
+		range->end_freq =
+			ch_avoid_event->avoid_freq_range[i].end_freq;
+	}
+	psoc_priv_obj->avoid_freq_ext_list.ch_avoid_range_cnt =
+		ch_avoid_event->ch_avoid_range_cnt;
+
+	psoc_priv_obj->ch_avoid_ext_ind = true;
+
+	status = wlan_objmgr_psoc_try_get_ref(psoc, WLAN_REGULATORY_SB_ID);
+
+	if (QDF_IS_STATUS_ERROR(status)) {
+		reg_err("error taking psoc ref cnt");
+		return status;
+	}
+
+	status = wlan_objmgr_iterate_obj_list(psoc, WLAN_PDEV_OP,
+					      reg_update_avoid_ch_ext,
+					      NULL, 1,
+					      WLAN_REGULATORY_SB_ID);
+
+	wlan_objmgr_psoc_release_ref(psoc, WLAN_REGULATORY_SB_ID);
+
+	return status;
+}
+#endif
+
+#if defined(CONFIG_AFC_SUPPORT) && defined(CONFIG_BAND_6GHZ)
+QDF_STATUS reg_send_afc_cmd(struct wlan_objmgr_pdev *pdev,
+			    struct reg_afc_resp_rx_ind_info *afc_ind_obj)
+{
+	uint8_t pdev_id = wlan_objmgr_pdev_get_pdev_id(pdev);
+	struct wlan_objmgr_psoc *psoc;
+	struct wlan_lmac_if_reg_tx_ops *tx_ops;
+
+	psoc = wlan_pdev_get_psoc(pdev);
+	if (!psoc) {
+		reg_err("psoc is NULL");
+		return QDF_STATUS_E_INVAL;
+	}
+
+	tx_ops = reg_get_psoc_tx_ops(psoc);
+	if (tx_ops->send_afc_ind)
+		return tx_ops->send_afc_ind(psoc, pdev_id, afc_ind_obj);
+
+	return QDF_STATUS_E_FAILURE;
+}
+
+bool reg_is_afc_power_event_received(struct wlan_objmgr_pdev *pdev)
+{
+	struct wlan_regulatory_pdev_priv_obj *pdev_priv_obj;
+
+	pdev_priv_obj = reg_get_pdev_obj(pdev);
+	if (!IS_VALID_PDEV_REG_OBJ(pdev_priv_obj)) {
+		reg_err("pdev reg component is NULL");
+		return false;
+	}
+
+	return pdev_priv_obj->is_6g_afc_power_event_received;
+}
+
+QDF_STATUS reg_get_afc_req_id(struct wlan_objmgr_pdev *pdev, uint64_t *req_id)
+{
+	struct wlan_regulatory_pdev_priv_obj *pdev_priv_obj;
+
+	pdev_priv_obj = reg_get_pdev_obj(pdev);
+
+	if (!IS_VALID_PDEV_REG_OBJ(pdev_priv_obj)) {
+		reg_err("reg pdev priv obj is NULL");
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	*req_id = pdev_priv_obj->afc_request_id;
+
+	return QDF_STATUS_SUCCESS;
+}
+
+bool reg_is_afc_expiry_event_received(struct wlan_objmgr_pdev *pdev)
+{
+	struct wlan_regulatory_pdev_priv_obj *pdev_priv_obj;
+
+	pdev_priv_obj = reg_get_pdev_obj(pdev);
+	if (!IS_VALID_PDEV_REG_OBJ(pdev_priv_obj)) {
+		reg_err("pdev reg component is NULL");
+		return false;
+	}
+
+	return pdev_priv_obj->is_6g_afc_expiry_event_received;
 }
 #endif

@@ -106,6 +106,13 @@ static struct qdf_track_timer alloc_track_timer;
 #define QDF_NBUF_ALLOC_EXPIRE_CNT_THRESHOLD  50
 #endif
 
+#ifdef NBUF_MEMORY_DEBUG
+/* SMMU crash indication*/
+static qdf_atomic_t smmu_crashed;
+/* Number of nbuf not added to history*/
+unsigned long g_histroy_add_drop;
+#endif
+
 /* Packet Counter */
 static uint32_t nbuf_tx_mgmt[QDF_NBUF_TX_PKT_STATE_MAX];
 static uint32_t nbuf_tx_data[QDF_NBUF_TX_PKT_STATE_MAX];
@@ -765,6 +772,11 @@ qdf_nbuf_history_add(qdf_nbuf_t nbuf, const char *func, uint32_t line,
 						   QDF_NBUF_HISTORY_SIZE);
 	struct qdf_nbuf_event *event = &qdf_nbuf_history[idx];
 
+	if (qdf_atomic_read(&smmu_crashed)) {
+		g_histroy_add_drop++;
+		return;
+	}
+
 	event->nbuf = nbuf;
 	qdf_str_lcopy(event->func, func, QDF_MEM_FUNC_NAME_SIZE);
 	event->line = line;
@@ -775,6 +787,14 @@ qdf_nbuf_history_add(qdf_nbuf_t nbuf, const char *func, uint32_t line,
 	else
 		event->iova = 0;
 }
+
+void qdf_set_smmu_fault_state(bool smmu_fault_state)
+{
+	qdf_atomic_set(&smmu_crashed, smmu_fault_state);
+	if (!smmu_fault_state)
+		g_histroy_add_drop = 0;
+}
+qdf_export_symbol(qdf_set_smmu_fault_state);
 #endif /* NBUF_MEMORY_DEBUG */
 
 #ifdef NBUF_MAP_UNMAP_DEBUG
@@ -975,6 +995,19 @@ void qdf_nbuf_unmap_nbytes_single_debug(qdf_device_t osdev,
 }
 
 qdf_export_symbol(qdf_nbuf_unmap_nbytes_single_debug);
+
+void qdf_nbuf_unmap_nbytes_single_paddr_debug(qdf_device_t osdev,
+					      qdf_nbuf_t buf,
+					      qdf_dma_addr_t phy_addr,
+					      qdf_dma_dir_t dir, int nbytes,
+					      const char *func, uint32_t line)
+{
+	qdf_nbuf_untrack_map(buf, func, line);
+	__qdf_mem_unmap_nbytes_single(osdev, phy_addr, dir, nbytes);
+	qdf_net_buf_debug_update_unmap_node(buf, func, line);
+}
+
+qdf_export_symbol(qdf_nbuf_unmap_nbytes_single_paddr_debug);
 
 static void qdf_nbuf_panic_on_free_if_mapped(qdf_nbuf_t nbuf,
 					     const char *func,

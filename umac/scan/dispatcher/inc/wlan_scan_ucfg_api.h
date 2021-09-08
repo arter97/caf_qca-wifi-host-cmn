@@ -534,7 +534,7 @@ ucfg_scan_get_vdev_status(struct wlan_objmgr_vdev *vdev);
 
 /**
  * ucfg_scan_get_pdev_status() - API to check pdev scan status
- * @pdev: vdev object
+ * @pdev: pdev object
  *
  * Return: enum scm_scan_status
  */
@@ -1046,6 +1046,32 @@ ucfg_scan_get_max_sched_scan_plan_iterations(struct wlan_objmgr_psoc *psoc);
  */
 bool
 ucfg_scan_get_user_config_sched_scan_plan(struct wlan_objmgr_psoc *psoc);
+
+#ifdef WLAN_POLICY_MGR_ENABLE
+/*
+ * ucfg_scan_update_pno_dwell_time() - update active and passive dwell time
+ * depending on active concurrency modes
+ * @vdev: vdev object pointer
+ * @req: scan request
+ *
+ * Return: void
+ */
+static inline
+void ucfg_scan_update_pno_dwell_time(struct wlan_objmgr_vdev *vdev,
+				     struct pno_scan_req_params *req,
+				     struct scan_default_params *scan_def)
+{
+	wlan_scan_update_pno_dwell_time(vdev, req, scan_def);
+}
+
+#else
+static inline
+void ucfg_scan_update_pno_dwell_time(struct wlan_objmgr_vdev *vdev,
+				     struct pno_scan_req_params *req,
+				     struct scan_default_params *scan_def)
+{}
+
+#endif
 
 #else
 static inline

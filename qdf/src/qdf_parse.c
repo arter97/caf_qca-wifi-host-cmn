@@ -78,6 +78,7 @@ QDF_STATUS qdf_ini_parse(const char *ini_path, void *context,
 				break;
 
 			case '#':
+			case '[':
 				/*
 				 * We don't process comments, so we can null-
 				 * terminate unconditionally here (unlike '=').
@@ -112,7 +113,11 @@ QDF_STATUS qdf_ini_parse(const char *ini_path, void *context,
 				qdf_err("Invalid *.ini syntax '%s'", key);
 			} else {
 				key[len - 1] = '\0';
-				status = section_cb(context, key + 1);
+				if (section_cb)
+					status = section_cb(context, key + 1);
+				else
+					status = QDF_STATUS_E_NULL_VALUE;
+
 				if (QDF_IS_STATUS_ERROR(status))
 					goto free_fbuf;
 			}

@@ -27,6 +27,7 @@
 #include <wlan_policy_mgr_api.h>
 #endif
 #include "wlan_cm_roam.h"
+#include <qdf_platform.h>
 
 static uint32_t cm_get_prefix_for_cm_id(enum wlan_cm_source source) {
 	switch (source) {
@@ -236,6 +237,26 @@ void cm_store_wep_key(struct cnx_mgr *cm_ctx,
 		   CM_PREFIX_REF(wlan_vdev_get_id(cm_ctx->vdev), cm_id),
 		   crypto_key->cipher_type, wep_keys->key_len,
 		   wep_keys->seq_len);
+}
+
+void cm_trigger_panic_on_cmd_timeout(struct wlan_objmgr_vdev *vdev)
+{
+	struct wlan_objmgr_psoc *psoc;
+
+	psoc = wlan_vdev_get_psoc(vdev);
+	if (!psoc)
+		return;
+
+	if (qdf_is_recovering() || qdf_is_fw_down())
+		return;
+
+	qdf_trigger_self_recovery(psoc, QDF_ACTIVE_LIST_TIMEOUT);
+}
+
+#else
+void cm_trigger_panic_on_cmd_timeout(struct wlan_objmgr_vdev *vdev)
+{
+	QDF_ASSERT(0);
 }
 #endif
 
@@ -451,12 +472,15 @@ cm_handle_connect_flush(struct cnx_mgr *cm_ctx, struct cm_req *cm_req)
 	resp->connect_status = QDF_STATUS_E_FAILURE;
 	resp->cm_id = cm_req->cm_id;
 	resp->vdev_id = wlan_vdev_get_id(cm_ctx->vdev);
-	resp->reason = CM_ABORT_DUE_TO_NEW_REQ_RECVD;
+	if (cm_req->failed_req)
+		resp->reason = CM_GENERIC_FAILURE;
+	else
+		resp->reason = CM_ABORT_DUE_TO_NEW_REQ_RECVD;
 
 	/* Get bssid and ssid and freq for the cm id from the req list */
 	cm_fill_connect_resp_from_req(resp, cm_req);
 
-	mlme_cm_osif_connect_complete(cm_ctx->vdev, resp);
+	cm_notify_connect_complete(cm_ctx, resp);
 	qdf_mem_free(resp);
 }
 
@@ -479,7 +503,7 @@ cm_handle_disconnect_flush(struct cnx_mgr *cm_ctx, struct cm_req *cm_req)
 	resp.req.cm_id = cm_req->cm_id;
 	resp.req.req = cm_req->discon_req.req;
 
-	mlme_cm_osif_disconnect_complete(cm_ctx->vdev, &resp);
+	cm_notify_disconnect_complete(cm_ctx, &resp);
 }
 
 static void cm_remove_cmd_from_serialization(struct cnx_mgr *cm_ctx,
@@ -1173,6 +1197,24 @@ cm_get_active_req_type(struct wlan_objmgr_vdev *vdev)
 		return CM_NONE;
 }
 
+#ifdef WLAN_FEATURE_11BE_MLO
+static inline
+void cm_fill_ml_partner_info(struct wlan_cm_connect_req *req,
+			       struct wlan_cm_vdev_connect_req *connect_req)
+{
+	if (req->ml_parnter_info.num_partner_links)
+		qdf_mem_copy(&connect_req->ml_parnter_info,
+			     &req->ml_parnter_info,
+			     sizeof(struct mlo_partner_info));
+}
+#else
+static inline
+void cm_fill_ml_partner_info(struct wlan_cm_connect_req *req,
+			     struct wlan_cm_vdev_connect_req *connect_req)
+{
+}
+#endif
+
 bool cm_get_active_connect_req(struct wlan_objmgr_vdev *vdev,
 			       struct wlan_cm_vdev_connect_req *req)
 {
@@ -1203,6 +1245,8 @@ bool cm_get_active_connect_req(struct wlan_objmgr_vdev *vdev,
 				cm_req->connect_req.req.is_wps_connection;
 			req->is_osen_connection =
 				cm_req->connect_req.req.is_osen_connection;
+			req->is_non_assoc_link = cm_req->connect_req.req.is_non_assoc_link;
+			cm_fill_ml_partner_info(&cm_req->connect_req.req, req);
 			status = true;
 			cm_req_lock_release(cm_ctx);
 			return status;
@@ -1245,6 +1289,8 @@ bool cm_get_active_disconnect_req(struct wlan_objmgr_vdev *vdev,
 			req->req.reason_code =
 					cm_req->discon_req.req.reason_code;
 			req->req.bssid = cm_req->discon_req.req.bssid;
+			req->req.is_no_disassoc_disconnect =
+				cm_req->discon_req.req.is_no_disassoc_disconnect;
 			status = true;
 			cm_req_lock_release(cm_ctx);
 			return status;

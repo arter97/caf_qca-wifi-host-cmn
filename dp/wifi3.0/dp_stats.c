@@ -21,11 +21,13 @@
 #include "dp_internal.h"
 #include "htt_stats.h"
 #include "htt_ppdu_stats.h"
-#include "dp_htt.h"
-
 #ifdef QCA_PEER_EXT_STATS
 #include <cdp_txrx_hist_struct.h>
 #include "dp_hist.h"
+#endif
+#ifdef WIFI_MONITOR_SUPPORT
+#include "dp_htt.h"
+#include <dp_mon.h>
 #endif
 
 #define DP_MAX_STRING_LEN 500
@@ -168,12 +170,9 @@ const char *intfrm_delay_bucket[CDP_DELAY_BUCKET_MAX + 1] = {
 };
 #endif
 
-#ifdef WLAN_TX_PKT_CAPTURE_ENH
-#include "dp_tx_capture.h"
-#endif
-
 #define TID_COUNTER_STATS 1	/* Success/drop stats type */
 #define TID_DELAY_STATS 2	/* Delay stats type */
+#define TID_RX_ERROR_STATS 3	/* Rx Error stats type */
 
 /*
  * dp_print_stats_string_tlv: display htt_stats_string_tlv
@@ -3208,6 +3207,10 @@ static void dp_print_rx_pdev_rate_stats_tlv(struct dp_pdev *pdev,
 		       dp_stats_buf->rx_11ax_ofdma);
 	DP_PRINT_STATS("txbf = %u",
 		       dp_stats_buf->txbf);
+	DP_PRINT_STATS("rx_su_ndpa = %u",
+		       dp_stats_buf->rx_su_ndpa);
+	DP_PRINT_STATS("rx_br_poll = %u",
+		       dp_stats_buf->rx_br_poll);
 
 	index = 0;
 	qdf_mem_zero(str_buf, DP_MAX_STRING_LEN);
@@ -3400,6 +3403,26 @@ static void dp_print_rx_pdev_rate_stats_tlv(struct dp_pdev *pdev,
 				     i, dp_stats_buf->rx_ulofdma_mpdu_fail[i]);
 	}
 	DP_PRINT_STATS("rx_ulofdma_mpdu_fail = %s", str_buf);
+
+	index = 0;
+	qdf_mem_zero(str_buf, DP_MAX_STRING_LEN);
+	for (i = 0; i < HTT_RX_PDEV_STATS_NUM_MCS_COUNTERS; i++) {
+		index += qdf_snprint(&str_buf[index],
+				     DP_MAX_STRING_LEN - index,
+				     " %u:%u,",
+				     i, dp_stats_buf->rx_11ax_su_txbf_mcs[i]);
+	}
+	DP_PRINT_STATS("rx_11ax_su_txbf_mcs = %s", str_buf);
+
+	index = 0;
+	qdf_mem_zero(str_buf, DP_MAX_STRING_LEN);
+	for (i = 0; i < HTT_RX_PDEV_STATS_NUM_MCS_COUNTERS; i++) {
+		index += qdf_snprint(&str_buf[index],
+				     DP_MAX_STRING_LEN - index,
+				     " %u:%u,",
+				     i, dp_stats_buf->rx_11ax_mu_txbf_mcs[i]);
+	}
+	DP_PRINT_STATS("rx_11ax_mu_txbf_mcs = %s", str_buf);
 
 	for (i = 0; i < HTT_TX_PDEV_STATS_NUM_GI_COUNTERS; i++)
 		qdf_mem_free(ul_ofdma_rx_gi[i]);
@@ -4345,70 +4368,6 @@ void dp_peer_stats_update_protocol_cnt(struct cdp_soc_t *soc_hdl,
 }
 #endif
 
-#ifdef WDI_EVENT_ENABLE
-QDF_STATUS dp_peer_stats_notify(struct dp_pdev *dp_pdev, struct dp_peer *peer)
-{
-	struct cdp_interface_peer_stats peer_stats_intf;
-	struct cdp_peer_stats *peer_stats = &peer->stats;
-
-	if (!peer->vdev)
-		return QDF_STATUS_E_FAULT;
-
-	qdf_mem_zero(&peer_stats_intf, sizeof(peer_stats_intf));
-	if (peer_stats->rx.last_snr != peer_stats->rx.snr)
-		peer_stats_intf.rssi_changed = true;
-
-	if ((peer_stats->rx.snr && peer_stats_intf.rssi_changed) ||
-	    (peer_stats->tx.tx_rate &&
-	     peer_stats->tx.tx_rate != peer_stats->tx.last_tx_rate)) {
-		qdf_mem_copy(peer_stats_intf.peer_mac, peer->mac_addr.raw,
-			     QDF_MAC_ADDR_SIZE);
-		peer_stats_intf.vdev_id = peer->vdev->vdev_id;
-		peer_stats_intf.last_peer_tx_rate = peer_stats->tx.last_tx_rate;
-		peer_stats_intf.peer_tx_rate = peer_stats->tx.tx_rate;
-		peer_stats_intf.peer_rssi = peer_stats->rx.snr;
-		peer_stats_intf.tx_packet_count = peer_stats->tx.ucast.num;
-		peer_stats_intf.rx_packet_count = peer_stats->rx.to_stack.num;
-		peer_stats_intf.tx_byte_count = peer_stats->tx.tx_success.bytes;
-		peer_stats_intf.rx_byte_count = peer_stats->rx.to_stack.bytes;
-		peer_stats_intf.per = peer_stats->tx.last_per;
-		peer_stats_intf.ack_rssi = peer_stats->tx.last_ack_rssi;
-		dp_wdi_event_handler(WDI_EVENT_PEER_STATS, dp_pdev->soc,
-				     (void *)&peer_stats_intf, 0,
-				     WDI_NO_VAL, dp_pdev->pdev_id);
-	}
-
-	return QDF_STATUS_SUCCESS;
-}
-
-QDF_STATUS dp_peer_qos_stats_notify(struct dp_pdev *dp_pdev,
-				    struct cdp_rx_stats_ppdu_user *ppdu_user)
-{
-	struct cdp_interface_peer_qos_stats qos_stats_intf;
-
-	if (ppdu_user->peer_id == HTT_INVALID_PEER) {
-		dp_err("Invalid peer id");
-		return QDF_STATUS_E_FAILURE;
-	}
-	qdf_mem_zero(&qos_stats_intf, sizeof(qos_stats_intf));
-
-	qdf_mem_copy(qos_stats_intf.peer_mac, ppdu_user->mac_addr,
-		     QDF_MAC_ADDR_SIZE);
-	qos_stats_intf.frame_control = ppdu_user->frame_control;
-	qos_stats_intf.frame_control_info_valid =
-			ppdu_user->frame_control_info_valid;
-	qos_stats_intf.qos_control = ppdu_user->qos_control;
-	qos_stats_intf.qos_control_info_valid =
-			ppdu_user->qos_control_info_valid;
-	qos_stats_intf.vdev_id = ppdu_user->vdev_id;
-	dp_wdi_event_handler(WDI_EVENT_PEER_QOS_STATS, dp_pdev->soc,
-			     (void *)&qos_stats_intf, 0,
-			     WDI_NO_VAL, dp_pdev->pdev_id);
-
-	return QDF_STATUS_SUCCESS;
-}
-#endif
-
 #ifdef QCA_ENH_V3_STATS_SUPPORT
 /**
  * dp_vow_str_fw_to_hw_delay() - Return string for a delay
@@ -4487,7 +4446,7 @@ dp_accumulate_tid_stats(struct dp_pdev *pdev, uint8_t tid,
 			struct cdp_tid_tx_stats *total_tx,
 			struct cdp_tid_rx_stats *total_rx, uint8_t type)
 {
-	uint8_t ring_id = 0, drop = 0, tqm_status_idx = 0, htt_status_idx = 0;
+	uint8_t i = 0, ring_id = 0, drop = 0, tqm_status_idx = 0, htt_status_idx = 0;
 	struct cdp_tid_stats *tid_stats = &pdev->stats.tid_stats;
 	struct cdp_tid_tx_stats *per_ring_tx = NULL;
 	struct cdp_tid_rx_stats *per_ring_rx = NULL;
@@ -4559,6 +4518,22 @@ dp_accumulate_tid_stats(struct dp_pdev *pdev, uint8_t tid,
 		break;
 	}
 
+	case TID_RX_ERROR_STATS:
+	{
+		for (ring_id = 0; ring_id < CDP_MAX_RX_RINGS; ring_id++) {
+			per_ring_rx = &tid_stats->tid_rx_stats[ring_id][tid];
+			total_rx->reo_err.err_src_reo_code_inv += per_ring_rx->reo_err.err_src_reo_code_inv;
+			for (i = 0; i < CDP_REO_CODE_MAX; i++) {
+				total_rx->reo_err.err_reo_codes[i] += per_ring_rx->reo_err.err_reo_codes[i];
+			}
+
+			total_rx->rxdma_err.err_src_rxdma_code_inv += per_ring_rx->rxdma_err.err_src_rxdma_code_inv;
+			for (i = 0; i < CDP_DMA_CODE_MAX; i++) {
+				total_rx->rxdma_err.err_dma_codes[i] += per_ring_rx->rxdma_err.err_dma_codes[i];
+			}
+		}
+		break;
+	}
 	default:
 		qdf_err("Invalid stats type");
 		break;
@@ -4726,6 +4701,40 @@ void dp_pdev_print_delay_stats(struct dp_pdev *pdev)
 		DP_PRINT_STATS("Min = %u", total_rx.to_stack_delay.min_delay);
 		DP_PRINT_STATS("Max = %u", total_rx.to_stack_delay.max_delay);
 		DP_PRINT_STATS("Avg = %u\n", total_rx.to_stack_delay.avg_delay);
+	}
+}
+
+void dp_pdev_print_rx_error_stats(struct dp_pdev *pdev)
+{
+	struct dp_soc *soc = pdev->soc;
+	struct cdp_tid_rx_stats total_rx;
+	struct cdp_tid_tx_stats total_tx;
+	struct cdp_tid_stats *tid_stats;
+
+	uint8_t tid, index;
+
+	if (!soc)
+		return;
+
+	tid_stats = &pdev->stats.tid_stats;
+
+	DP_PRINT_STATS("Per TID RX Error Stats:\n");
+	for (tid = 0; tid < CDP_MAX_VOW_TID; tid++) {
+		dp_accumulate_tid_stats(pdev, tid, &total_tx, &total_rx,
+					TID_RX_ERROR_STATS);
+		DP_PRINT_STATS("----TID: %d----", tid + 4);
+
+		DP_PRINT_STATS("Rx REO Error stats:");
+		DP_PRINT_STATS("err_src_reo_code_inv = %llu", total_rx.reo_err.err_src_reo_code_inv);
+		for (index = 0; index < CDP_REO_CODE_MAX; index++) {
+			DP_PRINT_STATS("err src reo codes: %d = %llu", index, total_rx.reo_err.err_reo_codes[index]);
+		}
+
+		DP_PRINT_STATS("Rx Rxdma Error stats:");
+		DP_PRINT_STATS("err_src_rxdma_code_inv = %llu", total_rx.rxdma_err.err_src_rxdma_code_inv);
+		for (index = 0; index < CDP_DMA_CODE_MAX; index++) {
+			DP_PRINT_STATS("err src dma codes: %d = %llu", index, total_rx.rxdma_err.err_dma_codes[index]);
+		}
 	}
 }
 #endif
@@ -6040,6 +6049,8 @@ void dp_txrx_path_stats(struct dp_soc *soc)
 			       pdev->soc->stats.rx.err.ipa_smmu_unmap_dup);
 		DP_PRINT_STATS("Rx ipa smmu unmap no pipes: %d",
 			       pdev->soc->stats.rx.err.ipa_unmap_no_pipe);
+		DP_PRINT_STATS("PN-in-Dest error frame pn-check fail: %d",
+			       soc->stats.rx.err.pn_in_dest_check_fail);
 
 		DP_PRINT_STATS("Reo Statistics");
 		DP_PRINT_STATS("near_full: %u ", soc->stats.rx.near_full);
@@ -6279,13 +6290,9 @@ dp_print_pdev_tx_stats(struct dp_pdev *pdev)
 	}
 	DP_PRINT_STATS("BA not received for delayed_ba: %d",
 		       pdev->stats.cdp_delayed_ba_not_recev);
-	DP_PRINT_STATS("ppdu info schedule completion list depth: %d",
-		       pdev->sched_comp_list_depth);
-	DP_PRINT_STATS("cur sched cmdid: %d", pdev->last_sched_cmdid);
-	DP_PRINT_STATS("delivered sched cmdid: %d",
-		       pdev->delivered_sched_cmdid);
-	DP_PRINT_STATS("ppdu info list depth: %d",
-		       pdev->list_depth);
+
+	dp_monitor_print_tx_stats(pdev);
+
 	DP_PRINT_STATS("tx_ppdu_proc: %llu",
 		       pdev->stats.tx_ppdu_proc);
 	DP_PRINT_STATS("ack ba comes twice: %llu",
@@ -6301,7 +6308,7 @@ dp_print_pdev_tx_stats(struct dp_pdev *pdev)
 				       i, pdev->stats.wdi_event[i]);
 	}
 
-	dp_print_pdev_tx_capture_stats(pdev);
+	dp_monitor_print_pdev_tx_capture_stats(pdev);
 }
 
 void
@@ -6379,88 +6386,6 @@ dp_print_pdev_rx_stats(struct dp_pdev *pdev)
 }
 
 void
-dp_print_pdev_rx_mon_stats(struct dp_pdev *pdev)
-{
-	struct cdp_pdev_mon_stats *rx_mon_stats;
-	uint32_t *stat_ring_ppdu_ids;
-	uint32_t *dest_ring_ppdu_ids;
-	int i, idx;
-
-	rx_mon_stats = &pdev->rx_mon_stats;
-
-	DP_PRINT_STATS("PDEV Rx Monitor Stats:\n");
-
-	DP_PRINT_STATS("status_ppdu_compl_cnt = %d",
-		       rx_mon_stats->status_ppdu_compl);
-	DP_PRINT_STATS("status_ppdu_start_cnt = %d",
-		       rx_mon_stats->status_ppdu_start);
-	DP_PRINT_STATS("status_ppdu_end_cnt = %d",
-		       rx_mon_stats->status_ppdu_end);
-	DP_PRINT_STATS("status_ppdu_start_mis_cnt = %d",
-		       rx_mon_stats->status_ppdu_start_mis);
-	DP_PRINT_STATS("status_ppdu_end_mis_cnt = %d",
-		       rx_mon_stats->status_ppdu_end_mis);
-	DP_PRINT_STATS("status_ppdu_done_cnt = %d",
-		       rx_mon_stats->status_ppdu_done);
-	DP_PRINT_STATS("dest_ppdu_done_cnt = %d",
-		       rx_mon_stats->dest_ppdu_done);
-	DP_PRINT_STATS("dest_mpdu_done_cnt = %d",
-		       rx_mon_stats->dest_mpdu_done);
-	DP_PRINT_STATS("tlv_tag_status_err_cnt = %u",
-		       rx_mon_stats->tlv_tag_status_err);
-	DP_PRINT_STATS("mon status DMA not done WAR count= %u",
-		       rx_mon_stats->status_buf_done_war);
-	DP_PRINT_STATS("dest_mpdu_drop_cnt = %d",
-		       rx_mon_stats->dest_mpdu_drop);
-	DP_PRINT_STATS("dup_mon_linkdesc_cnt = %d",
-		       rx_mon_stats->dup_mon_linkdesc_cnt);
-	DP_PRINT_STATS("dup_mon_buf_cnt = %d",
-		       rx_mon_stats->dup_mon_buf_cnt);
-	DP_PRINT_STATS("mon_rx_buf_reaped = %u",
-		       rx_mon_stats->mon_rx_bufs_reaped_dest);
-	DP_PRINT_STATS("mon_rx_buf_replenished = %u",
-		       rx_mon_stats->mon_rx_bufs_replenished_dest);
-	DP_PRINT_STATS("ppdu_id_mismatch = %u",
-		       rx_mon_stats->ppdu_id_mismatch);
-	DP_PRINT_STATS("mpdu_ppdu_id_match_cnt = %d",
-		       rx_mon_stats->ppdu_id_match);
-	DP_PRINT_STATS("ppdus dropped frm status ring = %d",
-		       rx_mon_stats->status_ppdu_drop);
-	DP_PRINT_STATS("ppdus dropped frm dest ring = %d",
-		       rx_mon_stats->dest_ppdu_drop);
-	stat_ring_ppdu_ids =
-		(uint32_t *)qdf_mem_malloc(sizeof(uint32_t) * MAX_PPDU_ID_HIST);
-	dest_ring_ppdu_ids =
-		(uint32_t *)qdf_mem_malloc(sizeof(uint32_t) * MAX_PPDU_ID_HIST);
-
-	if (!stat_ring_ppdu_ids || !dest_ring_ppdu_ids)
-		DP_PRINT_STATS("Unable to allocate ppdu id hist mem\n");
-
-	qdf_spin_lock_bh(&pdev->mon_lock);
-	idx = rx_mon_stats->ppdu_id_hist_idx;
-	qdf_mem_copy(stat_ring_ppdu_ids,
-		     rx_mon_stats->stat_ring_ppdu_id_hist,
-		     sizeof(uint32_t) * MAX_PPDU_ID_HIST);
-	qdf_mem_copy(dest_ring_ppdu_ids,
-		     rx_mon_stats->dest_ring_ppdu_id_hist,
-		     sizeof(uint32_t) * MAX_PPDU_ID_HIST);
-	qdf_spin_unlock_bh(&pdev->mon_lock);
-
-	DP_PRINT_STATS("PPDU Id history:");
-	DP_PRINT_STATS("stat_ring_ppdu_ids\t dest_ring_ppdu_ids");
-	for (i = 0; i < MAX_PPDU_ID_HIST; i++) {
-		idx = (idx + 1) & (MAX_PPDU_ID_HIST - 1);
-		DP_PRINT_STATS("%*u\t%*u", 16,
-			       rx_mon_stats->stat_ring_ppdu_id_hist[idx], 16,
-			       rx_mon_stats->dest_ring_ppdu_id_hist[idx]);
-	}
-	qdf_mem_free(stat_ring_ppdu_ids);
-	qdf_mem_free(dest_ring_ppdu_ids);
-	DP_PRINT_STATS("mon_rx_dest_stuck = %d",
-		       rx_mon_stats->mon_rx_dest_stuck);
-}
-
-void
 dp_print_soc_tx_stats(struct dp_soc *soc)
 {
 	uint8_t desc_pool_id;
@@ -6502,6 +6427,125 @@ dp_print_soc_tx_stats(struct dp_soc *soc)
 		       soc->stats.tx.hp_oos2);
 }
 
+#ifdef CONFIG_BERYLLIUM
+static
+int dp_fill_rx_interrupt_ctx_stats(struct dp_intr *intr_ctx,
+				   char *buf, int buf_len)
+{	int i;
+	int pos = 0;
+
+	if (buf_len <= 0 || !buf) {
+		dp_err("incorrect buf or buf_len(%d)!", buf_len);
+		return pos;
+	}
+
+	for (i = 0; i < MAX_REO_DEST_RINGS; i++) {
+		if (intr_ctx->intr_stats.num_rx_ring_masks[i])
+			pos += qdf_scnprintf(buf + pos,
+					     buf_len - pos,
+					     "reo[%u]:%u ", i,
+					     intr_ctx->intr_stats.num_rx_ring_masks[i]);
+	}
+	return pos;
+}
+
+static
+int dp_fill_tx_interrupt_ctx_stats(struct dp_intr *intr_ctx,
+				   char *buf, int buf_len)
+{	int i;
+	int pos = 0;
+
+	if (buf_len <= 0 || !buf) {
+		dp_err("incorrect buf or buf_len(%d)!", buf_len);
+		return pos;
+	}
+
+	for (i = 0; i < MAX_TCL_DATA_RINGS; i++) {
+		if (intr_ctx->intr_stats.num_tx_ring_masks[i])
+			pos += qdf_scnprintf(buf + pos,
+					     buf_len - pos,
+					     "tx_comps[%u]:%u ", i,
+					     intr_ctx->intr_stats.num_tx_ring_masks[i]);
+	}
+	return pos;
+}
+
+#define DP_INT_CTX_STATS_STRING_LEN 512
+void dp_print_soc_interrupt_stats(struct dp_soc *soc)
+{
+	char *buf;
+	char int_ctx_str[DP_INT_CTX_STATS_STRING_LEN] = {'\0'};
+	int i, pos, buf_len;
+	struct dp_intr_stats *intr_stats;
+
+	buf = int_ctx_str;
+	buf_len = DP_INT_CTX_STATS_STRING_LEN;
+
+	for (i = 0; i < WLAN_CFG_INT_NUM_CONTEXTS; i++) {
+		pos = 0;
+		qdf_mem_zero(int_ctx_str, sizeof(int_ctx_str));
+		intr_stats = &soc->intr_ctx[i].intr_stats;
+
+		if (!intr_stats->num_masks)
+			continue;
+
+		pos += qdf_scnprintf(buf + pos,
+				     buf_len - pos,
+				     "%2u[%3d] - Total:%u ",
+				     i,
+				     hif_get_int_ctx_irq_num(soc->hif_handle,
+							     i),
+				     intr_stats->num_masks);
+
+		if (soc->intr_ctx[i].tx_ring_mask)
+			pos += dp_fill_tx_interrupt_ctx_stats(&soc->intr_ctx[i],
+							      buf + pos,
+							      buf_len - pos);
+
+		if (soc->intr_ctx[i].rx_ring_mask)
+			pos += dp_fill_rx_interrupt_ctx_stats(&soc->intr_ctx[i],
+							      buf + pos,
+							      buf_len - pos);
+		if (soc->intr_ctx[i].rx_err_ring_mask)
+			pos += qdf_scnprintf(buf + pos,
+					     buf_len - pos,
+					     "reo_err:%u ",
+					     intr_stats->num_rx_err_ring_masks);
+
+		if (soc->intr_ctx[i].rx_wbm_rel_ring_mask)
+			pos += qdf_scnprintf(buf + pos,
+					     buf_len - pos,
+					     "wbm_rx_err:%u ",
+					     intr_stats->num_rx_wbm_rel_ring_masks);
+
+		if (soc->intr_ctx[i].rxdma2host_ring_mask)
+			pos += qdf_scnprintf(buf + pos,
+					     buf_len - pos,
+					     "rxdma2_host_err:%u ",
+					     intr_stats->num_rxdma2host_ring_masks);
+
+		if (soc->intr_ctx[i].rx_near_full_grp_1_mask)
+			pos += qdf_scnprintf(buf + pos,
+					     buf_len - pos,
+					     "rx_near_full_grp_1:%u ",
+					     intr_stats->num_near_full_masks);
+
+		if (soc->intr_ctx[i].rx_near_full_grp_2_mask)
+			pos += qdf_scnprintf(buf + pos,
+					     buf_len - pos,
+					     "rx_near_full_grp_2:%u ",
+					     intr_stats->num_near_full_masks);
+		if (soc->intr_ctx[i].tx_ring_near_full_mask)
+			pos += qdf_scnprintf(buf + pos,
+					     buf_len - pos,
+					     "tx_near_full:%u ",
+					     intr_stats->num_near_full_masks);
+
+		dp_info("%s", int_ctx_str);
+	}
+}
+
+#else
 void dp_print_soc_interrupt_stats(struct dp_soc *soc)
 {
 	int i = 0;
@@ -6527,6 +6571,7 @@ void dp_print_soc_interrupt_stats(struct dp_soc *soc)
 			       intr_stats->num_host2rxdma_ring_masks);
 		}
 }
+#endif
 
 void
 dp_print_soc_rx_stats(struct dp_soc *soc)
@@ -6633,6 +6678,9 @@ dp_print_soc_rx_stats(struct dp_soc *soc)
 	DP_PRINT_STATS("bar handle update fail count: %d",
 		       soc->stats.rx.err.bar_handle_fail_count);
 
+	DP_PRINT_STATS("PN-in-Dest error frame pn-check fail: %d",
+		       soc->stats.rx.err.pn_in_dest_check_fail);
+
 	for (i = 0; i < HAL_RXDMA_ERR_MAX; i++) {
 		index += qdf_snprint(&rxdma_error[index],
 				DP_RXDMA_ERR_LENGTH - index,
@@ -6655,6 +6703,7 @@ dp_print_soc_rx_stats(struct dp_soc *soc)
 		       soc->stats.rx.rxdma2rel_route_drop);
 	DP_PRINT_STATS("Reo2rel route drop:%d",
 		       soc->stats.rx.reo2rel_route_drop);
+	DP_PRINT_STATS("Rx Flush count:%d", soc->stats.rx.err.rx_flush_count);
 }
 
 #ifdef FEATURE_TSO_STATS

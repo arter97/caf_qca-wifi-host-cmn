@@ -106,7 +106,7 @@ struct hif_exec_context {
 	enum hif_exec_type type;
 	unsigned long long poll_start_time;
 	bool force_break;
-#ifdef HIF_CPU_PERF_AFFINE_MASK
+#if defined(HIF_CPU_PERF_AFFINE_MASK) || defined(HIF_CPU_CLEAR_AFFINITY)
 	/* Stores the affinity hint mask for each WLAN IRQ */
 	qdf_cpu_mask new_cpu_mask[HIF_MAX_GRP_IRQ];
 #endif
@@ -186,10 +186,10 @@ void hif_pci_ce_irq_set_affinity_hint(
 	struct hif_softc *scn);
 
 /**
- * hif_pci_ce_irq_remove_affinity_hint() - remove affinity for the irq
+ * hif_ce_irq_remove_affinity_hint() - remove affinity for the irq
  * @irq: irq number to remove affinity from
  */
-static inline void hif_pci_ce_irq_remove_affinity_hint(int irq)
+static inline void hif_ce_irq_remove_affinity_hint(int irq)
 {
 	hif_irq_affinity_remove(irq);
 }
@@ -204,9 +204,29 @@ static inline void hif_pci_ce_irq_set_affinity_hint(
 {
 }
 
-static inline void hif_pci_ce_irq_remove_affinity_hint(int irq)
+static inline void hif_ce_irq_remove_affinity_hint(int irq)
 {
 }
 #endif /* ifdef HIF_CPU_PERF_AFFINE_MASK */
+
+#ifdef HIF_CPU_CLEAR_AFFINITY
+/*
+ * hif_pci_config_irq_clear_affinity() - Remove cpu affinity of IRQ
+ * @scn: HIF handle
+ * @intr_ctxt: interrupt group index
+ * @cpu: CPU core to clear
+ *
+ * Return: None
+ */
+void hif_pci_config_irq_clear_cpu_affinity(struct hif_softc *scn,
+					   int intr_ctxt_id, int cpu);
+#else
+static inline
+void hif_pci_config_irq_clear_cpu_affinity(struct hif_softc *scn,
+					   int intr_ctxt_id, int cpu)
+{
+}
+#endif /* HIF_CPU_CLEAR_AFFINITY */
+
 #endif
 

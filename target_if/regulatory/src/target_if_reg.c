@@ -488,6 +488,127 @@ static QDF_STATUS tgt_if_regulatory_unregister_master_list_ext_handler(
 	return wmi_unified_unregister_event_handler(
 			wmi_handle, wmi_reg_chan_list_cc_ext_event_id);
 }
+
+#ifdef CONFIG_AFC_SUPPORT
+/**
+ * tgt_afc_event_handler() - Handler for AFC Event
+ * @handle: scn handle
+ * @event_buf: pointer to event buffer
+ * @len: buffer length
+ *
+ * Return: 0 on success
+ */
+static int
+tgt_afc_event_handler(ol_scn_t handle, uint8_t *event_buf, uint32_t len)
+{
+	struct wlan_objmgr_psoc *psoc;
+	struct wlan_lmac_if_reg_rx_ops *reg_rx_ops;
+	struct afc_regulatory_info *afc_info;
+	QDF_STATUS status;
+	struct wmi_unified *wmi_handle;
+	int ret_val = 0;
+
+	TARGET_IF_ENTER();
+
+	psoc = target_if_get_psoc_from_scn_hdl(handle);
+	if (!psoc) {
+		target_if_err("psoc ptr is NULL");
+		return -EINVAL;
+	}
+
+	reg_rx_ops = target_if_regulatory_get_rx_ops(psoc);
+	if (!reg_rx_ops) {
+		target_if_err("reg_rx_ops is NULL");
+		return -EINVAL;
+	}
+
+	if (!reg_rx_ops->afc_event_handler) {
+		target_if_err("afc_event_handler is NULL");
+		return -EINVAL;
+	}
+
+	wmi_handle = get_wmi_unified_hdl_from_psoc(psoc);
+	if (!wmi_handle) {
+		target_if_err("invalid wmi handle");
+		return -EINVAL;
+	}
+
+	afc_info = qdf_mem_malloc(sizeof(*afc_info));
+	if (!afc_info)
+		return -ENOMEM;
+
+	status = wmi_extract_afc_event(wmi_handle, event_buf, afc_info, len);
+	if (!QDF_IS_STATUS_SUCCESS(status)) {
+		target_if_err("Extraction of AFC event failed");
+		ret_val = -EFAULT;
+		goto clean;
+	}
+
+	if (afc_info->phy_id >= PSOC_MAX_PHY_REG_CAP) {
+		target_if_err_rl("phy_id %d is out of bounds",
+				 afc_info->phy_id);
+		ret_val = -EFAULT;
+		goto clean;
+	}
+
+	afc_info->psoc = psoc;
+
+	status = reg_rx_ops->afc_event_handler(afc_info);
+	if (!QDF_IS_STATUS_SUCCESS(status)) {
+		target_if_err("Failed to process AFC event handler");
+		ret_val = -EFAULT;
+		goto clean;
+	}
+
+clean:
+	qdf_mem_free(afc_info);
+	TARGET_IF_EXIT();
+
+	return ret_val;
+}
+
+/**
+ * tgt_if_regulatory_register_afc_event_handler() - Register AFC event
+ * handler
+ * @psoc: Pointer to psoc
+ * @arg: Pointer to argument list
+ *
+ * Return: QDF_STATUS
+ */
+static QDF_STATUS tgt_if_regulatory_register_afc_event_handler(
+	struct wlan_objmgr_psoc *psoc, void *arg)
+{
+	wmi_unified_t wmi_handle = get_wmi_unified_hdl_from_psoc(psoc);
+
+	if (!wmi_handle)
+		return QDF_STATUS_E_FAILURE;
+
+	return wmi_unified_register_event_handler(
+			wmi_handle, wmi_afc_event_id,
+			tgt_afc_event_handler, WMI_RX_WORK_CTX);
+}
+
+/**
+ * tgt_if_regulatory_unregister_afc_event_handler() - Unregister AFC event
+ * handler
+ * @psoc: Pointer to psoc
+ * @arg: Pointer to argument list
+ *
+ * Return: QDF_STATUS
+ */
+static QDF_STATUS
+tgt_if_regulatory_unregister_afc_event_handler(struct wlan_objmgr_psoc *psoc,
+					       void *arg)
+{
+	wmi_unified_t wmi_handle = get_wmi_unified_hdl_from_psoc(psoc);
+
+	if (!wmi_handle)
+		return QDF_STATUS_E_FAILURE;
+
+	return wmi_unified_unregister_event_handler(
+			wmi_handle, wmi_afc_event_id);
+}
+#endif
 #endif
 
 /**
@@ -687,9 +808,47 @@ static void target_if_register_master_ext_handler(
 	reg_ops->unregister_master_ext_handler =
 		tgt_if_regulatory_unregister_master_list_ext_handler;
 }
+
+#ifdef CONFIG_AFC_SUPPORT
+static void target_if_register_afc_event_handler(
+				struct wlan_lmac_if_reg_tx_ops *reg_ops)
+{
+	reg_ops->register_afc_event_handler =
+		tgt_if_regulatory_register_afc_event_handler;
+
+	reg_ops->unregister_afc_event_handler =
+		tgt_if_regulatory_unregister_afc_event_handler;
+}
+
+static void target_if_register_acs_trigger_for_afc
+				(struct wlan_lmac_if_reg_tx_ops *reg_ops)
+{
+	reg_ops->trigger_acs_for_afc = NULL;
+}
+#else
+static void target_if_register_afc_event_handler(
+				struct wlan_lmac_if_reg_tx_ops *reg_ops)
+{
+}
+
+static void target_if_register_acs_trigger_for_afc
+				(struct wlan_lmac_if_reg_tx_ops *reg_ops)
+{
+}
+#endif
 #else
 static inline void
 target_if_register_master_ext_handler(struct wlan_lmac_if_reg_tx_ops *reg_ops)
+{
+}
+
+static void target_if_register_afc_event_handler(
+				struct wlan_lmac_if_reg_tx_ops *reg_ops)
+{
+}
+
+static void target_if_register_acs_trigger_for_afc
+				(struct wlan_lmac_if_reg_tx_ops *reg_ops)
 {
 }
 #endif
@@ -706,6 +865,41 @@ tgt_if_regulatory_set_tpc_power(struct wlan_objmgr_psoc *psoc,
 
 	return wmi_unified_send_set_tpc_power_cmd(wmi_handle, vdev_id, param);
 }
+
+#ifdef CONFIG_AFC_SUPPORT
+/**
+ * tgt_if_regulatory_send_afc_cmd() - Send AFC command to the FW
+ *
+ * @psoc: Pointer to psoc
+ * @pdev_id: Pdev id
+ * @param: Pointer to hold AFC indication.
+ *
+ * Return: QDF_STATUS_SUCCESS if WMI_AFC_CMD is sent, else QDF_STATUS_E_FAILURE
+ */
+static QDF_STATUS
+tgt_if_regulatory_send_afc_cmd(struct wlan_objmgr_psoc *psoc,
+			       uint8_t pdev_id,
+			       struct reg_afc_resp_rx_ind_info *param)
+{
+	wmi_unified_t wmi_handle = get_wmi_unified_hdl_from_psoc(psoc);
+
+	if (!wmi_handle)
+		return QDF_STATUS_E_FAILURE;
+
+	return wmi_unified_send_afc_cmd(wmi_handle, pdev_id, param);
+}
+
+static void
+tgt_if_register_afc_callback(struct wlan_lmac_if_reg_tx_ops *reg_ops)
+{
+	reg_ops->send_afc_ind = tgt_if_regulatory_send_afc_cmd;
+}
+#else
+static void
+tgt_if_register_afc_callback(struct wlan_lmac_if_reg_tx_ops *reg_ops)
+{
+}
+#endif
 
 /**
  * tgt_if_regulatory_is_ext_tpc_supported() - Check if FW supports new
@@ -745,7 +939,7 @@ QDF_STATUS target_if_regulatory_set_ext_tpc(struct wlan_objmgr_psoc *psoc)
 	return QDF_STATUS_SUCCESS;
 }
 
-#if defined(CONFIG_BAND_6GHZ) && defined(CONFIG_REG_CLIENT)
+#if defined(CONFIG_BAND_6GHZ)
 /**
  * tgt_if_regulatory_is_lower_6g_edge_ch_supp() - Check if lower 6ghz
  * edge channel (5935MHz) is supported
@@ -848,11 +1042,15 @@ QDF_STATUS target_if_register_regulatory_tx_ops(
 
 	target_if_register_master_ext_handler(reg_ops);
 
+	target_if_register_afc_event_handler(reg_ops);
+
 	reg_ops->set_country_code = tgt_if_regulatory_set_country_code;
 
 	reg_ops->fill_umac_legacy_chanlist = NULL;
 
 	reg_ops->set_country_failed = NULL;
+
+	target_if_register_acs_trigger_for_afc(reg_ops);
 
 	reg_ops->register_11d_new_cc_handler =
 		tgt_if_regulatory_register_11d_new_cc_handler;
@@ -885,6 +1083,8 @@ QDF_STATUS target_if_register_regulatory_tx_ops(
 			tgt_if_regulatory_get_pdev_id_from_phy_id;
 
 	reg_ops->set_tpc_power = tgt_if_regulatory_set_tpc_power;
+
+	tgt_if_register_afc_callback(reg_ops);
 
 	return QDF_STATUS_SUCCESS;
 }

@@ -476,56 +476,6 @@ dfs_find_radar_affected_subchans_for_freq(struct wlan_dfs *dfs,
 }
 #endif
 
-#ifdef CONFIG_CHAN_NUM_API
-uint8_t dfs_get_bonding_channels_without_seg_info(struct dfs_channel *chan,
-						  uint8_t *channels)
-{
-	uint8_t center_chan;
-	uint8_t nchannels = 0;
-
-	center_chan = chan->dfs_ch_vhtop_ch_freq_seg1;
-
-	if (WLAN_IS_CHAN_MODE_20(chan)) {
-		nchannels = 1;
-		channels[0] = center_chan;
-	} else if (WLAN_IS_CHAN_MODE_40(chan)) {
-		nchannels = 2;
-		channels[0] = center_chan - DFS_5GHZ_NEXT_CHAN_OFFSET;
-		channels[1] = center_chan + DFS_5GHZ_NEXT_CHAN_OFFSET;
-	} else if (WLAN_IS_CHAN_MODE_80(chan)) {
-		nchannels = 4;
-		channels[0] = center_chan - DFS_5GHZ_2ND_CHAN_OFFSET;
-		channels[1] = center_chan - DFS_5GHZ_NEXT_CHAN_OFFSET;
-		channels[2] = center_chan + DFS_5GHZ_NEXT_CHAN_OFFSET;
-		channels[3] = center_chan + DFS_5GHZ_2ND_CHAN_OFFSET;
-	} else if (WLAN_IS_CHAN_MODE_80_80(chan)) {
-		nchannels = 8;
-		channels[0] = center_chan - DFS_5GHZ_2ND_CHAN_OFFSET;
-		channels[1] = center_chan - DFS_5GHZ_NEXT_CHAN_OFFSET;
-		channels[2] = center_chan + DFS_5GHZ_NEXT_CHAN_OFFSET;
-		channels[3] = center_chan + DFS_5GHZ_2ND_CHAN_OFFSET;
-		center_chan = chan->dfs_ch_vhtop_ch_freq_seg2;
-		channels[4] = center_chan - DFS_5GHZ_2ND_CHAN_OFFSET;
-		channels[5] = center_chan - DFS_5GHZ_NEXT_CHAN_OFFSET;
-		channels[6] = center_chan + DFS_5GHZ_NEXT_CHAN_OFFSET;
-		channels[7] = center_chan + DFS_5GHZ_2ND_CHAN_OFFSET;
-	} else if (WLAN_IS_CHAN_MODE_160(chan)) {
-		nchannels = 8;
-		center_chan = chan->dfs_ch_vhtop_ch_freq_seg2;
-		channels[0] = center_chan - DFS_5GHZ_4TH_CHAN_OFFSET;
-		channels[1] = center_chan - DFS_5GHZ_3RD_CHAN_OFFSET;
-		channels[2] = center_chan - DFS_5GHZ_2ND_CHAN_OFFSET;
-		channels[3] = center_chan - DFS_5GHZ_NEXT_CHAN_OFFSET;
-		channels[4] = center_chan + DFS_5GHZ_NEXT_CHAN_OFFSET;
-		channels[5] = center_chan + DFS_5GHZ_2ND_CHAN_OFFSET;
-		channels[6] = center_chan + DFS_5GHZ_3RD_CHAN_OFFSET;
-		channels[7] = center_chan + DFS_5GHZ_4TH_CHAN_OFFSET;
-	}
-
-	return nchannels;
-}
-#endif
-
 /*
  * dfs_get_bonding_channel_without_seg_info_for_freq() - Get bonding frequency
  * list.
@@ -808,11 +758,11 @@ bool dfs_radar_found_event_basic_sanity(struct wlan_dfs *dfs,
 
 void dfs_send_csa_to_current_chan(struct wlan_dfs *dfs)
 {
-	qdf_timer_stop(&dfs->wlan_dfstesttimer);
 	dfs->wlan_dfstest = 1;
 	dfs->wlan_dfstest_ieeechan = dfs->dfs_curchan->dfs_ch_ieee;
 	dfs->wlan_dfstesttime = 1;   /* 1ms */
-	qdf_timer_mod(&dfs->wlan_dfstesttimer, dfs->wlan_dfstesttime);
+	qdf_timer_sync_cancel(&dfs->wlan_dfstesttimer);
+	qdf_timer_start(&dfs->wlan_dfstesttimer, dfs->wlan_dfstesttime);
 }
 
 int dfs_second_segment_radar_disable(struct wlan_dfs *dfs)
@@ -821,6 +771,13 @@ int dfs_second_segment_radar_disable(struct wlan_dfs *dfs)
 
 	return 0;
 }
+
+#ifdef WLAN_DFS_FULL_OFFLOAD
+void dfs_inc_num_radar(struct wlan_dfs *dfs)
+{
+	dfs->wlan_dfs_stats.num_radar_detects++;
+}
+#endif /* WLAN_DFS_FULL_OFFLOAD */
 
 #if defined(WLAN_DFS_TRUE_160MHZ_SUPPORT) && defined(WLAN_DFS_FULL_OFFLOAD)
 void dfs_translate_radar_params(struct wlan_dfs *dfs,
@@ -1065,6 +1022,11 @@ dfs_process_radar_ind_on_home_chan(struct wlan_dfs *dfs,
 				WLAN_EV_RADAR_DETECTED);
 
 	if (!dfs->dfs_use_nol) {
+		if (!dfs->dfs_is_offload_enabled) {
+			dfs_radar_disable(dfs);
+			dfs_second_segment_radar_disable(dfs);
+			dfs_flush_additional_pulses(dfs);
+		}
 		dfs_reset_bangradar(dfs);
 		dfs_send_csa_to_current_chan(dfs);
 		status = QDF_STATUS_SUCCESS;

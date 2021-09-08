@@ -23,7 +23,6 @@
 #ifndef __WLAN_CM_API_H
 #define __WLAN_CM_API_H
 
-#ifdef FEATURE_CM_ENABLE
 #include "wlan_cm_public_struct.h"
 #include "wlan_ext_mlme_obj_types.h"
 
@@ -451,15 +450,13 @@ void wlan_cm_set_candidate_custom_sort_cb(
 				 qdf_list_t *list));
 #endif
 
-#else
-
-#ifdef WLAN_POLICY_MGR_ENABLE
-static inline void
-wlan_cm_hw_mode_change_resp(struct wlan_objmgr_pdev *pdev, uint8_t vdev_id,
-			    uint32_t cm_id, QDF_STATUS status)
-{
-}
-#endif /* ifdef POLICY_MGR_ENABLE */
-
-#endif
+/**
+ * wlan_cm_get_rnr() - get rnr
+ * @vdev:vdev
+ * @cm_id: connect mgr id
+ *
+ * Return: rnr pointer
+ */
+struct reduced_neighbor_report *wlan_cm_get_rnr(struct wlan_objmgr_vdev *vdev,
+						wlan_cm_id cm_id);
 #endif /* __WLAN_CM_UCFG_API_H */

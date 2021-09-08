@@ -476,7 +476,8 @@ target_if_send_vdev_spectral_configure_cmd(struct target_if_spectral *spectral,
 	struct wlan_objmgr_vdev *vdev = NULL;
 	struct target_if_psoc_spectral *psoc_spectral;
 
-	qdf_assert_always(spectral && param);
+	qdf_assert_always(spectral);
+	qdf_assert_always(param);
 
 	pdev = spectral->pdev_obj;
 
@@ -2522,6 +2523,7 @@ target_if_spectral_len_adj_swar_init(struct spectral_fft_bin_len_adj_swar *swar,
 				     uint32_t target_type)
 {
 	if (target_type == TARGET_TYPE_QCA8074V2 ||
+	    target_type == TARGET_TYPE_QCA9574 ||
 	    target_type == TARGET_TYPE_QCN9000 ||
 	    target_type == TARGET_TYPE_QCN6122 ||
 	    target_type == TARGET_TYPE_QCA5018 ||
@@ -2537,6 +2539,7 @@ target_if_spectral_len_adj_swar_init(struct spectral_fft_bin_len_adj_swar *swar,
 
 	if (target_type == TARGET_TYPE_QCA8074 ||
 	    target_type == TARGET_TYPE_QCA8074V2 ||
+	    target_type == TARGET_TYPE_QCA9574 ||
 	    target_type == TARGET_TYPE_QCA6018 ||
 	    target_type == TARGET_TYPE_QCN6122 ||
 	    target_type == TARGET_TYPE_QCA5018 ||
@@ -2549,7 +2552,8 @@ target_if_spectral_len_adj_swar_init(struct spectral_fft_bin_len_adj_swar *swar,
 		swar->null_fftbin_adj = 0;
 	}
 
-	if (target_type == TARGET_TYPE_QCA8074V2)
+	if (target_type == TARGET_TYPE_QCA8074V2 ||
+	    target_type == TARGET_TYPE_QCA9574)
 		swar->packmode_fftbin_size_adj = 1;
 	else
 		swar->packmode_fftbin_size_adj = 0;
@@ -2656,6 +2660,292 @@ target_if_spectral_timestamp_war_init(struct spectral_timestamp_war *twar)
 	twar->target_reset_count = 0;
 }
 
+#ifdef OPTIMIZED_SAMP_MESSAGE
+/**
+ * target_if_spectral_is_hw_mode_sbs() - Check if the given pdev is in SBS mode
+ * @pdev: pdev pointer
+ * @is_hw_mode_sbs: Pointer to the variable where this function should write
+ * whether the given pdev is in SBS mode
+ *
+ * Return: QDF_STATUS of operation
+ */
+static QDF_STATUS
+target_if_spectral_is_hw_mode_sbs(struct wlan_objmgr_pdev *pdev,
+				  bool *is_hw_mode_sbs)
+{
+	struct wlan_objmgr_psoc *psoc;
+	struct target_psoc_info *tgt_hdl;
+	enum wmi_host_hw_mode_config_type mode;
+
+	qdf_assert_always(is_hw_mode_sbs);
+
+	psoc = wlan_pdev_get_psoc(pdev);
+	if (!psoc) {
+		spectral_err("psoc is null");
+		return QDF_STATUS_E_NULL_VALUE;
+	}
+
+	tgt_hdl = wlan_psoc_get_tgt_if_handle(psoc);
+	if (!tgt_hdl) {
+		spectral_err("target_psoc_info is null");
+		return QDF_STATUS_E_NULL_VALUE;
+	}
+
+	mode = target_psoc_get_preferred_hw_mode(tgt_hdl);
+	switch (mode) {
+	case WMI_HOST_HW_MODE_SBS_PASSIVE:
+	case WMI_HOST_HW_MODE_SBS:
+	case WMI_HOST_HW_MODE_DBS_SBS:
+	case WMI_HOST_HW_MODE_DBS_OR_SBS:
+		*is_hw_mode_sbs = true;
+		break;
+	default:
+		*is_hw_mode_sbs = false;
+		break;
+	}
+
+	return QDF_STATUS_SUCCESS;
+}
+
+/**
+ * target_if_get_pdev_mac_phy_caps() - Get the MAC_PHY capabilities of a pdev
+ * @pdev: pdev pointer
+ *
+ * Return: On success, pointer to  MAC_PHY capabilities of @pdev.
+ * On failure, NULL
+ */
+static struct wlan_psoc_host_mac_phy_caps *
+target_if_get_pdev_mac_phy_caps(struct wlan_objmgr_pdev *pdev)
+{
+	struct wlan_objmgr_psoc *psoc;
+	struct wlan_psoc_host_mac_phy_caps *mac_phy_cap_arr;
+	struct target_psoc_info *tgt_psoc_info;
+	uint8_t pdev_id;
+
+	if (!pdev) {
+		spectral_err("pdev is NULL");
+		return NULL;
+	}
+
+	psoc = wlan_pdev_get_psoc(pdev);
+	if (!psoc) {
+		spectral_err("psoc is null");
+		return NULL;
+	}
+
+	tgt_psoc_info = wlan_psoc_get_tgt_if_handle(psoc);
+	if (!tgt_psoc_info) {
+		spectral_err("target_psoc_info is null");
+		return NULL;
+	}
+
+	mac_phy_cap_arr = target_psoc_get_mac_phy_cap(tgt_psoc_info);
+	if (!mac_phy_cap_arr) {
+		spectral_err("mac phy cap array is null");
+		return NULL;
+	}
+
+	pdev_id = wlan_objmgr_pdev_get_pdev_id(pdev);
+	return &mac_phy_cap_arr[pdev_id];
+}
+
+/**
+ * struct target_if_sscan_pdev_phy_info - PHY information of the pdev on
+ * which sscan is done. A pointer to an instance of this structure is passed
+ * as an argument to the iterator function target_if_find_sscan_pdev_phya1()
+ * @phy_id: PHY ID of this pdev
+ * @is_using_phya1: Pointer to the variable where the iterator function should
+ * populate whether the given pdev is using PHYA1
+ */
+struct target_if_sscan_pdev_phy_info {
+	uint8_t phy_id;
+	bool *is_using_phya1;
+};
+
+/**
+ * target_if_find_sscan_pdev_phya1() - This is an iterator function to
+ * wlan_objmgr_iterate_obj_list(). It checks whether a given sscan_pdev (pdev on
+ * which sscan is currenly issued) is using PHYA1 by comparing against the pdev
+ * argument given by the wlan_objmgr_iterate_obj_list()
+ * @psoc: Pointer to psoc
+ * @object: Pointer to pdev
+ * @arg: Pointer to target_if_sscan_pdev_phy_info of the sscan_pdev for which
+ * we want to check if it uses PHYA1
+ *
+ * Return: None
+ */
+static void
+target_if_find_sscan_pdev_phya1(struct wlan_objmgr_psoc *psoc,
+				void *object, void *arg)
+{
+	struct target_if_sscan_pdev_phy_info *sscan_pdev_phy_info = arg;
+	struct wlan_objmgr_pdev *cur_pdev = object;
+	struct wlan_psoc_host_mac_phy_caps *cur_mac_phy_caps;
+
+	cur_mac_phy_caps = target_if_get_pdev_mac_phy_caps(cur_pdev);
+	if (!cur_mac_phy_caps) {
+		spectral_err("Failed to get MAC PHY Capabilities of"
+			     "pdev %pK", cur_pdev);
+		return;
+	}
+
+	spectral_debug("supported_bands: %0x phy_id: %d",
+		       cur_mac_phy_caps->supported_bands,
+		       cur_mac_phy_caps->phy_id);
+
+	/* No need to do anything if the current pdev is not a 5GHz pdev */
+	if (!(cur_mac_phy_caps->supported_bands & WMI_HOST_WLAN_5G_CAPABILITY))
+		return;
+
+	/* No need to do anything if the current pdev is same as sscan_pdev */
+	if (sscan_pdev_phy_info->phy_id == cur_mac_phy_caps->phy_id)
+		return;
+
+	/**
+	 * Compare the phy_id of both the SBS pdevs to figure out if
+	 * the sscan_pdev using PHYA1
+	 */
+	if (sscan_pdev_phy_info->phy_id > cur_mac_phy_caps->phy_id)
+		*sscan_pdev_phy_info->is_using_phya1 = true;
+	else
+		*sscan_pdev_phy_info->is_using_phya1 = false;
+}
+
+/**
+ * target_if_spectral_detector_list_init() - Initialize Spectral detector list
+ * based on target type
+ * @spectral: Pointer to Spectral target_if
+ *
+ * Function to initialize Spectral detector list for possible combinations of
+ * Spectral scan mode and channel width, based on target type.
+ *
+ * Return: Success/Failure
+ */
+static QDF_STATUS
+target_if_spectral_detector_list_init(struct target_if_spectral *spectral)
+{
+	struct sscan_detector_list *det_list;
+	enum spectral_scan_mode smode;
+	enum phy_ch_width ch_width;
+	QDF_STATUS ret;
+	bool is_hw_mode_sbs = false, is_using_phya1 = false;
+
+	if (!spectral) {
+		spectral_err_rl("Spectral LMAC object is null");
+		return QDF_STATUS_E_NULL_VALUE;
+	}
+
+	/**
+	 * Special handling is required for SBS mode where the detector
+	 * list should be following for the 5GHz pdevs.
+	 * For the pdev that use PHYA0:
+	 *    detector 0 for normal mode
+	 *    detector 2 for agile mode
+	 * For the pdev that use PHYA1:
+	 *    detector 1 for normal mode
+	 *    detector 2 for agile mode
+	 *
+	 * There is no direct way of knowing which pdevs are using PHYA0 or
+	 * PHYA1. We need to look at the phy_id of a given pdev and compare
+	 * against other pdevs on the same psoc to figure out whether the given
+	 * pdev is operating using PHYA1.
+	 */
+
+	/* First check whether this pdev is in SBS mode */
+	ret = target_if_spectral_is_hw_mode_sbs(spectral->pdev_obj,
+						&is_hw_mode_sbs);
+	if (QDF_IS_STATUS_ERROR(ret)) {
+		spectral_err("Failed to check whether hw mode is SBS");
+		return ret;
+	}
+
+	if (is_hw_mode_sbs) {
+		struct wlan_psoc_host_mac_phy_caps *mac_phy_caps;
+
+		mac_phy_caps =
+			target_if_get_pdev_mac_phy_caps(spectral->pdev_obj);
+		if (!mac_phy_caps) {
+			spectral_err("Failed to get MAC PHY Capabilities of"
+				     "pdev %pK", spectral->pdev_obj);
+			return QDF_STATUS_E_FAILURE;
+		}
+
+		spectral_debug("bands: %0x phy_id: %d",
+			       mac_phy_caps->supported_bands,
+			       mac_phy_caps->phy_id);
+
+		 /* We only care about 5GHz pdevs */
+		if (mac_phy_caps->supported_bands &
+		    WMI_HOST_WLAN_5G_CAPABILITY) {
+			struct target_if_sscan_pdev_phy_info pdev_phy_info;
+
+			pdev_phy_info.phy_id = mac_phy_caps->phy_id;
+			pdev_phy_info.is_using_phya1 = &is_using_phya1;
+
+			/* Iterate over all pdevs on this psoc */
+			wlan_objmgr_iterate_obj_list
+				(wlan_pdev_get_psoc(spectral->pdev_obj),
+				 WLAN_PDEV_OP,
+				 target_if_find_sscan_pdev_phya1,
+				 &pdev_phy_info, 0,
+				 WLAN_SPECTRAL_ID);
+		}
+	}
+
+	/**
+	 * We assume there are 2 detectors. The Detector ID coming first will
+	 * always be pri80 detector, and second detector for sec80.
+	 */
+	ch_width = CH_WIDTH_20MHZ;
+	for (; ch_width <= CH_WIDTH_80P80MHZ; ch_width++) {
+		/* Normal spectral scan */
+		smode = SPECTRAL_SCAN_MODE_NORMAL;
+		det_list = &spectral->detector_list[smode][ch_width];
+		det_list->num_detectors = 1;
+
+		spectral_debug("is_hw_mode_sbs: %d is_using_phya1:%d",
+			       is_hw_mode_sbs, is_using_phya1);
+		if (is_hw_mode_sbs && is_using_phya1)
+			det_list->detectors[0] = SPECTRAL_DETECTOR_ID_1;
+		else
+			det_list->detectors[0] = SPECTRAL_DETECTOR_ID_0;
+
+		if (is_ch_width_160_or_80p80(ch_width) &&
+		    spectral->rparams.fragmentation_160[smode]) {
+			det_list->num_detectors += 1;
+			det_list->detectors[1] = SPECTRAL_DETECTOR_ID_1;
+		}
+
+		/* Agile spectral scan */
+		smode = SPECTRAL_SCAN_MODE_AGILE;
+		det_list = &spectral->detector_list[smode][ch_width];
+		det_list->num_detectors = 1;
+
+		if (spectral->rparams.fragmentation_160[smode]) {
+			/**
+			 * Skip to next iteration if 160/80p80 MHz for Agile
+			 * scan. Only 20/40/80 MHz is supported on platforms
+			 * with fragmentation, as only 1 detector is available.
+			 */
+			if (is_ch_width_160_or_80p80(ch_width))
+				continue;
+			det_list->detectors[0] = SPECTRAL_DETECTOR_ID_2;
+		} else {
+			det_list->detectors[0] = SPECTRAL_DETECTOR_ID_1;
+		}
+	}
+
+	return QDF_STATUS_SUCCESS;
+}
+#else
+
+static QDF_STATUS
+target_if_spectral_detector_list_init(struct target_if_spectral *spectral)
+{
+	return QDF_STATUS_SUCCESS;
+}
+#endif /* OPTIMIZED_SAMP_MESSAGE */
+
 /**
  * target_if_pdev_spectral_init() - Initialize target_if Spectral
  * functionality for the given pdev
@@ -2743,6 +3033,7 @@ target_if_pdev_spectral_init(struct wlan_objmgr_pdev *pdev)
 
 	if (target_type == TARGET_TYPE_QCA8074 ||
 	    target_type == TARGET_TYPE_QCA8074V2 ||
+	    target_type == TARGET_TYPE_QCA9574 ||
 	    target_type == TARGET_TYPE_QCA6018 ||
 	    target_type == TARGET_TYPE_QCA5018 ||
 	    target_type == TARGET_TYPE_QCA6390 ||
@@ -2758,6 +3049,7 @@ target_if_pdev_spectral_init(struct wlan_objmgr_pdev *pdev)
 
 	if ((target_type == TARGET_TYPE_QCA8074) ||
 	    (target_type == TARGET_TYPE_QCA8074V2) ||
+	    (target_type == TARGET_TYPE_QCA9574) ||
 	    (target_type == TARGET_TYPE_QCA6018) ||
 	    (target_type == TARGET_TYPE_QCA5018) ||
 	    (target_type == TARGET_TYPE_QCN6122) ||
@@ -4147,15 +4439,6 @@ target_if_spectral_scan_enable_params(struct target_if_spectral *spectral,
 	extension_channel = p_sops->get_extension_channel(spectral, smode);
 	current_channel = p_sops->get_current_channel(spectral, smode);
 
-	status = target_if_spectral_populate_chwidth(
-			spectral, spectral->ch_width,
-			spectral->params[SPECTRAL_SCAN_MODE_AGILE].
-			ss_frequency.cfreq2 > 0);
-	if (QDF_IS_STATUS_ERROR(status)) {
-		spectral_err("Failed to get channel widths");
-		return 1;
-	}
-
 	if (spectral->capability.advncd_spectral_cap) {
 		spectral->lb_edge_extrabins = 0;
 		spectral->rb_edge_extrabins = 0;
@@ -4680,6 +4963,183 @@ target_if_is_agile_supported_cur_chmask(struct target_if_spectral *spectral,
 	return QDF_STATUS_SUCCESS;
 }
 
+#ifdef OPTIMIZED_SAMP_MESSAGE
+/**
+ * target_if_spectral_populate_session_report_info() - Populate per-session
+ * report level information.
+ *
+ * @spectral: Pointer to Spectral object
+ * @smode: Spectral scan mode
+ *
+ * Return: Success/Failure
+ */
+static QDF_STATUS
+target_if_spectral_populate_session_report_info(
+				struct target_if_spectral *spectral,
+				enum spectral_scan_mode smode)
+{
+	struct per_session_report_info *rpt_info;
+	struct wlan_objmgr_psoc *psoc;
+
+	if (!spectral) {
+		spectral_err_rl("Spectral LMAC object is null");
+		return QDF_STATUS_E_NULL_VALUE;
+	}
+	if (smode > SPECTRAL_SCAN_MODE_MAX) {
+		spectral_err_rl("Invalid Spectral scan mode");
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	if (!spectral->pdev_obj) {
+		spectral_err_rl("Spectral PDEV is null");
+		return QDF_STATUS_E_NULL_VALUE;
+	}
+
+	psoc = wlan_pdev_get_psoc(spectral->pdev_obj);
+	if (!psoc) {
+		spectral_err_rl("psoc is null");
+		return QDF_STATUS_E_NULL_VALUE;
+	}
+
+	/* Fill per-session report information, based on the spectral mode */
+	rpt_info = &spectral->report_info[smode];
+
+	rpt_info->operating_bw = spectral->ch_width[SPECTRAL_SCAN_MODE_NORMAL];
+	rpt_info->sscan_bw = spectral->ch_width[smode];
+	rpt_info->sscan_cfreq1 = spectral->params[smode].ss_frequency.cfreq1;
+	rpt_info->sscan_cfreq2 = spectral->params[smode].ss_frequency.cfreq2;
+	if (rpt_info->sscan_bw == CH_WIDTH_80P80MHZ) {
+		rpt_info->num_spans = 2;
+		if (wlan_psoc_nif_fw_ext_cap_get(
+		    psoc, WLAN_SOC_RESTRICTED_80P80_SUPPORT))
+			/* 5 MHz frequency span in restricted 80p80 case */
+			rpt_info->num_spans += 1;
+	} else {
+		rpt_info->num_spans = 1;
+	}
+
+	return QDF_STATUS_SUCCESS;
+}
+
+/**
+ * target_if_spectral_populate_session_detector_info() - Populate per-session
+ * detector level information.
+ *
+ * @spectral: Pointer to Spectral object
+ * @smode: Spectral scan mode
+ *
+ * Return: Success/Failure
+ */
+static QDF_STATUS
+target_if_spectral_populate_session_detector_info(
+				struct target_if_spectral *spectral,
+				enum spectral_scan_mode smode)
+{
+	struct per_session_report_info *rpt_info;
+	struct sscan_detector_list *detector_list;
+	struct wlan_objmgr_psoc *psoc;
+	uint16_t dest_det_idx = 0;
+	uint16_t dest_span_idx = 0;
+	bool is_sec80 = false;
+	uint8_t det, dest_det;
+
+	if (!spectral) {
+		spectral_err_rl("Spectral LMAC object is null");
+		return QDF_STATUS_E_NULL_VALUE;
+	}
+	if (smode > SPECTRAL_SCAN_MODE_MAX) {
+		spectral_err_rl("Invalid Spectral scan mode");
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	if (!spectral->pdev_obj) {
+		spectral_err_rl("Spectral PDEV is null");
+		return QDF_STATUS_E_NULL_VALUE;
+	}
+
+	psoc = wlan_pdev_get_psoc(spectral->pdev_obj);
+	if (!psoc) {
+		spectral_err_rl("psoc is null");
+		return QDF_STATUS_E_NULL_VALUE;
+	}
+
+	rpt_info = &spectral->report_info[smode];
+	/* Fill per-sesion detector-level information */
+	detector_list = &spectral->detector_list[smode][rpt_info->sscan_bw];
+
+	for (det = 0; det < detector_list->num_detectors; det++) {
+		struct per_session_det_map *det_map;
+
+		det_map = &spectral->det_map[detector_list->detectors[det]];
+		if (detector_list->num_detectors > 1) {
+			if (det == 0) {
+				det_map->buf_type = SPECTRAL_MSG_BUF_NEW;
+				det_map->send_to_upper_layers = false;
+			} else if (det == detector_list->num_detectors - 1) {
+				det_map->buf_type = SPECTRAL_MSG_BUF_SAVED;
+				det_map->send_to_upper_layers = true;
+			} else {
+				/* middle fragments */
+				det_map->buf_type = SPECTRAL_MSG_BUF_SAVED;
+				det_map->send_to_upper_layers = false;
+			}
+		} else {
+			det_map->buf_type = SPECTRAL_MSG_BUF_NEW;
+			det_map->send_to_upper_layers = true;
+		}
+
+		det_map->num_dest_det_info = 1;
+		if (rpt_info->sscan_bw == CH_WIDTH_80P80MHZ &&
+		    wlan_psoc_nif_fw_ext_cap_get(
+		    psoc, WLAN_SOC_RESTRICTED_80P80_SUPPORT)) {
+			/**
+			 * In 165MHz case, 1 Spectral HW detector maps to 3
+			 * detectors in SAMP msg.
+			 */
+			det_map->num_dest_det_info += 2;
+		}
+
+		for (dest_det = 0; dest_det < det_map->num_dest_det_info;
+		     dest_det++) {
+			struct per_session_dest_det_info *map_det_info;
+
+			map_det_info = &det_map->dest_det_info[dest_det];
+			map_det_info->freq_span_id = dest_span_idx;
+			map_det_info->det_id = dest_det_idx;
+			map_det_info->is_sec80 = is_sec80;
+			if (rpt_info->sscan_bw == CH_WIDTH_80P80MHZ) {
+			/* Increment span ID for non-contiguous modes */
+				dest_det_idx = 0;
+				dest_span_idx++;
+			} else {
+			/* Increment detector ID for contiguous modes */
+				dest_det_idx++;
+			}
+			is_sec80 = !is_sec80;
+		}
+		det_map->det_map_valid = true;
+	}
+	return QDF_STATUS_SUCCESS;
+}
+
+#else
+static QDF_STATUS
+target_if_spectral_populate_session_report_info(
+				struct target_if_spectral *spectral,
+				enum spectral_scan_mode smode)
+{
+	return QDF_STATUS_SUCCESS;
+}
+
+static QDF_STATUS
+target_if_spectral_populate_session_detector_info(
+				struct target_if_spectral *spectral,
+				enum spectral_scan_mode smode)
+{
+	return QDF_STATUS_SUCCESS;
+}
+#endif /* OPTIMIZED_SAMP_MESSAGE */
+
 QDF_STATUS
 target_if_start_spectral_scan(struct wlan_objmgr_pdev *pdev,
 			      uint8_t vdev_id,
@@ -4690,6 +5150,7 @@ target_if_start_spectral_scan(struct wlan_objmgr_pdev *pdev,
 	struct target_if_spectral *spectral;
 	struct wlan_objmgr_psoc *psoc;
 	enum reg_wifi_band band;
+	QDF_STATUS ret;
 
 	if (!err) {
 		spectral_err("Error code argument is null");
@@ -4875,9 +5336,43 @@ target_if_start_spectral_scan(struct wlan_objmgr_pdev *pdev,
 		}
 	}
 
+	/* Populate detectot list first */
+	ret = target_if_spectral_detector_list_init(spectral);
+	if (QDF_IS_STATUS_ERROR(ret)) {
+		qdf_spin_unlock(&spectral->spectral_lock);
+		spectral_err("Failed to initialize detector list");
+		return ret;
+	}
+
+	ret = target_if_spectral_populate_chwidth(
+			spectral, spectral->ch_width,
+			spectral->params[SPECTRAL_SCAN_MODE_AGILE].
+			ss_frequency.cfreq2 > 0);
+	if (QDF_IS_STATUS_ERROR(ret)) {
+		qdf_spin_unlock(&spectral->spectral_lock);
+		spectral_err("Failed to get channel widths");
+		return ret;
+	}
+
+	ret = target_if_spectral_populate_session_report_info(spectral, smode);
+	if (QDF_IS_STATUS_ERROR(ret)) {
+		qdf_spin_unlock(&spectral->spectral_lock);
+		spectral_err("Failed to populate per-session report info");
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	ret = target_if_spectral_populate_session_detector_info(spectral,
+								smode);
+	if (QDF_IS_STATUS_ERROR(ret)) {
+		qdf_spin_unlock(&spectral->spectral_lock);
+		spectral_err("Failed to populate per-session report info");
+		return QDF_STATUS_E_FAILURE;
+	}
+
 	target_if_spectral_scan_enable_params(spectral,
 					      &spectral->params[smode], smode,
 					      err);
+
 	qdf_spin_unlock(&spectral->spectral_lock);
 
 	return QDF_STATUS_SUCCESS;
@@ -4890,6 +5385,7 @@ target_if_stop_spectral_scan(struct wlan_objmgr_pdev *pdev,
 {
 	struct target_if_spectral_ops *p_sops;
 	struct target_if_spectral *spectral;
+	uint8_t det;
 
 	if (!pdev) {
 		spectral_err("pdev object is NULL");
@@ -4934,6 +5430,9 @@ target_if_stop_spectral_scan(struct wlan_objmgr_pdev *pdev,
 
 	spectral->send_single_packet = 0;
 	spectral->sc_spectral_scan = 0;
+
+	for (det = 0; det < MAX_DETECTORS_PER_PDEV; det++)
+		spectral->det_map[det].det_map_valid = false;
 
 	qdf_spin_unlock(&spectral->spectral_lock);
 

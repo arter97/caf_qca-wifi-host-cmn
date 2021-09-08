@@ -40,7 +40,7 @@
 #include "hif_debug.h"
 #include "mp_dev.h"
 #if defined(QCA_WIFI_QCA8074) || defined(QCA_WIFI_QCA6018) || \
-	defined(QCA_WIFI_QCA5018)
+	defined(QCA_WIFI_QCA5018) || defined(QCA_WIFI_QCA9574)
 #include "hal_api.h"
 #endif
 #include "hif_napi.h"
@@ -51,6 +51,10 @@
 #include <qdf_hang_event_notifier.h>
 #endif
 #include <linux/cpumask.h>
+
+#if defined(HIF_IPCI) && defined(FEATURE_HAL_DELAYED_REG_WRITE)
+#include <pld_common.h>
+#endif
 
 void hif_dump(struct hif_opaque_softc *hif_ctx, uint8_t cmd_id, bool start)
 {
@@ -123,6 +127,10 @@ void hif_vote_link_down(struct hif_opaque_softc *hif_ctx)
 	struct hif_softc *scn = HIF_GET_SOFTC(hif_ctx);
 
 	QDF_BUG(scn);
+	if (scn->linkstate_vote == 0)
+		QDF_DEBUG_PANIC("linkstate_vote(%d) has already been 0",
+				scn->linkstate_vote);
+
 	scn->linkstate_vote--;
 	hif_info("Down_linkstate_vote %d", scn->linkstate_vote);
 	if (scn->linkstate_vote == 0)
@@ -647,44 +655,24 @@ static void hif_cpuhp_unregister(struct hif_softc *scn)
 #endif /* ifdef HIF_CPU_PERF_AFFINE_MASK */
 
 #ifdef HIF_DETECTION_LATENCY_ENABLE
-/**
- * hif_check_detection_latency(): to check if latency for tasklet/credit
- *
- * @scn: hif context
- * @from_timer: if called from timer handler
- * @bitmap_type: indicate if check tasklet or credit
- *
- * Return: none
- */
-void hif_check_detection_latency(struct hif_softc *scn,
-				 bool from_timer,
-				 uint32_t bitmap_type)
+
+void hif_tasklet_latency(struct hif_softc *scn, bool from_timer)
 {
 	qdf_time_t ce2_tasklet_sched_time =
 		scn->latency_detect.ce2_tasklet_sched_time;
 	qdf_time_t ce2_tasklet_exec_time =
 		scn->latency_detect.ce2_tasklet_exec_time;
-	qdf_time_t credit_request_time =
-		scn->latency_detect.credit_request_time;
-	qdf_time_t credit_report_time =
-		scn->latency_detect.credit_report_time;
 	qdf_time_t curr_jiffies = qdf_system_ticks();
 	uint32_t detect_latency_threshold =
 		scn->latency_detect.detect_latency_threshold;
 	int cpu_id = qdf_get_cpu();
 
-	if (QDF_GLOBAL_MISSION_MODE != hif_get_conparam(scn))
-		return;
-
-	if (!scn->latency_detect.enable_detection)
-		return;
-
 	/* 2 kinds of check here.
-	 * from_timer==true:  check if tasklet or credit report stall
-	 * from_timer==false: check tasklet execute or credit report comes late
+	 * from_timer==true:  check if tasklet stall
+	 * from_timer==false: check tasklet execute comes late
 	 */
-	if (bitmap_type & BIT(HIF_DETECT_TASKLET) &&
-	    (from_timer ?
+
+	if ((from_timer ?
 	    qdf_system_time_after(ce2_tasklet_sched_time,
 				  ce2_tasklet_exec_time) :
 	    qdf_system_time_after(ce2_tasklet_exec_time,
@@ -700,9 +688,29 @@ void hif_check_detection_latency(struct hif_softc *scn,
 			cpu_id, (void *)_RET_IP_);
 		goto latency;
 	}
+	return;
 
-	if (bitmap_type & BIT(HIF_DETECT_CREDIT) &&
-	    (from_timer ?
+latency:
+	qdf_trigger_self_recovery(NULL, QDF_TASKLET_CREDIT_LATENCY_DETECT);
+}
+
+void hif_credit_latency(struct hif_softc *scn, bool from_timer)
+{
+	qdf_time_t credit_request_time =
+		scn->latency_detect.credit_request_time;
+	qdf_time_t credit_report_time =
+		scn->latency_detect.credit_report_time;
+	qdf_time_t curr_jiffies = qdf_system_ticks();
+	uint32_t detect_latency_threshold =
+		scn->latency_detect.detect_latency_threshold;
+	int cpu_id = qdf_get_cpu();
+
+	/* 2 kinds of check here.
+	 * from_timer==true:  check if credit report stall
+	 * from_timer==false: check credit report comes late
+	 */
+
+	if ((from_timer ?
 	    qdf_system_time_after(credit_request_time,
 				  credit_report_time) :
 	    qdf_system_time_after(credit_report_time,
@@ -718,11 +726,36 @@ void hif_check_detection_latency(struct hif_softc *scn,
 			cpu_id, (void *)_RET_IP_);
 		goto latency;
 	}
-
 	return;
 
 latency:
 	qdf_trigger_self_recovery(NULL, QDF_TASKLET_CREDIT_LATENCY_DETECT);
+}
+
+/**
+ * hif_check_detection_latency(): to check if latency for tasklet/credit
+ *
+ * @scn: hif context
+ * @from_timer: if called from timer handler
+ * @bitmap_type: indicate if check tasklet or credit
+ *
+ * Return: none
+ */
+void hif_check_detection_latency(struct hif_softc *scn,
+				 bool from_timer,
+				 uint32_t bitmap_type)
+{
+	if (QDF_GLOBAL_MISSION_MODE != hif_get_conparam(scn))
+		return;
+
+	if (!scn->latency_detect.enable_detection)
+		return;
+
+	if (bitmap_type & BIT(HIF_DETECT_TASKLET))
+		hif_tasklet_latency(scn, from_timer);
+
+	if (bitmap_type & BIT(HIF_DETECT_CREDIT))
+		hif_credit_latency(scn, from_timer);
 }
 
 static void hif_latency_detect_timeout_handler(void *arg)
@@ -981,18 +1014,6 @@ void hif_close(struct hif_opaque_softc *hif_ctx)
 }
 
 /**
- * hif_get_num_active_tasklets() - get the number of active
- *		tasklets pending to be completed.
- * @scn: HIF context
- *
- * Returns: the number of tasklets which are active
- */
-static inline int hif_get_num_active_tasklets(struct hif_softc *scn)
-{
-	return qdf_atomic_read(&scn->active_tasklet_cnt);
-}
-
-/**
  * hif_get_num_active_grp_tasklets() - get the number of active
  *		datapath group tasklets pending to be completed.
  * @scn: HIF context
@@ -1008,7 +1029,8 @@ static inline int hif_get_num_active_grp_tasklets(struct hif_softc *scn)
 	defined(QCA_WIFI_QCA6290) || defined(QCA_WIFI_QCA6390) || \
 	defined(QCA_WIFI_QCN9000) || defined(QCA_WIFI_QCA6490) || \
 	defined(QCA_WIFI_QCA6750) || defined(QCA_WIFI_QCA5018) || \
-	defined(QCA_WIFI_WCN7850) || defined(QCA_WIFI_QCN9224))
+	defined(QCA_WIFI_WCN7850) || defined(QCA_WIFI_QCN9224) || \
+	defined(QCA_WIFI_QCA9574))
 /**
  * hif_get_num_pending_work() - get the number of entries in
  *		the workqueue pending to be completed.
@@ -1054,6 +1076,7 @@ QDF_STATUS hif_try_prevent_ep_vote_access(struct hif_opaque_softc *hif_ctx)
 {
 	struct hif_softc *scn = HIF_GET_SOFTC(hif_ctx);
 	uint32_t work_drain_wait_cnt = 0;
+	uint32_t wait_cnt = 0;
 	int work = 0;
 
 	qdf_atomic_set(&scn->dp_ep_vote_access,
@@ -1070,10 +1093,36 @@ QDF_STATUS hif_try_prevent_ep_vote_access(struct hif_opaque_softc *hif_ctx)
 			hif_err("timeout wait for pending work %d ", work);
 			return QDF_STATUS_E_FAULT;
 		}
+		qdf_sleep(10);
+	}
+
+	while (pld_is_pci_ep_awake(scn->qdf_dev->dev)) {
+		if (++wait_cnt > HIF_EP_WAKE_RESET_WAIT_CNT) {
+			hif_err("Release EP vote is not proceed by Fw");
+			return QDF_STATUS_E_FAULT;
+		}
 		qdf_sleep(5);
 	}
 
 	return QDF_STATUS_SUCCESS;
+}
+
+void hif_set_ep_intermediate_vote_access(struct hif_opaque_softc *hif_ctx)
+{
+	struct hif_softc *scn = HIF_GET_SOFTC(hif_ctx);
+	uint8_t vote_access;
+
+	vote_access = qdf_atomic_read(&scn->ep_vote_access);
+
+	if (vote_access != HIF_EP_VOTE_ACCESS_DISABLE)
+		hif_info("EP vote changed from:%u to intermediate state",
+			 vote_access);
+
+	if (QDF_IS_STATUS_ERROR(hif_try_prevent_ep_vote_access(hif_ctx)))
+		QDF_BUG(0);
+
+	qdf_atomic_set(&scn->ep_vote_access,
+		       HIF_EP_VOTE_INTERMEDIATE_ACCESS);
 }
 
 void hif_allow_ep_vote_access(struct hif_opaque_softc *hif_ctx)
@@ -1113,7 +1162,8 @@ uint8_t hif_get_ep_vote_access(struct hif_opaque_softc *hif_ctx,
 	defined(QCA_WIFI_QCA6290) || defined(QCA_WIFI_QCA6390) || \
 	defined(QCA_WIFI_QCN9000) || defined(QCA_WIFI_QCA6490) || \
 	defined(QCA_WIFI_QCA6750) || defined(QCA_WIFI_QCA5018) || \
-	defined(QCA_WIFI_WCN7850) || defined(QCA_WIFI_QCN9224))
+	defined(QCA_WIFI_WCN7850) || defined(QCA_WIFI_QCN9224) || \
+	defined(QCA_WIFI_QCA9574))
 static QDF_STATUS hif_hal_attach(struct hif_softc *scn)
 {
 	if (ce_srng_based(scn)) {
@@ -1560,6 +1610,12 @@ int hif_get_device_type(uint32_t device_id,
 		hif_info(" *********** qca5018 *************");
 		break;
 
+	case QCA9574_DEVICE_ID:
+		*hif_type = HIF_TYPE_QCA9574;
+		*target_type = TARGET_TYPE_QCA9574;
+		hif_info(" *********** QCA9574 *************");
+		break;
+
 	default:
 		hif_err("Unsupported device ID = 0x%x!", device_id);
 		ret = -ENODEV;
@@ -1939,6 +1995,9 @@ qdf_nbuf_t hif_batch_send(struct hif_opaque_softc *osc, qdf_nbuf_t msdu,
 {
 	void *ce_tx_hdl = hif_get_ce_handle(osc, CE_HTT_TX_CE);
 
+	if (!ce_tx_hdl)
+		return NULL;
+
 	return ce_batch_send((struct CE_handle *)ce_tx_hdl, msdu, transfer_id,
 			len, sendhead);
 }
@@ -2049,7 +2108,8 @@ irqreturn_t hif_wake_interrupt_handler(int irq, void *context)
 
 	if (hif_pm_runtime_get_monitor_wake_intr(hif_ctx)) {
 		hif_pm_runtime_set_monitor_wake_intr(hif_ctx, 0);
-		hif_pm_runtime_request_resume(hif_ctx);
+		hif_pm_runtime_request_resume(hif_ctx,
+					      RTPM_ID_WAKE_INTR_HANDLER);
 	}
 
 	if (scn->initial_wakeup_cb)

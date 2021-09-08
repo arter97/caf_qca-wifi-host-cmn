@@ -247,12 +247,13 @@ void target_if_cfr_fill_header(struct csi_cfr_header *hdr,
 		else
 			hdr->cmn.chip_type = CFR_CAPTURE_RADIO_NONE;
 	} else if (target_type == TARGET_TYPE_QCA8074V2) {
-		hdr->cmn.cfr_metadata_version = CFR_META_VERSION_4;
+		hdr->cmn.cfr_metadata_version = CFR_META_VERSION_6;
 		hdr->cmn.chip_type = CFR_CAPTURE_RADIO_HKV2;
 	} else {
-		if ((target_type == TARGET_TYPE_QCN9000) ||
-		    (target_type == TARGET_TYPE_QCA6018) ||
-		    ((target_type == TARGET_TYPE_QCA5018) && (!is_rcc)))
+		if (target_type == TARGET_TYPE_QCN9000)
+			hdr->cmn.cfr_metadata_version = CFR_META_VERSION_7;
+		else if ((target_type == TARGET_TYPE_QCA6018) ||
+			 ((target_type == TARGET_TYPE_QCA5018) && (!is_rcc)))
 			hdr->cmn.cfr_metadata_version = CFR_META_VERSION_5;
 		else
 			hdr->cmn.cfr_metadata_version = CFR_META_VERSION_3;
@@ -712,6 +713,25 @@ target_if_cfr_set_mo_marking_support(struct wlan_objmgr_psoc *psoc,
 
 	if (rx_ops->cfr_rx_ops.cfr_mo_marking_support_set)
 		return rx_ops->cfr_rx_ops.cfr_mo_marking_support_set(
+						psoc, value);
+
+	return QDF_STATUS_E_INVAL;
+}
+
+QDF_STATUS
+target_if_cfr_set_aoa_for_rcc_support(struct wlan_objmgr_psoc *psoc,
+				      uint8_t value)
+{
+	struct wlan_lmac_if_rx_ops *rx_ops;
+
+	rx_ops = wlan_psoc_get_lmac_if_rxops(psoc);
+	if (!rx_ops) {
+		cfr_err("rx_ops is NULL");
+		return QDF_STATUS_E_INVAL;
+	}
+
+	if (rx_ops->cfr_rx_ops.cfr_aoa_for_rcc_support_set)
+		return rx_ops->cfr_rx_ops.cfr_aoa_for_rcc_support_set(
 						psoc, value);
 
 	return QDF_STATUS_E_INVAL;

@@ -1117,6 +1117,8 @@ static QDF_STATUS target_if_dbr_fill_ring(struct wlan_objmgr_pdev *pdev,
 		}
 	}
 
+	direct_buf_rx_exit();
+
 	return QDF_STATUS_SUCCESS;
 }
 
@@ -1848,6 +1850,11 @@ static int target_if_direct_buf_rx_rsp_event_handler(ol_scn_t scn,
 	dbr_buf_pool = mod_param->dbr_buf_pool;
 	dbr_rsp.dbr_entries = qdf_mem_malloc(dbr_rsp.num_buf_release_entry *
 					sizeof(struct direct_buf_rx_entry));
+	if (!dbr_rsp.dbr_entries) {
+		direct_buf_rx_err("invalid dbr_entries");
+		wlan_objmgr_pdev_release_ref(pdev, dbr_mod_id);
+		return QDF_STATUS_E_FAILURE;
+	}
 
 	if (dbr_rsp.num_meta_data_entry > dbr_rsp.num_buf_release_entry) {
 		direct_buf_rx_err("More than expected number of metadata");

@@ -247,6 +247,30 @@ reg_init_6g_vars(struct wlan_regulatory_pdev_priv_obj *pdev_priv_obj)
 }
 #endif
 
+#ifdef CONFIG_AFC_SUPPORT
+static void
+reg_create_afc_cb_spinlock(struct wlan_regulatory_pdev_priv_obj *pdev_priv_obj)
+{
+	qdf_spinlock_create(&pdev_priv_obj->afc_cb_lock);
+}
+
+static void
+reg_destroy_afc_cb_spinlock(struct wlan_regulatory_pdev_priv_obj *pdev_priv_obj)
+{
+	qdf_spinlock_destroy(&pdev_priv_obj->afc_cb_lock);
+}
+#else
+static inline void
+reg_create_afc_cb_spinlock(struct wlan_regulatory_pdev_priv_obj *pdev_priv_obj)
+{
+}
+
+static inline void
+reg_destroy_afc_cb_spinlock(struct wlan_regulatory_pdev_priv_obj *pdev_priv_obj)
+{
+}
+#endif
+
 QDF_STATUS wlan_regulatory_pdev_obj_created_notification(
 	struct wlan_objmgr_pdev *pdev, void *arg_list)
 {
@@ -293,6 +317,7 @@ QDF_STATUS wlan_regulatory_pdev_obj_created_notification(
 	reg_reset_unii_5g_bitmap(pdev_priv_obj);
 
 	qdf_spinlock_create(&pdev_priv_obj->reg_rules_lock);
+	reg_create_afc_cb_spinlock(pdev_priv_obj);
 
 	reg_cap_ptr = psoc_priv_obj->reg_cap;
 	pdev_priv_obj->force_ssc_disable_indoor_channel =
@@ -355,6 +380,52 @@ QDF_STATUS wlan_regulatory_pdev_obj_created_notification(
 	return status;
 }
 
+#ifdef CONFIG_AFC_SUPPORT
+/**
+ * reg_free_chan_obj() - Free the AFC chan object and chan eirp object
+ * information
+ * @afc_chan_info: Pointer to afc_chan_info
+ *
+ * Return: void
+ */
+static void reg_free_chan_obj(struct afc_chan_obj *afc_chan_info)
+{
+	if (afc_chan_info->chan_eirp_info)
+		qdf_mem_free(afc_chan_info->chan_eirp_info);
+}
+
+/**
+ * reg_free_afc_pwr_info() - Free the AFC power information object
+ * @pdev_priv_obj: Pointer to pdev_priv_obj
+ *
+ * Return: void
+ */
+void
+reg_free_afc_pwr_info(struct wlan_regulatory_pdev_priv_obj *pdev_priv_obj)
+{
+	struct reg_fw_afc_power_event *power_info;
+	uint8_t i;
+
+	power_info = pdev_priv_obj->power_info;
+	if (!power_info)
+		return;
+
+	if (power_info->afc_freq_info)
+		qdf_mem_free(power_info->afc_freq_info);
+
+	if (!power_info->afc_chan_info)
+		return;
+
+	for (i = 0; i < power_info->num_chan_objs; i++)
+		reg_free_chan_obj(&power_info->afc_chan_info[i]);
+
+	if (power_info->afc_chan_info)
+		qdf_mem_free(power_info->afc_chan_info);
+
+	qdf_mem_free(power_info);
+}
+#endif
+
 QDF_STATUS wlan_regulatory_pdev_obj_destroyed_notification(
 		struct wlan_objmgr_pdev *pdev, void *arg_list)
 {
@@ -381,6 +452,7 @@ QDF_STATUS wlan_regulatory_pdev_obj_destroyed_notification(
 	if (!psoc_priv_obj->is_11d_offloaded)
 		reg_11d_host_scan_deinit(wlan_pdev_get_psoc(pdev));
 
+	reg_free_afc_pwr_info(pdev_priv_obj);
 	pdev_priv_obj->pdev_ptr = NULL;
 
 	status = wlan_objmgr_pdev_component_obj_detach(
@@ -395,6 +467,7 @@ QDF_STATUS wlan_regulatory_pdev_obj_destroyed_notification(
 	reg_reset_reg_rules(&pdev_priv_obj->reg_rules);
 	qdf_spin_unlock_bh(&pdev_priv_obj->reg_rules_lock);
 
+	reg_destroy_afc_cb_spinlock(pdev_priv_obj);
 	qdf_spinlock_destroy(&pdev_priv_obj->reg_rules_lock);
 
 	qdf_mem_free(pdev_priv_obj);

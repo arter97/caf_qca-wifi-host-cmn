@@ -27,6 +27,7 @@
 #include "qdf_mem.h"
 #include "qdf_nbuf.h"
 #include "qdf_net_types.h"
+#include "qdf_module.h"
 #include <wlan_cfg.h>
 #include "dp_ipa.h"
 #if defined(MESH_MODE_SUPPORT) || defined(FEATURE_PERPKT_INFO)
@@ -34,15 +35,18 @@
 #endif
 #include "enet.h"
 #include "dp_internal.h"
-#ifdef FEATURE_WDS
-#include "dp_txrx_wds.h"
-#endif
 #ifdef ATH_SUPPORT_IQUE
 #include "dp_txrx_me.h"
 #endif
 #include "dp_hist.h"
 #ifdef WLAN_DP_FEATURE_SW_LATENCY_MGR
 #include <dp_swlm.h>
+#endif
+#ifdef WIFI_MONITOR_SUPPORT
+#include <dp_mon.h>
+#endif
+#ifdef FEATURE_WDS
+#include "dp_txrx_wds.h"
 #endif
 
 /* Flag to skip CCE classify when mesh or tid override enabled */
@@ -57,6 +61,21 @@
 
 /* invalid peer id for reinject*/
 #define DP_INVALID_PEER 0XFFFE
+
+/*mapping between hal encrypt type and cdp_sec_type*/
+uint8_t sec_type_map[MAX_CDP_SEC_TYPE] = {HAL_TX_ENCRYPT_TYPE_NO_CIPHER,
+					  HAL_TX_ENCRYPT_TYPE_WEP_128,
+					  HAL_TX_ENCRYPT_TYPE_WEP_104,
+					  HAL_TX_ENCRYPT_TYPE_WEP_40,
+					  HAL_TX_ENCRYPT_TYPE_TKIP_WITH_MIC,
+					  HAL_TX_ENCRYPT_TYPE_TKIP_NO_MIC,
+					  HAL_TX_ENCRYPT_TYPE_AES_CCMP_128,
+					  HAL_TX_ENCRYPT_TYPE_WAPI,
+					  HAL_TX_ENCRYPT_TYPE_AES_CCMP_256,
+					  HAL_TX_ENCRYPT_TYPE_AES_GCMP_128,
+					  HAL_TX_ENCRYPT_TYPE_AES_GCMP_256,
+					  HAL_TX_ENCRYPT_TYPE_WAPI_GCM_SM4};
+qdf_export_symbol(sec_type_map);
 
 #ifdef CONFIG_WLAN_SYSFS_MEM_STATS
 /**
@@ -2281,6 +2300,7 @@ qdf_nbuf_t dp_tx_send_msdu_multiple(struct dp_vdev *vdev, qdf_nbuf_t nbuf,
 				} else
 					break;
 				i++;
+				dp_tx_desc_release(tx_desc, tx_q->desc_pool_id);
 				continue;
 			}
 
@@ -2297,6 +2317,7 @@ qdf_nbuf_t dp_tx_send_msdu_multiple(struct dp_vdev *vdev, qdf_nbuf_t nbuf,
 				 */
 				dp_tx_comp_free_buf(soc, tx_desc);
 				i++;
+				dp_tx_desc_release(tx_desc, tx_q->desc_pool_id);
 				continue;
 			}
 
@@ -2550,7 +2571,7 @@ qdf_nbuf_t dp_tx_extract_mesh_meta_data(struct dp_vdev *vdev, qdf_nbuf_t nbuf,
  */
 static bool dp_check_exc_metadata(struct cdp_tx_exception_metadata *tx_exc)
 {
-	bool invalid_tid = (tx_exc->tid > DP_MAX_TIDS && tx_exc->tid !=
+	bool invalid_tid = (tx_exc->tid >= DP_MAX_TIDS && tx_exc->tid !=
 			    HTT_INVALID_TID);
 	bool invalid_encap_type =
 			(tx_exc->tx_encap_type > htt_cmn_pkt_num_types &&
@@ -3834,7 +3855,7 @@ static inline void dp_tx_sojourn_stats_process(struct dp_pdev *pdev,
 	uint64_t delta_ms;
 	struct cdp_tx_sojourn_stats *sojourn_stats;
 
-	if (qdf_unlikely(pdev->enhanced_stats_en == 0))
+	if (qdf_unlikely(!pdev->enhanced_stats_en))
 		return;
 
 	if (qdf_unlikely(tid == HTT_INVALID_TID ||
@@ -3924,7 +3945,7 @@ dp_tx_comp_process_desc(struct dp_soc *soc,
 		dp_tx_enh_unmap(soc, desc);
 
 		if (QDF_STATUS_SUCCESS ==
-		    dp_tx_add_to_comp_queue(soc, desc, ts, peer)) {
+		    dp_monitor_tx_add_to_comp_queue(soc, desc, ts, peer)) {
 			return;
 		}
 
@@ -3990,6 +4011,138 @@ void dp_tx_update_connectivity_stats(struct dp_soc *soc,
 			  &pkt_type);
 }
 #endif
+
+#ifdef WLAN_FEATURE_TSF_UPLINK_DELAY
+void dp_set_delta_tsf(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
+		      uint32_t delta_tsf)
+{
+	struct dp_soc *soc = cdp_soc_t_to_dp_soc(soc_hdl);
+	struct dp_vdev *vdev = dp_vdev_get_ref_by_id(soc, vdev_id,
+						     DP_MOD_ID_CDP);
+
+	if (!vdev) {
+		dp_err_rl("vdev %d does not exist", vdev_id);
+		return;
+	}
+
+	vdev->delta_tsf = delta_tsf;
+	dp_debug("vdev id %u delta_tsf %u", vdev_id, delta_tsf);
+
+	dp_vdev_unref_delete(soc, vdev, DP_MOD_ID_CDP);
+}
+
+QDF_STATUS dp_set_tsf_ul_delay_report(struct cdp_soc_t *soc_hdl,
+				      uint8_t vdev_id, bool enable)
+{
+	struct dp_soc *soc = cdp_soc_t_to_dp_soc(soc_hdl);
+	struct dp_vdev *vdev = dp_vdev_get_ref_by_id(soc, vdev_id,
+						     DP_MOD_ID_CDP);
+
+	if (!vdev) {
+		dp_err_rl("vdev %d does not exist", vdev_id);
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	qdf_atomic_set(&vdev->ul_delay_report, enable);
+
+	dp_vdev_unref_delete(soc, vdev, DP_MOD_ID_CDP);
+
+	return QDF_STATUS_SUCCESS;
+}
+
+QDF_STATUS dp_get_uplink_delay(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
+			       uint32_t *val)
+{
+	struct dp_soc *soc = cdp_soc_t_to_dp_soc(soc_hdl);
+	struct dp_vdev *vdev;
+	uint32_t delay_accum;
+	uint32_t pkts_accum;
+
+	vdev = dp_vdev_get_ref_by_id(soc, vdev_id, DP_MOD_ID_CDP);
+	if (!vdev) {
+		dp_err_rl("vdev %d does not exist", vdev_id);
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	if (!qdf_atomic_read(&vdev->ul_delay_report)) {
+		dp_vdev_unref_delete(soc, vdev, DP_MOD_ID_CDP);
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	/* Average uplink delay based on current accumulated values */
+	delay_accum = qdf_atomic_read(&vdev->ul_delay_accum);
+	pkts_accum = qdf_atomic_read(&vdev->ul_pkts_accum);
+
+	*val = delay_accum / pkts_accum;
+	dp_debug("uplink_delay %u delay_accum %u pkts_accum %u", *val,
+		 delay_accum, pkts_accum);
+
+	/* Reset accumulated values to 0 */
+	qdf_atomic_set(&vdev->ul_delay_accum, 0);
+	qdf_atomic_set(&vdev->ul_pkts_accum, 0);
+
+	dp_vdev_unref_delete(soc, vdev, DP_MOD_ID_CDP);
+
+	return QDF_STATUS_SUCCESS;
+}
+
+static void dp_tx_update_uplink_delay(struct dp_soc *soc, struct dp_vdev *vdev,
+				      struct hal_tx_completion_status *ts)
+{
+	uint32_t buffer_ts;
+	uint32_t delta_tsf;
+	uint32_t ul_delay;
+
+	/* Tx_rate_stats_info_valid is 0 and tsf is invalid then */
+	if (!ts->valid)
+		return;
+
+	if (qdf_unlikely(!vdev)) {
+		dp_info_rl("vdev is null or delete in progrss");
+		return;
+	}
+
+	if (!qdf_atomic_read(&vdev->ul_delay_report))
+		return;
+
+	delta_tsf = vdev->delta_tsf;
+
+	/* buffer_timestamp is in units of 1024 us and is [31:13] of
+	 * WBM_RELEASE_RING_4. After left shift 10 bits, it's
+	 * valid up to 29 bits.
+	 */
+	buffer_ts = ts->buffer_timestamp << 10;
+
+	ul_delay = ts->tsf - buffer_ts - delta_tsf;
+	ul_delay &= 0x1FFFFFFF; /* mask 29 BITS */
+	if (ul_delay > 0x1000000) {
+		dp_info_rl("----------------------\n"
+			   "Tx completion status:\n"
+			   "----------------------\n"
+			   "release_src = %d\n"
+			   "ppdu_id = 0x%x\n"
+			   "release_reason = %d\n"
+			   "tsf = %u (0x%x)\n"
+			   "buffer_timestamp = %u (0x%x)\n"
+			   "delta_tsf = %u (0x%x)\n",
+			   ts->release_src, ts->ppdu_id, ts->status,
+			   ts->tsf, ts->tsf, ts->buffer_timestamp,
+			   ts->buffer_timestamp, delta_tsf, delta_tsf);
+		return;
+	}
+
+	ul_delay /= 1000; /* in unit of ms */
+
+	qdf_atomic_add(ul_delay, &vdev->ul_delay_accum);
+	qdf_atomic_inc(&vdev->ul_pkts_accum);
+}
+#else /* !WLAN_FEATURE_TSF_UPLINK_DELAY */
+static inline
+void dp_tx_update_uplink_delay(struct dp_soc *soc, struct dp_vdev *vdev,
+			       struct hal_tx_completion_status *ts)
+{
+}
+#endif /* WLAN_FEATURE_TSF_UPLINK_DELAY */
 
 /**
  * dp_tx_comp_process_tx_status() - Parse and Dump Tx completion status info
@@ -4069,6 +4222,7 @@ void dp_tx_comp_process_tx_status(struct dp_soc *soc,
 	vdev = peer->vdev;
 
 	dp_tx_update_connectivity_stats(soc, vdev, tx_desc, ts->status);
+	dp_tx_update_uplink_delay(soc, vdev, ts);
 
 	/* Update per-packet stats for mesh mode */
 	if (qdf_unlikely(vdev->mesh_vdev) &&
@@ -4145,6 +4299,7 @@ dp_tx_comp_process_desc_list(struct dp_soc *soc,
 			peer = dp_peer_get_ref_by_id(soc, peer_id,
 						     DP_MOD_ID_TX_COMP);
 		}
+
 		if (qdf_likely(desc->flags & DP_TX_DESC_FLAG_SIMPLE)) {
 			struct dp_pdev *pdev = desc->pdev;
 
@@ -4171,10 +4326,11 @@ dp_tx_comp_process_desc_list(struct dp_soc *soc,
 			next = desc->next;
 			dp_tx_desc_history_add(soc, desc->dma_addr, desc->nbuf,
 					       desc->id, DP_TX_COMP_UNMAP);
-			qdf_mem_unmap_nbytes_single(soc->osdev,
-						    desc->dma_addr,
-						    QDF_DMA_TO_DEVICE,
-						    desc->length);
+			qdf_nbuf_unmap_nbytes_single_paddr(soc->osdev,
+							   desc->nbuf,
+							   desc->dma_addr,
+							   QDF_DMA_TO_DEVICE,
+							   desc->length);
 			qdf_nbuf_free(desc->nbuf);
 			dp_tx_desc_free(soc, desc, desc->pool_id);
 			desc = next;
@@ -4355,13 +4511,13 @@ void dp_tx_process_htt_completion(struct dp_soc *soc,
 
 #ifdef WLAN_FEATURE_RX_SOFTIRQ_TIME_LIMIT
 static inline
-bool dp_tx_comp_loop_pkt_limit_hit(struct dp_soc *soc, int num_reaped)
+bool dp_tx_comp_loop_pkt_limit_hit(struct dp_soc *soc, int num_reaped,
+				   int max_reap_limit)
 {
 	bool limit_hit = false;
-	struct wlan_cfg_dp_soc_ctxt *cfg = soc->wlan_cfg_ctx;
 
 	limit_hit =
-		(num_reaped >= cfg->tx_comp_loop_pkt_limit) ? true : false;
+		(num_reaped >= max_reap_limit) ? true : false;
 
 	if (limit_hit)
 		DP_STATS_INC(soc, tx.tx_comp_loop_pkt_limit_hit, 1);
@@ -4373,9 +4529,17 @@ static inline bool dp_tx_comp_enable_eol_data_check(struct dp_soc *soc)
 {
 	return soc->wlan_cfg_ctx->tx_comp_enable_eol_data_check;
 }
+
+static inline int dp_tx_comp_get_loop_pkt_limit(struct dp_soc *soc)
+{
+	struct wlan_cfg_dp_soc_ctxt *cfg = soc->wlan_cfg_ctx;
+
+	return cfg->tx_comp_loop_pkt_limit;
+}
 #else
 static inline
-bool dp_tx_comp_loop_pkt_limit_hit(struct dp_soc *soc, int num_reaped)
+bool dp_tx_comp_loop_pkt_limit_hit(struct dp_soc *soc, int num_reaped,
+				   int max_reap_limit)
 {
 	return false;
 }
@@ -4383,6 +4547,28 @@ bool dp_tx_comp_loop_pkt_limit_hit(struct dp_soc *soc, int num_reaped)
 static inline bool dp_tx_comp_enable_eol_data_check(struct dp_soc *soc)
 {
 	return false;
+}
+
+static inline int dp_tx_comp_get_loop_pkt_limit(struct dp_soc *soc)
+{
+	return 0;
+}
+#endif
+
+#ifdef WLAN_FEATURE_NEAR_FULL_IRQ
+static inline int
+dp_srng_test_and_update_nf_params(struct dp_soc *soc, struct dp_srng *dp_srng,
+				  int *max_reap_limit)
+{
+	return soc->arch_ops.dp_srng_test_and_update_nf_params(soc, dp_srng,
+							       max_reap_limit);
+}
+#else
+static inline int
+dp_srng_test_and_update_nf_params(struct dp_soc *soc, struct dp_srng *dp_srng,
+				  int *max_reap_limit)
+{
+	return 0;
 }
 #endif
 
@@ -4399,6 +4585,8 @@ uint32_t dp_tx_comp_handler(struct dp_intr *int_ctx, struct dp_soc *soc,
 	uint32_t count;
 	uint32_t num_avail_for_reap = 0;
 	bool force_break = false;
+	struct dp_srng *tx_comp_ring = &soc->tx_comp_ring[ring_id];
+	int max_reap_limit, ring_near_full;
 
 	DP_HIST_INIT();
 
@@ -4407,6 +4595,10 @@ more_data:
 	head_desc = NULL;
 	tail_desc = NULL;
 	count = 0;
+	max_reap_limit = dp_tx_comp_get_loop_pkt_limit(soc);
+
+	ring_near_full = dp_srng_test_and_update_nf_params(soc, tx_comp_ring,
+							   &max_reap_limit);
 
 	if (qdf_unlikely(dp_srng_access_start(int_ctx, soc, hal_ring_hdl))) {
 		dp_err("HAL RING Access Failed -- %pK", hal_ring_hdl);
@@ -4421,7 +4613,7 @@ more_data:
 	dp_srng_dst_inv_cached_descs(soc, hal_ring_hdl, num_avail_for_reap);
 
 	/* Find head descriptor from completion ring */
-	while (qdf_likely(num_avail_for_reap)) {
+	while (qdf_likely(num_avail_for_reap--)) {
 
 		tx_comp_hal_desc =  dp_srng_dst_get_next(soc, hal_ring_hdl);
 		if (qdf_unlikely(!tx_comp_hal_desc))
@@ -4561,7 +4753,7 @@ next_desc:
 
 		count++;
 
-		if (dp_tx_comp_loop_pkt_limit_hit(soc, count))
+		if (dp_tx_comp_loop_pkt_limit_hit(soc, count, max_reap_limit))
 			break;
 	}
 
@@ -4570,6 +4762,17 @@ next_desc:
 	/* Process the reaped descriptors */
 	if (head_desc)
 		dp_tx_comp_process_desc_list(soc, head_desc, ring_id);
+
+	/*
+	 * If we are processing in near-full condition, there are 3 scenario
+	 * 1) Ring entries has reached critical state
+	 * 2) Ring entries are still near high threshold
+	 * 3) Ring entries are below the safe level
+	 *
+	 * One more loop will move te state to normal processing and yield
+	 */
+	if (ring_near_full)
+		goto more_data;
 
 	if (dp_tx_comp_enable_eol_data_check(soc)) {
 

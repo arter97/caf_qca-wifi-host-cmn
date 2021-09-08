@@ -44,6 +44,17 @@ QDF_STATUS tgt_reg_process_master_chan_list(struct cur_regulatory_info
  */
 QDF_STATUS tgt_reg_process_master_chan_list_ext(struct cur_regulatory_info
 						*reg_info);
+
+#ifdef CONFIG_AFC_SUPPORT
+/**
+ * tgt_reg_process_afc_event() - process the AFC event
+ * @afc_info: AFC regulatory info
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS
+tgt_reg_process_afc_event(struct afc_regulatory_info *afc_info);
+#endif
 #endif
 
 /**
@@ -116,7 +127,7 @@ QDF_STATUS tgt_reg_set_5dot9_ghz_supported(struct wlan_objmgr_psoc *psoc,
 QDF_STATUS tgt_reg_set_ext_tpc_supported(struct wlan_objmgr_psoc *psoc,
 					 bool val);
 
-#if defined(CONFIG_BAND_6GHZ) && defined(CONFIG_REG_CLIENT)
+#if defined(CONFIG_BAND_6GHZ)
 /**
  * tgt_reg_set_lower_6g_edge_ch_supp() - Assign the value set by FW for lower
  * 6ghz edge channel (5935 MHz) support

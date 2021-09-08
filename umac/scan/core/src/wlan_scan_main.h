@@ -158,6 +158,9 @@ struct probe_time_dwell_time {
 /* RRM scan type indication */
 #define SCAN_FLAG_EXT_RRM_SCAN_IND 0x400
 
+/* Probe request frame with unicast RA indication */
+#define SCAN_FLAG_EXT_FORCE_UNICAST_RA  0x1000
+
 /* Passive dwell time if bt_a2dp is enabled. Time in msecs*/
 #define PASSIVE_DWELL_TIME_BT_A2DP_ENABLED 28
 
@@ -304,6 +307,7 @@ struct extscan_def_config {
  * @skip_dfs_chan_in_p2p_search: Skip DFS channels in p2p search.
  * @use_wake_lock_in_user_scan: if wake lock will be acquired during user scan
  * @active_dwell_2g: default active dwell time for 2G channels, if it's not zero
+ * @min_dwell_time_6g: default min dwell time for 6G channels
  * @active_dwell_6g: default active dwell time for 6G channels
  * @passive_dwell_6g: default passive dwell time for 6G channels
  * @active_dwell_time_6g_conc: default concurrent active dwell time for 6G
@@ -393,6 +397,7 @@ struct scan_default_params {
 	bool skip_dfs_chan_in_p2p_search;
 	bool use_wake_lock_in_user_scan;
 	uint32_t active_dwell_2g;
+	uint32_t min_dwell_time_6g;
 	uint32_t active_dwell_6g;
 	uint32_t passive_dwell_6g;
 	uint32_t active_dwell_time_6g_conc;
@@ -852,6 +857,50 @@ wlan_vdev_get_def_scan_params(struct wlan_objmgr_vdev *vdev)
 	psoc = wlan_vdev_get_psoc(vdev);
 
 	return wlan_scan_psoc_get_def_params(psoc);
+}
+
+/**
+ * wlan_scan_psoc_set_disable() - private API to disable scans for psoc
+ * @psoc: psoc on which scans need to be disabled
+ * @reason: reason for enable/disabled
+ *
+ * Return: QDF_STATUS.
+ */
+static inline QDF_STATUS
+wlan_scan_psoc_set_disable(struct wlan_objmgr_psoc *psoc,
+			   enum scan_disable_reason reason)
+{
+	struct wlan_scan_obj *scan_obj;
+
+	scan_obj = wlan_psoc_get_scan_obj(psoc);
+	if (!scan_obj) {
+		scm_err("Failed to get scan object");
+		return QDF_STATUS_E_NULL_VALUE;
+	}
+
+	scan_obj->scan_disabled |= reason;
+
+	scm_debug("Psoc scan_disabled %x", scan_obj->scan_disabled);
+
+	return QDF_STATUS_SUCCESS;
+}
+
+static inline QDF_STATUS
+wlan_scan_psoc_set_enable(struct wlan_objmgr_psoc *psoc,
+			  enum scan_disable_reason reason)
+{
+	struct wlan_scan_obj *scan_obj;
+
+	scan_obj = wlan_psoc_get_scan_obj(psoc);
+	if (!scan_obj) {
+		scm_err("Failed to get scan object");
+		return QDF_STATUS_E_NULL_VALUE;
+	}
+
+	scan_obj->scan_disabled &= ~reason;
+	scm_debug("Psoc scan_disabled %x", scan_obj->scan_disabled);
+
+	return QDF_STATUS_SUCCESS;
 }
 
 /**

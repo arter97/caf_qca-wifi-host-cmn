@@ -29,6 +29,7 @@
 
 #include <qdf_status.h>
 #include <wlan_objmgr_cmn.h>
+#include "wlan_scan_public_structs.h"
 
 /* Preprocessor Definitions and Constants */
 
@@ -164,11 +165,6 @@ typedef QDF_STATUS (*wlan_ser_umac_cmd_cb)(void *umac_cmd);
  * enum wlan_umac_cmd_id - Command Type
  * @WLAN_SER_CMD_SCAN: Scan command
  * @WLAN_SER_CMD_NONSCAN: Non-scan command
- * @WLAN_SER_CMD_HDD_ISSUE_REASSOC_SAME_AP: HDD Reassoc cmd
- * @WLAN_SER_CMD_SME_ISSUE_REASSOC_SAME_AP: SME Reassoc cmd
- * @WLAN_SER_CMD_SME_ISSUE_DISASSOC_FOR_HANDOFF: SME Disassoc cmd
- * @WLAN_SER_CMD_SME_ISSUE_ASSOC_TO_SIMILAR_AP: SME Assoc cmd
- * @WLAN_SER_CMD_SME_ISSUE_FT_REASSOC: SME reassoc cmd
  * @WLAN_SER_CMD_FORCE_DISASSOC_STA: Force diassoc for STA vap
  * @WLAN_SER_CMD_FORCE_DEAUTH_STA: Force deauth for STA vap
  * @WLAN_SER_CMD_PERFORM_PRE_AUTH: Pre auth ops cmd
@@ -202,13 +198,6 @@ enum wlan_serialization_cmd_type {
 	WLAN_SER_CMD_SCAN,
 	/* all non-scan command below */
 	WLAN_SER_CMD_NONSCAN,
-#ifndef FEATURE_CM_ENABLE
-	WLAN_SER_CMD_HDD_ISSUE_REASSOC_SAME_AP,
-	WLAN_SER_CMD_SME_ISSUE_REASSOC_SAME_AP,
-	WLAN_SER_CMD_SME_ISSUE_DISASSOC_FOR_HANDOFF,
-	WLAN_SER_CMD_SME_ISSUE_ASSOC_TO_SIMILAR_AP,
-	WLAN_SER_CMD_SME_ISSUE_FT_REASSOC,
-#endif
 	WLAN_SER_CMD_FORCE_DISASSOC_STA,
 	WLAN_SER_CMD_FORCE_DEAUTH_STA,
 	WLAN_SER_CMD_PERFORM_PRE_AUTH,
@@ -717,4 +706,22 @@ void wlan_serialization_purge_all_scan_cmd_by_vdev_id(
  * Return: QDF_STATUS
  */
 QDF_STATUS wlan_ser_vdev_queue_disable(struct wlan_objmgr_vdev *vdev);
+
+/**
+ * wlan_get_vdev_status() - API to check vdev scan status
+ * @vdev: vdev object
+ *
+ * Return: enum scm_scan_status
+ */
+enum scm_scan_status
+wlan_get_vdev_status(struct wlan_objmgr_vdev *vdev);
+
+/**
+ * wlan_get_pdev_status() - API to check pdev scan status
+ * @pdev: pdev object
+ *
+ * Return: enum scm_scan_status
+ */
+enum scm_scan_status
+wlan_get_pdev_status(struct wlan_objmgr_pdev *pdev);
 #endif

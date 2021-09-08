@@ -152,96 +152,136 @@ enum hal_srng_ring_id {
 	HAL_SRNG_REO2SW7 = 7,
 	HAL_SRNG_REO2SW8 = 8,
 	HAL_SRNG_REO2TCL = 9,
-	HAL_SRNG_SW2REO = 10,
-	HAL_SRNG_SW2REO1 = 11,
-	HAL_SRNG_REO_CMD = 12,
-	HAL_SRNG_REO_STATUS = 13,
-	/* 14-15 unused */
-	HAL_SRNG_SW2TCL1 = 16,
-	HAL_SRNG_SW2TCL2 = 17,
-	HAL_SRNG_SW2TCL3 = 18,
-	HAL_SRNG_SW2TCL4 = 19, /* FW2TCL ring */
-	HAL_SRNG_SW2TCL5 = 20,
-	/* 20-23 unused */
-	HAL_SRNG_SW2TCL_CMD = 24,
-	HAL_SRNG_TCL_STATUS = 25,
-	/* 26-31 unused */
-	HAL_SRNG_CE_0_SRC = 32,
-	HAL_SRNG_CE_1_SRC = 33,
-	HAL_SRNG_CE_2_SRC = 34,
-	HAL_SRNG_CE_3_SRC = 35,
-	HAL_SRNG_CE_4_SRC = 36,
-	HAL_SRNG_CE_5_SRC = 37,
-	HAL_SRNG_CE_6_SRC = 38,
-	HAL_SRNG_CE_7_SRC = 39,
-	HAL_SRNG_CE_8_SRC = 40,
-	HAL_SRNG_CE_9_SRC = 41,
-	HAL_SRNG_CE_10_SRC = 42,
-	HAL_SRNG_CE_11_SRC = 43,
-	/* 44-55 unused */
-	HAL_SRNG_CE_0_DST = 56,
-	HAL_SRNG_CE_1_DST = 57,
-	HAL_SRNG_CE_2_DST = 58,
-	HAL_SRNG_CE_3_DST = 59,
-	HAL_SRNG_CE_4_DST = 60,
-	HAL_SRNG_CE_5_DST = 61,
-	HAL_SRNG_CE_6_DST = 62,
-	HAL_SRNG_CE_7_DST = 63,
-	HAL_SRNG_CE_8_DST = 64,
-	HAL_SRNG_CE_9_DST = 65,
-	HAL_SRNG_CE_10_DST = 66,
-	HAL_SRNG_CE_11_DST = 67,
-	/* 68-79 unused */
-	HAL_SRNG_CE_0_DST_STATUS = 80,
-	HAL_SRNG_CE_1_DST_STATUS = 81,
-	HAL_SRNG_CE_2_DST_STATUS = 82,
-	HAL_SRNG_CE_3_DST_STATUS = 83,
-	HAL_SRNG_CE_4_DST_STATUS = 84,
-	HAL_SRNG_CE_5_DST_STATUS = 85,
-	HAL_SRNG_CE_6_DST_STATUS = 86,
-	HAL_SRNG_CE_7_DST_STATUS = 87,
-	HAL_SRNG_CE_8_DST_STATUS = 88,
-	HAL_SRNG_CE_9_DST_STATUS = 89,
-	HAL_SRNG_CE_10_DST_STATUS = 90,
-	HAL_SRNG_CE_11_DST_STATUS = 91,
-	/* 92-103 unused */
-	HAL_SRNG_WBM_IDLE_LINK = 104,
-	HAL_SRNG_WBM_SW_RELEASE = 105,
-	HAL_SRNG_WBM2SW0_RELEASE = 106,
-	HAL_SRNG_WBM2SW1_RELEASE = 107,
-	HAL_SRNG_WBM2SW2_RELEASE = 108,
-	HAL_SRNG_WBM2SW3_RELEASE = 109,
-	HAL_SRNG_WBM2SW4_RELEASE = 110,
-	HAL_SRNG_WBM2SW5_RELEASE = 111,
-	HAL_SRNG_WBM2SW6_RELEASE = 112,
-	/* 113-127 unused */
-	HAL_SRNG_UMAC_ID_END = 127,
+	HAL_SRNG_REO2PPE = 10,
+	/* 11-15 unused */
+	HAL_SRNG_SW2REO = 16,
+	HAL_SRNG_SW2REO1 = 17,
+	HAL_SRNG_SW2REO2 = 18,
+	HAL_SRNG_SW2REO3 = 19,
+	HAL_SRNG_REO_CMD = 20,
+	HAL_SRNG_REO_STATUS = 21,
+	/* 22-23 unused */
+	HAL_SRNG_SW2TCL1 = 24,
+	HAL_SRNG_SW2TCL2 = 25,
+	HAL_SRNG_SW2TCL3 = 26,
+	HAL_SRNG_SW2TCL4 = 27,
+	HAL_SRNG_SW2TCL5 = 28,
+	HAL_SRNG_SW2TCL6 = 29,
+	HAL_SRNG_PPE2TCL1 = 30,
+	/* 31-39 unused */
+	HAL_SRNG_SW2TCL_CMD = 40,
+	HAL_SRNG_TCL_STATUS = 41,
+	HAL_SRNG_SW2TCL_CREDIT = 42,
+	/* 43-63 unused */
+	HAL_SRNG_CE_0_SRC = 64,
+	HAL_SRNG_CE_1_SRC = 65,
+	HAL_SRNG_CE_2_SRC = 66,
+	HAL_SRNG_CE_3_SRC = 67,
+	HAL_SRNG_CE_4_SRC = 68,
+	HAL_SRNG_CE_5_SRC = 69,
+	HAL_SRNG_CE_6_SRC = 70,
+	HAL_SRNG_CE_7_SRC = 71,
+	HAL_SRNG_CE_8_SRC = 72,
+	HAL_SRNG_CE_9_SRC = 73,
+	HAL_SRNG_CE_10_SRC = 74,
+	HAL_SRNG_CE_11_SRC = 75,
+	HAL_SRNG_CE_12_SRC = 76,
+	HAL_SRNG_CE_13_SRC = 77,
+	HAL_SRNG_CE_14_SRC = 78,
+	HAL_SRNG_CE_15_SRC = 79,
+	/* 80 */
+	HAL_SRNG_CE_0_DST = 81,
+	HAL_SRNG_CE_1_DST = 82,
+	HAL_SRNG_CE_2_DST = 83,
+	HAL_SRNG_CE_3_DST = 84,
+	HAL_SRNG_CE_4_DST = 85,
+	HAL_SRNG_CE_5_DST = 86,
+	HAL_SRNG_CE_6_DST = 87,
+	HAL_SRNG_CE_7_DST = 89,
+	HAL_SRNG_CE_8_DST = 90,
+	HAL_SRNG_CE_9_DST = 91,
+	HAL_SRNG_CE_10_DST = 92,
+	HAL_SRNG_CE_11_DST = 93,
+	HAL_SRNG_CE_12_DST = 94,
+	HAL_SRNG_CE_13_DST = 95,
+	HAL_SRNG_CE_14_DST = 96,
+	HAL_SRNG_CE_15_DST = 97,
+	/* 98-99 unused */
+	HAL_SRNG_CE_0_DST_STATUS = 100,
+	HAL_SRNG_CE_1_DST_STATUS = 101,
+	HAL_SRNG_CE_2_DST_STATUS = 102,
+	HAL_SRNG_CE_3_DST_STATUS = 103,
+	HAL_SRNG_CE_4_DST_STATUS = 104,
+	HAL_SRNG_CE_5_DST_STATUS = 105,
+	HAL_SRNG_CE_6_DST_STATUS = 106,
+	HAL_SRNG_CE_7_DST_STATUS = 107,
+	HAL_SRNG_CE_8_DST_STATUS = 108,
+	HAL_SRNG_CE_9_DST_STATUS = 109,
+	HAL_SRNG_CE_10_DST_STATUS = 110,
+	HAL_SRNG_CE_11_DST_STATUS = 111,
+	HAL_SRNG_CE_12_DST_STATUS = 112,
+	HAL_SRNG_CE_13_DST_STATUS = 113,
+	HAL_SRNG_CE_14_DST_STATUS = 114,
+	HAL_SRNG_CE_15_DST_STATUS = 115,
+	/* 116-119 unused */
+	HAL_SRNG_WBM_IDLE_LINK = 120,
+	HAL_SRNG_WBM_SW_RELEASE = 121,
+	HAL_SRNG_WBM_SW1_RELEASE = 122,
+	HAL_SRNG_WBM_PPE_RELEASE = 123,
+	/* 124-127 unused */
+	HAL_SRNG_WBM2SW0_RELEASE = 128,
+	HAL_SRNG_WBM2SW1_RELEASE = 129,
+	HAL_SRNG_WBM2SW2_RELEASE = 130,
+	HAL_SRNG_WBM2SW3_RELEASE = 131,
+	HAL_SRNG_WBM2SW4_RELEASE = 132,
+	HAL_SRNG_WBM2SW5_RELEASE = 133,
+	HAL_SRNG_WBM2SW6_RELEASE = 134,
+	HAL_SRNG_WBM_ERROR_RELEASE = 135,
+	/* 136-158 unused */
+	HAL_SRNG_UMAC_ID_END = 159,
+	/* Common DMAC rings shared by all LMACs */
+	HAL_SRNG_SW2RXDMA_BUF0 = 160,
+	HAL_SRNG_SW2RXDMA_BUF1 = 161,
+	HAL_SRNG_SW2RXDMA_BUF2 = 162,
+	/* 163-167 unused */
+	HAL_SRNG_SW2RXMON_BUF0 = 168,
+	/* 169-175 unused */
+	HAL_SRNG_SW2TXMON_BUF0 = 176,
+	/* 177-183 unused */
+	HAL_SRNG_DMAC_CMN_ID_END = 183,
 	/* LMAC rings - The following set will be replicated for each LMAC */
-	HAL_SRNG_LMAC1_ID_START = 128,
+	HAL_SRNG_LMAC1_ID_START = 184,
 	HAL_SRNG_WMAC1_SW2RXDMA0_BUF0 = HAL_SRNG_LMAC1_ID_START,
 #ifdef IPA_OFFLOAD
-	HAL_SRNG_WMAC1_SW2RXDMA0_BUF1 = (HAL_SRNG_LMAC1_ID_START + 1),
-	HAL_SRNG_WMAC1_SW2RXDMA0_BUF2 = (HAL_SRNG_LMAC1_ID_START + 2),
-	HAL_SRNG_WMAC1_SW2RXDMA1_BUF = (HAL_SRNG_WMAC1_SW2RXDMA0_BUF2 + 1),
+	HAL_SRNG_WMAC1_SW2RXDMA0_BUF1,
+	HAL_SRNG_WMAC1_SW2RXDMA0_BUF2,
+	HAL_SRNG_WMAC1_SW2RXDMA1_BUF,
 #else
-	HAL_SRNG_WMAC1_SW2RXDMA1_BUF = (HAL_SRNG_WMAC1_SW2RXDMA0_BUF0 + 1),
+	HAL_SRNG_WMAC1_SW2RXDMA1_BUF,
 #endif
-	HAL_SRNG_WMAC1_SW2RXDMA2_BUF = (HAL_SRNG_WMAC1_SW2RXDMA1_BUF + 1),
-	HAL_SRNG_WMAC1_SW2RXDMA0_STATBUF = (HAL_SRNG_WMAC1_SW2RXDMA2_BUF + 1),
-	HAL_SRNG_WMAC1_SW2RXDMA1_STATBUF =
-					(HAL_SRNG_WMAC1_SW2RXDMA0_STATBUF + 1),
-	HAL_SRNG_WMAC1_RXDMA2SW0 = (HAL_SRNG_WMAC1_SW2RXDMA1_STATBUF + 1),
-	HAL_SRNG_WMAC1_RXDMA2SW1 = (HAL_SRNG_WMAC1_RXDMA2SW0 + 1),
-	HAL_SRNG_WMAC1_SW2RXDMA1_DESC = (HAL_SRNG_WMAC1_RXDMA2SW1 + 1),
+	HAL_SRNG_WMAC1_SW2RXDMA2_BUF,
+	HAL_SRNG_WMAC1_SW2RXDMA0_STATBUF,
+	HAL_SRNG_WMAC1_SW2RXDMA1_STATBUF,
+	HAL_SRNG_WMAC1_RXDMA2SW0,
+	HAL_SRNG_WMAC1_RXDMA2SW1,
+	HAL_SRNG_WMAC1_RXMON2SW0 = HAL_SRNG_WMAC1_RXDMA2SW1,
+	HAL_SRNG_WMAC1_SW2RXDMA1_DESC,
 #ifdef WLAN_FEATURE_CIF_CFR
-	HAL_SRNG_WIFI_POS_SRC_DMA_RING = (HAL_SRNG_WMAC1_SW2RXDMA1_DESC + 1),
-	HAL_SRNG_DIR_BUF_RX_SRC_DMA_RING = (HAL_SRNG_WIFI_POS_SRC_DMA_RING + 1),
+	HAL_SRNG_WIFI_POS_SRC_DMA_RING,
+	HAL_SRNG_DIR_BUF_RX_SRC_DMA_RING,
 #else
-	HAL_SRNG_DIR_BUF_RX_SRC_DMA_RING = (HAL_SRNG_WMAC1_SW2RXDMA1_DESC + 1),
+	HAL_SRNG_DIR_BUF_RX_SRC_DMA_RING,
 #endif
-	/* -142 unused */
-	HAL_SRNG_LMAC1_ID_END = 143
+	HAL_SRNG_WMAC1_TXMON2SW0,
+	HAL_SRNG_LMAC1_ID_END = (HAL_SRNG_WMAC1_TXMON2SW0 + 3),
 };
+
+#define HAL_RXDMA_MAX_RING_SIZE 0xFFFF
+#define HAL_MAX_LMACS 3
+#define HAL_MAX_RINGS_PER_LMAC (HAL_SRNG_LMAC1_ID_END - HAL_SRNG_LMAC1_ID_START)
+#define HAL_MAX_LMAC_RINGS (HAL_MAX_LMACS * HAL_MAX_RINGS_PER_LMAC)
+
+#define HAL_SRNG_ID_MAX (HAL_SRNG_DMAC_CMN_ID_END + HAL_MAX_LMAC_RINGS)
 
 /* SRNG type to be passed in APIs hal_srng_get_entrysize and hal_srng_setup */
 enum hal_ring_type {
@@ -269,15 +309,52 @@ enum hal_ring_type {
 #ifdef WLAN_FEATURE_CIF_CFR
 	WIFI_POS_SRC,
 #endif
+	REO2PPE,
+	PPE2TCL,
+	PPE_RELEASE,
+	TX_MONITOR_BUF,
+	TX_MONITOR_DST,
+	SW2RXDMA_NEW,
 	MAX_RING_TYPES
 };
 
-#define HAL_RXDMA_MAX_RING_SIZE 0xFFFF
-#define HAL_MAX_LMACS 3
-#define HAL_MAX_RINGS_PER_LMAC (HAL_SRNG_LMAC1_ID_END - HAL_SRNG_LMAC1_ID_START)
-#define HAL_MAX_LMAC_RINGS (HAL_MAX_LMACS * HAL_MAX_RINGS_PER_LMAC)
+enum SRNG_REGISTERS {
+	DST_HP = 0,
+	DST_TP,
+	DST_ID,
+	DST_MISC,
+	DST_HP_ADDR_LSB,
+	DST_HP_ADDR_MSB,
+	DST_MSI1_BASE_LSB,
+	DST_MSI1_BASE_MSB,
+	DST_MSI1_DATA,
+#ifdef CONFIG_BERYLLIUM
+	DST_MSI2_BASE_LSB,
+	DST_MSI2_BASE_MSB,
+	DST_MSI2_DATA,
+#endif
+	DST_BASE_LSB,
+	DST_BASE_MSB,
+	DST_PRODUCER_INT_SETUP,
+#ifdef CONFIG_BERYLLIUM
+	DST_PRODUCER_INT2_SETUP,
+#endif
 
-#define HAL_SRNG_ID_MAX (HAL_SRNG_UMAC_ID_END + HAL_MAX_LMAC_RINGS)
+	SRC_HP,
+	SRC_TP,
+	SRC_ID,
+	SRC_MISC,
+	SRC_TP_ADDR_LSB,
+	SRC_TP_ADDR_MSB,
+	SRC_MSI1_BASE_LSB,
+	SRC_MSI1_BASE_MSB,
+	SRC_MSI1_DATA,
+	SRC_BASE_LSB,
+	SRC_BASE_MSB,
+	SRC_CONSUMER_INT_SETUP_IX0,
+	SRC_CONSUMER_INT_SETUP_IX1,
+	SRNG_REGISTER_MAX,
+};
 
 enum hal_srng_dir {
 	HAL_SRNG_SRC_RING,
@@ -352,12 +429,14 @@ struct hal_reg_write_q_elem {
  * @dequeues: writes dequeued from delayed work (not written yet)
  * @coalesces: writes not enqueued since srng is already queued up
  * @direct: writes not enqueued and written to register directly
+ * @dequeue_delay: dequeue operation be delayed
  */
 struct hal_reg_write_srng_stats {
 	uint32_t enqueues;
 	uint32_t dequeues;
 	uint32_t coalesces;
 	uint32_t direct;
+	uint32_t dequeue_delay;
 };
 
 /**
@@ -386,6 +465,7 @@ enum hal_reg_sched_delay {
  * @q_depth: current queue depth in delayed register write queue
  * @max_q_depth: maximum queue for delayed register write queue
  * @sched_delay: = kernel work sched delay + bus wakeup delay, histogram
+ * @dequeue_delay: dequeue operation be delayed
  */
 struct hal_reg_write_soc_stats {
 	qdf_atomic_t enqueues;
@@ -396,6 +476,7 @@ struct hal_reg_write_soc_stats {
 	qdf_atomic_t q_depth;
 	uint32_t max_q_depth;
 	uint32_t sched_delay[REG_WRITE_SCHED_DELAY_HIST_MAX];
+	uint32_t dequeue_delay;
 };
 
 #ifdef FEATURE_HAL_DELAYED_REG_WRITE_V2
@@ -471,6 +552,14 @@ struct hal_srng {
 	/* MSI data */
 	uint32_t msi_data;
 
+#ifdef WLAN_FEATURE_NEAR_FULL_IRQ
+	/* MSI2 Address */
+	qdf_dma_addr_t msi2_addr;
+
+	/* MSI2 data */
+	uint32_t msi2_data;
+#endif
+
 	/* Misc flags */
 	uint32_t flags;
 
@@ -510,6 +599,14 @@ struct hal_srng {
 
 			/* max transfer size */
 			uint16_t max_buffer_length;
+
+#ifdef WLAN_FEATURE_NEAR_FULL_IRQ
+			/* near full IRQ supported */
+			uint16_t nf_irq_support;
+
+			/* High threshold for Near full IRQ */
+			uint16_t high_thresh;
+#endif
 		} dst_ring;
 
 		struct {
@@ -543,12 +640,19 @@ struct hal_srng {
 	unsigned long srng_event;
 	/* last flushed time stamp */
 	uint64_t last_flush_ts;
+#if defined(CLEAR_SW2TCL_CONSUMED_DESC)
+	/* last ring desc entry cleared */
+	uint32_t last_desc_cleared;
+#endif
 #if defined(FEATURE_HAL_DELAYED_REG_WRITE) || \
 	defined(FEATURE_HAL_DELAYED_REG_WRITE_V2)
 	/* Previous hp/tp (based on ring dir) value written to the reg */
 	uint32_t last_reg_wr_val;
 	/* flag to indicate whether srng is already queued for delayed write */
 	uint8_t reg_write_in_progress;
+	/* last dequeue elem time stamp */
+	qdf_time_t last_dequeue_time;
+
 	/* srng specific delayed write stats */
 	struct hal_reg_write_srng_stats wstats;
 #endif
@@ -564,6 +668,7 @@ struct hal_hw_srng_config {
 	uint8_t lmac_ring;
 	enum hal_srng_dir ring_dir;
 	uint32_t max_size;
+	bool nf_irq_support;
 };
 
 #define MAX_SHADOW_REGISTERS 40
@@ -654,6 +759,7 @@ struct hal_hw_txrx_ops {
 	qdf_iomem_t (*hal_get_window_address)(struct hal_soc *hal_soc,
 					      qdf_iomem_t addr);
 	void (*hal_reo_set_err_dst_remap)(void *hal_soc);
+	uint8_t (*hal_reo_enable_pn_in_dest)(void *hal_soc);
 	void (*hal_reo_qdesc_setup)(hal_soc_handle_t hal_soc_hdl, int tid,
 				    uint32_t ba_window_size,
 				    uint32_t start_seq, void *hw_qdesc_vaddr,
@@ -809,6 +915,10 @@ struct hal_hw_txrx_ops {
 	void (*hal_rx_flow_get_cmem_fse)(struct hal_soc *soc,
 					 uint32_t fse_offset,
 					 uint32_t *fse, qdf_size_t len);
+
+	void (*hal_cmem_write)(hal_soc_handle_t hal_soc_hdl, uint32_t offset,
+			       uint32_t value);
+
 	void (*hal_rx_msdu_get_reo_destination_indication)(uint8_t *buf,
 							   uint32_t *reo_destination_indication);
 	uint8_t (*hal_tx_get_num_tcl_banks)(void);
@@ -842,6 +952,7 @@ struct hal_hw_txrx_ops {
 	uint32_t (*hal_rx_tlv_mic_err_get)(uint8_t *buf);
 	uint32_t (*hal_rx_tlv_get_pkt_type)(uint8_t *buf);
 	void (*hal_rx_tlv_get_pn_num)(uint8_t *buf, uint64_t *pn_num);
+	void (*hal_rx_reo_prev_pn_get)(void *ring_desc, uint64_t *prev_pn);
 	uint8_t * (*hal_rx_pkt_hdr_get)(uint8_t *buf);
 	uint32_t (*hal_rx_msdu_reo_dst_ind_get)(hal_soc_handle_t hal_soc_hdl,
 						void *msdu_link_desc);
@@ -896,6 +1007,8 @@ struct hal_hw_txrx_ops {
 					      uint8_t *priv_data,
 					      uint32_t len);
 	void (*hal_rx_tlv_msdu_len_set)(uint8_t *buf, uint32_t len);
+	void (*hal_rx_tlv_populate_mpdu_desc_info)(uint8_t *buf,
+						   void *mpdu_desc_info_hdl);
 
 	/* REO CMD and STATUS */
 	int (*hal_reo_send_cmd)(hal_soc_handle_t hal_soc_hdl,
@@ -1015,7 +1128,7 @@ struct hal_soc {
 
 	/* srng table */
 	struct hal_hw_srng_config *hw_srng_table;
-	int32_t *hal_hw_reg_offset;
+	int32_t hal_hw_reg_offset[SRNG_REGISTER_MAX];
 	struct hal_hw_txrx_ops *ops;
 
 	/* Indicate srngs initialization */
@@ -1057,6 +1170,8 @@ struct hal_soc {
 		list_shadow_reg_config[MAX_GENERIC_SHADOW_REG];
 	int num_generic_shadow_regs_configured;
 #endif
+	/* flag to indicate cmn dmac rings in berryllium */
+	bool dmac_cmn_src_rxbuf_ring;
 };
 
 #if defined(FEATURE_HAL_DELAYED_REG_WRITE) || \
@@ -1082,7 +1197,7 @@ void hal_qca6390_attach(struct hal_soc *hal_soc);
 void hal_qca6290_attach(struct hal_soc *hal_soc);
 void hal_qca8074_attach(struct hal_soc *hal_soc);
 void hal_wcn7850_attach(struct hal_soc *hal_soc);
-
+void hal_qcn9224_attach(struct hal_soc *hal_soc);
 /*
  * hal_soc_to_dp_hal_roc - API to convert hal_soc to opaque
  * dp_hal_soc handle type

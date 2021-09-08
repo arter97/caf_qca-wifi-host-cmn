@@ -29,14 +29,13 @@
 #include <hal_reo.h>
 #include <cdp_txrx_handle.h>
 #include <wlan_cfg.h>
+#ifdef WIFI_MONITOR_SUPPORT
+#include <dp_mon.h>
+#endif
 #ifdef FEATURE_WDS
 #include "dp_txrx_wds.h"
 #endif
-
-#ifdef WLAN_TX_PKT_CAPTURE_ENH
-#include "dp_tx_capture.h"
-#endif
-
+#include <qdf_module.h>
 #ifdef QCA_PEER_EXT_STATS
 #include "dp_hist.h"
 #endif
@@ -1399,6 +1398,8 @@ add_ast_entry:
 	return QDF_STATUS_E_FAILURE;
 }
 
+qdf_export_symbol(dp_peer_add_ast);
+
 /*
  * dp_peer_free_ast_entry() - Free up the ast entry memory
  * @soc: SoC handle
@@ -1996,6 +1997,8 @@ struct dp_peer *dp_peer_find_hash_find(struct dp_soc *soc,
 	return NULL; /* failure */
 }
 
+qdf_export_symbol(dp_peer_find_hash_find);
+
 /*
  * dp_peer_find_hash_remove() - remove peer from peer_hash_table
  * @soc: soc handle
@@ -2271,7 +2274,8 @@ static inline struct dp_peer *dp_peer_find_add_id(struct dp_soc *soc,
 		dp_peer_find_id_to_obj_add(soc, peer, peer_id);
 		if (peer->peer_id == HTT_INVALID_PEER) {
 			peer->peer_id = peer_id;
-			dp_peer_tid_peer_id_update(peer, peer->peer_id);
+			dp_monitor_peer_tid_peer_id_update(soc, peer,
+							   peer->peer_id);
 		} else {
 			QDF_ASSERT(0);
 		}
@@ -2513,7 +2517,8 @@ static bool dp_get_peer_vdev_roaming_in_progress(struct dp_peer *peer)
 }
 
 QDF_STATUS dp_rx_tid_update_wifi3(struct dp_peer *peer, int tid, uint32_t
-					 ba_window_size, uint32_t start_seq)
+					 ba_window_size, uint32_t start_seq,
+					 bool bar_update)
 {
 	struct dp_rx_tid *rx_tid = &peer->rx_tid[tid];
 	struct dp_soc *soc = peer->vdev->pdev->soc;
@@ -2545,7 +2550,7 @@ QDF_STATUS dp_rx_tid_update_wifi3(struct dp_peer *peer, int tid, uint32_t
 	if (dp_get_peer_vdev_roaming_in_progress(peer))
 		return QDF_STATUS_E_PERM;
 
-	if (soc->cdp_soc.ol_ops->peer_rx_reorder_queue_setup)
+	if (soc->cdp_soc.ol_ops->peer_rx_reorder_queue_setup && !bar_update)
 		soc->cdp_soc.ol_ops->peer_rx_reorder_queue_setup(
 			soc->ctrl_psoc, peer->vdev->pdev->pdev_id,
 			peer->vdev->vdev_id, peer->mac_addr.raw,
@@ -2733,7 +2738,7 @@ QDF_STATUS dp_rx_tid_setup_wifi3(struct dp_peer *peer, int tid,
 	rx_tid->ba_win_size = ba_window_size;
 	if (rx_tid->hw_qdesc_vaddr_unaligned)
 		return dp_rx_tid_update_wifi3(peer, tid, ba_window_size,
-			start_seq);
+			start_seq, false);
 	rx_tid->delba_tx_status = 0;
 	rx_tid->ppdu_id_2k = 0;
 	rx_tid->num_of_addba_req = 0;
@@ -3219,30 +3224,6 @@ static void dp_peer_setup_remaining_tids(struct dp_peer *peer) {};
 #endif
 
 /*
- * dp_peer_tx_init() – Initialize receive TID state
- * @pdev: Datapath pdev
- * @peer: Datapath peer
- *
- */
-void dp_peer_tx_init(struct dp_pdev *pdev, struct dp_peer *peer)
-{
-	dp_peer_tid_queue_init(peer);
-	dp_peer_update_80211_hdr(peer->vdev, peer);
-}
-
-/*
- * dp_peer_tx_cleanup() – Deinitialize receive TID state
- * @vdev: Datapath vdev
- * @peer: Datapath peer
- *
- */
-static inline void
-dp_peer_tx_cleanup(struct dp_vdev *vdev, struct dp_peer *peer)
-{
-	dp_peer_tid_queue_cleanup(peer);
-}
-
-/*
  * dp_peer_rx_init() – Initialize receive TID state
  * @pdev: Datapath pdev
  * @peer: Datapath peer
@@ -3330,32 +3311,6 @@ void dp_peer_rx_cleanup(struct dp_vdev *vdev, struct dp_peer *peer)
 #endif
 }
 
-#ifdef FEATURE_PERPKT_INFO
-/*
- * dp_peer_ppdu_delayed_ba_init() Initialize ppdu in peer
- * @peer: Datapath peer
- *
- * return: void
- */
-void dp_peer_ppdu_delayed_ba_init(struct dp_peer *peer)
-{
-	qdf_mem_zero(&peer->delayed_ba_ppdu_stats,
-		     sizeof(struct cdp_delayed_tx_completion_ppdu_user));
-	peer->last_delayed_ba = false;
-	peer->last_delayed_ba_ppduid = 0;
-}
-#else
-/*
- * dp_peer_ppdu_delayed_ba_init() Initialize ppdu in peer
- * @peer: Datapath peer
- *
- * return: void
- */
-void dp_peer_ppdu_delayed_ba_init(struct dp_peer *peer)
-{
-}
-#endif
-
 /*
  * dp_peer_cleanup() – Cleanup peer information
  * @vdev: Datapath vdev
@@ -3372,7 +3327,7 @@ void dp_peer_cleanup(struct dp_vdev *vdev, struct dp_peer *peer)
 	/* save vdev related member in case vdev freed */
 	vdev_opmode = vdev->opmode;
 
-	dp_peer_tx_cleanup(vdev, peer);
+	dp_monitor_peer_tx_cleanup(vdev, peer);
 
 	if (vdev_opmode != wlan_op_mode_monitor)
 	/* cleanup the Rx reorder queues for this peer */
@@ -3433,7 +3388,8 @@ static void dp_teardown_256_ba_sessions(struct dp_peer *peer)
 							peer->vdev->pdev->soc->ctrl_psoc,
 							peer->vdev->vdev_id,
 							peer->mac_addr.raw,
-							tid, delba_rcode);
+							tid, delba_rcode,
+							CDP_DELBA_REASON_NONE);
 				} else {
 					qdf_spin_unlock_bh(&rx_tid->tid_lock);
 				}
@@ -3473,7 +3429,7 @@ int dp_addba_resp_tx_completion_wifi3(struct cdp_soc_t *cdp_soc,
 	if (status) {
 		rx_tid->num_addba_rsp_failed++;
 		dp_rx_tid_update_wifi3(peer, tid, 1,
-				       IEEE80211_SEQ_MAX);
+				       IEEE80211_SEQ_MAX, false);
 		rx_tid->ba_status = DP_RX_BA_INACTIVE;
 		qdf_spin_unlock_bh(&rx_tid->tid_lock);
 		dp_err("RxTid- %d addba rsp tx completion failed", tid);
@@ -3498,7 +3454,8 @@ int dp_addba_resp_tx_completion_wifi3(struct cdp_soc_t *cdp_soc,
 
 	if (dp_rx_tid_update_wifi3(peer, tid,
 				   rx_tid->ba_win_size,
-				   rx_tid->startseqnum)) {
+				   rx_tid->startseqnum,
+				   false)) {
 		dp_err("Failed update REO SSN");
 	}
 
@@ -3665,7 +3622,7 @@ int dp_addba_requestprocess_wifi3(struct cdp_soc_t *cdp_soc,
 	rx_tid->num_of_addba_req++;
 	if ((rx_tid->ba_status == DP_RX_BA_ACTIVE &&
 	     rx_tid->hw_qdesc_vaddr_unaligned)) {
-		dp_rx_tid_update_wifi3(peer, tid, 1, IEEE80211_SEQ_MAX);
+		dp_rx_tid_update_wifi3(peer, tid, 1, IEEE80211_SEQ_MAX, false);
 		rx_tid->ba_status = DP_RX_BA_INACTIVE;
 		peer->active_ba_session_cnt--;
 		dp_peer_debug("%pK: Rx Tid- %d hw qdesc is already setup",
@@ -3798,7 +3755,7 @@ int dp_delba_process_wifi3(struct cdp_soc_t *cdp_soc, uint8_t *peer_mac,
 	 */
 	rx_tid->delba_rcode = reasoncode;
 	rx_tid->num_of_delba_req++;
-	dp_rx_tid_update_wifi3(peer, tid, 1, IEEE80211_SEQ_MAX);
+	dp_rx_tid_update_wifi3(peer, tid, 1, IEEE80211_SEQ_MAX, false);
 
 	rx_tid->ba_status = DP_RX_BA_INACTIVE;
 	peer->active_ba_session_cnt--;
@@ -3851,7 +3808,8 @@ int dp_delba_tx_completion_wifi3(struct cdp_soc_t *cdp_soc, uint8_t *peer_mac,
 					peer->vdev->pdev->soc->ctrl_psoc,
 					peer->vdev->vdev_id,
 					peer->mac_addr.raw, tid,
-					rx_tid->delba_rcode);
+					rx_tid->delba_rcode,
+					CDP_DELBA_REASON_NONE);
 		}
 		goto end;
 	} else {
@@ -3860,12 +3818,12 @@ int dp_delba_tx_completion_wifi3(struct cdp_soc_t *cdp_soc, uint8_t *peer_mac,
 		rx_tid->delba_tx_status = 0;
 	}
 	if (rx_tid->ba_status == DP_RX_BA_ACTIVE) {
-		dp_rx_tid_update_wifi3(peer, tid, 1, IEEE80211_SEQ_MAX);
+		dp_rx_tid_update_wifi3(peer, tid, 1, IEEE80211_SEQ_MAX, false);
 		rx_tid->ba_status = DP_RX_BA_INACTIVE;
 		peer->active_ba_session_cnt--;
 	}
 	if (rx_tid->ba_status == DP_RX_BA_IN_PROGRESS) {
-		dp_rx_tid_update_wifi3(peer, tid, 1, IEEE80211_SEQ_MAX);
+		dp_rx_tid_update_wifi3(peer, tid, 1, IEEE80211_SEQ_MAX, false);
 		rx_tid->ba_status = DP_RX_BA_INACTIVE;
 	}
 	qdf_spin_unlock_bh(&rx_tid->tid_lock);
@@ -4223,7 +4181,8 @@ dp_rx_delba_ind_handler(void *soc_handle, uint16_t peer_id,
 					peer->vdev->vdev_id,
 					peer->mac_addr.raw,
 					tid,
-					rx_tid->delba_rcode);
+					rx_tid->delba_rcode,
+					CDP_DELBA_REASON_NONE);
 		}
 	} else {
 		dp_peer_err("%pK: BA session is not setup for TID:%d ", soc, tid);

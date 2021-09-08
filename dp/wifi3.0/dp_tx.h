@@ -75,6 +75,8 @@ do {                                                           \
 #endif /* TX_PER_PDEV_DESC_POOL */
 #define DP_TX_QUEUE_MASK 0x3
 
+#define MAX_CDP_SEC_TYPE 12
+
 /* number of dwords for htt_tx_msdu_desc_ext2_t */
 #define DP_TX_MSDU_INFO_META_DATA_DWORDS 7
 
@@ -394,8 +396,9 @@ static inline enum qdf_dp_tx_rx_status dp_tx_hw_to_qdf(uint16_t status)
 	switch (status) {
 	case HAL_TX_TQM_RR_FRAME_ACKED:
 		return QDF_TX_RX_STATUS_OK;
-	case HAL_TX_TQM_RR_REM_CMD_REM:
 	case HAL_TX_TQM_RR_REM_CMD_TX:
+		return QDF_TX_RX_STATUS_NO_ACK;
+	case HAL_TX_TQM_RR_REM_CMD_REM:
 	case HAL_TX_TQM_RR_REM_CMD_NOTX:
 	case HAL_TX_TQM_RR_REM_CMD_AGED:
 		return QDF_TX_RX_STATUS_FW_DISCARD;
@@ -433,6 +436,7 @@ static inline void dp_tx_get_queue(struct dp_vdev *vdev,
 
 	dp_tx_debug("pool_id:%d ring_id: %d",
 		    queue->desc_pool_id, queue->ring_id);
+
 }
 
 /*
@@ -451,21 +455,8 @@ static inline hal_ring_handle_t dp_tx_get_hal_ring_hdl(struct dp_soc *soc,
 	return soc->tcl_data_ring[ring_id].hal_srng;
 }
 
-/*
- * dp_tx_get_rbm_id()- Get the RBM ID for data transmission completion.
- * @dp_soc - DP soc structure pointer
- * @ring_id - Transmit Queue/ring_id to be used when XPS is enabled
- *
- * Return - HAL ring handle
- */
-static inline uint8_t dp_tx_get_rbm_id(struct dp_soc *soc,
-				       uint8_t ring_id)
-{
-	return (ring_id ? soc->wbm_sw0_bm_id + (ring_id - 1) :
-			  HAL_WBM_SW2_BM_ID(soc->wbm_sw0_bm_id));
-}
-
 #else /* QCA_OL_TX_MULTIQ_SUPPORT */
+
 static inline void dp_tx_get_queue(struct dp_vdev *vdev,
 				   qdf_nbuf_t nbuf, struct dp_tx_queue *queue)
 {
@@ -473,20 +464,14 @@ static inline void dp_tx_get_queue(struct dp_vdev *vdev,
 	queue->desc_pool_id = DP_TX_GET_DESC_POOL_ID(vdev);
 	queue->ring_id = DP_TX_GET_RING_ID(vdev);
 
-	dp_tx_debug("pool_id:%d ring_id: %d",
-		    queue->desc_pool_id, queue->ring_id);
+	dp_tx_debug("pool_id:%d ring_id: %d skb %pK ",
+		    queue->desc_pool_id, queue->ring_id, nbuf);
 }
 
 static inline hal_ring_handle_t dp_tx_get_hal_ring_hdl(struct dp_soc *soc,
 						       uint8_t ring_id)
 {
 	return soc->tcl_data_ring[ring_id].hal_srng;
-}
-
-static inline uint8_t dp_tx_get_rbm_id(struct dp_soc *soc,
-				       uint8_t ring_id)
-{
-	return (ring_id + soc->wbm_sw0_bm_id);
 }
 #endif
 
@@ -550,8 +535,6 @@ static inline void dp_tx_hal_ring_access_end_reap(struct dp_soc *soc,
 	hal_srng_access_end_reap(soc->hal_soc, hal_ring_hdl);
 }
 #endif
-
-void  dp_iterate_update_peer_list(struct cdp_pdev *pdev_hdl);
 
 #ifdef ATH_TX_PRI_OVERRIDE
 #define DP_TX_TID_OVERRIDE(_msdu_info, _nbuf) \
@@ -652,16 +635,6 @@ void dp_send_completion_to_stack(struct dp_soc *soc,  struct dp_pdev *pdev,
 			    uint16_t peer_id, uint32_t ppdu_id,
 			    qdf_nbuf_t netbuf)
 {
-}
-#endif
-
-#ifndef WLAN_TX_PKT_CAPTURE_ENH
-static inline
-QDF_STATUS dp_peer_set_tx_capture_enabled(struct dp_pdev *pdev,
-					  struct dp_peer *peer_handle,
-					  uint8_t value, uint8_t *peer_mac)
-{
-	return QDF_STATUS_SUCCESS;
 }
 #endif
 
@@ -788,5 +761,40 @@ dp_tx_hw_desc_update_evt(uint8_t *hal_tx_desc_cached,
 {
 }
 #endif
+
+#ifdef WLAN_FEATURE_TSF_UPLINK_DELAY
+/**
+ * dp_set_delta_tsf() - Set delta_tsf to dp_soc structure
+ * @soc_hdl: cdp soc pointer
+ * @vdev_id: vdev id
+ * @delta_tsf: difference between TSF clock and qtimer
+ *
+ * Return: None
+ */
+void dp_set_delta_tsf(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
+		      uint32_t delta_tsf);
+
+/**
+ * dp_set_tsf_report_ul_delay() - Enable or disable reporting uplink delay
+ * @soc_hdl: cdp soc pointer
+ * @vdev_id: vdev id
+ * @enable: true to enable and false to disable
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS dp_set_tsf_ul_delay_report(struct cdp_soc_t *soc_hdl,
+				      uint8_t vdev_id, bool enable);
+
+/**
+ * dp_get_uplink_delay() - Get uplink delay value
+ * @soc_hdl: cdp soc pointer
+ * @vdev_id: vdev id
+ * @val: pointer to save uplink delay value
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS dp_get_uplink_delay(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
+			       uint32_t *val);
+#endif /* WLAN_FEATURE_TSF_UPLINK_TSF */
 
 #endif

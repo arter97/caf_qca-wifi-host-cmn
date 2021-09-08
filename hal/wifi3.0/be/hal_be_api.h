@@ -22,6 +22,26 @@
 #include "hal_hw_headers.h"
 #include "hal_rx.h"
 
+struct hal_hw_cc_config {
+	uint32_t lut_base_addr_31_0;
+	uint32_t cc_global_en:1,
+		 page_4k_align:1,
+		 cookie_offset_msb:5,
+		 cookie_page_msb:5,
+		 lut_base_addr_39_32:8,
+		 wbm2sw6_cc_en:1,
+		 wbm2sw5_cc_en:1,
+		 wbm2sw4_cc_en:1,
+		 wbm2sw3_cc_en:1,
+		 wbm2sw2_cc_en:1,
+		 wbm2sw1_cc_en:1,
+		 wbm2sw0_cc_en:1,
+		 wbm2fw_cc_en:1,
+		 error_path_cookie_conv_en:1,
+		 release_path_cookie_conv_en:1,
+		 reserved:2;
+};
+
 #define HAL_RX_MSDU_EXT_DESC_INFO_GET(msdu_details_ptr) \
 	((struct rx_msdu_ext_desc_info *) \
 	_OFFSET_TO_BYTE_PTR(msdu_details_ptr, \
@@ -35,24 +55,6 @@ RX_MSDU_DETAILS_RX_MSDU_EXT_DESC_INFO_DETAILS_RESERVED_0A_OFFSET))
  */
 void hal_reo_setup_generic_be(struct hal_soc *soc,
 			      void *reoparams);
-
-void hal_tx_desc_set_search_index_generic_be(void *desc, uint32_t search_index);
-
-/**
- * hal_tx_desc_set_cache_set_num_generic_be - Set the cache-set-num value
- * @desc: Handle to Tx Descriptor
- * @cache_num: Cache set number that should be used to cache the index
- *                based search results, for address and flow search.
- *                This value should be equal to LSB four bits of the hash value
- *                of match data, in case of search index points to an entry
- *                which may be used in content based search also. The value can
- *                be anything when the entry pointed by search index will not be
- *                used for content based search.
- *
- * Return: void
- */
-void hal_tx_desc_set_cache_set_num_generic_be(void *desc,
-					      uint8_t cache_num);
 
 /**
  * hal_rx_msdu_ext_desc_info_get_ptr_be() - Get the msdu extension
@@ -103,5 +105,16 @@ void hal_reo_qdesc_setup_be(hal_soc_handle_t hal_soc_hdl,
 			    uint32_t start_seq, void *hw_qdesc_vaddr,
 			    qdf_dma_addr_t hw_qdesc_paddr,
 			    int pn_type);
+
+/**
+ * hal_cookie_conversion_reg_cfg_be() - set cookie conversion relevant register
+ *					for REO/WBM
+ * @soc: HAL soc handle
+ * @cc_cfg: structure pointer for HW cookie conversion configuration
+ *
+ * Return: None
+ */
+void hal_cookie_conversion_reg_cfg_be(hal_soc_handle_t hal_soc_hdl,
+				      struct hal_hw_cc_config *cc_cfg);
 
 #endif /* _HAL_BE_API_H_ */

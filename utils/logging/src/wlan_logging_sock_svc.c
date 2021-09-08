@@ -35,9 +35,14 @@
 #include "host_diag_core_log.h"
 #include <qdf_event.h>
 #include <qdf_module.h>
+#include <qdf_str.h>
 
 #ifdef CNSS_GENL
+#ifdef CONFIG_CNSS_OUT_OF_TREE
+#include "cnss_nl.h"
+#else
 #include <net/cnss_nl.h>
+#endif
 #endif
 
 #if defined(FEATURE_FW_LOG_PARSING) || defined(FEATURE_WLAN_DIAG_SUPPORT) || \
@@ -104,10 +109,12 @@
 /* default rate limit period - 2sec */
 #define PANIC_WIFILOG_PRINT_RATE_LIMIT_PERIOD (2*HZ)
 /* default burst for rate limit */
-#define PANIC_WIFILOG_PRINT_RATE_LIMIT_BURST_DEFAULT 250
+#define PANIC_WIFILOG_PRINT_RATE_LIMIT_BURST_DEFAULT 500
 DEFINE_RATELIMIT_STATE(panic_wifilog_ratelimit,
 		       PANIC_WIFILOG_PRINT_RATE_LIMIT_PERIOD,
 		       PANIC_WIFILOG_PRINT_RATE_LIMIT_BURST_DEFAULT);
+
+#define FLUSH_LOG_COMPLETION_TIMEOUT 3000
 
 struct log_msg {
 	struct list_head node;
@@ -192,6 +199,8 @@ struct wlan_logging {
 	bool is_flush_timer_initialized;
 	uint32_t flush_timer_period;
 	qdf_spinlock_t flush_timer_lock;
+
+	qdf_event_t flush_log_completion;
 };
 
 /* This global variable is intentionally not marked static because it
@@ -765,6 +774,20 @@ static void send_flush_completion_to_user(uint8_t ring_id)
 }
 #endif
 
+static void wlan_logging_set_flush_log_completion(void)
+{
+	qdf_event_set(&gwlan_logging.flush_log_completion);
+}
+
+QDF_STATUS wlan_logging_wait_for_flush_log_completion(void)
+{
+	qdf_event_reset(&gwlan_logging.flush_log_completion);
+
+	return qdf_wait_for_event_completion(
+					&gwlan_logging.flush_log_completion,
+					FLUSH_LOG_COMPLETION_TIMEOUT);
+}
+
 static void setup_flush_timer(void)
 {
 	qdf_spin_lock(&gwlan_logging.flush_timer_lock);
@@ -850,6 +873,7 @@ static int wlan_logging_thread(void *Arg)
 				send_flush_completion_to_user(
 						RING_ID_DRIVER_DEBUG);
 #endif
+				wlan_logging_set_flush_log_completion();
 			} else {
 				gwlan_logging.is_flush_complete = true;
 				/* Flush all current host logs*/
@@ -927,7 +951,7 @@ static int panic_wifilog_ratelimit_print(void)
 /**
  * wlan_logging_dump_last_logs() - Panic notifier callback's helper function
  *
- * This function prints buffered logs in chunks of MAX_LOG_LINE.
+ * This function prints buffered logs one line at a time.
  */
 static void wlan_logging_dump_last_logs(void)
 {
@@ -947,11 +971,16 @@ static void wlan_logging_dump_last_logs(void)
 		log = &plog_msg->logbuf[sizeof(tAniHdr)];
 		filled_length = plog_msg->filled_length;
 		while (filled_length) {
-			text_len = scnprintf(textbuf,
-					     sizeof(textbuf),
-					     "%s", log);
+			text_len = qdf_str_copy_all_before_char(log, filled_length,
+								textbuf,
+								sizeof(textbuf) - 1,
+								'\n');
+			textbuf[text_len] = '\0';
 			if (panic_wifilog_ratelimit_print())
 				pr_err("%s\n", textbuf);
+
+			if (log[text_len] == '\n')
+				text_len += 1; /* skip newline */
 			log += text_len;
 			filled_length -= text_len;
 		}
@@ -1064,6 +1093,7 @@ int wlan_logging_sock_init_svc(void)
 {
 	int i = 0, j, pkt_stats_size;
 	unsigned long irq_flag;
+	QDF_STATUS status;
 
 	spin_lock_init(&gwlan_logging.spin_lock);
 	spin_lock_init(&gwlan_logging.pkt_stats_lock);
@@ -1147,6 +1177,12 @@ int wlan_logging_sock_init_svc(void)
 	gwlan_logging.is_active = true;
 	gwlan_logging.is_flush_complete = false;
 
+	status = qdf_event_create(&gwlan_logging.flush_log_completion);
+	if (!QDF_IS_STATUS_SUCCESS(status)) {
+		qdf_err("Flush log completion event init failed");
+		goto err3;
+	}
+
 	return 0;
 
 err3:
@@ -1177,6 +1213,8 @@ int wlan_logging_sock_deinit_svc(void)
 
 	if (!gwlan_logging.pcur_node)
 		return 0;
+
+	qdf_event_destroy(&gwlan_logging.flush_log_completion);
 
 	INIT_COMPLETION(gwlan_logging.shutdown_comp);
 	gwlan_logging.exit = true;

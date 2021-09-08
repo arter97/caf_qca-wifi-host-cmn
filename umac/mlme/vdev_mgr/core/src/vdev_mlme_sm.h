@@ -23,6 +23,9 @@
 #ifndef _VDEV_MLME_SM_H_
 #define _VDEV_MLME_SM_H_
 
+#include <wlan_mlo_mgr_ap.h>
+#include <wlan_dfs_utils_api.h>
+
 /**
  * mlme_vdev_sm_deliver_event() - Delivers event to VDEV MLME SM
  * @vdev_mlme: MLME VDEV comp object
@@ -622,6 +625,18 @@ static inline QDF_STATUS mlme_vdev_dfs_cac_wait_notify(
 	return ret;
 }
 
+/**
+ * mlme_vdev_chan_switch_disable_notify_dfs - Notifies DFS when channel
+ * switch is disabled
+ * @vdev_mlme: VDEV MLME comp object
+ *
+ * Return: QDF_STATUS.
+ */
+static inline QDF_STATUS mlme_vdev_chan_switch_disable_notify_dfs(
+					struct vdev_mlme_obj *vdev_mlme)
+{
+	return utils_dfs_radar_enable(wlan_vdev_get_pdev(vdev_mlme->vdev));
+}
 #ifdef WLAN_FEATURE_11BE_MLO
 /**
  * mlme_vdev_up_notify_mlo_mgr - notify mlo link is ready to up
@@ -631,10 +646,47 @@ static inline QDF_STATUS mlme_vdev_dfs_cac_wait_notify(
  */
 static inline void mlme_vdev_up_notify_mlo_mgr(struct vdev_mlme_obj *vdev_mlme)
 {
-	/* Add call to mlo_handle_link_up(vdev_mlme->vdev) once it is ready */
+	if (wlan_vdev_mlme_is_mlo_ap(vdev_mlme->vdev))
+		mlo_ap_link_sync_wait_notify(vdev_mlme->vdev);
+}
+
+/**
+ * mlme_vdev_start_rsp_notify_mlo_mgr - notify mlo link is started
+ * @vdev_mlme_obj:  VDEV MLME comp object
+ *
+ * Return: VOID.
+ */
+static inline void mlme_vdev_start_rsp_notify_mlo_mgr(
+					struct vdev_mlme_obj *vdev_mlme)
+{
+	if (wlan_vdev_mlme_is_mlo_ap(vdev_mlme->vdev))
+		mlo_ap_link_start_rsp_notify(vdev_mlme->vdev);
+}
+
+/**
+ * mlme_vdev_down_cmpl_notify_mlo_mgr - notify mlo link is down complate
+ * @vdev_mlme_obj:  VDEV MLME comp object
+ *
+ * Return: VOID.
+ */
+static inline void mlme_vdev_down_cmpl_notify_mlo_mgr(
+					struct vdev_mlme_obj *vdev_mlme)
+{
+	if (wlan_vdev_mlme_is_mlo_ap(vdev_mlme->vdev))
+		mlo_ap_link_down_cmpl_notify(vdev_mlme->vdev);
 }
 #else
 static inline void mlme_vdev_up_notify_mlo_mgr(struct vdev_mlme_obj *vdev_mlme)
+{
+}
+
+static inline void mlme_vdev_start_rsp_notify_mlo_mgr(
+					struct vdev_mlme_obj *vdev_mlme)
+{
+}
+
+static inline void mlme_vdev_down_cmpl_notify_mlo_mgr(
+					struct vdev_mlme_obj *vdev_mlme)
 {
 }
 #endif
