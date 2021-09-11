@@ -495,7 +495,14 @@ static void reg_find_low_limit_chan_enum(
 		max_bw = chan_list[chan_enum].max_bw;
 		center_freq = chan_list[chan_enum].center_freq;
 
-		if ((center_freq - min_bw / 2) >= low_freq) {
+		/* There are few cases where FW sends the reg rules with all
+		 * 0s if a center freq is not supported. This API does not
+		 * handle the case of 0 cfreq and assumes it to be a
+		 * valid freq and computes the low limit incorrectly.
+		 * Hence 2G channels become part of 5G pdev or vice-versa.
+		 * Hence adding the NUll check for center freq here.
+		 */
+		if ((center_freq && (center_freq - min_bw / 2) >= low_freq)) {
 			if ((center_freq - max_bw / 2) < low_freq) {
 				if (max_bw <= 20)
 					max_bw = ((center_freq - low_freq) * 2);
@@ -530,8 +537,14 @@ static void reg_find_high_limit_chan_enum(
 		min_bw = chan_list[chan_enum].min_bw;
 		max_bw = chan_list[chan_enum].max_bw;
 		center_freq = chan_list[chan_enum].center_freq;
-
-		if (center_freq + min_bw / 2 <= high_freq) {
+		/* There are few cases where FW sends the reg rules with all
+		 * 0s if a center freq is not supported. This API does not
+		 * handle the case of 0 cfreq and assumes it to be a
+		 * valid freq and computes the high limit incorrectly.
+		 * Hence 2G channels become part of 5G pdev or vice-versa.
+		 * Hence adding the NUll check for center freq here.
+		 */
+		if (center_freq && (center_freq + min_bw / 2 <= high_freq)) {
 			if ((center_freq + max_bw / 2) > high_freq) {
 				if (max_bw <= 20)
 					max_bw = ((high_freq -
