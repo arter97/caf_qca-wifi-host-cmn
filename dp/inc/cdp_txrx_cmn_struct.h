@@ -971,6 +971,7 @@ typedef void (*ol_txrx_pktdump_cb)(ol_txrx_soc_handle soc,
  * format specified by the OS to use for tx and rx
  * frames (either 802.3 or native WiFi). In case RX Threads are enabled, pkts
  * are given to the thread, instead of the stack via this pointer.
+ * @rx.rx_eapol - This rx function pointer used to receive only eapol frames
  * @rx.stack - function to give packets to the stack. Differs from @rx.rx.
  * In case RX Threads are enabled, this pointer holds the callback to give
  * packets to the stack.
@@ -1006,6 +1007,9 @@ struct ol_txrx_ops {
 	/* rx function pointers - specified by OS shim, stored by txrx */
 	struct {
 		ol_txrx_rx_fp           rx;
+#ifdef QCA_SUPPORT_EAPOL_OVER_CONTROL_PORT
+		ol_txrx_rx_fp     rx_eapol;
+#endif
 		ol_txrx_rx_fp           rx_stack;
 		ol_txrx_rx_flush_fp     rx_flush;
 		ol_txrx_rx_gro_flush_ind_fp           rx_gro_flush;
@@ -1115,6 +1119,7 @@ enum cdp_peer_param_type {
  * @CDP_CONFIG_BSS_COLOR: configure bss color
  * @CDP_SET_ATF_STATS_ENABLE: set ATF stats flag
  * @CDP_CONFIG_SPECIAL_VAP: Configure Special vap
+ * @CDP_RESET_SCAN_SPCL_VAP_STATS_ENABLE: Enable scan spcl vap stats reset
  */
 enum cdp_pdev_param_type {
 	CDP_CONFIG_DEBUG_SNIFFER,
@@ -1146,6 +1151,7 @@ enum cdp_pdev_param_type {
 	CDP_CONFIG_BSS_COLOR,
 	CDP_SET_ATF_STATS_ENABLE,
 	CDP_CONFIG_SPECIAL_VAP,
+	CDP_RESET_SCAN_SPCL_VAP_STATS_ENABLE,
 };
 
 /*
@@ -1279,6 +1285,7 @@ typedef union cdp_config_param_t {
 	uint32_t cdp_pdev_param_tx_pending;
 	bool cdp_pdev_param_atf_stats_enable;
 	bool cdp_pdev_param_config_special_vap;
+	bool cdp_pdev_param_reset_scan_spcl_vap_stats_enable;
 
 	/* psoc params */
 	bool cdp_psoc_param_en_rate_stats;
@@ -1287,6 +1294,8 @@ typedef union cdp_config_param_t {
 	bool cdp_psoc_param_pext_stats;
 
 	bool cdp_enable_tx_checksum;
+
+	bool cdp_skip_bar_update;
 } cdp_config_param_type;
 
 /**
@@ -1397,6 +1406,9 @@ enum cdp_vdev_param_type {
 #ifdef WLAN_SUPPORT_MESH_LATENCY
 	CDP_ENABLE_PEER_TID_LATENCY,
 	CDP_SET_VAP_MESH_TID,
+#endif
+#ifdef WLAN_VENDOR_SPECIFIC_BAR_UPDATE
+	CDP_SKIP_BAR_UPDATE_AP,
 #endif
 };
 
@@ -2567,4 +2579,26 @@ struct cdp_rx_flow_info {
 	struct cdp_rx_flow_tuple_info flow_tuple_info;
 	uint16_t fse_metadata;
 };
+
+#ifdef QCA_SUPPORT_SCAN_SPCL_VAP_STATS
+/**
+ * cdp_scan_spcl_vap_stats - Special vap statistics info
+ * @rx_ok_pkts: rx fcs ok pkts count
+ * @rx_ok_bytes: rx fcs ok bytes count
+ * @rx_err_pkts: rx fcs err pkts count
+ * @rx_err_bytes: rx fcs err bytes count
+ * @rx_mgmt_pkts: rx mgmt pkts count
+ * @rx_ctrl_pkts: rx ctrl pkts count
+ * @rx_data_pkts: rx data pkts count
+ */
+struct cdp_scan_spcl_vap_stats {
+	uint64_t rx_ok_pkts;
+	uint64_t rx_ok_bytes;
+	uint64_t rx_err_pkts;
+	uint64_t rx_err_bytes;
+	uint64_t rx_mgmt_pkts;
+	uint64_t rx_ctrl_pkts;
+	uint64_t rx_data_pkts;
+};
+#endif
 #endif

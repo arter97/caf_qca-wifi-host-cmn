@@ -29,14 +29,13 @@
 #include <hal_reo.h>
 #include <cdp_txrx_handle.h>
 #include <wlan_cfg.h>
+#ifdef WIFI_MONITOR_SUPPORT
+#include <dp_mon.h>
+#endif
 #ifdef FEATURE_WDS
 #include "dp_txrx_wds.h"
 #endif
-
-#ifdef WLAN_TX_PKT_CAPTURE_ENH
-#include "dp_tx_capture.h"
-#endif
-
+#include <qdf_module.h>
 #ifdef QCA_PEER_EXT_STATS
 #include "dp_hist.h"
 #endif
@@ -1399,6 +1398,8 @@ add_ast_entry:
 	return QDF_STATUS_E_FAILURE;
 }
 
+qdf_export_symbol(dp_peer_add_ast);
+
 /*
  * dp_peer_free_ast_entry() - Free up the ast entry memory
  * @soc: SoC handle
@@ -1996,6 +1997,8 @@ struct dp_peer *dp_peer_find_hash_find(struct dp_soc *soc,
 	return NULL; /* failure */
 }
 
+qdf_export_symbol(dp_peer_find_hash_find);
+
 /*
  * dp_peer_find_hash_remove() - remove peer from peer_hash_table
  * @soc: soc handle
@@ -2271,7 +2274,8 @@ static inline struct dp_peer *dp_peer_find_add_id(struct dp_soc *soc,
 		dp_peer_find_id_to_obj_add(soc, peer, peer_id);
 		if (peer->peer_id == HTT_INVALID_PEER) {
 			peer->peer_id = peer_id;
-			dp_peer_tid_peer_id_update(peer, peer->peer_id);
+			dp_monitor_peer_tid_peer_id_update(soc, peer,
+							   peer->peer_id);
 		} else {
 			QDF_ASSERT(0);
 		}
@@ -3220,30 +3224,6 @@ static void dp_peer_setup_remaining_tids(struct dp_peer *peer) {};
 #endif
 
 /*
- * dp_peer_tx_init() – Initialize receive TID state
- * @pdev: Datapath pdev
- * @peer: Datapath peer
- *
- */
-void dp_peer_tx_init(struct dp_pdev *pdev, struct dp_peer *peer)
-{
-	dp_peer_tid_queue_init(peer);
-	dp_peer_update_80211_hdr(peer->vdev, peer);
-}
-
-/*
- * dp_peer_tx_cleanup() – Deinitialize receive TID state
- * @vdev: Datapath vdev
- * @peer: Datapath peer
- *
- */
-static inline void
-dp_peer_tx_cleanup(struct dp_vdev *vdev, struct dp_peer *peer)
-{
-	dp_peer_tid_queue_cleanup(peer);
-}
-
-/*
  * dp_peer_rx_init() – Initialize receive TID state
  * @pdev: Datapath pdev
  * @peer: Datapath peer
@@ -3331,32 +3311,6 @@ void dp_peer_rx_cleanup(struct dp_vdev *vdev, struct dp_peer *peer)
 #endif
 }
 
-#ifdef FEATURE_PERPKT_INFO
-/*
- * dp_peer_ppdu_delayed_ba_init() Initialize ppdu in peer
- * @peer: Datapath peer
- *
- * return: void
- */
-void dp_peer_ppdu_delayed_ba_init(struct dp_peer *peer)
-{
-	qdf_mem_zero(&peer->delayed_ba_ppdu_stats,
-		     sizeof(struct cdp_delayed_tx_completion_ppdu_user));
-	peer->last_delayed_ba = false;
-	peer->last_delayed_ba_ppduid = 0;
-}
-#else
-/*
- * dp_peer_ppdu_delayed_ba_init() Initialize ppdu in peer
- * @peer: Datapath peer
- *
- * return: void
- */
-void dp_peer_ppdu_delayed_ba_init(struct dp_peer *peer)
-{
-}
-#endif
-
 /*
  * dp_peer_cleanup() – Cleanup peer information
  * @vdev: Datapath vdev
@@ -3373,7 +3327,7 @@ void dp_peer_cleanup(struct dp_vdev *vdev, struct dp_peer *peer)
 	/* save vdev related member in case vdev freed */
 	vdev_opmode = vdev->opmode;
 
-	dp_peer_tx_cleanup(vdev, peer);
+	dp_monitor_peer_tx_cleanup(vdev, peer);
 
 	if (vdev_opmode != wlan_op_mode_monitor)
 	/* cleanup the Rx reorder queues for this peer */

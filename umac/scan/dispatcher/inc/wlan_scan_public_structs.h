@@ -625,7 +625,7 @@ struct scan_cache_entry {
 	 */
 	uint8_t pdev_id;
 #ifdef WLAN_FEATURE_11BE_MLO
-	struct ml_info *ml_info;
+	struct ml_info ml_info;
 #endif
 };
 
@@ -687,6 +687,7 @@ enum dot11_mode_filter {
  * @num_of_bssid: number of bssid passed
  * @num_of_ssid: number of ssid
  * @num_of_channels: number of  channels
+ * @bss_type: bss type IBSS or BSS or ANY
  * @pmf_cap: Pmf capability
  * @dot11mode: Filter APs based upon dot11mode
  * @band: to get specific band 2.4G, 5G or 4.9 G
@@ -719,6 +720,7 @@ struct scan_filter {
 	uint8_t num_of_bssid;
 	uint8_t num_of_ssid;
 	uint16_t num_of_channels;
+	enum wlan_bss_type bss_type;
 	enum wlan_pmf_cap pmf_cap;
 	enum dot11_mode_filter dot11mode;
 	enum wlan_band band;
@@ -973,6 +975,7 @@ enum scan_request_type {
  * @dwell_time_active: active dwell time
  * @dwell_time_active_2g: active dwell time for 2G channels, if it's not zero
  * @dwell_time_passive: passive dwell time
+ * @min_dwell_time_6g: 6Ghz min dwell time
  * @dwell_time_active_6g: 6Ghz active dwell time
  * @dwell_time_passive_6g: 6Ghz passive dwell time
  * @min_rest_time: min rest time
@@ -1058,6 +1061,7 @@ struct scan_req_params {
 	uint32_t dwell_time_active;
 	uint32_t dwell_time_active_2g;
 	uint32_t dwell_time_passive;
+	uint32_t min_dwell_time_6g;
 	uint32_t dwell_time_active_6g;
 	uint32_t dwell_time_passive_6g;
 	uint32_t min_rest_time;
