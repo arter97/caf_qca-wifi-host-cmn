@@ -1228,6 +1228,24 @@ int32_t qdf_mem_dp_rx_skb_max_cnt_read(void);
 void qdf_mem_tx_desc_cnt_update(qdf_atomic_t pending_tx_descs,
 				int32_t tx_descs_max);
 
+/**
+ * qdf_mem_vfree() - Free the virtual memory pointed to by ptr
+ * @ptr: Pointer to the starting address of the memory to
+ * be freed.
+ *
+ * Return: None
+ */
+#define qdf_mem_vfree(ptr)   __qdf_mem_vfree(ptr)
+
+/**
+ * qdf_mem_valloc() - Allocate virtual memory for the given
+ * size
+ * @size: Number of bytes of memory to be allocated
+ *
+ * Return: Pointer to the starting address of the allocated virtual memory
+ */
+#define qdf_mem_valloc(size) __qdf_mem_valloc(size, __func__, __LINE__)
+
 #if IS_ENABLED(CONFIG_ARM_SMMU) && defined(ENABLE_SMMU_S1_TRANSLATION)
 /*
  * typedef qdf_iommu_domain_t: Platform indepedent iommu domain
