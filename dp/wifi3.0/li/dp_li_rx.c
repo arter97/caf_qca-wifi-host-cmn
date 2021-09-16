@@ -31,8 +31,10 @@
 #include "if_meta_hdr.h"
 #endif
 #include "dp_internal.h"
-#include "dp_rx_mon.h"
 #include "dp_ipa.h"
+#ifdef WIFI_MONITOR_SUPPORT
+#include <dp_mon.h>
+#endif
 #ifdef FEATURE_WDS
 #include "dp_txrx_wds.h"
 #endif
@@ -51,6 +53,35 @@ bool is_sa_da_idx_valid(struct dp_soc *soc, uint8_t *rx_tlv_hdr,
 
 	return true;
 }
+
+#ifndef QCA_HOST_MODE_WIFI_DISABLED
+#if defined(FEATURE_MCL_REPEATER) && defined(FEATURE_MEC)
+/**
+ * dp_rx_mec_check_wrapper() - wrapper to dp_rx_mcast_echo_check
+ * @soc: core DP main context
+ * @peer: dp peer handler
+ * @rx_tlv_hdr: start of the rx TLV header
+ * @nbuf: pkt buffer
+ *
+ * Return: bool (true if it is a looped back pkt else false)
+ */
+static inline bool dp_rx_mec_check_wrapper(struct dp_soc *soc,
+					   struct dp_peer *peer,
+					   uint8_t *rx_tlv_hdr,
+					   qdf_nbuf_t nbuf)
+{
+	return dp_rx_mcast_echo_check(soc, peer, rx_tlv_hdr, nbuf);
+}
+#else
+static inline bool dp_rx_mec_check_wrapper(struct dp_soc *soc,
+					   struct dp_peer *peer,
+					   uint8_t *rx_tlv_hdr,
+					   qdf_nbuf_t nbuf)
+{
+	return false;
+}
+#endif
+#endif
 
 /**
  * dp_rx_process_li() - Brain of the Rx processing functionality
@@ -698,6 +729,17 @@ done:
 				qdf_nbuf_free(nbuf);
 				nbuf = next;
 				DP_STATS_INC(soc, rx.err.invalid_sa_da_idx, 1);
+				continue;
+			}
+			if (qdf_unlikely(dp_rx_mec_check_wrapper(soc,
+								 peer,
+								 rx_tlv_hdr,
+								 nbuf))) {
+				/* this is a looped back MCBC pkt,drop it */
+				DP_STATS_INC_PKT(peer, rx.mec_drop, 1,
+						 QDF_NBUF_CB_RX_PKT_LEN(nbuf));
+				qdf_nbuf_free(nbuf);
+				nbuf = next;
 				continue;
 			}
 			/* WDS Source Port Learning */

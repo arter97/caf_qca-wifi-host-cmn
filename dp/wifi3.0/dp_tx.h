@@ -75,6 +75,8 @@ do {                                                           \
 #endif /* TX_PER_PDEV_DESC_POOL */
 #define DP_TX_QUEUE_MASK 0x3
 
+#define MAX_CDP_SEC_TYPE 12
+
 /* number of dwords for htt_tx_msdu_desc_ext2_t */
 #define DP_TX_MSDU_INFO_META_DATA_DWORDS 7
 
@@ -394,8 +396,9 @@ static inline enum qdf_dp_tx_rx_status dp_tx_hw_to_qdf(uint16_t status)
 	switch (status) {
 	case HAL_TX_TQM_RR_FRAME_ACKED:
 		return QDF_TX_RX_STATUS_OK;
-	case HAL_TX_TQM_RR_REM_CMD_REM:
 	case HAL_TX_TQM_RR_REM_CMD_TX:
+		return QDF_TX_RX_STATUS_NO_ACK;
+	case HAL_TX_TQM_RR_REM_CMD_REM:
 	case HAL_TX_TQM_RR_REM_CMD_NOTX:
 	case HAL_TX_TQM_RR_REM_CMD_AGED:
 		return QDF_TX_RX_STATUS_FW_DISCARD;
@@ -533,8 +536,6 @@ static inline void dp_tx_hal_ring_access_end_reap(struct dp_soc *soc,
 }
 #endif
 
-void  dp_iterate_update_peer_list(struct cdp_pdev *pdev_hdl);
-
 #ifdef ATH_TX_PRI_OVERRIDE
 #define DP_TX_TID_OVERRIDE(_msdu_info, _nbuf) \
 	((_msdu_info)->tid = qdf_nbuf_get_priority(_nbuf))
@@ -634,16 +635,6 @@ void dp_send_completion_to_stack(struct dp_soc *soc,  struct dp_pdev *pdev,
 			    uint16_t peer_id, uint32_t ppdu_id,
 			    qdf_nbuf_t netbuf)
 {
-}
-#endif
-
-#ifndef WLAN_TX_PKT_CAPTURE_ENH
-static inline
-QDF_STATUS dp_peer_set_tx_capture_enabled(struct dp_pdev *pdev,
-					  struct dp_peer *peer_handle,
-					  uint8_t value, uint8_t *peer_mac)
-{
-	return QDF_STATUS_SUCCESS;
 }
 #endif
 

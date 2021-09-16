@@ -53,6 +53,7 @@
 #ifdef WLAN_IOT_SIM_SUPPORT
 #include <wlan_iot_sim_public_structs.h>
 #endif
+#include <wlan_mgmt_txrx_rx_reo_public_structs.h>
 
 /* Number of dev type: Direct attach and Offload */
 #define MAX_DEV_TYPE 2
@@ -211,6 +212,40 @@ struct wlan_target_if_dcs_rx_ops {
 };
 #endif
 
+#ifdef WLAN_MGMT_RX_REO_SUPPORT
+/**
+ * struct wlan_lmac_if_mgmt_txrx_tx_ops - structure of tx function
+ * pointers for mgmt rx reo
+ * @read_mgmt_rx_reo_snapshot: Read rx-reorder snapshots
+ * @get_mgmt_rx_reo_snapshot_address: Get rx-reorder snapshot address
+ * @mgmt_rx_reo_filter_config:  Configure MGMT Rx REO filter
+ */
+struct wlan_lmac_if_mgmt_rx_reo_tx_ops {
+	QDF_STATUS (*read_mgmt_rx_reo_snapshot)
+			(struct mgmt_rx_reo_snapshot *address,
+			 enum mgmt_rx_reo_shared_snapshot_id id,
+			 struct mgmt_rx_reo_snapshot_params *value);
+	QDF_STATUS (*get_mgmt_rx_reo_snapshot_address)
+			(struct wlan_objmgr_pdev *pdev,
+			 enum mgmt_rx_reo_shared_snapshot_id id,
+			 struct mgmt_rx_reo_snapshot **address);
+	QDF_STATUS (*mgmt_rx_reo_filter_config)(
+					struct wlan_objmgr_pdev *pdev,
+					struct mgmt_rx_reo_filter *filter);
+};
+
+/**
+ * struct wlan_lmac_if_mgmt_txrx_rx_ops - structure of rx function
+ * pointers for mgmt rx reo module
+ * @fw_consumed_event_handler: FW consumed event handler
+ */
+struct wlan_lmac_if_mgmt_rx_reo_rx_ops {
+	QDF_STATUS (*fw_consumed_event_handler)(
+			struct wlan_objmgr_psoc *psoc,
+			struct mgmt_rx_reo_params *params);
+};
+#endif
+
 /**
  * struct wlan_lmac_if_mgmt_txrx_tx_ops - structure of tx function
  *                  pointers for mgmt txrx component
@@ -219,6 +254,9 @@ struct wlan_target_if_dcs_rx_ops {
  * @fd_action_frame_send: function pointer to transmit FD action frame
  * @tx_drain_nbuf_op: function pointer for any umac nbuf realted ops for
  *                    pending mgmt frames cleanup
+ * @reg_ev_handler: function pointer to register event handlers
+ * @unreg_ev_handler: function pointer to unregister event handlers
+ * @mgmt_rx_reo_tx_ops: management rx-reorder txops
  */
 struct wlan_lmac_if_mgmt_txrx_tx_ops {
 	QDF_STATUS (*mgmt_tx_send)(struct wlan_objmgr_vdev *vdev,
@@ -230,6 +268,11 @@ struct wlan_lmac_if_mgmt_txrx_tx_ops {
 					   qdf_nbuf_t nbuf);
 	void (*tx_drain_nbuf_op)(struct wlan_objmgr_pdev *pdev,
 				 qdf_nbuf_t nbuf);
+	QDF_STATUS (*reg_ev_handler)(struct wlan_objmgr_psoc *psoc);
+	QDF_STATUS (*unreg_ev_handler)(struct wlan_objmgr_psoc *psoc);
+#ifdef WLAN_MGMT_RX_REO_SUPPORT
+	struct wlan_lmac_if_mgmt_rx_reo_tx_ops mgmt_rx_reo_tx_ops;
+#endif
 };
 
 /**
@@ -298,6 +341,7 @@ enum wlan_mlme_cfg_id;
  * @vdev_config_ratemask_cmd_send: function to send ratemask
  * @peer_flush_tids_send: function to flush peer tids
  * @multiple_vdev_restart_req_cmd: function to send multiple vdev restart
+ * @multiple_vdev_set_param_cmd: function to send multiple vdev param
  * @beacon_send_cmd: function to send beacon
  * @beacon_tmpl_send: function to send beacon template
  * @vdev_bcn_miss_offload_send: function to send beacon miss offload
@@ -354,6 +398,9 @@ struct wlan_lmac_if_mlme_tx_ops {
 	QDF_STATUS (*multiple_vdev_restart_req_cmd)(
 				struct wlan_objmgr_pdev *pdev,
 				struct multiple_vdev_restart_params *param);
+	QDF_STATUS (*multiple_vdev_set_param_cmd)(
+				struct wlan_objmgr_pdev *pdev,
+				struct multiple_vdev_set_param *param);
 	QDF_STATUS (*beacon_cmd_send)(struct wlan_objmgr_vdev *vdev,
 				      struct beacon_params *param);
 	QDF_STATUS (*beacon_tmpl_send)(struct wlan_objmgr_vdev *vdev,
@@ -856,6 +903,9 @@ struct wlan_lmac_if_ftm_rx_ops {
  * @send_ctl_info: call-back function to send CTL info to firmware
  * @set_tpc_power: send transmit power control info to firmware
  * @send_afc_ind: send AFC indication info to firmware.
+ * @register_afc_event_handler: pointer to register afc event handler
+ * @unregister_afc_event_handler: pointer to unregister afc event handler
+ * @trigger_acs_for_afc: pointer to trigger acs for afc
  */
 struct wlan_lmac_if_reg_tx_ops {
 	QDF_STATUS (*register_master_handler)(struct wlan_objmgr_psoc *psoc,
@@ -900,6 +950,11 @@ struct wlan_lmac_if_reg_tx_ops {
 	QDF_STATUS (*send_afc_ind)(struct wlan_objmgr_psoc *psoc,
 				   uint8_t pdev_id,
 				   struct reg_afc_resp_rx_ind_info *param);
+	QDF_STATUS (*register_afc_event_handler)(struct wlan_objmgr_psoc *psoc,
+						 void *arg);
+	QDF_STATUS (*unregister_afc_event_handler)
+				(struct wlan_objmgr_psoc *psoc, void *arg);
+	QDF_STATUS (*trigger_acs_for_afc)(struct wlan_objmgr_pdev *pdev);
 #endif
 };
 
@@ -1257,6 +1312,9 @@ struct wlan_lmac_if_mgmt_txrx_rx_ops {
 			uint32_t desc_id);
 	uint32_t (*mgmt_txrx_get_free_desc_pool_count)(
 			struct wlan_objmgr_pdev *pdev);
+#ifdef WLAN_MGMT_RX_REO_SUPPORT
+	struct wlan_lmac_if_mgmt_rx_reo_rx_ops mgmt_rx_reo_rx_ops;
+#endif
 };
 
 struct wlan_lmac_if_reg_rx_ops {
@@ -1265,6 +1323,9 @@ struct wlan_lmac_if_reg_rx_ops {
 #ifdef CONFIG_BAND_6GHZ
 	QDF_STATUS (*master_list_ext_handler)(struct cur_regulatory_info
 					      *reg_info);
+#ifdef CONFIG_AFC_SUPPORT
+	QDF_STATUS (*afc_event_handler)(struct afc_regulatory_info *afc_info);
+#endif
 #endif
 	QDF_STATUS (*reg_11d_new_cc_handler)(struct wlan_objmgr_psoc *psoc,
 			struct reg_11d_new_country *reg_11d_new_cc);

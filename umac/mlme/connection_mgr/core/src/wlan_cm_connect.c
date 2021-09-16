@@ -447,11 +447,11 @@ void cm_set_vdev_link_id(struct cnx_mgr *cm_ctx,
 	uint8_t link_id;
 	uint8_t i;
 
-	for (i = 0; i < req->cur_candidate->entry->ml_info->num_links; i++) {
-		if (qdf_mem_cmp(req->cur_candidate->entry->ml_info->link_info[i].link_addr.bytes,
+	for (i = 0; i < req->cur_candidate->entry->ml_info.num_links; i++) {
+		if (qdf_mem_cmp(req->cur_candidate->entry->ml_info.link_info[i].link_addr.bytes,
 				req->cur_candidate->entry->mac_addr.bytes, QDF_MAC_ADDR_SIZE))
 			continue;
-		link_id = req->cur_candidate->entry->ml_info->link_info[i].link_id;
+		link_id = req->cur_candidate->entry->ml_info.link_info[i].link_id;
 		if (cm_ctx->vdev) {
 			mlme_debug("setting link ID to %d", link_id);
 			wlan_vdev_set_link_id(cm_ctx->vdev, link_id);
@@ -485,6 +485,33 @@ static void cm_update_vdev_mlme_macaddr(struct cnx_mgr *cm_ctx,
 {
 }
 #endif
+/**
+ * cm_get_bss_peer_mld_addr() - get bss peer mld mac address
+ * @req: pointer to cm_connect_req
+ *
+ * Return: mld mac address
+ */
+static struct qdf_mac_addr *cm_get_bss_peer_mld_addr(struct cm_connect_req *req)
+{
+	if (req && req->cur_candidate && req->cur_candidate->entry)
+		return &req->cur_candidate->entry->ml_info.mld_mac_addr;
+	else
+		return NULL;
+}
+
+/**
+ * cm_bss_peer_is_assoc_peer() - is the bss peer to be created assoc peer or not
+ * @req: pointer to cm_connect_req
+ *
+ * Return: true if the bss peer to be created is assoc peer
+ */
+static bool cm_bss_peer_is_assoc_peer(struct cm_connect_req *req)
+{
+	if (req)
+		return !req->req.is_non_assoc_link;
+
+	return false;
+}
 #else
 static inline
 void cm_set_vdev_link_id(struct cnx_mgr *cm_ctx,
@@ -495,6 +522,16 @@ static void cm_update_vdev_mlme_macaddr(struct cnx_mgr *cm_ctx,
 					struct cm_connect_req *req)
 {
 }
+
+static struct qdf_mac_addr *cm_get_bss_peer_mld_addr(struct cm_connect_req *req)
+{
+	return NULL;
+}
+
+static bool cm_bss_peer_is_assoc_peer(struct cm_connect_req *req)
+{
+	return false;
+}
 #endif
 
 static void cm_create_bss_peer(struct cnx_mgr *cm_ctx,
@@ -502,10 +539,23 @@ static void cm_create_bss_peer(struct cnx_mgr *cm_ctx,
 {
 	QDF_STATUS status;
 	struct qdf_mac_addr *bssid;
+	struct qdf_mac_addr *mld_mac;
+	bool is_assoc_link = false;
 
+	if (!cm_ctx) {
+		mlme_err("invalid cm_ctx");
+		return;
+	}
+	if (!req || !req->cur_candidate || !req->cur_candidate->entry) {
+		mlme_err("invalid req");
+		return;
+	}
 	bssid = &req->cur_candidate->entry->bssid;
 	cm_set_vdev_link_id(cm_ctx, req);
-	status = mlme_cm_bss_peer_create_req(cm_ctx->vdev, bssid);
+	mld_mac = cm_get_bss_peer_mld_addr(req);
+	is_assoc_link = cm_bss_peer_is_assoc_peer(req);
+	status = mlme_cm_bss_peer_create_req(cm_ctx->vdev, bssid,
+					     mld_mac, is_assoc_link);
 	if (QDF_IS_STATUS_ERROR(status)) {
 		struct wlan_cm_connect_resp *resp;
 		uint8_t vdev_id = wlan_vdev_get_id(cm_ctx->vdev);
@@ -755,6 +805,8 @@ static inline void cm_update_advance_filter(struct wlan_objmgr_pdev *pdev,
 {
 	struct wlan_objmgr_psoc *psoc = wlan_pdev_get_psoc(pdev);
 
+	/* Select only ESS type */
+	filter->bss_type = WLAN_TYPE_BSS;
 	filter->enable_adaptive_11r =
 		wlan_mlme_adaptive_11r_enabled(psoc);
 	if (wlan_vdev_mlme_get_opmode(cm_ctx->vdev) != QDF_STA_MODE)
@@ -1246,6 +1298,7 @@ QDF_STATUS cm_connect_start(struct cnx_mgr *cm_ctx,
 	}
 
 	status = cm_connect_get_candidates(pdev, cm_ctx, cm_req);
+
 	/* In case of status pending connect will continue after scan */
 	if (status == QDF_STATUS_E_PENDING)
 		return QDF_STATUS_SUCCESS;
@@ -1658,9 +1711,6 @@ cm_resume_connect_after_peer_create(struct cnx_mgr *cm_ctx, wlan_cm_id *cm_id)
 		rsn_caps &= ~WLAN_CRYPTO_RSN_CAP_MFP_REQUIRED;
 		rsn_caps &= ~WLAN_CRYPTO_RSN_CAP_OCV_SUPPORTED;
 	}
-	/* Reset OCV if AP doesnt support */
-	if (!(neg_sec_info->rsn_caps & WLAN_CRYPTO_RSN_CAP_OCV_SUPPORTED))
-		rsn_caps &= ~WLAN_CRYPTO_RSN_CAP_OCV_SUPPORTED;
 
 	/* Update the new caps */
 	wlan_crypto_set_vdev_param(cm_ctx->vdev, WLAN_CRYPTO_PARAM_RSN_CAP,
@@ -1763,6 +1813,19 @@ cm_update_scan_db_on_connect_success(struct cnx_mgr *cm_ctx,
 			    resp->freq, rssi, resp->cm_id);
 }
 
+QDF_STATUS cm_notify_connect_complete(struct cnx_mgr *cm_ctx,
+				      struct wlan_cm_connect_resp *resp)
+{
+	mlme_cm_connect_complete_ind(cm_ctx->vdev, resp);
+	mlo_sta_link_connect_notify(cm_ctx->vdev, resp);
+	mlme_cm_osif_connect_complete(cm_ctx->vdev, resp);
+	cm_if_mgr_inform_connect_complete(cm_ctx->vdev,
+					  resp->connect_status);
+	cm_inform_blm_connect_complete(cm_ctx->vdev, resp);
+
+	return QDF_STATUS_SUCCESS;
+}
+
 QDF_STATUS cm_connect_complete(struct cnx_mgr *cm_ctx,
 			       struct wlan_cm_connect_resp *resp)
 {
@@ -1791,14 +1854,8 @@ QDF_STATUS cm_connect_complete(struct cnx_mgr *cm_ctx,
 	if (resp->is_reassoc && QDF_IS_STATUS_ERROR(resp->connect_status))
 		send_ind = false;
 
-	if (send_ind) {
-		mlme_cm_connect_complete_ind(cm_ctx->vdev, resp);
-		mlo_sta_link_connect_notify(cm_ctx->vdev, resp);
-		mlme_cm_osif_connect_complete(cm_ctx->vdev, resp);
-		cm_if_mgr_inform_connect_complete(cm_ctx->vdev,
-						  resp->connect_status);
-		cm_inform_blm_connect_complete(cm_ctx->vdev, resp);
-	}
+	if (send_ind)
+		cm_notify_connect_complete(cm_ctx, resp);
 
 	/* Update scan entry in case connect is success or fails with bssid */
 	if (!qdf_is_macaddr_zero(&resp->bssid)) {

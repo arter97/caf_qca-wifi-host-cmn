@@ -84,6 +84,7 @@
 #define mlo_nofl_debug_rl(format, args...) \
 		QDF_TRACE_DEBUG_RL_NO_FL(QDF_MODULE_ID_MLO, format, ## args)
 
+#define MLO_INVALID_LINK_IDX 0xFF
 /**
  * mlo_get_link_information() - get partner link information
  * @mld_addr : MLD address
@@ -172,7 +173,7 @@ QDF_STATUS mlo_mlme_create_link_vdev(struct wlan_objmgr_vdev *vdev,
  */
 void mlo_mlme_peer_create(struct wlan_objmgr_vdev *vdev,
 			  struct wlan_mlo_peer_context *ml_peer,
-			  struct qdf_mac_addr addr,
+			  struct qdf_mac_addr *addr,
 			  qdf_nbuf_t frm_buf);
 
 /**
@@ -198,4 +199,23 @@ void mlo_mlme_peer_assoc_fail(struct wlan_objmgr_peer *peer);
  * Return: void
  */
 void mlo_mlme_peer_delete(struct wlan_objmgr_peer *peer);
+
+/**
+ * mlo_mlme_peer_assoc_resp() - Initiate sending of Assoc response
+ * @peer: Object manager peer
+ *
+ * Return: void
+ */
+void mlo_mlme_peer_assoc_resp(struct wlan_objmgr_peer *peer);
+
+/**
+ * mlo_get_link_vdev_ix() - Get index of link VDEV in MLD
+ * @ml_dev: ML device context
+ * @vdev: VDEV object
+ *
+ * Return: link index
+ */
+
+uint8_t mlo_get_link_vdev_ix(struct wlan_mlo_dev_context *mldev,
+			     struct wlan_objmgr_vdev *vdev);
 #endif

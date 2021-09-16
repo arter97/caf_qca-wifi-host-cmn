@@ -1078,8 +1078,10 @@ target_if_populate_fft_bins_info(struct target_if_spectral *spectral,
 		dest_det_info->dest_end_bin_idx =
 					dest_det_info->dest_start_bin_idx +
 					num_fft_bins - 1;
-		dest_det_info->lb_extrabins_start_idx = start_bin;
-		dest_det_info->rb_extrabins_start_idx = 1 +
+		if (dest_det_info->lb_extrabins_num)
+			dest_det_info->lb_extrabins_start_idx = start_bin;
+		if (dest_det_info->rb_extrabins_num)
+			dest_det_info->rb_extrabins_start_idx = 1 +
 					dest_det_info->dest_end_bin_idx;
 		dest_det_info->src_start_bin_idx = 0;
 	}
@@ -1426,11 +1428,21 @@ target_if_process_phyerr_gen2(struct target_if_spectral *spectral,
 	uint8_t segid_sec80;
 	enum phy_ch_width ch_width;
 	QDF_STATUS ret;
+	struct target_if_spectral_ops *p_sops;
 
 	if (!spectral) {
 		spectral_err_rl("Spectral LMAC object is null");
 		goto fail;
 	}
+
+	p_sops = GET_TARGET_IF_SPECTRAL_OPS(spectral);
+	/* Drop the sample if Spectral is not active */
+	if (!p_sops->is_spectral_active(spectral,
+					SPECTRAL_SCAN_MODE_NORMAL)) {
+		spectral_info_rl("Spectral scan is not active");
+		goto fail_no_print;
+	}
+
 	if (!data) {
 		spectral_err_rl("Phyerror event buffer is null");
 		goto fail;
@@ -1614,10 +1626,12 @@ target_if_process_phyerr_gen2(struct target_if_spectral *spectral,
 	return 0;
 
 fail:
+	spectral_err_rl("Error while processing Spectral report");
+
+fail_no_print:
 	if (spectral_debug_level & DEBUG_SPECTRAL4)
 		spectral_debug_level = DEBUG_SPECTRAL;
 
-	spectral_err_rl("Error while processing Spectral report");
 	free_samp_msg_skb(spectral, SPECTRAL_SCAN_MODE_NORMAL);
 	return -EPERM;
 }
@@ -3319,6 +3333,8 @@ target_if_consume_spectral_report_gen3(
 	QDF_STATUS ret;
 	enum spectral_scan_mode spectral_mode = SPECTRAL_SCAN_MODE_INVALID;
 	bool finite_scan = false;
+	int det = 0;
+	struct sscan_detector_list *det_list;
 
 	if (!spectral) {
 		spectral_err_rl("Spectral LMAC object is null");
@@ -3391,6 +3407,18 @@ target_if_consume_spectral_report_gen3(
 	if (QDF_IS_STATUS_ERROR(ret)) {
 		spectral_err_rl("Failed to process search FFT report");
 		goto fail;
+	}
+
+	det_list = &spectral->detector_list[spectral_mode]
+			[spectral->report_info[spectral_mode].sscan_bw];
+	for (det = 0; det < det_list->num_detectors; det++) {
+		if (p_sfft->fft_detector_id == det_list->detectors[det])
+			break;
+		if (det == det_list->num_detectors - 1) {
+			spectral_info("Incorrect det id %d for given scan mode and channel width",
+				      p_sfft->fft_detector_id);
+			goto fail_no_print;
+		}
 	}
 
 	ret = target_if_update_session_info_from_report_ctx(

@@ -29,7 +29,7 @@
 #include "cfg_ucfg_api.h"
 #include "hal_api.h"
 #include "dp_types.h"
-
+#include <qdf_module.h>
 
 /*
  * The max allowed size for tx comp ring is 8191.
@@ -45,6 +45,8 @@
 #define WLAN_CFG_TX_RING_MASK_4 BIT(4)
 #define WLAN_CFG_TX_RING_MASK_5 BIT(5)
 #define WLAN_CFG_TX_RING_MASK_6 BIT(6)
+#define WLAN_CFG_TX_RING_MASK_7 BIT(7)
+
 
 #define WLAN_CFG_RX_MON_RING_MASK_0 0x1
 #define WLAN_CFG_RX_MON_RING_MASK_1 0x2
@@ -112,13 +114,13 @@ struct dp_int_mask_assignment {
 #ifdef CONFIG_BERYLLIUM
 #ifdef IPA_OFFLOAD
 static const uint8_t tx_ring_mask_msi[WLAN_CFG_INT_NUM_CONTEXTS] = {
-	[0] = WLAN_CFG_TX_RING_MASK_0, [1] = WLAN_CFG_TX_RING_MASK_5,
-	[2] = WLAN_CFG_TX_RING_MASK_6};
+	[0] = WLAN_CFG_TX_RING_MASK_0, [1] = WLAN_CFG_TX_RING_MASK_6,
+	[2] = WLAN_CFG_TX_RING_MASK_7};
 #else
 static const uint8_t tx_ring_mask_msi[WLAN_CFG_INT_NUM_CONTEXTS] = {
 	[0] = WLAN_CFG_TX_RING_MASK_0, [1] = WLAN_CFG_TX_RING_MASK_4,
-	[2] = WLAN_CFG_TX_RING_MASK_2, [3] = WLAN_CFG_TX_RING_MASK_5,
-	[4] = WLAN_CFG_TX_RING_MASK_6};
+	[2] = WLAN_CFG_TX_RING_MASK_2, [3] = WLAN_CFG_TX_RING_MASK_6,
+	[4] = WLAN_CFG_TX_RING_MASK_7};
 #endif
 #else
 static const uint8_t tx_ring_mask_msi[WLAN_CFG_INT_NUM_CONTEXTS] = {
@@ -211,32 +213,6 @@ static const uint8_t rx_ring_near_full_irq_2_mask_msi[WLAN_CFG_INT_NUM_CONTEXTS]
 	0 };
 static const uint8_t tx_ring_near_full_irq_mask_msi[WLAN_CFG_INT_NUM_CONTEXTS] = {
 	0 };
-#endif
-
-#ifdef CONFIG_BERYLLIUM
-#ifdef IPA_OFFLOAD
-struct  wlan_cfg_tcl_wbm_ring_num_map tcl_wbm_map_array[MAX_TCL_DATA_RINGS] = {
-	{.tcl_ring_num = 0, .wbm_ring_num = 0, .for_ipa = 0},
-	{1, 4, 1}, /* For IPA */
-	{2, 2, 1}, /* For IPA */
-	{3, 5, 0},
-	{4, 6, 0},
-};
-#else
-struct  wlan_cfg_tcl_wbm_ring_num_map tcl_wbm_map_array[MAX_TCL_DATA_RINGS] = {
-	{.tcl_ring_num = 0, .wbm_ring_num = 0, .for_ipa = 0},
-	{1, 4, 0},
-	{2, 2, 0},
-	{3, 5, 0},
-	{4, 6, 0},
-};
-#endif /* IPA_OFFLOAD */
-#else
-struct  wlan_cfg_tcl_wbm_ring_num_map tcl_wbm_map_array[MAX_TCL_DATA_RINGS] = {
-	{.tcl_ring_num = 0, .wbm_ring_num = 0, .for_ipa = 0},
-	{1, 4, 1}, /* For IPA */
-	{2, 2, 1}, /* For IPA */
-};
 #endif
 
 #else
@@ -826,14 +802,6 @@ static struct dp_int_mask_assignment dp_mask_assignment[NUM_INTERRUPT_COMBINATIO
 		  0, 0, 0, 0},
 	},
 };
-
-struct  wlan_cfg_tcl_wbm_ring_num_map tcl_wbm_map_array[MAX_TCL_DATA_RINGS] = {
-	{0, 0, 0},
-	{1, 1, 0},
-	{2, 2, 0},
-	{3, 3, 0},
-	{4, 4, 0},
-};
 #endif
 
 /**
@@ -1017,6 +985,29 @@ void wlan_cfg_fill_interrupt_mask(struct wlan_cfg_dp_soc_ctxt *wlan_cfg_ctx,
 #endif
 
 #ifdef IPA_OFFLOAD
+#ifdef IPA_WDI3_TX_TWO_PIPES
+/**
+ * wlan_soc_ipa_cfg_attach() - Update ipa tx and tx alt config
+ *  in dp soc cfg context
+ * @psoc: Object manager psoc
+ * @wlan_cfg_ctx: dp soc cfg ctx
+ *
+ * Return: None
+ */
+static void
+wlan_soc_ipa_cfg_attach(struct cdp_ctrl_objmgr_psoc *psoc,
+			struct wlan_cfg_dp_soc_ctxt *wlan_cfg_ctx)
+{
+	wlan_cfg_ctx->ipa_tx_ring_size =
+			cfg_get(psoc, CFG_DP_IPA_TX_RING_SIZE);
+	wlan_cfg_ctx->ipa_tx_comp_ring_size =
+			cfg_get(psoc, CFG_DP_IPA_TX_COMP_RING_SIZE);
+	wlan_cfg_ctx->ipa_tx_alt_ring_size =
+			cfg_get(psoc, CFG_DP_IPA_TX_ALT_RING_SIZE);
+	wlan_cfg_ctx->ipa_tx_alt_comp_ring_size =
+			cfg_get(psoc, CFG_DP_IPA_TX_ALT_COMP_RING_SIZE);
+}
+#else /* !IPA_WDI3_TX_TWO_PIPES */
 /**
  * wlan_soc_ipa_cfg_attach() - Update ipa config in dp soc
  *  cfg context
@@ -1034,7 +1025,8 @@ wlan_soc_ipa_cfg_attach(struct cdp_ctrl_objmgr_psoc *psoc,
 	wlan_cfg_ctx->ipa_tx_comp_ring_size =
 			cfg_get(psoc, CFG_DP_IPA_TX_COMP_RING_SIZE);
 }
-#else
+#endif /* IPA_WDI3_TX_TWO_PIPES */
+#else /* !IPA_OFFLOAD */
 static inline void
 wlan_soc_ipa_cfg_attach(struct cdp_ctrl_objmgr_psoc *psoc,
 			struct wlan_cfg_dp_soc_ctxt *wlan_cfg_ctx)
@@ -1056,6 +1048,33 @@ wlan_soc_hw_cc_cfg_attach(struct cdp_ctrl_objmgr_psoc *psoc,
 			  struct wlan_cfg_dp_soc_ctxt *wlan_cfg_ctx)
 {
 	wlan_cfg_ctx->hw_cc_enabled = true;
+}
+#endif
+
+#ifdef WLAN_SUPPORT_PPEDS
+/**
+ * wlan_soc_ppe_cfg_attach() - Update ppe config in dp soc
+ *  cfg context
+ * @psoc - Object manager psoc
+ * @wlan_cfg_ctx - dp soc cfg ctx
+ *
+ * Return: None
+ */
+static void
+wlan_soc_ppe_cfg_attach(struct cdp_ctrl_objmgr_psoc *psoc,
+			struct wlan_cfg_dp_soc_ctxt *wlan_cfg_ctx)
+{
+	wlan_cfg_ctx->ppe_enable = cfg_get(psoc, CFG_DP_PPE_ENABLE);
+	wlan_cfg_ctx->reo2ppe_ring = cfg_get(psoc, CFG_DP_REO2PPE_RING);
+	wlan_cfg_ctx->ppe2tcl_ring = cfg_get(psoc, CFG_DP_PPE2TCL_RING);
+	wlan_cfg_ctx->ppe_release_ring = cfg_get(psoc,
+						 CFG_DP_PPE_RELEASE_RING);
+}
+#else
+static inline void
+wlan_soc_ppe_cfg_attach(struct cdp_ctrl_objmgr_psoc *psoc,
+			struct wlan_cfg_dp_soc_ctxt *wlan_cfg_ctx)
+{
 }
 #endif
 
@@ -1237,6 +1256,7 @@ wlan_cfg_soc_attach(struct cdp_ctrl_objmgr_psoc *psoc)
 			CFG_DP_DELAY_MON_REPLENISH);
 	wlan_soc_ipa_cfg_attach(psoc, wlan_cfg_ctx);
 	wlan_soc_hw_cc_cfg_attach(psoc, wlan_cfg_ctx);
+	wlan_soc_ppe_cfg_attach(psoc, wlan_cfg_ctx);
 
 	return wlan_cfg_ctx;
 }
@@ -1277,6 +1297,8 @@ void wlan_cfg_set_mon_delayed_replenish_entries(
 	cfg->delayed_replenish_entries = val;
 }
 
+qdf_export_symbol(wlan_cfg_set_mon_delayed_replenish_entries);
+
 int wlan_cfg_get_mon_delayed_replenish_entries(struct wlan_cfg_dp_soc_ctxt *cfg)
 {
 	return cfg->delayed_replenish_entries;
@@ -1312,6 +1334,8 @@ int wlan_cfg_get_max_ast_idx(struct wlan_cfg_dp_soc_ctxt *cfg)
 {
 	return cfg->max_ast_idx;
 }
+
+qdf_export_symbol(wlan_cfg_get_max_ast_idx);
 
 void wlan_cfg_set_tx_ring_mask(struct wlan_cfg_dp_soc_ctxt *cfg,
 		int context, int mask)
@@ -1410,6 +1434,8 @@ int wlan_cfg_get_hw_mac_idx(struct wlan_cfg_dp_soc_ctxt *cfg, int pdev_idx)
 	return cfg->hw_macid[pdev_idx];
 }
 
+qdf_export_symbol(wlan_cfg_get_hw_mac_idx);
+
 int wlan_cfg_get_target_pdev_id(struct wlan_cfg_dp_soc_ctxt *cfg,
 				int hw_macid)
 {
@@ -1437,6 +1463,8 @@ int wlan_cfg_get_pdev_idx(struct wlan_cfg_dp_soc_ctxt *cfg, int hw_macid)
 	qdf_assert_always(hw_macid < MAX_NUM_LMAC_HW);
 	return cfg->hw_macid_pdev_id_map[hw_macid];
 }
+
+qdf_export_symbol(wlan_cfg_get_pdev_idx);
 
 void wlan_cfg_set_ce_ring_mask(struct wlan_cfg_dp_soc_ctxt *cfg,
 		int context, int mask)
@@ -1476,12 +1504,6 @@ int wlan_cfg_get_num_contexts(struct wlan_cfg_dp_soc_ctxt *cfg)
 int wlan_cfg_get_tx_ring_mask(struct wlan_cfg_dp_soc_ctxt *cfg, int context)
 {
 	return cfg->int_tx_ring_mask[context];
-}
-
-void wlan_cfg_get_tcl_wbm_ring_num_for_index(int index, int *tcl, int *wbm)
-{
-	*tcl = tcl_wbm_map_array[index].tcl_ring_num;
-	*wbm = tcl_wbm_map_array[index].wbm_ring_num;
 }
 
 int wlan_cfg_get_rx_ring_mask(struct wlan_cfg_dp_soc_ctxt *cfg, int context)
@@ -1549,7 +1571,9 @@ int wlan_cfg_per_pdev_lmac_ring(struct wlan_cfg_dp_soc_ctxt *cfg)
 	return cfg->per_pdev_lmac_ring;
 }
 
-#ifdef DP_MEMORY_OPT
+qdf_export_symbol(wlan_cfg_per_pdev_lmac_ring);
+
+#if defined(DP_USE_SINGLE_TCL)
 int wlan_cfg_num_tcl_data_rings(struct wlan_cfg_dp_soc_ctxt *cfg)
 {
 	return 1;
@@ -1682,21 +1706,29 @@ int wlan_cfg_get_dma_mon_buf_ring_size(struct wlan_cfg_dp_pdev_ctxt *cfg)
 	return  cfg->dma_mon_buf_ring_size;
 }
 
+qdf_export_symbol(wlan_cfg_get_dma_mon_buf_ring_size);
+
 int wlan_cfg_get_dma_mon_dest_ring_size(struct wlan_cfg_dp_pdev_ctxt *cfg)
 {
 	return  cfg->dma_mon_dest_ring_size;
 }
+
+qdf_export_symbol(wlan_cfg_get_dma_mon_dest_ring_size);
 
 int wlan_cfg_get_dma_mon_stat_ring_size(struct wlan_cfg_dp_pdev_ctxt *cfg)
 {
 	return  cfg->dma_mon_status_ring_size;
 }
 
+qdf_export_symbol(wlan_cfg_get_dma_mon_stat_ring_size);
+
 int
 wlan_cfg_get_dma_mon_desc_ring_size(struct wlan_cfg_dp_pdev_ctxt *cfg)
 {
 	return cfg->rxdma_monitor_desc_ring;
 }
+
+qdf_export_symbol(wlan_cfg_get_dma_mon_desc_ring_size);
 
 int wlan_cfg_get_rx_dma_buf_ring_size(struct wlan_cfg_dp_pdev_ctxt *cfg)
 {
@@ -1707,6 +1739,8 @@ int wlan_cfg_get_num_mac_rings(struct wlan_cfg_dp_pdev_ctxt *cfg)
 {
 	return  cfg->num_mac_rings;
 }
+
+qdf_export_symbol(wlan_cfg_get_num_mac_rings);
 
 bool wlan_cfg_is_gro_enabled(struct wlan_cfg_dp_soc_ctxt *cfg)
 {
@@ -1911,6 +1945,8 @@ wlan_cfg_get_dp_soc_rx_sw_desc_weight(struct wlan_cfg_dp_soc_ctxt *cfg)
 	return cfg->rx_sw_desc_weight;
 }
 
+qdf_export_symbol(wlan_cfg_get_dp_soc_rx_sw_desc_weight);
+
 int
 wlan_cfg_get_dp_soc_rx_sw_desc_num(struct wlan_cfg_dp_soc_ctxt *cfg)
 {
@@ -2006,6 +2042,8 @@ bool wlan_cfg_is_rx_flow_tag_enabled(struct wlan_cfg_dp_soc_ctxt *cfg)
 	return cfg->is_rx_flow_tag_enabled;
 }
 
+qdf_export_symbol(wlan_cfg_is_rx_flow_tag_enabled);
+
 #ifdef WLAN_SUPPORT_RX_FISA
 bool wlan_cfg_is_rx_fisa_enabled(struct wlan_cfg_dp_soc_ctxt *cfg)
 {
@@ -2059,6 +2097,8 @@ wlan_cfg_is_rx_mon_protocol_flow_tag_enabled(struct wlan_cfg_dp_soc_ctxt *cfg)
 {
 	return cfg->is_rx_mon_protocol_flow_tag_enabled;
 }
+
+qdf_export_symbol(wlan_cfg_is_rx_mon_protocol_flow_tag_enabled);
 
 void
 wlan_cfg_set_tx_per_pkt_vdev_id_check(struct wlan_cfg_dp_soc_ctxt *cfg,
@@ -2163,6 +2203,8 @@ wlan_cfg_is_delay_mon_replenish(struct wlan_cfg_dp_soc_ctxt *cfg)
 	return cfg->delay_mon_replenish;
 }
 
+qdf_export_symbol(wlan_cfg_is_delay_mon_replenish);
+
 void wlan_cfg_dp_soc_ctx_dump(struct wlan_cfg_dp_soc_ctxt *cfg)
 {
 	dp_info("DP CFG SoC ctx: delay_mon_replenish = %d,",
@@ -2181,4 +2223,73 @@ uint32_t wlan_cfg_ipa_tx_comp_ring_size(struct wlan_cfg_dp_soc_ctxt *cfg)
 {
 	return cfg->ipa_tx_comp_ring_size;
 }
+
+#ifdef IPA_WDI3_TX_TWO_PIPES
+int wlan_cfg_ipa_tx_alt_ring_size(struct wlan_cfg_dp_soc_ctxt *cfg)
+{
+	return cfg->ipa_tx_alt_ring_size;
+}
+
+int wlan_cfg_ipa_tx_alt_comp_ring_size(struct wlan_cfg_dp_soc_ctxt *cfg)
+{
+	return cfg->ipa_tx_alt_comp_ring_size;
+}
+
+#else
+int wlan_cfg_ipa_tx_alt_ring_size(struct wlan_cfg_dp_soc_ctxt *cfg)
+{
+	return cfg->ipa_tx_ring_size;
+}
+
+int wlan_cfg_ipa_tx_alt_comp_ring_size(struct wlan_cfg_dp_soc_ctxt *cfg)
+{
+	return cfg->ipa_tx_comp_ring_size;
+}
 #endif
+#endif
+
+#ifdef WLAN_SUPPORT_PPEDS
+bool
+wlan_cfg_get_dp_soc_is_ppe_enabled(struct wlan_cfg_dp_soc_ctxt *cfg)
+{
+	return cfg->ppe_enable;
+}
+
+int
+wlan_cfg_get_dp_soc_reo2ppe_ring_size(struct wlan_cfg_dp_soc_ctxt *cfg)
+{
+	return cfg->reo2ppe_ring;
+}
+
+int
+wlan_cfg_get_dp_soc_ppe2tcl_ring_size(struct wlan_cfg_dp_soc_ctxt *cfg)
+{
+	return cfg->ppe2tcl_ring;
+}
+
+int
+wlan_cfg_get_dp_soc_ppe_release_ring_size(struct wlan_cfg_dp_soc_ctxt *cfg)
+{
+	return cfg->ppe_release_ring;
+}
+#endif
+
+void
+wlan_cfg_get_prealloc_cfg(struct cdp_ctrl_objmgr_psoc *ctrl_psoc,
+			  struct wlan_dp_prealloc_cfg *cfg)
+{
+	if (!ctrl_psoc || !cfg)
+		return;
+
+	cfg->num_tx_ring_entries = cfg_get(ctrl_psoc, CFG_DP_TX_RING_SIZE);
+	cfg->num_tx_comp_ring_entries = cfg_get(ctrl_psoc,
+						CFG_DP_TX_COMPL_RING_SIZE);
+	cfg->num_wbm_rel_ring_entries = cfg_get(ctrl_psoc,
+						CFG_DP_WBM_RELEASE_RING);
+	cfg->num_rxdma_err_dst_ring_entries = cfg_get(ctrl_psoc,
+						     CFG_DP_RXDMA_ERR_DST_RING);
+	cfg->num_reo_exception_ring_entries = cfg_get(ctrl_psoc,
+						     CFG_DP_REO_EXCEPTION_RING);
+	cfg->num_tx_desc = cfg_get(ctrl_psoc, CFG_DP_TX_DESC);
+	cfg->num_tx_ext_desc = cfg_get(ctrl_psoc, CFG_DP_TX_EXT_DESC);
+}

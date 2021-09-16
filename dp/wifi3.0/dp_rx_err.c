@@ -27,6 +27,10 @@
 #include "qdf_nbuf.h"
 #include "dp_rx_defrag.h"
 #include "dp_ipa.h"
+#ifdef WIFI_MONITOR_SUPPORT
+#include "dp_htt.h"
+#include <dp_mon.h>
+#endif
 #ifdef FEATURE_WDS
 #include "dp_txrx_wds.h"
 #endif
@@ -251,6 +255,8 @@ done:
 
 }
 
+qdf_export_symbol(dp_rx_link_desc_return_by_addr);
+
 /**
  * dp_rx_link_desc_return() - Return a MPDU link descriptor to HW
  *				(WBM), following error handling
@@ -314,6 +320,10 @@ dp_rx_msdus_drop(struct dp_soc *soc, hal_ring_desc_t ring_desc,
 				  &buf_info);
 
 	link_desc_va = dp_rx_cookie_2_link_desc_va(soc, &buf_info);
+	if (!link_desc_va) {
+		dp_rx_err_debug("link desc va is null, soc %pk", soc);
+		return rx_bufs_used;
+	}
 
 more_msdu_link_desc:
 	/* No UNMAP required -- this is "malloc_consistent" memory */
@@ -910,9 +920,8 @@ dp_rx_chain_msdus(struct dp_soc *soc, qdf_nbuf_t nbuf,
 
 		dp_pdev->invalid_peer_head_msdu = NULL;
 		dp_pdev->invalid_peer_tail_msdu = NULL;
-		hal_rx_mon_hw_desc_get_mpdu_status(soc->hal_soc, rx_tlv_hdr,
-				&(dp_pdev->ppdu_info.rx_status));
 
+		dp_monitor_get_mpdu_status(dp_pdev, soc, rx_tlv_hdr);
 	}
 
 	if (dp_pdev->ppdu_id == hal_rx_attn_phy_ppdu_id_get(soc->hal_soc,
@@ -2717,10 +2726,17 @@ done:
 					qdf_nbuf_free(nbuf);
 				}
 			} else if (wbm_err_info.reo_psh_rsn
-					== HAL_RX_WBM_REO_PSH_RSN_ROUTE)
+					== HAL_RX_WBM_REO_PSH_RSN_ROUTE) {
 				dp_rx_err_route_hdl(soc, nbuf, peer,
 						    rx_tlv_hdr,
 						    HAL_RX_WBM_ERR_SRC_REO);
+			} else {
+				/* should not enter here */
+				dp_rx_err_alert("invalid reo push reason %u",
+						wbm_err_info.reo_psh_rsn);
+				qdf_nbuf_free(nbuf);
+				qdf_assert_always(0);
+			}
 		} else if (wbm_err_info.wbm_err_src ==
 					HAL_RX_WBM_ERR_SRC_RXDMA) {
 			if (wbm_err_info.rxdma_psh_rsn
@@ -2785,10 +2801,23 @@ done:
 						  wbm_err_info.rxdma_err_code);
 				}
 			} else if (wbm_err_info.rxdma_psh_rsn
-					== HAL_RX_WBM_RXDMA_PSH_RSN_ROUTE)
+					== HAL_RX_WBM_RXDMA_PSH_RSN_ROUTE) {
 				dp_rx_err_route_hdl(soc, nbuf, peer,
 						    rx_tlv_hdr,
 						    HAL_RX_WBM_ERR_SRC_RXDMA);
+			} else if (wbm_err_info.rxdma_psh_rsn
+					== HAL_RX_WBM_RXDMA_PSH_RSN_FLUSH) {
+				dp_rx_err_err("rxdma push reason %u",
+						wbm_err_info.rxdma_psh_rsn);
+				DP_STATS_INC(soc, rx.err.rx_flush_count, 1);
+				qdf_nbuf_free(nbuf);
+			} else {
+				/* should not enter here */
+				dp_rx_err_alert("invalid rxdma push reason %u",
+						wbm_err_info.rxdma_psh_rsn);
+				qdf_nbuf_free(nbuf);
+				qdf_assert_always(0);
+			}
 		} else {
 			/* Should not come here */
 			qdf_assert(0);

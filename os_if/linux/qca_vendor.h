@@ -492,6 +492,9 @@
  *	to get DFS radar history from the driver to userspace. The driver
  *	returns QCA_WLAN_VENDOR_ATTR_RADAR_HISTORY_ENTRIES attribute with an
  *	array of nested entries.
+ * @QCA_NL80211_VENDOR_SUBCMD_MDNS_OFFLOAD: Userspace can use this command to
+ *	enable/disable mDNS offload to the firmware. The attributes used with
+ *	this command are defined in enum qca_wlan_vendor_attr_mdns_offload.
  */
 
 enum qca_nl80211_vendor_subcmds {
@@ -727,6 +730,7 @@ enum qca_nl80211_vendor_subcmds {
 	QCA_NL80211_VENDOR_SUBCMD_CONCURRENT_MULTI_STA_POLICY = 197,
 	QCA_NL80211_VENDOR_SUBCMD_USABLE_CHANNELS = 198,
 	QCA_NL80211_VENDOR_SUBCMD_GET_RADAR_HISTORY = 199,
+	QCA_NL80211_VENDOR_SUBCMD_MDNS_OFFLOAD = 200,
 };
 
 enum qca_wlan_vendor_tos {
@@ -3229,6 +3233,14 @@ enum qca_vendor_attr_roam_candidate_selection_criteria {
  *	threshold value specified by the
  *	QCA_ATTR_ROAM_CONTROL_CANDIDATE_RSSI_THRESHOLD attribute shall be used.
  *
+ * @QCA_ATTR_ROAM_CONTROL_BAND_MASK: Unsigned 32-bit value.
+ *	Carries bitmask value of bits from &enum qca_set_band and represents
+ *	all the bands in which roaming is allowed. The configuration is valid
+ *	until next disconnection. If this attribute is not present, the
+ *	existing configuration shall be used. By default, roaming is allowed
+ *	on all bands supported by local device. When the value is set to
+ *	%QCA_SETBAND_AUTO, all supported bands shall be enabled.
+ *
  */
 enum qca_vendor_attr_roam_control {
 	QCA_ATTR_ROAM_CONTROL_ENABLE = 1,
@@ -3247,6 +3259,7 @@ enum qca_vendor_attr_roam_control {
 	QCA_ATTR_ROAM_CONTROL_CANDIDATE_RSSI_THRESHOLD_2P4GHZ = 14,
 	QCA_ATTR_ROAM_CONTROL_CANDIDATE_RSSI_THRESHOLD_5GHZ = 15,
 	QCA_ATTR_ROAM_CONTROL_CANDIDATE_RSSI_THRESHOLD_6GHZ = 16,
+	QCA_ATTR_ROAM_CONTROL_BAND_MASK = 17,
 
 	/* keep last */
 	QCA_ATTR_ROAM_CONTROL_AFTER_LAST,
@@ -4891,7 +4904,7 @@ enum qca_wlan_vendor_attr_offloaded_packets {
 		QCA_WLAN_VENDOR_ATTR_OFFLOADED_PACKETS_AFTER_LAST - 1,
 };
 
-#endif
+#endif /* WLAN_FEATURE_OFFLOAD_PACKETS  */
 
 /**
  * enum qca_wlan_rssi_monitoring_control - rssi control commands
@@ -5404,6 +5417,14 @@ enum qca_wlan_vendor_attr_thermal_cmd {
 	 * there is any critical ongoing operation.
 	 */
 	QCA_WLAN_VENDOR_ATTR_THERMAL_COMPLETION_WINDOW = 3,
+	/* Nested attribute, driver/firmware uses this attribute to report
+	 * thermal stats of different thermal levels to userspace when requested
+	 * using QCA_WLAN_VENDOR_ATTR_THERMAL_CMD_TYPE_GET_THERMAL_STATS command
+	 * type. This attribute contains nested array of records of thermal
+	 * statistics of multiple levels. The attributes used inside this nested
+	 * attribute are defined in enum qca_wlan_vendor_attr_thermal_stats.
+	 */
+	QCA_WLAN_VENDOR_ATTR_THERMAL_STATS = 4,
 
 	/* keep last */
 	QCA_WLAN_VENDOR_ATTR_THERMAL_CMD_AFTER_LAST,
@@ -5432,6 +5453,13 @@ enum qca_wlan_vendor_attr_thermal_cmd {
  * @QCA_WLAN_VENDOR_ATTR_THERMAL_CMD_TYPE_GET_LEVEL: Request to get the current
  * thermal level from the driver/firmware. The driver should respond with a
  * thermal level defined in enum qca_wlan_vendor_thermal_level.
+ * @QCA_WLAN_VENDOR_ATTR_THERMAL_CMD_TYPE_GET_THERMAL_STATS: Request to get the
+ * current thermal stats from the driver/firmware. The driver should respond
+ * with stats of all thermal levels encapsulated in attribute
+ * QCA_WLAN_VENDOR_ATTR_THERMAL_STATS.
+ * @QCA_WLAN_VENDOR_ATTR_THERMAL_CMD_TYPE_CLEAR_THERMAL_STATS: Request to clear
+ * the current thermal stats all thermal levels maintained in the
+ * driver/firmware and start counting from zero again.
  */
 enum qca_wlan_vendor_attr_thermal_cmd_type {
 	QCA_WLAN_VENDOR_ATTR_THERMAL_CMD_TYPE_GET_PARAMS,
@@ -5440,6 +5468,8 @@ enum qca_wlan_vendor_attr_thermal_cmd_type {
 	QCA_WLAN_VENDOR_ATTR_THERMAL_CMD_TYPE_RESUME,
 	QCA_WLAN_VENDOR_ATTR_THERMAL_CMD_TYPE_SET_LEVEL,
 	QCA_WLAN_VENDOR_ATTR_THERMAL_CMD_TYPE_GET_LEVEL,
+	QCA_WLAN_VENDOR_ATTR_THERMAL_CMD_TYPE_GET_THERMAL_STATS,
+	QCA_WLAN_VENDOR_ATTR_THERMAL_CMD_TYPE_CLEAR_THERMAL_STATS,
 };
 
 /**
@@ -7462,6 +7492,14 @@ enum qca_wlan_vendor_attr_spectral_scan {
 	 * u32 attribute.
 	 */
 	QCA_WLAN_VENDOR_ATTR_SPECTRAL_SCAN_CONFIG_FREQUENCY_2 = 29,
+	/* This attribute specifies the bandwidth to be used for Spectral scan
+	 * operation. This is an u8 attribute and uses the values in enum
+	 * nl80211_chan_width.  This is an optional attribute.
+	 * If this attribute is not populated, the driver should configure the
+	 * Spectral scan bandwidth to the maximum value supported by the target
+	 * for the current operating bandwidth.
+	 */
+	QCA_WLAN_VENDOR_ATTR_SPECTRAL_SCAN_CONFIG_BANDWIDTH = 30,
 
 	QCA_WLAN_VENDOR_ATTR_SPECTRAL_SCAN_CONFIG_AFTER_LAST,
 	QCA_WLAN_VENDOR_ATTR_SPECTRAL_SCAN_CONFIG_MAX =
@@ -7865,6 +7903,35 @@ enum qca_wlan_vendor_attr_mac_info {
 	QCA_WLAN_VENDOR_ATTR_MAC_INFO_MAX =
 		QCA_WLAN_VENDOR_ATTR_MAC_INFO_AFTER_LAST - 1,
 
+};
+
+/**
+ * enum qca_wlan_vendor_attr_thermal_stats - vendor subcmd attributes
+ * to get thermal status from driver/firmware.
+ * enum values are used for NL attributes encapsulated inside
+ * QCA_WLAN_VENDOR_ATTR_THERMAL_STATS nested attribute.
+ *
+ * QCA_WLAN_VENDOR_ATTR_THERMAL_STATS_MIN_TEMPERATURE: Minimum temperature
+ * of a thermal level in Celsius. u32 size.
+ * QCA_WLAN_VENDOR_ATTR_THERMAL_STATS_MAX_TEMPERATURE: Maximum temperature
+ * of a thermal level in Celsius. u32 size.
+ * QCA_WLAN_VENDOR_ATTR_THERMAL_STATS_DWELL_TIME: The total time spent on each
+ * thermal level in milliseconds. u32 size.
+ * QCA_WLAN_VENDOR_ATTR_THERMAL_STATS_TEMP_LEVEL_COUNTER: Indicates the number
+ * of times the temperature crossed into the temperature range defined by the
+ * thermal level from both higher and lower directions. u32 size.
+ */
+enum qca_wlan_vendor_attr_thermal_stats {
+	QCA_WLAN_VENDOR_ATTR_THERMAL_STATS_INVALID = 0,
+	QCA_WLAN_VENDOR_ATTR_THERMAL_STATS_MIN_TEMPERATURE,
+	QCA_WLAN_VENDOR_ATTR_THERMAL_STATS_MAX_TEMPERATURE,
+	QCA_WLAN_VENDOR_ATTR_THERMAL_STATS_DWELL_TIME,
+	QCA_WLAN_VENDOR_ATTR_THERMAL_STATS_TEMP_LEVEL_COUNTER,
+
+	/* keep last */
+	QCA_WLAN_VENDOR_ATTR_THERMAL_STATS_AFTER_LAST,
+	QCA_WLAN_VENDOR_ATTR_THERMAL_STATS_MAX =
+	QCA_WLAN_VENDOR_ATTR_THERMAL_STATS_AFTER_LAST - 1,
 };
 
 /**
@@ -8588,6 +8655,24 @@ enum qca_wlan_vendor_attr_wifi_test_config {
 	 */
 	QCA_WLAN_VENDOR_ATTR_WIFI_TEST_CONFIG_BSS_MAX_IDLE_PERIOD_ENABLE = 55,
 
+	/* 8-bit unsigned value to configure the driver/firmware to enable or
+	 * disable Rx control frame to MultiBSS subfield in the HE MAC
+	 * capabilities information field.
+	 * 0 - Disable Rx control frame to MultiBSS subfield
+	 * 1 - Enable Rx control frame to MultiBSS subfield
+	 * This attribute is used to configure the testbed device.
+	 */
+	QCA_WLAN_VENDOR_ATTR_WIFI_TEST_CONFIG_RX_CTRL_FRAME_TO_MBSS = 56,
+
+	/* 8-bit unsigned value to configure the driver/firmware to enable or
+	 * disable Broadcast TWT support subfield in the HE MAC capabilities
+	 * information field.
+	 * 0 - Disable Broadcast TWT support subfield
+	 * 1 - Enable Broadcast TWT support subfield
+	 * This attribute is used to configure the testbed device.
+	 */
+	QCA_WLAN_VENDOR_ATTR_WIFI_TEST_CONFIG_BCAST_TWT_SUPPORT = 57,
+
 	/* keep last */
 	QCA_WLAN_VENDOR_ATTR_WIFI_TEST_CONFIG_AFTER_LAST,
 	QCA_WLAN_VENDOR_ATTR_WIFI_TEST_CONFIG_MAX =
@@ -8994,6 +9079,9 @@ enum qca_wlan_vendor_attr_twt_setup {
  * setup request due to channel switch in progress.
  * @QCA_WLAN_VENDOR_TWT_STATUS_SCAN_IN_PROGRESS: FW rejected the TWT setup
  * request due to scan in progress.
+ * QCA_WLAN_VENDOR_TWT_STATUS_POWER_SAVE_EXIT_TERMINATE: The driver requested to
+ * terminate an existing TWT session on power save exit request from userspace.
+ * Used on the TWT_TERMINATE notification from the driver/firmware.
  */
 enum qca_wlan_vendor_twt_status {
 	QCA_WLAN_VENDOR_TWT_STATUS_OK = 0,
@@ -9018,6 +9106,7 @@ enum qca_wlan_vendor_twt_status {
 	QCA_WLAN_VENDOR_TWT_STATUS_ROAMING_IN_PROGRESS = 19,
 	QCA_WLAN_VENDOR_TWT_STATUS_CHANNEL_SWITCH_IN_PROGRESS = 20,
 	QCA_WLAN_VENDOR_TWT_STATUS_SCAN_IN_PROGRESS = 21,
+	QCA_WLAN_VENDOR_TWT_STATUS_POWER_SAVE_EXIT_TERMINATE = 22,
 };
 
 /**
@@ -11295,6 +11384,61 @@ enum qca_wlan_vendor_attr_radar_history {
 	QCA_WLAN_VENDOR_ATTR_RADAR_HISTORY_LAST,
 	QCA_WLAN_VENDOR_ATTR_RADAR_HISTORY_MAX =
 	QCA_WLAN_VENDOR_ATTR_RADAR_HISTORY_LAST - 1,
+};
+
+/**
+ * enum qca_wlan_vendor_attr_mdns_offload - Attributes used by
+ * %QCA_NL80211_VENDOR_SUBCMD_MDNS_OFFLOAD vendor command.
+ *
+ * @QCA_WLAN_VENDOR_ATTR_MDNS_OFFLOAD_ENABLE: Required (flag)
+ * Enable mDNS offload. This attribute is mandatory to enable
+ * mDNS offload feature. If this attribute is not present, mDNS offload
+ * is disabled.
+ *
+ * @QCA_WLAN_VENDOR_ATTR_MDNS_OFFLOAD_TABLE: Nested attribute containing
+ * one or more %QCA_WLAN_VENDOR_ATTR_MDNS_OFFLOAD_ENTRY attributes. This
+ * attribute is mandatory when enabling the feature, and not required when
+ * disabling the feature.
+ *
+ * @QCA_WLAN_VENDOR_ATTR_MDNS_OFFLOAD_ENTRY: Nested attribute containing
+ * the following attributes:
+ *	%QCA_WLAN_VENDOR_ATTR_MDNS_OFFLOAD_FQDN
+ *	%QCA_WLAN_VENDOR_ATTR_MDNS_OFFLOAD_ANSWER_RESOURCE_RECORDS_COUNT
+ *	%QCA_WLAN_VENDOR_ATTR_MDNS_OFFLOAD_ANSWER_PAYLOAD
+ *
+ * @QCA_WLAN_VENDOR_ATTR_MDNS_OFFLOAD_FQDN: Required Null terminated string
+ * attribute. It consists of a hostname and ".local" as the domain name.
+ * The character set is limited to UTF-8 encoding. The maximum allowed size
+ * is 64 bytes. It is used to compare the domain the in the "QU" query.
+ * Only 1 FQDN is supported per vdev.
+ * For example: myphone.local
+ *
+ * @QCA_WLAN_VENDOR_ATTR_MDNS_OFFLOAD_ANSWER_RESOURCE_RECORDS_COUNT: Required
+ * u16 attribute. It specifies the total number of resource records present
+ * in the answer section of the answer payload. This attribute is needed by the
+ * firmware to populate the mDNS response frame for mNDS queries without having
+ * to parse the answer payload.
+ *
+ * @QCA_WLAN_VENDOR_ATTR_MDNS_OFFLOAD_ANSWER_PAYLOAD: Required Binary blob
+ * attribute sent by the mdnsResponder from userspace. It contains resource
+ * records of various types (Eg: A, AAAA, PTR, TXT) and service list. This
+ * payload is passed down to firmware and is transmitted in response to
+ * mDNS queries.
+ * The maximum size of the answer payload supported is 1500 bytes.
+ */
+enum qca_wlan_vendor_attr_mdns_offload {
+	QCA_WLAN_VENDOR_ATTR_MDNS_OFFLOAD_INVALID = 0,
+	QCA_WLAN_VENDOR_ATTR_MDNS_OFFLOAD_ENABLE = 1,
+	QCA_WLAN_VENDOR_ATTR_MDNS_OFFLOAD_TABLE = 2,
+	QCA_WLAN_VENDOR_ATTR_MDNS_OFFLOAD_ENTRY = 3,
+	QCA_WLAN_VENDOR_ATTR_MDNS_OFFLOAD_FQDN = 4,
+	QCA_WLAN_VENDOR_ATTR_MDNS_OFFLOAD_ANSWER_RESOURCE_RECORDS_COUNT = 5,
+	QCA_WLAN_VENDOR_ATTR_MDNS_OFFLOAD_ANSWER_PAYLOAD = 6,
+
+	/* keep last */
+	QCA_WLAN_VENDOR_ATTR_MDNS_OFFLOAD_AFTER_LAST,
+	QCA_WLAN_VENDOR_ATTR_MDNS_OFFLOAD_MAX =
+	QCA_WLAN_VENDOR_ATTR_MDNS_OFFLOAD_AFTER_LAST - 1,
 };
 
 #endif
