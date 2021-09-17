@@ -7917,4 +7917,38 @@ struct wmi_host_pdev_set_halphy_cal_event {
 	enum wmi_host_set_halphy_cal_status status;
 };
 
+/**
+ * wmi_host_ack_cts_resp_rate - value for ACK_CTS_RESP_RATE in MBPS
+ */
+
+enum wmi_host_ack_cts_resp_rate {
+	WMI_HOST_ACK_CTS_RESP_RATE_CCK_11L_MBPS,
+	WMI_HOST_ACK_CTS_RESP_RATE_CCK_5_5L_MBPS,
+	WMI_HOST_ACK_CTS_RESP_RATE_CCK_2L_MBPS,
+	WMI_HOST_ACK_CTS_RESP_RATE_CCK_1L_MBPS,
+	WMI_HOST_ACK_CTS_RESP_RATE_CCK_11S_MBPS,
+	WMI_HOST_ACK_CTS_RESP_RATE_CCK_5_5S_MBPS,
+	WMI_HOST_ACK_CTS_RESP_RATE_CCK_2S_MBPS,
+	WMI_HOST_ACK_CTS_RESP_RATE_OFDM_6_MBPS,
+	WMI_HOST_ACK_CTS_RESP_RATE_OFDM_9_MBPS,
+	WMI_HOST_ACK_CTS_RESP_RATE_OFDM_12_MBPS,
+	WMI_HOST_ACK_CTS_RESP_RATE_OFDM_18_MBPS,
+	WMI_HOST_ACK_CTS_RESP_RATE_OFDM_24_MBPS,
+	WMI_HOST_ACK_CTS_RESP_RATE_OFDM_36_MBPS,
+	WMI_HOST_ACK_CTS_RESP_RATE_OFDM_48_MBPS,
+	WMI_HOST_ACK_CTS_RESP_RATE_OFDM_54_MBPS,
+	WMI_HOST_ACK_CTS_RESP_RATE_DEFAULT,
+	WMI_HOST_ACK_CTS_RESP_RATE_MAX = WMI_HOST_ACK_CTS_RESP_RATE_DEFAULT,
+};
+
+/**
+ * struct wmi_host_send_set_ack_cts_resp_rate_info
+ * @pdev_id: pdev id
+ * @ack_cts_resp_rate: ack_cts_resp_rate value
+ */
+struct wmi_host_send_set_ack_cts_resp_rate_info {
+	uint8_t pdev_id;
+	enum wmi_host_ack_cts_resp_rate ack_cts_resp_rate;
+};
+
 #endif /* _WMI_UNIFIED_PARAM_H_ */

@@ -2538,6 +2538,10 @@ QDF_STATUS
 (*extract_halphy_cal_ev_param)(wmi_unified_t wmi_handle,
 			       void *evt_buf,
 			       struct wmi_host_pdev_set_halphy_cal_event *param);
+
+QDF_STATUS
+(*send_set_ack_cts_resp_rate)(wmi_unified_t wmi_handle,
+			      struct wmi_host_send_set_ack_cts_resp_rate_info *param);
 };
 
 /* Forward declartion for psoc*/
