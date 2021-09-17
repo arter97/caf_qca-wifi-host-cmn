@@ -501,6 +501,7 @@ static void dp_mon_filter_set_status_cmn(struct dp_pdev *pdev,
 	}
 }
 
+#ifdef WDI_EVENT_ENABLE
 /**
  * dp_mon_filter_set_status_cbf() - Set the cbf status filters
  * @pdev: DP pdev handle
@@ -558,6 +559,7 @@ static void dp_mon_filter_set_cbf_cmn(struct dp_pdev *pdev,
 	filter->tlv_filter.offset_valid = false;
 	filter->tlv_filter.enable_mo = 0;
 }
+#endif
 
 #ifdef FEATURE_PERPKT_INFO
 /**
