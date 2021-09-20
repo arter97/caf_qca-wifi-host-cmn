@@ -1061,6 +1061,9 @@ static QDF_STATUS send_vdev_start_cmd_tlv(wmi_unified_t wmi_handle,
 	copy_channel_info(cmd, chan, req);
 	cmd->beacon_interval = req->beacon_interval;
 	cmd->dtim_period = req->dtim_period;
+	qdf_info("Chan: %u, is_half: %u, is_quarter: %u\n",
+		 chan->mhz, req->channel.half_rate,
+		 req->channel.quarter_rate);
 
 	cmd->bcn_tx_rate = req->bcn_tx_rate_code;
 	if (req->bcn_tx_rate_code)
