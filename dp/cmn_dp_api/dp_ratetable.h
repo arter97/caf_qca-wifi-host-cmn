@@ -18,6 +18,8 @@
 
 #ifndef _DP_RATES_H_
 #define _DP_RATES_H_
+#include <linux/types.h>
+#include <i_qdf_types.h>
 
 #define CMN_DP_ASSERT(__bool)
 

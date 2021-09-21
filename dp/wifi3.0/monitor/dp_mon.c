@@ -4711,16 +4711,9 @@ static void dp_cfr_filter(struct cdp_soc_t *soc_hdl,
 				    &htt_tlv_filter);
 	}
 }
+#endif
 
-/*
- * dp_enable_mon_reap_timer() - enable/disable reap timer
- * @soc_hdl: Datapath soc handle
- * @pdev_id: id of objmgr pdev
- * @enable: Enable/Disable reap timer of monitor status ring
- *
- * Return: none
- */
-static void
+void
 dp_enable_mon_reap_timer(struct cdp_soc_t *soc_hdl, uint8_t pdev_id,
 			 bool enable)
 {
@@ -4753,7 +4746,6 @@ dp_enable_mon_reap_timer(struct cdp_soc_t *soc_hdl, uint8_t pdev_id,
 	else
 		qdf_timer_sync_cancel(&mon_soc->mon_reap_timer);
 }
-#endif
 
 #if defined(DP_CON_MON)
 #ifndef REMOVE_PKT_LOG
@@ -5939,6 +5931,7 @@ static struct cdp_mon_ops dp_ops_mon = {
 	.txrx_set_advance_monitor_filter = dp_pdev_set_advance_monitor_filter,
 	.txrx_deliver_tx_mgmt = dp_deliver_tx_mgmt,
 	.config_full_mon_mode = dp_config_full_mon_mode,
+	.txrx_enable_mon_reap_timer = dp_enable_mon_reap_timer,
 };
 
 void dp_mon_ops_register(struct dp_mon_soc *mon_soc)
@@ -5958,7 +5951,6 @@ void dp_mon_cdp_ops_register(struct dp_soc *soc)
 	ops->mon_ops = &dp_ops_mon;
 #if defined(WLAN_CFR_ENABLE) && defined(WLAN_ENH_CFR_ENABLE)
 	ops->cfr_ops->txrx_cfr_filter = dp_cfr_filter;
-	ops->cfr_ops->txrx_enable_mon_reap_timer = dp_enable_mon_reap_timer;
 #endif
 	ops->cmn_drv_ops->txrx_set_monitor_mode = dp_vdev_set_monitor_mode;
 	ops->cmn_drv_ops->txrx_get_mon_vdev_from_pdev =
@@ -6011,7 +6003,6 @@ void dp_mon_cdp_ops_deregister(struct dp_soc *soc)
 	ops->mon_ops = NULL;
 #if defined(WLAN_CFR_ENABLE) && defined(WLAN_ENH_CFR_ENABLE)
 	ops->cfr_ops->txrx_cfr_filter = NULL;
-	ops->cfr_ops->txrx_enable_mon_reap_timer = NULL;
 #endif
 	ops->cmn_drv_ops->txrx_set_monitor_mode = NULL;
 	ops->cmn_drv_ops->txrx_get_mon_vdev_from_pdev = NULL;

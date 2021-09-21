@@ -2581,6 +2581,33 @@ cdp_soc_config_full_mon_mode(ol_txrx_soc_handle soc, uint8_t val)
 }
 
 /**
+ * cdp_enable_mon_reap_timer() - enable/disable reap timer
+ * @soc: Datapath soc handle
+ * @pdev_id: id of objmgr pdev
+ * @enable: enable/disable reap timer of monitor status ring
+ *
+ * Return: none
+ */
+static inline void
+cdp_enable_mon_reap_timer(ol_txrx_soc_handle soc, uint8_t pdev_id,
+			  bool enable)
+{
+	if (!soc || !soc->ops) {
+		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_FATAL,
+			  "%s invalid instance", __func__);
+		QDF_BUG(0);
+		return;
+	}
+
+	if (!soc->ops->mon_ops ||
+	    !soc->ops->mon_ops->txrx_enable_mon_reap_timer)
+		return;
+
+	return soc->ops->mon_ops->txrx_enable_mon_reap_timer(soc, pdev_id,
+							     enable);
+}
+
+/**
  * cdp_rx_get_pending() - Get number of pending frames of RX threads
  * @soc: opaque soc handle
  * Return: number of pending frames

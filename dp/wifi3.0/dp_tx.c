@@ -30,8 +30,12 @@
 #include "qdf_module.h"
 #include <wlan_cfg.h>
 #include "dp_ipa.h"
-#if defined(MESH_MODE_SUPPORT) || defined(FEATURE_PERPKT_INFO)
+#ifdef FEATURE_PERPKT_INFO
+#if defined(QCA_SUPPORT_LATENCY_CAPTURE) || \
+	defined(QCA_TX_CAPTURE_SUPPORT) || \
+	defined(QCA_MCOPY_SUPPORT)
 #include "if_meta_hdr.h"
+#endif
 #endif
 #include "enet.h"
 #include "dp_internal.h"

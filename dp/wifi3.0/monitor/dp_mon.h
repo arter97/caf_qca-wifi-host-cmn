@@ -2626,4 +2626,15 @@ QDF_STATUS dp_peer_qos_stats_notify(struct dp_pdev *dp_pdev,
 				    struct cdp_rx_stats_ppdu_user *ppdu_user);
 #endif
 
+/*
+ * dp_enable_mon_reap_timer() - enable/disable reap timer
+ * @soc_hdl: Datapath soc handle
+ * @pdev_id: id of objmgr pdev
+ * @enable: Enable/Disable reap timer of monitor status ring
+ *
+ * Return: none
+ */
+void dp_enable_mon_reap_timer(struct cdp_soc_t *soc_hdl, uint8_t pdev_id,
+			      bool enable);
+
 #endif /* _DP_MON_H_ */
