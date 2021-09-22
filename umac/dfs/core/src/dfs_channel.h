@@ -105,6 +105,12 @@
 /* Turbo Channel */
 #define WLAN_CHAN_TURBO            0x0000000020000000
 
+/* 10MHz Channel */
+#define WLAN_CHAN_HALF             0x0000000004000000
+
+/* 5MHz Channel  */
+#define WLAN_CHAN_QUARTER          0x0000000008000000
+
 /* Radar found on channel */
 #define WLAN_CHAN_DFS_RADAR        0x0000000002000000
 
