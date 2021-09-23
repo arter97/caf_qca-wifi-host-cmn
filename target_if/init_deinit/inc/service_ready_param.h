@@ -184,6 +184,7 @@ struct wlan_psoc_host_hal_reg_cap_ext {
  * @nss_ratio_enabled: This flag is set if nss ratio is received from FW as part
  *                     of service ready ext event.
  * @nss_ratio: nss ratio is used to calculate the NSS value for 160MHz.
+ * @hw_link_id: Unique link id across SoCs used to identify link in Multi-SoC ML
  */
 struct wlan_psoc_host_mac_phy_caps {
 	uint32_t hw_mode_id;
@@ -230,6 +231,9 @@ struct wlan_psoc_host_mac_phy_caps {
 	uint32_t tgt_pdev_id;
 	bool nss_ratio_enabled;
 	uint8_t nss_ratio_info;
+#if defined(WLAN_FEATURE_11BE_MLO) && defined(WLAN_MLO_MULTI_CHIP)
+	uint16_t hw_link_id;
+#endif
 };
 
 /**
@@ -265,12 +269,12 @@ struct wlan_psoc_host_mac_phy_caps_ext2 {
 	uint32_t phy_id;
 	uint64_t wireless_modes_ext;
 #ifdef WLAN_FEATURE_11BE
-	uint32_t eht_cap_info_2G[PSOC_HOST_MAX_MAC_SIZE];
+	uint32_t eht_cap_info_2G[PSOC_HOST_MAX_EHT_MAC_SIZE];
 	uint32_t eht_supp_mcs_2G;
-	uint32_t eht_cap_info_5G[PSOC_HOST_MAX_MAC_SIZE];
+	uint32_t eht_cap_info_5G[PSOC_HOST_MAX_EHT_MAC_SIZE];
 	uint32_t eht_supp_mcs_5G;
-	uint32_t eht_cap_phy_info_2G[PSOC_HOST_MAX_PHY_SIZE];
-	uint32_t eht_cap_phy_info_5G[PSOC_HOST_MAX_PHY_SIZE];
+	uint32_t eht_cap_phy_info_2G[PSOC_HOST_MAX_EHT_PHY_SIZE];
+	uint32_t eht_cap_phy_info_5G[PSOC_HOST_MAX_EHT_PHY_SIZE];
 	uint32_t eht_cap_info_internal;
 #endif
 };
@@ -428,6 +432,7 @@ struct wlan_psoc_host_service_ext_param {
  * @max_users_dl_mumimo: Max number of users per-PPDU for Downlink MU-MIMO
  * @max_users_ul_mumimo: Max number of users per-PPDU for Uplink MU-MIMO
  * @twt_ack_support_cap: TWT ack capability support
+ * @target_cap_flags: Rx peer metadata version number used by target
  */
 struct wlan_psoc_host_service_ext2_param {
 	uint8_t reg_db_version_major;
@@ -444,6 +449,7 @@ struct wlan_psoc_host_service_ext2_param {
 	uint16_t max_users_dl_mumimo;
 	uint16_t max_users_ul_mumimo;
 	uint32_t twt_ack_support_cap:1;
+	uint32_t target_cap_flags;
 };
 
 #endif /* _SERVICE_READY_PARAM_H_*/

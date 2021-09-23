@@ -46,6 +46,7 @@
 #define FREQ_OFFSET_10MHZ (10)
 #define FREQ_OFFSET_40MHZ (40)
 #define FREQ_OFFSET_80MHZ (80)
+#define FREQ_OFFSET_85MHZ (85)
 #ifndef SPECTRAL_USE_NL_BCAST
 #define SPECTRAL_USE_NL_BCAST  (0)
 #endif
@@ -1029,6 +1030,7 @@ struct per_session_dest_det_info {
  * of this detector is to be filled
  * @spectral_msg_buf_type: Spectral message buffer type
  * @send_to_upper_layers: Indicates whether to send SAMP msg to upper layers
+ * @det_map_valid: Indicates whether detector map is valid or not
  */
 struct per_session_det_map {
 	struct per_session_dest_det_info
@@ -1036,6 +1038,7 @@ struct per_session_det_map {
 	uint8_t num_dest_det_info;
 	enum spectral_msg_buf_type buf_type;
 	bool send_to_upper_layers;
+	bool det_map_valid;
 };
 
 /**

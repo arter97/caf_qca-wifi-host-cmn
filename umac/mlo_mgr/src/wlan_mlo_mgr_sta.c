@@ -179,12 +179,6 @@ mlo_cm_handle_connect_in_connection_state(struct wlan_objmgr_vdev *vdev,
 	mlo_cm_handle_connect_in_disconnection_state(vdev, req);
 }
 
-static QDF_STATUS mlo_osif_validate_connect_req(struct wlan_objmgr_vdev *vdev)
-{
-	//mlo_connect: add osif CB to perform operation
-	return QDF_STATUS_SUCCESS;
-}
-
 static QDF_STATUS
 mlo_validate_connect_req(struct wlan_mlo_dev_context *mlo_dev_ctx,
 			 struct wlan_cm_connect_req *req)
@@ -213,7 +207,8 @@ mlo_validate_connect_req(struct wlan_mlo_dev_context *mlo_dev_ctx,
 		 * Validate pre checks for connection
 		 */
 		if (qdf_test_bit(i, mlo_dev_ctx->sta_ctx->wlan_connect_req_links)) {
-			status = mlo_osif_validate_connect_req(mlo_dev_ctx->wlan_vdev_list[i]);
+			status = mlo_mlme_validate_conn_req(
+					mlo_dev_ctx->wlan_vdev_list[i], NULL);
 			if (status != QDF_STATUS_SUCCESS)
 				return status;
 		}
@@ -252,6 +247,7 @@ QDF_STATUS mlo_connect(struct wlan_objmgr_vdev *vdev,
  *
  * Return: none
  */
+
 static void
 mlo_prepare_and_send_connect(struct wlan_objmgr_vdev *vdev,
 			     struct mlo_partner_info ml_parnter_info,
@@ -272,7 +268,7 @@ mlo_prepare_and_send_connect(struct wlan_objmgr_vdev *vdev,
 		     sizeof(struct mlo_partner_info));
 
 	req.ssid.length = ssid.length;
-	qdf_mem_copy(req.ssid.ssid, ssid.ssid,
+	qdf_mem_copy(&req.ssid.ssid, &ssid.ssid,
 		     ssid.length);
 
 	wlan_cm_start_connect(vdev, &req);
@@ -932,6 +928,7 @@ mlo_get_ml_vdev_by_mac(struct wlan_objmgr_vdev *vdev,
 	return NULL;
 }
 #endif
+
 qdf_freq_t
 mlo_get_chan_freq_by_bssid(struct wlan_objmgr_pdev *pdev,
 			   struct qdf_mac_addr *bssid)
@@ -968,5 +965,22 @@ error:
 		wlan_scan_purge_results(list);
 
 	return ch_freq;
+}
+
+void mlo_get_assoc_rsp(struct wlan_objmgr_vdev *vdev,
+		       struct element_info **assoc_rsp_frame)
+{
+	struct wlan_mlo_dev_context *mlo_dev_ctx = vdev->mlo_dev_ctx;
+	struct wlan_mlo_sta *sta_ctx = mlo_dev_ctx->sta_ctx;
+
+	if (!mlo_dev_ctx || !mlo_dev_ctx->sta_ctx)
+		return;
+
+	if (!sta_ctx->assoc_rsp.len || !sta_ctx->assoc_rsp.ptr) {
+		mlo_err("Assoc Resp info is empty");
+		return;
+	}
+
+	*assoc_rsp_frame = &sta_ctx->assoc_rsp;
 }
 #endif

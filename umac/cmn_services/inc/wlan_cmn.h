@@ -72,6 +72,9 @@
 /* Max vdev_id */
 #define WLAN_UMAC_VDEV_ID_MAX 0xFF
 
+/* TODO: MAX AID */
+#define WLAN_UMAC_MAX_AID 2048
+
 /* Invalid pdev_id */
 #define WLAN_INVALID_PDEV_ID 0xFFFFFFFF
 
@@ -686,5 +689,9 @@ struct wlan_ssid {
 #define PSOC_MAX_PHY_REG_CAP (3)
 #define PSOC_MAX_CHAINMASK_TABLES (5)
 
+#ifdef WLAN_FEATURE_11BE
+#define PSOC_HOST_MAX_EHT_MAC_SIZE 1
+#define PSOC_HOST_MAX_EHT_PHY_SIZE 2
+#endif
 
 #endif /* _WLAN_OBJMGR_CMN_H_*/

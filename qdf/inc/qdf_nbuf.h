@@ -199,6 +199,8 @@
  * 4 bytes padding for alignment
  */
 #define RADIOTAP_HEADER_EXT_LEN (2 * sizeof(uint32_t))
+#define RADIOTAP_HEADER_EXT2_LEN \
+	(sizeof(struct qdf_radiotap_ext2))
 #define RADIOTAP_HEADER_LEN (RADIOTAP_BASE_HEADER_LEN + \
 				RADIOTAP_FIXED_HEADER_LEN + \
 				RADIOTAP_HT_FLAGS_LEN + \
@@ -208,7 +210,8 @@
 				RADIOTAP_HE_MU_FLAGS_LEN + \
 				RADIOTAP_HE_MU_OTHER_FLAGS_LEN + \
 				RADIOTAP_VENDOR_NS_LEN + \
-				RADIOTAP_HEADER_EXT_LEN)
+				RADIOTAP_HEADER_EXT_LEN + \
+				RADIOTAP_HEADER_EXT2_LEN)
 
 /**
  * struct mon_rx_status - This will have monitor mode rx_status extracted from
@@ -286,6 +289,9 @@
  * @tx_status: packet tx status
  * @tx_retry_cnt: tx retry count
  * @add_rtap_ext: add radio tap extension
+ * @start_seq: starting sequence number
+ * @ba_bitmap: 256 bit block ack bitmap
+ * @add_rtap_ext2: add radiotap extension2
  */
 struct mon_rx_status {
 	uint64_t tsft;
@@ -370,6 +376,9 @@ struct mon_rx_status {
 	uint8_t  tx_status;
 	uint8_t  tx_retry_cnt;
 	bool add_rtap_ext;
+	uint16_t start_seq;
+	uint32_t ba_bitmap[8];
+	bool add_rtap_ext2;
 };
 
 /**
@@ -403,6 +412,7 @@ struct mon_rx_status {
  * @mpdu_fcs_ok_bitmap: mpdu with fcs ok bitmap
  * @mpdu_ok_byte_count: mpdu byte count with fcs ok
  * @mpdu_err_byte_count: mpdu byte count with fcs err
+ * @sw_peer_id: software peer id
  */
 struct mon_rx_user_status {
 	uint32_t mcs:4,
@@ -433,6 +443,7 @@ struct mon_rx_user_status {
 	uint32_t mpdu_fcs_ok_bitmap[QDF_MON_STATUS_MPDU_FCS_BMAP_NWORDS];
 	uint32_t mpdu_ok_byte_count;
 	uint32_t mpdu_err_byte_count;
+	uint16_t sw_peer_id;
 };
 
 /**
@@ -464,6 +475,23 @@ struct qdf_radiotap_vendor_ns_ath {
 	uint32_t device_id;
 	uint32_t lsig_b;
 	uint32_t ppdu_start_timestamp;
+} __attribute__((__packed__));
+
+/**
+ * struct qdf_radiotap_ext2 - radiotap ext2 fields
+ * ppdu_id: ppdu_id of current msdu
+ * prev_ppdu_id: ppdu_id of previous msdu
+ * tid: tid number of previous msdu
+ * start_seq: start sequence of previous msdu
+ * ba_bitmap: block ack bitmap of previous msdu
+ */
+struct qdf_radiotap_ext2 {
+	uint32_t ppdu_id;
+	uint32_t prev_ppdu_id;
+	uint16_t tid:8,
+		 reserved:8;
+	uint16_t start_seq;
+	uint32_t ba_bitmap[8];
 } __attribute__((__packed__));
 
 #define QDF_MEM_FUNC_NAME_SIZE 48
@@ -862,6 +890,16 @@ void qdf_nbuf_unmap_nbytes_single_debug(qdf_device_t osdev,
 	qdf_nbuf_unmap_nbytes_single_debug(osdev, buf, dir, nbytes, \
 					   __func__, __LINE__)
 
+void qdf_nbuf_unmap_nbytes_single_paddr_debug(qdf_device_t osdev,
+					      qdf_nbuf_t buf,
+					      qdf_dma_addr_t phy_addr,
+					      qdf_dma_dir_t dir, int nbytes,
+					      const char *func, uint32_t line);
+
+#define qdf_nbuf_unmap_nbytes_single_paddr(osdev, buf, phy_addr, dir, nbytes) \
+	qdf_nbuf_unmap_nbytes_single_paddr_debug(osdev, buf, phy_addr, \
+						 dir, nbytes, __func__, \
+						 __LINE__)
 #else /* NBUF_MAP_UNMAP_DEBUG */
 
 static inline void qdf_nbuf_map_check_for_leaks(void) {}
@@ -916,6 +954,14 @@ qdf_nbuf_unmap_nbytes_single(
 	qdf_device_t osdev, qdf_nbuf_t buf, qdf_dma_dir_t dir, int nbytes)
 {
 	return __qdf_nbuf_unmap_nbytes_single(osdev, buf, dir, nbytes);
+}
+
+static inline void
+qdf_nbuf_unmap_nbytes_single_paddr(qdf_device_t osdev, qdf_nbuf_t buf,
+				   qdf_dma_addr_t phy_addr, qdf_dma_dir_t dir,
+				   int nbytes)
+{
+	__qdf_mem_unmap_nbytes_single(osdev, phy_addr, dir, nbytes);
 }
 #endif /* NBUF_MAP_UNMAP_DEBUG */
 

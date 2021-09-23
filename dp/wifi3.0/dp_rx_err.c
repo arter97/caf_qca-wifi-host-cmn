@@ -27,6 +27,10 @@
 #include "qdf_nbuf.h"
 #include "dp_rx_defrag.h"
 #include "dp_ipa.h"
+#ifdef WIFI_MONITOR_SUPPORT
+#include "dp_htt.h"
+#include <dp_mon.h>
+#endif
 #ifdef FEATURE_WDS
 #include "dp_txrx_wds.h"
 #endif
@@ -251,6 +255,8 @@ done:
 
 }
 
+qdf_export_symbol(dp_rx_link_desc_return_by_addr);
+
 /**
  * dp_rx_link_desc_return() - Return a MPDU link descriptor to HW
  *				(WBM), following error handling
@@ -314,6 +320,10 @@ dp_rx_msdus_drop(struct dp_soc *soc, hal_ring_desc_t ring_desc,
 				  &buf_info);
 
 	link_desc_va = dp_rx_cookie_2_link_desc_va(soc, &buf_info);
+	if (!link_desc_va) {
+		dp_rx_err_debug("link desc va is null, soc %pk", soc);
+		return rx_bufs_used;
+	}
 
 more_msdu_link_desc:
 	/* No UNMAP required -- this is "malloc_consistent" memory */
@@ -536,6 +546,40 @@ dp_rx_err_nbuf_pn_check(struct dp_soc *soc, hal_ring_desc_t ring_desc,
 	return QDF_STATUS_E_FAILURE;
 }
 
+#ifdef WLAN_VENDOR_SPECIFIC_BAR_UPDATE
+/**
+ * dp_rx_skip_bar_frame() - Check whether BAR update need to be skipped
+ *
+ * @vdev: vdev reference
+ *
+ * Function to check whether BAR update need to be skipped
+ *
+ * Return: none
+ */
+static bool dp_rx_skip_bar_frame(struct dp_vdev *vdev)
+{
+	unsigned long cur_ts, prev_ts;
+
+	if (vdev->skip_bar_update) {
+		prev_ts = vdev->skip_bar_update_last_ts;
+		cur_ts = qdf_get_system_timestamp();
+		vdev->skip_bar_update_last_ts = cur_ts;
+		if ((cur_ts - prev_ts) < DP_SKIP_BAR_UPDATE_TIMEOUT) {
+			dp_info_rl("Skipping BAR update for vdev_id:%u",
+				   vdev->vdev_id);
+			return true;
+		}
+	}
+
+	return false;
+}
+#else
+static bool dp_rx_skip_bar_frame(struct dp_vdev *vdev)
+{
+	return false;
+}
+#endif
+
 static
 void dp_rx_err_handle_bar(struct dp_soc *soc,
 			  struct dp_peer *peer,
@@ -547,6 +591,9 @@ void dp_rx_err_handle_bar(struct dp_soc *soc,
 	uint32_t tid;
 	QDF_STATUS status;
 	struct ieee80211_frame_bar *bar;
+
+	if (dp_rx_skip_bar_frame(peer->vdev))
+		return;
 
 	/*
 	 * 1. Is this a BAR frame. If not Discard it.
@@ -910,9 +957,8 @@ dp_rx_chain_msdus(struct dp_soc *soc, qdf_nbuf_t nbuf,
 
 		dp_pdev->invalid_peer_head_msdu = NULL;
 		dp_pdev->invalid_peer_tail_msdu = NULL;
-		hal_rx_mon_hw_desc_get_mpdu_status(soc->hal_soc, rx_tlv_hdr,
-				&(dp_pdev->ppdu_info.rx_status));
 
+		dp_monitor_get_mpdu_status(dp_pdev, soc, rx_tlv_hdr);
 	}
 
 	if (dp_pdev->ppdu_id == hal_rx_attn_phy_ppdu_id_get(soc->hal_soc,
@@ -1696,6 +1742,44 @@ fail:
 	return;
 }
 
+/*
+ * dp_rx_deliver_to_osif_stack() - function to deliver rx pkts to stack
+ * @soc: DP soc
+ * @vdv: DP vdev handle
+ * @peer: pointer to the peer object
+ * @nbuf: skb list head
+ * @tail: skb list tail
+ * @is_eapol: eapol pkt check
+ *
+ * Return: None
+ */
+#ifdef QCA_SUPPORT_EAPOL_OVER_CONTROL_PORT
+static inline void
+dp_rx_deliver_to_osif_stack(struct dp_soc *soc,
+			    struct dp_vdev *vdev,
+			    struct dp_peer *peer,
+			    qdf_nbuf_t nbuf,
+			    qdf_nbuf_t tail,
+			    bool is_eapol)
+{
+	if (is_eapol && soc->eapol_over_control_port)
+		dp_rx_eapol_deliver_to_stack(soc, vdev, peer, nbuf, NULL);
+	else
+		dp_rx_deliver_to_stack(soc, vdev, peer, nbuf, NULL);
+}
+#else
+static inline void
+dp_rx_deliver_to_osif_stack(struct dp_soc *soc,
+			    struct dp_vdev *vdev,
+			    struct dp_peer *peer,
+			    qdf_nbuf_t nbuf,
+			    qdf_nbuf_t tail,
+			    bool is_eapol)
+{
+	dp_rx_deliver_to_stack(soc, vdev, peer, nbuf, NULL);
+}
+#endif
+
 #ifdef WLAN_SUPPORT_RX_PROTOCOL_TYPE_TAG
 /**
  * dp_rx_err_route_hdl() - Function to send EAPOL frames to stack
@@ -1722,6 +1806,7 @@ dp_rx_err_route_hdl(struct dp_soc *soc, qdf_nbuf_t nbuf,
 	uint16_t msdu_len;
 	struct dp_vdev *vdev;
 	struct hal_rx_msdu_metadata msdu_metadata;
+	bool is_eapol;
 
 	hal_rx_msdu_metadata_get(soc->hal_soc, rx_tlv_hdr, &msdu_metadata);
 	msdu_len = hal_rx_msdu_start_msdu_len_get(soc->hal_soc, rx_tlv_hdr);
@@ -1774,8 +1859,8 @@ dp_rx_err_route_hdl(struct dp_soc *soc, qdf_nbuf_t nbuf,
 	 * Indicate EAPOL frame to stack only when vap mac address
 	 * matches the destination address.
 	 */
-	if (qdf_nbuf_is_ipv4_eapol_pkt(nbuf) ||
-	    qdf_nbuf_is_ipv4_wapi_pkt(nbuf)) {
+	is_eapol = qdf_nbuf_is_ipv4_eapol_pkt(nbuf);
+	if (is_eapol || qdf_nbuf_is_ipv4_wapi_pkt(nbuf)) {
 		qdf_ether_header_t *eh =
 			(qdf_ether_header_t *)qdf_nbuf_data(nbuf);
 		if (qdf_mem_cmp(eh->ether_dhost, &vdev->mac_addr.raw[0],
@@ -1793,7 +1878,10 @@ dp_rx_err_route_hdl(struct dp_soc *soc, qdf_nbuf_t nbuf,
 			DP_STATS_INC(peer, rx.to_stack.num, 1);
 			qdf_nbuf_set_exc_frame(nbuf, 1);
 			qdf_nbuf_set_next(nbuf, NULL);
-			dp_rx_deliver_to_stack(soc, vdev, peer, nbuf, NULL);
+
+			dp_rx_deliver_to_osif_stack(soc, vdev, peer, nbuf,
+						    NULL, is_eapol);
+
 			return;
 		}
 	}
@@ -2717,10 +2805,17 @@ done:
 					qdf_nbuf_free(nbuf);
 				}
 			} else if (wbm_err_info.reo_psh_rsn
-					== HAL_RX_WBM_REO_PSH_RSN_ROUTE)
+					== HAL_RX_WBM_REO_PSH_RSN_ROUTE) {
 				dp_rx_err_route_hdl(soc, nbuf, peer,
 						    rx_tlv_hdr,
 						    HAL_RX_WBM_ERR_SRC_REO);
+			} else {
+				/* should not enter here */
+				dp_rx_err_alert("invalid reo push reason %u",
+						wbm_err_info.reo_psh_rsn);
+				qdf_nbuf_free(nbuf);
+				qdf_assert_always(0);
+			}
 		} else if (wbm_err_info.wbm_err_src ==
 					HAL_RX_WBM_ERR_SRC_RXDMA) {
 			if (wbm_err_info.rxdma_psh_rsn
@@ -2785,10 +2880,23 @@ done:
 						  wbm_err_info.rxdma_err_code);
 				}
 			} else if (wbm_err_info.rxdma_psh_rsn
-					== HAL_RX_WBM_RXDMA_PSH_RSN_ROUTE)
+					== HAL_RX_WBM_RXDMA_PSH_RSN_ROUTE) {
 				dp_rx_err_route_hdl(soc, nbuf, peer,
 						    rx_tlv_hdr,
 						    HAL_RX_WBM_ERR_SRC_RXDMA);
+			} else if (wbm_err_info.rxdma_psh_rsn
+					== HAL_RX_WBM_RXDMA_PSH_RSN_FLUSH) {
+				dp_rx_err_err("rxdma push reason %u",
+						wbm_err_info.rxdma_psh_rsn);
+				DP_STATS_INC(soc, rx.err.rx_flush_count, 1);
+				qdf_nbuf_free(nbuf);
+			} else {
+				/* should not enter here */
+				dp_rx_err_alert("invalid rxdma push reason %u",
+						wbm_err_info.rxdma_psh_rsn);
+				qdf_nbuf_free(nbuf);
+				qdf_assert_always(0);
+			}
 		} else {
 			/* Should not come here */
 			qdf_assert(0);
