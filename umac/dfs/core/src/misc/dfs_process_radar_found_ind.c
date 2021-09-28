@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017-2020 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2017-2021 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -1200,6 +1200,11 @@ dfs_process_radar_ind_on_home_chan(struct wlan_dfs *dfs,
 				WLAN_EV_RADAR_DETECTED);
 
 	if (!dfs->dfs_use_nol) {
+		if (!dfs->dfs_is_offload_enabled) {
+			dfs_radar_disable(dfs);
+			dfs_second_segment_radar_disable(dfs);
+			dfs_flush_additional_pulses(dfs);
+		}
 		dfs_reset_bangradar(dfs);
 		dfs_send_csa_to_current_chan(dfs);
 		status = QDF_STATUS_SUCCESS;
@@ -1283,6 +1288,14 @@ dfs_process_radar_ind_on_home_chan(struct wlan_dfs *dfs,
 	if (!dfs->dfs_is_offload_enabled) {
 		dfs_radar_disable(dfs);
 		dfs_second_segment_radar_disable(dfs);
+		/*
+		 * The radar queues were reset just after the filter match, but
+		 * the phyerror reception was not disabled. This might
+		 * cause the unwanted additional/accumulated pulses to be
+		 * detected as radar in the new channel. So, clear the radar
+		 * queues and the associated variables.
+		 */
+		dfs_flush_additional_pulses(dfs);
 	}
 
 	dfs_mlme_mark_dfs(dfs->dfs_pdev_obj,
