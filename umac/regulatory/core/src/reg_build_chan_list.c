@@ -264,7 +264,8 @@ static void reg_update_max_bw_per_rule(uint32_t num_reg_rules,
 
 /**
  * reg_do_auto_bw_correction() - Calculate and update the maximum bandwidth
- * value.
+ * value. The two adjacent bands are converted to a bigger band.
+ * The two adjacent bands may overlap or just touch each other.
  * @num_reg_rules: Number of regulatory rules.
  * @reg_rule_ptr: Pointer to regulatory rules.
  * @max_bw: Maximum bandwidth
@@ -277,7 +278,7 @@ static void reg_do_auto_bw_correction(uint32_t num_reg_rules,
 	uint16_t new_bw;
 
 	for (count = 0; count < num_reg_rules - 1; count++) {
-		if (reg_rule_ptr[count].end_freq ==
+		if (reg_rule_ptr[count].end_freq >=
 		    reg_rule_ptr[count + 1].start_freq) {
 			new_bw = QDF_MIN(max_bw, reg_rule_ptr[count].max_bw +
 					 reg_rule_ptr[count + 1].max_bw);
