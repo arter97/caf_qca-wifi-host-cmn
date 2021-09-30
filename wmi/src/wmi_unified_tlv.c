@@ -5900,8 +5900,8 @@ static QDF_STATUS send_oem_dma_cfg_cmd_tlv(wmi_unified_t wmi_handle,
 
 	cmd = (uint8_t *) wmi_buf_data(buf);
 	qdf_mem_copy(cmd, cfg, sizeof(*cfg));
-	wmi_debug("Sending OEM Data Request to target, data len %lu"),
-		 sizeof(*cfg);
+	wmi_debug("Sending OEM Data Request to target, data len %lu",
+		 sizeof(*cfg));
 	wmi_mtrace(WMI_OEM_DMA_RING_CFG_REQ_CMDID, NO_SESSION, 0);
 	ret = wmi_unified_cmd_send(wmi_handle, buf, sizeof(*cfg),
 				WMI_OEM_DMA_RING_CFG_REQ_CMDID);
@@ -7609,7 +7609,7 @@ void wmi_copy_resource_config(wmi_resource_config *resource_cfg,
 		WMI_RSRC_CFG_HOST_SERVICE_FLAG_STA_TWT_SYNC_EVT_SUPPORT_SET(
 			resource_cfg->host_service_flags, 1);
 
-	WMI_TARGET_CAP_FLAGS_RX_PEER_METADATA_VERSION_SET(resource_cfg->flags2,
+	WMI_RSRC_CFG_FLAGS2_RX_PEER_METADATA_VERSION_SET(resource_cfg->flags2,
 						 tgt_res_cfg->target_cap_flags);
 }
 
@@ -13512,7 +13512,7 @@ static QDF_STATUS extract_dfs_radar_detection_event_tlv(
 	return QDF_STATUS_SUCCESS;
 }
 
-#ifdef QCA_MCL_DFS_SUPPORT
+#ifdef MOBILE_DFS_SUPPORT
 /**
  * extract_wlan_radar_event_info_tlv() - extract radar pulse event
  * @wmi_handle: wma handle
@@ -14982,11 +14982,80 @@ static uint32_t wmi_convert_fw_to_cm_trig_reason(uint32_t fw_trig_reason)
 		return ROAM_TRIGGER_REASON_WTC_BTM;
 	case WMI_ROAM_TRIGGER_REASON_PMK_TIMEOUT:
 		return ROAM_TRIGGER_REASON_PMK_TIMEOUT;
+	case WMI_ROAM_TRIGGER_REASON_BTC:
+		return ROAM_TRIGGER_REASON_BTC;
 	case WMI_ROAM_TRIGGER_EXT_REASON_MAX:
 		return ROAM_TRIGGER_REASON_MAX;
 	default:
 		return ROAM_TRIGGER_REASON_NONE;
 	}
+}
+
+/**
+ * extract_roam_11kv_candidate_info  - Extract btm candidate info
+ * @wmi_handle: wmi_handle
+ * @evt_buf: Event buffer
+ * @dst_info: Destination buffer
+ *
+ * Return: QDF_STATUS
+ */
+static QDF_STATUS
+extract_roam_11kv_candidate_info(wmi_unified_t wmi_handle, void *evt_buf,
+				 struct wmi_btm_req_candidate_info *dst_info,
+				 uint8_t btm_idx, uint16_t num_cand)
+{
+	WMI_ROAM_STATS_EVENTID_param_tlvs *param_buf;
+	wmi_roam_btm_request_candidate_info *src_data;
+	uint8_t i;
+
+	param_buf = (WMI_ROAM_STATS_EVENTID_param_tlvs *)evt_buf;
+	if (!param_buf || !param_buf->roam_btm_request_candidate_info ||
+	    !param_buf->num_roam_btm_request_candidate_info ||
+	    (btm_idx +
+	     num_cand) >= param_buf->num_roam_btm_request_candidate_info)
+		return QDF_STATUS_SUCCESS;
+
+	src_data = &param_buf->roam_btm_request_candidate_info[btm_idx];
+	if (num_cand > WLAN_MAX_BTM_CANDIDATE)
+		num_cand = WLAN_MAX_BTM_CANDIDATE;
+	for (i = 0; i < num_cand; i++) {
+		WMI_MAC_ADDR_TO_CHAR_ARRAY(&src_data->btm_candidate_bssid,
+					   dst_info->candidate_bssid.bytes);
+		dst_info->preference = src_data->preference;
+		src_data++;
+		dst_info++;
+	}
+
+	return QDF_STATUS_SUCCESS;
+}
+
+static enum roam_trigger_sub_reason
+wmi_convert_roam_sub_reason(WMI_ROAM_TRIGGER_SUB_REASON_ID subreason)
+{
+	switch (subreason) {
+	case WMI_ROAM_TRIGGER_SUB_REASON_PERIODIC_TIMER:
+		return ROAM_TRIGGER_SUB_REASON_PERIODIC_TIMER;
+	case WMI_ROAM_TRIGGER_SUB_REASON_INACTIVITY_TIMER:
+		return ROAM_TRIGGER_SUB_REASON_INACTIVITY_TIMER_LOW_RSSI;
+	case WMI_ROAM_TRIGGER_SUB_REASON_BTM_DI_TIMER:
+		return ROAM_TRIGGER_SUB_REASON_BTM_DI_TIMER;
+	case WMI_ROAM_TRIGGER_SUB_REASON_FULL_SCAN:
+		return ROAM_TRIGGER_SUB_REASON_FULL_SCAN;
+	case WMI_ROAM_TRIGGER_SUB_REASON_LOW_RSSI_PERIODIC:
+		return ROAM_TRIGGER_SUB_REASON_LOW_RSSI_PERIODIC;
+	case WMI_ROAM_TRIGGER_SUB_REASON_CU_PERIODIC:
+		return ROAM_TRIGGER_SUB_REASON_CU_PERIODIC;
+	case WMI_ROAM_TRIGGER_SUB_REASON_PERIODIC_TIMER_AFTER_INACTIVITY:
+		return ROAM_TRIGGER_SUB_REASON_PERIODIC_TIMER_AFTER_INACTIVITY;
+	case WMI_ROAM_TRIGGER_SUB_REASON_PERIODIC_TIMER_AFTER_INACTIVITY_CU:
+		return ROAM_TRIGGER_SUB_REASON_PERIODIC_TIMER_AFTER_INACTIVITY_CU;
+	case WMI_ROAM_TRIGGER_SUB_REASON_INACTIVITY_TIMER_CU:
+		return ROAM_TRIGGER_SUB_REASON_INACTIVITY_TIMER_CU;
+	default:
+		break;
+	}
+
+	return 0;
 }
 
 /**
@@ -14999,7 +15068,8 @@ static uint32_t wmi_convert_fw_to_cm_trig_reason(uint32_t fw_trig_reason)
  */
 static QDF_STATUS
 extract_roam_trigger_stats_tlv(wmi_unified_t wmi_handle, void *evt_buf,
-			       struct wmi_roam_trigger_info *trig, uint8_t idx)
+			       struct wmi_roam_trigger_info *trig, uint8_t idx,
+			       uint8_t btm_idx)
 {
 	WMI_ROAM_STATS_EVENTID_param_tlvs *param_buf;
 	wmi_roam_trigger_reason *src_data = NULL;
@@ -15014,7 +15084,8 @@ extract_roam_trigger_stats_tlv(wmi_unified_t wmi_handle, void *evt_buf,
 	trig->present = true;
 	trig_reason = src_data->trigger_reason;
 	trig->trigger_reason = wmi_convert_fw_to_cm_trig_reason(trig_reason);
-	trig->trigger_sub_reason = src_data->trigger_sub_reason;
+	trig->trigger_sub_reason =
+		wmi_convert_roam_sub_reason(src_data->trigger_sub_reason);
 	trig->current_rssi = src_data->current_rssi;
 	trig->timestamp = src_data->timestamp;
 
@@ -15028,6 +15099,7 @@ extract_roam_trigger_stats_tlv(wmi_unified_t wmi_handle, void *evt_buf,
 	case WMI_ROAM_TRIGGER_REASON_IDLE:
 	case WMI_ROAM_TRIGGER_REASON_FORCED:
 	case WMI_ROAM_TRIGGER_REASON_UNIT_TEST:
+	case WMI_ROAM_TRIGGER_REASON_BTC:
 		return QDF_STATUS_SUCCESS;
 
 	case WMI_ROAM_TRIGGER_REASON_BTM:
@@ -15045,6 +15117,14 @@ extract_roam_trigger_stats_tlv(wmi_unified_t wmi_handle, void *evt_buf,
 				src_data->btm_bss_termination_timeout;
 		trig->btm_trig_data.btm_mbo_assoc_retry_timeout =
 				src_data->btm_mbo_assoc_retry_timeout;
+		if ((btm_idx + trig->btm_trig_data.candidate_list_count) <
+		    param_buf->num_roam_btm_request_candidate_info)
+			extract_roam_11kv_candidate_info(
+					wmi_handle, evt_buf,
+					trig->btm_trig_data.btm_cand,
+					btm_idx,
+					src_data->candidate_list_count);
+
 		return QDF_STATUS_SUCCESS;
 
 	case WMI_ROAM_TRIGGER_REASON_BSS_LOAD:
@@ -15179,6 +15259,9 @@ extract_roam_scan_stats_tlv(wmi_unified_t wmi_handle, void *evt_buf,
 	dst->type = src_data->roam_scan_type;
 	dst->num_chan = src_data->roam_scan_channel_count;
 	dst->next_rssi_threshold = src_data->next_rssi_trigger_threshold;
+	dst->frame_info_count = src_data->frame_info_count;
+	if (dst->frame_info_count >  WLAN_ROAM_MAX_FRAME_INFO)
+		dst->frame_info_count =  WLAN_ROAM_MAX_FRAME_INFO;
 
 	/* Read the channel data only for dst->type is 0 (partial scan) */
 	if (dst->num_chan && !dst->type && param_buf->num_roam_scan_chan_info &&
@@ -15274,6 +15357,8 @@ extract_roam_11kv_stats_tlv(wmi_unified_t wmi_handle, void *evt_buf,
 	dst->num_freq = src_data->neighbor_report_channel_count;
 	dst->req_time = src_data->neighbor_report_request_timestamp;
 	dst->resp_time = src_data->neighbor_report_response_timestamp;
+	dst->btm_query_token = src_data->btm_query_token;
+	dst->btm_query_reason = src_data->btm_query_reason_code;
 
 	if (!dst->num_freq || !param_buf->num_roam_neighbor_report_chan_info ||
 	    rpt_idx >= param_buf->num_roam_neighbor_report_chan_info)
@@ -15304,7 +15389,8 @@ extract_roam_11kv_stats_tlv(wmi_unified_t wmi_handle, void *evt_buf,
 #else
 static inline QDF_STATUS
 extract_roam_trigger_stats_tlv(wmi_unified_t wmi_handle, void *evt_buf,
-			       struct wmi_roam_trigger_info *trig, uint8_t idx)
+			       struct wmi_roam_trigger_info *trig, uint8_t idx,
+			       uint8_t btm_idx)
 {
 	return QDF_STATUS_E_NOSUPPORT;
 }
@@ -15522,6 +15608,9 @@ extract_time_sync_ftm_offset_event_tlv(wmi_unified_t wmi, void *buf,
 
 	param->vdev_id = resp_event->vdev_id;
 	param->num_qtime = param_buf->num_audio_sync_q_master_slave_times;
+	if (param->num_qtime > FTM_TIME_SYNC_QTIME_PAIR_MAX)
+		param->num_qtime = FTM_TIME_SYNC_QTIME_PAIR_MAX;
+
 	q_pair = param_buf->audio_sync_q_master_slave_times;
 	if (!q_pair) {
 		wmi_err("Invalid q_master_slave_times buffer");
@@ -17212,6 +17301,10 @@ static void populate_tlv_service(uint32_t *wmi_service)
 			WMI_SERVICE_RTT_AP_INITIATOR_STAGGERED_MODE_SUPPORTED;
 	wmi_service[wmi_service_rtt_ap_initiator_bursted_mode_supported] =
 			WMI_SERVICE_RTT_AP_INITIATOR_BURSTED_MODE_SUPPORTED;
+	wmi_service[wmi_service_ema_multiple_group_supported] =
+			WMI_SERVICE_EMA_MULTIPLE_GROUP_SUPPORT;
+	wmi_service[wmi_service_large_beacon_supported] =
+			WMI_SERVICE_LARGE_BEACON_SUPPORT;
 	wmi_service[wmi_service_aoa_for_rcc_supported] =
 			WMI_SERVICE_AOA_FOR_RCC_SUPPORTED;
 #ifdef WLAN_FEATURE_P2P_P2P_STA
@@ -17222,6 +17315,8 @@ static void populate_tlv_service(uint32_t *wmi_service)
 	wmi_service[wmi_service_thermal_stats_temp_range_supported] =
 			WMI_SERVICE_THERMAL_THROT_STATS_TEMP_RANGE_SUPPORT;
 #endif
+	wmi_service[wmi_service_hw_mode_policy_offload_support] =
+			WMI_SERVICE_HW_MODE_POLICY_OFFLOAD_SUPPORT;
 }
 
 /**

@@ -39,9 +39,7 @@
 #endif
 #include <reg_services_public_struct.h>
 
-#ifdef WLAN_CONV_CRYPTO_SUPPORTED
 #include "wlan_crypto_global_def.h"
-#endif
 
 #ifdef WLAN_CFR_ENABLE
 #include "wlan_cfr_utils_api.h"
@@ -238,10 +236,15 @@ struct wlan_lmac_if_mgmt_rx_reo_tx_ops {
  * struct wlan_lmac_if_mgmt_txrx_rx_ops - structure of rx function
  * pointers for mgmt rx reo module
  * @fw_consumed_event_handler: FW consumed event handler
+ * @host_drop_handler: Handler for the frames that gets dropped in Host before
+ * entering REO algorithm
  */
 struct wlan_lmac_if_mgmt_rx_reo_rx_ops {
 	QDF_STATUS (*fw_consumed_event_handler)(
-			struct wlan_objmgr_psoc *psoc,
+			struct wlan_objmgr_pdev *pdev,
+			struct mgmt_rx_reo_params *params);
+	QDF_STATUS (*host_drop_handler)(
+			struct wlan_objmgr_pdev *pdev,
 			struct mgmt_rx_reo_params *params);
 };
 #endif
@@ -257,6 +260,7 @@ struct wlan_lmac_if_mgmt_rx_reo_rx_ops {
  * @reg_ev_handler: function pointer to register event handlers
  * @unreg_ev_handler: function pointer to unregister event handlers
  * @mgmt_rx_reo_tx_ops: management rx-reorder txops
+ * @rx_frame_legacy_handler: Legacy handler for Rx frames
  */
 struct wlan_lmac_if_mgmt_txrx_tx_ops {
 	QDF_STATUS (*mgmt_tx_send)(struct wlan_objmgr_vdev *vdev,
@@ -270,6 +274,10 @@ struct wlan_lmac_if_mgmt_txrx_tx_ops {
 				 qdf_nbuf_t nbuf);
 	QDF_STATUS (*reg_ev_handler)(struct wlan_objmgr_psoc *psoc);
 	QDF_STATUS (*unreg_ev_handler)(struct wlan_objmgr_psoc *psoc);
+	QDF_STATUS (*rx_frame_legacy_handler)(
+			struct wlan_objmgr_pdev *pdev,
+			qdf_nbuf_t buf,
+			struct mgmt_rx_event_params *mgmt_rx_params);
 #ifdef WLAN_MGMT_RX_REO_SUPPORT
 	struct wlan_lmac_if_mgmt_rx_reo_tx_ops mgmt_rx_reo_tx_ops;
 #endif
@@ -1059,6 +1067,7 @@ struct wlan_lmac_if_dfs_tx_ops {
  * @tgt_is_tgt_type_adrastea: To check QCS40X target type.
  * @tgt_is_tgt_type_qcn9000: To check QCN9000 (Pine) target type.
  * @tgt_is_tgt_type_qcn6122: To check QCN6122 (Spruce) target type.
+ * @tgt_is_tgt_type_qcn7605: To check QCN7605 target type.
  * @tgt_get_tgt_type:        Get target type
  * @tgt_get_tgt_version:     Get target version
  * @tgt_get_tgt_revision:    Get target revision
@@ -1071,6 +1080,7 @@ struct wlan_lmac_if_target_tx_ops {
 	bool (*tgt_is_tgt_type_adrastea)(uint32_t);
 	bool (*tgt_is_tgt_type_qcn9000)(uint32_t);
 	bool (*tgt_is_tgt_type_qcn6122)(uint32_t);
+	bool (*tgt_is_tgt_type_qcn7605)(uint32_t);
 	uint32_t (*tgt_get_tgt_type)(struct wlan_objmgr_psoc *psoc);
 	uint32_t (*tgt_get_tgt_version)(struct wlan_objmgr_psoc *psoc);
 	uint32_t (*tgt_get_tgt_revision)(struct wlan_objmgr_psoc *psoc);
@@ -1243,9 +1253,7 @@ struct wlan_lmac_if_tx_ops {
 	struct wlan_lmac_if_sptrl_tx_ops sptrl_tx_ops;
 #endif
 
-#ifdef WLAN_CONV_CRYPTO_SUPPORTED
 	struct wlan_lmac_if_crypto_tx_ops crypto_tx_ops;
-#endif
 
 #ifdef WIFI_POS_CONVERGED
 	struct wlan_lmac_if_wifi_pos_tx_ops wifi_pos_tx_ops;
@@ -1296,6 +1304,8 @@ struct wlan_lmac_if_tx_ops {
  * @mgmt_txrx_get_peer_from_desc_id: function pointer to get peer from desc id
  * @mgmt_txrx_get_vdev_id_from_desc_id: function pointer to get vdev id from
  *                                      desc id
+ * @mgmt_rx_frame_entry: Entry point for Rx frames into MGMT TxRx component
+ * @mgmt_rx_reo_rx_ops: rxops of MGMT Rx REO module
  */
 struct wlan_lmac_if_mgmt_txrx_rx_ops {
 	QDF_STATUS (*mgmt_tx_completion_handler)(
@@ -1316,6 +1326,10 @@ struct wlan_lmac_if_mgmt_txrx_rx_ops {
 			uint32_t desc_id);
 	uint32_t (*mgmt_txrx_get_free_desc_pool_count)(
 			struct wlan_objmgr_pdev *pdev);
+	QDF_STATUS (*mgmt_rx_frame_entry)(
+			struct wlan_objmgr_pdev *pdev,
+			qdf_nbuf_t buf,
+			struct mgmt_rx_event_params *mgmt_rx_params);
 #ifdef WLAN_MGMT_RX_REO_SUPPORT
 	struct wlan_lmac_if_mgmt_rx_reo_rx_ops mgmt_rx_reo_rx_ops;
 #endif
@@ -1981,9 +1995,7 @@ struct wlan_lmac_if_rx_ops {
 	struct wlan_lmac_if_sptrl_rx_ops sptrl_rx_ops;
 #endif
 
-#ifdef WLAN_CONV_CRYPTO_SUPPORTED
 	struct wlan_lmac_if_crypto_rx_ops crypto_rx_ops;
-#endif
 #ifdef WIFI_POS_CONVERGED
 	struct wlan_lmac_if_wifi_pos_rx_ops wifi_pos_rx_ops;
 #endif

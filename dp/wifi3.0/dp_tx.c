@@ -3426,7 +3426,6 @@ static
 void dp_tx_comp_fill_tx_completion_stats(struct dp_tx_desc_s *tx_desc,
 		struct hal_tx_completion_status *ts)
 {
-	struct meta_hdr_s *mhdr;
 	qdf_nbuf_t netbuf = tx_desc->nbuf;
 
 	if (!tx_desc->msdu_ext_desc) {
@@ -3437,17 +3436,6 @@ void dp_tx_comp_fill_tx_completion_stats(struct dp_tx_desc_s *tx_desc,
 			return;
 		}
 	}
-	if (qdf_nbuf_push_head(netbuf, sizeof(struct meta_hdr_s)) == NULL) {
-		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_ERROR,
-			"netbuf %pK offset %zu", netbuf,
-			sizeof(struct meta_hdr_s));
-		return;
-	}
-
-	mhdr = (struct meta_hdr_s *)qdf_nbuf_data(netbuf);
-	mhdr->rssi = ts->ack_frame_rssi;
-	mhdr->band = tx_desc->pdev->operating_channel.band;
-	mhdr->channel = tx_desc->pdev->operating_channel.num;
 }
 
 #else
@@ -3736,12 +3724,6 @@ dp_tx_update_peer_stats(struct dp_tx_desc_s *tx_desc,
 	DP_STATS_INCC(peer, tx.stbc, 1, ts->stbc);
 	DP_STATS_INCC(peer, tx.ldpc, 1, ts->ldpc);
 	DP_STATS_INCC(peer, tx.retries, 1, ts->transmit_cnt > 1);
-
-#if defined(FEATURE_PERPKT_INFO) && WDI_EVENT_ENABLE
-	dp_wdi_event_handler(WDI_EVENT_UPDATE_DP_STATS, pdev->soc,
-			     &peer->stats, ts->peer_id,
-			     UPDATE_PEER_STATS, pdev->pdev_id);
-#endif
 }
 
 #ifdef QCA_LL_TX_FLOW_CONTROL_V2
@@ -4708,6 +4690,7 @@ more_data:
 				 !tx_desc->flags)) {
 				dp_tx_comp_info_rl("Descriptor freed in vdev_detach %d",
 						   tx_desc->id);
+				DP_STATS_INC(soc, tx.tx_comp_exception, 1);
 				continue;
 			}
 

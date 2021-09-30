@@ -71,7 +71,10 @@ target_if_spectral_fill_samp_msg(struct target_if_spectral *spectral,
 		return QDF_STATUS_E_FAILURE;
 	}
 
+	qdf_spin_lock_bh(&spectral->session_det_map_lock);
+
 	if (!spectral->det_map[params->hw_detector_id].det_map_valid) {
+		qdf_spin_unlock_bh(&spectral->session_det_map_lock);
 		spectral_info("Detector Map not valid for det id = %d",
 			      params->hw_detector_id);
 		return QDF_STATUS_E_FAILURE;
@@ -83,6 +86,7 @@ target_if_spectral_fill_samp_msg(struct target_if_spectral *spectral,
 						  msg_type,
 						  det_map->buf_type);
 	if (!spec_samp_msg) {
+		qdf_spin_unlock_bh(&spectral->session_det_map_lock);
 		spectral_err_rl("Spectral SAMP message is NULL");
 		return QDF_STATUS_E_FAILURE;
 	}
@@ -102,6 +106,7 @@ target_if_spectral_fill_samp_msg(struct target_if_spectral *spectral,
 		uint16_t *binptr_16;
 		uint16_t pwr_16;
 		size_t pwr_count;
+		uint16_t num_edge_bins;
 		uint16_t idx;
 		uint16_t start_bin_index;
 
@@ -127,10 +132,7 @@ target_if_spectral_fill_samp_msg(struct target_if_spectral *spectral,
 		rb_edge_bins->start_bin_idx =
 					map_det_info->rb_extrabins_start_idx;
 		rb_edge_bins->num_bins = map_det_info->rb_extrabins_num;
-		if (lb_edge_bins->num_bins)
-			start_bin_index = lb_edge_bins->start_bin_idx;
-		else
-			start_bin_index = detector_info->start_bin_idx;
+		start_bin_index = detector_info->start_bin_idx;
 
 		detector_info->rssi = params->rssi;
 
@@ -155,10 +157,9 @@ target_if_spectral_fill_samp_msg(struct target_if_spectral *spectral,
 		bin_pwr_data = &params->bin_pwr_data
 					[map_det_info->src_start_bin_idx];
 		pwr_count = detector_info->end_bin_idx -
-			    detector_info->start_bin_idx +
-			    lb_edge_bins->num_bins +
-			    rb_edge_bins->num_bins + 1;
-		spec_samp_msg->bin_pwr_count += pwr_count;
+			    detector_info->start_bin_idx + 1;
+		num_edge_bins = lb_edge_bins->num_bins +
+				rb_edge_bins->num_bins;
 		/*
 		 * To check whether FFT bin values exceed 8 bits, we add a
 		 * check before copying values to samp_data->bin_pwr.
@@ -171,6 +172,19 @@ target_if_spectral_fill_samp_msg(struct target_if_spectral *spectral,
 		if (swar->fftbin_size_war ==
 				SPECTRAL_FFTBIN_SIZE_WAR_4BYTE_TO_1BYTE) {
 			binptr_32 = (uint32_t *)bin_pwr_data;
+			if (lb_edge_bins->num_bins > 0) {
+				for (idx = 0; idx < lb_edge_bins->num_bins;
+				     idx++) {
+				/* Read only the first 2 bytes of the DWORD */
+					pwr_16 = *((uint16_t *)binptr_32++);
+					if (qdf_unlikely(pwr_16 >
+					    MAX_FFTBIN_VALUE))
+						pwr_16 = MAX_FFTBIN_VALUE;
+					spec_samp_msg->bin_pwr
+					  [lb_edge_bins->start_bin_idx + idx]
+					  = pwr_16;
+				}
+			}
 			for (idx = 0; idx < pwr_count; idx++) {
 				/* Read only the first 2 bytes of the DWORD */
 				pwr_16 = *((uint16_t *)binptr_32++);
@@ -179,9 +193,34 @@ target_if_spectral_fill_samp_msg(struct target_if_spectral *spectral,
 				spec_samp_msg->bin_pwr[start_bin_index + idx]
 							= pwr_16;
 			}
+			if (rb_edge_bins->num_bins > 0) {
+				for (idx = 0; idx < rb_edge_bins->num_bins;
+				     idx++) {
+				/* Read only the first 2 bytes of the DWORD */
+					pwr_16 = *((uint16_t *)binptr_32++);
+					if (qdf_unlikely(pwr_16 >
+					    MAX_FFTBIN_VALUE))
+						pwr_16 = MAX_FFTBIN_VALUE;
+					spec_samp_msg->bin_pwr
+					  [rb_edge_bins->start_bin_idx + idx]
+					  = pwr_16;
+				}
+			}
 		} else if (swar->fftbin_size_war ==
 				SPECTRAL_FFTBIN_SIZE_WAR_2BYTE_TO_1BYTE) {
 			binptr_16 = (uint16_t *)bin_pwr_data;
+			if (lb_edge_bins->num_bins > 0) {
+				for (idx = 0; idx < lb_edge_bins->num_bins;
+				     idx++) {
+					pwr_16 = *(binptr_16++);
+					if (qdf_unlikely(pwr_16 >
+					    MAX_FFTBIN_VALUE))
+						pwr_16 = MAX_FFTBIN_VALUE;
+					spec_samp_msg->bin_pwr
+					  [lb_edge_bins->start_bin_idx + idx]
+					  = pwr_16;
+				}
+			}
 			for (idx = 0; idx < pwr_count; idx++) {
 				pwr_16 = *(binptr_16++);
 				if (qdf_unlikely(pwr_16 > MAX_FFTBIN_VALUE))
@@ -189,10 +228,35 @@ target_if_spectral_fill_samp_msg(struct target_if_spectral *spectral,
 				spec_samp_msg->bin_pwr[start_bin_index + idx]
 							= pwr_16;
 			}
+			if (rb_edge_bins->num_bins > 0) {
+				for (idx = 0; idx < rb_edge_bins->num_bins;
+				     idx++) {
+					pwr_16 = *(binptr_16++);
+					if (qdf_unlikely(pwr_16 >
+					    MAX_FFTBIN_VALUE))
+						pwr_16 = MAX_FFTBIN_VALUE;
+					spec_samp_msg->bin_pwr
+					  [rb_edge_bins->start_bin_idx + idx]
+					  = pwr_16;
+				}
+			}
 		} else {
+			if (lb_edge_bins->num_bins > 0)
+				qdf_mem_copy(&spec_samp_msg->bin_pwr
+					     [lb_edge_bins->start_bin_idx],
+					     &bin_pwr_data[0],
+					     lb_edge_bins->num_bins);
 			qdf_mem_copy(&spec_samp_msg->bin_pwr[start_bin_index],
-				     bin_pwr_data, pwr_count);
+				     &bin_pwr_data[lb_edge_bins->num_bins],
+				     pwr_count);
+			if (rb_edge_bins->num_bins > 0)
+				qdf_mem_copy(&spec_samp_msg->bin_pwr
+					     [rb_edge_bins->start_bin_idx],
+					     &bin_pwr_data[pwr_count +
+					     lb_edge_bins->num_bins],
+					     rb_edge_bins->num_bins);
 		}
+		spec_samp_msg->bin_pwr_count += (pwr_count + num_edge_bins);
 	}
 
 	if (det_map->send_to_upper_layers) {
@@ -201,6 +265,8 @@ target_if_spectral_fill_samp_msg(struct target_if_spectral *spectral,
 		struct target_if_spectral_ops *p_sops;
 
 		p_sops = GET_TARGET_IF_SPECTRAL_OPS(spectral);
+
+		qdf_spin_lock_bh(&spectral->session_report_info_lock);
 
 		rpt_info = &spectral->report_info[spectral_mode];
 		spec_samp_msg->signature = SPECTRAL_SIGNATURE;
@@ -217,6 +283,9 @@ target_if_spectral_fill_samp_msg(struct target_if_spectral *spectral,
 		spec_samp_msg->sscan_bw = rpt_info->sscan_bw;
 		spec_samp_msg->fft_width = FFT_BIN_SIZE_1BYTE;
 		spec_samp_msg->num_freq_spans = rpt_info->num_spans;
+
+		qdf_spin_unlock_bh(&spectral->session_report_info_lock);
+
 		spec_samp_msg->spectral_upper_rssi = params->upper_rssi;
 		spec_samp_msg->spectral_lower_rssi = params->lower_rssi;
 		qdf_mem_copy(spec_samp_msg->spectral_chain_ctl_rssi,
@@ -236,6 +305,7 @@ target_if_spectral_fill_samp_msg(struct target_if_spectral *spectral,
 			reset_160mhz_delivery_state_machine(spectral,
 							    spectral_mode);
 	}
+	qdf_spin_unlock_bh(&spectral->session_det_map_lock);
 
 	return QDF_STATUS_SUCCESS;
 }
