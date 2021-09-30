@@ -926,6 +926,9 @@ util_scan_parse_vendor_ie(struct scan_cache_entry *scan_params,
 		}
 		scan_params->ie_list.single_pmk = (uint8_t *)ie +
 						sizeof(struct ie_header);
+	} else if (is_sbw_oui((uint8_t *)ie)) {
+		scan_params->ie_list.sbw = (((uint8_t *)(ie)) +
+					      WLAN_VENDOR_SBW_IE_OFFSET);
 	}
 	return QDF_STATUS_SUCCESS;
 }

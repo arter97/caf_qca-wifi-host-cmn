@@ -729,6 +729,7 @@ util_scan_copy_beacon_data(struct scan_cache_entry *new_entry,
 	ie_lst->adaptive_11r = conv_ptr(ie_lst->adaptive_11r, old_ptr, new_ptr);
 	ie_lst->single_pmk = conv_ptr(ie_lst->single_pmk, old_ptr, new_ptr);
 	ie_lst->rsnxe = conv_ptr(ie_lst->rsnxe, old_ptr, new_ptr);
+	ie_lst->sbw = conv_ptr(ie_lst->sbw, old_ptr, new_ptr);
 
 	return QDF_STATUS_SUCCESS;
 }
@@ -1688,6 +1689,28 @@ util_scan_entry_extenderie(struct scan_cache_entry *scan_entry)
 {
 	return scan_entry->ie_list.extender;
 }
+
+/**
+ * util_scan_entry_sbwie() - function to read sub-bw IE
+ * @scan_entry: scan entry
+ *
+ * API, function to read sub-bw IE
+ *
+ * Return: sub-bw ie or NULL if ie is not present
+ */
+#ifdef CONFIG_HALF_QUARTER_RATE_FOR_ALL_CHANS
+static inline uint8_t*
+util_scan_entry_sbwie(struct scan_cache_entry *scan_entry)
+{
+	return scan_entry->ie_list.sbw;
+}
+#else
+static inline uint8_t*
+util_scan_entry_sbwie(struct scan_cache_entry *scan_entry)
+{
+	return NULL;
+}
+#endif
 
 /**
  * util_scan_entry_mdie() - function to read Mobility Domain IE
