@@ -83,6 +83,20 @@
 /* Extender vendor specific IE */
 #define QCA_OUI_EXTENDER_TYPE           0x03
 
+#define QCA_OUI_GENERIC_TYPE_1          0x04 /* WARNING: Please do not define
+					      * a new type for VIE. Please use
+					      * this type and use the subtype
+					      * for future use until subtype
+					      * reaches 255,then define
+					      * GENERIC_TYPE_2 as 5 and proceed.
+					      */
+
+#define QCA_OUI_SUB_BW_INFO_SUBTYPE     0x02 /* This represents Sub-Band Width
+					      * info, refers to 5MHz/10MHz band
+					      * width.
+					      */
+#define QCA_OUI_LEN                     6     /* OUI len of SBW IE */
+
 #define ADAPTIVE_11R_OUI      0x964000
 #define ADAPTIVE_11R_OUI_TYPE 0x2C
 
@@ -1285,6 +1299,18 @@ struct wlan_vendor_ie_htinfo {
 #define WLAN_VENDOR_VHTCAP_IE_OFFSET    7
 #define WLAN_VENDOR_VHTOP_IE_OFFSET     21
 
+/** SBW IE offset is 8, we have skipped the following fields
+ * to read SBW channel width. Validation of the OUI is already
+ * done before we read the SBW BW.
+ * OUI          - 3 octet
+ * OUI Type     - 1 octet
+ * OUI Subtype  - 1 octet
+ * OUI Version  - 1 octet
+ * ISE length   - 1 octet
+ * SBW capabilities - 1 octet
+ */
+#define WLAN_VENDOR_SBW_IE_OFFSET       8
+
 /**
  * struct wlan_ie_vhtcaps - VHT capabilities
  * @elem_id: VHT caps IE
@@ -1920,6 +1946,29 @@ is_extender_oui(uint8_t *frm)
 	return (frm[1] > 4) && (LE_READ_4(frm + 2) ==
 		((QCA_OUI_EXTENDER_TYPE << 24) | QCA_OUI));
 }
+
+/**
+ * is_sbw_oui() - If vendor IE is Sub-bandwidth OUI (SBW_OUI)
+ * @frm: vendor IE pointer
+ *
+ * API to check if vendor IE is SBW_OUI
+ *
+ * Return: true if its SBW_OUI
+ */
+#ifdef CONFIG_HALF_QUARTER_RATE_FOR_ALL_CHANS
+static inline bool
+is_sbw_oui(uint8_t *frm)
+{
+	return (frm[1] > QCA_OUI_LEN) && (LE_READ_4(frm + 2) ==
+		((QCA_OUI_GENERIC_TYPE_1 << 24) | QCA_OUI)) &&
+		(frm[6] == QCA_OUI_SUB_BW_INFO_SUBTYPE);
+}
+#else
+static inline bool is_sbw_oui(uint8_t *frm)
+{
+	return false;
+}
+#endif
 
 /**
  * is_adaptive_11r_oui() - Function to check if vendor IE is ADAPTIVE 11R OUI
