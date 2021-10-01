@@ -886,5 +886,7 @@ QDF_STATUS target_if_register_regulatory_tx_ops(
 
 	reg_ops->set_tpc_power = tgt_if_regulatory_set_tpc_power;
 
+	reg_ops->reg_is_chanbw_20mhz = NULL;
+
 	return QDF_STATUS_SUCCESS;
 }

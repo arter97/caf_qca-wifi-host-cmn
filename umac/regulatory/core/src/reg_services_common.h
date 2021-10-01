@@ -1040,7 +1040,10 @@ void reg_update_nol_ch_for_freq(struct wlan_objmgr_pdev *pdev,
 				uint8_t num_chan,
 				bool nol_chan);
 /**
- * reg_is_dfs_for_freq () - Checks the channel state for DFS
+ * reg_is_dfs_for_freq () - Checks the channel state for DFS.
+ * If "CONFIG_HALF_QUARTER_RATE_FOR_ALL_CHANS" is defined, the channel
+ * is marked DFS only if half/qtr rate is not set. If half/qtr rate is
+ * is set, the channel is considered non-DFS.
  * @pdev: pdev ptr
  * @freq: Channel center frequency
  *
