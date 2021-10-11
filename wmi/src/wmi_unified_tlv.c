@@ -15522,6 +15522,9 @@ extract_time_sync_ftm_offset_event_tlv(wmi_unified_t wmi, void *buf,
 
 	param->vdev_id = resp_event->vdev_id;
 	param->num_qtime = param_buf->num_audio_sync_q_master_slave_times;
+	if (param->num_qtime > FTM_TIME_SYNC_QTIME_PAIR_MAX)
+		param->num_qtime = FTM_TIME_SYNC_QTIME_PAIR_MAX;
+
 	q_pair = param_buf->audio_sync_q_master_slave_times;
 	if (!q_pair) {
 		wmi_err("Invalid q_master_slave_times buffer");
@@ -17222,6 +17225,8 @@ static void populate_tlv_service(uint32_t *wmi_service)
 	wmi_service[wmi_service_thermal_stats_temp_range_supported] =
 			WMI_SERVICE_THERMAL_THROT_STATS_TEMP_RANGE_SUPPORT;
 #endif
+	wmi_service[wmi_service_hw_mode_policy_offload_support] =
+			WMI_SERVICE_HW_MODE_POLICY_OFFLOAD_SUPPORT;
 }
 
 /**
