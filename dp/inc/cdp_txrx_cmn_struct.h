@@ -1046,6 +1046,7 @@ enum cdp_peer_param_type {
  * @CDP_CONFIG_BSS_COLOR: configure bss color
  * @CDP_SET_ATF_STATS_ENABLE: set ATF stats flag
  * @CDP_CONFIG_SPECIAL_VAP: Configure Special vap
+ * @CDP_MONITOR_CHAN_FLAG: Configure monitor mode chan flags
  */
 enum cdp_pdev_param_type {
 	CDP_CONFIG_DEBUG_SNIFFER,
@@ -1077,6 +1078,7 @@ enum cdp_pdev_param_type {
 	CDP_CONFIG_BSS_COLOR,
 	CDP_SET_ATF_STATS_ENABLE,
 	CDP_CONFIG_SPECIAL_VAP,
+	CDP_MONITOR_CHAN_FLAG,
 };
 
 /*
@@ -1144,6 +1146,7 @@ enum cdp_pdev_param_type {
  * @cdp_psoc_param_en_nss_cfg: set nss cfg
  *
  * @cdp_enable_tx_checksum: Flag to specify if HW Tx checksum enabled
+ * @cdp_mon_chan_rate_flag: Set monitor mode's curchan flags
  */
 typedef union cdp_config_param_t {
 	/* peer params */
@@ -1218,6 +1221,7 @@ typedef union cdp_config_param_t {
 	bool cdp_psoc_param_pext_stats;
 
 	bool cdp_enable_tx_checksum;
+	uint64_t cdp_mon_chan_rate_flag;
 } cdp_config_param_type;
 
 /**

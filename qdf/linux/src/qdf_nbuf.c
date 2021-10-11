@@ -91,6 +91,8 @@
 #define RADIOTAP_2G_SPECTRUM_CHANNEL 0x0080
 #define RADIOTAP_CCK_CHANNEL 0x0020
 #define RADIOTAP_OFDM_CHANNEL 0x0040
+#define RADIOTAP_HALF_RATE_CHANNEL 0x4000
+#define RADIOTAP_QUARTER_RATE_CHANNEL 0x8000
 
 #ifdef FEATURE_NBUFF_REPLENISH_TIMER
 #include <qdf_mc_timer.h>
@@ -4625,6 +4627,11 @@ unsigned int qdf_nbuf_update_radiotap(struct mon_rx_status *rx_status,
 		rx_status->chan_flags |= RADIOTAP_CCK_CHANNEL;
 	if (rx_status->ofdm_flag)
 		rx_status->chan_flags |= RADIOTAP_OFDM_CHANNEL;
+	if (rx_status->is_chan_flag_half)
+		rx_status->chan_flags |= RADIOTAP_HALF_RATE_CHANNEL;
+	if (rx_status->is_chan_flag_qtr)
+		rx_status->chan_flags |= RADIOTAP_QUARTER_RATE_CHANNEL;
+
 	put_unaligned_le16(rx_status->chan_flags, &rtap_buf[rtap_len]);
 	rtap_len += 2;
 

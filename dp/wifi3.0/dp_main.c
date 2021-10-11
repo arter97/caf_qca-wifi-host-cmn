@@ -9266,6 +9266,9 @@ static QDF_STATUS dp_set_pdev_param(struct cdp_soc_t *cdp_soc, uint8_t pdev_id,
 	case CDP_CONFIG_SPECIAL_VAP:
 		dp_vdev_set_monitor_mode_buf_rings(pdev);
 		break;
+	case CDP_MONITOR_CHAN_FLAG:
+		pdev->mon_chan_flags = val.cdp_mon_chan_rate_flag;
+
 	default:
 		return QDF_STATUS_E_INVAL;
 	}

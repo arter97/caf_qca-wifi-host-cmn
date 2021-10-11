@@ -2087,6 +2087,9 @@ struct dp_pdev {
 	/* Monitor mode operation frequency */
 	qdf_freq_t mon_chan_freq;
 
+	/* Half/Quarter Rate channel flag */
+	uint64_t mon_chan_flags;
+
 	/* Monitor mode band */
 	enum reg_wifi_band mon_chan_band;
 

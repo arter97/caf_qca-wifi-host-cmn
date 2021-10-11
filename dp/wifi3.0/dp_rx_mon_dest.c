@@ -1513,6 +1513,16 @@ QDF_STATUS dp_rx_mon_deliver(struct dp_soc *soc, uint32_t mac_id,
 		dp_rx_mon_rssi_convert(&pdev->ppdu_info.rx_status);
 
 		dp_handle_tx_capture(soc, pdev, mon_mpdu);
+		/* Populate half/quarter rate flags in rx status of hal ppdu.
+		 * This field must be populated by the ucode and sent to
+		 * host via tlv. This is a temporary solution, populating
+		 * the half/qtr flag from the host curchan.
+		 */
+		if (pdev->mon_chan_flags & IEEE80211_CHAN_HALF) {
+			pdev->ppdu_info.rx_status.is_chan_flag_half = true;
+		} else if (pdev->mon_chan_flags & IEEE80211_CHAN_QUARTER) {
+			pdev->ppdu_info.rx_status.is_chan_flag_qtr = true;
+		}
 
 		if (!qdf_nbuf_update_radiotap(&pdev->ppdu_info.rx_status,
 					      mon_mpdu,

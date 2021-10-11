@@ -254,6 +254,8 @@
  * @tx_status: packet tx status
  * @tx_retry_cnt: tx retry count
  * @add_rtap_ext: add radio tap extension
+ * @is_chan_flag_half: Is channel flag half
+ * @is_chan_flag_qtr: Is channel flag quarter
  */
 struct mon_rx_status {
 	uint64_t tsft;
@@ -338,6 +340,8 @@ struct mon_rx_status {
 	uint8_t  tx_status;
 	uint8_t  tx_retry_cnt;
 	bool add_rtap_ext;
+	bool is_chan_flag_half;
+	bool is_chan_flag_qtr;
 };
 
 /**
