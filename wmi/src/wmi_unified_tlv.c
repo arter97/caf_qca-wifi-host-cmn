@@ -11739,6 +11739,9 @@ static QDF_STATUS extract_fips_event_data_tlv(wmi_unified_t wmi_handle,
 	param_buf = (WMI_PDEV_FIPS_EVENTID_param_tlvs *) evt_buf;
 	event = (wmi_pdev_fips_event_fixed_param *) param_buf->fixed_param;
 
+	if (event->data_len > param_buf->num_data)
+		return QDF_STATUS_E_FAILURE;
+
 	if (fips_conv_data_be(event->data_len, param_buf->data) !=
 							QDF_STATUS_SUCCESS)
 		return QDF_STATUS_E_FAILURE;
@@ -14472,6 +14475,9 @@ extract_time_sync_ftm_offset_event_tlv(wmi_unified_t wmi, void *buf,
 
 	param->vdev_id = resp_event->vdev_id;
 	param->num_qtime = param_buf->num_audio_sync_q_master_slave_times;
+	if (param->num_qtime > FTM_TIME_SYNC_QTIME_PAIR_MAX)
+		param->num_qtime = FTM_TIME_SYNC_QTIME_PAIR_MAX;
+
 	q_pair = param_buf->audio_sync_q_master_slave_times;
 	if (!q_pair) {
 		wmi_err("Invalid q_master_slave_times buffer");
