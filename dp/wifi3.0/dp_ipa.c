@@ -1576,18 +1576,49 @@ QDF_STATUS dp_ipa_setup_iface(char *ifname, uint8_t *mac_addr,
  *
  * Return: QDF_STATUS
  */
-QDF_STATUS dp_ipa_cleanup(uint32_t tx_pipe_handle, uint32_t rx_pipe_handle)
+QDF_STATUS dp_ipa_cleanup(struct cdp_pdev *ppdev, uint32_t tx_pipe_handle,
+			  uint32_t rx_pipe_handle)
 {
+	QDF_STATUS status = QDF_STATUS_SUCCESS;
+	struct dp_ipa_resources *ipa_res;
+	struct dp_pdev *pdev;
+	struct dp_soc *soc;
 	int ret;
 
 	ret = qdf_ipa_wdi_disconn_pipes();
 	if (ret) {
 		dp_err("ipa_wdi_disconn_pipes: IPA pipe cleanup failed: ret=%d",
 		       ret);
-		return QDF_STATUS_E_FAILURE;
+		status = QDF_STATUS_E_FAILURE;
 	}
 
-	return QDF_STATUS_SUCCESS;
+	pdev = (struct dp_pdev *)ppdev;
+	soc = pdev->soc;
+	if (!soc) {
+		dp_err_rl("Invalid soc handle");
+		status = QDF_STATUS_E_FAILURE;
+		goto exit;
+	}
+
+	if (qdf_mem_smmu_s1_enabled(soc->osdev)) {
+		ipa_res = &pdev->ipa_resource;
+
+		/* unmap has to be the reverse order of smmu map */
+		ret = pld_smmu_unmap(soc->osdev->dev,
+				     ipa_res->rx_ready_doorbell_paddr,
+				     sizeof(uint32_t));
+		if (ret)
+			dp_err_rl("IPA RX DB smmu unmap failed");
+
+		ret = pld_smmu_unmap(soc->osdev->dev,
+				     ipa_res->tx_comp_doorbell_paddr,
+				     sizeof(uint32_t));
+		if (ret)
+			dp_err_rl("IPA TX DB smmu unmap failed");
+	}
+
+exit:
+	return status;
 }
 
 /**
