@@ -121,6 +121,15 @@ bool wlan_reg_is_range_overlap_5g(qdf_freq_t low_freq, qdf_freq_t high_freq);
  */
 bool wlan_reg_is_freq_indoor(struct wlan_objmgr_pdev *pdev, qdf_freq_t freq);
 
+/**
+ * wlan_reg_get_next_lower_bandwidth() - Get next lower bandwdith
+ * @ch_width: channel bandwdith
+ *
+ * Return: Return next lower bandwidth of input channel bandwidth
+ */
+enum phy_ch_width
+wlan_reg_get_next_lower_bandwidth(enum phy_ch_width ch_width);
+
 #ifdef CONFIG_REG_CLIENT
 /**
  * wlan_reg_is_freq_indoor_in_secondary_list() - Check if the input frequency is
@@ -591,6 +600,38 @@ QDF_STATUS wlan_reg_psd_2_eirp(struct wlan_objmgr_pdev *pdev,
  * Return: true if AFC power event is received from the FW or false otherwise
  */
 bool wlan_reg_is_afc_power_event_received(struct wlan_objmgr_pdev *pdev);
+
+/**
+ * wlan_reg_get_afc_req_id() - Get the AFC request ID
+ * @pdev: pdev pointer
+ * @req_id: Pointer to request id
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS wlan_reg_get_afc_req_id(struct wlan_objmgr_pdev *pdev,
+				   uint64_t *req_id);
+
+/**
+ * wlan_reg_is_afc_expiry_event_received() - Checks if AFC power event is
+ * received from the FW.
+ *
+ * @pdev: pdev ptr
+ *
+ * Return: true if AFC exipry event is received from the FW or false otherwise
+ */
+bool wlan_reg_is_afc_expiry_event_received(struct wlan_objmgr_pdev *pdev);
+
+/**
+ * wlan_reg_is_noaction_on_afc_pwr_evt() - Checks whether driver needs to
+ * take action for AFC action or the response should be handled by the
+ * user application.
+ *
+ * @pdev: pdev ptr
+ *
+ * Return: true if driver need not take action for AFC resp, false otherwise.
+ */
+bool
+wlan_reg_is_noaction_on_afc_pwr_evt(struct wlan_objmgr_pdev *pdev);
 #else
 static inline bool
 wlan_reg_is_afc_power_event_received(struct wlan_objmgr_pdev *pdev)
@@ -1815,4 +1856,17 @@ wlan_reg_set_ap_pwr_and_update_chan_list(struct wlan_objmgr_pdev *pdev,
  * Return: true if FW supports new command or false otherwise
  */
 bool wlan_reg_is_ext_tpc_supported(struct wlan_objmgr_psoc *psoc);
+
+/**
+ * wlan_reg_is_chwidth_supported() - Check if given channel width is supported
+ * on a given pdev
+ * @pdev: pdev pointer
+ * @ch_width: channel width.
+ * @is_supported: whether the channel width is supported
+ *
+ * Return QDF_STATUS_SUCCESS of operation
+ */
+QDF_STATUS wlan_reg_is_chwidth_supported(struct wlan_objmgr_pdev *pdev,
+					 enum phy_ch_width ch_width,
+					 bool *is_supported);
 #endif

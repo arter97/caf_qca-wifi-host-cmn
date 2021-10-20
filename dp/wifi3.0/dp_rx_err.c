@@ -546,6 +546,16 @@ dp_rx_err_nbuf_pn_check(struct dp_soc *soc, hal_ring_desc_t ring_desc,
 	return QDF_STATUS_E_FAILURE;
 }
 
+#ifdef WLAN_SKIP_BAR_UPDATE
+static
+void dp_rx_err_handle_bar(struct dp_soc *soc,
+			  struct dp_peer *peer,
+			  qdf_nbuf_t nbuf)
+{
+	dp_info_rl("BAR update to H.W is skipped");
+	DP_STATS_INC(soc, rx.err.bar_handle_fail_count, 1);
+}
+#else
 static
 void dp_rx_err_handle_bar(struct dp_soc *soc,
 			  struct dp_peer *peer,
@@ -595,6 +605,7 @@ void dp_rx_err_handle_bar(struct dp_soc *soc,
 		DP_STATS_INC(soc, rx.err.ssn_update_count, 1);
 	}
 }
+#endif
 
 /**
  * _dp_rx_bar_frame_handle(): Core of the BAR frame handling
@@ -1331,9 +1342,11 @@ dp_rx_null_q_desc_handle(struct dp_soc *soc, qdf_nbuf_t nbuf,
 		}
 	}
 
-	if (dp_rx_mcast_echo_check(soc, peer, rx_tlv_hdr, nbuf)) {
+	if ((!soc->mec_fw_offload) &&
+	    dp_rx_mcast_echo_check(soc, peer, rx_tlv_hdr, nbuf)) {
 		/* this is a looped back MCBC pkt, drop it */
-		DP_STATS_INC_PKT(peer, rx.mec_drop, 1, qdf_nbuf_len(nbuf));
+		DP_STATS_INC_PKT(peer, rx.mec_drop, 1,
+				 qdf_nbuf_len(nbuf));
 		goto drop_nbuf;
 	}
 
@@ -1705,6 +1718,44 @@ fail:
 	return;
 }
 
+/*
+ * dp_rx_deliver_to_osif_stack() - function to deliver rx pkts to stack
+ * @soc: DP soc
+ * @vdv: DP vdev handle
+ * @peer: pointer to the peer object
+ * @nbuf: skb list head
+ * @tail: skb list tail
+ * @is_eapol: eapol pkt check
+ *
+ * Return: None
+ */
+#ifdef QCA_SUPPORT_EAPOL_OVER_CONTROL_PORT
+static inline void
+dp_rx_deliver_to_osif_stack(struct dp_soc *soc,
+			    struct dp_vdev *vdev,
+			    struct dp_peer *peer,
+			    qdf_nbuf_t nbuf,
+			    qdf_nbuf_t tail,
+			    bool is_eapol)
+{
+	if (is_eapol && soc->eapol_over_control_port)
+		dp_rx_eapol_deliver_to_stack(soc, vdev, peer, nbuf, NULL);
+	else
+		dp_rx_deliver_to_stack(soc, vdev, peer, nbuf, NULL);
+}
+#else
+static inline void
+dp_rx_deliver_to_osif_stack(struct dp_soc *soc,
+			    struct dp_vdev *vdev,
+			    struct dp_peer *peer,
+			    qdf_nbuf_t nbuf,
+			    qdf_nbuf_t tail,
+			    bool is_eapol)
+{
+	dp_rx_deliver_to_stack(soc, vdev, peer, nbuf, NULL);
+}
+#endif
+
 #ifdef WLAN_SUPPORT_RX_PROTOCOL_TYPE_TAG
 /**
  * dp_rx_err_route_hdl() - Function to send EAPOL frames to stack
@@ -1731,6 +1782,7 @@ dp_rx_err_route_hdl(struct dp_soc *soc, qdf_nbuf_t nbuf,
 	uint16_t msdu_len;
 	struct dp_vdev *vdev;
 	struct hal_rx_msdu_metadata msdu_metadata;
+	bool is_eapol;
 
 	hal_rx_msdu_metadata_get(soc->hal_soc, rx_tlv_hdr, &msdu_metadata);
 	msdu_len = hal_rx_msdu_start_msdu_len_get(soc->hal_soc, rx_tlv_hdr);
@@ -1783,8 +1835,8 @@ dp_rx_err_route_hdl(struct dp_soc *soc, qdf_nbuf_t nbuf,
 	 * Indicate EAPOL frame to stack only when vap mac address
 	 * matches the destination address.
 	 */
-	if (qdf_nbuf_is_ipv4_eapol_pkt(nbuf) ||
-	    qdf_nbuf_is_ipv4_wapi_pkt(nbuf)) {
+	is_eapol = qdf_nbuf_is_ipv4_eapol_pkt(nbuf);
+	if (is_eapol || qdf_nbuf_is_ipv4_wapi_pkt(nbuf)) {
 		qdf_ether_header_t *eh =
 			(qdf_ether_header_t *)qdf_nbuf_data(nbuf);
 		if (qdf_mem_cmp(eh->ether_dhost, &vdev->mac_addr.raw[0],
@@ -1802,7 +1854,10 @@ dp_rx_err_route_hdl(struct dp_soc *soc, qdf_nbuf_t nbuf,
 			DP_STATS_INC(peer, rx.to_stack.num, 1);
 			qdf_nbuf_set_exc_frame(nbuf, 1);
 			qdf_nbuf_set_next(nbuf, NULL);
-			dp_rx_deliver_to_stack(soc, vdev, peer, nbuf, NULL);
+
+			dp_rx_deliver_to_osif_stack(soc, vdev, peer, nbuf,
+						    NULL, is_eapol);
+
 			return;
 		}
 	}
@@ -2161,11 +2216,11 @@ dp_rx_err_process(struct dp_intr *int_ctx, struct dp_soc *soc,
 					    msdu_list.rbm[0]);
 		// TODO - BE- Check if the RBM is to be checked for all chips
 		if (qdf_unlikely((msdu_list.rbm[0] !=
-					DP_WBM2SW_RBM(soc->wbm_sw0_bm_id)) &&
+					dp_rx_get_rx_bm_id(soc)) &&
 				 (msdu_list.rbm[0] !=
 				  HAL_RX_BUF_RBM_WBM_CHIP0_IDLE_DESC_LIST) &&
 				 (msdu_list.rbm[0] !=
-					DP_DEFRAG_RBM(soc->wbm_sw0_bm_id)))) {
+					dp_rx_get_defrag_bm_id(soc)))) {
 			/* TODO */
 			/* Call appropriate handler */
 			if (!wlan_cfg_get_dp_soc_nss_cfg(soc->wlan_cfg_ctx)) {
@@ -2794,7 +2849,11 @@ done:
 								err_code,
 								pool_id);
 					break;
-
+				case HAL_RXDMA_MULTICAST_ECHO:
+					DP_STATS_INC_PKT(peer, rx.mec_drop, 1,
+							 qdf_nbuf_len(nbuf));
+					qdf_nbuf_free(nbuf);
+					break;
 				default:
 					qdf_nbuf_free(nbuf);
 					dp_err_rl("RXDMA error %d",

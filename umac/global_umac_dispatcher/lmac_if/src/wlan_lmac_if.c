@@ -42,9 +42,7 @@
 #include "wlan_tdls_tgt_api.h"
 #endif
 
-#ifdef WLAN_CONV_CRYPTO_SUPPORTED
 #include "wlan_crypto_global_api.h"
-#endif
 #ifdef DFS_COMPONENT_ENABLE
 #include <wlan_dfs_tgt_api.h>
 #include <wlan_objmgr_vdev_obj.h>
@@ -267,18 +265,11 @@ wlan_lmac_if_cfr_rx_ops_register(struct wlan_lmac_if_rx_ops *rx_ops)
 }
 #endif
 
-#ifdef WLAN_CONV_CRYPTO_SUPPORTED
 static void
 wlan_lmac_if_crypto_rx_ops_register(struct wlan_lmac_if_rx_ops *rx_ops)
 {
 	wlan_crypto_register_crypto_rx_ops(&rx_ops->crypto_rx_ops);
 }
-#else
-static void
-wlan_lmac_if_crypto_rx_ops_register(struct wlan_lmac_if_rx_ops *rx_ops)
-{
-}
-#endif
 
 #ifdef WIFI_POS_CONVERGED
 static void wlan_lmac_if_umac_rx_ops_register_wifi_pos(
@@ -300,8 +291,27 @@ static void wlan_lmac_if_register_master_list_ext_handler(
 	rx_ops->reg_rx_ops.master_list_ext_handler =
 		tgt_reg_process_master_chan_list_ext;
 }
+
+#ifdef CONFIG_AFC_SUPPORT
+static void wlan_lmac_if_register_afc_event_handler(
+					struct wlan_lmac_if_rx_ops *rx_ops)
+{
+	rx_ops->reg_rx_ops.afc_event_handler = tgt_reg_process_afc_event;
+}
+#else
+static void wlan_lmac_if_register_afc_event_handler(
+					struct wlan_lmac_if_rx_ops *rx_ops)
+{
+}
+#endif
+
 #else
 static inline void wlan_lmac_if_register_master_list_ext_handler(
+					struct wlan_lmac_if_rx_ops *rx_ops)
+{
+}
+
+static void wlan_lmac_if_register_afc_event_handler(
 					struct wlan_lmac_if_rx_ops *rx_ops)
 {
 }
@@ -396,6 +406,8 @@ static void wlan_lmac_if_umac_reg_rx_ops_register(
 		tgt_reg_set_ext_tpc_supported;
 
 	wlan_lmac_if_register_6g_edge_chan_supp(rx_ops);
+
+	wlan_lmac_if_register_afc_event_handler(rx_ops);
 }
 
 #ifdef CONVERGED_P2P_ENABLE
@@ -559,6 +571,8 @@ wlan_lmac_if_mgmt_rx_reo_rx_ops_register(
 	mgmt_rx_reo_rx_ops = &mgmt_txrx_rx_ops->mgmt_rx_reo_rx_ops;
 	mgmt_rx_reo_rx_ops->fw_consumed_event_handler =
 			tgt_mgmt_rx_reo_fw_consumed_event_handler;
+	mgmt_rx_reo_rx_ops->host_drop_handler =
+			tgt_mgmt_rx_reo_host_drop_handler;
 
 	return QDF_STATUS_SUCCESS;
 }
@@ -596,6 +610,8 @@ wlan_lmac_if_mgmt_txrx_rx_ops_register(struct wlan_lmac_if_rx_ops *rx_ops)
 			tgt_mgmt_txrx_get_vdev_id_from_desc_id;
 	mgmt_txrx_rx_ops->mgmt_txrx_get_free_desc_pool_count =
 			tgt_mgmt_txrx_get_free_desc_pool_count;
+	mgmt_txrx_rx_ops->mgmt_rx_frame_entry =
+			tgt_mgmt_txrx_rx_frame_entry;
 
 	return wlan_lmac_if_mgmt_rx_reo_rx_ops_register(mgmt_txrx_rx_ops);
 }

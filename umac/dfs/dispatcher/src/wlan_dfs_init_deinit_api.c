@@ -25,7 +25,7 @@
 #include "wlan_dfs_tgt_api.h"
 #include <wlan_objmgr_vdev_obj.h>
 #include "wlan_dfs_utils_api.h"
-#ifndef QCA_MCL_DFS_SUPPORT
+#ifndef MOBILE_DFS_SUPPORT
 #include "ieee80211_mlme_dfs_interface.h"
 #endif
 #include "wlan_objmgr_global_obj.h"
@@ -55,7 +55,7 @@ struct wlan_dfs *wlan_pdev_get_dfs_obj(struct wlan_objmgr_pdev *pdev)
  * frequency based APIs callback.
  * @mlme_callback: Pointer to dfs_to_mlme.
  */
-#ifndef QCA_MCL_DFS_SUPPORT
+#ifndef MOBILE_DFS_SUPPORT
 #if defined(WLAN_DFS_PRECAC_AUTO_CHAN_SUPPORT) && defined(CONFIG_CHAN_FREQ_API)
 static inline void
 register_dfs_precac_auto_chan_callbacks_freq(struct dfs_to_mlme *mlme_callback)
@@ -78,7 +78,7 @@ register_dfs_precac_auto_chan_callbacks_freq(struct dfs_to_mlme *mlme_callback)
  * register_dfs_postnol_csa_callback - Register CSA callback
  * @mlme_callback: Pointer to dfs_to_mlme.
  */
-#ifndef QCA_MCL_DFS_SUPPORT
+#ifndef MOBILE_DFS_SUPPORT
 #ifdef QCA_SUPPORT_DFS_CHAN_POSTNOL
 static inline void
 register_dfs_postnol_csa_callback(struct dfs_to_mlme *mlme_callback)
@@ -101,7 +101,7 @@ register_dfs_postnol_csa_callback(struct dfs_to_mlme *mlme_callback)
  * register_dfs_callbacks_for_freq() - Register dfs callbacks.
  * @mlme_callback: Pointer to dfs_to_mlme.
  */
-#ifndef QCA_MCL_DFS_SUPPORT
+#ifndef MOBILE_DFS_SUPPORT
 #ifdef CONFIG_CHAN_FREQ_API
 static inline void
 register_dfs_callbacks_for_freq(struct dfs_to_mlme *mlme_callback)
@@ -120,7 +120,7 @@ register_dfs_callbacks_for_freq(struct dfs_to_mlme *mlme_callback)
 #endif
 #endif
 
-#ifndef QCA_MCL_DFS_SUPPORT
+#ifndef MOBILE_DFS_SUPPORT
 void register_dfs_callbacks(void)
 {
 	struct dfs_to_mlme *tmp_dfs_to_mlme = &global_dfs_to_mlme;
@@ -471,6 +471,20 @@ QDF_STATUS wlan_dfs_pdev_obj_create_notification(struct wlan_objmgr_pdev *pdev,
 	dfs->dfs_is_offload_enabled = dfs_tx_ops->dfs_is_tgt_offload(psoc);
 	dfs_info(dfs, WLAN_DEBUG_DFS_ALWAYS, "dfs_offload %d",
 		 dfs->dfs_is_offload_enabled);
+
+	if (!dfs_tx_ops->dfs_is_tgt_radar_found_chan_freq_eq_center_freq) {
+		dfs_err(dfs, WLAN_DEBUG_DFS_ALWAYS,
+			"dfs_is_radar_found_chan_freq_eq_center_freq is null");
+		dfs_destroy_object(dfs);
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	dfs->dfs_is_radar_found_chan_freq_eq_center_freq =
+	    dfs_tx_ops->dfs_is_tgt_radar_found_chan_freq_eq_center_freq(psoc);
+	dfs_info(dfs, WLAN_DEBUG_DFS,
+		 "dfs_is_radar_found_chan_freq_eq_center_freq %d",
+		 dfs->dfs_is_radar_found_chan_freq_eq_center_freq);
+
 	dfs_soc_obj = wlan_objmgr_psoc_get_comp_private_obj(psoc,
 							    WLAN_UMAC_COMP_DFS);
 	dfs->dfs_soc_obj = dfs_soc_obj;
@@ -537,7 +551,7 @@ static void dfs_scan_serialization_comp_info_cb(
 
 	comp_info->scan_info.is_cac_in_progress = false;
 
-	if (!tgt_dfs_is_pdev_5ghz(pdev))
+	if (!tgt_dfs_is_5ghz_supported_in_pdev(pdev))
 		return;
 
 	dfs = wlan_pdev_get_dfs_obj(pdev);

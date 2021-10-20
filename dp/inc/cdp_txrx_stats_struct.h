@@ -78,6 +78,9 @@
 #define CDP_MAX_TX_TQM_STATUS 9  /* max tx tqm completion status */
 #define CDP_MAX_TX_HTT_STATUS 7  /* max tx htt completion status */
 
+#define CDP_DMA_CODE_MAX 14 /* max rxdma error */
+#define CDP_REO_CODE_MAX 15 /* max reo error */
+
 /*
  * Max of TxRx context
  */
@@ -114,6 +117,7 @@
  */
 #define CDP_PPDU_STATS_MAX_TAG 14
 #define CDP_MAX_DATA_TIDS 9
+#define CDP_MAX_VOW_TID 4
 
 #define CDP_WDI_NUM_EVENTS WDI_NUM_EVENTS
 
@@ -367,8 +371,11 @@ enum WDI_EVENT {
 	WDI_EVENT_PEER_QOS_STATS,
 	WDI_EVENT_PKT_CAPTURE_TX_DATA,
 	WDI_EVENT_PKT_CAPTURE_RX_DATA,
+	WDI_EVENT_PKT_CAPTURE_RX_DATA_NO_PEER,
 	WDI_EVENT_PKT_CAPTURE_OFFLOAD_TX_DATA,
 	WDI_EVENT_RX_CBF,
+	WDI_EVENT_PKT_CAPTURE_PPDU_STATS,
+	WDI_EVENT_HOST_SW_EVENT,
 	/* End of new event items */
 	WDI_EVENT_LAST
 };
@@ -641,6 +648,26 @@ struct cdp_tid_tx_stats {
 };
 
 /*
+ * cdp_reo_error_stats
+ * @err_src_reo_code_inv: Wireless Buffer Manager source receive reorder ring reason unknown
+ * @err_reo_codes: Receive reoder error codes
+ */
+struct cdp_reo_error_stats {
+	uint64_t err_src_reo_code_inv;
+	uint64_t err_reo_codes[CDP_REO_CODE_MAX];
+};
+
+/*
+ * cdp_rxdma_error_stats
+ * @err_src_rxdma_code_inv: DMA reason unknown count
+ * @err_reo_codes: Receive reoder error codes count
+ */
+struct cdp_rxdma_error_stats {
+	uint64_t err_src_rxdma_code_inv;
+	uint64_t err_dma_codes[CDP_DMA_CODE_MAX];
+};
+
+/*
  * struct cdp_tid_tx_stats
  * @to_stack_delay: Time taken between ring reap to indication to network stack
  * @intfrm_delay: Interframe rx delay
@@ -650,6 +677,8 @@ struct cdp_tid_tx_stats {
  * @mcast_msdu_cnt: Num Mcast Msdus received from HW in Rx
  * @bcast_msdu_cnt: Num Bcast Msdus received from HW in Rx
  * @fail_cnt: Rx deliver drop counters
+ * @reo_err: V3 reo error statistics
+ * @rxdma_err: V3 rxdma error statistics
  */
 struct cdp_tid_rx_stats {
 	struct cdp_delay_stats to_stack_delay;
@@ -660,6 +689,8 @@ struct cdp_tid_rx_stats {
 	uint64_t mcast_msdu_cnt;
 	uint64_t bcast_msdu_cnt;
 	uint64_t fail_cnt[RX_MAX_DROP];
+	struct cdp_reo_error_stats reo_err;
+	struct cdp_rxdma_error_stats rxdma_err;
 };
 
 /*
@@ -2104,10 +2135,15 @@ struct cdp_peer_hmwds_ast_add_status {
 	uint8_t  ast_mac[QDF_MAC_ADDR_SIZE];
 };
 
+/*
+ * Enumeration of cdp soc parameters
+ * @DP_SOC_PARAM_EAPOL_OVER_CONTROL_PORT: For sending EAPOL's over control port
+ */
 enum cdp_soc_param_t {
 	DP_SOC_PARAM_MSDU_EXCEPTION_DESC,
 	DP_SOC_PARAM_CMEM_FSE_SUPPORT,
 	DP_SOC_PARAM_MAX_AST_AGEOUT,
+	DP_SOC_PARAM_EAPOL_OVER_CONTROL_PORT,
 	DP_SOC_PARAM_MAX,
 };
 

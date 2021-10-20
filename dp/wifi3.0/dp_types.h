@@ -103,6 +103,12 @@
 
 #define MAX_AST_AGEOUT_COUNT 128
 
+#ifdef TX_ADDR_INDEX_SEARCH
+#define DP_TX_ADDR_SEARCH_ADDR_POLICY HAL_TX_ADDR_INDEX_SEARCH
+#else
+#define DP_TX_ADDR_SEARCH_ADDR_POLICY HAL_TX_ADDR_SEARCH_DEFAULT
+#endif
+
 #define WBM_INT_ERROR_ALL 0
 #define WBM_INT_ERROR_REO_NULL_BUFFER 1
 #define WBM_INT_ERROR_REO_NULL_LINK_DESC 2
@@ -113,6 +119,18 @@
 #define MAX_TX_HW_QUEUES MAX_TCL_DATA_RINGS
 /* Maximum retries for Delba per tid per peer */
 #define DP_MAX_DELBA_RETRY 3
+
+#ifdef AST_OFFLOAD_ENABLE
+#define AST_OFFLOAD_ENABLE_STATUS 1
+#else
+#define AST_OFFLOAD_ENABLE_STATUS 0
+#endif
+
+#ifdef FEATURE_MEC_OFFLOAD
+#define FW_MEC_FW_OFFLOAD_ENABLED 1
+#else
+#define FW_MEC_FW_OFFLOAD_ENABLED 0
+#endif
 
 #define PCP_TID_MAP_MAX 8
 #define MAX_MU_USERS 37
@@ -138,6 +156,10 @@
 #define DP_RX_REFILL_BUFF_POOL_SIZE  2048
 #define DP_RX_REFILL_BUFF_POOL_BURST 64
 #define DP_RX_REFILL_THRD_THRESHOLD  512
+#endif
+
+#ifdef WLAN_VENDOR_SPECIFIC_BAR_UPDATE
+#define DP_SKIP_BAR_UPDATE_TIMEOUT 5000
 #endif
 
 enum rx_pktlog_mode {
@@ -800,10 +822,20 @@ struct dp_rx_tid {
  * @num_reo_status_ring_masks: interrupts with reo_status_ring_mask set
  * @num_rxdma2host_ring_masks: interrupts with rxdma2host_ring_mask set
  * @num_host2rxdma_ring_masks: interrupts with host2rxdma_ring_mask set
+ * @num_host2rxdma_mon_ring_masks: interrupts with host2rxdma_ring_mask set
  * @num_rx_ring_near_full_masks: Near-full interrupts for REO DST ring
  * @num_tx_comp_ring_near_full_masks: Near-full interrupts for TX completion
+ * @num_rx_wbm_rel_ring_near_full_masks: total number of times the wbm rel ring
+ *                                       near full interrupt was received
+ * @num_reo_status_ring_near_full_masks: total number of times the reo status
+ *                                       near full interrupt was received
+ * @num_near_full_masks: total number of times the near full interrupt
+ *                       was received
  * @num_masks: total number of times the interrupt was received
+ * @num_host2txmon_ring_masks: interrupts with host2txmon_ring_mask set
+ * @num_near_full_masks: total number of times the interrupt was received
  * @num_masks: total number of times the near full interrupt was received
+ * @num_tx_mon_ring_masks: interrupts with num_tx_mon_ring_masks set
  *
  * Counter for individual masks are incremented only if there are any packets
  * on that ring.
@@ -817,12 +849,15 @@ struct dp_intr_stats {
 	uint32_t num_reo_status_ring_masks;
 	uint32_t num_rxdma2host_ring_masks;
 	uint32_t num_host2rxdma_ring_masks;
+	uint32_t num_host2rxdma_mon_ring_masks;
 	uint32_t num_rx_ring_near_full_masks[MAX_REO_DEST_RINGS];
 	uint32_t num_tx_comp_ring_near_full_masks[MAX_TCL_DATA_RINGS];
 	uint32_t num_rx_wbm_rel_ring_near_full_masks;
 	uint32_t num_reo_status_ring_near_full_masks;
+	uint32_t num_host2txmon_ring__masks;
 	uint32_t num_near_full_masks;
 	uint32_t num_masks;
+	uint32_t num_tx_mon_ring_masks;
 };
 
 /* per interrupt context  */
@@ -832,6 +867,7 @@ struct dp_intr {
 	uint8_t rx_ring_mask;   /* Rx REO rings (0-3) associated
 				with this interrupt context */
 	uint8_t rx_mon_ring_mask;  /* Rx monitor ring mask (0-2) */
+	uint8_t tx_mon_ring_mask;  /* Tx monitor ring mask (0-2) */
 	uint8_t rx_err_ring_mask; /* REO Exception Ring */
 	uint8_t rx_wbm_rel_ring_mask; /* WBM2SW Rx Release Ring */
 	uint8_t reo_status_ring_mask; /* REO command response ring */
@@ -845,6 +881,7 @@ struct dp_intr {
 	uint8_t rx_near_full_grp_2_mask;
 	/* WBM TX completion rings near full interrupt mask */
 	uint8_t tx_ring_near_full_mask;
+	uint8_t host2txmon_ring_mask; /* Tx monitor buffer ring */
 	struct dp_soc *soc;    /* Reference to SoC structure ,
 				to get DMA ring handles */
 	qdf_lro_ctx_t lro_ctx;
@@ -944,6 +981,8 @@ struct dp_soc_stats {
 		uint32_t tx_comp_loop_pkt_limit_hit;
 		/* Head pointer Out of sync at the end of dp_tx_comp_handler */
 		uint32_t hp_oos2;
+		/* tx desc freed as part of vdev detach */
+		uint32_t tx_comp_exception;
 	} tx;
 
 	/* SOC level RX stats */
@@ -1572,6 +1611,8 @@ struct dp_arch_ops {
 				       struct dp_vdev *vdev);
 	QDF_STATUS (*txrx_vdev_detach)(struct dp_soc *soc,
 				       struct dp_vdev *vdev);
+	QDF_STATUS (*txrx_peer_attach)(struct dp_soc *soc);
+	void (*txrx_peer_detach)(struct dp_soc *soc);
 	QDF_STATUS (*dp_rxdma_ring_sel_cfg)(struct dp_soc *soc);
 	void (*soc_cfg_attach)(struct dp_soc *soc);
 
@@ -1614,6 +1655,8 @@ struct dp_arch_ops {
 	uint32_t (*dp_service_near_full_srngs)(struct dp_soc *soc,
 					       struct dp_intr *int_ctx,
 					       uint32_t dp_budget);
+	void (*tx_implicit_rbm_set)(struct dp_soc *soc, uint8_t tx_ring_id,
+				    uint8_t bm_id);
 
 	/* Control Arch Ops */
 	QDF_STATUS (*txrx_set_vdev_param)(struct dp_soc *soc,
@@ -1635,6 +1678,43 @@ struct dp_arch_ops {
 struct dp_soc_features {
 	uint8_t pn_in_reo_dest;
 };
+
+enum sysfs_printing_mode {
+	PRINTING_MODE_DISABLED = 0,
+	PRINTING_MODE_ENABLED
+};
+
+#ifdef WLAN_SYSFS_DP_STATS
+/**
+ * struct sysfs_stats_config: Data structure holding stats sysfs config.
+ * @rw_stats_lock: Lock to read and write to stat_type and pdev_id.
+ * @sysfs_read_lock: Lock held while another stat req is being executed.
+ * @sysfs_write_user_buffer: Lock to change buff len, max buf len
+ * and *buf.
+ * @sysfs_txrx_fw_request_done: Event to wait for firmware response.
+ * @stat_type_requested: stat type requested.
+ * @mac_id: mac id for which stat type are requested.
+ * @printing_mode: Should a print go through.
+ * @process_id: Process allowed to write to buffer.
+ * @curr_buffer_length: Curr length of buffer written
+ * @max_buffer_length: Max buffer length.
+ * @buf: Sysfs buffer.
+ */
+struct sysfs_stats_config {
+	/* lock held to read stats */
+	qdf_spinlock_t rw_stats_lock;
+	qdf_mutex_t sysfs_read_lock;
+	qdf_spinlock_t sysfs_write_user_buffer;
+	qdf_event_t sysfs_txrx_fw_request_done;
+	uint32_t stat_type_requested;
+	uint32_t mac_id;
+	enum sysfs_printing_mode printing_mode;
+	int process_id;
+	uint16_t curr_buffer_length;
+	uint16_t max_buffer_length;
+	char *buf;
+};
+#endif
 
 /* SOC level structure for data path */
 struct dp_soc {
@@ -1868,7 +1948,10 @@ struct dp_soc {
 
 	/* SoC level data path statistics */
 	struct dp_soc_stats stats;
-
+#ifdef WLAN_SYSFS_DP_STATS
+	/* sysfs config for DP stats */
+	struct sysfs_stats_config *sysfs_config;
+#endif
 	/* timestamp to keep track of msdu buffers received on reo err ring */
 	uint64_t rx_route_err_start_pkt_ts;
 
@@ -1908,8 +1991,11 @@ struct dp_soc {
 	/*Timer counter for WDS AST entry ageout*/
 	uint8_t wds_ast_aging_timer_cnt;
 	bool pending_ageout;
+	bool ast_offload_support;
 	uint32_t max_ast_ageout_count;
+	uint8_t eapol_over_control_port;
 
+	uint8_t sta_mode_search_policy;
 	qdf_timer_t lmac_reap_timer;
 	uint8_t lmac_timer_init;
 	qdf_timer_t int_timer;
@@ -1962,8 +2048,8 @@ struct dp_soc {
 	bool is_last_stats_ctx_init;
 #endif /* WLAN_FEATURE_STATS_EXT */
 
-	/* Flag to indicate if HTT v2 is enabled*/
-	bool is_peer_map_unmap_v2;
+	/* Indicates HTT map/unmap versions*/
+	uint8_t peer_map_unmap_versions;
 	/* Per peer per Tid ba window size support */
 	uint8_t per_tid_basize_max_tid;
 	/* Soc level flag to enable da_war */
@@ -2055,6 +2141,9 @@ struct dp_soc {
 #ifdef FEATURE_RUNTIME_PM
 	/* Dp runtime refcount */
 	qdf_atomic_t dp_runtime_refcount;
+
+	/* Dp tx pending count in RTPM */
+	qdf_atomic_t tx_pending_rtpm;
 #endif
 	/* Invalid buffer that allocated for RX buffer */
 	qdf_nbuf_queue_t invalid_buf_queue;
@@ -2099,7 +2188,11 @@ struct dp_soc {
 #ifdef WIFI_MONITOR_SUPPORT
 	struct dp_mon_soc *monitor_soc;
 #endif
-	bool rxdma2sw_rings_not_supported;
+	uint8_t rxdma2sw_rings_not_supported:1,
+		mec_fw_offload:1;
+
+	/* Number of Rx refill rings */
+	uint8_t num_rx_refill_buf_rings;
 };
 
 #ifdef IPA_OFFLOAD
@@ -2429,6 +2522,9 @@ struct dp_pdev {
 	/* Global RX decap mode for the device */
 	enum htt_pkt_type rx_decap_mode;
 
+	/* Enhanced Stats is enabled */
+	bool enhanced_stats_en;
+
 	qdf_atomic_t num_tx_outstanding;
 	int32_t tx_descs_max;
 
@@ -2582,6 +2678,7 @@ struct dp_pdev {
 		qdf_work_t work;
 		qdf_workqueue_t *work_queue;
 		uint32_t seq_num;
+		uint8_t queue_depth;
 		qdf_spinlock_t list_lock;
 
 		TAILQ_HEAD(, dp_soc_srngs_state) list;
@@ -2623,6 +2720,10 @@ struct dp_vdev {
 	bool wds_ext_enabled;
 #endif /* QCA_SUPPORT_WDS_EXTENDED */
 
+#ifdef WLAN_VENDOR_SPECIFIC_BAR_UPDATE
+	bool skip_bar_update;
+	unsigned long skip_bar_update_last_ts;
+#endif
 	/* WDS Aging timer period */
 	uint32_t wds_aging_timer_val;
 
@@ -2695,6 +2796,10 @@ struct dp_vdev {
 	ol_txrx_rx_gro_flush_ind_fp osif_gro_flush;
 	/* default RX call back function called by dp */
 	ol_txrx_rx_fp osif_rx;
+#ifdef QCA_SUPPORT_EAPOL_OVER_CONTROL_PORT
+	/* callback to receive eapol frames */
+	ol_txrx_rx_fp osif_rx_eapol;
+#endif
 	/* callback to deliver rx frames to the OS */
 	ol_txrx_rx_fp osif_rx_stack;
 	/* Callback to handle rx fisa frames */

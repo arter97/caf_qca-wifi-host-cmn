@@ -353,7 +353,9 @@ bool utils_dfs_is_spruce_spur_war_applicable(struct wlan_objmgr_pdev *pdev)
 	cur_freq = dfs->dfs_curchan->dfs_ch_freq;
 
 	/* Is the current channel width 80MHz? */
-	if (WLAN_IS_CHAN_MODE_80(dfs->dfs_curchan)) {
+	if (WLAN_IS_CHAN_MODE_80(dfs->dfs_curchan) ||
+	    WLAN_IS_CHAN_MODE_40(dfs->dfs_curchan) ||
+	    WLAN_IS_CHAN_MODE_20(dfs->dfs_curchan)) {
 		/* is the primary channel 52/56/60/64? */
 		bool is_chan_spur_80mhzfreq =
 		    DFS_IS_CHAN_SPRUCE_SPUR_FREQ_80MHZ(cur_freq);
@@ -840,6 +842,8 @@ static void utils_dfs_get_channel_list(struct wlan_objmgr_pdev *pdev,
 		chan_list[i].dfs_ch_ieee  =
 			wlan_reg_freq_to_chan(pdev, pcl_ch[i]);
 		chan_list[i].dfs_ch_freq  = pcl_ch[i];
+		if (wlan_reg_is_dfs_for_freq(pdev, pcl_ch[i]))
+			chan_list[i].dfs_ch_flagext |= WLAN_CHAN_DFS;
 	}
 	*num_chan = i;
 	dfs_info(NULL, WLAN_DEBUG_DFS_ALWAYS, "num channels %d", i);
@@ -1203,7 +1207,7 @@ uint32_t utils_dfs_chan_to_freq(uint8_t chan)
 }
 qdf_export_symbol(utils_dfs_chan_to_freq);
 
-#ifdef QCA_MCL_DFS_SUPPORT
+#ifdef MOBILE_DFS_SUPPORT
 
 #ifdef CONFIG_CHAN_FREQ_API
 QDF_STATUS utils_dfs_mark_leaking_chan_for_freq(struct wlan_objmgr_pdev *pdev,
@@ -1250,7 +1254,7 @@ QDF_STATUS utils_dfs_is_spoof_check_failed(struct wlan_objmgr_pdev *pdev,
 {
 	struct wlan_dfs *dfs;
 
-	if (!tgt_dfs_is_pdev_5ghz(pdev))
+	if (!tgt_dfs_is_5ghz_supported_in_pdev(pdev))
 		return QDF_STATUS_SUCCESS;
 
 	dfs = wlan_pdev_get_dfs_obj(pdev);
@@ -1292,7 +1296,7 @@ QDF_STATUS utils_dfs_get_disable_radar_marking(struct wlan_objmgr_pdev *pdev,
 {
 	struct wlan_dfs *dfs;
 
-	if (!tgt_dfs_is_pdev_5ghz(pdev))
+	if (!tgt_dfs_is_5ghz_supported_in_pdev(pdev))
 		return QDF_STATUS_SUCCESS;
 
 	dfs = wlan_pdev_get_dfs_obj(pdev);
@@ -1333,7 +1337,7 @@ void utils_dfs_reset_dfs_prevchan(struct wlan_objmgr_pdev *pdev)
 {
 	struct wlan_dfs *dfs;
 
-	if (!tgt_dfs_is_pdev_5ghz(pdev))
+	if (!tgt_dfs_is_5ghz_supported_in_pdev(pdev))
 		return;
 
 	dfs = wlan_pdev_get_dfs_obj(pdev);
@@ -1352,8 +1356,9 @@ void utils_dfs_agile_sm_deliver_evt(struct wlan_objmgr_pdev *pdev,
 {
 	struct wlan_dfs *dfs;
 	void *event_data;
+	struct dfs_soc_priv_obj *dfs_soc_obj;
 
-	if (!tgt_dfs_is_pdev_5ghz(pdev))
+	if (!tgt_dfs_is_5ghz_supported_in_pdev(pdev))
 		return;
 
 	dfs = wlan_pdev_get_dfs_obj(pdev);
@@ -1365,6 +1370,8 @@ void utils_dfs_agile_sm_deliver_evt(struct wlan_objmgr_pdev *pdev,
 	if (!dfs_is_agile_cac_enabled(dfs))
 		return;
 
+	dfs_soc_obj = dfs->dfs_soc_obj;
+	dfs_soc_obj->dfs_priv[dfs->dfs_psoc_idx].agile_precac_active = true;
 	event_data = (void *)dfs;
 
 	dfs_agile_sm_deliver_evt(dfs->dfs_soc_obj,

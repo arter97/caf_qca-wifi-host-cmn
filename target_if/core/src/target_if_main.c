@@ -357,7 +357,7 @@ static QDF_STATUS target_if_green_ap_tx_ops_register(
 	return QDF_STATUS_SUCCESS;
 }
 #endif /* WLAN_SUPPORT_GREEN_AP */
-#if defined(WLAN_CONV_CRYPTO_SUPPORTED) && defined(CRYPTO_SET_KEY_CONVERGED)
+#if defined(CRYPTO_SET_KEY_CONVERGED)
 static void target_if_crypto_tx_ops_register(
 				struct wlan_lmac_if_tx_ops *tx_ops)
 {
@@ -416,6 +416,9 @@ static void target_if_target_tx_ops_register(
 
 	target_tx_ops->tgt_is_tgt_type_qcn6122 =
 		target_is_tgt_type_qcn6122;
+
+	target_tx_ops->tgt_is_tgt_type_qcn7605 =
+		target_is_tgt_type_qcn7605;
 
 	target_tx_ops->tgt_get_tgt_type =
 		lmac_get_tgt_type;
@@ -726,6 +729,11 @@ bool target_is_tgt_type_qcn6122(uint32_t target_type)
 	return target_type == TARGET_TYPE_QCN6122;
 }
 
+bool target_is_tgt_type_qcn7605(uint32_t target_type)
+{
+	return target_type == TARGET_TYPE_QCN7605;
+}
+
 QDF_STATUS
 target_pdev_is_scan_radio_supported(struct wlan_objmgr_pdev *pdev,
 				    bool *is_scan_radio_supported)
@@ -877,3 +885,34 @@ void target_if_set_reg_cc_ext_supp(struct target_psoc_info *tgt_hdl,
 	info->wlan_res_cfg.is_reg_cc_ext_event_supported =
 		target_if_reg_is_reg_cc_ext_event_host_supported(psoc);
 }
+
+#if defined(WLAN_FEATURE_11BE_MLO) && defined(WLAN_MLO_MULTI_CHIP)
+uint16_t  target_if_pdev_get_hw_link_id(struct wlan_objmgr_pdev *pdev)
+{
+	struct target_pdev_info *tgt_pdev_info;
+
+	if (!pdev)
+		return PDEV_INVALID_HW_LINK_ID;
+
+	tgt_pdev_info = wlan_pdev_get_tgt_if_handle(pdev);
+	if (!tgt_pdev_info)
+		return PDEV_INVALID_HW_LINK_ID;
+
+	return tgt_pdev_info->hw_link_id;
+}
+
+void target_pdev_set_hw_link_id(struct wlan_objmgr_pdev *pdev,
+				uint16_t hw_link_id)
+{
+	struct target_pdev_info *tgt_pdev_info;
+
+	if (!pdev)
+		return;
+
+	tgt_pdev_info = wlan_pdev_get_tgt_if_handle(pdev);
+	if (!tgt_pdev_info)
+		return;
+
+	tgt_pdev_info->hw_link_id  = hw_link_id;
+}
+#endif /*WLAN_FEATURE_11BE_MLO && WLAN_MLO_MULTI_CHIP*/

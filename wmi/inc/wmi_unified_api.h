@@ -53,7 +53,9 @@
 #include "wmi_unified_twt_param.h"
 #include "wmi_unified_twt_api.h"
 #endif
-
+#ifdef WDS_CONV_TARGET_IF_OPS_ENABLE
+#include "wmi_unified_wds_api.h"
+#endif
 #ifdef FEATURE_WLAN_EXTSCAN
 #include "wmi_unified_extscan_api.h"
 #endif
@@ -115,6 +117,10 @@
 #endif
 
 #include "wmi_unified_cp_stats_api.h"
+
+#if defined(WLAN_FEATURE_11BE_MLO) && defined(WLAN_MLO_MULTI_CHIP)
+#include "wmi_unified_11be_setup_api.h"
+#endif
 
 typedef qdf_nbuf_t wmi_buf_t;
 #define wmi_buf_data(_buf) qdf_nbuf_data(_buf)
@@ -701,13 +707,14 @@ wmi_unified_extract_hw_mode_resp(wmi_unified_t wmi,
  * @evt_buf:    Pointer to the event buffer
  * @trig:       Pointer to destination structure to fill data
  * @idx:        TLV id
+ * @btm_idx:    BTM candidates index
  *
  * Return: QDF_STATUS
  */
 QDF_STATUS
 wmi_unified_extract_roam_trigger_stats(wmi_unified_t wmi, void *evt_buf,
 				       struct wmi_roam_trigger_info *trig,
-				       uint8_t idx);
+				       uint8_t idx, uint8_t btm_idx);
 
 /**
  * wmi_unified_extract_roam_scan_stats() - Extract roam scan stats from
@@ -2201,6 +2208,36 @@ QDF_STATUS wmi_extract_pdev_sscan_fft_bin_index(
 			wmi_unified_t wmi_handle,
 			uint8_t *evt_buf,
 			struct spectral_fft_bin_markers_160_165mhz *param);
+
+/**
+ * wmi_extract_pdev_spectral_session_chan_info() - Extract channel information
+ * for a spectral scan session
+ * @wmi_handle: handle to WMI.
+ * @evt_buf: Event buffer
+ * @chan_info: Spectral session channel information data structure to be filled
+ * by this API
+ *
+ * Return: QDF_STATUS of operation
+ */
+QDF_STATUS wmi_extract_pdev_spectral_session_chan_info(
+			wmi_unified_t wmi_handle, void *event,
+			struct spectral_session_chan_info *chan_info);
+
+/**
+ * wmi_extract_pdev_spectral_session_detector_info() - Extract detector
+ * information for a spectral scan session
+ * @wmi_handle: handle to WMI.
+ * @evt_buf: Event buffer
+ * @det_info: Spectral session detector information data structure to be filled
+ * by this API
+ * @det_info_idx: index in the array of spectral scan detector info TLVs
+ *
+ * Return: QDF_STATUS of operation
+ */
+QDF_STATUS wmi_extract_pdev_spectral_session_detector_info(
+		wmi_unified_t wmi_handle, void *event,
+		struct spectral_session_det_info *det_info,
+		uint8_t det_info_idx);
 #endif /* WLAN_CONV_SPECTRAL_ENABLE */
 
 #if defined(WLAN_SUPPORT_FILS) || defined(CONFIG_BAND_6GHZ)
@@ -3017,6 +3054,9 @@ wmi_extract_chan_stats(wmi_unified_t wmi_handle, void *evt_buf,
  * @evt_buf: Pointer to event buffer
  * @temp: Pointer to hold extracted temperature
  * @level: Pointer to hold extracted level in host enum
+ * @therm_throt_levels: Pointer to hold extracted number of level in thermal
+ *                      stats
+ * @tt_lvl_stats_event: Pointer to hold extracted thermal stats for each level
  * @pdev_id: Pointer to hold extracted pdev_id
  *
  * Return: QDF_STATUS_SUCCESS on success and QDF_STATUS_E_FAILURE for failure
@@ -3024,6 +3064,8 @@ wmi_extract_chan_stats(wmi_unified_t wmi_handle, void *evt_buf,
 QDF_STATUS wmi_extract_thermal_stats(wmi_unified_t wmi_handle, void *evt_buf,
 				     uint32_t *temp,
 				     enum thermal_throttle_level *level,
+				     uint32_t *therm_throt_levels,
+				     struct thermal_throt_level_stats *tt_stats,
 				     uint32_t *pdev_id);
 
 /**
@@ -4421,4 +4463,16 @@ wmi_extract_halphy_cal_ev_param(wmi_unified_t wmi_handle,
 				void *evt_buf,
 				struct wmi_host_pdev_set_halphy_cal_event *param);
 
+#ifdef FEATURE_MEC_OFFLOAD
+/**
+ * wmi_unified_pdev_set_mec_timer() - set mec timer value
+ * @wmi_handle: wmi handle
+ * @param: params needed for mec timer config
+ *
+ * Return: QDF_STATUS_SUCCESS for success or error code
+ */
+QDF_STATUS
+wmi_unified_pdev_set_mec_timer(struct wmi_unified *wmi_handle,
+			       struct set_mec_timer_params *param);
+#endif
 #endif /* _WMI_UNIFIED_API_H_ */

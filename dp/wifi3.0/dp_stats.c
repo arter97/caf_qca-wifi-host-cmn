@@ -172,7 +172,48 @@ const char *intfrm_delay_bucket[CDP_DELAY_BUCKET_MAX + 1] = {
 
 #define TID_COUNTER_STATS 1	/* Success/drop stats type */
 #define TID_DELAY_STATS 2	/* Delay stats type */
+#define TID_RX_ERROR_STATS 3	/* Rx Error stats type */
 
+#ifdef WLAN_SYSFS_DP_STATS
+void DP_PRINT_STATS(const char *fmt, ...)
+{
+	void *soc_void = NULL;
+	va_list val;
+	uint16_t buf_written = 0;
+	uint16_t curr_len = 0;
+	uint16_t max_len = 0;
+	struct dp_soc *soc = NULL;
+
+	soc_void = cds_get_context(QDF_MODULE_ID_SOC);
+	soc = cdp_soc_t_to_dp_soc(soc_void);
+	va_start(val, fmt);
+	QDF_VTRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_INFO_HIGH, (char *)fmt, val);
+	/* writing to the buffer */
+	if (soc->sysfs_config && soc->sysfs_config->printing_mode == PRINTING_MODE_ENABLED) {
+		if (soc->sysfs_config->process_id == qdf_get_current_pid()) {
+			curr_len = soc->sysfs_config->curr_buffer_length;
+			max_len = soc->sysfs_config->max_buffer_length;
+			if ((max_len - curr_len) <= 1)
+				return;
+
+			qdf_spinlock_acquire(&soc->sysfs_config->sysfs_write_user_buffer);
+			if (soc->sysfs_config->buf) {
+				buf_written = vscnprintf(soc->sysfs_config->buf + curr_len,
+							 max_len - curr_len, fmt, val);
+				curr_len += buf_written;
+				if ((max_len - curr_len) <= 1)
+					return;
+
+				buf_written += scnprintf(soc->sysfs_config->buf + curr_len,
+							 max_len - curr_len, "\n");
+				soc->sysfs_config->curr_buffer_length +=  buf_written;
+			}
+			qdf_spinlock_release(&soc->sysfs_config->sysfs_write_user_buffer);
+		}
+	}
+	va_end(val);
+}
+#endif /* WLAN_SYSFS_DP_STATS */
 /*
  * dp_print_stats_string_tlv: display htt_stats_string_tlv
  * @tag_buf: buffer containing the tlv htt_stats_string_tlv
@@ -3206,6 +3247,10 @@ static void dp_print_rx_pdev_rate_stats_tlv(struct dp_pdev *pdev,
 		       dp_stats_buf->rx_11ax_ofdma);
 	DP_PRINT_STATS("txbf = %u",
 		       dp_stats_buf->txbf);
+	DP_PRINT_STATS("rx_su_ndpa = %u",
+		       dp_stats_buf->rx_su_ndpa);
+	DP_PRINT_STATS("rx_br_poll = %u",
+		       dp_stats_buf->rx_br_poll);
 
 	index = 0;
 	qdf_mem_zero(str_buf, DP_MAX_STRING_LEN);
@@ -3398,6 +3443,26 @@ static void dp_print_rx_pdev_rate_stats_tlv(struct dp_pdev *pdev,
 				     i, dp_stats_buf->rx_ulofdma_mpdu_fail[i]);
 	}
 	DP_PRINT_STATS("rx_ulofdma_mpdu_fail = %s", str_buf);
+
+	index = 0;
+	qdf_mem_zero(str_buf, DP_MAX_STRING_LEN);
+	for (i = 0; i < HTT_RX_PDEV_STATS_NUM_MCS_COUNTERS; i++) {
+		index += qdf_snprint(&str_buf[index],
+				     DP_MAX_STRING_LEN - index,
+				     " %u:%u,",
+				     i, dp_stats_buf->rx_11ax_su_txbf_mcs[i]);
+	}
+	DP_PRINT_STATS("rx_11ax_su_txbf_mcs = %s", str_buf);
+
+	index = 0;
+	qdf_mem_zero(str_buf, DP_MAX_STRING_LEN);
+	for (i = 0; i < HTT_RX_PDEV_STATS_NUM_MCS_COUNTERS; i++) {
+		index += qdf_snprint(&str_buf[index],
+				     DP_MAX_STRING_LEN - index,
+				     " %u:%u,",
+				     i, dp_stats_buf->rx_11ax_mu_txbf_mcs[i]);
+	}
+	DP_PRINT_STATS("rx_11ax_mu_txbf_mcs = %s", str_buf);
 
 	for (i = 0; i < HTT_TX_PDEV_STATS_NUM_GI_COUNTERS; i++)
 		qdf_mem_free(ul_ofdma_rx_gi[i]);
@@ -4421,7 +4486,7 @@ dp_accumulate_tid_stats(struct dp_pdev *pdev, uint8_t tid,
 			struct cdp_tid_tx_stats *total_tx,
 			struct cdp_tid_rx_stats *total_rx, uint8_t type)
 {
-	uint8_t ring_id = 0, drop = 0, tqm_status_idx = 0, htt_status_idx = 0;
+	uint8_t i = 0, ring_id = 0, drop = 0, tqm_status_idx = 0, htt_status_idx = 0;
 	struct cdp_tid_stats *tid_stats = &pdev->stats.tid_stats;
 	struct cdp_tid_tx_stats *per_ring_tx = NULL;
 	struct cdp_tid_rx_stats *per_ring_rx = NULL;
@@ -4493,6 +4558,22 @@ dp_accumulate_tid_stats(struct dp_pdev *pdev, uint8_t tid,
 		break;
 	}
 
+	case TID_RX_ERROR_STATS:
+	{
+		for (ring_id = 0; ring_id < CDP_MAX_RX_RINGS; ring_id++) {
+			per_ring_rx = &tid_stats->tid_rx_stats[ring_id][tid];
+			total_rx->reo_err.err_src_reo_code_inv += per_ring_rx->reo_err.err_src_reo_code_inv;
+			for (i = 0; i < CDP_REO_CODE_MAX; i++) {
+				total_rx->reo_err.err_reo_codes[i] += per_ring_rx->reo_err.err_reo_codes[i];
+			}
+
+			total_rx->rxdma_err.err_src_rxdma_code_inv += per_ring_rx->rxdma_err.err_src_rxdma_code_inv;
+			for (i = 0; i < CDP_DMA_CODE_MAX; i++) {
+				total_rx->rxdma_err.err_dma_codes[i] += per_ring_rx->rxdma_err.err_dma_codes[i];
+			}
+		}
+		break;
+	}
 	default:
 		qdf_err("Invalid stats type");
 		break;
@@ -4660,6 +4741,40 @@ void dp_pdev_print_delay_stats(struct dp_pdev *pdev)
 		DP_PRINT_STATS("Min = %u", total_rx.to_stack_delay.min_delay);
 		DP_PRINT_STATS("Max = %u", total_rx.to_stack_delay.max_delay);
 		DP_PRINT_STATS("Avg = %u\n", total_rx.to_stack_delay.avg_delay);
+	}
+}
+
+void dp_pdev_print_rx_error_stats(struct dp_pdev *pdev)
+{
+	struct dp_soc *soc = pdev->soc;
+	struct cdp_tid_rx_stats total_rx;
+	struct cdp_tid_tx_stats total_tx;
+	struct cdp_tid_stats *tid_stats;
+
+	uint8_t tid, index;
+
+	if (!soc)
+		return;
+
+	tid_stats = &pdev->stats.tid_stats;
+
+	DP_PRINT_STATS("Per TID RX Error Stats:\n");
+	for (tid = 0; tid < CDP_MAX_VOW_TID; tid++) {
+		dp_accumulate_tid_stats(pdev, tid, &total_tx, &total_rx,
+					TID_RX_ERROR_STATS);
+		DP_PRINT_STATS("----TID: %d----", tid + 4);
+
+		DP_PRINT_STATS("Rx REO Error stats:");
+		DP_PRINT_STATS("err_src_reo_code_inv = %llu", total_rx.reo_err.err_src_reo_code_inv);
+		for (index = 0; index < CDP_REO_CODE_MAX; index++) {
+			DP_PRINT_STATS("err src reo codes: %d = %llu", index, total_rx.reo_err.err_reo_codes[index]);
+		}
+
+		DP_PRINT_STATS("Rx Rxdma Error stats:");
+		DP_PRINT_STATS("err_src_rxdma_code_inv = %llu", total_rx.rxdma_err.err_src_rxdma_code_inv);
+		for (index = 0; index < CDP_DMA_CODE_MAX; index++) {
+			DP_PRINT_STATS("err src dma codes: %d = %llu", index, total_rx.rxdma_err.err_dma_codes[index]);
+		}
 	}
 }
 #endif
@@ -4906,7 +5021,7 @@ dp_print_pdev_cfg_params(struct dp_pdev *pdev)
 	DP_PRINT_STATS("DMA Mon buf ring size: %d ",
 		       pdev_cfg_ctx->dma_mon_buf_ring_size);
 	DP_PRINT_STATS("DMA Mon dest ring size: %d ",
-		       pdev_cfg_ctx->dma_mon_dest_ring_size);
+		       pdev_cfg_ctx->dma_rx_mon_dest_ring_size);
 	DP_PRINT_STATS("DMA Mon status ring size: %d ",
 		       pdev_cfg_ctx->dma_mon_status_ring_size);
 	DP_PRINT_STATS("Rxdma monitor desc ring: %d",
@@ -5884,6 +5999,8 @@ void dp_txrx_path_stats(struct dp_soc *soc)
 			       pdev->stats.tx.dropped.fw_rem_notx);
 		DP_PRINT_STATS("Invalid peer on tx path: %u",
 			       pdev->soc->stats.tx.tx_invalid_peer.num);
+		DP_PRINT_STATS("Tx desc freed in non-completion path: %u",
+			       pdev->soc->stats.tx.tx_comp_exception);
 
 		DP_PRINT_STATS("Tx packets sent per interrupt:");
 		DP_PRINT_STATS("Single Packet: %u",
@@ -6411,7 +6528,7 @@ void dp_print_soc_interrupt_stats(struct dp_soc *soc)
 		qdf_mem_zero(int_ctx_str, sizeof(int_ctx_str));
 		intr_stats = &soc->intr_ctx[i].intr_stats;
 
-		if (!intr_stats->num_masks)
+		if (!intr_stats->num_masks && !intr_stats->num_near_full_masks)
 			continue;
 
 		pos += qdf_scnprintf(buf + pos,

@@ -20,10 +20,11 @@
 #ifndef _WLAN_MLO_MGR_STA_H_
 #define _WLAN_MLO_MGR_STA_H_
 
-#include <wlan_mlo_mgr_public_structs.h>
 #include <wlan_cm_ucfg_api.h>
 #include <wlan_objmgr_vdev_obj.h>
 #ifdef WLAN_FEATURE_11BE_MLO
+#include <wlan_mlo_mgr_public_structs.h>
+
 /**
  * mlo_connect - Start the connection process
  *
@@ -225,7 +226,7 @@ mlo_get_chan_freq_by_bssid(struct wlan_objmgr_pdev *pdev,
  * Return: none
  */
 void mlo_get_assoc_rsp(struct wlan_objmgr_vdev *vdev,
-		       struct element_info **assoc_rsp_frame);
+		       struct element_info *assoc_rsp_frame);
 #else
 static inline
 QDF_STATUS mlo_connect(struct wlan_objmgr_vdev *vdev,
@@ -327,7 +328,7 @@ mlo_get_chan_freq_by_bssid(struct wlan_objmgr_pdev *pdev,
 
 static inline void
 mlo_get_assoc_rsp(struct wlan_objmgr_vdev *vdev,
-		  struct element_info **assoc_rsp_frame)
+		  struct element_info *assoc_rsp_frame)
 {
 }
 #endif

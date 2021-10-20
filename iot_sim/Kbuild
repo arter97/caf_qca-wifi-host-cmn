@@ -19,6 +19,7 @@ INCS += -I$(obj)/$(DEPTH)/cmn_dev/umac/cmn_services/mgmt_txrx/dispatcher/inc
 INCS += -I$(obj)/$(DEPTH)/cmn_dev/umac/regulatory/dispatcher/inc
 INCS += -I$(obj)/$(DEPTH)/umac/son/dispatcher/inc
 INCS += -I$(obj)/$(DEPTH)/umac/son/os/linux
+INCS += -I$(obj)/$(DEPTH)/cmn_dev/umac/cmn_services/regulatory/inc
 INCS += -I$(obj)/$(DEPTH)/cmn_dev/umac/dfs/dispatcher/inc
 INCS += -I$(obj)/$(DEPTH)/cmn_dev/os_if/linux/scan/inc
 INCS += -I$(obj)/$(DEPTH)/cmn_dev/target_if/direct_buf_rx/inc
@@ -29,10 +30,8 @@ INCS += -I$(obj)/$(DEPTH)/component_dev/wmi/inc
 INCS += -I$(obj)/$(DEPTH)/pld/inc
 INCS += -I$(obj)/$(DEPTH)/component_dev/dp/inc
 
-ifeq ($(WLAN_CONV_CRYPTO_SUPPORTED), 1)
 INCS += -I$(obj)/$(DEPTH)/cmn_dev/umac/cmn_services/crypto/inc
 INCS += -I$(obj)/$(DEPTH)/component_dev/crypto/inc
-endif
 
 ifeq ($(WLAN_SUPPORT_GREEN_AP), 1)
 INCS += -I$(obj)/$(DEPTH)/cmn_dev/umac/green_ap/dispatcher/inc

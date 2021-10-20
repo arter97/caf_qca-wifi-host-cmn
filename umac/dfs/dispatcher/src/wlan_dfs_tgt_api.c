@@ -33,7 +33,7 @@
 #include "../../core/src/dfs_process_radar_found_ind.h"
 #include <qdf_module.h>
 #include "../../core/src/dfs_partial_offload_radar.h"
-#ifdef QCA_MCL_DFS_SUPPORT
+#ifdef MOBILE_DFS_SUPPORT
 #include "wlan_mlme_ucfg_api.h"
 #endif
 
@@ -53,12 +53,21 @@ wlan_psoc_get_dfs_txops(struct wlan_objmgr_psoc *psoc)
 
 qdf_export_symbol(wlan_psoc_get_dfs_txops);
 
-bool tgt_dfs_is_pdev_5ghz(struct wlan_objmgr_pdev *pdev)
+bool tgt_dfs_is_5ghz_supported_in_pdev(struct wlan_objmgr_pdev *pdev)
 {
 	struct wlan_lmac_if_dfs_tx_ops *dfs_tx_ops;
 	struct wlan_objmgr_psoc *psoc;
 	bool is_5ghz = false;
 	QDF_STATUS status;
+	bool is_6ghz_only_pdev;
+	qdf_freq_t low_5g = 0;
+	qdf_freq_t high_5g = 0;
+
+	wlan_reg_get_freq_range(pdev, NULL, NULL, &low_5g, &high_5g);
+	is_6ghz_only_pdev = wlan_reg_is_range_only6g(low_5g, high_5g);
+
+	if (is_6ghz_only_pdev)
+		return false;
 
 	psoc = wlan_pdev_get_psoc(pdev);
 	if (!psoc) {
@@ -96,7 +105,7 @@ tgt_dfs_set_current_channel_for_freq(struct wlan_objmgr_pdev *pdev,
 {
 	struct wlan_dfs *dfs;
 
-	if (!tgt_dfs_is_pdev_5ghz(pdev))
+	if (!tgt_dfs_is_5ghz_supported_in_pdev(pdev))
 		return QDF_STATUS_SUCCESS;
 
 	dfs = wlan_pdev_get_dfs_obj(pdev);
@@ -212,7 +221,7 @@ QDF_STATUS tgt_dfs_process_phyerr(struct wlan_objmgr_pdev *pdev,
 }
 qdf_export_symbol(tgt_dfs_process_phyerr);
 
-#ifdef QCA_MCL_DFS_SUPPORT
+#ifdef MOBILE_DFS_SUPPORT
 QDF_STATUS tgt_dfs_process_phyerr_filter_offload(struct wlan_objmgr_pdev *pdev,
 						 struct radar_event_info
 						 *wlan_radar_event)
@@ -278,7 +287,7 @@ QDF_STATUS tgt_dfs_is_precac_timer_running(struct wlan_objmgr_pdev *pdev,
 {
 	struct wlan_dfs *dfs;
 
-	if (!tgt_dfs_is_pdev_5ghz(pdev))
+	if (!tgt_dfs_is_5ghz_supported_in_pdev(pdev))
 		return QDF_STATUS_SUCCESS;
 
 	dfs = wlan_pdev_get_dfs_obj(pdev);
@@ -297,7 +306,7 @@ QDF_STATUS tgt_dfs_get_radars(struct wlan_objmgr_pdev *pdev)
 {
 	struct wlan_dfs *dfs;
 
-	if (!tgt_dfs_is_pdev_5ghz(pdev))
+	if (!tgt_dfs_is_5ghz_supported_in_pdev(pdev))
 		return QDF_STATUS_SUCCESS;
 
 	dfs = wlan_pdev_get_dfs_obj(pdev);
@@ -329,7 +338,7 @@ QDF_STATUS tgt_dfs_destroy_object(struct wlan_objmgr_pdev *pdev)
 }
 qdf_export_symbol(tgt_dfs_destroy_object);
 
-#ifdef QCA_MCL_DFS_SUPPORT
+#ifdef MOBILE_DFS_SUPPORT
 QDF_STATUS tgt_dfs_set_tx_leakage_threshold(struct wlan_objmgr_pdev *pdev)
 {
 	struct wlan_dfs *dfs;
@@ -414,7 +423,7 @@ QDF_STATUS tgt_dfs_set_agile_precac_state(struct wlan_objmgr_pdev *pdev,
 	bool is_precac_running_on_given_pdev = false;
 	int i;
 
-	if (!tgt_dfs_is_pdev_5ghz(pdev))
+	if (!tgt_dfs_is_5ghz_supported_in_pdev(pdev))
 		return QDF_STATUS_SUCCESS;
 
 	dfs = wlan_pdev_get_dfs_obj(pdev);
@@ -554,7 +563,7 @@ QDF_STATUS tgt_dfs_process_radar_ind(struct wlan_objmgr_pdev *pdev,
 }
 qdf_export_symbol(tgt_dfs_process_radar_ind);
 
-#ifndef QCA_MCL_DFS_SUPPORT
+#ifndef MOBILE_DFS_SUPPORT
 QDF_STATUS tgt_dfs_cac_complete(struct wlan_objmgr_pdev *pdev, uint32_t vdev_id)
 {
 	return QDF_STATUS_SUCCESS;
@@ -595,7 +604,7 @@ QDF_STATUS tgt_dfs_stop(struct wlan_objmgr_pdev *pdev)
 {
 	struct wlan_dfs *dfs;
 
-	if (!tgt_dfs_is_pdev_5ghz(pdev))
+	if (!tgt_dfs_is_5ghz_supported_in_pdev(pdev))
 		return QDF_STATUS_SUCCESS;
 
 	dfs = wlan_pdev_get_dfs_obj(pdev);
@@ -634,7 +643,7 @@ QDF_STATUS tgt_dfs_process_emulate_bang_radar_cmd(struct wlan_objmgr_pdev *pdev,
 }
 qdf_export_symbol(tgt_dfs_process_emulate_bang_radar_cmd);
 
-#ifdef QCA_MCL_DFS_SUPPORT
+#ifdef MOBILE_DFS_SUPPORT
 QDF_STATUS tgt_dfs_set_phyerr_filter_offload(struct wlan_objmgr_pdev *pdev)
 {
 	struct wlan_objmgr_psoc *psoc;
@@ -732,7 +741,7 @@ QDF_STATUS tgt_dfs_reset_spoof_test(struct wlan_objmgr_pdev *pdev)
 {
 	struct wlan_dfs *dfs;
 
-	if (!tgt_dfs_is_pdev_5ghz(pdev))
+	if (!tgt_dfs_is_5ghz_supported_in_pdev(pdev))
 		return QDF_STATUS_SUCCESS;
 
 	dfs = wlan_pdev_get_dfs_obj(pdev);

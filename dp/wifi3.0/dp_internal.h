@@ -57,10 +57,13 @@ struct htt_dbgfs_cfg {
 #define DBG_STATS_COOKIE_DEFAULT 0x0
 
 /* Reserve for DP Stats: 3rd bit */
-#define DBG_STATS_COOKIE_DP_STATS 0x8
+#define DBG_STATS_COOKIE_DP_STATS BIT(3)
 
 /* Reserve for HTT Stats debugfs support: 4th bit */
-#define DBG_STATS_COOKIE_HTT_DBGFS 0x10
+#define DBG_STATS_COOKIE_HTT_DBGFS BIT(4)
+
+/*Reserve for HTT Stats debugfs support: 5th bit */
+#define DBG_SYSFS_STATS_COOKIE BIT(5)
 
 /**
  * Bitmap of HTT PPDU TLV types for Default mode
@@ -600,11 +603,6 @@ dp_monitor_get_rx_status(struct dp_pdev *pdev)
 	return NULL;
 }
 
-static inline bool dp_monitor_is_enable_enhanced_stats(struct dp_pdev *pdev)
-{
-	return false;
-}
-
 static inline
 void dp_monitor_pdev_config_scan_spcl_vap(struct dp_pdev *pdev)
 {
@@ -616,6 +614,19 @@ void dp_monitor_pdev_reset_scan_spcl_vap_stats_enable(struct dp_pdev *pdev,
 {
 }
 #endif
+
+/**
+ * cdp_soc_t_to_dp_soc() - typecast cdp_soc_t to
+ * dp soc handle
+ * @psoc: CDP psoc handle
+ *
+ * Return: struct dp_soc pointer
+ */
+static inline
+struct dp_soc *cdp_soc_t_to_dp_soc(struct cdp_soc_t *psoc)
+{
+	return (struct dp_soc *)psoc;
+}
 
 #define DP_MAX_TIMER_EXEC_TIME_TICKS \
 		(QDF_LOG_TIMESTAMP_CYCLES_PER_10_US * 100 * 20)
@@ -671,6 +682,9 @@ while (0)
 	QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_##LVL,       \
 		fmt, ## args)
 
+#ifdef WLAN_SYSFS_DP_STATS
+void DP_PRINT_STATS(const char *fmt, ...);
+#else /* WLAN_SYSFS_DP_STATS */
 #ifdef DP_PRINT_NO_CONSOLE
 /* Stat prints should not go to console or kernel logs.*/
 #define DP_PRINT_STATS(fmt, args ...)\
@@ -681,6 +695,8 @@ while (0)
 	QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_FATAL,\
 		  fmt, ## args)
 #endif
+#endif /* WLAN_SYSFS_DP_STATS */
+
 #define DP_STATS_INIT(_handle) \
 	qdf_mem_zero(&((_handle)->stats), sizeof((_handle)->stats))
 
@@ -2272,8 +2288,20 @@ void dp_vdev_peer_stats_update_protocol_cnt_tx(struct dp_vdev *vdev_hdl,
 
 #ifdef QCA_LL_TX_FLOW_CONTROL_V2
 void dp_tx_dump_flow_pool_info(struct cdp_soc_t *soc_hdl);
+
+/**
+ * dp_tx_dump_flow_pool_info_compact() - dump flow pool info
+ * @soc: DP soc context
+ *
+ * Return: none
+ */
+void dp_tx_dump_flow_pool_info_compact(struct dp_soc *soc);
 int dp_tx_delete_flow_pool(struct dp_soc *soc, struct dp_tx_desc_pool_s *pool,
 	bool force);
+#else
+static inline void dp_tx_dump_flow_pool_info_compact(struct dp_soc *soc)
+{
+}
 #endif /* QCA_LL_TX_FLOW_CONTROL_V2 */
 
 #ifdef QCA_OL_DP_SRNG_LOCK_LESS_ACCESS
@@ -2411,6 +2439,14 @@ void dp_pdev_print_delay_stats(struct dp_pdev *pdev);
  * Return:void
  */
 void dp_pdev_print_tid_stats(struct dp_pdev *pdev);
+
+/**
+ * dp_pdev_print_rx_error_stats(): Print pdev level rx error stats
+ * @pdev: DP_PDEV handle
+ *
+ * Return:void
+ */
+void dp_pdev_print_rx_error_stats(struct dp_pdev *pdev);
 #endif /* CONFIG_WIN */
 
 void dp_soc_set_txrx_ring_map(struct dp_soc *soc);
@@ -2462,19 +2498,6 @@ static inline
 struct cdp_soc_t *dp_soc_to_cdp_soc_t(struct dp_soc *psoc)
 {
 	return (struct cdp_soc_t *)psoc;
-}
-
-/**
- * cdp_soc_t_to_dp_soc() - typecast cdp_soc_t to
- * dp soc handle
- * @psoc: CDP psoc handle
- *
- * Return: struct dp_soc pointer
- */
-static inline
-struct dp_soc *cdp_soc_t_to_dp_soc(struct cdp_soc_t *psoc)
-{
-	return (struct dp_soc *)psoc;
 }
 
 #if defined(WLAN_SUPPORT_RX_FLOW_TAG) || defined(WLAN_SUPPORT_RX_FISA)

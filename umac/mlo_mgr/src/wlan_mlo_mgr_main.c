@@ -24,6 +24,7 @@
 #include "wlan_mlo_mgr_main.h"
 #include <wlan_mlo_mgr_ap.h>
 #include <wlan_mlo_mgr_peer.h>
+#include <wlan_cm_public_struct.h>
 
 static void mlo_global_ctx_deinit(void)
 {
@@ -297,6 +298,7 @@ static QDF_STATUS mlo_dev_ctx_deinit(struct wlan_objmgr_vdev *vdev)
 	struct qdf_mac_addr *mld_addr;
 	struct mlo_mgr_context *g_mlo_ctx = wlan_objmgr_get_mlo_ctx();
 	uint8_t id = 0;
+	struct wlan_cm_connect_req *connect_req;
 
 	mld_addr = (struct qdf_mac_addr *)wlan_vdev_mlme_get_mldaddr(vdev);
 	ml_dev = wlan_mlo_get_mld_ctx_by_mldaddr(mld_addr);
@@ -331,9 +333,19 @@ static QDF_STATUS mlo_dev_ctx_deinit(struct wlan_objmgr_vdev *vdev)
 		qdf_list_remove_node(&g_mlo_ctx->ml_dev_list,
 				     &ml_dev->node);
 		if (wlan_vdev_mlme_get_opmode(vdev) == QDF_STA_MODE) {
-			if (ml_dev->sta_ctx->connect_req)
-				qdf_mem_free(ml_dev->sta_ctx->connect_req);
+			connect_req = ml_dev->sta_ctx->connect_req;
+			if (connect_req) {
+				if (connect_req->scan_ie.ptr) {
+					qdf_mem_free(connect_req->scan_ie.ptr);
+					connect_req->scan_ie.ptr = NULL;
+				}
 
+				if (connect_req->assoc_ie.ptr) {
+					qdf_mem_free(connect_req->assoc_ie.ptr);
+					connect_req->assoc_ie.ptr = NULL;
+				}
+				qdf_mem_free(ml_dev->sta_ctx->connect_req);
+			}
 			if (ml_dev->sta_ctx->assoc_rsp.ptr)
 				qdf_mem_free(ml_dev->sta_ctx->assoc_rsp.ptr);
 
@@ -360,6 +372,8 @@ QDF_STATUS wlan_mlo_mgr_vdev_created_notification(struct wlan_objmgr_vdev *vdev,
 		/* It's not a ML interface*/
 		return QDF_STATUS_SUCCESS;
 	}
+	mlo_debug("MLD addr" QDF_MAC_ADDR_FMT,
+		  QDF_MAC_ADDR_REF(mld_addr->bytes));
 	status = mlo_dev_ctx_init(vdev);
 
 	return status;
@@ -376,6 +390,8 @@ QDF_STATUS wlan_mlo_mgr_vdev_destroyed_notification(struct wlan_objmgr_vdev *vde
 		/* It's not a ML interface*/
 		return QDF_STATUS_SUCCESS;
 	}
+	mlo_debug("MLD addr" QDF_MAC_ADDR_FMT,
+		  QDF_MAC_ADDR_REF(mld_addr->bytes));
 
 	status = mlo_dev_ctx_deinit(vdev);
 
