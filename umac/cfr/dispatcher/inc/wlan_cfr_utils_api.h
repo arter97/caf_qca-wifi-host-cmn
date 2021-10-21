@@ -201,8 +201,11 @@ struct csi_cfr_header {
 	u_int32_t   Reserved;
 
 	union {
+#ifdef WLAN_CFR_ADRASTEA
 		struct cfr_metadata_version_1 meta_v1;
+#else
 		struct cfr_metadata_version_2 meta_v2;
+#endif
 #ifdef WLAN_ENH_CFR_ENABLE
 		struct cfr_metadata_version_3 meta_v3;
 #endif
