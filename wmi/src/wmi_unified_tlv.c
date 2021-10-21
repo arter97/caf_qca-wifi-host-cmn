@@ -476,6 +476,15 @@ static const uint32_t vdev_param_tlv[] = {
 	[wmi_vdev_param_set_heop] = WMI_VDEV_PARAM_HEOPS_0_31,
 #ifdef WLAN_FEATURE_11BE
 	[wmi_vdev_param_set_ehtop] = WMI_VDEV_PARAM_EHTOPS_0_31,
+	[wmi_vdev_param_set_eht_mu_mode] = WMI_VDEV_PARAM_SET_EHT_MU_MODE,
+	[wmi_vdev_param_set_eht_puncturing_mode] =
+					WMI_VDEV_PARAM_SET_EHT_PUNCTURING_MODE,
+	[wmi_vdev_param_set_eht_ltf] = WMI_VDEV_PARAM_EHT_LTF,
+	[wmi_vdev_param_set_ul_eht_ltf] = WMI_VDEV_PARAM_UL_EHT_LTF,
+	[wmi_vdev_param_set_eht_dcm] = WMI_VDEV_PARAM_EHT_DCM,
+	[wmi_vdev_param_set_eht_range_ext] = WMI_VDEV_PARAM_EHT_RANGE_EXT,
+	[wmi_vdev_param_set_non_data_eht_range_ext] =
+					WMI_VDEV_PARAM_NON_DATA_EHT_RANGE_EXT,
 #endif
 	[wmi_vdev_param_sensor_ap] = WMI_VDEV_PARAM_SENSOR_AP,
 	[wmi_vdev_param_dtim_enable_cts] = WMI_VDEV_PARAM_DTIM_ENABLE_CTS,
@@ -3395,13 +3404,15 @@ static void wmi_scan_chanlist_dump(struct scan_chan_list_params *scan_chan_list)
 	for (i = 0; i < scan_chan_list->nallchans; i++) {
 		chan = &scan_chan_list->ch_param[i];
 		ret = qdf_scnprintf(info + len, sizeof(info) - len,
-				    " %d[%d][%d]", chan->mhz, chan->maxregpower,
-				    chan->dfs_set);
+				    " %d[%d][%d][%d]", chan->mhz,
+				    chan->maxregpower,
+				    chan->dfs_set, chan->nan_disabled);
 		if (ret <= 0)
 			break;
 		len += ret;
 		if (len >= (sizeof(info) - 20)) {
-			wmi_nofl_debug("Chan[TXPwr][DFS]:%s", info);
+			wmi_nofl_debug("Chan[TXPwr][DFS][nan_disabled]:%s",
+				       info);
 			len = 0;
 		}
 	}
@@ -5900,8 +5911,8 @@ static QDF_STATUS send_oem_dma_cfg_cmd_tlv(wmi_unified_t wmi_handle,
 
 	cmd = (uint8_t *) wmi_buf_data(buf);
 	qdf_mem_copy(cmd, cfg, sizeof(*cfg));
-	wmi_debug("Sending OEM Data Request to target, data len %lu"),
-		 sizeof(*cfg);
+	wmi_debug("Sending OEM Data Request to target, data len %lu",
+		 sizeof(*cfg));
 	wmi_mtrace(WMI_OEM_DMA_RING_CFG_REQ_CMDID, NO_SESSION, 0);
 	ret = wmi_unified_cmd_send(wmi_handle, buf, sizeof(*cfg),
 				WMI_OEM_DMA_RING_CFG_REQ_CMDID);
@@ -6948,6 +6959,35 @@ static QDF_STATUS send_simulation_test_cmd_tlv(wmi_unified_t wmi_handle,
 }
 #endif
 
+#ifdef WLAN_FEATURE_11BE
+#define WLAN_PHY_CH_WIDTH_320MHZ CH_WIDTH_320MHZ
+#else
+#define WLAN_PHY_CH_WIDTH_320MHZ CH_WIDTH_INVALID
+#endif
+enum phy_ch_width wmi_map_ch_width(A_UINT32 wmi_width)
+{
+	switch (wmi_width) {
+	case WMI_CHAN_WIDTH_20:
+		return CH_WIDTH_20MHZ;
+	case WMI_CHAN_WIDTH_40:
+		return CH_WIDTH_40MHZ;
+	case WMI_CHAN_WIDTH_80:
+		return CH_WIDTH_80MHZ;
+	case WMI_CHAN_WIDTH_160:
+		return CH_WIDTH_160MHZ;
+	case WMI_CHAN_WIDTH_80P80:
+		return CH_WIDTH_80P80MHZ;
+	case WMI_CHAN_WIDTH_5:
+		return CH_WIDTH_5MHZ;
+	case WMI_CHAN_WIDTH_10:
+		return CH_WIDTH_10MHZ;
+	case WMI_CHAN_WIDTH_320:
+		return WLAN_PHY_CH_WIDTH_320MHZ;
+	default:
+		return CH_WIDTH_INVALID;
+	}
+}
+
 /**
  * send_vdev_spectral_configure_cmd_tlv() - send VDEV spectral configure
  * command to fw
@@ -7180,6 +7220,99 @@ extract_pdev_sscan_fft_bin_index_tlv(
 
 	return QDF_STATUS_SUCCESS;
 }
+
+#ifdef SPECTRAL_BERYLLIUM
+/**
+ * extract_pdev_spectral_session_chan_info_tlv() - Extract channel information
+ * for a spectral scan session
+ * @wmi_handle: handle to WMI.
+ * @event: Event buffer
+ * @chan_info: Spectral session channel information data structure to be filled
+ * by this API
+ *
+ * Return: QDF_STATUS of operation
+ */
+static QDF_STATUS
+extract_pdev_spectral_session_chan_info_tlv(
+			wmi_unified_t wmi_handle, void *event,
+			struct spectral_session_chan_info *chan_info)
+{
+	WMI_PDEV_SSCAN_FW_PARAM_EVENTID_param_tlvs *param_buf = event;
+	wmi_pdev_sscan_chan_info *chan_info_tlv;
+
+	if (!param_buf) {
+		wmi_err("param_buf is NULL");
+		return QDF_STATUS_E_NULL_VALUE;
+	}
+
+	if (!chan_info) {
+		wmi_err("chan_info is NULL");
+		return QDF_STATUS_E_NULL_VALUE;
+	}
+
+	chan_info_tlv = param_buf->chan_info;
+	if (!chan_info_tlv) {
+		wmi_err("chan_info tlv is not present in the event");
+		return QDF_STATUS_E_NULL_VALUE;
+	}
+
+	chan_info->operating_pri20_freq =
+			(qdf_freq_t)chan_info_tlv->operating_pri20_freq;
+	chan_info->operating_cfreq1 =
+			(qdf_freq_t)chan_info_tlv->operating_cfreq1;
+	chan_info->operating_cfreq2 =
+			(qdf_freq_t)chan_info_tlv->operating_cfreq2;
+	chan_info->operating_bw = wmi_map_ch_width(chan_info_tlv->operating_bw);
+	chan_info->operating_puncture_20mhz_bitmap =
+		chan_info_tlv->operating_puncture_20mhz_bitmap;
+
+	chan_info->sscan_cfreq1 = (qdf_freq_t)chan_info_tlv->sscan_cfreq1;
+	chan_info->sscan_cfreq2 = (qdf_freq_t)chan_info_tlv->sscan_cfreq2;
+	chan_info->sscan_bw = wmi_map_ch_width(chan_info_tlv->sscan_bw);
+	chan_info->sscan_puncture_20mhz_bitmap =
+		chan_info_tlv->sscan_puncture_20mhz_bitmap;
+
+	return QDF_STATUS_SUCCESS;
+}
+
+static QDF_STATUS
+extract_pdev_spectral_session_detector_info_tlv(
+			wmi_unified_t wmi_handle, void *event,
+			struct spectral_session_det_info *det_info, uint8_t idx)
+{
+	WMI_PDEV_SSCAN_FW_PARAM_EVENTID_param_tlvs *param_buf = event;
+	wmi_pdev_sscan_detector_info *det_info_tlv;
+
+	if (!param_buf) {
+		wmi_err("param_buf is NULL");
+		return QDF_STATUS_E_NULL_VALUE;
+	}
+
+	if (!det_info) {
+		wmi_err("chan_info is NULL");
+		return QDF_STATUS_E_NULL_VALUE;
+	}
+
+	if (!param_buf->det_info) {
+		wmi_err("det_info tlv is not present in the event");
+		return QDF_STATUS_E_NULL_VALUE;
+	}
+
+	if (idx >= param_buf->num_det_info) {
+		wmi_err("det_info index(%u) is greater than or equal to %u",
+			idx, param_buf->num_det_info);
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	det_info_tlv = &param_buf->det_info[idx];
+
+	det_info->det_id = det_info_tlv->detector_id;
+	det_info->start_freq = (qdf_freq_t)det_info_tlv->start_freq;
+	det_info->end_freq = (qdf_freq_t)det_info_tlv->end_freq;
+
+	return QDF_STATUS_SUCCESS;
+}
+#endif /* SPECTRAL_BERYLLIUM */
 #endif /* WLAN_CONV_SPECTRAL_ENABLE */
 
 #ifdef FEATURE_WPSS_THERMAL_MITIGATION
@@ -7497,8 +7630,8 @@ void wmi_copy_resource_config(wmi_resource_config *resource_cfg,
 							 1);
 
 	wmi_copy_twt_resource_config(resource_cfg, tgt_res_cfg);
-	resource_cfg->peer_map_unmap_v2_support =
-		tgt_res_cfg->peer_map_unmap_v2;
+	resource_cfg->peer_map_unmap_versions =
+		tgt_res_cfg->peer_map_unmap_version;
 	resource_cfg->smart_ant_cap = tgt_res_cfg->smart_ant_cap;
 	if (tgt_res_cfg->re_ul_resp)
 		WMI_SET_BITS(resource_cfg->flags2, 0, 4,
@@ -7586,6 +7719,18 @@ void wmi_copy_resource_config(wmi_resource_config *resource_cfg,
 		resource_cfg->host_service_flags,
 		tgt_res_cfg->is_reg_cc_ext_event_supported);
 
+	WMI_RSRC_CFG_HOST_SERVICE_FLAG_LPI_SP_MODE_SUPPORT_SET(
+		resource_cfg->host_service_flags,
+		tgt_res_cfg->is_6ghz_sp_pwrmode_supp_enabled);
+
+	WMI_RSRC_CFG_HOST_SERVICE_FLAG_REG_DISCARD_AFC_TIMER_CHECK_SET(
+		resource_cfg->host_service_flags,
+		tgt_res_cfg->afc_timer_check_disable);
+
+	WMI_RSRC_CFG_HOST_SERVICE_FLAG_REG_DISCARD_AFC_REQ_ID_CHECK_SET(
+		resource_cfg->host_service_flags,
+		tgt_res_cfg->afc_req_id_check_disable);
+
 	wmi_set_nan_channel_support(resource_cfg);
 
 	wmi_info("Enable dynamic PCIe gen speed: %d",
@@ -7597,7 +7742,7 @@ void wmi_copy_resource_config(wmi_resource_config *resource_cfg,
 		WMI_RSRC_CFG_HOST_SERVICE_FLAG_STA_TWT_SYNC_EVT_SUPPORT_SET(
 			resource_cfg->host_service_flags, 1);
 
-	WMI_TARGET_CAP_FLAGS_RX_PEER_METADATA_VERSION_SET(resource_cfg->flags2,
+	WMI_RSRC_CFG_FLAGS2_RX_PEER_METADATA_VERSION_SET(resource_cfg->flags2,
 						 tgt_res_cfg->target_cap_flags);
 }
 
@@ -9990,7 +10135,7 @@ static QDF_STATUS extract_service_ready_tlv(wmi_unified_t wmi_handle,
 }
 
 /* convert_wireless_modes_tlv() - Convert REGDMN_MODE values sent by target
- *	 to host internal WMI_HOST_REGDMN_MODE values.
+ *	 to host internal HOST_REGDMN_MODE values.
  *	 REGULATORY TODO : REGDMN_MODE_11AC_VHT*_2G values are not used by the
  *	 host currently. Add this in the future if required.
  *	 11AX (Phase II) : 11ax related values are not currently
@@ -10008,73 +10153,73 @@ static inline uint32_t convert_wireless_modes_tlv(uint32_t target_wireless_mode)
 	wmi_debug("Target wireless mode: 0x%x", target_wireless_mode);
 
 	if (target_wireless_mode & REGDMN_MODE_11A)
-		wireless_modes |= WMI_HOST_REGDMN_MODE_11A;
+		wireless_modes |= HOST_REGDMN_MODE_11A;
 
 	if (target_wireless_mode & REGDMN_MODE_TURBO)
-		wireless_modes |= WMI_HOST_REGDMN_MODE_TURBO;
+		wireless_modes |= HOST_REGDMN_MODE_TURBO;
 
 	if (target_wireless_mode & REGDMN_MODE_11B)
-		wireless_modes |= WMI_HOST_REGDMN_MODE_11B;
+		wireless_modes |= HOST_REGDMN_MODE_11B;
 
 	if (target_wireless_mode & REGDMN_MODE_PUREG)
-		wireless_modes |= WMI_HOST_REGDMN_MODE_PUREG;
+		wireless_modes |= HOST_REGDMN_MODE_PUREG;
 
 	if (target_wireless_mode & REGDMN_MODE_11G)
-		wireless_modes |= WMI_HOST_REGDMN_MODE_11G;
+		wireless_modes |= HOST_REGDMN_MODE_11G;
 
 	if (target_wireless_mode & REGDMN_MODE_108G)
-		wireless_modes |= WMI_HOST_REGDMN_MODE_108G;
+		wireless_modes |= HOST_REGDMN_MODE_108G;
 
 	if (target_wireless_mode & REGDMN_MODE_108A)
-		wireless_modes |= WMI_HOST_REGDMN_MODE_108A;
+		wireless_modes |= HOST_REGDMN_MODE_108A;
 
 	if (target_wireless_mode & REGDMN_MODE_11AC_VHT20_2G)
-		wireless_modes |= WMI_HOST_REGDMN_MODE_11AC_VHT20_2G;
+		wireless_modes |= HOST_REGDMN_MODE_11AC_VHT20_2G;
 
 	if (target_wireless_mode & REGDMN_MODE_XR)
-		wireless_modes |= WMI_HOST_REGDMN_MODE_XR;
+		wireless_modes |= HOST_REGDMN_MODE_XR;
 
 	if (target_wireless_mode & REGDMN_MODE_11A_HALF_RATE)
-		wireless_modes |= WMI_HOST_REGDMN_MODE_11A_HALF_RATE;
+		wireless_modes |= HOST_REGDMN_MODE_11A_HALF_RATE;
 
 	if (target_wireless_mode & REGDMN_MODE_11A_QUARTER_RATE)
-		wireless_modes |= WMI_HOST_REGDMN_MODE_11A_QUARTER_RATE;
+		wireless_modes |= HOST_REGDMN_MODE_11A_QUARTER_RATE;
 
 	if (target_wireless_mode & REGDMN_MODE_11NG_HT20)
-		wireless_modes |= WMI_HOST_REGDMN_MODE_11NG_HT20;
+		wireless_modes |= HOST_REGDMN_MODE_11NG_HT20;
 
 	if (target_wireless_mode & REGDMN_MODE_11NA_HT20)
-		wireless_modes |= WMI_HOST_REGDMN_MODE_11NA_HT20;
+		wireless_modes |= HOST_REGDMN_MODE_11NA_HT20;
 
 	if (target_wireless_mode & REGDMN_MODE_11NG_HT40PLUS)
-		wireless_modes |= WMI_HOST_REGDMN_MODE_11NG_HT40PLUS;
+		wireless_modes |= HOST_REGDMN_MODE_11NG_HT40PLUS;
 
 	if (target_wireless_mode & REGDMN_MODE_11NG_HT40MINUS)
-		wireless_modes |= WMI_HOST_REGDMN_MODE_11NG_HT40MINUS;
+		wireless_modes |= HOST_REGDMN_MODE_11NG_HT40MINUS;
 
 	if (target_wireless_mode & REGDMN_MODE_11NA_HT40PLUS)
-		wireless_modes |= WMI_HOST_REGDMN_MODE_11NA_HT40PLUS;
+		wireless_modes |= HOST_REGDMN_MODE_11NA_HT40PLUS;
 
 	if (target_wireless_mode & REGDMN_MODE_11NA_HT40MINUS)
-		wireless_modes |= WMI_HOST_REGDMN_MODE_11NA_HT40MINUS;
+		wireless_modes |= HOST_REGDMN_MODE_11NA_HT40MINUS;
 
 	if (target_wireless_mode & REGDMN_MODE_11AC_VHT20)
-		wireless_modes |= WMI_HOST_REGDMN_MODE_11AC_VHT20;
+		wireless_modes |= HOST_REGDMN_MODE_11AC_VHT20;
 
 	if (target_wireless_mode & REGDMN_MODE_11AC_VHT40PLUS)
-		wireless_modes |= WMI_HOST_REGDMN_MODE_11AC_VHT40PLUS;
+		wireless_modes |= HOST_REGDMN_MODE_11AC_VHT40PLUS;
 
 	if (target_wireless_mode & REGDMN_MODE_11AC_VHT40MINUS)
-		wireless_modes |= WMI_HOST_REGDMN_MODE_11AC_VHT40MINUS;
+		wireless_modes |= HOST_REGDMN_MODE_11AC_VHT40MINUS;
 
 	if (target_wireless_mode & REGDMN_MODE_11AC_VHT80)
-		wireless_modes |= WMI_HOST_REGDMN_MODE_11AC_VHT80;
+		wireless_modes |= HOST_REGDMN_MODE_11AC_VHT80;
 
 	if (target_wireless_mode & REGDMN_MODE_11AC_VHT160)
-		wireless_modes |= WMI_HOST_REGDMN_MODE_11AC_VHT160;
+		wireless_modes |= HOST_REGDMN_MODE_11AC_VHT160;
 
 	if (target_wireless_mode & REGDMN_MODE_11AC_VHT80_80)
-		wireless_modes |= WMI_HOST_REGDMN_MODE_11AC_VHT80_80;
+		wireless_modes |= HOST_REGDMN_MODE_11AC_VHT80_80;
 
 	return wireless_modes;
 }
@@ -10152,31 +10297,31 @@ static void convert_11be_flags_to_modes_ext(uint32_t target_wireless_modes_ext,
 					    uint64_t *wireless_modes_ext)
 {
 	if (target_wireless_modes_ext & REGDMN_MODE_U32_11BEG_EHT20)
-		*wireless_modes_ext |= WMI_HOST_REGDMN_MODE_11BEG_EHT20;
+		*wireless_modes_ext |= HOST_REGDMN_MODE_11BEG_EHT20;
 
 	if (target_wireless_modes_ext & REGDMN_MODE_U32_11BEG_EHT40PLUS)
-		*wireless_modes_ext |= WMI_HOST_REGDMN_MODE_11BEG_EHT40PLUS;
+		*wireless_modes_ext |= HOST_REGDMN_MODE_11BEG_EHT40PLUS;
 
 	if (target_wireless_modes_ext & REGDMN_MODE_U32_11BEG_EHT40MINUS)
-		*wireless_modes_ext |= WMI_HOST_REGDMN_MODE_11BEG_EHT40MINUS;
+		*wireless_modes_ext |= HOST_REGDMN_MODE_11BEG_EHT40MINUS;
 
 	if (target_wireless_modes_ext & REGDMN_MODE_U32_11BEA_EHT20)
-		*wireless_modes_ext |= WMI_HOST_REGDMN_MODE_11BEA_EHT20;
+		*wireless_modes_ext |= HOST_REGDMN_MODE_11BEA_EHT20;
 
 	if (target_wireless_modes_ext & REGDMN_MODE_U32_11BEA_EHT40PLUS)
-		*wireless_modes_ext |= WMI_HOST_REGDMN_MODE_11BEA_EHT40PLUS;
+		*wireless_modes_ext |= HOST_REGDMN_MODE_11BEA_EHT40PLUS;
 
 	if (target_wireless_modes_ext & REGDMN_MODE_U32_11BEA_EHT40MINUS)
-		*wireless_modes_ext |= WMI_HOST_REGDMN_MODE_11BEA_EHT40MINUS;
+		*wireless_modes_ext |= HOST_REGDMN_MODE_11BEA_EHT40MINUS;
 
 	if (target_wireless_modes_ext & REGDMN_MODE_U32_11BEA_EHT80)
-		*wireless_modes_ext |= WMI_HOST_REGDMN_MODE_11BEA_EHT80;
+		*wireless_modes_ext |= HOST_REGDMN_MODE_11BEA_EHT80;
 
 	if (target_wireless_modes_ext & REGDMN_MODE_U32_11BEA_EHT160)
-		*wireless_modes_ext |= WMI_HOST_REGDMN_MODE_11BEA_EHT160;
+		*wireless_modes_ext |= HOST_REGDMN_MODE_11BEA_EHT160;
 
 	if (target_wireless_modes_ext & REGDMN_MODE_U32_11BEA_EHT320)
-		*wireless_modes_ext |= WMI_HOST_REGDMN_MODE_11BEA_EHT320;
+		*wireless_modes_ext |= HOST_REGDMN_MODE_11BEA_EHT320;
 }
 #else
 static void convert_11be_flags_to_modes_ext(uint32_t target_wireless_modes_ext,
@@ -10193,31 +10338,31 @@ static inline uint64_t convert_wireless_modes_ext_tlv(
 	wmi_debug("Target wireless mode: 0x%x", target_wireless_modes_ext);
 
 	if (target_wireless_modes_ext & REGDMN_MODE_U32_11AXG_HE20)
-		wireless_modes_ext |= WMI_HOST_REGDMN_MODE_11AXG_HE20;
+		wireless_modes_ext |= HOST_REGDMN_MODE_11AXG_HE20;
 
 	if (target_wireless_modes_ext & REGDMN_MODE_U32_11AXG_HE40PLUS)
-		wireless_modes_ext |= WMI_HOST_REGDMN_MODE_11AXG_HE40PLUS;
+		wireless_modes_ext |= HOST_REGDMN_MODE_11AXG_HE40PLUS;
 
 	if (target_wireless_modes_ext & REGDMN_MODE_U32_11AXG_HE40MINUS)
-		wireless_modes_ext |= WMI_HOST_REGDMN_MODE_11AXG_HE40MINUS;
+		wireless_modes_ext |= HOST_REGDMN_MODE_11AXG_HE40MINUS;
 
 	if (target_wireless_modes_ext & REGDMN_MODE_U32_11AXA_HE20)
-		wireless_modes_ext |= WMI_HOST_REGDMN_MODE_11AXA_HE20;
+		wireless_modes_ext |= HOST_REGDMN_MODE_11AXA_HE20;
 
 	if (target_wireless_modes_ext & REGDMN_MODE_U32_11AXA_HE40PLUS)
-		wireless_modes_ext |= WMI_HOST_REGDMN_MODE_11AXA_HE40PLUS;
+		wireless_modes_ext |= HOST_REGDMN_MODE_11AXA_HE40PLUS;
 
 	if (target_wireless_modes_ext & REGDMN_MODE_U32_11AXA_HE40MINUS)
-		wireless_modes_ext |= WMI_HOST_REGDMN_MODE_11AXA_HE40MINUS;
+		wireless_modes_ext |= HOST_REGDMN_MODE_11AXA_HE40MINUS;
 
 	if (target_wireless_modes_ext & REGDMN_MODE_U32_11AXA_HE80)
-		wireless_modes_ext |= WMI_HOST_REGDMN_MODE_11AXA_HE80;
+		wireless_modes_ext |= HOST_REGDMN_MODE_11AXA_HE80;
 
 	if (target_wireless_modes_ext & REGDMN_MODE_U32_11AXA_HE160)
-		wireless_modes_ext |= WMI_HOST_REGDMN_MODE_11AXA_HE160;
+		wireless_modes_ext |= HOST_REGDMN_MODE_11AXA_HE160;
 
 	if (target_wireless_modes_ext & REGDMN_MODE_U32_11AXA_HE80_80)
-		wireless_modes_ext |= WMI_HOST_REGDMN_MODE_11AXA_HE80_80;
+		wireless_modes_ext |= HOST_REGDMN_MODE_11AXA_HE80_80;
 
 	convert_11be_flags_to_modes_ext(target_wireless_modes_ext,
 					&wireless_modes_ext);
@@ -11681,6 +11826,19 @@ extract_service_ready_11be_support(struct wlan_psoc_host_mac_phy_caps *param,
 }
 #endif
 
+#if defined(WLAN_FEATURE_11BE_MLO) && defined(WLAN_MLO_MULTI_CHIP)
+static void extract_hw_link_id(struct wlan_psoc_host_mac_phy_caps *param,
+			       WMI_MAC_PHY_CAPABILITIES *mac_phy_caps)
+{
+	param->hw_link_id = WMI_PHY_GET_HW_LINK_ID(mac_phy_caps->pdev_id);
+}
+#else
+static void extract_hw_link_id(struct wlan_psoc_host_mac_phy_caps *param,
+			       WMI_MAC_PHY_CAPABILITIES *mac_phy_caps)
+{
+}
+#endif /*WLAN_FEATURE_11BE_MLO && WLAN_MLO_MULTI_CHIP*/
+
 /**
  * extract_mac_phy_cap_service_ready_ext_tlv() -
  *       extract MAC phy cap from service ready event
@@ -11701,7 +11859,7 @@ static QDF_STATUS extract_mac_phy_cap_service_ready_ext_tlv(
 	WMI_MAC_PHY_CAPABILITIES *mac_phy_caps;
 	WMI_SOC_MAC_PHY_HW_MODE_CAPS *hw_caps;
 	uint32_t phy_map;
-	uint8_t hw_idx, phy_idx = 0;
+	uint8_t hw_idx, phy_idx = 0, pdev_id;
 
 	param_buf = (WMI_SERVICE_READY_EXT_EVENTID_param_tlvs *) event;
 	if (!param_buf)
@@ -11739,10 +11897,12 @@ static QDF_STATUS extract_mac_phy_cap_service_ready_ext_tlv(
 
 	param->hw_mode_id = mac_phy_caps->hw_mode_id;
 	param->phy_idx = phy_idx;
+	pdev_id = WMI_PHY_GET_PDEV_ID(mac_phy_caps->pdev_id);
 	param->pdev_id = wmi_handle->ops->convert_pdev_id_target_to_host(
 							wmi_handle,
-							mac_phy_caps->pdev_id);
-	param->tgt_pdev_id = mac_phy_caps->pdev_id;
+							pdev_id);
+	param->tgt_pdev_id = pdev_id;
+	extract_hw_link_id(param, mac_phy_caps);
 	param->phy_id = mac_phy_caps->phy_id;
 	param->supports_11b =
 			WMI_SUPPORT_11B_GET(mac_phy_caps->supported_flags);
@@ -13105,6 +13265,9 @@ static void copy_power_event(struct afc_regulatory_info *afc_info,
 		afc_chan_info = qdf_mem_malloc(power_info->num_chan_objs *
 					       sizeof(*afc_chan_info));
 
+		if (!afc_chan_info)
+			return;
+
 		copy_afc_chan_obj_info(afc_chan_info,
 				       power_info->num_chan_objs,
 				       channel_info_hdr,
@@ -13485,7 +13648,7 @@ static QDF_STATUS extract_dfs_radar_detection_event_tlv(
 	return QDF_STATUS_SUCCESS;
 }
 
-#ifdef QCA_MCL_DFS_SUPPORT
+#ifdef MOBILE_DFS_SUPPORT
 /**
  * extract_wlan_radar_event_info_tlv() - extract radar pulse event
  * @wmi_handle: wma handle
@@ -14717,6 +14880,41 @@ static QDF_STATUS send_mws_coex_status_req_cmd_tlv(wmi_unified_t wmi_handle,
 }
 #endif
 
+#ifdef FEATURE_MEC_OFFLOAD
+static QDF_STATUS
+send_pdev_set_mec_timer_cmd_tlv(struct wmi_unified *wmi_handle,
+				struct set_mec_timer_params *param)
+{
+	wmi_pdev_mec_aging_timer_config_cmd_fixed_param *cmd;
+	wmi_buf_t buf;
+	int32_t len = sizeof(*cmd);
+
+	buf = wmi_buf_alloc(wmi_handle, len);
+	if (!buf) {
+		wmi_err("wmi_buf_alloc failed");
+		return QDF_STATUS_E_FAILURE;
+	}
+	cmd = (wmi_pdev_mec_aging_timer_config_cmd_fixed_param *)
+		wmi_buf_data(buf);
+	WMITLV_SET_HDR(&cmd->tlv_header,
+		       WMITLV_TAG_STRUC_wmi_pdev_mec_aging_timer_config_cmd_fixed_param,
+		       WMITLV_GET_STRUCT_TLVLEN(
+			wmi_pdev_mec_aging_timer_config_cmd_fixed_param));
+	cmd->pdev_id = param->pdev_id;
+	cmd->mec_aging_timer_threshold = param->mec_aging_timer_threshold;
+
+	wmi_mtrace(WMI_PDEV_MEC_AGING_TIMER_CONFIG_CMDID, param->vdev_id, 0);
+	if (wmi_unified_cmd_send(wmi_handle, buf, len,
+				 WMI_PDEV_MEC_AGING_TIMER_CONFIG_CMDID)) {
+		wmi_err("Failed to set mec aging timer param");
+		wmi_buf_free(buf);
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	return QDF_STATUS_SUCCESS;
+}
+#endif
+
 #ifdef WIFI_POS_CONVERGED
 /**
  * extract_oem_response_param_tlv() - Extract oem response params
@@ -14955,11 +15153,80 @@ static uint32_t wmi_convert_fw_to_cm_trig_reason(uint32_t fw_trig_reason)
 		return ROAM_TRIGGER_REASON_WTC_BTM;
 	case WMI_ROAM_TRIGGER_REASON_PMK_TIMEOUT:
 		return ROAM_TRIGGER_REASON_PMK_TIMEOUT;
+	case WMI_ROAM_TRIGGER_REASON_BTC:
+		return ROAM_TRIGGER_REASON_BTC;
 	case WMI_ROAM_TRIGGER_EXT_REASON_MAX:
 		return ROAM_TRIGGER_REASON_MAX;
 	default:
 		return ROAM_TRIGGER_REASON_NONE;
 	}
+}
+
+/**
+ * extract_roam_11kv_candidate_info  - Extract btm candidate info
+ * @wmi_handle: wmi_handle
+ * @evt_buf: Event buffer
+ * @dst_info: Destination buffer
+ *
+ * Return: QDF_STATUS
+ */
+static QDF_STATUS
+extract_roam_11kv_candidate_info(wmi_unified_t wmi_handle, void *evt_buf,
+				 struct wmi_btm_req_candidate_info *dst_info,
+				 uint8_t btm_idx, uint16_t num_cand)
+{
+	WMI_ROAM_STATS_EVENTID_param_tlvs *param_buf;
+	wmi_roam_btm_request_candidate_info *src_data;
+	uint8_t i;
+
+	param_buf = (WMI_ROAM_STATS_EVENTID_param_tlvs *)evt_buf;
+	if (!param_buf || !param_buf->roam_btm_request_candidate_info ||
+	    !param_buf->num_roam_btm_request_candidate_info ||
+	    (btm_idx +
+	     num_cand) >= param_buf->num_roam_btm_request_candidate_info)
+		return QDF_STATUS_SUCCESS;
+
+	src_data = &param_buf->roam_btm_request_candidate_info[btm_idx];
+	if (num_cand > WLAN_MAX_BTM_CANDIDATE)
+		num_cand = WLAN_MAX_BTM_CANDIDATE;
+	for (i = 0; i < num_cand; i++) {
+		WMI_MAC_ADDR_TO_CHAR_ARRAY(&src_data->btm_candidate_bssid,
+					   dst_info->candidate_bssid.bytes);
+		dst_info->preference = src_data->preference;
+		src_data++;
+		dst_info++;
+	}
+
+	return QDF_STATUS_SUCCESS;
+}
+
+static enum roam_trigger_sub_reason
+wmi_convert_roam_sub_reason(WMI_ROAM_TRIGGER_SUB_REASON_ID subreason)
+{
+	switch (subreason) {
+	case WMI_ROAM_TRIGGER_SUB_REASON_PERIODIC_TIMER:
+		return ROAM_TRIGGER_SUB_REASON_PERIODIC_TIMER;
+	case WMI_ROAM_TRIGGER_SUB_REASON_INACTIVITY_TIMER:
+		return ROAM_TRIGGER_SUB_REASON_INACTIVITY_TIMER_LOW_RSSI;
+	case WMI_ROAM_TRIGGER_SUB_REASON_BTM_DI_TIMER:
+		return ROAM_TRIGGER_SUB_REASON_BTM_DI_TIMER;
+	case WMI_ROAM_TRIGGER_SUB_REASON_FULL_SCAN:
+		return ROAM_TRIGGER_SUB_REASON_FULL_SCAN;
+	case WMI_ROAM_TRIGGER_SUB_REASON_LOW_RSSI_PERIODIC:
+		return ROAM_TRIGGER_SUB_REASON_LOW_RSSI_PERIODIC;
+	case WMI_ROAM_TRIGGER_SUB_REASON_CU_PERIODIC:
+		return ROAM_TRIGGER_SUB_REASON_CU_PERIODIC;
+	case WMI_ROAM_TRIGGER_SUB_REASON_PERIODIC_TIMER_AFTER_INACTIVITY:
+		return ROAM_TRIGGER_SUB_REASON_PERIODIC_TIMER_AFTER_INACTIVITY;
+	case WMI_ROAM_TRIGGER_SUB_REASON_PERIODIC_TIMER_AFTER_INACTIVITY_CU:
+		return ROAM_TRIGGER_SUB_REASON_PERIODIC_TIMER_AFTER_INACTIVITY_CU;
+	case WMI_ROAM_TRIGGER_SUB_REASON_INACTIVITY_TIMER_CU:
+		return ROAM_TRIGGER_SUB_REASON_INACTIVITY_TIMER_CU;
+	default:
+		break;
+	}
+
+	return 0;
 }
 
 /**
@@ -14972,7 +15239,8 @@ static uint32_t wmi_convert_fw_to_cm_trig_reason(uint32_t fw_trig_reason)
  */
 static QDF_STATUS
 extract_roam_trigger_stats_tlv(wmi_unified_t wmi_handle, void *evt_buf,
-			       struct wmi_roam_trigger_info *trig, uint8_t idx)
+			       struct wmi_roam_trigger_info *trig, uint8_t idx,
+			       uint8_t btm_idx)
 {
 	WMI_ROAM_STATS_EVENTID_param_tlvs *param_buf;
 	wmi_roam_trigger_reason *src_data = NULL;
@@ -14987,7 +15255,8 @@ extract_roam_trigger_stats_tlv(wmi_unified_t wmi_handle, void *evt_buf,
 	trig->present = true;
 	trig_reason = src_data->trigger_reason;
 	trig->trigger_reason = wmi_convert_fw_to_cm_trig_reason(trig_reason);
-	trig->trigger_sub_reason = src_data->trigger_sub_reason;
+	trig->trigger_sub_reason =
+		wmi_convert_roam_sub_reason(src_data->trigger_sub_reason);
 	trig->current_rssi = src_data->current_rssi;
 	trig->timestamp = src_data->timestamp;
 
@@ -15001,6 +15270,7 @@ extract_roam_trigger_stats_tlv(wmi_unified_t wmi_handle, void *evt_buf,
 	case WMI_ROAM_TRIGGER_REASON_IDLE:
 	case WMI_ROAM_TRIGGER_REASON_FORCED:
 	case WMI_ROAM_TRIGGER_REASON_UNIT_TEST:
+	case WMI_ROAM_TRIGGER_REASON_BTC:
 		return QDF_STATUS_SUCCESS;
 
 	case WMI_ROAM_TRIGGER_REASON_BTM:
@@ -15018,6 +15288,14 @@ extract_roam_trigger_stats_tlv(wmi_unified_t wmi_handle, void *evt_buf,
 				src_data->btm_bss_termination_timeout;
 		trig->btm_trig_data.btm_mbo_assoc_retry_timeout =
 				src_data->btm_mbo_assoc_retry_timeout;
+		if ((btm_idx + trig->btm_trig_data.candidate_list_count) <
+		    param_buf->num_roam_btm_request_candidate_info)
+			extract_roam_11kv_candidate_info(
+					wmi_handle, evt_buf,
+					trig->btm_trig_data.btm_cand,
+					btm_idx,
+					src_data->candidate_list_count);
+
 		return QDF_STATUS_SUCCESS;
 
 	case WMI_ROAM_TRIGGER_REASON_BSS_LOAD:
@@ -15152,6 +15430,9 @@ extract_roam_scan_stats_tlv(wmi_unified_t wmi_handle, void *evt_buf,
 	dst->type = src_data->roam_scan_type;
 	dst->num_chan = src_data->roam_scan_channel_count;
 	dst->next_rssi_threshold = src_data->next_rssi_trigger_threshold;
+	dst->frame_info_count = src_data->frame_info_count;
+	if (dst->frame_info_count >  WLAN_ROAM_MAX_FRAME_INFO)
+		dst->frame_info_count =  WLAN_ROAM_MAX_FRAME_INFO;
 
 	/* Read the channel data only for dst->type is 0 (partial scan) */
 	if (dst->num_chan && !dst->type && param_buf->num_roam_scan_chan_info &&
@@ -15247,6 +15528,8 @@ extract_roam_11kv_stats_tlv(wmi_unified_t wmi_handle, void *evt_buf,
 	dst->num_freq = src_data->neighbor_report_channel_count;
 	dst->req_time = src_data->neighbor_report_request_timestamp;
 	dst->resp_time = src_data->neighbor_report_response_timestamp;
+	dst->btm_query_token = src_data->btm_query_token;
+	dst->btm_query_reason = src_data->btm_query_reason_code;
 
 	if (!dst->num_freq || !param_buf->num_roam_neighbor_report_chan_info ||
 	    rpt_idx >= param_buf->num_roam_neighbor_report_chan_info)
@@ -15277,7 +15560,8 @@ extract_roam_11kv_stats_tlv(wmi_unified_t wmi_handle, void *evt_buf,
 #else
 static inline QDF_STATUS
 extract_roam_trigger_stats_tlv(wmi_unified_t wmi_handle, void *evt_buf,
-			       struct wmi_roam_trigger_info *trig, uint8_t idx)
+			       struct wmi_roam_trigger_info *trig, uint8_t idx,
+			       uint8_t btm_idx)
 {
 	return QDF_STATUS_E_NOSUPPORT;
 }
@@ -15495,6 +15779,9 @@ extract_time_sync_ftm_offset_event_tlv(wmi_unified_t wmi, void *buf,
 
 	param->vdev_id = resp_event->vdev_id;
 	param->num_qtime = param_buf->num_audio_sync_q_master_slave_times;
+	if (param->num_qtime > FTM_TIME_SYNC_QTIME_PAIR_MAX)
+		param->num_qtime = FTM_TIME_SYNC_QTIME_PAIR_MAX;
+
 	q_pair = param_buf->audio_sync_q_master_slave_times;
 	if (!q_pair) {
 		wmi_err("Invalid q_master_slave_times buffer");
@@ -16096,6 +16383,12 @@ struct wmi_ops tlv_ops =  {
 				extract_pdev_sscan_fw_cmd_fixed_param_tlv,
 	.extract_pdev_sscan_fft_bin_index =
 				extract_pdev_sscan_fft_bin_index_tlv,
+#ifdef SPECTRAL_BERYLLIUM
+	.extract_pdev_spectral_session_chan_info =
+				extract_pdev_spectral_session_chan_info_tlv,
+	.extract_pdev_spectral_session_detector_info =
+				extract_pdev_spectral_session_detector_info_tlv,
+#endif /* SPECTRAL_BERYLLIUM */
 #endif /* WLAN_CONV_SPECTRAL_ENABLE */
 	.send_thermal_mitigation_param_cmd =
 		send_thermal_mitigation_param_cmd_tlv,
@@ -16314,6 +16607,9 @@ struct wmi_ops tlv_ops =  {
 	.send_roam_scan_ch_list_req_cmd = send_roam_scan_ch_list_req_cmd_tlv,
 	.send_injector_config_cmd = send_injector_config_cmd_tlv,
 	.send_cp_stats_cmd = send_cp_stats_cmd_tlv,
+#ifdef FEATURE_MEC_OFFLOAD
+	.send_pdev_set_mec_timer_cmd = send_pdev_set_mec_timer_cmd_tlv,
+#endif
 #ifdef WLAN_SUPPORT_INFRA_CTRL_PATH_STATS
 	.extract_infra_cp_stats = extract_infra_cp_stats_tlv,
 #endif /* WLAN_SUPPORT_INFRA_CTRL_PATH_STATS */
@@ -17185,6 +17481,10 @@ static void populate_tlv_service(uint32_t *wmi_service)
 			WMI_SERVICE_RTT_AP_INITIATOR_STAGGERED_MODE_SUPPORTED;
 	wmi_service[wmi_service_rtt_ap_initiator_bursted_mode_supported] =
 			WMI_SERVICE_RTT_AP_INITIATOR_BURSTED_MODE_SUPPORTED;
+	wmi_service[wmi_service_ema_multiple_group_supported] =
+			WMI_SERVICE_EMA_MULTIPLE_GROUP_SUPPORT;
+	wmi_service[wmi_service_large_beacon_supported] =
+			WMI_SERVICE_LARGE_BEACON_SUPPORT;
 	wmi_service[wmi_service_aoa_for_rcc_supported] =
 			WMI_SERVICE_AOA_FOR_RCC_SUPPORTED;
 #ifdef WLAN_FEATURE_P2P_P2P_STA
@@ -17195,6 +17495,14 @@ static void populate_tlv_service(uint32_t *wmi_service)
 	wmi_service[wmi_service_thermal_stats_temp_range_supported] =
 			WMI_SERVICE_THERMAL_THROT_STATS_TEMP_RANGE_SUPPORT;
 #endif
+	wmi_service[wmi_service_hw_mode_policy_offload_support] =
+			WMI_SERVICE_HW_MODE_POLICY_OFFLOAD_SUPPORT;
+	wmi_service[wmi_service_mgmt_rx_reo_supported] =
+			WMI_SERVICE_MGMT_RX_REO_SUPPORTED;
+	wmi_service[wmi_service_phy_dma_byte_swap_support] =
+			WMI_SERVICE_UNAVAILABLE;
+	wmi_service[wmi_service_spectral_session_info_support] =
+			WMI_SERVICE_UNAVAILABLE;
 }
 
 /**

@@ -1458,6 +1458,7 @@ dp_tx_ring_access_end_wrapper(struct dp_soc *soc,
 		} else {
 			dp_tx_hal_ring_access_end_reap(soc, hal_ring_hdl);
 			hal_srng_set_event(hal_ring_hdl, HAL_SRNG_FLUSH_EVENT);
+			qdf_atomic_inc(&soc->tx_pending_rtpm);
 			hal_srng_inc_flush_cnt(hal_ring_hdl);
 		}
 		dp_runtime_put(soc);
@@ -1466,6 +1467,7 @@ dp_tx_ring_access_end_wrapper(struct dp_soc *soc,
 		dp_runtime_get(soc);
 		dp_tx_hal_ring_access_end_reap(soc, hal_ring_hdl);
 		hal_srng_set_event(hal_ring_hdl, HAL_SRNG_FLUSH_EVENT);
+		qdf_atomic_inc(&soc->tx_pending_rtpm);
 		hal_srng_inc_flush_cnt(hal_ring_hdl);
 		dp_runtime_put(soc);
 	}
@@ -2968,15 +2970,16 @@ void dp_tx_nawds_handler(struct dp_soc *soc, struct dp_vdev *vdev,
 	struct dp_ast_entry *ast_entry = NULL;
 	qdf_ether_header_t *eh = (qdf_ether_header_t *)qdf_nbuf_data(nbuf);
 
-	qdf_spin_lock_bh(&soc->ast_lock);
-	ast_entry = dp_peer_ast_hash_find_by_pdevid
-				(soc,
-				 (uint8_t *)(eh->ether_shost),
-				 vdev->pdev->pdev_id);
-
-	if (ast_entry)
-		sa_peer_id = ast_entry->peer_id;
-	qdf_spin_unlock_bh(&soc->ast_lock);
+	if (!soc->ast_offload_support) {
+		qdf_spin_lock_bh(&soc->ast_lock);
+		ast_entry = dp_peer_ast_hash_find_by_pdevid
+					(soc,
+					(uint8_t *)(eh->ether_shost),
+					vdev->pdev->pdev_id);
+		if (ast_entry)
+			sa_peer_id = ast_entry->peer_id;
+		qdf_spin_unlock_bh(&soc->ast_lock);
+	}
 
 	qdf_spin_lock_bh(&vdev->peer_list_lock);
 	TAILQ_FOREACH(peer, &vdev->peer_list, peer_list_elem) {
@@ -2985,11 +2988,15 @@ void dp_tx_nawds_handler(struct dp_soc *soc, struct dp_vdev *vdev,
 			/* Multicast packets needs to be
 			 * dropped in case of intra bss forwarding
 			 */
-			if (sa_peer_id == peer->peer_id) {
-				dp_tx_debug("multicast packet");
-				DP_STATS_INC(peer, tx.nawds_mcast_drop, 1);
-				continue;
+			if (!soc->ast_offload_support) {
+				if (sa_peer_id == peer->peer_id) {
+					dp_tx_debug("multicast packet");
+					DP_STATS_INC(peer, tx.nawds_mcast_drop,
+						     1);
+					continue;
+				}
 			}
+
 			nbuf_clone = qdf_nbuf_clone(nbuf);
 
 			if (!nbuf_clone) {
@@ -3426,7 +3433,6 @@ static
 void dp_tx_comp_fill_tx_completion_stats(struct dp_tx_desc_s *tx_desc,
 		struct hal_tx_completion_status *ts)
 {
-	struct meta_hdr_s *mhdr;
 	qdf_nbuf_t netbuf = tx_desc->nbuf;
 
 	if (!tx_desc->msdu_ext_desc) {
@@ -3437,17 +3443,6 @@ void dp_tx_comp_fill_tx_completion_stats(struct dp_tx_desc_s *tx_desc,
 			return;
 		}
 	}
-	if (qdf_nbuf_push_head(netbuf, sizeof(struct meta_hdr_s)) == NULL) {
-		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_ERROR,
-			"netbuf %pK offset %zu", netbuf,
-			sizeof(struct meta_hdr_s));
-		return;
-	}
-
-	mhdr = (struct meta_hdr_s *)qdf_nbuf_data(netbuf);
-	mhdr->rssi = ts->ack_frame_rssi;
-	mhdr->band = tx_desc->pdev->operating_channel.band;
-	mhdr->channel = tx_desc->pdev->operating_channel.num;
 }
 
 #else
@@ -3736,12 +3731,6 @@ dp_tx_update_peer_stats(struct dp_tx_desc_s *tx_desc,
 	DP_STATS_INCC(peer, tx.stbc, 1, ts->stbc);
 	DP_STATS_INCC(peer, tx.ldpc, 1, ts->ldpc);
 	DP_STATS_INCC(peer, tx.retries, 1, ts->transmit_cnt > 1);
-
-#if defined(FEATURE_PERPKT_INFO) && WDI_EVENT_ENABLE
-	dp_wdi_event_handler(WDI_EVENT_UPDATE_DP_STATS, pdev->soc,
-			     &peer->stats, ts->peer_id,
-			     UPDATE_PEER_STATS, pdev->pdev_id);
-#endif
 }
 
 #ifdef QCA_LL_TX_FLOW_CONTROL_V2
@@ -4394,6 +4383,7 @@ void dp_tx_process_htt_completion(struct dp_soc *soc,
 	 * descriptor in case of MEC notify.
 	 */
 	if (tx_status == HTT_TX_FW2WBM_TX_STATUS_MEC_NOTIFY) {
+		qdf_assert_always(!soc->mec_fw_offload);
 		/*
 		 * Get vdev id from HTT status word in case of MEC
 		 * notification
@@ -4500,12 +4490,23 @@ void dp_tx_process_htt_completion(struct dp_soc *soc,
 		dp_tx_inspect_handler(soc, vdev, tx_desc, status);
 		break;
 	}
+	case HTT_TX_FW2WBM_TX_STATUS_VDEVID_MISMATCH:
+	{
+		DP_STATS_INC(vdev, tx_i.dropped.fail_per_pkt_vdev_id_check, 1);
+		goto release_tx_desc;
+	}
 	default:
-		dp_tx_comp_debug("Invalid HTT tx_status %d\n",
-				 tx_status);
-		break;
+		dp_tx_comp_err("Invalid HTT tx_status %d\n",
+			       tx_status);
+		goto release_tx_desc;
 	}
 
+	dp_vdev_unref_delete(soc, vdev, DP_MOD_ID_HTT_COMP);
+	return;
+
+release_tx_desc:
+	dp_tx_comp_free_buf(soc, tx_desc);
+	dp_tx_desc_release(tx_desc, tx_desc->pool_id);
 	dp_vdev_unref_delete(soc, vdev, DP_MOD_ID_HTT_COMP);
 }
 
@@ -4708,6 +4709,7 @@ more_data:
 				 !tx_desc->flags)) {
 				dp_tx_comp_info_rl("Descriptor freed in vdev_detach %d",
 						   tx_desc->id);
+				DP_STATS_INC(soc, tx.tx_comp_exception, 1);
 				continue;
 			}
 
@@ -4912,12 +4914,8 @@ void dp_tx_vdev_update_search_flags(struct dp_vdev *vdev)
 	else
 		vdev->hal_desc_addr_search_flags = HAL_TX_DESC_ADDRX_EN;
 
-	/* Set search type only when peer map v2 messaging is enabled
-	 * as we will have the search index (AST hash) only when v2 is
-	 * enabled
-	 */
-	if (soc->is_peer_map_unmap_v2 && vdev->opmode == wlan_op_mode_sta)
-		vdev->search_type = HAL_TX_ADDR_INDEX_SEARCH;
+	if (vdev->opmode == wlan_op_mode_sta)
+		vdev->search_type = soc->sta_mode_search_policy;
 	else
 		vdev->search_type = HAL_TX_ADDR_SEARCH_DEFAULT;
 }

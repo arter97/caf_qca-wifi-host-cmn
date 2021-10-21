@@ -2584,6 +2584,31 @@ QDF_STATUS wmi_extract_pdev_sscan_fft_bin_index(
 
 	return QDF_STATUS_E_FAILURE;
 }
+
+QDF_STATUS wmi_extract_pdev_spectral_session_chan_info(
+			wmi_unified_t wmi_handle, void *event,
+			struct spectral_session_chan_info *chan_info)
+{
+	if (wmi_handle->ops->extract_pdev_spectral_session_chan_info)
+		return wmi_handle->ops->extract_pdev_spectral_session_chan_info(
+				wmi_handle,
+				event, chan_info);
+
+	return QDF_STATUS_E_FAILURE;
+}
+
+QDF_STATUS wmi_extract_pdev_spectral_session_detector_info(
+		wmi_unified_t wmi_handle, void *event,
+		struct spectral_session_det_info *det_info, uint8_t idx)
+{
+	if (wmi_handle->ops->extract_pdev_spectral_session_detector_info)
+		return wmi_handle->ops->
+			extract_pdev_spectral_session_detector_info(
+				wmi_handle, event,
+				det_info, idx);
+
+	return QDF_STATUS_E_FAILURE;
+}
 #endif /* WLAN_CONV_SPECTRAL_ENABLE */
 
 QDF_STATUS wmi_extract_spectral_scaling_params_service_ready_ext(
@@ -3255,11 +3280,11 @@ QDF_STATUS
 wmi_unified_extract_roam_trigger_stats(wmi_unified_t wmi,
 				       void *evt_buf,
 				       struct wmi_roam_trigger_info *trig,
-				       uint8_t idx)
+				       uint8_t idx, uint8_t btm_idx)
 {
 	if (wmi->ops->extract_roam_trigger_stats)
 		return wmi->ops->extract_roam_trigger_stats(wmi, evt_buf, trig,
-							    idx);
+							    idx, btm_idx);
 
 	return QDF_STATUS_E_FAILURE;
 }
@@ -3535,3 +3560,16 @@ wmi_unified_send_set_halphy_cal(wmi_unified_t wmi_handle,
 
 	return QDF_STATUS_E_FAILURE;
 }
+
+#ifdef FEATURE_MEC_OFFLOAD
+QDF_STATUS
+wmi_unified_pdev_set_mec_timer(struct wmi_unified *wmi_handle,
+			       struct set_mec_timer_params *param)
+{
+	if (wmi_handle->ops->send_pdev_set_mec_timer_cmd)
+		return wmi_handle->ops->send_pdev_set_mec_timer_cmd(wmi_handle,
+								    param);
+
+	return QDF_STATUS_E_FAILURE;
+}
+#endif

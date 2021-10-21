@@ -139,28 +139,68 @@ static const struct bonded_channel_freq bonded_chan_160mhz_list_freq[] = {
 #endif /*CONFIG_BAND_6GHZ*/
 };
 
+#ifdef WLAN_FEATURE_11BE
+/* bonded_chan_320mhz_list_freq - List of 320MHz bonnded channel frequencies */
+static const struct bonded_channel_freq bonded_chan_320mhz_list_freq[] = {
+	{5500, 5800}, /* center freq: 5650 */
+#ifdef CONFIG_BAND_6GHZ
+	{5955, 6255}, /* center freq: 6105 */
+	{6115, 6415}, /* center freq: 6265 */
+	{6275, 6575}, /* center freq: 6425 */
+	{6435, 6735}, /* center freq: 6585 */
+	{6595, 6895}, /* center freq: 6745 */
+	{6755, 7055}  /* center freq: 6905 */
+#endif /*CONFIG_BAND_6GHZ*/
+};
+#endif
+
+/**
+ * struct bw_bonded_array_pair - Structure containing bandwidth, bonded_array
+ * corresponding to bandwidth and the size of the bonded array.
+ * @chwidth: channel width
+ * @bonded_chan_arr: bonded array corresponding to chwidth.
+ * @array_size: size of the bonded_chan_arr.
+ */
+struct bw_bonded_array_pair {
+	enum phy_ch_width chwidth;
+	const struct bonded_channel_freq *bonded_chan_arr;
+	uint16_t array_size;
+};
+
+/* Mapping of chwidth to bonded array and size of bonded array */
+static const
+struct bw_bonded_array_pair bw_bonded_array_pair_map[] = {
+#ifdef WLAN_FEATURE_11BE
+	{CH_WIDTH_320MHZ, bonded_chan_320mhz_list_freq,
+		QDF_ARRAY_SIZE(bonded_chan_320mhz_list_freq)},
+#endif
+	{CH_WIDTH_160MHZ, bonded_chan_160mhz_list_freq,
+		QDF_ARRAY_SIZE(bonded_chan_160mhz_list_freq)},
+	{CH_WIDTH_80P80MHZ, bonded_chan_80mhz_list_freq,
+		QDF_ARRAY_SIZE(bonded_chan_80mhz_list_freq)},
+	{CH_WIDTH_80MHZ, bonded_chan_80mhz_list_freq,
+		QDF_ARRAY_SIZE(bonded_chan_80mhz_list_freq)},
+	{CH_WIDTH_40MHZ, bonded_chan_40mhz_list_freq,
+		QDF_ARRAY_SIZE(bonded_chan_40mhz_list_freq)},
+};
+
 const struct bonded_channel_freq *
 reg_get_bonded_chan_entry(qdf_freq_t freq,
 			  enum phy_ch_width chwidth)
 {
 	const struct bonded_channel_freq *bonded_chan_arr;
-	uint16_t array_size, i;
+	uint16_t array_size, i, num_bws;
 
-	switch (chwidth) {
-	case CH_WIDTH_160MHZ:
-		bonded_chan_arr = bonded_chan_160mhz_list_freq;
-		array_size = QDF_ARRAY_SIZE(bonded_chan_160mhz_list_freq);
-		break;
-	case CH_WIDTH_80MHZ:
-	case CH_WIDTH_80P80MHZ:
-		bonded_chan_arr = bonded_chan_80mhz_list_freq;
-		array_size = QDF_ARRAY_SIZE(bonded_chan_80mhz_list_freq);
-		break;
-	case CH_WIDTH_40MHZ:
-		bonded_chan_arr = bonded_chan_40mhz_list_freq;
-		array_size = QDF_ARRAY_SIZE(bonded_chan_40mhz_list_freq);
-		break;
-	default:
+	num_bws = QDF_ARRAY_SIZE(bw_bonded_array_pair_map);
+	for (i = 0; i < num_bws; i++) {
+		if (chwidth == bw_bonded_array_pair_map[i].chwidth) {
+			bonded_chan_arr =
+				bw_bonded_array_pair_map[i].bonded_chan_arr;
+			array_size = bw_bonded_array_pair_map[i].array_size;
+			break;
+		}
+	}
+	if (i == num_bws) {
 		reg_debug("Could not find bonded_chan_array for chwidth %d",
 			  chwidth);
 		return NULL;
@@ -177,21 +217,6 @@ reg_get_bonded_chan_entry(qdf_freq_t freq,
 		  freq, chwidth);
 	return NULL;
 }
-
-#ifdef WLAN_FEATURE_11BE
-/* bonded_chan_320mhz_list_freq - List of 320MHz bonnded channel frequencies */
-static const struct bonded_channel_freq bonded_chan_320mhz_list_freq[] = {
-	{5500, 5800}, /* center freq: 5650 */
-#ifdef CONFIG_BAND_6GHZ
-	{5955, 6255}, /* center freq: 6105 */
-	{6115, 6415}, /* center freq: 6265 */
-	{6275, 6575}, /* center freq: 6425 */
-	{6435, 6735}, /* center freq: 6585 */
-	{6595, 6895}, /* center freq: 6745 */
-	{6755, 7055}  /* center freq: 6905 */
-#endif /*CONFIG_BAND_6GHZ*/
-};
-#endif
 
 #endif /*CONFIG_CHAN_FREQ_API*/
 
@@ -2300,7 +2325,28 @@ qdf_freq_t reg_chan_band_to_freq(struct wlan_objmgr_pdev *pdev,
 				return 0;
 		}
 
-		min_chan = MIN_6GHZ_CHANNEL;
+		/* Handle 6G channel 2 as a special case as it does not follow
+		 * the regular increasing order of channel numbers
+		 */
+		if (chan_num == SIXG_CHAN_2) {
+			struct regulatory_channel *mas_chan_list;
+
+			mas_chan_list = pdev_priv_obj->mas_chan_list;
+			/* Check if chan 2 is in the master list */
+			if ((mas_chan_list[CHAN_ENUM_SIXG_2].state !=
+			     CHANNEL_STATE_DISABLE) &&
+			    !(mas_chan_list[CHAN_ENUM_SIXG_2].chan_flags &
+			     REGULATORY_CHAN_DISABLED))
+				return mas_chan_list[CHAN_ENUM_SIXG_2].
+								center_freq;
+			else
+				return 0;
+		}
+
+		/* MIN_6GHZ_CHANNEL corresponds to CHAN_ENUM_5935
+		 * ( a.k.a SIXG_CHAN_2). Skip it from the search space
+		 */
+		min_chan = MIN_6GHZ_CHANNEL + 1;
 		max_chan = MAX_6GHZ_CHANNEL;
 		return reg_compute_chan_to_freq(pdev, chan_num,
 						min_chan,
@@ -4824,7 +4870,6 @@ reg_get_cur_6g_ap_pwr_type(struct wlan_objmgr_pdev *pdev,
 	return QDF_STATUS_SUCCESS;
 }
 
-#ifdef CONFIG_AFC_SUPPORT
 /**
  * get_reg_rules_for_pdev() - Get the pointer to the reg rules for the pdev
  * @pdev: Pointer to pdev
@@ -4847,6 +4892,7 @@ reg_get_reg_rules_for_pdev(struct wlan_objmgr_pdev *pdev)
 	return psoc_reg_rules;
 }
 
+#ifdef CONFIG_AFC_SUPPORT
 /**
  * reg_is_empty_range() - If both left, right frquency edges in the input range
  * are zero then the range is empty, else not.
@@ -5480,15 +5526,6 @@ handle_invalid_priv_object:
 	return status;
 }
 
-/**
- * reg_dmn_set_afc_req_id() - Set the request ID in the AFC partial request
- *                            object
- * @afc_req: pointer to AFC partial request
- * @req_id: AFC request ID
- *
- * Return: Void
- */
-static
 void reg_dmn_set_afc_req_id(struct wlan_afc_host_partial_request *afc_req,
 			    uint64_t req_id)
 {
@@ -5539,6 +5576,9 @@ QDF_STATUS reg_afc_start(struct wlan_objmgr_pdev *pdev, uint64_t req_id)
 		reg_err("Creating AFC Request failed");
 		return QDF_STATUS_E_FAILURE;
 	}
+
+	QDF_TRACE(QDF_MODULE_ID_AFC, QDF_TRACE_LEVEL_DEBUG,
+		  "Processing AFC Start/Renew Expiry event");
 
 	reg_dmn_set_afc_req_id(afc_req, req_id);
 
@@ -5816,6 +5856,28 @@ QDF_STATUS reg_get_client_power_for_6ghz_ap(struct wlan_objmgr_pdev *pdev,
 	return status;
 }
 
+/**
+ * reg_get_num_rules_of_ap_pwr_type() - Get the number of reg rules present
+ * for a given ap power type
+ * @pdev - Pointer to pdev
+ * @ap_pwr_type - AP power type
+ *
+ * Return: Return the number of reg rules for a given ap power type
+ */
+static uint8_t
+reg_get_num_rules_of_ap_pwr_type(struct wlan_objmgr_pdev *pdev,
+				 enum reg_6g_ap_type ap_pwr_type)
+{
+	struct reg_rule_info *psoc_reg_rules = reg_get_reg_rules_for_pdev(pdev);
+
+	if (ap_pwr_type > REG_MAX_SUPP_AP_TYPE) {
+		reg_err("Unsupported 6G AP power type");
+		return 0;
+	}
+
+	return psoc_reg_rules->num_of_6g_ap_reg_rules[ap_pwr_type];
+}
+
 QDF_STATUS reg_set_ap_pwr_and_update_chan_list(struct wlan_objmgr_pdev *pdev,
 					       enum reg_6g_ap_type ap_pwr_type)
 {
@@ -5827,6 +5889,12 @@ QDF_STATUS reg_set_ap_pwr_and_update_chan_list(struct wlan_objmgr_pdev *pdev,
 		reg_err("pdev reg component is NULL");
 		return QDF_STATUS_E_INVAL;
 	}
+
+	if (pdev_priv_obj->reg_cur_6g_ap_pwr_type == ap_pwr_type)
+		return QDF_STATUS_SUCCESS;
+
+	if (!reg_get_num_rules_of_ap_pwr_type(pdev, ap_pwr_type))
+		return QDF_STATUS_E_FAILURE;
 
 	status = reg_set_cur_6g_ap_pwr_type(pdev, ap_pwr_type);
 	if (QDF_IS_STATUS_ERROR(status)) {
@@ -6223,4 +6291,75 @@ bool reg_is_afc_expiry_event_received(struct wlan_objmgr_pdev *pdev)
 
 	return pdev_priv_obj->is_6g_afc_expiry_event_received;
 }
+
+bool reg_is_noaction_on_afc_pwr_evt(struct wlan_objmgr_pdev *pdev)
+{
+	struct wlan_regulatory_pdev_priv_obj *pdev_priv_obj;
+
+	pdev_priv_obj = reg_get_pdev_obj(pdev);
+
+	if (!IS_VALID_PDEV_REG_OBJ(pdev_priv_obj)) {
+		reg_err("reg pdev priv obj is NULL");
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	return pdev_priv_obj->is_reg_noaction_on_afc_pwr_evt;
+}
 #endif
+
+/**
+ * struct bw_wireless_modes_pair - structure containing bandwidth and wireless
+ * modes corresponding to the bandwidth
+ * @ch_width: channel width
+ * @wireless_modes: wireless modes bitmap corresponding to @ch_width. This
+ * bitmap is a combination of enum values HOST_REGDMN_MODE
+ */
+struct bw_wireless_modes_pair {
+	enum phy_ch_width ch_width;
+	uint64_t wireless_modes;
+};
+
+/* Mapping of bandwidth to wireless modes */
+static const struct bw_wireless_modes_pair bw_wireless_modes_pair_map[] = {
+#ifdef WLAN_FEATURE_11BE
+	{CH_WIDTH_320MHZ, WIRELESS_320_MODES},
+#endif
+	{CH_WIDTH_80P80MHZ, WIRELESS_80P80_MODES},
+	{CH_WIDTH_160MHZ, WIRELESS_160_MODES},
+	{CH_WIDTH_80MHZ, WIRELESS_80_MODES},
+	{CH_WIDTH_40MHZ, WIRELESS_40_MODES},
+	{CH_WIDTH_20MHZ, WIRELESS_20_MODES},
+	{CH_WIDTH_10MHZ, WIRELESS_10_MODES},
+	{CH_WIDTH_5MHZ, WIRELESS_5_MODES},
+};
+
+QDF_STATUS reg_is_chwidth_supported(struct wlan_objmgr_pdev *pdev,
+				    enum phy_ch_width ch_width,
+				    bool *is_supported)
+{
+	struct wlan_regulatory_pdev_priv_obj *pdev_priv_obj;
+	uint64_t wireless_modes;
+	uint8_t num_bws, idx;
+
+	pdev_priv_obj = reg_get_pdev_obj(pdev);
+
+	if (!IS_VALID_PDEV_REG_OBJ(pdev_priv_obj)) {
+		reg_err("reg pdev priv obj is NULL");
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	*is_supported = false;
+
+	wireless_modes = pdev_priv_obj->wireless_modes;
+	num_bws = QDF_ARRAY_SIZE(bw_wireless_modes_pair_map);
+
+	for (idx = 0; idx < num_bws; ++idx) {
+		if (bw_wireless_modes_pair_map[idx].ch_width == ch_width) {
+			*is_supported = !!(wireless_modes &
+					   bw_wireless_modes_pair_map[idx].wireless_modes);
+			break;
+		}
+	}
+
+	return QDF_STATUS_SUCCESS;
+}

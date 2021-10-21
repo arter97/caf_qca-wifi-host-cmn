@@ -335,6 +335,7 @@ struct target_psoc_info {
  * @accelerator_hdl: NSS offload/IPA handles
  * @pdev_idx: pdev id (of FW)
  * @phy_idx: phy id (of FW)
+ * @hw_link_id: Unique link id across SoC required in multi-soc ML
  * @feature_ptr: stores legacy pointer or few driver specific structures
  */
 struct target_pdev_info {
@@ -342,6 +343,9 @@ struct target_pdev_info {
 	struct common_accelerator_handle *accelerator_hdl;
 	int32_t pdev_idx;
 	int32_t phy_idx;
+#if defined(WLAN_FEATURE_11BE_MLO) && defined(WLAN_MLO_MULTI_CHIP)
+	uint16_t hw_link_id;
+#endif
 	void *feature_ptr;
 };
 
@@ -546,6 +550,14 @@ bool target_is_tgt_type_qcn9000(uint32_t target_type);
  * Return: true if the target_type is QCN6122, else false.
  */
 bool target_is_tgt_type_qcn6122(uint32_t target_type);
+
+/**
+ * target_is_tgt_type_qcn7605() - Check if the target type is QCN7605
+ * @target_type: target type to be checked.
+ *
+ * Return: true if the target_type is QCN7605, else false.
+ */
+bool target_is_tgt_type_qcn7605(uint32_t target_type);
 
 /**
  * target_psoc_set_wlan_init_status() - set info wlan_init_status
@@ -2706,5 +2718,31 @@ static inline uint32_t target_psoc_get_target_cap_flags
 
 	return psoc_info->info.service_ext2_param.target_cap_flags;
 }
+
+#if defined(WLAN_FEATURE_11BE_MLO) && defined(WLAN_MLO_MULTI_CHIP)
+/**
+ * target_pdev_get_hw_link_id  - get hw_link_id
+ * @pdev:  pointer to structure target_pdev_info
+ *
+ * API to get hw_link_id
+ *
+ * Return: uint16_t
+ */
+#define PDEV_INVALID_HW_LINK_ID 0xFFFF
+uint16_t  target_if_pdev_get_hw_link_id
+		(struct wlan_objmgr_pdev *pdev);
+
+/**
+ * target_pdev_set_hw_link_id - set hw_link_id
+ * @pdev:  pointer to structure target_pdev_info
+ * @hw_link_id: unique hw link id of pdev across psoc
+ *
+ * API to set hw_link_id
+ *
+ * Return: void
+ */
+void target_pdev_set_hw_link_id
+		(struct wlan_objmgr_pdev *pdev, uint16_t hw_link_id);
+#endif /*WLAN_FEATURE_11BE_MLO && WLAN_MLO_MULTI_CHIP*/
 
 #endif

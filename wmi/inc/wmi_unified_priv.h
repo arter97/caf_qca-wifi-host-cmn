@@ -391,7 +391,11 @@ QDF_STATUS
 QDF_STATUS
 (*extract_roam_msg_info)(wmi_unified_t wmi_handle, void *evt_buf,
 			 struct roam_msg_info *dst, uint8_t idx);
-#ifdef ROAM_TARGET_IF_CONVERGENCE
+
+QDF_STATUS
+(*extract_roam_frame_info)(wmi_unified_t wmi_handle, void *evt_buf,
+			   struct roam_frame_info *dst, uint8_t idx,
+			   uint8_t num_frames);
 /**
  * extract_roam_sync_event  - Extract roam sync event func ptr
  * @wmi_handle: WMI handle
@@ -442,7 +446,11 @@ QDF_STATUS
 (*extract_roam_pmkid_request)(wmi_unified_t wmi_handle,
 			      uint8_t *event, uint32_t data_len,
 			      struct roam_pmkid_req_event **list);
-#endif /* ROAM_TARGET_IF_CONVERGENCE */
+#endif
+#ifdef FEATURE_MEC_OFFLOAD
+QDF_STATUS
+(*send_pdev_set_mec_timer_cmd)(struct wmi_unified *wmi_handle,
+			       struct set_mec_timer_params *param);
 #endif
 QDF_STATUS (*send_vdev_create_cmd)(wmi_unified_t wmi_handle,
 				 uint8_t macaddr[QDF_MAC_ADDR_SIZE],
@@ -980,6 +988,11 @@ QDF_STATUS (*send_config_packet_filter_cmd)(wmi_unified_t wmi_handle,
 		uint8_t vdev_id, struct pmo_rcv_pkt_fltr_cfg *rcv_filter_param,
 		uint8_t filter_id, bool enable);
 #endif
+
+#ifdef WLAN_FEATURE_ICMP_OFFLOAD
+QDF_STATUS (*send_icmp_offload_config_cmd)(wmi_unified_t wmi_handle,
+			   struct pmo_icmp_offload *pmo_icmp_req);
+#endif
 #endif /* end of WLAN_POWER_MANAGEMENT_OFFLOAD */
 #ifdef WLAN_WMI_BCN
 QDF_STATUS (*send_bcn_buf_ll_cmd)(wmi_unified_t wmi_handle,
@@ -1371,6 +1384,14 @@ QDF_STATUS (*extract_pdev_caldata_version_check_ev_param)(
 	wmi_unified_t wmi_handle,
 	void *evt_buf, wmi_host_pdev_check_cal_version_event *param);
 
+QDF_STATUS
+(*send_peer_set_intra_bss_cmd)(wmi_unified_t wmi_handle,
+			       struct wmi_intra_bss_params *param);
+
+QDF_STATUS
+(*send_vdev_set_intra_bss_cmd)(struct wmi_unified *wmi_handle,
+			       struct wmi_intra_bss_params *param);
+
 #ifdef WLAN_SUPPORT_RX_PROTOCOL_TYPE_TAG
 QDF_STATUS (*set_rx_pkt_type_routing_tag_cmd)(
 	wmi_unified_t wmi_hdl, struct wmi_rx_pkt_protocol_routing_info *param);
@@ -1463,6 +1484,15 @@ QDF_STATUS (*extract_pdev_sscan_fft_bin_index)(
 			wmi_unified_t wmi_handle,
 			uint8_t *evt_buf,
 			struct spectral_fft_bin_markers_160_165mhz *params);
+
+QDF_STATUS (*extract_pdev_spectral_session_chan_info)(
+			wmi_unified_t wmi_handle, void *event,
+			struct spectral_session_chan_info *chan_info);
+
+QDF_STATUS (*extract_pdev_spectral_session_detector_info)(
+		wmi_unified_t wmi_handle, void *event,
+		struct spectral_session_det_info *det_info,
+		uint8_t det_info_idx);
 #endif /* WLAN_CONV_SPECTRAL_ENABLE */
 
 QDF_STATUS (*send_vdev_spectral_configure_cmd)(wmi_unified_t wmi_handle,
@@ -2282,7 +2312,7 @@ QDF_STATUS
 (*extract_roam_trigger_stats)(wmi_unified_t wmi_handle,
 			      void *evt_buf,
 			      struct wmi_roam_trigger_info *trig,
-			      uint8_t idx);
+			      uint8_t idx, uint8_t btm_idx);
 
 QDF_STATUS
 (*extract_roam_scan_stats)(wmi_unified_t wmi_handle,
@@ -3290,4 +3320,12 @@ static inline void wmi_mc_cp_stats_attach_tlv(struct wmi_unified *wmi_handle)
 {
 }
 #endif /* QCA_SUPPORT_MC_CP_STATS */
+
+/*
+ * wmi_map_ch_width() - map wmi channel width to host channel width
+ * @wmi_width: wmi channel width
+ *
+ * Return: host channel width, enum phy_ch_width
+ */
+enum phy_ch_width wmi_map_ch_width(A_UINT32 wmi_width);
 #endif
