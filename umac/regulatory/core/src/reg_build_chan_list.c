@@ -39,6 +39,107 @@
 #define MAX_PWR_FCC_CHAN_12 8
 #define MAX_PWR_FCC_CHAN_13 2
 #define CHAN_144_CENT_FREQ 5720
+#define CHAN_144_20MHZ_LEFT_EDGE (CHAN_144_CENT_FREQ - 10)
+#define CHAN_144_20MHZ_RIGHT_EDGE (CHAN_144_CENT_FREQ + 10)
+
+#ifdef CONFIG_HALF_QUARTER_RATE_FOR_ALL_CHANS
+static bool reg_is_range_valid(struct freq_range *range)
+{
+	return (range->right > range->left);
+}
+
+static struct freq_range
+reg_init_freq_range(qdf_freq_t left, qdf_freq_t right)
+{
+	struct freq_range out_range;
+
+	out_range.left = left;
+	out_range.right = right;
+
+	return out_range;
+}
+
+/**
+ * reg_is_range_overlapping() - Check if the given 2 ranges overlap
+ * with each other.
+ * Algorithm: int e = max(a,b) where a and b are the lower limit of ranges
+ *                    range_first, range_second
+ *            int f = min(c,d) where c and d are the higher limit of ranges
+ *                    range_first, range_second
+ * Overlap exists in the range[e,f] if e <= f.
+ * An Example:
+ * range1:                -a-------c---
+ * range2:                ---b--------d----
+ * new range:             ---e-----f---
+ *
+ * @range_first: Pointer to first range
+ * @range_second: Pointer to first range
+ *
+ * Return: True if the range_first is a overlap of range_second,
+ * false otherwise.
+ */
+static bool reg_is_range_overlapping(struct freq_range *range_first,
+				     struct freq_range *range_second)
+{
+	bool is_overlap;
+	bool is_valid;
+	qdf_freq_t max_of_left_edge;
+	qdf_freq_t min_of_right_edge;
+
+	is_valid = reg_is_range_valid(range_first) &&
+		reg_is_range_valid(range_second);
+
+	if (!is_valid)
+		return false;
+
+	max_of_left_edge = QDF_MAX(range_first->left, range_second->left);
+	min_of_right_edge = QDF_MIN(range_first->right, range_second->right);
+
+	is_overlap = (max_of_left_edge <= min_of_right_edge) ? true : false;
+
+	return is_overlap;
+}
+#endif
+
+/**
+ * reg_is_chan_freq_excluded() - Given a freq and max bw of that freq,
+ * it determines if the frequency lies in channel 144 HT20
+ * frequency range and is excluded.
+ * When we add 5/10Mhz channels, there are multiple 5/10Mhz
+ * (143,145) channels around IEEE channel 144.
+ * These adjacent channels may be excluded along with channel 144.
+ * Hence validate if the input freq range is a subset of channel 144 HT20
+ * range.
+ * @freq: Frequency in MHZ.
+ * @max_bw: Maximum reg BW of the given freq.
+ *
+ * Return - True if channel freq is excluded, false otherwise.
+ */
+#ifdef CONFIG_HALF_QUARTER_RATE_FOR_ALL_CHANS
+static bool reg_is_chan_freq_excluded(qdf_freq_t input_freq, uint16_t max_bw)
+{
+	qdf_freq_t input_freq_left_edge;
+	qdf_freq_t input_freq_right_edge;
+	struct freq_range range_144_HT20;
+	struct freq_range range_input_freq;
+
+	input_freq_left_edge = input_freq - max_bw / 2;
+	input_freq_right_edge = input_freq + max_bw / 2;
+
+	range_144_HT20 = reg_init_freq_range(CHAN_144_20MHZ_LEFT_EDGE,
+					     CHAN_144_20MHZ_RIGHT_EDGE);
+	range_input_freq = reg_init_freq_range(input_freq_left_edge,
+					       input_freq_right_edge);
+	return reg_is_range_overlapping(&range_input_freq, &range_144_HT20);
+}
+#else
+static bool reg_is_chan_freq_excluded(qdf_freq_t freq, uint16_t max_bw)
+{
+	if (freq == CHAN_144_CENT_FREQ)
+		return true;
+	return false;
+}
+#endif
 
 #ifdef CONFIG_BAND_6GHZ
 static void reg_fill_psd_info(enum channel_enum chan_enum,
@@ -433,8 +534,37 @@ static void reg_modify_chan_list_for_fcc_channel(
 }
 
 /**
+ * reg_dis_or_en_channel() - Set reg channel state and flags based
+ * on the bool "enable". If enable is set to "true", mark the channel state
+ * and flags as enabled, else mark them as disabled.
+ *
+ * @reg_chan: Pointer to struct regulatory_channel
+ * @enable: Bool that decides whether channel must be enabled/disabled.
+ *
+ * Return - None.
+ */
+static void
+reg_dis_or_en_channel(struct regulatory_channel *reg_chan,
+		      bool enable)
+{
+	if (enable) {
+		reg_chan->chan_flags &= ~REGULATORY_CHAN_DISABLED;
+		reg_chan->state = CHANNEL_STATE_ENABLE;
+	} else {
+		reg_chan->chan_flags |= REGULATORY_CHAN_DISABLED;
+		reg_chan->state = CHANNEL_STATE_DISABLE;
+	}
+}
+
+/**
  * reg_modify_chan_list_for_chan_144() - Disable channel 144 if en_chan_144 flag
- * is set to false.
+ * is set to false. If set to true, enable channel 144.
+ * 5/10MHZ channels are overlapping, 20MHZ channels do not overlap and channels
+ * with BW > 20MHZ might overlap with 144 HT20 range. These channels cannot be
+ * marked as disabled inside regulatory as reg does not have a chan entry for
+ * every possible BW of the given channel.
+ * Hence channels with BW > 20MHZ that overlap with 144 HT20 frequency range
+ * is taken care while we find channel using reg_set_chan_params.
  * @chan_list: Pointer to regulatory channel list.
  * @en_chan_144: if false, then disable channel 144.
  */
@@ -443,14 +573,15 @@ static void reg_modify_chan_list_for_chan_144(
 {
 	enum channel_enum chan_enum;
 
-	if (en_chan_144)
-		return;
-
 	for (chan_enum = 0; chan_enum < NUM_CHANNELS; chan_enum++) {
-		if (chan_list[chan_enum].center_freq == CHAN_144_CENT_FREQ) {
-			chan_list[chan_enum].chan_flags |=
-				REGULATORY_CHAN_DISABLED;
-			chan_list[chan_enum].state = CHANNEL_STATE_DISABLE;
+		qdf_freq_t freq = chan_list[chan_enum].center_freq;
+		uint16_t max_bw = chan_list[chan_enum].max_bw;
+
+		if (freq == CHAN_144_CENT_FREQ ||
+		    (max_bw < BW_20_MHZ &&
+		     reg_is_chan_freq_excluded(freq, max_bw))) {
+		    reg_dis_or_en_channel(&chan_list[chan_enum],
+					  en_chan_144);
 		}
 	}
 }
@@ -585,6 +716,8 @@ reg_modify_chan_list_for_japan(struct wlan_objmgr_pdev *pdev)
 
 	if (pdev_priv_obj->reg_dmn_pair == MKK17_MKKC)
 		pdev_priv_obj->en_chan_144 = false;
+	else
+		pdev_priv_obj->en_chan_144 = true;
 
 #undef MKK17_MKKC
 }
