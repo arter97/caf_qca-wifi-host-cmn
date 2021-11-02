@@ -45,6 +45,8 @@
 #ifdef CONFIG_HALF_QUARTER_RATE_FOR_ALL_CHANS
 static bool reg_is_range_valid(struct freq_range *range)
 {
+	reg_debug("Range->left : %u, Range->right: %u\n",
+		  range->right, range->left);
 	return (range->right > range->left);
 }
 
@@ -102,7 +104,7 @@ static bool reg_is_range_overlapping(struct freq_range *range_first,
 #endif
 
 /**
- * reg_is_chan_freq_excluded() - Given a freq and max bw of that freq,
+ * reg_is_chan_overlaps_with_144_20mhz() - Given a freq and max bw of that freq,
  * it determines if the frequency lies in channel 144 HT20
  * frequency range and is excluded.
  * When we add 5/10Mhz channels, there are multiple 5/10Mhz
@@ -116,7 +118,8 @@ static bool reg_is_range_overlapping(struct freq_range *range_first,
  * Return - True if channel freq is excluded, false otherwise.
  */
 #ifdef CONFIG_HALF_QUARTER_RATE_FOR_ALL_CHANS
-static bool reg_is_chan_freq_excluded(qdf_freq_t input_freq, uint16_t max_bw)
+static bool reg_is_chan_overlaps_with_144_20mhz(qdf_freq_t input_freq,
+						uint16_t max_bw)
 {
 	qdf_freq_t input_freq_left_edge;
 	qdf_freq_t input_freq_right_edge;
@@ -133,7 +136,8 @@ static bool reg_is_chan_freq_excluded(qdf_freq_t input_freq, uint16_t max_bw)
 	return reg_is_range_overlapping(&range_input_freq, &range_144_HT20);
 }
 #else
-static bool reg_is_chan_freq_excluded(qdf_freq_t freq, uint16_t max_bw)
+static bool reg_is_chan_overlaps_with_144_20mhz(qdf_freq_t freq,
+						uint16_t max_bw)
 {
 	if (freq == CHAN_144_CENT_FREQ)
 		return true;
@@ -557,6 +561,27 @@ reg_dis_or_en_channel(struct regulatory_channel *reg_chan,
 }
 
 /**
+ * reg_is_ctry_sup_5_10mhz_chan() - Checks if country supports half/qtr
+ * rate channels. There are countries like russia where for chan 141,
+ * min_bw is 20MHZ and max_bw is 10MHZ. Hence checking only for the max_bw
+ * less than 20MHZ will not suffice to find out if the country supports
+ * 5/10MHZ channels. Hence checking min_bw as well.
+ *
+ * @min_bw: Minimum reg chan bw
+ * @max_bw: Maximum reg chan bw
+ *
+ * Return - True if ctry supports 5/10MHZ chans, false otherwise.
+ */
+static inline bool
+reg_is_ctry_sup_5_10mhz_chan(uint16_t min_bw, uint16_t max_bw)
+{
+
+	if (max_bw < BW_20_MHZ && min_bw >= BW_5_MHZ)
+		return true;
+	return false;
+}
+
+/**
  * reg_modify_chan_list_for_chan_144() - Disable channel 144 if en_chan_144 flag
  * is set to false. If set to true, enable channel 144.
  * 5/10MHZ channels are overlapping, 20MHZ channels do not overlap and channels
@@ -576,12 +601,18 @@ static void reg_modify_chan_list_for_chan_144(
 	for (chan_enum = 0; chan_enum < NUM_CHANNELS; chan_enum++) {
 		qdf_freq_t freq = chan_list[chan_enum].center_freq;
 		uint16_t max_bw = chan_list[chan_enum].max_bw;
-
+		uint16_t min_bw = chan_list[chan_enum].min_bw;
+		/**
+		 * Chan144 is an exception because even though it is a
+		 * 20MHz channel, we disable/enable it.
+		 * For rest of the channels, disabling/enabling applies
+		 * only if their bandwidth is less than 20MHz.
+		 */
 		if (freq == CHAN_144_CENT_FREQ ||
-		    (max_bw < BW_20_MHZ &&
-		     reg_is_chan_freq_excluded(freq, max_bw))) {
-		    reg_dis_or_en_channel(&chan_list[chan_enum],
-					  en_chan_144);
+		    (reg_is_ctry_sup_5_10mhz_chan(min_bw, max_bw) &&
+		     reg_is_chan_overlaps_with_144_20mhz(freq, max_bw))) {
+			reg_dis_or_en_channel(&chan_list[chan_enum],
+					      en_chan_144);
 		}
 	}
 }
