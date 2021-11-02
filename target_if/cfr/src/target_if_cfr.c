@@ -324,7 +324,8 @@ int target_if_cfr_init_pdev(struct wlan_objmgr_psoc *psoc,
 	    target_type == TARGET_TYPE_QCA6750) {
 		status = target_if_cfr_init_target(psoc,
 						   pdev, target_type);
-	} else if (target_type == TARGET_TYPE_ADRASTEA) {
+	} else if (target_type == TARGET_TYPE_ADRASTEA ||
+		target_type == TARGET_TYPE_QCN7605) {
 		status = cfr_adrastea_init_pdev(psoc, pdev);
 	} else {
 		cfr_info("unsupport chip");
@@ -345,7 +346,8 @@ int target_if_cfr_deinit_pdev(struct wlan_objmgr_psoc *psoc,
 	if (target_type == TARGET_TYPE_QCA6490 ||
 	    target_type == TARGET_TYPE_QCA6750) {
 		status = target_if_cfr_deinit_target(psoc, pdev);
-	} else if (target_type == TARGET_TYPE_ADRASTEA) {
+	} else if (target_type == TARGET_TYPE_ADRASTEA ||
+		target_type == TARGET_TYPE_QCN7605) {
 		status = cfr_adrastea_deinit_pdev(psoc, pdev);
 	} else {
 		cfr_info("unsupport chip");
