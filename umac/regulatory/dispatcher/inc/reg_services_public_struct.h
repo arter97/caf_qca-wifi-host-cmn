@@ -1578,4 +1578,15 @@ struct reg_tpc_power_info {
 	struct chan_power_info chan_power_info[MAX_NUM_PWR_LEVEL];
 };
 
+/**
+ * struct freq_range: The range/band of frequencies, indicated by left and right
+ * edge frequencies.
+ * @left: Left edge frequency(inclusive)
+ * @right: Right edge frequency(inclusive)
+ */
+struct freq_range {
+	qdf_freq_t left;
+	qdf_freq_t right;
+};
+
 #endif
