@@ -1063,6 +1063,8 @@ struct ol_if_ops {
 	void (*rx_mic_error)(struct cdp_ctrl_objmgr_psoc *psoc,
 			     uint8_t pdev_id,
 			     struct cdp_rx_mic_err_info *info);
+	void (*rx_hole_cnt_notify)(struct cdp_ctrl_objmgr_psoc *psoc,
+				   uint8_t vdev_id, uint32_t msdu_cnt);
 
 	bool (*rx_frag_tkip_demic)(struct cdp_ctrl_objmgr_psoc *psoc,
 				   uint8_t vdev_id, uint8_t *peer_mac_addr,
