@@ -719,6 +719,17 @@ struct dfs_channel {
 };
 
 /**
+ * struct dfs_freq_range - Structure representing the start and end of a
+ * frequency range.
+ * @start_freq: Start frequency.
+ * @end_freq: End frequency.
+ */
+struct dfs_freq_range {
+	qdf_freq_t start_freq;
+	qdf_freq_t end_freq;
+};
+
+/**
  * struct dfs_state - DFS state.
  * @rs_chan:            Channel info.
  * @rs_chanindex:       Channel index in radar structure.
@@ -740,7 +751,7 @@ struct dfs_state {
  * struct dfs_nolelem - DFS NOL element.
  * @nol_dfs           Back pointer to dfs object.
  * @nol_freq:         Centre frequency.
- * @nol_chwidth:      Event width (MHz).
+ * @nol_chwidth:      NOL channel width.
  * @nol_start_us:     NOL start time in us.
  * @nol_timeout_ms:   NOL timeout value in msec.
  * @nol_next:         Next element pointer.
@@ -749,7 +760,8 @@ struct dfs_nolelem {
 	TAILQ_ENTRY(dfs_nolelem) nolelem_list;
 	struct wlan_dfs *nol_dfs;
 	uint32_t       nol_freq;
-	uint32_t       nol_chwidth;
+	uint16_t       nol_chwidth;
+	struct dfs_freq_range nol_freq_range;
 	uint64_t       nol_start_us;
 	uint32_t       nol_timeout_ms;
 	struct dfs_nolelem *nol_next;
@@ -1596,12 +1608,12 @@ void  dfs_process_radarevent(struct wlan_dfs *dfs,
 /**
  * dfs_nol_addchan() - Add channel to NOL.
  * @dfs: Pointer to wlan_dfs structure.
- * @freq: frequency to add to NOL.
+ * @r_freq_range: Radar frequency range to add to NOL.
  * @dfs_nol_timeout: NOL timeout.
  */
 void dfs_nol_addchan(struct wlan_dfs *dfs,
-		uint16_t freq,
-		uint32_t dfs_nol_timeout);
+		     struct dfs_freq_range r_freq_range,
+		     uint32_t dfs_nol_timeout);
 
 /**
  * dfs_get_nol() - Get NOL.
@@ -2600,18 +2612,6 @@ void dfs_set_current_channel_for_freq(struct wlan_dfs *dfs,
 
 #endif
 /**
- * dfs_get_nol_chfreq_and_chwidth() - Get channel freq and width from NOL list.
- * @dfs_nol: Pointer to NOL channel entry.
- * @nol_chfreq: Pointer to save channel frequency.
- * @nol_chwidth: Pointer to save channel width.
- * @index: Index to dfs_nol list.
- */
-void dfs_get_nol_chfreq_and_chwidth(struct dfsreq_nolelem *dfs_nol,
-		uint32_t *nol_chfreq,
-		uint32_t *nol_chwidth,
-		int index);
-
-/**
  * dfs_process_phyerr_owl() - Process an Owl-style phy error.
  * @dfs: Pointer to wlan_dfs structure.
  * @buf: Phyerr buffer
@@ -3171,4 +3171,36 @@ dfs_restart_rcac_on_nol_expiry(struct wlan_dfs *dfs)
 	return false;
 }
 #endif
+
+/**
+ * dfs_convert_chan_to_freq_ranges() - API to fetch the input channel
+ * frequency ranges.
+ * @dfs: Pointer to the dfs structure.
+ * @curchan: Current channel of dfs_channel structure.
+ * @center_freq: Center frequency of the channel range.
+ * @cur_freq_range: Output frequency range.
+ * @detector_id: Detector ID, used to fetch agile channel if agile detector is
+ * set.
+ *
+ * Return: void.
+ */
+void
+dfs_convert_chan_to_freq_ranges(struct wlan_dfs *dfs,
+				struct dfs_channel *curchan,
+				qdf_freq_t center_freq,
+				struct dfs_freq_range *cur_freq_range,
+				uint8_t detector_id);
+
+/**
+ * dfs_is_chan_range_in_nol() - API to check if a given freq range is in NOL.
+ * @dfs: Pointer to the dfs structure.
+ * @start_freq: start frequency of the input range.
+ * @end_freq: end frequency of the input range.
+ *
+ * Return: True if the range overlaps with any other range in NOL, else false.
+ */
+bool
+dfs_is_chan_range_in_nol(struct wlan_dfs *dfs,
+			 qdf_freq_t start_freq,
+			 qdf_freq_t end_freq);
 #endif  /* _DFS_H_ */

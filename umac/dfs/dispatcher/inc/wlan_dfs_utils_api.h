@@ -132,6 +132,17 @@ QDF_STATUS utils_dfs_reset(struct wlan_objmgr_pdev *pdev);
 bool utils_dfs_is_freq_in_nol(struct wlan_objmgr_pdev *pdev, uint32_t freq);
 
 /**
+ * utils_dfs_is_chan_range_in_nol() - Check if the given channel range in nol
+ * list.
+ * @start_freq: Start frequency of the range.
+ * @end_freq: End frequency of the range.
+ *
+ * Return: True if channel in nol, false else.
+ */
+bool utils_dfs_is_chan_range_in_nol(struct wlan_objmgr_pdev *pdev,
+				    qdf_freq_t start_freq,
+				    qdf_freq_t end_freq);
+/**
  * utils_dfs_reset_precaclists() - Clears and initializes precac_list.
  * @pdev: Pointer to DFS pdev object.
  *
@@ -435,20 +446,6 @@ QDF_STATUS utils_dfs_is_bw_reduce(struct wlan_objmgr_pdev *pdev,
  */
 QDF_STATUS utils_dfs_set_cac_timer_running(struct wlan_objmgr_pdev *pdev,
 		int val);
-
-/**
- * utils_dfs_get_nol_chfreq_and_chwidth() - Sets the cac timer running.
- * @pdev: Pointer to DFS pdev object.
- * @nollist: Pointer to NOL channel entry.
- * @nol_chfreq: Pointer to save channel frequency.
- * @nol_chwidth: Pointer to save channel width.
- * @index: Index into nol list.
- */
-QDF_STATUS utils_dfs_get_nol_chfreq_and_chwidth(struct wlan_objmgr_pdev *pdev,
-		void *nollist,
-		uint32_t *nol_chfreq,
-		uint32_t *nol_chwidth,
-		int index);
 
 /**
  * utils_dfs_get_random_channel_for_freq() - Get random channel.

@@ -1382,22 +1382,18 @@ static uint16_t dfs_find_ch_with_fallback_for_freq(struct wlan_dfs *dfs,
 
 bool dfs_is_freq_in_nol(struct wlan_dfs *dfs, uint32_t freq)
 {
-	struct dfs_nolelem *nol;
+	qdf_freq_t start_freq, end_freq;
 
 	if (!dfs) {
 		dfs_err(dfs, WLAN_DEBUG_DFS_RANDOM_CHAN,  "null dfs");
 		return false;
 	}
 
-	nol = dfs->dfs_nol;
-	while (nol) {
-		if (freq == nol->nol_freq) {
-			dfs_debug(dfs, WLAN_DEBUG_DFS_RANDOM_CHAN,
-					"%d is in nol", freq);
-			return true;
-		}
-		nol = nol->nol_next;
-	}
+	start_freq = freq - 10;
+	end_freq = freq + 10;
+
+	if (dfs_is_chan_range_in_nol(dfs, start_freq, end_freq))
+		return true;
 
 	return false;
 }
