@@ -855,10 +855,6 @@ struct wlan_lmac_if_ftm_rx_ops {
  * @unregister_11d_new_cc_handler:  pointer to unregister 11d cc event handler
  * @send_ctl_info: call-back function to send CTL info to firmware
  * @set_tpc_power: send transmit power control info to firmware
- * @reg_is_chanbw_20mhz: Checks if the user configured chanbw is 20MHZ. If
- * user configured chanbw is half/quarter, the channel is considered non-DFS
- * irrespective of the regulatory channel flag. If chanbw is full rate,
- * the channel is marked DFS based on regulatory channel flag.
  */
 struct wlan_lmac_if_reg_tx_ops {
 	QDF_STATUS (*register_master_handler)(struct wlan_objmgr_psoc *psoc,
@@ -899,7 +895,6 @@ struct wlan_lmac_if_reg_tx_ops {
 	QDF_STATUS (*set_tpc_power)(struct wlan_objmgr_psoc *psoc,
 				    uint8_t vdev_id,
 				    struct reg_tpc_power_info *param);
-	bool (*reg_is_chanbw_20mhz) (struct wlan_objmgr_pdev *pdev);
 };
 
 /**

@@ -38,7 +38,6 @@
 #include <qdf_module.h>
 #include "wlan_dfs_lmac_api.h"
 #include "../../core/src/dfs_internal.h"
-#include <wlan_reg_channel_api.h>
 
 struct dfs_nol_info {
 	uint16_t num_chans;
@@ -678,12 +677,9 @@ void utils_dfs_get_chan_list(struct wlan_objmgr_pdev *pdev,
 	}
 
 	for (i = 0; i < NUM_CHANNELS; i++) {
-		uint16_t freq =  cur_chan_list[i].center_freq;
 		state = cur_chan_list[i].state;
-
-		if ((state == CHANNEL_STATE_DFS ||
-			 state == CHANNEL_STATE_ENABLE) &&
-			wlan_reg_is_freq_full_rate_supptd(pdev, freq)) {
+		if (state == CHANNEL_STATE_DFS ||
+				state == CHANNEL_STATE_ENABLE) {
 			chan_list[j].dfs_ch_ieee = cur_chan_list[i].chan_num;
 			chan_list[j].dfs_ch_freq = cur_chan_list[i].center_freq;
 			if (state == CHANNEL_STATE_DFS)

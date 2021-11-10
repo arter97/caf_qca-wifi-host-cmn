@@ -4531,33 +4531,6 @@ uint8_t reg_get_channel_reg_power_for_freq(struct wlan_objmgr_pdev *pdev,
 	return reg_channels[chan_enum].tx_power;
 }
 
-#ifdef CONFIG_HALF_QUARTER_RATE_FOR_ALL_CHANS
-bool reg_is_dfs_for_freq(struct wlan_objmgr_pdev *pdev, qdf_freq_t freq)
-{
-	uint32_t chan_flags;
-	bool is_dfs;
-	struct wlan_lmac_if_reg_tx_ops *reg_tx_ops;
-	struct wlan_objmgr_psoc *psoc;
-
-	psoc = wlan_pdev_get_psoc(pdev);
-	if (!psoc) {
-		return false;
-	}
-	reg_tx_ops = reg_get_psoc_tx_ops(psoc);
-
-	chan_flags = reg_get_channel_flags_for_freq(pdev, freq);
-
-	is_dfs = chan_flags & REGULATORY_CHAN_RADAR;
-	/* reg_is_chanbw_20mhz returns true for all channel with
-	 * bandwidth >= 20MHz , where either half and or flags are not set.
-	 */
-	if ((reg_tx_ops->reg_is_chanbw_20mhz &&
-		 reg_tx_ops->reg_is_chanbw_20mhz(pdev)) && is_dfs)
-	    return true;
-
-	return false;
-}
-#else
 bool reg_is_dfs_for_freq(struct wlan_objmgr_pdev *pdev, qdf_freq_t freq)
 {
 	uint32_t chan_flags;
@@ -4566,7 +4539,6 @@ bool reg_is_dfs_for_freq(struct wlan_objmgr_pdev *pdev, qdf_freq_t freq)
 
 	return chan_flags & REGULATORY_CHAN_RADAR;
 }
-#endif
 
 #ifdef CONFIG_REG_CLIENT
 /**
