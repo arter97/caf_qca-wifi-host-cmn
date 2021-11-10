@@ -1262,9 +1262,7 @@ reg_append_mas_chan_list_for_6g(
  * chan is less than 20MHZ and the channel is DFS, mark the channel as
  * non-DFS. To mark the channel as non-DFS, modify the state of the
  * channel from 'CHANNEL_STATE_DFS' to CHANNEL_STATE_ENABLE'. Also clear
- * the REGULATORY_CHAN_RADAR channel flag. Also, disable dfs for the channels
- * that are enabled by the regualtory. Do not enable the channels that
- * are already marked disabled.
+ * the REGULATORY_CHAN_RADAR channel flag.
  * @pdev: Pointer to wlan_objmgr_pdev
  * @chan_list: Pointer to regulatory_channel
  *
@@ -1278,9 +1276,6 @@ reg_disable_dfs_for_half_qtr_chans(struct wlan_objmgr_pdev *pdev,
 	enum channel_enum chan_enum;
 
 	for (chan_enum = 0; chan_enum < NUM_CHANNELS; chan_enum++) {
-		if (chan_list[chan_enum].chan_flags &
-			REGULATORY_CHAN_DISABLED)
-			continue;
 		if ((chan_list[chan_enum].chan_flags & REGULATORY_CHAN_RADAR) &&
 		    (chan_list[chan_enum].max_bw < BW_20_MHZ)) {
 			chan_list[chan_enum].state = CHANNEL_STATE_ENABLE;
