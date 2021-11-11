@@ -1651,7 +1651,6 @@ struct dp_soc {
 	bool ipa_first_tx_db_access;
 #endif
 
-#ifdef WLAN_FEATURE_STATS_EXT
 	struct {
 		uint32_t rx_mpdu_received;
 		uint32_t rx_mpdu_missed;
@@ -1659,7 +1658,6 @@ struct dp_soc {
 	qdf_event_t rx_hw_stats_event;
 	qdf_spinlock_t rx_hw_stats_lock;
 	bool is_last_stats_ctx_init;
-#endif /* WLAN_FEATURE_STATS_EXT */
 
 	/* Smart monitor capability for HKv2 */
 	uint8_t hw_nac_monitor_support;
