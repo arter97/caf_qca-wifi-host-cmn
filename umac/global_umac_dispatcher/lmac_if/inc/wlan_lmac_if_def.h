@@ -697,6 +697,12 @@ struct wlan_lmac_if_sptrl_tx_ops {
 	QDF_STATUS (*sptrlto_unregister_events)(struct wlan_objmgr_psoc *psoc);
 	QDF_STATUS (*sptrlto_init_pdev_feature_caps)(
 		struct wlan_objmgr_pdev *pdev);
+#if UMAC_SUPPORT_SBS
+	QDF_STATUS (*sptrlto_register_sbs_cb)(
+		    struct wlan_objmgr_pdev *pdev,
+		    struct spectral_sbs_cb *sbs_cb);
+	void (*sptrlto_deregister_sbs_cb)(struct wlan_objmgr_pdev *pdev);
+#endif
 };
 #endif /* WLAN_CONV_SPECTRAL_ENABLE */
 

@@ -357,6 +357,33 @@ struct spectral_nl_cb {
 			   enum spectral_msg_type smsg_type);
 };
 
+#define SPECTRAL_SBS_PEAK_PWR_NUM	64
+#define SPECTRAL_SBS_SAMPLE_COUNT_MAX	16384
+#define SPECTRAL_SBS_RSSI_THRESH_MIN	10
+#define SPECTRAL_SBS_RSSI_THRESH_MAX	80
+#define SPECTRAL_SBS_PWR_THRESH_MIN	4
+
+struct spectral_sbs_scan_status {
+	uint32_t wb_num;				/* WB signal number */
+	uint32_t sum_rssi;				/* Total WB RSSI */
+	uint8_t peak_pwr[SPECTRAL_SBS_PEAK_PWR_NUM];	/* WB peak power */
+};
+
+/**
+ * struct spectral_sbs_cb - Spectral SBS callbacks
+ */
+struct spectral_sbs_cb {
+	bool enable;
+	void *cookie;
+	uint32_t sample_count;
+	uint32_t rssi_thresh_min;
+	uint32_t rssi_thresh_max;
+	uint32_t pwr_thresh_min;
+	struct spectral_sbs_scan_status status;
+	void (*scan_complete)(struct spectral_sbs_scan_status *status,
+			      void *cookie);
+};
+
 /**
  * struct spectral_scan_config_request - Config request
  * @sscan_config: Spectral parameters

@@ -1959,6 +1959,158 @@ QDF_STATUS target_if_byte_swap_spectral_fft_bins_gen3(
 }
 #endif /* BIG_ENDIAN_HOST */
 
+#if UMAC_SUPPORT_SBS
+static inline void
+target_if_spectral_sbs_count_wb(struct spectral_sbs_cb *sbs_cb,
+				struct target_if_samp_msg_params *params,
+				uint8_t *bin_pwr, uint32_t bin_pwr_len)
+{
+	int i;
+	uint16_t peak_val = 0;
+	uint16_t num_bins_above_threshold = 0;
+	uint16_t peak_val_threshold = 0;
+	struct spectral_sbs_scan_status *status;
+
+	/* find the peak value in the given bins */
+	for (i = 0; i < bin_pwr_len; i++) {
+		if (peak_val < bin_pwr[i])
+			peak_val = bin_pwr[i];
+	}
+
+	if (peak_val < sbs_cb->pwr_thresh_min)
+		return;
+
+	/* Check how many bins are above peak bins are above threshold
+	 * Peak val threhold is set to 25% of peak value
+	 */
+	peak_val_threshold = peak_val >> 2;
+
+	for (i = 0; i < bin_pwr_len; i++) {
+		if (bin_pwr[i] >= peak_val_threshold)
+			num_bins_above_threshold++;
+	}
+
+	status = &sbs_cb->status;
+	/* if at least half of the bins are greater than or equal to the
+	 * peak value - 6dB
+	 */
+	if (num_bins_above_threshold >= (bin_pwr_len >> 1)) {
+		uint8_t *peak_pwr = status->peak_pwr;
+
+		status->wb_num++;
+		status->sum_rssi += params->rssi;
+
+		for (i = 0; i < SPECTRAL_SBS_PEAK_PWR_NUM; i++) {
+			if (peak_pwr[i] < bin_pwr[i])
+				peak_pwr[i] = bin_pwr[i];
+		}
+	}
+}
+
+static inline int
+target_if_spectral_sbs_segs_get(struct target_if_spectral *spectral)
+{
+	enum phy_ch_width ch_width;
+
+	ch_width = spectral->ch_width[SPECTRAL_SCAN_MODE_AGILE];
+
+	switch (ch_width) {
+	case CH_WIDTH_5MHZ:
+	case CH_WIDTH_10MHZ:
+	case CH_WIDTH_20MHZ:
+		return 1;
+	case CH_WIDTH_40MHZ:
+		return 2;
+	case CH_WIDTH_80MHZ:
+		return 4;
+	}
+
+	QDF_ASSERT(0);
+
+	return 0;
+}
+
+static void
+target_if_spectral_sbs_report(struct target_if_spectral *spectral,
+			      struct target_if_samp_msg_params *params)
+{
+	struct spectral_sbs_cb *sbs_cb = &spectral->sbs_cb;
+	int start_idx, num_segs, segment_id;
+	int segment_size = SPECTRAL_SBS_PEAK_PWR_NUM;
+	static uint32_t scount;
+	struct spectral_fft_bin_len_adj_swar *swar;
+	uint8_t *bin_pwr_tmp;
+	uint16_t idx, pwr16;
+
+	if (!spectral->sc_spectral_scan)
+		return;
+
+	/* Hardware generate version 3 and agile mode only */
+	if (spectral->spectral_gen != SPECTRAL_GEN3 ||
+	    params->smode != SPECTRAL_SCAN_MODE_AGILE)
+		return;
+
+	/* Indicates that the sample was received on the primary 80 MHz segment
+	 * instead of Agile frequency/secondary 80 MHz.
+	 */
+	if (params->gainchange || params->pri80ind)
+		goto out;
+
+	/* Check if it's a valid signal */
+	if (params->rssi < sbs_cb->rssi_thresh_min ||
+	    params->rssi > sbs_cb->rssi_thresh_max)
+		goto out;
+
+	bin_pwr_tmp = qdf_mem_malloc(params->pwr_count);
+	if (!bin_pwr_tmp)
+		goto out;
+
+	swar = &spectral->len_adj_swar;
+	if (swar->fftbin_size_war == SPECTRAL_FFTBIN_SIZE_WAR_4BYTE_TO_1BYTE) {
+		uint32_t *binptr32 = (uint32_t *)params->bin_pwr_data;
+
+		for (idx = 0; idx < params->pwr_count; idx++) {
+			/* Read only the first 2 bytes of the DWORD */
+			pwr16 = *((uint16_t *)binptr32++);
+			if (qdf_unlikely(pwr16 > MAX_FFTBIN_VALUE))
+				pwr16 = MAX_FFTBIN_VALUE;
+			bin_pwr_tmp[idx] = pwr16;
+		}
+	} else if (swar->fftbin_size_war ==
+		   SPECTRAL_FFTBIN_SIZE_WAR_2BYTE_TO_1BYTE) {
+		uint16_t *binptr16 = (uint16_t *)params->bin_pwr_data;
+
+		for (idx = 0; idx < params->pwr_count; idx++) {
+			pwr16 = *(binptr16++);
+			if (qdf_unlikely(pwr16 > MAX_FFTBIN_VALUE))
+				pwr16 = MAX_FFTBIN_VALUE;
+			bin_pwr_tmp[idx] = pwr16;
+		}
+	} else {
+		qdf_mem_copy(bin_pwr_tmp, params->bin_pwr_data,
+			     params->pwr_count);
+	}
+
+	num_segs = target_if_spectral_sbs_segs_get(spectral);
+
+	for (segment_id = 0;  segment_id < num_segs; segment_id++) {
+		start_idx = segment_size * segment_id;
+		QDF_ASSERT(start_idx < params->pwr_count);
+		target_if_spectral_sbs_count_wb(sbs_cb, params,
+						bin_pwr_tmp + start_idx,
+						segment_size);
+	}
+
+	qdf_mem_free(bin_pwr_tmp);
+
+out:
+	if (++scount >= sbs_cb->sample_count) {
+		sbs_cb->scan_complete(&sbs_cb->status, sbs_cb->cookie);
+		scount = 0;
+	}
+}
+#endif
+
 int
 target_if_consume_spectral_report_gen3(
 	 struct target_if_spectral *spectral,
@@ -2384,7 +2536,14 @@ target_if_consume_spectral_report_gen3(
 		     sizeof(struct spectral_classifier_params));
 
 	target_if_spectral_log_SAMP_param(&params);
-	target_if_spectral_create_samp_msg(spectral, &params);
+
+#if UMAC_SUPPORT_SBS
+	/* Spectral background scan is started, skip netlink report */
+	if (spectral->sbs_cb.cookie)
+		target_if_spectral_sbs_report(spectral, &params);
+	else
+#endif
+		target_if_spectral_create_samp_msg(spectral, &params);
 
 	return 0;
  fail:
