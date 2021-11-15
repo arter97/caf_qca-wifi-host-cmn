@@ -1699,10 +1699,7 @@ dp_tx_hw_enqueue(struct dp_soc *soc, struct dp_vdev *vdev,
 	if (tx_desc->flags & DP_TX_DESC_FLAG_MESH)
 		hal_tx_desc_set_mesh_en(soc->hal_soc, hal_tx_desc_cached, 1);
 
-	if (qdf_unlikely(vdev->pdev->delay_stats_flag) ||
-	    qdf_unlikely(wlan_cfg_is_peer_ext_stats_enabled(
-			 soc->wlan_cfg_ctx)))
-		tx_desc->timestamp = qdf_ktime_to_ms(qdf_ktime_real_get());
+	dp_tx_desc_set_ktimestamp(vdev, tx_desc);
 
 	dp_verbose_debug("length:%d , type = %d, dma_addr %llx, offset %d desc id %u",
 			 tx_desc->length, type, (uint64_t)tx_desc->dma_addr,
@@ -3906,6 +3903,28 @@ static inline void dp_tx_update_peer_ext_stats(struct dp_peer *peer,
 }
 #endif
 
+#ifdef HW_TX_DELAY_STATS_ENABLE
+static inline
+void dp_update_tx_delay_stats(struct dp_vdev *vdev, uint32_t delay, uint8_t tid,
+			      uint8_t mode, uint8_t ring_id)
+{
+	struct cdp_tid_tx_stats *tstats =
+		&vdev->stats.tid_tx_stats[ring_id][tid];
+
+	dp_update_delay_stats(tstats, NULL, delay, tid, mode, ring_id);
+}
+#else
+static inline
+void dp_update_tx_delay_stats(struct dp_vdev *vdev, uint32_t delay, uint8_t tid,
+			      uint8_t mode, uint8_t ring_id)
+{
+	struct cdp_tid_tx_stats *tstats =
+		&vdev->pdev->stats.tid_stats.tid_tx_stats[ring_id][tid];
+
+	dp_update_delay_stats(tstats, NULL, delay, tid, mode, ring_id);
+}
+#endif
+
 /**
  * dp_tx_compute_delay() - Compute and fill in all timestamps
  *				to pass in correct fields
@@ -3923,28 +3942,38 @@ static void dp_tx_compute_delay(struct dp_vdev *vdev,
 	int64_t current_timestamp, timestamp_ingress, timestamp_hw_enqueue;
 	uint32_t sw_enqueue_delay, fwhw_transmit_delay, interframe_delay;
 
-	if (qdf_likely(!vdev->pdev->delay_stats_flag))
+	if (qdf_likely(!vdev->pdev->delay_stats_flag) &&
+	    qdf_likely(!dp_is_vdev_tx_delay_stats_enabled(vdev)))
 		return;
 
 	current_timestamp = qdf_ktime_to_ms(qdf_ktime_real_get());
-	timestamp_ingress = qdf_nbuf_get_timestamp(tx_desc->nbuf);
 	timestamp_hw_enqueue = tx_desc->timestamp;
-	sw_enqueue_delay = (uint32_t)(timestamp_hw_enqueue - timestamp_ingress);
 	fwhw_transmit_delay = (uint32_t)(current_timestamp -
 					 timestamp_hw_enqueue);
+
+	/*
+	 * Delay between packet enqueued to HW and Tx completion
+	 */
+	dp_update_tx_delay_stats(vdev, fwhw_transmit_delay, tid,
+				 CDP_DELAY_STATS_FW_HW_TRANSMIT, ring_id);
+
+	/*
+	 * For MCL, only enqueue to completion delay is required
+	 * so return if the vdev flag is enabled.
+	 */
+	if (dp_is_vdev_tx_delay_stats_enabled(vdev))
+		return;
+
+	timestamp_ingress = qdf_nbuf_get_timestamp(tx_desc->nbuf);
+	sw_enqueue_delay = (uint32_t)(timestamp_hw_enqueue - timestamp_ingress);
 	interframe_delay = (uint32_t)(timestamp_ingress -
 				      vdev->prev_tx_enq_tstamp);
 
 	/*
 	 * Delay in software enqueue
 	 */
-	dp_update_delay_stats(vdev->pdev, sw_enqueue_delay, tid,
-			      CDP_DELAY_STATS_SW_ENQ, ring_id);
-	/*
-	 * Delay between packet enqueued to HW and Tx completion
-	 */
-	dp_update_delay_stats(vdev->pdev, fwhw_transmit_delay, tid,
-			      CDP_DELAY_STATS_FW_HW_TRANSMIT, ring_id);
+	dp_update_tx_delay_stats(vdev, sw_enqueue_delay, tid,
+				 CDP_DELAY_STATS_SW_ENQ, ring_id);
 
 	/*
 	 * Update interframe delay stats calculated at hardstart receive point.
@@ -3953,8 +3982,8 @@ static void dp_tx_compute_delay(struct dp_vdev *vdev,
 	 * On the other side, this will help in avoiding extra per packet check
 	 * of !vdev->prev_tx_enq_tstamp.
 	 */
-	dp_update_delay_stats(vdev->pdev, interframe_delay, tid,
-			      CDP_DELAY_STATS_TX_INTERFRAME, ring_id);
+	dp_update_tx_delay_stats(vdev, interframe_delay, tid,
+				 CDP_DELAY_STATS_TX_INTERFRAME, ring_id);
 	vdev->prev_tx_enq_tstamp = timestamp_ingress;
 }
 
@@ -4018,11 +4047,12 @@ dp_tx_update_peer_stats(struct dp_tx_desc_s *tx_desc,
 	length = qdf_nbuf_len(tx_desc->nbuf);
 	DP_STATS_INC_PKT(peer, tx.comp_pkt, 1, length);
 
-	if (qdf_unlikely(pdev->delay_stats_flag))
+	if (qdf_unlikely(pdev->delay_stats_flag) ||
+	    qdf_unlikely(dp_is_vdev_tx_delay_stats_enabled(peer->vdev)))
 		dp_tx_compute_delay(peer->vdev, tx_desc, tid, ring_id);
+
 	DP_STATS_INCC(peer, tx.dropped.age_out, 1,
 		     (ts->status == HAL_TX_TQM_RR_REM_CMD_AGED));
-
 	DP_STATS_INCC_PKT(peer, tx.dropped.fw_rem, 1, length,
 			  (ts->status == HAL_TX_TQM_RR_REM_CMD_REM));
 
@@ -4682,7 +4712,8 @@ void dp_tx_process_htt_completion(struct dp_tx_desc_s *tx_desc, uint8_t *status,
 
 		tid_stats = &pdev->stats.tid_stats.tid_tx_stats[ring_id][tid];
 
-		if (qdf_unlikely(pdev->delay_stats_flag))
+		if (qdf_unlikely(pdev->delay_stats_flag) ||
+		    qdf_unlikely(dp_is_vdev_tx_delay_stats_enabled(vdev)))
 			dp_tx_compute_delay(vdev, tx_desc, tid, ring_id);
 		if (tx_status < CDP_MAX_TX_HTT_STATUS) {
 			tid_stats->htt_status_cnt[tx_status]++;
