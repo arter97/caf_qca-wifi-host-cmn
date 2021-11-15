@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016-2020 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -18779,6 +18779,11 @@ static QDF_STATUS extract_mgmt_rx_params_tlv(wmi_unified_t wmi_handle,
 		return QDF_STATUS_E_INVAL;
 	}
 
+	if (ev_hdr->buf_len > param_tlvs->num_bufp) {
+		WMI_LOGE("Rx mgmt frame length mismatch, discard it");
+		return QDF_STATUS_E_INVAL;
+	}
+
 	hdr->pdev_id = wmi_handle->ops->convert_pdev_id_target_to_host(
 							ev_hdr->pdev_id);
 
@@ -20680,7 +20685,17 @@ static QDF_STATUS extract_dbr_buf_release_fixed_tlv(wmi_unified_t wmi_handle,
 	param->pdev_id = wmi_handle->ops->convert_pdev_id_target_to_host(
 								ev->pdev_id);
 	param->mod_id = ev->mod_id;
+	if ((!param_buf->num_entries) ||
+	    param_buf->num_entries < ev->num_buf_release_entry){
+		wmi_err("actual num of buf release entries less than provided entries");
+		return QDF_STATUS_E_INVAL;
+	}
 	param->num_buf_release_entry = ev->num_buf_release_entry;
+	if ((!param_buf->num_meta_data) ||
+	    param_buf->num_meta_data < ev->num_meta_data_entry) {
+		wmi_err("actual num of meta data entries less than provided entries");
+		return QDF_STATUS_E_INVAL;
+	}
 	param->num_meta_data_entry = ev->num_meta_data_entry;
 	WMI_LOGD("%s:pdev id %d mod id %d num buf release entry %d\n", __func__,
 		 param->pdev_id, param->mod_id, param->num_buf_release_entry);
@@ -23952,6 +23967,9 @@ extract_time_sync_ftm_offset_event_tlv(wmi_unified_t wmi, void *buf,
 
 	param->vdev_id = resp_event->vdev_id;
 	param->num_qtime = param_buf->num_audio_sync_q_master_slave_times;
+	if (param->num_qtime > FTM_TIME_SYNC_QTIME_PAIR_MAX)
+		param->num_qtime = FTM_TIME_SYNC_QTIME_PAIR_MAX;
+
 	q_pair = param_buf->audio_sync_q_master_slave_times;
 	if (!q_pair) {
 		WMI_LOGE("Invalid q_master_slave_times buffer");
