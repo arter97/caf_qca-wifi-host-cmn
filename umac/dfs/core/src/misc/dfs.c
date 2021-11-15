@@ -241,7 +241,6 @@ int dfs_attach(struct wlan_dfs *dfs)
 void dfs_stop(struct wlan_dfs *dfs)
 {
 	dfs_nol_timer_cleanup(dfs);
-	dfs_nol_workqueue_cleanup(dfs);
 	dfs_clear_nolhistory(dfs);
 }
 

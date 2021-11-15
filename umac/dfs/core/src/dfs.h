@@ -347,7 +347,6 @@
 	do {                                                \
 		WLAN_DFSNOL_LOCK(dfs);                      \
 		dfs_nol_delete(dfs, freq, chwidth);         \
-		qdf_sched_work(NULL, &dfs->dfs_nol_elem_free_work); \
 		WLAN_DFSNOL_UNLOCK(dfs);                    \
 	} while (0)
 
@@ -362,13 +361,6 @@
 	do {                                                \
 		WLAN_DFSNOL_LOCK(dfs);                      \
 		dfs_print_nol(dfs);                         \
-		WLAN_DFSNOL_UNLOCK(dfs);                    \
-	} while (0)
-
-#define DFS_NOL_FREE_LIST_LOCKED(dfs)                       \
-	do {                                                \
-		WLAN_DFSNOL_LOCK(dfs);                      \
-		dfs_nol_free_list(dfs);                     \
 		WLAN_DFSNOL_UNLOCK(dfs);                    \
 	} while (0)
 
@@ -751,7 +743,6 @@ struct dfs_state {
  * @nol_chwidth:      Event width (MHz).
  * @nol_start_us:     NOL start time in us.
  * @nol_timeout_ms:   NOL timeout value in msec.
- * @nol_timer:        Per element NOL timer.
  * @nol_next:         Next element pointer.
  */
 struct dfs_nolelem {
@@ -761,7 +752,6 @@ struct dfs_nolelem {
 	uint32_t       nol_chwidth;
 	uint64_t       nol_start_us;
 	uint32_t       nol_timeout_ms;
-	qdf_timer_t    nol_timer;
 	struct dfs_nolelem *nol_next;
 } qdf_packed;
 
@@ -1043,8 +1033,6 @@ struct dfs_rcac_params {
  * @dfs_seq_num:                     Sequence number.
  * @dfs_nol_event[]:                 NOL event.
  * @dfs_nol_timer:                   NOL list processing.
- * @dfs_nol_free_list:               NOL free list.
- * @dfs_nol_elem_free_work:          The work queue to free an NOL element.
  * @dfs_cac_timer:                   CAC timer.
  * @dfs_cac_valid_timer:             Ignore CAC when this timer is running.
  * @dfs_cac_timeout_override:        Overridden cac timeout.
@@ -1227,10 +1215,6 @@ struct wlan_dfs {
 	uint32_t       dfs_seq_num;
 	int            dfs_nol_event[DFS_CHAN_MAX];
 	qdf_timer_t    dfs_nol_timer;
-
-	TAILQ_HEAD(, dfs_nolelem) dfs_nol_free_list;
-	qdf_work_t     dfs_nol_elem_free_work;
-
 	qdf_timer_t    dfs_cac_timer;
 	qdf_timer_t    dfs_cac_valid_timer;
 	int            dfs_cac_timeout_override;
@@ -1661,14 +1645,6 @@ void dfs_nol_timer_cleanup(struct wlan_dfs *dfs);
  * @dfs: Pointer to wlan_dfs structure.
  */
 void dfs_nol_timer_detach(struct wlan_dfs *dfs);
-
-/**
- * dfs_nol_workqueue_cleanup() - Flushes NOL workqueue.
- * @dfs: Pointer to wlan_dfs structure.
- *
- * Flushes the NOL workqueue.
- */
-void dfs_nol_workqueue_cleanup(struct wlan_dfs *dfs);
 
 /**
  * dfs_retain_bin5_burst_pattern() - Retain the BIN5 burst pattern.
@@ -2782,12 +2758,6 @@ void dfs_update_cur_chan_flags(struct wlan_dfs *dfs,
  */
 struct wlan_lmac_if_dfs_tx_ops *
 wlan_psoc_get_dfs_txops(struct wlan_objmgr_psoc *psoc);
-
-/**
- * dfs_nol_free_list() - Free NOL elements.
- * @dfs: Pointer to wlan_dfs structure.
- */
-void dfs_nol_free_list(struct wlan_dfs *dfs);
 
 /**
  * dfs_second_segment_radar_disable() - Disables the second segment radar.
