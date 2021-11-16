@@ -476,6 +476,15 @@ static inline void hal_get_radiotap_he_gi_ltf(uint16_t *he_gi, uint16_t *he_ltf)
 #define CHANNEL_FREQ_5935 5935
 #define FREQ_MULTIPLIER_CONST_5MHZ 5
 #define FREQ_MULTIPLIER_CONST_20MHZ 20
+/* Following macros are related to 2.5MHz channel separation feature */
+#define BASE_CHANNEL_NUM_2PT5MHZ 200
+#define BASE_CHANNEL_FREQ_2PT5MHZ 2399
+#define CHANNEL_NUMBER_221 221
+#define CHANNEL_NUMBER_222 222
+#define CHANNEL_FREQ_2482 2482
+#define CHANNEL_FREQ_2477 2477
+#define IS_FREQ_2P5MHZ(freq) \
+    ((freq - CHANNEL_FREQ_2407) % FREQ_MULTIPLIER_CONST_5MHZ)
 /**
  * hal_rx_radiotap_num_to_freq() - Get frequency from chan number
  * @chan_num - Input channel number
@@ -573,7 +582,24 @@ hal_rx_status_get_tlv_info_generic(void *rx_tlv_hdr, void *ppduinfo,
 		ppdu_info->rx_status.chan_freq =
 			(HAL_RX_GET(rx_tlv, RX_PPDU_START_1,
 				SW_PHY_META_DATA) & 0xFFFF0000)>>16;
-		if (ppdu_info->rx_status.chan_num) {
+
+		/* The channel values received through 'chan_num'
+		 * are not correct for the non-standard channels. Fix them.
+		 */
+		if (ppdu_info->rx_status.chan_freq == CHANNEL_FREQ_2482)
+			ppdu_info->rx_status.chan_num = CHANNEL_NUMBER_222;
+		else if (ppdu_info->rx_status.chan_freq == CHANNEL_FREQ_2477)
+			ppdu_info->rx_status.chan_num = CHANNEL_NUMBER_221;
+		else if (IS_FREQ_2P5MHZ(ppdu_info->rx_status.chan_freq)) {
+			ppdu_info->rx_status.chan_num =
+				(ppdu_info->rx_status.chan_freq -
+				 BASE_CHANNEL_FREQ_2PT5MHZ)/
+				FREQ_MULTIPLIER_CONST_5MHZ +
+				BASE_CHANNEL_NUM_2PT5MHZ;
+		}
+
+		if (ppdu_info->rx_status.chan_num &&
+		    !IS_FREQ_2P5MHZ(ppdu_info->rx_status.chan_freq)) {
 			ppdu_info->rx_status.chan_freq =
 				hal_rx_radiotap_num_to_freq(
 				ppdu_info->rx_status.chan_num,
