@@ -3447,3 +3447,26 @@ wmi_unified_send_set_ack_cts_resp_rate(wmi_unified_t wmi_handle,
 
 	return QDF_STATUS_E_FAILURE;
 }
+
+QDF_STATUS
+wmi_unified_send_get_ani_err(wmi_unified_t wmi_handle,
+			     struct wmi_host_send_get_ani_err *param)
+{
+	if (wmi_handle->ops->send_get_ani_err)
+		return wmi_handle->ops->send_get_ani_err(wmi_handle, param);
+
+	return QDF_STATUS_E_FAILURE;
+}
+
+QDF_STATUS
+wmi_extract_halphy_get_ani_err_ev_param(wmi_unified_t wmi_handle,
+					void *evt_buf,
+					struct wmi_host_halphy_get_ani_err_event *param)
+{
+	if (wmi_handle->ops->extract_halphy_get_ani_err_ev_param)
+		return wmi_handle->ops->extract_halphy_get_ani_err_ev_param(
+			wmi_handle, evt_buf, param);
+
+	return QDF_STATUS_E_FAILURE;
+}
+

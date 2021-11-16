@@ -347,6 +347,10 @@ static const uint32_t pdev_param_tlv[] = {
 	[wmi_pdev_param_mpd_userpd_ssr] = WMI_PDEV_PARAM_MPD_USERPD_SSR,
 	[wmi_pdev_param_low_latency_mode] =
 			WMI_PDEV_PARAM_LOW_LATENCY_SCHED_MODE,
+	[wmi_pdev_param_tx_rx_switch_over] = WMI_PDEV_PARAM_TX_RX_SWITCH_OVER,
+	[wmi_pdev_param_preamble_pwr] = WMI_PDEV_PARAM_PREAMBLE_PWR,
+	[wmi_pdev_param_stomper_threshold] = WMI_PDEV_PARAM_STOMPER_THRSHOLD,
+	[wmi_pdev_param_agc_gain_value] = WMI_PDEV_PARAM_AGC_GAIN_VALUE,
 };
 
 /**
@@ -14773,6 +14777,76 @@ send_set_ack_cts_resp_rate_tlv(wmi_unified_t wmi_handle,
 	return ret;
 }
 
+static QDF_STATUS
+send_get_ani_err_tlv(wmi_unified_t wmi_handle,
+			struct wmi_host_send_get_ani_err *param)
+{
+	wmi_buf_t buf;
+	wmi_pdev_get_ani_err_cmd_fixed_param *cmd;
+	QDF_STATUS ret;
+	uint32_t len;
+
+	len = sizeof(*cmd);
+
+	buf = wmi_buf_alloc(wmi_handle, len);
+	if (!buf)
+		return QDF_STATUS_E_FAILURE;
+
+	cmd = (void *)wmi_buf_data(buf);
+
+	WMITLV_SET_HDR(&cmd->tlv_header,
+			WMITLV_TAG_STRUC_wmi_pdev_get_ani_err_cmd_fixed_param,
+			WMITLV_GET_STRUCT_TLVLEN(wmi_pdev_get_ani_err_cmd_fixed_param));
+
+	cmd->pdev_id = wmi_handle->ops->convert_pdev_id_host_to_target(wmi_handle,
+								param->pdev_id);
+
+	ret = wmi_unified_cmd_send(wmi_handle, buf, len,
+				   WMI_PDEV_GET_ANI_ERR_CMDID);
+	if (QDF_IS_STATUS_ERROR(ret)) {
+		wmi_err("WMI_PDEV_GET_ANI_ERR_CMDID send returned Error %d", ret);
+		wmi_buf_free(buf);
+	}
+
+	return ret;
+}
+
+/**
+ * extract_halphy_get_ani_err_ev_param_tlv() - extract ani_err values from FW
+ * @wmi_handle: wmi handle
+ * @evt_buf: event buffer
+ * @param: ani_error values
+ *
+ * Return: QDF_STATUS_SUCCESS for success or error code
+ */
+static QDF_STATUS
+extract_halphy_get_ani_err_ev_param_tlv(wmi_unified_t wmi_handle,
+					void *evt_buf,
+					struct wmi_host_halphy_get_ani_err_event *param)
+{
+	WMI_PDEV_GET_ANI_ERR_EVENTID_param_tlvs *param_buf;
+	wmi_pdev_get_ani_err_evt_fixed_param *get_ani_err;
+
+	param_buf = (WMI_PDEV_GET_ANI_ERR_EVENTID_param_tlvs *)evt_buf;
+	if (!param_buf) {
+		wmi_err("Invalid Event get ani err");
+		return QDF_STATUS_E_INVAL;
+	}
+
+	get_ani_err = param_buf->fixed_param;
+
+	param->pdev_id = wmi_handle->ops->convert_pdev_id_target_to_host
+		(wmi_handle, get_ani_err->pdev_id);
+	param->status = get_ani_err->status;
+	param->rx_ofdma_timing_err_cnt = get_ani_err->rx_ofdma_timing_err_cnt;
+	param->rx_cck_fail_cnt = get_ani_err->rx_cck_fail_cnt;
+	param->lsig_phy_err_cnt = get_ani_err->lsig_phy_err_cnt;
+	param->scaled_err = get_ani_err->scaled_err;
+	param->timestamp_vreg = get_ani_err->timestamp_vreg;
+
+	return QDF_STATUS_SUCCESS;
+}
+
 struct wmi_ops tlv_ops =  {
 	.send_vdev_create_cmd = send_vdev_create_cmd_tlv,
 	.send_vdev_delete_cmd = send_vdev_delete_cmd_tlv,
@@ -15143,6 +15217,9 @@ struct wmi_ops tlv_ops =  {
 	.send_set_halphy_cal = send_set_halphy_cal_tlv,
 	.extract_halphy_cal_ev_param = extract_halphy_cal_ev_param_tlv,
 	.send_set_ack_cts_resp_rate = send_set_ack_cts_resp_rate_tlv,
+	.send_get_ani_err = send_get_ani_err_tlv,
+	.extract_halphy_get_ani_err_ev_param =
+		extract_halphy_get_ani_err_ev_param_tlv,
 };
 
 /**
@@ -15551,6 +15628,8 @@ event_ids[wmi_roam_scan_chan_list_id] =
 			WMI_PDEV_GET_DPD_STATUS_EVENTID;
 	event_ids[wmi_pdev_set_halphy_cal_event_id] =
 			WMI_PDEV_SET_HALPHY_CAL_BMAP_EVENTID;
+	event_ids[wmi_pdev_get_ani_err_event_id] =
+			WMI_PDEV_GET_ANI_ERR_EVENTID;
 }
 
 #ifdef WLAN_FEATURE_LINK_LAYER_STATS
@@ -15941,6 +16020,8 @@ static void populate_tlv_service(uint32_t *wmi_service)
 			WMI_SERVICE_DCS_AWGN_INT_SUPPORT;
 	wmi_service[wmi_service_halphy_cal_enable_disable_support] =
 			WMI_SERVICE_HALPHY_CAL_ENABLE_DISABLE_SUPPORT;
+	wmi_service[wmi_service_halphy_get_ani_err_support] =
+			 WMI_SERVICE_HALPHY_ANI_ERROR_SUPPORT;
 }
 
 /**
