@@ -1268,6 +1268,14 @@ uint8_t utils_dfs_freq_to_chan(uint32_t freq)
 		chan = ((freq - DFS_24_GHZ_BASE_FREQ) / DFS_CHAN_SPACING_5MHZ);
 	else if (freq == DFS_CHAN_14_FREQ)
 		chan = DFS_24_GHZ_CHANNEL_14;
+	else if (freq == DFS_24_GHZ_2PT5MHZ_CHAN_221_FREQ)
+		chan = DFS_24_GHZ_2PT5MHZ_CHAN_221;
+	else if (freq == DFS_24_GHZ_2PT5MHZ_CHAN_222_FREQ)
+		chan = DFS_24_GHZ_2PT5MHZ_CHAN_222;
+	else if (DFS_IS_FREQ_2p5MHZ(freq))
+		chan = ((freq - DFS_24_GHZ_2PT5MHZ_CHAN_BASE_FREQ) /
+			DFS_CHAN_SPACING_5MHZ) +
+			DFS_24_GHZ_2PT5MHZ_CHAN_OFFSET;
 	else if ((freq > DFS_24_GHZ_BASE_FREQ) && (freq < DFS_5_GHZ_BASE_FREQ))
 		chan = (((freq - DFS_CHAN_15_FREQ) / DFS_CHAN_SPACING_20MHZ) +
 			DFS_24_GHZ_CHANNEL_15);
@@ -1292,7 +1300,16 @@ uint32_t utils_dfs_chan_to_freq(uint8_t chan)
 				DFS_CHAN_SPACING_20MHZ);
 	else if (chan == DFS_5_GHZ_CHANNEL_170)
 		return DFS_CHAN_170_FREQ;
-	else
+	else if (chan > DFS_24_GHZ_2PT5MHZ_CHAN_OFFSET) {
+		if (chan == DFS_24_GHZ_2PT5MHZ_CHAN_221)
+			return DFS_24_GHZ_2PT5MHZ_CHAN_221_FREQ;
+		else if (chan == DFS_24_GHZ_2PT5MHZ_CHAN_222)
+			return DFS_24_GHZ_2PT5MHZ_CHAN_222_FREQ;
+		else
+			return DFS_24_GHZ_2PT5MHZ_CHAN_BASE_FREQ +
+				(chan - DFS_24_GHZ_2PT5MHZ_CHAN_OFFSET) *
+				DFS_CHAN_SPACING_5MHZ;
+	} else
 		return DFS_5_GHZ_BASE_FREQ + (chan * DFS_CHAN_SPACING_5MHZ);
 }
 qdf_export_symbol(utils_dfs_chan_to_freq);

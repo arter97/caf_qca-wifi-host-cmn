@@ -125,18 +125,34 @@ enum op_class_table_num {
 /**
  * enum channel_enum - channel enumeration
  * @CHAN_ENUM_2412: channel with freq 2412
+ * @CHAN_ENUM_2414: channel with freq 2414
  * @CHAN_ENUM_2417: channel with freq 2417
+ * @CHAN_ENUM_2419: channel with freq 2419
  * @CHAN_ENUM_2422: channel with freq 2422
+ * @CHAN_ENUM_2424: channel with freq 2424
  * @CHAN_ENUM_2427: channel with freq 2427
+ * @CHAN_ENUM_2429: channel with freq 2429
  * @CHAN_ENUM_2432: channel with freq 2432
+ * @CHAN_ENUM_2434: channel with freq 2434
  * @CHAN_ENUM_2437: channel with freq 2437
+ * @CHAN_ENUM_2439: channel with freq 2439
  * @CHAN_ENUM_2442: channel with freq 2442
+ * @CHAN_ENUM_2444: channel with freq 2444
  * @CHAN_ENUM_2447: channel with freq 2447
+ * @CHAN_ENUM_2449: channel with freq 2449
  * @CHAN_ENUM_2452: channel with freq 2452
+ * @CHAN_ENUM_2454: channel with freq 2454
  * @CHAN_ENUM_2457: channel with freq 2457
+ * @CHAN_ENUM_2459: channel with freq 2459
  * @CHAN_ENUM_2462: channel with freq 2462
+ * @CHAN_ENUM_2464: channel with freq 2464
  * @CHAN_ENUM_2467: channel with freq 2467
+ * @CHAN_ENUM_2469: channel with freq 2469
  * @CHAN_ENUM_2472: channel with freq 2472
+ * @CHAN_ENUM_2474: channel with freq 2474
+ * @CHAN_ENUM_2477: channel with freq 2477
+ * @CHAN_ENUM_2479: channel with freq 2479
+ * @CHAN_ENUM_2482: channel with freq 2482
  * @CHAN_ENUM_2484: channel with freq 2484
  * @CHAN_ENUM_4912: channel with freq 4912
  * @CHAN_ENUM_4915: channel with freq 4915
@@ -358,18 +374,34 @@ enum op_class_table_num {
  */
 enum channel_enum {
 	CHAN_ENUM_2412,
+	CHAN_ENUM_2414,
 	CHAN_ENUM_2417,
+	CHAN_ENUM_2419,
 	CHAN_ENUM_2422,
+	CHAN_ENUM_2424,
 	CHAN_ENUM_2427,
+	CHAN_ENUM_2429,
 	CHAN_ENUM_2432,
+	CHAN_ENUM_2434,
 	CHAN_ENUM_2437,
+	CHAN_ENUM_2439,
 	CHAN_ENUM_2442,
+	CHAN_ENUM_2444,
 	CHAN_ENUM_2447,
+	CHAN_ENUM_2449,
 	CHAN_ENUM_2452,
+	CHAN_ENUM_2454,
 	CHAN_ENUM_2457,
+	CHAN_ENUM_2459,
 	CHAN_ENUM_2462,
+	CHAN_ENUM_2464,
 	CHAN_ENUM_2467,
+	CHAN_ENUM_2469,
 	CHAN_ENUM_2472,
+	CHAN_ENUM_2474,
+	CHAN_ENUM_2477,
+	CHAN_ENUM_2479,
+	CHAN_ENUM_2482,
 	CHAN_ENUM_2484,
 #ifdef CONFIG_49GHZ_CHAN
 	CHAN_ENUM_4912,
@@ -1505,6 +1537,16 @@ struct avoid_freq_ind_data {
 #define TWOG_CHAN_5_IN_MHZ         2432
 #define TWOG_CHAN_6_IN_MHZ         2437
 #define TWOG_CHAN_13_IN_MHZ        2472
+#define REG_24_GHZ_2PT5MHZ_CHAN_OFFSET 200
+#define REG_24_GHZ_2PT5MHZ_CHAN_BASE_FREQ   2399
+#define REG_24_GHZ_2PT5MHZ_CHAN_221 221
+#define REG_24_GHZ_2PT5MHZ_CHAN_222 222
+#define REG_24_GHZ_2PT5MHZ_CHAN_222_FREQ 2482
+#define REG_24_GHZ_2PT5MHZ_CHAN_221_FREQ 2477
+#define TWOG_CHAN_14_IEEE                  14
+
+#define REG_IS_FREQ_2p5MHZ(_freq) \
+			   (((_freq) - TWOG_STARTING_FREQ) % FREQ_TO_CHAN_SCALE)
 
 /**
  * struct reg_ctl_params - reg ctl and regd info
