@@ -4548,6 +4548,7 @@ typedef enum {
 	wmi_vdev_send_big_data_p2_eventid,
 	wmi_pdev_get_dpd_status_event_id,
 	wmi_pdev_set_halphy_cal_event_id,
+	wmi_pdev_get_ani_err_event_id,
 	wmi_events_max,
 } wmi_conv_event_id;
 
@@ -4721,6 +4722,10 @@ typedef enum {
 	wmi_pdev_param_set_mesh_params,
 	wmi_pdev_param_mpd_userpd_ssr,
 	wmi_pdev_param_low_latency_mode,
+	wmi_pdev_param_tx_rx_switch_over,
+	wmi_pdev_param_preamble_pwr,
+	wmi_pdev_param_stomper_threshold,
+	wmi_pdev_param_agc_gain_value,
 	wmi_pdev_param_max,
 } wmi_conv_pdev_params_id;
 
@@ -5117,6 +5122,7 @@ typedef enum {
 #endif
 	wmi_service_dcs_awgn_int_support,
 	wmi_service_halphy_cal_enable_disable_support,
+	wmi_service_halphy_get_ani_err_support,
 	wmi_services_max,
 } wmi_conv_service_ids;
 #define WMI_SERVICE_UNAVAILABLE 0xFFFF
@@ -7915,6 +7921,60 @@ enum wmi_host_set_halphy_cal_status {
 struct wmi_host_pdev_set_halphy_cal_event {
 	uint32_t pdev_id;
 	enum wmi_host_set_halphy_cal_status status;
+};
+
+/**
+ * struct wmi_host_send_halphy_get_ani_err
+ * @pdev_id: pdev id
+ */
+struct wmi_host_send_get_ani_err {
+	uint8_t pdev_id;
+};
+
+/**
+ * struct wmi_host_halphy_get_ani_err_event
+ * @pdev_id: pdev id
+ * @rx_ofdma_timing_err_cnt:
+ * @rx_cck_fail_cnt:
+ * @lsig_phy_err_cnt:
+ * @scaled_err:
+ * @timestamp_vreg:
+ * @status: 0-Success, 1-Listen Time is small, 2-VREG value overflow
+ */
+struct wmi_host_halphy_get_ani_err_event {
+	uint32_t pdev_id;	/* PDEV Id set by the command */
+
+	/* number of RXTD OFDMA OTA error counts except power surge and drop */
+	uint32_t rx_ofdma_timing_err_cnt;
+
+	/* rx_cck_fail_cnt:
+	 * number of cck error counts due to rx reception failure because of
+	 * timing error in cck
+	 */
+	uint32_t rx_cck_fail_cnt;
+
+	/* lsig_phy_err_cnt
+	 * LSIG Error count per source;
+	 */
+	uint32_t lsig_phy_err_cnt;
+
+	/* scaled_err:
+	 * This error takes into account all the above errors (ofdm_timing_err,
+	 * cck_err, lsig_phy_err),
+	 * adds weightage to it and decides whether desense is necessary or not
+	 */
+	uint32_t scaled_err;
+
+	/* Timestamp value when VREG error values are dumped
+	*/
+	uint32_t timestamp_vreg;
+
+	/* Status indication
+	 * 0 - Success
+	 * 1 - Listen Time is small (Error)
+	 * 2 - VREG values overflowed (Error)
+	 */
+	uint32_t status;
 };
 
 /**
