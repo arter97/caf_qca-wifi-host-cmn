@@ -555,7 +555,7 @@ static void reg_modify_chan_list_for_fcc_channel(
 /**
  * reg_dis_or_en_channel() - Set reg channel state and flags based
  * on the bool "enable". If enable is set to "true", mark the channel state
- * and flags as enabled, else mark them as disabled.
+ * and flags as enabled (or dfs), else mark them as disabled.
  *
  * @reg_chan: Pointer to struct regulatory_channel
  * @enable: Bool that decides whether channel must be enabled/disabled.
@@ -568,15 +568,23 @@ reg_dis_or_en_channel(struct regulatory_channel *reg_chan,
 {
 	if (enable) {
 		reg_chan->chan_flags &= ~REGULATORY_CHAN_DISABLED;
-		reg_chan->state = CHANNEL_STATE_ENABLE;
+		if (reg_chan->chan_flags & REGULATORY_CHAN_RADAR)
+			reg_chan->state = CHANNEL_STATE_DFS;
+		else
+			reg_chan->state = CHANNEL_STATE_ENABLE;
 	} else {
 		reg_chan->chan_flags |= REGULATORY_CHAN_DISABLED;
 		reg_chan->state = CHANNEL_STATE_DISABLE;
 	}
 }
 
+static bool reg_is_chan_bandwidths_invalid(uint16_t max_bw, uint16_t min_bw)
+{
+	return (max_bw < min_bw);
+}
+
 /**
- * reg_is_ctry_sup_5_10mhz_chan() - Checks if country supports half/qtr
+ * reg_is_ctry_sup_only_5_10mhz_chan() - Checks if country supports half/qtr
  * rate channels. There are countries like russia where for chan 141,
  * min_bw is 20MHZ and max_bw is 10MHZ. Hence checking only for the max_bw
  * less than 20MHZ will not suffice to find out if the country supports
@@ -588,10 +596,20 @@ reg_dis_or_en_channel(struct regulatory_channel *reg_chan,
  * Return - True if ctry supports 5/10MHZ chans, false otherwise.
  */
 static inline bool
-reg_is_ctry_sup_5_10mhz_chan(uint16_t min_bw, uint16_t max_bw)
+reg_is_ctry_sup_only_5_10mhz_chan(uint16_t min_bw, uint16_t max_bw)
 {
+	/* Countries e.g. Russia, do not support 5/10MHz channels.
+	 * For those countries, while manipulating the min and max
+	 * bandwidths of such channels the max bandwidth becomes
+	 * less than the min bandwidth.
+	 * Example: channel 144 min_bw: 20MHz max_bw:10MHz
+	 * We can use this inconsistency (max bandwidth < min bandwidth) to
+	 * identify and filter out invalid channels.
+	 */
 
-	if (max_bw < BW_20_MHZ && min_bw >= BW_5_MHZ)
+	if (reg_is_chan_bandwidths_invalid(max_bw, min_bw))
+		return false;
+	if (max_bw <= BW_10_MHZ)
 		return true;
 	return false;
 }
@@ -624,7 +642,7 @@ static void reg_modify_chan_list_for_chan_144(
 		 * only if their bandwidth is less than 20MHz.
 		 */
 		if (freq == CHAN_144_CENT_FREQ ||
-		    (reg_is_ctry_sup_5_10mhz_chan(min_bw, max_bw) &&
+		    (reg_is_ctry_sup_only_5_10mhz_chan(min_bw, max_bw) &&
 		     reg_is_chan_overlaps_with_144_20mhz(freq, max_bw))) {
 			reg_dis_or_en_channel(&chan_list[chan_enum],
 					      en_chan_144);
@@ -740,10 +758,127 @@ static void reg_find_high_limit_chan_enum(
 	}
 }
 
+/**
+ * reg_is_subrange() - Check if range_first is a subrange of range_second
+ * @range_first: Pointer to first range
+ * @range_second: Pointer to first range
+ *
+ * Return: True if the range_first is a subrange range_second, else false
+ */
+static bool reg_is_subrange(struct freq_range *range_first,
+			    struct freq_range *range_second)
+{
+	bool is_subrange;
+	bool is_valid;
+
+	is_valid = reg_is_range_valid(range_first) &&
+		   reg_is_range_valid(range_second);
+
+	if (!is_valid)
+		return false;
+
+	is_subrange = (range_first->left >= range_second->left) &&
+		      (range_first->right <= range_second->right);
+
+	return is_subrange;
+}
+
+/**
+ * reg_is_ch144_supp_by_reg() - Verify if the frequency range of channel
+ * 144 HT20 is supported by the regulatory. If the frequency range of
+ * 144 HT20 is present in the reg rules provided by the FW, channel 144 is
+ * considered to be supported by regdmn.
+ * @pdev_priv_obj: Pointer to struct wlan_regulatory_pdev_priv_obj
+ *
+ * Return - True if channel 144 is supported by regulatory, false otherwise.
+ */
+static bool
+reg_is_ch144_supp_by_reg(struct wlan_regulatory_pdev_priv_obj *pdev_priv_obj)
+{
+	struct freq_range range_ch144_20mhz;
+	struct reg_rule_info *reg_rules_info = &pdev_priv_obj->reg_rules;
+	uint8_t i;
+
+	if (!reg_rules_info)
+		return false;
+
+	range_ch144_20mhz = reg_init_freq_range(CHAN_144_20MHZ_LEFT_EDGE,
+						CHAN_144_20MHZ_RIGHT_EDGE);
+
+	for (i = 0 ; i < reg_rules_info->num_of_reg_rules; i++) {
+		struct cur_reg_rule *cur_reg_rule =
+			&reg_rules_info->reg_rules[i];
+		struct freq_range reg_rule_range;
+
+		reg_rule_range = reg_init_freq_range(cur_reg_rule->start_freq,
+						     cur_reg_rule->end_freq);
+		if (reg_is_subrange(&range_ch144_20mhz, &reg_rule_range))
+			return true;
+	}
+	return false;
+}
+
+static bool
+reg_is_chip_range_2g_only(struct wlan_regulatory_pdev_priv_obj *pdev_priv_obj)
+{
+	if (pdev_priv_obj->range_2g_low && pdev_priv_obj->range_2g_high)
+		return true;
+	return false;
+}
+
+/**
+ * reg_is_ch144_supp_by_chip() - Verify if the frequency range
+ * of channel 144 HT20 is supported by the device.
+ * @pdev_priv_obj: Pointer to struct wlan_regulatory_pdev_priv_obj
+ *
+ * Return - True if channel 144 is supported by the chip, false otherwise.
+ */
+static bool
+reg_is_ch144_supp_by_chip(struct wlan_regulatory_pdev_priv_obj *pdev_priv_obj)
+{
+#define ENUM_FOR_CHAN144 CHAN_ENUM_5720
+	/* For a 2G pdev indicated by valid 2g_low and 2g_high, need not
+	 * check if chan 144 is supported.
+	 */
+	if (reg_is_chip_range_2g_only(pdev_priv_obj))
+		return false;
+	if (reg_chan_in_range(pdev_priv_obj->mas_chan_list,
+			      pdev_priv_obj->range_2g_low,
+			      pdev_priv_obj->range_2g_high,
+			      pdev_priv_obj->range_5g_low,
+			      pdev_priv_obj->range_5g_high, ENUM_FOR_CHAN144)) {
+		return true;
+	}
+
+	return false;
+}
+
+/**
+ * reg_is_ch144_supp_by_chip_and_reg() - Verify if the frequency range
+ * of channel 144 HT20 is supported by the device and regulatory.
+ * @pdev_priv_obj: Pointer to struct wlan_regulatory_pdev_priv_obj
+ *
+ * Return - True if channel 144 is supported by both chip and regdmn,
+ * false otherwise.
+ */
+
+static bool
+reg_is_ch144_supp_by_chip_and_reg(struct wlan_regulatory_pdev_priv_obj
+				  *pdev_priv_obj)
+{
+	if (reg_is_ch144_supp_by_reg(pdev_priv_obj) &&
+	    reg_is_ch144_supp_by_chip(pdev_priv_obj)) {
+		return true;
+	}
+
+	return false;
+}
+
 #ifdef REG_DISABLE_JP_CH144
 /**
  * reg_modify_chan_list_for_japan() - Disable channel 144 for MKK17_MKKC
- * regdomain by default.
+ * regdomain by default. Enable channel 144 if both device and regulatory
+ * supports.
  * @pdev: Pointer to pdev
  *
  * Return: None
@@ -763,7 +898,8 @@ reg_modify_chan_list_for_japan(struct wlan_objmgr_pdev *pdev)
 	if (pdev_priv_obj->reg_dmn_pair == MKK17_MKKC)
 		pdev_priv_obj->en_chan_144 = false;
 	else
-		pdev_priv_obj->en_chan_144 = true;
+		pdev_priv_obj->en_chan_144 =
+			reg_is_ch144_supp_by_chip_and_reg(pdev_priv_obj);
 
 #undef MKK17_MKKC
 }
@@ -1326,8 +1462,6 @@ void reg_reset_reg_rules(struct reg_rule_info *reg_rules)
 	qdf_mem_zero(reg_rules, sizeof(*reg_rules));
 }
 
-#ifdef CONFIG_REG_CLIENT
-#ifdef CONFIG_BAND_6GHZ
 /**
  * reg_copy_6g_reg_rules() - Copy the 6G reg rules from PSOC to PDEV
  * @pdev_reg_rules: Pointer to pdev reg rules
@@ -1388,18 +1522,6 @@ static void reg_append_6g_reg_rules_in_pdev(
 		     sizeof(struct cur_reg_rule));
 }
 
-#else /* CONFIG_BAND_6GHZ */
-static inline void reg_copy_6g_reg_rules(struct reg_rule_info *pdev_reg_rules,
-					 struct reg_rule_info *psoc_reg_rules)
-{
-}
-
-static inline void reg_append_6g_reg_rules_in_pdev(
-			struct wlan_regulatory_pdev_priv_obj *pdev_priv_obj)
-{
-}
-#endif /* CONFIG_BAND_6GHZ */
-
 void reg_save_reg_rules_to_pdev(
 		struct reg_rule_info *psoc_reg_rules,
 		struct wlan_regulatory_pdev_priv_obj *pdev_priv_obj)
@@ -1433,7 +1555,6 @@ void reg_save_reg_rules_to_pdev(
 
 	qdf_spin_unlock_bh(&pdev_priv_obj->reg_rules_lock);
 }
-#endif /* CONFIG_REG_CLIENT */
 
 void reg_propagate_mas_chan_list_to_pdev(struct wlan_objmgr_psoc *psoc,
 					 void *object, void *arg)
