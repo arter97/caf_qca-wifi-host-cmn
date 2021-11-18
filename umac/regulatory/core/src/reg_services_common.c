@@ -35,6 +35,7 @@
 #include "reg_build_chan_list.h"
 #include <wlan_objmgr_pdev_obj.h>
 #include <target_if.h>
+#include <wlan_dfs_utils_api.h>
 
 const struct chan_map *channel_map;
 #ifdef CONFIG_CHAN_NUM_API
@@ -4099,6 +4100,9 @@ enum channel_state reg_get_channel_state_for_freq(struct wlan_objmgr_pdev *pdev,
 		reg_err("pdev reg obj is NULL");
 		return CHANNEL_STATE_INVALID;
 	}
+
+	if (utils_dfs_is_chan_range_in_nol(pdev, freq - 10, freq + 10))
+	    return CHANNEL_STATE_DISABLE;
 
 	return pdev_priv_obj->cur_chan_list[ch_idx].state;
 }

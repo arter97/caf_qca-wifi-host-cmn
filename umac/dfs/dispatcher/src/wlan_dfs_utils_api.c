@@ -71,6 +71,19 @@ bool utils_dfs_is_freq_in_nol(struct wlan_objmgr_pdev *pdev, uint32_t freq)
 	return dfs_is_freq_in_nol(dfs, freq);
 }
 
+bool utils_dfs_is_chan_range_in_nol(struct wlan_objmgr_pdev *pdev,
+				    qdf_freq_t start_freq,
+				    qdf_freq_t end_freq)
+{
+	struct wlan_dfs *dfs;
+
+	dfs = wlan_pdev_get_dfs_obj(pdev);
+	if (!dfs)
+		return false;
+
+	return dfs_is_chan_range_in_nol(dfs, start_freq, end_freq);
+}
+
 #ifdef CONFIG_CHAN_FREQ_API
 QDF_STATUS utils_dfs_cac_valid_reset_for_freq(struct wlan_objmgr_pdev *pdev,
 					      uint16_t prevchan_freq,
@@ -459,12 +472,16 @@ QDF_STATUS utils_dfs_nol_addchan(struct wlan_objmgr_pdev *pdev,
 		uint32_t dfs_nol_timeout)
 {
 	struct wlan_dfs *dfs;
+	struct dfs_freq_range nol_freq_range;
 
 	dfs = wlan_pdev_get_dfs_obj(pdev);
 	if (!dfs)
 		return  QDF_STATUS_E_FAILURE;
 
-	DFS_NOL_ADD_CHAN_LOCKED(dfs, freq, dfs_nol_timeout);
+	nol_freq_range.start_freq = freq - 10;
+	nol_freq_range.end_freq = freq + 10;
+
+	DFS_NOL_ADD_CHAN_LOCKED(dfs, nol_freq_range, dfs_nol_timeout);
 
 	return QDF_STATUS_SUCCESS;
 }
@@ -601,24 +618,6 @@ QDF_STATUS utils_dfs_set_cac_timer_running(struct wlan_objmgr_pdev *pdev,
 	return QDF_STATUS_SUCCESS;
 }
 qdf_export_symbol(utils_dfs_set_cac_timer_running);
-
-QDF_STATUS utils_dfs_get_nol_chfreq_and_chwidth(struct wlan_objmgr_pdev *pdev,
-		void *nollist,
-		uint32_t *nol_chfreq,
-		uint32_t *nol_chwidth,
-		int index)
-{
-	struct wlan_dfs *dfs;
-
-	dfs = wlan_pdev_get_dfs_obj(pdev);
-	if (!dfs)
-		return  QDF_STATUS_E_FAILURE;
-
-	dfs_get_nol_chfreq_and_chwidth(nollist, nol_chfreq, nol_chwidth, index);
-
-	return QDF_STATUS_SUCCESS;
-}
-qdf_export_symbol(utils_dfs_get_nol_chfreq_and_chwidth);
 
 QDF_STATUS utils_dfs_update_cur_chan_flags(struct wlan_objmgr_pdev *pdev,
 		uint64_t flags,

@@ -129,11 +129,8 @@ static void dfs_nol_delete(struct wlan_dfs *dfs,
  * @delchwidth: Width of the element to be removed.
  */
 static void dfs_action_on_expired_nol_elem(struct wlan_dfs *dfs,
-					   uint16_t delfreq,
-					   uint16_t delchwidth)
+					   uint16_t delfreq)
 {
-	utils_dfs_reg_update_nol_chan_for_freq(dfs->dfs_pdev_obj,
-					       &delfreq, 1, DFS_NOL_RESET);
 	/* Update the wireless stack with the new NOL. */
 	dfs_nol_update(dfs);
 
@@ -183,8 +180,7 @@ static void dfs_action_on_expired_nol_elem(struct wlan_dfs *dfs,
  * Return: No. of frequencies removed from NOL list.
  */
 static uint8_t dfs_delete_expired_nol_elems(struct wlan_dfs *dfs,
-					    uint16_t *delfreq,
-					    uint16_t *delchwidth)
+					    uint16_t *delfreq)
 {
 	struct dfs_nolelem *nol, **prev_next;
 	uint32_t diff_ms;
@@ -202,11 +198,9 @@ static uint8_t dfs_delete_expired_nol_elems(struct wlan_dfs *dfs,
 				     nol->nol_start_us, 1000);
 		if (diff_ms >= nol->nol_timeout_ms) {
 			delfreq[nol_count] = nol->nol_freq;
-			delchwidth[nol_count++] = nol->nol_chwidth;
 			dfs_debug(dfs, WLAN_DEBUG_DFS_NOL,
-				  "removing chan %d/%dMHz from NOL tstamp=%d",
+				  "removing chan %d from NOL tstamp=%d",
 				  nol->nol_freq,
-				  nol->nol_chwidth,
 				  (qdf_system_ticks_to_msecs
 				   (qdf_system_ticks()) / 1000));
 			*prev_next = nol->nol_next;
@@ -254,7 +248,6 @@ static os_timer_func(dfs_remove_from_nol)
 {
 	struct wlan_dfs *dfs;
 	uint16_t nol_freq[MAX_NOL];
-	uint16_t nol_chwidth[MAX_NOL];
 	uint8_t i, nol_count;
 
 	OS_GET_TIMER_ARG(dfs, struct wlan_dfs *);
@@ -265,12 +258,10 @@ static os_timer_func(dfs_remove_from_nol)
 	}
 
 	WLAN_DFSNOL_LOCK(dfs);
-	nol_count = dfs_delete_expired_nol_elems(dfs, nol_freq, nol_chwidth);
+	nol_count = dfs_delete_expired_nol_elems(dfs, nol_freq);
 	WLAN_DFSNOL_UNLOCK(dfs);
 	for (i = 0; i < nol_count; i++)
-		dfs_action_on_expired_nol_elem(dfs,
-					       nol_freq[i],
-					       nol_chwidth[i]);
+		dfs_action_on_expired_nol_elem(dfs, nol_freq[i]);
 }
 
 #else
@@ -337,9 +328,10 @@ void dfs_print_nol(struct wlan_dfs *dfs)
 		diff_ms = (nol->nol_timeout_ms - diff_ms);
 		remaining_sec = diff_ms / 1000; /* Convert to seconds */
 		dfs_info(NULL, WLAN_DEBUG_DFS_ALWAYS,
-			"nol:%d channel=%d MHz width=%d MHz time left=%u seconds nol start_us=%llu",
-			i++, nol->nol_freq,
-			nol->nol_chwidth,
+			"nol:%d start=%d MHz end=%d MHz time left=%u seconds nol start_us=%llu",
+			i++,
+			nol->nol_freq_range.start_freq,
+			nol->nol_freq_range.end_freq,
 			remaining_sec,
 			nol->nol_start_us);
 		nol = nol->nol_next;
@@ -395,7 +387,6 @@ void dfs_get_nol(struct wlan_dfs *dfs,
 	nol = dfs->dfs_nol;
 	while (nol) {
 		dfs_nol[*nchan].nol_freq = nol->nol_freq;
-		dfs_nol[*nchan].nol_chwidth = nol->nol_chwidth;
 		dfs_nol[*nchan].nol_start_us = nol->nol_start_us;
 		dfs_nol[*nchan].nol_timeout_ms = nol->nol_timeout_ms;
 		++(*nchan);
@@ -423,13 +414,19 @@ void dfs_set_nol(struct wlan_dfs *dfs,
 					     dfs_nol[i].nol_start_us, 1000);
 
 		if (nol_time_lft_ms < dfs_nol[i].nol_timeout_ms) {
+			struct dfs_freq_range nol_freq_range;
+
+			nol_freq_range.start_freq =
+				dfs_nol[i].nol_freq - MIN_DFS_SUBCHAN_BW / 2;
+			nol_freq_range.end_freq =
+				dfs_nol[i].nol_freq + MIN_DFS_SUBCHAN_BW / 2;
 			chan.dfs_ch_freq = dfs_nol[i].nol_freq;
 			chan.dfs_ch_flags = 0;
 			chan.dfs_ch_flagext = 0;
 			nol_time_lft_ms =
 				(dfs_nol[i].nol_timeout_ms - nol_time_lft_ms);
 
-			DFS_NOL_ADD_CHAN_LOCKED(dfs, chan.dfs_ch_freq,
+			DFS_NOL_ADD_CHAN_LOCKED(dfs, nol_freq_range,
 						(nol_time_lft_ms / TIME_IN_MS));
 			utils_dfs_reg_update_nol_chan_for_freq(
 						dfs->dfs_pdev_obj,
@@ -482,14 +479,14 @@ void dfs_set_nol(struct wlan_dfs *dfs,
 #endif
 
 void dfs_nol_addchan(struct wlan_dfs *dfs,
-		uint16_t freq,
+		struct dfs_freq_range nol_freq_range,
 		uint32_t dfs_nol_timeout)
 {
 #define TIME_IN_MS 1000
 #define TIME_IN_US (TIME_IN_MS * 1000)
 	struct dfs_nolelem *nol, *elem, *prev;
-	/* For now, assume all events are 20MHz wide. */
-	int ch_width = 20;
+	qdf_freq_t freq = (nol_freq_range.start_freq +
+			   nol_freq_range.end_freq) / 2;
 
 	if (!dfs) {
 		dfs_err(dfs, WLAN_DEBUG_DFS_ALWAYS,  "dfs is NULL");
@@ -499,8 +496,9 @@ void dfs_nol_addchan(struct wlan_dfs *dfs,
 	prev = dfs->dfs_nol;
 	elem = NULL;
 	while (nol) {
-		if ((nol->nol_freq == freq) &&
-				(nol->nol_chwidth == ch_width)) {
+		if ((nol->nol_freq_range.start_freq ==
+		     nol_freq_range.start_freq) &&
+		    (nol->nol_freq_range.end_freq == nol_freq_range.end_freq)) {
 			nol->nol_start_us = qdf_get_monotonic_boottime();
 			nol->nol_timeout_ms = dfs_nol_timeout * TIME_IN_MS;
 
@@ -522,9 +520,10 @@ void dfs_nol_addchan(struct wlan_dfs *dfs,
 	qdf_mem_zero(elem, sizeof(*elem));
 	elem->nol_dfs = dfs;
 	elem->nol_freq = freq;
-	elem->nol_chwidth = ch_width;
 	elem->nol_start_us = qdf_get_monotonic_boottime();
 	elem->nol_timeout_ms = dfs_nol_timeout*TIME_IN_MS;
+	elem->nol_freq_range.start_freq = nol_freq_range.start_freq;
+	elem->nol_freq_range.end_freq = nol_freq_range.end_freq;
 	elem->nol_next = NULL;
 	if (prev) {
 		prev->nol_next = elem;
@@ -552,18 +551,6 @@ bad:
 
 #undef TIME_IN_MS
 #undef TIME_IN_US
-}
-
-void dfs_get_nol_chfreq_and_chwidth(struct dfsreq_nolelem *dfs_nol,
-		uint32_t *nol_chfreq,
-		uint32_t *nol_chwidth,
-		int index)
-{
-	if (!dfs_nol)
-		return;
-
-	*nol_chfreq = dfs_nol[index].nol_freq;
-	*nol_chwidth = dfs_nol[index].nol_chwidth;
 }
 
 void dfs_nol_update(struct wlan_dfs *dfs)
@@ -838,7 +825,7 @@ void dfs_remove_spoof_channel_from_nol(struct wlan_dfs *dfs)
 
 	for (i = 0; i < nchans && i < NUM_CHANNELS_160MHZ; i++) {
 		DFS_NOL_DELETE_CHAN_LOCKED(dfs, freq_list[i], CHWIDTH_20MHZ);
-		dfs_action_on_expired_nol_elem(dfs, freq_list[i], CHWIDTH_20MHZ);
+		dfs_action_on_expired_nol_elem(dfs, freq_list[i]);
 	}
 
 	utils_dfs_reg_update_nol_chan_for_freq(dfs->dfs_pdev_obj,
@@ -878,3 +865,52 @@ void dfs_remove_spoof_channel_from_nol(struct wlan_dfs *dfs)
 }
 #endif
 #endif
+
+/**
+ * dfs_is_nol_overlap() - API to check if the input ranges overlap.
+ * @range_1: First input range.
+ * @range_2: Second input range.
+ *
+ * Consider, r1 and r2 are two contiguous frequency ranges.
+ * There are two cases where r1 and r2 does not overlap in a linear scale.
+ *   1. r1 is completely after r2 (i.e, start of r1 is > end of r2)
+ *   2. r2 is completely before r2 (i.e end of r1 is < start of r2)
+ *
+ * Combining them would result in (start_r1 > end_r2 || end_r1 < start_r2).
+ * The de-morgan of that is checked in this API.
+ *
+ * Return: True if the ranges overlap, else false.
+ */
+static bool
+dfs_is_nol_overlap(struct dfs_freq_range range_1, struct dfs_freq_range range_2)
+{
+	if ((range_1.start_freq < range_2.end_freq) &&
+	    (range_1.end_freq > range_2.start_freq))
+		return true;
+
+	return false;
+}
+
+bool
+dfs_is_chan_range_in_nol(struct wlan_dfs *dfs,
+			 qdf_freq_t start_freq,
+			 qdf_freq_t end_freq)
+{
+	struct dfs_nolelem *nol = dfs->dfs_nol;
+	struct dfs_freq_range input_range;
+
+	input_range.start_freq = start_freq;
+	input_range.end_freq = end_freq;
+
+	WLAN_DFSNOL_LOCK(dfs);
+	while (nol) {
+		if (dfs_is_nol_overlap(nol->nol_freq_range, input_range)) {
+			WLAN_DFSNOL_UNLOCK(dfs);
+			return true;
+		}
+		nol = nol->nol_next;
+	}
+	WLAN_DFSNOL_UNLOCK(dfs);
+
+	return false;
+}
