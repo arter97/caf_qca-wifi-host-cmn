@@ -655,6 +655,7 @@ void utils_dfs_get_chan_list(struct wlan_objmgr_pdev *pdev,
 	struct regulatory_channel *cur_chan_list;
 	struct wlan_dfs *dfs;
 	struct dfs_channel *chan_list = (struct dfs_channel *)clist;
+	uint16_t req_bw = BW_20_MHZ;
 
 	dfs = wlan_pdev_get_dfs_obj(pdev);
 	if (!dfs)
@@ -675,7 +676,24 @@ void utils_dfs_get_chan_list(struct wlan_objmgr_pdev *pdev,
 		return;
 	}
 
+	if (dfs->dfs_curchan->dfs_ch_flags & WLAN_CHAN_HALF)
+		req_bw = BW_10_MHZ;
+	else if (dfs->dfs_curchan->dfs_ch_flags & WLAN_CHAN_QUARTER)
+		req_bw = BW_5_MHZ;
+
 	for (i = 0; i < NUM_CHANNELS; i++) {
+		qdf_freq_t start_freq;
+		qdf_freq_t end_freq;
+
+		if (req_bw < cur_chan_list[i].min_bw ||
+		    req_bw > cur_chan_list[i].max_bw)
+			continue;
+
+		start_freq = cur_chan_list[i].center_freq - req_bw/2;
+		end_freq = cur_chan_list[i].center_freq + req_bw/2;
+		if (utils_dfs_is_chan_range_in_nol(pdev, start_freq, end_freq))
+			continue;
+
 		state = cur_chan_list[i].state;
 		if (state == CHANNEL_STATE_DFS ||
 				state == CHANNEL_STATE_ENABLE) {
