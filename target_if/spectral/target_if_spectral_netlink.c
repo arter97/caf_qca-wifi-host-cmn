@@ -102,13 +102,10 @@ target_if_spectral_fill_samp_msg(struct target_if_spectral *spectral,
 		struct samp_edge_extra_bin_info *lb_edge_bins;
 		struct samp_edge_extra_bin_info *rb_edge_bins;
 		uint8_t *bin_pwr_data;
-		uint32_t *binptr_32;
-		uint16_t *binptr_16;
-		uint16_t pwr_16;
 		size_t pwr_count;
 		uint16_t num_edge_bins;
-		uint16_t idx;
 		uint16_t start_bin_index;
+		uint32_t bytes_copied;
 
 		swar = &spectral->len_adj_swar;
 
@@ -160,102 +157,63 @@ target_if_spectral_fill_samp_msg(struct target_if_spectral *spectral,
 			    detector_info->start_bin_idx + 1;
 		num_edge_bins = lb_edge_bins->num_bins +
 				rb_edge_bins->num_bins;
-		/*
-		 * To check whether FFT bin values exceed 8 bits, we add a
-		 * check before copying values to samp_data->bin_pwr.
-		 * If it crosses 8 bits, we cap the values to maximum value
-		 * supported by 8 bits ie. 255. This needs to be done as the
-		 * destination array in SAMP message is 8 bits. This is a
-		 * temporary solution till an array of 16 bits is used for
-		 * SAMP message.
-		 */
-		if (swar->fftbin_size_war ==
-				SPECTRAL_FFTBIN_SIZE_WAR_4BYTE_TO_1BYTE) {
-			binptr_32 = (uint32_t *)bin_pwr_data;
-			if (lb_edge_bins->num_bins > 0) {
-				for (idx = 0; idx < lb_edge_bins->num_bins;
-				     idx++) {
-				/* Read only the first 2 bytes of the DWORD */
-					pwr_16 = *((uint16_t *)binptr_32++);
-					if (qdf_unlikely(pwr_16 >
-					    MAX_FFTBIN_VALUE))
-						pwr_16 = MAX_FFTBIN_VALUE;
-					spec_samp_msg->bin_pwr
-					  [lb_edge_bins->start_bin_idx + idx]
-					  = pwr_16;
-				}
+
+		/* Copy left edge bins */
+		if (lb_edge_bins->num_bins > 0) {
+			ret = target_if_spectral_copy_fft_bins(
+					spectral, bin_pwr_data,
+					&spec_samp_msg->bin_pwr[
+					lb_edge_bins->start_bin_idx],
+					lb_edge_bins->num_bins,
+					&bytes_copied);
+
+			if (QDF_IS_STATUS_ERROR(ret)) {
+				qdf_spin_unlock_bh(
+					&spectral->session_det_map_lock);
+				spectral_err_rl("Unable to copy left edge FFT bins");
+				return QDF_STATUS_E_FAILURE;
 			}
-			for (idx = 0; idx < pwr_count; idx++) {
-				/* Read only the first 2 bytes of the DWORD */
-				pwr_16 = *((uint16_t *)binptr_32++);
-				if (qdf_unlikely(pwr_16 > MAX_FFTBIN_VALUE))
-					pwr_16 = MAX_FFTBIN_VALUE;
-				spec_samp_msg->bin_pwr[start_bin_index + idx]
-							= pwr_16;
-			}
-			if (rb_edge_bins->num_bins > 0) {
-				for (idx = 0; idx < rb_edge_bins->num_bins;
-				     idx++) {
-				/* Read only the first 2 bytes of the DWORD */
-					pwr_16 = *((uint16_t *)binptr_32++);
-					if (qdf_unlikely(pwr_16 >
-					    MAX_FFTBIN_VALUE))
-						pwr_16 = MAX_FFTBIN_VALUE;
-					spec_samp_msg->bin_pwr
-					  [rb_edge_bins->start_bin_idx + idx]
-					  = pwr_16;
-				}
-			}
-		} else if (swar->fftbin_size_war ==
-				SPECTRAL_FFTBIN_SIZE_WAR_2BYTE_TO_1BYTE) {
-			binptr_16 = (uint16_t *)bin_pwr_data;
-			if (lb_edge_bins->num_bins > 0) {
-				for (idx = 0; idx < lb_edge_bins->num_bins;
-				     idx++) {
-					pwr_16 = *(binptr_16++);
-					if (qdf_unlikely(pwr_16 >
-					    MAX_FFTBIN_VALUE))
-						pwr_16 = MAX_FFTBIN_VALUE;
-					spec_samp_msg->bin_pwr
-					  [lb_edge_bins->start_bin_idx + idx]
-					  = pwr_16;
-				}
-			}
-			for (idx = 0; idx < pwr_count; idx++) {
-				pwr_16 = *(binptr_16++);
-				if (qdf_unlikely(pwr_16 > MAX_FFTBIN_VALUE))
-					pwr_16 = MAX_FFTBIN_VALUE;
-				spec_samp_msg->bin_pwr[start_bin_index + idx]
-							= pwr_16;
-			}
-			if (rb_edge_bins->num_bins > 0) {
-				for (idx = 0; idx < rb_edge_bins->num_bins;
-				     idx++) {
-					pwr_16 = *(binptr_16++);
-					if (qdf_unlikely(pwr_16 >
-					    MAX_FFTBIN_VALUE))
-						pwr_16 = MAX_FFTBIN_VALUE;
-					spec_samp_msg->bin_pwr
-					  [rb_edge_bins->start_bin_idx + idx]
-					  = pwr_16;
-				}
-			}
-		} else {
-			if (lb_edge_bins->num_bins > 0)
-				qdf_mem_copy(&spec_samp_msg->bin_pwr
-					     [lb_edge_bins->start_bin_idx],
-					     &bin_pwr_data[0],
-					     lb_edge_bins->num_bins);
-			qdf_mem_copy(&spec_samp_msg->bin_pwr[start_bin_index],
-				     &bin_pwr_data[lb_edge_bins->num_bins],
-				     pwr_count);
-			if (rb_edge_bins->num_bins > 0)
-				qdf_mem_copy(&spec_samp_msg->bin_pwr
-					     [rb_edge_bins->start_bin_idx],
-					     &bin_pwr_data[pwr_count +
-					     lb_edge_bins->num_bins],
-					     rb_edge_bins->num_bins);
+
+			/* Advance the fft bin pointer in the report */
+			bin_pwr_data += bytes_copied;
 		}
+
+		/* Copy the in-band and out-band bins */
+		ret = target_if_spectral_copy_fft_bins(
+				spectral, bin_pwr_data,
+				&spec_samp_msg->bin_pwr[start_bin_index],
+				pwr_count,
+				&bytes_copied);
+
+		if (QDF_IS_STATUS_ERROR(ret)) {
+			qdf_spin_unlock_bh(
+				&spectral->session_det_map_lock);
+			spectral_err_rl("Unable to copy in-band/out-band FFT bins");
+			return QDF_STATUS_E_FAILURE;
+		}
+		/* Advance the fft bin pointer in the report */
+		bin_pwr_data += bytes_copied;
+
+		/* Copy right edge bins */
+		if (rb_edge_bins->num_bins > 0) {
+			ret = target_if_spectral_copy_fft_bins(
+					spectral, bin_pwr_data,
+					&spec_samp_msg->bin_pwr[
+					rb_edge_bins->start_bin_idx],
+					rb_edge_bins->num_bins,
+					&bytes_copied);
+
+			if (QDF_IS_STATUS_ERROR(ret)) {
+				qdf_spin_unlock_bh(
+					&spectral->session_det_map_lock);
+				spectral_err_rl("Unable to copy right edge FFT bins");
+				return QDF_STATUS_E_FAILURE;
+			}
+
+			/* Advance the fft bin pointer in the report */
+			bin_pwr_data += bytes_copied;
+		}
+
 		spec_samp_msg->bin_pwr_count += (pwr_count + num_edge_bins);
 	}
 
@@ -269,18 +227,38 @@ target_if_spectral_fill_samp_msg(struct target_if_spectral *spectral,
 		qdf_spin_lock_bh(&spectral->session_report_info_lock);
 
 		rpt_info = &spectral->report_info[spectral_mode];
+
+		if (!rpt_info->valid) {
+			qdf_spin_unlock_bh(&spectral->session_report_info_lock);
+			qdf_spin_unlock_bh(&spectral->session_det_map_lock);
+			spectral_info("per-session report info is not valid");
+			return QDF_STATUS_E_FAILURE;
+		}
+
 		spec_samp_msg->signature = SPECTRAL_SIGNATURE;
 		p_sops->get_mac_address(spectral, spec_samp_msg->macaddr);
 		spec_samp_msg->spectral_mode = spectral_mode;
 		spec_samp_msg->target_reset_count =
 				spectral->timestamp_war.target_reset_count;
-		spec_samp_msg->operating_bw = rpt_info->operating_bw;
+		spec_samp_msg->operating_bw = spectral->nl_cb.
+				convert_to_nl_ch_width(rpt_info->operating_bw);
+		if (spec_samp_msg->operating_bw < 0) {
+			spectral_err_rl("Invalid operating channel width %d",
+					rpt_info->operating_bw);
+			return QDF_STATUS_E_FAILURE;
+		}
 		spec_samp_msg->pri20_freq = rpt_info->pri20_freq;
 		spec_samp_msg->cfreq1 = rpt_info->cfreq1;
 		spec_samp_msg->cfreq2 = rpt_info->cfreq2;
 		spec_samp_msg->sscan_cfreq1 = rpt_info->sscan_cfreq1;
 		spec_samp_msg->sscan_cfreq2 = rpt_info->sscan_cfreq2;
-		spec_samp_msg->sscan_bw = rpt_info->sscan_bw;
+		spec_samp_msg->sscan_bw = spectral->nl_cb.
+				convert_to_nl_ch_width(rpt_info->sscan_bw);
+		if (spec_samp_msg->sscan_bw < 0) {
+			spectral_err_rl("Invalid sscan channel width %d",
+					rpt_info->sscan_bw);
+			return QDF_STATUS_E_FAILURE;
+		}
 		spec_samp_msg->fft_width = FFT_BIN_SIZE_1BYTE;
 		spec_samp_msg->num_freq_spans = rpt_info->num_spans;
 

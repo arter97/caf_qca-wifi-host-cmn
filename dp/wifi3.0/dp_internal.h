@@ -57,10 +57,13 @@ struct htt_dbgfs_cfg {
 #define DBG_STATS_COOKIE_DEFAULT 0x0
 
 /* Reserve for DP Stats: 3rd bit */
-#define DBG_STATS_COOKIE_DP_STATS 0x8
+#define DBG_STATS_COOKIE_DP_STATS BIT(3)
 
 /* Reserve for HTT Stats debugfs support: 4th bit */
-#define DBG_STATS_COOKIE_HTT_DBGFS 0x10
+#define DBG_STATS_COOKIE_HTT_DBGFS BIT(4)
+
+/*Reserve for HTT Stats debugfs support: 5th bit */
+#define DBG_SYSFS_STATS_COOKIE BIT(5)
 
 /**
  * Bitmap of HTT PPDU TLV types for Default mode
@@ -612,6 +615,19 @@ void dp_monitor_pdev_reset_scan_spcl_vap_stats_enable(struct dp_pdev *pdev,
 }
 #endif
 
+/**
+ * cdp_soc_t_to_dp_soc() - typecast cdp_soc_t to
+ * dp soc handle
+ * @psoc: CDP psoc handle
+ *
+ * Return: struct dp_soc pointer
+ */
+static inline
+struct dp_soc *cdp_soc_t_to_dp_soc(struct cdp_soc_t *psoc)
+{
+	return (struct dp_soc *)psoc;
+}
+
 #define DP_MAX_TIMER_EXEC_TIME_TICKS \
 		(QDF_LOG_TIMESTAMP_CYCLES_PER_10_US * 100 * 20)
 
@@ -666,6 +682,9 @@ while (0)
 	QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_##LVL,       \
 		fmt, ## args)
 
+#ifdef WLAN_SYSFS_DP_STATS
+void DP_PRINT_STATS(const char *fmt, ...);
+#else /* WLAN_SYSFS_DP_STATS */
 #ifdef DP_PRINT_NO_CONSOLE
 /* Stat prints should not go to console or kernel logs.*/
 #define DP_PRINT_STATS(fmt, args ...)\
@@ -676,6 +695,8 @@ while (0)
 	QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_FATAL,\
 		  fmt, ## args)
 #endif
+#endif /* WLAN_SYSFS_DP_STATS */
+
 #define DP_STATS_INIT(_handle) \
 	qdf_mem_zero(&((_handle)->stats), sizeof((_handle)->stats))
 
@@ -2477,19 +2498,6 @@ static inline
 struct cdp_soc_t *dp_soc_to_cdp_soc_t(struct dp_soc *psoc)
 {
 	return (struct cdp_soc_t *)psoc;
-}
-
-/**
- * cdp_soc_t_to_dp_soc() - typecast cdp_soc_t to
- * dp soc handle
- * @psoc: CDP psoc handle
- *
- * Return: struct dp_soc pointer
- */
-static inline
-struct dp_soc *cdp_soc_t_to_dp_soc(struct cdp_soc_t *psoc)
-{
-	return (struct dp_soc *)psoc;
 }
 
 #if defined(WLAN_SUPPORT_RX_FLOW_TAG) || defined(WLAN_SUPPORT_RX_FISA)

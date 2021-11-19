@@ -2208,6 +2208,36 @@ QDF_STATUS wmi_extract_pdev_sscan_fft_bin_index(
 			wmi_unified_t wmi_handle,
 			uint8_t *evt_buf,
 			struct spectral_fft_bin_markers_160_165mhz *param);
+
+/**
+ * wmi_extract_pdev_spectral_session_chan_info() - Extract channel information
+ * for a spectral scan session
+ * @wmi_handle: handle to WMI.
+ * @evt_buf: Event buffer
+ * @chan_info: Spectral session channel information data structure to be filled
+ * by this API
+ *
+ * Return: QDF_STATUS of operation
+ */
+QDF_STATUS wmi_extract_pdev_spectral_session_chan_info(
+			wmi_unified_t wmi_handle, void *event,
+			struct spectral_session_chan_info *chan_info);
+
+/**
+ * wmi_extract_pdev_spectral_session_detector_info() - Extract detector
+ * information for a spectral scan session
+ * @wmi_handle: handle to WMI.
+ * @evt_buf: Event buffer
+ * @det_info: Spectral session detector information data structure to be filled
+ * by this API
+ * @det_info_idx: index in the array of spectral scan detector info TLVs
+ *
+ * Return: QDF_STATUS of operation
+ */
+QDF_STATUS wmi_extract_pdev_spectral_session_detector_info(
+		wmi_unified_t wmi_handle, void *event,
+		struct spectral_session_det_info *det_info,
+		uint8_t det_info_idx);
 #endif /* WLAN_CONV_SPECTRAL_ENABLE */
 
 #if defined(WLAN_SUPPORT_FILS) || defined(CONFIG_BAND_6GHZ)
@@ -4433,4 +4463,16 @@ wmi_extract_halphy_cal_ev_param(wmi_unified_t wmi_handle,
 				void *evt_buf,
 				struct wmi_host_pdev_set_halphy_cal_event *param);
 
+#ifdef FEATURE_MEC_OFFLOAD
+/**
+ * wmi_unified_pdev_set_mec_timer() - set mec timer value
+ * @wmi_handle: wmi handle
+ * @param: params needed for mec timer config
+ *
+ * Return: QDF_STATUS_SUCCESS for success or error code
+ */
+QDF_STATUS
+wmi_unified_pdev_set_mec_timer(struct wmi_unified *wmi_handle,
+			       struct set_mec_timer_params *param);
+#endif
 #endif /* _WMI_UNIFIED_API_H_ */

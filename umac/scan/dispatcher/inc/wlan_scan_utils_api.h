@@ -738,6 +738,9 @@ util_scan_copy_beacon_data(struct scan_cache_entry *new_entry,
 	ie_lst->ehtcap = conv_ptr(ie_lst->ehtcap, old_ptr, new_ptr);
 	ie_lst->ehtop = conv_ptr(ie_lst->ehtop, old_ptr, new_ptr);
 #endif
+#ifdef WLAN_FEATURE_11BE_MLO
+	ie_lst->multi_link = conv_ptr(ie_lst->multi_link, old_ptr, new_ptr);
+#endif
 
 	return QDF_STATUS_SUCCESS;
 }
@@ -749,27 +752,30 @@ util_scan_copy_beacon_data(struct scan_cache_entry *new_entry,
  *
  * API, function to get partner link information from an ML scan cache entry
  *
- * Return: scan_entry
+ * Return: QDF_STATUS
  */
-static inline struct mlo_partner_info
-util_scan_get_ml_partner_info(struct scan_cache_entry *scan_entry)
+static inline QDF_STATUS
+util_scan_get_ml_partner_info(struct scan_cache_entry *scan_entry,
+			      struct mlo_partner_info *partner_info)
 {
-	struct mlo_partner_info partner_info;
 	uint8_t i;
 
-	partner_info.num_partner_links =
+	if (!scan_entry->ml_info.num_links)
+		return QDF_STATUS_E_FAILURE;
+
+	partner_info->num_partner_links =
 			qdf_min((uint8_t)WLAN_UMAC_MLO_MAX_VDEVS - 1,
 				scan_entry->ml_info.num_links - 1);
 	/* TODO: Make sure that scan_entry->ml_info->link_info is a sorted
 	 * list */
-	for (i = 0; i < partner_info.num_partner_links; i++) {
-		partner_info.partner_link_info[i].link_addr =
+	for (i = 0; i < partner_info->num_partner_links; i++) {
+		partner_info->partner_link_info[i].link_addr =
 				scan_entry->ml_info.link_info[i].link_addr;
-		partner_info.partner_link_info[i].link_id =
+		partner_info->partner_link_info[i].link_id =
 				scan_entry->ml_info.link_info[i].link_id;
 	}
 
-	return partner_info;
+	return QDF_STATUS_SUCCESS;
 }
 #endif
 

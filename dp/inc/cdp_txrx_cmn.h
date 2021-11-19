@@ -2142,21 +2142,21 @@ void cdp_if_mgmt_drain(ol_txrx_soc_handle soc,
  * @soc: opaque soc handle
  * @max_peers: number of peers created in FW
  * @max_ast_index: max number of AST index supported in FW
- * @peer_map_unmap_v2: flag indicates HTT peer map v2 is enabled in FW
+ * @peer_map_unmap_v: Indicates HTT peer map/unmap versions enabled in FW
  *
  *
  * Return: QDF_STATUS
  */
 static inline QDF_STATUS
 cdp_peer_map_attach(ol_txrx_soc_handle soc, uint32_t max_peers,
-		    uint32_t max_ast_index, bool peer_map_unmap_v2)
+		    uint32_t max_ast_index, uint8_t peer_map_unmap_v)
 {
 	if (soc && soc->ops && soc->ops->cmn_drv_ops &&
 	    soc->ops->cmn_drv_ops->txrx_peer_map_attach)
 		return soc->ops->cmn_drv_ops->txrx_peer_map_attach(soc,
 							max_peers,
 							max_ast_index,
-							peer_map_unmap_v2);
+							peer_map_unmap_v);
 
 	return QDF_STATUS_SUCCESS;
 }
@@ -2671,5 +2671,48 @@ cdp_get_free_desc_poolsize(ol_txrx_soc_handle soc)
 		return 0;
 
 	return soc->ops->cmn_drv_ops->get_free_desc_poolsize(soc);
+}
+
+#ifdef WLAN_FEATURE_PKT_CAPTURE_V2
+/**
+ * cdp_set_pkt_capture_mode() - set pkt capture mode in dp ctx
+ * @soc: opaque soc handle
+ * @val: value to be set
+ */
+static inline void
+cdp_set_pkt_capture_mode(ol_txrx_soc_handle soc, bool val)
+{
+	if (!soc || !soc->ops) {
+		dp_cdp_debug("Invalid Instance");
+		QDF_BUG(0);
+		return;
+	}
+
+	if (!soc->ops->cmn_drv_ops ||
+	    !soc->ops->cmn_drv_ops->set_pkt_capture_mode)
+		return;
+
+	soc->ops->cmn_drv_ops->set_pkt_capture_mode(soc, val);
+}
+#else
+static inline void
+cdp_set_pkt_capture_mode(ol_txrx_soc_handle soc, bool val)
+{
+}
+#endif
+
+/**
+ * cdp_rx_get_pending() - Get number of pending frames of RX threads
+ * @soc: opaque soc handle
+ * Return: number of pending frames
+ */
+static inline uint32_t
+cdp_get_tx_inqueue(ol_txrx_soc_handle soc)
+{
+	if (!soc || !soc->ol_ops ||
+	    !soc->ol_ops->dp_get_tx_inqueue)
+		return 0;
+
+	return soc->ol_ops->dp_get_tx_inqueue(soc);
 }
 #endif /* _CDP_TXRX_CMN_H_ */

@@ -240,15 +240,15 @@ qdf_export_symbol(qdf_trace_hex_ascii_dump);
 #ifdef WLAN_LOGGING_BUFFERS_DYNAMICALLY
 static inline QDF_STATUS allocate_g_qdf_trace_tbl_buffer(void)
 {
-	g_qdf_trace_tbl = vzalloc(MAX_QDF_TRACE_RECORDS *
-				  sizeof(*g_qdf_trace_tbl));
+	g_qdf_trace_tbl = qdf_mem_valloc(MAX_QDF_TRACE_RECORDS *
+					 sizeof(*g_qdf_trace_tbl));
 	QDF_BUG(g_qdf_trace_tbl);
 	return g_qdf_trace_tbl ? QDF_STATUS_SUCCESS : QDF_STATUS_E_NOMEM;
 }
 
 static inline void free_g_qdf_trace_tbl_buffer(void)
 {
-	vfree(g_qdf_trace_tbl);
+	qdf_mem_vfree(g_qdf_trace_tbl);
 	g_qdf_trace_tbl = NULL;
 }
 #else
@@ -672,15 +672,15 @@ qdf_export_symbol(qdf_state_info_dump_all);
 #ifdef WLAN_LOGGING_BUFFERS_DYNAMICALLY
 static inline QDF_STATUS allocate_g_qdf_dp_trace_tbl_buffer(void)
 {
-	g_qdf_dp_trace_tbl = vzalloc(MAX_QDF_DP_TRACE_RECORDS *
-				     sizeof(*g_qdf_dp_trace_tbl));
+	g_qdf_dp_trace_tbl = qdf_mem_valloc(MAX_QDF_DP_TRACE_RECORDS *
+					    sizeof(*g_qdf_dp_trace_tbl));
 	QDF_BUG(g_qdf_dp_trace_tbl);
 	return g_qdf_dp_trace_tbl ? QDF_STATUS_SUCCESS : QDF_STATUS_E_NOMEM;
 }
 
 static inline void free_g_qdf_dp_trace_tbl_buffer(void)
 {
-	vfree(g_qdf_dp_trace_tbl);
+	qdf_mem_vfree(g_qdf_dp_trace_tbl);
 	g_qdf_dp_trace_tbl = NULL;
 }
 #else
@@ -3387,9 +3387,11 @@ struct category_name_info g_qdf_category_name[MAX_SUPPORTED_CATEGORY] = {
 	[QDF_MODULE_ID_DBDC_REP] = {"DBDC_REP"},
 	[QDF_MODULE_ID_EXT_AP] = {"EXT_AP"},
 	[QDF_MODULE_ID_MLO] = {"MLO_MGR"},
+	[QDF_MODULE_ID_MGMT_RX_REO] = {"MGMT_RX_REO"},
 	[QDF_MODULE_ID_MLOIE] = {"MLOIE"},
 	[QDF_MODULE_ID_MBSS] = {"MBSS"},
 	[QDF_MODULE_ID_MON] = {"MONITOR"},
+	[QDF_MODULE_ID_AFC] = {"AFC"},
 	[QDF_MODULE_ID_ANY] = {"ANY"},
 };
 qdf_export_symbol(g_qdf_category_name);
@@ -3962,6 +3964,7 @@ static void set_default_trace_levels(struct category_info *cinfo)
 		[QDF_MODULE_ID_MLOIE] = QDF_TRACE_LEVEL_INFO,
 		[QDF_MODULE_ID_MBSS] = QDF_TRACE_LEVEL_ERROR,
 		[QDF_MODULE_ID_MON] = QDF_TRACE_LEVEL_ERROR,
+		[QDF_MODULE_ID_MGMT_RX_REO] = QDF_TRACE_LEVEL_ERROR,
 		[QDF_MODULE_ID_ANY] = QDF_TRACE_LEVEL_INFO,
 	};
 

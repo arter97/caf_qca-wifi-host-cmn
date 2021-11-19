@@ -190,11 +190,9 @@ enum spectral_chan_width {
 	SPECTRAL_CH_WIDTH_80MHZ,
 	SPECTRAL_CH_WIDTH_160MHZ,
 	SPECTRAL_CH_WIDTH_80P80MHZ,
+	SPECTRAL_CH_WIDTH_320MHZ,
 	SPECTRAL_CH_WIDTH_5MHZ,
 	SPECTRAL_CH_WIDTH_10MHZ,
-#ifdef WLAN_FEATURE_11BE
-	SPECTRAL_CH_WIDTH_320MHZ,
-#endif
 	SPECTRAL_CH_WIDTH_MAX,
 	SPECTRAL_CH_WIDTH_INVALID,
 };
@@ -309,6 +307,7 @@ struct spectral_config_frequency {
 *                           span of interest or center frequency (in MHz) of
  *                          any WLAN channel in the secondary 80 MHz span of
  *                          interest.
+ * @ss_bandwidth: Spectral scan bandwidth
  */
 struct spectral_config {
 	uint16_t ss_fft_period;
@@ -336,6 +335,7 @@ struct spectral_config {
 	int8_t ss_nf_pwr[AH_MAX_CHAINS * 2];
 	int32_t ss_nf_temp_data;
 	struct spectral_config_frequency ss_frequency;
+	uint16_t ss_bandwidth;
 };
 
 /**
@@ -354,11 +354,13 @@ struct spectral_config {
  * @agile_spectral_cap: agile Spectral capability for 20/40/80
  * @agile_spectral_cap_160: agile Spectral capability for 160 MHz
  * @agile_spectral_cap_80p80: agile Spectral capability for 80p80
+ * @agile_spectral_cap_320: agile Spectral capability for 320 MHz
  * @num_detectors_20mhz: number of Spectral detectors in 20 MHz
  * @num_detectors_40mhz: number of Spectral detectors in 40 MHz
  * @num_detectors_80mhz: number of Spectral detectors in 80 MHz
  * @num_detectors_160mhz: number of Spectral detectors in 160 MHz
  * @num_detectors_80p80mhz: number of Spectral detectors in 80p80 MHz
+ * @num_detectors_320mhz: number of Spectral detectors in 320 MHz
  */
 struct spectral_caps {
 	uint8_t phydiag_cap;
@@ -375,11 +377,13 @@ struct spectral_caps {
 	bool agile_spectral_cap;
 	bool agile_spectral_cap_160;
 	bool agile_spectral_cap_80p80;
+	bool agile_spectral_cap_320;
 	uint32_t num_detectors_20mhz;
 	uint32_t num_detectors_40mhz;
 	uint32_t num_detectors_80mhz;
 	uint32_t num_detectors_160mhz;
 	uint32_t num_detectors_80p80mhz;
+	uint32_t num_detectors_320mhz;
 };
 
 #define SPECTRAL_IOCTL_PARAM_NOVAL (65535)

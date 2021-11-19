@@ -1056,6 +1056,9 @@ struct dfs_rcac_params {
  * @dfs_cac_started_chan:            CAC started channel.
  * @dfs_pdev_obj:                    DFS pdev object.
  * @dfs_is_offload_enabled:          Set if DFS offload enabled.
+ * @dfs_is_radar_found_chan_freq_eq_center_freq:
+ *                                   Set if chan_freq parameter of the radar
+ *                                   found wmi event indicates channel center.
  * @dfs_agile_precac_freq_mhz:       Freq in MHZ configured on Agile DFS engine.
  * @dfs_use_nol:                     Use the NOL when radar found(default: TRUE)
  * @dfs_nol_lock:                    Lock to protect nol list.
@@ -1131,6 +1134,9 @@ struct dfs_rcac_params {
  *                                   CAC REQUIRED, CAC COMPLETED, NOL,
  *                                   PRECAC STARTED, PRECAC COMPLETED etc. of
  *                                   all the DFS channels.
+ * @dfs_precac_max_root_bw:          Stores the max bandwidth (in MHz) to be
+ *                                   included in the precac forest as per the
+ *                                   regulatory current channel list.
  */
 struct wlan_dfs {
 	uint32_t       dfs_debug_mask;
@@ -1244,6 +1250,7 @@ struct wlan_dfs {
 	uint16_t       dfs_agile_precac_freq_mhz;
 #endif
 	bool           dfs_is_offload_enabled;
+	bool           dfs_is_radar_found_chan_freq_eq_center_freq;
 	int            dfs_use_nol;
 	qdf_spinlock_t dfs_nol_lock;
 	uint16_t tx_leakage_threshold;
@@ -1302,6 +1309,9 @@ struct wlan_dfs {
 #if defined(WLAN_DISP_CHAN_INFO)
 	enum channel_dfs_state dfs_channel_state_array[NUM_DFS_CHANS];
 #endif /* WLAN_DISP_CHAN_INFO */
+#ifdef QCA_SUPPORT_AGILE_DFS
+	uint16_t       dfs_precac_max_root_bw;
+#endif
 };
 
 #if defined(QCA_SUPPORT_AGILE_DFS) || defined(ATH_SUPPORT_ZERO_CAC_DFS)

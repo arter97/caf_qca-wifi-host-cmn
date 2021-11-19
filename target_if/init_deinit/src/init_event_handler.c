@@ -185,6 +185,11 @@ static int init_deinit_service_ready_event_handler(ol_scn_t scn_handle,
 
 	target_if_atf_cfg_enable(psoc, tgt_hdl, event);
 
+	if (wmi_service_enabled(wmi_handle,
+				wmi_service_mgmt_rx_reo_supported))
+		wlan_psoc_nif_fw_ext_cap_set(psoc,
+					     WLAN_SOC_F_MGMT_RX_REO_CAPABLE);
+
 	if (!wmi_service_enabled(wmi_handle, wmi_service_ext_msg))
 		target_if_qwrap_cfg_enable(psoc, tgt_hdl, event);
 
@@ -632,7 +637,7 @@ static int init_deinit_ready_event_handler(ol_scn_t scn_handle,
 
 		if (cdp_peer_map_attach(wlan_psoc_get_dp_handle(psoc),
 					max_peers, max_ast_index,
-					tgt_cfg->peer_map_unmap_v2) !=
+					tgt_cfg->peer_map_unmap_version) !=
 				QDF_STATUS_SUCCESS) {
 			target_if_err("DP peer map attach failed");
 			return -EINVAL;
