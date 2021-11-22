@@ -2636,6 +2636,28 @@ end:
 	return 0;
 }
 
+/**
+ * reg_is_freq_2pt5mhz() - Validate if the given input freq
+ * is a 2.5MHZ step frequency.
+ *
+ * Return - True if the freq is 2.5MHZ, false otherwise.
+ */
+#ifdef CONFIG_HALF_QUARTER_RATE_FOR_ALL_CHANS
+static bool reg_is_freq_2pt5mhz(qdf_freq_t freq)
+{
+	if ((freq == REG_24_GHZ_2PT5MHZ_CHAN_222_FREQ) ||
+		(freq == REG_24_GHZ_2PT5MHZ_CHAN_221_FREQ) ||
+		REG_IS_FREQ_2p5MHZ(freq))
+		return true;
+	return false;
+}
+#else
+static bool reg_is_freq_2pt5mhz(qdf_freq_t freq)
+{
+    return false;
+}
+#endif
+
 static uint16_t reg_compute_chan_to_freq(struct wlan_objmgr_pdev *pdev,
 					 uint8_t chan_num,
 					 enum channel_enum min_chan_range,
@@ -2660,9 +2682,11 @@ static uint16_t reg_compute_chan_to_freq(struct wlan_objmgr_pdev *pdev,
 	chan_list = pdev_priv_obj->mas_chan_list;
 
 	for (count = min_chan_range; count <= max_chan_range; count++) {
+		qdf_freq_t center_freq = chan_list[count].center_freq;
 		if ((chan_list[count].state != CHANNEL_STATE_DISABLE) &&
 		    !(chan_list[count].chan_flags & REGULATORY_CHAN_DISABLED)) {
-			if (REG_IS_49GHZ_FREQ(chan_list[count].center_freq)) {
+			if (REG_IS_49GHZ_FREQ(chan_list[count].center_freq) ||
+				reg_is_freq_2pt5mhz(center_freq)) {
 				if (chan_list[count].chan_num == chan_num)
 					break;
 				continue;
