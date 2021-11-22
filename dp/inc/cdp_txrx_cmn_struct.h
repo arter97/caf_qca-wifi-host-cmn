@@ -56,6 +56,10 @@
 #define OL_TXRX_NUM_LOCAL_PEER_IDS (32 + 1 + 1 + 1)
 #endif
 
+/* chan configs */
+#define TX_CAP_HALF_RATE_CHANNEL 0x4000
+#define TX_CAP_QUARTER_RATE_CHANNEL 0x8000
+
 #define CDP_BA_256_BIT_MAP_SIZE_DWORDS 8
 #define CDP_BA_64_BIT_MAP_SIZE_DWORDS 2
 #define CDP_RSSI_CHAIN_LEN 8
@@ -1872,6 +1876,7 @@ struct cdp_tx_indication_mpdu_info {
 		 rts_success:1,
 		 rts_failure:1;
 	uint8_t usr_idx;
+	uint16_t chan_flags;
 };
 
 /**
