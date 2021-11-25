@@ -292,7 +292,7 @@ ucfg_dcs_set_user_request(struct wlan_objmgr_psoc *psoc, uint8_t mac_id,
 }
 
 static inline QDF_STATUS
-ucfg_dcs_get_ch_util(struct wlan_objmgr_vdev *vdev,
+ucfg_dcs_get_ch_util(struct wlan_objmgr_psoc *psoc, uint8_t mac_id,
 		     struct wlan_host_dcs_ch_util_stats *dcs_stats)
 {
 	return QDF_STATUS_SUCCESS;
