@@ -138,6 +138,13 @@
 #define DEFAULT_HIGH_6GFREQ   7125
 #endif
 
+#define SIXG_CHAN_2           2
+#ifdef CONFIG_BAND_6GHZ
+#define CHAN_ENUM_SIXG_2      CHAN_ENUM_5935
+#else
+#define CHAN_ENUM_SIXG_2      INVALID_CHANNEL
+#endif
+
 extern const struct chan_map *channel_map;
 extern const struct chan_map channel_map_us[];
 extern const struct chan_map channel_map_eu[];
@@ -1258,7 +1265,6 @@ QDF_STATUS reg_afc_start(struct wlan_objmgr_pdev *pdev, uint64_t req_id);
  * reg_get_partial_afc_req_info() - Get the AFC partial request information
  * @pdev: Pointer to pdev
  * @afc_req: Address of AFC request pointer
- * @req_id: AFC request ID.
  *
  * NOTE:- The memory for AFC request is allocated by the function must be
  *        freed by the caller.
@@ -1266,8 +1272,7 @@ QDF_STATUS reg_afc_start(struct wlan_objmgr_pdev *pdev, uint64_t req_id);
  */
 QDF_STATUS
 reg_get_partial_afc_req_info(struct wlan_objmgr_pdev *pdev,
-			     struct wlan_afc_host_partial_request **afc_req,
-			     uint64_t req_id);
+			     struct wlan_afc_host_partial_request **afc_req);
 
 /**
  * reg_print_partial_afc_req_info() - Print the AFC partial request
@@ -1783,5 +1788,39 @@ QDF_STATUS reg_get_afc_req_id(struct wlan_objmgr_pdev *pdev, uint64_t *req_id);
  * Return: true if AFC expiry event is received from the FW or false otherwise
  */
 bool reg_is_afc_expiry_event_received(struct wlan_objmgr_pdev *pdev);
+
+/**
+ * reg_is_noaction_on_afc_pwr_evt() - Checks if the regulatory module
+ * needs to take action when AFC power event is received.
+ *
+ * @pdev: pdev ptr
+ *
+ * Return: true if regulatory should not take any action or false otherwise
+ */
+bool reg_is_noaction_on_afc_pwr_evt(struct wlan_objmgr_pdev *pdev);
+
+/**
+ * reg_dmn_set_afc_req_id() - Set the request ID in the AFC partial request
+ *                            object
+ * @afc_req: pointer to AFC partial request
+ * @req_id: AFC request ID
+ *
+ * Return: Void
+ */
+void reg_dmn_set_afc_req_id(struct wlan_afc_host_partial_request *afc_req,
+			    uint64_t req_id);
 #endif
+
+/**
+ * reg_is_chwidth_supported() - Check if given channel width is supported
+ * on a given pdev
+ * @pdev: pdev pointer
+ * @ch_width: channel width.
+ * @is_supported: whether the channel width is supported
+ *
+ * Return QDF_STATUS_SUCCESS of operation
+ */
+QDF_STATUS reg_is_chwidth_supported(struct wlan_objmgr_pdev *pdev,
+				    enum phy_ch_width ch_width,
+				    bool *is_supported);
 #endif

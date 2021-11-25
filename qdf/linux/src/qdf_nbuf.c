@@ -1358,6 +1358,8 @@ __qdf_nbuf_data_get_eapol_subtype(uint8_t *data)
 	return subtype;
 }
 
+qdf_export_symbol(__qdf_nbuf_data_get_eapol_subtype);
+
 /**
  * __qdf_nbuf_data_get_arp_subtype() - get the subtype
  *            of ARP packet.
@@ -1809,6 +1811,50 @@ bool __qdf_nbuf_data_is_dns_response(uint8_t *data)
 }
 
 /**
+ * __qdf_nbuf_data_is_tcp_fin() - check if skb data is a tcp fin
+ * @data: Pointer to network data buffer
+ *
+ * This api is to check if the packet is tcp fin.
+ *
+ * Return: true if packet is tcp fin packet.
+ *         false otherwise.
+ */
+bool __qdf_nbuf_data_is_tcp_fin(uint8_t *data)
+{
+	uint8_t op_code;
+
+	op_code = (uint8_t)(*(uint8_t *)(data +
+				QDF_NBUF_PKT_TCP_OPCODE_OFFSET));
+
+	if (op_code == QDF_NBUF_PKT_TCPOP_FIN)
+		return true;
+
+	return false;
+}
+
+/**
+ * __qdf_nbuf_data_is_tcp_fin_ack() - check if skb data is a tcp fin ack
+ * @data: Pointer to network data buffer
+ *
+ * This api is to check if the tcp packet is fin ack.
+ *
+ * Return: true if packet is tcp fin ack packet.
+ *         false otherwise.
+ */
+bool __qdf_nbuf_data_is_tcp_fin_ack(uint8_t *data)
+{
+	uint8_t op_code;
+
+	op_code = (uint8_t)(*(uint8_t *)(data +
+				QDF_NBUF_PKT_TCP_OPCODE_OFFSET));
+
+	if (op_code == QDF_NBUF_PKT_TCPOP_FIN_ACK)
+		return true;
+
+	return false;
+}
+
+/**
  * __qdf_nbuf_data_is_tcp_syn() - check if skb data is a tcp syn
  * @data: Pointer to network data buffer
  *
@@ -1847,6 +1893,28 @@ bool __qdf_nbuf_data_is_tcp_syn_ack(uint8_t *data)
 
 	if (op_code == QDF_NBUF_PKT_TCPOP_SYN_ACK)
 		return true;
+	return false;
+}
+
+/**
+ * __qdf_nbuf_data_is_tcp_rst() - check if skb data is a tcp rst
+ * @data: Pointer to network data buffer
+ *
+ * This api is to check if the tcp packet is rst.
+ *
+ * Return: true if packet is tcp rst packet.
+ *         false otherwise.
+ */
+bool __qdf_nbuf_data_is_tcp_rst(uint8_t *data)
+{
+	uint8_t op_code;
+
+	op_code = (uint8_t)(*(uint8_t *)(data +
+				QDF_NBUF_PKT_TCP_OPCODE_OFFSET));
+
+	if (op_code == QDF_NBUF_PKT_TCPOP_RST)
+		return true;
+
 	return false;
 }
 
@@ -4525,7 +4593,7 @@ qdf_nbuf_update_radiotap_he_mu_other_flags(struct mon_rx_status *rx_status,
 
 #define IEEE80211_RADIOTAP_TX_STATUS 0
 #define IEEE80211_RADIOTAP_RETRY_COUNT 1
-
+#define IEEE80211_RADIOTAP_EXTENSION2 2
 uint8_t ATH_OUI[] = {0x00, 0x03, 0x7f}; /* Atheros OUI */
 
 /**
@@ -4580,6 +4648,7 @@ unsigned int qdf_nbuf_update_radiotap(struct mon_rx_status *rx_status,
 	uint32_t rtap_len = rtap_hdr_len;
 	uint8_t length = rtap_len;
 	struct qdf_radiotap_vendor_ns_ath *radiotap_vendor_ns_ath;
+	struct qdf_radiotap_ext2 *rtap_ext2;
 	uint32_t *rtap_ext = NULL;
 
 	/* Adding Extended Header space */
@@ -4783,6 +4852,24 @@ unsigned int qdf_nbuf_update_radiotap(struct mon_rx_status *rx_status,
 		rtap_len += 1;
 		rtap_buf[rtap_len] = rx_status->tx_retry_cnt;
 		rtap_len += 1;
+	}
+
+	/* Add Extension2 to Radiotap Header */
+	if (rx_status->add_rtap_ext2) {
+		rthdr->it_present |= cpu_to_le32(1 << IEEE80211_RADIOTAP_EXT);
+		rtap_ext = (uint32_t *)&rthdr->it_present;
+		rtap_ext++;
+		*rtap_ext |= cpu_to_le32(1 << IEEE80211_RADIOTAP_EXTENSION2);
+
+		rtap_ext2 = (struct qdf_radiotap_ext2 *)(rtap_buf + rtap_len);
+		rtap_ext2->ppdu_id = rx_status->ppdu_id;
+		rtap_ext2->prev_ppdu_id = rx_status->prev_ppdu_id;
+		rtap_ext2->tid = rx_status->tid;
+		rtap_ext2->start_seq = rx_status->start_seq;
+		qdf_mem_copy(rtap_ext2->ba_bitmap,
+			     rx_status->ba_bitmap, 8 * (sizeof(uint32_t)));
+
+		rtap_len += sizeof(*rtap_ext2);
 	}
 
 	rthdr->it_len = cpu_to_le16(rtap_len);

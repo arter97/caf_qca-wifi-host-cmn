@@ -95,13 +95,28 @@
 /* EAPOL Related MASK */
 #define EAPOL_PACKET_TYPE_OFFSET		15
 #define EAPOL_KEY_INFO_OFFSET			19
-#define EAPOL_PKT_LEN_OFFSET            16
-#define EAPOL_KEY_LEN_OFFSET            21
+#define EAPOL_PKT_LEN_OFFSET			16
+#define EAPOL_KEY_LEN_OFFSET			21
+#define EAPOL_PACKET_TYPE_KEY			3
 #define EAPOL_MASK				0x8013
 #define EAPOL_M1_BIT_MASK			0x8000
 #define EAPOL_M2_BIT_MASK			0x0001
 #define EAPOL_M3_BIT_MASK			0x8013
 #define EAPOL_M4_BIT_MASK			0x0003
+#define EAPOL_KEY_TYPE_MASK			0x0800
+#define EAPOL_KEY_ENCRYPTED_MASK		0x0010
+
+/* EAP Related Mask */
+
+#define EAP_CODE_OFFSET				18
+#define EAP_LENGTH_OFFSET			20
+#define EAP_TYPE_OFFSET				22
+#define QDF_EAP_REQUEST				1
+#define QDF_EAP_RESPONE				2
+#define QDF_EAP_SUCCESS				3
+#define QDF_EAP_FAILURE				4
+#define QDF_EAP_INITIATE			5
+#define QDF_EAP_FINISH				6
 
 /* ARP Related MASK */
 #define QDF_NBUF_PKT_ARP_OPCODE_OFFSET	20
@@ -199,6 +214,8 @@
  * 4 bytes padding for alignment
  */
 #define RADIOTAP_HEADER_EXT_LEN (2 * sizeof(uint32_t))
+#define RADIOTAP_HEADER_EXT2_LEN \
+	(sizeof(struct qdf_radiotap_ext2))
 #define RADIOTAP_HEADER_LEN (RADIOTAP_BASE_HEADER_LEN + \
 				RADIOTAP_FIXED_HEADER_LEN + \
 				RADIOTAP_HT_FLAGS_LEN + \
@@ -208,7 +225,8 @@
 				RADIOTAP_HE_MU_FLAGS_LEN + \
 				RADIOTAP_HE_MU_OTHER_FLAGS_LEN + \
 				RADIOTAP_VENDOR_NS_LEN + \
-				RADIOTAP_HEADER_EXT_LEN)
+				RADIOTAP_HEADER_EXT_LEN + \
+				RADIOTAP_HEADER_EXT2_LEN)
 
 /**
  * struct mon_rx_status - This will have monitor mode rx_status extracted from
@@ -286,6 +304,9 @@
  * @tx_status: packet tx status
  * @tx_retry_cnt: tx retry count
  * @add_rtap_ext: add radio tap extension
+ * @start_seq: starting sequence number
+ * @ba_bitmap: 256 bit block ack bitmap
+ * @add_rtap_ext2: add radiotap extension2
  */
 struct mon_rx_status {
 	uint64_t tsft;
@@ -370,6 +391,9 @@ struct mon_rx_status {
 	uint8_t  tx_status;
 	uint8_t  tx_retry_cnt;
 	bool add_rtap_ext;
+	uint16_t start_seq;
+	uint32_t ba_bitmap[8];
+	bool add_rtap_ext2;
 };
 
 /**
@@ -466,6 +490,23 @@ struct qdf_radiotap_vendor_ns_ath {
 	uint32_t device_id;
 	uint32_t lsig_b;
 	uint32_t ppdu_start_timestamp;
+} __attribute__((__packed__));
+
+/**
+ * struct qdf_radiotap_ext2 - radiotap ext2 fields
+ * ppdu_id: ppdu_id of current msdu
+ * prev_ppdu_id: ppdu_id of previous msdu
+ * tid: tid number of previous msdu
+ * start_seq: start sequence of previous msdu
+ * ba_bitmap: block ack bitmap of previous msdu
+ */
+struct qdf_radiotap_ext2 {
+	uint32_t ppdu_id;
+	uint32_t prev_ppdu_id;
+	uint16_t tid:8,
+		 reserved:8;
+	uint16_t start_seq;
+	uint32_t ba_bitmap[8];
 } __attribute__((__packed__));
 
 #define QDF_MEM_FUNC_NAME_SIZE 48
@@ -2971,6 +3012,32 @@ bool qdf_nbuf_data_is_dns_response(qdf_nbuf_t buf)
 }
 
 /**
+ * qdf_nbuf_data_is_tcp_fin() - check if skb data is a tcp fin
+ * @buf:  buffer
+ *
+ * Return: true if packet is tcp fin packet.
+ *	   false otherwise.
+ */
+static inline
+bool qdf_nbuf_data_is_tcp_fin(qdf_nbuf_t buf)
+{
+	return __qdf_nbuf_data_is_tcp_fin(qdf_nbuf_data(buf));
+}
+
+/**
+ * qdf_nbuf_data_is_tcp_fin_ack() - check if skb data is a tcp fin ack
+ * @buf:  buffer
+ *
+ * Return: true if packet is tcp fin ack packet.
+ *	   false otherwise.
+ */
+static inline
+bool qdf_nbuf_data_is_tcp_fin_ack(qdf_nbuf_t buf)
+{
+	return __qdf_nbuf_data_is_tcp_fin_ack(qdf_nbuf_data(buf));
+}
+
+/**
  * qdf_nbuf_data_is_tcp_syn() - check if skb data is a tcp syn
  * @buf:  buffer
  *
@@ -2994,6 +3061,19 @@ static inline
 bool qdf_nbuf_data_is_tcp_syn_ack(qdf_nbuf_t buf)
 {
 	return __qdf_nbuf_data_is_tcp_syn_ack(qdf_nbuf_data(buf));
+}
+
+/**
+ * qdf_nbuf_data_is_tcp_rst() - check if skb data is a tcp rst
+ * @buf:  buffer
+ *
+ * Return: true if packet is tcp rst packet.
+ *	   false otherwise.
+ */
+static inline
+bool qdf_nbuf_data_is_tcp_rst(qdf_nbuf_t buf)
+{
+	return __qdf_nbuf_data_is_tcp_rst(qdf_nbuf_data(buf));
 }
 
 /**

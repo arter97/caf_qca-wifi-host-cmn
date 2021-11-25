@@ -25,12 +25,36 @@
 #include <qdf_types.h>
 #include <osdep.h>
 
-/* Assoc resp IE offset Capability(2) + AID(2) + Status Code(2) */
-#define WLAN_ASSOC_RSP_IES_OFFSET 6
+/* Length of Timestamp field */
+#define WLAN_TIMESTAMP_LEN         8
+
+/* Length of Beacon Interval field */
+#define WLAN_BEACONINTERVAL_LEN    2
+
+/* Length of Capability Information field */
+#define WLAN_CAPABILITYINFO_LEN    2
+
+/* Length of Listen Interval field */
+#define WLAN_LISTENINTERVAL_LEN    2
+
+/* Length of Status code field */
+#define WLAN_STATUSCODE_LEN        2
+
+/* Length of AID field */
+#define WLAN_AID_LEN               2
+
+/* Assoc resp IE offset Capability(2) + Status Code(2) + AID(2) */
+#define WLAN_ASSOC_RSP_IES_OFFSET \
+	(WLAN_CAPABILITYINFO_LEN  + WLAN_STATUSCODE_LEN + WLAN_AID_LEN)
+
 /* Assoc req IE offset - Capability(2) + LI(2) */
-#define WLAN_ASSOC_REQ_IES_OFFSET 4
-/* Assoc req IE offset - Capability(2) + LI(2) + current AP address(6) */
-#define WLAN_REASSOC_REQ_IES_OFFSET 10
+#define WLAN_ASSOC_REQ_IES_OFFSET \
+	(WLAN_CAPABILITYINFO_LEN + WLAN_LISTENINTERVAL_LEN)
+
+/* Reassoc req IE offset - Capability(2) + LI(2) + current AP address(6) */
+#define WLAN_REASSOC_REQ_IES_OFFSET \
+	(WLAN_CAPABILITYINFO_LEN + WLAN_LISTENINTERVAL_LEN + QDF_MAC_ADDR_SIZE)
+
 /* Length (in bytes) of MAC header in 3 address format */
 #define WLAN_MAC_HDR_LEN_3A 24
 
@@ -39,8 +63,11 @@
 #define IEEE80211_CCMP_MICLEN       8
 #define WLAN_IEEE80211_GCMP_HEADERLEN    8
 #define WLAN_IEEE80211_GCMP_MICLEN       16
+
+#define IEEE80211_FC1_RETRY         0x08
 #define IEEE80211_FC1_WEP           0x40
 #define IEEE80211_FC1_ORDER         0x80
+
 #define WLAN_HDR_IV_LEN            3
 #define WLAN_HDR_EXT_IV_BIT        0x20
 #define WLAN_HDR_EXT_IV_LEN        4
@@ -133,8 +160,8 @@
 
 /* Individual element IEs length checks */
 
-/* Maximum supported basic/mandatory rates are 8. */
-#define WLAN_SUPPORTED_RATES_IE_MAX_LEN          8
+/* Maximum supported basic/mandatory rates are 12 */
+#define WLAN_SUPPORTED_RATES_IE_MAX_LEN          12
 #define WLAN_FH_PARAM_IE_MAX_LEN                 5
 #define WLAN_DS_PARAM_IE_MAX_LEN                 1
 #define WLAN_CF_PARAM_IE_MAX_LEN                 6
@@ -143,13 +170,7 @@
 #define WLAN_CSA_IE_MAX_LEN                      3
 #define WLAN_XCSA_IE_MAX_LEN                     4
 #define WLAN_SECCHANOFF_IE_MAX_LEN               1
-
-#define WLAN_MAX_SUPPORTED_RATES                 44
-/* Maximum extended supported rates is equal to WLAN_MAX_SUPPORTED_RATES minus
- * WLAN_SUPPORTED_RATES_IE_MAX_LEN.
- */
-#define WLAN_EXT_SUPPORTED_RATES_IE_MAX_LEN      \
-	(WLAN_MAX_SUPPORTED_RATES - WLAN_SUPPORTED_RATES_IE_MAX_LEN)
+#define WLAN_EXT_SUPPORTED_RATES_IE_MAX_LEN      12
 
 #define WLAN_EXTCAP_IE_MAX_LEN                   15
 #define WLAN_FILS_INDICATION_IE_MIN_LEN          2
@@ -244,8 +265,16 @@
 #endif
 
 #define WLAN_RATE_VAL              0x7f
+#define WLAN_BASIC_RATE_MASK       0x80
 
 #define WLAN_RV(v)     ((v) & WLAN_RATE_VAL)
+
+#define WLAN_BSS_MEMBERSHIP_SELECTOR_HT_PHY       127
+#define WLAN_BSS_MEMBERSHIP_SELECTOR_VHT_PHY      126
+#define WLAN_BSS_MEMBERSHIP_SELECTOR_GLK          125
+#define WLAN_BSS_MEMBERSHIP_SELECTOR_EPD          124
+#define WLAN_BSS_MEMBERSHIP_SELECTOR_SAE_H2E      123
+#define WLAN_BSS_MEMBERSHIP_SELECTOR_HE_PHY       122
 
 #define WLAN_CHAN_IS_5GHZ(chanidx) \
 	((chanidx > 30) ? true : false)
@@ -382,6 +411,7 @@ enum ext_chan_offset {
  * @WLAN_ELEMID_QUIET_CHANNEL: Quiet Channel
  * @WLAN_ELEMID_OP_MODE_NOTIFY: Operating Mode Notification
  * @WLAN_ELEMID_VENDOR: vendor private
+ * @WLAN_ELEMID_FRAGMENT: Fragment
  * @WLAN_ELEMID_EXTN_ELEM: extended IE
  */
 enum element_ie {
@@ -460,6 +490,7 @@ enum element_ie {
 	WLAN_ELEMID_REDUCED_NEIGHBOR_REPORT = 201,
 	WLAN_ELEMID_VENDOR           = 221,
 	WLAN_ELEMID_FILS_INDICATION  = 240,
+	WLAN_ELEMID_FRAGMENT         = 242,
 	WLAN_ELEMID_RSNXE            = 244,
 	WLAN_ELEMID_EXTN_ELEM        = 255,
 };
@@ -1427,6 +1458,94 @@ struct wlan_ie_hecaps {
 #define WLAN_EHT_PHYCAP_LEN 8
 
 #define WLAN_EHT_MAX_MCS_MAPS 3
+
+#define EHTCAP_MAC_NSEPPRIACCESS_IDX                    0
+#define EHTCAP_MAC_NSEPPRIACCESS_BITS                   1
+#define EHTCAP_MAC_EHTOMCTRL_IDX                        1
+#define EHTCAP_MAC_EHTOMCTRL_BITS                       1
+#define EHTCAP_MAC_TRIGTXOP_IDX                         2
+#define EHTCAP_MAC_TRIGTXOP_BITS                        1
+
+#define EHTCAP_PHY_320MHZIN6GHZ_IDX                     1
+#define EHTCAP_PHY_320MHZIN6GHZ_BITS                    1
+#define EHTCAP_PHY_242TONERUBWLT20MHZ_IDX               2
+#define EHTCAP_PHY_242TONERUBWLT20MHZ_BITS              1
+#define EHTCAP_PHY_NDP4XEHTLTFAND320NSGI_IDX            3
+#define EHTCAP_PHY_NDP4XEHTLTFAND320NSGI_BITS           1
+#define EHTCAP_PHY_PARTIALBWULMU_IDX                    4
+#define EHTCAP_PHY_PARTIALBWULMU_BITS                   1
+#define EHTCAP_PHY_SUBFMR_IDX                           5
+#define EHTCAP_PHY_SUBFMR_BITS                          1
+#define EHTCAP_PHY_SUBFME_IDX                           6
+#define EHTCAP_PHY_SUBFME_BITS                          1
+#define EHTCAP_PHY_BFMESSLT80MHZ_IDX                    7
+#define EHTCAP_PHY_BFMESSLT80MHZ_BITS                   3
+#define EHTCAP_PHY_BFMESS160MHZ_IDX                     10
+#define EHTCAP_PHY_BFMESS160MHZ_BITS                    3
+#define EHTCAP_PHY_BFMESS320MHZ_IDX                     13
+#define EHTCAP_PHY_BFMESS320MHZ_BITS                    3
+#define EHTCAP_PHY_NUMSOUNDLT80MHZ_IDX                  16
+#define EHTCAP_PHY_NUMSOUNDLT80MHZ_BITS                 3
+#define EHTCAP_PHY_NUMSOUND160MHZ_IDX                   19
+#define EHTCAP_PHY_NUMSOUND160MHZ_BITS                  3
+#define EHTCAP_PHY_NUMSOUND320MHZ_IDX                   22
+#define EHTCAP_PHY_NUMSOUND320MHZ_BITS                  3
+#define EHTCAP_PHY_NG16SUFB_IDX                         25
+#define EHTCAP_PHY_NG16SUFB_BITS                        1
+#define EHTCAP_PHY_NG16MUFB_IDX                         26
+#define EHTCAP_PHY_NG16MUFB_BITS                        1
+#define EHTCAP_PHY_CODBK42SUFB_IDX                      27
+#define EHTCAP_PHY_CODBK42SUFB_BITS                     1
+#define EHTCAP_PHY_CODBK75MUFB_IDX                      28
+#define EHTCAP_PHY_CODBK75MUFB_BITS                     1
+#define EHTCAP_PHY_TRIGSUBFFB_IDX                       29
+#define EHTCAP_PHY_TRIGSUBFFB_BITS                      1
+#define EHTCAP_PHY_TRIGMUBFPARTBWFB_IDX                 30
+#define EHTCAP_PHY_TRIGMUBFPARTBWFB_BITS                1
+#define EHTCAP_PHY_TRIGCQIFB_IDX                        31
+#define EHTCAP_PHY_TRIGCQIFB_BITS                       1
+
+#define EHTCAP_PHY_PARTBWDLMUMIMO_IDX                   32
+#define EHTCAP_PHY_PARTBWDLMUMIMO_BITS                  1
+#define EHTCAP_PHY_PSRSR_IDX                            33
+#define EHTCAP_PHY_PSRSR_BITS                           1
+#define EHTCAP_PHY_PWRBSTFACTOR_IDX                     34
+#define EHTCAP_PHY_PWRBSTFACTOR_BITS                    1
+#define EHTCAP_PHY_4XEHTLTFAND800NSGI_IDX               35
+#define EHTCAP_PHY_4XEHTLTFAND800NSGI_BITS              1
+#define EHTCAP_PHY_MAXNC_IDX                            36
+#define EHTCAP_PHY_MAXNC_BITS                           4
+#define EHTCAP_PHY_NONTRIGCQIFB_IDX                     40
+#define EHTCAP_PHY_NONTRIGCQIFB_BITS                    1
+#define EHTCAP_PHY_TX1024AND4096QAMLS242TONERU_IDX      41
+#define EHTCAP_PHY_TX1024AND4096QAMLS242TONERU_BITS     1
+#define EHTCAP_PHY_RX1024AND4096QAMLS242TONERU_IDX      42
+#define EHTCAP_PHY_RX1024AND4096QAMLS242TONERU_BITS     1
+#define EHTCAP_PHY_PPETHRESPRESENT_IDX                  43
+#define EHTCAP_PHY_PPETHRESPRESENT_BITS                 1
+#define EHTCAP_PHY_CMNNOMPKTPAD_IDX                     44
+#define EHTCAP_PHY_CMNNOMPKTPAD_BITS                    2
+#define EHTCAP_PHY_MAXNUMEHTLTF_IDX                     46
+#define EHTCAP_PHY_MAXNUMEHTLTF_BITS                    5
+#define EHTCAP_PHY_SUPMCS15_IDX                         51
+#define EHTCAP_PHY_SUPMCS15_BITS                        4
+#define EHTCAP_PHY_EHTDUPIN6GHZ_IDX                     55
+#define EHTCAP_PHY_EHTDUPIN6GHZ_BITS                    1
+#define EHTCAP_PHY_20MHZOPSTARXNDPWIDERBW_IDX           56
+#define EHTCAP_PHY_20MHZOPSTARXNDPWIDERBW_BITS          1
+#define EHTCAP_PHY_NONOFDMAULMUMIMOLT80MHZ_IDX          57
+#define EHTCAP_PHY_NONOFDMAULMUMIMOLT80MHZ_BITS         1
+#define EHTCAP_PHY_NONOFDMAULMUMIMO160MHZ_IDX           58
+#define EHTCAP_PHY_NONOFDMAULMUMIMO160MHZ_BITS          1
+#define EHTCAP_PHY_NONOFDMAULMUMIMO320MHZ_IDX           59
+#define EHTCAP_PHY_NONOFDMAULMUMIMO320MHZ_BITS          1
+#define EHTCAP_PHY_MUBFMRLT80MHZ_IDX                    60
+#define EHTCAP_PHY_MUBFMRLT80MHZ_BITS                   1
+#define EHTCAP_PHY_MUBFMR160MHZ_IDX                     61
+#define EHTCAP_PHY_MUBFMR160MHZ_BITS                    1
+#define EHTCAP_PHY_MUBFMR320MHZ_IDX                     62
+#define EHTCAP_PHY_MUBFMR320MHZ_BITS                    1
+
 /**
  * struct wlan_ie_ehtcaps - EHT capabilities
  * @elem_id: EHT caps IE
@@ -1566,6 +1685,11 @@ enum wlan_ml_variant {
 /* Link ID */
 #define WLAN_ML_BV_CINFO_LINKIDINFO_LINKID_IDX                      0
 #define WLAN_ML_BV_CINFO_LINKIDINFO_LINKID_BITS                     4
+
+/* Size in octets of Link ID Info subfield in Basic variant Multi-Link element
+ * Common Info field.
+ */
+#define WLAN_ML_BV_CINFO_LINKIDINFO_SIZE                            1
 
 /* Definitions for sub-sub fields in Medium Synchronization Delay Information
  * subfield in Basic variant Multi-Link element Common Info field.
@@ -1807,6 +1931,30 @@ struct wlan_ml_bv_linfo_perstaprof_stainfo_dtiminfo {
 
 /* End of definitions related to Basic variant Multi-Link element. */
 
+/*
+ * Definitions related to MLO specific aspects of Reduced Neighbor Report
+ * element.
+ */
+
+/*
+ * Definitions for MLD Parameters subfield in TBTT Information field present as
+ * part of TBTT Information Set in Neighbor AP Information field of Reduced
+ * Neighbor Report element.
+ */
+/* MLD ID */
+#define WLAN_RNR_NBRAPINFO_TBTTINFO_MLDPARAMS_MLDID_IDX                  0
+#define WLAN_RNR_NBRAPINFO_TBTTINFO_MLDPARAMS_MLDID_BITS                 8
+/* Link ID */
+#define WLAN_RNR_NBRAPINFO_TBTTINFO_MLDPARAMS_LINKID_IDX                 8
+#define WLAN_RNR_NBRAPINFO_TBTTINFO_MLDPARAMS_LINKID_BITS                4
+/* BSS Parameters Change Count */
+#define WLAN_RNR_NBRAPINFO_TBTTINFO_MLDPARAMS_BSSPARAMCHANGECNT_IDX      12
+#define WLAN_RNR_NBRAPINFO_TBTTINFO_MLDPARAMS_BSSPARAMCHANGECNT_BITS     8
+
+/*
+ * End of definitions related to MLO specific aspects of Reduced Neighbor Report
+ * element.
+ */
 #endif /* WLAN_FEATURE_11BE_MLO */
 #endif /* WLAN_FEATURE_11BE */
 
@@ -2046,7 +2194,6 @@ struct oce_reduced_wan_metrics {
 	uint8_t uplink_av_cap:4;
 };
 
-#define WLAN_VENDOR_WPA_IE_LEN 28
 /**
  * is_wpa_oui() - If vendor IE is WPA type
  * @frm: vendor IE pointer
