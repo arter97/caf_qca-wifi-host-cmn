@@ -903,6 +903,32 @@ wlan_is_freq_allowable(qdf_freq_t freq, struct scan_req_params *req,
 #endif
 
 /**
+ * wlan_is_freq_added_to_scan_chan()  - Finds out if the given freq is
+ * already part of the scan channel index.
+ * @freq: Input frequency
+ * @req: Pointer to  struct scan_req_params
+ * @num_chan_index: Channel index of the scan channels
+ *
+ * Return - True if channels are already part of the scan index, false
+ * otherwise.
+ */
+static bool
+wlan_is_freq_added_to_scan_chan(qdf_freq_t freq,
+				struct scan_req_params *req,
+				uint8_t num_chan_index)
+{
+
+	int16_t i;
+
+	for (i = num_chan_index; i >= 0 ; i--) {
+		if (freq == req->chan_list.chan[i].freq)
+			return true;
+	}
+
+	return false;
+}
+
+/**
  * scm_update_channel_list() - update scan req params depending on dfs inis
  * and initial scan request.
  * @req: scan request
@@ -973,6 +999,13 @@ scm_update_channel_list(struct scan_start_request *req,
 		}
 		if (utils_dfs_is_freq_in_nol(pdev, freq)) {
 			scm_nofl_debug("Skip NOL freq %d", freq);
+			continue;
+		}
+		/* For duplicates, search the unique channels added so far */
+		if (num_scan_channels &&
+		    wlan_is_freq_added_to_scan_chan(freq, &req->scan_req,
+						    num_scan_channels-1)) {
+			scm_nofl_debug("Skip freq %d as it already part of scan channel list", freq);
 			continue;
 		}
 		if (!wlan_is_freq_allowable(freq, &req->scan_req, pdev))
