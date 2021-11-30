@@ -1297,6 +1297,9 @@ struct wlan_dfs {
 #if defined(QCA_SUPPORT_ADFS_RCAC)
 		       dfs_agile_rcac_ucfg:1,
 #endif
+#if defined(UMAC_SUPPORT_SBS)
+		       dfs_agile_rcac_sbs:1,
+#endif
 		       dfs_fw_adfs_support_non_160:1,
 		       dfs_fw_adfs_support_160:1;
 #if defined(WLAN_DFS_PARTIAL_OFFLOAD) && defined(WLAN_DFS_SYNTHETIC_RADAR)
