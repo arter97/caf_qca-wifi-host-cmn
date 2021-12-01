@@ -42,7 +42,6 @@
 #define CHAN_144_20MHZ_LEFT_EDGE (CHAN_144_CENT_FREQ - 10)
 #define CHAN_144_20MHZ_RIGHT_EDGE (CHAN_144_CENT_FREQ + 10)
 
-#ifdef CONFIG_HALF_QUARTER_RATE_FOR_ALL_CHANS
 static bool reg_is_range_valid(struct freq_range *range)
 {
 	reg_debug("Range->left : %u, Range->right: %u\n",
@@ -101,7 +100,6 @@ static bool reg_is_range_overlapping(struct freq_range *range_first,
 
 	return is_overlap;
 }
-#endif
 
 /**
  * reg_is_chan_overlaps_with_144_20mhz() - Given a freq and max bw of that freq,
