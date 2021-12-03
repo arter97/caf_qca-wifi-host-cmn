@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2021 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -468,9 +469,6 @@ typedef void (*ol_txrx_vdev_peer_remove_cb)(void *handle, uint8_t *bssid,
 typedef void (*tx_pause_callback)(uint8_t vdev_id,
 		enum netif_action_type action,
 		enum netif_reason_type reason);
-
-typedef void (*ipa_uc_op_cb_type)(uint8_t *op_msg,
-			void *osif_ctxt);
 
 /**
  * struct ol_rx_inv_peer_params - rx invalid peer data parameters
