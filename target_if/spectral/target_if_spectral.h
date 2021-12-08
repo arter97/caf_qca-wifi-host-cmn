@@ -1102,6 +1102,9 @@ struct target_if_spectral {
 	struct spectral_param_min_max param_min_max;
 	struct target_if_finite_spectral_scan_params
 					finite_scan[SPECTRAL_SCAN_MODE_MAX];
+#if UMAC_SUPPORT_SBS
+	struct spectral_sbs_cb sbs_cb;
+#endif
 };
 
 /**

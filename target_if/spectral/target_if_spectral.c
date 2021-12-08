@@ -4861,6 +4861,8 @@ target_if_start_spectral_scan(struct wlan_objmgr_pdev *pdev,
 	target_if_spectral_scan_enable_params(spectral,
 					      &spectral->params[smode], smode,
 					      err);
+	spectral->sc_spectral_scan = 1;
+
 	qdf_spin_unlock(&spectral->spectral_lock);
 
 	return QDF_STATUS_SUCCESS;
@@ -5500,6 +5502,62 @@ target_if_process_spectral_report(struct wlan_objmgr_pdev *pdev,
 	return p_sops->process_spectral_report(pdev, payload);
 }
 
+#if UMAC_SUPPORT_SBS
+/**
+ * target_if_register_sbs_cb() - Register SBS callbacks
+ * @pdev: Pointer to pdev object
+ * @nl_cb: Netlink callbacks to register
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS
+target_if_register_sbs_cb(struct wlan_objmgr_pdev *pdev,
+			  struct spectral_sbs_cb *sbs_cb)
+{
+	struct target_if_spectral *spectral = NULL;
+
+	spectral = get_target_if_spectral_handle_from_pdev(pdev);
+
+	if (!spectral) {
+		spectral_err("SPECTRAL : Module doesn't exist");
+		return QDF_STATUS_E_INVAL;
+	}
+
+	if (!sbs_cb->cookie || !sbs_cb->scan_complete ||
+	    sbs_cb->sample_count > SPECTRAL_SBS_SAMPLE_COUNT_MAX ||
+	    sbs_cb->rssi_thresh_min < SPECTRAL_SBS_RSSI_THRESH_MIN ||
+	    sbs_cb->rssi_thresh_max > SPECTRAL_SBS_RSSI_THRESH_MAX ||
+	    sbs_cb->pwr_thresh_min < SPECTRAL_SBS_PWR_THRESH_MIN) {
+		spectral_err("SPECTRAL : Invalid SBS callback parameter");
+		return QDF_STATUS_E_INVAL;
+	}
+
+	qdf_mem_copy(&spectral->sbs_cb, sbs_cb, sizeof(*sbs_cb));
+
+	return QDF_STATUS_SUCCESS;
+}
+
+/**
+ * target_if_deregister_sbs_cb() - De-register SBS callbacks
+ * @pdev: Pointer to pdev object
+ *
+ * Return: void
+ */
+void
+target_if_deregister_sbs_cb(struct wlan_objmgr_pdev *pdev)
+{
+	struct target_if_spectral *spectral = NULL;
+
+	spectral = get_target_if_spectral_handle_from_pdev(pdev);
+	if (!spectral) {
+		spectral_err("SPECTRAL : Module doesn't exist");
+		return;
+	}
+
+	qdf_mem_zero(&spectral->sbs_cb, sizeof(struct spectral_sbs_cb));
+}
+#endif
+
 #ifdef DIRECT_BUF_RX_DEBUG
 static inline void
 target_if_sptrl_debug_register_tx_ops(struct wlan_lmac_if_tx_ops *tx_ops)
@@ -6107,6 +6165,12 @@ target_if_sptrl_register_tx_ops(struct wlan_lmac_if_tx_ops *tx_ops)
 		target_if_spectral_unregister_events;
 	tx_ops->sptrl_tx_ops.sptrlto_init_pdev_feature_caps =
 		target_if_spectral_init_pdev_feature_caps;
+#if UMAC_SUPPORT_SBS
+	tx_ops->sptrl_tx_ops.sptrlto_register_sbs_cb =
+	    target_if_register_sbs_cb;
+	tx_ops->sptrl_tx_ops.sptrlto_deregister_sbs_cb =
+	    target_if_deregister_sbs_cb;
+#endif
 
 	target_if_sptrl_debug_register_tx_ops(tx_ops);
 }
