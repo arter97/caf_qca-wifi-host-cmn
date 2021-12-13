@@ -388,11 +388,11 @@ QDF_STATUS mlme_vdev_ops_ext_hdl_delete_rsp(struct wlan_objmgr_psoc *psoc,
 
 /**
  * mlme_max_chan_switch_is_set() - Get if max chan switch IE is enabled
- * @vdev: Object manager vdev pointer
+ * @vdev: Object manager psoc pointer
  *
  * Return: True if max chan switch is enabled else false
  */
-bool mlme_max_chan_switch_is_set(struct wlan_objmgr_vdev *vdev);
+bool mlme_max_chan_switch_is_set(struct wlan_objmgr_psoc *psoc);
 
 #ifdef FEATURE_CM_ENABLE
 /**
