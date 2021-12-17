@@ -1537,16 +1537,7 @@ struct avoid_freq_ind_data {
 #define TWOG_CHAN_5_IN_MHZ         2432
 #define TWOG_CHAN_6_IN_MHZ         2437
 #define TWOG_CHAN_13_IN_MHZ        2472
-#define REG_24_GHZ_2PT5MHZ_CHAN_OFFSET 200
-#define REG_24_GHZ_2PT5MHZ_CHAN_BASE_FREQ   2399
-#define REG_24_GHZ_2PT5MHZ_CHAN_221 221
-#define REG_24_GHZ_2PT5MHZ_CHAN_222 222
-#define REG_24_GHZ_2PT5MHZ_CHAN_222_FREQ 2482
-#define REG_24_GHZ_2PT5MHZ_CHAN_221_FREQ 2477
 #define TWOG_CHAN_14_IEEE                  14
-
-#define REG_IS_FREQ_2p5MHZ(_freq) \
-			   (((_freq) - TWOG_STARTING_FREQ) % FREQ_TO_CHAN_SCALE)
 
 /**
  * struct reg_ctl_params - reg ctl and regd info

@@ -484,7 +484,8 @@ static inline void hal_get_radiotap_he_gi_ltf(uint16_t *he_gi, uint16_t *he_ltf)
 #define CHANNEL_FREQ_2482 2482
 #define CHANNEL_FREQ_2477 2477
 #define IS_FREQ_2P5MHZ(freq) \
-    ((freq - CHANNEL_FREQ_2407) % FREQ_MULTIPLIER_CONST_5MHZ)
+    (((freq - CHANNEL_FREQ_2407) % FREQ_MULTIPLIER_CONST_5MHZ) && \
+     WLAN_REG_IS_24GHZ_CH_FREQ(freq))
 /**
  * hal_rx_radiotap_num_to_freq() - Get frequency from chan number
  * @chan_num - Input channel number

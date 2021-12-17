@@ -80,21 +80,6 @@
 /* WLAN 5GHz channel number 170 freq */
 #define DFS_CHAN_170_FREQ        (5852)
 
-#define DFS_24_GHZ_2PT5MHZ_CHAN_OFFSET (200)
-
-#define DFS_24_GHZ_2PT5MHZ_CHAN_BASE_FREQ   (2399)
-
-#define DFS_24_GHZ_2PT5MHZ_CHAN_221 (221)
-
-#define DFS_24_GHZ_2PT5MHZ_CHAN_222 (222)
-
-#define DFS_24_GHZ_2PT5MHZ_CHAN_222_FREQ (2482)
-
-#define DFS_24_GHZ_2PT5MHZ_CHAN_221_FREQ (2477)
-
-#define DFS_IS_FREQ_2p5MHZ(_freq) \
-	((_freq) - DFS_24_GHZ_BASE_FREQ) % DFS_CHAN_SPACING_5MHZ
-
 extern struct dfs_to_mlme global_dfs_to_mlme;
 
 /**
