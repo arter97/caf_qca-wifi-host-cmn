@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016-2020 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -23,6 +23,7 @@
  */
 
 #include "wlan_mgmt_txrx_utils_api.h"
+#include "wlan_mgmt_txrx_tgt_api.h"
 #include "../../core/src/wlan_mgmt_txrx_main_i.h"
 #include "wlan_objmgr_psoc_obj.h"
 #include "wlan_objmgr_global_obj.h"
@@ -31,6 +32,7 @@
 #include "wlan_objmgr_peer_obj.h"
 #include "qdf_nbuf.h"
 #include "wlan_lmac_if_api.h"
+#include <wlan_mgmt_txrx_rx_reo_utils_api.h>
 
 /**
  * wlan_mgmt_txrx_psoc_obj_create_notification() - called from objmgr when psoc
@@ -186,6 +188,13 @@ static QDF_STATUS wlan_mgmt_txrx_pdev_obj_create_notification(
 			     "mgmt_txrx tx_cmp");
 	qdf_runtime_lock_init(&mgmt_txrx_pdev_ctx->wakelock_tx_runtime_cmp);
 
+	status = wlan_mgmt_rx_reo_pdev_obj_create_notification(
+					pdev, mgmt_txrx_pdev_ctx);
+	if (QDF_IS_STATUS_ERROR(status)) {
+		mgmt_txrx_err("Failed to create mgmt Rx REO pdev object");
+		goto err_mgmt_rx_reo_attach;
+	}
+
 	if (wlan_objmgr_pdev_component_obj_attach(pdev,
 			WLAN_UMAC_COMP_MGMT_TXRX,
 			mgmt_txrx_pdev_ctx, QDF_STATUS_SUCCESS)
@@ -202,6 +211,10 @@ static QDF_STATUS wlan_mgmt_txrx_pdev_obj_create_notification(
 	return QDF_STATUS_SUCCESS;
 
 err_pdev_attach:
+	/* Avoiding error check in an error handler */
+	wlan_mgmt_rx_reo_pdev_obj_destroy_notification(pdev,
+						       mgmt_txrx_pdev_ctx);
+err_mgmt_rx_reo_attach:
 	qdf_runtime_lock_deinit(&mgmt_txrx_pdev_ctx->wakelock_tx_runtime_cmp);
 	qdf_wake_lock_destroy(&mgmt_txrx_pdev_ctx->wakelock_tx_cmp);
 	qdf_mem_free(mgmt_txrx_stats);
@@ -229,6 +242,7 @@ static QDF_STATUS wlan_mgmt_txrx_pdev_obj_destroy_notification(
 			void *arg)
 {
 	struct mgmt_txrx_priv_pdev_context *mgmt_txrx_pdev_ctx;
+	QDF_STATUS status;
 
 	if (!pdev) {
 		mgmt_txrx_err("pdev context passed is NULL");
@@ -248,6 +262,13 @@ static QDF_STATUS wlan_mgmt_txrx_pdev_obj_destroy_notification(
 				WLAN_UMAC_COMP_MGMT_TXRX, mgmt_txrx_pdev_ctx)
 			!= QDF_STATUS_SUCCESS) {
 		mgmt_txrx_err("Failed to detach mgmt txrx ctx in pdev ctx");
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	status = wlan_mgmt_rx_reo_pdev_obj_destroy_notification(
+						pdev, mgmt_txrx_pdev_ctx);
+	if (QDF_IS_STATUS_ERROR(status)) {
+		mgmt_txrx_err("Failed to destroy mgmt Rx REO pdev object");
 		return QDF_STATUS_E_FAILURE;
 	}
 
@@ -303,9 +324,19 @@ QDF_STATUS wlan_mgmt_txrx_init(void)
 		goto err_pdev_delete;
 	}
 
+	status = wlan_mgmt_rx_reo_init();
+	if (status != QDF_STATUS_SUCCESS) {
+		mgmt_txrx_err("Failed to initialize mgmt Rx reo module");
+		goto err_reo_init;
+	}
+
 	mgmt_txrx_debug("Successfully registered create and destroy handlers with objmgr");
 	return QDF_STATUS_SUCCESS;
 
+err_reo_init:
+	wlan_objmgr_unregister_pdev_destroy_handler(
+			WLAN_UMAC_COMP_MGMT_TXRX,
+			wlan_mgmt_txrx_pdev_obj_destroy_notification, NULL);
 err_pdev_delete:
 	wlan_objmgr_unregister_pdev_create_handler(WLAN_UMAC_COMP_MGMT_TXRX,
 			wlan_mgmt_txrx_pdev_obj_create_notification, NULL);
@@ -321,6 +352,11 @@ err_psoc_create:
 
 QDF_STATUS wlan_mgmt_txrx_deinit(void)
 {
+	if (QDF_IS_STATUS_ERROR(wlan_mgmt_rx_reo_deinit())) {
+		mgmt_txrx_err("Failed to de-initialize mgmt Rx reo module");
+		return QDF_STATUS_E_FAILURE;
+	}
+
 	if (wlan_objmgr_unregister_psoc_create_handler(WLAN_UMAC_COMP_MGMT_TXRX,
 				wlan_mgmt_txrx_psoc_obj_create_notification,
 				NULL)
@@ -350,7 +386,6 @@ QDF_STATUS wlan_mgmt_txrx_deinit(void)
 			!= QDF_STATUS_SUCCESS) {
 		return QDF_STATUS_E_FAILURE;
 	}
-
 
 	mgmt_txrx_debug("Successfully unregistered create and destroy handlers with objmgr");
 	return QDF_STATUS_SUCCESS;
@@ -503,6 +538,39 @@ QDF_STATUS wlan_mgmt_txrx_beacon_frame_tx(struct wlan_objmgr_peer *peer,
 		return QDF_STATUS_E_FAILURE;
 	}
 	return QDF_STATUS_SUCCESS;
+}
+
+bool wlan_mgmt_is_rmf_mgmt_action_frame(uint8_t action_category)
+{
+	switch (action_category) {
+	case ACTION_CATEGORY_SPECTRUM_MGMT:
+	case ACTION_CATEGORY_QOS:
+	case ACTION_CATEGORY_DLS:
+	case ACTION_CATEGORY_BACK:
+	case ACTION_CATEGORY_RRM:
+	case ACTION_FAST_BSS_TRNST:
+	case ACTION_CATEGORY_SA_QUERY:
+	case ACTION_CATEGORY_PROTECTED_DUAL_OF_PUBLIC_ACTION:
+	case ACTION_CATEGORY_WNM:
+	case ACTION_CATEGORY_MESH_ACTION:
+	case ACTION_CATEGORY_MULTIHOP_ACTION:
+	case ACTION_CATEGORY_DMG:
+	case ACTION_CATEGORY_FST:
+	case ACTION_CATEGORY_RVS:
+	case ACTION_CATEGORY_SIG:
+	case ACTION_CATEGORY_FLOW_CONTROL:
+	case ACTION_CATEGORY_CONTROL_RSP_MCS_NEGO:
+	case ACTION_CATEGORY_FILS:
+	case ACTION_CATEGORY_CDMG:
+	case ACTION_CATEGORY_CMMG:
+	case ACTION_CATEGORY_GLK:
+	case ACTION_CATEGORY_VENDOR_SPECIFIC_PROTECTED:
+		return true;
+	default:
+		break;
+	}
+
+	return false;
 }
 
 #ifdef WLAN_SUPPORT_FILS
@@ -750,6 +818,16 @@ QDF_STATUS wlan_mgmt_txrx_psoc_open(struct wlan_objmgr_psoc *psoc)
 QDF_STATUS wlan_mgmt_txrx_psoc_close(struct wlan_objmgr_psoc *psoc)
 {
 	return QDF_STATUS_SUCCESS;
+}
+
+QDF_STATUS wlan_mgmt_txrx_psoc_enable(struct wlan_objmgr_psoc *psoc)
+{
+	return tgt_mgmt_txrx_register_ev_handler(psoc);
+}
+
+QDF_STATUS wlan_mgmt_txrx_psoc_disable(struct wlan_objmgr_psoc *psoc)
+{
+	return tgt_mgmt_txrx_unregister_ev_handler(psoc);
 }
 
 QDF_STATUS wlan_mgmt_txrx_pdev_open(struct wlan_objmgr_pdev *pdev)

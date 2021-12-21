@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2020 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2014-2021 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -94,7 +94,7 @@ typedef __qdf_wait_queue_head_t qdf_wait_queue_head_t;
 
 #define QDF_SET_PARAM(__param, __val)    ((__param) |= (1 << (__val)))
 #define QDF_HAS_PARAM(__param, __val)    ((__param) &  (1 << (__val)))
-#define QDF_CLEAR_PARAM(__param, __val)  ((__param) &= ((~1) << (__val)))
+#define QDF_CLEAR_PARAM(__param, __val)  ((__param) &= (~(1 << (__val))))
 
 /**
  * QDF_MAX - get maximum of two values
@@ -131,6 +131,10 @@ typedef __qdf_wait_queue_head_t qdf_wait_queue_head_t;
 		(_var) &= ~(((1 << (_num_bits)) - 1) << (_index)); \
 		(_var) |= (((_val) & ((1 << (_num_bits)) - 1)) << (_index)); \
 		} while (0)
+
+/* Get number of bits from the index bit supporting 64 bits */
+#define QDF_GET_BITS64(_val, _index, _num_bits) \
+		(((_val) >> (_index)) & ((1LLU << (_num_bits)) - 1))
 
 #define QDF_DECLARE_EWMA(name, factor, weight) \
 	__QDF_DECLARE_EWMA(name, factor, weight)
@@ -289,6 +293,20 @@ typedef __qdf_wait_queue_head_t qdf_wait_queue_head_t;
  * Return: rounded value
  */
 #define qdf_roundup(x, y) __qdf_roundup(x, y)
+
+/**
+ * qdf_ceil() - roundup of x/y
+ * @x: dividend
+ * @y: divisor
+ *
+ * Return: rounded value
+ */
+#define qdf_ceil(x, y) __qdf_ceil(x, y)
+
+/**
+ * qdf_in_interrupt - returns true if in interrupt context
+ */
+#define qdf_in_interrupt  __qdf_in_interrupt
 
 /**
  * qdf_is_macaddr_equal() - compare two QDF MacAddress

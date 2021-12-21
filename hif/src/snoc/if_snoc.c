@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015-2020 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2015-2021 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -180,6 +180,7 @@ int hif_snoc_bus_configure(struct hif_softc *scn)
 		goto unconfig_ce;
 
 	scn->wake_irq = pld_get_irq(scn->qdf_dev->dev, wake_ce_id);
+	scn->wake_irq_type = HIF_PM_CE_WAKE;
 
 	hif_info("expecting wake from ce %d, irq %d",
 		 wake_ce_id, scn->wake_irq);
@@ -339,6 +340,7 @@ void hif_snoc_nointrs(struct hif_softc *scn)
 {
 	struct HIF_CE_state *hif_state = HIF_GET_CE_STATE(scn);
 
+	scn->free_irq_done = true;
 	ce_unregister_irq(hif_state, CE_ALL_BITMAP);
 }
 

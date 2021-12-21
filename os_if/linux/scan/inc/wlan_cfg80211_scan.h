@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017-2020 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2017-2021 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -153,6 +153,9 @@ struct scan_req {
  * inapplicable.
  * @dwell_time_passive_6g: 6 GHz specific passive dwell time. Ignored if zero or
  * inapplicable.
+ * @scan_probe_unicast_ra: Use BSSID in probe request frame RA.
+ * @scan_f_2ghz: Scan only 2GHz channels
+ * @scan_f_5ghz: Scan only 5+6GHz channels
  */
 struct scan_params {
 	uint8_t source;
@@ -167,6 +170,9 @@ struct scan_params {
 	uint32_t dwell_time_passive;
 	uint32_t dwell_time_active_6g;
 	uint32_t dwell_time_passive_6g;
+	bool scan_probe_unicast_ra;
+	bool scan_f_2ghz;
+	bool scan_f_5ghz;
 };
 
 /**
@@ -298,14 +304,17 @@ void wlan_cfg80211_inform_bss_frame(struct wlan_objmgr_pdev *pdev,
 /**
  * __wlan_cfg80211_unlink_bss_list() - flush bss from the kernel cache
  * @wiphy: wiphy
+ * @pdev: pdev object
  * @bssid: bssid of the BSS to find
  * @ssid: ssid of the BSS to find
  * @ssid_len: ssid len of of the BSS to find
  *
- * Return: None
+ * Return: QDF_STATUS
  */
-void __wlan_cfg80211_unlink_bss_list(struct wiphy *wiphy, uint8_t *bssid,
-				     uint8_t *ssid, uint8_t ssid_len);
+QDF_STATUS __wlan_cfg80211_unlink_bss_list(struct wiphy *wiphy,
+					   struct wlan_objmgr_pdev *pdev,
+					   uint8_t *bssid, uint8_t *ssid,
+					   uint8_t ssid_len);
 
 /**
  * wlan_cfg80211_get_bss() - Get the bss entry matching the chan, bssid and ssid

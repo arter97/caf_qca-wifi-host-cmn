@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017-2020 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2017-2021 The Linux Foundation. All rights reserved.
  *
  *
  * Permission to use, copy, modify, and/or distribute this software for
@@ -26,6 +26,9 @@
 #ifndef __WLAN_REG_UCFG_API_H
 #define __WLAN_REG_UCFG_API_H
 
+#ifdef CONFIG_AFC_SUPPORT
+#include <wlan_reg_afc.h>
+#endif
 #include <reg_services_public_struct.h>
 
 typedef QDF_STATUS (*reg_event_cb)(void *status_struct);
@@ -62,27 +65,6 @@ QDF_STATUS ucfg_reg_notify_sap_event(struct wlan_objmgr_pdev *pdev,
 			bool sap_state);
 
 /**
- * ucfg_reg_cache_channel_state() - Cache the current state of the channles
- * @pdev: The physical dev to cache the channels for
- * @channel_list: List of the channels for which states needs to be cached
- * @num_channels: Number of channels in the list
- *
- * Return: QDF_STATUS
- */
-#if defined(DISABLE_CHANNEL_LIST) && defined(CONFIG_CHAN_NUM_API)
-void ucfg_reg_cache_channel_state(struct wlan_objmgr_pdev *pdev,
-				  uint32_t *channel_list,
-				  uint32_t num_channels);
-#else
-static inline
-void ucfg_reg_cache_channel_state(struct wlan_objmgr_pdev *pdev,
-				  uint32_t *channel_list,
-				  uint32_t num_channels)
-{
-}
-#endif /* CONFIG_CHAN_NUM_API */
-
-/**
  * ucfg_reg_cache_channel_freq_state() - Cache the current state of the
  * channels based on the channel center frequency.
  * @pdev: Pointer to pdev.
@@ -104,15 +86,28 @@ void ucfg_reg_cache_channel_freq_state(struct wlan_objmgr_pdev *pdev,
 }
 #endif /* CONFIG_CHAN_FREQ_API */
 
+#ifdef DISABLE_CHANNEL_LIST
 /**
- * ucfg_reg_restore_cached_channels() - Cache the current state of the channles
+ * ucfg_reg_disable_cached_channels() - Disable cached channels
  * @pdev: The physical dev to cache the channels for
  *
- * Return: QDF_STATUS
+ * Return: Void
  */
-#ifdef DISABLE_CHANNEL_LIST
+void ucfg_reg_disable_cached_channels(struct wlan_objmgr_pdev *pdev);
+
+/**
+ * ucfg_reg_restore_cached_channels() - Restore disabled cached channels
+ * @pdev: The physical dev to cache the channels for
+ *
+ * Return: Void
+ */
 void ucfg_reg_restore_cached_channels(struct wlan_objmgr_pdev *pdev);
 #else
+static inline
+void ucfg_reg_disable_cached_channels(struct wlan_objmgr_pdev *pdev)
+{
+}
+
 static inline
 void ucfg_reg_restore_cached_channels(struct wlan_objmgr_pdev *pdev)
 {
@@ -307,6 +302,46 @@ void ucfg_reg_register_chan_change_callback(struct wlan_objmgr_psoc *psoc,
 void ucfg_reg_unregister_chan_change_callback(struct wlan_objmgr_psoc *psoc,
 					      void *cbk);
 
+#ifdef CONFIG_AFC_SUPPORT
+/**
+ * ucfg_reg_register_afc_req_rx_callback () - add AFC request received callback
+ * @pdev: Pointer to pdev
+ * @cbf: Pointer to callback function
+ * @arg: Pointer to opaque argument
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS ucfg_reg_register_afc_req_rx_callback(struct wlan_objmgr_pdev *pdev,
+						 afc_req_rx_evt_handler cbf,
+						 void *arg);
+
+/**
+ * ucfg_reg_unregister_afc_req_rx_callback () - remove AFC request received
+ * callback
+ * @pdev: Pointer to pdev
+ * @cbf: Pointer to callback function
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS ucfg_reg_unregister_afc_req_rx_callback(struct wlan_objmgr_pdev *pdev,
+						   afc_req_rx_evt_handler cbf);
+
+/**
+ * ucfg_reg_get_partial_afc_req_info() - Get the the frequency ranges and
+ * opclass + channel ranges. This is partial because in the AFC request there
+ * are a few more parameters: Longitude, Latitude a few other information
+ * @pdev: Pointer to PDEV object.
+ * @afc_req: Address of AFC request pointer.
+ * @req_id: AFC request ID.
+ *
+ * Return: QDF_STATUS_E_INVAL if unable to set and QDF_STATUS_SUCCESS is set.
+ */
+QDF_STATUS ucfg_reg_get_partial_afc_req_info(
+		struct wlan_objmgr_pdev *pdev,
+		struct wlan_afc_host_partial_request **afc_req,
+		uint64_t req_id);
+#endif
+
 /**
  * ucfg_reg_get_cc_and_src () - get country code and src
  * @psoc: psoc ptr
@@ -340,6 +375,21 @@ void ucfg_reg_unit_simulate_ch_avoid(struct wlan_objmgr_psoc *psoc,
  */
 void ucfg_reg_ch_avoid(struct wlan_objmgr_psoc *psoc,
 		       struct ch_avoid_ind_type *ch_avoid);
+
+#ifdef FEATURE_WLAN_CH_AVOID_EXT
+/**
+ * ucfg_reg_ch_avoid_ext () - Send channel avoid extend cmd to regulatory
+ * @psoc: psoc ptr
+ * @ch_avoid: ch_avoid_ind_type ranges
+ *
+ * This function send channel avoid extend cmd to regulatory from
+ * os_if/upper layer
+ *
+ * Return: void
+ */
+void ucfg_reg_ch_avoid_ext(struct wlan_objmgr_psoc *psoc,
+			   struct ch_avoid_ind_type *ch_avoid);
+#endif
 
 /**
  * ucfg_reg_11d_vdev_delete_update() - update vdev delete to regulatory
@@ -387,7 +437,7 @@ QDF_STATUS ucfg_reg_set_hal_reg_cap(struct wlan_objmgr_psoc *psoc,
  * Return: QDF_STATUS
  */
 QDF_STATUS ucfg_reg_update_hal_reg_cap(struct wlan_objmgr_psoc *psoc,
-				       uint32_t wireless_modes, uint8_t phy_id);
+				       uint64_t wireless_modes, uint8_t phy_id);
 
 /**
  * ucfg_set_ignore_fw_reg_offload_ind() - API to set ignore regdb offload ind
@@ -416,4 +466,69 @@ ucfg_reg_get_unii_5g_bitmap(struct wlan_objmgr_pdev *pdev, uint8_t *bitmap)
 }
 #endif
 
+#if defined(CONFIG_BAND_6GHZ)
+/**
+ * ucfg_reg_get_cur_6g_ap_pwr_type() - Get the current 6G regulatory AP power
+ * type.
+ * @pdev: Pointer to PDEV object.
+ * @reg_6g_ap_pwr_type: The current regulatory 6G AP type ie VLPI/LPI/SP.
+ *
+ * Return: QDF_STATUS.
+ */
+QDF_STATUS
+ucfg_reg_get_cur_6g_ap_pwr_type(struct wlan_objmgr_pdev *pdev,
+				enum reg_6g_ap_type *reg_cur_6g_ap_pwr_type);
+
+/**
+ * ucfg_reg_set_cur_6g_ap_pwr_type() - Set the current 6G regulatory AP power
+ * type.
+ * @pdev: Pointer to PDEV object.
+ * @reg_6g_ap_pwr_type: Regulatory 6G AP type ie VLPI/LPI/SP.
+ *
+ * Return: QDF_STATUS_E_INVAL if unable to set and QDF_STATUS_SUCCESS is set.
+ */
+QDF_STATUS
+ucfg_reg_set_cur_6g_ap_pwr_type(struct wlan_objmgr_pdev *pdev,
+				enum reg_6g_ap_type reg_cur_6g_ap_type);
+#else
+static inline QDF_STATUS
+ucfg_reg_get_cur_6g_ap_pwr_type(struct wlan_objmgr_pdev *pdev,
+				enum reg_6g_ap_type *reg_cur_6g_ap_pwr_type)
+{
+	*reg_cur_6g_ap_pwr_type = REG_INDOOR_AP;
+	return QDF_STATUS_E_NOSUPPORT;
+}
+
+static inline QDF_STATUS
+ucfg_reg_set_cur_6g_ap_pwr_type(struct wlan_objmgr_pdev *pdev,
+				enum reg_6g_ap_type reg_cur_6g_ap_type)
+{
+	return QDF_STATUS_E_NOSUPPORT;
+}
+#endif
+
+#if defined(CONFIG_AFC_SUPPORT) && defined(CONFIG_BAND_6GHZ)
+/**
+ * ucfg_reg_send_afc_resp_rx_ind() - Send AFC response received indication to
+ * the FW.
+ * @pdev: pdev ptr
+ * @afc_ind_obj: Pointer to hold AFC indication
+ *
+ * Return: QDF_STATUS_SUCCESS if the WMI command is sent or QDF_STATUS_E_FAILURE
+ * otherwise
+ */
+QDF_STATUS
+ucfg_reg_send_afc_resp_rx_ind(struct wlan_objmgr_pdev *pdev,
+			      struct reg_afc_resp_rx_ind_info *afc_ind_obj);
+
+/**
+ * ucfg_reg_afc_start() - Start the AFC request from regulatory. This finally
+ *                   sends the request to registered callbacks
+ * @pdev: Pointer to pdev
+ * @req_id: The AFC request ID
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS ucfg_reg_afc_start(struct wlan_objmgr_pdev *pdev, uint64_t req_id);
+#endif
 #endif

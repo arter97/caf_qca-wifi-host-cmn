@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016-2020 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -29,7 +29,7 @@
 #include "hal_internal.h"
 #include "cdp_txrx_mon_struct.h"
 #include "qdf_trace.h"
-#include "hal_rx.h"
+#include "hal_li_rx.h"
 #include "hal_tx.h"
 #include "dp_types.h"
 #include "hal_api_mon.h"
@@ -269,6 +269,9 @@
 
 #define HAL_RX_GET_SW_FRAME_GROUP_ID(rx_mpdu_start)	\
 	HAL_RX_GET(rx_mpdu_start, RX_MPDU_INFO_0, SW_FRAME_GROUP_ID)
+
+#define HAL_RX_GET_SW_PEER_ID(rx_mpdu_start)	\
+	HAL_RX_GET(rx_mpdu_start, RX_MPDU_INFO_1, SW_PEER_ID)
 
 #define HAL_REO_R0_CONFIG(soc, reg_val, reo_params)		\
 	do { \

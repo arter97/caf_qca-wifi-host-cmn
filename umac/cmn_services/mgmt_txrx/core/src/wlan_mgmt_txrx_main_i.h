@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016-2020 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -31,11 +31,30 @@
 #include "wlan_objmgr_psoc_obj.h"
 #include "wlan_lmac_if_def.h"
 #include "qdf_list.h"
+#ifdef WLAN_MGMT_RX_REO_SUPPORT
+#include "wlan_mgmt_txrx_rx_reo_i.h"
+#endif
 
 
 #define IEEE80211_FC0_TYPE_MASK             0x0c
 #define IEEE80211_FC0_SUBTYPE_MASK          0xf0
 #define IEEE80211_FC0_TYPE_MGT              0x00
+#define IEEE80211_FC0_TYPE_CTL              0x04
+
+/* for TYPE_MGT */
+#define IEEE80211_FC0_SUBTYPE_ASSOC_REQ     0x00
+#define IEEE80211_FC0_SUBTYPE_ASSOC_RESP    0x10
+#define IEEE80211_FC0_SUBTYPE_REASSOC_REQ   0x20
+#define IEEE80211_FC0_SUBTYPE_REASSOC_RESP  0x30
+#define IEEE80211_FC0_SUBTYPE_PROBE_REQ     0x40
+#define IEEE80211_FC0_SUBTYPE_PROBE_RESP    0x50
+#define IEEE80211_FC0_SUBTYPE_BEACON        0x80
+#define IEEE80211_FC0_SUBTYPE_ATIM          0x90
+#define IEEE80211_FC0_SUBTYPE_DISASSOC      0xa0
+#define IEEE80211_FC0_SUBTYPE_AUTH          0xb0
+#define IEEE80211_FC0_SUBTYPE_DEAUTH        0xc0
+#define IEEE80211_FC0_SUBTYPE_ACTION        0xd0
+#define IEEE80211_FCO_SUBTYPE_ACTION_NO_ACK 0xe0
 
 /**
  * mgmt_wakelock_reason - reasons mgmt_txrx might hold a wakelock
@@ -189,6 +208,7 @@ struct mgmt_txrx_priv_psoc_context {
  * @mgmt_txrx_stats:  pointer to mgmt txrx stats
  * @wakelock_tx_cmp:  mgmt tx complete wake lock
  * @wakelock_tx_runtime_cmp: mgmt tx runtime complete wake lock
+ * @mgmt_rx_reo_pdev_ctx: pointer to pdev object of MGMT Rx REO module
  */
 struct mgmt_txrx_priv_pdev_context {
 	struct wlan_objmgr_pdev *pdev;
@@ -196,6 +216,9 @@ struct mgmt_txrx_priv_pdev_context {
 	struct mgmt_txrx_stats_t *mgmt_txrx_stats;
 	qdf_wake_lock_t wakelock_tx_cmp;
 	qdf_runtime_lock_t wakelock_tx_runtime_cmp;
+#ifdef WLAN_MGMT_RX_REO_SUPPORT
+	struct mgmt_rx_reo_pdev_info *mgmt_rx_reo_pdev_ctx;
+#endif
 };
 
 

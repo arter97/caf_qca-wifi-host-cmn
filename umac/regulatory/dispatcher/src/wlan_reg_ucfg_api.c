@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017-2020 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2017-2021 The Linux Foundation. All rights reserved.
  *
  *
  * Permission to use, copy, modify, and/or distribute this software for
@@ -241,6 +241,41 @@ void ucfg_reg_unregister_chan_change_callback(struct wlan_objmgr_psoc *psoc,
 					    (reg_chan_change_callback)cbk);
 }
 
+#ifdef CONFIG_AFC_SUPPORT
+QDF_STATUS ucfg_reg_register_afc_req_rx_callback(struct wlan_objmgr_pdev *pdev,
+						 afc_req_rx_evt_handler cbf,
+						 void *arg)
+{
+	return reg_register_afc_req_rx_callback(pdev, cbf, arg);
+}
+
+qdf_export_symbol(ucfg_reg_register_afc_req_rx_callback);
+
+QDF_STATUS ucfg_reg_unregister_afc_req_rx_callback(struct wlan_objmgr_pdev *pdev,
+						   afc_req_rx_evt_handler cbf)
+{
+	return reg_unregister_afc_req_rx_callback(pdev, cbf);
+}
+
+QDF_STATUS ucfg_reg_get_partial_afc_req_info(
+		struct wlan_objmgr_pdev *pdev,
+		struct wlan_afc_host_partial_request **afc_req,
+		uint64_t req_id)
+{
+	QDF_STATUS status;
+
+	status = reg_get_partial_afc_req_info(pdev, afc_req);
+
+	if (!afc_req)
+		return QDF_STATUS_E_NOMEM;
+
+	if (status == QDF_STATUS_SUCCESS)
+		reg_dmn_set_afc_req_id(*afc_req, req_id);
+
+	return status;
+}
+#endif
+
 enum country_src ucfg_reg_get_cc_and_src(struct wlan_objmgr_psoc *psoc,
 					 uint8_t *alpha2)
 {
@@ -258,6 +293,14 @@ void ucfg_reg_ch_avoid(struct wlan_objmgr_psoc *psoc,
 {
 	reg_process_ch_avoid_event(psoc, ch_avoid);
 }
+
+#ifdef FEATURE_WLAN_CH_AVOID_EXT
+void ucfg_reg_ch_avoid_ext(struct wlan_objmgr_psoc *psoc,
+			   struct ch_avoid_ind_type *ch_avoid)
+{
+	reg_process_ch_avoid_ext_event(psoc, ch_avoid);
+}
+#endif
 
 QDF_STATUS ucfg_reg_11d_vdev_delete_update(struct wlan_objmgr_vdev *vdev)
 {
@@ -286,7 +329,7 @@ QDF_STATUS ucfg_reg_set_hal_reg_cap(struct wlan_objmgr_psoc *psoc,
 qdf_export_symbol(ucfg_reg_set_hal_reg_cap);
 
 QDF_STATUS ucfg_reg_update_hal_reg_cap(struct wlan_objmgr_psoc *psoc,
-				       uint32_t wireless_modes, uint8_t phy_id)
+				       uint64_t wireless_modes, uint8_t phy_id)
 {
 	return reg_update_hal_reg_cap(psoc, wireless_modes, phy_id);
 }
@@ -311,29 +354,16 @@ void ucfg_reg_cache_channel_freq_state(struct wlan_objmgr_pdev *pdev,
 }
 #endif /* CONFIG_CHAN_FREQ_API */
 
-#ifdef CONFIG_CHAN_NUM_API
-/**
- * ucfg_reg_cache_channel_state() - Cache the current state of the channles
- * @pdev: The physical dev to cache the channels for
- * @channel_list: List of the channels for which states needs to be cached
- * @num_channels: Number of channels in the list
- *
- */
-void ucfg_reg_cache_channel_state(struct wlan_objmgr_pdev *pdev,
-				  uint32_t *channel_list, uint32_t num_channels)
-{
-	reg_cache_channel_state(pdev, channel_list, num_channels);
-}
-#endif /* CONFIG_CHAN_NUM_API */
-
-/**
- * ucfg_reg_restore_cached_channels() - Cache the current state of the channles
- * @pdev: The physical dev to cache the channels for
- */
 void ucfg_reg_restore_cached_channels(struct wlan_objmgr_pdev *pdev)
 {
 	reg_restore_cached_channels(pdev);
 }
+
+void ucfg_reg_disable_cached_channels(struct wlan_objmgr_pdev *pdev)
+{
+	reg_disable_cached_channels(pdev);
+}
+
 #endif
 
 QDF_STATUS ucfg_set_ignore_fw_reg_offload_ind(struct wlan_objmgr_psoc *psoc)
@@ -346,5 +376,38 @@ QDF_STATUS
 ucfg_reg_get_unii_5g_bitmap(struct wlan_objmgr_pdev *pdev, uint8_t *bitmap)
 {
 	return reg_get_unii_5g_bitmap(pdev, bitmap);
+}
+#endif
+
+#if defined(CONFIG_BAND_6GHZ)
+QDF_STATUS
+ucfg_reg_set_cur_6g_ap_pwr_type(struct wlan_objmgr_pdev *pdev,
+				enum reg_6g_ap_type reg_cur_6g_ap_pwr_type)
+{
+	return reg_set_cur_6g_ap_pwr_type(pdev, reg_cur_6g_ap_pwr_type);
+}
+
+QDF_STATUS
+ucfg_reg_get_cur_6g_ap_pwr_type(struct wlan_objmgr_pdev *pdev,
+				enum reg_6g_ap_type *reg_cur_6g_ap_pwr_type)
+{
+	return reg_get_cur_6g_ap_pwr_type(pdev, reg_cur_6g_ap_pwr_type);
+}
+
+qdf_export_symbol(ucfg_reg_get_cur_6g_ap_pwr_type);
+#endif
+
+#if defined(CONFIG_AFC_SUPPORT) && defined(CONFIG_BAND_6GHZ)
+QDF_STATUS
+ucfg_reg_send_afc_resp_rx_ind(struct wlan_objmgr_pdev *pdev,
+			      struct reg_afc_resp_rx_ind_info *afc_ind_obj)
+{
+	return reg_send_afc_cmd(pdev, afc_ind_obj);
+}
+
+QDF_STATUS
+ucfg_reg_afc_start(struct wlan_objmgr_pdev *pdev, uint64_t req_id)
+{
+	return reg_afc_start(pdev, req_id);
 }
 #endif

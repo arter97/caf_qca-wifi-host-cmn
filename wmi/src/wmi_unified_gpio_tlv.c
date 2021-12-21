@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2020-2021, The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -34,11 +34,11 @@ convert_gpio_direction(enum gpio_direction dir)
 {
 	switch (dir) {
 	case WMI_HOST_GPIO_INPUT:
-		return 0;
+		return WMI_FW_GPIO_INPUT;
 	case WMI_HOST_GPIO_OUTPUT:
-		return 1;
+		return WMI_FW_GPIO_OUTPUT;
 	default:
-		return 0;
+		return WMI_FW_GPIO_OUTPUT;
 	}
 }
 
@@ -157,15 +157,21 @@ send_gpio_config_cmd_tlv(wmi_unified_t wmi_handle,
 	cmd->input = convert_gpio_direction(param->pin_dir);
 	cmd->pull_type = convert_gpio_pull_type(param->pin_pull_type);
 	cmd->intr_mode = convert_gpio_interrupt_mode(param->pin_intr_mode);
+	cmd->mux_config_val = param->mux_config_val;
+	cmd->drive = param->drive;
+	cmd->init_enable = param->init_enable;
 
-	WMI_LOGD("GPIO num %d, input-dir %d, pull_type %d, intr_mode %d",
-		 cmd->gpio_num, cmd->input, cmd->pull_type, cmd->intr_mode);
+	wmi_debug("GPIO num %d, input-dir %d, pull_type %d, intr_mode %d"
+		 " mux_config_val %d drive %d init_enable %d",
+		 cmd->gpio_num, cmd->input, cmd->pull_type, cmd->intr_mode,
+		 cmd->mux_config_val, cmd->drive, cmd->init_enable);
+
 	wmi_mtrace(WMI_GPIO_CONFIG_CMDID, NO_SESSION, 0);
 	ret = wmi_unified_cmd_send(wmi_handle, buf, sizeof(*cmd),
 				   WMI_GPIO_CONFIG_CMDID);
 
 	if (QDF_IS_STATUS_ERROR(ret)) {
-		WMI_LOGE("Sending GPIO config cmd failed");
+		wmi_err("Sending GPIO config cmd failed");
 		wmi_buf_free(buf);
 	}
 
@@ -208,13 +214,13 @@ send_gpio_output_cmd_tlv(wmi_unified_t wmi_handle,
 	cmd->gpio_num = param->pin_num;
 	cmd->set = convert_gpio_output_value(param->pin_set);
 
-	WMI_LOGD("GPIO num %d, set %d", cmd->gpio_num, cmd->set);
+	wmi_debug("GPIO num %d, set %d", cmd->gpio_num, cmd->set);
 	wmi_mtrace(WMI_GPIO_OUTPUT_CMDID, NO_SESSION, 0);
 	ret = wmi_unified_cmd_send(wmi_handle, buf, sizeof(*cmd),
 				   WMI_GPIO_OUTPUT_CMDID);
 
 	if (QDF_IS_STATUS_ERROR(ret)) {
-		WMI_LOGE("Sending GPIO output cmd failed");
+		wmi_err("Sending GPIO output cmd failed");
 		wmi_buf_free(buf);
 	}
 

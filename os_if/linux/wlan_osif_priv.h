@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016-2017,2020 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2016-2017,2020-2021 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -21,7 +21,6 @@
 #define _WLAN_OSIF_PRIV_H_
 
 #include "qdf_net_if.h"
-#include <qdf_event.h>
 #include "wlan_cm_public_struct.h"
 #include <qca_vendor.h>
 
@@ -42,26 +41,19 @@ struct pdev_osif_priv {
 	struct qdf_net_if *nif;
 };
 
-#ifdef FEATURE_CM_ENABLE
 /**
  * struct osif_cm_info - osif connection manager info
  * @last_source: Last command request source
  * @last_id: Last command from connection manager
  * @cmd_id_lock: lock to update and read last command source
- * @last_disconnect_reason: last disconnect reason to be indicated in get
- * station
- * @disconnect_complete: disconnect completion wait event
  * @ext_priv: legacy data pointer.
  */
 struct osif_cm_info {
 	enum wlan_cm_source last_source;
 	wlan_cm_id last_id;
 	struct qdf_spinlock cmd_id_lock;
-	enum qca_disconnect_reason_codes last_disconnect_reason;
-	qdf_event_t disconnect_complete;
 	void *ext_priv;
 };
-#endif
 
 /**
  * struct vdev_osif_priv - OS private structure of vdev
@@ -74,9 +66,7 @@ struct vdev_osif_priv {
 	struct wireless_dev *wdev;
 	void *legacy_osif_priv;
 	struct osif_tdls_vdev *osif_tdls;
-#ifdef FEATURE_CM_ENABLE
 	struct osif_cm_info cm_info;
-#endif
 };
 
 #endif

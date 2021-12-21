@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016-2020 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -92,7 +92,9 @@ static QDF_STATUS wlan_objmgr_peer_obj_free(struct wlan_objmgr_peer *peer)
 	}
 
 	/* Notify peer free only for non self peer*/
-	if (peer == wlan_vdev_get_selfpeer(vdev))
+	if (WLAN_ADDR_EQ(wlan_peer_get_macaddr(peer),
+			 wlan_vdev_mlme_get_macaddr(vdev)) ==
+				QDF_STATUS_SUCCESS)
 		peer_free_notify = false;
 
 	vdev_id = wlan_vdev_get_id(vdev);
@@ -135,6 +137,7 @@ static QDF_STATUS wlan_objmgr_peer_obj_free(struct wlan_objmgr_peer *peer)
 	wlan_objmgr_peer_trace_deinit_lock(peer);
 	qdf_spinlock_destroy(&peer->peer_lock);
 	qdf_mem_free(peer);
+	peer = NULL;
 
 	if (peer_free_notify)
 		wlan_objmgr_vdev_peer_freed_notify(vdev);

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2020 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2014-2021 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -210,10 +210,13 @@ typedef struct qdf_shared_mem {
  * on expiry
  * @QDF_TIMER_TYPE_WAKE_APPS: Non deferrable timer which will cause CPU to
  * wake up on expiry
+ * @QDF_TIMER_TYPE_SW_SPIN: Deferrable&Pinned SW timer, it will not cause cpu
+ * to wake up on expiry and be able to queue on assigned cpu by add_timer_on
  */
 typedef enum {
 	QDF_TIMER_TYPE_SW,
-	QDF_TIMER_TYPE_WAKE_APPS
+	QDF_TIMER_TYPE_WAKE_APPS,
+	QDF_TIMER_TYPE_SW_SPIN
 } QDF_TIMER_TYPE;
 
 /**
@@ -363,7 +366,6 @@ typedef bool (*qdf_irqlocked_func_t)(void *);
  * @QDF_MODULE_ID_DISA: DISA (encryption test) module ID
  * @QDF_MODULE_ID_GREEN_AP: Green AP related logging
  * @QDF_MODULE_ID_FTM: FTM module ID
- * @QDF_MODULE_ID_EXTAP: Extender AP module ID
  * @QDF_MODULE_ID_FD: FILS discovery logging
  * @QDF_MODULE_ID_OCB: OCB module ID
  * @QDF_MODULE_ID_IPA: IPA module ID
@@ -375,7 +377,7 @@ typedef bool (*qdf_irqlocked_func_t)(void *);
  * @QDF_MODULE_ID_SM_ENGINE: SM engine module ID
  * @QDF_MODULE_ID_CMN_MLME: CMN MLME module ID
  * @QDF_MODULE_ID_CFR: CFR module ID
- * @QDF_MODULE_ID_TX_CAPTURE: Tx capture enhancement feature ID
+ * @QDF_MODULE_ID_DP_TX_CAPTURE: Tx capture enhancement feature ID
  * @QDF_MODULE_ID_INTEROP_ISSUES_AP: interop issues ap module ID
  * @QDF_MODULE_ID_BLACKLIST_MGR: Blacklist Manager module
  * @QDF_MODULE_ID_QLD: QCA Live Debug module ID
@@ -391,6 +393,32 @@ typedef bool (*qdf_irqlocked_func_t)(void *);
  * @QDF_MODULE_ID_IFMGR: Interface Manager feature ID
  * @QDF_MODULE_ID_MSCS: MSCS feature ID
  * @QDF_MODULE_ID_GPIO: GPIO configuration module ID
+ * @QDF_MODULE_ID_DIAG: Host diag module ID
+ * @QDF_MODULE_ID_DP_INIT: INIT/DEINIT path of datapath module ID
+ * @QDF_MODULE_ID_DP_TX: TX path of datapath module ID
+ * @QDF_MODULE_ID_DP_RX: RX path of datapath module ID
+ * @QDF_MODULE_ID_DP_STATS: TX/RX stats, AST stats module ID
+ * @QDF_MODULE_ID_DP_HTT: Firmware to host DP event handling module ID
+ * @QDF_MODULE_ID_DP_PEER: DP peer module ID
+ * @QDF_MODULE_ID_DP_RX_ERROR: Packet handling from WBM release ring module ID
+ * @QDF_MODULE_ID_DP_HTT_TX_STATS: FW to host Tx  PPDU stats module ID
+ * @QDF_MODULE_ID_DP_RX_MON_STATUS: RX mon status ring module ID
+ * @QDF_MODULE_ID_DP_RX_MON_DEST: Monitor ode processing module ID
+ * @QDF_MODULE_ID_DP_REO: REO command status module ID
+ * @QDF_MODULE_ID_DP_TX_COMP: TX completion module ID
+ * @QDF_MODULE_ID_DP_VDEV: DP Vdev module ID
+ * @QDF_MODULE_ID_DP_CDP: Configuration module ID
+ * @QDF_MODULE_ID_TSO: TSO module ID
+ * @QDF_MODULE_ID_ME: Multicast Enhancement module ID
+ * @QDF_MODULE_ID_QWRAP: QWRAP module ID
+ * @QDF_MODULE_ID_DBDC_REP: DBDC repeater module ID
+ * @QDF_MODULE_ID_EXT_AP: Extended AP module ID
+ * @QDF_MODULE_ID_MLO: MLO Manager module ID
+ * @QDF_MODULE_ID_MLOIE: MLO related IE protocol processing module ID
+ * @QDF_MODULE_ID_MBSS: MBSS Framework module ID
+ * @QDF_MODULE_ID_MON: Monitor module ID
+ * @QDF_MODULE_ID_MGMT_RX_REO: Management rx-reorder module ID
+ * @QDF_MODULE_ID_AFC: AFC module ID
  * @QDF_MODULE_ID_ANY: anything
  * @QDF_MODULE_ID_MAX: Max place holder module ID
  *
@@ -493,7 +521,6 @@ typedef enum {
 	QDF_MODULE_ID_DISA,
 	QDF_MODULE_ID_GREEN_AP,
 	QDF_MODULE_ID_FTM,
-	QDF_MODULE_ID_EXTAP,
 	QDF_MODULE_ID_FD,
 	QDF_MODULE_ID_OCB,
 	QDF_MODULE_ID_IPA,
@@ -506,7 +533,7 @@ typedef enum {
 	QDF_MODULE_ID_CMN_MLME,
 	QDF_MODULE_ID_BSSCOLOR,
 	QDF_MODULE_ID_CFR,
-	QDF_MODULE_ID_TX_CAPTURE,
+	QDF_MODULE_ID_DP_TX_CAPTURE,
 	QDF_MODULE_ID_INTEROP_ISSUES_AP,
 	QDF_MODULE_ID_BLACKLIST_MGR,
 	QDF_MODULE_ID_QLD,
@@ -522,6 +549,32 @@ typedef enum {
 	QDF_MODULE_ID_IFMGR,
 	QDF_MODULE_ID_MSCS,
 	QDF_MODULE_ID_GPIO,
+	QDF_MODULE_ID_DIAG,
+	QDF_MODULE_ID_DP_INIT,
+	QDF_MODULE_ID_DP_TX,
+	QDF_MODULE_ID_DP_RX,
+	QDF_MODULE_ID_DP_STATS,
+	QDF_MODULE_ID_DP_HTT,
+	QDF_MODULE_ID_DP_PEER,
+	QDF_MODULE_ID_DP_RX_ERROR,
+	QDF_MODULE_ID_DP_HTT_TX_STATS,
+	QDF_MODULE_ID_DP_RX_MON_STATUS,
+	QDF_MODULE_ID_DP_RX_MON_DEST,
+	QDF_MODULE_ID_DP_REO,
+	QDF_MODULE_ID_DP_TX_COMP,
+	QDF_MODULE_ID_DP_VDEV,
+	QDF_MODULE_ID_DP_CDP,
+	QDF_MODULE_ID_TSO,
+	QDF_MODULE_ID_ME,
+	QDF_MODULE_ID_QWRAP,
+	QDF_MODULE_ID_DBDC_REP,
+	QDF_MODULE_ID_EXT_AP,
+	QDF_MODULE_ID_MLO,
+	QDF_MODULE_ID_MLOIE,
+	QDF_MODULE_ID_MBSS,
+	QDF_MODULE_ID_MON,
+	QDF_MODULE_ID_MGMT_RX_REO,
+	QDF_MODULE_ID_AFC,
 	QDF_MODULE_ID_ANY,
 	QDF_MODULE_ID_MAX,
 } QDF_MODULE_ID;
@@ -1315,10 +1368,12 @@ struct qdf_tso_info_t {
  * enum qdf_suspend_type - type of suspend
  * @QDF_SYSTEM_SUSPEND: System suspend triggered wlan suspend
  * @QDF_RUNTIME_SUSPEND: Runtime pm inactivity timer triggered wlan suspend
+ * @QDF_UNIT_TEST_WOW_SUSPEND: WoW unit test suspend
  */
 enum qdf_suspend_type {
 	QDF_SYSTEM_SUSPEND,
-	QDF_RUNTIME_SUSPEND
+	QDF_RUNTIME_SUSPEND,
+	QDF_UNIT_TEST_WOW_SUSPEND
 };
 
 /**
@@ -1345,6 +1400,12 @@ enum qdf_suspend_type {
  * @QDF_VDEV_PEER_DELETE_ALL_RESPONSE_TIMED_OUT: Peer delete all resp timeout
  * @QDF_WMI_BUF_SEQUENCE_MISMATCH: WMI Tx completion buffer sequence mismatch
  * @QDF_HAL_REG_WRITE_FAILURE: HAL register writing failures
+ * @QDF_SUSPEND_NO_CREDIT: host lack of credit after suspend
+ * @QCA_HANG_BUS_FAILURE: Bus failure
+ * @QDF_TASKLET_CREDIT_LATENCY_DETECT: tasklet or credit latency happened
+ * @QDF_RX_REG_PKT_ROUTE_ERR: MSDU buf errors exceed thresh in REO err path
+ * @QDF_VDEV_SM_OUT_OF_SYNC: Vdev SM is out of sync and connect req received
+ * when already connected
  */
 enum qdf_hang_reason {
 	QDF_REASON_UNSPECIFIED,
@@ -1369,6 +1430,11 @@ enum qdf_hang_reason {
 	QDF_VDEV_PEER_DELETE_ALL_RESPONSE_TIMED_OUT,
 	QDF_WMI_BUF_SEQUENCE_MISMATCH,
 	QDF_HAL_REG_WRITE_FAILURE,
+	QDF_SUSPEND_NO_CREDIT,
+	QCA_HANG_BUS_FAILURE,
+	QDF_TASKLET_CREDIT_LATENCY_DETECT,
+	QDF_RX_REG_PKT_ROUTE_ERR,
+	QDF_VDEV_SM_OUT_OF_SYNC,
 };
 
 /**
@@ -1431,10 +1497,12 @@ enum qdf_context_mode {
  * enum qdf_dp_tx_rx_status - TX/RX packet status
  * @QDF_TX_RX_STATUS_INVALID: default invalid status
  * @QDF_TX_RX_STATUS_OK: successfully sent + acked
- * @QDF_TX_RX_STATUS_FW_DISCARD: packet not sent
- * @QDF_TX_RX_STATUS_NO_ACK: packet sent but no ack
- * @QDF_TX_RX_STATUS_DROP: packet dropped in host
+ * @QDF_TX_RX_STATUS_DISCARD: queued but not sent over air
+ * @QDF_TX_RX_STATUS_NO_ACK: packet sent but no ack received
+ * @QDF_TX_RX_STATUS_DROP: packet dropped due to congestion
  * @QDF_TX_RX_STATUS_DOWNLOAD_SUCC: packet delivered to target
+ * @QDF_TX_RX_STATUS_DEFAULT: default status
+ * @QDF_TX_RX_STATUS_MAX:
  */
 enum qdf_dp_tx_rx_status {
 	QDF_TX_RX_STATUS_INVALID,
@@ -1443,28 +1511,8 @@ enum qdf_dp_tx_rx_status {
 	QDF_TX_RX_STATUS_NO_ACK,
 	QDF_TX_RX_STATUS_DROP,
 	QDF_TX_RX_STATUS_DOWNLOAD_SUCC,
-	QDF_TX_RX_STATUS_MAX,
-};
-
-/**
- * enum qdf_dp_tx_comp_status - TX COMPL packet status
- * @QDF_TX_COMP_STATUS_OK: successfully sent + acked
- * @QDF_TX_COMP_STATUS_STAT_DISCARD: packet not sent in FW
- * @QDF_TX_COMP_STATUS_STAT_NO_ACK: packet sent but no ack
- * @QDF_TX_COMP_STATUS_STAT_POSTPONE: equal HTT_TX_COMPL_IND_STAT_POSTPONE
- * @QDF_TX_COMP_STATUS_STAT_PEER_DEL: equal HTT_TX_COMPL_IND_STAT_PEER_DEL
- * @QDF_TX_COMP_STATUS_STAT_DROP: packet dropped in FW
- * @QDF_TX_COMP_STATUS_STAT_INSPECT: equal HTT_TX_COMPL_IND_STAT_HOST_INSPECT
- */
-enum qdf_dp_tx_comp_status {
-	QDF_TX_COMP_STATUS_OK,
-	QDF_TX_COMP_STATUS_STAT_DISCARD,
-	QDF_TX_COMP_STATUS_STAT_NO_ACK,
-	QDF_TX_COMP_STATUS_STAT_POSTPONE,
-	QDF_TX_COMP_STATUS_STAT_PEER_DEL,
-	QDF_TX_COMP_STATUS_STAT_DROP,
-	QDF_TX_COMP_STATUS_STAT_INSPECT,
-	QDF_TX_COMP_STATUS_STAT_MAX,
+	QDF_TX_RX_STATUS_DEFAULT,
+	QDF_TX_RX_STATUS_MAX
 };
 
 /**

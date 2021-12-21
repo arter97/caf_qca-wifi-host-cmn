@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2019-2021, The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -128,6 +128,65 @@ wlan_util_vdev_mlme_set_ratemask_config(struct vdev_mlme_obj *vdev_mlme)
 
 qdf_export_symbol(wlan_util_vdev_mlme_set_ratemask_config);
 
+static QDF_STATUS
+tgt_vdev_mgr_vdev_set_param_wrapper(struct vdev_mlme_obj *vdev_mlme,
+				    enum wlan_mlme_cfg_id param_id,
+				    struct wlan_vdev_mgr_cfg mlme_cfg)
+{
+	uint8_t id, count = 0;
+	bool is_mbss_enabled, is_cmn_param = 0;
+	unsigned long vdev_bmap = 0;
+	struct wlan_objmgr_pdev *pdev;
+	struct vdev_mlme_mbss_11ax *mbss;
+	struct vdev_set_params param1 = {0};
+	struct multiple_vdev_set_param param2 = {0};
+	QDF_STATUS status = QDF_STATUS_SUCCESS;
+
+	mbss = &vdev_mlme->mgmt.mbss_11ax;
+	is_mbss_enabled = (mbss->mbssid_flags
+				& WLAN_VDEV_MLME_FLAGS_NON_MBSSID_AP) ? 0 : 1;
+
+	if (is_mbss_enabled) {
+		vdev_bmap = mbss->vdev_bmap;
+		is_cmn_param = mbss->is_cmn_param;
+	}
+
+	/* 1. if non tx vap and cmn param, dont send any WMI
+	 * 2. if tx vap and cmn param, send multi vdev set WMI
+	 * 3. if non tx vap and non cmn param, send vdev set WMI
+	 * 4. if tx vap and non cmn param, send vdev set WMI
+	 * 5. if non mbss vap, send vdev set WMI
+	 */
+	if (!is_mbss_enabled || !is_cmn_param) {
+		param1.param_id = param_id;
+		param1.vdev_id = wlan_vdev_get_id(vdev_mlme->vdev);
+		param1.param_value = mlme_cfg.value;
+		return tgt_vdev_mgr_set_param_send(vdev_mlme, &param1);
+	}
+
+	if (is_cmn_param && vdev_bmap) {
+		pdev = wlan_vdev_get_pdev(vdev_mlme->vdev);
+		param2.pdev_id = wlan_objmgr_pdev_get_pdev_id(pdev);
+		param2.param_id = param_id;
+		param2.param_value = mlme_cfg.value;
+
+		for (id = 0; id < WLAN_UMAC_PDEV_MAX_VDEVS; id++) {
+			if (qdf_test_bit(id, &vdev_bmap)) {
+				param2.vdev_ids[count] = id;
+				count++;
+			}
+		}
+		param2.num_vdevs = count;
+		status = tgt_vdev_mgr_multiple_vdev_set_param(pdev, &param2);
+		mbss->vdev_bmap = 0;
+	}
+
+	/* Reset the is_cmn_param for this vap */
+	mbss->is_cmn_param = 0;
+
+	return status;
+}
+
 QDF_STATUS
 wlan_util_vdev_mlme_set_param(struct vdev_mlme_obj *vdev_mlme,
 			      enum wlan_mlme_cfg_id param_id,
@@ -139,7 +198,6 @@ wlan_util_vdev_mlme_set_param(struct vdev_mlme_obj *vdev_mlme,
 	struct vdev_mlme_inactivity_params *inactivity_params;
 	bool is_wmi_cmd = false;
 	int ret = QDF_STATUS_SUCCESS;
-	struct vdev_set_params param = {0};
 
 	if (!vdev_mlme) {
 		mlme_err("VDEV MLME is NULL");
@@ -215,6 +273,12 @@ wlan_util_vdev_mlme_set_param(struct vdev_mlme_obj *vdev_mlme,
 		mlme_proto->he_ops_info.he_ops = mlme_cfg.value;
 		is_wmi_cmd = true;
 		break;
+#ifdef WLAN_FEATURE_11BE
+	case WLAN_MLME_CFG_EHT_OPS:
+		mlme_proto->eht_ops_info.eht_ops = mlme_cfg.value;
+		is_wmi_cmd = true;
+		break;
+#endif
 	case WLAN_MLME_CFG_RTS_THRESHOLD:
 		mlme_mgmt->generic.rts_threshold = mlme_cfg.value;
 		is_wmi_cmd = true;
@@ -392,16 +456,25 @@ wlan_util_vdev_mlme_set_param(struct vdev_mlme_obj *vdev_mlme,
 	case WLAN_MLME_CFG_MAX_GROUP_KEYS:
 		is_wmi_cmd = true;
 		break;
+	case WLAN_MLME_CFG_TX_STREAMS:
+		mlme_mgmt->chainmask_info.num_tx_chain = mlme_cfg.value;
+		break;
+	case WLAN_MLME_CFG_RX_STREAMS:
+		mlme_mgmt->chainmask_info.num_rx_chain = mlme_cfg.value;
+		break;
+	case WLAN_MLME_CFG_ENABLE_DISABLE_RTT_RESPONDER_ROLE:
+		is_wmi_cmd = true;
+		break;
+	case WLAN_MLME_CFG_ENABLE_DISABLE_RTT_INITIATOR_ROLE:
+		is_wmi_cmd = true;
+		break;
 	default:
 		break;
 	}
 
-	if (is_wmi_cmd) {
-		param.param_id = param_id;
-		param.vdev_id = wlan_vdev_get_id(vdev);
-		param.param_value = mlme_cfg.value;
-		ret = tgt_vdev_mgr_set_param_send(vdev_mlme, &param);
-	}
+	if (is_wmi_cmd)
+		ret = tgt_vdev_mgr_vdev_set_param_wrapper(vdev_mlme, param_id,
+							  mlme_cfg);
 
 	return ret;
 }
@@ -476,6 +549,11 @@ void wlan_util_vdev_mlme_get_param(struct vdev_mlme_obj *vdev_mlme,
 	case WLAN_MLME_CFG_HE_OPS:
 		*value = mlme_proto->he_ops_info.he_ops;
 		break;
+#ifdef WLAN_FEATURE_11BE
+	case WLAN_MLME_CFG_EHT_OPS:
+		*value = mlme_proto->eht_ops_info.eht_ops;
+		break;
+#endif
 	case WLAN_MLME_CFG_RTS_THRESHOLD:
 		*value = mlme_mgmt->generic.rts_threshold;
 		break;
@@ -574,6 +652,12 @@ void wlan_util_vdev_mlme_get_param(struct vdev_mlme_obj *vdev_mlme,
 		break;
 	case WLAN_MLME_CFG_BCN_TX_RATE:
 		*value = mlme_mgmt->rate_info.bcn_tx_rate;
+		break;
+	case WLAN_MLME_CFG_TX_STREAMS:
+		*value = mlme_mgmt->chainmask_info.num_tx_chain;
+		break;
+	case WLAN_MLME_CFG_RX_STREAMS:
+		*value = mlme_mgmt->chainmask_info.num_rx_chain;
 		break;
 	default:
 		break;

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016-2020 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -28,7 +28,7 @@
 #include "wlan_objmgr_psoc_obj.h"
 #include "wlan_objmgr_peer_obj.h"
 #include "wlan_objmgr_pdev_obj.h"
-
+#include "wlan_mgmt_txrx_rx_reo_tgt_api.h"
 
 /**
  * mgmt_get_spec_mgmt_action_subtype() - gets spec mgmt action subtype
@@ -832,6 +832,9 @@ mgmt_txrx_get_action_frm_subtype(uint8_t *mpdu_data_ptr)
 	case ACTION_CATEGORY_VENDOR_SPECIFIC:
 		frm_type = MGMT_ACTION_CATEGORY_VENDOR_SPECIFIC;
 		break;
+	case ACTION_CATEGORY_VENDOR_SPECIFIC_PROTECTED:
+		frm_type = MGMT_ACTION_CATEGORY_VENDOR_SPECIFIC_PROTECTED;
+		break;
 	case ACTION_CATEGORY_FST:
 		frm_type = mgmt_get_fst_action_subtype(action_hdr->action_code);
 		break;
@@ -1063,9 +1066,10 @@ QDF_STATUS tgt_mgmt_txrx_rx_frame_handler(
 	mgmt_type = (wh)->i_fc[0] & IEEE80211_FC0_TYPE_MASK;
 	mgmt_subtype = (wh)->i_fc[0] & IEEE80211_FC0_SUBTYPE_MASK;
 
-	if (mgmt_type != IEEE80211_FC0_TYPE_MGT) {
-		mgmt_txrx_err("Rx event doesn't conatin a mgmt. packet, %d",
-			mgmt_type);
+	if (mgmt_type != IEEE80211_FC0_TYPE_MGT &&
+	    mgmt_type != IEEE80211_FC0_TYPE_CTL) {
+		mgmt_txrx_err("Rx event doesn't contain a mgmt/ctrl packet, %d",
+			      mgmt_type);
 		qdf_nbuf_free(buf);
 		return QDF_STATUS_E_FAILURE;
 	}
@@ -1083,7 +1087,8 @@ QDF_STATUS tgt_mgmt_txrx_rx_frame_handler(
 		return QDF_STATUS_E_FAILURE;
 	}
 
-	if ((mgmt_subtype == MGMT_SUBTYPE_BEACON ||
+	if (mgmt_type == IEEE80211_FC0_TYPE_MGT &&
+	    (mgmt_subtype == MGMT_SUBTYPE_BEACON ||
 	     mgmt_subtype == MGMT_SUBTYPE_PROBE_RESP) &&
 	    !(is_from_addr_valid && is_bssid_valid)) {
 		mgmt_txrx_debug_rl("from addr "QDF_MAC_ADDR_FMT" bssid addr "QDF_MAC_ADDR_FMT" not valid, modifying them",
@@ -1141,15 +1146,21 @@ QDF_STATUS tgt_mgmt_txrx_rx_frame_handler(
 		}
 	}
 
-	frm_type = mgmt_txrx_get_frm_type(mgmt_subtype, mpdu_data_ptr);
-	if (frm_type == MGMT_FRM_UNSPECIFIED) {
-		mgmt_txrx_debug_rl("Unspecified mgmt frame type fc: %x %x",
-				   wh->i_fc[0], wh->i_fc[1]);
-		qdf_nbuf_free(buf);
-		return QDF_STATUS_E_FAILURE;
+	if (mgmt_type == IEEE80211_FC0_TYPE_MGT) {
+		frm_type = mgmt_txrx_get_frm_type(mgmt_subtype, mpdu_data_ptr);
+		if (frm_type == MGMT_FRM_UNSPECIFIED) {
+			mgmt_txrx_debug_rl(
+			"Unspecified mgmt frame type fc: %x %x", wh->i_fc[0],
+								wh->i_fc[1]);
+			qdf_nbuf_free(buf);
+			return QDF_STATUS_E_FAILURE;
+		}
+	} else {
+		frm_type = MGMT_CTRL_FRAME;
 	}
 
-	if (!(mgmt_subtype == MGMT_SUBTYPE_BEACON ||
+	if (mgmt_type == IEEE80211_FC0_TYPE_MGT &&
+	    !(mgmt_subtype == MGMT_SUBTYPE_BEACON ||
 	      mgmt_subtype == MGMT_SUBTYPE_PROBE_RESP ||
 	      mgmt_subtype == MGMT_SUBTYPE_PROBE_REQ))
 		mgmt_txrx_debug("Rcvd mgmt frame subtype %x (frame type %u) from "QDF_MAC_ADDR_FMT", seq_num = %d, rssi = %d tsf_delta: %u",
@@ -1178,14 +1189,18 @@ QDF_STATUS tgt_mgmt_txrx_rx_frame_handler(
 		}
 	}
 
-	rx_handler = mgmt_txrx_psoc_ctx->mgmt_rx_comp_cb[MGMT_FRAME_TYPE_ALL];
-	if (rx_handler) {
-		status = wlan_mgmt_txrx_rx_handler_list_copy(rx_handler,
-				&rx_handler_head, &rx_handler_tail);
-		if (status != QDF_STATUS_SUCCESS) {
-			qdf_spin_unlock_bh(&mgmt_txrx_psoc_ctx->mgmt_txrx_psoc_ctx_lock);
-			qdf_nbuf_free(buf);
-			goto rx_handler_mem_free;
+	if (mgmt_type == IEEE80211_FC0_TYPE_MGT) {
+		rx_handler =
+		mgmt_txrx_psoc_ctx->mgmt_rx_comp_cb[MGMT_FRAME_TYPE_ALL];
+		if (rx_handler) {
+			status = wlan_mgmt_txrx_rx_handler_list_copy(
+				rx_handler, &rx_handler_head, &rx_handler_tail);
+			if (status != QDF_STATUS_SUCCESS) {
+				qdf_spin_unlock_bh(
+				  &mgmt_txrx_psoc_ctx->mgmt_txrx_psoc_ctx_lock);
+				qdf_nbuf_free(buf);
+				goto rx_handler_mem_free;
+			}
 		}
 	}
 
@@ -1440,4 +1455,76 @@ uint32_t tgt_mgmt_txrx_get_free_desc_pool_count(
 
 fail:
 	return free_desc_count;
+}
+
+QDF_STATUS
+tgt_mgmt_txrx_register_ev_handler(struct wlan_objmgr_psoc *psoc)
+{
+	struct wlan_lmac_if_mgmt_txrx_tx_ops *mgmt_txrx_tx_ops;
+
+	mgmt_txrx_tx_ops = wlan_psoc_get_mgmt_txrx_txops(psoc);
+	if (!mgmt_txrx_tx_ops) {
+		mgmt_txrx_err("txops is null for mgmt txrx module");
+		return QDF_STATUS_E_NULL_VALUE;
+	}
+
+	if (mgmt_txrx_tx_ops->reg_ev_handler)
+		return mgmt_txrx_tx_ops->reg_ev_handler(psoc);
+
+	return QDF_STATUS_SUCCESS;
+}
+
+QDF_STATUS
+tgt_mgmt_txrx_unregister_ev_handler(struct wlan_objmgr_psoc *psoc)
+{
+	struct wlan_lmac_if_mgmt_txrx_tx_ops *mgmt_txrx_tx_ops;
+
+	mgmt_txrx_tx_ops = wlan_psoc_get_mgmt_txrx_txops(psoc);
+	if (!mgmt_txrx_tx_ops) {
+		mgmt_txrx_err("txops is null for mgmt txrx module");
+		return QDF_STATUS_E_NULL_VALUE;
+	}
+
+	if (mgmt_txrx_tx_ops->unreg_ev_handler)
+		return mgmt_txrx_tx_ops->unreg_ev_handler(psoc);
+
+	return QDF_STATUS_SUCCESS;
+}
+
+QDF_STATUS tgt_mgmt_txrx_process_rx_frame(
+			struct wlan_objmgr_pdev *pdev,
+			qdf_nbuf_t buf,
+			struct mgmt_rx_event_params *mgmt_rx_params)
+{
+	QDF_STATUS status;
+	struct wlan_lmac_if_mgmt_txrx_tx_ops *mgmt_txrx_tx_ops;
+
+	mgmt_txrx_tx_ops = wlan_pdev_get_mgmt_txrx_txops(pdev);
+	if (!mgmt_txrx_tx_ops) {
+		mgmt_txrx_err("txops is null for mgmt txrx module");
+		qdf_nbuf_free(buf);
+		free_mgmt_rx_event_params(mgmt_rx_params);
+		return QDF_STATUS_E_NULL_VALUE;
+	}
+
+	/* Call the legacy handler to actually process and deliver frames */
+	status = mgmt_txrx_tx_ops->rx_frame_legacy_handler(pdev, buf,
+							   mgmt_rx_params);
+	/**
+	 * Free up the mgmt rx params.
+	 * nbuf shouldn't be freed here as it is taken care by
+	 * rx_frame_legacy_handler.
+	 */
+	free_mgmt_rx_event_params(mgmt_rx_params);
+
+	return status;
+}
+
+QDF_STATUS tgt_mgmt_txrx_rx_frame_entry(
+			struct wlan_objmgr_pdev *pdev,
+			qdf_nbuf_t buf,
+			struct mgmt_rx_event_params *mgmt_rx_params)
+{
+	/* Call the MGMT Rx REO handler */
+	return tgt_mgmt_rx_reo_frame_handler(pdev, buf, mgmt_rx_params);
 }

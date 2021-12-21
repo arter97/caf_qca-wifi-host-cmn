@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2020 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2014-2021 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -63,7 +63,7 @@ static inline void scheduler_watchdog_notify(struct scheduler_ctx *sched)
 	sched_fatal("Callback %s (type 0x%x) exceeded its allotted time of %ds",
 		    sched->watchdog_callback ? symbol : "<null>",
 		    sched->watchdog_msg_type,
-		    SCHEDULER_WATCHDOG_TIMEOUT / 1000);
+		    sched->timeout / 1000);
 }
 
 static void scheduler_watchdog_timeout(void *arg)
@@ -83,7 +83,7 @@ static void scheduler_watchdog_timeout(void *arg)
 	if (qdf_atomic_test_bit(MC_SHUTDOWN_EVENT_MASK, &sched->sch_event_flag))
 		return;
 
-	QDF_DEBUG_PANIC("Going down for Scheduler Watchdog Bite!");
+	SCHED_DEBUG_PANIC("Going down for Scheduler Watchdog Bite!");
 }
 
 QDF_STATUS scheduler_enable(void)
@@ -169,6 +169,7 @@ QDF_STATUS scheduler_init(void)
 	qdf_spinlock_create(&sched_ctx->sch_thread_lock);
 	qdf_init_waitqueue_head(&sched_ctx->sch_wait_queue);
 	sched_ctx->sch_event_flag = 0;
+	sched_ctx->timeout = SCHEDULER_WATCHDOG_TIMEOUT;
 	qdf_timer_init(NULL,
 		       &sched_ctx->watchdog_timer,
 		       &scheduler_watchdog_timeout,
@@ -518,6 +519,17 @@ QDF_STATUS scheduler_scan_mq_handler(struct scheduler_msg *msg)
 	scan_q_msg_handler(msg);
 
 	return QDF_STATUS_SUCCESS;
+}
+
+void scheduler_set_watchdog_timeout(uint32_t timeout)
+{
+	struct scheduler_ctx *sched_ctx = scheduler_get_context();
+
+	QDF_BUG(sched_ctx);
+	if (!sched_ctx)
+		return;
+
+	sched_ctx->timeout = timeout;
 }
 
 QDF_STATUS scheduler_register_wma_legacy_handler(scheduler_msg_process_fn_t

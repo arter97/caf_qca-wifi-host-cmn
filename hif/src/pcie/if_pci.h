@@ -58,6 +58,11 @@ struct hif_tasklet_entry {
 	void *hif_handler; /* struct hif_pci_softc */
 };
 
+struct hang_event_bus_info {
+	uint16_t tlv_header;
+	uint16_t dev_id;
+} qdf_packed;
+
 /**
  * struct hif_msi_info - Structure to hold msi info
  * @magic: cookie
@@ -93,6 +98,13 @@ struct hif_pci_stats {
 	uint32_t mhi_force_wake_release_failure;
 	uint32_t mhi_force_wake_release_success;
 	uint32_t soc_force_wake_release_success;
+};
+
+struct hif_soc_info {
+	u32 family_number;
+	u32 device_number;
+	u32 major_version;
+	u32 minor_version;
 };
 
 struct hif_pci_softc {
@@ -133,6 +145,7 @@ struct hif_pci_softc {
 	/* Stores the affinity hint mask for each CE IRQ */
 	qdf_cpu_mask ce_irq_cpu_mask[CE_COUNT_MAX];
 #endif
+	struct hif_soc_info device_version;
 };
 
 bool hif_pci_targ_is_present(struct hif_softc *scn, void *__iomem *mem);
@@ -191,4 +204,15 @@ void hif_print_pci_stats(struct hif_pci_softc *pci_scn)
 {
 }
 #endif /* FORCE_WAKE */
+#ifdef HIF_BUS_LOG_INFO
+bool hif_log_pcie_info(struct hif_softc *scn, uint8_t *data,
+		       unsigned int *offset);
+#else
+static inline
+bool hif_log_pcie_info(struct hif_softc *scn, uint8_t *data,
+		       unsigned int *offset)
+{
+	return false;
+}
+#endif
 #endif /* __ATH_PCI_H__ */

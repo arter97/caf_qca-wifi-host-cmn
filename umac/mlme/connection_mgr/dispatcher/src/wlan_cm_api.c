@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012-2015, 2020, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012-2015, 2020-2021, The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -22,6 +22,7 @@
 
 #include <wlan_cm_api.h>
 #include "connection_mgr/core/src/wlan_cm_main_api.h"
+#include "connection_mgr/core/src/wlan_cm_roam.h"
 
 QDF_STATUS wlan_cm_start_connect(struct wlan_objmgr_vdev *vdev,
 				 struct wlan_cm_connect_req *req)
@@ -29,10 +30,33 @@ QDF_STATUS wlan_cm_start_connect(struct wlan_objmgr_vdev *vdev,
 	return cm_connect_start_req(vdev, req);
 }
 
-QDF_STATUS wlan_cm_start_disconnect(struct wlan_objmgr_vdev *vdev,
-				    struct wlan_cm_disconnect_req *req)
+QDF_STATUS wlan_cm_disconnect(struct wlan_objmgr_vdev *vdev,
+			      enum wlan_cm_source source,
+			      enum wlan_reason_code reason_code,
+			      struct qdf_mac_addr *bssid)
 {
-	return cm_disconnect_start_req(vdev, req);
+	struct wlan_cm_disconnect_req req = {0};
+
+	req.vdev_id = wlan_vdev_get_id(vdev);
+	req.source = source;
+	req.reason_code = reason_code;
+	if (bssid)
+		qdf_copy_macaddr(&req.bssid, bssid);
+
+	return cm_disconnect_start_req(vdev, &req);
+}
+
+QDF_STATUS wlan_cm_disconnect_sync(struct wlan_objmgr_vdev *vdev,
+				   enum wlan_cm_source source,
+				   enum wlan_reason_code reason_code)
+{
+	struct wlan_cm_disconnect_req req = {0};
+
+	req.vdev_id = wlan_vdev_get_id(vdev);
+	req.source = source;
+	req.reason_code = reason_code;
+
+	return cm_disconnect_start_req_sync(vdev, &req);
 }
 
 QDF_STATUS wlan_cm_bss_select_ind_rsp(struct wlan_objmgr_vdev *vdev,
@@ -45,11 +69,21 @@ QDF_STATUS wlan_cm_bss_peer_create_rsp(struct wlan_objmgr_vdev *vdev,
 				       QDF_STATUS status,
 				       struct qdf_mac_addr *peer_mac)
 {
-	return cm_bss_peer_create_rsp(vdev, status, peer_mac);
+	uint32_t prefix;
+	struct cnx_mgr *cm_ctx = cm_get_cm_ctx(vdev);
+
+	if (!cm_ctx)
+		return QDF_STATUS_E_INVAL;
+
+	prefix = CM_ID_GET_PREFIX(cm_ctx->active_cm_id);
+	if (prefix == ROAM_REQ_PREFIX)
+		return cm_roam_bss_peer_create_rsp(vdev, status, peer_mac);
+	else
+		return cm_bss_peer_create_rsp(vdev, status, peer_mac);
 }
 
 QDF_STATUS wlan_cm_connect_rsp(struct wlan_objmgr_vdev *vdev,
-			       struct wlan_cm_connect_rsp *resp)
+			       struct wlan_cm_connect_resp *resp)
 {
 	return cm_connect_rsp(vdev, resp);
 }
@@ -69,13 +103,37 @@ QDF_STATUS wlan_cm_bss_peer_delete_rsp(struct wlan_objmgr_vdev *vdev,
 QDF_STATUS wlan_cm_disconnect_rsp(struct wlan_objmgr_vdev *vdev,
 				  struct wlan_cm_discon_rsp *resp)
 {
-	return cm_disconnect_rsp(vdev, resp);
+	uint32_t prefix;
+	struct cnx_mgr *cm_ctx = cm_get_cm_ctx(vdev);
+
+	if (!cm_ctx)
+		return QDF_STATUS_E_INVAL;
+
+	prefix = CM_ID_GET_PREFIX(cm_ctx->active_cm_id);
+	if (prefix == ROAM_REQ_PREFIX)
+		return cm_roam_disconnect_rsp(vdev, resp);
+	else
+		return cm_disconnect_rsp(vdev, resp);
 }
+
+#ifdef WLAN_FEATURE_HOST_ROAM
+QDF_STATUS wlan_cm_reassoc_rsp(struct wlan_objmgr_vdev *vdev,
+			       struct wlan_cm_connect_resp *resp)
+{
+	return cm_reassoc_rsp(vdev, resp);
+}
+#endif
 
 void wlan_cm_set_max_connect_attempts(struct wlan_objmgr_vdev *vdev,
 				      uint8_t max_connect_attempts)
 {
 	cm_set_max_connect_attempts(vdev, max_connect_attempts);
+}
+
+void wlan_cm_set_max_connect_timeout(struct wlan_objmgr_vdev *vdev,
+				     uint32_t max_connect_timeout)
+{
+	cm_set_max_connect_timeout(vdev, max_connect_timeout);
 }
 
 bool wlan_cm_is_vdev_connecting(struct wlan_objmgr_vdev *vdev)
@@ -86,6 +144,11 @@ bool wlan_cm_is_vdev_connecting(struct wlan_objmgr_vdev *vdev)
 bool wlan_cm_is_vdev_connected(struct wlan_objmgr_vdev *vdev)
 {
 	return cm_is_vdev_connected(vdev);
+}
+
+bool wlan_cm_is_vdev_active(struct wlan_objmgr_vdev *vdev)
+{
+	return cm_is_vdev_active(vdev);
 }
 
 bool wlan_cm_is_vdev_disconnecting(struct wlan_objmgr_vdev *vdev)
@@ -101,6 +164,61 @@ bool wlan_cm_is_vdev_disconnected(struct wlan_objmgr_vdev *vdev)
 bool wlan_cm_is_vdev_roaming(struct wlan_objmgr_vdev *vdev)
 {
 	return cm_is_vdev_roaming(vdev);
+}
+
+#ifdef WLAN_FEATURE_ROAM_OFFLOAD
+bool wlan_cm_is_vdev_roam_started(struct wlan_objmgr_vdev *vdev)
+{
+	return cm_is_vdev_roam_started(vdev);
+}
+
+bool wlan_cm_is_vdev_roam_sync_inprogress(struct wlan_objmgr_vdev *vdev)
+{
+	return cm_is_vdev_roam_sync_inprogress(vdev);
+}
+#endif
+
+#ifdef WLAN_FEATURE_HOST_ROAM
+bool wlan_cm_is_vdev_roam_preauth_state(struct wlan_objmgr_vdev *vdev)
+{
+	return cm_is_vdev_roam_preauth_state(vdev);
+}
+
+bool wlan_cm_is_vdev_roam_reassoc_state(struct wlan_objmgr_vdev *vdev)
+{
+	return cm_is_vdev_roam_reassoc_state(vdev);
+}
+#endif
+
+enum wlan_cm_active_request_type
+wlan_cm_get_active_req_type(struct wlan_objmgr_vdev *vdev)
+{
+	return cm_get_active_req_type(vdev);
+}
+
+bool wlan_cm_get_active_connect_req(struct wlan_objmgr_vdev *vdev,
+				    struct wlan_cm_vdev_connect_req *req)
+{
+	return cm_get_active_connect_req(vdev, req);
+}
+
+cm_ext_t *wlan_cm_get_ext_hdl(struct wlan_objmgr_vdev *vdev)
+{
+	return cm_get_ext_hdl(vdev);
+}
+
+#ifdef WLAN_FEATURE_HOST_ROAM
+bool wlan_cm_get_active_reassoc_req(struct wlan_objmgr_vdev *vdev,
+				    struct wlan_cm_vdev_reassoc_req *req)
+{
+	return cm_get_active_reassoc_req(vdev, req);
+}
+#endif
+
+bool wlan_cm_get_active_disconnect_req(struct wlan_objmgr_vdev *vdev,
+				       struct wlan_cm_vdev_discon_req *req)
+{
+	return cm_get_active_disconnect_req(vdev, req);
 }
 
 const char *wlan_cm_reason_code_to_str(enum wlan_reason_code reason)
@@ -180,6 +298,75 @@ const char *wlan_cm_reason_code_to_str(enum wlan_reason_code reason)
 void wlan_cm_hw_mode_change_resp(struct wlan_objmgr_pdev *pdev, uint8_t vdev_id,
 				 wlan_cm_id cm_id, QDF_STATUS status)
 {
-	cm_hw_mode_change_resp(pdev, vdev_id, cm_id, status);
+	uint32_t prefix;
+
+	prefix = CM_ID_GET_PREFIX(cm_id);
+	if (prefix == ROAM_REQ_PREFIX)
+		cm_reassoc_hw_mode_change_resp(pdev, vdev_id, cm_id, status);
+	else
+		cm_hw_mode_change_resp(pdev, vdev_id, cm_id, status);
 }
 #endif /* ifdef POLICY_MGR_ENABLE */
+
+#ifdef SM_ENG_HIST_ENABLE
+void wlan_cm_sm_history_print(struct wlan_objmgr_vdev *vdev)
+{
+	return cm_sm_history_print(vdev);
+}
+
+void wlan_cm_req_history_print(struct wlan_objmgr_vdev *vdev)
+{
+	struct cnx_mgr *cm_ctx = cm_get_cm_ctx(vdev);
+
+	if (!cm_ctx)
+		return;
+
+	cm_req_history_print(cm_ctx);
+}
+#endif /* SM_ENG_HIST_ENABLE */
+
+#ifndef CONN_MGR_ADV_FEATURE
+void wlan_cm_set_candidate_advance_filter_cb(
+		struct wlan_objmgr_vdev *vdev,
+		void (*filter_fun)(struct wlan_objmgr_vdev *vdev,
+				   struct scan_filter *filter))
+{
+	cm_set_candidate_advance_filter_cb(vdev, filter_fun);
+}
+
+void wlan_cm_set_candidate_custom_sort_cb(
+		struct wlan_objmgr_vdev *vdev,
+		void (*sort_fun)(struct wlan_objmgr_vdev *vdev,
+				 qdf_list_t *list))
+{
+	cm_set_candidate_custom_sort_cb(vdev, sort_fun);
+}
+
+#endif
+
+struct reduced_neighbor_report *wlan_cm_get_rnr(struct wlan_objmgr_vdev *vdev,
+						wlan_cm_id cm_id)
+{
+	enum QDF_OPMODE op_mode = wlan_vdev_mlme_get_opmode(vdev);
+	struct cm_req *cm_req;
+	struct cnx_mgr *cm_ctx;
+
+	if (op_mode != QDF_STA_MODE && op_mode != QDF_P2P_CLIENT_MODE) {
+		mlme_err("vdev %d Invalid mode %d",
+			 wlan_vdev_get_id(vdev), op_mode);
+		return NULL;
+	}
+
+	cm_ctx = cm_get_cm_ctx(vdev);
+	if (!cm_ctx)
+		return NULL;
+	cm_req = cm_get_req_by_cm_id(cm_ctx, cm_id);
+	if (!cm_req)
+		return NULL;
+
+	if (cm_req->connect_req.cur_candidate &&
+	    cm_req->connect_req.cur_candidate->entry)
+		return &cm_req->connect_req.cur_candidate->entry->rnr;
+
+	return NULL;
+}

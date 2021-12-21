@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2019-2021 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -62,6 +62,7 @@ int ucfg_cfr_start_capture(struct wlan_objmgr_pdev *pdev,
 	int status;
 	struct pdev_cfr *pa;
 	struct peer_cfr *pe;
+	struct wlan_objmgr_psoc *psoc;
 
 	pa = wlan_objmgr_pdev_get_comp_private_obj(pdev, WLAN_UMAC_COMP_CFR);
 	if (NULL == pa) {
@@ -81,11 +82,14 @@ int ucfg_cfr_start_capture(struct wlan_objmgr_pdev *pdev,
 		return -EINVAL;
 	}
 
-	if ((params->period < 0) || (params->period > MAX_CFR_PRD) ||
-		(params->period % 10)) {
-		cfr_err("Invalid period value: %d", params->period);
+	psoc = wlan_pdev_get_psoc(pdev);
+	if (!psoc) {
+		cfr_err("psoc is null!");
 		return -EINVAL;
 	}
+
+	if (!(tgt_cfr_validate_period(psoc, params->period)))
+		return -EINVAL;
 
 	if (!(params->period) && (pa->cfr_timer_enable)) {
 		cfr_err("Single shot capture is not allowed during periodic capture");
@@ -419,12 +423,12 @@ void ucfg_cfr_capture_data(struct wlan_objmgr_psoc *psoc, uint32_t vdev_id,
 		goto exit;
 	}
 
-	hdr->vendorid               = CFR_VENDOR_ID;
-	hdr->cfr_metadata_version   = CFR_META_VERSION_1;
-	hdr->cfr_data_version       = CFR_DATA_VERSION_1;
-	hdr->chip_type              = CFR_CAPTURE_RADIO_ADRASTEA;
-	hdr->pltform_type           = CFR_PLATFORM_TYPE_ARM;
-	hdr->Reserved               = 0;
+	hdr->cmn.vendorid               = CFR_VENDOR_ID;
+	hdr->cmn.cfr_metadata_version   = CFR_META_VERSION_1;
+	hdr->cmn.cfr_data_version       = CFR_DATA_VERSION_1;
+	hdr->cmn.chip_type              = CFR_CAPTURE_RADIO_ADRASTEA;
+	hdr->cmn.pltform_type           = CFR_PLATFORM_TYPE_ARM;
+	hdr->cmn.cfr_metadata_len       = CFR_META_DATA_LEN;
 
 	vaddr = pcfr->cfr_mem_chunk.vaddr;
 	rindex = (u32 *)vaddr;
@@ -435,7 +439,7 @@ void ucfg_cfr_capture_data(struct wlan_objmgr_psoc *psoc, uint32_t vdev_id,
 	 * find data pointer from mem index and start address of memory.
 	 */
 	payload = vaddr + mem_index;
-	payload_len = hdr->u.meta_v1.length;
+	payload_len = hdr->u.meta_legacy.length;
 
 	/* Write data into streamfs */
 	tgt_cfr_info_send(pdev, hdr, sizeof(struct csi_cfr_header),
@@ -463,7 +467,7 @@ exit:
 
 #ifdef WLAN_ENH_CFR_ENABLE
 
-static inline
+static
 QDF_STATUS dev_sanity_check(struct wlan_objmgr_vdev *vdev,
 			    struct wlan_objmgr_pdev **ppdev,
 			    struct pdev_cfr **ppcfr)
@@ -1322,6 +1326,37 @@ QDF_STATUS ucfg_cfr_committed_rcc_config(struct wlan_objmgr_vdev *vdev)
 	return status;
 }
 
+#ifdef WLAN_CFR_PM
+QDF_STATUS ucfg_cfr_suspend(struct wlan_objmgr_pdev *pdev)
+{
+	struct pdev_cfr *pcfr;
+
+	pcfr = wlan_objmgr_pdev_get_comp_private_obj(
+				pdev, WLAN_UMAC_COMP_CFR);
+
+	if (!pcfr) {
+		cfr_err("null pcfr");
+		return QDF_STATUS_E_INVAL;
+	}
+
+	return cfr_allow_suspend(pcfr);
+}
+
+QDF_STATUS ucfg_cfr_resume(struct wlan_objmgr_pdev *pdev)
+{
+	struct pdev_cfr *pcfr;
+
+	pcfr = wlan_objmgr_pdev_get_comp_private_obj(
+				pdev, WLAN_UMAC_COMP_CFR);
+
+	if (!pcfr) {
+		cfr_err("null pcfr");
+		return QDF_STATUS_E_INVAL;
+	}
+
+	return cfr_prevent_suspend(pcfr);
+}
+#endif
 /*
  * This handler is used to enable / disable the capture mode.
  *
@@ -1400,5 +1435,4 @@ QDF_STATUS ucfg_cfr_subscribe_ppdu_desc(struct wlan_objmgr_pdev *pdev,
 	return tgt_cfr_subscribe_ppdu_desc(pdev, is_subscribe);
 }
 #endif
-
 #endif

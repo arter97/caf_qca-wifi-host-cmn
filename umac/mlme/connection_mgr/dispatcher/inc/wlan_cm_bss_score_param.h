@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017-2020, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -40,6 +40,16 @@
  * @oce_ap_tx_pwr_weightage: OCE AP tx power weigtage
  * @oce_subnet_id_weightage: OCE subnet id weigtage
  * @sae_pk_ap_weightage: SAE-PK AP weigtage
+ * @eht_caps_weightage: EHT caps weightage
+ * @mlo_weightage: MLO weightage
+ * @joint_rssi_alpha: Joint RSSI alpha value
+ * @joint_esp_alpha: Joint ESP alpha value
+ * @joint_oce_alpha: Joint OCE alpha value
+ * @low_band_rssi_boost: Flag to assign higher alpha weightage low band RSSI
+ * @low_band_esp_boost: Flag to assign higher alpha weightage low band esp
+ * @low_band_oce_boost: Flag to assign higher alpha weightage low band oce
+ * @wlm_indication_weightage: WLM indication weightage
+ * @emlsr_weightage: eMLSR weightage
  */
 struct weight_cfg {
 	uint8_t rssi_weightage;
@@ -56,6 +66,19 @@ struct weight_cfg {
 	uint8_t oce_ap_tx_pwr_weightage;
 	uint8_t oce_subnet_id_weightage;
 	uint8_t sae_pk_ap_weightage;
+#ifdef WLAN_FEATURE_11BE_MLO
+	uint8_t eht_caps_weightage;
+	uint8_t mlo_weightage;
+	uint8_t joint_rssi_alpha;
+	uint8_t joint_esp_alpha;
+	uint8_t joint_oce_alpha;
+	uint8_t low_band_rssi_boost:1,
+		low_band_esp_boost:1,
+		low_band_oce_boost:1,
+		reserved:5;
+	uint8_t wlm_indication_weightage;
+	uint8_t emlsr_weightage;
+#endif
 };
 
 /**
@@ -116,6 +139,49 @@ struct per_slot_score {
 	uint32_t score_pcnt15_to_12;
 };
 
+#ifndef WLAN_FEATURE_11BE_MLO
+#define CM_20MHZ_BW_INDEX                  0
+#define CM_40MHZ_BW_INDEX                  1
+#define CM_80MHZ_BW_INDEX                  2
+#define CM_160MHZ_BW_INDEX                 3
+#define CM_MAX_BW_INDEX                    4
+
+#define CM_NSS_1x1_INDEX                   0
+#define CM_NSS_2x2_INDEX                   1
+#define CM_NSS_3x3_INDEX                   2
+#define CM_NSS_4x4_INDEX                   3
+#define CM_MAX_NSS_INDEX                   4
+#else
+enum cm_bw_idx {
+	CM_20MHZ_BW_INDEX,
+	CM_40MHZ_BW_INDEX,
+	CM_80MHZ_BW_INDEX,
+	CM_160MHZ_BW_INDEX,
+	CM_MLO_20_PLUS_20MHZ_BW_INDEX,
+	CM_MLO_20_PLUS_40MHZ_BW_INDEX,
+	CM_MLO_40_PLUS_40MHZ_BW_INDEX,
+	CM_MLO_20_PLUS_80MHZ_BW_INDEX,
+	CM_MLO_40_PLUS_80MHZ_BW_INDEX,
+	CM_MLO_80_PLUS_80MHZ_BW_INDEX,
+	CM_MLO_20_PLUS_160HZ_BW_INDEX,
+	CM_MLO_40_PLUS_160HZ_BW_INDEX,
+	CM_MLO_80_PLUS_160HZ_BW_INDEX,
+	CM_MLO_160_PLUS_160HZ_BW_INDEX,
+	CM_320MHZ_BW_INDEX,
+	CM_MAX_BW_INDEX
+};
+
+enum cm_nss_idx {
+	CM_NSS_1x1_INDEX,
+	CM_NSS_2x2_INDEX,
+	CM_NSS_3x3_INDEX,
+	CM_NSS_4x4_INDEX,
+	CM_NSS_2x2_PLUS_2x2_INDEX,
+	CM_NSS_4x4_PLUS_4x4_INDEX,
+	CM_MAX_NSS_INDEX
+};
+#endif
+
 /**
  * struct scoring_cfg - Scoring related configuration
  * @weight_cfg: weigtage config for config
@@ -127,17 +193,27 @@ struct per_slot_score {
  * @band_weight_per_index: band weight per index
  * @is_bssid_hint_priority: True if bssid_hint is given priority
  * @check_assoc_disallowed: Should assoc be disallowed if MBO OCE IE indicate so
+ * @vendor_roam_score_algorithm: Preferred ETP vendor roam score algorithm
+ * @check_6ghz_security: check security for 6Ghz candidate
+ * @key_mgmt_mask_6ghz: user configurable mask for 6ghz AKM
+ * @mlsr_link_selection: MLSR link selection config
  */
 struct scoring_cfg {
 	struct weight_cfg weight_config;
 	struct rssi_config_score rssi_score;
 	struct per_slot_score esp_qbss_scoring;
 	struct per_slot_score oce_wan_scoring;
-	uint32_t bandwidth_weight_per_index;
-	uint32_t nss_weight_per_index;
+	uint32_t bandwidth_weight_per_index[qdf_ceil(CM_MAX_BW_INDEX, 4)];
+	uint32_t nss_weight_per_index[qdf_ceil(CM_MAX_NSS_INDEX, 4)];
 	uint32_t band_weight_per_index;
-	bool is_bssid_hint_priority;
-	bool check_assoc_disallowed;
+	uint8_t is_bssid_hint_priority:1,
+		 check_assoc_disallowed:1,
+		 vendor_roam_score_algorithm:1,
+		 check_6ghz_security:1;
+	uint32_t key_mgmt_mask_6ghz;
+#ifdef WLAN_FEATURE_11BE_MLO
+	uint8_t mlsr_link_selection;
+#endif
 };
 
 /**
@@ -156,12 +232,33 @@ struct pcl_freq_weight_list {
  * enum cm_blacklist_action - action taken by blacklist manager for the bssid
  * @CM_BLM_NO_ACTION: No operation to be taken for the BSSID in the scan list.
  * @CM_BLM_REMOVE: Remove the BSSID from the scan list (AP is blacklisted)
+ * This param is a way to inform the caller that this BSSID is blacklisted
+ * but it is a driver blacklist and we can connect to them if required.
+ * @CM_BLM_FORCE_REMOVE: Forcefully remove the BSSID from scan list.
+ * This param is introduced as we want to differentiate between optional
+ * mandatory blacklisting. Driver blacklisting is optional and won't
+ * fail any CERT or protocol violations as it is internal implementation.
+ * hence FORCE_REMOVE will mean that driver cannot connect to this BSSID
+ * in any situation.
  * @CM_BLM_AVOID: Add the Ap at last of the scan list (AP to Avoid)
  */
 enum cm_blacklist_action {
 	CM_BLM_NO_ACTION,
 	CM_BLM_REMOVE,
+	CM_BLM_FORCE_REMOVE,
 	CM_BLM_AVOID,
+};
+
+/**
+ * struct etp_params - params for estimated throughput
+ * @airtime_fraction: Portion of airtime available for outbound transmissions
+ * @data_ppdu_dur_target_us: Expected duration of a single PPDU, in us
+ * @ba_window_size: Block ack window size of the transmitter
+ */
+struct etp_params {
+	uint32_t airtime_fraction;
+	uint32_t data_ppdu_dur_target_us;
+	uint32_t ba_window_size;
 };
 
 #ifdef FEATURE_BLACKLIST_MGR
@@ -201,6 +298,102 @@ void wlan_cm_calculate_bss_score(struct wlan_objmgr_pdev *pdev,
  */
 void wlan_cm_init_score_config(struct wlan_objmgr_psoc *psoc,
 			       struct scoring_cfg *score_cfg);
+
+/**
+ * wlan_cm_6ghz_allowed_for_akm() - check if 6Ghz channel can be allowed for AKM
+ * @psoc: pointer to psoc object
+ * @key_mgmt: key mgmt used
+ * @rsn_caps: rsn caps
+ * @rsnxe: rsnxe pointer if present
+ * @sae_pwe: support for SAE password
+ * @is_wps: if security is WPS
+ *
+ * Return: bool
+ */
+#ifdef CONFIG_BAND_6GHZ
+bool wlan_cm_6ghz_allowed_for_akm(struct wlan_objmgr_psoc *psoc,
+				  uint32_t key_mgmt, uint16_t rsn_caps,
+				  const uint8_t *rsnxe, uint8_t sae_pwe,
+				  bool is_wps);
+
+/**
+ * wlan_cm_set_check_6ghz_security() - Set check 6Ghz security
+ * @psoc: pointer to psoc object
+ * @value: value to be set
+ *
+ * Return: void
+ */
+void wlan_cm_set_check_6ghz_security(struct wlan_objmgr_psoc *psoc,
+				     bool value);
+
+/**
+ * wlan_cm_reset_check_6ghz_security() - reset check 6Ghz security to orignal
+ * value
+ * @psoc: pointer to psoc object
+ *
+ * Return: void
+ */
+void wlan_cm_reset_check_6ghz_security(struct wlan_objmgr_psoc *psoc);
+
+/**
+ * wlan_cm_get_check_6ghz_security() - Get 6Ghz allowe AKM mask
+ * @psoc: pointer to psoc object
+ * @value: value to be set
+ *
+ * Return: value
+ */
+bool wlan_cm_get_check_6ghz_security(struct wlan_objmgr_psoc *psoc);
+
+/**
+ * wlan_cm_set_6ghz_key_mgmt_mask() - Set 6Ghz allowe AKM mask
+ * @psoc: pointer to psoc object
+ *
+ * Return: void
+ */
+void wlan_cm_set_6ghz_key_mgmt_mask(struct wlan_objmgr_psoc *psoc,
+				    uint32_t value);
+
+/**
+ * wlan_cm_get_6ghz_key_mgmt_mask() - Get 6Ghz allowe AKM mask
+ * @psoc: pointer to psoc object
+ *
+ * Return: value
+ */
+uint32_t wlan_cm_get_6ghz_key_mgmt_mask(struct wlan_objmgr_psoc *psoc);
+
+#else
+static inline bool
+wlan_cm_6ghz_allowed_for_akm(struct wlan_objmgr_psoc *psoc,
+			     uint32_t key_mgmt, uint16_t rsn_caps,
+			     const uint8_t *rsnxe, uint8_t sae_pwe,
+			     bool is_wps)
+{
+	return true;
+}
+
+static inline
+void wlan_cm_set_check_6ghz_security(struct wlan_objmgr_psoc *psoc,
+				     bool value) {}
+
+static inline
+void wlan_cm_reset_check_6ghz_security(struct wlan_objmgr_psoc *psoc) {}
+
+static inline
+bool wlan_cm_get_check_6ghz_security(struct wlan_objmgr_psoc *psoc)
+{
+	return false;
+}
+
+static inline
+void wlan_cm_set_6ghz_key_mgmt_mask(struct wlan_objmgr_psoc *psoc,
+				    uint32_t value) {}
+
+static inline
+uint32_t wlan_cm_get_6ghz_key_mgmt_mask(struct wlan_objmgr_psoc *psoc)
+{
+	return DEFAULT_KEYMGMT_6G_MASK;
+}
+#endif
 
 #ifdef CONN_MGR_ADV_FEATURE
 /**

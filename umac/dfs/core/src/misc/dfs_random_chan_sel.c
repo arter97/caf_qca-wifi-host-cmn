@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012-2020 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012-2021 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -716,67 +716,6 @@ struct dfs_matrix_tx_leak_info ht20_chan[] = {
 };
 
 /*
- * dfs_find_target_channel_in_channel_matrix() - finds the leakage matrix
- * @ch_width: target channel width
- * @NOL_channel: the NOL channel whose leakage matrix is required
- * @pTarget_chnl_mtrx: pointer to target channel matrix returned.
- *
- * This function gives the leakage matrix for given NOL channel and ch_width
- *
- * Return: TRUE or FALSE
- */
-#ifdef CONFIG_CHAN_NUM_API
-static bool
-dfs_find_target_channel_in_channel_matrix(enum phy_ch_width ch_width,
-				uint8_t NOL_channel,
-				struct dfs_tx_leak_info **pTarget_chnl_mtrx)
-{
-	struct dfs_tx_leak_info *target_chan_matrix = NULL;
-	struct dfs_matrix_tx_leak_info *pchan_matrix = NULL;
-	uint32_t nchan_matrix;
-	int i = 0;
-
-	switch (ch_width) {
-	case CH_WIDTH_20MHZ:
-		/* HT20 */
-		pchan_matrix = ht20_chan;
-		nchan_matrix = QDF_ARRAY_SIZE(ht20_chan);
-		break;
-	case CH_WIDTH_40MHZ:
-		/* HT40 */
-		pchan_matrix = ht40_chan;
-		nchan_matrix = QDF_ARRAY_SIZE(ht40_chan);
-		break;
-	case CH_WIDTH_80MHZ:
-		/* HT80 */
-		pchan_matrix = ht80_chan;
-		nchan_matrix = QDF_ARRAY_SIZE(ht80_chan);
-		break;
-	default:
-		/* handle exception and fall back to HT20 table */
-		pchan_matrix = ht20_chan;
-		nchan_matrix = QDF_ARRAY_SIZE(ht20_chan);
-		break;
-	}
-
-	for (i = 0; i < nchan_matrix; i++) {
-		/* find the SAP channel to map the leakage matrix */
-		if (NOL_channel == pchan_matrix[i].channel) {
-			target_chan_matrix = pchan_matrix[i].chan_matrix;
-			break;
-		}
-	}
-
-	if (!target_chan_matrix) {
-		return false;
-	} else {
-		*pTarget_chnl_mtrx = target_chan_matrix;
-		return true;
-	}
-}
-#endif
-
-/*
  * dfs_find_target_channel_in_channel_matrix_for_freq() - finds the leakage
  * matrix.
  * @chan_width: target channel width
@@ -836,76 +775,6 @@ dfs_find_target_channel_in_channel_matrix_for_freq(enum phy_ch_width chan_width,
 		*pTarget_chnl_mtrx = target_chan_matrix;
 		return true;
 	}
-}
-#endif
-
-#ifdef CONFIG_CHAN_NUM_API
-QDF_STATUS
-dfs_mark_leaking_ch(struct wlan_dfs *dfs,
-		enum phy_ch_width ch_width,
-		uint8_t temp_ch_lst_sz,
-		uint8_t *temp_ch_lst)
-{
-	struct dfs_tx_leak_info *target_chan_matrix = NULL;
-	uint32_t         num_channel = (CHAN_ENUM_5720 - CHAN_ENUM_5180) + 1;
-	uint32_t         j = 0;
-	uint32_t         k = 0;
-	uint8_t          dfs_nol_channel;
-	struct dfs_nolelem *nol;
-
-	nol = dfs->dfs_nol;
-	while (nol) {
-		dfs_nol_channel = wlan_reg_freq_to_chan(dfs->dfs_pdev_obj,
-							nol->nol_freq);
-		if (false == dfs_find_target_channel_in_channel_matrix(
-					ch_width, dfs_nol_channel,
-					&target_chan_matrix)) {
-			/*
-			 * should never happen, we should always find a table
-			 * here, if we don't, need a fix here!
-			 */
-			dfs_err(dfs, WLAN_DEBUG_DFS_RANDOM_CHAN,
-				"Couldn't find target channel matrix!");
-			QDF_ASSERT(0);
-			return QDF_STATUS_E_FAILURE;
-		}
-		/*
-		 * following is based on assumption that both temp_ch_lst
-		 * and target channel matrix are in increasing order of
-		 * ch_id
-		 */
-		for (j = 0, k = 0; j < temp_ch_lst_sz && k < num_channel;) {
-			if (temp_ch_lst[j] == 0) {
-				j++;
-				continue;
-			}
-			if (target_chan_matrix[k].leak_chan != temp_ch_lst[j]) {
-				k++;
-				continue;
-			}
-			/*
-			 * check leakage from candidate channel
-			 * to NOL channel
-			 */
-			if (target_chan_matrix[k].leak_lvl <=
-				dfs->tx_leakage_threshold) {
-				/*
-				 * candidate channel will have
-				 * bad leakage in NOL channel,
-				 * remove from temp list
-				 */
-				dfs_debug(dfs, WLAN_DEBUG_DFS_RANDOM_CHAN,
-					"dfs: channel: %d will have bad leakage due to channel: %d\n",
-					dfs_nol_channel, temp_ch_lst[j]);
-				temp_ch_lst[j] = 0;
-			}
-			j++;
-			k++;
-		}
-		nol = nol->nol_next;
-	} /* end of loop that selects each NOL */
-
-	return QDF_STATUS_SUCCESS;
 }
 #endif
 
@@ -985,16 +854,6 @@ dfs_mark_leaking_chan_for_freq(struct wlan_dfs *dfs,
 }
 #endif
 #else
-#ifdef CONFIG_CHAN_NUM_API
-QDF_STATUS
-dfs_mark_leaking_ch(struct wlan_dfs *dfs,
-		enum phy_ch_width ch_width,
-		uint8_t temp_ch_lst_sz,
-		uint8_t *temp_ch_lst)
-{
-	return QDF_STATUS_SUCCESS;
-}
-#endif
 #ifdef CONFIG_CHAN_FREQ_API
 QDF_STATUS
 dfs_mark_leaking_chan_for_freq(struct wlan_dfs *dfs,
@@ -1005,49 +864,6 @@ dfs_mark_leaking_chan_for_freq(struct wlan_dfs *dfs,
 	return QDF_STATUS_SUCCESS;
 }
 #endif
-#endif
-
-/**
- * dfs_populate_80mhz_available_channels()- Populate channels for 80MHz using
- *                                          bitmap
- * @dfs: Pointer to DFS structure.
- * @bitmap: bitmap
- * @avail_freq_list: prepared channel list
- *
- * Prepare 80MHz channels from the bitmap.
- *
- * Return: channel count
- */
-#ifdef CONFIG_CHAN_NUM_API
-static uint8_t dfs_populate_80mhz_available_channels(
-		struct wlan_dfs *dfs,
-		struct chan_bonding_bitmap *bitmap,
-		uint8_t *avail_chnl)
-{
-	uint8_t i = 0;
-	uint8_t chnl_count = 0;
-	uint8_t start_chan = 0;
-
-	for (i = 0; i < DFS_MAX_80MHZ_BANDS; i++) {
-		start_chan = bitmap->chan_bonding_set[i].start_chan;
-		if (bitmap->chan_bonding_set[i].chan_map ==
-			DFS_80MHZ_MASK) {
-			avail_chnl[chnl_count++] = start_chan +
-				(DFS_NEXT_5GHZ_CHANNEL * 0);
-			avail_chnl[chnl_count++] = start_chan +
-				(DFS_NEXT_5GHZ_CHANNEL * 1);
-			avail_chnl[chnl_count++] = start_chan +
-				(DFS_NEXT_5GHZ_CHANNEL * 2);
-			avail_chnl[chnl_count++] = start_chan +
-				(DFS_NEXT_5GHZ_CHANNEL * 3);
-		}
-	}
-
-	dfs_info(dfs, WLAN_DEBUG_DFS_RANDOM_CHAN,
-			"channel count %d", chnl_count);
-
-	return chnl_count;
-}
 #endif
 
 /*
@@ -1089,52 +905,6 @@ static uint8_t dfs_populate_80mhz_available_channel_for_freq(
 }
 #endif
 
-/**
- * dfs_populate_40mhz_available_channels()- Populate channels for 40MHz using
- *                                          bitmap
- * @dfs: Pointer to DFS structure.
- * @bitmap: bitmap
- * @avail_chnl: prepared channel list
- *
- * Prepare 40MHz channels from the bitmap.
- *
- * Return: channel count
- */
-#ifdef CONFIG_CHAN_NUM_API
-static uint8_t dfs_populate_40mhz_available_channels(
-		struct wlan_dfs *dfs,
-		struct chan_bonding_bitmap *bitmap,
-		uint8_t *avail_chnl)
-{
-	uint8_t i = 0;
-	uint8_t chnl_count = 0;
-	uint8_t start_chan = 0;
-
-	for (i = 0; i < DFS_MAX_80MHZ_BANDS; i++) {
-		start_chan = bitmap->chan_bonding_set[i].start_chan;
-		if ((bitmap->chan_bonding_set[i].chan_map &
-			DFS_40MHZ_MASK_L) == DFS_40MHZ_MASK_L) {
-			avail_chnl[chnl_count++] = start_chan +
-				(DFS_NEXT_5GHZ_CHANNEL * 0);
-			avail_chnl[chnl_count++] = start_chan +
-				(DFS_NEXT_5GHZ_CHANNEL * 1);
-		}
-		if ((bitmap->chan_bonding_set[i].chan_map &
-			DFS_40MHZ_MASK_H) == DFS_40MHZ_MASK_H) {
-			avail_chnl[chnl_count++] = start_chan +
-				(DFS_NEXT_5GHZ_CHANNEL * 2);
-			avail_chnl[chnl_count++] = start_chan +
-				(DFS_NEXT_5GHZ_CHANNEL * 3);
-		}
-	}
-
-	dfs_info(dfs, WLAN_DEBUG_DFS_RANDOM_CHAN,
-			"channel count %d", chnl_count);
-
-	return chnl_count;
-}
-#endif
-
 #ifdef CONFIG_CHAN_FREQ_API
 static uint8_t
 dfs_populate_40mhz_available_channel_for_freq(struct wlan_dfs *dfs,
@@ -1167,44 +937,6 @@ dfs_populate_40mhz_available_channel_for_freq(struct wlan_dfs *dfs,
 		 "channel count %d", chnl_count);
 
 	return chnl_count;
-}
-#endif
-
-/**
- * dfs_populate_available_channels()- Populate channels based on width and
- *                                    bitmap
- * @dfs: Pointer to DFS structure.
- * @bitmap: bitmap
- * @ch_width: channel width
- * @avail_chnl: prepared channel list
- *
- * Prepare channel list based on width and channel bitmap.
- *
- * Return: channel count
- */
-#ifdef CONFIG_CHAN_NUM_API
-static uint8_t dfs_populate_available_channels(
-		struct wlan_dfs *dfs,
-		struct chan_bonding_bitmap *bitmap,
-		uint8_t ch_width,
-		uint8_t *avail_chnl)
-{
-	switch (ch_width) {
-	case DFS_CH_WIDTH_160MHZ:
-	case DFS_CH_WIDTH_80P80MHZ:
-	case DFS_CH_WIDTH_80MHZ:
-		return dfs_populate_80mhz_available_channels(
-			dfs, bitmap, avail_chnl);
-	case DFS_CH_WIDTH_40MHZ:
-		return dfs_populate_40mhz_available_channels(
-			dfs, bitmap, avail_chnl);
-	default:
-		dfs_err(dfs, WLAN_DEBUG_DFS_RANDOM_CHAN,
-				"Invalid ch_width %d", ch_width);
-		break;
-	}
-
-	return 0;
 }
 #endif
 
@@ -1249,42 +981,6 @@ dfs_populate_available_channel_for_freq(struct wlan_dfs *dfs,
 #endif
 
 /**
- * dfs_get_rand_from_lst()- Get random channel from a given channel list
- * @dfs: Pointer to DFS structure.
- * @ch_lst: channel list
- * @num_ch: number of channels
- *
- * Get random channel from given channel list.
- *
- * Return: channel number
- */
-#ifdef CONFIG_CHAN_NUM_API
-static uint8_t dfs_get_rand_from_lst(
-		struct wlan_dfs *dfs,
-		uint8_t *ch_lst,
-		uint8_t num_ch)
-{
-	uint8_t i;
-	uint32_t rand_byte = 0;
-
-	if (!num_ch || !ch_lst) {
-		dfs_err(NULL, WLAN_DEBUG_DFS_ALWAYS,
-				"invalid param ch_lst %pK, num_ch = %d",
-				ch_lst, num_ch);
-		return 0;
-	}
-
-	get_random_bytes((uint8_t *)&rand_byte, 1);
-	i = (rand_byte + qdf_mc_timer_get_system_ticks()) % num_ch;
-
-	dfs_info(dfs, WLAN_DEBUG_DFS_RANDOM_CHAN,
-			"random channel %d", ch_lst[i]);
-
-	return ch_lst[i];
-}
-#endif
-
-/**
  * dfs_get_rand_from_lst_for_freq()- Get random channel from a given channel
  * list.
  * @dfs: Pointer to DFS structure.
@@ -1315,49 +1011,14 @@ static uint16_t dfs_get_rand_from_lst_for_freq(struct wlan_dfs *dfs,
 	i = (rand_byte + qdf_mc_timer_get_system_ticks()) % num_chan;
 
 	dfs_info(dfs, WLAN_DEBUG_DFS_RANDOM_CHAN,
-		 "random channel %d", freq_lst[i]);
+		 "random chan freq %d", freq_lst[i]);
 
 	return freq_lst[i];
 }
 #endif
 
 /**
- * dfs_random_channel_sel_set_bitmap()- Set channel bit in bitmap based
- * on given channel number
- * @dfs: Pointer to DFS structure.
- * @bitmap: bitmap
- * @channel: channel number
- *
- * Set channel bit in bitmap based on given channel number.
- *
- * Return: None
- */
-#ifdef CONFIG_CHAN_NUM_API
-static void dfs_random_channel_sel_set_bitmap(
-		struct wlan_dfs *dfs,
-		struct chan_bonding_bitmap *bitmap,
-		uint8_t channel)
-{
-	int i = 0;
-	int start_chan = 0;
-
-	for (i = 0; i < DFS_MAX_80MHZ_BANDS; i++) {
-		start_chan = bitmap->chan_bonding_set[i].start_chan;
-		if (channel >= start_chan && channel <= start_chan + 12) {
-			bitmap->chan_bonding_set[i].chan_map |=
-			(1 << ((channel - start_chan) /
-			DFS_80_NUM_SUB_CHANNEL));
-			return;
-		}
-	}
-
-	dfs_debug(dfs, WLAN_DEBUG_DFS_RANDOM_CHAN,
-			"Channel=%d is not in the bitmap", channel);
-}
-#endif
-
-/**
- * dfs_random_channel_sel_set_bitmap()- Set channel bit in bitmap based
+ * dfs_random_channel_sel_set_bitmap_for_freq()- Set channel bit in bitmap based
  * on given channel number
  * @dfs: Pointer to DFS structure.
  * @bitmap: bitmap
@@ -1394,156 +1055,6 @@ dfs_random_channel_sel_set_bitmap_for_freq(struct wlan_dfs *dfs,
 }
 #endif
 
-/**
- * dfs_find_ch_with_fallback()- find random channel
- * @dfs: Pointer to DFS structure.
- * @ch_wd: channel width
- * @center_freq_seg1: center frequency of secondary segment.
- * @ch_lst: list of available channels.
- * @num_ch: number of channels in the list.
- *
- * Find random channel based on given channel width and channel list,
- * fallback to lower width if requested channel width not available.
- *
- * Return: channel number
- */
-#ifdef CONFIG_CHAN_NUM_API
-static uint8_t dfs_find_ch_with_fallback(
-		struct wlan_dfs *dfs,
-		uint8_t *ch_wd,
-		uint8_t *center_freq_seg1,
-		uint8_t *ch_lst,
-		uint32_t num_ch)
-{
-	bool flag = false;
-	uint32_t rand_byte = 0;
-	struct  chan_bonding_bitmap ch_map = { { {0} } };
-	uint8_t count = 0, i, index = 0, final_cnt = 0, target_channel = 0;
-	uint8_t primary_seg_start_ch = 0, sec_seg_ch = 0, new_160_start_ch = 0;
-	uint8_t final_lst[NUM_CHANNELS] = {0};
-
-	/* initialize ch_map for all 80 MHz bands: we have 6 80MHz bands */
-	ch_map.chan_bonding_set[0].start_chan = 36;
-	ch_map.chan_bonding_set[1].start_chan = 52;
-	ch_map.chan_bonding_set[2].start_chan = 100;
-	ch_map.chan_bonding_set[3].start_chan = 116;
-	ch_map.chan_bonding_set[4].start_chan = 132;
-	ch_map.chan_bonding_set[5].start_chan = 149;
-
-	for (i = 0; i < num_ch; i++) {
-		dfs_debug(dfs, WLAN_DEBUG_DFS_RANDOM_CHAN,
-				"channel = %d added to bitmap", ch_lst[i]);
-		dfs_random_channel_sel_set_bitmap(dfs, &ch_map, ch_lst[i]);
-	}
-
-	/* populate available channel list from bitmap */
-	final_cnt = dfs_populate_available_channels(dfs, &ch_map,
-			*ch_wd, final_lst);
-
-	/* If no valid ch bonding found, fallback */
-	if (final_cnt == 0) {
-		if ((*ch_wd == DFS_CH_WIDTH_160MHZ) ||
-		    (*ch_wd == DFS_CH_WIDTH_80P80MHZ) ||
-		    (*ch_wd == DFS_CH_WIDTH_80MHZ)) {
-			dfs_info(dfs, WLAN_DEBUG_DFS_RANDOM_CHAN,
-					"from [%d] to 40Mhz", *ch_wd);
-			*ch_wd = DFS_CH_WIDTH_40MHZ;
-		} else if (*ch_wd == DFS_CH_WIDTH_40MHZ) {
-			dfs_info(dfs, WLAN_DEBUG_DFS_RANDOM_CHAN,
-					"from 40Mhz to 20MHz");
-			*ch_wd = DFS_CH_WIDTH_20MHZ;
-		}
-		return 0;
-	}
-
-	/* ch count should be > 8 to switch new channel in 160Mhz band */
-	if (((*ch_wd == DFS_CH_WIDTH_160MHZ) ||
-	     (*ch_wd == DFS_CH_WIDTH_80P80MHZ)) &&
-	     (final_cnt < DFS_MAX_20M_SUB_CH)) {
-		dfs_info(dfs, WLAN_DEBUG_DFS_RANDOM_CHAN,
-				"from [%d] to 80Mhz", *ch_wd);
-		*ch_wd = DFS_CH_WIDTH_80MHZ;
-		return 0;
-	}
-
-	if (*ch_wd == DFS_CH_WIDTH_160MHZ) {
-		/*
-		 * Only 2 blocks for 160Mhz bandwidth i.e 36-64 & 100-128
-		 * and all the channels in these blocks are continuous
-		 * and separated by 4Mhz.
-		 */
-		for (i = 1; ((i < final_cnt)); i++) {
-			if ((final_lst[i] - final_lst[i-1]) ==
-			     DFS_NEXT_5GHZ_CHANNEL)
-				count++;
-			else
-				count = 0;
-			if (count == DFS_MAX_20M_SUB_CH - 1) {
-				flag = true;
-				new_160_start_ch = final_lst[i - count];
-				break;
-			}
-		}
-	} else if (*ch_wd == DFS_CH_WIDTH_80P80MHZ) {
-		flag = true;
-	}
-
-	if ((flag == false) && (*ch_wd > DFS_CH_WIDTH_80MHZ)) {
-		dfs_info(dfs, WLAN_DEBUG_DFS_RANDOM_CHAN,
-				"from [%d] to 80Mhz", *ch_wd);
-		*ch_wd = DFS_CH_WIDTH_80MHZ;
-		return 0;
-	}
-
-	if (*ch_wd == DFS_CH_WIDTH_160MHZ) {
-		get_random_bytes((uint8_t *)&rand_byte, 1);
-		rand_byte = (rand_byte + qdf_mc_timer_get_system_ticks())
-			% DFS_MAX_20M_SUB_CH;
-		target_channel = new_160_start_ch + (rand_byte *
-				DFS_80_NUM_SUB_CHANNEL);
-	} else if (*ch_wd == DFS_CH_WIDTH_80P80MHZ) {
-		get_random_bytes((uint8_t *)&rand_byte, 1);
-		index = (rand_byte + qdf_mc_timer_get_system_ticks()) %
-			final_cnt;
-		target_channel = final_lst[index];
-		index -= (index % DFS_80_NUM_SUB_CHANNEL);
-		primary_seg_start_ch = final_lst[index];
-
-		/* reset channels associate with primary 80Mhz */
-		for (i = 0; i < DFS_80_NUM_SUB_CHANNEL; i++)
-			final_lst[i + index] = 0;
-		/* select and calculate center freq for secondary segment */
-		for (i = 0; i < final_cnt / DFS_80_NUM_SUB_CHANNEL; i++) {
-			if (final_lst[i * DFS_80_NUM_SUB_CHANNEL] &&
-			    (abs(primary_seg_start_ch -
-			     final_lst[i * DFS_80_NUM_SUB_CHANNEL]) >
-			     (DFS_MAX_20M_SUB_CH * 2))) {
-				sec_seg_ch =
-					final_lst[i * DFS_80_NUM_SUB_CHANNEL] +
-					DFS_80MHZ_START_CENTER_CH_DIFF;
-				break;
-			}
-		}
-
-		if (!sec_seg_ch && (final_cnt == DFS_MAX_20M_SUB_CH))
-			*ch_wd = DFS_CH_WIDTH_160MHZ;
-		else if (!sec_seg_ch)
-			*ch_wd = DFS_CH_WIDTH_80MHZ;
-
-		*center_freq_seg1 = sec_seg_ch;
-		dfs_info(dfs, WLAN_DEBUG_DFS_RANDOM_CHAN,
-				"Center frequency seg1 = %d", sec_seg_ch);
-	} else {
-		target_channel = dfs_get_rand_from_lst(dfs,
-				final_lst, final_cnt);
-	}
-	dfs_info(dfs, WLAN_DEBUG_DFS_RANDOM_CHAN,
-			"target channel = %d", target_channel);
-
-	return target_channel;
-}
-#endif
-
 #ifdef CONFIG_BAND_6GHZ
 /**
  * dfs_assign_6g_channels()- Assign the center frequency of the first 20 MHZ
@@ -1554,20 +1065,20 @@ static uint8_t dfs_find_ch_with_fallback(
  */
 static void dfs_assign_6g_channels(struct  chan_bonding_bitmap *ch_map)
 {
-	ch_map->chan_bonding_set[6].start_chan_freq = 5955;
-	ch_map->chan_bonding_set[7].start_chan_freq = 6035;
-	ch_map->chan_bonding_set[8].start_chan_freq = 6115;
-	ch_map->chan_bonding_set[9].start_chan_freq = 6195;
-	ch_map->chan_bonding_set[10].start_chan_freq = 6275;
-	ch_map->chan_bonding_set[11].start_chan_freq = 6355;
-	ch_map->chan_bonding_set[12].start_chan_freq = 6435;
-	ch_map->chan_bonding_set[13].start_chan_freq = 6515;
-	ch_map->chan_bonding_set[14].start_chan_freq = 6595;
-	ch_map->chan_bonding_set[15].start_chan_freq = 6675;
-	ch_map->chan_bonding_set[16].start_chan_freq = 6755;
-	ch_map->chan_bonding_set[17].start_chan_freq = 6835;
-	ch_map->chan_bonding_set[18].start_chan_freq = 6915;
-	ch_map->chan_bonding_set[19].start_chan_freq = 6995;
+	ch_map->chan_bonding_set[7].start_chan_freq = 5955;
+	ch_map->chan_bonding_set[8].start_chan_freq = 6035;
+	ch_map->chan_bonding_set[9].start_chan_freq = 6115;
+	ch_map->chan_bonding_set[10].start_chan_freq = 6195;
+	ch_map->chan_bonding_set[11].start_chan_freq = 6275;
+	ch_map->chan_bonding_set[12].start_chan_freq = 6355;
+	ch_map->chan_bonding_set[13].start_chan_freq = 6435;
+	ch_map->chan_bonding_set[14].start_chan_freq = 6515;
+	ch_map->chan_bonding_set[15].start_chan_freq = 6595;
+	ch_map->chan_bonding_set[16].start_chan_freq = 6675;
+	ch_map->chan_bonding_set[17].start_chan_freq = 6755;
+	ch_map->chan_bonding_set[18].start_chan_freq = 6835;
+	ch_map->chan_bonding_set[19].start_chan_freq = 6915;
+	ch_map->chan_bonding_set[20].start_chan_freq = 6995;
 }
 #else
 static inline void dfs_assign_6g_channels(struct  chan_bonding_bitmap *ch_map)
@@ -1610,6 +1121,7 @@ static uint16_t dfs_find_ch_with_fallback_for_freq(struct wlan_dfs *dfs,
 	ch_map.chan_bonding_set[3].start_chan_freq = 5580;
 	ch_map.chan_bonding_set[4].start_chan_freq = 5660;
 	ch_map.chan_bonding_set[5].start_chan_freq = 5745;
+	ch_map.chan_bonding_set[6].start_chan_freq = 5825;
 
 	dfs_assign_6g_channels(&ch_map);
 	for (i = 0; i < num_chan; i++) {
@@ -1751,160 +1263,6 @@ bool dfs_is_freq_in_nol(struct wlan_dfs *dfs, uint32_t freq)
 }
 
 /**
- * dfs_apply_rules()- prepare channel list based on flags
- * @dfs: dfs handler
- * @flags: channel flags
- * @random_chan_list: output channel list
- * @random_chan_cnt: output channel count
- * @ch_list: input channel list
- * @ch_cnt: input channel count
- * @dfs_region: dfs region
- * @acs_info: acs channel range information
- *
- * prepare channel list based on flags
- *
- * return: none
- */
-#ifdef CONFIG_CHAN_NUM_API
-static void dfs_apply_rules(struct wlan_dfs *dfs,
-	uint32_t flags,
-	uint8_t *random_chan_list,
-	uint32_t *random_chan_cnt,
-	struct dfs_channel *ch_list,
-	uint32_t ch_cnt,
-	uint8_t dfs_region,
-	struct dfs_acs_info *acs_info)
-{
-	struct dfs_channel *chan;
-	bool flag_no_weather = 0;
-	bool flag_no_lower_5g = 0;
-	bool flag_no_upper_5g = 0;
-	bool flag_no_dfs_chan = 0;
-	bool flag_no_2g_chan  = 0;
-	bool flag_no_5g_chan  = 0;
-	bool flag_no_japan_w53 = 0;
-	int i;
-	bool found = false;
-	uint16_t j;
-
-	dfs_debug(dfs, WLAN_DEBUG_DFS_RANDOM_CHAN, "flags %d", flags);
-	flag_no_weather = (dfs_region == DFS_ETSI_REGION_VAL) ?
-		flags & DFS_RANDOM_CH_FLAG_NO_WEATHER_CH : 0;
-
-	if (dfs_region == DFS_MKK_REGION_VAL) {
-		flag_no_lower_5g = flags & DFS_RANDOM_CH_FLAG_NO_LOWER_5G_CH;
-		flag_no_upper_5g = flags & DFS_RANDOM_CH_FLAG_NO_UPEER_5G_CH;
-		flag_no_japan_w53 = flags & DFS_RANDOM_CH_FLAG_NO_JAPAN_W53_CH;
-	}
-
-	flag_no_dfs_chan = flags & DFS_RANDOM_CH_FLAG_NO_DFS_CH;
-	flag_no_2g_chan  = flags & DFS_RANDOM_CH_FLAG_NO_2GHZ_CH;
-	flag_no_5g_chan  = flags & DFS_RANDOM_CH_FLAG_NO_5GHZ_CH;
-
-	for (i = 0; i < ch_cnt; i++) {
-		chan = &ch_list[i];
-
-		if ((chan->dfs_ch_ieee == 0) ||
-				(chan->dfs_ch_ieee > MAX_CHANNEL_NUM)) {
-			dfs_debug(dfs, WLAN_DEBUG_DFS_RANDOM_CHAN,
-				  "invalid channel %d", chan->dfs_ch_ieee);
-			continue;
-		}
-
-		if (flags & DFS_RANDOM_CH_FLAG_NO_CURR_OPE_CH) {
-			/* TODO : Skip all HT20 channels in the given mode */
-			if (chan->dfs_ch_ieee ==
-					dfs->dfs_curchan->dfs_ch_ieee) {
-				dfs_debug(dfs, WLAN_DEBUG_DFS_RANDOM_CHAN,
-					  "skip %d current operating channel",
-					  chan->dfs_ch_ieee);
-				continue;
-			}
-		}
-
-		if (acs_info && acs_info->acs_mode) {
-			for (j = 0; j < acs_info->num_of_channel; j++) {
-				if (acs_info->chan_freq_list[j] ==
-							     chan->dfs_ch_freq){
-					found = true;
-					break;
-				}
-			}
-
-			if (!found) {
-				dfs_debug(dfs, WLAN_DEBUG_DFS_RANDOM_CHAN,
-					  "skip ch %d not in acs range",
-					  chan->dfs_ch_ieee);
-				continue;
-			}
-			found = false;
-		}
-
-		if (flag_no_2g_chan &&
-				chan->dfs_ch_ieee <= DFS_MAX_24GHZ_CHANNEL) {
-			dfs_debug(dfs, WLAN_DEBUG_DFS_RANDOM_CHAN,
-				  "skip 2.4 GHz channel=%d", chan->dfs_ch_ieee);
-			continue;
-		}
-
-		if (flag_no_5g_chan &&
-				chan->dfs_ch_ieee > DFS_MAX_24GHZ_CHANNEL) {
-			dfs_debug(dfs, WLAN_DEBUG_DFS_RANDOM_CHAN,
-				  "skip 5 GHz channel=%d", chan->dfs_ch_ieee);
-			continue;
-		}
-
-		if (flag_no_weather) {
-			if (DFS_IS_CHANNEL_WEATHER_RADAR(chan->dfs_ch_freq)) {
-				dfs_debug(dfs, WLAN_DEBUG_DFS_RANDOM_CHAN,
-					  "skip weather channel=%d",
-					  chan->dfs_ch_ieee);
-				continue;
-			}
-		}
-
-		if (flag_no_lower_5g &&
-		    DFS_IS_CHAN_JAPAN_INDOOR(chan->dfs_ch_ieee)) {
-			dfs_debug(dfs, WLAN_DEBUG_DFS_RANDOM_CHAN,
-				  "skip indoor channel=%d", chan->dfs_ch_ieee);
-			continue;
-		}
-
-		if (flag_no_upper_5g &&
-		    DFS_IS_CHAN_JAPAN_OUTDOOR(chan->dfs_ch_ieee)) {
-			dfs_debug(dfs, WLAN_DEBUG_DFS_RANDOM_CHAN,
-				  "skip outdoor channel=%d", chan->dfs_ch_ieee);
-			continue;
-		}
-
-		if (flag_no_dfs_chan &&
-		    (chan->dfs_ch_flagext & WLAN_CHAN_DFS)) {
-			dfs_debug(dfs, WLAN_DEBUG_DFS_RANDOM_CHAN,
-				  "skip dfs channel=%d", chan->dfs_ch_ieee);
-			continue;
-		}
-
-		if (flag_no_japan_w53 &&
-		    DFS_IS_CHAN_JAPAN_W53(chan->dfs_ch_ieee)) {
-			dfs_debug(dfs, WLAN_DEBUG_DFS_RANDOM_CHAN,
-				  "skip japan W53 channel=%d",
-				  chan->dfs_ch_ieee);
-			continue;
-		}
-
-		if (dfs_is_freq_in_nol(dfs, chan->dfs_ch_freq)) {
-			dfs_debug(dfs, WLAN_DEBUG_DFS_RANDOM_CHAN,
-				  "skip nol channel=%d", chan->dfs_ch_ieee);
-			continue;
-		}
-
-		random_chan_list[*random_chan_cnt] = chan->dfs_ch_ieee;
-		*random_chan_cnt += 1;
-	}
-}
-#endif
-
-/**
  * dfs_apply_rules_for_freq()- prepare channel list based on flags
  * @dfs: dfs handler
  * @flags: channel flags
@@ -1937,6 +1295,7 @@ static void dfs_apply_rules_for_freq(struct wlan_dfs *dfs,
 	bool flag_no_2g_chan  = 0;
 	bool flag_no_5g_chan  = 0;
 	bool flag_no_japan_w53 = 0;
+	bool flag_no_6g_freq;
 	int i;
 	bool found = false;
 	uint16_t j;
@@ -1944,10 +1303,11 @@ static void dfs_apply_rules_for_freq(struct wlan_dfs *dfs,
 	uint8_t num_channels = 0;
 
 	dfs_debug(dfs, WLAN_DEBUG_DFS_RANDOM_CHAN, "flags %d", flags);
-	flag_no_weather = (dfs_region == DFS_ETSI_REGION_VAL) ?
+	flag_no_weather = (dfs_region == DFS_ETSI_REGION) ?
 		flags & DFS_RANDOM_CH_FLAG_NO_WEATHER_CH : 0;
 
-	if (dfs_region == DFS_MKK_REGION_VAL) {
+	if (dfs_region == DFS_MKK_REGION ||
+	    dfs_region == DFS_MKKN_REGION) {
 		flag_no_lower_5g = flags & DFS_RANDOM_CH_FLAG_NO_LOWER_5G_CH;
 		flag_no_upper_5g = flags & DFS_RANDOM_CH_FLAG_NO_UPEER_5G_CH;
 		flag_no_japan_w53 = flags & DFS_RANDOM_CH_FLAG_NO_JAPAN_W53_CH;
@@ -1956,6 +1316,7 @@ static void dfs_apply_rules_for_freq(struct wlan_dfs *dfs,
 	flag_no_dfs_chan = flags & DFS_RANDOM_CH_FLAG_NO_DFS_CH;
 	flag_no_2g_chan  = flags & DFS_RANDOM_CH_FLAG_NO_2GHZ_CH;
 	flag_no_5g_chan  = flags & DFS_RANDOM_CH_FLAG_NO_5GHZ_CH;
+	flag_no_6g_freq = flags & DFS_RANDOM_CH_FLAG_NO_6GHZ_CH;
 
 	if (flags & DFS_RANDOM_CH_FLAG_NO_CURR_OPE_CH) {
 		num_channels =
@@ -2015,9 +1376,8 @@ static void dfs_apply_rules_for_freq(struct wlan_dfs *dfs,
 			continue;
 		}
 
-		if (flag_no_5g_chan && chan->dfs_ch_freq >
-		    DFS_MAX_24GHZ_CHANNEL_FREQ)
-		{
+		if (flag_no_5g_chan &&
+		    WLAN_REG_IS_5GHZ_CH_FREQ(chan->dfs_ch_freq)) {
 			dfs_debug(dfs, WLAN_DEBUG_DFS_RANDOM_CHAN,
 				  "skip 5 GHz channel=%d", chan->dfs_ch_ieee);
 			continue;
@@ -2043,6 +1403,13 @@ static void dfs_apply_rules_for_freq(struct wlan_dfs *dfs,
 		    DFS_IS_CHAN_JAPAN_OUTDOOR_FREQ(chan->dfs_ch_freq)) {
 			dfs_debug(dfs, WLAN_DEBUG_DFS_RANDOM_CHAN,
 				  "skip outdoor channel=%d", chan->dfs_ch_ieee);
+			continue;
+		}
+
+		if (flag_no_6g_freq &&
+		    WLAN_REG_IS_6GHZ_CHAN_FREQ(chan->dfs_ch_freq)) {
+			dfs_debug(dfs, WLAN_DEBUG_DFS_RANDOM_CHAN,
+				  "skip 6 GHz channel=%d", chan->dfs_ch_ieee);
 			continue;
 		}
 
@@ -2073,116 +1440,25 @@ static void dfs_apply_rules_for_freq(struct wlan_dfs *dfs,
 }
 #endif
 
-#ifdef CONFIG_CHAN_NUM_API
-uint8_t dfs_prepare_random_channel(struct wlan_dfs *dfs,
-	struct dfs_channel *ch_list,
-	uint32_t ch_cnt,
-	uint32_t flags,
-	uint8_t *ch_wd,
-	struct dfs_channel *cur_chan,
-	uint8_t dfs_region,
-	struct dfs_acs_info *acs_info)
+/**
+ * dfs_remove_spruce_spur_channels_for_bw_20_40() - API to remove the
+ * spur channels in spruce if current bw is 20/40MHz.
+ * @freq_list: Input list from which spur channels are removed.
+ * @freq_count: Input list count.
+ *
+ * return: void.
+ */
+static void
+dfs_remove_spruce_spur_channels_for_bw_20_40(uint16_t *freq_list,
+					     uint8_t freq_count)
 {
-	int i = 0;
-	uint8_t final_cnt = 0;
-	uint8_t target_ch = 0;
-	uint8_t *random_chan_list = NULL;
-	uint32_t random_chan_cnt = 0;
-	uint16_t flag_no_weather = 0;
-	uint8_t *leakage_adjusted_lst;
-	uint8_t final_lst[NUM_CHANNELS] = {0};
+	uint8_t i;
 
-	if (!ch_list || !ch_cnt) {
-		dfs_info(dfs, WLAN_DEBUG_DFS_RANDOM_CHAN,
-				"Invalid params %pK, ch_cnt=%d",
-				ch_list, ch_cnt);
-		return 0;
+	for (i = 0; i < freq_count; i++) {
+		if (DFS_IS_CHAN_SPRUCE_SPUR_FREQ_20_40_MHZ(freq_list[i]))
+			freq_list[i] = 0;
 	}
-
-	if (*ch_wd < DFS_CH_WIDTH_20MHZ || *ch_wd > DFS_CH_WIDTH_80P80MHZ) {
-		dfs_info(dfs, WLAN_DEBUG_DFS_RANDOM_CHAN,
-				"Invalid ch_wd %d", *ch_wd);
-		return 0;
-	}
-
-	random_chan_list = qdf_mem_malloc(ch_cnt * sizeof(*random_chan_list));
-	if (!random_chan_list)
-		return 0;
-
-	dfs_apply_rules(dfs, flags, random_chan_list, &random_chan_cnt,
-		    ch_list, ch_cnt, dfs_region, acs_info);
-
-	flag_no_weather = (dfs_region == DFS_ETSI_REGION_VAL) ?
-		flags & DFS_RANDOM_CH_FLAG_NO_WEATHER_CH : 0;
-
-	/* list adjusted after leakage has been marked */
-	leakage_adjusted_lst = qdf_mem_malloc(random_chan_cnt);
-	if (!leakage_adjusted_lst) {
-		qdf_mem_free(random_chan_list);
-		return 0;
-	}
-
-	do {
-		qdf_mem_copy(leakage_adjusted_lst, random_chan_list,
-			     random_chan_cnt);
-		if (QDF_IS_STATUS_ERROR(dfs_mark_leaking_ch(dfs, *ch_wd,
-				random_chan_cnt,
-				leakage_adjusted_lst))) {
-			qdf_mem_free(random_chan_list);
-			qdf_mem_free(leakage_adjusted_lst);
-			return 0;
-		}
-
-		if (*ch_wd == DFS_CH_WIDTH_20MHZ) {
-			/*
-			 * PASS: 3 - from leakage_adjusted_lst, prepare valid
-			 * ch list and use random number from that
-			 */
-			for (i = 0; i < random_chan_cnt; i++) {
-				if (leakage_adjusted_lst[i] == 0)
-					continue;
-				dfs_debug(dfs, WLAN_DEBUG_DFS_RANDOM_CHAN,
-					  "dfs: Channel=%d added to available list",
-					  leakage_adjusted_lst[i]);
-				final_lst[final_cnt] = leakage_adjusted_lst[i];
-				final_cnt++;
-			}
-			target_ch = dfs_get_rand_from_lst(
-				dfs, final_lst, final_cnt);
-			break;
-		}
-
-		target_ch = dfs_find_ch_with_fallback(dfs, ch_wd,
-				&cur_chan->dfs_ch_vhtop_ch_freq_seg2,
-				leakage_adjusted_lst,
-				random_chan_cnt);
-
-		/*
-		 * When flag_no_weather is set, avoid usage of Adjacent
-		 * weather radar channel in HT40 mode as extension channel
-		 * will be on 5600.
-		 */
-		if (flag_no_weather &&
-				(target_ch ==
-				 DFS_ADJACENT_WEATHER_RADAR_CHANNEL_NUM) &&
-				(*ch_wd == DFS_CH_WIDTH_40MHZ)) {
-			dfs_debug(dfs, WLAN_DEBUG_DFS_RANDOM_CHAN,
-					"skip weather adjacent ch=%d\n",
-					target_ch);
-			continue;
-		}
-
-		if (target_ch)
-			break;
-	} while (true);
-
-	qdf_mem_free(random_chan_list);
-	qdf_mem_free(leakage_adjusted_lst);
-	dfs_info(dfs, WLAN_DEBUG_DFS_RANDOM_CHAN, "target_ch = %d", target_ch);
-
-	return target_ch;
 }
-#endif
 
 #ifdef CONFIG_CHAN_FREQ_API
 uint16_t dfs_prepare_random_channel_for_freq(struct wlan_dfs *dfs,
@@ -2202,6 +1478,7 @@ uint16_t dfs_prepare_random_channel_for_freq(struct wlan_dfs *dfs,
 	uint16_t *leakage_adjusted_lst;
 	uint16_t final_lst[NUM_CHANNELS] = {0};
 	uint8_t *chan_wd = (uint8_t *)&chan_params->ch_width;
+	bool flag_no_spur_leakage_adj_chans = false;
 
 	if (!chan_list || !chan_cnt) {
 		dfs_info(dfs, WLAN_DEBUG_DFS_RANDOM_CHAN,
@@ -2224,8 +1501,10 @@ uint16_t dfs_prepare_random_channel_for_freq(struct wlan_dfs *dfs,
 	dfs_apply_rules_for_freq(dfs, flags, random_chan_freq_list,
 				 &random_chan_cnt, chan_list, chan_cnt,
 				 dfs_region, acs_info);
-	flag_no_weather = (dfs_region == DFS_ETSI_REGION_VAL) ?
+	flag_no_weather = (dfs_region == DFS_ETSI_REGION) ?
 		flags & DFS_RANDOM_CH_FLAG_NO_WEATHER_CH : 0;
+	flag_no_spur_leakage_adj_chans =
+	    flags & DFS_RANDOM_CH_FLAG_NO_SPRUCE_SPUR_ADJ_CH;
 
 	/* list adjusted after leakage has been marked */
 	leakage_adjusted_lst = qdf_mem_malloc(random_chan_cnt *
@@ -2235,6 +1514,12 @@ uint16_t dfs_prepare_random_channel_for_freq(struct wlan_dfs *dfs,
 		return 0;
 	}
 
+	if (flag_no_spur_leakage_adj_chans &&
+	    (*chan_wd == DFS_CH_WIDTH_20MHZ ||
+	     *chan_wd == DFS_CH_WIDTH_40MHZ))
+		dfs_remove_spruce_spur_channels_for_bw_20_40(
+				random_chan_freq_list,
+				random_chan_cnt);
 	do {
 		int ret;
 
@@ -2258,7 +1543,7 @@ uint16_t dfs_prepare_random_channel_for_freq(struct wlan_dfs *dfs,
 				if (leakage_adjusted_lst[i] == 0)
 					continue;
 				dfs_debug(dfs, WLAN_DEBUG_DFS_RANDOM_CHAN,
-					  "Channel=%d added to available list",
+					  "Chan freq =%d added to available list",
 					  leakage_adjusted_lst[i]);
 				final_lst[final_cnt] = leakage_adjusted_lst[i];
 				final_cnt++;
@@ -2306,7 +1591,30 @@ uint16_t dfs_prepare_random_channel_for_freq(struct wlan_dfs *dfs,
 		     DFS_ADJACENT_WEATHER_RADAR_CHANNEL_FREQ) &&
 		    (*chan_wd == DFS_CH_WIDTH_40MHZ)) {
 			dfs_debug(dfs, WLAN_DEBUG_DFS_RANDOM_CHAN,
-				  "skip weather adjacent ch=%d\n",
+				  "skip weather adjacent ch freq =%d\n",
+				  target_freq);
+			continue;
+		}
+
+		/*
+		 * Spur or leakage transmissions is observed in Spruce HW in
+		 * frequencies from 5260MHz to 5320MHz when one of the following
+		 * conditions is true,
+		 * i) The AP is transmitting in 52/56/60/64 in 80MHz mode and
+		 * then the AP moves to the adjacent channel 36/44/48 in 80MHz
+		 * mode and starts transmitting.
+		 * ii) The AP is transmitting in 36/44/48/52/56/60/64 in 160MHz
+		 * mode and then the  AP moves to the adjacent channel 36/44/48
+		 * in 80MHz mode and starts transmitting.
+		 *
+		 * The random channel selection algorithm prevents the channel
+		 * movement mentioned above, thereby eliminating the leakage.
+		 */
+		if (flag_no_spur_leakage_adj_chans &&
+		    DFS_IS_SPRUCE_SPUR_AVOID_FREQS(target_freq) &&
+		    *chan_wd == DFS_CH_WIDTH_80MHZ) {
+			dfs_debug(dfs, WLAN_DEBUG_DFS_RANDOM_CHAN,
+				  "skip spruce spur causing (adjacent) channel=%hu",
 				  target_freq);
 			continue;
 		}

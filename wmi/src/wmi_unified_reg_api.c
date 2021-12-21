@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017-2019 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2017-2021 The Linux Foundation. All rights reserved.
  *
  *
  * Permission to use, copy, modify, and/or distribute this software for
@@ -41,6 +41,41 @@ QDF_STATUS wmi_extract_reg_chan_list_update_event(
 	return QDF_STATUS_E_FAILURE;
 }
 qdf_export_symbol(wmi_extract_reg_chan_list_update_event);
+
+#ifdef CONFIG_BAND_6GHZ
+QDF_STATUS wmi_extract_reg_chan_list_ext_update_event(
+		wmi_unified_t wmi_handle,
+		uint8_t *evt_buf,
+		struct cur_regulatory_info *reg_info,
+		uint32_t len)
+{
+	if (wmi_handle &&
+	    wmi_handle->ops->extract_reg_chan_list_ext_update_event)
+		return wmi_handle->ops->extract_reg_chan_list_ext_update_event
+					(wmi_handle, evt_buf, reg_info, len);
+
+	return QDF_STATUS_E_FAILURE;
+}
+
+qdf_export_symbol(wmi_extract_reg_chan_list_ext_update_event);
+
+#ifdef CONFIG_AFC_SUPPORT
+QDF_STATUS wmi_extract_afc_event(wmi_unified_t wmi_handle,
+				 uint8_t *evt_buf,
+				 struct afc_regulatory_info *afc_info,
+				 uint32_t len)
+{
+	if (wmi_handle &&
+	    wmi_handle->ops->extract_afc_event)
+		return wmi_handle->ops->extract_afc_event(wmi_handle, evt_buf,
+							  afc_info, len);
+
+	return QDF_STATUS_E_FAILURE;
+}
+
+qdf_export_symbol(wmi_extract_afc_event);
+#endif
+#endif
 
 /*
  * wmi_unified_send_start_11d_scan_cmd() - start 11d scan

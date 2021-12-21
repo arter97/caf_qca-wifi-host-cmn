@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2019-2021 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -26,6 +26,9 @@
 #define __WLAN_VDEV_MGR_TX_OPS_DEFS_H__
 
 #include <qdf_nbuf.h>
+#ifdef WLAN_FEATURE_11BE_MLO
+#include <wlan_mlo_mgr_public_structs.h>
+#endif
 
 /** slot time long */
 #define WLAN_MLME_VDEV_SLOT_TIME_LONG   0x1
@@ -183,6 +186,43 @@ struct tbttoffset_params {
 	uint32_t vdev_tbtt_qtime_hi;
 };
 
+/* Follow bitmap for sending the CSA switch count event */
+#define WLAN_CSA_EVENT_BMAP_VALID_MASK 0X80000000
+/* Send only when the switch count becomes zero, added for backward
+ * compatibility same can also be achieved by setting bitmap to 0X80000001.
+ */
+#define WLAN_CSA_EVENT_BMAP_SWITCH_COUNT_ZERO    0
+/* Send CSA switch count event for every update to switch count */
+#define WLAN_CSA_EVENT_BMAP_ALL                  0XFFFFFFFF
+
+#ifdef WLAN_FEATURE_11BE_MLO
+/**
+ * struct ml_bcn_partner_info - Partner link beacon information
+ * @vdev_id: Vdev id
+ * @hw_link_id: Unique hw link id across SoCs
+ * @beacon_interval: Beacon interval
+ * @csa_switch_count_offset: CSA swith count offset in beacon frame
+ * @ext_csa_switch_count_offset: ECSA switch count offset in beacon frame
+ */
+struct ml_bcn_partner_info {
+	uint32_t vdev_id;
+	uint32_t hw_link_id;
+	uint32_t beacon_interval;
+	uint32_t csa_switch_count_offset;
+	uint32_t ext_csa_switch_count_offset;
+};
+
+/**
+ * struct mlo_bcn_templ_partner_links - ML partner links
+ * @num_links: Number of links
+ * @partner_info: Partner link info
+ */
+struct mlo_bcn_templ_partner_links {
+	uint8_t num_links;
+	struct ml_bcn_partner_info partner_info[WLAN_UMAC_MLO_MAX_VDEVS];
+};
+#endif
+
 /**
  * struct beacon_tmpl_params - beacon template cmd parameter
  * @vdev_id: vdev id
@@ -198,8 +238,12 @@ struct tbttoffset_params {
  *     ema_beacon_profile_periodicity, ema_beacon_tmpl_idx,
  *     ema_first_tmpl and ema_last_tmpl in the order of low
  *     to high
+ * @csa_event_bitmap: Specify when to send the CSA switch count status from FW
+ *     to host. Example: if CSA switch count event is needed to be sent when the
+ *     switch count is 0, 1, 4, and 5, set the bitmap to (0X80000033)
  * @enable_bigtk: enable bigtk or not
  * @frm: beacon template parameter
+ * @mlo_partner: Partner link information
  */
 struct beacon_tmpl_params {
 	uint8_t vdev_id;
@@ -212,8 +256,12 @@ struct beacon_tmpl_params {
 	uint32_t esp_ie_offset;
 	uint32_t mu_edca_ie_offset;
 	uint32_t ema_params;
+	uint32_t csa_event_bitmap;
 	bool enable_bigtk;
 	uint8_t *frm;
+#ifdef WLAN_FEATURE_11BE_MLO
+	struct mlo_bcn_templ_partner_links mlo_partner;
+#endif
 };
 
 /**
@@ -265,6 +313,7 @@ struct fils_discovery_tmpl_params {
  * @allow_ht: HT allowed in chan
  * @allow_vht: VHT allowed on chan
  * @set_agile: is agile mode
+ * @is_stadfs_en: STA DFS enabled
  * @phy_mode: phymode (vht80 or ht40 or ...)
  * @cfreq1: centre frequency on primary
  * @cfreq2: centre frequency on secondary
@@ -273,6 +322,7 @@ struct fils_discovery_tmpl_params {
  * @maxreqpower: Max regulatory power
  * @antennamac: Max antenna
  * @reg_class_id: Regulatory class id.
+ * @puncture_pattern: 11be static puncture pattern
  */
 struct mlme_channel_param {
 	uint8_t chan_id;
@@ -285,7 +335,8 @@ struct mlme_channel_param {
 		is_chan_passive:1,
 		allow_ht:1,
 		allow_vht:1,
-		set_agile:1;
+		set_agile:1,
+		is_stadfs_en:1;
 	enum wlan_phymode phy_mode;
 	uint32_t cfreq1;
 	uint32_t cfreq2;
@@ -294,14 +345,21 @@ struct mlme_channel_param {
 	int8_t   maxregpower;
 	uint8_t  antennamax;
 	uint8_t  reg_class_id;
+#ifdef WLAN_FEATURE_11BE
+	uint16_t puncture_pattern;
+#endif
 };
 
 /**
  * struct vdev_mlme_mvr_param - Multiple vdev restart params
  * @phymode: phymode information
+ * @preferred_tx_streams: preferred tx streams for VAP
+ * @preferred_rx_streams: preferred rx streams for VAP
  */
 struct vdev_mlme_mvr_param {
 	uint32_t phymode;
+	uint32_t preferred_tx_streams;
+	uint32_t preferred_rx_streams;
 };
 
 /**
@@ -324,6 +382,22 @@ struct multiple_vdev_restart_params {
 	struct mlme_channel_param ch_param;
 	uint32_t vdev_ids[WLAN_UMAC_PDEV_MAX_VDEVS];
 	struct vdev_mlme_mvr_param mvr_param[WLAN_UMAC_PDEV_MAX_VDEVS];
+};
+
+/**
+ * struct multiple_vdev_set_param - Multiple vdev set param command parameter
+ * @pdev_id: Pdev identifier
+ * @param_id: parameter id
+ * @param_value: parameter value
+ * @num_vdevs: number of vdevs
+ * @vdev_ids: Pointer to array of vdev_ids
+ */
+struct multiple_vdev_set_param {
+	uint32_t pdev_id;
+	uint32_t param_id;
+	uint32_t param_value;
+	uint32_t num_vdevs;
+	uint32_t vdev_ids[WLAN_UMAC_PDEV_MAX_VDEVS];
 };
 
 /**
@@ -388,7 +462,8 @@ struct set_custom_aggr_size_params {
 		 tx_aggr_size_disable:1,
 		 rx_aggr_size_disable:1,
 		 tx_ac_enable:1,
-		 reserved:26;
+		 aggr_ba_enable:1,
+		 reserved:25;
 };
 
 /**
@@ -431,6 +506,40 @@ struct vdev_scan_nac_rssi_params {
 	uint32_t action; /* WMI_FILTER_NAC_RSSI_ACTION */
 };
 
+#ifdef WLAN_FEATURE_11BE_MLO
+/**
+ * @mlo_enabled: indicate is MLO enabled
+ * @mlo_assoc_link: indicate is the link used to initialize
+ *                  the association of mlo connection
+ */
+struct mlo_vdev_start_flags {
+	uint32_t mlo_enabled:1,
+		 mlo_assoc_link:1,
+		 rsvd:30;
+};
+
+/**
+ * struct ml_vdev_start_partner_info - partner link info
+ * @vdev_id: vdev id
+ * @hw_mld_link_id: unique hw link id across SoCs
+ * @mac_addr: Partner mac address
+ */
+struct ml_vdev_start_partner_info {
+	uint32_t vdev_id;
+	uint32_t hw_mld_link_id;
+	uint8_t mac_addr[QDF_MAC_ADDR_SIZE];
+};
+
+/**
+ * struct mlo_vdev_start__partner_links - ML partner links
+ * @num_links: Number of links
+ * @partner_info: Partner link info
+ */
+struct mlo_vdev_start_partner_links {
+	uint8_t num_links;
+	struct ml_vdev_start_partner_info partner_info[WLAN_UMAC_MLO_MAX_VDEVS];
+};
+#endif
 /**
  * struct vdev_start_params - vdev start cmd parameter
  * @vdev_id: vdev id
@@ -447,11 +556,14 @@ struct vdev_scan_nac_rssi_params {
  * @cac_duration_ms: cac duration in milliseconds
  * @regdomain: Regulatory domain
  * @he_ops: HE ops
+ * @eht_ops: EHT ops
  * @channel_param: Channel params required by target.
  * @bcn_tx_rate_code: Beacon tx rate code.
  * @ldpc_rx_enabled: Enable/Disable LDPC RX for this vdev
  * @mbssid_flags: MBSSID flags to FW
  * @vdevid_trans: Tx VDEV ID
+ * @mbssid_multi_group_flag: Flag to identify multi group mbssid support
+ * @mbssid_multi_group_id: Group id of current vdev
  */
 struct vdev_start_params {
 	uint8_t vdev_id;
@@ -468,11 +580,20 @@ struct vdev_start_params {
 	uint32_t cac_duration_ms;
 	uint32_t regdomain;
 	uint32_t he_ops;
+#ifdef WLAN_FEATURE_11BE
+	uint32_t eht_ops;
+#endif
 	struct mlme_channel_param channel;
 	enum mlme_bcn_tx_rate_code bcn_tx_rate_code;
 	bool ldpc_rx_enabled;
 	uint32_t mbssid_flags;
 	uint8_t vdevid_trans;
+#ifdef WLAN_FEATURE_11BE_MLO
+	struct mlo_vdev_start_flags mlo_flags;
+	struct mlo_vdev_start_partner_links mlo_partner;
+#endif
+	uint8_t mbssid_multi_group_flag;
+	uint32_t mbssid_multi_group_id;
 };
 
 /**
@@ -509,6 +630,9 @@ struct vdev_create_params {
 	uint32_t mbssid_flags;
 	uint8_t vdevid_trans;
 	bool special_vdev_mode;
+#ifdef WLAN_FEATURE_11BE_MLO
+	uint8_t mlo_mac[QDF_MAC_ADDR_SIZE];
+#endif
 };
 
 /**

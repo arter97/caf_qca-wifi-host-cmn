@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016-2020 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
  *
  *
  * Permission to use, copy, modify, and/or distribute this software for
@@ -42,13 +42,14 @@
 #include "wlan_tdls_tgt_api.h"
 #endif
 
-#ifdef WLAN_CONV_CRYPTO_SUPPORTED
 #include "wlan_crypto_global_api.h"
-#endif
 #ifdef DFS_COMPONENT_ENABLE
 #include <wlan_dfs_tgt_api.h>
 #include <wlan_objmgr_vdev_obj.h>
 #include <wlan_dfs_utils_api.h>
+#ifdef QCA_SUPPORT_DFS_CHAN_POSTNOL
+#include <dfs_postnol_ucfg.h>
+#endif
 #endif
 
 #ifdef WLAN_SUPPORT_GREEN_AP
@@ -73,6 +74,8 @@
 #ifdef WIFI_POS_CONVERGED
 #include "wifi_pos_api.h"
 #endif
+
+#include "wlan_mgmt_txrx_rx_reo_tgt_api.h"
 
 /* Function pointer for OL/WMA specific UMAC tx_ops
  * registration.
@@ -139,41 +142,24 @@ wlan_lmac_if_atf_rx_ops_register(struct wlan_lmac_if_rx_ops *rx_ops)
 	struct wlan_lmac_if_atf_rx_ops *atf_rx_ops = &rx_ops->atf_rx_ops;
 
 	/* ATF rx ops */
-	atf_rx_ops->atf_get_atf_commit = tgt_atf_get_atf_commit;
 	atf_rx_ops->atf_get_fmcap = tgt_atf_get_fmcap;
-	atf_rx_ops->atf_get_obss_scale = tgt_atf_get_obss_scale;
 	atf_rx_ops->atf_get_mode = tgt_atf_get_mode;
 	atf_rx_ops->atf_get_msdu_desc = tgt_atf_get_msdu_desc;
 	atf_rx_ops->atf_get_max_vdevs = tgt_atf_get_max_vdevs;
 	atf_rx_ops->atf_get_peers = tgt_atf_get_peers;
 	atf_rx_ops->atf_get_tput_based = tgt_atf_get_tput_based;
 	atf_rx_ops->atf_get_logging = tgt_atf_get_logging;
-	atf_rx_ops->atf_update_buf_held = tgt_atf_update_buf_held;
 	atf_rx_ops->atf_get_ssidgroup = tgt_atf_get_ssidgroup;
 	atf_rx_ops->atf_get_vdev_ac_blk_cnt = tgt_atf_get_vdev_ac_blk_cnt;
 	atf_rx_ops->atf_get_peer_blk_txbitmap = tgt_atf_get_peer_blk_txbitmap;
 	atf_rx_ops->atf_get_vdev_blk_txtraffic = tgt_atf_get_vdev_blk_txtraffic;
 	atf_rx_ops->atf_get_sched = tgt_atf_get_sched;
-	atf_rx_ops->atf_get_tx_tokens = tgt_atf_get_tx_tokens;
-	atf_rx_ops->atf_account_subgroup_txtokens =
-					tgt_atf_account_subgroup_txtokens;
-	atf_rx_ops->atf_adjust_subgroup_txtokens =
-					tgt_atf_adjust_subgroup_txtokens;
-	atf_rx_ops->atf_get_subgroup_airtime = tgt_atf_get_subgroup_airtime;
-	atf_rx_ops->atf_subgroup_free_buf = tgt_atf_subgroup_free_buf;
-	atf_rx_ops->atf_update_subgroup_tidstate =
-					tgt_atf_update_subgroup_tidstate;
-	atf_rx_ops->atf_buf_distribute = tgt_atf_buf_distribute;
-	atf_rx_ops->atf_get_shadow_alloted_tx_tokens =
-					tgt_atf_get_shadow_alloted_tx_tokens;
-	atf_rx_ops->atf_get_txtokens_common = tgt_atf_get_txtokens_common;
 	atf_rx_ops->atf_get_peer_stats = tgt_atf_get_peer_stats;
 	atf_rx_ops->atf_get_token_allocated = tgt_atf_get_token_allocated;
 	atf_rx_ops->atf_get_token_utilized = tgt_atf_get_token_utilized;
 
 	atf_rx_ops->atf_set_sched = tgt_atf_set_sched;
 	atf_rx_ops->atf_set_fmcap = tgt_atf_set_fmcap;
-	atf_rx_ops->atf_set_obss_scale = tgt_atf_set_obss_scale;
 	atf_rx_ops->atf_set_msdu_desc = tgt_atf_set_msdu_desc;
 	atf_rx_ops->atf_set_max_vdevs = tgt_atf_set_max_vdevs;
 	atf_rx_ops->atf_set_peers = tgt_atf_set_peers;
@@ -269,6 +255,8 @@ wlan_lmac_if_cfr_rx_ops_register(struct wlan_lmac_if_rx_ops *rx_ops)
 	cfr_rx_ops->cfr_capture_count_support_set =
 		tgt_cfr_capture_count_support_set;
 	cfr_rx_ops->cfr_mo_marking_support_set = tgt_cfr_mo_marking_support_set;
+	cfr_rx_ops->cfr_aoa_for_rcc_support_set =
+		tgt_cfr_aoa_for_rcc_support_set;
 }
 #else
 static void
@@ -277,18 +265,11 @@ wlan_lmac_if_cfr_rx_ops_register(struct wlan_lmac_if_rx_ops *rx_ops)
 }
 #endif
 
-#ifdef WLAN_CONV_CRYPTO_SUPPORTED
 static void
 wlan_lmac_if_crypto_rx_ops_register(struct wlan_lmac_if_rx_ops *rx_ops)
 {
 	wlan_crypto_register_crypto_rx_ops(&rx_ops->crypto_rx_ops);
 }
-#else
-static void
-wlan_lmac_if_crypto_rx_ops_register(struct wlan_lmac_if_rx_ops *rx_ops)
-{
-}
-#endif
 
 #ifdef WIFI_POS_CONVERGED
 static void wlan_lmac_if_umac_rx_ops_register_wifi_pos(
@@ -303,11 +284,63 @@ static void wlan_lmac_if_umac_rx_ops_register_wifi_pos(
 }
 #endif /* WIFI_POS_CONVERGED */
 
+#ifdef CONFIG_BAND_6GHZ
+static void wlan_lmac_if_register_master_list_ext_handler(
+					struct wlan_lmac_if_rx_ops *rx_ops)
+{
+	rx_ops->reg_rx_ops.master_list_ext_handler =
+		tgt_reg_process_master_chan_list_ext;
+}
+
+#ifdef CONFIG_AFC_SUPPORT
+static void wlan_lmac_if_register_afc_event_handler(
+					struct wlan_lmac_if_rx_ops *rx_ops)
+{
+	rx_ops->reg_rx_ops.afc_event_handler = tgt_reg_process_afc_event;
+}
+#else
+static void wlan_lmac_if_register_afc_event_handler(
+					struct wlan_lmac_if_rx_ops *rx_ops)
+{
+}
+#endif
+
+#else
+static inline void wlan_lmac_if_register_master_list_ext_handler(
+					struct wlan_lmac_if_rx_ops *rx_ops)
+{
+}
+
+static void wlan_lmac_if_register_afc_event_handler(
+					struct wlan_lmac_if_rx_ops *rx_ops)
+{
+}
+#endif
+
+#if defined(CONFIG_BAND_6GHZ)
+static void wlan_lmac_if_register_6g_edge_chan_supp(
+					struct wlan_lmac_if_rx_ops *rx_ops)
+{
+	rx_ops->reg_rx_ops.reg_set_lower_6g_edge_ch_supp =
+		tgt_reg_set_lower_6g_edge_ch_supp;
+
+	rx_ops->reg_rx_ops.reg_set_disable_upper_6g_edge_ch_supp =
+		tgt_reg_set_disable_upper_6g_edge_ch_supp;
+}
+#else
+static inline void wlan_lmac_if_register_6g_edge_chan_supp(
+					struct wlan_lmac_if_rx_ops *rx_ops)
+{
+}
+#endif
+
 static void wlan_lmac_if_umac_reg_rx_ops_register(
 	struct wlan_lmac_if_rx_ops *rx_ops)
 {
 	rx_ops->reg_rx_ops.master_list_handler =
 		tgt_reg_process_master_chan_list;
+
+	wlan_lmac_if_register_master_list_ext_handler(rx_ops);
 
 	rx_ops->reg_rx_ops.reg_11d_new_cc_handler =
 		tgt_reg_process_11d_new_country;
@@ -357,6 +390,9 @@ static void wlan_lmac_if_umac_reg_rx_ops_register(
 	rx_ops->reg_rx_ops.reg_is_range_only6g =
 		wlan_reg_is_range_only6g;
 
+	rx_ops->reg_rx_ops.reg_is_range_overlap_6g =
+		wlan_reg_is_range_overlap_6g;
+
 	rx_ops->reg_rx_ops.reg_ignore_fw_reg_offload_ind =
 		tgt_reg_ignore_fw_reg_offload_ind;
 
@@ -365,6 +401,13 @@ static void wlan_lmac_if_umac_reg_rx_ops_register(
 
 	rx_ops->reg_rx_ops.reg_get_unii_5g_bitmap =
 		ucfg_reg_get_unii_5g_bitmap;
+
+	rx_ops->reg_rx_ops.reg_set_ext_tpc_supported =
+		tgt_reg_set_ext_tpc_supported;
+
+	wlan_lmac_if_register_6g_edge_chan_supp(rx_ops);
+
+	wlan_lmac_if_register_afc_event_handler(rx_ops);
 }
 
 #ifdef CONVERGED_P2P_ENABLE
@@ -391,28 +434,6 @@ static void wlan_lmac_if_umac_rx_ops_register_p2p(
 				struct wlan_lmac_if_rx_ops *rx_ops)
 {
 }
-#endif
-
-/*
- * register_precac_auto_chan_rx_ops_ieee() - Register auto chan switch rx ops
- * for IEEE channel based APIs.
- * rx_ops: Pointer to wlan_lmac_if_dfs_rx_ops
- */
-#ifdef DFS_COMPONENT_ENABLE
-#if defined(WLAN_DFS_PRECAC_AUTO_CHAN_SUPPORT) && defined(CONFIG_CHAN_NUM_API)
-static inline void
-register_precac_auto_chan_rx_ops_ieee(struct wlan_lmac_if_dfs_rx_ops *rx_ops)
-{
-	if (!rx_ops)
-		return;
-	rx_ops->dfs_get_precac_chan_state = ucfg_dfs_get_precac_chan_state;
-}
-#else
-static inline void
-register_precac_auto_chan_rx_ops_ieee(struct wlan_lmac_if_dfs_rx_ops *rx_ops)
-{
-}
-#endif
 #endif
 
 /*
@@ -540,6 +561,61 @@ register_dfs_chan_postnol_rx_ops(struct wlan_lmac_if_dfs_rx_ops *rx_ops)
 }
 #endif
 
+#ifdef WLAN_MGMT_RX_REO_SUPPORT
+static QDF_STATUS
+wlan_lmac_if_mgmt_rx_reo_rx_ops_register(
+	struct wlan_lmac_if_mgmt_txrx_rx_ops *mgmt_txrx_rx_ops)
+{
+	struct wlan_lmac_if_mgmt_rx_reo_rx_ops *mgmt_rx_reo_rx_ops;
+
+	mgmt_rx_reo_rx_ops = &mgmt_txrx_rx_ops->mgmt_rx_reo_rx_ops;
+	mgmt_rx_reo_rx_ops->fw_consumed_event_handler =
+			tgt_mgmt_rx_reo_fw_consumed_event_handler;
+	mgmt_rx_reo_rx_ops->host_drop_handler =
+			tgt_mgmt_rx_reo_host_drop_handler;
+
+	return QDF_STATUS_SUCCESS;
+}
+#else
+static QDF_STATUS
+wlan_lmac_if_mgmt_rx_reo_rx_ops_register(
+	struct wlan_lmac_if_mgmt_txrx_rx_ops *mgmt_txrx_rx_ops)
+{
+	return QDF_STATUS_SUCCESS;
+}
+#endif
+
+static QDF_STATUS
+wlan_lmac_if_mgmt_txrx_rx_ops_register(struct wlan_lmac_if_rx_ops *rx_ops)
+{
+	struct wlan_lmac_if_mgmt_txrx_rx_ops *mgmt_txrx_rx_ops;
+
+	if (!rx_ops) {
+		qdf_print("lmac if rx ops pointer is NULL");
+		return QDF_STATUS_E_NULL_VALUE;
+	}
+
+	/* mgmt txrx rx ops */
+	mgmt_txrx_rx_ops = &rx_ops->mgmt_txrx_rx_ops;
+
+	mgmt_txrx_rx_ops->mgmt_tx_completion_handler =
+			tgt_mgmt_txrx_tx_completion_handler;
+	mgmt_txrx_rx_ops->mgmt_rx_frame_handler =
+			tgt_mgmt_txrx_rx_frame_handler;
+	mgmt_txrx_rx_ops->mgmt_txrx_get_nbuf_from_desc_id =
+			tgt_mgmt_txrx_get_nbuf_from_desc_id;
+	mgmt_txrx_rx_ops->mgmt_txrx_get_peer_from_desc_id =
+			tgt_mgmt_txrx_get_peer_from_desc_id;
+	mgmt_txrx_rx_ops->mgmt_txrx_get_vdev_id_from_desc_id =
+			tgt_mgmt_txrx_get_vdev_id_from_desc_id;
+	mgmt_txrx_rx_ops->mgmt_txrx_get_free_desc_pool_count =
+			tgt_mgmt_txrx_get_free_desc_pool_count;
+	mgmt_txrx_rx_ops->mgmt_rx_frame_entry =
+			tgt_mgmt_txrx_rx_frame_entry;
+
+	return wlan_lmac_if_mgmt_rx_reo_rx_ops_register(mgmt_txrx_rx_ops);
+}
+
 static QDF_STATUS
 wlan_lmac_if_umac_dfs_rx_ops_register(struct wlan_lmac_if_rx_ops *rx_ops)
 {
@@ -620,7 +696,6 @@ wlan_lmac_if_umac_dfs_rx_ops_register(struct wlan_lmac_if_rx_ops *rx_ops)
 	dfs_rx_ops->dfs_complete_deferred_tasks =
 		tgt_dfs_complete_deferred_tasks;
 	register_precac_auto_chan_rx_ops(dfs_rx_ops);
-	register_precac_auto_chan_rx_ops_ieee(dfs_rx_ops);
 	register_precac_auto_chan_rx_ops_freq(dfs_rx_ops);
 	register_dfs_rx_ops_for_freq(dfs_rx_ops);
 	register_rcac_dfs_rx_ops(dfs_rx_ops);
@@ -693,6 +768,7 @@ wlan_lmac_if_umac_ftm_rx_ops_register(struct wlan_lmac_if_rx_ops *rx_ops)
 	return QDF_STATUS_SUCCESS;
 }
 #endif
+
 /**
  * wlan_lmac_if_umac_rx_ops_register() - UMAC rx handler register
  * @rx_ops: Pointer to rx_ops structure to be populated
@@ -708,28 +784,13 @@ wlan_lmac_if_umac_rx_ops_register(struct wlan_lmac_if_rx_ops *rx_ops)
 	 * respective callbacks
 	 * Ex: rx_ops->fp = function;
 	 */
-	struct wlan_lmac_if_mgmt_txrx_rx_ops *mgmt_txrx_rx_ops;
 
 	if (!rx_ops) {
 		qdf_print("lmac if rx ops pointer is NULL");
 		return QDF_STATUS_E_INVAL;
 	}
 
-	/* mgmt txrx rx ops */
-	mgmt_txrx_rx_ops = &rx_ops->mgmt_txrx_rx_ops;
-
-	mgmt_txrx_rx_ops->mgmt_tx_completion_handler =
-			tgt_mgmt_txrx_tx_completion_handler;
-	mgmt_txrx_rx_ops->mgmt_rx_frame_handler =
-			tgt_mgmt_txrx_rx_frame_handler;
-	mgmt_txrx_rx_ops->mgmt_txrx_get_nbuf_from_desc_id =
-			tgt_mgmt_txrx_get_nbuf_from_desc_id;
-	mgmt_txrx_rx_ops->mgmt_txrx_get_peer_from_desc_id =
-			tgt_mgmt_txrx_get_peer_from_desc_id;
-	mgmt_txrx_rx_ops->mgmt_txrx_get_vdev_id_from_desc_id =
-			tgt_mgmt_txrx_get_vdev_id_from_desc_id;
-	mgmt_txrx_rx_ops->mgmt_txrx_get_free_desc_pool_count =
-			tgt_mgmt_txrx_get_free_desc_pool_count;
+	wlan_lmac_if_mgmt_txrx_rx_ops_register(rx_ops);
 
 	/* scan rx ops */
 	rx_ops->scan.scan_ev_handler = tgt_scan_event_handler;

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012-2015, 2020, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012-2015,2020-2021 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -19,22 +19,113 @@
  */
 #include "wlan_cm_main_api.h"
 #include "wlan_cm_sm.h"
+#include "wlan_cm_roam.h"
 #include <wlan_serialization_api.h>
 #include "wlan_utility.h"
 #include "wlan_scan_api.h"
+#include "wlan_crypto_global_api.h"
 #ifdef CONN_MGR_ADV_FEATURE
 #include "wlan_blm_api.h"
 #endif
+#include <wlan_mlo_mgr_sta.h>
 
 void cm_send_disconnect_resp(struct cnx_mgr *cm_ctx, wlan_cm_id cm_id)
 {
 	struct wlan_cm_discon_rsp resp;
 	QDF_STATUS status;
 
+	qdf_mem_zero(&resp, sizeof(resp));
 	status = cm_fill_disconnect_resp_from_cm_id(cm_ctx, cm_id, &resp);
 	if (QDF_IS_STATUS_SUCCESS(status))
 		cm_disconnect_complete(cm_ctx, &resp);
 }
+
+#ifdef WLAN_CM_USE_SPINLOCK
+static QDF_STATUS cm_activate_disconnect_req_sched_cb(struct scheduler_msg *msg)
+{
+	struct wlan_serialization_command *cmd = msg->bodyptr;
+	struct wlan_objmgr_vdev *vdev;
+	struct cnx_mgr *cm_ctx;
+	QDF_STATUS ret = QDF_STATUS_E_FAILURE;
+
+	if (!cmd) {
+		mlme_err("cmd is null");
+		return QDF_STATUS_E_INVAL;
+	}
+
+	vdev = cmd->vdev;
+	if (!vdev) {
+		mlme_err("vdev is null");
+		return QDF_STATUS_E_INVAL;
+	}
+
+	cm_ctx = cm_get_cm_ctx(vdev);
+	if (!cm_ctx)
+		return QDF_STATUS_E_INVAL;
+
+	ret = cm_sm_deliver_event(
+			cm_ctx->vdev,
+			WLAN_CM_SM_EV_DISCONNECT_ACTIVE,
+			sizeof(wlan_cm_id),
+			&cmd->cmd_id);
+
+	/*
+	 * Called from scheduler context hence
+	 * handle failure if posting fails
+	 */
+	if (QDF_IS_STATUS_ERROR(ret)) {
+		mlme_err(CM_PREFIX_FMT "Activation failed for cmd:%d",
+			 CM_PREFIX_REF(wlan_vdev_get_id(vdev), cmd->cmd_id),
+			 cmd->cmd_type);
+		cm_send_disconnect_resp(cm_ctx, cmd->cmd_id);
+	}
+
+	wlan_objmgr_vdev_release_ref(vdev, WLAN_MLME_CM_ID);
+	return ret;
+}
+
+static QDF_STATUS
+cm_activate_disconnect_req(struct wlan_serialization_command *cmd)
+{
+	struct wlan_objmgr_vdev *vdev = cmd->vdev;
+	struct scheduler_msg msg = {0};
+	QDF_STATUS ret;
+
+	msg.bodyptr = cmd;
+	msg.callback = cm_activate_disconnect_req_sched_cb;
+	msg.flush_callback = cm_activate_cmd_req_flush_cb;
+
+	ret = wlan_objmgr_vdev_try_get_ref(vdev, WLAN_MLME_CM_ID);
+	if (QDF_IS_STATUS_ERROR(ret))
+		return ret;
+
+	ret = scheduler_post_message(QDF_MODULE_ID_MLME,
+				     QDF_MODULE_ID_MLME,
+				     QDF_MODULE_ID_MLME, &msg);
+
+	if (QDF_IS_STATUS_ERROR(ret)) {
+		mlme_err(CM_PREFIX_FMT "Failed to post scheduler_msg",
+			 CM_PREFIX_REF(wlan_vdev_get_id(vdev), cmd->cmd_id));
+		wlan_objmgr_vdev_release_ref(vdev, WLAN_MLME_CM_ID);
+		return ret;
+	}
+	mlme_debug(CM_PREFIX_FMT "Cmd act in sched cmd type:%d",
+		   CM_PREFIX_REF(wlan_vdev_get_id(vdev), cmd->cmd_id),
+		   cmd->cmd_type);
+
+	return ret;
+}
+#else
+static QDF_STATUS
+cm_activate_disconnect_req(struct wlan_serialization_command *cmd)
+{
+	return cm_sm_deliver_event(
+			cmd->vdev,
+			WLAN_CM_SM_EV_DISCONNECT_ACTIVE,
+			sizeof(wlan_cm_id),
+			&cmd->cmd_id);
+}
+#endif
 
 static QDF_STATUS
 cm_sm_deliver_disconnect_event(struct cnx_mgr *cm_ctx,
@@ -46,11 +137,7 @@ cm_sm_deliver_disconnect_event(struct cnx_mgr *cm_ctx,
 	 * acquired.
 	 */
 	if (cmd->activation_reason == SER_PENDING_TO_ACTIVE)
-		return cm_sm_deliver_event(
-					cm_ctx->vdev,
-					WLAN_CM_SM_EV_DISCONNECT_ACTIVE,
-					sizeof(wlan_cm_id),
-					&cmd->cmd_id);
+		return cm_activate_disconnect_req(cmd);
 	else
 		return cm_sm_deliver_event_sync(
 					cm_ctx,
@@ -100,7 +187,7 @@ cm_ser_disconnect_cb(struct wlan_serialization_command *cmd,
 	case WLAN_SER_CB_ACTIVE_CMD_TIMEOUT:
 		mlme_err(CM_PREFIX_FMT "Active command timeout",
 			 CM_PREFIX_REF(wlan_vdev_get_id(vdev), cmd->cmd_id));
-		QDF_ASSERT(0);
+		cm_trigger_panic_on_cmd_timeout(cm_ctx->vdev);
 		cm_send_disconnect_resp(cm_ctx, cmd->cmd_id);
 		break;
 	case WLAN_SER_CB_RELEASE_MEM_CMD:
@@ -160,9 +247,8 @@ static QDF_STATUS cm_ser_disconnect_req(struct wlan_objmgr_pdev *pdev,
 	return QDF_STATUS_SUCCESS;
 }
 
-#ifdef WLAN_FEATURE_INTERFACE_MGR
 static void
-cm_inform_if_mgr_disconnect_complete(struct wlan_objmgr_vdev *vdev)
+cm_if_mgr_inform_disconnect_complete(struct wlan_objmgr_vdev *vdev)
 {
 	struct if_mgr_event_data *disconnect_complete;
 
@@ -178,7 +264,7 @@ cm_inform_if_mgr_disconnect_complete(struct wlan_objmgr_vdev *vdev)
 }
 
 static void
-cm_inform_if_mgr_disconnect_start(struct wlan_objmgr_vdev *vdev)
+cm_if_mgr_inform_disconnect_start(struct wlan_objmgr_vdev *vdev)
 {
 	struct if_mgr_event_data *disconnect_start;
 
@@ -192,18 +278,6 @@ cm_inform_if_mgr_disconnect_start(struct wlan_objmgr_vdev *vdev)
 			     disconnect_start);
 	qdf_mem_free(disconnect_start);
 }
-
-#else
-static inline void
-cm_inform_if_mgr_disconnect_complete(struct wlan_objmgr_vdev *vdev)
-{
-}
-
-static inline void
-cm_inform_if_mgr_disconnect_start(struct wlan_objmgr_vdev *vdev)
-{
-}
-#endif
 
 void cm_initiate_internal_disconnect(struct cnx_mgr *cm_ctx)
 {
@@ -243,10 +317,9 @@ QDF_STATUS cm_disconnect_start(struct cnx_mgr *cm_ctx,
 		cm_send_disconnect_resp(cm_ctx, req->cm_id);
 		return QDF_STATUS_E_INVAL;
 	}
-
-	/* disconnect TDLS, P2P roc cleanup */
-	cm_inform_if_mgr_disconnect_start(cm_ctx->vdev);
-	cm_vdev_scan_cancel(wlan_vdev_get_pdev(cm_ctx->vdev), cm_ctx->vdev);
+	cm_vdev_scan_cancel(pdev, cm_ctx->vdev);
+	mlme_cm_disconnect_start_ind(cm_ctx->vdev, &req->req);
+	cm_if_mgr_inform_disconnect_start(cm_ctx->vdev);
 	mlme_cm_osif_disconnect_start_ind(cm_ctx->vdev);
 
 	/* Serialize disconnect req, Handle failure status */
@@ -258,7 +331,7 @@ QDF_STATUS cm_disconnect_start(struct cnx_mgr *cm_ctx,
 	return QDF_STATUS_SUCCESS;
 }
 
-static void
+void
 cm_update_scan_mlme_on_disconnect(struct wlan_objmgr_vdev *vdev,
 				  struct cm_disconnect_req *req)
 {
@@ -303,7 +376,7 @@ QDF_STATUS cm_disconnect_active(struct cnx_mgr *cm_ctx, wlan_cm_id *cm_id)
 {
 	struct wlan_cm_vdev_discon_req *req;
 	struct cm_req *cm_req;
-	struct qdf_mac_addr bssid;
+	struct qdf_mac_addr bssid = QDF_MAC_ADDR_ZERO_INIT;
 	QDF_STATUS status;
 
 	cm_req = cm_get_req_by_cm_id(cm_ctx, *cm_id);
@@ -315,14 +388,23 @@ QDF_STATUS cm_disconnect_active(struct cnx_mgr *cm_ctx, wlan_cm_id *cm_id)
 		return QDF_STATUS_E_NOMEM;
 
 	cm_ctx->active_cm_id = *cm_id;
-
 	wlan_vdev_get_bss_peer_mac(cm_ctx->vdev, &bssid);
+	/*
+	 * for northbound req, bssid is not provided so update it from vdev
+	 * in case bssid is not present
+	 */
+	if (qdf_is_macaddr_zero(&cm_req->discon_req.req.bssid) ||
+	    qdf_is_macaddr_broadcast(&cm_req->discon_req.req.bssid))
+		qdf_copy_macaddr(&cm_req->discon_req.req.bssid, &bssid);
+
 	qdf_copy_macaddr(&req->req.bssid, &bssid);
 
 	req->cm_id = *cm_id;
 	req->req.vdev_id = wlan_vdev_get_id(cm_ctx->vdev);
 	req->req.source = cm_req->discon_req.req.source;
 	req->req.reason_code = cm_req->discon_req.req.reason_code;
+	req->req.is_no_disassoc_disconnect =
+			cm_req->discon_req.req.is_no_disassoc_disconnect;
 
 	cm_update_scan_mlme_on_disconnect(cm_ctx->vdev,
 					  &cm_req->discon_req);
@@ -367,6 +449,19 @@ cm_inform_blm_disconnect_complete(struct wlan_objmgr_vdev *vdev,
 {}
 #endif
 
+QDF_STATUS cm_notify_disconnect_complete(struct cnx_mgr *cm_ctx,
+					 struct wlan_cm_discon_rsp *resp)
+{
+	mlme_cm_disconnect_complete_ind(cm_ctx->vdev, resp);
+	mlo_sta_link_disconn_notify(cm_ctx->vdev, resp);
+	mlme_cm_osif_disconnect_complete(cm_ctx->vdev, resp);
+	cm_if_mgr_inform_disconnect_complete(cm_ctx->vdev);
+	cm_inform_blm_disconnect_complete(cm_ctx->vdev, resp);
+	wlan_vdev_mlme_feat_ext2_cap_clear(cm_ctx->vdev, WLAN_VDEV_FEXT2_MLO);
+
+	return QDF_STATUS_SUCCESS;
+}
+
 QDF_STATUS cm_disconnect_complete(struct cnx_mgr *cm_ctx,
 				  struct wlan_cm_discon_rsp *resp)
 {
@@ -377,21 +472,27 @@ QDF_STATUS cm_disconnect_complete(struct cnx_mgr *cm_ctx,
 	if (!cm_get_req_by_cm_id(cm_ctx, resp->req.cm_id))
 		return QDF_STATUS_SUCCESS;
 
-	mlme_cm_disconnect_complete_ind(cm_ctx->vdev, resp);
-	mlme_cm_osif_disconnect_complete(cm_ctx->vdev, resp);
-
-	cm_inform_if_mgr_disconnect_complete(cm_ctx->vdev);
-
-	cm_inform_blm_disconnect_complete(cm_ctx->vdev, resp);
+	cm_notify_disconnect_complete(cm_ctx, resp);
 
 	/*
 	 * Remove all pending disconnect if this is an active disconnect
 	 * complete.
 	 */
 	if (resp->req.cm_id == cm_ctx->active_cm_id)
-		cm_flush_pending_request(cm_ctx, DISCONNECT_REQ_PREFIX);
+		cm_flush_pending_request(cm_ctx, DISCONNECT_REQ_PREFIX, false);
 
-	cm_remove_cmd(cm_ctx, resp->req.cm_id);
+	cm_remove_cmd(cm_ctx, &resp->req.cm_id);
+	mlme_debug(CM_PREFIX_FMT "disconnect count %d connect count %d",
+		   CM_PREFIX_REF(wlan_vdev_get_id(cm_ctx->vdev),
+				 resp->req.cm_id),
+		   cm_ctx->disconnect_count, cm_ctx->connect_count);
+	/* Flush failed connect req as pending disconnect is completed */
+	if (!cm_ctx->disconnect_count && cm_ctx->connect_count)
+		cm_flush_pending_request(cm_ctx, CONNECT_REQ_PREFIX, true);
+
+	/* Set the disconnect wait event once all disconnect are completed */
+	if (!cm_ctx->disconnect_count)
+		qdf_event_set(&cm_ctx->disconnect_complete);
 
 	return QDF_STATUS_SUCCESS;
 }
@@ -409,7 +510,8 @@ cm_handle_discon_req_in_non_connected_state(struct cnx_mgr *cm_ctx,
 	 * been received, hence skip the non-osif disconnect request.
 	 */
 	if (cur_state == WLAN_CM_S_CONNECTING &&
-	    cm_req->req.source != CM_OSIF_DISCONNECT) {
+	    (cm_req->req.source != CM_OSIF_DISCONNECT &&
+	    cm_req->req.source != CM_OSIF_CFG_DISCONNECT)) {
 		mlme_info("Vdev %d ignore disconnect req from source %d in state %d",
 			  wlan_vdev_get_id(cm_ctx->vdev), cm_req->req.source,
 			  cm_state_substate);
@@ -429,15 +531,27 @@ cm_handle_discon_req_in_non_connected_state(struct cnx_mgr *cm_ctx,
 		mlme_cm_osif_update_id_and_src(cm_ctx->vdev,
 					       CM_SOURCE_INVALID,
 					       CM_ID_INVALID);
-		cm_flush_pending_request(cm_ctx, DISCONNECT_REQ_PREFIX);
+		cm_flush_pending_request(cm_ctx, DISCONNECT_REQ_PREFIX, false);
+		/*
+		 * Flush failed pending connect req as new req is received
+		 * and its no longer the latest one.
+		 */
+		if (cm_ctx->connect_count)
+			cm_flush_pending_request(cm_ctx, CONNECT_REQ_PREFIX,
+						 true);
 		break;
+	case WLAN_CM_S_ROAMING:
+		/* for FW roam/LFR3 remove the req from the list */
+		if (cm_roam_offload_enabled(wlan_vdev_get_psoc(cm_ctx->vdev)))
+			cm_flush_pending_request(cm_ctx, ROAM_REQ_PREFIX,
+						 false);
+		/* fallthrough */
 	case WLAN_CM_SS_JOIN_ACTIVE:
 		/*
-		 * In join active state, there would be no pending command, so
-		 * for new disconnect request, queue disconnect.
-		 * In disconnecting state queue the new disconnect request, and
-		 * when the old diconnect moves the SM to init it would be
-		 * dropped and required callbacks would be called.
+		 * In join active/roaming state, there would be no pending
+		 * command, so no action required. so for new disconnect
+		 * request, queue disconnect and move the state to
+		 * disconnecting.
 		 */
 		break;
 	case WLAN_CM_SS_SCAN:
@@ -462,8 +576,8 @@ cm_handle_discon_req_in_non_connected_state(struct cnx_mgr *cm_ctx,
 		 * disconnect requests pending, so flush all the requests except
 		 * the activated request.
 		 */
-		cm_flush_pending_request(cm_ctx, CONNECT_REQ_PREFIX);
-		cm_flush_pending_request(cm_ctx, DISCONNECT_REQ_PREFIX);
+		cm_flush_pending_request(cm_ctx, CONNECT_REQ_PREFIX, false);
+		cm_flush_pending_request(cm_ctx, DISCONNECT_REQ_PREFIX, false);
 		break;
 	default:
 		mlme_err("Vdev %d disconnect req in invalid state %d",
@@ -512,6 +626,10 @@ QDF_STATUS cm_disconnect_start_req(struct wlan_objmgr_vdev *vdev,
 	if (!cm_req)
 		return QDF_STATUS_E_NOMEM;
 
+	if (wlan_vdev_mlme_is_mlo_vdev(vdev) &&
+	    !wlan_vdev_mlme_is_mlo_link_vdev(vdev))
+		req->is_no_disassoc_disconnect = 1;
+
 	disconnect_req = &cm_req->discon_req;
 	disconnect_req->req = *req;
 
@@ -520,6 +638,35 @@ QDF_STATUS cm_disconnect_start_req(struct wlan_objmgr_vdev *vdev,
 	/* free the req if disconnect is not handled */
 	if (QDF_IS_STATUS_ERROR(status))
 		qdf_mem_free(cm_req);
+
+	return status;
+}
+
+QDF_STATUS cm_disconnect_start_req_sync(struct wlan_objmgr_vdev *vdev,
+					struct wlan_cm_disconnect_req *req)
+{
+	struct cnx_mgr *cm_ctx;
+	QDF_STATUS status;
+
+	cm_ctx = cm_get_cm_ctx(vdev);
+	if (!cm_ctx)
+		return QDF_STATUS_E_INVAL;
+
+	if (wlan_vdev_mlme_is_mlo_vdev(vdev) &&
+	    !wlan_vdev_mlme_is_mlo_link_vdev(vdev))
+		req->is_no_disassoc_disconnect = 1;
+
+	qdf_event_reset(&cm_ctx->disconnect_complete);
+	status = cm_disconnect_start_req(vdev, req);
+	if (QDF_IS_STATUS_ERROR(status)) {
+		mlme_err("Disconnect failed with status %d", status);
+		return status;
+	}
+
+	status = qdf_wait_single_event(&cm_ctx->disconnect_complete,
+				       CM_DISCONNECT_CMD_TIMEOUT);
+	if (QDF_IS_STATUS_ERROR(status))
+		mlme_err("Disconnect timeout with status %d", status);
 
 	return status;
 }

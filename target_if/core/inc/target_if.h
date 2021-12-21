@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017-2020 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2017-2021 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -178,6 +178,7 @@ struct target_version_info {
  * @service_ext2_param: service ready ext2 event params
  * @service_ext_param: ext service params
  * @mac_phy_cap: phy caps array
+ * @mac_phy_caps_ext2: mac phy caps ext2 params
  * @dbr_ring_cap: dbr_ring capability info
  * @reg_cap: regulatory caps array
  * @scaling_params: Spectral bin scaling parameters
@@ -185,6 +186,7 @@ struct target_version_info {
  * @hw_mode_caps: HW mode caps of preferred mode
  * @mem_chunks: allocated memory blocks for FW
  * @scan_radio_caps: scan radio capabilities
+ * @device_mode: Global Device mode
  */
 struct tgt_info {
 	struct host_fw_ver version;
@@ -206,6 +208,8 @@ struct tgt_info {
 	struct wlan_psoc_host_service_ext2_param service_ext2_param;
 	struct wlan_psoc_host_mac_phy_caps
 			mac_phy_cap[PSOC_MAX_MAC_PHY_CAP];
+	struct wlan_psoc_host_mac_phy_caps_ext2
+			mac_phy_caps_ext2[PSOC_MAX_MAC_PHY_CAP];
 	struct wlan_psoc_host_dbr_ring_caps *dbr_ring_cap;
 	struct wlan_psoc_host_spectral_scaling_params *scaling_params;
 	uint32_t num_mem_chunks;
@@ -215,6 +219,7 @@ struct tgt_info {
 	uint8_t pdev_id_to_phy_id_map[WLAN_UMAC_MAX_PDEVS];
 	bool is_pdevid_to_phyid_map;
 	struct wlan_psoc_host_scan_radio_caps *scan_radio_caps;
+	uint32_t device_mode;
 };
 
 /**
@@ -240,6 +245,7 @@ struct tgt_info {
  * @smart_log_enable: Enable Smart Logs feature
  * @cfr_support_enable: CFR support enable
  * @set_pktlog_checksum: Set the pktlog checksum from FW ready event to pl_dev
+ * @csa_switch_count_status: CSA event handler
  */
 struct target_ops {
 	QDF_STATUS (*ext_resource_config_enable)
@@ -302,6 +308,9 @@ struct target_ops {
 		 struct target_psoc_info *tgt_info, uint8_t *event);
 	void (*set_pktlog_checksum)
 		(struct wlan_objmgr_pdev *pdev, uint32_t checksum);
+	int (*csa_switch_count_status)(
+		struct wlan_objmgr_psoc *psoc,
+		struct pdev_csa_switch_count_status csa_status);
 };
 
 
@@ -326,6 +335,7 @@ struct target_psoc_info {
  * @accelerator_hdl: NSS offload/IPA handles
  * @pdev_idx: pdev id (of FW)
  * @phy_idx: phy id (of FW)
+ * @hw_link_id: Unique link id across SoC required in multi-soc ML
  * @feature_ptr: stores legacy pointer or few driver specific structures
  */
 struct target_pdev_info {
@@ -333,6 +343,9 @@ struct target_pdev_info {
 	struct common_accelerator_handle *accelerator_hdl;
 	int32_t pdev_idx;
 	int32_t phy_idx;
+#if defined(WLAN_FEATURE_11BE_MLO) && defined(WLAN_MLO_MULTI_CHIP)
+	uint16_t hw_link_id;
+#endif
 	void *feature_ptr;
 };
 
@@ -531,12 +544,20 @@ bool target_is_tgt_type_adrastea(uint32_t target_type);
 bool target_is_tgt_type_qcn9000(uint32_t target_type);
 
 /**
- * target_is_tgt_type_qcn9100() - Check if the target type is QCN9100 (Spruce)
+ * target_is_tgt_type_qcn6122() - Check if the target type is QCN6122 (Spruce)
  * @target_type: target type to be checked.
  *
- * Return: true if the target_type is QCN9100, else false.
+ * Return: true if the target_type is QCN6122, else false.
  */
-bool target_is_tgt_type_qcn9100(uint32_t target_type);
+bool target_is_tgt_type_qcn6122(uint32_t target_type);
+
+/**
+ * target_is_tgt_type_qcn7605() - Check if the target type is QCN7605
+ * @target_type: target type to be checked.
+ *
+ * Return: true if the target_type is QCN7605, else false.
+ */
+bool target_is_tgt_type_qcn7605(uint32_t target_type);
 
 /**
  * target_psoc_set_wlan_init_status() - set info wlan_init_status
@@ -1426,6 +1447,39 @@ static inline struct wlan_psoc_host_mac_phy_caps
 }
 
 /**
+ * target_psoc_get_mac_phy_cap_ext2_for_mode() - get mac_phy_caps_ext2
+ *                                               for a hw-mode
+ * @psoc_info:  pointer to structure target_psoc_info
+ * @mode: hw mode
+ *
+ * API to get mac_phy_cap for a specified hw-mode
+ *
+ * Return: structure pointer to wlan_psoc_host_mac_phy_caps_ext2
+ */
+
+static inline struct wlan_psoc_host_mac_phy_caps_ext2
+		*target_psoc_get_mac_phy_cap_ext2_for_mode
+		(struct target_psoc_info *psoc_info, uint8_t mode)
+{
+	uint8_t mac_phy_idx;
+	struct tgt_info *info = &psoc_info->info;
+
+	if (!psoc_info)
+		return NULL;
+
+	for (mac_phy_idx = 0;
+		mac_phy_idx < PSOC_MAX_MAC_PHY_CAP;
+			mac_phy_idx++)
+		if (info->mac_phy_caps_ext2[mac_phy_idx].hw_mode_id == mode)
+			break;
+
+	if (mac_phy_idx == PSOC_MAX_MAC_PHY_CAP)
+		return NULL;
+
+	return &info->mac_phy_caps_ext2[mac_phy_idx];
+}
+
+/**
  * target_psoc_get_mac_phy_cap() - get mac_phy_cap
  * @psoc_info:  pointer to structure target_psoc_info
  *
@@ -1454,6 +1508,38 @@ static inline struct wlan_psoc_host_mac_phy_caps *target_psoc_get_mac_phy_cap
 	}
 
 	return mac_phy_cap;
+}
+
+/**
+ * target_psoc_get_mac_phy_cap_ext2() - get mac_phy_caps_ext2
+ * @psoc_info:  pointer to structure target_psoc_info
+ *
+ * API to get mac_phy_caps_ext2
+ *
+ * Return: structure pointer to wlan_psoc_host_mac_phy_caps
+ */
+static inline struct wlan_psoc_host_mac_phy_caps_ext2
+		*target_psoc_get_mac_phy_cap_ext2
+		(struct target_psoc_info *psoc_info)
+{
+	uint32_t preferred_hw_mode;
+	struct wlan_psoc_host_mac_phy_caps_ext2 *mac_phy_caps_ext2;
+
+	if (!psoc_info)
+		return NULL;
+
+	preferred_hw_mode =
+		target_psoc_get_preferred_hw_mode(psoc_info);
+
+	if (preferred_hw_mode < WMI_HOST_HW_MODE_MAX) {
+		mac_phy_caps_ext2 =
+			target_psoc_get_mac_phy_cap_ext2_for_mode
+			(psoc_info, preferred_hw_mode);
+	} else {
+		mac_phy_caps_ext2 = psoc_info->info.mac_phy_caps_ext2;
+	}
+
+	return mac_phy_caps_ext2;
 }
 
 /**
@@ -2114,6 +2200,26 @@ static inline void target_if_add_11ax_modes(struct wlan_objmgr_psoc *psoc,
 #endif
 
 /**
+ * target_if_csa_switch_count_status - Calls a function to process CSA event
+ * @psoc:  psoc object
+ * @tgt_hdl: target_psoc_info pointer
+ * @csa_status: CSA switch count status event param
+ *
+ * Return: 0 on success, -1 on failure
+ */
+static inline int target_if_csa_switch_count_status(
+		struct wlan_objmgr_psoc *psoc,
+		struct target_psoc_info *tgt_hdl,
+		struct pdev_csa_switch_count_status csa_status)
+{
+	if (tgt_hdl->tif_ops && tgt_hdl->tif_ops->csa_switch_count_status)
+		return tgt_hdl->tif_ops->csa_switch_count_status(
+				psoc, csa_status);
+
+	return -1;
+}
+
+/**
  * target_if_set_default_config - Set default config in init command
  * @psoc:  psoc object
  * @tgt_hdl: target_psoc_info pointer
@@ -2512,5 +2618,131 @@ static inline void target_psoc_get_mu_max_users(
 	mu_caps->mumimo_dl = service_ext2_param->max_users_dl_mumimo;
 	mu_caps->mumimo_ul = service_ext2_param->max_users_ul_mumimo;
 }
+
+/**
+ * target_psoc_set_device_mode() - set global device_mode
+ * @psoc_info: pointer to structure target_psoc_info
+ * @device_mode: device mode mission monitor/ftm etc
+ *
+ * API to set global device mode
+ *
+ * Return: void
+ */
+static inline void target_psoc_set_device_mode
+		(struct target_psoc_info *psoc_info, uint32_t device_mode)
+{
+	if (!psoc_info)
+		return;
+
+	psoc_info->info.device_mode = device_mode;
+}
+
+/**
+ * target_psoc_get_device_mode() - get info device_mode
+ * @psoc_info: pointer to structure target_psoc_info
+ *
+ * API to get device_mode
+ *
+ * Return: enum QDF_GLOBAL_MODE
+ */
+static inline enum QDF_GLOBAL_MODE target_psoc_get_device_mode
+		(struct target_psoc_info *psoc_info)
+{
+	if (!psoc_info)
+		return QDF_GLOBAL_MAX_MODE;
+
+	return psoc_info->info.device_mode;
+}
+
+/**
+ * target_if_set_reg_cc_ext_supp() - Set reg_cc_ext_supp capability
+ * in WMI_INIT_CMD based on host capability of reg_cc_ext_event.
+ *
+ * @tgt_hdl: Pointer to struct target_psoc_info.
+ * @psoc: Pointer to struct wlan_objmgr_psoc.
+ *
+ */
+void target_if_set_reg_cc_ext_supp(struct target_psoc_info *tgt_hdl,
+				   struct wlan_objmgr_psoc *psoc);
+
+/**
+ * target_psoc_set_twt_ack_cap() - Set twt ack capability
+ *
+ * @psoc_info: Pointer to struct target_psoc_info.
+ * @val: twt ack cap value
+ *
+ * Return: None
+ *
+ */
+static inline
+void target_psoc_set_twt_ack_cap(struct target_psoc_info *psoc_info, bool val)
+{
+	if (!psoc_info)
+		return;
+
+	psoc_info->info.service_ext2_param.twt_ack_support_cap = val;
+}
+
+/**
+ * target_psoc_get_twt_ack_cap() - Get twt ack capability
+ *
+ * @psoc_info: Pointer to struct target_psoc_info.
+ * @val: twt ack cap value
+ *
+ * Return: None
+ *
+ */
+static inline
+void target_psoc_get_twt_ack_cap(struct target_psoc_info *psoc_info, bool *val)
+{
+	if (!psoc_info)
+		return;
+
+	*val = psoc_info->info.service_ext2_param.twt_ack_support_cap;
+}
+
+/**
+ * target_psoc_target_cap_flags() - flags containing information about target
+ * capabilities
+ * @psoc_info:  pointer to structure target_psoc_info
+ *
+ * API to get flags containing information about target capabilities
+ *
+ * Return: no of target_cap_flags
+ */
+static inline uint32_t target_psoc_get_target_cap_flags
+		(struct target_psoc_info *psoc_info)
+{
+	if (!psoc_info)
+		return 0;
+
+	return psoc_info->info.service_ext2_param.target_cap_flags;
+}
+
+#if defined(WLAN_FEATURE_11BE_MLO) && defined(WLAN_MLO_MULTI_CHIP)
+/**
+ * target_pdev_get_hw_link_id  - get hw_link_id
+ * @pdev:  pointer to structure target_pdev_info
+ *
+ * API to get hw_link_id
+ *
+ * Return: uint16_t
+ */
+#define PDEV_INVALID_HW_LINK_ID 0xFFFF
+uint16_t  target_if_pdev_get_hw_link_id
+		(struct wlan_objmgr_pdev *pdev);
+
+/**
+ * target_pdev_set_hw_link_id - set hw_link_id
+ * @pdev:  pointer to structure target_pdev_info
+ * @hw_link_id: unique hw link id of pdev across psoc
+ *
+ * API to set hw_link_id
+ *
+ * Return: void
+ */
+void target_pdev_set_hw_link_id
+		(struct wlan_objmgr_pdev *pdev, uint16_t hw_link_id);
+#endif /*WLAN_FEATURE_11BE_MLO && WLAN_MLO_MULTI_CHIP*/
 
 #endif

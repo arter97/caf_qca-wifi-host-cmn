@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011-2020 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2011-2021 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -26,9 +26,23 @@
 
 #include "hif_main.h"
 
-#define MOB_DRV_LEGACY_DP	0xdeed/*FIXME Add MCL device IDs */
-#define LITHIUM_DP		0xfffd/*FIXME Add Litium device ID */
-/* Use these device IDs for attach in future */
+#define MOB_DRV_LEGACY_DP 0xdeed
+/* Lithium device IDs */
+#define LITHIUM_DP		0xfffd
+/* Beryllium device IDs */
+#define BERYLLIUM_DP		0xaffe
+/* Use device IDs for attach in future */
+
+/* enum cdp_arch_type - enum for DP arch type
+ * CDP_ARCH_TYPE_LI - for lithium
+ * CDP_ARCH_TYPE_BE - for beryllium
+ * CDP_ARCH_TYPE_NONE - not supported
+ */
+enum cdp_arch_type {
+	CDP_ARCH_TYPE_NONE = -1,
+	CDP_ARCH_TYPE_LI,
+	CDP_ARCH_TYPE_BE,
+};
 
 #if defined(DP_TXRX_SOC_ATTACH)
 static inline ol_txrx_soc_handle
@@ -66,7 +80,7 @@ ol_txrx_soc_attach(void *scn_handle, struct ol_if_ops *dp_ol_if_ops);
  * Return: DP SOC handle on success, NULL on failure
  */
 #if defined(QCA_WIFI_QCA8074) || defined(QCA_WIFI_QCA6018) || \
-	defined(QCA_WIFI_QCA5018)
+	defined(QCA_WIFI_QCA5018) || defined(QCA_WIFI_QCA9574)
 struct cdp_soc_t *
 dp_soc_attach_wifi3(struct cdp_ctrl_objmgr_psoc *ctrl_psoc,
 		    struct hif_opaque_softc *hif_handle,
@@ -100,22 +114,17 @@ void *dp_soc_init_wifi3(struct cdp_soc_t *soc,
 }
 #endif /* QCA_WIFI_QCA8074 */
 
-static inline
-ol_txrx_soc_handle cdp_soc_attach(u_int16_t devid,
-				  struct hif_opaque_softc *hif_handle,
-				  struct cdp_ctrl_objmgr_psoc *psoc,
-				  HTC_HANDLE htc_handle,
-				  qdf_device_t qdf_dev,
-				  struct ol_if_ops *dp_ol_if_ops)
+static inline int cdp_get_arch_type_from_devid(uint16_t devid)
 {
 	switch (devid) {
 	case LITHIUM_DP: /*FIXME Add lithium devide IDs */
 	case QCA8074_DEVICE_ID: /* Hawekeye */
 	case QCA8074V2_DEVICE_ID: /* Hawekeye V2*/
+	case QCA9574_DEVICE_ID:
 	case QCA5018_DEVICE_ID:
 	case QCA6290_DEVICE_ID:
 	case QCN9000_DEVICE_ID:
-	case QCN9100_DEVICE_ID:
+	case QCN6122_DEVICE_ID:
 	case QCA6390_DEVICE_ID:
 	case QCA6490_DEVICE_ID:
 	case QCA6750_DEVICE_ID:
@@ -126,6 +135,45 @@ ol_txrx_soc_handle cdp_soc_attach(u_int16_t devid,
 	case RUMIM2M_DEVICE_ID_NODE3: /*lithium emulation */
 	case RUMIM2M_DEVICE_ID_NODE4: /*lithium emulation */
 	case RUMIM2M_DEVICE_ID_NODE5: /*lithium emulation */
+		return CDP_ARCH_TYPE_LI;
+	case BERYLLIUM_DP:
+	case WCN7850_DEVICE_ID:
+	case QCN9224_DEVICE_ID:
+		return CDP_ARCH_TYPE_BE;
+	default:
+		return CDP_ARCH_TYPE_NONE;
+	}
+}
+
+static inline
+ol_txrx_soc_handle cdp_soc_attach(u_int16_t devid,
+				  struct hif_opaque_softc *hif_handle,
+				  struct cdp_ctrl_objmgr_psoc *psoc,
+				  HTC_HANDLE htc_handle,
+				  qdf_device_t qdf_dev,
+				  struct ol_if_ops *dp_ol_if_ops)
+{
+	switch (devid) {
+	case LITHIUM_DP: /*FIXME Add lithium devide IDs */
+	case BERYLLIUM_DP:
+	case QCA8074_DEVICE_ID: /* Hawekeye */
+	case QCA8074V2_DEVICE_ID: /* Hawekeye V2*/
+	case QCA5018_DEVICE_ID:
+	case QCA6290_DEVICE_ID:
+	case QCN9000_DEVICE_ID:
+	case QCN6122_DEVICE_ID:
+	case QCA6390_DEVICE_ID:
+	case QCA6490_DEVICE_ID:
+	case QCA6750_DEVICE_ID:
+	case QCA6390_EMULATION_DEVICE_ID:
+	case RUMIM2M_DEVICE_ID_NODE0: /*lithium emulation */
+	case RUMIM2M_DEVICE_ID_NODE1: /*lithium emulation */
+	case RUMIM2M_DEVICE_ID_NODE2: /*lithium emulation */
+	case RUMIM2M_DEVICE_ID_NODE3: /*lithium emulation */
+	case RUMIM2M_DEVICE_ID_NODE4: /*lithium emulation */
+	case RUMIM2M_DEVICE_ID_NODE5: /*lithium emulation */
+	case WCN7850_DEVICE_ID:
+	case QCN9224_DEVICE_ID:
 		return dp_soc_attach_wifi3(psoc, hif_handle, htc_handle,
 			qdf_dev, dp_ol_if_ops, devid);
 	break;

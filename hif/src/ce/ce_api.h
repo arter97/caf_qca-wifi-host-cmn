@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2020 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2013-2021 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -438,6 +438,7 @@ void war_ce_src_ring_write_idx_set(struct hif_softc *scn,
 #define CE_ATTR_ENABLE_POLL          0x10 /* poll for residue descriptors */
 #define CE_ATTR_DIAG                 0x20 /* Diag CE */
 #define CE_ATTR_INIT_ON_DEMAND       0x40 /* Initialized on demand */
+#define CE_ATTR_HI_TASKLET           0x80 /* HI_TASKLET CE */
 
 /**
  * struct CE_attr - Attributes of an instance of a Copy Engine
@@ -535,6 +536,8 @@ struct ce_ops {
 	int (*ce_ring_setup)(struct hif_softc *scn, uint8_t ring_type,
 		uint32_t ce_id, struct CE_ring_state *ring,
 		struct CE_attr *attr);
+	void (*ce_srng_cleanup)(struct hif_softc *scn,
+				struct CE_state *CE_state, uint8_t ring_type);
 	QDF_STATUS (*ce_send_nolock)(struct CE_handle *copyeng,
 				     void *per_transfer_context,
 				     qdf_dma_addr_t buffer,

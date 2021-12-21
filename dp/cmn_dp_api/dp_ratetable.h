@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016-2020 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -40,7 +40,7 @@ enum CMN_BW_TYPES {
 #define NUM_HT_MCS 8
 #define NUM_VHT_MCS 12
 
-#define NUM_HE_MCS 12
+#define NUM_HE_MCS 14
 
 #define NUM_SPATIAL_STREAM 4
 #define NUM_SPATIAL_STREAMS 8
@@ -157,6 +157,7 @@ enum HW_RATECODE_PREAM_TYPE {
 	HW_RATECODE_PREAM_CCK,
 	HW_RATECODE_PREAM_HT,
 	HW_RATECODE_PREAM_VHT,
+	HW_RATECODE_PREAM_HE,
 };
 
 enum DP_CMN_MODULATION_TYPE dp_getmodulation(

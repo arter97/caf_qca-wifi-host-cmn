@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017-2020 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2017-2021 The Linux Foundation. All rights reserved.
  *
  *
  * Permission to use, copy, modify, and/or distribute this software for
@@ -33,7 +33,8 @@
 #include <wdi_event_api.h>
 
 #ifdef IPA_OFFLOAD
-#ifdef CONFIG_IPA_WDI_UNIFIED_API
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 10, 0)) || \
+	defined(CONFIG_IPA_WDI_UNIFIED_API)
 #include <qdf_ipa_wdi3.h>
 #else
 #include <qdf_ipa.h>
@@ -56,6 +57,17 @@ enum cdp_nac_param_cmd {
 	CDP_NAC_PARAM_DEL,
 	/* IEEE80211_NAC_PARAM_LIST */
 	CDP_NAC_PARAM_LIST,
+};
+
+#define CDP_DELBA_INTERVAL_MS 3000
+/**
+ * enum cdp_delba_rcode - CDP reason code for sending DELBA
+ * @CDP_DELBA_REASON_NONE: None
+ * @CDP_DELBA_2K_JUMP: Sending DELBA from 2k_jump_handle
+ */
+enum cdp_delba_rcode {
+	CDP_DELBA_REASON_NONE = 0,
+	CDP_DELBA_2K_JUMP,
 };
 
 /**
@@ -501,7 +513,7 @@ struct cdp_cmn_ops {
 	QDF_STATUS (*txrx_peer_map_attach)(ol_txrx_soc_handle soc,
 					   uint32_t num_peers,
 					   uint32_t max_ast_index,
-					   bool peer_map_unmap_v2);
+					   uint8_t peer_map_unmap_v);
 
 	QDF_STATUS (*set_soc_param)(ol_txrx_soc_handle soc,
 				    enum cdp_soc_param_t param,
@@ -566,6 +578,18 @@ struct cdp_cmn_ops {
 					  ol_txrx_rx_fp rx,
 					  ol_osif_peer_handle osif_peer);
 #endif /* QCA_SUPPORT_WDS_EXTENDED */
+	void (*txrx_drain)(ol_txrx_soc_handle soc);
+	int (*get_free_desc_poolsize)(struct cdp_soc_t *soc);
+#ifdef WLAN_SYSFS_DP_STATS
+	QDF_STATUS (*txrx_sysfs_fill_stats)(ol_txrx_soc_handle soc,
+					    char *buf, uint32_t buf_size);
+	QDF_STATUS (*txrx_sysfs_set_stat_type)(ol_txrx_soc_handle soc,
+					       uint32_t stat_type,
+					       uint32_t mac_id);
+#endif /* WLAN_SYSFS_DP_STATS */
+#ifdef WLAN_FEATURE_PKT_CAPTURE_V2
+	void (*set_pkt_capture_mode)(struct cdp_soc_t *soc, bool val);
+#endif
 };
 
 struct cdp_ctrl_ops {
@@ -682,6 +706,9 @@ struct cdp_ctrl_ops {
 					  cdp_config_param_type *val);
 
 	void * (*txrx_get_pldev)(struct cdp_soc_t *soc, uint8_t pdev_id);
+	void (*txrx_peer_flush_frags)(struct cdp_soc_t *soc, uint8_t vdev_id,
+				      uint8_t *peer_mac);
+
 #ifdef VDEV_PEER_PROTOCOL_COUNT
 	void (*txrx_peer_protocol_cnt)(struct cdp_soc_t *soc,
 				       int8_t vdev_id,
@@ -701,6 +728,24 @@ struct cdp_ctrl_ops {
 						   uint8_t vdev_id,
 						   char *macaddr,
 						   uint8_t *rssi);
+#endif
+
+#ifdef WLAN_SUPPORT_SCS
+	QDF_STATUS
+		(*txrx_enable_scs_params) (
+			   struct cdp_soc_t *soc, struct qdf_mac_addr
+			   *macaddr,
+			   uint8_t vdev_id,
+			   bool is_active);
+
+	QDF_STATUS
+		(*txrx_record_scs_params) (
+			   struct cdp_soc_t *soc, struct qdf_mac_addr
+			   *macaddr,
+			   uint8_t vdev_id,
+			   struct cdp_scs_params *scs_params,
+			   uint8_t entry_ctr,
+			   uint8_t scs_sessions);
 #endif
 
 #ifdef WLAN_SUPPORT_MSCS
@@ -779,6 +824,17 @@ struct cdp_ctrl_ops {
 						int8_t vdev_id);
 
 #endif
+
+#ifdef WLAN_FEATURE_TSF_UPLINK_DELAY
+	void (*txrx_set_delta_tsf)(struct cdp_soc_t *soc, uint8_t vdev_id,
+				   uint32_t delta_tsf);
+	QDF_STATUS (*txrx_set_tsf_ul_delay_report)(struct cdp_soc_t *soc,
+						   uint8_t vdev_id,
+						   bool enable);
+	QDF_STATUS (*txrx_get_uplink_delay)(struct cdp_soc_t *soc,
+					    uint8_t vdev_id,
+					    uint32_t *val);
+#endif
 };
 
 struct cdp_me_ops {
@@ -810,6 +866,8 @@ struct cdp_mon_ops {
 	/* Configure full monitor mode */
 	QDF_STATUS
 		(*config_full_mon_mode)(struct cdp_soc_t *soc, uint8_t val);
+	QDF_STATUS (*soc_config_full_mon_mode)(struct cdp_pdev *cdp_pdev,
+					       uint8_t val);
 };
 
 struct cdp_host_stats_ops {
@@ -901,6 +959,9 @@ struct cdp_host_stats_ops {
 				       uint8_t *peer_mac,
 				       struct cdp_peer_stats *peer_stats);
 	QDF_STATUS
+		(*txrx_get_soc_stats)(struct cdp_soc_t *soc,
+				      struct cdp_soc_stats *soc_stats);
+	QDF_STATUS
 		(*txrx_reset_peer_ald_stats)(struct cdp_soc_t *soc,
 					     uint8_t vdev_id,
 					     uint8_t *peer_mac);
@@ -937,6 +998,12 @@ struct cdp_host_stats_ops {
 				  uint8_t *peer_mac, void *stats,
 				  uint32_t last_tx_rate_mcs,
 				  uint32_t stats_id);
+
+#ifdef QCA_SUPPORT_SCAN_SPCL_VAP_STATS
+	QDF_STATUS
+	(*txrx_get_scan_spcl_vap_stats)(struct cdp_soc_t *soc, uint8_t vdev_id,
+					struct cdp_scan_spcl_vap_stats *stats);
+#endif
 };
 
 struct cdp_wds_ops {
@@ -952,8 +1019,6 @@ struct cdp_wds_ops {
 };
 
 struct cdp_raw_ops {
-	int (*txrx_get_nwifi_mode)(struct cdp_soc_t *soc, uint8_t vdev_id);
-
 	QDF_STATUS
 	(*rsim_get_astentry)(struct cdp_soc_t *soc, uint8_t vdev_id,
 			     qdf_nbuf_t *pnbuf, struct cdp_raw_ast *raw_ast);
@@ -1074,6 +1139,9 @@ struct ol_if_ops {
 	uint8_t (*freq_to_band)(struct cdp_ctrl_objmgr_psoc *psoc,
 				uint8_t pdev_id, uint16_t freq);
 
+	QDF_STATUS(*set_mec_timer)(struct cdp_ctrl_objmgr_psoc *psoc,
+				   uint8_t vdev_id, uint16_t mec_timer_val);
+
 #ifdef ATH_SUPPORT_NAC_RSSI
 	int (*config_fw_for_nac_rssi)(struct cdp_ctrl_objmgr_psoc *psoc,
 				      uint8_t pdev_id,
@@ -1096,12 +1164,14 @@ struct ol_if_ops {
 	 * @vdev_id: dp vdev id
 	 * @peer_macaddr: Peer mac addr
 	 * @tid: Tid number
+	 * @reason_code: Reason code
+	 * @cdp_rcode: CDP reason code for sending DELBA
 	 *
 	 * Return: 0 for success, non-zero for failure
 	 */
 	int (*send_delba)(struct cdp_ctrl_objmgr_psoc *psoc, uint8_t vdev_id,
 			  uint8_t *peer_macaddr, uint8_t tid,
-			  uint8_t reason_code);
+			  uint8_t reason_code, uint8_t cdp_rcode);
 
 	int
 	(*peer_delete_multiple_wds_entries)(struct cdp_ctrl_objmgr_psoc *psoc,
@@ -1122,6 +1192,9 @@ struct ol_if_ops {
 				   uint8_t *peer_mac_addr);
 #endif
 #ifdef DP_MEM_PRE_ALLOC
+	void *(*dp_prealloc_get_context)(uint32_t ctxt_type);
+
+	QDF_STATUS(*dp_prealloc_put_context)(uint32_t ctxt_type, void *vaddr);
 	void *(*dp_prealloc_get_consistent)(uint32_t *size,
 					    void **base_vaddr_unaligned,
 					    qdf_dma_addr_t *paddr_unaligned,
@@ -1146,12 +1219,22 @@ struct ol_if_ops {
 	QDF_STATUS(*nss_stats_clr)(struct cdp_ctrl_objmgr_psoc *psoc,
 				   uint8_t vdev_id);
 	int (*dp_rx_get_pending)(ol_txrx_soc_handle soc);
+	void (*dp_rx_sched_refill_thread)(ol_txrx_soc_handle soc);
 	/* TODO: Add any other control path calls required to OL_IF/WMA layer */
 #ifdef QCA_SUPPORT_WDS_EXTENDED
 	void (*rx_wds_ext_peer_learn)(struct cdp_ctrl_objmgr_psoc *ctrl_psoc,
 				      uint16_t peer_id, uint8_t vdev_id,
 				      uint8_t *peer_macaddr);
 #endif /* QCA_SUPPORT_WDS_EXTENDED */
+#ifdef WLAN_SUPPORT_MESH_LATENCY
+	QDF_STATUS(*peer_update_mesh_latency_params)(
+			     struct cdp_ctrl_objmgr_psoc *psoc,
+				   uint8_t vdev_id, uint8_t *peer_mac, uint8_t tid,
+				   uint32_t service_interval_dl, uint32_t burst_size_dl,
+				   uint32_t service_interval_ul, uint32_t burst_size_ul,
+				   uint8_t add_or_sub, uint8_t ac);
+#endif
+	uint32_t (*dp_get_tx_inqueue)(ol_txrx_soc_handle soc);
 };
 
 #ifdef DP_PEER_EXTENDED_API
@@ -1190,6 +1273,7 @@ struct ol_if_ops {
  *			 for this particular vdev.
  * @set_swlm_enable: Enable or Disable Software Latency Manager.
  * @is_swlm_enabled: Check if Software latency manager is enabled or not.
+ * @display_txrx_hw_info: Dump the DP rings info
  *
  * Function pointers for miscellaneous soc/pdev/vdev related operations.
  */
@@ -1246,6 +1330,7 @@ struct cdp_misc_ops {
 			     void *scn);
 	void (*pkt_log_con_service)(struct cdp_soc_t *soc_hdl,
 				    uint8_t pdev_id, void *scn);
+	void (*pkt_log_exit)(struct cdp_soc_t *soc_hdl, uint8_t pdev_id);
 	int (*get_num_rx_contexts)(struct cdp_soc_t *soc_hdl);
 	void (*register_pktdump_cb)(struct cdp_soc_t *soc_hdl, uint8_t pdev_id,
 				    ol_txrx_pktdump_cb tx_cb,
@@ -1272,12 +1357,14 @@ struct cdp_misc_ops {
 					     struct cdp_txrx_ext_stats *req);
 	QDF_STATUS (*request_rx_hw_stats)(struct cdp_soc_t *soc_hdl,
 					  uint8_t vdev_id);
+	void (*reset_rx_hw_ext_stats)(struct cdp_soc_t *soc_hdl);
 	QDF_STATUS (*vdev_inform_ll_conn)(struct cdp_soc_t *soc_hdl,
 					  uint8_t vdev_id,
 					  enum vdev_ll_conn_actions action);
 	QDF_STATUS (*set_swlm_enable)(struct cdp_soc_t *soc_hdl,
 				      uint8_t val);
 	uint8_t (*is_swlm_enabled)(struct cdp_soc_t *soc_hdl);
+	void (*display_txrx_hw_info)(struct cdp_soc_t *soc_hdl);
 };
 
 /**
@@ -1575,7 +1662,9 @@ struct cdp_ipa_ops {
 					  uint8_t pdev_id);
 	QDF_STATUS (*ipa_disable_autonomy)(struct cdp_soc_t *soc_hdl,
 					   uint8_t pdev_id);
-#ifdef CONFIG_IPA_WDI_UNIFIED_API
+
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 10, 0)) || \
+	defined(CONFIG_IPA_WDI_UNIFIED_API)
 	QDF_STATUS (*ipa_setup)(struct cdp_soc_t *soc_hdl, uint8_t pdev_id,
 				void *ipa_i2w_cb, void *ipa_w2i_cb,
 				void *ipa_wdi_meter_notifier_cb,
@@ -1704,8 +1793,24 @@ struct cdp_cfr_ops {
  */
 struct cdp_mscs_ops {
 	int (*mscs_peer_lookup_n_get_priority)(struct cdp_soc_t *soc,
-			      uint8_t *peer_mac,
-				  qdf_nbuf_t nbuf);
+			uint8_t *src_mac,
+			uint8_t *dst_mac,
+			qdf_nbuf_t nbuf);
+};
+#endif
+
+#ifdef WLAN_SUPPORT_MESH_LATENCY
+/**
+ * struct cdp_mesh_latency_ops - data path ops for Mesh latency
+ * @mesh_latency_update_peer_parameter:
+ */
+struct cdp_mesh_latency_ops {
+	QDF_STATUS (*mesh_latency_update_peer_parameter)(
+			struct cdp_soc_t *soc,
+			uint8_t *dest_mac, uint32_t service_interval_dl,
+			uint32_t burst_size_dl, uint32_t service_interval_ul,
+			uint32_t burst_size_ul, uint16_t priority,
+			uint8_t add_or_sub);
 };
 #endif
 
@@ -1746,6 +1851,9 @@ struct cdp_ops {
 #endif
 #ifdef WLAN_SUPPORT_MSCS
 	struct cdp_mscs_ops         *mscs_ops;
+#endif
+#ifdef WLAN_SUPPORT_MESH_LATENCY
+	struct cdp_mesh_latency_ops         *mesh_latency_ops;
 #endif
 
 };

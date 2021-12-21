@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016-2020 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -113,7 +113,6 @@ static QDF_STATUS wlan_objmgr_vdev_obj_free(struct wlan_objmgr_vdev *vdev)
 
 	qdf_mem_free(vdev->vdev_mlme.bss_chan);
 	qdf_mem_free(vdev->vdev_mlme.des_chan);
-	wlan_minidump_remove(vdev);
 	qdf_mem_free(vdev);
 
 	return QDF_STATUS_SUCCESS;
@@ -209,6 +208,10 @@ struct wlan_objmgr_vdev *wlan_objmgr_vdev_obj_create(
 	wlan_vdev_mlme_set_macaddr(vdev, params->macaddr);
 	/* set MAT address */
 	wlan_vdev_mlme_set_mataddr(vdev, params->mataddr);
+	/* set MLD address */
+	wlan_vdev_mlme_set_mldaddr(vdev, params->mldaddr);
+	/* set link address */
+	wlan_vdev_mlme_set_linkaddr(vdev, params->macaddr);
 	/* Set create flags */
 	vdev->vdev_objmgr.c_flags = params->flags;
 	/* store os-specific pointer */
@@ -303,10 +306,14 @@ static QDF_STATUS wlan_objmgr_vdev_obj_destroy(struct wlan_objmgr_vdev *vdev)
 	obj_mgr_debug("Physically deleting vdev %d", vdev_id);
 
 	if (vdev->obj_state != WLAN_OBJ_STATE_LOGICALLY_DELETED) {
-		obj_mgr_err("VDEV object delete is not invoked vdevid:%d objstate:%d",
-			    wlan_vdev_get_id(vdev), vdev->obj_state);
+		obj_mgr_alert("VDEV object delete is not invoked vdevid:%d objstate:%d",
+			      wlan_vdev_get_id(vdev), vdev->obj_state);
 		WLAN_OBJMGR_BUG(0);
+		return QDF_STATUS_E_FAILURE;
 	}
+
+	wlan_minidump_remove(vdev, sizeof(*vdev), wlan_vdev_get_psoc(vdev),
+			     WLAN_MD_OBJMGR_VDEV, "wlan_objmgr_vdev");
 
 	/* Invoke registered destroy handlers */
 	for (id = 0; id < WLAN_UMAC_MAX_COMPONENTS; id++) {

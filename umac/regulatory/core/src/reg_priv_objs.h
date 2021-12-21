@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017-2020 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2017-2021 The Linux Foundation. All rights reserved.
  *
  *
  * Permission to use, copy, modify, and/or distribute this software for
@@ -26,6 +26,9 @@
 #define __REG_PRIV_OBJS_H
 
 #include <wlan_scan_public_structs.h>
+#ifdef CONFIG_AFC_SUPPORT
+#include "reg_services_common.h"
+#endif
 
 #define reg_alert(params...) \
 	QDF_TRACE_FATAL(QDF_MODULE_ID_REGULATORY, params)
@@ -82,6 +85,7 @@ struct chan_change_cbk_entry {
 
 /**
  * struct wlan_regulatory_psoc_priv_obj - wlan regulatory psoc private object
+ * @mas_chan_params: master channel parameters list
  * @chan_list_recvd: whether channel list has been received
  * @new_user_ctry_pending: In this array, element[phy_id] is true if any user
  *	country update is pending for pdev (phy_id), used in case of MCL.
@@ -101,6 +105,15 @@ struct chan_change_cbk_entry {
  *	master mode (ini fcc_5dot9_ghz_chan_in_master_mode)
  * @retain_nol_across_regdmn_update: Retain the NOL list across the regdomain
  *	changes.
+ * @domain_code_6g_ap: domain code for 6G AP
+ * @domain_code_6g_client: domain code for 6G client
+ * @is_ext_tpc_supported: Whether FW supports new WMI command for TPC
+ * @is_lower_6g_edge_ch_supported: whether lower 6ghz edge channel 5935MHz is
+ * supported
+ * @is_upper_6g_edge_ch_disabled: whether upper 6ghz edge channel 7115MHz is
+ * disabled
+ * @ch_avoid_ext_ind: whether need to update extended channel frequency list
+ * @avoid_freq_ext_list: the extended avoid channel frequency list
  */
 struct wlan_regulatory_psoc_priv_obj {
 	struct mas_chan_params mas_chan_params[PSOC_MAX_PHY_REG_CAP];
@@ -153,17 +166,71 @@ struct wlan_regulatory_psoc_priv_obj {
 	bool enable_5dot9_ghz_chan_in_master_mode;
 	qdf_spinlock_t cbk_list_lock;
 	bool retain_nol_across_regdmn_update;
+#ifdef CONFIG_BAND_6GHZ
+	uint8_t domain_code_6g_ap[REG_CURRENT_MAX_AP_TYPE];
+	uint8_t domain_code_6g_client[REG_CURRENT_MAX_AP_TYPE][REG_MAX_CLIENT_TYPE];
+#endif
+	bool is_ext_tpc_supported;
+#if defined(CONFIG_BAND_6GHZ)
+	bool is_lower_6g_edge_ch_supported;
+	bool is_upper_6g_edge_ch_disabled;
+#endif
+#ifdef FEATURE_WLAN_CH_AVOID_EXT
+	bool ch_avoid_ext_ind;
+	struct ch_avoid_ind_type avoid_freq_ext_list;
+#endif
 };
 
 /**
  * struct wlan_regulatory_pdev_priv_obj - wlan regulatory pdev private object
- * @pdev_opened: whether pdev has been opened by application
+ * @cur_chan_list: current channel list, includes 6G channels
+ * @secondary_cur_chan_list: secondary current channel list, for concurrency
+ * situations
+ * @mas_chan_list: master channel list
+ * from the firmware.
+ * @is_6g_channel_list_populated: indicates the channel lists are populated
+ * @mas_chan_list_6g_ap: master channel list for 6G AP, includes all power types
+ * @mas_chan_list_6g_client: master channel list for 6G client, includes
+ *	all power types
  * @band_capability: bitmap of bands enabled, using enum reg_wifi_band as the
  *	bit position value
+ * @reg_6g_superid: 6Ghz super domain id
+ * @pdev_opened: whether pdev has been opened by application
+ * @reg_cur_6g_ap_pwr_type: 6G AP type ie VLP/SP/LPI.
+ * @reg_cur_6g_client_mobility_type: 6G client type ie Default/Subordinate.
+ * @reg_rnr_tpe_usable: Indicates whether RNR IE is applicable for current reg
+ * domain.
+ * @reg_unspecified_ap_usable: Indicates if the AP type mentioned is not part of
+ * 802.11 standard.
+ * @max_phymode: The maximum phymode supported by the device and regulatory.
+ * @max_chwidth: The maximum bandwidth corresponding to the maximum phymode.
+ * @avoid_chan_ext_list: the extended avoid frequency list.
+ * @afc_cb_lock: The spinlock to synchronize afc callbacks
+ * @afc_cb_obj: The object containing the callback function and opaque argument
+ * @afc_request_id: The last AFC request id received from FW/halphy
+ * @is_6g_afc_power_event_received: indicates if the AFC power event is
+ * received
+ * @is_6g_afc_expiry_event_received: indicates if the AFC exipiry event is
+ * received
+ * @afc_chan_list: Intersection of AFC master and Standard power channel list
+ * @mas_chan_list_6g_afc: AFC master channel list constructed from the AFC
+ * server response.
+ * @power_info: pointer to AFC power information received from the AFC event
+ * sent by the target
+ * @is_reg_noaction_on_afc_pwr_evt: indicates whether regulatory needs to
+ * take action when AFC Power event is received
  */
 struct wlan_regulatory_pdev_priv_obj {
 	struct regulatory_channel cur_chan_list[NUM_CHANNELS];
+#ifdef CONFIG_REG_CLIENT
+	struct regulatory_channel secondary_cur_chan_list[NUM_CHANNELS];
+#endif
 	struct regulatory_channel mas_chan_list[NUM_CHANNELS];
+#ifdef CONFIG_BAND_6GHZ
+	bool is_6g_channel_list_populated;
+	struct regulatory_channel mas_chan_list_6g_ap[REG_CURRENT_MAX_AP_TYPE][NUM_6GHZ_CHANNELS];
+	struct regulatory_channel mas_chan_list_6g_client[REG_CURRENT_MAX_AP_TYPE][REG_MAX_CLIENT_TYPE][NUM_6GHZ_CHANNELS];
+#endif
 #ifdef DISABLE_CHANNEL_LIST
 	struct regulatory_channel cache_disable_chan_list[NUM_CHANNELS];
 	uint32_t num_cache_channels;
@@ -174,6 +241,7 @@ struct wlan_regulatory_pdev_priv_obj {
 	uint16_t def_country_code;
 	char current_country[REG_ALPHA2_LEN + 1];
 	uint16_t reg_dmn_pair;
+	uint16_t reg_6g_superid;
 	uint16_t ctry_code;
 #ifdef DISABLE_UNII_SHARED_BANDS
 	uint8_t unii_5g_bitmap;
@@ -190,7 +258,7 @@ struct wlan_regulatory_pdev_priv_obj {
 	uint32_t band_capability;
 	bool indoor_chan_enabled;
 	bool en_chan_144;
-	uint32_t wireless_modes;
+	uint64_t wireless_modes;
 	struct ch_avoid_ind_type freq_avoid_list;
 	bool force_ssc_disable_indoor_channel;
 	bool sap_state;
@@ -198,6 +266,30 @@ struct wlan_regulatory_pdev_priv_obj {
 	qdf_spinlock_t reg_rules_lock;
 	bool chan_list_recvd;
 	bool pdev_opened;
+#if defined(CONFIG_BAND_6GHZ)
+	enum reg_6g_ap_type reg_cur_6g_ap_pwr_type;
+	enum reg_6g_client_type reg_cur_6g_client_mobility_type;
+	bool reg_rnr_tpe_usable;
+	bool reg_unspecified_ap_usable;
+#endif
+#ifdef CONFIG_HOST_FIND_CHAN
+	enum reg_phymode max_phymode;
+	enum phy_ch_width max_chwidth;
+#endif
+#ifdef FEATURE_WLAN_CH_AVOID_EXT
+	avoid_ch_ext_list avoid_chan_ext_list;
+#endif
+#ifdef CONFIG_AFC_SUPPORT
+	qdf_spinlock_t afc_cb_lock;
+	struct afc_cb_handler afc_cb_obj;
+	uint64_t afc_request_id;
+	bool is_6g_afc_power_event_received;
+	bool is_6g_afc_expiry_event_received;
+	struct regulatory_channel afc_chan_list[NUM_6GHZ_CHANNELS];
+	struct regulatory_channel mas_chan_list_6g_afc[NUM_6GHZ_CHANNELS];
+	struct reg_fw_afc_power_event *power_info;
+	bool is_reg_noaction_on_afc_pwr_evt;
+#endif
 };
 
 /**
@@ -269,4 +361,20 @@ QDF_STATUS wlan_regulatory_pdev_obj_created_notification(
  */
 QDF_STATUS wlan_regulatory_pdev_obj_destroyed_notification(
 		struct wlan_objmgr_pdev *pdev, void *arg_list);
+
+#ifdef CONFIG_AFC_SUPPORT
+/**
+ * reg_free_afc_pwr_info() - Free the AFC power information object
+ * @pdev_priv_obj: Pointer to pdev_priv_obj
+ *
+ * Return: void
+ */
+void
+reg_free_afc_pwr_info(struct wlan_regulatory_pdev_priv_obj *pdev_priv_obj);
+#else
+static inline void
+reg_free_afc_pwr_info(struct wlan_regulatory_pdev_priv_obj *pdev_priv_obj)
+{
+}
+#endif
 #endif

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2019 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2018-2019, 2021 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -160,6 +160,17 @@ QDF_STATUS wlan_vdev_mlme_is_csa_restart(struct wlan_objmgr_vdev *vdev);
 QDF_STATUS wlan_vdev_is_going_down(struct wlan_objmgr_vdev *vdev);
 
 /**
+ * wlan_vdev_is_peer_create_allowed() - Checks whether PEER can be created
+ * @vdev: Object manager VDEV object
+ *
+ * API to check the VDEV MLME SM state to allow PEER association
+ *
+ * Return: SUCCESS: if peer create can be allowed
+ *         FAILURE: otherwise failure
+ */
+QDF_STATUS wlan_vdev_is_peer_create_allowed(struct wlan_objmgr_vdev *vdev);
+
+/**
  * wlan_vdev_is_restart_progress() - Checks VDEV restart is in progress
  * @vdev: Object manager VDEV object
  *
@@ -220,4 +231,15 @@ QDF_STATUS wlan_vdev_mlme_is_scan_allowed(struct wlan_objmgr_vdev *vdev);
  *         FAILURE: otherwise failure
  */
 QDF_STATUS wlan_vdev_mlme_is_init_state(struct wlan_objmgr_vdev *vdev);
+
+/**
+ * wlan_vdev_is_up_active_state() - Checks whether vdev is in up active state
+ * @vdev: Object manager VDEV object
+ *
+ * API to checks the VDEV MLME SM state is in UP ACTIVE state
+ *
+ * Return: SUCCESS: if vdev is in UP ACTIVE state
+ *         FAILURE: otherwise failure
+ */
+QDF_STATUS wlan_vdev_is_up_active_state(struct wlan_objmgr_vdev *vdev);
 #endif

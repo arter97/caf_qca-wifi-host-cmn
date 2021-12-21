@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2019-2021 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -23,8 +23,6 @@
 #include <wlan_objmgr_pdev_obj.h>
 #include <wlan_cfr_public_structs.h>
 #include <wlan_cfr_utils_api.h>
-
-#define MAX_CFR_PRD        (10*60*1000)        /* 10 minutes */
 
 /**
  * ucfg_cfr_start_capture() - function to start cfr capture for connected client
@@ -349,5 +347,37 @@ QDF_STATUS ucfg_cfr_rcc_dump_lut(struct wlan_objmgr_vdev *vdev);
  */
 QDF_STATUS ucfg_cfr_subscribe_ppdu_desc(struct wlan_objmgr_pdev *pdev,
 					bool is_subscribe);
+
+#ifdef WLAN_CFR_PM
+/**
+ * ucfg_cfr_suspend() - User space interface to
+ * set suspend status to CFR
+ * @pdev: pointer to pdev_object
+ *
+ * return QDF status
+ */
+QDF_STATUS ucfg_cfr_suspend(struct wlan_objmgr_pdev *pdev);
+
+/**
+ * ucfg_cfr_resume() - User space interface to
+ * set resume status to CFR
+ * @pdev: pointer to pdev_object
+ *
+ * return QDF status
+ */
+QDF_STATUS ucfg_cfr_resume(struct wlan_objmgr_pdev *pdev);
+#else
+static inline QDF_STATUS
+ucfg_cfr_suspend(struct wlan_objmgr_pdev *pdev)
+{
+	return QDF_STATUS_E_NOSUPPORT;
+}
+
+static inline QDF_STATUS
+ucfg_cfr_resume(struct wlan_objmgr_pdev *pdev)
+{
+	return QDF_STATUS_E_NOSUPPORT;
+}
+#endif /* end of WLAN_CFR_PM */
 #endif
 #endif
