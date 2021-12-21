@@ -28,6 +28,18 @@
 #include "cfg_ucfg_api.h"
 #include <wlan_serialization_api.h>
 
+uint16_t wlan_2pt5mhz_step_chan_to_freq(uint8_t chan)
+{
+	if (chan == WLAN_24_GHZ_2PT5MHZ_CHAN_221)
+		return WLAN_24_GHZ_2PT5MHZ_CHAN_221_FREQ;
+	else if (chan == WLAN_24_GHZ_2PT5MHZ_CHAN_222)
+		return WLAN_24_GHZ_2PT5MHZ_CHAN_222_FREQ;
+	else
+		return WLAN_24_GHZ_2PT5MHZ_CHAN_BASE_FREQ +
+			(chan - WLAN_24_GHZ_2PT5MHZ_BASECHAN) *
+			WLAN_CHAN_SPACING_5MHZ;
+}
+
 uint32_t wlan_chan_to_freq(uint8_t chan)
 {
 	if (chan == 0 )
@@ -43,17 +55,18 @@ uint32_t wlan_chan_to_freq(uint8_t chan)
 		  (chan - WLAN_24_GHZ_CHANNEL_15) * WLAN_CHAN_SPACING_20MHZ;
 	else if (chan == WLAN_5_GHZ_CHANNEL_170)
 		return WLAN_CHAN_170_FREQ;
-	else if (chan > WLAN_24_GHZ_2PT5MHZ_CHAN_OFFSET) {
-		if (chan == WLAN_24_GHZ_2PT5MHZ_CHAN_221)
-			return WLAN_24_GHZ_2PT5MHZ_CHAN_221_FREQ;
-		else if (chan == WLAN_24_GHZ_2PT5MHZ_CHAN_222)
-			return WLAN_24_GHZ_2PT5MHZ_CHAN_222_FREQ;
-		else
-			return WLAN_24_GHZ_2PT5MHZ_CHAN_BASE_FREQ +
-				(chan - WLAN_24_GHZ_2PT5MHZ_CHAN_OFFSET) *
-				WLAN_CHAN_SPACING_5MHZ;
-	} else
+	else if (chan > WLAN_24_GHZ_2PT5MHZ_BASECHAN &&
+		 chan <= WLAN_24_GHZ_2PT5MHZ_END_CHAN)
+		return wlan_2pt5mhz_step_chan_to_freq(chan);
+	else
 		return WLAN_5_GHZ_BASE_FREQ + chan * WLAN_CHAN_SPACING_5MHZ;
+}
+
+uint8_t wlan_2pt5mhz_step_freq_to_chan(qdf_freq_t freq)
+{
+	return ((freq - WLAN_24_GHZ_2PT5MHZ_CHAN_BASE_FREQ) /
+		WLAN_CHAN_SPACING_5MHZ) +
+		WLAN_24_GHZ_2PT5MHZ_BASECHAN;
 }
 
 uint8_t wlan_freq_to_chan(uint32_t freq)
@@ -72,10 +85,8 @@ uint8_t wlan_freq_to_chan(uint32_t freq)
 		chan = WLAN_24_GHZ_2PT5MHZ_CHAN_221;
 	else if (freq == WLAN_24_GHZ_2PT5MHZ_CHAN_222_FREQ)
 		chan = WLAN_24_GHZ_2PT5MHZ_CHAN_222;
-	else if (WLAN_IS_FREQ_2p5MHZ(freq))
-		chan = ((freq - WLAN_24_GHZ_2PT5MHZ_CHAN_BASE_FREQ) /
-			WLAN_CHAN_SPACING_5MHZ) +
-			WLAN_24_GHZ_2PT5MHZ_CHAN_OFFSET;
+	else if (WLAN_IS_FREQ_2P5MHZ(freq))
+		chan = wlan_2pt5mhz_step_freq_to_chan(freq);
 	else if ((freq > WLAN_24_GHZ_BASE_FREQ) &&
 		(freq < WLAN_5_GHZ_BASE_FREQ))
 		chan = (((freq - WLAN_CHAN_15_FREQ) /

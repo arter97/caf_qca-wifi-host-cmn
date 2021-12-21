@@ -118,14 +118,19 @@
 #define WLAN_CHAN_14_FREQ       (2484)
 #define WLAN_CHAN_15_FREQ       (2512)
 #define WLAN_CHAN_170_FREQ      (5852)
-#define WLAN_24_GHZ_2PT5MHZ_CHAN_OFFSET (200)
+
+/* Following macros are related to 2.5MHz channel separation feature */
+#define WLAN_24_GHZ_2PT5MHZ_BASECHAN (200)
 #define WLAN_24_GHZ_2PT5MHZ_CHAN_BASE_FREQ   (2399)
 #define WLAN_24_GHZ_2PT5MHZ_CHAN_221 (221)
 #define WLAN_24_GHZ_2PT5MHZ_CHAN_222 (222)
+#define WLAN_24_GHZ_2PT5MHZ_END_CHAN WLAN_24_GHZ_2PT5MHZ_CHAN_222
 #define WLAN_24_GHZ_2PT5MHZ_CHAN_222_FREQ (2482)
 #define WLAN_24_GHZ_2PT5MHZ_CHAN_221_FREQ (2477)
-#define WLAN_IS_FREQ_2p5MHZ(_freq) \
-	((_freq) - WLAN_24_GHZ_BASE_FREQ) % WLAN_CHAN_SPACING_5MHZ
+/* 2.5Mhz spaced channel are only in 2.4Ghz band */
+#define WLAN_IS_FREQ_2P5MHZ(_freq) \
+	(((_freq) - WLAN_24_GHZ_BASE_FREQ) % WLAN_CHAN_SPACING_5MHZ && \
+	  WLAN_REG_IS_24GHZ_CH_FREQ(_freq))
 
 #define WLAN_MAC_EID_VENDOR     221
 #define WLAN_MAC_EID_EXT        255

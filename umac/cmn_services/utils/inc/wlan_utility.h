@@ -61,6 +61,13 @@ struct wlan_op_mode_peer_count {
 uint32_t wlan_chan_to_freq(uint8_t chan);
 
 /**
+ * wlan_2pt5mhz_step_chan_to_freq() - converts 2.5MHZ step channel to frequency
+ * @chan: channel number
+ *
+ * @return frequency of the channel
+ */
+uint16_t wlan_2pt5mhz_step_chan_to_freq(uint8_t chan);
+/**
  * wlan_freq_to_chan() - converts frequency to channel
  * @freq: frequency
  *
@@ -68,6 +75,13 @@ uint32_t wlan_chan_to_freq(uint8_t chan);
  */
 uint8_t wlan_freq_to_chan(uint32_t freq);
 
+/**
+ * wlan_2pt5mhz_step_freq_to_chan() - converts 2.5MHZ step frequency to channel
+ * @freq: frequency
+ *
+ * Return: channel of frequency
+ */
+uint8_t wlan_2pt5mhz_step_freq_to_chan(qdf_freq_t freq);
 /**
  * wlan_is_ie_valid() - Determine if an IE sequence is valid
  * @ie: Pointer to the IE buffer
