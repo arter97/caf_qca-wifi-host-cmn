@@ -25,6 +25,18 @@
 #define DP_MON_DATA_BUFFER_SIZE     2048
 
 /**
+ * struct dp_mon_filter_be - Monitor TLV filter
+ * @rx_tlv_filter: Rx MON TLV filter
+ * @tx_tlv_filter: Tx MON TLV filter
+ * @tx_valid: enable/disable Tx Mon TLV filter
+ */
+struct dp_mon_filter_be {
+	struct dp_mon_filter rx_tlv_filter;
+	struct htt_tx_ring_tlv_filter tx_tlv_filter;
+	bool tx_valid;
+};
+
+/**
  * struct dp_mon_desc
  *
  * @buf_addr: virtual address
@@ -74,9 +86,11 @@ struct dp_mon_desc_pool {
 
 /**
  * struct dp_mon_pdev_be - BE specific monitor pdev object
+ * @filter_be: Monitor Filter pointer
  * @mon_pdev: monitor pdev structure
  */
 struct dp_mon_pdev_be {
+	struct dp_mon_filter_be **filter_be;
 	struct dp_mon_pdev mon_pdev;
 };
 
@@ -89,8 +103,6 @@ struct dp_mon_pdev_be {
  * @rx_desc_mon: descriptor pool for rx mon src ring
  * @rx_mon_ring_fill_level: rx mon ring refill level
  * @tx_mon_ring_fill_level: tx mon ring refill level
- * @low_thresh_intrs: number of tx mon low threshold interrupts received
- * @low_thresh_intrs: number of rx mon low threshold interrupts received
  */
 struct dp_mon_soc_be {
 	struct dp_mon_soc mon_soc;
@@ -105,8 +117,6 @@ struct dp_mon_soc_be {
 
 	uint16_t rx_mon_ring_fill_level;
 	uint16_t tx_mon_ring_fill_level;
-	uint32_t tx_low_thresh_intrs;
-	uint32_t rx_low_thresh_intrs;
 };
 #endif
 
@@ -179,4 +189,13 @@ QDF_STATUS dp_mon_buffers_replenish(struct dp_soc *dp_soc,
 				union dp_mon_desc_list_elem_t **desc_list,
 				union dp_mon_desc_list_elem_t **tail);
 
+/**
+ * dp_mon_filter_show_filter_be() - Show the set filters
+ * @pdev: DP pdev handle
+ * @mode: The filter modes
+ * @tlv_filter: tlv filter
+ */
+void dp_mon_filter_show_filter_be(struct dp_mon_pdev *mon_pdev,
+				  enum dp_mon_filter_mode mode,
+				  struct dp_mon_filter_be *filter);
 #endif /* _DP_MON_2_0_H_ */

@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2013-2021 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2021 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -86,6 +87,13 @@
 #endif
 #endif
 
+/* Max number of chips that can participate in MLO */
+#if defined(WLAN_FEATURE_11BE_MLO) && defined(WLAN_MLO_MULTI_CHIP)
+#define WLAN_MAX_MLO_CHIPS 3
+#else
+#define WLAN_MAX_MLO_CHIPS 1
+#endif
+
 struct wlan_cfg_dp_pdev_ctxt;
 
 /**
@@ -153,8 +161,6 @@ struct wlan_srng_cfg {
  *				mapped to each NAPI/INTR context
  * @int_tx_ring_near_full_irq_mask: Bitmap of Tx completion ring near full
  *				interrupt mapped to each NAPI/INTR context
- * @int_host2txmon_ring_mask: Bitmap of Tx monitor source ring interrupt
- *				mapped to each NAPI/INTR context
  * @int_ce_ring_mask: Bitmap of CE interrupts mapped to each NAPI/Intr context
  * @lro_enabled: enable/disable lro feature
  * @rx_hash: Enable hash based steering of rx packets
@@ -162,6 +168,7 @@ struct wlan_srng_cfg {
  * @lro_enabled: enable/disable LRO feature
  * @sg_enabled: enable disable scatter gather feature
  * @gro_enabled: enable disable GRO feature
+ * @force_gro_enabled: force enable GRO feature
  * @ipa_enabled: Flag indicating if IPA is enabled
  * @ol_tx_csum_enabled: Flag indicating if TX csum is enabled
  * @ol_rx_csum_enabled: Flag indicating if Rx csum is enabled
@@ -185,7 +192,6 @@ struct wlan_srng_cfg {
  * @rxdma_err_dst_ring: rxdma error detination ring size
  * @raw_mode_war: enable/disable raw mode war
  * @enable_data_stall_detection: flag to enable data stall detection
- * @enable_force_rx_64_ba: flag to enable force 64 blockack in RX
  * @disable_intra_bss_fwd: flag to disable intra bss forwarding
  * @rxdma1_enable: flag to indicate if rxdma1 is enabled
  * @delay_mon_replenish: delay monitor buffer replenish
@@ -233,6 +239,13 @@ struct wlan_srng_cfg {
  * @pkt_capture_mode: Packet capture mode config
  * @rx_mon_buf_ring_size: Rx monitor buf ring size
  * @tx_mon_buf_ring_size: Tx monitor buf ring size
+ * @tx_rings_grp_bitmap: bitmap of group intr contexts which have
+ *  non-zero tx ring mask
+ * @mlo_chip_rx_ring_map: map of chip_id to rx ring map
+ * @mlo_chip_default_rx_ring_id: default rx_ring of chip when hash is not found
+ * @lmac_peer_id_msb: value used for hash based routing
+ * @vdev_stats_hw_offload_config: HW vdev stats config
+ * @vdev_stats_hw_offload_timer: HW vdev stats timer duration
  */
 struct wlan_cfg_dp_soc_ctxt {
 	int num_int_ctxts;
@@ -277,7 +290,6 @@ struct wlan_cfg_dp_soc_ctxt {
 	uint8_t int_rx_ring_near_full_irq_1_mask[WLAN_CFG_INT_NUM_CONTEXTS];
 	uint8_t int_rx_ring_near_full_irq_2_mask[WLAN_CFG_INT_NUM_CONTEXTS];
 	uint8_t int_tx_ring_near_full_irq_mask[WLAN_CFG_INT_NUM_CONTEXTS];
-	uint8_t int_host2txmon_ring_mask[WLAN_CFG_INT_NUM_CONTEXTS];
 	int hw_macid[MAX_PDEV_CNT];
 	int hw_macid_pdev_id_map[MAX_NUM_LMAC_HW];
 	int base_hw_macid;
@@ -286,6 +298,7 @@ struct wlan_cfg_dp_soc_ctxt {
 	bool lro_enabled;
 	bool sg_enabled;
 	bool gro_enabled;
+	bool force_gro_enabled;
 	bool ipa_enabled;
 	bool ol_tx_csum_enabled;
 	bool ol_rx_csum_enabled;
@@ -315,7 +328,6 @@ struct wlan_cfg_dp_soc_ctxt {
 	uint32_t per_pkt_trace;
 	bool raw_mode_war;
 	bool enable_data_stall_detection;
-	bool enable_force_rx_64_ba;
 	bool disable_intra_bss_fwd;
 	bool rxdma1_enable;
 	bool delay_mon_replenish;
@@ -381,6 +393,16 @@ struct wlan_cfg_dp_soc_ctxt {
 	uint32_t rx_mon_buf_ring_size;
 	uint32_t tx_mon_buf_ring_size;
 	uint8_t rx_rel_wbm2sw_ring_id;
+	uint32_t tx_rings_grp_bitmap;
+#if defined(WLAN_FEATURE_11BE_MLO) && defined(WLAN_MLO_MULTI_CHIP)
+	uint8_t mlo_chip_rx_ring_map[WLAN_MAX_MLO_CHIPS];
+	uint8_t mlo_chip_default_rx_ring_id[WLAN_MAX_MLO_CHIPS];
+	uint8_t lmac_peer_id_msb[WLAN_MAX_MLO_CHIPS];
+#endif
+#ifdef QCA_VDEV_STATS_HW_OFFLOAD_SUPPORT
+	bool vdev_stats_hw_offload_config;
+	int vdev_stats_hw_offload_timer;
+#endif
 };
 
 /**
@@ -1706,14 +1728,6 @@ bool wlan_cfg_is_fst_in_cmem_enabled(struct wlan_cfg_dp_soc_ctxt *cfg);
  */
 bool wlan_cfg_is_swlm_enabled(struct wlan_cfg_dp_soc_ctxt *cfg);
 
-/**
- * wlan_cfg_is_dp_force_rx_64_ba() - Get force use 64 BA flag
- * @cfg: config context
- *
- * Return: force use 64 BA flag
- */
-bool wlan_cfg_is_dp_force_rx_64_ba(struct wlan_cfg_dp_soc_ctxt *cfg);
-
 #ifdef IPA_OFFLOAD
 /*
  * wlan_cfg_ipa_tx_ring_size - Get Tx DMA ring size (TCL Data Ring)
@@ -1920,25 +1934,6 @@ int wlan_cfg_get_dma_rx_mon_dest_ring_size(struct wlan_cfg_dp_pdev_ctxt *cfg);
  * Return: Size of Tx MON dest ring size
  */
 int wlan_cfg_get_dma_tx_mon_dest_ring_size(struct wlan_cfg_dp_pdev_ctxt *cfg);
-/*
- * wlan_cfg_set_host2txmon_ring_mask() - Set host2txmon ring
- *                               interrupt mask mapped to an interrupt context
- * @wlan_cfg_ctx - Configuration Handle
- *
- * Return: None
- */
-void wlan_cfg_set_host2txmon_ring_mask(struct wlan_cfg_dp_soc_ctxt *cfg,
-				       int context, int mask);
-/**
- * wlan_cfg_get_host2txmon_ring_mask() - Return host2txmon ring
- *                               interrupt mask mapped to an interrupt context
- * @wlan_cfg_ctx - Configuration Handle
- * @context - Numerical ID identifying the Interrupt/NAPI context
- *
- * Return: int_host2txmon_ring_mask[context]
- */
-int wlan_cfg_get_host2txmon_ring_mask(struct wlan_cfg_dp_soc_ctxt *cfg,
-				      int context);
 
 /*
  * wlan_cfg_get_rx_rel_ring_id() - get wbm2sw ring id for Rx release ring
@@ -1958,4 +1953,57 @@ wlan_cfg_get_rx_rel_ring_id(struct wlan_cfg_dp_soc_ctxt *cfg);
 void
 wlan_cfg_set_rx_rel_ring_id(struct wlan_cfg_dp_soc_ctxt *cfg,
 			    uint8_t wbm2sw_ring_id);
+
+/**
+ * wlan_cfg_get_vdev_stats_hw_offload_config() - Get hw vdev stats offload
+ *						 config
+ * @cfg: config context
+ *
+ * Return: value of hw vdev stats config
+ */
+bool
+wlan_cfg_get_vdev_stats_hw_offload_config(struct wlan_cfg_dp_soc_ctxt *cfg);
+
+/**
+ * wlan_cfg_get_vdev_stats_hw_offload_timer()- Get hw vdev stats timer duration
+ * @cfg: config context
+ *
+ * Return: value of hw vdev stats timer duration
+ */
+int wlan_cfg_get_vdev_stats_hw_offload_timer(struct wlan_cfg_dp_soc_ctxt *cfg);
+
+#if defined(WLAN_FEATURE_11BE_MLO) && defined(WLAN_MLO_MULTI_CHIP)
+/**
+ * wlan_cfg_mlo_rx_ring_map_get_by_chip_id() - get rx ring map
+ * @cfg: soc configuration context
+ * @chip_id: mlo_chip_id
+ *
+ * Return: rx_ring_map
+ */
+uint8_t
+wlan_cfg_mlo_rx_ring_map_get_by_chip_id(struct wlan_cfg_dp_soc_ctxt *cfg,
+					uint8_t chip_id);
+
+/**
+ * wlan_cfg_mlo_default_rx_ring_get_by_chip_id() - get default RX ring
+ * @cfg: soc configuration context
+ * @chip_id: mlo_chip_id
+ *
+ * Return: default rx ring
+ */
+uint8_t
+wlan_cfg_mlo_default_rx_ring_get_by_chip_id(struct wlan_cfg_dp_soc_ctxt *cfg,
+					    uint8_t chip_id);
+
+/**
+ * wlan_cfg_mlo_lmac_peer_id_msb_get_by_chip_id() - get chip's lmac_peer_id_msb
+ * @cfg: soc configuration context
+ * @chip_id: mlo_chip_id
+ *
+ * Return: lmac_peer_id_msb
+ */
+uint8_t
+wlan_cfg_mlo_lmac_peer_id_msb_get_by_chip_id(struct wlan_cfg_dp_soc_ctxt *cfg,
+					     uint8_t chip_id);
 #endif
+#endif /*__WLAN_CFG_H*/

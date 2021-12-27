@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2017-2021 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2021 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  *
  * Permission to use, copy, modify, and/or distribute this software for
@@ -86,12 +87,13 @@ QDF_STATUS wlan_reg_get_max_5g_bw_from_regdomain(uint16_t regdmn,
 
 #ifdef CONFIG_REG_CLIENT
 QDF_STATUS
-wlan_reg_get_6g_power_type_for_ctry(uint8_t *ap_ctry, uint8_t *sta_ctry,
+wlan_reg_get_6g_power_type_for_ctry(struct wlan_objmgr_psoc *psoc,
+				    uint8_t *ap_ctry, uint8_t *sta_ctry,
 				    enum reg_6g_ap_type *pwr_type_6g,
 				    bool *ctry_code_match)
 {
-	return reg_get_6g_power_type_for_ctry(ap_ctry, sta_ctry, pwr_type_6g,
-					      ctry_code_match);
+	return reg_get_6g_power_type_for_ctry(psoc, ap_ctry, sta_ctry,
+					      pwr_type_6g, ctry_code_match);
 }
 #endif
 
@@ -486,6 +488,49 @@ QDF_STATUS regulatory_psoc_close(struct wlan_objmgr_psoc *psoc)
 	return QDF_STATUS_SUCCESS;
 }
 
+#ifdef CONFIG_REG_CLIENT
+/**
+ * reg_is_cntry_set_pending() - Check if country set is pending
+ * @pdev: Pointer to pdev object.
+ * @psoc: Pointer to psoc object.
+ */
+static bool reg_is_cntry_set_pending(struct wlan_objmgr_pdev *pdev,
+				     struct wlan_objmgr_psoc *psoc)
+{
+	struct wlan_regulatory_psoc_priv_obj *soc_reg;
+	struct wlan_lmac_if_reg_tx_ops *tx_ops;
+	uint8_t phy_id;
+
+	soc_reg = reg_get_psoc_obj(psoc);
+
+	if (!IS_VALID_PSOC_REG_OBJ(soc_reg)) {
+		reg_err("psoc reg component is NULL");
+		return false;
+	}
+
+	tx_ops = reg_get_psoc_tx_ops(psoc);
+
+	if (tx_ops->get_phy_id_from_pdev_id)
+		tx_ops->get_phy_id_from_pdev_id(
+					psoc,
+					wlan_objmgr_pdev_get_pdev_id(pdev),
+					&phy_id);
+	else
+		phy_id = wlan_objmgr_pdev_get_pdev_id(pdev);
+
+	return (soc_reg->new_user_ctry_pending[phy_id] ||
+		soc_reg->new_init_ctry_pending[phy_id] ||
+		soc_reg->new_11d_ctry_pending[phy_id] ||
+		soc_reg->world_country_pending[phy_id]);
+}
+#else
+static inline bool reg_is_cntry_set_pending(struct wlan_objmgr_pdev *pdev,
+					    struct wlan_objmgr_psoc *psoc)
+{
+	return false;
+}
+#endif
+
 QDF_STATUS regulatory_pdev_open(struct wlan_objmgr_pdev *pdev)
 {
 	struct wlan_objmgr_psoc *parent_psoc;
@@ -501,6 +546,9 @@ QDF_STATUS regulatory_pdev_open(struct wlan_objmgr_pdev *pdev)
 	pdev_priv_obj->pdev_opened = true;
 
 	parent_psoc = wlan_pdev_get_psoc(pdev);
+
+	if (reg_is_cntry_set_pending(pdev, parent_psoc))
+		return QDF_STATUS_SUCCESS;
 
 	reg_send_scheduler_msg_nb(parent_psoc, pdev);
 

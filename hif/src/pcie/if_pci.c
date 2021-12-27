@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2013-2021 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2021 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -2204,6 +2205,65 @@ void hif_pci_prevent_linkdown(struct hif_softc *scn, bool flag)
 }
 #endif
 
+#ifdef CONFIG_PCI_LOW_POWER_INT_REG
+/**
+ * hif_pci_config_low_power_int_register(): configure pci low power
+ * interrupt  register.
+ * @enable: true to enable the bits, false clear.
+ *
+ * Configure the bits INTR_L1SS and INTR_CLKPM of
+ * PCIE_LOW_POWER_INT_MASK register.
+ *
+ * Return: n/a
+ */
+static void hif_pci_config_low_power_int_register(struct hif_softc *scn,
+						  bool enable)
+{
+	void *address;
+	uint32_t value;
+	struct hif_opaque_softc *hif_hdl = GET_HIF_OPAQUE_HDL(scn);
+	struct hif_target_info *tgt_info = hif_get_target_info_handle(hif_hdl);
+	uint32_t target_type = tgt_info->target_type;
+
+	/*
+	 * Only configure the bits INTR_L1SS and INTR_CLKPM of
+	 * PCIE_LOW_POWER_INT_MASK register for QCA6174 for high
+	 * consumption issue. NFA344A power consumption is above 80mA
+	 * after entering Modern Standby. But the power will drop to normal
+	 * after PERST# de-assert.
+	 */
+	if ((target_type == TARGET_TYPE_AR6320) ||
+	    (target_type == TARGET_TYPE_AR6320V1) ||
+	    (target_type == TARGET_TYPE_AR6320V2) ||
+	    (target_type == TARGET_TYPE_AR6320V3)) {
+		hif_info("Configure PCI low power int mask register");
+
+		address = scn->mem + PCIE_LOW_POWER_INT_MASK_OFFSET;
+
+		/* Configure bit3 INTR_L1SS */
+		value = hif_read32_mb(scn, address);
+		if (enable)
+			value |= INTR_L1SS;
+		else
+			value &= ~INTR_L1SS;
+		hif_write32_mb(scn, address, value);
+
+		/* Configure bit4 INTR_CLKPM */
+		value = hif_read32_mb(scn, address);
+		if (enable)
+			value |= INTR_CLKPM;
+		else
+			value &= ~INTR_CLKPM;
+		hif_write32_mb(scn, address, value);
+	}
+}
+#else
+static inline void hif_pci_config_low_power_int_register(struct hif_softc *scn,
+							 bool enable)
+{
+}
+#endif
+
 /**
  * hif_pci_bus_suspend(): prepare hif for suspend
  *
@@ -2223,6 +2283,13 @@ int hif_pci_bus_suspend(struct hif_softc *scn)
 
 	/* Stop the HIF Sleep Timer */
 	hif_cancel_deferred_target_sleep(scn);
+
+	/*
+	 * Only need clear the bits INTR_L1SS/INTR_CLKPM after suspend.
+	 * No need do enable bits after resume, as firmware will restore
+	 * the bits after resume.
+	 */
+	hif_pci_config_low_power_int_register(scn, false);
 
 	scn->bus_suspended = true;
 
@@ -2953,13 +3020,15 @@ const char *hif_pci_get_irq_name(int irq_no)
 	return "pci-dummy";
 }
 
-#ifdef HIF_CPU_PERF_AFFINE_MASK
-void hif_pci_irq_set_affinity_hint(
-	struct hif_exec_context *hif_ext_group)
+#if defined(FEATURE_IRQ_AFFINITY) || defined(HIF_CPU_PERF_AFFINE_MASK)
+void hif_pci_irq_set_affinity_hint(struct hif_exec_context *hif_ext_group,
+				   bool perf)
 {
 	int i, ret;
 	unsigned int cpus;
 	bool mask_set = false;
+	int cpu_cluster = perf ? CPU_CLUSTER_TYPE_PERF :
+						CPU_CLUSTER_TYPE_LITTLE;
 
 	for (i = 0; i < hif_ext_group->numirq; i++)
 		qdf_cpumask_clear(&hif_ext_group->new_cpu_mask[i]);
@@ -2967,7 +3036,7 @@ void hif_pci_irq_set_affinity_hint(
 	for (i = 0; i < hif_ext_group->numirq; i++) {
 		qdf_for_each_online_cpu(cpus) {
 			if (qdf_topology_physical_package_id(cpus) ==
-				CPU_CLUSTER_TYPE_PERF) {
+			    cpu_cluster) {
 				qdf_cpumask_set_cpu(cpus,
 						    &hif_ext_group->
 						    new_cpu_mask[i]);
@@ -2986,12 +3055,7 @@ void hif_pci_irq_set_affinity_hint(
 			qdf_dev_modify_irq_status(hif_ext_group->os_irq[i],
 						  0, IRQ_NO_BALANCING);
 			if (ret)
-				qdf_err("Set affinity %*pbl fails for IRQ %d ",
-					qdf_cpumask_pr_args(&hif_ext_group->
-							    new_cpu_mask[i]),
-					hif_ext_group->os_irq[i]);
-			else
-				qdf_debug("Set affinity %*pbl for IRQ: %d",
+				qdf_debug("Set affinity %*pbl fails for IRQ %d ",
 					  qdf_cpumask_pr_args(&hif_ext_group->
 							      new_cpu_mask[i]),
 					  hif_ext_group->os_irq[i]);
@@ -3001,7 +3065,9 @@ void hif_pci_irq_set_affinity_hint(
 		}
 	}
 }
+#endif
 
+#ifdef HIF_CPU_PERF_AFFINE_MASK
 void hif_pci_ce_irq_set_affinity_hint(
 	struct hif_softc *scn)
 {
@@ -3105,7 +3171,7 @@ void hif_pci_config_irq_affinity(struct hif_softc *scn)
 	/* Set IRQ affinity for WLAN DP interrupts*/
 	for (i = 0; i < hif_state->hif_num_extgroup; i++) {
 		hif_ext_group = hif_state->hif_ext_group[i];
-		hif_pci_irq_set_affinity_hint(hif_ext_group);
+		hif_pci_irq_set_affinity_hint(hif_ext_group, true);
 	}
 	/* Set IRQ affinity for CE interrupts*/
 	hif_pci_ce_irq_set_affinity_hint(scn);
@@ -3152,6 +3218,25 @@ int hif_pci_configure_grp_irq(struct hif_softc *scn,
 	hif_ext_group->irq_requested = true;
 	return 0;
 }
+
+#ifdef FEATURE_IRQ_AFFINITY
+void hif_pci_set_grp_intr_affinity(struct hif_softc *scn,
+				   uint32_t grp_intr_bitmask, bool perf)
+{
+	int i;
+	struct HIF_CE_state *hif_state = HIF_GET_CE_STATE(scn);
+	struct hif_exec_context *hif_ext_group;
+
+	for (i = 0; i < hif_state->hif_num_extgroup; i++) {
+		if (!(grp_intr_bitmask & BIT(i)))
+			continue;
+
+		hif_ext_group = hif_state->hif_ext_group[i];
+		hif_pci_irq_set_affinity_hint(hif_ext_group, perf);
+		qdf_atomic_set(&hif_ext_group->force_napi_complete, -1);
+	}
+}
+#endif
 
 #if (defined(QCA_WIFI_QCA6390) || defined(QCA_WIFI_QCA6490) || \
 	defined(QCA_WIFI_WCN7850))

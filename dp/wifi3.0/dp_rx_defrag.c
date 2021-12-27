@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2017-2021 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2021 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -222,9 +223,7 @@ void dp_rx_defrag_waitlist_flush(struct dp_soc *soc)
 		TAILQ_REMOVE(&temp_list, rx_reorder,
 			     defrag_waitlist_elem);
 		/* get address of current peer */
-		peer =
-			container_of(rx_reorder, struct dp_peer,
-				     rx_tid[rx_reorder->tid]);
+		peer = rx_reorder->defrag_peer;
 		qdf_spin_unlock_bh(&rx_reorder->tid_lock);
 
 		temp_peer = dp_peer_get_ref_by_id(soc, peer->peer_id,
@@ -298,9 +297,7 @@ void dp_rx_defrag_waitlist_remove(struct dp_peer *peer, unsigned tid)
 		struct dp_peer *peer_on_waitlist;
 
 		/* get address of current peer */
-		peer_on_waitlist =
-			container_of(rx_reorder, struct dp_peer,
-				     rx_tid[rx_reorder->tid]);
+		peer_on_waitlist = rx_reorder->defrag_peer;
 
 		/* Ensure it is TID for same peer */
 		if (peer_on_waitlist == peer && rx_reorder->tid == tid) {
@@ -1380,20 +1377,21 @@ static QDF_STATUS dp_rx_defrag_reo_reinject(struct dp_peer *peer,
 	qdf_mem_zero(ent_mpdu_desc_info, sizeof(uint32_t));
 
 	mpdu_wrd = (uint32_t *)dst_mpdu_desc_info;
-	seq_no = HAL_RX_MPDU_SEQUENCE_NUMBER_GET(mpdu_wrd);
+	seq_no = hal_rx_get_rx_sequence(soc->hal_soc, qdf_nbuf_data(head));
 
 	hal_mpdu_desc_info_set(soc->hal_soc, ent_mpdu_desc_info, seq_no);
 	/* qdesc addr */
-	ent_qdesc_addr = (uint8_t *)ent_ring_desc +
-		REO_ENTRANCE_RING_4_RX_REO_QUEUE_DESC_ADDR_31_0_OFFSET;
+	ent_qdesc_addr = hal_get_reo_ent_desc_qdesc_addr(soc->hal_soc,
+						(uint8_t *)ent_ring_desc);
 
-	dst_qdesc_addr = (uint8_t *)dst_ring_desc +
-		REO_DESTINATION_RING_6_RX_REO_QUEUE_DESC_ADDR_31_0_OFFSET;
+	dst_qdesc_addr = hal_rx_get_qdesc_addr(soc->hal_soc,
+					       (uint8_t *)dst_ring_desc,
+					       qdf_nbuf_data(head));
 
-	qdf_mem_copy(ent_qdesc_addr, dst_qdesc_addr, 8);
+	qdf_mem_copy(ent_qdesc_addr, dst_qdesc_addr, 5);
 
-	HAL_RX_FLD_SET(ent_ring_desc, REO_ENTRANCE_RING_5,
-			REO_DESTINATION_INDICATION, dst_ind);
+	hal_set_reo_ent_desc_reo_dest_ind(soc->hal_soc,
+					  (uint8_t *)ent_ring_desc, dst_ind);
 
 	hal_srng_access_end(soc->hal_soc, hal_srng);
 
@@ -1715,8 +1713,8 @@ dp_rx_defrag_store_fragment(struct dp_soc *soc,
 	qdf_nbuf_append_ext_list(frag, NULL, 0);
 
 	/* Check if the packet is from a valid peer */
-	peer_id = DP_PEER_METADATA_PEER_ID_GET(
-					mpdu_desc_info->peer_meta_data);
+	peer_id = dp_rx_peer_metadata_peer_id_get(soc,
+					       mpdu_desc_info->peer_meta_data);
 	peer = dp_peer_get_ref_by_id(soc, peer_id, DP_MOD_ID_RX_ERR);
 
 	if (!peer) {
@@ -1735,9 +1733,6 @@ dp_rx_defrag_store_fragment(struct dp_soc *soc,
 		qdf_assert_always(0);
 		goto discard_frag;
 	}
-
-	pdev = peer->vdev->pdev;
-	rx_tid = &peer->rx_tid[tid];
 
 	mpdu_sequence_control_valid =
 		hal_rx_get_mpdu_sequence_control_valid(soc->hal_soc,
@@ -1773,10 +1768,15 @@ dp_rx_defrag_store_fragment(struct dp_soc *soc,
 	 */
 	fragno = dp_rx_frag_get_mpdu_frag_number(soc, rx_desc->rx_buf_start);
 
+	pdev = peer->vdev->pdev;
+	rx_tid = &peer->rx_tid[tid];
+
+	qdf_spin_lock_bh(&rx_tid->tid_lock);
 	rx_reorder_array_elem = peer->rx_tid[tid].array;
 	if (!rx_reorder_array_elem) {
 		dp_err_rl("Rcvd Fragmented pkt before tid setup for peer %pK",
 			  peer);
+		qdf_spin_unlock_bh(&rx_tid->tid_lock);
 		goto discard_frag;
 	}
 
@@ -1794,6 +1794,7 @@ dp_rx_defrag_store_fragment(struct dp_soc *soc,
 		QDF_TRACE(QDF_MODULE_ID_TXRX, QDF_TRACE_LEVEL_ERROR,
 			"Rcvd unfragmented pkt on REO Err srng, dropping");
 
+		qdf_spin_unlock_bh(&rx_tid->tid_lock);
 		qdf_assert(0);
 		goto discard_frag;
 	}
@@ -1821,6 +1822,13 @@ dp_rx_defrag_store_fragment(struct dp_soc *soc,
 			rx_tid->curr_seq_num = rxseq;
 		}
 	} else {
+		/* Check if we are processing first fragment if it is
+		 * not first fragment discard fragment.
+		 */
+		if (fragno) {
+			qdf_spin_unlock_bh(&rx_tid->tid_lock);
+			goto discard_frag;
+		}
 		dp_debug("cur rxseq %d\n", rxseq);
 		/* Start of a new sequence */
 		dp_rx_defrag_cleanup(peer, tid);
@@ -1832,11 +1840,9 @@ dp_rx_defrag_store_fragment(struct dp_soc *soc,
 	 * If the earlier sequence was dropped, this will be the fresh start.
 	 * Else, continue with next fragment in a given sequence
 	 */
-	qdf_spin_lock_bh(&rx_tid->tid_lock);
 	status = dp_rx_defrag_fraglist_insert(peer, tid, &rx_reorder_array_elem->head,
 			&rx_reorder_array_elem->tail, frag,
 			&all_frag_present);
-	qdf_spin_unlock_bh(&rx_tid->tid_lock);
 
 	/*
 	 * Currently, we can have only 6 MSDUs per-MPDU, if the current
@@ -1854,6 +1860,7 @@ dp_rx_defrag_store_fragment(struct dp_soc *soc,
 		if (status != QDF_STATUS_SUCCESS) {
 			QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_ERROR,
 				"%s: Unable to store ring desc !", __func__);
+			qdf_spin_unlock_bh(&rx_tid->tid_lock);
 			goto discard_frag;
 		}
 	} else {
@@ -1882,6 +1889,7 @@ dp_rx_defrag_store_fragment(struct dp_soc *soc,
 
 		dp_rx_defrag_waitlist_add(peer, tid);
 		dp_peer_unref_delete(peer, DP_MOD_ID_RX_ERR);
+		qdf_spin_unlock_bh(&rx_tid->tid_lock);
 
 		return QDF_STATUS_SUCCESS;
 	}
@@ -1890,7 +1898,6 @@ dp_rx_defrag_store_fragment(struct dp_soc *soc,
 		  "All fragments received for sequence: %d", rxseq);
 
 	/* Process the fragments */
-	qdf_spin_lock_bh(&rx_tid->tid_lock);
 	status = dp_rx_defrag(peer, tid, rx_reorder_array_elem->head,
 		rx_reorder_array_elem->tail);
 	if (QDF_IS_STATUS_ERROR(status)) {
@@ -1916,7 +1923,6 @@ dp_rx_defrag_store_fragment(struct dp_soc *soc,
 	/* Re-inject the fragments back to REO for further processing */
 	status = dp_rx_defrag_reo_reinject(peer, tid,
 			rx_reorder_array_elem->head);
-	qdf_spin_unlock_bh(&rx_tid->tid_lock);
 	if (QDF_IS_STATUS_SUCCESS(status)) {
 		rx_reorder_array_elem->head = NULL;
 		rx_reorder_array_elem->tail = NULL;
@@ -1929,6 +1935,7 @@ dp_rx_defrag_store_fragment(struct dp_soc *soc,
 	}
 
 	dp_rx_defrag_cleanup(peer, tid);
+	qdf_spin_unlock_bh(&rx_tid->tid_lock);
 
 	dp_peer_unref_delete(peer, DP_MOD_ID_RX_ERR);
 

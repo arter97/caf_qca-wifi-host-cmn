@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2014-2021 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2021 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -4630,6 +4631,14 @@ static unsigned int qdf_nbuf_update_radiotap_ampdu_flags(
 	return rtap_len;
 }
 
+#ifdef DP_MON_RSSI_IN_DBM
+#define QDF_MON_STATUS_GET_RSSI_IN_DBM(rx_status) \
+(rx_status->rssi_comb)
+#else
+#define QDF_MON_STATUS_GET_RSSI_IN_DBM(rx_status) \
+(rx_status->rssi_comb + rx_status->chan_noise_floor)
+#endif
+
 /**
  * qdf_nbuf_update_radiotap() - Update radiotap header from rx_status
  * @rx_status: Pointer to rx_status.
@@ -4705,7 +4714,7 @@ unsigned int qdf_nbuf_update_radiotap(struct mon_rx_status *rx_status,
 	 * rssi_comb is int dB, need to convert it to dBm.
 	 * normalize value to noise floor of -96 dBm
 	 */
-	rtap_buf[rtap_len] = rx_status->rssi_comb + rx_status->chan_noise_floor;
+	rtap_buf[rtap_len] = QDF_MON_STATUS_GET_RSSI_IN_DBM(rx_status);
 	rtap_len += 1;
 
 	/* RX signal noise floor */
@@ -4930,6 +4939,8 @@ void __qdf_nbuf_reg_free_cb(qdf_nbuf_free_t cb_func_ptr)
 {
 	nbuf_free_cb = cb_func_ptr;
 }
+
+qdf_export_symbol(__qdf_nbuf_reg_free_cb);
 
 /**
  * qdf_nbuf_classify_pkt() - classify packet

@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2021 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -35,35 +36,18 @@
 #define RX_MONITOR_BUFFER_ALIGNMENT     4
 #endif /* RXDMA_OPTIMIZATION */
 
-#ifdef QCA_HOST2FW_RXBUF_RING
+#if defined(WLAN_MAX_PDEVS) && (WLAN_MAX_PDEVS == 1)
 #define DP_WBM2SW_RBM(sw0_bm_id)	HAL_RX_BUF_RBM_SW1_BM(sw0_bm_id)
 /* RBM value used for re-injecting defragmented packets into REO */
 #define DP_DEFRAG_RBM(sw0_bm_id)	HAL_RX_BUF_RBM_SW3_BM(sw0_bm_id)
-#endif /* QCA_HOST2FW_RXBUF_RING */
+#endif
 
 #define RX_BUFFER_RESERVATION   0
-
-#define DP_PEER_METADATA_PEER_ID_MASK	0x0000ffff
-#define DP_PEER_METADATA_PEER_ID_SHIFT	0
-#define DP_PEER_METADATA_VDEV_ID_MASK	0x003f0000
-#define DP_PEER_METADATA_VDEV_ID_SHIFT	16
-#define DP_PEER_METADATA_OFFLOAD_MASK	0x01000000
-#define DP_PEER_METADATA_OFFLOAD_SHIFT	24
-
+#ifdef QCA_WIFI_QCN9224
+#define RX_MON_MIN_HEAD_ROOM   64
+#endif
 
 #define DP_DEFAULT_NOISEFLOOR	(-96)
-
-#define DP_PEER_METADATA_PEER_ID_GET(_peer_metadata)		\
-	(((_peer_metadata) & DP_PEER_METADATA_PEER_ID_MASK)	\
-			>> DP_PEER_METADATA_PEER_ID_SHIFT)
-
-#define DP_PEER_METADATA_VDEV_ID_GET(_peer_metadata)		\
-	(((_peer_metadata) & DP_PEER_METADATA_VDEV_ID_MASK)	\
-			>> DP_PEER_METADATA_VDEV_ID_SHIFT)
-
-#define DP_PEER_METADATA_OFFLOAD_GET(_peer_metadata)		\
-	(((_peer_metadata) & DP_PEER_METADATA_OFFLOAD_MASK)	\
-			>> DP_PEER_METADATA_OFFLOAD_SHIFT)
 
 #define DP_RX_DESC_MAGIC 0xdec0de
 
@@ -1099,25 +1083,33 @@ void *dp_rx_cookie_2_link_desc_va(struct dp_soc *soc,
 }
 
 #ifndef QCA_HOST_MODE_WIFI_DISABLED
-/*
- * dp_rx_intrabss_fwd() - API for intrabss fwd. For EAPOL
- *  pkt with DA not equal to vdev mac addr, fwd is not allowed.
- * @soc: core txrx main context
- * @ta_peer: source peer entry
- * @rx_tlv_hdr: start address of rx tlvs
- * @nbuf: nbuf that has to be intrabss forwarded
- * @msdu_metadata: msdu metadata
- *
- * Return: true if it is forwarded else false
- */
-
-bool dp_rx_intrabss_fwd(struct dp_soc *soc,
-			struct dp_peer *ta_peer,
-			uint8_t *rx_tlv_hdr,
-			qdf_nbuf_t nbuf,
-			struct hal_rx_msdu_metadata msdu_metadata);
-
 #ifdef DISABLE_EAPOL_INTRABSS_FWD
+#ifdef WLAN_FEATURE_11BE_MLO
+static inline bool dp_nbuf_dst_addr_is_mld_addr(struct dp_vdev *vdev,
+						qdf_nbuf_t nbuf)
+{
+	struct qdf_mac_addr *self_mld_mac_addr =
+				(struct qdf_mac_addr *)vdev->mld_mac_addr.raw;
+	return qdf_is_macaddr_equal(self_mld_mac_addr,
+				    (struct qdf_mac_addr *)qdf_nbuf_data(nbuf) +
+				    QDF_NBUF_DEST_MAC_OFFSET);
+}
+#else
+static inline bool dp_nbuf_dst_addr_is_mld_addr(struct dp_vdev *vdev,
+						qdf_nbuf_t nbuf)
+{
+	return false;
+}
+#endif
+
+static inline bool dp_nbuf_dst_addr_is_self_addr(struct dp_vdev *vdev,
+						 qdf_nbuf_t nbuf)
+{
+	return qdf_is_macaddr_equal((struct qdf_mac_addr *)vdev->mac_addr.raw,
+				    (struct qdf_mac_addr *)qdf_nbuf_data(nbuf) +
+				    QDF_NBUF_DEST_MAC_OFFSET);
+}
+
 /*
  * dp_rx_intrabss_eapol_drop_check() - API For EAPOL
  *  pkt with DA not equal to vdev mac addr, fwd is not allowed.
@@ -1134,10 +1126,8 @@ bool dp_rx_intrabss_eapol_drop_check(struct dp_soc *soc,
 				     uint8_t *rx_tlv_hdr, qdf_nbuf_t nbuf)
 {
 	if (qdf_unlikely(qdf_nbuf_is_ipv4_eapol_pkt(nbuf) &&
-			 qdf_mem_cmp(qdf_nbuf_data(nbuf) +
-				     QDF_NBUF_DEST_MAC_OFFSET,
-				     ta_peer->vdev->mac_addr.raw,
-				     QDF_MAC_ADDR_SIZE))) {
+			 !(dp_nbuf_dst_addr_is_self_addr(ta_peer->vdev, nbuf) ||
+			   dp_nbuf_dst_addr_is_mld_addr(ta_peer->vdev, nbuf)))) {
 		qdf_nbuf_free(nbuf);
 		DP_STATS_INC(soc, rx.err.intrabss_eapol_drop, 1);
 		return true;
@@ -1155,6 +1145,16 @@ bool dp_rx_intrabss_eapol_drop_check(struct dp_soc *soc,
 	return false;
 }
 #endif /* DISABLE_EAPOL_INTRABSS_FWD */
+
+bool dp_rx_intrabss_mcbc_fwd(struct dp_soc *soc, struct dp_peer *ta_peer,
+			     uint8_t *rx_tlv_hdr, qdf_nbuf_t nbuf,
+			     struct cdp_tid_rx_stats *tid_stats);
+
+bool dp_rx_intrabss_ucast_fwd(struct dp_soc *soc, struct dp_peer *ta_peer,
+			      uint8_t tx_vdev_id,
+			      uint8_t *rx_tlv_hdr, qdf_nbuf_t nbuf,
+			      struct cdp_tid_rx_stats *tid_stats);
+
 /**
  * dp_rx_defrag_concat() - Concatenate the fragments
  *
@@ -2023,7 +2023,7 @@ dp_rx_is_list_ready(qdf_nbuf_t nbuf_head,
 }
 #endif
 
-#ifdef QCA_HOST2FW_RXBUF_RING
+#if defined(WLAN_MAX_PDEVS) && (WLAN_MAX_PDEVS == 1)
 static inline uint8_t
 dp_rx_get_defrag_bm_id(struct dp_soc *soc)
 {
@@ -2054,6 +2054,13 @@ dp_rx_get_defrag_bm_id(struct dp_soc *soc)
 	return dp_rx_get_rx_bm_id(soc);
 }
 #endif
+
+static inline uint16_t
+dp_rx_peer_metadata_peer_id_get(struct dp_soc *soc, uint32_t peer_metadata)
+{
+	return soc->arch_ops.dp_rx_peer_metadata_peer_id_get(soc,
+							     peer_metadata);
+}
 
 /**
  * dp_rx_desc_pool_init_generic() - Generic Rx descriptors initialization

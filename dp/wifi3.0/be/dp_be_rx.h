@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2021 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -125,6 +126,43 @@ dp_rx_desc_sw_cc_check(struct dp_soc *soc,
 }
 #endif /* DP_FEATURE_HW_COOKIE_CONVERSION && DP_HW_COOKIE_CONVERT_EXCEPTION */
 
+#define DP_PEER_METADATA_OFFLOAD_GET_BE(_peer_metadata)		(0)
+
+#ifdef DP_USE_REDUCED_PEER_ID_FIELD_WIDTH
+static inline uint16_t
+dp_rx_peer_metadata_peer_id_get_be(struct dp_soc *soc, uint32_t peer_metadata)
+{
+	struct htt_rx_peer_metadata_v1 *metadata =
+			(struct htt_rx_peer_metadata_v1 *)&peer_metadata;
+	uint16_t peer_id;
+
+	peer_id = metadata->peer_id |
+		  (metadata->ml_peer_valid << soc->peer_id_shift);
+
+	return peer_id;
+}
+#else
+/* Combine ml_peer_valid and peer_id field */
+#define DP_BE_PEER_METADATA_PEER_ID_MASK	0x00003fff
+#define DP_BE_PEER_METADATA_PEER_ID_SHIFT	0
+
+static inline uint16_t
+dp_rx_peer_metadata_peer_id_get_be(struct dp_soc *soc, uint32_t peer_metadata)
+{
+	return ((peer_metadata & DP_BE_PEER_METADATA_PEER_ID_MASK) >>
+		DP_BE_PEER_METADATA_PEER_ID_SHIFT);
+}
+#endif
+
+static inline uint16_t
+dp_rx_peer_metadata_vdev_id_get_be(struct dp_soc *soc, uint32_t peer_metadata)
+{
+	struct htt_rx_peer_metadata_v1 *metadata =
+			(struct htt_rx_peer_metadata_v1 *)&peer_metadata;
+
+	return metadata->vdev_id;
+}
+
 #ifdef WLAN_FEATURE_NEAR_FULL_IRQ
 /**
  * dp_rx_nf_process() - Near Full state handler for RX rings.
@@ -149,4 +187,15 @@ uint32_t dp_rx_nf_process(struct dp_intr *int_ctx,
 	return 0;
 }
 #endif /*WLAN_FEATURE_NEAR_FULL_IRQ */
+
+#if defined(WLAN_FEATURE_11BE_MLO) && defined(WLAN_MLO_MULTI_CHIP)
+struct dp_soc *
+dp_rx_replensih_soc_get(struct dp_soc *soc, uint8_t reo_ring_num);
+#else
+static inline struct dp_soc *
+dp_rx_replensih_soc_get(struct dp_soc *soc, uint8_t reo_ring_num)
+{
+	return soc;
+}
+#endif
 #endif

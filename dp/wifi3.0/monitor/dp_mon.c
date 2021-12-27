@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2016-2021, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2021 Qualcomm Innovation Center, Inc. All rights reserved.
 
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -151,9 +152,9 @@ QDF_STATUS dp_reset_monitor_mode(struct cdp_soc_t *soc_hdl,
 	qdf_spin_lock_bh(&mon_pdev->mon_lock);
 
 	cdp_ops = dp_mon_cdp_ops_get(soc);
-	if (cdp_ops  && cdp_ops->config_full_mon_mode)
+	if (cdp_ops  && cdp_ops->soc_config_full_mon_mode)
 		cdp_ops->soc_config_full_mon_mode((struct cdp_pdev *)pdev,
-						  DP_FULL_MON_ENABLE);
+						  DP_FULL_MON_DISABLE);
 	mon_pdev->mvdev = NULL;
 	mon_pdev->monitor_configured = false;
 
@@ -431,7 +432,7 @@ static QDF_STATUS dp_vdev_set_monitor_mode(struct cdp_soc_t *dp_soc,
 	mon_pdev->monitor_configured = true;
 
 	cdp_ops = dp_mon_cdp_ops_get(soc);
-	if (cdp_ops  && cdp_ops->config_full_mon_mode)
+	if (cdp_ops  && cdp_ops->soc_config_full_mon_mode)
 		cdp_ops->soc_config_full_mon_mode((struct cdp_pdev *)pdev,
 						  DP_FULL_MON_ENABLE);
 	dp_mon_filter_setup_mon_mode(pdev);
@@ -890,6 +891,36 @@ int dp_set_pktlog_wifi3(struct dp_pdev *pdev, uint32_t event,
 			}
 			break;
 
+#ifdef QCA_WIFI_QCN9224
+		case WDI_EVENT_HYBRID_TX:
+			if (mon_pdev->mvdev) {
+				/* Nothing needs to be done if monitor mode is
+				 * enabled
+				 */
+				mon_pdev->pktlog_hybrid_mode = true;
+				return 0;
+			}
+
+			if (!mon_pdev->pktlog_hybrid_mode) {
+				mon_pdev->pktlog_hybrid_mode = true;
+				dp_mon_filter_setup_pktlog_hybrid(pdev);
+				if (dp_mon_filter_update(pdev) !=
+				    QDF_STATUS_SUCCESS) {
+					dp_cdp_err("Set hybrid filters failed");
+					dp_mon_filter_reset_pktlog_hybrid(pdev);
+					mon_pdev->rx_pktlog_mode =
+						DP_RX_PKTLOG_DISABLED;
+					return 0;
+				}
+
+				if (mon_soc->reap_timer_init &&
+				    !dp_mon_is_enable_reap_timer_non_pkt(pdev))
+					qdf_timer_mod(&mon_soc->mon_reap_timer,
+						      DP_INTR_POLL_TIMER_MS);
+			}
+			break;
+#endif
+
 		default:
 			/* Nothing needs to be done for other pktlog types */
 			break;
@@ -961,6 +992,12 @@ int dp_set_pktlog_wifi3(struct dp_pdev *pdev, uint32_t event,
 		case WDI_EVENT_RX_CBF:
 			mon_pdev->rx_pktlog_cbf = false;
 			break;
+
+#ifdef QCA_WIFI_QCN9224
+		case WDI_EVENT_HYBRID_TX:
+			mon_pdev->pktlog_hybrid_mode = false;
+			break;
+#endif
 
 		default:
 			/* Nothing needs to be done for other pktlog types */
@@ -1984,21 +2021,6 @@ bool dp_pdev_get_filter_non_data(struct cdp_pdev *pdev_handle)
 	return false;
 }
 
-QDF_STATUS dp_mon_htt_srng_setup(struct dp_soc *soc,
-				 struct dp_pdev *pdev,
-				 int mac_id,
-				 int mac_for_pdev)
-{
-	struct dp_mon_ops *mon_ops;
-
-	mon_ops = dp_mon_ops_get(soc);
-	if (mon_ops  && mon_ops->mon_pdev_htt_srng_setup)
-		return mon_ops->mon_pdev_htt_srng_setup(soc, pdev,
-							mac_id, mac_for_pdev);
-
-	return QDF_STATUS_E_FAILURE;
-}
-
 QDF_STATUS dp_mon_soc_cfg_init(struct dp_soc *soc)
 {
 	int target_type;
@@ -2349,6 +2371,21 @@ QDF_STATUS dp_mon_peer_detach(struct dp_peer *peer)
 	return QDF_STATUS_SUCCESS;
 }
 
+#ifndef DISABLE_MON_CONFIG
+void dp_mon_register_intr_ops(struct dp_soc *soc)
+{
+	struct dp_mon_ops *mon_ops = NULL;
+
+	mon_ops = dp_mon_ops_get(soc);
+	if (!mon_ops) {
+		dp_mon_err("Monitor ops is NULL");
+		return;
+	}
+	if (mon_ops->mon_register_intr_ops)
+		mon_ops->mon_register_intr_ops(soc);
+}
+#endif
+
 void dp_mon_ops_register(struct dp_soc *soc)
 {
 	struct dp_mon_soc *mon_soc = soc->monitor_soc;
@@ -2521,8 +2558,10 @@ QDF_STATUS dp_mon_soc_attach(struct dp_soc *soc)
 	/* register monitor ops */
 	soc->monitor_soc = mon_soc;
 	dp_mon_ops_register(soc);
+	dp_mon_register_intr_ops(soc);
 
 	dp_mon_cdp_ops_register(soc);
+	dp_mon_register_feature_ops(soc);
 	return QDF_STATUS_SUCCESS;
 }
 

@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2021 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -25,8 +26,7 @@
 #include "qdf_mem.h"
 #include "qdf_nbuf.h"
 #include "pld_common.h"
-#if defined(FEATURE_HAL_DELAYED_REG_WRITE) || \
-	defined(FEATURE_HAL_DELAYED_REG_WRITE_V2)
+#if defined(FEATURE_HAL_DELAYED_REG_WRITE)
 #include "qdf_defer.h"
 #include "qdf_timer.h"
 #endif
@@ -398,8 +398,7 @@ typedef struct hal_ring_handle *hal_ring_handle_t;
  */
 #define HAL_SRNG_FLUSH_EVENT BIT(0)
 
-#if defined(FEATURE_HAL_DELAYED_REG_WRITE) || \
-	defined(FEATURE_HAL_DELAYED_REG_WRITE_V2)
+#if defined(FEATURE_HAL_DELAYED_REG_WRITE)
 
 /**
  * struct hal_reg_write_q_elem - delayed register write queue element
@@ -411,6 +410,7 @@ typedef struct hal_ring_handle *hal_ring_handle_t;
  * @enqueue_time: enqueue time (qdf_log_timestamp)
  * @work_scheduled_time: work scheduled time (qdf_log_timestamp)
  * @dequeue_time: dequeue time (qdf_log_timestamp)
+ * @cpu_id: record cpuid when schedule work
  */
 struct hal_reg_write_q_elem {
 	struct hal_srng *srng;
@@ -421,6 +421,7 @@ struct hal_reg_write_q_elem {
 	qdf_time_t enqueue_time;
 	qdf_time_t work_scheduled_time;
 	qdf_time_t dequeue_time;
+	int cpu_id;
 };
 
 /**
@@ -478,21 +479,6 @@ struct hal_reg_write_soc_stats {
 	uint32_t sched_delay[REG_WRITE_SCHED_DELAY_HIST_MAX];
 	uint32_t dequeue_delay;
 };
-
-#ifdef FEATURE_HAL_DELAYED_REG_WRITE_V2
-struct hal_reg_write_tcl_stats {
-	uint32_t wq_delayed;
-	uint32_t wq_direct;
-	uint32_t timer_enq;
-	uint32_t timer_direct;
-	uint32_t enq_timer_set;
-	uint32_t direct_timer_set;
-	uint32_t timer_reset;
-	qdf_time_t enq_time;
-	qdf_time_t deq_time;
-	uint32_t sched_delay[REG_WRITE_SCHED_DELAY_HIST_MAX];
-};
-#endif
 #endif
 
 struct hal_offload_info {
@@ -524,6 +510,9 @@ struct hal_srng {
 
 	/* Virtual base address of the ring */
 	uint32_t *ring_base_vaddr;
+
+	/* virtual address end */
+	uint32_t *ring_vaddr_end;
 
 	/* Number of entries in ring */
 	uint32_t num_entries;
@@ -644,10 +633,7 @@ struct hal_srng {
 	/* last ring desc entry cleared */
 	uint32_t last_desc_cleared;
 #endif
-#if defined(FEATURE_HAL_DELAYED_REG_WRITE) || \
-	defined(FEATURE_HAL_DELAYED_REG_WRITE_V2)
-	/* Previous hp/tp (based on ring dir) value written to the reg */
-	uint32_t last_reg_wr_val;
+#if defined(FEATURE_HAL_DELAYED_REG_WRITE)
 	/* flag to indicate whether srng is already queued for delayed write */
 	uint8_t reg_write_in_progress;
 	/* last dequeue elem time stamp */
@@ -697,6 +683,8 @@ struct shadow_reg_config {
 struct hal_reo_params {
 	/** rx hash steering enabled or disabled */
 	bool rx_hash_enabled;
+	/** reo remap 0 register */
+	uint32_t remap0;
 	/** reo remap 1 register */
 	uint32_t remap1;
 	/** reo remap 2 register */
@@ -764,7 +752,7 @@ struct hal_hw_txrx_ops {
 				    uint32_t ba_window_size,
 				    uint32_t start_seq, void *hw_qdesc_vaddr,
 				    qdf_dma_addr_t hw_qdesc_paddr,
-				    int pn_type);
+				    int pn_type, uint8_t vdev_stats_id);
 	uint32_t (*hal_gen_reo_remap_val)(enum hal_reo_remap_reg,
 					  uint8_t *ix0_map);
 
@@ -837,6 +825,7 @@ struct hal_hw_txrx_ops {
 	uint8_t (*hal_rx_msdu_end_last_msdu_get)(uint8_t *buf);
 	bool (*hal_rx_get_mpdu_mac_ad4_valid)(uint8_t *buf);
 	uint32_t (*hal_rx_mpdu_start_sw_peer_id_get)(uint8_t *buf);
+	uint32_t (*hal_rx_mpdu_peer_meta_data_get)(uint8_t *buf);
 	uint32_t (*hal_rx_mpdu_get_to_ds)(uint8_t *buf);
 	uint32_t (*hal_rx_mpdu_get_fr_ds)(uint8_t *buf);
 	uint8_t (*hal_rx_get_mpdu_frame_control_valid)(uint8_t *buf);
@@ -925,7 +914,8 @@ struct hal_hw_txrx_ops {
 	uint32_t (*hal_get_reo_qdesc_size)(uint32_t ba_window_size, int tid);
 
 	void (*hal_set_link_desc_addr)(void *desc, uint32_t cookie,
-				       qdf_dma_addr_t link_desc_paddr);
+				       qdf_dma_addr_t link_desc_paddr,
+				       uint8_t bm_id);
 	void (*hal_tx_init_data_ring)(hal_soc_handle_t hal_soc_hdl,
 				      hal_ring_handle_t hal_ring_hdl);
 	void* (*hal_rx_msdu_ext_desc_info_get_ptr)(void *msdu_details_ptr);
@@ -1009,6 +999,11 @@ struct hal_hw_txrx_ops {
 	void (*hal_rx_tlv_msdu_len_set)(uint8_t *buf, uint32_t len);
 	void (*hal_rx_tlv_populate_mpdu_desc_info)(uint8_t *buf,
 						   void *mpdu_desc_info_hdl);
+	uint8_t *(*hal_get_reo_ent_desc_qdesc_addr)(uint8_t *desc);
+	uint8_t *(*hal_rx_get_qdesc_addr)(uint8_t *dst_ring_desc,
+					  uint8_t *buf);
+	void (*hal_set_reo_ent_desc_reo_dest_ind)(uint8_t *desc,
+						  uint32_t dst_ind);
 
 	/* REO CMD and STATUS */
 	int (*hal_reo_send_cmd)(hal_soc_handle_t hal_soc_hdl,
@@ -1020,6 +1015,7 @@ struct hal_hw_txrx_ops {
 					    void *st_handle,
 					    uint32_t tlv, int *num_ref);
 	uint8_t (*hal_get_tlv_hdr_size)(void);
+	uint8_t (*hal_get_idle_link_bm_id)(uint8_t chip_id);
 };
 
 /**
@@ -1033,8 +1029,7 @@ struct hal_hw_txrx_ops {
  */
 struct hal_soc_stats {
 	uint32_t reg_write_fail;
-#if defined(FEATURE_HAL_DELAYED_REG_WRITE) || \
-	defined(FEATURE_HAL_DELAYED_REG_WRITE_V2)
+#if defined(FEATURE_HAL_DELAYED_REG_WRITE)
 	struct hal_reg_write_soc_stats wstats;
 #endif
 #ifdef GENERIC_SHADOW_REGISTER_ACCESS_ENABLE
@@ -1150,20 +1145,6 @@ struct hal_soc {
 	/* read index used by worker thread to dequeue/write registers */
 	uint32_t read_idx;
 #endif /*FEATURE_HAL_DELAYED_REG_WRITE */
-#ifdef FEATURE_HAL_DELAYED_REG_WRITE_V2
-	/* delayed work for TCL reg write to be queued into workqueue */
-	qdf_work_t tcl_reg_write_work;
-	/* workqueue for TCL delayed register writes */
-	qdf_workqueue_t *tcl_reg_write_wq;
-	/* flag denotes whether TCL delayed write work is active */
-	qdf_atomic_t tcl_work_active;
-	/* flag indiactes TCL write happening from direct context */
-	bool tcl_direct;
-	/* timer to handle the pending TCL reg writes */
-	qdf_timer_t tcl_reg_write_timer;
-	/* stats related to TCL reg write */
-	struct hal_reg_write_tcl_stats tcl_stats;
-#endif /* FEATURE_HAL_DELAYED_REG_WRITE_V2 */
 	qdf_atomic_t active_work_cnt;
 #ifdef GENERIC_SHADOW_REGISTER_ACCESS_ENABLE
 	struct shadow_reg_config
@@ -1174,8 +1155,7 @@ struct hal_soc {
 	bool dmac_cmn_src_rxbuf_ring;
 };
 
-#if defined(FEATURE_HAL_DELAYED_REG_WRITE) || \
-	defined(FEATURE_HAL_DELAYED_REG_WRITE_V2)
+#if defined(FEATURE_HAL_DELAYED_REG_WRITE)
 /**
  *  hal_delayed_reg_write() - delayed regiter write
  * @hal_soc: HAL soc handle

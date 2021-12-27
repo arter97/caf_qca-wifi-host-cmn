@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2019-2021 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2021 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -485,7 +486,6 @@ static inline void hal_rx_dump_mpdu_start_tlv_7850(void *mpdustart,
 		       "all_frames_shall_be_encrypted  :%x"
 		       "encrypt_type:%x "
 		       "wep_key_width_for_variable_key :%x"
-		       "mesh_sta:%x "
 		       "bssid_hit:%x "
 		       "bssid_number:%x "
 		       "tid:%x "
@@ -505,7 +505,6 @@ static inline void hal_rx_dump_mpdu_start_tlv_7850(void *mpdustart,
 		       mpdu_info->all_frames_shall_be_encrypted,
 		       mpdu_info->encrypt_type,
 		       mpdu_info->wep_key_width_for_variable_key,
-		       mpdu_info->mesh_sta,
 		       mpdu_info->bssid_hit,
 		       mpdu_info->bssid_number,
 		       mpdu_info->tid,
@@ -521,7 +520,6 @@ static inline void hal_rx_dump_mpdu_start_tlv_7850(void *mpdustart,
 		       "phy_err_during_mpdu_header  :%x"
 		       "protocol_version_err:%x "
 		       "ast_based_lookup_valid:%x "
-		       "ranging:%x "
 		       "reserved_9a:%x "
 		       "phy_ppdu_id:%x "
 		       "ast_index:%x "
@@ -543,7 +541,6 @@ static inline void hal_rx_dump_mpdu_start_tlv_7850(void *mpdustart,
 		       mpdu_info->phy_err_during_mpdu_header,
 		       mpdu_info->protocol_version_err,
 		       mpdu_info->ast_based_lookup_valid,
-		       mpdu_info->ranging,
 		       mpdu_info->reserved_9a,
 		       mpdu_info->phy_ppdu_id,
 		       mpdu_info->ast_index,
@@ -667,12 +664,7 @@ static inline void hal_rx_dump_mpdu_start_tlv_7850(void *mpdustart,
 		       "vdev_id:%x "
 		       "service_code:%x "
 		       "priority_valid:%x "
-		       "reserved_23a:%x "
-		       "multi_link_addr_ad1_ad2_valid  :%x"
-		       "multi_link_addr_ad1_31_0:%x "
-		       "multi_link_addr_ad1_47_32:%x "
-		       "multi_link_addr_ad2_15_0:%x "
-		       "multi_link_addr_ad2_47_16:%x ",
+		       "reserved_23a:%x ",
 		       mpdu_info->mac_addr_ad1_31_0,
 		       mpdu_info->mac_addr_ad1_47_32,
 		       mpdu_info->mac_addr_ad2_15_0,
@@ -687,12 +679,7 @@ static inline void hal_rx_dump_mpdu_start_tlv_7850(void *mpdustart,
 		       mpdu_info->vdev_id,
 		       mpdu_info->service_code,
 		       mpdu_info->priority_valid,
-		       mpdu_info->reserved_23a,
-		       mpdu_info->multi_link_addr_ad1_ad2_valid,
-		       mpdu_info->multi_link_addr_ad1_31_0,
-		       mpdu_info->multi_link_addr_ad1_47_32,
-		       mpdu_info->multi_link_addr_ad2_15_0,
-		       mpdu_info->multi_link_addr_ad2_47_16);
+		       mpdu_info->reserved_23a);
 }
 
 /**
@@ -1302,6 +1289,17 @@ static inline void hal_cmem_write_7850(hal_soc_handle_t hal_soc_hdl,
 	hal_write32_mb(hal, offset, value);
 }
 
+/**
+ * hal_get_idle_link_bm_id_7850() - Get idle link BM id from chid_id
+ * @chip_id: mlo chip_id
+ *
+ * Returns: RBM ID
+ */
+static uint8_t hal_get_idle_link_bm_id_7850(uint8_t chip_id)
+{
+	return WBM_IDLE_DESC_LIST;
+}
+
 static void hal_hw_txrx_ops_attach_wcn7850(struct hal_soc *hal_soc)
 {
 	/* init and setup */
@@ -1387,6 +1385,8 @@ static void hal_hw_txrx_ops_attach_wcn7850(struct hal_soc *hal_soc)
 					hal_rx_get_mpdu_mac_ad4_valid_be;
 	hal_soc->ops->hal_rx_mpdu_start_sw_peer_id_get =
 		hal_rx_mpdu_start_sw_peer_id_get_be;
+	hal_soc->ops->hal_rx_mpdu_peer_meta_data_get =
+		hal_rx_mpdu_peer_meta_data_get_be;
 	hal_soc->ops->hal_rx_mpdu_get_to_ds = hal_rx_mpdu_get_to_ds_be;
 	hal_soc->ops->hal_rx_mpdu_get_fr_ds = hal_rx_mpdu_get_fr_ds_be;
 	hal_soc->ops->hal_rx_get_mpdu_frame_control_valid =
@@ -1514,6 +1514,13 @@ static void hal_hw_txrx_ops_attach_wcn7850(struct hal_soc *hal_soc)
 				hal_rx_tlv_populate_mpdu_desc_info_7850;
 	hal_soc->ops->hal_rx_tlv_get_pn_num =
 				hal_rx_tlv_get_pn_num_be;
+	hal_soc->ops->hal_get_reo_ent_desc_qdesc_addr =
+				hal_get_reo_ent_desc_qdesc_addr_be;
+	hal_soc->ops->hal_rx_get_qdesc_addr =
+				hal_rx_get_qdesc_addr_be;
+	hal_soc->ops->hal_set_reo_ent_desc_reo_dest_ind =
+				hal_set_reo_ent_desc_reo_dest_ind_be;
+	hal_soc->ops->hal_get_idle_link_bm_id = hal_get_idle_link_bm_id_7850;
 };
 
 struct hal_hw_srng_config hw_srng_table_7850[] = {

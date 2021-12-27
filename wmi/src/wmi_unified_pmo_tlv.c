@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2018-2021 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2021 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -1685,13 +1686,15 @@ QDF_STATUS wmi_unified_cmd_send_chk(struct wmi_unified *wmi_handle,
 /**
  * send_host_wakeup_ind_to_fw_cmd_tlv() - send wakeup ind to fw
  * @wmi_handle: wmi handle
+ * @tx_pending_ind: flag of TX has pending frames
  *
  * Sends host wakeup indication to FW. On receiving this indication,
  * FW will come out of WOW.
  *
  * Return: CDF status
  */
-static QDF_STATUS send_host_wakeup_ind_to_fw_cmd_tlv(wmi_unified_t wmi_handle)
+static QDF_STATUS send_host_wakeup_ind_to_fw_cmd_tlv(wmi_unified_t wmi_handle,
+						     bool tx_pending_ind)
 {
 	wmi_wow_hostwakeup_from_sleep_cmd_fixed_param *cmd;
 	wmi_buf_t buf;
@@ -1708,6 +1711,12 @@ static QDF_STATUS send_host_wakeup_ind_to_fw_cmd_tlv(wmi_unified_t wmi_handle)
 
 	cmd = (wmi_wow_hostwakeup_from_sleep_cmd_fixed_param *)
 	      wmi_buf_data(buf);
+
+	if (tx_pending_ind) {
+		wmi_debug("TX pending before WoW wake, indicate FW");
+		cmd->flags |= WMI_WOW_RESUME_FLAG_TX_DATA;
+	}
+
 	WMITLV_SET_HDR(&cmd->tlv_header,
 		WMITLV_TAG_STRUC_wmi_wow_hostwakeup_from_sleep_cmd_fixed_param,
 		WMITLV_GET_STRUCT_TLVLEN
