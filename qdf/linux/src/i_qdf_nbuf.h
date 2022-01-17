@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2014-2018 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -116,6 +117,7 @@ typedef union {
  * @rx.flag_chfrag_cont: middle or part of MSDU in an AMSDU
  * @rx.flag_chfrag_end: last MSDU in an AMSDU
  * @rx.packet_buff_pool: indicate packet from pre-allocated pool for Rx ring
+ * @rx.ipa_smmu_map: do IPA smmu map
  * @rx.rsrvd: reserved
  *
  * @rx.trace: combined structure for DP and protocol trace
@@ -209,7 +211,8 @@ struct qdf_nbuf_cb {
 				flag_chfrag_cont:1,
 				flag_chfrag_end:1,
 				packet_buff_pool:1,
-				rsrvd:4;
+				ipa_smmu_map:1,
+				rsrvd:3;
 			union {
 				uint8_t packet_state;
 				uint8_t dp_trace:1,
