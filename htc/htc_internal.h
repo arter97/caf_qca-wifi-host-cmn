@@ -401,7 +401,7 @@ htc_send_complete_check(HTC_ENDPOINT *pEndpoint, int force) {
 #endif
 
 /* HTC Control message receive timeout msec */
-#define HTC_CONTROL_RX_TIMEOUT     6000
+#define HTC_CONTROL_RX_TIMEOUT     12000
 
 #if defined(HIF_SDIO) || defined(HIF_USB)
 #ifndef ENABLE_BUNDLE_TX
