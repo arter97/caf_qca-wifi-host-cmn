@@ -74,6 +74,28 @@ static const uint8_t sec_type_map[MAX_CDP_SEC_TYPE] = {
 					HAL_TX_ENCRYPT_TYPE_AES_GCMP_256,
 					HAL_TX_ENCRYPT_TYPE_WAPI_GCM_SM4};
 
+#ifdef CONFIG_DP_PKT_ADD_TIMESTAMP
+void dp_pkt_add_timestamp(struct dp_vdev *vdev,
+			  enum qdf_pkt_timestamp_index index, uint64_t time,
+			  qdf_nbuf_t nbuf)
+{
+	if (qdf_unlikely(qdf_is_dp_pkt_timestamp_enabled())) {
+		uint64_t tsf_time;
+
+		if (vdev->get_tsf_time) {
+			vdev->get_tsf_time(vdev->osif_vdev, time, &tsf_time);
+			qdf_add_dp_pkt_timestamp(nbuf, index, tsf_time);
+		}
+	}
+}
+
+void dp_pkt_get_timestamp(uint64_t *time)
+{
+	if (qdf_unlikely(qdf_is_dp_pkt_timestamp_enabled()))
+		*time = qdf_get_log_timestamp();
+}
+#endif
+
 #ifdef QCA_TX_LIMIT_CHECK
 /**
  * dp_tx_limit_check - Check if allocated tx descriptors reached
@@ -1720,6 +1742,8 @@ dp_tx_hw_enqueue(struct dp_soc *soc, struct dp_vdev *vdev,
 
 ring_access_fail:
 	dp_tx_ring_access_end_wrapper(soc, hal_ring_hdl, coalesce);
+	dp_pkt_add_timestamp(vdev, QDF_PKT_TX_DRIVER_EXIT,
+			     qdf_get_log_timestamp(), tx_desc->nbuf);
 
 	return status;
 }

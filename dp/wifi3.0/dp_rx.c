@@ -2388,6 +2388,7 @@ uint32_t dp_rx_process(struct dp_intr *int_ctx, hal_ring_handle_t hal_ring_hdl,
 	qdf_nbuf_t ebuf_head;
 	qdf_nbuf_t ebuf_tail;
 	uint8_t pkt_capture_offload = 0;
+	uint64_t current_time = 0;
 
 	DP_HIST_INIT();
 
@@ -2417,6 +2418,8 @@ more_data:
 	qdf_mem_zero(&msdu_desc_info, sizeof(msdu_desc_info));
 	qdf_mem_zero(head, sizeof(head));
 	qdf_mem_zero(tail, sizeof(tail));
+
+	dp_pkt_get_timestamp(&current_time);
 
 	if (qdf_unlikely(dp_rx_srng_access_start(int_ctx, soc, hal_ring_hdl))) {
 
@@ -3002,6 +3005,10 @@ done:
 		dp_rx_fill_gro_info(soc, rx_tlv_hdr, nbuf, &rx_ol_pkt_cnt);
 
 		dp_rx_update_stats(soc, nbuf);
+
+		dp_pkt_add_timestamp(peer->vdev, QDF_PKT_RX_DRIVER_ENTRY,
+				     current_time, nbuf);
+
 		DP_RX_LIST_APPEND(deliver_list_head,
 				  deliver_list_tail,
 				  nbuf);
