@@ -58,7 +58,7 @@
 
 #define WLAN_IPA_WLAN_HDR_DES_MAC_OFFSET    0
 #define WLAN_IPA_MAX_IFACE                  MAX_IPA_IFACE
-#define WLAN_IPA_CLIENT_MAX_IFACE           3
+#define WLAN_IPA_CLIENT_MAX_IFACE           MAX_IPA_IFACE
 #define WLAN_IPA_MAX_SYSBAM_PIPE            4
 #define WLAN_IPA_MAX_SESSION                5
 #ifdef WLAN_MAX_CLIENTS_ALLOWED
@@ -77,7 +77,11 @@
 #define WLAN_IPA_UC_STA_ENABLE_MASK         BIT(6)
 #define WLAN_IPA_REAL_TIME_DEBUGGING        BIT(8)
 
+#ifdef QCA_IPA_LL_TX_FLOW_CONTROL
+#define WLAN_IPA_MAX_BANDWIDTH              4800
+#else
 #define WLAN_IPA_MAX_BANDWIDTH              800
+#endif
 
 #define WLAN_IPA_MAX_PENDING_EVENT_COUNT    20
 

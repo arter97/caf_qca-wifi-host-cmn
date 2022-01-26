@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2013-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -34,6 +34,7 @@
 #include <cdp_txrx_flow_ctrl_v2.h>
 #include <cdp_txrx_peer_ops.h>
 #endif
+#include <qal_vbus_dev.h>
 
 #define IPA_SPS_DESC_SIZE 8
 static struct wlan_ipa_priv *gp_ipa;
@@ -54,11 +55,20 @@ static struct wlan_ipa_iface_2_client {
 } wlan_ipa_iface_2_client[WLAN_IPA_CLIENT_MAX_IFACE] = {
 	{
 		QDF_IPA_CLIENT_WLAN2_CONS, QDF_IPA_CLIENT_WLAN1_PROD
-	}, {
+	},
+	{
 		QDF_IPA_CLIENT_MCC2_CONS,  QDF_IPA_CLIENT_WLAN1_PROD
-	}, {
+	},
+#if WLAN_IPA_CLIENT_MAX_IFACE >= 3
+	{
 		QDF_IPA_CLIENT_WLAN4_CONS, QDF_IPA_CLIENT_WLAN1_PROD
-	}
+	},
+#if WLAN_IPA_CLIENT_MAX_IFACE == 4
+	{
+		QDF_IPA_CLIENT_WLAN4_CONS, QDF_IPA_CLIENT_WLAN1_PROD
+	},
+#endif
+#endif
 };
 
 /* Local Function Prototypes */
@@ -737,7 +747,7 @@ static bool is_rx_dest_bridge_dev(struct wlan_ipa_iface_context *iface_ctx,
 	if (!netif_is_bridge_port(ndev))
 		return false;
 
-	rcu_read_lock();
+	qal_vbus_rcu_read_lock();
 
 	master_ndev = netdev_master_upper_dev_get_rcu(ndev);
 	if (!master_ndev) {
@@ -754,7 +764,7 @@ static bool is_rx_dest_bridge_dev(struct wlan_ipa_iface_context *iface_ctx,
 	ret = true;
 
 out:
-	rcu_read_unlock();
+	qal_vbus_rcu_read_unlock();
 	return ret;
 }
 #else /* !MDM_PLATFORM */
@@ -1203,7 +1213,7 @@ static void __wlan_ipa_w2i_cb(void *priv, qdf_ipa_dp_evt_type_t evt,
 		}
 
 		iface_context = &ipa_ctx->iface_context[iface_id];
-		if (iface_context->session_id == WLAN_IPA_MAX_SESSION) {
+		if (iface_context->session_id >= WLAN_IPA_MAX_SESSION) {
 			ipa_err_rl("session_id of iface_id %u is invalid:%d",
 				   iface_id, iface_context->session_id);
 			ipa_ctx->ipa_rx_internal_drop_count++;
@@ -1255,7 +1265,7 @@ static void __wlan_ipa_w2i_cb(void *priv, qdf_ipa_dp_evt_type_t evt,
 		/* Disable to forward Intra-BSS Rx packets when
 		 * ap_isolate=1 in hostapd.conf
 		 */
-		if (!ipa_ctx->disable_intrabss_fwd[session_id] &&
+		if (!ipa_ctx->disable_intrabss_fwd[iface_context->session_id] &&
 		    iface_context->device_mode == QDF_SAP_MODE) {
 			/*
 			 * When INTRA_BSS_FWD_OFFLOAD is enabled, FW will send
@@ -1273,7 +1283,7 @@ static void __wlan_ipa_w2i_cb(void *priv, qdf_ipa_dp_evt_type_t evt,
 				break;
 		} else {
 			ipa_debug_rl("Intra-BSS fwd disabled for session_id %u",
-				     session_id);
+				     iface_context->session_id);
 		}
 
 		wlan_ipa_send_skb_to_network(skb, iface_context);
