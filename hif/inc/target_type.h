@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2021 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2013-2022 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -73,6 +73,10 @@ extern "C" {
 /* Hamilton */
 #ifndef TARGET_TYPE_WCN7850
 #define TARGET_TYPE_WCN7850 31
+#endif
+
+#ifndef TARGET_TYPE_QCN9224
+#define TARGET_TYPE_QCN9224	32
 #endif
 
 #ifdef __cplusplus

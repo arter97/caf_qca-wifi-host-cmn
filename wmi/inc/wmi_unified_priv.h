@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2021 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2013-2022 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -2549,6 +2549,13 @@ QDF_STATUS
 (*extract_halphy_get_ani_err_ev_param)(wmi_unified_t wmi_handle,
 					void *evt_buf,
 					struct wmi_host_halphy_get_ani_err_event *param);
+QDF_STATUS
+	(*pack_rate_upper_cap)(wmi_unified_t wmi_handle,
+			 uint32_t *pdev_param, struct wmi_rc_params *param);
+
+QDF_STATUS
+	(*unpack_rate_upper_cap)(wmi_unified_t wmi_handle,
+			   uint32_t *pdev_param, struct wmi_rc_params *param);
 };
 /* Forward declartion for psoc*/
 struct wlan_objmgr_psoc;

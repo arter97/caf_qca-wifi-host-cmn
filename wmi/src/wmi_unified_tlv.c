@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2016-2022 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -351,6 +351,7 @@ static const uint32_t pdev_param_tlv[] = {
 	[wmi_pdev_param_preamble_pwr] = WMI_PDEV_PARAM_PREAMBLE_PWR,
 	[wmi_pdev_param_stomper_threshold] = WMI_PDEV_PARAM_STOMPER_THRSHOLD,
 	[wmi_pdev_param_agc_gain_value] = WMI_PDEV_PARAM_AGC_GAIN_VALUE,
+	[wmi_pdev_param_rate_upper_cap] = WMI_PDEV_PARAM_RATE_UPPER_CAP,
 };
 
 /**
@@ -16022,6 +16023,8 @@ static void populate_tlv_service(uint32_t *wmi_service)
 			WMI_SERVICE_HALPHY_CAL_ENABLE_DISABLE_SUPPORT;
 	wmi_service[wmi_service_halphy_get_ani_err_support] =
 			 WMI_SERVICE_HALPHY_ANI_ERROR_SUPPORT;
+	wmi_service[wmi_service_pdev_rate_config_support] =
+			WMI_SERVICE_PDEV_RATE_CONFIG_SUPPORT;
 }
 
 /**

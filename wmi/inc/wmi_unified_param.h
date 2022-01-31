@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2016-2022 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -4726,6 +4726,7 @@ typedef enum {
 	wmi_pdev_param_preamble_pwr,
 	wmi_pdev_param_stomper_threshold,
 	wmi_pdev_param_agc_gain_value,
+	wmi_pdev_param_rate_upper_cap,
 	wmi_pdev_param_max,
 } wmi_conv_pdev_params_id;
 
@@ -5123,6 +5124,7 @@ typedef enum {
 	wmi_service_dcs_awgn_int_support,
 	wmi_service_halphy_cal_enable_disable_support,
 	wmi_service_halphy_get_ani_err_support,
+	wmi_service_pdev_rate_config_support,
 	wmi_services_max,
 } wmi_conv_service_ids;
 #define WMI_SERVICE_UNAVAILABLE 0xFFFF
