@@ -402,4 +402,19 @@ enum precac_status_for_chan {
 	DFS_INVALID_PRECAC_STATUS,
 };
 
+/**
+ * enum adfs_status - ADFS status for the radio.
+ * @ADFS_STARTED:   Status to indicate ADFS is started. Used by rootAP
+ *                  to the connected clients.
+ * @ADFS_COMPLETED: Status to indicate ADFS is completed, by the station
+ *                  to the rootAP.
+ * @ADFS_FAILED:    Status to indicate ADFS has failed, sent by the station
+ *                  to the rootAP.
+ */
+enum adfs_status {
+    ADFS_STARTED = 1,
+    ADFS_COMPLETED,
+    ADFS_FAILED,
+};
+
 #endif  /* _DFS_IOCTL_H_ */

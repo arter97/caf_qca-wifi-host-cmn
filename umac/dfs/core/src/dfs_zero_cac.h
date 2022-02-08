@@ -107,6 +107,10 @@
  *                     the country's channel list).
  * @bandwidth:         Bandwidth of the ch_ieee (in the current node).
  * @depth:             Depth of the precac tree node.
+ * @is_adfs_completed_by_all_stas: ADFS status of all connected clients during
+ *                     the time of completion of preCAC in that channel.
+ *                     Set to true if all clients of all vaps of this
+ *                     radio has completed preCAC on this channel.
  */
 struct precac_tree_node {
 	struct precac_tree_node *left_child;
@@ -118,6 +122,7 @@ struct precac_tree_node {
 	uint8_t n_valid_subchs;
 	uint8_t bandwidth;
 	uint8_t depth;
+	bool is_adfs_completed_by_all_stas;
 };
 
 /**
@@ -770,6 +775,7 @@ static inline bool dfs_is_legacy_precac_enabled(struct wlan_dfs *dfs)
  */
 #ifdef QCA_SUPPORT_AGILE_DFS
 bool dfs_is_agile_precac_enabled(struct wlan_dfs *dfs);
+
 #else
 static inline bool dfs_is_agile_precac_enabled(struct wlan_dfs *dfs)
 {
@@ -987,7 +993,8 @@ dfs_find_curchwidth_and_center_chan_for_freq(struct wlan_dfs *dfs,
 void dfs_mark_precac_done(struct wlan_dfs *dfs,
 			  uint8_t pri_ch_ieee,
 			  uint8_t sec_ch_ieee,
-			  enum phy_ch_width ch_width);
+			  enum phy_ch_width ch_width,
+			  bool);
 #endif
 
 #ifdef CONFIG_CHAN_FREQ_API
@@ -997,11 +1004,14 @@ void dfs_mark_precac_done(struct wlan_dfs *dfs,
  * @pri_chan_freq:   Primary channel IEEE freq.
  * @sec_chan_freq:   Secondary channel IEEE freq(only in HT80_80 mode).
  * @chan_width:      Channel width enum.
+ * @is_adfs_completed_by_all_stas: boolean to represent ADFS completion by
+ * clients.
  */
 void dfs_mark_precac_done_for_freq(struct wlan_dfs *dfs,
 				   uint16_t pri_chan_freq,
 				   uint16_t sec_chan_freq,
-				   enum phy_ch_width chan_width);
+				   enum phy_ch_width chan_width,
+				   bool is_adfs_completed_by_all_stas);
 #endif
 
 /**
@@ -1085,10 +1095,12 @@ static inline void dfs_mark_precac_done(struct wlan_dfs *dfs,
 #endif
 
 #ifdef CONFIG_CHAN_FREQ_API
-static inline void dfs_mark_precac_done_for_freq(struct wlan_dfs *dfs,
-						 uint16_t pri_chan_freq,
-						 uint16_t sec_chan_freq,
-						 enum phy_ch_width chan_width)
+static inline void
+dfs_mark_precac_done_for_freq(struct wlan_dfs *dfs,
+			      uint16_t pri_chan_freq,
+			      uint16_t sec_chan_freq,
+			      enum phy_ch_width chan_width,
+			      bool is_adfs_completed_by_all_stas)
 {
 }
 #endif
@@ -1454,4 +1466,29 @@ dfs_translate_radar_params_for_agile_chan(struct wlan_dfs *dfs,
 {
 }
 #endif
+
+/**
+ * dfs_get_agile_info() - API to fetch the agile channel and remaining time
+ * information.
+ * @dfs: Pointer to the DFS object.
+ * @agile_cfreq: Center frequency of the channel currently being run for ADFS.
+ * @agile_chwidth: Width of the channel currently being run for ADFS.
+ *
+ * Return: Void.
+ */
+void dfs_get_agile_info(struct wlan_dfs *dfs,
+			qdf_freq_t *agile_cfreq,
+			uint8_t *agile_chwidth);
+
+/**
+ * dfs_start_adfs_for_sta() - API to start agile DFS for a station
+ * @Pdev: Pointer to the Pdev object.
+ * @agile_cfreq: Center frequency of the channel to run ADFS.
+ * @agile_chwidth: Width of the channel currently to run ADFS.
+ *
+ * Return: void.
+ */
+void dfs_start_adfs_for_sta(struct wlan_dfs *dfs,
+			    qdf_freq_t agile_cfreq,
+			    uint8_t agile_chwidth);
 #endif /* _DFS_ZERO_CAC_H_ */

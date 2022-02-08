@@ -40,6 +40,22 @@ void dfs_mlme_start_rcsa(struct wlan_objmgr_pdev *pdev,
 }
 #endif
 
+void dfs_mlme_send_adfs_update_action(struct wlan_objmgr_pdev *pdev,
+				      enum adfs_status adfs_status)
+{
+	if (global_dfs_to_mlme.dfs_send_adfs_update_action)
+		global_dfs_to_mlme.dfs_send_adfs_update_action(
+			pdev, adfs_status);
+}
+
+void dfs_mlme_fetch_adfs_status_of_all_vaps(struct wlan_objmgr_pdev *pdev,
+					    bool *is_adfs_completed_by_all_stas)
+{
+	if (global_dfs_to_mlme.dfs_fetch_adfs_status_of_all_vaps)
+		global_dfs_to_mlme.dfs_fetch_adfs_status_of_all_vaps(
+			pdev, is_adfs_completed_by_all_stas);
+}
+
 #if defined(WLAN_DFS_PARTIAL_OFFLOAD) && defined(HOST_DFS_SPOOF_TEST)
 void dfs_mlme_proc_spoof_success(struct wlan_objmgr_pdev *pdev)
 {

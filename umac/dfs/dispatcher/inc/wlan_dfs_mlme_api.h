@@ -39,6 +39,26 @@ void dfs_mlme_start_rcsa(struct wlan_objmgr_pdev *pdev,
 #endif
 
 /**
+ * dfs_mlme_send_adfs_update_action() - Send the ADFS status to the AP.
+ * @pdev: Pointer to DFS pdev object.
+ * @adfs_status: Agile DFS status.
+ *
+ * Return: void.
+ */
+void dfs_mlme_send_adfs_update_action(struct wlan_objmgr_pdev *pdev,
+				      enum adfs_status adfs_status);
+
+/**
+ * dfs_mlme_fetch_adfs_status_of_all_vaps() - API to fetch the ADFS status
+ * of the connected clients of all vaps.
+ * @pdev: Pointer to DFS pdev object.
+ * @is_adfs_completed_by_all_stas: True, if all vaps have ADFS completed by
+ * their clients, else false.
+ */
+void dfs_mlme_fetch_adfs_status_of_all_vaps(
+	struct wlan_objmgr_pdev *pdev, bool *is_adfs_completed_by_all_stas);
+
+/**
  * dfs_mlme_mark_dfs() - Mark the channel in the channel list.
  * @pdev: Pointer to DFS pdev object.
  * @ieee: Channel number.

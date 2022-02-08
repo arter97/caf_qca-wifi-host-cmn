@@ -1722,3 +1722,35 @@ QDF_STATUS utils_dfs_update_chan_state_array(struct wlan_objmgr_pdev *pdev,
 	return utils_dfs_update_chan_state_array_element(dfs, freq, state);
 }
 #endif /* WLAN_DISP_CHAN_INFO */
+
+#ifdef QCA_SUPPORT_AGILE_DFS
+QDF_STATUS utils_dfs_get_agile_info(struct wlan_objmgr_pdev *pdev,
+				    qdf_freq_t *agile_cfreq,
+				    uint8_t *agile_chwidth)
+{
+	struct wlan_dfs *dfs;
+
+	dfs = wlan_pdev_get_dfs_obj(pdev);
+	if (!dfs)
+		return QDF_STATUS_E_FAILURE;
+
+	dfs_get_agile_info(dfs, agile_cfreq, agile_chwidth);
+
+	return QDF_STATUS_SUCCESS;
+}
+
+QDF_STATUS utils_dfs_start_adfs_for_sta(struct wlan_objmgr_pdev *pdev,
+					qdf_freq_t agile_cfreq,
+					uint8_t agile_chwidth)
+{
+	struct wlan_dfs *dfs;
+
+	dfs = wlan_pdev_get_dfs_obj(pdev);
+	if (!dfs)
+		return QDF_STATUS_E_FAILURE;
+
+	dfs_start_adfs_for_sta(dfs, agile_cfreq, agile_chwidth);
+
+	return QDF_STATUS_SUCCESS;
+}
+#endif /* QCA_SUPPORT_AGILE_DFS */

@@ -122,7 +122,8 @@ void dfs_process_cac_completion(struct wlan_dfs *dfs)
 			dfs_mark_precac_done_for_freq(dfs,
 						      primary_chan_freq,
 						      sec_chan_freq,
-						      ch_width);
+						      ch_width,
+						      false);
 	}
 
 	dfs_clear_cac_started_chan(dfs);

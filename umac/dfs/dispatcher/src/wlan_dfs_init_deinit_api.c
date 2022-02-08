@@ -133,6 +133,10 @@ void register_dfs_callbacks(void)
 		wlan_objmgr_pdev_component_obj_detach;
 
 	tmp_dfs_to_mlme->dfs_start_rcsa = mlme_dfs_start_rcsa;
+	tmp_dfs_to_mlme->dfs_send_adfs_update_action =
+		mlme_dfs_send_adfs_update_action;
+	tmp_dfs_to_mlme->dfs_fetch_adfs_status_of_all_vaps =
+		mlme_dfs_fetch_adfs_status_of_all_vaps;
 	tmp_dfs_to_mlme->mlme_proc_cac = mlme_dfs_proc_cac;
 	tmp_dfs_to_mlme->mlme_deliver_event_up_after_cac =
 		mlme_dfs_deliver_event_up_after_cac;
