@@ -35,6 +35,9 @@
 #include <cdp_txrx_peer_ops.h>
 #endif
 #include <qal_vbus_dev.h>
+#ifdef IPA_STATIC_VOTING
+#include "wlan_policy_mgr_api.h"
+#endif
 
 #define IPA_SPS_DESC_SIZE 8
 static struct wlan_ipa_priv *gp_ipa;
@@ -2432,6 +2435,24 @@ wlan_ipa_save_bssid_iface_ctx(struct wlan_ipa_priv *ipa_ctx, uint8_t iface_id,
 		     mac_addr, QDF_MAC_ADDR_SIZE);
 }
 
+#ifdef IPA_STATIC_VOTING
+static void wlan_ipa_static_vote(struct wlan_ipa_priv *ipa_ctx)
+{
+	enum hw_mode_bandwidth bw;
+	struct wlan_objmgr_psoc *psoc;
+
+	psoc = wlan_pdev_get_psoc(ipa_ctx->pdev);
+	bw = policy_mgr_get_connection_channel_width(psoc);
+	if (bw >= HW_MODE_80_MHZ)
+		wlan_ipa_set_bandwidth(ipa_ctx,  WLAN_IPA_NOMINAL_BANDWIDTH);
+	else
+		wlan_ipa_set_bandwidth(ipa_ctx,  WLAN_IPA_MAX_BANDWIDTH);
+}
+#else
+static inline void wlan_ipa_static_vote(struct wlan_ipa_priv *ipa_ctx)
+{}
+#endif
+
 /**
  * __wlan_ipa_wlan_evt() - IPA event handler
  * @net_dev: Interface net device
@@ -2688,6 +2709,7 @@ static QDF_STATUS __wlan_ipa_wlan_evt(qdf_netdev_t net_dev, uint8_t device_mode,
 			 ipa_ctx->sta_connected,
 			 session_id,
 			 ipa_ctx->vdev_to_iface[session_id]);
+		wlan_ipa_static_vote(ipa_ctx);
 		break;
 
 	case QDF_IPA_AP_CONNECT:
@@ -2816,6 +2838,7 @@ static QDF_STATUS __wlan_ipa_wlan_evt(qdf_netdev_t net_dev, uint8_t device_mode,
 		qdf_mutex_release(&ipa_ctx->event_lock);
 
 		ipa_debug("sta_connected=%d", ipa_ctx->sta_connected);
+		wlan_ipa_static_vote(ipa_ctx);
 		break;
 
 	case QDF_IPA_AP_DISCONNECT:
@@ -2971,7 +2994,7 @@ static QDF_STATUS __wlan_ipa_wlan_evt(qdf_netdev_t net_dev, uint8_t device_mode,
 
 		ipa_debug("sap_num_connected_sta=%d",
 			  ipa_ctx->sap_num_connected_sta);
-
+		wlan_ipa_static_vote(ipa_ctx);
 		return QDF_STATUS_SUCCESS;
 
 	case WLAN_CLIENT_DISCONNECT:
@@ -3055,6 +3078,7 @@ static QDF_STATUS __wlan_ipa_wlan_evt(qdf_netdev_t net_dev, uint8_t device_mode,
 
 		ipa_debug("sap_num_connected_sta=%d",
 			  ipa_ctx->sap_num_connected_sta);
+		wlan_ipa_static_vote(ipa_ctx);
 		break;
 
 	default:
