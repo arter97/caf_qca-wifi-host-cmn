@@ -543,7 +543,6 @@ static void usb_hif_usb_recv_prestart_complete
 {
 	struct HIF_URB_CONTEXT *urb_context =
 					(struct HIF_URB_CONTEXT *) urb->context;
-	QDF_STATUS status = QDF_STATUS_SUCCESS;
 	qdf_nbuf_t buf = NULL;
 	struct HIF_USB_PIPE *pipe = urb_context->pipe;
 	struct hif_usb_softc *sc = HIF_GET_USB_SOFTC(pipe->device);
@@ -558,7 +557,6 @@ static void usb_hif_usb_recv_prestart_complete
 	usb_hif_remove_pending_transfer(urb_context);
 	do {
 		if (urb->status != 0) {
-			status = A_ECOMM;
 			switch (urb->status) {
 			case -ECONNRESET:
 			case -ENOENT:
@@ -567,7 +565,6 @@ static void usb_hif_usb_recv_prestart_complete
 				 * device is removed
 				 * or urb is killed due to driver shutdown
 				 */
-				status = A_ECANCELED;
 				break;
 			default:
 				HIF_ERROR("%s recv pipe: %d (ep:0x%2.2X), failed:%d",
@@ -637,7 +634,7 @@ static void usb_hif_usb_recv_complete(struct urb *urb)
 	do {
 
 		if (urb->status != 0) {
-			status = A_ECOMM;
+			status = QDF_STATUS_E_CANCELED;
 			switch (urb->status) {
 #ifdef RX_SG_SUPPORT
 			case -EOVERFLOW:
@@ -652,7 +649,7 @@ static void usb_hif_usb_recv_complete(struct urb *urb)
 				 * device is removed
 				 * or urb is killed due to driver shutdown
 				 */
-				status = A_ECANCELED;
+				status = QDF_STATUS_E_CANCELED;
 				break;
 			default:
 				HIF_ERROR("%s recv pipe: %d (ep:0x%2.2X), failed:%d",
@@ -741,7 +738,7 @@ static void usb_hif_usb_recv_bundle_complete(struct urb *urb)
 	do {
 
 		if (urb->status != 0) {
-			status = A_ECOMM;
+			status = QDF_STATUS_E_FAILURE;
 			switch (urb->status) {
 			case -ECONNRESET:
 			case -ENOENT:
@@ -750,7 +747,7 @@ static void usb_hif_usb_recv_bundle_complete(struct urb *urb)
 				 * device is removed
 				 * or urb is killed due to driver shutdown
 				 */
-				status = A_ECANCELED;
+				status = QDF_STATUS_E_CANCELED;
 				break;
 			default:
 				HIF_ERROR("%s recv pipe: %d (ep:0x%2.2X), failed:%d",

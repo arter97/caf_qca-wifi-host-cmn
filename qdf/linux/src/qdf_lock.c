@@ -243,8 +243,13 @@ qdf_export_symbol(qdf_mutex_release);
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(3, 10, 0))
 const char *qdf_wake_lock_name(qdf_wake_lock_t *lock)
 {
+#ifndef KERNEL_4_19_SUPPORT
 	if (lock->name)
 		return lock->name;
+#else
+        if (lock)
+            return lock->lock.name;
+#endif //KERNEL_4_19_SUPPORT
 	return "UNNAMED_WAKELOCK";
 }
 #else
@@ -264,6 +269,21 @@ qdf_export_symbol(qdf_wake_lock_name);
  * QDF status success: if wake lock is initialized
  * QDF status failure: if wake lock was not initialized
  */
+#ifdef KERNEL_4_19_SUPPORT
+QDF_STATUS qdf_wake_lock_create(qdf_wake_lock_t *lock, const char *name)
+{
+    qdf_mem_zero(lock, sizeof(*lock));
+    lock->priv = wakeup_source_register(lock->lock.dev, name);
+    if (!(lock->priv)) {
+        QDF_BUG(0);
+        return QDF_STATUS_E_FAILURE;
+    }
+
+    lock->lock = *(lock->priv);
+
+    return QDF_STATUS_SUCCESS;
+}
+#else
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(3, 10, 0))
 QDF_STATUS qdf_wake_lock_create(qdf_wake_lock_t *lock, const char *name)
 {
@@ -276,6 +296,7 @@ QDF_STATUS qdf_wake_lock_create(qdf_wake_lock_t *lock, const char *name)
 	return QDF_STATUS_SUCCESS;
 }
 #endif
+#endif //KERNEL_4_19_SUPPORT
 qdf_export_symbol(qdf_wake_lock_create);
 
 /**
@@ -293,7 +314,11 @@ QDF_STATUS qdf_wake_lock_acquire(qdf_wake_lock_t *lock, uint32_t reason)
 	host_diag_log_wlock(reason, qdf_wake_lock_name(lock),
 			    WIFI_POWER_EVENT_DEFAULT_WAKELOCK_TIMEOUT,
 			    WIFI_POWER_EVENT_WAKELOCK_TAKEN);
+#ifndef KERNEL_4_19_SUPPORT
 	__pm_stay_awake(lock);
+#else
+	__pm_stay_awake(lock->priv);
+#endif //KERNEL_4_19_SUPPORT
 
 	return QDF_STATUS_SUCCESS;
 }
@@ -317,7 +342,11 @@ qdf_export_symbol(qdf_wake_lock_acquire);
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 12, 0)
 QDF_STATUS qdf_wake_lock_timeout_acquire(qdf_wake_lock_t *lock, uint32_t msec)
 {
+#ifndef KERNEL_4_19_SUPPORT
 	pm_wakeup_ws_event(lock, msec, true);
+#else
+	pm_wakeup_ws_event(lock->priv, msec, true);
+#endif //KERNEL_4_19_SUPPORT
 	return QDF_STATUS_SUCCESS;
 }
 #elif LINUX_VERSION_CODE >= KERNEL_VERSION(3, 10, 0)
@@ -326,7 +355,11 @@ QDF_STATUS qdf_wake_lock_timeout_acquire(qdf_wake_lock_t *lock, uint32_t msec)
 	/* Wakelock for Rx is frequent.
 	 * It is reported only during active debug
 	 */
+#ifndef KERNEL_4_19_SUPPORT
 	__pm_wakeup_event(lock, msec);
+#else
+	__pm_wakeup_event(&(lock->lock), msec);
+#endif //KERNEL_4_19_SUPPORT
 	return QDF_STATUS_SUCCESS;
 }
 #else /* LINUX_VERSION_CODE */
@@ -352,7 +385,11 @@ QDF_STATUS qdf_wake_lock_release(qdf_wake_lock_t *lock, uint32_t reason)
 	host_diag_log_wlock(reason, qdf_wake_lock_name(lock),
 			    WIFI_POWER_EVENT_DEFAULT_WAKELOCK_TIMEOUT,
 			    WIFI_POWER_EVENT_WAKELOCK_RELEASED);
+#ifndef KERNEL_4_19_SUPPORT
 	__pm_relax(lock);
+#else
+	__pm_relax(lock->priv);
+#endif //KERNEL_4_19_SUPPORT
 
 	return QDF_STATUS_SUCCESS;
 }
@@ -372,6 +409,13 @@ qdf_export_symbol(qdf_wake_lock_release);
  * QDF status success: if wake lock is acquired
  * QDF status failure: if wake lock was not acquired
  */
+#ifdef KERNEL_4_19_SUPPORT
+QDF_STATUS qdf_wake_lock_destroy(qdf_wake_lock_t *lock)
+{
+    wakeup_source_unregister(lock->priv);
+    return QDF_STATUS_SUCCESS;
+}
+#else
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(3, 10, 0))
 QDF_STATUS qdf_wake_lock_destroy(qdf_wake_lock_t *lock)
 {
@@ -384,6 +428,7 @@ QDF_STATUS qdf_wake_lock_destroy(qdf_wake_lock_t *lock)
 	return QDF_STATUS_SUCCESS;
 }
 #endif
+#endif //KERNEL_4_19_SUPPORT
 qdf_export_symbol(qdf_wake_lock_destroy);
 
 #ifdef FEATURE_RUNTIME_PM

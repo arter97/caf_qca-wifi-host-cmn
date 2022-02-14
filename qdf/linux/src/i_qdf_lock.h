@@ -84,7 +84,19 @@ typedef struct __qdf_spinlock {
 
 typedef struct semaphore __qdf_semaphore_t;
 
+#ifndef KERNEL_4_19_SUPPORT
 typedef struct wakeup_source qdf_wake_lock_t;
+#else
+/**
+ * typedef struct - qdf_wake_lock_t
+ * @lock: this lock needs to be used in kernel version < 4.19
+ * @priv: this lock pointer needs to be used in kernel version >= 4.19
+ */
+typedef struct qdf_wake_lock {
+    struct wakeup_source lock;
+    struct wakeup_source *priv;
+} qdf_wake_lock_t;
+#endif //KERNEL_4_19_SUPPORT
 
 struct hif_pm_runtime_lock;
 typedef struct qdf_runtime_lock {
