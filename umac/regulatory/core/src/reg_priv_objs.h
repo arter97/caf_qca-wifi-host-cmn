@@ -192,6 +192,7 @@ struct wlan_regulatory_psoc_priv_obj {
  * 802.11 standard.
  * @max_phymode: The maximum phymode supported by the device and regulatory.
  * @max_chwidth: The maximum bandwidth corresponding to the maximum phymode.
+ * @min_5g_cc_bw: Minimum 5g bw supported by the country
  */
 struct wlan_regulatory_pdev_priv_obj {
 	struct regulatory_channel cur_chan_list[NUM_CHANNELS];
@@ -246,6 +247,7 @@ struct wlan_regulatory_pdev_priv_obj {
 	enum reg_phymode max_phymode;
 	enum phy_ch_width max_chwidth;
 #endif
+	uint16_t min_5g_cc_bw;
 };
 
 /**

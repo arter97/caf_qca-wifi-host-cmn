@@ -102,8 +102,8 @@ static bool reg_is_range_overlapping(struct freq_range *range_first,
 }
 
 /**
- * reg_is_chan_overlaps_with_144_20mhz() - Given a freq and max bw of that freq,
- * it determines if the frequency lies in channel 144 HT20
+ * reg_is_5_10m_chan_overlaps_with_144_20mhz() - Given a freq and max bw of
+ * that freq, it determines if the frequency lies in channel 144 HT20
  * frequency range and is excluded.
  * When we add 5/10Mhz channels, there are multiple 5/10Mhz
  * (143,145) channels around IEEE channel 144.
@@ -116,8 +116,8 @@ static bool reg_is_range_overlapping(struct freq_range *range_first,
  * Return - True if channel freq is excluded, false otherwise.
  */
 #ifdef CONFIG_HALF_QUARTER_RATE_FOR_ALL_CHANS
-static bool reg_is_chan_overlaps_with_144_20mhz(qdf_freq_t input_freq,
-						uint16_t max_bw)
+static bool reg_is_5_10m_chan_overlaps_with_144_20mhz(qdf_freq_t input_freq,
+						      uint16_t max_bw)
 {
 	qdf_freq_t input_freq_left_edge;
 	qdf_freq_t input_freq_right_edge;
@@ -134,8 +134,8 @@ static bool reg_is_chan_overlaps_with_144_20mhz(qdf_freq_t input_freq,
 	return reg_is_range_overlapping(&range_input_freq, &range_144_HT20);
 }
 #else
-static bool reg_is_chan_overlaps_with_144_20mhz(qdf_freq_t freq,
-						uint16_t max_bw)
+static bool reg_is_5_10m_chan_overlaps_with_144_20mhz(qdf_freq_t freq,
+						      uint16_t max_bw)
 {
 	if (freq == CHAN_144_CENT_FREQ)
 		return true;
@@ -576,41 +576,66 @@ reg_dis_or_en_channel(struct regulatory_channel *reg_chan,
 	}
 }
 
-static bool reg_is_chan_bandwidths_invalid(uint16_t max_bw, uint16_t min_bw)
-{
-	return (max_bw < min_bw);
-}
-
 /**
- * reg_is_ctry_sup_only_5_10mhz_chan() - Checks if country supports half/qtr
- * rate channels. There are countries like russia where for chan 141,
- * min_bw is 20MHZ and max_bw is 10MHZ. Hence checking only for the max_bw
- * less than 20MHZ will not suffice to find out if the country supports
- * 5/10MHZ channels. Hence checking min_bw as well.
- *
- * @min_bw: Minimum reg chan bw
- * @max_bw: Maximum reg chan bw
- *
- * Return - True if ctry supports 5/10MHZ chans, false otherwise.
+ * reg_is_country_sup_5_10() - If the country supported minimum 5g bandwidth
+ * is less than 20MHZ, return true. False otherwise.
+ * @min_5g_cc_bw: Country supported minimum 5g bw
  */
-static inline bool
-reg_is_ctry_sup_only_5_10mhz_chan(uint16_t min_bw, uint16_t max_bw)
+static bool reg_is_country_sup_5_10(uint16_t min_5g_cc_bw)
 {
-	/* Countries e.g. Russia, do not support 5/10MHz channels.
-	 * For those countries, while manipulating the min and max
-	 * bandwidths of such channels the max bandwidth becomes
-	 * less than the min bandwidth.
-	 * Example: channel 144 min_bw: 20MHz max_bw:10MHz
-	 * We can use this inconsistency (max bandwidth < min bandwidth) to
-	 * identify and filter out invalid channels.
-	 */
-
-	if (reg_is_chan_bandwidths_invalid(max_bw, min_bw))
-		return false;
-	if (max_bw <= BW_10_MHZ)
+	if (min_5g_cc_bw <= BW_10_MHZ)
 		return true;
 	return false;
 }
+
+/**
+ * reg_is_chan_sup_5_10() - If the max BW of the reg chan is less than 20MHZ,
+ * it is a 5/10M only channel. Return true if chan is 5/10 capable only. False
+ * otherwise.
+ * @chan_max_bw: reg chan's max bw
+ */
+static bool reg_is_chan_sup_5_10(uint16_t chan_max_bw)
+{
+	if (chan_max_bw <= BW_10_MHZ)
+		return true;
+	return false;
+}
+/**
+ * reg_is_non144_overlaps_with_144_20MHz() - If 5/10M channels overlap with
+ * 144 HT20 frequency range return true, else return false.
+ * Only 5 and 10 Mhz channels should be considered for overlapping
+ * with a 20 Mhz channel as all other channels (20/40/80/160 MHz)
+ * are taken care of by the "reg_set_channel_params_for_freq" function.
+ * Eg: We cannot disable channel 132 which may have a max bandwidth of 160Mhz.
+ * If we do so then, since regulatory has only one entry for 132,
+ * all other channels 132 (5/10/20/40/80), will also be disabled.
+ *
+ * @freq: Frequency in MHZ.
+ * @chan_max_bw: reg chan's max bw
+ * @min_5g_cc_bw: Country supported minimum 5g BW
+ *
+ */
+#ifdef CONFIG_HALF_QUARTER_RATE_FOR_ALL_CHANS
+static bool
+reg_is_non144_overlaps_with_144_20MHz(qdf_freq_t freq, uint16_t chan_max_bw,
+				      uint16_t min_5g_cc_bw)
+{
+
+	if (!reg_is_country_sup_5_10(min_5g_cc_bw))
+		return false;
+	if (!reg_is_chan_sup_5_10(chan_max_bw))
+		return false;
+
+	return reg_is_5_10m_chan_overlaps_with_144_20mhz(freq, chan_max_bw);
+}
+#else
+static bool
+reg_is_non144_overlaps_with_144_20MHz(qdf_freq_t freq, uint16_t chan_max_bw,
+				      uint16_t min_5g_cc_bw)
+{
+	return false;
+}
+#endif
 
 /**
  * reg_modify_chan_list_for_chan_144() - Disable channel 144 if en_chan_144 flag
@@ -623,28 +648,35 @@ reg_is_ctry_sup_only_5_10mhz_chan(uint16_t min_bw, uint16_t max_bw)
  * is taken care while we find channel using reg_set_chan_params.
  * @chan_list: Pointer to regulatory channel list.
  * @en_chan_144: if false, then disable channel 144.
+ * @min_5g_cc_bw: Minimum 5g bw supported by the country
  */
 static void reg_modify_chan_list_for_chan_144(
-		struct regulatory_channel *chan_list, bool en_chan_144)
+		struct regulatory_channel *chan_list, bool en_chan_144,
+		uint16_t min_5g_cc_bw)
 {
 	enum channel_enum chan_enum;
 
 	for (chan_enum = 0; chan_enum < NUM_CHANNELS; chan_enum++) {
 		qdf_freq_t freq = chan_list[chan_enum].center_freq;
 		uint16_t max_bw = chan_list[chan_enum].max_bw;
-		uint16_t min_bw = chan_list[chan_enum].min_bw;
 		/**
 		 * Chan144 is an exception because even though it is a
 		 * 20MHz channel, we disable/enable it.
 		 * For rest of the channels, disabling/enabling applies
 		 * only if their bandwidth is less than 20MHz.
 		 */
-		if (freq == CHAN_144_CENT_FREQ ||
-		    (reg_is_ctry_sup_only_5_10mhz_chan(min_bw, max_bw) &&
-		     reg_is_chan_overlaps_with_144_20mhz(freq, max_bw))) {
+		if (freq == CHAN_144_CENT_FREQ)
 			reg_dis_or_en_channel(&chan_list[chan_enum],
 					      en_chan_144);
-		}
+
+		/* If the minimum cc bw is 20mhz, need not enable/disable
+		 * 5/10mhz chans overlapping with 144 HT20.
+		 */
+		if (reg_is_non144_overlaps_with_144_20MHz(freq, max_bw,
+							  min_5g_cc_bw))
+			reg_dis_or_en_channel(&chan_list[chan_enum],
+					      en_chan_144);
+
 	}
 }
 
@@ -1436,7 +1468,8 @@ void reg_compute_pdev_current_chan_list(struct wlan_regulatory_pdev_priv_obj
 					     pdev_priv_obj->set_fcc_channel);
 
 	reg_modify_chan_list_for_chan_144(pdev_priv_obj->cur_chan_list,
-					  pdev_priv_obj->en_chan_144);
+					  pdev_priv_obj->en_chan_144,
+					  pdev_priv_obj->min_5g_cc_bw);
 
 	reg_modify_chan_list_for_cached_channels(pdev_priv_obj);
 
@@ -2141,6 +2174,26 @@ static void reg_set_socpriv_vars(struct wlan_regulatory_psoc_priv_obj *soc_reg,
 	}
 }
 
+/**
+ * reg_store_min_cc_5g_bw() - Store the 5g min bw supported by the cc
+ * in regulatory pdev object.
+ * @pdev: Pointer to struct wlan_objmgr_pdev
+ * @min_5g_cc_bw: Minimum 5g BW supported by cc
+ */
+static void
+reg_store_min_cc_5g_bw(struct wlan_objmgr_pdev *pdev,
+		       uint16_t min_5g_cc_bw)
+{
+	struct wlan_regulatory_pdev_priv_obj *pdev_priv_obj;
+	pdev_priv_obj = reg_get_pdev_obj(pdev);
+
+	if (!IS_VALID_PDEV_REG_OBJ(pdev_priv_obj)) {
+		reg_err("reg pdev priv obj is NULL");
+		return;
+	}
+	pdev_priv_obj->min_5g_cc_bw = min_5g_cc_bw;
+}
+
 QDF_STATUS reg_process_master_chan_list_ext(
 		struct cur_regulatory_info *regulat_info)
 {
@@ -2244,6 +2297,7 @@ QDF_STATUS reg_process_master_chan_list_ext(
 
 	pdev = wlan_objmgr_get_pdev_by_id(psoc, pdev_id, dbg_id);
 	if (pdev) {
+		reg_store_min_cc_5g_bw(pdev, regulat_info->min_bw_5g);
 		reg_propagate_mas_chan_list_to_pdev(psoc, pdev, &dir);
 		wlan_objmgr_pdev_release_ref(pdev, dbg_id);
 	}
