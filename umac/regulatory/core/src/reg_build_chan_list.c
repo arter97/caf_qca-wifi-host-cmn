@@ -358,7 +358,11 @@ static void reg_populate_band_channels(enum channel_enum start_chan,
 			mas_chan_list[chan_enum].max_bw = bw;
 			reg_fill_channel_info(chan_enum, found_rule_ptr,
 					      mas_chan_list, min_bw);
-			reg_disable_half_qtr_24gchan(&mas_chan_list[chan_enum]);
+			 /* Disable 2.4 Ghz channels that dont have 20 mhz bw */
+			if (start_chan == MIN_24GHZ_CHANNEL &&
+			    mas_chan_list[chan_enum].max_bw < BW_20_MHZ)
+				reg_disable_half_qtr_24gchan(&mas_chan_list
+							     [chan_enum]);
 		}
 	}
 }
