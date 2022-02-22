@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2017-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -519,12 +519,18 @@ struct reduced_neighbor_report {
  * @freq: center frequency in MHz
  * @cfreq2: center frequency of the secondary channel in MHz
  * @link_id: Link id advertised by the AP
+ * @csa_ie: Pointer to CSA IE
+ * @ecsa_ie: Pointer to eCSA IE
+ * @max_cst_ie: Pointer to Max Channel Switch Time IE
  */
 struct partner_link_info {
 	struct qdf_mac_addr link_addr;
 	uint16_t freq;
 	uint16_t cfreq2;
 	uint8_t link_id;
+	const uint8_t *csa_ie;
+	const uint8_t *ecsa_ie;
+	const uint8_t *max_cst_ie;
 };
 
 /**
@@ -1121,7 +1127,8 @@ struct scan_req_params {
 		struct {
 			uint32_t scan_policy_high_accuracy:1,
 				 scan_policy_low_span:1,
-				 scan_policy_low_power:1;
+				 scan_policy_low_power:1,
+				 scan_policy_colocated_6ghz:1;
 		};
 		uint32_t scan_policy_type;
 	};
@@ -1599,5 +1606,17 @@ struct rnr_chan_weight {
 	uint32_t weight;
 	enum scan_phy_mode phymode;
 	enum scan_flags flags;
+};
+
+/**
+ * trim_channel_list - which channel list need trim
+ * @TRIM_CHANNEL_LIST_NONE: no channel need trim
+ * @TRIM_CHANNEL_LIST_5G: 5G channel need trim
+ * @TRIM_CHANNEL_LIST_24G: 2.4G channel need trim
+ */
+enum trim_channel_list {
+	TRIM_CHANNEL_LIST_NONE,
+	TRIM_CHANNEL_LIST_5G,
+	TRIM_CHANNEL_LIST_24G,
 };
 #endif

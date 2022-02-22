@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -2684,6 +2684,39 @@ QDF_STATUS wmi_extract_pdev_spectral_session_detector_info(
 
 	return QDF_STATUS_E_FAILURE;
 }
+
+QDF_STATUS wmi_extract_spectral_caps_fixed_param(
+		wmi_unified_t wmi_handle, void *event,
+		struct spectral_capabilities_event_params *param)
+{
+	if (wmi_handle->ops->extract_spectral_caps_fixed_param)
+		return wmi_handle->ops->extract_spectral_caps_fixed_param(
+					wmi_handle, event, param);
+
+	return QDF_STATUS_E_FAILURE;
+}
+
+QDF_STATUS wmi_extract_spectral_scan_bw_caps(
+		wmi_unified_t wmi_handle, void *event,
+		struct spectral_scan_bw_capabilities *bw_caps)
+{
+	if (wmi_handle->ops->extract_spectral_scan_bw_caps)
+		return wmi_handle->ops->extract_spectral_scan_bw_caps(
+					wmi_handle, event, bw_caps);
+
+	return QDF_STATUS_E_FAILURE;
+}
+
+QDF_STATUS wmi_extract_spectral_fft_size_caps(
+		wmi_unified_t wmi_handle, void *event,
+		struct spectral_fft_size_capabilities *fft_size_caps)
+{
+	if (wmi_handle->ops->extract_spectral_fft_size_caps)
+		return wmi_handle->ops->extract_spectral_fft_size_caps(
+					wmi_handle, event, fft_size_caps);
+
+	return QDF_STATUS_E_FAILURE;
+}
 #endif /* WLAN_CONV_SPECTRAL_ENABLE */
 
 QDF_STATUS wmi_extract_spectral_scaling_params_service_ready_ext(
@@ -3658,6 +3691,28 @@ wmi_unified_pdev_set_mec_timer(struct wmi_unified *wmi_handle,
 	if (wmi_handle->ops->send_pdev_set_mec_timer_cmd)
 		return wmi_handle->ops->send_pdev_set_mec_timer_cmd(wmi_handle,
 								    param);
+
+	return QDF_STATUS_E_FAILURE;
+}
+#endif
+
+#ifdef WLAN_FEATURE_DYNAMIC_MAC_ADDR_UPDATE
+QDF_STATUS wmi_unified_send_set_mac_addr(struct wmi_unified *wmi_handle,
+					 struct set_mac_addr_params *params)
+{
+	if (wmi_handle->ops->send_set_mac_address_cmd)
+		return wmi_handle->ops->send_set_mac_address_cmd(wmi_handle,
+								 params);
+	return QDF_STATUS_E_FAILURE;
+}
+
+QDF_STATUS wmi_extract_update_mac_address_event(wmi_unified_t wmi_handle,
+						void *evt_buf, uint8_t *vdev_id,
+						uint8_t *status)
+{
+	if (wmi_handle->ops->extract_update_mac_address_event)
+		return wmi_handle->ops->extract_update_mac_address_event(
+					wmi_handle, evt_buf, vdev_id, status);
 
 	return QDF_STATUS_E_FAILURE;
 }

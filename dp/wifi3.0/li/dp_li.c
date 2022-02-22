@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021,2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -22,6 +22,7 @@
 #include <dp_htt.h>
 #include "dp_li.h"
 #include "dp_li_tx.h"
+#include "dp_tx_desc.h"
 #include "dp_li_rx.h"
 #include "dp_peer.h"
 
@@ -58,6 +59,18 @@ qdf_size_t dp_get_context_size_li(enum dp_context_type context_type)
 		return sizeof(struct dp_vdev_li);
 	case DP_CONTEXT_TYPE_PEER:
 		return sizeof(struct dp_peer_li);
+	default:
+		return 0;
+	}
+}
+
+qdf_size_t dp_mon_get_context_size_li(enum dp_context_type context_type)
+{
+	switch (context_type) {
+	case DP_CONTEXT_TYPE_MON_PDEV:
+		return sizeof(struct dp_mon_pdev_li);
+	case DP_CONTEXT_TYPE_MON_SOC:
+		return sizeof(struct dp_mon_soc_li);
 	default:
 		return 0;
 	}
@@ -389,6 +402,8 @@ void dp_initialize_arch_ops_li(struct dp_arch_ops *arch_ops)
 	arch_ops->dp_rx_process = dp_rx_process_li;
 	arch_ops->tx_comp_get_params_from_hal_desc =
 		dp_tx_comp_get_params_from_hal_desc_li;
+	arch_ops->dp_tx_process_htt_completion =
+			dp_tx_process_htt_completion_li;
 	arch_ops->dp_wbm_get_rx_desc_from_hal_desc =
 			dp_wbm_get_rx_desc_from_hal_desc_li;
 	arch_ops->dp_tx_desc_pool_init = dp_tx_desc_pool_init_li;
@@ -400,6 +415,7 @@ void dp_initialize_arch_ops_li(struct dp_arch_ops *arch_ops)
 	arch_ops->dp_rx_desc_pool_deinit = dp_rx_desc_pool_deinit_generic;
 #endif
 	arch_ops->txrx_get_context_size = dp_get_context_size_li;
+	arch_ops->txrx_get_mon_context_size = dp_mon_get_context_size_li;
 	arch_ops->txrx_soc_attach = dp_soc_attach_li;
 	arch_ops->txrx_soc_detach = dp_soc_detach_li;
 	arch_ops->txrx_soc_init = dp_soc_init_li;
@@ -424,5 +440,28 @@ void dp_initialize_arch_ops_li(struct dp_arch_ops *arch_ops)
 	arch_ops->peer_get_reo_hash = dp_peer_get_reo_hash_li;
 	arch_ops->reo_remap_config = dp_reo_remap_config_li;
 	arch_ops->txrx_set_vdev_param = dp_txrx_set_vdev_param_li;
+	arch_ops->txrx_print_peer_stats = dp_print_peer_txrx_stats_li;
 }
 
+#ifdef QCA_DP_TX_HW_SW_NBUF_DESC_PREFETCH
+void dp_tx_comp_get_prefetched_params_from_hal_desc(
+					struct dp_soc *soc,
+					void *tx_comp_hal_desc,
+					struct dp_tx_desc_s **r_tx_desc)
+{
+	uint8_t pool_id;
+	uint32_t tx_desc_id;
+
+	tx_desc_id = hal_tx_comp_get_desc_id(tx_comp_hal_desc);
+	pool_id = (tx_desc_id & DP_TX_DESC_ID_POOL_MASK) >>
+		DP_TX_DESC_ID_POOL_OS;
+
+	/* Find Tx descriptor */
+	*r_tx_desc = dp_tx_desc_find(soc, pool_id,
+			(tx_desc_id & DP_TX_DESC_ID_PAGE_MASK) >>
+			DP_TX_DESC_ID_PAGE_OS,
+			(tx_desc_id & DP_TX_DESC_ID_OFFSET_MASK) >>
+			DP_TX_DESC_ID_OFFSET_OS);
+	qdf_prefetch((uint8_t *)*r_tx_desc);
+}
+#endif
