@@ -386,6 +386,14 @@ QDF_STATUS wlan_cmn_mlme_deinit(void);
 QDF_STATUS mlme_vdev_ops_ext_hdl_delete_rsp(struct wlan_objmgr_psoc *psoc,
 					    struct vdev_delete_response *rsp);
 
+/**
+ * mlme_max_chan_switch_is_set() - Get if max chan switch IE is enabled
+ * @vdev: Object manager psoc pointer
+ *
+ * Return: True if max chan switch is enabled else false
+ */
+bool mlme_max_chan_switch_is_set(struct wlan_objmgr_psoc *psoc);
+
 #ifdef FEATURE_CM_ENABLE
 /**
  * mlme_cm_ext_hdl_create() - Connection manager callback to create ext
