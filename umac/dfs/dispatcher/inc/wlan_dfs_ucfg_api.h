@@ -90,6 +90,12 @@ struct dfs_to_mlme {
 			void *comp_priv_obj);
 	QDF_STATUS (*dfs_start_rcsa)(struct wlan_objmgr_pdev *pdev,
 			bool *wait_for_csa);
+	QDF_STATUS (*dfs_send_adfs_update_action)(struct wlan_objmgr_pdev *pdev,
+			enum adfs_status adfs_status);
+	QDF_STATUS
+	(*dfs_fetch_adfs_status_of_all_vaps)(
+			struct wlan_objmgr_pdev *pdev,
+			bool *is_adfs_completed_by_all_stas);
 	QDF_STATUS (*mlme_mark_dfs)(struct wlan_objmgr_pdev *pdev,
 			uint8_t ieee,
 			uint16_t freq,

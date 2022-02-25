@@ -1063,6 +1063,7 @@ struct dfs_rcac_params {
  * @dfs_prevchan:                    DFS previous channel.
  * @dfs_cac_started_chan:            CAC started channel.
  * @dfs_pdev_obj:                    DFS pdev object.
+ * @dfs_is_agile_running_for_staL    Set if AgileDFS is running for STA.
  * @dfs_is_offload_enabled:          Set if DFS offload enabled.
  * @dfs_agile_precac_freq_mhz:       Freq in MHZ configured on Agile DFS engine.
  * @dfs_use_nol:                     Use the NOL when radar found(default: TRUE)
@@ -1258,6 +1259,7 @@ struct wlan_dfs {
 #ifdef CONFIG_CHAN_FREQ_API
 	uint16_t       dfs_agile_precac_freq_mhz;
 #endif
+	bool           dfs_is_agile_running_for_sta;
 	bool           dfs_is_offload_enabled;
 	int            dfs_use_nol;
 	qdf_spinlock_t dfs_nol_lock;

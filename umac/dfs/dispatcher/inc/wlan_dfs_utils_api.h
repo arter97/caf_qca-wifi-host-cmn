@@ -1038,4 +1038,48 @@ QDF_STATUS dfs_init_chan_state_array(struct wlan_objmgr_pdev *pdev)
 	return QDF_STATUS_E_NOSUPPORT;
 }
 #endif /* WLAN_DISP_CHAN_INFO */
+
+#ifdef QCA_SUPPORT_AGILE_DFS
+/**
+ * utils_dfs_get_agile_info() - API to fetch the agile channel and remaining
+ * time information.
+ * @pdev: Pointer to Pdev structure.
+ * @agile_cfreq: Center frequency of the channel currently being run for ADFS.
+ * @agile_chwidth: Width of the channel currently being run for ADFS.
+ *
+ * Return: QDF_STATUS.
+ */
+QDF_STATUS utils_dfs_get_agile_info(struct wlan_objmgr_pdev *pdev,
+				    qdf_freq_t *agile_cfreq,
+				    uint8_t *agile_chwidth);
+
+/**
+ * utils_dfs_start_adfs_for_sta() - API to start agile DFS for a station
+ * @Pdev: Pointer to the Pdev object.
+ * @agile_cfreq: Center frequency of the channel to run ADFS.
+ * @agile_chwidth: Width of the channel currently to run ADFS.
+ *
+ * Return: QDF_STATUS.
+ */
+QDF_STATUS utils_dfs_start_adfs_for_sta(struct wlan_objmgr_pdev *pdev,
+					qdf_freq_t agile_cfreq,
+					uint8_t agile_chwidth);
+#else
+static inline
+QDF_STATUS utils_dfs_get_agile_info(struct wlan_objmgr_pdev *pdev,
+				    qdf_freq_t *agile_cfreq,
+				    uint8_t *agile_chwidth)
+{
+	return QDF_STATUS_SUCCESS;
+}
+
+static inline
+QDF_STATUS utils_dfs_start_adfs_for_sta(struct wlan_objmgr_pdev *pdev,
+					qdf_freq_t agile_cfreq,
+					uint8_t agile_chwidth)
+{
+	return QDF_STATUS_SUCCESS;
+}
+#endif /* QCA_SUPPORT_AGILE_DFS */
+
 #endif /* _WLAN_DFS_UTILS_API_H_ */
