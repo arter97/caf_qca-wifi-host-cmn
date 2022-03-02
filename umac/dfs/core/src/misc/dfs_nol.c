@@ -197,7 +197,7 @@ static uint8_t dfs_delete_expired_nol_elems(struct wlan_dfs *dfs,
 		diff_ms = qdf_do_div(qdf_get_monotonic_boottime() -
 				     nol->nol_start_us, 1000);
 		if (diff_ms >= nol->nol_timeout_ms) {
-			delfreq[nol_count] = nol->nol_freq;
+			delfreq[nol_count++] = nol->nol_freq;
 			dfs_debug(dfs, WLAN_DEBUG_DFS_NOL,
 				  "removing chan %d from NOL tstamp=%d",
 				  nol->nol_freq,
