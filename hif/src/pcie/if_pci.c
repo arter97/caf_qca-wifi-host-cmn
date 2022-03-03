@@ -2762,25 +2762,25 @@ static void hif_pci_config_low_power_int_register(struct hif_softc *scn,
 	    (target_type == TARGET_TYPE_AR6320V1) ||
 	    (target_type == TARGET_TYPE_AR6320V2) ||
 	    (target_type == TARGET_TYPE_AR6320V3)) {
-		hif_info("Configure PCI low power int mask register");
+		HIF_INFO("Configure PCI low power int mask register");
 
 		address = scn->mem + PCIE_LOW_POWER_INT_MASK_OFFSET;
 
 		/* Configure bit3 INTR_L1SS */
-		value = hif_read32_mb(scn, address);
+		value = hif_read32_mb(address);
 		if (enable)
 			value |= INTR_L1SS;
 		else
 			value &= ~INTR_L1SS;
-		hif_write32_mb(scn, address, value);
+		hif_write32_mb(address, value);
 
 		/* Configure bit4 INTR_CLKPM */
-		value = hif_read32_mb(scn, address);
+		value = hif_read32_mb(address);
 		if (enable)
 			value |= INTR_CLKPM;
 		else
 			value &= ~INTR_CLKPM;
-		hif_write32_mb(scn, address, value);
+		hif_write32_mb(address, value);
 	}
 }
 #else
