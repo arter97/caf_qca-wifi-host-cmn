@@ -353,6 +353,10 @@ static const uint32_t pdev_param_tlv[] = {
 	[wmi_pdev_param_stomper_threshold] = WMI_PDEV_PARAM_STOMPER_THRSHOLD,
 	[wmi_pdev_param_agc_gain_value] = WMI_PDEV_PARAM_AGC_GAIN_VALUE,
 	[wmi_pdev_param_rate_upper_cap] = WMI_PDEV_PARAM_RATE_UPPER_CAP,
+	[wmi_pdev_param_lsig_rlsig_power_scaling] =
+			WMI_PDEV_PARAM_LSIG_RLSIG_POWER_SCALING,
+	[wmi_pdev_param_hesiga_power_scaling] =
+			WMI_PDEV_PARAM_HESIGA_POWER_SCALING,
 };
 
 /**

@@ -4729,6 +4729,8 @@ typedef enum {
 	wmi_pdev_param_agc_gain_value,
 	wmi_pdev_param_rate_upper_cap,
 	wmi_pdev_param_max,
+	wmi_pdev_param_lsig_rlsig_power_scaling,
+	wmi_pdev_param_hesiga_power_scaling,
 } wmi_conv_pdev_params_id;
 
 
