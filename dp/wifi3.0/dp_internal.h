@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -501,7 +502,7 @@ static inline bool dp_monitor_is_vdev_timer_running(struct dp_soc *soc)
 }
 
 static inline
-void dp_monitor_pdev_set_mon_vdev(struct dp_pdev *pdev)
+void dp_monitor_pdev_set_mon_vdev(struct dp_vdev *vdev)
 {
 }
 
@@ -601,7 +602,7 @@ dp_monitor_get_rx_status(struct dp_pdev *pdev)
 }
 
 static inline
-void dp_monitor_pdev_config_scan_spcl_vap(struct dp_pdev *pdev)
+void dp_monitor_pdev_config_scan_spcl_vap(struct dp_pdev *pdev, bool val)
 {
 }
 
@@ -609,6 +610,22 @@ static inline
 void dp_monitor_pdev_reset_scan_spcl_vap_stats_enable(struct dp_pdev *pdev,
 						      bool val)
 {
+}
+#ifdef DP_POWER_SAVE
+static inline
+void dp_monitor_pktlog_reap_pending_frames(struct dp_pdev *pdev)
+{
+}
+
+static inline
+void dp_monitor_pktlog_start_reap_timer(struct dp_pdev *pdev)
+{
+}
+#endif
+
+static inline bool dp_monitor_is_configured(struct dp_pdev *pdev)
+{
+	return false;
 }
 #endif
 
