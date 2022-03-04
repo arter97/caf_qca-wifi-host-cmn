@@ -855,7 +855,8 @@ reg_is_ch144_supp_by_reg(struct wlan_regulatory_pdev_priv_obj *pdev_priv_obj)
 static bool
 reg_is_chip_range_2g_only(struct wlan_regulatory_pdev_priv_obj *pdev_priv_obj)
 {
-	if (pdev_priv_obj->range_2g_low && pdev_priv_obj->range_2g_high)
+	if (pdev_priv_obj->range_2g_low && pdev_priv_obj->range_2g_high
+	    && !pdev_priv_obj->range_5g_low && !pdev_priv_obj->range_5g_high)
 		return true;
 	return false;
 }
