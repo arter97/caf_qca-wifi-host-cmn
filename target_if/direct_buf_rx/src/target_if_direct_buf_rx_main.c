@@ -1028,6 +1028,11 @@ static QDF_STATUS target_if_dbr_replenish_ring(struct wlan_objmgr_pdev *pdev,
 		return QDF_STATUS_E_INVAL;
 	}
 
+	if (cookie >= mod_param->dbr_ring_cfg->num_ptr) {
+		direct_buf_rx_err("invalid cookie %d", cookie);
+		return QDF_STATUS_E_INVAL;
+	}
+
 	dbr_psoc_obj = wlan_objmgr_psoc_get_comp_private_obj(psoc,
 				WLAN_TARGET_IF_COMP_DIRECT_BUF_RX);
 
