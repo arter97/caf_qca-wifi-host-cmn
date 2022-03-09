@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2016-2020 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2021 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -10211,6 +10212,11 @@ static QDF_STATUS extract_mgmt_rx_params_tlv(wmi_unified_t wmi_handle,
 		return QDF_STATUS_E_INVAL;
 	}
 
+	if (ev_hdr->buf_len > param_tlvs->num_bufp) {
+		wmi_err("Rx mgmt frame length mismatch, discard it");
+		return QDF_STATUS_E_INVAL;
+	}
+
 	hdr->pdev_id = wmi_handle->ops->convert_pdev_id_target_to_host(
 							wmi_handle,
 							ev_hdr->pdev_id);
@@ -11414,18 +11420,41 @@ static QDF_STATUS extract_scan_radio_cap_service_ready_ext2_tlv(
 }
 
 /**
+ * wmi_tgt_thermal_level_to_host() - Convert target thermal level to host enum
+ * @level: target thermal level from WMI_THERM_THROT_STATS_EVENTID event
+ *
+ * Return: host thermal throt level
+ */
+static enum thermal_throttle_level
+wmi_tgt_thermal_level_to_host(uint32_t level)
+{
+	switch (level) {
+	case WMI_THERMAL_FULLPERF:
+		return THERMAL_FULLPERF;
+	case WMI_THERMAL_MITIGATION:
+		return THERMAL_MITIGATION;
+	case WMI_THERMAL_SHUTOFF:
+		return THERMAL_SHUTOFF;
+	case WMI_THERMAL_SHUTDOWN_TGT:
+		return THERMAL_SHUTDOWN_TARGET;
+	default:
+		return THERMAL_UNKNOWN;
+	}
+}
+
+/**
  * extract_thermal_stats_tlv() - extract thermal stats from event
  * @wmi_handle: wmi handle
  * @param evt_buf: Pointer to event buffer
  * @param temp: Pointer to hold extracted temperature
- * @param level: Pointer to hold extracted level
+ * @param level: Pointer to hold extracted level in host enum
  *
  * Return: 0 for success or error code
  */
 static QDF_STATUS
 extract_thermal_stats_tlv(wmi_unified_t wmi_handle,
 		void *evt_buf, uint32_t *temp,
-		uint32_t *level, uint32_t *pdev_id)
+		enum thermal_throttle_level *level, uint32_t *pdev_id)
 {
 	WMI_THERM_THROT_STATS_EVENTID_param_tlvs *param_buf;
 	wmi_therm_throt_stats_event_fixed_param *tt_stats_event;
@@ -11436,12 +11465,13 @@ extract_thermal_stats_tlv(wmi_unified_t wmi_handle,
 		return QDF_STATUS_E_INVAL;
 
 	tt_stats_event = param_buf->fixed_param;
-
+	wmi_debug("thermal temperature %d level %d",
+		  tt_stats_event->temp, tt_stats_event->level);
 	*pdev_id = wmi_handle->ops->convert_pdev_id_target_to_host(
 						wmi_handle,
 						tt_stats_event->pdev_id);
 	*temp = tt_stats_event->temp;
-	*level = tt_stats_event->level;
+	*level = wmi_tgt_thermal_level_to_host(tt_stats_event->level);
 
 	return QDF_STATUS_SUCCESS;
 }
@@ -11625,6 +11655,9 @@ static QDF_STATUS extract_fips_event_data_tlv(wmi_unified_t wmi_handle,
 
 	param_buf = (WMI_PDEV_FIPS_EVENTID_param_tlvs *) evt_buf;
 	event = (wmi_pdev_fips_event_fixed_param *) param_buf->fixed_param;
+
+	if (event->data_len > param_buf->num_data)
+		return QDF_STATUS_E_FAILURE;
 
 	if (fips_conv_data_be(event->data_len, param_buf->data) !=
 							QDF_STATUS_SUCCESS)
@@ -14012,6 +14045,9 @@ extract_time_sync_ftm_offset_event_tlv(wmi_unified_t wmi, void *buf,
 
 	param->vdev_id = resp_event->vdev_id;
 	param->num_qtime = param_buf->num_audio_sync_q_master_slave_times;
+	if (param->num_qtime > FTM_TIME_SYNC_QTIME_PAIR_MAX)
+		param->num_qtime = FTM_TIME_SYNC_QTIME_PAIR_MAX;
+
 	q_pair = param_buf->audio_sync_q_master_slave_times;
 	if (!q_pair) {
 		wmi_err("Invalid q_master_slave_times buffer");
