@@ -1082,4 +1082,14 @@ QDF_STATUS utils_dfs_start_adfs_for_sta(struct wlan_objmgr_pdev *pdev,
 }
 #endif /* QCA_SUPPORT_AGILE_DFS */
 
+/**
+ * utils_dfs_get_5ghz_freq_list() - Fetch the DFS 5GHz frequency list from
+ * regulatory.
+ * @pdev: Pointer to the pdev.
+ * @dfs_5g_freq_list: Output DFS 5GHz frequency list.
+ *
+ * Return: Number of DFS 5GHz freq list.
+ */
+uint8_t utils_dfs_get_5ghz_freq_list(struct wlan_objmgr_pdev *pdev,
+				     qdf_freq_t *dfs_5g_freq_list);
 #endif /* _WLAN_DFS_UTILS_API_H_ */

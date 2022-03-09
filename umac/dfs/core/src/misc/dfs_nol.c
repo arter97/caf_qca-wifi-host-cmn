@@ -171,16 +171,23 @@ static void dfs_action_on_expired_nol_elem(struct wlan_dfs *dfs,
 					       DFS_AGILE_SM_EV_AGILE_START);
 }
 
+static inline void dfs_copy_nol_range(struct dfs_freq_range *tgt_range,
+				      struct dfs_freq_range src_range)
+{
+	tgt_range->start_freq = src_range.start_freq;
+	tgt_range->end_freq = src_range.end_freq;
+}
+
 /**
  * dfs_delete_expired_nol_elems() - Delete the NOL elements which has expired.
  * @dfs: Pointer to wlan_dfs structure.
- * @delfreq: List of frequencies which has been removed from NOL.
- * @delchwidth: List of bw values of frequencies which has been removed.
+ * @noldel_freq_range: List of frequency ranges which has been removed from NOL.
  *
  * Return: No. of frequencies removed from NOL list.
  */
-static uint8_t dfs_delete_expired_nol_elems(struct wlan_dfs *dfs,
-					    uint16_t *delfreq)
+static uint8_t
+dfs_delete_expired_nol_elems(struct wlan_dfs *dfs,
+			     struct dfs_freq_range *noldel_freq_range)
 {
 	struct dfs_nolelem *nol, **prev_next;
 	uint32_t diff_ms;
@@ -197,7 +204,9 @@ static uint8_t dfs_delete_expired_nol_elems(struct wlan_dfs *dfs,
 		diff_ms = qdf_do_div(qdf_get_monotonic_boottime() -
 				     nol->nol_start_us, 1000);
 		if (diff_ms >= nol->nol_timeout_ms) {
-			delfreq[nol_count++] = nol->nol_freq;
+			dfs_copy_nol_range(&noldel_freq_range[nol_count],
+					   nol->nol_freq_range);
+			nol_count++;
 			dfs_debug(dfs, WLAN_DEBUG_DFS_NOL,
 				  "removing chan %d from NOL tstamp=%d",
 				  nol->nol_freq,
@@ -238,17 +247,74 @@ static uint8_t dfs_delete_expired_nol_elems(struct wlan_dfs *dfs,
 }
 
 /**
+ * dfs_is_nol_overlap() - API to check if the input ranges overlap.
+ * @range_1: First input range.
+ * @range_2: Second input range.
+ *
+ * Consider, r1 and r2 are two contiguous frequency ranges.
+ * There are two cases where r1 and r2 does not overlap in a linear scale.
+ *   1. r1 is completely after r2 (i.e, start of r1 is > end of r2)
+ *   2. r2 is completely before r2 (i.e end of r1 is < start of r2)
+ *
+ * Combining them would result in (start_r1 > end_r2 || end_r1 < start_r2).
+ * The de-morgan of that is checked in this API.
+ *
+ * Return: True if the ranges overlap, else false.
+ */
+static bool
+dfs_is_nol_overlap(struct dfs_freq_range range_1, struct dfs_freq_range range_2)
+{
+	if ((range_1.start_freq < range_2.end_freq) &&
+	    (range_1.end_freq > range_2.start_freq))
+		return true;
+
+	return false;
+}
+
+#define MAX_NOL 25
+static uint8_t
+dfs_find_nol_cleared_20mhz_freq(struct wlan_dfs *dfs,
+				struct dfs_freq_range *noldel_freq_range,
+				uint8_t nol_range_count,
+				qdf_freq_t *nol_freq)
+{
+	uint8_t nol_count = 0;
+	uint8_t dfs_5g_count, i, j;
+	qdf_freq_t dfs_5g_freq_list[MAX_NOL];
+
+	dfs_5g_count = utils_dfs_get_5ghz_freq_list(dfs->dfs_pdev_obj,
+						    dfs_5g_freq_list);
+
+	for (i = 0; i < dfs_5g_count; i++) {
+		struct dfs_freq_range dfs_5g_freq_range;
+
+		dfs_5g_freq_range.start_freq = dfs_5g_freq_list[i] - 10;
+		dfs_5g_freq_range.end_freq = dfs_5g_freq_list[i] + 10;
+
+		for (j = 0; j < nol_range_count; j++) {
+			if (dfs_is_nol_overlap(dfs_5g_freq_range,
+					       noldel_freq_range[j])) {
+				nol_freq[nol_count++] = dfs_5g_freq_list[i];
+				break;
+			}
+		}
+	}
+
+	return nol_count;
+}
+
+/**
  * dfs_remove_from_nol() - Remove the freq from NOL list.
  *
  * When NOL times out, this function removes the channel from NOL list.
  */
 #ifdef CONFIG_CHAN_FREQ_API
-#define MAX_NOL 25
 static os_timer_func(dfs_remove_from_nol)
 {
 	struct wlan_dfs *dfs;
-	uint16_t nol_freq[MAX_NOL];
-	uint8_t i, nol_count;
+	qdf_freq_t nol_freq[MAX_NOL];
+	struct dfs_freq_range noldel_freq_range[MAX_NOL];
+	uint8_t i, nol_count, nol_range_count;
 
 	OS_GET_TIMER_ARG(dfs, struct wlan_dfs *);
 
@@ -258,8 +324,14 @@ static os_timer_func(dfs_remove_from_nol)
 	}
 
 	WLAN_DFSNOL_LOCK(dfs);
-	nol_count = dfs_delete_expired_nol_elems(dfs, nol_freq);
+	nol_range_count = dfs_delete_expired_nol_elems(dfs, noldel_freq_range);
 	WLAN_DFSNOL_UNLOCK(dfs);
+
+	/* From the NOL range, find the NOL freed 20MHz channels to notify
+	 * the upper layer. */
+	nol_count = dfs_find_nol_cleared_20mhz_freq(dfs, noldel_freq_range,
+						    nol_range_count, nol_freq);
+
 	for (i = 0; i < nol_count; i++)
 		dfs_action_on_expired_nol_elem(dfs, nol_freq[i]);
 }
@@ -865,31 +937,6 @@ void dfs_remove_spoof_channel_from_nol(struct wlan_dfs *dfs)
 }
 #endif
 #endif
-
-/**
- * dfs_is_nol_overlap() - API to check if the input ranges overlap.
- * @range_1: First input range.
- * @range_2: Second input range.
- *
- * Consider, r1 and r2 are two contiguous frequency ranges.
- * There are two cases where r1 and r2 does not overlap in a linear scale.
- *   1. r1 is completely after r2 (i.e, start of r1 is > end of r2)
- *   2. r2 is completely before r2 (i.e end of r1 is < start of r2)
- *
- * Combining them would result in (start_r1 > end_r2 || end_r1 < start_r2).
- * The de-morgan of that is checked in this API.
- *
- * Return: True if the ranges overlap, else false.
- */
-static bool
-dfs_is_nol_overlap(struct dfs_freq_range range_1, struct dfs_freq_range range_2)
-{
-	if ((range_1.start_freq < range_2.end_freq) &&
-	    (range_1.end_freq > range_2.start_freq))
-		return true;
-
-	return false;
-}
 
 bool
 dfs_is_chan_range_in_nol(struct wlan_dfs *dfs,

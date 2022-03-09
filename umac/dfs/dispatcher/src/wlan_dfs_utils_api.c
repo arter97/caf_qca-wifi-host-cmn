@@ -1565,11 +1565,11 @@ utils_dfs_precac_status_for_channel(struct wlan_objmgr_pdev *pdev,
 }
 #endif
 
+#define IS_CHAN_DFS(_flags) ((_flags) & REGULATORY_CHAN_RADAR)
 #if defined(WLAN_DISP_CHAN_INFO)
 #define FIRST_DFS_CHAN_NUM  52
 #define CHAN_NUM_SPACING     4
 #define INVALID_INDEX     (-1)
-#define IS_CHAN_DFS(_flags) ((_flags) & REGULATORY_CHAN_RADAR)
 /**
  * utils_dfs_convert_freq_to_index() - Converts a DFS channel frequency
  * to the DFS channel state array index. The input frequency should be a DFS
@@ -1754,3 +1754,37 @@ QDF_STATUS utils_dfs_start_adfs_for_sta(struct wlan_objmgr_pdev *pdev,
 	return QDF_STATUS_SUCCESS;
 }
 #endif /* QCA_SUPPORT_AGILE_DFS */
+
+uint8_t utils_dfs_get_5ghz_freq_list(struct wlan_objmgr_pdev *pdev,
+				     qdf_freq_t *dfs_5g_freq_list)
+{
+	struct regulatory_channel *cur_chan_list;
+	int i;
+	uint8_t dfs_5g_freq_count = 0;
+
+	cur_chan_list = qdf_mem_malloc(NUM_CHANNELS *
+			sizeof(struct regulatory_channel));
+
+	if (!cur_chan_list)
+		return dfs_5g_freq_count;
+
+	if (wlan_reg_get_current_chan_list(
+				pdev, cur_chan_list) != QDF_STATUS_SUCCESS) {
+		dfs_err(NULL, WLAN_DEBUG_DFS_ALWAYS,
+			"failed to get curr channel list");
+		goto exit;
+	}
+
+	for (i = 0; i < NUM_CHANNELS; i++) {
+		if (!IS_CHAN_DFS(cur_chan_list[i].chan_flags) ||
+		     cur_chan_list[i].max_bw < 20)
+			continue;
+
+		dfs_5g_freq_list[dfs_5g_freq_count++] =
+			cur_chan_list[i].center_freq;
+	}
+
+exit:
+	qdf_mem_free(cur_chan_list);
+	return dfs_5g_freq_count;
+}
