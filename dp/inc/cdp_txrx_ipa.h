@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -404,7 +404,6 @@ cdp_ipa_disable_autonomy(ol_txrx_soc_handle soc, uint8_t pdev_id)
  * @is_smmu_enabled: Is SMMU enabled or not
  * @sys_in: parameters to setup sys pipe in mcc mode
  * @over_gsi: Is IPA using GSI
- * @hdl: IPA handle
  *
  * Return: QDF_STATUS
  */
@@ -414,7 +413,7 @@ cdp_ipa_setup(ol_txrx_soc_handle soc, uint8_t pdev_id, void *ipa_i2w_cb,
 	      uint32_t ipa_desc_size, void *ipa_priv, bool is_rm_enabled,
 	      uint32_t *tx_pipe_handle, uint32_t *rx_pipe_handle,
 	      bool is_smmu_enabled, qdf_ipa_sys_connect_params_t *sys_in,
-	      bool over_gsi, qdf_ipa_wdi_hdl_t hdl)
+	      bool over_gsi)
 {
 	if (!soc || !soc->ops || !soc->ops->ipa_ops) {
 		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_FATAL,
@@ -431,7 +430,7 @@ cdp_ipa_setup(ol_txrx_soc_handle soc, uint8_t pdev_id, void *ipa_i2w_cb,
 						    tx_pipe_handle,
 						    rx_pipe_handle,
 						    is_smmu_enabled,
-						    sys_in, over_gsi, hdl);
+						    sys_in, over_gsi);
 
 	return QDF_STATUS_SUCCESS;
 }
@@ -482,14 +481,12 @@ cdp_ipa_setup(ol_txrx_soc_handle soc, uint8_t pdev_id, void *ipa_i2w_cb,
  * @pdev_id: handle to the device instance number
  * @tx_pipe_handle: Tx pipe handle
  * @rx_pipe_handle: Rx pipe handle
- * @hdl: IPA handle
  *
  * Return: QDF_STATUS
  */
 static inline QDF_STATUS
 cdp_ipa_cleanup(ol_txrx_soc_handle soc, uint8_t pdev_id,
-		uint32_t tx_pipe_handle, uint32_t rx_pipe_handle,
-		qdf_ipa_wdi_hdl_t hdl)
+		uint32_t tx_pipe_handle, uint32_t rx_pipe_handle)
 {
 	if (!soc || !soc->ops || !soc->ops->ipa_ops) {
 		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_FATAL,
@@ -500,7 +497,7 @@ cdp_ipa_cleanup(ol_txrx_soc_handle soc, uint8_t pdev_id,
 	if (soc->ops->ipa_ops->ipa_cleanup)
 		return soc->ops->ipa_ops->ipa_cleanup(soc, pdev_id,
 						      tx_pipe_handle,
-						      rx_pipe_handle, hdl);
+						      rx_pipe_handle);
 
 	return QDF_STATUS_SUCCESS;
 }
@@ -514,7 +511,6 @@ cdp_ipa_cleanup(ol_txrx_soc_handle soc, uint8_t pdev_id,
  * @cons_client: IPA cons client type
  * @session_id: Session ID
  * @is_ipv6_enabled: Is IPV6 enabled or not
- * @hdl: IPA handle
  *
  * Return: QDF_STATUS
  */
@@ -522,8 +518,7 @@ static inline QDF_STATUS
 cdp_ipa_setup_iface(ol_txrx_soc_handle soc, char *ifname, uint8_t *mac_addr,
 		    qdf_ipa_client_type_t prod_client,
 		    qdf_ipa_client_type_t cons_client,
-		    uint8_t session_id, bool is_ipv6_enabled,
-		    qdf_ipa_wdi_hdl_t hdl)
+		    uint8_t session_id, bool is_ipv6_enabled)
 {
 	if (!soc || !soc->ops || !soc->ops->ipa_ops) {
 		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_FATAL,
@@ -536,8 +531,7 @@ cdp_ipa_setup_iface(ol_txrx_soc_handle soc, char *ifname, uint8_t *mac_addr,
 							  prod_client,
 							  cons_client,
 							  session_id,
-							  is_ipv6_enabled,
-							  hdl);
+							  is_ipv6_enabled);
 
 	return QDF_STATUS_SUCCESS;
 }
@@ -547,13 +541,12 @@ cdp_ipa_setup_iface(ol_txrx_soc_handle soc, char *ifname, uint8_t *mac_addr,
  * @soc: data path soc handle
  * @ifname: Interface name
  * @is_ipv6_enabled: Is IPV6 enabled or not
- * @hdl: IPA handle
  *
  * Return: QDF_STATUS
  */
 static inline QDF_STATUS
 cdp_ipa_cleanup_iface(ol_txrx_soc_handle soc, char *ifname,
-		      bool is_ipv6_enabled, qdf_ipa_wdi_hdl_t hdl)
+		      bool is_ipv6_enabled)
 {
 	if (!soc || !soc->ops || !soc->ops->ipa_ops) {
 		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_FATAL,
@@ -563,8 +556,7 @@ cdp_ipa_cleanup_iface(ol_txrx_soc_handle soc, char *ifname,
 
 	if (soc->ops->ipa_ops->ipa_cleanup_iface)
 		return soc->ops->ipa_ops->ipa_cleanup_iface(ifname,
-							    is_ipv6_enabled,
-							    hdl);
+							    is_ipv6_enabled);
 
 	return QDF_STATUS_SUCCESS;
 }
@@ -573,13 +565,11 @@ cdp_ipa_cleanup_iface(ol_txrx_soc_handle soc, char *ifname,
  * cdp_ipa_uc_enable_pipes() - Enable and resume traffic on Tx/Rx pipes
  * @soc - data path soc handle
  * @pdev_id - device instance id
- * @hdl: IPA handle
  *
  * Return: QDF_STATUS
  */
 static inline QDF_STATUS
-cdp_ipa_enable_pipes(ol_txrx_soc_handle soc, uint8_t pdev_id,
-		     qdf_ipa_wdi_hdl_t hdl)
+cdp_ipa_enable_pipes(ol_txrx_soc_handle soc, uint8_t pdev_id)
 {
 	if (!soc || !soc->ops || !soc->ops->ipa_ops) {
 		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_FATAL,
@@ -588,7 +578,7 @@ cdp_ipa_enable_pipes(ol_txrx_soc_handle soc, uint8_t pdev_id,
 	}
 
 	if (soc->ops->ipa_ops->ipa_enable_pipes)
-		return soc->ops->ipa_ops->ipa_enable_pipes(soc, pdev_id, hdl);
+		return soc->ops->ipa_ops->ipa_enable_pipes(soc, pdev_id);
 
 	return QDF_STATUS_SUCCESS;
 }
@@ -597,13 +587,11 @@ cdp_ipa_enable_pipes(ol_txrx_soc_handle soc, uint8_t pdev_id,
  * cdp_ipa_uc_disable_pipes() - Suspend traffic and disable Tx/Rx pipes
  * @soc: data path soc handle
  * @pdev_id - device instance id
- * @hdl: IPA handle
  *
  * Return: QDF_STATUS
  */
 static inline QDF_STATUS
-cdp_ipa_disable_pipes(ol_txrx_soc_handle soc, uint8_t pdev_id,
-		      qdf_ipa_wdi_hdl_t hdl)
+cdp_ipa_disable_pipes(ol_txrx_soc_handle soc, uint8_t pdev_id)
 {
 	if (!soc || !soc->ops || !soc->ops->ipa_ops) {
 		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_FATAL,
@@ -612,7 +600,7 @@ cdp_ipa_disable_pipes(ol_txrx_soc_handle soc, uint8_t pdev_id,
 	}
 
 	if (soc->ops->ipa_ops->ipa_disable_pipes)
-		return soc->ops->ipa_ops->ipa_disable_pipes(soc, pdev_id, hdl);
+		return soc->ops->ipa_ops->ipa_disable_pipes(soc, pdev_id);
 
 	return QDF_STATUS_SUCCESS;
 }
@@ -622,13 +610,12 @@ cdp_ipa_disable_pipes(ol_txrx_soc_handle soc, uint8_t pdev_id,
  * @soc: data path soc handle
  * @client: WLAN Client ID
  * @max_supported_bw_mbps: Maximum bandwidth needed (in Mbps)
- * @hdl: IPA handle
  *
  * Return: 0 on success, negative errno on error
  */
 static inline QDF_STATUS
 cdp_ipa_set_perf_level(ol_txrx_soc_handle soc, int client,
-		       uint32_t max_supported_bw_mbps, qdf_ipa_wdi_hdl_t hdl)
+		       uint32_t max_supported_bw_mbps)
 {
 	if (!soc || !soc->ops || !soc->ops->ipa_ops) {
 		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_FATAL,
@@ -638,7 +625,7 @@ cdp_ipa_set_perf_level(ol_txrx_soc_handle soc, int client,
 
 	if (soc->ops->ipa_ops->ipa_set_perf_level)
 		return soc->ops->ipa_ops->ipa_set_perf_level(client,
-				max_supported_bw_mbps, hdl);
+				max_supported_bw_mbps);
 
 	return QDF_STATUS_SUCCESS;
 }
