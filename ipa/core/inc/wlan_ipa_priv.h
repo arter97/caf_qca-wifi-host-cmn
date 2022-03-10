@@ -81,7 +81,6 @@
 #define WLAN_IPA_MAX_BANDWIDTH              4800
 #else
 #define WLAN_IPA_MAX_BANDWIDTH              800
-#define WLAN_IPA_NOMINAL_BANDWIDTH          2500
 #endif
 
 #define WLAN_IPA_MAX_PENDING_EVENT_COUNT    20
