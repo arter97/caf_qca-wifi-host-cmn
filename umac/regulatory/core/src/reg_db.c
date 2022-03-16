@@ -1262,7 +1262,7 @@ enum reg_rules_5g {
 	CHAN_5735_5895_2,
 	CHAN_5835_5855_1,
 	CHAN_5835_5855_2,
-	CHAN_5815_5895_1,
+	CHAN_5835_5895_1,
 	CHAN_5850_5925_1,
 	CHAN_5850_5925_2,
 #if defined(CONFIG_BAND_6GHZ) && defined(COMPILE_REGDB_6G)
@@ -1362,7 +1362,11 @@ const struct regulatory_rule reg_rules_5g[] = {
 	[CHAN_5735_5895_2] = {5735, 5895, 160, 20, REGULATORY_CHAN_NO_IR},
 	[CHAN_5835_5855_1] = {5835, 5855, 20, 30, 0},
 	[CHAN_5835_5855_2] = {5835, 5855, 20, 14, REGULATORY_CHAN_INDOOR_ONLY},
-	[CHAN_5815_5895_1] = {5815, 5895, 80, 30, REGULATORY_CHAN_INDOOR_ONLY},
+#ifdef CONFIG_REG_CLIENT
+	[CHAN_5835_5895_1] = {5835, 5895, 40, 30, REGULATORY_CHAN_INDOOR_ONLY},
+#else
+	[CHAN_5835_5895_1] = {5835, 5895, 80, 30, REGULATORY_CHAN_INDOOR_ONLY},
+#endif
 	[CHAN_5850_5925_1] = {5850, 5925, 20, 24, 0},
 	[CHAN_5850_5925_2] = {5850, 5925, 20, 30, 0},
 #if defined(CONFIG_BAND_6GHZ) && defined(COMPILE_REGDB_6G)
@@ -1386,7 +1390,7 @@ const struct regdomain regdomains_5g[] = {
 							  CHAN_5250_5330_7,
 							  CHAN_5490_5730_1,
 							  CHAN_5735_5835_2,
-							  CHAN_5815_5895_1} },
+							  CHAN_5835_5895_1} },
 
 	[FCC4] = {CTL_FCC, DFS_FCC_REGION, 2, 160, 6, 4, {CHAN_4940_4990_1,
 							  CHAN_5170_5250_1,
@@ -1406,7 +1410,7 @@ const struct regdomain regdomains_5g[] = {
 							  CHAN_5250_5330_7,
 							  CHAN_5490_5730_1,
 							  CHAN_5735_5835_2,
-							  CHAN_5815_5895_1} },
+							  CHAN_5835_5895_1} },
 
 	[FCC10] = {CTL_FCC, DFS_FCC_REGION, 2, 160, 0, 5, {CHAN_5170_5250_4,
 							   CHAN_5250_5330_7,
@@ -1436,14 +1440,14 @@ const struct regdomain regdomains_5g[] = {
 							   CHAN_5250_5330_7,
 							   CHAN_5490_5730_1,
 							   CHAN_5735_5835_2,
-							   CHAN_5815_5895_1,
+							   CHAN_5835_5895_1,
 							   CHAN_5945_7125_1} },
 
 	[FCC16] = {CTL_FCC, DFS_FCC_REGION, 2, 160, 0, 6, {CHAN_5170_5250_4,
 							   CHAN_5250_5330_7,
 							   CHAN_5490_5730_1,
 							   CHAN_5735_5835_2,
-							   CHAN_5815_5895_1,
+							   CHAN_5835_5895_1,
 							   CHAN_5945_7125_2} },
 #endif
 	[FCC17] = {CTL_FCC, DFS_FCC_REGION, 2, 160, 6, 4, {CHAN_5170_5250_5,
