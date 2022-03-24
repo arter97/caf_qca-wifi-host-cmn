@@ -20,6 +20,7 @@
 #define _DP_INTERNAL_H_
 
 #include "dp_types.h"
+#include "qdf_pkt_add_timestamp.h"
 
 #define RX_BUFFER_SIZE_PKTLOG_LITE 1024
 
@@ -2742,4 +2743,40 @@ static inline QDF_STATUS dp_runtime_init(struct dp_soc *soc)
  */
 void dp_peer_flush_frags(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
 			 uint8_t *peer_mac);
+
+#ifdef CONFIG_DP_PKT_ADD_TIMESTAMP
+/**
+ * dp_pkt_add_timestamp() - add timestamp in data payload
+ *
+ * @vdev: dp vdev
+ * @index: index to decide offset in payload
+ * @time: timestamp to add in data payload
+ * @nbuf: network buffer
+ *
+ * Return: none
+ */
+void dp_pkt_add_timestamp(struct dp_vdev *vdev,
+			  enum qdf_pkt_timestamp_index index, uint64_t time,
+			  qdf_nbuf_t nbuf);
+/**
+ * dp_pkt_get_timestamp() - get current system time
+ *
+ * @time: return current system time
+ *
+ * Return: none
+ */
+void dp_pkt_get_timestamp(uint64_t *time);
+#else
+static inline
+void dp_pkt_add_timestamp(struct dp_vdev *vdev,
+			  enum qdf_pkt_timestamp_index index, uint64_t time,
+			  qdf_nbuf_t nbuf)
+{
+}
+
+static inline
+void dp_pkt_get_timestamp(uint64_t *time)
+{
+}
+#endif
 #endif /* #ifndef _DP_INTERNAL_H_ */
