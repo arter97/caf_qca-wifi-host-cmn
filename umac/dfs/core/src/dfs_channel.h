@@ -636,6 +636,12 @@
 #define WLAN_CHAN_ANYC \
 	((struct dfs_channel *) WLAN_CHAN_ANY)
 
+#define WLAN_IS_CHAN_MODE_5(_c) \
+	(((_c)->dfs_ch_flags & WLAN_CHAN_QUARTER) == WLAN_CHAN_QUARTER)
+
+#define WLAN_IS_CHAN_MODE_10(_c) \
+	(((_c)->dfs_ch_flags & WLAN_CHAN_HALF) == WLAN_CHAN_HALF)
+
 #define WLAN_IS_CHAN_MODE_20(_c)      \
 	(WLAN_IS_CHAN_A(_c)        ||    \
 	 WLAN_IS_CHAN_11NA_HT20(_c)  ||  \

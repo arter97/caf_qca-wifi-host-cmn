@@ -1395,11 +1395,13 @@ dfs_process_radar_ind_on_home_chan(struct wlan_dfs *dfs,
 
 	dfs_debug(dfs, WLAN_DEBUG_DFS,
 		  "Radar found on dfs detector: %d", radar_found->detector_id);
+
 	dfs_mark_precac_nol_for_freq(dfs,
 				     dfs->is_radar_found_on_secondary_seg,
 				     radar_found->detector_id,
 				     freq_list,
-				     num_channels);
+				     num_channels,
+				     &radar_freq_range, 1);
 
 	dfs_send_nol_ie_and_rcsa(dfs,
 				 radar_found,

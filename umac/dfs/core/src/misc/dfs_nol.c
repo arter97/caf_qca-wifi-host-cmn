@@ -40,6 +40,7 @@
 #include "../dfs_partial_offload_radar.h"
 #endif
 #include <qdf_types.h>
+#include <dfs_zero_cac.h>
 
 void dfs_set_update_nol_flag(struct wlan_dfs *dfs, bool val)
 {
@@ -246,24 +247,20 @@ dfs_delete_expired_nol_elems(struct wlan_dfs *dfs,
 	return nol_count;
 }
 
-/**
- * dfs_is_nol_overlap() - API to check if the input ranges overlap.
- * @range_1: First input range.
- * @range_2: Second input range.
- *
- * Consider, r1 and r2 are two contiguous frequency ranges.
- * There are two cases where r1 and r2 does not overlap in a linear scale.
- *   1. r1 is completely after r2 (i.e, start of r1 is > end of r2)
- *   2. r2 is completely before r2 (i.e end of r1 is < start of r2)
- *
- * Combining them would result in (start_r1 > end_r2 || end_r1 < start_r2).
- * The de-morgan of that is checked in this API.
- *
- * Return: True if the ranges overlap, else false.
- */
-static bool
-dfs_is_nol_overlap(struct dfs_freq_range range_1, struct dfs_freq_range range_2)
+bool dfs_is_range_overlap(struct dfs_freq_range range_1,
+			  struct dfs_freq_range range_2)
 {
+	/**
+	 * Consider, r1 and r2 are two contiguous frequency ranges.
+	 * There are two cases where r1 and r2 does not overlap in a linear
+	 * scale.
+	 *   1. r1 is completely after r2 (i.e, start of r1 is > end of r2)
+	 *   2. r2 is completely before r2 (i.e end of r1 is < start of r2)
+	 *
+	 * Combining them would result in
+	 * (start_r1 > end_r2 || end_r1 < start_r2).
+	 * The de-morgan of that is checked in this API.
+	 */
 	if ((range_1.start_freq < range_2.end_freq) &&
 	    (range_1.end_freq > range_2.start_freq))
 		return true;
@@ -292,7 +289,7 @@ dfs_find_nol_cleared_20mhz_freq(struct wlan_dfs *dfs,
 		dfs_5g_freq_range.end_freq = dfs_5g_freq_list[i] + 10;
 
 		for (j = 0; j < nol_range_count; j++) {
-			if (dfs_is_nol_overlap(dfs_5g_freq_range,
+			if (dfs_is_range_overlap(dfs_5g_freq_range,
 					       noldel_freq_range[j])) {
 				nol_freq[nol_count++] = dfs_5g_freq_list[i];
 				break;
@@ -304,6 +301,36 @@ dfs_find_nol_cleared_20mhz_freq(struct wlan_dfs *dfs,
 }
 
 /**
+ * dfs_unmark_nol_and_notify() - Unmark nol channels and notify it to
+ * other modules/application.
+ * @dfs: Pointer to struct wlan_dfs
+ * @noldel_freq_range: NOL freq change
+ * @nol_range_count: number of NOL ranges
+ *
+ * Return - None
+ */
+static void
+dfs_unmark_nol_and_notify(struct wlan_dfs *dfs,
+			  struct dfs_freq_range *noldel_freq_range,
+			  uint8_t nol_range_count)
+{
+	uint8_t i, nol_count;
+	qdf_freq_t nol_freq[MAX_NOL];
+	/* unmark the 5MHz and 10MHz preCAC list after NOL expiry */
+	dfs_modify_precac_5_10_mhz_list_for_nol(dfs, noldel_freq_range,
+						nol_range_count,
+						false);
+
+	/* From the NOL range, find the NOL freed 20MHz channels to notify
+	 * the upper layer. */
+	nol_count = dfs_find_nol_cleared_20mhz_freq(dfs, noldel_freq_range,
+						    nol_range_count, nol_freq);
+
+	for (i = 0; i < nol_count; i++)
+		dfs_action_on_expired_nol_elem(dfs, nol_freq[i]);
+}
+
+/**
  * dfs_remove_from_nol() - Remove the freq from NOL list.
  *
  * When NOL times out, this function removes the channel from NOL list.
@@ -312,9 +339,8 @@ dfs_find_nol_cleared_20mhz_freq(struct wlan_dfs *dfs,
 static os_timer_func(dfs_remove_from_nol)
 {
 	struct wlan_dfs *dfs;
-	qdf_freq_t nol_freq[MAX_NOL];
 	struct dfs_freq_range noldel_freq_range[MAX_NOL];
-	uint8_t i, nol_count, nol_range_count;
+	uint8_t nol_range_count;
 
 	OS_GET_TIMER_ARG(dfs, struct wlan_dfs *);
 
@@ -327,13 +353,8 @@ static os_timer_func(dfs_remove_from_nol)
 	nol_range_count = dfs_delete_expired_nol_elems(dfs, noldel_freq_range);
 	WLAN_DFSNOL_UNLOCK(dfs);
 
-	/* From the NOL range, find the NOL freed 20MHz channels to notify
-	 * the upper layer. */
-	nol_count = dfs_find_nol_cleared_20mhz_freq(dfs, noldel_freq_range,
-						    nol_range_count, nol_freq);
-
-	for (i = 0; i < nol_count; i++)
-		dfs_action_on_expired_nol_elem(dfs, nol_freq[i]);
+	dfs_unmark_nol_and_notify(dfs, noldel_freq_range,
+				  nol_range_count);
 }
 
 #else
@@ -951,7 +972,7 @@ dfs_is_chan_range_in_nol(struct wlan_dfs *dfs,
 
 	WLAN_DFSNOL_LOCK(dfs);
 	while (nol) {
-		if (dfs_is_nol_overlap(nol->nol_freq_range, input_range)) {
+		if (dfs_is_range_overlap(nol->nol_freq_range, input_range)) {
 			WLAN_DFSNOL_UNLOCK(dfs);
 			return true;
 		}

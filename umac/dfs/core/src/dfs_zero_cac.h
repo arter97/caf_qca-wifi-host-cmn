@@ -1057,18 +1057,23 @@ void dfs_mark_precac_nol(struct wlan_dfs *dfs,
 
 /**
  * dfs_mark_precac_nol_for_freq() - Mark the precac channel as radar.
+ *
  * @dfs:                              Pointer to wlan_dfs structure.
  * @is_radar_found_on_secondary_seg:  Radar found on secondary seg for Cascade.
  * @detector_id:                      detector id which found RADAR in HW.
- * @freq_list:                         Array of radar found frequencies.
+ * @freq_list:                        Array of radar found frequencies.
  * @num_channels:                     Number of radar found subchannels.
+ * @radar_range:                      Frequency range infected by radar
+ * @range_count:                      Number of ranges infected by radar
  */
 #ifdef CONFIG_CHAN_FREQ_API
 void dfs_mark_precac_nol_for_freq(struct wlan_dfs *dfs,
 				  uint8_t is_radar_found_on_secondary_seg,
 				  uint8_t detector_id,
 				  uint16_t *freq_list,
-				  uint8_t num_channels);
+				  uint8_t num_channels,
+				  struct dfs_freq_range *radar_range,
+				  uint8_t range_count);
 #endif
 
 /**
@@ -1146,7 +1151,9 @@ dfs_mark_precac_nol_for_freq(struct wlan_dfs *dfs,
 			     uint8_t is_radar_found_on_secondary_seg,
 			     uint8_t detector_id,
 			     uint16_t *freq,
-			     uint8_t num_channels)
+			     uint8_t num_channels,
+			     struct dfs_freq_range *radar_freq_range,
+			     uint8_t range_count)
 {
 }
 #endif
@@ -1516,4 +1523,50 @@ void dfs_get_agile_info(struct wlan_dfs *dfs,
 void dfs_start_adfs_for_sta(struct wlan_dfs *dfs,
 			    qdf_freq_t agile_cfreq,
 			    uint8_t agile_chwidth);
+
+/**
+ * dfs_modify_precac_5_10_mhz_list_for_nol() - Mark or unmark nol on 5mhz
+ * and 10mhz channels.
+ * @dfs: Pointer to struct wlan_dfs
+ * @nol_ranges: Pointer to struct dfs_freq_range
+ * @nol_range_count: Nol range count
+ * @is_nol_found: bool to indicate if nol should be marked/unmarked
+ *
+ * Return - None
+ */
+void
+dfs_modify_precac_5_10_mhz_list_for_nol(struct wlan_dfs *dfs,
+					struct dfs_freq_range *nol_ranges,
+					uint8_t nol_range_count,
+					bool is_nol_found);
+/**
+ * dfs_is_cac_done_in_5_10_mhz_list() - Find out if cac is done on the
+ * given channel range.
+ * @dfs: Pointer to struct wlan_dfs
+ * @chan_range: Channel range
+ *
+ * Return - Status of cac.
+ */
+bool
+dfs_is_cac_done_in_5_10_mhz_list(struct wlan_dfs *dfs,
+				 struct dfs_freq_range chan_range);
+/**
+ * dfs_mark_5_and_10mhz_list_as_cac_done() - Mark the 5 and 10mhz channels
+ * as CAC done if they are subsets of the given channel range.
+ * @dfs: Pointer to struct wlan_dfs
+ * @center_freq: Center frequency in MHZ
+ * @bw: Channel bandwidth
+ *
+ * Return - None.
+ */
+void dfs_mark_5_and_10mhz_list_as_cac_done(struct wlan_dfs *dfs,
+					   qdf_freq_t center_freq,
+					   uint8_t bw);
+/**
+ * dfs_delete_5_and_10m_precac_lists() - Delete the 5m and 10m precac entries.
+ * @dfs: Pointer to struct wlan_dfs
+ *
+ * Return - None.
+ */
+void dfs_delete_5_and_10m_precac_lists(struct wlan_dfs *dfs);
 #endif /* _DFS_ZERO_CAC_H_ */

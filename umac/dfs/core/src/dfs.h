@@ -3213,4 +3213,14 @@ bool
 dfs_is_chan_range_in_nol(struct wlan_dfs *dfs,
 			 qdf_freq_t start_freq,
 			 qdf_freq_t end_freq);
+
+/**
+ * dfs_is_range_overlap() - API to check if the input ranges overlap.
+ * @range_1: First input range.
+ * @range_2: Second input range.
+ *
+ * Return: True if the ranges overlap, else false.
+ */
+bool dfs_is_range_overlap(struct dfs_freq_range range_1,
+			  struct dfs_freq_range range_2);
 #endif  /* _DFS_H_ */
