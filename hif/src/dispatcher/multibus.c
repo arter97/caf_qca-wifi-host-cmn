@@ -34,6 +34,11 @@
 #include "dummy.h"
 #include "qdf_module.h"
 
+#ifdef HIF_SDIO
+#include "hif_exec.h"
+#endif
+
+
 /**
  * hif_initialize_default_ops() - initializes default operations values
  *

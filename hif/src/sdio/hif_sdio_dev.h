@@ -157,7 +157,7 @@ QDF_STATUS hif_enable_func(struct hif_softc *ol_sc, struct hif_sdio_dev *device,
 QDF_STATUS hif_disable_func(struct hif_sdio_dev *device,
 			    struct sdio_func *func,
 			    bool reset);
-A_STATUS hif_sdio_probe(struct hif_softc *ol_sc,
+QDF_STATUS hif_sdio_probe(struct hif_softc *ol_sc,
 			struct sdio_func *func,
 			struct hif_sdio_dev *device);
 #endif /* HIF_SDIO_DEV_H_ */
