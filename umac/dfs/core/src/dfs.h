@@ -1058,6 +1058,8 @@ struct dfs_rcac_params {
  * @dfs_precac_timeout_override:     Overridden precac timeout.
  * @dfs_num_precac_freqs:            Number of PreCAC VHT80 frequencies.
  * @dfs_precac_list:                 PreCAC list (contains individual trees).
+ * @dfs_precac_5m_list:              PreCAC list of 5MHZ channels
+ * @dfs_precac_10m_list:             PreCAC list of 10MHZ channels
  * @dfs_precac_chwidth:              PreCAC channel width enum.
  * @dfs_curchan:                     DFS current channel.
  * @dfs_prevchan:                    DFS previous channel.
@@ -1243,6 +1245,9 @@ struct wlan_dfs {
 	uint8_t        dfs_disable_radar_marking;
 #endif
 	TAILQ_HEAD(, dfs_precac_entry) dfs_precac_list;
+	STAILQ_HEAD(, dfs_precac_5_10_entry) dfs_precac_5m_list;
+	STAILQ_HEAD(, dfs_precac_5_10_entry) dfs_precac_10m_list;
+
 	enum phy_ch_width dfs_precac_chwidth;
 
 	struct dfs_channel *dfs_curchan;

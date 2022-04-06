@@ -58,6 +58,8 @@
 #define NEXT_40_CHAN_OFFSET               8
 #define NEXT_80_CHAN_OFFSET              16
 
+#define DFS_CHWIDTH_5_VAL                 5
+#define DFS_CHWIDTH_10_VAL               10
 #define DFS_CHWIDTH_20_VAL               20
 #define DFS_CHWIDTH_40_VAL               40
 #define DFS_CHWIDTH_80_VAL               80
@@ -168,6 +170,22 @@ struct dfs_precac_entry {
 };
 
 /**
+ * struct dfs_precac_5_10_entry - PreCAC 5/10M entry
+ * @pe_5_10_list:      PreCAC 5/10M entry
+ * @center_freq: Center frequency in MHZ
+ * @is_cac_done: Bool to indicate if the channel is cac done
+ * @is_freq_nol: Bool to indicate if the channel is radar infected
+ * @bandwidth: Channel bandwidth
+ */
+struct dfs_precac_5_10_entry {
+	STAILQ_ENTRY(dfs_precac_5_10_entry) pe_5_10_list;
+	qdf_freq_t center_freq;
+	bool is_cac_done;
+	bool is_freq_nol;
+	uint8_t bandwidth;
+};
+
+/**
  * dfs_zero_cac_timer_init() - Initialize zero-cac timers
  * @dfs_soc_obj: Pointer to DFS SOC object structure.
  */
@@ -238,6 +256,13 @@ static inline void dfs_zero_cac_detach(struct wlan_dfs *dfs)
  * @dfs: Pointer to wlan_dfs dtructure.
  */
 void dfs_init_precac_list(struct wlan_dfs *dfs);
+
+/**
+ * dfs_init_precac_5_and_10_lists() - Initialize two precac lists:
+ * 5MHz channel list and 10MHz channel list.
+ * @dfs: Pointer to wlan_dfs dtructure.
+ */
+void dfs_init_precac_5_and_10_lists(struct wlan_dfs *dfs);
 
 /**
  * dfs_start_precac_timer() - Start precac timer.
