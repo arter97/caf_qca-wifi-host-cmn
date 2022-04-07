@@ -236,9 +236,11 @@
  * @QCA_NL80211_VENDOR_SUBCMD_SPECTRAL_SCAN_GET_STATUS: Get the current
  *     status of spectral scan. The status values are specified
  *     by enum qca_wlan_vendor_attr_spectral_scan_status.
- * @QCA_NL80211_VENDOR_SUBCMD_HTT_STATS: Request the firmware
- *     DP stats for a particualr stats type for response evnet
- *     it carries the stats data sent from the FW
+ * @QCA_NL80211_VENDOR_SUBCMD_PEER_FLUSH_PENDING: Sub-command to flush
+ *     peer pending packets. Specify the peer MAC address in
+ *     QCA_WLAN_VENDOR_ATTR_PEER_ADDR and the access category of the packets
+ *     in QCA_WLAN_VENDOR_ATTR_AC. The attributes are listed
+ *     in enum qca_wlan_vendor_attr_flush_pending.
  * @QCA_NL80211_VENDOR_SUBCMD_GET_RROP_INFO: Get vendor specific Representative
  *     RF Operating Parameter (RROP) information. The attributes for this
  *     information are defined in enum qca_wlan_vendor_attr_rrop_info. This is
@@ -361,6 +363,17 @@
  *	code immediately prior to triggering cfg80211_disconnected(). The
  *	attributes used with this event are defined in enum
  *	qca_wlan_vendor_attr_driver_disconnect_reason.
+ *
+ * @QCA_NL80211_VENDOR_SUBCMD_WIFI_FW_STATS: This vendor subcommand is used by
+ *	the driver to send opaque data from the firmware to userspace. The
+ *	driver sends an event to userspace whenever such data is received from
+ *	the firmware.
+ *
+ *	QCA_WLAN_VENDOR_ATTR_CONFIG_GENERIC_DATA is used as the attribute to
+ *	send this opaque data for this event.
+ *
+ *	The format of the opaque data is specific to the particular firmware
+ *	version and there is no guarantee of the format remaining same.
  */
 
 enum qca_nl80211_vendor_subcmds {
@@ -560,7 +573,7 @@ enum qca_nl80211_vendor_subcmds {
 	QCA_NL80211_VENDOR_SUBCMD_SPECTRAL_SCAN_GET_DIAG_STATS = 159,
 	QCA_NL80211_VENDOR_SUBCMD_SPECTRAL_SCAN_GET_CAP_INFO = 160,
 	QCA_NL80211_VENDOR_SUBCMD_SPECTRAL_SCAN_GET_STATUS = 161,
-	QCA_NL80211_VENDOR_SUBCMD_HTT_STATS = 162,
+	QCA_NL80211_VENDOR_SUBCMD_PEER_FLUSH_PENDING = 162,
 	QCA_NL80211_VENDOR_SUBCMD_GET_RROP_INFO = 163,
 	QCA_NL80211_VENDOR_SUBCMD_GET_SAR_LIMITS = 164,
 	QCA_NL80211_VENDOR_SUBCMD_WLAN_MAC_INFO = 165,
@@ -577,6 +590,7 @@ enum qca_nl80211_vendor_subcmds {
 	QCA_NL80211_VENDOR_SUBCMD_GET_SAR_LIMITS_EVENT = 187,
 	QCA_NL80211_VENDOR_SUBCMD_UPDATE_STA_INFO = 188,
 	QCA_NL80211_VENDOR_SUBCMD_DRIVER_DISCONNECT_REASON = 189,
+	QCA_NL80211_VENDOR_SUBCMD_WIFI_FW_STATS = 195,
 };
 
 enum qca_wlan_vendor_tos {
@@ -584,6 +598,27 @@ enum qca_wlan_vendor_tos {
 	QCA_WLAN_VENDOR_TOS_BE = 1,
 	QCA_WLAN_VENDOR_TOS_VI = 2,
 	QCA_WLAN_VENDOR_TOS_VO = 3,
+};
+
+/**
+ * enum qca_wlan_vendor_attr_flush_pending - Attributes for
+ * flush pending traffic in firmware.
+ *
+ * @QCA_WLAN_VENDOR_ATTR_PEER_ADDR: Configure peer mac address.
+ * @QCA_WLAN_VENDOR_ATTR_AC: Configure access category the pending
+ *  packets using. It is u8 value with bit0~3 represent AC_BE, AC_BK,
+ *  AC_VI, AC_VO respectively. Set the corresponding bit to 1 to flush
+ *  packets with access category.
+ */
+enum qca_wlan_vendor_attr_flush_pending {
+	QCA_WLAN_VENDOR_ATTR_FLUSH_PENDING_INVALID = 0,
+	QCA_WLAN_VENDOR_ATTR_PEER_ADDR = 1,
+	QCA_WLAN_VENDOR_ATTR_AC = 2,
+
+	/* keep last */
+	QCA_WLAN_VENDOR_ATTR_FLUSH_PENDING_AFTER_LAST,
+	QCA_WLAN_VENDOR_ATTR_FLUSH_PENDING_MAX =
+	QCA_WLAN_VENDOR_ATTR_FLUSH_PENDING_AFTER_LAST - 1,
 };
 
 /**
@@ -970,10 +1005,11 @@ enum qca_wlan_vendor_attr_get_station_info {
  * @QCA_NL80211_VENDOR_SUBCMD_SAP_CONDITIONAL_CHAN_SWITCH_INDEX: SAP
  *      conditional channel switch index
  * @QCA_NL80211_VENDOR_SUBCMD_NUD_STATS_GET_INDEX: NUD DEBUG Stats index
- * @QCA_NL80211_VENDOR_SUBCMD_HANG_REASON_INDEX: hang event reason index
  * @QCA_NL80211_VENDOR_SUBCMD_WLAN_MAC_INFO_INDEX: MAC mode info index
  * @QCA_NL80211_VENDOR_SUBCMD_BEACON_REPORTING_INDEX: Beacon reporting index
  * @QCA_NL80211_VENDOR_SUBCMD_REQUEST_SAR_LIMITS_INDEX: Request SAR limit index
+ * @QCA_NL80211_VENDOR_SUBCMD_WIFI_FW_STATS_INDEX: Wifi FW stats index
+ * @QCA_NL80211_VENDOR_SUBCMD_PEER_FLUSH_PENDING_INDEX: Peer TID flush index
  */
 
 enum qca_nl80211_vendor_subcmds_index {
@@ -1055,7 +1091,6 @@ enum qca_nl80211_vendor_subcmds_index {
 	QCA_NL80211_VENDOR_SUBCMD_PWR_SAVE_FAIL_DETECTED_INDEX,
 	QCA_NL80211_VENDOR_SUBCMD_NUD_STATS_GET_INDEX,
 	QCA_NL80211_VENDOR_SUBCMD_HANG_REASON_INDEX,
-	QCA_NL80211_VENDOR_SUBCMD_HTT_STATS_INDEX,
 	QCA_NL80211_VENDOR_SUBCMD_WLAN_MAC_INFO_INDEX,
 	QCA_NL80211_VENDOR_SUBCMD_THROUGHPUT_CHANGE_EVENT_INDEX,
 	QCA_NL80211_VENDOR_SUBCMD_BEACON_REPORTING_INDEX,
@@ -1063,6 +1098,8 @@ enum qca_nl80211_vendor_subcmds_index {
 	QCA_NL80211_VENDOR_SUBCMD_OEM_DATA_INDEX,
 	QCA_NL80211_VENDOR_SUBCMD_REQUEST_SAR_LIMITS_INDEX,
 	QCA_NL80211_VENDOR_SUBCMD_UPDATE_STA_INFO_INDEX,
+	QCA_NL80211_VENDOR_SUBCMD_WIFI_FW_STATS_INDEX,
+	QCA_NL80211_VENDOR_SUBCMD_PEER_FLUSH_PENDING_INDEX,
 };
 
 /**
