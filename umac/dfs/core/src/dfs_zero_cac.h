@@ -175,6 +175,8 @@ struct dfs_precac_entry {
  * @center_freq: Center frequency in MHZ
  * @is_cac_done: Bool to indicate if the channel is cac done
  * @is_freq_nol: Bool to indicate if the channel is radar infected
+ * @is_adfs_completed_by_all_stas: Bool to represent ADFS completion by all
+ * connected clients.
  * @bandwidth: Channel bandwidth
  */
 struct dfs_precac_5_10_entry {
@@ -182,6 +184,7 @@ struct dfs_precac_5_10_entry {
 	qdf_freq_t center_freq;
 	bool is_cac_done;
 	bool is_freq_nol;
+	bool is_adfs_completed_by_all_stas;
 	uint8_t bandwidth;
 };
 
@@ -1030,7 +1033,7 @@ void dfs_mark_precac_done(struct wlan_dfs *dfs,
  * @sec_chan_freq:   Secondary channel IEEE freq(only in HT80_80 mode).
  * @chan_width:      Channel width enum.
  * @is_adfs_completed_by_all_stas: boolean to represent ADFS completion by
- * clients.
+ * all connected clients.
  */
 void dfs_mark_precac_done_for_freq(struct wlan_dfs *dfs,
 				   uint16_t pri_chan_freq,
@@ -1550,18 +1553,22 @@ dfs_modify_precac_5_10_mhz_list_for_nol(struct wlan_dfs *dfs,
 bool
 dfs_is_cac_done_in_5_10_mhz_list(struct wlan_dfs *dfs,
 				 struct dfs_freq_range chan_range);
+
 /**
  * dfs_mark_5_and_10mhz_list_as_cac_done() - Mark the 5 and 10mhz channels
  * as CAC done if they are subsets of the given channel range.
  * @dfs: Pointer to struct wlan_dfs
  * @center_freq: Center frequency in MHZ
  * @bw: Channel bandwidth
+ * @is_adfs_completed_by_all_stas: Bool to represent ADFS completion by all
+ * connected clients.
  *
  * Return - None.
  */
 void dfs_mark_5_and_10mhz_list_as_cac_done(struct wlan_dfs *dfs,
 					   qdf_freq_t center_freq,
-					   uint8_t bw);
+					   uint8_t bw,
+					   bool is_adfs_completed_by_all_stas);
 /**
  * dfs_delete_5_and_10m_precac_lists() - Delete the 5m and 10m precac entries.
  * @dfs: Pointer to struct wlan_dfs

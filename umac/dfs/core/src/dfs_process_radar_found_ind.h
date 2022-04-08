@@ -120,6 +120,7 @@ dfs_flush_additional_pulses(struct wlan_dfs *dfs)
  * @radar_found: Pointer to radar found structure.
  * @nol_freq_list: List of 20MHz frequencies on which radar has been detected.
  * @num_channels: number of radar affected channels.
+ * @nol_range: Range of NOL affected frequencies.
  * @wait_for_csa: indicates if the repeater AP should take DFS action or wait
  * for CSA
  *
@@ -129,6 +130,7 @@ void dfs_send_nol_ie_and_rcsa(struct wlan_dfs *dfs,
 			      struct radar_found_info *radar_found,
 			      uint16_t *nol_freq_list,
 			      uint8_t num_channels,
+			      struct dfs_freq_range nol_range,
 			      bool *wait_for_csa);
 #else
 static inline
@@ -136,6 +138,7 @@ void dfs_send_nol_ie_and_rcsa(struct wlan_dfs *dfs,
 			      struct radar_found_info *radar_found,
 			      uint16_t *nol_freq_list,
 			      uint8_t num_channels,
+			      struct dfs_freq_range nol_range,
 			      bool *wait_for_csa)
 {
 }
