@@ -1341,6 +1341,7 @@ dfs_process_radar_ind_on_home_chan(struct wlan_dfs *dfs,
 							radar_found,
 							freq_list,
 							freq_center);
+	dfs_reset_bangradar(dfs);
 
 	dfs_convert_chan_to_freq_ranges(dfs,
 					dfs->dfs_curchan,
@@ -1364,8 +1365,6 @@ dfs_process_radar_ind_on_home_chan(struct wlan_dfs *dfs,
 	}
 
 	dfs_limit_range_with_dfs_edges(dfs, &radar_freq_range);
-
-	dfs_reset_bangradar(dfs);
 
 	status = dfs_radar_add_channel_range_to_nol(dfs,
 						    radar_freq_range);
