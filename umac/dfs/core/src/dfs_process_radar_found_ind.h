@@ -111,6 +111,7 @@ dfs_flush_additional_pulses(struct wlan_dfs *dfs)
 #endif
 /* Max number of bonding channels in 160 MHz segment */
 #define NUM_CHANNELS_160MHZ 8
+#define MAX_NOL_CHANS      25
 
 #if defined(QCA_DFS_RCSA_SUPPORT)
 /**
@@ -399,4 +400,43 @@ dfs_translate_radar_params(struct wlan_dfs *dfs,
 {
 }
 #endif /* WLAN_DFS_TRUE_160MHZ_SUPPORT */
+
+/**
+ * dfs_limit_range_with_dfs_edges() - Limit the freq range based on
+ * the edge channels.
+ * @dfs: Pointer to struct wlan_dfs
+ * @radar_freq_range: Pointer to struct dfs_freq_range
+ *
+ * Return - None
+ */
+void
+dfs_limit_range_with_dfs_edges(struct wlan_dfs *dfs,
+			       struct dfs_freq_range *radar_freq_range);
+/**
+ * dfs_radar_add_channel_range_to_nol() - Add the given channel range to NOL.
+ * @dfs: Pointer to DFS structure.
+ * @radar_freq_range: Input radar frequency range.
+ *
+ * Return: QDF_STATUS_SUCCESS if the range is added to NOL.
+ */
+
+QDF_STATUS
+dfs_radar_add_channel_range_to_nol(struct wlan_dfs *dfs,
+				   struct dfs_freq_range radar_freq_range);
+
+/**
+ * dfs_find_radar_freq_range_and_add_to_nol() - Find the radar found freq
+ * range from the center freq and BW. Add the radar found freq range to NOL.
+ *
+ * @dfs: Pointer to DFS structure.
+ * @radar_found: Pointer to struct radar_found_info
+ * @freq_center: Frequency center
+ *
+ * Return: the radar freq range
+ */
+struct dfs_freq_range
+dfs_find_radar_freq_range_and_add_to_nol(struct wlan_dfs *dfs,
+					 struct radar_found_info *radar_found,
+					 qdf_freq_t freq_center);
+
 #endif /*_DFS_PROCESS_RADAR_FOUND_IND_H_ */

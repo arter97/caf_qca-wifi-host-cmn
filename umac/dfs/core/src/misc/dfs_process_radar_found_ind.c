@@ -149,14 +149,7 @@ int dfs_get_nol_subchannel_marking(struct wlan_dfs *dfs,
 	return 0;
 }
 
-/**
- * dfs_radar_add_channel_range_to_nol() - Add the given channel range to NOL.
- * @dfs: Pointer to DFS structure.
- * @radar_freq_range: Input radar frequency range.
- *
- * Return: QDF_STATUS_SUCCESS if the range is added to NOL.
- */
-static QDF_STATUS
+QDF_STATUS
 dfs_radar_add_channel_range_to_nol(struct wlan_dfs *dfs,
 				   struct dfs_freq_range radar_freq_range)
 {
@@ -1241,7 +1234,7 @@ dfs_intersect_2_freq_ranges(struct dfs_freq_range cur_freq_range,
 		radar_freq_range->end_freq = cur_freq_range.end_freq;
 }
 
-static void
+void
 dfs_limit_range_with_dfs_edges(struct wlan_dfs *dfs,
 			       struct dfs_freq_range *radar_freq_range)
 {
@@ -1289,6 +1282,43 @@ dfs_process_radar_ind(struct wlan_dfs *dfs,
 	return status;
 }
 
+struct dfs_freq_range
+dfs_find_radar_freq_range_and_add_to_nol(struct wlan_dfs *dfs,
+					 struct radar_found_info *radar_found,
+					 qdf_freq_t freq_center)
+{
+	struct dfs_freq_range curchan_freq_range;
+	struct dfs_freq_range radar_freq_range;
+
+	dfs_convert_chan_to_freq_ranges(dfs,
+					dfs->dfs_curchan,
+					freq_center,
+					&curchan_freq_range,
+					radar_found->detector_id);
+
+	if ((dfs->dfs_use_nol_subchannel_marking) &&
+	    (!(dfs->dfs_bangradar_type) ||
+	     (dfs->dfs_bangradar_type ==
+	      DFS_BANGRADAR_FOR_SPECIFIC_SUBCHANS))) {
+		dfs_find_radar_affected_frequency_range(dfs,
+							radar_found,
+							&radar_freq_range,
+							freq_center);
+		dfs_intersect_2_freq_ranges(curchan_freq_range,
+					    &radar_freq_range);
+	} else {
+		radar_freq_range.start_freq = curchan_freq_range.start_freq;
+		radar_freq_range.end_freq = curchan_freq_range.end_freq;
+	}
+
+	dfs_limit_range_with_dfs_edges(dfs, &radar_freq_range);
+
+	dfs_radar_add_channel_range_to_nol(dfs,
+					   radar_freq_range);
+
+	return radar_freq_range;
+}
+
 QDF_STATUS
 dfs_process_radar_ind_on_home_chan(struct wlan_dfs *dfs,
 				   struct radar_found_info *radar_found)
@@ -1300,8 +1330,9 @@ dfs_process_radar_ind_on_home_chan(struct wlan_dfs *dfs,
 	uint32_t freq_center;
 	uint32_t radarfound_freq;
 	struct dfs_channel *dfs_curchan;
-	struct dfs_freq_range curchan_freq_range;
 	struct dfs_freq_range radar_freq_range;
+	qdf_freq_t nol_freq_list[MAX_NOL_CHANS];
+	uint8_t nol_count;
 
 	dfs_curchan = dfs->dfs_curchan;
 
@@ -1343,38 +1374,10 @@ dfs_process_radar_ind_on_home_chan(struct wlan_dfs *dfs,
 							freq_center);
 	dfs_reset_bangradar(dfs);
 
-	dfs_convert_chan_to_freq_ranges(dfs,
-					dfs->dfs_curchan,
-					freq_center,
-					&curchan_freq_range,
-					radar_found->detector_id);
-
-	if ((dfs->dfs_use_nol_subchannel_marking) &&
-		 (!(dfs->dfs_bangradar_type) ||
-		 (dfs->dfs_bangradar_type ==
-		  DFS_BANGRADAR_FOR_SPECIFIC_SUBCHANS))) {
-		dfs_find_radar_affected_frequency_range(dfs,
-							radar_found,
-							&radar_freq_range,
-							freq_center);
-		dfs_intersect_2_freq_ranges(curchan_freq_range,
-					    &radar_freq_range);
-	} else {
-		radar_freq_range.start_freq = curchan_freq_range.start_freq;
-		radar_freq_range.end_freq = curchan_freq_range.end_freq;
-	}
-
-	dfs_limit_range_with_dfs_edges(dfs, &radar_freq_range);
-
-	status = dfs_radar_add_channel_range_to_nol(dfs,
-						    radar_freq_range);
-
-	if (QDF_IS_STATUS_ERROR(status)) {
-		dfs_err(dfs, WLAN_DEBUG_DFS,
-			"radar event received on invalid channel");
-		goto exit;
-	}
-
+	radar_freq_range =
+		dfs_find_radar_freq_range_and_add_to_nol(dfs,
+							 radar_found,
+							 freq_center);
 	/*
 	 * If precac is running and the radar found in secondary
 	 * VHT80 mark the channel as radar and add to NOL list.
@@ -1395,12 +1398,13 @@ dfs_process_radar_ind_on_home_chan(struct wlan_dfs *dfs,
 	dfs_debug(dfs, WLAN_DEBUG_DFS,
 		  "Radar found on dfs detector: %d", radar_found->detector_id);
 
+	nol_count = dfs_convert_rangelist_2_reg_freqlist(dfs, &radar_freq_range,
+							 1, nol_freq_list);
 	dfs_mark_precac_nol_for_freq(dfs,
 				     dfs->is_radar_found_on_secondary_seg,
 				     radar_found->detector_id,
-				     freq_list,
-				     num_channels,
-				     &radar_freq_range, 1);
+				     nol_freq_list,
+				     nol_count, &radar_freq_range, 1);
 
 	dfs_send_nol_ie_and_rcsa(dfs,
 				 radar_found,

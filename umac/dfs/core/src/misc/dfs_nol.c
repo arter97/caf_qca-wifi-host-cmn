@@ -35,8 +35,8 @@
 #include <wlan_objmgr_vdev_obj.h>
 #include <wlan_dfs_utils_api.h>
 #include <wlan_reg_services_api.h>
-#if defined(WLAN_DFS_PARTIAL_OFFLOAD) && defined(HOST_DFS_SPOOF_TEST)
 #include "../dfs_process_radar_found_ind.h"
+#if defined(WLAN_DFS_PARTIAL_OFFLOAD) && defined(HOST_DFS_SPOOF_TEST)
 #include "../dfs_partial_offload_radar.h"
 #endif
 #include <qdf_types.h>
@@ -268,36 +268,36 @@ bool dfs_is_range_overlap(struct dfs_freq_range range_1,
 	return false;
 }
 
-#define MAX_NOL 25
-static uint8_t
-dfs_find_nol_cleared_20mhz_freq(struct wlan_dfs *dfs,
-				struct dfs_freq_range *noldel_freq_range,
-				uint8_t nol_range_count,
-				qdf_freq_t *nol_freq)
+uint8_t
+dfs_convert_rangelist_2_reg_freqlist(struct wlan_dfs *dfs,
+				     struct dfs_freq_range *freq_range_list,
+				     uint8_t range_count,
+				     qdf_freq_t *reg_freq_list)
 {
-	uint8_t nol_count = 0;
+	uint8_t chan_count = 0;
 	uint8_t dfs_5g_count, i, j;
-	qdf_freq_t dfs_5g_freq_list[MAX_NOL];
+	qdf_freq_t dfs_5g_freq_list[MAX_NOL_CHANS];
 
 	dfs_5g_count = utils_dfs_get_5ghz_freq_list(dfs->dfs_pdev_obj,
 						    dfs_5g_freq_list);
 
 	for (i = 0; i < dfs_5g_count; i++) {
-		struct dfs_freq_range dfs_5g_freq_range;
+	    struct dfs_freq_range dfs_5g_freq_range;
 
-		dfs_5g_freq_range.start_freq = dfs_5g_freq_list[i] - 10;
-		dfs_5g_freq_range.end_freq = dfs_5g_freq_list[i] + 10;
+	    dfs_5g_freq_range.start_freq = dfs_5g_freq_list[i] - 10;
+	    dfs_5g_freq_range.end_freq = dfs_5g_freq_list[i] + 10;
 
-		for (j = 0; j < nol_range_count; j++) {
-			if (dfs_is_range_overlap(dfs_5g_freq_range,
-					       noldel_freq_range[j])) {
-				nol_freq[nol_count++] = dfs_5g_freq_list[i];
-				break;
-			}
+	    for (j = 0; j < range_count; j++) {
+		if (dfs_is_range_overlap(dfs_5g_freq_range,
+					 freq_range_list[j])) {
+		    reg_freq_list[chan_count++] =
+			dfs_5g_freq_list[i];
+		    break;
 		}
+	    }
 	}
 
-	return nol_count;
+	return chan_count;
 }
 
 /**
@@ -315,7 +315,7 @@ dfs_unmark_nol_and_notify(struct wlan_dfs *dfs,
 			  uint8_t nol_range_count)
 {
 	uint8_t i, nol_count;
-	qdf_freq_t nol_freq[MAX_NOL];
+	qdf_freq_t nol_freq[MAX_NOL_CHANS];
 	/* unmark the 5MHz and 10MHz preCAC list after NOL expiry */
 	dfs_modify_precac_5_10_mhz_list_for_nol(dfs, noldel_freq_range,
 						nol_range_count,
@@ -323,8 +323,9 @@ dfs_unmark_nol_and_notify(struct wlan_dfs *dfs,
 
 	/* From the NOL range, find the NOL freed 20MHz channels to notify
 	 * the upper layer. */
-	nol_count = dfs_find_nol_cleared_20mhz_freq(dfs, noldel_freq_range,
-						    nol_range_count, nol_freq);
+	nol_count = dfs_convert_rangelist_2_reg_freqlist(dfs, noldel_freq_range,
+							 nol_range_count,
+							 nol_freq);
 
 	for (i = 0; i < nol_count; i++)
 		dfs_action_on_expired_nol_elem(dfs, nol_freq[i]);
@@ -339,7 +340,7 @@ dfs_unmark_nol_and_notify(struct wlan_dfs *dfs,
 static os_timer_func(dfs_remove_from_nol)
 {
 	struct wlan_dfs *dfs;
-	struct dfs_freq_range noldel_freq_range[MAX_NOL];
+	struct dfs_freq_range noldel_freq_range[MAX_NOL_CHANS];
 	uint8_t nol_range_count;
 
 	OS_GET_TIMER_ARG(dfs, struct wlan_dfs *);

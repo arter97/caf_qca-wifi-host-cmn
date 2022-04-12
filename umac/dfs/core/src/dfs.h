@@ -3223,4 +3223,19 @@ dfs_is_chan_range_in_nol(struct wlan_dfs *dfs,
  */
 bool dfs_is_range_overlap(struct dfs_freq_range range_1,
 			  struct dfs_freq_range range_2);
+/**
+ * dfs_convert_rangelist_2_reg_freqlist() - Given a freq range,
+ * find the 20MHZ channels that overlaps with the given range.
+ * @dfs: Pointer to struct wlan_dfs
+ * @freq_range_list: Freq range list
+ * @range_count: Number of ranges
+ * @reg_freq_list: Output list of 20MHZ frequency
+ *
+ * Return - number of overlapping 20MHZ frequency
+ */
+uint8_t
+dfs_convert_rangelist_2_reg_freqlist(struct wlan_dfs *dfs,
+				     struct dfs_freq_range *freq_range_list,
+				     uint8_t range_count,
+				     qdf_freq_t *reg_freq_list);
 #endif  /* _DFS_H_ */
