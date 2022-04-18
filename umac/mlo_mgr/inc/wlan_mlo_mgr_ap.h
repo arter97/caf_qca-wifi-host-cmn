@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2021 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -22,7 +23,10 @@
 
 #include <wlan_mlo_mgr_cmn.h>
 #include <wlan_mlo_mgr_public_structs.h>
+#include "wlan_mlo_mgr_msgq.h"
 
+#define WLAN_RESV_AID_BITS 0xc000
+#define WLAN_AID(b)    ((b) & ~0xc000)
 /**
  * mlo_ap_vdev_attach() - update vdev obj and vdev count to
  *                         wlan_mlo_dev_context
@@ -82,6 +86,30 @@ void mlo_ap_vdev_detach(struct wlan_objmgr_vdev *vdev);
  * Return: None
  */
 void mlo_ap_link_down_cmpl_notify(struct wlan_objmgr_vdev *vdev);
+
+/**
+ * wlan_vdev_mlme_aid_mgr_max_aid_set() - set VDEV Max AID
+ * @vdev: vdev pointer
+ * @max_aid: max AID
+ *
+ * This function sets max AID for the VDEV
+ *
+ * Return: void
+ */
+void wlan_vdev_mlme_aid_mgr_max_aid_set(struct wlan_objmgr_vdev *vdev,
+					uint16_t max_aid);
+
+/**
+ * wlan_vdev_mlme_set_start_aid() - set VDEV start AID
+ * @vdev: vdev pointer
+ * @start_aid: start AID
+ *
+ * This function sets start AID for the VDEV
+ *
+ * Return: void
+ */
+QDF_STATUS wlan_vdev_mlme_set_start_aid(struct wlan_objmgr_vdev *vdev,
+					uint16_t start_aid);
 /**
  * wlan_vdev_aid_mgr_init() - VDEV AID mgr init
  * @max_aid: max AID
@@ -192,6 +220,18 @@ QDF_STATUS mlo_free_aid(struct wlan_objmgr_vdev *vdev, uint16_t assoc_id);
 uint16_t mlme_get_aid(struct wlan_objmgr_vdev *vdev);
 
 /**
+ * mlme_is_aid_set() - Check whether the AID is already allocated
+ * @vdev: VDEV
+ * @assoc_id: Assoc ID
+ *
+ * This function checks whether the AID is already allocated
+ *
+ * Return: 1 for AID is already allocated
+ *         0 for AID is available
+ */
+int mlme_is_aid_set(struct wlan_objmgr_vdev *vdev, uint16_t assoc_id);
+
+/**
  * wlan_mlo_peer_free_aid() - Free assoc id
  * @ml_aid_mgr: MLO AID mgr
  * @link_ix: Link index
@@ -242,6 +282,42 @@ QDF_STATUS mlo_peer_free_aid(struct wlan_mlo_dev_context *ml_dev,
  * Return: void
  */
 void mlme_free_aid(struct wlan_objmgr_vdev *vdev, uint16_t assoc_id);
+
+/**
+ * mlo_set_aid() - public API to reserve AID
+ * @vdev: VDEV object
+ * @assoc_id: Assoc id to be reserved
+ *
+ * This function reserves AID of MLO VDEV
+ *
+ * Return: SUCCESS, if it is reserved
+ *         FAILURE, if it is already allocated
+ */
+QDF_STATUS mlo_set_aid(struct wlan_objmgr_vdev *vdev,
+		       uint16_t assoc_id);
+
+/**
+ * mlme_set_aid() - public API to reserve AID
+ * @vdev: VDEV object
+ * @assoc_id: Assoc id to be reserved
+ *
+ * This function reserves AID of VDEV
+ *
+ * Return: SUCCESS, if it is reserved
+ *         FAILURE, if it is already allocated
+ */
+QDF_STATUS mlme_set_aid(struct wlan_objmgr_vdev *vdev,
+			uint16_t assoc_id);
+
+/**
+ * wlan_mlme_get_aid_count() - public API to get AID count
+ * @vdev: VDEV object
+ *
+ * This function counts number AIDs allocated for the VDEV
+ *
+ * Return: aid count value
+ */
+uint16_t wlan_mlme_get_aid_count(struct wlan_objmgr_vdev *vdev);
 
 /**
  * mlo_ap_ml_peerid_alloc() - public API to allocate MLO peer id
@@ -329,4 +405,39 @@ void mlo_ap_vdev_quiet_clear(struct wlan_objmgr_vdev *vdev);
  * Return: true, if any index is set, else false
  */
 bool mlo_ap_vdev_quiet_is_any_idx_set(struct wlan_objmgr_vdev *vdev);
+
+#ifdef UMAC_SUPPORT_MLNAWDS
+/**
+ * mlo_peer_populate_nawds_params() - Populate nawds parameters in ml_peer
+ * @ml_peer: ml_peer to which nawds config parameters need to be populated
+ * @ml_info: ml_info with nawds config associated with this link
+ *
+ * Return: void
+ */
+void mlo_peer_populate_nawds_params(
+		struct wlan_mlo_peer_context *ml_peer,
+		struct mlo_partner_info *ml_info);
+#else
+static inline
+void mlo_peer_populate_nawds_params(
+		struct wlan_mlo_peer_context *ml_peer,
+		struct mlo_partner_info *ml_info)
+{
+}
+#endif
+
+/**
+ * mlo_peer_create_get_frm_buf() - get frm_buf to peer_create
+ * @ml_peer: MLO peer
+ * @peer_create: pointer to peer_create_notif context
+ * @frm_buf: pointer to frame buffer to be cloned to peer_create
+ *
+ * Return: SUCCESS if
+ * - peer_create frame buffer cloned successfully in non NAWDS case Or
+ * - ml_peer is in NAWDS mode.
+ */
+QDF_STATUS mlo_peer_create_get_frm_buf(
+		struct wlan_mlo_peer_context *ml_peer,
+		struct peer_create_notif_s *peer_create,
+		qdf_nbuf_t frm_buf);
 #endif

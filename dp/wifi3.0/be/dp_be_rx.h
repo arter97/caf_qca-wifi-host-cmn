@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -21,6 +22,18 @@
 
 #include <dp_types.h>
 #include "dp_be.h"
+#include "dp_peer.h"
+
+/*
+ * dp_be_intrabss_params
+ *
+ * @dest_soc: dest soc to forward the packet to
+ * @tx_vdev_id: vdev id retrieved from dest peer
+ */
+struct dp_be_intrabss_params {
+	struct dp_soc *dest_soc;
+	uint8_t tx_vdev_id;
+};
 
 #ifndef QCA_HOST_MODE_WIFI_DISABLED
 
@@ -28,7 +41,7 @@
  * dp_rx_intrabss_fwd_be() - API for intrabss fwd. For EAPOL
  *  pkt with DA not equal to vdev mac addr, fwd is not allowed.
  * @soc: core txrx main context
- * @ta_peer: source peer entry
+ * @ta_txrx_peer: source peer entry
  * @rx_tlv_hdr: start address of rx tlvs
  * @nbuf: nbuf that has to be intrabss forwarded
  * @msdu_metadata: msdu metadata
@@ -37,7 +50,7 @@
  */
 
 bool dp_rx_intrabss_fwd_be(struct dp_soc *soc,
-			   struct dp_peer *ta_peer,
+			   struct dp_txrx_peer *ta_txrx_peer,
 			   uint8_t *rx_tlv_hdr,
 			   qdf_nbuf_t nbuf,
 			   struct hal_rx_msdu_metadata msdu_metadata);
@@ -125,6 +138,43 @@ dp_rx_desc_sw_cc_check(struct dp_soc *soc,
 }
 #endif /* DP_FEATURE_HW_COOKIE_CONVERSION && DP_HW_COOKIE_CONVERT_EXCEPTION */
 
+#define DP_PEER_METADATA_OFFLOAD_GET_BE(_peer_metadata)		(0)
+
+#ifdef DP_USE_REDUCED_PEER_ID_FIELD_WIDTH
+static inline uint16_t
+dp_rx_peer_metadata_peer_id_get_be(struct dp_soc *soc, uint32_t peer_metadata)
+{
+	struct htt_rx_peer_metadata_v1 *metadata =
+			(struct htt_rx_peer_metadata_v1 *)&peer_metadata;
+	uint16_t peer_id;
+
+	peer_id = metadata->peer_id |
+		  (metadata->ml_peer_valid << soc->peer_id_shift);
+
+	return peer_id;
+}
+#else
+/* Combine ml_peer_valid and peer_id field */
+#define DP_BE_PEER_METADATA_PEER_ID_MASK	0x00003fff
+#define DP_BE_PEER_METADATA_PEER_ID_SHIFT	0
+
+static inline uint16_t
+dp_rx_peer_metadata_peer_id_get_be(struct dp_soc *soc, uint32_t peer_metadata)
+{
+	return ((peer_metadata & DP_BE_PEER_METADATA_PEER_ID_MASK) >>
+		DP_BE_PEER_METADATA_PEER_ID_SHIFT);
+}
+#endif
+
+static inline uint16_t
+dp_rx_peer_metadata_vdev_id_get_be(struct dp_soc *soc, uint32_t peer_metadata)
+{
+	struct htt_rx_peer_metadata_v1 *metadata =
+			(struct htt_rx_peer_metadata_v1 *)&peer_metadata;
+
+	return metadata->vdev_id;
+}
+
 #ifdef WLAN_FEATURE_NEAR_FULL_IRQ
 /**
  * dp_rx_nf_process() - Near Full state handler for RX rings.
@@ -149,4 +199,161 @@ uint32_t dp_rx_nf_process(struct dp_intr *int_ctx,
 	return 0;
 }
 #endif /*WLAN_FEATURE_NEAR_FULL_IRQ */
+
+#if defined(WLAN_FEATURE_11BE_MLO) && defined(WLAN_MLO_MULTI_CHIP)
+struct dp_soc *
+dp_rx_replensih_soc_get(struct dp_soc *soc, uint8_t reo_ring_num);
+#else
+static inline struct dp_soc *
+dp_rx_replensih_soc_get(struct dp_soc *soc, uint8_t reo_ring_num)
+{
+	return soc;
+}
+#endif
+
+#ifdef WLAN_FEATURE_11BE_MLO
+/**
+ * dp_rx_mlo_igmp_handler() - Rx handler for Mcast packets
+ * @soc: Handle to DP Soc structure
+ * @vdev: DP vdev handle
+ * @peer: DP peer handle
+ * @nbuf: nbuf to be enqueued
+ *
+ * Return: true when packet sent to stack, false failure
+ */
+bool dp_rx_mlo_igmp_handler(struct dp_soc *soc,
+			    struct dp_vdev *vdev,
+			    struct dp_peer *peer,
+			    qdf_nbuf_t nbuf);
+
+/**
+ * dp_peer_rx_reorder_queue_setup() - Send reo queue setup wmi cmd to FW
+				      per peer type
+ * @soc: DP Soc handle
+ * @peer: dp peer to operate on
+ * @tid: TID
+ * @ba_window_size: BlockAck window size
+ *
+ * Return: 0 - success, others - failure
+ */
+static inline
+QDF_STATUS dp_peer_rx_reorder_queue_setup_be(struct dp_soc *soc,
+					     struct dp_peer *peer,
+					     int tid,
+					     uint32_t ba_window_size)
+{
+	uint8_t i;
+	struct dp_mld_link_peers link_peers_info;
+	struct dp_peer *link_peer;
+	struct dp_rx_tid *rx_tid;
+	struct dp_soc *link_peer_soc;
+
+	rx_tid = &peer->rx_tid[tid];
+	if (!rx_tid->hw_qdesc_paddr)
+		return QDF_STATUS_E_INVAL;
+
+	if (!hal_reo_shared_qaddr_is_enable(soc->hal_soc)) {
+		if (IS_MLO_DP_MLD_PEER(peer)) {
+			/* get link peers with reference */
+			dp_get_link_peers_ref_from_mld_peer(soc, peer,
+							    &link_peers_info,
+							    DP_MOD_ID_CDP);
+			/* send WMI cmd to each link peers */
+			for (i = 0; i < link_peers_info.num_links; i++) {
+				link_peer = link_peers_info.link_peers[i];
+				link_peer_soc = link_peer->vdev->pdev->soc;
+				if (link_peer_soc->cdp_soc.ol_ops->
+						peer_rx_reorder_queue_setup) {
+					if (link_peer_soc->cdp_soc.ol_ops->
+						peer_rx_reorder_queue_setup(
+					    link_peer_soc->ctrl_psoc,
+					    link_peer->vdev->pdev->pdev_id,
+					    link_peer->vdev->vdev_id,
+					    link_peer->mac_addr.raw,
+					    rx_tid->hw_qdesc_paddr,
+					    tid, tid,
+					    1, ba_window_size)) {
+						dp_peer_err("%pK: Failed to send reo queue setup to FW - tid %d\n",
+							    link_peer_soc, tid);
+						return QDF_STATUS_E_FAILURE;
+					}
+				}
+			}
+			/* release link peers reference */
+			dp_release_link_peers_ref(&link_peers_info,
+						  DP_MOD_ID_CDP);
+		} else if (peer->peer_type == CDP_LINK_PEER_TYPE) {
+			if (soc->cdp_soc.ol_ops->peer_rx_reorder_queue_setup) {
+				if (soc->cdp_soc.ol_ops->
+					peer_rx_reorder_queue_setup(
+				    soc->ctrl_psoc,
+				    peer->vdev->pdev->pdev_id,
+				    peer->vdev->vdev_id,
+				    peer->mac_addr.raw,
+				    rx_tid->hw_qdesc_paddr,
+				    tid, tid,
+				    1, ba_window_size)) {
+					dp_peer_err("%pK: Failed to send reo queue setup to FW - tid %d\n",
+						    soc, tid);
+					return QDF_STATUS_E_FAILURE;
+				}
+			}
+		} else {
+			dp_peer_err("invalid peer type %d", peer->peer_type);
+			return QDF_STATUS_E_FAILURE;
+		}
+	} else {
+		/* Some BE targets dont require WMI and use shared
+		 * table managed by host for storing Reo queue ref structs
+		 */
+		if (IS_MLO_DP_LINK_PEER(peer) ||
+		    peer->peer_id == HTT_INVALID_PEER) {
+			/* Return if this is for MLD link peer and table
+			 * is not used in MLD link peer case as MLD peer's
+			 * qref is written to LUT in peer setup or peer map.
+			 * At this point peer setup for link peer is called
+			 * before peer map, hence peer id is not assigned.
+			 * This could happen if peer_setup is called before
+			 * host receives HTT peer map. In this case return
+			 * success with no op and let peer map handle
+			 * writing the reo_qref to LUT.
+			 */
+			dp_peer_debug("Invalid peer id for dp_peer:%pK", peer);
+			return QDF_STATUS_SUCCESS;
+		}
+
+		hal_reo_shared_qaddr_write(soc->hal_soc,
+					   peer->peer_id,
+					   tid, peer->rx_tid[tid].hw_qdesc_paddr);
+	}
+	return QDF_STATUS_SUCCESS;
+}
+#else
+static inline
+QDF_STATUS dp_peer_rx_reorder_queue_setup_be(struct dp_soc *soc,
+					     struct dp_peer *peer,
+					     int tid,
+					     uint32_t ba_window_size)
+{
+	struct dp_rx_tid *rx_tid = &peer->rx_tid[tid];
+
+	if (!rx_tid->hw_qdesc_paddr)
+		return QDF_STATUS_E_INVAL;
+
+	if (soc->cdp_soc.ol_ops->peer_rx_reorder_queue_setup) {
+		if (soc->cdp_soc.ol_ops->peer_rx_reorder_queue_setup(
+		    soc->ctrl_psoc,
+		    peer->vdev->pdev->pdev_id,
+		    peer->vdev->vdev_id,
+		    peer->mac_addr.raw, rx_tid->hw_qdesc_paddr, tid, tid,
+		    1, ba_window_size)) {
+			dp_peer_err("%pK: Failed to send reo queue setup to FW - tid %d\n",
+				    soc, tid);
+			return QDF_STATUS_E_FAILURE;
+		}
+	}
+
+	return QDF_STATUS_SUCCESS;
+}
+#endif /* WLAN_FEATURE_11BE_MLO */
 #endif

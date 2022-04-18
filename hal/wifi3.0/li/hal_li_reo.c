@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -42,7 +43,7 @@ void hal_reo_qdesc_setup_li(hal_soc_handle_t hal_soc_hdl, int tid,
 			    uint32_t ba_window_size,
 			    uint32_t start_seq, void *hw_qdesc_vaddr,
 			    qdf_dma_addr_t hw_qdesc_paddr,
-			    int pn_type)
+			    int pn_type, uint8_t vdev_stats_id)
 {
 	uint32_t *reo_queue_desc = (uint32_t *)hw_qdesc_vaddr;
 	uint32_t *reo_queue_ext_desc;
@@ -794,13 +795,6 @@ hal_reo_cmd_update_rx_queue_li(hal_ring_handle_t hal_ring_hdl,
 	HAL_DESC_SET_FIELD(reo_desc, REO_UPDATE_RX_REO_QUEUE_4,
 			   BA_WINDOW_SIZE, p->ba_window_size - 1);
 
-	if (p->pn_size == 24)
-		p->pn_size = PN_SIZE_24;
-	else if (p->pn_size == 48)
-		p->pn_size = PN_SIZE_48;
-	else if (p->pn_size == 128)
-		p->pn_size = PN_SIZE_128;
-
 	HAL_DESC_SET_FIELD(reo_desc, REO_UPDATE_RX_REO_QUEUE_4,
 			   PN_SIZE, p->pn_size);
 
@@ -1353,4 +1347,10 @@ hal_reo_rx_update_queue_status_li(hal_ring_desc_t ring_desc,
 uint8_t hal_get_tlv_hdr_size_li(void)
 {
 	return sizeof(struct tlv_32_hdr);
+}
+
+uint64_t hal_rx_get_qdesc_addr_li(uint8_t *dst_ring_desc, uint8_t *buf)
+{
+	return *(uint64_t *)dst_ring_desc +
+		REO_DESTINATION_RING_6_RX_REO_QUEUE_DESC_ADDR_31_0_OFFSET;
 }

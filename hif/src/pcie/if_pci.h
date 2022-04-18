@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2013-2021 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -45,6 +46,13 @@
 /* Validate UMAC status every 5ms */
 #define FORCE_WAKE_DELAY_MS 5
 #endif /* FORCE_WAKE */
+
+#ifdef CONFIG_PCI_LOW_POWER_INT_REG
+/* PCIe low power interrupt mask register */
+#define PCIE_LOW_POWER_INT_MASK_OFFSET	0x38044
+#define INTR_L1SS			BIT(3)
+#define INTR_CLKPM			BIT(4)
+#endif
 
 #ifdef QCA_HIF_HIA_EXTND
 extern int32_t frac, intval, ar900b_20_targ_clk, qca9888_20_targ_clk;
@@ -119,7 +127,7 @@ struct hif_pci_softc {
 	/* 0 --> using legacy PCI line interrupts */
 	struct tasklet_struct intr_tq;  /* tasklet */
 	struct hif_msi_info msi_info;
-	int ce_msi_irq_num[CE_COUNT_MAX];
+	int ce_irq_num[CE_COUNT_MAX];
 	int irq;
 	int irq_event;
 	int cacheline_sz;

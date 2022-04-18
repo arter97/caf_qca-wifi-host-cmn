@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2017-2020 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -94,11 +95,20 @@ enum {
 	CDP_RX_TYPE_MU_OFDMA_MIMO,
 };
 
-enum {
-	CDP_FULL_RX_BW_20 = 0,
-	CDP_FULL_RX_BW_40,
-	CDP_FULL_RX_BW_80,
-	CDP_FULL_RX_BW_160,
+/*
+ *Band Width Types
+ */
+enum CMN_BW_TYPES {
+	CMN_BW_20MHZ,
+	CMN_BW_40MHZ,
+	CMN_BW_80MHZ,
+	CMN_BW_160MHZ,
+	CMN_BW_80_80MHZ,
+#ifdef WLAN_FEATURE_11BE
+	CMN_BW_320MHZ,
+#endif
+	CMN_BW_CNT,
+	CMN_BW_IDLE = 0xFF, /*default BW state */
 };
 
 struct cdp_mon_status {
@@ -111,6 +121,7 @@ struct cdp_mon_status {
 #define IEEE80211_RX_DECRYPT_ERROR  0x04
 /* holes in flags here between, ATH_RX_XXXX to IEEE80211_RX_XXX */
 #define IEEE80211_RX_KEYMISS        0x200
+#define IEEE80211_RX_PN_ERROR       0x400
 	int rs_rssi;       /* RSSI (noise floor ajusted) */
 	int rs_abs_rssi;   /* absolute RSSI */
 	int rs_datarate;   /* data rate received */

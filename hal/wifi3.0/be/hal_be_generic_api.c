@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -23,14 +24,19 @@
 #include "hal_tx.h"	//HAL_SET_FLD
 #include "hal_be_rx.h"	//HAL_RX_BUF_RBM_GET
 
-#if defined(QDF_BIG_ENDIAN_MACHINE)
-/**
- * hal_setup_reo_swap() - Set the swap flag for big endian machines
- * @soc: HAL soc handle
+/*
+ * The 4 bits REO destination ring value is defined as: 0: TCL
+ * 1:SW1  2:SW2  3:SW3  4:SW4  5:Release  6:FW(WIFI)  7:SW5
+ * 8:SW6 9:SW7  10:SW8  11: NOT_USED.
  *
- * Return: None
  */
-static void hal_setup_reo_swap(struct hal_soc *soc)
+uint32_t reo_dest_ring_remap[] = {REO_REMAP_SW1, REO_REMAP_SW2,
+				  REO_REMAP_SW3, REO_REMAP_SW4,
+				  REO_REMAP_SW5, REO_REMAP_SW6,
+				  REO_REMAP_SW7, REO_REMAP_SW8};
+
+#if defined(QDF_BIG_ENDIAN_MACHINE)
+void hal_setup_reo_swap(struct hal_soc *soc)
 {
 	uint32_t reg_val;
 
@@ -44,7 +50,7 @@ static void hal_setup_reo_swap(struct hal_soc *soc)
 		REO_REG_REG_BASE), reg_val);
 }
 #else
-static inline void hal_setup_reo_swap(struct hal_soc *soc)
+void hal_setup_reo_swap(struct hal_soc *soc)
 {
 }
 #endif
@@ -142,7 +148,8 @@ void hal_reo_setup_generic_be(struct hal_soc *soc, void *reoparams)
 }
 
 void hal_set_link_desc_addr_be(void *desc, uint32_t cookie,
-			       qdf_dma_addr_t link_desc_paddr)
+			       qdf_dma_addr_t link_desc_paddr,
+			       uint8_t bm_id)
 {
 	uint32_t *buf_addr = (uint32_t *)desc;
 
@@ -151,13 +158,19 @@ void hal_set_link_desc_addr_be(void *desc, uint32_t cookie,
 	HAL_DESC_SET_FIELD(buf_addr, BUFFER_ADDR_INFO, BUFFER_ADDR_39_32,
 			   (uint64_t)link_desc_paddr >> 32);
 	HAL_DESC_SET_FIELD(buf_addr, BUFFER_ADDR_INFO, RETURN_BUFFER_MANAGER,
-			   WBM_IDLE_DESC_LIST);
+			   bm_id);
 	HAL_DESC_SET_FIELD(buf_addr, BUFFER_ADDR_INFO, SW_BUFFER_COOKIE,
 			   cookie);
 }
 
 static uint32_t hal_get_reo_qdesc_size_be(uint32_t ba_window_size, int tid)
 {
+	/* Hardcode the ba_window_size to HAL_RX_MAX_BA_WINDOW for
+	 * NON_QOS_TID until HW issues are resolved.
+	 */
+	if (tid != HAL_NON_QOS_TID)
+		ba_window_size = HAL_RX_MAX_BA_WINDOW;
+
 	/* Return descriptor size corresponding to window size of 2 since
 	 * we set ba_window_size to 2 while setting up REO descriptors as
 	 * a WAR to get 2k jump exception aggregates are received without
@@ -188,7 +201,7 @@ void *hal_rx_msdu_ext_desc_info_get_ptr_be(void *msdu_details_ptr)
 	return HAL_RX_MSDU_EXT_DESC_INFO_GET(msdu_details_ptr);
 }
 
-#ifdef QCA_WIFI_WCN7850
+#if defined(QCA_WIFI_KIWI) && !defined(QCA_WIFI_KIWI_V2)
 static inline uint32_t
 hal_wbm2sw_release_source_get(void *hal_desc, enum hal_be_wbm_release_dir dir)
 {
@@ -861,6 +874,44 @@ void hal_cookie_conversion_reg_cfg_be(hal_soc_handle_t hal_soc_hdl,
 }
 qdf_export_symbol(hal_cookie_conversion_reg_cfg_be);
 
+static inline void
+hal_msdu_desc_info_set_be(hal_soc_handle_t hal_soc_hdl,
+			  void *msdu_desc, uint32_t dst_ind,
+			  uint32_t nbuf_len)
+{
+	struct rx_msdu_desc_info *msdu_desc_info =
+		(struct rx_msdu_desc_info *)msdu_desc;
+
+	HAL_RX_MSDU_DESC_INFO_SET(msdu_desc_info,
+				  FIRST_MSDU_IN_MPDU_FLAG, 1);
+	HAL_RX_MSDU_DESC_INFO_SET(msdu_desc_info,
+				  LAST_MSDU_IN_MPDU_FLAG, 1);
+	HAL_RX_MSDU_DESC_INFO_SET(msdu_desc_info,
+				  MSDU_CONTINUATION, 0x0);
+	HAL_RX_MSDU_DESC_INFO_SET(msdu_desc_info,
+				  MSDU_LENGTH, nbuf_len);
+	HAL_RX_MSDU_DESC_INFO_SET(msdu_desc_info,
+				  SA_IS_VALID, 1);
+	HAL_RX_MSDU_DESC_INFO_SET(msdu_desc_info,
+				  DA_IS_VALID, 1);
+}
+
+static inline void
+hal_mpdu_desc_info_set_be(hal_soc_handle_t hal_soc_hdl,
+			  void *mpdu_desc, uint32_t seq_no)
+{
+	struct rx_mpdu_desc_info *mpdu_desc_info =
+			(struct rx_mpdu_desc_info *)mpdu_desc;
+
+	HAL_RX_MPDU_DESC_INFO_SET(mpdu_desc_info,
+				  MSDU_COUNT, 0x1);
+	/* unset frag bit */
+	HAL_RX_MPDU_DESC_INFO_SET(mpdu_desc_info,
+				  FRAGMENT_FLAG, 0x0);
+	HAL_RX_MPDU_DESC_INFO_SET(mpdu_desc_info,
+				  RAW_MPDU, 0x0);
+}
+
 /**
  * hal_rx_msdu_reo_dst_ind_get: Gets the REO
  * destination ring ID from the msdu desc info
@@ -887,6 +938,79 @@ uint32_t hal_rx_msdu_reo_dst_ind_get_be(hal_soc_handle_t hal_soc_hdl,
 							   hal_soc);
 	dst_ind = HAL_RX_MSDU_REO_DST_IND_GET(msdu_desc_info);
 	return dst_ind;
+}
+
+uint32_t
+hal_reo_ix_remap_value_get_be(hal_soc_handle_t hal_soc_hdl,
+			      uint8_t rx_ring_mask)
+{
+	uint32_t num_rings = 0;
+	uint32_t i = 0;
+	uint32_t ring_remap_arr[HAL_MAX_REO2SW_RINGS] = {0};
+	uint32_t reo_remap_val = 0;
+	uint32_t ring_idx = 0;
+	uint8_t ix_map[HAL_NUM_RX_RING_PER_IX_MAP] = {0};
+
+	/* create reo ring remap array */
+	while (i < HAL_MAX_REO2SW_RINGS) {
+		if (rx_ring_mask & (1 << i)) {
+			ring_remap_arr[num_rings] = reo_dest_ring_remap[i];
+			num_rings++;
+		}
+		i++;
+	}
+
+	for (i = 0; i < HAL_NUM_RX_RING_PER_IX_MAP; i++) {
+		if (rx_ring_mask) {
+			ix_map[i] = ring_remap_arr[ring_idx];
+			ring_idx = ((ring_idx + 1) % num_rings);
+		} else {
+			/* if ring mask is zero configure to release to WBM */
+			ix_map[i] = REO_REMAP_RELEASE;
+		}
+	}
+
+	reo_remap_val = HAL_REO_REMAP_IX0(ix_map[0], 0) |
+					  HAL_REO_REMAP_IX0(ix_map[1], 1) |
+					  HAL_REO_REMAP_IX0(ix_map[2], 2) |
+					  HAL_REO_REMAP_IX0(ix_map[3], 3) |
+					  HAL_REO_REMAP_IX0(ix_map[4], 4) |
+					  HAL_REO_REMAP_IX0(ix_map[5], 5) |
+					  HAL_REO_REMAP_IX0(ix_map[6], 6) |
+					  HAL_REO_REMAP_IX0(ix_map[7], 7);
+
+	return reo_remap_val;
+}
+
+qdf_export_symbol(hal_reo_ix_remap_value_get_be);
+
+uint8_t hal_reo_ring_remap_value_get_be(uint8_t rx_ring_id)
+{
+	if (rx_ring_id >= HAL_MAX_REO2SW_RINGS)
+		return REO_REMAP_RELEASE;
+
+	return reo_dest_ring_remap[rx_ring_id];
+}
+
+qdf_export_symbol(hal_reo_ring_remap_value_get_be);
+
+uint8_t hal_get_idle_link_bm_id_be(uint8_t chip_id)
+{
+	return (WBM_IDLE_DESC_LIST + chip_id);
+}
+
+static inline void
+hal_rx_wbm_rel_buf_paddr_get_be(hal_ring_desc_t rx_desc,
+				struct hal_buf_info *buf_info)
+{
+	struct wbm_release_ring *wbm_rel_ring =
+		 (struct wbm_release_ring *)rx_desc;
+
+	buf_info->paddr =
+	 (HAL_RX_WBM_BUF_ADDR_31_0_GET(wbm_rel_ring) |
+	  ((uint64_t)(HAL_RX_WBM_BUF_ADDR_39_32_GET(wbm_rel_ring)) << 32));
+
+	buf_info->sw_cookie = HAL_RX_WBM_BUF_COOKIE_GET(wbm_rel_ring);
 }
 
 /**
@@ -932,6 +1056,8 @@ void hal_hw_txrx_default_ops_attach_be(struct hal_soc *hal_soc)
 	hal_soc->ops->hal_rx_err_status_get = hal_rx_err_status_get_be;
 	hal_soc->ops->hal_rx_reo_buf_type_get = hal_rx_reo_buf_type_get_be;
 	hal_soc->ops->hal_rx_wbm_err_src_get = hal_rx_wbm_err_src_get_be;
+	hal_soc->ops->hal_rx_wbm_rel_buf_paddr_get =
+					hal_rx_wbm_rel_buf_paddr_get_be;
 
 	hal_soc->ops->hal_reo_send_cmd = hal_reo_send_cmd_be;
 	hal_soc->ops->hal_reo_qdesc_setup = hal_reo_qdesc_setup_be;
@@ -939,4 +1065,9 @@ void hal_hw_txrx_default_ops_attach_be(struct hal_soc *hal_soc)
 	hal_soc->ops->hal_get_tlv_hdr_size = hal_get_tlv_hdr_size_be;
 	hal_soc->ops->hal_rx_msdu_reo_dst_ind_get =
 						hal_rx_msdu_reo_dst_ind_get_be;
+	hal_soc->ops->hal_get_idle_link_bm_id = hal_get_idle_link_bm_id_be;
+	hal_soc->ops->hal_rx_msdu_ext_desc_info_get_ptr =
+					hal_rx_msdu_ext_desc_info_get_ptr_be;
+	hal_soc->ops->hal_msdu_desc_info_set = hal_msdu_desc_info_set_be;
+	hal_soc->ops->hal_mpdu_desc_info_set = hal_mpdu_desc_info_set_be;
 }

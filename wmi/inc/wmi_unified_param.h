@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -354,6 +355,106 @@
 #define WMI_HOST_HE_VHT_SU_MU_SOUNDING_MODE_SET(x, z) \
 	WMI_HOST_F_RMW(x, z, WMI_HOST_TRIG_NONTRIG_SOUNDING_MODE)
 
+#ifdef WLAN_FEATURE_11BE
+/* EHT BF capabilities mask */
+#define WMI_HOST_EHT_CONF_SU_BFEE_S 0
+#define WMI_HOST_EHT_CONF_SU_BFEE_M 0x1
+#define WMI_HOST_EHT_CONF_SU_BFEE \
+	(WMI_HOST_EHT_CONF_SU_BFEE_M << WMI_HOST_EHT_CONF_SU_BFEE_S)
+#define WMI_HOST_EHT_CONF_SU_BFEE_GET(x) \
+	WMI_HOST_F_MS(x, WMI_HOST_EHT_CONF_SU_BFEE)
+#define WMI_HOST_EHT_CONF_SU_BFEE_SET(x, z) \
+	WMI_HOST_F_RMW(x, z, WMI_HOST_EHT_CONF_SU_BFEE)
+
+#define WMI_HOST_EHT_CONF_SU_BFER_S 1
+#define WMI_HOST_EHT_CONF_SU_BFER_M 0x1
+#define WMI_HOST_EHT_CONF_SU_BFER \
+	(WMI_HOST_EHT_CONF_SU_BFER_M << WMI_HOST_EHT_CONF_SU_BFER_S)
+#define WMI_HOST_EHT_CONF_SU_BFER_GET(x) \
+	WMI_HOST_F_MS(x, WMI_HOST_EHT_CONF_SU_BFER)
+#define WMI_HOST_EHT_CONF_SU_BFER_SET(x, z) \
+	WMI_HOST_F_RMW(x, z, WMI_HOST_EHT_CONF_SU_BFER)
+
+#define WMI_HOST_EHT_CONF_MU_BFEE_S 2
+#define WMI_HOST_EHT_CONF_MU_BFEE_M 0x1
+#define WMI_HOST_EHT_CONF_MU_BFEE \
+	(WMI_HOST_EHT_CONF_MU_BFEE_M << WMI_HOST_EHT_CONF_MU_BFEE_S)
+#define WMI_HOST_EHT_CONF_MU_BFEE_GET(x) \
+	WMI_HOST_F_MS(x, WMI_HOST_EHT_CONF_MU_BFEE)
+#define WMI_HOST_EHT_CONF_MU_BFEE_SET(x, z) \
+	WMI_HOST_F_RMW(x, z, WMI_HOST_EHT_CONF_MU_BFEE)
+
+#define WMI_HOST_EHT_CONF_MU_BFER_S 3
+#define WMI_HOST_EHT_CONF_MU_BFER_M 0x1
+#define WMI_HOST_EHT_CONF_MU_BFER \
+	(WMI_HOST_EHT_CONF_MU_BFER_M << WMI_HOST_EHT_CONF_MU_BFER_S)
+#define WMI_HOST_EHT_CONF_MU_BFER_GET(x) \
+	WMI_HOST_F_MS(x, WMI_HOST_EHT_CONF_MU_BFER)
+#define WMI_HOST_EHT_CONF_MU_BFER_SET(x, z) \
+	WMI_HOST_F_RMW(x, z, WMI_HOST_EHT_CONF_MU_BFER)
+
+#define WMI_HOST_EHT_CONF_DL_OFDMA_S 4
+#define WMI_HOST_EHT_CONF_DL_OFDMA_M 0x1
+#define WMI_HOST_EHT_CONF_DL_OFDMA \
+	(WMI_HOST_EHT_CONF_DL_OFDMA_M << WMI_HOST_EHT_CONF_DL_OFDMA_S)
+#define WMI_HOST_EHT_CONF_DL_OFDMA_GET(x) \
+	WMI_HOST_F_MS(x, WMI_HOST_EHT_CONF_DL_OFDMA)
+#define WMI_HOST_EHT_CONF_DL_OFDMA_SET(x, z) \
+	WMI_HOST_F_RMW(x, z, WMI_HOST_EHT_CONF_DL_OFDMA)
+
+#define WMI_HOST_EHT_CONF_UL_OFDMA_S 5
+#define WMI_HOST_EHT_CONF_UL_OFDMA_M 0x1
+#define WMI_HOST_EHT_CONF_UL_OFDMA \
+	(WMI_HOST_EHT_CONF_UL_OFDMA_M << WMI_HOST_EHT_CONF_UL_OFDMA_S)
+#define WMI_HOST_EHT_CONF_UL_OFDMA_GET(x) \
+	WMI_HOST_F_MS(x, WMI_HOST_EHT_CONF_UL_OFDMA)
+#define WMI_HOST_EHT_CONF_UL_OFDMA_SET(x, z) \
+	WMI_HOST_F_RMW(x, z, WMI_HOST_EHT_CONF_UL_OFDMA)
+
+#define WMI_HOST_EHT_CONF_UL_MUMIMO_S 6
+#define WMI_HOST_EHT_CONF_UL_MUMIMO_M 0x1
+#define WMI_HOST_EHT_CONF_UL_MUMIMO \
+	(WMI_HOST_EHT_CONF_UL_MUMIMO_M << WMI_HOST_EHT_CONF_UL_MUMIMO_S)
+#define WMI_HOST_EHT_CONF_UL_MUMIMO_GET(x) \
+	WMI_HOST_F_MS(x, WMI_HOST_EHT_CONF_UL_MUMIMO)
+#define WMI_HOST_EHT_CONF_UL_MUMIMO_SET(x, z) \
+	WMI_HOST_F_RMW(x, z, WMI_HOST_EHT_CONF_UL_MUMIMO)
+
+#define WMI_HOST_EHT_CONF_DL_OFDMA_TXBF_S 7
+#define WMI_HOST_EHT_CONF_DL_OFDMA_TXBF_M 0x1
+#define WMI_HOST_EHT_CONF_DL_OFDMA_TXBF \
+	(WMI_HOST_EHT_CONF_DL_OFDMA_TXBF_M << \
+		WMI_HOST_EHT_CONF_DL_OFDMA_TXBF_S)
+#define WMI_HOST_EHT_CONF_DL_OFDMA_TXBF_GET(x) \
+	WMI_HOST_F_MS(x, WMI_HOST_EHT_CONF_DL_OFDMA_TXBF)
+#define WMI_HOST_EHT_CONF_DL_OFDMA_TXBF_SET(x, z) \
+	WMI_HOST_F_RMW(x, z, WMI_HOST_EHT_CONF_DL_OFDMA_TXBF)
+
+#define WMI_HOST_EHT_CONF_DL_OFDMA_MUMIMO_S 8
+#define WMI_HOST_EHT_CONF_DL_OFDMA_MUMIMO_M 0x1
+#define WMI_HOST_EHT_CONF_DL_OFDMA_MUMIMO \
+	(WMI_HOST_EHT_CONF_DL_OFDMA_MUMIMO_M << \
+		 WMI_HOST_EHT_CONF_DL_OFDMA_MUMIMO_S)
+#define WMI_HOST_EHT_CONF_DL_OFDMA_MUMIMO_GET(x) \
+	WMI_HOST_F_MS(x, WMI_HOST_EHT_CONF_DL_OFDMA_MUMIMO)
+#define WMI_HOST_EHT_CONF_DL_OFDMA_MUMIMO_SET(x, z) \
+	WMI_HOST_F_RMW(x, z, WMI_HOST_EHT_CONF_DL_OFDMA_MUMIMO)
+
+#define WMI_HOST_EHT_CONF_UL_OFDMA_MUMIMO_S 9
+#define WMI_HOST_EHT_CONF_UL_OFDMA_MUMIMO_M 0x1
+#define WMI_HOST_EHT_CONF_UL_OFDMA_MUMIMO \
+	(WMI_HOST_EHT_CONF_UL_OFDMA_MUMIMO_M << \
+		WMI_HOST_EHT_CONF_UL_OFDMA_MUMIMO_S)
+#define WMI_HOST_EHT_CONF_UL_OFDMA_MUMIMO_GET(x) \
+	WMI_HOST_F_MS(x, WMI_HOST_EHT_CONF_UL_OFDMA_MUMIMO)
+#define WMI_HOST_EHT_CONF_UL_OFDMA_MUMIMO_SET(x, z) \
+	WMI_HOST_F_RMW(x, z, WMI_HOST_EHT_CONF_UL_OFDMA_MUMIMO)
+
+/* Firmware uses most significant 4 bits to differentiate */
+/* some of vdev params between HE and EHT */
+#define WMI_HOST_VDEV_PARAM_EHT_MODE 0x10000000
+#endif
+
 #define WMI_HOST_TPC_RATE_MAX	160
 #define WMI_HOST_TPC_TX_NUM_CHAIN	4
 #define WMI_HOST_RXG_CAL_CHAN_MAX	8
@@ -543,6 +644,8 @@ typedef enum {
  * @WMI_HOST_CHAN_WIDTH_5: 5 MHz channel operating width
  * @WMI_HOST_CHAN_WIDTH_10: 10 MHz channel operating width
  * @WMI_HOST_CHAN_WIDTH_165: 165 MHz channel operating width
+ * @WMI_HOST_CHAN_WIDTH_160P160: 160 MHz + 160 MHz channel operating width
+ * @WMI_HOST_CHAN_WIDTH_320: 320 MHz channel operating width
  */
 typedef enum {
 	WMI_HOST_CHAN_WIDTH_20    = 0,
@@ -553,9 +656,8 @@ typedef enum {
 	WMI_HOST_CHAN_WIDTH_5     = 5,
 	WMI_HOST_CHAN_WIDTH_10    = 6,
 	WMI_HOST_CHAN_WIDTH_165   = 7,
-#ifdef WLAN_FEATURE_11BE
-	WMI_HOST_CHAN_WIDTH_320   = 8,
-#endif
+	WMI_HOST_CHAN_WIDTH_160P160 = 8,
+	WMI_HOST_CHAN_WIDTH_320   = 9,
 } wmi_host_channel_width;
 
 #define ATH_EXPONENT_TO_VALUE(v)	((1<<v)-1)
@@ -763,12 +865,14 @@ typedef struct {
  * @vdev_id: vdev id
  * @pdev_id: pdev_id
  * @wmi_host_inst_rssi_args: Instantaneous rssi stats args
+ * @is_qmi_send_support: support to send by qmi or not
  */
 struct stats_request_params {
 	uint32_t stats_id;
 	uint8_t vdev_id;
 	uint8_t pdev_id;
 	wmi_host_inst_rssi_args rssi_args;
+	bool is_qmi_send_support;
 };
 
 /**
@@ -1041,6 +1145,7 @@ struct peer_assoc_ml_partner_links {
  * @peer_eht_mcs_count: Peer EHT MCS TX/RX MAP count
  * @peer_eht_rx_mcs_set: Peer EHT RX MCS MAP
  * @peer_eht_tx_mcs_set: Peer EHT TX MCS MAP
+ * @peer_eht_ppet: Peer EHT PPET info
  * @peer_ppet: Peer HE PPET info
  * @peer_bss_max_idle_option: Peer BSS Max Idle option update
  * @akm: AKM info
@@ -1120,6 +1225,7 @@ struct peer_assoc_params {
 	uint32_t peer_eht_rx_mcs_set[WMI_HOST_MAX_EHT_RATE_SET];
 	uint32_t peer_eht_tx_mcs_set[WMI_HOST_MAX_EHT_RATE_SET];
 	uint16_t puncture_pattern;
+	struct wmi_host_ppe_threshold peer_eht_ppet;
 #endif
 	struct wmi_host_ppe_threshold peer_ppet;
 	u_int8_t peer_bsscolor_rept_info;
@@ -1129,6 +1235,8 @@ struct peer_assoc_params {
 	struct peer_assoc_mlo_params mlo_params;
 	struct peer_assoc_ml_partner_links ml_links;
 #endif
+	uint8_t peer_dms_capable:1,
+		reserved:7;
 };
 
 /**
@@ -1319,6 +1427,10 @@ struct seg_hdr_info {
  *              0:disable 1:enable
  * @en_beamforming: flag to enable tx beamforming
  *              0:disable 1:enable
+ * @retry_limit_ext: 3 bits of extended retry limit.
+ *              Combined with 4 bits "retry_limit"
+ *              to create 7 bits hw retry count.
+ *              Maximum 127 retries for specific frames.
  */
 struct tx_send_params {
 	uint32_t pwr:8,
@@ -1331,7 +1443,8 @@ struct tx_send_params {
 		 frame_type:1,
 		 cfr_enable:1,
 		 en_beamforming:1,
-		 reserved:9;
+		 retry_limit_ext:3,
+		 reserved:6;
 };
 
 /**
@@ -2995,6 +3108,46 @@ struct spectral_session_det_info {
 	qdf_freq_t start_freq;
 	qdf_freq_t end_freq;
 };
+
+/**
+ * struct spectral_capabilities_event_params - parameters related to Spectral
+ * capabilities event
+ * @num_sscan_bw_caps: Number of spectral_scan_bw_capabilities TLVs
+ * @num_fft_size_caps: Number of spectral_fft_size_capabilities TLVs
+ */
+struct spectral_capabilities_event_params {
+	uint8_t num_sscan_bw_caps;
+	uint8_t num_fft_size_caps;
+};
+
+/**
+ * struct spectral_scan_bw_capabilities - Spectral scan bandwidth caps
+ * that are extracted from Spectral capabilities WMI event
+ * @pdev_id: pdev ID
+ * @smode: Spectral scan mode
+ * @operating_bw: Operating bandwidth
+ * @supported_bws: Supported sscan bandwidths bitmap for given @pdev_id,
+ * @operating_bw, and @smode
+ */
+struct spectral_scan_bw_capabilities {
+	uint8_t pdev_id;
+	enum spectral_scan_mode smode;
+	enum phy_ch_width operating_bw;
+	uint32_t supported_bws;
+};
+
+/**
+ * struct spectral_fft_size_capabilities - Spectral scan FFT size caps
+ * that are extracted from Spectral capabilities WMI event
+ * @pdev_id: pdev ID
+ * @sscan_bw: Spectral scan bandwidth
+ * @sscan_bw: Supported FFT sizes bitmap for given @pdev_id and @sscan_bw
+ */
+struct spectral_fft_size_capabilities {
+	uint8_t pdev_id;
+	enum phy_ch_width sscan_bw;
+	uint32_t supports_fft_sizes;
+};
 #endif
 
 /**
@@ -3265,6 +3418,64 @@ struct fips_params {
 	uint32_t op;
 	uint32_t pdev_id;
 };
+
+#ifdef WLAN_FEATURE_FIPS_BER_CCMGCM
+#define MAX_KEY_LEN_FIPS_EXTEND 64
+#define MAX_NONCEIV_LEN_FIPS_EXTEND 16
+/**
+ * struct fips_extend_cmd_params - FIPS extend params config for first frag
+ * @fips_cmd:  1 - Encrypt, 2 - Decrypt
+ * key_cipher: 0 - CCM, 1 - GCM
+ * @key_len: length of key
+ * @key: key_data
+ * @nonce_iv_len: length of nonce or iv
+ * @nonce_iv: nonce_iv
+ * @tag_len: length of tag/mic
+ * @aad_len: length of aad
+ * @payload_len: length of payload
+ */
+struct fips_extend_cmd_params {
+	u_int32_t fips_cmd;
+	u_int32_t key_cipher;
+	u_int32_t key_len;
+	u_int8_t  key[MAX_KEY_LEN_FIPS_EXTEND];
+	u_int32_t nonce_iv_len;
+	u_int8_t  nonce_iv[MAX_NONCEIV_LEN_FIPS_EXTEND];
+	u_int32_t tag_len;
+	u_int32_t aad_len;
+	u_int32_t payload_len;
+};
+
+/**
+ * struct fips_extend_params - FIPS extend params config
+ * @pdev_id: pdev_id for identifying the MAC
+ * @cookie: cookie value
+ * @frag_idx: fragment index
+ * @more_bit: more bit
+ * @data_len: length of data buf
+ * @cmd_params: cmd_params set for first fragment
+ * @data: pointer data buf
+ */
+struct fips_extend_params {
+	uint32_t pdev_id;
+	u_int32_t cookie;
+	u_int32_t frag_idx;
+	u_int32_t more_bit;
+	u_int32_t data_len;
+	struct fips_extend_cmd_params cmd_params;
+	u_int32_t *data;
+};
+
+/**
+ * struct fips_mode_set_params - FIPS mode enable param
+ * @pdev_id: pdev_id for identifying the MAC
+ * @mode: value to disable or enable fips extend mode
+ */
+struct fips_mode_set_params {
+	uint32_t pdev_id;
+	uint32_t mode;
+};
+#endif
 
 #ifdef WLAN_FEATURE_DISA_FIPS
 /**
@@ -4373,10 +4584,30 @@ struct ftm_time_sync_offset {
  * struct wmi_host_tsf_event_- Get tsf event info
  * @vdev_id: vdev id
  * @tsf: tsf
+ * @tsf_low: low 32bit of tsf
+ * @tsf_high: high 32 bit of tsf
+ * @qtimer_low: low 32 bits of qtimer
+ * @qtimer_high: high 32 bits of qtimer
+ * @tsf_id: TSF ID for the current vdev
+ * @tsf_id_valid: is TSF valid
+ * @mac_id: MAC identifier
+ * @mac_id_valid: is MAC id valid
+ * @wlan_global_tsf_low: low 32 bits of wlan global tsf
+ * @wlan_global_tsf_high: high 32 bits of wlan global tsf
  */
 struct wmi_host_tsf_event {
 	uint32_t vdev_id;
 	uint64_t tsf;
+	uint32_t tsf_low;
+	uint32_t tsf_high;
+	uint32_t qtimer_low;
+	uint32_t qtimer_high;
+	uint32_t tsf_id;
+	uint32_t tsf_id_valid;
+	uint32_t mac_id;
+	uint32_t mac_id_valid;
+	uint32_t wlan_global_tsf_low;
+	uint32_t wlan_global_tsf_high;
 };
 
 #define WMI_EVENT_ID_INVALID 0
@@ -4654,6 +4885,15 @@ typedef enum {
 #ifdef WLAN_FEATURE_11BE_MLO
 	wmi_mlo_setup_complete_event_id,
 	wmi_mlo_teardown_complete_event_id,
+	wmi_mlo_link_set_active_resp_eventid,
+#endif
+	wmi_pdev_fips_extend_event_id,
+	wmi_roam_frame_event_id,
+#ifdef WLAN_FEATURE_DYNAMIC_MAC_ADDR_UPDATE
+	wmi_vdev_update_mac_addr_conf_eventid,
+#endif
+#ifdef WLAN_FEATURE_11BE_MLO
+	wmi_vdev_quiet_offload_eventid,
 #endif
 	wmi_events_max,
 } wmi_conv_event_id;
@@ -4829,6 +5069,14 @@ typedef enum {
 	wmi_pdev_param_mpd_userpd_ssr,
 	wmi_pdev_param_low_latency_mode,
 	wmi_pdev_param_scan_radio_tx_on_dfs,
+	wmi_pdev_param_en_probe_all_bw,
+	wmi_pdev_param_obss_min_duration_check_for_sr,
+	wmi_pdev_param_truncate_sr,
+	wmi_pdev_param_ctrl_frame_obss_pd_threshold,
+	wmi_pdev_param_rate_upper_cap,
+	wmi_pdev_param_rate_retry_mcs_drop,
+	wmi_pdev_param_mcs_probe_intvl,
+	wmi_pdev_param_nss_probe_intvl,
 	wmi_pdev_param_max,
 } wmi_conv_pdev_params_id;
 
@@ -5268,6 +5516,20 @@ typedef enum {
 	wmi_service_mgmt_rx_reo_supported,
 	wmi_service_phy_dma_byte_swap_support,
 	wmi_service_spectral_session_info_support,
+	wmi_service_mu_snif,
+#ifdef WLAN_FEATURE_DYNAMIC_MAC_ADDR_UPDATE
+	wmi_service_dynamic_update_vdev_macaddr_support,
+#endif
+	wmi_service_probe_all_bw_support,
+	wmi_service_pno_scan_conf_per_ch_support,
+#ifdef QCA_UNDECODED_METADATA_SUPPORT
+	wmi_service_fp_phy_err_filter_support,
+#endif
+#ifdef WLAN_FEATURE_11BE_MLO
+	wmi_service_mlo_sta_nan_ndi_support,
+#endif
+	wmi_service_pdev_rate_config_support,
+	wmi_service_multi_peer_group_cmd_support,
 	wmi_services_max,
 } wmi_conv_service_ids;
 #define WMI_SERVICE_UNAVAILABLE 0xFFFF
@@ -5425,6 +5687,7 @@ struct wmi_host_fw_abi_ver {
  *                                       inclusive of SP power mode.
  * @afc_timer_check_disable: Disables AFC Timer related checks in FW
  * @afc_req_id_check_disable: Disables AFC Request ID check in FW
+ * @carrier_profile_config: Configuration for per-carrier profile
  */
 typedef struct {
 	uint32_t num_vdevs;
@@ -5544,6 +5807,8 @@ typedef struct {
 	bool is_6ghz_sp_pwrmode_supp_enabled;
 	bool afc_timer_check_disable;
 	bool afc_req_id_check_disable;
+	uint32_t carrier_profile_config;
+	bool sawf;
 } target_resource_config;
 
 /**
@@ -6137,6 +6402,7 @@ enum wmi_host_ap_ps_peer_param {
 #define WMI_HOST_RXERR_DECRYPT	0x08 /* non-Michael decrypt error */
 #define WMI_HOST_RXERR_MIC	0x10 /* Michael MIC decrypt error */
 #define WMI_HOST_RXERR_KEY_CACHE_MISS 0x20 /* No/incorrect key matter in h/w */
+#define WMI_HOST_RXERR_PN	0x80 /* invalid PN in frame */
 
 enum wmi_host_sta_ps_param_rx_wake_policy {
 	/* Wake up when ever there is an  RX activity on the VDEV. In this mode
@@ -6271,6 +6537,9 @@ enum {
 	WMI_HOST_PKTLOG_EVENT_TX_DATA_CAPTURE_BIT,
 	WMI_HOST_PKTLOG_EVENT_PHY_LOGGING_BIT,
 	WMI_HOST_PKTLOG_EVENT_CBF_BIT,
+#ifdef BE_PKTLOG_SUPPORT
+	WMI_HOST_PKTLOG_EVENT_HYBRID_TX_BIT,
+#endif
 };
 
 typedef enum {
@@ -6297,6 +6566,10 @@ typedef enum {
 		BIT(WMI_HOST_PKTLOG_EVENT_PHY_LOGGING_BIT),
 	WMI_HOST_PKTLOG_EVENT_CBF =
 		BIT(WMI_HOST_PKTLOG_EVENT_CBF_BIT),
+#ifdef BE_PKTLOG_SUPPORT
+	WMI_HOST_PKTLOG_EVENT_HYBRID_TX =
+		BIT(WMI_HOST_PKTLOG_EVENT_HYBRID_TX_BIT),
+#endif
 } WMI_HOST_PKTLOG_EVENT;
 
 /**
@@ -6923,6 +7196,28 @@ struct wmi_host_fips_event_param {
 	uint32_t data_len;
 	uint32_t *data;
 };
+
+#ifdef WLAN_FEATURE_FIPS_BER_CCMGCM
+/*
+ * struct wmi_host_fips_extend_event_param: FIPS extend event param
+ * @pdev_id: pdev id
+ * @fips_cookie: fips_cookie
+ * @cmd_frag_idx: cmd_frag_idx
+ * @more_bit: more_bit
+ * @error_status: Error status: 0 (no err), 1, or OPER_TIMEOUR
+ * @data_len: FIPS data length
+ * @data: pointer to data
+ */
+struct wmi_host_fips_extend_event_param {
+	uint32_t pdev_id;
+	uint32_t fips_cookie;
+	uint32_t cmd_frag_idx;
+	uint32_t more_bit;
+	uint32_t error_status;
+	uint32_t data_len;
+	uint32_t *data;
+};
+#endif
 
 #ifdef WLAN_FEATURE_DISA_FIPS
 /**
@@ -7584,6 +7879,7 @@ struct wmi_roam_deauth_trigger_data {
  * threshold for 5g & 6g AP to host or not
  * @wtc_candi_rssi_th_5g: 5g candidate AP rssi threshold
  * @wtc_candi_rssi_th_6g: 6g candidate AP rssi threshold
+ * @duration: WTC duration
  */
 struct wmi_roam_wtc_btm_trigger_data {
 	uint32_t roaming_mode;
@@ -7596,6 +7892,7 @@ struct wmi_roam_wtc_btm_trigger_data {
 	uint32_t wtc_candi_rssi_ext_present;
 	uint32_t wtc_candi_rssi_th_5g;
 	uint32_t wtc_candi_rssi_th_6g;
+	uint32_t duration;
 };
 
 /**
@@ -7663,12 +7960,14 @@ struct wmi_roam_scan_data {
  * @status:             0 - Roaming is success ; 1 - Roaming failed ;
  * 2 - No roam
  * @fail_reason:        One of WMI_ROAM_FAIL_REASON_ID
+ * @fail_bssid:         BSSID of the last attempted roam failed AP
  */
 struct wmi_roam_result {
 	bool present;
 	uint32_t timestamp;
 	uint32_t status;
 	uint32_t fail_reason;
+	struct qdf_mac_addr fail_bssid;
 };
 
 #define WLAN_11KV_TYPE_BTM_REQ  1
@@ -7871,6 +8170,7 @@ typedef struct {
 	uint32_t rx_ts_reset;
 	uint32_t mcs_rate;
 	uint32_t gi_type;
+	uint8_t agc_gain_tbl_index[WMI_HOST_MAX_CHAINS];
 } wmi_cfr_peer_tx_event_param;
 
 /**
@@ -8194,6 +8494,34 @@ struct set_mec_timer_params {
 	uint32_t pdev_id;
 	uint32_t vdev_id;
 	uint32_t mec_aging_timer_threshold;
+};
+#endif
+
+#ifdef WLAN_FEATURE_DYNAMIC_MAC_ADDR_UPDATE
+/**
+ * struct set_mac_addr_params - Set MAC address command parameter
+ * @vdev_id: vdev id
+ * @mac_addr: VDEV MAC address
+ * @mmld_addr: MLD address of the vdev
+ */
+struct set_mac_addr_params {
+	uint8_t vdev_id;
+	struct qdf_mac_addr mac_addr;
+	struct qdf_mac_addr mld_addr;
+};
+#endif
+
+#ifdef WLAN_FEATURE_SON
+/**
+ * struct wmi_host_inst_rssi_stats_resp - inst rssi stats
+ * @inst_rssi: instantaneous rssi above the noise floor in dB unit
+ * @peer_macaddr: peer mac address
+ * @vdev_id: vdev_id
+ */
+struct wmi_host_inst_rssi_stats_resp {
+	uint32_t inst_rssi;
+	struct qdf_mac_addr peer_macaddr;
+	uint32_t vdev_id;
 };
 #endif
 #endif /* _WMI_UNIFIED_PARAM_H_ */

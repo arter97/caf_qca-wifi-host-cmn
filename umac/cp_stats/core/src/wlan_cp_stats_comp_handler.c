@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2018 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -30,6 +31,9 @@
 #include "wlan_cp_stats_defs.h"
 #include <wlan_cp_stats_ucfg_api.h>
 #include <wlan_cp_stats_utils_api.h>
+#include <wmi_unified_twt_param.h>
+#include <wlan_twt_public_structs.h>
+
 
 static QDF_STATUS
 wlan_cp_stats_psoc_comp_obj_config
@@ -230,3 +234,67 @@ wlan_cp_stats_comp_obj_config(enum wlan_objmgr_obj_type obj_type,
 
 	return status;
 }
+
+#if defined(WLAN_SUPPORT_TWT) && defined(WLAN_TWT_CONV_SUPPORTED)
+QDF_STATUS
+wlan_cp_stats_twt_get_session_evt_handler(
+				struct wlan_objmgr_psoc *psoc,
+				struct twt_session_stats_info *twt_params)
+{
+	int i;
+	uint32_t event_type;
+	struct wlan_objmgr_peer *peer;
+	struct peer_cp_stats *peer_cp_stats_priv;
+	QDF_STATUS status = QDF_STATUS_SUCCESS;
+
+	if (!psoc || !twt_params)
+		return QDF_STATUS_E_INVAL;
+
+	peer = wlan_objmgr_get_peer_by_mac(psoc, twt_params->peer_mac.bytes,
+					   WLAN_CP_STATS_ID);
+	if (!peer) {
+		cp_stats_err("peer is NULL");
+		return QDF_STATUS_E_INVAL;
+	}
+
+	peer_cp_stats_priv = wlan_cp_stats_get_peer_stats_obj(peer);
+	if (!peer_cp_stats_priv) {
+		cp_stats_err("peer_cp_stats_priv is null");
+		status = QDF_STATUS_E_INVAL;
+		goto cleanup;
+	}
+
+	if (twt_params->event_type == HOST_TWT_SESSION_UPDATE ||
+	    twt_params->event_type == HOST_TWT_SESSION_TEARDOWN) {
+		/* Update for a existing session, find by dialog_id */
+		for (i = 0; i < WLAN_MAX_TWT_SESSIONS_PER_PEER; i++) {
+			if (peer_cp_stats_priv->twt_param[i].dialog_id !=
+			    twt_params->dialog_id)
+				continue;
+			qdf_mem_copy(&peer_cp_stats_priv->twt_param[i],
+				     twt_params, sizeof(*twt_params));
+			goto cleanup;
+		}
+	} else if (twt_params->event_type == HOST_TWT_SESSION_SETUP) {
+		/* New session, fill in any existing invalid session */
+		for (i = 0; i < WLAN_MAX_TWT_SESSIONS_PER_PEER; i++) {
+			event_type =
+				peer_cp_stats_priv->twt_param[i].event_type;
+			if (event_type != HOST_TWT_SESSION_SETUP &&
+			    event_type != HOST_TWT_SESSION_UPDATE) {
+				qdf_mem_copy(&peer_cp_stats_priv->twt_param[i],
+					     twt_params, sizeof(*twt_params));
+				goto cleanup;
+			}
+		}
+	}
+
+	cp_stats_err("Unable to save twt session params with dialog id %d",
+		     twt_params->dialog_id);
+	status = QDF_STATUS_E_INVAL;
+
+cleanup:
+	wlan_objmgr_peer_release_ref(peer, WLAN_CP_STATS_ID);
+	return status;
+}
+#endif

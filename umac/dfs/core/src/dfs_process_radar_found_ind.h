@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2017-2021 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2021 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -27,6 +28,11 @@
 #define _DFS_PROCESS_RADAR_FOUND_IND_H_
 #include "dfs_partial_offload_radar.h"
 
+#define BW_20   20
+#define BW_40   40
+#define BW_80   80
+#define BW_160 160
+#define BW_320 320
 /**
  * dfs_false_radarfound_reset_vars () - Reset dfs radar detection related
  * variables and queues after processing radar and disabling phyerror reception.
@@ -96,13 +102,25 @@ dfs_flush_additional_pulses(struct wlan_dfs *dfs)
 
 #ifdef CONFIG_CHAN_FREQ_API
 /* Next channel frequency offsets from center channel frequency */
-#define DFS_5GHZ_NEXT_CHAN_FREQ_OFFSET  10
-#define DFS_5GHZ_2ND_CHAN_FREQ_OFFSET   30
-#define DFS_5GHZ_3RD_CHAN_FREQ_OFFSET   50
-#define DFS_5GHZ_4TH_CHAN_FREQ_OFFSET   70
+#define DFS_5GHZ_NEXT_CHAN_FREQ_OFFSET   10
+#define DFS_5GHZ_2ND_CHAN_FREQ_OFFSET    30
+#define DFS_5GHZ_3RD_CHAN_FREQ_OFFSET    50
+#define DFS_5GHZ_4TH_CHAN_FREQ_OFFSET    70
+#define DFS_5GHZ_5TH_CHAN_FREQ_OFFSET    90
+#define DFS_5GHZ_6TH_CHAN_FREQ_OFFSET   110
+#define DFS_5GHZ_7TH_CHAN_FREQ_OFFSET   130
+#define DFS_5GHZ_8TH_CHAN_FREQ_OFFSET   150
 #endif
-/* Max number of bonding channels in 160 MHz segment */
-#define NUM_CHANNELS_160MHZ 8
+/* Number of 20MHz sub-channels in 160 MHz segment */
+#define NUM_CHANNELS_160MHZ  8
+/* Number of 20MHz sub-channels in 320 MHz segment */
+#define NUM_CHANNELS_320MHZ 16
+
+#ifdef WLAN_FEATURE_11BE
+#define MAX_20MHZ_SUBCHANS NUM_CHANNELS_320MHZ
+#else
+#define MAX_20MHZ_SUBCHANS NUM_CHANNELS_160MHZ
+#endif
 
 #if defined(QCA_DFS_RCSA_SUPPORT)
 /**

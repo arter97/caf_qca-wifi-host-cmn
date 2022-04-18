@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2017-2019, 2021 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -320,8 +321,8 @@ struct hal_reo_cmd_update_queue_params {
 		pn_uneven:1,
 		pn_hand_enab:1,
 		ignore_ampdu:1;
-	uint32_t ba_window_size:9,
-		pn_size:8,
+	uint32_t ba_window_size:15,
+		pn_size:2,
 		svld:1,
 		ssn:12,
 		seq_2k_err_detect:1,
@@ -613,7 +614,7 @@ static inline void hal_reo_qdesc_setup(hal_soc_handle_t hal_soc_hdl, int tid,
 				       uint32_t ba_window_size,
 			 uint32_t start_seq, void *hw_qdesc_vaddr,
 			 qdf_dma_addr_t hw_qdesc_paddr,
-			 int pn_type)
+			 int pn_type, uint8_t vdev_stats_id)
 {
 	struct hal_soc *hal_soc = (struct hal_soc *)hal_soc_hdl;
 
@@ -627,7 +628,8 @@ static inline void hal_reo_qdesc_setup(hal_soc_handle_t hal_soc_hdl, int tid,
 		hal_soc->ops->hal_reo_qdesc_setup(hal_soc_hdl, tid,
 						  ba_window_size, start_seq,
 						  hw_qdesc_vaddr,
-						  hw_qdesc_paddr, pn_type);
+						  hw_qdesc_paddr, pn_type,
+						  vdev_stats_id);
 }
 
 /**
@@ -715,4 +717,50 @@ hal_get_tlv_hdr_size(hal_soc_handle_t hal_soc_hdl)
  */
 void hal_reo_init_cmd_ring(hal_soc_handle_t hal_soc_hdl,
 			   hal_ring_handle_t hal_ring_hdl);
+
+#ifdef REO_SHARED_QREF_TABLE_EN
+/**
+ * hal_reo_shared_qaddr_setup(): Setup reo qref LUT
+ * @hal_soc: Hal soc pointer
+ *
+ * Allocate MLO and Non MLO table for storing REO queue
+ * reference pointers
+ *
+ * Return: void
+ */
+static inline void
+hal_reo_shared_qaddr_setup(hal_soc_handle_t hal_soc_hdl)
+{
+	struct hal_soc *hal_soc = (struct hal_soc *)hal_soc_hdl;
+
+	if (hal_soc->ops->hal_reo_shared_qaddr_setup)
+		return hal_soc->ops->hal_reo_shared_qaddr_setup(hal_soc_hdl);
+}
+
+/**
+ * hal_reo_shared_qaddr_detach(): Detach reo qref LUT
+ * @hal_soc: Hal soc pointer
+ *
+ * Detach MLO and Non MLO table start addr to HW reg
+ *
+ * Return: void
+ */
+static inline void
+hal_reo_shared_qaddr_detach(hal_soc_handle_t hal_soc_hdl)
+{
+	struct hal_soc *hal_soc = (struct hal_soc *)hal_soc_hdl;
+
+	if (hal_soc->ops->hal_reo_shared_qaddr_detach)
+		return hal_soc->ops->hal_reo_shared_qaddr_detach(hal_soc_hdl);
+}
+
+#else
+static inline void
+hal_reo_shared_qaddr_setup(hal_soc_handle_t hal_soc_hdl)
+{
+}
+
+static inline void
+hal_reo_shared_qaddr_detach(hal_soc_handle_t hal_soc_hdl) {}
+#endif /* REO_SHARED_QREF_TABLE_EN */
 #endif /* _HAL_REO_H */

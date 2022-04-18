@@ -1,6 +1,6 @@
-
 /*
  * Copyright (c) 2019-2021 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -114,6 +114,9 @@ enum cfrradiotype {
 	CFR_CAPTURE_RADIO_MAPLE,
 	CFR_CAPTURE_RADIO_MOSELLE,
 	CFR_CAPTURE_RADIO_SPRUCE,
+	CFR_CAPTURE_RADIO_ALDER,
+	CFR_CAPTURE_RADIO_WAIKIKI,
+	CFR_CAPTURE_RADIO_KIWI,
 	CFR_CAPTURE_RADIO_MAX = 0xFF,
 };
 
@@ -142,24 +145,6 @@ enum cfr_capture_type {
 	CFR_TYPE_METHOD_MAX,
 };
 
-/* ensure to add new members at the end of the structure only */
-struct legacy_cfr_metadata {
-	u_int8_t    peer_addr[QDF_MAC_ADDR_SIZE];
-	u_int8_t    status;
-	u_int8_t    capture_bw;
-	u_int8_t    channel_bw;
-	u_int8_t    phy_mode;
-	u_int16_t   prim20_chan;
-	u_int16_t   center_freq1;
-	u_int16_t   center_freq2;
-	u_int8_t    capture_mode;
-	u_int8_t    capture_type;
-	u_int8_t    sts_count;
-	u_int8_t    num_rx_chain;
-	u_int32_t   timestamp;
-	u_int32_t   length;
-} __attribute__ ((__packed__));
-
 #define HOST_MAX_CHAINS 8
 
 /* ensure to add new members at the end of the structure only */
@@ -185,6 +170,7 @@ struct dbr_cfr_metadata {
 	u_int32_t   rx_start_ts;
 	u_int16_t   mcs_rate;
 	u_int16_t   gi_type;
+	u_int8_t    agc_gain_tbl_index[HOST_MAX_CHAINS];
 } __attribute__ ((__packed__));
 
 #ifdef WLAN_ENH_CFR_ENABLE
@@ -227,6 +213,7 @@ struct enh_cfr_metadata {
 	u_int16_t   mcs_rate;
 	u_int16_t   gi_type;
 	struct cfr_su_sig_info sig_info;
+	u_int8_t    agc_gain_tbl_index[HOST_MAX_CHAINS];
 } __attribute__ ((__packed__));
 #endif
 
@@ -246,7 +233,6 @@ struct cfr_header_cmn {
 struct csi_cfr_header {
 	struct cfr_header_cmn cmn;
 	union {
-		struct legacy_cfr_metadata meta_legacy;
 		struct dbr_cfr_metadata meta_dbr;
 #ifdef WLAN_ENH_CFR_ENABLE
 		struct enh_cfr_metadata meta_enh;
@@ -264,6 +250,9 @@ struct cfr_capture_params {
 	u_int8_t   bandwidth;
 	u_int32_t  period;
 	u_int8_t   method;
+#ifdef WLAN_FEATURE_11BE
+	uint32_t   puncture_bitmap;
+#endif
 };
 
 /**
@@ -411,9 +400,9 @@ struct unassoc_pool_entry {
  */
 struct ta_ra_cfr_cfg {
 	uint8_t filter_group_id;
-	uint16_t bw                          :5,
+	uint16_t bw                          :6,
 		 nss                         :8,
-		 rsvd0                       :3;
+		 rsvd0                       :2;
 	uint16_t valid_ta                    :1,
 		 valid_ta_mask               :1,
 		 valid_ra                    :1,
@@ -657,6 +646,9 @@ struct peer_cfr {
 	u_int8_t   bandwidth;
 	u_int32_t  period;
 	u_int8_t   capture_method;
+#ifdef WLAN_FEATURE_11BE
+	uint32_t   puncture_bitmap;
+#endif
 };
 
 /**

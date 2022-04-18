@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2018-2021 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2021 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -353,11 +354,13 @@ struct vdev_mlme_mgmt_generic {
 /*
  * struct wlan_vdev_aid_mgr – AID manager
  * @aid_bitmap: AID bitmap array
+ * @start_aid: start of AID index
  * @max_aid: Max allowed AID
  * @ref_cnt:  to share AID across VDEVs for MBSSID
  */
 struct wlan_vdev_aid_mgr {
 	qdf_bitmap(aid_bitmap, WLAN_UMAC_MAX_AID);
+	uint16_t start_aid;
 	uint16_t max_aid;
 	qdf_atomic_t ref_cnt;
 };
@@ -367,11 +370,16 @@ struct wlan_vdev_aid_mgr {
  * @hidden_ssid: flag to indicate whether it is hidden ssid
  * @cac_duration_ms: cac duration in millseconds
  * @aid_mgr: AID bitmap mgr
+ * @max_chan_switch_time: Max channel switch time in milliseconds.
+ * @last_bcn_ts_ms: Timestamp (in milliseconds) of the last beacon sent on the
+ *                  CSA triggered channel.
  */
 struct vdev_mlme_mgmt_ap {
 	bool hidden_ssid;
 	uint32_t cac_duration_ms;
 	struct wlan_vdev_aid_mgr *aid_mgr;
+	uint32_t max_chan_switch_time;
+	unsigned long last_bcn_ts_ms;
 };
 
 /**
@@ -1166,4 +1174,21 @@ static inline struct wlan_vdev_aid_mgr *wlan_vdev_mlme_get_aid_mgr(
 	return vdev_mlme->mgmt.ap.aid_mgr;
 }
 
+#ifdef WLAN_FEATURE_DYNAMIC_MAC_ADDR_UPDATE
+/**
+ * vdev_mgr_cdp_vdev_attach() - MLME API to attach CDP vdev
+ * @mlme_obj: pointer to vdev_mlme_obj
+ *
+ * Return: QDF_STATUS - Success or Failure
+ */
+QDF_STATUS vdev_mgr_cdp_vdev_attach(struct vdev_mlme_obj *mlme_obj);
+
+/**
+ * vdev_mgr_cdp_vdev_detach() - MLME API to detach CDP vdev
+ * @mlme_obj: pointer to vdev_mlme_obj
+ *
+ * Return: QDF_STATUS - Success or Failure
+ */
+QDF_STATUS vdev_mgr_cdp_vdev_detach(struct vdev_mlme_obj *mlme_obj);
+#endif
 #endif

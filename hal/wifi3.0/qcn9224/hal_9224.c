@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2021 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -39,6 +40,11 @@
 #include <wbm_release_ring_tx.h>
 #include <wbm_release_ring_rx.h>
 #include <phyrx_location.h>
+#ifdef QCA_MONITOR_2_0_SUPPORT
+#include <mon_ingress_ring.h>
+#include <mon_destination_ring.h>
+#endif
+#include "rx_reo_queue_1k.h"
 
 #include <hal_be_rx.h>
 
@@ -685,6 +691,7 @@ typedef struct rx_msdu_end_compact_qca9224 hal_rx_msdu_end_t;
 #include <hal_be_generic_api.h>
 
 #define LINK_DESC_SIZE (NUM_OF_DWORDS_RX_MSDU_LINK << 2)
+#define HAL_PPE_VP_ENTRIES_MAX 32
 /**
  * hal_get_link_desc_size_9224(): API to get the link desc size
  *
@@ -795,9 +802,7 @@ void hal_rx_get_rtt_info_9224(void *rx_tlv, void *ppdu_info_hdl)
 		   RTT_CHE_BUFFER_POINTER_HIGH8);
 
 	ppdu_info->cfr_info.chan_capture_status =
-	HAL_RX_GET(rx_tlv,
-		   RX_LOCATION_INFO,
-		   RESERVED_3);
+	HAL_GET_RX_LOCATION_INFO_CHAN_CAPTURE_STATUS(rx_tlv);
 
 	ppdu_info->cfr_info.rx_start_ts =
 	HAL_RX_GET(rx_tlv,
@@ -811,23 +816,27 @@ void hal_rx_get_rtt_info_9224(void *rx_tlv, void *ppdu_info_hdl)
 
 	ppdu_info->cfr_info.agc_gain_info0 =
 	HAL_RX_GET(rx_tlv,
-		   PHYRX_PKT_END_INFO,
-		   PHY_TIMESTAMP_1_LOWER_32);
+		   PHYRX_LOCATION_RX_LOCATION_INFO_DETAILS,
+		   GAIN_CHAIN0);
+
+	ppdu_info->cfr_info.agc_gain_info0 |=
+	(((uint32_t)HAL_RX_GET(rx_tlv,
+		    PHYRX_LOCATION_RX_LOCATION_INFO_DETAILS,
+		    GAIN_CHAIN1)) << 16);
 
 	ppdu_info->cfr_info.agc_gain_info1 =
 	HAL_RX_GET(rx_tlv,
-		   PHYRX_PKT_END_INFO,
-		   PHY_TIMESTAMP_1_UPPER_32);
+		   PHYRX_LOCATION_RX_LOCATION_INFO_DETAILS,
+		   GAIN_CHAIN2);
 
-	ppdu_info->cfr_info.agc_gain_info2 =
-	HAL_RX_GET(rx_tlv,
-		   PHYRX_PKT_END_INFO,
-		   PHY_TIMESTAMP_2_LOWER_32);
+	ppdu_info->cfr_info.agc_gain_info1 |=
+	(((uint32_t)HAL_RX_GET(rx_tlv,
+		    PHYRX_LOCATION_RX_LOCATION_INFO_DETAILS,
+		    GAIN_CHAIN3)) << 16);
 
-	ppdu_info->cfr_info.agc_gain_info3 =
-	HAL_RX_GET(rx_tlv,
-		   PHYRX_PKT_END_INFO,
-		   PHY_TIMESTAMP_2_UPPER_32);
+	ppdu_info->cfr_info.agc_gain_info2 = 0;
+
+	ppdu_info->cfr_info.agc_gain_info3 = 0;
 }
 #endif
 
@@ -852,6 +861,7 @@ static inline void hal_rx_dump_mpdu_start_tlv_9224(void *mpdustart,
 #endif
 	QDF_TRACE(dbg_level, QDF_MODULE_ID_HAL,
 		  "rx_mpdu_start tlv (1/5) - "
+		  "rx_reo_queue_desc_addr_31_0 :%x"
 		  "rx_reo_queue_desc_addr_39_32 :%x"
 		  "receive_queue_number:%x "
 		  "pre_delim_err_warning:%x "
@@ -870,6 +880,7 @@ static inline void hal_rx_dump_mpdu_start_tlv_9224(void *mpdustart,
 		  "bssid_number:%x "
 		  "tid:%x "
 		  "reserved_7a:%x ",
+		  mpdu_info->rx_reo_queue_desc_addr_31_0,
 		  mpdu_info->rx_reo_queue_desc_addr_39_32,
 		  mpdu_info->receive_queue_number,
 		  mpdu_info->pre_delim_err_warning,
@@ -1468,8 +1479,30 @@ static inline void hal_rx_dump_pkt_hdr_tlv_9224(struct rx_pkt_tlvs *pkt_tlvs,
 			     sizeof(pkt_hdr_tlv->rx_pkt_hdr));
 }
 
+/*
+ * hal_tx_dump_ppe_vp_entry_9224()
+ * @hal_soc_hdl: HAL SoC handle
+ *
+ * Return: void
+ */
+static inline
+void hal_tx_dump_ppe_vp_entry_9224(hal_soc_handle_t hal_soc_hdl)
+{
+	struct hal_soc *soc = (struct hal_soc *)hal_soc_hdl;
+	uint32_t reg_addr, reg_val = 0, i;
+
+	for (i = 0; i < HAL_PPE_VP_ENTRIES_MAX; i++) {
+		reg_addr =
+			HWIO_TCL_R0_PPE_VP_CONFIG_TABLE_n_ADDR(
+				MAC_TCL_REG_REG_BASE,
+				i);
+		reg_val = HAL_REG_READ(soc, reg_addr);
+		hal_verbose_debug("%d: 0x%x\n", i, reg_val);
+	}
+}
+
 /**
- * hal_rx_dump_pkt_tlvs_9224(): API to print RX Pkt TLVS for 7850
+ * hal_rx_dump_pkt_tlvs_9224(): API to print RX Pkt TLVS QCN9224
  * @hal_soc_hdl: hal_soc handle
  * @buf: pointer the pkt buffer
  * @dbg_level: log level
@@ -1534,6 +1567,150 @@ static uint8_t hal_tx_get_num_tcl_banks_9224(void)
 	return HAL_NUM_TCL_BANKS_9224;
 }
 
+static void hal_reo_setup_9224(struct hal_soc *soc, void *reoparams)
+{
+	uint32_t reg_val;
+	struct hal_reo_params *reo_params = (struct hal_reo_params *)reoparams;
+
+	reg_val = HAL_REG_READ(soc, HWIO_REO_R0_GENERAL_ENABLE_ADDR(
+		REO_REG_REG_BASE));
+
+	hal_reo_config_9224(soc, reg_val, reo_params);
+	/* Other ring enable bits and REO_ENABLE will be set by FW */
+
+	/* TODO: Setup destination ring mapping if enabled */
+
+	/* TODO: Error destination ring setting is left to default.
+	 * Default setting is to send all errors to release ring.
+	 */
+
+	/* Set the reo descriptor swap bits in case of BIG endian platform */
+	hal_setup_reo_swap(soc);
+
+	HAL_REG_WRITE(soc,
+		      HWIO_REO_R0_AGING_THRESHOLD_IX_0_ADDR(REO_REG_REG_BASE),
+		      HAL_DEFAULT_BE_BK_VI_REO_TIMEOUT_MS * 1000);
+
+	HAL_REG_WRITE(soc,
+		      HWIO_REO_R0_AGING_THRESHOLD_IX_1_ADDR(REO_REG_REG_BASE),
+		      (HAL_DEFAULT_BE_BK_VI_REO_TIMEOUT_MS * 1000));
+
+	HAL_REG_WRITE(soc,
+		      HWIO_REO_R0_AGING_THRESHOLD_IX_2_ADDR(REO_REG_REG_BASE),
+		      (HAL_DEFAULT_BE_BK_VI_REO_TIMEOUT_MS * 1000));
+
+	HAL_REG_WRITE(soc,
+		      HWIO_REO_R0_AGING_THRESHOLD_IX_3_ADDR(REO_REG_REG_BASE),
+		      (HAL_DEFAULT_VO_REO_TIMEOUT_MS * 1000));
+
+	/*
+	 * When hash based routing is enabled, routing of the rx packet
+	 * is done based on the following value: 1 _ _ _ _ The last 4
+	 * bits are based on hash[3:0]. This means the possible values
+	 * are 0x10 to 0x1f. This value is used to look-up the
+	 * ring ID configured in Destination_Ring_Ctrl_IX_* register.
+	 * The Destination_Ring_Ctrl_IX_2 and Destination_Ring_Ctrl_IX_3
+	 * registers need to be configured to set-up the 16 entries to
+	 * map the hash values to a ring number. There are 3 bits per
+	 * hash entry  which are mapped as follows:
+	 * 0: TCL, 1:SW1, 2:SW2, * 3:SW3, 4:SW4, 5:Release, 6:FW(WIFI),
+	 * 7: NOT_USED.
+	 */
+	if (reo_params->rx_hash_enabled) {
+		HAL_REG_WRITE(soc,
+			      HWIO_REO_R0_DESTINATION_RING_CTRL_IX_1_ADDR
+			      (REO_REG_REG_BASE), reo_params->remap0);
+
+		hal_debug("HWIO_REO_R0_DESTINATION_RING_CTRL_IX_2_ADDR 0x%x",
+			  HAL_REG_READ(soc,
+				       HWIO_REO_R0_DESTINATION_RING_CTRL_IX_1_ADDR(
+				       REO_REG_REG_BASE)));
+
+		HAL_REG_WRITE(soc,
+			      HWIO_REO_R0_DESTINATION_RING_CTRL_IX_2_ADDR
+			      (REO_REG_REG_BASE), reo_params->remap1);
+
+		hal_debug("HWIO_REO_R0_DESTINATION_RING_CTRL_IX_2_ADDR 0x%x",
+			  HAL_REG_READ(soc,
+				       HWIO_REO_R0_DESTINATION_RING_CTRL_IX_2_ADDR(
+				       REO_REG_REG_BASE)));
+
+		HAL_REG_WRITE(soc,
+			      HWIO_REO_R0_DESTINATION_RING_CTRL_IX_3_ADDR
+			      (REO_REG_REG_BASE), reo_params->remap2);
+
+		hal_debug("HWIO_REO_R0_DESTINATION_RING_CTRL_IX_3_ADDR 0x%x",
+			  HAL_REG_READ(soc,
+				       HWIO_REO_R0_DESTINATION_RING_CTRL_IX_3_ADDR(
+				       REO_REG_REG_BASE)));
+	}
+
+	/* TODO: Check if the following registers shoould be setup by host:
+	 * AGING_CONTROL
+	 * HIGH_MEMORY_THRESHOLD
+	 * GLOBAL_LINK_DESC_COUNT_THRESH_IX_0[1,2]
+	 * GLOBAL_LINK_DESC_COUNT_CTRL
+	 */
+
+	hal_reo_shared_qaddr_init((hal_soc_handle_t)soc);
+}
+
+/**
+ * hal_qcn9224_get_reo_qdesc_size()- Get the reo queue descriptor size
+ *			  from the give Block-Ack window size
+ * Return: reo queue descriptor size
+ */
+static uint32_t hal_qcn9224_get_reo_qdesc_size(uint32_t ba_window_size, int tid)
+{
+	/* Hardcode the ba_window_size to HAL_RX_MAX_BA_WINDOW for
+	 * NON_QOS_TID until HW issues are resolved.
+	 */
+#define HAL_RX_MAX_BA_WINDOW_BE 1024
+	if (tid != HAL_NON_QOS_TID)
+		ba_window_size = HAL_RX_MAX_BA_WINDOW_BE;
+
+	/* Return descriptor size corresponding to window size of 2 since
+	 * we set ba_window_size to 2 while setting up REO descriptors as
+	 * a WAR to get 2k jump exception aggregates are received without
+	 * a BA session.
+	 */
+	if (ba_window_size <= 1) {
+		if (tid != HAL_NON_QOS_TID)
+			return sizeof(struct rx_reo_queue) +
+				sizeof(struct rx_reo_queue_ext);
+		else
+			return sizeof(struct rx_reo_queue);
+	}
+
+	if (ba_window_size <= 105)
+		return sizeof(struct rx_reo_queue) +
+			sizeof(struct rx_reo_queue_ext);
+
+	if (ba_window_size <= 210)
+		return sizeof(struct rx_reo_queue) +
+			(2 * sizeof(struct rx_reo_queue_ext));
+
+	if (ba_window_size <= 256)
+		return sizeof(struct rx_reo_queue) +
+			(3 * sizeof(struct rx_reo_queue_ext));
+
+	return sizeof(struct rx_reo_queue) +
+		(10 * sizeof(struct rx_reo_queue_ext)) +
+		sizeof(struct rx_reo_queue_1k);
+}
+
+/*
+ * hal_tx_dump_ppe_vp_entry_9224()
+ * @hal_soc_hdl: HAL SoC handle
+ *
+ * Return: Number of PPE VP entries
+ */
+static
+uint32_t hal_tx_get_num_ppe_vp_tbl_entries_9224(hal_soc_handle_t hal_soc_hdl)
+{
+	return HAL_PPE_VP_ENTRIES_MAX;
+}
+
 static void hal_hw_txrx_ops_attach_qcn9224(struct hal_soc *hal_soc)
 {
 	/* init and setup */
@@ -1547,9 +1724,23 @@ static void hal_hw_txrx_ops_attach_qcn9224(struct hal_soc *hal_soc)
 	hal_soc->ops->hal_tx_set_dscp_tid_map = hal_tx_set_dscp_tid_map_9224;
 	hal_soc->ops->hal_tx_update_dscp_tid = hal_tx_update_dscp_tid_9224;
 	hal_soc->ops->hal_tx_comp_get_status =
-					hal_tx_comp_get_status_generic_be;
+			hal_tx_comp_get_status_generic_be;
 	hal_soc->ops->hal_tx_init_cmd_credit_ring =
-					hal_tx_init_cmd_credit_ring_9224;
+			hal_tx_init_cmd_credit_ring_9224;
+	hal_soc->ops->hal_tx_set_ppe_cmn_cfg =
+			hal_tx_set_ppe_cmn_config_9224;
+	hal_soc->ops->hal_tx_set_ppe_vp_entry =
+			hal_tx_set_ppe_vp_entry_9224;
+	hal_soc->ops->hal_tx_set_ppe_pri2tid =
+			hal_tx_set_ppe_pri2tid_map_9224;
+	hal_soc->ops->hal_tx_update_ppe_pri2tid =
+			hal_tx_update_ppe_pri2tid_9224;
+	hal_soc->ops->hal_tx_dump_ppe_vp_entry =
+			hal_tx_dump_ppe_vp_entry_9224;
+	hal_soc->ops->hal_tx_get_num_ppe_vp_tbl_entries =
+			hal_tx_get_num_ppe_vp_tbl_entries_9224;
+	hal_soc->ops->hal_tx_enable_pri2tid_map =
+			hal_tx_enable_pri2tid_map_9224;
 
 	/* rx */
 	hal_soc->ops->hal_rx_msdu_start_nss_get = hal_rx_tlv_nss_get_be;
@@ -1609,6 +1800,8 @@ static void hal_hw_txrx_ops_attach_qcn9224(struct hal_soc *hal_soc)
 					hal_rx_get_mpdu_mac_ad4_valid_be;
 	hal_soc->ops->hal_rx_mpdu_start_sw_peer_id_get =
 		hal_rx_mpdu_start_sw_peer_id_get_be;
+	hal_soc->ops->hal_rx_mpdu_peer_meta_data_get =
+		hal_rx_mpdu_peer_meta_data_get_be;
 	hal_soc->ops->hal_rx_mpdu_get_to_ds = hal_rx_mpdu_get_to_ds_be;
 	hal_soc->ops->hal_rx_mpdu_get_fr_ds = hal_rx_mpdu_get_fr_ds_be;
 	hal_soc->ops->hal_rx_get_mpdu_frame_control_valid =
@@ -1648,6 +1841,8 @@ static void hal_hw_txrx_ops_attach_qcn9224(struct hal_soc *hal_soc)
 					hal_rx_msdu_flow_idx_timeout_be;
 	hal_soc->ops->hal_rx_msdu_fse_metadata_get =
 					hal_rx_msdu_fse_metadata_get_be;
+	hal_soc->ops->hal_rx_msdu_cce_match_get =
+					hal_rx_msdu_cce_match_get_be;
 	hal_soc->ops->hal_rx_msdu_cce_metadata_get =
 					hal_rx_msdu_cce_metadata_get_be;
 	hal_soc->ops->hal_rx_msdu_get_flow_params =
@@ -1680,6 +1875,12 @@ static void hal_hw_txrx_ops_attach_qcn9224(struct hal_soc *hal_soc)
 					hal_rx_pkt_tlv_offset_get_generic;
 #endif
 	hal_soc->ops->hal_rx_flow_setup_fse = hal_rx_flow_setup_fse_9224;
+
+	hal_soc->ops->hal_rx_flow_get_tuple_info =
+					hal_rx_flow_get_tuple_info_be;
+	 hal_soc->ops->hal_rx_flow_delete_entry =
+					hal_rx_flow_delete_entry_be;
+	hal_soc->ops->hal_rx_fst_get_fse_size = hal_rx_fst_get_fse_size_be;
 	hal_soc->ops->hal_compute_reo_remap_ix2_ix3 =
 					hal_compute_reo_remap_ix2_ix3_9224;
 
@@ -1726,6 +1927,24 @@ static void hal_hw_txrx_ops_attach_qcn9224(struct hal_soc *hal_soc)
 	hal_soc->ops->hal_rx_priv_info_get_from_tlv =
 			hal_rx_priv_info_get_from_tlv_be;
 	hal_soc->ops->hal_rx_pkt_hdr_get = hal_rx_pkt_hdr_get_be;
+	hal_soc->ops->hal_reo_setup = hal_reo_setup_9224;
+#ifdef REO_SHARED_QREF_TABLE_EN
+	hal_soc->ops->hal_reo_shared_qaddr_setup = hal_reo_shared_qaddr_setup_be;
+	hal_soc->ops->hal_reo_shared_qaddr_init = hal_reo_shared_qaddr_init_be;
+	hal_soc->ops->hal_reo_shared_qaddr_detach = hal_reo_shared_qaddr_detach_be;
+	hal_soc->ops->hal_reo_shared_qaddr_write = hal_reo_shared_qaddr_write_be;
+#endif
+	/* Overwrite the default BE ops */
+	hal_soc->ops->hal_get_reo_qdesc_size = hal_qcn9224_get_reo_qdesc_size;
+	/* TX MONITOR */
+#ifdef QCA_MONITOR_2_0_SUPPORT
+	hal_soc->ops->hal_txmon_status_parse_tlv =
+				hal_txmon_status_parse_tlv_generic_be;
+	hal_soc->ops->hal_txmon_status_get_num_users =
+				hal_txmon_status_get_num_users_generic_be;
+	hal_soc->ops->hal_txmon_status_free_buffer =
+				hal_txmon_status_free_buffer_generic_be;
+#endif /* QCA_MONITOR_2_0_SUPPORT */
 };
 
 struct hal_hw_srng_config hw_srng_table_9224[] = {
@@ -2070,10 +2289,11 @@ struct hal_hw_srng_config hw_srng_table_9224[] = {
 		.reg_size = {},
 		.max_size = HAL_RXDMA_MAX_RING_SIZE,
 	},
+#ifdef QCA_MONITOR_2_0_SUPPORT
 	{ /* RXDMA_MONITOR_BUF */
 		.start_ring_id = HAL_SRNG_WMAC1_SW2RXDMA2_BUF,
 		.max_rings = 1,
-		.entry_size = sizeof(struct wbm_buffer_ring) >> 2,
+		.entry_size = sizeof(struct mon_ingress_ring) >> 2,
 		.lmac_ring = TRUE,
 		.ring_dir = HAL_SRNG_SRC_RING,
 		/* reg_start is not set because LMAC rings are not accessed
@@ -2083,6 +2303,9 @@ struct hal_hw_srng_config hw_srng_table_9224[] = {
 		.reg_size = {},
 		.max_size = HAL_RXDMA_MAX_RING_SIZE_BE,
 	},
+#else
+	{},
+#endif
 	{ /* RXDMA_MONITOR_STATUS */
 		.start_ring_id = HAL_SRNG_WMAC1_SW2RXDMA1_STATBUF,
 		.max_rings = 0,
@@ -2096,10 +2319,11 @@ struct hal_hw_srng_config hw_srng_table_9224[] = {
 		.reg_size = {},
 		.max_size = HAL_RXDMA_MAX_RING_SIZE,
 	},
+#ifdef QCA_MONITOR_2_0_SUPPORT
 	{ /* RXDMA_MONITOR_DST */
 		.start_ring_id = HAL_SRNG_WMAC1_RXMON2SW0,
 		.max_rings = 1,
-		.entry_size = sizeof(struct sw_monitor_ring) >> 2,
+		.entry_size = sizeof(struct mon_destination_ring) >> 2,
 		.lmac_ring = TRUE,
 		.ring_dir = HAL_SRNG_DST_RING,
 		/* reg_start is not set because LMAC rings are not accessed
@@ -2109,6 +2333,9 @@ struct hal_hw_srng_config hw_srng_table_9224[] = {
 		.reg_size = {},
 		.max_size = HAL_RXDMA_MAX_RING_SIZE_BE,
 	},
+#else
+	{},
+#endif
 	{ /* RXDMA_MONITOR_DESC */
 		.start_ring_id = HAL_SRNG_WMAC1_SW2RXDMA1_DESC,
 		.max_rings = 0,
@@ -2204,10 +2431,11 @@ struct hal_hw_srng_config hw_srng_table_9224[] = {
 		HWIO_WBM_R0_PPE_RELEASE_RING_BASE_MSB_RING_SIZE_BMSK >>
 		HWIO_WBM_R0_PPE_RELEASE_RING_BASE_MSB_RING_SIZE_SHFT,
 	},
+#ifdef QCA_MONITOR_2_0_SUPPORT
 	{ /* TX_MONITOR_BUF */
 		.start_ring_id = HAL_SRNG_SW2TXMON_BUF0,
 		.max_rings = 1,
-		.entry_size = sizeof(struct wbm_buffer_ring) >> 2,
+		.entry_size = sizeof(struct mon_ingress_ring) >> 2,
 		.lmac_ring = TRUE,
 		.ring_dir = HAL_SRNG_SRC_RING,
 		/* reg_start is not set because LMAC rings are not accessed
@@ -2220,7 +2448,7 @@ struct hal_hw_srng_config hw_srng_table_9224[] = {
 	{ /* TX_MONITOR_DST */
 		.start_ring_id = HAL_SRNG_WMAC1_TXMON2SW0,
 		.max_rings = 1,
-		.entry_size = sizeof(struct sw_monitor_ring) >> 2,
+		.entry_size = sizeof(struct mon_destination_ring) >> 2,
 		.lmac_ring = TRUE,
 		.ring_dir = HAL_SRNG_DST_RING,
 		/* reg_start is not set because LMAC rings are not accessed
@@ -2230,6 +2458,10 @@ struct hal_hw_srng_config hw_srng_table_9224[] = {
 		.reg_size = {},
 		.max_size = HAL_RXDMA_MAX_RING_SIZE_BE,
 	},
+#else
+	{},
+	{},
+#endif
 	{ /* SW2RXDMA */
 		.start_ring_id = HAL_SRNG_SW2RXDMA_BUF0,
 		.max_rings = 3,
@@ -2247,7 +2479,7 @@ struct hal_hw_srng_config hw_srng_table_9224[] = {
 
 /**
  * hal_srng_hw_reg_offset_init_qcn9224() - Initialize the HW srng reg offset
- *				applicable only for WCN7850
+ *				applicable only for QCN9224
  * @hal_soc: HAL Soc handle
  *
  * Return: None
