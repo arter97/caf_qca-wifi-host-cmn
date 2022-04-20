@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2015-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -73,9 +73,8 @@ dp_tx_initialize_threshold(struct dp_tx_desc_pool_s *pool,
 	pool->stop_th[DP_TH_HI] = (pool->stop_th[DP_TH_BE_BK]
 					* FL_TH_HI_PERCENTAGE) / 100;
 
-	QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_ERROR,
-		  "%s: tx flow control threshold is set, pool size is %d",
-		  __func__, flow_pool_size);
+	dp_info("tx flow control threshold is set, pool size is %d",
+		flow_pool_size);
 }
 
 /**
@@ -328,7 +327,7 @@ void dp_tx_clear_flow_pool_stats(struct dp_soc *soc)
  * Return: flow_pool pointer / NULL for error
  */
 struct dp_tx_desc_pool_s *dp_tx_create_flow_pool(struct dp_soc *soc,
-	uint8_t flow_pool_id, uint16_t flow_pool_size)
+	uint8_t flow_pool_id, uint32_t flow_pool_size)
 {
 	struct dp_tx_desc_pool_s *pool;
 	uint32_t stop_threshold;
@@ -513,7 +512,7 @@ static void dp_tx_flow_pool_vdev_unmap(struct dp_pdev *pdev,
  * Return: none
  */
 QDF_STATUS dp_tx_flow_pool_map_handler(struct dp_pdev *pdev, uint8_t flow_id,
-	uint8_t flow_type, uint8_t flow_pool_id, uint16_t flow_pool_size)
+	uint8_t flow_type, uint8_t flow_pool_id, uint32_t flow_pool_size)
 {
 	struct dp_soc *soc = pdev->soc;
 	struct dp_tx_desc_pool_s *pool;

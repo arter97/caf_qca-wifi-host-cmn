@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2017-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -561,8 +561,8 @@ target_if_dbr_deinit_mem_list(struct direct_buf_rx_psoc_obj *dbr_psoc_obj)
 	for (i = 0; i < QDF_ARRAY_SIZE(dbr_psoc_obj->mem_list); i++) {
 		mem_list = &dbr_psoc_obj->mem_list[i];
 		qdf_list_for_each_del(mem_list, cur, next, node) {
-			qdf_mem_free(cur->vaddr_unaligned);
 			qdf_list_remove_node(mem_list, &cur->node);
+			qdf_mem_free(cur->vaddr_unaligned);
 		}
 
 		qdf_list_destroy(mem_list);
@@ -1323,6 +1323,11 @@ static QDF_STATUS target_if_dbr_replenish_ring(struct wlan_objmgr_pdev *pdev,
 		return QDF_STATUS_E_FAILURE;
 	}
 
+	if (cookie >= mod_param->dbr_ring_cfg->num_ptr) {
+		direct_buf_rx_err("invalid cookie %d", cookie);
+		return QDF_STATUS_E_INVAL;
+	}
+
 	dbr_psoc_obj = wlan_objmgr_psoc_get_comp_private_obj(psoc,
 				WLAN_TARGET_IF_COMP_DIRECT_BUF_RX);
 
@@ -1810,6 +1815,11 @@ static void *target_if_dbr_vaddr_lookup(
 	struct direct_buf_rx_buf_info *dbr_buf_pool;
 
 	dbr_buf_pool = mod_param->dbr_buf_pool;
+
+	if (cookie >= mod_param->dbr_ring_cfg->num_ptr) {
+		direct_buf_rx_err("invalid cookie %d", cookie);
+		return NULL;
+	}
 
 	if (dbr_buf_pool[cookie].paddr == paddr) {
 		return dbr_buf_pool[cookie].vaddr +

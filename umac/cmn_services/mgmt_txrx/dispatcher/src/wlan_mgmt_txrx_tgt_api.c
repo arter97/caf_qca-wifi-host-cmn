@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -21,6 +22,8 @@
  *  This file contains mgmt txrx public API definitions for
  *  southbound interface.
  */
+
+#include <wmi_unified_param.h>
 
 #include "wlan_mgmt_txrx_tgt_api.h"
 #include "wlan_mgmt_txrx_utils_api.h"
@@ -757,6 +760,38 @@ mgmt_get_rvs_action_subtype(uint8_t action_code)
 }
 
 /**
+ * mgmt_get_twt_action_subtype() - gets twt action subtype
+ * @action_code: action code
+ *
+ * This function returns the subtype for twt action
+ * category.
+ *
+ * Return: mgmt frame type
+ */
+static enum mgmt_frame_type
+mgmt_get_twt_action_subtype(uint8_t action_code)
+{
+	enum mgmt_frame_type frm_type;
+
+	switch (action_code) {
+	case TWT_SETUP:
+		frm_type = MGMT_ACTION_TWT_SETUP;
+		break;
+	case TWT_TEARDOWN:
+		frm_type = MGMT_ACTION_TWT_TEARDOWN;
+		break;
+	case TWT_INFORMATION:
+		frm_type = MGMT_ACTION_TWT_INFORMATION;
+		break;
+	default:
+		frm_type = MGMT_FRM_UNSPECIFIED;
+		break;
+	}
+
+	return frm_type;
+}
+
+/**
  * mgmt_txrx_get_action_frm_subtype() - gets action frm subtype
  * @mpdu_data_ptr: pointer to mpdu data
  *
@@ -841,6 +876,10 @@ mgmt_txrx_get_action_frm_subtype(uint8_t *mpdu_data_ptr)
 	case ACTION_CATEGORY_RVS:
 		frm_type =
 			mgmt_get_rvs_action_subtype(action_hdr->action_code);
+		break;
+	case ACTION_CATEGORY_USIG:
+		frm_type =
+			mgmt_get_twt_action_subtype(action_hdr->action_code);
 		break;
 	default:
 		frm_type = MGMT_FRM_UNSPECIFIED;
@@ -1169,6 +1208,28 @@ QDF_STATUS tgt_mgmt_txrx_rx_frame_handler(
 				(le16toh(*(uint16_t *)wh->i_seq) >>
 				WLAN_SEQ_SEQ_SHIFT), mgmt_rx_params->rssi,
 				mgmt_rx_params->tsf_delta);
+
+	/* Print a hexdump of packet for host debug */
+	if (mgmt_type == IEEE80211_FC0_TYPE_MGT &&
+	    ((mgmt_rx_params->status & WMI_HOST_RXERR_PN) ||
+	     (mgmt_rx_params->status & WMI_HOST_RXERR_CRC) ||
+	     (mgmt_rx_params->status & WMI_HOST_RXERR_DECRYPT) ||
+	     (mgmt_rx_params->status & WMI_HOST_RXERR_MIC) ||
+	     (mgmt_rx_params->status & WMI_HOST_RXERR_KEY_CACHE_MISS))) {
+		uint64_t curr_pn, prev_pn;
+		uint8_t *pn = NULL;
+
+		pn = mgmt_rx_params->pn_params.curr_pn;
+		curr_pn = qdf_le64_to_cpu(*((uint64_t *)pn));
+
+		pn = mgmt_rx_params->pn_params.prev_pn;
+		prev_pn = qdf_le64_to_cpu(*((uint64_t *)pn));
+
+		mgmt_txrx_debug("Current PN=0x%llx Previous PN=0x%llx. Packet dumped below",
+				curr_pn, prev_pn);
+		qdf_trace_hex_dump(QDF_MODULE_ID_MGMT_TXRX,
+				   QDF_TRACE_LEVEL_DEBUG, data, buflen);
+	}
 
 	if (simulation_frame_update(psoc, buf, mgmt_rx_params))
 		return QDF_STATUS_E_FAILURE;

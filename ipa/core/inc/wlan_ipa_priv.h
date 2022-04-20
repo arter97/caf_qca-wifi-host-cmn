@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2013-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -335,7 +335,8 @@ struct wlan_ipa_priv;
  * @interface_lock: Interface lock
  * @ifa_address: Interface address
  * @stats: Interface stats
- * @bssid: BSSID. valid only for sta iface ctx;
+ * @bssid: BSSID. valid only for sta iface ctx
+ * @is_authenticated: is peer authenticated
  */
 struct wlan_ipa_iface_context {
 	struct wlan_ipa_priv *ipa_ctx;
@@ -354,6 +355,7 @@ struct wlan_ipa_iface_context {
 	uint32_t ifa_address;
 	struct wlan_ipa_iface_stats stats;
 	struct qdf_mac_addr bssid;
+	uint8_t is_authenticated;
 };
 
 /**
@@ -402,11 +404,13 @@ struct wlan_ipa_stats {
 /**
  * struct ipa_uc_stas_map - IPA UC assoc station map
  * @is_reserved: STA reserved flag
+ * @is_authenticated: is peer authenticated
  * @mac_addr: Station mac address
  */
 struct ipa_uc_stas_map {
 	bool is_reserved;
 	struct qdf_mac_addr mac_addr;
+	uint8_t is_authenticated;
 };
 
 /**
@@ -512,11 +516,13 @@ struct uc_rm_work_struct {
  * @work: uC OP work
  * @msg: OP message
  * @osdev: poiner to qdf net device, used by osif_psoc_sync_trans_start_wait
+ * @ipa_priv_bp: back pointer to ipa_obj
  */
 struct uc_op_work_struct {
 	qdf_work_t work;
 	struct op_msg_type *msg;
 	qdf_device_t osdev;
+	struct wlan_ipa_priv *ipa_priv_bp;
 };
 
 /**
@@ -730,6 +736,9 @@ struct wlan_ipa_priv {
 	qdf_atomic_t stats_quota;
 	uint8_t curr_bw_level;
 	qdf_atomic_t deinit_in_prog;
+	uint8_t instance_id;
+	bool handle_initialized;
+	qdf_ipa_wdi_hdl_t hdl;
 };
 
 #define WLAN_IPA_WLAN_FRAG_HEADER        sizeof(struct frag_header)

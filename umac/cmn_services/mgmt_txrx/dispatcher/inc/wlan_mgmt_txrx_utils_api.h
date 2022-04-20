@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -489,6 +490,17 @@ enum vht_actioncode {
 };
 
 /**
+ * enum twt_actioncode - twt action frames
+ * @TWT_SETUP: twt set up action frame
+ * @TWT_INFORMATION: twt information action frame
+ */
+enum twt_actioncode {
+	TWT_SETUP = 6,
+	TWT_TEARDOWN = 7,
+	TWT_INFORMATION = 11,
+};
+
+/**
  * struct action_frm_hdr - action frame header
  * @action_category: action category
  * @action_code: action code
@@ -620,6 +632,9 @@ struct action_frm_hdr {
  * @MGMT_ACTION_MCSC_RSP: MCSC response frame
  * @MGMT_FRAME_TYPE_ALL:         mgmt frame type for all type of frames
  * @MGMT_CTRL_FRAME: Control Frames
+ * @MGMT_ACTION_TWT_SETUP: TWT setup frame
+ * @MGMT_ACTION_TWT_TEARDOWN: TWT teardown frame
+ * @MGMT_ACTION_TWT_INFORMATION: TWT information frame
  * @MGMT_MAX_FRAME_TYPE:         max. mgmt frame types
  */
 enum mgmt_frame_type {
@@ -746,13 +761,28 @@ enum mgmt_frame_type {
 	MGMT_ACTION_MCSC_RSP,
 	MGMT_FRAME_TYPE_ALL,
 	MGMT_CTRL_FRAME,
+	MGMT_ACTION_TWT_SETUP,
+	MGMT_ACTION_TWT_TEARDOWN,
+	MGMT_ACTION_TWT_INFORMATION,
 	MGMT_MAX_FRAME_TYPE,
 };
 
 #define WLAN_MGMT_TXRX_HOST_MAX_ANTENNA          4
+#define WLAN_MGMT_TXRX_HOST_MAX_PN_LEN           8
 #define WLAN_INVALID_PER_CHAIN_RSSI             0xFF
 #define WLAN_INVALID_PER_CHAIN_SNR              0x80
 #define WLAN_NOISE_FLOOR_DBM_DEFAULT            -96
+
+/**
+ * struct frame_pn_params - host PN params
+ * @curr_pn: current running PN of rx frames
+ * @prev_pn: previous PN of rx frames
+ */
+struct frame_pn_params {
+	uint8_t curr_pn[WLAN_MGMT_TXRX_HOST_MAX_PN_LEN];
+	uint8_t prev_pn[WLAN_MGMT_TXRX_HOST_MAX_PN_LEN];
+};
+
 /**
  * struct mgmt_rx_event_params - host mgmt header params
  * @chan_freq: channel frequency on which this frame is received
@@ -767,6 +797,7 @@ enum mgmt_frame_type {
  *          WMI_HOST_RXERR_DECRYPT = 0x08
  *          WMI_HOST_RXERR_MIC = 0x10
  *          WMI_HOST_RXERR_KEY_CACHE_MISS = 0x20
+ *          WMI_HOST_RXERR_PN = 0x80
  * @flags: information about the management frame e.g. can give a
  *         scan source for a scan result mgmt frame
  * @rssi: combined RSSI, i.e. the sum of the snr + noise floor (dBm units)
@@ -775,6 +806,7 @@ enum mgmt_frame_type {
  * @rx_params: pointer to other rx params
  *             (win specific, will be removed in phase 4)
  * @reo_params: Pointer to MGMT Rx REO params
+ * @pn_params: Frame PN params
  */
 struct mgmt_rx_event_params {
 	uint32_t    chan_freq;
@@ -794,6 +826,7 @@ struct mgmt_rx_event_params {
 #ifdef WLAN_MGMT_RX_REO_SUPPORT
 	struct mgmt_rx_reo_params *reo_params;
 #endif
+	struct frame_pn_params pn_params;
 };
 
 #ifdef WLAN_MGMT_RX_REO_SUPPORT

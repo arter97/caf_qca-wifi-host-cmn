@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021,2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -29,6 +29,7 @@
 #ifdef FEATURE_WDS
 #include "dp_txrx_wds.h"
 #endif
+#include "dp_li.h"
 
 extern uint8_t sec_type_map[MAX_CDP_SEC_TYPE];
 
@@ -93,7 +94,8 @@ void dp_tx_process_htt_completion_li(struct dp_soc *soc,
 	struct dp_vdev *vdev = NULL;
 	struct hal_tx_completion_status ts = {0};
 	uint32_t *htt_desc = (uint32_t *)status;
-	struct dp_peer *peer;
+	struct dp_txrx_peer *txrx_peer;
+	dp_txrx_ref_handle txrx_ref_handle = NULL;
 	struct cdp_tid_tx_stats *tid_stats = NULL;
 	struct htt_soc *htt_handle;
 	uint8_t vdev_id;
@@ -187,21 +189,24 @@ void dp_tx_process_htt_completion_li(struct dp_soc *soc,
 		if (tx_status < CDP_MAX_TX_HTT_STATUS)
 			tid_stats->htt_status_cnt[tx_status]++;
 
-		peer = dp_peer_get_ref_by_id(soc, ts.peer_id,
-					     DP_MOD_ID_HTT_COMP);
-		if (qdf_likely(peer)) {
-			DP_STATS_INC_PKT(peer, tx.comp_pkt, 1,
-					 qdf_nbuf_len(tx_desc->nbuf));
-			DP_STATS_INCC(peer, tx.tx_failed, 1,
-				      tx_status != HTT_TX_FW2WBM_TX_STATUS_OK);
+		txrx_peer = dp_txrx_peer_get_ref_by_id(soc, ts.peer_id,
+						       &txrx_ref_handle,
+						       DP_MOD_ID_HTT_COMP);
+		if (qdf_likely(txrx_peer)) {
+			DP_PEER_STATS_FLAT_INC_PKT(txrx_peer, comp_pkt, 1,
+						   qdf_nbuf_len(tx_desc->nbuf));
+			if (tx_status != HTT_TX_FW2WBM_TX_STATUS_OK)
+				DP_PEER_STATS_FLAT_INC(txrx_peer, tx_failed, 1);
 		}
 
-		dp_tx_comp_process_tx_status(soc, tx_desc, &ts, peer, ring_id);
-		dp_tx_comp_process_desc(soc, tx_desc, &ts, peer);
+		dp_tx_comp_process_tx_status(soc, tx_desc, &ts, txrx_peer,
+					     ring_id);
+		dp_tx_comp_process_desc(soc, tx_desc, &ts, txrx_peer);
 		dp_tx_desc_release(tx_desc, tx_desc->pool_id);
 
-		if (qdf_likely(peer))
-			dp_peer_unref_delete(peer, DP_MOD_ID_HTT_COMP);
+		if (qdf_likely(txrx_peer))
+			dp_txrx_peer_unref_delete(txrx_ref_handle,
+						  DP_MOD_ID_HTT_COMP);
 
 		break;
 	}
@@ -260,8 +265,9 @@ static inline uint8_t dp_tx_get_rbm_id_li(struct dp_soc *soc,
 static inline uint8_t dp_tx_get_rbm_id_li(struct dp_soc *soc,
 					  uint8_t ring_id)
 {
-	return (ring_id ? soc->wbm_sw0_bm_id + (ring_id - 1) :
-			  HAL_WBM_SW2_BM_ID(soc->wbm_sw0_bm_id));
+	if (ring_id == soc->num_tcl_data_rings)
+		return HAL_WBM_SW4_BM_ID(soc->wbm_sw0_bm_id);
+	return (ring_id + HAL_WBM_SW0_BM_ID(soc->wbm_sw0_bm_id));
 }
 #endif
 #else
@@ -322,6 +328,54 @@ void dp_tx_clear_consumed_hw_descs(struct dp_soc *soc,
 }
 #endif /* CLEAR_SW2TCL_CONSUMED_DESC */
 
+#ifdef CONFIG_SAWF
+/**
+ * dp_sawf_config_li - Configure sawf specific fields in tcl
+ *
+ * @soc: DP soc handle
+ * @hhal_tx_desc_cached: tx descriptor
+ * @vdev_id: vdev id
+ * @nbuf: skb buffer
+ *
+ * Return: void
+ */
+static inline
+void dp_sawf_config_li(struct dp_soc *soc, uint32_t *hal_tx_desc_cached,
+		       uint16_t *fw_metadata, uint16_t vdev_id,
+		       qdf_nbuf_t nbuf)
+{
+	uint8_t q_id = 0;
+	uint32_t search_index;
+
+	if (!wlan_cfg_get_sawf_config(soc->wlan_cfg_ctx))
+		return;
+
+	q_id = dp_sawf_queue_id_get(nbuf);
+	if (q_id == DP_SAWF_DEFAULT_Q_INVALID)
+		return;
+
+	dp_sawf_tcl_cmd(fw_metadata, nbuf);
+
+	search_index = dp_sawf_get_search_index(soc, nbuf, vdev_id,
+						q_id);
+	hal_tx_desc_set_hlos_tid(hal_tx_desc_cached, (q_id & 0x7));
+	hal_tx_desc_set_search_type_li(soc->hal_soc, hal_tx_desc_cached,
+				       HAL_TX_ADDR_INDEX_SEARCH);
+	hal_tx_desc_set_search_index_li(soc->hal_soc, hal_tx_desc_cached,
+					search_index);
+}
+#else
+static inline
+void dp_sawf_config_li(struct dp_soc *soc, uint32_t *hal_tx_desc_cached,
+		       uint16_t *fw_metadata, uint16_t vdev_id,
+		       qdf_nbuf_t nbuf)
+{
+}
+
+#define dp_sawf_tx_enqueue_peer_stats(soc, tx_desc)
+#define dp_sawf_tx_enqueue_fail_peer_stats(soc, tx_desc)
+#endif
+
 QDF_STATUS
 dp_tx_hw_enqueue_li(struct dp_soc *soc, struct dp_vdev *vdev,
 		    struct dp_tx_desc_s *tx_desc, uint16_t fw_metadata,
@@ -376,6 +430,12 @@ dp_tx_hw_enqueue_li(struct dp_soc *soc, struct dp_vdev *vdev,
 	hal_tx_desc_set_cache_set_num(soc->hal_soc, hal_tx_desc_cached,
 				      (vdev->bss_ast_hash & 0xF));
 
+	if (dp_sawf_tag_valid_get(tx_desc->nbuf)) {
+		dp_sawf_config_li(soc, hal_tx_desc_cached, &fw_metadata,
+				  vdev->vdev_id, tx_desc->nbuf);
+		dp_sawf_tx_enqueue_peer_stats(soc, tx_desc);
+	}
+
 	hal_tx_desc_set_fw_metadata(hal_tx_desc_cached, fw_metadata);
 	hal_tx_desc_set_buf_length(hal_tx_desc_cached, tx_desc->length);
 	hal_tx_desc_set_buf_offset(hal_tx_desc_cached, tx_desc->pkt_offset);
@@ -406,6 +466,8 @@ dp_tx_hw_enqueue_li(struct dp_soc *soc, struct dp_vdev *vdev,
 		dp_tx_pkt_tracepoints_enabled() ||
 		qdf_unlikely(soc->rdkstats_enabled))
 		tx_desc->timestamp = qdf_ktime_to_ms(qdf_ktime_real_get());
+	else
+		dp_tx_desc_set_timestamp(tx_desc);
 
 	dp_verbose_debug("length:%d , type = %d, dma_addr %llx, offset %d desc id %u",
 			 tx_desc->length,
@@ -421,6 +483,7 @@ dp_tx_hw_enqueue_li(struct dp_soc *soc, struct dp_vdev *vdev,
 			 __func__, __LINE__, hal_ring_hdl);
 		DP_STATS_INC(soc, tx.tcl_ring_full[ring_id], 1);
 		DP_STATS_INC(vdev, tx_i.dropped.enqueue_fail, 1);
+		dp_sawf_tx_enqueue_fail_peer_stats(soc, tx_desc);
 		return status;
 	}
 
@@ -433,13 +496,14 @@ dp_tx_hw_enqueue_li(struct dp_soc *soc, struct dp_vdev *vdev,
 		dp_verbose_debug("TCL ring full ring_id:%d", ring_id);
 		DP_STATS_INC(soc, tx.tcl_ring_full[ring_id], 1);
 		DP_STATS_INC(vdev, tx_i.dropped.enqueue_fail, 1);
+		dp_sawf_tx_enqueue_fail_peer_stats(soc, tx_desc);
 		goto ring_access_fail;
 	}
 
 	tx_desc->flags |= DP_TX_DESC_FLAG_QUEUED_TX;
 	dp_vdev_peer_stats_update_protocol_cnt_tx(vdev, tx_desc->nbuf);
 	hal_tx_desc_sync(hal_tx_desc_cached, hal_tx_desc);
-	coalesce = dp_tx_attempt_coalescing(soc, vdev, tx_desc, tid);
+	coalesce = dp_tx_attempt_coalescing(soc, vdev, tx_desc, tid, msdu_info);
 	DP_STATS_INC_PKT(vdev, tx_i.processed, 1, tx_desc->length);
 	DP_STATS_INC(soc, tx.tcl_enq[ring_id], 1);
 	dp_tx_update_stats(soc, tx_desc->nbuf);
@@ -450,12 +514,14 @@ dp_tx_hw_enqueue_li(struct dp_soc *soc, struct dp_vdev *vdev,
 
 ring_access_fail:
 	dp_tx_ring_access_end_wrapper(soc, hal_ring_hdl, coalesce);
+	dp_pkt_add_timestamp(vdev, QDF_PKT_TX_DRIVER_EXIT,
+			     qdf_get_log_timestamp(), tx_desc->nbuf);
 
 	return status;
 }
 
 QDF_STATUS dp_tx_desc_pool_init_li(struct dp_soc *soc,
-				   uint16_t num_elem,
+				   uint32_t num_elem,
 				   uint8_t pool_id)
 {
 	uint32_t id, count, page_id, offset, pool_id_32;
@@ -476,6 +542,7 @@ QDF_STATUS dp_tx_desc_pool_init_li(struct dp_soc *soc,
 
 		tx_desc->id = id;
 		tx_desc->pool_id = pool_id;
+		dp_tx_desc_set_magic(tx_desc, DP_TX_MAGIC_PATTERN_FREE);
 		tx_desc = tx_desc->next;
 		count++;
 	}

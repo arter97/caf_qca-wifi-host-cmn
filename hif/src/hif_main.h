@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2013-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -110,9 +110,6 @@
 #define AR900B_DEVICE_ID    (0x0040)
 #define QCA9984_DEVICE_ID   (0x0046)
 #define QCA9888_DEVICE_ID   (0x0056)
-#ifndef IPQ4019_DEVICE_ID
-#define IPQ4019_DEVICE_ID   (0x12ef)
-#endif
 #define QCA8074_DEVICE_ID   (0xffff) /* Todo: replace this with
 					actual number once available.
 					currently defining this to 0xffff for
@@ -186,7 +183,7 @@ struct hif_latency_detect {
 #if defined(HIF_CONFIG_SLUB_DEBUG_ON) || defined(HIF_CE_DEBUG_DATA_BUF)
 struct ce_desc_hist {
 	qdf_atomic_t history_index[CE_COUNT_MAX];
-	uint32_t enable[CE_COUNT_MAX];
+	bool enable[CE_COUNT_MAX];
 	bool data_enable[CE_COUNT_MAX];
 	qdf_mutex_t ce_dbg_datamem_lock[CE_COUNT_MAX];
 	uint32_t hist_index;

@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  *
  * Permission to use, copy, modify, and/or distribute this software for
@@ -915,8 +915,10 @@ QDF_STATUS utils_dfs_get_vdev_random_channel_for_freq(
 		 "input width=%d", chan_params->ch_width);
 
 	if (*target_chan_freq) {
-		wlan_reg_set_channel_params_for_freq(pdev, *target_chan_freq, 0,
-						     chan_params);
+		wlan_reg_set_channel_params_for_pwrmode(
+						     pdev, *target_chan_freq, 0,
+						     chan_params,
+						     REG_CURRENT_PWR_MODE);
 		utils_dfs_get_max_phy_mode(pdev, hw_mode);
 		status = QDF_STATUS_SUCCESS;
 	}
@@ -980,8 +982,9 @@ QDF_STATUS utils_dfs_bw_reduced_channel_for_freq(
 	}
 	dfs_curchan = dfs->dfs_curchan;
 	ch_state =
-	    wlan_reg_get_channel_state_for_freq(pdev,
-						dfs_curchan->dfs_ch_freq);
+		wlan_reg_get_channel_state_for_pwrmode(pdev,
+						       dfs_curchan->dfs_ch_freq,
+						       REG_CURRENT_PWR_MODE);
 
 	if (ch_state == CHANNEL_STATE_DFS ||
 	    ch_state == CHANNEL_STATE_ENABLE) {
@@ -998,9 +1001,10 @@ QDF_STATUS utils_dfs_bw_reduced_channel_for_freq(
 			dfs_curchan->dfs_ch_mhz_freq_seg1;
 		chan_params->mhz_freq_seg1 =
 			dfs_curchan->dfs_ch_mhz_freq_seg2;
-		wlan_reg_set_channel_params_for_freq(pdev,
-						     dfs_curchan->dfs_ch_freq,
-						     0, chan_params);
+		wlan_reg_set_channel_params_for_pwrmode(pdev, dfs_curchan->
+							dfs_ch_freq,
+							0, chan_params,
+							REG_CURRENT_PWR_MODE);
 
 		*target_chan_freq = dfs_curchan->dfs_ch_freq;
 		utils_dfs_get_max_phy_mode(pdev, hw_mode);
@@ -1240,15 +1244,6 @@ int utils_get_dfsdomain(struct wlan_objmgr_pdev *pdev)
 	wlan_reg_get_dfs_region(pdev, &dfsdomain);
 
 	return dfsdomain;
-}
-
-uint16_t utils_dfs_get_cur_rd(struct wlan_objmgr_pdev *pdev)
-{
-	struct cur_regdmn_info cur_regdmn;
-
-	wlan_reg_get_curr_regdomain(pdev, &cur_regdmn);
-
-	return cur_regdmn.regdmn_pair_id;
 }
 
 #if defined(WLAN_DFS_PARTIAL_OFFLOAD) && defined(HOST_DFS_SPOOF_TEST)

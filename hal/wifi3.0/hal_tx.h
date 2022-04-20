@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -39,11 +39,24 @@
   ---------------------------------------------------------------------------*/
 #define HAL_OFFSET(block, field) block ## _ ## field ## _OFFSET
 
+#define HAL_TX_LSB(block, field) block ## _ ## field ## _LSB
+
+#define HAL_TX_MASK(block, field) block ## _ ## field ## _MASK
+
+#define HAL_TX_DESC_OFFSET(desc, block, field) \
+	(((uint8_t *)desc) + HAL_OFFSET(block, field))
+
 #define HAL_SET_FLD(desc, block , field) \
 	(*(uint32_t *) ((uint8_t *) desc + HAL_OFFSET(block, field)))
 
 #define HAL_SET_FLD_OFFSET(desc, block , field, offset) \
 	(*(uint32_t *) ((uint8_t *) desc + HAL_OFFSET(block, field) + (offset)))
+
+#define HAL_SET_FLD_64(desc, block, field) \
+	(*(uint64_t *)((uint8_t *)desc + HAL_OFFSET(block, field)))
+
+#define HAL_SET_FLD_OFFSET_64(desc, block, field, offset) \
+	(*(uint64_t *)((uint8_t *)desc + HAL_OFFSET(block, field) + (offset)))
 
 #define HAL_TX_DESC_SET_TLV_HDR(desc, tag, len) \
 do {                                            \
@@ -67,8 +80,21 @@ do {                                            \
 #define HAL_TX_DESC_GET(desc, block, field) \
 	HAL_TX_MS(block, field, HAL_SET_FLD(desc, block, field))
 
+#define HAL_TX_DESC_OFFSET_GET(desc, block, field, offset) \
+	HAL_TX_MS(block, field, HAL_SET_FLD_OFFSET(desc, block, field, offset))
+
 #define HAL_TX_DESC_SUBBLOCK_GET(desc, block, sub, field) \
 	HAL_TX_MS(sub, field, HAL_SET_FLD(desc, block, sub))
+
+#define HAL_TX_DESC_GET_64(desc, block, field) \
+	HAL_TX_MS(block, field, HAL_SET_FLD_64(desc, block, field))
+
+#define HAL_TX_DESC_OFFSET_GET_64(desc, block, field, offset) \
+	HAL_TX_MS(block, field, HAL_SET_FLD_OFFSET_64(desc, block, field,\
+		  offset))
+
+#define HAL_TX_DESC_SUBBLOCK_GET_64(desc, block, sub, field) \
+	HAL_TX_MS(sub, field, HAL_SET_FLD_64(desc, block, sub))
 
 #define HAL_TX_BUF_TYPE_BUFFER 0
 #define HAL_TX_BUF_TYPE_EXT_DESC 1
@@ -203,7 +229,7 @@ struct hal_tx_completion_status {
 	uint8_t transmit_cnt;
 	uint8_t tid;
 	uint16_t peer_id;
-#ifdef WLAN_FEATURE_TSF_UPLINK_DELAY
+#if defined(WLAN_FEATURE_TSF_UPLINK_DELAY) || defined(CONFIG_SAWF)
 	uint32_t buffer_timestamp:19;
 #endif
 };
@@ -280,6 +306,13 @@ enum hal_tx_encap_type {
  *				remove reason is fw_reason3
  * @HAL_TX_TQM_RR_REM_CMD_DISABLE_QUEUE : Remove command where fw indicated that
  *				remove reason is remove disable queue
+ * @HAL_TX_TQM_RR_REM_CMD_TILL_NONMATCHING: Remove command from fw to remove
+ *				all mpdu until 1st non-match
+ * @HAL_TX_TQM_RR_DROP_THRESHOLD: Dropped due to drop threshold criteria
+ * @HAL_TX_TQM_RR_LINK_DESC_UNAVAILABLE: Dropped due to link desc not available
+ * @HAL_TX_TQM_RR_DROP_OR_INVALID_MSDU: Dropped due drop bit set or null flow
+ * @HAL_TX_TQM_RR_MULTICAST_DROP: Dropped due mcast drop set for VDEV
+ *
  */
 enum hal_tx_tqm_release_reason {
 	HAL_TX_TQM_RR_FRAME_ACKED,
@@ -291,6 +324,11 @@ enum hal_tx_tqm_release_reason {
 	HAL_TX_TQM_RR_FW_REASON2,
 	HAL_TX_TQM_RR_FW_REASON3,
 	HAL_TX_TQM_RR_REM_CMD_DISABLE_QUEUE,
+	HAL_TX_TQM_RR_REM_CMD_TILL_NONMATCHING,
+	HAL_TX_TQM_RR_DROP_THRESHOLD,
+	HAL_TX_TQM_RR_LINK_DESC_UNAVAILABLE,
+	HAL_TX_TQM_RR_DROP_OR_INVALID_MSDU,
+	HAL_TX_TQM_RR_MULTICAST_DROP,
 };
 
 /* enum - Table IDs for 2 DSCP-TID mapping Tables that TCL H/W supports
@@ -428,6 +466,32 @@ static inline void hal_tx_ext_desc_set_buffer(void *desc,
 	HAL_SET_FLD_OFFSET(desc, HAL_TX_MSDU_EXTENSION, BUF0_LEN,
 			   (frag_num << 3)) |=
 		((HAL_TX_SM(HAL_TX_MSDU_EXTENSION, BUF0_LEN, length)));
+}
+
+/**
+ * hal_tx_ext_desc_get_frag_info() - Get the frag_num'th frag iova and len
+ * @desc: Handle to Tx MSDU Extension Descriptor
+ * @frag_num: fragment number (value can be 0 to 5)
+ * @iova: fragment dma address
+ * @len: fragement Length
+ *
+ * Return: None
+ */
+static inline void hal_tx_ext_desc_get_frag_info(void *desc, uint8_t frag_num,
+						 qdf_dma_addr_t *iova,
+						 uint32_t *len)
+{
+	uint64_t iova_hi;
+
+	*iova = HAL_TX_DESC_OFFSET_GET(desc, HAL_TX_MSDU_EXTENSION,
+				       BUF0_PTR_31_0, (frag_num << 3));
+
+	iova_hi = HAL_TX_DESC_OFFSET_GET(desc, HAL_TX_MSDU_EXTENSION,
+					 BUF0_PTR_39_32, (frag_num << 3));
+	*iova |= (iova_hi << 32);
+
+	*len = HAL_TX_DESC_OFFSET_GET(desc, HAL_TX_MSDU_EXTENSION, BUF0_LEN,
+				      (frag_num << 3));
 }
 
 /**

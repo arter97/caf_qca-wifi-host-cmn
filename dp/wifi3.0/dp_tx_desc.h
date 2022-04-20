@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -93,31 +93,44 @@ do {                                                   \
 #endif /* !QCA_LL_TX_FLOW_CONTROL_V2 */
 #define MAX_POOL_BUFF_COUNT 10000
 
+#ifdef DP_TX_TRACKING
+static inline void dp_tx_desc_set_magic(struct dp_tx_desc_s *tx_desc,
+					uint32_t magic_pattern)
+{
+	tx_desc->magic = magic_pattern;
+}
+#else
+static inline void dp_tx_desc_set_magic(struct dp_tx_desc_s *tx_desc,
+					uint32_t magic_pattern)
+{
+}
+#endif
+
 QDF_STATUS dp_tx_desc_pool_alloc(struct dp_soc *soc, uint8_t pool_id,
-				 uint16_t num_elem);
+				 uint32_t num_elem);
 QDF_STATUS dp_tx_desc_pool_init(struct dp_soc *soc, uint8_t pool_id,
-				uint16_t num_elem);
+				uint32_t num_elem);
 void dp_tx_desc_pool_free(struct dp_soc *soc, uint8_t pool_id);
 void dp_tx_desc_pool_deinit(struct dp_soc *soc, uint8_t pool_id);
 
 QDF_STATUS dp_tx_ext_desc_pool_alloc(struct dp_soc *soc, uint8_t pool_id,
-				     uint16_t num_elem);
+				     uint32_t num_elem);
 QDF_STATUS dp_tx_ext_desc_pool_init(struct dp_soc *soc, uint8_t pool_id,
-				    uint16_t num_elem);
+				    uint32_t num_elem);
 void dp_tx_ext_desc_pool_free(struct dp_soc *soc, uint8_t pool_id);
 void dp_tx_ext_desc_pool_deinit(struct dp_soc *soc, uint8_t pool_id);
 
 QDF_STATUS dp_tx_tso_desc_pool_alloc(struct dp_soc *soc, uint8_t pool_id,
-				     uint16_t num_elem);
+				     uint32_t num_elem);
 QDF_STATUS dp_tx_tso_desc_pool_init(struct dp_soc *soc, uint8_t pool_id,
-				    uint16_t num_elem);
+				    uint32_t num_elem);
 void dp_tx_tso_desc_pool_free(struct dp_soc *soc, uint8_t pool_id);
 void dp_tx_tso_desc_pool_deinit(struct dp_soc *soc, uint8_t pool_id);
 
 QDF_STATUS dp_tx_tso_num_seg_pool_alloc(struct dp_soc *soc, uint8_t pool_id,
-		uint16_t num_elem);
+		uint32_t num_elem);
 QDF_STATUS dp_tx_tso_num_seg_pool_init(struct dp_soc *soc, uint8_t pool_id,
-				       uint16_t num_elem);
+				       uint32_t num_elem);
 void dp_tx_tso_num_seg_pool_free(struct dp_soc *soc, uint8_t pool_id);
 void dp_tx_tso_num_seg_pool_deinit(struct dp_soc *soc, uint8_t pool_id);
 
@@ -133,10 +146,10 @@ void dp_tx_flow_pool_unmap(struct cdp_soc_t *handle, uint8_t pdev_id,
 			   uint8_t vdev_id);
 void dp_tx_clear_flow_pool_stats(struct dp_soc *soc);
 struct dp_tx_desc_pool_s *dp_tx_create_flow_pool(struct dp_soc *soc,
-	uint8_t flow_pool_id, uint16_t flow_pool_size);
+	uint8_t flow_pool_id, uint32_t flow_pool_size);
 
 QDF_STATUS dp_tx_flow_pool_map_handler(struct dp_pdev *pdev, uint8_t flow_id,
-	uint8_t flow_type, uint8_t flow_pool_id, uint16_t flow_pool_size);
+	uint8_t flow_type, uint8_t flow_pool_id, uint32_t flow_pool_size);
 void dp_tx_flow_pool_unmap_handler(struct dp_pdev *pdev, uint8_t flow_id,
 	uint8_t flow_type, uint8_t flow_pool_id);
 
@@ -301,7 +314,8 @@ dp_tx_desc_alloc(struct dp_soc *soc, uint8_t desc_pool_id)
 			tx_desc = dp_tx_get_desc_flow_pool(pool);
 			tx_desc->pool_id = desc_pool_id;
 			tx_desc->flags = DP_TX_DESC_FLAG_ALLOCATED;
-
+			dp_tx_desc_set_magic(tx_desc,
+					     DP_TX_MAGIC_PATTERN_INUSE);
 			is_pause = dp_tx_is_threshold_reached(pool,
 							      pool->avail_desc);
 
@@ -391,6 +405,8 @@ dp_tx_desc_free(struct dp_soc *soc, struct dp_tx_desc_s *tx_desc,
 	tx_desc->vdev_id = DP_INVALID_VDEV_ID;
 	tx_desc->nbuf = NULL;
 	tx_desc->flags = 0;
+	dp_tx_desc_set_magic(tx_desc, DP_TX_MAGIC_PATTERN_FREE);
+	tx_desc->timestamp = 0;
 	dp_tx_put_desc_flow_pool(pool, tx_desc);
 	switch (pool->status) {
 	case FLOW_POOL_ACTIVE_PAUSED:
@@ -503,6 +519,8 @@ dp_tx_desc_alloc(struct dp_soc *soc, uint8_t desc_pool_id)
 			tx_desc = dp_tx_get_desc_flow_pool(pool);
 			tx_desc->pool_id = desc_pool_id;
 			tx_desc->flags = DP_TX_DESC_FLAG_ALLOCATED;
+			dp_tx_desc_set_magic(tx_desc,
+					     DP_TX_MAGIC_PATTERN_INUSE);
 			if (qdf_unlikely(pool->avail_desc < pool->stop_th)) {
 				pool->status = FLOW_POOL_ACTIVE_PAUSED;
 				qdf_spin_unlock_bh(&pool->flow_pool_lock);
@@ -555,6 +573,8 @@ dp_tx_desc_free(struct dp_soc *soc, struct dp_tx_desc_s *tx_desc,
 	tx_desc->vdev_id = DP_INVALID_VDEV_ID;
 	tx_desc->nbuf = NULL;
 	tx_desc->flags = 0;
+	dp_tx_desc_set_magic(tx_desc, DP_TX_MAGIC_PATTERN_FREE);
+	tx_desc->timestamp = 0;
 	dp_tx_put_desc_flow_pool(pool, tx_desc);
 	switch (pool->status) {
 	case FLOW_POOL_ACTIVE_PAUSED:
@@ -627,7 +647,7 @@ static inline void dp_tx_flow_control_deinit(struct dp_soc *handle)
 
 static inline QDF_STATUS dp_tx_flow_pool_map_handler(struct dp_pdev *pdev,
 	uint8_t flow_id, uint8_t flow_type, uint8_t flow_pool_id,
-	uint16_t flow_pool_size)
+	uint32_t flow_pool_size)
 {
 	return QDF_STATUS_SUCCESS;
 }

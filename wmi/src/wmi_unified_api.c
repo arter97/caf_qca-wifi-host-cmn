@@ -1460,6 +1460,7 @@ wmi_unified_vdev_set_qdepth_thresh_cmd_send(
 	return QDF_STATUS_E_FAILURE;
 }
 
+#ifdef WLAN_REG_PARTIAL_OFFLOAD
 QDF_STATUS wmi_unified_pdev_set_regdomain_cmd_send(
 			wmi_unified_t wmi_handle,
 			struct pdev_set_regdomain_params *param)
@@ -1470,6 +1471,7 @@ QDF_STATUS wmi_unified_pdev_set_regdomain_cmd_send(
 
 	return QDF_STATUS_E_FAILURE;
 }
+#endif
 
 QDF_STATUS
 wmi_unified_set_beacon_filter_cmd_send(
@@ -1510,6 +1512,18 @@ QDF_STATUS wmi_unified_get_pn_send_cmd(wmi_unified_t wmi_hdl,
 
 	return QDF_STATUS_E_FAILURE;
 }
+
+QDF_STATUS wmi_unified_get_rxpn_send_cmd(
+		wmi_unified_t wmi_hdl,
+		struct peer_request_rxpn_param *pn_params)
+{
+	if (wmi_hdl->ops->send_pdev_get_rxpn_cmd)
+		return wmi_hdl->ops->send_pdev_get_rxpn_cmd(wmi_hdl,
+							    pn_params);
+
+	return QDF_STATUS_E_FAILURE;
+}
+qdf_export_symbol(wmi_unified_get_rxpn_send_cmd);
 
 /**
  *  wmi_unified_mgmt_cmd_send() - WMI mgmt cmd function
@@ -1990,6 +2004,17 @@ QDF_STATUS wmi_unified_extract_pn(wmi_unified_t wmi_hdl, void *evt_buf,
 	return QDF_STATUS_E_FAILURE;
 }
 
+QDF_STATUS wmi_unified_extract_rxpn(wmi_unified_t wmi_hdl, void *evt_buf,
+				    struct wmi_host_get_rxpn_event *param)
+{
+	if (wmi_hdl->ops->extract_get_rxpn_data)
+		return wmi_hdl->ops->extract_get_rxpn_data(wmi_hdl,
+							   evt_buf, param);
+	return QDF_STATUS_E_FAILURE;
+}
+
+qdf_export_symbol(wmi_unified_extract_rxpn);
+
 #ifdef WLAN_FEATURE_DISA
 QDF_STATUS
 wmi_extract_encrypt_decrypt_resp_params(void *wmi_hdl, void *evt_buf,
@@ -2054,6 +2079,18 @@ QDF_STATUS wmi_unified_mgmt_rx_reo_filter_config_cmd(
 	return QDF_STATUS_E_FAILURE;
 }
 #endif
+
+QDF_STATUS
+wmi_extract_frame_pn_params(wmi_unified_t wmi_handle, void *evt_buf,
+			    struct frame_pn_params *pn_params)
+{
+	if (wmi_handle->ops->extract_frame_pn_params)
+		return wmi_handle->ops->extract_frame_pn_params(wmi_handle,
+								evt_buf,
+								pn_params);
+
+	return QDF_STATUS_E_FAILURE;
+}
 
 QDF_STATUS
 wmi_extract_vdev_roam_param(wmi_unified_t wmi_handle, void *evt_buf,
@@ -3717,3 +3754,46 @@ QDF_STATUS wmi_extract_update_mac_address_event(wmi_unified_t wmi_handle,
 	return QDF_STATUS_E_FAILURE;
 }
 #endif
+
+#ifdef WLAN_FEATURE_11BE_MLO
+QDF_STATUS wmi_extract_quiet_offload_event(
+				struct wmi_unified *wmi_handle, void *evt_buf,
+				struct vdev_sta_quiet_event *quiet_event)
+{
+	if (wmi_handle->ops->extract_quiet_offload_event)
+		return wmi_handle->ops->extract_quiet_offload_event(
+					wmi_handle, evt_buf, quiet_event);
+
+	return QDF_STATUS_E_FAILURE;
+}
+#endif
+
+#ifdef WLAN_SUPPORT_PPEDS
+QDF_STATUS
+wmi_unified_peer_ppe_ds_param_send(wmi_unified_t wmi_handle,
+				   struct peer_ppe_ds_param *param)
+{
+	if (wmi_handle->ops->peer_ppe_ds_param_send)
+		return wmi_handle->ops->peer_ppe_ds_param_send(
+				wmi_handle, param);
+
+	return QDF_STATUS_E_FAILURE;
+}
+#endif /* WLAN_SUPPORT_PPEDS */
+
+/**
+ * wmi_unified_pn_mgmt_rxfilter_send_cmd() - Send PN mgmt RxFilter command to FW
+ * @wmi_handle: WMI handle
+ * @params: RxFilter params
+ *
+ * Return: QDF_STATUS_SUCCESS for success or error code
+ */
+QDF_STATUS wmi_unified_pn_mgmt_rxfilter_send_cmd(
+		struct wmi_unified *wmi_handle,
+		struct vdev_pn_mgmt_rxfilter_params *params)
+{
+	if (wmi_handle->ops->send_vdev_pn_mgmt_rxfilter_cmd)
+		return wmi_handle->ops->send_vdev_pn_mgmt_rxfilter_cmd(
+					wmi_handle, params);
+	return QDF_STATUS_E_FAILURE;
+}

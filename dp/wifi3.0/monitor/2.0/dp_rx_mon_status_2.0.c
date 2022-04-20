@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2021,2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -26,37 +26,30 @@
 #include <dp_rx.h>
 #include <dp_rx_mon.h>
 
-void dp_rx_mon_process_status_tlv(struct dp_soc *soc,
-				  struct dp_pdev *pdev,
-				  struct hal_mon_desc *mon_ring_desc,
-				  qdf_dma_addr_t addr)
+QDF_STATUS
+dp_rx_process_pktlog_be(struct dp_soc *soc, struct dp_pdev *pdev,
+			struct hal_rx_ppdu_info *ppdu_info,
+			void *status_frag, uint32_t end_offset)
 {
-	/* API to process status tlv */
-}
-
-static inline void
-dp_rx_process_pktlog(struct dp_soc *soc,
-		     struct hal_rx_ppdu_info *ppdu_info,
-		     void *status_frag, struct dp_pdev *pdev)
-{
-	struct dp_mon_pdev *mon_pdev;
+	struct dp_mon_pdev *mon_pdev = pdev->monitor_pdev;
 	qdf_nbuf_t nbuf = NULL;
 	enum WDI_EVENT pktlog_mode = WDI_NO_VAL;
+
+	if (!mon_pdev->dp_peer_based_pktlog &&
+	    (mon_pdev->rx_pktlog_mode == DP_RX_PKTLOG_DISABLED)) {
+		return QDF_STATUS_E_INVAL;
+	}
 
 	nbuf = qdf_nbuf_alloc(soc->osdev, RX_MON_MIN_HEAD_ROOM,
 			      RX_BUFFER_RESERVATION, 0, FALSE);
 	if (!nbuf)
-		return;
+		return QDF_STATUS_E_NOMEM;
 
-	qdf_nbuf_add_rx_frag(status_frag, nbuf,
-			     (ppdu_info->data -
-			      (unsigned char *)status_frag),
-			     ppdu_info->hdr_len,
-			     RX_MON_MIN_HEAD_ROOM, FALSE);
+	qdf_nbuf_add_rx_frag(status_frag, nbuf, 0,
+			     end_offset,
+			     RX_MON_MIN_HEAD_ROOM, true);
 
-	mon_pdev = pdev->monitor_pdev;
-
-	if (mon_pdev->dp_peer_based_pktlog) {
+	if (mon_pdev->dp_peer_based_pktlog && ppdu_info) {
 		dp_rx_process_peer_based_pktlog(soc, ppdu_info,
 						nbuf, pdev->pdev_id);
 	} else {
@@ -71,5 +64,7 @@ dp_rx_process_pktlog(struct dp_soc *soc,
 					     WDI_NO_VAL, pdev->pdev_id);
 	}
 	qdf_nbuf_free(nbuf);
+
+	return QDF_STATUS_SUCCESS;
 }
 

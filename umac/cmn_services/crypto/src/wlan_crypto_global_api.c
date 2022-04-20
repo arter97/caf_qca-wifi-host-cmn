@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2017-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -30,6 +30,7 @@
 #include <wlan_objmgr_vdev_obj.h>
 #include <wlan_objmgr_peer_obj.h>
 #include <wlan_utility.h>
+#include <wlan_cp_stats_utils_api.h>
 
 #include "wlan_crypto_global_def.h"
 #include "wlan_crypto_global_api.h"
@@ -1285,11 +1286,20 @@ QDF_STATUS wlan_crypto_getkey(struct wlan_objmgr_vdev *vdev,
 	struct wlan_crypto_key *key;
 	struct wlan_objmgr_psoc *psoc;
 	struct wlan_lmac_if_tx_ops *tx_ops;
+	struct wlan_lmac_if_rx_ops *rx_ops;
 	uint8_t macaddr[QDF_MAC_ADDR_SIZE] =
 			{0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
 	QDF_STATUS status = QDF_STATUS_E_INVAL;
 	struct wlan_objmgr_peer *peer = NULL;
 	uint8_t pdev_id;
+	uint16_t get_pn_enable;
+
+	if (!req_key) {
+		crypto_err("req_key NULL");
+		return QDF_STATUS_E_INVAL;
+	}
+
+	get_pn_enable = req_key->flags & WLAN_CRYPTO_KEY_GET_PN;
 
 	wlan_vdev_obj_lock(vdev);
 	qdf_mem_copy(macaddr, wlan_vdev_mlme_get_macaddr(vdev),
@@ -1305,6 +1315,12 @@ QDF_STATUS wlan_crypto_getkey(struct wlan_objmgr_vdev *vdev,
 	tx_ops = wlan_psoc_get_lmac_if_txops(psoc);
 	if (!tx_ops) {
 		crypto_err("tx_ops is NULL");
+		return QDF_STATUS_E_INVAL;
+	}
+
+	rx_ops = wlan_psoc_get_lmac_if_rxops(psoc);
+	if (!rx_ops) {
+		crypto_err("rx_ops is NULL");
 		return QDF_STATUS_E_INVAL;
 	}
 
@@ -1345,6 +1361,7 @@ QDF_STATUS wlan_crypto_getkey(struct wlan_objmgr_vdev *vdev,
 				(uint8_t *)(&key->keyrsc[0]),
 				sizeof(req_key->keyrsc));
 		req_key->keylen = key->keylen;
+		req_key->keyix = key->keyix;
 		req_key->flags = key->flags;
 		cipher_table = (struct wlan_crypto_cipher *)key->cipher_table;
 
@@ -1363,10 +1380,13 @@ QDF_STATUS wlan_crypto_getkey(struct wlan_objmgr_vdev *vdev,
 					sizeof(req_key->recviv));
 		}
 
-		if (WLAN_CRYPTO_TX_OPS_GETPN(tx_ops) &&
-		    (req_key->flags & WLAN_CRYPTO_KEY_GET_PN)) {
-			WLAN_CRYPTO_TX_OPS_GETPN(tx_ops)(vdev, mac_addr,
-							 req_key->type);
+		if (get_pn_enable) {
+			if (WLAN_CRYPTO_TX_OPS_GETPN(tx_ops))
+				WLAN_CRYPTO_TX_OPS_GETPN(tx_ops)(vdev, mac_addr,
+								 req_key->type);
+			if (WLAN_CRYPTO_RX_OPS_GET_RXPN(&rx_ops->crypto_rx_ops))
+				WLAN_CRYPTO_RX_OPS_GET_RXPN(&rx_ops->crypto_rx_ops)(
+						vdev, mac_addr, req_key->keyix);
 		}
 	}
 	status = QDF_STATUS_SUCCESS;
@@ -2394,12 +2414,15 @@ bool wlan_crypto_is_mmie_valid(struct wlan_objmgr_vdev *vdev,
 	if (qdf_mem_cmp(ipn, key->keyrsc, 6) <= 0) {
 		uint8_t *su = (uint8_t *)key->keyrsc;
 		uint8_t *end = ipn + 6;
+		struct wlan_objmgr_peer *peer = wlan_vdev_get_selfpeer(vdev);
 
 		crypto_err("replay error :");
 		while (ipn < end) {
 			crypto_err("expected pn = %x received pn = %x",
 				   *ipn++, *su++);
 		}
+		wlan_cp_stats_vdev_ucast_rx_pnerr(vdev);
+		wlan_cp_stats_peer_rx_pnerr(peer);
 		return false;
 	}
 
@@ -3670,7 +3693,7 @@ exit:
  * Return: QDF_STATUS
  */
 QDF_STATUS wlan_crypto_register_crypto_rx_ops(
-			struct wlan_lmac_if_crypto_rx_ops *crypto_rx_ops){
+			struct wlan_lmac_if_crypto_rx_ops *crypto_rx_ops) {
 	crypto_rx_ops->crypto_encap      = wlan_crypto_encap;
 	crypto_rx_ops->crypto_decap      = wlan_crypto_decap;
 	crypto_rx_ops->crypto_enmic      = wlan_crypto_enmic;

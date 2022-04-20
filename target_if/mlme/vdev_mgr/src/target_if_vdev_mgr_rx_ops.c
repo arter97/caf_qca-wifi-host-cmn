@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2019-2020 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -33,6 +33,9 @@
 #include <wlan_vdev_mlme_main.h>
 #include <wmi_unified_vdev_api.h>
 #include <target_if_psoc_wake_lock.h>
+#ifdef WLAN_FEATURE_ROAM_OFFLOAD
+#include <target_if_cm_roam_offload.h>
+#endif
 
 static inline
 void target_if_vdev_mgr_handle_recovery(struct wlan_objmgr_psoc *psoc,
@@ -48,6 +51,22 @@ void target_if_vdev_mgr_handle_recovery(struct wlan_objmgr_psoc *psoc,
 		mlme_nofl_debug("PSOC_%d VDEV_%d: Panic not allowed",
 				wlan_psoc_get_id(psoc), vdev_id);
 }
+
+#ifdef WLAN_FEATURE_ROAM_OFFLOAD
+static inline QDF_STATUS
+target_if_send_rso_stop_failure_rsp(struct wlan_objmgr_psoc *psoc,
+				    uint8_t vdev_id)
+{
+	return target_if_cm_send_rso_stop_failure_rsp(psoc, vdev_id);
+}
+#else
+static inline QDF_STATUS
+target_if_send_rso_stop_failure_rsp(struct wlan_objmgr_psoc *psoc,
+				    uint8_t vdev_id)
+{
+	return QDF_STATUS_E_NOSUPPORT;
+}
+#endif
 
 void target_if_vdev_mgr_rsp_timer_cb(void *arg)
 {
@@ -83,9 +102,10 @@ void target_if_vdev_mgr_rsp_timer_cb(void *arg)
 	    !qdf_atomic_test_bit(RESTART_RESPONSE_BIT, &vdev_rsp->rsp_status) &&
 	    !qdf_atomic_test_bit(STOP_RESPONSE_BIT, &vdev_rsp->rsp_status) &&
 	    !qdf_atomic_test_bit(DELETE_RESPONSE_BIT, &vdev_rsp->rsp_status) &&
-	    !qdf_atomic_test_bit(
-			PEER_DELETE_ALL_RESPONSE_BIT,
-			&vdev_rsp->rsp_status)) {
+	    !qdf_atomic_test_bit(PEER_DELETE_ALL_RESPONSE_BIT,
+				 &vdev_rsp->rsp_status) &&
+	    !qdf_atomic_test_bit(RSO_STOP_RESPONSE_BIT,
+				 &vdev_rsp->rsp_status)) {
 		mlme_debug("No response bit is set, ignoring actions :%d",
 			   vdev_rsp->vdev_id);
 		return;
@@ -151,6 +171,14 @@ void target_if_vdev_mgr_rsp_timer_cb(void *arg)
 						   recovery_reason, rsp_pos);
 		rx_ops->vdev_mgr_peer_delete_all_response(psoc,
 							  &peer_del_all_rsp);
+	} else if (qdf_atomic_test_bit(RSO_STOP_RESPONSE_BIT,
+				       &vdev_rsp->rsp_status)) {
+		rsp_pos = RSO_STOP_RESPONSE_BIT;
+		recovery_reason = QDF_RSO_STOP_RSP_TIMEOUT;
+		target_if_vdev_mgr_rsp_timer_stop(psoc, vdev_rsp, rsp_pos);
+		target_if_vdev_mgr_handle_recovery(psoc, vdev_id,
+						   recovery_reason, rsp_pos);
+		target_if_send_rso_stop_failure_rsp(psoc, vdev_id);
 	} else {
 		mlme_err("PSOC_%d VDEV_%d: Unknown error",
 			 wlan_psoc_get_id(psoc), vdev_id);
@@ -912,6 +940,87 @@ target_if_unregister_set_mac_addr_evt_cbk(struct wmi_unified *wmi_handle)
 }
 #endif
 
+#ifdef WLAN_FEATURE_11BE_MLO
+/**
+ * target_if_quiet_offload_event_handler() - Quiet IE offload mlo
+ *                                           station event handler
+ * @scn: Pointer to scn structure
+ * @event_buff: event data
+ * @len: length
+ *
+ * Return: 0 for success or error code
+ */
+static int target_if_quiet_offload_event_handler(ol_scn_t scn,
+						 uint8_t *event_buff,
+						 uint32_t len)
+{
+	struct wlan_objmgr_psoc *psoc;
+	struct wmi_unified *wmi_handle;
+	QDF_STATUS status;
+	struct wlan_lmac_if_mlme_rx_ops *rx_ops;
+	struct vdev_sta_quiet_event sta_quiet_event = {0};
+
+	if (!event_buff) {
+		mlme_err("Received NULL event ptr from FW");
+		return -EINVAL;
+	}
+
+	psoc = target_if_get_psoc_from_scn_hdl(scn);
+	if (!psoc) {
+		mlme_err("PSOC is NULL");
+		return -EINVAL;
+	}
+
+	wmi_handle = get_wmi_unified_hdl_from_psoc(psoc);
+	if (!wmi_handle) {
+		mlme_err("wmi_handle is null");
+		return -EINVAL;
+	}
+
+	status = wmi_extract_quiet_offload_event(wmi_handle, event_buff,
+						 &sta_quiet_event);
+	if (QDF_IS_STATUS_ERROR(status)) {
+		mlme_err("Failed to extract quiet IE offload event");
+		return -EINVAL;
+	}
+
+	rx_ops = target_if_vdev_mgr_get_rx_ops(psoc);
+	if (!rx_ops || !rx_ops->vdev_mgr_quiet_offload) {
+		mlme_err("No Rx Ops");
+		return -EINVAL;
+	}
+
+	rx_ops->vdev_mgr_quiet_offload(psoc, &sta_quiet_event);
+
+	return 0;
+}
+
+static inline void
+target_if_register_quiet_offload_event(struct wmi_unified *wmi_handle)
+{
+	wmi_unified_register_event_handler(
+		   wmi_handle, wmi_vdev_quiet_offload_eventid,
+		   target_if_quiet_offload_event_handler, VDEV_RSP_RX_CTX);
+}
+
+static inline void
+target_if_unregister_quiet_offload_event(struct wmi_unified *wmi_handle)
+{
+	wmi_unified_unregister_event_handler(
+			wmi_handle, wmi_vdev_quiet_offload_eventid);
+}
+#else
+static inline void
+target_if_register_quiet_offload_event(struct wmi_unified *wmi_handle)
+{
+}
+
+static inline void
+target_if_unregister_quiet_offload_event(struct wmi_unified *wmi_handle)
+{
+}
+#endif
+
 QDF_STATUS target_if_vdev_mgr_wmi_event_register(
 				struct wlan_objmgr_psoc *psoc)
 {
@@ -981,6 +1090,8 @@ QDF_STATUS target_if_vdev_mgr_wmi_event_register(
 
 	target_if_register_set_mac_addr_evt_cbk(wmi_handle);
 
+	target_if_register_quiet_offload_event(wmi_handle);
+
 	return retval;
 }
 
@@ -999,6 +1110,8 @@ QDF_STATUS target_if_vdev_mgr_wmi_event_unregister(
 		mlme_err("wmi_handle is null");
 		return QDF_STATUS_E_INVAL;
 	}
+
+	target_if_unregister_quiet_offload_event(wmi_handle);
 
 	target_if_unregister_set_mac_addr_evt_cbk(wmi_handle);
 

@@ -56,8 +56,13 @@
 #define WMI_SIZE_UTC_TIME (10)
 /* The size of the utc time error in bytes. */
 #define WMI_SIZE_UTC_TIME_ERROR (5)
+#ifdef WLAN_MCC_MIN_CHANNEL_QUOTA
+#define WMI_MCC_MIN_CHANNEL_QUOTA             WLAN_MCC_MIN_CHANNEL_QUOTA
+#define WMI_MCC_MAX_CHANNEL_QUOTA             (100 - WLAN_MCC_MIN_CHANNEL_QUOTA)
+#else
 #define WMI_MCC_MIN_CHANNEL_QUOTA             20
 #define WMI_MCC_MAX_CHANNEL_QUOTA             80
+#endif
 #define WMI_MCC_MIN_NON_ZERO_CHANNEL_LATENCY  30
 
 #ifdef WMI_AP_SUPPORT
@@ -357,98 +362,98 @@
 
 #ifdef WLAN_FEATURE_11BE
 /* EHT BF capabilities mask */
-#define WMI_HOST_EHT_BF_CONF_SU_BFEE_S 0
-#define WMI_HOST_EHT_BF_CONF_SU_BFEE_M 0x1
-#define WMI_HOST_EHT_BF_CONF_SU_BFEE \
-	(WMI_HOST_EHT_BF_CONF_SU_BFEE_M << WMI_HOST_EHT_BF_CONF_SU_BFEE_S)
-#define WMI_HOST_EHT_BF_CONF_SU_BFEE_GET(x) \
-	WMI_HOST_F_MS(x, WMI_HOST_EHT_BF_CONF_SU_BFEE)
-#define WMI_HOST_EHT_BF_CONF_SU_BFEE_SET(x, z) \
-	WMI_HOST_F_RMW(x, z, WMI_HOST_EHT_BF_CONF_SU_BFEE)
+#define WMI_HOST_EHT_CONF_SU_BFEE_S 0
+#define WMI_HOST_EHT_CONF_SU_BFEE_M 0x1
+#define WMI_HOST_EHT_CONF_SU_BFEE \
+	(WMI_HOST_EHT_CONF_SU_BFEE_M << WMI_HOST_EHT_CONF_SU_BFEE_S)
+#define WMI_HOST_EHT_CONF_SU_BFEE_GET(x) \
+	WMI_HOST_F_MS(x, WMI_HOST_EHT_CONF_SU_BFEE)
+#define WMI_HOST_EHT_CONF_SU_BFEE_SET(x, z) \
+	WMI_HOST_F_RMW(x, z, WMI_HOST_EHT_CONF_SU_BFEE)
 
-#define WMI_HOST_EHT_BF_CONF_SU_BFER_S 1
-#define WMI_HOST_EHT_BF_CONF_SU_BFER_M 0x1
-#define WMI_HOST_EHT_BF_CONF_SU_BFER \
-	(WMI_HOST_EHT_BF_CONF_SU_BFER_M << WMI_HOST_EHT_BF_CONF_SU_BFER_S)
-#define WMI_HOST_EHT_BF_CONF_SU_BFER_GET(x) \
-	WMI_HOST_F_MS(x, WMI_HOST_EHT_BF_CONF_SU_BFER)
-#define WMI_HOST_EHT_BF_CONF_SU_BFER_SET(x, z) \
-	WMI_HOST_F_RMW(x, z, WMI_HOST_EHT_BF_CONF_SU_BFER)
+#define WMI_HOST_EHT_CONF_SU_BFER_S 1
+#define WMI_HOST_EHT_CONF_SU_BFER_M 0x1
+#define WMI_HOST_EHT_CONF_SU_BFER \
+	(WMI_HOST_EHT_CONF_SU_BFER_M << WMI_HOST_EHT_CONF_SU_BFER_S)
+#define WMI_HOST_EHT_CONF_SU_BFER_GET(x) \
+	WMI_HOST_F_MS(x, WMI_HOST_EHT_CONF_SU_BFER)
+#define WMI_HOST_EHT_CONF_SU_BFER_SET(x, z) \
+	WMI_HOST_F_RMW(x, z, WMI_HOST_EHT_CONF_SU_BFER)
 
-#define WMI_HOST_EHT_BF_CONF_MU_BFEE_S 2
-#define WMI_HOST_EHT_BF_CONF_MU_BFEE_M 0x1
-#define WMI_HOST_EHT_BF_CONF_MU_BFEE \
-	(WMI_HOST_EHT_BF_CONF_MU_BFEE_M << WMI_HOST_EHT_BF_CONF_MU_BFEE_S)
-#define WMI_HOST_EHT_BF_CONF_MU_BFEE_GET(x) \
-	WMI_HOST_F_MS(x, WMI_HOST_EHT_BF_CONF_MU_BFEE)
-#define WMI_HOST_EHT_BF_CONF_MU_BFEE_SET(x, z) \
-	WMI_HOST_F_RMW(x, z, WMI_HOST_EHT_BF_CONF_MU_BFEE)
+#define WMI_HOST_EHT_CONF_MU_BFEE_S 2
+#define WMI_HOST_EHT_CONF_MU_BFEE_M 0x1
+#define WMI_HOST_EHT_CONF_MU_BFEE \
+	(WMI_HOST_EHT_CONF_MU_BFEE_M << WMI_HOST_EHT_CONF_MU_BFEE_S)
+#define WMI_HOST_EHT_CONF_MU_BFEE_GET(x) \
+	WMI_HOST_F_MS(x, WMI_HOST_EHT_CONF_MU_BFEE)
+#define WMI_HOST_EHT_CONF_MU_BFEE_SET(x, z) \
+	WMI_HOST_F_RMW(x, z, WMI_HOST_EHT_CONF_MU_BFEE)
 
-#define WMI_HOST_EHT_BF_CONF_MU_BFER_S 3
-#define WMI_HOST_EHT_BF_CONF_MU_BFER_M 0x1
-#define WMI_HOST_EHT_BF_CONF_MU_BFER \
-	(WMI_HOST_EHT_BF_CONF_MU_BFER_M << WMI_HOST_EHT_BF_CONF_MU_BFER_S)
-#define WMI_HOST_EHT_BF_CONF_MU_BFER_GET(x) \
-	WMI_HOST_F_MS(x, WMI_HOST_EHT_BF_CONF_MU_BFER)
-#define WMI_HOST_EHT_BF_CONF_MU_BFER_SET(x, z) \
-	WMI_HOST_F_RMW(x, z, WMI_HOST_EHT_BF_CONF_MU_BFER)
+#define WMI_HOST_EHT_CONF_MU_BFER_S 3
+#define WMI_HOST_EHT_CONF_MU_BFER_M 0x1
+#define WMI_HOST_EHT_CONF_MU_BFER \
+	(WMI_HOST_EHT_CONF_MU_BFER_M << WMI_HOST_EHT_CONF_MU_BFER_S)
+#define WMI_HOST_EHT_CONF_MU_BFER_GET(x) \
+	WMI_HOST_F_MS(x, WMI_HOST_EHT_CONF_MU_BFER)
+#define WMI_HOST_EHT_CONF_MU_BFER_SET(x, z) \
+	WMI_HOST_F_RMW(x, z, WMI_HOST_EHT_CONF_MU_BFER)
 
-#define WMI_HOST_EHT_BF_CONF_DL_OFDMA_S 4
-#define WMI_HOST_EHT_BF_CONF_DL_OFDMA_M 0x1
-#define WMI_HOST_EHT_BF_CONF_DL_OFDMA \
-	(WMI_HOST_EHT_BF_CONF_DL_OFDMA_M << WMI_HOST_EHT_BF_CONF_DL_OFDMA_S)
-#define WMI_HOST_EHT_BF_CONF_DL_OFDMA_GET(x) \
-	WMI_HOST_F_MS(x, WMI_HOST_EHT_BF_CONF_DL_OFDMA)
-#define WMI_HOST_EHT_BF_CONF_DL_OFDMA_SET(x, z) \
-	WMI_HOST_F_RMW(x, z, WMI_HOST_EHT_BF_CONF_DL_OFDMA)
+#define WMI_HOST_EHT_CONF_DL_OFDMA_S 4
+#define WMI_HOST_EHT_CONF_DL_OFDMA_M 0x1
+#define WMI_HOST_EHT_CONF_DL_OFDMA \
+	(WMI_HOST_EHT_CONF_DL_OFDMA_M << WMI_HOST_EHT_CONF_DL_OFDMA_S)
+#define WMI_HOST_EHT_CONF_DL_OFDMA_GET(x) \
+	WMI_HOST_F_MS(x, WMI_HOST_EHT_CONF_DL_OFDMA)
+#define WMI_HOST_EHT_CONF_DL_OFDMA_SET(x, z) \
+	WMI_HOST_F_RMW(x, z, WMI_HOST_EHT_CONF_DL_OFDMA)
 
-#define WMI_HOST_EHT_BF_CONF_UL_OFDMA_S 5
-#define WMI_HOST_EHT_BF_CONF_UL_OFDMA_M 0x1
-#define WMI_HOST_EHT_BF_CONF_UL_OFDMA \
-	(WMI_HOST_EHT_BF_CONF_UL_OFDMA_M << WMI_HOST_EHT_BF_CONF_UL_OFDMA_S)
-#define WMI_HOST_EHT_BF_CONF_UL_OFDMA_GET(x) \
-	WMI_HOST_F_MS(x, WMI_HOST_EHT_BF_CONF_UL_OFDMA)
-#define WMI_HOST_EHT_BF_CONF_UL_OFDMA_SET(x, z) \
-	WMI_HOST_F_RMW(x, z, WMI_HOST_EHT_BF_CONF_UL_OFDMA)
+#define WMI_HOST_EHT_CONF_UL_OFDMA_S 5
+#define WMI_HOST_EHT_CONF_UL_OFDMA_M 0x1
+#define WMI_HOST_EHT_CONF_UL_OFDMA \
+	(WMI_HOST_EHT_CONF_UL_OFDMA_M << WMI_HOST_EHT_CONF_UL_OFDMA_S)
+#define WMI_HOST_EHT_CONF_UL_OFDMA_GET(x) \
+	WMI_HOST_F_MS(x, WMI_HOST_EHT_CONF_UL_OFDMA)
+#define WMI_HOST_EHT_CONF_UL_OFDMA_SET(x, z) \
+	WMI_HOST_F_RMW(x, z, WMI_HOST_EHT_CONF_UL_OFDMA)
 
-#define WMI_HOST_EHT_BF_CONF_MUMIMO_S 6
-#define WMI_HOST_EHT_BF_CONF_MUMIMO_M 0x1
-#define WMI_HOST_EHT_BF_CONF_MUMIMO \
-	(WMI_HOST_EHT_BF_CONF_MUMIMO_M << WMI_HOST_EHT_BF_CONF_MUMIMO_S)
-#define WMI_HOST_EHT_BF_CONF_MUMIMO_GET(x) \
-	WMI_HOST_F_MS(x, WMI_HOST_EHT_BF_CONF_MUMIMO)
-#define WMI_HOST_EHT_BF_CONF_MUMIMO_SET(x, z) \
-	WMI_HOST_F_RMW(x, z, WMI_HOST_EHT_BF_CONF_MUMIMO)
+#define WMI_HOST_EHT_CONF_UL_MUMIMO_S 6
+#define WMI_HOST_EHT_CONF_UL_MUMIMO_M 0x1
+#define WMI_HOST_EHT_CONF_UL_MUMIMO \
+	(WMI_HOST_EHT_CONF_UL_MUMIMO_M << WMI_HOST_EHT_CONF_UL_MUMIMO_S)
+#define WMI_HOST_EHT_CONF_UL_MUMIMO_GET(x) \
+	WMI_HOST_F_MS(x, WMI_HOST_EHT_CONF_UL_MUMIMO)
+#define WMI_HOST_EHT_CONF_UL_MUMIMO_SET(x, z) \
+	WMI_HOST_F_RMW(x, z, WMI_HOST_EHT_CONF_UL_MUMIMO)
 
-#define WMI_HOST_EHT_BF_CONF_DL_OFDMA_TXBF_S 7
-#define WMI_HOST_EHT_BF_CONF_DL_OFDMA_TXBF_M 0x1
-#define WMI_HOST_EHT_BF_CONF_DL_OFDMA_TXBF \
-	(WMI_HOST_EHT_BF_CONF_DL_OFDMA_TXBF_M << \
-		WMI_HOST_EHT_BF_CONF_DL_OFDMA_TXBF_S)
-#define WMI_HOST_EHT_BF_CONF_DL_OFDMA_TXBF_GET(x) \
-	WMI_HOST_F_MS(x, WMI_HOST_EHT_BF_CONF_DL_OFDMA_TXBF)
-#define WMI_HOST_EHT_BF_CONF_DL_OFDMA_TXBF_SET(x, z) \
-	WMI_HOST_F_RMW(x, z, WMI_HOST_EHT_BF_CONF_DL_OFDMA_TXBF)
+#define WMI_HOST_EHT_CONF_DL_OFDMA_TXBF_S 7
+#define WMI_HOST_EHT_CONF_DL_OFDMA_TXBF_M 0x1
+#define WMI_HOST_EHT_CONF_DL_OFDMA_TXBF \
+	(WMI_HOST_EHT_CONF_DL_OFDMA_TXBF_M << \
+		WMI_HOST_EHT_CONF_DL_OFDMA_TXBF_S)
+#define WMI_HOST_EHT_CONF_DL_OFDMA_TXBF_GET(x) \
+	WMI_HOST_F_MS(x, WMI_HOST_EHT_CONF_DL_OFDMA_TXBF)
+#define WMI_HOST_EHT_CONF_DL_OFDMA_TXBF_SET(x, z) \
+	WMI_HOST_F_RMW(x, z, WMI_HOST_EHT_CONF_DL_OFDMA_TXBF)
 
-#define WMI_HOST_EHT_BF_CONF_DL_OFDMA_MUMIMO_S 8
-#define WMI_HOST_EHT_BF_CONF_DL_OFDMA_MUMIMO_M 0x1
-#define WMI_HOST_EHT_BF_CONF_DL_OFDMA_MUMIMO \
-	(WMI_HOST_EHT_BF_CONF_DL_OFDMA_MUMIMO_M << \
-		 WMI_HOST_EHT_BF_CONF_DL_OFDMA_MUMIMO_S)
-#define WMI_HOST_EHT_BF_CONF_DL_OFDMA_MUMIMO_GET(x) \
-	WMI_HOST_F_MS(x, WMI_HOST_EHT_BF_CONF_DL_OFDMA_MUMIMO)
-#define WMI_HOST_EHT_BF_CONF_DL_OFDMA_MUMIMO_SET(x, z) \
-	WMI_HOST_F_RMW(x, z, WMI_HOST_EHT_BF_CONF_DL_OFDMA_MUMIMO)
+#define WMI_HOST_EHT_CONF_DL_OFDMA_MUMIMO_S 8
+#define WMI_HOST_EHT_CONF_DL_OFDMA_MUMIMO_M 0x1
+#define WMI_HOST_EHT_CONF_DL_OFDMA_MUMIMO \
+	(WMI_HOST_EHT_CONF_DL_OFDMA_MUMIMO_M << \
+		 WMI_HOST_EHT_CONF_DL_OFDMA_MUMIMO_S)
+#define WMI_HOST_EHT_CONF_DL_OFDMA_MUMIMO_GET(x) \
+	WMI_HOST_F_MS(x, WMI_HOST_EHT_CONF_DL_OFDMA_MUMIMO)
+#define WMI_HOST_EHT_CONF_DL_OFDMA_MUMIMO_SET(x, z) \
+	WMI_HOST_F_RMW(x, z, WMI_HOST_EHT_CONF_DL_OFDMA_MUMIMO)
 
-#define WMI_HOST_EHT_BF_CONF_UL_OFDMA_MUMIMO_S 9
-#define WMI_HOST_EHT_BF_CONF_UL_OFDMA_MUMIMO_M 0x1
-#define WMI_HOST_EHT_BF_CONF_UL_OFDMA_MUMIMO \
-	(WMI_HOST_EHT_BF_CONF_UL_OFDMA_MUMIMO_M << \
-		WMI_HOST_EHT_BF_CONF_UL_OFDMA_MUMIMO_S)
-#define WMI_HOST_EHT_BF_CONF_UL_OFDMA_MUMIMO_GET(x) \
-	WMI_HOST_F_MS(x, WMI_HOST_EHT_BF_CONF_UL_OFDMA_MUMIMO)
-#define WMI_HOST_EHT_BF_CONF_UL_OFDMA_MUMIMO_SET(x, z) \
-	WMI_HOST_F_RMW(x, z, WMI_HOST_EHT_BF_CONF_UL_OFDMA_MUMIMO)
+#define WMI_HOST_EHT_CONF_UL_OFDMA_MUMIMO_S 9
+#define WMI_HOST_EHT_CONF_UL_OFDMA_MUMIMO_M 0x1
+#define WMI_HOST_EHT_CONF_UL_OFDMA_MUMIMO \
+	(WMI_HOST_EHT_CONF_UL_OFDMA_MUMIMO_M << \
+		WMI_HOST_EHT_CONF_UL_OFDMA_MUMIMO_S)
+#define WMI_HOST_EHT_CONF_UL_OFDMA_MUMIMO_GET(x) \
+	WMI_HOST_F_MS(x, WMI_HOST_EHT_CONF_UL_OFDMA_MUMIMO)
+#define WMI_HOST_EHT_CONF_UL_OFDMA_MUMIMO_SET(x, z) \
+	WMI_HOST_F_RMW(x, z, WMI_HOST_EHT_CONF_UL_OFDMA_MUMIMO)
 
 /* Firmware uses most significant 4 bits to differentiate */
 /* some of vdev params between HE and EHT */
@@ -820,6 +825,28 @@ struct peer_create_params {
 #endif
 };
 
+#ifdef WLAN_SUPPORT_PPEDS
+/**
+ * struct peer_ppe_ds_param - Per peer PPE Direct Switch parameter
+ * @peer_macaddr: PPE mac address
+ * @ppe_routing_enabled: Master flag for PPE routing
+ * @use_ppe: Use PPE command for the peer entry
+ * @service_code: Service code
+ * @priority_valid: If PRI to TID conversion is enabled
+ * @src_info: Source info/PPE port of the interface
+ * @vdev_id: VAP ID
+ */
+struct peer_ppe_ds_param {
+	uint8_t peer_macaddr[QDF_MAC_ADDR_SIZE];
+	bool ppe_routing_enabled;
+	bool use_ppe;
+	uint16_t service_code;
+	uint16_t src_info;
+	uint8_t priority_valid;
+	uint8_t vdev_id;
+};
+#endif
+
 /**
  * struct peer_remove_params - peer remove cmd parameter
  * @bssid: bss id
@@ -1145,6 +1172,7 @@ struct peer_assoc_ml_partner_links {
  * @peer_eht_mcs_count: Peer EHT MCS TX/RX MAP count
  * @peer_eht_rx_mcs_set: Peer EHT RX MCS MAP
  * @peer_eht_tx_mcs_set: Peer EHT TX MCS MAP
+ * @peer_eht_ppet: Peer EHT PPET info
  * @peer_ppet: Peer HE PPET info
  * @peer_bss_max_idle_option: Peer BSS Max Idle option update
  * @akm: AKM info
@@ -1224,6 +1252,7 @@ struct peer_assoc_params {
 	uint32_t peer_eht_rx_mcs_set[WMI_HOST_MAX_EHT_RATE_SET];
 	uint32_t peer_eht_tx_mcs_set[WMI_HOST_MAX_EHT_RATE_SET];
 	uint16_t puncture_pattern;
+	struct wmi_host_ppe_threshold peer_eht_ppet;
 #endif
 	struct wmi_host_ppe_threshold peer_ppet;
 	u_int8_t peer_bsscolor_rept_info;
@@ -1717,13 +1746,13 @@ struct set_key_params {
  * @oui: oui parameters
  * @vdev_id: interface id
  * @enb_probe_req_sno_randomization: control probe req sequence no randomization
- * @ie_whitelist: probe req IE whitelist attrs
+ * @ie_allowlist: probe req IE allowlist attrs
  */
 struct scan_mac_oui {
 	uint8_t oui[WMI_WIFI_SCANNING_MAC_OUI_LENGTH];
 	uint32_t vdev_id;
 	bool enb_probe_req_sno_randomization;
-	struct probe_req_whitelist_attr ie_whitelist;
+	struct probe_req_allowlist_attr ie_allowlist;
 };
 
 #define WMI_PASSPOINT_REALM_LEN 256
@@ -2948,6 +2977,7 @@ struct smart_ant_enable_tx_feedback_params {
  * @vdev_id: VDEV id
  * @count: count
  * @period: period
+ * @fft_recap: FFT recapture enable/disable
  * @spectral_pri: Spectral priority
  * @fft_size: FFT size
  * @gc_enable: GC enable
@@ -2974,6 +3004,7 @@ struct vdev_spectral_configure_params {
 	uint8_t vdev_id;
 	uint16_t count;
 	uint16_t period;
+	uint16_t fft_recap;
 	uint16_t spectral_pri;
 	uint16_t fft_size;
 	uint16_t gc_enable;
@@ -3840,6 +3871,18 @@ struct peer_request_pn_param {
 };
 
 /**
+ * struct peer_request_rxpn_param - Rx PN request params
+ * @vdev_id: vdev id
+ * @peer_macaddr: Peer mac address
+ * @keyix: key index
+ */
+struct peer_request_rxpn_param {
+	uint32_t vdev_id;
+	uint8_t peer_macaddr[QDF_MAC_ADDR_SIZE];
+	uint16_t keyix;
+};
+
+/**
  * struct rtt_meas_req_params - RTT measurement request params
  * @req_id: Request id
  * @vdev_id: vdev id
@@ -4017,7 +4060,7 @@ typedef struct {
  * @last_tx_power: Tx power latest
  * @atf_tokens_allocated: atf tokens allocated
  * @atf_tokens_utilized: atf tokens utilized
- * @num_mu_tx_blacklisted: Blacklisted MU Tx count
+ * @num_mu_tx_denylisted: Denylisted MU Tx count
  * @sgi_count: sgi count of the peer
  * @rx_mc_bc_cnt: Total number of received multicast & broadcast data frames
  * corresponding to this peer, 1 in the MSB of rx_mc_bc_cnt represents a
@@ -4034,7 +4077,7 @@ typedef struct {
 	uint32_t last_tx_power;
 	uint32_t atf_tokens_allocated;
 	uint32_t atf_tokens_utilized;
-	uint32_t num_mu_tx_blacklisted;
+	uint32_t num_mu_tx_denylisted;
 	uint32_t sgi_count;
 	uint32_t rx_mc_bc_cnt;
 	uint32_t rx_retry_cnt;
@@ -4582,10 +4625,30 @@ struct ftm_time_sync_offset {
  * struct wmi_host_tsf_event_- Get tsf event info
  * @vdev_id: vdev id
  * @tsf: tsf
+ * @tsf_low: low 32bit of tsf
+ * @tsf_high: high 32 bit of tsf
+ * @qtimer_low: low 32 bits of qtimer
+ * @qtimer_high: high 32 bits of qtimer
+ * @tsf_id: TSF ID for the current vdev
+ * @tsf_id_valid: is TSF valid
+ * @mac_id: MAC identifier
+ * @mac_id_valid: is MAC id valid
+ * @wlan_global_tsf_low: low 32 bits of wlan global tsf
+ * @wlan_global_tsf_high: high 32 bits of wlan global tsf
  */
 struct wmi_host_tsf_event {
 	uint32_t vdev_id;
 	uint64_t tsf;
+	uint32_t tsf_low;
+	uint32_t tsf_high;
+	uint32_t qtimer_low;
+	uint32_t qtimer_high;
+	uint32_t tsf_id;
+	uint32_t tsf_id_valid;
+	uint32_t mac_id;
+	uint32_t mac_id_valid;
+	uint32_t wlan_global_tsf_low;
+	uint32_t wlan_global_tsf_high;
 };
 
 #define WMI_EVENT_ID_INVALID 0
@@ -4811,7 +4874,7 @@ typedef enum {
 	wmi_esp_estimate_event_id,
 	wmi_pdev_ctl_failsafe_check_event_id,
 	wmi_vdev_bcn_reception_stats_event_id,
-	wmi_roam_blacklist_event_id,
+	wmi_roam_denylist_event_id,
 	wmi_wlm_stats_event_id,
 	wmi_peer_cfr_capture_event_id,
 	wmi_pdev_cold_boot_cal_event_id,
@@ -4870,6 +4933,13 @@ typedef enum {
 #ifdef WLAN_FEATURE_DYNAMIC_MAC_ADDR_UPDATE
 	wmi_vdev_update_mac_addr_conf_eventid,
 #endif
+#ifdef WLAN_FEATURE_11BE_MLO
+	wmi_vdev_quiet_offload_eventid,
+#endif
+#ifdef WLAN_FEATURE_MCC_QUOTA
+	wmi_resmgr_chan_time_quota_changed_eventid,
+#endif
+	wmi_peer_rx_pn_response_event_id,
 	wmi_events_max,
 } wmi_conv_event_id;
 
@@ -5045,6 +5115,13 @@ typedef enum {
 	wmi_pdev_param_low_latency_mode,
 	wmi_pdev_param_scan_radio_tx_on_dfs,
 	wmi_pdev_param_en_probe_all_bw,
+	wmi_pdev_param_obss_min_duration_check_for_sr,
+	wmi_pdev_param_truncate_sr,
+	wmi_pdev_param_ctrl_frame_obss_pd_threshold,
+	wmi_pdev_param_rate_upper_cap,
+	wmi_pdev_param_rate_retry_mcs_drop,
+	wmi_pdev_param_mcs_probe_intvl,
+	wmi_pdev_param_nss_probe_intvl,
 	wmi_pdev_param_max,
 } wmi_conv_pdev_params_id;
 
@@ -5489,6 +5566,22 @@ typedef enum {
 	wmi_service_dynamic_update_vdev_macaddr_support,
 #endif
 	wmi_service_probe_all_bw_support,
+	wmi_service_pno_scan_conf_per_ch_support,
+#ifdef QCA_UNDECODED_METADATA_SUPPORT
+	wmi_service_fp_phy_err_filter_support,
+#endif
+#ifdef WLAN_FEATURE_11BE_MLO
+	wmi_service_mlo_sta_nan_ndi_support,
+#endif
+	wmi_service_pdev_rate_config_support,
+	wmi_service_multi_peer_group_cmd_support,
+#ifdef WLAN_FEATURE_11BE
+	wmi_service_radar_found_chan_freq_eq_center_freq,
+#endif
+	wmi_service_pn_replay_check_support,
+#ifdef QCA_RSSI_DB2DBM
+	wmi_service_pdev_rssi_dbm_conv_event_support,
+#endif
 	wmi_services_max,
 } wmi_conv_service_ids;
 #define WMI_SERVICE_UNAVAILABLE 0xFFFF
@@ -5767,6 +5860,7 @@ typedef struct {
 	bool afc_timer_check_disable;
 	bool afc_req_id_check_disable;
 	uint32_t carrier_profile_config;
+	bool sawf;
 } target_resource_config;
 
 /**
@@ -6079,7 +6173,7 @@ typedef enum {
  * @WMI_HOST_PEER_EXT_STATS_ENABLE: Enable extended peer stats
  * @WMI_HOST_PEER_USE_FIXED_PWR: Use FIXED Pwr,
  * @WMI_HOST_PEER_PARAM_FIXED_RATE: Set peer fixed rate
- * @WMI_HOST_PEER_SET_MU_WHITELIST: Whitelist peer TIDs
+ * @WMI_HOST_PEER_SET_MU_ALLOWLIST: Allowlist peer TIDs
  * @WMI_HOST_PEER_MEMBERSHIP: set group membership status
  * @WMI_HOST_PEER_USERPOS: User POS
  * @WMI_HOST_PEER_CRIT_PROTO_HINT_ENABLED: Critical Protocol Hint enabled
@@ -6109,7 +6203,7 @@ enum {
 	WMI_HOST_PEER_EXT_STATS_ENABLE,
 	WMI_HOST_PEER_USE_FIXED_PWR,
 	WMI_HOST_PEER_PARAM_FIXED_RATE,
-	WMI_HOST_PEER_SET_MU_WHITELIST,
+	WMI_HOST_PEER_SET_MU_ALLOWLIST,
 	WMI_HOST_PEER_MEMBERSHIP,
 	WMI_HOST_PEER_USERPOS,
 	WMI_HOST_PEER_CRIT_PROTO_HINT_ENABLED,
@@ -6360,6 +6454,7 @@ enum wmi_host_ap_ps_peer_param {
 #define WMI_HOST_RXERR_DECRYPT	0x08 /* non-Michael decrypt error */
 #define WMI_HOST_RXERR_MIC	0x10 /* Michael MIC decrypt error */
 #define WMI_HOST_RXERR_KEY_CACHE_MISS 0x20 /* No/incorrect key matter in h/w */
+#define WMI_HOST_RXERR_PN	0x80 /* invalid PN in frame */
 
 enum wmi_host_sta_ps_param_rx_wake_policy {
 	/* Wake up when ever there is an  RX activity on the VDEV. In this mode
@@ -6494,7 +6589,7 @@ enum {
 	WMI_HOST_PKTLOG_EVENT_TX_DATA_CAPTURE_BIT,
 	WMI_HOST_PKTLOG_EVENT_PHY_LOGGING_BIT,
 	WMI_HOST_PKTLOG_EVENT_CBF_BIT,
-#ifdef QCA_WIFI_QCN9224
+#ifdef BE_PKTLOG_SUPPORT
 	WMI_HOST_PKTLOG_EVENT_HYBRID_TX_BIT,
 #endif
 };
@@ -6523,7 +6618,7 @@ typedef enum {
 		BIT(WMI_HOST_PKTLOG_EVENT_PHY_LOGGING_BIT),
 	WMI_HOST_PKTLOG_EVENT_CBF =
 		BIT(WMI_HOST_PKTLOG_EVENT_CBF_BIT),
-#ifdef QCA_WIFI_QCN9224
+#ifdef BE_PKTLOG_SUPPORT
 	WMI_HOST_PKTLOG_EVENT_HYBRID_TX =
 		BIT(WMI_HOST_PKTLOG_EVENT_HYBRID_TX_BIT),
 #endif
@@ -7358,6 +7453,7 @@ enum wmi_host_fatal_condition_subtype_packet_log_config {
 #endif /* OL_ATH_SMART_LOGGING */
 
 #define GET_PN_MAX_LEN 16
+#define GET_RX_PN_MAX_LEN 8
 
 /**
  * struct wmi_host_get_pn_event - PN event params
@@ -7371,6 +7467,20 @@ struct wmi_host_get_pn_event {
 	uint8_t mac_addr[QDF_MAC_ADDR_SIZE];
 	uint32_t key_type;
 	uint8_t pn[GET_PN_MAX_LEN];
+};
+
+/**
+ * struct wmi_host_get_rxpn_event - Rx PN event params
+ * @vdev_id: vdev id
+ * @peer_macaddr: Peer mac address
+ * @keyix: key index
+ * @pn: pn value
+ */
+struct wmi_host_get_rxpn_event {
+	uint32_t vdev_id;
+	uint8_t mac_addr[QDF_MAC_ADDR_SIZE];
+	uint16_t keyix;
+	uint8_t pn[GET_RX_PN_MAX_LEN];
 };
 
 /**
@@ -7864,12 +7974,12 @@ struct wmi_roam_wtc_btm_trigger_data {
  *  @rssi_score:  AP RSSI score
  *  @total_score: Total score of the candidate AP.
  *  @etp:         Estimated throughput value of the AP in Mbps
- *  @bl_reason:   Blacklist reason
- *  @bl_source:   Source of adding AP to BL
- *  @bl_timestamp:This timestamp indicates the time when AP added
- *  to blacklist.
- *  @bl_original_timeout: Original timeout value in milli seconds
- *  when AP added to BL
+ *  @dl_reason:   Denylist reason
+ *  @dl_source:   Source of adding AP to DL
+ *  @dl_timestamp:This timestamp indicates the time when AP added
+ *  to denylist.
+ *  @dl_original_timeout: Original timeout value in milli seconds
+ *  when AP added to DL
  */
 struct wmi_roam_candidate_info {
 	uint32_t timestamp;
@@ -7882,10 +7992,10 @@ struct wmi_roam_candidate_info {
 	uint32_t rssi_score;
 	uint32_t total_score;
 	uint32_t etp;
-	uint32_t bl_reason;
-	uint32_t bl_source;
-	uint32_t bl_timestamp;
-	uint32_t bl_original_timeout;
+	uint32_t dl_reason;
+	uint32_t dl_source;
+	uint32_t dl_timestamp;
+	uint32_t dl_original_timeout;
 };
 
 /**
@@ -8481,4 +8591,14 @@ struct wmi_host_inst_rssi_stats_resp {
 	uint32_t vdev_id;
 };
 #endif
+
+/**
+ * struct vdev_pn_mgmt_rxfilter_params - Send PN mgmt RxFilter command params
+ * @vdev_id: vdev id
+ * @pn_rxfilter: Rx Filter
+ */
+struct vdev_pn_mgmt_rxfilter_params {
+	uint8_t vdev_id;
+	uint32_t pn_rxfilter;
+};
 #endif /* _WMI_UNIFIED_PARAM_H_ */

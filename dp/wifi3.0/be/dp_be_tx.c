@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021,2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -182,7 +182,8 @@ void dp_tx_process_htt_completion_be(struct dp_soc *soc,
 	struct dp_vdev *vdev = NULL;
 	struct hal_tx_completion_status ts = {0};
 	uint32_t *htt_desc = (uint32_t *)status;
-	struct dp_peer *peer;
+	struct dp_txrx_peer *txrx_peer;
+	dp_txrx_ref_handle txrx_ref_handle = NULL;
 	struct cdp_tid_tx_stats *tid_stats = NULL;
 	struct htt_soc *htt_handle;
 	uint8_t vdev_id;
@@ -276,21 +277,24 @@ void dp_tx_process_htt_completion_be(struct dp_soc *soc,
 		if (tx_status < CDP_MAX_TX_HTT_STATUS)
 			tid_stats->htt_status_cnt[tx_status]++;
 
-		peer = dp_peer_get_ref_by_id(soc, ts.peer_id,
-					     DP_MOD_ID_HTT_COMP);
-		if (qdf_likely(peer))
+		txrx_peer = dp_txrx_peer_get_ref_by_id(soc, ts.peer_id,
+						       &txrx_ref_handle,
+						       DP_MOD_ID_HTT_COMP);
+		if (qdf_likely(txrx_peer))
 			dp_tx_update_peer_basic_stats(
-						peer,
+						txrx_peer,
 						qdf_nbuf_len(tx_desc->nbuf),
 						tx_status,
 						pdev->enhanced_stats_en);
 
-		dp_tx_comp_process_tx_status(soc, tx_desc, &ts, peer, ring_id);
-		dp_tx_comp_process_desc(soc, tx_desc, &ts, peer);
+		dp_tx_comp_process_tx_status(soc, tx_desc, &ts, txrx_peer,
+					     ring_id);
+		dp_tx_comp_process_desc(soc, tx_desc, &ts, txrx_peer);
 		dp_tx_desc_release(tx_desc, tx_desc->pool_id);
 
-		if (qdf_likely(peer))
-			dp_peer_unref_delete(peer, DP_MOD_ID_HTT_COMP);
+		if (qdf_likely(txrx_peer))
+			dp_txrx_peer_unref_delete(txrx_ref_handle,
+						  DP_MOD_ID_HTT_COMP);
 
 		break;
 	}
@@ -362,6 +366,50 @@ static inline uint8_t dp_tx_get_rbm_id_be(struct dp_soc *soc,
 	rbm = wlan_cfg_get_rbm_id_for_index(soc->wlan_cfg_ctx, tcl_index);
 	dp_verbose_debug("tcl_id %u rbm %u", tcl_index, rbm);
 	return rbm;
+}
+#endif
+#ifdef QCA_SUPPORT_TX_MIN_RATES_FOR_SPECIAL_FRAMES
+
+/*
+ * dp_tx_set_min_rates_for_critical_frames()- sets min-rates for critical pkts
+ * @dp_soc - DP soc structure pointer
+ * @hal_tx_desc - HAL descriptor where fields are set
+ * nbuf - skb to be considered for min rates
+ *
+ * The function relies on upper layers to set QDF_NBUF_CB_TX_EXTRA_IS_CRITICAL
+ * and uses it to determine if the frame is critical. For a critical frame,
+ * flow override bits are set to classify the frame into HW's high priority
+ * queue. The HW will pick pre-configured min rates for such packets.
+ *
+ * Return - None
+ */
+static void
+dp_tx_set_min_rates_for_critical_frames(struct dp_soc *soc,
+					uint32_t *hal_tx_desc,
+					qdf_nbuf_t nbuf)
+{
+/*
+ * Critical frames should be queued to the high priority queue for the TID on
+ * on which they are sent out (for the concerned peer).
+ * FW is using HTT_MSDU_Q_IDX 2 for HOL (high priority) queue.
+ * htt_msdu_idx = (2 * who_classify_info_sel) + flow_override
+ * Hence, using who_classify_info_sel = 1, flow_override = 0 to select
+ * HOL queue.
+ */
+	if (QDF_NBUF_CB_TX_EXTRA_IS_CRITICAL(nbuf)) {
+		hal_tx_desc_set_flow_override_enable(hal_tx_desc, 1);
+		hal_tx_desc_set_flow_override(hal_tx_desc, 0);
+		hal_tx_desc_set_who_classify_info_sel(hal_tx_desc, 1);
+		hal_tx_desc_set_tx_notify_frame(hal_tx_desc,
+						TX_SEMI_HARD_NOTIFY_E);
+	}
+}
+#else
+static inline void
+dp_tx_set_min_rates_for_critical_frames(struct dp_soc *soc,
+					uint32_t *hal_tx_desc_cached,
+					qdf_nbuf_t nbuf)
+{
 }
 #endif
 
@@ -452,6 +500,37 @@ void dp_tx_mlo_mcast_handler_be(struct dp_soc *soc,
 }
 #endif
 
+#ifdef CONFIG_SAWF
+void dp_sawf_config_be(struct dp_soc *soc, uint32_t *hal_tx_desc_cached,
+		       uint16_t *fw_metadata, qdf_nbuf_t nbuf)
+{
+	uint8_t q_id = 0;
+
+	if (wlan_cfg_get_sawf_config(soc->wlan_cfg_ctx))
+		return;
+
+	dp_sawf_tcl_cmd(fw_metadata, nbuf);
+	q_id = dp_sawf_queue_id_get(nbuf);
+
+	if (q_id == DP_SAWF_DEFAULT_Q_INVALID)
+		return;
+
+	hal_tx_desc_set_hlos_tid(hal_tx_desc_cached, (q_id & 0x0e) >> 1);
+	hal_tx_desc_set_flow_override_enable(hal_tx_desc_cached, 1);
+	hal_tx_desc_set_flow_override(hal_tx_desc_cached, q_id & 0x1);
+	hal_tx_desc_set_who_classify_info_sel(hal_tx_desc_cached,
+					      (q_id & 0x30) >> 4);
+}
+
+#else
+
+static inline
+void dp_sawf_config_be(struct dp_soc *soc, uint32_t *hal_tx_desc_cached,
+		       uint16_t *fw_metadata, qdf_nbuf_t nbuf)
+{
+}
+#endif
+
 QDF_STATUS
 dp_tx_hw_enqueue_be(struct dp_soc *soc, struct dp_vdev *vdev,
 		    struct dp_tx_desc_s *tx_desc, uint16_t fw_metadata,
@@ -492,6 +571,11 @@ dp_tx_hw_enqueue_be(struct dp_soc *soc, struct dp_vdev *vdev,
 
 	hal_tx_desc_cached = (void *)cached_desc;
 
+	if (dp_sawf_tag_valid_get(tx_desc->nbuf)) {
+		dp_sawf_config_be(soc, hal_tx_desc_cached,
+				  &fw_metadata, tx_desc->nbuf);
+	}
+
 	hal_tx_desc_set_buf_addr_be(soc->hal_soc, hal_tx_desc_cached,
 				    tx_desc->dma_addr, bm_id, tx_desc->id,
 				    (tx_desc->flags & DP_TX_DESC_FLAG_FRAG));
@@ -530,9 +614,13 @@ dp_tx_hw_enqueue_be(struct dp_soc *soc, struct dp_vdev *vdev,
 	if (tid != HTT_TX_EXT_TID_INVALID)
 		hal_tx_desc_set_hlos_tid(hal_tx_desc_cached, tid);
 
+	dp_tx_set_min_rates_for_critical_frames(soc, hal_tx_desc_cached,
+						tx_desc->nbuf);
+
 	if (qdf_unlikely(vdev->pdev->delay_stats_flag) ||
-		qdf_unlikely(wlan_cfg_is_peer_ext_stats_enabled(soc->wlan_cfg_ctx)) ||
-		qdf_unlikely(soc->rdkstats_enabled))
+	    qdf_unlikely(wlan_cfg_is_peer_ext_stats_enabled(soc->wlan_cfg_ctx)) ||
+	    qdf_unlikely(soc->rdkstats_enabled) ||
+	    dp_tx_pkt_tracepoints_enabled())
 		tx_desc->timestamp = qdf_ktime_to_ms(qdf_ktime_real_get());
 
 	dp_verbose_debug("length:%d , type = %d, dma_addr %llx, offset %d desc id %u",
@@ -564,9 +652,10 @@ dp_tx_hw_enqueue_be(struct dp_soc *soc, struct dp_vdev *vdev,
 	/* Sync cached descriptor with HW */
 	hal_tx_desc_sync(hal_tx_desc_cached, hal_tx_desc);
 
-	coalesce = dp_tx_attempt_coalescing(soc, vdev, tx_desc, tid);
+	coalesce = dp_tx_attempt_coalescing(soc, vdev, tx_desc, tid, msdu_info);
 
 	DP_STATS_INC_PKT(vdev, tx_i.processed, 1, tx_desc->length);
+	DP_STATS_INC(soc, tx.tcl_enq[ring_id], 1);
 	dp_tx_update_stats(soc, tx_desc->nbuf);
 	status = QDF_STATUS_SUCCESS;
 
@@ -616,7 +705,6 @@ void dp_tx_get_vdev_bank_config(struct dp_vdev_be *be_vdev,
 				union hal_tx_bank_config *bank_config)
 {
 	struct dp_vdev *vdev = &be_vdev->vdev;
-	struct dp_soc *soc = vdev->pdev->soc;
 
 	bank_config->epd = 0;
 
@@ -632,8 +720,8 @@ void dp_tx_get_vdev_bank_config(struct dp_vdev_be *be_vdev,
 	bank_config->src_buffer_swap = 0;
 	bank_config->link_meta_swap = 0;
 
-	if ((soc->sta_mode_search_policy == HAL_TX_ADDR_INDEX_SEARCH) &&
-	     vdev->opmode == wlan_op_mode_sta) {
+	if ((vdev->search_type == HAL_TX_ADDR_INDEX_SEARCH) &&
+	    vdev->opmode == wlan_op_mode_sta) {
 		bank_config->index_lookup_enable = 1;
 		bank_config->mcast_pkt_ctrl = HAL_TX_MCAST_CTRL_MEC_NOTIFY;
 		bank_config->addrx_en = 0;
@@ -758,7 +846,7 @@ void dp_tx_update_bank_profile(struct dp_soc_be *be_soc,
 }
 
 QDF_STATUS dp_tx_desc_pool_init_be(struct dp_soc *soc,
-				   uint16_t num_elem,
+				   uint32_t num_elem,
 				   uint8_t pool_id)
 {
 	struct dp_tx_desc_pool_s *tx_desc_pool;
@@ -799,7 +887,7 @@ QDF_STATUS dp_tx_desc_pool_init_be(struct dp_soc *soc,
 			dp_cc_desc_id_generate(page_desc->ppt_index,
 					       avail_entry_index);
 		tx_desc->pool_id = pool_id;
-
+		dp_tx_desc_set_magic(tx_desc, DP_TX_MAGIC_PATTERN_FREE);
 		tx_desc = tx_desc->next;
 		avail_entry_index = (avail_entry_index + 1) &
 					DP_CC_SPT_PAGE_MAX_ENTRIES_MASK;

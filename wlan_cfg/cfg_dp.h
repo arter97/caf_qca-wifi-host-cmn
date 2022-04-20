@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2018-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021,2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -166,7 +166,7 @@
 #define WLAN_CFG_TX_COMP_RING_SIZE_MAX 0x80000
 
 #define WLAN_CFG_NUM_TX_DESC_MIN  16
-#define WLAN_CFG_NUM_TX_DESC_MAX  32768
+#define WLAN_CFG_NUM_TX_DESC_MAX  0x10000
 
 #define WLAN_CFG_NUM_TX_EXT_DESC_MIN  16
 #define WLAN_CFG_NUM_TX_EXT_DESC_MAX  0x80000
@@ -244,6 +244,10 @@
 #define WLAN_CFG_NUM_TCL_DATA_RINGS_MIN 1
 #define WLAN_CFG_NUM_TCL_DATA_RINGS_MAX MAX_TCL_DATA_RINGS
 
+#define WLAN_CFG_NUM_TX_COMP_RINGS WLAN_CFG_NUM_TCL_DATA_RINGS
+#define WLAN_CFG_NUM_TX_COMP_RINGS_MIN WLAN_CFG_NUM_TCL_DATA_RINGS_MIN
+#define WLAN_CFG_NUM_TX_COMP_RINGS_MAX WLAN_CFG_NUM_TCL_DATA_RINGS_MAX
+
 #if defined(CONFIG_BERYLLIUM)
 #define WLAN_CFG_NUM_REO_DEST_RING 8
 #else
@@ -308,7 +312,11 @@
 
 #define WLAN_CFG_RXDMA_BUF_RING_SIZE 1024
 #define WLAN_CFG_RXDMA_BUF_RING_SIZE_MIN 1024
+#if defined(WLAN_MAX_PDEVS) && (WLAN_MAX_PDEVS == 1)
 #define WLAN_CFG_RXDMA_BUF_RING_SIZE_MAX 1024
+#else
+#define WLAN_CFG_RXDMA_BUF_RING_SIZE_MAX 4096
+#endif
 
 #define WLAN_CFG_RXDMA_REFILL_RING_SIZE 4096
 #define WLAN_CFG_RXDMA_REFILL_RING_SIZE_MIN 16
@@ -414,13 +422,17 @@
 #define WLAN_CFG_PKTLOG_MIN_BUFFER_SIZE 1
 #define WLAN_CFG_PKTLOG_MAX_BUFFER_SIZE 10
 
-#ifdef QCA_WIFI_KIWI
+#ifdef IPA_OFFLOAD
 #define WLAN_CFG_NUM_REO_RINGS_MAP 0x7
 #else
 #define WLAN_CFG_NUM_REO_RINGS_MAP 0xF
 #endif
 #define WLAN_CFG_NUM_REO_RINGS_MAP_MIN 0x1
+#if defined(CONFIG_BERYLLIUM)
+#define WLAN_CFG_NUM_REO_RINGS_MAP_MAX 0xFF
+#else
 #define WLAN_CFG_NUM_REO_RINGS_MAP_MAX 0xF
+#endif
 
 #define WLAN_CFG_RADIO_0_DEFAULT_REO 0x1
 #define WLAN_CFG_RADIO_1_DEFAULT_REO 0x2
@@ -447,7 +459,33 @@
 #define WLAN_CFG_MLO_RX_RING_MAP_MAX 0xFF
 #endif
 
-/* DP INI Declerations */
+#define WLAN_CFG_TX_CAPT_MAX_MEM_MIN 0
+#define WLAN_CFG_TX_CAPT_MAX_MEM_MAX 512
+#define WLAN_CFG_TX_CAPT_MAX_MEM_DEFAULT 0
+
+/*
+ * <ini>
+ * "dp_tx_capt_max_mem_mb"- maximum memory used by Tx capture
+ * @Min: 0
+ * @Max: 512 MB
+ * @Default: 0 (disabled)
+ *
+ * This ini entry is used to set a max limit beyond which frames
+ * are dropped by Tx capture. User needs to set a non-zero value
+ * to enable it.
+ *
+ * Usage: External
+ *
+ * </ini>
+ */
+#define CFG_DP_TX_CAPT_MAX_MEM_MB \
+		CFG_INI_UINT("dp_tx_capt_max_mem_mb", \
+		WLAN_CFG_TX_CAPT_MAX_MEM_MIN, \
+		WLAN_CFG_TX_CAPT_MAX_MEM_MAX, \
+		WLAN_CFG_TX_CAPT_MAX_MEM_DEFAULT, \
+			CFG_VALUE_OR_DEFAULT, "Max Memory (in MB) used by Tx Capture")
+
+/* DP INI Declarations */
 #define CFG_DP_HTT_PACKET_TYPE \
 		CFG_INI_UINT("dp_htt_packet_type", \
 		WLAN_CFG_HTT_PKT_TYPE_MIN, \
@@ -538,6 +576,13 @@
 		WLAN_CFG_NUM_REO_DEST_RING_MAX, \
 		WLAN_CFG_NUM_REO_DEST_RING, \
 		CFG_VALUE_OR_DEFAULT, "DP REO Destination Rings")
+
+#define CFG_DP_TX_COMP_RINGS \
+		CFG_INI_UINT("dp_tx_comp_rings", \
+		WLAN_CFG_NUM_TX_COMP_RINGS_MIN, \
+		WLAN_CFG_NUM_TX_COMP_RINGS_MAX, \
+		WLAN_CFG_NUM_TX_COMP_RINGS, \
+		CFG_VALUE_OR_DEFAULT, "DP Tx Comp Rings")
 
 #define CFG_DP_TCL_DATA_RINGS \
 		CFG_INI_UINT("dp_tcl_data_rings", \
@@ -690,6 +735,122 @@
 #define CFG_DP_LRO \
 	CFG_INI_BOOL("LROEnable", WLAN_LRO_ENABLE, \
 	"DP LRO Enable")
+
+#ifdef WLAN_USE_CONFIG_PARAMS
+/*
+ * <ini>
+ * dp_tx_desc_use_512p - Use 512M tx descriptor size
+ * @Min: 0
+ * @Max: 1
+ * @Default: 0
+ *
+ * This ini entry is used as flag to use 512M tx descriptor size or not
+ *
+ * Usage: Internal
+ *
+ * </ini>
+ */
+#define CFG_DP_TX_DESC_512P \
+	CFG_INI_BOOL("dp_tx_desc_use_512p", false, \
+	"DP TX DESC PINE SPECIFIC")
+
+/*
+ * <ini>
+ * dp_nss_3radio_ring - Use 3 Radio NSS comp ring size
+ * @Min: 0
+ * @Max: 1
+ * @Default: 0
+ *
+ * This ini entry is used as flag to use 3 Radio NSS com ring size or not
+ *
+ * Usage: Internal
+ *
+ * </ini>
+ */
+#define CFG_DP_NSS_3RADIO_RING \
+	CFG_INI_BOOL("dp_nss_3radio_ring", false, \
+	"DP NSS 3 RADIO RING SIZE")
+
+/*
+ * <ini>
+ * dp_mon_ring_per_512M - Update monitor status ring as 512M profile
+ * @Min: 0
+ * @Max: 1
+ * @Default: 0
+ *
+ * This ini entry is used as flag to update monitor status ring as 512M profile
+ *
+ * Usage: Internal
+ *
+ * </ini>
+ */
+#define CFG_DP_MON_STATUS_512M \
+	CFG_INI_BOOL("dp_mon_ring_per_512M", false, \
+	"DP MON STATUS RING SIZE PER 512M PROFILE")
+
+/*
+ * <ini>
+ * dp_mon_2chain_ring - Reduce monitor rings size as for 2 Chains case
+ * @Min: 0
+ * @Max: 1
+ * @Default: 0
+ *
+ * This ini entry is used as flag to reduce monitor rings size as those used
+ * in case of 2 Tx/RxChains
+ *
+ * Usage: Internal
+ *
+ * </ini>
+ */
+#define CFG_DP_MON_2CHAIN_RING \
+	CFG_INI_BOOL("dp_mon_2chain_ring", false, \
+	"DP MON UPDATE RINGS FOR 2CHAIN")
+
+/*
+ * <ini>
+ * dp_mon_4chain_ring - Update monitor rings size for 4 Chains case
+ * @Min: 0
+ * @Max: 1
+ * @Default: 0
+ *
+ * This ini entry is used as flag to reduce monitor rings size as those used
+ * in case of 4 Tx/RxChains
+ *
+ * Usage: Internal
+ *
+ * </ini>
+ */
+#define CFG_DP_MON_4CHAIN_RING \
+	CFG_INI_BOOL("dp_mon_4chain_ring", false, \
+	"DP MON UPDATE RINGS FOR 4CHAIN")
+
+/*
+ * <ini>
+ * dp_4radip_rdp_reo - Update RDP REO map based on 4 radio config
+ * @Min: 0
+ * @Max: 1
+ * @Default: 0
+ *
+ * This ini entry is used as flag to update RDP reo map based on 4 Radio config
+ *
+ * Usage: Internal
+ *
+ * </ini>
+ */
+#define CFG_DP_4RADIO_RDP_REO \
+	CFG_INI_BOOL("dp_nss_4radio_rdp_reo", \
+	false, "Update REO destination mapping for 4radio")
+
+#define CFG_DP_INI_SECTION_PARAMS \
+		CFG(CFG_DP_NSS_3RADIO_RING) \
+		CFG(CFG_DP_TX_DESC_512P) \
+		CFG(CFG_DP_MON_STATUS_512M) \
+		CFG(CFG_DP_MON_2CHAIN_RING) \
+		CFG(CFG_DP_MON_4CHAIN_RING) \
+		CFG(CFG_DP_4RADIO_RDP_REO)
+#else
+#define CFG_DP_INI_SECTION_PARAMS
+#endif
 
 /*
  * <ini>
@@ -1474,6 +1635,7 @@
 		CFG(CFG_DP_MAX_CLIENTS) \
 		CFG(CFG_DP_MAX_PEER_ID) \
 		CFG(CFG_DP_REO_DEST_RINGS) \
+		CFG(CFG_DP_TX_COMP_RINGS) \
 		CFG(CFG_DP_TCL_DATA_RINGS) \
 		CFG(CFG_DP_NSS_REO_DEST_RINGS) \
 		CFG(CFG_DP_NSS_TCL_DATA_RINGS) \
@@ -1564,5 +1726,7 @@
 		CFG_DP_PPE_CONFIG \
 		CFG_DP_IPA_TX_ALT_RING_CFG \
 		CFG_DP_MLO_CONFIG \
-		CFG_DP_VDEV_STATS_HW_OFFLOAD
+		CFG_DP_INI_SECTION_PARAMS \
+		CFG_DP_VDEV_STATS_HW_OFFLOAD \
+		CFG(CFG_DP_TX_CAPT_MAX_MEM_MB)
 #endif /* _CFG_DP_H_ */

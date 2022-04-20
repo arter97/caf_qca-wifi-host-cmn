@@ -1426,6 +1426,17 @@ wmi_unified_get_pn_send_cmd(wmi_unified_t wmi_hdl,
 			    struct peer_request_pn_param *pn_params);
 
 /**
+ * wmi_unified_get_rxpn_send_cmd() - send command to fw get Rx PN for peer
+ * @wmi_handle: wmi handle
+ * @pn_params: PN parameters
+ *
+ * Return: QDF_STATUS_SUCCESS on success and QDF_STATUS_E_FAILURE for failure
+ */
+QDF_STATUS
+wmi_unified_get_rxpn_send_cmd(wmi_unified_t wmi_hdl,
+			      struct peer_request_rxpn_param *pn_params);
+
+/**
  * wmi_unified_p2p_go_set_beacon_ie_cmd() - set beacon IE for p2p go
  * @wmi_handle: wmi handle
  * @vdev_id: vdev id
@@ -2424,6 +2435,7 @@ QDF_STATUS wmi_unified_vdev_set_qdepth_thresh_cmd_send(
 		wmi_unified_t wmi_handle,
 		struct set_qdepth_thresh_params *param);
 
+#ifdef WLAN_REG_PARTIAL_OFFLOAD
 /**
  *  wmi_unified_pdev_set_regdomain_params_cmd_send() - WMI set regdomain
  *  function
@@ -2435,6 +2447,7 @@ QDF_STATUS wmi_unified_vdev_set_qdepth_thresh_cmd_send(
 QDF_STATUS wmi_unified_pdev_set_regdomain_cmd_send(
 			wmi_unified_t wmi_handle,
 			struct pdev_set_regdomain_params *param);
+#endif
 
 /**
  *  wmi_unified_set_beacon_filter_cmd_send() - WMI set beacon filter function
@@ -2838,6 +2851,17 @@ QDF_STATUS wmi_unified_extract_pn(wmi_unified_t wmi_hdl, void *evt_buf,
 			  struct wmi_host_get_pn_event *param);
 
 /**
+ * wmi_unified_extract_rxpn() - extract Rx PN event data
+ * @wmi_handle: wmi handle
+ * @evt_buf: pointer to event buffer
+ * @param: pointer to get Rx PN event param
+ *
+ * Return: QDF_STATUS_SUCCESS on success and QDF_STATUS_E_FAILURE for failure
+ */
+QDF_STATUS wmi_unified_extract_rxpn(wmi_unified_t wmi_hdl, void *evt_buf,
+				    struct wmi_host_get_rxpn_event *param);
+
+/**
  * wmi_unified_send_periodic_chan_stats_config_cmd() - send periodic chan
  * stats cmd to fw
  * @wmi_handle: wmi handle
@@ -2932,6 +2956,18 @@ QDF_STATUS wmi_unified_mgmt_rx_reo_filter_config_cmd(
 					uint8_t pdev_id,
 					struct mgmt_rx_reo_filter *filter);
 #endif
+
+/**
+ * wmi_extract_frame_pn_params() - extract PN params from event
+ * @wmi_handle: wmi handle
+ * @evt_buf: pointer to event buffer
+ * @pn_params: Pointer to Frame PN params
+ *
+ * Return: QDF_STATUS_SUCCESS on success and QDF_STATUS_E_FAILURE for failure
+ */
+QDF_STATUS
+wmi_extract_frame_pn_params(wmi_unified_t wmi_handle, void *evt_buf,
+			    struct frame_pn_params *pn_params);
 
 /**
  * wmi_extract_vdev_roam_param() - extract vdev roam param from event
@@ -4644,4 +4680,42 @@ QDF_STATUS wmi_extract_update_mac_address_event(wmi_unified_t wmi_handle,
 						void *evt_buf, uint8_t *vdev_id,
 						uint8_t *status);
 #endif
+
+#ifdef WLAN_FEATURE_11BE_MLO
+/**
+ * wmi_extract_quiet_offload_event() - Extra mlo sta quiet IE offload event
+ * @wmi_handle: WMI handle
+ * @evt_buf: event buffer
+ * @quiet_event: pointer to struct vdev_sta_quiet_event
+ *
+ * Return: QDF_STATUS_SUCCESS for success or error code
+ */
+QDF_STATUS wmi_extract_quiet_offload_event(
+				struct wmi_unified *wmi_handle, void *evt_buf,
+				struct vdev_sta_quiet_event *quiet_event);
+#endif
+
+#ifdef WLAN_SUPPORT_PPEDS
+/**
+ * wmi_unified_peer_ppe_ds_param_send - Set the PPEDS configs
+ * @wmi_handle: WMI handle
+ * @param: Peer PPE DS param
+ *
+ * Return: QDF_STATUS_SUCCESS for success or error code.
+ */
+QDF_STATUS
+wmi_unified_peer_ppe_ds_param_send(wmi_unified_t wmi_handle,
+				   struct peer_ppe_ds_param *param);
+#endif /* WLAN_SUPPORT_PPEDS */
+
+/**
+ * wmi_unified_pn_mgmt_rxfilter_send_cmd() - Send PN mgmt RxFilter command to FW
+ * @wmi_handle: WMI handle
+ * @params: RxFilter params
+ *
+ * Return: QDF_STATUS_SUCCESS for success or error code
+ */
+QDF_STATUS wmi_unified_pn_mgmt_rxfilter_send_cmd(
+		struct wmi_unified *wmi_handle,
+		struct vdev_pn_mgmt_rxfilter_params *params);
 #endif /* _WMI_UNIFIED_API_H_ */

@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -248,6 +249,7 @@ enum qca_nl80211_vendor_subcmds_index {
 #ifdef WLAN_FEATURE_ROAM_OFFLOAD
 	QCA_NL80211_VENDOR_SUBCMD_ROAM_EVENTS_INDEX,
 #endif
+	QCA_NL80211_VENDOR_SUBCMD_MCC_QUOTA_INDEX,
 };
 
 #if !defined(SUPPORT_WDEV_CFG80211_VENDOR_EVENT_ALLOC) && \
@@ -471,4 +473,29 @@ wlan_cfg80211_nla_strscpy(char *dst, const struct nlattr *nla, size_t dstsize)
 	return nla_strscpy(dst, nla, dstsize);
 }
 #endif
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 12, 0)
+static inline int wlan_cfg80211_register_netdevice(struct net_device *dev)
+{
+	return cfg80211_register_netdevice(dev);
+}
+#else
+static inline int wlan_cfg80211_register_netdevice(struct net_device *dev)
+{
+	return register_netdevice(dev);
+}
+#endif
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 12, 0)
+static inline void wlan_cfg80211_unregister_netdevice(struct net_device *dev)
+{
+	cfg80211_unregister_netdevice(dev);
+}
+#else
+static inline void wlan_cfg80211_unregister_netdevice(struct net_device *dev)
+{
+	unregister_netdevice(dev);
+}
+#endif
+
 #endif

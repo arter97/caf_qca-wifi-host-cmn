@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021,2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -25,18 +25,49 @@
 #include "dp_tx_desc.h"
 #include "dp_li_rx.h"
 #include "dp_peer.h"
+#include <wlan_utility.h>
+#include "dp_ipa.h"
 
 #if defined(WLAN_MAX_PDEVS) && (WLAN_MAX_PDEVS == 1)
 static struct wlan_cfg_tcl_wbm_ring_num_map g_tcl_wbm_map_array[MAX_TCL_DATA_RINGS] = {
 	{.tcl_ring_num = 0, .wbm_ring_num = 0, .wbm_rbm_id = HAL_LI_WBM_SW0_BM_ID, .for_ipa = 0},
-	{1, 4, HAL_LI_WBM_SW4_BM_ID, 1}, /* For IPA */
-	{2, 2, HAL_LI_WBM_SW2_BM_ID, 1} /* For IPA */};
+	/*
+	 * INVALID_WBM_RING_NUM implies re-use of an existing WBM2SW ring
+	 * as indicated by rbm id.
+	 */
+	{1, INVALID_WBM_RING_NUM, HAL_LI_WBM_SW0_BM_ID, 0},
+	{2, 2, HAL_LI_WBM_SW2_BM_ID, 0}
+};
 #else
 static struct wlan_cfg_tcl_wbm_ring_num_map g_tcl_wbm_map_array[MAX_TCL_DATA_RINGS] = {
 	{.tcl_ring_num = 0, .wbm_ring_num = 0, .wbm_rbm_id = HAL_LI_WBM_SW0_BM_ID, .for_ipa = 0},
 	{1, 1, HAL_LI_WBM_SW1_BM_ID, 0},
-	{2, 2, HAL_LI_WBM_SW2_BM_ID, 0}
+	{2, 2, HAL_LI_WBM_SW2_BM_ID, 0},
+	/*
+	 * Although using wbm_ring 4, wbm_ring 3 is mentioned in order to match
+	 * with the tx_mask in dp_service_srngs. Please be carefull while using
+	 * this table anywhere else.
+	 */
+	{3, 3, HAL_LI_WBM_SW4_BM_ID, 0}
 };
+#endif
+
+#ifdef IPA_WDI3_TX_TWO_PIPES
+static inline void
+dp_soc_cfg_update_tcl_wbm_map_for_ipa(struct wlan_cfg_dp_soc_ctxt *cfg_ctx)
+{
+	if (!cfg_ctx->ipa_enabled)
+		return;
+
+	cfg_ctx->tcl_wbm_map_array[IPA_TX_ALT_RING_IDX].wbm_ring_num = 4;
+	cfg_ctx->tcl_wbm_map_array[IPA_TX_ALT_RING_IDX].wbm_rbm_id =
+							   HAL_LI_WBM_SW4_BM_ID;
+}
+#else
+static inline void
+dp_soc_cfg_update_tcl_wbm_map_for_ipa(struct wlan_cfg_dp_soc_ctxt *soc_cfg_ctx)
+{
+}
 #endif
 
 static void dp_soc_cfg_attach_li(struct dp_soc *soc)
@@ -46,6 +77,7 @@ static void dp_soc_cfg_attach_li(struct dp_soc *soc)
 	wlan_cfg_set_rx_rel_ring_id(soc_cfg_ctx, WBM2SW_REL_ERR_RING_NUM);
 
 	soc_cfg_ctx->tcl_wbm_map_array = g_tcl_wbm_map_array;
+	dp_soc_cfg_update_tcl_wbm_map_for_ipa(soc_cfg_ctx);
 }
 
 qdf_size_t dp_get_context_size_li(enum dp_context_type context_type)
@@ -346,22 +378,128 @@ dp_rxdma_ring_sel_cfg_li(struct dp_soc *soc)
 }
 #endif
 
+#ifdef QCA_DP_ENABLE_TX_COMP_RING4
+static inline
+void dp_deinit_txcomp_ring4(struct dp_soc *soc)
+{
+	if (soc) {
+		wlan_minidump_remove(soc->tx_comp_ring[3].base_vaddr_unaligned,
+				     soc->tx_comp_ring[3].alloc_size,
+				     soc->ctrl_psoc, WLAN_MD_DP_SRNG_TX_COMP,
+				     "Transmit_completion_ring");
+		dp_srng_deinit(soc, &soc->tx_comp_ring[3], WBM2SW_RELEASE, 0);
+	}
+}
+
+static inline
+QDF_STATUS dp_init_txcomp_ring4(struct dp_soc *soc)
+{
+	if (soc) {
+		if (dp_srng_init(soc, &soc->tx_comp_ring[3],
+				 WBM2SW_RELEASE, WBM2SW_TXCOMP_RING4_NUM, 0)) {
+			dp_err("%pK: dp_srng_init failed for rx_rel_ring",
+			       soc);
+			return QDF_STATUS_E_FAILURE;
+		}
+		wlan_minidump_log(soc->tx_comp_ring[3].base_vaddr_unaligned,
+				  soc->tx_comp_ring[3].alloc_size,
+				  soc->ctrl_psoc, WLAN_MD_DP_SRNG_TX_COMP,
+				  "Transmit_completion_ring");
+	}
+	return QDF_STATUS_SUCCESS;
+}
+
+static inline
+void dp_free_txcomp_ring4(struct dp_soc *soc)
+{
+	if (soc)
+		dp_srng_free(soc, &soc->tx_comp_ring[3]);
+}
+
+static inline
+QDF_STATUS dp_alloc_txcomp_ring4(struct dp_soc *soc, uint32_t tx_comp_ring_size,
+				 uint32_t cached)
+{
+	if (soc) {
+		if (dp_srng_alloc(soc, &soc->tx_comp_ring[3], WBM2SW_RELEASE,
+				  tx_comp_ring_size, cached)) {
+			dp_err("dp_srng_alloc failed for tx_comp_ring");
+			return QDF_STATUS_E_FAILURE;
+		}
+	}
+	return QDF_STATUS_SUCCESS;
+}
+#else
+static inline
+void dp_deinit_txcomp_ring4(struct dp_soc *soc)
+{
+}
+
+static inline
+QDF_STATUS dp_init_txcomp_ring4(struct dp_soc *soc)
+{
+	return QDF_STATUS_SUCCESS;
+}
+
+static inline
+void dp_free_txcomp_ring4(struct dp_soc *soc)
+{
+}
+
+static inline
+QDF_STATUS dp_alloc_txcomp_ring4(struct dp_soc *soc, uint32_t tx_comp_ring_size,
+				 uint32_t cached)
+{
+	return QDF_STATUS_SUCCESS;
+}
+#endif
+
 static void dp_soc_srng_deinit_li(struct dp_soc *soc)
 {
+	/* Tx Complete ring */
+	dp_deinit_txcomp_ring4(soc);
 }
 
 static void dp_soc_srng_free_li(struct dp_soc *soc)
 {
+	dp_free_txcomp_ring4(soc);
 }
 
 static QDF_STATUS dp_soc_srng_alloc_li(struct dp_soc *soc)
 {
+	uint32_t tx_comp_ring_size;
+	uint32_t cached = WLAN_CFG_DST_RING_CACHED_DESC;
+	struct wlan_cfg_dp_soc_ctxt *soc_cfg_ctx;
+
+	soc_cfg_ctx = soc->wlan_cfg_ctx;
+
+	tx_comp_ring_size = wlan_cfg_tx_comp_ring_size(soc_cfg_ctx);
+	/* Disable cached desc if NSS offload is enabled */
+	if (wlan_cfg_get_dp_soc_nss_cfg(soc_cfg_ctx))
+		cached = 0;
+
+	if (dp_alloc_txcomp_ring4(soc, tx_comp_ring_size, cached))
+		goto fail1;
 	return QDF_STATUS_SUCCESS;
+fail1:
+	dp_soc_srng_free_li(soc);
+	return QDF_STATUS_E_NOMEM;
 }
 
 static QDF_STATUS dp_soc_srng_init_li(struct dp_soc *soc)
 {
+	/* Tx comp ring 3 */
+	if (dp_init_txcomp_ring4(soc))
+		goto fail1;
+
 	return QDF_STATUS_SUCCESS;
+fail1:
+	/*
+	 * Cleanup will be done as part of soc_detach, which will
+	 * be called on pdev attach failure
+	 */
+	dp_soc_srng_deinit_li(soc);
+	return QDF_STATUS_E_FAILURE;
 }
 
 static void dp_tx_implicit_rbm_set_li(struct dp_soc *soc,
@@ -393,6 +531,14 @@ static QDF_STATUS dp_txrx_set_vdev_param_li(struct dp_soc *soc,
 					    cdp_config_param_type val)
 {
 	return QDF_STATUS_SUCCESS;
+}
+
+bool
+dp_rx_intrabss_handle_nawds_li(struct dp_soc *soc, struct dp_txrx_peer *ta_peer,
+			       qdf_nbuf_t nbuf_copy,
+			       struct cdp_tid_rx_stats *tid_stats)
+{
+	return false;
 }
 
 void dp_initialize_arch_ops_li(struct dp_arch_ops *arch_ops)
@@ -432,6 +578,7 @@ void dp_initialize_arch_ops_li(struct dp_arch_ops *arch_ops)
 	arch_ops->txrx_peer_map_detach = dp_peer_map_detach_li;
 	arch_ops->dp_rx_desc_cookie_2_va =
 			dp_rx_desc_cookie_2_va_li;
+	arch_ops->dp_rx_intrabss_handle_nawds = dp_rx_intrabss_handle_nawds_li;
 	arch_ops->dp_rxdma_ring_sel_cfg = dp_rxdma_ring_sel_cfg_li;
 	arch_ops->dp_rx_peer_metadata_peer_id_get =
 					dp_rx_peer_metadata_peer_id_get_li;
@@ -441,6 +588,8 @@ void dp_initialize_arch_ops_li(struct dp_arch_ops *arch_ops)
 	arch_ops->reo_remap_config = dp_reo_remap_config_li;
 	arch_ops->txrx_set_vdev_param = dp_txrx_set_vdev_param_li;
 	arch_ops->txrx_print_peer_stats = dp_print_peer_txrx_stats_li;
+	arch_ops->dp_peer_rx_reorder_queue_setup =
+					dp_peer_rx_reorder_queue_setup_li;
 }
 
 #ifdef QCA_DP_TX_HW_SW_NBUF_DESC_PREFETCH
@@ -463,5 +612,27 @@ void dp_tx_comp_get_prefetched_params_from_hal_desc(
 			(tx_desc_id & DP_TX_DESC_ID_OFFSET_MASK) >>
 			DP_TX_DESC_ID_OFFSET_OS);
 	qdf_prefetch((uint8_t *)*r_tx_desc);
+}
+#endif
+
+#ifdef CONFIG_DP_PKT_ADD_TIMESTAMP
+void dp_pkt_add_timestamp(struct dp_vdev *vdev,
+			  enum qdf_pkt_timestamp_index index, uint64_t time,
+			  qdf_nbuf_t nbuf)
+{
+	if (qdf_unlikely(qdf_is_dp_pkt_timestamp_enabled())) {
+		uint64_t tsf_time;
+
+		if (vdev->get_tsf_time) {
+			vdev->get_tsf_time(vdev->osif_vdev, time, &tsf_time);
+			qdf_add_dp_pkt_timestamp(nbuf, index, tsf_time);
+		}
+	}
+}
+
+void dp_pkt_get_timestamp(uint64_t *time)
+{
+	if (qdf_unlikely(qdf_is_dp_pkt_timestamp_enabled()))
+		*time = qdf_get_log_timestamp();
 }
 #endif

@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021,2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -138,6 +138,12 @@ typedef struct hal_buf_info *hal_buf_info_t;
 
 struct rx_msdu_desc_info;
 typedef struct rx_msdu_desc_info *rx_msdu_desc_info_t;
+
+/**
+ * Opaque hanlder for PPE VP config.
+ */
+union hal_tx_ppe_vp_config;
+union hal_tx_cmn_config_ppe;
 
 /* TBD: This should be movded to shared HW header file */
 enum hal_srng_ring_id {
@@ -778,6 +784,22 @@ struct hal_hw_txrx_ops {
 	void (*hal_tx_init_cmd_credit_ring)(hal_soc_handle_t hal_soc_hdl,
 					    hal_ring_handle_t hal_ring_hdl);
 	uint32_t (*hal_tx_comp_get_buffer_source)(void *hal_desc);
+	uint32_t (*hal_tx_get_num_ppe_vp_tbl_entries)(
+					hal_soc_handle_t hal_soc_hdl);
+	void (*hal_tx_set_ppe_cmn_cfg)(hal_soc_handle_t hal_soc_hdl,
+				       union hal_tx_cmn_config_ppe *cmn_cfg);
+	void (*hal_tx_set_ppe_vp_entry)(hal_soc_handle_t hal_soc_hdl,
+					union hal_tx_ppe_vp_config *vp_cfg,
+					int ppe_vp_idx);
+	void (*hal_tx_set_ppe_pri2tid)(hal_soc_handle_t hal_soc_hdl,
+				       uint32_t val,
+				       uint8_t map_no);
+	void (*hal_tx_update_ppe_pri2tid)(hal_soc_handle_t hal_soc_hdl,
+					  uint8_t pri,
+					  uint8_t tid);
+	void (*hal_tx_dump_ppe_vp_entry)(hal_soc_handle_t hal_soc_hdl);
+	void (*hal_tx_enable_pri2tid_map)(hal_soc_handle_t hal_soc_hdl,
+					  bool value, uint8_t ppe_vp_idx);
 
 	/* rx */
 	uint32_t (*hal_rx_msdu_start_nss_get)(uint8_t *);
@@ -801,6 +823,10 @@ struct hal_hw_txrx_ops {
 					       void *ppdu_info,
 					       hal_soc_handle_t hal_soc_hdl,
 					       qdf_nbuf_t nbuf);
+
+	void (*hal_rx_wbm_rel_buf_paddr_get)(hal_ring_desc_t rx_desc,
+					     struct hal_buf_info *buf_info);
+
 	void (*hal_rx_wbm_err_info_get)(void *wbm_desc,
 				void *wbm_er_info);
 	void (*hal_rx_dump_mpdu_start_tlv)(void *mpdustart,
@@ -903,6 +929,7 @@ struct hal_hw_txrx_ops {
 					      uint32_t num_rings,
 					      uint32_t *remap1,
 					      uint32_t *remap2);
+	void (*hal_compute_reo_remap_ix0)(uint32_t *remap0);
 	uint32_t (*hal_rx_flow_setup_cmem_fse)(
 				struct hal_soc *soc, uint32_t cmem_ba,
 				uint32_t table_offset, uint8_t *rx_flow);
@@ -1023,6 +1050,29 @@ struct hal_hw_txrx_ops {
 					    uint32_t tlv, int *num_ref);
 	uint8_t (*hal_get_tlv_hdr_size)(void);
 	uint8_t (*hal_get_idle_link_bm_id)(uint8_t chip_id);
+
+	/* TX MONITOR */
+#ifdef QCA_MONITOR_2_0_SUPPORT
+	uint32_t (*hal_txmon_status_parse_tlv)(void *data_ppdu_info,
+					       void *prot_ppdu_info,
+					       void *data_status_info,
+					       void *prot_status_info,
+					       void *tx_tlv_hdr,
+					       qdf_frag_t status_frag);
+	uint32_t (*hal_txmon_status_get_num_users)(void *tx_tlv_hdr,
+						   uint8_t *num_users);
+	void (*hal_txmon_status_free_buffer)(qdf_frag_t status_frag);
+#endif /* QCA_MONITOR_2_0_SUPPORT */
+	void (*hal_reo_shared_qaddr_setup)(hal_soc_handle_t hal_soc_hdl);
+	void (*hal_reo_shared_qaddr_init)(hal_soc_handle_t hal_soc_hdl);
+	void (*hal_reo_shared_qaddr_detach)(hal_soc_handle_t hal_soc_hdl);
+	void (*hal_reo_shared_qaddr_write)(hal_soc_handle_t hal_soc_hdl,
+					   uint16_t peer_id,
+					   int tid,
+					   qdf_dma_addr_t hw_qdesc_paddr);
+#ifdef WLAN_FEATURE_MARK_FIRST_WAKEUP_PACKET
+	uint8_t (*hal_get_first_wow_wakeup_packet)(uint8_t *buf);
+#endif
 };
 
 /**
@@ -1078,6 +1128,22 @@ struct hal_reg_write_fail_history {
 	struct hal_reg_write_fail_entry record[HAL_REG_WRITE_HIST_SIZE];
 };
 #endif
+
+/**
+ * struct reo_queue_ref_table - Reo qref LUT addr
+ * @mlo_reo_qref_table_vaddr: MLO table vaddr
+ * @non_mlo_reo_qref_table_vaddr: Non MLO table vaddr
+ * @mlo_reo_qref_table_paddr: MLO table paddr
+ * @non_mlo_reo_qref_table_paddr: Non MLO table paddr
+ * @reo_qref_table_en: Enable flag
+ */
+struct reo_queue_ref_table {
+	uint64_t *mlo_reo_qref_table_vaddr;
+	uint64_t *non_mlo_reo_qref_table_vaddr;
+	qdf_dma_addr_t mlo_reo_qref_table_paddr;
+	qdf_dma_addr_t non_mlo_reo_qref_table_paddr;
+	uint8_t reo_qref_table_en;
+};
 
 /**
  * struct hal_soc - HAL context to be used to access SRNG APIs
@@ -1160,6 +1226,8 @@ struct hal_soc {
 #endif
 	/* flag to indicate cmn dmac rings in berryllium */
 	bool dmac_cmn_src_rxbuf_ring;
+	/* Reo queue ref table items */
+	struct reo_queue_ref_table reo_qref;
 };
 
 #if defined(FEATURE_HAL_DELAYED_REG_WRITE)
@@ -1222,4 +1290,19 @@ struct hal_srng *hal_ring_handle_to_hal_srng(hal_ring_handle_t hal_ring)
 {
 	return (struct hal_srng *)hal_ring;
 }
+
+/* Size of REO queue reference table in Host
+ * 2k peers * 17 tids * 8bytes(rx_reo_queue_reference)
+ * = 278528 bytes
+ */
+#define REO_QUEUE_REF_NON_ML_TABLE_SIZE 278528
+/* Calculated based on 512 MLO peers */
+#define REO_QUEUE_REF_ML_TABLE_SIZE 69632
+#define HAL_ML_PEER_ID_START 0x2000
+#define HAL_PEER_ID_IS_MLO(peer_id) ((peer_id) & HAL_ML_PEER_ID_START)
+
+/*
+ * REO2PPE destination indication
+ */
+#define REO2PPE_DST_IND 11
 #endif /* _HAL_INTERNAL_H_ */

@@ -104,6 +104,7 @@
 #endif /* WLAN_MGMT_RX_REO_SUPPORT */
 
 #include "wmi_unified_api.h"
+#include <target_if_twt.h>
 
 #ifdef WLAN_FEATURE_11BE_MLO
 #include <target_if_mlo_mgr.h>
@@ -409,9 +410,6 @@ static void target_if_target_tx_ops_register(
 	target_tx_ops->tgt_is_tgt_type_ar900b =
 		target_is_tgt_type_ar900b;
 
-	target_tx_ops->tgt_is_tgt_type_ipq4019 =
-		target_is_tgt_type_ipq4019;
-
 	target_tx_ops->tgt_is_tgt_type_qca9984 =
 		target_is_tgt_type_qca9984;
 
@@ -529,6 +527,19 @@ static void target_if_ipa_tx_ops_register(struct wlan_lmac_if_tx_ops *tx_ops)
 { }
 #endif
 
+#if defined(WLAN_SUPPORT_TWT) && defined(WLAN_TWT_CONV_SUPPORTED)
+static
+void target_if_twt_tx_ops_register(struct wlan_lmac_if_tx_ops *tx_ops)
+{
+	target_if_twt_register_tx_ops(tx_ops);
+}
+#else
+static
+void target_if_twt_tx_ops_register(struct wlan_lmac_if_tx_ops *tx_ops)
+{
+}
+#endif /* WLAN_SUPPORT_TWT && WLAN_TWT_CONV_SUPPORTED */
+
 static
 QDF_STATUS target_if_register_umac_tx_ops(struct wlan_lmac_if_tx_ops *tx_ops)
 {
@@ -582,6 +593,9 @@ QDF_STATUS target_if_register_umac_tx_ops(struct wlan_lmac_if_tx_ops *tx_ops)
 	target_if_mlo_tx_ops_register(tx_ops);
 
 	target_if_ipa_tx_ops_register(tx_ops);
+
+	target_if_twt_tx_ops_register(tx_ops);
+
 	/* Converged UMAC components to register their TX-ops here */
 	return QDF_STATUS_SUCCESS;
 }
@@ -734,11 +748,6 @@ QDF_STATUS target_if_free_psoc_tgt_info(struct wlan_objmgr_psoc *psoc)
 bool target_is_tgt_type_ar900b(uint32_t target_type)
 {
 	return target_type == TARGET_TYPE_AR900B;
-}
-
-bool target_is_tgt_type_ipq4019(uint32_t target_type)
-{
-	return target_type == TARGET_TYPE_IPQ4019;
 }
 
 bool target_is_tgt_type_qca9984(uint32_t target_type)
@@ -1013,6 +1022,35 @@ QDF_STATUS target_if_mlo_ready(struct wlan_objmgr_pdev **pdev,
 
 	for (idx = 0; idx < num_pdevs; idx++)
 		target_if_mlo_ready_send(pdev[idx]);
+
+	return QDF_STATUS_SUCCESS;
+}
+
+static QDF_STATUS
+target_if_mlo_teardown_send(struct wlan_objmgr_pdev *pdev,
+			    enum wmi_mlo_teardown_reason reason)
+{
+	wmi_unified_t wmi_handle;
+	struct wmi_mlo_teardown_params params = {0};
+
+	wmi_handle = lmac_get_pdev_wmi_handle(pdev);
+	if (!wmi_handle)
+		return QDF_STATUS_E_INVAL;
+
+	params.pdev_id = wlan_objmgr_pdev_get_pdev_id(pdev);
+	params.reason = reason;
+
+	return wmi_mlo_teardown_cmd_send(wmi_handle, &params);
+}
+
+QDF_STATUS target_if_mlo_teardown_req(struct wlan_objmgr_pdev **pdev,
+				      uint8_t num_pdevs,
+				      enum wmi_mlo_teardown_reason reason)
+{
+	uint8_t idx;
+
+	for (idx = 0; idx < num_pdevs; idx++)
+		target_if_mlo_teardown_send(pdev[idx], reason);
 
 	return QDF_STATUS_SUCCESS;
 }

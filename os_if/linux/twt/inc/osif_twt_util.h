@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2014, 2016 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -16,17 +16,39 @@
  * PERFORMANCE OF THIS SOFTWARE.
  */
 
-/*
- * Every Product Line or chipset or team can have its own Whitelist table.
- * The following is a list of versions that the present software can support
- * even though its versions are incompatible. Any entry here means that the
- * indicated version does not break WMI compatibility even though it has
- * a minor version change.
+/**
+ * DOC : osif_twt_util.h
+ *
  */
-#ifndef _WMI_VERSION_WHITELIST_H_
-#define _WMI_VERSION_WHITELIST_H_
-static wmi_whitelist_version_info version_whitelist[] = {
-	{0, 0, 0x5F414351, 0x00004C4D, 0, 0}
-	/* Placeholder: Major=0, Minor=0, Namespace="QCA_ML" (Dummy entry) */
+
+#ifndef _OSIF_TWT_UTIL_H_
+#define _OSIF_TWT_UTIL_H_
+
+#if defined(WLAN_SUPPORT_TWT) && defined(WLAN_TWT_CONV_SUPPORTED)
+/**
+ * struct twt_en_dis_priv - twt enable/disable private context
+ * @vdev_id: vdev id
+ */
+struct twt_en_dis_priv {
+	uint32_t pdev_id;
+	uint32_t status;
 };
-#endif /* _WMI_VERSION_WHITELIST_H_ */
+
+/**
+ * osif_twt_register_cb() - Set TWT osif callbacks
+ *
+ * API to set twt callbacks to osif
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS osif_twt_register_cb(void);
+
+#else
+static inline QDF_STATUS osif_twt_register_cb(void)
+{
+	return QDF_STATUS_SUCCESS;
+}
+
+#endif
+#endif /* _OSIF_TWT_UTIL_H_ */
+

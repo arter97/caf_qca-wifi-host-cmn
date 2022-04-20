@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -64,6 +64,7 @@
 
 #ifdef QCA_SUPPORT_CP_STATS
 #include <wlan_cp_stats_tgt_api.h>
+#include <wlan_cp_stats_utils_api.h>
 #endif /* QCA_SUPPORT_CP_STATS */
 #include <wlan_vdev_mgr_tgt_if_rx_api.h>
 
@@ -81,12 +82,19 @@
 #include "wlan_mlo_mgr_cmn.h"
 #endif
 
+#include <wlan_twt_tgt_if_rx_api.h>
+
 /* Function pointer for OL/WMA specific UMAC tx_ops
  * registration.
  */
 QDF_STATUS (*wlan_lmac_if_umac_tx_ops_register)
 				(struct wlan_lmac_if_tx_ops *tx_ops);
 qdf_export_symbol(wlan_lmac_if_umac_tx_ops_register);
+
+/* Function pointer to call legacy crypto rxpn registration in OL */
+QDF_STATUS (*wlan_lmac_if_umac_crypto_rxpn_ops_register)
+				(struct wlan_lmac_if_rx_ops *rx_ops);
+qdf_export_symbol(wlan_lmac_if_umac_crypto_rxpn_ops_register);
 
 static void
 tgt_vdev_mgr_rx_ops_register(struct wlan_lmac_if_rx_ops *rx_ops)
@@ -95,6 +103,26 @@ tgt_vdev_mgr_rx_ops_register(struct wlan_lmac_if_rx_ops *rx_ops)
 }
 
 #ifdef QCA_SUPPORT_CP_STATS
+#if defined(WLAN_SUPPORT_TWT) && defined(WLAN_TWT_CONV_SUPPORTED)
+/**
+ * wlan_target_if_cp_stats_rx_ops_register() - register cp_stats rx ops
+ * @rx_ops: lmac rx_ops
+ *
+ * Return: none
+ */
+static void
+wlan_target_if_cp_stats_rx_ops_register(struct wlan_lmac_if_rx_ops *rx_ops)
+{
+	rx_ops->cp_stats_rx_ops.twt_get_session_param_resp =
+			tgt_cp_stats_twt_get_session_evt_handler;
+}
+#else
+static void
+wlan_target_if_cp_stats_rx_ops_register(struct wlan_lmac_if_rx_ops *rx_ops)
+{
+}
+#endif
+
 /**
  * wlan_lmac_if_cp_stats_rx_ops_register() - API to register cp stats Rx Ops
  * @rx_ops:	pointer to lmac rx ops
@@ -106,6 +134,7 @@ tgt_vdev_mgr_rx_ops_register(struct wlan_lmac_if_rx_ops *rx_ops)
 static void
 wlan_lmac_if_cp_stats_rx_ops_register(struct wlan_lmac_if_rx_ops *rx_ops)
 {
+	wlan_target_if_cp_stats_rx_ops_register(rx_ops);
 	tgt_cp_stats_register_rx_ops(rx_ops);
 }
 #else
@@ -273,6 +302,8 @@ static void
 wlan_lmac_if_crypto_rx_ops_register(struct wlan_lmac_if_rx_ops *rx_ops)
 {
 	wlan_crypto_register_crypto_rx_ops(&rx_ops->crypto_rx_ops);
+	if (wlan_lmac_if_umac_crypto_rxpn_ops_register)
+		wlan_lmac_if_umac_crypto_rxpn_ops_register(rx_ops);
 }
 
 #ifdef WIFI_POS_CONVERGED
@@ -338,6 +369,30 @@ static inline void wlan_lmac_if_register_6g_edge_chan_supp(
 }
 #endif
 
+#ifdef WLAN_REG_PARTIAL_OFFLOAD
+/**
+ * wlan_lmac_if_umac_reg_rx_ops_register_po() - Function to register Reg RX ops
+ * for Partial Offload
+ * rx_ops: Pointer to wlan_lmac_if_dfs_rx_ops
+ *
+ * Return: void
+ */
+static void wlan_lmac_if_umac_reg_rx_ops_register_po(
+					struct wlan_lmac_if_rx_ops *rx_ops)
+{
+	rx_ops->reg_rx_ops.reg_program_default_cc =
+		ucfg_reg_program_default_cc;
+
+	rx_ops->reg_rx_ops.reg_get_current_regdomain =
+		wlan_reg_get_curr_regdomain;
+}
+#else
+static void wlan_lmac_if_umac_reg_rx_ops_register_po(
+					struct wlan_lmac_if_rx_ops *rx_ops)
+{
+}
+#endif
+
 static void wlan_lmac_if_umac_reg_rx_ops_register(
 	struct wlan_lmac_if_rx_ops *rx_ops)
 {
@@ -376,11 +431,7 @@ static void wlan_lmac_if_umac_reg_rx_ops_register(
 	rx_ops->reg_rx_ops.reg_get_chan_144 =
 		ucfg_reg_get_en_chan_144;
 
-	rx_ops->reg_rx_ops.reg_program_default_cc =
-		ucfg_reg_program_default_cc;
-
-	rx_ops->reg_rx_ops.reg_get_current_regdomain =
-		wlan_reg_get_curr_regdomain;
+	wlan_lmac_if_umac_reg_rx_ops_register_po(rx_ops);
 
 	rx_ops->reg_rx_ops.reg_enable_dfs_channels =
 		ucfg_reg_enable_dfs_channels;
@@ -415,24 +466,41 @@ static void wlan_lmac_if_umac_reg_rx_ops_register(
 }
 
 #ifdef CONVERGED_P2P_ENABLE
-#ifdef FEATURE_P2P_LISTEN_OFFLOAD
-static void wlan_lmac_if_umac_rx_ops_register_p2p(
-				struct wlan_lmac_if_rx_ops *rx_ops)
+#ifdef WLAN_FEATURE_MCC_QUOTA
+static inline void
+wlan_lmac_if_umac_rx_ops_register_p2p_mcc_quota(struct wlan_lmac_if_rx_ops *rx_ops)
 {
-	rx_ops->p2p.lo_ev_handler = tgt_p2p_lo_event_cb;
-	rx_ops->p2p.noa_ev_handler = tgt_p2p_noa_event_cb;
-	rx_ops->p2p.add_mac_addr_filter_evt_handler =
-		tgt_p2p_add_mac_addr_status_event_cb;
+	rx_ops->p2p.mcc_quota_ev_handler = tgt_p2p_mcc_quota_event_cb;
 }
 #else
+static inline void wlan_lmac_if_umac_rx_ops_register_p2p_mcc_quota(
+				struct wlan_lmac_if_rx_ops *rx_ops)
+{
+}
+#endif
+
+#ifdef FEATURE_P2P_LISTEN_OFFLOAD
+static inline void
+wlan_lmac_if_umac_rx_ops_register_p2p_listen_offload(struct wlan_lmac_if_rx_ops *rx_ops)
+{
+	rx_ops->p2p.lo_ev_handler = tgt_p2p_lo_event_cb;
+}
+#else
+static inline void
+wlan_lmac_if_umac_rx_ops_register_p2p_listen_offload(struct wlan_lmac_if_rx_ops *rx_ops)
+{
+}
+#endif
+
 static void wlan_lmac_if_umac_rx_ops_register_p2p(
 				struct wlan_lmac_if_rx_ops *rx_ops)
 {
+	wlan_lmac_if_umac_rx_ops_register_p2p_listen_offload(rx_ops);
 	rx_ops->p2p.noa_ev_handler = tgt_p2p_noa_event_cb;
 	rx_ops->p2p.add_mac_addr_filter_evt_handler =
 		tgt_p2p_add_mac_addr_status_event_cb;
+	wlan_lmac_if_umac_rx_ops_register_p2p_mcc_quota(rx_ops);
 }
-#endif
 #else
 static void wlan_lmac_if_umac_rx_ops_register_p2p(
 				struct wlan_lmac_if_rx_ops *rx_ops)
@@ -492,8 +560,6 @@ static void register_dfs_rx_ops_for_freq(struct wlan_lmac_if_dfs_rx_ops *rx_ops)
 {
 	if (!rx_ops)
 		return;
-	rx_ops->dfs_find_vht80_chan_for_precac_for_freq =
-		tgt_dfs_find_vht80_precac_chan_freq;
 	rx_ops->dfs_set_current_channel_for_freq =
 		tgt_dfs_set_current_channel_for_freq;
 }
@@ -620,6 +686,19 @@ wlan_lmac_if_mgmt_txrx_rx_ops_register(struct wlan_lmac_if_rx_ops *rx_ops)
 	return wlan_lmac_if_mgmt_rx_reo_rx_ops_register(mgmt_txrx_rx_ops);
 }
 
+#if defined(WLAN_DFS_PARTIAL_OFFLOAD) && defined(HOST_DFS_SPOOF_TEST)
+static void dfs_action_on_status_assign(
+		struct wlan_lmac_if_dfs_rx_ops *dfs_rx_ops)
+{
+	dfs_rx_ops->dfs_action_on_status = tgt_dfs_action_on_status_from_fw;
+}
+#else
+static inline void dfs_action_on_status_assign(
+		struct wlan_lmac_if_dfs_rx_ops *dfs_rx_ops)
+{
+}
+#endif
+
 static QDF_STATUS
 wlan_lmac_if_umac_dfs_rx_ops_register(struct wlan_lmac_if_rx_ops *rx_ops)
 {
@@ -645,8 +724,6 @@ wlan_lmac_if_umac_dfs_rx_ops_register(struct wlan_lmac_if_rx_ops *rx_ops)
 	dfs_rx_ops->dfs_override_precac_timeout =
 		ucfg_dfs_override_precac_timeout;
 	dfs_rx_ops->dfs_set_precac_enable = ucfg_dfs_set_precac_enable;
-	dfs_rx_ops->dfs_get_legacy_precac_enable =
-		ucfg_dfs_get_legacy_precac_enable;
 	dfs_rx_ops->dfs_get_agile_precac_enable =
 		ucfg_dfs_get_agile_precac_enable;
 	dfs_rx_ops->dfs_get_override_precac_timeout =
@@ -662,7 +739,9 @@ wlan_lmac_if_umac_dfs_rx_ops_register(struct wlan_lmac_if_rx_ops *rx_ops)
 		tgt_dfs_process_phyerr_filter_offload;
 	dfs_rx_ops->dfs_is_phyerr_filter_offload =
 		tgt_dfs_is_phyerr_filter_offload;
-	dfs_rx_ops->dfs_action_on_status = tgt_dfs_action_on_status_from_fw;
+
+	dfs_action_on_status_assign(dfs_rx_ops);
+
 	dfs_rx_ops->dfs_override_status_timeout =
 		ucfg_dfs_set_override_status_timeout;
 	dfs_rx_ops->dfs_get_override_status_timeout =
@@ -796,6 +875,19 @@ wlan_lmac_if_mlo_mgr_rx_ops_register(struct wlan_lmac_if_rx_ops *rx_ops)
 }
 #endif /* WLAN_FEATURE_11BE_MLO */
 
+#if defined(WLAN_SUPPORT_TWT) && defined(WLAN_TWT_CONV_SUPPORTED)
+static
+void wlan_lmac_if_twt_rx_ops_register(struct wlan_lmac_if_rx_ops *rx_ops)
+{
+	tgt_twt_register_rx_ops(rx_ops);
+}
+#else
+static
+void wlan_lmac_if_twt_rx_ops_register(struct wlan_lmac_if_rx_ops *rx_ops)
+{
+}
+#endif /* WLAN_SUPPORT_TWT && WLAN_TWT_CONV_SUPPORTED */
+
 /**
  * wlan_lmac_if_umac_rx_ops_register() - UMAC rx handler register
  * @rx_ops: Pointer to rx_ops structure to be populated
@@ -861,6 +953,8 @@ wlan_lmac_if_umac_rx_ops_register(struct wlan_lmac_if_rx_ops *rx_ops)
 
 	wlan_lmac_if_mlo_mgr_rx_ops_register(rx_ops);
 
+	wlan_lmac_if_twt_rx_ops_register(rx_ops);
+
 	return QDF_STATUS_SUCCESS;
 }
 
@@ -883,3 +977,21 @@ QDF_STATUS wlan_lmac_if_set_umac_txops_registration_cb(QDF_STATUS (*handler)
 }
 qdf_export_symbol(wlan_lmac_if_set_umac_txops_registration_cb);
 
+/**
+ * wlan_lmac_if_set_umac_crypto_rxpn_ops_registration_cb() - crypto rxpn
+ * registration callback assignment
+ * @dev_type: Dev type can be either Direct attach or Offload
+ * @handler: handler to be called for LMAC crypto rxpn ops registration
+ *
+ * API to assign appropriate crypto rxpn registration callback handler
+ * based on the device type
+ *
+ * Return: QDF_STATUS_SUCCESS - in case of success
+ */
+QDF_STATUS wlan_lmac_if_set_umac_crypto_rxpn_ops_registration_cb(
+		QDF_STATUS (*handler)(struct wlan_lmac_if_rx_ops *))
+{
+	wlan_lmac_if_umac_crypto_rxpn_ops_register = handler;
+	return QDF_STATUS_SUCCESS;
+}
+qdf_export_symbol(wlan_lmac_if_set_umac_crypto_rxpn_ops_registration_cb);

@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021,2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -565,6 +565,10 @@ static QDF_STATUS dp_vdev_attach_be(struct dp_soc *soc, struct dp_vdev *vdev)
 {
 	struct dp_soc_be *be_soc = dp_get_be_soc_from_dp_soc(soc);
 	struct dp_vdev_be *be_vdev = dp_get_be_vdev_from_dp_vdev(vdev);
+	struct dp_pdev *pdev = vdev->pdev;
+
+	if (vdev->opmode == wlan_op_mode_monitor)
+		return QDF_STATUS_SUCCESS;
 
 	be_vdev->vdev_id_check_en = DP_TX_VDEV_ID_CHECK_ENABLE;
 
@@ -582,8 +586,12 @@ static QDF_STATUS dp_vdev_attach_be(struct dp_soc *soc, struct dp_vdev *vdev)
 					vdev->vdev_id,
 					DP_AST_AGING_TIMER_DEFAULT_MS);
 
-		hal_tx_vdev_mcast_ctrl_set(soc->hal_soc, vdev->vdev_id,
-					   HAL_TX_MCAST_CTRL_MEC_NOTIFY);
+		if (pdev->isolation)
+			hal_tx_vdev_mcast_ctrl_set(soc->hal_soc, vdev->vdev_id,
+						   HAL_TX_MCAST_CTRL_FW_EXCEPTION);
+		else
+			hal_tx_vdev_mcast_ctrl_set(soc->hal_soc, vdev->vdev_id,
+						   HAL_TX_MCAST_CTRL_MEC_NOTIFY);
 	}
 
 	dp_mlo_init_ptnr_list(vdev);
@@ -596,6 +604,9 @@ static QDF_STATUS dp_vdev_detach_be(struct dp_soc *soc, struct dp_vdev *vdev)
 	struct dp_soc_be *be_soc = dp_get_be_soc_from_dp_soc(soc);
 	struct dp_vdev_be *be_vdev = dp_get_be_vdev_from_dp_vdev(vdev);
 
+	if (vdev->opmode == wlan_op_mode_monitor)
+		return QDF_STATUS_SUCCESS;
+
 	dp_tx_put_bank_profile(be_soc, be_vdev);
 	dp_clr_mlo_ptnr_list(soc, vdev);
 
@@ -607,6 +618,100 @@ qdf_size_t dp_get_soc_context_size_be(void)
 	return sizeof(struct dp_soc_be);
 }
 
+#ifdef NO_RX_PKT_HDR_TLV
+/**
+ * dp_rxdma_ring_sel_cfg_be() - Setup RXDMA ring config
+ * @soc: Common DP soc handle
+ *
+ * Return: QDF_STATUS
+ */
+static QDF_STATUS
+dp_rxdma_ring_sel_cfg_be(struct dp_soc *soc)
+{
+	int i;
+	int mac_id;
+	struct htt_rx_ring_tlv_filter htt_tlv_filter = {0};
+	struct dp_srng *rx_mac_srng;
+	QDF_STATUS status = QDF_STATUS_SUCCESS;
+
+	/*
+	 * In Beryllium chipset msdu_start, mpdu_end
+	 * and rx_attn are part of msdu_end/mpdu_start
+	 */
+	htt_tlv_filter.msdu_start = 0;
+	htt_tlv_filter.mpdu_end = 0;
+	htt_tlv_filter.attention = 0;
+	htt_tlv_filter.mpdu_start = 1;
+	htt_tlv_filter.msdu_end = 1;
+	htt_tlv_filter.packet = 1;
+	htt_tlv_filter.packet_header = 1;
+
+	htt_tlv_filter.ppdu_start = 0;
+	htt_tlv_filter.ppdu_end = 0;
+	htt_tlv_filter.ppdu_end_user_stats = 0;
+	htt_tlv_filter.ppdu_end_user_stats_ext = 0;
+	htt_tlv_filter.ppdu_end_status_done = 0;
+	htt_tlv_filter.enable_fp = 1;
+	htt_tlv_filter.enable_md = 0;
+	htt_tlv_filter.enable_md = 0;
+	htt_tlv_filter.enable_mo = 0;
+
+	htt_tlv_filter.fp_mgmt_filter = 0;
+	htt_tlv_filter.fp_ctrl_filter = FILTER_CTRL_BA_REQ;
+	htt_tlv_filter.fp_data_filter = (FILTER_DATA_UCAST |
+					 FILTER_DATA_MCAST |
+					 FILTER_DATA_DATA);
+	htt_tlv_filter.mo_mgmt_filter = 0;
+	htt_tlv_filter.mo_ctrl_filter = 0;
+	htt_tlv_filter.mo_data_filter = 0;
+	htt_tlv_filter.md_data_filter = 0;
+
+	htt_tlv_filter.offset_valid = true;
+
+	/* Not subscribing to mpdu_end, msdu_start and rx_attn */
+	htt_tlv_filter.rx_mpdu_end_offset = 0;
+	htt_tlv_filter.rx_msdu_start_offset = 0;
+	htt_tlv_filter.rx_attn_offset = 0;
+
+	htt_tlv_filter.rx_packet_offset = soc->rx_pkt_tlv_size;
+	/*Not subscribing rx_pkt_header*/
+	htt_tlv_filter.rx_header_offset = 0;
+	htt_tlv_filter.rx_mpdu_start_offset =
+				hal_rx_mpdu_start_offset_get(soc->hal_soc);
+	htt_tlv_filter.rx_msdu_end_offset =
+				hal_rx_msdu_end_offset_get(soc->hal_soc);
+
+	for (i = 0; i < MAX_PDEV_CNT; i++) {
+		struct dp_pdev *pdev = soc->pdev_list[i];
+
+		if (!pdev)
+			continue;
+
+		for (mac_id = 0; mac_id < NUM_RXDMA_RINGS_PER_PDEV; mac_id++) {
+			int mac_for_pdev =
+				dp_get_mac_id_for_pdev(mac_id, pdev->pdev_id);
+			/*
+			 * Obtain lmac id from pdev to access the LMAC ring
+			 * in soc context
+			 */
+			int lmac_id =
+				dp_get_lmac_id_for_pdev_id(soc, mac_id,
+							   pdev->pdev_id);
+
+			rx_mac_srng = dp_get_rxdma_ring(pdev, lmac_id);
+
+			if (!rx_mac_srng->hal_srng)
+				continue;
+
+			htt_h2t_rx_ring_cfg(soc->htt_handle, mac_for_pdev,
+					    rx_mac_srng->hal_srng,
+					    RXDMA_BUF, RX_DATA_BUFFER_SIZE,
+					    &htt_tlv_filter);
+		}
+	}
+	return status;
+}
+#else
 /**
  * dp_rxdma_ring_sel_cfg_be() - Setup RXDMA ring config
  * @soc: Common DP soc handle
@@ -721,6 +826,7 @@ dp_rxdma_ring_sel_cfg_be(struct dp_soc *soc)
 	return status;
 
 }
+#endif
 
 #ifdef WLAN_FEATURE_NEAR_FULL_IRQ
 /**
@@ -1406,6 +1512,7 @@ QDF_STATUS dp_txrx_set_vdev_param_be(struct dp_soc *soc,
 	switch (param) {
 	case CDP_TX_ENCAP_TYPE:
 	case CDP_UPDATE_DSCP_TO_TID_MAP:
+	case CDP_UPDATE_TDLS_FLAGS:
 		dp_tx_update_bank_profile(be_soc, be_vdev);
 		break;
 	case CDP_ENABLE_CIPHER:
@@ -1483,6 +1590,7 @@ void dp_initialize_arch_ops_be(struct dp_arch_ops *arch_ops)
 	arch_ops->txrx_get_mon_context_size = dp_mon_get_context_size_be;
 	arch_ops->dp_rx_desc_cookie_2_va =
 			dp_rx_desc_cookie_2_va_be;
+	arch_ops->dp_rx_intrabss_handle_nawds = dp_rx_intrabss_handle_nawds_be;
 
 	arch_ops->txrx_soc_attach = dp_soc_attach_be;
 	arch_ops->txrx_soc_detach = dp_soc_detach_be;
@@ -1520,6 +1628,8 @@ void dp_initialize_arch_ops_be(struct dp_arch_ops *arch_ops)
 	arch_ops->mlo_peer_find_hash_remove = dp_mlo_peer_find_hash_remove_be;
 	arch_ops->mlo_peer_find_hash_find = dp_mlo_peer_find_hash_find_be;
 #endif
+	arch_ops->dp_peer_rx_reorder_queue_setup =
+					dp_peer_rx_reorder_queue_setup_be;
 	arch_ops->txrx_print_peer_stats = dp_print_peer_txrx_stats_be;
 	dp_init_near_full_arch_ops_be(arch_ops);
 }

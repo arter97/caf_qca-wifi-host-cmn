@@ -115,11 +115,7 @@
 #define CDP_DATA_TID_MAX 8
 #define CDP_DATA_NON_QOS_TID 16
 
-#ifdef WLAN_FEATURE_11BE
-#define CDP_NUM_SA_BW 5
-#else
 #define CDP_NUM_SA_BW 4
-#endif
 #define CDP_PERCENT_MACRO 100
 #define CDP_NUM_KB_IN_MB 1000
 /*
@@ -305,6 +301,7 @@ enum cdp_host_txrx_stats {
 	TXRX_SOC_FSE_STATS = 13,
 	TXRX_HAL_REG_WRITE_STATS = 14,
 	TXRX_SOC_REO_HW_DESC_DUMP = 15,
+	TXRX_SOC_WBM_IDLE_HPTP_DUMP = 16,
 	TXRX_HOST_STATS_MAX,
 };
 
@@ -644,7 +641,8 @@ struct cdp_tx_exception_metadata {
 	uint8_t tid;
 	uint16_t tx_encap_type;
 	enum cdp_sec_type sec_type;
-	uint8_t is_tx_sniffer;
+	uint8_t is_tx_sniffer :1,
+		is_intrabss_fwd :1;
 	uint16_t ppdu_cookie;
 #ifdef QCA_SUPPORT_WDS_EXTENDED
 	uint8_t is_wds_extended;
@@ -864,6 +862,14 @@ typedef qdf_nbuf_t (*ol_txrx_tx_exc_fp)(struct cdp_soc_t *soc, uint8_t vdev_id,
  */
 typedef void (*ol_txrx_completion_fp)(qdf_nbuf_t skb,
 				      void *osif_dev, uint16_t flag);
+
+/**
+ * ol_txrx_classify_critical_pkt_fp - classification cb for critical frames
+ * @osif_dev: the virtual device's OS shim object
+ * @skb: skb data
+ */
+typedef void (*ol_txrx_classify_critical_pkt_fp)(void *osif_dev,
+						 qdf_nbuf_t skb);
 /**
  * ol_txrx_tx_flow_control_fp - tx flow control notification
  * function from txrx to OS shim
@@ -944,8 +950,7 @@ typedef QDF_STATUS(*ol_txrx_get_key_fp)(void *osif_dev, uint8_t *key_buf, uint8_
  */
 typedef QDF_STATUS(*ol_txrx_rsim_rx_decap_fp)(void *osif_dev,
 						qdf_nbuf_t *list_head,
-						qdf_nbuf_t *list_tail,
-						uint8_t *peer_mac);
+						qdf_nbuf_t *list_tail);
 
 /* ol_txrx_rx_fp - external tx free function to read per packet stats and
  *                            free tx buffer externally
@@ -995,6 +1000,12 @@ typedef void (*ol_txrx_pktdump_cb)(ol_txrx_soc_handle soc,
 				   qdf_nbuf_t netbuf,
 				   uint8_t status,
 				   uint8_t type);
+
+/**
+ * ol_txrx_get_tsf_time - callback to get tsf time
+ */
+typedef QDF_STATUS(*ol_txrx_get_tsf_time)(void *osif_dev, uint64_t input_time,
+					  uint64_t *tsf_time);
 
 /**
  * ol_txrx_ops - (pointers to) the functions used for tx and rx
@@ -1060,6 +1071,7 @@ struct ol_txrx_ops {
 		ol_txrx_tx_exc_fp     tx_exception;
 		ol_txrx_tx_free_ext_fp tx_free_ext;
 		ol_txrx_completion_fp tx_comp;
+		ol_txrx_classify_critical_pkt_fp tx_classify_critical_pkt_cb;
 	} tx;
 
 	/* rx function pointers - specified by OS shim, stored by txrx */
@@ -1083,6 +1095,7 @@ struct ol_txrx_ops {
 	ol_txrx_mcast_me_fp          me_convert;
 
 	ol_txrx_get_key_fp  get_key;
+	ol_txrx_get_tsf_time get_tsf_time;
 };
 
 /**
@@ -1178,6 +1191,8 @@ enum cdp_peer_param_type {
  * @CDP_SET_ATF_STATS_ENABLE: set ATF stats flag
  * @CDP_CONFIG_SPECIAL_VAP: Configure Special vap
  * @CDP_RESET_SCAN_SPCL_VAP_STATS_ENABLE: Enable scan spcl vap stats reset
+ * @CDP_ISOLATION: set isolation flag
+ * @CDP_CONFIG_UNDECODED_METADATA_CAPTURE_ENABLE: Undecoded metadata capture
  */
 enum cdp_pdev_param_type {
 	CDP_CONFIG_DEBUG_SNIFFER,
@@ -1211,6 +1226,8 @@ enum cdp_pdev_param_type {
 	CDP_CONFIG_SPECIAL_VAP,
 	CDP_RESET_SCAN_SPCL_VAP_STATS_ENABLE,
 	CDP_CONFIG_ENHANCED_STATS_ENABLE,
+	CDP_ISOLATION,
+	CDP_CONFIG_UNDECODED_METADATA_CAPTURE_ENABLE,
 };
 
 /*
@@ -1275,11 +1292,13 @@ enum cdp_pdev_param_type {
  * @cdp_pdev_param_monitor_chan: monitor channel
  * @cdp_pdev_param_atf_stats_enable: ATF stats enable
  * @cdp_pdev_param_config_special_vap: Configure Special vap
+ * @cdp_pdev_param_isolation : set isolation mode
  *
  * @cdp_psoc_param_en_rate_stats: set rate stats enable/disable
  * @cdp_psoc_param_en_nss_cfg: set nss cfg
  * @cdp_ipa_enabled : set ipa mode
  * @cdp_psoc_param_vdev_stats_hw_offload: Configure HW vdev stats offload
+ * @cdp_pdev_param_undecoded_metadata_enable: Undecoded metadata capture enable
  */
 typedef union cdp_config_param_t {
 	/* peer params */
@@ -1350,6 +1369,7 @@ typedef union cdp_config_param_t {
 	bool cdp_pdev_param_config_special_vap;
 	bool cdp_pdev_param_reset_scan_spcl_vap_stats_enable;
 	bool cdp_pdev_param_enhanced_stats_enable;
+	bool cdp_pdev_param_isolation;
 
 	/* psoc params */
 	bool cdp_psoc_param_en_rate_stats;
@@ -1360,6 +1380,8 @@ typedef union cdp_config_param_t {
 	bool cdp_skip_bar_update;
 	bool cdp_ipa_enabled;
 	bool cdp_psoc_param_vdev_stats_hw_offload;
+	bool cdp_pdev_param_undecoded_metadata_enable;
+	bool cdp_sawf_enabled;
 } cdp_config_param_type;
 
 /**
@@ -1487,7 +1509,7 @@ enum cdp_vdev_param_type {
  * @CDP_SET_PREFERRED_HW_MODE: set preferred hw mode
  * @CDP_CFG_PEER_EXT_STATS: Peer extended stats mode.
  * @CDP_IPA_ENABLE : set IPA enable mode.
- * @CDP_SET_VDEV_STATS_HW_OFFLOAD: HW Vdev stats enable/disable
+ * @CDP_CFG_VDEV_STATS_HW_OFFLOAD: HW Vdev stats config
  */
 enum cdp_psoc_param_type {
 	CDP_ENABLE_RATE_STATS,
@@ -1495,7 +1517,8 @@ enum cdp_psoc_param_type {
 	CDP_SET_PREFERRED_HW_MODE,
 	CDP_CFG_PEER_EXT_STATS,
 	CDP_IPA_ENABLE,
-	CDP_SET_VDEV_STATS_HW_OFFLOAD,
+	CDP_CFG_VDEV_STATS_HW_OFFLOAD,
+	CDP_SAWF_ENABLE,
 };
 
 #define TXRX_FW_STATS_TXSTATS                     1
@@ -1779,6 +1802,7 @@ struct cdp_delayed_tx_completion_ppdu_user {
  * @is_ampdu: mpdu aggregate or non-aggregate?
  * @success_bytes: bytes successfully transmitted
  * @retry_bytes: bytes retried
+ * @retry_mpdus: mpdus retried
  * @failed_msdus: MSDUs failed transmission
  * @duration: user duration in ppdu
  * @ltf_size: ltf_size
@@ -1836,6 +1860,7 @@ struct cdp_delayed_tx_completion_ppdu_user {
  * @debug_copied: flag to indicate bar frame copied
  * @peer_last_delayed_ba: flag to indicate peer last delayed ba
  * @phy_tx_time_us: Phy TX duration for the User
+ * @mpdu_bytes: accumulated bytes per mpdu for mem limit feature
  */
 struct cdp_tx_completion_ppdu_user {
 	uint32_t completion_status:8,
@@ -1861,6 +1886,7 @@ struct cdp_tx_completion_ppdu_user {
 	uint32_t failed_bytes;
 	uint32_t success_msdus:16,
 		 retry_msdus:16;
+	uint32_t retry_mpdus;
 	uint32_t failed_msdus:16,
 		 duration:16;
 	uint32_t ltf_size:2,
@@ -1937,6 +1963,7 @@ struct cdp_tx_completion_ppdu_user {
 	bool peer_last_delayed_ba;
 
 	uint16_t phy_tx_time_us;
+	uint32_t mpdu_bytes;
 };
 
 /**
@@ -2024,11 +2051,15 @@ struct cdp_tx_indication_mpdu_info {
 
 /**
  * struct cdp_tx_indication_info - Tx capture information
+ * @radiotap_done: Flag to say radiotap already done or not
+ *			0 - radiotap not updated
+ *			1 - radiotap header updated
  * @mpdu_info: Tx MPDU completion information
  * @mpdu_nbuf: reconstructed mpdu packet
  * @ppdu_desc: tx completion ppdu
  */
 struct cdp_tx_indication_info {
+	bool radiotap_done;
 	struct cdp_tx_indication_mpdu_info mpdu_info;
 	qdf_nbuf_t mpdu_nbuf;
 	struct cdp_tx_completion_ppdu *ppdu_desc;
@@ -2091,6 +2122,7 @@ struct cdp_tx_mgmt_comp_info {
  * @tlv_bitmap: tlv_bitmap for the PPDU
  * @sched_cmdid: schedule command id
  * @phy_ppdu_tx_time_us: Phy per PPDU TX duration
+ * @ppdu_bytes: accumulated bytes per ppdu for mem limit feature
  * @user: per-User stats (array of per-user structures)
  */
 struct cdp_tx_completion_ppdu {
@@ -2135,6 +2167,7 @@ struct cdp_tx_completion_ppdu {
 	uint32_t tlv_bitmap;
 	uint16_t sched_cmdid;
 	uint16_t phy_ppdu_tx_time_us;
+	uint32_t ppdu_bytes;
 	struct cdp_tx_completion_ppdu_user user[];
 };
 
@@ -2342,6 +2375,37 @@ struct cdp_rx_stats_ppdu_user {
  * @nf: noise floor
  * @per_chain_rssi: rssi per antenna
  * @punc_bw: puncered bw
+ * @phyrx_abort: rx aborted undecoded frame indication
+ * @phyrx_abort_reason: abort reason defined in phyrx_abort_request_info
+ * @l_sig_length: L SIG A length
+ * @l_sig_a_parity: L SIG A parity
+ * @l_sig_a_pkt_type: L SIG A info pkt type
+ * @l_sig_a_implicit_sounding: L SIG A info captured implicit sounding
+ * @ht_length: num of bytes in PSDU
+ * @ht_smoothing: Indicate ht_smoothing
+ * @ht_not_sounding: Indicate ht not sounding
+ * @ht_aggregation: Indicate ht aggregation
+ * @ht_stbc: Indicate ht stbc
+ * @ht_crc: Indicate ht crc
+ * @vht_crc: Indicate vht crc
+ * @vht_no_txop_ps: Indicate TXOP power save mode
+ * @bss_color_id: Indicate BSS color ID
+ * @beam_change: Indicates whether spatial mapping is changed
+ * @dl_ul_flag: Differentiates between DL and UL transmission
+ * @transmit_mcs: Indicates the data MCS
+ * @ldpc_extra_sym: LDPC extra symbol
+ * @special_reuse: Spatial reuse
+ * @ltf_sym: Indictaes HE NSTS
+ * @txbf: Indicates whether beamforming is applied
+ * @pe_disambiguity: packet extension disambiguity
+ * @pre_fec_pad: packet extension a factor
+ * @dopplar: Doppler support
+ * @txop_duration: Indicates the remaining time in the current TXOP
+ * @sig_b_mcs: MCS of HE-SIG-B
+ * @sig_b_dcm: DCM of HE-SIG-B
+ * @sig_b_sym: Number of symbols of HE-SIG-B
+ * @sig_b_comp: Compression mode of HE-SIG-B
+ * @he_crc: CRC for HE-SIG contents
  */
 struct cdp_rx_indication_ppdu {
 	uint32_t ppdu_id;
@@ -2403,6 +2467,40 @@ struct cdp_rx_indication_ppdu {
 	struct cdp_rx_ppdu_cfr_info cfr_info;
 #endif
 	uint8_t punc_bw;
+#ifdef QCA_UNDECODED_METADATA_SUPPORT
+	bool phyrx_abort;
+	uint8_t phyrx_abort_reason;
+	uint32_t l_sig_length:12,
+		 l_sig_a_parity:1,
+		 l_sig_a_pkt_type:4,
+		 l_sig_a_implicit_sounding:1,
+		 vht_crc:8,
+		 group_id:6;
+	uint32_t ht_length:16,
+		 ht_smoothing:1,
+		 ht_not_sounding:1,
+		 ht_aggregation:1,
+		 ht_stbc:2,
+		 ht_crc:8,
+		 vht_no_txop_ps:1;
+	uint32_t bss_color_id:6,
+		 beam_change:1,
+		 dl_ul_flag:1,
+		 transmit_mcs:4,
+		 ldpc_extra_sym:1,
+		 special_reuse:4,
+		 ltf_sym:3,
+		 txbf:1,
+		 pe_disambiguity:1,
+		 pre_fec_pad:4,
+		 dopplar:1;
+	uint32_t txop_duration:7,
+		 sig_b_mcs:3,
+		 sig_b_dcm:1,
+		 sig_b_sym:4,
+		 sig_b_comp:1,
+		 he_crc:4;
+#endif
 };
 
 /**

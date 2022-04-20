@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2017-2021 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -157,7 +158,7 @@ typedef enum wlan_crypto_auth_mode {
 	WLAN_CRYPTO_AUTH_SAE      = 9,
 	WLAN_CRYPTO_AUTH_FILS_SK  = 10,
 	/** Keep WLAN_CRYPTO_AUTH_MAX at the end. */
-	WLAN_CRYPTO_AUTH_MAX      = WLAN_CRYPTO_AUTH_FILS_SK,
+	WLAN_CRYPTO_AUTH_MAX,
 } wlan_crypto_auth_mode;
 
 /* crypto capabilities */
@@ -223,7 +224,7 @@ typedef enum wlan_crypto_key_mgmt {
 	WLAN_CRYPTO_KEY_MGMT_FT_PSK_SHA384         = 25,
 	WLAN_CRYPTO_KEY_MGMT_PSK_SHA384            = 26,
 	/** Keep WLAN_CRYPTO_KEY_MGMT_MAX at the end. */
-	WLAN_CRYPTO_KEY_MGMT_MAX   = WLAN_CRYPTO_KEY_MGMT_FT_IEEE8021X_SHA384,
+	WLAN_CRYPTO_KEY_MGMT_MAX,
 } wlan_crypto_key_mgmt;
 
 enum wlan_crypto_key_type {
@@ -454,6 +455,7 @@ struct wlan_lmac_if_crypto_tx_ops {
  * @decap:  function pointer to decap rx frame in hw
  * @enmic: function pointer to enmic tx frame
  * @demic: function pointer to demic rx frame
+ * @get_rxpn: function pointer to get current Rx pn value of peer
  */
 
 struct wlan_lmac_if_crypto_rx_ops {
@@ -471,6 +473,8 @@ struct wlan_lmac_if_crypto_rx_ops {
 					uint8_t tid, uint8_t keyid);
 	QDF_STATUS(*set_peer_wep_keys)(struct wlan_objmgr_vdev *vdev,
 					struct wlan_objmgr_peer *peer);
+	QDF_STATUS (*get_rxpn)(struct wlan_objmgr_vdev *vdev,
+			       uint8_t *macaddr, uint16_t keyix);
 };
 
 #define WLAN_CRYPTO_RX_OPS_ENCAP(crypto_rx_ops) \
@@ -483,5 +487,7 @@ struct wlan_lmac_if_crypto_rx_ops {
 				(crypto_rx_ops->crypto_demic)
 #define WLAN_CRYPTO_RX_OPS_SET_PEER_WEP_KEYS(crypto_rx_ops) \
 				(crypto_rx_ops->set_peer_wep_keys)
+#define WLAN_CRYPTO_RX_OPS_GET_RXPN(crypto_rx_ops) \
+				((crypto_rx_ops)->get_rxpn)
 
 #endif /* end of _WLAN_CRYPTO_GLOBAL_DEF_H_ */
