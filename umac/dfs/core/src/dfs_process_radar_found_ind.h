@@ -113,6 +113,17 @@ dfs_flush_additional_pulses(struct wlan_dfs *dfs)
 #define NUM_CHANNELS_160MHZ 8
 #define MAX_NOL_CHANS      25
 
+#ifdef QCA_SUPPORT_AGILE_DFS
+/* Checks the Host side agile configurations. ie if agile channel
+ * is configured as 5730MHz and the agile channel width is 80P80/165MHz.
+ */
+#define DFS_IS_HOST_AGILE_CURCHAN_165MHZ(_x) \
+	(((_x)->dfs_agile_precac_freq_mhz == \
+	 RESTRICTED_80P80_CHAN_CENTER_FREQ) && \
+	((_x)->dfs_precac_chwidth == CH_WIDTH_80P80MHZ))
+
+#endif
+
 #if defined(QCA_DFS_RCSA_SUPPORT)
 /**
  * dfs_send_nol_ie_and_rcsa()- Send NOL IE and RCSA action frames.
@@ -441,5 +452,16 @@ struct dfs_freq_range
 dfs_find_radar_freq_range_and_add_to_nol(struct wlan_dfs *dfs,
 					 struct radar_found_info *radar_found,
 					 qdf_freq_t freq_center);
+
+/**
+ * dfs_is_freq_offset_valid() - Return true if the given radar found freq
+ * offset is valid, false otherwise.
+ *
+ * @dfs: Pointer to struct wlan_dfs
+ * @radar_found: Pointer to struct radar_found_info
+ *
+ */
+bool dfs_is_freq_offset_valid(struct wlan_dfs *dfs,
+			      struct radar_found_info *radar_found);
 
 #endif /*_DFS_PROCESS_RADAR_FOUND_IND_H_ */

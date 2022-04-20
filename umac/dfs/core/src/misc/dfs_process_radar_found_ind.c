@@ -945,18 +945,162 @@ void dfs_reset_bangradar(struct wlan_dfs *dfs)
 }
 
 /**
- * dfs_radar_found_event_basic_sanity() - Check if radar event is received on a
- * DFS channel.
- * @dfs: Pointer to wlan_dfs structure.
- * @chan: Current channel.
+ * dfs_chan_to_width: Outputs the channel width in MHz of the given input
+ * dfs_channel.
  *
- * Return: If a radar event found on NON-DFS channel return false. Otherwise,
- * return true.
+ * chan: Pointer to the input dfs_channel structure.
+ *
+ * Return: Channel width in MHz, 0 in case of error.
  */
-static
-bool dfs_radar_found_event_basic_sanity(struct wlan_dfs *dfs,
-					struct dfs_channel *chan)
+static uint16_t dfs_chan_to_width(struct dfs_channel *chan)
 {
+	uint16_t width = 0;
+
+	if (!chan)
+		return width;
+
+	if (WLAN_IS_CHAN_MODE_5(chan)) {
+		width = BW_5_MHZ;
+	} else if (WLAN_IS_CHAN_MODE_10(chan)) {
+		width = BW_10_MHZ;
+	} else if (WLAN_IS_CHAN_MODE_20(chan)) {
+		width = BW_20_MHZ;
+	} else if (WLAN_IS_CHAN_MODE_40(chan)) {
+		width = BW_40_MHZ;
+	} else if (WLAN_IS_CHAN_MODE_80(chan)) {
+		width = BW_80_MHZ;
+	} else if (WLAN_IS_CHAN_MODE_160(chan)) {
+		width = BW_160_MHZ;
+	}
+	return width;
+}
+
+/**
+ * dfs_is_radar_found_on_165m_chan() - Find out if radar is found on
+ * the 165MHZ BW. True, if found, false otherwise
+ * @dfs: pointer to struct wlan_dfs
+ * @radar_found: Pointer to struct radar_found_info
+ */
+static bool
+dfs_is_radar_found_on_165m_chan(struct wlan_dfs *dfs,
+				struct radar_found_info *radar_found)
+{
+	struct dfs_channel *curchan = dfs->dfs_curchan;
+
+	if (!dfs_is_true_160mhz_supported(dfs))
+		return false;
+
+	if (radar_found->detector_id == dfs_get_agile_detector_id(dfs)) {
+		if (DFS_IS_HOST_AGILE_CURCHAN_165MHZ(dfs))
+			return true;
+	}
+
+	if (WLAN_IS_CHAN_MODE_165(dfs, curchan))
+		return true;
+
+	return false;
+}
+
+/**
+ * dfs_validate_offset_for_165_mhz_chan() - Return true if the radar
+ * found offset lies within the 165MHZ channel boundary, false otherwise.
+ * @dfs: Pointer to struct wlan_dfs
+ * @radar_found: Pointer to struct radar_found_info
+ *
+ * Offsets with respect to pri/sec 80MHz center ranging from -40 to +40.
+ *          ____________________________________________
+ *         |                    |    |                  |
+ *         |            165 MHz |5M  | Channel          |
+ *         |______  L.C_________|Gap |________R.C_______|
+ *         |         |          |    |         |        |
+ *         |         |          |    |         |        |
+ *        -40    5690(138)     +40   -40     5775(155) +40
+ *
+ * When home/agile channel is 165MHZ, host sends center frequency
+ * of primary80 segment in cfreq1 and center frequency of secondary80
+ * segment in cfreq2. But the synth programming frequency in
+ * 165MHz mode of operation is always 5730MHz(146) which is not known to host.
+ * Hence, freq_offset is converted to offset with respect to cfreq1 and
+ * is sent to host by FW.
+ * While programming a 165M agile chan to FW, cfreq1 is set as 5690 (138).
+ * and freq offset on radar found is w.r.t 5690 (138).
+ * Hence radar found freq offsets for agile radar is always -40 to 125.
+ * For home channel radar, depending on where the primary channel is (to
+ * the left or the right of band center), offset is -40 to 125 (OR) 40 to -125.
+ */
+static bool
+dfs_validate_offset_for_165_mhz_chan(struct wlan_dfs *dfs,
+				     struct radar_found_info *radar_found)
+{
+	bool is_primary_ch_left_of_center;
+	struct dfs_channel *curchan = dfs->dfs_curchan;
+	bool is_offset_valid = false;
+	bool is_radar_from_agile =
+	    radar_found->detector_id == dfs_get_agile_detector_id(dfs);
+
+	if (is_radar_from_agile)
+		is_primary_ch_left_of_center = true;
+	else if (curchan->dfs_ch_freq < curchan->dfs_ch_mhz_freq_seg2)
+		is_primary_ch_left_of_center = true;
+	else
+		is_primary_ch_left_of_center = false;
+
+	if (is_primary_ch_left_of_center) {
+	    if (radar_found->freq_offset > -FREQ_OFFSET_BOUNDARY_FOR_80MHZ &&
+		radar_found->freq_offset < FREQ_OFFSET_BOUNDARY_FOR_165MHZ)
+		is_offset_valid = true;
+	} else {
+	    if (radar_found->freq_offset > -FREQ_OFFSET_BOUNDARY_FOR_165MHZ &&
+		radar_found->freq_offset < FREQ_OFFSET_BOUNDARY_FOR_80MHZ)
+		is_offset_valid = true;
+	}
+	return is_offset_valid;
+}
+
+
+/**
+ * dfs_is_freq_offset_valid() - Given radar found params, find if
+ * the radar found freq offset is a valid offset for the operating
+ * current channel bandwidth.
+ * @dfs: Pointer to struct wlan_dfs
+ * @radar_found; Pointer to struct radar_found_info
+ *
+ * Return - True if freq offset is valid, false otherwise
+ */
+bool dfs_is_freq_offset_valid(struct wlan_dfs *dfs,
+			      struct radar_found_info *radar_found)
+{
+	uint16_t width;
+	struct dfs_channel *chan = dfs->dfs_curchan;
+	int32_t valid_offset;
+
+	if (!chan) {
+		dfs_err(dfs, WLAN_DEBUG_DFS_ALWAYS,
+			"dfs->dfs_curchan is NULL");
+		return false;
+	}
+
+	if (dfs_is_radar_found_on_165m_chan(dfs, radar_found))
+		return dfs_validate_offset_for_165_mhz_chan(dfs, radar_found);
+
+	width = dfs_chan_to_width(chan);
+	valid_offset = width / 2;
+
+	if (radar_found->freq_offset < -valid_offset ||
+	    radar_found->freq_offset > valid_offset) {
+		dfs_debug(dfs, WLAN_DEBUG_DFS_ALWAYS,
+			  "offset %d is invalid for %u BW",
+			  radar_found->freq_offset, width);
+		return false;
+	}
+	return true;
+}
+
+bool dfs_radar_found_event_basic_sanity(struct wlan_dfs *dfs,
+					struct radar_found_info *radar_found)
+{
+	struct dfs_channel *chan = dfs->dfs_curchan;
+
 	if (!chan) {
 		dfs_err(dfs, WLAN_DEBUG_DFS_ALWAYS,
 			"dfs->dfs_curchan is NULL");
@@ -969,7 +1113,8 @@ bool dfs_radar_found_event_basic_sanity(struct wlan_dfs *dfs,
 		return false;
 	}
 
-	return true;
+	return dfs_is_freq_offset_valid(dfs, radar_found);
+
 }
 
 void dfs_send_csa_to_current_chan(struct wlan_dfs *dfs)
@@ -1341,7 +1486,7 @@ dfs_process_radar_ind_on_home_chan(struct wlan_dfs *dfs,
 	 * Detector we need to process it since Agile Detector has a
 	 * different channel.
 	 */
-	if (!dfs_radar_found_event_basic_sanity(dfs, dfs_curchan))
+	if (!dfs_radar_found_event_basic_sanity(dfs, radar_found))
 		goto exit;
 
 	dfs_compute_radar_found_cfreq(dfs, radar_found, &freq_center);
