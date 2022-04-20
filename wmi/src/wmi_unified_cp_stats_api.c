@@ -130,3 +130,32 @@ wmi_extract_peer_extd_stats(wmi_unified_t wmi_handle, void *evt_buf,
 
 	return QDF_STATUS_E_FAILURE;
 }
+
+QDF_STATUS wmi_unified_send_stats_threshold(wmi_unified_t wmi_handle,
+					    void *threshold)
+{
+	if (wmi_handle->ops->send_stats_threshold)
+		return wmi_handle->ops->send_stats_threshold(wmi_handle,
+							     threshold);
+	return QDF_STATUS_E_FAILURE;
+}
+
+QDF_STATUS wmi_unified_extract_ll_stats(wmi_unified_t wmi_handle,
+					void *evt_buf,
+					struct wmi_link_layer_stats *stats)
+{
+	if (wmi_handle->ops->send_stats_threshold)
+		return wmi_handle->ops->extract_ll_stats(wmi_handle,
+							 evt_buf,
+							 stats);
+	return QDF_STATUS_E_FAILURE;
+}
+
+uint32_t wmi_unified_get_stats_length(wmi_unified_t wmi_handle,
+				      void *evt_buf)
+{
+	if (wmi_handle->ops->get_stats_buf_length)
+		return wmi_handle->ops->get_stats_buf_length(wmi_handle,
+							     evt_buf);
+	return 0;
+}

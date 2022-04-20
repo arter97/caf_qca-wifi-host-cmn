@@ -2557,6 +2557,13 @@ QDF_STATUS
 QDF_STATUS
 	(*unpack_rate_upper_cap)(wmi_unified_t wmi_handle,
 			   uint32_t *pdev_param, struct wmi_rc_params *param);
+
+QDF_STATUS
+	(*send_stats_threshold)(wmi_unified_t wmi_handle, void *threshold);
+QDF_STATUS
+	(*extract_ll_stats)(wmi_unified_t wmi_handle, void *evt_buf,
+				struct wmi_link_layer_stats *stats);
+uint32_t (*get_stats_buf_length)(wmi_unified_t wmi_handle, void *evt_buf);
 };
 /* Forward declartion for psoc*/
 struct wlan_objmgr_psoc;

@@ -154,4 +154,35 @@ QDF_STATUS
 wmi_extract_peer_extd_stats(wmi_unified_t wmi_handle, void *evt_buf,
 			    uint32_t index,
 			    wmi_host_peer_extd_stats *peer_extd_stats);
+
+/**
+ * wmi_unified_send_stats_threshold() - send stats threshold parameters
+ * @wmi_handle: wmi handle
+ * @threshold: pointer to threshold parameters
+ *
+ * Return: QDF_STATUS_SUCCESS on success and QDF_STATUS_E_FAILURE for failure
+ */
+QDF_STATUS wmi_unified_send_stats_threshold(wmi_unified_t wmi_handle,
+					    void *threshold);
+
+/**
+ * wmi_unified_extract_ll_stats() - extract wlan stats from event
+ * @wmi_handle: wmi handle
+ * @evt_buf: pointer to event buffer
+ * @stats: Pointer to hold extended wlan stats
+ *
+ * Return: QDF_STATUS_SUCCESS on success and QDF_STATUS_E_FAILURE for failure
+ */
+QDF_STATUS wmi_unified_extract_ll_stats(wmi_unified_t wmi_handle,
+					void *evt_buf,
+					struct wmi_link_layer_stats *stats);
+
+/**
+ * wmi_unified_get_stats_length() - check stats length from event
+ * @wmi_handle: wmi handle
+ * @evt_buf: pointer to event buffer
+ *
+ * Return: stats length
+ */
+uint32_t wmi_unified_get_stats_length(wmi_unified_t wmi_handle, void *evt_buf);
 #endif /* _WMI_UNIFIED_CP_STATS_API_H_ */

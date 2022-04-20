@@ -359,6 +359,7 @@ static const uint32_t pdev_param_tlv[] = {
 			WMI_PDEV_PARAM_HESIGA_POWER_SCALING,
 	[wmi_pdev_param_en_ru_106_tone_er_su_dcm] =
 			WMI_PDEV_PARAM_EN_RU_106_TONE_ER_SU_DCM,
+	[wmi_pdev_param_stats_observe_period] = WMI_PDEV_PARAM_STATS_OBSERVATION_PERIOD,
 };
 
 /**

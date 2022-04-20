@@ -3979,6 +3979,302 @@ typedef struct {
 } wmi_host_pmf_bcn_protect_stats;
 
 /**
+ * struct wmi_wifi_chan_cca_stats - channal CCA stats
+ * @vdev_id: vdev ID
+ * @idle_time: percentage of idle time, no TX, no RX, no interference
+ * @tx_time: percentage of time transmitting packets
+ * @rx_in_bss_time: percentage of time receiving packets in current BSS
+ * @rx_out_bss_time: percentage of time receiving packets not in current BSS
+ * @rx_busy_time: percentage of time interference detected
+ * @rx_in_bad_cond_time: percentage of time receiving packets with errors
+ *	or packets flagged as retransmission or seqnum discontinued.
+ * @tx_in_bad_cond_time: percentage of time the device transmitted packets
+ *	that haven't been ACKed.
+ * @wlan_not_avail_time: percentage of time the chip is unable to
+ *	work in normal conditions.
+ */
+struct wmi_wifi_chan_cca_stats {
+	uint32_t vdev_id;
+	uint32_t idle_time;
+	uint32_t tx_time;
+	uint32_t rx_in_bss_time;
+	uint32_t rx_out_bss_time;
+	uint32_t rx_busy_time;
+	uint32_t rx_in_bad_cond_time;
+	uint32_t tx_in_bad_cond_time;
+	uint32_t wlan_not_avail_time;
+};
+
+#define WIFI_MAX_CHAINS                 8
+
+/**
+ * struct wmi_wifi_peer_signal_stats - peer signal stats
+ * @vdev_id: vdev ID
+ * @peer_id: peer ID
+ * @per_ant_snr: per antenna SNR
+ * @nf: peer background noise
+ * @per_ant_rx_mpdus: MPDUs received per antenna
+ * @per_ant_tx_mpdus: MPDUs transferred per antenna
+ * @num_chain: valid chain count
+ */
+struct wmi_wifi_peer_signal_stats {
+	uint32_t vdev_id;
+	uint32_t peer_id;
+
+	/* per antenna SNR in current bss */
+	int32_t per_ant_snr[WIFI_MAX_CHAINS];
+
+	/* Background noise */
+	int32_t nf[WIFI_MAX_CHAINS];
+
+	uint32_t per_ant_rx_mpdus[WIFI_MAX_CHAINS];
+	uint32_t per_ant_tx_mpdus[WIFI_MAX_CHAINS];
+	uint32_t num_chain;
+};
+
+#define WIFI_VDEV_NUM		4
+#define WFIF_MCS_NUM		10
+#define WIFI_AGGR_NUM		8
+#define WIFI_DELAY_SIZE	11
+
+/**
+ * struct wmi_wifi_tx - per AC tx stats
+ * @msdus: number of totoal MSDUs on MAC layer in the period
+ * @mpdus: number of totoal MPDUs on MAC layer in the period
+ * @ppdus: number of totoal PPDUs on PHY layer in the period
+ * @bytes: bytes of tx data on MAC layer in the period
+ * @drops: number of TX packets cancelled due to any reason in the period,
+ *	such as WMM limitation/bandwidth limitation/radio congestion
+ * @drop_bytes: bytes of dropped TX packets in the period
+ * @retries: number of unacked transmissions of MPDUs
+ * @failed: number of packets have not been ACKed despite retried
+ * @aggr_len: length of the MPDU aggregation size buffer
+ * @mpdu_aggr_size: histogram of MPDU aggregation size
+ * @success_mcs_len: length of success mcs buffer
+ * @success_mcs: histogram of succeeded received MPDUs encoding rate
+ * @fail_mcs_len: length of failed mcs buffer
+ * @fail_mcs: histogram of failed received MPDUs encoding rate
+ * @delay_len: length of the delay histofram buffer
+ * @delay: histogram of delays on MAC layer
+ */
+struct wmi_wifi_tx {
+	uint32_t msdus;
+	uint32_t mpdus;
+	uint32_t ppdus;
+	uint32_t bytes;
+	uint32_t drops;
+	uint32_t drop_bytes;
+	uint32_t retries;
+	uint32_t failed;
+	uint32_t aggr_len;
+	uint32_t *mpdu_aggr_size;
+	uint32_t success_mcs_len;
+	uint32_t *success_mcs;
+	uint32_t fail_mcs_len;
+	uint32_t *fail_mcs;
+	uint32_t delay_len;
+	uint32_t *delay;
+};
+
+/**
+ * struct wmi_wifi_rx - per AC rx stats
+ * @mpdus: number of RX packets on MAC layer
+ * @bytes: bytes of RX packets on MAC layer
+ * @ppdus: number of RX packets on PHY layer
+ * @ppdu_bytes: bytes of RX packets on PHY layer
+ * @mpdu_lost: number of discontinuity in seqnum
+ * @mpdu_retry: number of RX packets flagged as retransmissions
+ * @mpdu_dup: number of RX packets identified as duplicates
+ * @mpdu_discard: number of RX packets discarded
+ * @aggr_len: length of MPDU aggregation histogram buffer
+ * @mpdu_aggr: histogram of MPDU aggregation size
+ * @mcs_len: length of mcs histogram buffer
+ * @mcs: histogram of encoding rate.
+ */
+struct wmi_wifi_rx {
+	uint32_t mpdus;
+	uint32_t bytes;
+	uint32_t ppdus;
+	uint32_t ppdu_bytes;
+	uint32_t mpdu_lost;
+	uint32_t mpdu_retry;
+	uint32_t mpdu_dup;
+	uint32_t mpdu_discard;
+	uint32_t aggr_len;
+	uint32_t *mpdu_aggr;
+	uint32_t mcs_len;
+	uint32_t *mcs;
+};
+
+/**
+ * struct wmi_wifi_ll_wmm_ac_stats - stats for WMM AC
+ * @type: WMM AC type
+ * @tx_stats: pointer to TX stats
+ * @rx_stats: pointer to RX stats
+ */
+struct wmi_wifi_ll_wmm_ac_stats {
+	uint32_t type;
+	struct wmi_wifi_tx *tx_stats;
+	struct wmi_wifi_rx *rx_stats;
+};
+
+#define WIFI_INVALID_PEER_ID		(-1)
+#define WIFI_INVALID_VDEV_ID		(-1)
+#define WIFI_MAX_AC                     (4)
+
+/**
+ * struct wmi_wifi_ll_peer_stats - per peer stats
+ * @peer_id: peer ID
+ * @vdev_id: VDEV ID
+ * mac_address: MAC address
+ * @sta_ps_inds: how many times STAs go to sleep
+ * @sta_ps_durs: total sleep time of STAs (units in ms)
+ * @rx_probe_reqs: number of probe requests received
+ * @rx_oth_mgmts: number of other management frames received,
+ *		  not including probe requests
+ * @peer_signal_stat: signal stats
+ * @ac_stats: WMM BE/BK/VI/VO stats
+ */
+struct wmi_wifi_ll_peer_stats {
+	uint32_t peer_id;
+	uint32_t vdev_id;
+	uint8_t  mac_address[QDF_MAC_ADDR_SIZE];
+	uint32_t sta_ps_inds;
+	uint32_t sta_ps_durs;
+	uint32_t rx_probe_reqs;
+	uint32_t rx_oth_mgmts;
+	struct wmi_wifi_peer_signal_stats peer_signal_stats;
+	struct wmi_wifi_ll_wmm_ac_stats ac_stats[WIFI_MAX_AC];
+};
+
+/**
+ * struct wmi_wifi_ll_period - time stamp for stats report
+ * @duration: the count duration on fw side for this report
+ * @end_time: timestamp when LL stats reported to user layer
+ */
+struct wmi_wifi_ll_period {
+	uint32_t duration;
+	qdf_time_t end_time;
+};
+
+/**
+ * struct wmi_wifi_ll_ext_stats - link layer stats report
+ * @trigger_cond_id:  Indicate what triggered this event.
+ *	1: timeout. 2: threshold
+ * @cca_chgd_bitmap: Bitmap to indicate changed channel CCA stats
+ *	which exceeded the thresholds
+ * @sig_chgd_bitmap: Bitmap to indicate changed peer signal stats
+ *	which exceeded the thresholds
+ * @tx_chgd_bitmap: Bitmap to indicate changed TX counters
+ *	which exceeded the thresholds
+ * @rx_chgd_bitmap: Bitmap to indicate changed RX counters
+ *	which exceeded the thresholds
+ * @chan_cca_stats: channel CCA stats
+ * @peer_signal_stats: peer signal stats
+ * @tx_mpdu_aggr_array_len: length of TX MPDU aggregation buffer
+ * @tx_succ_mcs_array_len: length of mcs buffer for ACKed MPDUs
+ * @tx_fail_mcs_array_len: length of mcs buffer for no-ACKed MPDUs
+ * @tx_delay_array_len: length of delay stats buffer
+ * @rx_mpdu_aggr_array_len: length of RX MPDU aggregation buffer
+ * @rx_mcs_array_len: length of RX mcs stats buffer
+ * @peer_stats: peer stats
+ * @cca: physical channel CCA stats
+ * @maxtrix: bitmask for antenna used while receiving this stats
+ * @phyerr_count: phy error times
+ * @timestamp: timestamp on target side for this event
+ * @buf_len: length of following stats buffer
+ * @stats: pointer to stats data buffer.
+ *
+ * Structure of the whole statictics is like this:
+ *     ---------------------------------
+ *     |      trigger_cond_i           |
+ *     +-------------------------------+
+ *     |      cca_chgd_bitmap          |
+ *     +-------------------------------+
+ *     |      sig_chgd_bitmap          |
+ *     +-------------------------------+
+ *     |      tx_chgd_bitmap           |
+ *     +-------------------------------+
+ *     |      rx_chgd_bitmap           |
+ *     +-------------------------------+
+ *     |      peer_num                 |
+ *     +-------------------------------+
+ *     |      channel_num              |
+ *     +-------------------------------+
+ *     |      time stamp               |
+ *     +-------------------------------+
+ *     |      tx_mpdu_aggr_array_len   |
+ *     +-------------------------------+
+ *     |      tx_succ_mcs_array_len    |
+ *     +-------------------------------+
+ *     |      tx_fail_mcs_array_len    |
+ *     +-------------------------------+
+ *     |      tx_delay_array_len       |
+ *     +-------------------------------+
+ *     |      rx_mpdu_aggr_array_len   |
+ *     +-------------------------------+
+ *     |      rx_mcs_array_len         |
+ *     +-------------------------------+
+ *     |      pointer to CCA stats     |
+ *     +-------------------------------+
+ *     |      pointer to peer stats    |
+ *     +-------------------------------+
+ *     |      CCA stats                |
+ *     +-------------------------------+
+ *     |      peer_stats               |----+
+ *     +-------------------------------+    |
+ *     |      per peer signals stats   |<---+
+ *     |        peer0 ~ peern          |    |
+ *     +-------------------------------+    |
+ *     | TX aggr/mcs parameters array  |    |
+ *     | Length of this buffer is      |    |
+ *     | configurable for user layer.  |<-+ |
+ *     +-------------------------------+  | |
+ *     |      per peer tx stats        |--+ |
+ *     |         BE                    | <--+
+ *     |         BK                    |    |
+ *     |         VI                    |    |
+ *     |         VO                    |    |
+ *     +-------------------------------+    |
+ *     | TX aggr/mcs parameters array  |    |
+ *     | Length of this buffer is      |    |
+ *     | configurable for user layer.  |<-+ |
+ *     +-------------------------------+  | |
+ *     |      peer peer rx stats       |--+ |
+ *     |         BE                    | <--+
+ *     |         BE                    |
+ *     |         BK                    |
+ *     |         VI                    |
+ *     |         VO                    |
+ *     ---------------------------------
+ */
+struct wmi_link_layer_stats {
+	uint32_t trigger_cond_id;
+	uint32_t pdev_id;
+	uint32_t cca_chgd_bitmap;
+	uint32_t sig_chgd_bitmap;
+	uint32_t tx_chgd_bitmap;
+	uint32_t rx_chgd_bitmap;
+	uint8_t peer_num;
+	uint8_t channel_num;
+	struct wmi_wifi_ll_period time_stamp;
+	uint32_t tx_mpdu_aggr_array_len;
+	uint32_t tx_succ_mcs_array_len;
+	uint32_t tx_fail_mcs_array_len;
+	uint32_t tx_delay_array_len;
+	uint32_t rx_mpdu_aggr_array_len;
+	uint32_t rx_mcs_array_len;
+	struct wmi_wifi_ll_peer_stats *peer_stats;
+	struct wmi_wifi_chan_cca_stats *cca;
+	uint32_t maxtrix;
+	uint32_t phyerr_count;
+	uint32_t timestamp;
+#define WLAN_COUNTER_MAX_SIZE           4096
+	uint32_t buf_len;
+	uint8_t stats[0];
+};
+
+/**
  * struct wmi_unit_test_event - Structure corresponding to WMI Unit test event
  * @vdev_id: VDEV ID
  * @module_id: MODULE ID
@@ -4731,6 +5027,7 @@ typedef enum {
 	wmi_pdev_param_lsig_rlsig_power_scaling,
 	wmi_pdev_param_hesiga_power_scaling,
 	wmi_pdev_param_en_ru_106_tone_er_su_dcm,
+	wmi_pdev_param_stats_observe_period,
 	wmi_pdev_param_max,
 } wmi_conv_pdev_params_id;
 

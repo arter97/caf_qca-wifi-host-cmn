@@ -897,6 +897,741 @@ static void wmi_infra_cp_stats_ops_attach_tlv(struct wmi_ops *ops)
 }
 #endif /* WLAN_SUPPORT_INFRA_CTRL_PATH_STATS */
 
+static QDF_STATUS send_stats_threshold_tlv(wmi_unified_t wmi_handle,
+					   void *threshold)
+{
+	return QDF_STATUS_SUCCESS;
+}
+
+#define WMA_FILL_TX_STATS(eve, msg)   do {\
+	(msg)->msdus = (eve)->tx_msdu_cnt;\
+	(msg)->mpdus = (eve)->tx_mpdu_cnt;\
+	(msg)->ppdus = (eve)->tx_ppdu_cnt;\
+	(msg)->bytes = (eve)->tx_bytes;\
+	(msg)->drops = (eve)->tx_msdu_drop_cnt;\
+	(msg)->drop_bytes = (eve)->tx_drop_bytes;\
+	(msg)->retries = (eve)->tx_mpdu_retry_cnt;\
+	(msg)->failed = (eve)->tx_mpdu_fail_cnt;\
+} while (0)
+
+#define WMA_FILL_RX_STATS(eve, msg)       do {\
+	(msg)->mpdus = (eve)->mac_rx_mpdu_cnt;\
+	(msg)->bytes = (eve)->mac_rx_bytes;\
+	(msg)->ppdus = (eve)->phy_rx_ppdu_cnt;\
+	(msg)->ppdu_bytes = (eve)->phy_rx_bytes;\
+	(msg)->mpdu_retry = (eve)->rx_mpdu_retry_cnt;\
+	(msg)->mpdu_dup = (eve)->rx_mpdu_dup_cnt;\
+	(msg)->mpdu_discard = (eve)->rx_mpdu_discard_cnt;\
+} while (0)
+
+/**
+ * get_stats_buf_length_tlv() - calculate buffer size for MAC counters
+ * @wmi_handle: WMI handle
+ * @evt_buf: stats report event buffer
+ *
+ * Structure of the stats message
+ * LL_EXT_STATS
+ *  |
+ *  |--Channel stats[1~n]
+ *  |--Peer[1~n]
+ *      |
+ *      +---Signal
+ *      +---TX
+ *      |    +---BE
+ *      |    +---BK
+ *      |    +---VI
+ *      |    +---VO
+ *      |
+ *      +---RX
+ *           +---BE
+ *           +---BK
+ *           +---VI
+ *           +---VO
+ * For each Access Category, the arregation and mcs
+ * stats are as this:
+ *  TX
+ *   +-BE/BK/VI/VO
+ *         +----tx_mpdu_aggr_array
+ *         +----tx_succ_mcs_array
+ *         +----tx_fail_mcs_array
+ *         +----tx_delay_array
+ *  RX
+ *   +-BE/BK/VI/VO
+ *         +----rx_mpdu_aggr_array
+ *         +----rx_mcs_array
+ *
+ * return: length of result buffer.
+ */
+static uint32_t
+get_stats_buf_length_tlv(wmi_unified_t wmi_handle, void *evt_buf)
+{
+	WMI_REPORT_STATS_EVENTID_param_tlvs *param_buf;
+	wmi_report_stats_event_fixed_param *fixed_param;
+	uint32_t buf_len, peer_num;
+	uint32_t total_array_len, total_peer_len;
+
+	param_buf = (WMI_REPORT_STATS_EVENTID_param_tlvs *)evt_buf;
+	if (!param_buf) {
+		wmi_err("Invalid input parameters.");
+		return 0;
+	}
+	fixed_param = param_buf->fixed_param;
+
+	wmi_debug("num_peer_signal_stats=%d num_peer_ac_tx_stats=%d num_peer_ac_rx_stats=%d",
+		  fixed_param->num_peer_signal_stats,
+		  fixed_param->num_peer_ac_tx_stats,
+		  fixed_param->num_peer_ac_rx_stats);
+	/* Get the MAX of three peer numbers */
+	peer_num = fixed_param->num_peer_signal_stats >
+			fixed_param->num_peer_ac_tx_stats ?
+			fixed_param->num_peer_signal_stats :
+			fixed_param->num_peer_ac_tx_stats;
+	peer_num = peer_num > fixed_param->num_peer_ac_rx_stats ?
+			peer_num : fixed_param->num_peer_ac_rx_stats;
+
+	if (peer_num == 0) {
+		wmi_err("%s: Peer number is zero", __func__);
+		return -EINVAL;
+	}
+	wmi_debug("num_chan_cca_stats=%d tx_mpdu_aggr_array_len=%d tx_succ_mcs_array_len=%d tx_fail_mcs_array_len=%d tx_ppdu_delay_bin_size_ms=%d tx_ppdu_delay_array_len=%d rx_mpdu_aggr_array_len=%d rx_mcs_array_len=%d stats_period_array_len=%d",
+		  fixed_param->num_chan_cca_stats,
+		  fixed_param->tx_mpdu_aggr_array_len,
+		  fixed_param->tx_succ_mcs_array_len,
+		  fixed_param->tx_fail_mcs_array_len,
+		  fixed_param->tx_ppdu_delay_bin_size_ms,
+		  fixed_param->tx_ppdu_delay_array_len,
+		  fixed_param->rx_mpdu_aggr_array_len,
+		  fixed_param->rx_mcs_array_len,
+		  fixed_param->stats_period_array_len);
+	/*
+	 * Result buffer has a structure like this:
+	 *     ---------------------------------
+	 *     |      trigger_cond_i           |
+	 *     +-------------------------------+
+	 *     |      cca_chgd_bitmap          |
+	 *     +-------------------------------+
+	 *     |      sig_chgd_bitmap          |
+	 *     +-------------------------------+
+	 *     |      tx_chgd_bitmap           |
+	 *     +-------------------------------+
+	 *     |      rx_chgd_bitmap           |
+	 *     +-------------------------------+
+	 *     |      peer_num                 |
+	 *     +-------------------------------+
+	 *     |      channel_num              |
+	 *     +-------------------------------+
+	 *     |      time stamp               |
+	 *     +-------------------------------+
+	 *     |      tx_mpdu_aggr_array_len   |
+	 *     +-------------------------------+
+	 *     |      tx_succ_mcs_array_len    |
+	 *     +-------------------------------+
+	 *     |      tx_fail_mcs_array_len    |
+	 *     +-------------------------------+
+	 *     |      tx_delay_array_len       |
+	 *     +-------------------------------+
+	 *     |      rx_mpdu_aggr_array_len   |
+	 *     +-------------------------------+
+	 *     |      rx_mcs_array_len         |
+	 *     +-------------------------------+
+	 *     |      pointer to CCA stats     |
+	 *     +-------------------------------+
+	 *     |      CCA stats                |
+	 *     +-------------------------------+
+	 *     |      peer_stats               |----+
+	 *     +-------------------------------+    |
+	 *     | TX aggr/mcs parameters array  |    |
+	 *     | Length of this buffer is      |    |
+	 *     | not fixed.                    |<-+ |
+	 *     +-------------------------------+  | |
+	 *     |      per peer tx stats        |--+ |
+	 *     |         BE                    | <--+
+	 *     |         BK                    |    |
+	 *     |         VI                    |    |
+	 *     |         VO                    |    |
+	 *     +-------------------------------+    |
+	 *     | TX aggr/mcs parameters array  |    |
+	 *     | Length of this buffer is      |    |
+	 *     | not fixed.                    |<-+ |
+	 *     +-------------------------------+  | |
+	 *     |      peer peer rx stats       |--+ |
+	 *     |         BE                    | <--+
+	 *     |         BK                    |
+	 *     |         VI                    |
+	 *     |         VO                    |
+	 *     ---------------------------------
+	 */
+	buf_len = sizeof(struct wmi_link_layer_stats);
+
+	if (fixed_param->num_chan_cca_stats > (WMI_SVC_MSG_MAX_SIZE /
+				      sizeof(struct wmi_wifi_chan_cca_stats)))
+		goto excess_data;
+
+	buf_len += (fixed_param->num_chan_cca_stats *
+			sizeof(struct wmi_wifi_chan_cca_stats));
+	if (fixed_param->tx_mpdu_aggr_array_len > WMI_SVC_MSG_MAX_SIZE)
+		goto excess_data;
+	total_array_len = fixed_param->tx_mpdu_aggr_array_len;
+
+	if (fixed_param->tx_succ_mcs_array_len >
+			(WMI_SVC_MSG_MAX_SIZE - total_array_len))
+		goto excess_data;
+
+	total_array_len += fixed_param->tx_succ_mcs_array_len;
+
+	if (fixed_param->tx_fail_mcs_array_len >
+			(WMI_SVC_MSG_MAX_SIZE - total_array_len))
+		goto excess_data;
+
+	total_array_len += fixed_param->tx_fail_mcs_array_len;
+
+	if (fixed_param->tx_ppdu_delay_array_len >
+			(WMI_SVC_MSG_MAX_SIZE - total_array_len))
+		goto excess_data;
+
+	total_array_len += fixed_param->tx_ppdu_delay_array_len;
+
+	if (fixed_param->rx_mpdu_aggr_array_len >
+			(WMI_SVC_MSG_MAX_SIZE - total_array_len))
+		goto excess_data;
+
+	total_array_len += fixed_param->rx_mpdu_aggr_array_len;
+
+	if (fixed_param->rx_mcs_array_len >
+			(WMI_SVC_MSG_MAX_SIZE - total_array_len))
+		goto excess_data;
+
+	total_array_len += fixed_param->rx_mcs_array_len;
+
+	if (total_array_len > (WMI_SVC_MSG_MAX_SIZE /
+					(peer_num * WLAN_MAX_AC)))
+		goto excess_data;
+
+	total_peer_len = (sizeof(uint32_t) * total_array_len +
+			  sizeof(struct wmi_wifi_tx) +
+			  sizeof(struct wmi_wifi_rx)) *
+			  WLAN_MAX_AC +
+			  sizeof(struct wmi_wifi_ll_peer_stats);
+	buf_len += peer_num * total_peer_len;
+
+	wmi_debug("peer_num=%d wlan counter needs %d bytes", peer_num, buf_len);
+	return buf_len + 64;
+
+excess_data:
+	wmi_err("%s: excess wmi buffer: peer %d cca %d tx_mpdu %d ",
+		 __func__, peer_num, fixed_param->num_chan_cca_stats,
+		 fixed_param->tx_mpdu_aggr_array_len);
+	wmi_err("tx_succ %d tx_fail %d tx_ppdu %d ",
+		 fixed_param->tx_succ_mcs_array_len,
+		 fixed_param->tx_fail_mcs_array_len,
+		 fixed_param->tx_ppdu_delay_array_len);
+	wmi_err("rx_mpdu %d rx_mcs %d",
+		 fixed_param->rx_mpdu_aggr_array_len,
+		 fixed_param->rx_mcs_array_len);
+	return 0;
+}
+
+/**
+ * extract_ll_tx_stats() - Fix TX stats into result buffer
+ * @ll_stats: LL stats buffer
+ * @fix_param: parameters with fixed length in WMI event
+ * @param_buf: parameters without fixed length in WMI event
+ * @buf: buffer for result
+ * @buf_length: buffer length
+ *
+ * Return: TX stats result length
+ */
+static size_t extract_ll_tx_stats(struct wmi_link_layer_stats *ll_stats,
+			wmi_report_stats_event_fixed_param *fix_param,
+			WMI_REPORT_STATS_EVENTID_param_tlvs *param_buf,
+			uint8_t *buf,
+			uint32_t buf_length)
+{
+	uint8_t *result;
+	uint32_t i, j, k;
+	wmi_peer_ac_tx_stats *wmi_peer_tx;
+	wmi_tx_stats *wmi_tx;
+	struct wmi_wifi_tx *tx_stats;
+	struct wmi_wifi_ll_peer_stats *peer_stats;
+	uint8_t *counter;
+	uint32_t *tx_mpdu_aggr, *tx_succ_mcs, *tx_fail_mcs, *tx_delay;
+	uint32_t len, dst_len, param_len, tx_mpdu_aggr_array_len,
+		 tx_succ_mcs_array_len, tx_fail_mcs_array_len,
+		 tx_delay_array_len;
+
+	result = buf;
+	dst_len = buf_length;
+	tx_mpdu_aggr_array_len = fix_param->tx_mpdu_aggr_array_len;
+	ll_stats->tx_mpdu_aggr_array_len = tx_mpdu_aggr_array_len;
+	tx_succ_mcs_array_len = fix_param->tx_succ_mcs_array_len;
+	ll_stats->tx_succ_mcs_array_len = tx_succ_mcs_array_len;
+	tx_fail_mcs_array_len = fix_param->tx_fail_mcs_array_len;
+	ll_stats->tx_fail_mcs_array_len = tx_fail_mcs_array_len;
+	tx_delay_array_len = fix_param->tx_ppdu_delay_array_len;
+	ll_stats->tx_delay_array_len = tx_delay_array_len;
+	wmi_peer_tx = param_buf->peer_ac_tx_stats;
+	wmi_tx = param_buf->tx_stats;
+
+	len = fix_param->num_peer_ac_tx_stats *
+		WLAN_MAX_AC * tx_mpdu_aggr_array_len;
+	param_len = param_buf->num_tx_mpdu_aggr * sizeof(uint32_t);
+	if (len * sizeof(uint32_t) <= dst_len && len <= param_len) {
+		tx_mpdu_aggr = (uint32_t *)result;
+		counter = (uint8_t *)param_buf->tx_mpdu_aggr;
+		for (i = 0; i < len; i++) {
+			result[4 * i] = counter[2 * i];
+			result[4 * i + 1] = counter[2 * i + 1];
+		}
+		wmi_debug("Tx MPDU aggregation array:");
+		QDF_TRACE_HEX_DUMP(QDF_MODULE_ID_WMI, QDF_TRACE_LEVEL_DEBUG,
+				   param_buf->tx_mpdu_aggr,
+				   len * sizeof(uint16_t));
+		result += len * sizeof(uint32_t);
+		dst_len -= len * sizeof(uint32_t);
+	} else {
+		wmi_err("TX_MPDU_AGGR invalid arg, %d, %d, %d",
+			 len, dst_len, param_len);
+		tx_mpdu_aggr = NULL;
+	}
+
+	len = fix_param->num_peer_ac_tx_stats * WLAN_MAX_AC *
+		tx_succ_mcs_array_len;
+	param_len = param_buf->num_tx_succ_mcs * sizeof(uint32_t);
+	if (len * sizeof(uint32_t) <= dst_len && len <= param_len) {
+		tx_succ_mcs = (uint32_t *)result;
+		counter = (uint8_t *)param_buf->tx_succ_mcs;
+		for (i = 0; i < len; i++) {
+			result[4 * i] = counter[2 * i];
+			result[4 * i + 1] = counter[2 * i + 1];
+		}
+		wmi_debug("Tx success MCS array:");
+		QDF_TRACE_HEX_DUMP(QDF_MODULE_ID_WMI, QDF_TRACE_LEVEL_DEBUG,
+				   param_buf->tx_succ_mcs,
+				   len * sizeof(uint16_t));
+		len *= sizeof(uint32_t);
+		result += len;
+		dst_len -= len;
+	} else {
+		wmi_err("TX_SUCC_MCS invalid arg, %d, %d, %d",
+			 len, dst_len, param_len);
+		tx_succ_mcs = NULL;
+	}
+
+	len = fix_param->num_peer_ac_tx_stats * WLAN_MAX_AC *
+		tx_fail_mcs_array_len;
+	param_len = param_buf->num_tx_fail_mcs * sizeof(uint32_t);
+	if (len * sizeof(uint32_t) <= dst_len && len <= param_len) {
+		tx_fail_mcs = (uint32_t *)result;
+		counter = (uint8_t *)param_buf->tx_fail_mcs;
+		for (i = 0; i < len; i++) {
+			result[4 * i] = counter[2 * i];
+			result[4 * i + 1] = counter[2 * i + 1];
+		}
+		wmi_debug("Tx Failes MCS array:");
+		QDF_TRACE_HEX_DUMP(QDF_MODULE_ID_WMI, QDF_TRACE_LEVEL_DEBUG,
+				   param_buf->tx_fail_mcs,
+				   len * sizeof(uint16_t));
+		len *= sizeof(uint32_t);
+		result += len;
+		dst_len -= len;
+	} else {
+		wmi_err("TX_SUCC_MCS invalid arg, %d, %d, %d",
+			 len, dst_len, param_len);
+		tx_fail_mcs = NULL;
+	}
+
+	len = fix_param->num_peer_ac_tx_stats *
+		WLAN_MAX_AC * tx_delay_array_len;
+	param_len = param_buf->num_tx_ppdu_delay * sizeof(uint32_t);
+	if (len * sizeof(uint32_t) <= dst_len && len <= param_len) {
+		tx_delay = (uint32_t *)result;
+		counter = (uint8_t *)param_buf->tx_ppdu_delay;
+		for (i = 0; i < len; i++) {
+			result[4 * i] = counter[2 * i];
+			result[4 * i + 1] = counter[2 * i + 1];
+		}
+		wmi_debug("Tx PPDU delay array:");
+		QDF_TRACE_HEX_DUMP(QDF_MODULE_ID_WMI, QDF_TRACE_LEVEL_DEBUG,
+				   param_buf->tx_ppdu_delay,
+				   len * sizeof(uint16_t));
+		len *= sizeof(uint32_t);
+		result += len;
+		dst_len -= len;
+	} else {
+		wmi_err("TX_DELAY invalid arg, %d, %d, %d",
+			 len, dst_len, param_len);
+		tx_delay = NULL;
+	}
+
+	/* per peer tx stats */
+	peer_stats = ll_stats->peer_stats;
+
+	for (i = 0; i < fix_param->num_peer_ac_tx_stats; i++) {
+		uint32_t peer_id = wmi_peer_tx[i].peer_id;
+		struct wmi_wifi_tx *ac;
+		wmi_tx_stats *wmi_tx_stats;
+
+		for (j = 0; j < ll_stats->peer_num; j++) {
+			peer_stats += j;
+			if (peer_stats->peer_id == WIFI_INVALID_PEER_ID ||
+			    peer_stats->peer_id == peer_id)
+				break;
+		}
+
+		if (j < ll_stats->peer_num) {
+			peer_stats->peer_id = wmi_peer_tx[i].peer_id;
+			peer_stats->vdev_id = wmi_peer_tx[i].vdev_id;
+			tx_stats = (struct wmi_wifi_tx *)result;
+			for (k = 0; k < WLAN_MAX_AC; k++) {
+				wmi_tx_stats = &wmi_tx[i * WLAN_MAX_AC + k];
+				ac = &tx_stats[k];
+				WMA_FILL_TX_STATS(wmi_tx_stats, ac);
+				ac->mpdu_aggr_size = tx_mpdu_aggr;
+				ac->aggr_len = tx_mpdu_aggr_array_len *
+							sizeof(uint32_t);
+				ac->success_mcs = tx_succ_mcs;
+				ac->success_mcs_len = tx_succ_mcs_array_len *
+							sizeof(uint32_t);
+				ac->fail_mcs = tx_fail_mcs;
+				ac->fail_mcs_len = tx_fail_mcs_array_len *
+							sizeof(uint32_t);
+				ac->delay = tx_delay;
+				ac->delay_len = tx_delay_array_len *
+							sizeof(uint32_t);
+				peer_stats->ac_stats[k].tx_stats = ac;
+				peer_stats->ac_stats[k].type = k;
+				tx_mpdu_aggr += tx_mpdu_aggr_array_len;
+				tx_succ_mcs += tx_succ_mcs_array_len;
+				tx_fail_mcs += tx_fail_mcs_array_len;
+				tx_delay += tx_delay_array_len;
+			}
+			result += WLAN_MAX_AC * sizeof(struct wmi_wifi_tx);
+			dst_len -= WLAN_MAX_AC * sizeof(struct wmi_wifi_tx);
+		} else {
+			/*
+			 * Buffer for Peer TX counter overflow.
+			 * There is peer ID mismatch between TX, RX,
+			 * signal counters.
+			 */
+			wmi_err("One peer TX info is dropped.");
+
+			tx_mpdu_aggr += tx_mpdu_aggr_array_len * WLAN_MAX_AC;
+			tx_succ_mcs += tx_succ_mcs_array_len * WLAN_MAX_AC;
+			tx_fail_mcs += tx_fail_mcs_array_len * WLAN_MAX_AC;
+			tx_delay += tx_delay_array_len * WLAN_MAX_AC;
+		}
+	}
+	return result - buf;
+}
+
+/**
+ * extract_ll_rx_stats() - Fix RX stats into result buffer
+ * @ll_stats: LL stats buffer
+ * @fix_param: parameters with fixed length in WMI event
+ * @param_buf: parameters without fixed length in WMI event
+ * @buf: buffer for result
+ * @buf_length: buffer length
+ *
+ * Return: RX stats result length
+ */
+static size_t extract_ll_rx_stats(struct wmi_link_layer_stats *ll_stats,
+				wmi_report_stats_event_fixed_param *fix_param,
+				WMI_REPORT_STATS_EVENTID_param_tlvs *param_buf,
+				uint8_t *buf,
+				uint32_t buf_length)
+{
+	uint8_t *result;
+	uint32_t i, j, k;
+	uint32_t *rx_mpdu_aggr, *rx_mcs;
+	wmi_rx_stats *wmi_rx;
+	wmi_peer_ac_rx_stats *wmi_peer_rx;
+	struct wmi_wifi_rx *rx_stats;
+	struct wmi_wifi_ll_peer_stats *peer_stats;
+	uint32_t len, dst_len, param_len,
+		 rx_mpdu_aggr_array_len, rx_mcs_array_len;
+	uint8_t *counter;
+
+	rx_mpdu_aggr_array_len = fix_param->rx_mpdu_aggr_array_len;
+	ll_stats->rx_mpdu_aggr_array_len = rx_mpdu_aggr_array_len;
+	rx_mcs_array_len = fix_param->rx_mcs_array_len;
+	ll_stats->rx_mcs_array_len = rx_mcs_array_len;
+	wmi_peer_rx = param_buf->peer_ac_rx_stats;
+	wmi_rx = param_buf->rx_stats;
+
+	result = buf;
+	dst_len = buf_length;
+	len = fix_param->num_peer_ac_rx_stats *
+		  WLAN_MAX_AC * rx_mpdu_aggr_array_len;
+	param_len = param_buf->num_rx_mpdu_aggr * sizeof(uint32_t);
+	if (len * sizeof(uint32_t) <= dst_len && len <= param_len) {
+		rx_mpdu_aggr = (uint32_t *)result;
+		counter = (uint8_t *)param_buf->rx_mpdu_aggr;
+		for (i = 0; i < len; i++) {
+			result[4 * i] = counter[2 * i];
+			result[4 * i + 1] = counter[2 * i + 1];
+		}
+		wmi_debug("Rx PPDU delay array:");
+		QDF_TRACE_HEX_DUMP(QDF_MODULE_ID_WMI, QDF_TRACE_LEVEL_DEBUG,
+				   param_buf->rx_mpdu_aggr,
+				   len * sizeof(uint16_t));
+		len *= sizeof(uint32_t);
+		result += len;
+		dst_len -= len;
+	} else {
+		wmi_err("RX_MPDU_AGGR invalid arg %d, %d, %d",
+			 len, dst_len, param_len);
+		rx_mpdu_aggr = NULL;
+	}
+
+	len = fix_param->num_peer_ac_rx_stats *
+		  WLAN_MAX_AC * rx_mcs_array_len;
+	param_len = param_buf->num_rx_mcs * sizeof(uint32_t);
+	if (len * sizeof(uint32_t) <= dst_len && len <= param_len) {
+		rx_mcs = (uint32_t *)result;
+		counter = (uint8_t *)param_buf->rx_mcs;
+		for (i = 0; i < len; i++) {
+			result[4 * i] = counter[2 * i];
+			result[4 * i + 1] = counter[2 * i + 1];
+		}
+		wmi_debug("Rx MCS array:");
+		QDF_TRACE_HEX_DUMP(QDF_MODULE_ID_WMI, QDF_TRACE_LEVEL_DEBUG,
+				   param_buf->rx_mcs,
+				   len * sizeof(uint16_t));
+		len *= sizeof(uint32_t);
+		result += len;
+		dst_len -= len;
+	} else {
+		wmi_err("RX_MCS invalid arg %d, %d, %d",
+			 len, dst_len, param_len);
+		rx_mcs = NULL;
+	}
+
+	/* per peer rx stats */
+	peer_stats = ll_stats->peer_stats;
+	for (i = 0; i < fix_param->num_peer_ac_rx_stats; i++) {
+		uint32_t peer_id = wmi_peer_rx[i].peer_id;
+		struct wmi_wifi_rx *ac;
+		wmi_rx_stats *wmi_rx_stats;
+
+		for (j = 0; j < ll_stats->peer_num; j++) {
+			peer_stats += j;
+			if ((peer_stats->peer_id == WIFI_INVALID_PEER_ID) ||
+			    (peer_stats->peer_id == peer_id))
+				break;
+		}
+
+		if (j < ll_stats->peer_num) {
+			peer_stats->peer_id = wmi_peer_rx[i].peer_id;
+			peer_stats->vdev_id = wmi_peer_rx[i].vdev_id;
+			peer_stats->sta_ps_inds = wmi_peer_rx[i].sta_ps_inds;
+			peer_stats->sta_ps_durs = wmi_peer_rx[i].sta_ps_durs;
+			peer_stats->rx_probe_reqs =
+						wmi_peer_rx[i].rx_probe_reqs;
+			peer_stats->rx_oth_mgmts = wmi_peer_rx[i].rx_oth_mgmts;
+			rx_stats = (struct wmi_wifi_rx *)result;
+
+			for (k = 0; k < WLAN_MAX_AC; k++) {
+				wmi_rx_stats = &wmi_rx[i * WLAN_MAX_AC + k];
+				ac = &rx_stats[k];
+				WMA_FILL_RX_STATS(wmi_rx_stats, ac);
+				ac->mpdu_aggr = rx_mpdu_aggr;
+				ac->aggr_len = rx_mpdu_aggr_array_len *
+							sizeof(uint32_t);
+				ac->mcs = rx_mcs;
+				ac->mcs_len = rx_mcs_array_len *
+							sizeof(uint32_t);
+				peer_stats->ac_stats[k].rx_stats = ac;
+				peer_stats->ac_stats[k].type = k;
+				rx_mpdu_aggr += rx_mpdu_aggr_array_len;
+				rx_mcs += rx_mcs_array_len;
+			}
+			result += WLAN_MAX_AC * sizeof(struct wmi_wifi_rx);
+			dst_len -= WLAN_MAX_AC * sizeof(struct wmi_wifi_rx);
+		} else {
+			/*
+			 * Buffer for Peer RX counter overflow.
+			 * There is peer ID mismatch between TX, RX,
+			 * signal counters.
+			 */
+			wmi_err("One peer RX info is dropped.");
+			rx_mpdu_aggr += rx_mpdu_aggr_array_len * WLAN_MAX_AC;
+			rx_mcs += rx_mcs_array_len * WLAN_MAX_AC;
+		}
+	}
+	return result - buf;
+}
+
+/**
+ * extract_ll_stats_time_stamp() - extract log indication timestamp and
+ *  counting duration.
+ * @period - counting period on FW side
+ * @time_stamp - time stamp for user layer
+ *
+ * return: none
+ */
+static void etract_ll_stats_time_stamp(wmi_stats_period *period,
+				       struct wmi_wifi_ll_period *time_stamp)
+{
+	time_stamp->end_time = qdf_system_ticks();
+	if (!period) {
+		wmi_err("Period buf is null.");
+		time_stamp->duration = 0;
+		return;
+	}
+	wmi_debug("On fw side, start time is %d, start count is %d ",
+		  period->start_low_freq_msec, period->start_low_freq_count);
+	time_stamp->duration = period->end_low_freq_msec -
+				period->start_low_freq_msec;
+}
+
+/**
+ * extract_ll_stats_tlv() - handler for MAC layer counters.
+ * @handle - wma handle
+ * @event - FW event
+ * @len - length of FW event
+ *
+ * return: 0 success.
+ */
+static QDF_STATUS extract_ll_stats_tlv(wmi_unified_t wmi_handle, void *evt_buf,
+				       struct wmi_link_layer_stats *stats)
+{
+	WMI_REPORT_STATS_EVENTID_param_tlvs *param_buf;
+	wmi_report_stats_event_fixed_param *fixed_param;
+	wmi_chan_cca_stats *wmi_cca_stats;
+	wmi_peer_signal_stats *wmi_peer_signal;
+	wmi_peer_ac_rx_stats *wmi_peer_rx;
+	wmi_stats_period *period;
+	wmi_stats_interference *intf_stats;
+	struct wmi_link_layer_stats *ll_stats;
+	struct wmi_wifi_ll_peer_stats *peer_stats;
+	struct wmi_wifi_chan_cca_stats *cca_stats;
+	struct wmi_wifi_peer_signal_stats *peer_signal;
+	uint8_t *result;
+	uint32_t i, peer_num, result_size, dst_len;
+
+	param_buf = (WMI_REPORT_STATS_EVENTID_param_tlvs *)evt_buf;
+	fixed_param = param_buf->fixed_param;
+	wmi_cca_stats = param_buf->chan_cca_stats;
+	wmi_peer_signal = param_buf->peer_signal_stats;
+	wmi_peer_rx = param_buf->peer_ac_rx_stats;
+	period = param_buf->stats_period;
+	intf_stats = param_buf->stats_interference;
+	wmi_debug("TrigID=0x%x", fixed_param->trigger_cond_id);
+
+	/* Get the MAX of three peer numbers */
+	peer_num = fixed_param->num_peer_signal_stats >
+			fixed_param->num_peer_ac_tx_stats ?
+			fixed_param->num_peer_signal_stats :
+			fixed_param->num_peer_ac_tx_stats;
+	peer_num = peer_num > fixed_param->num_peer_ac_rx_stats ?
+			peer_num : fixed_param->num_peer_ac_rx_stats;
+
+	if (peer_num == 0) {
+		wmi_err("Peer number is zero");
+		return -EINVAL;
+	}
+
+	ll_stats = stats;
+	ll_stats->trigger_cond_id = fixed_param->trigger_cond_id;
+	ll_stats->cca_chgd_bitmap = fixed_param->cca_chgd_bitmap;
+	ll_stats->sig_chgd_bitmap = fixed_param->sig_chgd_bitmap;
+	ll_stats->tx_chgd_bitmap = fixed_param->tx_chgd_bitmap;
+	ll_stats->rx_chgd_bitmap = fixed_param->rx_chgd_bitmap;
+	ll_stats->channel_num = fixed_param->num_chan_cca_stats;
+	ll_stats->peer_num = peer_num;
+
+	if (intf_stats) {
+		wmi_debug("sa_ant_matrix=%d sa_ant_matrix=%d timestamp=%d",
+			  intf_stats->sa_ant_matrix, intf_stats->phyerr_count,
+			  intf_stats->timestamp);
+		ll_stats->maxtrix = intf_stats->sa_ant_matrix;
+		ll_stats->phyerr_count = intf_stats->phyerr_count;
+		ll_stats->timestamp = intf_stats->timestamp;
+	}
+
+	etract_ll_stats_time_stamp(period, &ll_stats->time_stamp);
+	result = (uint8_t *)ll_stats->stats;
+	result_size = ll_stats->buf_len;
+	peer_stats = (struct wmi_wifi_ll_peer_stats *)result;
+	ll_stats->peer_stats = peer_stats;
+
+	for (i = 0; i < peer_num; i++) {
+		peer_stats[i].peer_id = WIFI_INVALID_PEER_ID;
+		peer_stats[i].vdev_id = WIFI_INVALID_VDEV_ID;
+	}
+
+	/* Per peer signal */
+	dst_len = sizeof(struct wmi_wifi_peer_signal_stats);
+	for (i = 0; i < fixed_param->num_peer_signal_stats; i++) {
+		peer_stats[i].peer_id = wmi_peer_signal->peer_id;
+		peer_stats[i].vdev_id = wmi_peer_signal->vdev_id;
+		peer_signal = &peer_stats[i].peer_signal_stats;
+
+		wmi_debug("%d antennas for peer %d",
+			 wmi_peer_signal->num_chains_valid,
+			 wmi_peer_signal->peer_id);
+
+		peer_signal->vdev_id = wmi_peer_signal->vdev_id;
+		peer_signal->peer_id = wmi_peer_signal->peer_id;
+		peer_signal->num_chain =
+				wmi_peer_signal->num_chains_valid;
+		qdf_mem_copy(peer_signal->per_ant_snr,
+			     wmi_peer_signal->per_chain_snr,
+			     sizeof(peer_signal->per_ant_snr));
+		qdf_mem_copy(peer_signal->nf,
+			     wmi_peer_signal->per_chain_nf,
+			     sizeof(peer_signal->nf));
+		qdf_mem_copy(peer_signal->per_ant_rx_mpdus,
+			     wmi_peer_signal->per_antenna_rx_mpdus,
+			     sizeof(peer_signal->per_ant_rx_mpdus));
+		qdf_mem_copy(peer_signal->per_ant_tx_mpdus,
+			     wmi_peer_signal->per_antenna_tx_mpdus,
+			     sizeof(peer_signal->per_ant_tx_mpdus));
+		WMI_MAC_ADDR_TO_CHAR_ARRAY(&wmi_peer_signal->peer_macaddr,
+					   peer_stats[i].mac_address);
+		wmi_debug("Peer %d mac address is: %02x:%02x:%02x:%02x:%02x:%02x",
+			  peer_stats[i].peer_id,
+			  peer_stats[i].mac_address[0],
+			  peer_stats[i].mac_address[1],
+			  peer_stats[i].mac_address[2],
+			  peer_stats[i].mac_address[3],
+			  peer_stats[i].mac_address[4],
+			  peer_stats[i].mac_address[5]);
+		wmi_peer_signal++;
+	}
+
+	result += peer_num * sizeof(struct wmi_wifi_ll_peer_stats);
+	result_size -= peer_num * sizeof(struct wmi_wifi_ll_peer_stats);
+
+	cca_stats = (struct wmi_wifi_chan_cca_stats *)result;
+	ll_stats->cca = cca_stats;
+	dst_len = sizeof(struct wmi_wifi_chan_cca_stats);
+	for (i = 0; i < ll_stats->channel_num; i++) {
+		if (dst_len <= result_size) {
+			qdf_mem_copy(&cca_stats[i], &wmi_cca_stats->vdev_id,
+				     dst_len);
+			result_size -= dst_len;
+
+			if (result_size <= 0) {
+				wmi_err("No more buffer for peer signal counters");
+				return -EINVAL;
+			}
+		} else {
+			wmi_err("Invalid length of CCA.");
+			return -EINVAL;
+		}
+	}
+
+	result += i * sizeof(struct wmi_wifi_chan_cca_stats);
+	result += extract_ll_tx_stats(ll_stats, fixed_param, param_buf,
+				      result, result_size);
+
+	extract_ll_rx_stats(ll_stats, fixed_param, param_buf,
+			    result, result_size);
+
+	return 0;
+}
+
 void wmi_cp_stats_attach_tlv(wmi_unified_t wmi_handle)
 {
 	struct wmi_ops *ops = wmi_handle->ops;
@@ -913,6 +1648,9 @@ void wmi_cp_stats_attach_tlv(wmi_unified_t wmi_handle)
 	ops->extract_peer_extd_stats = extract_peer_extd_stats_tlv;
 	wmi_infra_cp_stats_ops_attach_tlv(ops);
 	ops->extract_pmf_bcn_protect_stats = extract_pmf_bcn_protect_stats_tlv,
+	ops->send_stats_threshold = send_stats_threshold_tlv;
+	ops->extract_ll_stats = extract_ll_stats_tlv;
+	ops->get_stats_buf_length = get_stats_buf_length_tlv;
 
 	wmi_mc_cp_stats_attach_tlv(wmi_handle);
 }
