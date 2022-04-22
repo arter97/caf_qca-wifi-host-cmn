@@ -1305,7 +1305,7 @@ uint8_t reg_freq_to_chan(struct wlan_objmgr_pdev *pdev,
 	struct wlan_regulatory_pdev_priv_obj *pdev_priv_obj;
 
 	if (freq == 0) {
-		reg_err_rl("Invalid freq %d", freq);
+		reg_debug_rl("Invalid freq %d", freq);
 		return 0;
 	}
 
@@ -1419,7 +1419,7 @@ uint16_t reg_legacy_chan_to_freq(struct wlan_objmgr_pdev *pdev,
 	uint16_t max_chan_range = MAX_5GHZ_CHANNEL;
 
 	if (chan_num == 0) {
-		reg_err_rl("Invalid channel %d", chan_num);
+		reg_debug_rl("Invalid channel %d", chan_num);
 		return 0;
 	}
 
