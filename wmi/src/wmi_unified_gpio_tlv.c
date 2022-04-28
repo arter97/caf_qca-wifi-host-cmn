@@ -19,6 +19,8 @@
 #include <wmi_unified_priv.h>
 #include <wmi_unified_gpio_api.h>
 
+/*to support antenna diversity*/
+#define GPIO_SUPPORT_DIVERSITY 1
 /**
  * convert_gpio_dir() - Function to convert unified gpio direction
  * @dir: pointer to enum gpio_direction
@@ -137,13 +139,14 @@ send_gpio_config_cmd_tlv(wmi_unified_t wmi_handle,
 
 	len = sizeof(*cmd);
 
+#ifndef GPIO_SUPPORT_DIVERSITY
 	/* Sanity Checks */
 	if (param->pin_pull_type >= WMI_HOST_GPIO_PULL_MAX ||
 	    param->pin_intr_mode >= WMI_HOST_GPIO_INTMODE_MAX ||
 	    param->pin_dir >= WMI_HOST_GPIO_DIR_MAX) {
 		return QDF_STATUS_E_FAILURE;
 	}
-
+#endif
 	buf = wmi_buf_alloc(wmi_handle, len);
 	if (!buf)
 		return QDF_STATUS_E_FAILURE;
@@ -154,9 +157,15 @@ send_gpio_config_cmd_tlv(wmi_unified_t wmi_handle,
 		       WMITLV_GET_STRUCT_TLVLEN(
 				wmi_gpio_config_cmd_fixed_param));
 	cmd->gpio_num = param->pin_num;
+#ifndef GPIO_SUPPORT_DIVERSITY
 	cmd->input = convert_gpio_direction(param->pin_dir);
 	cmd->pull_type = convert_gpio_pull_type(param->pin_pull_type);
 	cmd->intr_mode = convert_gpio_interrupt_mode(param->pin_intr_mode);
+#else
+	cmd->input = param->pin_dir;
+	cmd->pull_type = param->pin_pull_type;
+	cmd->intr_mode = param->pin_intr_mode;
+#endif
 	cmd->mux_config_val = param->mux_config_val;
 	cmd->drive = param->drive;
 	cmd->init_enable = param->init_enable;
@@ -198,10 +207,11 @@ send_gpio_output_cmd_tlv(wmi_unified_t wmi_handle,
 
 	len = sizeof(*cmd);
 
+#ifndef GPIO_SUPPORT_DIVERSITY
 	/* Sanity Checks */
 	if (param->pin_set >= WMI_HOST_GPIO_LEVEL_MAX)
 		return QDF_STATUS_E_FAILURE;
-
+#endif
 	buf = wmi_buf_alloc(wmi_handle, len);
 	if (!buf)
 		return QDF_STATUS_E_FAILURE;
@@ -212,7 +222,11 @@ send_gpio_output_cmd_tlv(wmi_unified_t wmi_handle,
 		       WMITLV_GET_STRUCT_TLVLEN(
 				wmi_gpio_output_cmd_fixed_param));
 	cmd->gpio_num = param->pin_num;
+#ifndef GPIO_SUPPORT_DIVERSITY
 	cmd->set = convert_gpio_output_value(param->pin_set);
+#else
+	cmd->set = param->pin_set;
+#endif
 
 	wmi_debug("GPIO num %d, set %d", cmd->gpio_num, cmd->set);
 	wmi_mtrace(WMI_GPIO_OUTPUT_CMDID, NO_SESSION, 0);
