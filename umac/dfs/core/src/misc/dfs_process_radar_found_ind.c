@@ -1158,6 +1158,24 @@ bool dfs_is_radarsource_agile(struct wlan_dfs *dfs,
 }
 #endif
 
+/**
+ * dfs_get_160m_cfreq_based_on_rf_detector_id() - Get 160MHZ center
+ * freq based on the detector id where radar is found.
+ * @dfs: Pointer to struct wlan_dfs
+ * @detector_id: Detector id
+ *
+ * Return - Center frequency in MHZ
+ */
+static qdf_freq_t
+dfs_get_160m_cfreq_based_on_rf_detector_id(struct wlan_dfs *dfs,
+					   uint8_t detector_id)
+{
+	if (detector_id == dfs_get_agile_detector_id(dfs))
+		return dfs->dfs_agile_precac_freq_mhz;
+	else
+		return dfs->dfs_curchan->dfs_ch_mhz_freq_seg2;
+}
+
 void
 dfs_convert_chan_to_freq_ranges(struct wlan_dfs *dfs,
 				struct dfs_channel *curchan,
@@ -1183,8 +1201,11 @@ dfs_convert_chan_to_freq_ranges(struct wlan_dfs *dfs,
 		start_freq = center_freq - 40;
 		end_freq = center_freq + 40;
 	} else if (WLAN_IS_CHAN_MODE_160(curchan)) {
-		start_freq = curchan->dfs_ch_mhz_freq_seg2 - 80;
-		end_freq = curchan->dfs_ch_mhz_freq_seg2 + 80;
+		center_freq =
+			dfs_get_160m_cfreq_based_on_rf_detector_id(dfs,
+								   detector_id);
+		start_freq = center_freq - 80;
+		end_freq = center_freq + 80;
 	} else if (WLAN_IS_CHAN_MODE_80_80(curchan)) {
 		if (detector_id == dfs_get_agile_detector_id(dfs) &&
 		    dfs->dfs_precac_chwidth == CH_WIDTH_160MHZ) {
