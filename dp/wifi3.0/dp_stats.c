@@ -5659,7 +5659,7 @@ dp_print_mu_be_ppdu_rates_info(struct cdp_pkt_type *pkt_type_array)
 
 			DP_PRINT_STATS("	%s = %d",
 				       dp_mu_be_rate_string[pkt_type][mcs].mcs_type,
-				       pkt_type_array->mcs_count[mcs]);
+				       pkt_type_array[pkt_type].mcs_count[mcs]);
 		}
 
 		DP_PRINT_STATS("\n");
@@ -5841,11 +5841,13 @@ static void dp_print_hist_stats(struct cdp_hist_stats *hstats,
 {
 	uint8_t index = 0;
 	uint64_t count = 0;
+	bool hist_delay_data = false;
 
 	for (index = 0; index < CDP_HIST_BUCKET_MAX; index++) {
 		count = hstats->hist.freq[index];
 		if (!count)
 			continue;
+		hist_delay_data = true;
 		if (hist_type == CDP_HIST_TYPE_SW_ENQEUE_DELAY)
 			DP_PRINT_STATS("%s:  Packets = %llu",
 				       dp_vow_str_sw_enq_delay(index),
@@ -5860,9 +5862,15 @@ static void dp_print_hist_stats(struct cdp_hist_stats *hstats,
 				       count);
 	}
 
-	DP_PRINT_STATS("Min = %u", hstats->min);
-	DP_PRINT_STATS("Max = %u", hstats->max);
-	DP_PRINT_STATS("Avg = %u\n", hstats->avg);
+	/*
+	 * If none of the buckets have any packets,
+	 * there is no need to display the stats.
+	 */
+	if (hist_delay_data) {
+		DP_PRINT_STATS("Min = %u", hstats->min);
+		DP_PRINT_STATS("Max = %u", hstats->max);
+		DP_PRINT_STATS("Avg = %u\n", hstats->avg);
+	}
 }
 
 /*
@@ -5964,14 +5972,14 @@ void dp_peer_print_tx_delay_stats(struct dp_pdev *pdev,
 	for (tid = 0; tid < CDP_MAX_DATA_TIDS; tid++) {
 		DP_PRINT_STATS("----TID: %d----", tid);
 		DP_PRINT_STATS("Software Enqueue Delay:");
-		qdf_mem_zero(&hist_stats, sizeof(*(&hist_stats)));
+		dp_hist_init(&hist_stats, CDP_HIST_TYPE_SW_ENQEUE_DELAY);
 		dp_accumulate_delay_tid_stats(soc, delay_stats->delay_tid_stats,
 					      &hist_stats, tid,
 					      CDP_HIST_TYPE_SW_ENQEUE_DELAY);
 		dp_print_hist_stats(&hist_stats, CDP_HIST_TYPE_SW_ENQEUE_DELAY);
-		qdf_mem_zero(&hist_stats, sizeof(*(&hist_stats)));
 
 		DP_PRINT_STATS("Hardware Transmission Delay:");
+		dp_hist_init(&hist_stats, CDP_HIST_TYPE_HW_COMP_DELAY);
 		dp_accumulate_delay_tid_stats(soc, delay_stats->delay_tid_stats,
 					      &hist_stats, tid,
 					      CDP_HIST_TYPE_HW_COMP_DELAY);
@@ -6011,7 +6019,7 @@ void dp_peer_print_rx_delay_stats(struct dp_pdev *pdev,
 	for (tid = 0; tid < CDP_MAX_DATA_TIDS; tid++) {
 		DP_PRINT_STATS("----TID: %d----", tid);
 		DP_PRINT_STATS("Rx Reap2stack Deliver Delay:");
-		qdf_mem_zero(&hist_stats, sizeof(*(&hist_stats)));
+		dp_hist_init(&hist_stats, CDP_HIST_TYPE_REAP_STACK);
 		dp_accumulate_delay_tid_stats(soc, delay_stats->delay_tid_stats,
 					      &hist_stats, tid,
 					      CDP_HIST_TYPE_REAP_STACK);
@@ -6044,6 +6052,12 @@ void dp_print_peer_txrx_stats_be(struct cdp_peer_stats *peer_stats,
 			       peer_stats->tx.bw[CMN_BW_80MHZ],
 			       peer_stats->tx.bw[CMN_BW_160MHZ],
 			       peer_stats->tx.bw[CMN_BW_320MHZ]);
+		DP_PRINT_STATS("Punctured BW Counts = NO_PUNC %d 20MHz %d 40MHz %d 80MHz %d 120MHz %d\n",
+			       peer_stats->tx.punc_bw[NO_PUNCTURE],
+			       peer_stats->tx.punc_bw[PUNCTURED_20MHZ],
+			       peer_stats->tx.punc_bw[PUNCTURED_40MHZ],
+			       peer_stats->tx.punc_bw[PUNCTURED_80MHZ],
+			       peer_stats->tx.punc_bw[PUNCTURED_120MHZ]);
 		DP_PRINT_STATS("RU Locations RU[26 52 52_26 106 106_26 242 484 484_242 996 996_484 996_484_242 2X996 2X996_484 3X996 3X996_484 4X996]:");
 		for (i = 0; i < RU_INDEX_MAX; i++)
 			DP_PRINT_STATS("%s:  %d", cdp_ru_string[i].ru_type,
@@ -6059,6 +6073,12 @@ void dp_print_peer_txrx_stats_be(struct cdp_peer_stats *peer_stats,
 			       peer_stats->rx.bw[CMN_BW_80MHZ],
 			       peer_stats->rx.bw[CMN_BW_160MHZ],
 			       peer_stats->rx.bw[CMN_BW_320MHZ]);
+		DP_PRINT_STATS("Punctured BW Counts = NO_PUNC %d 20MHz %d 40MHz %d 80MHz %d 120MHz %d\n",
+			       peer_stats->rx.punc_bw[NO_PUNCTURE],
+			       peer_stats->rx.punc_bw[PUNCTURED_20MHZ],
+			       peer_stats->rx.punc_bw[PUNCTURED_40MHZ],
+			       peer_stats->rx.punc_bw[PUNCTURED_80MHZ],
+			       peer_stats->rx.punc_bw[PUNCTURED_120MHZ]);
 		dp_print_common_ppdu_rates_info(&peer_stats->rx.su_be_ppdu_cnt,
 						DOT11_BE);
 		dp_print_mu_be_ppdu_rates_info(&peer_stats->rx.mu_be_ppdu_cnt[0]);
@@ -7983,7 +8003,7 @@ QDF_STATUS dp_txrx_get_soc_stats(struct cdp_soc_t *soc_hdl,
 	uint8_t cpus;
 
 	/* soc tx stats */
-	soc_stats->tx.egress = soc->stats.tx.egress;
+	soc_stats->tx.egress = soc->stats.tx.egress[0];
 	soc_stats->tx.tx_invalid_peer = soc->stats.tx.tx_invalid_peer;
 	for (inx = 0; inx < CDP_MAX_TX_DATA_RINGS; inx++) {
 		soc_stats->tx.tx_hw_enq[inx] = soc->stats.tx.tcl_enq[inx];

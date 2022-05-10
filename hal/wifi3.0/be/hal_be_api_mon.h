@@ -850,7 +850,7 @@ hal_tx_status_get_next_tlv(uint8_t *tx_tlv) {
 	tlv_tag = HAL_RX_GET_USER_TLV32_TYPE(tx_tlv);
 
 	return (uint8_t *)(((unsigned long)(tx_tlv + tlv_len +
-					    HAL_RX_TLV32_HDR_SIZE + 3)) & (~3));
+					    HAL_RX_TLV32_HDR_SIZE + 7)) & (~7));
 }
 
 /**
@@ -907,17 +907,19 @@ hal_txmon_status_get_num_users(hal_soc_handle_t hal_soc_hdl,
  * hal_txmon_status_free_buffer() - api to free status buffer
  * @hal_soc: HAL soc handle
  * @status_frag: qdf_frag_t buffer
+ * @end_offset: end offset within buffer that has valid data
  *
- * Return void
+ * Return status
  */
-static inline void
+static inline QDF_STATUS
 hal_txmon_status_free_buffer(hal_soc_handle_t hal_soc_hdl,
-			     qdf_frag_t status_frag)
+			     qdf_frag_t status_frag,
+			     uint32_t end_offset)
 {
 	struct hal_soc *hal_soc = (struct hal_soc *)hal_soc_hdl;
 
-	if (hal_soc->ops->hal_txmon_status_free_buffer)
-		hal_soc->ops->hal_txmon_status_free_buffer(status_frag);
+	return hal_soc->ops->hal_txmon_status_free_buffer(status_frag,
+							  end_offset);
 }
 
 /**
@@ -1412,7 +1414,20 @@ hal_rx_parse_eht_sig_hdr(struct hal_soc *hal_soc, uint8_t *tlv,
 	return HAL_TLV_STATUS_PPDU_NOT_DONE;
 }
 
-#ifdef WLAN_RX_MON_PARSE_CMN_USER_INFO
+#ifdef WLAN_FEATURE_11BE
+static inline void
+hal_rx_parse_punctured_pattern(struct phyrx_common_user_info *cmn_usr_info,
+			       struct hal_rx_ppdu_info *ppdu_info)
+{
+	ppdu_info->rx_status.punctured_pattern = cmn_usr_info->puncture_bitmap;
+}
+#else
+static inline void
+hal_rx_parse_punctured_pattern(struct phyrx_common_user_info *cmn_usr_info,
+			       struct hal_rx_ppdu_info *ppdu_info)
+{
+}
+#endif
 static inline uint32_t
 hal_rx_parse_cmn_usr_info(struct hal_soc *hal_soc, uint8_t *tlv,
 			  struct hal_rx_ppdu_info *ppdu_info)
@@ -1432,16 +1447,10 @@ hal_rx_parse_cmn_usr_info(struct hal_soc *hal_soc, uint8_t *tlv,
 					     QDF_MON_STATUS_EHT_LTF_SHIFT);
 	ppdu_info->rx_status.ltf_size = cmn_usr_info->ltf_size;
 
+	hal_rx_parse_punctured_pattern(cmn_usr_info, ppdu_info);
+
 	return HAL_TLV_STATUS_PPDU_NOT_DONE;
 }
-#else
-static inline uint32_t
-hal_rx_parse_cmn_usr_info(struct hal_soc *hal_soc, uint8_t *tlv,
-			  struct hal_rx_ppdu_info *ppdu_info)
-{
-	return HAL_TLV_STATUS_PPDU_NOT_DONE;
-}
-#endif
 
 static inline enum ieee80211_eht_ru_size
 hal_rx_mon_hal_ru_size_to_ieee80211_ru_size(struct hal_soc *hal_soc,
@@ -1643,12 +1652,30 @@ hal_rx_status_get_mpdu_retry_cnt(struct hal_rx_ppdu_info *ppdu_info,
 			HAL_RX_GET_64(rx_tlv, RX_PPDU_END_USER_STATS,
 				      RETRIED_MPDU_COUNT);
 }
+
+static inline void
+hal_rx_status_get_mon_buf_addr(uint8_t *rx_tlv,
+			       struct hal_rx_ppdu_info *ppdu_info)
+{
+	struct mon_buffer_addr *addr = (struct mon_buffer_addr *)rx_tlv;
+
+	ppdu_info->packet_info.sw_cookie = (((uint64_t)addr->buffer_virt_addr_63_32 << 32) |
+					    (addr->buffer_virt_addr_31_0));
+	ppdu_info->packet_info.dma_length = addr->dma_length;
+	ppdu_info->packet_info.msdu_continuation = addr->msdu_continuation;
+
+}
 #else
 static inline void
 hal_rx_status_get_mpdu_retry_cnt(struct hal_rx_ppdu_info *ppdu_info,
 				 void *rx_tlv)
 {
 		ppdu_info->rx_status.mpdu_retry_cnt = 0;
+}
+static inline void
+hal_rx_status_get_mon_buf_addr(uint8_t *rx_tlv,
+			       struct hal_rx_ppdu_info *ppdu_info)
+{
 }
 #endif
 
@@ -1685,6 +1712,7 @@ hal_rx_status_get_tlv_info_generic_be(void *rx_tlv_hdr, void *ppduinfo,
 	qdf_trace_hex_dump(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_DEBUG,
 			   rx_tlv, tlv_len);
 
+	ppdu_info->user_id = user_id;
 	switch (tlv_tag) {
 	case WIFIRX_PPDU_START_E:
 	{
@@ -2746,7 +2774,10 @@ hal_rx_status_get_tlv_info_generic_be(void *rx_tlv_hdr, void *ppduinfo,
 
 		ppdu_info->nac_info.mcast_bcast =
 			rx_mpdu_start->rx_mpdu_info_details.mcast_bcast;
-		break;
+		ppdu_info->mpdu_info[user_id].decap_type =
+			rx_mpdu_start->rx_mpdu_info_details.decap_type;
+
+		return HAL_TLV_STATUS_MPDU_START;
 	}
 	case WIFIRX_MPDU_END_E:
 		ppdu_info->user_id = user_id;
@@ -2768,13 +2799,23 @@ hal_rx_status_get_tlv_info_generic_be(void *rx_tlv_hdr, void *ppduinfo,
 				rx_msdu_end->flow_idx_invalid;
 			ppdu_info->rx_msdu_info[user_id].flow_idx =
 				rx_msdu_end->flow_idx;
+			ppdu_info->msdu[user_id].first_msdu =
+				rx_msdu_end->first_msdu;
+			ppdu_info->msdu[user_id].last_msdu =
+				rx_msdu_end->last_msdu;
+			ppdu_info->msdu[user_id].msdu_len =
+				rx_msdu_end->msdu_length;
+			ppdu_info->msdu[user_id].user_rssi =
+				rx_msdu_end->user_rssi;
+			ppdu_info->msdu[user_id].reception_type =
+				rx_msdu_end->reception_type;
 		}
 		return HAL_TLV_STATUS_MSDU_END;
 		}
 	case WIFIMON_BUFFER_ADDR_E:
-	{
+		hal_rx_status_get_mon_buf_addr(rx_tlv, ppdu_info);
+
 		return HAL_TLV_STATUS_MON_BUF_ADDR;
-	}
 	case 0:
 		return HAL_TLV_STATUS_PPDU_DONE;
 

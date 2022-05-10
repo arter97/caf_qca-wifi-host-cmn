@@ -1173,6 +1173,7 @@ struct peer_assoc_ml_partner_links {
  * @peer_eht_rx_mcs_set: Peer EHT RX MCS MAP
  * @peer_eht_tx_mcs_set: Peer EHT TX MCS MAP
  * @peer_eht_ppet: Peer EHT PPET info
+ * @puncture_bitmap: 11be static puncture bitmap
  * @peer_ppet: Peer HE PPET info
  * @peer_bss_max_idle_option: Peer BSS Max Idle option update
  * @akm: AKM info
@@ -1251,8 +1252,8 @@ struct peer_assoc_params {
 	uint32_t peer_eht_mcs_count;
 	uint32_t peer_eht_rx_mcs_set[WMI_HOST_MAX_EHT_RATE_SET];
 	uint32_t peer_eht_tx_mcs_set[WMI_HOST_MAX_EHT_RATE_SET];
-	uint16_t puncture_pattern;
 	struct wmi_host_ppe_threshold peer_eht_ppet;
+	uint16_t puncture_bitmap;
 #endif
 	struct wmi_host_ppe_threshold peer_ppet;
 	u_int8_t peer_bsscolor_rept_info;
@@ -4600,12 +4601,12 @@ struct ftm_time_sync_start_stop_params {
 /**
  * struct wlan_time_sync_qtime_pair- Get wlan time sync qtime pair value
  * @vdev_id: vdev id
- * @qtime_master: qtimer value of master
- * @qtime_slave: qtimer value of slave
+ * @qtime_initiator: qtimer value of initiator
+ * @qtime_target: qtimer value of target
  */
 struct wlan_time_sync_qtime_pair {
-	uint64_t qtime_master;
-	uint64_t qtime_slave;
+	uint64_t qtime_initiator;
+	uint64_t qtime_target;
 };
 
 /**
@@ -4902,7 +4903,7 @@ typedef enum {
 	wmi_roam_pmkid_request_event_id,
 #ifdef FEATURE_WLAN_TIME_SYNC_FTM
 	wmi_wlan_time_sync_ftm_start_stop_event_id,
-	wmi_wlan_time_sync_q_master_slave_offset_eventid,
+	wmi_wlan_time_sync_q_initiator_target_offset_eventid,
 #endif
 	wmi_roam_scan_chan_list_id,
 	wmi_muedca_params_config_eventid,
@@ -4940,6 +4941,10 @@ typedef enum {
 	wmi_resmgr_chan_time_quota_changed_eventid,
 #endif
 	wmi_peer_rx_pn_response_event_id,
+	wmi_extract_pktlog_decode_info_eventid,
+#ifdef QCA_RSSI_DB2DBM
+	wmi_pdev_rssi_dbm_conversion_params_info_eventid,
+#endif
 	wmi_events_max,
 } wmi_conv_event_id;
 
@@ -5588,6 +5593,7 @@ typedef enum {
 	wmi_service_rtt_11az_ntb_support,
 	wmi_service_rtt_11az_tb_support,
 #endif
+	wmi_service_pktlog_decode_info_support,
 	wmi_services_max,
 } wmi_conv_service_ids;
 #define WMI_SERVICE_UNAVAILABLE 0xFFFF
@@ -5746,6 +5752,7 @@ struct wmi_host_fw_abi_ver {
  * @afc_timer_check_disable: Disables AFC Timer related checks in FW
  * @afc_req_id_check_disable: Disables AFC Request ID check in FW
  * @carrier_profile_config: Configuration for per-carrier profile
+ * @reo_qdesc_shared_addr_table_enabled: Reo shared qref enhancement enabled
  */
 typedef struct {
 	uint32_t num_vdevs;
@@ -5867,6 +5874,7 @@ typedef struct {
 	bool afc_req_id_check_disable;
 	uint32_t carrier_profile_config;
 	bool sawf;
+	bool reo_qdesc_shared_addr_table_enabled;
 } target_resource_config;
 
 /**

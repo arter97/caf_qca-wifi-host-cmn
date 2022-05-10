@@ -233,7 +233,7 @@ static inline QDF_STATUS dp_monitor_peer_detach(struct dp_soc *soc,
 }
 
 static inline struct cdp_peer_rate_stats_ctx*
-dp_monitor_peer_get_rdkstats_ctx(struct dp_soc *soc, struct dp_peer *peer)
+dp_monitor_peer_get_peerstats_ctx(struct dp_soc *soc, struct dp_peer *peer)
 {
 	return NULL;
 }
@@ -696,6 +696,12 @@ void dp_monitor_pktlog_start_reap_timer(struct dp_pdev *pdev)
 static inline bool dp_monitor_is_configured(struct dp_pdev *pdev)
 {
 	return false;
+}
+
+static inline void
+dp_mon_rx_hdr_length_set(struct dp_soc *soc, uint32_t *msg_word,
+			 struct htt_rx_ring_tlv_filter *tlv_filter)
+{
 }
 #endif
 
@@ -1507,6 +1513,10 @@ void dp_update_vdev_stats_on_peer_unmap(struct dp_vdev *vdev,
 				_tgtobj->rx.mu_be_ppdu_cnt[mu_type].mcs_count[i] += \
 					_srcobj->rx.mu_be_ppdu_cnt[mu_type].mcs_count[i]; \
 			} \
+		} \
+		for (i = 0; i < MAX_PUNCTURED_MODE; i++) { \
+			_tgtobj->tx.punc_bw[i] += _srcobj->tx.punc_bw[i]; \
+			_tgtobj->rx.punc_bw[i] += _srcobj->rx.punc_bw[i]; \
 		} \
 	} while (0)
 #else

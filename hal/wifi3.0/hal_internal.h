@@ -1061,7 +1061,8 @@ struct hal_hw_txrx_ops {
 					       qdf_frag_t status_frag);
 	uint32_t (*hal_txmon_status_get_num_users)(void *tx_tlv_hdr,
 						   uint8_t *num_users);
-	void (*hal_txmon_status_free_buffer)(qdf_frag_t status_frag);
+	QDF_STATUS (*hal_txmon_status_free_buffer)(qdf_frag_t status_frag,
+						   uint32_t end_offset);
 #endif /* QCA_MONITOR_2_0_SUPPORT */
 	void (*hal_reo_shared_qaddr_setup)(hal_soc_handle_t hal_soc_hdl);
 	void (*hal_reo_shared_qaddr_init)(hal_soc_handle_t hal_soc_hdl);
@@ -1073,6 +1074,7 @@ struct hal_hw_txrx_ops {
 #ifdef WLAN_FEATURE_MARK_FIRST_WAKEUP_PACKET
 	uint8_t (*hal_get_first_wow_wakeup_packet)(uint8_t *buf);
 #endif
+	void (*hal_reo_shared_qaddr_cache_clear)(hal_soc_handle_t hal_soc_hdl);
 };
 
 /**

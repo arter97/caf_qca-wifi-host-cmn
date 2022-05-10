@@ -79,6 +79,8 @@ void dp_mon_filter_show_filter(struct dp_mon_pdev *mon_pdev,
 			    tlv_filter->ppdu_end_user_stats_ext);
 	DP_MON_FILTER_PRINT("ppdu_end_status_done: %d",
 			    tlv_filter->ppdu_end_status_done);
+	DP_MON_FILTER_PRINT("ppdu_start_user_info: %d",
+			    tlv_filter->ppdu_start_user_info);
 	DP_MON_FILTER_PRINT("header_per_msdu: %d", tlv_filter->header_per_msdu);
 	DP_MON_FILTER_PRINT("enable_fp: %d", tlv_filter->enable_fp);
 	DP_MON_FILTER_PRINT("enable_md: %d", tlv_filter->enable_md);
@@ -459,6 +461,13 @@ void dp_mon_filter_setup_mon_mode(struct dp_pdev *pdev)
 	mon_ops = dp_mon_ops_get(pdev->soc);
 	if (mon_ops && mon_ops->mon_filter_setup_rx_mon_mode)
 		mon_ops->mon_filter_setup_rx_mon_mode(pdev);
+}
+
+void dp_mon_filter_setup_tx_mon_mode(struct dp_pdev *pdev)
+{
+	struct dp_mon_ops *mon_ops = NULL;
+
+	mon_ops = dp_mon_ops_get(pdev->soc);
 	if (mon_ops && mon_ops->mon_filter_setup_tx_mon_mode)
 		mon_ops->mon_filter_setup_tx_mon_mode(pdev);
 }
@@ -470,8 +479,6 @@ void dp_mon_filter_reset_mon_mode(struct dp_pdev *pdev)
 	mon_ops = dp_mon_ops_get(pdev->soc);
 	if (mon_ops && mon_ops->mon_filter_reset_rx_mon_mode)
 		mon_ops->mon_filter_reset_rx_mon_mode(pdev);
-	if (mon_ops && mon_ops->mon_filter_reset_tx_mon_mode)
-		mon_ops->mon_filter_reset_tx_mon_mode(pdev);
 }
 
 #ifdef WDI_EVENT_ENABLE
@@ -560,11 +567,24 @@ QDF_STATUS dp_mon_filter_update(struct dp_pdev *pdev)
 		return QDF_STATUS_E_FAILURE;
 	}
 
-	if (mon_ops && mon_ops->tx_mon_filter_update)
-		mon_ops->tx_mon_filter_update(pdev);
-
 	if (mon_ops && mon_ops->rx_mon_filter_update)
 		mon_ops->rx_mon_filter_update(pdev);
+
+	return QDF_STATUS_SUCCESS;
+}
+
+QDF_STATUS dp_tx_mon_filter_update(struct dp_pdev *pdev)
+{
+	struct dp_mon_ops *mon_ops = NULL;
+
+	mon_ops = dp_mon_ops_get(pdev->soc);
+	if (!mon_ops) {
+		dp_mon_filter_err("Mon ops uninitialized");
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	if (mon_ops && mon_ops->tx_mon_filter_update)
+		mon_ops->tx_mon_filter_update(pdev);
 
 	return QDF_STATUS_SUCCESS;
 }

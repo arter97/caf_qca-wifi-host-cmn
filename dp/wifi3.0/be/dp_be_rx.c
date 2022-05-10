@@ -1109,9 +1109,11 @@ bool dp_rx_mlo_igmp_handler(struct dp_soc *soc,
 	struct dp_vdev_be *be_vdev = dp_get_be_vdev_from_dp_vdev(vdev);
 	struct dp_soc_be *be_soc = dp_get_be_soc_from_dp_soc(soc);
 
-	if (!(qdf_nbuf_is_ipv4_igmp_pkt(buf) ||
-	      qdf_nbuf_is_ipv6_igmp_pkt(buf)))
+	if (!(qdf_nbuf_is_ipv4_igmp_pkt(nbuf) ||
+	      qdf_nbuf_is_ipv6_igmp_pkt(nbuf)))
 		return false;
+
+	qdf_nbuf_set_next(nbuf, NULL);
 
 	if (vdev->mcast_enhancement_en || be_vdev->mcast_primary)
 		goto send_pkt;
@@ -1143,7 +1145,7 @@ send_pkt:
 #else
 bool dp_rx_mlo_igmp_handler(struct dp_soc *soc,
 			    struct dp_vdev *vdev,
-			    struct dp_peer *peer,
+			    struct dp_txrx_peer *peer,
 			    qdf_nbuf_t nbuf)
 {
 	return false;
@@ -1270,8 +1272,10 @@ dp_rx_intrabss_ucast_check_be(qdf_nbuf_t nbuf,
 
 	dest_chip_id = HAL_RX_DEST_CHIP_ID_GET(msdu_metadata);
 	qdf_assert_always(dest_chip_id <= (DP_MLO_MAX_DEST_CHIP_ID - 1));
+	da_peer_id = HAL_RX_PEER_ID_GET(msdu_metadata);
 
-	if (be_soc->mlo_enabled) {
+	/* TA is MLD peer */
+	if (be_soc->mlo_enabled && ta_peer->mld_peer) {
 		/* validate chip_id, get a ref, and re-assign soc */
 		params->dest_soc =
 			dp_mlo_get_soc_ref_by_chip_id(be_soc->ml_ctxt,
@@ -1280,8 +1284,6 @@ dp_rx_intrabss_ucast_check_be(qdf_nbuf_t nbuf,
 			return false;
 	}
 
-	da_peer_id = dp_rx_peer_metadata_peer_id_get_be(params->dest_soc,
-							msdu_metadata->da_idx);
 	da_peer = dp_txrx_peer_get_ref_by_id(params->dest_soc, da_peer_id,
 					     &txrx_ref_handle, DP_MOD_ID_RX);
 	if (!da_peer)
@@ -1308,6 +1310,12 @@ dp_rx_intrabss_ucast_check_be(qdf_nbuf_t nbuf,
 
 	/* MLO specific Intra-BSS check */
 	if (dp_rx_intrabss_fwd_mlo_allow(ta_peer, da_peer)) {
+		/* TA is legacy peer */
+		if (!ta_peer->mld_peer) {
+			params->dest_soc = da_peer->vdev->pdev->soc;
+			ret = true;
+			goto rel_da_peer;
+		}
 		/* index of soc in the array */
 		soc_idx = dest_chip_id << DP_MLO_DEST_CHIP_ID_SHIFT;
 		if (!(be_vdev->partner_vdev_list[soc_idx][0] ==

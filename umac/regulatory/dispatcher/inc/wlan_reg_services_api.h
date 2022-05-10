@@ -995,6 +995,27 @@ wlan_reg_get_opclass_details(struct wlan_objmgr_pdev *pdev,
 			     bool global_tbl_lookup);
 
 /**
+ * wlan_reg_get_opclass_for_cur_hwmode() - Get details about the
+ * opclass table for the current hwmode.
+ * @pdev: Pointer to pdev.
+ * @reg_ap_cap: Pointer to reg_ap_cap.
+ * @n_opclasses: Pointer to number of opclasses.
+ * @max_supp_op_class: Maximum number of operating classes supported.
+ * @global_tbl_lookup: Whether to lookup global op class tbl.
+ * @max_chwidth: Maximum channel width supported by cur hwmode
+ * @is_80p80_supp: Bool to indicate if 80p80 is supported.
+ *
+ * Return: QDF_STATUS_SUCCESS if success, else return QDF_STATUS_FAILURE.
+ */
+QDF_STATUS
+wlan_reg_get_opclass_for_cur_hwmode(struct wlan_objmgr_pdev *pdev,
+				    struct regdmn_ap_cap_opclass_t *reg_ap_cap,
+				    uint8_t *n_opclasses,
+				    uint8_t max_supp_op_class,
+				    bool global_tbl_lookup,
+				    enum phy_ch_width max_chwidth,
+				    bool is_80p80_supp);
+/**
  * wlan_reg_get_cc_and_src () - get country code and src
  * @psoc: psoc ptr
  * @alpha2: country code alpha2
@@ -1363,7 +1384,7 @@ wlan_reg_get_5g_bonded_channel_state_for_freq(struct wlan_objmgr_pdev *pdev,
  * state.
  * @pdev: The physical dev to program country code or regdomain
  * @freq: channel frequency.
- * @bw: channel band width
+ * @ch_params: channel parameters
  * @in_6g_pwr_type: 6g power type which decides 6G channel list lookup.
  *
  * Return: channel state
@@ -1371,7 +1392,7 @@ wlan_reg_get_5g_bonded_channel_state_for_freq(struct wlan_objmgr_pdev *pdev,
 enum channel_state
 wlan_reg_get_5g_bonded_channel_state_for_pwrmode(struct wlan_objmgr_pdev *pdev,
 						 qdf_freq_t freq,
-						 enum phy_ch_width bw,
+						 struct ch_params *ch_params,
 						 enum supported_6g_pwr_types
 						 in_6g_pwr_type);
 #endif
@@ -1441,7 +1462,7 @@ enum channel_state wlan_reg_get_channel_state_from_secondary_list_for_freq(
  * @ch_width: Channel width of type 'enum phy_ch_width'.
  * @band_center_320: Center frequency of 320MHZ channel.
  * @chan_list: Pointer to struct reg_channel_list to be filled (Output param).
- * @is_treat_nol_chan_as_disabled: bool to treat nol channel as enabled or
+ * @treat_nol_chan_as_disabled: bool to treat nol channel as enabled or
  * disabled. If set to true, nol chan is considered as disabled in chan search.
  *
  * Return: None
@@ -1452,7 +1473,7 @@ void wlan_reg_fill_channel_list(struct wlan_objmgr_pdev *pdev,
 				enum phy_ch_width ch_width,
 				qdf_freq_t band_center_320,
 				struct reg_channel_list *chan_list,
-				bool is_treat_nol_chan_as_disabled);
+				bool treat_nol_chan_as_disabled);
 
 /**
  * wlan_reg_is_punc_bitmap_valid() - is puncture bitmap valid or not
@@ -1484,7 +1505,7 @@ void wlan_reg_set_create_punc_bitmap(struct ch_params *ch_params,
  * @band_center_320: Center frequency of 320MHZ channel.
  * @chan_list: Pointer to struct reg_channel_list to be filled (Output param).
  * @in_6g_pwr_type: 6g power type which decides 6G channel list lookup.
- * @is_treat_nol_chan_as_disabled: bool to treat nol channel as enabled or
+ * @treat_nol_chan_as_disabled: bool to treat nol channel as enabled or
  * disabled. If set to true, nol chan is considered as disabled in chan search.
  *
  * Return: None
@@ -1497,7 +1518,7 @@ void wlan_reg_fill_channel_list_for_pwrmode(
 				qdf_freq_t band_center_320,
 				struct reg_channel_list *chan_list,
 				enum supported_6g_pwr_types in_6g_pwr_type,
-				bool is_treat_nol_chan_as_disabled);
+				bool treat_nol_chan_as_disabled);
 #endif
 #else
 static inline void wlan_reg_set_create_punc_bitmap(struct ch_params *ch_params,

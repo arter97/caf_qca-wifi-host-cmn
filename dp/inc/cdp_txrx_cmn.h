@@ -242,6 +242,24 @@ cdp_vdev_detach(ol_txrx_soc_handle soc, uint8_t vdev_id,
 						       callback, cb_context);
 }
 
+#if defined(WLAN_FEATURE_11BE_MLO) && defined(WLAN_MLO_MULTI_CHIP)
+static inline void
+cdp_vdev_recovery_flush_peers(ol_txrx_soc_handle soc, uint8_t vdev_id)
+{
+	if (!soc || !soc->ops) {
+		dp_cdp_debug("Invalid Instance:");
+		QDF_BUG(0);
+		return;
+	}
+
+	if (!soc->ops->cmn_drv_ops ||
+	    !soc->ops->cmn_drv_ops->txrx_recovery_vdev_flush_peers)
+		return;
+
+	soc->ops->cmn_drv_ops->txrx_recovery_vdev_flush_peers(soc, vdev_id);
+}
+#endif
+
 static inline int
 cdp_pdev_attach_target(ol_txrx_soc_handle soc, uint8_t pdev_id)
 {
@@ -2417,14 +2435,14 @@ cdp_peer_flush_rate_stats(ol_txrx_soc_handle soc, uint8_t pdev_id,
 }
 
 /**
- * cdp_peer_get_rdkstats_ctx() - get RDK stats context
+ * cdp_peer_get_peerstats_ctx() - get peer stats context
  * @soc: opaque soc handle
  * @vdev_id: id of vdev handle
  * @mac: peer mac address
  */
 static inline void
-*cdp_peer_get_rdkstats_ctx(ol_txrx_soc_handle soc, uint8_t vdev_id,
-			  uint8_t *mac_addr)
+*cdp_peer_get_peerstats_ctx(ol_txrx_soc_handle soc, uint8_t vdev_id,
+			    uint8_t *mac_addr)
 {
 	if (!soc || !soc->ops) {
 		dp_cdp_debug("Invalid Instance:");
@@ -2433,12 +2451,12 @@ static inline void
 	}
 
 	if (!soc->ops->cmn_drv_ops ||
-	    !soc->ops->cmn_drv_ops->txrx_peer_get_rdkstats_ctx)
+	    !soc->ops->cmn_drv_ops->txrx_peer_get_peerstats_ctx)
 		return NULL;
 
-	return soc->ops->cmn_drv_ops->txrx_peer_get_rdkstats_ctx(soc,
-								   vdev_id,
-								   mac_addr);
+	return soc->ops->cmn_drv_ops->txrx_peer_get_peerstats_ctx(soc,
+								  vdev_id,
+								  mac_addr);
 }
 
 /**

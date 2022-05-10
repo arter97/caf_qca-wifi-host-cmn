@@ -29,6 +29,9 @@
 #include <hal_be_api_mon.h>
 #include <dp_be.h>
 #include <htt_ppdu_stats.h>
+#ifdef QCA_SUPPORT_LITE_MONITOR
+#include "dp_lite_mon.h"
+#endif
 
 #if !defined(DISABLE_MON_CONFIG)
 
@@ -46,6 +49,8 @@ QDF_STATUS dp_mon_pdev_ext_init_2_0(struct dp_pdev *pdev)
 	struct dp_mon_pdev_be *mon_pdev_be =
 			dp_get_be_mon_pdev_from_dp_mon_pdev(mon_pdev);
 
+	qdf_create_work(0, &mon_pdev_be->rx_mon_work,
+			dp_rx_mon_process_ppdu, pdev);
 	mon_pdev_be->rx_mon_workqueue =
 		qdf_alloc_unbound_workqueue("rx_mon_work_queue");
 
@@ -55,8 +60,6 @@ QDF_STATUS dp_mon_pdev_ext_init_2_0(struct dp_pdev *pdev)
 	}
 	TAILQ_INIT(&mon_pdev_be->rx_mon_queue);
 
-	qdf_create_work(0, &mon_pdev_be->rx_mon_work,
-			dp_rx_mon_process_ppdu, pdev);
 	qdf_spinlock_create(&mon_pdev_be->rx_mon_wq_lock);
 
 	return QDF_STATUS_SUCCESS;
@@ -472,12 +475,16 @@ void
 dp_mon_tx_stats_update_2_0(struct dp_mon_peer *mon_peer,
 			   struct cdp_tx_completion_ppdu_user *ppdu)
 {
-	uint8_t preamble;
-	uint8_t mcs;
+	uint8_t preamble, mcs, punc_mode;
 
 	preamble = ppdu->preamble;
 	mcs = ppdu->mcs;
 
+	punc_mode = dp_mon_get_puncture_type(ppdu->punc_pattern_bitmap,
+					     ppdu->bw);
+	ppdu->punc_mode = punc_mode;
+
+	DP_STATS_INC(mon_peer, tx.punc_bw[punc_mode], ppdu->num_msdu);
 	DP_STATS_INCC(mon_peer,
 		      tx.pkt_type[preamble].mcs_count[MAX_MCS - 1],
 		      ppdu->num_msdu,
@@ -515,6 +522,68 @@ dp_mon_tx_stats_update_2_0(struct dp_mon_peer *mon_peer,
 		      (preamble == DOT11_BE) &&
 		      (ppdu->ppdu_type == HTT_PPDU_STATS_PPDU_TYPE_MU_MIMO)));
 }
+
+enum cdp_punctured_modes
+dp_mon_get_puncture_type(uint16_t puncture_pattern, uint8_t bw)
+{
+	uint16_t mask;
+	uint8_t punctured_bits;
+
+	if (!puncture_pattern)
+		return NO_PUNCTURE;
+
+	switch (bw) {
+	case CMN_BW_80MHZ:
+		mask = PUNCTURE_80MHZ_MASK;
+		break;
+	case CMN_BW_160MHZ:
+		mask = PUNCTURE_160MHZ_MASK;
+		break;
+	case CMN_BW_320MHZ:
+		mask = PUNCTURE_320MHZ_MASK;
+		break;
+	default:
+		return NO_PUNCTURE;
+	}
+
+	/* 0s in puncture pattern received in TLV indicates punctured 20Mhz,
+	 * after complement, 1s will indicate punctured 20Mhz
+	 */
+	puncture_pattern = ~puncture_pattern;
+	puncture_pattern &= mask;
+
+	if (puncture_pattern) {
+		punctured_bits = 0;
+		while (puncture_pattern != 0) {
+			punctured_bits++;
+			puncture_pattern &= (puncture_pattern - 1);
+		}
+
+		if (bw == CMN_BW_80MHZ) {
+			if (punctured_bits == IEEE80211_PUNC_MINUS20MHZ)
+				return PUNCTURED_20MHZ;
+			else
+				return NO_PUNCTURE;
+		} else if (bw == CMN_BW_160MHZ) {
+			if (punctured_bits == IEEE80211_PUNC_MINUS20MHZ)
+				return PUNCTURED_20MHZ;
+			else if (punctured_bits == IEEE80211_PUNC_MINUS40MHZ)
+				return PUNCTURED_40MHZ;
+			else
+				return NO_PUNCTURE;
+		} else if (bw == CMN_BW_320MHZ) {
+			if (punctured_bits == IEEE80211_PUNC_MINUS40MHZ)
+				return PUNCTURED_40MHZ;
+			else if (punctured_bits == IEEE80211_PUNC_MINUS80MHZ)
+				return PUNCTURED_80MHZ;
+			else if (punctured_bits == IEEE80211_PUNC_MINUS120MHZ)
+				return PUNCTURED_120MHZ;
+			else
+				return NO_PUNCTURE;
+		}
+	}
+	return NO_PUNCTURE;
+}
 #endif
 
 #if defined(QCA_ENHANCED_STATS_SUPPORT) && !defined(WLAN_FEATURE_11BE)
@@ -522,6 +591,13 @@ void
 dp_mon_tx_stats_update_2_0(struct dp_mon_peer *mon_peer,
 			   struct cdp_tx_completion_ppdu_user *ppdu)
 {
+	ppdu->punc_mode = NO_PUNCTURE;
+}
+
+enum cdp_punctured_modes
+dp_mon_get_puncture_type(uint16_t puncture_pattern, uint8_t bw)
+{
+	return NO_PUNCTURE;
 }
 #endif /* QCA_ENHANCED_STATS_SUPPORT && WLAN_FEATURE_11BE */
 
@@ -533,8 +609,8 @@ dp_set_bpr_enable_2_0(struct dp_pdev *pdev, int val)
 }
 #endif /* QCA_SUPPORT_BPR */
 
-#if defined(WDI_EVENT_ENABLE) &&\
-	(defined(QCA_ENHANCED_STATS_SUPPORT) || !defined(REMOVE_PKT_LOG))
+#ifdef QCA_ENHANCED_STATS_SUPPORT
+#ifdef WDI_EVENT_ENABLE
 /**
  * dp_ppdu_desc_notify_2_0 - Notify upper layer for PPDU indication via WDI
  *
@@ -560,6 +636,7 @@ static void dp_ppdu_desc_notify_2_0(struct dp_pdev *pdev, qdf_nbuf_t nbuf)
 		qdf_nbuf_free(nbuf);
 	}
 }
+#endif
 
 /**
  * dp_ppdu_stats_feat_enable_check_2_0 - Check if feature(s) is enabled to
@@ -1136,16 +1213,12 @@ dp_mon_register_feature_ops_2_0(struct dp_soc *soc)
 	mon_ops->mon_tx_capture_debugfs_init = NULL;
 	mon_ops->mon_tx_add_to_comp_queue = NULL;
 	mon_ops->mon_print_pdev_tx_capture_stats = NULL;
-	mon_ops->mon_config_enh_tx_capture = NULL;
+	mon_ops->mon_config_enh_tx_capture = dp_config_enh_tx_core_capture_2_0;
 	mon_ops->mon_tx_peer_filter = NULL;
 #endif
 #if defined(WDI_EVENT_ENABLE) &&\
 	(defined(QCA_ENHANCED_STATS_SUPPORT) || !defined(REMOVE_PKT_LOG))
 	mon_ops->mon_ppdu_stats_ind_handler = dp_ppdu_stats_ind_handler;
-	mon_ops->mon_ppdu_desc_deliver = dp_ppdu_desc_deliver;
-	mon_ops->mon_ppdu_desc_notify = dp_ppdu_desc_notify_2_0;
-	mon_ops->mon_ppdu_stats_feat_enable_check =
-				dp_ppdu_stats_feat_enable_check_2_0;
 #endif
 #ifdef WLAN_RX_PKT_CAPTURE_ENH
 	mon_ops->mon_config_enh_rx_capture = NULL;
@@ -1178,11 +1251,13 @@ dp_mon_register_feature_ops_2_0(struct dp_soc *soc)
 				dp_mon_tx_enable_enhanced_stats_2_0;
 	mon_ops->mon_tx_disable_enhanced_stats =
 				dp_mon_tx_disable_enhanced_stats_2_0;
+	mon_ops->mon_ppdu_stats_feat_enable_check =
+				dp_ppdu_stats_feat_enable_check_2_0;
 	mon_ops->mon_tx_stats_update = dp_mon_tx_stats_update_2_0;
+	mon_ops->mon_ppdu_desc_deliver = dp_ppdu_desc_deliver;
+#ifdef WDI_EVENT_ENABLE
+	mon_ops->mon_ppdu_desc_notify = dp_ppdu_desc_notify_2_0;
 #endif
-#if defined(ATH_SUPPORT_NAC_RSSI) || defined(ATH_SUPPORT_NAC)
-	mon_ops->mon_filter_setup_smart_monitor =
-				dp_mon_filter_setup_smart_monitor_2_0;
 #endif
 #ifdef WLAN_RX_PKT_CAPTURE_ENH
 	mon_ops->mon_filter_setup_rx_enh_capture =
@@ -1210,6 +1285,7 @@ dp_mon_register_feature_ops_2_0(struct dp_soc *soc)
 #if defined(DP_CON_MON) && !defined(REMOVE_PKT_LOG)
 	mon_ops->mon_pktlogmod_exit = dp_pktlogmod_exit;
 #endif
+	mon_ops->rx_hdr_length_set = dp_rx_mon_hdr_length_set;
 	mon_ops->rx_packet_length_set = dp_rx_mon_packet_length_set;
 	mon_ops->rx_mon_enable = dp_rx_mon_enable_set;
 	mon_ops->rx_wmask_subscribe = dp_rx_mon_word_mask_subscribe;
@@ -1251,7 +1327,7 @@ struct dp_mon_ops monitor_ops_2_0 = {
 	.mon_vdev_detach = dp_mon_vdev_detach,
 	.mon_peer_attach = dp_mon_peer_attach,
 	.mon_peer_detach = dp_mon_peer_detach,
-	.mon_peer_get_rdkstats_ctx = dp_mon_peer_get_rdkstats_ctx,
+	.mon_peer_get_peerstats_ctx = dp_mon_peer_get_peerstats_ctx,
 	.mon_peer_reset_stats = dp_mon_peer_reset_stats,
 	.mon_peer_get_stats = dp_mon_peer_get_stats,
 	.mon_invalid_peer_update_pdev_stats =
@@ -1317,6 +1393,10 @@ struct dp_mon_ops monitor_ops_2_0 = {
 #endif
 	.mon_pdev_ext_init = dp_mon_pdev_ext_init_2_0,
 	.mon_pdev_ext_deinit = dp_mon_pdev_ext_deinit_2_0,
+	.mon_lite_mon_alloc = dp_lite_mon_alloc,
+	.mon_lite_mon_dealloc = dp_lite_mon_dealloc,
+	.mon_lite_mon_vdev_delete = dp_lite_mon_vdev_delete,
+	.mon_lite_mon_disable_rx = dp_lite_mon_disable_rx,
 };
 
 struct cdp_mon_ops dp_ops_mon_2_0 = {
@@ -1328,6 +1408,13 @@ struct cdp_mon_ops dp_ops_mon_2_0 = {
 	.soc_config_full_mon_mode = NULL,
 	.get_mon_pdev_rx_stats = dp_pdev_get_rx_mon_stats,
 	.txrx_enable_mon_reap_timer = dp_enable_mon_reap_timer,
+#ifdef QCA_SUPPORT_LITE_MONITOR
+	.txrx_set_lite_mon_config = dp_lite_mon_set_config,
+	.txrx_get_lite_mon_config = dp_lite_mon_get_config,
+	.txrx_set_lite_mon_peer_config = dp_lite_mon_set_peer_config,
+	.txrx_get_lite_mon_peer_config = dp_lite_mon_get_peer_config,
+	.txrx_is_lite_mon_enabled = dp_lite_mon_is_enabled,
+#endif
 };
 
 #ifdef QCA_MONITOR_OPS_PER_SOC_SUPPORT

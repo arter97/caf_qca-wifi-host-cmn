@@ -248,6 +248,7 @@ struct tgt_info {
  * @cfr_support_enable: CFR support enable
  * @set_pktlog_checksum: Set the pktlog checksum from FW ready event to pl_dev
  * @csa_switch_count_status: CSA event handler
+ * @mlo_setup_done_event: MLO setup sequence complete event handler
  */
 struct target_ops {
 	QDF_STATUS (*ext_resource_config_enable)
@@ -312,6 +313,7 @@ struct target_ops {
 		struct pdev_csa_switch_count_status csa_status);
 #if defined(WLAN_FEATURE_11BE_MLO) && defined(WLAN_MLO_MULTI_CHIP)
 	bool (*mlo_capable)(struct wlan_objmgr_psoc *psoc);
+	void (*mlo_setup_done_event)(struct wlan_objmgr_psoc *psoc);
 #endif
 };
 
@@ -2771,5 +2773,19 @@ QDF_STATUS target_if_mlo_ready(struct wlan_objmgr_pdev **pdev,
 QDF_STATUS target_if_mlo_teardown_req(struct wlan_objmgr_pdev **pdev,
 				      uint8_t num_pdevs, uint32_t reason);
 #endif /*WLAN_FEATURE_11BE_MLO && WLAN_MLO_MULTI_CHIP*/
+
+#ifdef REO_SHARED_QREF_TABLE_EN
+static inline void target_if_set_reo_shared_qref_feature(struct wlan_objmgr_psoc *psoc,
+							 struct tgt_info *info)
+{
+	info->wlan_res_cfg.reo_qdesc_shared_addr_table_enabled = true;
+}
+#else
+static inline void target_if_set_reo_shared_qref_feature(struct wlan_objmgr_psoc *psoc,
+							 struct tgt_info *info)
+{
+	info->wlan_res_cfg.reo_qdesc_shared_addr_table_enabled = false;
+}
+#endif
 
 #endif

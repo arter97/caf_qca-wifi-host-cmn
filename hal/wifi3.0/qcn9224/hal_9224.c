@@ -1430,6 +1430,7 @@ hal_rx_flow_setup_fse_9224(uint8_t *rx_fst, uint32_t table_offset,
 	return fse;
 }
 
+#ifndef NO_RX_PKT_HDR_TLV
 /**
  * hal_rx_dump_pkt_hdr_tlv: dump RX pkt header TLV in hex format
  * @ pkt_hdr_tlv: pointer the pkt_hdr_tlv in pkt.
@@ -1451,6 +1452,19 @@ static inline void hal_rx_dump_pkt_hdr_tlv_9224(struct rx_pkt_tlvs *pkt_tlvs,
 	hal_verbose_hex_dump(pkt_hdr_tlv->rx_pkt_hdr,
 			     sizeof(pkt_hdr_tlv->rx_pkt_hdr));
 }
+#else
+/**
+ * hal_rx_dump_pkt_hdr_tlv: dump RX pkt header TLV in hex format
+ * @ pkt_hdr_tlv: pointer the pkt_hdr_tlv in pkt.
+ * @ dbg_level: log level.
+ *
+ * Return: void
+ */
+static inline void hal_rx_dump_pkt_hdr_tlv_9224(struct rx_pkt_tlvs *pkt_tlvs,
+						uint8_t dbg_level)
+{
+}
+#endif
 
 /*
  * hal_tx_dump_ppe_vp_entry_9224()
@@ -1917,6 +1931,7 @@ static void hal_hw_txrx_ops_attach_qcn9224(struct hal_soc *hal_soc)
 	hal_soc->ops->hal_reo_shared_qaddr_init = hal_reo_shared_qaddr_init_be;
 	hal_soc->ops->hal_reo_shared_qaddr_detach = hal_reo_shared_qaddr_detach_be;
 	hal_soc->ops->hal_reo_shared_qaddr_write = hal_reo_shared_qaddr_write_be;
+	hal_soc->ops->hal_reo_shared_qaddr_cache_clear = hal_reo_shared_qaddr_cache_clear_be;
 #endif
 	/* Overwrite the default BE ops */
 	hal_soc->ops->hal_get_reo_qdesc_size = hal_qcn9224_get_reo_qdesc_size;

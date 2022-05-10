@@ -159,6 +159,8 @@ void htt_htc_pkt_pool_free(struct htt_soc *soc);
 #define HTT_VDEV_STATS_TLV_TX_RETRY_BYTE_CNT_OFFSET   16
 #define HTT_VDEV_STATS_TLV_TX_DROP_BYTE_CNT_OFFSET    18
 #define HTT_VDEV_STATS_TLV_TX_AGE_OUT_BYTE_CNT_OFFSET 20
+#define HTT_VDEV_STATS_TLV_TX_TQM_BYPASS_PKT_CNT_OFFSET  22
+#define HTT_VDEV_STATS_TLV_TX_TQM_BYPASS_BYTE_CNT_OFFSET 24
 
 #define HTT_VDEV_STATS_GET_INDEX(index) \
 	HTT_VDEV_STATS_TLV_##index##_OFFSET
@@ -611,6 +613,7 @@ struct htt_tx_ring_tlv_filter {
  * @mgmt_dma_length: configure length for mgmt packet
  * @ctrl_dma_length: configure length for ctrl packet
  * @data_dma_length: configure length for data packet
+ * @rx_hdr_length: configure length for rx header tlv
  * @mgmt_mpdu_log: enable mgmt mpdu level logging
  * @ctrl_mpdu_log: enable ctrl mpdu level logging
  * @data_mpdu_log: enable data mpdu level logging
@@ -631,6 +634,7 @@ struct htt_rx_ring_tlv_filter {
 		ppdu_end_user_stats:1,
 		ppdu_end_user_stats_ext:1,
 		ppdu_end_status_done:1,
+		ppdu_start_user_info:1,
 		header_per_msdu:1,
 		enable_fp:1,
 		enable_md:1,
@@ -668,6 +672,7 @@ struct htt_rx_ring_tlv_filter {
 	uint16_t mgmt_dma_length:3,
 		 ctrl_dma_length:3,
 		 data_dma_length:3,
+		 rx_hdr_length:3,
 		 mgmt_mpdu_log:1,
 		 ctrl_mpdu_log:1,
 		 data_mpdu_log:1,

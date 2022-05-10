@@ -440,7 +440,8 @@ static int dp_htt_h2t_add_tcl_metadata_ver_v2(struct htt_soc *soc,
 static int dp_htt_h2t_add_tcl_metadata_ver(struct htt_soc *soc, qdf_nbuf_t *msg)
 {
 	/* Use tcl_metadata_v1 when NSS offload is enabled */
-	if (wlan_cfg_get_dp_soc_nss_cfg(soc->dp_soc->wlan_cfg_ctx))
+	if (wlan_cfg_get_dp_soc_nss_cfg(soc->dp_soc->wlan_cfg_ctx) ||
+	    soc->dp_soc->cdp_soc.ol_ops->get_con_mode() == QDF_GLOBAL_FTM_MODE)
 		return dp_htt_h2t_add_tcl_metadata_ver_v1(soc, msg);
 	else
 		return dp_htt_h2t_add_tcl_metadata_ver_v2(soc, msg);
@@ -1081,6 +1082,7 @@ int htt_h2t_rx_ring_cfg(struct htt_soc *htt_soc, int pdev_id,
 		ring_buf_size);
 
 	dp_mon_rx_packet_length_set(soc->dp_soc, msg_word, htt_tlv_filter);
+	dp_mon_rx_hdr_length_set(soc->dp_soc, msg_word, htt_tlv_filter);
 
 	/* word 2 */
 	msg_word++;
@@ -1607,6 +1609,8 @@ int htt_h2t_rx_ring_cfg(struct htt_soc *htt_soc, int pdev_id,
 		htt_tlv_filter->ppdu_end_user_stats_ext);
 	htt_rx_ring_tlv_filter_in_enable_set(tlv_filter, PPDU_END_STATUS_DONE,
 		htt_tlv_filter->ppdu_end_status_done);
+	htt_rx_ring_tlv_filter_in_enable_set(tlv_filter, PPDU_START_USER_INFO,
+		htt_tlv_filter->ppdu_start_user_info);
 	/* RESERVED bit maps to header_per_msdu in htt_tlv_filter*/
 	 htt_rx_ring_tlv_filter_in_enable_set(tlv_filter, RESERVED,
 		 htt_tlv_filter->header_per_msdu);
@@ -2399,6 +2403,18 @@ static void dp_vdev_txrx_hw_stats_handler(struct htt_soc *soc,
 			byte_count = HTT_VDEV_GET_STATS_U64(tag_buf);
 			tx_comp.bytes += byte_count;
 			tx_failed.bytes += byte_count;
+
+			/* Extract tqm bypass packet count from buffer */
+			tag_buf = tlv_buf_temp +
+				HTT_VDEV_STATS_GET_INDEX(TX_TQM_BYPASS_PKT_CNT);
+			pkt_count = HTT_VDEV_GET_STATS_U64(tag_buf);
+			tx_comp.num += pkt_count;
+
+			/* Extract tx bypass packet byte count from buffer */
+			tag_buf = tlv_buf_temp +
+				HTT_VDEV_STATS_GET_INDEX(TX_TQM_BYPASS_BYTE_CNT);
+			byte_count = HTT_VDEV_GET_STATS_U64(tag_buf);
+			tx_comp.bytes += byte_count;
 
 			DP_STATS_UPD(vdev, tx.comp_pkt.num, tx_comp.num);
 			DP_STATS_UPD(vdev, tx.comp_pkt.bytes, tx_comp.bytes);

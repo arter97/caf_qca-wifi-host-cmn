@@ -325,7 +325,7 @@ typedef __qdf_nbuf_queue_t qdf_nbuf_queue_t;
  * @ba_bitmap: 256 bit block ack bitmap
  * @add_rtap_ext2: add radiotap extension2
  * @mpdu_retry_cnt: Rx mpdu retry count
- * @punctured_bw: puntured bw
+ * @punctured_pattern: punctured pattern (0 means the band is punctured)
  * @rx_user_status: pointer to mon_rx_user_status, when set update
  * radiotap header will use userinfo from this structure.
  * @usig_common: U-SIG property of received frame
@@ -441,7 +441,7 @@ struct mon_rx_status {
 	bool add_rtap_ext2;
 	uint32_t mpdu_retry_cnt;
 #ifdef WLAN_FEATURE_11BE
-	uint8_t punctured_bw;
+	uint16_t punctured_pattern;
 #endif
 	struct mon_rx_user_status *rx_user_status;
 	uint32_t usig_common;
@@ -522,6 +522,7 @@ struct mon_rx_status {
  * @ba_control: Block ack control
  * @ba_bitmap: 256 bit block ack bitmap
  * @tid: QoS traffic tid number
+ * @filter_category: mpdu filter category
  * @mpdu_q: user mpdu_queue used for monitor
  */
 struct mon_rx_user_status {
@@ -581,6 +582,7 @@ struct mon_rx_user_status {
 	uint32_t ba_bitmap[32];
 	uint32_t ba_bitmap_sz;
 	uint16_t aid;
+	uint8_t filter_category;
 	qdf_nbuf_queue_t mpdu_q;
 };
 
@@ -4319,6 +4321,27 @@ QDF_STATUS qdf_nbuf_move_frag_page_offset_debug(qdf_nbuf_t nbuf, uint8_t idx,
 						int offset, const char *func,
 						uint32_t line);
 
+#define qdf_nbuf_remove_frag(n, i, t) \
+	qdf_nbuf_remove_frag_debug(n, i, t, __func__, __LINE__)
+
+/**
+ * qdf_nbuf_remove_frag_debug - Remove frag from nbuf
+ * @nbuf: nbuf where frag will be removed
+ * @idx: frag index
+ * @truesize: truesize of frag
+ * @func: Caller function name
+ * @line:  Caller function line no.
+ *
+ * Return: QDF_STATUS
+ *
+ */
+QDF_STATUS
+qdf_nbuf_remove_frag_debug(qdf_nbuf_t nbuf,
+			   uint16_t idx,
+			   uint16_t truesize,
+			   const char *func,
+			   uint32_t line);
+
 #define qdf_nbuf_add_rx_frag(f, b, o, l, s, r) \
 	qdf_nbuf_add_rx_frag_debug(f, b, o, l, s, r, __func__, __LINE__)
 
@@ -4414,6 +4437,22 @@ static inline QDF_STATUS qdf_nbuf_move_frag_page_offset(qdf_nbuf_t nbuf,
 							int offset)
 {
 	return __qdf_nbuf_move_frag_page_offset(nbuf, idx, offset);
+}
+
+/**
+ * qdf_nbuf_remove_frag() - Remove frag from nbuf
+ *
+ * @nbuf: nbuf pointer
+ * @idx: idx at which frag need to be removed
+ * @truesize: truesize of frag
+ *
+ * Return: void
+ */
+static inline void qdf_nbuf_remove_frag(qdf_nbuf_t nbuf,
+					uint16_t idx,
+					uint16_t truesize)
+{
+	return __qdf_nbuf_remove_frag(nbuf, idx, truesize);
 }
 
 /**

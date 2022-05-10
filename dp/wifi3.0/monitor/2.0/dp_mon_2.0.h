@@ -30,7 +30,7 @@
 #define DP_MON_RING_FILL_LEVEL_DEFAULT 2048
 #define DP_MON_DATA_BUFFER_SIZE     2048
 #define DP_MON_DESC_MAGIC 0xdeadabcd
-#define DP_MON_MAX_STATUS_BUF 32
+#define DP_MON_MAX_STATUS_BUF 128
 #define DP_MON_QUEUE_DEPTH_MAX 16
 
 /**
@@ -103,6 +103,8 @@ struct dp_mon_desc_pool {
  * struct dp_mon_pdev_be - BE specific monitor pdev object
  * @mon_pdev: monitor pdev structure
  * @filter_be: filters sent to fw
+ * @tx_mon_mode: tx monitor mode
+ * @tx_mon_filter_length: tx monitor filter length
  * @tx_capture: pointer to tx capture function
  * @tx_stats: tx monitor drop stats
  * @rx_mon_wq_lock: Rx mon workqueue lock
@@ -116,9 +118,9 @@ struct dp_mon_desc_pool {
 struct dp_mon_pdev_be {
 	struct dp_mon_pdev mon_pdev;
 	struct dp_mon_filter_be **filter_be;
-#ifdef WLAN_TX_PKT_CAPTURE_ENH_BE
+	uint8_t tx_mon_mode;
+	uint8_t tx_mon_filter_length;
 	struct dp_pdev_tx_capture_be tx_capture_be;
-#endif
 	struct dp_tx_monitor_drop_stats tx_stats;
 	qdf_spinlock_t rx_mon_wq_lock;
 	qdf_workqueue_t *rx_mon_workqueue;
@@ -128,6 +130,12 @@ struct dp_mon_pdev_be {
 	uint16_t rx_mon_queue_depth;
 	uint16_t desc_count;
 	struct dp_mon_desc *status[DP_MON_MAX_STATUS_BUF];
+#ifdef QCA_SUPPORT_LITE_MONITOR
+	struct dp_lite_mon_rx_config *lite_mon_rx_config;
+	struct dp_lite_mon_tx_config *lite_mon_tx_config;
+#endif
+	void *prev_rxmon_desc;
+	uint32_t prev_rxmon_cookie;
 };
 
 /**
@@ -242,6 +250,24 @@ QDF_STATUS dp_mon_buffers_replenish(struct dp_soc *dp_soc,
  */
 void dp_mon_filter_show_filter_be(enum dp_mon_filter_mode mode,
 				  struct dp_mon_filter_be *filter);
+
+/**
+ * dp_mon_filter_show_tx_filter_be() - Show the set filters
+ * @mode: The filter modes
+ * @tlv_filter: tlv filter
+ */
+void dp_mon_filter_show_tx_filter_be(enum dp_mon_filter_mode mode,
+				     struct dp_mon_filter_be *filter);
+
+#ifdef QCA_ENHANCED_STATS_SUPPORT
+/**
+ * dp_mon_get_puncture_type() - Get puncture type
+ * @puncture_pattern: puncture bitmap
+ * @bw: Bandwidth
+ */
+enum cdp_punctured_modes
+dp_mon_get_puncture_type(uint16_t puncture_pattern, uint8_t bw);
+#endif
 
 /*
  * dp_mon_desc_get() - get monitor sw descriptor

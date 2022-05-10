@@ -1088,9 +1088,10 @@ vdev_start_cmd_fill_11be(wmi_vdev_start_request_cmd_fixed_param *cmd,
 			 struct vdev_start_params *req)
 {
 	cmd->eht_ops = req->eht_ops;
-	cmd->puncture_20mhz_bitmap = req->channel.puncture_pattern;
-	wmi_info("EHT ops: %x puncture_pattern %x",
-		 req->eht_ops, req->channel.puncture_pattern);
+	cmd->puncture_20mhz_bitmap = ~req->channel.puncture_bitmap;
+	wmi_info("EHT ops: %x puncture_bitmap %x wmi cmd puncture bitmap %x",
+		 req->eht_ops, req->channel.puncture_bitmap,
+		 cmd->puncture_20mhz_bitmap);
 }
 #else
 static void
@@ -2621,7 +2622,7 @@ static QDF_STATUS send_beacon_tmpl_send_cmd_tlv(wmi_unified_t wmi_handle,
 
 	wmi_buf_len = sizeof(wmi_bcn_tmpl_cmd_fixed_param) +
 		      sizeof(wmi_bcn_prb_info) + WMI_TLV_HDR_SIZE +
-		      param->tmpl_len_aligned;
+		      param->tmpl_len_aligned + bcn_tmpl_mlo_param_size(param);
 	wmi_buf = wmi_buf_alloc(wmi_handle, wmi_buf_len);
 	if (!wmi_buf)
 		return QDF_STATUS_E_NOMEM;
@@ -2665,7 +2666,7 @@ static QDF_STATUS send_beacon_tmpl_send_cmd_tlv(wmi_unified_t wmi_handle,
 	WMI_HOST_IF_MSG_COPY_CHAR_ARRAY(buf_ptr, param->frm,
 					param->tmpl_len);
 
-	buf_ptr += param->tmpl_len;
+	buf_ptr += roundup(param->tmpl_len, sizeof(uint32_t));
 	buf_ptr = bcn_tmpl_add_ml_partner_links(buf_ptr, param);
 
 	wmi_mtrace(WMI_BCN_TMPL_CMDID, cmd->vdev_id, 0);
@@ -2814,7 +2815,7 @@ static uint8_t *update_peer_flags_tlv_ehtinfo(
 	int i;
 
 	cmd->peer_eht_ops = param->peer_eht_ops;
-	cmd->puncture_20mhz_bitmap = param->puncture_pattern;
+	cmd->puncture_20mhz_bitmap = ~param->puncture_bitmap;
 
 	qdf_mem_copy(&cmd->peer_eht_cap_mac, &param->peer_eht_cap_macinfo,
 		     sizeof(param->peer_eht_cap_macinfo));
@@ -8098,6 +8099,10 @@ void wmi_copy_resource_config(wmi_resource_config *resource_cfg,
 
 	if (tgt_res_cfg->twt_ack_support_cap)
 		WMI_RSRC_CFG_HOST_SERVICE_FLAG_STA_TWT_SYNC_EVT_SUPPORT_SET(
+			resource_cfg->host_service_flags, 1);
+
+	if (tgt_res_cfg->reo_qdesc_shared_addr_table_enabled)
+		WMI_RSRC_CFG_HOST_SERVICE_FLAG_REO_QREF_FEATURE_SUPPORT_SET(
 			resource_cfg->host_service_flags, 1);
 
 	WMI_RSRC_CFG_FLAGS2_RX_PEER_METADATA_VERSION_SET(resource_cfg->flags2,
@@ -16766,10 +16771,10 @@ extract_time_sync_ftm_offset_event_tlv(wmi_unified_t wmi, void *buf,
 	}
 
 	for (iter = 0; iter < param->num_qtime; iter++) {
-		param->pairs[iter].qtime_master = (
+		param->pairs[iter].qtime_initiator = (
 			(uint64_t)q_pair[iter].qmaster_u32 << 32) |
 			 q_pair[iter].qmaster_l32;
-		param->pairs[iter].qtime_slave = (
+		param->pairs[iter].qtime_target = (
 			(uint64_t)q_pair[iter].qslave_u32 << 32) |
 			 q_pair[iter].qslave_l32;
 	}
@@ -17396,6 +17401,34 @@ send_vdev_pn_mgmt_rxfilter_cmd_tlv(wmi_unified_t wmi_handle,
 	return QDF_STATUS_SUCCESS;
 }
 
+static QDF_STATUS
+extract_pktlog_decode_info_event_tlv(wmi_unified_t wmi_handle, void *evt_buf,
+				     uint8_t *pdev_id, uint8_t *software_image,
+				     uint8_t *chip_info,
+				     uint32_t *pktlog_json_version)
+{
+	WMI_PDEV_PKTLOG_DECODE_INFO_EVENTID_param_tlvs *param_buf;
+	wmi_pdev_pktlog_decode_info_evt_fixed_param *event;
+
+	param_buf =
+		(WMI_PDEV_PKTLOG_DECODE_INFO_EVENTID_param_tlvs *)evt_buf;
+
+	event = param_buf->fixed_param;
+
+	if ((event->software_image[0] == '\0') ||
+	    (event->chip_info[0] == '\0')) {
+		*pdev_id = event->pdev_id;
+		return QDF_STATUS_E_INVAL;
+	}
+
+	qdf_mem_copy(software_image, event->software_image, 40);
+	qdf_mem_copy(chip_info, event->chip_info, 40);
+	*pktlog_json_version = event->pktlog_defs_json_version;
+	*pdev_id = event->pdev_id;
+
+	return QDF_STATUS_SUCCESS;
+}
+
 struct wmi_ops tlv_ops =  {
 	.send_vdev_create_cmd = send_vdev_create_cmd_tlv,
 	.send_vdev_delete_cmd = send_vdev_delete_cmd_tlv,
@@ -17832,6 +17865,8 @@ struct wmi_ops tlv_ops =  {
 #endif /* WLAN_SUPPORT_PPEDS */
 
 	.send_vdev_pn_mgmt_rxfilter_cmd = send_vdev_pn_mgmt_rxfilter_cmd_tlv,
+	.extract_pktlog_decode_info_event =
+		extract_pktlog_decode_info_event_tlv,
 };
 
 /**
@@ -18223,7 +18258,7 @@ static void populate_tlv_events_id(uint32_t *event_ids)
 #ifdef FEATURE_WLAN_TIME_SYNC_FTM
 	event_ids[wmi_wlan_time_sync_ftm_start_stop_event_id] =
 				WMI_VDEV_AUDIO_SYNC_START_STOP_EVENTID;
-	event_ids[wmi_wlan_time_sync_q_master_slave_offset_eventid] =
+	event_ids[wmi_wlan_time_sync_q_initiator_target_offset_eventid] =
 			WMI_VDEV_AUDIO_SYNC_Q_MASTER_SLAVE_OFFSET_EVENTID;
 #endif
 event_ids[wmi_roam_scan_chan_list_id] =
@@ -18284,6 +18319,12 @@ event_ids[wmi_roam_scan_chan_list_id] =
 #endif
 	event_ids[wmi_peer_rx_pn_response_event_id] =
 		WMI_PEER_RX_PN_RESPONSE_EVENTID;
+	event_ids[wmi_extract_pktlog_decode_info_eventid] =
+		WMI_PDEV_PKTLOG_DECODE_INFO_EVENTID;
+#ifdef QCA_RSSI_DB2DBM
+	event_ids[wmi_pdev_rssi_dbm_conversion_params_info_eventid] =
+		WMI_PDEV_RSSI_DBM_CONVERSION_PARAMS_INFO_EVENTID;
+#endif
 }
 
 #ifdef WLAN_FEATURE_LINK_LAYER_STATS
@@ -18763,6 +18804,8 @@ static void populate_tlv_service(uint32_t *wmi_service)
 	wmi_service[wmi_service_pdev_rssi_dbm_conv_event_support] =
 			WMI_SERVICE_PDEV_RSSI_DBM_CONV_EVENT_SUPPORT;
 #endif
+	wmi_service[wmi_service_pktlog_decode_info_support] =
+		WMI_SERVICE_PKTLOG_DECODE_INFO_SUPPORT;
 }
 
 /**

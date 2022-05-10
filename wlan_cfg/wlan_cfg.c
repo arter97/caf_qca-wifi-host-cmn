@@ -17,6 +17,7 @@
  * PERFORMANCE OF THIS SOFTWARE.
  */
 
+#include "wlan_ipa_ucfg_api.h"
 #if defined(CONFIG_HL_SUPPORT)
 #include "wlan_tgt_def_config_hl.h"
 #else
@@ -291,11 +292,7 @@ static struct dp_int_mask_assignment dp_mask_assignment[NUM_INTERRUPT_COMBINATIO
 		  WLAN_CFG_RX_MON_RING_MASK_2,
 		  0, 0, 0, 0},
 		/* host2rxdma ring masks */
-		{ WLAN_CFG_HOST2RXDMA_RING_MASK_0,
-		  WLAN_CFG_HOST2RXDMA_RING_MASK_1,
-		  WLAN_CFG_HOST2RXDMA_RING_MASK_2,
-		  WLAN_CFG_HOST2RXDMA_RING_MASK_3,
-		  0, 0, 0, 0, 0, 0, 0},
+		{ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
 		/* rxdma2host ring masks */
 		{ WLAN_CFG_RXDMA2HOST_RING_MASK_0,
 		  WLAN_CFG_RXDMA2HOST_RING_MASK_1,
@@ -349,11 +346,7 @@ static struct dp_int_mask_assignment dp_mask_assignment[NUM_INTERRUPT_COMBINATIO
 		    WLAN_CFG_RX_MON_RING_MASK_2,
 		  0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
 		/* host2rxdma ring masks */
-		{ WLAN_CFG_HOST2RXDMA_RING_MASK_0 |
-		    WLAN_CFG_HOST2RXDMA_RING_MASK_1 |
-		    WLAN_CFG_HOST2RXDMA_RING_MASK_2 |
-		    WLAN_CFG_HOST2RXDMA_RING_MASK_3,
-		  0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+		{ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
 		/* rxdma2host ring masks */
 		{ WLAN_CFG_RXDMA2HOST_RING_MASK_0 |
 		    WLAN_CFG_RXDMA2HOST_RING_MASK_1 |
@@ -405,11 +398,7 @@ static struct dp_int_mask_assignment dp_mask_assignment[NUM_INTERRUPT_COMBINATIO
 		  WLAN_CFG_RX_MON_RING_MASK_2,
 		  0, 0, 0, 0, 0, 0, 0, 0, 0},
 		/* host2rxdma ring masks */
-		{ WLAN_CFG_HOST2RXDMA_RING_MASK_0 |
-		    WLAN_CFG_HOST2RXDMA_RING_MASK_1,
-		  WLAN_CFG_HOST2RXDMA_RING_MASK_2 |
-		    WLAN_CFG_HOST2RXDMA_RING_MASK_3,
-		  0, 0, 0, 0, 0, 0, 0, 0, 0},
+		{ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
 		/* rxdma2host ring masks */
 		{ WLAN_CFG_RXDMA2HOST_RING_MASK_0 |
 		    WLAN_CFG_RXDMA2HOST_RING_MASK_1,
@@ -462,12 +451,7 @@ static struct dp_int_mask_assignment dp_mask_assignment[NUM_INTERRUPT_COMBINATIO
 		    WLAN_CFG_RX_MON_RING_MASK_2,
 		  0, 0, 0, 0, 0, 0, 0, 0},
 		/* host2rxdma ring masks */
-		{ 0, 0,
-		  WLAN_CFG_HOST2RXDMA_RING_MASK_0 |
-		    WLAN_CFG_HOST2RXDMA_RING_MASK_1 |
-		    WLAN_CFG_HOST2RXDMA_RING_MASK_2 |
-		    WLAN_CFG_HOST2RXDMA_RING_MASK_3,
-		  0, 0, 0, 0, 0, 0, 0, 0},
+		{ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
 		/* rxdma2host ring masks */
 		{ 0, 0,
 		  WLAN_CFG_RXDMA2HOST_RING_MASK_0 |
@@ -525,11 +509,7 @@ static struct dp_int_mask_assignment dp_mask_assignment[NUM_INTERRUPT_COMBINATIO
 		  WLAN_CFG_RX_MON_RING_MASK_2,
 		  0, 0, 0, 0, 0, 0, 0, 0},
 		/* host2rxdma ring masks */
-		{ WLAN_CFG_HOST2RXDMA_RING_MASK_0,
-		  WLAN_CFG_HOST2RXDMA_RING_MASK_1,
-		  WLAN_CFG_HOST2RXDMA_RING_MASK_2,
-		  WLAN_CFG_HOST2RXDMA_RING_MASK_3,
-		  0, 0, 0, 0, 0, 0, 0},
+		{ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
 		/* rxdma2host ring masks */
 		{ WLAN_CFG_RXDMA2HOST_RING_MASK_0,
 		  WLAN_CFG_RXDMA2HOST_RING_MASK_1,
@@ -582,12 +562,7 @@ static struct dp_int_mask_assignment dp_mask_assignment[NUM_INTERRUPT_COMBINATIO
 		    WLAN_CFG_RX_MON_RING_MASK_2,
 		  0, 0, 0, 0, 0, 0},
 		/* host2rxdma ring masks */
-		{ 0, 0, 0, 0,
-		  WLAN_CFG_HOST2RXDMA_RING_MASK_0 |
-		    WLAN_CFG_HOST2RXDMA_RING_MASK_1 |
-		    WLAN_CFG_HOST2RXDMA_RING_MASK_2 |
-		    WLAN_CFG_HOST2RXDMA_RING_MASK_3,
-		  0, 0, 0, 0, 0, 0},
+		{ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
 		/* rxdma2host ring masks */
 		{ 0, 0, 0, 0,
 		  WLAN_CFG_RXDMA2HOST_RING_MASK_0 |
@@ -646,11 +621,7 @@ static struct dp_int_mask_assignment dp_mask_assignment[NUM_INTERRUPT_COMBINATIO
 		  WLAN_CFG_RX_MON_RING_MASK_2,
 		  0, 0, 0, 0, 0, 0, 0, 0},
 		/* host2rxdma ring masks */
-		{ WLAN_CFG_HOST2RXDMA_RING_MASK_0,
-		  WLAN_CFG_HOST2RXDMA_RING_MASK_1,
-		  WLAN_CFG_HOST2RXDMA_RING_MASK_2,
-		  WLAN_CFG_HOST2RXDMA_RING_MASK_3,
-		  0, 0, 0, 0, 0, 0, 0},
+		{ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
 		/* rxdma2host ring masks */
 		{ WLAN_CFG_RXDMA2HOST_RING_MASK_0,
 		  WLAN_CFG_RXDMA2HOST_RING_MASK_1,
@@ -704,12 +675,7 @@ static struct dp_int_mask_assignment dp_mask_assignment[NUM_INTERRUPT_COMBINATIO
 		  WLAN_CFG_RX_MON_RING_MASK_2,
 		  0, 0, 0, 0, 0},
 		/* host2rxdma ring masks */
-		{ 0, 0, 0,
-		  WLAN_CFG_HOST2RXDMA_RING_MASK_0,
-		  WLAN_CFG_HOST2RXDMA_RING_MASK_1,
-		  WLAN_CFG_HOST2RXDMA_RING_MASK_2,
-		  WLAN_CFG_HOST2RXDMA_RING_MASK_3,
-		  0, 0, 0, 0},
+		{ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
 		/* rxdma2host ring masks */
 		{ 0, 0, 0,
 		  WLAN_CFG_RXDMA2HOST_RING_MASK_0,
@@ -769,12 +735,7 @@ static struct dp_int_mask_assignment dp_mask_assignment[NUM_INTERRUPT_COMBINATIO
 		  WLAN_CFG_RX_MON_RING_MASK_2,
 		  0, 0, 0, 0, 0},
 		/* host2rxdma ring masks */
-		{ 0, 0, 0,
-		  WLAN_CFG_HOST2RXDMA_RING_MASK_0,
-		  WLAN_CFG_HOST2RXDMA_RING_MASK_1,
-		  WLAN_CFG_HOST2RXDMA_RING_MASK_2,
-		  WLAN_CFG_HOST2RXDMA_RING_MASK_3,
-		  0, 0, 0, 0},
+		{ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
 		/* rxdma2host ring masks */
 		{ 0, 0, 0,
 		  WLAN_CFG_RXDMA2HOST_RING_MASK_0,
@@ -1570,19 +1531,26 @@ struct wlan_srng_cfg wlan_srng_default_cfg = {
 	.low_threshold = 0,
 };
 
+/* DEFAULT_CONFIG source ring configuration */
+struct wlan_srng_cfg wlan_src_srng_default_cfg = {
+	.timer_threshold = 0,
+	.batch_count_threshold = 0,
+	.low_threshold = 0,
+};
+
 void wlan_set_srng_cfg(struct wlan_srng_cfg **wlan_cfg)
 {
 	g_wlan_srng_cfg[REO_DST] = wlan_srng_reo_cfg;
 	g_wlan_srng_cfg[WBM2SW_RELEASE] = wlan_srng_wbm_release_cfg;
 	g_wlan_srng_cfg[REO_EXCEPTION] = wlan_srng_default_cfg;
-	g_wlan_srng_cfg[REO_REINJECT] = wlan_srng_default_cfg;
-	g_wlan_srng_cfg[REO_CMD] = wlan_srng_default_cfg;
+	g_wlan_srng_cfg[REO_REINJECT] = wlan_src_srng_default_cfg;
+	g_wlan_srng_cfg[REO_CMD] = wlan_src_srng_default_cfg;
 	g_wlan_srng_cfg[REO_STATUS] = wlan_srng_default_cfg;
-	g_wlan_srng_cfg[TCL_DATA] = wlan_srng_default_cfg;
-	g_wlan_srng_cfg[TCL_CMD_CREDIT] = wlan_srng_default_cfg;
+	g_wlan_srng_cfg[TCL_DATA] = wlan_src_srng_default_cfg;
+	g_wlan_srng_cfg[TCL_CMD_CREDIT] = wlan_src_srng_default_cfg;
 	g_wlan_srng_cfg[TCL_STATUS] = wlan_srng_default_cfg;
-	g_wlan_srng_cfg[WBM_IDLE_LINK] = wlan_srng_default_cfg;
-	g_wlan_srng_cfg[SW2WBM_RELEASE] = wlan_srng_default_cfg;
+	g_wlan_srng_cfg[WBM_IDLE_LINK] = wlan_src_srng_default_cfg;
+	g_wlan_srng_cfg[SW2WBM_RELEASE] = wlan_src_srng_default_cfg;
 	g_wlan_srng_cfg[RXDMA_BUF] = wlan_srng_rxdma_buf_cfg;
 	g_wlan_srng_cfg[RXDMA_DST] = wlan_srng_default_cfg;
 	g_wlan_srng_cfg[RXDMA_MONITOR_BUF] =
@@ -1752,8 +1720,16 @@ static void
 wlan_soc_ipa_cfg_attach(struct cdp_ctrl_objmgr_psoc *psoc,
 			struct wlan_cfg_dp_soc_ctxt *wlan_cfg_ctx)
 {
-	wlan_cfg_ctx->ipa_enabled = (cfg_get(psoc, CFG_DP_IPA_OFFLOAD_CONFIG) &
-				     WLAN_CFG_IPA_ENABLE_MASK);
+	if (ucfg_ipa_get_pld_enable()) {
+		wlan_cfg_ctx->ipa_enabled =
+			(cfg_get(psoc, CFG_DP_IPA_OFFLOAD_CONFIG) &
+			WLAN_CFG_IPA_ENABLE_MASK);
+		dp_info("is IPA enabled from ini: %d",
+			wlan_cfg_ctx->ipa_enabled);
+	} else {
+		wlan_cfg_ctx->ipa_enabled = false;
+		dp_info("IPA disabled from platform driver");
+	}
 	wlan_cfg_ctx->ipa_tx_ring_size =
 			cfg_get(psoc, CFG_DP_IPA_TX_RING_SIZE);
 	wlan_cfg_ctx->ipa_tx_comp_ring_size =
@@ -1776,8 +1752,16 @@ static void
 wlan_soc_ipa_cfg_attach(struct cdp_ctrl_objmgr_psoc *psoc,
 			struct wlan_cfg_dp_soc_ctxt *wlan_cfg_ctx)
 {
-	wlan_cfg_ctx->ipa_enabled = (cfg_get(psoc, CFG_DP_IPA_OFFLOAD_CONFIG) &
-				     WLAN_CFG_IPA_ENABLE_MASK);
+	if (ucfg_ipa_get_pld_enable()) {
+		wlan_cfg_ctx->ipa_enabled =
+			(cfg_get(psoc, CFG_DP_IPA_OFFLOAD_CONFIG) &
+			WLAN_CFG_IPA_ENABLE_MASK);
+		dp_info("is IPA enabled from ini: %d",
+			wlan_cfg_ctx->ipa_enabled);
+	} else {
+		wlan_cfg_ctx->ipa_enabled = false;
+		dp_info("IPA disabled from platform driver");
+	}
 	wlan_cfg_ctx->ipa_tx_ring_size =
 			cfg_get(psoc, CFG_DP_IPA_TX_RING_SIZE);
 	wlan_cfg_ctx->ipa_tx_comp_ring_size =

@@ -22,6 +22,49 @@
  */
 #include <wlan_mgmt_txrx_rx_reo_tgt_api.h>
 #include "../../core/src/wlan_mgmt_txrx_rx_reo_i.h"
+#include <../../core/src/wlan_mgmt_txrx_main_i.h>
+
+QDF_STATUS
+tgt_mgmt_rx_reo_get_num_active_hw_links(struct wlan_objmgr_psoc *psoc,
+					int8_t *num_active_hw_links)
+{
+	struct wlan_lmac_if_mgmt_rx_reo_tx_ops *mgmt_rx_reo_txops;
+
+	mgmt_rx_reo_txops = wlan_psoc_get_mgmt_rx_reo_txops(psoc);
+	if (!mgmt_rx_reo_txops) {
+		mgmt_rx_reo_err("mgmt rx reo txops is NULL");
+		return QDF_STATUS_E_NULL_VALUE;
+	}
+
+	if (!mgmt_rx_reo_txops->get_num_active_hw_links) {
+		mgmt_rx_reo_err("get num active hw links txops is NULL");
+		return QDF_STATUS_E_NULL_VALUE;
+	}
+
+	return mgmt_rx_reo_txops->get_num_active_hw_links(psoc,
+							  num_active_hw_links);
+}
+
+QDF_STATUS
+tgt_mgmt_rx_reo_get_valid_hw_link_bitmap(struct wlan_objmgr_psoc *psoc,
+					 uint16_t *valid_hw_link_bitmap)
+{
+	struct wlan_lmac_if_mgmt_rx_reo_tx_ops *mgmt_rx_reo_txops;
+
+	mgmt_rx_reo_txops = wlan_psoc_get_mgmt_rx_reo_txops(psoc);
+	if (!mgmt_rx_reo_txops) {
+		mgmt_rx_reo_err("mgmt rx reo txops is NULL");
+		return QDF_STATUS_E_NULL_VALUE;
+	}
+
+	if (!mgmt_rx_reo_txops->get_valid_hw_link_bitmap) {
+		mgmt_rx_reo_err("get valid hw link bitmap txops is NULL");
+		return QDF_STATUS_E_NULL_VALUE;
+	}
+
+	return mgmt_rx_reo_txops->get_valid_hw_link_bitmap(psoc,
+						valid_hw_link_bitmap);
+}
 
 QDF_STATUS
 tgt_mgmt_rx_reo_read_snapshot(
@@ -104,6 +147,21 @@ QDF_STATUS
 tgt_mgmt_rx_reo_fw_consumed_event_handler(struct wlan_objmgr_pdev *pdev,
 					  struct mgmt_rx_reo_params *params)
 {
+	int8_t link_id;
+
+	if (!params) {
+		mgmt_rx_reo_err("MGMT rx reo params is NULL");
+		return QDF_STATUS_E_NULL_VALUE;
+	}
+
+	link_id = wlan_get_mlo_link_id_from_pdev(pdev);
+	if (link_id < 0) {
+		mgmt_rx_reo_err("Invalid link %d for the pdev", link_id);
+		return QDF_STATUS_E_INVAL;
+	}
+
+	params->link_id = link_id;
+
 	return tgt_mgmt_rx_reo_enter_algo_without_buffer(
 			pdev, params, MGMT_RX_REO_FRAME_DESC_FW_CONSUMED_FRAME);
 }
@@ -112,6 +170,21 @@ QDF_STATUS
 tgt_mgmt_rx_reo_host_drop_handler(struct wlan_objmgr_pdev *pdev,
 				  struct mgmt_rx_reo_params *params)
 {
+	int8_t link_id;
+
+	if (!params) {
+		mgmt_rx_reo_err("MGMT rx reo params is NULL");
+		return QDF_STATUS_E_NULL_VALUE;
+	}
+
+	link_id = wlan_get_mlo_link_id_from_pdev(pdev);
+	if (link_id < 0) {
+		mgmt_rx_reo_err("Invalid link %d for the pdev", link_id);
+		return QDF_STATUS_E_INVAL;
+	}
+
+	params->link_id = link_id;
+
 	return tgt_mgmt_rx_reo_enter_algo_without_buffer(
 			pdev, params, MGMT_RX_REO_FRAME_DESC_ERROR_FRAME);
 }
@@ -184,6 +257,15 @@ QDF_STATUS tgt_mgmt_rx_reo_frame_handler(
 		status = QDF_STATUS_E_NULL_VALUE;
 		goto cleanup;
 	}
+
+	link_id = wlan_get_mlo_link_id_from_pdev(pdev);
+	if (link_id < 0) {
+		mgmt_rx_reo_err("Invalid link %d for the pdev", link_id);
+		status = QDF_STATUS_E_INVAL;
+		goto cleanup;
+	}
+
+	mgmt_rx_params->reo_params->link_id = link_id;
 
 	/* Populate frame descriptor */
 	desc.type = MGMT_RX_REO_FRAME_DESC_HOST_CONSUMED_FRAME;

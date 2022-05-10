@@ -6428,12 +6428,30 @@ static inline void dp_vdev_register_rx_eapol(struct dp_vdev *vdev,
 #endif
 
 #ifdef WLAN_FEATURE_11BE_MLO
+#if defined(WLAN_MLO_MULTI_CHIP) && defined(WLAN_MCAST_MLO)
+static inline void dp_vdev_save_mld_info(struct dp_vdev *vdev,
+					 struct cdp_vdev_info *vdev_info)
+{
+	if (qdf_is_macaddr_zero((struct qdf_mac_addr *)vdev_info->mld_mac_addr))
+		vdev->mlo_vdev = false;
+	else
+		vdev->mlo_vdev = true;
+}
+#else
+static inline void dp_vdev_save_mld_info(struct dp_vdev *vdev,
+					 struct cdp_vdev_info *vdev_info)
+{
+}
+#endif
 static inline void dp_vdev_save_mld_addr(struct dp_vdev *vdev,
 					 struct cdp_vdev_info *vdev_info)
 {
 	if (vdev_info->mld_mac_addr)
 		qdf_mem_copy(&vdev->mld_mac_addr.raw[0],
 			     vdev_info->mld_mac_addr, QDF_MAC_ADDR_SIZE);
+
+	dp_vdev_save_mld_info(vdev, vdev_info);
+
 }
 #else
 static inline void dp_vdev_save_mld_addr(struct dp_vdev *vdev,
@@ -10230,7 +10248,7 @@ dp_set_psoc_param(struct cdp_soc_t *cdp_soc,
 
 	switch (param) {
 	case CDP_ENABLE_RATE_STATS:
-		soc->rdkstats_enabled = val.cdp_psoc_param_en_rate_stats;
+		soc->peerstats_enabled = val.cdp_psoc_param_en_rate_stats;
 		break;
 	case CDP_SET_NSS_CFG:
 		wlan_cfg_set_dp_soc_nss_cfg(wlan_cfg_ctx,
@@ -10358,7 +10376,7 @@ static int dp_txrx_get_ratekbps(int preamb, int mcs,
 {
 	uint32_t rix;
 	uint16_t ratecode;
-	enum PUNCTURED_MODES punc_mode = NO_PUNCTURE;
+	enum cdp_punctured_modes punc_mode = NO_PUNCTURE;
 
 	return dp_getrateindex((uint32_t)gintval, (uint16_t)mcs, 1,
 			       (uint8_t)preamb, 1, punc_mode,
@@ -12003,7 +12021,7 @@ dp_peer_flush_rate_stats_req(struct dp_soc *soc, struct dp_peer *peer,
 
 	dp_wdi_event_handler(
 		WDI_EVENT_FLUSH_RATE_STATS_REQ,
-		soc, dp_monitor_peer_get_rdkstats_ctx(soc, peer),
+		soc, dp_monitor_peer_get_peerstats_ctx(soc, peer),
 		peer->peer_id,
 		WDI_NO_VAL, peer->vdev->pdev->pdev_id);
 }
@@ -12039,13 +12057,13 @@ dp_flush_rate_stats_req(struct cdp_soc_t *soc_hdl,
 }
 #endif
 
-static void *dp_peer_get_rdkstats_ctx(struct cdp_soc_t *soc_hdl,
-				      uint8_t vdev_id,
-				      uint8_t *mac_addr)
+static void *dp_peer_get_peerstats_ctx(struct cdp_soc_t *soc_hdl,
+				       uint8_t vdev_id,
+				       uint8_t *mac_addr)
 {
 	struct dp_soc *soc = (struct dp_soc *)soc_hdl;
 	struct dp_peer *peer;
-	void *rdkstats_ctx = NULL;
+	void *peerstats_ctx = NULL;
 
 	if (mac_addr) {
 		peer = dp_peer_find_hash_find(soc, mac_addr,
@@ -12055,13 +12073,13 @@ static void *dp_peer_get_rdkstats_ctx(struct cdp_soc_t *soc_hdl,
 			return NULL;
 
 		if (!IS_MLO_DP_MLD_PEER(peer))
-			rdkstats_ctx = dp_monitor_peer_get_rdkstats_ctx(soc,
-									peer);
+			peerstats_ctx = dp_monitor_peer_get_peerstats_ctx(soc,
+									  peer);
 
 		dp_peer_unref_delete(peer, DP_MOD_ID_CDP);
 	}
 
-	return rdkstats_ctx;
+	return peerstats_ctx;
 }
 
 #if defined(FEATURE_PERPKT_INFO) && WDI_EVENT_ENABLE
@@ -12376,6 +12394,23 @@ dp_check_vdev_tx_delay_stats_enabled(struct cdp_soc_t *soc_hdl,
 }
 #endif
 
+#if defined(WLAN_FEATURE_11BE_MLO) && defined(WLAN_MLO_MULTI_CHIP)
+static void
+dp_recovery_vdev_flush_peers(struct cdp_soc_t *cdp_soc, uint8_t vdev_id)
+{
+	struct dp_soc *soc = (struct dp_soc *)cdp_soc;
+	struct dp_vdev *vdev;
+
+	vdev = dp_vdev_get_ref_by_id(soc, vdev_id, DP_MOD_ID_CDP);
+
+	if (!vdev)
+		return;
+
+	dp_vdev_flush_peers((struct cdp_vdev *)vdev, false);
+	dp_vdev_unref_delete(soc, vdev, DP_MOD_ID_CDP);
+}
+#endif
+
 static struct cdp_cmn_ops dp_ops_cmn = {
 	.txrx_soc_attach_target = dp_soc_attach_target_wifi3,
 	.txrx_vdev_attach = dp_vdev_attach_wifi3,
@@ -12460,7 +12495,7 @@ static struct cdp_cmn_ops dp_ops_cmn = {
 	.get_rate_stats_ctx = dp_soc_get_rate_stats_ctx,
 	.txrx_peer_flush_rate_stats = dp_peer_flush_rate_stats,
 	.txrx_flush_rate_stats_request = dp_flush_rate_stats_req,
-	.txrx_peer_get_rdkstats_ctx = dp_peer_get_rdkstats_ctx,
+	.txrx_peer_get_peerstats_ctx = dp_peer_get_peerstats_ctx,
 
 	.set_pdev_pcp_tid_map = dp_set_pdev_pcp_tid_map_wifi3,
 	.set_vdev_pcp_tid_map = dp_set_vdev_pcp_tid_map_wifi3,
@@ -12487,6 +12522,9 @@ static struct cdp_cmn_ops dp_ops_cmn = {
 #endif /* WLAN_SYSFS_DP_STATS */
 #ifdef WLAN_FEATURE_PKT_CAPTURE_V2
 	.set_pkt_capture_mode = dp_set_pkt_capture_mode,
+#endif
+#if defined(WLAN_FEATURE_11BE_MLO) && defined(WLAN_MLO_MULTI_CHIP)
+	.txrx_recovery_vdev_flush_peers = dp_recovery_vdev_flush_peers,
 #endif
 };
 

@@ -384,6 +384,13 @@ struct wmi_wq_dbg_info {
 };
 
 struct wmi_ops {
+#if defined(CONN_MGR_ADV_FEATURE) && \
+	    (defined(WLAN_FEATURE_HOST_ROAM) || \
+		     defined(WLAN_FEATURE_ROAM_OFFLOAD))
+QDF_STATUS
+(*extract_roam_event)(wmi_unified_t wmi_handle, void *evt_buf, uint32_t len,
+		      struct roam_offload_roam_event *roam_event);
+#endif
 #ifdef WLAN_FEATURE_ROAM_OFFLOAD
 QDF_STATUS
 (*extract_roam_btm_response_stats)(wmi_unified_t wmi_handle, void *evt_buf,
@@ -425,9 +432,6 @@ QDF_STATUS
 				 uint32_t len,
 				 struct roam_synch_frame_ind *frame_ptr);
 
-QDF_STATUS
-(*extract_roam_event)(wmi_unified_t wmi_handle, void *evt_buf, uint32_t len,
-		      struct roam_offload_roam_event *roam_event);
 QDF_STATUS
 (*extract_btm_dl_event)(wmi_unified_t wmi_handle,
 			uint8_t *event, uint32_t data_len,
@@ -1386,6 +1390,12 @@ QDF_STATUS (*extract_offchan_data_tx_compl_param)(wmi_unified_t wmi_handle,
 
 QDF_STATUS (*extract_pdev_tpc_config_ev_param)(wmi_unified_t wmi_handle,
 		void *evt_buf, wmi_host_pdev_tpc_config_event *param);
+
+#ifdef QCA_RSSI_DB2DBM
+QDF_STATUS (*extract_pdev_rssi_dbm_conv_ev_param)(wmi_unified_t wmi_handle,
+						  void *evt_buf,
+						  struct rssi_db2dbm_param *param);
+#endif
 
 QDF_STATUS (*extract_peer_sta_kickout_ev)(wmi_unified_t wmi_handle,
 		void *evt_buf, wmi_host_peer_sta_kickout_event *ev);
@@ -2965,6 +2975,12 @@ QDF_STATUS
 QDF_STATUS
 (*send_vdev_pn_mgmt_rxfilter_cmd)(wmi_unified_t wmi_handle,
 				  struct vdev_pn_mgmt_rxfilter_params *params);
+
+QDF_STATUS
+(*extract_pktlog_decode_info_event)(wmi_unified_t wmi_handle, void *evt_buf,
+				    uint8_t *pdev_id, uint8_t *software_image,
+				    uint8_t *chip_info,
+				    uint32_t *pktlog_json_version);
 };
 
 /* Forward declartion for psoc*/

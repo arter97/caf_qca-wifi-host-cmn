@@ -277,6 +277,8 @@ struct hal_rx_mon_msdu_info {
  * @overflow_err: overflow error
  * @decrypt_err: decrypt error
  * @mpdu_start_received: MPDU start received
+ * @full_pkt: Full MPDU received
+ * @first_rx_hdr_rcvd: First rx_hdr received
  */
 struct hal_rx_mon_mpdu_info {
 	uint8_t decap_type;
@@ -285,6 +287,8 @@ struct hal_rx_mon_mpdu_info {
 	bool overflow_err;
 	bool decrypt_err;
 	bool mpdu_start_received;
+	bool full_pkt;
+	bool first_rx_hdr_rcvd;
 };
 
 /**
@@ -1233,8 +1237,10 @@ struct hal_rx_ppdu_info {
 	struct hal_rx_mon_mpdu_info mpdu_info[HAL_MAX_UL_MU_USERS];
 	 /* placeholder to hold packet buffer info */
 	struct hal_mon_packet_info packet_info;
+#ifdef QCA_MONITOR_2_0_SUPPORT
 	 /* per user per MPDU queue */
 	qdf_nbuf_t mpdu_q[HAL_MAX_UL_MU_USERS][HAL_RX_MAX_MPDU];
+#endif
 	 /* ppdu info list element */
 	TAILQ_ENTRY(hal_rx_ppdu_info) ppdu_list_elem;
 };
