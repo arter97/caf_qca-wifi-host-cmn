@@ -243,6 +243,7 @@ static QDF_STATUS nan_handle_confirm(
 	uint8_t vdev_id;
 	struct wlan_objmgr_psoc *psoc;
 	struct nan_psoc_priv_obj *psoc_nan_obj;
+	struct wlan_objmgr_peer *peer;
 
 	vdev_id = wlan_vdev_get_id(confirm->vdev);
 	psoc = wlan_vdev_get_psoc(confirm->vdev);
@@ -250,6 +251,14 @@ static QDF_STATUS nan_handle_confirm(
 		nan_err("psoc is null");
 		return QDF_STATUS_E_NULL_VALUE;
 	}
+	peer = wlan_objmgr_get_peer_by_mac(psoc,
+					   confirm->peer_ndi_mac_addr.bytes,
+					   WLAN_NAN_ID);
+	if (!peer) {
+		nan_debug("Drop NDP confirm as peer isn't available");
+		return QDF_STATUS_E_NULL_VALUE;
+	}
+	wlan_objmgr_peer_release_ref(peer, WLAN_NAN_ID);
 
 	psoc_nan_obj = nan_get_psoc_priv_obj(psoc);
 	if (!psoc_nan_obj) {
