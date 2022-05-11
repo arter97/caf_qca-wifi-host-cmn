@@ -322,6 +322,8 @@ struct spectral_config {
  * @agile_spectral_cap: agile Spectral capability for 20/40/80
  * @agile_spectral_cap_160: agile Spectral capability for 160 MHz
  * @agile_spectral_cap_80p80: agile Spectral capability for 80p80
+ * @num_detectors_5mhz: number of Spectral detectors in 5 MHz
+ * @num_detectors_10mhz: number of Spectral detectors in 10 MHz
  * @num_detectors_20mhz: number of Spectral detectors in 20 MHz
  * @num_detectors_40mhz: number of Spectral detectors in 40 MHz
  * @num_detectors_80mhz: number of Spectral detectors in 80 MHz
@@ -343,6 +345,8 @@ struct spectral_caps {
 	bool agile_spectral_cap;
 	bool agile_spectral_cap_160;
 	bool agile_spectral_cap_80p80;
+	uint32_t num_detectors_5mhz;
+	uint32_t num_detectors_10mhz;
 	uint32_t num_detectors_20mhz;
 	uint32_t num_detectors_40mhz;
 	uint32_t num_detectors_80mhz;

@@ -42,6 +42,7 @@
 #include <spectral_defs_i.h>
 #include <wmi_unified_param.h>
 
+#define FREQ_OFFSET_5MHZ (5)
 #define FREQ_OFFSET_10MHZ (10)
 #define FREQ_OFFSET_40MHZ (40)
 #define FREQ_OFFSET_80MHZ (80)
