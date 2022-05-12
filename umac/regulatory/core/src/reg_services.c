@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2020 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2014-2021 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -1748,6 +1748,33 @@ bool reg_is_dfs_ch(struct wlan_objmgr_pdev *pdev,
 	ch_state = reg_get_channel_state(pdev, chan);
 
 	return ch_state == CHANNEL_STATE_DFS;
+}
+
+bool reg_is_indoor_chan(struct wlan_objmgr_pdev *pdev, uint32_t chan)
+{
+	struct regulatory_channel *cur_chan_list;
+	struct wlan_regulatory_pdev_priv_obj *pdev_priv_obj;
+	enum channel_enum chan_enum;
+
+	pdev_priv_obj = reg_get_pdev_obj(pdev);
+
+	if (!IS_VALID_PDEV_REG_OBJ(pdev_priv_obj)) {
+		reg_err("reg pdev priv obj is NULL");
+		return false;
+	}
+
+	chan_enum = reg_get_chan_enum(chan);
+
+	if (chan_enum == INVALID_CHANNEL) {
+		reg_err("Invalid chan enum %d", chan_enum);
+		return false;
+	}
+
+	cur_chan_list = pdev_priv_obj->cur_chan_list;
+
+	return (cur_chan_list[chan_enum].chan_flags &
+		REGULATORY_CHAN_INDOOR_ONLY);
+
 }
 
 bool reg_is_passive_or_disable_ch(struct wlan_objmgr_pdev *pdev,
@@ -3730,6 +3757,7 @@ QDF_STATUS wlan_regulatory_psoc_obj_created_notification(
 	soc_reg_obj->enable_srd_chan_in_master_mode = true;
 	soc_reg_obj->enable_11d_in_world_mode = false;
 	soc_reg_obj->def_pdev_id = -1;
+	soc_reg_obj->enable_nan_on_indoor_channels = false;
 
 	for (i = 0; i < MAX_STA_VDEV_CNT; i++)
 		soc_reg_obj->vdev_ids_11d[i] = INVALID_VDEV_ID;
@@ -3883,7 +3911,6 @@ QDF_STATUS reg_get_band(struct wlan_objmgr_pdev *pdev,
 #ifdef DISABLE_CHANNEL_LIST
 QDF_STATUS reg_restore_cached_channels(struct wlan_objmgr_pdev *pdev)
 {
-	struct wlan_regulatory_psoc_priv_obj *psoc_priv_obj;
 	struct wlan_regulatory_pdev_priv_obj *pdev_priv_obj;
 	struct wlan_objmgr_psoc *psoc;
 	QDF_STATUS status;
@@ -3900,15 +3927,34 @@ QDF_STATUS reg_restore_cached_channels(struct wlan_objmgr_pdev *pdev)
 		return QDF_STATUS_E_INVAL;
 	}
 
-	psoc_priv_obj = reg_get_psoc_obj(psoc);
-	if (!IS_VALID_PSOC_REG_OBJ(psoc_priv_obj)) {
-		reg_err("psoc reg component is NULL");
-		return QDF_STATUS_E_INVAL;
-	}
-
 	pdev_priv_obj->disable_cached_channels = false;
 	reg_compute_pdev_current_chan_list(pdev_priv_obj);
 	status = reg_send_scheduler_msg_sb(psoc, pdev);
+	return status;
+}
+
+QDF_STATUS reg_disable_cached_channels(struct wlan_objmgr_pdev *pdev)
+{
+	struct wlan_regulatory_pdev_priv_obj *pdev_priv_obj;
+	struct wlan_objmgr_psoc *psoc;
+	QDF_STATUS status;
+
+	pdev_priv_obj = reg_get_pdev_obj(pdev);
+	if (!IS_VALID_PDEV_REG_OBJ(pdev_priv_obj)) {
+		reg_err("pdev reg component is NULL");
+		return QDF_STATUS_E_INVAL;
+	}
+
+	psoc = wlan_pdev_get_psoc(pdev);
+	if (!psoc) {
+		reg_err("psoc is NULL");
+		return QDF_STATUS_E_INVAL;
+	}
+
+	pdev_priv_obj->disable_cached_channels = true;
+	reg_compute_pdev_current_chan_list(pdev_priv_obj);
+	status = reg_send_scheduler_msg_sb(psoc, pdev);
+
 	return status;
 }
 
@@ -3966,17 +4012,6 @@ QDF_STATUS reg_cache_channel_state(struct wlan_objmgr_pdev *pdev,
 
 	return QDF_STATUS_SUCCESS;
 }
-
-static void set_disable_channel_state(
-			struct wlan_regulatory_pdev_priv_obj *pdev_priv_obj)
-{
-	pdev_priv_obj->disable_cached_channels = pdev_priv_obj->sap_state;
-}
-#else
-static void set_disable_channel_state(
-			struct wlan_regulatory_pdev_priv_obj *pdev_priv_obj)
-{
-}
 #endif
 
 QDF_STATUS reg_notify_sap_event(struct wlan_objmgr_pdev *pdev,
@@ -4012,7 +4047,6 @@ QDF_STATUS reg_notify_sap_event(struct wlan_objmgr_pdev *pdev,
 		return QDF_STATUS_SUCCESS;
 
 	pdev_priv_obj->sap_state = sap_state;
-	set_disable_channel_state(pdev_priv_obj);
 
 	reg_compute_pdev_current_chan_list(pdev_priv_obj);
 	status = reg_send_scheduler_msg_sb(psoc, pdev);
@@ -4563,6 +4597,8 @@ QDF_STATUS reg_set_config_vars(struct wlan_objmgr_psoc *psoc,
 		config_vars.enable_srd_chan_in_master_mode;
 	psoc_priv_obj->enable_11d_in_world_mode =
 		config_vars.enable_11d_in_world_mode;
+	psoc_priv_obj->enable_nan_on_indoor_channels =
+		config_vars.enable_nan_on_indoor_channels;
 
 	status = wlan_objmgr_psoc_try_get_ref(psoc, WLAN_REGULATORY_SB_ID);
 	if (QDF_IS_STATUS_ERROR(status)) {
@@ -5430,3 +5466,20 @@ bool reg_get_ignore_fw_reg_offload_ind(struct wlan_objmgr_psoc *psoc)
 	return psoc_reg->ignore_fw_reg_offload_ind;
 }
 
+bool reg_is_nan_allowed_on_indoor(struct wlan_objmgr_pdev *pdev)
+{
+	struct wlan_objmgr_psoc *psoc;
+	struct wlan_regulatory_psoc_priv_obj *psoc_reg;
+
+	if (!pdev) {
+		reg_err("pdev is NULL");
+		return true;
+	}
+	psoc = wlan_pdev_get_psoc(pdev);
+
+	psoc_reg = reg_get_psoc_obj(psoc);
+	if (!IS_VALID_PSOC_REG_OBJ(psoc_reg))
+		return false;
+
+	return psoc_reg->enable_nan_on_indoor_channels;
+}
