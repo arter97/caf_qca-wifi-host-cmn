@@ -1485,6 +1485,24 @@ dfs_find_radar_freq_range_and_add_to_nol(struct wlan_dfs *dfs,
 	return radar_freq_range;
 }
 
+static void
+dfs_add_chan_to_nol_history(struct wlan_dfs *dfs, qdf_freq_t *freq_list,
+			    uint8_t freq_count)
+{
+	if (!dfs->dfs_is_stadfs_enabled ||
+	    !dfs_mlme_is_opmode_sta(dfs->dfs_pdev_obj))
+		return;
+
+	if (WLAN_IS_CHAN_MODE_5(dfs->dfs_curchan) ||
+	    WLAN_IS_CHAN_MODE_10(dfs->dfs_curchan)) {
+		freq_list[0] = dfs->dfs_curchan->dfs_ch_freq;
+		freq_count = 1;
+	}
+	utils_dfs_reg_update_nol_history_chan_for_freq(dfs->dfs_pdev_obj,
+						       freq_list, freq_count,
+						       DFS_NOL_HISTORY_SET);
+}
+
 QDF_STATUS
 dfs_process_radar_ind_on_home_chan(struct wlan_dfs *dfs,
 				   struct radar_found_info *radar_found)
@@ -1544,6 +1562,7 @@ dfs_process_radar_ind_on_home_chan(struct wlan_dfs *dfs,
 		dfs_find_radar_freq_range_and_add_to_nol(dfs,
 							 radar_found,
 							 freq_center);
+
 	/*
 	 * If precac is running and the radar found in secondary
 	 * VHT80 mark the channel as radar and add to NOL list.
@@ -1566,6 +1585,8 @@ dfs_process_radar_ind_on_home_chan(struct wlan_dfs *dfs,
 
 	nol_count = dfs_convert_rangelist_2_reg_freqlist(dfs, &radar_freq_range,
 							 1, nol_freq_list);
+
+	dfs_add_chan_to_nol_history(dfs, nol_freq_list, nol_count);
 	dfs_mark_precac_nol_for_freq(dfs,
 				     dfs->is_radar_found_on_secondary_seg,
 				     radar_found->detector_id,
