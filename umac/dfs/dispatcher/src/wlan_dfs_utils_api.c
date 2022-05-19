@@ -998,10 +998,18 @@ QDF_STATUS utils_dfs_get_vdev_random_channel_for_freq(
 		 "input width=%d", chan_params->ch_width);
 
 	if (*target_chan_freq) {
-		wlan_reg_set_channel_params_for_freq(pdev, *target_chan_freq, 0,
-						     chan_params);
-		utils_dfs_get_max_phy_mode(pdev, hw_mode);
-		status = QDF_STATUS_SUCCESS;
+		if (WLAN_IS_CHAN_MODE_5(dfs->dfs_curchan) ||
+		    WLAN_IS_CHAN_MODE_10(dfs->dfs_curchan)) {
+			chan_params->center_freq_seg0 =
+				wlan_reg_freq_to_chan(pdev, *target_chan_freq);
+			chan_params->mhz_freq_seg0 = *target_chan_freq;
+		} else {
+			wlan_reg_set_channel_params_for_freq(pdev,
+							     *target_chan_freq,
+							     0, chan_params);
+			utils_dfs_get_max_phy_mode(pdev, hw_mode);
+			status = QDF_STATUS_SUCCESS;
+		}
 	}
 
 	dfs_info(dfs, WLAN_DEBUG_DFS_RANDOM_CHAN,

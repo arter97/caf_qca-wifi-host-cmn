@@ -1602,13 +1602,15 @@ dfs_is_cac_done_in_5_10_mhz_list(struct wlan_dfs *dfs,
  * @bw: Channel bandwidth
  * @is_adfs_completed_by_all_stas: Bool to represent ADFS completion by all
  * connected clients.
+ * @is_unmark: Bool to indicate whether cac done should be unmarked.
  *
  * Return - None.
  */
 void dfs_mark_5_and_10mhz_list_as_cac_done(struct wlan_dfs *dfs,
 					   qdf_freq_t center_freq,
 					   uint8_t bw,
-					   bool is_adfs_completed_by_all_stas);
+					   bool is_adfs_completed_by_all_stas,
+					   bool is_unmark);
 /**
  * dfs_delete_5_and_10m_precac_lists() - Delete the 5m and 10m precac entries.
  * @dfs: Pointer to struct wlan_dfs
