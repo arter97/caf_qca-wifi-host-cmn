@@ -188,11 +188,12 @@ void dp_mon_ops_register(struct dp_soc *soc);
  * Return: QDF_STATUS_SUCCESS: Success
  *         QDF_STATUS_E_FAILURE: Error
  */
+#if !defined(DISABLE_MON_CONFIG)
 QDF_STATUS dp_mon_htt_srng_setup(struct dp_soc *soc,
 				 struct dp_pdev *pdev,
 				 int mac_id,
 				 int mac_for_pdev);
-
+#endif
 /*
  * dp_config_debug_sniffer()- API to enable/disable debug sniffer
  * @pdev: DP_PDEV handle
@@ -1875,11 +1876,13 @@ dp_tx_mon_process(struct dp_soc *soc, struct dp_intr *int_ctx,
 static inline
 uint32_t dp_tx_mon_buf_refill(struct dp_intr *int_ctx)
 {
+	return 0;
 }
 
 static inline
 uint32_t dp_rx_mon_buf_refill(struct dp_intr *int_ctx)
 {
+	return 0;
 }
 #endif
 

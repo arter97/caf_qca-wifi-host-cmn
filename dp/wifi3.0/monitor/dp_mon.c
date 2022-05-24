@@ -1984,6 +1984,7 @@ bool dp_pdev_get_filter_non_data(struct cdp_pdev *pdev_handle)
 	return false;
 }
 
+#if !defined(DISABLE_MON_CONFIG)
 QDF_STATUS dp_mon_htt_srng_setup(struct dp_soc *soc,
 				 struct dp_pdev *pdev,
 				 int mac_id,
@@ -1998,7 +1999,7 @@ QDF_STATUS dp_mon_htt_srng_setup(struct dp_soc *soc,
 
 	return QDF_STATUS_E_FAILURE;
 }
-
+#endif
 QDF_STATUS dp_mon_soc_cfg_init(struct dp_soc *soc)
 {
 	int target_type;
