@@ -779,6 +779,8 @@ struct dp_mon_ops {
 	void (*mon_lite_mon_vdev_delete)(struct dp_pdev *pdev,
 					 struct dp_vdev *vdev);
 	void (*mon_lite_mon_disable_rx)(struct dp_pdev *pdev);
+	void (*mon_rx_stats_update_rssi_dbm_params)
+		(struct dp_soc *soc, struct dp_mon_pdev *mon_pdev);
 };
 
 struct dp_mon_soc {
@@ -3754,6 +3756,27 @@ dp_rx_mon_enable(struct dp_soc *soc, uint32_t *msg_word,
 	monitor_ops->rx_mon_enable(msg_word, tlv_filter);
 }
 
+static inline void
+dp_mon_rx_stats_update_rssi_dbm_params(struct dp_soc *soc,
+				       struct dp_mon_pdev *mon_pdev)
+{
+	struct dp_mon_soc *mon_soc = soc->monitor_soc;
+	struct dp_mon_ops *monitor_ops;
+
+	if (!mon_soc) {
+		dp_mon_debug("mon soc is NULL");
+		return;
+	}
+
+	monitor_ops = mon_soc->mon_ops;
+	if (!monitor_ops ||
+	    !monitor_ops->mon_rx_stats_update_rssi_dbm_params) {
+		dp_mon_debug("callback not registered");
+		return;
+	}
+	monitor_ops->mon_rx_stats_update_rssi_dbm_params(soc, mon_pdev);
+}
+
 #ifdef QCA_ENHANCED_STATS_SUPPORT
 QDF_STATUS dp_peer_qos_stats_notify(struct dp_pdev *dp_pdev,
 				    struct cdp_rx_stats_ppdu_user *ppdu_user);
@@ -4051,6 +4074,15 @@ static inline QDF_STATUS
 dp_lite_mon_get_nac_peer_rssi(struct cdp_soc_t *soc_hdl,
 			      uint8_t vdev_id, char *macaddr,
 			      uint8_t *rssi)
+{
+	return QDF_STATUS_E_FAILURE;
+}
+
+static inline QDF_STATUS
+dp_lite_mon_rx_mpdu_process(struct dp_pdev *pdev,
+			    struct hal_rx_ppdu_info *ppdu_info,
+			    qdf_nbuf_t mon_mpdu, uint16_t mpdu_id,
+			    uint8_t user)
 {
 	return QDF_STATUS_E_FAILURE;
 }

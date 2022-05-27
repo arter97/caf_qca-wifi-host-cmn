@@ -3558,7 +3558,10 @@ static void reg_disable_sp_entries_in_supr_chan_entry(
 	uint8_t num_sp_lists = QDF_ARRAY_SIZE(list_of_sp_lists);
 
 	for (j = 0; j < num_sp_lists; j++) {
-		uint8_t idx = list_of_sp_lists[j];
+		enum supported_6g_pwr_types  idx = list_of_sp_lists[j];
+
+		if (reg_is_supp_pwr_mode_invalid(idx))
+			continue;
 
 		reg_dis_chan_state_and_flags(&chan_info->state_arr[idx],
 					     &chan_info->chan_flags_arr[idx]);
@@ -3700,9 +3703,9 @@ reg_fill_min_max_bw_for_afc_list(
  *
  * Return: void
  */
-static uint8_t reg_get_subchannels_for_opclass(uint8_t cfi,
-					       uint8_t opclass,
-					       uint8_t *subchannels)
+uint8_t reg_get_subchannels_for_opclass(uint8_t cfi,
+					uint8_t opclass,
+					uint8_t *subchannels)
 {
 	uint8_t nchans;
 
@@ -4460,7 +4463,9 @@ reg_get_6g_afc_mas_chan_list(struct wlan_objmgr_pdev *pdev,
 
 	return QDF_STATUS_SUCCESS;
 }
+#endif
 
+#ifdef CONFIG_BAND_6GHZ
 /**
  * struct bw_10log10_pair - The bandwidth and 10*log10(bandwidth) pair.
  * ten_l_len = trunc(10*log10(bw)).  'trunc' is truncation function.

@@ -1598,6 +1598,7 @@ void dp_update_vdev_stats_on_peer_unmap(struct dp_vdev *vdev,
 		_tgtobj->rx.raw.num += _srcobj->rx.raw.num; \
 		_tgtobj->rx.raw.bytes += _srcobj->rx.raw.bytes; \
 		_tgtobj->rx.nawds_mcast_drop += _srcobj->rx.nawds_mcast_drop; \
+		_tgtobj->rx.mcast_3addr_drop += _srcobj->rx.mcast_3addr_drop; \
 		_tgtobj->rx.mec_drop.num += _srcobj->rx.mec_drop.num; \
 		_tgtobj->rx.mec_drop.bytes += _srcobj->rx.mec_drop.bytes; \
 		_tgtobj->rx.intra_bss.pkts.num += \
@@ -1711,7 +1712,7 @@ void dp_update_vdev_stats_on_peer_unmap(struct dp_vdev *vdev,
 					_srcobj->tx.transmit_type[i].mpdu_tried; \
 		} \
 		for (i = 0; i < MAX_MU_GROUP_ID; i++) { \
-			_tgtobj->tx.mu_group_id[i] += _srcobj->tx.mu_group_id[i]; \
+			_tgtobj->tx.mu_group_id[i] = _srcobj->tx.mu_group_id[i]; \
 		} \
 		\
 		_tgtobj->rx.mpdu_cnt_fcs_ok += _srcobj->rx.mpdu_cnt_fcs_ok; \
@@ -1928,6 +1929,17 @@ int dp_get_peer_state(struct cdp_soc_t *soc, uint8_t vdev_id,
 void dp_local_peer_id_pool_init(struct dp_pdev *pdev);
 void dp_local_peer_id_alloc(struct dp_pdev *pdev, struct dp_peer *peer);
 void dp_local_peer_id_free(struct dp_pdev *pdev, struct dp_peer *peer);
+/**
+ * dp_set_peer_as_tdls_peer() - set tdls peer flag to peer
+ * @soc_hdl: datapath soc handle
+ * @vdev_id: vdev_id
+ * @peer_mac: peer mac addr
+ * @val: tdls peer flag
+ *
+ * Return: none
+ */
+void dp_set_peer_as_tdls_peer(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
+			      uint8_t *peer_mac, bool val);
 #else
 /**
  * dp_get_vdevid() - Get virtual interface id which peer registered
@@ -1959,7 +1971,14 @@ static inline
 void dp_local_peer_id_free(struct dp_pdev *pdev, struct dp_peer *peer)
 {
 }
+
+static inline
+void dp_set_peer_as_tdls_peer(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
+			      uint8_t *peer_mac, bool val)
+{
+}
 #endif
+
 int dp_addba_resp_tx_completion_wifi3(struct cdp_soc_t *cdp_soc,
 				      uint8_t *peer_mac, uint16_t vdev_id,
 				      uint8_t tid,

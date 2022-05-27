@@ -69,7 +69,7 @@ tgt_mgmt_rx_reo_get_valid_hw_link_bitmap(struct wlan_objmgr_psoc *psoc,
 QDF_STATUS
 tgt_mgmt_rx_reo_read_snapshot(
 			struct wlan_objmgr_pdev *pdev,
-			struct mgmt_rx_reo_snapshot *address,
+			struct mgmt_rx_reo_snapshot_info *snapshot_info,
 			enum mgmt_rx_reo_shared_snapshot_id id,
 			struct mgmt_rx_reo_snapshot_params *value)
 {
@@ -86,8 +86,8 @@ tgt_mgmt_rx_reo_read_snapshot(
 		return QDF_STATUS_E_NULL_VALUE;
 	}
 
-	return mgmt_rx_reo_txops->read_mgmt_rx_reo_snapshot(pdev, address, id,
-							    value);
+	return mgmt_rx_reo_txops->read_mgmt_rx_reo_snapshot(pdev, snapshot_info,
+							    id, value);
 }
 
 /**
@@ -128,6 +128,8 @@ tgt_mgmt_rx_reo_enter_algo_without_buffer(
 	desc.ingress_timestamp = qdf_get_log_timestamp();
 	desc.list_size_rx = -1;
 	desc.list_insertion_pos = -1;
+	desc.frame_type = IEEE80211_FC0_TYPE_MGT;
+	desc.frame_subtype = 0xFF;
 
 	/** If REO is not required for this descriptor,
 	 *  no need to proceed further
@@ -209,10 +211,10 @@ QDF_STATUS tgt_mgmt_rx_reo_filter_config(struct wlan_objmgr_pdev *pdev,
 }
 
 QDF_STATUS
-tgt_mgmt_rx_reo_get_snapshot_address(
-			struct wlan_objmgr_pdev *pdev,
-			enum mgmt_rx_reo_shared_snapshot_id id,
-			struct mgmt_rx_reo_snapshot **address)
+tgt_mgmt_rx_reo_get_snapshot_info
+			(struct wlan_objmgr_pdev *pdev,
+			 enum mgmt_rx_reo_shared_snapshot_id id,
+			 struct mgmt_rx_reo_snapshot_info *snapshot_info)
 {
 	struct wlan_lmac_if_mgmt_rx_reo_tx_ops *mgmt_rx_reo_txops;
 
@@ -222,13 +224,13 @@ tgt_mgmt_rx_reo_get_snapshot_address(
 		return QDF_STATUS_E_NULL_VALUE;
 	}
 
-	if (!mgmt_rx_reo_txops->get_mgmt_rx_reo_snapshot_address) {
-		mgmt_rx_reo_err("txops entry for get snapshot address is null");
+	if (!mgmt_rx_reo_txops->get_mgmt_rx_reo_snapshot_info) {
+		mgmt_rx_reo_err("txops entry for get snapshot info is null");
 		return QDF_STATUS_E_NULL_VALUE;
 	}
 
-	return mgmt_rx_reo_txops->get_mgmt_rx_reo_snapshot_address(pdev, id,
-								   address);
+	return mgmt_rx_reo_txops->get_mgmt_rx_reo_snapshot_info(pdev, id,
+								snapshot_info);
 }
 
 QDF_STATUS tgt_mgmt_rx_reo_frame_handler(
@@ -239,6 +241,10 @@ QDF_STATUS tgt_mgmt_rx_reo_frame_handler(
 	QDF_STATUS status;
 	struct mgmt_rx_reo_frame_descriptor desc = {0};
 	bool is_queued;
+	int8_t link_id;
+	uint8_t frame_type;
+	uint8_t frame_subtype;
+	struct ieee80211_frame *wh;
 
 	if (!pdev) {
 		mgmt_rx_reo_err("pdev is NULL");
@@ -275,8 +281,16 @@ QDF_STATUS tgt_mgmt_rx_reo_frame_handler(
 	desc.list_size_rx = -1;
 	desc.list_insertion_pos = -1;
 
+	wh = (struct ieee80211_frame *)qdf_nbuf_data(buf);
+	frame_type = wh->i_fc[0] & IEEE80211_FC0_TYPE_MASK;
+	frame_subtype = wh->i_fc[0] & IEEE80211_FC0_SUBTYPE_MASK;
+
+	desc.frame_type = frame_type;
+	desc.frame_subtype = frame_subtype;
+
 	/* If REO is not required for this frame, process it right away */
-	if (!is_mgmt_rx_reo_required(pdev, &desc)) {
+	if (frame_type != IEEE80211_FC0_TYPE_MGT ||
+	    !is_mgmt_rx_reo_required(pdev, &desc)) {
 		return tgt_mgmt_txrx_process_rx_frame(pdev, buf,
 						      mgmt_rx_params);
 	}

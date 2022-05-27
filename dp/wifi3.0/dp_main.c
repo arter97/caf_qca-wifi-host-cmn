@@ -7188,6 +7188,7 @@ dp_peer_create_wifi3(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
 		dp_peer_add_ast(soc, peer, peer_mac_addr, ast_type, 0);
 
 		peer->valid = 1;
+		peer->is_tdls_peer = false;
 		dp_local_peer_id_alloc(pdev, peer);
 
 		qdf_spinlock_create(&peer->peer_info_lock);
@@ -7387,7 +7388,7 @@ QDF_STATUS dp_peer_mlo_setup(
 	peer->primary_link = setup_info->is_primary_link;
 	mld_peer = dp_peer_find_hash_find(soc,
 					  setup_info->mld_peer_mac,
-					  0, DP_VDEV_ALL, DP_MOD_ID_CDP);
+					  0, vdev_id, DP_MOD_ID_CDP);
 	if (mld_peer) {
 		if (setup_info->is_first_link) {
 			/* assign rx_tid to mld peer */
@@ -8897,7 +8898,8 @@ static QDF_STATUS dp_vdev_getstats(struct cdp_vdev *vdev_handle,
 			    vdev_stats->rx.multipass_rx_pkt_drop +
 			    vdev_stats->rx.peer_unauth_rx_pkt_drop +
 			    vdev_stats->rx.policy_check_drop +
-			    vdev_stats->rx.nawds_mcast_drop;
+			    vdev_stats->rx.nawds_mcast_drop +
+			    vdev_stats->rx.mcast_3addr_drop;
 
 	qdf_mem_free(vdev_stats);
 
@@ -8961,7 +8963,8 @@ static void dp_pdev_getstats(struct cdp_pdev *pdev_handle,
 		pdev->stats.rx.multipass_rx_pkt_drop +
 		pdev->stats.rx.peer_unauth_rx_pkt_drop +
 		pdev->stats.rx.policy_check_drop +
-		pdev->stats.rx.nawds_mcast_drop;
+		pdev->stats.rx.nawds_mcast_drop +
+		pdev->stats.rx.mcast_3addr_drop;
 }
 
 /**
@@ -10220,6 +10223,11 @@ dp_set_vdev_param(struct cdp_soc_t *cdp_soc, uint8_t vdev_id,
 		vdev->skip_bar_update_last_ts = 0;
 		break;
 #endif
+	case CDP_DROP_3ADDR_MCAST:
+		dp_info("vdev_id %d drop 3 addr mcast :%d", vdev_id,
+			val.cdp_drop_3addr_mcast);
+		vdev->drop_3addr_mcast = val.cdp_drop_3addr_mcast;
+		break;
 	default:
 		break;
 	}
@@ -11987,6 +11995,11 @@ static QDF_STATUS dp_soc_set_param(struct cdp_soc_t  *soc_hdl,
 		dp_info("Multi Peer group command support:%d",
 			soc->multi_peer_grp_cmd_supported);
 		break;
+	case DP_SOC_PARAM_RSSI_DBM_CONV_SUPPORT:
+		soc->features.rssi_dbm_conv_support = value;
+		dp_info("Rssi dbm converstion support:%u",
+			soc->features.rssi_dbm_conv_support);
+		break;
 	default:
 		dp_info("not handled param %d ", param);
 		break;
@@ -13516,6 +13529,7 @@ static struct cdp_peer_ops dp_ops_peer = {
 	.peer_get_peer_mac_addr = dp_peer_get_peer_mac_addr,
 	.get_peer_state = dp_get_peer_state,
 	.peer_flush_frags = dp_peer_flush_frags,
+	.set_peer_as_tdls_peer = dp_set_peer_as_tdls_peer,
 };
 #endif
 
@@ -14159,7 +14173,7 @@ static uint8_t dp_bucket_index(uint32_t delay, uint16_t *array)
 	uint8_t i = CDP_DELAY_BUCKET_0;
 
 	for (; i < CDP_DELAY_BUCKET_MAX - 1; i++) {
-		if (delay >= array[i] && delay <= array[i + 1])
+		if (delay >= array[i] && delay < array[i + 1])
 			return i;
 	}
 

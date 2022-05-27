@@ -92,7 +92,7 @@
 #define DP_PDEV_MAX_VDEVS 17
 #endif
 
-#define MAX_TXDESC_POOLS 4
+#define MAX_TXDESC_POOLS 6
 #define MAX_RXDESC_POOLS 4
 
 #define EXCEPTION_DEST_RING_ID 0
@@ -1804,7 +1804,8 @@ struct dp_arch_ops {
 	struct dp_peer *(*mlo_peer_find_hash_find)(struct dp_soc *soc,
 						   uint8_t *peer_mac_addr,
 						   int mac_addr_is_aligned,
-						   enum dp_mod_id mod_id);
+						   enum dp_mod_id mod_id,
+						   uint8_t vdev_id);
 #endif
 	void (*txrx_print_peer_stats)(struct cdp_peer_stats *peer_stats,
 				      enum peer_stats_type stats_type);
@@ -1820,10 +1821,12 @@ struct dp_arch_ops {
  * @pn_in_reo_dest: PN provided by hardware in the REO destination ring.
  * @dmac_cmn_src_rxbuf_ring_enabled: Flag to indicate DMAC mode common Rx
  *				     buffer source rings
+ * @rssi_dbm_conv_support: Rssi dbm converstion support param.
  */
 struct dp_soc_features {
 	uint8_t pn_in_reo_dest:1,
 		dmac_cmn_src_rxbuf_ring_enabled:1;
+	bool rssi_dbm_conv_support;
 };
 
 enum sysfs_printing_mode {
@@ -2936,7 +2939,7 @@ struct dp_vdev {
 #ifdef QCA_SUPPORT_WDS_EXTENDED
 	bool wds_ext_enabled;
 #endif /* QCA_SUPPORT_WDS_EXTENDED */
-
+	bool drop_3addr_mcast;
 #ifdef WLAN_VENDOR_SPECIFIC_BAR_UPDATE
 	bool skip_bar_update;
 	unsigned long skip_bar_update_last_ts;
@@ -3311,6 +3314,16 @@ struct dp_mlo_flow_override_info {
 	uint8_t cache_set_num;
 };
 
+/**
+ * struct dp_mlo_link_info - Link info
+ * @peer_chip_id: Peer Chip ID
+ * @vdev_id: Vdev ID
+ */
+struct dp_mlo_link_info {
+	uint8_t peer_chip_id;
+	uint8_t vdev_id;
+};
+
 #ifdef WLAN_SUPPORT_MSCS
 /*MSCS Procedure based macros */
 #define IEEE80211_MSCS_MAX_ELEM_SIZE    5
@@ -3644,6 +3657,7 @@ struct dp_peer_per_pkt_rx_stats {
 #ifdef VDEV_PEER_PROTOCOL_COUNT
 	struct protocol_trace_count protocol_trace_cnt[CDP_TRACE_MAX];
 #endif
+	uint32_t mcast_3addr_drop;
 };
 
 /**
@@ -3874,7 +3888,8 @@ struct dp_peer {
 		authorize:1, /* Set when authorized */
 		valid:1, /* valid bit */
 		delete_in_progress:1, /* Indicate kickout sent */
-		sta_self_peer:1; /* Indicate STA self peer */
+		sta_self_peer:1, /* Indicate STA self peer */
+		is_tdls_peer:1; /* Indicate TDLS peer */
 
 #ifdef WLAN_FEATURE_11BE_MLO
 	uint8_t first_link:1, /* first link peer for MLO */

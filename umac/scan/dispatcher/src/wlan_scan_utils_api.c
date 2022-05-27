@@ -213,20 +213,23 @@ util_scan_get_phymode_11be(struct wlan_objmgr_pdev *pdev,
 		phymode = WLAN_PHYMODE_11BEA_EHT320;
 		break;
 	default:
-		scm_err("Invalid eht_ops width: %d", eht_ops->width);
+		scm_debug("Invalid eht_ops width: %d", eht_ops->width);
 		phymode = WLAN_PHYMODE_11BEA_EHT20;
 		break;
 	}
 
-	scan_params->channel.cfreq0 =
-		wlan_reg_chan_band_to_freq(pdev,
-					   eht_ops->chan_freq_seg0,
-					   band_mask);
 	scan_params->channel.cfreq1 =
 		wlan_reg_chan_band_to_freq(pdev,
-					   eht_ops->chan_freq_seg1,
+					   eht_ops->ccfs,
 					   band_mask);
-	scan_params->channel.puncture_bitmap = eht_ops->puncture_pattern;
+
+	if (eht_ops->disable_sub_chan_bitmap_present) {
+		scan_params->channel.puncture_bitmap =
+				QDF_GET_BITS(eht_ops->disable_sub_chan_bitmap[0], 0, 8);
+		scan_params->channel.puncture_bitmap |=
+				QDF_GET_BITS(eht_ops->disable_sub_chan_bitmap[1], 0, 8) << 8;
+	}
+
 	return phymode;
 }
 #else
@@ -755,21 +758,6 @@ util_scan_update_rnr_mld(struct rnr_bss_info *rnr,
 		   TBTT_NEIGHBOR_AP_BSSID_S_SSID_BSS_PARAM_20MHZ_PSD_MLD_PARAM;
 
 	switch (tbtt_info_length) {
-	case TBTT_NEIGHBOR_AP_MLD_PARAM:
-		rnr->channel_number = ap_info->channel_number;
-		rnr->operating_class = ap_info->operting_class;
-		qdf_mem_copy(&rnr->mld_info, &data[1],
-			     sizeof(struct rnr_mld_info));
-		mld_info_present = true;
-		break;
-	case TBTT_NEIGHBOR_AP_BSSID_MLD_PARAM:
-		rnr->channel_number = ap_info->channel_number;
-		rnr->operating_class = ap_info->operting_class;
-		qdf_mem_copy(&rnr->bssid, &data[1], QDF_MAC_ADDR_SIZE);
-		qdf_mem_copy(&rnr->mld_info, &data[1 + QDF_MAC_ADDR_SIZE],
-			     sizeof(struct rnr_mld_info));
-		mld_info_present = true;
-		break;
 	case TBTT_NEIGHBOR_AP_BSSID_S_SSID_BSS_PARAM_20MHZ_PSD_MLD_PARAM:
 		rnr->channel_number = ap_info->channel_number;
 		rnr->operating_class = ap_info->operting_class;
@@ -882,12 +870,13 @@ util_scan_parse_rnr_ie(struct scan_cache_entry *scan_entry,
 		       struct ie_header *ie)
 {
 	uint32_t rnr_ie_len;
-	uint16_t tbtt_count, tbtt_length, i, fieldtype, idx = 0;
+	uint16_t tbtt_count, tbtt_length, i, fieldtype, idx;
 	uint8_t *data;
 	struct neighbor_ap_info_field *neighbor_ap_info;
 
 	rnr_ie_len = ie->ie_len;
 	data = (uint8_t *)ie + sizeof(struct ie_header);
+	idx = scan_entry->rnr.count;
 
 	while (data < ((uint8_t *)ie + rnr_ie_len + 2)) {
 		neighbor_ap_info = (struct neighbor_ap_info_field *)data;
@@ -1689,6 +1678,11 @@ util_scan_add_hidden_ssid(struct wlan_objmgr_pdev *pdev, qdf_nbuf_t bcnbuf)
 				scm_debug("No enough tailroom");
 				return  QDF_STATUS_E_NOMEM;
 			}
+			/*
+			 * "qdf_nbuf_put_tail" might change the data pointer of
+			 * the skb. Therefore use the new data area.
+			 */
+			pbeacon = (qdf_nbuf_data(bcnbuf) + sizeof(*hdr));
 			/* length of the buffer to be copied */
 			tmplen = frame_len -
 				sizeof(*hdr) - ssid_ie_end_offset;
@@ -1783,8 +1777,7 @@ static void util_scan_set_security(struct scan_cache_entry *scan_params)
 #define ML_CONTROL_OFFSET 3
 #define ML_CMN_INFO_OFFSET ML_CONTROL_OFFSET + 2
 
-#define CMN_INFO_MLD_ADDR_PRESENT_BIT     BIT(4)
-#define CMN_INFO_LINK_ID_PRESENT_BIT      BIT(5)
+#define CMN_INFO_LINK_ID_PRESENT_BIT      BIT(4)
 #define LINK_INFO_MAC_ADDR_PRESENT_BIT    BIT(5)
 
 /* This function is implemented as per IEEE802.11be D1.0, there is no difference
@@ -1824,9 +1817,8 @@ static uint8_t util_get_link_info_offset(uint8_t *ml_ie)
 
 	parsed_ie_len += sizeof(*mlie_fixed);
 
-	/* Check if MLD MAC address is present */
-	if (presencebm & WLAN_ML_BV_CTRL_PBM_MLDMACADDR_P)
-		parsed_ie_len += QDF_MAC_ADDR_SIZE;
+	parsed_ie_len += WLAN_ML_BV_CINFO_LENGTH_SIZE;
+	parsed_ie_len += QDF_MAC_ADDR_SIZE;
 
 	/* Check if Link ID info is present */
 	if (presencebm & WLAN_ML_BV_CTRL_PBM_LINKIDINFO_P)
@@ -1905,6 +1897,9 @@ static void util_get_partner_link_info(struct scan_cache_entry *scan_entry)
 		/* Skip STA control field */
 		offset += 2;
 
+		 /* Skip STA Info Length field */
+		 offset += WLAN_ML_BV_LINFO_PERSTAPROF_STAINFO_LENGTH_SIZE;
+
 		scan_entry->ml_info.link_info[0].link_id = sta_ctrl & 0xF;
 		if (sta_ctrl & LINK_INFO_MAC_ADDR_PRESENT_BIT) {
 			qdf_mem_copy(
@@ -1948,12 +1943,13 @@ static void util_scan_update_ml_info(struct scan_cache_entry *scan_entry)
 
 	multi_link_ctrl = *(uint16_t *)(ml_ie + ML_CONTROL_OFFSET);
 	offset = ML_CMN_INFO_OFFSET;
-	/* TODO: Add proper parsing based on presense bitmap */
-	if (multi_link_ctrl & CMN_INFO_MLD_ADDR_PRESENT_BIT) {
-		qdf_mem_copy(&scan_entry->ml_info.mld_mac_addr,
-			     ml_ie + offset, 6);
-		offset += 6;
-	}
+
+	/* Increment the offset to account for the Common Info Length */
+	offset += WLAN_ML_BV_CINFO_LENGTH_SIZE;
+
+	qdf_mem_copy(&scan_entry->ml_info.mld_mac_addr,
+		     ml_ie + offset, 6);
+	offset += 6;
 
 	/* TODO: Decode it from ML IE */
 	scan_entry->ml_info.num_links = 0;
