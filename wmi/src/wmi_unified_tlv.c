@@ -360,6 +360,7 @@ static const uint32_t pdev_param_tlv[] = {
 	[wmi_pdev_param_en_ru_106_tone_er_su_dcm] =
 			WMI_PDEV_PARAM_EN_RU_106_TONE_ER_SU_DCM,
 	[wmi_pdev_param_stats_observe_period] = WMI_PDEV_PARAM_STATS_OBSERVATION_PERIOD,
+	[wmi_pdev_param_ul_ofdma_rtd] = WMI_PDEV_PARAM_UL_OFDMA_RTD,
 };
 
 /**

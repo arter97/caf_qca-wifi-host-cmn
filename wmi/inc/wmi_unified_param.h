@@ -5029,6 +5029,7 @@ typedef enum {
 	wmi_pdev_param_en_ru_106_tone_er_su_dcm,
 	wmi_pdev_param_stats_observe_period,
 	wmi_pdev_param_max,
+	wmi_pdev_param_ul_ofdma_rtd,
 } wmi_conv_pdev_params_id;
 
 
