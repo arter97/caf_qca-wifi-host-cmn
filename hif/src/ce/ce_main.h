@@ -68,6 +68,12 @@ enum ce_id_type {
 	CE_ID_9,
 	CE_ID_10,
 	CE_ID_11,
+#ifdef QCA_WIFI_QCN9224
+	CE_ID_12,
+	CE_ID_13,
+	CE_ID_14,
+	CE_ID_15,
+#endif
 	CE_ID_MAX
 };
 
@@ -147,6 +153,7 @@ struct ce_tasklet_entry {
 	struct tasklet_struct intr_tq;
 	enum ce_id_type ce_id;
 	bool inited;
+	bool hi_tasklet_ce;
 	void *hif_ce_state;
 };
 

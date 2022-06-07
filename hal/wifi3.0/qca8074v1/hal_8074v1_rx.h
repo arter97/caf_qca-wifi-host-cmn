@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016-2020 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -19,7 +19,7 @@
 #include "hal_internal.h"
 #include "cdp_txrx_mon_struct.h"
 #include "qdf_trace.h"
-#include "hal_rx.h"
+#include "hal_li_rx.h"
 #include "hal_tx.h"
 #include "dp_types.h"
 #include "hal_api_mon.h"
@@ -259,6 +259,9 @@
 #define HAL_RX_GET_SW_FRAME_GROUP_ID(rx_mpdu_start)	\
 	HAL_RX_GET(rx_mpdu_start, RX_MPDU_INFO_0, SW_FRAME_GROUP_ID)
 
+#define HAL_RX_GET_SW_PEER_ID(rx_mpdu_start)	\
+	HAL_RX_GET(rx_mpdu_start, RX_MPDU_INFO_1, SW_PEER_ID)
+
 #define HAL_REO_R0_CONFIG(soc, reg_val, reo_params)		\
 	do { \
 		reg_val &= \
@@ -276,6 +279,20 @@
 		HAL_REG_WRITE((soc), \
 			      HWIO_REO_R0_GENERAL_ENABLE_ADDR( \
 			      SEQ_WCSS_UMAC_REO_REG_OFFSET),\
+			      (reg_val)); \
+		(reg_val) = \
+		HAL_REG_READ((soc), \
+			     HWIO_REO_R0_DESTINATION_RING_ALT_CTRL_IX_0_ADDR( \
+			     SEQ_WCSS_UMAC_REO_REG_OFFSET)); \
+		(reg_val) &= \
+			~(HWIO_REO_R0_DESTINATION_RING_ALT_CTRL_IX_0_DEST_RING_ALT_MAPPING_0_BMSK); \
+		(reg_val) |= \
+			HAL_SM(HWIO_REO_R0_DESTINATION_RING_ALT_CTRL_IX_0, \
+			       DEST_RING_ALT_MAPPING_0, \
+			       (reo_params)->alt_dst_ind_0); \
+		HAL_REG_WRITE((soc), \
+			      HWIO_REO_R0_DESTINATION_RING_ALT_CTRL_IX_0_ADDR( \
+			      SEQ_WCSS_UMAC_REO_REG_OFFSET), \
 			      (reg_val)); \
 	} while (0)
 

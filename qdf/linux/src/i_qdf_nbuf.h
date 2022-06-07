@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2020 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2014-2021 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -38,6 +38,7 @@
 #include <linux/tcp.h>
 #include <qdf_util.h>
 #include <qdf_nbuf_frag.h>
+#include "qdf_time.h"
 
 /*
  * Use socket buffer as the underlying implementation as skbuf .
@@ -69,9 +70,22 @@ typedef struct sk_buff_head __qdf_nbuf_queue_head_t;
 #define QDF_NBUF_CB_PACKET_TYPE_ICMP   5
 #define QDF_NBUF_CB_PACKET_TYPE_ICMPv6 6
 
+#define RADIOTAP_BASE_HEADER_LEN sizeof(struct ieee80211_radiotap_header)
+
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(4, 19, 0))
+#define IEEE80211_RADIOTAP_HE 23
+#define IEEE80211_RADIOTAP_HE_MU 24
+#endif
+
+#define IEEE80211_RADIOTAP_HE_MU_OTHER 25
 
 /* mark the first packet after wow wakeup */
 #define QDF_MARK_FIRST_WAKEUP_PACKET   0x80000000
+
+/* TCP Related MASK */
+#define QDF_NBUF_PKT_TCPOP_FIN			0x01
+#define QDF_NBUF_PKT_TCPOP_FIN_ACK		0x11
+#define QDF_NBUF_PKT_TCPOP_RST			0x04
 
 /*
  * Make sure that qdf_dma_addr_t in the cb block is always 64 bit aligned
@@ -104,6 +118,7 @@ typedef union {
  * @rx.dev.priv_cb_w.fctx: ctx to handle special pkts defined by ftype
  * @rx.dev.priv_cb_w.msdu_len: length of RX packet
  * @rx.dev.priv_cb_w.peer_id: peer_id for RX packet
+ * @rx.dev.priv_cb_w.flag_intra_bss: flag to indicate this is intra bss packet
  * @rx.dev.priv_cb_w.protocol_tag: protocol tag set by app for rcvd packet type
  * @rx.dev.priv_cb_w.flow_tag: flow tag set by application for 5 tuples rcvd
  *
@@ -113,6 +128,7 @@ typedef union {
  * @rx.dev.priv_cb_m.l3_hdr_pad: L3 header padding offset
  * @rx.dev.priv_cb_m.exc_frm: exception frame
  * @rx.dev.priv_cb_m.ipa_smmu_map: do IPA smmu map
+ * @rx.dev.priv_cb_m.reo_dest_ind: reo destination indication
  * @rx.dev.priv_cb_m.tcp_seq_num: TCP sequence number
  * @rx.dev.priv_cb_m.tcp_ack_num: TCP ACK number
  * @rx.dev.priv_cb_m.lro_ctx: LRO context
@@ -191,6 +207,7 @@ typedef union {
  *                       +          (TXRX)|(HTT)|(HTC)|(HIF)|(CE)|(FREE)]
  * @tx.trace.is_packet_priv:
  * @tx.trace.packet_track: {NBUF_TX_PKT_[(DATA)|(MGMT)]_TRACK}
+ * @tx.trace.to_fw: Flag to indicate send this packet to FW
  * @tx.trace.proto_type: bitmap of NBUF_PKT_TRAC_TYPE[(EAPOL)|(DHCP)|
  *                          + (MGMT_ACTION)] - 4 bits
  * @tx.trace.dp_trace: flag (Datapath trace)
@@ -214,7 +231,9 @@ struct qdf_nbuf_cb {
 				struct {
 					void *ext_cb_ptr;
 					void *fctx;
-					uint16_t msdu_len;
+					uint16_t msdu_len : 14,
+						 flag_intra_bss : 1,
+						 reserved : 1;
 					uint16_t peer_id;
 					uint16_t protocol_tag;
 					uint16_t flow_tag;
@@ -232,7 +251,8 @@ struct qdf_nbuf_cb {
 						 /* exception frame flag */
 						 exc_frm:1,
 						 ipa_smmu_map:1,
-						 reserved:7,
+						 reo_dest_ind:5,
+						 reserved:2,
 						 reserved1:16;
 					uint32_t tcp_seq_num;
 					uint32_t tcp_ack_num;
@@ -272,8 +292,8 @@ struct qdf_nbuf_cb {
 			union {
 				uint8_t packet_state;
 				uint8_t dp_trace:1,
-					packet_track:4,
-					rsrvd:3;
+					packet_track:3,
+					rsrvd:4;
 			} trace;
 			uint16_t vdev_id:8,
 				 tid_val:4,
@@ -303,7 +323,9 @@ struct qdf_nbuf_cb {
 						uint8_t bi_map:1,
 							reserved:7;
 					} dma_option;
-					uint8_t reserved[3];
+					uint8_t flag_notify_comp:1,
+						rsvd:7;
+					uint8_t reserved[2];
 				} priv_cb_m;
 			} dev;
 			uint8_t ftype;
@@ -318,14 +340,15 @@ struct qdf_nbuf_cb {
 						flag_chfrag_cont:1,
 						flag_chfrag_end:1,
 						flag_ext_header:1,
-						flag_notify_comp:1;
+						reserved:1;
 				} bits;
 				uint8_t u8;
 			} flags;
 			struct {
 				uint8_t packet_state:7,
 					is_packet_priv:1;
-				uint8_t packet_track:4,
+				uint8_t packet_track:3,
+					to_fw:1,
 					proto_type:4;
 				uint8_t dp_trace:1,
 					is_bcast:1,
@@ -463,8 +486,6 @@ QDF_COMPILE_TIME_ASSERT(qdf_nbuf_cb_size,
 		((skb)->cb))->u.tx.flags.bits.flag_nbuf)
 #define QDF_NBUF_CB_TX_NUM_EXTRA_FRAGS(skb) \
 	(((struct qdf_nbuf_cb *)((skb)->cb))->u.tx.flags.bits.num)
-#define QDF_NBUF_CB_TX_EXTRA_FRAG_FLAGS_NOTIFY_COMP(skb) \
-	(((struct qdf_nbuf_cb *)((skb)->cb))->u.tx.flags.bits.flag_notify_comp)
 #define QDF_NBUF_CB_TX_EXTRA_FRAG_FLAGS_CHFRAG_START(skb) \
 	(((struct qdf_nbuf_cb *) \
 	((skb)->cb))->u.tx.flags.bits.flag_chfrag_start)
@@ -493,6 +514,10 @@ QDF_COMPILE_TIME_ASSERT(qdf_nbuf_cb_size,
 #define QDF_NBUF_CB_TX_PACKET_TRACK(skb)\
 	(((struct qdf_nbuf_cb *) \
 		((skb)->cb))->u.tx.trace.packet_track)
+
+#define QDF_NBUF_CB_TX_PACKET_TO_FW(skb)\
+	(((struct qdf_nbuf_cb *) \
+		((skb)->cb))->u.tx.trace.to_fw)
 
 #define QDF_NBUF_CB_RX_PACKET_TRACK(skb)\
 		(((struct qdf_nbuf_cb *) \
@@ -842,8 +867,11 @@ uint32_t __qdf_nbuf_get_arp_tgt_ip(uint8_t *data);
 uint8_t *__qdf_nbuf_get_dns_domain_name(uint8_t *data, uint32_t len);
 bool __qdf_nbuf_data_is_dns_query(uint8_t *data);
 bool __qdf_nbuf_data_is_dns_response(uint8_t *data);
+bool __qdf_nbuf_data_is_tcp_fin(uint8_t *data);
+bool __qdf_nbuf_data_is_tcp_fin_ack(uint8_t *data);
 bool __qdf_nbuf_data_is_tcp_syn(uint8_t *data);
 bool __qdf_nbuf_data_is_tcp_syn_ack(uint8_t *data);
+bool __qdf_nbuf_data_is_tcp_rst(uint8_t *data);
 bool __qdf_nbuf_data_is_tcp_ack(uint8_t *data);
 uint16_t __qdf_nbuf_data_get_tcp_src_port(uint8_t *data);
 uint16_t __qdf_nbuf_data_get_tcp_dst_port(uint8_t *data);
@@ -1460,8 +1488,11 @@ static inline void __qdf_nbuf_set_pktlen(struct sk_buff *skb, uint32_t len)
 			if (unlikely(pskb_expand_head(skb, 0,
 				len - skb->len - skb_tailroom(skb),
 				GFP_ATOMIC))) {
+				QDF_DEBUG_PANIC(
+				   "SKB tailroom is lessthan requested length."
+				   " tail-room: %u, len: %u, skb->len: %u",
+				   skb_tailroom(skb), len, skb->len);
 				dev_kfree_skb_any(skb);
-				qdf_assert(0);
 			}
 		}
 		skb_put(skb, (len - skb->len));
@@ -2229,6 +2260,60 @@ static inline void __qdf_nbuf_orphan(struct sk_buff *skb)
 }
 
 /**
+ * __qdf_nbuf_get_end_offset() - Return the size of the nbuf from
+ * head pointer to end pointer
+ * @nbuf: qdf_nbuf_t
+ *
+ * Return: size of network buffer from head pointer to end
+ * pointer
+ */
+static inline unsigned int __qdf_nbuf_get_end_offset(__qdf_nbuf_t nbuf)
+{
+	return skb_end_offset(nbuf);
+}
+
+#ifdef CONFIG_WLAN_SYSFS_MEM_STATS
+/**
+ * __qdf_record_nbuf_nbytes() - add or subtract the size of the nbuf
+ * from the total skb mem and DP tx/rx skb mem
+ * @nbytes: number of bytes
+ * @dir: direction
+ * @is_mapped: is mapped or unmapped memory
+ *
+ * Return: none
+ */
+static inline void __qdf_record_nbuf_nbytes(
+	int nbytes, qdf_dma_dir_t dir, bool is_mapped)
+{
+	if (is_mapped) {
+		if (dir == QDF_DMA_TO_DEVICE) {
+			qdf_mem_dp_tx_skb_cnt_inc();
+			qdf_mem_dp_tx_skb_inc(nbytes);
+		} else if (dir == QDF_DMA_FROM_DEVICE) {
+			qdf_mem_dp_rx_skb_cnt_inc();
+			qdf_mem_dp_rx_skb_inc(nbytes);
+		}
+		qdf_mem_skb_total_inc(nbytes);
+	} else {
+		if (dir == QDF_DMA_TO_DEVICE) {
+			qdf_mem_dp_tx_skb_cnt_dec();
+			qdf_mem_dp_tx_skb_dec(nbytes);
+		} else if (dir == QDF_DMA_FROM_DEVICE) {
+			qdf_mem_dp_rx_skb_cnt_dec();
+			qdf_mem_dp_rx_skb_dec(nbytes);
+		}
+		qdf_mem_skb_total_dec(nbytes);
+	}
+}
+
+#else /* CONFIG_WLAN_SYSFS_MEM_STATS */
+static inline void __qdf_record_nbuf_nbytes(
+	int nbytes, qdf_dma_dir_t dir, bool is_mapped)
+{
+}
+#endif /* CONFIG_WLAN_SYSFS_MEM_STATS */
+
+/**
  * __qdf_nbuf_map_nbytes_single() - map nbytes
  * @osdev: os device
  * @buf: buffer
@@ -2253,13 +2338,18 @@ static inline QDF_STATUS __qdf_nbuf_map_nbytes_single(
 		qdf_dma_dir_t dir, int nbytes)
 {
 	qdf_dma_addr_t paddr;
+	QDF_STATUS ret;
 
 	/* assume that the OS only provides a single fragment */
 	QDF_NBUF_CB_PADDR(buf) = paddr =
 		dma_map_single(osdev->dev, buf->data,
 			       nbytes, __qdf_dma_dir_to_os(dir));
-	return dma_mapping_error(osdev->dev, paddr) ?
+	ret =  dma_mapping_error(osdev->dev, paddr) ?
 		QDF_STATUS_E_FAULT : QDF_STATUS_SUCCESS;
+	if (QDF_IS_STATUS_SUCCESS(ret))
+		__qdf_record_nbuf_nbytes(__qdf_nbuf_get_end_offset(buf),
+					 dir, true);
+	return ret;
 }
 #endif
 /**
@@ -2286,6 +2376,8 @@ __qdf_nbuf_unmap_nbytes_single(qdf_device_t osdev, struct sk_buff *buf,
 	qdf_dma_addr_t paddr = QDF_NBUF_CB_PADDR(buf);
 
 	if (qdf_likely(paddr)) {
+		__qdf_record_nbuf_nbytes(
+			__qdf_nbuf_get_end_offset(buf), dir, false);
 		dma_unmap_single(osdev->dev, paddr, nbytes,
 				 __qdf_dma_dir_to_os(dir));
 		return;
@@ -2464,6 +2556,28 @@ static inline uint32_t __qdf_nbuf_get_mark(__qdf_nbuf_t buf)
 static inline qdf_size_t __qdf_nbuf_get_data_len(__qdf_nbuf_t nbuf)
 {
 	return (skb_end_pointer(nbuf) - nbuf->data);
+}
+
+/**
+ * __qdf_nbuf_get_gso_segs() - Return the number of gso segments
+ * @skb: Pointer to network buffer
+ *
+ * Return: Return the number of gso segments
+ */
+static inline uint16_t __qdf_nbuf_get_gso_segs(struct sk_buff *skb)
+{
+	return skb_shinfo(skb)->gso_segs;
+}
+
+/*
+ * __qdf_nbuf_net_timedelta() - get time delta
+ * @t: time as __qdf_ktime_t object
+ *
+ * Return: time delta as ktime_t object
+ */
+static inline qdf_ktime_t __qdf_nbuf_net_timedelta(qdf_ktime_t t)
+{
+	return net_timedelta(t);
 }
 
 #ifdef CONFIG_NBUF_AP_PLATFORM

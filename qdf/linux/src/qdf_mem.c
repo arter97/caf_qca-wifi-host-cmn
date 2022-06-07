@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2020 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2014-2021 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -28,7 +28,6 @@
 #include "qdf_mc_timer.h"
 #include "qdf_module.h"
 #include <qdf_trace.h>
-#include "qdf_atomic.h"
 #include "qdf_str.h"
 #include "qdf_talloc.h"
 #include <linux/debugfs.h>
@@ -60,11 +59,35 @@ static bool is_initial_mem_debug_disabled;
  * @kmalloc: total kmalloc allocations
  * @dma: total dma allocations
  * @skb: total skb allocations
+ * @skb_total: total skb allocations in host driver
+ * @dp_tx_skb: total Tx skb allocations in datapath
+ * @dp_rx_skb: total Rx skb allocations in datapath
+ * @skb_mem_max: high watermark for skb allocations
+ * @dp_tx_skb_mem_max: high watermark for Tx DP skb allocations
+ * @dp_rx_skb_mem_max: high watermark for Rx DP skb allocations
+ * @dp_tx_skb_count: DP Tx buffer count
+ * @dp_tx_skb_count_max: High watermark for DP Tx buffer count
+ * @dp_rx_skb_count: DP Rx buffer count
+ * @dp_rx_skb_count_max: High watermark for DP Rx buffer count
+ * @tx_descs_outstanding: Current pending Tx descs count
+ * @tx_descs_max: High watermark for pending Tx descs count
  */
 static struct __qdf_mem_stat {
 	qdf_atomic_t kmalloc;
 	qdf_atomic_t dma;
 	qdf_atomic_t skb;
+	qdf_atomic_t skb_total;
+	qdf_atomic_t dp_tx_skb;
+	qdf_atomic_t dp_rx_skb;
+	int32_t skb_mem_max;
+	int32_t dp_tx_skb_mem_max;
+	int32_t dp_rx_skb_mem_max;
+	qdf_atomic_t dp_tx_skb_count;
+	int32_t dp_tx_skb_count_max;
+	qdf_atomic_t dp_rx_skb_count;
+	int32_t dp_rx_skb_count_max;
+	qdf_atomic_t tx_descs_outstanding;
+	int32_t tx_descs_max;
 } qdf_mem_stat;
 
 #ifdef MEMORY_DEBUG
@@ -88,27 +111,6 @@ enum list_type {
 struct major_alloc_priv {
 	enum list_type type;
 	uint32_t threshold;
-};
-
-static struct major_alloc_priv mem_priv = {
-	/* List type set to mem */
-	LIST_TYPE_MEM,
-	/* initial threshold to list APIs which allocates mem >= 50 times */
-	50
-};
-
-static struct major_alloc_priv dma_priv = {
-	/* List type set to DMA */
-	LIST_TYPE_DMA,
-	/* initial threshold to list APIs which allocates dma >= 50 times */
-	50
-};
-
-static struct major_alloc_priv nbuf_priv = {
-	/* List type set to NBUF */
-	LIST_TYPE_NBUF,
-	/* initial threshold to list APIs which allocates nbuf >= 50 times */
-	50
 };
 
 static qdf_list_t qdf_mem_domains[QDF_DEBUG_DOMAIN_COUNT];
@@ -152,6 +154,9 @@ struct qdf_mem_header {
 	uint64_t time;
 };
 
+/* align the qdf_mem_header to 8 bytes */
+#define QDF_DMA_MEM_HEADER_ALIGN 8
+
 static uint64_t WLAN_MEM_HEADER = 0x6162636465666768;
 static uint64_t WLAN_MEM_TRAILER = 0x8081828384858687;
 
@@ -160,10 +165,13 @@ static inline struct qdf_mem_header *qdf_mem_get_header(void *ptr)
 	return (struct qdf_mem_header *)ptr - 1;
 }
 
+/* make sure the header pointer is 8bytes aligned */
 static inline struct qdf_mem_header *qdf_mem_dma_get_header(void *ptr,
 							    qdf_size_t size)
 {
-	return (struct qdf_mem_header *) ((uint8_t *) ptr + size);
+	return (struct qdf_mem_header *)
+				qdf_roundup((size_t)((uint8_t *)ptr + size),
+					    QDF_DMA_MEM_HEADER_ALIGN);
 }
 
 static inline uint64_t *qdf_mem_get_trailer(struct qdf_mem_header *header)
@@ -182,7 +190,7 @@ static inline void *qdf_mem_get_ptr(struct qdf_mem_header *header)
 
 /* number of bytes needed for the qdf dma memory debug information */
 #define QDF_DMA_MEM_DEBUG_SIZE \
-	(sizeof(struct qdf_mem_header))
+	(sizeof(struct qdf_mem_header) + QDF_DMA_MEM_HEADER_ALIGN)
 
 static void qdf_mem_trailer_init(struct qdf_mem_header *header)
 {
@@ -302,41 +310,6 @@ qdf_mem_header_assert_valid(struct qdf_mem_header *header,
 
 	QDF_MEMDEBUG_PANIC("Fatal memory error detected @ %s:%d", func, line);
 }
-#endif /* MEMORY_DEBUG */
-
-u_int8_t prealloc_disabled = 1;
-qdf_declare_param(prealloc_disabled, byte);
-qdf_export_symbol(prealloc_disabled);
-
-#if defined WLAN_DEBUGFS
-
-/* Debugfs root directory for qdf_mem */
-static struct dentry *qdf_mem_debugfs_root;
-
-#ifdef MEMORY_DEBUG
-static int qdf_err_printer(void *priv, const char *fmt, ...)
-{
-	va_list args;
-
-	va_start(args, fmt);
-	QDF_VTRACE(QDF_MODULE_ID_QDF, QDF_TRACE_LEVEL_ERROR, (char *)fmt, args);
-	va_end(args);
-
-	return 0;
-}
-
-static int seq_printf_printer(void *priv, const char *fmt, ...)
-{
-	struct seq_file *file = priv;
-	va_list args;
-
-	va_start(args, fmt);
-	seq_vprintf(file, fmt, args);
-	seq_puts(file, "\n");
-	va_end(args);
-
-	return 0;
-}
 
 /**
  * struct __qdf_mem_info - memory statistics
@@ -383,81 +356,6 @@ static void qdf_mem_debug_print_header(qdf_abstract_print print,
 	      " count    size     total    filename     caller    timestamp");
 	print(print_priv,
 	      "--------------------------------------------------------------");
-}
-
-/**
- * qdf_mem_meta_table_print() - memory metadata table print logic
- * @table: the memory metadata table to print
- * @print: the print adapter function
- * @print_priv: the private data to be consumed by @print
- * @threshold: the threshold value set by user to list top allocations
- *
- * Return: None
- */
-static void qdf_mem_meta_table_print(struct __qdf_mem_info *table,
-				     qdf_abstract_print print,
-				     void *print_priv,
-				     uint32_t threshold)
-{
-	int i;
-	char debug_str[QDF_DEBUG_STRING_SIZE];
-	size_t len = 0;
-	char *debug_prefix = "WLAN_BUG_RCA: memory leak detected";
-
-	len += qdf_scnprintf(debug_str, sizeof(debug_str) - len,
-			     "%s", debug_prefix);
-
-	for (i = 0; i < QDF_MEM_STAT_TABLE_SIZE; i++) {
-		if (!table[i].count)
-			break;
-
-		print(print_priv,
-		      "%6u x %5u = %7uB @ %s:%u   %pS %llu",
-		      table[i].count,
-		      table[i].size,
-		      table[i].count * table[i].size,
-		      table[i].func,
-		      table[i].line, table[i].caller,
-		      table[i].time);
-		len += qdf_scnprintf(debug_str + len,
-				     sizeof(debug_str) - len,
-				     " @ %s:%u %pS",
-				     table[i].func,
-				     table[i].line,
-				     table[i].caller);
-	}
-	print(print_priv, "%s", debug_str);
-}
-
-/**
- * qdf_print_major_alloc() - memory metadata table print logic
- * @table: the memory metadata table to print
- * @print: the print adapter function
- * @print_priv: the private data to be consumed by @print
- * @threshold: the threshold value set by uset to list top allocations
- *
- * Return: None
- */
-static void qdf_print_major_alloc(struct __qdf_mem_info *table,
-				  qdf_abstract_print print,
-				  void *print_priv,
-				  uint32_t threshold)
-{
-	int i;
-
-	for (i = 0; i < QDF_MEM_STAT_TABLE_SIZE; i++) {
-		if (!table[i].count)
-			break;
-		if (table[i].count >= threshold)
-			print(print_priv,
-			      "%6u x %5u = %7uB @ %s:%u   %pS %llu",
-			      table[i].count,
-			      table[i].size,
-			      table[i].count * table[i].size,
-			      table[i].func,
-			      table[i].line, table[i].caller,
-			      table[i].time);
-	}
 }
 
 /**
@@ -542,6 +440,158 @@ static void qdf_mem_domain_print(qdf_list_t *domain,
 	qdf_spin_unlock(&qdf_mem_list_lock);
 
 	(*mem_print)(table, print, print_priv, threshold);
+}
+
+/**
+ * qdf_mem_meta_table_print() - memory metadata table print logic
+ * @table: the memory metadata table to print
+ * @print: the print adapter function
+ * @print_priv: the private data to be consumed by @print
+ * @threshold: the threshold value set by user to list top allocations
+ *
+ * Return: None
+ */
+static void qdf_mem_meta_table_print(struct __qdf_mem_info *table,
+				     qdf_abstract_print print,
+				     void *print_priv,
+				     uint32_t threshold)
+{
+	int i;
+	char debug_str[QDF_DEBUG_STRING_SIZE];
+	size_t len = 0;
+	char *debug_prefix = "WLAN_BUG_RCA: memory leak detected";
+
+	len += qdf_scnprintf(debug_str, sizeof(debug_str) - len,
+			     "%s", debug_prefix);
+
+	for (i = 0; i < QDF_MEM_STAT_TABLE_SIZE; i++) {
+		if (!table[i].count)
+			break;
+
+		print(print_priv,
+		      "%6u x %5u = %7uB @ %s:%u   %pS %llu",
+		      table[i].count,
+		      table[i].size,
+		      table[i].count * table[i].size,
+		      table[i].func,
+		      table[i].line, table[i].caller,
+		      table[i].time);
+		len += qdf_scnprintf(debug_str + len,
+				     sizeof(debug_str) - len,
+				     " @ %s:%u %pS",
+				     table[i].func,
+				     table[i].line,
+				     table[i].caller);
+	}
+	print(print_priv, "%s", debug_str);
+}
+
+static int qdf_err_printer(void *priv, const char *fmt, ...)
+{
+	va_list args;
+
+	va_start(args, fmt);
+	QDF_VTRACE(QDF_MODULE_ID_QDF, QDF_TRACE_LEVEL_ERROR, (char *)fmt, args);
+	va_end(args);
+
+	return 0;
+}
+
+#endif /* MEMORY_DEBUG */
+
+bool prealloc_disabled = 1;
+qdf_declare_param(prealloc_disabled, bool);
+qdf_export_symbol(prealloc_disabled);
+
+int qdf_mem_malloc_flags(void)
+{
+	if (in_interrupt() || irqs_disabled() || in_atomic())
+		return GFP_ATOMIC;
+
+	return GFP_KERNEL;
+}
+
+qdf_export_symbol(qdf_mem_malloc_flags);
+
+/**
+ * qdf_prealloc_disabled_config_get() - Get the user configuration of
+ *                                       prealloc_disabled
+ *
+ * Return: value of prealloc_disabled qdf module argument
+ */
+bool qdf_prealloc_disabled_config_get(void)
+{
+	return prealloc_disabled;
+}
+
+qdf_export_symbol(qdf_prealloc_disabled_config_get);
+
+#ifdef QCA_WIFI_MODULE_PARAMS_FROM_INI
+/**
+ * qdf_prealloc_disabled_config_set() - Set prealloc_disabled
+ * @str_value: value of the module param
+ *
+ * This function will set qdf module param prealloc_disabled
+ *
+ * Return: QDF_STATUS_SUCCESS on Success
+ */
+QDF_STATUS qdf_prealloc_disabled_config_set(const char *str_value)
+{
+	QDF_STATUS status;
+
+	status = qdf_bool_parse(str_value, &prealloc_disabled);
+	return status;
+}
+#endif
+
+#if defined WLAN_DEBUGFS
+
+/* Debugfs root directory for qdf_mem */
+static struct dentry *qdf_mem_debugfs_root;
+
+#ifdef MEMORY_DEBUG
+static int seq_printf_printer(void *priv, const char *fmt, ...)
+{
+	struct seq_file *file = priv;
+	va_list args;
+
+	va_start(args, fmt);
+	seq_vprintf(file, fmt, args);
+	seq_puts(file, "\n");
+	va_end(args);
+
+	return 0;
+}
+
+/**
+ * qdf_print_major_alloc() - memory metadata table print logic
+ * @table: the memory metadata table to print
+ * @print: the print adapter function
+ * @print_priv: the private data to be consumed by @print
+ * @threshold: the threshold value set by uset to list top allocations
+ *
+ * Return: None
+ */
+static void qdf_print_major_alloc(struct __qdf_mem_info *table,
+				  qdf_abstract_print print,
+				  void *print_priv,
+				  uint32_t threshold)
+{
+	int i;
+
+	for (i = 0; i < QDF_MEM_STAT_TABLE_SIZE; i++) {
+		if (!table[i].count)
+			break;
+		if (table[i].count >= threshold)
+			print(print_priv,
+			      "%6u x %5u = %7uB @ %s:%u   %pS %llu",
+			      table[i].count,
+			      table[i].size,
+			      table[i].count * table[i].size,
+			      table[i].func,
+			      table[i].line, table[i].caller,
+			      table[i].time);
+	}
 }
 
 /**
@@ -911,6 +961,27 @@ static const struct file_operations fops_qdf_nbuf_major_allocs = {
 	.write = qdf_major_nbuf_alloc_set_threshold,
 };
 
+static struct major_alloc_priv mem_priv = {
+	/* List type set to mem */
+	LIST_TYPE_MEM,
+	/* initial threshold to list APIs which allocates mem >= 50 times */
+	50
+};
+
+static struct major_alloc_priv dma_priv = {
+	/* List type set to DMA */
+	LIST_TYPE_DMA,
+	/* initial threshold to list APIs which allocates dma >= 50 times */
+	50
+};
+
+static struct major_alloc_priv nbuf_priv = {
+	/* List type set to NBUF */
+	LIST_TYPE_NBUF,
+	/* initial threshold to list APIs which allocates nbuf >= 50 times */
+	50
+};
+
 static QDF_STATUS qdf_mem_debug_debugfs_init(void)
 {
 	if (is_initial_mem_debug_disabled)
@@ -1043,6 +1114,83 @@ void qdf_mem_skb_inc(qdf_size_t size)
 void qdf_mem_skb_dec(qdf_size_t size)
 {
 	qdf_atomic_sub(size, &qdf_mem_stat.skb);
+}
+
+void qdf_mem_skb_total_inc(qdf_size_t size)
+{
+	int32_t skb_mem_max = 0;
+
+	qdf_atomic_add(size, &qdf_mem_stat.skb_total);
+	skb_mem_max = qdf_atomic_read(&qdf_mem_stat.skb_total);
+	if (qdf_mem_stat.skb_mem_max < skb_mem_max)
+		qdf_mem_stat.skb_mem_max = skb_mem_max;
+}
+
+void qdf_mem_skb_total_dec(qdf_size_t size)
+{
+	qdf_atomic_sub(size, &qdf_mem_stat.skb_total);
+}
+
+void qdf_mem_dp_tx_skb_inc(qdf_size_t size)
+{
+	int32_t curr_dp_tx_skb_mem_max = 0;
+
+	qdf_atomic_add(size, &qdf_mem_stat.dp_tx_skb);
+	curr_dp_tx_skb_mem_max = qdf_atomic_read(&qdf_mem_stat.dp_tx_skb);
+	if (qdf_mem_stat.dp_tx_skb_mem_max < curr_dp_tx_skb_mem_max)
+		qdf_mem_stat.dp_tx_skb_mem_max = curr_dp_tx_skb_mem_max;
+}
+
+void qdf_mem_dp_tx_skb_dec(qdf_size_t size)
+{
+	qdf_atomic_sub(size, &qdf_mem_stat.dp_tx_skb);
+}
+
+void qdf_mem_dp_rx_skb_inc(qdf_size_t size)
+{
+	int32_t curr_dp_rx_skb_mem_max = 0;
+
+	qdf_atomic_add(size, &qdf_mem_stat.dp_rx_skb);
+	curr_dp_rx_skb_mem_max = qdf_atomic_read(&qdf_mem_stat.dp_rx_skb);
+	if (qdf_mem_stat.dp_rx_skb_mem_max < curr_dp_rx_skb_mem_max)
+		qdf_mem_stat.dp_rx_skb_mem_max = curr_dp_rx_skb_mem_max;
+}
+
+void qdf_mem_dp_rx_skb_dec(qdf_size_t size)
+{
+	qdf_atomic_sub(size, &qdf_mem_stat.dp_rx_skb);
+}
+
+void qdf_mem_dp_tx_skb_cnt_inc(void)
+{
+	int32_t curr_dp_tx_skb_count_max = 0;
+
+	qdf_atomic_add(1, &qdf_mem_stat.dp_tx_skb_count);
+	curr_dp_tx_skb_count_max =
+		qdf_atomic_read(&qdf_mem_stat.dp_tx_skb_count);
+	if (qdf_mem_stat.dp_tx_skb_count_max < curr_dp_tx_skb_count_max)
+		qdf_mem_stat.dp_tx_skb_count_max = curr_dp_tx_skb_count_max;
+}
+
+void qdf_mem_dp_tx_skb_cnt_dec(void)
+{
+	qdf_atomic_sub(1, &qdf_mem_stat.dp_tx_skb_count);
+}
+
+void qdf_mem_dp_rx_skb_cnt_inc(void)
+{
+	int32_t curr_dp_rx_skb_count_max = 0;
+
+	qdf_atomic_add(1, &qdf_mem_stat.dp_rx_skb_count);
+	curr_dp_rx_skb_count_max =
+		qdf_atomic_read(&qdf_mem_stat.dp_rx_skb_count);
+	if (qdf_mem_stat.dp_rx_skb_count_max < curr_dp_rx_skb_count_max)
+		qdf_mem_stat.dp_rx_skb_count_max = curr_dp_rx_skb_count_max;
+}
+
+void qdf_mem_dp_rx_skb_cnt_dec(void)
+{
+	qdf_atomic_sub(1, &qdf_mem_stat.dp_rx_skb_count);
 }
 #endif
 
@@ -1233,6 +1381,14 @@ void __qdf_mempool_free(qdf_device_t osdev, __qdf_mempool_t pool, void *buf)
 qdf_export_symbol(__qdf_mempool_free);
 
 #if IS_ENABLED(CONFIG_WCNSS_MEM_PRE_ALLOC)
+static bool qdf_might_be_prealloc(void *ptr)
+{
+	if (ksize(ptr) > WCNSS_PRE_ALLOC_GET_THRESHOLD)
+		return true;
+	else
+		return false;
+}
+
 /**
  * qdf_mem_prealloc_get() - conditionally pre-allocate memory
  * @size: the number of bytes to allocate
@@ -1264,6 +1420,11 @@ static inline bool qdf_mem_prealloc_put(void *ptr)
 	return wcnss_prealloc_put(ptr);
 }
 #else
+static bool qdf_might_be_prealloc(void *ptr)
+{
+	return false;
+}
+
 static inline void *qdf_mem_prealloc_get(size_t size)
 {
 	return NULL;
@@ -1274,14 +1435,6 @@ static inline bool qdf_mem_prealloc_put(void *ptr)
 	return false;
 }
 #endif /* CONFIG_WCNSS_MEM_PRE_ALLOC */
-
-static int qdf_mem_malloc_flags(void)
-{
-	if (in_interrupt() || irqs_disabled() || in_atomic())
-		return GFP_ATOMIC;
-
-	return GFP_KERNEL;
-}
 
 /* External Function implementation */
 #ifdef MEMORY_DEBUG
@@ -1302,6 +1455,24 @@ bool qdf_mem_debug_config_get(void)
 	return mem_debug_disabled;
 }
 #endif /* DISABLE_MEM_DBG_LOAD_CONFIG */
+
+/**
+ * qdf_mem_debug_disabled_set() - Set mem_debug_disabled
+ * @str_value: value of the module param
+ *
+ * This function will se qdf module param mem_debug_disabled
+ *
+ * Return: QDF_STATUS_SUCCESS on Success
+ */
+#ifdef QCA_WIFI_MODULE_PARAMS_FROM_INI
+QDF_STATUS qdf_mem_debug_disabled_config_set(const char *str_value)
+{
+	QDF_STATUS status;
+
+	status = qdf_bool_parse(str_value, &mem_debug_disabled);
+	return status;
+}
+#endif
 
 /**
  * qdf_mem_debug_init() - initialize qdf memory debug functionality
@@ -1680,6 +1851,12 @@ void *qdf_mem_malloc_atomic_fl(size_t size, const char *func, uint32_t line)
 {
 	void *ptr;
 
+	if (!size || size > QDF_MEM_MAX_MALLOC) {
+		qdf_nofl_err("Cannot malloc %zu bytes @ %s:%d", size, func,
+			     line);
+		return NULL;
+	}
+
 	ptr = qdf_mem_prealloc_get(size);
 	if (ptr)
 		return ptr;
@@ -1877,8 +2054,10 @@ void __qdf_mem_free(void *ptr)
 	if (!ptr)
 		return;
 
-	if (qdf_mem_prealloc_put(ptr))
-		return;
+	if (qdf_might_be_prealloc(ptr)) {
+		if (qdf_mem_prealloc_put(ptr))
+			return;
+	}
 
 	qdf_mem_kmalloc_dec(ksize(ptr));
 
@@ -1911,6 +2090,33 @@ void *__qdf_mem_malloc(size_t size, const char *func, uint32_t line)
 }
 
 qdf_export_symbol(__qdf_mem_malloc);
+
+#ifdef QCA_WIFI_MODULE_PARAMS_FROM_INI
+void __qdf_untracked_mem_free(void *ptr)
+{
+	if (!ptr)
+		return;
+
+	kfree(ptr);
+}
+
+void *__qdf_untracked_mem_malloc(size_t size, const char *func, uint32_t line)
+{
+	void *ptr;
+
+	if (!size || size > QDF_MEM_MAX_MALLOC) {
+		qdf_nofl_err("Cannot malloc %zu bytes @ %s:%d", size, func,
+			     line);
+		return NULL;
+	}
+
+	ptr = kzalloc(size, qdf_mem_malloc_flags());
+	if (!ptr)
+		return NULL;
+
+	return ptr;
+}
+#endif
 
 void *qdf_aligned_malloc_fl(uint32_t *size,
 			    void **vaddr_unaligned,
@@ -2002,6 +2208,8 @@ int qdf_mem_multi_page_link(qdf_device_t osdev,
 		c_elem = (void **)page_info;
 		for (i_int = 0; i_int < pages->num_element_per_page; i_int++) {
 			if (i_int == (pages->num_element_per_page - 1)) {
+				if ((i + 1) == pages->num_pages)
+					break;
 				if (cacheable)
 					*c_elem = pages->
 						cacheable_pages[i + 1];
@@ -2543,3 +2751,133 @@ int32_t qdf_skb_mem_stats_read(void)
 
 qdf_export_symbol(qdf_skb_mem_stats_read);
 
+int32_t qdf_skb_total_mem_stats_read(void)
+{
+	return qdf_atomic_read(&qdf_mem_stat.skb_total);
+}
+
+qdf_export_symbol(qdf_skb_total_mem_stats_read);
+
+int32_t qdf_skb_max_mem_stats_read(void)
+{
+	return qdf_mem_stat.skb_mem_max;
+}
+
+qdf_export_symbol(qdf_skb_max_mem_stats_read);
+
+int32_t qdf_dp_tx_skb_mem_stats_read(void)
+{
+	return qdf_atomic_read(&qdf_mem_stat.dp_tx_skb);
+}
+
+qdf_export_symbol(qdf_dp_tx_skb_mem_stats_read);
+
+int32_t qdf_dp_rx_skb_mem_stats_read(void)
+{
+	return qdf_atomic_read(&qdf_mem_stat.dp_rx_skb);
+}
+
+qdf_export_symbol(qdf_dp_rx_skb_mem_stats_read);
+
+int32_t qdf_mem_dp_tx_skb_cnt_read(void)
+{
+	return qdf_atomic_read(&qdf_mem_stat.dp_tx_skb_count);
+}
+
+qdf_export_symbol(qdf_mem_dp_tx_skb_cnt_read);
+
+int32_t qdf_mem_dp_tx_skb_max_cnt_read(void)
+{
+	return qdf_mem_stat.dp_tx_skb_count_max;
+}
+
+qdf_export_symbol(qdf_mem_dp_tx_skb_max_cnt_read);
+
+int32_t qdf_mem_dp_rx_skb_cnt_read(void)
+{
+	return qdf_atomic_read(&qdf_mem_stat.dp_rx_skb_count);
+}
+
+qdf_export_symbol(qdf_mem_dp_rx_skb_cnt_read);
+
+int32_t qdf_mem_dp_rx_skb_max_cnt_read(void)
+{
+	return qdf_mem_stat.dp_rx_skb_count_max;
+}
+
+qdf_export_symbol(qdf_mem_dp_rx_skb_max_cnt_read);
+
+int32_t qdf_dp_tx_skb_max_mem_stats_read(void)
+{
+	return qdf_mem_stat.dp_tx_skb_mem_max;
+}
+
+qdf_export_symbol(qdf_dp_tx_skb_max_mem_stats_read);
+
+int32_t qdf_dp_rx_skb_max_mem_stats_read(void)
+{
+	return qdf_mem_stat.dp_rx_skb_mem_max;
+}
+
+qdf_export_symbol(qdf_dp_rx_skb_max_mem_stats_read);
+
+int32_t qdf_mem_tx_desc_cnt_read(void)
+{
+	return qdf_atomic_read(&qdf_mem_stat.tx_descs_outstanding);
+}
+
+qdf_export_symbol(qdf_mem_tx_desc_cnt_read);
+
+int32_t qdf_mem_tx_desc_max_read(void)
+{
+	return qdf_mem_stat.tx_descs_max;
+}
+
+qdf_export_symbol(qdf_mem_tx_desc_max_read);
+
+void qdf_mem_tx_desc_cnt_update(qdf_atomic_t pending_tx_descs,
+				int32_t tx_descs_max)
+{
+	qdf_mem_stat.tx_descs_outstanding = pending_tx_descs;
+	qdf_mem_stat.tx_descs_max = tx_descs_max;
+}
+
+qdf_export_symbol(qdf_mem_tx_desc_cnt_update);
+
+void qdf_mem_stats_init(void)
+{
+	qdf_mem_stat.skb_mem_max = 0;
+	qdf_mem_stat.dp_tx_skb_mem_max = 0;
+	qdf_mem_stat.dp_rx_skb_mem_max = 0;
+	qdf_mem_stat.dp_tx_skb_count_max = 0;
+	qdf_mem_stat.dp_rx_skb_count_max = 0;
+	qdf_mem_stat.tx_descs_max = 0;
+}
+
+qdf_export_symbol(qdf_mem_stats_init);
+
+void *__qdf_mem_valloc(size_t size, const char *func, uint32_t line)
+{
+	void *ptr;
+
+	if (!size) {
+		qdf_err("Valloc called with 0 bytes @ %s:%d", func, line);
+		return NULL;
+	}
+
+	ptr = vzalloc(size);
+
+	return ptr;
+}
+
+qdf_export_symbol(__qdf_mem_valloc);
+
+void __qdf_mem_vfree(void *ptr)
+{
+	if (qdf_unlikely(!ptr))
+		return;
+
+	vfree(ptr);
+}
+
+qdf_export_symbol(__qdf_mem_vfree);

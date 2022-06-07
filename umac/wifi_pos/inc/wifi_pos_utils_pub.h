@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2020-2021, The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -25,12 +25,13 @@
 #include "qdf_types.h"
 #include "qdf_status.h"
 #include "qdf_trace.h"
+#include <wlan_cmn.h>
+#include <reg_services_public_struct.h>
 
 #define WIFIPOS_RESERVE_BYTES      100
 #define OEM_TARGET_SIGNATURE_LEN   8
 #define OEM_TARGET_SIGNATURE       "QUALCOMM"
 
-#define MAX_CHANNELS               255
 #define OEM_CAP_MAX_NUM_CHANNELS   128
 
 #define WIFI_POS_RSP_V1_FLAT_MEMORY  0x00000001
@@ -77,14 +78,16 @@ struct qdf_packed wifi_pos_driver_version {
 
 /**
  * struct wifi_pos_channel_power
- * @center_freq: Channel Center Frequency
- * @chan_num: channel number
- * @tx_power: TX power
+ * @ch_power: channel_power structure object
+ * @band_center_freq1: Center frequency1
+ * @phy_mode: Phymode
+ * @is_dfs_chan: Is DFS channel
  */
 struct wifi_pos_channel_power {
-	uint32_t center_freq;
-	uint32_t chan_num;
-	uint32_t tx_power;
+	struct channel_power ch_power;
+	uint32_t band_center_freq1;
+	uint32_t phy_mode;
+	bool is_dfs_chan;
 };
 
 /**
@@ -94,7 +97,7 @@ struct wifi_pos_channel_power {
  */
 struct qdf_packed wifi_pos_channel_list {
 	uint16_t num_channels;
-	struct wifi_pos_channel_power chan_info[MAX_CHANNELS];
+	struct wifi_pos_channel_power chan_info[NUM_CHANNELS];
 };
 
 /**

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2020 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2013-2021 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -125,6 +125,13 @@ void hif_target_register_tbl_attach(struct hif_softc *scn, u32 target_type)
 		scn->target_ce_def = QCA6018_CE_TARGETDEF;
 		break;
 #endif
+#if defined(QCA9574_HEADERS_DEF)
+	case TARGET_TYPE_QCA9574:
+		scn->targetdef = QCA9574_TARGETDEF;
+		scn->target_ce_def = QCA9574_CE_TARGETDEF;
+		hif_info("TARGET_TYPE_QCA9574");
+		break;
+#endif
 
 #if defined(QCN9000_HEADERS_DEF)
 	case TARGET_TYPE_QCN9000:
@@ -134,11 +141,19 @@ void hif_target_register_tbl_attach(struct hif_softc *scn, u32 target_type)
 		break;
 #endif
 
-#if defined(QCN9100_HEADERS_DEF)
-	case TARGET_TYPE_QCN9100:
-		scn->targetdef = QCN9100_TARGETDEF;
-		scn->target_ce_def = QCN9100_CE_TARGETDEF;
-		hif_info("TARGET_TYPE_QCN9100");
+#if defined(QCN9224_HEADERS_DEF)
+	case TARGET_TYPE_QCN9224:
+		scn->targetdef = QCN9224_TARGETDEF;
+		scn->target_ce_def = QCN9224_CE_TARGETDEF;
+		hif_info("TARGET_TYPE_QCN9224");
+		break;
+#endif
+
+#if defined(QCN6122_HEADERS_DEF)
+	case TARGET_TYPE_QCN6122:
+		scn->targetdef = QCN6122_TARGETDEF;
+		scn->target_ce_def = QCN6122_CE_TARGETDEF;
+		hif_info("TARGET_TYPE_QCN6122");
 		break;
 #endif
 
@@ -165,6 +180,14 @@ void hif_target_register_tbl_attach(struct hif_softc *scn, u32 target_type)
 		hif_info("TARGET_TYPE_QCA6490");
 		break;
 #endif /* QCA6490_HEADERS_DEF */
+
+#if defined(WCN7850_HEADERS_DEF)
+	case TARGET_TYPE_WCN7850:
+		scn->targetdef = WCN7850_TARGETdef;
+		scn->target_ce_def = WCN7850_CE_TARGETdef;
+		hif_info("TARGET_TYPE_WCN7850");
+		break;
+#endif /* WCN7850_HEADERS_DEF */
 
 #if defined(QCA6750_HEADERS_DEF)
 	case TARGET_TYPE_QCA6750:
@@ -266,14 +289,25 @@ void hif_register_tbl_attach(struct hif_softc *scn, u32 hif_type)
 		scn->hostdef = QCN9000_HOSTDEF;
 		break;
 #endif
-#if defined(QCN9100_HEADERS_DEF)
-	case HIF_TYPE_QCN9100:
-		scn->hostdef = QCN9100_HOSTDEF;
+#if defined(QCN9224_HEADERS_DEF)
+	case HIF_TYPE_QCN9224:
+		scn->hostdef = QCN9224_HOSTDEF;
+		break;
+#endif
+#if defined(QCN6122_HEADERS_DEF)
+	case HIF_TYPE_QCN6122:
+		scn->hostdef = QCN6122_HOSTDEF;
 		break;
 #endif
 #if defined(QCA5018_HEADERS_DEF)
 	case HIF_TYPE_QCA5018:
 		scn->hostdef = QCA5018_HOSTDEF;
+		break;
+#endif
+#if defined(QCA9574_HEADERS_DEF)
+	case HIF_TYPE_QCA9574:
+		scn->hostdef = QCA9574_HOSTDEF;
+		hif_info("HIF_TYPE_QCA9574");
 		break;
 #endif
 
@@ -290,6 +324,13 @@ void hif_register_tbl_attach(struct hif_softc *scn, u32 hif_type)
 		hif_info("HIF_TYPE_QCA6490");
 		break;
 #endif /* QCA6490_HEADERS_DEF */
+
+#if defined(WCN7850_HEADERS_DEF)
+	case HIF_TYPE_WCN7850:
+		scn->hostdef = WCN7850_HOSTdef;
+		hif_info("HIF_TYPE_WCN7850");
+		break;
+#endif /* WCN7850_HEADERS_DEF */
 
 #if defined(QCA6750_HEADERS_DEF)
 	case HIF_TYPE_QCA6750:

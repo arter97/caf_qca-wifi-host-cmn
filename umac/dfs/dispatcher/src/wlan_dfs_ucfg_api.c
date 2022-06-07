@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016-2020 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
  *
  *
  * Permission to use, copy, modify, and/or distribute this software for
@@ -144,7 +144,7 @@ QDF_STATUS ucfg_dfs_get_legacy_precac_enable(struct wlan_objmgr_pdev *pdev,
 {
 	struct wlan_dfs *dfs;
 
-	if (!tgt_dfs_is_pdev_5ghz(pdev))
+	if (!tgt_dfs_is_5ghz_supported_in_pdev(pdev))
 		return QDF_STATUS_SUCCESS;
 
 	dfs = wlan_pdev_get_dfs_obj(pdev);
@@ -168,15 +168,16 @@ QDF_STATUS ucfg_dfs_get_agile_precac_enable(struct wlan_objmgr_pdev *pdev,
 	if (!pdev || !buff)
 		return QDF_STATUS_E_FAILURE;
 
-	if (!tgt_dfs_is_pdev_5ghz(pdev)) {
+	if (!tgt_dfs_is_5ghz_supported_in_pdev(pdev)) {
 		*buff = false;
 		return QDF_STATUS_SUCCESS;
 	}
 
 	dfs = wlan_pdev_get_dfs_obj(pdev);
 	if (!dfs) {
-		dfs_err(dfs, WLAN_DEBUG_DFS_ALWAYS, "null dfs");
-		return QDF_STATUS_E_FAILURE;
+		dfs_info(dfs, WLAN_DEBUG_DFS_ALWAYS, "null dfs");
+		*buff = false;
+		return QDF_STATUS_SUCCESS;
 	}
 
 	*buff = dfs_is_agile_precac_enabled(dfs);
@@ -249,30 +250,6 @@ QDF_STATUS ucfg_dfs_get_precac_intermediate_chan(struct wlan_objmgr_pdev *pdev,
 	return QDF_STATUS_SUCCESS;
 }
 
-#ifdef CONFIG_CHAN_NUM_API
-enum precac_chan_state
-ucfg_dfs_get_precac_chan_state(struct wlan_objmgr_pdev *pdev,
-			       uint8_t precac_chan)
-{
-	struct wlan_dfs *dfs;
-	enum precac_chan_state retval = PRECAC_ERR;
-
-	dfs = wlan_pdev_get_dfs_obj(pdev);
-	if (!dfs) {
-		dfs_err(dfs, WLAN_DEBUG_DFS_ALWAYS,  "null dfs");
-		return PRECAC_ERR;
-	}
-
-	retval = dfs_get_precac_chan_state(dfs, precac_chan);
-	if (retval == PRECAC_ERR) {
-		dfs_err(dfs, WLAN_DEBUG_DFS_ALWAYS,
-			"Could not find precac channel state");
-	}
-
-	return retval;
-}
-#endif
-
 #ifdef CONFIG_CHAN_FREQ_API
 enum precac_chan_state
 ucfg_dfs_get_precac_chan_state_for_freq(struct wlan_objmgr_pdev *pdev,
@@ -298,7 +275,7 @@ ucfg_dfs_get_precac_chan_state_for_freq(struct wlan_objmgr_pdev *pdev,
 #endif
 #endif
 
-#ifdef QCA_MCL_DFS_SUPPORT
+#ifdef MOBILE_DFS_SUPPORT
 QDF_STATUS ucfg_dfs_update_config(struct wlan_objmgr_psoc *psoc,
 		struct dfs_user_config *req)
 {
@@ -370,7 +347,7 @@ void ucfg_dfs_allow_hw_pulses(struct wlan_objmgr_pdev *pdev,
 {
 	struct wlan_dfs *dfs;
 
-	if (!tgt_dfs_is_pdev_5ghz(pdev))
+	if (!tgt_dfs_is_5ghz_supported_in_pdev(pdev))
 		return;
 
 	dfs = wlan_pdev_get_dfs_obj(pdev);
@@ -388,7 +365,7 @@ bool ucfg_dfs_is_hw_pulses_allowed(struct wlan_objmgr_pdev *pdev)
 {
 	struct wlan_dfs *dfs;
 
-	if (!tgt_dfs_is_pdev_5ghz(pdev))
+	if (!tgt_dfs_is_5ghz_supported_in_pdev(pdev))
 		return false;
 
 	dfs = wlan_pdev_get_dfs_obj(pdev);
@@ -433,7 +410,7 @@ QDF_STATUS ucfg_dfs_reinit_timers(struct wlan_objmgr_pdev *pdev)
 {
 	struct wlan_dfs *dfs;
 
-	if (!tgt_dfs_is_pdev_5ghz(pdev))
+	if (!tgt_dfs_is_5ghz_supported_in_pdev(pdev))
 		return QDF_STATUS_SUCCESS;
 
 	dfs = wlan_pdev_get_dfs_obj(pdev);
@@ -472,6 +449,11 @@ QDF_STATUS ucfg_dfs_get_rcac_enable(struct wlan_objmgr_pdev *pdev,
 				    bool *rcac_en)
 {
 	struct wlan_dfs *dfs;
+
+	if (!tgt_dfs_is_5ghz_supported_in_pdev(pdev)) {
+		*rcac_en = false;
+		return QDF_STATUS_SUCCESS;
+	}
 
 	dfs = wlan_pdev_get_dfs_obj(pdev);
 	if (!dfs) {
@@ -538,112 +520,3 @@ bool ucfg_dfs_is_agile_rcac_enabled(struct wlan_objmgr_pdev *pdev)
 qdf_export_symbol(ucfg_dfs_is_agile_rcac_enabled);
 #endif
 
-#ifdef QCA_SUPPORT_DFS_CHAN_POSTNOL
-QDF_STATUS ucfg_dfs_set_postnol_freq(struct wlan_objmgr_pdev *pdev,
-				     qdf_freq_t postnol_freq)
-{
-	struct wlan_dfs *dfs;
-
-	dfs = wlan_pdev_get_dfs_obj(pdev);
-	if (!dfs) {
-		dfs_err(dfs, WLAN_DEBUG_DFS_ALWAYS, "null dfs");
-		return QDF_STATUS_E_FAILURE;
-	}
-
-	dfs_set_postnol_freq(dfs, postnol_freq);
-
-	return QDF_STATUS_SUCCESS;
-}
-
-qdf_export_symbol(ucfg_dfs_set_postnol_freq);
-
-QDF_STATUS ucfg_dfs_set_postnol_mode(struct wlan_objmgr_pdev *pdev,
-				     uint8_t postnol_mode)
-{
-	struct wlan_dfs *dfs;
-
-	dfs = wlan_pdev_get_dfs_obj(pdev);
-	if (!dfs) {
-		dfs_err(dfs, WLAN_DEBUG_DFS_ALWAYS, "null dfs");
-		return QDF_STATUS_E_FAILURE;
-	}
-
-	dfs_set_postnol_mode(dfs, postnol_mode);
-
-	return QDF_STATUS_SUCCESS;
-}
-
-qdf_export_symbol(ucfg_dfs_set_postnol_mode);
-
-QDF_STATUS ucfg_dfs_set_postnol_cfreq2(struct wlan_objmgr_pdev *pdev,
-				       qdf_freq_t postnol_cfreq2)
-{
-	struct wlan_dfs *dfs;
-
-	dfs = wlan_pdev_get_dfs_obj(pdev);
-	if (!dfs) {
-		dfs_err(dfs, WLAN_DEBUG_DFS_ALWAYS, "null dfs");
-		return QDF_STATUS_E_FAILURE;
-	}
-
-	dfs_set_postnol_cfreq2(dfs, postnol_cfreq2);
-
-	return QDF_STATUS_SUCCESS;
-}
-
-qdf_export_symbol(ucfg_dfs_set_postnol_cfreq2);
-
-QDF_STATUS ucfg_dfs_get_postnol_freq(struct wlan_objmgr_pdev *pdev,
-				     qdf_freq_t *postnol_freq)
-{
-	struct wlan_dfs *dfs;
-
-	dfs = wlan_pdev_get_dfs_obj(pdev);
-	if (!dfs) {
-		dfs_err(dfs, WLAN_DEBUG_DFS_ALWAYS, "null dfs");
-		return QDF_STATUS_E_FAILURE;
-	}
-
-	dfs_get_postnol_freq(dfs, postnol_freq);
-
-	return QDF_STATUS_SUCCESS;
-}
-
-qdf_export_symbol(ucfg_dfs_get_postnol_freq);
-
-QDF_STATUS ucfg_dfs_get_postnol_mode(struct wlan_objmgr_pdev *pdev,
-				     uint8_t *postnol_mode)
-{
-	struct wlan_dfs *dfs;
-
-	dfs = wlan_pdev_get_dfs_obj(pdev);
-	if (!dfs) {
-		dfs_err(dfs, WLAN_DEBUG_DFS_ALWAYS, "null dfs");
-		return QDF_STATUS_E_FAILURE;
-	}
-
-	dfs_get_postnol_mode(dfs, postnol_mode);
-
-	return QDF_STATUS_SUCCESS;
-}
-
-qdf_export_symbol(ucfg_dfs_get_postnol_mode);
-
-QDF_STATUS ucfg_dfs_get_postnol_cfreq2(struct wlan_objmgr_pdev *pdev,
-				       qdf_freq_t *postnol_cfreq2)
-{
-	struct wlan_dfs *dfs;
-
-	dfs = wlan_pdev_get_dfs_obj(pdev);
-	if (!dfs) {
-		dfs_err(dfs, WLAN_DEBUG_DFS_ALWAYS, "null dfs");
-		return QDF_STATUS_E_FAILURE;
-	}
-
-	dfs_get_postnol_cfreq2(dfs, postnol_cfreq2);
-
-	return QDF_STATUS_SUCCESS;
-}
-
-qdf_export_symbol(ucfg_dfs_get_postnol_cfreq2);
-#endif

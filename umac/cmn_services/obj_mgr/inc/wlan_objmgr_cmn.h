@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016-2020 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -270,6 +270,19 @@ typedef void (*wlan_objmgr_peer_status_handler)(
  * @WLAN_IOT_SIM_ID:            IOT Simulation feature
  * @WLAN_MLME_CM_ID             Connection Manager reference ID
  * @WLAN_IF_MGR_ID:             Interface manager reference ID
+ * @WLAN_OSIF_SCAN_ID:          SCAN operations in OS IF
+ * @WLAN_OSIF_MGMT_ID:          MGMT frame operations in OS IF
+ * @WLAN_OSIF_STATS_ID:         STATS request operations in OS IF
+ * @WLAN_OSIF_NAN_ID:           NAN operations in OS IF
+ * @WLAN_OSIF_P2P_ID:           P2P operations in OS IF
+ * @WLAN_OSIF_OCB_ID:           OCB operations in OS IF
+ * @WLAN_OSIF_SPECTRAL_ID:      spectal operations in OS IF
+ * @WLAN_OSIF_POWER_ID:         power operations in OS IF
+ * @WLAN_OSIF_TDLS_ID:          TDLS operations in OS IF
+ * @WLAN_OSIF_CM_ID:            Connection manager osif reference id
+ * @WLAN_TXRX_STREAMS_ID:       Preferred TX & RX streams operations
+ * @WLAN_MLO_MGR_ID:            MLO manager reference id
+ * @WLAN_MGMT_RX_REO_ID:        Management rx reorder reference id
  * @WLAN_REF_ID_MAX:            Max id used to generate ref count tracking array
  */
  /* New value added to the enum must also be reflected in function
@@ -355,6 +368,21 @@ typedef enum {
 	WLAN_IOT_SIM_ID       = 76,
 	WLAN_MLME_CM_ID       = 77,
 	WLAN_IF_MGR_ID        = 78,
+	/* Create WLAN_OSIF sub id based on functionality */
+	WLAN_OSIF_SCAN_ID     = 79,
+	WLAN_OSIF_MGMT_ID     = 80,
+	WLAN_OSIF_STATS_ID    = 81,
+	WLAN_OSIF_NAN_ID      = 82,
+	WLAN_OSIF_P2P_ID      = 83,
+	WLAN_OSIF_OCB_ID      = 84,
+	WLAN_OSIF_SPECTRAL_ID = 85,
+	WLAN_OSIF_POWER_ID    = 86,
+	WLAN_OSIF_TDLS_ID     = 87,
+	WLAN_OSIF_CM_ID       = 88,
+	WLAN_TXRX_STREAMS_ID  = 89,
+	WLAN_MLO_MGR_ID       = 90,
+	WLAN_MBSS_ID          = 91,
+	WLAN_MGMT_RX_REO_ID   = 92,
 	WLAN_REF_ID_MAX,
 } wlan_objmgr_ref_dbgid;
 
@@ -446,7 +474,22 @@ static inline const char *string_from_dbgid(wlan_objmgr_ref_dbgid id)
 					"WLAN_DCS_ID",
 					"WLAN_IOT_SIM_ID",
 					"WLAN_MLME_CM_ID",
-					"WLAN_IF_MGR_ID"};
+					"WLAN_IF_MGR_ID",
+					"WLAN_OSIF_SCAN_ID",
+					"WLAN_OSIF_MGMT_ID",
+					"WLAN_OSIF_STATS_ID",
+					"WLAN_OSIF_NAN_ID",
+					"WLAN_OSIF_P2P_ID",
+					"WLAN_OSIF_OCB_ID",
+					"WLAN_OSIF_SPECTRAL_ID",
+					"WLAN_OSIF_POWER_ID",
+					"WLAN_OSIF_TDLS_ID",
+					"WLAN_OSIF_CM_ID",
+					"WLAN_TXRX_STREAMS_ID",
+					"WLAN_MLO_MGR_ID",
+					"WLAN_MBSS_ID",
+					"WLAN_MGMT_RX_REO_ID"
+					};
 
 	if (id >= WLAN_REF_ID_MAX)
 		return "Unknown";
@@ -459,7 +502,10 @@ static inline const char *string_from_dbgid(wlan_objmgr_ref_dbgid id)
 #else
 #define WLAN_OBJMGR_BUG(val)
 #endif
+
+#ifndef WLAN_OBJMGR_RATELIMIT_THRESH
 #define WLAN_OBJMGR_RATELIMIT_THRESH 2
+#endif
 
 #ifdef WLAN_OBJMGR_REF_ID_TRACE
 #define WLAN_OBJMGR_TRACE_FUNC_SIZE 30

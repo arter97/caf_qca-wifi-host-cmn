@@ -1,6 +1,6 @@
 
 /*
- * Copyright (c) 2013-2020 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2013-2021 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -296,6 +296,7 @@ static QDF_STATUS send_nan_req_cmd_tlv(wmi_unified_t wmi_handle,
 					   WMI_FW_NAN_RTT_INITR));
 	WMI_NAN_SET_RANGING_RESPONDER_ROLE(cfg->flags, !!(nan_msg->rtt_cap &
 					   WMI_FW_NAN_RTT_RESPR));
+	WMI_NAN_SET_NAN_6G_DISABLE(cfg->flags, nan_msg->disable_6g_nan);
 
 	wmi_mtrace(WMI_NAN_CMDID, NO_SESSION, 0);
 	ret = wmi_unified_cmd_send(wmi_handle, buf, len, WMI_NAN_CMDID);
@@ -692,7 +693,7 @@ static QDF_STATUS extract_ndp_initiator_rsp_tlv(wmi_unified_t wmi_handle,
 	return QDF_STATUS_SUCCESS;
 }
 
-#define MAX_NAN_MSG_LEN                 200
+#define MAX_NAN_MSG_LEN                 400
 
 static QDF_STATUS extract_nan_msg_tlv(uint8_t *data,
 				      struct nan_dump_msg *msg)

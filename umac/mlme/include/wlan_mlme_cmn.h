@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2019-2021 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -23,11 +23,7 @@
 #include <include/wlan_psoc_mlme.h>
 #include <include/wlan_pdev_mlme.h>
 #include <include/wlan_vdev_mlme.h>
-#ifdef FEATURE_CM_ENABLE
 #include "wlan_cm_public_struct.h"
-#endif
-
-#ifdef FEATURE_CM_ENABLE
 
 /**
  * mlme_cm_ops: connection manager osif callbacks
@@ -51,14 +47,40 @@
  *
  * @mlme_cm_disconnect_start_cb: Disconnect start callback
  * @vdev: vdev pointer
+ *
+ * @mlme_cm_roam_sync_cb: Roam sync callback
+ * @vdev: vdev pointer
+ *
+ * @mlme_cm_pmksa_candidate_notify_cb: Roam pmksa candidate notify callback
+ * @vdev: vdev pointer
+ * @bssid: bssid
+ * @index: index
+ * @preauth: preauth flag
+ *
+ * @mlme_cm_roam_start_cb: Roam start callback
+ * @vdev: vdev pointer
+ *
+ * @mlme_cm_roam_abort_cb: Roam abort callback
+ * @vdev: vdev pointer
+ *
+ * @mlme_cm_roam_cmpl_cb: Roam sync complete cb
+ * @vdev: vdev pointer
+ *
+ * @mlme_cm_ft_preauth_cmpl_cb: Roam ft preauth complete cb
+ * @vdev: vdev pointer
+ * @rsp: preauth response pointer
+ *
+ * @mlme_cm_cckm_preauth_cmpl_cb: Roam cckm preauth complete cb
+ * @vdev: vdev pointer
+ * @rsp: preauth response pointer
  */
 struct mlme_cm_ops {
 	QDF_STATUS (*mlme_cm_connect_complete_cb)(
 					struct wlan_objmgr_vdev *vdev,
-					struct wlan_cm_connect_rsp *rsp);
+					struct wlan_cm_connect_resp *rsp);
 	QDF_STATUS (*mlme_cm_failed_candidate_cb)(
 					struct wlan_objmgr_vdev *vdev,
-					struct wlan_cm_connect_rsp *rsp);
+					struct wlan_cm_connect_resp *rsp);
 	QDF_STATUS (*mlme_cm_update_id_and_src_cb)(
 					struct wlan_objmgr_vdev *vdev,
 					enum wlan_cm_source source,
@@ -68,8 +90,29 @@ struct mlme_cm_ops {
 					struct wlan_cm_discon_rsp *rsp);
 	QDF_STATUS (*mlme_cm_disconnect_start_cb)(
 					struct wlan_objmgr_vdev *vdev);
-};
+#ifdef CONN_MGR_ADV_FEATURE
+	QDF_STATUS (*mlme_cm_roam_sync_cb)(struct wlan_objmgr_vdev *vdev);
+	QDF_STATUS (*mlme_cm_pmksa_candidate_notify_cb)(
+						struct wlan_objmgr_vdev *vdev,
+						struct qdf_mac_addr *bssid,
+						int index, bool preauth);
 #endif
+#ifdef WLAN_FEATURE_ROAM_OFFLOAD
+	QDF_STATUS (*mlme_cm_roam_start_cb)(struct wlan_objmgr_vdev *vdev);
+	QDF_STATUS (*mlme_cm_roam_abort_cb)(struct wlan_objmgr_vdev *vdev);
+	QDF_STATUS (*mlme_cm_roam_cmpl_cb)(struct wlan_objmgr_vdev *vdev);
+#endif
+#ifdef WLAN_FEATURE_PREAUTH_ENABLE
+	QDF_STATUS (*mlme_cm_ft_preauth_cmpl_cb)(
+					struct wlan_objmgr_vdev *vdev,
+					struct wlan_preauth_rsp *rsp);
+#ifdef FEATURE_WLAN_ESE
+	QDF_STATUS (*mlme_cm_cckm_preauth_cmpl_cb)(
+					struct wlan_objmgr_vdev *vdev,
+					struct wlan_preauth_rsp *rsp);
+#endif
+#endif
+};
 
 /**
  * struct vdev_mlme_ext_ops - VDEV MLME legacy callbacks structure
@@ -98,6 +141,8 @@ struct mlme_cm_ops {
  *                                          required by serialization
  * @mlme_multi_vdev_restart_resp:           callback to process multivdev
  *                                          restart response
+ * @mlme_cm_ext_hdl_create_cb:              callback to create ext cm context
+ * @mlme_cm_ext_hdl_destroy_cb:             callback to destroy ext cm context
  * @mlme_cm_ext_connect_start_ind_cb:       callback to indicate connect start
  * @mlme_cm_ext_bss_select_ind_cb:          callback to indicate candidate
  *                                          select for connect
@@ -114,6 +159,9 @@ struct mlme_cm_ops {
  * @mlme_cm_ext_disconnect_complete_ind_cb: callback to indicate disconnect
  *                                          complete
  * @mlme_cm_ext_vdev_down_req_cb:           callback to send vdev down to FW
+ * @mlme_cm_ext_roam_start_ind_cb:          callback to indicate roam start
+ * @mlme_cm_ext_reassoc_req_cb:             callback for reassoc request to
+ *                                          VDEV/PEER SM
  */
 struct mlme_ext_ops {
 	QDF_STATUS (*mlme_psoc_ext_hdl_create)(
@@ -145,7 +193,10 @@ struct mlme_ext_ops {
 	QDF_STATUS (*mlme_multi_vdev_restart_resp)(
 				struct wlan_objmgr_psoc *psoc,
 				struct multi_vdev_restart_resp *resp);
-#ifdef FEATURE_CM_ENABLE
+	QDF_STATUS (*mlme_cm_ext_hdl_create_cb)(struct wlan_objmgr_vdev *vdev,
+						cm_ext_t **ext_cm_ptr);
+	QDF_STATUS (*mlme_cm_ext_hdl_destroy_cb)(struct wlan_objmgr_vdev *vdev,
+						 cm_ext_t *ext_cm_ptr);
 	QDF_STATUS (*mlme_cm_ext_connect_start_ind_cb)(
 				struct wlan_objmgr_vdev *vdev,
 				struct wlan_cm_connect_req *req);
@@ -154,12 +205,14 @@ struct mlme_ext_ops {
 			struct wlan_cm_vdev_connect_req *req);
 	QDF_STATUS (*mlme_cm_ext_bss_peer_create_req_cb)(
 				struct wlan_objmgr_vdev *vdev,
-				struct qdf_mac_addr *peer_mac);
+				struct qdf_mac_addr *peer_mac,
+				struct qdf_mac_addr *mld_mac,
+				bool is_assoc_link);
 	QDF_STATUS (*mlme_cm_ext_connect_req_cb)(struct wlan_objmgr_vdev *vdev,
 			struct wlan_cm_vdev_connect_req *req);
 	QDF_STATUS (*mlme_cm_ext_connect_complete_ind_cb)(
 				struct wlan_objmgr_vdev *vdev,
-				struct wlan_cm_connect_rsp *rsp);
+				struct wlan_cm_connect_resp *rsp);
 	QDF_STATUS (*mlme_cm_ext_disconnect_start_ind_cb)(
 				struct wlan_objmgr_vdev *vdev,
 				struct wlan_cm_disconnect_req *req);
@@ -173,7 +226,12 @@ struct mlme_ext_ops {
 				struct wlan_cm_discon_rsp *rsp);
 	QDF_STATUS (*mlme_cm_ext_vdev_down_req_cb)(
 				struct wlan_objmgr_vdev *vdev);
-#endif
+	QDF_STATUS (*mlme_cm_ext_roam_start_ind_cb)(
+				struct wlan_objmgr_vdev *vdev,
+				struct wlan_cm_roam_req *req);
+	QDF_STATUS (*mlme_cm_ext_reassoc_req_cb)(
+				struct wlan_objmgr_vdev *vdev,
+				struct wlan_cm_vdev_reassoc_req *req);
 };
 
 /**
@@ -372,7 +430,28 @@ QDF_STATUS wlan_cmn_mlme_deinit(void);
 QDF_STATUS mlme_vdev_ops_ext_hdl_delete_rsp(struct wlan_objmgr_psoc *psoc,
 					    struct vdev_delete_response *rsp);
 
-#ifdef FEATURE_CM_ENABLE
+/**
+ * mlme_cm_ext_hdl_create() - Connection manager callback to create ext
+ * context
+ * @vdev: VDEV object
+ * @ext_cm_ptr: pointer to connection manager ext pointer
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS mlme_cm_ext_hdl_create(struct wlan_objmgr_vdev *vdev,
+				  cm_ext_t **ext_cm_ptr);
+
+/**
+ * mlme_cm_ext_hdl_destroy() - Connection manager callback to destroy ext
+ * context
+ * @vdev: VDEV object
+ * @ext_cm_ptr: connection manager ext pointer
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS mlme_cm_ext_hdl_destroy(struct wlan_objmgr_vdev *vdev,
+				   cm_ext_t *ext_cm_ptr);
+
 /**
  * mlme_cm_connect_start_ind() - Connection manager ext Connect start indication
  * @vdev: VDEV object
@@ -399,17 +478,24 @@ QDF_STATUS mlme_cm_bss_select_ind(struct wlan_objmgr_vdev *vdev,
  * request
  * @vdev: VDEV object
  * @peer_mac: Peer mac address
+ * @mld_mac: mld mac address
+ * @is_assoc_link: assoc happens on this link or not
  *
  * Return: QDF_STATUS
  */
 QDF_STATUS mlme_cm_bss_peer_create_req(struct wlan_objmgr_vdev *vdev,
-				       struct qdf_mac_addr *peer_mac);
+				       struct qdf_mac_addr *peer_mac,
+				       struct qdf_mac_addr *mld_mac,
+				       bool is_assoc_link);
 
 /**
  * mlme_cm_connect_req() - Connection manager ext connect request to start vdev
  * and peer assoc state machine
  * @vdev: VDEV object
  * @req: Vdev connect request
+ *
+ * Context: The req is on stack, so the API need to make a copy, if it want to
+ * use the req after return.
  *
  * Return: QDF_STATUS
  */
@@ -425,7 +511,30 @@ QDF_STATUS mlme_cm_connect_req(struct wlan_objmgr_vdev *vdev,
  * Return: QDF_STATUS
  */
 QDF_STATUS mlme_cm_connect_complete_ind(struct wlan_objmgr_vdev *vdev,
-					struct wlan_cm_connect_rsp *rsp);
+					struct wlan_cm_connect_resp *rsp);
+
+/**
+ * mlme_cm_roam_start_ind() - Connection manager ext Connect start indication
+ * @vdev: VDEV object
+ * @req: Connection manager roam request
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS mlme_cm_roam_start_ind(struct wlan_objmgr_vdev *vdev,
+				  struct wlan_cm_roam_req *req);
+
+/**
+ * mlme_cm_reassoc_req() - Connection manager ext reassoc request
+ * @vdev: VDEV object
+ * @req: Vdev reassoc request
+ *
+ * Context: The req is on stack, so the API need to make a copy, if it want to
+ * use the req after return.
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS mlme_cm_reassoc_req(struct wlan_objmgr_vdev *vdev,
+			       struct wlan_cm_vdev_reassoc_req *req);
 
 /**
  * mlme_cm_disconnect_start_ind() - Connection manager ext disconnect start
@@ -486,7 +595,7 @@ QDF_STATUS mlme_cm_vdev_down_req(struct wlan_objmgr_vdev *vdev);
  * Return: QDF_STATUS
  */
 QDF_STATUS mlme_cm_osif_connect_complete(struct wlan_objmgr_vdev *vdev,
-					 struct wlan_cm_connect_rsp *rsp);
+					 struct wlan_cm_connect_resp *rsp);
 
 /**
  * mlme_cm_osif_failed_candidate_ind() - Failed Candidate indication to osif
@@ -497,7 +606,7 @@ QDF_STATUS mlme_cm_osif_connect_complete(struct wlan_objmgr_vdev *vdev,
  */
 QDF_STATUS
 mlme_cm_osif_failed_candidate_ind(struct wlan_objmgr_vdev *vdev,
-				  struct wlan_cm_connect_rsp *rsp);
+				  struct wlan_cm_connect_resp *rsp);
 
 /**
  * mlme_cm_osif_update_id_and_src() - Update connection id and source to osif
@@ -531,6 +640,93 @@ mlme_cm_osif_disconnect_complete(struct wlan_objmgr_vdev *vdev,
  */
 QDF_STATUS mlme_cm_osif_disconnect_start_ind(struct wlan_objmgr_vdev *vdev);
 
+#ifdef CONN_MGR_ADV_FEATURE
+/**
+ * mlme_cm_osif_roam_sync_ind() - osif Roam sync indication
+ * @vdev: vdev pointer
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS mlme_cm_osif_roam_sync_ind(struct wlan_objmgr_vdev *vdev);
+
+/**
+ * mlme_cm_osif_pmksa_candidate_notify() - osif roam pmksa candidate notify
+ * @vdev: vdev pointer
+ * @bssid: bssid
+ * @index: index
+ * @preauth: preauth flag
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS mlme_cm_osif_pmksa_candidate_notify(struct wlan_objmgr_vdev *vdev,
+					       struct qdf_mac_addr *bssid,
+					       int index, bool preauth);
+#else
+static inline
+QDF_STATUS mlme_cm_osif_roam_sync_ind(struct wlan_objmgr_vdev *vdev)
+{
+	return QDF_STATUS_SUCCESS;
+}
+#endif
+
+#ifdef WLAN_FEATURE_ROAM_OFFLOAD
+/**
+ * mlme_cm_osif_roam_start_ind() - osif Roam start indication
+ * @vdev: vdev pointer
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS mlme_cm_osif_roam_start_ind(struct wlan_objmgr_vdev *vdev);
+
+/**
+ * mlme_cm_osif_roam_abort_ind() - osif Roam abort indication
+ * @vdev: vdev pointer
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS mlme_cm_osif_roam_abort_ind(struct wlan_objmgr_vdev *vdev);
+
+/**
+ * mlme_cm_osif_roam_complete() - osif Roam sync complete callback
+ * @vdev: vdev pointer
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS mlme_cm_osif_roam_complete(struct wlan_objmgr_vdev *vdev);
+#endif
+
+#ifdef WLAN_FEATURE_PREAUTH_ENABLE
+/**
+ * mlme_cm_osif_ft_preauth_complete() - osif roam ft preauth complete callback
+ * @vdev: vdev pointer
+ * @rsp: preauth response pointer
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS
+mlme_cm_osif_ft_preauth_complete(struct wlan_objmgr_vdev *vdev,
+				 struct wlan_preauth_rsp *rsp);
+#ifdef FEATURE_WLAN_ESE
+/**
+ * mlme_cm_osif_cckm_preauth_complete() - osif cckm preauth complete callback
+ * @vdev: vdev pointer
+ * @rsp: preauth response pointer
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS
+mlme_cm_osif_cckm_preauth_complete(struct wlan_objmgr_vdev *vdev,
+				   struct wlan_preauth_rsp *rsp);
+#else
+static inline QDF_STATUS
+mlme_cm_osif_cckm_preauth_complete(struct wlan_objmgr_vdev *vdev,
+				   struct wlan_preauth_rsp *rsp)
+{
+	return QDF_STATUS_SUCCESS;
+}
+#endif /* FEATURE_WLAN_ESE */
+#endif /* WLAN_FEATURE_PREAUTH_ENABLE */
+
 /**
  * typedef osif_cm_get_global_ops_cb() - Callback to get connection manager
  * global ops
@@ -547,6 +743,12 @@ typedef struct mlme_cm_ops *(*osif_cm_get_global_ops_cb)(void);
  */
 void mlme_set_osif_cm_cb(osif_cm_get_global_ops_cb cm_osif_ops);
 
-#endif
+/**
+ * mlme_max_chan_switch_is_set() - Get if max chan switch IE is enabled
+ * @vdev: Object manager psoc pointer
+ *
+ * Return: True if max chan switch is enabled else false
+ */
+bool mlme_max_chan_switch_is_set(struct wlan_objmgr_psoc *psoc);
 
 #endif

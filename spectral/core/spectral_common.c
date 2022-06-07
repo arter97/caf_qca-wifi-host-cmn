@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011,2017-2020 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2011,2017-2021 The Linux Foundation. All rights reserved.
  *
  *
  * Permission to use, copy, modify, and/or distribute this software for
@@ -343,6 +343,15 @@ spectral_control_cmn(struct wlan_objmgr_pdev *pdev,
 				goto bad;
 		}
 
+		if (sp_in->ss_bandwidth != SPECTRAL_PHYERR_PARAM_NOVAL) {
+			param.id = SPECTRAL_PARAM_CHAN_WIDTH;
+			param.value = sp_in->ss_bandwidth;
+			ret = sc->sptrlc_set_spectral_config
+						(pdev, &param, smode, err);
+			if (QDF_IS_STATUS_ERROR(ret))
+				goto bad;
+		}
+
 		break;
 
 	case SPECTRAL_GET_CONFIG:
@@ -373,6 +382,7 @@ spectral_control_cmn(struct wlan_objmgr_pdev *pdev,
 		spectralparams->ss_dbm_adj = sp_out.ss_dbm_adj;
 		spectralparams->ss_chn_mask = sp_out.ss_chn_mask;
 		spectralparams->ss_frequency = sp_out.ss_frequency;
+		spectralparams->ss_bandwidth = sp_out.ss_bandwidth;
 		break;
 
 	case SPECTRAL_IS_ACTIVE:
@@ -496,15 +506,21 @@ QDF_STATUS
 wlan_spectral_psoc_obj_create_handler(struct wlan_objmgr_psoc *psoc, void *arg)
 {
 	struct spectral_context *sc = NULL;
+	QDF_STATUS status;
 
 	if (!psoc) {
 		spectral_err("PSOC is NULL");
 		return QDF_STATUS_E_FAILURE;
 	}
 
-	if (cfg_get(psoc, CFG_SPECTRAL_DISABLE)) {
-		wlan_psoc_nif_feat_cap_set(psoc, WLAN_SOC_F_SPECTRAL_DISABLE);
-		spectral_info("Spectral is disabled");
+	status = wlan_spectral_init_psoc_feature_cap(psoc);
+	if (QDF_IS_STATUS_ERROR(status)) {
+		spectral_err("Failed to intitialize spectral pdev feature caps");
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	if (wlan_spectral_is_feature_disabled_psoc(psoc)) {
+		spectral_info("Spectral feature is disabled");
 		return QDF_STATUS_COMP_DISABLED;
 	}
 
@@ -534,8 +550,8 @@ wlan_spectral_psoc_obj_destroy_handler(struct wlan_objmgr_psoc *psoc,
 		return QDF_STATUS_E_FAILURE;
 	}
 
-	if (wlan_spectral_is_feature_disabled(psoc)) {
-		spectral_info("Spectral is disabled");
+	if (wlan_spectral_is_feature_disabled_psoc(psoc)) {
+		spectral_info("Spectral feature is disabled");
 		return QDF_STATUS_COMP_DISABLED;
 	}
 
@@ -559,14 +575,21 @@ wlan_spectral_pdev_obj_create_handler(struct wlan_objmgr_pdev *pdev, void *arg)
 	struct pdev_spectral *ps = NULL;
 	struct spectral_context *sc = NULL;
 	void *target_handle = NULL;
+	QDF_STATUS status;
 
 	if (!pdev) {
 		spectral_err("PDEV is NULL");
 		return QDF_STATUS_E_FAILURE;
 	}
 
-	if (wlan_spectral_is_feature_disabled(wlan_pdev_get_psoc(pdev))) {
-		spectral_info("Spectral is disabled");
+	status = wlan_spectral_init_pdev_feature_caps(pdev);
+	if (QDF_IS_STATUS_ERROR(status)) {
+		spectral_err("Failed to intitialize spectral pdev feature caps");
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	if (wlan_spectral_is_feature_disabled_pdev(pdev)) {
+		spectral_info("Spectral feature is disabled");
 		return QDF_STATUS_COMP_DISABLED;
 	}
 
@@ -614,8 +637,8 @@ wlan_spectral_pdev_obj_destroy_handler(struct wlan_objmgr_pdev *pdev,
 		return QDF_STATUS_E_FAILURE;
 	}
 
-	if (wlan_spectral_is_feature_disabled(wlan_pdev_get_psoc(pdev))) {
-		spectral_info("Spectral is disabled");
+	if (wlan_spectral_is_feature_disabled_pdev(pdev)) {
+		spectral_info("Spectral feature is disabled");
 		return QDF_STATUS_COMP_DISABLED;
 	}
 

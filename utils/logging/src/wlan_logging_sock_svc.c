@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2020 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2014-2021 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -35,9 +35,17 @@
 #include "host_diag_core_log.h"
 #include <qdf_event.h>
 #include <qdf_module.h>
+#include <qdf_str.h>
+#ifdef WLAN_FEATURE_CONNECTIVITY_LOGGING
+#include <wlan_connectivity_logging.h>
+#endif
 
 #ifdef CNSS_GENL
+#ifdef CONFIG_CNSS_OUT_OF_TREE
+#include "cnss_nl.h"
+#else
 #include <net/cnss_nl.h>
+#endif
 #endif
 
 #if defined(FEATURE_FW_LOG_PARSING) || defined(FEATURE_WLAN_DIAG_SUPPORT) || \
@@ -94,9 +102,11 @@
 #endif /* FEATURE_PKTLOG */
 
 #define MAX_PKTSTATS_BUFF   16
-#define HOST_LOG_DRIVER_MSG        0x001
-#define HOST_LOG_PER_PKT_STATS     0x002
-#define HOST_LOG_FW_FLUSH_COMPLETE 0x003
+#define HOST_LOG_DRIVER_MSG              0x001
+#define HOST_LOG_PER_PKT_STATS           0x002
+#define HOST_LOG_FW_FLUSH_COMPLETE       0x003
+#define HOST_LOG_DRIVER_CONNECTIVITY_MSG 0x004
+
 #define DIAG_TYPE_LOGS                 1
 #define PTT_MSG_DIAG_CMDS_TYPE    0x5050
 #define MAX_LOG_LINE 500
@@ -104,10 +114,12 @@
 /* default rate limit period - 2sec */
 #define PANIC_WIFILOG_PRINT_RATE_LIMIT_PERIOD (2*HZ)
 /* default burst for rate limit */
-#define PANIC_WIFILOG_PRINT_RATE_LIMIT_BURST_DEFAULT 250
+#define PANIC_WIFILOG_PRINT_RATE_LIMIT_BURST_DEFAULT 500
 DEFINE_RATELIMIT_STATE(panic_wifilog_ratelimit,
 		       PANIC_WIFILOG_PRINT_RATE_LIMIT_PERIOD,
 		       PANIC_WIFILOG_PRINT_RATE_LIMIT_BURST_DEFAULT);
+
+#define FLUSH_LOG_COMPLETION_TIMEOUT 3000
 
 struct log_msg {
 	struct list_head node;
@@ -192,6 +204,8 @@ struct wlan_logging {
 	bool is_flush_timer_initialized;
 	uint32_t flush_timer_period;
 	qdf_spinlock_t flush_timer_lock;
+
+	qdf_event_t flush_log_completion;
 };
 
 /* This global variable is intentionally not marked static because it
@@ -206,14 +220,14 @@ static struct log_msg *gplog_msg;
 
 static inline QDF_STATUS allocate_log_msg_buffer(void)
 {
-	gplog_msg = vzalloc(MAX_LOGMSG_COUNT * sizeof(*gplog_msg));
+	gplog_msg = qdf_mem_valloc(MAX_LOGMSG_COUNT * sizeof(*gplog_msg));
 
 	return gplog_msg ? QDF_STATUS_SUCCESS : QDF_STATUS_E_NOMEM;
 }
 
 static inline void free_log_msg_buffer(void)
 {
-	vfree(gplog_msg);
+	qdf_mem_vfree(gplog_msg);
 	gplog_msg = NULL;
 }
 
@@ -222,11 +236,14 @@ static struct log_msg gplog_msg[MAX_LOGMSG_COUNT];
 
 static inline QDF_STATUS allocate_log_msg_buffer(void)
 {
+	qdf_minidump_log(gplog_msg, sizeof(gplog_msg), "wlan_logs");
 	return QDF_STATUS_SUCCESS;
 }
 
 static inline void free_log_msg_buffer(void)
-{ }
+{
+	qdf_minidump_remove(gplog_msg, sizeof(gplog_msg), "wlan_logs");
+}
 #endif
 
 /* Need to call this with spin_lock acquired */
@@ -308,62 +325,48 @@ static int wlan_add_user_log_time_stamp(char *tbuf, size_t tbuf_sz, uint64_t ts)
 }
 
 #ifdef WLAN_MAX_LOGS_PER_SEC
-static qdf_time_t __log_window_end_ticks;
-static qdf_atomic_t __log_window_count;
-
-/**
- * assert_on_excessive_logging() - Check for and panic on excessive logging
- *
- * Track logging count using a quasi-tumbling window, 1 second long. If the max
- * logging count for a given window is exceeded, panic.
- *
- * Return: None
- */
-static void assert_on_excessive_logging(void)
+static inline void wlan_panic_on_excessive_logging(void)
 {
-	qdf_time_t now = qdf_system_ticks();
-
-	/*
-	 * If 'now' is more recent than the end of the window, reset.
-	 *
-	 * Note: This is not thread safe, and can result in more than one reset.
-	 * For our purposes, this is fine.
-	 */
-	if (!qdf_atomic_read(&__log_window_count)) {
-		__log_window_end_ticks = now + qdf_system_ticks_per_sec;
-	} else if (qdf_system_time_after(now, __log_window_end_ticks)) {
-		__log_window_end_ticks = now + qdf_system_ticks_per_sec;
-		qdf_atomic_set(&__log_window_count, 0);
-	}
-
-	/* this _is_ thread safe, and results in at most one panic */
-	if (qdf_atomic_inc_return(&__log_window_count) == WLAN_MAX_LOGS_PER_SEC)
+	if (qdf_detected_excessive_logging())
 		QDF_DEBUG_PANIC("Exceeded %d logs per second",
 				WLAN_MAX_LOGS_PER_SEC);
 }
 #else
-static inline void assert_on_excessive_logging(void) { }
+static inline void wlan_panic_on_excessive_logging(void) {}
 #endif /* WLAN_MAX_LOGS_PER_SEC */
 
+#ifdef QDF_TRACE_PRINT_ENABLE
+static inline void
+log_to_console(QDF_TRACE_LEVEL level, const char *timestamp, const char *msg)
+{
+	if (qdf_detected_excessive_logging()) {
+		qdf_rl_print_supressed_inc();
+		return;
+	}
+
+	qdf_rl_print_supressed_log();
+	pr_err("%s %s\n", timestamp, msg);
+}
+#else
 static inline void
 log_to_console(QDF_TRACE_LEVEL level, const char *timestamp, const char *msg)
 {
 	switch (level) {
 	case QDF_TRACE_LEVEL_FATAL:
 		pr_alert("%s %s\n", timestamp, msg);
-		assert_on_excessive_logging();
+		wlan_panic_on_excessive_logging();
 		break;
 	case QDF_TRACE_LEVEL_ERROR:
 		pr_err("%s %s\n", timestamp, msg);
-		assert_on_excessive_logging();
+		wlan_panic_on_excessive_logging();
 		break;
 	case QDF_TRACE_LEVEL_WARN:
 		pr_warn("%s %s\n", timestamp, msg);
-		assert_on_excessive_logging();
+		wlan_panic_on_excessive_logging();
 		break;
 	case QDF_TRACE_LEVEL_INFO:
 		pr_info("%s %s\n", timestamp, msg);
-		assert_on_excessive_logging();
+		wlan_panic_on_excessive_logging();
 		break;
 	case QDF_TRACE_LEVEL_INFO_HIGH:
 	case QDF_TRACE_LEVEL_INFO_MED:
@@ -374,6 +377,7 @@ log_to_console(QDF_TRACE_LEVEL level, const char *timestamp, const char *msg)
 		break;
 	}
 }
+#endif
 
 int wlan_log_to_user(QDF_TRACE_LEVEL log_level, char *to_be_sent, int length)
 {
@@ -775,6 +779,20 @@ static void send_flush_completion_to_user(uint8_t ring_id)
 }
 #endif
 
+static void wlan_logging_set_flush_log_completion(void)
+{
+	qdf_event_set(&gwlan_logging.flush_log_completion);
+}
+
+QDF_STATUS wlan_logging_wait_for_flush_log_completion(void)
+{
+	qdf_event_reset(&gwlan_logging.flush_log_completion);
+
+	return qdf_wait_for_event_completion(
+					&gwlan_logging.flush_log_completion,
+					FLUSH_LOG_COMPLETION_TIMEOUT);
+}
+
 static void setup_flush_timer(void)
 {
 	qdf_spin_lock(&gwlan_logging.flush_timer_lock);
@@ -787,6 +805,20 @@ static void setup_flush_timer(void)
 		      gwlan_logging.flush_timer_period);
 	qdf_spin_unlock(&gwlan_logging.flush_timer_lock);
 }
+
+#ifdef WLAN_FEATURE_CONNECTIVITY_LOGGING
+static QDF_STATUS
+wlan_logging_send_connectivity_event(void)
+{
+	return wlan_connectivity_log_dequeue();
+}
+#else
+static inline QDF_STATUS
+wlan_logging_send_connectivity_event(void)
+{
+	return QDF_STATUS_E_NOSUPPORT;
+}
+#endif
 
 /**
  * wlan_logging_thread() - The WLAN Logger thread
@@ -814,6 +846,9 @@ static int wlan_logging_thread(void *Arg)
 						     &gwlan_logging.eventFlag)
 						  || test_bit(
 						     HOST_LOG_FW_FLUSH_COMPLETE,
+						     &gwlan_logging.eventFlag)
+						  || test_bit(
+						     HOST_LOG_DRIVER_CONNECTIVITY_MSG,
 						     &gwlan_logging.eventFlag)
 						  || gwlan_logging.exit));
 
@@ -860,6 +895,7 @@ static int wlan_logging_thread(void *Arg)
 				send_flush_completion_to_user(
 						RING_ID_DRIVER_DEBUG);
 #endif
+				wlan_logging_set_flush_log_completion();
 			} else {
 				gwlan_logging.is_flush_complete = true;
 				/* Flush all current host logs*/
@@ -878,6 +914,11 @@ static int wlan_logging_thread(void *Arg)
 						&gwlan_logging.wait_queue);
 			}
 		}
+
+		/* Dequeue the connectivity_log */
+		wlan_logging_send_connectivity_event();
+		clear_bit(HOST_LOG_DRIVER_CONNECTIVITY_MSG,
+			  &gwlan_logging.eventFlag);
 	}
 
 	complete_and_exit(&gwlan_logging.shutdown_comp, 0);
@@ -937,7 +978,7 @@ static int panic_wifilog_ratelimit_print(void)
 /**
  * wlan_logging_dump_last_logs() - Panic notifier callback's helper function
  *
- * This function prints buffered logs in chunks of MAX_LOG_LINE.
+ * This function prints buffered logs one line at a time.
  */
 static void wlan_logging_dump_last_logs(void)
 {
@@ -957,11 +998,16 @@ static void wlan_logging_dump_last_logs(void)
 		log = &plog_msg->logbuf[sizeof(tAniHdr)];
 		filled_length = plog_msg->filled_length;
 		while (filled_length) {
-			text_len = scnprintf(textbuf,
-					     sizeof(textbuf),
-					     "%s", log);
+			text_len = qdf_str_copy_all_before_char(log, filled_length,
+								textbuf,
+								sizeof(textbuf) - 1,
+								'\n');
+			textbuf[text_len] = '\0';
 			if (panic_wifilog_ratelimit_print())
 				pr_err("%s\n", textbuf);
+
+			if (log[text_len] == '\n')
+				text_len += 1; /* skip newline */
 			log += text_len;
 			filled_length -= text_len;
 		}
@@ -1060,12 +1106,22 @@ static void flush_timer_init(void)
 	gwlan_logging.flush_timer_period = 0;
 }
 
+static void flush_timer_deinit(void)
+{
+	gwlan_logging.is_flush_timer_initialized = false;
+	qdf_spin_lock(&gwlan_logging.flush_timer_lock);
+	qdf_timer_stop(&gwlan_logging.flush_timer);
+	qdf_timer_free(&gwlan_logging.flush_timer);
+	qdf_spin_unlock(&gwlan_logging.flush_timer_lock);
+	qdf_spinlock_destroy(&gwlan_logging.flush_timer_lock);
+}
+
 int wlan_logging_sock_init_svc(void)
 {
 	int i = 0, j, pkt_stats_size;
 	unsigned long irq_flag;
+	QDF_STATUS status;
 
-	flush_timer_init();
 	spin_lock_init(&gwlan_logging.spin_lock);
 	spin_lock_init(&gwlan_logging.pkt_stats_lock);
 
@@ -1092,9 +1148,11 @@ int wlan_logging_sock_init_svc(void)
 	list_del_init(gwlan_logging.free_list.next);
 	spin_unlock_irqrestore(&gwlan_logging.spin_lock, irq_flag);
 
+	flush_timer_init();
+
 	/* Initialize the pktStats data structure here */
 	pkt_stats_size = sizeof(struct pkt_stats_msg);
-	gpkt_stats_buffers = vmalloc(MAX_PKTSTATS_BUFF * pkt_stats_size);
+	gpkt_stats_buffers = qdf_mem_valloc(MAX_PKTSTATS_BUFF * pkt_stats_size);
 	if (!gpkt_stats_buffers) {
 		qdf_err("Could not allocate memory for Pkt stats");
 		goto err1;
@@ -1135,6 +1193,7 @@ int wlan_logging_sock_init_svc(void)
 	clear_bit(HOST_LOG_DRIVER_MSG, &gwlan_logging.eventFlag);
 	clear_bit(HOST_LOG_PER_PKT_STATS, &gwlan_logging.eventFlag);
 	clear_bit(HOST_LOG_FW_FLUSH_COMPLETE, &gwlan_logging.eventFlag);
+	clear_bit(HOST_LOG_DRIVER_CONNECTIVITY_MSG, &gwlan_logging.eventFlag);
 	init_completion(&gwlan_logging.shutdown_comp);
 	gwlan_logging.thread = kthread_create(wlan_logging_thread, NULL,
 					      "wlan_logging_thread");
@@ -1145,6 +1204,12 @@ int wlan_logging_sock_init_svc(void)
 	wake_up_process(gwlan_logging.thread);
 	gwlan_logging.is_active = true;
 	gwlan_logging.is_flush_complete = false;
+
+	status = qdf_event_create(&gwlan_logging.flush_log_completion);
+	if (!QDF_IS_STATUS_SUCCESS(status)) {
+		qdf_err("Flush log completion event init failed");
+		goto err3;
+	}
 
 	return 0;
 
@@ -1157,25 +1222,16 @@ err2:
 	spin_lock_irqsave(&gwlan_logging.pkt_stats_lock, irq_flag);
 	gwlan_logging.pkt_stats_pcur_node = NULL;
 	spin_unlock_irqrestore(&gwlan_logging.pkt_stats_lock, irq_flag);
-	vfree(gpkt_stats_buffers);
+	qdf_mem_vfree(gpkt_stats_buffers);
 	gpkt_stats_buffers = NULL;
 err1:
+	flush_timer_deinit();
 	spin_lock_irqsave(&gwlan_logging.spin_lock, irq_flag);
 	gwlan_logging.pcur_node = NULL;
 	spin_unlock_irqrestore(&gwlan_logging.spin_lock, irq_flag);
 	free_log_msg_buffer();
 
 	return -ENOMEM;
-}
-
-static void flush_timer_deinit(void)
-{
-	gwlan_logging.is_flush_timer_initialized = false;
-	qdf_spin_lock(&gwlan_logging.flush_timer_lock);
-	qdf_timer_stop(&gwlan_logging.flush_timer);
-	qdf_timer_free(&gwlan_logging.flush_timer);
-	qdf_spin_unlock(&gwlan_logging.flush_timer_lock);
-	qdf_spinlock_destroy(&gwlan_logging.flush_timer_lock);
 }
 
 int wlan_logging_sock_deinit_svc(void)
@@ -1185,6 +1241,8 @@ int wlan_logging_sock_deinit_svc(void)
 
 	if (!gwlan_logging.pcur_node)
 		return 0;
+
+	qdf_event_destroy(&gwlan_logging.flush_log_completion);
 
 	INIT_COMPLETION(gwlan_logging.shutdown_comp);
 	gwlan_logging.exit = true;
@@ -1196,12 +1254,9 @@ int wlan_logging_sock_deinit_svc(void)
 	clear_bit(HOST_LOG_DRIVER_MSG, &gwlan_logging.eventFlag);
 	clear_bit(HOST_LOG_PER_PKT_STATS, &gwlan_logging.eventFlag);
 	clear_bit(HOST_LOG_FW_FLUSH_COMPLETE, &gwlan_logging.eventFlag);
+	clear_bit(HOST_LOG_DRIVER_CONNECTIVITY_MSG, &gwlan_logging.eventFlag);
 	wake_up_interruptible(&gwlan_logging.wait_queue);
 	wait_for_completion(&gwlan_logging.shutdown_comp);
-
-	spin_lock_irqsave(&gwlan_logging.spin_lock, irq_flag);
-	gwlan_logging.pcur_node = NULL;
-	spin_unlock_irqrestore(&gwlan_logging.spin_lock, irq_flag);
 
 	spin_lock_irqsave(&gwlan_logging.pkt_stats_lock, irq_flag);
 	gwlan_logging.pkt_stats_pcur_node = NULL;
@@ -1212,11 +1267,17 @@ int wlan_logging_sock_deinit_svc(void)
 			dev_kfree_skb(gpkt_stats_buffers[i].skb);
 	}
 	spin_unlock_irqrestore(&gwlan_logging.pkt_stats_lock, irq_flag);
-
-	vfree(gpkt_stats_buffers);
+	qdf_mem_vfree(gpkt_stats_buffers);
 	gpkt_stats_buffers = NULL;
-	free_log_msg_buffer();
+
+	/* Delete the Flush timer then mark pcur_node NULL */
 	flush_timer_deinit();
+
+	spin_lock_irqsave(&gwlan_logging.spin_lock, irq_flag);
+	gwlan_logging.pcur_node = NULL;
+	spin_unlock_irqrestore(&gwlan_logging.spin_lock, irq_flag);
+
+	free_log_msg_buffer();
 
 	return 0;
 }
@@ -1236,6 +1297,15 @@ void wlan_logging_set_per_pkt_stats(void)
 		return;
 
 	set_bit(HOST_LOG_PER_PKT_STATS, &gwlan_logging.eventFlag);
+	wake_up_interruptible(&gwlan_logging.wait_queue);
+}
+
+void wlan_logging_set_connectivity_log(void)
+{
+	if (gwlan_logging.is_active == false)
+		return;
+
+	set_bit(HOST_LOG_DRIVER_CONNECTIVITY_MSG, &gwlan_logging.eventFlag);
 	wake_up_interruptible(&gwlan_logging.wait_queue);
 }
 

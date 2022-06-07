@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2020 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2018-2021 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -22,6 +22,11 @@
 
 #ifndef _VDEV_MLME_SM_H_
 #define _VDEV_MLME_SM_H_
+
+#ifdef WLAN_FEATURE_11BE_MLO
+#include <wlan_mlo_mgr_ap.h>
+#endif
+#include <wlan_dfs_utils_api.h>
 
 /**
  * mlme_vdev_sm_deliver_event() - Delivers event to VDEV MLME SM
@@ -285,6 +290,30 @@ static inline QDF_STATUS mlme_vdev_sta_conn_start(
 
 	if ((vdev_mlme->ops) && vdev_mlme->ops->mlme_vdev_sta_conn_start)
 		ret = vdev_mlme->ops->mlme_vdev_sta_conn_start(
+					vdev_mlme, event_data_len, event_data);
+
+	return ret;
+}
+
+/**
+ * mlme_vdev_sta_disconn_start - Invoke Station VDEV disconnection
+ * @vdev_mlme_obj:  VDEV MLME comp object
+ * @event_data_len: data size
+ * @event_data: event data
+ *
+ * API invokes connection SM to start station disconnection
+ *
+ * Return: SUCCESS on successful invocation of disconnection sm
+ *         FAILURE, if it fails due to any
+ */
+static inline QDF_STATUS mlme_vdev_sta_disconn_start(
+				struct vdev_mlme_obj *vdev_mlme,
+				uint16_t event_data_len, void *event_data)
+{
+	QDF_STATUS ret = QDF_STATUS_SUCCESS;
+
+	if ((vdev_mlme->ops) && vdev_mlme->ops->mlme_vdev_sta_disconn_start)
+		ret = vdev_mlme->ops->mlme_vdev_sta_disconn_start(
 					vdev_mlme, event_data_len, event_data);
 
 	return ret;
@@ -579,6 +608,90 @@ static inline QDF_STATUS mlme_vdev_is_newchan_no_cac(
 
 	return ret;
 }
+
+/**
+ * mlme_vdev_dfs_cac_wait_notify - Notifies DFS CAC wait state
+ * @vdev_mlme_obj:  VDEV MLME comp object
+ *
+ * Return: NO_SUPPORT if the callback is not supported.
+ *         SUCCESS if DFS CAC Wait notification handled by caller
+ */
+static inline QDF_STATUS mlme_vdev_dfs_cac_wait_notify(
+				struct vdev_mlme_obj *vdev_mlme)
+{
+	QDF_STATUS ret = QDF_STATUS_E_NOSUPPORT;
+
+	if ((vdev_mlme->ops) && vdev_mlme->ops->mlme_vdev_dfs_cac_wait_notify)
+		ret = vdev_mlme->ops->mlme_vdev_dfs_cac_wait_notify(vdev_mlme);
+
+	return ret;
+}
+
+/**
+ * mlme_vdev_chan_switch_disable_notify_dfs - Notifies DFS when channel
+ * switch is disabled
+ * @vdev_mlme: VDEV MLME comp object
+ *
+ * Return: QDF_STATUS.
+ */
+static inline QDF_STATUS mlme_vdev_chan_switch_disable_notify_dfs(
+					struct vdev_mlme_obj *vdev_mlme)
+{
+	return utils_dfs_radar_enable(wlan_vdev_get_pdev(vdev_mlme->vdev));
+}
+#ifdef WLAN_FEATURE_11BE_MLO
+/**
+ * mlme_vdev_up_notify_mlo_mgr - notify mlo link is ready to up
+ * @vdev_mlme_obj:  VDEV MLME comp object
+ *
+ * Return: VOID.
+ */
+static inline void mlme_vdev_up_notify_mlo_mgr(struct vdev_mlme_obj *vdev_mlme)
+{
+	if (wlan_vdev_mlme_is_mlo_ap(vdev_mlme->vdev))
+		mlo_ap_link_sync_wait_notify(vdev_mlme->vdev);
+}
+
+/**
+ * mlme_vdev_start_rsp_notify_mlo_mgr - notify mlo link is started
+ * @vdev_mlme_obj:  VDEV MLME comp object
+ *
+ * Return: VOID.
+ */
+static inline void mlme_vdev_start_rsp_notify_mlo_mgr(
+					struct vdev_mlme_obj *vdev_mlme)
+{
+	if (wlan_vdev_mlme_is_mlo_ap(vdev_mlme->vdev))
+		mlo_ap_link_start_rsp_notify(vdev_mlme->vdev);
+}
+
+/**
+ * mlme_vdev_down_cmpl_notify_mlo_mgr - notify mlo link is down complate
+ * @vdev_mlme_obj:  VDEV MLME comp object
+ *
+ * Return: VOID.
+ */
+static inline void mlme_vdev_down_cmpl_notify_mlo_mgr(
+					struct vdev_mlme_obj *vdev_mlme)
+{
+	if (wlan_vdev_mlme_is_mlo_ap(vdev_mlme->vdev))
+		mlo_ap_link_down_cmpl_notify(vdev_mlme->vdev);
+}
+#else
+static inline void mlme_vdev_up_notify_mlo_mgr(struct vdev_mlme_obj *vdev_mlme)
+{
+}
+
+static inline void mlme_vdev_start_rsp_notify_mlo_mgr(
+					struct vdev_mlme_obj *vdev_mlme)
+{
+}
+
+static inline void mlme_vdev_down_cmpl_notify_mlo_mgr(
+					struct vdev_mlme_obj *vdev_mlme)
+{
+}
+#endif
 
 #ifdef VDEV_SM_LOCK_SUPPORT
 /**

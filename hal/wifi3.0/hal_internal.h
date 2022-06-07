@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016-2020 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -25,8 +25,10 @@
 #include "qdf_mem.h"
 #include "qdf_nbuf.h"
 #include "pld_common.h"
-#ifdef FEATURE_HAL_DELAYED_REG_WRITE
+#if defined(FEATURE_HAL_DELAYED_REG_WRITE) || \
+	defined(FEATURE_HAL_DELAYED_REG_WRITE_V2)
 #include "qdf_defer.h"
+#include "qdf_timer.h"
 #endif
 
 #define hal_alert(params...) QDF_TRACE_FATAL(QDF_MODULE_ID_HAL, params)
@@ -61,6 +63,39 @@ extern bool is_hal_verbose_debug_enabled;
 		QDF_TRACE_HEX_DUMP(QDF_MODULE_ID_HAL, QDF_TRACE_LEVEL_DEBUG, \
 				   params)
 #endif
+
+/*
+ * Given the offset of a field in bytes, returns uint8_t *
+ */
+#define _OFFSET_TO_BYTE_PTR(_ptr, _off_in_bytes)	\
+	(((uint8_t *)(_ptr)) + (_off_in_bytes))
+
+/*
+ * Given the offset of a field in bytes, returns uint32_t *
+ */
+#define _OFFSET_TO_WORD_PTR(_ptr, _off_in_bytes)	\
+	(((uint32_t *)(_ptr)) + ((_off_in_bytes) >> 2))
+
+/*
+ * Given the offset of a field in bytes, returns uint64_t *
+ */
+#define _OFFSET_TO_QWORD_PTR(_ptr, _off_in_bytes)	\
+	(((uint64_t *)(_ptr)) + ((_off_in_bytes) >> 3))
+
+#define _HAL_MS(_word, _mask, _shift)		\
+	(((_word) & (_mask)) >> (_shift))
+
+/*
+ * Get number of QWORDS possible for num.
+ * Its the caller's duty to make sure num is a multiple of QWORD (8)
+ */
+#define HAL_GET_NUM_QWORDS(num)	((num) >> 3)
+
+/*
+ * Get number of DWORDS possible for num.
+ * Its the caller's duty to make sure num is a multiple of DWORD (8)
+ */
+#define HAL_GET_NUM_DWORDS(num)	((num) >> 2)
 
 /*
  * dp_hal_soc - opaque handle for DP HAL soc
@@ -98,99 +133,147 @@ typedef struct hal_buff_addrinfo *hal_buff_addrinfo_t;
 struct hal_rx_mon_desc_info;
 typedef struct hal_rx_mon_desc_info *hal_rx_mon_desc_info_t;
 
+struct hal_buf_info;
+typedef struct hal_buf_info *hal_buf_info_t;
+
+struct rx_msdu_desc_info;
+typedef struct rx_msdu_desc_info *rx_msdu_desc_info_t;
+
 /* TBD: This should be movded to shared HW header file */
 enum hal_srng_ring_id {
 	/* UMAC rings */
-	HAL_SRNG_REO2SW1 = 0,
-	HAL_SRNG_REO2SW2 = 1,
-	HAL_SRNG_REO2SW3 = 2,
-	HAL_SRNG_REO2SW4 = 3,
-	HAL_SRNG_REO2TCL = 4,
-	HAL_SRNG_SW2REO = 5,
-	/* 6-7 unused */
-	HAL_SRNG_REO_CMD = 8,
-	HAL_SRNG_REO_STATUS = 9,
-	/* 10-15 unused */
-	HAL_SRNG_SW2TCL1 = 16,
-	HAL_SRNG_SW2TCL2 = 17,
-	HAL_SRNG_SW2TCL3 = 18,
-	HAL_SRNG_SW2TCL4 = 19, /* FW2TCL ring */
-	/* 20-23 unused */
-	HAL_SRNG_SW2TCL_CMD = 24,
-	HAL_SRNG_TCL_STATUS = 25,
-	/* 26-31 unused */
-	HAL_SRNG_CE_0_SRC = 32,
-	HAL_SRNG_CE_1_SRC = 33,
-	HAL_SRNG_CE_2_SRC = 34,
-	HAL_SRNG_CE_3_SRC = 35,
-	HAL_SRNG_CE_4_SRC = 36,
-	HAL_SRNG_CE_5_SRC = 37,
-	HAL_SRNG_CE_6_SRC = 38,
-	HAL_SRNG_CE_7_SRC = 39,
-	HAL_SRNG_CE_8_SRC = 40,
-	HAL_SRNG_CE_9_SRC = 41,
-	HAL_SRNG_CE_10_SRC = 42,
-	HAL_SRNG_CE_11_SRC = 43,
-	/* 44-55 unused */
-	HAL_SRNG_CE_0_DST = 56,
-	HAL_SRNG_CE_1_DST = 57,
-	HAL_SRNG_CE_2_DST = 58,
-	HAL_SRNG_CE_3_DST = 59,
-	HAL_SRNG_CE_4_DST = 60,
-	HAL_SRNG_CE_5_DST = 61,
-	HAL_SRNG_CE_6_DST = 62,
-	HAL_SRNG_CE_7_DST = 63,
-	HAL_SRNG_CE_8_DST = 64,
-	HAL_SRNG_CE_9_DST = 65,
-	HAL_SRNG_CE_10_DST = 66,
-	HAL_SRNG_CE_11_DST = 67,
-	/* 68-79 unused */
-	HAL_SRNG_CE_0_DST_STATUS = 80,
-	HAL_SRNG_CE_1_DST_STATUS = 81,
-	HAL_SRNG_CE_2_DST_STATUS = 82,
-	HAL_SRNG_CE_3_DST_STATUS = 83,
-	HAL_SRNG_CE_4_DST_STATUS = 84,
-	HAL_SRNG_CE_5_DST_STATUS = 85,
-	HAL_SRNG_CE_6_DST_STATUS = 86,
-	HAL_SRNG_CE_7_DST_STATUS = 87,
-	HAL_SRNG_CE_8_DST_STATUS = 88,
-	HAL_SRNG_CE_9_DST_STATUS = 89,
-	HAL_SRNG_CE_10_DST_STATUS = 90,
-	HAL_SRNG_CE_11_DST_STATUS = 91,
-	/* 92-103 unused */
-	HAL_SRNG_WBM_IDLE_LINK = 104,
-	HAL_SRNG_WBM_SW_RELEASE = 105,
-	HAL_SRNG_WBM2SW0_RELEASE = 106,
-	HAL_SRNG_WBM2SW1_RELEASE = 107,
-	HAL_SRNG_WBM2SW2_RELEASE = 108,
-	HAL_SRNG_WBM2SW3_RELEASE = 109,
-	/* 110-127 unused */
-	HAL_SRNG_UMAC_ID_END = 127,
+	HAL_SRNG_REO2SW0 = 0,
+	HAL_SRNG_REO2SW1 = 1,
+	HAL_SRNG_REO2SW2 = 2,
+	HAL_SRNG_REO2SW3 = 3,
+	HAL_SRNG_REO2SW4 = 4,
+	HAL_SRNG_REO2SW5 = 5,
+	HAL_SRNG_REO2SW6 = 6,
+	HAL_SRNG_REO2SW7 = 7,
+	HAL_SRNG_REO2SW8 = 8,
+	HAL_SRNG_REO2TCL = 9,
+	HAL_SRNG_REO2PPE = 10,
+	/* 11-15 unused */
+	HAL_SRNG_SW2REO = 16,
+	HAL_SRNG_SW2REO1 = 17,
+	HAL_SRNG_SW2REO2 = 18,
+	HAL_SRNG_SW2REO3 = 19,
+	HAL_SRNG_REO_CMD = 20,
+	HAL_SRNG_REO_STATUS = 21,
+	/* 22-23 unused */
+	HAL_SRNG_SW2TCL1 = 24,
+	HAL_SRNG_SW2TCL2 = 25,
+	HAL_SRNG_SW2TCL3 = 26,
+	HAL_SRNG_SW2TCL4 = 27,
+	HAL_SRNG_SW2TCL5 = 28,
+	HAL_SRNG_SW2TCL6 = 29,
+	HAL_SRNG_PPE2TCL1 = 30,
+	/* 31-39 unused */
+	HAL_SRNG_SW2TCL_CMD = 40,
+	HAL_SRNG_TCL_STATUS = 41,
+	HAL_SRNG_SW2TCL_CREDIT = 42,
+	/* 43-63 unused */
+	HAL_SRNG_CE_0_SRC = 64,
+	HAL_SRNG_CE_1_SRC = 65,
+	HAL_SRNG_CE_2_SRC = 66,
+	HAL_SRNG_CE_3_SRC = 67,
+	HAL_SRNG_CE_4_SRC = 68,
+	HAL_SRNG_CE_5_SRC = 69,
+	HAL_SRNG_CE_6_SRC = 70,
+	HAL_SRNG_CE_7_SRC = 71,
+	HAL_SRNG_CE_8_SRC = 72,
+	HAL_SRNG_CE_9_SRC = 73,
+	HAL_SRNG_CE_10_SRC = 74,
+	HAL_SRNG_CE_11_SRC = 75,
+	HAL_SRNG_CE_12_SRC = 76,
+	HAL_SRNG_CE_13_SRC = 77,
+	HAL_SRNG_CE_14_SRC = 78,
+	HAL_SRNG_CE_15_SRC = 79,
+	/* 80 */
+	HAL_SRNG_CE_0_DST = 81,
+	HAL_SRNG_CE_1_DST = 82,
+	HAL_SRNG_CE_2_DST = 83,
+	HAL_SRNG_CE_3_DST = 84,
+	HAL_SRNG_CE_4_DST = 85,
+	HAL_SRNG_CE_5_DST = 86,
+	HAL_SRNG_CE_6_DST = 87,
+	HAL_SRNG_CE_7_DST = 89,
+	HAL_SRNG_CE_8_DST = 90,
+	HAL_SRNG_CE_9_DST = 91,
+	HAL_SRNG_CE_10_DST = 92,
+	HAL_SRNG_CE_11_DST = 93,
+	HAL_SRNG_CE_12_DST = 94,
+	HAL_SRNG_CE_13_DST = 95,
+	HAL_SRNG_CE_14_DST = 96,
+	HAL_SRNG_CE_15_DST = 97,
+	/* 98-99 unused */
+	HAL_SRNG_CE_0_DST_STATUS = 100,
+	HAL_SRNG_CE_1_DST_STATUS = 101,
+	HAL_SRNG_CE_2_DST_STATUS = 102,
+	HAL_SRNG_CE_3_DST_STATUS = 103,
+	HAL_SRNG_CE_4_DST_STATUS = 104,
+	HAL_SRNG_CE_5_DST_STATUS = 105,
+	HAL_SRNG_CE_6_DST_STATUS = 106,
+	HAL_SRNG_CE_7_DST_STATUS = 107,
+	HAL_SRNG_CE_8_DST_STATUS = 108,
+	HAL_SRNG_CE_9_DST_STATUS = 109,
+	HAL_SRNG_CE_10_DST_STATUS = 110,
+	HAL_SRNG_CE_11_DST_STATUS = 111,
+	HAL_SRNG_CE_12_DST_STATUS = 112,
+	HAL_SRNG_CE_13_DST_STATUS = 113,
+	HAL_SRNG_CE_14_DST_STATUS = 114,
+	HAL_SRNG_CE_15_DST_STATUS = 115,
+	/* 116-119 unused */
+	HAL_SRNG_WBM_IDLE_LINK = 120,
+	HAL_SRNG_WBM_SW_RELEASE = 121,
+	HAL_SRNG_WBM_SW1_RELEASE = 122,
+	HAL_SRNG_WBM_PPE_RELEASE = 123,
+	/* 124-127 unused */
+	HAL_SRNG_WBM2SW0_RELEASE = 128,
+	HAL_SRNG_WBM2SW1_RELEASE = 129,
+	HAL_SRNG_WBM2SW2_RELEASE = 130,
+	HAL_SRNG_WBM2SW3_RELEASE = 131,
+	HAL_SRNG_WBM2SW4_RELEASE = 132,
+	HAL_SRNG_WBM2SW5_RELEASE = 133,
+	HAL_SRNG_WBM2SW6_RELEASE = 134,
+	HAL_SRNG_WBM_ERROR_RELEASE = 135,
+	/* 136-158 unused */
+	HAL_SRNG_UMAC_ID_END = 159,
+	/* Common DMAC rings shared by all LMACs */
+	HAL_SRNG_SW2RXDMA_BUF0 = 160,
+	HAL_SRNG_SW2RXDMA_BUF1 = 161,
+	HAL_SRNG_SW2RXDMA_BUF2 = 162,
+	/* 163-167 unused */
+	HAL_SRNG_SW2RXMON_BUF0 = 168,
+	/* 169-175 unused */
+	HAL_SRNG_SW2TXMON_BUF0 = 176,
+	/* 177-183 unused */
+	HAL_SRNG_DMAC_CMN_ID_END = 183,
 	/* LMAC rings - The following set will be replicated for each LMAC */
-	HAL_SRNG_LMAC1_ID_START = 128,
+	HAL_SRNG_LMAC1_ID_START = 184,
 	HAL_SRNG_WMAC1_SW2RXDMA0_BUF0 = HAL_SRNG_LMAC1_ID_START,
 #ifdef IPA_OFFLOAD
-	HAL_SRNG_WMAC1_SW2RXDMA0_BUF1 = (HAL_SRNG_LMAC1_ID_START + 1),
-	HAL_SRNG_WMAC1_SW2RXDMA0_BUF2 = (HAL_SRNG_LMAC1_ID_START + 2),
-	HAL_SRNG_WMAC1_SW2RXDMA1_BUF = (HAL_SRNG_WMAC1_SW2RXDMA0_BUF2 + 1),
+	HAL_SRNG_WMAC1_SW2RXDMA0_BUF1,
+	HAL_SRNG_WMAC1_SW2RXDMA0_BUF2,
+	HAL_SRNG_WMAC1_SW2RXDMA1_BUF,
 #else
-	HAL_SRNG_WMAC1_SW2RXDMA1_BUF = (HAL_SRNG_WMAC1_SW2RXDMA0_BUF0 + 1),
+	HAL_SRNG_WMAC1_SW2RXDMA1_BUF,
 #endif
-	HAL_SRNG_WMAC1_SW2RXDMA2_BUF = (HAL_SRNG_WMAC1_SW2RXDMA1_BUF + 1),
-	HAL_SRNG_WMAC1_SW2RXDMA0_STATBUF = (HAL_SRNG_WMAC1_SW2RXDMA2_BUF + 1),
-	HAL_SRNG_WMAC1_SW2RXDMA1_STATBUF =
-					(HAL_SRNG_WMAC1_SW2RXDMA0_STATBUF + 1),
-	HAL_SRNG_WMAC1_RXDMA2SW0 = (HAL_SRNG_WMAC1_SW2RXDMA1_STATBUF + 1),
-	HAL_SRNG_WMAC1_RXDMA2SW1 = (HAL_SRNG_WMAC1_RXDMA2SW0 + 1),
-	HAL_SRNG_WMAC1_SW2RXDMA1_DESC = (HAL_SRNG_WMAC1_RXDMA2SW1 + 1),
+	HAL_SRNG_WMAC1_SW2RXDMA2_BUF,
+	HAL_SRNG_WMAC1_SW2RXDMA0_STATBUF,
+	HAL_SRNG_WMAC1_SW2RXDMA1_STATBUF,
+	HAL_SRNG_WMAC1_RXDMA2SW0,
+	HAL_SRNG_WMAC1_RXDMA2SW1,
+	HAL_SRNG_WMAC1_RXMON2SW0 = HAL_SRNG_WMAC1_RXDMA2SW1,
+	HAL_SRNG_WMAC1_SW2RXDMA1_DESC,
 #ifdef WLAN_FEATURE_CIF_CFR
-	HAL_SRNG_WIFI_POS_SRC_DMA_RING = (HAL_SRNG_WMAC1_SW2RXDMA1_DESC + 1),
-	HAL_SRNG_DIR_BUF_RX_SRC_DMA_RING = (HAL_SRNG_WIFI_POS_SRC_DMA_RING + 1),
+	HAL_SRNG_WIFI_POS_SRC_DMA_RING,
+	HAL_SRNG_DIR_BUF_RX_SRC_DMA_RING,
 #else
-	HAL_SRNG_DIR_BUF_RX_SRC_DMA_RING = (HAL_SRNG_WMAC1_SW2RXDMA1_DESC + 1),
+	HAL_SRNG_DIR_BUF_RX_SRC_DMA_RING,
 #endif
-	/* -142 unused */
-	HAL_SRNG_LMAC1_ID_END = 143
+	HAL_SRNG_WMAC1_TXMON2SW0,
+	HAL_SRNG_LMAC1_ID_END = (HAL_SRNG_WMAC1_TXMON2SW0 + 3),
 };
 
 #define HAL_RXDMA_MAX_RING_SIZE 0xFFFF
@@ -198,11 +281,98 @@ enum hal_srng_ring_id {
 #define HAL_MAX_RINGS_PER_LMAC (HAL_SRNG_LMAC1_ID_END - HAL_SRNG_LMAC1_ID_START)
 #define HAL_MAX_LMAC_RINGS (HAL_MAX_LMACS * HAL_MAX_RINGS_PER_LMAC)
 
-#define HAL_SRNG_ID_MAX (HAL_SRNG_UMAC_ID_END + HAL_MAX_LMAC_RINGS)
+#define HAL_SRNG_ID_MAX (HAL_SRNG_DMAC_CMN_ID_END + HAL_MAX_LMAC_RINGS)
+
+/* SRNG type to be passed in APIs hal_srng_get_entrysize and hal_srng_setup */
+enum hal_ring_type {
+	REO_DST = 0,
+	REO_EXCEPTION = 1,
+	REO_REINJECT = 2,
+	REO_CMD = 3,
+	REO_STATUS = 4,
+	TCL_DATA = 5,
+	TCL_CMD_CREDIT = 6,
+	TCL_STATUS = 7,
+	CE_SRC = 8,
+	CE_DST = 9,
+	CE_DST_STATUS = 10,
+	WBM_IDLE_LINK = 11,
+	SW2WBM_RELEASE = 12,
+	WBM2SW_RELEASE = 13,
+	RXDMA_BUF = 14,
+	RXDMA_DST = 15,
+	RXDMA_MONITOR_BUF = 16,
+	RXDMA_MONITOR_STATUS = 17,
+	RXDMA_MONITOR_DST = 18,
+	RXDMA_MONITOR_DESC = 19,
+	DIR_BUF_RX_DMA_SRC = 20,
+#ifdef WLAN_FEATURE_CIF_CFR
+	WIFI_POS_SRC,
+#endif
+	REO2PPE,
+	PPE2TCL,
+	PPE_RELEASE,
+	TX_MONITOR_BUF,
+	TX_MONITOR_DST,
+	SW2RXDMA_NEW,
+	MAX_RING_TYPES
+};
+
+enum SRNG_REGISTERS {
+	DST_HP = 0,
+	DST_TP,
+	DST_ID,
+	DST_MISC,
+	DST_HP_ADDR_LSB,
+	DST_HP_ADDR_MSB,
+	DST_MSI1_BASE_LSB,
+	DST_MSI1_BASE_MSB,
+	DST_MSI1_DATA,
+#ifdef CONFIG_BERYLLIUM
+	DST_MSI2_BASE_LSB,
+	DST_MSI2_BASE_MSB,
+	DST_MSI2_DATA,
+#endif
+	DST_BASE_LSB,
+	DST_BASE_MSB,
+	DST_PRODUCER_INT_SETUP,
+#ifdef CONFIG_BERYLLIUM
+	DST_PRODUCER_INT2_SETUP,
+#endif
+
+	SRC_HP,
+	SRC_TP,
+	SRC_ID,
+	SRC_MISC,
+	SRC_TP_ADDR_LSB,
+	SRC_TP_ADDR_MSB,
+	SRC_MSI1_BASE_LSB,
+	SRC_MSI1_BASE_MSB,
+	SRC_MSI1_DATA,
+	SRC_BASE_LSB,
+	SRC_BASE_MSB,
+	SRC_CONSUMER_INT_SETUP_IX0,
+	SRC_CONSUMER_INT_SETUP_IX1,
+	SRNG_REGISTER_MAX,
+};
 
 enum hal_srng_dir {
 	HAL_SRNG_SRC_RING,
 	HAL_SRNG_DST_RING
+};
+
+/**
+ * enum hal_reo_remap_reg - REO remap registers
+ * @HAL_REO_REMAP_REG_IX0: reo remap reg IX0
+ * @HAL_REO_REMAP_REG_IX1: reo remap reg IX1
+ * @HAL_REO_REMAP_REG_IX2: reo remap reg IX2
+ * @HAL_REO_REMAP_REG_IX3: reo remap reg IX3
+ */
+enum hal_reo_remap_reg {
+	HAL_REO_REMAP_REG_IX0,
+	HAL_REO_REMAP_REG_IX1,
+	HAL_REO_REMAP_REG_IX2,
+	HAL_REO_REMAP_REG_IX3
 };
 
 /* Lock wrappers for SRNG */
@@ -228,7 +398,8 @@ typedef struct hal_ring_handle *hal_ring_handle_t;
  */
 #define HAL_SRNG_FLUSH_EVENT BIT(0)
 
-#ifdef FEATURE_HAL_DELAYED_REG_WRITE
+#if defined(FEATURE_HAL_DELAYED_REG_WRITE) || \
+	defined(FEATURE_HAL_DELAYED_REG_WRITE_V2)
 
 /**
  * struct hal_reg_write_q_elem - delayed register write queue element
@@ -258,12 +429,14 @@ struct hal_reg_write_q_elem {
  * @dequeues: writes dequeued from delayed work (not written yet)
  * @coalesces: writes not enqueued since srng is already queued up
  * @direct: writes not enqueued and written to register directly
+ * @dequeue_delay: dequeue operation be delayed
  */
 struct hal_reg_write_srng_stats {
 	uint32_t enqueues;
 	uint32_t dequeues;
 	uint32_t coalesces;
 	uint32_t direct;
+	uint32_t dequeue_delay;
 };
 
 /**
@@ -292,6 +465,7 @@ enum hal_reg_sched_delay {
  * @q_depth: current queue depth in delayed register write queue
  * @max_q_depth: maximum queue for delayed register write queue
  * @sched_delay: = kernel work sched delay + bus wakeup delay, histogram
+ * @dequeue_delay: dequeue operation be delayed
  */
 struct hal_reg_write_soc_stats {
 	qdf_atomic_t enqueues;
@@ -302,8 +476,37 @@ struct hal_reg_write_soc_stats {
 	qdf_atomic_t q_depth;
 	uint32_t max_q_depth;
 	uint32_t sched_delay[REG_WRITE_SCHED_DELAY_HIST_MAX];
+	uint32_t dequeue_delay;
+};
+
+#ifdef FEATURE_HAL_DELAYED_REG_WRITE_V2
+struct hal_reg_write_tcl_stats {
+	uint32_t wq_delayed;
+	uint32_t wq_direct;
+	uint32_t timer_enq;
+	uint32_t timer_direct;
+	uint32_t enq_timer_set;
+	uint32_t direct_timer_set;
+	uint32_t timer_reset;
+	qdf_time_t enq_time;
+	qdf_time_t deq_time;
+	uint32_t sched_delay[REG_WRITE_SCHED_DELAY_HIST_MAX];
 };
 #endif
+#endif
+
+struct hal_offload_info {
+	uint8_t lro_eligible;
+	uint8_t tcp_proto;
+	uint8_t tcp_pure_ack;
+	uint8_t ipv6_proto;
+	uint8_t tcp_offset;
+	uint16_t tcp_csum;
+	uint16_t tcp_win;
+	uint32_t tcp_seq_num;
+	uint32_t tcp_ack_num;
+	uint32_t flow_id;
+};
 
 /* Common SRNG ring structure for source and destination rings */
 struct hal_srng {
@@ -349,6 +552,14 @@ struct hal_srng {
 	/* MSI data */
 	uint32_t msi_data;
 
+#ifdef WLAN_FEATURE_NEAR_FULL_IRQ
+	/* MSI2 Address */
+	qdf_dma_addr_t msi2_addr;
+
+	/* MSI2 data */
+	uint32_t msi2_data;
+#endif
+
 	/* Misc flags */
 	uint32_t flags;
 
@@ -360,6 +571,9 @@ struct hal_srng {
 	 * from ring ID
 	 */
 	void *hwreg_base[MAX_SRNG_REG_GROUPS];
+
+	/* Ring type/name */
+	enum hal_ring_type ring_type;
 
 	/* Source or Destination ring */
 	enum hal_srng_dir ring_dir;
@@ -385,6 +599,14 @@ struct hal_srng {
 
 			/* max transfer size */
 			uint16_t max_buffer_length;
+
+#ifdef WLAN_FEATURE_NEAR_FULL_IRQ
+			/* near full IRQ supported */
+			uint16_t nf_irq_support;
+
+			/* High threshold for Near full IRQ */
+			uint16_t high_thresh;
+#endif
 		} dst_ring;
 
 		struct {
@@ -418,9 +640,18 @@ struct hal_srng {
 	unsigned long srng_event;
 	/* last flushed time stamp */
 	uint64_t last_flush_ts;
-#ifdef FEATURE_HAL_DELAYED_REG_WRITE
+#if defined(CLEAR_SW2TCL_CONSUMED_DESC)
+	/* last ring desc entry cleared */
+	uint32_t last_desc_cleared;
+#endif
+#if defined(FEATURE_HAL_DELAYED_REG_WRITE) || \
+	defined(FEATURE_HAL_DELAYED_REG_WRITE_V2)
+	/* Previous hp/tp (based on ring dir) value written to the reg */
+	uint32_t last_reg_wr_val;
 	/* flag to indicate whether srng is already queued for delayed write */
 	uint8_t reg_write_in_progress;
+	/* last dequeue elem time stamp */
+	qdf_time_t last_dequeue_time;
 
 	/* srng specific delayed write stats */
 	struct hal_reg_write_srng_stats wstats;
@@ -437,9 +668,10 @@ struct hal_hw_srng_config {
 	uint8_t lmac_ring;
 	enum hal_srng_dir ring_dir;
 	uint32_t max_size;
+	bool nf_irq_support;
 };
 
-#define MAX_SHADOW_REGISTERS 36
+#define MAX_SHADOW_REGISTERS 40
 #define MAX_GENERIC_SHADOW_REG 5
 
 /**
@@ -471,12 +703,41 @@ struct hal_reo_params {
 	uint32_t remap2;
 	/** fragment destination ring */
 	uint8_t frag_dst_ring;
+	/* Destination for alternate */
+	uint8_t alt_dst_ind_0;
 	/** padding */
-	uint8_t padding[3];
+	uint8_t padding[2];
+};
+
+/**
+ * enum hal_reo_cmd_type: Enum for REO command type
+ * @CMD_GET_QUEUE_STATS: Get REO queue status/stats
+ * @CMD_FLUSH_QUEUE: Flush all frames in REO queue
+ * @CMD_FLUSH_CACHE: Flush descriptor entries in the cache
+ * @CMD_UNBLOCK_CACHE: Unblock a descriptor’s address that was blocked
+ *	earlier with a ‘REO_FLUSH_CACHE’ command
+ * @CMD_FLUSH_TIMEOUT_LIST: Flush buffers/descriptors from timeout list
+ * @CMD_UPDATE_RX_REO_QUEUE: Update REO queue settings
+ */
+enum hal_reo_cmd_type {
+	CMD_GET_QUEUE_STATS	= 0,
+	CMD_FLUSH_QUEUE		= 1,
+	CMD_FLUSH_CACHE		= 2,
+	CMD_UNBLOCK_CACHE	= 3,
+	CMD_FLUSH_TIMEOUT_LIST	= 4,
+	CMD_UPDATE_RX_REO_QUEUE = 5
+};
+
+struct hal_rx_pkt_capture_flags {
+	uint8_t encrypt_type;
+	uint8_t fragment_flag;
+	uint8_t fcs_err;
+	uint32_t chan_freq;
+	uint32_t rssi_comb;
+	uint64_t tsft;
 };
 
 struct hal_hw_txrx_ops {
-
 	/* init and setup */
 	void (*hal_srng_dst_hw_init)(struct hal_soc *hal,
 				     struct hal_srng *srng);
@@ -498,6 +759,14 @@ struct hal_hw_txrx_ops {
 	qdf_iomem_t (*hal_get_window_address)(struct hal_soc *hal_soc,
 					      qdf_iomem_t addr);
 	void (*hal_reo_set_err_dst_remap)(void *hal_soc);
+	uint8_t (*hal_reo_enable_pn_in_dest)(void *hal_soc);
+	void (*hal_reo_qdesc_setup)(hal_soc_handle_t hal_soc_hdl, int tid,
+				    uint32_t ba_window_size,
+				    uint32_t start_seq, void *hw_qdesc_vaddr,
+				    qdf_dma_addr_t hw_qdesc_paddr,
+				    int pn_type);
+	uint32_t (*hal_gen_reo_remap_val)(enum hal_reo_remap_reg,
+					  uint8_t *ix0_map);
 
 	/* tx */
 	void (*hal_tx_desc_set_dscp_tid_table_id)(void *desc, uint8_t id);
@@ -507,8 +776,9 @@ struct hal_hw_txrx_ops {
 				       uint8_t id,
 				       uint8_t dscp);
 	void (*hal_tx_desc_set_lmac_id)(void *desc, uint8_t lmac_id);
-	 void (*hal_tx_desc_set_buf_addr)(void *desc, dma_addr_t paddr,
-			uint8_t pool_id, uint32_t desc_id, uint8_t type);
+	void (*hal_tx_desc_set_buf_addr)(void *desc, dma_addr_t paddr,
+					 uint8_t pool_id, uint32_t desc_id,
+					 uint8_t type);
 	void (*hal_tx_desc_set_search_type)(void *desc, uint8_t search_type);
 	void (*hal_tx_desc_set_search_index)(void *desc, uint32_t search_index);
 	void (*hal_tx_desc_set_cache_set_num)(void *desc, uint8_t search_index);
@@ -519,6 +789,7 @@ struct hal_hw_txrx_ops {
 	void (*hal_tx_desc_set_mesh_en)(void *desc, uint8_t en);
 	void (*hal_tx_init_cmd_credit_ring)(hal_soc_handle_t hal_soc_hdl,
 					    hal_ring_handle_t hal_ring_hdl);
+	uint32_t (*hal_tx_comp_get_buffer_source)(void *hal_desc);
 
 	/* rx */
 	uint32_t (*hal_rx_msdu_start_nss_get)(uint8_t *);
@@ -536,7 +807,8 @@ struct hal_hw_txrx_ops {
 	uint16_t (*hal_rx_msdu_end_da_idx_get)(uint8_t *buf);
 	void* (*hal_rx_msdu_desc_info_get_ptr)(void *msdu_details_ptr);
 	void* (*hal_rx_link_desc_msdu0_ptr)(void *msdu_link_ptr);
-	void (*hal_reo_status_get_header)(uint32_t *d, int b, void *h);
+	void (*hal_reo_status_get_header)(hal_ring_desc_t ring_desc, int b,
+					  void *h);
 	uint32_t (*hal_rx_status_get_tlv_info)(void *rx_tlv_hdr,
 					       void *ppdu_info,
 					       hal_soc_handle_t hal_soc_hdl,
@@ -550,6 +822,8 @@ struct hal_hw_txrx_ops {
 	void (*hal_tx_update_pcp_tid_map)(struct hal_soc *hal_soc, uint8_t pcp,
 					  uint8_t id);
 	void (*hal_tx_set_tidmap_prty)(struct hal_soc *hal_soc, uint8_t prio);
+
+	/* rx */
 	uint8_t (*hal_rx_get_rx_fragment_number)(uint8_t *buf);
 	uint8_t (*hal_rx_msdu_end_da_is_mcbc_get)(uint8_t *buf);
 	uint8_t (*hal_rx_msdu_end_sa_is_valid_get)(uint8_t *buf);
@@ -625,6 +899,7 @@ struct hal_hw_txrx_ops {
 	uint32_t (*hal_rx_msdu_start_offset_get)(void);
 	uint32_t (*hal_rx_mpdu_start_offset_get)(void);
 	uint32_t (*hal_rx_mpdu_end_offset_get)(void);
+	uint32_t (*hal_rx_pkt_tlv_offset_get)(void);
 	void * (*hal_rx_flow_setup_fse)(uint8_t *rx_fst,
 					uint32_t table_offset,
 					uint8_t *rx_flow);
@@ -640,8 +915,111 @@ struct hal_hw_txrx_ops {
 	void (*hal_rx_flow_get_cmem_fse)(struct hal_soc *soc,
 					 uint32_t fse_offset,
 					 uint32_t *fse, qdf_size_t len);
+
+	void (*hal_cmem_write)(hal_soc_handle_t hal_soc_hdl, uint32_t offset,
+			       uint32_t value);
+
 	void (*hal_rx_msdu_get_reo_destination_indication)(uint8_t *buf,
 							   uint32_t *reo_destination_indication);
+	uint8_t (*hal_tx_get_num_tcl_banks)(void);
+	uint32_t (*hal_get_reo_qdesc_size)(uint32_t ba_window_size, int tid);
+
+	void (*hal_set_link_desc_addr)(void *desc, uint32_t cookie,
+				       qdf_dma_addr_t link_desc_paddr);
+	void (*hal_tx_init_data_ring)(hal_soc_handle_t hal_soc_hdl,
+				      hal_ring_handle_t hal_ring_hdl);
+	void* (*hal_rx_msdu_ext_desc_info_get_ptr)(void *msdu_details_ptr);
+	void (*hal_get_ba_aging_timeout)(hal_soc_handle_t hal_soc_hdl,
+					 uint8_t ac, uint32_t *value);
+	void (*hal_set_ba_aging_timeout)(hal_soc_handle_t hal_soc_hdl,
+					 uint8_t ac, uint32_t value);
+	uint32_t (*hal_get_reo_reg_base_offset)(void);
+	void (*hal_rx_get_tlv_size)(uint16_t *rx_pkt_tlv_size,
+				    uint16_t *rx_mon_pkt_tlv_size);
+	uint32_t (*hal_rx_msdu_is_wlan_mcast)(qdf_nbuf_t nbuf);
+	uint32_t (*hal_rx_tlv_decap_format_get)(void *hw_desc_addr);
+	void (*hal_rx_dump_pkt_tlvs)(hal_soc_handle_t hal_soc_hdl,
+				     uint8_t *buf, uint8_t dbg_level);
+	int (*hal_rx_tlv_get_offload_info)(uint8_t *rx_tlv,
+					   struct hal_offload_info *offload_info);
+	uint16_t (*hal_rx_tlv_phy_ppdu_id_get)(uint8_t *buf);
+	uint32_t (*hal_rx_tlv_msdu_done_get)(uint8_t *buf);
+	uint32_t (*hal_rx_tlv_msdu_len_get)(uint8_t *buf);
+	uint16_t (*hal_rx_get_frame_ctrl_field)(uint8_t *buf);
+	int (*hal_rx_get_proto_params)(uint8_t *buf, void *fisa_params);
+	int (*hal_rx_get_l3_l4_offsets)(uint8_t *buf, uint32_t *l3_hdr_offset,
+					uint32_t *l4_hdr_offset);
+	uint32_t (*hal_rx_tlv_mic_err_get)(uint8_t *buf);
+	uint32_t (*hal_rx_tlv_get_pkt_type)(uint8_t *buf);
+	void (*hal_rx_tlv_get_pn_num)(uint8_t *buf, uint64_t *pn_num);
+	void (*hal_rx_reo_prev_pn_get)(void *ring_desc, uint64_t *prev_pn);
+	uint8_t * (*hal_rx_pkt_hdr_get)(uint8_t *buf);
+	uint32_t (*hal_rx_msdu_reo_dst_ind_get)(hal_soc_handle_t hal_soc_hdl,
+						void *msdu_link_desc);
+	void (*hal_msdu_desc_info_set)(hal_soc_handle_t hal_soc_hdl,
+				       void *msdu_desc_info, uint32_t dst_ind,
+				       uint32_t nbuf_len);
+	void (*hal_mpdu_desc_info_set)(hal_soc_handle_t hal_soc_hdl,
+				       void *mpdu_desc_info, uint32_t seq_no);
+	uint32_t (*hal_rx_tlv_sgi_get)(uint8_t *buf);
+	uint32_t (*hal_rx_tlv_get_freq)(uint8_t *buf);
+	uint8_t (*hal_rx_msdu_get_keyid)(uint8_t *buf);
+	uint32_t (*hal_rx_tlv_rate_mcs_get)(uint8_t *buf);
+	uint32_t (*hal_rx_tlv_decrypt_err_get)(uint8_t *buf);
+	uint32_t (*hal_rx_tlv_first_mpdu_get)(uint8_t *buf);
+	uint32_t (*hal_rx_tlv_bw_get)(uint8_t *buf);
+	uint32_t (*hal_rx_tlv_get_is_decrypted)(uint8_t *buf);
+
+	uint32_t (*hal_rx_wbm_err_src_get)(hal_ring_desc_t ring_desc);
+	uint8_t (*hal_rx_ret_buf_manager_get)(hal_ring_desc_t ring_desc);
+	void (*hal_rx_msdu_link_desc_set)(hal_soc_handle_t hal_soc_hdl,
+					  void *src_srng_desc,
+					  hal_buff_addrinfo_t buf_addr_info,
+					  uint8_t bm_action);
+
+	void (*hal_rx_buf_cookie_rbm_get)(uint32_t *buf_addr_info_hdl,
+					  hal_buf_info_t buf_info_hdl);
+	void (*hal_rx_reo_buf_paddr_get)(hal_ring_desc_t rx_desc,
+					 struct hal_buf_info *buf_info);
+	void (*hal_rxdma_buff_addr_info_set)(void *rxdma_entry,
+					     qdf_dma_addr_t paddr,
+					     uint32_t cookie, uint8_t manager);
+	uint32_t (*hal_rx_msdu_flags_get)(rx_msdu_desc_info_t msdu_desc_info_hdl);
+	uint32_t (*hal_rx_get_reo_error_code)(hal_ring_desc_t rx_desc);
+	void (*hal_rx_tlv_csum_err_get)(uint8_t *rx_tlv_hdr,
+					uint32_t *ip_csum_err,
+					uint32_t *tcp_udp_csum_err);
+	void (*hal_rx_mpdu_desc_info_get)(void *desc_addr,
+					  void *mpdu_desc_info_hdl);
+	uint8_t (*hal_rx_err_status_get)(hal_ring_desc_t rx_desc);
+	uint8_t (*hal_rx_reo_buf_type_get)(hal_ring_desc_t rx_desc);
+	bool (*hal_rx_mpdu_info_ampdu_flag_get)(uint8_t *buf);
+	uint32_t (*hal_rx_tlv_mpdu_len_err_get)(void *hw_desc_addr);
+	uint32_t (*hal_rx_tlv_mpdu_fcs_err_get)(void *hw_desc_addr);
+	void (*hal_rx_tlv_get_pkt_capture_flags)(uint8_t *rx_tlv_hdr,
+						 struct hal_rx_pkt_capture_flags *flags);
+	uint8_t *(*hal_rx_desc_get_80211_hdr)(void *hw_desc_addr);
+	uint32_t (*hal_rx_hw_desc_mpdu_user_id)(void *hw_desc_addr);
+	void (*hal_rx_priv_info_set_in_tlv)(uint8_t *buf,
+					    uint8_t *priv_data,
+					    uint32_t len);
+	void (*hal_rx_priv_info_get_from_tlv)(uint8_t *buf,
+					      uint8_t *priv_data,
+					      uint32_t len);
+	void (*hal_rx_tlv_msdu_len_set)(uint8_t *buf, uint32_t len);
+	void (*hal_rx_tlv_populate_mpdu_desc_info)(uint8_t *buf,
+						   void *mpdu_desc_info_hdl);
+
+	/* REO CMD and STATUS */
+	int (*hal_reo_send_cmd)(hal_soc_handle_t hal_soc_hdl,
+				hal_ring_handle_t  hal_ring_hdl,
+				enum hal_reo_cmd_type cmd,
+				void *params);
+	QDF_STATUS (*hal_reo_status_update)(hal_soc_handle_t hal_soc_hdl,
+					    hal_ring_desc_t reo_desc,
+					    void *st_handle,
+					    uint32_t tlv, int *num_ref);
+	uint8_t (*hal_get_tlv_hdr_size)(void);
 };
 
 /**
@@ -655,7 +1033,8 @@ struct hal_hw_txrx_ops {
  */
 struct hal_soc_stats {
 	uint32_t reg_write_fail;
-#ifdef FEATURE_HAL_DELAYED_REG_WRITE
+#if defined(FEATURE_HAL_DELAYED_REG_WRITE) || \
+	defined(FEATURE_HAL_DELAYED_REG_WRITE_V2)
 	struct hal_reg_write_soc_stats wstats;
 #endif
 #ifdef GENERIC_SHADOW_REGISTER_ACCESS_ENABLE
@@ -749,7 +1128,7 @@ struct hal_soc {
 
 	/* srng table */
 	struct hal_hw_srng_config *hw_srng_table;
-	int32_t *hal_hw_reg_offset;
+	int32_t hal_hw_reg_offset[SRNG_REGISTER_MAX];
 	struct hal_hw_txrx_ops *ops;
 
 	/* Indicate srngs initialization */
@@ -770,16 +1149,33 @@ struct hal_soc {
 	qdf_atomic_t write_idx;
 	/* read index used by worker thread to dequeue/write registers */
 	uint32_t read_idx;
-#endif
+#endif /*FEATURE_HAL_DELAYED_REG_WRITE */
+#ifdef FEATURE_HAL_DELAYED_REG_WRITE_V2
+	/* delayed work for TCL reg write to be queued into workqueue */
+	qdf_work_t tcl_reg_write_work;
+	/* workqueue for TCL delayed register writes */
+	qdf_workqueue_t *tcl_reg_write_wq;
+	/* flag denotes whether TCL delayed write work is active */
+	qdf_atomic_t tcl_work_active;
+	/* flag indiactes TCL write happening from direct context */
+	bool tcl_direct;
+	/* timer to handle the pending TCL reg writes */
+	qdf_timer_t tcl_reg_write_timer;
+	/* stats related to TCL reg write */
+	struct hal_reg_write_tcl_stats tcl_stats;
+#endif /* FEATURE_HAL_DELAYED_REG_WRITE_V2 */
 	qdf_atomic_t active_work_cnt;
 #ifdef GENERIC_SHADOW_REGISTER_ACCESS_ENABLE
 	struct shadow_reg_config
 		list_shadow_reg_config[MAX_GENERIC_SHADOW_REG];
 	int num_generic_shadow_regs_configured;
 #endif
+	/* flag to indicate cmn dmac rings in berryllium */
+	bool dmac_cmn_src_rxbuf_ring;
 };
 
-#ifdef FEATURE_HAL_DELAYED_REG_WRITE
+#if defined(FEATURE_HAL_DELAYED_REG_WRITE) || \
+	defined(FEATURE_HAL_DELAYED_REG_WRITE_V2)
 /**
  *  hal_delayed_reg_write() - delayed regiter write
  * @hal_soc: HAL soc handle
@@ -800,7 +1196,8 @@ void hal_qca6490_attach(struct hal_soc *hal_soc);
 void hal_qca6390_attach(struct hal_soc *hal_soc);
 void hal_qca6290_attach(struct hal_soc *hal_soc);
 void hal_qca8074_attach(struct hal_soc *hal_soc);
-
+void hal_wcn7850_attach(struct hal_soc *hal_soc);
+void hal_qcn9224_attach(struct hal_soc *hal_soc);
 /*
  * hal_soc_to_dp_hal_roc - API to convert hal_soc to opaque
  * dp_hal_soc handle type

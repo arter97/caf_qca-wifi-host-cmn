@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017-2020 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2017-2021 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -119,7 +119,7 @@ struct wlan_psoc_host_ppe_threshold {
  * @high_5ghz_chan: higher 5 GHz channels
  */
 struct wlan_psoc_host_hal_reg_cap_ext {
-	uint32_t wireless_modes;
+	uint64_t wireless_modes;
 	uint32_t low_2ghz_chan;
 	uint32_t high_2ghz_chan;
 	uint32_t low_5ghz_chan;
@@ -184,6 +184,7 @@ struct wlan_psoc_host_hal_reg_cap_ext {
  * @nss_ratio_enabled: This flag is set if nss ratio is received from FW as part
  *                     of service ready ext event.
  * @nss_ratio: nss ratio is used to calculate the NSS value for 160MHz.
+ * @hw_link_id: Unique link id across SoCs used to identify link in Multi-SoC ML
  */
 struct wlan_psoc_host_mac_phy_caps {
 	uint32_t hw_mode_id;
@@ -196,7 +197,11 @@ struct wlan_psoc_host_mac_phy_caps {
 		 supports_11a:1,
 		 supports_11n:1,
 		 supports_11ac:1,
-		 supports_11ax:1;
+		 supports_11ax:1,
+#ifdef WLAN_FEATURE_11BE
+		 supports_11be:1,
+#endif
+		 reserved:25;
 	uint32_t supported_bands;
 	uint32_t ampdu_density;
 	uint32_t max_bw_supported_2G;
@@ -226,6 +231,9 @@ struct wlan_psoc_host_mac_phy_caps {
 	uint32_t tgt_pdev_id;
 	bool nss_ratio_enabled;
 	uint8_t nss_ratio_info;
+#if defined(WLAN_FEATURE_11BE_MLO) && defined(WLAN_MLO_MULTI_CHIP)
+	uint16_t hw_link_id;
+#endif
 };
 
 /**
@@ -247,12 +255,28 @@ struct wlan_psoc_host_hw_mode_caps {
  * @pdev_id: Pdev id
  * @phy_id: Phy id
  * @wireless_modes_ext: Extended wireless modes
+ * @eht_cap_info_2G[]: EHT capability info field of 802.11ax, WMI_HE_CAP defines
+ * @eht_supp_mcs_2G: EHT Supported MCS Set field Rx/Tx same
+ * @eht_cap_info_5G[]: EHT capability info field of 802.11ax, WMI_HE_CAP defines
+ * @eht_supp_mcs_5G: EHT Supported MCS Set field Rx/Tx same
+ * @eht_cap_phy_info_2G: 2G EHT capability phy field
+ * @eht_cap_phy_info_5G: 5G EHT capability phy field
+ * @eht_cap_info_internal: EHT PHY internal feature capability
  */
 struct wlan_psoc_host_mac_phy_caps_ext2 {
 	uint32_t hw_mode_id;
 	uint32_t pdev_id;
 	uint32_t phy_id;
-	uint32_t wireless_modes_ext;
+	uint64_t wireless_modes_ext;
+#ifdef WLAN_FEATURE_11BE
+	uint32_t eht_cap_info_2G[PSOC_HOST_MAX_EHT_MAC_SIZE];
+	uint32_t eht_supp_mcs_2G;
+	uint32_t eht_cap_info_5G[PSOC_HOST_MAX_EHT_MAC_SIZE];
+	uint32_t eht_supp_mcs_5G;
+	uint32_t eht_cap_phy_info_2G[PSOC_HOST_MAX_EHT_PHY_SIZE];
+	uint32_t eht_cap_phy_info_5G[PSOC_HOST_MAX_EHT_PHY_SIZE];
+	uint32_t eht_cap_info_internal;
+#endif
 };
 
 /*
@@ -325,6 +349,9 @@ struct wlan_psoc_host_chainmask_capabilities {
 		 supports_chan_width_80:1,
 		 supports_chan_width_160:1,
 		 supports_chan_width_80P80:1,
+#ifdef WLAN_FEATURE_11BE
+		 supports_chan_width_320:1,
+#endif
 		 supports_aSpectral:1,
 		 supports_aSpectral_160:1,
 		 supports_aDFS_160:1,
@@ -404,6 +431,8 @@ struct wlan_psoc_host_service_ext_param {
  * @max_users_ul_ofdma: Max number of users per-PPDU for Uplink OFDMA
  * @max_users_dl_mumimo: Max number of users per-PPDU for Downlink MU-MIMO
  * @max_users_ul_mumimo: Max number of users per-PPDU for Uplink MU-MIMO
+ * @twt_ack_support_cap: TWT ack capability support
+ * @target_cap_flags: Rx peer metadata version number used by target
  */
 struct wlan_psoc_host_service_ext2_param {
 	uint8_t reg_db_version_major;
@@ -419,6 +448,8 @@ struct wlan_psoc_host_service_ext2_param {
 	uint16_t max_users_ul_ofdma;
 	uint16_t max_users_dl_mumimo;
 	uint16_t max_users_ul_mumimo;
+	uint32_t twt_ack_support_cap:1;
+	uint32_t target_cap_flags;
 };
 
 #endif /* _SERVICE_READY_PARAM_H_*/

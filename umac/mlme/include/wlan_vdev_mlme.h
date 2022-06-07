@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2020 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2018-2021 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -56,6 +56,7 @@ struct cnx_mgr;
 #define WLAN_VDEV_MLME_FLAGS_TRANSMIT_AP        0x00000002
 #define WLAN_VDEV_MLME_FLAGS_NON_TRANSMIT_AP    0x00000004
 #define WLAN_VDEV_MLME_FLAGS_EMA_MODE           0x00000008
+#define WLAN_VDEV_MLME_FLAGS_MBSS_CMN_PARAM     0x00000010
 
 /**
  * struct vdev_mlme_proto_generic - generic mlme proto structure
@@ -160,6 +161,114 @@ struct vdev_mlme_he_ops_info {
 	uint32_t he_ops;
 };
 
+#ifdef WLAN_FEATURE_11BE
+
+/**
+ * struct vdev_mlme_eht_caps_info - vdev mlme EHT capability information
+ * @eht_maccap_nseppriaccess_support : NSEP Priority Access Supported
+ * @eht_maccap_ehtomctrl_support     : EHT OM Control Support
+ * @eht_maccap_trigtxop_support      : Triggered TXOP Sharing Support
+ * @eht_phycap_reserved              : Reserved
+ * @eht_phycap_320mhzin6ghz          : Support For 320 MHz In 6 GHz
+ * @eht_phycap_242tonerubwlt20mhz    : Support for 242-tone RU In BW Wider Than
+ *                                     20 MHz
+ * @eht_phycap_ndp4xehtltfand320nsgi : NDP With 4. EHT-LTF And 3.2 .s GI
+ * @eht_phycap_partialbwulmu         : Partial Bandwidth UL MU-MIMO
+ * @eht_phycap_subfmr                : SU Beamformer
+ * @eht_phycap_subfme                : SU Beamformee
+ * @eht_phycap_bfmesslt80mhz         : Beamformee SS (<= 80 MHz)
+ * @eht_phycap_bfmess160mhz          : Beamformee SS (= 160 MHz)
+ * @eht_phycap_bfmess320mhz          : Beamformee SS (= 320 MHz)
+ * @eht_phycap_numsoundlt80mhz       : Number Of Sounding Dimensions (<=80 MHz)
+ * @eht_phycap_numsound160mhz        : Number Of Sounding Dimensions (=160 MHz)
+ * @eht_phycap_numsound320mhz        : Number Of Sounding Dimensions (=320 MHz)
+ * @eht_phycap_ng16sufb              : Ng = 16 SU Feedback
+ * @eht_phycap_ng16mufb              : Ng = 16 MU Feedback
+ * @eht_phycap_codbk42sufb           : Codebook Size {4,2} SU Feedback
+ * @eht_phycap_codbk75mufb           : Codebook Size {4,2} MU Feedback
+ * @eht_phycap_trigsubffb            : Triggered SU Beamforming Feedback
+ * @eht_phycap_trigmubfpartbwfb      : Triggered MU Beamforming Partial B
+ *                                     Feedback
+ * @eht_phycap_trigcqifb             : Triggered CQI Feedback
+ * @eht_phycap_partbwdlmumimo        : Partial Bandwidth DL MU-MIMO
+ * @eht_phycap_psrsr                 : PSR-Based SR Support
+ * @eht_phycap_pwrbstfactor          : Power Boost Factor Support
+ * @eht_phycap_4xehtltfand800nsgi    : EHT MU PPDU With 4xEHT-LTF And 0.8 .s GI
+ * @eht_phycap_maxnc                 : Max Nc
+ * @eht_phycap_nontrigcqifb          : Non-Triggered CQI Feedback
+ * @eht_phycap_tx1024and4096qamls242toneru : Tx 1024-QAM And 4096-QAM <
+ *                                           242-tone RU Support
+ * @eht_phycap_rx1024and4096qamls242toneru : Rx 1024-QAM And 4096-QAM <
+ *                                           242-tone RU Support
+ * @eht_phycap_ppethrespresent       : PPE Thresholds Present
+ * @eht_phycap_cmnnompktpad          : Common Nominal Packet Padding
+ * @eht_phycap_maxnumehtltf          : Maximum Number Of Supported EHT-LTFs
+ * @eht_phycap_supmcs15              : Support of MCS 15
+ * @eht_phycap_ehtdupin6ghz          : Support Of EHT DUP In 6 GHz
+ * @eht_phycap_20mhzopstarxndpwiderbw : Support For 20 MHz Operating STA
+ *                                      Receiving NDP With Wider Bandwidth
+ * @eht_phycap_nonofdmaulmumimolt80mhz : Non-OFDMA UL MU-MIMO (BW <= 80 MHz)
+ * @eht_phycap_nonofdmaulmumimo160mhz : Non-OFDMA UL MU-MIMO (BW = 160 MHz)
+ * @eht_phycap_nonofdmaulmumimo320mhz : Non-OFDMA UL MU-MIMO (BW = 320 MHz)
+ * @eht_phycap_mubfmrlt80mhz         : MU Beamformer (BW <= 80 MHz)
+ * @eht_phycap_mubfmr160mhz          : MU Beamformer (BW = 160 MHz)
+ * @eht_phycap_mubfmr320mhz          : MU Beamformer (BW = 320 MHz)
+ */
+struct vdev_mlme_eht_caps_info {
+	uint32_t eht_maccap_nseppriaccess_support :1,
+		 eht_maccap_ehtomctrl_support     :1,
+		 eht_maccap_trigtxop_support      :1;
+	uint32_t eht_phycap_reserved                    :1,
+		 eht_phycap_320mhzin6ghz                :1,
+		 eht_phycap_242tonerubwlt20mhz          :1,
+		 eht_phycap_ndp4xehtltfand320nsgi       :1,
+		 eht_phycap_partialbwulmu               :1,
+		 eht_phycap_subfmr                      :1,
+		 eht_phycap_subfme                      :1,
+		 eht_phycap_bfmesslt80mhz               :3,
+		 eht_phycap_bfmess160mhz                :3,
+		 eht_phycap_bfmess320mhz                :3,
+		 eht_phycap_numsoundlt80mhz             :3,
+		 eht_phycap_numsound160mhz              :3,
+		 eht_phycap_numsound320mhz              :3,
+		 eht_phycap_ng16sufb                    :1,
+		 eht_phycap_ng16mufb                    :1,
+		 eht_phycap_codbk42sufb                 :1,
+		 eht_phycap_codbk75mufb                 :1,
+		 eht_phycap_trigsubffb                  :1,
+		 eht_phycap_trigmubfpartbwfb            :1,
+		 eht_phycap_trigcqifb                   :1;
+	uint32_t eht_phycap_partbwdlmumimo              :1,
+		 eht_phycap_psrsr                       :1,
+		 eht_phycap_pwrbstfactor                :1,
+		 eht_phycap_4xehtltfand800nsgi          :1,
+		 eht_phycap_maxnc                       :4,
+		 eht_phycap_nontrigcqifb                :1,
+		 eht_phycap_tx1024and4096qamls242toneru :1,
+		 eht_phycap_rx1024and4096qamls242toneru :1,
+		 eht_phycap_ppethrespresent             :1,
+		 eht_phycap_cmnnompktpad                :2,
+		 eht_phycap_maxnumehtltf                :5,
+		 eht_phycap_supmcs15                    :4,
+		 eht_phycap_ehtdupin6ghz                :1,
+		 eht_phycap_20mhzopstarxndpwiderbw      :1,
+		 eht_phycap_nonofdmaulmumimolt80mhz     :1,
+		 eht_phycap_nonofdmaulmumimo160mhz      :1,
+		 eht_phycap_nonofdmaulmumimo320mhz      :1,
+		 eht_phycap_mubfmrlt80mhz               :1,
+		 eht_phycap_mubfmr160mhz                :1,
+		 eht_phycap_mubfmr320mhz                :1;
+};
+
+/**
+ * struct vdev_mlme_eht_ops_info - vdev mlme EHTOPS information
+ * @eht_ops: eht ops
+ */
+struct vdev_mlme_eht_ops_info {
+	uint32_t eht_ops;
+};
+#endif
+
 /**
  * struct vdev_mlme_he_ops_info - vdev protocol structure holding information
  * that is used in frames
@@ -169,6 +278,8 @@ struct vdev_mlme_he_ops_info {
  * @vht_info: vht information
  * @ht_info: ht capabilities information
  * @he_ops_info: he ops information
+ * @eht_cap_info: EHT capability information
+ * @eht_ops_info: EHT operation information
  * @bss_color: 11ax HE BSS Color information
  */
 struct vdev_mlme_proto {
@@ -178,6 +289,10 @@ struct vdev_mlme_proto {
 	struct vdev_mlme_vht_info vht_info;
 	struct vdev_mlme_ht_info ht_info;
 	struct vdev_mlme_he_ops_info he_ops_info;
+#ifdef WLAN_FEATURE_11BE
+	struct vdev_mlme_eht_caps_info eht_cap_info;
+	struct vdev_mlme_eht_ops_info eht_ops_info;
+#endif
 	struct vdev_mlme_proto_bss_color bss_color;
 };
 
@@ -235,21 +350,36 @@ struct vdev_mlme_mgmt_generic {
 	bool special_vdev_mode;
 };
 
+/*
+ * struct wlan_vdev_aid_mgr – AID manager
+ * @aid_bitmap: AID bitmap array
+ * @max_aid: Max allowed AID
+ * @ref_cnt:  to share AID across VDEVs for MBSSID
+ */
+struct wlan_vdev_aid_mgr {
+	qdf_bitmap(aid_bitmap, WLAN_UMAC_MAX_AID);
+	uint16_t max_aid;
+	qdf_atomic_t ref_cnt;
+};
+
 /**
  * struct vdev_mlme_mgmt_ap - ap specific vdev mlme mgmt cfg
  * @hidden_ssid: flag to indicate whether it is hidden ssid
  * @cac_duration_ms: cac duration in millseconds
+ * @aid_mgr: AID bitmap mgr
  */
 struct vdev_mlme_mgmt_ap {
 	bool hidden_ssid;
 	uint32_t cac_duration_ms;
+	struct wlan_vdev_aid_mgr *aid_mgr;
 };
 
 /**
  * struct vdev_mlme_mgmt_sta - sta specific vdev mlme mgmt cfg
- * @.
+ * @he_mcs_12_13_map: map to indicate mcs12/13 caps of peer&dut
  */
 struct vdev_mlme_mgmt_sta {
+	uint16_t he_mcs_12_13_map;
 };
 
 /**
@@ -352,14 +482,22 @@ struct vdev_mlme_beacon_info {
  *              0 means non-MBSS AP.
  * @mbssid-flags: MBSS IE flags indicating vdev type
  * @vdevid_trans: id of transmitting vdev for MBSS IE
+ * @vdev_bmap: vdev bitmap of VAPs in MBSS group
+ * @is_cmn_param: flag to check mbss common param
  * @trans_bssid: bssid of transmitted AP (MBSS IE case)
+ * @is_multi_mbssid: Flag to identify multi group mbssid support
+ * @grp_id: Group id of current vdev
  */
 struct vdev_mlme_mbss_11ax {
 	uint32_t profile_idx;
 	uint32_t profile_num;
 	uint32_t mbssid_flags;
 	uint8_t vdevid_trans;
+	unsigned long vdev_bmap;
+	bool is_cmn_param;
 	uint8_t trans_bssid[QDF_MAC_ADDR_SIZE];
+	bool is_multi_mbssid;
+	uint32_t grp_id;
 };
 
 /**
@@ -438,6 +576,7 @@ enum vdev_start_resp_type {
  *                                      request command
  * @mlme_vdev_start_continue:           callback to initiate operations on
  *                                      LMAC/FW start response
+ * @mlme_vdev_sta_conn_start:           callback to initiate STA connection
  * @mlme_vdev_up_send:                  callback to initiate actions of VDEV
  *                                      MLME up operation
  * @mlme_vdev_notify_up_complete:       callback to notify VDEV MLME on moving
@@ -460,6 +599,9 @@ enum vdev_start_resp_type {
  * @mlme_vdev_is_newchan_no_cac:        callback to check CAC is required
  * @mlme_vdev_ext_peer_delete_all_rsp:  callback to initiate actions for
  *                                      vdev mlme peer delete all response
+ * @mlme_vdev_dfs_cac_wait_notify:      callback to notify about CAC state
+ * @mlme_vdev_csa_complete:             callback to indicate CSA complete
+ * @mlme_vdev_sta_disconn_start:        callback to initiate STA disconnection
  */
 struct vdev_mlme_ops {
 	QDF_STATUS (*mlme_vdev_validate_basic_params)(
@@ -531,6 +673,14 @@ struct vdev_mlme_ops {
 	QDF_STATUS (*mlme_vdev_ext_peer_delete_all_rsp)(
 				struct vdev_mlme_obj *vdev_mlme,
 				struct peer_delete_all_response *rsp);
+	QDF_STATUS (*mlme_vdev_dfs_cac_wait_notify)(
+				struct vdev_mlme_obj *vdev_mlme);
+	QDF_STATUS (*mlme_vdev_csa_complete)(
+				struct vdev_mlme_obj *vdev_mlme);
+	QDF_STATUS (*mlme_vdev_sta_disconn_start)(
+				struct vdev_mlme_obj *vdev_mlme,
+				uint16_t event_data_len, void *event_data);
+
 };
 
 /**
@@ -544,6 +694,7 @@ struct vdev_mlme_ops {
  * @vdev: Pointer to vdev objmgr
  * @ops:                  VDEV MLME callback table
  * @ext_vdev_ptr:         VDEV MLME legacy pointer
+ * @reg_tpc_obj:          Regulatory transmit power info
  * @vdev_rt: VDEV response timer
  * @vdev_wakelock:  vdev wakelock sub structure
  */
@@ -561,6 +712,7 @@ struct vdev_mlme_obj {
 	struct wlan_objmgr_vdev *vdev;
 	struct vdev_mlme_ops *ops;
 	mlme_vdev_ext_t *ext_vdev_ptr;
+	struct reg_tpc_power_info reg_tpc_obj;
 };
 
 /**
@@ -914,4 +1066,104 @@ static inline bool wlan_vdev_mlme_is_special_vdev(
 
 	return vdev_mlme->mgmt.generic.special_vdev_mode;
 }
+
+#ifdef WLAN_FEATURE_11AX
+/**
+ * wlan_vdev_mlme_set_he_mcs_12_13_map() - set he mcs12/13 map
+ * @vdev: VDEV object
+ * @he_mcs_12_13_map: he mcs12/13 map from self&peer
+ *
+ * API to set he mcs 12/13 map
+ *
+ * Return: void
+ */
+static inline void wlan_vdev_mlme_set_he_mcs_12_13_map(
+				struct wlan_objmgr_vdev *vdev,
+				uint16_t he_mcs_12_13_map)
+{
+	struct vdev_mlme_obj *vdev_mlme;
+
+	vdev_mlme = wlan_vdev_mlme_get_cmpt_obj(vdev);
+	if (!vdev_mlme)
+		return;
+
+	vdev_mlme->mgmt.sta.he_mcs_12_13_map = he_mcs_12_13_map;
+}
+
+/**
+ * wlan_vdev_mlme_get_he_mcs_12_13_map() - get he mcs12/13 map
+ * @vdev: VDEV object
+ *
+ * API to get he mcs12/13 support capability
+ *
+ * Return:
+ * @he_mcs_12_13_map: he mcs12/13 map
+ */
+static inline uint16_t wlan_vdev_mlme_get_he_mcs_12_13_map(
+				struct wlan_objmgr_vdev *vdev)
+{
+	struct vdev_mlme_obj *vdev_mlme;
+
+	vdev_mlme = wlan_vdev_mlme_get_cmpt_obj(vdev);
+	if (!vdev_mlme)
+		return 0;
+
+	return vdev_mlme->mgmt.sta.he_mcs_12_13_map;
+}
+#else
+static inline void wlan_vdev_mlme_set_he_mcs_12_13_map(
+				struct wlan_objmgr_vdev *vdev,
+				uint16_t he_mcs_12_13_map)
+{
+}
+
+static inline uint16_t wlan_vdev_mlme_get_he_mcs_12_13_map(
+				struct wlan_objmgr_vdev *vdev)
+{
+	return 0;
+}
+#endif
+
+/**
+ * wlan_vdev_mlme_set_aid_mgr() - set aid mgr
+ * @vdev: VDEV object
+ * @aid_mgr: AID mgr
+ *
+ * API to set AID mgr in VDEV MLME cmpt object
+ *
+ * Return: void
+ */
+static inline void wlan_vdev_mlme_set_aid_mgr(
+				struct wlan_objmgr_vdev *vdev,
+				struct wlan_vdev_aid_mgr *aid_mgr)
+{
+	struct vdev_mlme_obj *vdev_mlme;
+
+	vdev_mlme = wlan_vdev_mlme_get_cmpt_obj(vdev);
+	if (!vdev_mlme)
+		return;
+
+	vdev_mlme->mgmt.ap.aid_mgr = aid_mgr;
+}
+
+/**
+ * wlan_vdev_mlme_get_aid_mgr() - get aid mgr
+ * @vdev: VDEV object
+ *
+ * API to get AID mgr in VDEV MLME cmpt object
+ *
+ * Return: aid_mgr
+ */
+static inline struct wlan_vdev_aid_mgr *wlan_vdev_mlme_get_aid_mgr(
+				struct wlan_objmgr_vdev *vdev)
+{
+	struct vdev_mlme_obj *vdev_mlme;
+
+	vdev_mlme = wlan_vdev_mlme_get_cmpt_obj(vdev);
+	if (!vdev_mlme)
+		return NULL;
+
+	return vdev_mlme->mgmt.ap.aid_mgr;
+}
+
 #endif

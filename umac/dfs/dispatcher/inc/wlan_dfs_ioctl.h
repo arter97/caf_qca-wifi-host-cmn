@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2016-2020 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2011, 2016-2021 The Linux Foundation. All rights reserved.
  * Copyright (c) 2010, Atheros Communications Inc.
  * All Rights Reserved.
  *
@@ -211,6 +211,12 @@ struct dfs_bangradar_params {
 #define DFS_RANDOM_CH_FLAG_RESTRICTED_80P80_ENABLED 0x0200
 						       /* 0000 0010 0000 0000 */
 
+/* Flag to exclude all 6GHz channels */
+#define DFS_RANDOM_CH_FLAG_NO_6GHZ_CH          0x00400 /* 0000 0100 0000 0000 */
+
+/* Flag to exclude spruce spur adjacent channels */
+#define DFS_RANDOM_CH_FLAG_NO_SPRUCE_SPUR_ADJ_CH \
+		0x0800 /* 0000 1000 0000 0000 */
 /**
  * struct wlan_dfs_caps - DFS capability structure.
  * @wlan_dfs_ext_chan_ok:         Can radar be detected on the extension chan?
@@ -277,20 +283,26 @@ struct wlan_dfs_phyerr_param {
 /**
  * enum WLAN_DFS_EVENTS - DFS Events that will be sent to userspace
  * @WLAN_EV_RADAR_DETECTED: Radar is detected
+ * @WLAN_EV_CAC_RESET:      CAC started or CAC completed status is reset
  * @WLAN_EV_CAC_STARTED:    CAC timer has started
  * @WLAN_EV_CAC_COMPLETED:  CAC timer completed
  * @WLAN_EV_NOL_STARTED:    NOL started
  * @WLAN_EV_NOL_FINISHED:   NOL Completed
+ * @WLAN_EV_PCAC_STARTED:   PreCAC Started
+ * @WLAN_EV_PCAC_COMPLETED: PreCAC Completed
  *
  * DFS events such as radar detected, CAC started,
  * CAC completed, NOL started, NOL finished
  */
 enum WLAN_DFS_EVENTS {
 	WLAN_EV_RADAR_DETECTED,
+	WLAN_EV_CAC_RESET,
 	WLAN_EV_CAC_STARTED,
 	WLAN_EV_CAC_COMPLETED,
 	WLAN_EV_NOL_STARTED,
 	WLAN_EV_NOL_FINISHED,
+	WLAN_EV_PCAC_STARTED,
+	WLAN_EV_PCAC_COMPLETED,
 };
 
 #if defined(WLAN_DFS_PARTIAL_OFFLOAD) && defined(WLAN_DFS_SYNTHETIC_RADAR)

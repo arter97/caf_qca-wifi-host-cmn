@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017-2020 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2017-2021 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -267,6 +267,15 @@ ucfg_scan_get_global_config(struct wlan_objmgr_psoc *psoc,
 		enum scan_config config, uint32_t *val);
 
 /**
+ * ucfg_scan_set_obss_scan_offload() - Public API to set obss scan flag
+ * @psoc: psoc context
+ * @val: the value to be set
+ *
+ * Return: void.
+ */
+void ucfg_scan_set_obss_scan_offload(struct wlan_objmgr_psoc *psoc, bool value);
+
+/**
  * ucfg_scan_set_wide_band_scan() - Public API to disable/enable wide band scan
  * @pdev: psoc on which scans need to be disabled
  * @enable: enable wide band scan if @enable is true, disable otherwise
@@ -525,7 +534,7 @@ ucfg_scan_get_vdev_status(struct wlan_objmgr_vdev *vdev);
 
 /**
  * ucfg_scan_get_pdev_status() - API to check pdev scan status
- * @pdev: vdev object
+ * @pdev: pdev object
  *
  * Return: enum scm_scan_status
  */
@@ -1028,6 +1037,42 @@ ucfg_scan_get_max_sched_scan_plan_interval(struct wlan_objmgr_psoc *psoc);
 uint32_t
 ucfg_scan_get_max_sched_scan_plan_iterations(struct wlan_objmgr_psoc *psoc);
 
+/**
+ * ucfg_scan_get_user_config_sched_scan_plan() - API to get user config sched
+ * scan plan configuration value
+ * @psoc: pointer to psoc object
+ *
+ * Return: value.
+ */
+bool
+ucfg_scan_get_user_config_sched_scan_plan(struct wlan_objmgr_psoc *psoc);
+
+#ifdef WLAN_POLICY_MGR_ENABLE
+/*
+ * ucfg_scan_update_pno_dwell_time() - update active and passive dwell time
+ * depending on active concurrency modes
+ * @vdev: vdev object pointer
+ * @req: scan request
+ *
+ * Return: void
+ */
+static inline
+void ucfg_scan_update_pno_dwell_time(struct wlan_objmgr_vdev *vdev,
+				     struct pno_scan_req_params *req,
+				     struct scan_default_params *scan_def)
+{
+	wlan_scan_update_pno_dwell_time(vdev, req, scan_def);
+}
+
+#else
+static inline
+void ucfg_scan_update_pno_dwell_time(struct wlan_objmgr_vdev *vdev,
+				     struct pno_scan_req_params *req,
+				     struct scan_default_params *scan_def)
+{}
+
+#endif
+
 #else
 static inline
 bool ucfg_scan_is_pno_offload_enabled(struct wlan_objmgr_psoc *psoc)
@@ -1080,6 +1125,12 @@ static inline uint32_t
 ucfg_scan_get_max_sched_scan_plan_iterations(struct wlan_objmgr_psoc *psoc)
 {
 	return 0;
+}
+
+static inline bool
+ucfg_scan_get_user_config_sched_scan_plan(struct wlan_objmgr_psoc *psoc)
+{
+	return true;
 }
 
 #endif /* FEATURE_WLAN_SCAN_PNO */

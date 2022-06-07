@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017-2020 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2017-2021 The Linux Foundation. All rights reserved.
  *
  *
  * Permission to use, copy, modify, and/or distribute this software for
@@ -19,7 +19,7 @@
 
 #ifndef _WLAN_SPECTRAL_UTILS_API_H_
 #define _WLAN_SPECTRAL_UTILS_API_H_
-
+#ifdef WLAN_CONV_SPECTRAL_ENABLE
 #include <wlan_objmgr_cmn.h>
 #include <wlan_lmac_if_def.h>
 
@@ -29,12 +29,42 @@ struct spectral_wmi_ops;
 struct spectral_tgt_ops;
 
 /**
- * wlan_spectral_is_feature_disabled() - Check if spectral feature is disabled
- * @psoc - the physical device object.
+ * wlan_spectral_is_feature_disabled_pdev() - Check if spectral feature
+ * is disabled for a given pdev
+ * @pdev - pointer to pdev
  *
  * Return : true if spectral is disabled, else false.
  */
-bool wlan_spectral_is_feature_disabled(struct wlan_objmgr_psoc *psoc);
+bool wlan_spectral_is_feature_disabled_pdev(struct wlan_objmgr_pdev *pdev);
+
+/**
+ * wlan_spectral_is_feature_disabled_ini() - Check if spectral feature
+ * is disabled in INI
+ * @psoc - pointer to psoc
+ *
+ * Return : true if spectral is disabled, else false.
+ */
+bool wlan_spectral_is_feature_disabled_ini(struct wlan_objmgr_psoc *psoc);
+
+/**
+ * wlan_spectral_is_feature_disabled_psoc() - Check if spectral feature
+ * is disabled for a given psoc
+ * @psoc - pointer to psoc
+ *
+ * Return : true if spectral is disabled, else false.
+ */
+bool wlan_spectral_is_feature_disabled_psoc(struct wlan_objmgr_psoc *psoc);
+
+/**
+ * wlan_spectral_is_mode_disabled_pdev() - Check if a given spectral mode
+ * is disabled for a given pdev
+ * @pdev - pointer to pdev
+ * @smode - spectral scan mode
+ *
+ * Return : true if spectral mode is disabled, else false.
+ */
+bool wlan_spectral_is_mode_disabled_pdev(struct wlan_objmgr_pdev *pdev,
+					 enum spectral_scan_mode smode);
 
 /**
  * wlan_spectral_init() - API to init spectral component
@@ -245,6 +275,43 @@ QDF_STATUS spectral_register_dbr(struct wlan_objmgr_pdev *pdev);
  */
 QDF_STATUS spectral_unregister_dbr(struct wlan_objmgr_pdev *pdev);
 
+/**
+ * wlan_spectral_init_pdev_feature_caps() - API to initialize
+ * spectral pdev feature caps
+ * @pdev:  pointer to pdev object
+ *
+ * API to initialize Spectral feature caps for a given pdev.
+ *
+ * Return: QDF_STATUS_SUCCESS upon successful initialization,
+ *         QDF_STATUS_E_FAILURE upon failure
+ */
+QDF_STATUS wlan_spectral_init_pdev_feature_caps(struct wlan_objmgr_pdev *pdev);
+
+/**
+ * wlan_spectral_init_psoc_feature_cap() - API to initialize
+ * spectral psoc feature caps
+ * @psoc:  pointer to psoc object
+ *
+ * API to initialize Spectral feature caps for a given psoc.
+ *
+ * Return: QDF_STATUS_SUCCESS upon successful initialization,
+ *         QDF_STATUS_E_FAILURE upon failure
+ */
+QDF_STATUS wlan_spectral_init_psoc_feature_cap(struct wlan_objmgr_psoc *psoc);
+
+/**
+ * wlan_spectral_pdev_get_lmac_if_txops() - API to get pointer
+ * to Spectral txops structure
+ * @pdev:  pointer to pdev object
+ *
+ * API to get pointer to Spectral txops structure
+ *
+ * Return: Pointer to Spectral txops structure, NULL in case of
+ *         error.
+ */
+struct wlan_lmac_if_sptrl_tx_ops *
+wlan_spectral_pdev_get_lmac_if_txops(struct wlan_objmgr_pdev *pdev);
+
 #ifdef DIRECT_BUF_RX_ENABLE
 /**
  * spectral_dbr_event_handler() - Spectral dbr event handler
@@ -258,4 +325,5 @@ QDF_STATUS spectral_unregister_dbr(struct wlan_objmgr_pdev *pdev);
 bool spectral_dbr_event_handler(struct wlan_objmgr_pdev *pdev,
 				struct direct_buf_rx_data *payload);
 #endif
+#endif /* WLAN_CONV_SPECTRAL_ENABLE */
 #endif /* _WLAN_SPECTRAL_UTILS_API_H_*/

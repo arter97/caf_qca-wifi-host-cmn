@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016-2020 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -79,8 +79,6 @@
 #define WLAN_PDEV_F_STRICT_PSCAN_EN         0x02000000
   /* dupie (ANA,pre ANA ) */
 /*#define WLAN_PDEV_F_DUPIE                 0x00200000*/
- /* QWRAP enable flag */
-#define WLAN_PDEV_F_WRAP_EN                 0x04000000
 /* Chan concurrency enabled */
 #define WLAN_PDEV_F_CHAN_CONCURRENCY        0x08000000
 /* Multivdev restart enabled */
@@ -101,6 +99,16 @@
 #define WLAN_PDEV_FEXT_SCAN_RADIO           0x00000004
 /* DFS disable, valid only for scan radio supported pdevs */
 #define WLAN_PDEV_FEXT_SCAN_RADIO_DFS_DIS   0x00000008
+/* normal Spectral scan support disable */
+#define WLAN_PDEV_FEXT_NORMAL_SPECTRAL_SCAN_DIS          0x00000010
+/* agile Spectral scan support disable for 20/40/80 MHz */
+#define WLAN_PDEV_FEXT_AGILE_SPECTRAL_SCAN_DIS           0x00000020
+/* agile Spectral scan support disable for 160 MHz */
+#define WLAN_PDEV_FEXT_AGILE_SPECTRAL_SCAN_160_DIS       0x00000040
+/* agile Spectral scan support disable for 80+80 MHz */
+#define WLAN_PDEV_FEXT_AGILE_SPECTRAL_SCAN_80P80_DIS     0x00000080
+/* agile Spectral scan support disable for 320 MHz */
+#define WLAN_PDEV_FEXT_AGILE_SPECTRAL_SCAN_320_DIS     0x00000100
 
 /* PDEV op flags */
    /* Enable htrate for wep and tkip */

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016-2020 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -19,11 +19,11 @@
 #include "hal_internal.h"
 #include "cdp_txrx_mon_struct.h"
 #include "qdf_trace.h"
-#include "hal_rx.h"
+#include "hal_li_rx.h"
 #include "hal_tx.h"
 #include "dp_types.h"
 #include "hal_api_mon.h"
-#ifndef QCA_WIFI_QCA6018
+#if (!defined(QCA_WIFI_QCA6018)) && (!defined(QCA_WIFI_QCA9574))
 #include "phyrx_other_receive_info_su_evm_details.h"
 #endif
 
@@ -268,6 +268,9 @@
 #define HAL_RX_GET_SW_FRAME_GROUP_ID(rx_mpdu_start)	\
 	HAL_RX_GET(rx_mpdu_start, RX_MPDU_INFO_0, SW_FRAME_GROUP_ID)
 
+#define HAL_RX_GET_SW_PEER_ID(rx_mpdu_start)	\
+	HAL_RX_GET(rx_mpdu_start, RX_MPDU_INFO_1, SW_PEER_ID)
+
 #define HAL_REO_R0_CONFIG(soc, reg_val, reo_params)		\
 	do { \
 		reg_val &= \
@@ -284,6 +287,20 @@
 			       AGING_FLUSH_ENABLE, 1);\
 		HAL_REG_WRITE((soc), \
 			      HWIO_REO_R0_GENERAL_ENABLE_ADDR( \
+			      SEQ_WCSS_UMAC_REO_REG_OFFSET), \
+			      (reg_val)); \
+		(reg_val) = \
+		HAL_REG_READ((soc), \
+			     HWIO_REO_R0_DESTINATION_RING_ALT_CTRL_IX_0_ADDR(	\
+			     SEQ_WCSS_UMAC_REO_REG_OFFSET)); \
+		(reg_val) &= \
+			~(HWIO_REO_R0_DESTINATION_RING_ALT_CTRL_IX_0_DEST_RING_ALT_MAPPING_0_BMSK); \
+		(reg_val) |= \
+			HAL_SM(HWIO_REO_R0_DESTINATION_RING_ALT_CTRL_IX_0, \
+			       DEST_RING_ALT_MAPPING_0, \
+			       (reo_params)->alt_dst_ind_0); \
+		HAL_REG_WRITE((soc), \
+			      HWIO_REO_R0_DESTINATION_RING_ALT_CTRL_IX_0_ADDR( \
 			      SEQ_WCSS_UMAC_REO_REG_OFFSET), \
 			      (reg_val)); \
 	} while (0)
@@ -408,7 +425,7 @@ static uint8_t hal_rx_get_tlv_8074v2(void *rx_tlv)
 	return HAL_RX_GET(rx_tlv, PHYRX_RSSI_LEGACY_0, RECEIVE_BANDWIDTH);
 }
 
-#ifndef QCA_WIFI_QCA6018
+#if (!defined(QCA_WIFI_QCA6018)) && (!defined(QCA_WIFI_QCA9574))
 #define HAL_RX_UPDATE_SU_EVM_INFO(rx_tlv, ppdu_info, evm, pilot) \
 	(ppdu_info)->evm_info.pilot_evm[pilot] = HAL_RX_GET(rx_tlv, \
 				PHYRX_OTHER_RECEIVE_INFO, \
@@ -545,6 +562,46 @@ void hal_rx_get_rtt_info_8074v2(void *rx_tlv,
 	HAL_RX_GET(rx_tlv,
 		   PHYRX_PKT_END_13_RX_PKT_END_DETAILS_RX_LOCATION_INFO_DETAILS,
 		   RESERVED_8);
+
+	ppdu_info->cfr_info.rx_start_ts =
+	HAL_RX_GET(rx_tlv,
+		   PHYRX_PKT_END_9_RX_PKT_END_DETAILS_RX_LOCATION_INFO_DETAILS,
+		   RX_START_TS);
+
+	ppdu_info->cfr_info.rtt_cfo_measurement = (int16_t)
+	HAL_RX_GET(rx_tlv,
+		   PHYRX_PKT_END_13_RX_PKT_END_DETAILS_RX_LOCATION_INFO_DETAILS,
+		   RTT_CFO_MEASUREMENT);
+
+	ppdu_info->cfr_info.agc_gain_info0 =
+	HAL_RX_GET(rx_tlv,
+		   PHYRX_PKT_END_1_RX_PKT_END_DETAILS,
+		   PHY_TIMESTAMP_1_LOWER_32);
+
+	ppdu_info->cfr_info.agc_gain_info1 =
+	HAL_RX_GET(rx_tlv,
+		   PHYRX_PKT_END_2_RX_PKT_END_DETAILS,
+		   PHY_TIMESTAMP_1_UPPER_32);
+
+	ppdu_info->cfr_info.agc_gain_info2 =
+	HAL_RX_GET(rx_tlv,
+		   PHYRX_PKT_END_3_RX_PKT_END_DETAILS,
+		   PHY_TIMESTAMP_2_LOWER_32);
+
+	ppdu_info->cfr_info.agc_gain_info3 =
+	HAL_RX_GET(rx_tlv,
+		   PHYRX_PKT_END_4_RX_PKT_END_DETAILS,
+		   PHY_TIMESTAMP_2_UPPER_32);
+
+	ppdu_info->cfr_info.mcs_rate =
+	HAL_RX_GET(rx_tlv,
+		   PHYRX_PKT_END_8_RX_PKT_END_DETAILS_RX_LOCATION_INFO_DETAILS,
+		   RTT_MCS_RATE);
+
+	ppdu_info->cfr_info.gi_type =
+	HAL_RX_GET(rx_tlv,
+		   PHYRX_PKT_END_8_RX_PKT_END_DETAILS_RX_LOCATION_INFO_DETAILS,
+		   RTT_GI_TYPE);
 }
 #endif
 

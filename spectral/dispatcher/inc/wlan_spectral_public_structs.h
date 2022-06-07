@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011,2017-2020 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2011,2017-2021 The Linux Foundation. All rights reserved.
  *
  *
  * Permission to use, copy, modify, and/or distribute this software for
@@ -218,7 +218,8 @@ enum spectral_dma_debug {
 };
 
 struct wiphy;
-
+struct wlan_objmgr_pdev;
+struct wlan_objmgr_vdev;
 /**
  * struct spectral_cfg80211_vendor_cmd_handlers - Spectral vendor command
  * handlers
@@ -355,6 +356,8 @@ struct spectral_nl_cb {
 			       enum spectral_msg_type smsg_type);
 	void (*free_sbuff)(struct wlan_objmgr_pdev *pdev,
 			   enum spectral_msg_type smsg_type);
+	int (*convert_to_nl_ch_width)(uint8_t phy_chwidth);
+	uint8_t (*convert_to_phy_ch_width)(uint8_t nl_chwidth);
 };
 
 /**

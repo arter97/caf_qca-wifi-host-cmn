@@ -1,5 +1,6 @@
 /*
- * Copyright (c) 2012-2020, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012-2021, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2021 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -23,7 +24,8 @@
 
 /*
  * <ini>
- * rssi_weightage - RSSI Weightage to calculate best candidate
+ * rssi_weightage/RoamAPScore_RSSIWeight - RSSI Weightage to calculate best
+ * candidate
  * @Min: 0
  * @Max: 100
  * @Default: 20
@@ -40,7 +42,7 @@
  * </ini>
  */
 #define CFG_SCORING_RSSI_WEIGHTAGE CFG_INI_UINT( \
-	"rssi_weightage", \
+	"rssi_weightage RoamAPScore_RSSIWeight", \
 	0, \
 	100, \
 	20, \
@@ -267,7 +269,8 @@
 
 /*
  * <ini>
- * channel_congestion_weightage - channel Congestion Weightage to
+ * channel_congestion_weightage/RoamAPScore_CUWeight - channel Congestion
+ * Weightage to
  * calculate best candidate
  * @Min: 0
  * @Max: 100
@@ -285,7 +288,7 @@
  * </ini>
  */
 #define CFG_SCORING_CHAN_CONGESTION_WEIGHTAGE CFG_INI_UINT( \
-	"channel_congestion_weightage", \
+	"channel_congestion_weightage RoamAPScore_CUWeight", \
 	0, \
 	100, \
 	25, \
@@ -384,8 +387,8 @@
  * <ini>
  * sae_pk_ap_weightage - update scoring param based on SAE PK ap weightage
  * @Min: 0
- * @Max: 10
- * @Default: 3
+ * @Max: 30
+ * @Default: 30
  *
  * This ini is used to calculate SAE PK ap weightage in roam score. SAE Public
  * Key (SAE-PK) authentication is an extension of SAE that is intended for use
@@ -405,8 +408,8 @@
 #define CFG_SAE_PK_AP_WEIGHTAGE CFG_INI_UINT( \
 		"sae_pk_ap_weightage", \
 		0, \
-		10, \
-		PLATFORM_VALUE(3, 0), \
+		30, \
+		PLATFORM_VALUE(30, 0), \
 		CFG_VALUE_OR_DEFAULT,\
 		"SAE-PK AP weightage")
 
@@ -1061,7 +1064,7 @@
  * BSSID.
  * @Min: 0
  * @Max: 1
- * @Default: 1
+ * @Default: 1 - AP and 0 - non AP
  *
  * This ini is used to give priority to BSS for connection which comes
  * as part of bssid_hint
@@ -1076,9 +1079,575 @@
  */
 #define CFG_IS_BSSID_HINT_PRIORITY CFG_INI_UINT(\
 			"is_bssid_hint_priority",\
-			0, 1, 0,\
+			0, 1, \
+			PLATFORM_VALUE(0, 1), \
 			CFG_VALUE_OR_DEFAULT, \
 			"Set priority for connection with bssid_hint")
+
+/*
+ * <ini>
+ * vendor_roam_score_algorithm - Algorithm to calculate AP score
+ * @Min: false
+ * @Max: true
+ * @Default: false
+ *
+ * By default the value is false and default roam algorithm will be used.
+ * When the value is true, the V2 roaming algorithm will be used:
+ * For this V2 algo, AP score calculation is based on ETP and below equation:
+ * AP Score = (RSSIfactor * rssiweight(0.65)) + (CUfactor *cuweight(0.35))
+ *
+ * Related: None
+ *
+ * Supported Feature: roam score algorithm
+ *
+ * Usage: External
+ *
+ * </ini>
+ */
+#define CFG_VENDOR_ROAM_SCORE_ALGORITHM \
+	CFG_INI_BOOL("vendor_roam_score_algorithm", false, \
+	"Roam candidate selection score algorithm")
+
+#ifdef CONFIG_BAND_6GHZ
+/*
+ * <ini>
+ * check_6ghz_security - Enable check for 6Ghz allowed security
+ * BSSID.
+ * @Min: 0
+ * @Max: 1
+ * @Default: non AP 1, AP 0
+ *
+ * This ini is used to Enable check for 6Ghz allowed security. If enabled
+ * only WPA3 and other allowed security will be allowed for 6Ghz connection
+ *
+ * Related: None
+ *
+ * Supported Feature: STA
+ *
+ * Usage: External
+ *
+ * </ini>
+ */
+#define CFG_CHECK_6GHZ_SECURITY CFG_INI_BOOL(\
+				"check_6ghz_security", PLATFORM_VALUE(1, 0), \
+				"Enable check for 6Ghz allowed security")
+/*
+ * <ini>
+ * key_mgmt_mask_6ghz - AKM bit mask (@wlan_crypto_key_mgmt) allowed in 6Ghz
+ * channel
+ * @Min: 0
+ * @Max: 0xffffffff
+ * @Default: 0xffffffff
+ *
+ * This ini is used to set allowed AKM check for 6Ghz. If enabled
+ * only only AKM bits allowed will be used to connect to candidate.
+ * valid only if check_6ghz_security is 0. By default all AKM are allowed
+ *
+ * Related: check_6Ghz_security
+ *
+ * Supported Feature: STA
+ *
+ * Usage: External
+ *
+ * </ini>
+ */
+#define CFG_6GHZ_ALLOWED_AKM_MASK CFG_INI_UINT(\
+			"key_mgmt_mask_6ghz",\
+			0, DEFAULT_KEYMGMT_6G_MASK, DEFAULT_KEYMGMT_6G_MASK,\
+			CFG_VALUE_OR_DEFAULT, \
+			"Set priority for connection with bssid_hint")
+
+#define CFG_6GHZ_CONFIG \
+	CFG(CFG_CHECK_6GHZ_SECURITY) \
+	CFG(CFG_6GHZ_ALLOWED_AKM_MASK)
+#else
+#define CFG_6GHZ_CONFIG
+#endif
+
+#ifdef WLAN_FEATURE_11BE_MLO
+/**
+ * <ini>
+ * eht_caps_weightage - EHT caps Weightage to calculate best candidate
+ * @Min: 0
+ * @Max: 100
+ * @Default: 2
+ *
+ * This ini is used to increase/decrease EHT caps weightage in best candidate
+ * selection. If AP supports EHT caps, AP will get additional weightage with
+ * this param. Weightage will be given only if dot11mode is EHT capable.
+ *
+ * Related: None
+ *
+ * Supported Feature: STA Candidate selection
+ *
+ * Usage: External
+ *
+ * </ini>
+ */
+#define CFG_SCORING_EHT_CAPS_WEIGHTAGE CFG_INI_UINT( \
+	"eht_caps_weightage", \
+	0, \
+	100, \
+	2, \
+	CFG_VALUE_OR_DEFAULT, \
+	"EHT Caps Weightage")
+
+/**
+ * <ini>
+ * mlo_weightage - MLO Weightage to calculate best candidate
+ * @Min: 0
+ * @Max: 100
+ * @Default: 3
+ *
+ * This ini is used to increase/decrease MLO weightage in best candidate
+ * selection. If AP supports MLO, AP will get additional weightage with
+ * this param.
+ *
+ * Related: None
+ *
+ * Supported Feature: STA Candidate selection
+ *
+ * Usage: External
+ *
+ * </ini>
+ */
+#define CFG_SCORING_MLO_WEIGHTAGE CFG_INI_UINT( \
+	"mlo_weightage", \
+	0, \
+	100, \
+	3, \
+	CFG_VALUE_OR_DEFAULT, \
+	"MLO Weightage")
+
+/**
+ * <ini>
+ * emlsr_weightage - eMLSR Weightage to calculate best candidate
+ * @Min: 0
+ * @Max: 100
+ * @Default: 3
+ *
+ * This ini is used to increase/decrease eMLSR weightage in best candidate
+ * selection. If AP supports eMLSR, AP will get additional weightage with
+ * this param.
+ *
+ * Related: None
+ *
+ * Supported Feature: STA Candidate selection
+ *
+ * Usage: External
+ *
+ * </ini>
+ */
+#define CFG_SCORING_EMLSR_WEIGHTAGE CFG_INI_UINT( \
+	"emlsr_weightage", \
+	0, \
+	100, \
+	3, \
+	CFG_VALUE_OR_DEFAULT, \
+	"eMLSR Weightage")
+
+/**
+ * <ini>
+ * wlm_indication_weightage - WLM indication Weightage to calculate best
+ *                            candidate
+ * @Min: 0
+ * @Max: 100
+ * @Default: 2
+ *
+ * This ini is used to increase/decrease WLM indication weightage in best
+ * candidate selection. AP will get additional weightage with this param based
+ * on WLM indicates ultra low latency or low latency.
+ *
+ * Related: None
+ *
+ * Supported Feature: STA Candidate selection
+ *
+ * Usage: External
+ *
+ * </ini>
+ */
+#define CFG_SCORING_WLM_INDICATION_WEIGHTAGE CFG_INI_UINT( \
+	"wlm_indication_weightage", \
+	0, \
+	100, \
+	2, \
+	CFG_VALUE_OR_DEFAULT, \
+	"WLM indication Weightage")
+
+/**
+ * <ini>
+ * mlsr_link_selection - MLSR link selection criteria
+ * @Min: 0
+ * @Max: 1
+ * @Default: 0
+ *
+ * This ini is used to select the link to operate in MLSR mode.
+ *
+ * The values are defined as follows:
+ *    0 : ML Link with highest link score
+ *    1 : Link corresponds to best average ML score
+ *
+ * Related: None
+ *
+ * Supported Feature: STA Candidate selection
+ *
+ * Usage: External
+ *
+ * </ini>
+ */
+#define CFG_SCORING_MLSR_LINK_SELECTION CFG_INI_UINT( \
+	"mlsr_link_selection", \
+	0, \
+	1, \
+	0, \
+	CFG_VALUE_OR_DEFAULT, \
+	"MLSR link selection")
+
+/**
+ * <ini>
+ * joint_rssi_alpha - Joint RSSI alpha to select best ML candidate
+ * @Min: 0
+ * @Max: 100
+ * @Default: 50
+ *
+ * This ini is used to increase/decrease joint RSSI alpha percentage for
+ * an MLO candidate in best candidate selection. Using this the joint RSSI
+ * will be calculated as below.
+ *
+ *     joint_rssi = (alpha % Link1 RSSI) + ((100 - alpha)% Link2 RSSI)
+ *
+ * Related: low_band_rssi_boost
+ *
+ * Supported Feature: STA Candidate selection
+ *
+ * Usage: External
+ *
+ * </ini>
+ */
+#define CFG_SCORING_JOINT_RSSI_ALPHA CFG_INI_UINT( \
+	"joint_rssi_alpha", \
+	0, \
+	100, \
+	50, \
+	CFG_VALUE_OR_DEFAULT, \
+	"Joint RSSI alpha")
+
+/**
+ * <ini>
+ * low_band_rssi_boost - Low band RSSI boost in joint RSSI calculation
+ * @Min: 0
+ * @Max: 1
+ * @Default: 1
+ *
+ * If joint RSSI alpha is not 50 then joint RSSI calculation will depend on
+ * this INI param as explained below.
+ *
+ * If this INI set to 1, then lower band will be given more weightage.
+ * Otherwise higher band will get more weightage.
+ *
+ *    Example: Joint RSSI alpha is 70
+ *	if (low_band_rssi_boost)
+ *		joint_rssi_5g_6g = (70 * 5g_rssi) + (30 * 6g_rssi)
+ *	else
+ *		joint_rssi_5g_6g = (30 * 5g_rssi) + (70 * 6g_rssi)
+ *
+ * Related: joint_rssi_alpha
+ *
+ * Supported Feature: STA Candidate selection
+ *
+ * Usage: External
+ *
+ * </ini>
+ */
+#define CFG_SCORING_LOW_BAND_RSSI_BOOST CFG_INI_BOOL( \
+				"low_band_rssi_boost", \
+				1, \
+				"Low band RSSI boost ")
+
+/**
+ * <ini>
+ * joint_esp_alpha - Joint ESP alpha to select best ML candidate
+ * @Min: 0
+ * @Max: 100
+ * @Default: 50
+ *
+ * This ini is used to increase/decrease joint ESP alpha percentage for
+ * an MLO candidate in best candidate selection. Using this the joint ESP
+ * will be calculated as below.
+ *
+ *     joint_esp = (alpha % Link1 ESP) + ((100 - alpha)% Link2 ESP)
+ *
+ * Related: low_band_esp_boost
+ *
+ * Supported Feature: STA Candidate selection
+ *
+ * Usage: External
+ *
+ * </ini>
+ */
+#define CFG_SCORING_JOINT_ESP_ALPHA CFG_INI_UINT( \
+	"joint_esp_alpha", \
+	0, \
+	100, \
+	50, \
+	CFG_VALUE_OR_DEFAULT, \
+	"Joint ESP alpha")
+
+/**
+ * <ini>
+ * low_band_esp_boost - Low band ESP boost in joint ESP calculation
+ * @Min: 0
+ * @Max: 1
+ * @Default: 1
+ *
+ * If joint ESP alpha is not 50 then joint ESP calculation will depend on
+ * this INI param as explained below.
+ *
+ * If this INI set to 1, then lower band will be given more weightage.
+ * Otherwise higher band will get more weightage.
+ *
+ *    Example: Joint ESP alpha is 70
+ *	if (low_band_esp_boost)
+ *		joint_esp_5g_6g = (70 * 5g_esp) + (30 * 6g_esp)
+ *	else
+ *		joint_esp_5g_6g = (30 * 5g_esp) + (70 * 6g_esp)
+ *
+ * Related: joint_esp_alpha
+ *
+ * Supported Feature: STA Candidate selection
+ *
+ * Usage: External
+ *
+ * </ini>
+ */
+#define CFG_SCORING_LOW_BAND_ESP_BOOST CFG_INI_BOOL( \
+				"low_band_esp_boost", \
+				1, \
+				"Low band ESP boost ")
+
+/**
+ * <ini>
+ * joint_oce_alpha - Joint OCE alpha to select best ML candidate
+ * @Min: 0
+ * @Max: 100
+ * @Default: 50
+ *
+ * This ini is used to increase/decrease joint OCE alpha percentage for
+ * an MLO candidate in best candidate selection. Using this the joint OCE
+ * will be calculated as below.
+ *
+ *     joint_oce = (alpha % Link1 OCE) + ((100 - alpha)% Link2 OCE)
+ *
+ * Related: low_band_oce_boost
+ *
+ * Supported Feature: STA Candidate selection
+ *
+ * Usage: External
+ *
+ * </ini>
+ */
+#define CFG_SCORING_JOINT_OCE_ALPHA CFG_INI_UINT( \
+	"joint_oce_alpha", \
+	0, \
+	100, \
+	50, \
+	CFG_VALUE_OR_DEFAULT, \
+	"Joint OCE alpha")
+
+/**
+ * <ini>
+ * low_band_oce_boost - Low band OCE boost in joint OCE calculation
+ * @Min: 0
+ * @Max: 1
+ * @Default: 1
+ *
+ * If joint OCE alpha is not 50 then joint OCE calculation will depend on
+ * this INI param as explained below.
+ *
+ * If this INI set to 1, then lower band will be given more weightage.
+ * Otherwise higher band will get more weightage.
+ *
+ *    Example: Joint OCE alpha is 70
+ *	if (low_band_oce_boost)
+ *		joint_oce_5g_6g = (70 * 5g_oce) + (30 * 6g_oce)
+ *	else
+ *		joint_oce_5g_6g = (30 * 5g_oce) + (70 * 6g_oce)
+ *
+ * Related: joint_oce_alpha
+ *
+ * Supported Feature: STA Candidate selection
+ *
+ * Usage: External
+ *
+ * </ini>
+ */
+#define CFG_SCORING_LOW_BAND_OCE_BOOST CFG_INI_BOOL( \
+				"low_band_oce_boost", \
+				1, \
+				"Low band OCE boost ")
+
+/*
+ * <ini>
+ * ml_bandwidth_weight_per_index_4_to_7 - percentage as per bandwidth
+ * @Min: 0x00000000
+ * @Max: 0x64646464
+ * @Default: 0x342A1F14
+ *
+ * This INI give percentage value of chan_width_weightage to be used as per
+ * peer bandwidth for two links. Self BW is also considered while calculating
+ * score. Eg if self BW is 20+20 MHZ 20% will be given for all AP irrespective
+ * of the AP  capability.
+ *
+ * Indexes are defined in this way.
+ *     4 Index (BITS 0-7): 20+20 MHz - Def 20%
+ *     5 Index (BITS 8-15): 20+40 MHz - Def 31%
+ *     6 Index (BITS 16-23): 40+40 MHz - Def 42%
+ *     7 Index (BITS 24-31): 20+80 MHz - Def 52%
+ * These percentage values are stored in HEX. For any index max value, can be 64
+ *
+ * Indexes 0-3 are considered as part of the INI bandwidth_weight_per_index
+ *
+ * Related: chan_width_weightage
+ *
+ * Supported Feature: STA Candidate selection
+ *
+ * Usage: External
+ *
+ * </ini>
+ */
+#define CFG_SCORING_ML_BW_WEIGHT_PER_IDX_4_TO_7 CFG_INI_UINT( \
+	"ml_bandwidth_weight_per_index_4_to_7", \
+	0x00000000, \
+	0x64646464, \
+	0x342A1F14, \
+	CFG_VALUE_OR_DEFAULT, \
+	"ML Bandwidth weight per index 4 to 7")
+
+/*
+ * <ini>
+ * ml_bandwidth_weight_per_index_8_to_11 - percentage as per bandwidth
+ * @Min: 0x00000000
+ * @Max: 0x64646464
+ * @Default: 0x5A57553F
+ *
+ * This INI give percentage value of chan_width_weightage to be used as per
+ * peer bandwidth for two links. Self BW is also considered while calculating
+ * score. Eg if self BW is 20+20 MHZ 20% will be given for all AP irrespective
+ * of the AP  capability.
+ *
+ * Indexes are defined in this way.
+ *     8 Index (BITS 0-7): 40+80 MHz - Def 63%
+ *     9 Index (BITS 8-15): 80+80 MHz - Def 85%
+ *     10 Index (BITS 16-23): 20+160 MHz - Def 87%
+ *     11 Index (BITS 24-31): 40+160 MHz - Def 90%
+ * These percentage values are stored in HEX. For any index max value, can be 64
+ *
+ * Related: chan_width_weightage
+ *
+ * Supported Feature: STA Candidate selection
+ *
+ * Usage: External
+ *
+ * </ini>
+ */
+#define CFG_SCORING_ML_BW_WEIGHT_PER_IDX_8_TO_11 CFG_INI_UINT( \
+	"ml_bandwidth_weight_per_index_8_to_11", \
+	0x00000000, \
+	0x64646464, \
+	0x5A57553F, \
+	CFG_VALUE_OR_DEFAULT, \
+	"ML Bandwidth weight per index 8 to 11")
+
+/*
+ * <ini>
+ * ml_bandwidth_weight_per_index_12_to_15 - percentage as per bandwidth
+ * @Min: 0x00000000
+ * @Max: 0x00646464
+ * @Default: 0x0064645F
+ *
+ * This INI give percentage value of chan_width_weightage to be used as per
+ * peer bandwidth for two links. Self BW is also considered while calculating
+ * score. Eg if self BW is 20+20 MHZ 20% will be given for all AP irrespective
+ * of the AP  capability.
+ *
+ * Indexes are defined in this way.
+ *     12 Index (BITS 0-7): 80+160 MHz - Def 95%
+ *     13 Index (BITS 8-15): 160+160 MHz - Def 100%
+ *     14 Index (BITS 16-23): 320 MHz - Def 100%
+ *     15 Index (BITS 24-31): Reserved - Def 0
+ * These percentage values are stored in HEX. For any index max value, can be 64
+ *
+ * Related: chan_width_weightage
+ *
+ * Supported Feature: STA Candidate selection
+ *
+ * Usage: External
+ *
+ * </ini>
+ */
+#define CFG_SCORING_ML_BW_WEIGHT_PER_IDX_12_TO_15 CFG_INI_UINT( \
+	"ml_bandwidth_weight_per_index_12_to_15", \
+	0x00000000, \
+	0x00646464, \
+	0x0064645F, \
+	CFG_VALUE_OR_DEFAULT, \
+	"ML Bandwidth weight per index 12 to 15")
+
+/*
+ * <ini>
+ * ml_nss_weight_per_index_4_to_7 - percentage as per NSS
+ * @Min: 0x00000000
+ * @Max: 0x00646464
+ * @Default: 0x00645019
+ *
+ * This INI give percentage value of nss_weightage to be used as per peer NSS.
+ * Self NSS capability is also considered. Eg if self NSS is 1x1 10% will be
+ * given for all AP irrespective of the AP capability.
+ *
+ * Indexes are defined in this way.
+ *     4 Index (BITS 0-7): 2x2 + 2x2 - Def 25%
+ *     5 Index (BITS 8-15): 4x4 + 4x4 - Def 80%
+ *     6 Index (BITS 16-23): 8X8- Def 100%
+ *     7 Index (BITS 24-31): Reserved - Def 0
+ * These percentage values are stored in HEX. For any index max value, can be 64
+ *
+ * Indexes 0-3 are considered as part of the INI nss_weight_per_index
+ *
+ * Related: nss_weightage
+ *
+ * Supported Feature: STA Candidate selection
+ *
+ * Usage: External
+ *
+ * </ini>
+ */
+#define CFG_SCORING_ML_NSS_WEIGHT_PER_IDX_4_TO_7 CFG_INI_UINT( \
+	"ml_nss_weight_per_index_4_to_7", \
+	0x00000000, \
+	0x00646464, \
+	0x00645019, \
+	CFG_VALUE_OR_DEFAULT, \
+	"ML NSS weight per index 4 to 7")
+
+#define CFG_MLO_CONFIG \
+	CFG(CFG_SCORING_EHT_CAPS_WEIGHTAGE) \
+	CFG(CFG_SCORING_EMLSR_WEIGHTAGE) \
+	CFG(CFG_SCORING_JOINT_ESP_ALPHA) \
+	CFG(CFG_SCORING_JOINT_OCE_ALPHA) \
+	CFG(CFG_SCORING_JOINT_RSSI_ALPHA) \
+	CFG(CFG_SCORING_LOW_BAND_ESP_BOOST) \
+	CFG(CFG_SCORING_LOW_BAND_OCE_BOOST) \
+	CFG(CFG_SCORING_LOW_BAND_RSSI_BOOST) \
+	CFG(CFG_SCORING_ML_BW_WEIGHT_PER_IDX_4_TO_7) \
+	CFG(CFG_SCORING_ML_BW_WEIGHT_PER_IDX_8_TO_11) \
+	CFG(CFG_SCORING_ML_BW_WEIGHT_PER_IDX_12_TO_15) \
+	CFG(CFG_SCORING_ML_NSS_WEIGHT_PER_IDX_4_TO_7) \
+	CFG(CFG_SCORING_MLO_WEIGHTAGE) \
+	CFG(CFG_SCORING_MLSR_LINK_SELECTION) \
+	CFG(CFG_SCORING_WLM_INDICATION_WEIGHTAGE)
+#else
+#define CFG_MLO_CONFIG
+#endif
 
 #define CFG_MLME_SCORE_ALL \
 	CFG(CFG_SCORING_RSSI_WEIGHTAGE) \
@@ -1116,6 +1685,9 @@
 	CFG(CFG_SCORING_OCE_WAN_SCORE_IDX_7_TO_4) \
 	CFG(CFG_SCORING_OCE_WAN_SCORE_IDX_11_TO_8) \
 	CFG(CFG_SCORING_OCE_WAN_SCORE_IDX_15_TO_12) \
-	CFG(CFG_IS_BSSID_HINT_PRIORITY)
+	CFG(CFG_IS_BSSID_HINT_PRIORITY) \
+	CFG(CFG_VENDOR_ROAM_SCORE_ALGORITHM) \
+	CFG_6GHZ_CONFIG \
+	CFG_MLO_CONFIG
 
 #endif /* __CFG_MLME_SCORE_PARAMS_H */

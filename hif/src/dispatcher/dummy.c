@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016-2020 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -263,6 +263,16 @@ int hif_dummy_grp_irq_configure(struct hif_softc *hif_sc,
 }
 
 /**
+ * hif_dummy_grp_irq_deconfigure - dummy call
+ * hif_sc: hif context
+ *
+ * Return: none
+ */
+void hif_dummy_grp_irq_deconfigure(struct hif_softc *hif_sc)
+{
+}
+
+/**
  * hif_dummy_dump_registers - dummy call
  * hif_sc: hif context
  *
@@ -284,6 +294,18 @@ int hif_dummy_dump_registers(struct hif_softc *hif_sc)
  */
 void hif_dummy_dump_target_memory(struct hif_softc *hif_sc, void *ramdump_base,
 						uint32_t address, uint32_t size)
+{
+}
+
+uint32_t hif_dummy_bus_reg_read32(struct hif_softc *hif_sc,
+				  uint32_t offset)
+{
+	return 0;
+}
+
+void hif_dummy_bus_reg_write32(struct hif_softc *hif_sc,
+			       uint32_t offset,
+			       uint32_t value)
 {
 }
 
@@ -386,4 +408,51 @@ void hif_dummy_config_irq_affinity(struct hif_softc *scn)
 int hif_dummy_config_irq_by_ceid(struct hif_softc *scn, int ce_id)
 {
 	return 0;
+}
+
+/**
+ * hif_config_irq_clear_affinity() - dummy call
+ * @scn: HIF handle
+ * @intr_ctxt_id: interrupt group index
+ * @cpu: CPU core to clear
+ *
+ * Return: None
+ */
+void hif_dummy_config_irq_clear_cpu_affinity(struct hif_softc *scn,
+					     int intr_ctxt_id, int cpu)
+{
+}
+
+/**
+ * hif_dummy_log_bus_info - dummy call
+ * @scn: hif context
+ * @data: hang event data buffer
+ * @offset: offset at which data needs to be written
+ *
+ * Return: bool
+ */
+bool hif_dummy_log_bus_info(struct hif_softc *scn, uint8_t *data,
+			    unsigned int *offset)
+{
+	return false;
+}
+
+/**
+ * hif_dummy_enable_grp_irqs - dummy call
+ * @scn: hif context
+ * Return: EOPNOTSUPP
+ */
+int hif_dummy_enable_grp_irqs(struct hif_softc *scn)
+{
+	return -EOPNOTSUPP;
+}
+
+/**
+ * hif_dummy_disable_grp_irqs - dummy call
+ * @scn: hif context
+ * Return: EOPNOTSUPP
+ */
+int hif_dummy_disable_grp_irqs(struct hif_softc *scn)
+{
+	return -EOPNOTSUPP;
 }

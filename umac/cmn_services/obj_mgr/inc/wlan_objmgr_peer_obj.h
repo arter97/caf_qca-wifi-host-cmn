@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016-2020 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -25,6 +25,9 @@
 #include <qdf_types.h>
 #include <qdf_atomic.h>
 #include "wlan_objmgr_vdev_obj.h"
+#ifdef WLAN_FEATURE_11BE_MLO
+#include "wlan_mlo_mgr_public_structs.h"
+#endif
 
 /* peer flags */
 /* authorized for data */
@@ -92,6 +95,9 @@
 /* node is a local mesh peer */
 #define WLAN_PEER_F_LOCAL_MESH_PEER                 0x80000000
 
+/* MLO enabled peer */
+#define WLAN_PEER_FEXT_MLO                          0x00000001
+
 /**
  * enum wlan_peer_state  - peer state
  * @WLAN_INIT_STATE:       Default state
@@ -118,16 +124,19 @@ enum wlan_peer_state {
  * struct wlan_objmgr_peer_mlme - mlme common data of peer
  * @peer_capinfo:    protocol cap info
  * @peer_flags:      PEER OP flags
+ * @peer_ext_flags:  PEER OP ext flags
  * @peer_type:       Type of PEER, (STA/AP/etc.)
  * @phymode:         phy mode of station
  * @max_rate:        Max Rate supported
  * @state:           State of the peer
  * @seq_num:         Sequence number
  * @rssi:            Last received RSSI value
+ * @assoc_peer:      assoc req/response is handled in this peer
  */
 struct wlan_objmgr_peer_mlme {
 	uint32_t peer_capinfo;
 	uint32_t peer_flags;
+	uint32_t peer_ext_flags;
 	enum wlan_peer_type peer_type;
 	enum wlan_phymode phymode;
 	uint32_t max_rate;
@@ -135,6 +144,9 @@ struct wlan_objmgr_peer_mlme {
 	uint16_t seq_num;
 	int8_t rssi;
 	bool is_authenticated;
+#ifdef WLAN_FEATURE_11BE_MLO
+	bool assoc_peer;
+#endif
 };
 
 /**
@@ -169,6 +181,8 @@ struct wlan_objmgr_peer_objmgr {
  * @obj_state:        Status of Peer object
  * @pdev_id:          Pdev ID
  * @peer_lock:        Lock for access/update peer contents
+ * @mlo_peer_ctx:     Reference to MLO Peer context
+ * @mldaddr:          Peer MLD MAC address
  */
 struct wlan_objmgr_peer {
 	qdf_list_node_t psoc_peer;
@@ -181,6 +195,10 @@ struct wlan_objmgr_peer {
 	QDF_STATUS obj_status[WLAN_UMAC_MAX_COMPONENTS];
 	WLAN_OBJ_STATE obj_state;
 	qdf_spinlock_t peer_lock;
+#ifdef WLAN_FEATURE_11BE_MLO
+	struct wlan_mlo_peer_context *mlo_peer_ctx;
+	uint8_t mldaddr[QDF_MAC_ADDR_SIZE];
+#endif
 };
 
 /**
@@ -827,6 +845,35 @@ static inline enum wlan_phymode wlan_peer_get_phymode(
 	return peer->peer_mlme.phymode;
 }
 
+/**
+ * wlan_peer_set_rssi() - set RSSI
+ * @peer: PEER object
+ * @rssi: RSSI
+ *
+ * API to set rssi
+ *
+ * Return: void
+ */
+static inline void wlan_peer_set_rssi(struct wlan_objmgr_peer *peer,
+				      int8_t rssi)
+{
+	peer->peer_mlme.rssi = rssi;
+}
+
+/**
+ * wlan_peer_get_rssi() - get RSSI
+ * @peer: PEER object
+ *
+ * API to get RSSI
+ *
+ * Return:
+ * @rssi: RSSI of PEER
+ */
+static inline int8_t wlan_peer_get_rssi(
+				struct wlan_objmgr_peer *peer)
+{
+	return peer->peer_mlme.rssi;
+}
 
 /**
  * wlan_peer_set_macaddr() - set mac addr
@@ -939,6 +986,51 @@ static inline uint8_t wlan_peer_mlme_flag_get(struct wlan_objmgr_peer *peer,
 }
 
 /**
+ * wlan_peer_mlme_flag_ext_set() - mlme ext flag set
+ * @peer: PEER object
+ * @flag: ext flag to be set
+ *
+ * API to set ext flag in peer
+ *
+ * Return: void
+ */
+static inline void wlan_peer_mlme_flag_ext_set(struct wlan_objmgr_peer *peer,
+					       uint32_t flag)
+{
+	peer->peer_mlme.peer_ext_flags |= flag;
+}
+
+/**
+ * wlan_peer_mlme_flag_clear() - mlme ext flag clear
+ * @peer: PEER object
+ * @flag: ext flag to be cleared
+ *
+ * API to clear ext flag in peer
+ *
+ * Return: void
+ */
+static inline void wlan_peer_mlme_flag_ext_clear(struct wlan_objmgr_peer *peer,
+						 uint32_t flag)
+{
+	peer->peer_mlme.peer_ext_flags &= ~flag;
+}
+
+/**
+ * wlan_peer_mlme_flag_ext_get() - mlme ext flag get
+ * @peer: PEER object
+ * @flag: ext flag to be checked
+ *
+ * API to know, whether particular ext flag is set in peer
+ *
+ * Return: 1 (for set) or 0 (for not set)
+ */
+static inline uint8_t wlan_peer_mlme_flag_ext_get(struct wlan_objmgr_peer *peer,
+						  uint32_t flag)
+{
+	return (peer->peer_mlme.peer_ext_flags & flag) ? 1 : 0;
+}
+
+/**
  * wlan_peer_mlme_set_state() - peer mlme state
  * @peer: PEER object
  * @state: enum wlan_peer_state
@@ -953,6 +1045,89 @@ static inline void wlan_peer_mlme_set_state(
 {
 	peer->peer_mlme.state = state;
 }
+
+#ifdef WLAN_FEATURE_11BE_MLO
+/**
+ * wlan_peer_mlme_get_mldaddr() - get peer mldaddr
+ * @peer: PEER object
+ *
+ * API to get MLD address from peer object
+ *
+ * Return: mld address
+ */
+static inline uint8_t *wlan_peer_mlme_get_mldaddr(struct wlan_objmgr_peer *peer)
+{
+	return peer->mldaddr;
+}
+
+/**
+ * wlan_peer_mlme_set_mldaddr() - set peer mldaddr
+ * @peer: PEER object
+ * @mldaddr: MLD address
+ *
+ * API to set MLD addr in peer object
+ *
+ * Return: void
+ */
+static inline void wlan_peer_mlme_set_mldaddr(struct wlan_objmgr_peer *peer,
+					      uint8_t *mldaddr)
+{
+	WLAN_ADDR_COPY(peer->mldaddr, mldaddr);
+}
+
+/**
+ * wlan_peer_mlme_set_assoc_peer() - assoc frames is received on this peer
+ * @peer: PEER object
+ * @is_assoc_link: whether assoc frames is received on this peer or not
+ *
+ * API to update assoc peer
+ *
+ * Return: void
+ */
+static inline void wlan_peer_mlme_set_assoc_peer(
+				struct wlan_objmgr_peer *peer,
+				bool is_assoc_link)
+{
+	peer->peer_mlme.assoc_peer = is_assoc_link;
+}
+
+/**
+ * wlan_peer_mlme_is_assoc_peer() - check peer is assoc peer or not
+ * @peer: PEER object
+ *
+ * API to get assoc peer info
+ *
+ * Return: whether assoc frames is received on this peer or not
+ */
+static inline bool wlan_peer_mlme_is_assoc_peer(
+				struct wlan_objmgr_peer *peer)
+{
+	return peer->peer_mlme.assoc_peer;
+}
+#else
+
+static inline uint8_t *wlan_peer_mlme_get_mldaddr(struct wlan_objmgr_peer *peer)
+{
+	return NULL;
+}
+
+static inline void wlan_peer_mlme_set_mldaddr(struct wlan_objmgr_peer *peer,
+					      uint8_t *mldaddr)
+{
+}
+
+static inline void wlan_peer_mlme_set_assoc_peer(
+				struct wlan_objmgr_peer *peer,
+				bool is_assoc_link)
+{
+}
+
+static inline bool wlan_peer_mlme_is_assoc_peer(
+				struct wlan_objmgr_peer *peer)
+{
+	return false;
+}
+#endif
 
 /**
  * wlan_peer_mlme_set_auth_state() - peer mlme auth state
@@ -1077,6 +1252,23 @@ static inline struct wlan_objmgr_psoc *wlan_peer_get_psoc(
 	return psoc;
 }
 
+/**
+ * wlan_peer_get_psoc_id() - get psoc id
+ * @peer: PEER object
+ *
+ * API to get peer's psoc id
+ *
+ * Return: @psoc_id: psoc id
+ */
+static inline uint8_t wlan_peer_get_psoc_id(struct wlan_objmgr_peer *peer)
+{
+	struct wlan_objmgr_psoc *psoc;
+
+	psoc = wlan_peer_get_psoc(peer);
+
+	return wlan_psoc_get_id(psoc);
+}
+
 /*
  * wlan_peer_get_pdev_id() - get pdev id
  * @peer: peer object pointer
@@ -1128,7 +1320,7 @@ wlan_objmgr_peer_get_comp_ref_cnt(struct wlan_objmgr_peer *peer,
  *
  * Return: void
  */
-#ifdef WLAN_OBJMGR_TRACE
+#ifdef WLAN_OBJMGR_REF_ID_TRACE
 static inline void
 wlan_objmgr_peer_trace_init_lock(struct wlan_objmgr_peer *peer)
 {
@@ -1147,7 +1339,7 @@ wlan_objmgr_peer_trace_init_lock(struct wlan_objmgr_peer *peer)
  *
  * Return: void
  */
-#ifdef WLAN_OBJMGR_TRACE
+#ifdef WLAN_OBJMGR_REF_ID_TRACE
 static inline void
 wlan_objmgr_peer_trace_deinit_lock(struct wlan_objmgr_peer *peer)
 {

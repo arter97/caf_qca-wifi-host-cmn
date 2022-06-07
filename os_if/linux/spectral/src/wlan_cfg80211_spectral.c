@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017-2020 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2017-2021 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -91,6 +91,17 @@ const struct nla_policy spectral_scan_policy[
 							.type = NLA_U8},
 	[QCA_WLAN_VENDOR_ATTR_SPECTRAL_SCAN_CONFIG_DMA_BUFFER_DEBUG] = {
 							.type = NLA_U8},
+	[QCA_WLAN_VENDOR_ATTR_SPECTRAL_SCAN_CONFIG_BANDWIDTH] = {
+							.type = NLA_U8},
+};
+
+const struct nla_policy spectral_scan_get_status_policy[
+		QCA_WLAN_VENDOR_ATTR_SPECTRAL_SCAN_STATUS_MAX + 1] = {
+	[QCA_WLAN_VENDOR_ATTR_SPECTRAL_SCAN_STATUS_IS_ENABLED] = {
+							.type = NLA_FLAG },
+	[QCA_WLAN_VENDOR_ATTR_SPECTRAL_SCAN_STATUS_IS_ACTIVE] = {
+							.type = NLA_FLAG },
+	[QCA_WLAN_VENDOR_ATTR_SPECTRAL_SCAN_STATUS_MODE] = { .type = NLA_U32 },
 };
 
 static void wlan_spectral_intit_config(struct spectral_config *config_req)
@@ -117,6 +128,7 @@ static void wlan_spectral_intit_config(struct spectral_config *config_req)
 	config_req->ss_chn_mask =        SPECTRAL_PHYERR_PARAM_NOVAL;
 	config_req->ss_frequency.cfreq1 = SPECTRAL_PHYERR_PARAM_NOVAL;
 	config_req->ss_frequency.cfreq2 = SPECTRAL_PHYERR_PARAM_NOVAL;
+	config_req->ss_bandwidth = SPECTRAL_PHYERR_PARAM_NOVAL;
 }
 
 /**
@@ -188,6 +200,112 @@ convert_spectral_err_code_internal_to_nl
 
 	return QDF_STATUS_SUCCESS;
 }
+
+#ifdef WLAN_FEATURE_11BE
+int
+wlan_spectral_get_nl80211_chwidth(uint8_t phy_chwidth)
+{
+	switch ((enum phy_ch_width)phy_chwidth) {
+	case CH_WIDTH_5MHZ:
+		return NL80211_CHAN_WIDTH_5;
+	case CH_WIDTH_10MHZ:
+		return NL80211_CHAN_WIDTH_10;
+	case CH_WIDTH_20MHZ:
+		return NL80211_CHAN_WIDTH_20;
+	case CH_WIDTH_40MHZ:
+		return NL80211_CHAN_WIDTH_40;
+	case CH_WIDTH_80MHZ:
+		return NL80211_CHAN_WIDTH_80;
+	case CH_WIDTH_160MHZ:
+		return NL80211_CHAN_WIDTH_160;
+	case CH_WIDTH_80P80MHZ:
+		return NL80211_CHAN_WIDTH_80P80;
+	case CH_WIDTH_320MHZ:
+	case CH_WIDTH_MAX:
+		return NL80211_CHAN_WIDTH_320;
+	case CH_WIDTH_INVALID:
+	default:
+		osif_err("Invalid spectral channel width %u", phy_chwidth);
+		return -EINVAL;
+	}
+}
+
+uint8_t
+wlan_spectral_get_phy_ch_width(uint8_t nl_chwidth)
+{
+	switch ((enum nl80211_chan_width)nl_chwidth) {
+	case NL80211_CHAN_WIDTH_5:
+		return CH_WIDTH_5MHZ;
+	case NL80211_CHAN_WIDTH_10:
+		return CH_WIDTH_10MHZ;
+	case NL80211_CHAN_WIDTH_20:
+		return CH_WIDTH_20MHZ;
+	case NL80211_CHAN_WIDTH_40:
+		return CH_WIDTH_40MHZ;
+	case NL80211_CHAN_WIDTH_80:
+		return CH_WIDTH_80MHZ;
+	case NL80211_CHAN_WIDTH_160:
+		return CH_WIDTH_160MHZ;
+	case NL80211_CHAN_WIDTH_80P80:
+		return CH_WIDTH_80P80MHZ;
+	case NL80211_CHAN_WIDTH_320:
+		return CH_WIDTH_320MHZ;
+	default:
+		osif_err("Invalid nl80211 channel width %u", nl_chwidth);
+		return CH_WIDTH_INVALID;
+	}
+}
+#else
+int
+wlan_spectral_get_nl80211_chwidth(uint8_t phy_chwidth)
+{
+	switch ((enum phy_ch_width)phy_chwidth) {
+	case CH_WIDTH_5MHZ:
+		return NL80211_CHAN_WIDTH_5;
+	case CH_WIDTH_10MHZ:
+		return NL80211_CHAN_WIDTH_10;
+	case CH_WIDTH_20MHZ:
+		return NL80211_CHAN_WIDTH_20;
+	case CH_WIDTH_40MHZ:
+		return NL80211_CHAN_WIDTH_40;
+	case CH_WIDTH_80MHZ:
+		return NL80211_CHAN_WIDTH_80;
+	case CH_WIDTH_160MHZ:
+	case CH_WIDTH_MAX:
+		return NL80211_CHAN_WIDTH_160;
+	case CH_WIDTH_80P80MHZ:
+		return NL80211_CHAN_WIDTH_80P80;
+	case CH_WIDTH_INVALID:
+	default:
+		osif_err("Invalid spectral channel width %u", phy_chwidth);
+		return -EINVAL;
+	}
+}
+
+uint8_t
+wlan_spectral_get_phy_ch_width(uint8_t nl_chwidth)
+{
+	switch ((enum nl80211_chan_width)nl_chwidth) {
+	case NL80211_CHAN_WIDTH_5:
+		return CH_WIDTH_5MHZ;
+	case NL80211_CHAN_WIDTH_10:
+		return CH_WIDTH_10MHZ;
+	case NL80211_CHAN_WIDTH_20:
+		return CH_WIDTH_20MHZ;
+	case NL80211_CHAN_WIDTH_40:
+		return CH_WIDTH_40MHZ;
+	case NL80211_CHAN_WIDTH_80:
+		return CH_WIDTH_80MHZ;
+	case NL80211_CHAN_WIDTH_160:
+		return CH_WIDTH_160MHZ;
+	case NL80211_CHAN_WIDTH_80P80:
+		return CH_WIDTH_80P80MHZ;
+	default:
+		osif_err("Invalid nl80211 channel width %u", nl_chwidth);
+		return CH_WIDTH_INVALID;
+	}
+}
+#endif /* WLAN_FEATURE_11BE */
 
 #ifdef DIRECT_BUF_RX_DEBUG
 QDF_STATUS wlan_cfg80211_spectral_scan_dma_debug_config(
@@ -359,6 +477,17 @@ int wlan_cfg80211_spectral_scan_config_and_start(struct wiphy *wiphy,
 	if (tb[QCA_WLAN_VENDOR_ATTR_SPECTRAL_SCAN_CONFIG_FREQUENCY_2])
 		config_req.ss_frequency.cfreq2 = nla_get_u32(tb
 		   [QCA_WLAN_VENDOR_ATTR_SPECTRAL_SCAN_CONFIG_FREQUENCY_2]);
+
+	if (tb[QCA_WLAN_VENDOR_ATTR_SPECTRAL_SCAN_CONFIG_BANDWIDTH]) {
+		uint8_t sscan_bw_nl;
+
+		sscan_bw_nl = nla_get_u8(
+		   tb[QCA_WLAN_VENDOR_ATTR_SPECTRAL_SCAN_CONFIG_BANDWIDTH]);
+
+		/* Convert to phy_ch_width format */
+		config_req.ss_bandwidth =
+			wlan_spectral_get_phy_ch_width(sscan_bw_nl);
+	}
 
 	if (tb[QCA_WLAN_VENDOR_ATTR_SPECTRAL_SCAN_MODE]) {
 		status = convert_spectral_mode_nl_to_internal(nla_get_u32(tb
@@ -569,6 +698,7 @@ int wlan_cfg80211_spectral_scan_get_config(struct wiphy *wiphy,
 	struct spectral_cp_request sscan_req;
 	enum spectral_scan_mode sscan_mode = SPECTRAL_SCAN_MODE_NORMAL;
 	QDF_STATUS status;
+	int sscan_bw_nl;
 
 	if (wlan_cfg80211_nla_parse(
 			tb,
@@ -601,6 +731,12 @@ int wlan_cfg80211_spectral_scan_get_config(struct wiphy *wiphy,
 	sscan_req.req_id = SPECTRAL_GET_CONFIG;
 	status = ucfg_spectral_control(pdev, &sscan_req);
 	sconfig = &sscan_req.config_req.sscan_config;
+
+	/* Convert to sscan_bw to NL8021 format */
+	sscan_bw_nl = wlan_spectral_get_nl80211_chwidth(sconfig->ss_bandwidth);
+	if (sscan_bw_nl == -EINVAL)
+		goto fail;
+
 	if (nla_put_u32(skb,
 			QCA_WLAN_VENDOR_ATTR_SPECTRAL_SCAN_CONFIG_SCAN_COUNT,
 			sconfig->ss_count) ||
@@ -667,7 +803,10 @@ int wlan_cfg80211_spectral_scan_get_config(struct wiphy *wiphy,
 			sconfig->ss_frequency.cfreq1) ||
 	    nla_put_u32(skb,
 			QCA_WLAN_VENDOR_ATTR_SPECTRAL_SCAN_CONFIG_FREQUENCY_2,
-			sconfig->ss_frequency.cfreq2))
+			sconfig->ss_frequency.cfreq2) ||
+	    nla_put_u8(skb,
+		       QCA_WLAN_VENDOR_ATTR_SPECTRAL_SCAN_CONFIG_BANDWIDTH,
+		       sscan_bw_nl))
 
 		goto fail;
 
@@ -799,6 +938,16 @@ int wlan_cfg80211_spectral_scan_get_cap(struct wiphy *wiphy,
 		if (ret)
 			goto fail;
 	}
+	if (scaps->agile_spectral_cap_320) {
+		int ret;
+
+		ret = nla_put_flag
+		  (skb,
+		   QCA_WLAN_VENDOR_ATTR_SPECTRAL_SCAN_CAP_AGILE_SPECTRAL_320);
+		if (ret)
+			goto fail;
+	}
+
 
 	if (nla_put_u32(
 		skb,
@@ -828,6 +977,12 @@ int wlan_cfg80211_spectral_scan_get_cap(struct wiphy *wiphy,
 		skb,
 		QCA_WLAN_VENDOR_ATTR_SPECTRAL_SCAN_CAP_NUM_DETECTORS_80P80_MHZ,
 		scaps->num_detectors_80p80mhz))
+		goto fail;
+
+	if (nla_put_u32(
+		skb,
+		QCA_WLAN_VENDOR_ATTR_SPECTRAL_SCAN_CAP_NUM_DETECTORS_320_MHZ,
+		scaps->num_detectors_320mhz))
 		goto fail;
 
 	wlan_cfg80211_qal_devcfg_send_response((qdf_nbuf_t)skb);
@@ -909,7 +1064,7 @@ int wlan_cfg80211_spectral_scan_get_status(struct wiphy *wiphy,
 			QCA_WLAN_VENDOR_ATTR_SPECTRAL_SCAN_STATUS_MAX,
 			data,
 			data_len,
-			NULL)) {
+			spectral_scan_get_status_policy)) {
 		osif_err("Invalid Spectral Scan config ATTR");
 		return -EINVAL;
 	}

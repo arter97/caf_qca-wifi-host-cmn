@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012-2020 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012-2021 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -32,7 +32,11 @@
 #include "wlan_cfg80211.h"
 #include "wlan_objmgr_psoc_obj.h"
 #ifdef CNSS_GENL
+#ifdef CONFIG_CNSS_OUT_OF_TREE
+#include "cnss_nl.h"
+#else
 #include <net/cnss_nl.h>
+#endif
 #include "linux/genetlink.h"
 #include "wifi_pos_utils_pub.h"
 #endif
@@ -726,6 +730,12 @@ static int  wifi_pos_parse_ani_req(const void *data, int len, int pid,
 	if (!field_info->count) {
 		osif_debug("field_info->count is zero, ignoring META_DATA");
 		return 0;
+	}
+
+	if ((field_info->count - 1) >
+	    ((UINT_MAX - sizeof(*field_info)) /
+	    sizeof(struct wifi_pos_field))) {
+		return OEM_ERR_INVALID_MESSAGE_LENGTH;
 	}
 
 	expected_field_info_size = sizeof(*field_info) +

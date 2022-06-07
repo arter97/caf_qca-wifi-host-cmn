@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017-2020 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2017-2021 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -129,6 +129,20 @@ void wlan_scan_cfg_set_passive_dwelltime(struct wlan_objmgr_psoc *psoc,
 void wlan_scan_cfg_get_passive_dwelltime(struct wlan_objmgr_psoc *psoc,
 					 uint32_t *dwell_time);
 
+#ifdef WLAN_POLICY_MGR_ENABLE
+/*
+ * wlan_scan_update_pno_dwell_time() - update active and passive dwell time
+ * depending on active concurrency modes
+ * @vdev: vdev object pointer
+ * @req: scan request
+ *
+ * Return: void
+ */
+void wlan_scan_update_pno_dwell_time(struct wlan_objmgr_vdev *vdev,
+				     struct pno_scan_req_params *req,
+				     struct scan_default_params *scan_def);
+#endif
+
 /**
  * wlan_scan_cfg_get_conc_active_dwelltime() - Get concurrent active dwelltime
  * @psoc: pointer to psoc object
@@ -252,6 +266,16 @@ wlan_scan_process_bcn_probe_rx_sync(struct wlan_objmgr_psoc *psoc,
  * Return: Scan aging time config
  */
 qdf_time_t wlan_scan_get_aging_time(struct wlan_objmgr_psoc *psoc);
+
+/**
+ * wlan_scan_set_aging_time  - Set the scan aging time config
+ * @psoc: psoc context
+ * @time: scan aging time
+ *
+ * Return: success or error code.
+ */
+QDF_STATUS wlan_scan_set_aging_time(struct wlan_objmgr_psoc *psoc,
+				    qdf_time_t time);
 
 /**
  * wlan_scan_purge_results() - purge the scan list

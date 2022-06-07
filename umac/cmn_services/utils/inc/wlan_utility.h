@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017-2020 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2017-2021 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -59,6 +59,19 @@ struct wlan_op_mode_peer_count {
  * @return frequency of the channel
  */
 uint32_t wlan_chan_to_freq(uint8_t chan);
+
+/**
+  * wlan_get_320_center_freq() - find center frequencies for 320Mhz channel
+  * @freq: Primary frequency
+  * @center_freq1: possible 1st center frequency
+  * @center_freq2: possible 2nd center frequency
+  *
+  * return: void
+  **/
+void
+wlan_get_320_center_freq(qdf_freq_t freq,
+			 qdf_freq_t *center_freq1,
+			 qdf_freq_t *center_freq2);
 
 /**
  * wlan_freq_to_chan() - converts frequency to channel
@@ -305,6 +318,20 @@ struct wlan_channel *wlan_vdev_get_active_channel
 				(struct wlan_objmgr_vdev *vdev);
 
 /**
+ * wlan_get_connected_vdev_by_bssid() - check/get any vdev connected on bssid
+ * @pdev: pdev object
+ * @bssid: bssid to be checked
+ * @vdev_id: vdev id
+ *
+ * This function will loop through all the vdev in psoc and find/return the
+ * vdev which is connected to bssid provided.
+ *
+ * Return: bool
+ */
+bool wlan_get_connected_vdev_by_bssid(struct wlan_objmgr_pdev *pdev,
+				      uint8_t *bssid, uint8_t *vdev_id);
+
+/**
  * wlan_util_stats_get_rssi() - API to get rssi in dbm
  * @db2dbm_enabled: If db2dbm capability is enabled
  * @bcn_snr: beacon snr
@@ -395,6 +422,9 @@ uint16_t wlan_util_get_peer_count_for_mode(struct wlan_objmgr_pdev *pdev,
  * @WLAN_MD_OBJMGR_VDEV - wlan_objmgr_vdev
  * @WLAN_MD_OBJMGR_VDEV_MLME -vdev mlme
  * @WLAN_MD_OBJMGR_VDEV_SM - wlan_sm
+ * @WLAN_MD_DP_SRNG_REO2PPE- dp_srng type PPE rx ring
+ * @WLAN_MD_DP_SRNG_PPE2TCL - dp_srng type for PPE tx ring
+ * @WLAN_MD_DP_SRNG_PPE_RELEASE - dp_srng type for PPE tx com ring
  * @WLAN_MD_MAX - Max value
  */
 enum wlan_minidump_host_data {
@@ -432,14 +462,36 @@ enum wlan_minidump_host_data {
 	WLAN_MD_OBJMGR_VDEV,
 	WLAN_MD_OBJMGR_VDEV_MLME,
 	WLAN_MD_OBJMGR_VDEV_SM,
+	WLAN_MD_DP_SRNG_REO2PPE,
+	WLAN_MD_DP_SRNG_PPE2TCL,
+	WLAN_MD_DP_SRNG_PPE_RELEASE,
 	WLAN_MD_MAX
 };
 
-void wlan_minidump_log(void *start_addr, size_t size,
-		       void *psoc,
+/**
+ * wlan_minidump_log() - Log memory address to be included in minidump
+ * @start_addr: Start address of the memory to be dumped
+ * @size: Size in bytes
+ * @psoc_obj: Psoc Object
+ * @type: Type of data structure
+ * @name: String to identify this entry
+ */
+void wlan_minidump_log(void *start_addr, const size_t size,
+		       void *psoc_obj,
 		       enum wlan_minidump_host_data type,
 		       const char *name);
 
-void wlan_minidump_remove(void *addr);
+/**
+ * wlan_minidump_remove() - Remove memory address from  minidump
+ * @start_addr: Start address of the memory previously added
+ * @size: Size in bytes
+ * @psoc_obj: Psoc Object
+ * @type: Type of data structure
+ * @name: String to identify this entry
+ */
+void wlan_minidump_remove(void *start_addr, const size_t size,
+			  void *psoc_obj,
+			  enum wlan_minidump_host_data type,
+			  const char *name);
 
 #endif /* _WLAN_UTILITY_H_ */

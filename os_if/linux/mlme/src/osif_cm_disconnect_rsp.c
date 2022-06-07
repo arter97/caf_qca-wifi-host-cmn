@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012-2015, 2020 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012-2015, 2020-2021 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -26,6 +26,7 @@
 #include "osif_cm_rsp.h"
 #include "wlan_osif_priv.h"
 #include "osif_cm_util.h"
+#include "wlan_mlo_mgr_sta.h"
 
 /**
  * osif_validate_disconnect_and_reset_src_id() - Validate disconnection
@@ -61,7 +62,7 @@ osif_validate_disconnect_and_reset_src_id(struct vdev_osif_priv *osif_priv,
 	 */
 	if (rsp->req.cm_id != osif_priv->cm_info.last_id ||
 	    rsp->req.req.source != osif_priv->cm_info.last_source) {
-		osif_debug("Ignore as cm_id(%d)/src(%d) didn't match stored cm_id(%d)/src(%d)",
+		osif_debug("Ignore as cm_id(0x%x)/src(%d) didn't match stored cm_id(0x%x)/src(%d)",
 			   rsp->req.cm_id, rsp->req.req.source,
 			   osif_priv->cm_info.last_id,
 			   osif_priv->cm_info.last_source);
@@ -78,17 +79,69 @@ rel_lock:
 
 #if defined(CFG80211_DISCONNECTED_V2) || \
 (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 2, 0))
+#ifdef WLAN_FEATURE_11BE_MLO
+#ifdef WLAN_FEATURE_11BE_MLO_ADV_FEATURE
 static void
-osif_cm_indicate_disconnect(struct net_device *dev,
+osif_cm_indicate_disconnect(struct wlan_objmgr_vdev *vdev,
+			    struct net_device *dev,
+			    enum ieee80211_reasoncode reason,
+			    bool locally_generated, const u8 *ie,
+			    size_t ie_len, gfp_t gfp)
+{
+	if (wlan_vdev_mlme_is_mlo_vdev(vdev)) {
+		if (!wlan_vdev_mlme_is_mlo_link_vdev(vdev))
+			cfg80211_disconnected(dev, reason, ie,
+					      ie_len, locally_generated, gfp);
+	} else {
+		cfg80211_disconnected(dev, reason, ie,
+				      ie_len, locally_generated, gfp);
+	}
+}
+#else /* WLAN_FEATURE_11BE_MLO_ADV_FEATURE */
+static void
+osif_cm_indicate_disconnect(struct wlan_objmgr_vdev *vdev,
+			    struct net_device *dev,
+			    enum ieee80211_reasoncode reason,
+			    bool locally_generated, const u8 *ie,
+			    size_t ie_len, gfp_t gfp)
+{
+	struct net_device *netdev = dev;
+	struct vdev_osif_priv *osif_priv = NULL;
+	struct wlan_objmgr_vdev *assoc_vdev = NULL;
+
+	if (!wlan_vdev_mlme_is_mlo_vdev(vdev)) {
+		cfg80211_disconnected(netdev, reason, ie, ie_len,
+				      locally_generated, gfp);
+		return;
+	}
+
+	if (ucfg_mlo_is_mld_disconnected(vdev)) {
+		assoc_vdev = ucfg_mlo_get_assoc_link_vdev(vdev);
+		if (!assoc_vdev)
+			return;
+		osif_priv  = wlan_vdev_get_ospriv(assoc_vdev);
+		netdev = osif_priv->wdev->netdev;
+		cfg80211_disconnected(netdev, reason,
+				      ie, ie_len,
+				      locally_generated, gfp);
+	}
+}
+#endif /* WLAN_FEATURE_11BE_MLO_ADV_FEATURE */
+#else /* WLAN_FEATURE_11BE_MLO */
+static void
+osif_cm_indicate_disconnect(struct wlan_objmgr_vdev *vdev,
+			    struct net_device *dev,
 			    enum ieee80211_reasoncode reason,
 			    bool locally_generated, const u8 *ie,
 			    size_t ie_len, gfp_t gfp)
 {
 	cfg80211_disconnected(dev, reason, ie, ie_len, locally_generated, gfp);
 }
+#endif /* WLAN_FEATURE_11BE_MLO */
 #else
 static void
-osif_cm_indicate_disconnect(struct net_device *dev,
+osif_cm_indicate_disconnect(struct wlan_objmgr_vdev *vdev,
+			    struct net_device *dev,
 			    enum ieee80211_reasoncode reason,
 			    bool locally_generated, const u8 *ie,
 			    size_t ie_len, gfp_t gfp)
@@ -102,8 +155,6 @@ osif_cm_get_disconnect_reason(struct vdev_osif_priv *osif_priv, uint16_t reason)
 {
 	enum ieee80211_reasoncode ieee80211_reason = WLAN_REASON_UNSPECIFIED;
 
-	osif_priv->cm_info.last_disconnect_reason =
-					osif_cm_mac_to_qca_reason(reason);
 	if (reason < REASON_PROP_START)
 		ieee80211_reason = reason;
 	/*
@@ -116,6 +167,27 @@ osif_cm_get_disconnect_reason(struct vdev_osif_priv *osif_priv, uint16_t reason)
 	return ieee80211_reason;
 }
 
+#ifdef CONN_MGR_ADV_FEATURE
+static inline bool
+osif_is_disconnect_locally_generated(struct wlan_cm_discon_rsp *rsp)
+{
+	if (rsp->req.req.source == CM_PEER_DISCONNECT)
+		return false;
+
+	return true;
+}
+#else
+static inline bool
+osif_is_disconnect_locally_generated(struct wlan_cm_discon_rsp *rsp)
+{
+	if (rsp->req.req.source == CM_PEER_DISCONNECT ||
+	    rsp->req.req.source == CM_SB_DISCONNECT)
+		return false;
+
+	return true;
+}
+#endif
+
 QDF_STATUS osif_disconnect_handler(struct wlan_objmgr_vdev *vdev,
 				   struct wlan_cm_discon_rsp *rsp)
 {
@@ -123,12 +195,16 @@ QDF_STATUS osif_disconnect_handler(struct wlan_objmgr_vdev *vdev,
 	struct vdev_osif_priv *osif_priv = wlan_vdev_get_ospriv(vdev);
 	bool locally_generated = true;
 	QDF_STATUS status = QDF_STATUS_SUCCESS;
+	enum qca_disconnect_reason_codes qca_reason;
 
+	qca_reason = osif_cm_mac_to_qca_reason(rsp->req.req.reason_code);
 	ieee80211_reason =
 		osif_cm_get_disconnect_reason(osif_priv,
 					      rsp->req.req.reason_code);
 
-	osif_nofl_info("%s(vdevid-%d): " QDF_MAC_ADDR_FMT " %sdisconnect " QDF_MAC_ADDR_FMT " cm_id %d source %d reason:%u %s vendor:%u %s",
+	locally_generated = osif_is_disconnect_locally_generated(rsp);
+
+	osif_nofl_info("%s(vdevid-%d): " QDF_MAC_ADDR_FMT " %sdisconnect " QDF_MAC_ADDR_FMT " cm_id 0x%x source %d reason:%u %s vendor:%u %s",
 		       osif_priv->wdev->netdev->name,
 		       rsp->req.req.vdev_id,
 		       QDF_MAC_ADDR_REF(wlan_vdev_mlme_get_macaddr(vdev)),
@@ -136,21 +212,29 @@ QDF_STATUS osif_disconnect_handler(struct wlan_objmgr_vdev *vdev,
 		       QDF_MAC_ADDR_REF(rsp->req.req.bssid.bytes),
 		       rsp->req.cm_id, rsp->req.req.source, ieee80211_reason,
 		       ucfg_cm_reason_code_to_str(rsp->req.req.reason_code),
-		       osif_priv->cm_info.last_disconnect_reason,
-		       osif_cm_qca_reason_to_str(osif_priv->cm_info.last_disconnect_reason));
+		       qca_reason,
+		       osif_cm_qca_reason_to_str(qca_reason));
+
+	/* Unlink bss if disconnect is from peer or south bound */
+	if (rsp->req.req.source == CM_PEER_DISCONNECT ||
+	    rsp->req.req.source == CM_SB_DISCONNECT)
+		osif_cm_unlink_bss(vdev, osif_priv, &rsp->req.req.bssid,
+				   NULL, 0);
 
 	status = osif_validate_disconnect_and_reset_src_id(osif_priv, rsp);
-	if (QDF_IS_STATUS_ERROR(status))
+	if (QDF_IS_STATUS_ERROR(status)) {
+		osif_cm_disconnect_comp_ind(vdev, rsp, OSIF_NOT_HANDLED);
 		return status;
+	}
 
-	if (rsp->req.req.source == CM_PEER_DISCONNECT)
-		locally_generated = false;
-
-	osif_cm_indicate_disconnect(osif_priv->wdev->netdev, ieee80211_reason,
+	osif_cm_disconnect_comp_ind(vdev, rsp, OSIF_PRE_USERSPACE_UPDATE);
+	osif_cm_indicate_disconnect(vdev, osif_priv->wdev->netdev,
+				    ieee80211_reason,
 				    locally_generated, rsp->ap_discon_ie.ptr,
-				    rsp->ap_discon_ie.len, GFP_KERNEL);
+				    rsp->ap_discon_ie.len,
+				    qdf_mem_malloc_flags());
 
-	qdf_event_set(&osif_priv->cm_info.disconnect_complete);
+	osif_cm_disconnect_comp_ind(vdev, rsp, OSIF_POST_USERSPACE_UPDATE);
 
 	return status;
 }
