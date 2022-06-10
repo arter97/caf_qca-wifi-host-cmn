@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2019-2021, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -333,6 +334,7 @@ static inline void wmi_enh_cfr_attach_tlv(wmi_unified_t wmi_handle)
 }
 #endif
 
+#ifdef WLAN_ENH_CFR_ENABLE
 void wmi_cfr_attach_tlv(wmi_unified_t wmi_handle)
 {
 	struct wmi_ops *ops = wmi_handle->ops;
@@ -343,4 +345,14 @@ void wmi_cfr_attach_tlv(wmi_unified_t wmi_handle)
 	ops->extract_cfr_phase_param = extract_cfr_phase_param_tlv;
 	wmi_enh_cfr_attach_tlv(wmi_handle);
 }
+#else
+void wmi_cfr_attach_tlv(wmi_unified_t wmi_handle)
+{
+	struct wmi_ops *ops = wmi_handle->ops;
+
+	ops->send_peer_cfr_capture_cmd = send_peer_cfr_capture_cmd_tlv;
+	ops->extract_cfr_peer_tx_event_param =
+		extract_cfr_peer_tx_event_param_tlv;
+}
+#endif
 #endif /* WLAN_CFR_ENABLE */
