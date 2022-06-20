@@ -569,7 +569,7 @@ bool dp_tx_desc_set_ktimestamp(struct dp_vdev *vdev,
 			       struct dp_tx_desc_s *tx_desc)
 {
 	if (qdf_unlikely(vdev->pdev->delay_stats_flag) ||
-	    qdf_unlikely(vdev->pdev->soc->wlan_cfg_ctx->pext_stats_enabled))
+	    qdf_unlikely(vdev->pdev->soc->wlan_cfg_ctx->pext_stats_enabled)) {
 		tx_desc->timestamp = qdf_ktime_real_get();
 		return true;
 	}
