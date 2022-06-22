@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2017-2021 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -132,7 +133,7 @@ static void scm_add_rnr_channel_db(struct wlan_objmgr_psoc *psoc,
 			continue;
 		chan_freq = wlan_reg_chan_opclass_to_freq(rnr_bss->channel_number,
 							  rnr_bss->operating_class,
-							  false);
+							  true);
 		channel = scm_get_chan_meta(psoc, chan_freq);
 		if (!channel) {
 			scm_debug("Failed to get chan Meta freq %d", chan_freq);
@@ -930,6 +931,8 @@ static bool scm_is_bss_allowed_for_country(struct wlan_objmgr_psoc *psoc,
 
 	if (wlan_reg_is_6ghz_chan_freq(scan_entry->channel.chan_freq)) {
 		cc_ie = util_scan_entry_country(scan_entry);
+		if (!cc_ie)
+			return false;
 		wlan_reg_read_current_country(psoc, programmed_country);
 		if (cc_ie && qdf_mem_cmp(cc_ie->cc, programmed_country,
 					 REG_ALPHA2_LEN)) {
@@ -1044,8 +1047,10 @@ QDF_STATUS __scm_handle_bcn_probe(struct scan_bcn_probe_event *bcn)
 		}
 		/* Do not add invalid channel entry as kernel will reject it */
 		if (scan_obj->drop_bcn_on_invalid_freq &&
-		    wlan_reg_is_disable_for_freq(pdev,
-					scan_entry->channel.chan_freq)) {
+		    wlan_reg_is_disable_for_pwrmode(
+					pdev,
+					scan_entry->channel.chan_freq,
+					REG_CURRENT_PWR_MODE)) {
 			scm_nofl_debug("Drop frame for invalid freq %d: "QDF_MAC_ADDR_FMT" Seq Num: %d RSSI %d",
 				       scan_entry->channel.chan_freq,
 				       QDF_MAC_ADDR_REF(scan_entry->bssid.bytes),
@@ -1118,7 +1123,13 @@ QDF_STATUS __scm_handle_bcn_probe(struct scan_bcn_probe_event *bcn)
 		if (scan_obj->cb.update_beacon)
 			scan_obj->cb.update_beacon(pdev, scan_entry);
 
-		if (!scm_is_bss_allowed_for_country(psoc, scan_entry)) {
+		/**
+		 * Do not drop the frame if Wi-Fi safe mode or RF test mode is
+		 * enabled. wlan_cm_get_check_6ghz_security API returns true if
+		 * neither Safe mode nor RF test mode are enabled.
+		 */
+		if (!scm_is_bss_allowed_for_country(psoc, scan_entry) &&
+		    wlan_cm_get_check_6ghz_security(psoc)) {
 			scm_info_rl(
 				"Drop frame from "QDF_MAC_ADDR_FMT
 				": AP in VLP mode not supported for US",

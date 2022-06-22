@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -30,26 +31,28 @@
 struct mgmt_txrx_priv_pdev_context;
 
 /**
- * TODO: Dummy function to get the MLO link ID from the pdev.
- * This is added only as a place holder for the time being.
- * Remove this once this API is implemented in MLO manager.
+ * wlan_get_mlo_link_id_from_pdev() - Helper API to get the MLO HW link id
+ * from the pdev object.
+ * @pdev: Pointer to pdev object
+ *
+ * Return: On success returns the MLO HW link id corresponding to the pdev
+ * object. On failure returns -1.
  */
-static inline uint8_t
-wlan_get_mlo_link_id_from_pdev(struct wlan_objmgr_pdev *pdev)
-{
-	return 0;
-}
+int8_t
+wlan_get_mlo_link_id_from_pdev(struct wlan_objmgr_pdev *pdev);
 
 /**
- * TODO: Dummy function to get pdev handle from MLO link ID.
- * This is added only as a place holder for the time being.
- * Remove this once this API is implemented in MLO manager.
+ * wlan_get_pdev_from_mlo_link_id() - Helper API to get the pdev
+ * object from the link id.
+ * @mlo_link_id: MLO HW link id
+ * @refdbgid: Reference debug id
+ *
+ * Return: On success returns the pdev object from the link_id.
+ * On failure returns NULL.
  */
-static inline struct wlan_objmgr_pdev *
-wlan_get_pdev_from_mlo_link_id(uint8_t mlo_link_id)
-{
-	return NULL;
-}
+struct wlan_objmgr_pdev *
+wlan_get_pdev_from_mlo_link_id(uint8_t mlo_link_id,
+			       wlan_objmgr_ref_dbgid refdbgid);
 
 #ifdef WLAN_MGMT_RX_REO_SUPPORT
 
@@ -66,6 +69,19 @@ wlan_get_pdev_from_mlo_link_id(uint8_t mlo_link_id)
 #define mgmt_rx_reo_debug(params...) \
 	QDF_TRACE_DEBUG(QDF_MODULE_ID_MGMT_RX_REO, params)
 
+#define mgmt_rx_reo_alert_no_fl(params...) \
+	QDF_TRACE_FATAL_NO_FL(QDF_MODULE_ID_MGMT_RX_REO, params)
+#define mgmt_rx_reo_err_no_fl(params...) \
+	QDF_TRACE_ERROR_NO_FL(QDF_MODULE_ID_MGMT_RX_REO, params)
+#define mgmt_rx_reo_warn_no_fl(params...) \
+	QDF_TRACE_WARN_NO_FL(QDF_MODULE_ID_MGMT_RX_REO, params)
+#define mgmt_rx_reo_notice_no_fl(params...) \
+	QDF_TRACE_INFO_NO_FL(QDF_MODULE_ID_MGMT_RX_REO, params)
+#define mgmt_rx_reo_info_no_fl(params...) \
+	QDF_TRACE_INFO_NO_FL(QDF_MODULE_ID_MGMT_RX_REO, params)
+#define mgmt_rx_reo_debug_no_fl(params...) \
+	QDF_TRACE_DEBUG_NO_FL(QDF_MODULE_ID_MGMT_RX_REO, params)
+
 #define mgmt_rx_reo_alert_rl(params...) \
 	QDF_TRACE_FATAL_RL(QDF_MODULE_ID_MGMT_RX_REO, params)
 #define mgmt_rx_reo_err_rl(params...) \
@@ -78,6 +94,98 @@ wlan_get_pdev_from_mlo_link_id(uint8_t mlo_link_id)
 	QDF_TRACE_INFO_RL(QDF_MODULE_ID_MGMT_RX_REO, params)
 #define mgmt_rx_reo_debug_rl(params...) \
 	QDF_TRACE_DEBUG_RL(QDF_MODULE_ID_MGMT_RX_REO, params)
+
+#ifdef WLAN_MGMT_RX_REO_SIM_SUPPORT
+/**
+ * wlan_mgmt_rx_reo_sim_start() - Helper API to start management Rx reorder
+ * simulation
+ *
+ * This API starts the simulation framework which mimics the management frame
+ * generation by target. MAC HW is modelled as a kthread. FW and host layers
+ * are modelled as an ordered work queues.
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS
+wlan_mgmt_rx_reo_sim_start(void);
+
+/**
+ * wlan_mgmt_rx_reo_sim_stop() - Helper API to stop management Rx reorder
+ * simulation
+ *
+ * This API stops the simulation framework which mimics the management frame
+ * generation by target. MAC HW is modelled as a kthread. FW and host layers
+ * are modelled as an ordered work queues.
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS
+wlan_mgmt_rx_reo_sim_stop(void);
+#else
+/**
+ * wlan_mgmt_rx_reo_sim_start() - Helper API to start management Rx reorder
+ * simulation
+ *
+ * Error print is added to indicate that simulation framework is not compiled.
+ *
+ * Return: QDF_STATUS_E_INVAL
+ */
+static inline QDF_STATUS
+wlan_mgmt_rx_reo_sim_start(void)
+{
+	mgmt_txrx_err("Mgmt rx reo simulation is not compiled");
+
+	return QDF_STATUS_E_INVAL;
+}
+
+/**
+ * wlan_mgmt_rx_reo_sim_stop() - Helper API to stop management Rx reorder
+ * simulation
+ *
+ * Error print is added to indicate that simulation framework is not compiled.
+ *
+ * Return: QDF_STATUS_E_INVAL
+ */
+static inline QDF_STATUS
+wlan_mgmt_rx_reo_sim_stop(void)
+{
+	mgmt_txrx_err("Mgmt rx reo simulation is not compiled");
+
+	return QDF_STATUS_E_INVAL;
+}
+#endif /* WLAN_MGMT_RX_REO_SIM_SUPPORT */
+
+/**
+ * wlan_mgmt_rx_reo_get_snapshot_address() - Get snapshot address
+ * @pdev: pointer to pdev
+ * @id: snapshot identifier
+ * @address: pointer to snapshot address
+ *
+ * Helper API to get address of snapshot @id for pdev @pdev.
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS
+wlan_mgmt_rx_reo_get_snapshot_address(
+			struct wlan_objmgr_pdev *pdev,
+			enum mgmt_rx_reo_shared_snapshot_id id,
+			struct mgmt_rx_reo_snapshot **address);
+
+/**
+ * wlan_mgmt_txrx_process_rx_frame() - API to process the incoming management
+ * frame
+ * @pdev: pointer to pdev
+ * @buf: pointer to buffer
+ * @mgmt_rx_params: pointer to management rx params
+ *
+ * API to process the incoming management frame.
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS wlan_mgmt_txrx_process_rx_frame(
+			struct wlan_objmgr_pdev *pdev,
+			qdf_nbuf_t buf,
+			struct mgmt_rx_event_params *mgmt_rx_params);
 
 /**
  * wlan_mgmt_rx_reo_init() - Initializes the management rx-reorder module
@@ -152,6 +260,15 @@ wlan_mgmt_rx_reo_is_feature_enabled_at_psoc(struct wlan_objmgr_psoc *psoc);
  */
 bool
 wlan_mgmt_rx_reo_is_feature_enabled_at_pdev(struct wlan_objmgr_pdev *pdev);
+
+/**
+ * wlan_mgmt_rx_reo_is_simulation_in_progress() - API to check whether
+ * simulation is in progress
+ *
+ * Return: true if simulation is in progress, else false
+ */
+bool
+wlan_mgmt_rx_reo_is_simulation_in_progress(void);
 #else
 /**
  * wlan_mgmt_rx_reo_pdev_obj_create_notification() - pdev create handler for

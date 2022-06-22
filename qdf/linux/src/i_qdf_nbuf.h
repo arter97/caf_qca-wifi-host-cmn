@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2014-2021 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -69,6 +70,7 @@ typedef struct sk_buff_head __qdf_nbuf_queue_head_t;
 #define QDF_NBUF_CB_PACKET_TYPE_DHCP   4
 #define QDF_NBUF_CB_PACKET_TYPE_ICMP   5
 #define QDF_NBUF_CB_PACKET_TYPE_ICMPv6 6
+#define QDF_NBUF_CB_PACKET_TYPE_DHCPV6 7
 
 #define RADIOTAP_BASE_HEADER_LEN sizeof(struct ieee80211_radiotap_header)
 
@@ -78,6 +80,9 @@ typedef struct sk_buff_head __qdf_nbuf_queue_head_t;
 #endif
 
 #define IEEE80211_RADIOTAP_HE_MU_OTHER 25
+
+#define IEEE80211_RADIOTAP_EXT1_USIG	1
+#define IEEE80211_RADIOTAP_EXT1_EHT	2
 
 /* mark the first packet after wow wakeup */
 #define QDF_MARK_FIRST_WAKEUP_PACKET   0x80000000
@@ -117,6 +122,7 @@ typedef union {
  * @rx.dev.priv_cb_w.ext_cb_ptr: extended cb pointer
  * @rx.dev.priv_cb_w.fctx: ctx to handle special pkts defined by ftype
  * @rx.dev.priv_cb_w.msdu_len: length of RX packet
+ * @rx.dev.priv_cb_w.ipa_smmu_map: do IPA smmu map
  * @rx.dev.priv_cb_w.peer_id: peer_id for RX packet
  * @rx.dev.priv_cb_w.flag_intra_bss: flag to indicate this is intra bss packet
  * @rx.dev.priv_cb_w.protocol_tag: protocol tag set by app for rcvd packet type
@@ -128,7 +134,8 @@ typedef union {
  * @rx.dev.priv_cb_m.l3_hdr_pad: L3 header padding offset
  * @rx.dev.priv_cb_m.exc_frm: exception frame
  * @rx.dev.priv_cb_m.ipa_smmu_map: do IPA smmu map
- * @rx.dev.priv_cb_m.reo_dest_ind: reo destination indication
+ * @rx.dev.priv_cb_m.reo_dest_ind_or_sw_excpt: reo destination indication or
+					     sw execption bit from ring desc
  * @rx.dev.priv_cb_m.tcp_seq_num: TCP sequence number
  * @rx.dev.priv_cb_m.tcp_ack_num: TCP ACK number
  * @rx.dev.priv_cb_m.lro_ctx: LRO context
@@ -201,7 +208,7 @@ typedef union {
  * @tx.flags.bits.flag_chfrag_cont: middle or part of MSDU in an AMSDU
  * @tx.flags.bits.flag_chfrag_end: last MSDU in an AMSDU
  * @tx.flags.bits.flag_ext_header: extended flags
- * @tx.flags.bits.reserved: reserved
+ * @tx.flags.bits.is_critical: flag indicating a critical frame
  * @tx.trace: combined structure for DP and protocol trace
  * @tx.trace.packet_stat: {NBUF_TX_PKT_[(HDD)|(TXRX_ENQUEUE)|(TXRX_DEQUEUE)|
  *                       +          (TXRX)|(HTT)|(HTC)|(HIF)|(CE)|(FREE)]
@@ -233,7 +240,7 @@ struct qdf_nbuf_cb {
 					void *fctx;
 					uint16_t msdu_len : 14,
 						 flag_intra_bss : 1,
-						 reserved : 1;
+						 ipa_smmu_map : 1;
 					uint16_t peer_id;
 					uint16_t protocol_tag;
 					uint16_t flow_tag;
@@ -251,7 +258,7 @@ struct qdf_nbuf_cb {
 						 /* exception frame flag */
 						 exc_frm:1,
 						 ipa_smmu_map:1,
-						 reo_dest_ind:5,
+						 reo_dest_ind_or_sw_excpt:5,
 						 reserved:2,
 						 reserved1:16;
 					uint32_t tcp_seq_num;
@@ -340,7 +347,7 @@ struct qdf_nbuf_cb {
 						flag_chfrag_cont:1,
 						flag_chfrag_end:1,
 						flag_ext_header:1,
-						reserved:1;
+						is_critical:1;
 				} bits;
 				uint8_t u8;
 			} flags;
@@ -500,6 +507,9 @@ QDF_COMPILE_TIME_ASSERT(qdf_nbuf_cb_size,
 		((skb)->cb))->u.tx.flags.bits.flag_ext_header)
 #define QDF_NBUF_CB_TX_EXTRA_FRAG_WORDSTR_FLAGS(skb) \
 	(((struct qdf_nbuf_cb *)((skb)->cb))->u.tx.flags.u8)
+
+#define QDF_NBUF_CB_TX_EXTRA_IS_CRITICAL(skb) \
+	(((struct qdf_nbuf_cb *)((skb)->cb))->u.tx.flags.bits.is_critical)
 /* End of Tx Flags Accessor Macros */
 
 /* Tx trace accessor macros */
@@ -781,6 +791,8 @@ __qdf_nbuf_t
 __qdf_nbuf_alloc(__qdf_device_t osdev, size_t size, int reserve, int align,
 		 int prio, const char *func, uint32_t line);
 
+__qdf_nbuf_t __qdf_nbuf_alloc_simple(__qdf_device_t osdev, size_t size);
+
 /**
  * __qdf_nbuf_alloc_no_recycler() - Allocates skb
  * @size: Size to be allocated for skb
@@ -858,6 +870,8 @@ bool __qdf_nbuf_data_is_ipv4_dhcp_pkt(uint8_t *data);
 bool __qdf_nbuf_data_is_ipv6_dhcp_pkt(uint8_t *data);
 bool __qdf_nbuf_data_is_ipv6_mdns_pkt(uint8_t *data);
 bool __qdf_nbuf_data_is_ipv4_eapol_pkt(uint8_t *data);
+bool __qdf_nbuf_data_is_ipv4_igmp_pkt(uint8_t *data);
+bool __qdf_nbuf_data_is_ipv6_igmp_pkt(uint8_t *data);
 bool __qdf_nbuf_data_is_ipv4_arp_pkt(uint8_t *data);
 bool __qdf_nbuf_is_bcast_pkt(__qdf_nbuf_t nbuf);
 bool __qdf_nbuf_data_is_arp_req(uint8_t *data);
@@ -1979,6 +1993,38 @@ __qdf_nbuf_copy_expand(struct sk_buff *buf, int headroom, int tailroom)
 }
 
 /**
+ * __qdf_nbuf_has_fraglist() - check buf has fraglist
+ * @buf: Network buf instance
+ *
+ * Return: True, if buf has frag_list else return False
+ */
+static inline bool
+__qdf_nbuf_has_fraglist(struct sk_buff *buf)
+{
+	return skb_has_frag_list(buf);
+}
+
+/**
+ * __qdf_nbuf_get_last_frag_list_nbuf() - Get last frag_list nbuf
+ * @buf: Network buf instance
+ *
+ * Return: Network buf instance
+ */
+static inline struct sk_buff *
+__qdf_nbuf_get_last_frag_list_nbuf(struct sk_buff *buf)
+{
+	struct sk_buff *list;
+
+	if (!__qdf_nbuf_has_fraglist(buf))
+		return NULL;
+
+	for (list = skb_shinfo(buf)->frag_list; list->next; list = list->next)
+		;
+
+	return list;
+}
+
+/**
  * __qdf_nbuf_get_ref_fraglist() - get reference to fragments
  * @buf: Network buf instance
  *
@@ -2272,6 +2318,18 @@ static inline unsigned int __qdf_nbuf_get_end_offset(__qdf_nbuf_t nbuf)
 	return skb_end_offset(nbuf);
 }
 
+/**
+ * __qdf_nbuf_get_truesize() - Return the true size of the nbuf
+ * including the header and variable data area
+ * @skb: sk buff
+ *
+ * Return: size of network buffer
+ */
+static inline unsigned int __qdf_nbuf_get_truesize(struct sk_buff *skb)
+{
+	return skb->truesize;
+}
+
 #ifdef CONFIG_WLAN_SYSFS_MEM_STATS
 /**
  * __qdf_record_nbuf_nbytes() - add or subtract the size of the nbuf
@@ -2522,6 +2580,13 @@ QDF_STATUS __qdf_nbuf_move_frag_page_offset(__qdf_nbuf_t nbuf, uint8_t idx,
 void __qdf_nbuf_add_rx_frag(__qdf_frag_t buf, __qdf_nbuf_t nbuf,
 			    int offset, int frag_len,
 			    unsigned int truesize, bool take_frag_ref);
+
+/**
+ * __qdf_nbuf_ref_frag() - get frag reference
+ *
+ * Return: void
+ */
+void __qdf_nbuf_ref_frag(qdf_frag_t buf);
 
 /**
  * __qdf_nbuf_set_mark() - Set nbuf mark

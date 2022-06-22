@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2014-2021 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2021 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -35,8 +36,12 @@
 #include <linux/string.h>
 #include <qdf_list.h>
 
-#if IS_ENABLED(CONFIG_WCNSS_MEM_PRE_ALLOC)
+#ifdef CNSS_MEM_PRE_ALLOC
+#ifdef CONFIG_CNSS_OUT_OF_TREE
+#include "cnss_prealloc.h"
+#else
 #include <net/cnss_prealloc.h>
+#endif
 #endif
 
 #if defined(MEMORY_DEBUG) || defined(NBUF_MEMORY_DEBUG)
@@ -1380,7 +1385,7 @@ void __qdf_mempool_free(qdf_device_t osdev, __qdf_mempool_t pool, void *buf)
 }
 qdf_export_symbol(__qdf_mempool_free);
 
-#if IS_ENABLED(CONFIG_WCNSS_MEM_PRE_ALLOC)
+#ifdef CNSS_MEM_PRE_ALLOC
 static bool qdf_might_be_prealloc(void *ptr)
 {
 	if (ksize(ptr) > WCNSS_PRE_ALLOC_GET_THRESHOLD)
@@ -1434,7 +1439,7 @@ static inline bool qdf_mem_prealloc_put(void *ptr)
 {
 	return false;
 }
-#endif /* CONFIG_WCNSS_MEM_PRE_ALLOC */
+#endif /* CNSS_MEM_PRE_ALLOC */
 
 /* External Function implementation */
 #ifdef MEMORY_DEBUG
@@ -1616,6 +1621,87 @@ void *qdf_mem_malloc_debug(size_t size, const char *func, uint32_t line,
 	return ptr;
 }
 qdf_export_symbol(qdf_mem_malloc_debug);
+
+void *qdf_mem_malloc_atomic_debug(size_t size, const char *func,
+				  uint32_t line, void *caller)
+{
+	QDF_STATUS status;
+	enum qdf_debug_domain current_domain = qdf_debug_domain_get();
+	qdf_list_t *mem_list = qdf_mem_list_get(current_domain);
+	struct qdf_mem_header *header;
+	void *ptr;
+	unsigned long start, duration;
+
+	if (is_initial_mem_debug_disabled)
+		return qdf_mem_malloc_atomic_debug_fl(size, func, line);
+
+	if (!size || size > QDF_MEM_MAX_MALLOC) {
+		qdf_err("Cannot malloc %zu bytes @ %s:%d", size, func, line);
+		return NULL;
+	}
+
+	ptr = qdf_mem_prealloc_get(size);
+	if (ptr)
+		return ptr;
+
+	start = qdf_mc_timer_get_system_time();
+	header = kzalloc(size + QDF_MEM_DEBUG_SIZE, GFP_ATOMIC);
+	duration = qdf_mc_timer_get_system_time() - start;
+
+	if (duration > QDF_MEM_WARN_THRESHOLD)
+		qdf_warn("Malloc slept; %lums, %zuB @ %s:%d",
+			 duration, size, func, line);
+
+	if (!header) {
+		qdf_warn("Failed to malloc %zuB @ %s:%d", size, func, line);
+		return NULL;
+	}
+
+	qdf_mem_header_init(header, size, func, line, caller);
+	qdf_mem_trailer_init(header);
+	ptr = qdf_mem_get_ptr(header);
+
+	qdf_spin_lock_irqsave(&qdf_mem_list_lock);
+	status = qdf_list_insert_front(mem_list, &header->node);
+	qdf_spin_unlock_irqrestore(&qdf_mem_list_lock);
+	if (QDF_IS_STATUS_ERROR(status))
+		qdf_err("Failed to insert memory header; status %d", status);
+
+	qdf_mem_kmalloc_inc(ksize(header));
+
+	return ptr;
+}
+
+qdf_export_symbol(qdf_mem_malloc_atomic_debug);
+
+void *qdf_mem_malloc_atomic_debug_fl(size_t size, const char *func,
+				     uint32_t line)
+{
+	void *ptr;
+
+	if (!size || size > QDF_MEM_MAX_MALLOC) {
+		qdf_nofl_err("Cannot malloc %zu bytes @ %s:%d", size, func,
+			     line);
+		return NULL;
+	}
+
+	ptr = qdf_mem_prealloc_get(size);
+	if (ptr)
+		return ptr;
+
+	ptr = kzalloc(size, GFP_ATOMIC);
+	if (!ptr) {
+		qdf_nofl_warn("Failed to malloc %zuB @ %s:%d",
+			      size, func, line);
+		return NULL;
+	}
+
+	qdf_mem_kmalloc_inc(ksize(ptr));
+
+	return ptr;
+}
+
+qdf_export_symbol(qdf_mem_malloc_atomic_debug_fl);
 
 void qdf_mem_free_debug(void *ptr, const char *func, uint32_t line)
 {
@@ -2881,3 +2967,39 @@ void __qdf_mem_vfree(void *ptr)
 }
 
 qdf_export_symbol(__qdf_mem_vfree);
+
+#if IS_ENABLED(CONFIG_ARM_SMMU) && defined(ENABLE_SMMU_S1_TRANSLATION)
+int
+qdf_iommu_domain_get_attr(qdf_iommu_domain_t *domain,
+			  enum qdf_iommu_attr attr, void *data)
+{
+	return __qdf_iommu_domain_get_attr(domain, attr, data);
+}
+
+qdf_export_symbol(qdf_iommu_domain_get_attr);
+#endif
+
+#ifdef ENHANCED_OS_ABSTRACTION
+void qdf_update_mem_map_table(qdf_device_t osdev,
+			      qdf_mem_info_t *mem_info,
+			      qdf_dma_addr_t dma_addr,
+			      uint32_t mem_size)
+{
+	if (!mem_info) {
+		qdf_nofl_err("%s: NULL mem_info", __func__);
+		return;
+	}
+
+	__qdf_update_mem_map_table(osdev, mem_info, dma_addr, mem_size);
+}
+
+qdf_export_symbol(qdf_update_mem_map_table);
+
+qdf_dma_addr_t qdf_mem_paddr_from_dmaaddr(qdf_device_t osdev,
+					  qdf_dma_addr_t dma_addr)
+{
+	return __qdf_mem_paddr_from_dmaaddr(osdev, dma_addr);
+}
+
+qdf_export_symbol(qdf_mem_paddr_from_dmaaddr);
+#endif

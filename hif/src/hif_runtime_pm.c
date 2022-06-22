@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2013-2021 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -303,7 +304,6 @@ static const struct file_operations hif_pci_runtime_pm_fops = {
 	.llseek         = seq_lseek,
 };
 
-#ifdef WLAN_OPEN_SOURCE
 /**
  * hif_runtime_pm_debugfs_create() - creates runtimepm debugfs entry
  * @scn: hif context
@@ -333,13 +333,6 @@ static void hif_runtime_pm_debugfs_remove(struct hif_softc *scn)
 
 	qdf_debugfs_remove_file(rpm_ctx->pm_dentry);
 }
-#else
-static inline void hif_runtime_pm_debugfs_remove(struct hif_softc *scn)
-{}
-
-static inline void hif_runtime_pm_debugfs_create(struct hif_softc *scn)
-{}
-#endif
 
 /**
  * hif_runtime_init() - Initialize Runtime PM
@@ -1388,6 +1381,7 @@ static int __hif_pm_runtime_prevent_suspend(struct hif_softc *scn,
 		return 0;
 
 	ret = __hif_pm_runtime_get(dev);
+	hif_debug("request runtime PM resume, rtpm_dbgid %s", lock->name);
 
 	/**
 	 * The ret can be -EINPROGRESS, if Runtime status is RPM_RESUMING or

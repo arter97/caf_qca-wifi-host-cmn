@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -145,53 +146,6 @@ dp_send_ack_frame_to_stack(struct dp_soc *soc,
 }
 #endif
 
-/**
-* dp_rx_process_peer_based_pktlog() - Process Rx pktlog if peer based
-* filtering enabled
-* @soc: core txrx main context
-* @ppdu_info: Structure for rx ppdu info
-* @status_nbuf: Qdf nbuf abstraction for linux skb
-* @pdev_id: mac_id/pdev_id correspondinggly for MCL and WIN
-*
-* Return: none
-*/
-static inline void
-dp_rx_process_peer_based_pktlog(struct dp_soc *soc,
-				struct hal_rx_ppdu_info *ppdu_info,
-				qdf_nbuf_t status_nbuf, uint32_t pdev_id)
-{
-	struct dp_peer *peer;
-	struct mon_rx_user_status *rx_user_status;
-	uint32_t num_users = ppdu_info->com_info.num_users;
-	uint16_t sw_peer_id;
-
-	/* Sanity check for num_users */
-	if (!num_users)
-		return;
-
-	qdf_assert_always(num_users <= CDP_MU_MAX_USERS);
-	rx_user_status = &ppdu_info->rx_user_status[num_users - 1];
-
-	sw_peer_id = rx_user_status->sw_peer_id;
-
-	peer = dp_peer_get_ref_by_id(soc, sw_peer_id,
-				     DP_MOD_ID_RX_PPDU_STATS);
-
-	if (!peer)
-		return;
-
-	if ((peer->peer_id != HTT_INVALID_PEER) &&
-	    (peer->peer_based_pktlog_filter)) {
-		dp_wdi_event_handler(
-			WDI_EVENT_RX_DESC, soc,
-			status_nbuf,
-			peer->peer_id,
-			WDI_NO_VAL, pdev_id);
-	}
-	dp_peer_unref_delete(peer,
-			     DP_MOD_ID_RX_PPDU_STATS);
-}
-
 #if defined(HTT_UL_OFDMA_USER_INFO_V0_W0_VALID_M)
 static inline void
 dp_rx_ul_ofdma_ru_size_to_width(
@@ -287,6 +241,41 @@ dp_rx_mon_handle_mu_ul_info(struct hal_rx_ppdu_info *ppdu_info)
 }
 #endif
 
+#ifdef QCA_UNDECODED_METADATA_SUPPORT
+static inline bool
+dp_rx_mon_check_phyrx_abort(struct dp_pdev *pdev,
+			    struct hal_rx_ppdu_info *ppdu_info)
+{
+	return (pdev->monitor_pdev->undecoded_metadata_capture &&
+			ppdu_info->rx_status.phyrx_abort);
+}
+
+static inline void
+dp_rx_mon_handle_ppdu_undecoded_metadata(struct dp_soc *soc,
+					 struct dp_pdev *pdev,
+					 struct hal_rx_ppdu_info *ppdu_info)
+{
+	if (pdev->monitor_pdev->undecoded_metadata_capture)
+		dp_rx_handle_ppdu_undecoded_metadata(soc, pdev, ppdu_info);
+
+	pdev->monitor_pdev->mon_ppdu_status = DP_PPDU_STATUS_START;
+}
+#else
+static inline bool
+dp_rx_mon_check_phyrx_abort(struct dp_pdev *pdev,
+			    struct hal_rx_ppdu_info *ppdu_info)
+{
+	return false;
+}
+
+static inline void
+dp_rx_mon_handle_ppdu_undecoded_metadata(struct dp_soc *soc,
+					 struct dp_pdev *pdev,
+					 struct hal_rx_ppdu_info *ppdu_info)
+{
+}
+#endif
+
 #ifdef QCA_SUPPORT_SCAN_SPCL_VAP_STATS
 /**
  * dp_rx_mon_update_scan_spcl_vap_stats() - Update special vap stats
@@ -342,7 +331,7 @@ dp_rx_mon_update_scan_spcl_vap_stats(struct dp_pdev *pdev,
 
 /**
  * dp_rx_mon_status_process_tlv() - Process status TLV in status
- *	buffer on Rx status Queue posted by status SRNG processing.
+ * buffer on Rx status Queue posted by status SRNG processing.
  * @soc: core txrx main context
  * @int_ctx: interrupt context
  * @mac_id: mac_id which is one of 3 mac_ids _ring
@@ -397,6 +386,7 @@ dp_rx_mon_status_process_tlv(struct dp_soc *soc, struct dp_intr *int_ctx,
 
 		if ((mon_pdev->mvdev) || (mon_pdev->enhanced_stats_en) ||
 		    (mon_pdev->mcopy_mode) || (dp_cfr_rcc_mode_status(pdev)) ||
+		    (mon_pdev->undecoded_metadata_capture) ||
 		    (rx_enh_capture_mode != CDP_RX_ENH_CAPTURE_DISABLED)) {
 			do {
 				tlv_status = hal_rx_status_get_tlv_info(rx_tlv,
@@ -414,7 +404,8 @@ dp_rx_mon_status_process_tlv(struct dp_soc *soc, struct dp_intr *int_ctx,
 							      ppdu_info,
 							      tlv_status);
 
-				rx_tlv = hal_rx_status_get_next_tlv(rx_tlv);
+				rx_tlv = hal_rx_status_get_next_tlv(rx_tlv,
+						mon_pdev->is_tlv_hdr_64_bit);
 
 				if ((rx_tlv - rx_tlv_start) >=
 					RX_MON_STATUS_BUF_SIZE)
@@ -468,7 +459,8 @@ dp_rx_mon_status_process_tlv(struct dp_soc *soc, struct dp_intr *int_ctx,
 
 		if (tlv_status == HAL_TLV_STATUS_PPDU_NON_STD_DONE) {
 			dp_rx_mon_deliver_non_std(soc, mac_id);
-		} else if (tlv_status == HAL_TLV_STATUS_PPDU_DONE) {
+		} else if ((tlv_status == HAL_TLV_STATUS_PPDU_DONE) &&
+				(!dp_rx_mon_check_phyrx_abort(pdev, ppdu_info))) {
 			rx_mon_stats->status_ppdu_done++;
 			dp_rx_mon_handle_mu_ul_info(ppdu_info);
 
@@ -512,6 +504,9 @@ dp_rx_mon_status_process_tlv(struct dp_soc *soc, struct dp_intr *int_ctx,
 						       quota);
 
 			mon_pdev->mon_ppdu_status = DP_PPDU_STATUS_START;
+		} else {
+			dp_rx_mon_handle_ppdu_undecoded_metadata(soc, pdev,
+								 ppdu_info);
 		}
 	}
 	return;
@@ -599,6 +594,13 @@ dp_rx_mon_status_srng_process(struct dp_soc *soc, struct dp_intr *int_ctx,
 						hbi.sw_cookie);
 
 			qdf_assert_always(rx_desc);
+
+			if (qdf_unlikely(!dp_rx_desc_paddr_sanity_check(rx_desc,
+								buf_addr))) {
+				DP_STATS_INC(soc, rx.err.nbuf_sanity_fail, 1);
+				hal_srng_src_get_next(hal_soc, mon_status_srng);
+				continue;
+			}
 
 			status_nbuf = rx_desc->nbuf;
 
@@ -1202,7 +1204,8 @@ uint32_t dp_mon_drop_packets_for_mac(struct dp_pdev *pdev, uint32_t mac_id,
 	uint32_t work_done;
 
 	work_done = dp_mon_status_srng_drop_for_mac(pdev, mac_id, quota);
-	dp_mon_dest_srng_drop_for_mac(pdev, mac_id);
+	if (!dp_is_rxdma_dst_ring_common(pdev))
+		dp_mon_dest_srng_drop_for_mac(pdev, mac_id);
 
 	return work_done;
 }
