@@ -754,6 +754,15 @@ wlan_reg_get_6g_afc_mas_chan_list(struct wlan_objmgr_pdev *pdev,
 bool wlan_reg_is_afc_power_event_received(struct wlan_objmgr_pdev *pdev);
 
 /**
+ * wlan_reg_is_afc_done() - Check if AFC response enables the given frequency.
+ * @pdev: pdev ptr
+ * @freq: given frequency.
+ *
+ * Return: True if frequency is enabled, false otherwise.
+ */
+bool wlan_reg_is_afc_done(struct wlan_objmgr_pdev *pdev, qdf_freq_t freq);
+
+/**
  * wlan_reg_get_afc_req_id() - Get the AFC request ID
  * @pdev: pdev pointer
  * @req_id: Pointer to request id
@@ -798,6 +807,12 @@ wlan_reg_get_afc_dev_deploy_type(struct wlan_objmgr_pdev *pdev,
 #else
 static inline bool
 wlan_reg_is_afc_power_event_received(struct wlan_objmgr_pdev *pdev)
+{
+	return false;
+}
+
+static inline bool
+wlan_reg_is_afc_done(struct wlan_objmgr_pdev *pdev, qdf_freq_t freq)
 {
 	return false;
 }
@@ -1101,6 +1116,14 @@ bool wlan_reg_is_us(uint8_t *country);
  */
 bool wlan_reg_is_etsi(uint8_t *country);
 
+
+/**
+ * wlan_reg_ctry_support_vlp() - Country supports VLP or not
+ * @country: The country information
+ *
+ * Return: true or false
+ */
+bool wlan_reg_ctry_support_vlp(uint8_t *country);
 
 /**
  * wlan_reg_set_country() - Set the current regulatory country

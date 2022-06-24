@@ -1043,6 +1043,20 @@ struct cdp_tid_stats {
 };
 
 /*
+ * struct cdp_tid_stats_intf
+ * @ingress_stack: Total packets received from linux stack
+ * @osif_drop: drops in osif layer
+ * @tx_total: total of per ring transmit counters per tid
+ * @rx_total: total of per ring receive counters per tid
+ */
+struct cdp_tid_stats_intf {
+	uint64_t ingress_stack;
+	uint64_t osif_drop;
+	struct cdp_tid_tx_stats tx_total[CDP_MAX_DATA_TIDS];
+	struct cdp_tid_rx_stats rx_total[CDP_MAX_DATA_TIDS];
+};
+
+/*
  * struct cdp_delay_tx_stats: Tx delay stats
  * @tx_swq_delay: software enqueue delay
  * @hwtx_delay: HW enque to completion delay
@@ -1366,6 +1380,8 @@ struct protocol_trace_count {
  * @su_be_ppdu_cnt: SU Tx packet count
  * @mu_be_ppdu_cnt: MU Tx packet count
  * @punc_bw[MAX_PUNCTURED_MODE]: MSDU count for punctured BW
+ * @release_src_not_tqm: Counter to keep track of release source is not TQM
+ *			 in TX completion status processing
  */
 struct cdp_tx_stats {
 	struct cdp_pkt_info comp_pkt;
@@ -1483,6 +1499,7 @@ struct cdp_tx_stats {
 	struct cdp_pkt_type mu_be_ppdu_cnt[TXRX_TYPE_MU_MAX];
 	uint32_t punc_bw[MAX_PUNCTURED_MODE];
 #endif
+	uint32_t release_src_not_tqm;
 };
 
 /* struct cdp_rx_stats - rx Level Stats

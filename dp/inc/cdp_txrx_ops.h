@@ -440,6 +440,10 @@ struct cdp_cmn_ops {
 	int (*delba_process)(struct cdp_soc_t *cdp_soc, uint8_t *peer_mac,
 			     uint16_t vdev_id, int tid, uint16_t reasoncode);
 
+	QDF_STATUS (*tid_update_ba_win_size)(ol_txrx_soc_handle soc,
+					     uint8_t *peer_mac,
+					     uint16_t vdev_id, uint8_t tid,
+					     uint16_t buffersize);
 	/**
 	 * delba_tx_completion() - Indicate delba tx status
 	 * @cdp_soc: soc handle
@@ -578,6 +582,13 @@ struct cdp_cmn_ops {
 	QDF_STATUS (*set_vdev_pcp_tid_map)(struct cdp_soc_t *soc,
 					   uint8_t vdev_id,
 					   uint8_t pcp, uint8_t tid);
+#ifdef DP_RX_UDP_OVER_PEER_ROAM
+	QDF_STATUS (*txrx_update_roaming_peer)(struct cdp_soc_t *soc,
+					       uint8_t vdev_id,
+					       uint8_t *peer_mac,
+					       uint32_t auth_status);
+#endif
+
 #ifdef QCA_MULTIPASS_SUPPORT
 	QDF_STATUS (*set_vlan_groupkey)(struct cdp_soc_t *soc, uint8_t vdev_id,
 					uint16_t vlan_id, uint16_t group_key);
@@ -587,10 +598,10 @@ struct cdp_cmn_ops {
 		 (ol_txrx_soc_handle soc, uint8_t vdev_id,
 		  u_int8_t newmac[][QDF_MAC_ADDR_SIZE], uint16_t mac_cnt,
 		  bool limit);
+	uint16_t (*get_peer_id)(ol_txrx_soc_handle soc,
+				uint8_t vdev_id,
+				uint8_t *mac);
 #ifdef QCA_SUPPORT_WDS_EXTENDED
-	uint16_t (*get_wds_ext_peer_id)(ol_txrx_soc_handle soc,
-					uint8_t vdev_id,
-					uint8_t *mac);
 	QDF_STATUS (*set_wds_ext_peer_rx)(ol_txrx_soc_handle soc,
 					  uint8_t vdev_id,
 					  uint8_t *mac,
@@ -857,7 +868,7 @@ struct cdp_ctrl_ops {
 
 #endif
 
-#if defined(WLAN_FEATURE_TSF_UPLINK_DELAY) || defined(CONFIG_SAWF)
+#if defined(WLAN_FEATURE_TSF_UPLINK_DELAY) || defined(QCA_PEER_EXT_STATS)
 	void (*txrx_set_delta_tsf)(struct cdp_soc_t *soc, uint8_t vdev_id,
 				   uint32_t delta_tsf);
 #endif
@@ -1142,6 +1153,9 @@ struct cdp_host_stats_ops {
 	uint8_t (*is_tx_delay_stats_enabled)(struct cdp_soc_t *soc_hdl,
 					     uint8_t vdev_id);
 #endif
+	QDF_STATUS
+	(*txrx_get_pdev_tid_stats)(struct cdp_soc_t *soc, uint8_t pdev_id,
+				   struct cdp_tid_stats_intf *tid_stats);
 };
 
 struct cdp_wds_ops {
@@ -1995,6 +2009,16 @@ struct cdp_sawf_ops {
 	(*txrx_get_peer_sawf_tx_stats)(struct cdp_soc_t *soc,
 				       uint32_t svc_id, uint8_t *mac,
 				       void *data);
+	QDF_STATUS
+	(*sawf_mpdu_stats_req)(struct cdp_soc_t *soc, uint8_t enable);
+	QDF_STATUS
+	(*sawf_mpdu_details_stats_req)(struct cdp_soc_t *soc, uint8_t enable);
+	QDF_STATUS
+	(*txrx_sawf_set_mov_avg_params)(uint32_t num_pkt, uint32_t num_win);
+	QDF_STATUS
+	(*txrx_sawf_set_sla_params)(uint32_t num_pkt, uint32_t time_secs);
+	QDF_STATUS
+	(*txrx_sawf_init_telemtery_params)(void);
 #endif
 };
 #endif

@@ -815,11 +815,11 @@ struct hal_tx_status_info {
 	uint32_t offset;
 	uint32_t length;
 
+	uint8_t protection_addr;
 	uint8_t addr1[QDF_MAC_ADDR_SIZE];
 	uint8_t addr2[QDF_MAC_ADDR_SIZE];
 	uint8_t addr3[QDF_MAC_ADDR_SIZE];
 	uint8_t addr4[QDF_MAC_ADDR_SIZE];
-
 };
 
 struct hal_tx_ppdu_info {
@@ -1774,6 +1774,7 @@ hal_rx_status_get_mon_buf_addr(uint8_t *rx_tlv,
 					    (addr->buffer_virt_addr_31_0));
 	ppdu_info->packet_info.dma_length = addr->dma_length;
 	ppdu_info->packet_info.msdu_continuation = addr->msdu_continuation;
+	ppdu_info->packet_info.truncated = addr->truncated;
 
 }
 #else

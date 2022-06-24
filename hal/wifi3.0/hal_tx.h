@@ -140,7 +140,11 @@ do {                                            \
  * (Exception frames and TQM bypass frames)
  */
 #define HAL_TX_COMP_HTT_STATUS_OFFSET 8
+#ifdef CONFIG_BERYLLIUM
+#define HAL_TX_COMP_HTT_STATUS_LEN 20
+#else
 #define HAL_TX_COMP_HTT_STATUS_LEN 16
+#endif
 
 #define HAL_TX_BUF_TYPE_BUFFER 0
 #define HAL_TX_BUF_TYPE_EXT_DESC 1
@@ -229,7 +233,7 @@ struct hal_tx_completion_status {
 	uint8_t transmit_cnt;
 	uint8_t tid;
 	uint16_t peer_id;
-#if defined(WLAN_FEATURE_TSF_UPLINK_DELAY) || defined(CONFIG_SAWF)
+#if defined(WLAN_FEATURE_TSF_UPLINK_DELAY) || defined(QCA_PEER_EXT_STATS)
 	uint32_t buffer_timestamp:19;
 #endif
 };

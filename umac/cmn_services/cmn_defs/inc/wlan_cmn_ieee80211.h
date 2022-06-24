@@ -597,6 +597,7 @@ enum element_ie {
  * @WLAN_EXTN_ELEMID_MULTI_LINK: Multi-Link IE
  * @WLAN_EXTN_ELEMID_EHTCAP: EHT Capabilities IE
  * @WLAN_EXTN_ELEMID_T2LM: TID-to-link mapping IE
+ * @WLAN_EXTN_ELEMID_MULTI_LINK_TRAFFIC_IND: Multi-link Traffic Indication IE
  */
 enum extn_element_ie {
 	WLAN_EXTN_ELEMID_HECAP       = 35,
@@ -617,6 +618,7 @@ enum extn_element_ie {
 	WLAN_EXTN_ELEMID_EHTCAP      = 108,
 #endif
 	WLAN_EXTN_ELEMID_T2LM        = 109,
+	WLAN_EXTN_ELEMID_MULTI_LINK_TRAFFIC_IND = 110,
 };
 
 /**
@@ -1725,6 +1727,14 @@ struct subelem_header {
 #define EHTCAP_PPET_RU_INDEX_BITMASK_IDX  4
 #define EHTCAP_PPET_RU_INDEX_BITMASK_BITS 5
 
+#define EHTOP_INFO_PRESENT_IDX             0
+#define EHTOP_INFO_PRESENT_BITS            1
+#define EHTOP_PARAM_DISABLED_SC_BITMAP_PRESENT_IDX       1
+#define EHTOP_PARAM_DISABLED_SC_BITMAP_PRESENT_BITS      1
+
+#define EHTOP_INFO_CHAN_WIDTH_IDX          0
+#define EHTOP_INFO_CHAN_WIDTH_BITS         3
+
 #define MAX_EHT_MCS_NSS_MAP_LEN 9
 
 /**
@@ -1773,12 +1783,10 @@ struct wlan_ie_ehtcaps {
  * @elem_id: EHT caps IE
  * @elem_len: EHT caps IE len
  * @elem_id_extn: EHT caps extension id
- * @width: EHT BSS Channel Width
- * @reserved1: Reserved bits
- * @ccfs: EHT Channel Centre Frequency Segment information
- * @disable_sub_chan_bitmap_present: Flag to indicate disable subchannel
- *                                   bitmap present
- * @reserved2: Reserved bits
+ * @ehtop_param: EHT Operation Parameters
+ * @control: Control field in EHT Operation Information
+ * @ccfs0: EHT Channel Centre Frequency Segment0 information
+ * @ccfs1: EHT Channel Centre Frequency Segment1 information
  * @disable_sub_chan_bitmap: Bitmap to indicate 20MHz subchannel is punctured
  *                           or not
  */
@@ -1786,11 +1794,10 @@ struct wlan_ie_ehtops {
 	uint8_t elem_id;
 	uint8_t elem_len;
 	uint8_t elem_id_extn;
-	uint8_t width:3,
-		reserved1:5;
-	uint8_t ccfs;
-	uint8_t disable_sub_chan_bitmap_present:1,
-		reserved2:7;
+	uint8_t ehtop_param;
+	uint8_t control;
+	uint8_t ccfs0;
+	uint8_t ccfs1;
 	uint8_t disable_sub_chan_bitmap[2];
 } qdf_packed;
 
@@ -2285,6 +2292,25 @@ struct wlan_ie_tid_to_link_mapping {
 /* Link mapping presence indicator */
 #define WLAN_T2LM_CONTROL_LINK_MAPPING_PRESENCE_INDICATOR_IDX   8
 #define WLAN_T2LM_CONTROL_LINK_MAPPING_PRESENCE_INDICATOR_BITS  8
+
+/**
+ * struct wlan_ie_multi_link_traffic_indication - Multi-link traffic indication
+ * element
+ * @elem_id: Multi-link traffic indication IE
+ * @elem_len: Multi-link traffic indication IE length
+ * @elem_id_extn: Multi-link traffic indication extension ID
+ * @ml_traffic_ind_control: Multi-link traffic indication control
+ * @per_link_traffic_ind_list: Indicates the per-link traffic indication. Each
+ *                             bit in the per_link_traffic_ind_list corresponds
+ *                             to a link of the MLD.
+ */
+struct wlan_ie_multi_link_traffic_indication {
+	uint8_t elem_id;
+	uint8_t elem_len;
+	uint8_t elem_id_extn;
+	uint16_t ml_traffic_ind_control;
+	uint16_t per_link_traffic_ind_list[];
+} qdf_packed;
 #endif /* WLAN_FEATURE_T2LM */
 
 /**

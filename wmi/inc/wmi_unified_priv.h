@@ -2899,6 +2899,10 @@ QDF_STATUS
 			       void *evt_buf,
 			       struct wmi_host_pdev_set_halphy_cal_event *param);
 
+QDF_STATUS (*extract_mgmt_rx_ext_params)(wmi_unified_t wmi_handle,
+					 void *evt_buf,
+					 struct mgmt_rx_event_ext_params *params);
+
 #ifdef WLAN_MGMT_RX_REO_SUPPORT
 QDF_STATUS (*extract_mgmt_rx_fw_consumed)(wmi_unified_t wmi_handle,
 					  void *evt_buf,
@@ -3003,6 +3007,11 @@ QDF_STATUS
 				    uint8_t *pdev_id, uint8_t *software_image,
 				    uint8_t *chip_info,
 				    uint32_t *pktlog_json_version);
+
+QDF_STATUS
+(*extract_pdev_telemetry_stats)(
+		wmi_unified_t wmi_handle, void *evt_buf,
+		struct wmi_host_pdev_telemetry_stats *pdev_stats);
 };
 
 /* Forward declartion for psoc*/

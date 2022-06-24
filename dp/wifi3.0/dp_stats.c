@@ -40,6 +40,7 @@
 #define DP_HTT_HIGH_WM_HIT_COUNT_LEN  HTT_STATS_HIGH_WM_BINS
 #define DP_HTT_TX_MCS_LEN  HTT_TX_PDEV_STATS_NUM_MCS_COUNTERS
 #define DP_HTT_TX_MCS_EXT_LEN  HTT_TX_PDEV_STATS_NUM_EXTRA_MCS_COUNTERS
+#define DP_HTT_TX_MCS_EXT2_LEN  HTT_TX_PDEV_STATS_NUM_EXTRA2_MCS_COUNTERS
 #define DP_HTT_TX_SU_MCS_LEN  HTT_TX_PDEV_STATS_NUM_MCS_COUNTERS
 #define DP_HTT_TX_SU_MCS_EXT_LEN  HTT_TX_PDEV_STATS_NUM_EXTRA_MCS_COUNTERS
 #define DP_HTT_TX_MU_MCS_LEN  HTT_TX_PDEV_STATS_NUM_MCS_COUNTERS
@@ -52,6 +53,7 @@
 #define DP_HTT_RX_MCS_LEN  HTT_RX_PDEV_STATS_NUM_MCS_COUNTERS
 #define DP_HTT_RX_MCS_EXT_LEN  HTT_RX_PDEV_STATS_NUM_EXTRA_MCS_COUNTERS
 #define DP_HTT_RX_PDEV_MCS_LEN_EXT HTT_RX_PDEV_STATS_NUM_MCS_COUNTERS_EXT
+#define DP_HTT_RX_PDEV_MCS_LEN_EXT2 HTT_RX_PDEV_STATS_NUM_EXTRA2_MCS_COUNTERS
 #define DP_HTT_RX_NSS_LEN  HTT_RX_PDEV_STATS_NUM_SPATIAL_STREAMS
 #define DP_HTT_RX_DCM_LEN  HTT_RX_PDEV_STATS_NUM_DCM_COUNTERS
 #define DP_HTT_RX_BW_LEN  HTT_RX_PDEV_STATS_NUM_BW_COUNTERS
@@ -2868,6 +2870,14 @@ static void dp_print_tx_pdev_rate_stats_tlv(uint32_t *tag_buf)
 				" %u:%u,", i + DP_HTT_TX_MCS_LEN,
 				dp_stats_buf->tx_mcs_ext[i]);
 	}
+
+	for (i = 0; i <  DP_HTT_TX_MCS_EXT2_LEN; i++) {
+		index += qdf_snprint(&str_buf[index],
+				DP_MAX_STRING_LEN - index,
+				" %u:%u,", i + DP_HTT_TX_MCS_LEN +
+				DP_HTT_TX_MCS_EXT_LEN,
+				dp_stats_buf->tx_mcs_ext_2[i]);
+	}
 	DP_PRINT_STATS("tx_mcs = %s ", str_buf);
 
 	index = 0;
@@ -2907,6 +2917,8 @@ static void dp_print_tx_pdev_rate_stats_tlv(uint32_t *tag_buf)
 				" %u:%u,", i, dp_stats_buf->tx_bw[i]);
 	}
 	DP_PRINT_STATS("tx_bw = %s ", str_buf);
+
+	DP_PRINT_STATS("tx_bw_320mhz = %u ", dp_stats_buf->tx_bw_320mhz);
 
 	index = 0;
 	qdf_mem_zero(str_buf, DP_MAX_STRING_LEN);
@@ -2963,7 +2975,17 @@ static void dp_print_tx_pdev_rate_stats_tlv(uint32_t *tag_buf)
 				DP_MAX_STRING_LEN - index,
 				" %u:%u,", i, dp_stats_buf->tx_dcm[i]);
 	}
-	DP_PRINT_STATS("tx_dcm = %s\n", str_buf);
+	DP_PRINT_STATS("tx_dcm = %s", str_buf);
+
+	index = 0;
+	qdf_mem_zero(str_buf, DP_MAX_STRING_LEN);
+	for (i = 0; i <  HTT_TX_PDEV_STATS_NUM_PUNCTURED_MODE_COUNTERS; i++) {
+		index += qdf_snprint(&str_buf[index],
+				DP_MAX_STRING_LEN - index,
+				" %u:%u,", i,
+				dp_stats_buf->tx_su_punctured_mode[i]);
+	}
+	DP_PRINT_STATS("tx_su_punctured_mode = %s\n", str_buf);
 
 	DP_PRINT_STATS("rts_success = %u",
 		       dp_stats_buf->rts_success);
@@ -3203,6 +3225,13 @@ static void dp_print_rx_pdev_rate_ext_stats_tlv(struct dp_pdev *pdev,
 				DP_MAX_STRING_LEN - index,
 				" %u:%u,", i, dp_stats_buf->rx_mcs_ext[i]);
 	}
+
+	for (i = 0; i <  DP_HTT_RX_PDEV_MCS_LEN_EXT2; i++) {
+		index += qdf_snprint(&str_buf[index],
+				DP_MAX_STRING_LEN - index,
+				" %u:%u,", i + DP_HTT_RX_PDEV_MCS_LEN_EXT,
+				 dp_stats_buf->rx_mcs_ext_2[i]);
+	}
 	DP_PRINT_STATS("rx_mcs_ext = %s ", str_buf);
 
 	index = 0;
@@ -3280,6 +3309,25 @@ static void dp_print_rx_pdev_rate_ext_stats_tlv(struct dp_pdev *pdev,
 	}
 	DP_PRINT_STATS("rx_11ax_dl_ofdma_mcs_ext = %s ", str_buf);
 
+	index = 0;
+	qdf_mem_zero(str_buf, DP_MAX_STRING_LEN);
+	for (i = 0; i < HTT_RX_PDEV_STATS_NUM_BW_EXT2_COUNTERS; i++) {
+		index += qdf_snprint(&str_buf[index],
+		DP_MAX_STRING_LEN - index,
+		" %u:%u,", i,
+		dp_stats_buf->rx_bw_ext[i]);
+	}
+	DP_PRINT_STATS("rx_bw_ext = %s ", str_buf);
+
+	index = 0;
+	qdf_mem_zero(str_buf, DP_MAX_STRING_LEN);
+	for (i = 0; i < HTT_RX_PDEV_STATS_NUM_PUNCTURED_MODE_COUNTERS; i++) {
+		index += qdf_snprint(&str_buf[index],
+		DP_MAX_STRING_LEN - index,
+		" %u:%u,", i,
+		dp_stats_buf->rx_su_punctured_mode[i]);
+	}
+	DP_PRINT_STATS("rx_su_punctured_mode = %s ", str_buf);
 
 fail1:
 	for (i = 0; i < HTT_RX_PDEV_STATS_NUM_GI_COUNTERS; i++) {
@@ -4660,6 +4708,7 @@ dp_accumulate_tid_stats(struct dp_pdev *pdev, uint8_t tid,
 		for (ring_id = 0; ring_id < CDP_MAX_TX_COMP_RINGS; ring_id++) {
 			per_ring_tx = &tid_stats->tid_tx_stats[ring_id][tid];
 			total_tx->success_cnt += per_ring_tx->success_cnt;
+			total_tx->comp_fail_cnt += per_ring_tx->comp_fail_cnt;
 			for (tqm_status_idx = 0; tqm_status_idx < CDP_MAX_TX_TQM_STATUS; tqm_status_idx++) {
 				total_tx->tqm_status_cnt[tqm_status_idx] +=
 					per_ring_tx->tqm_status_cnt[tqm_status_idx];
@@ -4928,6 +4977,80 @@ void dp_pdev_print_rx_error_stats(struct dp_pdev *pdev)
 			DP_PRINT_STATS("err src dma codes: %d = %llu", index, total_rx.rxdma_err.err_dma_codes[index]);
 		}
 	}
+}
+
+QDF_STATUS dp_pdev_get_tid_stats(struct cdp_soc_t *soc_hdl, uint8_t pdev_id,
+				 struct cdp_tid_stats_intf *tid_stats)
+{
+	struct dp_soc *soc = (struct dp_soc *)soc_hdl;
+	struct dp_pdev *pdev = dp_get_pdev_from_soc_pdev_id_wifi3(soc, pdev_id);
+	struct cdp_tid_rx_stats rx;
+	struct cdp_tid_tx_stats tx;
+	uint8_t tid;
+	uint32_t size;
+
+	if (!pdev)
+		return QDF_STATUS_E_INVAL;
+
+	size = sizeof(struct cdp_delay_stats);
+	for (tid = 0; tid < CDP_MAX_DATA_TIDS; tid++) {
+		dp_accumulate_tid_stats(pdev, tid, &tx, &rx, TID_COUNTER_STATS);
+		/* Copy specific accumulated Tx tid stats */
+		tid_stats->tx_total[tid].success_cnt = tx.success_cnt;
+		tid_stats->tx_total[tid].comp_fail_cnt = tx.comp_fail_cnt;
+		qdf_mem_copy(&tid_stats->tx_total[tid].tqm_status_cnt[0],
+			     &tx.tqm_status_cnt[0],
+			     CDP_MAX_TX_TQM_STATUS * sizeof(uint64_t));
+		qdf_mem_copy(&tid_stats->tx_total[tid].htt_status_cnt[0],
+			     &tx.htt_status_cnt[0],
+			     CDP_MAX_TX_HTT_STATUS * sizeof(uint64_t));
+		qdf_mem_copy(&tid_stats->tx_total[tid].swdrop_cnt[0],
+			     &tx.swdrop_cnt[0], TX_MAX_DROP * sizeof(uint64_t));
+
+		/* Copy specific accumulated Rx tid stats */
+		tid_stats->rx_total[tid].delivered_to_stack =
+							rx.delivered_to_stack;
+		tid_stats->rx_total[tid].intrabss_cnt = rx.intrabss_cnt;
+		tid_stats->rx_total[tid].msdu_cnt = rx.msdu_cnt;
+		tid_stats->rx_total[tid].mcast_msdu_cnt = rx.mcast_msdu_cnt;
+		tid_stats->rx_total[tid].bcast_msdu_cnt = rx.bcast_msdu_cnt;
+		qdf_mem_copy(&tid_stats->rx_total[tid].fail_cnt[0],
+			     &rx.fail_cnt[0], RX_MAX_DROP * sizeof(uint64_t));
+
+		dp_accumulate_tid_stats(pdev, tid, &tx, &rx, TID_DELAY_STATS);
+		/* Copy specific accumulated Tx delay stats */
+		qdf_mem_copy(&tid_stats->tx_total[tid].swq_delay,
+			     &tx.swq_delay, size);
+		qdf_mem_copy(&tid_stats->tx_total[tid].hwtx_delay,
+			     &tx.hwtx_delay, size);
+		qdf_mem_copy(&tid_stats->tx_total[tid].intfrm_delay,
+			     &tx.intfrm_delay, size);
+
+		/* Copy specific accumulated Rx delay stats */
+		qdf_mem_copy(&tid_stats->rx_total[tid].intfrm_delay,
+			     &rx.intfrm_delay, size);
+		qdf_mem_copy(&tid_stats->rx_total[tid].to_stack_delay,
+			     &rx.to_stack_delay, size);
+	}
+	for (tid = 0; tid < CDP_MAX_VOW_TID; tid++) {
+		dp_accumulate_tid_stats(pdev, tid, &tx, &rx,
+					TID_RX_ERROR_STATS);
+		/* Copy specific accumulated VOW Rx stats */
+		qdf_mem_copy(&tid_stats->rx_total[tid].reo_err,
+			     &rx.reo_err, sizeof(struct cdp_reo_error_stats));
+		qdf_mem_copy(&tid_stats->rx_total[tid].rxdma_err, &rx.rxdma_err,
+			     sizeof(struct cdp_rxdma_error_stats));
+	}
+	tid_stats->ingress_stack = pdev->stats.tid_stats.ingress_stack;
+	tid_stats->osif_drop = pdev->stats.tid_stats.osif_drop;
+
+	return QDF_STATUS_SUCCESS;
+}
+#else
+QDF_STATUS dp_pdev_get_tid_stats(struct cdp_soc_t *soc_hdl, uint8_t pdev_id,
+				 struct cdp_tid_stats_intf *tid_stats)
+{
+	return QDF_STATUS_E_INVAL;
 }
 #endif
 
@@ -6253,6 +6376,8 @@ void dp_print_peer_stats(struct dp_peer *peer,
 		       peer_stats->tx.last_ack_rssi);
 	DP_PRINT_STATS("Dropped At FW: Removed Pkts = %u",
 		       peer_stats->tx.dropped.fw_rem.num);
+	DP_PRINT_STATS("Release source not TQM = %u",
+		       peer_stats->tx.release_src_not_tqm);
 	if (pdev && !wlan_cfg_get_dp_pdev_nss_enabled(pdev->wlan_cfg_ctx)) {
 		DP_PRINT_STATS("Dropped At FW: Removed bytes = %llu",
 			peer_stats->tx.dropped.fw_rem.bytes);
@@ -6446,7 +6571,7 @@ void dp_print_peer_stats(struct dp_peer *peer,
 		       peer_stats->rx.err.rxdma_wifi_parse_err);
 	DP_PRINT_STATS("Msdu's Received As Part of Ampdu = %d",
 		       peer_stats->rx.non_ampdu_cnt);
-	DP_PRINT_STATS("Msdu's Recived As Ampdu = %d",
+	DP_PRINT_STATS("Msdu's Received As Ampdu = %d",
 		       peer_stats->rx.ampdu_cnt);
 	DP_PRINT_STATS("Msdu's Received Not Part of Amsdu's = %d",
 		       peer_stats->rx.non_amsdu_cnt);

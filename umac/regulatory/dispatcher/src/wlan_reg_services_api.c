@@ -671,6 +671,11 @@ bool wlan_reg_is_etsi(uint8_t *country)
 	return reg_is_etsi_alpha2(country);
 }
 
+bool wlan_reg_ctry_support_vlp(uint8_t *country)
+{
+	return reg_ctry_support_vlp(country);
+}
+
 void wlan_reg_register_chan_change_callback(struct wlan_objmgr_psoc *psoc,
 					    void *cbk, void *arg)
 {
@@ -1728,6 +1733,13 @@ bool wlan_reg_is_afc_power_event_received(struct wlan_objmgr_pdev *pdev)
 
 qdf_export_symbol(wlan_reg_is_afc_power_event_received);
 
+bool wlan_reg_is_afc_done(struct wlan_objmgr_pdev *pdev, qdf_freq_t freq)
+{
+	return reg_is_afc_done(pdev, freq);
+}
+
+qdf_export_symbol(wlan_reg_is_afc_done);
+
 QDF_STATUS wlan_reg_get_afc_req_id(struct wlan_objmgr_pdev *pdev,
 				   uint64_t *req_id)
 {
@@ -1755,6 +1767,7 @@ wlan_reg_get_afc_dev_deploy_type(struct wlan_objmgr_pdev *pdev,
 	return reg_get_afc_dev_deploy_type(pdev, afc_dev_type);
 }
 
+qdf_export_symbol(wlan_reg_get_afc_dev_deploy_type);
 #endif /* CONFIG_AFC_SUPPORT */
 
 QDF_STATUS wlan_reg_is_chwidth_supported(struct wlan_objmgr_pdev *pdev,
