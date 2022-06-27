@@ -2382,6 +2382,37 @@ dp_rx_peer_map_handler(struct dp_soc *soc, uint16_t peer_id,
 	return err;
 }
 
+#ifdef IPA_OFFLOAD
+/**
+ * dp_rx_peer_unmap_event() - Peer unmap event
+ * @soc_handle - genereic soc handle
+ * @peer_id - peer_id from firmware
+ * @vdev_id - vdev ID
+ * @mac_addr - mac address of the peer or wds entry
+ *
+ * Return: none
+ */
+static inline void
+dp_rx_peer_unmap_event(struct dp_soc *soc, uint16_t peer_id,
+		       uint8_t vdev_id, uint8_t *mac_addr)
+{
+	if (soc->cdp_soc.ol_ops->peer_unmap_event) {
+		soc->cdp_soc.ol_ops->peer_unmap_event(soc->ctrl_psoc,
+				peer_id, vdev_id, mac_addr);
+	}
+}
+#else
+static inline void
+dp_rx_peer_unmap_event(struct dp_soc *soc, uint16_t peer_id,
+		       uint8_t vdev_id, uint8_t *mac_addr)
+{
+	if (soc->cdp_soc.ol_ops->peer_unmap_event) {
+		soc->cdp_soc.ol_ops->peer_unmap_event(soc->ctrl_psoc,
+				peer_id, vdev_id);
+	}
+}
+#endif
+
 /**
  * dp_rx_peer_unmap_handler() - handle peer unmap event from firmware
  * @soc_handle - genereic soc handle
@@ -2437,7 +2468,6 @@ dp_rx_peer_unmap_handler(struct dp_soc *soc, uint16_t peer_id,
 
 	dp_info("peer_unmap_event (soc:%pK) peer_id %d peer %pK",
 		soc, peer_id, peer);
-
 	dp_peer_find_id_to_obj_remove(soc, peer_id);
 	peer->peer_id = HTT_INVALID_PEER;
 
@@ -2446,10 +2476,7 @@ dp_rx_peer_unmap_handler(struct dp_soc *soc, uint16_t peer_id,
 	 */
 	dp_peer_reset_flowq_map(peer);
 
-	if (soc->cdp_soc.ol_ops->peer_unmap_event) {
-		soc->cdp_soc.ol_ops->peer_unmap_event(soc->ctrl_psoc,
-				peer_id, vdev_id);
-	}
+	dp_rx_peer_unmap_event(soc, peer_id, vdev_id, peer->mac_addr.raw);
 
 	vdev = peer->vdev;
 	DP_UPDATE_STATS(vdev, peer);
