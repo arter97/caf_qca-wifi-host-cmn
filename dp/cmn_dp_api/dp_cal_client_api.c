@@ -129,25 +129,66 @@ qdf_export_symbol(dp_cal_client_stats_timer_fn);
  *
  * return: void
  */
-void dp_cal_client_update_peer_stats(struct cdp_peer_stats *peer_stats)
-{
-	uint32_t temp_rx_bytes = peer_stats->rx.to_stack.bytes;
-	uint32_t temp_rx_data = peer_stats->rx.to_stack.num;
-	uint32_t temp_tx_bytes = peer_stats->tx.tx_success.bytes;
-	uint32_t temp_tx_data = peer_stats->tx.tx_success.num;
-	uint32_t temp_tx_ucast_pkts = peer_stats->tx.ucast.num;
 
-	peer_stats->rx.rx_byte_rate = temp_rx_bytes -
-					peer_stats->rx.rx_bytes_success_last;
-	peer_stats->rx.rx_data_rate  = temp_rx_data -
-					peer_stats->rx.rx_data_success_last;
+#ifdef IPA_OFFLOAD
+static
+void dp_cal_client_update_peer_tx_stats(struct cdp_peer_stats *peer_stats)
+{
+
+	uint32_t temp_tx_bytes = peer_stats->tx.tx_ucast_success.bytes;
+	uint32_t temp_tx_data = peer_stats->tx.tx_ucast_success.num;
+	uint32_t temp_tx_ucast_pkts = peer_stats->tx.tx_ucast_total.num;
+
 	peer_stats->tx.tx_byte_rate = temp_tx_bytes -
 					peer_stats->tx.tx_bytes_success_last;
 	peer_stats->tx.tx_data_rate  = temp_tx_data -
 					peer_stats->tx.tx_data_success_last;
 	peer_stats->tx.tx_data_ucast_rate = temp_tx_ucast_pkts -
 					peer_stats->tx.tx_data_ucast_last;
+	peer_stats->tx.tx_bytes_success_last = temp_tx_bytes;
+	peer_stats->tx.tx_data_success_last = temp_tx_data;
+	peer_stats->tx.tx_data_ucast_last = temp_tx_ucast_pkts;
+}
 
+#else
+static
+void dp_cal_client_update_peer_tx_stats(struct cdp_peer_stats *peer_stats)
+{
+	uint32_t temp_tx_bytes = peer_stats->tx.tx_success.bytes;
+	uint32_t temp_tx_data = peer_stats->tx.tx_success.num;
+	uint32_t temp_tx_ucast_pkts = peer_stats->tx.ucast.num;
+
+	peer_stats->tx.tx_byte_rate = temp_tx_bytes -
+					peer_stats->tx.tx_bytes_success_last;
+	peer_stats->tx.tx_data_rate  = temp_tx_data -
+					peer_stats->tx.tx_data_success_last;
+	peer_stats->tx.tx_data_ucast_rate = temp_tx_ucast_pkts -
+					peer_stats->tx.tx_data_ucast_last;
+	peer_stats->tx.tx_bytes_success_last = temp_tx_bytes;
+	peer_stats->tx.tx_data_success_last = temp_tx_data;
+	peer_stats->tx.tx_data_ucast_last = temp_tx_ucast_pkts;
+}
+#endif
+
+static
+void dp_cal_client_update_peer_rx_stats(struct cdp_peer_stats *peer_stats)
+{
+	uint32_t temp_rx_bytes = peer_stats->rx.to_stack.bytes;
+	uint32_t temp_rx_data = peer_stats->rx.to_stack.num;
+
+	peer_stats->rx.rx_byte_rate = temp_rx_bytes -
+					peer_stats->rx.rx_bytes_success_last;
+	peer_stats->rx.rx_data_rate  = temp_rx_data -
+					peer_stats->rx.rx_data_success_last;
+
+	peer_stats->rx.rx_bytes_success_last = temp_rx_bytes;
+	peer_stats->rx.rx_data_success_last = temp_rx_data;
+}
+
+static
+void dp_cal_client_update_peer_inactivity_and_err_rate(struct cdp_peer_stats
+						       *peer_stats)
+{
 	/* Check tx and rx packets in last one second, and increment
 	 * inactive time for peer
 	 */
@@ -155,12 +196,6 @@ void dp_cal_client_update_peer_stats(struct cdp_peer_stats *peer_stats)
 		peer_stats->tx.inactive_time = 0;
 	else
 		peer_stats->tx.inactive_time++;
-
-	peer_stats->rx.rx_bytes_success_last = temp_rx_bytes;
-	peer_stats->rx.rx_data_success_last = temp_rx_data;
-	peer_stats->tx.tx_bytes_success_last = temp_tx_bytes;
-	peer_stats->tx.tx_data_success_last = temp_tx_data;
-	peer_stats->tx.tx_data_ucast_last = temp_tx_ucast_pkts;
 
 	if (peer_stats->tx.tx_data_ucast_rate) {
 		if (peer_stats->tx.tx_data_ucast_rate >
@@ -172,7 +207,13 @@ void dp_cal_client_update_peer_stats(struct cdp_peer_stats *peer_stats)
 		else
 			peer_stats->tx.last_per = 0;
 	}
+}
 
+void dp_cal_client_update_peer_stats(struct cdp_peer_stats *peer_stats)
+{
+	dp_cal_client_update_peer_tx_stats(peer_stats);
+	dp_cal_client_update_peer_rx_stats(peer_stats);
+	dp_cal_client_update_peer_inactivity_and_err_rate(peer_stats);
 }
 
 qdf_export_symbol(dp_cal_client_update_peer_stats);

@@ -1683,7 +1683,7 @@ dp_tx_stats_update(struct dp_pdev *pdev, struct dp_peer *peer,
 	 * ack failure i.e for long retries we get
 	 * mpdu failed equal mpdu tried.
 	 */
-	if(!ppdu->is_mcast) {
+	if (!ppdu->is_mcast) {
 		DP_STATS_INC(peer, tx.tx_ucast_success.num, num_msdu);
 		DP_STATS_INC(peer, tx.tx_ucast_success.bytes, tx_byte_count);
 	}
@@ -4296,15 +4296,46 @@ static void dp_pktlogmod_exit(struct dp_pdev *handle) { }
 #endif /*DP_CON_MON*/
 
 #ifdef WDI_EVENT_ENABLE
+#ifdef IPA_OFFLOAD
+void dp_peer_get_tx_rx_stats(struct dp_peer *peer,
+			     struct cdp_interface_peer_stats *peer_stats_intf)
+{
+	struct dp_rx_tid *rx_tid = NULL;
+	uint8_t i = 0;
+
+	for (i = 0; i < DP_MAX_TIDS; i++) {
+		rx_tid = &peer->rx_tid[i];
+		peer_stats_intf->rx_byte_count +=
+			rx_tid->rx_msdu_cnt.bytes;
+		peer_stats_intf->rx_packet_count +=
+			rx_tid->rx_msdu_cnt.num;
+	}
+	peer_stats_intf->tx_packet_count =
+		peer->stats.tx.tx_ucast_success.num;
+	peer_stats_intf->tx_byte_count =
+		peer->stats.tx.tx_ucast_success.bytes;
+}
+#else
+void dp_peer_get_tx_rx_stats(struct dp_peer *peer,
+			     struct cdp_interface_peer_stats *peer_stats_intf)
+{
+	struct cdp_peer_stats *peer_stats = &peer->stats;
+
+	peer_stats_intf->tx_packet_count = peer_stats->tx.ucast.num;
+	peer_stats_intf->rx_packet_count = peer_stats->rx.to_stack.num;
+	peer_stats_intf->tx_byte_count = peer_stats->tx.tx_success.bytes;
+	peer_stats_intf->rx_byte_count = peer_stats->rx.to_stack.bytes;
+}
+#endif
+
 QDF_STATUS dp_peer_stats_notify(struct dp_pdev *dp_pdev, struct dp_peer *peer)
 {
-	struct cdp_interface_peer_stats peer_stats_intf;
+	struct cdp_interface_peer_stats peer_stats_intf = {0};
 	struct cdp_peer_stats *peer_stats = &peer->stats;
 
 	if (!peer->vdev)
 		return QDF_STATUS_E_FAULT;
 
-	qdf_mem_zero(&peer_stats_intf, sizeof(peer_stats_intf));
 	if (peer_stats->rx.last_snr != peer_stats->rx.snr)
 		peer_stats_intf.rssi_changed = true;
 
@@ -4317,10 +4348,7 @@ QDF_STATUS dp_peer_stats_notify(struct dp_pdev *dp_pdev, struct dp_peer *peer)
 		peer_stats_intf.last_peer_tx_rate = peer_stats->tx.last_tx_rate;
 		peer_stats_intf.peer_tx_rate = peer_stats->tx.tx_rate;
 		peer_stats_intf.peer_rssi = peer_stats->rx.snr;
-		peer_stats_intf.tx_packet_count = peer_stats->tx.ucast.num;
-		peer_stats_intf.rx_packet_count = peer_stats->rx.to_stack.num;
-		peer_stats_intf.tx_byte_count = peer_stats->tx.tx_success.bytes;
-		peer_stats_intf.rx_byte_count = peer_stats->rx.to_stack.bytes;
+		dp_peer_get_tx_rx_stats(peer, &peer_stats_intf);
 		peer_stats_intf.per = peer_stats->tx.last_per;
 		peer_stats_intf.ack_rssi = peer_stats->tx.last_ack_rssi;
 		peer_stats_intf.free_buff = INVALID_FREE_BUFF;
@@ -5500,6 +5528,7 @@ dp_peer_cal_clients_stats_update(struct dp_soc *soc,
 				 void *arg)
 {
 	dp_cal_client_update_peer_stats(&peer->stats);
+	dp_peer_get_rxtid_stats_ipa(peer, dp_peer_update_tid_stats_from_reo);
 }
 
 /*dp_iterate_update_peer_list - update peer stats on cal client timer
