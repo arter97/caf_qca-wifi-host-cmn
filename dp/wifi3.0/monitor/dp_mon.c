@@ -1576,6 +1576,7 @@ dp_tx_stats_update(struct dp_pdev *pdev, struct dp_peer *peer,
 	uint16_t num_mpdu;
 	uint16_t mpdu_tried;
 	uint16_t mpdu_failed;
+	uint64_t tx_byte_count;
 
 	preamble = ppdu->preamble;
 	mcs = ppdu->mcs;
@@ -1583,6 +1584,7 @@ dp_tx_stats_update(struct dp_pdev *pdev, struct dp_peer *peer,
 	num_mpdu = ppdu->mpdu_success;
 	mpdu_tried = ppdu->mpdu_tried_ucast + ppdu->mpdu_tried_mcast;
 	mpdu_failed = mpdu_tried - num_mpdu;
+	tx_byte_count = ppdu->success_bytes;
 
 	/* If the peer statistics are already processed as part of
 	 * per-MSDU completion handler, do not process these again in per-PPDU
@@ -1590,6 +1592,11 @@ dp_tx_stats_update(struct dp_pdev *pdev, struct dp_peer *peer,
 	 */
 	if (pdev->soc->process_tx_status)
 		return;
+
+	if (!ppdu->is_mcast) {
+		DP_STATS_INC(peer, tx.tx_ucast_total.num, num_msdu);
+		DP_STATS_INC(peer, tx.tx_ucast_total.bytes, tx_byte_count);
+	}
 
 	if (ppdu->completion_status != HTT_PPDU_STATS_USER_STATUS_OK) {
 		/*
@@ -1678,6 +1685,11 @@ dp_tx_stats_update(struct dp_pdev *pdev, struct dp_peer *peer,
 	 * ack failure i.e for long retries we get
 	 * mpdu failed equal mpdu tried.
 	 */
+	if (!ppdu->is_mcast) {
+		DP_STATS_INC(peer, tx.tx_ucast_success.num, num_msdu);
+		DP_STATS_INC(peer, tx.tx_ucast_success.bytes, tx_byte_count);
+	}
+
 	DP_STATS_INC(peer, tx.retries, mpdu_failed);
 	DP_STATS_INC(peer, tx.tx_failed, ppdu->failed_msdus);
 
