@@ -473,4 +473,23 @@ wlan_cfg80211_nla_strscpy(char *dst, const struct nlattr *nla, size_t dstsize)
 	return nla_strscpy(dst, nla, dstsize);
 }
 #endif
+
+#ifdef CFG80211_SINGLE_NETDEV_MULTI_LINK_SUPPORT
+static inline
+void wlan_cfg80211_ch_switch_notify(struct net_device *dev,
+				    struct cfg80211_chan_def *chandef,
+				    unsigned int link_id)
+{
+	cfg80211_ch_switch_notify(dev, chandef, link_id);
+}
+#else
+static inline
+void wlan_cfg80211_ch_switch_notify(struct net_device *dev,
+				    struct cfg80211_chan_def *chandef,
+				    unsigned int link_id)
+{
+	cfg80211_ch_switch_notify(dev, chandef);
+}
+#endif
+
 #endif
