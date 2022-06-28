@@ -368,6 +368,26 @@ osif_populate_fils_params(struct cfg80211_connect_resp_params *rsp_params,
 #if defined(CFG80211_CONNECT_DONE) || \
 	(LINUX_VERSION_CODE >= KERNEL_VERSION(4, 12, 0))
 
+#ifdef CFG80211_SINGLE_NETDEV_MULTI_LINK_SUPPORT
+static
+void osif_copy_connected_info(struct cfg80211_connect_resp_params *conn_rsp,
+			      struct wlan_cm_connect_resp *rsp,
+			      struct cfg80211_bss *bss)
+{
+	conn_rsp->links[0].bssid = rsp->bssid.bytes;
+	conn_rsp->links[0].bss = bss;
+}
+#else
+static
+void osif_copy_connected_info(struct cfg80211_connect_resp_params *conn_rsp,
+			      struct wlan_cm_connect_resp *rsp,
+			      struct cfg80211_bss *bss)
+{
+	conn_rsp->bssid = rsp->bssid.bytes;
+	conn_rsp->bss = bss;
+}
+#endif
+
 /**
  * osif_connect_done() - Wrapper API to call cfg80211_connect_done
  * @dev: network device
@@ -397,7 +417,7 @@ static void osif_connect_done(struct net_device *dev, struct cfg80211_bss *bss,
 		conn_rsp_params.status = WLAN_STATUS_UNSPECIFIED_FAILURE;
 	} else {
 		conn_rsp_params.status = status;
-		conn_rsp_params.bssid = rsp->bssid.bytes;
+		osif_copy_connected_info(&conn_rsp_params, rsp, bss);
 		conn_rsp_params.timeout_reason =
 			osif_convert_timeout_reason(rsp->reason);
 		osif_cm_get_assoc_req_ie_data(&rsp->connect_ies.assoc_req,
@@ -406,7 +426,6 @@ static void osif_connect_done(struct net_device *dev, struct cfg80211_bss *bss,
 		osif_cm_get_assoc_rsp_ie_data(&rsp->connect_ies.assoc_rsp,
 					      &conn_rsp_params.resp_ie_len,
 					      &conn_rsp_params.resp_ie);
-		conn_rsp_params.bss = bss;
 		osif_populate_fils_params(&conn_rsp_params,
 					  rsp->connect_ies.fils_ie);
 		osif_cm_save_gtk(vdev, rsp);
