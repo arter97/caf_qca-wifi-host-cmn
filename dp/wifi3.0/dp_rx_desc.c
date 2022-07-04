@@ -23,7 +23,7 @@
 
 #ifdef RX_DESC_MULTI_PAGE_ALLOC
 A_COMPILE_TIME_ASSERT(cookie_size_check,
-		      PAGE_SIZE / sizeof(union dp_rx_desc_list_elem_t) <=
+		      qdf_page_size / sizeof(union dp_rx_desc_list_elem_t) <=
 		      1 << DP_RX_DESC_PAGE_ID_SHIFT);
 
 /*
