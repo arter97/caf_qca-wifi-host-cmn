@@ -255,6 +255,8 @@ const struct chan_map channel_map_us[NUM_CHANNELS] = {
 	[CHAN_ENUM_2479] = {2479, 216, 5, 10},
 	[CHAN_ENUM_2482] = {2482, 222, 5, 10},
 	[CHAN_ENUM_2484] = {2484, 14, 5, 20},
+	[CHAN_ENUM_2487] = {2487, 223, 5, 20},
+	[CHAN_ENUM_2492] = {2492, 224, 5, 20},
 #else
 	[CHAN_ENUM_2412] = {2412, 1, 20, 40},
 	[CHAN_ENUM_2417] = {2417, 2, 20, 40},
@@ -602,6 +604,8 @@ const struct chan_map channel_map_eu[NUM_CHANNELS] = {
 	[CHAN_ENUM_2479] = {2479, 216, 5, 10},
 	[CHAN_ENUM_2482] = {2482, 222, 5, 10},
 	[CHAN_ENUM_2484] = {2484, 14, 5, 20},
+	[CHAN_ENUM_2487] = {2487, 223, 5, 20},
+	[CHAN_ENUM_2492] = {2492, 224, 5, 20},
 #else
 	[CHAN_ENUM_2412] = {2412, 1, 20, 40},
 	[CHAN_ENUM_2417] = {2417, 2, 20, 40},
@@ -946,6 +950,8 @@ const struct chan_map channel_map_jp[NUM_CHANNELS] = {
 	[CHAN_ENUM_2472] = {2472, 13, 5, 40},
 	[CHAN_ENUM_2474] = {2474, 215, 5, 10},
 	[CHAN_ENUM_2484] = {2484, 14, 5, 20},
+	[CHAN_ENUM_2487] = {2487, 223, 5, 20},
+	[CHAN_ENUM_2492] = {2492, 224, 5, 20},
 #else
 	[CHAN_ENUM_2412] = {2412, 1, 20, 40},
 	[CHAN_ENUM_2417] = {2417, 2, 20, 40},
@@ -1293,6 +1299,8 @@ const struct chan_map channel_map_global[NUM_CHANNELS] = {
 	[CHAN_ENUM_2479] = {2479, 216, 5, 10},
 	[CHAN_ENUM_2482] = {2482, 222, 5, 10},
 	[CHAN_ENUM_2484] = {2484, 14, 5, 20},
+	[CHAN_ENUM_2487] = {2487, 223, 5, 20},
+	[CHAN_ENUM_2492] = {2492, 224, 5, 20},
 #else
 	[CHAN_ENUM_2412] = {2412, 1, 20, 40},
 	[CHAN_ENUM_2417] = {2417, 2, 20, 40},
@@ -1640,6 +1648,8 @@ const struct chan_map channel_map_china[NUM_CHANNELS] = {
 	[CHAN_ENUM_2479] = {2479, 216, 5, 10},
 	[CHAN_ENUM_2482] = {2482, 222, 5, 10},
 	[CHAN_ENUM_2484] = {2484, 14, 5, 20},
+	[CHAN_ENUM_2487] = {2487, 223, 5, 20},
+	[CHAN_ENUM_2492] = {2492, 224, 5, 20},
 #else
 	[CHAN_ENUM_2412] = {2412, 1, 20, 40},
 	[CHAN_ENUM_2417] = {2417, 2, 20, 40},
@@ -4514,19 +4524,6 @@ update_bw:
 	}
 }
 
-static void reg_freq_to_ieee(qdf_freq_t center_freq,
-			     uint8_t *chan_ieee)
-{
-	if (center_freq == TWOG_CHAN_14_IN_MHZ)
-		*chan_ieee = TWOG_CHAN_14_IEEE;
-	else if (WLAN_IS_FREQ_2P5MHZ(center_freq))
-		*chan_ieee = wlan_2pt5mhz_step_freq_to_chan(center_freq);
-	else
-		*chan_ieee = (center_freq - TWOG_STARTING_FREQ) /
-			FREQ_TO_CHAN_SCALE;
-}
-
-
 void reg_set_2g_channel_params_for_freq(struct wlan_objmgr_pdev *pdev,
 					uint16_t oper_freq,
 					struct ch_params *ch_params,
@@ -4592,8 +4589,9 @@ void reg_set_2g_channel_params_for_freq(struct wlan_objmgr_pdev *pdev,
 			} else {
 				ch_params->sec_ch_offset = NO_SEC_CH;
 				ch_params->mhz_freq_seg0 = oper_freq;
-				reg_freq_to_ieee(ch_params->mhz_freq_seg0,
-						 &ch_params->center_freq_seg0);
+				ch_params->center_freq_seg0 =
+					wlan_freq_to_chan_2g(
+						ch_params->mhz_freq_seg0);
 			}
 			break;
 		}
