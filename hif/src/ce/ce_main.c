@@ -142,9 +142,18 @@ static void ce_poll_timeout(void *arg)
 	struct CE_state *CE_state = (struct CE_state *)arg;
 	struct hif_opaque_softc *hif_hdl = GET_HIF_OPAQUE_HDL(CE_state->scn);
 	struct HIF_CE_state *hif_state = HIF_GET_CE_STATE(CE_state->scn);
+	struct hif_softc *scn = CE_state->scn;
 
 	if (CE_state->timer_inited) {
 		CE_state->poll_count++;
+
+		if (qdf_atomic_read(&scn->link_suspended)) {
+			qdf_info("the link is suspend, skip for the CE id %d", CE_state->id);
+			qdf_timer_mod(&CE_state->poll_timer, CE_state->scn->ini_cfg.ce_poll_timeout);
+			return;
+
+		}
+
 		if (ce_per_engine_pkt_pending_check(CE_state->scn, CE_state->id)) {
 
 			if ((qdf_atomic_inc_return(&CE_state->disable_process) == 1) &&
