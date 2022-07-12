@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2017-2018 The Linux Foundation. All rights reserved.
- *
+ * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -1124,6 +1124,8 @@ struct cdp_peer_ops {
 	void (*update_last_real_peer)(struct cdp_pdev *pdev, void *peer,
 			uint8_t *peer_id, bool restore_last_peer);
 	void (*peer_detach_force_delete)(void *peer);
+	void (*peer_flush_frags)(struct cdp_pdev *pdev,
+				 uint8_t vdev_id, uint8_t *peer_mac);
 };
 
 /**
