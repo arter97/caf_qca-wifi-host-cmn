@@ -36,6 +36,7 @@
 #include <qdf_platform.h>
 #include "reg_services_common.h"
 #include "reg_build_chan_list.h"
+#include "wmi_unified_param.h"
 
 #define DEFAULT_WORLD_REGDMN 0x60
 
@@ -250,7 +251,11 @@ QDF_STATUS reg_set_country(struct wlan_objmgr_pdev *pdev,
 	reg_debug("programming new country: %s to firmware", country);
 
 	qdf_mem_copy(cc.country, country, REG_ALPHA2_LEN + 1);
-	cc.pdev_id = pdev_id;
+	/*
+	 * Need firmware to send channel list event
+	 * for all phys. Therefore set pdev_id to 0xFF.
+	 */
+	cc.pdev_id = WMI_HOST_PDEV_ID_SOC;
 
 	if (!psoc_reg->offload_enabled && !reg_is_world_alpha2(country)) {
 		QDF_STATUS status;
@@ -908,9 +913,9 @@ QDF_STATUS reg_set_curr_country(struct wlan_regulatory_psoc_priv_obj *soc_reg,
 
 	/*
 	 * Need firmware to send channel list event
-	 * for all phys. Therefore set pdev_id to 0xFF
+	 * for all phys. Therefore set pdev_id to 0xFF.
 	 */
-	pdev_id = 0xFF;
+	pdev_id = WMI_HOST_PDEV_ID_SOC;
 	for (phy_num = 0; phy_num < regulat_info->num_phy; phy_num++) {
 		if (soc_reg->cc_src == SOURCE_USERSPACE)
 			soc_reg->new_user_ctry_pending[phy_num] = true;
