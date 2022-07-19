@@ -481,7 +481,7 @@ int nl_srv_ucast(struct sk_buff *skb, int dst_pid, int flag,
 	return 0;
 }
 
-#elif !defined(MULTI_IF_NAME)
+#elif !defined(MULTI_IF_NAME) || defined(MULTI_IF_LOG)
 
 /* Global variables */
 static DEFINE_MUTEX(nl_srv_sem);

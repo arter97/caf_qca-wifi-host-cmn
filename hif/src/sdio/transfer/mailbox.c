@@ -494,7 +494,6 @@ int hif_get_send_address(struct hif_sdio_device *pdev,
 
 	if (!addr)
 		return -EINVAL;
-
 	mbox_index = hif_dev_map_pipe_to_mail_box(pdev, pipe);
 
 	if (mbox_index == INVALID_MAILBOX_NUMBER)
@@ -586,7 +585,7 @@ static QDF_STATUS hif_dev_recv_packet(struct hif_sdio_device *pdev,
 	}
 
 	/* mailbox index is saved in Endpoint member */
-	HIF_INFO("%s : hdr:0x%x, len:%d, padded length: %d Mbox:0x%x",
+	HIF_DBG("%s : hdr:0x%x, len:%d, padded length: %d Mbox:0x%x",
 		 __func__, packet->PktInfo.AsRx.ExpectedHdr, recv_length,
 		 padded_length, mbox_index);
 
@@ -604,7 +603,7 @@ static QDF_STATUS hif_dev_recv_packet(struct hif_sdio_device *pdev,
 		if (status == QDF_STATUS_SUCCESS) {
 			HTC_FRAME_HDR *hdr = (HTC_FRAME_HDR *) packet->pBuffer;
 
-			HIF_INFO("%s: EP:%d,Len:%d,Flag:%d,CB:0x%02X,0x%02X\n",
+			HIF_DBG("%s: EP:%d,Len:%d,Flag:%d,CB:0x%02X,0x%02X\n",
 				 __func__,
 				 hdr->EndpointID, hdr->PayloadLen,
 				 hdr->Flags, hdr->ControlBytes0,
@@ -745,7 +744,7 @@ QDF_STATUS hif_dev_recv_message_pending_handler(struct hif_sdio_device *pdev,
 	HTC_PACKET_QUEUE recv_q, sync_comp_q;
 	QDF_STATUS (*rxCompletion)(void *, qdf_nbuf_t,	uint8_t);
 
-	HIF_INFO("%s: NumLookAheads: %d\n", __func__, num_look_aheads);
+	HIF_DBG("%s: NumLookAheads: %d\n", __func__, num_look_aheads);
 
 	if (num_pkts_fetched)
 		*num_pkts_fetched = 0;

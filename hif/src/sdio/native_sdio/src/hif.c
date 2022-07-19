@@ -203,14 +203,14 @@ __hif_read_write(struct hif_sdio_dev *device,
 		return QDF_STATUS_E_INVAL;
 	}
 
-	HIF_INFO_HI("%s: addr:0X%06X, len:%08d, %s, %s", __func__,
+	HIF_DBG("%s: addr:0X%06X, len:%08d, %s, %s", __func__,
 		    address, length,
 		    request & HIF_SDIO_READ ? "Read " : "Write",
 		    request & HIF_ASYNCHRONOUS ? "Async" : "Sync ");
 
 	do {
 		if (request & HIF_EXTENDED_IO) {
-			HIF_INFO_HI("%s: Command type: CMD53\n", __func__);
+			HIF_DBG("%s: Command type: CMD53\n", __func__);
 		} else {
 			HIF_ERROR("%s: Invalid command type: 0x%08x\n",
 				  __func__, request);
@@ -223,10 +223,10 @@ __hif_read_write(struct hif_sdio_dev *device,
 			length =
 				(length / HIF_BLOCK_SIZE) *
 				HIF_BLOCK_SIZE;
-			HIF_INFO_HI("%s: Block mode (BlockLen: %d)\n",
+			HIF_DBG("%s: Block mode (BlockLen: %d)\n",
 				    __func__, length);
 		} else if (request & HIF_BYTE_BASIS) {
-			HIF_INFO_HI("%s: Byte mode (BlockLen: %d)\n",
+			HIF_DBG("%s: Byte mode (BlockLen: %d)\n",
 				    __func__, length);
 		} else {
 			HIF_ERROR("%s: Invalid data mode: 0x%08x\n",
@@ -238,18 +238,18 @@ __hif_read_write(struct hif_sdio_dev *device,
 			hif_fixup_write_param(device, request,
 					      &length, &address);
 
-			HIF_INFO_HI("addr:%08X, len:0x%08X, dummy:0x%04X\n",
+			HIF_DBG("addr:%08X, len:0x%08X, dummy:0x%04X\n",
 				    address, length,
 				    (request & HIF_DUMMY_SPACE_MASK) >> 16);
 		}
 
 		if (request & HIF_FIXED_ADDRESS) {
 			opcode = CMD53_FIXED_ADDRESS;
-			HIF_INFO_HI("%s: Addr mode: fixed 0x%X\n",
+			HIF_DBG("%s: Addr mode: fixed 0x%X\n",
 				    __func__, address);
 		} else if (request & HIF_INCREMENTAL_ADDRESS) {
 			opcode = CMD53_INCR_ADDRESS;
-			HIF_INFO_HI("%s: Address mode: Incremental 0x%X\n",
+			HIF_DBG("%s: Address mode: Incremental 0x%X\n",
 				    __func__, address);
 		} else {
 			HIF_ERROR("%s: Invalid address mode: 0x%08x\n",
@@ -282,13 +282,13 @@ __hif_read_write(struct hif_sdio_dev *device,
 			if (opcode == CMD53_FIXED_ADDRESS  && tbuffer) {
 				ret = sdio_writesb(device->func, address,
 						   tbuffer, length);
-				HIF_INFO_HI("%s:r=%d addr:0x%X, len:%d, 0x%X\n",
+				HIF_DBG("%s:r=%d addr:0x%X, len:%d, 0x%X\n",
 					    __func__, ret, address, length,
 					    *(int *)tbuffer);
 			} else if (tbuffer) {
 				ret = sdio_memcpy_toio(device->func, address,
 						       tbuffer, length);
-				HIF_INFO_HI("%s:r=%d addr:0x%X, len:%d, 0x%X\n",
+				HIF_DBG("%s:r=%d addr:0x%X, len:%d, 0x%X\n",
 					    __func__, ret, address, length,
 					    *(int *)tbuffer);
 			}
@@ -315,14 +315,14 @@ __hif_read_write(struct hif_sdio_dev *device,
 			if (opcode == CMD53_FIXED_ADDRESS && tbuffer) {
 				ret = sdio_readsb(device->func, tbuffer,
 						  address, length);
-				HIF_INFO_HI("%s:r=%d addr:0x%X, len:%d, 0x%X\n",
+				HIF_DBG("%s:r=%d addr:0x%X, len:%d, 0x%X\n",
 					    __func__, ret, address, length,
 					    *(int *)tbuffer);
 			} else if (tbuffer) {
 				ret = sdio_memcpy_fromio(device->func,
 							 tbuffer, address,
 							 length);
-				HIF_INFO_HI("%s:r=%d addr:0x%X, len:%d, 0x%X\n",
+				HIF_DBG("%s:r=%d addr:0x%X, len:%d, 0x%X\n",
 					    __func__, ret, address, length,
 					    *(int *)tbuffer);
 			}
@@ -1358,7 +1358,6 @@ static A_STATUS hif_sdio_remove(void *context, void *hif_handle)
 	}
 
 	athdiag_procfs_remove();
-
 
 	HIF_EXIT();
 

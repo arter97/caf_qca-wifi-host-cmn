@@ -245,7 +245,7 @@ QDF_STATUS hif_dev_alloc_and_prepare_rx_packets(struct hif_sdio_device *pdev,
 			 */
 			num_messages++;
 
-			HIF_INFO("%s: HTC header : %u messages in bundle",
+			HIF_DBG("%s: HTC header : %u messages in bundle",
 				 __func__, num_messages);
 		}
 
@@ -381,7 +381,7 @@ QDF_STATUS hif_dev_process_trailer(struct hif_sdio_device *pdev,
 	HTC_RECORD_HDR *record;
 	HTC_LOOKAHEAD_REPORT *look_ahead;
 
-	HIF_INFO("%s: length:%d", __func__, length);
+	HIF_DBG("%s: length:%d", __func__, length);
 
 	orig_buffer = buffer;
 	orig_length = length;
@@ -420,11 +420,11 @@ QDF_STATUS hif_dev_process_trailer(struct hif_sdio_device *pdev,
 			if ((look_ahead->PreValid ==
 			     ((~look_ahead->PostValid) & 0xFF)) &&
 			    next_look_aheads) {
-				HIF_INFO_HI("%s: look_ahead Report", __func__);
-				HIF_INFO_HI("%s:prevalid:0x%x, postvalid:0x%x",
+				HIF_DBG("%s: look_ahead Report", __func__);
+				HIF_DBG("%s:prevalid:0x%x, postvalid:0x%x",
 					    __func__, look_ahead->PreValid,
 					    look_ahead->PostValid);
-				HIF_INFO_HI("%s:from endpoint %d : %u",
+				HIF_DBG("%s:from endpoint %d : %u",
 					    __func__, from_endpoint,
 					    look_ahead->LookAhead0);
 				/* look ahead bytes are valid, copy them over */
@@ -515,7 +515,7 @@ QDF_STATUS hif_dev_process_trailer(struct hif_sdio_device *pdev,
 		debug_dump_bytes(orig_buffer, orig_length,
 				 "BAD Recv Trailer");
 
-	HIF_INFO("%s: status = %d", __func__, status);
+	HIF_DBG("%s: status = %d", __func__, status);
 
 	return status;
 }

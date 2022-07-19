@@ -286,7 +286,7 @@ QDF_STATUS hif_dev_dsr_handler(void *context)
 			HIF_INFO("%s:  Yield (RX count: %d)",
 				 __func__, pdev->CurrentDSRRecvCount);
 		} else {
-			HIF_INFO("%s: Ack interrupt", __func__);
+			HIF_DBG("%s: Ack interrupt", __func__);
 			hif_ack_interrupt(pdev->HIFDevice);
 		}
 	}
