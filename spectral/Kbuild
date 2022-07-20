@@ -195,7 +195,9 @@ endif
 
 obj-m += qca_spectral.o
 
-ccflags-y+= $(INCS) $(COPTS) -DSPECTRAL_USE_NETLINK_SOCKETS=1 -DWLAN_SPECTRAL_ENABLE=1
+inc_var := $(shell echo $(INCS) > $(obj)/$(DEPTH)/inc_spectral_opts)
+var := "@$(obj)/$(DEPTH)/inc_spectral_opts"
+ccflags-y+=  $(var) $(COPTS) -DSPECTRAL_USE_NETLINK_SOCKETS=1 -DWLAN_SPECTRAL_ENABLE=1
 ccflags-y+= -DSPECTRAL_USE_NL_BCAST=1
 
 ifeq ($(strip ${QCA_PARTNER_MAKE_F_SUPPORT}),1)
