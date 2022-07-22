@@ -73,6 +73,14 @@ bool ucfg_ipa_is_enabled(void);
 bool ucfg_ipa_uc_is_enabled(void);
 
 /**
+ * ucfg_ipa_is_vlan enabled() - get IPA vlan support enable status
+ *
+ * Return: true - ipa vlan support is enabled
+ *         false - ipa vlan support is not enabled
+ */
+bool ucfg_ipa_is_vlan_enabled(void);
+
+/**
  * ucfg_ipa_set_dp_handle() - register DP handle
  * @psoc: psoc handle
  * @dp_soc: data path soc handle
@@ -468,6 +476,11 @@ static inline bool ucfg_ipa_is_enabled(void)
 }
 
 static inline bool ucfg_ipa_uc_is_enabled(void)
+{
+	return false;
+}
+
+static inline bool ucfg_ipa_is_vlan_enabled(void)
 {
 	return false;
 }
