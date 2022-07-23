@@ -521,11 +521,7 @@ static inline void dp_tx_get_queue(struct dp_vdev *vdev,
 				DP_TX_QUEUE_MASK;
 
 	queue->desc_pool_id = queue_offset;
-	queue->ring_id = qdf_get_cpu();
-
-	dp_tx_debug("pool_id:%d ring_id: %d",
-		    queue->desc_pool_id, queue->ring_id);
-
+	queue->ring_id = qdf_nbuf_get_queue_mapping(nbuf);
 }
 
 /*
@@ -916,7 +912,7 @@ dp_tx_hw_desc_update_evt(uint8_t *hal_tx_desc_cached,
 }
 #endif
 
-#if defined(WLAN_FEATURE_TSF_UPLINK_DELAY) || defined(QCA_PEER_EXT_STATS)
+#if defined(WLAN_FEATURE_TSF_UPLINK_DELAY) || defined(CONFIG_SAWF)
 /**
  * dp_tx_compute_hw_delay_us() - Compute hardware Tx completion delay
  * @ts: Tx completion status

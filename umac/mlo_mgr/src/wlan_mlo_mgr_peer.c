@@ -736,6 +736,20 @@ static void mlo_dev_release_link_vdevs(
 	}
 }
 
+#ifdef WLAN_FEATURE_T2LM
+static void
+wlan_mlo_peer_set_t2lm_enable_val(struct wlan_mlo_peer_context *ml_peer,
+				  struct mlo_partner_info *ml_info)
+{
+	ml_peer->t2lm_policy.t2lm_enable_val = ml_info->t2lm_enable_val;
+}
+#else
+static void
+wlan_mlo_peer_set_t2lm_enable_val(struct wlan_mlo_peer_context *ml_peer,
+				  struct mlo_partner_info *ml_info)
+{}
+#endif /* WLAN_FEATURE_T2LM */
+
 QDF_STATUS wlan_mlo_peer_create(struct wlan_objmgr_vdev *vdev,
 				struct wlan_objmgr_peer *link_peer,
 				struct mlo_partner_info *ml_info,
@@ -760,6 +774,13 @@ QDF_STATUS wlan_mlo_peer_create(struct wlan_objmgr_vdev *vdev,
 
 	/* Check resources of Partner VDEV */
 	if (wlan_vdev_mlme_get_opmode(vdev) == QDF_SAP_MODE) {
+		if (wlan_mlo_is_mld_ctx_exist(
+		    (struct qdf_mac_addr *)&link_peer->mldaddr[0])) {
+			mlo_err("MLD ID %d ML Peer " QDF_MAC_ADDR_FMT " is matching with one of the MLD address in the system",
+				ml_dev->mld_id,
+				QDF_MAC_ADDR_REF(link_peer->mldaddr));
+			return QDF_STATUS_E_FAILURE;
+		}
 		status = mlo_dev_get_link_vdevs(vdev, ml_dev,
 						ml_info, link_vdevs);
 		if (QDF_IS_STATUS_ERROR(status)) {
@@ -842,6 +863,8 @@ QDF_STATUS wlan_mlo_peer_create(struct wlan_objmgr_vdev *vdev,
 
 		qdf_copy_macaddr((struct qdf_mac_addr *)&ml_peer->peer_mld_addr,
 				 (struct qdf_mac_addr *)&link_peer->mldaddr[0]);
+		wlan_mlo_peer_set_t2lm_enable_val(ml_peer, ml_info);
+
 		/* Allocate AID */
 		if (wlan_vdev_mlme_get_opmode(vdev) == QDF_SAP_MODE) {
 			if (aid == (uint16_t)-1) {

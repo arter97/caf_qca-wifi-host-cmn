@@ -804,6 +804,17 @@ wlan_reg_is_noaction_on_afc_pwr_evt(struct wlan_objmgr_pdev *pdev);
 QDF_STATUS
 wlan_reg_get_afc_dev_deploy_type(struct wlan_objmgr_pdev *pdev,
 				 enum reg_afc_dev_deploy_type *afc_dev_type);
+
+/**
+ * wlan_reg_is_sta_connect_allowed() - Check if STA connection allowed
+ * @pdev: pdev pointer
+ * @root_ap_pwr_mode: power mode of the Root AP.
+ *
+ * Return : True if STA Vap connection is allowed.
+ */
+bool
+wlan_reg_is_sta_connect_allowed(struct wlan_objmgr_pdev *pdev,
+				enum reg_6g_ap_type root_ap_pwr_mode);
 #else
 static inline bool
 wlan_reg_is_afc_power_event_received(struct wlan_objmgr_pdev *pdev)
@@ -814,7 +825,7 @@ wlan_reg_is_afc_power_event_received(struct wlan_objmgr_pdev *pdev)
 static inline bool
 wlan_reg_is_afc_done(struct wlan_objmgr_pdev *pdev, qdf_freq_t freq)
 {
-	return false;
+	return true;
 }
 
 static inline QDF_STATUS
@@ -822,6 +833,13 @@ wlan_reg_get_6g_afc_chan_list(struct wlan_objmgr_pdev *pdev,
 			      struct regulatory_channel *chan_list)
 {
 	return QDF_STATUS_E_NOSUPPORT;
+}
+
+static inline bool
+wlan_reg_is_sta_connect_allowed(struct wlan_objmgr_pdev *pdev,
+				enum reg_6g_ap_type root_ap_pwr_mode)
+{
+	return true;
 }
 #endif
 
@@ -1505,6 +1523,26 @@ bool wlan_reg_is_punc_bitmap_valid(enum phy_ch_width bw,
 				   uint16_t puncture_bitmap);
 
 /**
+ * wlan_reg_extract_puncture_by_bw() - generate new puncture bitmap from
+ *                                     original puncture bitmap and bandwidth
+ *                                     based on new bandwidth
+ * @ori_bw: original bandwidth
+ * @ori_puncture_bitmap: original puncture bitmap
+ * @freq: frequency of primary channel
+ * @cen320_freq: center frequency of 320 MHZ if channel width is 320
+ * @new_bw new bandwidth
+ * @new_puncture_bitmap: output of puncture bitmap
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS wlan_reg_extract_puncture_by_bw(enum phy_ch_width ori_bw,
+					   uint16_t ori_puncture_bitmap,
+					   qdf_freq_t freq,
+					   qdf_freq_t cen320_freq,
+					   enum phy_ch_width new_bw,
+					   uint16_t *new_puncture_bitmap);
+
+/**
  * wlan_reg_set_create_punc_bitmap() - set is_create_punc_bitmap of ch_params
  * @ch_params: ch_params to set
  * @is_create_punc_bitmap: is create punc bitmap
@@ -1540,6 +1578,16 @@ void wlan_reg_fill_channel_list_for_pwrmode(
 				bool treat_nol_chan_as_disabled);
 #endif
 #else
+static inline
+QDF_STATUS wlan_reg_extract_puncture_by_bw(enum phy_ch_width ori_bw,
+					   uint16_t ori_puncture_bitmap,
+					   qdf_freq_t freq,
+					   enum phy_ch_width new_bw,
+					   uint16_t *new_puncture_bitmap)
+{
+	return QDF_STATUS_SUCCESS;
+}
+
 static inline void wlan_reg_set_create_punc_bitmap(struct ch_params *ch_params,
 						   bool is_create_punc_bitmap)
 {
@@ -2325,17 +2373,47 @@ QDF_STATUS wlan_reg_psd_2_eirp(struct wlan_objmgr_pdev *pdev,
 			       int16_t *eirp);
 
 /**
+ * wlan_reg_eirp_2_psd() - Calculate PSD poewr from EIRP and bandwidth
+ * @pdev: pdev pointer
+ * @ch_bw: Bandwidth of a channel in MHz (20/40/80/160/320 etc)
+ * @eirp:  EIRP power  in dBm
+ * @psd: Power Spectral Density in dBm/MHz
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS wlan_reg_eirp_2_psd(struct wlan_objmgr_pdev *pdev,
+			       uint16_t ch_bw,
+			       int16_t eirp,
+			       int16_t *psd);
+
+/**
  * wlan_reg_get_best_pwr_mode() - Get the best power mode based on input freq
  * and bandwidth. The mode that provides the best EIRP is the best power mode.
  * @pdev: Pointer to pdev
- * @freq: Frequency in mhz
- * @bw: Bandwidth in mhz
+ * @freq: Frequency in MHz
+ * @cen320: 320 MHz band center frequency. For other BW, this param is
+ * ignored while processing
+ * @bw: Bandwidth in MHz
  *
  * Return: Best power mode
  */
 enum reg_6g_ap_type
 wlan_reg_get_best_pwr_mode(struct wlan_objmgr_pdev *pdev, qdf_freq_t freq,
-			   uint16_t bw);
+			   qdf_freq_t cen320, uint16_t bw);
+
+/**
+ * wlan_reg_get_eirp_pwr() - Get eirp power based on the AP power mode
+ * @pdev: Pointer to pdev
+ * @freq: Frequency in MHz
+ * @cen320: 320 MHz Band center frequency
+ * @bw: Bandwidth in MHz
+ * @ap_pwr_type: AP power type
+ *
+ * Return: EIRP power
+ */
+uint8_t wlan_reg_get_eirp_pwr(struct wlan_objmgr_pdev *pdev, qdf_freq_t freq,
+			      qdf_freq_t cen320, uint16_t bw,
+			      enum reg_6g_ap_type ap_pwr_type);
 #else
 static inline
 qdf_freq_t wlan_reg_get_thresh_priority_freq(struct wlan_objmgr_pdev *pdev)
@@ -2345,6 +2423,7 @@ qdf_freq_t wlan_reg_get_thresh_priority_freq(struct wlan_objmgr_pdev *pdev)
 
 static inline enum reg_6g_ap_type
 wlan_reg_get_best_pwr_mode(struct wlan_objmgr_pdev *pdev, qdf_freq_t freq,
+			   qdf_freq_t cen320,
 			   uint16_t bw)
 {
 	return REG_MAX_AP_TYPE;
@@ -2357,6 +2436,22 @@ static inline QDF_STATUS wlan_reg_psd_2_eirp(struct wlan_objmgr_pdev *pdev,
 {
 	return QDF_STATUS_E_FAILURE;
 }
+
+static inline QDF_STATUS wlan_reg_eirp_2_psd(struct wlan_objmgr_pdev *pdev,
+					     uint16_t ch_bw,
+					     int16_t eirp,
+					     int16_t *psd)
+{
+	return QDF_STATUS_E_FAILURE;
+}
+
+static inline uint8_t wlan_reg_get_eirp_pwr(struct wlan_objmgr_pdev *pdev,
+					    qdf_freq_t freq,
+					    qdf_freq_t cen320, uint16_t bw,
+					    enum reg_6g_ap_type ap_pwr_type)
+{
+	return 0;
+}
 #endif /* CONFIG_BAND_6GHZ */
 /**
  * wlan_reg_find_chwidth_from_bw () - Gets channel width for given
@@ -2366,4 +2461,42 @@ static inline QDF_STATUS wlan_reg_psd_2_eirp(struct wlan_objmgr_pdev *pdev,
  * Return: phy_ch_width
  */
 enum phy_ch_width wlan_reg_find_chwidth_from_bw(uint16_t bw);
+
+/**
+ * wlan_reg_get_chan_state_for_320() - Get the channel state of a 320 MHz
+ * bonded channel.
+ * @pdev: Pointer to wlan_objmgr_pdev
+ * @freq: Primary frequency
+ * @center_320: Band center of 320 MHz
+ * @ch_width: Channel width
+ * @bonded_chan_ptr_ptr: Pointer to bonded channel pointer
+ * @treat_nol_chan_as_disabled: Bool to treat nol chan as enabled/disabled
+ * @in_pwr_type: Input 6g power type
+ *
+ * Return: Channel state
+ */
+#ifdef WLAN_FEATURE_11BE
+enum channel_state
+wlan_reg_get_chan_state_for_320(struct wlan_objmgr_pdev *pdev,
+				uint16_t freq,
+				qdf_freq_t center_320,
+				enum phy_ch_width ch_width,
+				const struct bonded_channel_freq
+				**bonded_chan_ptr_ptr,
+				enum supported_6g_pwr_types in_6g_pwr_type,
+				bool treat_nol_chan_as_disabled);
+#else
+static inline enum channel_state
+wlan_reg_get_chan_state_for_320(struct wlan_objmgr_pdev *pdev,
+				uint16_t freq,
+				qdf_freq_t center_320,
+				enum phy_ch_width ch_width,
+				const struct bonded_channel_freq
+				**bonded_chan_ptr_ptr,
+				enum supported_6g_pwr_types in_6g_pwr_type,
+				bool treat_nol_chan_as_disabled)
+{
+	return CHANNEL_STATE_INVALID;
+}
+#endif
 #endif

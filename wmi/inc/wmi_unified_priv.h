@@ -460,6 +460,22 @@ QDF_STATUS
 (*extract_roam_candidate_frame)(wmi_unified_t wmi_handle,
 				uint8_t *event, uint32_t data_len,
 				struct roam_scan_candidate_frame *data);
+#ifdef WLAN_VENDOR_HANDOFF_CONTROL
+/**
+ * extract_roam_vendor_control_param_event  - Extract vendor handoff param event
+ * function pointer
+ * @wmi_handle: WMI handle
+ * @event: Event buffer
+ * @data_len: evt buffer data len
+ * @vendor_handoff_params: vendor handoff param buffer pointer
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS
+(*extract_roam_vendor_control_param_event)(wmi_unified_t wmi_handle,
+		uint8_t *event, uint32_t data_len,
+		struct roam_vendor_handoff_params **vendor_handoff_params);
+#endif
 #endif
 #ifdef FEATURE_MEC_OFFLOAD
 QDF_STATUS
@@ -836,6 +852,11 @@ QDF_STATUS (*send_set_ric_req_cmd)(wmi_unified_t wmi_handle, void *msg,
 
 QDF_STATUS (*send_process_roam_synch_complete_cmd)(wmi_unified_t wmi_handle,
 		 uint8_t vdev_id);
+
+#ifdef WLAN_VENDOR_HANDOFF_CONTROL
+QDF_STATUS (*send_process_roam_vendor_handoff_req_cmd)(wmi_unified_t wmi_handle,
+					uint8_t vdev_id, uint32_t param_id);
+#endif
 
 QDF_STATUS (*send_roam_invoke_cmd)(wmi_unified_t wmi_handle,
 		struct roam_invoke_req *roaminvoke);
@@ -3009,9 +3030,19 @@ QDF_STATUS
 				    uint32_t *pktlog_json_version);
 
 QDF_STATUS
+(*send_peer_filter_set_tx_cmd)(wmi_unified_t wmi_handle,
+			       uint8_t macaddr[],
+			       struct set_tx_peer_filter *param);
+
+QDF_STATUS
 (*extract_pdev_telemetry_stats)(
 		wmi_unified_t wmi_handle, void *evt_buf,
 		struct wmi_host_pdev_telemetry_stats *pdev_stats);
+#ifdef WLAN_FEATURE_PEER_TXQ_FLUSH_CONF
+QDF_STATUS
+(*send_peer_txq_flush_config_cmd)(wmi_unified_t wmi_handle,
+				  struct peer_txq_flush_config_params *param);
+#endif
 };
 
 /* Forward declartion for psoc*/

@@ -38,8 +38,6 @@
 
 #include <hal_be_rx.h>
 
-struct tcl_data_cmd gtcl_data_symbol __attribute__((used));
-
 #define UNIFIED_RXPCU_PPDU_END_INFO_8_RX_PPDU_DURATION_OFFSET \
 	RXPCU_PPDU_END_INFO_RX_PPDU_DURATION_OFFSET
 #define UNIFIED_RXPCU_PPDU_END_INFO_8_RX_PPDU_DURATION_MASK \
@@ -1232,9 +1230,8 @@ void hal_rx_proc_phyrx_other_receive_info_tlv_kiwi(void *rx_tlv_hdr,
 
 	switch (other_tlv_tag) {
 	default:
-		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_ERROR,
-			  "%s unhandled TLV type: %d, TLV len:%d",
-			  __func__, other_tlv_tag, other_tlv_len);
+		hal_err_rl("unhandled TLV type: %d, TLV len:%d",
+			   other_tlv_tag, other_tlv_len);
 		break;
 	}
 }

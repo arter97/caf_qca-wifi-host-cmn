@@ -246,6 +246,8 @@
 #define WLAN_VDEV_C_BGSCAN               0x00000100
   /* CAPABILITY: Restrict offchannel */
 #define WLAN_VDEV_C_RESTRICT_OFFCHAN     0x00000200
+  /* CAPABILITY: eMLSR capability */
+#define WLAN_VDEV_C_EMLSR_CAP            0x00000400
 
 /* Invalid VDEV identifier */
 #define WLAN_INVALID_VDEV_ID 255
@@ -403,6 +405,7 @@ struct wlan_objmgr_vdev_objmgr {
  * @obj_state:      VDEV object state
  * @vdev_lock:      VDEV lock
  * @mlo_dev_ctx:    MLO device context
+ * @twt_work:	    TWT work
  */
 struct wlan_objmgr_vdev {
 	qdf_list_node_t vdev_node;
@@ -415,6 +418,9 @@ struct wlan_objmgr_vdev {
 	qdf_spinlock_t vdev_lock;
 #ifdef WLAN_FEATURE_11BE_MLO
 	struct wlan_mlo_dev_context *mlo_dev_ctx;
+#endif
+#ifdef WLAN_SUPPORT_TWT
+	qdf_work_t twt_work;
 #endif
 };
 

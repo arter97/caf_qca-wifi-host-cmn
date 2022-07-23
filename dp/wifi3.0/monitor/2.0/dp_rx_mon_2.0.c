@@ -66,6 +66,53 @@ dp_rx_mon_pf_update_stats(struct dp_pdev *dp_pdev, uint32_t flow_idx,
 }
 #endif
 
+/**
+ * dp_rx_mon_nbuf_add_rx_frag () -  Add frag to SKB
+ *
+ * @nbuf: SKB to which frag is going to be added
+ * @frag: frag to be added to SKB
+ * @frag_len: frag length
+ * @offset: frag offset
+ * @buf_size: buffer size
+ * @frag_ref: take frag ref
+ *
+ * Return: QDF_STATUS
+ */
+static inline QDF_STATUS
+dp_rx_mon_nbuf_add_rx_frag(qdf_nbuf_t nbuf, qdf_frag_t *frag,
+			   uint16_t frag_len, uint16_t offset,
+			   uint16_t buf_size, bool frag_ref)
+{
+	uint8_t num_frags;
+
+	num_frags = qdf_nbuf_get_nr_frags(nbuf);
+	if (num_frags < QDF_NBUF_MAX_FRAGS) {
+		qdf_nbuf_add_rx_frag(frag, nbuf,
+				     offset,
+				     frag_len,
+				     buf_size,
+				     frag_ref);
+		return QDF_STATUS_SUCCESS;
+	}
+	return QDF_STATUS_E_FAILURE;
+}
+
+/**
+ * dp_mon_free_parent_nbuf() - Free parent SKB
+ *
+ * @mon_pdev: monitor pdev
+ * @nbuf: SKB to be freed
+ *
+ * @Return: void
+ */
+static inline void
+dp_mon_free_parent_nbuf(struct dp_mon_pdev *mon_pdev,
+			qdf_nbuf_t nbuf)
+{
+	mon_pdev->rx_mon_stats.parent_buf_free++;
+	qdf_nbuf_free(nbuf);
+}
+
 void
 dp_rx_mon_shift_pf_tag_in_headroom(qdf_nbuf_t nbuf, struct dp_soc *soc)
 {
@@ -100,14 +147,12 @@ dp_rx_mon_pf_tag_to_buf_headroom_2_0(void *nbuf,
 				     struct dp_pdev *pdev, struct dp_soc *soc)
 {
 	uint8_t *nbuf_head = NULL;
-	uint8_t user_id = ppdu_info->user_id;
-	struct hal_rx_mon_msdu_info *msdu_info = &ppdu_info->msdu[user_id];
-	uint16_t flow_id = ppdu_info->rx_msdu_info[user_id].flow_idx;
-	uint16_t cce_metadata = ppdu_info->rx_msdu_info[user_id].cce_metadata -
-				RX_PROTOCOL_TAG_START_OFFSET;
-	uint16_t protocol_tag = pdev->rx_proto_tag_map[cce_metadata].tag;
-	uint32_t flow_tag = ppdu_info->rx_msdu_info[user_id].fse_metadata &
-			    F_MASK;
+	uint8_t user_id;
+	struct hal_rx_mon_msdu_info *msdu_info;
+	uint16_t flow_id;
+	uint16_t cce_metadata;
+	uint16_t protocol_tag;
+	uint32_t flow_tag;
 
 	if (qdf_unlikely(!soc)) {
 		dp_mon_err("Soc[%pK] Null. Can't update pftag to nbuf headroom",
@@ -128,6 +173,25 @@ dp_rx_mon_pf_tag_to_buf_headroom_2_0(void *nbuf,
 			   qdf_nbuf_headroom(nbuf), DP_RX_MON_TOT_PF_TAG_LEN);
 		return;
 	}
+
+	user_id = ppdu_info->user_id;
+	if (qdf_unlikely(user_id > HAL_MAX_UL_MU_USERS)) {
+		dp_mon_debug("Invalid user_id user_id: %d pdev: %pK", user_id, pdev);
+		return;
+	}
+
+	msdu_info = &ppdu_info->msdu[user_id];
+	flow_id = ppdu_info->rx_msdu_info[user_id].flow_idx;
+	cce_metadata = ppdu_info->rx_msdu_info[user_id].cce_metadata -
+		       RX_PROTOCOL_TAG_START_OFFSET;
+
+	if (qdf_unlikely(cce_metadata > RX_PROTOCOL_TAG_MAX - 1)) {
+		dp_mon_debug("Invalid user_id cce_metadata: %d pdev: %pK", cce_metadata, pdev);
+		return;
+	}
+
+	protocol_tag = pdev->rx_proto_tag_map[cce_metadata].tag;
+	flow_tag = ppdu_info->rx_msdu_info[user_id].fse_metadata & F_MASK;
 
 	if (msdu_info->msdu_index >= QDF_NBUF_MAX_FRAGS) {
 		dp_mon_err("msdu_index causes overflow in headroom");
@@ -155,7 +219,9 @@ dp_rx_mon_free_ppdu_info(struct dp_pdev *pdev,
 			 struct hal_rx_ppdu_info *ppdu_info)
 {
 	uint8_t user;
+	struct dp_mon_pdev *mon_pdev;
 
+	mon_pdev = (struct dp_mon_pdev *)pdev->monitor_pdev;
 	for (user = 0; user < ppdu_info->com_info.num_users; user++) {
 		uint16_t mpdu_count  = ppdu_info->mpdu_count[user];
 		uint16_t mpdu_idx;
@@ -166,7 +232,7 @@ dp_rx_mon_free_ppdu_info(struct dp_pdev *pdev,
 
 			if (!mpdu)
 				continue;
-			qdf_nbuf_free(mpdu);
+			dp_mon_free_parent_nbuf(mon_pdev, mpdu);
 		}
 	}
 }
@@ -192,17 +258,15 @@ void dp_rx_mon_drain_wq(struct dp_pdev *pdev)
 	mon_pdev_be = dp_get_be_mon_pdev_from_dp_mon_pdev(mon_pdev);
 
 	qdf_spin_lock_bh(&mon_pdev_be->rx_mon_wq_lock);
-	if (!TAILQ_EMPTY(&mon_pdev_be->rx_mon_queue)) {
-		TAILQ_FOREACH_SAFE(ppdu_info,
-				   &mon_pdev_be->rx_mon_queue,
-				   ppdu_list_elem,
-				   temp_ppdu_info) {
-			TAILQ_REMOVE(&mon_pdev_be->rx_mon_queue,
-				     ppdu_info, ppdu_list_elem);
+	TAILQ_FOREACH_SAFE(ppdu_info,
+			   &mon_pdev_be->rx_mon_queue,
+			   ppdu_list_elem,
+			   temp_ppdu_info) {
+		mon_pdev_be->rx_mon_queue_depth--;
+		TAILQ_REMOVE(&mon_pdev_be->rx_mon_queue,
+			     ppdu_info, ppdu_list_elem);
 
-			dp_rx_mon_free_ppdu_info(pdev, ppdu_info);
-			qdf_mem_free(ppdu_info);
-		}
+		dp_rx_mon_free_ppdu_info(pdev, ppdu_info);
 	}
 	qdf_spin_unlock_bh(&mon_pdev_be->rx_mon_wq_lock);
 }
@@ -221,7 +285,16 @@ dp_rx_mon_deliver_mpdu(struct dp_mon_pdev *mon_pdev,
 		       qdf_nbuf_t mpdu,
 		       struct mon_rx_status *rx_status)
 {
+	qdf_nbuf_t nbuf;
+
 	if (mon_pdev->mvdev && mon_pdev->mvdev->monitor_vdev->osif_rx_mon) {
+		mon_pdev->rx_mon_stats.mpdus_buf_to_stack++;
+		nbuf = qdf_nbuf_get_ext_list(mpdu);
+
+		while (nbuf) {
+			mon_pdev->rx_mon_stats.mpdus_buf_to_stack++;
+			nbuf = nbuf->next;
+		}
 		mon_pdev->mvdev->monitor_vdev->osif_rx_mon(mon_pdev->mvdev->osif_vdev,
 							   mpdu,
 							   rx_status);
@@ -271,14 +344,14 @@ dp_rx_mon_process_ppdu_info(struct dp_pdev *pdev,
 			} else {
 				if (mpdu_meta->full_pkt) {
 					if (qdf_unlikely(mpdu_meta->truncated)) {
-						qdf_nbuf_free(mpdu);
+						dp_mon_free_parent_nbuf(mon_pdev, mpdu);
 						continue;
 					}
 
 					dp_rx_mon_handle_full_mon(pdev,
 								  ppdu_info, mpdu);
 				} else {
-					qdf_nbuf_free(mpdu);
+					dp_mon_free_parent_nbuf(mon_pdev, mpdu);
 					continue;
 				}
 
@@ -298,9 +371,8 @@ dp_rx_mon_process_ppdu_info(struct dp_pdev *pdev,
 				status = dp_rx_mon_deliver_mpdu(mon_pdev,
 								mpdu,
 								&ppdu_info->rx_status);
-
 				if (status != QDF_STATUS_SUCCESS)
-					qdf_nbuf_free(mpdu);
+					dp_mon_free_parent_nbuf(mon_pdev, mpdu);
 			}
 		}
 	}
@@ -338,18 +410,15 @@ void dp_rx_mon_process_ppdu(void *context)
 	mon_pdev_be = dp_get_be_mon_pdev_from_dp_mon_pdev(mon_pdev);
 
 	qdf_spin_lock_bh(&mon_pdev_be->rx_mon_wq_lock);
-	if (!TAILQ_EMPTY(&mon_pdev_be->rx_mon_queue)) {
-		TAILQ_FOREACH_SAFE(ppdu_info,
-				   &mon_pdev_be->rx_mon_queue,
-				   ppdu_list_elem,
-				   temp_ppdu_info) {
-			TAILQ_REMOVE(&mon_pdev_be->rx_mon_queue,
-				     ppdu_info, ppdu_list_elem);
+	TAILQ_FOREACH_SAFE(ppdu_info,
+			   &mon_pdev_be->rx_mon_queue,
+			   ppdu_list_elem, temp_ppdu_info) {
+		TAILQ_REMOVE(&mon_pdev_be->rx_mon_queue,
+			     ppdu_info, ppdu_list_elem);
 
-			mon_pdev_be->rx_mon_queue_depth--;
-			dp_rx_mon_process_ppdu_info(pdev, ppdu_info);
-			qdf_mem_free(ppdu_info);
-		}
+		mon_pdev_be->rx_mon_queue_depth--;
+		dp_rx_mon_process_ppdu_info(pdev, ppdu_info);
+		qdf_mem_free(ppdu_info);
 	}
 	qdf_spin_unlock_bh(&mon_pdev_be->rx_mon_wq_lock);
 }
@@ -750,6 +819,7 @@ dp_rx_mon_flush_status_buf_queue(struct dp_pdev *pdev)
 		mon_pdev_be->desc_count--;
 
 		qdf_frag_free(buf);
+		DP_STATS_INC(mon_soc, frag_free, 1);
 	}
 
 	if (work_done) {
@@ -785,6 +855,7 @@ dp_rx_mon_handle_flush_n_trucated_ppdu(struct dp_soc *soc,
 	/* Flush status buffers in queue */
 	dp_rx_mon_flush_status_buf_queue(pdev);
 	qdf_frag_free(mon_desc->buf_addr);
+	DP_STATS_INC(mon_soc, frag_free, 1);
 	dp_mon_add_to_free_desc_list(&desc_list, &tail, mon_desc);
 	work_done = 1;
 	dp_mon_buffers_replenish(soc, &soc->rxdma_mon_buf_ring[0],
@@ -801,6 +872,7 @@ uint8_t dp_rx_mon_process_tlv_status(struct dp_pdev *pdev,
 				     union dp_mon_desc_list_elem_t **tail)
 {
 	struct dp_soc *soc  = pdev->soc;
+	struct dp_mon_soc *mon_soc = soc->monitor_soc;
 	struct dp_mon_pdev *mon_pdev = pdev->monitor_pdev;
 	qdf_nbuf_t nbuf, tmp_nbuf;
 	qdf_frag_t addr;
@@ -808,6 +880,7 @@ uint8_t dp_rx_mon_process_tlv_status(struct dp_pdev *pdev,
 	uint8_t mpdu_idx = ppdu_info->mpdu_count[user_id];
 	uint16_t num_frags;
 	uint8_t num_buf_reaped = 0;
+	QDF_STATUS status;
 
 	if (!mon_pdev->monitor_configured &&
 	    !dp_lite_mon_is_rx_enabled(mon_pdev)) {
@@ -830,26 +903,21 @@ uint8_t dp_rx_mon_process_tlv_status(struct dp_pdev *pdev,
 			/* Set *head_msdu->next as NULL as all msdus are
 			 *                          * mapped via nr frags
 			 *                                                   */
-			if (!nbuf) {
+			if (qdf_unlikely(!nbuf)) {
 				dp_mon_err("malloc failed pdev: %pK ", pdev);
 				return num_buf_reaped;
 			}
 
+			mon_pdev->rx_mon_stats.parent_buf_alloc++;
 			qdf_nbuf_set_next(nbuf, NULL);
 
 			ppdu_info->mpdu_q[user_id][mpdu_idx] = nbuf;
 
-			num_frags = qdf_nbuf_get_nr_frags(nbuf);
-			if (num_frags < QDF_NBUF_MAX_FRAGS) {
-				qdf_nbuf_add_rx_frag(status_frag, nbuf,
-						     ppdu_info->data - (unsigned char *)status_frag + 4,
-						     ppdu_info->hdr_len - DP_RX_MON_RX_HDR_OFFSET,
-						     DP_MON_DATA_BUFFER_SIZE,
-						     true);
-
-
-
-			} else {
+			status = dp_rx_mon_nbuf_add_rx_frag(nbuf, status_frag,
+							    ppdu_info->data - (unsigned char *)status_frag + 4,
+							    ppdu_info->hdr_len - DP_RX_MON_RX_HDR_OFFSET,
+							    DP_MON_DATA_BUFFER_SIZE, true);
+			if (qdf_unlikely(status != QDF_STATUS_SUCCESS)) {
 				dp_mon_err("num_frags exceeding MAX frags");
 				qdf_assert_always(0);
 			}
@@ -882,23 +950,16 @@ uint8_t dp_rx_mon_process_tlv_status(struct dp_pdev *pdev,
 					dp_mon_err("nbuf is NULL");
 					qdf_assert_always(0);
 				}
+				mon_pdev->rx_mon_stats.parent_buf_alloc++;
 				/* add new skb to frag list */
 				qdf_nbuf_append_ext_list(nbuf, tmp_nbuf,
 							 qdf_nbuf_len(tmp_nbuf));
 			}
-
-			num_frags = qdf_nbuf_get_nr_frags(tmp_nbuf);
-			if (num_frags < QDF_NBUF_MAX_FRAGS) {
-				qdf_nbuf_add_rx_frag(status_frag,
-						     tmp_nbuf,
-						     ppdu_info->data - (unsigned char *)status_frag + 4,
-						     ppdu_info->hdr_len - DP_RX_MON_RX_HDR_OFFSET,
-						     DP_MON_DATA_BUFFER_SIZE,
-						     true);
-			} else {
-				dp_mon_err("num_frags exceeding MAX frags");
-				qdf_assert_always(0);
-			}
+			dp_rx_mon_nbuf_add_rx_frag(tmp_nbuf, status_frag,
+						   ppdu_info->data - (unsigned char *)status_frag + 4,
+						   ppdu_info->hdr_len - DP_RX_MON_RX_HDR_OFFSET,
+						   DP_MON_DATA_BUFFER_SIZE,
+						   true);
 		}
 	}
 	break;
@@ -929,51 +990,66 @@ uint8_t dp_rx_mon_process_tlv_status(struct dp_pdev *pdev,
 		dp_mon_add_to_free_desc_list(desc_list, tail, mon_desc);
 		num_buf_reaped++;
 
+		mon_pdev->rx_mon_stats.pkt_buf_count++;
 		nbuf = ppdu_info->mpdu_q[user_id][mpdu_idx];
 
-		mpdu_info->full_pkt = true;
 		if (qdf_unlikely(!nbuf)) {
-			nbuf = qdf_nbuf_alloc(pdev->soc->osdev,
-					      DP_RX_MON_MAX_MONITOR_HEADER,
-					      DP_RX_MON_MAX_MONITOR_HEADER,
-					      4, FALSE);
 
-			if (!nbuf) {
-				dp_mon_err("nbuf allocation failed ...");
+			/* WAR: RX_HDR is not received for this MPDU, drop this frame */
+			DP_STATS_INC(mon_soc, frag_free, 1);
+			qdf_frag_free(addr);
+			return num_buf_reaped;
+		}
+
+		tmp_nbuf = qdf_get_nbuf_valid_frag(nbuf);
+
+		if (!tmp_nbuf) {
+			tmp_nbuf = qdf_nbuf_alloc(pdev->soc->osdev,
+						  DP_RX_MON_MAX_MONITOR_HEADER,
+						  DP_RX_MON_MAX_MONITOR_HEADER,
+						  4, FALSE);
+			if (qdf_unlikely(!tmp_nbuf)) {
+				dp_mon_err("nbuf is NULL");
+				DP_STATS_INC(mon_soc, frag_free, 1);
+				mon_pdev->rx_mon_stats.parent_buf_free++;
 				qdf_frag_free(addr);
+				qdf_nbuf_free(nbuf);
+				ppdu_info->mpdu_q[user_id][mpdu_idx] = NULL;
 				return num_buf_reaped;
 			}
+			mon_pdev->rx_mon_stats.parent_buf_alloc++;
+			/* add new skb to frag list */
+			qdf_nbuf_append_ext_list(nbuf, tmp_nbuf,
+						 qdf_nbuf_len(tmp_nbuf));
 		}
+		mpdu_info->full_pkt = true;
 
 		if (mpdu_info->decap_type == HAL_HW_RX_DECAP_FORMAT_RAW) {
 			if (mpdu_info->first_rx_hdr_rcvd) {
 				qdf_nbuf_remove_frag(nbuf, frag_idx, DP_MON_DATA_BUFFER_SIZE);
-				qdf_nbuf_add_rx_frag(addr, nbuf,
-						DP_RX_MON_PACKET_OFFSET,
-						packet_info->dma_length,
-						DP_MON_DATA_BUFFER_SIZE,
-						false);
+				dp_rx_mon_nbuf_add_rx_frag(nbuf, addr,
+							   packet_info->dma_length,
+							   DP_RX_MON_PACKET_OFFSET,
+							   DP_MON_DATA_BUFFER_SIZE,
+							   false);
+				DP_STATS_INC(mon_soc, frag_free, 1);
 				mpdu_info->first_rx_hdr_rcvd = false;
 			} else {
-				num_frags = qdf_nbuf_get_nr_frags(nbuf);
-				if (num_frags < QDF_NBUF_MAX_FRAGS) {
-					qdf_nbuf_add_rx_frag(addr, nbuf,
-							DP_RX_MON_PACKET_OFFSET,
-							packet_info->dma_length,
-							RX_MONITOR_BUFFER_SIZE,
-							false);
-				}
+				dp_rx_mon_nbuf_add_rx_frag(tmp_nbuf, addr,
+							   packet_info->dma_length,
+							   DP_RX_MON_PACKET_OFFSET,
+							   DP_MON_DATA_BUFFER_SIZE,
+							   false);
+				DP_STATS_INC(mon_soc, frag_free, 1);
 			}
 		} else {
-			num_frags = qdf_nbuf_get_nr_frags(nbuf);
-			if (num_frags < QDF_NBUF_MAX_FRAGS) {
-				qdf_nbuf_add_rx_frag(addr, nbuf,
-						DP_RX_MON_NONRAW_L2_HDR_PAD_BYTE +
-						DP_RX_MON_PACKET_OFFSET,
-						packet_info->dma_length,
-						RX_MONITOR_BUFFER_SIZE,
-						false);
-			}
+			dp_rx_mon_nbuf_add_rx_frag(tmp_nbuf, addr,
+						   packet_info->dma_length,
+						   DP_RX_MON_NONRAW_L2_HDR_PAD_BYTE +
+						   DP_RX_MON_PACKET_OFFSET,
+						   DP_MON_DATA_BUFFER_SIZE,
+						   false);
+				DP_STATS_INC(mon_soc, frag_free, 1);
 			buf_info = addr;
 
 			if (!ppdu_info->msdu[user_id].first_buffer) {
@@ -990,7 +1066,6 @@ uint8_t dp_rx_mon_process_tlv_status(struct dp_pdev *pdev,
 
 			buf_info->frag_len = packet_info->dma_length;
 		}
-
 		if (qdf_unlikely(packet_info->truncated))
 			mpdu_info->truncated = true;
 	}
@@ -1065,7 +1140,7 @@ uint8_t dp_rx_mon_process_tlv_status(struct dp_pdev *pdev,
 		mpdu_meta->overflow_err = mpdu_info->overflow_err;
 		mpdu_meta->decrypt_err = mpdu_info->decrypt_err;
 		mpdu_meta->full_pkt = mpdu_info->full_pkt;
-		num_frags = qdf_nbuf_get_nr_frags(nbuf);
+		mpdu_meta->truncated = mpdu_info->truncated;
 
 		num_frags = qdf_nbuf_get_nr_frags(nbuf);
 		ppdu_info->mpdu_q[user_id][mpdu_idx] = nbuf;
@@ -1171,6 +1246,8 @@ dp_rx_mon_process_status_tlv(struct dp_pdev *pdev)
 		mon_pdev_be->desc_count--;
 
 		qdf_frag_free(buf);
+		DP_STATS_INC(mon_soc, frag_free, 1);
+		mon_pdev->rx_mon_stats.status_buf_count++;
 	}
 
 	if (work_done) {
@@ -1181,6 +1258,11 @@ dp_rx_mon_process_status_tlv(struct dp_pdev *pdev)
 					 work_done,
 					 &desc_list, &tail);
 	}
+
+	ppdu_info->rx_status.tsft = ppdu_info->rx_status.tsft +
+				    pdev->timestamp.mlo_offset_lo_us +
+				    ((uint64_t)pdev->timestamp.mlo_offset_hi_us
+				    << 32);
 
 	return ppdu_info;
 }
@@ -1290,6 +1372,7 @@ dp_rx_mon_srng_process_2_0(struct dp_soc *soc, struct dp_intr *int_ctx,
 				     mon_pdev);
 			rx_mon_dst_ring_desc =
 				hal_srng_dst_get_next(hal_soc, mon_dst_srng);
+			mon_pdev->rx_mon_stats.empty_desc_ppdu++;
 			continue;
 		}
 		mon_desc = (struct dp_mon_desc *)(uintptr_t)(hal_mon_rx_desc.buf_addr);
@@ -1321,6 +1404,7 @@ dp_rx_mon_srng_process_2_0(struct dp_soc *soc, struct dp_intr *int_ctx,
 		    hal_mon_rx_desc.end_reason == HAL_MON_PPDU_TRUNCATED) {
 			dp_mon_debug("end_resaon: %d mon_pdev: %pK",
 				     hal_mon_rx_desc.end_reason, mon_pdev);
+			mon_pdev->rx_mon_stats.status_ppdu_drop++;
 			dp_rx_mon_handle_flush_n_trucated_ppdu(soc,
 							       pdev,
 							       mon_desc);
@@ -1352,6 +1436,8 @@ dp_rx_mon_srng_process_2_0(struct dp_soc *soc, struct dp_intr *int_ctx,
 		/* Call enhanced stats update API */
 		if (mon_pdev->enhanced_stats_en && ppdu_info)
 			dp_rx_handle_ppdu_stats(soc, pdev, ppdu_info);
+		else if (dp_cfr_rcc_mode_status(pdev) && ppdu_info)
+			dp_rx_handle_cfr(soc, pdev, ppdu_info);
 
 		/* Call API to add PPDU info workqueue */
 		status = dp_rx_mon_add_ppdu_info_to_wq(mon_pdev, ppdu_info);

@@ -274,8 +274,10 @@ enum hal_srng_ring_id {
 #ifdef WLAN_FEATURE_CIF_CFR
 	HAL_SRNG_WIFI_POS_SRC_DMA_RING,
 	HAL_SRNG_DIR_BUF_RX_SRC_DMA_RING,
+	HAL_SRNG_DIR_BUF_RX_SRC_DMA_RING1,
 #else
 	HAL_SRNG_DIR_BUF_RX_SRC_DMA_RING,
+	HAL_SRNG_DIR_BUF_RX_SRC_DMA_RING1,
 #endif
 	HAL_SRNG_WMAC1_TXMON2SW0,
 	HAL_SRNG_SW2TXMON_BUF0,
@@ -840,6 +842,7 @@ struct hal_hw_txrx_ops {
 	/* rx */
 	uint8_t (*hal_rx_get_rx_fragment_number)(uint8_t *buf);
 	uint8_t (*hal_rx_msdu_end_da_is_mcbc_get)(uint8_t *buf);
+	uint8_t (*hal_rx_msdu_end_is_tkip_mic_err)(uint8_t *buf);
 	uint8_t (*hal_rx_msdu_end_sa_is_valid_get)(uint8_t *buf);
 	uint16_t (*hal_rx_msdu_end_sa_idx_get)(uint8_t *buf);
 	uint32_t (*hal_rx_desc_is_first_msdu)(void *hw_desc_addr);

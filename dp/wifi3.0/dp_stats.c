@@ -5269,6 +5269,8 @@ void dp_print_soc_cfg_params(struct dp_soc *soc)
 		       soc_cfg_ctx->int_batch_threshold_other);
 	DP_PRINT_STATS("Int timer threshold other: %u ",
 		       soc_cfg_ctx->int_timer_threshold_other);
+	DP_PRINT_STATS("DP NAPI scale factor: %u ",
+		       soc_cfg_ctx->napi_scale_factor);
 
 	for (i = 0; i < num_of_int_contexts; i++) {
 		index += qdf_snprint(&ring_mask[index],
@@ -5367,8 +5369,10 @@ void dp_print_soc_cfg_params(struct dp_soc *soc)
 		       soc_cfg_ctx->sg_enabled);
 	DP_PRINT_STATS("Gro enabled: %u ",
 		       soc_cfg_ctx->gro_enabled);
-	DP_PRINT_STATS("Force Gro enabled: %u ",
-		       soc_cfg_ctx->force_gro_enabled);
+	DP_PRINT_STATS("TC based dynamic GRO: %u ",
+		       soc_cfg_ctx->tc_based_dynamic_gro);
+	DP_PRINT_STATS("TC ingress prio: %u ",
+		       soc_cfg_ctx->tc_ingress_prio);
 	DP_PRINT_STATS("rawmode enabled: %u ",
 		       soc_cfg_ctx->rawmode_enabled);
 	DP_PRINT_STATS("peer flow ctrl enabled: %u ",
@@ -5590,8 +5594,7 @@ dp_print_ring_stats(struct dp_pdev *pdev)
 	int mac_id;
 	int lmac_id;
 
-	if (hif_pm_runtime_get_sync(pdev->soc->hif_handle,
-				    RTPM_ID_DP_PRINT_RING_STATS))
+	if (hif_rtpm_get(HIF_RTPM_GET_SYNC, HIF_RTPM_ID_DP_RING_STATS))
 		return;
 
 	dp_print_ring_stat_from_hal(pdev->soc,
@@ -5676,8 +5679,7 @@ dp_print_ring_stats(struct dp_pdev *pdev)
 					    [lmac_id],
 					    RXDMA_DST);
 	}
-	hif_pm_runtime_put(pdev->soc->hif_handle,
-			   RTPM_ID_DP_PRINT_RING_STATS);
+	hif_rtpm_put(HIF_RTPM_PUT_ASYNC, HIF_RTPM_ID_DP_RING_STATS);
 }
 
 /**
@@ -7676,6 +7678,7 @@ QDF_STATUS dp_txrx_get_peer_per_pkt_stats_param(struct dp_peer *peer,
 						cdp_peer_stats_param_t *buf)
 {
 	QDF_STATUS ret = QDF_STATUS_SUCCESS;
+	struct dp_peer *tgt_peer;
 	struct dp_txrx_peer *txrx_peer;
 	struct dp_peer_per_pkt_stats *peer_stats;
 
@@ -7692,7 +7695,12 @@ QDF_STATUS dp_txrx_get_peer_per_pkt_stats_param(struct dp_peer *peer,
 		buf->tx_mcast = peer_stats->tx.mcast;
 		break;
 	case cdp_peer_tx_inactive_time:
-		buf->tx_inactive_time = peer->stats.tx.inactive_time;
+		tgt_peer = dp_get_tgt_peer_from_peer(peer);
+		if (tgt_peer)
+			buf->tx_inactive_time =
+					tgt_peer->stats.tx.inactive_time;
+		else
+			ret = QDF_STATUS_E_FAILURE;
 		break;
 	case cdp_peer_rx_ucast:
 		buf->rx_ucast = peer_stats->rx.unicast;
@@ -7978,6 +7986,7 @@ void dp_update_pdev_stats(struct dp_pdev *tgtobj,
 {
 	uint8_t i;
 	uint8_t pream_type;
+	uint8_t mu_type;
 	struct cdp_pdev_stats *pdev_stats = NULL;
 
 	pdev_stats = &tgtobj->stats;
@@ -8002,6 +8011,7 @@ void dp_update_pdev_stats(struct dp_pdev *tgtobj,
 	for (i = 0; i < SS_COUNT; i++) {
 		tgtobj->stats.tx.nss[i] += srcobj->tx.nss[i];
 		tgtobj->stats.rx.nss[i] += srcobj->rx.nss[i];
+		tgtobj->stats.rx.ppdu_nss[i] += srcobj->rx.ppdu_nss[i];
 	}
 
 	for (i = 0; i < WME_AC_MAX; i++) {
@@ -8035,6 +8045,45 @@ void dp_update_pdev_stats(struct dp_pdev *tgtobj,
 				srcobj->tx.transmit_type[i].mpdu_tried;
 	}
 
+	for (i = 0; i < QDF_PROTO_SUBTYPE_MAX; i++)
+		tgtobj->stats.tx.no_ack_count[i] += srcobj->tx.no_ack_count[i];
+
+	for (i = 0; i < MAX_MU_GROUP_ID; i++)
+		tgtobj->stats.tx.mu_group_id[i] = srcobj->tx.mu_group_id[i];
+
+	for (i = 0; i < MAX_RU_LOCATIONS; i++) {
+		tgtobj->stats.tx.ru_loc[i].num_msdu +=
+			srcobj->tx.ru_loc[i].num_msdu;
+		tgtobj->stats.tx.ru_loc[i].num_mpdu +=
+			srcobj->tx.ru_loc[i].num_mpdu;
+		tgtobj->stats.tx.ru_loc[i].mpdu_tried +=
+			srcobj->tx.ru_loc[i].mpdu_tried;
+	}
+
+	tgtobj->stats.tx.tx_ppdus += srcobj->tx.tx_ppdus;
+	tgtobj->stats.tx.tx_mpdus_success += srcobj->tx.tx_mpdus_success;
+	tgtobj->stats.tx.tx_mpdus_tried += srcobj->tx.tx_mpdus_tried;
+	tgtobj->stats.tx.retries_mpdu += srcobj->tx.retries_mpdu;
+	tgtobj->stats.tx.mpdu_success_with_retries +=
+		srcobj->tx.mpdu_success_with_retries;
+	tgtobj->stats.tx.last_tx_ts = srcobj->tx.last_tx_ts;
+	tgtobj->stats.tx.tx_rate = srcobj->tx.tx_rate;
+	tgtobj->stats.tx.last_tx_rate = srcobj->tx.last_tx_rate;
+	tgtobj->stats.tx.last_tx_rate_mcs = srcobj->tx.last_tx_rate_mcs;
+	tgtobj->stats.tx.mcast_last_tx_rate = srcobj->tx.mcast_last_tx_rate;
+	tgtobj->stats.tx.mcast_last_tx_rate_mcs =
+		srcobj->tx.mcast_last_tx_rate_mcs;
+	tgtobj->stats.tx.rnd_avg_tx_rate = srcobj->tx.rnd_avg_tx_rate;
+	tgtobj->stats.tx.avg_tx_rate = srcobj->tx.avg_tx_rate;
+	tgtobj->stats.tx.tx_ratecode = srcobj->tx.tx_ratecode;
+	tgtobj->stats.tx.ru_start = srcobj->tx.ru_start;
+	tgtobj->stats.tx.ru_tones = srcobj->tx.ru_tones;
+	tgtobj->stats.tx.last_ack_rssi = srcobj->tx.last_ack_rssi;
+	tgtobj->stats.tx.nss_info = srcobj->tx.nss_info;
+	tgtobj->stats.tx.mcs_info = srcobj->tx.mcs_info;
+	tgtobj->stats.tx.bw_info = srcobj->tx.bw_info;
+	tgtobj->stats.tx.gi_info = srcobj->tx.gi_info;
+	tgtobj->stats.tx.preamble_info = srcobj->tx.preamble_info;
 	tgtobj->stats.tx.comp_pkt.bytes += srcobj->tx.comp_pkt.bytes;
 	tgtobj->stats.tx.comp_pkt.num += srcobj->tx.comp_pkt.num;
 	tgtobj->stats.tx.ucast.num += srcobj->tx.ucast.num;
@@ -8103,8 +8152,20 @@ void dp_update_pdev_stats(struct dp_pdev *tgtobj,
 	if (srcobj->rx.snr != 0)
 		tgtobj->stats.rx.snr = srcobj->rx.snr;
 	tgtobj->stats.rx.rx_rate = srcobj->rx.rx_rate;
+	tgtobj->stats.rx.last_rx_rate = srcobj->rx.last_rx_rate;
+	tgtobj->stats.rx.rnd_avg_rx_rate = srcobj->rx.rnd_avg_rx_rate;
+	tgtobj->stats.rx.avg_rx_rate = srcobj->rx.avg_rx_rate;
+	tgtobj->stats.rx.rx_ratecode = srcobj->rx.rx_ratecode;
+	tgtobj->stats.rx.avg_snr = srcobj->rx.avg_snr;
+	tgtobj->stats.rx.rx_snr_measured_time = srcobj->rx.rx_snr_measured_time;
+	tgtobj->stats.rx.last_snr = srcobj->rx.last_snr;
+	tgtobj->stats.rx.nss_info = srcobj->rx.nss_info;
+	tgtobj->stats.rx.mcs_info = srcobj->rx.mcs_info;
+	tgtobj->stats.rx.bw_info = srcobj->rx.bw_info;
+	tgtobj->stats.rx.gi_info = srcobj->rx.gi_info;
+	tgtobj->stats.rx.preamble_info = srcobj->rx.preamble_info;
 	tgtobj->stats.rx.non_ampdu_cnt += srcobj->rx.non_ampdu_cnt;
-	tgtobj->stats.rx.amsdu_cnt += srcobj->rx.ampdu_cnt;
+	tgtobj->stats.rx.ampdu_cnt += srcobj->rx.ampdu_cnt;
 	tgtobj->stats.rx.non_amsdu_cnt += srcobj->rx.non_amsdu_cnt;
 	tgtobj->stats.rx.amsdu_cnt += srcobj->rx.amsdu_cnt;
 	tgtobj->stats.rx.nawds_mcast_drop += srcobj->rx.nawds_mcast_drop;
@@ -8153,6 +8214,32 @@ void dp_update_pdev_stats(struct dp_pdev *tgtobj,
 		srcobj->rx.peer_unauth_rx_pkt_drop;
 	tgtobj->stats.rx.policy_check_drop +=
 		srcobj->rx.policy_check_drop;
+
+	for (mu_type = 0 ; mu_type < TXRX_TYPE_MU_MAX; mu_type++) {
+		tgtobj->stats.rx.rx_mu[mu_type].mpdu_cnt_fcs_ok +=
+			srcobj->rx.rx_mu[mu_type].mpdu_cnt_fcs_ok;
+		tgtobj->stats.rx.rx_mu[mu_type].mpdu_cnt_fcs_err +=
+			srcobj->rx.rx_mu[mu_type].mpdu_cnt_fcs_err;
+		for (i = 0; i < SS_COUNT; i++)
+			tgtobj->stats.rx.rx_mu[mu_type].ppdu_nss[i] +=
+				srcobj->rx.rx_mu[mu_type].ppdu_nss[i];
+		for (i = 0; i < MAX_MCS; i++)
+			tgtobj->stats.rx.rx_mu[mu_type].ppdu.mcs_count[i] +=
+				srcobj->rx.rx_mu[mu_type].ppdu.mcs_count[i];
+	}
+
+	for (i = 0; i < MAX_MCS; i++) {
+		tgtobj->stats.rx.su_ax_ppdu_cnt.mcs_count[i] +=
+			srcobj->rx.su_ax_ppdu_cnt.mcs_count[i];
+		tgtobj->stats.rx.rx_mpdu_cnt[i] += srcobj->rx.rx_mpdu_cnt[i];
+	}
+
+	tgtobj->stats.rx.mpdu_cnt_fcs_ok += srcobj->rx.mpdu_cnt_fcs_ok;
+	tgtobj->stats.rx.mpdu_cnt_fcs_err += srcobj->rx.mpdu_cnt_fcs_err;
+	tgtobj->stats.rx.rx_mpdus += srcobj->rx.rx_mpdus;
+	tgtobj->stats.rx.rx_ppdus += srcobj->rx.rx_ppdus;
+	tgtobj->stats.rx.mpdu_retry_cnt += srcobj->rx.mpdu_retry_cnt;
+	tgtobj->stats.rx.rx_retries += srcobj->rx.rx_retries;
 
 	DP_UPDATE_11BE_STATS(pdev_stats, srcobj);
 }
@@ -8536,3 +8623,38 @@ dp_pdev_get_tx_capture_stats(struct cdp_soc_t *soc_hdl, uint8_t pdev_id,
 	return QDF_STATUS_E_FAILURE;
 }
 #endif /* WLAN_TX_PKT_CAPTURE_ENH */
+
+#ifdef WLAN_TELEMETRY_STATS_SUPPORT
+QDF_STATUS
+dp_get_pdev_telemetry_stats(struct cdp_soc_t *soc_hdl, uint8_t pdev_id,
+			    struct cdp_pdev_telemetry_stats *stats)
+{
+	struct dp_soc *soc = (struct dp_soc *)soc_hdl;
+	struct dp_pdev *pdev = dp_get_pdev_from_soc_pdev_id_wifi3(soc, pdev_id);
+
+	if (!pdev)
+		return QDF_STATUS_E_FAILURE;
+
+	stats->tx_mpdu_failed = pdev->stats.telemetry_stats.tx_mpdu_failed;
+	stats->tx_mpdu_total = pdev->stats.telemetry_stats.tx_mpdu_total;
+
+	return QDF_STATUS_SUCCESS;
+}
+
+QDF_STATUS
+dp_get_peer_telemetry_stats(struct cdp_soc_t *soc_hdl, uint8_t *addr,
+			    struct cdp_peer_telemetry_stats *stats)
+{
+	struct dp_soc *soc = (struct dp_soc *)soc_hdl;
+	struct dp_peer *peer = dp_peer_find_hash_find(soc, addr, 0, DP_VDEV_ALL,
+						      DP_MOD_ID_MISC);
+
+	if (!peer)
+		return QDF_STATUS_E_FAILURE;
+
+	dp_monitor_peer_telemetry_stats(peer, stats);
+	dp_peer_unref_delete(peer, DP_MOD_ID_MISC);
+
+	return QDF_STATUS_SUCCESS;
+}
+#endif

@@ -39,8 +39,6 @@
 #define NEIGHBOR_AP_LEN 1
 #define BSS_PARAMS_LEN 1
 
-static struct he_oper_6g_param *util_scan_get_he_6g_params(uint8_t *he_ops);
-
 const char*
 util_scan_get_ev_type_name(enum scan_event_type type)
 {
@@ -266,9 +264,11 @@ util_scan_get_phymode_11be(struct wlan_objmgr_pdev *pdev,
 			 EHTOP_PARAM_DISABLED_SC_BITMAP_PRESENT_IDX,
 			 EHTOP_PARAM_DISABLED_SC_BITMAP_PRESENT_BITS)) {
 		scan_params->channel.puncture_bitmap =
-				QDF_GET_BITS(eht_ops->disable_sub_chan_bitmap[0], 0, 8);
+			QDF_GET_BITS(eht_ops->disabled_sub_chan_bitmap[0],
+				     0, 8);
 		scan_params->channel.puncture_bitmap |=
-				QDF_GET_BITS(eht_ops->disable_sub_chan_bitmap[1], 0, 8) << 8;
+			QDF_GET_BITS(eht_ops->disabled_sub_chan_bitmap[1],
+				     0, 8) << 8;
 	} else {
 		scan_params->channel.puncture_bitmap = 0;
 	}
@@ -1144,7 +1144,10 @@ util_scan_parse_vendor_ie(struct scan_cache_entry *scan_params,
 		}
 		scan_params->ie_list.single_pmk = (uint8_t *)ie +
 						sizeof(struct ie_header);
+	} else if (is_qcn_oui((uint8_t *)ie)) {
+		scan_params->ie_list.qcn = (uint8_t *)ie;
 	}
+
 	return QDF_STATUS_SUCCESS;
 }
 
@@ -1869,7 +1872,7 @@ static uint8_t util_get_link_info_offset(uint8_t *ml_ie)
 
 	/* Check if BSS parameter change count is present */
 	if (presencebm & WLAN_ML_BV_CTRL_PBM_BSSPARAMCHANGECNT_P)
-		parsed_ie_len += WLAN_ML_BV_CINFO_BSSPARAMCHNGCNT_SIZE;
+		parsed_ie_len += WLAN_ML_BSSPARAMCHNGCNT_SIZE;
 
 	/* Check if Medium Sync Delay Info is present */
 	if (presencebm & WLAN_ML_BV_CTRL_PBM_MEDIUMSYNCDELAYINFO_P)
@@ -1879,9 +1882,13 @@ static uint8_t util_get_link_info_offset(uint8_t *ml_ie)
 	if (presencebm & WLAN_ML_BV_CTRL_PBM_EMLCAP_P)
 		parsed_ie_len += WLAN_ML_BV_CINFO_EMLCAP_SIZE;
 
-	/* Check if MLD cap is present */
-	if (presencebm & WLAN_ML_BV_CTRL_PBM_MLDCAP_P)
-		parsed_ie_len += WLAN_ML_BV_CINFO_MLDCAP_SIZE;
+	/* Check if MLD cap and op is present */
+	if (presencebm & WLAN_ML_BV_CTRL_PBM_MLDCAPANDOP_P)
+		parsed_ie_len += WLAN_ML_BV_CINFO_MLDCAPANDOP_SIZE;
+
+	/* Check if MLD ID is present */
+	if (presencebm & WLAN_ML_BV_CTRL_PBM_MLDID_P)
+		parsed_ie_len += WLAN_ML_BV_CINFO_MLDID_SIZE;
 
 	/* Offset calculation starts from the beginning of the ML IE (including
 	 * EID) hence, adding the size of IE header to ML IE length.
@@ -1897,8 +1904,8 @@ static void util_get_partner_link_info(struct scan_cache_entry *scan_entry)
 	uint8_t *ml_ie = scan_entry->ie_list.multi_link;
 	uint8_t offset = util_get_link_info_offset(ml_ie);
 	uint16_t sta_ctrl;
-	uint8_t *stactrl_offset = NULL;
-	uint8_t perstaprof_len = 0;
+	uint8_t *stactrl_offset = NULL, *ielist_offset;
+	uint8_t perstaprof_len = 0, perstaprof_stainfo_len = 0, ielist_len = 0;
 	struct partner_link_info *link_info = NULL;
 	uint8_t eid = 0;
 	uint8_t link_idx = 0;
@@ -1916,7 +1923,10 @@ static void util_get_partner_link_info(struct scan_cache_entry *scan_entry)
 				     &rnr->bssid, QDF_MAC_ADDR_SIZE);
 
 			link_info->link_id = rnr->mld_info.link_id;
-
+			link_info->freq =
+				wlan_reg_chan_opclass_to_freq(rnr->channel_number,
+							      rnr->operating_class,
+							      true);
 			link_idx++;
 		}
 		rnr_idx++;
@@ -1937,11 +1947,41 @@ static void util_get_partner_link_info(struct scan_cache_entry *scan_entry)
 		offset += 2;
 
 		sta_ctrl = *(uint16_t *)(ml_ie + offset);
+
 		/* Skip STA control field */
 		offset += 2;
 
-		 /* Skip STA Info Length field */
-		 offset += WLAN_ML_BV_LINFO_PERSTAPROF_STAINFO_LENGTH_SIZE;
+		/*
+		 * offset points to the beginning of the STA Info field which
+		 * holds the length of the variable field.
+		 */
+		perstaprof_stainfo_len = ml_ie[offset];
+
+		/* Skip STA Info Length field */
+		offset += WLAN_ML_BV_LINFO_PERSTAPROF_STAINFO_LENGTH_SIZE;
+
+		/*
+		 * To point to the ie_list offset move past the STA Info field.
+		 */
+		ielist_offset  = &ml_ie[offset + perstaprof_stainfo_len];
+
+		/*
+		 * Ensure that the STA Control Field + STA Info Field
+		 * is smaller than the per-STA profile when incrementing
+		 * the pointer to avoid underflow during subtraction.
+		 */
+		if ((perstaprof_stainfo_len +
+		     WLAN_ML_BV_LINFO_PERSTAPROF_STAINFO_LENGTH_SIZE +
+		     WLAN_ML_BV_LINFO_PERSTAPROF_STACTRL_SIZE) <
+							perstaprof_len) {
+			ielist_len = perstaprof_len -
+			     (WLAN_ML_BV_LINFO_PERSTAPROF_STACTRL_SIZE +
+			      WLAN_ML_BV_LINFO_PERSTAPROF_STAINFO_LENGTH_SIZE +
+			      perstaprof_stainfo_len);
+		} else {
+			scm_debug("No STA profile IE list found");
+			ielist_len = 0;
+		}
 
 		scan_entry->ml_info.link_info[0].link_id = sta_ctrl & 0xF;
 		if (sta_ctrl & LINK_INFO_MAC_ADDR_PRESENT_BIT) {
@@ -1955,16 +1995,16 @@ static void util_get_partner_link_info(struct scan_cache_entry *scan_entry)
 		link_info = &scan_entry->ml_info.link_info[0];
 
 		link_info->csa_ie = wlan_get_ie_ptr_from_eid
-			(WLAN_ELEMID_CHANSWITCHANN, stactrl_offset,
-			 perstaprof_len);
+			(WLAN_ELEMID_CHANSWITCHANN, ielist_offset,
+			 ielist_len);
 
 		link_info->ecsa_ie = wlan_get_ie_ptr_from_eid
-			(WLAN_ELEMID_EXTCHANSWITCHANN, stactrl_offset,
-			 perstaprof_len);
+			(WLAN_ELEMID_EXTCHANSWITCHANN, ielist_offset,
+			 ielist_len);
 
 		eid = WLAN_EXTN_ELEMID_MAX_CHAN_SWITCH_TIME;
 		link_info->max_cst_ie = wlan_get_ext_ie_ptr_from_ext_id
-			(&eid, 1, stactrl_offset, perstaprof_len);
+			(&eid, 1, ielist_offset, ielist_len);
 
 		scan_entry->ml_info.num_links++;
 	}
@@ -3113,7 +3153,7 @@ static QDF_STATUS util_scan_parse_mbssid(struct wlan_objmgr_pdev *pdev,
 
 			new_frame_len = frame_len - ielen + new_ie_len;
 
-			if (new_frame_len < 0) {
+			if (new_frame_len < 0 || new_frame_len > frame_len) {
 				if (mbssid_info.split_prof_continue) {
 					qdf_mem_free(split_prof_start);
 					split_prof_start = NULL;

@@ -493,12 +493,15 @@ void dp_monitor_reap_timer_deinit(struct dp_soc *soc)
 }
 
 static inline
-void dp_monitor_reap_timer_start(struct dp_soc *soc)
+bool dp_monitor_reap_timer_start(struct dp_soc *soc,
+				 enum cdp_mon_reap_source source)
 {
+	return false;
 }
 
 static inline
-bool dp_monitor_reap_timer_stop(struct dp_soc *soc)
+bool dp_monitor_reap_timer_stop(struct dp_soc *soc,
+				enum cdp_mon_reap_source source)
 {
 	return false;
 }
@@ -3387,14 +3390,40 @@ static inline int32_t dp_runtime_get_refcount(struct dp_soc *soc)
 }
 
 /**
- * dp_runtime_init() - Init dp runtime refcount when dp soc init
+ * dp_runtime_init() - Init DP related runtime PM clients and runtime refcount
  * @soc: Datapath soc handle
  *
  * Return: QDF_STATUS
  */
-static inline QDF_STATUS dp_runtime_init(struct dp_soc *soc)
+static inline void dp_runtime_init(struct dp_soc *soc)
 {
-	return qdf_atomic_init(&soc->dp_runtime_refcount);
+	hif_rtpm_register(HIF_RTPM_ID_DP, NULL);
+	hif_rtpm_register(HIF_RTPM_ID_DP_RING_STATS, NULL);
+	qdf_atomic_init(&soc->dp_runtime_refcount);
+}
+
+/**
+ * dp_runtime_deinit() - Deinit DP related runtime PM clients
+ *
+ * Return: None
+ */
+static inline void dp_runtime_deinit(void)
+{
+	hif_rtpm_deregister(HIF_RTPM_ID_DP);
+	hif_rtpm_deregister(HIF_RTPM_ID_DP_RING_STATS);
+}
+
+/**
+ * dp_runtime_pm_mark_last_busy() - Mark last busy when rx path in use
+ * @soc: Datapath soc handle
+ *
+ * Return: None
+ */
+static inline void dp_runtime_pm_mark_last_busy(struct dp_soc *soc)
+{
+	soc->rx_last_busy = qdf_get_log_timestamp_usecs();
+
+	hif_rtpm_mark_last_busy(HIF_RTPM_ID_DP);
 }
 #else
 static inline int32_t dp_runtime_get(struct dp_soc *soc)
@@ -3410,6 +3439,14 @@ static inline int32_t dp_runtime_put(struct dp_soc *soc)
 static inline QDF_STATUS dp_runtime_init(struct dp_soc *soc)
 {
 	return QDF_STATUS_SUCCESS;
+}
+
+static inline void dp_runtime_deinit(void)
+{
+}
+
+static inline void dp_runtime_pm_mark_last_busy(struct dp_soc *soc)
+{
 }
 #endif
 
@@ -3582,4 +3619,96 @@ dp_get_rx_hash_key_bytes(struct cdp_lro_hash_config *lro_hash)
 			     (sizeof(lro_hash->toeplitz_hash_ipv6[0]) *
 			      LRO_IPV6_SEED_ARR_SZ));
 }
+
+#ifdef WLAN_TELEMETRY_STATS_SUPPORT
+/*
+ * dp_get_pdev_telemetry_stats- API to get pdev telemetry stats
+ * @soc_hdl: soc handle
+ * @pdev_id: id of pdev handle
+ * @stats: pointer to pdev telemetry stats
+ *
+ * Return: QDF_STATUS_SUCCESS: Success
+ *         QDF_STATUS_E_FAILURE: Error
+ */
+QDF_STATUS
+dp_get_pdev_telemetry_stats(struct cdp_soc_t *soc_hdl, uint8_t pdev_id,
+			    struct cdp_pdev_telemetry_stats *stats);
+
+/*
+ * dp_get_peer_telemetry_stats- API to get peer telemetry stats
+ * @soc_hdl: soc handle
+ * @addr: peer mac
+ * @stats: pointer to peer telemetry stats
+ *
+ * Return: QDF_STATUS_SUCCESS: Success
+ *         QDF_STATUS_E_FAILURE: Error
+ */
+QDF_STATUS
+dp_get_peer_telemetry_stats(struct cdp_soc_t *soc_hdl, uint8_t *addr,
+			    struct cdp_peer_telemetry_stats *stats);
+#endif /* WLAN_TELEMETRY_STATS_SUPPORT */
+
+#ifdef CONNECTIVITY_PKTLOG
+/*
+ * dp_tx_send_pktlog() - send tx packet log
+ * @soc: soc handle
+ * @pdev: pdev handle
+ * @nbuf: nbuf
+ * @status: status of tx packet
+ *
+ * This function is used to send tx packet for logging
+ *
+ * Return: None
+ *
+ */
+static inline
+void dp_tx_send_pktlog(struct dp_soc *soc, struct dp_pdev *pdev,
+		       qdf_nbuf_t nbuf, enum qdf_dp_tx_rx_status status)
+{
+	ol_txrx_pktdump_cb packetdump_cb = pdev->dp_tx_packetdump_cb;
+
+	if (qdf_unlikely(packetdump_cb)) {
+		packetdump_cb((ol_txrx_soc_handle)soc, pdev->pdev_id,
+			      QDF_NBUF_CB_TX_VDEV_CTX(nbuf),
+			      nbuf, status, QDF_TX_DATA_PKT);
+	}
+}
+
+/*
+ * dp_rx_send_pktlog() - send rx packet log
+ * @soc: soc handle
+ * @pdev: pdev handle
+ * @nbuf: nbuf
+ * @status: status of rx packet
+ *
+ * This function is used to send rx packet for logging
+ *
+ * Return: None
+ *
+ */
+static inline
+void dp_rx_send_pktlog(struct dp_soc *soc, struct dp_pdev *pdev,
+		       qdf_nbuf_t nbuf, enum qdf_dp_tx_rx_status status)
+{
+	ol_txrx_pktdump_cb packetdump_cb = pdev->dp_rx_packetdump_cb;
+
+	if (qdf_unlikely(packetdump_cb)) {
+		packetdump_cb((ol_txrx_soc_handle)soc, pdev->pdev_id,
+			      QDF_NBUF_CB_RX_VDEV_ID(nbuf),
+			      nbuf, status, QDF_RX_DATA_PKT);
+	}
+}
+#else
+static inline
+void dp_tx_send_pktlog(struct dp_soc *soc, struct dp_pdev *pdev,
+		       qdf_nbuf_t nbuf, enum qdf_dp_tx_rx_status status)
+{
+}
+
+static inline
+void dp_rx_send_pktlog(struct dp_soc *soc, struct dp_pdev *pdev,
+		       qdf_nbuf_t nbuf, enum qdf_dp_tx_rx_status status)
+{
+}
+#endif
 #endif /* #ifndef _DP_INTERNAL_H_ */

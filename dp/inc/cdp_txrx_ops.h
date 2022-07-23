@@ -59,6 +59,20 @@ enum cdp_nac_param_cmd {
 	CDP_NAC_PARAM_LIST,
 };
 
+/**
+ * enum cdp_tx_filter_action - TX peer filtering action
+ * @CDP_TX_FILTER_ACTION_ADD: add peer
+ * @CDP_TX_FILTER_ACTION_DEL: delete peer
+ *
+ * whether add or delete
+ */
+enum cdp_tx_filter_action {
+	/* add peer mac address*/
+	CDP_TX_FILTER_ACTION_ADD = 1,
+	/* delete peer mac address */
+	CDP_TX_FILTER_ACTION_DEL,
+};
+
 #define CDP_DELBA_INTERVAL_MS 3000
 /**
  * enum cdp_delba_rcode - CDP reason code for sending DELBA
@@ -103,6 +117,23 @@ enum vdev_peer_protocol_tx_rx {
 enum vdev_ll_conn_actions {
 	CDP_VDEV_LL_CONN_ADD,
 	CDP_VDEV_LL_CONN_DEL
+};
+
+/**
+ * enum cdp_peer_txq_flush_policy: Values for peer TX TID queues flush policy
+ * @CDP_PEER_TXQ_FLUSH_POLICY_NONE: No flush policy configured
+ * @CDP_PEER_TXQ_FLUSH_POLICY_IMMEDIATE: Flush peer TX TID queue(s) immediately
+ * @CDP_PEER_TXQ_FLUSH_POLICY_TWT_SP_END: Flush peer TX TID queue(s) at SP end
+ *
+ * This is used to map the 'flush_policy' in WMI_PEER_FLUSH_POLICY_CMDID
+ */
+enum cdp_peer_txq_flush_policy {
+	CDP_PEER_TXQ_FLUSH_POLICY_NONE = 0,
+	CDP_PEER_TXQ_FLUSH_POLICY_IMMEDIATE = 1,
+	CDP_PEER_TXQ_FLUSH_POLICY_TWT_SP_END = 2,
+
+	/* keep last */
+	CDP_PEER_TXQ_FLUSH_POLICY_INVALID,
 };
 
 /**
@@ -868,7 +899,7 @@ struct cdp_ctrl_ops {
 
 #endif
 
-#if defined(WLAN_FEATURE_TSF_UPLINK_DELAY) || defined(QCA_PEER_EXT_STATS)
+#if defined(WLAN_FEATURE_TSF_UPLINK_DELAY) || defined(CONFIG_SAWF)
 	void (*txrx_set_delta_tsf)(struct cdp_soc_t *soc, uint8_t vdev_id,
 				   uint32_t delta_tsf);
 #endif
@@ -938,9 +969,9 @@ struct cdp_mon_ops {
 					 struct cdp_pdev_mon_stats *stats);
 
 	/* Configure monitor status srng reap timer */
-	 void (*txrx_enable_mon_reap_timer)(struct cdp_soc_t *soc_hdl,
-					    uint8_t pdev_id,
-					    bool enable);
+	bool (*txrx_enable_mon_reap_timer)(struct cdp_soc_t *soc_hdl,
+					   enum cdp_mon_reap_source source,
+					   bool enable);
 
 #ifdef QCA_SUPPORT_LITE_MONITOR
 	/* set lite monitor config */
@@ -1156,6 +1187,18 @@ struct cdp_host_stats_ops {
 	QDF_STATUS
 	(*txrx_get_pdev_tid_stats)(struct cdp_soc_t *soc, uint8_t pdev_id,
 				   struct cdp_tid_stats_intf *tid_stats);
+#ifdef WLAN_TELEMETRY_STATS_SUPPORT
+	QDF_STATUS
+		(*txrx_pdev_telemetry_stats)(
+				struct cdp_soc_t *soc,
+				uint8_t pdev_id,
+				struct cdp_pdev_telemetry_stats *stats);
+	QDF_STATUS
+		(*txrx_peer_telemetry_stats)(
+				struct cdp_soc_t *soc,
+				uint8_t *addr,
+				struct cdp_peer_telemetry_stats *stats);
+#endif
 };
 
 struct cdp_wds_ops {
@@ -1404,6 +1447,10 @@ struct ol_if_ops {
 				    uint8_t vdev_id,
 				    enum cdp_nac_param_cmd cmd,
 				    uint8_t *peer_mac);
+	int (*config_lite_mon_tx_peer)(struct cdp_ctrl_objmgr_psoc *psoc,
+				       uint8_t pdev_id, uint8_t vdev_id,
+				       enum cdp_tx_filter_action cmd,
+				       uint8_t *peer_mac);
 #endif
 };
 
@@ -1444,6 +1491,8 @@ struct ol_if_ops {
  * @set_swlm_enable: Enable or Disable Software Latency Manager.
  * @is_swlm_enabled: Check if Software latency manager is enabled or not.
  * @display_txrx_hw_info: Dump the DP rings info
+ * @set_tx_flush_pending: Configures the ac/tid to be flushed and policy
+ *			  to flush.
  *
  * Function pointers for miscellaneous soc/pdev/vdev related operations.
  */
@@ -1536,6 +1585,12 @@ struct cdp_misc_ops {
 	uint8_t (*is_swlm_enabled)(struct cdp_soc_t *soc_hdl);
 	void (*display_txrx_hw_info)(struct cdp_soc_t *soc_hdl);
 	uint32_t (*get_tx_rings_grp_bitmap)(struct cdp_soc_t *soc_hdl);
+#ifdef WLAN_FEATURE_PEER_TXQ_FLUSH_CONF
+	int (*set_peer_txq_flush_config)(struct cdp_soc_t *soc_hdl,
+					 uint8_t vdev_id, uint8_t *addr,
+					 uint8_t ac, uint32_t tid,
+					 enum cdp_peer_txq_flush_policy policy);
+#endif
 };
 
 /**
@@ -2019,6 +2074,20 @@ struct cdp_sawf_ops {
 	(*txrx_sawf_set_sla_params)(uint32_t num_pkt, uint32_t time_secs);
 	QDF_STATUS
 	(*txrx_sawf_init_telemtery_params)(void);
+	QDF_STATUS
+	(*telemetry_get_throughput_stats)(void *arg, uint64_t *in_bytes,
+					  uint64_t *in_cnt, uint64_t *tx_bytes,
+					  uint64_t *tx_cnt, uint8_t tid,
+					  uint8_t msduq);
+	QDF_STATUS
+	(*telemetry_get_mpdu_stats)(void *arg, uint64_t *svc_int_pass,
+				    uint64_t *svc_int_fail,
+				    uint64_t *burst_pass, uint64_t *burst_fail,
+				    uint8_t tid, uint8_t msduq);
+	QDF_STATUS
+	(*telemetry_get_drop_stats)(void *arg, uint64_t *pass, uint64_t *drop,
+				    uint64_t *drop_ttl, uint8_t tid,
+				    uint8_t msduq);
 #endif
 };
 #endif

@@ -919,14 +919,6 @@ dp_mon_rx_enable_phy_errors(uint32_t *msg_word,
 		*msg_word = 0;
 		HTT_RX_RING_SELECTION_CFG_PHY_ERR_MASK_CONT_SET
 			(*msg_word, htt_tlv_filter->phy_err_mask_cont);
-
-		/* word 14*/
-		msg_word++;
-		*msg_word = 0;
-	} else {
-		/* word 14*/
-		msg_word += 3;
-		*msg_word = 0;
 	}
 }
 #else
@@ -934,9 +926,6 @@ static inline void
 dp_mon_rx_enable_phy_errors(uint32_t *msg_word,
 			    struct htt_rx_ring_tlv_filter *htt_tlv_filter)
 {
-	/* word 14*/
-	msg_word += 3;
-	*msg_word = 0;
 }
 #endif
 
@@ -1669,6 +1658,10 @@ int htt_h2t_rx_ring_cfg(struct htt_soc *htt_soc, int pdev_id,
 	dp_mon_rx_enable_mpdu_logging(soc->dp_soc, msg_word, htt_tlv_filter);
 
 	dp_mon_rx_enable_phy_errors(msg_word, htt_tlv_filter);
+
+	/* word 14*/
+	msg_word += 3;
+	*msg_word = 0;
 
 	dp_mon_rx_wmask_subscribe(soc->dp_soc, msg_word, htt_tlv_filter);
 
@@ -3096,6 +3089,13 @@ dp_rx_mlo_timestamp_ind_handler(struct dp_soc *soc,
 	pdev->timestamp.mlo_comp_timer =
 	HTT_T2H_MLO_TIMESTAMP_OFFSET_MLO_TIMESTAMP_COMP_PERIOD_US_GET(
 							*(msg_word + 7));
+
+	dp_htt_debug("tsf_lo=%d tsf_hi=%d, mlo_ofst_lo=%d, mlo_ofst_hi=%d\n",
+		     pdev->timestamp.sync_tstmp_lo_us,
+		     pdev->timestamp.sync_tstmp_hi_us,
+		     pdev->timestamp.mlo_offset_lo_us,
+		     pdev->timestamp.mlo_offset_hi_us);
+
 	qdf_spin_unlock_bh(&soc->htt_stats.lock);
 }
 #else
@@ -3118,6 +3118,73 @@ dp_rx_mlo_timestamp_ind_handler(void *soc_handle,
 	qdf_assert_always(0);
 }
 #endif
+
+/*
+ * dp_htt_rx_addba_handler() - RX Addba HTT msg handler
+ * @soc: DP Soc handler
+ * @peer_id: ID of peer
+ * @tid: TID number
+ * @win_sz: BA window size
+ *
+ * Return: None
+ */
+static void
+dp_htt_rx_addba_handler(struct dp_soc *soc, uint16_t peer_id,
+			uint8_t tid, uint16_t win_sz)
+{
+	uint16_t status;
+	struct dp_peer *peer;
+
+	peer = dp_peer_get_ref_by_id(soc, peer_id, DP_MOD_ID_HTT);
+
+	if (!peer) {
+		dp_err("Peer not found peer id %d", peer_id);
+		return;
+	}
+
+	status = dp_addba_requestprocess_wifi3((struct cdp_soc_t *)soc,
+					       peer->mac_addr.raw,
+					       peer->vdev->vdev_id, 0,
+					       tid, 0, win_sz, 0xffff);
+
+	dp_addba_resp_tx_completion_wifi3(
+		(struct cdp_soc_t *)soc,
+		peer->mac_addr.raw, peer->vdev->vdev_id,
+		tid,
+		status);
+
+	dp_peer_unref_delete(peer, DP_MOD_ID_HTT);
+
+	dp_info("PeerID %d BAW %d TID %d stat %d",
+		peer_id, win_sz, tid, status);
+}
+
+/*
+ * dp_htt_ppdu_id_fmt_handler() - PPDU ID Format handler
+ * @htt_soc: HTT SOC handle
+ * @msg_word: Pointer to payload
+ *
+ * Return: None
+ */
+static void
+dp_htt_ppdu_id_fmt_handler(struct dp_soc *soc, uint32_t *msg_word)
+{
+	uint8_t msg_type, valid, bits, offset;
+
+	msg_type = HTT_T2H_MSG_TYPE_GET(*msg_word);
+
+	msg_word += HTT_PPDU_ID_FMT_IND_LINK_ID_OFFSET;
+	valid = HTT_PPDU_ID_FMT_IND_VALID_GET_BITS31_16(*msg_word);
+	bits = HTT_PPDU_ID_FMT_IND_BITS_GET_BITS31_16(*msg_word);
+	offset = HTT_PPDU_ID_FMT_IND_OFFSET_GET_BITS31_16(*msg_word);
+
+	dp_info("link_id: valid %u bits %u offset %u", valid, bits, offset);
+
+	if (valid) {
+		soc->link_id_offset = offset;
+		soc->link_id_bits = bits;
+	}
+}
 
 /*
  * dp_htt_t2h_msg_handler() - Generic Target to host Msg/event handler
@@ -3273,9 +3340,7 @@ static void dp_htt_t2h_msg_handler(void *context, HTC_PACKET *pkt)
 		{
 			uint16_t peer_id;
 			uint8_t tid;
-			uint8_t win_sz;
-			uint16_t status;
-			struct dp_peer *peer;
+			uint16_t win_sz;
 
 			/*
 			 * Update REO Queue Desc with new values
@@ -3283,37 +3348,35 @@ static void dp_htt_t2h_msg_handler(void *context, HTC_PACKET *pkt)
 			peer_id = HTT_RX_ADDBA_PEER_ID_GET(*msg_word);
 			tid = HTT_RX_ADDBA_TID_GET(*msg_word);
 			win_sz = HTT_RX_ADDBA_WIN_SIZE_GET(*msg_word);
-			peer = dp_peer_get_ref_by_id(soc->dp_soc, peer_id,
-						     DP_MOD_ID_HTT);
 
 			/*
 			 * Window size needs to be incremented by 1
 			 * since fw needs to represent a value of 256
 			 * using just 8 bits
 			 */
-			if (peer) {
-				status = dp_addba_requestprocess_wifi3(
-					(struct cdp_soc_t *)soc->dp_soc,
-					peer->mac_addr.raw, peer->vdev->vdev_id,
-					0, tid, 0, win_sz + 1, 0xffff);
+			dp_htt_rx_addba_handler(soc->dp_soc, peer_id,
+						tid, win_sz + 1);
+			break;
+		}
+	case HTT_T2H_MSG_TYPE_RX_ADDBA_EXTN:
+		{
+			uint16_t peer_id;
+			uint8_t tid;
+			uint16_t win_sz;
 
-				/*
-				 * If PEER_LOCK_REF_PROTECT enbled dec ref
-				 * which is inc by dp_peer_get_ref_by_id
-				 */
-				dp_peer_unref_delete(peer, DP_MOD_ID_HTT);
+			peer_id = HTT_RX_ADDBA_EXTN_PEER_ID_GET(*msg_word);
+			tid = HTT_RX_ADDBA_EXTN_TID_GET(*msg_word);
 
-				QDF_TRACE(QDF_MODULE_ID_TXRX,
-					QDF_TRACE_LEVEL_INFO,
-					FL("PeerID %d BAW %d TID %d stat %d"),
-					peer_id, win_sz, tid, status);
+			msg_word++;
+			win_sz = HTT_RX_ADDBA_EXTN_WIN_SIZE_GET(*msg_word);
 
-			} else {
-				QDF_TRACE(QDF_MODULE_ID_TXRX,
-					QDF_TRACE_LEVEL_ERROR,
-					FL("Peer not found peer id %d"),
-					peer_id);
-			}
+			dp_htt_rx_addba_handler(soc->dp_soc, peer_id,
+						tid, win_sz);
+			break;
+		}
+	case HTT_T2H_PPDU_ID_FMT_IND:
+		{
+			dp_htt_ppdu_id_fmt_handler(soc->dp_soc, msg_word);
 			break;
 		}
 	case HTT_T2H_MSG_TYPE_EXT_STATS_CONF:
@@ -3459,6 +3522,27 @@ static void dp_htt_t2h_msg_handler(void *context, HTC_PACKET *pkt)
 				  QDF_TRACE_LEVEL_INFO,
 				  FL("DELBA PeerID %d BAW %d TID %d stat %d"),
 				  peer_id, win_sz, tid, status);
+			break;
+		}
+	case HTT_T2H_MSG_TYPE_RX_DELBA_EXTN:
+		{
+			uint16_t peer_id;
+			uint8_t tid;
+			uint16_t win_sz;
+			QDF_STATUS status;
+
+			peer_id = HTT_RX_DELBA_EXTN_PEER_ID_GET(*msg_word);
+			tid = HTT_RX_DELBA_EXTN_TID_GET(*msg_word);
+
+			msg_word++;
+			win_sz = HTT_RX_DELBA_EXTN_WIN_SIZE_GET(*msg_word);
+
+			status = dp_rx_delba_ind_handler(soc->dp_soc,
+							 peer_id, tid,
+							 win_sz);
+
+			dp_info("DELBA PeerID %d BAW %d TID %d stat %d",
+				peer_id, win_sz, tid, status);
 			break;
 		}
 	case HTT_T2H_MSG_TYPE_FSE_CMEM_BASE_SEND:

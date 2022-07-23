@@ -765,6 +765,7 @@ struct dfs_state {
  * @nol_start_us:     NOL start time in us.
  * @nol_timeout_ms:   NOL timeout value in msec.
  * @nol_timer:        Per element NOL timer.
+ * @nol_timer_completion_work: workqueue to process the nol timeout
  * @nol_next:         Next element pointer.
  */
 struct dfs_nolelem {
@@ -775,6 +776,7 @@ struct dfs_nolelem {
 	uint64_t       nol_start_us;
 	uint32_t       nol_timeout_ms;
 	qdf_hrtimer_data_t    nol_timer;
+	qdf_work_t     nol_timer_completion_work;
 	struct dfs_nolelem *nol_next;
 };
 
@@ -1115,6 +1117,10 @@ struct dfs_rcac_params {
  * @dfs_is_rcsa_ie_sent:             To send or to not send RCSA IE.
  * @dfs_is_nol_ie_sent:              To send or to not send NOL IE.
  * @dfs_agile_precac_ucfg:           User configuration for agile preCAC.
+ * @dfs_bw_expand_target_freq:       User configured Channel frequency for
+ *                                   bandwidth expansion feature.
+ * @dfs_bw_expand_des_mode:          User configured Channel Phymode for
+ *                                   bandwidth expansion feature.
  * @dfs_agile_rcac_ucfg:             User configuration for Rolling CAC.
  * @dfs_fw_adfs_support_non_160:     Target Agile DFS support for non-160 BWs.
  * @dfs_fw_adfs_support_160:         Target Agile DFS support for 160 BW.
@@ -1285,6 +1291,10 @@ struct wlan_dfs {
 	uint8_t        dfs_nol_ie_bitmap;
 	bool           dfs_is_rcsa_ie_sent;
 	bool           dfs_is_nol_ie_sent;
+#endif
+#if defined(QCA_DFS_BW_EXPAND)
+	qdf_freq_t      dfs_bw_expand_target_freq;
+	enum wlan_phymode dfs_bw_expand_des_mode;
 #endif
 	uint8_t        dfs_agile_precac_ucfg:1,
 #if defined(QCA_SUPPORT_ADFS_RCAC)
@@ -2968,6 +2978,14 @@ void dfs_process_cac_completion(void *context);
  * Return: void.
  */
 void dfs_process_precac_completion(void *context);
+
+/**
+ * dfs_process_noltimeout_completion() - Process NOL timeout completion event.
+ * @dfs_nolelem: Pointer to dfs_nolelem object.
+ *
+ * Return: void.
+ */
+void dfs_process_noltimeout_completion(void *context);
 
 #ifdef WLAN_DFS_TRUE_160MHZ_SUPPORT
 /**

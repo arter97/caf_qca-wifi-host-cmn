@@ -75,6 +75,11 @@
  * @mlme_cm_cckm_preauth_cmpl_cb: Roam cckm preauth complete cb
  * @vdev: vdev pointer
  * @rsp: preauth response pointer
+ *
+ * @mlme_cm_get_vendor_handoff_params_cb: get vendor handoff params cb
+ * @psoc: psoc pointer
+ * @rsp: vendor handoff response pointer
+ * @vendor_handoff_context: vendor handoff context
  */
 struct mlme_cm_ops {
 	QDF_STATUS (*mlme_cm_connect_complete_cb)(
@@ -113,6 +118,11 @@ struct mlme_cm_ops {
 					struct wlan_objmgr_vdev *vdev,
 					struct wlan_preauth_rsp *rsp);
 #endif
+#endif
+#ifdef WLAN_VENDOR_HANDOFF_CONTROL
+	QDF_STATUS (*mlme_cm_get_vendor_handoff_params_cb)(
+				struct wlan_objmgr_psoc *psoc,
+				void *vendor_handoff_context);
 #endif
 };
 
@@ -210,6 +220,12 @@ struct mlme_twt_ops {
 	QDF_STATUS (*mlme_twt_notify_complete_cb)(
 			struct wlan_objmgr_psoc *psoc,
 			struct twt_notify_event_param *event);
+
+	QDF_STATUS (*mlme_twt_vdev_create_cb)(
+			struct wlan_objmgr_vdev *vdev);
+
+	QDF_STATUS (*mlme_twt_vdev_destroy_cb)(
+			struct wlan_objmgr_vdev *vdev);
 };
 
 /**
@@ -784,6 +800,19 @@ mlme_cm_osif_disconnect_complete(struct wlan_objmgr_vdev *vdev,
  */
 QDF_STATUS mlme_cm_osif_disconnect_start_ind(struct wlan_objmgr_vdev *vdev);
 
+#ifdef WLAN_VENDOR_HANDOFF_CONTROL
+/**
+ * mlme_cm_osif_get_vendor_handoff_params() - osif get vendor handoff params
+ * indication
+ * @psoc: psoc pointer
+ * @vendor_handoff_context: vendor handoff context
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS mlme_cm_osif_get_vendor_handoff_params(struct wlan_objmgr_psoc *psoc,
+						  void *vendor_handoff_context);
+#endif
+
 #ifdef CONN_MGR_ADV_FEATURE
 /**
  * mlme_cm_osif_roam_sync_ind() - osif Roam sync indication
@@ -1061,6 +1090,23 @@ QDF_STATUS
 mlme_twt_osif_notify_complete_ind(struct wlan_objmgr_psoc *psoc,
 				  struct twt_notify_event_param *event);
 
+/**
+ * mlme_twt_vdev_create_notification() - vdev create notification to osif
+ * @vdev: vdev pointer
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS
+mlme_twt_vdev_create_notification(struct wlan_objmgr_vdev *vdev);
+
+/**
+ * mlme_twt_vdev_destroy_notification() - vdev destroy notification to osif
+ * @vdev: vdev pointer
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS
+mlme_twt_vdev_destroy_notification(struct wlan_objmgr_vdev *vdev);
 #else
 static inline QDF_STATUS
 mlme_twt_osif_enable_complete_ind(struct wlan_objmgr_psoc *psoc,
@@ -1125,6 +1171,18 @@ mlme_twt_osif_nudge_complete_ind(struct wlan_objmgr_psoc *psoc,
 static inline QDF_STATUS
 mlme_twt_osif_notify_complete_ind(struct wlan_objmgr_psoc *psoc,
 				  struct twt_notify_event_param *event)
+{
+	return QDF_STATUS_SUCCESS;
+}
+
+static inline QDF_STATUS
+mlme_twt_vdev_create_notification(struct wlan_objmgr_vdev *vdev)
+{
+	return QDF_STATUS_SUCCESS;
+}
+
+static inline QDF_STATUS
+mlme_twt_vdev_destroy_notification(struct wlan_objmgr_vdev *vdev)
 {
 	return QDF_STATUS_SUCCESS;
 }

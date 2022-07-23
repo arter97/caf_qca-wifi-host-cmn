@@ -30,7 +30,7 @@
 #define DP_MON_RING_FILL_LEVEL_DEFAULT 2048
 #define DP_MON_DATA_BUFFER_SIZE     2048
 #define DP_MON_DESC_MAGIC 0xdeadabcd
-#define DP_MON_MAX_STATUS_BUF 128
+#define DP_MON_MAX_STATUS_BUF 1200
 #define DP_MON_QUEUE_DEPTH_MAX 16
 #define DP_MON_MSDU_LOGGING 0
 #define DP_MON_MPDU_LOGGING 1
@@ -282,20 +282,36 @@ QDF_STATUS dp_mon_buffers_replenish(struct dp_soc *dp_soc,
 				union dp_mon_desc_list_elem_t **tail);
 
 /**
- * dp_mon_filter_show_filter_be() - Show the set filters
- * @mode: The filter modes
- * @tlv_filter: tlv filter
- */
-void dp_mon_filter_show_filter_be(enum dp_mon_filter_mode mode,
-				  struct dp_mon_filter_be *filter);
-
-/**
  * dp_mon_filter_show_tx_filter_be() - Show the set filters
  * @mode: The filter modes
  * @tlv_filter: tlv filter
  */
 void dp_mon_filter_show_tx_filter_be(enum dp_mon_filter_mode mode,
 				     struct dp_mon_filter_be *filter);
+
+/**
+ * dp_mon_filter_show_rx_filter_be() - Show the set filters
+ * @mode: The filter modes
+ * @tlv_filter: tlv filter
+ */
+void dp_mon_filter_show_rx_filter_be(enum dp_mon_filter_mode mode,
+				     struct dp_mon_filter_be *filter);
+
+/**
+ * dp_vdev_set_monitor_mode_buf_rings_tx_2_0() - Add buffers to tx ring
+ * @pdev: Pointer to dp_pdev object
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS dp_vdev_set_monitor_mode_buf_rings_tx_2_0(struct dp_pdev *pdev);
+
+/**
+ * dp_vdev_set_monitor_mode_buf_rings_rx_2_0() - Add buffers to rx ring
+ * @pdev: Pointer to dp_pdev object
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS dp_vdev_set_monitor_mode_buf_rings_rx_2_0(struct dp_pdev *pdev);
 
 #ifdef QCA_ENHANCED_STATS_SUPPORT
 /**
