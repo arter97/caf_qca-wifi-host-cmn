@@ -51,7 +51,8 @@ void wlan_sm_save_history(struct wlan_sm *sm,
 void wlan_sm_history_init(struct wlan_sm *sm)
 {
 	qdf_spinlock_create(&sm->history.sm_history_lock);
-	qdf_mem_zero(&sm->history, sizeof(struct wlan_sm_history));
+	sm->history.index = 0;
+	qdf_mem_zero(&sm->history.data[0], sizeof(sm->history.data));
 }
 
 void wlan_sm_history_delete(struct wlan_sm *sm)
