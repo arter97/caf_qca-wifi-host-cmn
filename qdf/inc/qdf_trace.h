@@ -1655,7 +1655,8 @@ static inline
 void qdf_minidump_log(void *start_addr,
 		      const size_t size, const char *name)
 {
-	__qdf_minidump_log(start_addr, size, name);
+	pr_info("Skip WLAN minidump register for %s\n", name);
+	//__qdf_minidump_log(start_addr, size, name);
 }
 
 /**
@@ -1668,7 +1669,8 @@ static inline
 void qdf_minidump_remove(void *start_addr,
 			 const size_t size, const char *name)
 {
-	__qdf_minidump_remove(start_addr, size, name);
+	pr_info("Skip WLAN minidump remove for %s\n", name);
+	//__qdf_minidump_remove(start_addr, size, name);
 }
 
 #endif /* __QDF_TRACE_H */
