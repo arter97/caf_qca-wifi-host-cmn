@@ -1732,7 +1732,6 @@ void scm_disable_obss_pdev_scan(struct wlan_objmgr_psoc *psoc,
 	struct scan_vdev_obj *scan_vdev_obj;
 	QDF_STATUS status;
 	struct wlan_objmgr_pdev_objmgr *pdev_objmgr;
-	struct wlan_objmgr_vdev *vdev_next;
 	qdf_list_t *vdev_list;
 	uint16_t index = 0;
 
@@ -1765,9 +1764,8 @@ void scm_disable_obss_pdev_scan(struct wlan_objmgr_psoc *psoc,
 next:
 			index++;
 			/* get next vdev */
-			vdev_next = wlan_vdev_get_next_vdev_of_pdev(vdev_list,
-								    vdev);
-			vdev = vdev_next;
+			vdev = wlan_vdev_get_next_vdev_of_pdev(vdev_list,
+							       vdev);
 		}
 		wlan_pdev_obj_unlock(pdev);
 	}

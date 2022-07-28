@@ -145,6 +145,23 @@ enum cfr_capture_type {
 	CFR_TYPE_METHOD_MAX,
 };
 
+struct cfr_metadata_version_1 {
+	u_int8_t    peer_addr[QDF_MAC_ADDR_SIZE];
+	u_int8_t    status;
+	u_int8_t    capture_bw;
+	u_int8_t    channel_bw;
+	u_int8_t    phy_mode;
+	u_int16_t   prim20_chan;
+	u_int16_t   center_freq1;
+	u_int16_t   center_freq2;
+	u_int8_t    capture_mode;
+	u_int8_t    capture_type;
+	u_int8_t    sts_count;
+	u_int8_t    num_rx_chain;
+	u_int32_t   timestamp;
+	u_int32_t   length;
+} __attribute__ ((__packed__));
+
 #define HOST_MAX_CHAINS 8
 
 /* ensure to add new members at the end of the structure only */
@@ -233,6 +250,9 @@ struct cfr_header_cmn {
 struct csi_cfr_header {
 	struct cfr_header_cmn cmn;
 	union {
+#ifdef WLAN_CFR_ADRASTEA
+		struct cfr_metadata_version_1 meta_v1;
+#endif
 		struct dbr_cfr_metadata meta_dbr;
 #ifdef WLAN_ENH_CFR_ENABLE
 		struct enh_cfr_metadata meta_enh;
