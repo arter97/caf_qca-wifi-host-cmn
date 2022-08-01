@@ -4593,6 +4593,7 @@ int dp_peer_get_rxtid_stats_ipa(struct dp_peer *peer,
 	int stats_cmd_sent_cnt = 0;
 	QDF_STATUS status;
 	uint16_t peer_id = peer->peer_id;
+	unsigned long comb_peer_id_tid;
 
 	if (!dp_stats_cmd_cb)
 		return stats_cmd_sent_cnt;
@@ -4608,11 +4609,11 @@ int dp_peer_get_rxtid_stats_ipa(struct dp_peer *peer,
 				(uint64_t)(rx_tid->hw_qdesc_paddr) >> 32;
 
 			params.u.stats_params.clear = 1;
+			comb_peer_id_tid = ((i << DP_PEER_REO_STATS_TID_SHIFT)
+					    | peer_id);
 			status = dp_reo_send_cmd(soc, CMD_GET_QUEUE_STATS,
 						 &params, dp_stats_cmd_cb,
-						 (void *)((i << DP_PEER_REO_STATS_TID_SHIFT)
-						 | peer_id));
-
+						 (void *)comb_peer_id_tid);
 			if (QDF_IS_STATUS_SUCCESS(status))
 				stats_cmd_sent_cnt++;
 
