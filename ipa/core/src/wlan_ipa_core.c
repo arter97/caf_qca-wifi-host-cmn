@@ -412,7 +412,7 @@ static void wlan_ipa_forward(struct wlan_ipa_priv *ipa_ctx,
  *
  */
 
-#ifndef QCA_IPA_LL_TX_FLOW_CONTROL
+#if !defined(QCA_IPA_LL_TX_FLOW_CONTROL) && (defined(CONFIG_LITHIUM) || defined(CONFIG_BERYLLIUM))
 static inline
 bool wlan_ipa_tx_desc_thresh_reached(struct cdp_soc_t *soc, uint8_t vdev_id)
 {
