@@ -2133,6 +2133,55 @@ map_detach:
 	return status;
 }
 
+#ifdef IPA_OFFLOAD
+/*
+ * dp_peer_update_tid_stats_from_reo() - get rx packet and bytes from reo
+ * @soc - soc handle
+ * @cb_ctxt - combination of peer_id and tid
+ * @reo_status - reo status
+ *
+ * return: void
+ */
+void dp_peer_update_tid_stats_from_reo(struct dp_soc *soc, void *cb_ctxt,
+				       union hal_reo_status *reo_status)
+{
+	struct dp_peer *peer = NULL;
+	struct dp_rx_tid *rx_tid = NULL;
+	struct hal_reo_queue_status *queue_status = &reo_status->queue_status;
+	unsigned long comb_peer_id_tid;
+	uint16_t tid;
+	uint16_t peer_id;
+
+	if (queue_status->header.status != HAL_REO_CMD_SUCCESS) {
+		DP_PRINT_STATS("REO stats failure %d\n",
+			       queue_status->header.status);
+		return;
+	}
+	comb_peer_id_tid = (unsigned long)cb_ctxt;
+	tid = DP_PEER_GET_REO_STATS_TID(comb_peer_id_tid);
+	peer_id = DP_PEER_GET_REO_STATS_PEER_ID(comb_peer_id_tid);
+	peer = dp_peer_get_ref_by_id(soc, peer_id, DP_MOD_ID_GENERIC_STATS);
+	if (!peer)
+		return;
+	rx_tid  = &peer->rx_tid[tid];
+	if (!rx_tid) {
+		dp_peer_unref_delete(peer, DP_MOD_ID_GENERIC_STATS);
+		return;
+	}
+
+	rx_tid->rx_msdu_cnt.bytes += queue_status->total_cnt;
+	rx_tid->rx_msdu_cnt.num += queue_status->msdu_frms_cnt;
+	dp_peer_unref_delete(peer, DP_MOD_ID_GENERIC_STATS);
+}
+#else
+void dp_peer_update_tid_stats_from_reo(struct dp_soc *soc, void *cb_ctxt,
+				       union hal_reo_status *reo_status)
+{
+}
+#endif
+
+qdf_export_symbol(dp_peer_update_tid_stats_from_reo);
+
 void dp_rx_tid_stats_cb(struct dp_soc *soc, void *cb_ctxt,
 	union hal_reo_status *reo_status)
 {
@@ -2382,6 +2431,37 @@ dp_rx_peer_map_handler(struct dp_soc *soc, uint16_t peer_id,
 	return err;
 }
 
+#ifdef IPA_OFFLOAD
+/**
+ * dp_rx_peer_unmap_event() - Peer unmap event
+ * @soc_handle - genereic soc handle
+ * @peer_id - peer_id from firmware
+ * @vdev_id - vdev ID
+ * @mac_addr - mac address of the peer or wds entry
+ *
+ * Return: none
+ */
+static inline void
+dp_rx_peer_unmap_event(struct dp_soc *soc, uint16_t peer_id,
+		       uint8_t vdev_id, uint8_t *mac_addr)
+{
+	if (soc->cdp_soc.ol_ops->peer_unmap_event) {
+		soc->cdp_soc.ol_ops->peer_unmap_event(soc->ctrl_psoc,
+				peer_id, vdev_id, mac_addr);
+	}
+}
+#else
+static inline void
+dp_rx_peer_unmap_event(struct dp_soc *soc, uint16_t peer_id,
+		       uint8_t vdev_id, uint8_t *mac_addr)
+{
+	if (soc->cdp_soc.ol_ops->peer_unmap_event) {
+		soc->cdp_soc.ol_ops->peer_unmap_event(soc->ctrl_psoc,
+				peer_id, vdev_id);
+	}
+}
+#endif
+
 /**
  * dp_rx_peer_unmap_handler() - handle peer unmap event from firmware
  * @soc_handle - genereic soc handle
@@ -2437,7 +2517,6 @@ dp_rx_peer_unmap_handler(struct dp_soc *soc, uint16_t peer_id,
 
 	dp_info("peer_unmap_event (soc:%pK) peer_id %d peer %pK",
 		soc, peer_id, peer);
-
 	dp_peer_find_id_to_obj_remove(soc, peer_id);
 	peer->peer_id = HTT_INVALID_PEER;
 
@@ -2446,10 +2525,7 @@ dp_rx_peer_unmap_handler(struct dp_soc *soc, uint16_t peer_id,
 	 */
 	dp_peer_reset_flowq_map(peer);
 
-	if (soc->cdp_soc.ol_ops->peer_unmap_event) {
-		soc->cdp_soc.ol_ops->peer_unmap_event(soc->ctrl_psoc,
-				peer_id, vdev_id);
-	}
+	dp_rx_peer_unmap_event(soc, peer_id, vdev_id, peer->mac_addr.raw);
 
 	vdev = peer->vdev;
 	DP_UPDATE_STATS(vdev, peer);
@@ -4506,6 +4582,65 @@ bool dp_find_peer_exist(struct cdp_soc_t *soc_hdl, uint8_t pdev_id,
 	return false;
 }
 #endif
+
+#ifdef IPA_OFFLOAD
+int dp_peer_get_rxtid_stats_ipa(struct dp_peer *peer,
+				dp_rxtid_stats_cmd_cb dp_stats_cmd_cb)
+{
+	struct dp_soc *soc = peer->vdev->pdev->soc;
+	struct hal_reo_cmd_params params;
+	int i;
+	int stats_cmd_sent_cnt = 0;
+	QDF_STATUS status;
+	uint16_t peer_id = peer->peer_id;
+
+	if (!dp_stats_cmd_cb)
+		return stats_cmd_sent_cnt;
+
+	qdf_mem_zero(&params, sizeof(params));
+	for (i = 0; i < DP_MAX_TIDS; i++) {
+		struct dp_rx_tid *rx_tid = &peer->rx_tid[i];
+		if (rx_tid->hw_qdesc_vaddr_unaligned) {
+			params.std.need_status = 1;
+			params.std.addr_lo =
+				rx_tid->hw_qdesc_paddr & 0xffffffff;
+			params.std.addr_hi =
+				(uint64_t)(rx_tid->hw_qdesc_paddr) >> 32;
+
+			params.u.stats_params.clear = 1;
+			status = dp_reo_send_cmd(soc, CMD_GET_QUEUE_STATS,
+						 &params, dp_stats_cmd_cb,
+						 (void *)((i << DP_PEER_REO_STATS_TID_SHIFT)
+						 | peer_id));
+
+			if (QDF_IS_STATUS_SUCCESS(status))
+				stats_cmd_sent_cnt++;
+
+			/* Flush REO descriptor from HW cache to update stats
+			 * in descriptor memory. This is to help debugging */
+			qdf_mem_zero(&params, sizeof(params));
+			params.std.need_status = 0;
+			params.std.addr_lo =
+				rx_tid->hw_qdesc_paddr & 0xffffffff;
+			params.std.addr_hi =
+				(uint64_t)(rx_tid->hw_qdesc_paddr) >> 32;
+			params.u.fl_cache_params.flush_no_inval = 1;
+			dp_reo_send_cmd(soc, CMD_FLUSH_CACHE, &params, NULL,
+					NULL);
+		}
+	}
+
+	return stats_cmd_sent_cnt;
+}
+#else
+int dp_peer_get_rxtid_stats_ipa(struct dp_peer *peer,
+				dp_rxtid_stats_cmd_cb dp_stats_cmd_cb)
+{
+	return 0;
+}
+#endif
+
+qdf_export_symbol(dp_peer_get_rxtid_stats_ipa);
 
 /**
  * dp_peer_rxtid_stats: Retried Rx TID (REO queue) stats from HW
