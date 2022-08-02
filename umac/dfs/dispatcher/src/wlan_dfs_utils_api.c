@@ -1285,7 +1285,28 @@ utils_dfs_reg_update_nol_history_chan_for_freq(struct wlan_objmgr_pdev *pdev,
 
 uint8_t utils_dfs_freq_to_chan(uint32_t freq)
 {
-	return wlan_freq_to_chan(freq);
+	uint8_t chan;
+
+	if (freq == 0)
+		return 0;
+
+	if (freq > DFS_24_GHZ_BASE_FREQ && freq < DFS_CHAN_14_FREQ)
+		chan = ((freq - DFS_24_GHZ_BASE_FREQ) / DFS_CHAN_SPACING_5MHZ);
+	else if (freq == DFS_CHAN_14_FREQ)
+		chan = DFS_24_GHZ_CHANNEL_14;
+	else if (freq == WLAN_24_GHZ_2PT5MHZ_CHAN_221_FREQ)
+		chan = WLAN_24_GHZ_2PT5MHZ_CHAN_221;
+	else if (freq == WLAN_24_GHZ_2PT5MHZ_CHAN_222_FREQ)
+		chan = WLAN_24_GHZ_2PT5MHZ_CHAN_222;
+	else if (WLAN_IS_FREQ_2P5MHZ(freq))
+		chan = wlan_2pt5mhz_step_freq_to_chan(freq);
+	else if ((freq > DFS_24_GHZ_BASE_FREQ) && (freq < DFS_5_GHZ_BASE_FREQ))
+		chan = (((freq - DFS_CHAN_15_FREQ) / DFS_CHAN_SPACING_20MHZ) +
+			DFS_24_GHZ_CHANNEL_15);
+	else
+		chan = (freq - DFS_5_GHZ_BASE_FREQ) / DFS_CHAN_SPACING_5MHZ;
+
+	return chan;
 }
 qdf_export_symbol(utils_dfs_freq_to_chan);
 
