@@ -246,6 +246,7 @@ void dp_rx_desc_pool_free(struct dp_soc *soc,
 
 	dp_desc_multi_pages_mem_free(soc, rx_desc_pool->desc_type,
 				     &rx_desc_pool->desc_pages, 0, true);
+	qdf_spinlock_destroy(&rx_desc_pool->lock);
 }
 
 void dp_rx_desc_pool_deinit(struct dp_soc *soc,
@@ -446,6 +447,7 @@ void dp_rx_desc_pool_free(struct dp_soc *soc,
 			  struct rx_desc_pool *rx_desc_pool)
 {
 	qdf_mem_free(rx_desc_pool->array);
+	qdf_spinlock_destroy(&rx_desc_pool->lock);
 }
 
 void dp_rx_desc_pool_deinit(struct dp_soc *soc,

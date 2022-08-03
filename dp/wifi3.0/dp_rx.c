@@ -3488,6 +3488,8 @@ dp_rx_pdev_buffers_alloc(struct dp_pdev *pdev)
 
 	rx_desc_pool = &soc->rx_desc_buf[mac_for_pdev];
 
+	qdf_spinlock_create(&rx_desc_pool->lock);
+
 	/* Initialize RX buffer pool which will be
 	 * used during low memory conditions
 	 */
@@ -3513,6 +3515,7 @@ dp_rx_pdev_buffers_free(struct dp_pdev *pdev)
 
 	dp_rx_desc_nbuf_free(soc, rx_desc_pool);
 	dp_rx_buffer_pool_deinit(soc, mac_for_pdev);
+	qdf_spinlock_destroy(&rx_desc_pool->lock);
 }
 
 #ifdef DP_RX_SPECIAL_FRAME_NEED

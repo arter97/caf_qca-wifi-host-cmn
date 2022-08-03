@@ -1757,6 +1757,8 @@ dp_rx_pdev_mon_buf_buffers_alloc(struct dp_pdev *pdev, uint32_t mac_id,
 
 	rx_desc_pool = dp_rx_get_mon_desc_pool(soc, mac_id, pdev_id);
 
+	qdf_spinlock_create(&rx_desc_pool->lock);
+
 	dp_debug("Mon RX Desc Pool[%d] entries=%u", pdev_id, num_entries);
 
 	/* Replenish RXDMA monitor buffer ring with 8 buffers only
@@ -1955,6 +1957,8 @@ void dp_rx_pdev_mon_buf_buffers_free(struct dp_pdev *pdev, uint32_t mac_id)
 		dp_rx_desc_frag_free(soc, rx_desc_pool);
 	else
 		dp_rx_desc_nbuf_free(soc, rx_desc_pool);
+
+	qdf_spinlock_destroy(&rx_desc_pool->lock);
 }
 
 QDF_STATUS
