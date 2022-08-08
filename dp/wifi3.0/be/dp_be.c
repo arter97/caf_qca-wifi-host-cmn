@@ -38,8 +38,13 @@ static struct wlan_cfg_tcl_wbm_ring_num_map g_tcl_wbm_map_array[MAX_TCL_DATA_RIN
 	{.tcl_ring_num = 0, .wbm_ring_num = 0, .wbm_rbm_id = HAL_BE_WBM_SW0_BM_ID, .for_ipa = 0},
 	{1, 4, HAL_BE_WBM_SW4_BM_ID, 0},
 	{2, 2, HAL_BE_WBM_SW2_BM_ID, 0},
+#ifdef QCA_WIFI_KIWI_V2
+	{3, 5, HAL_BE_WBM_SW5_BM_ID, 0},
+	{4, 6, HAL_BE_WBM_SW6_BM_ID, 0}
+#else
 	{3, 6, HAL_BE_WBM_SW5_BM_ID, 0},
 	{4, 7, HAL_BE_WBM_SW6_BM_ID, 0}
+#endif
 };
 #else
 #define DP_TX_VDEV_ID_CHECK_ENABLE 1
@@ -687,11 +692,15 @@ static QDF_STATUS dp_pdev_attach_be(struct dp_pdev *pdev,
 				    struct cdp_pdev_attach_params *params)
 {
 	dp_pdev_mlo_fill_params(pdev, params);
+	dp_mlo_update_link_to_pdev_map(pdev->soc, pdev);
+
 	return QDF_STATUS_SUCCESS;
 }
 
 static QDF_STATUS dp_pdev_detach_be(struct dp_pdev *pdev)
 {
+	dp_mlo_update_link_to_pdev_unmap(pdev->soc, pdev);
+
 	return QDF_STATUS_SUCCESS;
 }
 
@@ -782,7 +791,7 @@ dp_rxdma_ring_sel_cfg_be(struct dp_soc *soc)
 	htt_tlv_filter.mpdu_start = 1;
 	htt_tlv_filter.msdu_end = 1;
 	htt_tlv_filter.packet = 1;
-	htt_tlv_filter.packet_header = 1;
+	htt_tlv_filter.packet_header = 0;
 
 	htt_tlv_filter.ppdu_start = 0;
 	htt_tlv_filter.ppdu_end = 0;
@@ -1743,6 +1752,7 @@ void dp_initialize_arch_ops_be(struct dp_arch_ops *arch_ops)
 	arch_ops->dp_rx_desc_pool_deinit = dp_rx_desc_pool_deinit_be;
 	arch_ops->dp_wbm_get_rx_desc_from_hal_desc =
 				dp_wbm_get_rx_desc_from_hal_desc_be;
+	arch_ops->dp_tx_compute_hw_delay = dp_tx_compute_tx_delay_be;
 #endif
 	arch_ops->txrx_get_context_size = dp_get_context_size_be;
 	arch_ops->txrx_get_mon_context_size = dp_mon_get_context_size_be;

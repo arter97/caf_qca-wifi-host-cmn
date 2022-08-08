@@ -566,12 +566,14 @@ struct vdev_scan_nac_rssi_params {
  * @mlo_assoc_link: indicate is the link used to initialize
  *                  the association of mlo connection
  * @mlo_mcast_vdev: MLO cast vdev
+ * @emlsr_support: indicate non AP MLD STA supports eMLSR mode
  */
 struct mlo_vdev_start_flags {
 	uint32_t mlo_enabled:1,
 		 mlo_assoc_link:1,
 		 mlo_mcast_vdev:1,
-		 rsvd:29;
+		 emlsr_support:1,
+		 rsvd:28;
 };
 
 /**
@@ -757,9 +759,12 @@ struct vdev_down_params {
 /**
  * struct peer_delete_all_params - peer delete all request parameter
  * @vdev_id: vdev id
+ * @peer_type_bitmap: Bitmap of type with bits corresponding to value from
+ * enum wlan_peer_type
  */
 struct peer_delete_all_params {
 	uint8_t vdev_id;
+	uint32_t peer_type_bitmap;
 };
 
 #define AC_MAX 4

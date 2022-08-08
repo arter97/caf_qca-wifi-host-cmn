@@ -343,6 +343,9 @@
 #define WLAN_HE_6GHZ_CHWIDTH_80           2 /* 80MHz Oper Ch width */
 #define WLAN_HE_6GHZ_CHWIDTH_160_80_80    3 /* 160/80+80 MHz Oper Ch width */
 
+#define WLAN_HE_NON_SRG_PD_SR_DISALLOWED 0x02
+#define WLAN_HE_NON_SRG_OFFSET_PRESENT 0x04
+
 #ifdef WLAN_FEATURE_11BE
 #define WLAN_EHT_CHWIDTH_20           0 /* 20MHz Oper Ch width */
 #define WLAN_EHT_CHWIDTH_40           1 /* 40MHz Oper Ch width */
@@ -365,6 +368,12 @@
 #define WLAN_BSS_MEMBERSHIP_SELECTOR_EPD          124
 #define WLAN_BSS_MEMBERSHIP_SELECTOR_SAE_H2E      123
 #define WLAN_BSS_MEMBERSHIP_SELECTOR_HE_PHY       122
+
+/* EXT cap bit definitions based on IEEE 802.11az D4.0 - 9.4.2.26 */
+#define WLAN_EXT_CAPA11_NTB_RANGING_RESPONDER          BIT(2)
+#define WLAN_EXT_CAPA11_TB_RANGING_RESPONDER           BIT(3)
+#define WLAN_EXT_CAPA11_PASSIVE_TB_RANGING_RESPONDER   BIT(4)
+#define WLAN_EXT_CAPA11_PASSIVE_TB_RANGING_INITIATOR   BIT(5)
 
 #define WLAN_CHAN_IS_5GHZ(chanidx) \
 	((chanidx > 30) ? true : false)
@@ -743,6 +752,7 @@ enum extn_element_ie {
  * accordingly.
  *
  * @REASON_PROP_START: Start of prop reason code
+ * @REASON_OCI_MISMATCH: Reason OCI Mismatch happens
  * @REASON_HOST_TRIGGERED_ROAM_FAILURE: Reason host triggered roam failed
  * @REASON_FW_TRIGGERED_ROAM_FAILURE: Firmware triggered roam failed
  * @REASON_GATEWAY_REACHABILITY_FAILURE: Due to NUD failure
@@ -827,7 +837,14 @@ enum wlan_reason_code {
 	/* 72–65535 reserved */
 
 	/* Internal reason codes */
-	REASON_PROP_START = 65519,
+
+	/*
+	 * Internal reason codes: Add any internal reason code just after
+	 * REASON_PROP_START and decrease the value of REASON_PROP_START
+	 * accordingly.
+	 */
+	REASON_PROP_START = 65517,
+	REASON_OCI_MISMATCH = 65518,
 	REASON_HOST_TRIGGERED_ROAM_FAILURE  = 65519,
 	REASON_FW_TRIGGERED_ROAM_FAILURE = 65520,
 	REASON_GATEWAY_REACHABILITY_FAILURE = 65521,
@@ -1018,6 +1035,9 @@ enum wlan_status_code {
 #define KEK_KEY_LEN 16
 #define KCK_192BIT_KEY_LEN 24
 #define KEK_256BIT_KEY_LEN 32
+
+#define WLAN_MAX_SECURE_LTF_KEYSEED_LEN 48
+#define WLAN_MIN_SECURE_LTF_KEYSEED_LEN 32
 
 #define WLAN_WPA_OUI 0xf25000
 #define WLAN_WPA_OUI_TYPE 0x01
@@ -2423,7 +2443,7 @@ struct wlan_ml_prv_linfo_perstaprof {
 #endif /* WLAN_FEATURE_11BE_MLO */
 #endif /* WLAN_FEATURE_11BE */
 
-#ifdef WLAN_FEATURE_T2LM
+#ifdef WLAN_FEATURE_11BE
 /**
  * struct wlan_ie_tid_to_link_mapping - TID-to-link mapping IE
  * @elem_id: T2LM IE
@@ -2476,7 +2496,7 @@ struct wlan_ie_multi_link_traffic_indication {
 	uint16_t ml_traffic_ind_control;
 	uint16_t per_link_traffic_ind_list[];
 } qdf_packed;
-#endif /* WLAN_FEATURE_T2LM */
+#endif /* WLAN_FEATURE_11BE */
 
 /**
  * struct he_oper_6g_param: 6 Ghz params for HE
@@ -2704,6 +2724,8 @@ struct wlan_ext_cap_ie {
 	uint8_t ext_caps[];
 } qdf_packed;
 
+/* EHT caps fixed field = 2 bytes (EHT mac caps) + 9 bytes (EHT phy caps) */
+#define EHT_CAP_FIXED_FIELDS         11
 #define EHT_CAP_320M_MCS_MAP_LEN      3
 #define EHT_CAP_160M_MCS_MAP_LEN      3
 #define EHT_CAP_80M_MCS_MAP_LEN       3

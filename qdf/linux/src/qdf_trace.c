@@ -1728,6 +1728,25 @@ static bool qdf_log_icmp_pkt(uint8_t vdev_id, struct sk_buff *skb,
 }
 
 #ifdef CONNECTIVITY_DIAG_EVENT
+enum diag_tx_status wlan_get_diag_tx_status(enum qdf_dp_tx_rx_status tx_status)
+{
+	switch (tx_status) {
+	case DIAG_TX_RX_STATUS_FW_DISCARD:
+	case DIAG_TX_RX_STATUS_INVALID:
+	case DIAG_TX_RX_STATUS_DROP:
+	case DIAG_TX_RX_STATUS_DOWNLOAD_SUCC:
+	case DIAG_TX_RX_STATUS_DEFAULT:
+	default:
+		return DIAG_TX_STATUS_FAIL;
+	case DIAG_TX_RX_STATUS_NO_ACK:
+		return DIAG_TX_STATUS_NO_ACK;
+	case DIAG_TX_RX_STATUS_OK:
+		return DIAG_TX_STATUS_ACK;
+	}
+
+	return DIAG_TX_STATUS_FAIL;
+}
+
 /**
  * qdf_subtype_to_wlan_main_tag() - Convert qdf subtype to wlan main tag
  * @subtype: EAPoL key subtype
@@ -1884,7 +1903,8 @@ void qdf_fill_wlan_connectivity_log(enum qdf_proto_type type,
 
 	/*Tx completion status needs to be logged*/
 	if (dir == QDF_TX)
-		wlan_diag_event.tx_status = qdf_tx_status;
+		wlan_diag_event.tx_status =
+					wlan_get_diag_tx_status(qdf_tx_status);
 
 	WLAN_HOST_DIAG_EVENT_REPORT(&wlan_diag_event, EVENT_WLAN_CONN_DP);
 }
@@ -3576,6 +3596,7 @@ struct category_name_info g_qdf_category_name[MAX_SUPPORTED_CATEGORY] = {
 	[QDF_MODULE_ID_WLAN_PRE_CAC] = {"PRE_CAC"},
 	[QDF_MODULE_ID_T2LM] = {"T2LM"},
 	[QDF_MODULE_ID_DP_SAWF] = {"DP_SAWF"},
+	[QDF_MODULE_ID_SCS] = {"SCS"},
 	[QDF_MODULE_ID_ANY] = {"ANY"},
 };
 qdf_export_symbol(g_qdf_category_name);
@@ -4153,6 +4174,7 @@ static void set_default_trace_levels(struct category_info *cinfo)
 		[QDF_MODULE_ID_WLAN_PRE_CAC] = QDF_TRACE_LEVEL_ERROR,
 		[QDF_MODULE_ID_T2LM] = QDF_TRACE_LEVEL_ERROR,
 		[QDF_MODULE_ID_DP_SAWF] = QDF_TRACE_LEVEL_ERROR,
+		[QDF_MODULE_ID_SCS] = QDF_TRACE_LEVEL_ERROR,
 		[QDF_MODULE_ID_ANY] = QDF_TRACE_LEVEL_INFO,
 	};
 

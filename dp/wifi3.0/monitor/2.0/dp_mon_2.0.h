@@ -35,6 +35,9 @@
 #define DP_MON_MSDU_LOGGING 0
 #define DP_MON_MPDU_LOGGING 1
 
+#define DP_MON_DECAP_FORMAT_INVALID 0xff
+#define DP_MON_MIN_FRAGS_FOR_RESTITCH 2
+
 /* monitor frame filter modes */
 enum dp_mon_frm_filter_mode {
 	/* mode filter pass */
@@ -114,6 +117,7 @@ union dp_mon_desc_list_elem_t {
  * @owner: owner for nbuf
  * @buf_size: Buffer size
  * @buf_alignment: Buffer alignment
+ * @pf_cache: page frag cache
  */
 struct dp_mon_desc_pool {
 	uint32_t pool_size;
@@ -123,6 +127,7 @@ struct dp_mon_desc_pool {
 	uint8_t owner;
 	uint16_t buf_size;
 	uint8_t buf_alignment;
+	qdf_frag_cache_t pf_cache;
 };
 
 /**
@@ -140,11 +145,6 @@ struct dp_mon_desc_pool {
  * @rx_mon_queue_depth: RxMON queue depth
  * @desc_count: reaped status desc count
  * @status: reaped status buffer per ppdu
- * @rssi_temp_offset: Temperature based rssi offset
- * @xlna_bypass_offset: Low noise amplifier bypass offset
- * @xlna_bypass_threshold: Low noise amplifier bypass threshold
- * @xbar_config: 3 Bytes of xbar_config are used for RF to BB mapping
- * @min_nf_dbm: min noise floor in active chains per channel
  */
 struct dp_mon_pdev_be {
 	struct dp_mon_pdev mon_pdev;
@@ -167,13 +167,6 @@ struct dp_mon_pdev_be {
 #endif
 	void *prev_rxmon_desc;
 	uint32_t prev_rxmon_cookie;
-#ifdef QCA_RSSI_DB2DBM
-	int32_t rssi_temp_offset;
-	int32_t xlna_bypass_offset;
-	int32_t xlna_bypass_threshold;
-	uint32_t xbar_config;
-	int8_t min_nf_dbm;
-#endif
 };
 
 /**

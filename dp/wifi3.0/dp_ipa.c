@@ -17,6 +17,7 @@
 
 #ifdef IPA_OFFLOAD
 
+#include <wlan_ipa_ucfg_api.h>
 #include <qdf_ipa_wdi3.h>
 #include <qdf_types.h>
 #include <qdf_lock.h>
@@ -36,9 +37,9 @@
 #ifdef WIFI_MONITOR_SUPPORT
 #include "dp_mon.h"
 #endif
-
-/* Ring index for WBM2SW2 release ring */
-#define IPA_TX_COMP_RING_IDX HAL_IPA_TX_COMP_RING_IDX
+#ifdef FEATURE_WDS
+#include "dp_txrx_wds.h"
+#endif
 
 /* Hard coded config parameters until dp_ops_cfg.cfg_attach implemented */
 #define CFG_IPA_UC_TX_BUF_SIZE_DEFAULT            (2048)
@@ -63,6 +64,14 @@ struct dp_ipa_reo_remap_record {
 	uint32_t ix2_reg;
 	uint32_t ix3_reg;
 };
+
+#ifdef IPA_WDS_EASYMESH_FEATURE
+#define WLAN_IPA_META_DATA_MASK htonl(0x000000FF)
+#define WLAN_IPA_HDR_L2_ETHERNET IPA_HDR_L2_ETHERNET_II_AST
+#else
+#define WLAN_IPA_META_DATA_MASK htonl(0x00FF0000)
+#define WLAN_IPA_HDR_L2_ETHERNET IPA_HDR_L2_ETHERNET_II
+#endif
 
 #define REO_REMAP_HISTORY_SIZE 32
 
@@ -424,7 +433,7 @@ static int dp_ipa_tx_alt_pool_attach(struct dp_soc *soc)
 	struct hal_srng *wbm_srng = (struct hal_srng *)
 			soc->tx_comp_ring[IPA_TX_ALT_COMP_RING_IDX].hal_srng;
 	struct hal_srng_params srng_params;
-	uint32_t wbm_sw0_bm_id = soc->wbm_sw0_bm_id;
+	uint32_t wbm_bm_id;
 	void *ring_entry;
 	int num_entries;
 	qdf_nbuf_t nbuf;
@@ -438,6 +447,9 @@ static int dp_ipa_tx_alt_pool_attach(struct dp_soc *soc)
 	 */
 	unsigned int uc_tx_buf_sz = CFG_IPA_UC_TX_BUF_SIZE_DEFAULT;
 	unsigned int alloc_size = uc_tx_buf_sz + ring_base_align - 1;
+
+	wbm_bm_id = wlan_cfg_get_rbm_id_for_index(soc->wlan_cfg_ctx,
+						  IPA_TX_ALT_RING_IDX);
 
 	hal_get_srng_params(soc->hal_soc,
 			    hal_srng_to_hal_ring_handle(wbm_srng),
@@ -496,8 +508,7 @@ static int dp_ipa_tx_alt_pool_attach(struct dp_soc *soc)
 		qdf_mem_dp_tx_skb_inc(qdf_nbuf_get_end_offset(nbuf));
 
 		hal_rxdma_buff_addr_info_set(soc->hal_soc, ring_entry,
-					     buffer_paddr, 0,
-					     HAL_WBM_SW4_BM_ID(wbm_sw0_bm_id));
+					     buffer_paddr, 0, wbm_bm_id);
 
 		soc->ipa_uc_tx_rsc_alt.tx_buf_pool_vaddr_unaligned[
 			tx_buffer_count] = (void *)nbuf;
@@ -736,10 +747,6 @@ static void dp_ipa_wdi_tx_alt_pipe_params(struct dp_soc *soc,
 					  struct dp_ipa_resources *ipa_res,
 					  qdf_ipa_wdi_pipe_setup_info_t *tx)
 {
-	struct tcl_data_cmd *tcl_desc_ptr;
-	uint8_t *desc_addr;
-	uint32_t desc_size;
-
 	QDF_IPA_WDI_SETUP_INFO_CLIENT(tx) = IPA_CLIENT_WLAN2_CONS1;
 
 	QDF_IPA_WDI_SETUP_INFO_TRANSFER_RING_BASE_PA(tx) =
@@ -770,20 +777,6 @@ static void dp_ipa_wdi_tx_alt_pipe_params(struct dp_soc *soc,
 		ipa_res->tx_alt_ring_num_alloc_buffer;
 
 	QDF_IPA_WDI_SETUP_INFO_PKT_OFFSET(tx) = 0;
-
-	/* Preprogram TCL descriptor */
-	desc_addr =
-		(uint8_t *)QDF_IPA_WDI_SETUP_INFO_DESC_FORMAT_TEMPLATE(tx);
-	desc_size = sizeof(struct tcl_data_cmd);
-	HAL_TX_DESC_SET_TLV_HDR(desc_addr, HAL_TX_TCL_DATA_TAG, desc_size);
-	tcl_desc_ptr = (struct tcl_data_cmd *)
-		(QDF_IPA_WDI_SETUP_INFO_DESC_FORMAT_TEMPLATE(tx) + 1);
-	tcl_desc_ptr->buf_addr_info.return_buffer_manager =
-				HAL_WBM_SW4_BM_ID(soc->wbm_sw0_bm_id);
-	tcl_desc_ptr->addrx_en = 1;	/* Address X search enable in ASE */
-	tcl_desc_ptr->addry_en = 1;	/* Address X search enable in ASE */
-	tcl_desc_ptr->encap_type = HAL_TX_ENCAP_TYPE_ETHERNET;
-	tcl_desc_ptr->packet_offset = 0;	/* padding for alignment */
 }
 
 static void
@@ -791,10 +784,6 @@ dp_ipa_wdi_tx_alt_pipe_smmu_params(struct dp_soc *soc,
 				   struct dp_ipa_resources *ipa_res,
 				   qdf_ipa_wdi_pipe_setup_info_smmu_t *tx_smmu)
 {
-	struct tcl_data_cmd *tcl_desc_ptr;
-	uint8_t *desc_addr;
-	uint32_t desc_size;
-
 	QDF_IPA_WDI_SETUP_INFO_SMMU_CLIENT(tx_smmu) = IPA_CLIENT_WLAN2_CONS1;
 
 	qdf_mem_copy(&QDF_IPA_WDI_SETUP_INFO_SMMU_TRANSFER_RING_BASE(tx_smmu),
@@ -822,20 +811,6 @@ dp_ipa_wdi_tx_alt_pipe_smmu_params(struct dp_soc *soc,
 	QDF_IPA_WDI_SETUP_INFO_SMMU_NUM_PKT_BUFFERS(tx_smmu) =
 		ipa_res->tx_alt_ring_num_alloc_buffer;
 	QDF_IPA_WDI_SETUP_INFO_SMMU_PKT_OFFSET(tx_smmu) = 0;
-
-	/* Preprogram TCL descriptor */
-	desc_addr = (uint8_t *)QDF_IPA_WDI_SETUP_INFO_SMMU_DESC_FORMAT_TEMPLATE(
-			tx_smmu);
-	desc_size = sizeof(struct tcl_data_cmd);
-	HAL_TX_DESC_SET_TLV_HDR(desc_addr, HAL_TX_TCL_DATA_TAG, desc_size);
-	tcl_desc_ptr = (struct tcl_data_cmd *)
-		(QDF_IPA_WDI_SETUP_INFO_SMMU_DESC_FORMAT_TEMPLATE(tx_smmu) + 1);
-	tcl_desc_ptr->buf_addr_info.return_buffer_manager =
-					HAL_WBM_SW4_BM_ID(soc->wbm_sw0_bm_id);
-	tcl_desc_ptr->addrx_en = 1;	/* Address X search enable in ASE */
-	tcl_desc_ptr->addry_en = 1;	/* Address Y search enable in ASE */
-	tcl_desc_ptr->encap_type = HAL_TX_ENCAP_TYPE_ETHERNET;
-	tcl_desc_ptr->packet_offset = 0;	/* padding for alignment */
 }
 
 static void dp_ipa_setup_tx_alt_pipe(struct dp_soc *soc,
@@ -1064,11 +1039,29 @@ static void dp_ipa_set_pipe_db(struct dp_ipa_resources *res,
 		QDF_IPA_WDI_CONN_OUT_PARAMS_RX_UC_DB_PA(out);
 }
 
+#ifdef IPA_WDS_EASYMESH_FEATURE
+/**
+ * dp_ipa_setup_iface_session_id - Pass vdev id to IPA
+ * @in: ipa in params
+ * @session_id: vdev id
+ *
+ * Pass Vdev id to IPA, IPA metadata order is changed and vdev id
+ * is stored at higher nibble so, no shift is required.
+ *
+ * Return: none
+ */
+static void dp_ipa_setup_iface_session_id(qdf_ipa_wdi_reg_intf_in_params_t *in,
+					  uint8_t session_id)
+{
+	QDF_IPA_WDI_REG_INTF_IN_PARAMS_META_DATA(in) = htonl(session_id);
+}
+#else
 static void dp_ipa_setup_iface_session_id(qdf_ipa_wdi_reg_intf_in_params_t *in,
 					  uint8_t session_id)
 {
 	QDF_IPA_WDI_REG_INTF_IN_PARAMS_META_DATA(in) = htonl(session_id << 16);
 }
+#endif
 
 static inline void dp_ipa_tx_comp_ring_init_hp(struct dp_soc *soc,
 					       struct dp_ipa_resources *res)
@@ -1212,6 +1205,7 @@ static int dp_tx_ipa_uc_attach(struct dp_soc *soc, struct dp_pdev *pdev)
 	qdf_nbuf_t nbuf;
 	int retval = QDF_STATUS_SUCCESS;
 	int max_alloc_count = 0;
+	uint32_t wbm_bm_id;
 
 	/*
 	 * Uncomment when dp_ops_cfg.cfg_attach is implemented
@@ -1220,6 +1214,9 @@ static int dp_tx_ipa_uc_attach(struct dp_soc *soc, struct dp_pdev *pdev)
 	 */
 	unsigned int uc_tx_buf_sz = CFG_IPA_UC_TX_BUF_SIZE_DEFAULT;
 	unsigned int alloc_size = uc_tx_buf_sz + ring_base_align - 1;
+
+	wbm_bm_id = wlan_cfg_get_rbm_id_for_index(soc->wlan_cfg_ctx,
+						  IPA_TCL_DATA_RING_IDX);
 
 	hal_get_srng_params(soc->hal_soc, hal_srng_to_hal_ring_handle(wbm_srng),
 			    &srng_params);
@@ -1280,9 +1277,7 @@ static int dp_tx_ipa_uc_attach(struct dp_soc *soc, struct dp_pdev *pdev)
 		 * instead of hal soc ops.
 		 */
 		hal_rxdma_buff_addr_info_set(soc->hal_soc, ring_entry,
-					     buffer_paddr, 0,
-					     (IPA_TCL_DATA_RING_IDX +
-					      soc->wbm_sw0_bm_id));
+					     buffer_paddr, 0, wbm_bm_id);
 
 		soc->ipa_uc_tx_rsc.tx_buf_pool_vaddr_unaligned[tx_buffer_count]
 			= (void *)nbuf;
@@ -1901,10 +1896,6 @@ static void dp_ipa_wdi_tx_params(struct dp_soc *soc,
 				 qdf_ipa_wdi_pipe_setup_info_t *tx,
 				 bool over_gsi)
 {
-	struct tcl_data_cmd *tcl_desc_ptr;
-	uint8_t *desc_addr;
-	uint32_t desc_size;
-
 	if (over_gsi)
 		QDF_IPA_WDI_SETUP_INFO_CLIENT(tx) = IPA_CLIENT_WLAN2_CONS;
 	else
@@ -1938,25 +1929,6 @@ static void dp_ipa_wdi_tx_params(struct dp_soc *soc,
 		ipa_res->tx_num_alloc_buffer;
 
 	QDF_IPA_WDI_SETUP_INFO_PKT_OFFSET(tx) = 0;
-
-	/* Preprogram TCL descriptor */
-	desc_addr =
-		(uint8_t *)QDF_IPA_WDI_SETUP_INFO_DESC_FORMAT_TEMPLATE(tx);
-	desc_size = sizeof(struct tcl_data_cmd);
-#ifndef DP_BE_WAR
-	/* TODO - KIWI does not have these fields */
-	HAL_TX_DESC_SET_TLV_HDR(desc_addr, HAL_TX_TCL_DATA_TAG, desc_size);
-#endif
-	tcl_desc_ptr = (struct tcl_data_cmd *)
-		(QDF_IPA_WDI_SETUP_INFO_DESC_FORMAT_TEMPLATE(tx) + 1);
-	tcl_desc_ptr->buf_addr_info.return_buffer_manager =
-		HAL_RX_BUF_RBM_SW2_BM(soc->wbm_sw0_bm_id);
-#ifndef DP_BE_WAR
-	/* TODO - KIWI does not have these fields */
-	tcl_desc_ptr->addrx_en = 1;	/* Address X search enable in ASE */
-	tcl_desc_ptr->encap_type = HAL_TX_ENCAP_TYPE_ETHERNET;
-	tcl_desc_ptr->packet_offset = 2;	/* padding for alignment */
-#endif
 }
 
 static void dp_ipa_wdi_rx_params(struct dp_soc *soc,
@@ -2006,10 +1978,6 @@ dp_ipa_wdi_tx_smmu_params(struct dp_soc *soc,
 			  bool over_gsi,
 			  qdf_ipa_wdi_hdl_t hdl)
 {
-	struct tcl_data_cmd *tcl_desc_ptr;
-	uint8_t *desc_addr;
-	uint32_t desc_size;
-
 	if (over_gsi) {
 		if (hdl == DP_IPA_HDL_FIRST)
 			QDF_IPA_WDI_SETUP_INFO_SMMU_CLIENT(tx_smmu) =
@@ -2048,24 +2016,6 @@ dp_ipa_wdi_tx_smmu_params(struct dp_soc *soc,
 		ipa_res->tx_num_alloc_buffer;
 	QDF_IPA_WDI_SETUP_INFO_SMMU_PKT_OFFSET(tx_smmu) = 0;
 
-	/* Preprogram TCL descriptor */
-	desc_addr = (uint8_t *)QDF_IPA_WDI_SETUP_INFO_SMMU_DESC_FORMAT_TEMPLATE(
-			tx_smmu);
-	desc_size = sizeof(struct tcl_data_cmd);
-#ifndef DP_BE_WAR
-	/* TODO - KIWI does not have these fields */
-	HAL_TX_DESC_SET_TLV_HDR(desc_addr, HAL_TX_TCL_DATA_TAG, desc_size);
-#endif
-	tcl_desc_ptr = (struct tcl_data_cmd *)
-		(QDF_IPA_WDI_SETUP_INFO_SMMU_DESC_FORMAT_TEMPLATE(tx_smmu) + 1);
-	tcl_desc_ptr->buf_addr_info.return_buffer_manager =
-		HAL_RX_BUF_RBM_SW2_BM(soc->wbm_sw0_bm_id);
-#ifndef DP_BE_WAR
-	/* TODO - KIWI does not have these fields */
-	tcl_desc_ptr->addrx_en = 1;	/* Address X search enable in ASE */
-	tcl_desc_ptr->encap_type = HAL_TX_ENCAP_TYPE_ETHERNET;
-	tcl_desc_ptr->packet_offset = 2;	/* padding for alignment */
-#endif
 }
 
 static void
@@ -2121,7 +2071,8 @@ QDF_STATUS dp_ipa_setup(struct cdp_soc_t *soc_hdl, uint8_t pdev_id,
 			bool is_rm_enabled, uint32_t *tx_pipe_handle,
 			uint32_t *rx_pipe_handle, bool is_smmu_enabled,
 			qdf_ipa_sys_connect_params_t *sys_in, bool over_gsi,
-			qdf_ipa_wdi_hdl_t hdl, qdf_ipa_wdi_hdl_t id)
+			qdf_ipa_wdi_hdl_t hdl, qdf_ipa_wdi_hdl_t id,
+			void *ipa_ast_notify_cb)
 {
 	struct dp_soc *soc = cdp_soc_t_to_dp_soc(soc_hdl);
 	struct dp_pdev *pdev =
@@ -2199,7 +2150,11 @@ QDF_STATUS dp_ipa_setup(struct cdp_soc_t *soc_hdl, uint8_t pdev_id,
 	}
 
 	QDF_IPA_EP_CFG_NAT_EN(rx_cfg) = IPA_BYPASS_NAT;
-	QDF_IPA_EP_CFG_HDR_LEN(rx_cfg) = DP_IPA_UC_WLAN_RX_HDR_LEN;
+	if (ucfg_ipa_is_wds_enabled())
+		QDF_IPA_EP_CFG_HDR_LEN(rx_cfg) = DP_IPA_UC_WLAN_RX_HDR_LEN_AST;
+	else
+		QDF_IPA_EP_CFG_HDR_LEN(rx_cfg) = DP_IPA_UC_WLAN_RX_HDR_LEN;
+
 	QDF_IPA_EP_CFG_HDR_OFST_PKT_SIZE_VALID(rx_cfg) = 1;
 	QDF_IPA_EP_CFG_HDR_OFST_PKT_SIZE(rx_cfg) = 0;
 	QDF_IPA_EP_CFG_HDR_ADDITIONAL_CONST_LEN(rx_cfg) = 0;
@@ -2222,6 +2177,7 @@ QDF_STATUS dp_ipa_setup(struct cdp_soc_t *soc_hdl, uint8_t pdev_id,
 	QDF_IPA_WDI_CONN_IN_PARAMS_NOTIFY(pipe_in) = ipa_w2i_cb;
 	QDF_IPA_WDI_CONN_IN_PARAMS_PRIV(pipe_in) = ipa_priv;
 	QDF_IPA_WDI_CONN_IN_PARAMS_HANDLE(pipe_in) = hdl;
+	dp_ipa_ast_notify_cb(pipe_in, ipa_ast_notify_cb);
 
 	/* Connect WDI IPA PIPEs */
 	ret = qdf_ipa_wdi_conn_pipes(pipe_in, &pipe_out);
@@ -2289,7 +2245,8 @@ QDF_STATUS dp_ipa_setup_iface(char *ifname, uint8_t *mac_addr,
 
 	QDF_IPA_WDI_HDR_INFO_HDR(&hdr_info) = (uint8_t *)&uc_tx_hdr;
 	QDF_IPA_WDI_HDR_INFO_HDR_LEN(&hdr_info) = DP_IPA_UC_WLAN_TX_HDR_LEN;
-	QDF_IPA_WDI_HDR_INFO_HDR_TYPE(&hdr_info) = IPA_HDR_L2_ETHERNET_II;
+	QDF_IPA_WDI_HDR_INFO_HDR_TYPE(&hdr_info) = WLAN_IPA_HDR_L2_ETHERNET;
+
 	QDF_IPA_WDI_HDR_INFO_DST_MAC_ADDR_OFFSET(&hdr_info) =
 		DP_IPA_UC_WLAN_HDR_DES_MAC_OFFSET;
 
@@ -2298,7 +2255,7 @@ QDF_STATUS dp_ipa_setup_iface(char *ifname, uint8_t *mac_addr,
 		     &hdr_info, sizeof(qdf_ipa_wdi_hdr_info_t));
 	QDF_IPA_WDI_REG_INTF_IN_PARAMS_ALT_DST_PIPE(&in) = cons_client;
 	QDF_IPA_WDI_REG_INTF_IN_PARAMS_IS_META_DATA_VALID(&in) = 1;
-	QDF_IPA_WDI_REG_INTF_IN_PARAMS_META_DATA_MASK(&in) = htonl(0x00FF0000);
+	QDF_IPA_WDI_REG_INTF_IN_PARAMS_META_DATA_MASK(&in) = WLAN_IPA_META_DATA_MASK;
 	QDF_IPA_WDI_REG_INTF_IN_PARAMS_HANDLE(&in) = hdl;
 	dp_ipa_setup_iface_session_id(&in, session_id);
 
@@ -3046,4 +3003,39 @@ QDF_STATUS dp_ipa_tx_buf_smmu_unmapping(
 	return QDF_STATUS_SUCCESS;
 }
 
+#ifdef IPA_WDS_EASYMESH_FEATURE
+QDF_STATUS dp_ipa_ast_create(struct cdp_soc_t *soc_hdl,
+			     qdf_ipa_ast_info_type_t *data)
+{
+	struct dp_soc *soc = cdp_soc_t_to_dp_soc(soc_hdl);
+	uint8_t *rx_tlv_hdr;
+	struct dp_peer *peer;
+	struct hal_rx_msdu_metadata msdu_metadata;
+	qdf_ipa_ast_info_type_t *ast_info;
+
+	if (!data) {
+		dp_err("Data is NULL !!!");
+		return QDF_STATUS_E_FAILURE;
+	}
+	ast_info = data;
+
+	rx_tlv_hdr = qdf_nbuf_data(ast_info->skb);
+	peer = dp_peer_get_ref_by_id(soc, ast_info->ta_peer_id,
+				     DP_MOD_ID_IPA);
+	if (!peer) {
+		dp_err("Peer is NULL !!!!");
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	hal_rx_msdu_metadata_get(soc->hal_soc, rx_tlv_hdr, &msdu_metadata);
+
+	dp_rx_ipa_wds_srcport_learn(soc, peer, ast_info->skb, msdu_metadata,
+				    ast_info->mac_addr_ad4_valid,
+				    ast_info->first_msdu_in_mpdu_flag);
+
+	dp_peer_unref_delete(peer, DP_MOD_ID_IPA);
+
+	return QDF_STATUS_SUCCESS;
+}
+#endif
 #endif

@@ -602,6 +602,12 @@
  *
  *	The attributes used with this command are defined in
  *	enum qca_wlan_vendor_attr_secure_ranging_ctx.
+ *
+ * @QCA_NL80211_VENDOR_SUBCMD_SCS_RULE_CONFIG: Subcommand to configure
+ *	(add, remove, or change) a Stream Classification Service (SCS) rule.
+ *
+ *	The attributes used with this event are defined in
+ *	enum qca_wlan_vendor_attr_scs_rule_config.
  */
 
 enum qca_nl80211_vendor_subcmds {
@@ -848,6 +854,7 @@ enum qca_nl80211_vendor_subcmds {
 	QCA_NL80211_VENDOR_SUBCMD_DRIVER_READY = 214,
 	QCA_NL80211_VENDOR_SUBCMD_PASN = 215,
 	QCA_NL80211_VENDOR_SUBCMD_SECURE_RANGING_CONTEXT = 216,
+	QCA_NL80211_VENDOR_SUBCMD_SCS_RULE_CONFIG = 218,
 };
 
 enum qca_wlan_vendor_tos {
@@ -2488,6 +2495,22 @@ enum qca_wlan_vendor_attr_ll_stats_results {
 	 * Possible values are 0-100.
 	 */
 	QCA_WLAN_VENDOR_ATTR_LL_STATS_IFACE_INFO_TS_DUTY_CYCLE = 87,
+	/* Unsigned 32 bit value. The number of Beacon frames which are received
+	 * from the associated AP and indicate buffered unicast frame(s) for us
+	 * in the TIM element.
+	 */
+	QCA_WLAN_VENDOR_ATTR_LL_STATS_TIM_BEACON = 88,
+	/* Unsigned 32 bit value. The total number of Beacon frames received
+	 * from the associated AP that have wrongly indicated buffered unicast
+	 * traffic in the TIM element for us.
+	 * Below scenarios will be considered as wrong TIM element beacon:
+	 * 1) The related TIM element is set in the beacon for STA but STA
+	 *    doesn’t receive any unicast data after this beacon.
+	 * 2) The related TIM element is still set in the beacon for STA
+	 *    after STA has indicated power save exit by QoS Null Data frame.
+	 */
+	QCA_WLAN_VENDOR_ATTR_LL_STATS_TIM_BEACON_ERR = 89,
+
 	/* keep last */
 	QCA_WLAN_VENDOR_ATTR_LL_STATS_AFTER_LAST,
 	QCA_WLAN_VENDOR_ATTR_LL_STATS_MAX =
@@ -4168,7 +4191,30 @@ enum qca_wlan_vendor_attr_nd_offload {
  * 	during the register/unregister of netdev. Create and delete NDP
  * 	interface using NL80211_CMD_NEW_INTERFACE and NL80211_CMD_DEL_INTERFACE
  * 	commands respectively if the driver advertises this capability set.
-
+ * @QCA_WLAN_VENDOR_FEATURE_SECURE_LTF_STA: Flag indicates that the device in
+ *	station mode supports secure LTF. If NL80211_EXT_FEATURE_SECURE_LTF is
+ *	set, then QCA_WLAN_VENDOR_FEATURE_SECURE_LTF_STA will be ignored.
+ * @QCA_WLAN_VENDOR_FEATURE_SECURE_LTF_AP: Flag indicates that the device in AP
+ *	mode supports secure LTF. If NL80211_EXT_FEATURE_SECURE_LTF is set, then
+ *	QCA_WLAN_VENDOR_FEATURE_SECURE_LTF_AP will be ignored.
+ * @QCA_WLAN_VENDOR_FEATURE_SECURE_RTT_STA: Flag indicates that the device in
+ *	station mode supports secure RTT measurement exchange. If
+ *	NL80211_EXT_FEATURE_SECURE_RTT is set,
+ *	QCA_WLAN_VENDOR_FEATURE_SECURE_RTT_STA will be ignored.
+ * @QCA_WLAN_VENDOR_FEATURE_SECURE_RTT_AP: Flag indicates that the device in AP
+ *	mode supports secure RTT measurement exchange. If
+ *	NL80211_EXT_FEATURE_SECURE_RTT is set,
+ *	QCA_WLAN_VENDOR_FEATURE_SECURE_RTT_AP will be ignored.
+ * @QCA_WLAN_VENDOR_FEATURE_PROT_RANGE_NEGO_AND_MEASURE_STA: Flag indicates that
+ *	the device in station mode supports protection of range negotiation and
+ *	measurement management frames. If
+ *	NL80211_EXT_FEATURE_PROT_RANGE_NEGO_AND_MEASURE is set, then
+ *	QCA_WLAN_VENDOR_FEATURE_PROT_RANGE_NEGO_AND_MEASURE_STA will be ignored.
+ * @QCA_WLAN_VENDOR_FEATURE_PROT_RANGE_NEGO_AND_MEASURE_AP: Flag indicates that
+ *	the device in AP mode supports protection of range negotiation and
+ *	measurement management frames. If
+ *	NL80211_EXT_FEATURE_PROT_RANGE_NEGO_AND_MEASURE is set, then
+ *	QCA_WLAN_VENDOR_FEATURE_PROT_RANGE_NEGO_AND_MEASURE_AP will be ignored.
  * @NUM_QCA_WLAN_VENDOR_FEATURES: Number of assigned feature bits
  */
 enum qca_wlan_vendor_features {
@@ -4188,7 +4234,12 @@ enum qca_wlan_vendor_features {
 	QCA_WLAN_VENDOR_FEATURE_CONCURRENT_BAND_SESSIONS = 13,
 	QCA_WLAN_VENDOR_FEATURE_TWT_ASYNC_SUPPORT = 14,
 	QCA_WLAN_VENDOR_FEATURE_USE_ADD_DEL_VIRTUAL_INTF_FOR_NDI = 15,
-
+	QCA_WLAN_VENDOR_FEATURE_SECURE_LTF_STA		= 16,
+	QCA_WLAN_VENDOR_FEATURE_SECURE_LTF_AP		= 17,
+	QCA_WLAN_VENDOR_FEATURE_SECURE_RTT_STA		= 18,
+	QCA_WLAN_VENDOR_FEATURE_SECURE_RTT_AP		= 19,
+	QCA_WLAN_VENDOR_FEATURE_PROT_RANGE_NEGO_AND_MEASURE_STA = 20,
+	QCA_WLAN_VENDOR_FEATURE_PROT_RANGE_NEGO_AND_MEASURE_AP = 21,
 	NUM_QCA_WLAN_VENDOR_FEATURES /* keep last */
 };
 
@@ -5029,10 +5080,30 @@ enum qca_wlan_vendor_attr_config {
 	 */
 	QCA_WLAN_VENDOR_ATTR_CONFIG_ARP_NS_OFFLOAD = 81,
 
+	/*
+	 * 8-bit unsigned value. This attribute can be used to configure the
+	 * Dedicated Bluetooth Antenna Mode (DBAM) feature. Possible values
+	 * for this attribute are defined in the enum qca_dbam_config.
+	 */
+	QCA_WLAN_VENDOR_ATTR_CONFIG_DBAM = 83,
+
 	/* keep last */
 	QCA_WLAN_VENDOR_ATTR_CONFIG_AFTER_LAST,
 	QCA_WLAN_VENDOR_ATTR_CONFIG_MAX =
 	QCA_WLAN_VENDOR_ATTR_CONFIG_AFTER_LAST - 1,
+};
+
+/**
+ * enum qca_dbam_config - Specifies DBAM config mode
+ * @QCA_DBAM_DISABLE: Firmware disables DBAM
+ * @QCA_DBAM_ENABLE: Firmware enables DBAM opportunistically when
+ * internal criteria are met.
+ * @QCA_DBAM_FORCE_ENABLE: Firmware enables DBAM forcefully.
+ */
+enum qca_dbam_config {
+	QCA_DBAM_DISABLE = 0,
+	QCA_DBAM_ENABLE = 1,
+	QCA_DBAM_FORCE_ENABLE = 2,
 };
 
 /**
@@ -13399,4 +13470,135 @@ enum qca_wlan_vendor_attr_secure_ranging_ctx {
 	QCA_WLAN_VENDOR_ATTR_SECURE_RANGING_CTX_MAX =
 	QCA_WLAN_VENDOR_ATTR_SECURE_RANGING_CTX_AFTER_LAST - 1,
 };
+
+/**
+ * enum qca_wlan_vendor_attr_scs_rule_config - Used by the vendor command
+ * QCA_NL80211_VENDOR_SUBCMD_SCS_RULE_CONFIG to configure Stream Classification
+ * Service (SCS) rule.
+ *
+ * @QCA_WLAN_VENDOR_ATTR_SCS_RULE_CONFIG_RULE_ID: Mandatory u32 attribute.
+ * Represents the unique id of SCS rule to be configured.
+
+ * @QCA_WLAN_VENDOR_ATTR_SCS_RULE_CONFIG_REQUEST_TYPE: Mandatory u8 attribute.
+ * Represents the request type: add, remove, or change.
+ * Values as defined in IEEE Std 802.11-2020, Table 9-246 (SCS Request
+ * Type definitions).
+ *
+ * @QCA_WLAN_VENDOR_ATTR_SCS_RULE_CONFIG_OUTPUT_TID: Mandatory u8 attribute
+ * in case of add/change request type.
+ * Represents the output traffic identifier (TID) to be assigned to the flow
+ * matching the rule.
+ *
+ * @QCA_WLAN_VENDOR_ATTR_SCS_RULE_CONFIG_CLASSIFIER_TYPE: Mandatory u8
+ * attribute in case of add/change request type.
+ * Represents type of classifier parameters present in SCS rule.
+ * Refer IEEE Std 802.11-2020 Table 9-164 (Frame classifier type).
+ * Only classifier types 4 and 10 are supported for SCS.
+ *
+ * @QCA_WLAN_VENDOR_ATTR_SCS_RULE_CONFIG_TCLAS4_VERSION: Mandatory u8 attribute
+ * in case of add/change request type when classifier type is TCLAS4.
+ * Represents the IP version (4: IPv4, 6: IPv6) of the rule.
+ *
+ * @QCA_WLAN_VENDOR_ATTR_SCS_RULE_CONFIG_TCLAS4_SRC_IPV4_ADDR: Optional
+ * attribute in case of add/change request type when classifier type is TCLAS4
+ * and version attribute is IPv4.
+ * Represents the source IPv4 address in the rule which is to be compared
+ * against the source IP address in the IPv4 header.
+ *
+ * @QCA_WLAN_VENDOR_ATTR_SCS_RULE_CONFIG_TCLAS4_DST_IPV4_ADDR: Optional
+ * attribute in case of add/change request type when classifier type is TCLAS4
+ * and version attribute is IPv4.
+ * Represents the destination IPv4 address in the rule which is to be compared
+ * against the destination IP address in the IPv4 header.
+ *
+ * @QCA_WLAN_VENDOR_ATTR_SCS_RULE_CONFIG_TCLAS4_SRC_IPV6_ADDR: Optional
+ * attribute in case of add/change request type when classifier type is TCLAS4
+ * and version attribute is IPv6.
+ * Represents the source IPv6 address in the rule which is to be compared
+ * against the source IP address in the IPv6 header.
+ *
+ * @QCA_WLAN_VENDOR_ATTR_SCS_RULE_CONFIG_TCLAS4_DST_IPV6_ADDR: Optional
+ * attribute in case of add/change request type when classifier type is TCLAS4
+ * and version attribute is IPv6.
+ * Represents the destination IPv6 address in the rule which is to be compared
+ * against the destination IP address in the IPv6 header.
+ *
+ * @QCA_WLAN_VENDOR_ATTR_SCS_RULE_CONFIG_TCLAS4_SRC_PORT: Optional u16 attribute
+ * in case of add/change request type when classifier type is TCLAS4.
+ * Represents the source port number in the rule which is to be compared against
+ * the source port number in the protocol header.
+ *
+ * @QCA_WLAN_VENDOR_ATTR_SCS_RULE_CONFIG_TCLAS4_DST_PORT: Optional u16 attribute
+ * in case of add/change request type when classifier type is TCLAS4.
+ * Represents the destination port number in the rule which is to be compared
+ * against the destination port number in the protocol header.
+ *
+ * @QCA_WLAN_VENDOR_ATTR_SCS_RULE_CONFIG_TCLAS4_DSCP: Optional u8 attribute
+ * in case of add/change request type when classifier type is TCLAS4.
+ * Represents the DSCP value in the rule which is to be compared against the
+ * DSCP field present in the IP header.
+ *
+ * @QCA_WLAN_VENDOR_ATTR_SCS_RULE_CONFIG_TCLAS4_NEXT_HEADER: Optional u8
+ * attribute in case of add/change request type when classifier type is TCLAS4.
+ * Represents the protocol/next header in the rule which is to be compared
+ * against the protocol/next header field present in the IPv4/IPv6 header.
+ *
+ * @QCA_WLAN_VENDOR_ATTR_SCS_RULE_CONFIG_TCLAS4_FLOW_LABEL: Optional
+ * attribute of size 3 bytes present in case of add/change request type
+ * when classifier type is TCLAS4 and version is IPv6.
+ * Represents the flow label value in the rule which is to be compared against
+ * the flow label field present in the IPv6 header.
+ *
+ * @QCA_WLAN_VENDOR_ATTR_SCS_RULE_CONFIG_TCLAS10_PROTOCOL_INSTANCE: Optional u8
+ * attribute in case of add/change request type when classifier type is TCLAS10.
+ * Represents the protocol instance number in the rule.
+ *
+ * @QCA_WLAN_VENDOR_ATTR_SCS_RULE_CONFIG_TCLAS10_NEXT_HEADER: Optional u8
+ * attribute in case of add/change request type when classifier type is TCLAS10.
+ * Represents the protocol/next header in the rule which is to be compared
+ * against the protocol/next header field present in the IPv4/IPv6 header.
+ *
+ * @QCA_WLAN_VENDOR_ATTR_SCS_RULE_CONFIG_TCLAS10_FILTER_MASK: Optional
+ * attribute of variable length present when request type is add/change and
+ * classifier type is TCLAS10.
+ * Represents the mask to be used for masking the header contents of the header
+ * specified by QCA_WLAN_VENDOR_ATTR_SCS_RULE_CONFIG_TCLAS10_NEXT_HEADER
+ * attribute.
+ *
+ * @QCA_WLAN_VENDOR_ATTR_SCS_RULE_CONFIG_TCLAS10_FILTER_VALUE: Optional
+ * attribute of variable length present when request type is add/change and
+ * classifier type is TCLAS10.
+ * Represents the value to be compared against after masking the header contents
+ * of the header specified by the
+ * QCA_WLAN_VENDOR_ATTR_SCS_RULE_CONFIG_TCLAS10_NEXT_HEADER attribute with the
+ * filter mask specified by the
+ * QCA_WLAN_VENDOR_ATTR_SCS_RULE_CONFIG_TCLAS10_FILTER_MASK attribute.
+ */
+enum qca_wlan_vendor_attr_scs_rule_config {
+	QCA_WLAN_VENDOR_ATTR_SCS_RULE_CONFIG_INVALID = 0,
+	QCA_WLAN_VENDOR_ATTR_SCS_RULE_CONFIG_RULE_ID = 1,
+	QCA_WLAN_VENDOR_ATTR_SCS_RULE_CONFIG_REQUEST_TYPE = 2,
+	QCA_WLAN_VENDOR_ATTR_SCS_RULE_CONFIG_OUTPUT_TID = 3,
+	QCA_WLAN_VENDOR_ATTR_SCS_RULE_CONFIG_CLASSIFIER_TYPE = 4,
+	QCA_WLAN_VENDOR_ATTR_SCS_RULE_CONFIG_TCLAS4_VERSION = 5,
+	QCA_WLAN_VENDOR_ATTR_SCS_RULE_CONFIG_TCLAS4_SRC_IPV4_ADDR = 6,
+	QCA_WLAN_VENDOR_ATTR_SCS_RULE_CONFIG_TCLAS4_DST_IPV4_ADDR = 7,
+	QCA_WLAN_VENDOR_ATTR_SCS_RULE_CONFIG_TCLAS4_SRC_IPV6_ADDR = 8,
+	QCA_WLAN_VENDOR_ATTR_SCS_RULE_CONFIG_TCLAS4_DST_IPV6_ADDR = 9,
+	QCA_WLAN_VENDOR_ATTR_SCS_RULE_CONFIG_TCLAS4_SRC_PORT = 10,
+	QCA_WLAN_VENDOR_ATTR_SCS_RULE_CONFIG_TCLAS4_DST_PORT = 11,
+	QCA_WLAN_VENDOR_ATTR_SCS_RULE_CONFIG_TCLAS4_DSCP = 12,
+	QCA_WLAN_VENDOR_ATTR_SCS_RULE_CONFIG_TCLAS4_NEXT_HEADER = 13,
+	QCA_WLAN_VENDOR_ATTR_SCS_RULE_CONFIG_TCLAS4_FLOW_LABEL = 14,
+	QCA_WLAN_VENDOR_ATTR_SCS_RULE_CONFIG_TCLAS10_PROTOCOL_INSTANCE = 15,
+	QCA_WLAN_VENDOR_ATTR_SCS_RULE_CONFIG_TCLAS10_NEXT_HEADER = 16,
+	QCA_WLAN_VENDOR_ATTR_SCS_RULE_CONFIG_TCLAS10_FILTER_MASK = 17,
+	QCA_WLAN_VENDOR_ATTR_SCS_RULE_CONFIG_TCLAS10_FILTER_VALUE = 18,
+
+	/* Keep last */
+	QCA_WLAN_VENDOR_ATTR_SCS_RULE_CONFIG_AFTER_LAST,
+	QCA_WLAN_VENDOR_ATTR_SCS_RULE_CONFIG_MAX =
+	QCA_WLAN_VENDOR_ATTR_SCS_RULE_CONFIG_AFTER_LAST - 1,
+};
+
 #endif

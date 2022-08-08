@@ -41,6 +41,15 @@
 #define DP_MON_REAP_BUDGET 1024
 #define MON_BUF_MIN_ENTRIES 64
 
+/* 40MHZ BW 2 20MHZ sub bands */
+#define SUB40BW 2
+/* 80MHZ BW 4 20MHZ sub bands */
+#define SUB80BW 4
+/* 160MHZ BW 8 20MHZ sub bands */
+#define SUB160BW 8
+/* 320MHZ BW 16 20MHZ sub bands */
+#define SUB320BW 16
+
 #define RNG_ERR		"SRNG setup failed for"
 #define dp_mon_info(params...) \
 	__QDF_TRACE_FL(QDF_TRACE_LEVEL_INFO_HIGH, QDF_MODULE_ID_MON, ## params)
@@ -530,6 +539,28 @@ bool dp_ppdu_stats_ind_handler(struct htt_soc *soc,
 void dp_ppdu_desc_deliver(struct dp_pdev *pdev, struct ppdu_info *ppdu_info);
 #endif
 
+#ifdef QCA_RSSI_DB2DBM
+/*
+ * dp_mon_pdev_params_rssi_dbm_conv() --> to set rssi in dbm converstion
+ *						params into monitor pdev.
+ *@cdp_soc: dp soc handle.
+ *@params: cdp_rssi_db2dbm_param_dp structure value.
+ *
+ * Return: QDF_STATUS_SUCCESS if value set successfully
+ *         QDF_STATUS_E_INVAL false if error
+ */
+QDF_STATUS
+dp_mon_pdev_params_rssi_dbm_conv(struct cdp_soc_t *cdp_soc,
+				 struct cdp_rssi_db2dbm_param_dp *params);
+#else
+static inline QDF_STATUS
+dp_mon_pdev_params_rssi_dbm_conv(struct cdp_soc_t *cdp_soc,
+				 struct cdp_rssi_db2dbm_param_dp *params)
+{
+	return QDF_STATUS_E_INVAL;
+}
+#endif /* QCA_RSSI_DB2DBM */
+
 struct dp_mon_ops {
 	QDF_STATUS (*mon_soc_cfg_init)(struct dp_soc *soc);
 	QDF_STATUS (*mon_soc_attach)(struct dp_soc *soc);
@@ -781,8 +812,6 @@ struct dp_mon_ops {
 	void (*mon_lite_mon_vdev_delete)(struct dp_pdev *pdev,
 					 struct dp_vdev *vdev);
 	void (*mon_lite_mon_disable_rx)(struct dp_pdev *pdev);
-	void (*mon_rx_stats_update_rssi_dbm_params)
-		(struct dp_soc *soc, struct dp_mon_pdev *mon_pdev);
 };
 
 /**
@@ -3765,27 +3794,6 @@ dp_rx_mon_enable(struct dp_soc *soc, uint32_t *msg_word,
 	monitor_ops->rx_mon_enable(msg_word, tlv_filter);
 }
 
-static inline void
-dp_mon_rx_stats_update_rssi_dbm_params(struct dp_soc *soc,
-				       struct dp_mon_pdev *mon_pdev)
-{
-	struct dp_mon_soc *mon_soc = soc->monitor_soc;
-	struct dp_mon_ops *monitor_ops;
-
-	if (!mon_soc) {
-		dp_mon_debug("mon soc is NULL");
-		return;
-	}
-
-	monitor_ops = mon_soc->mon_ops;
-	if (!monitor_ops ||
-	    !monitor_ops->mon_rx_stats_update_rssi_dbm_params) {
-		dp_mon_debug("callback not registered");
-		return;
-	}
-	monitor_ops->mon_rx_stats_update_rssi_dbm_params(soc, mon_pdev);
-}
-
 #ifdef QCA_ENHANCED_STATS_SUPPORT
 QDF_STATUS dp_peer_qos_stats_notify(struct dp_pdev *dp_pdev,
 				    struct cdp_rx_stats_ppdu_user *ppdu_user);
@@ -3934,6 +3942,16 @@ void dp_mon_ops_register_1_0(struct dp_mon_soc *mon_soc);
  */
 void dp_mon_cdp_ops_register_1_0(struct cdp_ops *ops);
 
+#if defined(WLAN_CFR_ENABLE) && defined(WLAN_ENH_CFR_ENABLE)
+/**
+ * dp_cfr_filter_register_1_0(): register cfr filter setting API
+ * @ops: cdp ops handle
+ *
+ * return: void
+ */
+void dp_cfr_filter_register_1_0(struct cdp_ops *ops);
+#endif
+
 #ifdef QCA_MONITOR_2_0_SUPPORT
 /**
  * dp_mon_ops_register_2_0(): register monitor ops
@@ -3950,6 +3968,16 @@ void dp_mon_ops_register_2_0(struct dp_mon_soc *mon_soc);
  * return: void
  */
 void dp_mon_cdp_ops_register_2_0(struct cdp_ops *ops);
+
+#if defined(WLAN_CFR_ENABLE) && defined(WLAN_ENH_CFR_ENABLE)
+/**
+ * dp_cfr_filter_register_2_0(): register cfr filter setting API
+ * @ops: cdp ops handle
+ *
+ * return: void
+ */
+void dp_cfr_filter_register_2_0(struct cdp_ops *ops);
+#endif
 #endif /* QCA_MONITOR_2_0_SUPPORT */
 
 /**

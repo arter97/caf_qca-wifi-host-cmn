@@ -167,6 +167,17 @@
 #define DP_TX_MAGIC_PATTERN_INUSE	0xABCD1234
 #define DP_TX_MAGIC_PATTERN_FREE	0xDEADBEEF
 
+#ifdef IPA_OFFLOAD
+#define DP_PEER_REO_STATS_TID_SHIFT 16
+#define DP_PEER_REO_STATS_TID_MASK 0xFFFF0000
+#define DP_PEER_REO_STATS_PEER_ID_MASK 0x0000FFFF
+#define DP_PEER_GET_REO_STATS_TID(comb_peer_id_tid) \
+	((comb_peer_id_tid & DP_PEER_REO_STATS_TID_MASK) >> \
+	DP_PEER_REO_STATS_TID_SHIFT)
+#define DP_PEER_GET_REO_STATS_PEER_ID(comb_peer_id_tid) \
+	(comb_peer_id_tid & DP_PEER_REO_STATS_PEER_ID_MASK)
+#endif
+
 enum rx_pktlog_mode {
 	DP_RX_PKTLOG_DISABLED = 0,
 	DP_RX_PKTLOG_FULL,
@@ -248,6 +259,7 @@ enum dp_mod_id {
 	DP_MOD_ID_TX,
 	DP_MOD_ID_SAWF,
 	DP_MOD_ID_REINJECT,
+	DP_MOD_ID_SCS,
 	DP_MOD_ID_MAX,
 };
 
@@ -875,6 +887,11 @@ struct dp_rx_tid {
 
 	/* Coex Override preserved windows size 1 based */
 	uint16_t rx_ba_win_size_override;
+#ifdef IPA_OFFLOAD
+	/* rx msdu count per tid */
+	struct cdp_pkt_info rx_msdu_cnt;
+#endif
+
 };
 
 /**
@@ -1863,6 +1880,11 @@ struct dp_arch_ops {
 	struct dp_peer *(*dp_find_peer_by_destmac)(struct dp_soc *soc,
 						   uint8_t *dest_mac_addr,
 						   uint8_t vdev_id);
+	QDF_STATUS
+	(*dp_tx_compute_hw_delay)(struct dp_soc *soc,
+				  struct dp_vdev *vdev,
+				  struct hal_tx_completion_status *ts,
+				  uint32_t *delay_us);
 };
 
 /**
@@ -2436,6 +2458,10 @@ struct dp_soc {
 	/* PPDU to link_id mapping parameters */
 	uint8_t link_id_offset;
 	uint8_t link_id_bits;
+#ifdef FEATURE_RX_LINKSPEED_ROAM_TRIGGER
+	/* A flag using to decide the switch of rx link speed  */
+	bool high_throughput;
+#endif
 };
 
 #ifdef IPA_OFFLOAD
@@ -3380,16 +3406,6 @@ struct dp_peer_ast_params {
 	uint8_t flowQ;
 };
 
-#ifdef WLAN_SUPPORT_SCS
-/* SCS procedures macros */
-/* SCS Procedures - SCS parameters
- * obtained from SCS request are stored
- * in a peer based database for traffic
- * classification.
- */
-#define IEEE80211_SCS_MAX_NO_OF_ELEM 10
-#endif
-
 #define DP_MLO_FLOW_INFO_MAX	3
 
 /**
@@ -3635,6 +3651,8 @@ struct dp_peer_per_pkt_tx_stats {
  *       <enum 2     1_6_us_sgi > HE related GI
  *       <enum 3     3_2_us_sgi > HE
  * @preamble_info: preamble
+ * @tx_ucast_total: total ucast count
+ * @tx_ucast_success: total ucast success count
  * @retries_mpdu: mpdu number of successfully transmitted after retries
  * @mpdu_success_with_retries: mpdu retry count in case of successful tx
  * @su_be_ppdu_cnt: SU Tx packet count for 11BE
@@ -3685,6 +3703,8 @@ struct dp_peer_extd_tx_stats {
 
 	uint32_t retries_mpdu;
 	uint32_t mpdu_success_with_retries;
+	struct cdp_pkt_info tx_ucast_total;
+	struct cdp_pkt_info tx_ucast_success;
 #ifdef WLAN_FEATURE_11BE
 	struct cdp_pkt_type su_be_ppdu_cnt;
 	struct cdp_pkt_type mu_be_ppdu_cnt[TXRX_TYPE_MU_MAX];
@@ -4033,11 +4053,6 @@ struct dp_peer {
 
 	uint8_t peer_state;
 	qdf_spinlock_t peer_state_lock;
-#ifdef WLAN_SUPPORT_SCS
-	struct cdp_scs_params scs[IEEE80211_SCS_MAX_NO_OF_ELEM];
-	bool scs_is_active;
-	uint8_t no_of_scs_sessions;
-#endif
 #ifdef WLAN_SUPPORT_MSCS
 	struct dp_peer_mscs_parameter mscs_ipv4_parameter, mscs_ipv6_parameter;
 	bool mscs_active;

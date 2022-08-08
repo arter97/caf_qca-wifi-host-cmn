@@ -39,6 +39,9 @@
 #ifdef FEATURE_WDS
 #include "dp_txrx_wds.h"
 #endif
+#ifdef DP_RATETABLE_SUPPORT
+#include "dp_ratetable.h"
+#endif
 
 #ifdef DUP_RX_DESC_WAR
 void dp_rx_dump_info_and_assert(struct dp_soc *soc,
@@ -125,7 +128,7 @@ dp_pdev_frag_alloc_and_map(struct dp_soc *dp_soc,
 	QDF_STATUS ret = QDF_STATUS_E_FAILURE;
 
 	(nbuf_frag_info_t->virt_addr).vaddr =
-			qdf_frag_alloc(rx_desc_pool->buf_size);
+			qdf_frag_alloc(NULL, rx_desc_pool->buf_size);
 
 	if (!((nbuf_frag_info_t->virt_addr).vaddr)) {
 		dp_err("Frag alloc failed");
@@ -1182,13 +1185,15 @@ uint8_t dp_rx_process_invalid_peer(struct dp_soc *soc, qdf_nbuf_t mpdu,
 	struct ieee80211_frame *wh;
 	qdf_nbuf_t curr_nbuf, next_nbuf;
 	uint8_t *rx_tlv_hdr = qdf_nbuf_data(mpdu);
-	uint8_t *rx_pkt_hdr = hal_rx_pkt_hdr_get(soc->hal_soc, rx_tlv_hdr);
+	uint8_t *rx_pkt_hdr = NULL;
 
 	if (!HAL_IS_DECAP_FORMAT_RAW(soc->hal_soc, rx_tlv_hdr)) {
 		dp_rx_debug("%pK: Drop decapped frames", soc);
 		goto free;
 	}
 
+	/* In RAW packet, packet header will be part of data */
+	rx_pkt_hdr = rx_tlv_hdr + soc->rx_pkt_tlv_size;
 	wh = (struct ieee80211_frame *)rx_pkt_hdr;
 
 	if (!DP_FRAME_IS_DATA(wh)) {
@@ -2073,6 +2078,70 @@ QDF_STATUS dp_rx_eapol_deliver_to_stack(struct dp_soc *soc,
 #define dp_rx_msdu_stats_update_prot_cnts(vdev_hdl, nbuf, txrx_peer)
 #endif
 
+#ifdef FEATURE_RX_LINKSPEED_ROAM_TRIGGER
+/**
+ * dp_rx_rates_stats_update() - update rate stats
+ * from rx msdu.
+ * @soc: datapath soc handle
+ * @nbuf: received msdu buffer
+ * @rx_tlv_hdr: rx tlv header
+ * @txrx_peer: datapath txrx_peer handle
+ * @sgi: Short Guard Interval
+ * @mcs: Modulation and Coding Set
+ * @nss: Number of Spatial Streams
+ * @bw: BandWidth
+ * @pkt_type: Corresponds to preamble
+ *
+ * To be precisely record rates, following factors are considered:
+ * Exclude specific frames, ARP, DHCP, ssdp, etc.
+ * Make sure to affect rx throughput as least as possible.
+ *
+ * Return: void
+ */
+static void
+dp_rx_rates_stats_update(struct dp_soc *soc, qdf_nbuf_t nbuf,
+			 uint8_t *rx_tlv_hdr, struct dp_txrx_peer *txrx_peer,
+			 uint32_t sgi, uint32_t mcs,
+			 uint32_t nss, uint32_t bw, uint32_t pkt_type)
+{
+	uint32_t rix;
+	uint16_t ratecode;
+	uint32_t avg_rx_rate;
+	uint32_t ratekbps;
+	enum cdp_punctured_modes punc_mode = NO_PUNCTURE;
+
+	if (soc->high_throughput ||
+	    dp_rx_data_is_specific(soc->hal_soc, rx_tlv_hdr, nbuf)) {
+		return;
+	}
+
+	DP_PEER_EXTD_STATS_UPD(txrx_peer, rx.rx_rate, mcs);
+
+	/* here pkt_type corresponds to preamble */
+	ratekbps = dp_getrateindex(sgi,
+				   mcs,
+				   nss,
+				   pkt_type,
+				   bw,
+				   punc_mode,
+				   &rix,
+				   &ratecode);
+	DP_PEER_EXTD_STATS_UPD(txrx_peer, rx.last_rx_rate, ratekbps);
+	avg_rx_rate =
+		dp_ath_rate_lpf(txrx_peer->stats.extd_stats.rx.avg_rx_rate,
+				ratekbps);
+	DP_PEER_EXTD_STATS_UPD(txrx_peer, rx.avg_rx_rate, avg_rx_rate);
+}
+#else
+static void
+dp_rx_rates_stats_update(struct dp_soc *soc, qdf_nbuf_t nbuf,
+			 uint8_t *rx_tlv_hdr, struct dp_txrx_peer *txrx_peer,
+			 uint32_t sgi, uint32_t mcs,
+			 uint32_t nss, uint32_t bw, uint32_t pkt_type)
+{
+}
+#endif /* FEATURE_RX_LINKSPEED_ROAM_TRIGGER */
+
 #ifndef QCA_ENHANCED_STATS_SUPPORT
 /**
  * dp_rx_msdu_extd_stats_update(): Update Rx extended path stats for peer
@@ -2091,6 +2160,7 @@ void dp_rx_msdu_extd_stats_update(struct dp_soc *soc, qdf_nbuf_t nbuf,
 {
 	bool is_ampdu;
 	uint32_t sgi, mcs, tid, nss, bw, reception_type, pkt_type;
+	uint8_t dst_mcs_idx;
 
 	/*
 	 * TODO - For KIWI this field is present in ring_desc
@@ -2108,6 +2178,9 @@ void dp_rx_msdu_extd_stats_update(struct dp_soc *soc, qdf_nbuf_t nbuf,
 							      rx_tlv_hdr);
 	nss = hal_rx_msdu_start_nss_get(soc->hal_soc, rx_tlv_hdr);
 	pkt_type = hal_rx_tlv_get_pkt_type(soc->hal_soc, rx_tlv_hdr);
+	/* do HW to SW pkt type conversion */
+	pkt_type = (pkt_type >= HAL_DOT11_MAX ? DOT11_MAX :
+		    hal_2_dp_pkt_type_map[pkt_type]);
 
 	DP_PEER_EXTD_STATS_INCC(txrx_peer, rx.rx_mpdu_cnt[mcs], 1,
 		      ((mcs < MAX_MCS) && QDF_NBUF_CB_RX_CHFRAG_START(nbuf)));
@@ -2118,9 +2191,7 @@ void dp_rx_msdu_extd_stats_update(struct dp_soc *soc, qdf_nbuf_t nbuf,
 	 * only if nss > 0 and pkt_type is 11N/AC/AX,
 	 * then increase index [nss - 1] in array counter.
 	 */
-	if (nss > 0 && (pkt_type == DOT11_N ||
-			pkt_type == DOT11_AC ||
-			pkt_type == DOT11_AX))
+	if (nss > 0 && CDP_IS_PKT_TYPE_SUPPORT_NSS(pkt_type))
 		DP_PEER_EXTD_STATS_INC(txrx_peer, rx.nss[nss - 1], 1);
 
 	DP_PEER_EXTD_STATS_INC(txrx_peer, rx.sgi_count[sgi], 1);
@@ -2134,36 +2205,14 @@ void dp_rx_msdu_extd_stats_update(struct dp_soc *soc, qdf_nbuf_t nbuf,
 	DP_PEER_EXTD_STATS_INC(txrx_peer, rx.wme_ac_type[TID_TO_WME_AC(tid)], 1);
 	DP_PEER_EXTD_STATS_INC(txrx_peer, rx.reception_type[reception_type], 1);
 
-	DP_PEER_EXTD_STATS_INCC(txrx_peer,
-				rx.pkt_type[pkt_type].mcs_count[MAX_MCS - 1], 1,
-				((mcs >= MAX_MCS_11A) && (pkt_type == DOT11_A)));
-	DP_PEER_EXTD_STATS_INCC(txrx_peer,
-				rx.pkt_type[pkt_type].mcs_count[mcs], 1,
-				((mcs <= MAX_MCS_11A) && (pkt_type == DOT11_A)));
-	DP_PEER_EXTD_STATS_INCC(txrx_peer,
-				rx.pkt_type[pkt_type].mcs_count[MAX_MCS - 1], 1,
-				((mcs >= MAX_MCS_11B) && (pkt_type == DOT11_B)));
-	DP_PEER_EXTD_STATS_INCC(txrx_peer,
-				rx.pkt_type[pkt_type].mcs_count[mcs], 1,
-				((mcs <= MAX_MCS_11B) && (pkt_type == DOT11_B)));
-	DP_PEER_EXTD_STATS_INCC(txrx_peer,
-				rx.pkt_type[pkt_type].mcs_count[MAX_MCS - 1], 1,
-				((mcs >= MAX_MCS_11A) && (pkt_type == DOT11_N)));
-	DP_PEER_EXTD_STATS_INCC(txrx_peer,
-				rx.pkt_type[pkt_type].mcs_count[mcs], 1,
-				((mcs <= MAX_MCS_11A) && (pkt_type == DOT11_N)));
-	DP_PEER_EXTD_STATS_INCC(txrx_peer,
-				rx.pkt_type[pkt_type].mcs_count[MAX_MCS - 1], 1,
-				((mcs >= MAX_MCS_11AC) && (pkt_type == DOT11_AC)));
-	DP_PEER_EXTD_STATS_INCC(txrx_peer,
-				rx.pkt_type[pkt_type].mcs_count[mcs], 1,
-				((mcs <= MAX_MCS_11AC) && (pkt_type == DOT11_AC)));
-	DP_PEER_EXTD_STATS_INCC(txrx_peer,
-				rx.pkt_type[pkt_type].mcs_count[MAX_MCS - 1], 1,
-				((mcs >= MAX_MCS) && (pkt_type == DOT11_AX)));
-	DP_PEER_EXTD_STATS_INCC(txrx_peer,
-				rx.pkt_type[pkt_type].mcs_count[mcs], 1,
-				((mcs < MAX_MCS) && (pkt_type == DOT11_AX)));
+	dst_mcs_idx = dp_get_mcs_array_index_by_pkt_type_mcs(pkt_type, mcs);
+	if (MCS_INVALID_ARRAY_INDEX != dst_mcs_idx)
+		DP_PEER_EXTD_STATS_INC(txrx_peer,
+				       rx.pkt_type[pkt_type].mcs_count[dst_mcs_idx],
+				       1);
+
+	dp_rx_rates_stats_update(soc, nbuf, rx_tlv_hdr, txrx_peer,
+				 sgi, mcs, nss, bw, pkt_type);
 }
 #else
 static inline

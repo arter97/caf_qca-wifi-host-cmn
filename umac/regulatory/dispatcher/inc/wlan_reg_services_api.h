@@ -543,6 +543,27 @@ QDF_STATUS wlan_reg_get_max_5g_bw_from_regdomain(
 					uint16_t *max_bw_5g);
 
 /**
+ * wlan_reg_get_max_bw_5G_for_fo() - get max_5g_bw for FullOffload
+ * @pdev: PDEV object
+ *
+ * API to get max_bw_5g from pdev object
+ *
+ * Return: @max_bw_5g
+ */
+QDF_STATUS wlan_reg_get_max_bw_5G_for_fo(struct wlan_objmgr_pdev *pdev);
+
+/**
+ * wlan_reg_is_offload_enabled() - get offload_enabled
+ * @pdev: PDEV object
+ *
+ * API to get offload_enabled from psoc.
+ *
+ * Return: true if offload enaled
+ */
+
+bool wlan_reg_is_offload_enabled(struct wlan_objmgr_pdev *pdev);
+
+/**
  * wlan_reg_get_fcc_constraint() - Check FCC constraint on given frequency
  * @pdev: physical dev to get
  * @freq: frequency to be checked
@@ -1488,6 +1509,22 @@ wlan_reg_get_channel_state_for_pwrmode(
 enum channel_state wlan_reg_get_channel_state_from_secondary_list_for_freq(
 						struct wlan_objmgr_pdev *pdev,
 						qdf_freq_t freq);
+
+/**
+ * wlan_reg_get_channel_list_with_power() - Provide channel list with tx power
+ * @ch_list: pointer to the channel list.
+ * @num_chan: Number of channels which has been filed in ch_list
+ * @in_6g_pwr_type: 6G power type corresponding to which 6G channels needs to
+ * be provided
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS
+wlan_reg_get_channel_list_with_power(
+				struct wlan_objmgr_pdev *pdev,
+				struct channel_power *ch_list,
+				uint8_t *num_chan,
+				enum supported_6g_pwr_types in_6g_pwr_type);
 #endif
 
 #ifdef WLAN_FEATURE_11BE
@@ -2497,6 +2534,32 @@ wlan_reg_get_chan_state_for_320(struct wlan_objmgr_pdev *pdev,
 				bool treat_nol_chan_as_disabled)
 {
 	return CHANNEL_STATE_INVALID;
+}
+#endif
+
+/**
+ * wlan_is_sup_chan_entry_afc_done() - Checks if the super chan entry of given
+ * channel idx and power mode has REGULATORY_CHAN_AFC_NOT_DONE flag cleared.
+ *
+ * @pdev: pdev pointer
+ * @freq: input channel idx
+ * @in_6g_pwr_mode: input power mode
+ *
+ * Return: True if REGULATORY_CHAN_AFC_NOT_DONE flag is clear for the super
+ * chan entry.
+ */
+#ifdef CONFIG_BAND_6GHZ
+bool
+wlan_is_sup_chan_entry_afc_done(struct wlan_objmgr_pdev *pdev,
+				enum channel_enum chan_idx,
+				enum supported_6g_pwr_types in_6g_pwr_mode);
+#else
+static inline bool
+wlan_is_sup_chan_entry_afc_done(struct wlan_objmgr_pdev *pdev,
+				enum channel_enum chan_idx,
+				enum supported_6g_pwr_types in_6g_pwr_mode)
+{
+	return false;
 }
 #endif
 #endif

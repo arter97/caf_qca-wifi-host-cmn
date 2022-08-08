@@ -736,7 +736,7 @@ static void mlo_dev_release_link_vdevs(
 	}
 }
 
-#ifdef WLAN_FEATURE_T2LM
+#ifdef WLAN_FEATURE_11BE
 static void
 wlan_mlo_peer_set_t2lm_enable_val(struct wlan_mlo_peer_context *ml_peer,
 				  struct mlo_partner_info *ml_info)
@@ -748,7 +748,7 @@ static void
 wlan_mlo_peer_set_t2lm_enable_val(struct wlan_mlo_peer_context *ml_peer,
 				  struct mlo_partner_info *ml_info)
 {}
-#endif /* WLAN_FEATURE_T2LM */
+#endif /* WLAN_FEATURE_11BE */
 
 QDF_STATUS wlan_mlo_peer_create(struct wlan_objmgr_vdev *vdev,
 				struct wlan_objmgr_peer *link_peer,
@@ -826,11 +826,9 @@ QDF_STATUS wlan_mlo_peer_create(struct wlan_objmgr_vdev *vdev,
 		}
 	}
 
-	if ((wlan_vdev_mlme_get_opmode(vdev) == QDF_STA_MODE)) {
-		ml_peer = mlo_get_mlpeer(
-				ml_dev,
-				(struct qdf_mac_addr *)&link_peer->mldaddr[0]);
-	}
+	if (wlan_vdev_mlme_get_opmode(vdev) == QDF_STA_MODE)
+		ml_peer = wlan_mlo_get_mlpeer(ml_dev,
+				 (struct qdf_mac_addr *)&link_peer->mldaddr[0]);
 
 	if (!ml_peer) {
 		/* Allocate MLO peer */

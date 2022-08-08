@@ -77,6 +77,9 @@ cdp_dump_flow_pool_info(struct cdp_soc_t *soc)
 #ifdef WLAN_SUPPORT_MESH_LATENCY
 #include "dp_mesh_latency.h"
 #endif
+#ifdef WLAN_SUPPORT_SCS
+#include "dp_scs.h"
+#endif
 #ifdef ATH_SUPPORT_IQUE
 #include "dp_txrx_me.h"
 #endif
@@ -404,12 +407,15 @@ const int dp_stats_mapping_table[][STATS_TYPE_MAX] = {
 	{TXRX_FW_STATS_INVALID, TXRX_REO_QUEUE_STATS},
 	{TXRX_FW_STATS_INVALID, TXRX_SOC_CFG_PARAMS},
 	{TXRX_FW_STATS_INVALID, TXRX_PDEV_CFG_PARAMS},
+	{TXRX_FW_STATS_INVALID, TXRX_NAPI_STATS},
 	{TXRX_FW_STATS_INVALID, TXRX_SOC_INTERRUPT_STATS},
 	{TXRX_FW_STATS_INVALID, TXRX_SOC_FSE_STATS},
 	{TXRX_FW_STATS_INVALID, TXRX_HAL_REG_WRITE_STATS},
 	{TXRX_FW_STATS_INVALID, TXRX_SOC_REO_HW_DESC_DUMP},
 	{TXRX_FW_STATS_INVALID, TXRX_SOC_WBM_IDLE_HPTP_DUMP},
-	{HTT_DBG_EXT_STATS_PDEV_RX_RATE_EXT, TXRX_HOST_STATS_INVALID}
+	{TXRX_FW_STATS_INVALID, TXRX_SRNG_USAGE_WM_STATS},
+	{HTT_DBG_EXT_STATS_PDEV_RX_RATE_EXT, TXRX_HOST_STATS_INVALID},
+	{HTT_DBG_EXT_STATS_TX_SOUNDING_INFO, TXRX_HOST_STATS_INVALID}
 };
 
 /* MCL specific functions */
@@ -5721,6 +5727,7 @@ static QDF_STATUS dp_pdev_detach_wifi3(struct cdp_soc_t *psoc, uint8_t pdev_id,
 				       int force)
 {
 	struct dp_pdev *pdev;
+	struct dp_soc *soc = (struct dp_soc *)psoc;
 
 	pdev = dp_get_pdev_from_soc_pdev_id_wifi3((struct dp_soc *)psoc,
 						  pdev_id);
@@ -5730,6 +5737,8 @@ static QDF_STATUS dp_pdev_detach_wifi3(struct cdp_soc_t *psoc, uint8_t pdev_id,
 			    (struct dp_soc *)psoc, pdev_id);
 		return QDF_STATUS_E_FAILURE;
 	}
+
+	soc->arch_ops.txrx_pdev_detach(pdev);
 
 	dp_pdev_detach((struct cdp_pdev *)pdev, force);
 	return QDF_STATUS_SUCCESS;
@@ -7493,6 +7502,7 @@ QDF_STATUS dp_peer_mlo_setup(
 			 */
 			mld_peer->vdev = dp_vdev_get_ref_by_id(soc, vdev_id,
 							       DP_MOD_ID_CHILD);
+			mld_peer->txrx_peer->vdev = mld_peer->vdev;
 		}
 
 		/* associate mld and link peer */
@@ -7912,140 +7922,6 @@ dp_get_pdev_reo_dest(struct cdp_soc_t *txrx_soc, uint8_t pdev_id)
 	else
 		return cdp_host_reo_dest_ring_unknown;
 }
-
-#ifdef WLAN_SUPPORT_SCS
-/*
- * dp_enable_scs_params - Enable/Disable SCS procedures
- * @soc - Datapath soc handle
- * @peer_mac - STA Mac address
- * @vdev_id - ID of the vdev handle
- * @active - Flag to set SCS active/inactive
- * return type - QDF_STATUS - Success/Invalid
- */
-static QDF_STATUS
-dp_enable_scs_params(struct cdp_soc_t *soc_hdl, struct qdf_mac_addr
-		     *peer_mac,
-		     uint8_t vdev_id,
-		     bool is_active)
-{
-	struct dp_peer *peer;
-	QDF_STATUS status = QDF_STATUS_E_INVAL;
-	struct dp_soc *soc = (struct dp_soc *)soc_hdl;
-
-	peer = dp_peer_find_hash_find(soc, peer_mac->bytes, 0, vdev_id,
-				      DP_MOD_ID_CDP);
-
-	if (!peer) {
-		dp_err("Peer is NULL!");
-		goto fail;
-	}
-
-	peer->scs_is_active = is_active;
-	status = QDF_STATUS_SUCCESS;
-
-fail:
-	if (peer)
-		dp_peer_unref_delete(peer, DP_MOD_ID_CDP);
-	return status;
-}
-
-/*
- * @brief dp_copy_scs_params - SCS Parameters sent by STA
- * is copied from the cdp layer to the dp layer
- * These parameters are then used by the peer
- * for traffic classification.
- *
- * @param peer - peer struct
- * @param scs_params - cdp layer params
- * @idx - SCS_entry index obtained from the
- * node database with a given SCSID
- * @return void
- */
-void
-dp_copy_scs_params(struct dp_peer *peer,
-		   struct cdp_scs_params *scs_params,
-		   uint8_t idx)
-{
-	uint8_t tidx = 0;
-	uint8_t tclas_elem;
-
-	peer->scs[idx].scsid = scs_params->scsid;
-	peer->scs[idx].access_priority =
-		scs_params->access_priority;
-	peer->scs[idx].tclas_elements =
-		scs_params->tclas_elements;
-	peer->scs[idx].tclas_process =
-		scs_params->tclas_process;
-
-	tclas_elem = peer->scs[idx].tclas_elements;
-
-	while (tidx < tclas_elem) {
-		qdf_mem_copy(&peer->scs[idx].tclas[tidx],
-			     &scs_params->tclas[tidx],
-			     sizeof(struct cdp_tclas_tuple));
-		tidx++;
-	}
-}
-
-/*
- * @brief dp_record_scs_params() - Copying the SCS params to a
- * peer based database.
- *
- * @soc - Datapath soc handle
- * @peer_mac - STA Mac address
- * @vdev_id - ID of the vdev handle
- * @scs_params - Structure having SCS parameters obtained
- * from handshake
- * @idx - SCS_entry index obtained from the
- * node database with a given SCSID
- * @scs_sessions - Total # of SCS sessions active
- *
- * @details
- * SCS parameters sent by the STA in
- * the SCS Request to the AP. The AP makes a note of these
- * parameters while sending the MSDUs to the STA, to
- * send the downlink traffic with correct User priority.
- *
- * return type - QDF_STATUS - Success/Invalid
- */
-static QDF_STATUS
-dp_record_scs_params(struct cdp_soc_t *soc_hdl, struct qdf_mac_addr
-		     *peer_mac,
-		     uint8_t vdev_id,
-		     struct cdp_scs_params *scs_params,
-		     uint8_t idx,
-		     uint8_t scs_sessions)
-{
-	struct dp_peer *peer;
-	QDF_STATUS status = QDF_STATUS_E_INVAL;
-	struct dp_soc *soc = (struct dp_soc *)soc_hdl;
-
-	peer = dp_peer_find_hash_find(soc, peer_mac->bytes, 0, vdev_id,
-				      DP_MOD_ID_CDP);
-
-	if (!peer) {
-		dp_err("Peer is NULL!");
-		goto fail;
-	}
-
-	if (idx >= IEEE80211_SCS_MAX_NO_OF_ELEM)
-		goto fail;
-
-	/* SCS procedure for the peer is activated
-	 * as soon as we get this information from
-	 * the control path, unless explicitly disabled.
-	 */
-	peer->scs_is_active = 1;
-	dp_copy_scs_params(peer, scs_params, idx);
-	status = QDF_STATUS_SUCCESS;
-	peer->no_of_scs_sessions = scs_sessions;
-
-fail:
-	if (peer)
-		dp_peer_unref_delete(peer, DP_MOD_ID_CDP);
-	return status;
-}
-#endif
 
 #ifdef WLAN_SUPPORT_MSCS
 /*
@@ -9193,6 +9069,21 @@ dp_txrx_host_peer_stats_clr(struct dp_soc *soc,
 #endif
 }
 
+#ifdef WLAN_DP_SRNG_USAGE_WM_TRACKING
+static inline void dp_srng_clear_ring_usage_wm_stats(struct dp_soc *soc)
+{
+	int ring;
+
+	for (ring = 0; ring < soc->num_reo_dest_rings; ring++)
+		hal_srng_clear_ring_usage_wm_locked(soc->hal_soc,
+					    soc->reo_dest_ring[ring].hal_srng);
+}
+#else
+static inline void dp_srng_clear_ring_usage_wm_stats(struct dp_soc *soc)
+{
+}
+#endif
+
 /**
  * dp_txrx_host_stats_clr(): Reinitialize the txrx stats
  * @vdev: DP_VDEV handle
@@ -9228,6 +9119,8 @@ dp_txrx_host_stats_clr(struct dp_vdev *vdev, struct dp_soc *soc)
 
 	dp_vdev_iterate_peer(vdev, dp_txrx_host_peer_stats_clr, NULL,
 			     DP_MOD_ID_GENERIC_STATS);
+
+	dp_srng_clear_ring_usage_wm_stats(soc);
 
 #if defined(FEATURE_PERPKT_INFO) && WDI_EVENT_ENABLE
 	dp_wdi_event_handler(WDI_EVENT_UPDATE_DP_STATS, vdev->pdev->soc,
@@ -9566,8 +9459,13 @@ static void dp_txrx_stats_help(void)
 	dp_info(" 28 -- Host REO Queue Statistics");
 	dp_info(" 29 -- Host Soc cfg param Statistics");
 	dp_info(" 30 -- Host pdev cfg param Statistics");
-	dp_info(" 31 -- Host FISA stats");
-	dp_info(" 32 -- Host Register Work stats");
+	dp_info(" 31 -- Host NAPI stats");
+	dp_info(" 32 -- Host Interrupt stats");
+	dp_info(" 33 -- Host FISA stats");
+	dp_info(" 34 -- Host Register Work stats");
+	dp_info(" 35 -- HW REO Queue stats");
+	dp_info(" 36 -- Host WBM IDLE link desc ring HP/TP");
+	dp_info(" 37 -- Host SRNG usage watermark stats");
 }
 
 /**
@@ -9647,6 +9545,10 @@ dp_print_host_stats(struct dp_vdev *vdev,
 		break;
 	case TXRX_SOC_WBM_IDLE_HPTP_DUMP:
 		dp_dump_wbm_idle_hptp(pdev->soc, pdev);
+		break;
+	case TXRX_SRNG_USAGE_WM_STATS:
+		/* Dump usage watermark stats for all SRNGs */
+		dp_dump_srng_high_wm_stats(soc, 0xFF);
 		break;
 	default:
 		dp_info("Wrong Input For TxRx Host Stats");
@@ -11143,6 +11045,8 @@ static QDF_STATUS dp_txrx_dump_stats(struct cdp_soc_t *psoc, uint16_t value,
 		dp_print_soc_interrupt_stats(soc);
 		hal_dump_reg_write_stats(soc->hal_soc);
 		dp_pdev_print_tx_delay_stats(soc);
+		/* Dump usage watermark stats for core TX/RX SRNGs */
+		dp_dump_srng_high_wm_stats(soc, (1 << REO_DST));
 		break;
 
 	case CDP_RX_RING_STATS:
@@ -12714,10 +12618,6 @@ static struct cdp_ctrl_ops dp_ops_ctrl = {
 #ifdef WLAN_SUPPORT_MSCS
 	.txrx_record_mscs_params = dp_record_mscs_params,
 #endif
-#ifdef WLAN_SUPPORT_SCS
-	.txrx_enable_scs_params = dp_enable_scs_params,
-	.txrx_record_scs_params = dp_record_scs_params,
-#endif
 	.set_key = dp_set_michael_key,
 	.txrx_get_vdev_param = dp_get_vdev_param,
 	.calculate_delay_stats = dp_calculate_delay_stats,
@@ -12825,6 +12725,12 @@ static struct cdp_mscs_ops dp_ops_mscs = {
 static struct cdp_mesh_latency_ops dp_ops_mesh_latency = {
 	.mesh_latency_update_peer_parameter =
 		dp_mesh_latency_update_peer_parameter,
+};
+#endif
+
+#ifdef WLAN_SUPPORT_SCS
+static struct cdp_scs_ops dp_ops_scs = {
+	.scs_peer_lookup_n_rule_match = dp_scs_peer_lookup_n_rule_match,
 };
 #endif
 
@@ -13556,6 +13462,37 @@ void dp_deregister_packetdump_callback(struct cdp_soc_t *soc_hdl,
 }
 #endif
 
+#ifdef FEATURE_RX_LINKSPEED_ROAM_TRIGGER
+/**
+ * dp_set_bus_vote_lvl_high() - Take a vote on bus bandwidth from dp
+ * @soc_hdl: Datapath soc handle
+ * @high: whether the bus bw is high or not
+ *
+ * Return: void
+ */
+static void
+dp_set_bus_vote_lvl_high(ol_txrx_soc_handle soc_hdl, bool high)
+{
+	struct dp_soc *soc = cdp_soc_t_to_dp_soc(soc_hdl);
+
+	soc->high_throughput = high;
+}
+
+/**
+ * dp_get_bus_vote_lvl_high() - get bus bandwidth vote to dp
+ * @soc_hdl: Datapath soc handle
+ *
+ * Return: bool
+ */
+static bool
+dp_get_bus_vote_lvl_high(ol_txrx_soc_handle soc_hdl)
+{
+	struct dp_soc *soc = cdp_soc_t_to_dp_soc(soc_hdl);
+
+	return soc->high_throughput;
+}
+#endif
+
 #ifdef DP_PEER_EXTENDED_API
 static struct cdp_misc_ops dp_ops_misc = {
 #ifdef FEATURE_WLAN_TDLS
@@ -13595,6 +13532,10 @@ static struct cdp_misc_ops dp_ops_misc = {
 #ifdef CONNECTIVITY_PKTLOG
 	.register_pktdump_cb = dp_register_packetdump_callback,
 	.unregister_pktdump_cb = dp_deregister_packetdump_callback,
+#endif
+#ifdef FEATURE_RX_LINKSPEED_ROAM_TRIGGER
+	.set_bus_vote_lvl_high = dp_set_bus_vote_lvl_high,
+	.get_bus_vote_lvl_high = dp_get_bus_vote_lvl_high,
 #endif
 };
 #endif
@@ -13637,7 +13578,10 @@ static struct cdp_ipa_ops dp_ops_ipa = {
 	.ipa_set_perf_level = dp_ipa_set_perf_level,
 	.ipa_rx_intrabss_fwd = dp_ipa_rx_intrabss_fwd,
 	.ipa_tx_buf_smmu_mapping = dp_ipa_tx_buf_smmu_mapping,
-	.ipa_tx_buf_smmu_unmapping = dp_ipa_tx_buf_smmu_unmapping
+	.ipa_tx_buf_smmu_unmapping = dp_ipa_tx_buf_smmu_unmapping,
+#ifdef IPA_WDS_EASYMESH_FEATURE
+	.ipa_ast_create = dp_ipa_ast_create,
+#endif
 };
 #endif
 
@@ -13833,6 +13777,9 @@ static void dp_soc_txrx_ops_attach(struct dp_soc *soc)
 #endif
 #ifdef CONFIG_SAWF_DEF_QUEUES
 	soc->cdp_soc.ops->sawf_ops = &dp_ops_sawf;
+#endif
+#ifdef WLAN_SUPPORT_SCS
+	soc->cdp_soc.ops->scs_ops = &dp_ops_scs;
 #endif
 };
 
@@ -15476,8 +15423,6 @@ static void dp_soc_cfg_init(struct dp_soc *soc)
 		break;
 	case TARGET_TYPE_KIWI:
 	case TARGET_TYPE_MANGO:
-		wlan_cfg_set_reo_dst_ring_size(soc->wlan_cfg_ctx,
-					       REO_DST_RING_SIZE_QCA6290);
 		soc->ast_override_support = 1;
 		soc->per_tid_basize_max_tid = 8;
 
@@ -15496,6 +15441,8 @@ static void dp_soc_cfg_init(struct dp_soc *soc)
 
 		soc->wlan_cfg_ctx->rxdma1_enable = 0;
 		soc->wlan_cfg_ctx->num_rxdma_dst_rings_per_pdev = 1;
+		/* use only MAC0 status ring */
+		soc->wlan_cfg_ctx->num_rxdma_status_rings_per_pdev = 1;
 		break;
 	case TARGET_TYPE_QCA8074:
 		wlan_cfg_set_raw_mode_war(soc->wlan_cfg_ctx, true);
@@ -15579,8 +15526,6 @@ static void dp_soc_cfg_attach(struct dp_soc *soc)
 		break;
 	case TARGET_TYPE_KIWI:
 	case TARGET_TYPE_MANGO:
-		wlan_cfg_set_reo_dst_ring_size(soc->wlan_cfg_ctx,
-					       REO_DST_RING_SIZE_QCA6290);
 		soc->wlan_cfg_ctx->rxdma1_enable = 0;
 		break;
 	case TARGET_TYPE_QCA8074:

@@ -1080,7 +1080,7 @@ typedef struct {
 	uint32_t mac_addr47to32;
 } wmi_host_mac_addr;
 
-#if defined(WLAN_FEATURE_11BE) && defined(WLAN_FEATURE_T2LM)
+#ifdef WLAN_FEATURE_11BE
 /**
  * struct wlan_host_t2lm_of_tids - TID-to-link mapping info
  * @direction:  0 - Downlink, 1 - uplink 2 - Both uplink and downlink
@@ -1108,7 +1108,7 @@ struct wmi_host_tid_to_link_map_params {
 	uint8_t num_dir;
 	struct wlan_host_t2lm_of_tids t2lm_info[WLAN_T2LM_MAX_DIRECTION];
 };
-#endif /* defined(WLAN_FEATURE_11BE) && defined(WLAN_FEATURE_T2LM) */
+#endif /* WLAN_FEATURE_11BE */
 
 #ifdef WLAN_FEATURE_11BE_MLO
 /**
@@ -1321,7 +1321,7 @@ struct peer_assoc_params {
 #endif
 	uint8_t peer_dms_capable:1,
 		reserved:7;
-#if defined(WLAN_FEATURE_11BE) && defined(WLAN_FEATURE_T2LM)
+#ifdef WLAN_FEATURE_11BE
 	struct wmi_host_tid_to_link_map_params t2lm_params;
 #endif
 };
@@ -5072,6 +5072,9 @@ typedef enum {
 #ifdef WLAN_VENDOR_HANDOFF_CONTROL
 	wmi_get_roam_vendor_control_param_event_id,
 #endif
+#ifdef WLAN_FEATURE_DBAM_CONFIG
+	wmi_coex_dbam_complete_event_id,
+#endif
 	wmi_events_max,
 } wmi_conv_event_id;
 
@@ -5749,6 +5752,7 @@ typedef enum {
 #endif
 	wmi_service_tdls_wideband_support,
 #endif
+	wmi_service_is_my_mgmt_frame,
 	wmi_services_max,
 } wmi_conv_service_ids;
 #define WMI_SERVICE_UNAVAILABLE 0xFFFF

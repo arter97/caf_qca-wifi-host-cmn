@@ -89,6 +89,16 @@ QDF_STATUS wlan_reg_get_max_5g_bw_from_regdomain(
 	return reg_get_max_5g_bw_from_regdomain(pdev, regdmn, max_bw_5g);
 }
 
+QDF_STATUS wlan_reg_get_max_bw_5G_for_fo(struct wlan_objmgr_pdev *pdev)
+{
+	return reg_get_max_bw_5G_for_fo(pdev);
+}
+
+bool wlan_reg_is_offload_enabled(struct wlan_objmgr_pdev *pdev)
+{
+	return reg_is_offload_enabled(pdev);
+}
+
 QDF_STATUS wlan_reg_get_pwrmode_chan_list(struct wlan_objmgr_pdev *pdev,
 					  struct regulatory_channel *chan_list,
 					  enum supported_6g_pwr_types
@@ -1347,6 +1357,16 @@ enum channel_state wlan_reg_get_channel_state_from_secondary_list_for_freq(
 {
 	return reg_get_channel_state_from_secondary_list_for_freq(pdev, freq);
 }
+
+QDF_STATUS
+wlan_reg_get_channel_list_with_power(struct wlan_objmgr_pdev *pdev,
+				     struct channel_power *ch_list,
+				     uint8_t *num_chan,
+				     enum supported_6g_pwr_types in_6g_pwr_type)
+{
+	return reg_get_channel_list_with_power(pdev, ch_list, num_chan,
+					       in_6g_pwr_type);
+}
 #endif
 
 uint8_t wlan_reg_get_channel_reg_power_for_freq(struct wlan_objmgr_pdev *pdev,
@@ -1866,4 +1886,15 @@ wlan_reg_get_chan_state_for_320(struct wlan_objmgr_pdev *pdev,
 					  in_6g_pwr_type,
 					  treat_nol_chan_as_disabled);
 }
+#endif
+
+#ifdef CONFIG_BAND_6GHZ
+bool wlan_is_sup_chan_entry_afc_done(struct wlan_objmgr_pdev *pdev,
+				     enum channel_enum chan_idx,
+				     enum supported_6g_pwr_types in_6g_pwr_mode)
+{
+	return reg_is_sup_chan_entry_afc_done(pdev, chan_idx, in_6g_pwr_mode);
+}
+
+qdf_export_symbol(wlan_is_sup_chan_entry_afc_done);
 #endif
