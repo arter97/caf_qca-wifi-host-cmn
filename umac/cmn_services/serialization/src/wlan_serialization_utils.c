@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017-2020 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2017-2021 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -126,8 +126,8 @@ QDF_STATUS wlan_serialization_timer_destroy(
 		qdf_status =  QDF_STATUS_E_FAILURE;
 		goto error;
 	}
-
-	qdf_timer_stop(&ser_timer->timer);
+	/* Wait till timeout CB is completed */
+	qdf_timer_sync_cancel(&ser_timer->timer);
 	ser_timer->cmd = NULL;
 
 error:
@@ -901,4 +901,16 @@ wlan_serialization_destroy_lock(qdf_spinlock_t *lock)
 	qdf_spinlock_destroy(lock);
 
 	return QDF_STATUS_SUCCESS;
+}
+
+bool wlan_serialization_any_vdev_cmd_active(
+		struct wlan_serialization_pdev_queue *pdev_queue)
+{
+	uint32_t vdev_bitmap_size;
+
+	vdev_bitmap_size =
+		(QDF_CHAR_BIT * sizeof(pdev_queue->vdev_active_cmd_bitmap));
+
+	return !qdf_bitmap_empty(pdev_queue->vdev_active_cmd_bitmap,
+				 vdev_bitmap_size);
 }

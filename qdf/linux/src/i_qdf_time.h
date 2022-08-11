@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2019 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2014-2021 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -27,6 +27,11 @@
 #include <linux/version.h>
 #include <linux/jiffies.h>
 #include <linux/delay.h>
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 14, 0))
+#include <linux/sched/clock.h>
+#else
+#include <linux/sched.h>
+#endif
 #include <linux/ktime.h>
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(3, 17, 0))
 #include <linux/timekeeping.h>
@@ -75,6 +80,16 @@ static inline ktime_t __qdf_ktime_get(void)
 }
 
 /**
+ * __qdf_ktime_real_get() - Gets the current wall clock as ktime object
+ *
+ * Return: current wall clock as ktime object
+ */
+static inline ktime_t __qdf_ktime_real_get(void)
+{
+	return ktime_get_real();
+}
+
+/**
  * __qdf_ktime_add_ns() - Adds ktime object and nanoseconds value and
  * returns the ktime object
  *
@@ -95,6 +110,17 @@ static inline ktime_t __qdf_ktime_add_ns(ktime_t ktime, int64_t ns)
 static inline int64_t __qdf_ktime_to_ns(ktime_t ktime)
 {
 	return ktime_to_ns(ktime);
+}
+
+/**
+ * __qdf_ktime_to_us() - convert ktime to microseconds
+ * @ktime: time as ktime object
+ *
+ * Return: ktime in microseconds
+ */
+static inline int64_t __qdf_ktime_to_us(ktime_t ktime)
+{
+	return ktime_to_us(ktime);
 }
 
 /**
@@ -241,6 +267,16 @@ static inline bool __qdf_system_time_after_eq(__qdf_time_t a, __qdf_time_t b)
 }
 
 /**
+ * qdf_sched_clock() - use light weight timer to get timestamp
+ *
+ * Return: timestamp in ns
+ */
+static inline uint64_t __qdf_sched_clock(void)
+{
+	return sched_clock();
+}
+
+/**
  * __qdf_get_monotonic_boottime() - get monotonic kernel boot time
  * This API is similar to qdf_get_system_boottime but it includes
  * time spent in suspend.
@@ -285,6 +321,16 @@ static inline uint64_t __qdf_get_log_timestamp(void)
  *
  * Return: system tick for non MSM platfroms
  */
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3, 17, 0))
+static inline uint64_t __qdf_get_log_timestamp(void)
+{
+	struct timespec64 ts;
+
+	ktime_get_ts64(&ts);
+
+	return ((uint64_t)ts.tv_sec * 1000000) + (ts.tv_nsec / 1000);
+}
+#else
 static inline uint64_t __qdf_get_log_timestamp(void)
 {
 	struct timespec ts;
@@ -293,6 +339,7 @@ static inline uint64_t __qdf_get_log_timestamp(void)
 
 	return ((uint64_t) ts.tv_sec * 1000000) + (ts.tv_nsec / 1000);
 }
+#endif
 #endif
 
 /**

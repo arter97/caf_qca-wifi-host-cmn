@@ -23,6 +23,7 @@
 
 #define TX_WMM_AC_NUM	4
 #define ENABLE_DP_HIST_STATS
+#define DP_MEMORY_OPT
 #define DP_RX_DISABLE_NDI_MDNS_FORWARDING
 
 #define OL_TXQ_PAUSE_REASON_FW                (1 << 0)
@@ -314,7 +315,6 @@ struct txrx_pdev_cfg_param_t {
 	bool gro_enable;
 	bool tso_enable;
 	bool lro_enable;
-	bool sg_enable;
 	bool enable_data_stall_detection;
 	bool enable_flow_steering;
 	bool disable_intra_bss_fwd;

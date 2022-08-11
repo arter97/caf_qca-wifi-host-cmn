@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2019 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2014-2021 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -67,6 +67,17 @@ static inline qdf_ktime_t qdf_ktime_get(void)
 }
 
 /**
+ * qdf_ktime_real_get - Gets the current wall clock as qdf_ktime_t object
+ *
+ * Return: current wall clock as qdf_ktime_t object
+ */
+
+static inline qdf_ktime_t qdf_ktime_real_get(void)
+{
+	return __qdf_ktime_real_get();
+}
+
+/**
  * qdf_ktime_add_ns - Adds qdf_ktime_t object and nanoseconds value and
  * returns the qdf_ktime_t object
  * @ktime: time as qdf_ktime_t object
@@ -90,6 +101,18 @@ static inline qdf_ktime_t qdf_ktime_add_ns(qdf_ktime_t ktime, int64_t ns)
 static inline int64_t qdf_ktime_to_ms(qdf_ktime_t ktime)
 {
 	return __qdf_ktime_to_ms(ktime);
+}
+
+/**
+ * qdf_ktime_to_us - Convert the qdf_ktime_t object into microseconds
+ * @ktime: time as qdf_ktime_t object
+ *
+ * Return: qdf_ktime_t in microseconds
+ */
+
+static inline int64_t qdf_ktime_to_us(qdf_ktime_t ktime)
+{
+	return __qdf_ktime_to_us(ktime);
 }
 
 /**
@@ -236,6 +259,16 @@ static inline bool qdf_system_time_before(qdf_time_t a, qdf_time_t b)
 static inline bool qdf_system_time_after_eq(qdf_time_t a, qdf_time_t b)
 {
 	return __qdf_system_time_after_eq(a, b);
+}
+
+/**
+ * qdf_sched_clock() - use light weight timer to get timestamp for logging
+ *
+ * Return: timestamp in ns
+ */
+static inline uint64_t qdf_sched_clock(void)
+{
+	return __qdf_sched_clock();
 }
 
 /**

@@ -1,6 +1,5 @@
 /*
- * Copyright (c) 2017-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2017-2020 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -34,7 +33,6 @@
 #define SCAN_GET_HASH(addr) \
 	(((const uint8_t *)(addr))[QDF_MAC_ADDR_SIZE - 1] % SCAN_HASH_SIZE)
 
-#define SCM_PCL_RSSI_THRESHOLD -75
 #define ADJACENT_CHANNEL_RSSI_THRESHOLD -80
 
 /**
@@ -262,15 +260,6 @@ QDF_STATUS scm_channel_list_db_deinit(struct wlan_objmgr_psoc *psoc)
 	return QDF_STATUS_SUCCESS;
 }
 #endif
-
-/**
- * scm_validate_scoring_config() - validate score config
- * @score_cfg: config to be validated
- *
- * Return: void
- */
-void scm_validate_scoring_config(
-			struct scoring_config *score_cfg);
 
 /**
  * scm_scan_update_mlme_by_bssinfo() - updates scan entry with mlme data

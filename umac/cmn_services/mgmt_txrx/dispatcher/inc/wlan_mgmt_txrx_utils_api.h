@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016-2019 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2016-2020 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -112,8 +112,17 @@ enum mgmt_subtype {
  * @ACTION_CATEGORY_DMG: unprotected dmg action category
  * @ACTION_CATEGORY_WMM: wmm action category
  * @ACTION_CATEGORY_FST: fst action category
+ * @ACTION_CATEGORY_RVS: robust av streaming action category
  * @ACTION_CATEGORY_UNPROT_DMG: dmg action category
  * @ACTION_CATEGORY_VHT: vht action category
+ * @ACTION_CATEGORY_USIG: Unprotected S1G Action frame
+ * @ACTION_CATEGORY_SIG: S1G Action frame
+ * @ACTION_CATEGORY_FLOW_CONTROL: Flow Control Action frame
+ * @ACTION_CATEGORY_CONTROL_RSP_MCS_NEGO: Control Response MCS Negotiation frame
+ * @ACTION_CATEGORY_FIL: FILS Action frame
+ * @ACTION_CATEGORY_CDMG: CDMG Action frame
+ * @ACTION_CATEGORY_CMMG: CMMG Action frame
+ * @ACTION_CATEGORY_GLK: GLK Action frame
  * @ACTION_CATEGORY_VENDOR_SPECIFIC_PROTECTED: vendor specific protected
  *                                             action category
  * @ACTION_CATEGORY_VENDOR_SPECIFIC: vendor specific action category
@@ -138,8 +147,17 @@ enum mgmt_action_category {
 	ACTION_CATEGORY_DMG = 16,
 	ACTION_CATEGORY_WMM = 17,
 	ACTION_CATEGORY_FST = 18,
+	ACTION_CATEGORY_RVS = 19,
 	ACTION_CATEGORY_UNPROT_DMG = 20,
 	ACTION_CATEGORY_VHT = 21,
+	ACTION_CATEGORY_USIG = 22,
+	ACTION_CATEGORY_SIG = 23,
+	ACTION_CATEGORY_FLOW_CONTROL = 24,
+	ACTION_CATEGORY_CONTROL_RSP_MCS_NEGO = 25,
+	ACTION_CATEGORY_FILS = 26,
+	ACTION_CATEGORY_CDMG = 27,
+	ACTION_CATEGORY_CMMG = 28,
+	ACTION_CATEGORY_GLK = 29,
 	ACTION_CATEGORY_VENDOR_SPECIFIC_PROTECTED = 126,
 	ACTION_CATEGORY_VENDOR_SPECIFIC = 127,
 };
@@ -440,6 +458,24 @@ enum fst_actioncode {
 };
 
 /**
+ * enum rvs_actioncode - Robust av streaming action frames
+ * @SCS_REQ: scs request frame
+ * @SCS_RSP: scs response frame
+ * @GROUP_MEMBERSHIP_REQ:  Group Membership Request frame
+ * @GROUP_MEMBERSHIP_RSP: Group Membership Response frame
+ * @MCSC_REQ: mcsc request frame
+ * @MCSC_RSP: mcsc response frame
+ */
+enum rvs_actioncode {
+	SCS_REQ,
+	SCS_RSP,
+	GROUP_MEMBERSHIP_REQ,
+	GROUP_MEMBERSHIP_RSP,
+	MCSC_REQ,
+	MCSC_RSP,
+};
+
+/**
  * enum vht_actioncode - vht action frames
  * @VHT_ACTION_COMPRESSED_BF: vht compressed bf action frame
  * @VHT_ACTION_GID_NOTIF: vht gid notification action frame
@@ -492,7 +528,9 @@ struct action_frm_hdr {
  * @MGMT_ACTION_BA_ADDBA_RESPONSE:  ADDBA response action frame
  * @MGMT_ACTION_BA_DELBA:           DELBA action frame
  * @MGMT_ACTION_2040_BSS_COEXISTENCE: 20-40 bss coex action frame
- * @MGMT_ACTION_CATEGORY_VENDOR_SPECIFIC: category vendor spcific action frame
+ * @MGMT_ACTION_CATEGORY_VENDOR_SPECIFIC: category vendor specific action frame
+ * @MGMT_ACTION_CATEGORY_VENDOR_SPECIFIC_PROTECTED: category vendor specific
+ * protected action frame
  * @MGMT_ACTION_EXT_CHANNEL_SWITCH_ID: ext channel switch id action frame
  * @MGMT_ACTION_VENDOR_SPECIFIC:    vendor specific action frame
  * @MGMT_ACTION_TDLS_DISCRESP:      TDLS discovery response frame
@@ -573,6 +611,12 @@ struct action_frm_hdr {
  * @MGMT_ACTION_FST_ACK_REQ: FST ack frame for request
  * @MGMT_ACTION_FST_ACK_RSP: FST ack frame for response
  * @MGMT_ACTION_FST_ON_CHANNEL_TUNNEL: FST on channel tunnel frame
+ * @MGMT_ACTION_SCS_REQ: SCS request frame
+ * @MGMT_ACTION_SCS_RSP: SCS response frame
+ * @MGMT_ACTION_GROUP_MEMBERSHIP_REQ: group membership request frame
+ * @MGMT_ACTION_GROUP_MEMBERSHIP_RSP: group membership response frame
+ * @MGMT_ACTION_MCSC_REQ: MCSC request frame
+ * @MGMT_ACTION_MCSC_RSP: MCSC response frame
  * @MGMT_FRAME_TYPE_ALL:         mgmt frame type for all type of frames
  * @MGMT_MAX_FRAME_TYPE:         max. mgmt frame types
  */
@@ -607,6 +651,7 @@ enum mgmt_frame_type {
 	MGMT_ACTION_BA_DELBA,
 	MGMT_ACTION_2040_BSS_COEXISTENCE,
 	MGMT_ACTION_CATEGORY_VENDOR_SPECIFIC,
+	MGMT_ACTION_CATEGORY_VENDOR_SPECIFIC_PROTECTED,
 	MGMT_ACTION_EXT_CHANNEL_SWITCH_ID,
 	MGMT_ACTION_VENDOR_SPECIFIC,
 	MGMT_ACTION_TDLS_DISCRESP,
@@ -691,6 +736,12 @@ enum mgmt_frame_type {
 	MGMT_ACTION_FST_ACK_REQ,
 	MGMT_ACTION_FST_ACK_RSP,
 	MGMT_ACTION_FST_ON_CHANNEL_TUNNEL,
+	MGMT_ACTION_SCS_REQ,
+	MGMT_ACTION_SCS_RSP,
+	MGMT_ACTION_GROUP_MEMBERSHIP_REQ,
+	MGMT_ACTION_GROUP_MEMBERSHIP_RSP,
+	MGMT_ACTION_MCSC_REQ,
+	MGMT_ACTION_MCSC_RSP,
 	MGMT_FRAME_TYPE_ALL,
 	MGMT_MAX_FRAME_TYPE,
 };
@@ -729,6 +780,7 @@ struct mgmt_rx_event_params {
 	uint32_t    flags;
 	int32_t     rssi;
 	uint32_t    tsf_delta;
+	uint32_t    tsf_l32;
 	uint8_t     pdev_id;
 	void        *rx_params;
 };
@@ -846,6 +898,13 @@ QDF_STATUS wlan_mgmt_txrx_mgmt_frame_tx(struct wlan_objmgr_peer *peer,
 					mgmt_ota_comp_cb tx_ota_comp_cb,
 					enum wlan_umac_comp_id comp_id,
 					void *mgmt_tx_params);
+/**
+ * wlan_mgmt_is_rmf_mgmt_action_frame() - API to check action category is rmf
+ * @action_category: action category to check
+ *
+ * Return: true if action category is rmf else false
+ */
+bool wlan_mgmt_is_rmf_mgmt_action_frame(uint8_t action_category);
 
 /**
  * wlan_mgmt_txrx_beacon_frame_tx() - transmits mgmt. beacon
