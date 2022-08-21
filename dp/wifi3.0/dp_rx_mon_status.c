@@ -2159,6 +2159,8 @@ dp_rx_pdev_mon_status_buffers_alloc(struct dp_pdev *pdev, uint32_t mac_id)
 
 	rx_desc_pool = &soc->rx_desc_status[mac_id];
 
+	qdf_spinlock_create(&rx_desc_pool->lock);
+
 	dp_debug("Mon RX Desc Pool[%d] entries=%u",
 		 pdev_id, num_entries);
 
@@ -2271,6 +2273,7 @@ dp_rx_pdev_mon_status_desc_pool_free(struct dp_pdev *pdev, uint32_t mac_id) {
 	dp_debug("Mon RX Status Desc Pool Free pdev[%d]", pdev_id);
 
 	dp_rx_desc_pool_free(soc, rx_desc_pool);
+	qdf_spinlock_destroy(&rx_desc_pool->lock);
 }
 
 void
@@ -2285,6 +2288,7 @@ dp_rx_pdev_mon_status_buffers_free(struct dp_pdev *pdev, uint32_t mac_id)
 	dp_debug("Mon RX Status Desc Pool Free pdev[%d]", pdev_id);
 
 	dp_rx_desc_nbuf_free(soc, rx_desc_pool);
+	qdf_spinlock_destroy(&rx_desc_pool->lock);
 }
 
 /*
