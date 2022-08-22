@@ -536,6 +536,11 @@ void dp_tx_tso_desc_pool_deinit(struct dp_soc *soc, uint8_t num_pool)
 
 	for (pool_id = 0; pool_id < num_pool; pool_id++) {
 		tso_desc_pool = &soc->tx_tso_desc[pool_id];
+
+		if (wlan_cfg_is_tso_desc_attach_defer(soc->wlan_cfg_ctx) &&
+		    !tso_desc_pool->pool_size)
+			continue;
+
 		qdf_spin_lock_bh(&tso_desc_pool->lock);
 
 		tso_desc_pool->freelist = NULL;
@@ -667,6 +672,11 @@ void dp_tx_tso_num_seg_pool_deinit(struct dp_soc *soc, uint8_t num_pool)
 
 	for (pool_id = 0; pool_id < num_pool; pool_id++) {
 		tso_num_seg_pool = &soc->tx_tso_num_seg[pool_id];
+
+		if (wlan_cfg_is_tso_desc_attach_defer(soc->wlan_cfg_ctx) &&
+		    !tso_num_seg_pool->num_seg_pool_size)
+			continue;
+
 		qdf_spin_lock_bh(&tso_num_seg_pool->lock);
 
 		tso_num_seg_pool->freelist = NULL;

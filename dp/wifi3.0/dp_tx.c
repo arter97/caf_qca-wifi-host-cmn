@@ -5264,13 +5264,14 @@ QDF_STATUS dp_soc_tx_desc_sw_pools_init(struct dp_soc *soc)
 	if (dp_tx_ext_desc_pool_init(soc, num_pool, num_ext_desc))
 		goto fail2;
 
+	dp_tx_flow_control_init(soc);
+
 	if (wlan_cfg_is_tso_desc_attach_defer(soc->wlan_cfg_ctx))
 		return QDF_STATUS_SUCCESS;
 
 	if (dp_tx_tso_cmn_desc_pool_init(soc, num_pool, num_ext_desc))
 		goto fail3;
 
-	dp_tx_flow_control_init(soc);
 	soc->process_tx_status = CONFIG_PROCESS_TX_STATUS;
 	return QDF_STATUS_SUCCESS;
 
