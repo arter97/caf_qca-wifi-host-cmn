@@ -27,32 +27,54 @@
 #define _CDP_TXRX_MON_STRUCT_H_
 
 #ifdef QCA_SUPPORT_LITE_MONITOR
-#define CDP_LITE_MON_MODE_MAX 3
-#define CDP_LITE_MON_FRM_TYPE_MAX 3
+
 #define CDP_LITE_MON_PEER_MAX 16
+
+#define CDP_MON_FRM_TYPE_MAX 3
+#define CDP_MON_FRM_FILTER_MODE_MAX 4
+
+#define CDP_LITE_MON_LEN_64B 0x40
+#define CDP_LITE_MON_LEN_128B 0x80
+#define CDP_LITE_MON_LEN_256B 0x100
+#define CDP_LITE_MON_LEN_FULL 0xFFFF
+
+#define CDP_LITE_MON_FILTER_ALL 0xFFFF
+
+/* This should align with nac mac type enumerations in ieee80211_ioctl.h */
+#define CDP_LITE_MON_PEER_MAC_TYPE_CLIENT 2
+
+/* lite mon frame levels */
+enum cdp_lite_mon_level {
+	/* level invalid */
+	CDP_LITE_MON_LEVEL_INVALID = 0,
+	/* level msdu */
+	CDP_LITE_MON_LEVEL_MSDU = 1,
+	/* level mpdu */
+	CDP_LITE_MON_LEVEL_MPDU = 2,
+	/* level ppdu */
+	CDP_LITE_MON_LEVEL_PPDU = 3,
+};
 
 /* lite mon peer action */
 enum cdp_lite_mon_peer_action {
+	/* peer add */
 	CDP_LITE_MON_PEER_ADD = 0,
+	/* peer remove */
 	CDP_LITE_MON_PEER_REMOVE = 1,
-};
-
-/* lite mon peer types */
-enum cdp_lite_mon_peer_type {
-	CDP_LITE_MON_PEER_TYPE_ASSOCIATED = 0,
-	CDP_LITE_MON_PEER_TYPE_NON_ASSOCIATED = 1,
-	CDP_LITE_MON_PEER_TYPE_MAX = 2,
 };
 
 /* lite mon config direction */
 enum cdp_lite_mon_direction {
+	/* lite mon config direction rx */
 	CDP_LITE_MON_DIRECTION_RX = 1,
+	/* lite mon config direction tx */
 	CDP_LITE_MON_DIRECTION_TX = 2,
 };
-
-/* This should align with nac mac type enumerations in ieee80211_ioctl.h */
-#define CDP_LITE_MON_PEER_MAC_TYPE_CLIENT 2
 #endif
+/* Same as MAX_20MHZ_SEGMENTS */
+#define CDP_MAX_20MHZ_SEGS 16
+/* Same as MAX_ANTENNA_EIGHT */
+#define CDP_MAX_NUM_ANTENNA 8
 
 /* XXX not really a mode; there are really multiple PHY's */
 enum cdp_mon_phymode {
@@ -138,6 +160,17 @@ enum CMN_BW_TYPES {
 #endif
 	CMN_BW_CNT,
 	CMN_BW_IDLE = 0xFF, /*default BW state */
+};
+
+enum cdp_punctured_modes {
+	NO_PUNCTURE,
+#ifdef WLAN_FEATURE_11BE
+	PUNCTURED_20MHZ,
+	PUNCTURED_40MHZ,
+	PUNCTURED_80MHZ,
+	PUNCTURED_120MHZ,
+#endif
+	PUNCTURED_MODE_CNT,
 };
 
 struct cdp_mon_status {
@@ -345,8 +378,18 @@ enum cdp_mon_phyrx_abort_reason_code {
  * @dest_ppdu_drop: Number of ppdu dropped from monitor destination ring
  * @mon_link_desc_invalid: msdu link desc invalid count
  * @mon_rx_desc_invalid: rx_desc invalid count
+ * @mpdu_ppdu_id_mismatch_drop: mpdu's ppdu id did not match destination
+ *  ring ppdu id
+ * @mpdu_decap_type_invalid: mpdu decap type invalid count
  * @rx_undecoded_count: Received undecoded frame count
  * @rx_undecoded_error: Rx undecoded errors
+ * @rx_hdr_not_received: Rx HDR not received for MPDU
+ * @parent_buf_alloc: Numder of parent nbuf allocated for MPDU
+ * @parent_buf_free: Number of parent nbuf freed
+ * @pkt_buf_count: Number of packet buffers received
+ * @mpdus_to_stack: Number of MPDUs delivered to stack
+ * @status_buf_count: Number of status buffer received
+ * @empty_desc_ppdu: Number of empty desc received
  */
 struct cdp_pdev_mon_stats {
 #ifndef REMOVE_MON_DBG_STATS
@@ -378,10 +421,19 @@ struct cdp_pdev_mon_stats {
 	uint32_t mon_link_desc_invalid;
 	uint32_t mon_rx_desc_invalid;
 	uint32_t mon_nbuf_sanity_err;
+	uint32_t mpdu_ppdu_id_mismatch_drop;
+	uint32_t mpdu_decap_type_invalid;
 #ifdef QCA_UNDECODED_METADATA_SUPPORT
 	uint32_t rx_undecoded_count;
 	uint32_t rx_undecoded_error[CDP_PHYRX_ERR_MAX];
 #endif
+	uint32_t rx_hdr_not_received;
+	uint32_t parent_buf_alloc;
+	uint32_t parent_buf_free;
+	uint32_t pkt_buf_count;
+	uint32_t mpdus_buf_to_stack;
+	uint32_t status_buf_count;
+	uint32_t empty_desc_ppdu;
 };
 
 #ifdef QCA_SUPPORT_LITE_MONITOR
@@ -403,10 +455,10 @@ struct cdp_lite_mon_filter_config {
 	uint8_t disable;
 	uint8_t level;
 	uint8_t metadata;
-	uint16_t mgmt_filter[CDP_LITE_MON_MODE_MAX];
-	uint16_t ctrl_filter[CDP_LITE_MON_MODE_MAX];
-	uint16_t data_filter[CDP_LITE_MON_MODE_MAX];
-	uint16_t len[CDP_LITE_MON_FRM_TYPE_MAX];
+	uint16_t mgmt_filter[CDP_MON_FRM_FILTER_MODE_MAX];
+	uint16_t ctrl_filter[CDP_MON_FRM_FILTER_MODE_MAX];
+	uint16_t data_filter[CDP_MON_FRM_FILTER_MODE_MAX];
+	uint16_t len[CDP_MON_FRM_TYPE_MAX];
 	uint8_t debug;
 	uint8_t vdev_id;
 };
@@ -415,14 +467,12 @@ struct cdp_lite_mon_filter_config {
  * cdp_lite_mon_peer_config - lite mon set peer config
  * @direction: direction tx/rx
  * @action: add/del
- * @type: assoc/non-assoc
  * @vdev_id: peer vdev id
  * @mac: peer mac
  */
 struct cdp_lite_mon_peer_config {
 	uint8_t direction;
 	uint8_t action;
-	uint8_t type;
 	uint8_t vdev_id;
 	uint8_t mac[QDF_MAC_ADDR_SIZE];
 };
@@ -430,15 +480,90 @@ struct cdp_lite_mon_peer_config {
 /**
  * cdp_lite_mon_peer_info - lite mon get peer config
  * @direction: direction tx/rx
- * @type: assoc/non-assoc
  * @count: no of peers
  * @mac: peer macs
  */
 struct cdp_lite_mon_peer_info {
 	uint8_t direction;
-	uint8_t type;
 	uint8_t count;
 	uint8_t mac[CDP_LITE_MON_PEER_MAX][QDF_MAC_ADDR_SIZE];
 };
 #endif
+/* channel operating width */
+enum cdp_channel_width {
+	CHAN_WIDTH_20 = 0,
+	CHAN_WIDTH_40,
+	CHAN_WIDTH_80,
+	CHAN_WIDTH_160,
+	CHAN_WIDTH_80P80,
+	CHAN_WIDTH_5,
+	CHAN_WIDTH_10,
+	CHAN_WIDTH_165,
+	CHAN_WIDTH_160P160,
+	CHAN_WIDTH_320,
+
+	CHAN_WIDTH_MAX,
+};
+
+/* struct cdp_rssi_temp_off_param_dp
+ * @rssi_temp_offset: Temperature based rssi offset , send every 30 secs
+ */
+
+struct cdp_rssi_temp_off_param_dp {
+	int32_t rssi_temp_offset;
+};
+
+/*
+ * struct cdp_rssi_dbm_conv_param_dp
+ * @curr_bw: Current bandwidth
+ * @curr_rx_chainmask: Current rx chainmask
+ * @xbar_config: 4 bytes, used for BB to RF Chain mapping
+ * @xlna_bypass_offset: Low noise amplifier bypass offset
+ * @xlna_bypass_threshold: Low noise amplifier bypass threshold
+ * @nfHwDbm: HW noise floor in dBm per chain, per 20MHz subband
+ */
+struct cdp_rssi_dbm_conv_param_dp {
+	uint32_t curr_bw;
+	uint32_t curr_rx_chainmask;
+	uint32_t xbar_config;
+	int32_t xlna_bypass_offset;
+	int32_t xlna_bypass_threshold;
+	int8_t nf_hw_dbm[CDP_MAX_NUM_ANTENNA][CDP_MAX_20MHZ_SEGS];
+};
+
+/*
+ * struct cdp_rssi_db2dbm_param_dp
+ * @pdev_id: pdev_id
+ * @rssi_temp_off_present: to check temp offset values present or not
+ * @rssi_dbm_info_present: to check rssi dbm converstion parameters
+ *						   present or not
+ * @temp_off_param: cdp_rssi_temp_off_param_dp structure value
+ * @rssi_dbm_param: cdp_rssi_dbm_conv_param_dp staructure value
+ */
+struct cdp_rssi_db2dbm_param_dp {
+	uint32_t pdev_id;
+	bool rssi_temp_off_present;
+	bool rssi_dbm_info_present;
+	struct cdp_rssi_temp_off_param_dp temp_off_param;
+	struct cdp_rssi_dbm_conv_param_dp rssi_dbm_param;
+};
+
+/*
+ * enum cdp_mon_reap_source: trigger source of the reap timer of
+ * monitor status ring
+ * @CDP_MON_REAP_SOURCE_PKTLOG: pktlog
+ * @CDP_MON_REAP_SOURCE_CFR: CFR
+ * @CDP_MON_REAP_SOURCE_EMESH: easy mesh
+ * @CDP_MON_REAP_SOURCE_NUM: total number of the sources
+ * @CDP_MON_REAP_SOURCE_ANY: any of the sources
+ */
+enum cdp_mon_reap_source {
+	CDP_MON_REAP_SOURCE_PKTLOG,
+	CDP_MON_REAP_SOURCE_CFR,
+	CDP_MON_REAP_SOURCE_EMESH,
+
+	/* keep last */
+	CDP_MON_REAP_SOURCE_NUM,
+	CDP_MON_REAP_SOURCE_ANY,
+};
 #endif

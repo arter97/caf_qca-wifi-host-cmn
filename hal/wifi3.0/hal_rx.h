@@ -1125,6 +1125,26 @@ hal_rx_msdu_end_da_is_mcbc_get(hal_soc_handle_t hal_soc_hdl, uint8_t *buf)
 }
 
 /**
+ * hal_rx_msdu_end_is_tkip_mic_err: API to check if pkt has mic error
+ * from rx_msdu_end TLV
+ *
+ * @buf: pointer to the start of RX PKT TLV headers
+ *
+ * Return: tkip_mic_err
+ */
+static inline uint8_t
+hal_rx_msdu_end_is_tkip_mic_err(hal_soc_handle_t hal_soc_hdl,
+				uint8_t *buf)
+{
+	struct hal_soc *hal_soc = (struct hal_soc *)hal_soc_hdl;
+
+	if (hal_soc->ops->hal_rx_msdu_end_is_tkip_mic_err)
+		return hal_soc->ops->hal_rx_msdu_end_is_tkip_mic_err(buf);
+	else
+		return 0;
+}
+
+/**
  * hal_rx_msdu_end_first_msdu_get: API to get first msdu status
  * from rx_msdu_end TLV
  * @hal_soc_hdl: hal soc handle
@@ -2934,6 +2954,26 @@ hal_reo_shared_qaddr_init(hal_soc_handle_t hal_soc_hdl)
 		return hal_soc->ops->hal_reo_shared_qaddr_init(hal_soc_hdl);
 }
 
+/**
+ * hal_reo_shared_qaddr_cache_clear(): Set and unset 'clear_qdesc_array'
+ * bit in reo reg for shared qref feature. This is done for every MLO
+ * connection to clear HW reo internal storage for clearing stale entry
+ * of prev peer having same peer id
+ *
+ * @hal_soc: Hal soc pointer
+ *
+ * Write MLO and Non MLO table start addr to HW reg
+ *
+ * Return: void
+ */
+static inline void hal_reo_shared_qaddr_cache_clear(hal_soc_handle_t hal_soc_hdl)
+{
+	struct hal_soc *hal_soc = (struct hal_soc *)hal_soc_hdl;
+
+	if (hal_soc->ops->hal_reo_shared_qaddr_cache_clear)
+		return hal_soc->ops->hal_reo_shared_qaddr_cache_clear(hal_soc_hdl);
+}
+
 #else
 static inline void
 hal_reo_shared_qaddr_write(hal_soc_handle_t hal_soc_hdl,
@@ -2942,6 +2982,9 @@ hal_reo_shared_qaddr_write(hal_soc_handle_t hal_soc_hdl,
 			   qdf_dma_addr_t hw_qdesc_paddr) {}
 static inline void
 hal_reo_shared_qaddr_init(hal_soc_handle_t hal_soc_hdl) {}
+
+static inline void
+hal_reo_shared_qaddr_cache_clear(hal_soc_handle_t hal_soc_hdl) {}
 
 #endif /* REO_SHARED_QREF_TABLE_EN */
 
@@ -2963,4 +3006,11 @@ hal_get_first_wow_wakeup_packet(hal_soc_handle_t hal_soc_hdl, uint8_t *buf)
 }
 #endif
 
+static inline uint32_t
+hal_rx_tlv_l3_type_get(hal_soc_handle_t hal_soc_hdl, uint8_t *buf)
+{
+	struct hal_soc *hal_soc = (struct hal_soc *)hal_soc_hdl;
+
+	return hal_soc->ops->hal_rx_tlv_l3_type_get(buf);
+}
 #endif /* _HAL_RX_H */

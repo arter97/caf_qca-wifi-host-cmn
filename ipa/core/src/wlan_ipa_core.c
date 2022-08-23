@@ -544,7 +544,9 @@ wlan_ipa_wdi_setup(struct wlan_ipa_priv *ipa_ctx,
 				   &ipa_ctx->tx_pipe_handle,
 				   &ipa_ctx->rx_pipe_handle,
 				   wlan_ipa_wdi_is_smmu_enabled(ipa_ctx, osdev),
-				   sys_in, ipa_ctx->over_gsi, ipa_ctx->hdl);
+				   sys_in, ipa_ctx->over_gsi,
+				   ipa_ctx->hdl,
+				   (qdf_ipa_wdi_hdl_t)ipa_ctx->instance_id);
 
 	qdf_mem_free(sys_in);
 
@@ -2392,6 +2394,7 @@ static QDF_STATUS wlan_ipa_send_msg(qdf_netdev_t net_dev,
 	QDF_IPA_SET_META_MSG_TYPE(&meta, type);
 	strlcpy(QDF_IPA_WLAN_MSG_NAME(msg), net_dev->name, IPA_RESOURCE_NAME_MAX);
 	qdf_mem_copy(QDF_IPA_WLAN_MSG_MAC_ADDR(msg), mac_addr, QDF_NET_ETH_LEN);
+	QDF_IPA_WLAN_MSG_NETDEV_IF_ID(msg) = net_dev->ifindex;
 
 	ipa_debug("%s: Evt: %d", QDF_IPA_WLAN_MSG_NAME(msg), QDF_IPA_MSG_META_MSG_TYPE(&meta));
 
@@ -3098,6 +3101,7 @@ static QDF_STATUS __wlan_ipa_wlan_evt(qdf_netdev_t net_dev, uint8_t device_mode,
 	strlcpy(QDF_IPA_WLAN_MSG_NAME(msg), net_dev->name,
 		IPA_RESOURCE_NAME_MAX);
 	qdf_mem_copy(QDF_IPA_WLAN_MSG_MAC_ADDR(msg), mac_addr, QDF_NET_ETH_LEN);
+	QDF_IPA_WLAN_MSG_NETDEV_IF_ID(msg) = net_dev->ifindex;
 
 	ipa_debug("%s: Evt: %d", QDF_IPA_WLAN_MSG_NAME(msg),
 		  QDF_IPA_MSG_META_MSG_TYPE(&meta));
@@ -3837,7 +3841,6 @@ QDF_STATUS wlan_ipa_cleanup(struct wlan_ipa_priv *ipa_ctx)
 
 	if (!ipa_cb_is_ready())
 		return QDF_STATUS_SUCCESS;
-
 	qdf_event_destroy(&ipa_ctx->ipa_resource_comp);
 	if (!wlan_ipa_uc_is_enabled(ipa_ctx->config))
 		wlan_ipa_teardown_sys_pipe(ipa_ctx);
@@ -4375,6 +4378,7 @@ static QDF_STATUS wlan_ipa_uc_send_evt(qdf_netdev_t net_dev,
 	qdf_str_lcopy(QDF_IPA_WLAN_MSG_NAME(msg), net_dev->name,
 		      IPA_RESOURCE_NAME_MAX);
 	qdf_mem_copy(QDF_IPA_WLAN_MSG_MAC_ADDR(msg), mac_addr, QDF_NET_ETH_LEN);
+	QDF_IPA_WLAN_MSG_NETDEV_IF_ID(msg) = net_dev->ifindex;
 
 	if (qdf_ipa_send_msg(&meta, msg, wlan_ipa_msg_free_fn)) {
 		ipa_err("%s: Evt: %d fail",

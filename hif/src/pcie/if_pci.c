@@ -1080,7 +1080,7 @@ void hif_pci_enable_power_management(struct hif_softc *hif_sc,
 		return;
 	}
 
-	hif_pm_runtime_start(hif_sc);
+	hif_rtpm_start(hif_sc);
 
 	if (!is_packet_log_enabled)
 		hif_enable_power_gating(pci_ctx);
@@ -1111,7 +1111,7 @@ void hif_pci_disable_power_management(struct hif_softc *hif_ctx)
 		return;
 	}
 
-	hif_pm_runtime_stop(hif_ctx);
+	hif_rtpm_stop(hif_ctx);
 }
 
 void hif_pci_display_stats(struct hif_softc *hif_ctx)
@@ -1151,7 +1151,7 @@ QDF_STATUS hif_pci_open(struct hif_softc *hif_ctx, enum qdf_bus_type bus_type)
 	struct hif_pci_softc *sc = HIF_GET_PCI_SOFTC(hif_ctx);
 
 	hif_ctx->bus_type = bus_type;
-	hif_pm_runtime_open(hif_ctx);
+	hif_rtpm_open(hif_ctx);
 
 	qdf_spinlock_create(&sc->irq_lock);
 
@@ -1790,7 +1790,7 @@ timer_free:
  */
 void hif_pci_close(struct hif_softc *hif_sc)
 {
-	hif_pm_runtime_close(hif_sc);
+	hif_rtpm_close(hif_sc);
 	hif_ce_close(hif_sc);
 }
 
@@ -2234,40 +2234,6 @@ void hif_pci_disable_bus(struct hif_softc *scn)
 	hif_info("X");
 }
 
-#ifdef FEATURE_RUNTIME_PM
-/**
- * hif_pci_get_rpm_ctx() - Map corresponding hif_runtime_pm_ctx
- * @scn: hif context
- *
- * This function will map and return the corresponding
- * hif_runtime_pm_ctx based on pcie interface.
- *
- * Return: struct hif_runtime_pm_ctx pointer
- */
-struct hif_runtime_pm_ctx *hif_pci_get_rpm_ctx(struct hif_softc *scn)
-{
-	struct hif_pci_softc *sc = HIF_GET_PCI_SOFTC(scn);
-
-	return &sc->rpm_ctx;
-}
-
-/**
- * hif_pci_get_dev() - Map corresponding device structure
- * @scn: hif context
- *
- * This function will map and return the corresponding
- * device structure based on pcie interface.
- *
- * Return: struct device pointer
- */
-struct device *hif_pci_get_dev(struct hif_softc *scn)
-{
-	struct hif_pci_softc *sc = HIF_GET_PCI_SOFTC(scn);
-
-	return sc->dev;
-}
-#endif
-
 #define OL_ATH_PCI_PM_CONTROL 0x44
 
 #ifdef CONFIG_PLD_PCIE_CNSS
@@ -2369,6 +2335,17 @@ int hif_pci_bus_suspend(struct hif_softc *scn)
 
 	ret = hif_try_complete_tasks(scn);
 	if (QDF_IS_STATUS_ERROR(ret)) {
+		hif_apps_irqs_enable(GET_HIF_OPAQUE_HDL(scn));
+		return -EBUSY;
+	}
+
+	/*
+	 * In an unlikely case, if draining becomes infinite loop,
+	 * it returns an error, shall abort the bus suspend.
+	 */
+	ret = hif_drain_fw_diag_ce(scn);
+	if (ret) {
+		hif_err("draining fw_diag_ce goes infinite, so abort suspend");
 		hif_apps_irqs_enable(GET_HIF_OPAQUE_HDL(scn));
 		return -EBUSY;
 	}
@@ -3222,8 +3199,8 @@ void hif_pci_irq_set_affinity_hint(struct hif_exec_context *hif_ext_group,
 							      new_cpu_mask[i]),
 					  hif_ext_group->os_irq[i]);
 		} else {
-			qdf_err("Offline CPU: Set affinity fails for IRQ: %d",
-				hif_ext_group->os_irq[i]);
+			qdf_debug("Offline CPU: Set affinity fails for IRQ: %d",
+				  hif_ext_group->os_irq[i]);
 		}
 	}
 }
@@ -3702,6 +3679,7 @@ static bool hif_is_pld_based_target(struct hif_pci_softc *sc,
 	case AR6320_DEVICE_ID:
 	case QCN7605_DEVICE_ID:
 	case KIWI_DEVICE_ID:
+	case MANGO_DEVICE_ID:
 		return true;
 	}
 	return false;
@@ -3730,6 +3708,7 @@ static void hif_pci_init_reg_windowing_support(struct hif_pci_softc *sc,
 	case TARGET_TYPE_QCA6490:
 	case TARGET_TYPE_QCA6390:
 	case TARGET_TYPE_KIWI:
+	case TARGET_TYPE_MANGO:
 		sc->use_register_windowing = true;
 		qdf_spinlock_create(&sc->register_access_lock);
 		sc->register_window = 0;
@@ -3951,7 +3930,8 @@ int hif_pci_addr_in_boundary(struct hif_softc *scn, uint32_t offset)
 	    tgt_info->target_type == TARGET_TYPE_QCA6490 ||
 	    tgt_info->target_type == TARGET_TYPE_QCN7605 ||
 	    tgt_info->target_type == TARGET_TYPE_QCA8074 ||
-	    tgt_info->target_type == TARGET_TYPE_KIWI) {
+	    tgt_info->target_type == TARGET_TYPE_KIWI ||
+	    tgt_info->target_type == TARGET_TYPE_MANGO) {
 		/*
 		 * Need to consider offset's memtype for QCA6290/QCA8074,
 		 * also mem_len and DRAM_BASE_ADDRESS/DRAM_SIZE need to be
@@ -4010,7 +3990,7 @@ int hif_force_wake_request(struct hif_opaque_softc *hif_handle)
 	struct hif_pci_softc *pci_scn = HIF_GET_PCI_SOFTC(scn);
 
 	/* Prevent runtime PM or trigger resume firstly */
-	if (hif_pm_runtime_get_sync(hif_handle, RTPM_ID_HIF_FORCE_WAKE)) {
+	if (hif_rtpm_get(HIF_RTPM_GET_SYNC, HIF_RTPM_ID_FORCE_WAKE)) {
 		hif_err("runtime pm get failed");
 		return -EINVAL;
 	}
@@ -4046,7 +4026,6 @@ int hif_force_wake_request(struct hif_opaque_softc *hif_handle)
 		value = hif_read32_mb(
 				scn, scn->mem +
 				PCIE_SOC_PCIE_REG_PCIE_SCRATCH_0_SOC_PCIE_REG);
-		hif_info("pcie scratch reg read value = %x", value);
 		if (value == HIF_POLL_UMAC_WAKE)
 			break;
 		qdf_mdelay(FORCE_WAKE_DELAY_MS);
@@ -4054,7 +4033,8 @@ int hif_force_wake_request(struct hif_opaque_softc *hif_handle)
 	} while (timeout <= FORCE_WAKE_DELAY_TIMEOUT_MS);
 
 	if (value != HIF_POLL_UMAC_WAKE) {
-		hif_err("failed force wake handshake mechanism");
+		hif_err("force wake handshake failed, reg value = 0x%x",
+			value);
 		HIF_STATS_INC(pci_scn, soc_force_wake_failure, 1);
 		return -ETIMEDOUT;
 	}
@@ -4082,7 +4062,7 @@ int hif_force_wake_release(struct hif_opaque_softc *hif_handle)
 	HIF_STATS_INC(pci_scn, mhi_force_wake_release_success, 1);
 
 	/* Release runtime PM force wake */
-	ret = hif_pm_runtime_put(hif_handle, RTPM_ID_HIF_FORCE_WAKE);
+	ret = hif_rtpm_put(HIF_RTPM_PUT_ASYNC, HIF_RTPM_ID_FORCE_WAKE);
 	if (ret) {
 		hif_err("runtime pm put failure");
 		return ret;

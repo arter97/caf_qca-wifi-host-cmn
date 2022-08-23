@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2019-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -232,6 +232,24 @@ struct mlo_bcn_templ_partner_links {
 	uint8_t num_links;
 	struct ml_bcn_partner_info partner_info[WLAN_UMAC_MLO_MAX_VDEVS];
 };
+
+/**
+ * struct mlo_bcn_tmpl_ml_info - Impacted link critical update information
+ * @hw_link_id: Unique hw link id across SoCs
+ * CU vdev map for the Critical update category-1 (Inclusion of CU IES)
+ * @cu_vdev_map_cat1_lo: bits 31:0 to represent vdev ids 0 to 31
+ * @cu_vdev_map_cat1_hi: bits 63:32 to represent vdev ids 32 to 63
+ * CU vdev map for the Critical update category-2 (modification of CU IES)
+ * @cu_vdev_map_cat2_lo: bits 31:0 to represent vdev ids 0 to 31
+ * @cu_vdev_map_cat2_hi: bits 63:32 to represent vdev ids 32 to 63
+ */
+struct mlo_bcn_tmpl_ml_info {
+	uint32_t hw_link_id;
+	uint32_t cu_vdev_map_cat1_lo;
+	uint32_t cu_vdev_map_cat1_hi;
+	uint32_t cu_vdev_map_cat2_lo;
+	uint32_t cu_vdev_map_cat2_hi;
+};
 #endif
 
 /**
@@ -255,6 +273,7 @@ struct mlo_bcn_templ_partner_links {
  * @enable_bigtk: enable bigtk or not
  * @frm: beacon template parameter
  * @mlo_partner: Partner link information
+ * @cu_ml_info: Impacted link critical update information
  */
 struct beacon_tmpl_params {
 	uint8_t vdev_id;
@@ -272,6 +291,7 @@ struct beacon_tmpl_params {
 	uint8_t *frm;
 #ifdef WLAN_FEATURE_11BE_MLO
 	struct mlo_bcn_templ_partner_links mlo_partner;
+	struct mlo_bcn_tmpl_ml_info cu_ml_info;
 #endif
 };
 
@@ -333,7 +353,7 @@ struct fils_discovery_tmpl_params {
  * @maxreqpower: Max regulatory power
  * @antennamac: Max antenna
  * @reg_class_id: Regulatory class id.
- * @puncture_pattern: 11be static puncture pattern
+ * @puncture_bitmap: 11be static puncture bitmap
  */
 struct mlme_channel_param {
 	uint8_t chan_id;
@@ -357,7 +377,7 @@ struct mlme_channel_param {
 	uint8_t  antennamax;
 	uint8_t  reg_class_id;
 #ifdef WLAN_FEATURE_11BE
-	uint16_t puncture_pattern;
+	uint16_t puncture_bitmap;
 #endif
 };
 
@@ -421,6 +441,17 @@ struct peer_flush_params {
 	uint32_t peer_tid_bitmap;
 	uint8_t vdev_id;
 	uint8_t peer_mac[QDF_MAC_ADDR_SIZE];
+};
+
+/**
+ * struct peer_delete_params - peer delete cmd parameter
+ * @vdev_id: vdev id
+ * @mlo_logical_link_id_bitmap: logical link id bitmap for peers
+ * not getting created
+ */
+struct peer_delete_cmd_params {
+	uint8_t vdev_id;
+	uint32_t hw_link_id_bitmap;
 };
 
 /* Default FILS DISCOVERY/probe response sent in period of 20TU */
@@ -499,6 +530,18 @@ struct set_neighbour_rx_params {
 	uint32_t idx;
 	uint32_t action;
 	uint32_t type;
+};
+
+/**
+ * struct set_tx_peer_filter - Set tx peer filter
+ * @vdev_id: vdev id
+ * @idx: index of param
+ * @action: action
+ */
+struct set_tx_peer_filter {
+	uint8_t vdev_id;
+	uint32_t idx;
+	uint32_t action;
 };
 
 /**
@@ -714,9 +757,12 @@ struct vdev_down_params {
 /**
  * struct peer_delete_all_params - peer delete all request parameter
  * @vdev_id: vdev id
+ * @peer_type_bitmap: Bitmap of type with bits corresponding to value from
+ * enum wlan_peer_type
  */
 struct peer_delete_all_params {
 	uint8_t vdev_id;
+	uint32_t peer_type_bitmap;
 };
 
 #define AC_MAX 4

@@ -353,7 +353,7 @@ QDF_STATUS dp_mon_rings_alloc_1_0(struct dp_pdev *pdev)
 #endif
 
 #ifdef QCA_MONITOR_PKT_SUPPORT
-void dp_vdev_set_monitor_mode_buf_rings(struct dp_pdev *pdev)
+QDF_STATUS dp_vdev_set_monitor_mode_buf_rings(struct dp_pdev *pdev)
 {
 	uint32_t mac_id;
 	uint32_t mac_for_pdev;
@@ -392,6 +392,7 @@ void dp_vdev_set_monitor_mode_buf_rings(struct dp_pdev *pdev)
 			}
 		}
 	}
+	return QDF_STATUS_SUCCESS;
 }
 #endif
 
@@ -564,10 +565,13 @@ static void dp_mon_reap_timer_init(struct dp_soc *soc)
 {
 	struct dp_mon_soc *mon_soc = soc->monitor_soc;
 
-        qdf_timer_init(soc->osdev, &mon_soc->mon_reap_timer,
-                       dp_mon_reap_timer_handler, (void *)soc,
-                       QDF_TIMER_TYPE_WAKE_APPS);
-        mon_soc->reap_timer_init = 1;
+	qdf_spinlock_create(&mon_soc->reap_timer_lock);
+	qdf_timer_init(soc->osdev, &mon_soc->mon_reap_timer,
+		       dp_mon_reap_timer_handler, (void *)soc,
+		       QDF_TIMER_TYPE_WAKE_APPS);
+	qdf_mem_zero(mon_soc->mon_reap_src_bitmap,
+		     sizeof(mon_soc->mon_reap_src_bitmap));
+	mon_soc->reap_timer_init = 1;
 }
 #else
 static void dp_mon_reap_timer_init(struct dp_soc *soc)
@@ -579,29 +583,81 @@ static void dp_mon_reap_timer_deinit(struct dp_soc *soc)
 {
 	struct dp_mon_soc *mon_soc = soc->monitor_soc;
         if (mon_soc->reap_timer_init) {
-                qdf_timer_free(&mon_soc->mon_reap_timer);
-                mon_soc->reap_timer_init = 0;
+		mon_soc->reap_timer_init = 0;
+		qdf_timer_free(&mon_soc->mon_reap_timer);
+		qdf_spinlock_destroy(&mon_soc->reap_timer_lock);
         }
 }
 
-static void dp_mon_reap_timer_start(struct dp_soc *soc)
+/**
+ * dp_mon_reap_timer_start() - start reap timer of monitor status ring
+ * @soc: point to soc
+ * @source: trigger source
+ *
+ * If the source is CDP_MON_REAP_SOURCE_ANY, skip bit set, and start timer
+ * if any bit has been set in the bitmap; while for the other sources, set
+ * the bit and start timer if the bitmap is empty before that.
+ *
+ * Return: true if timer-start is performed, false otherwise.
+ */
+static bool
+dp_mon_reap_timer_start(struct dp_soc *soc, enum cdp_mon_reap_source source)
 {
 	struct dp_mon_soc *mon_soc = soc->monitor_soc;
-        if (mon_soc->reap_timer_init) {
-                qdf_timer_mod(&mon_soc->mon_reap_timer, DP_INTR_POLL_TIMER_MS);
-        }
+	bool do_start;
 
+	if (!mon_soc->reap_timer_init)
+		return false;
+
+	qdf_spin_lock_bh(&mon_soc->reap_timer_lock);
+	do_start = qdf_bitmap_empty(mon_soc->mon_reap_src_bitmap,
+				    CDP_MON_REAP_SOURCE_NUM);
+	if (source == CDP_MON_REAP_SOURCE_ANY)
+		do_start = !do_start;
+	else
+		qdf_set_bit(source, mon_soc->mon_reap_src_bitmap);
+	qdf_spin_unlock_bh(&mon_soc->reap_timer_lock);
+
+	if (do_start)
+		qdf_timer_mod(&mon_soc->mon_reap_timer, DP_INTR_POLL_TIMER_MS);
+
+	return do_start;
 }
 
-static bool dp_mon_reap_timer_stop(struct dp_soc *soc)
+/**
+ * dp_mon_reap_timer_stop() - stop reap timer of monitor status ring
+ * @soc: point to soc
+ * @source: trigger source
+ *
+ * If the source is CDP_MON_REAP_SOURCE_ANY, skip bit clear, and stop timer
+ * if any bit has been set in the bitmap; while for the other sources, clear
+ * the bit and stop the timer if the bitmap is empty after that.
+ *
+ * Return: true if timer-stop is performed, false otherwise.
+ */
+static bool
+dp_mon_reap_timer_stop(struct dp_soc *soc, enum cdp_mon_reap_source source)
 {
 	struct dp_mon_soc *mon_soc = soc->monitor_soc;
-        if (mon_soc->reap_timer_init) {
-                qdf_timer_sync_cancel(&mon_soc->mon_reap_timer);
-                return true;
-        }
+	bool do_stop;
 
-        return false;
+	if (!mon_soc->reap_timer_init)
+		return false;
+
+	qdf_spin_lock_bh(&mon_soc->reap_timer_lock);
+	if (source != CDP_MON_REAP_SOURCE_ANY)
+		qdf_clear_bit(source, mon_soc->mon_reap_src_bitmap);
+
+	do_stop = qdf_bitmap_empty(mon_soc->mon_reap_src_bitmap,
+				   CDP_MON_REAP_SOURCE_NUM);
+	if (source == CDP_MON_REAP_SOURCE_ANY)
+		do_stop = !do_stop;
+	qdf_spin_unlock_bh(&mon_soc->reap_timer_lock);
+
+	if (do_stop)
+		qdf_timer_sync_cancel(&mon_soc->mon_reap_timer);
+
+	return do_stop;
 }
 
 static void dp_mon_vdev_timer_init(struct dp_soc *soc)
@@ -942,6 +998,19 @@ static bool dp_ppdu_stats_feat_enable_check_1_0(struct dp_pdev *pdev)
 	else
 		return true;
 }
+
+/**
+ * dp_mon_tx_stats_update_1_0 - Update Tx stats from HTT PPDU completion path
+ *
+ * @monitor: Monitor peer
+ * @ppdu: Tx PPDU user completion info
+ */
+void
+dp_mon_tx_stats_update_1_0(struct dp_mon_peer *mon_peer,
+			   struct cdp_tx_completion_ppdu_user *ppdu)
+{
+	ppdu->punc_mode = NO_PUNCTURE;
+}
 #endif
 
 #ifndef QCA_SUPPORT_FULL_MON
@@ -979,11 +1048,27 @@ dp_rx_mon_process_1_0(struct dp_soc *soc, struct dp_intr *int_ctx,
 	return dp_rx_mon_status_process(soc, int_ctx, mac_id, quota);
 }
 
+#if defined(WDI_EVENT_ENABLE) &&\
+	(defined(QCA_ENHANCED_STATS_SUPPORT) || !defined(REMOVE_PKT_LOG))
+static inline
+void dp_mon_ppdu_stats_handler_register(struct dp_mon_soc *mon_soc)
+{
+	mon_soc->mon_ops->mon_ppdu_stats_ind_handler =
+					dp_ppdu_stats_ind_handler;
+}
+#else
+static inline
+void dp_mon_ppdu_stats_handler_register(struct dp_mon_soc *mon_soc)
+{
+}
+#endif
+
 static void dp_mon_register_intr_ops_1_0(struct dp_soc *soc)
 {
 	struct dp_mon_soc *mon_soc = soc->monitor_soc;
 
 	mon_soc->mon_rx_process = dp_rx_mon_process_1_0;
+	dp_mon_ppdu_stats_handler_register(mon_soc);
 }
 #endif
 
@@ -1036,10 +1121,6 @@ dp_mon_register_feature_ops_1_0(struct dp_soc *soc)
 	mon_ops->mon_config_enh_tx_capture = NULL;
 	mon_ops->mon_tx_peer_filter = NULL;
 #endif
-#if defined(WDI_EVENT_ENABLE) &&\
-	(defined(QCA_ENHANCED_STATS_SUPPORT) || !defined(REMOVE_PKT_LOG))
-	mon_ops->mon_ppdu_stats_ind_handler = dp_ppdu_stats_ind_handler;
-#endif
 #ifdef WLAN_RX_PKT_CAPTURE_ENH
 	mon_ops->mon_config_enh_rx_capture = dp_config_enh_rx_capture;
 #endif
@@ -1081,9 +1162,7 @@ dp_mon_register_feature_ops_1_0(struct dp_soc *soc)
 #else
 	mon_ops->mon_ppdu_desc_deliver = dp_ppdu_desc_deliver_1_0;
 #endif
-#ifdef WLAN_FEATURE_11BE
-	mon_ops->mon_tx_stats_update = NULL;
-#endif
+	mon_ops->mon_tx_stats_update = dp_mon_tx_stats_update_1_0;
 #endif
 #if defined(ATH_SUPPORT_NAC_RSSI) || defined(ATH_SUPPORT_NAC)
 	mon_ops->mon_filter_setup_smart_monitor =
@@ -1117,6 +1196,7 @@ dp_mon_register_feature_ops_1_0(struct dp_soc *soc)
 #if defined(DP_CON_MON) && !defined(REMOVE_PKT_LOG)
 	mon_ops->mon_pktlogmod_exit = dp_pktlogmod_exit;
 #endif
+	mon_ops->rx_hdr_length_set = NULL;
 	mon_ops->rx_packet_length_set = NULL;
 	mon_ops->rx_mon_enable = NULL;
 	mon_ops->rx_wmask_subscribe = NULL;
@@ -1153,7 +1233,7 @@ struct dp_mon_ops monitor_ops_1_0 = {
 	.mon_vdev_detach = dp_mon_vdev_detach,
 	.mon_peer_attach = dp_mon_peer_attach,
 	.mon_peer_detach = dp_mon_peer_detach,
-	.mon_peer_get_rdkstats_ctx = dp_mon_peer_get_rdkstats_ctx,
+	.mon_peer_get_peerstats_ctx = dp_mon_peer_get_peerstats_ctx,
 	.mon_peer_reset_stats = dp_mon_peer_reset_stats,
 	.mon_peer_get_stats = dp_mon_peer_get_stats,
 	.mon_invalid_peer_update_pdev_stats =
@@ -1218,6 +1298,7 @@ struct dp_mon_ops monitor_ops_1_0 = {
 	.mon_lite_mon_alloc = NULL,
 	.mon_lite_mon_dealloc = NULL,
 	.mon_lite_mon_vdev_delete = NULL,
+	.mon_lite_mon_disable_rx = NULL,
 };
 
 struct cdp_mon_ops dp_ops_mon_1_0 = {
@@ -1236,6 +1317,8 @@ struct cdp_mon_ops dp_ops_mon_1_0 = {
 	.txrx_get_lite_mon_peer_config = NULL,
 	.txrx_is_lite_mon_enabled = NULL,
 #endif
+	.txrx_set_mon_pdev_params_rssi_dbm_conv =
+				dp_mon_pdev_params_rssi_dbm_conv,
 };
 
 #ifdef QCA_MONITOR_OPS_PER_SOC_SUPPORT

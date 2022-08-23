@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2017-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  *
  * Permission to use, copy, modify, and/or distribute this software for
@@ -216,6 +216,14 @@ bool reg_is_us_alpha2(uint8_t *alpha2);
 bool reg_is_etsi_alpha2(uint8_t *alpha2);
 
 /**
+ * reg_ctry_support_vlp - Does country code supports VLP
+ * @alpha2: country code pointer
+ *
+ * Return: true or false
+ */
+bool reg_ctry_support_vlp(uint8_t *alpha2);
+
+/**
  * reg_set_country() - Set the current regulatory country
  * @pdev: pdev device for country information
  * @country: country value
@@ -282,16 +290,6 @@ QDF_STATUS reg_set_config_vars(struct wlan_objmgr_psoc *psoc,
 void reg_program_mas_chan_list(struct wlan_objmgr_psoc *psoc,
 			       struct regulatory_channel *reg_channels,
 			       uint8_t *alpha2, enum dfs_reg dfs_region);
-
-/**
- * reg_get_regd_rules() - provides the reg domain rules info
- * @pdev: pdev pointer
- * @reg_rules: regulatory rules
- *
- * Return: QDF_STATUS
- */
-QDF_STATUS reg_get_regd_rules(struct wlan_objmgr_pdev *pdev,
-			      struct reg_rule_info *reg_rules);
 
 /**
  * reg_get_cc_and_src() - Get country string and country source
@@ -371,6 +369,11 @@ static inline bool reg_is_world_alpha2(uint8_t *alpha2)
 	return false;
 }
 
+static inline bool reg_ctry_support_vlp(uint8_t *alpha2)
+{
+	return false;
+}
+
 static inline bool reg_is_us_alpha2(uint8_t *alpha2)
 {
 	return false;
@@ -410,12 +413,6 @@ static inline void reg_program_mas_chan_list(
 	struct regulatory_channel *reg_channels,
 	uint8_t *alpha2, enum dfs_reg dfs_region)
 {
-}
-
-static inline QDF_STATUS reg_get_regd_rules(struct wlan_objmgr_pdev *pdev,
-					    struct reg_rule_info *reg_rules)
-{
-	return QDF_STATUS_SUCCESS;
 }
 
 static inline enum country_src reg_get_cc_and_src(struct wlan_objmgr_psoc *psoc,

@@ -913,14 +913,14 @@ QDF_STATUS wmi_unified_sifs_trigger_send(wmi_unified_t wmi_handle,
  * wmi_unified_peer_delete_send() - send PEER delete command to fw
  * @wmi_handle: wmi handle
  * @peer_addr: peer mac addr
- * @vdev_id: vdev id
+ * @param: pointer to hold peer delete parameters
  *
  * Return: QDF_STATUS_SUCCESS on success and QDF_STATUS_E_FAILURE for failure
  */
 QDF_STATUS
 wmi_unified_peer_delete_send(wmi_unified_t wmi_handle,
 			     uint8_t peer_addr[QDF_MAC_ADDR_SIZE],
-			     uint8_t vdev_id);
+			     struct peer_delete_cmd_params *param);
 
 /**
  * wmi_unified_peer_flush_tids_send() - flush peer tids packets in fw
@@ -934,6 +934,18 @@ QDF_STATUS
 wmi_unified_peer_flush_tids_send(wmi_unified_t wmi_handle,
 				 uint8_t peer_addr[QDF_MAC_ADDR_SIZE],
 				 struct peer_flush_params *param);
+#ifdef WLAN_FEATURE_PEER_TXQ_FLUSH_CONF
+/**
+ * wmi_unified_peer_txq_flush_config_send() - peer txq flush policy config in fw
+ * @wmi_handle: wmi handle
+ * @pr: peer txq flush config parameters
+ *
+ * Return: QDF_STATUS_SUCCESS on success and QDF_STATUS_E_FAILURE for failure
+ */
+QDF_STATUS
+wmi_unified_peer_txq_flush_config_send(wmi_unified_t wmi_handle,
+				       struct peer_txq_flush_config_params *pr);
+#endif
 
 /**
  * wmi_unified_peer_delete_all_send() - send PEER delete all command to fw
@@ -2916,6 +2928,18 @@ QDF_STATUS
 wmi_extract_mgmt_rx_params(wmi_unified_t wmi_handle, void *evt_buf,
 			   struct mgmt_rx_event_params *hdr, uint8_t **bufp);
 
+/**
+ * wmi_extract_mgmt_rx_ext_params() - extract extended rx params from event
+ * @wmi_handle: wmi handle
+ * @evt_buf: pointer to event buffer
+ * @params: Pointer to hold ext params
+ *
+ * Return: QDF_STATUS_SUCCESS on success and QDF_STATUS_E_FAILURE for failure
+ */
+QDF_STATUS
+wmi_extract_mgmt_rx_ext_params(wmi_unified_t wmi_handle, void *evt_buf,
+			       struct mgmt_rx_event_ext_params *params);
+
 #ifdef WLAN_MGMT_RX_REO_SUPPORT
 /**
  * wmi_extract_mgmt_rx_fw_consumed() - extract MGMT Rx FW consumed event
@@ -2968,6 +2992,18 @@ QDF_STATUS wmi_unified_mgmt_rx_reo_filter_config_cmd(
 QDF_STATUS
 wmi_extract_frame_pn_params(wmi_unified_t wmi_handle, void *evt_buf,
 			    struct frame_pn_params *pn_params);
+
+/**
+ * wmi_extract_is_conn_ap_frame() - extract is_conn_ap_frame param from event
+ * @wmi_handle: wmi handle
+ * @evt_buf: pointer to event buffer
+ * @is_conn_ap: is_conn_ap param
+ *
+ * Return: QDF_STATUS_SUCCESS on success and QDF_STATUS_E_FAILURE for failure
+ */
+QDF_STATUS
+wmi_extract_is_conn_ap_frame(wmi_unified_t wmi_handle, void *evt_buf,
+			     struct frm_conn_ap *is_conn_ap);
 
 /**
  * wmi_extract_vdev_roam_param() - extract vdev roam param from event
@@ -3668,6 +3704,19 @@ QDF_STATUS wmi_extract_scan_radio_cap_service_ready_ext2(
 			struct wlan_psoc_host_scan_radio_caps *param);
 
 /**
+ * wmi_extract_sw_cal_ver_ext2: Extract sw cal version received through
+ *                              extended service ready2 event
+ * @wmi_handle: WMI handle
+ * @event: Event buffer
+ * @cal: Pointer to sw cal ver struct
+ *
+ * Return: QDF status of operation
+ */
+QDF_STATUS wmi_extract_sw_cal_ver_ext2(wmi_unified_t wmi_handle,
+				       uint8_t *event,
+				       struct wmi_host_sw_cal_ver *cal);
+
+/**
  * wmi_extract_spectral_scaling_params_service_ready_ext: Extract Spectral
  *                                             scaling params received through
  *                                             extended service ready event
@@ -4349,6 +4398,55 @@ QDF_STATUS
 wmi_extract_oem_response_param(wmi_unified_t wmi_hdl, void *resp_buf,
 			       struct wmi_oem_response_param *oem_resp_param);
 #endif /* WIFI_POS_CONVERGED */
+
+#if defined(WIFI_POS_CONVERGED) && defined(WLAN_FEATURE_RTT_11AZ_SUPPORT)
+/**
+ * wmi_extract_pasn_peer_create_req() - Extract peer create request event
+ * @wmi_hdl: WMI handle
+ * @evt_buf: Event buffer
+ * @dst: Destination buffer
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS
+wmi_extract_pasn_peer_create_req(wmi_unified_t wmi, void *evt_buf,
+				 struct wifi_pos_pasn_peer_data *dst);
+
+/**
+ * wmi_extract_pasn_peer_delete_req() - Extract PASN peer delete request
+ * @wmi: WMI handle
+ * @evt_buf: Event buffer
+ * @dst: Destination buffer pointer
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS
+wmi_extract_pasn_peer_delete_req(wmi_unified_t wmi, void *evt_buf,
+				 struct wifi_pos_pasn_peer_data *dst);
+
+/**
+ * wmi_send_rtt_pasn_auth_status_cmd  - Send PASN authentication status of all
+ * the PASN peers.
+ * @wmi: WMI handle
+ * @data: Auth status data
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS
+wmi_send_rtt_pasn_auth_status_cmd(wmi_unified_t wmi,
+				  struct wlan_pasn_auth_status *data);
+
+/**
+ * wmi_send_rtt_pasn_deauth_cmd  - Send RTT pasn deauthentication command
+ * @wmi: WMI handle
+ * @peer_mac: peer mac address
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS
+wmi_send_rtt_pasn_deauth_cmd(wmi_unified_t wmi, struct qdf_mac_addr *peer_mac);
+#endif
+
 /**
  * wmi_critical_events_in_flight() - get the number of critical events in flight
  *
@@ -4737,4 +4835,16 @@ wmi_extract_pktlog_decode_info_event(wmi_unified_t wmi_handle,
 QDF_STATUS wmi_unified_pn_mgmt_rxfilter_send_cmd(
 		struct wmi_unified *wmi_handle,
 		struct vdev_pn_mgmt_rxfilter_params *params);
+
+/**
+ * wmi_extract_pdev_telemetry_stats_tlv - extract pdev telemetry stats
+ * @wmi_handle: wmi handle
+ * @evt_buf: pointer to event buffer
+ * @pdev stats: Pointer to hold pdev telemetry stats
+ *
+ * Return: QDF_STATUS_SUCCESS for success or error code
+ */
+QDF_STATUS wmi_extract_pdev_telemetry_stats(
+		wmi_unified_t wmi_handle, void *evt_buf,
+		struct wmi_host_pdev_telemetry_stats *pdev_stats);
 #endif /* _WMI_UNIFIED_API_H_ */

@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2020 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -35,6 +36,9 @@
  * @CDP_HIST_BUCKET_7: Bucket Index 7
  * @CDP_HIST_BUCKET_8: Bucket Index 8
  * @CDP_HIST_BUCKET_9: Bucket Index 9
+ * @CDP_HIST_BUCKET_10: Bucket Index 10
+ * @CDP_HIST_BUCKET_11: Bucket Index 11
+ * @CDP_HIST_BUCKET_12: Bucket Index 12
  */
 enum cdp_hist_bucket_index {
 	CDP_HIST_BUCKET_0,
@@ -47,6 +51,9 @@ enum cdp_hist_bucket_index {
 	CDP_HIST_BUCKET_7,
 	CDP_HIST_BUCKET_8,
 	CDP_HIST_BUCKET_9,
+	CDP_HIST_BUCKET_10,
+	CDP_HIST_BUCKET_11,
+	CDP_HIST_BUCKET_12,
 	CDP_HIST_BUCKET_MAX,
 };
 
@@ -55,11 +62,14 @@ enum cdp_hist_bucket_index {
  * @CDP_HIST_TYPE_SW_ENQEUE_DELAY: From stack to HW enqueue delay
  * @CDP_HIST_TYPE_HW_COMP_DELAY: From HW enqueue to completion delay
  * @CDP_HIST_TYPE_REAP_STACK: Rx HW reap to stack deliver delay
+ * @CDP_HIST_TYPE_HW_TX_COMP_DELAY: Tx completion delay based on the timestamp
+ *                                  provided by HW
  */
 enum cdp_hist_types {
 	CDP_HIST_TYPE_SW_ENQEUE_DELAY,
 	CDP_HIST_TYPE_HW_COMP_DELAY,
 	CDP_HIST_TYPE_REAP_STACK,
+	CDP_HIST_TYPE_HW_TX_COMP_DELAY,
 	CDP_HIST_TYPE_MAX,
 };
 

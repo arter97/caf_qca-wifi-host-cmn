@@ -48,6 +48,13 @@ dp_mlo_ctxt_attach_wifi3(struct cdp_ctrl_mlo_mgr *ctrl_ctxt)
 		return NULL;
 	}
 
+	qdf_get_random_bytes(mlo_ctxt->toeplitz_hash_ipv4,
+			     (sizeof(mlo_ctxt->toeplitz_hash_ipv4[0]) *
+			      LRO_IPV4_SEED_ARR_SZ));
+	qdf_get_random_bytes(mlo_ctxt->toeplitz_hash_ipv6,
+			     (sizeof(mlo_ctxt->toeplitz_hash_ipv6[0]) *
+			      LRO_IPV6_SEED_ARR_SZ));
+
 	qdf_spinlock_create(&mlo_ctxt->ml_soc_list_lock);
 	return dp_mlo_ctx_to_cdp(mlo_ctxt);
 }
@@ -135,12 +142,14 @@ static QDF_STATUS dp_partner_soc_rx_hw_cc_init(struct dp_mlo_ctxt *mlo_ctxt,
 	struct dp_soc *partner_soc;
 	struct dp_soc_be *be_partner_soc;
 	uint8_t pool_id;
-	QDF_STATUS qdf_status;
+	QDF_STATUS qdf_status = QDF_STATUS_SUCCESS;
 
 	for (i = 0; i < WLAN_MAX_MLO_CHIPS; i++) {
 		partner_soc = dp_mlo_get_soc_ref_by_chip_id(mlo_ctxt, i);
-		if (!partner_soc)
+		if (!partner_soc) {
+			dp_err("partner_soc is NULL");
 			continue;
+		}
 
 		be_partner_soc = dp_get_be_soc_from_dp_soc(partner_soc);
 
@@ -319,6 +328,8 @@ void dp_clr_mlo_ptnr_list(struct dp_soc *soc, struct dp_vdev *vdev)
 				continue;
 
 			pr_soc = dp_mlo_get_soc_ref_by_chip_id(dp_mlo, i);
+			if (!pr_soc)
+				continue;
 			pr_soc_be = dp_get_be_soc_from_dp_soc(pr_soc);
 			pr_vdev = dp_vdev_get_ref_by_id(pr_soc,
 						vdev_be->partner_vdev_list[i][j],
@@ -370,11 +381,51 @@ static void dp_mlo_setup_complete(struct cdp_mlo_ctxt *cdp_ml_ctxt)
 	}
 }
 
+static void dp_mlo_update_delta_tsf2(struct cdp_soc_t *soc_hdl,
+				     uint8_t pdev_id, uint64_t delta_tsf2)
+{
+	struct dp_soc *soc = cdp_soc_t_to_dp_soc(soc_hdl);
+	struct dp_pdev *pdev;
+	struct dp_pdev_be *be_pdev;
+
+	pdev = dp_get_pdev_from_soc_pdev_id_wifi3((struct dp_soc *)soc,
+						  pdev_id);
+	if (!pdev) {
+		dp_err("pdev is NULL for pdev_id %u", pdev_id);
+		return;
+	}
+
+	be_pdev = dp_get_be_pdev_from_dp_pdev(pdev);
+
+	be_pdev->delta_tsf2 = delta_tsf2;
+}
+
+static void dp_mlo_update_delta_tqm(struct cdp_soc_t *soc_hdl,
+				    uint64_t delta_tqm)
+{
+	struct dp_soc *soc = cdp_soc_t_to_dp_soc(soc_hdl);
+	struct dp_soc_be *be_soc = dp_get_be_soc_from_dp_soc(soc);
+
+	be_soc->delta_tqm = delta_tqm;
+}
+
+static void dp_mlo_update_mlo_ts_offset(struct cdp_soc_t *soc_hdl,
+					uint64_t offset)
+{
+	struct dp_soc *soc = cdp_soc_t_to_dp_soc(soc_hdl);
+	struct dp_soc_be *be_soc = dp_get_be_soc_from_dp_soc(soc);
+
+	be_soc->mlo_tstamp_offset = offset;
+}
+
 static struct cdp_mlo_ops dp_mlo_ops = {
 	.mlo_soc_setup = dp_mlo_soc_setup,
 	.mlo_soc_teardown = dp_mlo_soc_teardown,
 	.update_mlo_ptnr_list = dp_update_mlo_ptnr_list,
 	.mlo_setup_complete = dp_mlo_setup_complete,
+	.mlo_update_delta_tsf2 = dp_mlo_update_delta_tsf2,
+	.mlo_update_delta_tqm = dp_mlo_update_delta_tqm,
+	.mlo_update_mlo_ts_offset = dp_mlo_update_mlo_ts_offset,
 };
 
 void dp_soc_mlo_fill_params(struct dp_soc *soc,
@@ -391,6 +442,57 @@ void dp_soc_mlo_fill_params(struct dp_soc *soc,
 	be_soc->ml_ctxt = cdp_mlo_ctx_to_dp(params->ml_context);
 	be_soc->mlo_enabled = 1;
 	soc->cdp_soc.ops->mlo_ops = &dp_mlo_ops;
+}
+
+void dp_mlo_update_link_to_pdev_map(struct dp_soc *soc, struct dp_pdev *pdev)
+{
+	struct dp_soc_be *be_soc = dp_get_be_soc_from_dp_soc(soc);
+	struct dp_pdev_be *be_pdev = dp_get_be_pdev_from_dp_pdev(pdev);
+	struct dp_mlo_ctxt *ml_ctxt = be_soc->ml_ctxt;
+	uint8_t link_id;
+
+	if (!be_soc->mlo_enabled)
+		return;
+
+	if (!ml_ctxt)
+		return;
+
+	link_id = be_pdev->mlo_link_id;
+
+	if (link_id < WLAN_MAX_MLO_CHIPS * WLAN_MAX_MLO_LINKS_PER_SOC) {
+		if (!ml_ctxt->link_to_pdev_map[link_id])
+			ml_ctxt->link_to_pdev_map[link_id] = be_pdev;
+		else
+			dp_alert("Attempt to update existing map for link %u",
+				 link_id);
+	}
+}
+
+void dp_mlo_update_link_to_pdev_unmap(struct dp_soc *soc, struct dp_pdev *pdev)
+{
+	struct dp_soc_be *be_soc = dp_get_be_soc_from_dp_soc(soc);
+	struct dp_pdev_be *be_pdev = dp_get_be_pdev_from_dp_pdev(pdev);
+	struct dp_mlo_ctxt *ml_ctxt = be_soc->ml_ctxt;
+	uint8_t link_id;
+
+	if (!be_soc->mlo_enabled)
+		return;
+
+	if (!ml_ctxt)
+		return;
+
+	link_id = be_pdev->mlo_link_id;
+
+	if (link_id < WLAN_MAX_MLO_CHIPS * WLAN_MAX_MLO_LINKS_PER_SOC)
+		ml_ctxt->link_to_pdev_map[link_id] = NULL;
+}
+
+static struct dp_pdev_be *
+dp_mlo_get_be_pdev_from_link_id(struct dp_mlo_ctxt *ml_ctxt, uint8_t link_id)
+{
+	if (link_id < WLAN_MAX_MLO_CHIPS * WLAN_MAX_MLO_LINKS_PER_SOC)
+		return ml_ctxt->link_to_pdev_map[link_id];
+	return NULL;
 }
 
 void dp_pdev_mlo_fill_params(struct dp_pdev *pdev,
@@ -516,30 +618,62 @@ dp_link_peer_hash_find_by_chip_id(struct dp_soc *soc,
 
 qdf_export_symbol(dp_link_peer_hash_find_by_chip_id);
 
+void dp_mlo_get_rx_hash_key(struct dp_soc *soc,
+			    struct cdp_lro_hash_config *lro_hash)
+{
+	struct dp_soc_be *be_soc = dp_get_be_soc_from_dp_soc(soc);
+	struct dp_mlo_ctxt *ml_ctxt = be_soc->ml_ctxt;
+
+	if (!be_soc->mlo_enabled || !ml_ctxt)
+		return dp_get_rx_hash_key_bytes(lro_hash);
+
+	qdf_mem_copy(lro_hash->toeplitz_hash_ipv4, ml_ctxt->toeplitz_hash_ipv4,
+		     (sizeof(lro_hash->toeplitz_hash_ipv4[0]) *
+		      LRO_IPV4_SEED_ARR_SZ));
+	qdf_mem_copy(lro_hash->toeplitz_hash_ipv6, ml_ctxt->toeplitz_hash_ipv6,
+		     (sizeof(lro_hash->toeplitz_hash_ipv6[0]) *
+		      LRO_IPV6_SEED_ARR_SZ));
+}
+
 struct dp_soc *
-dp_rx_replensih_soc_get(struct dp_soc *soc, uint8_t reo_ring_num)
+dp_rx_replensih_soc_get(struct dp_soc *soc, uint8_t chip_id)
 {
 	struct dp_soc_be *be_soc = dp_get_be_soc_from_dp_soc(soc);
 	struct dp_mlo_ctxt *mlo_ctxt = be_soc->ml_ctxt;
-	uint8_t chip_id;
-	uint8_t rx_ring_mask;
+	struct dp_soc *replenish_soc;
 
 	if (!be_soc->mlo_enabled || !mlo_ctxt)
 		return soc;
 
-	for (chip_id = 0; chip_id < WLAN_MAX_MLO_CHIPS; chip_id++) {
-		rx_ring_mask =
-			wlan_cfg_mlo_rx_ring_map_get_by_chip_id
-					(soc->wlan_cfg_ctx, chip_id);
-
-		if (rx_ring_mask & (1 << reo_ring_num))
-			return dp_mlo_get_soc_ref_by_chip_id(mlo_ctxt, chip_id);
+	replenish_soc = dp_mlo_get_soc_ref_by_chip_id(mlo_ctxt, chip_id);
+	if (qdf_unlikely(!replenish_soc)) {
+		dp_alert("replenish SOC is NULL");
+		qdf_assert_always(0);
 	}
 
-	return soc;
+	return replenish_soc;
 }
 
 #ifdef WLAN_MCAST_MLO
+void dp_mcast_mlo_iter_ptnr_soc(struct dp_soc_be *be_soc,
+				dp_ptnr_soc_iter_func func,
+				void *arg)
+{
+	int i = 0;
+	struct dp_mlo_ctxt *dp_mlo = be_soc->ml_ctxt;
+
+	for (i = 0; i < WLAN_MAX_MLO_CHIPS ; i++) {
+		struct dp_soc *ptnr_soc =
+				dp_mlo_get_soc_ref_by_chip_id(dp_mlo, i);
+
+		if (!ptnr_soc)
+			continue;
+		(*func)(ptnr_soc, arg);
+	}
+}
+
+qdf_export_symbol(dp_mcast_mlo_iter_ptnr_soc);
+
 void dp_mcast_mlo_iter_ptnr_vdev(struct dp_soc_be *be_soc,
 				 struct dp_vdev_be *be_vdev,
 				 dp_ptnr_vdev_iter_func func,
@@ -612,3 +746,57 @@ struct dp_vdev *dp_mlo_get_mcast_primary_vdev(struct dp_soc_be *be_soc,
 
 qdf_export_symbol(dp_mlo_get_mcast_primary_vdev);
 #endif
+
+static inline uint64_t dp_mlo_get_mlo_ts_offset(struct dp_pdev_be *be_pdev)
+{
+	struct dp_soc *soc;
+	struct dp_pdev *pdev;
+	struct dp_soc_be *be_soc;
+	uint32_t mlo_offset;
+
+	pdev = &be_pdev->pdev;
+	soc = pdev->soc;
+	be_soc = dp_get_be_soc_from_dp_soc(soc);
+
+	mlo_offset = be_soc->mlo_tstamp_offset;
+
+	return mlo_offset;
+}
+
+int32_t dp_mlo_get_delta_tsf2_wrt_mlo_offset(struct dp_soc *soc,
+					     uint8_t hw_link_id)
+{
+	struct dp_soc_be *be_soc = dp_get_be_soc_from_dp_soc(soc);
+	struct dp_mlo_ctxt *ml_ctxt = be_soc->ml_ctxt;
+	struct dp_pdev_be *be_pdev;
+	int32_t delta_tsf2_mlo_offset;
+	int32_t mlo_offset, delta_tsf2;
+
+	if (!ml_ctxt)
+		return 0;
+
+	be_pdev = dp_mlo_get_be_pdev_from_link_id(ml_ctxt, hw_link_id);
+	if (!be_pdev)
+		return 0;
+
+	mlo_offset = dp_mlo_get_mlo_ts_offset(be_pdev);
+	delta_tsf2 = be_pdev->delta_tsf2;
+
+	delta_tsf2_mlo_offset = mlo_offset - delta_tsf2;
+
+	return delta_tsf2_mlo_offset;
+}
+
+int32_t dp_mlo_get_delta_tqm_wrt_mlo_offset(struct dp_soc *soc)
+{
+	struct dp_soc_be *be_soc = dp_get_be_soc_from_dp_soc(soc);
+	int32_t delta_tqm_mlo_offset;
+	int32_t mlo_offset, delta_tqm;
+
+	mlo_offset = be_soc->mlo_tstamp_offset;
+	delta_tqm = be_soc->delta_tqm;
+
+	delta_tqm_mlo_offset = mlo_offset - delta_tqm;
+
+	return delta_tqm_mlo_offset;
+}

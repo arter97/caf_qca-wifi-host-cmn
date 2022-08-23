@@ -26,6 +26,7 @@
 #include <wlan_cmn.h>
 #include <reg_services_public_struct.h>
 #include <wlan_objmgr_psoc_obj.h>
+#include <wlan_objmgr_pdev_obj.h>
 #include "reg_priv_objs.h"
 #include "reg_utils.h"
 #include "reg_db.h"
@@ -524,6 +525,9 @@ static const struct reg_dmn_op_class_map_t
 {
 	const struct reg_dmn_op_class_map_t *class = NULL;
 
+	if (!country)
+		return global_op_class;
+
 	reg_debug_rl("Country %c%c 0x%x", country[0], country[1], country[2]);
 
 	switch (country[2]) {
@@ -663,6 +667,63 @@ void reg_dmn_free_6g_opclasses_and_channels(struct wlan_objmgr_pdev *pdev,
 	qdf_mem_free(opclass_lst);
 }
 
+/* The array of bandwidth to 6GHz operating class mapping */
+static const struct bw_opclass_pair bw_opclass_pair_map[] = {
+	{BW_20_MHZ,  131},
+	{BW_40_MHZ,  132},
+	{BW_80_MHZ,  133},
+	{BW_160_MHZ, 134},
+#ifdef WLAN_FEATURE_11BE
+	{BW_320_MHZ, 137},
+#endif
+};
+
+/**
+ * reg_convert_bw_to_opclass() - Convert bandwidth to operating class
+ *
+ * @bw: Bandwidth in MHz
+ */
+static uint8_t reg_convert_bw_to_opclass(uint16_t bw)
+{
+	uint8_t i, num_bws;
+
+	num_bws = QDF_ARRAY_SIZE(bw_opclass_pair_map);
+	for (i = 0; i < num_bws; i++)
+		if (bw == bw_opclass_pair_map[i].bw)
+			return bw_opclass_pair_map[i].opclass;
+
+	return 0;
+}
+
+/**
+ * reg_is_6ghz_op_class_supported() - Check whether the 6GHz opclass is
+ * supported. It is determined by the max bandwidth of the chip.
+ *
+ * @pdev: Pointer to pdev
+ * @op_class: oper class
+ */
+static bool reg_is_6ghz_op_class_supported(struct wlan_objmgr_pdev *pdev,
+					   uint8_t op_class)
+{
+	uint16_t max_5g_bw_supported;
+	uint8_t max_opclass;
+	struct wlan_objmgr_psoc *psoc;
+
+	psoc = wlan_pdev_get_psoc(pdev);
+
+	if (!reg_is_6ghz_op_class(pdev, op_class))
+		return false;
+
+	max_5g_bw_supported = reg_get_max_bw_5G_for_fo(pdev);
+	if (op_class == 136 && max_5g_bw_supported >= BW_20_MHZ &&
+	    reg_is_lower_6g_edge_ch_supp(psoc))
+		return true;
+
+	max_opclass = reg_convert_bw_to_opclass(max_5g_bw_supported);
+
+	return op_class <= max_opclass;
+}
+
 /**
  * reg_dmn_get_num_6g_opclasses() - Calculate the number of opclasses in the
  * 6GHz band.
@@ -681,7 +742,8 @@ static uint8_t reg_dmn_get_num_6g_opclasses(struct wlan_objmgr_pdev *pdev)
 
 		p_lst = op_class_tbl->p_cfi_lst_obj;
 		if (p_lst &&
-		    reg_is_6ghz_op_class(pdev, op_class_tbl->op_class))
+		    reg_is_6ghz_op_class_supported(pdev,
+						   op_class_tbl->op_class))
 			count++;
 
 		op_class_tbl++;
@@ -716,7 +778,8 @@ static void reg_dmn_fill_6g_opcls_chan_lists(struct wlan_objmgr_pdev *pdev,
 
 		p_lst = op_class_tbl->p_cfi_lst_obj;
 		if (p_lst &&
-		    reg_is_6ghz_op_class(pdev, op_class_tbl->op_class)) {
+		    reg_is_6ghz_op_class_supported(pdev,
+						   op_class_tbl->op_class)) {
 			uint8_t j;
 			uint8_t cfi_idx = 0;
 			uint8_t *dst;
@@ -805,7 +868,8 @@ QDF_STATUS reg_dmn_get_6g_opclasses_and_channels(struct wlan_objmgr_pdev *pdev,
 
 		p_lst = op_class_tbl->p_cfi_lst_obj;
 		if (p_lst &&
-		    reg_is_6ghz_op_class(pdev, op_class_tbl->op_class)) {
+		    reg_is_6ghz_op_class_supported(pdev,
+						   op_class_tbl->op_class)) {
 			uint8_t n_supp_cfis = 0;
 			uint8_t j;
 
@@ -1096,6 +1160,35 @@ reg_find_opclass_absent_in_ctry_opclss_tables(struct wlan_objmgr_pdev *pdev,
 	}
 }
 
+static bool
+reg_is_country_opclass_global(struct wlan_objmgr_pdev *pdev)
+{
+	struct wlan_lmac_if_reg_tx_ops *reg_tx_ops;
+	struct wlan_objmgr_psoc *psoc;
+	uint8_t opclass_tbl_idx;
+
+	psoc = wlan_pdev_get_psoc(pdev);
+	if (!psoc) {
+		reg_err("psoc is NULL");
+		return false;
+	}
+
+	reg_tx_ops = reg_get_psoc_tx_ops(psoc);
+	if (!reg_tx_ops) {
+		reg_err("reg_tx_ops is NULL");
+		return false;
+	}
+
+	if (reg_tx_ops->get_opclass_tbl_idx) {
+		reg_tx_ops->get_opclass_tbl_idx(pdev, &opclass_tbl_idx);
+
+		if (opclass_tbl_idx == OP_CLASS_GLOBAL)
+			return true;
+	}
+
+	return false;
+}
+
 void reg_freq_width_to_chan_op_class_auto(struct wlan_objmgr_pdev *pdev,
 					  qdf_freq_t freq,
 					  uint16_t chan_width,
@@ -1111,7 +1204,7 @@ void reg_freq_width_to_chan_op_class_auto(struct wlan_objmgr_pdev *pdev,
 	} else if (reg_is_5dot9_ghz_freq(pdev, freq)) {
 		global_tbl_lookup = true;
 	} else {
-		global_tbl_lookup = false;
+		global_tbl_lookup = reg_is_country_opclass_global(pdev);
 	}
 
 	*op_class = 0;
@@ -1194,7 +1287,7 @@ void reg_freq_to_chan_op_class(struct wlan_objmgr_pdev *pdev,
 	enum channel_enum chan_enum;
 	struct regulatory_channel *cur_chan_list;
 	struct wlan_regulatory_pdev_priv_obj *pdev_priv_obj;
-	struct ch_params chan_params;
+	struct ch_params chan_params = {0};
 
 	pdev_priv_obj = reg_get_pdev_obj(pdev);
 
@@ -1533,7 +1626,7 @@ static bool reg_is_chan_supported(struct wlan_objmgr_pdev *pdev,
 {
 	struct reg_channel_list chan_list;
 	qdf_freq_t center_320;
-	struct ch_params ch_params;
+	struct ch_params ch_params = {0};
 
 	center_320 = (ch_width == CH_WIDTH_320MHZ) ? cfi_freq : 0;
 	reg_fill_channel_list(pdev,
@@ -1555,7 +1648,7 @@ static bool reg_is_chan_supported(struct wlan_objmgr_pdev *pdev,
 				  qdf_freq_t cfi_freq,
 				  enum phy_ch_width ch_width)
 {
-	struct ch_params ch_params;
+	struct ch_params ch_params = {0};
 
 	ch_params.ch_width = ch_width;
 	reg_set_channel_params_for_freq(pdev, pri_freq, 0, &ch_params, true);

@@ -1,6 +1,7 @@
 /*
  * Copyright (c) 2016-2018,2020-2021 The Linux Foundation. All rights reserved.
  * Copyright (c) 2008 Atheros Communications, Inc.
+ * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -795,10 +796,10 @@
 /* if channel has been checked for DFS */
 #define WLAN_CHAN_DFS_CLEAR        0x0008
 
-/* DFS radar history for slave device(STA mode) */
+/* DFS radar history for client device(STA mode) */
 #define WLAN_CHAN_HISTORY_RADAR    0x0100
 
-/* DFS CAC valid for  slave device(STA mode) */
+/* DFS CAC valid for  client device(STA mode) */
 #define WLAN_CHAN_CAC_VALID        0x0200
 
 #define WLAN_IS_CHAN_DFS(_c) \
@@ -878,5 +879,29 @@
 	WLAN_IS_CHAN_MODE_80_80(_c))
 
 #define WLAN_IS_CHAN_MODE_320(_c) WLAN_IS_CHAN_11BE_EHT320(_c)
+
+#define WLAN_IS_CHAN_11BE(_c)             \
+	(WLAN_IS_CHAN_11BE_EHT20(_c)      || \
+	 WLAN_IS_CHAN_11BE_EHT40PLUS(_c)  || \
+	 WLAN_IS_CHAN_11BE_EHT40MINUS(_c) || \
+	 WLAN_IS_CHAN_11BE_EHT80(_c)      || \
+	 WLAN_IS_CHAN_11BE_EHT160(_c)     || \
+	 WLAN_IS_CHAN_11BE_EHT320(_c))
+
+#define WLAN_IS_CHAN_11AXA(_c)            \
+	(WLAN_IS_CHAN_11AXA_HE20(_c)      || \
+	 WLAN_IS_CHAN_11AXA_HE40PLUS(_c)  || \
+	 WLAN_IS_CHAN_11AXA_HE40MINUS(_c) || \
+	 WLAN_IS_CHAN_11AXA_HE80(_c)      || \
+	 WLAN_IS_CHAN_11AXA_HE160(_c)     || \
+	 WLAN_IS_CHAN_11AXA_HE80_80(_c))
+
+#define WLAN_IS_CHAN_11AC(_c)             \
+	(WLAN_IS_CHAN_11AC_VHT20(_c)      || \
+	 WLAN_IS_CHAN_11AC_VHT40PLUS(_c)  || \
+	 WLAN_IS_CHAN_11AC_VHT40MINUS(_c) || \
+	 WLAN_IS_CHAN_11AC_VHT80(_c)      || \
+	 WLAN_IS_CHAN_11AC_VHT160(_c)     || \
+	 WLAN_IS_CHAN_11AC_VHT80_80(_c))
 
 #endif /* _DFS_CHANNEL_H_ */

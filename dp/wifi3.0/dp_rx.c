@@ -833,6 +833,19 @@ void dp_classify_critical_pkts(struct dp_soc *soc, struct dp_vdev *vdev,
 }
 #endif
 
+#ifdef QCA_OL_TX_MULTIQ_SUPPORT
+static inline
+void dp_rx_nbuf_queue_mapping_set(qdf_nbuf_t nbuf, uint8_t ring_id)
+{
+	qdf_nbuf_set_queue_mapping(nbuf, ring_id);
+}
+#else
+static inline
+void dp_rx_nbuf_queue_mapping_set(qdf_nbuf_t nbuf, uint8_t ring_id)
+{
+}
+#endif
+
 /*
  * dp_rx_intrabss_mcbc_fwd() - Does intrabss forward for mcast packets
  *
@@ -850,6 +863,7 @@ bool dp_rx_intrabss_mcbc_fwd(struct dp_soc *soc, struct dp_txrx_peer *ta_peer,
 {
 	uint16_t len;
 	qdf_nbuf_t nbuf_copy;
+	uint8_t ring_id = QDF_NBUF_CB_RX_CTX_ID(nbuf);
 
 	if (dp_rx_intrabss_eapol_drop_check(soc, ta_peer, rx_tlv_hdr,
 					    nbuf))
@@ -870,8 +884,10 @@ bool dp_rx_intrabss_mcbc_fwd(struct dp_soc *soc, struct dp_txrx_peer *ta_peer,
 
 	len = QDF_NBUF_CB_RX_PKT_LEN(nbuf);
 
+	qdf_mem_set(nbuf_copy->cb, 0x0, sizeof(nbuf_copy->cb));
 	dp_classify_critical_pkts(soc, ta_peer->vdev, nbuf_copy);
 
+	dp_rx_nbuf_queue_mapping_set(nbuf_copy, ring_id);
 	if (soc->arch_ops.dp_rx_intrabss_handle_nawds(soc, ta_peer, nbuf_copy,
 						      tid_stats))
 		return false;
@@ -908,6 +924,7 @@ bool dp_rx_intrabss_ucast_fwd(struct dp_soc *soc, struct dp_txrx_peer *ta_peer,
 			      struct cdp_tid_rx_stats *tid_stats)
 {
 	uint16_t len;
+	uint8_t ring_id = QDF_NBUF_CB_RX_CTX_ID(nbuf);
 
 	len = QDF_NBUF_CB_RX_PKT_LEN(nbuf);
 
@@ -933,8 +950,10 @@ bool dp_rx_intrabss_ucast_fwd(struct dp_soc *soc, struct dp_txrx_peer *ta_peer,
 		}
 	}
 
+	qdf_mem_set(nbuf->cb, 0x0, sizeof(nbuf->cb));
 	dp_classify_critical_pkts(soc, ta_peer->vdev, nbuf);
 
+	dp_rx_nbuf_queue_mapping_set(nbuf, ring_id);
 	if (!dp_tx_send((struct cdp_soc_t *)soc,
 			tx_vdev_id, nbuf)) {
 		DP_PEER_PER_PKT_STATS_INC_PKT(ta_peer, rx.intra_bss.pkts, 1,
@@ -1622,7 +1641,7 @@ void dp_rx_compute_delay(struct dp_vdev *vdev, qdf_nbuf_t nbuf)
 		&vdev->pdev->stats.tid_stats.tid_rx_stats[ring_id][tid];
 
 	dp_update_delay_stats(NULL, rstats, to_stack, tid,
-			      CDP_DELAY_STATS_REAP_STACK, ring_id);
+			      CDP_DELAY_STATS_REAP_STACK, ring_id, false);
 	/*
 	 * Update interframe delay stats calculated at deliver_data_ol point.
 	 * Value of vdev->prev_rx_deliver_tstamp will be 0 for 1st frame, so
@@ -1631,7 +1650,7 @@ void dp_rx_compute_delay(struct dp_vdev *vdev, qdf_nbuf_t nbuf)
 	 * of vdev->prev_rx_deliver_tstamp.
 	 */
 	dp_update_delay_stats(NULL, rstats, interframe_delay, tid,
-			      CDP_DELAY_STATS_RX_INTERFRAME, ring_id);
+			      CDP_DELAY_STATS_RX_INTERFRAME, ring_id, false);
 	vdev->prev_rx_deliver_tstamp = current_ts;
 }
 
@@ -1739,11 +1758,8 @@ void dp_rx_flush_rx_cached(struct dp_peer *peer, bool drop)
 		return;
 
 	if (!peer->txrx_peer) {
-		if (!peer->sta_self_peer) {
-			qdf_err("txrx_peer NULL!!");
-			qdf_assert_always(0);
-		}
-
+		dp_err("txrx_peer NULL!! peer mac_addr("QDF_MAC_ADDR_FMT")",
+			QDF_MAC_ADDR_REF(peer->mac_addr.raw));
 		return;
 	}
 
@@ -2075,6 +2091,7 @@ void dp_rx_msdu_extd_stats_update(struct dp_soc *soc, qdf_nbuf_t nbuf,
 {
 	bool is_ampdu;
 	uint32_t sgi, mcs, tid, nss, bw, reception_type, pkt_type;
+	uint8_t dst_mcs_idx;
 
 	/*
 	 * TODO - For KIWI this field is present in ring_desc
@@ -2092,6 +2109,9 @@ void dp_rx_msdu_extd_stats_update(struct dp_soc *soc, qdf_nbuf_t nbuf,
 							      rx_tlv_hdr);
 	nss = hal_rx_msdu_start_nss_get(soc->hal_soc, rx_tlv_hdr);
 	pkt_type = hal_rx_tlv_get_pkt_type(soc->hal_soc, rx_tlv_hdr);
+	/* do HW to SW pkt type conversion */
+	pkt_type = (pkt_type >= HAL_DOT11_MAX ? DOT11_MAX :
+		    hal_2_dp_pkt_type_map[pkt_type]);
 
 	DP_PEER_EXTD_STATS_INCC(txrx_peer, rx.rx_mpdu_cnt[mcs], 1,
 		      ((mcs < MAX_MCS) && QDF_NBUF_CB_RX_CHFRAG_START(nbuf)));
@@ -2102,9 +2122,7 @@ void dp_rx_msdu_extd_stats_update(struct dp_soc *soc, qdf_nbuf_t nbuf,
 	 * only if nss > 0 and pkt_type is 11N/AC/AX,
 	 * then increase index [nss - 1] in array counter.
 	 */
-	if (nss > 0 && (pkt_type == DOT11_N ||
-			pkt_type == DOT11_AC ||
-			pkt_type == DOT11_AX))
+	if (nss > 0 && CDP_IS_PKT_TYPE_SUPPORT_NSS(pkt_type))
 		DP_PEER_EXTD_STATS_INC(txrx_peer, rx.nss[nss - 1], 1);
 
 	DP_PEER_EXTD_STATS_INC(txrx_peer, rx.sgi_count[sgi], 1);
@@ -2118,36 +2136,11 @@ void dp_rx_msdu_extd_stats_update(struct dp_soc *soc, qdf_nbuf_t nbuf,
 	DP_PEER_EXTD_STATS_INC(txrx_peer, rx.wme_ac_type[TID_TO_WME_AC(tid)], 1);
 	DP_PEER_EXTD_STATS_INC(txrx_peer, rx.reception_type[reception_type], 1);
 
-	DP_PEER_EXTD_STATS_INCC(txrx_peer,
-				rx.pkt_type[pkt_type].mcs_count[MAX_MCS - 1], 1,
-				((mcs >= MAX_MCS_11A) && (pkt_type == DOT11_A)));
-	DP_PEER_EXTD_STATS_INCC(txrx_peer,
-				rx.pkt_type[pkt_type].mcs_count[mcs], 1,
-				((mcs <= MAX_MCS_11A) && (pkt_type == DOT11_A)));
-	DP_PEER_EXTD_STATS_INCC(txrx_peer,
-				rx.pkt_type[pkt_type].mcs_count[MAX_MCS - 1], 1,
-				((mcs >= MAX_MCS_11B) && (pkt_type == DOT11_B)));
-	DP_PEER_EXTD_STATS_INCC(txrx_peer,
-				rx.pkt_type[pkt_type].mcs_count[mcs], 1,
-				((mcs <= MAX_MCS_11B) && (pkt_type == DOT11_B)));
-	DP_PEER_EXTD_STATS_INCC(txrx_peer,
-				rx.pkt_type[pkt_type].mcs_count[MAX_MCS - 1], 1,
-				((mcs >= MAX_MCS_11A) && (pkt_type == DOT11_N)));
-	DP_PEER_EXTD_STATS_INCC(txrx_peer,
-				rx.pkt_type[pkt_type].mcs_count[mcs], 1,
-				((mcs <= MAX_MCS_11A) && (pkt_type == DOT11_N)));
-	DP_PEER_EXTD_STATS_INCC(txrx_peer,
-				rx.pkt_type[pkt_type].mcs_count[MAX_MCS - 1], 1,
-				((mcs >= MAX_MCS_11AC) && (pkt_type == DOT11_AC)));
-	DP_PEER_EXTD_STATS_INCC(txrx_peer,
-				rx.pkt_type[pkt_type].mcs_count[mcs], 1,
-				((mcs <= MAX_MCS_11AC) && (pkt_type == DOT11_AC)));
-	DP_PEER_EXTD_STATS_INCC(txrx_peer,
-				rx.pkt_type[pkt_type].mcs_count[MAX_MCS - 1], 1,
-				((mcs >= MAX_MCS) && (pkt_type == DOT11_AX)));
-	DP_PEER_EXTD_STATS_INCC(txrx_peer,
-				rx.pkt_type[pkt_type].mcs_count[mcs], 1,
-				((mcs < MAX_MCS) && (pkt_type == DOT11_AX)));
+	dst_mcs_idx = dp_get_mcs_array_index_by_pkt_type_mcs(pkt_type, mcs);
+	if (MCS_INVALID_ARRAY_INDEX != dst_mcs_idx)
+		DP_PEER_EXTD_STATS_INC(txrx_peer,
+				       rx.pkt_type[pkt_type].mcs_count[dst_mcs_idx],
+				       1);
 }
 #else
 static inline
@@ -2267,6 +2260,49 @@ dp_rx_desc_nbuf_len_sanity_check(struct dp_soc *soc, uint32_t pkt_len) { }
 #endif
 
 #ifdef DP_RX_PKT_NO_PEER_DELIVER
+#ifdef DP_RX_UDP_OVER_PEER_ROAM
+/**
+ * dp_rx_is_udp_allowed_over_roam_peer() - check if udp data received
+ *					   during roaming
+ * @vdev: dp_vdev pointer
+ * @rx_tlv_hdr: rx tlv header
+ * @nbuf: pkt skb pointer
+ *
+ * This function will check if rx udp data is received from authorised
+ * roamed peer before peer map indication is received from FW after
+ * roaming. This is needed for VoIP scenarios in which packet loss
+ * expected during roaming is minimal.
+ *
+ * Return: bool
+ */
+static bool dp_rx_is_udp_allowed_over_roam_peer(struct dp_vdev *vdev,
+						uint8_t *rx_tlv_hdr,
+						qdf_nbuf_t nbuf)
+{
+	char *hdr_desc;
+	struct ieee80211_frame *wh = NULL;
+
+	hdr_desc = hal_rx_desc_get_80211_hdr(vdev->pdev->soc->hal_soc,
+					     rx_tlv_hdr);
+	wh = (struct ieee80211_frame *)hdr_desc;
+
+	if (vdev->roaming_peer_status ==
+	    WLAN_ROAM_PEER_AUTH_STATUS_AUTHENTICATED &&
+	    !qdf_mem_cmp(vdev->roaming_peer_mac.raw, wh->i_addr2,
+	    QDF_MAC_ADDR_SIZE) && (qdf_nbuf_is_ipv4_udp_pkt(nbuf) ||
+	    qdf_nbuf_is_ipv6_udp_pkt(nbuf)))
+		return true;
+
+	return false;
+}
+#else
+static bool dp_rx_is_udp_allowed_over_roam_peer(struct dp_vdev *vdev,
+						uint8_t *rx_tlv_hdr,
+						qdf_nbuf_t nbuf)
+{
+	return false;
+}
+#endif
 /**
  * dp_rx_deliver_to_stack_no_peer() - try deliver rx data even if
  *				      no corresbonding peer found
@@ -2314,7 +2350,8 @@ void dp_rx_deliver_to_stack_no_peer(struct dp_soc *soc, qdf_nbuf_t nbuf)
 	qdf_nbuf_set_pktlen(nbuf, pkt_len);
 	qdf_nbuf_pull_head(nbuf, soc->rx_pkt_tlv_size + l2_hdr_offset);
 
-	if (dp_rx_is_special_frame(nbuf, frame_mask)) {
+	if (dp_rx_is_special_frame(nbuf, frame_mask) ||
+	    dp_rx_is_udp_allowed_over_roam_peer(vdev, rx_tlv_hdr, nbuf)) {
 		qdf_nbuf_set_exc_frame(nbuf, 1);
 		if (QDF_STATUS_SUCCESS !=
 		    vdev->osif_rx(vdev->osif_vdev, nbuf))

@@ -286,6 +286,8 @@ typedef void (*wlan_objmgr_peer_status_handler)(
  * @WLAN_MGMT_RX_REO_ID:        Management rx reorder reference id
  * @WLAN_MGMT_RX_REO_SIM_ID:    Management rx reorder simulation reference id
  * @WLAN_LITE_MON_ID:           Lite monitor operations
+ * @WLAN_PRE_CAC_ID:            Pre-CAC operations
+ * @WLAN_DP_ID:                 DP component
  * @WLAN_REF_ID_MAX:            Max id used to generate ref count tracking array
  */
  /* New value added to the enum must also be reflected in function
@@ -389,6 +391,8 @@ typedef enum {
 	WLAN_MGMT_RX_REO_SIM_ID   = 93,
 	WLAN_TWT_ID           = 94,
 	WLAN_LITE_MON_ID      = 95,
+	WLAN_PRE_CAC_ID       = 96,
+	WLAN_DP_ID            = 97,
 	WLAN_REF_ID_MAX,
 } wlan_objmgr_ref_dbgid;
 
@@ -496,7 +500,10 @@ static inline const char *string_from_dbgid(wlan_objmgr_ref_dbgid id)
 					"WLAN_MBSS_ID",
 					"WLAN_MGMT_RX_REO_ID",
 					"WLAN_MGMT_RX_REO_SIM_ID",
-					"WLAN_TWT_ID"
+					"WLAN_TWT_ID",
+					"WLAN_LITE_MON_ID",
+					"WLAN_PRE_CAC_ID",
+					"WLAN_DP_ID"
 					};
 
 	if (id >= WLAN_REF_ID_MAX)

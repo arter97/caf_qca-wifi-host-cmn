@@ -274,8 +274,10 @@ enum hal_srng_ring_id {
 #ifdef WLAN_FEATURE_CIF_CFR
 	HAL_SRNG_WIFI_POS_SRC_DMA_RING,
 	HAL_SRNG_DIR_BUF_RX_SRC_DMA_RING,
+	HAL_SRNG_DIR_BUF_RX_SRC_DMA_RING1,
 #else
 	HAL_SRNG_DIR_BUF_RX_SRC_DMA_RING,
+	HAL_SRNG_DIR_BUF_RX_SRC_DMA_RING1,
 #endif
 	HAL_SRNG_WMAC1_TXMON2SW0,
 	HAL_SRNG_SW2TXMON_BUF0,
@@ -500,6 +502,41 @@ struct hal_offload_info {
 	uint32_t flow_id;
 };
 
+#ifdef WLAN_DP_SRNG_USAGE_WM_TRACKING
+/**
+ * enum hal_srng_high_wm_bin - BIN for SRNG high watermark
+ * @HAL_SRNG_HIGH_WM_BIN_BELOW_50_PERCENT: <50% SRNG entries used
+ * @HAL_SRNG_HIGH_WM_BIN_50_to_60: 50-60% SRNG entries used
+ * @HAL_SRNG_HIGH_WM_BIN_60_to_70: 60-70% SRNG entries used
+ * @HAL_SRNG_HIGH_WM_BIN_70_to_80: 70-80% SRNG entries used
+ * @HAL_SRNG_HIGH_WM_BIN_80_to_90: 80-90% SRNG entries used
+ * @HAL_SRNG_HIGH_WM_BIN_90_to_100: 90-100% SRNG entries used
+ */
+enum hal_srng_high_wm_bin {
+	HAL_SRNG_HIGH_WM_BIN_BELOW_50_PERCENT,
+	HAL_SRNG_HIGH_WM_BIN_50_to_60,
+	HAL_SRNG_HIGH_WM_BIN_60_to_70,
+	HAL_SRNG_HIGH_WM_BIN_70_to_80,
+	HAL_SRNG_HIGH_WM_BIN_80_to_90,
+	HAL_SRNG_HIGH_WM_BIN_90_to_100,
+	HAL_SRNG_HIGH_WM_BIN_MAX,
+};
+
+/**
+ * struct hal_srng_high_wm_info - SRNG usage high watermark info
+ * @val: highest number of entries used in SRNG
+ * @timestamp: Timestamp when the max num entries were in used for a SRNG
+ * @bin_thresh: threshold for each bins
+ * @bins: Bins for srng usage
+ */
+struct hal_srng_high_wm_info {
+	uint32_t val;
+	uint64_t timestamp;
+	uint32_t bin_thresh[HAL_SRNG_HIGH_WM_BIN_MAX];
+	uint32_t bins[HAL_SRNG_HIGH_WM_BIN_MAX];
+};
+#endif
+
 /* Common SRNG ring structure for source and destination rings */
 struct hal_srng {
 	/* Unique SRNG ring ID */
@@ -647,6 +684,9 @@ struct hal_srng {
 
 	/* srng specific delayed write stats */
 	struct hal_reg_write_srng_stats wstats;
+#endif
+#ifdef WLAN_DP_SRNG_USAGE_WM_TRACKING
+	struct hal_srng_high_wm_info high_wm;
 #endif
 };
 
@@ -840,6 +880,7 @@ struct hal_hw_txrx_ops {
 	/* rx */
 	uint8_t (*hal_rx_get_rx_fragment_number)(uint8_t *buf);
 	uint8_t (*hal_rx_msdu_end_da_is_mcbc_get)(uint8_t *buf);
+	uint8_t (*hal_rx_msdu_end_is_tkip_mic_err)(uint8_t *buf);
 	uint8_t (*hal_rx_msdu_end_sa_is_valid_get)(uint8_t *buf);
 	uint16_t (*hal_rx_msdu_end_sa_idx_get)(uint8_t *buf);
 	uint32_t (*hal_rx_desc_is_first_msdu)(void *hw_desc_addr);
@@ -946,6 +987,7 @@ struct hal_hw_txrx_ops {
 							   uint32_t *reo_destination_indication);
 	uint8_t (*hal_tx_get_num_tcl_banks)(void);
 	uint32_t (*hal_get_reo_qdesc_size)(uint32_t ba_window_size, int tid);
+	uint16_t (*hal_get_rx_max_ba_window)(int tid);
 
 	void (*hal_set_link_desc_addr)(void *desc, uint32_t cookie,
 				       qdf_dma_addr_t link_desc_paddr,
@@ -1074,6 +1116,8 @@ struct hal_hw_txrx_ops {
 #ifdef WLAN_FEATURE_MARK_FIRST_WAKEUP_PACKET
 	uint8_t (*hal_get_first_wow_wakeup_packet)(uint8_t *buf);
 #endif
+	void (*hal_reo_shared_qaddr_cache_clear)(hal_soc_handle_t hal_soc_hdl);
+	uint32_t (*hal_rx_tlv_l3_type_get)(uint8_t *buf);
 };
 
 /**
@@ -1147,6 +1191,20 @@ struct reo_queue_ref_table {
 };
 
 /**
+ * union hal_shadow_reg_cfg - Shadow register config
+ * @addr: Place holder where shadow address is saved
+ * @v2: shadow config v2 format
+ * @v3: shadow config v3 format
+ */
+union hal_shadow_reg_cfg {
+	uint32_t addr;
+	struct pld_shadow_reg_v2_cfg v2;
+#ifdef CONFIG_SHADOW_V3
+	struct pld_shadow_reg_v3_cfg v3;
+#endif
+};
+
+/**
  * struct hal_soc - HAL context to be used to access SRNG APIs
  *		    (currently used by data path and
  *		    transport (CE) modules)
@@ -1186,7 +1244,7 @@ struct hal_soc {
 	uint32_t target_type;
 
 	/* shadow register configuration */
-	struct pld_shadow_reg_v2_cfg shadow_config[MAX_SHADOW_REGISTERS];
+	union hal_shadow_reg_cfg shadow_config[MAX_SHADOW_REGISTERS];
 	int num_shadow_registers_configured;
 	bool use_register_windowing;
 	uint32_t register_window;
@@ -1306,4 +1364,33 @@ struct hal_srng *hal_ring_handle_to_hal_srng(hal_ring_handle_t hal_ring)
  * REO2PPE destination indication
  */
 #define REO2PPE_DST_IND 11
+
+/**
+ * enum hal_pkt_type - Type of packet type reported by HW
+ * @HAL_DOT11A: 802.11a PPDU type
+ * @HAL_DOT11B: 802.11b PPDU type
+ * @HAL_DOT11N_MM: 802.11n Mixed Mode PPDU type
+ * @HAL_DOT11AC: 802.11ac PPDU type
+ * @HAL_DOT11AX: 802.11ax PPDU type
+ * @HAL_DOT11BA: 802.11ba (WUR) PPDU type
+ * @HAL_DOT11BE: 802.11be PPDU type
+ * @HAL_DOT11AZ: 802.11az (ranging) PPDU type
+ * @HAL_DOT11N_GF: 802.11n Green Field PPDU type
+ *
+ * Enum indicating the packet type reported by HW in rx_pkt_tlvs (RX data)
+ * or WBM2SW ring entry's descriptor (TX data completion)
+ */
+enum hal_pkt_type {
+	HAL_DOT11A = 0,
+	HAL_DOT11B = 1,
+	HAL_DOT11N_MM = 2,
+	HAL_DOT11AC = 3,
+	HAL_DOT11AX = 4,
+	HAL_DOT11BA = 5,
+	HAL_DOT11BE = 6,
+	HAL_DOT11AZ = 7,
+	HAL_DOT11N_GF = 8,
+	HAL_DOT11_MAX,
+};
+
 #endif /* _HAL_INTERNAL_H_ */

@@ -48,9 +48,9 @@ bool mlo_ap_vdev_attach(struct wlan_objmgr_vdev *vdev,
 
 	dev_ctx = vdev->mlo_dev_ctx;
 	wlan_vdev_set_link_id(vdev, link_id);
-	wlan_vdev_mlme_feat_ext2_cap_set(vdev, WLAN_VDEV_FEXT2_MLO);
+	wlan_vdev_mlme_set_mlo_vdev(vdev);
 
-	/**
+	/*
 	 * every link will trigger mlo_ap_vdev_attach,
 	 * and they should provide the same vdev_count.
 	 */
@@ -65,7 +65,7 @@ bool mlo_ap_vdev_attach(struct wlan_objmgr_vdev *vdev,
 
 	if (cdp_update_mlo_ptnr_list(wlan_psoc_get_dp_handle(psoc),
 				pr_vdev_ids, WLAN_UMAC_MLO_MAX_VDEVS,
-				wlan_vdev_get_id(vdev) != QDF_STATUS_SUCCESS)) {
+				wlan_vdev_get_id(vdev)) != QDF_STATUS_SUCCESS) {
 		mlo_debug("Failed to add vdev to partner vdev list, vdev id:%d",
 			 wlan_vdev_get_id(vdev));
 	}
@@ -86,9 +86,9 @@ bool mlo_ap_vdev_attach(struct wlan_objmgr_vdev *vdev,
 
 	dev_ctx = vdev->mlo_dev_ctx;
 	wlan_vdev_set_link_id(vdev, link_id);
-	wlan_vdev_mlme_feat_ext2_cap_set(vdev, WLAN_VDEV_FEXT2_MLO);
+	wlan_vdev_mlme_set_mlo_vdev(vdev);
 
-	/**
+	/*
 	 * every link will trigger mlo_ap_vdev_attach,
 	 * and they should provide the same vdev_count.
 	 */
@@ -122,6 +122,43 @@ void mlo_ap_get_vdev_list(struct wlan_objmgr_vdev *vdev,
 	for (i = 0; i < QDF_ARRAY_SIZE(dev_ctx->wlan_vdev_list); i++) {
 		if (dev_ctx->wlan_vdev_list[i] &&
 		    wlan_vdev_mlme_is_mlo_ap(dev_ctx->wlan_vdev_list[i])) {
+			status = wlan_objmgr_vdev_try_get_ref(
+						dev_ctx->wlan_vdev_list[i],
+						WLAN_MLO_MGR_ID);
+			if (QDF_IS_STATUS_ERROR(status))
+				break;
+			wlan_vdev_list[*vdev_count] =
+				dev_ctx->wlan_vdev_list[i];
+			(*vdev_count) += 1;
+		}
+	}
+	mlo_dev_lock_release(dev_ctx);
+}
+
+void mlo_ap_get_partner_vdev_list_from_mld(
+		struct wlan_objmgr_vdev *vdev,
+		uint16_t *vdev_count,
+		struct wlan_objmgr_vdev **wlan_vdev_list)
+{
+	struct wlan_mlo_dev_context *dev_ctx;
+	int i;
+	QDF_STATUS status;
+
+	*vdev_count = 0;
+
+	if (!vdev || !vdev->mlo_dev_ctx) {
+		mlo_err("Invalid input");
+		return;
+	}
+
+	dev_ctx = vdev->mlo_dev_ctx;
+
+	mlo_dev_lock_acquire(dev_ctx);
+	*vdev_count = 0;
+	for (i = 0; i < QDF_ARRAY_SIZE(dev_ctx->wlan_vdev_list); i++) {
+		if (dev_ctx->wlan_vdev_list[i] &&
+		    (QDF_SAP_MODE ==
+		     wlan_vdev_mlme_get_opmode(dev_ctx->wlan_vdev_list[i]))) {
 			status = wlan_objmgr_vdev_try_get_ref(
 						dev_ctx->wlan_vdev_list[i],
 						WLAN_MLO_MGR_ID);
@@ -277,7 +314,7 @@ void mlo_ap_vdev_detach(struct wlan_objmgr_vdev *vdev)
 		mlo_err("Invalid input");
 		return;
 	}
-	wlan_vdev_mlme_feat_ext2_cap_clear(vdev, WLAN_VDEV_FEXT2_MLO);
+	wlan_vdev_mlme_clear_mlo_vdev(vdev);
 }
 
 void mlo_ap_link_down_cmpl_notify(struct wlan_objmgr_vdev *vdev)
@@ -303,7 +340,7 @@ uint16_t mlo_ap_ml_peerid_alloc(void)
 	if (i == mlo_ctx->max_mlo_peer_id)
 		return MLO_INVALID_PEER_ID;
 
-	mlo_debug(" ML peee id %d is allocated", i + 1);
+	mlo_debug(" ML peer id %d is allocated", i + 1);
 
 	return i + 1;
 }
@@ -312,11 +349,13 @@ void mlo_ap_ml_peerid_free(uint16_t mlo_peer_id)
 {
 	struct mlo_mgr_context *mlo_ctx = wlan_objmgr_get_mlo_ctx();
 
-	if (mlo_peer_id == MLO_INVALID_PEER_ID)
+	if ((mlo_peer_id == 0) || (mlo_peer_id == MLO_INVALID_PEER_ID)) {
+		mlo_err(" ML peer id %d is invalid", mlo_peer_id);
 		return;
+	}
 
 	if (mlo_peer_id > mlo_ctx->max_mlo_peer_id) {
-		mlo_err(" ML peee id %d is invalid", mlo_peer_id);
+		mlo_err(" ML peer id %d is invalid", mlo_peer_id);
 		QDF_BUG(0);
 		return;
 	}
@@ -327,7 +366,7 @@ void mlo_ap_ml_peerid_free(uint16_t mlo_peer_id)
 
 	ml_peerid_lock_release(mlo_ctx);
 
-	mlo_debug(" ML peee id %d is freed", mlo_peer_id);
+	mlo_debug(" ML peer id %d is freed", mlo_peer_id);
 }
 
 void mlo_ap_vdev_quiet_set(struct wlan_objmgr_vdev *vdev)

@@ -55,6 +55,7 @@
 #ifndef REMOVE_PKT_LOG
 #include <pktlog.h>
 #endif
+#include <dp_umac_reset.h>
 
 //#include "dp_tx.h"
 
@@ -75,7 +76,12 @@
 
 #if defined(WLAN_MAX_PDEVS) && (WLAN_MAX_PDEVS == 1)
 #define WLAN_DP_RESET_MON_BUF_RING_FILTER
+#define MAX_TXDESC_POOLS 6
+#else
+#define MAX_TXDESC_POOLS 4
 #endif
+
+#define MAX_RXDESC_POOLS 4
 
 /* Max no. of VDEV per PSOC */
 #ifdef WLAN_PSOC_MAX_VDEVS
@@ -90,9 +96,6 @@
 #else
 #define DP_PDEV_MAX_VDEVS 17
 #endif
-
-#define MAX_TXDESC_POOLS 4
-#define MAX_RXDESC_POOLS 4
 
 #define EXCEPTION_DEST_RING_ID 0
 #define MAX_IDLE_SCATTER_BUFS 16
@@ -244,6 +247,7 @@ enum dp_mod_id {
 	DP_MOD_ID_MSCS,
 	DP_MOD_ID_TX,
 	DP_MOD_ID_SAWF,
+	DP_MOD_ID_REINJECT,
 	DP_MOD_ID_MAX,
 };
 
@@ -421,6 +425,7 @@ struct dp_rx_nbuf_frag_info {
  * @DP_TX_HW_DESC_HIST_TYPE: Datapath TX HW descriptor history
  * @DP_MON_SOC_TYPE: Datapath monitor soc context
  * @DP_MON_PDEV_TYPE: Datapath monitor pdev context
+ * @DP_MON_STATUS_BUF_HIST_TYPE: DP monitor status buffer history
  */
 enum dp_ctxt_type {
 	DP_PDEV_TYPE,
@@ -434,6 +439,7 @@ enum dp_ctxt_type {
 	DP_TX_HW_DESC_HIST_TYPE,
 	DP_MON_SOC_TYPE,
 	DP_MON_PDEV_TYPE,
+	DP_MON_STATUS_BUF_HIST_TYPE,
 };
 
 /**
@@ -561,6 +567,7 @@ struct dp_tx_desc_s {
 	uint16_t length;
 #ifdef DP_TX_TRACKING
 	uint32_t magic;
+	uint64_t timestamp_tick;
 #endif
 	uint16_t flags;
 	uint32_t id;
@@ -576,7 +583,7 @@ struct dp_tx_desc_s {
 	uint8_t pkt_offset;
 	uint8_t  pool_id;
 	struct dp_tx_ext_desc_elem_s *msdu_ext_desc;
-	uint64_t timestamp;
+	qdf_ktime_t timestamp;
 	struct hal_tx_desc_comp_s comp;
 };
 
@@ -947,6 +954,7 @@ struct dp_intr {
 
 	/* Interrupt Stats for individual masks */
 	struct dp_intr_stats intr_stats;
+	uint8_t umac_reset_intr_mask;  /* UMAC reset interrupt mask */
 };
 
 #define REO_DESC_FREELIST_SIZE 64
@@ -988,7 +996,7 @@ struct reo_desc_deferred_freelist_node {
 struct reo_cmd_event_record {
 	enum hal_reo_cmd_type cmd_type;
 	uint8_t cmd_return_status;
-	uint32_t timestamp;
+	uint64_t timestamp;
 };
 
 /**
@@ -1347,6 +1355,50 @@ struct dp_tx_hw_desc_evt {
 struct dp_tx_hw_desc_history {
 	uint64_t index;
 	struct dp_tx_hw_desc_evt entry[DP_TX_HW_DESC_HIST_MAX];
+};
+#endif
+
+/*
+ * enum dp_mon_status_process_event - Events for monitor status buffer record
+ * @DP_MON_STATUS_BUF_REAP: Monitor status buffer is reaped from ring
+ * @DP_MON_STATUS_BUF_ENQUEUE: Status buffer is enqueued to local queue
+ * @DP_MON_STATUS_BUF_DEQUEUE: Status buffer is dequeued from local queue
+ */
+enum dp_mon_status_process_event {
+	DP_MON_STATUS_BUF_REAP,
+	DP_MON_STATUS_BUF_ENQUEUE,
+	DP_MON_STATUS_BUF_DEQUEUE,
+};
+
+#ifdef WLAN_FEATURE_DP_MON_STATUS_RING_HISTORY
+#define DP_MON_STATUS_HIST_MAX	2048
+
+/**
+ * struct dp_buf_info_record - ring buffer info
+ * @hbi: HW ring buffer info
+ * @timestamp: timestamp when this entry was recorded
+ * @event: event
+ * @rx_desc: RX descriptor corresponding to the received buffer
+ * @nbuf: buffer attached to rx_desc, if event is REAP, else the buffer
+ *	  which was enqueued or dequeued.
+ * @rx_desc_nbuf_data: nbuf data pointer.
+ */
+struct dp_mon_stat_info_record {
+	struct hal_buf_info hbi;
+	uint64_t timestamp;
+	enum dp_mon_status_process_event event;
+	void *rx_desc;
+	qdf_nbuf_t nbuf;
+	uint8_t *rx_desc_nbuf_data;
+};
+
+/* struct dp_rx_history - rx ring hisotry
+ * @index: Index where the last entry is written
+ * @entry: history entries
+ */
+struct dp_mon_status_ring_history {
+	qdf_atomic_t index;
+	struct dp_mon_stat_info_record entry[DP_MON_STATUS_HIST_MAX];
 };
 #endif
 
@@ -1711,13 +1763,6 @@ struct dp_arch_ops {
 	void (*txrx_peer_map_detach)(struct dp_soc *soc);
 	QDF_STATUS (*dp_rxdma_ring_sel_cfg)(struct dp_soc *soc);
 	void (*soc_cfg_attach)(struct dp_soc *soc);
-	void (*peer_get_reo_hash)(struct dp_vdev *vdev,
-				  struct cdp_peer_setup_info *setup_info,
-				  enum cdp_host_reo_dest_ring *reo_dest,
-				  bool *hash_based,
-				  uint8_t *lmac_peer_id_msb);
-	bool (*reo_remap_config)(struct dp_soc *soc, uint32_t *remap0,
-				 uint32_t *remap1, uint32_t *remap2);
 
 	/* TX RX Arch Ops */
 	QDF_STATUS (*tx_hw_enqueue)(struct dp_soc *soc, struct dp_vdev *vdev,
@@ -1803,8 +1848,11 @@ struct dp_arch_ops {
 	struct dp_peer *(*mlo_peer_find_hash_find)(struct dp_soc *soc,
 						   uint8_t *peer_mac_addr,
 						   int mac_addr_is_aligned,
-						   enum dp_mod_id mod_id);
+						   enum dp_mod_id mod_id,
+						   uint8_t vdev_id);
 #endif
+	void (*get_rx_hash_key)(struct dp_soc *soc,
+				struct cdp_lro_hash_config *lro_hash);
 	void (*txrx_print_peer_stats)(struct cdp_peer_stats *peer_stats,
 				      enum peer_stats_type stats_type);
 	/* Dp peer reorder queue setup */
@@ -1812,6 +1860,14 @@ struct dp_arch_ops {
 						     struct dp_peer *peer,
 						     int tid,
 						     uint32_t ba_window_size);
+	struct dp_peer *(*dp_find_peer_by_destmac)(struct dp_soc *soc,
+						   uint8_t *dest_mac_addr,
+						   uint8_t vdev_id);
+	QDF_STATUS
+	(*dp_tx_compute_hw_delay)(struct dp_soc *soc,
+				  struct dp_vdev *vdev,
+				  struct hal_tx_completion_status *ts,
+				  uint32_t *delay_us);
 };
 
 /**
@@ -1819,10 +1875,12 @@ struct dp_arch_ops {
  * @pn_in_reo_dest: PN provided by hardware in the REO destination ring.
  * @dmac_cmn_src_rxbuf_ring_enabled: Flag to indicate DMAC mode common Rx
  *				     buffer source rings
+ * @rssi_dbm_conv_support: Rssi dbm converstion support param.
  */
 struct dp_soc_features {
 	uint8_t pn_in_reo_dest:1,
 		dmac_cmn_src_rxbuf_ring_enabled:1;
+	bool rssi_dbm_conv_support;
 };
 
 enum sysfs_printing_mode {
@@ -2135,6 +2193,10 @@ struct dp_soc {
 	struct dp_rx_reinject_history *rx_reinject_ring_history;
 #endif
 
+#ifdef WLAN_FEATURE_DP_MON_STATUS_RING_HISTORY
+	struct dp_mon_status_ring_history *mon_status_ring_history;
+#endif
+
 #ifdef WLAN_FEATURE_DP_TX_DESC_HISTORY
 	struct dp_tx_tcl_history *tx_tcl_history;
 	struct dp_tx_comp_history *tx_comp_history;
@@ -2212,10 +2274,10 @@ struct dp_soc {
 	uint8_t da_war_enabled;
 	/* number of active ast entries */
 	uint32_t num_ast_entries;
-	/* rdk rate statistics context at soc level*/
+	/* peer extended rate statistics context at soc level*/
 	struct cdp_soc_rate_stats_ctx *rate_stats_ctx;
-	/* rdk rate statistics control flag */
-	bool rdkstats_enabled;
+	/* peer extended rate statistics control flag */
+	bool peerstats_enabled;
 
 	/* 8021p PCP-TID map values */
 	uint8_t pcp_tid_map[PCP_TID_MAP_MAX];
@@ -2246,7 +2308,7 @@ struct dp_soc {
 	struct dp_rx_fst *rx_fst;
 #ifdef WLAN_SUPPORT_RX_FISA
 	uint8_t fisa_enable;
-
+	uint8_t fisa_lru_del_enable;
 	/**
 	 * Params used for controlling the fisa aggregation dynamically
 	 */
@@ -2254,6 +2316,13 @@ struct dp_soc {
 		qdf_atomic_t skip_fisa;
 		uint8_t fisa_force_flush[MAX_REO_DEST_RINGS];
 	} skip_fisa_param;
+
+	/**
+	 * CMEM address and size for FST in CMEM, This is the address
+	 * shared during init time.
+	 */
+	uint64_t fst_cmem_base;
+	uint64_t fst_cmem_size;
 #endif
 #endif /* WLAN_SUPPORT_RX_FLOW_TAG || WLAN_SUPPORT_RX_FISA */
 	/* SG supported for msdu continued packets from wbm release ring */
@@ -2294,10 +2363,12 @@ struct dp_soc {
 #ifdef WLAN_DP_FEATURE_SW_LATENCY_MGR
 	struct dp_swlm swlm;
 #endif
+
 #ifdef FEATURE_RUNTIME_PM
+	/* DP Rx timestamp */
+	qdf_time_t rx_last_busy;
 	/* Dp runtime refcount */
 	qdf_atomic_t dp_runtime_refcount;
-
 	/* Dp tx pending count in RTPM */
 	qdf_atomic_t tx_pending_rtpm;
 #endif
@@ -2336,7 +2407,9 @@ struct dp_soc {
 	/* CMEM buffer target reserved for host usage */
 	uint64_t cmem_base;
 	/* CMEM size in bytes */
-	uint64_t cmem_size;
+	uint64_t cmem_total_size;
+	/* CMEM free size in bytes */
+	uint64_t cmem_avail_size;
 
 	/* SOC level feature flags */
 	struct dp_soc_features features;
@@ -2361,6 +2434,13 @@ struct dp_soc {
 
 	unsigned long vdev_stats_id_map;
 	bool txmon_hw_support;
+
+#ifdef DP_UMAC_HW_RESET_SUPPORT
+	struct dp_soc_umac_reset_ctx umac_reset_ctx;
+#endif
+	/* PPDU to link_id mapping parameters */
+	uint8_t link_id_offset;
+	uint8_t link_id_bits;
 };
 
 #ifdef IPA_OFFLOAD
@@ -2534,9 +2614,17 @@ struct rx_protocol_tag_map {
 	uint16_t tag;
 };
 
+/**
+ * rx_protocol_tag_stats - protocol statistics
+ * @tag_ctr: number of rx msdus matching this tag
+ * @mon_tag_ctr: number of msdus matching this tag in mon path
+ */
 #ifdef WLAN_SUPPORT_RX_TAG_STATISTICS
 struct rx_protocol_tag_stats {
 	uint32_t tag_ctr;
+#ifdef QCA_TEST_MON_PF_TAGS_STATS
+	uint32_t mon_tag_ctr;
+#endif
 };
 #endif /* WLAN_SUPPORT_RX_TAG_STATISTICS */
 
@@ -2898,9 +2986,23 @@ struct dp_pdev {
 #ifdef WLAN_FEATURE_MARK_FIRST_WAKEUP_PACKET
 	uint8_t is_first_wakeup_packet;
 #endif
+#ifdef CONNECTIVITY_PKTLOG
+	/* packetdump callback functions */
+	ol_txrx_pktdump_cb dp_tx_packetdump_cb;
+	ol_txrx_pktdump_cb dp_rx_packetdump_cb;
+#endif
 };
 
 struct dp_peer;
+
+#ifdef DP_RX_UDP_OVER_PEER_ROAM
+#define WLAN_ROAM_PEER_AUTH_STATUS_NONE 0x0
+/**
+ * This macro is equivalent to macro ROAM_AUTH_STATUS_AUTHENTICATED used
+ * in connection mgr
+ */
+#define WLAN_ROAM_PEER_AUTH_STATUS_AUTHENTICATED 0x2
+#endif
 
 /* VDEV structure for data path state */
 struct dp_vdev {
@@ -2931,7 +3033,7 @@ struct dp_vdev {
 #ifdef QCA_SUPPORT_WDS_EXTENDED
 	bool wds_ext_enabled;
 #endif /* QCA_SUPPORT_WDS_EXTENDED */
-
+	bool drop_3addr_mcast;
 #ifdef WLAN_VENDOR_SPECIFIC_BAR_UPDATE
 	bool skip_bar_update;
 	unsigned long skip_bar_update_last_ts;
@@ -2996,6 +3098,9 @@ struct dp_vdev {
 #ifdef WLAN_FEATURE_11BE_MLO
 	/* MLO MAC address corresponding to vdev */
 	union dp_align_mac_addr mld_mac_addr;
+#if defined(WLAN_MLO_MULTI_CHIP) && defined(WLAN_MCAST_MLO)
+	bool mlo_vdev;
+#endif
 #endif
 
 	/* node in the pdev's list of vdevs */
@@ -3087,9 +3192,10 @@ struct dp_vdev {
 	struct cdp_vdev_stats stats;
 
 	/* Is this a proxySTA VAP */
-	bool proxysta_vdev;
-	/* Is isolation mode enabled */
-	bool isolation_vdev;
+	uint8_t proxysta_vdev : 1, /* Is this a proxySTA VAP */
+		wrap_vdev : 1, /* Is this a QWRAP AP VAP */
+		isolation_vdev : 1, /* Is this a QWRAP AP VAP */
+		reserved : 5; /* Reserved */
 
 #ifdef QCA_LL_TX_FLOW_CONTROL_V2
 	struct dp_tx_desc_pool_s *pool;
@@ -3196,6 +3302,10 @@ struct dp_vdev {
 	/* hw tx delay stats enable */
 	uint8_t hw_tx_delay_stats_enabled;
 #endif
+#ifdef DP_RX_UDP_OVER_PEER_ROAM
+	uint32_t roaming_peer_status;
+	union dp_align_mac_addr roaming_peer_mac;
+#endif
 };
 
 enum {
@@ -3301,6 +3411,16 @@ struct dp_mlo_flow_override_info {
 	uint8_t chip_id;
 	uint8_t tidmask;
 	uint8_t cache_set_num;
+};
+
+/**
+ * struct dp_mlo_link_info - Link info
+ * @peer_chip_id: Peer Chip ID
+ * @vdev_id: Vdev ID
+ */
+struct dp_mlo_link_info {
+	uint8_t peer_chip_id;
+	uint8_t vdev_id;
 };
 
 #ifdef WLAN_SUPPORT_MSCS
@@ -3432,6 +3552,8 @@ typedef void *dp_txrx_ref_handle;
  * @last_tx_ts: last timestamp in jiffies when tx comp occurred
  * @avg_sojourn_msdu[CDP_DATA_TID_MAX]: Avg sojourn msdu stat
  * @protocol_trace_cnt: per-peer protocol counter
+ * @release_src_not_tqm: Counter to keep track of release source is not TQM
+ *			 in TX completion status processing
  */
 struct dp_peer_per_pkt_tx_stats {
 	struct cdp_pkt_info ucast;
@@ -3469,6 +3591,7 @@ struct dp_peer_per_pkt_tx_stats {
 #ifdef VDEV_PEER_PROTOCOL_COUNT
 	struct protocol_trace_count protocol_trace_cnt[CDP_TRACE_MAX];
 #endif
+	uint32_t release_src_not_tqm;
 };
 
 /**
@@ -3521,6 +3644,7 @@ struct dp_peer_per_pkt_tx_stats {
  * @mpdu_success_with_retries: mpdu retry count in case of successful tx
  * @su_be_ppdu_cnt: SU Tx packet count for 11BE
  * @mu_be_ppdu_cnt[TXRX_TYPE_MU_MAX]: MU Tx packet count for 11BE
+ * @punc_bw[MAX_PUNCTURED_MODE]: MSDU count for punctured bw
  */
 struct dp_peer_extd_tx_stats {
 	uint32_t stbc;
@@ -3569,6 +3693,7 @@ struct dp_peer_extd_tx_stats {
 #ifdef WLAN_FEATURE_11BE
 	struct cdp_pkt_type su_be_ppdu_cnt;
 	struct cdp_pkt_type mu_be_ppdu_cnt[TXRX_TYPE_MU_MAX];
+	uint32_t punc_bw[MAX_PUNCTURED_MODE];
 #endif
 };
 
@@ -3634,6 +3759,7 @@ struct dp_peer_per_pkt_rx_stats {
 #ifdef VDEV_PEER_PROTOCOL_COUNT
 	struct protocol_trace_count protocol_trace_cnt[CDP_TRACE_MAX];
 #endif
+	uint32_t mcast_3addr_drop;
 };
 
 /**
@@ -3681,6 +3807,7 @@ struct dp_peer_per_pkt_rx_stats {
  * @mpdu_retry_cnt: retries of mpdu in rx
  * @su_be_ppdu_cnt: SU Rx packet count for BE
  * @mu_be_ppdu_cnt[TXRX_TYPE_MU_MAX]: MU rx packet count for BE
+ * @punc_bw[MAX_PUNCTURED_MODE]: MSDU count for punctured bw
  */
 struct dp_peer_extd_rx_stats {
 	struct cdp_pkt_type pkt_type[DOT11_MAX];
@@ -3724,6 +3851,7 @@ struct dp_peer_extd_rx_stats {
 #ifdef WLAN_FEATURE_11BE
 	struct cdp_pkt_type su_be_ppdu_cnt;
 	struct cdp_pkt_type mu_be_ppdu_cnt[TXRX_TYPE_MU_MAX];
+	uint32_t punc_bw[MAX_PUNCTURED_MODE];
 #endif
 };
 
@@ -3767,6 +3895,8 @@ struct dp_peer_stats {
  * @stats: Peer stats
  * @delay_stats: Peer delay stats
  * @jitter_stats: Peer jitter stats
+ * @bw: bandwidth of peer connection
+ * @mpdu_retry_threshold: MPDU retry threshold to increment tx bad count
  */
 struct dp_txrx_peer {
 	/* Core TxRx Peer */
@@ -3822,6 +3952,10 @@ struct dp_txrx_peer {
 #ifdef CONFIG_SAWF
 	struct dp_peer_sawf_stats *sawf_stats;
 #endif
+#ifdef DP_PEER_EXTENDED_API
+	enum cdp_peer_bw bw;
+	uint8_t mpdu_retry_threshold;
+#endif
 };
 
 /* Peer structure for data path state */
@@ -3862,7 +3996,8 @@ struct dp_peer {
 		authorize:1, /* Set when authorized */
 		valid:1, /* valid bit */
 		delete_in_progress:1, /* Indicate kickout sent */
-		sta_self_peer:1; /* Indicate STA self peer */
+		sta_self_peer:1, /* Indicate STA self peer */
+		is_tdls_peer:1; /* Indicate TDLS peer */
 
 #ifdef WLAN_FEATURE_11BE_MLO
 	uint8_t first_link:1, /* first link peer for MLO */

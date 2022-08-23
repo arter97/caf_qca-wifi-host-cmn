@@ -571,6 +571,37 @@
  *
  *	The attributes used with this command are defined in
  *	enum qca_wlan_vendor_attr_mcc_quota.
+ *
+ * @QCA_NL80211_VENDOR_SUBCMD_DRIVER_READY: Event indicating to the
+ *	user space that the driver is ready for operations again after
+ *	recovering from internal failures. This occurs following a failure
+ *	that was indicated by @QCA_NL80211_VENDOR_SUBCMD_HANG.
+ *
+ * @QCA_NL80211_VENDOR_SUBCMD_GET_RADIO_COMBINATION_MATRIX: Vendor command to
+ *	get the WLAN radio combinations matrix supported by the device which
+ *	provides the device simultaneous radio configurations such as
+ *	standalone, dual band simultaneous, and single band simultaneous.
+ *
+ *	The attributes used with this command are defined in
+ *	enum qca_wlan_vendor_attr_radio_combination_matrix.
+ *
+ * @QCA_NL80211_VENDOR_SUBCMD_PASN: Subcommand used to offload preassociation
+ *	security negotiation and key generation to user space.
+ *
+ *	When used as an event, the driver requests userspace to trigger the PASN
+ *	authentication or dropping of a PTKSA for the indicated peer devices.
+ *	When used as a command response, userspace indicates a consolidated
+ *	status report for all the peers that were requested for.
+ *
+ *	The attributes used with this command are defined in
+ *	enum qca_wlan_vendor_attr_pasn.
+ *
+ * @QCA_NL80211_VENDOR_SUBCMD_SECURE_RANGING_CONTEXT: Subcommand used to set
+ *	secure ranging context such as TK and LTF keyseed for each peer
+ *	requested by the driver with a @QCA_NL80211_VENDOR_SUBCMD_PASN event.
+ *
+ *	The attributes used with this command are defined in
+ *	enum qca_wlan_vendor_attr_secure_ranging_ctx.
  */
 
 enum qca_nl80211_vendor_subcmds {
@@ -812,6 +843,11 @@ enum qca_nl80211_vendor_subcmds {
 	QCA_NL80211_VENDOR_SUBCMD_ROAM_EVENTS = 203,
 	QCA_NL80211_VENDOR_SUBCMD_RATEMASK_CONFIG = 204,
 	QCA_NL80211_VENDOR_SUBCMD_MCC_QUOTA = 205,
+	/* 206..212 - reserved for QCA */
+	QCA_NL80211_VENDOR_SUBCMD_GET_RADIO_COMBINATION_MATRIX = 213,
+	QCA_NL80211_VENDOR_SUBCMD_DRIVER_READY = 214,
+	QCA_NL80211_VENDOR_SUBCMD_PASN = 215,
+	QCA_NL80211_VENDOR_SUBCMD_SECURE_RANGING_CONTEXT = 216,
 };
 
 enum qca_wlan_vendor_tos {
@@ -4120,7 +4156,42 @@ enum qca_wlan_vendor_attr_nd_offload {
  *	synchronous (in vendor command reply) to the request. Each TWT
  *	operation is specifically mentioned (against its respective)
  *	documentation) to support either of these or both modes.
- *
+ * @QCA_WLAN_VENDOR_FEATURE_USE_ADD_DEL_VIRTUAL_INTF_FOR_NDI: Flag indicates
+ * 	that the driver requires add/del virtual interface path using the
+ *	generic nl80211 commands for NDP interface create/delete and to
+ *	register/unregister the netdev instead of creating/deleting the NDP
+ *	interface using the vendor commands
+ *	QCA_WLAN_VENDOR_ATTR_NDP_INTERFACE_CREATE and
+ *	QCA_WLAN_VENDOR_ATTR_NDP_INTERFACE_DELETE. With the latest kernel
+ * 	(5.12 version onward), interface creation/deletion is not allowed using
+ * 	vendor commands as it leads to a deadlock while acquiring the RTNL_LOCK
+ * 	during the register/unregister of netdev. Create and delete NDP
+ * 	interface using NL80211_CMD_NEW_INTERFACE and NL80211_CMD_DEL_INTERFACE
+ * 	commands respectively if the driver advertises this capability set.
+ * @QCA_WLAN_VENDOR_FEATURE_SECURE_LTF_STA: Flag indicates that the device in
+ *	station mode supports secure LTF. If NL80211_EXT_FEATURE_SECURE_LTF is
+ *	set, then QCA_WLAN_VENDOR_FEATURE_SECURE_LTF_STA will be ignored.
+ * @QCA_WLAN_VENDOR_FEATURE_SECURE_LTF_AP: Flag indicates that the device in AP
+ *	mode supports secure LTF. If NL80211_EXT_FEATURE_SECURE_LTF is set, then
+ *	QCA_WLAN_VENDOR_FEATURE_SECURE_LTF_AP will be ignored.
+ * @QCA_WLAN_VENDOR_FEATURE_SECURE_RTT_STA: Flag indicates that the device in
+ *	station mode supports secure RTT measurement exchange. If
+ *	NL80211_EXT_FEATURE_SECURE_RTT is set,
+ *	QCA_WLAN_VENDOR_FEATURE_SECURE_RTT_STA will be ignored.
+ * @QCA_WLAN_VENDOR_FEATURE_SECURE_RTT_AP: Flag indicates that the device in AP
+ *	mode supports secure RTT measurement exchange. If
+ *	NL80211_EXT_FEATURE_SECURE_RTT is set,
+ *	QCA_WLAN_VENDOR_FEATURE_SECURE_RTT_AP will be ignored.
+ * @QCA_WLAN_VENDOR_FEATURE_PROT_RANGE_NEGO_AND_MEASURE_STA: Flag indicates that
+ *	the device in station mode supports protection of range negotiation and
+ *	measurement management frames. If
+ *	NL80211_EXT_FEATURE_PROT_RANGE_NEGO_AND_MEASURE is set, then
+ *	QCA_WLAN_VENDOR_FEATURE_PROT_RANGE_NEGO_AND_MEASURE_STA will be ignored.
+ * @QCA_WLAN_VENDOR_FEATURE_PROT_RANGE_NEGO_AND_MEASURE_AP: Flag indicates that
+ *	the device in AP mode supports protection of range negotiation and
+ *	measurement management frames. If
+ *	NL80211_EXT_FEATURE_PROT_RANGE_NEGO_AND_MEASURE is set, then
+ *	QCA_WLAN_VENDOR_FEATURE_PROT_RANGE_NEGO_AND_MEASURE_AP will be ignored.
  * @NUM_QCA_WLAN_VENDOR_FEATURES: Number of assigned feature bits
  */
 enum qca_wlan_vendor_features {
@@ -4139,7 +4210,13 @@ enum qca_wlan_vendor_features {
 	QCA_WLAN_VENDOR_FEATURE_ADAPTIVE_11R = 12,
 	QCA_WLAN_VENDOR_FEATURE_CONCURRENT_BAND_SESSIONS = 13,
 	QCA_WLAN_VENDOR_FEATURE_TWT_ASYNC_SUPPORT = 14,
-
+	QCA_WLAN_VENDOR_FEATURE_USE_ADD_DEL_VIRTUAL_INTF_FOR_NDI = 15,
+	QCA_WLAN_VENDOR_FEATURE_SECURE_LTF_STA		= 16,
+	QCA_WLAN_VENDOR_FEATURE_SECURE_LTF_AP		= 17,
+	QCA_WLAN_VENDOR_FEATURE_SECURE_RTT_STA		= 18,
+	QCA_WLAN_VENDOR_FEATURE_SECURE_RTT_AP		= 19,
+	QCA_WLAN_VENDOR_FEATURE_PROT_RANGE_NEGO_AND_MEASURE_STA = 20,
+	QCA_WLAN_VENDOR_FEATURE_PROT_RANGE_NEGO_AND_MEASURE_AP = 21,
 	NUM_QCA_WLAN_VENDOR_FEATURES /* keep last */
 };
 
@@ -4321,6 +4398,12 @@ enum wifi_logger_supported_features {
  * Used with command to configure ACS operation for EHT mode.
  * Disable (flag attribute not present) - EHT disabled and
  * Enable (flag attribute present) - EHT enabled.
+ *
+ * @QCA_WLAN_VENDOR_ATTR_ACS_LAST_SCAN_AGEOUT_TIME: Optional (u32).
+ * Used with command to configure how older scan can be considered for ACS
+ * scoring. In case scan was performed on partial set of channels configured
+ * with this command, within last QCA_WLAN_VENDOR_ATTR_ACS_LAST_SCAN_AGEOUT_TIME
+ * (in ms), then scan only remaining channels.
  */
 enum qca_wlan_vendor_attr_acs_offload {
 	QCA_WLAN_VENDOR_ATTR_ACS_CHANNEL_INVALID = 0,
@@ -4343,6 +4426,7 @@ enum qca_wlan_vendor_attr_acs_offload {
 	QCA_WLAN_VENDOR_ATTR_ACS_EDMG_CHANNEL = 17,
 	QCA_WLAN_VENDOR_ATTR_ACS_PUNCTURE_BITMAP = 18,
 	QCA_WLAN_VENDOR_ATTR_ACS_EHT_ENABLED = 19,
+	QCA_WLAN_VENDOR_ATTR_ACS_LAST_SCAN_AGEOUT_TIME = 20,
 
 	/* keep last */
 	QCA_WLAN_VENDOR_ATTR_ACS_AFTER_LAST,
@@ -4733,7 +4817,10 @@ enum qca_wlan_vendor_attr_config {
 	QCA_WLAN_VENDOR_ATTR_CONFIG_DISCONNECT_IES = 58,
 
 	/* 8-bit unsigned value for ELNA bypass.
-	 * 1-Enable, 0-Disable
+	 * 0 - Disable eLNA bypass.
+	 * 1 - Enable eLNA bypass.
+	 * 2 - Reset eLNA bypass configuration, the driver should
+	 *	revert to the default configuration of eLNA bypass.
 	 */
 	QCA_WLAN_VENDOR_ATTR_CONFIG_ELNA_BYPASS = 59,
 
@@ -5227,9 +5314,23 @@ enum qca_wlan_vendor_attr_ndp_params {
  * enum qca_wlan_ndp_sub_cmd - NDP sub comands types for
  * QCA_NL80211_VENDOR_SUBCMD_NDP.
  * @QCA_WLAN_VENDOR_ATTR_NDP_INVALID: invalid value
- * @QCA_WLAN_VENDOR_ATTR_NDP_INTERFACE_CREATE: create a ndi
- * @QCA_WLAN_VENDOR_ATTR_NDP_INTERFACE_DELETE: delete a ndi
- * @QCA_WLAN_VENDOR_ATTR_NDP_INITIATOR_REQUEST: initiate a ndp session
+ * @QCA_WLAN_VENDOR_ATTR_NDP_INTERFACE_CREATE: Command to create a NAN
+ * data path interface.
+ * This command was initially designed to both create and start a NAN
+ * data path interface. However, changes to Linux 5.12 no longer allow
+ * interface creation via vendor commands. When the driver advertises
+ * QCA_WLAN_VENDOR_FEATURE_USE_ADD_DEL_VIRTUAL_INTF_FOR_NDI
+ * userspace must explicitly first create the interface using
+ * NL80211_CMD_NEW_INTERFACE before subsequently invoking this command
+ * to start the interface.
+ * @QCA_WLAN_VENDOR_ATTR_NDP_INTERFACE_DELETE: command to delete a NAN
+ * data path interface.
+ * This command was initially designed to both stop and delete a NAN
+ * data path interface. However, changes to Linux 5.12 no longer allow
+ * interface deletion via vendor commands. When the driver advertises
+ * QCA_WLAN_VENDOR_FEATURE_USE_ADD_DEL_VIRTUAL_INTF_FOR_NDI
+ * userspace must explicitly delete the interface using
+ * NL80211_CMD_DEL_INTERFACE after calling this command.
  * @QCA_WLAN_VENDOR_ATTR_NDP_INITIATOR_RESPONSE: response for above
  * @QCA_WLAN_VENDOR_ATTR_NDP_RESPONDER_REQUEST: respond to ndp session
  * @QCA_WLAN_VENDOR_ATTR_NDP_RESPONDER_RESPONSE: response for above
@@ -8968,6 +9069,18 @@ enum qca_wlan_vendor_attr_wifi_test_config {
 	 */
 	QCA_WLAN_VENDOR_ATTR_WIFI_TEST_CONFIG_BCAST_TWT_SUPPORT = 57,
 
+	/* 8-bit unsigned value to configure the driver/firmware to allow eMLSR
+	 * mode for 802.11be MLO capable devices. If the attribute is set to 1,
+	 * and if the FW supports this capability too, then the STA host
+	 * advertises this capability to AP over assoc request frame. This
+	 * attribute will not have any effect on legacy devices with no 802.11be
+	 * support.
+	 * 0 - Default behavior
+	 * 1 - Enable eMLSR (Enhanced Multi-link Single-Radio) mode
+	 * This attribute is used to configure the testbed device.
+	 */
+	QCA_WLAN_VENDOR_ATTR_WIFI_TEST_CONFIG_11BE_EMLSR_MODE = 58,
+
 	/* keep last */
 	QCA_WLAN_VENDOR_ATTR_WIFI_TEST_CONFIG_AFTER_LAST,
 	QCA_WLAN_VENDOR_ATTR_WIFI_TEST_CONFIG_MAX =
@@ -11881,6 +11994,82 @@ enum qca_wlan_vendor_attr_mcc_quota {
 };
 
 /**
+ * enum qca_wlan_vendor_attr_supported_radio_cfg - Attributes for
+ * radio configurations present in each radio combination.
+ *
+ * @QCA_WLAN_VENDOR_ATTR_SUPPORTED_RADIO_CFG_BAND: u32 attribute indicates
+ * the band info in the radio configuration. Uses the enum qca_set_band values.
+ *
+ * @QCA_WLAN_VENDOR_ATTR_SUPPORTED_RADIO_CFG_ANTENNA: u8 attribute indicates
+ * the number of antennas info in the radio configuration.
+ */
+enum qca_wlan_vendor_attr_supported_radio_cfg {
+	QCA_WLAN_VENDOR_ATTR_SUPPORTED_RADIO_CFG_INVALID = 0,
+	QCA_WLAN_VENDOR_ATTR_SUPPORTED_RADIO_CFG_BAND = 1,
+	QCA_WLAN_VENDOR_ATTR_SUPPORTED_RADIO_CFG_ANTENNA = 2,
+
+	/* keep last */
+	QCA_WLAN_VENDOR_ATTR_SUPPORTED_RADIO_CFG_LAST,
+	QCA_WLAN_VENDOR_ATTR_SUPPORTED_RADIO_CFG_MAX =
+	QCA_WLAN_VENDOR_ATTR_SUPPORTED_RADIO_CFG_LAST - 1,
+};
+
+/**
+ * enum qca_wlan_vendor_attr_radio_combination - Attributes for
+ * radio combinations supported by the device.
+ *
+ * @QCA_WLAN_VENDOR_ATTR_RADIO_COMBINATIONS_CFGS: Nested attribute
+ * provides the radio configurations present in the radio combination.
+ * Uses the enum qca_wlan_vendor_attr_supported_radio_cfg attributes.
+ * This attribute provides the values for radio combination matrix.
+ * For standalone config, the number of config values is one and the config
+ * carries the band and antenna information for standalone configuration. For
+ * Dual Band Simultaneous (DBS)/Single Band Simultaneous (SBS) mode
+ * configuration the number of config values is two and the config carries the
+ * band and antenna information for each simultaneous radio.
+ */
+enum qca_wlan_vendor_attr_radio_combination {
+	QCA_WLAN_VENDOR_ATTR_RADIO_COMBINATIONS_INVALID = 0,
+	QCA_WLAN_VENDOR_ATTR_RADIO_COMBINATIONS_CFGS = 1,
+
+	/* keep last */
+	QCA_WLAN_VENDOR_ATTR_RADIO_COMBINATIONS_LAST,
+	QCA_WLAN_VENDOR_ATTR_RADIO_COMBINATIONS_MAX =
+	QCA_WLAN_VENDOR_ATTR_RADIO_COMBINATIONS_LAST - 1,
+};
+
+/**
+ * enum qca_wlan_vendor_attr_radio_combination_matrix - Attributes used by
+ * %QCA_NL80211_VENDOR_SUBCMD_GET_RADIO_COMBINATION_MATRIX
+ *
+ * @QCA_WLAN_VENDOR_ATTR_RADIO_MATRIX_SUPPORTED_CFGS: Nested attribute
+ * provides the radio combinations supported by the device.
+ * Uses the enum qca_wlan_vendor_attr_radio_combination attributes.
+ * For example, in the radio combination matrix for a device which has two
+ * radios, where one radio is capable of 2.4 GHz 2X2 only and another radio is
+ * capable of either 5 GHz or 6 GHz 2X2, the possible number of radio
+ * combinations is 5 and the radio combinations are
+ * {{{2.4 GHz 2X2}}, //Standalone 2.4 GHz
+ * {{5 GHz 2X2}}, //Standalone 5 GHz
+ * {{6 GHz 2X2}}, //Standalone 6 GHz
+ * {{2.4 GHz 2X2}, {5 GHz 2X2}}, //2.4 GHz + 5 GHz DBS
+ * {{2.4 GHz 2X2}, {6 GHz 2X2}}} //2.4 GHz + 6 GHz DBS
+ * The band and antenna info together as nested data provides one radio config.
+ * Standalone configuration has one config with band and antenna nested data.
+ * Dual Band Simultaneous (DBS)/Single Band Simultaneous (SBS) configuration
+ * have two nested band and antenna info data.
+ */
+enum qca_wlan_vendor_attr_radio_combination_matrix {
+	QCA_WLAN_VENDOR_ATTR_RADIO_MATRIX_INVALID = 0,
+	QCA_WLAN_VENDOR_ATTR_RADIO_MATRIX_SUPPORTED_CFGS = 1,
+
+	/* keep last */
+	QCA_WLAN_VENDOR_ATTR_RADIO_MATRIX_LAST,
+	QCA_WLAN_VENDOR_ATTR_RADIO_MATRIX_MAX =
+	QCA_WLAN_VENDOR_ATTR_RADIO_MATRIX_LAST - 1,
+};
+
+/**
  * enum qca_wlan_vendor_attr_mdns_offload - Attributes used by
  * %QCA_NL80211_VENDOR_SUBCMD_MDNS_OFFLOAD vendor command.
  *
@@ -12020,7 +12209,8 @@ enum qca_wlan_vendor_attr_mdns_offload {
  * QCA_WLAN_VENDOR_ATTR_DIAG_IFINDEX,
  * QCA_WLAN_VENDOR_ATTR_DIAG_IS_RETRY_FRAME,
  * QCA_WLAN_VENDOR_ATTR_DIAG_FIRMWARE_TIMESTAMP,
- * QCA_WLAN_VENDOR_ATTR_DIAG_KERNEL_TIMESTAMP.
+ * QCA_WLAN_VENDOR_ATTR_DIAG_KERNEL_TIMESTAMP,
+ * QCA_WLAN_VENDOR_ATTR_DIAG_ASSOC_ID.
  *
  * @QCA_WLAN_VENDOR_DIAG_EVENT_TYPE_DEAUTH_RX: Diag event sent from
  * driver/userspace when device receives a deauthentication response. Uses the
@@ -12104,7 +12294,8 @@ enum qca_wlan_vendor_attr_mdns_offload {
  * QCA_WLAN_VENDOR_ATTR_DIAG_FREQ,
  * QCA_WLAN_VENDOR_ATTR_DIAG_IFINDEX,
  * QCA_WLAN_VENDOR_ATTR_DIAG_FIRMWARE_TIMESTAMP,
- * QCA_WLAN_VENDOR_ATTR_DIAG_KERNEL_TIMESTAMP.
+ * QCA_WLAN_VENDOR_ATTR_DIAG_KERNEL_TIMESTAMP,
+ * QCA_WLAN_VENDOR_ATTR_DIAG_BT_COEX_ACTIVE.
  *
  * @QCA_WLAN_VENDOR_DIAG_EVENT_TYPE_ROAM_SCORE_CURR_AP: Diag event sent from
  * driver/firmware to provide Roam information of the current AP. Uses the
@@ -12332,6 +12523,30 @@ enum qca_wlan_vendor_attr_mdns_offload {
  * QCA_WLAN_VENDOR_ATTR_DIAG_HOST_TIMESTAMP,
  * QCA_WLAN_VENDOR_ATTR_DIAG_IFINDEX,
  * QCA_WLAN_VENDOR_ATTR_DIAG_KERNEL_TIMESTAMP.
+ *
+ * @QCA_WLAN_VENDOR_DIAG_EVENT_TYPE_REASSOC_REQ: Diag event sent from driver
+ * /firmware to indicate Reassocation request. Uses the following attributes
+ * of enum qca_wlan_vendor_attr_diag:
+ * QCA_WLAN_VENDOR_ATTR_DIAG_KERNEL_TIMESTAMP,
+ * QCA_WLAN_VENDOR_ATTR_DIAG_BSSID,
+ * QCA_WLAN_VENDOR_ATTR_DIAG_RSSI,
+ * QCA_WLAN_VENDOR_ATTR_DIAG_SEQUENCE_NUMBER,
+ * QCA_WLAN_VENDOR_ATTR_DIAG_FRAME_TX_STATUS,
+ * QCA_WLAN_VENDOR_ATTR_DIAG_IFINDEX,
+ * QCA_WLAN_VENDOR_ATTR_DIAG_IS_RETRY_FRAME,
+ * QCA_WLAN_VENDOR_ATTR_DIAG_FIRMWARE_TIMESTAMP.
+ *
+ * @QCA_WLAN_VENDOR_DIAG_EVENT_TYPE_REASSOC_RES: Diag event sent from driver
+ * /firmware to indicate Reassocation response. Uses the following attributes
+ * of enum qca_wlan_vendor_attr_diag:
+ * QCA_WLAN_VENDOR_ATTR_DIAG_KERNEL_TIMESTAMP,
+ * QCA_WLAN_VENDOR_ATTR_DIAG_BSSID,
+ * QCA_WLAN_VENDOR_ATTR_DIAG_SEQUENCE_NUMBER,
+ * QCA_WLAN_VENDOR_ATTR_DIAG_STATUS_CODE,
+ * QCA_WLAN_VENDOR_ATTR_DIAG_ASSOC_ID,
+ * QCA_WLAN_VENDOR_ATTR_DIAG_IFINDEX,
+ * QCA_WLAN_VENDOR_ATTR_DIAG_IS_RETRY_FRAME,
+ * QCA_WLAN_VENDOR_ATTR_DIAG_FIRMWARE_TIMESTAMP.
  */
 enum qca_vendor_attr_diag_event_type {
 	QCA_WLAN_VENDOR_DIAG_EVENT_TYPE_CONNECTING = 0,
@@ -12371,6 +12586,8 @@ enum qca_vendor_attr_diag_event_type {
 	QCA_WLAN_VENDOR_DIAG_EVENT_TYPE_EAP_RESPONSE = 34,
 	QCA_WLAN_VENDOR_DIAG_EVENT_TYPE_EAP_SUCCESS = 35,
 	QCA_WLAN_VENDOR_DIAG_EVENT_TYPE_EAP_FAILURE = 36,
+	QCA_WLAN_VENDOR_DIAG_EVENT_TYPE_REASSOC_REQ = 37,
+	QCA_WLAN_VENDOR_DIAG_EVENT_TYPE_REASSOC_RES = 38,
 
 	/* keep last */
 	QCA_WLAN_VENDOR_DIAG_EVENT_TYPE_AFTER_LAST,
@@ -12615,6 +12832,10 @@ enum qca_roam_sub_reason {
  * attribute indicates the kernel timestamp. Driver uses ktime_get() API
  * (Time from boot but not the time spent in suspend) to send in microseconds
  * to userspace.
+ *
+ * @QCA_WLAN_VENDOR_ATTR_DIAG_ASSOC_ID: Optional u16 attribute. This attribute
+ * indicates the association id received in the (re)association response frame
+ * defined in IEEE Std 802.11-2020 Figure 9-91-AID field format.
  */
 enum qca_wlan_vendor_attr_diag {
 	QCA_WLAN_VENDOR_ATTR_DIAG_INVALID = 0,
@@ -12667,6 +12888,7 @@ enum qca_wlan_vendor_attr_diag {
 	QCA_WLAN_VENDOR_ATTR_DIAG_EAP_TYPE = 47,
 	QCA_WLAN_VENDOR_ATTR_DIAG_EAP_LEN = 48,
 	QCA_WLAN_VENDOR_ATTR_DIAG_KERNEL_TIMESTAMP = 49,
+	QCA_WLAN_VENDOR_ATTR_DIAG_ASSOC_ID = 50,
 
 	/* keep last */
 	QCA_WLAN_VENDOR_ATTR_DIAG_AFTER_LAST,
@@ -12994,5 +13216,215 @@ enum qca_wlan_vendor_attr_ratemask_params {
 	QCA_WLAN_VENDOR_ATTR_RATEMASK_PARAMS_AFTER_LAST,
 	QCA_WLAN_VENDOR_ATTR_RATEMASK_PARAMS_MAX =
 	QCA_WLAN_VENDOR_ATTR_RATEMASK_PARAMS_AFTER_LAST - 1,
+};
+
+/**
+ * enum qca_wlan_vendor_flush_pending_policy: Represents values for
+ * the policy to flush pending frames, configured via
+ * %QCA_NL80211_VENDOR_SUBCMD_PEER_FLUSH_PENDING. This enumeration defines the
+ * valid values for %QCA_WLAN_VENDOR_ATTR_FLUSH_PENDING_POLICY.
+ *
+ * @QCA_WLAN_VENDOR_FLUSH_PENDING_POLICY_NONE: This value clears all
+ * the flush policy configured before. This command basically disables the
+ * flush config set by the user.
+ * @QCA_WLAN_VENDOR_FLUSH_PENDING_POLICY_IMMEDIATE: This value configures
+ * the flush policy to be immediate. All pending packets for the peer/TID are
+ * flushed when this command/policy is received.
+ * @QCA_WLAN_VENDOR_FLUSH_PENDING_POLICY_TWT_SP_END: This value configures
+ * the flush policy to the end of TWT SP. All pending packets for the peer/TID
+ * are flushed when the end of TWT SP is reached.
+ */
+enum qca_wlan_vendor_flush_pending_policy  {
+	QCA_WLAN_VENDOR_FLUSH_PENDING_POLICY_NONE = 0,
+	QCA_WLAN_VENDOR_FLUSH_PENDING_POLICY_IMMEDIATE = 1,
+	QCA_WLAN_VENDOR_FLUSH_PENDING_POLICY_TWT_SP_END = 2,
+};
+
+/**
+ * enum qca_wlan_vendor_attr_flush_pending - Attributes for
+ * flushing pending traffic in firmware.
+ *
+ * @QCA_WLAN_VENDOR_ATTR_PEER_ADDR: Configure peer MAC address.
+ * @QCA_WLAN_VENDOR_ATTR_AC: Configure access category of the pending
+ * packets. It is u8 value with bit 0~3 represent AC_BE, AC_BK,
+ * AC_VI, AC_VO respectively. Set the corresponding bit to 1 to
+ * flush packets with access category. This is optional. See below.
+ * @QCA_WLAN_VENDOR_ATTR_TID_MASK: Configure TID mask of the pending packets.
+ * It is a u32 value with bit 0-7 representing TID 0-7. Set corresponding
+ * bit to 1 to act upon the TID. This is optional. Either this attribute or
+ * %QCA_WLAN_VENDOR_ATTR_AC must be provided. If both are provided,
+ * %QCA_WLAN_VENDOR_ATTR_TID_MASK takes precedence. If neither are provided
+ * it is an error.
+ * @QCA_WLAN_VENDOR_ATTR_FLUSH_PENDING_POLICY: Policy of flushing the pending
+ * packets corresponding to the peer/TID provided. It is a u32 value,
+ * represented by %enum qca_wlan_vendor_flush_pending_policy. This
+ * value is honored only when TID mask is provided. This is not honored when AC
+ * mask is provided.
+ */
+enum qca_wlan_vendor_attr_flush_pending {
+	QCA_WLAN_VENDOR_ATTR_FLUSH_PENDING_INVALID = 0,
+	QCA_WLAN_VENDOR_ATTR_PEER_ADDR = 1,
+	QCA_WLAN_VENDOR_ATTR_AC = 2,
+	QCA_WLAN_VENDOR_ATTR_TID_MASK = 3,
+	QCA_WLAN_VENDOR_ATTR_FLUSH_PENDING_POLICY = 4,
+	/* keep last */
+	QCA_WLAN_VENDOR_ATTR_FLUSH_PENDING_AFTER_LAST,
+	QCA_WLAN_VENDOR_ATTR_FLUSH_PENDING_MAX =
+	QCA_WLAN_VENDOR_ATTR_FLUSH_PENDING_AFTER_LAST - 1,
+};
+
+/**
+ * enum qca_wlan_vendor_pasn_action - Action to authenticate (and generate keys
+ *	for) or drop existing PASN security association for the listed the
+ *	peers. Used by QCA_WLAN_VENDOR_ATTR_PASN_ACTION and sent from the driver
+ *	to userspace.
+ *
+ * @QCA_WLAN_VENDOR_PASN_ACTION_AUTH: Initiate PASN handshake with the peer
+ *	devices indicated with %QCA_WLAN_VENDOR_ATTR_PASN_PEER_MAC_ADDR.
+ * @QCA_WLAN_VENDOR_PASN_ACTION_DELETE_SECURE_RANGING_CONTEXT: Indication from
+ *	the driver to userspace to inform that the existing PASN keys of the
+ *	peer devices specified with %QCA_WLAN_VENDOR_ATTR_PASN_PEER_MAC_ADDR are
+ *	not valid anymore.
+ */
+enum qca_wlan_vendor_pasn_action {
+	QCA_WLAN_VENDOR_PASN_ACTION_AUTH,
+	QCA_WLAN_VENDOR_PASN_ACTION_DELETE_SECURE_RANGING_CONTEXT,
+};
+
+/**
+ * enum qca_wlan_vendor_attr_pasn_peer: Defines the nested attributes used in
+ *	QCA_WLAN_VENDOR_ATTR_PASN_PEERS.
+ *
+ * @QCA_WLAN_VENDOR_ATTR_PASN_PEER_SRC_ADDR: This attribute is optional in the
+ *	event from the driver to userspace and represents the local MAC address
+ *	to be used for PASN handshake. When this attribute is present, userspace
+ *	shall use the source address specified in this attribute by the driver
+ *	for PASN handshake with peer device.
+ *	This attribute is required in a command response from userspace to the
+ *	driver and represents the MAC address that was used in PASN handshake
+ *	with the peer device.
+ * @QCA_WLAN_VENDOR_ATTR_PASN_PEER_MAC_ADDR: Indicates the MAC address of the
+ *	peer device to which PASN handshake is requested in an event from the
+ *	driver to userspace when QCA_WLAN_VENDOR_ATTR_PASN_ACTION is set to
+ *	QCA_WLAN_VENDOR_PASN_ACTION_AUTH.
+ *	Indicates the MAC address of the peer device for which the keys are to
+ *	be invalidated in an event from the driver to userspace when
+ *	QCA_WLAN_VENDOR_ATTR_PASN_ACTION is set to
+ *	QCA_WLAN_VENDOR_PASN_ACTION_DELETE_SECURE_RANGING_CONTEXT.
+ *	Indicates the MAC address of the peer device for which the status is
+ *	being sent in a status report from userspace to the driver.
+ * @QCA_WLAN_VENDOR_ATTR_PASN_PEER_LTF_KEYSEED_REQUIRED: NLA_FLAG attribute used
+ *	in the event from the driver to userspace. When set, userspace is
+ *	required to derive LTF key seed from KDK and set it to the driver.
+ * @QCA_WLAN_VENDOR_ATTR_PASN_PEER_STATUS_SUCCESS: NLA_FLAG attribute. This
+ *	attribute is used in the command response from userspace to the driver.
+ *	If present, it indicates the successful PASN handshake with the peer. If
+ *	this flag is not present, it indicates that the PASN handshake with the
+ *	peer device failed.
+ */
+enum qca_wlan_vendor_attr_pasn_peer {
+	QCA_WLAN_VENDOR_ATTR_PASN_PEER_INVALID = 0,
+	QCA_WLAN_VENDOR_ATTR_PASN_PEER_SRC_ADDR = 1,
+	QCA_WLAN_VENDOR_ATTR_PASN_PEER_MAC_ADDR = 2,
+	QCA_WLAN_VENDOR_ATTR_PASN_PEER_LTF_KEYSEED_REQUIRED = 3,
+	QCA_WLAN_VENDOR_ATTR_PASN_PEER_STATUS_SUCCESS = 4,
+
+	/* keep last */
+	QCA_WLAN_VENDOR_ATTR_PASN_PEER_AFTER_LAST,
+	QCA_WLAN_VENDOR_ATTR_PASN_PEER_MAX =
+	QCA_WLAN_VENDOR_ATTR_PASN_PEER_AFTER_LAST - 1,
+};
+
+/**
+ * enum qca_wlan_vendor_attr_pasn: Defines the attributes used in the
+ *	QCA_NL80211_VENDOR_SUBCMD_PASN command.
+ *
+ * @QCA_WLAN_VENDOR_ATTR_PASN_ACTION: u32 attribute, possible values are
+ *	defined in enum qca_wlan_vendor_pasn_action and used only in an event
+ *	from the driver to userspace.
+ * @QCA_WLAN_VENDOR_ATTR_PASN_PEERS: Nested attribute, used to pass PASN peer
+ *	details for each peer and used in both an event and a command response.
+ *	The nested attributes used inside QCA_WLAN_VENDOR_ATTR_PASN_PEERS are
+ *	defined in enum qca_wlan_vendor_attr_pasn_peer.
+ */
+enum qca_wlan_vendor_attr_pasn {
+	QCA_WLAN_VENDOR_ATTR_PASN_INVALID = 0,
+	QCA_WLAN_VENDOR_ATTR_PASN_ACTION = 1,
+	QCA_WLAN_VENDOR_ATTR_PASN_PEERS = 2,
+
+	/* keep last */
+	QCA_WLAN_VENDOR_ATTR_PASN_AFTER_LAST,
+	QCA_WLAN_VENDOR_ATTR_PASN_MAX =
+	QCA_WLAN_VENDOR_ATTR_PASN_AFTER_LAST - 1,
+};
+
+/**
+ * enum qca_wlan_vendor_secure_ranging_ctx_action - Used to add or delete
+ *	the ranging security context derived from PASN for each peer. Used in
+ *	QCA_WLAN_VENDOR_ATTR_SECURE_RANGING_CTX_ACTION.
+ *
+ * @QCA_WLAN_VENDOR_SECURE_RANGING_CTX_ACTION_ADD: Add the secure ranging
+ *	context for the peer.
+ * @QCA_WLAN_VENDOR_SECURE_RANGING_CTX_ACTION_DELETE: Delete the secure ranging
+ *	context for the peer.
+ */
+enum qca_wlan_vendor_secure_ranging_ctx_action {
+	QCA_WLAN_VENDOR_SECURE_RANGING_CTX_ACTION_ADD,
+	QCA_WLAN_VENDOR_SECURE_RANGING_CTX_ACTION_DELETE,
+};
+
+/**
+ * enum qca_wlan_vendor_sha_type - SHA types. Used to configure the SHA type
+ *	used for deriving PASN keys to the driver. Used in
+ *	QCA_WLAN_VENDOR_ATTR_SECURE_RANGING_CTX_SHA_TYPE
+ * @QCA_WLAN_VENDOR_SHA_256: SHA-256
+ * @QCA_WLAN_VENDOR_SHA_384: SHA-384
+ */
+enum qca_wlan_vendor_sha_type {
+	QCA_WLAN_VENDOR_SHA_256,
+	QCA_WLAN_VENDOR_SHA_384,
+};
+
+/**
+ * enum qca_wlan_vendor_attr_secure_ranging_ctx: Defines the attributes used
+ *	to set security context for the PASN peer from userspace to the driver.
+ *	Used with QCA_NL80211_VENDOR_SUBCMD_SECURE_RANGING_CONTEXT.
+ *
+ * @QCA_WLAN_VENDOR_ATTR_SECURE_RANGING_CTX_ACTION: u32 attribute, possible
+ *	values are defined in enum qca_wlan_vendor_secure_ranging_ctx_action
+ * @QCA_WLAN_VENDOR_ATTR_SECURE_RANGING_CTX_SRC_ADDR: The local MAC address that
+ *	was used during the PASN handshake.
+ * @QCA_WLAN_VENDOR_ATTR_SECURE_RANGING_CTX_PEER_MAC_ADDR: The MAC address of
+ *	the peer device for which secure ranging context is being configured.
+ * @QCA_WLAN_VENDOR_ATTR_SECURE_RANGING_CTX_SHA_TYPE: u32 attribute, defines the
+ *	hash algorithm to be used, possible values are defined in enum
+ *	qca_wlan_vendor_sha_type.
+ * @QCA_WLAN_VENDOR_ATTR_SECURE_RANGING_CTX_TK: Variable length attribute, holds
+ *	the temporal key generated from the PASN handshake. The length of this
+ *	attribute is dependent on the value of
+ *	%QCA_WLAN_VENDOR_ATTR_SECURE_RANGING_CTX_CIPHER.
+ * @QCA_WLAN_VENDOR_ATTR_SECURE_RANGING_CTX_CIPHER: cipher suite to use with the
+ *	TK, u32, as defined in IEEE Std 802.11-2020, 9.4.2.24.2 (Cipher suites)
+ *	(e.g., 0x000FAC04).
+ * @QCA_WLAN_VENDOR_ATTR_SECURE_RANGING_CTX_LTF_KEYSEED: Variable length
+ *	attribute, holds the LTF keyseed derived from KDK of PASN handshake.
+ *	The length of this attribute is dependent on the value of
+ *	%QCA_WLAN_VENDOR_ATTR_SECURE_RANGING_CTX_SHA_TYPE.
+ *
+ */
+enum qca_wlan_vendor_attr_secure_ranging_ctx {
+	QCA_WLAN_VENDOR_ATTR_SECURE_RANGING_CTX_INVALID = 0,
+	QCA_WLAN_VENDOR_ATTR_SECURE_RANGING_CTX_ACTION = 1,
+	QCA_WLAN_VENDOR_ATTR_SECURE_RANGING_CTX_SRC_ADDR = 2,
+	QCA_WLAN_VENDOR_ATTR_SECURE_RANGING_CTX_PEER_MAC_ADDR = 3,
+	QCA_WLAN_VENDOR_ATTR_SECURE_RANGING_CTX_SHA_TYPE = 4,
+	QCA_WLAN_VENDOR_ATTR_SECURE_RANGING_CTX_TK = 5,
+	QCA_WLAN_VENDOR_ATTR_SECURE_RANGING_CTX_CIPHER = 6,
+	QCA_WLAN_VENDOR_ATTR_SECURE_RANGING_CTX_LTF_KEYSEED = 7,
+
+	/* keep last */
+	QCA_WLAN_VENDOR_ATTR_SECURE_RANGING_CTX_AFTER_LAST,
+	QCA_WLAN_VENDOR_ATTR_SECURE_RANGING_CTX_MAX =
+	QCA_WLAN_VENDOR_ATTR_SECURE_RANGING_CTX_AFTER_LAST - 1,
 };
 #endif

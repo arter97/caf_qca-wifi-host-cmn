@@ -33,6 +33,7 @@
 #include "qdf_trace.h"
 #include "qdf_module.h"
 #include "wifi_pos_utils_pub.h"
+#include "wlan_objmgr_vdev_obj.h"
 #include "wlan_cmn.h"
 
 struct wlan_objmgr_psoc;
@@ -216,6 +217,23 @@ typedef void (*wifi_pos_send_rsp_handler)(struct wlan_objmgr_psoc *, uint32_t,
 					  uint32_t, uint8_t *);
 
 /**
+ * struct wifi_pos_legacy_ops  - wifi pos module legacy callbacks
+ * @pasn_peer_create_cb: PASN peer create callback
+ * @pasn_peer_delete_cb: PASN peer delete callback
+ * @pasn_vdev_delete_resume_cb: PASN resume vdev delete callback
+ */
+struct wifi_pos_legacy_ops {
+	QDF_STATUS (*pasn_peer_create_cb)(struct wlan_objmgr_psoc *psoc,
+					  struct qdf_mac_addr *peer_addr,
+					  uint8_t vdev_id);
+	QDF_STATUS (*pasn_peer_delete_cb)(struct wlan_objmgr_psoc *psoc,
+					  struct qdf_mac_addr *peer_addr,
+					  uint8_t vdev_id,
+					  bool no_fw_peer_delete);
+	QDF_STATUS (*pasn_vdev_delete_resume_cb)(struct wlan_objmgr_vdev *vdev);
+};
+
+/**
  * struct wifi_pos_psoc_priv_obj - psoc obj data for wifi_pos
  * @app_pid: pid of app registered to host driver
  * @is_app_registered: indicates if app is registered
@@ -237,6 +255,7 @@ typedef void (*wifi_pos_send_rsp_handler)(struct wlan_objmgr_psoc *, uint32_t,
  * @dma_cfg: DMA ring cfg to be programmed to firmware
  * @dma_buf_pool: DMA buffer pools maintained at host: this will be 2-D array
  * where with num_rows = number of rings num_elements in each row = ring depth
+ * @osif_cb: Callbacks to OS_IF
  * @wifi_pos_lock: lock to access wifi pos priv object
  * @oem_6g_support_disable: oem target 6ghz support is disabled if set
  * @wifi_pos_req_handler: function pointer to handle TLV or non-TLV
@@ -251,6 +270,7 @@ typedef void (*wifi_pos_send_rsp_handler)(struct wlan_objmgr_psoc *, uint32_t,
  * @wifi_pos_measurement_request_notification: Call this API when the driver
  *                                             receives measurement request
  *                                             from the LOWI application
+ * @legacy_ops: wifi pos legacy callbacks
  * @rsp_version: rsp version
  *
  * wifi pos request messages
@@ -288,8 +308,11 @@ struct wifi_pos_psoc_priv_obj {
 	struct wifi_pos_dma_rings_cfg *dma_cfg;
 	struct wifi_pos_dma_buf_info **dma_buf_pool;
 
+	struct wifi_pos_osif_ops *osif_cb;
+
 	qdf_spinlock_t wifi_pos_lock;
 	bool oem_6g_support_disable;
+	struct wifi_pos_legacy_ops *legacy_ops;
 	QDF_STATUS (*wifi_pos_req_handler)(struct wlan_objmgr_psoc *psoc,
 				    struct wifi_pos_req_msg *req);
 	wifi_pos_send_rsp_handler wifi_pos_send_rsp;
@@ -390,6 +413,16 @@ uint32_t wifi_pos_get_app_pid(struct wlan_objmgr_psoc *psoc);
  * Return: true if app is registered, false otherwise
  */
 bool wifi_pos_is_app_registered(struct wlan_objmgr_psoc *psoc);
+
+/**
+ * wifi_pos_get_vdev_priv_obj() - Get WIfi pos module vdev private
+ * object
+ * @vdev: vdev pointer
+ *
+ * Return: Pointer to vdev private obj
+ */
+struct wifi_pos_vdev_priv_obj *
+wifi_pos_get_vdev_priv_obj(struct wlan_objmgr_vdev *vdev);
 
 #endif /* _WIFI_POS_UTILS_H_ */
 #endif /* WIFI_POS_CONVERGED */

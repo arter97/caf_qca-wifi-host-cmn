@@ -28,6 +28,7 @@
 #include <linux/skbuff.h>
 #include <linux/module.h>
 #include <linux/proc_fs.h>
+#include <linux/inetdevice.h>
 #include <qdf_atomic.h>
 #include <qdf_debugfs.h>
 #include <qdf_lock.h>
@@ -600,36 +601,6 @@ skb_alloc:
 }
 #else
 
-struct sk_buff *__qdf_nbuf_alloc_simple(qdf_device_t osdev, size_t size)
-{
-	struct sk_buff *skb;
-	int flags = GFP_KERNEL;
-
-	if (in_interrupt() || irqs_disabled() || in_atomic()) {
-		flags = GFP_ATOMIC;
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 4, 0)
-		/*
-		 * Observed that kcompactd burns out CPU to make order-3 page.
-		 *__netdev_alloc_skb has 4k page fallback option just in case of
-		 * failing high order page allocation so we don't need to be
-		 * hard. Make kcompactd rest in piece.
-		 */
-		flags = flags & ~__GFP_KSWAPD_RECLAIM;
-#endif
-	}
-
-	skb = __netdev_alloc_skb(NULL, size, flags);
-
-	if (skb)
-		qdf_nbuf_count_inc(skb);
-	else
-		return NULL;
-
-	return skb;
-}
-
-qdf_export_symbol(__qdf_nbuf_alloc_simple);
-
 struct sk_buff *__qdf_nbuf_alloc(qdf_device_t osdev, size_t size, int reserve,
 				 int align, int prio, const char *func,
 				 uint32_t line)
@@ -772,17 +743,6 @@ __qdf_nbuf_t __qdf_nbuf_clone(__qdf_nbuf_t skb)
 qdf_export_symbol(__qdf_nbuf_clone);
 
 #ifdef NBUF_MEMORY_DEBUG
-enum qdf_nbuf_event_type {
-	QDF_NBUF_ALLOC,
-	QDF_NBUF_ALLOC_CLONE,
-	QDF_NBUF_ALLOC_COPY,
-	QDF_NBUF_ALLOC_FAILURE,
-	QDF_NBUF_FREE,
-	QDF_NBUF_MAP,
-	QDF_NBUF_UNMAP,
-	QDF_NBUF_ALLOC_COPY_EXPAND,
-};
-
 struct qdf_nbuf_event {
 	qdf_nbuf_t nbuf;
 	char func[QDF_MEM_FUNC_NAME_SIZE];
@@ -808,7 +768,7 @@ static int32_t qdf_nbuf_circular_index_next(qdf_atomic_t *index, int size)
 	return next % size;
 }
 
-static void
+void
 qdf_nbuf_history_add(qdf_nbuf_t nbuf, const char *func, uint32_t line,
 		     enum qdf_nbuf_event_type type)
 {
@@ -2465,6 +2425,73 @@ bool __qdf_nbuf_is_bcast_pkt(qdf_nbuf_t nbuf)
 }
 qdf_export_symbol(__qdf_nbuf_is_bcast_pkt);
 
+/**
+ * __qdf_nbuf_is_mcast_replay() - is multicast replay packet
+ * @nbuf - sk buff
+ *
+ * Return: true if packet is multicast replay
+ *	   false otherwise
+ */
+bool __qdf_nbuf_is_mcast_replay(qdf_nbuf_t nbuf)
+{
+	struct ethhdr *eh = (struct ethhdr *)qdf_nbuf_data(nbuf);
+
+	if (unlikely(nbuf->pkt_type == PACKET_MULTICAST)) {
+		if (unlikely(ether_addr_equal(eh->h_source,
+					      nbuf->dev->dev_addr)))
+			return true;
+	}
+	return false;
+}
+
+/**
+ * __qdf_nbuf_is_arp_local() - check if local or non local arp
+ * @skb: pointer to sk_buff
+ *
+ * Return: true if local arp or false otherwise.
+ */
+bool __qdf_nbuf_is_arp_local(struct sk_buff *skb)
+{
+	struct arphdr *arp;
+	struct in_ifaddr **ifap = NULL;
+	struct in_ifaddr *ifa = NULL;
+	struct in_device *in_dev;
+	unsigned char *arp_ptr;
+	__be32 tip;
+
+	arp = (struct arphdr *)skb->data;
+	if (arp->ar_op == htons(ARPOP_REQUEST)) {
+		/* if fail to acquire rtnl lock, assume it's local arp */
+		if (!rtnl_trylock())
+			return true;
+
+		in_dev = __in_dev_get_rtnl(skb->dev);
+		if (in_dev) {
+			for (ifap = &in_dev->ifa_list; (ifa = *ifap) != NULL;
+				ifap = &ifa->ifa_next) {
+				if (!strcmp(skb->dev->name, ifa->ifa_label))
+					break;
+			}
+		}
+
+		if (ifa && ifa->ifa_local) {
+			arp_ptr = (unsigned char *)(arp + 1);
+			arp_ptr += (skb->dev->addr_len + 4 +
+					skb->dev->addr_len);
+			memcpy(&tip, arp_ptr, 4);
+			qdf_debug("ARP packet: local IP: %x dest IP: %x",
+				  ifa->ifa_local, tip);
+			if (ifa->ifa_local == tip) {
+				rtnl_unlock();
+				return true;
+			}
+		}
+		rtnl_unlock();
+	}
+
+	return false;
+}
+
 #ifdef NBUF_MEMORY_DEBUG
 
 static spinlock_t g_qdf_net_buf_track_lock[QDF_NET_BUF_TRACK_MAX_SIZE];
@@ -3207,6 +3234,61 @@ free_buf:
 	__qdf_nbuf_free(nbuf);
 }
 qdf_export_symbol(qdf_nbuf_free_debug);
+
+struct sk_buff *__qdf_nbuf_alloc_simple(qdf_device_t osdev, size_t size,
+					const char *func, uint32_t line)
+{
+	struct sk_buff *skb;
+	int flags = GFP_KERNEL;
+
+	if (in_interrupt() || irqs_disabled() || in_atomic()) {
+		flags = GFP_ATOMIC;
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 4, 0)
+		/*
+		 * Observed that kcompactd burns out CPU to make order-3 page.
+		 *__netdev_alloc_skb has 4k page fallback option just in case of
+		 * failing high order page allocation so we don't need to be
+		 * hard. Make kcompactd rest in piece.
+		 */
+		flags = flags & ~__GFP_KSWAPD_RECLAIM;
+#endif
+	}
+
+	skb = __netdev_alloc_skb(NULL, size, flags);
+
+
+	if (qdf_likely(is_initial_mem_debug_disabled)) {
+		if (qdf_likely(skb))
+			qdf_nbuf_count_inc(skb);
+	} else {
+		if (qdf_likely(skb)) {
+			qdf_nbuf_count_inc(skb);
+			qdf_net_buf_debug_add_node(skb, size, func, line);
+			qdf_nbuf_history_add(skb, func, line, QDF_NBUF_ALLOC);
+		} else {
+			qdf_nbuf_history_add(skb, func, line, QDF_NBUF_ALLOC_FAILURE);
+		}
+	}
+
+
+	return skb;
+}
+
+qdf_export_symbol(__qdf_nbuf_alloc_simple);
+
+void qdf_nbuf_free_debug_simple(qdf_nbuf_t nbuf, const char *func,
+				uint32_t line)
+{
+	if (qdf_likely(nbuf)) {
+		if (is_initial_mem_debug_disabled) {
+			dev_kfree_skb_any(nbuf);
+		} else {
+			qdf_nbuf_free_debug(nbuf, func, line);
+		}
+	}
+}
+
+qdf_export_symbol(qdf_nbuf_free_debug_simple);
 
 qdf_nbuf_t qdf_nbuf_clone_debug(qdf_nbuf_t buf, const char *func, uint32_t line)
 {
@@ -4976,8 +5058,16 @@ static unsigned int qdf_nbuf_update_radiotap_ampdu_flags(
 #define QDF_MON_STATUS_GET_RSSI_IN_DBM(rx_status) \
 (rx_status->rssi_comb)
 #else
+#ifdef QCA_RSSI_DB2DBM
+#define QDF_MON_STATUS_GET_RSSI_IN_DBM(rx_status) \
+(((rx_status)->rssi_dbm_conv_support) ? \
+((rx_status)->rssi_comb + (rx_status)->min_nf_dbm +\
+(rx_status)->rssi_temp_offset) : \
+((rx_status)->rssi_comb + (rx_status)->chan_noise_floor))
+#else
 #define QDF_MON_STATUS_GET_RSSI_IN_DBM(rx_status) \
 (rx_status->rssi_comb + rx_status->chan_noise_floor)
+#endif
 #endif
 
 /**
@@ -5504,6 +5594,28 @@ QDF_STATUS __qdf_nbuf_move_frag_page_offset(__qdf_nbuf_t nbuf, uint8_t idx,
 
 qdf_export_symbol(__qdf_nbuf_move_frag_page_offset);
 
+void __qdf_nbuf_remove_frag(__qdf_nbuf_t nbuf,
+			    uint16_t idx,
+			    uint16_t truesize)
+{
+	struct page *page;
+	uint16_t frag_len;
+
+	page = skb_frag_page(&skb_shinfo(nbuf)->frags[idx]);
+
+	if (qdf_unlikely(!page))
+		return;
+
+	frag_len = qdf_nbuf_get_frag_size_by_idx(nbuf, idx);
+	put_page(page);
+	nbuf->len -= frag_len;
+	nbuf->data_len -= frag_len;
+	nbuf->truesize -= truesize;
+	skb_shinfo(nbuf)->nr_frags--;
+}
+
+qdf_export_symbol(__qdf_nbuf_remove_frag);
+
 void __qdf_nbuf_add_rx_frag(__qdf_frag_t buf, __qdf_nbuf_t nbuf,
 			    int offset, int frag_len,
 			    unsigned int truesize, bool take_frag_ref)
@@ -5730,6 +5842,51 @@ void qdf_net_buf_debug_release_frag(qdf_nbuf_t buf, const char *func,
 }
 
 qdf_export_symbol(qdf_net_buf_debug_release_frag);
+
+/**
+ * qdf_nbuf_remove_frag_debug - Remove frag from nbuf
+ * @nbuf: nbuf  where frag will be removed
+ * @idx: frag index
+ * @truesize: truesize of frag
+ * @func: Caller function name
+ * @line:  Caller function line no.
+ *
+ * Return: QDF_STATUS
+ *
+ */
+QDF_STATUS
+qdf_nbuf_remove_frag_debug(qdf_nbuf_t nbuf,
+			   uint16_t idx,
+			   uint16_t truesize,
+			   const char *func,
+			   uint32_t line)
+{
+	uint16_t num_frags;
+	qdf_frag_t frag;
+
+	if (qdf_unlikely(!nbuf))
+		return QDF_STATUS_E_INVAL;
+
+	num_frags = qdf_nbuf_get_nr_frags(nbuf);
+	if (idx >= num_frags)
+		return QDF_STATUS_E_INVAL;
+
+	if (qdf_likely(is_initial_mem_debug_disabled)) {
+		__qdf_nbuf_remove_frag(nbuf, idx, truesize);
+		return QDF_STATUS_SUCCESS;
+	}
+
+	frag = qdf_nbuf_get_frag_addr(nbuf, idx);
+	if (qdf_likely(frag))
+		qdf_frag_debug_refcount_dec(frag, func, line);
+
+	__qdf_nbuf_remove_frag(nbuf, idx, truesize);
+
+	return QDF_STATUS_SUCCESS;
+}
+
+qdf_export_symbol(qdf_nbuf_remove_frag_debug);
+
 #endif /* NBUF_FRAG_MEMORY_DEBUG */
 
 /**
@@ -5738,7 +5895,7 @@ qdf_export_symbol(qdf_net_buf_debug_release_frag);
  *
  * Return: qdf_nbuf_t
  */
-static inline qdf_nbuf_t qdf_get_nbuf_valid_frag(qdf_nbuf_t nbuf)
+qdf_nbuf_t qdf_get_nbuf_valid_frag(qdf_nbuf_t nbuf)
 {
 	qdf_nbuf_t last_nbuf;
 	uint32_t num_frags;
@@ -5749,10 +5906,10 @@ static inline qdf_nbuf_t qdf_get_nbuf_valid_frag(qdf_nbuf_t nbuf)
 	num_frags = qdf_nbuf_get_nr_frags(nbuf);
 
 	/* Check nbuf has enough memory to store frag memory */
-	if (num_frags <= QDF_NBUF_MAX_FRAGS)
+	if (num_frags < QDF_NBUF_MAX_FRAGS)
 		return nbuf;
 
-	if (num_frags > QDF_NBUF_MAX_FRAGS && !__qdf_nbuf_has_fraglist(nbuf))
+	if (!__qdf_nbuf_has_fraglist(nbuf))
 		return NULL;
 
 	last_nbuf = __qdf_nbuf_get_last_frag_list_nbuf(nbuf);
@@ -5765,6 +5922,8 @@ static inline qdf_nbuf_t qdf_get_nbuf_valid_frag(qdf_nbuf_t nbuf)
 
 	return NULL;
 }
+
+qdf_export_symbol(qdf_get_nbuf_valid_frag);
 
 /**
  * qdf_nbuf_add_frag_debug() - Add frag to nbuf

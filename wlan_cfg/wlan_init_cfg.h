@@ -59,8 +59,8 @@
 #define WLAN_CFG_DST_RING_CACHED_DESC 1
 #endif
 #define MAX_PDEV_CNT 3
-#define WLAN_CFG_INT_NUM_CONTEXTS 11
-#define WLAN_CFG_INT_NUM_CONTEXTS_MAX 11
+#define WLAN_CFG_INT_NUM_CONTEXTS 16
+#define WLAN_CFG_INT_NUM_CONTEXTS_MAX 16
 #define NUM_RXDMA_RINGS_PER_PDEV 1
 #define MAX_NUM_LMAC_HW	3
 #define DP_NUM_MACS_PER_PDEV 1
@@ -69,10 +69,6 @@
 
 /* Tx configuration */
 #define MAX_LINK_DESC_BANKS 8
-#define MAX_TXDESC_POOLS 4
-
-/* Rx configuration */
-#define MAX_RXDESC_POOLS 4
 
 #define MAX_REO_DEST_RINGS 8
 #define MAX_TCL_DATA_RINGS 5

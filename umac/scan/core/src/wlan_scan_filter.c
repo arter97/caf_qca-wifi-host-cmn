@@ -26,6 +26,7 @@
 #include <wlan_dfs_utils_api.h>
 #include "wlan_crypto_global_def.h"
 #include "wlan_crypto_global_api.h"
+#include "wlan_reg_services_api.h"
 
 /**
  * scm_check_open() - Check if scan entry support open authmode
@@ -213,6 +214,73 @@ static bool scm_chk_crypto_params(struct scan_filter *filter,
 	return true;
 }
 
+#ifdef WLAN_ADAPTIVE_11R
+/**
+ * scm_check_and_update_adaptive_11r_key_mgmt_support() -  check and update
+ * first rsn security which is present in RSN IE of Beacon/Probe response to
+ * corresponding FT AKM.
+ * @ap_crypto: crypto param structure
+ *
+ * Return: none
+ */
+static void scm_check_and_update_adaptive_11r_key_mgmt_support(
+					struct wlan_crypto_params *ap_crypto)
+{
+	uint32_t i, first_key_mgmt = WLAN_CRYPTO_KEY_MGMT_MAX;
+
+	/*
+	 * Supplicant compares AKM(s) in RSN IE of Beacon/Probe response and
+	 * AKM on EAPOL M3 frame received by AP.  In the case of multi AKM,
+	 * previously Host converts all adaptive 11r AKM(s), if any, present
+	 * in RSN IE of Beacon/Probe response to corresponding FT AKM but the
+	 * AP(s) which support adaptive 11r (ADAPTIVE_11R_OUI: 0x964000) only
+	 * converts first AKM to corresponding FT AKM and sends EAPOL M3 frame
+	 * to DUT. This results in failure in a 4-way handshake in supplicant
+	 * due to RSN IE miss-match between RSNIE sent by host and RSNIE
+	 * present in EAPOL M3 frame. Now like AP, the host is converting only
+	 * the first AKM to corresponding FT AKM to avoid RSNIE mismatch in
+	 * supplicant.
+	 */
+	for (i = 0; i < WLAN_CRYPTO_KEY_MGMT_MAX; i++) {
+		if (ap_crypto->akm_list[i].key_mgmt ==
+		    WLAN_CRYPTO_KEY_MGMT_IEEE8021X ||
+		    ap_crypto->akm_list[i].key_mgmt ==
+		    WLAN_CRYPTO_KEY_MGMT_IEEE8021X_SHA256) {
+			first_key_mgmt = WLAN_CRYPTO_KEY_MGMT_IEEE8021X;
+			break;
+		}
+
+		if (ap_crypto->akm_list[i].key_mgmt ==
+		    WLAN_CRYPTO_KEY_MGMT_PSK ||
+		    ap_crypto->akm_list[i].key_mgmt ==
+		    WLAN_CRYPTO_KEY_MGMT_PSK_SHA256) {
+			first_key_mgmt = WLAN_CRYPTO_KEY_MGMT_PSK;
+			break;
+		}
+	}
+
+	if (first_key_mgmt == WLAN_CRYPTO_KEY_MGMT_MAX) {
+		scm_debug("No adaptive 11r's AKM present in RSN IE");
+		return;
+	}
+
+	scm_debug("First AKM:%d present in RSN IE of bcn/Probe rsp at index:%d",
+		  first_key_mgmt, i);
+
+	if (first_key_mgmt == WLAN_CRYPTO_KEY_MGMT_IEEE8021X)
+		QDF_SET_PARAM(ap_crypto->key_mgmt,
+			      WLAN_CRYPTO_KEY_MGMT_FT_IEEE8021X);
+
+	if (first_key_mgmt == WLAN_CRYPTO_KEY_MGMT_PSK)
+		QDF_SET_PARAM(ap_crypto->key_mgmt, WLAN_CRYPTO_KEY_MGMT_FT_PSK);
+}
+#else
+static inline void scm_check_and_update_adaptive_11r_key_mgmt_support(
+					struct wlan_crypto_params *ap_crypto)
+{
+}
+#endif
+
 /**
  * scm_check_rsn() - Check if scan entry support RSN security
  * @filter: scan filter
@@ -252,29 +320,11 @@ static bool scm_check_rsn(struct scan_filter *filter,
 				filter->enable_adaptive_11r;
 
 	/* If adaptive 11r is enabled set the FT AKM for AP */
-	if (is_adaptive_11r) {
-		if (QDF_HAS_PARAM(ap_crypto->key_mgmt,
-				  WLAN_CRYPTO_KEY_MGMT_IEEE8021X)) {
-			QDF_SET_PARAM(ap_crypto->key_mgmt,
-				      WLAN_CRYPTO_KEY_MGMT_FT_IEEE8021X);
-		}
-		if (QDF_HAS_PARAM(ap_crypto->key_mgmt,
-				  WLAN_CRYPTO_KEY_MGMT_PSK)) {
-			QDF_SET_PARAM(ap_crypto->key_mgmt,
-				      WLAN_CRYPTO_KEY_MGMT_FT_PSK);
-		}
-		if (QDF_HAS_PARAM(ap_crypto->key_mgmt,
-				  WLAN_CRYPTO_KEY_MGMT_PSK_SHA256)) {
-			QDF_SET_PARAM(ap_crypto->key_mgmt,
-				      WLAN_CRYPTO_KEY_MGMT_FT_PSK);
-		}
-		if (QDF_HAS_PARAM(ap_crypto->key_mgmt,
-				  WLAN_CRYPTO_KEY_MGMT_IEEE8021X_SHA256)) {
-			QDF_SET_PARAM(ap_crypto->key_mgmt,
-				      WLAN_CRYPTO_KEY_MGMT_FT_IEEE8021X);
-		}
-	}
+	if (is_adaptive_11r)
+		scm_check_and_update_adaptive_11r_key_mgmt_support(ap_crypto);
 
+	scm_debug("ap_crypto->key_mgmt:%d, filter->key_mgmt:%d",
+		  ap_crypto->key_mgmt, filter->key_mgmt);
 	match = scm_chk_crypto_params(filter, ap_crypto, is_adaptive_11r,
 				      db_entry, security);
 	qdf_mem_free(ap_crypto);
@@ -506,7 +556,7 @@ static bool scm_is_security_match(struct scan_filter *filter,
 			if (match)
 				break;
 		/* If not OPEN, then check WEP match */
-		/* fallthrough */
+			fallthrough;
 		case WLAN_CRYPTO_AUTH_SHARED:
 			match = scm_check_wep(filter, db_entry, security);
 			break;
@@ -638,6 +688,103 @@ static bool scm_check_dot11mode(struct scan_cache_entry *db_entry,
 
 	return true;
 }
+
+#ifdef WLAN_FEATURE_11BE_MLO
+static bool util_mlo_filter_match(struct scan_filter *filter,
+				  struct scan_cache_entry *db_entry)
+{
+	uint8_t i;
+	enum reg_wifi_band band;
+	struct partner_link_info *partner_link;
+
+	if (!db_entry->ie_list.multi_link)
+		return true;
+
+	if (!filter->band_bitmap)
+		return true;
+
+	band = wlan_reg_freq_to_band(db_entry->channel.chan_freq);
+	if (!(filter->band_bitmap & BIT(band))) {
+		scm_debug("bss freq %d not match band bitmap: %d",
+			  db_entry->channel.chan_freq,
+			  filter->band_bitmap);
+		return false;
+	}
+	for (i = 0; i < db_entry->ml_info.num_links; i++) {
+		partner_link = &db_entry->ml_info.link_info[i];
+		band = wlan_reg_freq_to_band(partner_link->freq);
+		if (filter->band_bitmap & BIT(band)) {
+			scm_debug("partner freq %d  match band bitmap: %d",
+				  partner_link->freq,
+				  filter->band_bitmap);
+			partner_link->is_valid_link = true;
+		}
+	}
+
+	return true;
+}
+#else
+static bool util_mlo_filter_match(struct scan_filter *filter,
+				  struct scan_cache_entry *db_entry)
+{
+	return true;
+}
+#endif
+
+#ifdef WLAN_FEATURE_11BE
+static bool util_eht_puncture_valid(struct scan_cache_entry *db_entry)
+{
+	struct wlan_ie_ehtops *eht_ops;
+	int8_t orig_width;
+	enum phy_ch_width width;
+	qdf_freq_t center_freq_320m;
+	uint16_t orig_puncture_bitmap;
+	uint16_t new_puncture_bitmap = 0;
+	QDF_STATUS status;
+
+	eht_ops = (struct wlan_ie_ehtops *)util_scan_entry_ehtop(db_entry);
+	if (!eht_ops)
+		return true;
+	if (!QDF_GET_BITS(eht_ops->ehtop_param,
+			  EHTOP_INFO_PRESENT_IDX, EHTOP_INFO_PRESENT_BITS))
+		return true;
+	orig_puncture_bitmap = db_entry->channel.puncture_bitmap;
+	if (!orig_puncture_bitmap)
+		return true;
+
+	orig_width = QDF_GET_BITS(eht_ops->control,
+				  EHTOP_INFO_CHAN_WIDTH_IDX,
+				  EHTOP_INFO_CHAN_WIDTH_BITS);
+	if (orig_width == WLAN_EHT_CHWIDTH_320) {
+		width = CH_WIDTH_320MHZ;
+		center_freq_320m = db_entry->channel.cfreq1;
+	} else {
+		width = orig_width;
+		center_freq_320m = 0;
+	}
+
+	status = wlan_reg_extract_puncture_by_bw(width,
+						 orig_puncture_bitmap,
+						 db_entry->channel.chan_freq,
+						 center_freq_320m,
+						 CH_WIDTH_20MHZ,
+						 &new_puncture_bitmap);
+	if (QDF_IS_STATUS_ERROR(status) || new_puncture_bitmap) {
+		scm_debug(QDF_MAC_ADDR_FMT "freq %d width %d 320m center %d puncture: orig %d new %d status %d",
+			  QDF_MAC_ADDR_REF(db_entry->bssid.bytes),
+			  db_entry->channel.chan_freq, width, center_freq_320m,
+			  orig_puncture_bitmap, new_puncture_bitmap, status);
+		return false;
+	} else {
+		return true;
+	}
+}
+#else
+static bool util_eht_puncture_valid(struct scan_cache_entry *db_entry)
+{
+	return true;
+}
+#endif
 
 bool scm_filter_match(struct wlan_objmgr_psoc *psoc,
 		      struct scan_cache_entry *db_entry,
@@ -815,5 +962,15 @@ bool scm_filter_match(struct wlan_objmgr_psoc *psoc,
 			  QDF_MAC_ADDR_REF(db_entry->bssid.bytes));
 		return false;
 	}
+
+	if (!util_mlo_filter_match(filter, db_entry)) {
+		scm_debug(QDF_MAC_ADDR_FMT ": Ignore as mlo filter didn't match",
+			  QDF_MAC_ADDR_REF(db_entry->bssid.bytes));
+		return false;
+	}
+
+	if (!util_eht_puncture_valid(db_entry))
+		return false;
+
 	return true;
 }

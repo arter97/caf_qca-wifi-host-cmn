@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2021 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -46,11 +46,39 @@ bool mlo_ap_vdev_attach(struct wlan_objmgr_vdev *vdev,
  * @vdev_count: vdev count
  * @wlan_vdev_list: vdev list
  *
+ * This API gets all partner vdev's which have WLAN_VDEV_FEXT2_MLO bit
+ * set.
+ *
+ * It takes references for all vdev's with bit set in the list. Callers
+ * of this API should properly release references before destroying the
+ * list.
+ *
  * Return: None
  */
 void mlo_ap_get_vdev_list(struct wlan_objmgr_vdev *vdev,
 			  uint16_t *vdev_count,
 			  struct wlan_objmgr_vdev **wlan_vdev_list);
+
+/**
+ * mlo_ap_get_partner_vdev_list_from_mld() - get partner vdev from MLD
+ *                                           vdev_list without checking
+ *                                           WLAN_VDEV_FEXT2_MLO bit
+ * @vdev: vdev pointer
+ * @vdev_count: vdev count
+ * @wlan_vdev_list: vdev list
+ *
+ * This API gets all partner vdev's irrespective of WLAN_VDEV_FEXT2_MLO
+ * bit. Ideally, it copies all partners of the MLD with references.
+ *
+ * It takes references for all vdev's in the list. The callers of this
+ * API should properly release references before destroying the list.
+ *
+ * Return: None
+ */
+void mlo_ap_get_partner_vdev_list_from_mld(
+		struct wlan_objmgr_vdev *vdev,
+		uint16_t *vdev_count,
+		struct wlan_objmgr_vdev **wlan_vdev_list);
 
 /**
  * mlo_ap_link_sync_wait_notify() - notify the mlo manager, once vdev
@@ -110,6 +138,69 @@ void wlan_vdev_mlme_aid_mgr_max_aid_set(struct wlan_objmgr_vdev *vdev,
  */
 QDF_STATUS wlan_vdev_mlme_set_start_aid(struct wlan_objmgr_vdev *vdev,
 					uint16_t start_aid);
+
+/**
+ * wlan_vdev_mlme_get_start_aid() - set VDEV start AID
+ * @vdev: vdev pointer
+ *
+ * This function sets start AID for the VDEV
+ *
+ * Return: start AID
+ */
+uint16_t wlan_vdev_mlme_get_start_aid(struct wlan_objmgr_vdev *vdev);
+
+/**
+ * wlan_mlo_vdev_init_mbss_aid_mgr() - Assigns tx vdev aid mgr to a VDEV
+ * @ml_dev: MLO DEV context
+ * @vdev: VDEV
+ * @tx_vdev: Transmit VDEV
+ *
+ * This function assigns Tx VDEV's AID mgr to non-Tx VDEV
+ *
+ * Return: SUCCESS if assigned successfully
+ */
+QDF_STATUS wlan_mlo_vdev_init_mbss_aid_mgr(struct wlan_mlo_dev_context *ml_dev,
+					   struct wlan_objmgr_vdev *vdev,
+					   struct wlan_objmgr_vdev *tx_vdev);
+
+/**
+ * wlan_mlo_vdev_deinit_mbss_aid_mgr() - Resets aid mgr to a non-Tx VDEV
+ * @mldev: MLO DEV context
+ * @vdev: VDEV
+ * @tx_vdev: Transmit VDEV
+ *
+ * This function resets AID mgr of non-Tx VDEV
+ *
+ * Return: SUCCESS if reset successfully
+ */
+QDF_STATUS wlan_mlo_vdev_deinit_mbss_aid_mgr(struct wlan_mlo_dev_context *mldev,
+					     struct wlan_objmgr_vdev *vdev,
+					     struct wlan_objmgr_vdev *tx_vdev);
+
+/**
+ * wlan_mlme_vdev_init_mbss_aid_mgr() - Assigns tx vdev aid mgr to a VDEV
+ * @vdev: VDEV
+ * @tx_vdev: Transmit VDEV
+ *
+ * This function assigns Tx VDEV's AID mgr to non-Tx VDEV
+ *
+ * Return: SUCCESS if assigned successfully
+ */
+QDF_STATUS wlan_mlme_vdev_init_mbss_aid_mgr(struct wlan_objmgr_vdev *vdev,
+					    struct wlan_objmgr_vdev *tx_vdev);
+
+/**
+ * wlan_mlme_vdev_deinit_mbss_aid_mgr() - Resets aid mgr to a non-Tx VDEV
+ * @vdev: VDEV
+ * @tx_vdev: Transmit VDEV
+ *
+ * This function resets AID mgr of non-Tx VDEV
+ *
+ * Return: SUCCESS if reset successfully
+ */
+QDF_STATUS wlan_mlme_vdev_deinit_mbss_aid_mgr(struct wlan_objmgr_vdev *vdev,
+					      struct wlan_objmgr_vdev *tx_vdev);
+
 /**
  * wlan_vdev_aid_mgr_init() - VDEV AID mgr init
  * @max_aid: max AID

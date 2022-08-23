@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2014-2021 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -124,6 +125,7 @@ QDF_STATUS wlan_regulatory_psoc_obj_created_notification(
 	reg_set_5dot9_ghz_chan_in_master_mode(soc_reg_obj);
 	soc_reg_obj->retain_nol_across_regdmn_update = false;
 	soc_reg_obj->is_ext_tpc_supported = false;
+	soc_reg_obj->sta_sap_scc_on_indoor_channel = true;
 
 	for (i = 0; i < MAX_STA_VDEV_CNT; i++)
 		soc_reg_obj->vdev_ids_11d[i] = INVALID_VDEV_ID;
@@ -238,7 +240,7 @@ reg_init_def_client_type(struct wlan_regulatory_pdev_priv_obj *pdev_priv_obj)
 static void
 reg_init_6g_vars(struct wlan_regulatory_pdev_priv_obj *pdev_priv_obj)
 {
-	pdev_priv_obj->reg_cur_6g_ap_pwr_type = REG_INDOOR_AP;
+	reg_set_ap_pwr_type(pdev_priv_obj);
 	pdev_priv_obj->reg_rnr_tpe_usable = false;
 	pdev_priv_obj->reg_unspecified_ap_usable = false;
 	reg_init_def_client_type(pdev_priv_obj);
@@ -270,6 +272,14 @@ reg_init_afc_vars(struct wlan_objmgr_psoc *psoc,
 	pdev_priv_obj->is_reg_noaction_on_afc_pwr_evt =
 			cfg_get(psoc, CFG_OL_AFC_REG_NO_ACTION);
 }
+
+static inline void
+reg_set_pdev_afc_dev_type(struct wlan_regulatory_pdev_priv_obj *pdev_priv_obj,
+			  struct wlan_regulatory_psoc_priv_obj *psoc_priv_obj)
+{
+	pdev_priv_obj->reg_afc_dev_deployment_type =
+		psoc_priv_obj->reg_afc_dev_type;
+}
 #else
 static inline void
 reg_create_afc_cb_spinlock(struct wlan_regulatory_pdev_priv_obj *pdev_priv_obj)
@@ -284,6 +294,12 @@ reg_destroy_afc_cb_spinlock(struct wlan_regulatory_pdev_priv_obj *pdev_priv_obj)
 static void
 reg_init_afc_vars(struct wlan_objmgr_psoc *psoc,
 		  struct wlan_regulatory_pdev_priv_obj *pdev_priv_obj)
+{
+}
+
+static inline void
+reg_set_pdev_afc_dev_type(struct wlan_regulatory_pdev_priv_obj *pdev_priv_obj,
+			  struct wlan_regulatory_psoc_priv_obj *psoc_priv_obj)
 {
 }
 #endif
@@ -330,6 +346,9 @@ QDF_STATUS wlan_regulatory_pdev_obj_created_notification(
 	pdev_priv_obj->band_capability = psoc_priv_obj->band_capability;
 	pdev_priv_obj->indoor_chan_enabled =
 		psoc_priv_obj->indoor_chan_enabled;
+
+	reg_set_pdev_afc_dev_type(pdev_priv_obj, psoc_priv_obj);
+
 	pdev_priv_obj->en_chan_144 = true;
 	reg_reset_unii_5g_bitmap(pdev_priv_obj);
 
@@ -339,6 +358,8 @@ QDF_STATUS wlan_regulatory_pdev_obj_created_notification(
 	reg_cap_ptr = psoc_priv_obj->reg_cap;
 	pdev_priv_obj->force_ssc_disable_indoor_channel =
 		psoc_priv_obj->force_ssc_disable_indoor_channel;
+	pdev_priv_obj->sta_sap_scc_on_indoor_channel =
+		psoc_priv_obj->sta_sap_scc_on_indoor_channel;
 
 	for (cnt = 0; cnt < PSOC_MAX_PHY_REG_CAP; cnt++) {
 		if (!reg_cap_ptr) {

@@ -175,6 +175,16 @@ typedef __qdf_cpu_mask qdf_cpu_mask;
 typedef __qdf_netdev_t qdf_netdev_t;
 
 /**
+ * pointer to napi struct
+ */
+typedef __qdf_napi_struct qdf_napi_struct;
+
+/**
+ * pointer to net dev stats
+ */
+typedef __qdf_net_dev_stats qdf_net_dev_stats;
+
+/**
  * struct qdf_dma_map_info - Information inside a DMA map.
  * @nsegs: total number mapped segments
  * struct __dma_segs - Information of physical address.
@@ -422,6 +432,9 @@ typedef bool (*qdf_irqlocked_func_t)(void *);
  * @QDF_MODULE_ID_AFC: AFC module ID
  * @QDF_MODULE_ID_WIFI_RADAR: WIFI RADAR module ID
  * @QDF_MODULE_ID_TWT: TWT module ID
+ * @QDF_MODULE_ID_WLAN_PRE_CAC: WLAN PRE CAC module ID
+ * @QDF_MODULE_ID_T2LM: T2LM module ID
+ * @QDF_MODULE_ID_DP_SAWF: DP SAWF module ID
  * @QDF_MODULE_ID_ANY: anything
  * @QDF_MODULE_ID_MAX: Max place holder module ID
  *
@@ -580,6 +593,10 @@ typedef enum {
 	QDF_MODULE_ID_AFC,
 	QDF_MODULE_ID_WIFI_RADAR,
 	QDF_MODULE_ID_TWT,
+	QDF_MODULE_ID_DP_UMAC_RESET,
+	QDF_MODULE_ID_WLAN_PRE_CAC,
+	QDF_MODULE_ID_T2LM,
+	QDF_MODULE_ID_DP_SAWF,
 	QDF_MODULE_ID_ANY,
 	QDF_MODULE_ID_MAX,
 } QDF_MODULE_ID;
@@ -1523,6 +1540,22 @@ enum qdf_dp_tx_rx_status {
 	QDF_TX_RX_STATUS_DOWNLOAD_SUCC,
 	QDF_TX_RX_STATUS_DEFAULT,
 	QDF_TX_RX_STATUS_MAX
+};
+
+/**
+ * enum qdf_pkt_type - TX/RX packet type
+ * @QDF_TX_MGMT_PKT: Tx Management Packet
+ * @QDF_TX_DATA_PKT: Tx data Packet
+ * @QDF_RX_MGMT_PKT: Rx Management Packet
+ * @QDF_RX_DATA_PKT: Rx data Packet
+ * @QDF_INVALID_PKT: Invalid Packet type
+ */
+enum qdf_pkt_type {
+	QDF_TX_MGMT_PKT,
+	QDF_TX_DATA_PKT,
+	QDF_RX_MGMT_PKT,
+	QDF_RX_DATA_PKT,
+	QDF_INVALID_PKT
 };
 
 /**

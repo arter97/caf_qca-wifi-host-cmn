@@ -1548,10 +1548,8 @@ dp_tx_ring_access_end_wrapper(struct dp_soc *soc,
 		return;
 	}
 
-	ret = hif_pm_runtime_get(soc->hif_handle,
-				 RTPM_ID_DW_TX_HW_ENQUEUE, true);
-	switch (ret) {
-	case 0:
+	ret = hif_rtpm_get(HIF_RTPM_GET_ASYNC, HIF_RTPM_ID_DP);
+	if (QDF_IS_STATUS_SUCCESS(ret)) {
 		if (hif_system_pm_state_check(soc->hif_handle)) {
 			dp_tx_hal_ring_access_end_reap(soc, hal_ring_hdl);
 			hal_srng_set_event(hal_ring_hdl, HAL_SRNG_FLUSH_EVENT);
@@ -1559,31 +1557,8 @@ dp_tx_ring_access_end_wrapper(struct dp_soc *soc,
 		} else {
 			dp_tx_ring_access_end(soc, hal_ring_hdl, coalesce);
 		}
-		hif_pm_runtime_put(soc->hif_handle,
-				   RTPM_ID_DW_TX_HW_ENQUEUE);
-		break;
-	/*
-	 * If hif_pm_runtime_get returns -EBUSY or -EINPROGRESS,
-	 * take the dp runtime refcount using dp_runtime_get,
-	 * check link state,if up, write TX ring HP, else just set flush event.
-	 * In dp_runtime_resume, wait until dp runtime refcount becomes
-	 * zero or time out, then flush pending tx.
-	 */
-	case -EBUSY:
-	case -EINPROGRESS:
-		dp_runtime_get(soc);
-		if (hif_pm_get_link_state(soc->hif_handle) ==
-		    HIF_PM_LINK_STATE_UP) {
-			dp_tx_ring_access_end(soc, hal_ring_hdl, coalesce);
-		} else {
-			dp_tx_hal_ring_access_end_reap(soc, hal_ring_hdl);
-			hal_srng_set_event(hal_ring_hdl, HAL_SRNG_FLUSH_EVENT);
-			qdf_atomic_inc(&soc->tx_pending_rtpm);
-			hal_srng_inc_flush_cnt(hal_ring_hdl);
-		}
-		dp_runtime_put(soc);
-		break;
-	default:
+		hif_rtpm_put(HIF_RTPM_PUT_ASYNC, HIF_RTPM_ID_DP);
+	} else {
 		dp_runtime_get(soc);
 		dp_tx_hal_ring_access_end_reap(soc, hal_ring_hdl);
 		hal_srng_set_event(hal_ring_hdl, HAL_SRNG_FLUSH_EVENT);
@@ -2103,6 +2078,15 @@ int dp_tx_frame_is_drop(struct dp_vdev *vdev, uint8_t *srcmac, uint8_t *dstmac)
 #define DP_MLO_VDEV_ID_OFFSET 0x80
 
 static inline void
+dp_tx_bypass_reinjection(struct dp_soc *soc, struct dp_tx_desc_s *tx_desc)
+{
+	if (!(tx_desc->flags & DP_TX_DESC_FLAG_TO_FW)) {
+		tx_desc->flags |= DP_TX_DESC_FLAG_TO_FW;
+		qdf_atomic_inc(&soc->num_tx_exception);
+	}
+}
+
+static inline void
 dp_tx_update_mcast_param(uint16_t peer_id,
 			 uint16_t *htt_tcl_metadata,
 			 struct dp_vdev *vdev,
@@ -2117,11 +2101,19 @@ dp_tx_update_mcast_param(uint16_t peer_id,
 						    msdu_info->gsn);
 
 		msdu_info->vdev_id = vdev->vdev_id + DP_MLO_VDEV_ID_OFFSET;
+		if (qdf_unlikely(vdev->nawds_enabled))
+			HTT_TX_TCL_METADATA_GLBL_SEQ_HOST_INSPECTED_SET(
+							*htt_tcl_metadata, 1);
 	} else {
 		msdu_info->vdev_id = vdev->vdev_id;
 	}
 }
 #else
+static inline void
+dp_tx_bypass_reinjection(struct dp_soc *soc, struct dp_tx_desc_s *tx_desc)
+{
+}
+
 static inline void
 dp_tx_update_mcast_param(uint16_t peer_id,
 			 uint16_t *htt_tcl_metadata,
@@ -2179,6 +2171,7 @@ dp_tx_send_msdu_single(struct dp_vdev *vdev, qdf_nbuf_t nbuf,
 					    DP_TCL_METADATA_TYPE_PEER_BASED);
 		DP_TX_TCL_METADATA_PEER_ID_SET(htt_tcl_metadata,
 					       peer_id);
+		dp_tx_bypass_reinjection(soc, tx_desc);
 	} else
 		htt_tcl_metadata = vdev->htt_tcl_metadata;
 
@@ -2523,6 +2516,7 @@ qdf_nbuf_t dp_tx_send_msdu_multiple(struct dp_vdev *vdev, qdf_nbuf_t nbuf,
 				 */
 				qdf_nbuf_free(msdu_info->u.sg_info
 					      .curr_seg->nbuf);
+				dp_tx_desc_release(tx_desc, tx_q->desc_pool_id);
 				if (msdu_info->u.sg_info.curr_seg->next) {
 					msdu_info->u.sg_info.curr_seg =
 						msdu_info->u.sg_info
@@ -2532,7 +2526,6 @@ qdf_nbuf_t dp_tx_send_msdu_multiple(struct dp_vdev *vdev, qdf_nbuf_t nbuf,
 				} else
 					break;
 				i++;
-				dp_tx_desc_release(tx_desc, tx_q->desc_pool_id);
 				continue;
 			}
 
@@ -2956,7 +2949,7 @@ void dp_tx_nawds_handler(struct dp_soc *soc, struct dp_vdev *vdev,
 			/* Multicast packets needs to be
 			 * dropped in case of intra bss forwarding
 			 */
-			if (sa_peer_id == peer->peer_id) {
+			if (sa_peer_id == txrx_peer->peer_id) {
 				dp_tx_debug("multicast packet");
 				DP_PEER_PER_PKT_STATS_INC(txrx_peer,
 							  tx.nawds_mcast_drop,
@@ -3334,15 +3327,12 @@ qdf_nbuf_t dp_tx_send(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
 	if (qdf_unlikely(!vdev))
 		return nbuf;
 
-	dp_verbose_debug("skb "QDF_MAC_ADDR_FMT,
-			 QDF_MAC_ADDR_REF(nbuf->data));
-
 	/*
 	 * Set Default Host TID value to invalid TID
 	 * (TID override disabled)
 	 */
 	msdu_info.tid = HTT_TX_EXT_TID_INVALID;
-	DP_STATS_INC_PKT(vdev, tx_i.rcvd, 1, qdf_nbuf_len(nbuf));
+	DP_STATS_INC_PKT(vdev, tx_i.rcvd, 1, qdf_nbuf_headlen(nbuf));
 
 	if (qdf_unlikely(vdev->mesh_vdev)) {
 		qdf_nbuf_t nbuf_mesh = dp_tx_extract_mesh_meta_data(vdev, nbuf,
@@ -3567,6 +3557,45 @@ int dp_tx_proxy_arp(struct dp_vdev *vdev, qdf_nbuf_t nbuf)
 }
 #endif
 
+#if defined(WLAN_FEATURE_11BE_MLO) && defined(WLAN_MLO_MULTI_CHIP)
+#ifdef WLAN_MCAST_MLO
+static bool
+dp_tx_reinject_mlo_hdl(struct dp_soc *soc, struct dp_vdev *vdev,
+		       struct dp_tx_desc_s *tx_desc,
+		       qdf_nbuf_t nbuf,
+		       uint8_t reinject_reason)
+{
+	if (reinject_reason == HTT_TX_FW2WBM_REINJECT_REASON_MLO_MCAST) {
+		if (soc->arch_ops.dp_tx_mcast_handler)
+			soc->arch_ops.dp_tx_mcast_handler(soc, vdev, nbuf);
+
+		dp_tx_desc_release(tx_desc, tx_desc->pool_id);
+		return true;
+	}
+
+	return false;
+}
+#else /* WLAN_MCAST_MLO */
+static inline bool
+dp_tx_reinject_mlo_hdl(struct dp_soc *soc, struct dp_vdev *vdev,
+		       struct dp_tx_desc_s *tx_desc,
+		       qdf_nbuf_t nbuf,
+		       uint8_t reinject_reason)
+{
+	return false;
+}
+#endif /* WLAN_MCAST_MLO */
+#else
+static inline bool
+dp_tx_reinject_mlo_hdl(struct dp_soc *soc, struct dp_vdev *vdev,
+		       struct dp_tx_desc_s *tx_desc,
+		       qdf_nbuf_t nbuf,
+		       uint8_t reinject_reason)
+{
+	return false;
+}
+#endif
+
 /**
  * dp_tx_reinject_handler() - Tx Reinject Handler
  * @soc: datapath soc handle
@@ -3606,17 +3635,8 @@ void dp_tx_reinject_handler(struct dp_soc *soc,
 	DP_STATS_INC_PKT(vdev, tx_i.reinject_pkts, 1,
 			qdf_nbuf_len(tx_desc->nbuf));
 
-#if defined(WLAN_FEATURE_11BE_MLO) && defined(WLAN_MLO_MULTI_CHIP)
-#ifdef WLAN_MCAST_MLO
-	if (reinject_reason == HTT_TX_FW2WBM_REINJECT_REASON_MLO_MCAST) {
-		if (soc->arch_ops.dp_tx_mcast_handler)
-			soc->arch_ops.dp_tx_mcast_handler(soc, vdev, nbuf);
-
-		dp_tx_desc_release(tx_desc, tx_desc->pool_id);
+	if (dp_tx_reinject_mlo_hdl(soc, vdev, tx_desc, nbuf, reinject_reason))
 		return;
-	}
-#endif
-#endif
 
 #ifdef WDS_VENDOR_EXTENSION
 	if (qdf_unlikely(vdev->tx_encap_type != htt_cmn_pkt_type_raw)) {
@@ -3813,7 +3833,7 @@ static void dp_tx_compute_tid_delay(struct cdp_delay_tid_stats *stats,
 
 	current_timestamp = qdf_ktime_to_ms(qdf_ktime_real_get());
 	timestamp_ingress = qdf_nbuf_get_timestamp(tx_desc->nbuf);
-	timestamp_hw_enqueue = tx_desc->timestamp;
+	timestamp_hw_enqueue = qdf_ktime_to_ms(tx_desc->timestamp);
 	sw_enqueue_delay = (uint32_t)(timestamp_hw_enqueue - timestamp_ingress);
 	fwhw_transmit_delay = (uint32_t)(current_timestamp -
 					 timestamp_hw_enqueue);
@@ -3872,24 +3892,37 @@ static inline void dp_tx_update_peer_delay_stats(struct dp_txrx_peer *txrx_peer,
 #endif
 
 #ifdef HW_TX_DELAY_STATS_ENABLE
+/**
+ * dp_update_tx_delay_stats() - update the delay stats
+ * @vdev: vdev handle
+ * @delay: delay in ms or us based on the flag delay_in_us
+ * @tid: tid value
+ * @mode: type of tx delay mode
+ * @ring id: ring number
+ * @delay_in_us: flag to indicate whether the delay is in ms or us
+ *
+ * Return: none
+ */
 static inline
 void dp_update_tx_delay_stats(struct dp_vdev *vdev, uint32_t delay, uint8_t tid,
-			      uint8_t mode, uint8_t ring_id)
+			      uint8_t mode, uint8_t ring_id, bool delay_in_us)
 {
 	struct cdp_tid_tx_stats *tstats =
 		&vdev->stats.tid_tx_stats[ring_id][tid];
 
-	dp_update_delay_stats(tstats, NULL, delay, tid, mode, ring_id);
+	dp_update_delay_stats(tstats, NULL, delay, tid, mode, ring_id,
+			      delay_in_us);
 }
 #else
 static inline
 void dp_update_tx_delay_stats(struct dp_vdev *vdev, uint32_t delay, uint8_t tid,
-			      uint8_t mode, uint8_t ring_id)
+			      uint8_t mode, uint8_t ring_id, bool delay_in_us)
 {
 	struct cdp_tid_tx_stats *tstats =
 		&vdev->pdev->stats.tid_stats.tid_tx_stats[ring_id][tid];
 
-	dp_update_delay_stats(tstats, NULL, delay, tid, mode, ring_id);
+	dp_update_delay_stats(tstats, NULL, delay, tid, mode, ring_id,
+			      delay_in_us);
 }
 #endif
 
@@ -3908,28 +3941,41 @@ void dp_tx_compute_delay(struct dp_vdev *vdev, struct dp_tx_desc_s *tx_desc,
 {
 	int64_t current_timestamp, timestamp_ingress, timestamp_hw_enqueue;
 	uint32_t sw_enqueue_delay, fwhw_transmit_delay, interframe_delay;
+	uint32_t fwhw_transmit_delay_us;
 
 	if (qdf_likely(!vdev->pdev->delay_stats_flag) &&
 	    qdf_likely(!dp_is_vdev_tx_delay_stats_enabled(vdev)))
 		return;
 
+	if (dp_is_vdev_tx_delay_stats_enabled(vdev)) {
+		fwhw_transmit_delay_us =
+			qdf_ktime_to_us(qdf_ktime_real_get()) -
+			qdf_ktime_to_us(tx_desc->timestamp);
+
+		/*
+		 * Delay between packet enqueued to HW and Tx completion in us
+		 */
+		dp_update_tx_delay_stats(vdev, fwhw_transmit_delay_us, tid,
+					 CDP_DELAY_STATS_FW_HW_TRANSMIT,
+					 ring_id, true);
+		/*
+		 * For MCL, only enqueue to completion delay is required
+		 * so return if the vdev flag is enabled.
+		 */
+		return;
+	}
+
 	current_timestamp = qdf_ktime_to_ms(qdf_ktime_real_get());
-	timestamp_hw_enqueue = tx_desc->timestamp;
+	timestamp_hw_enqueue = qdf_ktime_to_ms(tx_desc->timestamp);
 	fwhw_transmit_delay = (uint32_t)(current_timestamp -
 					 timestamp_hw_enqueue);
 
 	/*
-	 * Delay between packet enqueued to HW and Tx completion
+	 * Delay between packet enqueued to HW and Tx completion in ms
 	 */
 	dp_update_tx_delay_stats(vdev, fwhw_transmit_delay, tid,
-				 CDP_DELAY_STATS_FW_HW_TRANSMIT, ring_id);
-
-	/*
-	 * For MCL, only enqueue to completion delay is required
-	 * so return if the vdev flag is enabled.
-	 */
-	if (dp_is_vdev_tx_delay_stats_enabled(vdev))
-		return;
+				 CDP_DELAY_STATS_FW_HW_TRANSMIT, ring_id,
+				 false);
 
 	timestamp_ingress = qdf_nbuf_get_timestamp(tx_desc->nbuf);
 	sw_enqueue_delay = (uint32_t)(timestamp_hw_enqueue - timestamp_ingress);
@@ -3940,7 +3986,8 @@ void dp_tx_compute_delay(struct dp_vdev *vdev, struct dp_tx_desc_s *tx_desc,
 	 * Delay in software enqueue
 	 */
 	dp_update_tx_delay_stats(vdev, sw_enqueue_delay, tid,
-				 CDP_DELAY_STATS_SW_ENQ, ring_id);
+				 CDP_DELAY_STATS_SW_ENQ, ring_id,
+				 false);
 
 	/*
 	 * Update interframe delay stats calculated at hardstart receive point.
@@ -3950,7 +3997,8 @@ void dp_tx_compute_delay(struct dp_vdev *vdev, struct dp_tx_desc_s *tx_desc,
 	 * of !vdev->prev_tx_enq_tstamp.
 	 */
 	dp_update_tx_delay_stats(vdev, interframe_delay, tid,
-				 CDP_DELAY_STATS_TX_INTERFRAME, ring_id);
+				 CDP_DELAY_STATS_TX_INTERFRAME, ring_id,
+				 false);
 	vdev->prev_tx_enq_tstamp = timestamp_ingress;
 }
 
@@ -3986,41 +4034,20 @@ static inline void
 dp_tx_update_peer_extd_stats(struct hal_tx_completion_status *ts,
 			     struct dp_txrx_peer *txrx_peer)
 {
-	uint8_t mcs, pkt_type;
+	uint8_t mcs, pkt_type, dst_mcs_idx;
+	uint8_t retry_threshold = txrx_peer->mpdu_retry_threshold;
 
 	mcs = ts->mcs;
 	pkt_type = ts->pkt_type;
+	/* do HW to SW pkt type conversion */
+	pkt_type = (pkt_type >= HAL_DOT11_MAX ? DOT11_MAX :
+		    hal_2_dp_pkt_type_map[pkt_type]);
 
-	DP_PEER_EXTD_STATS_INCC(txrx_peer,
-				tx.pkt_type[pkt_type].mcs_count[MAX_MCS - 1], 1,
-				((mcs >= MAX_MCS_11A) && (pkt_type == DOT11_A)));
-	DP_PEER_EXTD_STATS_INCC(txrx_peer,
-				tx.pkt_type[pkt_type].mcs_count[mcs], 1,
-				((mcs < (MAX_MCS_11A)) && (pkt_type == DOT11_A)));
-	DP_PEER_EXTD_STATS_INCC(txrx_peer,
-				tx.pkt_type[pkt_type].mcs_count[MAX_MCS - 1], 1,
-				((mcs >= MAX_MCS_11B) && (pkt_type == DOT11_B)));
-	DP_PEER_EXTD_STATS_INCC(txrx_peer,
-				tx.pkt_type[pkt_type].mcs_count[mcs], 1,
-				((mcs < MAX_MCS_11B) && (pkt_type == DOT11_B)));
-	DP_PEER_EXTD_STATS_INCC(txrx_peer,
-				tx.pkt_type[pkt_type].mcs_count[MAX_MCS - 1], 1,
-				((mcs >= MAX_MCS_11A) && (pkt_type == DOT11_N)));
-	DP_PEER_EXTD_STATS_INCC(txrx_peer,
-				tx.pkt_type[pkt_type].mcs_count[mcs], 1,
-				((mcs < MAX_MCS_11A) && (pkt_type == DOT11_N)));
-	DP_PEER_EXTD_STATS_INCC(txrx_peer,
-				tx.pkt_type[pkt_type].mcs_count[MAX_MCS - 1], 1,
-				((mcs >= MAX_MCS_11AC) && (pkt_type == DOT11_AC)));
-	DP_PEER_EXTD_STATS_INCC(txrx_peer,
-				tx.pkt_type[pkt_type].mcs_count[mcs], 1,
-				((mcs < MAX_MCS_11AC) && (pkt_type == DOT11_AC)));
-	DP_PEER_EXTD_STATS_INCC(txrx_peer,
-				tx.pkt_type[pkt_type].mcs_count[MAX_MCS - 1], 1,
-				((mcs >= (MAX_MCS - 1)) && (pkt_type == DOT11_AX)));
-	DP_PEER_EXTD_STATS_INCC(txrx_peer,
-				tx.pkt_type[pkt_type].mcs_count[mcs], 1,
-				((mcs < (MAX_MCS - 1)) && (pkt_type == DOT11_AX)));
+	dst_mcs_idx = dp_get_mcs_array_index_by_pkt_type_mcs(pkt_type, mcs);
+	if (MCS_INVALID_ARRAY_INDEX != dst_mcs_idx)
+		DP_PEER_EXTD_STATS_INC(txrx_peer,
+				       tx.pkt_type[pkt_type].mcs_count[dst_mcs_idx],
+				       1);
 
 	DP_PEER_EXTD_STATS_INC(txrx_peer, tx.sgi_count[ts->sgi], 1);
 	DP_PEER_EXTD_STATS_INC(txrx_peer, tx.bw[ts->bw], 1);
@@ -4033,9 +4060,13 @@ dp_tx_update_peer_extd_stats(struct hal_tx_completion_status *ts,
 	if (ts->first_msdu) {
 		DP_PEER_EXTD_STATS_INCC(txrx_peer, tx.retries_mpdu, 1,
 					ts->transmit_cnt > 1);
+
+		if (!retry_threshold)
+			return;
 		DP_PEER_EXTD_STATS_INCC(txrx_peer, tx.mpdu_success_with_retries,
-					qdf_do_div(ts->transmit_cnt, DP_RETRY_COUNT),
-					ts->transmit_cnt > DP_RETRY_COUNT);
+					qdf_do_div(ts->transmit_cnt,
+						   retry_threshold),
+					ts->transmit_cnt > retry_threshold);
 	}
 }
 #else
@@ -4076,7 +4107,8 @@ dp_tx_update_peer_stats(struct dp_tx_desc_s *tx_desc,
 	tid_stats = &pdev->stats.tid_stats.tid_tx_stats[ring_id][tid];
 
 	if (ts->release_src != HAL_TX_COMP_RELEASE_SOURCE_TQM) {
-		dp_err("Release source is not from TQM");
+		dp_err_rl("Release source:%d is not from TQM", ts->release_src);
+		DP_PEER_PER_PKT_STATS_INC(txrx_peer, tx.release_src_not_tqm, 1);
 		return;
 	}
 
@@ -4239,17 +4271,13 @@ static inline void dp_tx_notify_completion(struct dp_soc *soc,
 
 	qdf_assert(tx_desc);
 
-	dp_tx_flow_pool_lock(soc, tx_desc);
-
 	if (!vdev ||
 	    !vdev->osif_vdev) {
-		dp_tx_flow_pool_unlock(soc, tx_desc);
 		return;
 	}
 
 	osif_dev = vdev->osif_vdev;
 	tx_compl_cbk = vdev->tx_comp;
-	dp_tx_flow_pool_unlock(soc, tx_desc);
 
 	if (status == HAL_TX_TQM_RR_FRAME_ACKED)
 		flag |= BIT(QDF_TX_RX_STATUS_OK);
@@ -4300,8 +4328,8 @@ static inline void dp_tx_sojourn_stats_process(struct dp_pdev *pdev,
 
 	link_peer_soc = primary_link_peer->vdev->pdev->soc;
 	sojourn_stats->cookie = (void *)
-			dp_monitor_peer_get_rdkstats_ctx(link_peer_soc,
-							 primary_link_peer);
+			dp_monitor_peer_get_peerstats_ctx(link_peer_soc,
+							  primary_link_peer);
 
 	delta_ms = qdf_ktime_to_ms(qdf_ktime_real_get()) -
 				txdesc_ts;
@@ -4372,7 +4400,7 @@ dp_tx_comp_process_desc(struct dp_soc *soc,
 	 */
 	if (qdf_unlikely(!!desc->pdev->latency_capture_enable)) {
 		time_latency = (qdf_ktime_to_ms(qdf_ktime_real_get()) -
-				desc->timestamp);
+				qdf_ktime_to_ms(desc->timestamp));
 	}
 
 	dp_send_completion_to_pkt_capture(soc, desc, ts);
@@ -4381,7 +4409,7 @@ dp_tx_comp_process_desc(struct dp_soc *soc,
 		qdf_trace_dp_packet(desc->nbuf, QDF_TX,
 				    desc->msdu_ext_desc ?
 				    desc->msdu_ext_desc->tso_desc : NULL,
-				    desc->timestamp);
+				    qdf_ktime_to_ms(desc->timestamp));
 
 	if (!(desc->msdu_ext_desc)) {
 		dp_tx_enh_unmap(soc, desc);
@@ -4457,6 +4485,50 @@ void dp_tx_update_connectivity_stats(struct dp_soc *soc,
 #endif
 
 #if defined(WLAN_FEATURE_TSF_UPLINK_DELAY) || defined(CONFIG_SAWF)
+QDF_STATUS
+dp_tx_compute_hw_delay_us(struct hal_tx_completion_status *ts,
+			  uint32_t delta_tsf,
+			  uint32_t *delay_us)
+{
+	uint32_t buffer_ts;
+	uint32_t delay;
+
+	if (!delay_us)
+		return QDF_STATUS_E_INVAL;
+
+	/* Tx_rate_stats_info_valid is 0 and tsf is invalid then */
+	if (!ts->valid)
+		return QDF_STATUS_E_INVAL;
+
+	/* buffer_timestamp is in units of 1024 us and is [31:13] of
+	 * WBM_RELEASE_RING_4. After left shift 10 bits, it's
+	 * valid up to 29 bits.
+	 */
+	buffer_ts = ts->buffer_timestamp << 10;
+
+	delay = ts->tsf - buffer_ts - delta_tsf;
+	delay &= 0x1FFFFFFF; /* mask 29 BITS */
+	if (delay > 0x1000000) {
+		dp_info_rl("----------------------\n"
+			   "Tx completion status:\n"
+			   "----------------------\n"
+			   "release_src = %d\n"
+			   "ppdu_id = 0x%x\n"
+			   "release_reason = %d\n"
+			   "tsf = %u (0x%x)\n"
+			   "buffer_timestamp = %u (0x%x)\n"
+			   "delta_tsf = %u (0x%x)\n",
+			   ts->release_src, ts->ppdu_id, ts->status,
+			   ts->tsf, ts->tsf, ts->buffer_timestamp,
+			   ts->buffer_timestamp, delta_tsf, delta_tsf);
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	*delay_us = delay;
+
+	return QDF_STATUS_SUCCESS;
+}
+
 void dp_set_delta_tsf(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
 		      uint32_t delta_tsf)
 {
@@ -4534,13 +4606,7 @@ QDF_STATUS dp_get_uplink_delay(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
 static void dp_tx_update_uplink_delay(struct dp_soc *soc, struct dp_vdev *vdev,
 				      struct hal_tx_completion_status *ts)
 {
-	uint32_t buffer_ts;
-	uint32_t delta_tsf;
 	uint32_t ul_delay;
-
-	/* Tx_rate_stats_info_valid is 0 and tsf is invalid then */
-	if (!ts->valid)
-		return;
 
 	if (qdf_unlikely(!vdev)) {
 		dp_info_rl("vdev is null or delete in progrss");
@@ -4550,31 +4616,10 @@ static void dp_tx_update_uplink_delay(struct dp_soc *soc, struct dp_vdev *vdev,
 	if (!qdf_atomic_read(&vdev->ul_delay_report))
 		return;
 
-	delta_tsf = vdev->delta_tsf;
-
-	/* buffer_timestamp is in units of 1024 us and is [31:13] of
-	 * WBM_RELEASE_RING_4. After left shift 10 bits, it's
-	 * valid up to 29 bits.
-	 */
-	buffer_ts = ts->buffer_timestamp << 10;
-
-	ul_delay = ts->tsf - buffer_ts - delta_tsf;
-	ul_delay &= 0x1FFFFFFF; /* mask 29 BITS */
-	if (ul_delay > 0x1000000) {
-		dp_info_rl("----------------------\n"
-			   "Tx completion status:\n"
-			   "----------------------\n"
-			   "release_src = %d\n"
-			   "ppdu_id = 0x%x\n"
-			   "release_reason = %d\n"
-			   "tsf = %u (0x%x)\n"
-			   "buffer_timestamp = %u (0x%x)\n"
-			   "delta_tsf = %u (0x%x)\n",
-			   ts->release_src, ts->ppdu_id, ts->status,
-			   ts->tsf, ts->tsf, ts->buffer_timestamp,
-			   ts->buffer_timestamp, delta_tsf, delta_tsf);
+	if (QDF_IS_STATUS_ERROR(dp_tx_compute_hw_delay_us(ts,
+							  vdev->delta_tsf,
+							  &ul_delay)))
 		return;
-	}
 
 	ul_delay /= 1000; /* in unit of ms */
 
@@ -4671,6 +4716,11 @@ void dp_tx_comp_process_tx_status(struct dp_soc *soc,
 	dp_tx_update_connectivity_stats(soc, vdev, tx_desc, ts->status);
 	dp_tx_update_uplink_delay(soc, vdev, ts);
 
+	/* check tx complete notification */
+	if (qdf_nbuf_tx_notify_comp_get(nbuf))
+		dp_tx_notify_completion(soc, vdev, tx_desc,
+					nbuf, ts->status);
+
 	/* Update per-packet stats for mesh mode */
 	if (qdf_unlikely(vdev->mesh_vdev) &&
 			!(tx_desc->flags & DP_TX_DESC_FLAG_TO_FW))
@@ -4708,11 +4758,12 @@ void dp_tx_comp_process_tx_status(struct dp_soc *soc,
 	dp_tx_update_peer_delay_stats(txrx_peer, tx_desc, ts->tid, ring_id);
 	dp_tx_update_peer_sawf_stats(soc, vdev, txrx_peer, tx_desc,
 				     ts, ts->tid);
+	dp_tx_send_pktlog(soc, vdev->pdev, nbuf, dp_status);
 
 #ifdef QCA_SUPPORT_RDK_STATS
-	if (soc->rdkstats_enabled)
+	if (soc->peerstats_enabled)
 		dp_tx_sojourn_stats_process(vdev->pdev, txrx_peer, ts->tid,
-					    tx_desc->timestamp,
+					    qdf_ktime_to_ms(tx_desc->timestamp),
 					    ts->ppdu_id);
 #endif
 
@@ -4787,12 +4838,57 @@ void dp_tx_prefetch_next_nbuf_data(struct dp_tx_desc_s *next)
 		/* prefetch skb fields present in different cachelines */
 		qdf_prefetch(&nbuf->len);
 		qdf_prefetch(&nbuf->users);
+		qdf_prefetch(skb_end_pointer(nbuf));
 	}
 }
 #else
 static inline
 void dp_tx_prefetch_next_nbuf_data(struct dp_tx_desc_s *next)
 {
+}
+#endif
+
+/**
+ * dp_tx_mcast_reinject_handler() - Tx reinjected multicast packets handler
+ * @soc: core txrx main context
+ * @desc: software descriptor
+ *
+ * Return: true when packet is reinjected
+ */
+#if defined(WLAN_FEATURE_11BE_MLO) && defined(WLAN_MLO_MULTI_CHIP) && \
+	defined(WLAN_MCAST_MLO)
+static inline bool
+dp_tx_mcast_reinject_handler(struct dp_soc *soc, struct dp_tx_desc_s *desc)
+{
+	struct dp_vdev *vdev = NULL;
+
+	if (desc->tx_status == HAL_TX_TQM_RR_MULTICAST_DROP) {
+		if (!soc->arch_ops.dp_tx_mcast_handler)
+			return false;
+
+		vdev = dp_vdev_get_ref_by_id(soc, desc->vdev_id,
+					     DP_MOD_ID_REINJECT);
+
+		if (qdf_unlikely(!vdev)) {
+			dp_tx_comp_info_rl("Unable to get vdev ref  %d",
+					   desc->id);
+			return false;
+		}
+		DP_STATS_INC_PKT(vdev, tx_i.reinject_pkts, 1,
+				 qdf_nbuf_len(desc->nbuf));
+		soc->arch_ops.dp_tx_mcast_handler(soc, vdev, desc->nbuf);
+		dp_tx_desc_release(desc, desc->pool_id);
+		dp_vdev_unref_delete(soc, vdev, DP_MOD_ID_REINJECT);
+		return true;
+	}
+
+	return false;
+}
+#else
+static inline bool
+dp_tx_mcast_reinject_handler(struct dp_soc *soc, struct dp_tx_desc_s *desc)
+{
+	return false;
 }
 #endif
 
@@ -4816,7 +4912,6 @@ dp_tx_comp_process_desc_list(struct dp_soc *soc,
 	struct hal_tx_completion_status ts;
 	struct dp_txrx_peer *txrx_peer = NULL;
 	uint16_t peer_id = DP_INVALID_PEER;
-	qdf_nbuf_t netbuf;
 	dp_txrx_ref_handle txrx_ref_handle = NULL;
 
 	desc = comp_head;
@@ -4836,6 +4931,10 @@ dp_tx_comp_process_desc_list(struct dp_soc *soc,
 							   DP_MOD_ID_TX_COMP);
 		}
 
+		if (dp_tx_mcast_reinject_handler(soc, desc)) {
+			desc = next;
+			continue;
+		}
 		if (qdf_likely(desc->flags & DP_TX_DESC_FLAG_SIMPLE)) {
 			struct dp_pdev *pdev = desc->pdev;
 
@@ -4854,21 +4953,16 @@ dp_tx_comp_process_desc_list(struct dp_soc *soc,
 			dp_tx_desc_history_add(soc, desc->dma_addr, desc->nbuf,
 					       desc->id, DP_TX_COMP_UNMAP);
 			dp_tx_nbuf_unmap(soc, desc);
-			qdf_nbuf_free(desc->nbuf);
+			qdf_nbuf_free_simple(desc->nbuf);
 			dp_tx_desc_free(soc, desc, desc->pool_id);
 			desc = next;
 			continue;
 		}
+
 		hal_tx_comp_get_status(&desc->comp, &ts, soc->hal_soc);
 
 		dp_tx_comp_process_tx_status(soc, desc, &ts, txrx_peer,
 					     ring_id);
-
-		netbuf = desc->nbuf;
-		/* check tx complete notification */
-		if (txrx_peer && qdf_nbuf_tx_notify_comp_get(netbuf))
-			dp_tx_notify_completion(soc, txrx_peer->vdev, desc,
-						netbuf, ts.status);
 
 		dp_tx_comp_process_desc(soc, desc, &ts, txrx_peer);
 

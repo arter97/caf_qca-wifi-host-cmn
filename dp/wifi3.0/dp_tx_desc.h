@@ -264,19 +264,19 @@ dp_tx_adjust_flow_pool_state(struct dp_soc *soc,
 		soc->pause_cb(pool->flow_pool_id,
 			      WLAN_NETIF_PRIORITY_QUEUE_OFF,
 			      WLAN_DATA_FLOW_CTRL_PRI);
-		/* fallthrough */
+		fallthrough;
 
 	case FLOW_POOL_VO_PAUSED:
 		soc->pause_cb(pool->flow_pool_id,
 			      WLAN_NETIF_VO_QUEUE_OFF,
 			      WLAN_DATA_FLOW_CTRL_VO);
-		/* fallthrough */
+		fallthrough;
 
 	case FLOW_POOL_VI_PAUSED:
 		soc->pause_cb(pool->flow_pool_id,
 			      WLAN_NETIF_VI_QUEUE_OFF,
 			      WLAN_DATA_FLOW_CTRL_VI);
-		/* fallthrough */
+		fallthrough;
 
 	case FLOW_POOL_BE_BK_PAUSED:
 		soc->pause_cb(pool->flow_pool_id,
@@ -406,7 +406,6 @@ dp_tx_desc_free(struct dp_soc *soc, struct dp_tx_desc_s *tx_desc,
 	tx_desc->nbuf = NULL;
 	tx_desc->flags = 0;
 	dp_tx_desc_set_magic(tx_desc, DP_TX_MAGIC_PATTERN_FREE);
-	tx_desc->timestamp = 0;
 	dp_tx_put_desc_flow_pool(pool, tx_desc);
 	switch (pool->status) {
 	case FLOW_POOL_ACTIVE_PAUSED:
@@ -531,17 +530,6 @@ dp_tx_desc_alloc(struct dp_soc *soc, uint8_t desc_pool_id)
 			} else {
 				qdf_spin_unlock_bh(&pool->flow_pool_lock);
 			}
-
-			/*
-			 * If one packet is going to be sent, PM usage count
-			 * needs to be incremented by one to prevent future
-			 * runtime suspend. This should be tied with the
-			 * success of allocating one descriptor. It will be
-			 * decremented after the packet has been sent.
-			 */
-			hif_pm_runtime_get_noresume(
-				soc->hif_handle,
-				RTPM_ID_DP_TX_DESC_ALLOC_FREE);
 		} else {
 			pool->pkt_drop_no_desc++;
 			qdf_spin_unlock_bh(&pool->flow_pool_lock);
@@ -549,7 +537,6 @@ dp_tx_desc_alloc(struct dp_soc *soc, uint8_t desc_pool_id)
 	} else {
 		soc->pool_stats.pkt_drop_no_pool++;
 	}
-
 
 	return tx_desc;
 }
@@ -574,7 +561,6 @@ dp_tx_desc_free(struct dp_soc *soc, struct dp_tx_desc_s *tx_desc,
 	tx_desc->nbuf = NULL;
 	tx_desc->flags = 0;
 	dp_tx_desc_set_magic(tx_desc, DP_TX_MAGIC_PATTERN_FREE);
-	tx_desc->timestamp = 0;
 	dp_tx_put_desc_flow_pool(pool, tx_desc);
 	switch (pool->status) {
 	case FLOW_POOL_ACTIVE_PAUSED:
@@ -592,7 +578,7 @@ dp_tx_desc_free(struct dp_soc *soc, struct dp_tx_desc_s *tx_desc,
 			qdf_spin_unlock_bh(&pool->flow_pool_lock);
 			qdf_print("%s %d pool is freed!!",
 				  __func__, __LINE__);
-			goto out;
+			return;
 		}
 		break;
 
@@ -605,14 +591,6 @@ dp_tx_desc_free(struct dp_soc *soc, struct dp_tx_desc_s *tx_desc,
 	};
 
 	qdf_spin_unlock_bh(&pool->flow_pool_lock);
-
-out:
-	/**
-	 * Decrement PM usage count if the packet has been sent. This
-	 * should be tied with the success of freeing one descriptor.
-	 */
-	hif_pm_runtime_put(soc->hif_handle,
-			   RTPM_ID_DP_TX_DESC_ALLOC_FREE);
 }
 
 #endif /* QCA_AC_BASED_FLOW_CONTROL */

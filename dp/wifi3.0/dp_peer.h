@@ -611,6 +611,27 @@ void dp_rx_peer_unmap_handler(struct dp_soc *soc, uint16_t peer_id,
 			      uint8_t vdev_id, uint8_t *peer_mac_addr,
 			      uint8_t is_wds, uint32_t free_wds_count);
 
+#ifdef DP_RX_UDP_OVER_PEER_ROAM
+/**
+ * dp_rx_reset_roaming_peer() - Reset the roamed peer in vdev
+ * @soc - dp soc pointer
+ * @vdev_id - vdev id
+ * @peer_mac_addr - mac address of the peer
+ *
+ * This function resets the roamed peer auth status and mac address
+ * after peer map indication of same peer is received from firmware.
+ *
+ * Return: None
+ */
+void dp_rx_reset_roaming_peer(struct dp_soc *soc, uint8_t vdev_id,
+			      uint8_t *peer_mac_addr);
+#else
+static inline void dp_rx_reset_roaming_peer(struct dp_soc *soc, uint8_t vdev_id,
+					    uint8_t *peer_mac_addr)
+{
+}
+#endif
+
 #ifdef WLAN_FEATURE_11BE_MLO
 /**
  * dp_rx_mlo_peer_map_handler() - handle MLO peer map event from firmware
@@ -618,6 +639,7 @@ void dp_rx_peer_unmap_handler(struct dp_soc *soc, uint16_t peer_id,
  * @peer_id - ML peer_id from firmware
  * @peer_mac_addr - mac address of the peer
  * @mlo_ast_flow_info: MLO AST flow info
+ * @mlo_link_info - MLO link info
  *
  * associate the ML peer_id that firmware provided with peer entry
  * and update the ast table in the host with the hw_peer_id.
@@ -627,7 +649,8 @@ void dp_rx_peer_unmap_handler(struct dp_soc *soc, uint16_t peer_id,
 QDF_STATUS
 dp_rx_mlo_peer_map_handler(struct dp_soc *soc, uint16_t peer_id,
 			   uint8_t *peer_mac_addr,
-			   struct dp_mlo_flow_override_info *mlo_flow_info);
+			   struct dp_mlo_flow_override_info *mlo_flow_info,
+			   struct dp_mlo_link_info *mlo_link_info);
 
 /**
  * dp_rx_mlo_peer_unmap_handler() - handle MLO peer unmap event from firmware

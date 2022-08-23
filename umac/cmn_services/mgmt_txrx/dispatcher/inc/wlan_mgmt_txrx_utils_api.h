@@ -125,6 +125,7 @@ enum mgmt_subtype {
  * @ACTION_CATEGORY_CDMG: CDMG Action frame
  * @ACTION_CATEGORY_CMMG: CMMG Action frame
  * @ACTION_CATEGORY_GLK: GLK Action frame
+ * @ACTION_CATEGORY_PROTECTED_EHT: Protected EHT Action frame
  * @ACTION_CATEGORY_VENDOR_SPECIFIC_PROTECTED: vendor specific protected
  *                                             action category
  * @ACTION_CATEGORY_VENDOR_SPECIFIC: vendor specific action category
@@ -160,6 +161,7 @@ enum mgmt_action_category {
 	ACTION_CATEGORY_CDMG = 27,
 	ACTION_CATEGORY_CMMG = 28,
 	ACTION_CATEGORY_GLK = 29,
+	ACTION_CATEGORY_PROTECTED_EHT = 37,
 	ACTION_CATEGORY_VENDOR_SPECIFIC_PROTECTED = 126,
 	ACTION_CATEGORY_VENDOR_SPECIFIC = 127,
 };
@@ -501,6 +503,18 @@ enum twt_actioncode {
 };
 
 /**
+ * enum eht_actioncode - Protected EHT action frames
+ * @EHT_T2LM_REQUEST: T2LM request action frame
+ * @EHT_T2LM_RESPONSE: T2LM response action frame
+ * @EHT_T2LM_TEARDOWN: T2LM teardown action frame
+ */
+enum eht_actioncode {
+	EHT_T2LM_REQUEST = 0,
+	EHT_T2LM_RESPONSE = 1,
+	EHT_T2LM_TEARDOWN = 2,
+};
+
+/**
  * struct action_frm_hdr - action frame header
  * @action_category: action category
  * @action_code: action code
@@ -635,6 +649,9 @@ struct action_frm_hdr {
  * @MGMT_ACTION_TWT_SETUP: TWT setup frame
  * @MGMT_ACTION_TWT_TEARDOWN: TWT teardown frame
  * @MGMT_ACTION_TWT_INFORMATION: TWT information frame
+ * @MGMT_ACTION_EHT_T2LM_REQUEST: T2LM request frame
+ * @MGMT_ACTION_EHT_T2LM_RESPONSE: T2LM response frame
+ * @MGMT_ACTION_EHT_T2LM_TEARDOWN: T2LM teardown frame
  * @MGMT_MAX_FRAME_TYPE:         max. mgmt frame types
  */
 enum mgmt_frame_type {
@@ -764,6 +781,9 @@ enum mgmt_frame_type {
 	MGMT_ACTION_TWT_SETUP,
 	MGMT_ACTION_TWT_TEARDOWN,
 	MGMT_ACTION_TWT_INFORMATION,
+	MGMT_ACTION_EHT_T2LM_REQUEST,
+	MGMT_ACTION_EHT_T2LM_RESPONSE,
+	MGMT_ACTION_EHT_T2LM_TEARDOWN,
 	MGMT_MAX_FRAME_TYPE,
 };
 
@@ -781,6 +801,26 @@ enum mgmt_frame_type {
 struct frame_pn_params {
 	uint8_t curr_pn[WLAN_MGMT_TXRX_HOST_MAX_PN_LEN];
 	uint8_t prev_pn[WLAN_MGMT_TXRX_HOST_MAX_PN_LEN];
+};
+
+/**
+ * struct frm_conn_ap - connected ap
+ * @mgmt_frm_sub_type: type of frame
+ * @is_conn_ap_frm:     set if frm is from connected ap
+ */
+struct frm_conn_ap {
+	uint8_t mgmt_frm_sub_type;
+	uint8_t is_conn_ap_frm;
+};
+
+/**
+ * struct mgmt_rx_event_ext_params - Host mgmt extended params
+ * @ba_win_size: Block-Ack window size
+ * @reo_win_size: Reo win size
+ */
+struct mgmt_rx_event_ext_params {
+	uint16_t ba_win_size;
+	uint16_t reo_win_size;
 };
 
 /**
@@ -807,6 +847,8 @@ struct frame_pn_params {
  *             (win specific, will be removed in phase 4)
  * @reo_params: Pointer to MGMT Rx REO params
  * @pn_params: Frame PN params
+ * @ext_params: Extended params
+ * @frm_con_ap: Frame is from connected ap
  */
 struct mgmt_rx_event_params {
 	uint32_t    chan_freq;
@@ -827,6 +869,8 @@ struct mgmt_rx_event_params {
 	struct mgmt_rx_reo_params *reo_params;
 #endif
 	struct frame_pn_params pn_params;
+	struct mgmt_rx_event_ext_params *ext_params;
+	struct frm_conn_ap is_conn_ap;
 };
 
 #ifdef WLAN_MGMT_RX_REO_SUPPORT
@@ -847,14 +891,25 @@ struct mgmt_rx_event_params *alloc_mgmt_rx_event_params(void)
 		return NULL;
 	}
 
+	rx_params->ext_params =
+		qdf_mem_malloc(sizeof(struct mgmt_rx_event_ext_params));
+
+	if (!rx_params->ext_params) {
+		qdf_mem_free(rx_params->reo_params);
+		qdf_mem_free(rx_params);
+		return NULL;
+	}
+
 	return rx_params;
 }
 
 static inline void
 free_mgmt_rx_event_params(struct mgmt_rx_event_params *rx_params)
 {
-	if (rx_params)
+	if (rx_params) {
+		qdf_mem_free(rx_params->ext_params);
 		qdf_mem_free(rx_params->reo_params);
+	}
 
 	qdf_mem_free(rx_params);
 }
@@ -868,10 +923,25 @@ struct mgmt_rx_event_params *alloc_mgmt_rx_event_params(void)
 	if (!rx_params)
 		return NULL;
 
+	rx_params->ext_params =
+		qdf_mem_malloc(sizeof(struct mgmt_rx_event_ext_params));
+
+	if (!rx_params->ext_params) {
+		qdf_mem_free(rx_params);
+		return NULL;
+	}
+
 	return rx_params;
 }
 
-#define free_mgmt_rx_event_params(rx_params) qdf_mem_free((rx_params))
+static inline void
+free_mgmt_rx_event_params(struct mgmt_rx_event_params *rx_params)
+{
+	if (rx_params)
+		qdf_mem_free(rx_params->ext_params);
+
+	qdf_mem_free(rx_params);
+}
 #endif
 
 /**

@@ -309,6 +309,18 @@ QDF_STATUS mlme_cm_connect_start_ind(struct wlan_objmgr_vdev *vdev,
 	return ret;
 }
 
+QDF_STATUS mlme_ext_hdl_get_acs_in_progress(struct wlan_objmgr_vdev *vdev,
+					    bool *acs_in_progress)
+{
+	QDF_STATUS ret = QDF_STATUS_SUCCESS;
+
+	if ((glbl_ops) && glbl_ops->mlme_ext_get_acs_inprogress)
+		ret = glbl_ops->mlme_ext_get_acs_inprogress(vdev,
+							    acs_in_progress);
+
+	return ret;
+}
+
 QDF_STATUS mlme_cm_bss_select_ind(struct wlan_objmgr_vdev *vdev,
 				  struct wlan_cm_vdev_connect_req *req)
 {
@@ -501,6 +513,18 @@ QDF_STATUS mlme_cm_osif_disconnect_start_ind(struct wlan_objmgr_vdev *vdev)
 
 	return ret;
 }
+
+#ifdef WLAN_VENDOR_HANDOFF_CONTROL
+QDF_STATUS mlme_cm_osif_get_vendor_handoff_params(struct wlan_objmgr_psoc *psoc,
+						  void *vendor_handoff_context)
+{
+	if (glbl_cm_ops && glbl_cm_ops->mlme_cm_get_vendor_handoff_params_cb)
+		return glbl_cm_ops->mlme_cm_get_vendor_handoff_params_cb(psoc,
+							vendor_handoff_context);
+
+	return QDF_STATUS_E_FAILURE;
+}
+#endif
 
 #ifdef CONN_MGR_ADV_FEATURE
 QDF_STATUS mlme_cm_osif_roam_sync_ind(struct wlan_objmgr_vdev *vdev)
@@ -770,6 +794,28 @@ mlme_twt_osif_notify_complete_ind(struct wlan_objmgr_psoc *psoc,
 
 	if (glbl_twt_ops && glbl_twt_ops->mlme_twt_notify_complete_cb)
 		ret = glbl_twt_ops->mlme_twt_notify_complete_cb(psoc, event);
+
+	return ret;
+}
+
+QDF_STATUS
+mlme_twt_vdev_create_notification(struct wlan_objmgr_vdev *vdev)
+{
+	QDF_STATUS ret = QDF_STATUS_SUCCESS;
+
+	if (glbl_twt_ops && glbl_twt_ops->mlme_twt_vdev_create_cb)
+		ret = glbl_twt_ops->mlme_twt_vdev_create_cb(vdev);
+
+	return ret;
+}
+
+QDF_STATUS
+mlme_twt_vdev_destroy_notification(struct wlan_objmgr_vdev *vdev)
+{
+	QDF_STATUS ret = QDF_STATUS_SUCCESS;
+
+	if (glbl_twt_ops && glbl_twt_ops->mlme_twt_vdev_destroy_cb)
+		ret = glbl_twt_ops->mlme_twt_vdev_destroy_cb(vdev);
 
 	return ret;
 }

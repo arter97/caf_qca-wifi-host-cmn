@@ -2833,12 +2833,40 @@ QDF_STATUS wlan_crypto_wpaie_check(struct wlan_crypto_params *crypto_params,
 	return QDF_STATUS_SUCCESS;
 }
 
+#ifdef WLAN_ADAPTIVE_11R
+/**
+ * wlan_crypto_akm_list_in_order - store AMK list in order
+ * @crypto_params: crypto param structure
+ * @key_mgmt: key management
+ * @akm_index: place at which AMK present in RSN IE of Beacon/Probe response
+ *
+ * Return: none
+ */
+static void
+wlan_crypto_store_akm_list_in_order(struct wlan_crypto_params *crypto_params,
+				    int32_t key_mgmt, int akm_index)
+{
+	if (akm_index >= WLAN_CRYPTO_KEY_MGMT_MAX) {
+		crypto_debug("Invalid AKM Index");
+		return;
+	}
+
+	crypto_params->akm_list[akm_index].key_mgmt = key_mgmt;
+}
+#else
+static inline void
+wlan_crypto_store_akm_list_in_order(struct wlan_crypto_params *crypto_params,
+				    int32_t key_mgmt, int akm_index)
+{
+}
+#endif
+
 QDF_STATUS wlan_crypto_rsnie_check(struct wlan_crypto_params *crypto_params,
 				   const uint8_t *frm)
 {
 	uint8_t len = frm[1];
 	int32_t w;
-	int n;
+	int n, akm_index;
 
 	/* Check the length once for fixed parts: OUI, type & version */
 	if (len < 2)
@@ -2928,11 +2956,16 @@ QDF_STATUS wlan_crypto_rsnie_check(struct wlan_crypto_params *crypto_params,
 	if (n) {
 		if (len < n * 4)
 			return QDF_STATUS_E_INVAL;
-
+		akm_index = 0;
 		for (; n > 0; n--) {
 			w = wlan_crypto_rsn_suite_to_keymgmt(frm);
-			if (w >= 0)
+			if (w >= 0) {
 				SET_KEY_MGMT(crypto_params, w);
+				wlan_crypto_store_akm_list_in_order(
+						crypto_params, w, akm_index);
+				akm_index++;
+			}
+
 			frm += 4, len -= 4;
 		}
 	} else {
@@ -4444,6 +4477,13 @@ QDF_STATUS wlan_set_vdev_crypto_prarams_from_ie(struct wlan_objmgr_vdev *vdev,
 		send_fail = false;
 	}
 
+	status = wlan_get_crypto_params_from_wapi_ie(&crypto_params,
+						     ie_ptr, ie_len);
+	if (QDF_IS_STATUS_SUCCESS(status)) {
+		wlan_crypto_merge_prarams(vdev_crypto_params, &crypto_params);
+		send_fail = false;
+	}
+
 	return send_fail ? QDF_STATUS_E_FAILURE : QDF_STATUS_SUCCESS;
 }
 
@@ -4675,6 +4715,43 @@ void wlan_crypto_set_sae_single_pmk_bss_cap(struct wlan_objmgr_vdev *vdev,
 					single_pmk_capable_bss;
 	}
 }
+
+void
+wlan_crypto_set_sae_single_pmk_info(struct wlan_objmgr_vdev *vdev,
+				    struct wlan_crypto_pmksa *roam_sync_pmksa)
+{
+	struct wlan_crypto_params *crypto_params;
+	struct wlan_crypto_comp_priv *crypto_priv;
+	int i;
+
+	crypto_priv = (struct wlan_crypto_comp_priv *)
+					wlan_get_vdev_crypto_obj(vdev);
+
+	if (!crypto_priv) {
+		crypto_err("crypto_priv NULL");
+		return;
+	}
+
+	crypto_params = &crypto_priv->crypto_params;
+
+	for (i = 0; i < WLAN_CRYPTO_MAX_PMKID; i++) {
+		if (!crypto_params->pmksa[i])
+			continue;
+		if (qdf_is_macaddr_equal(&roam_sync_pmksa->bssid,
+					 &crypto_params->pmksa[i]->bssid) &&
+		    roam_sync_pmksa->single_pmk_supported &&
+		    roam_sync_pmksa->pmk_len) {
+			crypto_params->pmksa[i]->single_pmk_supported =
+					roam_sync_pmksa->single_pmk_supported;
+			crypto_params->pmksa[i]->pmk_len =
+						roam_sync_pmksa->pmk_len;
+			qdf_mem_copy(crypto_params->pmksa[i]->pmk,
+				     roam_sync_pmksa->pmk,
+				     roam_sync_pmksa->pmk_len);
+		}
+	}
+}
+
 #endif
 
 void wlan_crypto_reset_vdev_params(struct wlan_objmgr_vdev *vdev)
@@ -4759,3 +4836,46 @@ QDF_STATUS wlan_crypto_create_fils_rik(uint8_t *rrk, uint8_t rrk_len,
 	return QDF_STATUS_SUCCESS;
 }
 #endif /* WLAN_FEATURE_FILS_SK */
+
+#if defined(WIFI_POS_CONVERGED) && defined(WLAN_FEATURE_RTT_11AZ_SUPPORT)
+QDF_STATUS
+wlan_crypto_set_ltf_keyseed(struct wlan_objmgr_psoc *psoc,
+			    struct wlan_crypto_ltf_keyseed_data *data)
+{
+	QDF_STATUS status = QDF_STATUS_SUCCESS;
+	struct wlan_lmac_if_tx_ops *tx_ops;
+
+	tx_ops = wlan_psoc_get_lmac_if_txops(psoc);
+	if (!tx_ops) {
+		crypto_err("tx_ops is NULL");
+		return QDF_STATUS_E_INVAL;
+	}
+
+	if (WLAN_CRYPTO_TX_OPS_SET_LTF_KEYSEED(tx_ops))
+		status = WLAN_CRYPTO_TX_OPS_SET_LTF_KEYSEED(tx_ops)(psoc, data);
+
+	return status;
+}
+#endif
+
+QDF_STATUS
+wlan_crypto_vdev_set_param(struct wlan_objmgr_psoc *psoc, uint32_t vdev_id,
+			   uint32_t param_id, uint32_t param_value)
+{
+	QDF_STATUS status = QDF_STATUS_SUCCESS;
+	struct wlan_lmac_if_tx_ops *tx_ops;
+
+	tx_ops = wlan_psoc_get_lmac_if_txops(psoc);
+	if (!tx_ops) {
+		crypto_err("tx_ops is NULL");
+		return QDF_STATUS_E_INVAL;
+	}
+
+	if (WLAN_CRYPTO_TX_OPS_SET_VDEV_PARAM(tx_ops))
+		status = WLAN_CRYPTO_TX_OPS_SET_VDEV_PARAM(tx_ops) (psoc,
+								    vdev_id,
+								    param_id,
+								    param_value);
+
+	return status;
+}

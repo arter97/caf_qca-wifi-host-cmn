@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2014-2021 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -180,6 +181,52 @@ typedef struct s_qdf_trace_data {
 	uint16_t dump_count;
 } t_qdf_trace_data;
 
+#ifdef CONNECTIVITY_DIAG_EVENT
+/**
+ * enum diag_dp_tx_rx_status - TX/RX packet status
+ * @DIAG_TX_RX_STATUS_INVALID: default invalid status
+ * @DIAG_TX_RX_STATUS_OK: successfully sent + acked
+ * @DIAG_TX_RX_STATUS_DISCARD: queued but not sent over air
+ * @DIAG_TX_RX_STATUS_NO_ACK: packet sent but no ack received
+ * @DIAG_TX_RX_STATUS_DROP: packet dropped due to congestion
+ * @DIAG_TX_RX_STATUS_DOWNLOAD_SUCC: packet delivered to target
+ * @DIAG_TX_RX_STATUS_DEFAULT: default status
+ * @DIAG_TX_RX_STATUS_MAX:
+ */
+enum diag_dp_tx_rx_status {
+	DIAG_TX_RX_STATUS_INVALID,
+	DIAG_TX_RX_STATUS_OK,
+	DIAG_TX_RX_STATUS_FW_DISCARD,
+	DIAG_TX_RX_STATUS_NO_ACK,
+	DIAG_TX_RX_STATUS_DROP,
+	DIAG_TX_RX_STATUS_DOWNLOAD_SUCC,
+	DIAG_TX_RX_STATUS_DEFAULT,
+	DIAG_TX_RX_STATUS_MAX
+};
+
+/**
+ * enum diag_tx_status - Used by attribute
+ * @DIAG_TX_STATUS_FAIL: Indicates frame is not sent over the air.
+ * @DIAG_TX_STATUS_NO_ACK: Indicates packet sent but acknowledgment
+ * is not received.
+ * @DIAG_TX_STATUS_ACK: Indicates the frame is successfully sent and
+ * acknowledged.
+ */
+enum diag_tx_status {
+	DIAG_TX_STATUS_FAIL = 1,
+	DIAG_TX_STATUS_NO_ACK = 2,
+	DIAG_TX_STATUS_ACK = 3
+};
+
+/**
+ * wlan_get_diag_tx_status() - Gives the diag logging specific tx status
+ * @tx_status: fw specific TX status
+ *
+ * Returns TX status specified in enum diag_tx_status
+ */
+enum diag_tx_status wlan_get_diag_tx_status(enum qdf_dp_tx_rx_status tx_status);
+#endif
+
 #define CASE_RETURN_STRING(str) case ((str)): return (uint8_t *)(# str);
 
 #ifndef MAX_QDF_DP_TRACE_RECORDS
@@ -221,7 +268,9 @@ typedef struct s_qdf_trace_data {
  * @QDF_DP_TRACE_FREE_PACKET_PTR_RECORD - tx completion ptr record
  * @QDF_DP_TRACE_LOW_VERBOSITY - below this are part of low verbosity
  * @QDF_DP_TRACE_HDD_TX_PACKET_PTR_RECORD - HDD layer ptr record
+ * @QDF_DP_TRACE_TX_PACKET_PTR_RECORD - DP component Tx ptr record
  * @QDF_DP_TRACE_LI_DP_TX_PACKET_PTR_RECORD - Lithium DP layer ptr record
+ * @QDF_DP_TRACE_RX_PACKET_PTR_RECORD - DP component Rx ptr record
  * @QDF_DP_TRACE_RX_HDD_PACKET_PTR_RECORD - HDD RX record
  * @QDF_DP_TRACE_CE_PACKET_PTR_RECORD - CE layer ptr record
  * @QDF_DP_TRACE_CE_FAST_PACKET_PTR_RECORD- CE fastpath ptr record
@@ -267,7 +316,9 @@ enum  QDF_DP_TRACE_ID {
 	QDF_DP_TRACE_FREE_PACKET_PTR_RECORD,
 	QDF_DP_TRACE_LOW_VERBOSITY,
 	QDF_DP_TRACE_HDD_TX_PACKET_PTR_RECORD,
+	QDF_DP_TRACE_TX_PACKET_PTR_RECORD,
 	QDF_DP_TRACE_LI_DP_TX_PACKET_PTR_RECORD,
+	QDF_DP_TRACE_RX_PACKET_PTR_RECORD,
 	QDF_DP_TRACE_RX_HDD_PACKET_PTR_RECORD,
 	QDF_DP_TRACE_CE_PACKET_PTR_RECORD,
 	QDF_DP_TRACE_CE_FAST_PACKET_PTR_RECORD,

@@ -1496,7 +1496,7 @@ static QDF_STATUS dp_rx_defrag(struct dp_txrx_peer *txrx_peer, unsigned int tid,
 	switch (txrx_peer->security[index].sec_type) {
 	case cdp_sec_type_tkip:
 		tkip_demic = 1;
-
+		fallthrough;
 	case cdp_sec_type_tkip_nomic:
 		while (cur) {
 			tmp_next = qdf_nbuf_next(cur);
@@ -2044,6 +2044,7 @@ uint32_t dp_rx_frag_handle(struct dp_soc *soc, hal_ring_desc_t ring_desc,
 	if (rx_desc->unmapped)
 		return rx_bufs_used;
 
+	dp_rx_send_pktlog(soc, pdev, msdu, QDF_TX_RX_STATUS_OK);
 	dp_ipa_rx_buf_smmu_mapping_lock(soc);
 	dp_rx_nbuf_unmap_pool(soc, rx_desc_pool, rx_desc->nbuf);
 	rx_desc->unmapped = 1;

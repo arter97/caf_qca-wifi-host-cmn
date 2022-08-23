@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2013-2021 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -197,6 +198,7 @@ enum ol_ath_htc_pkt_ecodes {
 	HTC_PKT_Q_EMPTY,
 	HTC_SEND_Q_EMPTY
 };
+
 /* our HTC target state */
 typedef struct _HTC_TARGET {
 	struct hif_opaque_softc *hif_dev;
@@ -264,6 +266,9 @@ typedef struct _HTC_TARGET {
 	/* Runtime count for H2T msg with response */
 	qdf_atomic_t htc_runtime_cnt;
 #endif
+	/* Non flow ctrl enabled endpoints nbuf map unmap count */
+	uint32_t nbuf_nfc_map_count;
+	uint32_t nbuf_nfc_unmap_count;
 } HTC_TARGET;
 
 

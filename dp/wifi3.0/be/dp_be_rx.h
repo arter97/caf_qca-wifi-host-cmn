@@ -216,10 +216,10 @@ uint32_t dp_rx_nf_process(struct dp_intr *int_ctx,
 
 #if defined(WLAN_FEATURE_11BE_MLO) && defined(WLAN_MLO_MULTI_CHIP)
 struct dp_soc *
-dp_rx_replensih_soc_get(struct dp_soc *soc, uint8_t reo_ring_num);
+dp_rx_replensih_soc_get(struct dp_soc *soc, uint8_t chip_id);
 #else
 static inline struct dp_soc *
-dp_rx_replensih_soc_get(struct dp_soc *soc, uint8_t reo_ring_num)
+dp_rx_replensih_soc_get(struct dp_soc *soc, uint8_t chip_id)
 {
 	return soc;
 }
@@ -237,7 +237,7 @@ dp_rx_replensih_soc_get(struct dp_soc *soc, uint8_t reo_ring_num)
  */
 bool dp_rx_mlo_igmp_handler(struct dp_soc *soc,
 			    struct dp_vdev *vdev,
-			    struct dp_peer *peer,
+			    struct dp_txrx_peer *peer,
 			    qdf_nbuf_t nbuf);
 
 /**

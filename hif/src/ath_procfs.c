@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2013-2014, 2016-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -112,7 +112,8 @@ static ssize_t ath_procfs_diag_read_legacy(struct file *file,
 	     (tgt_info->target_type == TARGET_TYPE_QCA5018) ||
 	     (tgt_info->target_type == TARGET_TYPE_QCA6018) ||
 	     (tgt_info->target_type == TARGET_TYPE_QCN7605) ||
-	     (tgt_info->target_type == TARGET_TYPE_KIWI))) ||
+	     (tgt_info->target_type == TARGET_TYPE_KIWI) ||
+	     (tgt_info->target_type == TARGET_TYPE_MANGO))) ||
 	    (scn->bus_type ==  QDF_BUS_TYPE_IPCI &&
 	     (tgt_info->target_type == TARGET_TYPE_QCA6750)) ||
 	    ((scn->bus_type ==  QDF_BUS_TYPE_USB) &&
@@ -194,7 +195,8 @@ static ssize_t ath_procfs_diag_write_legacy(struct file *file,
 	      (tgt_info->target_type == TARGET_TYPE_QCA5018) ||
 	      (tgt_info->target_type == TARGET_TYPE_QCA6018) ||
 	      (tgt_info->target_type == TARGET_TYPE_QCN7605) ||
-	      (tgt_info->target_type == TARGET_TYPE_KIWI))) ||
+	      (tgt_info->target_type == TARGET_TYPE_KIWI) ||
+	      (tgt_info->target_type == TARGET_TYPE_MANGO))) ||
 	    (scn->bus_type ==  QDF_BUS_TYPE_IPCI &&
 	     (tgt_info->target_type == TARGET_TYPE_QCA6750)) ||
 	    ((scn->bus_type ==  QDF_BUS_TYPE_USB) &&
@@ -341,6 +343,7 @@ static ssize_t ath_procfs_diag_read_ext(struct file *file, char __user *buf,
 		case TARGET_TYPE_QCA6390:
 		case TARGET_TYPE_QCA6490:
 		case TARGET_TYPE_KIWI:
+		case TARGET_TYPE_MANGO:
 			if (op_type == OP_TYPE_EXT_DIRECT)
 				rv = ath_procfs_direct_read(scn,
 							    offset,
@@ -416,6 +419,7 @@ static ssize_t ath_procfs_diag_write_ext(struct file *file,
 		case TARGET_TYPE_QCA6390:
 		case TARGET_TYPE_QCA6490:
 		case TARGET_TYPE_KIWI:
+		case TARGET_TYPE_MANGO:
 			if (op_type == OP_TYPE_EXT_DIRECT)
 				rv = ath_procfs_direct_write(scn,
 							     offset,
@@ -543,6 +547,7 @@ static ssize_t ath_procfs_diag_write(struct file *file,
 static const struct proc_ops athdiag_fops = {
 	.proc_read = ath_procfs_diag_read,
 	.proc_write = ath_procfs_diag_write,
+	.proc_lseek = default_llseek,
 };
 #else
 static const struct file_operations athdiag_fops = {

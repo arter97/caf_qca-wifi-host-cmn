@@ -25,6 +25,8 @@
 #include "wcss_version.h"
 #include <qdf_tracepoint.h>
 
+struct tcl_data_cmd gtcl_data_symbol __attribute__((used));
+
 #ifdef QCA_WIFI_QCA8074
 void hal_qca6290_attach(struct hal_soc *hal);
 #endif
@@ -351,12 +353,25 @@ void hal_get_shadow_config(void *hal_soc,
 {
 	struct hal_soc *hal = (struct hal_soc *)hal_soc;
 
-	*shadow_config = hal->shadow_config;
+	*shadow_config = &hal->shadow_config[0].v2;
 	*num_shadow_registers_configured =
 		hal->num_shadow_registers_configured;
 }
-
 qdf_export_symbol(hal_get_shadow_config);
+
+#ifdef CONFIG_SHADOW_V3
+void hal_get_shadow_v3_config(void *hal_soc,
+			      struct pld_shadow_reg_v3_cfg **shadow_config,
+			      int *num_shadow_registers_configured)
+{
+	struct hal_soc *hal = (struct hal_soc *)hal_soc;
+
+	*shadow_config = &hal->shadow_config[0].v3;
+	*num_shadow_registers_configured =
+		hal->num_shadow_registers_configured;
+}
+qdf_export_symbol(hal_get_shadow_v3_config);
+#endif
 
 static bool hal_validate_shadow_register(struct hal_soc *hal,
 					 uint32_t *destination,
@@ -425,6 +440,7 @@ static void hal_target_based_configure(struct hal_soc *hal)
 #endif
 #ifdef QCA_WIFI_KIWI
 	case TARGET_TYPE_KIWI:
+	case TARGET_TYPE_MANGO:
 		hal->use_register_windowing = true;
 		hal_kiwi_attach(hal);
 		break;
@@ -1089,6 +1105,8 @@ void *hal_attach(struct hif_opaque_softc *hif_handle, qdf_device_t qdf_dev)
 
 	hal_reo_shared_qaddr_setup((hal_soc_handle_t)hal);
 
+	hif_rtpm_register(HIF_RTPM_ID_HAL_REO_CMD, NULL);
+
 	return (void *)hal;
 fail3:
 	qdf_mem_free_consistent(qdf_dev, qdf_dev->dev,
@@ -1143,7 +1161,9 @@ extern void hal_detach(void *hal_soc)
 {
 	struct hal_soc *hal = (struct hal_soc *)hal_soc;
 
+	hif_rtpm_deregister(HIF_RTPM_ID_HAL_REO_CMD);
 	hal_delayed_reg_write_deinit(hal);
+	hal_reo_shared_qaddr_detach((hal_soc_handle_t)hal);
 	qdf_mem_free(hal->ops);
 
 	qdf_mem_free_consistent(hal->qdf_dev, hal->qdf_dev->dev,
@@ -1153,8 +1173,6 @@ extern void hal_detach(void *hal_soc)
 		sizeof(*(hal->shadow_wrptr_mem_vaddr)) * HAL_MAX_LMAC_RINGS,
 		hal->shadow_wrptr_mem_vaddr, hal->shadow_wrptr_mem_paddr, 0);
 	qdf_minidump_remove(hal, sizeof(*hal), "hal_soc");
-
-	hal_reo_shared_qaddr_detach((hal_soc_handle_t)hal);
 
 	qdf_mem_free(hal);
 
@@ -1352,7 +1370,7 @@ static inline void hal_srng_hw_init(struct hal_soc *hal,
 		hal_srng_dst_hw_init(hal, srng);
 }
 
-#ifdef CONFIG_SHADOW_V2
+#if defined(CONFIG_SHADOW_V2) || defined(CONFIG_SHADOW_V3)
 #define ignore_shadow false
 #define CHECK_SHADOW_REGISTERS true
 #else
@@ -1467,6 +1485,37 @@ void hal_srng_last_desc_cleared_init(struct hal_srng *srng)
 }
 #endif /* CLEAR_SW2TCL_CONSUMED_DESC */
 
+#ifdef WLAN_DP_SRNG_USAGE_WM_TRACKING
+static inline void hal_srng_update_high_wm_thresholds(struct hal_srng *srng)
+{
+	srng->high_wm.bin_thresh[HAL_SRNG_HIGH_WM_BIN_90_to_100] =
+			((srng->num_entries * 90) / 100);
+	srng->high_wm.bin_thresh[HAL_SRNG_HIGH_WM_BIN_80_to_90] =
+			((srng->num_entries * 80) / 100);
+	srng->high_wm.bin_thresh[HAL_SRNG_HIGH_WM_BIN_70_to_80] =
+			((srng->num_entries * 70) / 100);
+	srng->high_wm.bin_thresh[HAL_SRNG_HIGH_WM_BIN_60_to_70] =
+			((srng->num_entries * 60) / 100);
+	srng->high_wm.bin_thresh[HAL_SRNG_HIGH_WM_BIN_50_to_60] =
+			((srng->num_entries * 50) / 100);
+	/* Below 50% threshold is not needed */
+	srng->high_wm.bin_thresh[HAL_SRNG_HIGH_WM_BIN_BELOW_50_PERCENT] = 0;
+
+	hal_info("ring_id: %u, wm_thresh- <50:%u, 50-60:%u, 60-70:%u, 70-80:%u, 80-90:%u, 90-100:%u",
+		 srng->ring_id,
+		 srng->high_wm.bin_thresh[HAL_SRNG_HIGH_WM_BIN_BELOW_50_PERCENT],
+		 srng->high_wm.bin_thresh[HAL_SRNG_HIGH_WM_BIN_50_to_60],
+		 srng->high_wm.bin_thresh[HAL_SRNG_HIGH_WM_BIN_60_to_70],
+		 srng->high_wm.bin_thresh[HAL_SRNG_HIGH_WM_BIN_70_to_80],
+		 srng->high_wm.bin_thresh[HAL_SRNG_HIGH_WM_BIN_80_to_90],
+		 srng->high_wm.bin_thresh[HAL_SRNG_HIGH_WM_BIN_90_to_100]);
+}
+#else
+static inline void hal_srng_update_high_wm_thresholds(struct hal_srng *srng)
+{
+}
+#endif
+
 /**
  * hal_srng_setup - Initialize HW SRNG ring.
  * @hal_soc: Opaque HAL SOC handle
@@ -1529,6 +1578,7 @@ void *hal_srng_setup(void *hal_soc, int ring_type, int ring_num,
 	srng->prefetch_timer = ring_params->prefetch_timer;
 	srng->hal_soc = hal_soc;
 	hal_srng_set_msi2_params(srng, ring_params);
+	hal_srng_update_high_wm_thresholds(srng);
 
 	for (i = 0 ; i < MAX_SRNG_REG_GROUPS; i++) {
 		srng->hwreg_base[i] = dev_base_addr + ring_config->reg_start[i]
@@ -1540,6 +1590,18 @@ void *hal_srng_setup(void *hal_soc, int ring_type, int ring_num,
 		srng->num_entries) << 2);
 
 	srng->flags = ring_params->flags;
+
+	/* For cached descriptors flush and invalidate the memory*/
+	if (srng->flags & HAL_SRNG_CACHED_DESC) {
+		qdf_nbuf_dma_clean_range(
+				srng->ring_base_vaddr,
+				srng->ring_base_vaddr +
+				((srng->entry_size * srng->num_entries)));
+		qdf_nbuf_dma_inv_range(
+				srng->ring_base_vaddr,
+				srng->ring_base_vaddr +
+				((srng->entry_size * srng->num_entries)));
+	}
 #ifdef BIG_ENDIAN_HOST
 		/* TODO: See if we should we get these flags from caller */
 	srng->flags |= HAL_SRNG_DATA_TLV_SWAP;
@@ -1760,11 +1822,34 @@ void hal_set_low_threshold(hal_ring_handle_t hal_ring_hdl,
 }
 qdf_export_symbol(hal_set_low_threshold);
 
+#ifdef FEATURE_RUNTIME_PM
+void
+hal_srng_rtpm_access_end(hal_soc_handle_t hal_soc_hdl,
+			 hal_ring_handle_t hal_ring_hdl,
+			 uint32_t rtpm_id)
+{
+	if (qdf_unlikely(!hal_ring_hdl)) {
+		qdf_print("Error: Invalid hal_ring\n");
+		return;
+	}
+
+	if (hif_rtpm_get(HIF_RTPM_GET_ASYNC, rtpm_id) == 0) {
+		hal_srng_access_end(hal_soc_hdl, hal_ring_hdl);
+		hif_rtpm_put(HIF_RTPM_PUT_ASYNC, rtpm_id);
+	} else {
+		hal_srng_access_end_reap(hal_soc_hdl, hal_ring_hdl);
+		hal_srng_set_event(hal_ring_hdl, HAL_SRNG_FLUSH_EVENT);
+		hal_srng_inc_flush_cnt(hal_ring_hdl);
+	}
+}
+
+qdf_export_symbol(hal_srng_rtpm_access_end);
+#endif /* FEATURE_RUNTIME_PM */
+
 #ifdef FORCE_WAKE
 void hal_set_init_phase(hal_soc_handle_t soc, bool init_phase)
 {
 	struct hal_soc *hal_soc = (struct hal_soc *)soc;
-
 	hal_soc->init_phase = init_phase;
 }
 #endif /* FORCE_WAKE */

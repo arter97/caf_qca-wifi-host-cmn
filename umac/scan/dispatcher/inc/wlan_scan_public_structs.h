@@ -36,7 +36,7 @@ typedef uint32_t wlan_scan_id;
 
 #define WLAN_SCAN_MAX_HINT_S_SSID        10
 #define WLAN_SCAN_MAX_HINT_BSSID         10
-#define MAX_RNR_BSS                      5
+#define MAX_RNR_BSS                      16
 #define WLAN_SCAN_MAX_NUM_SSID          16
 #define WLAN_SCAN_MAX_NUM_BSSID         4
 
@@ -203,6 +203,13 @@ struct channel_info {
  * @ehtcap: pointer to ehtcap ie
  * @ehtop: pointer to eht op ie
  * @multi_link: pointer to multi lik IE
+ * @bwnss_map: pointer to NSS map IE
+ * @secchanoff: pointer to secondary chan IE
+ * @mdie: pointer to md IE
+ * @heop: pointer to HE op IE
+ * @muedca: pointer to muedca IE
+ * @extender: pointer to extended IE
+ * @qcn: pointer to QCN IE
  */
 struct ie_list {
 	uint8_t *tim;
@@ -264,6 +271,7 @@ struct ie_list {
 #ifdef WLAN_FEATURE_11BE_MLO
 	uint8_t *multi_link;
 #endif
+	uint8_t *qcn;
 
 /**
  * For any new IEs in this structre, add handling in
@@ -406,12 +414,14 @@ struct non_inheritance_ie {
  * @mld_id: MLD ID
  * @link_id: Link ID
  * @bss_param_change_cnt: BSS parameters change count
+ * @all_updates_included: All Updates Included
  */
 struct rnr_mld_info {
 	uint8_t mld_id;
 	uint16_t link_id: 4,
 		 bss_param_change_cnt: 8,
-		 reserved: 4;
+		 all_updates_included: 1,
+		 reserved: 3;
 };
 #endif
 /**
@@ -471,32 +481,27 @@ struct neighbor_ap_info_field {
  * enum tbtt_information_field - TBTT information field
  * @TBTT_NEIGHBOR_AP_OFFSET_ONLY: TBTT information field type
  * @TBTT_NEIGHBOR_AP_BSS_PARAM: neighbor AP and bss param
- * @TBTT_NEIGHBOR_AP_MLD_PARAM: neighbor AP and MLD param
  * @TBTT_NEIGHBOR_AP_SHORTSSID: neighbor AP and Short ssid
  * @TBTT_NEIGHBOR_AP_S_SSID_BSS_PARAM: neighbor AP, short ssid and bss param
  * @TBTT_NEIGHBOR_AP_BSSID: neighbor AP and bssid
  * @TBTT_NEIGHBOR_AP_BSSID_BSS_PARAM: neighbor AP, bssid and bss param
  * @TBTT_NEIGHBOR_AP_BSSID_BSS_PARAM_20MHZ_PSD: neighbor AP, bssid and bss
  * param and 20MHz PSD
- * @TBTT_NEIGHBOR_AP_BSSID_MLD_PARAM:  neighbor AP, bssid and MLD param
  * @TBTT_NEIGHBOR_AP_BSSSID_S_SSID: neighbor AP, bssid and short ssid
  * @TBTT_NEIGHBOR_AP_BSSID_S_SSID_BSS_PARAM: neighbor AP, bssid, short ssid
  * and bss params
  * @TBTT_NEIGHBOR_AP_BSSID_S_SSID_BSS_PARAM_20MHZ_PSD: neighbor AP, bssid,
  * short ssid, bss params and 20MHz PSD
- * @TBTT_NEIGHBOR_AP_BSSID_S_SSID_BSS_PARAM_20MHZ_PSD_MLD_PARAM: neighbor AP,
  * bssid, short ssid, bss params, 20MHz PSD and MLD param
  */
 enum tbtt_information_field {
 	TBTT_NEIGHBOR_AP_OFFSET_ONLY = 1,
 	TBTT_NEIGHBOR_AP_BSS_PARAM = 2,
-	TBTT_NEIGHBOR_AP_MLD_PARAM = 4,
 	TBTT_NEIGHBOR_AP_SHORTSSID = 5,
 	TBTT_NEIGHBOR_AP_S_SSID_BSS_PARAM = 6,
 	TBTT_NEIGHBOR_AP_BSSID = 7,
 	TBTT_NEIGHBOR_AP_BSSID_BSS_PARAM = 8,
 	TBTT_NEIGHBOR_AP_BSSID_BSS_PARAM_20MHZ_PSD = 9,
-	TBTT_NEIGHBOR_AP_BSSID_MLD_PARAM = 10,
 	TBTT_NEIGHBOR_AP_BSSSID_S_SSID = 11,
 	TBTT_NEIGHBOR_AP_BSSID_S_SSID_BSS_PARAM = 12,
 	TBTT_NEIGHBOR_AP_BSSID_S_SSID_BSS_PARAM_20MHZ_PSD = 13,
@@ -530,6 +535,7 @@ struct reduced_neighbor_report {
  * @csa_ie: Pointer to CSA IE
  * @ecsa_ie: Pointer to eCSA IE
  * @max_cst_ie: Pointer to Max Channel Switch Time IE
+ * @is_valid_link: The partner link can be used if true
  */
 struct partner_link_info {
 	struct qdf_mac_addr link_addr;
@@ -539,6 +545,7 @@ struct partner_link_info {
 	const uint8_t *csa_ie;
 	const uint8_t *ecsa_ie;
 	const uint8_t *max_cst_ie;
+	uint8_t  is_valid_link;
 };
 
 /**
@@ -719,7 +726,6 @@ enum dot11_mode_filter {
  * @bss_type: bss type IBSS or BSS or ANY
  * @pmf_cap: Pmf capability
  * @dot11mode: Filter APs based upon dot11mode
- * @band: to get specific band 2.4G, 5G or 4.9 G
  * @rssi_threshold: AP having RSSI greater than
  *                  rssi threasholed (ignored if set 0)
  * @mobility_domain: Mobility domain for 11r
@@ -737,6 +743,7 @@ enum dot11_mode_filter {
  * @match_security_func_arg: Function argument to custom security filter
  * @ccx_validate_bss: Function pointer to custom bssid filter
  * @ccx_validate_bss_arg: Function argument to custom bssid filter
+ * @band_bitmap: Allowed band bit map, BIT0: 2G, BIT1: 5G, BIT2: 6G
  */
 struct scan_filter {
 	uint8_t enable_adaptive_11r:1,
@@ -752,7 +759,6 @@ struct scan_filter {
 	enum wlan_bss_type bss_type;
 	enum wlan_pmf_cap pmf_cap;
 	enum dot11_mode_filter dot11mode;
-	enum wlan_band band;
 	uint8_t rssi_threshold;
 	uint32_t mobility_domain;
 	uint32_t authmodeset;
@@ -772,6 +778,9 @@ struct scan_filter {
 	bss_filter_arg_t match_security_func_arg;
 	bool (*ccx_validate_bss)(void *, struct scan_cache_entry *, int);
 	bss_filter_arg_t ccx_validate_bss_arg;
+#ifdef WLAN_FEATURE_11BE_MLO
+	uint32_t band_bitmap;
+#endif
 };
 
 /**
@@ -1559,11 +1568,13 @@ enum ext_cap_bit_field {
  * @timestamp: time stamp of beacon/probe
  * @short_ssid: Short SSID
  * @bssid: BSSID
+ * @bss_params: bss params present in RNR IE
  */
 struct scan_rnr_info {
 	qdf_time_t timestamp;
 	uint32_t short_ssid;
 	struct qdf_mac_addr bssid;
+	uint8_t bss_params;
 };
 
 /**

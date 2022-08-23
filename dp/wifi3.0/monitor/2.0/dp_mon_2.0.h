@@ -30,8 +30,37 @@
 #define DP_MON_RING_FILL_LEVEL_DEFAULT 2048
 #define DP_MON_DATA_BUFFER_SIZE     2048
 #define DP_MON_DESC_MAGIC 0xdeadabcd
-#define DP_MON_MAX_STATUS_BUF 128
+#define DP_MON_MAX_STATUS_BUF 1200
 #define DP_MON_QUEUE_DEPTH_MAX 16
+#define DP_MON_MSDU_LOGGING 0
+#define DP_MON_MPDU_LOGGING 1
+
+#define DP_MON_DECAP_FORMAT_INVALID 0xff
+#define DP_MON_MIN_FRAGS_FOR_RESTITCH 2
+
+/* monitor frame filter modes */
+enum dp_mon_frm_filter_mode {
+	/* mode filter pass */
+	DP_MON_FRM_FILTER_MODE_FP = 0,
+	/* mode monitor direct */
+	DP_MON_FRM_FILTER_MODE_MD = 1,
+	/* mode monitor other */
+	DP_MON_FRM_FILTER_MODE_MO = 2,
+	/* mode filter pass monitor other */
+	DP_MON_FRM_FILTER_MODE_FP_MO = 3,
+};
+
+/* mpdu filter categories */
+enum dp_mpdu_filter_category {
+	/* category filter pass */
+	DP_MPDU_FILTER_CATEGORY_FP = 0,
+	/* category monitor direct */
+	DP_MPDU_FILTER_CATEGORY_MD = 1,
+	/* category monitor other */
+	DP_MPDU_FILTER_CATEGORY_MO = 2,
+	/* category filter pass monitor override */
+	DP_MPDU_FILTER_CATEGORY_FP_MO = 3,
+};
 
 /**
  * struct dp_mon_filter_be - Monitor TLV filter
@@ -134,6 +163,8 @@ struct dp_mon_pdev_be {
 	struct dp_lite_mon_rx_config *lite_mon_rx_config;
 	struct dp_lite_mon_tx_config *lite_mon_tx_config;
 #endif
+	void *prev_rxmon_desc;
+	uint32_t prev_rxmon_cookie;
 };
 
 /**
@@ -242,20 +273,46 @@ QDF_STATUS dp_mon_buffers_replenish(struct dp_soc *dp_soc,
 				union dp_mon_desc_list_elem_t **tail);
 
 /**
- * dp_mon_filter_show_filter_be() - Show the set filters
- * @mode: The filter modes
- * @tlv_filter: tlv filter
- */
-void dp_mon_filter_show_filter_be(enum dp_mon_filter_mode mode,
-				  struct dp_mon_filter_be *filter);
-
-/**
  * dp_mon_filter_show_tx_filter_be() - Show the set filters
  * @mode: The filter modes
  * @tlv_filter: tlv filter
  */
 void dp_mon_filter_show_tx_filter_be(enum dp_mon_filter_mode mode,
 				     struct dp_mon_filter_be *filter);
+
+/**
+ * dp_mon_filter_show_rx_filter_be() - Show the set filters
+ * @mode: The filter modes
+ * @tlv_filter: tlv filter
+ */
+void dp_mon_filter_show_rx_filter_be(enum dp_mon_filter_mode mode,
+				     struct dp_mon_filter_be *filter);
+
+/**
+ * dp_vdev_set_monitor_mode_buf_rings_tx_2_0() - Add buffers to tx ring
+ * @pdev: Pointer to dp_pdev object
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS dp_vdev_set_monitor_mode_buf_rings_tx_2_0(struct dp_pdev *pdev);
+
+/**
+ * dp_vdev_set_monitor_mode_buf_rings_rx_2_0() - Add buffers to rx ring
+ * @pdev: Pointer to dp_pdev object
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS dp_vdev_set_monitor_mode_buf_rings_rx_2_0(struct dp_pdev *pdev);
+
+#ifdef QCA_ENHANCED_STATS_SUPPORT
+/**
+ * dp_mon_get_puncture_type() - Get puncture type
+ * @puncture_pattern: puncture bitmap
+ * @bw: Bandwidth
+ */
+enum cdp_punctured_modes
+dp_mon_get_puncture_type(uint16_t puncture_pattern, uint8_t bw);
+#endif
 
 /*
  * dp_mon_desc_get() - get monitor sw descriptor

@@ -28,6 +28,11 @@
 #endif
 #include <dp_mon.h>
 
+enum CMEM_MEM_CLIENTS {
+	COOKIE_CONVERSION,
+	FISA_FST,
+};
+
 /* maximum number of entries in one page of secondary page table */
 #define DP_CC_SPT_PAGE_MAX_ENTRIES 512
 
@@ -46,6 +51,9 @@
 /* FST required CMEM offset from CMEM pool */
 #define DP_FST_MEM_OFFSET_IN_CMEM \
 	(DP_CC_MEM_OFFSET_IN_CMEM + DP_CC_PPT_MEM_SIZE)
+
+/* CMEM size for FISA FST 16K */
+#define DP_CMEM_FST_SIZE 16384
 
 /* lower 9 bits in Desc ID for offset in page of SPT */
 #define DP_CC_DESC_ID_SPT_VA_OS_SHIFT 0
@@ -215,6 +223,8 @@ struct dp_ppe_vp_profile {
  * @mlo_enabled: Flag to indicate MLO is enabled or not
  * @mlo_chip_id: MLO chip_id
  * @ml_ctxt: pointer to global ml_context
+ * @delta_tqm: delta_tqm
+ * @mlo_tstamp_offset: mlo timestamp offset
  * @mld_peer_hash: peer hash table for ML peers
  *           Associated peer with this MAC address)
  * @mld_peer_hash_lock: lock to protect mld_peer_hash
@@ -251,6 +261,8 @@ struct dp_soc_be {
 	uint8_t mlo_enabled;
 	uint8_t mlo_chip_id;
 	struct dp_mlo_ctxt *ml_ctxt;
+	uint64_t delta_tqm;
+	uint64_t mlo_tstamp_offset;
 #else
 	/* Protect mld peer hash table */
 	DP_MUTEX_TYPE mld_peer_hash_lock;
@@ -272,11 +284,13 @@ struct dp_soc_be {
  * @pdev: dp pdev structure
  * @monitor_pdev_be: BE specific monitor object
  * @mlo_link_id: MLO link id for PDEV
+ * @delta_tsf2: delta_tsf2
  */
 struct dp_pdev_be {
 	struct dp_pdev pdev;
 #ifdef WLAN_MLO_MULTI_CHIP
 	uint8_t mlo_link_id;
+	uint64_t delta_tsf2;
 #endif
 };
 
@@ -396,6 +410,8 @@ void  dp_clr_mlo_ptnr_list(struct dp_soc *soc, struct dp_vdev *vdev);
 typedef void dp_ptnr_vdev_iter_func(struct dp_vdev_be *be_vdev,
 				    struct dp_vdev *ptnr_vdev,
 				    void *arg);
+typedef void dp_ptnr_soc_iter_func(struct dp_soc *ptnr_soc,
+				   void *arg);
 /*
  * dp_mcast_mlo_iter_ptnr_vdev - API to iterate through ptnr vdev list
  * @be_soc: dp_soc_be pointer
@@ -411,6 +427,17 @@ void dp_mcast_mlo_iter_ptnr_vdev(struct dp_soc_be *be_soc,
 				 dp_ptnr_vdev_iter_func func,
 				 void *arg,
 				 enum dp_mod_id mod_id);
+/*
+ * dp_mcast_mlo_iter_ptnr_soc - API to iterate through ptnr soc list
+ * @be_soc: dp_soc_be pointer
+ * @func        : function to be called for each peer
+ * @arg         : argument need to be passed to func
+ *
+ * Return: None
+ */
+void dp_mcast_mlo_iter_ptnr_soc(struct dp_soc_be *be_soc,
+				dp_ptnr_soc_iter_func func,
+				void *arg);
 /*
  * dp_mlo_get_mcast_primary_vdev- get ref to mcast primary vdev
  * @be_soc: dp_soc_be pointer
@@ -692,7 +719,7 @@ _dp_srng_test_and_update_nf_params(struct dp_soc *soc,
 		switch (near_full_level) {
 		case DP_SRNG_THRESH_CRITICAL:
 			/* Currently not doing anything special here */
-			/* fall through */
+			fallthrough;
 		case DP_SRNG_THRESH_NEAR_FULL:
 			ring_near_full = 1;
 			*max_reap_limit *= DP_SRNG_PER_LOOP_NF_REAP_MULTIPLIER;
@@ -747,6 +774,16 @@ void dp_soc_mlo_fill_params(struct dp_soc *soc,
 static inline
 void dp_pdev_mlo_fill_params(struct dp_pdev *pdev,
 			     struct cdp_pdev_attach_params *params)
+{
+}
+
+static inline
+void dp_mlo_update_link_to_pdev_map(struct dp_soc *soc, struct dp_pdev *pdev)
+{
+}
+
+static inline
+void dp_mlo_update_link_to_pdev_unmap(struct dp_soc *soc, struct dp_pdev *pdev)
 {
 }
 #endif

@@ -39,6 +39,7 @@
 #define MGMT_RX_REO_LIST_MAX_SIZE             (100)
 #define MGMT_RX_REO_LIST_TIMEOUT_US           (500 * USEC_PER_MSEC)
 #define MGMT_RX_REO_AGEOUT_TIMER_PERIOD_MS    (250)
+#define MGMT_RX_REO_GLOBAL_MGMT_RX_INACTIVITY_TIMEOUT   (10 * 60 * MSEC_PER_SEC)
 #define MGMT_RX_REO_STATUS_WAIT_FOR_FRAME_ON_OTHER_LINKS         (BIT(0))
 #define MGMT_RX_REO_STATUS_AGED_OUT                              (BIT(1))
 #define MGMT_RX_REO_STATUS_OLDER_THAN_LATEST_AGED_OUT_FRAME      (BIT(2))
@@ -67,11 +68,19 @@
 #define MGMT_RX_REO_INGRESS_FRAME_DEBUG_ENTRIES_MAX             (1000)
 #define MGMT_RX_REO_EGRESS_FRAME_DEBUG_ENTRIES_MAX              (1000)
 
+#define MGMT_RX_REO_EGRESS_FRAME_DEBUG_INFO_BOARDER_MAX_SIZE   (816)
+#define MGMT_RX_REO_EGRESS_FRAME_DELIVERY_REASON_STATS_BOARDER_A_MAX_SIZE  (66)
+#define MGMT_RX_REO_EGRESS_FRAME_DELIVERY_REASON_STATS_BOARDER_B_MAX_SIZE  (73)
 #define MGMT_RX_REO_EGRESS_FRAME_DEBUG_INFO_FLAG_MAX_SIZE   (3)
-#define MGMT_RX_REO_EGRESS_FRAME_DEBUG_INFO_WAIT_COUNT_MAX_SIZE   (49)
+#define MGMT_RX_REO_EGRESS_FRAME_DEBUG_INFO_WAIT_COUNT_MAX_SIZE   (69)
+#define MGMT_RX_REO_EGRESS_FRAME_DEBUG_INFO_PER_LINK_SNAPSHOTS_MAX_SIZE   (94)
+#define MGMT_RX_REO_EGRESS_FRAME_DEBUG_INFO_SNAPSHOT_MAX_SIZE     (22)
 
-#define MGMT_RX_REO_INGRESS_FRAME_DEBUG_INFO_FLAG_MAX_SIZE   (9)
-#define MGMT_RX_REO_INGRESS_FRAME_DEBUG_INFO_WAIT_COUNT_MAX_SIZE   (49)
+#define MGMT_RX_REO_INGRESS_FRAME_DEBUG_INFO_BOARDER_MAX_SIZE   (785)
+#define MGMT_RX_REO_INGRESS_FRAME_DEBUG_INFO_FLAG_MAX_SIZE   (13)
+#define MGMT_RX_REO_INGRESS_FRAME_DEBUG_INFO_WAIT_COUNT_MAX_SIZE   (69)
+#define MGMT_RX_REO_INGRESS_FRAME_DEBUG_INFO_PER_LINK_SNAPSHOTS_MAX_SIZE   (94)
+#define MGMT_RX_REO_INGRESS_FRAME_DEBUG_INFO_SNAPSHOT_MAX_SIZE     (22)
 #endif /* WLAN_MGMT_RX_REO_DEBUG_SUPPORT*/
 
 /*
@@ -81,34 +90,38 @@
  * It considers both MGMT Rx and MGMT FW consumed.
  * @last_valid_shared_snapshot: Array of last valid snapshots(for snapshots
  * shared between host and target)
- * @host_target_shared_snapshot: Array of snapshot addresses(for snapshots
- * shared between host and target)
+ * @host_target_shared_snapshot_info: Array of meta information related to
+ * snapshots(for snapshots shared between host and target)
  * @filter: MGMT Rx REO filter
  */
 struct mgmt_rx_reo_pdev_info {
 	struct mgmt_rx_reo_snapshot_params host_snapshot;
 	struct mgmt_rx_reo_snapshot_params last_valid_shared_snapshot
 				[MGMT_RX_REO_SHARED_SNAPSHOT_MAX];
-	struct mgmt_rx_reo_snapshot *host_target_shared_snapshot
+	struct mgmt_rx_reo_snapshot_info host_target_shared_snapshot_info
 				[MGMT_RX_REO_SHARED_SNAPSHOT_MAX];
 	struct mgmt_rx_reo_filter filter;
 };
 
 /**
- * mgmt_rx_reo_pdev_obj_open_notification() - pdev open handler for
+ * mgmt_rx_reo_attach() - Initializes the per pdev data structures related to
  * management rx-reorder module
  * @pdev: pointer to pdev object
- * @mgmt_txrx_pdev_ctx: pdev private object of mgmt txrx module
- *
- * This function gets called from object manager when pdev is being opened and
- * creates management rx-reorder pdev context
  *
  * Return: QDF_STATUS
  */
 QDF_STATUS
-mgmt_rx_reo_pdev_obj_open_notification
-		(struct wlan_objmgr_pdev *pdev,
-		 struct mgmt_txrx_priv_pdev_context *mgmt_txrx_pdev_ctx);
+mgmt_rx_reo_attach(struct wlan_objmgr_pdev *pdev);
+
+/**
+ * mgmt_rx_reo_detach() - Clears the per pdev data structures related to
+ * management rx-reorder module
+ * @pdev: pointer to pdev object
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS
+mgmt_rx_reo_detach(struct wlan_objmgr_pdev *pdev);
 
 /**
  * mgmt_rx_reo_pdev_obj_create_notification() - pdev create handler for
@@ -162,12 +175,16 @@ enum mgmt_rx_reo_frame_descriptor_type {
 /**
  * struct mgmt_rx_reo_global_ts_info - This structure holds the global time
  * stamp information of a frame.
- * @global_ts: Global time stamp value
  * @valid: Indicates whether global time stamp is valid
+ * @global_ts: Global time stamp value
+ * @start_ts: Start time stamp value
+ * @end_ts: End time stamp value
  */
 struct mgmt_rx_reo_global_ts_info {
 	bool valid;
 	uint32_t global_ts;
+	uint32_t start_ts;
+	uint32_t end_ts;
 };
 
 /**
@@ -181,6 +198,7 @@ struct mgmt_rx_reo_global_ts_info {
  * @list_entry_timeout_us: Time out value(microsecond) for the reorder list
  * entries
  * @ageout_timer: Periodic timer to age-out the list entries
+ * @global_mgmt_rx_inactivity_timer: Global management Rx inactivity timer
  * @ts_last_released_frame: Stores the global time stamp for the last frame
  * removed from the reorder list
  */
@@ -190,6 +208,7 @@ struct mgmt_rx_reo_list {
 	uint32_t max_list_size;
 	uint32_t list_entry_timeout_us;
 	qdf_timer_t ageout_timer;
+	qdf_timer_t global_mgmt_rx_inactivity_timer;
 	struct mgmt_rx_reo_global_ts_info ts_last_released_frame;
 };
 
@@ -211,6 +230,7 @@ struct mgmt_rx_reo_wait_count {
  * @nbuf: nbuf corresponding to this frame
  * @rx_params: Management rx event parameters
  * @wait_count: Wait counts for the frame
+ * @initial_wait_count: Wait count when the frame is queued
  * @insertion_ts: Host time stamp when this entry is inserted to the list.
  * @removal_ts: Host time stamp when this entry is removed from the list
  * @ingress_timestamp: Host time stamp when this frame has arrived reorder
@@ -223,12 +243,17 @@ struct mgmt_rx_reo_wait_count {
  * @is_delivered: Indicates whether the frame is delivered successfully
  * @is_premature_delivery: Indicates whether the frame is delivered
  * prematurely
+ * @is_parallel_rx: Indicates that this frame is received in parallel to the
+ * last frame which is delivered to the upper layer.
+ * @shared_snapshots: snapshots shared b/w host and target
+ * @host_snapshot: host snapshot
  */
 struct mgmt_rx_reo_list_entry {
 	qdf_list_node_t node;
 	qdf_nbuf_t nbuf;
 	struct mgmt_rx_event_params *rx_params;
 	struct mgmt_rx_reo_wait_count wait_count;
+	struct mgmt_rx_reo_wait_count initial_wait_count;
 	uint64_t insertion_ts;
 	uint64_t removal_ts;
 	uint64_t ingress_timestamp;
@@ -238,6 +263,10 @@ struct mgmt_rx_reo_list_entry {
 	uint8_t release_reason;
 	bool is_delivered;
 	bool is_premature_delivery;
+	bool is_parallel_rx;
+	struct mgmt_rx_reo_snapshot_params shared_snapshots
+			[MAX_MLO_LINKS][MGMT_RX_REO_SHARED_SNAPSHOT_MAX];
+	struct mgmt_rx_reo_snapshot_params host_snapshot[MAX_MLO_LINKS];
 };
 
 #ifdef WLAN_MGMT_RX_REO_SIM_SUPPORT
@@ -405,7 +434,12 @@ struct mgmt_rx_reo_sim_context {
  * @link_id: link id
  * @mgmt_pkt_ctr: management packet counter
  * @global_timestamp: MLO global time stamp
- * @type: Type of the frame descriptor
+ * @start_timestamp: start time stamp of the frame
+ * @end_timestamp: end time stamp of the frame
+ * @duration_us: duration of the frame in us
+ * @desc_type: Type of the frame descriptor
+ * @frame_type: frame type
+ * @frame_subtype: frame sub type
  * @ingress_timestamp: Host time stamp when the frames enters the reorder
  * algorithm
  * @ingress_duration: Duration in us for processing the incoming frame.
@@ -414,6 +448,8 @@ struct mgmt_rx_reo_sim_context {
  * @wait_count: Wait count calculated for the current frame
  * @is_queued: Indicates whether this frame is queued to reorder list
  * @is_stale: Indicates whether this frame is stale.
+ * @is_parallel_rx: Indicates that this frame is received in parallel to the
+ * last frame which is delivered to the upper layer.
  * @zero_wait_count_rx: Indicates whether this frame's wait count was
  * zero when received by host
  * @immediate_delivery: Indicates whether this frame can be delivered
@@ -425,23 +461,40 @@ struct mgmt_rx_reo_sim_context {
  * updating the list based on this frame).
  * @list_insertion_pos: Position in the reorder list where this frame is going
  * to get inserted (Applicable for only host consumed frames)
+ * @shared_snapshots: snapshots shared b/w host and target
+ * @host_snapshot: host snapshot
+ * @cpu_id: CPU index
+ * @reo_required: Indicates whether reorder is required for the current frame.
+ * If reorder is not required, current frame will just be used for updating the
+ * wait count of frames already part of the reorder list.
  */
 struct reo_ingress_debug_frame_info {
 	uint8_t link_id;
 	uint16_t mgmt_pkt_ctr;
 	uint32_t global_timestamp;
-	enum mgmt_rx_reo_frame_descriptor_type type;
+	uint32_t start_timestamp;
+	uint32_t end_timestamp;
+	uint32_t duration_us;
+	enum mgmt_rx_reo_frame_descriptor_type desc_type;
+	uint8_t frame_type;
+	uint8_t frame_subtype;
 	uint64_t ingress_timestamp;
 	uint64_t ingress_duration;
 	struct mgmt_rx_reo_wait_count wait_count;
 	bool is_queued;
 	bool is_stale;
+	bool is_parallel_rx;
 	bool zero_wait_count_rx;
 	bool immediate_delivery;
 	bool is_error;
 	struct mgmt_rx_reo_global_ts_info ts_last_released_frame;
 	int16_t list_size_rx;
 	int16_t list_insertion_pos;
+	struct mgmt_rx_reo_snapshot_params shared_snapshots
+			[MAX_MLO_LINKS][MGMT_RX_REO_SHARED_SNAPSHOT_MAX];
+	struct mgmt_rx_reo_snapshot_params host_snapshot[MAX_MLO_LINKS];
+	int cpu_id;
+	bool reo_required;
 };
 
 /**
@@ -461,8 +514,12 @@ struct reo_ingress_debug_frame_info {
  * @egress_duration: Duration in us taken by the upper layer to process
  * the frame.
  * @removal_ts: Host time stamp when this entry is removed from the list
- * @wait_count: Wait count calculated for the current frame
+ * @initial_wait_count: Wait count when the frame is queued
+ * @final_wait_count: Wait count when frame is released to upper layer
  * @release_reason: Reason for delivering the frame to upper layers
+ * @shared_snapshots: snapshots shared b/w host and target
+ * @host_snapshot: host snapshot
+ * @cpu_id: CPU index
  */
 struct reo_egress_debug_frame_info {
 	bool is_delivered;
@@ -475,8 +532,13 @@ struct reo_egress_debug_frame_info {
 	uint64_t egress_timestamp;
 	uint64_t egress_duration;
 	uint64_t removal_ts;
-	struct mgmt_rx_reo_wait_count wait_count;
+	struct mgmt_rx_reo_wait_count initial_wait_count;
+	struct mgmt_rx_reo_wait_count final_wait_count;
 	uint8_t release_reason;
+	struct mgmt_rx_reo_snapshot_params shared_snapshots
+			[MAX_MLO_LINKS][MGMT_RX_REO_SHARED_SNAPSHOT_MAX];
+	struct mgmt_rx_reo_snapshot_params host_snapshot[MAX_MLO_LINKS];
+	int cpu_id;
 };
 
 /**
@@ -539,13 +601,15 @@ struct reo_egress_frame_stats {
  * @wrap_aroud: Flag to indicate whether wrap around occurred when logging
  * debug information to @frame_list
  * @stats: Stats related to incoming frames
+ * @boarder: boarder string
  */
 struct reo_ingress_debug_info {
 	struct reo_ingress_debug_frame_info
 			frame_list[MGMT_RX_REO_INGRESS_FRAME_DEBUG_ENTRIES_MAX];
-	uint32_t next_index;
+	int next_index;
 	bool wrap_aroud;
 	struct reo_ingress_frame_stats stats;
+	char boarder[MGMT_RX_REO_INGRESS_FRAME_DEBUG_INFO_BOARDER_MAX_SIZE + 1];
 };
 
 /**
@@ -556,13 +620,15 @@ struct reo_ingress_debug_info {
  * @wrap_aroud: Flag to indicate whether wrap around occurred when logging
  * debug information to @frame_list
  * @stats: Stats related to outgoing frames
+ * @boarder: boarder string
  */
 struct reo_egress_debug_info {
 	struct reo_egress_debug_frame_info
 			frame_list[MGMT_RX_REO_EGRESS_FRAME_DEBUG_ENTRIES_MAX];
-	uint32_t next_index;
+	int next_index;
 	bool wrap_aroud;
 	struct reo_egress_frame_stats stats;
+	char boarder[MGMT_RX_REO_EGRESS_FRAME_DEBUG_INFO_BOARDER_MAX_SIZE + 1];
 };
 #endif /* WLAN_MGMT_RX_REO_DEBUG_SUPPORT */
 
@@ -609,6 +675,8 @@ struct mgmt_rx_reo_context {
  * struct mgmt_rx_reo_frame_descriptor - Frame Descriptor used to describe
  * a management frame in mgmt rx reo module.
  * @type: Frame descriptor type
+ * @frame_type: frame type
+ * @frame_subtype: frame subtype
  * @nbuf: nbuf corresponding to this frame
  * @rx_params: Management rx event parameters
  * @wait_count: Wait counts for the frame
@@ -627,9 +695,19 @@ struct mgmt_rx_reo_context {
  * updating the list based on this frame).
  * @list_insertion_pos: Position in the reorder list where this frame is going
  * to get inserted (Applicable for only host consumed frames)
+ * @shared_snapshots: snapshots shared b/w host and target
+ * @host_snapshot: host snapshot
+ * @is_parallel_rx: Indicates that this frame is received in parallel to the
+ * last frame which is delivered to the upper layer.
+ * @pkt_ctr_delta: Packet counter delta of the current and last frame
+ * @reo_required: Indicates whether reorder is required for the current frame.
+ * If reorder is not required, current frame will just be used for updating the
+ * wait count of frames already part of the reorder list.
  */
 struct mgmt_rx_reo_frame_descriptor {
 	enum mgmt_rx_reo_frame_descriptor_type type;
+	uint8_t frame_type;
+	uint8_t frame_subtype;
 	qdf_nbuf_t nbuf;
 	struct mgmt_rx_event_params *rx_params;
 	struct mgmt_rx_reo_wait_count wait_count;
@@ -639,6 +717,12 @@ struct mgmt_rx_reo_frame_descriptor {
 	bool immediate_delivery;
 	int16_t list_size_rx;
 	int16_t list_insertion_pos;
+	struct mgmt_rx_reo_snapshot_params shared_snapshots
+			[MAX_MLO_LINKS][MGMT_RX_REO_SHARED_SNAPSHOT_MAX];
+	struct mgmt_rx_reo_snapshot_params host_snapshot[MAX_MLO_LINKS];
+	bool is_parallel_rx;
+	int pkt_ctr_delta;
+	bool reo_required;
 };
 
 /**
@@ -670,6 +754,52 @@ mgmt_rx_reo_get_global_ts(struct mgmt_rx_event_params *rx_params)
 	qdf_assert_always(rx_params->reo_params);
 
 	return rx_params->reo_params->global_timestamp;
+}
+
+/**
+ * mgmt_rx_reo_get_start_ts() - Helper API to get start time stamp of the frame
+ * @rx_params: Management rx event params
+ *
+ * Return: start time stamp of the frame
+ */
+static inline uint32_t
+mgmt_rx_reo_get_start_ts(struct mgmt_rx_event_params *rx_params)
+{
+	qdf_assert_always(rx_params);
+	qdf_assert_always(rx_params->reo_params);
+
+	return rx_params->reo_params->start_timestamp;
+}
+
+/**
+ * mgmt_rx_reo_get_end_ts() - Helper API to get end time stamp of the frame
+ * @rx_params: Management rx event params
+ *
+ * Return: end time stamp of the frame
+ */
+static inline uint32_t
+mgmt_rx_reo_get_end_ts(struct mgmt_rx_event_params *rx_params)
+{
+	qdf_assert_always(rx_params);
+	qdf_assert_always(rx_params->reo_params);
+
+	return rx_params->reo_params->end_timestamp;
+}
+
+/**
+ * mgmt_rx_reo_get_duration_us() - Helper API to get the duration of the frame
+ * in us
+ * @rx_params: Management rx event params
+ *
+ * Return: Duration of the frame in us
+ */
+static inline uint32_t
+mgmt_rx_reo_get_duration_us(struct mgmt_rx_event_params *rx_params)
+{
+	qdf_assert_always(rx_params);
+	qdf_assert_always(rx_params->reo_params);
+
+	return rx_params->reo_params->duration_us;
 }
 
 /**
@@ -751,7 +881,7 @@ bool
 mgmt_rx_reo_is_simulation_in_progress(void);
 
 /**
- * mgmt_rx_reo_print_ingress_frame_debug_info() - Helper API to print
+ * mgmt_rx_reo_print_ingress_frame_stats() - Helper API to print
  * stats related to incoming management frames
  *
  * This API prints stats related to management frames entering management
@@ -760,10 +890,22 @@ mgmt_rx_reo_is_simulation_in_progress(void);
  * Return: QDF_STATUS
  */
 QDF_STATUS
-mgmt_rx_reo_print_ingress_frame_debug_info(void);
+mgmt_rx_reo_print_ingress_frame_stats(void);
 
 /**
- * mgmt_rx_reo_print_egress_frame_debug_info() - Helper API to print
+ * mgmt_rx_reo_print_ingress_frame_info() - Print the debug information
+ * about the latest frames entered the reorder module
+ * @num_frames: Number of frames for which the debug information is to be
+ * printed. If @num_frames is 0, then debug information about all the frames
+ * in the ring buffer will be  printed.
+ *
+ * Return: QDF_STATUS of operation
+ */
+QDF_STATUS
+mgmt_rx_reo_print_ingress_frame_info(uint16_t num_frames);
+
+/**
+ * mgmt_rx_reo_print_egress_frame_stats() - Helper API to print
  * stats related to outgoing management frames
  *
  * This API prints stats related to management frames exiting management
@@ -772,7 +914,19 @@ mgmt_rx_reo_print_ingress_frame_debug_info(void);
  * Return: QDF_STATUS
  */
 QDF_STATUS
-mgmt_rx_reo_print_egress_frame_debug_info(void);
+mgmt_rx_reo_print_egress_frame_stats(void);
+
+/**
+ * mgmt_rx_reo_print_egress_frame_info() - Print the debug information
+ * about the latest frames leaving the reorder module
+ * @num_frames: Number of frames for which the debug information is to be
+ * printed. If @num_frames is 0, then debug information about all the frames
+ * in the ring buffer will be  printed.
+ *
+ * Return: QDF_STATUS of operation
+ */
+QDF_STATUS
+mgmt_rx_reo_print_egress_frame_info(uint16_t num_frames);
 
 #ifdef WLAN_MGMT_RX_REO_SIM_SUPPORT
 /**
@@ -905,11 +1059,10 @@ static inline bool is_mgmt_rx_reo_required(
 			struct mgmt_rx_reo_frame_descriptor *desc)
 {
 	/**
-	 * NOTE: Implementing a simple policy based on INI and WMI serive bit
-	 * for now. Finer policies like checking whether this pdev has
-	 * any MLO VAPs or checking the frame type can be implemented later.
+	 * NOTE: Implementing a simple policy based on the number of MLO vdevs
+	 * in the given pdev.
 	 */
-	return wlan_mgmt_rx_reo_is_feature_enabled_at_pdev(pdev);
+	return  wlan_pdev_get_mlo_vdev_count(pdev);
 }
 
 /**
@@ -943,7 +1096,7 @@ mgmt_rx_reo_list_max_size_exceeded(struct mgmt_rx_reo_list *reo_list)
 }
 
 /**
- * mgmt_rx_reo_validate_mlo_hw_link_info() - Validate the MLO HW link info
+ * mgmt_rx_reo_validate_mlo_link_info() - Validate the MLO HW link info
  * obtained from the global shared memory arena
  * @psoc: Pointer to psoc object
  *
@@ -955,6 +1108,6 @@ mgmt_rx_reo_list_max_size_exceeded(struct mgmt_rx_reo_list *reo_list)
  * Return: QDF_STATUS of operation
  */
 QDF_STATUS
-mgmt_rx_reo_validate_mlo_hw_link_info(struct wlan_objmgr_psoc *psoc);
+mgmt_rx_reo_validate_mlo_link_info(struct wlan_objmgr_psoc *psoc);
 #endif /* WLAN_MGMT_RX_REO_SUPPORT */
 #endif /* _WLAN_MGMT_TXRX_RX_REO_I_H */

@@ -31,6 +31,7 @@
 #include "wlan_mgmt_txrx_utils_api.h"
 #ifdef CONN_MGR_ADV_FEATURE
 #include "wlan_mlme_api.h"
+#include "wlan_wfa_tgt_if_tx_api.h"
 #endif
 
 #define CM_PCL_RSSI_THRESHOLD -75
@@ -1588,14 +1589,16 @@ static int cm_calculate_eht_score(struct scan_cache_entry *entry,
 	struct weight_cfg *weight_config;
 	uint8_t partner_link_idx = cm_get_parter_link_index(entry);
 
+	weight_config = &score_config->weight_config;
+
 	if (!phy_config->eht_cap || !entry->ie_list.ehtcap)
-		return 0;
+		return cm_calculate_rssi_score(&score_config->rssi_score,
+					       entry->rssi_raw,
+					       weight_config->rssi_weightage);
 
 	/* TODO: get partner entry and return ml_score for that if it is
 	 *       non-zero
 	 */
-
-	weight_config = &score_config->weight_config;
 
 	joint_rssi = cm_get_joint_rssi(entry, weight_config, partner_link_idx);
 
@@ -2085,6 +2088,18 @@ static bool cm_check_h2e_support(const uint8_t *rsnxe)
 	return false;
 }
 
+#ifdef CONN_MGR_ADV_FEATURE
+static bool wlan_cm_wfa_get_test_feature_flags(struct wlan_objmgr_psoc *psoc)
+{
+	return wlan_wfa_get_test_feature_flags(psoc, WFA_TEST_IGNORE_RSNXE);
+}
+#else
+static bool wlan_cm_wfa_get_test_feature_flags(struct wlan_objmgr_psoc *psoc)
+{
+	return false;
+}
+#endif
+
 bool wlan_cm_6ghz_allowed_for_akm(struct wlan_objmgr_psoc *psoc,
 				  uint32_t key_mgmt, uint16_t rsn_caps,
 				  const uint8_t *rsnxe, uint8_t sae_pwe,
@@ -2140,7 +2155,8 @@ bool wlan_cm_6ghz_allowed_for_akm(struct wlan_objmgr_psoc *psoc,
 	    QDF_HAS_PARAM(key_mgmt, WLAN_CRYPTO_KEY_MGMT_FT_SAE)))
 		return true;
 
-	return cm_check_h2e_support(rsnxe);
+	return (cm_check_h2e_support(rsnxe) ||
+		wlan_cm_wfa_get_test_feature_flags(psoc));
 }
 
 void wlan_cm_set_check_6ghz_security(struct wlan_objmgr_psoc *psoc,

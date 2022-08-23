@@ -791,6 +791,45 @@ mgmt_get_twt_action_subtype(uint8_t action_code)
 	return frm_type;
 }
 
+#ifdef WLAN_FEATURE_11BE
+/**
+ * mgmt_get_protected_eht_action_subtype() - gets protected EHT action subtype
+ * @action_code: action code
+ *
+ * This function returns the subtype for protected EHT action category.
+ *
+ * Return: mgmt frame type
+ */
+static enum mgmt_frame_type
+mgmt_get_protected_eht_action_subtype(uint8_t action_code)
+{
+	enum mgmt_frame_type frm_type;
+
+	switch (action_code) {
+	case EHT_T2LM_REQUEST:
+		frm_type = MGMT_ACTION_EHT_T2LM_REQUEST;
+		break;
+	case EHT_T2LM_RESPONSE:
+		frm_type = MGMT_ACTION_EHT_T2LM_RESPONSE;
+		break;
+	case EHT_T2LM_TEARDOWN:
+		frm_type = MGMT_ACTION_EHT_T2LM_TEARDOWN;
+		break;
+	default:
+		frm_type = MGMT_FRM_UNSPECIFIED;
+		break;
+	}
+
+	return frm_type;
+}
+#else
+static enum mgmt_frame_type
+mgmt_get_protected_eht_action_subtype(uint8_t action_code)
+{
+	return MGMT_FRM_UNSPECIFIED;
+}
+#endif /* WLAN_FEATURE_11BE */
+
 /**
  * mgmt_txrx_get_action_frm_subtype() - gets action frm subtype
  * @mpdu_data_ptr: pointer to mpdu data
@@ -880,6 +919,10 @@ mgmt_txrx_get_action_frm_subtype(uint8_t *mpdu_data_ptr)
 	case ACTION_CATEGORY_USIG:
 		frm_type =
 			mgmt_get_twt_action_subtype(action_hdr->action_code);
+		break;
+	case ACTION_CATEGORY_PROTECTED_EHT:
+		frm_type = mgmt_get_protected_eht_action_subtype(
+				action_hdr->action_code);
 		break;
 	default:
 		frm_type = MGMT_FRM_UNSPECIFIED;
@@ -1008,6 +1051,49 @@ static QDF_STATUS simulation_frame_update(struct wlan_objmgr_psoc *psoc,
 	return QDF_STATUS_SUCCESS;
 }
 #endif
+
+/**
+ * wlan_mgmt_rx_beacon_rate_limit() - rate limiting mgmt beacons
+ * @psoc - pointer to psoc struct
+ * @mgmt_rx_params - rx params
+ *
+ * This function will drop the beacons if the number of beacons
+ * received is greater than the percentage of limit of beacons to max
+ * count of beacons, when beacon rate limiting is enabled
+ *
+ * Return : QDF_STATUS if success, else QDF_STATUS_E_RESOURCES
+ */
+static QDF_STATUS wlan_mgmt_rx_beacon_rate_limit(struct wlan_objmgr_psoc *psoc,
+						 struct mgmt_rx_event_params
+						 *mgmt_rx_params)
+{
+	struct wlan_objmgr_pdev *pdev = NULL;
+
+	pdev = wlan_objmgr_get_pdev_by_id(psoc, mgmt_rx_params->pdev_id,
+					  WLAN_MGMT_SB_ID);
+
+	if (pdev && pdev->pdev_objmgr.bcn.bcn_rate_limit) {
+		uint64_t b_limit = qdf_do_div(
+				(wlan_pdev_get_max_beacon_count(pdev) *
+				 wlan_pdev_get_max_beacon_limit(pdev)), 100);
+		wlan_pdev_incr_wlan_beacon_count(pdev);
+
+		if (wlan_pdev_get_wlan_beacon_count(pdev) >=
+					wlan_pdev_get_max_beacon_count(pdev))
+			wlan_pdev_set_wlan_beacon_count(pdev, 0);
+
+		if (wlan_pdev_get_wlan_beacon_count(pdev) >= b_limit) {
+			wlan_pdev_incr_dropped_beacon_count(pdev);
+			wlan_objmgr_pdev_release_ref(pdev, WLAN_MGMT_SB_ID);
+			return QDF_STATUS_E_RESOURCES;
+		}
+	}
+
+	if (pdev)
+		wlan_objmgr_pdev_release_ref(pdev, WLAN_MGMT_SB_ID);
+
+	return QDF_STATUS_SUCCESS;
+}
 
 /**
  * wlan_mgmt_txrx_rx_handler_list_copy() - copies rx handler list
@@ -1273,6 +1359,15 @@ QDF_STATUS tgt_mgmt_txrx_rx_frame_handler(
 		return QDF_STATUS_E_FAILURE;
 	}
 	qdf_spin_unlock_bh(&mgmt_txrx_psoc_ctx->mgmt_txrx_psoc_ctx_lock);
+
+	if (mgmt_subtype == MGMT_SUBTYPE_BEACON &&
+	    mgmt_rx_params->is_conn_ap.is_conn_ap_frm == 0) {
+		status = wlan_mgmt_rx_beacon_rate_limit(psoc, mgmt_rx_params);
+		if (QDF_IS_STATUS_ERROR(status)) {
+			qdf_nbuf_free(buf);
+			goto rx_handler_mem_free;
+		}
+	}
 
 	mac_addr = (uint8_t *)wh->i_addr2;
 	/*

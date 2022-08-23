@@ -240,6 +240,13 @@
 /* 11AZ Secure ranging PHY Security support */
 #define WLAN_RTT_11AZ_MAC_PHY_SEC_SUPPORT 0x00000004
 
+/* Roam Frame info stats - per candidate frames support */
+#define WLAN_ROAM_STATS_FRAME_INFO_PER_CANDIDATE  0x00000008
+/* multi client feature flags support */
+#define WLAN_SOC_WLM_MULTI_CLIENT_LL_SUPPORT      0x00000010
+/* vendor handoff control feature support */
+#define WLAN_SOC_VENDOR_HANDOFF_CONTROL           0x00000020
+
 /* PSOC op flags */
 
 	/* Invalid VHT cap */

@@ -186,7 +186,7 @@ static struct CE_attr host_ce_config_wlan[] = {
 	/* host->target WMI */
 	{ /* CE3 */ CE_ATTR_FLAGS, 0, 32, 2048, 0, NULL,},
 	/* host->target HTT */
-	{ /* CE4 */ (CE_ATTR_FLAGS | CE_ATTR_DISABLE_INTR), 0,
+	{ /* CE4 */ CE4_COMP_HTT_HTC, 0,
 		CE_HTT_H2T_MSG_SRC_NENTRIES, 256, 0, NULL,},
 	/* ipa_uc->target HTC control */
 	{ /* CE5 */ (CE_ATTR_FLAGS | CE_ATTR_DISABLE_INTR), 0,
@@ -215,8 +215,7 @@ static struct CE_pipe_config target_ce_config_wlan[] = {
 	/* host->target WMI */
 	{ /* CE3 */ 3, PIPEDIR_OUT, 32, 2048, CE_ATTR_FLAGS, 0,},
 	/* host->target HTT */
-	{ /* CE4 */ 4, PIPEDIR_OUT, 256, 256,
-		(CE_ATTR_FLAGS | CE_ATTR_DISABLE_INTR), 0,},
+	{ /* CE4 */ 4, PIPEDIR_OUT, 256, 256, CE4_COMP_HTT_HTC, 0,},
 	/* NB: 50% of src nentries, since tx has 2 frags */
 	/* ipa_uc->target */
 	{ /* CE5 */ 5, PIPEDIR_OUT, 1024,   64,
@@ -355,7 +354,7 @@ static struct CE_attr host_ce_config_wlan[] = {
 	/* host->target WMI */
 	{ /* CE3 */ CE_ATTR_FLAGS, 0, 32, 2048, 0, NULL,},
 	/* host->target HTT */
-	{ /* CE4 */ CE_ATTR_FLAGS | CE_ATTR_DISABLE_INTR, 0,
+	{ /* CE4 */ CE4_COMP_HTT_HTC, 0,
 		CE_HTT_H2T_MSG_SRC_NENTRIES, 256, 0, NULL,},
 	/* ipa_uc->target HTC control */
 	{ /* CE5 */ CE_ATTR_FLAGS | CE_ATTR_DISABLE_INTR, 0,
@@ -377,7 +376,7 @@ static struct CE_pipe_config target_ce_config_wlan[] = {
 	/* host->target WMI */
 	{ /* CE3 */ 3, PIPEDIR_OUT, 32, 2048, CE_ATTR_FLAGS, 0,},
 	/* host->target HTT */
-	{ /* CE4 */ 4, PIPEDIR_OUT, 256, 256, CE_ATTR_FLAGS, 0,},
+	{ /* CE4 */ 4, PIPEDIR_OUT, 256, 256, CE4_COMP_HTT_HTC, 0,},
 	/* NB: 50% of src nentries, since tx has 2 frags */
 	/* ipa_uc->target HTC control */
 	{ /* CE5 */ 5, PIPEDIR_OUT, 1024,   64, CE_ATTR_FLAGS, 0,},
@@ -477,7 +476,7 @@ static struct CE_attr host_ce_config_wlan_ar9888[] = {
 	/* host->target WMI */
 	{ /* CE3 */ CE_ATTR_FLAGS, 0, 32, 2048, 0, NULL, },
 	/* host->target HTT */
-	{ /* CE4 */ CE_ATTR_FLAGS | CE_ATTR_DISABLE_INTR, 0,
+	{ /* CE4 */ CE4_COMP_HTT_HTC, 0,
 		CE_HTT_H2T_MSG_SRC_NENTRIES_AR900B, 256, 0, NULL, },
 #ifdef WLAN_FEATURE_FASTPATH
 	/* target->host HTT messages */
@@ -544,7 +543,7 @@ static struct CE_attr host_lowdesc_ce_cfg_wlan_ar9888[] = {
 	/* host->target WMI */
 	{ /* CE3 */ CE_ATTR_FLAGS, 0, 32, 2048, 0, NULL, },
 	/* host->target HTT */
-	{ /* CE4 */ CE_ATTR_FLAGS | CE_ATTR_DISABLE_INTR, 0,
+	{ /* CE4 */ CE4_COMP_HTT_HTC, 0,
 		CE_HTT_H2T_MSG_SRC_NENTRIES_AR900B, 256, 0, NULL, },
 #ifdef WLAN_FEATURE_FASTPATH
 	/* target->host HTT messages */
@@ -649,7 +648,7 @@ static struct CE_pipe_config target_ce_config_wlan_ar9888[] = {
 	/* host->target WMI */
 	{ /* CE3 */ 3, PIPEDIR_OUT, 32, 2048, CE_ATTR_FLAGS, 0, },
 	/* host->target HTT */
-	{ /* CE4 */ 4, PIPEDIR_OUT, 256, 256, CE_ATTR_FLAGS, 0, },
+	{ /* CE4 */ 4, PIPEDIR_OUT, 256, 256, CE4_COMP_HTT_HTC, 0, },
 	/* NB: 50% of src nentries, since tx has 2 frags */
 #ifdef WLAN_FEATURE_FASTPATH
 	/* target->host HTT */
@@ -706,7 +705,7 @@ static struct CE_attr host_ce_config_wlan_qca8074[] = {
 	/* host->target WMI (mac0) */
 	{ /* CE3 */ CE_ATTR_FLAGS, 0, 32, 2048, 0, NULL,},
 	/* host->target HTT */
-	{ /* CE4 */ (CE_ATTR_FLAGS | CE_ATTR_DISABLE_INTR), 0,
+	{ /* CE4 */ CE4_COMP_HTT_HTC, 0,
 		CE_HTT_H2T_MSG_SRC_NENTRIES, 256, 0, NULL,},
 	/* target -> host PKTLOG */
 #ifdef REMOVE_PKT_LOG
@@ -743,8 +742,7 @@ static struct CE_pipe_config target_ce_config_wlan_qca8074[] = {
 	/* host->target WMI */
 	{ /* CE3 */ 3, PIPEDIR_OUT, 32, 2048, CE_ATTR_FLAGS, 0,},
 	/* host->target HTT */
-	{ /* CE4 */ 4, PIPEDIR_OUT, 256, 256,
-		(CE_ATTR_FLAGS | CE_ATTR_DISABLE_INTR), 0,},
+	{ /* CE4 */ 4, PIPEDIR_OUT, 256, 256, CE4_COMP_HTT_HTC, 0,},
 	/* NB: 50% of src nentries, since tx has 2 frags */
 	/* Target -> host PKTLOG */
 #ifdef REMOVE_PKT_LOG
@@ -776,7 +774,7 @@ static struct CE_attr host_ce_config_wlan_qca8074_pci[] = {
 	/* host->target WMI (mac0) */
 	{ /* CE3 */ EPPING_CE_FLAGS_POLL, 0, 32, 2048, 0, NULL,},
 	/* host->target HTT */
-	{ /* CE4 */ (CE_ATTR_FLAGS | CE_ATTR_DISABLE_INTR), 0,
+	{ /* CE4 */ CE4_COMP_HTT_HTC, 0,
 		CE_HTT_H2T_MSG_SRC_NENTRIES, 256, 0, NULL,},
 	/* target -> host PKTLOG */
 #ifdef REMOVE_PKT_LOG
@@ -807,8 +805,7 @@ static struct CE_pipe_config target_ce_config_wlan_qca8074_pci[] = {
 	/* host->target WMI */
 	{ /* CE3 */ 3, PIPEDIR_OUT, 32, 2048, CE_ATTR_FLAGS, 0,},
 	/* host->target HTT */
-	{ /* CE4 */ 4, PIPEDIR_OUT, 256, 256,
-		(CE_ATTR_FLAGS | CE_ATTR_DISABLE_INTR), 0,},
+	{ /* CE4 */ 4, PIPEDIR_OUT, 256, 256, CE4_COMP_HTT_HTC, 0,},
 	/* NB: 50% of src nentries, since tx has 2 frags */
 	/* ipa_uc->target */
 	{ /* CE5 */ 5, PIPEDIR_OUT, 1024,   64,
@@ -838,7 +835,7 @@ static struct CE_attr host_ce_config_wlan_qca9574[] = {
 	/* host->target WMI (mac0) */
 	{ /* CE3 */ CE_ATTR_FLAGS, 0, 32, 2048, 0, NULL,},
 	/* host->target HTT */
-	{ /* CE4 */ (CE_ATTR_FLAGS | CE_ATTR_DISABLE_INTR), 0,
+	{ /* CE4 */ CE4_COMP_HTT_HTC, 0,
 		CE_HTT_H2T_MSG_SRC_NENTRIES, 256, 0, NULL,},
 	/* target -> host PKTLOG */
 #ifdef REMOVE_PKT_LOG
@@ -870,8 +867,7 @@ static struct CE_pipe_config target_ce_config_wlan_qca9574[] = {
 	/* host->target WMI */
 	{ /* CE3 */ 3, PIPEDIR_OUT, 32, 2048, CE_ATTR_FLAGS, 0,},
 	/* host->target HTT */
-	{ /* CE4 */ 4, PIPEDIR_OUT, 256, 256,
-		(CE_ATTR_FLAGS | CE_ATTR_DISABLE_INTR), 0,},
+	{ /* CE4 */ 4, PIPEDIR_OUT, 256, 256, CE4_COMP_HTT_HTC, 0,},
 	/* NB: 50% of src nentries, since tx has 2 frags */
 	/* Target -> host PKTLOG */
 #ifdef REMOVE_PKT_LOG
@@ -1029,7 +1025,7 @@ static struct CE_attr host_ce_config_wlan_qcn6122[] = {
 	/* host->target WMI */
 	{/*CE3*/ (CE_ATTR_FLAGS), 0, 32, WMI_CE_BUF_SIZE, 0, NULL,},
 	/* host->target HTT */
-	{/*CE4*/ (CE_ATTR_FLAGS | CE_ATTR_DISABLE_INTR), 0,
+	{/*CE4*/ CE4_COMP_HTT_HTC, 0,
 		CE_HTT_H2T_MSG_SRC_NENTRIES, 256, 0, NULL,},
 	/* target -> host PKTLOG */
 	{/*CE5*/ (CE_ATTR_FLAGS), 0, 0, 2048,
@@ -1053,8 +1049,7 @@ static struct CE_pipe_config target_ce_config_wlan_qcn6122[] = {
 	/* host->target WMI */
 	{ /* CE3 */ 3, PIPEDIR_OUT, 32, WMI_CE_BUF_SIZE, CE_ATTR_FLAGS, 0,},
 	/* host->target HTT */
-	{ /* CE4 */ 4, PIPEDIR_OUT, 256, 256,
-		(CE_ATTR_FLAGS | CE_ATTR_DISABLE_INTR), 0,},
+	{ /* CE4 */ 4, PIPEDIR_OUT, 256, 256, CE4_COMP_HTT_HTC, 0,},
 	/* Target -> host PKTLOG */
 	{ /* CE5 */ 5, PIPEDIR_IN,  32, 2048, CE_ATTR_FLAGS, 0,},
 	/* Reserved for target autonomous HIF_memcpy */
@@ -1086,7 +1081,7 @@ static struct CE_attr host_ce_config_wlan_qca5018[] = {
 	/* host->target WMI */
 	{/*CE3*/ (CE_ATTR_FLAGS), 0, 32, 2048, 0, NULL,},
 	/* host->target HTT */
-	{/*CE4*/ (CE_ATTR_FLAGS | CE_ATTR_DISABLE_INTR), 0,
+	{/*CE4*/ CE4_COMP_HTT_HTC, 0,
 		CE_HTT_H2T_MSG_SRC_NENTRIES, 256, 0, NULL,},
 	/* target -> host PKTLOG */
 #ifdef REMOVE_PKT_LOG
@@ -1114,8 +1109,7 @@ static struct CE_pipe_config target_ce_config_wlan_qca5018[] = {
 	/* host->target WMI */
 	{ /* CE3 */ 3, PIPEDIR_OUT, 32, 2048, CE_ATTR_FLAGS, 0,},
 	/* host->target HTT */
-	{ /* CE4 */ 4, PIPEDIR_OUT, 256, 256,
-		(CE_ATTR_FLAGS | CE_ATTR_DISABLE_INTR), 0,},
+	{ /* CE4 */ 4, PIPEDIR_OUT, 256, 256, CE4_COMP_HTT_HTC, 0,},
 	/* Target -> host PKTLOG */
 	{ /* CE5 */ 5, PIPEDIR_IN,  32, 2048, CE_ATTR_FLAGS, 0,},
 	/* Reserved for target autonomous HIF_memcpy */
@@ -1143,7 +1137,7 @@ static struct CE_attr host_ce_config_wlan_qcn9000[] = {
 	/* host->target WMI */
 	{/*CE3*/ (CE_ATTR_FLAGS), 0, 32, WMI_CE_BUF_SIZE, 0, NULL,},
 	/* host->target HTT */
-	{/*CE4*/ (CE_ATTR_FLAGS | CE_ATTR_DISABLE_INTR), 0,
+	{/*CE4*/ CE4_COMP_HTT_HTC, 0,
 		CE_HTT_H2T_MSG_SRC_NENTRIES, 256, 0, NULL,},
 	/* target -> host PKTLOG */
 #ifdef REMOVE_PKT_LOG
@@ -1171,8 +1165,7 @@ static struct CE_pipe_config target_ce_config_wlan_qcn9000[] = {
 	/* host->target WMI */
 	{ /* CE3 */ 3, PIPEDIR_OUT, 32, WMI_CE_BUF_SIZE, CE_ATTR_FLAGS, 0,},
 	/* host->target HTT */
-	{ /* CE4 */ 4, PIPEDIR_OUT, 256, 256,
-		(CE_ATTR_FLAGS | CE_ATTR_DISABLE_INTR), 0,},
+	{ /* CE4 */ 4, PIPEDIR_OUT, 256, 256, CE4_COMP_HTT_HTC, 0,},
 	/* Target -> host PKTLOG */
 	{ /* CE5 */ 5, PIPEDIR_IN,  32, 2048, CE_ATTR_FLAGS, 0,},
 	/* Reserved for target autonomous HIF_memcpy */
@@ -1301,7 +1294,7 @@ static struct CE_attr host_ce_config_wlan_qca6390[] = {
 	/* host->target WMI */
 	{ /* CE3 */ CE_ATTR_FLAGS, 0, 32, 2048, 0, NULL,},
 	/* host->target HTT */
-	{ /* CE4 */ (CE_ATTR_FLAGS | CE_ATTR_DISABLE_INTR), 0,
+	{ /* CE4 */ CE4_COMP_HTT_HTC, 0,
 		CE_HTT_H2T_MSG_SRC_NENTRIES_QCA6390, 256, 0, NULL,},
 	/* target -> host PKTLOG */
 #ifdef REMOVE_PKT_LOG
@@ -1417,7 +1410,7 @@ static struct CE_attr host_ce_config_wlan_qca6750[] = {
 	/* host->target WMI */
 	{ /* CE3 */ CE_ATTR_FLAGS, 0, 32, 3520, 0, NULL,},
 	/* host->target HTT */
-	{ /* CE4 */ (CE_ATTR_FLAGS | CE_ATTR_DISABLE_INTR), 0,
+	{ /* CE4 */ CE4_COMP_HTT_HTC, 0,
 		CE_HTT_H2T_MSG_SRC_NENTRIES, 256, 0, NULL,},
 	/* target -> host PKTLOG */
 	{ /* CE5 */ (CE_ATTR_FLAGS | CE_ATTR_DISABLE_INTR), 0, 0, 2048, 512,
@@ -1473,17 +1466,21 @@ static struct CE_attr host_ce_config_wlan_kiwi[] = {
 	/* target->host HTT + HTC control */
 	{ /* CE1 */ CE_ATTR_FLAGS, 0, 0,  2048, 512, NULL,},
 	/* target->host WMI */
-	{ /* CE2 */ CE_ATTR_FLAGS, 0, 0,  3520, 64, NULL,},
+	{ /* CE2 */ CE_ATTR_FLAGS, 0, 0,  3520, 256, NULL,},
 	/* host->target WMI */
 	{ /* CE3 */ CE_ATTR_FLAGS, 0, 32, 3520, 0, NULL,},
 	/* host->target HTT */
-	{ /* CE4 */ (CE_ATTR_FLAGS | CE_ATTR_DISABLE_INTR), 0,
+	{ /* CE4 */ CE4_COMP_HTT_HTC, 0,
 		256, 256, 0, NULL,},
 #ifdef FEATURE_PKTLOG
 	/* target -> host PKTLOG */
 	{ /* CE5 */ CE_ATTR_FLAGS, 0, 0, 2048, 512, NULL,},
 #else
+#ifdef FEATURE_XPAN
+	{ /* CE5 */ CE_ATTR_FLAGS, 0, 0, 256, 32, NULL,},
+#else
 	{ /* CE5 */ CE_ATTR_FLAGS, 0, 0, 2048, 0, NULL,},
+#endif
 #endif
 	/* Target autonomous HIF_memcpy */
 	{ /* CE6 */ CE_ATTR_FLAGS, 0, 0, 0, 0, NULL,},
@@ -1516,7 +1513,11 @@ static struct CE_pipe_config target_ce_config_wlan_kiwi[] = {
 	/* Target -> host PKTLOG */
 	{ /* CE5 */ 5, PIPEDIR_IN,  32, 2048, CE_ATTR_FLAGS, 0,},
 #else
+#ifdef FEATURE_XPAN
+	{ /* CE5 */ 5, PIPEDIR_IN,  16, 256, CE_ATTR_FLAGS, 0,},
+#else
 	{ /* CE5 */ 5, PIPEDIR_IN,  0, 2048, CE_ATTR_FLAGS, 0,},
+#endif
 #endif
 
 	/* Reserved for target autonomous HIF_memcpy */
@@ -1548,7 +1549,7 @@ static struct CE_attr host_ce_config_wlan_qcn9224[] = {
 	/* host->target WMI (mac0) */
 	{/*CE3*/ (CE_ATTR_FLAGS), 0, 32, 2048, 0, NULL,},
 	/* host->target HTT */
-	{/*CE4*/ (CE_ATTR_FLAGS | CE_ATTR_DISABLE_INTR), 0,
+	{/*CE4*/ CE4_COMP_HTT_HTC, 0,
 		CE_HTT_H2T_MSG_SRC_NENTRIES, 256, 0, NULL,},
 	/* target -> host PKTLOG */
 #ifdef REMOVE_PKT_LOG
@@ -1572,7 +1573,7 @@ static struct CE_attr host_ce_config_wlan_qcn9224[] = {
 	/* Target CV prefetch */
 	{/*CE13*/ (CE_ATTR_FLAGS | CE_ATTR_DISABLE_INTR), 0, 0, 0, 0, NULL,},
 	/* target->host WMI logging, Direc-DMA */
-	{/*CE14*/ (CE_ATTR_FLAGS), 0, 0, 0, 0, NULL,},
+	{/*CE14*/ (CE_ATTR_FLAGS), 0, 0, 2048, 128, NULL,},
 	/* Reserved for customer use */
 	{/*CE15*/ (CE_ATTR_FLAGS | CE_ATTR_DISABLE_INTR), 0, 0, 0, 0, NULL,},
 };
@@ -1587,8 +1588,7 @@ static struct CE_pipe_config target_ce_config_wlan_qcn9224[] = {
 	/* host->target WMI */
 	{ /* CE3 */ 3, PIPEDIR_OUT, 32, 2048, CE_ATTR_FLAGS, 0,},
 	/* host->target HTT */
-	{ /* CE4 */ 4, PIPEDIR_OUT, 256, 256,
-		(CE_ATTR_FLAGS | CE_ATTR_DISABLE_INTR), 0,},
+	{ /* CE4 */ 4, PIPEDIR_OUT, 256, 256, CE4_COMP_HTT_HTC, 0,},
 	/* Target -> host PKTLOG */
 	{ /* CE5 */ 5, PIPEDIR_IN,  32, 2048, CE_ATTR_FLAGS, 0,},
 	/* Reserved for target autonomous HIF_memcpy */

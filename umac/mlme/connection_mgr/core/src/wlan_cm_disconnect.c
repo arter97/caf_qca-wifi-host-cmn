@@ -382,11 +382,21 @@ QDF_STATUS cm_disconnect_active(struct cnx_mgr *cm_ctx, wlan_cm_id *cm_id)
 	struct cm_req *cm_req;
 	QDF_STATUS status = QDF_STATUS_E_NOSUPPORT;
 
-	cm_req = cm_get_req_by_cm_id(cm_ctx, *cm_id);
-	if (!cm_req)
-		return QDF_STATUS_E_INVAL;
-
 	cm_ctx->active_cm_id = *cm_id;
+	cm_req = cm_get_req_by_cm_id(cm_ctx, *cm_id);
+	if (!cm_req) {
+		/*
+		 * Remove the command from serialization active queue, if
+		 * disconnect req was not found, to avoid active cmd timeout.
+		 * This can happen if a thread tried to flush the pending
+		 * disconnect request and while doing so, it removed the
+		 * CM pending request, but before it tried to remove pending
+		 * command from serialization, the command becomes active in
+		 * another thread.
+		 */
+		cm_remove_cmd_from_serialization(cm_ctx, *cm_id);
+		return QDF_STATUS_E_INVAL;
+	}
 
 	if (wlan_vdev_mlme_get_opmode(cm_ctx->vdev) == QDF_STA_MODE)
 		status = mlme_cm_rso_stop_req(cm_ctx->vdev);
@@ -504,7 +514,7 @@ cm_inform_dlm_disconnect_complete(struct wlan_objmgr_vdev *vdev,
 static inline void
 cm_clear_vdev_mlo_cap(struct wlan_objmgr_vdev *vdev)
 {
-	wlan_vdev_mlme_feat_ext2_cap_clear(vdev, WLAN_VDEV_FEXT2_MLO);
+	wlan_vdev_mlme_clear_mlo_vdev(vdev);
 }
 #else /*WLAN_FEATURE_11BE_MLO_ADV_FEATURE*/
 static inline void
@@ -626,7 +636,7 @@ cm_handle_discon_req_in_non_connected_state(struct cnx_mgr *cm_ctx,
 		if (cm_roam_offload_enabled(wlan_vdev_get_psoc(cm_ctx->vdev)))
 			cm_flush_pending_request(cm_ctx, ROAM_REQ_PREFIX,
 						 false);
-		/* fallthrough */
+		fallthrough;
 	case WLAN_CM_SS_JOIN_ACTIVE:
 		/*
 		 * In join active/roaming state, there would be no pending
@@ -639,7 +649,7 @@ cm_handle_discon_req_in_non_connected_state(struct cnx_mgr *cm_ctx,
 		/* In the scan state abort the ongoing scan */
 		cm_vdev_scan_cancel(wlan_vdev_get_pdev(cm_ctx->vdev),
 				    cm_ctx->vdev);
-		/* fallthrough */
+		fallthrough;
 	case WLAN_CM_SS_JOIN_PENDING:
 		/*
 		 * There would be pending disconnect requests in the list, and

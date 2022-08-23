@@ -283,6 +283,9 @@ enum htt_cmn_dbg_stats_type {
  * @TXRX_NAPI_STATS: Print NAPI scheduling statistics
  * @TXRX_SOC_INTERRUPT_STATS: Print soc interrupt stats
  * @TXRX_HAL_REG_WRITE_STATS: Hal Reg Write stats
+ * @TXRX_SOC_REO_HW_DESC_DUMP: HW REO queue desc dump
+ * @TXRX_SOC_WBM_IDLE_HPTP_DUMP: WBM idle link desc SRNG HP/TP dump
+ * @TXRX_SRNG_USAGE_WM_STATS: SRNG usage watermark stats
  */
 enum cdp_host_txrx_stats {
 	TXRX_HOST_STATS_INVALID  = -1,
@@ -303,6 +306,7 @@ enum cdp_host_txrx_stats {
 	TXRX_HAL_REG_WRITE_STATS = 14,
 	TXRX_SOC_REO_HW_DESC_DUMP = 15,
 	TXRX_SOC_WBM_IDLE_HPTP_DUMP = 16,
+	TXRX_SRNG_USAGE_WM_STATS = 17,
 	TXRX_HOST_STATS_MAX,
 };
 
@@ -733,7 +737,16 @@ enum txrx_direction {
 };
 
 /**
- * cdp_capabilities- DP capabilities
+ * enum cdp_capabilities- DP capabilities
+ * @CDP_CFG_DP_TSO: TSO capability
+ * @CDP_CFG_DP_LRO: LRO capability
+ * @CDP_CFG_DP_SG: Scatter Gather capability
+ * @CDP_CFG_DP_GRO: GRO capability
+ * @CDP_CFG_DP_OL_TX_CSUM: Hardware based TX checksum capability
+ * @CDP_CFG_DP_OL_RX_CSUM: Hardware based RX checksum capability
+ * @CDP_CFG_DP_RAWMODE: RAW mode capability
+ * @CDP_CFG_DP_PEER_FLOW_CTRL: Peer flow-control capability
+ * @CDP_CFG_DP_MARK_NOTIFY_FRAME_SUPPORT: mark notify frames capability
  */
 enum cdp_capabilities {
 	CDP_CFG_DP_TSO,
@@ -744,6 +757,7 @@ enum cdp_capabilities {
 	CDP_CFG_DP_OL_RX_CSUM,
 	CDP_CFG_DP_RAWMODE,
 	CDP_CFG_DP_PEER_FLOW_CTRL,
+	CDP_CFG_DP_MARK_NOTIFY_FRAME_SUPPORT,
 };
 
 /**
@@ -999,8 +1013,8 @@ typedef void (*ol_txrx_pktdump_cb)(ol_txrx_soc_handle soc,
 				   uint8_t pdev_id,
 				   uint8_t vdev_id,
 				   qdf_nbuf_t netbuf,
-				   uint8_t status,
-				   uint8_t type);
+				   enum qdf_dp_tx_rx_status status,
+				   enum qdf_pkt_type type);
 
 /**
  * ol_txrx_get_tsf_time - callback to get tsf time
@@ -1263,6 +1277,7 @@ enum cdp_pdev_param_type {
  * @cdp_vdev_param_mesh_tid: config tatency tid on vdev
  * @cdp_vdev_param_dscp_tid_map_id: set dscp to tid map id
  * @cdp_vdev_param_mcast_vdev: set mcast vdev params
+ * @cdp_vdev_param_wrap: qwrap ap vap
  *
  * @cdp_pdev_param_dbg_snf: Enable debug sniffer feature
  * @cdp_pdev_param_bpr_enable: Enable bcast probe feature
@@ -1337,6 +1352,7 @@ typedef union cdp_config_param_t {
 	uint8_t cdp_vdev_param_mesh_tid;
 	uint8_t cdp_vdev_param_dscp_tid_map_id;
 	bool cdp_vdev_param_mcast_vdev;
+	bool cdp_vdev_param_wrap;
 
 	/* pdev params */
 	bool cdp_pdev_param_cptr_latcy;
@@ -1383,6 +1399,7 @@ typedef union cdp_config_param_t {
 	bool cdp_psoc_param_vdev_stats_hw_offload;
 	bool cdp_pdev_param_undecoded_metadata_enable;
 	bool cdp_sawf_enabled;
+	bool cdp_drop_3addr_mcast;
 } cdp_config_param_type;
 
 /**
@@ -1461,6 +1478,7 @@ enum cdp_pdev_bpr_param {
  * @CDP_SET_VAP_MESH_TID : Set latency tid in vap
  * @CDP_UPDATE_DSCP_TO_TID_MAP: Set DSCP to TID map id
  * @CDP_SET_MCAST_VDEV : Set primary mcast vdev
+ * @CDP_ENABLE_WRAP: qwrap ap
  */
 enum cdp_vdev_param_type {
 	CDP_ENABLE_NAWDS,
@@ -1500,6 +1518,8 @@ enum cdp_vdev_param_type {
 #endif
 	CDP_UPDATE_DSCP_TO_TID_MAP,
 	CDP_SET_MCAST_VDEV,
+	CDP_DROP_3ADDR_MCAST,
+	CDP_ENABLE_WRAP,
 };
 
 /*
@@ -1862,6 +1882,8 @@ struct cdp_delayed_tx_completion_ppdu_user {
  * @peer_last_delayed_ba: flag to indicate peer last delayed ba
  * @phy_tx_time_us: Phy TX duration for the User
  * @mpdu_bytes: accumulated bytes per mpdu for mem limit feature
+ * @punc_mode: puncutured mode to indicate punctured bw
+ * @punc_pattern_bitmap: bitmap indicating punctured pattern
  */
 struct cdp_tx_completion_ppdu_user {
 	uint32_t completion_status:8,
@@ -1965,6 +1987,8 @@ struct cdp_tx_completion_ppdu_user {
 
 	uint16_t phy_tx_time_us;
 	uint32_t mpdu_bytes;
+	uint8_t punc_mode;
+	uint16_t punc_pattern_bitmap;
 };
 
 /**
@@ -2064,6 +2088,9 @@ struct cdp_tx_indication_info {
 	struct cdp_tx_indication_mpdu_info mpdu_info;
 	qdf_nbuf_t mpdu_nbuf;
 	struct cdp_tx_completion_ppdu *ppdu_desc;
+#ifdef QCA_SUPPORT_LITE_MONITOR
+	ol_osif_vdev_handle osif_vdev;
+#endif
 };
 
 /**
@@ -2377,7 +2404,7 @@ struct cdp_rx_stats_ppdu_user {
  * @user: per user stats in MU-user case
  * @nf: noise floor
  * @per_chain_rssi: rssi per antenna
- * @punc_bw: puncered bw
+ * @punc_bw: punctured bw
  * @phyrx_abort: rx aborted undecoded frame indication
  * @phyrx_abort_reason: abort reason defined in phyrx_abort_request_info
  * @l_sig_length: L SIG A length
@@ -2409,6 +2436,8 @@ struct cdp_rx_stats_ppdu_user {
  * @sig_b_sym: Number of symbols of HE-SIG-B
  * @sig_b_comp: Compression mode of HE-SIG-B
  * @he_crc: CRC for HE-SIG contents
+ * @usr_nss_sum: Sum of user nss
+ * @usr_ru_tones_sum: Sum of user ru_tones
  */
 struct cdp_rx_indication_ppdu {
 	uint32_t ppdu_id;
@@ -2504,6 +2533,8 @@ struct cdp_rx_indication_ppdu {
 		 sig_b_comp:1,
 		 he_crc:4;
 #endif
+	uint8_t usr_nss_sum;
+	uint32_t usr_ru_tones_sum;
 };
 
 /**
@@ -2620,7 +2651,8 @@ struct cdp_monitor_filter {
  * @cfg_dp_tso_enable: get TSO enable config
  * @cfg_dp_lro_enable: get LRO enable config
  * @cfg_dp_gro_enable: get GRO enable config
- * @cfg_dp_force_gro_enable: get Force GRO enable config
+ * @cfg_dp_tc_based_dyn_gro_enable: get TC based dynamic gro enable config
+ * @cfg_dp_tc_ingress_prio: priority value to be checked for tc filters
  * @cfg_dp_tx_flow_start_queue_offset: get DP TX flow start queue offset
  * @cfg_dp_tx_flow_stop_queue_threshold: get DP TX flow stop queue threshold
  * @cfg_dp_ipa_uc_tx_buf_size: get IPA TX buf size config
@@ -2643,7 +2675,8 @@ enum cdp_dp_cfg {
 	cfg_dp_tso_enable,
 	cfg_dp_lro_enable,
 	cfg_dp_gro_enable,
-	cfg_dp_force_gro_enable,
+	cfg_dp_tc_based_dyn_gro_enable,
+	cfg_dp_tc_ingress_prio,
 	cfg_dp_sg_enable,
 	cfg_dp_tx_flow_start_queue_offset,
 	cfg_dp_tx_flow_stop_queue_threshold,
@@ -2685,12 +2718,16 @@ struct cdp_flow_stats {
 /**
  * cdp_flow_stats - Per-Flow (5-tuple) statistics
  * @msdu_count: number of rx msdus matching this flow
+ * @mon_msdu_count: number of msdus matching this flow in mon path
  *
  * HW also includes msdu_byte_count and timestamp, which
  * are not currently tracked in SW.
  */
 struct cdp_flow_stats {
 	uint32_t msdu_count;
+#ifdef QCA_TEST_MON_PF_TAGS_STATS
+	uint32_t mon_msdu_count;
+#endif
 };
 #endif
 

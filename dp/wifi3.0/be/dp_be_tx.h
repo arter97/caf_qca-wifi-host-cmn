@@ -37,6 +37,15 @@ struct __attribute__((__packed__)) dp_tx_comp_peer_id {
 /* Invalid TX Bank ID value */
 #define DP_BE_INVALID_BANK_ID -1
 
+/* Extraction of msdu queue information from per packet sawf metadata */
+#define DP_TX_HLOS_TID_GET(_var) \
+	(((_var) & 0x0e) >> 1)
+#define DP_TX_FLOW_OVERRIDE_GET(_var) \
+	((_var) & 0x1)
+#define DP_TX_WHO_CLFY_INF_SEL_GET(_var) \
+	(((_var) & 0x30) >> 4)
+#define DP_TX_FLOW_OVERRIDE_ENABLE 0x1
+
 /**
  * dp_tx_hw_enqueue_be() - Enqueue to TCL HW for transmit for BE target
  * @soc: DP Soc Handle
@@ -181,6 +190,15 @@ void dp_tx_mlo_mcast_handler_be(struct dp_soc *soc,
 void dp_tx_mlo_mcast_pkt_send(struct dp_vdev_be *be_vdev,
 			      struct dp_vdev *ptnr_vdev,
 			      void *arg);
+
+/**
+ * dp_tx_mcast_mlo_reinject_routing_set() - mlo mcast reinject routing handler
+ * @be_vdev: Handle to DP be_vdev structure
+ * @cmd: cmd to set TQM/FW based reinjection
+ *
+ * Return: None
+ */
+void dp_tx_mcast_mlo_reinject_routing_set(struct dp_soc *soc, void *arg);
 #endif
 #endif
 #endif
@@ -208,4 +226,18 @@ uint32_t dp_tx_comp_nf_handler(struct dp_intr *int_ctx, struct dp_soc *soc,
 	return 0;
 }
 #endif /* WLAN_FEATURE_NEAR_FULL_IRQ */
+
+/**
+ * dp_tx_compute_tx_delay_be() - Compute HW Tx completion delay
+ * @soc: Handle to DP Soc structure
+ * @vdev: vdev
+ * @ts: Tx completion status
+ * @delay_us: Delay to be calculated in microseconds
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS dp_tx_compute_tx_delay_be(struct dp_soc *soc,
+				     struct dp_vdev *vdev,
+				     struct hal_tx_completion_status *ts,
+				     uint32_t *delay_us);
 #endif
