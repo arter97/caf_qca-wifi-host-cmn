@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -4696,6 +4697,7 @@ typedef enum {
 #ifdef WLAN_FEATURE_PKT_CAPTURE_V2
 	wmi_vdev_smart_monitor_event_id,
 #endif
+	 wmi_roam_frame_event_id,
 	wmi_events_max,
 } wmi_conv_event_id;
 
@@ -5271,6 +5273,7 @@ typedef enum {
 #ifdef THERMAL_STATS_SUPPORT
 	wmi_service_thermal_stats_temp_range_supported,
 #endif
+	wmi_service_pno_scan_conf_per_ch_support,
 	wmi_services_max,
 } wmi_conv_service_ids;
 #define WMI_SERVICE_UNAVAILABLE 0xFFFF
