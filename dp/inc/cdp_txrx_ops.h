@@ -1229,6 +1229,10 @@ struct ol_if_ops {
 				   uint32_t service_interval_ul, uint32_t burst_size_ul,
 				   uint8_t add_or_sub, uint8_t ac);
 #endif
+#if defined(IPA_WDS_EASYMESH_FEATURE) && defined(FEATURE_AST)
+void (*peer_send_wds_disconnect)(struct cdp_ctrl_objmgr_psoc *psoc,
+				 uint8_t *mac_addr, uint8_t vdev_id);
+#endif
 };
 
 #ifdef DP_PEER_EXTENDED_API
