@@ -97,6 +97,26 @@ extern bool is_hal_verbose_debug_enabled;
  */
 #define HAL_GET_NUM_DWORDS(num)	((num) >> 2)
 
+struct hal_hw_cc_config {
+	uint32_t lut_base_addr_31_0;
+	uint32_t cc_global_en:1,
+		 page_4k_align:1,
+		 cookie_offset_msb:5,
+		 cookie_page_msb:5,
+		 lut_base_addr_39_32:8,
+		 wbm2sw6_cc_en:1,
+		 wbm2sw5_cc_en:1,
+		 wbm2sw4_cc_en:1,
+		 wbm2sw3_cc_en:1,
+		 wbm2sw2_cc_en:1,
+		 wbm2sw1_cc_en:1,
+		 wbm2sw0_cc_en:1,
+		 wbm2fw_cc_en:1,
+		 error_path_cookie_conv_en:1,
+		 release_path_cookie_conv_en:1,
+		 reserved:2;
+};
+
 /*
  * dp_hal_soc - opaque handle for DP HAL soc
  */
@@ -144,6 +164,7 @@ typedef struct rx_msdu_desc_info *rx_msdu_desc_info_t;
  */
 union hal_tx_ppe_vp_config;
 union hal_tx_cmn_config_ppe;
+union hal_tx_bank_config;
 
 /* TBD: This should be movded to shared HW header file */
 enum hal_srng_ring_id {
@@ -260,6 +281,9 @@ enum hal_srng_ring_id {
 #ifdef IPA_OFFLOAD
 	HAL_SRNG_WMAC1_SW2RXDMA0_BUF1,
 	HAL_SRNG_WMAC1_SW2RXDMA0_BUF2,
+#ifdef IPA_WDI3_VLAN_SUPPORT
+	HAL_SRNG_WMAC1_SW2RXDMA0_BUF3,
+#endif
 	HAL_SRNG_WMAC1_SW2RXDMA1_BUF,
 #else
 	HAL_SRNG_WMAC1_SW2RXDMA1_BUF,
@@ -762,6 +786,26 @@ enum hal_reo_cmd_type {
 	CMD_UPDATE_RX_REO_QUEUE = 5
 };
 
+/**
+ * enum hal_tx_mcast_mlo_reinject_notify
+ * @HAL_TX_MCAST_MLO_REINJECT_FW_NOTIFY: MLO Mcast reinject routed to FW
+ * @HAL_TX_MCAST_MLO_REINJECT_TQM_NOTIFY: MLO Mcast reinject routed to TQM
+ */
+enum hal_tx_mcast_mlo_reinject_notify {
+	HAL_TX_MCAST_MLO_REINJECT_FW_NOTIFY = 0,
+	HAL_TX_MCAST_MLO_REINJECT_TQM_NOTIFY,
+};
+
+/**
+ * enum hal_tx_vdev_mismatch_notify
+ * @HAL_TX_VDEV_MISMATCH_TQM_NOTIFY: vdev mismatch exception routed to TQM
+ * @HAL_TX_VDEV_MISMATCH_FW_NOTIFY: vdev mismatch exception routed to FW
+ */
+enum hal_tx_vdev_mismatch_notify {
+	HAL_TX_VDEV_MISMATCH_TQM_NOTIFY = 0,
+	HAL_TX_VDEV_MISMATCH_FW_NOTIFY,
+};
+
 struct hal_rx_pkt_capture_flags {
 	uint8_t encrypt_type;
 	uint8_t fragment_flag;
@@ -840,6 +884,9 @@ struct hal_hw_txrx_ops {
 	void (*hal_tx_dump_ppe_vp_entry)(hal_soc_handle_t hal_soc_hdl);
 	void (*hal_tx_enable_pri2tid_map)(hal_soc_handle_t hal_soc_hdl,
 					  bool value, uint8_t ppe_vp_idx);
+	void (*hal_tx_config_rbm_mapping_be)(hal_soc_handle_t hal_soc_hdl,
+					     hal_ring_handle_t hal_ring_hdl,
+					     uint8_t rbm_id);
 
 	/* rx */
 	uint32_t (*hal_rx_msdu_start_nss_get)(uint8_t *);
@@ -1093,6 +1140,9 @@ struct hal_hw_txrx_ops {
 	uint8_t (*hal_get_tlv_hdr_size)(void);
 	uint8_t (*hal_get_idle_link_bm_id)(uint8_t chip_id);
 
+	bool (*hal_txmon_is_mon_buf_addr_tlv)(void *tx_tlv_hdr);
+	void (*hal_txmon_populate_packet_info)(void *tx_tlv_hdr,
+					       void *pkt_info);
 	/* TX MONITOR */
 #ifdef QCA_MONITOR_2_0_SUPPORT
 	uint32_t (*hal_txmon_status_parse_tlv)(void *data_ppdu_info,
@@ -1103,8 +1153,6 @@ struct hal_hw_txrx_ops {
 					       qdf_frag_t status_frag);
 	uint32_t (*hal_txmon_status_get_num_users)(void *tx_tlv_hdr,
 						   uint8_t *num_users);
-	QDF_STATUS (*hal_txmon_status_free_buffer)(qdf_frag_t status_frag,
-						   uint32_t end_offset);
 #endif /* QCA_MONITOR_2_0_SUPPORT */
 	void (*hal_reo_shared_qaddr_setup)(hal_soc_handle_t hal_soc_hdl);
 	void (*hal_reo_shared_qaddr_init)(hal_soc_handle_t hal_soc_hdl);
@@ -1118,6 +1166,20 @@ struct hal_hw_txrx_ops {
 #endif
 	void (*hal_reo_shared_qaddr_cache_clear)(hal_soc_handle_t hal_soc_hdl);
 	uint32_t (*hal_rx_tlv_l3_type_get)(uint8_t *buf);
+	void (*hal_tx_vdev_mismatch_routing_set)(hal_soc_handle_t hal_soc_hdl,
+			enum hal_tx_vdev_mismatch_notify config);
+	void (*hal_tx_mcast_mlo_reinject_routing_set)(
+			hal_soc_handle_t hal_soc_hdl,
+			enum hal_tx_mcast_mlo_reinject_notify config);
+	void (*hal_cookie_conversion_reg_cfg_be)(hal_soc_handle_t hal_soc_hdl,
+						 struct hal_hw_cc_config
+						 *cc_cfg);
+	void (*hal_tx_populate_bank_register)(hal_soc_handle_t hal_soc_hdl,
+					      union hal_tx_bank_config *config,
+					      uint8_t bank_id);
+	void (*hal_tx_vdev_mcast_ctrl_set)(hal_soc_handle_t hal_soc_hdl,
+					   uint8_t vdev_id,
+					   uint8_t mcast_ctrl_val);
 };
 
 /**
@@ -1242,6 +1304,7 @@ struct hal_soc {
 	uint8_t reo_res_bitmap;
 	uint8_t index;
 	uint32_t target_type;
+	uint32_t version;
 
 	/* shadow register configuration */
 	union hal_shadow_reg_cfg shadow_config[MAX_SHADOW_REGISTERS];
@@ -1311,7 +1374,8 @@ void hal_qca6390_attach(struct hal_soc *hal_soc);
 void hal_qca6290_attach(struct hal_soc *hal_soc);
 void hal_qca8074_attach(struct hal_soc *hal_soc);
 void hal_kiwi_attach(struct hal_soc *hal_soc);
-void hal_qcn9224_attach(struct hal_soc *hal_soc);
+void hal_qcn9224v1_attach(struct hal_soc *hal_soc);
+void hal_qcn9224v2_attach(struct hal_soc *hal_soc);
 /*
  * hal_soc_to_dp_hal_roc - API to convert hal_soc to opaque
  * dp_hal_soc handle type

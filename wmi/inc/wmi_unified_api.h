@@ -482,6 +482,27 @@ wmi_diag_connect_pdev_htc_service(struct wmi_unified *wmi_handle,
 }
 #endif
 
+#if defined(WLAN_DIAG_AND_DBR_OVER_SEPARATE_CE)
+/**
+ * wmi_dbr_connect_pdev_htc_service()
+ * WMI DBR API to get connect to HTC service
+ * @wmi_handle: handle to WMI.
+ * @htc_handle: handle to HTC.
+ *
+ * Return: QDF_STATUS_SUCCESS on success and QDF_STATUS_E_FAULT for failure
+ */
+QDF_STATUS
+wmi_dbr_connect_pdev_htc_service(struct wmi_unified *wmi_handle,
+				 HTC_HANDLE htc_handle);
+#else
+static inline QDF_STATUS
+wmi_dbr_connect_pdev_htc_service(struct wmi_unified *wmi_handle,
+				 HTC_HANDLE htc_handle)
+{
+	return QDF_STATUS_SUCCESS;
+}
+#endif
+
 /*
  * WMI API to verify the host has enough credits to suspend
  *  @param wmi_handle      : handle to WMI.
@@ -4634,6 +4655,19 @@ QDF_STATUS wmi_unified_send_cp_stats_cmd(wmi_unified_t wmi_handle,
 
 
 /**
+ * wmi_unified_send_halphy_stats_cmd() - Send halphy stats command
+ * @wmi_handle: wmi handle
+ * @buf_ptr: buf_ptr received from wifistats
+ * @buf_len: length of buffer received from wifistats
+ *
+ * This function sends halphy stats cmd to get halphy stats.
+ *
+ * Return QDF_STATUS_SUCCESS on success and QDF_STATUS_E_FAILURE for failure
+ */
+QDF_STATUS wmi_unified_send_halphy_stats_cmd(wmi_unified_t wmi_handle,
+					     void *buf_ptr, uint32_t buf_len);
+
+/**
  * wmi_unified_extract_cp_stats_more_pending() - extract more flag
  * @wmi_handle: wmi handle
  * @evt_buf: event buffer
@@ -4646,6 +4680,36 @@ QDF_STATUS wmi_unified_send_cp_stats_cmd(wmi_unified_t wmi_handle,
 QDF_STATUS
 wmi_unified_extract_cp_stats_more_pending(wmi_unified_t wmi_handle,
 					  void *evt_buf, uint32_t *more_flag);
+
+/**
+ * wmi_unified_extract_halphy_stats_end_of_event() - extract end_of_event flag
+ * @wmi_handle: wmi handle
+ * @evt_buf: event buffer
+ * @end_of_event_flag: end_of_event flag
+ *
+ * This function extracts the end_of_event_flag from fixed param
+ *
+ * Return: QDF_STATUS_SUCCESS on success and QDF_STATUS_E_FAILURE for failure
+ */
+QDF_STATUS
+wmi_unified_extract_halphy_stats_end_of_event(wmi_unified_t wmi_handle,
+					      void *evt_buf,
+					      uint32_t *end_of_event_flag);
+
+/**
+ * wmi_unified_extract_halphy_stats_event_count() - extract event_count flag
+ * @wmi_handle: wmi handle
+ * @evt_buf: event buffer
+ * @event_count_flag: event count flag
+ *
+ * This function extracts the event_count_flag from fixed param
+ *
+ * Return: QDF_STATUS_SUCCESS on success and QDF_STATUS_E_FAILURE for failure
+ */
+QDF_STATUS
+wmi_unified_extract_halphy_stats_event_count(wmi_unified_t wmi_handle,
+					     void *evt_buf,
+					     uint32_t *event_count_flag);
 
 /**
  * wmi_unified_send_vdev_tsf_tstamp_action_cmd() - send vdev tsf action command

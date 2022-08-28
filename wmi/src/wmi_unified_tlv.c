@@ -5360,6 +5360,45 @@ static QDF_STATUS send_cp_stats_cmd_tlv(wmi_unified_t wmi_handle,
 }
 
 /**
+ * send_halphy_stats_cmd_tlv() - Send halphy stats wmi command
+ * @wmi_handle: wmi handle
+ * @buf_ptr: Buffer passed by upper layers
+ * @buf_len: Length of passed buffer by upper layer
+ *
+ * Copy the buffer passed by the upper layers and send it
+ * down to the firmware.
+ *
+ * Return: None
+ */
+static QDF_STATUS send_halphy_stats_cmd_tlv(wmi_unified_t wmi_handle,
+					    void *buf_ptr, uint32_t buf_len)
+{
+	wmi_buf_t buf = NULL;
+	QDF_STATUS status;
+	int len;
+	uint8_t *data_ptr;
+
+	len = buf_len;
+	buf = wmi_buf_alloc(wmi_handle, len);
+	if (!buf)
+		return QDF_STATUS_E_NOMEM;
+
+	data_ptr = (uint8_t *)wmi_buf_data(buf);
+	qdf_mem_copy(data_ptr, buf_ptr, len);
+
+	wmi_mtrace(WMI_REQUEST_HALPHY_CTRL_PATH_STATS_CMDID, NO_SESSION, 0);
+	status = wmi_unified_cmd_send(wmi_handle, buf,
+				      len,
+				      WMI_REQUEST_HALPHY_CTRL_PATH_STATS_CMDID);
+
+	if (QDF_IS_STATUS_ERROR(status)) {
+		wmi_buf_free(buf);
+		return QDF_STATUS_E_FAILURE;
+	}
+	return QDF_STATUS_SUCCESS;
+}
+
+/**
  * extract_cp_stats_more_pending_tlv - api to extract more flag from event data
  * @wmi_handle: wmi handle
  * @evt_buf:    event buffer
@@ -5382,6 +5421,62 @@ extract_cp_stats_more_pending_tlv(wmi_unified_t wmi, void *evt_buf,
 	ev = (wmi_ctrl_path_stats_event_fixed_param *)param_buf->fixed_param;
 
 	*more_flag = ev->more;
+	return QDF_STATUS_SUCCESS;
+}
+
+/**
+ * extract_halphy_stats_end_of_event_tlv - api to extract end_of_event flag
+ * from event data
+ * @wmi_handle: wmi handle
+ * @evt_buf:    event buffer
+ * @end_of_event_flag:  buffer to populate end_of_event flag
+ *
+ * Return: status of operation
+ */
+static QDF_STATUS
+extract_halphy_stats_end_of_event_tlv(wmi_unified_t wmi, void *evt_buf,
+				      uint32_t *end_of_event_flag)
+{
+	WMI_HALPHY_CTRL_PATH_STATS_EVENTID_param_tlvs *param_buf;
+	wmi_halphy_ctrl_path_stats_event_fixed_param *ev;
+
+	param_buf = (WMI_HALPHY_CTRL_PATH_STATS_EVENTID_param_tlvs *)evt_buf;
+	if (!param_buf) {
+		wmi_err_rl("param_buf is NULL");
+		return QDF_STATUS_E_FAILURE;
+	}
+	ev = (wmi_halphy_ctrl_path_stats_event_fixed_param *)
+	param_buf->fixed_param;
+
+	*end_of_event_flag = ev->end_of_event;
+	return QDF_STATUS_SUCCESS;
+}
+
+/**
+ * extract_halphy_stats_event_count - api to extract event count flag from
+ * event data
+ * @wmi_handle: wmi handle
+ * @evt_buf:    event buffer
+ * @event_count_flag:  buffer to populate event_count flag
+ *
+ * Return: status of operation
+ */
+static QDF_STATUS
+extract_halphy_stats_event_count_tlv(wmi_unified_t wmi, void *evt_buf,
+				     uint32_t *event_count_flag)
+{
+	WMI_HALPHY_CTRL_PATH_STATS_EVENTID_param_tlvs *param_buf;
+	wmi_halphy_ctrl_path_stats_event_fixed_param *ev;
+
+	param_buf = (WMI_HALPHY_CTRL_PATH_STATS_EVENTID_param_tlvs *)evt_buf;
+	if (!param_buf) {
+		wmi_err_rl("param_buf is NULL");
+		return QDF_STATUS_E_FAILURE;
+	}
+	ev = (wmi_halphy_ctrl_path_stats_event_fixed_param *)
+	param_buf->fixed_param;
+
+	*event_count_flag = ev->event_count;
 	return QDF_STATUS_SUCCESS;
 }
 
@@ -7889,13 +7984,13 @@ extract_spectral_fft_size_caps_tlv(
 		fft_size_caps[idx].sscan_bw = wmi_map_ch_width(
 			param_buf->fft_size_caps[idx].sscan_bw);
 		fft_size_caps[idx].supports_fft_sizes =
-			param_buf->sscan_bw_caps[idx].supported_flags;
+			param_buf->fft_size_caps[idx].supported_flags;
 
 		wmi_debug("fft_size_caps[%u]:: pdev_id:%u sscan_bw:%u"
 			  "supported_flags:0x%x",
-			  idx, param_buf->sscan_bw_caps[idx].pdev_id,
+			  idx, param_buf->fft_size_caps[idx].pdev_id,
 			  param_buf->fft_size_caps[idx].sscan_bw,
-			  param_buf->sscan_bw_caps[idx].supported_flags);
+			  param_buf->fft_size_caps[idx].supported_flags);
 	}
 
 	return QDF_STATUS_SUCCESS;
@@ -12312,6 +12407,26 @@ static QDF_STATUS extract_unit_test_tlv(wmi_unified_t wmi_handle,
 static QDF_STATUS extract_pdev_ext_stats_tlv(wmi_unified_t wmi_handle,
 	void *evt_buf, uint32_t index, wmi_host_pdev_ext_stats *pdev_ext_stats)
 {
+	WMI_UPDATE_STATS_EVENTID_param_tlvs *param_buf;
+	wmi_pdev_extd_stats *ev;
+
+	param_buf = evt_buf;
+	if (!param_buf)
+		return QDF_STATUS_E_FAILURE;
+
+	if (!param_buf->pdev_extd_stats)
+		return QDF_STATUS_E_FAILURE;
+
+	ev = param_buf->pdev_extd_stats + index;
+
+	pdev_ext_stats->pdev_id =
+		wmi_handle->ops->convert_target_pdev_id_to_host(
+						wmi_handle,
+						ev->pdev_id);
+	pdev_ext_stats->my_rx_count = ev->my_rx_count;
+	pdev_ext_stats->rx_matched_11ax_msdu_cnt = ev->rx_matched_11ax_msdu_cnt;
+	pdev_ext_stats->rx_other_11ax_msdu_cnt = ev->rx_other_11ax_msdu_cnt;
+
 	return QDF_STATUS_SUCCESS;
 }
 
@@ -13215,6 +13330,59 @@ static QDF_STATUS extract_mac_phy_cap_service_ready_ext_tlv(
 	return QDF_STATUS_SUCCESS;
 }
 
+#ifdef WLAN_FEATURE_11BE_MLO
+/**
+ * extract_mac_phy_emlcap() - API to extract EML Capabilities
+ * @param: host ext2 mac phy capabilities
+ * @mac_phy_caps: ext mac phy capabilities
+ *
+ * Return: void
+ */
+static void extract_mac_phy_emlcap(struct wlan_psoc_host_mac_phy_caps_ext2 *param,
+				   WMI_MAC_PHY_CAPABILITIES_EXT *mac_phy_caps)
+{
+	if (!param || !mac_phy_caps)
+		return;
+
+	param->emlcap.emlsr_supp = WMI_SUPPORT_EMLSR_GET(mac_phy_caps->eml_capability);
+	param->emlcap.emlsr_pad_delay = WMI_EMLSR_PADDING_DELAY_GET(mac_phy_caps->eml_capability);
+	param->emlcap.emlsr_trans_delay = WMI_EMLSR_TRANSITION_DELAY_GET(mac_phy_caps->eml_capability);
+	param->emlcap.emlmr_supp = WMI_SUPPORT_EMLMR_GET(mac_phy_caps->eml_capability);
+	param->emlcap.emlmr_delay = WMI_EMLMR_DELAY_GET(mac_phy_caps->eml_capability);
+	param->emlcap.trans_timeout = WMI_TRANSITION_TIMEOUT_GET(mac_phy_caps->eml_capability);
+}
+
+/**
+ * extract_mac_phy_mldcap() - API to extract MLD Capabilities
+ * @param: host ext2 mac phy capabilities
+ * @mac_phy_caps: ext mac phy capabilities
+ *
+ * Return: void
+ */
+static void extract_mac_phy_mldcap(struct wlan_psoc_host_mac_phy_caps_ext2 *param,
+				   WMI_MAC_PHY_CAPABILITIES_EXT *mac_phy_caps)
+{
+	if (!param || !mac_phy_caps)
+		return;
+
+	param->mldcap.max_simult_link = WMI_MAX_NUM_SIMULTANEOUS_LINKS_GET(mac_phy_caps->mld_capability);
+	param->mldcap.srs_support = WMI_SUPPORT_SRS_GET(mac_phy_caps->mld_capability);
+	param->mldcap.tid2link_neg_support = WMI_TID_TO_LINK_NEGOTIATION_GET(mac_phy_caps->mld_capability);
+	param->mldcap.str_freq_sep = WMI_FREQ_SEPERATION_STR_GET(mac_phy_caps->mld_capability);
+	param->mldcap.aar_support = WMI_SUPPORT_AAR_GET(mac_phy_caps->mld_capability);
+}
+#else
+static void extract_mac_phy_emlcap(struct wlan_psoc_host_mac_phy_caps_ext2 *param,
+				   WMI_MAC_PHY_CAPABILITIES_EXT *mac_phy_caps)
+{
+}
+
+static void extract_mac_phy_mldcap(struct wlan_psoc_host_mac_phy_caps_ext2 *param,
+				   WMI_MAC_PHY_CAPABILITIES_EXT *mac_phy_caps)
+{
+}
+#endif
+
 /**
  * extract_mac_phy_cap_ehtcaps- api to extract eht mac phy caps
  * @param param: host ext2 mac phy capabilities
@@ -13309,6 +13477,7 @@ static void extract_mac_phy_cap_ehtcaps(
 {
 }
 #endif
+
 static QDF_STATUS extract_mac_phy_cap_service_ready_ext2_tlv(
 			wmi_unified_t wmi_handle,
 			uint8_t *event, uint8_t hw_mode_id, uint8_t phy_id,
@@ -13345,6 +13514,8 @@ static QDF_STATUS extract_mac_phy_cap_service_ready_ext2_tlv(
 			mac_phy_caps->wireless_modes_ext);
 
 	extract_mac_phy_cap_ehtcaps(param, mac_phy_caps);
+	extract_mac_phy_emlcap(param, mac_phy_caps);
+	extract_mac_phy_mldcap(param, mac_phy_caps);
 
 	return QDF_STATUS_SUCCESS;
 }
@@ -17406,8 +17577,8 @@ send_roam_set_param_cmd_tlv(wmi_unified_t wmi_handle,
 	wmi_debug("Setting vdev %d roam_param = %x, value = %u",
 		  cmd->vdev_id, cmd->param_id, cmd->param_value);
 	wmi_mtrace(WMI_ROAM_SET_PARAM_CMDID, cmd->vdev_id, 0);
-	ret = wmi_unified_cmd_send(wmi_handle, buf, len,
-				   WMI_ROAM_SET_PARAM_CMDID);
+	ret = wmi_unified_cmd_send_over_qmi(wmi_handle, buf, len,
+					    WMI_ROAM_SET_PARAM_CMDID);
 	if (QDF_IS_STATUS_ERROR(ret)) {
 		wmi_err("Failed to send roam set param command, ret = %d", ret);
 		wmi_buf_free(buf);
@@ -18737,6 +18908,7 @@ struct wmi_ops tlv_ops =  {
 	.send_roam_scan_ch_list_req_cmd = send_roam_scan_ch_list_req_cmd_tlv,
 	.send_injector_config_cmd = send_injector_config_cmd_tlv,
 	.send_cp_stats_cmd = send_cp_stats_cmd_tlv,
+	.send_halphy_stats_cmd = send_halphy_stats_cmd_tlv,
 #ifdef FEATURE_MEC_OFFLOAD
 	.send_pdev_set_mec_timer_cmd = send_pdev_set_mec_timer_cmd_tlv,
 #endif
@@ -18745,6 +18917,10 @@ struct wmi_ops tlv_ops =  {
 #endif /* WLAN_SUPPORT_INFRA_CTRL_PATH_STATS */
 	.extract_cp_stats_more_pending =
 				extract_cp_stats_more_pending_tlv,
+	.extract_halphy_stats_end_of_event =
+				extract_halphy_stats_end_of_event_tlv,
+	.extract_halphy_stats_event_count =
+				extract_halphy_stats_event_count_tlv,
 	.send_vdev_tsf_tstamp_action_cmd = send_vdev_tsf_tstamp_action_cmd_tlv,
 	.extract_vdev_tsf_report_event = extract_vdev_tsf_report_event_tlv,
 	.extract_pdev_csa_switch_count_status =
@@ -19226,6 +19402,8 @@ static void populate_tlv_events_id(uint32_t *event_ids)
 			WMI_PEER_CREATE_CONF_EVENTID;
 	event_ids[wmi_pdev_cp_fwstats_eventid] =
 			WMI_CTRL_PATH_STATS_EVENTID;
+	event_ids[wmi_pdev_halphy_fwstats_eventid] =
+			WMI_HALPHY_CTRL_PATH_STATS_EVENTID;
 	event_ids[wmi_vdev_send_big_data_p2_eventid] =
 			WMI_VDEV_SEND_BIG_DATA_P2_EVENTID;
 	event_ids[wmi_pdev_get_dpd_status_event_id] =
@@ -19280,6 +19458,8 @@ static void populate_tlv_events_id(uint32_t *event_ids)
 	event_ids[wmi_coex_dbam_complete_event_id] =
 			WMI_COEX_DBAM_COMPLETE_EVENTID;
 #endif
+	event_ids[wmi_spectral_capabilities_eventid] =
+				WMI_SPECTRAL_CAPABILITIES_EVENTID;
 }
 
 #ifdef WLAN_FEATURE_LINK_LAYER_STATS
@@ -19746,6 +19926,8 @@ static void populate_tlv_service(uint32_t *wmi_service)
 			WMI_SERVICE_UNAVAILABLE;
 	wmi_service[wmi_service_spectral_session_info_support] =
 			WMI_SERVICE_SPECTRAL_SESSION_INFO_SUPPORT;
+	wmi_service[wmi_service_umac_hang_recovery_support] =
+			WMI_SERVICE_UMAC_HANG_RECOVERY_SUPPORT;
 	wmi_service[wmi_service_mu_snif] = WMI_SERVICE_MU_SNIF;
 #ifdef WLAN_FEATURE_DYNAMIC_MAC_ADDR_UPDATE
 	wmi_service[wmi_service_dynamic_update_vdev_macaddr_support] =
@@ -19788,6 +19970,8 @@ static void populate_tlv_service(uint32_t *wmi_service)
 	wmi_service[wmi_service_configure_vendor_handoff_control_support] =
 				WMI_SERVICE_FW_INI_PARSE_SUPPORT;
 #endif
+	wmi_service[wmi_service_linkspeed_roam_trigger_support] =
+		WMI_SERVICE_LINKSPEED_ROAM_TRIGGER_SUPPORT;
 }
 
 /**

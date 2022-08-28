@@ -21,6 +21,7 @@
 #include "hal_hw_headers.h"
 #include "dp_types.h"
 #include "dp_rx.h"
+#include "dp_tx.h"
 #include "dp_li_rx.h"
 #include "dp_peer.h"
 #include "hal_rx.h"
@@ -658,8 +659,6 @@ done:
 			old_tid = tid;
 		}
 
-		dp_rx_send_pktlog(soc, rx_pdev, nbuf, QDF_TX_RX_STATUS_OK);
-
 		/*
 		 * Check if DMA completed -- msdu_done is the last bit
 		 * to be written
@@ -756,6 +755,8 @@ done:
 			qdf_nbuf_set_pktlen(nbuf, pkt_len);
 			dp_rx_skip_tlvs(soc, nbuf, msdu_metadata.l3_hdr_pad);
 		}
+
+		dp_rx_send_pktlog(soc, rx_pdev, nbuf, QDF_TX_RX_STATUS_OK);
 
 		/*
 		 * process frame for mulitpass phrase processing
@@ -922,25 +923,10 @@ done:
 		nbuf = next;
 	}
 
-	if (qdf_likely(deliver_list_head)) {
-		if (qdf_likely(txrx_peer)) {
-			dp_rx_deliver_to_pkt_capture(soc, vdev->pdev, peer_id,
-						     pkt_capture_offload,
-						     deliver_list_head);
-			if (!pkt_capture_offload)
-				dp_rx_deliver_to_stack(soc, vdev, txrx_peer,
-						       deliver_list_head,
-						       deliver_list_tail);
-		} else {
-			nbuf = deliver_list_head;
-			while (nbuf) {
-				next = nbuf->next;
-				nbuf->next = NULL;
-				dp_rx_deliver_to_stack_no_peer(soc, nbuf);
-				nbuf = next;
-			}
-		}
-	}
+	DP_RX_DELIVER_TO_STACK(soc, vdev, txrx_peer, peer_id,
+			       pkt_capture_offload,
+			       deliver_list_head,
+			       deliver_list_tail);
 
 	if (qdf_likely(txrx_peer))
 		dp_txrx_peer_unref_delete(txrx_ref_handle, DP_MOD_ID_RX);

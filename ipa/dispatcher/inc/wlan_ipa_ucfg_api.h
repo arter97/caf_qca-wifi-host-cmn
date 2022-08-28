@@ -88,6 +88,14 @@ bool ucfg_ipa_is_enabled(void);
 bool ucfg_ipa_uc_is_enabled(void);
 
 /**
+ * ucfg_ipa_is_vlan enabled() - get IPA vlan support enable status
+ *
+ * Return: true - ipa vlan support is enabled
+ *         false - ipa vlan support is not enabled
+ */
+bool ucfg_ipa_is_vlan_enabled(void);
+
+/**
  * ucfg_ipa_set_dp_handle() - register DP handle
  * @psoc: psoc handle
  * @dp_soc: data path soc handle
@@ -495,6 +503,11 @@ static inline bool ucfg_ipa_uc_is_enabled(void)
 	return false;
 }
 
+static inline bool ucfg_ipa_is_vlan_enabled(void)
+{
+	return false;
+}
+
 static inline
 QDF_STATUS ucfg_ipa_set_dp_handle(struct wlan_objmgr_psoc *psoc,
 				     void *dp_soc)
@@ -717,7 +730,7 @@ void ucfg_ipa_flush_pending_vdev_events(struct wlan_objmgr_pdev *pdev,
 static inline
 bool ucfg_ipa_is_wds_enabled(void)
 {
-	return 0;
+	return false;
 }
 #endif /* IPA_OFFLOAD */
 #endif /* _WLAN_IPA_UCFG_API_H_ */

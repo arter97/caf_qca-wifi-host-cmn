@@ -866,7 +866,6 @@ bool dp_rx_intrabss_mcbc_fwd(struct dp_soc *soc, struct dp_txrx_peer *ta_peer,
 {
 	uint16_t len;
 	qdf_nbuf_t nbuf_copy;
-	uint8_t ring_id = QDF_NBUF_CB_RX_CTX_ID(nbuf);
 
 	if (dp_rx_intrabss_eapol_drop_check(soc, ta_peer, rx_tlv_hdr,
 					    nbuf))
@@ -890,7 +889,7 @@ bool dp_rx_intrabss_mcbc_fwd(struct dp_soc *soc, struct dp_txrx_peer *ta_peer,
 	qdf_mem_set(nbuf_copy->cb, 0x0, sizeof(nbuf_copy->cb));
 	dp_classify_critical_pkts(soc, ta_peer->vdev, nbuf_copy);
 
-	dp_rx_nbuf_queue_mapping_set(nbuf_copy, ring_id);
+	dp_rx_nbuf_queue_mapping_set(nbuf_copy, qdf_get_cpu());
 	if (soc->arch_ops.dp_rx_intrabss_handle_nawds(soc, ta_peer, nbuf_copy,
 						      tid_stats))
 		return false;
@@ -927,7 +926,6 @@ bool dp_rx_intrabss_ucast_fwd(struct dp_soc *soc, struct dp_txrx_peer *ta_peer,
 			      struct cdp_tid_rx_stats *tid_stats)
 {
 	uint16_t len;
-	uint8_t ring_id = QDF_NBUF_CB_RX_CTX_ID(nbuf);
 
 	len = QDF_NBUF_CB_RX_PKT_LEN(nbuf);
 
@@ -956,7 +954,7 @@ bool dp_rx_intrabss_ucast_fwd(struct dp_soc *soc, struct dp_txrx_peer *ta_peer,
 	qdf_mem_set(nbuf->cb, 0x0, sizeof(nbuf->cb));
 	dp_classify_critical_pkts(soc, ta_peer->vdev, nbuf);
 
-	dp_rx_nbuf_queue_mapping_set(nbuf, ring_id);
+	dp_rx_nbuf_queue_mapping_set(nbuf, qdf_get_cpu());
 	if (!dp_tx_send((struct cdp_soc_t *)soc,
 			tx_vdev_id, nbuf)) {
 		DP_PEER_PER_PKT_STATS_INC_PKT(ta_peer, rx.intra_bss.pkts, 1,
@@ -1186,6 +1184,7 @@ uint8_t dp_rx_process_invalid_peer(struct dp_soc *soc, qdf_nbuf_t mpdu,
 	qdf_nbuf_t curr_nbuf, next_nbuf;
 	uint8_t *rx_tlv_hdr = qdf_nbuf_data(mpdu);
 	uint8_t *rx_pkt_hdr = NULL;
+	int i = 0;
 
 	if (!HAL_IS_DECAP_FORMAT_RAW(soc->hal_soc, rx_tlv_hdr)) {
 		dp_rx_debug("%pK: Drop decapped frames", soc);
@@ -1206,21 +1205,46 @@ uint8_t dp_rx_process_invalid_peer(struct dp_soc *soc, qdf_nbuf_t mpdu,
 		goto free;
 	}
 
-	pdev = dp_get_pdev_for_lmac_id(soc, mac_id);
+	/* In DMAC case the rx_desc_pools are common across PDEVs
+	 * so PDEV cannot be derived from the pool_id.
+	 *
+	 * link_id need to derived from the TLV tag word which is
+	 * disabled by default. For now adding a WAR to get vdev
+	 * with brute force this need to fixed with word based subscription
+	 * support is added by enabling TLV tag word
+	 */
+	if (soc->features.dmac_cmn_src_rxbuf_ring_enabled) {
+		for (i = 0; i < MAX_PDEV_CNT; i++) {
+			pdev = soc->pdev_list[i];
 
-	if (!pdev || qdf_unlikely(pdev->is_pdev_down)) {
-		dp_rx_err("%pK: PDEV %s", soc, !pdev ? "not found" : "down");
-		goto free;
-	}
+			if (!pdev || qdf_unlikely(pdev->is_pdev_down))
+				continue;
 
-	if (dp_monitor_filter_neighbour_peer(pdev, rx_pkt_hdr) ==
-	    QDF_STATUS_SUCCESS)
-		return 0;
+			TAILQ_FOREACH(vdev, &pdev->vdev_list, vdev_list_elem) {
+				if (qdf_mem_cmp(wh->i_addr1, vdev->mac_addr.raw,
+						QDF_MAC_ADDR_SIZE) == 0) {
+					goto out;
+				}
+			}
+		}
+	} else {
+		pdev = dp_get_pdev_for_lmac_id(soc, mac_id);
 
-	TAILQ_FOREACH(vdev, &pdev->vdev_list, vdev_list_elem) {
-		if (qdf_mem_cmp(wh->i_addr1, vdev->mac_addr.raw,
-				QDF_MAC_ADDR_SIZE) == 0) {
-			goto out;
+		if (!pdev || qdf_unlikely(pdev->is_pdev_down)) {
+			dp_rx_err("%pK: PDEV %s",
+				  soc, !pdev ? "not found" : "down");
+			goto free;
+		}
+
+		if (dp_monitor_filter_neighbour_peer(pdev, rx_pkt_hdr) ==
+		    QDF_STATUS_SUCCESS)
+			return 0;
+
+		TAILQ_FOREACH(vdev, &pdev->vdev_list, vdev_list_elem) {
+			if (qdf_mem_cmp(wh->i_addr1, vdev->mac_addr.raw,
+					QDF_MAC_ADDR_SIZE) == 0) {
+				goto out;
+			}
 		}
 	}
 
@@ -1228,7 +1252,6 @@ uint8_t dp_rx_process_invalid_peer(struct dp_soc *soc, qdf_nbuf_t mpdu,
 		dp_rx_err("%pK: VDEV not found", soc);
 		goto free;
 	}
-
 out:
 	msg.wh = wh;
 	qdf_nbuf_pull_head(mpdu, soc->rx_pkt_tlv_size);
@@ -2223,6 +2246,26 @@ void dp_rx_msdu_extd_stats_update(struct dp_soc *soc, qdf_nbuf_t nbuf,
 }
 #endif
 
+#if defined(DP_PKT_STATS_PER_LMAC) && defined(WLAN_FEATURE_11BE_MLO)
+static inline void
+dp_peer_update_rx_pkt_per_lmac(struct dp_txrx_peer *txrx_peer,
+			       qdf_nbuf_t nbuf)
+{
+	uint8_t lmac_id = qdf_nbuf_get_lmac_id(nbuf);
+
+	/* only count stats per lmac for MLO connection*/
+	DP_PEER_PER_PKT_STATS_INCC_PKT(txrx_peer, rx.rx_lmac[lmac_id], 1,
+				       QDF_NBUF_CB_RX_PKT_LEN(nbuf),
+				       txrx_peer->mld_peer);
+}
+#else
+static inline void
+dp_peer_update_rx_pkt_per_lmac(struct dp_txrx_peer *txrx_peer,
+			       qdf_nbuf_t nbuf)
+{
+}
+#endif
+
 /**
  * dp_rx_msdu_stats_update() - update per msdu stats.
  * @soc: core txrx main context
@@ -2257,6 +2300,7 @@ void dp_rx_msdu_stats_update(struct dp_soc *soc, qdf_nbuf_t nbuf,
 	DP_PEER_PER_PKT_STATS_INCC(txrx_peer, rx.amsdu_cnt, 1, !is_not_amsdu);
 	DP_PEER_PER_PKT_STATS_INCC(txrx_peer, rx.rx_retries, 1,
 				   qdf_nbuf_is_rx_retry_flag(nbuf));
+	dp_peer_update_rx_pkt_per_lmac(txrx_peer, nbuf);
 	tid_stats->msdu_cnt++;
 	if (qdf_unlikely(qdf_nbuf_is_da_mcbc(nbuf) &&
 			 (vdev->rx_decap_type == htt_cmn_pkt_type_ethernet))) {
@@ -2735,24 +2779,24 @@ dp_pdev_rx_buffers_attach(struct dp_soc *dp_soc, uint32_t mac_id,
 	 * have been allocated to fit in one page across each
 	 * iteration to index into the nbuf.
 	 */
-	total_pages = (nr_descs * sizeof(*nf_info)) / PAGE_SIZE;
+	total_pages = (nr_descs * sizeof(*nf_info)) / DP_BLOCKMEM_SIZE;
 
 	/*
 	 * Add an extra page to store the remainder if any
 	 */
-	if ((nr_descs * sizeof(*nf_info)) % PAGE_SIZE)
+	if ((nr_descs * sizeof(*nf_info)) % DP_BLOCKMEM_SIZE)
 		total_pages++;
-	nf_info = qdf_mem_malloc(PAGE_SIZE);
+	nf_info = qdf_mem_malloc(DP_BLOCKMEM_SIZE);
 	if (!nf_info) {
 		dp_err("failed to allocate nbuf array");
 		DP_STATS_INC(dp_pdev, replenish.rxdma_err, num_req_buffers);
 		QDF_BUG(0);
 		return QDF_STATUS_E_NOMEM;
 	}
-	nbuf_ptrs_per_page = PAGE_SIZE / sizeof(*nf_info);
+	nbuf_ptrs_per_page = DP_BLOCKMEM_SIZE / sizeof(*nf_info);
 
 	for (page_idx = 0; page_idx < total_pages; page_idx++) {
-		qdf_mem_zero(nf_info, PAGE_SIZE);
+		qdf_mem_zero(nf_info, DP_BLOCKMEM_SIZE);
 
 		for (nr_nbuf = 0; nr_nbuf < nbuf_ptrs_per_page; nr_nbuf++) {
 			/*
@@ -3077,6 +3121,11 @@ bool dp_rx_deliver_special_frame(struct dp_soc *soc,
 	QDF_NBUF_CB_RX_NUM_ELEMENTS_IN_LIST(nbuf) = 1;
 	dp_rx_set_hdr_pad(nbuf, l2_hdr_offset);
 	qdf_nbuf_pull_head(nbuf, skip_len);
+
+	if (txrx_peer->vdev) {
+		dp_rx_send_pktlog(soc, txrx_peer->vdev->pdev, nbuf,
+				  QDF_TX_RX_STATUS_OK);
+	}
 
 	if (dp_rx_is_special_frame(nbuf, frame_mask)) {
 		dp_info("special frame, mpdu sn 0x%x",

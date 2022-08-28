@@ -1565,6 +1565,28 @@ dp_mlo_peer_find_hash_add_be(struct dp_soc *soc, struct dp_peer *peer)
 			  hash_list_elem);
 	qdf_spin_unlock_bh(&mld_hash_obj->mld_peer_hash_lock);
 }
+
+void dp_print_mlo_ast_stats_be(struct dp_soc *soc)
+{
+	uint32_t index;
+	struct dp_peer *peer;
+	dp_mld_peer_hash_obj_t mld_hash_obj;
+
+	mld_hash_obj = dp_mlo_get_peer_hash_obj(soc);
+
+	if (!mld_hash_obj)
+		return;
+
+	qdf_spin_lock_bh(&mld_hash_obj->mld_peer_hash_lock);
+	for (index = 0; index < mld_hash_obj->mld_peer_hash.mask; index++) {
+		TAILQ_FOREACH(peer, &mld_hash_obj->mld_peer_hash.bins[index],
+			      hash_list_elem) {
+			dp_print_peer_ast_entries(soc, peer, NULL);
+		}
+	}
+	qdf_spin_unlock_bh(&mld_hash_obj->mld_peer_hash_lock);
+}
+
 #endif
 
 #if defined(WLAN_FEATURE_11BE_MLO) && defined(WLAN_MLO_MULTI_CHIP) && \
@@ -1678,10 +1700,20 @@ dp_soc_max_peer_id_set(struct dp_soc *soc)
 
 static void dp_peer_map_detach_be(struct dp_soc *soc)
 {
+	if (soc->host_ast_db_enable)
+		dp_peer_ast_hash_detach(soc);
 }
 
 static QDF_STATUS dp_peer_map_attach_be(struct dp_soc *soc)
 {
+	QDF_STATUS status;
+
+	if (soc->host_ast_db_enable) {
+		status = dp_peer_ast_hash_attach(soc);
+		if (QDF_IS_STATUS_ERROR(status))
+			return status;
+	}
+
 	dp_soc_max_peer_id_set(soc);
 
 	return QDF_STATUS_SUCCESS;
@@ -1692,15 +1724,40 @@ static struct dp_peer *dp_find_peer_by_destmac_be(struct dp_soc *soc,
 						  uint8_t vdev_id)
 {
 	struct dp_peer *peer = NULL;
+	struct dp_peer *tgt_peer = NULL;
+	struct dp_ast_entry *ast_entry = NULL;
+	uint16_t peer_id;
 
-	peer = dp_peer_find_hash_find(soc, dest_mac, 0,
-				      vdev_id, DP_MOD_ID_SAWF);
-	if (!peer) {
-		dp_err("Invalid peer");
+	qdf_spin_lock_bh(&soc->ast_lock);
+	ast_entry = dp_peer_ast_hash_find_soc(soc, dest_mac);
+	if (!ast_entry) {
+		qdf_spin_unlock_bh(&soc->ast_lock);
+		dp_err("NULL ast entry");
 		return NULL;
 	}
 
-	return peer;
+	peer_id = ast_entry->peer_id;
+	qdf_spin_unlock_bh(&soc->ast_lock);
+
+	if (peer_id == HTT_INVALID_PEER)
+		return NULL;
+
+	peer = dp_peer_get_ref_by_id(soc, peer_id, DP_MOD_ID_SAWF);
+	if (!peer) {
+		dp_err("NULL peer for peer_id:%d", peer_id);
+		return NULL;
+	}
+
+	tgt_peer = dp_get_tgt_peer_from_peer(peer);
+
+	/*
+	 * Once tgt_peer is obtained,
+	 * release the ref taken for original peer.
+	 */
+	dp_peer_get_ref(NULL, tgt_peer, DP_MOD_ID_SAWF);
+	dp_peer_unref_delete(peer, DP_MOD_ID_SAWF);
+
+	return tgt_peer;
 }
 
 #ifdef WLAN_FEATURE_11BE_MLO
@@ -1787,4 +1844,5 @@ void dp_initialize_arch_ops_be(struct dp_arch_ops *arch_ops)
 	arch_ops->dp_find_peer_by_destmac = dp_find_peer_by_destmac_be;
 	dp_init_near_full_arch_ops_be(arch_ops);
 	arch_ops->get_rx_hash_key = dp_get_rx_hash_key_be;
+	arch_ops->print_mlo_ast_stats = dp_print_mlo_ast_stats_be;
 }

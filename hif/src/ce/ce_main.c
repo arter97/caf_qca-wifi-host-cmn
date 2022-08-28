@@ -907,6 +907,7 @@ static struct service_to_pipe target_service_to_ce_map_qcn9224[] = {
 	{ WMI_CONTROL_SVC_WMAC1, PIPEDIR_IN, 2, },
 	{ PACKET_LOG_SVC, PIPEDIR_IN, 5, },
 	{ WMI_CONTROL_DIAG_SVC, PIPEDIR_IN, 14, },
+	{ WMI_CONTROL_DBR_SVC, PIPEDIR_IN, 14, },
 	/* (Additions here) */
 	{ 0, 0, 0, },
 };
@@ -2039,7 +2040,7 @@ static struct hif_ce_desc_event *
 {
 	struct ce_desc_hist *ce_hist = &scn->hif_ce_desc_hist;
 
-	hif_debug("get ce debug buffer ce_id %u, only_ce2/ce3=%d, idx=%u",
+	hif_debug("get ce debug buffer ce_id %u, only_ce2/ce3=0x%x, idx=%u",
 		  ce_id, IS_CE_DEBUG_ONLY_FOR_CRIT_CE,
 		  ce_hist->ce_id_hist_map[ce_id]);
 	if (IS_CE_DEBUG_ONLY_FOR_CRIT_CE &&

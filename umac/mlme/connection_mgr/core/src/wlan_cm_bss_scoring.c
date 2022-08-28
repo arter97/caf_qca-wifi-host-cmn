@@ -130,11 +130,12 @@ SNR_DB_TO_BIT_PER_TONE_LUT[DB_NUM] = {0, 171, 212, 262, 323, 396, 484,
 586, 706, 844, 1000, 1176, 1370, 1583, 1812, 2058, 2317, 2588, 2870, 3161};
 #endif
 
+/* MLO link types */
 enum MLO_TYPE {
 	SLO,
 	MLSR,
 	MLMR,
-	MLO_TYPE_NUM
+	MLO_TYPE_MAX
 };
 
 static bool cm_is_better_bss(struct scan_cache_entry *bss1,
@@ -1458,6 +1459,21 @@ static uint16_t cm_get_puncture_bw(struct scan_cache_entry *entry)
 	}
 	return num_puncture_bw * 20;
 }
+
+static bool cm_get_su_beam_former(struct scan_cache_entry *entry)
+{
+	struct wlan_ie_ehtcaps *eht_cap;
+	struct wlan_eht_cap_info *eht_cap_info;
+
+	eht_cap = (struct wlan_ie_ehtcaps *)util_scan_entry_ehtcap(entry);
+	if (eht_cap) {
+		eht_cap_info = (struct wlan_eht_cap_info *)eht_cap->eht_mac_cap;
+		if (eht_cap_info->su_beamformer)
+			return true;
+	}
+
+	return false;
+}
 #else
 static int cm_calculate_eht_score(struct scan_cache_entry *entry,
 				  struct scoring_cfg *score_config,
@@ -1471,39 +1487,28 @@ static uint16_t cm_get_puncture_bw(struct scan_cache_entry *entry)
 {
 	return 0;
 }
+
+static bool cm_get_su_beam_former(struct scan_cache_entry *entry)
+{
+	return false;
+}
 #endif
 
-/**
- * struct mlo_bw_score: MLO AP total bandwidth and score percent
- * @total_bw: Total bandwidth (unit: MHz)
- * @score_pcnt: Score percent (0 - 100)
- */
-struct mlo_bw_score {
-	uint16_t total_bw;
-	uint8_t score_pcnt;
-};
-
-#define CM_BAND_WIDTH_TYPE 16
-struct mlo_bw_score mlo_link_bw_score[CM_BAND_WIDTH_TYPE] = {
-{20, 9}, {40, 18}, {60, 27}, {80, 35}, {100, 44}, {120, 53},
-{140, 56}, {160, 67}, {180, 74}, {200, 80}, {220, 86}, {240, 90},
-{260, 93}, {280, 96}, {300, 98}, {320, 100}
-};
+#define CM_BAND_WIDTH_NUM 16
+#define CM_BAND_WIDTH_UNIT 20
+uint16_t link_bw_score[CM_BAND_WIDTH_NUM] = {
+9, 18, 27, 35, 44, 53, 56, 67, 74, 80, 86, 90, 93, 96, 98, 100};
 
 static uint32_t cm_get_bw_score(uint8_t bw_weightage, uint16_t bw,
 				uint8_t prorated_pcnt)
 {
-	uint8_t i;
 	uint32_t score;
+	uint8_t index;
 
-	for (i = 0; i < CM_BAND_WIDTH_TYPE; i++)
-		if (mlo_link_bw_score[i].total_bw == bw) {
-			score = bw_weightage *
-				mlo_link_bw_score[i].score_pcnt *
-				prorated_pcnt / CM_MAX_PCT_SCORE;
-			return score;
-	}
-	score = bw_weightage * mlo_link_bw_score[0].score_pcnt
+	index = bw / CM_BAND_WIDTH_UNIT - 1;
+	if (index >= CM_BAND_WIDTH_NUM)
+		index = CM_BAND_WIDTH_NUM - 1;
+	score = bw_weightage * link_bw_score[index]
 		* prorated_pcnt / CM_MAX_PCT_SCORE;
 
 	return score;
@@ -1556,7 +1561,7 @@ static uint16_t cm_get_ch_width(struct scan_cache_entry *entry,
 #define CM_MLO_BAD_RSSI_PCT 61
 #define CM_MLO_CONGESTION_PCT_BAD_RSSI 6
 
-static uint8_t mlo_boost_pct[MLO_TYPE_NUM] = {0, 10, CM_MAX_PCT_SCORE};
+static uint8_t mlo_boost_pct[MLO_TYPE_MAX] = {0, 10, CM_MAX_PCT_SCORE};
 
 /**
  * struct mlo_rssi_pct: MLO AP rssi joint factor and score percent
@@ -1908,7 +1913,7 @@ static int cm_calculate_mlo_bss_score(struct wlan_objmgr_psoc *psoc,
 			best_total_score = total_score[i];
 			best_partner_index = i;
 		}
-		mlme_nofl_debug("ML score: link index %u rssi %d %d rssi score %d pror %u freq %u %u bw %u %u, bw score %u congest score %u %u %u, total score %u",
+		mlme_nofl_debug("ML score: link index %u rssi %d %d rssi score %u pror %u freq %u %u bw %u %u, bw score %u congest score %u %u %u, total score %u",
 				i, entry->rssi_raw,  rssi[i], rssi_score[i],
 				prorated_pct[i], freq_entry, freq[i],
 				chan_width, ch_width[i], bandwidth_score[i],
@@ -2096,6 +2101,8 @@ static int cm_calculate_bss_score(struct wlan_objmgr_psoc *psoc,
 	vht_cap = (struct wlan_ie_vhtcaps *)util_scan_entry_vhtcap(entry);
 	if (vht_cap && vht_cap->su_beam_former)
 		ap_su_beam_former = true;
+	else
+		ap_su_beam_former = cm_get_su_beam_former(entry);
 	if (phy_config->beamformee_cap && is_vht &&
 	    ap_su_beam_former &&
 	    (entry->rssi_raw > rssi_pref_5g_rssi_thresh) && !same_bucket)
@@ -2169,12 +2176,14 @@ static int cm_calculate_bss_score(struct wlan_objmgr_psoc *psoc,
 					   prorated_pcnt);
 	score += eht_score;
 
-	mlme_nofl_debug("Candidate("QDF_MAC_ADDR_FMT" freq %d): rssi %d HT %d VHT %d HE %d su bfer %d phy %d  air time frac %d qbss %d cong_pct %d NSS %d ap_tx_pwr_dbm %d oce_subnet_id_present %d sae_pk_cap_present %d prorated_pcnt %d keymgmt 0x%x mlo type %d",
+	mlme_nofl_debug("Candidate("QDF_MAC_ADDR_FMT" freq %d): rssi %d HT %d VHT %d HE %d EHT %d su bfer %d phy %d  air time frac %d qbss %d cong_pct %d NSS %d ap_tx_pwr_dbm %d oce_subnet_id_present %d sae_pk_cap_present %d prorated_pcnt %d keymgmt 0x%x mlo type %d",
 			QDF_MAC_ADDR_REF(entry->bssid.bytes),
 			entry->channel.chan_freq,
 			entry->rssi_raw, util_scan_entry_htcap(entry) ? 1 : 0,
 			util_scan_entry_vhtcap(entry) ? 1 : 0,
-			util_scan_entry_hecap(entry) ? 1 : 0, ap_su_beam_former,
+			util_scan_entry_hecap(entry) ? 1 : 0,
+			util_scan_entry_ehtcap(entry) ? 1 : 0,
+			ap_su_beam_former,
 			entry->phy_mode, entry->air_time_fraction,
 			entry->qbss_chan_load, congestion_pct, entry->nss,
 			ap_tx_pwr_dbm, oce_subnet_id_present,
@@ -2253,9 +2262,9 @@ void wlan_cm_calculate_bss_score(struct wlan_objmgr_pdev *pdev,
 	score_config = &mlme_psoc_obj->psoc_cfg.score_config;
 	config = &mlme_psoc_obj->psoc_cfg.phy_config;
 
-	mlme_nofl_debug("Self caps: HT %d VHT %d HE %d VHT_24Ghz %d BF cap %d bw_above_20_24ghz %d bw_above_20_5ghz %d 2.4G NSS %d 5G NSS %d",
+	mlme_nofl_debug("Self caps: HT %d VHT %d HE %d EHT %d VHT_24Ghz %d BF cap %d bw_above_20_24ghz %d bw_above_20_5ghz %d 2.4G NSS %d 5G NSS %d",
 			config->ht_cap, config->vht_cap,
-			config->he_cap, config->vht_24G_cap,
+			config->he_cap, config->eht_cap, config->vht_24G_cap,
 			config->beamformee_cap, config->bw_above_20_24ghz,
 			config->bw_above_20_5ghz, config->vdev_nss_24g,
 			config->vdev_nss_5g);

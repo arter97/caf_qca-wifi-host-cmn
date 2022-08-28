@@ -2856,9 +2856,18 @@ QDF_STATUS (*send_injector_config_cmd)(wmi_unified_t wmi_handle,
 QDF_STATUS (*send_cp_stats_cmd)(wmi_unified_t wmi_handle,
 				void *buf_ptr, uint32_t buf_len);
 
+QDF_STATUS (*send_halphy_stats_cmd)(wmi_unified_t wmi_handle,
+				    void *buf_ptr, uint32_t buf_len);
+
 QDF_STATUS (*extract_cp_stats_more_pending)(wmi_unified_t wmi_handle,
 					    void *evt_buf,
 					    uint32_t *more_flag);
+QDF_STATUS (*extract_halphy_stats_end_of_event)(wmi_unified_t wmi_handle,
+						void *evt_buf,
+						uint32_t *end_of_event_flag);
+QDF_STATUS (*extract_halphy_stats_event_count)(wmi_unified_t wmi_handle,
+					       void *evt_buf,
+					       uint32_t *event_count_flag);
 #ifdef WLAN_SUPPORT_INFRA_CTRL_PATH_STATS
 QDF_STATUS
 (*extract_infra_cp_stats)(wmi_unified_t wmi_handle,
@@ -3211,6 +3220,9 @@ struct wmi_soc {
 #if defined(WLAN_FEATURE_WMI_DIAG_OVER_CE7) || \
 	defined(WLAN_DIAG_AND_DBR_OVER_SEPARATE_CE)
 	HTC_ENDPOINT_ID wmi_diag_endpoint_id;
+#endif
+#if defined(WLAN_DIAG_AND_DBR_OVER_SEPARATE_CE)
+	HTC_ENDPOINT_ID wmi_dbr_endpoint_id;
 #endif
 	uint32_t wmi_events[wmi_events_max];
 	/* WMI service bitmap received from target */

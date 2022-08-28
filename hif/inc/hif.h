@@ -633,6 +633,15 @@ static inline void hif_event_history_deinit(struct hif_opaque_softc *hif_ctx,
 }
 #endif /* WLAN_FEATURE_DP_EVENT_HISTORY */
 
+void hif_display_ctrl_traffic_pipes_state(struct hif_opaque_softc *hif_ctx);
+
+#if defined(HIF_CONFIG_SLUB_DEBUG_ON) || defined(HIF_CE_DEBUG_DATA_BUF)
+void hif_display_latest_desc_hist(struct hif_opaque_softc *hif_ctx);
+#else
+static
+inline void hif_display_latest_desc_hist(struct hif_opaque_softc *hif_ctx) {}
+#endif
+
 /**
  * enum HIF_DEVICE_POWER_CHANGE_TYPE: Device Power change type
  *
@@ -1315,6 +1324,17 @@ QDF_STATUS hif_rtpm_put(uint8_t type, uint32_t id);
 int hif_pm_runtime_prevent_suspend(struct hif_pm_runtime_lock *data);
 
 /**
+ * hif_pm_runtime_prevent_suspend_sync() - Synchronized prevent Runtime suspend
+ * @data: runtime PM lock
+ *
+ * This function will prevent runtime suspend, by incrementing
+ * device's usage count.
+ *
+ * Return: status
+ */
+int hif_pm_runtime_prevent_suspend_sync(struct hif_pm_runtime_lock *data);
+
+/**
  * hif_pm_runtime_allow_suspend() - Allow Runtime suspend
  * @data: runtime PM lock
  *
@@ -1527,6 +1547,10 @@ int hif_pm_runtime_allow_suspend(struct hif_pm_runtime_lock *data)
 
 static inline
 int hif_pm_runtime_prevent_suspend(struct hif_pm_runtime_lock *data)
+{ return 0; }
+
+static inline
+int hif_pm_runtime_prevent_suspend_sync(struct hif_pm_runtime_lock *data)
 { return 0; }
 
 static inline
@@ -1912,6 +1936,14 @@ void hif_allow_link_low_power_states(struct hif_opaque_softc *hif)
 
 void *hif_get_dev_ba(struct hif_opaque_softc *hif_handle);
 void *hif_get_dev_ba_ce(struct hif_opaque_softc *hif_handle);
+
+/**
+ * hif_get_soc_version() - get soc major version from target info
+ * @hif_ctx - the HIF context
+ *
+ * Return: version number
+ */
+uint32_t hif_get_soc_version(struct hif_opaque_softc *hif_handle);
 
 /**
  * hif_set_initial_wakeup_cb() - set the initial wakeup event handler function

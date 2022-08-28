@@ -734,8 +734,9 @@ util_scan_parse_chan_switch_wrapper_ie(struct scan_cache_entry *scan_params,
 			continue;
 		}
 		if (sub_ie_len < sub_ie->ie_len) {
-			scm_err("Incomplete corrupted IE:%x",
-				WLAN_ELEMID_CHAN_SWITCH_WRAP);
+			scm_debug_rl(QDF_MAC_ADDR_FMT": Incomplete corrupted IE:%x",
+				     QDF_MAC_ADDR_REF(scan_params->bssid.bytes),
+				     WLAN_ELEMID_CHAN_SWITCH_WRAP);
 			return QDF_STATUS_E_INVAL;
 		}
 		switch (sub_ie->ie_id) {
@@ -1928,7 +1929,7 @@ static void util_get_partner_link_info(struct scan_cache_entry *scan_entry)
 							      rnr->operating_class,
 							      true);
 			if (!link_info->freq)
-				scm_debug("freq 0 rnr channel %d op_class %d",
+				scm_debug("freq 0 rnr channel %u op_class %u",
 					  rnr->channel_number,
 					  rnr->operating_class);
 			link_info->op_class = rnr->operating_class;

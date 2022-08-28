@@ -288,6 +288,7 @@ struct wlan_mlo_peer_list {
  * @mlo_peer: list peers in this MLO connection
  * @wlan_max_mlo_peer_count: peer count across the links of specific MLO
  * @mlo_dev_lock: lock to access struct
+ * @tsf_recalculation_lock: Lock to protect TSF (re)calculation
  * @ref_cnt: reference count
  * @ref_id_dbg: Reference count debug information
  * @sta_ctx: MLO STA related information
@@ -303,8 +304,10 @@ struct wlan_mlo_dev_context {
 	uint16_t wlan_max_mlo_peer_count;
 #ifdef WLAN_MLO_USE_SPINLOCK
 	qdf_spinlock_t mlo_dev_lock;
+	qdf_spinlock_t tsf_recalculation_lock;
 #else
 	qdf_mutex_t mlo_dev_lock;
+	qdf_mutex_t tsf_recalculation_lock;
 #endif
 	qdf_atomic_t ref_cnt;
 	qdf_atomic_t ref_id_dbg[WLAN_REF_ID_MAX];
@@ -362,6 +365,7 @@ struct mlnawds_config {
  * @vdev_id:  VDEV ID
  * @psoc_id:  PSOC ID
  * @link_addr: MAC address
+ * @mldmacaddr: MLD MAC address
  * @algo:  Auth algorithm
  * @seq: Auth sequence number
  * @status_code: Auth status
@@ -374,6 +378,7 @@ struct mlpeer_auth_params {
 	uint8_t vdev_id;
 	uint8_t psoc_id;
 	struct qdf_mac_addr link_addr;
+	struct qdf_mac_addr mldaddr;
 	uint16_t algo;
 	uint16_t seq;
 	uint16_t status_code;
@@ -544,13 +549,42 @@ struct wlan_mlo_peer_t2lm_policy {
 #endif /* WLAN_FEATURE_11BE */
 
 /**
- * struct wlan_mlo_peer_eml_caps - peer EML capabilities
- * @emlsr_support: eMLSR Support
- * @transition_timeout: Transition Timeout
+ * struct wlan_mlo_eml_cap - EML capabilities of MLD
+ * @emlsr_supp: eMLSR Support
+ * @emlsr_pad_delay: eMLSR Padding Delay
+ * @emlsr_trans_delay: eMLSR transition delay
+ * @emlmr_supp: eMLMR Support
+ * @emlmr_delay: eMLMR Delay
+ * @trans_timeout: Transition Timeout
+ * @reserved: Reserved
  */
-struct wlan_mlo_peer_eml_caps {
-	bool emlsr_support;
-	uint16_t transition_timeout;
+struct wlan_mlo_eml_cap {
+	uint16_t emlsr_supp:1,
+		 emlsr_pad_delay:3,
+		 emlsr_trans_delay:3,
+		 emlmr_supp:1,
+		 emlmr_delay:3,
+		 trans_timeout:4,
+		 reserved:1;
+};
+
+/**
+ * struct wlan_mlo_mld_cap - MLD capabilities of MLD
+ * @max_simult_link: Maximum number of simultaneous links
+ * @srs_support: SRS support
+ * @tid2link_neg_support: TID to Link Negotiation Support
+ * @str_freq_sep: Frequency separation suggested by STR non-AP MLD
+ *                OR Type of AP-MLD
+ * @aar_support: AAR Support
+ * @reserved: Reserved
+ */
+struct wlan_mlo_mld_cap {
+	uint16_t max_simult_link:4,
+		 srs_support:1,
+		 tid2link_neg_support:2,
+		 str_freq_sep:5,
+		 aar_support:1,
+		 reserved:3;
 };
 
 /*
@@ -603,7 +637,7 @@ struct wlan_mlo_peer_context {
 #ifdef WLAN_FEATURE_11BE
 	struct wlan_mlo_peer_t2lm_policy t2lm_policy;
 #endif
-	struct wlan_mlo_peer_eml_caps eml_caps;
+	struct wlan_mlo_eml_cap mlpeer_emlcap;
 };
 
 /*
@@ -710,6 +744,10 @@ struct mlo_mlme_ext_ops {
 	void (*mlo_mlme_ext_handle_sta_csa_param)(
 				struct wlan_objmgr_vdev *vdev,
 				struct csa_offload_params *csa_param);
+	QDF_STATUS (*mlo_mlme_ext_sta_op_class)(
+			struct vdev_mlme_obj *vdev_mlme,
+			uint8_t *ml_ie);
+
 };
 
 /* maximum size of vdev bitmap array for MLO link set active command */

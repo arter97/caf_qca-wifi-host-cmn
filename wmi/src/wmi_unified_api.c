@@ -3700,6 +3700,17 @@ QDF_STATUS wmi_unified_send_cp_stats_cmd(wmi_unified_t wmi_handle,
 	return QDF_STATUS_E_FAILURE;
 }
 
+QDF_STATUS wmi_unified_send_halphy_stats_cmd(wmi_unified_t wmi_handle,
+					     void *buf_ptr, uint32_t buf_len)
+{
+	if (wmi_handle->ops->send_halphy_stats_cmd)
+		return wmi_handle->ops->send_halphy_stats_cmd(wmi_handle,
+							      buf_ptr,
+							      buf_len);
+
+	return QDF_STATUS_E_FAILURE;
+}
+
 QDF_STATUS
 wmi_unified_extract_cp_stats_more_pending(wmi_unified_t wmi_handle,
 					  void *evt_buf, uint32_t *more_flag)
@@ -3708,6 +3719,34 @@ wmi_unified_extract_cp_stats_more_pending(wmi_unified_t wmi_handle,
 		return wmi_handle->ops->extract_cp_stats_more_pending(wmi_handle,
 								      evt_buf,
 								      more_flag);
+
+	return QDF_STATUS_E_FAILURE;
+}
+
+QDF_STATUS
+wmi_unified_extract_halphy_stats_end_of_event(wmi_unified_t wmi_handle,
+					      void *evt_buf,
+					      uint32_t *end_of_event_flag)
+{
+	if (wmi_handle->ops->extract_halphy_stats_end_of_event)
+		return
+		wmi_handle->ops->extract_halphy_stats_end_of_event(wmi_handle,
+							evt_buf,
+							end_of_event_flag);
+
+	return QDF_STATUS_E_FAILURE;
+}
+
+QDF_STATUS
+wmi_unified_extract_halphy_stats_event_count(wmi_unified_t wmi_handle,
+					     void *evt_buf,
+					     uint32_t *event_count_flag)
+{
+	if (wmi_handle->ops->extract_halphy_stats_event_count)
+		return
+		wmi_handle->ops->extract_halphy_stats_event_count(wmi_handle,
+							evt_buf,
+							event_count_flag);
 
 	return QDF_STATUS_E_FAILURE;
 }

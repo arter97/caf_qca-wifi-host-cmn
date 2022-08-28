@@ -32,6 +32,16 @@
 #endif
 
 #define DP_MAX_STRING_LEN 500
+#define DP_HTT_TX_RX_EXPECTED_TLVS (((uint64_t)1 << HTT_STATS_TX_PDEV_CMN_TAG) |\
+	((uint64_t)1 << HTT_STATS_TX_PDEV_UNDERRUN_TAG) |\
+	((uint64_t)1 << HTT_STATS_TX_PDEV_SIFS_TAG) |\
+	((uint64_t)1 << HTT_STATS_TX_PDEV_FLUSH_TAG) |\
+	((uint64_t)1 << HTT_STATS_RX_PDEV_FW_STATS_TAG) |\
+	((uint64_t)1 << HTT_STATS_RX_SOC_FW_STATS_TAG) |\
+	((uint64_t)1 << HTT_STATS_RX_SOC_FW_REFILL_RING_EMPTY_TAG) |\
+	((uint64_t)1 << HTT_STATS_RX_SOC_FW_REFILL_RING_NUM_REFILL_TAG) |\
+	((uint64_t)1 << HTT_STATS_RX_PDEV_FW_RING_MPDU_ERR_TAG) |\
+	((uint64_t)1 << HTT_STATS_RX_PDEV_FW_MPDU_DROP_TAG))
 
 #define DP_HTT_HW_INTR_NAME_LEN  HTT_STATS_MAX_HW_INTR_NAME_LEN
 #define DP_HTT_HW_MODULE_NAME_LEN  HTT_STATS_MAX_HW_MODULE_NAME_LEN
@@ -4713,7 +4723,9 @@ void dp_htt_stats_copy_tag(struct dp_pdev *pdev, uint8_t tag_type, uint32_t *tag
 	void *dest_ptr = NULL;
 	uint32_t size = 0;
 	uint32_t size_expected = 0;
+	uint64_t val = 1;
 
+	pdev->fw_stats_tlv_bitmap_rcvd |= (val << tag_type);
 	switch (tag_type) {
 	case HTT_STATS_TX_PDEV_CMN_TAG:
 		dest_ptr = &pdev->stats.htt_tx_pdev_stats.cmn_tlv;
@@ -4786,6 +4798,11 @@ void dp_htt_stats_copy_tag(struct dp_pdev *pdev, uint8_t tag_type, uint32_t *tag
 
 	if (dest_ptr)
 		qdf_mem_copy(dest_ptr, tag_buf, size_expected);
+
+	if (((pdev->fw_stats_tlv_bitmap_rcvd) & DP_HTT_TX_RX_EXPECTED_TLVS)
+	      == DP_HTT_TX_RX_EXPECTED_TLVS) {
+		qdf_event_set(&pdev->fw_stats_event);
+	}
 }
 
 #ifdef VDEV_PEER_PROTOCOL_COUNT
@@ -6833,6 +6850,11 @@ void dp_print_peer_stats(struct dp_peer *peer,
 		DP_PRINT_STATS("	Bytes Received = %llu",
 			       peer_stats->rx.rcvd_reo[i].bytes);
 	}
+	for (i = 0; i < CDP_MAX_LMACS; i++)
+		DP_PRINT_STATS("Packets Received on lmac[%d] = %d ( %llu ),",
+			       i, peer_stats->rx.rx_lmac[i].num,
+			       peer_stats->rx.rx_lmac[i].bytes);
+
 	DP_PRINT_STATS("Unicast Packets Received = %d",
 		       peer_stats->rx.unicast.num);
 	DP_PRINT_STATS("Unicast Bytes Received = %llu",
@@ -7079,6 +7101,8 @@ void dp_txrx_path_stats(struct dp_soc *soc)
 			       pdev->soc->stats.tx.tx_invalid_peer.num);
 		DP_PRINT_STATS("Tx desc freed in non-completion path: %u",
 			       pdev->soc->stats.tx.tx_comp_exception);
+		DP_PRINT_STATS("Tx desc force freed: %u",
+			       pdev->soc->stats.tx.tx_comp_force_freed);
 
 		DP_PRINT_STATS("Tx packets sent per interrupt:");
 		DP_PRINT_STATS("Single Packet: %u",
@@ -7103,7 +7127,7 @@ void dp_txrx_path_stats(struct dp_soc *soc)
 		DP_PRINT_STATS("delivered %u msdus ( %llu bytes),",
 			       pdev->stats.rx.to_stack.num,
 			       pdev->stats.rx.to_stack.bytes);
-		for (i = 0; i <  CDP_MAX_RX_RINGS; i++) {
+		for (i = 0; i < CDP_MAX_RX_RINGS; i++) {
 			if (!pdev->stats.rx.rcvd_reo[i].num)
 				continue;
 			DP_PRINT_STATS(
@@ -7111,6 +7135,10 @@ void dp_txrx_path_stats(struct dp_soc *soc)
 				       i, pdev->stats.rx.rcvd_reo[i].num,
 				       pdev->stats.rx.rcvd_reo[i].bytes);
 		}
+		for (i = 0; i < CDP_MAX_LMACS; i++)
+			DP_PRINT_STATS("received on lmac[%d] %u msdus (%llu bytes),",
+				       i, pdev->stats.rx.rx_lmac[i].num,
+				       pdev->stats.rx.rx_lmac[i].bytes);
 		DP_PRINT_STATS("intra-bss packets %u msdus ( %llu bytes),",
 			       pdev->stats.rx.intra_bss.pkts.num,
 			       pdev->stats.rx.intra_bss.pkts.bytes);
@@ -7450,6 +7478,8 @@ dp_print_pdev_tx_stats(struct dp_pdev *pdev)
 void
 dp_print_pdev_rx_stats(struct dp_pdev *pdev)
 {
+	uint8_t i;
+
 	DP_PRINT_STATS("PDEV Rx Stats:\n");
 	DP_PRINT_STATS("Received From HW (Per Rx Ring):");
 	DP_PRINT_STATS("	Packets = %u %u %u %u",
@@ -7462,6 +7492,10 @@ dp_print_pdev_rx_stats(struct dp_pdev *pdev)
 		       pdev->stats.rx.rcvd_reo[1].bytes,
 		       pdev->stats.rx.rcvd_reo[2].bytes,
 		       pdev->stats.rx.rcvd_reo[3].bytes);
+	for (i = 0; i < CDP_MAX_LMACS; i++)
+		DP_PRINT_STATS("Packets Received on lmac[%d] = %d (%llu)",
+			       i, pdev->stats.rx.rx_lmac[i].num,
+			       pdev->stats.rx.rx_lmac[i].bytes);
 	DP_PRINT_STATS("Replenished:");
 	DP_PRINT_STATS("	Packets = %u",
 		       pdev->stats.replenish.pkts.num);
@@ -8507,11 +8541,18 @@ void dp_update_pdev_stats(struct dp_pdev *tgtobj,
 	tgtobj->stats.rx.to_stack.num += srcobj->rx.to_stack.num;
 	tgtobj->stats.rx.to_stack.bytes += srcobj->rx.to_stack.bytes;
 
-	for (i = 0; i <  CDP_MAX_RX_RINGS; i++) {
+	for (i = 0; i < CDP_MAX_RX_RINGS; i++) {
 		tgtobj->stats.rx.rcvd_reo[i].num +=
 			srcobj->rx.rcvd_reo[i].num;
 		tgtobj->stats.rx.rcvd_reo[i].bytes +=
 			srcobj->rx.rcvd_reo[i].bytes;
+	}
+
+	for (i = 0; i < CDP_MAX_LMACS; i++) {
+		tgtobj->stats.rx.rx_lmac[i].num +=
+			srcobj->rx.rx_lmac[i].num;
+		tgtobj->stats.rx.rx_lmac[i].bytes +=
+			srcobj->rx.rx_lmac[i].bytes;
 	}
 
 	srcobj->rx.unicast.num =

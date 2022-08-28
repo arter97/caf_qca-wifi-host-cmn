@@ -403,11 +403,13 @@ enum htt_cmn_t2h_en_stats_status {
  * @CDP_INVALID_PEER_TYPE: invalid peer type
  * @CDP_LINK_PEER_TYPE: legacy peer or link peer for MLO connection
  * @CDP_MLD_PEER_TYPE: MLD peer for MLO connection
+ * @CDP_WILD_PEER_TYPE: used to set peer type for same mld/link mac addr
  */
 enum cdp_peer_type {
 	CDP_INVALID_PEER_TYPE,
 	CDP_LINK_PEER_TYPE,
 	CDP_MLD_PEER_TYPE,
+	CDP_WILD_PEER_TYPE,
 };
 
 /**
@@ -422,6 +424,21 @@ struct cdp_peer_setup_info {
 	uint8_t is_first_link:1,
 		is_primary_link:1;
 	uint8_t primary_umac_id;
+};
+
+/**
+ * struct cdp_peer_info: peer info for dp hash find
+ * @vdev_id: Vdev ID
+ * @mac_addr: peer mac address to search
+ * @mac_addr_is_aligned: true only if mac_addr type is
+			"union dp_align_mac_addr", otherwise set false always.
+ * @peer_type: link or MLD peer type
+ */
+struct cdp_peer_info {
+	uint8_t vdev_id;
+	uint8_t *mac_addr;
+	bool mac_addr_is_aligned;
+	enum cdp_peer_type peer_type;
 };
 
 /**
@@ -446,6 +463,7 @@ enum cdp_txrx_ast_entry_type {
 	CDP_TXRX_AST_TYPE_STA_BSS,	 /* BSS entry(STA mode) */
 	CDP_TXRX_AST_TYPE_DA,	/* AST entry based on Destination address */
 	CDP_TXRX_AST_TYPE_WDS_HM_SEC, /* HM WDS entry for secondary radio */
+	CDP_TXRX_AST_TYPE_MLD, /* AST entry type for MLD peer */
 	CDP_TXRX_AST_TYPE_MAX
 };
 
@@ -2248,6 +2266,7 @@ struct cdp_tx_completion_msdu {
  * @rx_ratekpbs - rx rate in kbps
  * @rix - rate index
  * @mpdu_retries - retries of mpdu in rx
+ * @rx_time_us - Rx duration
  */
 struct cdp_rx_stats_ppdu_user {
 	uint16_t peer_id;
@@ -2287,6 +2306,7 @@ struct cdp_rx_stats_ppdu_user {
 	uint32_t rx_ratekbps;
 	uint32_t rix;
 	uint32_t mpdu_retries;
+	uint16_t rx_time_us;
 };
 
 /**
@@ -2657,9 +2677,7 @@ struct cdp_flow_stats {
  */
 struct cdp_flow_stats {
 	uint32_t msdu_count;
-#ifdef QCA_TEST_MON_PF_TAGS_STATS
 	uint32_t mon_msdu_count;
-#endif
 };
 #endif
 
@@ -2683,6 +2701,9 @@ enum cdp_flow_protocol_type {
 
 /**
  * cdp_rx_flow_tuple_info - RX flow tuple info used for addition/deletion
+ * @tuple_populated:
+ * @is_exception: Flows which are added to flow table but not aggregated.
+ * @bypass_fisa: Flow which are not added to flow table.
  * @dest_ip_127_96: destination IP address bit fields 96-127
  * @dest_ip_95_64: destination IP address bit fields 64-95
  * @dest_ip_63_32: destination IP address bit fields 32-63
@@ -2699,6 +2720,7 @@ struct cdp_rx_flow_tuple_info {
 #ifdef WLAN_SUPPORT_RX_FISA
 	uint8_t tuple_populated;
 	uint8_t is_exception;
+	bool bypass_fisa;
 #endif
 	uint32_t dest_ip_127_96;
 	uint32_t dest_ip_95_64;

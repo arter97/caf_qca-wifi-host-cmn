@@ -54,14 +54,13 @@
  * https://android-review.googlesource.com/c/kernel/common/+/1996268
  */
 
-#if defined(WLAN_11BE_MLO_FEATURE_ENABLE)
 #if (defined(__ANDROID_COMMON_KERNEL__) && \
 	(LINUX_VERSION_CODE >= KERNEL_VERSION(5, 15, 0)) && \
 	(LINUX_VERSION_CODE < KERNEL_VERSION(5, 16, 0))) || \
 	(LINUX_VERSION_CODE >= KERNEL_VERSION(5, 18, 0))
 #define CFG80211_11BE_BASIC 1
 #endif
-#endif
+
 /*
  * CFG80211_SA_QUERY_OFFLOAD_SUPPORT
  * Used to indicate the Linux Kernel contains support to offload SA Query
@@ -128,5 +127,19 @@
 	(LINUX_VERSION_CODE >= KERNEL_VERSION(5, 15, 0)) && \
 	(defined  CFG80211_EXTERNAL_AUTH_TA_SUPPORT))
 #define CFG80211_SAE_AUTH_TA_ADDR_SUPPORT 1
+#endif
+
+/*
+ * CFG80211_MULTI_AKM_CONNECT_SUPPORT
+ * used to indicate the Linux kernel contains support for multi AKM connect
+ * support
+ *
+ * This feature was backported to Android Common Kernel 5.15 via:
+ * https://android-review.googlesource.com/c/kernel/common/+/2115619
+ */
+#if (defined(__ANDROID_COMMON_KERNEL__) && \
+	(LINUX_VERSION_CODE >= KERNEL_VERSION(5, 15, 0)) && \
+	(LINUX_VERSION_CODE < KERNEL_VERSION(5, 16, 0)))
+#define CFG80211_MULTI_AKM_CONNECT_SUPPORT 1
 #endif
 #endif
