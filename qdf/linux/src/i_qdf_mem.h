@@ -100,16 +100,7 @@ typedef struct __qdf_mempool_ctxt {
 
 #endif /* __KERNEL__ */
 
-#ifdef DP_PAGE_SIZE_INDEPENDENT
-#define __page_size ((size_t)4096)
-#else
-#if PAGE_SIZE == 4096
 #define __page_size ((size_t)PAGE_SIZE)
-#else
-#error "Current none 4K page size is not supported!"
-#endif
-#endif
-
 #define __qdf_align(a, mask) ALIGN(a, mask)
 
 #ifdef DISABLE_MEMDEBUG_PANIC
