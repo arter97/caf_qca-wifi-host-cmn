@@ -423,6 +423,16 @@ mlo_validate_disconn_req(struct wlan_objmgr_vdev *vdev,
 				qdf_copy_macaddr(&sta_ctx->disconn_req->bssid,
 						 bssid);
 			return QDF_STATUS_E_BUSY;
+		} else if (wlan_cm_is_vdev_connected(mlo_dev->wlan_vdev_list[i]) &&
+			   !wlan_vdev_mlme_is_mlo_link_vdev(
+				mlo_dev->wlan_vdev_list[i])) {
+				/* If the vdev is moved to connected state but
+				 * MLO mgr is not yet notified, defer disconnect
+				 * as it can cause race between connect complete
+				 * and disconnect initiation
+				 */
+				if (!qdf_test_bit(i, sta_ctx->wlan_connected_links))
+					return QDF_STATUS_E_BUSY;
 		}
 	}
 	return QDF_STATUS_SUCCESS;
@@ -1758,4 +1768,38 @@ void mlo_internal_disconnect_links(struct wlan_objmgr_vdev *vdev)
 
 	mlo_dev_lock_release(mlo_dev_ctx);
 }
+
+void mlo_sta_get_vdev_list(struct wlan_objmgr_vdev *vdev, uint16_t *vdev_count,
+			   struct wlan_objmgr_vdev **wlan_vdev_list)
+{
+	struct wlan_mlo_dev_context *dev_ctx;
+	int i;
+	QDF_STATUS status;
+
+	*vdev_count = 0;
+
+	if (!vdev || !vdev->mlo_dev_ctx) {
+		mlo_err("Invalid input");
+		return;
+	}
+
+	dev_ctx = vdev->mlo_dev_ctx;
+
+	mlo_dev_lock_acquire(dev_ctx);
+	*vdev_count = 0;
+	for (i = 0; i < QDF_ARRAY_SIZE(dev_ctx->wlan_vdev_list); i++) {
+		if (dev_ctx->wlan_vdev_list[i]) {
+			status =
+			wlan_objmgr_vdev_try_get_ref(dev_ctx->wlan_vdev_list[i],
+						     WLAN_MLO_MGR_ID);
+			if (QDF_IS_STATUS_ERROR(status))
+				break;
+			wlan_vdev_list[*vdev_count] =
+				dev_ctx->wlan_vdev_list[i];
+			(*vdev_count) += 1;
+		}
+	}
+	mlo_dev_lock_release(dev_ctx);
+}
+
 #endif

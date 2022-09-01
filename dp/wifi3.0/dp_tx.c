@@ -41,7 +41,7 @@
 #endif
 #include "dp_hist.h"
 #ifdef WLAN_DP_FEATURE_SW_LATENCY_MGR
-#include <dp_swlm.h>
+#include <wlan_dp_swlm.h>
 #endif
 #ifdef WIFI_MONITOR_SUPPORT
 #include <dp_mon.h>
@@ -3722,6 +3722,8 @@ void dp_tx_reinject_handler(struct dp_soc *soc,
 		qdf_spin_unlock_bh(&vdev->peer_list_lock);
 	}
 
+	qdf_nbuf_unmap_nbytes_single(vdev->osdev, nbuf, QDF_DMA_TO_DEVICE,
+				     nbuf->len);
 	qdf_nbuf_free(nbuf);
 
 	dp_tx_desc_release(tx_desc, tx_desc->pool_id);
@@ -4034,42 +4036,20 @@ static inline void
 dp_tx_update_peer_extd_stats(struct hal_tx_completion_status *ts,
 			     struct dp_txrx_peer *txrx_peer)
 {
-	uint8_t mcs, pkt_type;
+	uint8_t mcs, pkt_type, dst_mcs_idx;
 	uint8_t retry_threshold = txrx_peer->mpdu_retry_threshold;
 
 	mcs = ts->mcs;
 	pkt_type = ts->pkt_type;
+	/* do HW to SW pkt type conversion */
+	pkt_type = (pkt_type >= HAL_DOT11_MAX ? DOT11_MAX :
+		    hal_2_dp_pkt_type_map[pkt_type]);
 
-	DP_PEER_EXTD_STATS_INCC(txrx_peer,
-				tx.pkt_type[pkt_type].mcs_count[MAX_MCS - 1], 1,
-				((mcs >= MAX_MCS_11A) && (pkt_type == DOT11_A)));
-	DP_PEER_EXTD_STATS_INCC(txrx_peer,
-				tx.pkt_type[pkt_type].mcs_count[mcs], 1,
-				((mcs < (MAX_MCS_11A)) && (pkt_type == DOT11_A)));
-	DP_PEER_EXTD_STATS_INCC(txrx_peer,
-				tx.pkt_type[pkt_type].mcs_count[MAX_MCS - 1], 1,
-				((mcs >= MAX_MCS_11B) && (pkt_type == DOT11_B)));
-	DP_PEER_EXTD_STATS_INCC(txrx_peer,
-				tx.pkt_type[pkt_type].mcs_count[mcs], 1,
-				((mcs < MAX_MCS_11B) && (pkt_type == DOT11_B)));
-	DP_PEER_EXTD_STATS_INCC(txrx_peer,
-				tx.pkt_type[pkt_type].mcs_count[MAX_MCS - 1], 1,
-				((mcs >= MAX_MCS_11A) && (pkt_type == DOT11_N)));
-	DP_PEER_EXTD_STATS_INCC(txrx_peer,
-				tx.pkt_type[pkt_type].mcs_count[mcs], 1,
-				((mcs < MAX_MCS_11A) && (pkt_type == DOT11_N)));
-	DP_PEER_EXTD_STATS_INCC(txrx_peer,
-				tx.pkt_type[pkt_type].mcs_count[MAX_MCS - 1], 1,
-				((mcs >= MAX_MCS_11AC) && (pkt_type == DOT11_AC)));
-	DP_PEER_EXTD_STATS_INCC(txrx_peer,
-				tx.pkt_type[pkt_type].mcs_count[mcs], 1,
-				((mcs < MAX_MCS_11AC) && (pkt_type == DOT11_AC)));
-	DP_PEER_EXTD_STATS_INCC(txrx_peer,
-				tx.pkt_type[pkt_type].mcs_count[MAX_MCS - 1], 1,
-				((mcs >= (MAX_MCS - 1)) && (pkt_type == DOT11_AX)));
-	DP_PEER_EXTD_STATS_INCC(txrx_peer,
-				tx.pkt_type[pkt_type].mcs_count[mcs], 1,
-				((mcs < (MAX_MCS - 1)) && (pkt_type == DOT11_AX)));
+	dst_mcs_idx = dp_get_mcs_array_index_by_pkt_type_mcs(pkt_type, mcs);
+	if (MCS_INVALID_ARRAY_INDEX != dst_mcs_idx)
+		DP_PEER_EXTD_STATS_INC(txrx_peer,
+				       tx.pkt_type[pkt_type].mcs_count[dst_mcs_idx],
+				       1);
 
 	DP_PEER_EXTD_STATS_INC(txrx_peer, tx.sgi_count[ts->sgi], 1);
 	DP_PEER_EXTD_STATS_INC(txrx_peer, tx.bw[ts->bw], 1);
@@ -4780,7 +4760,7 @@ void dp_tx_comp_process_tx_status(struct dp_soc *soc,
 	dp_tx_update_peer_delay_stats(txrx_peer, tx_desc, ts->tid, ring_id);
 	dp_tx_update_peer_sawf_stats(soc, vdev, txrx_peer, tx_desc,
 				     ts, ts->tid);
-	dp_tx_send_pktlog(soc, vdev->pdev, nbuf, dp_status);
+	dp_tx_send_pktlog(soc, vdev->pdev, tx_desc, nbuf, dp_status);
 
 #ifdef QCA_SUPPORT_RDK_STATS
 	if (soc->peerstats_enabled)
@@ -5948,4 +5928,26 @@ QDF_STATUS dp_tso_soc_detach(struct cdp_soc_t *txrx_soc)
 
 	return QDF_STATUS_SUCCESS;
 }
+
+#ifdef CONFIG_DP_PKT_ADD_TIMESTAMP
+void dp_pkt_add_timestamp(struct dp_vdev *vdev,
+			  enum qdf_pkt_timestamp_index index, uint64_t time,
+			  qdf_nbuf_t nbuf)
+{
+	if (qdf_unlikely(qdf_is_dp_pkt_timestamp_enabled())) {
+		uint64_t tsf_time;
+
+		if (vdev->get_tsf_time) {
+			vdev->get_tsf_time(vdev->osif_vdev, time, &tsf_time);
+			qdf_add_dp_pkt_timestamp(nbuf, index, tsf_time);
+		}
+	}
+}
+
+void dp_pkt_get_timestamp(uint64_t *time)
+{
+	if (qdf_unlikely(qdf_is_dp_pkt_timestamp_enabled()))
+		*time = qdf_get_log_timestamp();
+}
+#endif
 

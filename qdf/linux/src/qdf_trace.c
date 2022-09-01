@@ -1728,6 +1728,25 @@ static bool qdf_log_icmp_pkt(uint8_t vdev_id, struct sk_buff *skb,
 }
 
 #ifdef CONNECTIVITY_DIAG_EVENT
+enum diag_tx_status wlan_get_diag_tx_status(enum qdf_dp_tx_rx_status tx_status)
+{
+	switch (tx_status) {
+	case DIAG_TX_RX_STATUS_FW_DISCARD:
+	case DIAG_TX_RX_STATUS_INVALID:
+	case DIAG_TX_RX_STATUS_DROP:
+	case DIAG_TX_RX_STATUS_DOWNLOAD_SUCC:
+	case DIAG_TX_RX_STATUS_DEFAULT:
+	default:
+		return DIAG_TX_STATUS_FAIL;
+	case DIAG_TX_RX_STATUS_NO_ACK:
+		return DIAG_TX_STATUS_NO_ACK;
+	case DIAG_TX_RX_STATUS_OK:
+		return DIAG_TX_STATUS_ACK;
+	}
+
+	return DIAG_TX_STATUS_FAIL;
+}
+
 /**
  * qdf_subtype_to_wlan_main_tag() - Convert qdf subtype to wlan main tag
  * @subtype: EAPoL key subtype
@@ -1884,7 +1903,8 @@ void qdf_fill_wlan_connectivity_log(enum qdf_proto_type type,
 
 	/*Tx completion status needs to be logged*/
 	if (dir == QDF_TX)
-		wlan_diag_event.tx_status = qdf_tx_status;
+		wlan_diag_event.tx_status =
+					wlan_get_diag_tx_status(qdf_tx_status);
 
 	WLAN_HOST_DIAG_EVENT_REPORT(&wlan_diag_event, EVENT_WLAN_CONN_DP);
 }
@@ -3576,6 +3596,8 @@ struct category_name_info g_qdf_category_name[MAX_SUPPORTED_CATEGORY] = {
 	[QDF_MODULE_ID_WLAN_PRE_CAC] = {"PRE_CAC"},
 	[QDF_MODULE_ID_T2LM] = {"T2LM"},
 	[QDF_MODULE_ID_DP_SAWF] = {"DP_SAWF"},
+	[QDF_MODULE_ID_SCS] = {"SCS"},
+	[QDF_MODULE_ID_DP_UMAC_RESET] = {"UMAC_HW_RESET"},
 	[QDF_MODULE_ID_ANY] = {"ANY"},
 };
 qdf_export_symbol(g_qdf_category_name);
@@ -4153,6 +4175,8 @@ static void set_default_trace_levels(struct category_info *cinfo)
 		[QDF_MODULE_ID_WLAN_PRE_CAC] = QDF_TRACE_LEVEL_ERROR,
 		[QDF_MODULE_ID_T2LM] = QDF_TRACE_LEVEL_ERROR,
 		[QDF_MODULE_ID_DP_SAWF] = QDF_TRACE_LEVEL_ERROR,
+		[QDF_MODULE_ID_SCS] = QDF_TRACE_LEVEL_ERROR,
+		[QDF_MODULE_ID_DP_UMAC_RESET] = QDF_TRACE_LEVEL_ERROR,
 		[QDF_MODULE_ID_ANY] = QDF_TRACE_LEVEL_INFO,
 	};
 
@@ -4580,3 +4604,117 @@ qdf_export_symbol(__qdf_bug);
 #endif /* CONFIG_SLUB_DEBUG */
 #endif /* PANIC_ON_BUG */
 
+#ifdef WLAN_QCOM_VA_MINIDUMP
+static bool qdf_va_md_initialized;
+static qdf_list_t qdf_va_md_list;
+static qdf_spinlock_t qdf_va_md_list_lock;
+#define QDF_MINIDUMP_LIST_SIZE 128
+
+struct qdf_va_md_entry {
+	qdf_list_node_t node;
+	struct va_md_entry data;
+};
+
+static int qdf_va_md_notif_handler(struct notifier_block *this,
+				   unsigned long event, void *ptr)
+{
+	struct qdf_va_md_entry *entry;
+	struct qdf_va_md_entry *next;
+
+	qdf_spin_lock_irqsave(&qdf_va_md_list_lock);
+	qdf_list_for_each_del(&qdf_va_md_list, entry, next, node) {
+		qcom_va_md_add_region(&entry->data);
+	}
+
+	qdf_spin_unlock_irqrestore(&qdf_va_md_list_lock);
+	return NOTIFY_OK;
+}
+
+static struct notifier_block qdf_va_md_notif_blk = {
+	.notifier_call = qdf_va_md_notif_handler,
+	.priority = INT_MAX,
+};
+
+void __qdf_minidump_init(void)
+{
+	qdf_spinlock_create(&qdf_va_md_list_lock);
+	qdf_list_create(&qdf_va_md_list, QDF_MINIDUMP_LIST_SIZE);
+	qcom_va_md_register("qdf_va_md", &qdf_va_md_notif_blk);
+	qdf_va_md_initialized = true;
+}
+
+qdf_export_symbol(__qdf_minidump_init);
+
+void __qdf_minidump_deinit(void)
+{
+	struct qdf_va_md_entry *entry;
+	struct qdf_va_md_entry *next;
+
+	qdf_va_md_initialized = false;
+	qdf_spin_lock_irqsave(&qdf_va_md_list_lock);
+	qdf_list_for_each_del(&qdf_va_md_list, entry, next, node) {
+		qdf_list_remove_node(&qdf_va_md_list, &entry->node);
+		qdf_mem_free(entry);
+	}
+
+	qdf_list_destroy(&qdf_va_md_list);
+	qdf_spin_unlock_irqrestore(&qdf_va_md_list_lock);
+	qdf_spinlock_destroy(&qdf_va_md_list_lock);
+}
+
+qdf_export_symbol(__qdf_minidump_deinit);
+
+void __qdf_minidump_log(void *start_addr, size_t size, const char *name)
+{
+	struct qdf_va_md_entry *entry;
+	QDF_STATUS status;
+
+	if (!qdf_va_md_initialized)
+		return;
+
+	entry = qdf_mem_malloc(sizeof(*entry));
+	if (!entry) {
+		qdf_err("malloc failed for %s: %pK, %zu",
+			name, start_addr, size);
+		return;
+	}
+
+	qdf_str_lcopy(entry->data.owner, name, sizeof(entry->data.owner));
+	entry->data.vaddr = (unsigned long)start_addr;
+	entry->data.size = size;
+
+	qdf_spin_lock_irqsave(&qdf_va_md_list_lock);
+	status = qdf_list_insert_front(&qdf_va_md_list, &entry->node);
+	qdf_spin_unlock_irqrestore(&qdf_va_md_list_lock);
+	if (QDF_IS_STATUS_ERROR(status)) {
+		qdf_err("Failed to insert qdf va md entry, status %d", status);
+		qdf_mem_free(entry);
+	}
+}
+
+qdf_export_symbol(__qdf_minidump_log);
+
+void __qdf_minidump_remove(void *addr, size_t size, const char *name)
+{
+	struct qdf_va_md_entry *entry;
+	struct qdf_va_md_entry *next;
+
+	if (!qdf_va_md_initialized)
+		return;
+
+	qdf_spin_lock_irqsave(&qdf_va_md_list_lock);
+	qdf_list_for_each_del(&qdf_va_md_list, entry, next, node) {
+		if (entry->data.vaddr == (unsigned long)addr &&
+		    entry->data.size == size &&
+		    !qdf_str_cmp(entry->data.owner, name)) {
+			qdf_list_remove_node(&qdf_va_md_list, &entry->node);
+			qdf_mem_free(entry);
+			break;
+		}
+	}
+
+	qdf_spin_unlock_irqrestore(&qdf_va_md_list_lock);
+}
+
+qdf_export_symbol(__qdf_minidump_remove);
+#endif

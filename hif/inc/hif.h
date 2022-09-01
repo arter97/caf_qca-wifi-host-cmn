@@ -633,6 +633,15 @@ static inline void hif_event_history_deinit(struct hif_opaque_softc *hif_ctx,
 }
 #endif /* WLAN_FEATURE_DP_EVENT_HISTORY */
 
+void hif_display_ctrl_traffic_pipes_state(struct hif_opaque_softc *hif_ctx);
+
+#if defined(HIF_CONFIG_SLUB_DEBUG_ON) || defined(HIF_CE_DEBUG_DATA_BUF)
+void hif_display_latest_desc_hist(struct hif_opaque_softc *hif_ctx);
+#else
+static
+inline void hif_display_latest_desc_hist(struct hif_opaque_softc *hif_ctx) {}
+#endif
+
 /**
  * enum HIF_DEVICE_POWER_CHANGE_TYPE: Device Power change type
  *
@@ -1013,6 +1022,7 @@ QDF_STATUS hif_send_head(struct hif_opaque_softc *hif_ctx, uint8_t PipeID,
 				  qdf_nbuf_t wbuf, uint32_t data_attr);
 void hif_send_complete_check(struct hif_opaque_softc *hif_ctx, uint8_t PipeID,
 			     int force);
+void hif_schedule_ce_tasklet(struct hif_opaque_softc *hif_ctx, uint8_t PipeID);
 void hif_shut_down_device(struct hif_opaque_softc *hif_ctx);
 void hif_get_default_pipe(struct hif_opaque_softc *hif_ctx, uint8_t *ULPipe,
 			  uint8_t *DLPipe);
@@ -1314,6 +1324,17 @@ QDF_STATUS hif_rtpm_put(uint8_t type, uint32_t id);
 int hif_pm_runtime_prevent_suspend(struct hif_pm_runtime_lock *data);
 
 /**
+ * hif_pm_runtime_prevent_suspend_sync() - Synchronized prevent Runtime suspend
+ * @data: runtime PM lock
+ *
+ * This function will prevent runtime suspend, by incrementing
+ * device's usage count.
+ *
+ * Return: status
+ */
+int hif_pm_runtime_prevent_suspend_sync(struct hif_pm_runtime_lock *data);
+
+/**
  * hif_pm_runtime_allow_suspend() - Allow Runtime suspend
  * @data: runtime PM lock
  *
@@ -1526,6 +1547,10 @@ int hif_pm_runtime_allow_suspend(struct hif_pm_runtime_lock *data)
 
 static inline
 int hif_pm_runtime_prevent_suspend(struct hif_pm_runtime_lock *data)
+{ return 0; }
+
+static inline
+int hif_pm_runtime_prevent_suspend_sync(struct hif_pm_runtime_lock *data)
 { return 0; }
 
 static inline
@@ -1911,6 +1936,14 @@ void hif_allow_link_low_power_states(struct hif_opaque_softc *hif)
 
 void *hif_get_dev_ba(struct hif_opaque_softc *hif_handle);
 void *hif_get_dev_ba_ce(struct hif_opaque_softc *hif_handle);
+
+/**
+ * hif_get_soc_version() - get soc major version from target info
+ * @hif_ctx - the HIF context
+ *
+ * Return: version number
+ */
+uint32_t hif_get_soc_version(struct hif_opaque_softc *hif_handle);
 
 /**
  * hif_set_initial_wakeup_cb() - set the initial wakeup event handler function
@@ -2349,4 +2382,43 @@ void hif_set_grp_intr_affinity(struct hif_opaque_softc *scn,
  *  uint8_t: count for WMI eps in target svc map
  */
 uint8_t hif_get_max_wmi_ep(struct hif_opaque_softc *scn);
+
+#ifdef DP_UMAC_HW_RESET_SUPPORT
+/**
+ * hif_register_umac_reset_handler() - Register UMAC HW reset handler
+ * @hif_scn: hif opaque handle
+ * @handler: callback handler function
+ * @cb_ctx: context to passed to @handler
+ * @irq: irq number to be used for UMAC HW reset interrupt
+ *
+ * Return: QDF_STATUS of operation
+ */
+QDF_STATUS hif_register_umac_reset_handler(struct hif_opaque_softc *hif_scn,
+					   int (*handler)(void *cb_ctx),
+					   void *cb_ctx, int irq);
+
+/**
+ * hif_unregister_umac_reset_handler() - Unregister UMAC HW reset handler
+ * @hif_scn: hif opaque handle
+ *
+ * Return: QDF_STATUS of operation
+ */
+QDF_STATUS hif_unregister_umac_reset_handler(struct hif_opaque_softc *hif_scn);
+#else
+static inline
+QDF_STATUS hif_register_umac_reset_handler(struct hif_opaque_softc *hif_scn,
+					   int (*handler)(void *cb_ctx),
+					   void *cb_ctx, int irq)
+{
+	return QDF_STATUS_SUCCESS;
+}
+
+static inline
+QDF_STATUS hif_unregister_umac_reset_handler(struct hif_opaque_softc *hif_scn)
+{
+	return QDF_STATUS_SUCCESS;
+}
+
+#endif /* DP_UMAC_HW_RESET_SUPPORT */
+
 #endif /* _HIF_H_ */

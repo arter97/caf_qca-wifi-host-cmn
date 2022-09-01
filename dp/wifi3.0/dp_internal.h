@@ -26,6 +26,8 @@
 
 #define DP_PEER_WDS_COUNT_INVALID UINT_MAX
 
+#define DP_BLOCKMEM_SIZE 4096
+
 /* Alignment for consistent memory for DP rings*/
 #define DP_RING_BASE_ALIGN 32
 
@@ -155,6 +157,103 @@ struct htt_dbgfs_cfg {
 	(1 << HTT_PPDU_STATS_USR_COMPLTN_ACK_BA_STATUS_TLV) | \
 	(1 << HTT_PPDU_STATS_USR_COMPLTN_BA_BITMAP_256_TLV) | \
 	(1 << HTT_PPDU_STATS_USR_MPDU_ENQ_BITMAP_256_TLV))
+
+static const enum cdp_packet_type hal_2_dp_pkt_type_map[HAL_DOT11_MAX] = {
+	[HAL_DOT11A] = DOT11_A,
+	[HAL_DOT11B] = DOT11_B,
+	[HAL_DOT11N_MM] = DOT11_N,
+	[HAL_DOT11AC] = DOT11_AC,
+	[HAL_DOT11AX] = DOT11_AX,
+	[HAL_DOT11BA] = DOT11_MAX,
+#ifdef WLAN_FEATURE_11BE
+	[HAL_DOT11BE] = DOT11_BE,
+#else
+	[HAL_DOT11BE] = DOT11_MAX,
+#endif
+	[HAL_DOT11AZ] = DOT11_MAX,
+	[HAL_DOT11N_GF] = DOT11_MAX,
+};
+
+#ifdef WLAN_FEATURE_11BE
+/**
+ * dp_get_mcs_array_index_by_pkt_type_mcs () - get the destination mcs index
+					       in array
+ * @pkt_type: host SW pkt type
+ * @mcs: mcs value for TX/RX rate
+ *
+ * Return: succeeded - valid index in mcs array
+	   fail - same value as MCS_MAX
+ */
+static inline uint8_t
+dp_get_mcs_array_index_by_pkt_type_mcs(uint32_t pkt_type, uint32_t mcs)
+{
+	uint8_t dst_mcs_idx = MCS_INVALID_ARRAY_INDEX;
+
+	switch (pkt_type) {
+	case DOT11_A:
+		dst_mcs_idx =
+			mcs >= MAX_MCS_11A ? (MAX_MCS - 1) : mcs;
+		break;
+	case DOT11_B:
+		dst_mcs_idx =
+			mcs >= MAX_MCS_11B ? (MAX_MCS - 1) : mcs;
+		break;
+	case DOT11_N:
+		dst_mcs_idx =
+			mcs >= MAX_MCS_11N ? (MAX_MCS - 1) : mcs;
+		break;
+	case DOT11_AC:
+		dst_mcs_idx =
+			mcs >= MAX_MCS_11AC ? (MAX_MCS - 1) : mcs;
+		break;
+	case DOT11_AX:
+		dst_mcs_idx =
+			mcs >= MAX_MCS_11AX ? (MAX_MCS - 1) : mcs;
+		break;
+	case DOT11_BE:
+		dst_mcs_idx =
+			mcs >= MAX_MCS_11BE ? (MAX_MCS - 1) : mcs;
+		break;
+	default:
+		break;
+	}
+
+	return dst_mcs_idx;
+}
+#else
+static inline uint8_t
+dp_get_mcs_array_index_by_pkt_type_mcs(uint32_t pkt_type, uint32_t mcs)
+{
+	uint8_t dst_mcs_idx = MCS_INVALID_ARRAY_INDEX;
+
+	switch (pkt_type) {
+	case DOT11_A:
+		dst_mcs_idx =
+			mcs >= MAX_MCS_11A ? (MAX_MCS - 1) : mcs;
+		break;
+	case DOT11_B:
+		dst_mcs_idx =
+			mcs >= MAX_MCS_11B ? (MAX_MCS - 1) : mcs;
+		break;
+	case DOT11_N:
+		dst_mcs_idx =
+			mcs >= MAX_MCS_11N ? (MAX_MCS - 1) : mcs;
+		break;
+	case DOT11_AC:
+		dst_mcs_idx =
+			mcs >= MAX_MCS_11AC ? (MAX_MCS - 1) : mcs;
+		break;
+	case DOT11_AX:
+		dst_mcs_idx =
+			mcs >= MAX_MCS_11AX ? (MAX_MCS - 1) : mcs;
+		break;
+	default:
+		break;
+	}
+
+	return dst_mcs_idx;
+}
+#endif
 
 QDF_STATUS dp_mon_soc_attach(struct dp_soc *soc);
 QDF_STATUS dp_mon_soc_detach(struct dp_soc *soc);
@@ -1459,6 +1558,9 @@ void dp_update_vdev_stats_on_peer_unmap(struct dp_vdev *vdev,
 		for (i = 0; i <  CDP_MAX_RX_RINGS; i++)	\
 			DP_STATS_AGGR_PKT(_tgtobj, _srcobj, rx.rcvd_reo[i]); \
 									\
+		for (i = 0; i <  CDP_MAX_LMACS; i++) \
+			DP_STATS_AGGR_PKT(_tgtobj, _srcobj, rx.rx_lmac[i]); \
+									\
 		_srcobj->stats.rx.unicast.num = \
 			_srcobj->stats.rx.to_stack.num - \
 					_srcobj->stats.rx.multicast.num; \
@@ -1642,6 +1744,12 @@ void dp_update_vdev_stats_on_peer_unmap(struct dp_vdev *vdev,
 					 _srcobj->rx.rcvd_reo[i].num; \
 			_tgtobj->rx.rcvd_reo[i].bytes += \
 					_srcobj->rx.rcvd_reo[i].bytes; \
+		} \
+		for (i = 0; i < CDP_MAX_LMACS; i++) { \
+			_tgtobj->rx.rx_lmac[i].num += \
+					_srcobj->rx.rx_lmac[i].num; \
+			_tgtobj->rx.rx_lmac[i].bytes += \
+					_srcobj->rx.rx_lmac[i].bytes; \
 		} \
 		DP_UPDATE_PROTOCOL_COUNT_STATS(_tgtobj, _srcobj); \
 	} while (0)
@@ -2089,6 +2197,12 @@ typedef void (*dp_rxtid_stats_cmd_cb)(struct dp_soc *soc, void *cb_ctxt,
 int dp_peer_rxtid_stats(struct dp_peer *peer,
 			dp_rxtid_stats_cmd_cb dp_stats_cmd_cb,
 			void *cb_ctxt);
+#ifdef IPA_OFFLOAD
+void dp_peer_update_tid_stats_from_reo(struct dp_soc *soc, void *cb_ctxt,
+				       union hal_reo_status *reo_status);
+int dp_peer_get_rxtid_stats_ipa(struct dp_peer *peer,
+				dp_rxtid_stats_cmd_cb dp_stats_cmd_cb);
+#endif
 QDF_STATUS
 dp_set_pn_check_wifi3(struct cdp_soc_t *soc, uint8_t vdev_id,
 		      uint8_t *peer_mac, enum cdp_sec_type sec_type,
@@ -2249,6 +2363,31 @@ void dp_print_soc_tx_stats(struct dp_soc *soc);
  * Return: None
  */
 void dp_print_soc_interrupt_stats(struct dp_soc *soc);
+
+#ifdef WLAN_DP_SRNG_USAGE_WM_TRACKING
+/**
+ * dp_dump_srng_high_wm_stats() - Print the ring usage high watermark stats
+ *				  for all SRNGs
+ * @soc: DP soc handle
+ * @srng_mask: SRNGs mask for dumping usage watermark stats
+ *
+ * Return: None
+ */
+void dp_dump_srng_high_wm_stats(struct dp_soc *soc, uint64_t srng_mask);
+#else
+/**
+ * dp_dump_srng_high_wm_stats() - Print the ring usage high watermark stats
+ *				  for all SRNGs
+ * @soc: DP soc handle
+ * @srng_mask: SRNGs mask for dumping usage watermark stats
+ *
+ * Return: None
+ */
+static inline
+void dp_dump_srng_high_wm_stats(struct dp_soc *soc, uint64_t srng_mask)
+{
+}
+#endif
 
 /**
  * dp_print_soc_rx_stats: Print SOC level Rx stats
@@ -2910,6 +3049,16 @@ void dp_rx_fst_detach(struct dp_soc *soc, struct dp_pdev *pdev);
  */
 QDF_STATUS dp_rx_flow_send_fst_fw_setup(struct dp_soc *soc,
 					struct dp_pdev *pdev);
+
+/** dp_mon_rx_update_rx_flow_tag_stats() - Update a mon flow's statistics
+ * @pdev: pdev handle
+ * @flow_id: flow index (truncated hash) in the Rx FST
+ *
+ * Return: Success when flow statistcs is updated, error on failure
+ */
+QDF_STATUS
+dp_mon_rx_update_rx_flow_tag_stats(struct dp_pdev *pdev, uint32_t flow_id);
+
 #else /* !((WLAN_SUPPORT_RX_FLOW_TAG) || defined(WLAN_SUPPORT_RX_FISA)) */
 
 /**
@@ -3653,6 +3802,7 @@ dp_get_peer_telemetry_stats(struct cdp_soc_t *soc_hdl, uint8_t *addr,
  * dp_tx_send_pktlog() - send tx packet log
  * @soc: soc handle
  * @pdev: pdev handle
+ * @tx_desc: TX software descriptor
  * @nbuf: nbuf
  * @status: status of tx packet
  *
@@ -3663,11 +3813,13 @@ dp_get_peer_telemetry_stats(struct cdp_soc_t *soc_hdl, uint8_t *addr,
  */
 static inline
 void dp_tx_send_pktlog(struct dp_soc *soc, struct dp_pdev *pdev,
+		       struct dp_tx_desc_s *tx_desc,
 		       qdf_nbuf_t nbuf, enum qdf_dp_tx_rx_status status)
 {
 	ol_txrx_pktdump_cb packetdump_cb = pdev->dp_tx_packetdump_cb;
 
-	if (qdf_unlikely(packetdump_cb)) {
+	if (qdf_unlikely(packetdump_cb) &&
+	    dp_tx_frm_std == tx_desc->frm_type) {
 		packetdump_cb((ol_txrx_soc_handle)soc, pdev->pdev_id,
 			      QDF_NBUF_CB_TX_VDEV_CTX(nbuf),
 			      nbuf, status, QDF_TX_DATA_PKT);
@@ -3698,9 +3850,69 @@ void dp_rx_send_pktlog(struct dp_soc *soc, struct dp_pdev *pdev,
 			      nbuf, status, QDF_RX_DATA_PKT);
 	}
 }
+
+/*
+ * dp_rx_err_send_pktlog() - send rx error packet log
+ * @soc: soc handle
+ * @pdev: pdev handle
+ * @mpdu_desc_info: MPDU descriptor info
+ * @nbuf: nbuf
+ * @status: status of rx packet
+ * @set_pktlen: weither to set packet length
+ *
+ * This API should only be called when we have not removed
+ * Rx TLV from head, and head is pointing to rx_tlv
+ *
+ * This function is used to send rx packet from erro path
+ * for logging for which rx packet tlv is not removed.
+ *
+ * Return: None
+ *
+ */
+static inline
+void dp_rx_err_send_pktlog(struct dp_soc *soc, struct dp_pdev *pdev,
+			   struct hal_rx_mpdu_desc_info *mpdu_desc_info,
+			   qdf_nbuf_t nbuf, enum qdf_dp_tx_rx_status status,
+			   bool set_pktlen)
+{
+	ol_txrx_pktdump_cb packetdump_cb = pdev->dp_rx_packetdump_cb;
+	qdf_size_t skip_size;
+	uint16_t msdu_len, nbuf_len;
+	uint8_t *rx_tlv_hdr;
+	struct hal_rx_msdu_metadata msdu_metadata;
+
+	if (qdf_unlikely(packetdump_cb)) {
+		rx_tlv_hdr = qdf_nbuf_data(nbuf);
+		nbuf_len = hal_rx_msdu_start_msdu_len_get(soc->hal_soc,
+							  rx_tlv_hdr);
+		hal_rx_msdu_metadata_get(soc->hal_soc, rx_tlv_hdr,
+					 &msdu_metadata);
+
+		if (mpdu_desc_info->bar_frame ||
+		    (mpdu_desc_info->mpdu_flags & HAL_MPDU_F_FRAGMENT))
+			skip_size = soc->rx_pkt_tlv_size;
+		else
+			skip_size = soc->rx_pkt_tlv_size +
+					msdu_metadata.l3_hdr_pad;
+
+		if (set_pktlen) {
+			msdu_len = nbuf_len + skip_size;
+			qdf_nbuf_set_pktlen(nbuf, qdf_min(msdu_len,
+					    (uint16_t)RX_DATA_BUFFER_SIZE));
+		}
+
+		qdf_nbuf_pull_head(nbuf, skip_size);
+		packetdump_cb((ol_txrx_soc_handle)soc, pdev->pdev_id,
+			      QDF_NBUF_CB_RX_VDEV_ID(nbuf),
+			      nbuf, status, QDF_RX_DATA_PKT);
+		qdf_nbuf_push_head(nbuf, skip_size);
+	}
+}
+
 #else
 static inline
 void dp_tx_send_pktlog(struct dp_soc *soc, struct dp_pdev *pdev,
+		       struct dp_tx_desc_s *tx_desc,
 		       qdf_nbuf_t nbuf, enum qdf_dp_tx_rx_status status)
 {
 }
@@ -3708,6 +3920,14 @@ void dp_tx_send_pktlog(struct dp_soc *soc, struct dp_pdev *pdev,
 static inline
 void dp_rx_send_pktlog(struct dp_soc *soc, struct dp_pdev *pdev,
 		       qdf_nbuf_t nbuf, enum qdf_dp_tx_rx_status status)
+{
+}
+
+static inline
+void dp_rx_err_send_pktlog(struct dp_soc *soc, struct dp_pdev *pdev,
+			   struct hal_rx_mpdu_desc_info *mpdu_desc_info,
+			   qdf_nbuf_t nbuf, enum qdf_dp_tx_rx_status status,
+			   bool set_pktlen)
 {
 }
 #endif

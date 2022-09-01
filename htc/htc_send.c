@@ -765,7 +765,7 @@ static QDF_STATUS htc_issue_packets(HTC_TARGET *target,
 					    (pEndpoint) < 1)
 						break;
 				}
-				/* fallthrough */
+				fallthrough;
 			case QDF_BUS_TYPE_USB:
 				htc_issue_packets_bundle(target,
 							pEndpoint,
@@ -1601,8 +1601,11 @@ static enum HTC_SEND_QUEUE_RESULT htc_try_send(HTC_TARGET *target,
 
 		if (pEndpoint->async_update &&
 			(!IS_TX_CREDIT_FLOW_ENABLED(pEndpoint)) &&
-			(!tx_resources))
+			(!tx_resources)) {
+			hif_schedule_ce_tasklet(target->hif_dev,
+						pEndpoint->UL_PipeID);
 			break;
+		}
 
 		if (IS_TX_CREDIT_FLOW_ENABLED(pEndpoint)) {
 #if DEBUG_CREDIT
@@ -1681,7 +1684,7 @@ static enum HTC_SEND_QUEUE_RESULT htc_try_send(HTC_TARGET *target,
 					pEndpoint->total_num_requeues++;
 					pEndpoint->num_requeues_warn = 0;
 				}
-				/* fallthrough */
+				fallthrough;
 			default:
 				QDF_TRACE(QDF_MODULE_ID_HIF, QDF_TRACE_LEVEL_INFO,
 					  "htc_issue_packets, failed status:%d"

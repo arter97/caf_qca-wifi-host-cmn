@@ -129,6 +129,22 @@ dp_rx_wds_learn(struct dp_soc *soc,
 }
 #endif
 
+#if defined(DP_PKT_STATS_PER_LMAC) && defined(WLAN_FEATURE_11BE_MLO)
+static inline void
+dp_rx_set_msdu_lmac_id(qdf_nbuf_t nbuf, uint32_t peer_mdata)
+{
+	uint8_t lmac_id;
+
+	lmac_id = dp_rx_peer_metadata_lmac_id_get_be(peer_mdata);
+	qdf_nbuf_set_lmac_id(nbuf, lmac_id);
+}
+#else
+static inline void
+dp_rx_set_msdu_lmac_id(qdf_nbuf_t nbuf, uint32_t peer_mdata)
+{
+}
+#endif
+
 /**
  * dp_rx_process_be() - Brain of the Rx processing functionality
  *		     Called from the bottom half (tasklet/NET_RX_SOFTIRQ)
@@ -197,6 +213,7 @@ uint32_t dp_rx_process_be(struct dp_intr *int_ctx,
 	int max_reap_limit, ring_near_full;
 	struct dp_soc *replenish_soc;
 	uint8_t chip_id;
+	uint64_t current_time = 0;
 
 	DP_HIST_INIT();
 
@@ -229,6 +246,8 @@ more_data:
 	qdf_mem_zero(head, sizeof(head));
 	qdf_mem_zero(tail, sizeof(tail));
 
+	dp_pkt_get_timestamp(&current_time);
+
 	ring_near_full = _dp_srng_test_and_update_nf_params(soc, rx_ring,
 							    &max_reap_limit);
 
@@ -242,6 +261,8 @@ more_data:
 			  FL("HAL RING Access Failed -- %pK"), hal_ring_hdl);
 		goto done;
 	}
+
+	hal_srng_update_ring_usage_wm_no_lock(soc->hal_soc, hal_ring_hdl);
 
 	/*
 	 * start reaping the buffers from reo ring and queue
@@ -388,6 +409,7 @@ more_data:
 			dp_rx_peer_metadata_peer_id_get_be(soc, peer_mdata);
 		QDF_NBUF_CB_RX_VDEV_ID(rx_desc->nbuf) =
 			dp_rx_peer_metadata_vdev_id_get_be(soc, peer_mdata);
+		dp_rx_set_msdu_lmac_id(rx_desc->nbuf, peer_mdata);
 
 		/* to indicate whether this msdu is rx offload */
 		pkt_capture_offload =
@@ -592,8 +614,6 @@ done:
 		tid_stats =
 		&rx_pdev->stats.tid_stats.tid_rx_stats[reo_ring_num][tid];
 
-		dp_rx_send_pktlog(soc, rx_pdev, nbuf, QDF_TX_RX_STATUS_OK);
-
 		/*
 		 * Check if DMA completed -- msdu_done is the last bit
 		 * to be written
@@ -683,6 +703,8 @@ done:
 			qdf_nbuf_set_pktlen(nbuf, pkt_len);
 			dp_rx_skip_tlvs(soc, nbuf, msdu_metadata.l3_hdr_pad);
 		}
+
+		dp_rx_send_pktlog(soc, rx_pdev, nbuf, QDF_TX_RX_STATUS_OK);
 
 		/*
 		 * process frame for mulitpass phrase processing
@@ -798,6 +820,10 @@ done:
 							 nbuf);
 
 		dp_rx_update_stats(soc, nbuf);
+
+		dp_pkt_add_timestamp(txrx_peer->vdev, QDF_PKT_RX_DRIVER_ENTRY,
+				     current_time, nbuf);
+
 		DP_RX_LIST_APPEND(deliver_list_head,
 				  deliver_list_tail,
 				  nbuf);
@@ -814,25 +840,10 @@ done:
 		nbuf = next;
 	}
 
-	if (qdf_likely(deliver_list_head)) {
-		if (qdf_likely(txrx_peer)) {
-			dp_rx_deliver_to_pkt_capture(soc, vdev->pdev, peer_id,
-						     pkt_capture_offload,
-						     deliver_list_head);
-			if (!pkt_capture_offload)
-				dp_rx_deliver_to_stack(soc, vdev, txrx_peer,
-						       deliver_list_head,
-						       deliver_list_tail);
-		} else {
-			nbuf = deliver_list_head;
-			while (nbuf) {
-				next = nbuf->next;
-				nbuf->next = NULL;
-				dp_rx_deliver_to_stack_no_peer(soc, nbuf);
-				nbuf = next;
-			}
-		}
-	}
+	DP_RX_DELIVER_TO_STACK(soc, vdev, txrx_peer, peer_id,
+			       pkt_capture_offload,
+			       deliver_list_head,
+			       deliver_list_tail);
 
 	if (qdf_likely(txrx_peer))
 		dp_txrx_peer_unref_delete(txrx_ref_handle, DP_MOD_ID_RX);

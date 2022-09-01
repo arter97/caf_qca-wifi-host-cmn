@@ -2339,6 +2339,17 @@ int hif_pci_bus_suspend(struct hif_softc *scn)
 		return -EBUSY;
 	}
 
+	/*
+	 * In an unlikely case, if draining becomes infinite loop,
+	 * it returns an error, shall abort the bus suspend.
+	 */
+	ret = hif_drain_fw_diag_ce(scn);
+	if (ret) {
+		hif_err("draining fw_diag_ce goes infinite, so abort suspend");
+		hif_apps_irqs_enable(GET_HIF_OPAQUE_HDL(scn));
+		return -EBUSY;
+	}
+
 	/* Stop the HIF Sleep Timer */
 	hif_cancel_deferred_target_sleep(scn);
 
@@ -3646,6 +3657,7 @@ static void hif_pci_get_soc_info_pld(struct hif_pci_softc *sc,
 	scn->cmem_size = info.dev_mem_info[0].size;
 	scn->target_info.target_version = info.soc_id;
 	scn->target_info.target_revision = 0;
+	scn->target_info.soc_version = info.device_version.major_version;
 }
 
 static void hif_pci_get_soc_info_nopld(struct hif_pci_softc *sc,

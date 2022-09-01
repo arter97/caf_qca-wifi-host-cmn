@@ -527,6 +527,19 @@ struct scan_cache_node *scm_get_conn_node(struct scan_dbs *scan_db)
 	return NULL;
 }
 
+static bool
+scm_bss_is_nontx_of_conn_bss(struct scan_cache_node *conn_node,
+			     struct scan_cache_node *cur_node)
+{
+	if (cur_node->entry->mbssid_info.profile_num &&
+	    !memcmp(conn_node->entry->mbssid_info.trans_bssid,
+		    cur_node->entry->mbssid_info.trans_bssid,
+		    QDF_MAC_ADDR_SIZE))
+		return true;
+
+	return false;
+}
+
 void scm_age_out_entries(struct wlan_objmgr_psoc *psoc,
 	struct scan_dbs *scan_db)
 {
@@ -551,10 +564,9 @@ void scm_age_out_entries(struct wlan_objmgr_psoc *psoc,
 			    /* OR cur_node is not part of the MBSSID of the
 			     * connected node
 			     */
-			    memcmp(conn_node->entry->mbssid_info.trans_bssid,
-				   cur_node->entry->mbssid_info.trans_bssid,
-				   QDF_MAC_ADDR_SIZE)
-			   ) {
+			    (!scm_bss_is_connected(cur_node->entry) &&
+			     !scm_bss_is_nontx_of_conn_bss(conn_node,
+							  cur_node))) {
 				scm_check_and_age_out(scan_db, cur_node,
 					def_param->scan_cache_aging_time);
 			}
@@ -1114,6 +1126,22 @@ QDF_STATUS __scm_handle_bcn_probe(struct scan_bcn_probe_event *bcn)
 			util_scan_free_cache_entry(scan_entry);
 			qdf_mem_free(scan_node);
 			continue;
+		}
+		if (util_scan_entry_rsn(scan_entry)) {
+			status = wlan_crypto_rsnie_check(
+					&sec_params,
+					util_scan_entry_rsn(scan_entry));
+			if (QDF_IS_STATUS_ERROR(status)) {
+				scm_nofl_debug("Drop frame from invalid RSN IE AP"
+					       QDF_MAC_ADDR_FMT
+					       ": RSN IE parse failed, status %d",
+					       QDF_MAC_ADDR_REF(
+					       scan_entry->bssid.bytes),
+					       status);
+				util_scan_free_cache_entry(scan_entry);
+				qdf_mem_free(scan_node);
+				continue;
+			}
 		}
 		if (wlan_cm_get_check_6ghz_security(psoc) &&
 		    wlan_reg_is_6ghz_chan_freq(scan_entry->channel.chan_freq)) {
@@ -1934,4 +1962,27 @@ QDF_STATUS scm_scan_update_mlme_by_bssinfo(struct wlan_objmgr_pdev *pdev,
 	}
 
 	return QDF_STATUS_E_INVAL;
+}
+
+uint32_t scm_get_last_scan_time_per_channel(struct wlan_objmgr_vdev *vdev,
+					    uint32_t freq)
+{
+	struct wlan_scan_obj *scan;
+	struct chan_list_scan_info *chan_info;
+	uint8_t pdev_id;
+	int i;
+
+	scan = wlan_vdev_get_scan_obj(vdev);
+	if (!scan)
+		return 0;
+
+	pdev_id = wlan_scan_vdev_get_pdev_id(vdev);
+	chan_info = &scan->pdev_info[pdev_id].chan_scan_info;
+
+	for (i = 0; i < chan_info->num_chan ; i++) {
+		if (chan_info->ch_scan_info[i].freq == freq)
+			return chan_info->ch_scan_info[i].last_scan_time;
+	}
+
+	return 0;
 }

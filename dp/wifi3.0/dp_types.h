@@ -167,6 +167,17 @@
 #define DP_TX_MAGIC_PATTERN_INUSE	0xABCD1234
 #define DP_TX_MAGIC_PATTERN_FREE	0xDEADBEEF
 
+#ifdef IPA_OFFLOAD
+#define DP_PEER_REO_STATS_TID_SHIFT 16
+#define DP_PEER_REO_STATS_TID_MASK 0xFFFF0000
+#define DP_PEER_REO_STATS_PEER_ID_MASK 0x0000FFFF
+#define DP_PEER_GET_REO_STATS_TID(comb_peer_id_tid) \
+	((comb_peer_id_tid & DP_PEER_REO_STATS_TID_MASK) >> \
+	DP_PEER_REO_STATS_TID_SHIFT)
+#define DP_PEER_GET_REO_STATS_PEER_ID(comb_peer_id_tid) \
+	(comb_peer_id_tid & DP_PEER_REO_STATS_PEER_ID_MASK)
+#endif
+
 enum rx_pktlog_mode {
 	DP_RX_PKTLOG_DISABLED = 0,
 	DP_RX_PKTLOG_FULL,
@@ -248,6 +259,7 @@ enum dp_mod_id {
 	DP_MOD_ID_TX,
 	DP_MOD_ID_SAWF,
 	DP_MOD_ID_REINJECT,
+	DP_MOD_ID_SCS,
 	DP_MOD_ID_MAX,
 };
 
@@ -875,6 +887,11 @@ struct dp_rx_tid {
 
 	/* Coex Override preserved windows size 1 based */
 	uint16_t rx_ba_win_size_override;
+#ifdef IPA_OFFLOAD
+	/* rx msdu count per tid */
+	struct cdp_pkt_info rx_msdu_cnt;
+#endif
+
 };
 
 /**
@@ -1055,6 +1072,8 @@ struct dp_soc_stats {
 		uint64_t tqm_drop_no_peer;
 		/* Number of tx completions reaped per WBM2SW release ring */
 		uint32_t tx_comp[MAX_TCL_DATA_RINGS];
+		/* Number of tx completions force freed */
+		uint32_t tx_comp_force_freed;
 	} tx;
 
 	/* SOC level RX stats */
@@ -1705,6 +1724,21 @@ struct ipa_dp_tx_rsc {
 	void **tx_buf_pool_vaddr_unaligned;
 	qdf_dma_addr_t *tx_buf_pool_paddr_unaligned;
 };
+
+/* IPA uC datapath offload Wlan Rx resources */
+struct ipa_dp_rx_rsc {
+	/* Resource info to be passed to IPA */
+	qdf_dma_addr_t ipa_reo_ring_base_paddr;
+	void *ipa_reo_ring_base_vaddr;
+	uint32_t ipa_reo_ring_size;
+	qdf_dma_addr_t ipa_reo_tp_paddr;
+
+	/* Resource info to be passed to firmware and IPA */
+	qdf_dma_addr_t ipa_rx_refill_buf_ring_base_paddr;
+	void *ipa_rx_refill_buf_ring_base_vaddr;
+	uint32_t ipa_rx_refill_buf_ring_size;
+	qdf_dma_addr_t ipa_rx_refill_buf_hp_paddr;
+};
 #endif
 
 struct dp_tx_msdu_info_s;
@@ -1863,6 +1897,12 @@ struct dp_arch_ops {
 	struct dp_peer *(*dp_find_peer_by_destmac)(struct dp_soc *soc,
 						   uint8_t *dest_mac_addr,
 						   uint8_t vdev_id);
+	QDF_STATUS
+	(*dp_tx_compute_hw_delay)(struct dp_soc *soc,
+				  struct dp_vdev *vdev,
+				  struct hal_tx_completion_status *ts,
+				  uint32_t *delay_us);
+	void (*print_mlo_ast_stats)(struct dp_soc *soc);
 };
 
 /**
@@ -1871,11 +1911,13 @@ struct dp_arch_ops {
  * @dmac_cmn_src_rxbuf_ring_enabled: Flag to indicate DMAC mode common Rx
  *				     buffer source rings
  * @rssi_dbm_conv_support: Rssi dbm converstion support param.
+ * @umac_hw_reset_support: UMAC HW reset support
  */
 struct dp_soc_features {
 	uint8_t pn_in_reo_dest:1,
 		dmac_cmn_src_rxbuf_ring_enabled:1;
 	bool rssi_dbm_conv_support;
+	bool umac_hw_reset_support;
 };
 
 enum sysfs_printing_mode {
@@ -2205,6 +2247,7 @@ struct dp_soc {
 	uint8_t wds_ast_aging_timer_cnt;
 	bool pending_ageout;
 	bool ast_offload_support;
+	bool host_ast_db_enable;
 	uint32_t max_ast_ageout_count;
 	uint8_t eapol_over_control_port;
 
@@ -2229,21 +2272,10 @@ struct dp_soc {
 	struct ipa_dp_tx_rsc ipa_uc_tx_rsc_alt;
 #endif
 
-	/* IPA uC datapath offload Wlan Rx resources */
-	struct {
-		/* Resource info to be passed to IPA */
-		qdf_dma_addr_t ipa_reo_ring_base_paddr;
-		void *ipa_reo_ring_base_vaddr;
-		uint32_t ipa_reo_ring_size;
-		qdf_dma_addr_t ipa_reo_tp_paddr;
-
-		/* Resource info to be passed to firmware and IPA */
-		qdf_dma_addr_t ipa_rx_refill_buf_ring_base_paddr;
-		void *ipa_rx_refill_buf_ring_base_vaddr;
-		uint32_t ipa_rx_refill_buf_ring_size;
-		qdf_dma_addr_t ipa_rx_refill_buf_hp_paddr;
-	} ipa_uc_rx_rsc;
-
+	struct ipa_dp_rx_rsc ipa_uc_rx_rsc;
+#ifdef IPA_WDI3_VLAN_SUPPORT
+	struct ipa_dp_rx_rsc ipa_uc_rx_rsc_alt;
+#endif
 	qdf_atomic_t ipa_pipes_enabled;
 	bool ipa_first_tx_db_access;
 	qdf_spinlock_t ipa_rx_buf_map_lock;
@@ -2436,6 +2468,10 @@ struct dp_soc {
 	/* PPDU to link_id mapping parameters */
 	uint8_t link_id_offset;
 	uint8_t link_id_bits;
+#ifdef FEATURE_RX_LINKSPEED_ROAM_TRIGGER
+	/* A flag using to decide the switch of rx link speed  */
+	bool high_throughput;
+#endif
 };
 
 #ifdef IPA_OFFLOAD
@@ -2465,6 +2501,11 @@ struct dp_ipa_resources {
 	/* IPA UC doorbell registers paddr */
 	qdf_dma_addr_t tx_alt_comp_doorbell_paddr;
 	uint32_t *tx_alt_comp_doorbell_vaddr;
+#endif
+#ifdef IPA_WDI3_VLAN_SUPPORT
+	qdf_shared_mem_t rx_alt_rdy_ring;
+	qdf_shared_mem_t rx_alt_refill_ring;
+	qdf_dma_addr_t rx_alt_ready_doorbell_paddr;
 #endif
 };
 #endif
@@ -2617,9 +2658,6 @@ struct rx_protocol_tag_map {
 #ifdef WLAN_SUPPORT_RX_TAG_STATISTICS
 struct rx_protocol_tag_stats {
 	uint32_t tag_ctr;
-#ifdef QCA_TEST_MON_PF_TAGS_STATS
-	uint32_t mon_tag_ctr;
-#endif
 };
 #endif /* WLAN_SUPPORT_RX_TAG_STATISTICS */
 
@@ -2768,6 +2806,10 @@ struct dp_pdev {
 
 	/* Second ring used to replenish rx buffers */
 	struct dp_srng rx_refill_buf_ring2;
+#ifdef IPA_WDI3_VLAN_SUPPORT
+	/* Third ring used to replenish rx buffers */
+	struct dp_srng rx_refill_buf_ring3;
+#endif
 
 	/* Empty ring used by firmware to post rx buffers to the MAC */
 	struct dp_srng rx_mac_buf_ring[MAX_RX_MAC_RINGS];
@@ -2904,6 +2946,7 @@ struct dp_pdev {
 
 	/* qdf_event for fw_peer_stats */
 	qdf_event_t fw_peer_stats_event;
+	qdf_event_t fw_stats_event;
 
 	/* User configured max number of tx buffers */
 	uint32_t num_tx_allowed;
@@ -2934,6 +2977,8 @@ struct dp_pdev {
 	/* Track msdus received from expection ring separately */
 	struct rx_protocol_tag_stats
 		rx_err_proto_tag_stats[RX_PROTOCOL_TAG_MAX];
+	struct rx_protocol_tag_stats
+		mon_proto_tag_stats[RX_PROTOCOL_TAG_MAX];
 #endif /* WLAN_SUPPORT_RX_TAG_STATISTICS */
 #endif /* WLAN_SUPPORT_RX_PROTOCOL_TYPE_TAG */
 
@@ -2986,6 +3031,8 @@ struct dp_pdev {
 	ol_txrx_pktdump_cb dp_tx_packetdump_cb;
 	ol_txrx_pktdump_cb dp_rx_packetdump_cb;
 #endif
+	uint64_t fw_stats_tlv_bitmap_rcvd;
+	bool pending_fw_response;
 };
 
 struct dp_peer;
@@ -3380,16 +3427,6 @@ struct dp_peer_ast_params {
 	uint8_t flowQ;
 };
 
-#ifdef WLAN_SUPPORT_SCS
-/* SCS procedures macros */
-/* SCS Procedures - SCS parameters
- * obtained from SCS request are stored
- * in a peer based database for traffic
- * classification.
- */
-#define IEEE80211_SCS_MAX_NO_OF_ELEM 10
-#endif
-
 #define DP_MLO_FLOW_INFO_MAX	3
 
 /**
@@ -3635,6 +3672,8 @@ struct dp_peer_per_pkt_tx_stats {
  *       <enum 2     1_6_us_sgi > HE related GI
  *       <enum 3     3_2_us_sgi > HE
  * @preamble_info: preamble
+ * @tx_ucast_total: total ucast count
+ * @tx_ucast_success: total ucast success count
  * @retries_mpdu: mpdu number of successfully transmitted after retries
  * @mpdu_success_with_retries: mpdu retry count in case of successful tx
  * @su_be_ppdu_cnt: SU Tx packet count for 11BE
@@ -3685,6 +3724,8 @@ struct dp_peer_extd_tx_stats {
 
 	uint32_t retries_mpdu;
 	uint32_t mpdu_success_with_retries;
+	struct cdp_pkt_info tx_ucast_total;
+	struct cdp_pkt_info tx_ucast_success;
 #ifdef WLAN_FEATURE_11BE
 	struct cdp_pkt_type su_be_ppdu_cnt;
 	struct cdp_pkt_type mu_be_ppdu_cnt[TXRX_TYPE_MU_MAX];
@@ -3695,6 +3736,7 @@ struct dp_peer_extd_tx_stats {
 /**
  * struct dp_peer_per_pkt_rx_stats - Peer Rx stats updated in per pkt Rx path
  * @rcvd_reo[CDP_MAX_RX_RINGS]: Packets received on the reo ring
+ * @rx_lmac[CDP_MAX_LMACS]: Packets received on each lmac
  * @unicast: Total unicast packets
  * @multicast: Total multicast packets
  * @bcast:  Broadcast Packet Count
@@ -3723,6 +3765,7 @@ struct dp_peer_extd_tx_stats {
  */
 struct dp_peer_per_pkt_rx_stats {
 	struct cdp_pkt_info rcvd_reo[CDP_MAX_RX_RINGS];
+	struct cdp_pkt_info rx_lmac[CDP_MAX_LMACS];
 	struct cdp_pkt_info unicast;
 	struct cdp_pkt_info multicast;
 	struct cdp_pkt_info bcast;
@@ -4033,11 +4076,6 @@ struct dp_peer {
 
 	uint8_t peer_state;
 	qdf_spinlock_t peer_state_lock;
-#ifdef WLAN_SUPPORT_SCS
-	struct cdp_scs_params scs[IEEE80211_SCS_MAX_NO_OF_ELEM];
-	bool scs_is_active;
-	uint8_t no_of_scs_sessions;
-#endif
 #ifdef WLAN_SUPPORT_MSCS
 	struct dp_peer_mscs_parameter mscs_ipv4_parameter, mscs_ipv6_parameter;
 	bool mscs_active;
@@ -4050,7 +4088,6 @@ struct dp_peer {
 	enum cdp_peer_type peer_type;
 	/*---------for link peer---------*/
 	struct dp_peer *mld_peer;
-
 	/*---------for mld peer----------*/
 	struct dp_peer_link_info link_peers[DP_MAX_MLO_LINKS];
 	uint8_t num_links;

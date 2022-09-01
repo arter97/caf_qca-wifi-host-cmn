@@ -31,6 +31,7 @@
 #define HAL_RX_OFFSET(block, field) block##_##field##_OFFSET
 #define HAL_RX_LSB(block, field) block##_##field##_LSB
 #define HAL_RX_MASK(block, field) block##_##field##_MASK
+#define HAL_RX_TLV_L3_TYPE_INVALID 0xFFFF
 
 #define HAL_RX_GET(_ptr, block, field) \
 	(((*((volatile uint32_t *)_ptr + (HAL_RX_OFFSET(block, field)>>2))) & \
@@ -3006,4 +3007,13 @@ hal_get_first_wow_wakeup_packet(hal_soc_handle_t hal_soc_hdl, uint8_t *buf)
 }
 #endif
 
+static inline uint32_t
+hal_rx_tlv_l3_type_get(hal_soc_handle_t hal_soc_hdl, uint8_t *buf)
+{
+	struct hal_soc *hal_soc = (struct hal_soc *)hal_soc_hdl;
+
+	return hal_soc->ops->hal_rx_tlv_l3_type_get ?
+		hal_soc->ops->hal_rx_tlv_l3_type_get(buf) :
+			HAL_RX_TLV_L3_TYPE_INVALID;
+}
 #endif /* _HAL_RX_H */

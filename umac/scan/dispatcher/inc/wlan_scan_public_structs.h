@@ -536,6 +536,7 @@ struct reduced_neighbor_report {
  * @ecsa_ie: Pointer to eCSA IE
  * @max_cst_ie: Pointer to Max Channel Switch Time IE
  * @is_valid_link: The partner link can be used if true
+ * @op_class: Operating class
  */
 struct partner_link_info {
 	struct qdf_mac_addr link_addr;
@@ -546,6 +547,7 @@ struct partner_link_info {
 	const uint8_t *ecsa_ie;
 	const uint8_t *max_cst_ie;
 	uint8_t  is_valid_link;
+	uint8_t op_class;
 };
 
 /**
@@ -935,6 +937,16 @@ struct chan_info {
 	qdf_freq_t freq;
 	enum scan_phy_mode phymode;
 	enum scan_flags flags;
+};
+
+struct chan_list_info {
+	qdf_freq_t freq;
+	uint32_t last_scan_time;
+};
+
+struct chan_list_scan_info {
+	uint8_t num_chan;
+	struct chan_list_info ch_scan_info[NUM_CHANNELS];
 };
 
 /**

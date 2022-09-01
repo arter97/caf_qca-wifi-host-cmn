@@ -573,6 +573,7 @@ void dp_initialize_arch_ops_li(struct dp_arch_ops *arch_ops)
 	arch_ops->dp_tx_desc_pool_deinit = dp_tx_desc_pool_deinit_li;
 	arch_ops->dp_rx_desc_pool_init = dp_rx_desc_pool_init_li;
 	arch_ops->dp_rx_desc_pool_deinit = dp_rx_desc_pool_deinit_li;
+	arch_ops->dp_tx_compute_hw_delay = dp_tx_compute_tx_delay_li;
 #else
 	arch_ops->dp_rx_desc_pool_init = dp_rx_desc_pool_init_generic;
 	arch_ops->dp_rx_desc_pool_deinit = dp_rx_desc_pool_deinit_generic;
@@ -629,27 +630,5 @@ void dp_tx_comp_get_prefetched_params_from_hal_desc(
 			(tx_desc_id & DP_TX_DESC_ID_OFFSET_MASK) >>
 			DP_TX_DESC_ID_OFFSET_OS);
 	qdf_prefetch((uint8_t *)*r_tx_desc);
-}
-#endif
-
-#ifdef CONFIG_DP_PKT_ADD_TIMESTAMP
-void dp_pkt_add_timestamp(struct dp_vdev *vdev,
-			  enum qdf_pkt_timestamp_index index, uint64_t time,
-			  qdf_nbuf_t nbuf)
-{
-	if (qdf_unlikely(qdf_is_dp_pkt_timestamp_enabled())) {
-		uint64_t tsf_time;
-
-		if (vdev->get_tsf_time) {
-			vdev->get_tsf_time(vdev->osif_vdev, time, &tsf_time);
-			qdf_add_dp_pkt_timestamp(nbuf, index, tsf_time);
-		}
-	}
-}
-
-void dp_pkt_get_timestamp(uint64_t *time)
-{
-	if (qdf_unlikely(qdf_is_dp_pkt_timestamp_enabled()))
-		*time = qdf_get_log_timestamp();
 }
 #endif

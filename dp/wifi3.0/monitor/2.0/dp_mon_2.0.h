@@ -35,6 +35,9 @@
 #define DP_MON_MSDU_LOGGING 0
 #define DP_MON_MPDU_LOGGING 1
 
+#define DP_MON_DECAP_FORMAT_INVALID 0xff
+#define DP_MON_MIN_FRAGS_FOR_RESTITCH 2
+
 /* monitor frame filter modes */
 enum dp_mon_frm_filter_mode {
 	/* mode filter pass */
@@ -114,6 +117,7 @@ union dp_mon_desc_list_elem_t {
  * @owner: owner for nbuf
  * @buf_size: Buffer size
  * @buf_alignment: Buffer alignment
+ * @pf_cache: page frag cache
  */
 struct dp_mon_desc_pool {
 	uint32_t pool_size;
@@ -123,6 +127,7 @@ struct dp_mon_desc_pool {
 	uint8_t owner;
 	uint16_t buf_size;
 	uint8_t buf_alignment;
+	qdf_frag_cache_t pf_cache;
 };
 
 /**
@@ -131,7 +136,7 @@ struct dp_mon_desc_pool {
  * @filter_be: filters sent to fw
  * @tx_mon_mode: tx monitor mode
  * @tx_mon_filter_length: tx monitor filter length
- * @tx_capture: pointer to tx capture function
+ * @tx_monitor_be: pointer to tx monitor be structure
  * @tx_stats: tx monitor drop stats
  * @rx_mon_wq_lock: Rx mon workqueue lock
  * @rx_mon_workqueue: Rx mon workqueue
@@ -140,18 +145,13 @@ struct dp_mon_desc_pool {
  * @rx_mon_queue_depth: RxMON queue depth
  * @desc_count: reaped status desc count
  * @status: reaped status buffer per ppdu
- * @rssi_temp_offset: Temperature based rssi offset
- * @xlna_bypass_offset: Low noise amplifier bypass offset
- * @xlna_bypass_threshold: Low noise amplifier bypass threshold
- * @xbar_config: 3 Bytes of xbar_config are used for RF to BB mapping
- * @min_nf_dbm: min noise floor in active chains per channel
  */
 struct dp_mon_pdev_be {
 	struct dp_mon_pdev mon_pdev;
 	struct dp_mon_filter_be **filter_be;
 	uint8_t tx_mon_mode;
 	uint8_t tx_mon_filter_length;
-	struct dp_pdev_tx_capture_be tx_capture_be;
+	struct dp_pdev_tx_monitor_be tx_monitor_be;
 	struct dp_tx_monitor_drop_stats tx_stats;
 	qdf_spinlock_t rx_mon_wq_lock;
 	qdf_workqueue_t *rx_mon_workqueue;
@@ -167,13 +167,6 @@ struct dp_mon_pdev_be {
 #endif
 	void *prev_rxmon_desc;
 	uint32_t prev_rxmon_cookie;
-#ifdef QCA_RSSI_DB2DBM
-	int32_t rssi_temp_offset;
-	int32_t xlna_bypass_offset;
-	int32_t xlna_bypass_threshold;
-	uint32_t xbar_config;
-	int8_t min_nf_dbm;
-#endif
 };
 
 /**
@@ -271,6 +264,7 @@ void dp_mon_pool_frag_unmap_and_free(struct dp_soc *dp_soc,
  *	       or NULL during dp rx initialization or out of buffer
  *	       interrupt.
  * @tail: tail of descs list
+ * @relenish_cnt_ref: pointer to update replenish_cnt
  *
  * Return: return success or failure
  */
@@ -279,7 +273,8 @@ QDF_STATUS dp_mon_buffers_replenish(struct dp_soc *dp_soc,
 				struct dp_mon_desc_pool *mon_desc_pool,
 				uint32_t num_req_buffers,
 				union dp_mon_desc_list_elem_t **desc_list,
-				union dp_mon_desc_list_elem_t **tail);
+				union dp_mon_desc_list_elem_t **tail,
+				uint32_t *replenish_cnt_ref);
 
 /**
  * dp_mon_filter_show_tx_filter_be() - Show the set filters
@@ -411,4 +406,19 @@ dp_rx_mon_add_frag_to_skb(struct hal_rx_ppdu_info *ppdu_info,
 		qdf_assert_always(0);
 	}
 }
+
+#if defined(WLAN_SUPPORT_RX_PROTOCOL_TYPE_TAG) ||\
+	defined(WLAN_SUPPORT_RX_FLOW_TAG)
+/** dp_mon_rx_update_rx_err_protocol_tag_stats() - Update mon protocols's
+ *					      statistics from given protocol
+ *					      type
+ * @pdev: pdev handle
+ * @protocol_index: Protocol index for which the stats should be incremented
+ *
+ * Return: void
+ */
+void dp_mon_rx_update_rx_protocol_tag_stats(struct dp_pdev *pdev,
+					    uint16_t protocol_index);
+#endif /* WLAN_SUPPORT_RX_PROTOCOL_TYPE_TAG */
+
 #endif /* _DP_MON_2_0_H_ */

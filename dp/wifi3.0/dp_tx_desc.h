@@ -49,9 +49,10 @@
  */
 QDF_COMPILE_TIME_ASSERT(dp_tx_desc_size,
 			((sizeof(struct dp_tx_desc_s)) <=
-			 (PAGE_SIZE >> DP_TX_DESC_ID_PAGE_OS)) &&
+			 (DP_BLOCKMEM_SIZE >> DP_TX_DESC_ID_PAGE_OS)) &&
 			((sizeof(struct dp_tx_desc_s)) >
-			 (PAGE_SIZE >> (DP_TX_DESC_ID_PAGE_OS + 1))));
+			 (DP_BLOCKMEM_SIZE >> (DP_TX_DESC_ID_PAGE_OS + 1)))
+		       );
 
 #ifdef QCA_LL_TX_FLOW_CONTROL_V2
 #define TX_DESC_LOCK_CREATE(lock)
@@ -264,19 +265,19 @@ dp_tx_adjust_flow_pool_state(struct dp_soc *soc,
 		soc->pause_cb(pool->flow_pool_id,
 			      WLAN_NETIF_PRIORITY_QUEUE_OFF,
 			      WLAN_DATA_FLOW_CTRL_PRI);
-		/* fallthrough */
+		fallthrough;
 
 	case FLOW_POOL_VO_PAUSED:
 		soc->pause_cb(pool->flow_pool_id,
 			      WLAN_NETIF_VO_QUEUE_OFF,
 			      WLAN_DATA_FLOW_CTRL_VO);
-		/* fallthrough */
+		fallthrough;
 
 	case FLOW_POOL_VI_PAUSED:
 		soc->pause_cb(pool->flow_pool_id,
 			      WLAN_NETIF_VI_QUEUE_OFF,
 			      WLAN_DATA_FLOW_CTRL_VI);
-		/* fallthrough */
+		fallthrough;
 
 	case FLOW_POOL_BE_BK_PAUSED:
 		soc->pause_cb(pool->flow_pool_id,

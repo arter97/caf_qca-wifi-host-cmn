@@ -370,9 +370,9 @@ more_msdu_link_desc:
 		if (hal_rx_encryption_info_valid(soc->hal_soc, rx_tlv_hdr))
 			hal_rx_print_pn(soc->hal_soc, rx_tlv_hdr);
 
-		dp_rx_send_pktlog(soc, pdev, rx_desc->nbuf,
-				  QDF_TX_RX_STATUS_DROP);
-
+		dp_rx_err_send_pktlog(soc, pdev, mpdu_desc_info,
+				      rx_desc->nbuf,
+				      QDF_TX_RX_STATUS_DROP, true);
 		/* Just free the buffers */
 		dp_rx_buffer_pool_nbuf_free(soc, rx_desc->nbuf, *mac_id);
 
@@ -461,9 +461,8 @@ dp_rx_pn_error_handle(struct dp_soc *soc, hal_ring_desc_t ring_desc,
 		/*
 		 * TODO: Check for peer specific policies & set peer_pn_policy
 		 */
-		QDF_TRACE(QDF_MODULE_ID_TXRX, QDF_TRACE_LEVEL_ERROR,
-			 "discard rx due to PN error for peer  %pK",
-			 txrx_peer);
+		dp_err_rl("discard rx due to PN error for peer  %pK",
+			  txrx_peer);
 
 		dp_txrx_peer_unref_delete(txrx_ref_handle, DP_MOD_ID_RX_ERR);
 	}
@@ -712,7 +711,6 @@ _dp_rx_bar_frame_handle(struct dp_soc *soc, qdf_nbuf_t nbuf,
 	if (err_status == HAL_REO_ERROR_DETECTED) {
 		switch (error_code) {
 		case HAL_REO_ERR_BAR_FRAME_2K_JUMP:
-			/* fallthrough */
 		case HAL_REO_ERR_BAR_FRAME_OOR:
 			dp_rx_err_handle_bar(soc, peer, nbuf);
 			DP_STATS_INC(soc, rx.err.reo_error[error_code], 1);
@@ -865,7 +863,8 @@ dp_rx_bar_frame_handle(struct dp_soc *soc,
 
 	_dp_rx_bar_frame_handle(soc, nbuf, mpdu_desc_info, tid, err_status,
 				err_code);
-	dp_rx_send_pktlog(soc, pdev, nbuf, QDF_TX_RX_STATUS_DROP);
+	dp_rx_err_send_pktlog(soc, pdev, mpdu_desc_info, nbuf,
+			      QDF_TX_RX_STATUS_DROP, true);
 	dp_rx_link_desc_return(soc, ring_desc,
 			       HAL_BM_ACTION_PUT_IN_IDLE_LIST);
 	dp_rx_buffer_pool_nbuf_free(soc, rx_desc->nbuf,
@@ -1543,7 +1542,6 @@ more_msdu_link_desc:
 		/* all buffers from a MSDU link belong to same pdev */
 		pdev = dp_get_pdev_for_lmac_id(soc, rx_desc_pool_id);
 
-		dp_rx_send_pktlog(soc, pdev, nbuf, QDF_TX_RX_STATUS_OK);
 		rx_desc_pool = &soc->rx_desc_buf[rx_desc_pool_id];
 		dp_ipa_rx_buf_smmu_mapping_lock(soc);
 		dp_rx_nbuf_unmap_pool(soc, rx_desc_pool, nbuf);

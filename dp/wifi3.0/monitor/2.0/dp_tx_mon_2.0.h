@@ -22,6 +22,19 @@
 #include <hal_be_api_mon.h>
 
 struct dp_mon_desc;
+
+/**
+ * dp_tx_mon_desc_list - structure to store double linked liskt
+ * @tx_ppdu_info_dlist_elem: support adding to double linked list
+ * @tx_ppdu_info_slist_elem: support adding to single linked list
+ * @tx_mon_reap_cnt: tx monitor reap count
+ */
+struct dp_tx_mon_desc_list {
+	union dp_mon_desc_list_elem_t *desc_list;
+	union dp_mon_desc_list_elem_t *tail;
+	uint32_t tx_mon_reap_cnt;
+};
+
 /*
  * dp_tx_mon_buffers_alloc() - allocate tx monitor buffers
  * @soc: DP soc handle
@@ -87,6 +100,21 @@ dp_tx_mon_buf_desc_pool_alloc(struct dp_soc *soc);
 void dp_tx_mon_update_end_reason(struct dp_mon_pdev *mon_pdev,
 				 int ppdu_id, int end_reason);
 
+/**
+ * dp_tx_mon_status_free_packet_buf() - API to free packet buffer
+ * @pdev: pdev Handle
+ * @status_frag: status frag
+ * @end_offset: status fragment end offset
+ * @mon_desc_list_ref: tx monitor descriptor list reference
+ *
+ * Return: void
+ */
+void
+dp_tx_mon_status_free_packet_buf(struct dp_pdev *pdev,
+				 qdf_frag_t status_frag,
+				 uint32_t end_offset,
+				 struct dp_tx_mon_desc_list *mon_desc_list_ref);
+
 /*
  * dp_tx_mon_process_status_tlv() - API to processed TLV
  * invoked from interrupt handler
@@ -96,14 +124,17 @@ void dp_tx_mon_update_end_reason(struct dp_mon_pdev *mon_pdev,
  * @mon_ring_desc - descriptor status info
  * @addr - status buffer frag address
  * @end_offset - end offset of buffer that has valid buffer
+ * @mon_desc_list_ref: tx monitor descriptor list reference
  *
  * Return: QDF_STATUS
  */
-QDF_STATUS dp_tx_mon_process_status_tlv(struct dp_soc *soc,
-					struct dp_pdev *pdev,
-					struct hal_mon_desc *mon_ring_desc,
-					qdf_frag_t status_frag,
-					uint32_t end_offset);
+QDF_STATUS
+dp_tx_mon_process_status_tlv(struct dp_soc *soc,
+			     struct dp_pdev *pdev,
+			     struct hal_mon_desc *mon_ring_desc,
+			     qdf_frag_t status_frag,
+			     uint32_t end_offset,
+			     struct dp_tx_mon_desc_list *mon_desc_list_ref);
 
 /*
  * dp_tx_mon_process_2_0() - tx monitor interrupt process
@@ -327,11 +358,41 @@ struct dp_tx_ppdu_info {
  * @ppdu_drop_cnt: ppdu drop counter
  * @mpdu_drop_cnt: mpdu drop counter
  * @tlv_drop_cnt: tlv drop counter
+ * @pkt_buf_recv: tx monitor packet buffer received
+ * @pkt_buf_free: tx monitor packet buffer free
+ * @pkt_buf_processed: tx monitor packet buffer processed
+ * @pkt_buf_to_stack: tx monitor packet buffer send to stack
+ * @status_buf_recv: tx monitor status buffer received
+ * @status_buf_free: tx monitor status buffer free
+ * @totat_tx_mon_replenish_cnt: tx monitor replenish count
+ * @total_tx_mon_reap_cnt: tx monitor reap count
+ * @tx_mon_stuck: tx monitor stuck count
+ * @total_tx_mon_stuck: tx monitor stuck count
+ * @ppdu_info_drop_th: count ppdu info been dropped due threshold reached
+ * @ppdu_info_drop_flush: count ppdu info been dropped due to flush detected
+ * @ppdu_info_drop_trunc: count ppdu info been dropped due to truncated
  */
 struct dp_tx_monitor_drop_stats {
 	uint64_t ppdu_drop_cnt;
 	uint64_t mpdu_drop_cnt;
 	uint64_t tlv_drop_cnt;
+
+	uint64_t pkt_buf_recv;
+	uint64_t pkt_buf_free;
+	uint64_t pkt_buf_processed;
+	uint64_t pkt_buf_to_stack;
+
+	uint64_t status_buf_recv;
+	uint64_t status_buf_free;
+
+	uint64_t totat_tx_mon_replenish_cnt;
+	uint64_t total_tx_mon_reap_cnt;
+	uint8_t tx_mon_stuck;
+	uint32_t total_tx_mon_stuck;
+
+	uint64_t ppdu_info_drop_th;
+	uint64_t ppdu_info_drop_flush;
+	uint64_t ppdu_info_drop_trunc;
 };
 
 /**
@@ -385,13 +446,16 @@ enum dp_tx_monitor_framework_mode {
 
 #ifndef WLAN_TX_PKT_CAPTURE_ENH_BE
 /**
- * dp_pdev_tx_capture_be - info to store tx capture information in pdev
+ * dp_pdev_tx_monitor_be - info to store tx capture information in pdev
+ * @be_ppdu_id: current ppdu id
  * @mode: tx monitor core framework current mode
+ * @stats: tx monitor drop stats for that mac
  *
- * This is a dummy structure
  */
-struct dp_pdev_tx_capture_be {
+struct dp_pdev_tx_monitor_be {
+	uint32_t be_ppdu_id;
 	uint32_t mode;
+	struct dp_tx_monitor_drop_stats stats;
 };
 
 /**
@@ -414,7 +478,7 @@ struct dp_txmon_frag_vec {
 };
 
 /**
- * dp_pdev_tx_capture_be - info to store tx capture information in pdev
+ * dp_pdev_tx_monitor_be - info to store tx capture information in pdev
  * @be_ppdu_id: current ppdu id
  * @be_end_reason_bitmap: current end reason bitmap
  * @mode: tx monitor current mode
@@ -425,7 +489,7 @@ struct dp_txmon_frag_vec {
  * @tx_ppdu_info_list: ppdu info list to hold ppdu
  * @defer_ppdu_info_list_depth: defer ppdu list depth counter
  * @defer_ppdu_info_list: defer ppdu info list to hold defer ppdu
- * @tx_stats: tx monitor drop stats for that mac
+ * @stats: tx monitor drop stats for that mac
  * @tx_prot_ppdu_info: tx monitor protection ppdu info
  * @tx_data_ppdu_info: tx monitor data ppdu info
  * @last_prot_ppdu_info: last tx monitor protection ppdu info
@@ -436,7 +500,7 @@ struct dp_txmon_frag_vec {
  * @cur_frag_q_idx: current index of frag buffer
  * @status_frag_queue: array of status frag queue to hold 64 status buffer
  */
-struct dp_pdev_tx_capture_be {
+struct dp_pdev_tx_monitor_be {
 	uint32_t be_ppdu_id;
 	uint32_t be_end_reason_bitmap;
 	uint32_t mode;
@@ -454,7 +518,7 @@ struct dp_pdev_tx_capture_be {
 
 	STAILQ_HEAD(, dp_tx_ppdu_info) defer_tx_ppdu_info_queue;
 
-	struct dp_tx_monitor_drop_stats tx_stats;
+	struct dp_tx_monitor_drop_stats stats;
 
 	struct dp_tx_ppdu_info *tx_prot_ppdu_info;
 	struct dp_tx_ppdu_info *tx_data_ppdu_info;
@@ -491,19 +555,23 @@ void dp_tx_mon_ppdu_info_free(struct dp_tx_ppdu_info *tx_ppdu_info);
  * dp_tx_mon_free_usr_mpduq() - API to free user mpduq
  * @tx_ppdu_info - pointer to tx_ppdu_info
  * @usr_idx - user index
+ * @tx_cap_be - pointer to tx capture be
  *
  * Return: void
  */
 void dp_tx_mon_free_usr_mpduq(struct dp_tx_ppdu_info *tx_ppdu_info,
-			      uint8_t usr_idx);
+			      uint8_t usr_idx,
+			      struct dp_pdev_tx_monitor_be *tx_mon_be);
 
 /*
  * dp_tx_mon_free_ppdu_info() - API to free dp_tx_ppdu_info
  * @tx_ppdu_info - pointer to tx_ppdu_info
+ * @tx_cap_be - pointer to tx capture be
  *
  * Return: void
  */
-void dp_tx_mon_free_ppdu_info(struct dp_tx_ppdu_info *tx_ppdu_info);
+void dp_tx_mon_free_ppdu_info(struct dp_tx_ppdu_info *tx_ppdu_info,
+			      struct dp_pdev_tx_monitor_be *tx_mon_be);
 
 /*
  * dp_tx_mon_get_ppdu_info() - API to allocate dp_tx_ppdu_info
@@ -537,21 +605,21 @@ void dp_tx_ppdu_stats_attach_2_0(struct dp_pdev *pdev);
 void dp_tx_ppdu_stats_detach_2_0(struct dp_pdev *pdev);
 
 /*
- * dp_print_pdev_tx_capture_stats_2_0: print tx capture stats
+ * dp_print_pdev_tx_monitor_stats_2_0: print tx capture stats
  * @pdev: DP PDEV handle
  *
  * return: void
  */
-void dp_print_pdev_tx_capture_stats_2_0(struct dp_pdev *pdev);
+void dp_print_pdev_tx_monitor_stats_2_0(struct dp_pdev *pdev);
 
 /*
- * dp_config_enh_tx_capture_be()- API to enable/disable enhanced tx capture
+ * dp_config_enh_tx_monitor_2_0()- API to enable/disable enhanced tx capture
  * @pdev_handle: DP_PDEV handle
  * @val: user provided value
  *
  * Return: QDF_STATUS
  */
-QDF_STATUS dp_config_enh_tx_capture_2_0(struct dp_pdev *pdev, uint8_t val);
+QDF_STATUS dp_config_enh_tx_monitor_2_0(struct dp_pdev *pdev, uint8_t val);
 
 /*
  * dp_peer_set_tx_capture_enabled_2_0() -  add tx monitor peer filter
@@ -570,13 +638,13 @@ QDF_STATUS dp_peer_set_tx_capture_enabled_2_0(struct dp_pdev *pdev_handle,
 
 #if (defined(WIFI_MONITOR_SUPPORT) && !defined(WLAN_TX_PKT_CAPTURE_ENH_BE))
 /*
- * dp_config_enh_tx_core_capture_2_0()- API to validate core framework
+ * dp_config_enh_tx_core_monitor_2_0()- API to validate core framework
  * @pdev_handle: DP_PDEV handle
  * @val: user provided value
  *
  * Return: QDF_STATUS
  */
-QDF_STATUS dp_config_enh_tx_core_capture_2_0(struct dp_pdev *pdev, uint8_t val);
+QDF_STATUS dp_config_enh_tx_core_monitor_2_0(struct dp_pdev *pdev, uint8_t val);
 #endif
 
 #endif /* _DP_TX_MON_2_0_H_ */

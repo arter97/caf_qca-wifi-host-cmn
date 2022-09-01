@@ -546,6 +546,12 @@ wlan_create_elemsubelem_fragseq(bool inline_frag,
 	 /* The lead bytes that occur before the payload */
 	qdf_size_t prepayload_leadbytes;
 
+	 /* used for inline copy, the extra bytes needed in the payload buffer
+	  * due to difference in destination and source.
+	  * Note that the caller should ensure there is enough bytes beyond
+	  * valid data untill payloadbuff_maxsize*/
+	qdf_size_t payloadbuff_shiftsize;
+
 	/* Miscellaneous variables */
 	uint8_t *src;
 	uint8_t *dst;
@@ -690,6 +696,12 @@ wlan_create_elemsubelem_fragseq(bool inline_frag,
 
 		bytes_to_transfer = smallerfrag_size;
 
+		/* Account for increased size due to shift in data */
+		if (inline_frag && (dst > src))
+			payloadbuff_shiftsize = (dst - src);
+		else
+			payloadbuff_shiftsize = 0;
+
 		/* In the case of inline fragmentation, if the payload buffer
 		 * has additional contents beyond the payload, include those
 		 * contents in the move/copy.
@@ -698,7 +710,8 @@ wlan_create_elemsubelem_fragseq(bool inline_frag,
 		    (payloadbuff_maxsize > (prepayload_leadbytes + payloadlen)))
 			bytes_to_transfer += (payloadbuff_maxsize -
 					      prepayload_leadbytes -
-					      payloadlen);
+					      payloadlen -
+					      payloadbuff_shiftsize);
 
 		if (inline_frag)
 			qdf_mem_move(dst, src, bytes_to_transfer);
@@ -748,6 +761,12 @@ wlan_create_elemsubelem_fragseq(bool inline_frag,
 
 		bytes_to_transfer = elemunit_maxpayloadlen;
 
+		/* Account for increased size due to shift in data */
+		if (inline_frag && (dst > src))
+			payloadbuff_shiftsize = (dst - src);
+		else
+			payloadbuff_shiftsize = 0;
+
 		/* In the case of inline fragmentation, if this is the last
 		 * non-lead max-sized fragment (i.e. at the highest memory
 		 * location), if the payload buffer has additional contents
@@ -763,7 +782,8 @@ wlan_create_elemsubelem_fragseq(bool inline_frag,
 			!smallerfrag_size)
 			bytes_to_transfer += (payloadbuff_maxsize -
 					      prepayload_leadbytes -
-					      payloadlen);
+					      payloadlen -
+					      payloadbuff_shiftsize);
 
 		if (inline_frag)
 			qdf_mem_move(dst, src, bytes_to_transfer);
@@ -848,43 +868,43 @@ wlan_get_elemsubelem_successorfrag(bool is_subelem,
 				     &elemunit_len_pos,
 				     NULL);
 	if (QDF_IS_STATUS_ERROR(ret)) {
-		qdf_rl_nofl_err("Investigate error %d when trying to get element unit info",
+		qdf_rl_nofl_err("Get elem unit info: Error %d",
 				ret);
 		return QDF_STATUS_E_FAILURE;
 	}
 
 	if (!curr_elemunit_ptr) {
-		qdf_nofl_err("Pointer to current element unit is NULL");
+		qdf_nofl_err("Ptr to curr elem unit is NULL");
 		return QDF_STATUS_E_NULL_VALUE;
 	}
 
 	if (!buff) {
-		qdf_nofl_err("Buffer for element units is NULL");
+		qdf_nofl_err("Elem unit buff is NULL");
 		return QDF_STATUS_E_NULL_VALUE;
 	}
 
 	if (buff_maxsize == 0) {
-		qdf_nofl_err("Max size of buffer for element units is 0");
+		qdf_nofl_err("Max size of elem unit buff is 0");
 		return QDF_STATUS_E_INVAL;
 	}
 
 	if (!successorfrag) {
-		qdf_nofl_err("Pointer to pointer to successor fragment is NULL");
+		qdf_nofl_err("Double ptr to successor frag is NULL");
 		return QDF_STATUS_E_NULL_VALUE;
 	}
 
 	if (!successorfrag_totallen) {
-		qdf_nofl_err("Pointer to successor fragment's total length is NULL");
+		qdf_nofl_err("Ptr to successor frag total len is NULL");
 		return QDF_STATUS_E_NULL_VALUE;
 	}
 
 	if (!successorfrag_payloadlen) {
-		qdf_nofl_err("Pointer to successor fragment's payload length is NULL");
+		qdf_nofl_err("Ptr to successor frag payload len is NULL");
 		return QDF_STATUS_E_NULL_VALUE;
 	}
 
 	if ((buff + buff_maxsize) < (curr_elemunit_ptr + elemunit_hdrlen)) {
-		qdf_rl_nofl_err("Space %zu octets after current element unit offset %zu in buffer for element units is lesser than header size of element unit %zu octets",
+		qdf_rl_nofl_err("(Space %zu after curr elem unit offset %zu in elem unit buff) < (header size of elem unit %zu)",
 				buff_maxsize - (curr_elemunit_ptr - buff),
 				curr_elemunit_ptr - buff,
 				elemunit_hdrlen);
@@ -896,7 +916,7 @@ wlan_get_elemsubelem_successorfrag(bool is_subelem,
 
 	if ((buff + buff_maxsize) <
 		(curr_elemunit_ptr + curr_elemunit_totallen)) {
-		qdf_rl_nofl_err("Space %zu octets after current element unit offset %zu in buffer for element units is lesser than indicated total length of element unit %zu octets",
+		qdf_rl_nofl_err("(Space %zu after curr elem unit offset %zu in elem unit buff) < (indicated total len of elem unit %zu)",
 				buff_maxsize - (curr_elemunit_ptr - buff),
 				curr_elemunit_ptr - buff,
 				curr_elemunit_totallen);
@@ -915,7 +935,7 @@ wlan_get_elemsubelem_successorfrag(bool is_subelem,
 	next_elemunit_ptr = curr_elemunit_ptr + curr_elemunit_totallen;
 
 	if ((buff + buff_maxsize) < (next_elemunit_ptr + elemunit_hdrlen)) {
-		qdf_rl_nofl_err("Space %zu octets after next element unit offset %zu in buffer for element units is lesser than header size of element unit %zu octets",
+		qdf_rl_nofl_err("(Space %zu after next elem unit offset %zu in elem unit buff) < (header size of elem unit %zu)",
 				buff_maxsize - (next_elemunit_ptr - buff),
 				next_elemunit_ptr - buff,
 				elemunit_hdrlen);
@@ -927,7 +947,7 @@ wlan_get_elemsubelem_successorfrag(bool is_subelem,
 
 	if ((buff + buff_maxsize) <
 		(next_elemunit_ptr + next_elemunit_totallen)) {
-		qdf_rl_nofl_err("Space %zu octets after next element unit offset %zu in buffer for element units is lesser than indicated total length of element unit %zu octets",
+		qdf_rl_nofl_err("(Space %zu after next elem unit offset %zu in elem unit buff) < (indicated total len of elem unit %zu)",
 				buff_maxsize - (next_elemunit_ptr - buff),
 				next_elemunit_ptr - buff,
 				next_elemunit_totallen);
@@ -943,14 +963,14 @@ wlan_get_elemsubelem_successorfrag(bool is_subelem,
 	 * current element unit is lesser than the max.
 	 */
 	if (curr_elemunit_ptr[elemunit_len_pos] != elemunit_maxpayloadlen) {
-		qdf_rl_nofl_err("Potential successor fragment found though length %u octets of payload of current element unit is not equal to max payload length %zu",
+		qdf_rl_nofl_err("Potential successor frag found though (len %u of payload of curr elem unit) != (max payload len %zu)",
 				curr_elemunit_ptr[elemunit_len_pos],
 				elemunit_maxpayloadlen);
 		return QDF_STATUS_E_PROTO;
 	}
 
 	if (next_elemunit_ptr[elemunit_len_pos] == 0) {
-		qdf_rl_nofl_err("Potential successor fragment's length is 0");
+		qdf_rl_nofl_err("Potential successor frag len is 0");
 		return QDF_STATUS_E_PROTO;
 	}
 
@@ -1009,33 +1029,33 @@ wlan_get_elemsubelem_fragseq_info(bool is_subelem,
 				     &elemunit_len_pos,
 				     NULL);
 	if (QDF_IS_STATUS_ERROR(ret)) {
-		qdf_rl_nofl_err("Investigate error %d when trying to get element unit info",
+		qdf_rl_nofl_err("Get elem unit info: Error %d",
 				ret);
 		return QDF_STATUS_E_FAILURE;
 	}
 
 	if (!buff) {
-		qdf_nofl_err("Buffer for element units is NULL");
+		qdf_nofl_err("Elem unit buff is NULL");
 		return QDF_STATUS_E_NULL_VALUE;
 	}
 
 	if (buff_maxsize == 0) {
-		qdf_nofl_err("Max size of buffer for element units is 0");
+		qdf_nofl_err("Max size of elem unit buff is 0");
 		return QDF_STATUS_E_INVAL;
 	}
 
 	if (!is_fragseq) {
-		qdf_nofl_err("Pointer to location for status of fragment sequence presence is NULL");
+		qdf_nofl_err("Ptr to status of frag seq presence is NULL");
 		return QDF_STATUS_E_NULL_VALUE;
 	}
 
 	if (!fragseq_totallen) {
-		qdf_nofl_err("Pointer to location for total length of fragment sequence is NULL");
+		qdf_nofl_err("Ptr to total len of frag seq is NULL");
 		return QDF_STATUS_E_NULL_VALUE;
 	}
 
 	if (!fragseq_payloadlen) {
-		qdf_nofl_err("Pointer to location of payload length of fragment sequence is NULL");
+		qdf_nofl_err("Ptr to payload len of frag seq is NULL");
 		return QDF_STATUS_E_NULL_VALUE;
 	}
 
@@ -1044,7 +1064,7 @@ wlan_get_elemsubelem_fragseq_info(bool is_subelem,
 	fragseq_currpayloadlen = 0;
 
 	if ((buff + buff_maxsize) < (curr_elemunit_ptr + elemunit_hdrlen)) {
-		qdf_rl_nofl_err("Space %zu octets after current element unit offset %zu in buffer for element units is lesser than header size of element unit %zu octets",
+		qdf_rl_nofl_err("(Space %zu after curr elem unit offset %zu in elem unit buff) < (header size of elem unit %zu)",
 				buff_maxsize - (curr_elemunit_ptr - buff),
 				curr_elemunit_ptr - buff,
 				elemunit_hdrlen);
@@ -1056,7 +1076,7 @@ wlan_get_elemsubelem_fragseq_info(bool is_subelem,
 
 	if ((buff + buff_maxsize) <
 		(curr_elemunit_ptr + curr_elemunit_totallen)) {
-		qdf_rl_nofl_err("Space %zu octets after current element unit offset %zu in buffer for element units is lesser than indicated total length of element unit %zu octets",
+		qdf_rl_nofl_err("(Space %zu after curr elem unit offset %zu in elem unit buff) < (indicated total len of elem unit %zu)",
 				buff_maxsize - (curr_elemunit_ptr - buff),
 				curr_elemunit_ptr - buff,
 				curr_elemunit_totallen);
@@ -1177,35 +1197,35 @@ static QDF_STATUS wlan_defrag_elemsubelem_fragseq(bool inline_defrag,
 				     &elemunit_len_pos,
 				     &elemunit_idext_pos);
 	if (QDF_IS_STATUS_ERROR(ret)) {
-		qdf_rl_nofl_err("Investigate error %d when trying to get element unit info",
+		qdf_rl_nofl_err("Get elem unit info: Error %d",
 				ret);
 		return QDF_STATUS_E_FAILURE;
 	}
 
 	if (!fragbuff) {
-		qdf_nofl_err("Source buffer for fragment sequence is NULL");
+		qdf_nofl_err("Src buff for frag seq is NULL");
 		return QDF_STATUS_E_NULL_VALUE;
 	}
 
 	if (fragbuff_maxsize == 0) {
-		qdf_nofl_err("Size of source buffer for fragment sequence is 0");
+		qdf_nofl_err("Size of src buff for frag seq is 0");
 		return QDF_STATUS_E_INVAL;
 	}
 
 	if (!inline_defrag) {
 		if (!defragbuff) {
-			qdf_nofl_err("Destination buffer for defragmented payload is NULL");
+			qdf_nofl_err("Dest buff for defragged payload is NULL");
 			return QDF_STATUS_E_NULL_VALUE;
 		}
 
 		if (defragbuff_maxsize == 0) {
-			qdf_nofl_err("Size of destination buffer for defragmented payload is 0");
+			qdf_nofl_err("Size of dest buff for defragged payload is 0");
 			return QDF_STATUS_E_INVAL;
 		}
 	}
 
 	if (!defragpayload_len) {
-		qdf_nofl_err("Pointer to location for length of defragmented payload is NULL");
+		qdf_nofl_err("Ptr to len of defragged payload is NULL");
 		return QDF_STATUS_E_NULL_VALUE;
 	}
 
@@ -1223,7 +1243,7 @@ static QDF_STATUS wlan_defrag_elemsubelem_fragseq(bool inline_defrag,
 		/* We treat this as an error since the caller is supposed to
 		 * check this.
 		 */
-		qdf_rl_nofl_err("Fragment sequence not found at start of source buffer for fragment sequence");
+		qdf_rl_nofl_err("Frag seq not found at start of src buff for frag seq");
 		return QDF_STATUS_E_INVAL;
 	}
 
@@ -1234,7 +1254,7 @@ static QDF_STATUS wlan_defrag_elemsubelem_fragseq(bool inline_defrag,
 	 */
 
 	if (!inline_defrag && (defragbuff_maxsize < fragseq_payloadlen)) {
-		qdf_rl_nofl_err("Size of destination buffer for defragmented payload %zu octets is smaller than the size of fragment sequence payload %zu octets",
+		qdf_rl_nofl_err("(Size of dest buff for defragged payload %zu) < (size of frag seq payload %zu)",
 				defragbuff_maxsize, fragseq_payloadlen);
 		return QDF_STATUS_E_INVAL;
 	}

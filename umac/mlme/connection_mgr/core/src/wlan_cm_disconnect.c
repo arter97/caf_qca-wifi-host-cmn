@@ -539,13 +539,6 @@ QDF_STATUS cm_notify_disconnect_complete(struct cnx_mgr *cm_ctx,
 	cm_if_mgr_inform_disconnect_complete(cm_ctx->vdev);
 	cm_inform_dlm_disconnect_complete(cm_ctx->vdev, resp);
 
-	/* Clear MLO cap only when it is the last disconnect req
-	 * as osif would not have informed userspace for other disconnect
-	 * req because of cm_id mismatch
-	 */
-	if (cm_ctx->disconnect_count == 1)
-		cm_clear_vdev_mlo_cap(cm_ctx->vdev);
-
 	return QDF_STATUS_SUCCESS;
 }
 
@@ -578,8 +571,11 @@ QDF_STATUS cm_disconnect_complete(struct cnx_mgr *cm_ctx,
 		cm_flush_pending_request(cm_ctx, CONNECT_REQ_PREFIX, true);
 
 	/* Set the disconnect wait event once all disconnect are completed */
-	if (!cm_ctx->disconnect_count)
+	if (!cm_ctx->disconnect_count) {
+		/* Clear MLO cap only when it is the last disconnect req */
+		cm_clear_vdev_mlo_cap(cm_ctx->vdev);
 		qdf_event_set(&cm_ctx->disconnect_complete);
+	}
 
 	return QDF_STATUS_SUCCESS;
 }
@@ -636,7 +632,7 @@ cm_handle_discon_req_in_non_connected_state(struct cnx_mgr *cm_ctx,
 		if (cm_roam_offload_enabled(wlan_vdev_get_psoc(cm_ctx->vdev)))
 			cm_flush_pending_request(cm_ctx, ROAM_REQ_PREFIX,
 						 false);
-		/* fallthrough */
+		fallthrough;
 	case WLAN_CM_SS_JOIN_ACTIVE:
 		/*
 		 * In join active/roaming state, there would be no pending
@@ -649,7 +645,7 @@ cm_handle_discon_req_in_non_connected_state(struct cnx_mgr *cm_ctx,
 		/* In the scan state abort the ongoing scan */
 		cm_vdev_scan_cancel(wlan_vdev_get_pdev(cm_ctx->vdev),
 				    cm_ctx->vdev);
-		/* fallthrough */
+		fallthrough;
 	case WLAN_CM_SS_JOIN_PENDING:
 		/*
 		 * There would be pending disconnect requests in the list, and

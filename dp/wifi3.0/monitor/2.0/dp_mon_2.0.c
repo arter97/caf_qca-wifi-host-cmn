@@ -33,15 +33,6 @@
 #include "dp_lite_mon.h"
 #endif
 
-/* 40MHZ BW 2 20MHZ sub bands */
-#define SUB40BW 2
-/* 80MHZ BW 4 20MHZ sub bands */
-#define SUB80BW 4
-/* 160MHZ BW 8 20MHZ sub bands */
-#define SUB160BW 8
-/* 320MHZ BW 16 20MHZ sub bands */
-#define SUB320BW 16
-
 #if !defined(DISABLE_MON_CONFIG)
 
 /**
@@ -203,7 +194,8 @@ dp_mon_frag_alloc_and_map(struct dp_soc *dp_soc,
 {
 	QDF_STATUS ret = QDF_STATUS_E_FAILURE;
 
-	mon_desc->buf_addr = qdf_frag_alloc(mon_desc_pool->buf_size);
+	mon_desc->buf_addr = qdf_frag_alloc(&mon_desc_pool->pf_cache,
+					    mon_desc_pool->buf_size);
 
 	if (!mon_desc->buf_addr) {
 		dp_mon_err("Frag alloc failed");
@@ -231,7 +223,8 @@ dp_mon_buffers_replenish(struct dp_soc *dp_soc,
 			 struct dp_mon_desc_pool *mon_desc_pool,
 			 uint32_t num_req_buffers,
 			 union dp_mon_desc_list_elem_t **desc_list,
-			 union dp_mon_desc_list_elem_t **tail)
+			 union dp_mon_desc_list_elem_t **tail,
+			 uint32_t *replenish_cnt_ref)
 {
 	uint32_t num_alloc_desc;
 	uint16_t num_desc_to_free = 0;
@@ -329,6 +322,8 @@ dp_mon_buffers_replenish(struct dp_soc *dp_soc,
 	}
 
 	hal_srng_access_end(dp_soc->hal_soc, mon_srng);
+	if (replenish_cnt_ref)
+		*replenish_cnt_ref += count;
 
 free_desc:
 	/*
@@ -820,7 +815,8 @@ QDF_STATUS dp_tx_mon_refill_buf_ring_2_0(struct dp_intr *int_ctx)
 	if (num_entries_avail)
 		dp_mon_buffers_replenish(soc, tx_mon_buf_ring,
 					 &mon_soc_be->tx_desc_mon,
-					 num_entries_avail, &desc_list, &tail);
+					 num_entries_avail, &desc_list, &tail,
+					 NULL);
 
 	return QDF_STATUS_SUCCESS;
 }
@@ -852,7 +848,8 @@ QDF_STATUS dp_rx_mon_refill_buf_ring_2_0(struct dp_intr *int_ctx)
 	if (num_entries_avail)
 		dp_mon_buffers_replenish(soc, rx_mon_buf_ring,
 					 &mon_soc_be->rx_desc_mon,
-					 num_entries_avail, &desc_list, &tail);
+					 num_entries_avail, &desc_list, &tail,
+					 NULL);
 
 	return QDF_STATUS_SUCCESS;
 }
@@ -1230,140 +1227,6 @@ QDF_STATUS dp_vdev_set_monitor_mode_rings_2_0(struct dp_pdev *pdev,
 }
 #endif
 
-#ifdef QCA_RSSI_DB2DBM
-/*
- * dp_mon_compute_min_nf() - calculate the min nf value in the
- *			active chains 20MHZ subbands.
- * computation: Need to calculate nfInDbm[][] to A_MIN(nfHwDbm[][])
- *		considering row index as active chains and column
- *		index as 20MHZ subbands per chain.
- * example: chain_mask = 0x07 (consider 3 active chains 0,1,2 index)
- *	    BandWidth = 40MHZ (40MHZ includes two 20MHZ subbands so need to
- *			consider 0,1 index calculate min_nf value)
- *
- *@conv_params: cdp_rssi_dbm_conv_param_dp structure value
- *@chain_idx: active chain index in nfHwdbm array
- *
- * Return: QDF_STATUS_SUCCESS if value set successfully
- *	   QDF_STATUS_E_INVAL false if error
- */
-static QDF_STATUS
-dp_mon_compute_min_nf(struct cdp_rssi_dbm_conv_param_dp *conv_params,
-		      int8_t *min_nf, int chain_idx)
-{
-	int j;
-	*min_nf = conv_params->nf_hw_dbm[chain_idx][0];
-
-	switch (conv_params->curr_bw) {
-	case CHAN_WIDTH_20:
-	case CHAN_WIDTH_5:
-	case CHAN_WIDTH_10:
-		break;
-	case CHAN_WIDTH_40:
-		for (j = 1; j < SUB40BW; j++) {
-			if (conv_params->nf_hw_dbm[chain_idx][j] < *min_nf)
-				*min_nf = conv_params->nf_hw_dbm[chain_idx][j];
-		}
-		break;
-	case CHAN_WIDTH_80:
-		for (j = 1; j < SUB80BW; j++) {
-			if (conv_params->nf_hw_dbm[chain_idx][j] < *min_nf)
-				*min_nf = conv_params->nf_hw_dbm[chain_idx][j];
-		}
-		break;
-	case CHAN_WIDTH_160:
-	case CHAN_WIDTH_80P80:
-	case CHAN_WIDTH_165:
-		for (j = 1; j < SUB160BW; j++) {
-			if (conv_params->nf_hw_dbm[chain_idx][j] < *min_nf)
-				*min_nf = conv_params->nf_hw_dbm[chain_idx][j];
-		}
-		break;
-	case CHAN_WIDTH_160P160:
-	case CHAN_WIDTH_320:
-		for (j = 1; j < SUB320BW; j++) {
-			if (conv_params->nf_hw_dbm[chain_idx][j] < *min_nf)
-				*min_nf = conv_params->nf_hw_dbm[chain_idx][j];
-		}
-		break;
-	default:
-		dp_cdp_err("Invalid bandwidth %u", conv_params->curr_bw);
-		return QDF_STATUS_E_INVAL;
-	}
-	return QDF_STATUS_SUCCESS;
-}
-
-/*
- * dp_mon_pdev_params_rssi_dbm_conv() --> to set rssi in dbm converstion
- *					params into monitor pdev.
- *@cdp_soc: dp soc handle.
- *@params: cdp_rssi_db2dbm_param_dp structure value.
- *
- * Return: QDF_STATUS_SUCCESS if value set successfully
- *         QDF_STATUS_E_INVAL false if error
- */
-static QDF_STATUS
-dp_mon_pdev_params_rssi_dbm_conv(struct cdp_soc_t *cdp_soc,
-				 struct cdp_rssi_db2dbm_param_dp *params)
-{
-	struct cdp_rssi_db2dbm_param_dp *dp_rssi_params = params;
-	uint8_t pdev_id = params->pdev_id;
-	struct dp_soc *soc = (struct dp_soc *)cdp_soc;
-	struct dp_pdev *pdev =
-		dp_get_pdev_from_soc_pdev_id_wifi3(soc, pdev_id);
-	struct dp_mon_pdev *mon_pdev;
-	struct dp_mon_pdev_be *mon_pdev_be;
-	struct cdp_rssi_temp_off_param_dp temp_off_param;
-	struct cdp_rssi_dbm_conv_param_dp conv_params;
-	int8_t min_nf = 0;
-	int i;
-
-	if (!soc->features.rssi_dbm_conv_support) {
-		dp_cdp_err("rssi dbm converstion support is false");
-		return QDF_STATUS_E_INVAL;
-	}
-	if (!pdev || !pdev->monitor_pdev) {
-		dp_cdp_err("Invalid pdev_id %u", pdev_id);
-		return QDF_STATUS_E_FAILURE;
-	}
-
-	mon_pdev = pdev->monitor_pdev;
-	mon_pdev_be = dp_get_be_mon_pdev_from_dp_mon_pdev(mon_pdev);
-
-	if (dp_rssi_params->rssi_temp_off_present) {
-		temp_off_param = dp_rssi_params->temp_off_param;
-		mon_pdev_be->rssi_temp_offset = temp_off_param.rssi_temp_offset;
-	}
-	if (dp_rssi_params->rssi_dbm_info_present) {
-		conv_params = dp_rssi_params->rssi_dbm_param;
-		for (i = 0; i < CDP_MAX_NUM_ANTENNA; i++) {
-			if (conv_params.curr_rx_chainmask & (0x01 << i)) {
-				if (QDF_STATUS_E_INVAL == dp_mon_compute_min_nf
-						(&conv_params, &min_nf, i))
-					return QDF_STATUS_E_INVAL;
-			} else {
-				continue;
-			}
-		}
-		mon_pdev_be->xlna_bypass_offset =
-			conv_params.xlna_bypass_offset;
-		mon_pdev_be->xlna_bypass_threshold =
-			conv_params.xlna_bypass_threshold;
-		mon_pdev_be->xbar_config = conv_params.xbar_config;
-
-		mon_pdev_be->min_nf_dbm = min_nf;
-	}
-	return QDF_STATUS_SUCCESS;
-}
-#else
-static inline QDF_STATUS
-dp_mon_pdev_params_rssi_dbm_conv(struct cdp_soc_t *cdp_soc,
-				 struct cdp_rssi_db2dbm_param_dp *params)
-{
-	return 0;
-}
-#endif
-
 #if defined(WDI_EVENT_ENABLE) &&\
 	(defined(QCA_ENHANCED_STATS_SUPPORT) || !defined(REMOVE_PKT_LOG))
 static inline
@@ -1415,11 +1278,9 @@ dp_mon_register_feature_ops_2_0(struct dp_soc *soc)
 	mon_ops->mon_htt_ppdu_stats_detach = dp_htt_ppdu_stats_detach;
 	mon_ops->mon_print_pdev_rx_mon_stats = dp_print_pdev_rx_mon_stats;
 	mon_ops->mon_set_bsscolor = dp_mon_set_bsscolor;
-	mon_ops->mon_pdev_get_filter_ucast_data =
-				dp_pdev_get_filter_ucast_data;
-	mon_ops->mon_pdev_get_filter_mcast_data =
-				dp_pdev_get_filter_mcast_data;
-	mon_ops->mon_pdev_get_filter_non_data = dp_pdev_get_filter_non_data;
+	mon_ops->mon_pdev_get_filter_ucast_data = NULL;
+	mon_ops->mon_pdev_get_filter_mcast_data = NULL;
+	mon_ops->mon_pdev_get_filter_non_data = NULL;
 	mon_ops->mon_neighbour_peer_add_ast = NULL;
 #ifndef DISABLE_MON_CONFIG
 	mon_ops->mon_tx_process = dp_tx_mon_process_2_0;
@@ -1429,8 +1290,8 @@ dp_mon_register_feature_ops_2_0(struct dp_soc *soc)
 	mon_ops->mon_tx_capture_debugfs_init = NULL;
 	mon_ops->mon_tx_add_to_comp_queue = NULL;
 	mon_ops->mon_print_pdev_tx_capture_stats =
-					dp_print_pdev_tx_capture_stats_2_0;
-	mon_ops->mon_config_enh_tx_capture = dp_config_enh_tx_capture_2_0;
+					dp_print_pdev_tx_monitor_stats_2_0;
+	mon_ops->mon_config_enh_tx_capture = dp_config_enh_tx_monitor_2_0;
 	mon_ops->mon_tx_peer_filter = dp_peer_set_tx_capture_enabled_2_0;
 #endif
 #if (defined(WIFI_MONITOR_SUPPORT) && !defined(WLAN_TX_PKT_CAPTURE_ENH_BE))
@@ -1438,7 +1299,7 @@ dp_mon_register_feature_ops_2_0(struct dp_soc *soc)
 	mon_ops->mon_tx_capture_debugfs_init = NULL;
 	mon_ops->mon_tx_add_to_comp_queue = NULL;
 	mon_ops->mon_print_pdev_tx_capture_stats = NULL;
-	mon_ops->mon_config_enh_tx_capture = dp_config_enh_tx_core_capture_2_0;
+	mon_ops->mon_config_enh_tx_capture = dp_config_enh_tx_core_monitor_2_0;
 	mon_ops->mon_tx_peer_filter = NULL;
 #endif
 #ifdef WLAN_RX_PKT_CAPTURE_ENH
@@ -1448,19 +1309,17 @@ dp_mon_register_feature_ops_2_0(struct dp_soc *soc)
 	mon_ops->mon_set_bpr_enable = dp_set_bpr_enable_2_0;
 #endif
 #ifdef ATH_SUPPORT_NAC
-	mon_ops->mon_set_filter_neigh_peers = dp_set_filter_neigh_peers;
+	mon_ops->mon_set_filter_neigh_peers = NULL;
 #endif
 #ifdef WLAN_ATF_ENABLE
 	mon_ops->mon_set_atf_stats_enable = dp_set_atf_stats_enable;
 #endif
 #ifdef FEATURE_NAC_RSSI
-	mon_ops->mon_filter_neighbour_peer = dp_filter_neighbour_peer;
+	mon_ops->mon_filter_neighbour_peer = NULL;
 #endif
 #ifdef QCA_MCOPY_SUPPORT
-	mon_ops->mon_filter_setup_mcopy_mode =
-				dp_mon_filter_setup_mcopy_mode_2_0;
-	mon_ops->mon_filter_reset_mcopy_mode =
-				dp_mon_filter_reset_mcopy_mode_2_0;
+	mon_ops->mon_filter_setup_mcopy_mode = NULL;
+	mon_ops->mon_filter_reset_mcopy_mode = NULL;
 	mon_ops->mon_mcopy_check_deliver = NULL;
 #endif
 #ifdef QCA_ENHANCED_STATS_SUPPORT
@@ -1481,8 +1340,7 @@ dp_mon_register_feature_ops_2_0(struct dp_soc *soc)
 #endif
 #endif
 #ifdef WLAN_RX_PKT_CAPTURE_ENH
-	mon_ops->mon_filter_setup_rx_enh_capture =
-				dp_mon_filter_setup_rx_enh_capture_2_0;
+	mon_ops->mon_filter_setup_rx_enh_capture = NULL;
 #endif
 #ifdef WDI_EVENT_ENABLE
 	mon_ops->mon_set_pktlog_wifi3 = dp_set_pktlog_wifi3;
@@ -1511,7 +1369,7 @@ dp_mon_register_feature_ops_2_0(struct dp_soc *soc)
 	mon_ops->rx_mon_enable = dp_rx_mon_enable_set;
 	mon_ops->rx_wmask_subscribe = dp_rx_mon_word_mask_subscribe;
 	mon_ops->rx_enable_mpdu_logging = dp_rx_mon_enable_mpdu_logging;
-	mon_ops->mon_neighbour_peers_detach = dp_neighbour_peers_detach;
+	mon_ops->mon_neighbour_peers_detach = NULL;
 	mon_ops->mon_vdev_set_monitor_mode_buf_rings =
 				dp_vdev_set_monitor_mode_buf_rings_2_0;
 	mon_ops->mon_vdev_set_monitor_mode_rings =
@@ -1530,8 +1388,7 @@ dp_mon_register_feature_ops_2_0(struct dp_soc *soc)
 	mon_ops->mon_filter_reset_undecoded_metadata_capture =
 		dp_mon_filter_reset_undecoded_metadata_capture_2_0;
 #endif
-	mon_ops->mon_rx_stats_update_rssi_dbm_params =
-		dp_mon_rx_stats_update_rssi_dbm_params_2_0;
+	mon_ops->rx_enable_fpmo = dp_rx_mon_enable_fpmo;
 }
 
 struct dp_mon_ops monitor_ops_2_0 = {
@@ -1625,7 +1482,7 @@ struct dp_mon_ops monitor_ops_2_0 = {
 struct cdp_mon_ops dp_ops_mon_2_0 = {
 	.txrx_reset_monitor_mode = dp_reset_monitor_mode,
 	/* Added support for HK advance filter */
-	.txrx_set_advance_monitor_filter = dp_pdev_set_advance_monitor_filter,
+	.txrx_set_advance_monitor_filter = NULL,
 	.txrx_deliver_tx_mgmt = dp_deliver_tx_mgmt,
 	.config_full_mon_mode = NULL,
 	.soc_config_full_mon_mode = NULL,
@@ -1690,4 +1547,28 @@ void dp_mon_cdp_ops_register_2_0(struct cdp_ops *ops)
 {
 	ops->mon_ops = &dp_ops_mon_2_0;
 }
+#endif
+
+#if defined(WLAN_SUPPORT_RX_PROTOCOL_TYPE_TAG) ||\
+	defined(WLAN_SUPPORT_RX_FLOW_TAG)
+#if QCA_TEST_MON_PF_TAGS_STATS
+/** dp_mon_rx_update_rx_protocol_tag_stats() - Update mon protocols's
+ *					      statistics
+ * @pdev: pdev handle
+ * @protocol_index: Protocol index for which the stats should be incremented
+ * @ring_index: REO ring number from which this tag was received.
+ *
+ * Return: void
+ */
+void dp_mon_rx_update_rx_protocol_tag_stats(struct dp_pdev *pdev,
+					    uint16_t protocol_index)
+{
+	pdev->mon_proto_tag_stats[protocol_index].tag_ctr++;
+}
+#else
+void dp_mon_rx_update_rx_protocol_tag_stats(struct dp_pdev *pdev,
+					    uint16_t protocol_index)
+{
+}
+#endif
 #endif

@@ -103,6 +103,10 @@
 #include <wlan_twt_public_structs.h>
 #endif
 
+#ifdef WLAN_FEATURE_DBAM_CONFIG
+#include "wlan_coex_public_structs.h"
+#endif
+
 #define WMI_UNIFIED_MAX_EVENT 0x100
 
 #ifdef WMI_EXT_DBG
@@ -1796,6 +1800,15 @@ QDF_STATUS
 (*send_coex_config_cmd)(wmi_unified_t wmi_handle,
 			struct coex_config_params *param);
 
+#ifdef WLAN_FEATURE_DBAM_CONFIG
+QDF_STATUS
+(*send_dbam_config_cmd)(wmi_unified_t wmi_handle,
+			struct coex_dbam_config_params *param);
+QDF_STATUS
+(*extract_dbam_config_resp_event)(wmi_unified_t wmi_handle, void *evt_buf,
+				  struct coex_dbam_config_resp *resp);
+#endif
+
 #ifdef OL_ATH_SMART_LOGGING
 QDF_STATUS
 (*send_smart_logging_enable_cmd)(wmi_unified_t wmi_handle, uint32_t param);
@@ -1885,6 +1898,10 @@ QDF_STATUS (*extract_mgmt_rx_params)(wmi_unified_t wmi_handle, void *evt_buf,
 QDF_STATUS (*extract_frame_pn_params)(wmi_unified_t wmi_handle, void *evt_buf,
 				      struct frame_pn_params *pn_params);
 
+QDF_STATUS (*extract_is_conn_ap_frame)(wmi_unified_t wmi_handle,
+				       void *evt_buf,
+				       struct frm_conn_ap *is_conn_ap);
+
 QDF_STATUS (*extract_vdev_stopped_param)(wmi_unified_t wmi_handle,
 		void *evt_buf, uint32_t *vdev_id);
 
@@ -1933,7 +1950,7 @@ QDF_STATUS (*extract_pdev_csa_switch_count_status)(wmi_unified_t wmi_handle,
 		void *evt_buf, struct pdev_csa_switch_count_status *param);
 
 QDF_STATUS (*extract_swba_num_vdevs)(wmi_unified_t wmi_handle, void *evt_buf,
-	uint32_t *num_vdevs);
+	uint32_t *num_vdevs, uint32_t *num_quiet_triggered_vdevs);
 
 #ifdef CONVERGED_P2P_ENABLE
 #ifdef FEATURE_P2P_LISTEN_OFFLOAD
@@ -2735,6 +2752,13 @@ QDF_STATUS (*extract_pasn_peer_delete_req_event)
 			(wmi_unified_t wmi_handle,
 			 void *evt_buf,
 			 struct wifi_pos_pasn_peer_data *dst);
+
+QDF_STATUS (*send_rtt_pasn_auth_status_cmd)
+			(wmi_unified_t wmi_handle,
+			 struct wlan_pasn_auth_status *data);
+
+QDF_STATUS (*send_rtt_pasn_deauth_cmd)(wmi_unified_t wmi_handle,
+				       struct qdf_mac_addr *peer_mac);
 #endif
 
 QDF_STATUS (*extract_hw_mode_resp_event)(wmi_unified_t wmi_handle,
@@ -2832,9 +2856,18 @@ QDF_STATUS (*send_injector_config_cmd)(wmi_unified_t wmi_handle,
 QDF_STATUS (*send_cp_stats_cmd)(wmi_unified_t wmi_handle,
 				void *buf_ptr, uint32_t buf_len);
 
+QDF_STATUS (*send_halphy_stats_cmd)(wmi_unified_t wmi_handle,
+				    void *buf_ptr, uint32_t buf_len);
+
 QDF_STATUS (*extract_cp_stats_more_pending)(wmi_unified_t wmi_handle,
 					    void *evt_buf,
 					    uint32_t *more_flag);
+QDF_STATUS (*extract_halphy_stats_end_of_event)(wmi_unified_t wmi_handle,
+						void *evt_buf,
+						uint32_t *end_of_event_flag);
+QDF_STATUS (*extract_halphy_stats_event_count)(wmi_unified_t wmi_handle,
+					       void *evt_buf,
+					       uint32_t *event_count_flag);
 #ifdef WLAN_SUPPORT_INFRA_CTRL_PATH_STATS
 QDF_STATUS
 (*extract_infra_cp_stats)(wmi_unified_t wmi_handle,
@@ -2904,6 +2937,10 @@ QDF_STATUS
 (*extract_install_key_comp_event)(wmi_unified_t wmi_handle,
 				  void *evt_buf, uint32_t len,
 				  struct wmi_install_key_comp_event *param);
+
+QDF_STATUS (*send_vdev_set_ltf_key_seed_cmd)
+			(wmi_unified_t wmi_handle,
+			 struct wlan_crypto_ltf_keyseed_data *data);
 
 #ifdef WLAN_ENH_CFR_ENABLE
 QDF_STATUS
@@ -3017,11 +3054,11 @@ QDF_STATUS
 (*send_vdev_pn_mgmt_rxfilter_cmd)(wmi_unified_t wmi_handle,
 				  struct vdev_pn_mgmt_rxfilter_params *params);
 
-#if defined(WLAN_FEATURE_11BE) && defined(WLAN_FEATURE_T2LM)
+#ifdef WLAN_FEATURE_11BE
 QDF_STATUS (*send_mlo_peer_tid_to_link_map)(
 		wmi_unified_t wmi_handle,
 		struct wmi_host_tid_to_link_map_params *params);
-#endif /* defined(WLAN_FEATURE_11BE) && defined(WLAN_FEATURE_T2LM) */
+#endif /* WLAN_FEATURE_11BE */
 
 QDF_STATUS
 (*extract_pktlog_decode_info_event)(wmi_unified_t wmi_handle, void *evt_buf,
@@ -3183,6 +3220,9 @@ struct wmi_soc {
 #if defined(WLAN_FEATURE_WMI_DIAG_OVER_CE7) || \
 	defined(WLAN_DIAG_AND_DBR_OVER_SEPARATE_CE)
 	HTC_ENDPOINT_ID wmi_diag_endpoint_id;
+#endif
+#if defined(WLAN_DIAG_AND_DBR_OVER_SEPARATE_CE)
+	HTC_ENDPOINT_ID wmi_dbr_endpoint_id;
 #endif
 	uint32_t wmi_events[wmi_events_max];
 	/* WMI service bitmap received from target */

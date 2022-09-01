@@ -224,6 +224,7 @@ enum block_ack_actioncode {
 
 /**
  * enum pub_actioncode - public action frames
+ * Reference IEEE Std 802.11-2020 Table 9-364—Public Action field values
  * @PUB_ACTION_2040_BSS_COEXISTENCE:  public 20-40 bss coex action frame
  * @PUB_ACTION_EXT_CHANNEL_SWITCH_ID: public ext channel switch id action frame
  * @PUB_ACTION_VENDOR_SPECIFIC: vendor specific public action frame
@@ -232,6 +233,8 @@ enum block_ack_actioncode {
  * @PUB_ACTION_GAS_COMEBACK_REQUEST: GAS comeback request action frame
  * @PUB_ACTION_GAS_COMEBACK_RESPONSE: GAS comeback respose action frame
  * @PUB_ACTION_TDLS_DISCRESP: tdls discovery response public action frame
+ * @PUB_ACTION_FTM_REQUEST: FTM request action frame
+ * @PUB_ACTION_FTM_RESPONSE: FTM respose action frame
  */
 enum pub_actioncode {
 	PUB_ACTION_2040_BSS_COEXISTENCE = 0,
@@ -242,6 +245,8 @@ enum pub_actioncode {
 	PUB_ACTION_GAS_COMEBACK_REQUEST = 12,
 	PUB_ACTION_GAS_COMEBACK_RESPONSE = 13,
 	PUB_ACTION_TDLS_DISCRESP = 14,
+	PUB_ACTION_FTM_REQUEST = 32,
+	PUB_ACTION_FTM_RESPONSE = 33,
 };
 
 /**
@@ -652,6 +657,8 @@ struct action_frm_hdr {
  * @MGMT_ACTION_EHT_T2LM_REQUEST: T2LM request frame
  * @MGMT_ACTION_EHT_T2LM_RESPONSE: T2LM response frame
  * @MGMT_ACTION_EHT_T2LM_TEARDOWN: T2LM teardown frame
+ * @MGMT_ACTION_FTM_REQUEST: FTM request frame
+ * @MGMT_ACTION_FTM_RESPONSE: FTM response frame
  * @MGMT_MAX_FRAME_TYPE:         max. mgmt frame types
  */
 enum mgmt_frame_type {
@@ -784,6 +791,8 @@ enum mgmt_frame_type {
 	MGMT_ACTION_EHT_T2LM_REQUEST,
 	MGMT_ACTION_EHT_T2LM_RESPONSE,
 	MGMT_ACTION_EHT_T2LM_TEARDOWN,
+	MGMT_ACTION_FTM_REQUEST,
+	MGMT_ACTION_FTM_RESPONSE,
 	MGMT_MAX_FRAME_TYPE,
 };
 
@@ -801,6 +810,16 @@ enum mgmt_frame_type {
 struct frame_pn_params {
 	uint8_t curr_pn[WLAN_MGMT_TXRX_HOST_MAX_PN_LEN];
 	uint8_t prev_pn[WLAN_MGMT_TXRX_HOST_MAX_PN_LEN];
+};
+
+/**
+ * struct frm_conn_ap - connected ap
+ * @mgmt_frm_sub_type: type of frame
+ * @is_conn_ap_frm:     set if frm is from connected ap
+ */
+struct frm_conn_ap {
+	uint8_t mgmt_frm_sub_type;
+	uint8_t is_conn_ap_frm;
 };
 
 /**
@@ -838,6 +857,7 @@ struct mgmt_rx_event_ext_params {
  * @reo_params: Pointer to MGMT Rx REO params
  * @pn_params: Frame PN params
  * @ext_params: Extended params
+ * @frm_con_ap: Frame is from connected ap
  */
 struct mgmt_rx_event_params {
 	uint32_t    chan_freq;
@@ -859,6 +879,7 @@ struct mgmt_rx_event_params {
 #endif
 	struct frame_pn_params pn_params;
 	struct mgmt_rx_event_ext_params *ext_params;
+	struct frm_conn_ap is_conn_ap;
 };
 
 #ifdef WLAN_MGMT_RX_REO_SUPPORT

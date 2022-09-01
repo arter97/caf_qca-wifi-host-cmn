@@ -1,20 +1,18 @@
 /*
  * Copyright (c) 2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2022, Qualcomm Innovation Center, Inc. All rights reserved.
  *
- * Permission to use, copy, modify, and/or distribute this software for
- * any purpose with or without fee is hereby granted, provided that the
- * above copyright notice and this permission notice appear in all
- * copies.
+ * Permission to use, copy, modify, and/or distribute this software for any
+ * purpose with or without fee is hereby granted, provided that the above
+ * copyright notice and this permission notice appear in all copies.
  *
- * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL
- * WARRANTIES WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED
- * WARRANTIES OF MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE
- * AUTHOR BE LIABLE FOR ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL
- * DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR
- * PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER
- * TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
- * PERFORMANCE OF THIS SOFTWARE.
+ * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+ * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+ * MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+ * ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+ * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+ * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+ * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE
  */
 #include "qdf_types.h"
 #include "qdf_util.h"
@@ -103,26 +101,26 @@
 #ifdef CONFIG_WIFI_EMULATION_WIFI_3_0
 #define CMEM_REG_BASE 0x0010e000
 
-#define CMEM_WINDOW_ADDRESS_9224 \
+#define CMEM_WINDOW_ADDRESS_5332 \
 		((CMEM_REG_BASE >> WINDOW_SHIFT) & WINDOW_VALUE_MASK)
 #endif
 
-#define CE_WINDOW_ADDRESS_9224 \
-		((CE_WFSS_CE_REG_BASE >> WINDOW_SHIFT) & WINDOW_VALUE_MASK)
+#define CE_WINDOW_ADDRESS_5332 \
+		((CE_CFG_WFSS_CE_REG_BASE >> WINDOW_SHIFT) & WINDOW_VALUE_MASK)
 
-#define UMAC_WINDOW_ADDRESS_9224 \
+#define UMAC_WINDOW_ADDRESS_5332 \
 		((UMAC_BASE >> WINDOW_SHIFT) & WINDOW_VALUE_MASK)
 
 #ifdef CONFIG_WIFI_EMULATION_WIFI_3_0
-#define WINDOW_CONFIGURATION_VALUE_9224 \
-		((CE_WINDOW_ADDRESS_9224 << 6) |\
-		 (UMAC_WINDOW_ADDRESS_9224 << 12) | \
-		 CMEM_WINDOW_ADDRESS_9224 | \
+#define WINDOW_CONFIGURATION_VALUE_5332 \
+		((CE_WINDOW_ADDRESS_5332 << 6) |\
+		 (UMAC_WINDOW_ADDRESS_5332 << 12) | \
+		 CMEM_WINDOW_ADDRESS_5332 | \
 		 WINDOW_ENABLE_BIT)
 #else
-#define WINDOW_CONFIGURATION_VALUE_9224 \
-		((CE_WINDOW_ADDRESS_9224 << 6) |\
-		 (UMAC_WINDOW_ADDRESS_9224 << 12) | \
+#define WINDOW_CONFIGURATION_VALUE_5332 \
+		((CE_WINDOW_ADDRESS_5332 << 6) |\
+		 (UMAC_WINDOW_ADDRESS_5332 << 12) | \
 		 WINDOW_ENABLE_BIT)
 #endif
 
@@ -131,7 +129,7 @@
 
 #ifdef CONFIG_WORD_BASED_TLV
 #ifndef BIG_ENDIAN_HOST
-struct rx_msdu_end_compact_qca9224 {
+struct rx_msdu_end_compact_qca5332 {
 	uint32_t rxpcu_mpdu_filter_in_category		:  2, // [1:0]
 		 sw_frame_group_id			:  7, // [8:2]
 		 reserved_0				:  7, // [15:9]
@@ -280,7 +278,7 @@ struct rx_msdu_end_compact_qca9224 {
 
 };
 
-struct rx_mpdu_start_compact_qca9224 {
+struct rx_mpdu_start_compact_qca5332 {
 	struct rxpt_classify_info rxpt_classify_info_details;
 	uint32_t rx_reo_queue_desc_addr_31_0		: 32; // [31:0]
 	uint32_t rx_reo_queue_desc_addr_39_32		:  8, // [7:0]
@@ -392,7 +390,7 @@ struct rx_mpdu_start_compact_qca9224 {
 	uint32_t reserved_29a				: 32; // [31:0]
 };
 #else
-struct rx_msdu_end_compact_qca9224 {
+struct rx_msdu_end_compact_qca5332 {
 	uint32_t phy_ppdu_id                            : 16, // [31:16]
 		 reserved_0                             :  7, // [15:9]
 		 sw_frame_group_id                      :  7, // [8:2]
@@ -540,7 +538,7 @@ struct rx_msdu_end_compact_qca9224 {
 		 reserved_31a                           : 10; // [9:0]
 };
 
-struct rx_mpdu_start_compact_qca9224 {
+struct rx_mpdu_start_compact_qca5332 {
 	struct   rxpt_classify_info                 rxpt_classify_info_details;
 	uint32_t rx_reo_queue_desc_addr_31_0            : 32; // [31:0]
 	uint32_t reserved_2a                            :  6, // [31:26]
@@ -654,47 +652,47 @@ struct rx_mpdu_start_compact_qca9224 {
 #endif /* BIG_ENDIAN_HOST */
 
 /* TLV struct for word based Tlv */
-typedef struct rx_mpdu_start_compact_qca9224 hal_rx_mpdu_start_t;
-typedef struct rx_msdu_end_compact_qca9224 hal_rx_msdu_end_t;
+typedef struct rx_mpdu_start_compact_qca5332 hal_rx_mpdu_start_t;
+typedef struct rx_msdu_end_compact_qca5332 hal_rx_msdu_end_t;
 #endif /* CONFIG_WORD_BASED_TLV */
 
-#include "hal_9224_rx.h"
-#include "hal_9224_tx.h"
+#include "hal_5332_rx.h"
+#include "hal_5332_tx.h"
 #include "hal_be_rx_tlv.h"
 #include <hal_be_generic_api.h>
 
 #define LINK_DESC_SIZE (NUM_OF_DWORDS_RX_MSDU_LINK << 2)
 #define HAL_PPE_VP_ENTRIES_MAX 32
 /**
- * hal_get_link_desc_size_9224(): API to get the link desc size
+ * hal_get_link_desc_size_5332(): API to get the link desc size
  *
  * Return: uint32_t
  */
-static uint32_t hal_get_link_desc_size_9224(void)
+static uint32_t hal_get_link_desc_size_5332(void)
 {
 	return LINK_DESC_SIZE;
 }
 
 /**
- * hal_rx_get_tlv_9224(): API to get the tlv
+ * hal_rx_get_tlv_5332(): API to get the tlv
  *
  * @rx_tlv: TLV data extracted from the rx packet
  * Return: uint8_t
  */
-static uint8_t hal_rx_get_tlv_9224(void *rx_tlv)
+static uint8_t hal_rx_get_tlv_5332(void *rx_tlv)
 {
 	return HAL_RX_GET(rx_tlv, PHYRX_RSSI_LEGACY, RECEIVE_BANDWIDTH);
 }
 
 /**
- * hal_rx_wbm_err_msdu_continuation_get_9224 () - API to check if WBM
+ * hal_rx_wbm_err_msdu_continuation_get_5332 () - API to check if WBM
  * msdu continuation bit is set
  *
  *@wbm_desc: wbm release ring descriptor
  *
  * Return: true if msdu continuation bit is set.
  */
-uint8_t hal_rx_wbm_err_msdu_continuation_get_9224(void *wbm_desc)
+uint8_t hal_rx_wbm_err_msdu_continuation_get_5332(void *wbm_desc)
 {
 	uint32_t comp_desc = *(uint32_t *)(((uint8_t *)wbm_desc) +
 	WBM_RELEASE_RING_RX_RX_MSDU_DESC_INFO_DETAILS_MSDU_CONTINUATION_OFFSET);
@@ -705,12 +703,12 @@ uint8_t hal_rx_wbm_err_msdu_continuation_get_9224(void *wbm_desc)
 }
 
 /**
- * hal_rx_proc_phyrx_other_receive_info_tlv_9224(): API to get tlv info
+ * hal_rx_proc_phyrx_other_receive_info_tlv_5332(): API to get tlv info
  *
  * Return: uint32_t
  */
 static inline
-void hal_rx_proc_phyrx_other_receive_info_tlv_9224(void *rx_tlv_hdr,
+void hal_rx_proc_phyrx_other_receive_info_tlv_5332(void *rx_tlv_hdr,
 						   void *ppdu_info_hdl)
 {
 	uint32_t tlv_tag, tlv_len;
@@ -741,7 +739,7 @@ void hal_rx_proc_phyrx_other_receive_info_tlv_9224(void *rx_tlv_hdr,
 
 #if defined(WLAN_CFR_ENABLE) && defined(WLAN_ENH_CFR_ENABLE)
 static inline
-void hal_rx_get_bb_info_9224(void *rx_tlv, void *ppdu_info_hdl)
+void hal_rx_get_bb_info_5332(void *rx_tlv, void *ppdu_info_hdl)
 {
 	struct hal_rx_ppdu_info *ppdu_info  = ppdu_info_hdl;
 
@@ -756,7 +754,7 @@ void hal_rx_get_bb_info_9224(void *rx_tlv, void *ppdu_info_hdl)
 }
 
 static inline
-void hal_rx_get_rtt_info_9224(void *rx_tlv, void *ppdu_info_hdl)
+void hal_rx_get_rtt_info_5332(void *rx_tlv, void *ppdu_info_hdl)
 {
 	struct hal_rx_ppdu_info *ppdu_info  = ppdu_info_hdl;
 
@@ -814,19 +812,19 @@ void hal_rx_get_rtt_info_9224(void *rx_tlv, void *ppdu_info_hdl)
 #endif
 
 /**
- * hal_rx_dump_mpdu_start_tlv_9224: dump RX mpdu_start TLV in structured
+ * hal_rx_dump_mpdu_start_tlv_5332: dump RX mpdu_start TLV in structured
  *			       human readable format.
  * @mpdu_start: pointer the rx_attention TLV in pkt.
  * @dbg_level: log level.
  *
  * Return: void
  */
-static inline void hal_rx_dump_mpdu_start_tlv_9224(void *mpdustart,
+static inline void hal_rx_dump_mpdu_start_tlv_5332(void *mpdustart,
 						   uint8_t dbg_level)
 {
 #ifdef CONFIG_WORD_BASED_TLV
-	struct rx_mpdu_start_compact_qca9224 *mpdu_info =
-		(struct rx_mpdu_start_compact_qca9224 *)mpdustart;
+	struct rx_mpdu_start_compact_qca5332 *mpdu_info =
+		(struct rx_mpdu_start_compact_qca5332 *)mpdustart;
 #else
 	struct rx_mpdu_start *mpdu_start = (struct rx_mpdu_start *)mpdustart;
 	struct rx_mpdu_info *mpdu_info =
@@ -951,19 +949,19 @@ static inline void hal_rx_dump_mpdu_start_tlv_9224(void *mpdustart,
 }
 
 /**
- * hal_rx_dump_msdu_end_tlv_9224: dump RX msdu_end TLV in structured
+ * hal_rx_dump_msdu_end_tlv_5332: dump RX msdu_end TLV in structured
  *			     human readable format.
  * @ msdu_end: pointer the msdu_end TLV in pkt.
  * @ dbg_level: log level.
  *
  * Return: void
  */
-static void hal_rx_dump_msdu_end_tlv_9224(void *msduend,
+static void hal_rx_dump_msdu_end_tlv_5332(void *msduend,
 					  uint8_t dbg_level)
 {
 #ifdef CONFIG_WORD_BASED_TLV
-	struct rx_msdu_end_compact_qca9224 *msdu_end =
-		(struct rx_msdu_end_compact_qca9224 *)msduend;
+	struct rx_msdu_end_compact_qca5332 *msdu_end =
+		(struct rx_msdu_end_compact_qca5332 *)msduend;
 #else
 	struct rx_msdu_end *msdu_end =
 		(struct rx_msdu_end *)msduend;
@@ -1025,7 +1023,7 @@ static void hal_rx_dump_msdu_end_tlv_9224(void *msduend,
 }
 
 /**
- * hal_reo_status_get_header_9224 - Process reo desc info
+ * hal_reo_status_get_header_5332 - Process reo desc info
  * @d - Pointer to reo descriptior
  * @b - tlv type info
  * @h1 - Pointer to hal_reo_status_header where info to be stored
@@ -1033,7 +1031,7 @@ static void hal_rx_dump_msdu_end_tlv_9224(void *msduend,
  * Return - none.
  *
  */
-static void hal_reo_status_get_header_9224(hal_ring_desc_t ring_desc,
+static void hal_reo_status_get_header_5332(hal_ring_desc_t ring_desc,
 					   int b, void *h1)
 {
 	uint64_t *d = (uint64_t *)ring_desc;
@@ -1129,31 +1127,31 @@ static void hal_reo_status_get_header_9224(hal_ring_desc_t ring_desc,
 }
 
 static
-void *hal_rx_msdu0_buffer_addr_lsb_9224(void *link_desc_va)
+void *hal_rx_msdu0_buffer_addr_lsb_5332(void *link_desc_va)
 {
 	return (void *)HAL_RX_MSDU0_BUFFER_ADDR_LSB(link_desc_va);
 }
 
 static
-void *hal_rx_msdu_desc_info_ptr_get_9224(void *msdu0)
+void *hal_rx_msdu_desc_info_ptr_get_5332(void *msdu0)
 {
 	return (void *)HAL_RX_MSDU_DESC_INFO_PTR_GET(msdu0);
 }
 
 static
-void *hal_ent_mpdu_desc_info_9224(void *ent_ring_desc)
+void *hal_ent_mpdu_desc_info_5332(void *ent_ring_desc)
 {
 	return (void *)HAL_ENT_MPDU_DESC_INFO(ent_ring_desc);
 }
 
 static
-void *hal_dst_mpdu_desc_info_9224(void *dst_ring_desc)
+void *hal_dst_mpdu_desc_info_5332(void *dst_ring_desc)
 {
 	return (void *)HAL_DST_MPDU_DESC_INFO(dst_ring_desc);
 }
 
 /**
- * hal_reo_config_9224(): Set reo config parameters
+ * hal_reo_config_5332(): Set reo config parameters
  * @soc: hal soc handle
  * @reg_val: value to be set
  * @reo_params: reo parameters
@@ -1161,7 +1159,7 @@ void *hal_dst_mpdu_desc_info_9224(void *dst_ring_desc)
  * Return: void
  */
 static void
-hal_reo_config_9224(struct hal_soc *soc,
+hal_reo_config_5332(struct hal_soc *soc,
 		    uint32_t reg_val,
 		    struct hal_reo_params *reo_params)
 {
@@ -1169,38 +1167,38 @@ hal_reo_config_9224(struct hal_soc *soc,
 }
 
 /**
- * hal_rx_msdu_desc_info_get_ptr_9224() - Get msdu desc info ptr
+ * hal_rx_msdu_desc_info_get_ptr_5332() - Get msdu desc info ptr
  * @msdu_details_ptr - Pointer to msdu_details_ptr
  *
  * Return - Pointer to rx_msdu_desc_info structure.
  *
  */
-static void *hal_rx_msdu_desc_info_get_ptr_9224(void *msdu_details_ptr)
+static void *hal_rx_msdu_desc_info_get_ptr_5332(void *msdu_details_ptr)
 {
 	return HAL_RX_MSDU_DESC_INFO_GET(msdu_details_ptr);
 }
 
 /**
- * hal_rx_link_desc_msdu0_ptr_9224 - Get pointer to rx_msdu details
+ * hal_rx_link_desc_msdu0_ptr_5332 - Get pointer to rx_msdu details
  * @link_desc - Pointer to link desc
  *
  * Return - Pointer to rx_msdu_details structure
  *
  */
-static void *hal_rx_link_desc_msdu0_ptr_9224(void *link_desc)
+static void *hal_rx_link_desc_msdu0_ptr_5332(void *link_desc)
 {
 	return HAL_RX_LINK_DESC_MSDU0_PTR(link_desc);
 }
 
 /**
- * hal_get_window_address_9224(): Function to get hp/tp address
+ * hal_get_window_address_5332(): Function to get hp/tp address
  * @hal_soc: Pointer to hal_soc
  * @addr: address offset of register
  *
  * Return: modified address offset of register
  */
 
-static inline qdf_iomem_t hal_get_window_address_9224(struct hal_soc *hal_soc,
+static inline qdf_iomem_t hal_get_window_address_5332(struct hal_soc *hal_soc,
 						      qdf_iomem_t addr)
 {
 	uint32_t offset = addr - hal_soc->dev_base_addr;
@@ -1217,7 +1215,7 @@ static inline qdf_iomem_t hal_get_window_address_9224(struct hal_soc *hal_soc,
 	 * If offset lies within CE register range, use 2nd window to write
 	 * into CE region.
 	 */
-	} else if ((offset ^ CE_WFSS_CE_REG_BASE) < WINDOW_RANGE_MASK) {
+	} else if ((offset ^ CE_CFG_WFSS_CE_REG_BASE) < WINDOW_RANGE_MASK) {
 		new_offset = (hal_soc->dev_base_addr + (2 * WINDOW_START) +
 			  (offset & WINDOW_RANGE_MASK));
 	} else {
@@ -1233,11 +1231,11 @@ static inline void hal_write_window_register(struct hal_soc *hal_soc)
 {
 	/* Write value into window configuration register */
 	qdf_iowrite32(hal_soc->dev_base_addr + WINDOW_REG_ADDRESS,
-		      WINDOW_CONFIGURATION_VALUE_9224);
+		      WINDOW_CONFIGURATION_VALUE_5332);
 }
 
 static
-void hal_compute_reo_remap_ix2_ix3_9224(uint32_t *ring, uint32_t num_rings,
+void hal_compute_reo_remap_ix2_ix3_5332(uint32_t *ring, uint32_t num_rings,
 					uint32_t *remap1, uint32_t *remap2)
 {
 	switch (num_rings) {
@@ -1321,7 +1319,7 @@ void hal_compute_reo_remap_ix2_ix3_9224(uint32_t *ring, uint32_t num_rings,
 }
 
 /**
- * hal_rx_flow_setup_fse_9224() - Setup a flow search entry in HW FST
+ * hal_rx_flow_setup_fse_5332() - Setup a flow search entry in HW FST
  * @fst: Pointer to the Rx Flow Search Table
  * @table_offset: offset into the table where the flow is to be setup
  * @flow: Flow Parameters
@@ -1329,7 +1327,7 @@ void hal_compute_reo_remap_ix2_ix3_9224(uint32_t *ring, uint32_t num_rings,
  * Return: Success/Failure
  */
 static void *
-hal_rx_flow_setup_fse_9224(uint8_t *rx_fst, uint32_t table_offset,
+hal_rx_flow_setup_fse_5332(uint8_t *rx_fst, uint32_t table_offset,
 			   uint8_t *rx_flow)
 {
 	struct hal_rx_fst *fst = (struct hal_rx_fst *)rx_fst;
@@ -1440,7 +1438,7 @@ hal_rx_flow_setup_fse_9224(uint8_t *rx_fst, uint32_t table_offset,
  *
  * Return: void
  */
-static inline void hal_rx_dump_pkt_hdr_tlv_9224(struct rx_pkt_tlvs *pkt_tlvs,
+static inline void hal_rx_dump_pkt_hdr_tlv_5332(struct rx_pkt_tlvs *pkt_tlvs,
 						uint8_t dbg_level)
 {
 	struct rx_pkt_hdr_tlv *pkt_hdr_tlv = &pkt_tlvs->pkt_hdr_tlv;
@@ -1462,36 +1460,14 @@ static inline void hal_rx_dump_pkt_hdr_tlv_9224(struct rx_pkt_tlvs *pkt_tlvs,
  *
  * Return: void
  */
-static inline void hal_rx_dump_pkt_hdr_tlv_9224(struct rx_pkt_tlvs *pkt_tlvs,
+static inline void hal_rx_dump_pkt_hdr_tlv_5332(struct rx_pkt_tlvs *pkt_tlvs,
 						uint8_t dbg_level)
 {
 }
 #endif
 
-/*
- * hal_tx_dump_ppe_vp_entry_9224()
- * @hal_soc_hdl: HAL SoC handle
- *
- * Return: void
- */
-static inline
-void hal_tx_dump_ppe_vp_entry_9224(hal_soc_handle_t hal_soc_hdl)
-{
-	struct hal_soc *soc = (struct hal_soc *)hal_soc_hdl;
-	uint32_t reg_addr, reg_val = 0, i;
-
-	for (i = 0; i < HAL_PPE_VP_ENTRIES_MAX; i++) {
-		reg_addr =
-			HWIO_TCL_R0_PPE_VP_CONFIG_TABLE_n_ADDR(
-				MAC_TCL_REG_REG_BASE,
-				i);
-		reg_val = HAL_REG_READ(soc, reg_addr);
-		hal_verbose_debug("%d: 0x%x\n", i, reg_val);
-	}
-}
-
 /**
- * hal_rx_dump_pkt_tlvs_9224(): API to print RX Pkt TLVS QCN9224
+ * hal_rx_dump_pkt_tlvs_5332(): API to print RX Pkt TLVS qca5332
  * @hal_soc_hdl: hal_soc handle
  * @buf: pointer the pkt buffer
  * @dbg_level: log level
@@ -1499,21 +1475,21 @@ void hal_tx_dump_ppe_vp_entry_9224(hal_soc_handle_t hal_soc_hdl)
  * Return: void
  */
 #ifdef CONFIG_WORD_BASED_TLV
-static void hal_rx_dump_pkt_tlvs_9224(hal_soc_handle_t hal_soc_hdl,
+static void hal_rx_dump_pkt_tlvs_5332(hal_soc_handle_t hal_soc_hdl,
 				      uint8_t *buf, uint8_t dbg_level)
 {
 	struct rx_pkt_tlvs *pkt_tlvs = (struct rx_pkt_tlvs *)buf;
-	struct rx_msdu_end_compact_qca9224 *msdu_end =
+	struct rx_msdu_end_compact_qca5332 *msdu_end =
 					&pkt_tlvs->msdu_end_tlv.rx_msdu_end;
-	struct rx_mpdu_start_compact_qca9224 *mpdu_start =
+	struct rx_mpdu_start_compact_qca5332 *mpdu_start =
 				&pkt_tlvs->mpdu_start_tlv.rx_mpdu_start;
 
-	hal_rx_dump_msdu_end_tlv_9224(msdu_end, dbg_level);
-	hal_rx_dump_mpdu_start_tlv_9224(mpdu_start, dbg_level);
-	hal_rx_dump_pkt_hdr_tlv_9224(pkt_tlvs, dbg_level);
+	hal_rx_dump_msdu_end_tlv_5332(msdu_end, dbg_level);
+	hal_rx_dump_mpdu_start_tlv_5332(mpdu_start, dbg_level);
+	hal_rx_dump_pkt_hdr_tlv_5332(pkt_tlvs, dbg_level);
 }
 #else
-static void hal_rx_dump_pkt_tlvs_9224(hal_soc_handle_t hal_soc_hdl,
+static void hal_rx_dump_pkt_tlvs_5332(hal_soc_handle_t hal_soc_hdl,
 				      uint8_t *buf, uint8_t dbg_level)
 {
 	struct rx_pkt_tlvs *pkt_tlvs = (struct rx_pkt_tlvs *)buf;
@@ -1521,23 +1497,23 @@ static void hal_rx_dump_pkt_tlvs_9224(hal_soc_handle_t hal_soc_hdl,
 	struct rx_mpdu_start *mpdu_start =
 				&pkt_tlvs->mpdu_start_tlv.rx_mpdu_start;
 
-	hal_rx_dump_msdu_end_tlv_9224(msdu_end, dbg_level);
-	hal_rx_dump_mpdu_start_tlv_9224(mpdu_start, dbg_level);
-	hal_rx_dump_pkt_hdr_tlv_9224(pkt_tlvs, dbg_level);
+	hal_rx_dump_msdu_end_tlv_5332(msdu_end, dbg_level);
+	hal_rx_dump_mpdu_start_tlv_5332(mpdu_start, dbg_level);
+	hal_rx_dump_pkt_hdr_tlv_5332(pkt_tlvs, dbg_level);
 }
 #endif
 
-#define HAL_NUM_TCL_BANKS_9224 48
+#define HAL_NUM_TCL_BANKS_5332 48
 
 /**
- * hal_cmem_write_9224() - function for CMEM buffer writing
+ * hal_cmem_write_5332() - function for CMEM buffer writing
  * @hal_soc_hdl: HAL SOC handle
  * @offset: CMEM address
  * @value: value to write
  *
  * Return: None.
  */
-static void hal_cmem_write_9224(hal_soc_handle_t hal_soc_hdl,
+static void hal_cmem_write_5332(hal_soc_handle_t hal_soc_hdl,
 				uint32_t offset,
 				uint32_t value)
 {
@@ -1547,16 +1523,16 @@ static void hal_cmem_write_9224(hal_soc_handle_t hal_soc_hdl,
 }
 
 /**
- * hal_tx_get_num_tcl_banks_9224() - Get number of banks in target
+ * hal_tx_get_num_tcl_banks_5332() - Get number of banks in target
  *
  * Returns: number of bank
  */
-static uint8_t hal_tx_get_num_tcl_banks_9224(void)
+static uint8_t hal_tx_get_num_tcl_banks_5332(void)
 {
-	return HAL_NUM_TCL_BANKS_9224;
+	return HAL_NUM_TCL_BANKS_5332;
 }
 
-static void hal_reo_setup_9224(struct hal_soc *soc, void *reoparams)
+static void hal_reo_setup_5332(struct hal_soc *soc, void *reoparams)
 {
 	uint32_t reg_val;
 	struct hal_reo_params *reo_params = (struct hal_reo_params *)reoparams;
@@ -1564,7 +1540,7 @@ static void hal_reo_setup_9224(struct hal_soc *soc, void *reoparams)
 	reg_val = HAL_REG_READ(soc, HWIO_REO_R0_GENERAL_ENABLE_ADDR(
 		REO_REG_REG_BASE));
 
-	hal_reo_config_9224(soc, reg_val, reo_params);
+	hal_reo_config_5332(soc, reg_val, reo_params);
 	/* Other ring enable bits and REO_ENABLE will be set by FW */
 
 	/* TODO: Setup destination ring mapping if enabled */
@@ -1644,23 +1620,23 @@ static void hal_reo_setup_9224(struct hal_soc *soc, void *reoparams)
 	hal_reo_shared_qaddr_init((hal_soc_handle_t)soc);
 }
 
-static uint16_t hal_get_rx_max_ba_window_qcn9224(int tid)
+static uint16_t hal_get_rx_max_ba_window_qca5332(int tid)
 {
 	return HAL_RX_BA_WINDOW_1024;
 }
 
 /**
- * hal_qcn9224_get_reo_qdesc_size()- Get the reo queue descriptor size
+ * hal_qca5332_get_reo_qdesc_size()- Get the reo queue descriptor size
  *			  from the give Block-Ack window size
  * Return: reo queue descriptor size
  */
-static uint32_t hal_qcn9224_get_reo_qdesc_size(uint32_t ba_window_size, int tid)
+static uint32_t hal_qca5332_get_reo_qdesc_size(uint32_t ba_window_size, int tid)
 {
 	/* Hardcode the ba_window_size to HAL_RX_MAX_BA_WINDOW for
 	 * NON_QOS_TID until HW issues are resolved.
 	 */
 	if (tid != HAL_NON_QOS_TID)
-		ba_window_size = hal_get_rx_max_ba_window_qcn9224(tid);
+		ba_window_size = hal_get_rx_max_ba_window_qca5332(tid);
 
 	/* Return descriptor size corresponding to window size of 2 since
 	 * we set ba_window_size to 2 while setting up REO descriptors as
@@ -1691,85 +1667,67 @@ static uint32_t hal_qcn9224_get_reo_qdesc_size(uint32_t ba_window_size, int tid)
 		(10 * sizeof(struct rx_reo_queue_ext)) +
 		sizeof(struct rx_reo_queue_1k);
 }
-
-/*
- * hal_tx_dump_ppe_vp_entry_9224()
- * @hal_soc_hdl: HAL SoC handle
- *
- * Return: Number of PPE VP entries
- */
-static
-uint32_t hal_tx_get_num_ppe_vp_tbl_entries_9224(hal_soc_handle_t hal_soc_hdl)
-{
-	return HAL_PPE_VP_ENTRIES_MAX;
-}
-
 /**
- * hal_rx_tlv_msdu_done_copy_get_9224() - Get msdu done copy bit from rx_tlv
+ * hal_rx_tlv_msdu_done_copy_get_5332() - Get msdu done copy bit from rx_tlv
  *
  * Returns: msdu done copy bit
  */
-static inline uint32_t hal_rx_tlv_msdu_done_copy_get_9224(uint8_t *buf)
+static inline uint32_t hal_rx_tlv_msdu_done_copy_get_5332(uint8_t *buf)
 {
 	return HAL_RX_TLV_MSDU_DONE_COPY_GET(buf);
 }
 
-static void hal_hw_txrx_ops_attach_qcn9224(struct hal_soc *hal_soc)
+static void hal_hw_txrx_ops_attach_qca5332(struct hal_soc *hal_soc)
 {
 	/* init and setup */
 	hal_soc->ops->hal_srng_dst_hw_init = hal_srng_dst_hw_init_generic;
 	hal_soc->ops->hal_srng_src_hw_init = hal_srng_src_hw_init_generic;
 	hal_soc->ops->hal_get_hw_hptp = hal_get_hw_hptp_generic;
-	hal_soc->ops->hal_get_window_address = hal_get_window_address_9224;
-	hal_soc->ops->hal_cmem_write = hal_cmem_write_9224;
+	hal_soc->ops->hal_get_window_address = hal_get_window_address_5332;
+	hal_soc->ops->hal_cmem_write = hal_cmem_write_5332;
 
 	/* tx */
-	hal_soc->ops->hal_tx_set_dscp_tid_map = hal_tx_set_dscp_tid_map_9224;
-	hal_soc->ops->hal_tx_update_dscp_tid = hal_tx_update_dscp_tid_9224;
+	hal_soc->ops->hal_tx_set_dscp_tid_map = hal_tx_set_dscp_tid_map_5332;
+	hal_soc->ops->hal_tx_update_dscp_tid = hal_tx_update_dscp_tid_5332;
 	hal_soc->ops->hal_tx_comp_get_status =
 			hal_tx_comp_get_status_generic_be;
 	hal_soc->ops->hal_tx_init_cmd_credit_ring =
-			hal_tx_init_cmd_credit_ring_9224;
-	hal_soc->ops->hal_tx_set_ppe_cmn_cfg =
-			hal_tx_set_ppe_cmn_config_9224;
-	hal_soc->ops->hal_tx_set_ppe_vp_entry =
-			hal_tx_set_ppe_vp_entry_9224;
-	hal_soc->ops->hal_tx_set_ppe_pri2tid =
-			hal_tx_set_ppe_pri2tid_map_9224;
-	hal_soc->ops->hal_tx_update_ppe_pri2tid =
-			hal_tx_update_ppe_pri2tid_9224;
-	hal_soc->ops->hal_tx_dump_ppe_vp_entry =
-			hal_tx_dump_ppe_vp_entry_9224;
-	hal_soc->ops->hal_tx_get_num_ppe_vp_tbl_entries =
-			hal_tx_get_num_ppe_vp_tbl_entries_9224;
-	hal_soc->ops->hal_tx_enable_pri2tid_map =
-			hal_tx_enable_pri2tid_map_9224;
+			hal_tx_init_cmd_credit_ring_5332;
+	hal_soc->ops->hal_tx_set_ppe_cmn_cfg = NULL;
+	hal_soc->ops->hal_tx_set_ppe_vp_entry = NULL;
+	hal_soc->ops->hal_tx_set_ppe_pri2tid = NULL;
+	hal_soc->ops->hal_tx_update_ppe_pri2tid = NULL;
+	hal_soc->ops->hal_tx_dump_ppe_vp_entry = NULL;
+	hal_soc->ops->hal_tx_get_num_ppe_vp_tbl_entries = NULL;
+	hal_soc->ops->hal_tx_enable_pri2tid_map = NULL;
+	hal_soc->ops->hal_tx_config_rbm_mapping_be =
+				hal_tx_config_rbm_mapping_be_5332;
 
 	/* rx */
 	hal_soc->ops->hal_rx_msdu_start_nss_get = hal_rx_tlv_nss_get_be;
 	hal_soc->ops->hal_rx_mon_hw_desc_get_mpdu_status =
 		hal_rx_mon_hw_desc_get_mpdu_status_be;
-	hal_soc->ops->hal_rx_get_tlv = hal_rx_get_tlv_9224;
+	hal_soc->ops->hal_rx_get_tlv = hal_rx_get_tlv_5332;
 	hal_soc->ops->hal_rx_proc_phyrx_other_receive_info_tlv =
-				hal_rx_proc_phyrx_other_receive_info_tlv_9224;
+				hal_rx_proc_phyrx_other_receive_info_tlv_5332;
 
-	hal_soc->ops->hal_rx_dump_msdu_end_tlv = hal_rx_dump_msdu_end_tlv_9224;
+	hal_soc->ops->hal_rx_dump_msdu_end_tlv = hal_rx_dump_msdu_end_tlv_5332;
 	hal_soc->ops->hal_rx_dump_mpdu_start_tlv =
-					hal_rx_dump_mpdu_start_tlv_9224;
-	hal_soc->ops->hal_rx_dump_pkt_tlvs = hal_rx_dump_pkt_tlvs_9224;
+					hal_rx_dump_mpdu_start_tlv_5332;
+	hal_soc->ops->hal_rx_dump_pkt_tlvs = hal_rx_dump_pkt_tlvs_5332;
 
-	hal_soc->ops->hal_get_link_desc_size = hal_get_link_desc_size_9224;
+	hal_soc->ops->hal_get_link_desc_size = hal_get_link_desc_size_5332;
 	hal_soc->ops->hal_rx_mpdu_start_tid_get = hal_rx_tlv_tid_get_be;
 	hal_soc->ops->hal_rx_msdu_start_reception_type_get =
 					hal_rx_tlv_reception_type_get_be;
 	hal_soc->ops->hal_rx_msdu_end_da_idx_get =
 					hal_rx_msdu_end_da_idx_get_be;
 	hal_soc->ops->hal_rx_msdu_desc_info_get_ptr =
-					hal_rx_msdu_desc_info_get_ptr_9224;
+					hal_rx_msdu_desc_info_get_ptr_5332;
 	hal_soc->ops->hal_rx_link_desc_msdu0_ptr =
-					hal_rx_link_desc_msdu0_ptr_9224;
+					hal_rx_link_desc_msdu0_ptr_5332;
 	hal_soc->ops->hal_reo_status_get_header =
-					hal_reo_status_get_header_9224;
+					hal_reo_status_get_header_5332;
 	hal_soc->ops->hal_rx_status_get_tlv_info =
 					hal_rx_status_get_tlv_info_wrapper_be;
 	hal_soc->ops->hal_rx_wbm_err_info_get =
@@ -1826,11 +1784,11 @@ static void hal_hw_txrx_ops_attach_qcn9224(struct hal_soc *hal_soc)
 	hal_soc->ops->hal_rx_msdu_end_sa_sw_peer_id_get =
 					hal_rx_msdu_end_sa_sw_peer_id_get_be;
 	hal_soc->ops->hal_rx_msdu0_buffer_addr_lsb =
-					hal_rx_msdu0_buffer_addr_lsb_9224;
+					hal_rx_msdu0_buffer_addr_lsb_5332;
 	hal_soc->ops->hal_rx_msdu_desc_info_ptr_get =
-					hal_rx_msdu_desc_info_ptr_get_9224;
-	hal_soc->ops->hal_ent_mpdu_desc_info = hal_ent_mpdu_desc_info_9224;
-	hal_soc->ops->hal_dst_mpdu_desc_info = hal_dst_mpdu_desc_info_9224;
+					hal_rx_msdu_desc_info_ptr_get_5332;
+	hal_soc->ops->hal_ent_mpdu_desc_info = hal_ent_mpdu_desc_info_5332;
+	hal_soc->ops->hal_dst_mpdu_desc_info = hal_dst_mpdu_desc_info_5332;
 	hal_soc->ops->hal_rx_get_fc_valid = hal_rx_get_fc_valid_be;
 	hal_soc->ops->hal_rx_get_to_ds_flag = hal_rx_get_to_ds_flag_be;
 	hal_soc->ops->hal_rx_get_mac_addr2_valid =
@@ -1838,7 +1796,7 @@ static void hal_hw_txrx_ops_attach_qcn9224(struct hal_soc *hal_soc)
 	hal_soc->ops->hal_rx_get_filter_category =
 						hal_rx_get_filter_category_be;
 	hal_soc->ops->hal_rx_get_ppdu_id = hal_rx_get_ppdu_id_be;
-	hal_soc->ops->hal_reo_config = hal_reo_config_9224;
+	hal_soc->ops->hal_reo_config = hal_reo_config_5332;
 	hal_soc->ops->hal_rx_msdu_flow_idx_get = hal_rx_msdu_flow_idx_get_be;
 	hal_soc->ops->hal_rx_msdu_flow_idx_invalid =
 					hal_rx_msdu_flow_idx_invalid_be;
@@ -1854,10 +1812,10 @@ static void hal_hw_txrx_ops_attach_qcn9224(struct hal_soc *hal_soc)
 					hal_rx_msdu_get_flow_params_be;
 	hal_soc->ops->hal_rx_tlv_get_tcp_chksum = hal_rx_tlv_get_tcp_chksum_be;
 	hal_soc->ops->hal_rx_get_rx_sequence = hal_rx_get_rx_sequence_be;
-#if defined(QCA_WIFI_QCA9224) && defined(WLAN_CFR_ENABLE) && \
+#if defined(QCA_WIFI_QCA5332) && defined(WLAN_CFR_ENABLE) && \
 	defined(WLAN_ENH_CFR_ENABLE)
-	hal_soc->ops->hal_rx_get_bb_info = hal_rx_get_bb_info_9224;
-	hal_soc->ops->hal_rx_get_rtt_info = hal_rx_get_rtt_info_9224;
+	hal_soc->ops->hal_rx_get_bb_info = hal_rx_get_bb_info_5332;
+	hal_soc->ops->hal_rx_get_rtt_info = hal_rx_get_rtt_info_5332;
 #else
 	hal_soc->ops->hal_rx_get_bb_info = NULL;
 	hal_soc->ops->hal_rx_get_rtt_info = NULL;
@@ -1868,7 +1826,7 @@ static void hal_hw_txrx_ops_attach_qcn9224(struct hal_soc *hal_soc)
 	hal_soc->ops->hal_rx_mpdu_start_tlv_tag_valid =
 				hal_rx_mpdu_start_tlv_tag_valid_be;
 	hal_soc->ops->hal_rx_wbm_err_msdu_continuation_get =
-				hal_rx_wbm_err_msdu_continuation_get_9224;
+				hal_rx_wbm_err_msdu_continuation_get_5332;
 
 	/* rx - TLV struct offsets */
 	hal_soc->ops->hal_rx_msdu_end_offset_get =
@@ -1879,7 +1837,7 @@ static void hal_hw_txrx_ops_attach_qcn9224(struct hal_soc *hal_soc)
 	hal_soc->ops->hal_rx_pkt_tlv_offset_get =
 					hal_rx_pkt_tlv_offset_get_generic;
 #endif
-	hal_soc->ops->hal_rx_flow_setup_fse = hal_rx_flow_setup_fse_9224;
+	hal_soc->ops->hal_rx_flow_setup_fse = hal_rx_flow_setup_fse_5332;
 
 	hal_soc->ops->hal_rx_flow_get_tuple_info =
 					hal_rx_flow_get_tuple_info_be;
@@ -1887,14 +1845,14 @@ static void hal_hw_txrx_ops_attach_qcn9224(struct hal_soc *hal_soc)
 					hal_rx_flow_delete_entry_be;
 	hal_soc->ops->hal_rx_fst_get_fse_size = hal_rx_fst_get_fse_size_be;
 	hal_soc->ops->hal_compute_reo_remap_ix2_ix3 =
-					hal_compute_reo_remap_ix2_ix3_9224;
+					hal_compute_reo_remap_ix2_ix3_5332;
 
 	hal_soc->ops->hal_rx_msdu_get_reo_destination_indication =
 				hal_rx_msdu_get_reo_destination_indication_be;
 	hal_soc->ops->hal_rx_get_tlv_size = hal_rx_get_tlv_size_generic_be;
 	hal_soc->ops->hal_rx_msdu_is_wlan_mcast =
 					hal_rx_msdu_is_wlan_mcast_generic_be;
-	hal_soc->ops->hal_tx_get_num_tcl_banks = hal_tx_get_num_tcl_banks_9224;
+	hal_soc->ops->hal_tx_get_num_tcl_banks = hal_tx_get_num_tcl_banks_5332;
 	hal_soc->ops->hal_rx_tlv_decap_format_get =
 					hal_rx_tlv_decap_format_get_be;
 #ifdef RECEIVE_OFFLOAD
@@ -1906,7 +1864,7 @@ static void hal_hw_txrx_ops_attach_qcn9224(struct hal_soc *hal_soc)
 	hal_soc->ops->hal_rx_tlv_phy_ppdu_id_get =
 					hal_rx_attn_phy_ppdu_id_get_be;
 	hal_soc->ops->hal_rx_tlv_msdu_done_get =
-					hal_rx_tlv_msdu_done_copy_get_9224;
+					hal_rx_tlv_msdu_done_copy_get_5332;
 	hal_soc->ops->hal_rx_tlv_msdu_len_get =
 					hal_rx_msdu_start_msdu_len_get_be;
 	hal_soc->ops->hal_rx_get_frame_ctrl_field =
@@ -1933,7 +1891,7 @@ static void hal_hw_txrx_ops_attach_qcn9224(struct hal_soc *hal_soc)
 	hal_soc->ops->hal_rx_priv_info_get_from_tlv =
 			hal_rx_priv_info_get_from_tlv_be;
 	hal_soc->ops->hal_rx_pkt_hdr_get = hal_rx_pkt_hdr_get_be;
-	hal_soc->ops->hal_reo_setup = hal_reo_setup_9224;
+	hal_soc->ops->hal_reo_setup = hal_reo_setup_5332;
 #ifdef REO_SHARED_QREF_TABLE_EN
 	hal_soc->ops->hal_reo_shared_qaddr_setup = hal_reo_shared_qaddr_setup_be;
 	hal_soc->ops->hal_reo_shared_qaddr_init = hal_reo_shared_qaddr_init_be;
@@ -1943,21 +1901,39 @@ static void hal_hw_txrx_ops_attach_qcn9224(struct hal_soc *hal_soc)
 #endif
 	/* Overwrite the default BE ops */
 	hal_soc->ops->hal_get_rx_max_ba_window =
-					hal_get_rx_max_ba_window_qcn9224;
-	hal_soc->ops->hal_get_reo_qdesc_size = hal_qcn9224_get_reo_qdesc_size;
+					hal_get_rx_max_ba_window_qca5332;
+	hal_soc->ops->hal_get_reo_qdesc_size = hal_qca5332_get_reo_qdesc_size;
 	/* TX MONITOR */
 #ifdef QCA_MONITOR_2_0_SUPPORT
+	hal_soc->ops->hal_txmon_is_mon_buf_addr_tlv =
+				hal_txmon_is_mon_buf_addr_tlv_generic_be;
+	hal_soc->ops->hal_txmon_populate_packet_info =
+				hal_txmon_populate_packet_info_generic_be;
 	hal_soc->ops->hal_txmon_status_parse_tlv =
 				hal_txmon_status_parse_tlv_generic_be;
 	hal_soc->ops->hal_txmon_status_get_num_users =
 				hal_txmon_status_get_num_users_generic_be;
-	hal_soc->ops->hal_txmon_status_free_buffer =
-				hal_txmon_status_free_buffer_generic_be;
 #endif /* QCA_MONITOR_2_0_SUPPORT */
 	hal_soc->ops->hal_compute_reo_remap_ix0 = NULL;
+	hal_soc->ops->hal_tx_vdev_mismatch_routing_set =
+		hal_tx_vdev_mismatch_routing_set_generic_be;
+	hal_soc->ops->hal_tx_mcast_mlo_reinject_routing_set =
+		hal_tx_mcast_mlo_reinject_routing_set_generic_be;
+	hal_soc->ops->hal_get_ba_aging_timeout =
+		hal_get_ba_aging_timeout_be_generic;
+	hal_soc->ops->hal_setup_link_idle_list =
+		hal_setup_link_idle_list_generic_be;
+	hal_soc->ops->hal_cookie_conversion_reg_cfg_be =
+		hal_cookie_conversion_reg_cfg_generic_be;
+	hal_soc->ops->hal_set_ba_aging_timeout =
+		hal_set_ba_aging_timeout_be_generic;
+	hal_soc->ops->hal_tx_populate_bank_register =
+		hal_tx_populate_bank_register_be;
+	hal_soc->ops->hal_tx_vdev_mcast_ctrl_set =
+		hal_tx_vdev_mcast_ctrl_set_be;
 };
 
-struct hal_hw_srng_config hw_srng_table_9224[] = {
+struct hal_hw_srng_config hw_srng_table_5332[] = {
 	/* TODO: max_rings can populated by querying HW capabilities */
 	{ /* REO_DST */
 		.start_ring_id = HAL_SRNG_REO2SW1,
@@ -2093,7 +2069,7 @@ struct hal_hw_srng_config hw_srng_table_9224[] = {
 			HWIO_TCL_R0_SW2TCL1_RING_BASE_MSB_RING_SIZE_SHFT,
 	},
 	{ /* TCL_CMD/CREDIT */
-	  /* qca8074v2 and qcn9224 uses this ring for data commands */
+	  /* qca8074v2 and qca5332 uses this ring for data commands */
 		.start_ring_id = HAL_SRNG_SW2TCL_CMD,
 		.max_rings = 1,
 		.entry_size = sizeof(struct tcl_data_cmd) >> 2,
@@ -2225,7 +2201,7 @@ struct hal_hw_srng_config hw_srng_table_9224[] = {
 	},
 	{ /* SW2WBM_RELEASE */
 		.start_ring_id = HAL_SRNG_WBM_SW_RELEASE,
-		.max_rings = 2,
+		.max_rings = 1,
 		.entry_size = sizeof(struct wbm_release_ring) >> 2,
 		.lmac_ring = FALSE,
 		.ring_dir = HAL_SRNG_SRC_RING,
@@ -2233,12 +2209,10 @@ struct hal_hw_srng_config hw_srng_table_9224[] = {
 		HWIO_WBM_R0_SW_RELEASE_RING_BASE_LSB_ADDR(WBM_REG_REG_BASE),
 		HWIO_WBM_R2_SW_RELEASE_RING_HP_ADDR(WBM_REG_REG_BASE),
 		},
-		.reg_size = {
-		HWIO_WBM_R0_SW1_RELEASE_RING_BASE_LSB_ADDR(WBM_REG_REG_BASE) -
-		HWIO_WBM_R0_SW_RELEASE_RING_BASE_LSB_ADDR(WBM_REG_REG_BASE),
-		HWIO_WBM_R2_SW1_RELEASE_RING_HP_ADDR(WBM_REG_REG_BASE) -
-		HWIO_WBM_R2_SW_RELEASE_RING_HP_ADDR(WBM_REG_REG_BASE)
-		},
+		/* Single ring - provide ring size if multiple rings of this
+		 * type are supported
+		 */
+		.reg_size = {},
 		.max_size =
 		HWIO_WBM_R0_SW_RELEASE_RING_BASE_MSB_RING_SIZE_BMSK >>
 		HWIO_WBM_R0_SW_RELEASE_RING_BASE_MSB_RING_SIZE_SHFT,
@@ -2389,58 +2363,6 @@ struct hal_hw_srng_config hw_srng_table_9224[] = {
 		.max_size = HAL_RXDMA_MAX_RING_SIZE_BE,
 	},
 #endif
-	{ /* REO2PPE */
-		.start_ring_id = HAL_SRNG_REO2PPE,
-		.max_rings = 1,
-		.entry_size = sizeof(struct reo_destination_ring) >> 2,
-		.lmac_ring = FALSE,
-		.ring_dir = HAL_SRNG_DST_RING,
-		.reg_start = {
-			HWIO_REO_R0_REO2PPE_RING_BASE_LSB_ADDR(
-				REO_REG_REG_BASE),
-			HWIO_REO_R2_REO2PPE_RING_HP_ADDR(
-				REO_REG_REG_BASE),
-		},
-		/* Single ring - provide ring size if multiple rings of this
-		 * type are supported
-		 */
-		.reg_size = {},
-		.max_size =
-		HWIO_REO_R0_REO2PPE_RING_BASE_LSB_RING_BASE_ADDR_LSB_BMSK >>
-		HWIO_REO_R0_REO2PPE_RING_BASE_LSB_RING_BASE_ADDR_LSB_SHFT,
-	},
-	{ /* PPE2TCL */
-		.start_ring_id = HAL_SRNG_PPE2TCL1,
-		.max_rings = 1,
-		.entry_size = sizeof(struct tcl_entrance_from_ppe_ring) >> 2,
-		.lmac_ring = FALSE,
-		.ring_dir = HAL_SRNG_SRC_RING,
-		.reg_start = {
-			HWIO_TCL_R0_PPE2TCL1_RING_BASE_LSB_ADDR(
-				MAC_TCL_REG_REG_BASE),
-			HWIO_TCL_R2_PPE2TCL1_RING_HP_ADDR(
-				MAC_TCL_REG_REG_BASE),
-		},
-		.reg_size = {},
-		.max_size =
-			HWIO_TCL_R0_SW2TCL1_RING_BASE_MSB_RING_SIZE_BMSK >>
-			HWIO_TCL_R0_SW2TCL1_RING_BASE_MSB_RING_SIZE_SHFT,
-	},
-	{ /* PPE_RELEASE */
-		.start_ring_id = HAL_SRNG_WBM_PPE_RELEASE,
-		.max_rings = 1,
-		.entry_size = sizeof(struct wbm_release_ring) >> 2,
-		.lmac_ring = FALSE,
-		.ring_dir = HAL_SRNG_SRC_RING,
-		.reg_start = {
-		HWIO_WBM_R0_PPE_RELEASE_RING_BASE_LSB_ADDR(WBM_REG_REG_BASE),
-		HWIO_WBM_R2_PPE_RELEASE_RING_HP_ADDR(WBM_REG_REG_BASE),
-		},
-		.reg_size = {},
-		.max_size =
-		HWIO_WBM_R0_PPE_RELEASE_RING_BASE_MSB_RING_SIZE_BMSK >>
-		HWIO_WBM_R0_PPE_RELEASE_RING_BASE_MSB_RING_SIZE_SHFT,
-	},
 #ifdef QCA_MONITOR_2_0_SUPPORT
 	{ /* TX_MONITOR_BUF */
 		.start_ring_id = HAL_SRNG_SW2TXMON_BUF0,
@@ -2488,13 +2410,13 @@ struct hal_hw_srng_config hw_srng_table_9224[] = {
 };
 
 /**
- * hal_srng_hw_reg_offset_init_qcn9224() - Initialize the HW srng reg offset
- *				applicable only for QCN9224
+ * hal_srng_hw_reg_offset_init_qca5332() - Initialize the HW srng reg offset
+ *				applicable only for qca5332
  * @hal_soc: HAL Soc handle
  *
  * Return: None
  */
-static inline void hal_srng_hw_reg_offset_init_qcn9224(struct hal_soc *hal_soc)
+static inline void hal_srng_hw_reg_offset_init_qca5332(struct hal_soc *hal_soc)
 {
 	int32_t *hw_reg_offset = hal_soc->hal_hw_reg_offset;
 
@@ -2506,19 +2428,19 @@ static inline void hal_srng_hw_reg_offset_init_qcn9224(struct hal_soc *hal_soc)
 }
 
 /**
- * hal_qcn9224_attach()- Attach 9224 target specific hal_soc ops,
+ * hal_qca5332_attach()- Attach 5332 target specific hal_soc ops,
  *			  offset and srng table
  * Return: void
  */
-void hal_qcn9224_attach(struct hal_soc *hal_soc)
+void hal_qca5332_attach(struct hal_soc *hal_soc)
 {
-	hal_soc->hw_srng_table = hw_srng_table_9224;
+	hal_soc->hw_srng_table = hw_srng_table_5332;
 
 	hal_srng_hw_reg_offset_init_generic(hal_soc);
-	hal_srng_hw_reg_offset_init_qcn9224(hal_soc);
+	hal_srng_hw_reg_offset_init_qca5332(hal_soc);
 
 	hal_hw_txrx_default_ops_attach_be(hal_soc);
-	hal_hw_txrx_ops_attach_qcn9224(hal_soc);
+	hal_hw_txrx_ops_attach_qca5332(hal_soc);
 	if (hal_soc->static_window_map)
 		hal_write_window_register(hal_soc);
 	hal_soc->dmac_cmn_src_rxbuf_ring = true;

@@ -2119,6 +2119,18 @@ wmi_extract_frame_pn_params(wmi_unified_t wmi_handle, void *evt_buf,
 }
 
 QDF_STATUS
+wmi_extract_is_conn_ap_frame(wmi_unified_t wmi_handle, void *evt_buf,
+			     struct frm_conn_ap *is_conn_ap_frm)
+{
+	if (wmi_handle->ops->extract_is_conn_ap_frame)
+		return wmi_handle->ops->extract_is_conn_ap_frame(wmi_handle,
+							evt_buf,
+							is_conn_ap_frm);
+
+	return QDF_STATUS_E_FAILURE;
+}
+
+QDF_STATUS
 wmi_extract_vdev_roam_param(wmi_unified_t wmi_handle, void *evt_buf,
 			    wmi_host_roam_event *param)
 {
@@ -2852,6 +2864,30 @@ wmi_unified_send_coex_config_cmd(wmi_unified_t wmi_handle,
 	return QDF_STATUS_E_FAILURE;
 }
 
+#ifdef WLAN_FEATURE_DBAM_CONFIG
+QDF_STATUS
+wmi_unified_send_dbam_config_cmd(wmi_unified_t wmi_handle,
+				 struct coex_dbam_config_params *param)
+{
+	if (wmi_handle->ops->send_dbam_config_cmd)
+		return wmi_handle->ops->send_dbam_config_cmd(wmi_handle,
+							     param);
+
+	return QDF_STATUS_E_FAILURE;
+}
+
+QDF_STATUS
+wmi_extract_dbam_config_response(wmi_unified_t wmi_handle, void *evt_buf,
+				 struct coex_dbam_config_resp *resp)
+{
+	if (wmi_handle->ops->extract_dbam_config_resp_event)
+		return wmi_handle->ops->extract_dbam_config_resp_event(
+					wmi_handle, evt_buf, resp);
+
+	return QDF_STATUS_E_FAILURE;
+}
+#endif
+
 QDF_STATUS
 wmi_unified_send_request_get_rcpi_cmd(wmi_unified_t wmi_handle,
 				      struct rcpi_req *get_rcpi_param)
@@ -3460,6 +3496,25 @@ wmi_extract_pasn_peer_delete_req(wmi_unified_t wmi, void *evt_buf,
 
 	return QDF_STATUS_E_FAILURE;
 }
+
+QDF_STATUS
+wmi_send_rtt_pasn_auth_status_cmd(wmi_unified_t wmi,
+				  struct wlan_pasn_auth_status *data)
+{
+	if (wmi->ops->send_rtt_pasn_auth_status_cmd)
+		return wmi->ops->send_rtt_pasn_auth_status_cmd(wmi, data);
+
+	return QDF_STATUS_E_FAILURE;
+}
+
+QDF_STATUS
+wmi_send_rtt_pasn_deauth_cmd(wmi_unified_t wmi, struct qdf_mac_addr *peer_mac)
+{
+	if (wmi->ops->send_rtt_pasn_deauth_cmd)
+		return wmi->ops->send_rtt_pasn_deauth_cmd(wmi, peer_mac);
+
+	return QDF_STATUS_E_FAILURE;
+}
 #endif
 
 QDF_STATUS wmi_unified_extract_hw_mode_resp(wmi_unified_t wmi,
@@ -3645,6 +3700,17 @@ QDF_STATUS wmi_unified_send_cp_stats_cmd(wmi_unified_t wmi_handle,
 	return QDF_STATUS_E_FAILURE;
 }
 
+QDF_STATUS wmi_unified_send_halphy_stats_cmd(wmi_unified_t wmi_handle,
+					     void *buf_ptr, uint32_t buf_len)
+{
+	if (wmi_handle->ops->send_halphy_stats_cmd)
+		return wmi_handle->ops->send_halphy_stats_cmd(wmi_handle,
+							      buf_ptr,
+							      buf_len);
+
+	return QDF_STATUS_E_FAILURE;
+}
+
 QDF_STATUS
 wmi_unified_extract_cp_stats_more_pending(wmi_unified_t wmi_handle,
 					  void *evt_buf, uint32_t *more_flag)
@@ -3653,6 +3719,34 @@ wmi_unified_extract_cp_stats_more_pending(wmi_unified_t wmi_handle,
 		return wmi_handle->ops->extract_cp_stats_more_pending(wmi_handle,
 								      evt_buf,
 								      more_flag);
+
+	return QDF_STATUS_E_FAILURE;
+}
+
+QDF_STATUS
+wmi_unified_extract_halphy_stats_end_of_event(wmi_unified_t wmi_handle,
+					      void *evt_buf,
+					      uint32_t *end_of_event_flag)
+{
+	if (wmi_handle->ops->extract_halphy_stats_end_of_event)
+		return
+		wmi_handle->ops->extract_halphy_stats_end_of_event(wmi_handle,
+							evt_buf,
+							end_of_event_flag);
+
+	return QDF_STATUS_E_FAILURE;
+}
+
+QDF_STATUS
+wmi_unified_extract_halphy_stats_event_count(wmi_unified_t wmi_handle,
+					     void *evt_buf,
+					     uint32_t *event_count_flag)
+{
+	if (wmi_handle->ops->extract_halphy_stats_event_count)
+		return
+		wmi_handle->ops->extract_halphy_stats_event_count(wmi_handle,
+							evt_buf,
+							event_count_flag);
 
 	return QDF_STATUS_E_FAILURE;
 }

@@ -283,6 +283,9 @@ enum htt_cmn_dbg_stats_type {
  * @TXRX_NAPI_STATS: Print NAPI scheduling statistics
  * @TXRX_SOC_INTERRUPT_STATS: Print soc interrupt stats
  * @TXRX_HAL_REG_WRITE_STATS: Hal Reg Write stats
+ * @TXRX_SOC_REO_HW_DESC_DUMP: HW REO queue desc dump
+ * @TXRX_SOC_WBM_IDLE_HPTP_DUMP: WBM idle link desc SRNG HP/TP dump
+ * @TXRX_SRNG_USAGE_WM_STATS: SRNG usage watermark stats
  */
 enum cdp_host_txrx_stats {
 	TXRX_HOST_STATS_INVALID  = -1,
@@ -303,6 +306,7 @@ enum cdp_host_txrx_stats {
 	TXRX_HAL_REG_WRITE_STATS = 14,
 	TXRX_SOC_REO_HW_DESC_DUMP = 15,
 	TXRX_SOC_WBM_IDLE_HPTP_DUMP = 16,
+	TXRX_SRNG_USAGE_WM_STATS = 17,
 	TXRX_HOST_STATS_MAX,
 };
 
@@ -399,11 +403,13 @@ enum htt_cmn_t2h_en_stats_status {
  * @CDP_INVALID_PEER_TYPE: invalid peer type
  * @CDP_LINK_PEER_TYPE: legacy peer or link peer for MLO connection
  * @CDP_MLD_PEER_TYPE: MLD peer for MLO connection
+ * @CDP_WILD_PEER_TYPE: used to set peer type for same mld/link mac addr
  */
 enum cdp_peer_type {
 	CDP_INVALID_PEER_TYPE,
 	CDP_LINK_PEER_TYPE,
 	CDP_MLD_PEER_TYPE,
+	CDP_WILD_PEER_TYPE,
 };
 
 /**
@@ -418,6 +424,21 @@ struct cdp_peer_setup_info {
 	uint8_t is_first_link:1,
 		is_primary_link:1;
 	uint8_t primary_umac_id;
+};
+
+/**
+ * struct cdp_peer_info: peer info for dp hash find
+ * @vdev_id: Vdev ID
+ * @mac_addr: peer mac address to search
+ * @mac_addr_is_aligned: true only if mac_addr type is
+			"union dp_align_mac_addr", otherwise set false always.
+ * @peer_type: link or MLD peer type
+ */
+struct cdp_peer_info {
+	uint8_t vdev_id;
+	uint8_t *mac_addr;
+	bool mac_addr_is_aligned;
+	enum cdp_peer_type peer_type;
 };
 
 /**
@@ -442,6 +463,7 @@ enum cdp_txrx_ast_entry_type {
 	CDP_TXRX_AST_TYPE_STA_BSS,	 /* BSS entry(STA mode) */
 	CDP_TXRX_AST_TYPE_DA,	/* AST entry based on Destination address */
 	CDP_TXRX_AST_TYPE_WDS_HM_SEC, /* HM WDS entry for secondary radio */
+	CDP_TXRX_AST_TYPE_MLD, /* AST entry type for MLD peer */
 	CDP_TXRX_AST_TYPE_MAX
 };
 
@@ -519,74 +541,6 @@ struct cdp_rx_mic_err_info {
 	bool multicast;
 	uint16_t vdev_id;
 };
-
-#ifdef WLAN_SUPPORT_SCS
-/* SCS Procedure data structures
- */
-#define IEEE80211_SCS_MAX_SIZE        10
-#define IEEE80211_IPV4_LEN 4
-#define IEEE80211_IPV6_LEN 16
-
-struct cdp_tclas_tuple_ipv4 {
-	u_int8_t  version;
-	uint8_t  src_ip[IEEE80211_IPV4_LEN];
-	uint8_t  dst_ip[IEEE80211_IPV4_LEN];
-	u_int16_t src_port;
-	u_int16_t dst_port;
-	u_int8_t  dscp;
-	u_int8_t  protocol;
-	u_int8_t  reserved;
-} __packed;
-
-struct cdp_tclas_tuple_ipv6 {
-	u_int8_t version;
-	u_int8_t  src_ip[IEEE80211_IPV6_LEN];
-	u_int8_t  dst_ip[IEEE80211_IPV6_LEN];
-	u_int16_t src_port;
-	u_int16_t dst_port;
-	u_int8_t  type4_dscp;
-	u_int8_t  next_header;
-	u_int8_t  flow_label[3];
-} __packed;
-
-struct cdp_tclas_tuple_ipsec {
-	u_int8_t protocol_number;
-	u_int8_t protocol_instance;
-	u_int8_t filter_len;
-	u_int8_t *filter_mask;
-	u_int8_t *filter_val;
-} __packed;
-
-struct cdp_tclas_tuple {
-	uint8_t type;
-	uint8_t mask;
-	union {
-		union {
-			struct cdp_tclas_tuple_ipv4 v4;
-			struct cdp_tclas_tuple_ipv6 v6;
-		} type4;
-		struct cdp_tclas_tuple_ipsec ips;
-	} tclas;
-} __packed;
-
-/**
- * struct cdp_scs_params - SCS parameters
- * obtained from handshake
- * @scsid  - SCS ID
- * @access_priority - User Access Priority
- * containing tid value.
- * @tclas_elements - Number of TCLAS elements
- * @tclas - TCLAS tuple parameters
- * @tclas_processing - TCLAS processing value
- */
-struct cdp_scs_params {
-	uint8_t scsid;
-	uint8_t access_priority;
-	uint8_t tclas_elements;
-	struct cdp_tclas_tuple tclas[IEEE80211_SCS_MAX_SIZE];
-	uint8_t tclas_process;
-};
-#endif
 
 #ifdef WLAN_SUPPORT_MSCS
 /**
@@ -2312,6 +2266,7 @@ struct cdp_tx_completion_msdu {
  * @rx_ratekpbs - rx rate in kbps
  * @rix - rate index
  * @mpdu_retries - retries of mpdu in rx
+ * @rx_time_us - Rx duration
  */
 struct cdp_rx_stats_ppdu_user {
 	uint16_t peer_id;
@@ -2351,6 +2306,7 @@ struct cdp_rx_stats_ppdu_user {
 	uint32_t rx_ratekbps;
 	uint32_t rix;
 	uint32_t mpdu_retries;
+	uint16_t rx_time_us;
 };
 
 /**
@@ -2721,9 +2677,7 @@ struct cdp_flow_stats {
  */
 struct cdp_flow_stats {
 	uint32_t msdu_count;
-#ifdef QCA_TEST_MON_PF_TAGS_STATS
 	uint32_t mon_msdu_count;
-#endif
 };
 #endif
 
@@ -2747,6 +2701,9 @@ enum cdp_flow_protocol_type {
 
 /**
  * cdp_rx_flow_tuple_info - RX flow tuple info used for addition/deletion
+ * @tuple_populated:
+ * @is_exception: Flows which are added to flow table but not aggregated.
+ * @bypass_fisa: Flow which are not added to flow table.
  * @dest_ip_127_96: destination IP address bit fields 96-127
  * @dest_ip_95_64: destination IP address bit fields 64-95
  * @dest_ip_63_32: destination IP address bit fields 32-63
@@ -2763,6 +2720,7 @@ struct cdp_rx_flow_tuple_info {
 #ifdef WLAN_SUPPORT_RX_FISA
 	uint8_t tuple_populated;
 	uint8_t is_exception;
+	bool bypass_fisa;
 #endif
 	uint32_t dest_ip_127_96;
 	uint32_t dest_ip_95_64;
