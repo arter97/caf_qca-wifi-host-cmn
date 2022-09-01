@@ -1757,7 +1757,8 @@ dp_rx_pdev_mon_buf_buffers_alloc(struct dp_pdev *pdev, uint32_t mac_id,
 
 	rx_desc_pool = dp_rx_get_mon_desc_pool(soc, mac_id, pdev_id);
 
-	qdf_spinlock_create(&rx_desc_pool->lock);
+	if (atomic_fetch_inc(&rx_desc_pool->refcnt) == 0)
+		qdf_spinlock_create(&rx_desc_pool->lock);
 
 	dp_debug("Mon RX Desc Pool[%d] entries=%u", pdev_id, num_entries);
 
@@ -1894,6 +1895,10 @@ dp_rx_pdev_mon_buf_desc_pool_deinit(struct dp_pdev *pdev, uint32_t mac_id)
 
 	rx_desc_pool = &soc->rx_desc_mon[mac_id];
 
+	if (!wlan_cfg_is_delay_mon_replenish(soc->wlan_cfg_ctx) &&
+	    !atomic_read(&rx_desc_pool->refcnt))
+		return;
+
 	dp_debug("Mon RX Desc buf Pool[%d] deinit", pdev_id);
 
 	dp_rx_desc_pool_deinit(soc, rx_desc_pool);
@@ -1926,9 +1931,16 @@ dp_rx_pdev_mon_buf_desc_pool_free(struct dp_pdev *pdev, uint32_t mac_id)
 
 	rx_desc_pool = &soc->rx_desc_mon[mac_id];
 
+	if (!wlan_cfg_is_delay_mon_replenish(soc->wlan_cfg_ctx) &&
+	    !atomic_read(&rx_desc_pool->refcnt))
+		return;
+
 	dp_debug("Mon RX Buf Desc Pool Free pdev[%d]", pdev_id);
 
 	dp_rx_desc_pool_free(soc, rx_desc_pool);
+
+	if (atomic_fetch_dec(&rx_desc_pool->refcnt) == 1)
+		qdf_spinlock_destroy(&rx_desc_pool->lock);
 }
 
 static void
@@ -1951,6 +1963,10 @@ void dp_rx_pdev_mon_buf_buffers_free(struct dp_pdev *pdev, uint32_t mac_id)
 
 	rx_desc_pool = &soc->rx_desc_mon[mac_id];
 
+	if (!wlan_cfg_is_delay_mon_replenish(soc->wlan_cfg_ctx) &&
+	    !atomic_read(&rx_desc_pool->refcnt))
+		return;
+
 	dp_debug("Mon RX Buf buffers Free pdev[%d]", pdev_id);
 
 	if (rx_desc_pool->rx_mon_dest_frag_enable)
@@ -1958,7 +1974,8 @@ void dp_rx_pdev_mon_buf_buffers_free(struct dp_pdev *pdev, uint32_t mac_id)
 	else
 		dp_rx_desc_nbuf_free(soc, rx_desc_pool);
 
-	qdf_spinlock_destroy(&rx_desc_pool->lock);
+	if (atomic_fetch_dec(&rx_desc_pool->refcnt) == 1)
+		qdf_spinlock_destroy(&rx_desc_pool->lock);
 }
 
 QDF_STATUS
@@ -1977,6 +1994,9 @@ dp_rx_pdev_mon_buf_desc_pool_alloc(struct dp_pdev *pdev, uint32_t mac_id)
 	num_entries = mon_buf_ring->num_entries;
 
 	rx_desc_pool = &soc->rx_desc_mon[mac_id];
+
+	if (atomic_fetch_inc(&rx_desc_pool->refcnt) == 0)
+		qdf_spinlock_create(&rx_desc_pool->lock);
 
 	dp_debug("Mon RX Desc Pool[%d] entries=%u",
 		 pdev_id, num_entries);
