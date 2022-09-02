@@ -893,9 +893,6 @@ static A_STATUS hif_sdio_remove(void *context, void *hif_handle)
 
 	athdiag_procfs_remove();
 
-#ifndef TARGET_DUMP_FOR_NON_QC_PLATFORM
-	iounmap(scn->ramdump_base);
-#endif
 
 	HIF_EXIT();
 
