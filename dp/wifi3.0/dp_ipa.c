@@ -2800,6 +2800,64 @@ static qdf_nbuf_t dp_ipa_intrabss_send(struct dp_pdev *pdev,
 	return NULL;
 }
 
+#ifdef IPA_WDS_EASYMESH_FEATURE
+/**
+ * dp_ipa_peer_check() - Check for peer for given mac
+ * @soc: dp soc object
+ * @peer_mac_addr: peer mac address
+ * @vdev_id: vdev id
+ *
+ * Return: true if peer is found, else false
+ */
+static inline bool dp_ipa_peer_check(struct dp_soc *soc,
+				     uint8_t *peer_mac_addr, uint8_t vdev_id)
+{
+	struct dp_ast_entry *ast_entry = NULL;
+	struct dp_peer *peer = NULL;
+
+	qdf_spin_lock_bh(&soc->ast_lock);
+	ast_entry = dp_peer_ast_hash_find_soc(soc, peer_mac_addr);
+
+	if ((!ast_entry) ||
+	    (ast_entry->delete_in_progress && !ast_entry->callback)) {
+		qdf_spin_unlock_bh(&soc->ast_lock);
+		return false;
+	}
+
+	peer = dp_peer_get_ref_by_id(soc, ast_entry->peer_id,
+				     DP_MOD_ID_AST);
+
+	if (!peer) {
+		qdf_spin_unlock_bh(&soc->ast_lock);
+		return false;
+	} else {
+		if (peer->vdev->vdev_id == vdev_id) {
+			dp_peer_unref_delete(peer, DP_MOD_ID_IPA);
+			qdf_spin_unlock_bh(&soc->ast_lock);
+			return true;
+		}
+		dp_peer_unref_delete(peer, DP_MOD_ID_IPA);
+		qdf_spin_unlock_bh(&soc->ast_lock);
+		return false;
+	}
+}
+#else
+static inline bool dp_ipa_peer_check(struct dp_soc *soc,
+				     uint8_t *peer_mac_addr, uint8_t vdev_id)
+{
+	struct dp_peer *peer = NULL;
+
+	peer = dp_peer_find_hash_find(soc, peer_mac_addr, 0, vdev_id,
+				      DP_MOD_ID_IPA);
+	if (!peer) {
+		return false;
+	} else {
+		dp_peer_unref_delete(peer, DP_MOD_ID_IPA);
+		return true;
+	}
+}
+#endif
+
 bool dp_ipa_rx_intrabss_fwd(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
 			    qdf_nbuf_t nbuf, bool *fwd_success)
 {
@@ -2807,8 +2865,6 @@ bool dp_ipa_rx_intrabss_fwd(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
 	struct dp_vdev *vdev = dp_vdev_get_ref_by_id(soc, vdev_id,
 						     DP_MOD_ID_IPA);
 	struct dp_pdev *pdev;
-	struct dp_peer *da_peer;
-	struct dp_peer *sa_peer;
 	qdf_nbuf_t nbuf_copy;
 	uint8_t da_is_bcmc;
 	struct ethhdr *eh;
@@ -2853,19 +2909,11 @@ bool dp_ipa_rx_intrabss_fwd(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
 	if (!qdf_mem_cmp(eh->h_dest, vdev->mac_addr.raw, QDF_MAC_ADDR_SIZE))
 		goto out;
 
-	da_peer = dp_peer_find_hash_find(soc, eh->h_dest, 0, vdev->vdev_id,
-					 DP_MOD_ID_IPA);
-	if (!da_peer)
+	if (!dp_ipa_peer_check(soc, eh->h_dest, vdev->vdev_id))
 		goto out;
 
-	dp_peer_unref_delete(da_peer, DP_MOD_ID_IPA);
-
-	sa_peer = dp_peer_find_hash_find(soc, eh->h_source, 0, vdev->vdev_id,
-					 DP_MOD_ID_IPA);
-	if (!sa_peer)
+	if (!dp_ipa_peer_check(soc, eh->h_source, vdev->vdev_id))
 		goto out;
-
-	dp_peer_unref_delete(sa_peer, DP_MOD_ID_IPA);
 
 	/*
 	 * In intra-bss forwarding scenario, skb is allocated by IPA driver.
