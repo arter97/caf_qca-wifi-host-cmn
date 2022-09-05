@@ -144,6 +144,17 @@
 #define DP_SKIP_BAR_UPDATE_TIMEOUT 5000
 #endif
 
+#ifdef IPA_OFFLOAD
+#define DP_PEER_REO_STATS_TID_SHIFT 16
+#define DP_PEER_REO_STATS_TID_MASK 0xFFFF0000
+#define DP_PEER_REO_STATS_PEER_ID_MASK 0x0000FFFF
+#define DP_PEER_GET_REO_STATS_TID(comb_peer_id_tid) \
+	((comb_peer_id_tid & DP_PEER_REO_STATS_TID_MASK) >> \
+	DP_PEER_REO_STATS_TID_SHIFT)
+#define DP_PEER_GET_REO_STATS_PEER_ID(comb_peer_id_tid) \
+	(comb_peer_id_tid & DP_PEER_REO_STATS_PEER_ID_MASK)
+#endif
+
 enum rx_pktlog_mode {
 	DP_RX_PKTLOG_DISABLED = 0,
 	DP_RX_PKTLOG_FULL,
@@ -792,6 +803,11 @@ struct dp_rx_tid {
 
 	/* Peer TID statistics */
 	struct cdp_peer_tid_stats stats;
+#ifdef IPA_OFFLOAD
+	/* rx msdu count per tid */
+	struct cdp_pkt_info rx_msdu_cnt;
+#endif
+
 };
 
 /**
