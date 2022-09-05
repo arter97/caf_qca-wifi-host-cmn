@@ -30,7 +30,8 @@
 #include <wlan_crypto_global_api.h>
 
 #ifdef WLAN_FEATURE_11BE_MLO
-static inline void
+
+void
 mlo_allocate_and_copy_ies(struct wlan_cm_connect_req *target,
 			  struct wlan_cm_connect_req *source)
 {
@@ -56,7 +57,7 @@ mlo_allocate_and_copy_ies(struct wlan_cm_connect_req *target,
 	}
 }
 
-static inline void
+void
 mlo_free_connect_ies(struct wlan_cm_connect_req *connect_req)
 {
 	if (connect_req->scan_ie.ptr) {
@@ -843,7 +844,6 @@ static QDF_STATUS ml_activate_pend_disconn_req_cb(struct scheduler_msg *msg)
 	mlo_disconnect(vdev, sta_ctx->disconn_req->source,
 		       sta_ctx->disconn_req->reason_code,
 		       &sta_ctx->disconn_req->bssid);
-
 	qdf_mem_free(sta_ctx->disconn_req);
 	sta_ctx->disconn_req = NULL;
 	wlan_objmgr_vdev_release_ref(vdev, WLAN_MLO_MGR_ID);
@@ -887,7 +887,6 @@ QDF_STATUS mlo_post_disconnect_msg(struct scheduler_msg *msg)
 }
 #endif
 
-static inline
 void mlo_handle_sta_link_connect_failure(struct wlan_objmgr_vdev *vdev,
 					 struct wlan_cm_connect_resp *rsp)
 {
@@ -940,7 +939,6 @@ void mlo_handle_sta_link_connect_failure(struct wlan_objmgr_vdev *vdev,
 	}
 }
 
-static inline
 void mlo_handle_pending_disconnect(struct wlan_objmgr_vdev *vdev)
 {
 	struct scheduler_msg msg = {0};
