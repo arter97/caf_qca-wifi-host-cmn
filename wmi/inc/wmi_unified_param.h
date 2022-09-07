@@ -5034,6 +5034,7 @@ typedef enum {
 	wmi_pdev_param_stats_observe_period,
 	wmi_pdev_param_max,
 	wmi_pdev_param_ul_ofdma_rtd,
+	wmi_pdev_param_preamble_power_removal,
 } wmi_conv_pdev_params_id;
 
 
