@@ -378,7 +378,7 @@ static void ce_tasklet(unsigned long data)
 	if (scn->target_status != TARGET_STATUS_RESET) {
 		if (ce_per_engine_pkt_pending_check(CE_state->scn, CE_state->id)) {
 			CE_state->before_int_count++;
-			qdf_err("before pkt pending for ce_id %d", CE_state->id);
+			hif_debug("before pkt pending for ce_id %d", CE_state->id);
 			hif_record_ce_desc_event(CE_state->scn, CE_state->id,
 			    HIF_PKT_PEND_BEFORE_INT, NULL, NULL, CE_state->before_int_count, 0);
 		}
@@ -387,7 +387,7 @@ static void ce_tasklet(unsigned long data)
 
 		if (ce_per_engine_pkt_pending_check(CE_state->scn, CE_state->id)) {
 			CE_state->after_int_count++;
-			qdf_err("After pkt pending for ce_id %d", CE_state->id);
+			hif_debug("After pkt pending for ce_id %d", CE_state->id);
 			hif_record_ce_desc_event(CE_state->scn, CE_state->id,
 			    HIF_PKT_PEND_AFTER_INT, NULL, NULL, CE_state->after_int_count, 0);
 		}
