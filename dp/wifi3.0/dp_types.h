@@ -432,7 +432,7 @@ struct rx_desc_pool {
 	uint8_t buf_alignment;
 	bool rx_mon_dest_frag_enable;
 	enum dp_desc_type desc_type;
-	atomic_t refcnt;
+	qdf_atomic_t refcnt;
 };
 
 /**

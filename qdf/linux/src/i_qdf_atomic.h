@@ -159,6 +159,28 @@ static inline int32_t __qdf_atomic_inc_not_zero(__qdf_atomic_t *v)
 }
 
 /**
+ * __qdf_atomic_fetch_inc() - fetch before increment
+ * @v: A pointer to an opaque atomic variable
+ *
+ * Return: The current value of the variable
+ */
+static inline int32_t __qdf_atomic_fetch_inc(__qdf_atomic_t *v)
+{
+	return atomic_fetch_inc(v);
+}
+
+/**
+ * __qdf_atomic_fetch_dec() - fetch before decremented
+ * @v: A pointer to an opaque atomic variable
+ *
+ * Return: The current value of the variable
+ */
+static inline int32_t __qdf_atomic_fetch_dec(__qdf_atomic_t *v)
+{
+	return atomic_fetch_dec(v);
+}
+
+/**
  * __qdf_atomic_set_bit - Atomically set a bit in memory
  * @nr: bit to set
  * @addr: the address to start counting from

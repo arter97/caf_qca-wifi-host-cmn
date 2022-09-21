@@ -108,7 +108,7 @@ void dp_rx_desc_pool_init(struct dp_soc *soc, uint32_t pool_id,
 	union dp_rx_desc_list_elem_t *rx_desc_elem;
 
 	/* Initialize the lock */
-	if (atomic_fetch_inc(&rx_desc_pool->refcnt) == 0)
+	if (qdf_atomic_fetch_inc(&rx_desc_pool->refcnt) == 0)
 		qdf_spinlock_create(&rx_desc_pool->lock);
 
 	qdf_spin_lock_bh(&rx_desc_pool->lock);
@@ -265,7 +265,7 @@ void dp_rx_desc_pool_deinit(struct dp_soc *soc,
 
 	qdf_spin_unlock_bh(&rx_desc_pool->lock);
 
-	if (atomic_fetch_dec(&rx_desc_pool->refcnt) == 1)
+	if (qdf_atomic_fetch_dec(&rx_desc_pool->refcnt) == 1)
 		qdf_spinlock_destroy(&rx_desc_pool->lock);
 }
 #else
@@ -330,7 +330,7 @@ void dp_rx_desc_pool_init(struct dp_soc *soc, uint32_t pool_id,
 {
 	int i;
 	/* Initialize the lock */
-	if (atomic_fetch_inc(&rx_desc_pool->refcnt) == 0)
+	if (qdf_atomic_fetch_inc(&rx_desc_pool->refcnt) == 0)
 		qdf_spinlock_create(&rx_desc_pool->lock);
 
 	qdf_spin_lock_bh(&rx_desc_pool->lock);
@@ -470,7 +470,7 @@ void dp_rx_desc_pool_deinit(struct dp_soc *soc,
 
 	qdf_spin_unlock_bh(&rx_desc_pool->lock);
 
-	if (atomic_fetch_dec(&rx_desc_pool->refcnt) == 1)
+	if (qdf_atomic_fetch_dec(&rx_desc_pool->refcnt) == 1)
 		qdf_spinlock_destroy(&rx_desc_pool->lock);
 }
 

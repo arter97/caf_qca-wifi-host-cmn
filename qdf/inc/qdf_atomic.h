@@ -255,4 +255,26 @@ static inline int qdf_atomic_test_bit(int nr, volatile unsigned long *addr)
 	return __qdf_atomic_test_bit(nr, addr);
 }
 
+/**
+ * qdf_atomic_fetch_inc() - fetch before increment
+ * @v: A pointer to an opaque atomic variable
+ *
+ * Return: The current value of the variable
+ */
+static inline int32_t qdf_atomic_fetch_inc(qdf_atomic_t *v)
+{
+	return __qdf_atomic_fetch_inc(v);
+}
+
+/**
+ * qdf_atomic_fetch_dec() - fetch before decremented
+ * @v: A pointer to an opaque atomic variable
+ *
+ * Return: The current value of the variable
+ */
+static inline int32_t qdf_atomic_fetch_dec(qdf_atomic_t *v)
+{
+	return __qdf_atomic_fetch_dec(v);
+}
+
 #endif

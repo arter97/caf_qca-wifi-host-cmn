@@ -1757,7 +1757,7 @@ dp_rx_pdev_mon_buf_buffers_alloc(struct dp_pdev *pdev, uint32_t mac_id,
 
 	rx_desc_pool = dp_rx_get_mon_desc_pool(soc, mac_id, pdev_id);
 
-	if (atomic_fetch_inc(&rx_desc_pool->refcnt) == 0)
+	if (qdf_atomic_fetch_inc(&rx_desc_pool->refcnt) == 0)
 		qdf_spinlock_create(&rx_desc_pool->lock);
 
 	dp_debug("Mon RX Desc Pool[%d] entries=%u", pdev_id, num_entries);
@@ -1939,7 +1939,7 @@ dp_rx_pdev_mon_buf_desc_pool_free(struct dp_pdev *pdev, uint32_t mac_id)
 
 	dp_rx_desc_pool_free(soc, rx_desc_pool);
 
-	if (atomic_fetch_dec(&rx_desc_pool->refcnt) == 1)
+	if (qdf_atomic_fetch_dec(&rx_desc_pool->refcnt) == 1)
 		qdf_spinlock_destroy(&rx_desc_pool->lock);
 }
 
@@ -1974,7 +1974,7 @@ void dp_rx_pdev_mon_buf_buffers_free(struct dp_pdev *pdev, uint32_t mac_id)
 	else
 		dp_rx_desc_nbuf_free(soc, rx_desc_pool);
 
-	if (atomic_fetch_dec(&rx_desc_pool->refcnt) == 1)
+	if (qdf_atomic_fetch_dec(&rx_desc_pool->refcnt) == 1)
 		qdf_spinlock_destroy(&rx_desc_pool->lock);
 }
 
@@ -1995,7 +1995,7 @@ dp_rx_pdev_mon_buf_desc_pool_alloc(struct dp_pdev *pdev, uint32_t mac_id)
 
 	rx_desc_pool = &soc->rx_desc_mon[mac_id];
 
-	if (atomic_fetch_inc(&rx_desc_pool->refcnt) == 0)
+	if (qdf_atomic_fetch_inc(&rx_desc_pool->refcnt) == 0)
 		qdf_spinlock_create(&rx_desc_pool->lock);
 
 	dp_debug("Mon RX Desc Pool[%d] entries=%u",
