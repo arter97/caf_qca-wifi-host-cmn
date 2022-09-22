@@ -1516,6 +1516,13 @@ int hif_runtime_resume(struct hif_opaque_softc *hif_ctx);
  * fastpath only applicable to legacy copy engine
  */
 void hif_fastpath_resume(struct hif_opaque_softc *hif_ctx);
+
+/**
+ * hif_rtpm_get_state(): get rtpm link state
+ *
+ * Return: state
+ */
+int hif_rtpm_get_state(void);
 #else
 static inline
 QDF_STATUS hif_rtpm_register(uint32_t id, void (*hif_rpm_cbk)(void))
@@ -1785,7 +1792,7 @@ enum hif_exec_type {
 	HIF_EXEC_TASKLET_TYPE,
 };
 
-typedef uint32_t (*ext_intr_handler)(void *, uint32_t);
+typedef uint32_t (*ext_intr_handler)(void *, uint32_t, int);
 
 /**
  * hif_get_int_ctx_irq_num() - retrieve an irq num for an interrupt context id

@@ -32,7 +32,7 @@
  */
 #define SHOW_DEFINED(x) do {} while (0)
 
-#if defined(WLAN_FEATURE_TSF_UPLINK_DELAY) || defined(CONFIG_SAWF)
+#if defined(WLAN_FEATURE_TSF_UPLINK_DELAY) || defined(WLAN_CONFIG_TX_DELAY)
 static inline void
 hal_tx_comp_get_buffer_timestamp_be(void *desc,
 				    struct hal_tx_completion_status *ts)
@@ -40,7 +40,7 @@ hal_tx_comp_get_buffer_timestamp_be(void *desc,
 	ts->buffer_timestamp = HAL_TX_DESC_GET(desc, WBM2SW_COMPLETION_RING_TX,
 					       BUFFER_TIMESTAMP);
 }
-#else /* !WLAN_FEATURE_TSF_UPLINK_DELAY || CONFIG_SAWF */
+#else /* !WLAN_FEATURE_TSF_UPLINK_DELAY || WLAN_CONFIG_TX_DELAY */
 static inline void
 hal_tx_comp_get_buffer_timestamp_be(void *desc,
 				    struct hal_tx_completion_status *ts)
@@ -2090,14 +2090,14 @@ hal_txmon_status_parse_tlv_generic_be(void *data_ppdu_info,
 					      MACTX_VHT_SIG_A_MACTX_VHT_SIG_A_INFO_DETAILS,
 					      N_STS);
 		/* if it is SU */
-		nss_su = nss_comb & 0x7;
+		nss_su = (nss_comb & 0x7) + 1;
 		/* partial aid - applicable only for SU */
 		partial_aid = (nss_comb >> 3) & 0x1F;
 		/* if it is MU */
-		nss_mu[0] = nss_comb & 0x7;
-		nss_mu[1] = (nss_comb >> 3) & 0x7;
-		nss_mu[2] = (nss_comb >> 6) & 0x7;
-		nss_mu[3] = (nss_comb >> 9) & 0x7;
+		nss_mu[0] = (nss_comb & 0x7) + 1;
+		nss_mu[1] = ((nss_comb >> 3) & 0x7) + 1;
+		nss_mu[2] = ((nss_comb >> 6) & 0x7) + 1;
+		nss_mu[3] = ((nss_comb >> 9) & 0x7) + 1;
 
 		sgi = HAL_TX_DESC_GET_64(tx_tlv,
 					 MACTX_VHT_SIG_A_MACTX_VHT_SIG_A_INFO_DETAILS,
@@ -2127,25 +2127,34 @@ hal_txmon_status_parse_tlv_generic_be(void *data_ppdu_info,
 			TXMON_HAL_STATUS(ppdu_info, mcs) = mcs;
 			TXMON_HAL_STATUS(ppdu_info, nss) =
 						nss_su & VHT_SIG_SU_NSS_MASK;
+
+			TXMON_HAL_USER(ppdu_info, user_id,
+				       vht_flag_values3[0]) = ((mcs << 4) |
+							       nss_su);
 		} else {
 			TXMON_HAL_STATUS(ppdu_info, reception_type) =
 						HAL_RX_TYPE_MU_MIMO;
 			TXMON_HAL_USER(ppdu_info, user_id, mcs) = mcs;
 			TXMON_HAL_USER(ppdu_info, user_id, nss) =
 						nss_su & VHT_SIG_SU_NSS_MASK;
+
+			TXMON_HAL_USER(ppdu_info, user_id,
+				       vht_flag_values3[0]) = ((mcs << 4) |
+							       nss_su);
+			TXMON_HAL_USER(ppdu_info, user_id,
+				       vht_flag_values3[1]) = ((mcs << 4) |
+							       nss_mu[1]);
+			TXMON_HAL_USER(ppdu_info, user_id,
+				       vht_flag_values3[2]) = ((mcs << 4) |
+							       nss_mu[2]);
+			TXMON_HAL_USER(ppdu_info, user_id,
+				       vht_flag_values3[3]) = ((mcs << 4) |
+							       nss_mu[3]);
 		}
 
 		/* TODO: loop over multiple user */
 		TXMON_HAL_USER(ppdu_info, user_id,
 			       vht_flag_values2) = bandwidth;
-		TXMON_HAL_USER(ppdu_info, user_id,
-			       vht_flag_values3[0]) = (mcs << 4) | nss_su;
-		TXMON_HAL_USER(ppdu_info, user_id,
-			       vht_flag_values3[1]) = (mcs << 4) | nss_mu[1];
-		TXMON_HAL_USER(ppdu_info, user_id,
-			       vht_flag_values3[2]) = (mcs << 4) | nss_mu[2];
-		TXMON_HAL_USER(ppdu_info, user_id,
-			       vht_flag_values3[3]) = (mcs << 4) | nss_mu[3];
 		TXMON_HAL_USER(ppdu_info, user_id,
 			       vht_flag_values4) = coding;
 		TXMON_HAL_USER(ppdu_info, user_id,
@@ -2501,6 +2510,11 @@ hal_txmon_status_parse_tlv_generic_be(void *data_ppdu_info,
 		SHOW_DEFINED(WIFITRIGGER_RESPONSE_TX_DONE_E);
 		break;
 	}
+	case WIFIFW2SW_MON_E:
+	{
+		SHOW_DEFINED(WIFIFW2SW_MON_E);
+		break;
+	}
 	}
 
 	return status;
@@ -2625,17 +2639,21 @@ static void hal_reo_shared_qaddr_setup_be(hal_soc_handle_t hal_soc_hdl)
  * write start addr of MLO and Non MLO table in HW
  *
  * @hal_soc: HAL Soc handle
+ * @qref_reset: reset qref LUT
  *
  * Return: None
  */
-static void hal_reo_shared_qaddr_init_be(hal_soc_handle_t hal_soc_hdl)
+static void hal_reo_shared_qaddr_init_be(hal_soc_handle_t hal_soc_hdl,
+					 int qref_reset)
 {
 	struct hal_soc *hal = (struct hal_soc *)hal_soc_hdl;
 
-	qdf_mem_zero(hal->reo_qref.mlo_reo_qref_table_vaddr,
-		     REO_QUEUE_REF_ML_TABLE_SIZE);
-	qdf_mem_zero(hal->reo_qref.non_mlo_reo_qref_table_vaddr,
-		     REO_QUEUE_REF_NON_ML_TABLE_SIZE);
+	if (qref_reset) {
+		qdf_mem_zero(hal->reo_qref.mlo_reo_qref_table_vaddr,
+			     REO_QUEUE_REF_ML_TABLE_SIZE);
+		qdf_mem_zero(hal->reo_qref.non_mlo_reo_qref_table_vaddr,
+			     REO_QUEUE_REF_NON_ML_TABLE_SIZE);
+	}
 	/* LUT_BASE0 and BASE1 registers expect upper 32bits of LUT base address
 	 * and lower 8 bits to be 0. Shift the physical address by 8 to plug
 	 * upper 32bits only
