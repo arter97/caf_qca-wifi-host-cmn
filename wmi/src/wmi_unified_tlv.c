@@ -5842,11 +5842,7 @@ static QDF_STATUS send_vdev_spectral_configure_cmd_tlv(wmi_unified_t wmi_handle,
 		 param->rpt_mode, param->bin_scale);
 	wmi_debug("spectral_scan_dBm_adj: %u spectral_scan_chn_mask: %u",
 		 param->dbm_adj, param->chn_mask);
-	wmi_debug("spectral_scan_mode: %u spectral_scan_center_freq: %u",
-		 param->mode, param->center_freq);
-	wmi_debug("spectral_scan_chan_freq: %u", param->chan_freq);
-	wmi_debug("spectral_scan_chan_width: %u Status: %d",
-		 param->chan_width, ret);
+	wmi_debug("Status: %d", ret);
 
 	return ret;
 }
