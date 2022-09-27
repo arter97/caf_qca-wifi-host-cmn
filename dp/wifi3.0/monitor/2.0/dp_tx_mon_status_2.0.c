@@ -297,12 +297,14 @@ dp_tx_mon_enqueue_mpdu_nbuf(struct dp_pdev *pdev,
  * dp_tx_mon_generate_cts2self_frm() - API to generate cts2self frame
  * @pdev: pdev Handle
  * @tx_ppdu_info: pointer to tx ppdu info structure
+ * @window_flag: frame generated window
  *
  * Return: void
  */
 static void
 dp_tx_mon_generate_cts2self_frm(struct dp_pdev *pdev,
-				struct dp_tx_ppdu_info *tx_ppdu_info)
+				struct dp_tx_ppdu_info *tx_ppdu_info,
+				uint8_t window_flag)
 {
 	/* allocate and populate CTS/ CTS2SELF frame */
 	/* enqueue 802.11 payload to per user mpdu_q */
@@ -313,6 +315,7 @@ dp_tx_mon_generate_cts2self_frm(struct dp_pdev *pdev,
 	uint16_t duration_le = 0;
 	struct ieee80211_frame_min_one *wh_min = NULL;
 	qdf_nbuf_t mpdu_nbuf = NULL;
+	uint8_t frm_ctl;
 
 	/* sanity check */
 	if (qdf_unlikely(!pdev))
@@ -341,16 +344,26 @@ dp_tx_mon_generate_cts2self_frm(struct dp_pdev *pdev,
 	wh_min = (struct ieee80211_frame_min_one *)qdf_nbuf_data(mpdu_nbuf);
 	qdf_mem_zero(wh_min, MAX_DUMMY_FRM_BODY);
 
+	frm_ctl = (IEEE80211_FC0_VERSION_0 | IEEE80211_FC0_TYPE_CTL |
+		   IEEE80211_FC0_SUBTYPE_CTS);
+	TXMON_PPDU_COM(tx_ppdu_info, frame_control) = frm_ctl;
+	TXMON_PPDU_COM(tx_ppdu_info, frame_control_info_valid) = 1;
 	wh_min->i_fc[1] = 0;
-	wh_min->i_fc[0] = (IEEE80211_FC0_VERSION_0 | IEEE80211_FC0_TYPE_CTL |
-			   IEEE80211_FC0_SUBTYPE_CTS);
+	wh_min->i_fc[0] = frm_ctl;
+
 	duration_le = qdf_cpu_to_le16(TXMON_PPDU_COM(tx_ppdu_info, duration));
 	wh_min->i_dur[1] = (duration_le & 0xFF00) >> 8;
 	wh_min->i_dur[0] = (duration_le & 0xFF);
 
-	qdf_mem_copy(wh_min->i_addr1,
-		     TXMON_STATUS_INFO(tx_status_info, addr1),
-		     QDF_MAC_ADDR_SIZE);
+	if (window_flag == INITIATOR_WINDOW) {
+		qdf_mem_copy(wh_min->i_addr1,
+			     TXMON_STATUS_INFO(tx_status_info, addr1),
+			     QDF_MAC_ADDR_SIZE);
+	} else {
+		qdf_mem_copy(wh_min->i_addr1,
+			     TXMON_STATUS_INFO(tx_status_info, addr2),
+			     QDF_MAC_ADDR_SIZE);
+	}
 
 	qdf_nbuf_set_pktlen(mpdu_nbuf, sizeof(*wh_min));
 	dp_tx_mon_enqueue_mpdu_nbuf(pdev, tx_ppdu_info, 0, mpdu_nbuf);
@@ -361,12 +374,14 @@ dp_tx_mon_generate_cts2self_frm(struct dp_pdev *pdev,
  * dp_tx_mon_generate_rts_frm() - API to generate rts frame
  * @pdev: pdev Handle
  * @tx_ppdu_info: pointer to tx ppdu info structure
+ * @window_flag: frame generated window
  *
  * Return: void
  */
 static void
 dp_tx_mon_generate_rts_frm(struct dp_pdev *pdev,
-			   struct dp_tx_ppdu_info *tx_ppdu_info)
+			   struct dp_tx_ppdu_info *tx_ppdu_info,
+			   uint8_t window_flag)
 {
 	/* allocate and populate RTS frame */
 	/* enqueue 802.11 payload to per user mpdu_q */
@@ -377,6 +392,7 @@ dp_tx_mon_generate_rts_frm(struct dp_pdev *pdev,
 	uint16_t duration_le = 0;
 	struct ieee80211_ctlframe_addr2 *wh_min = NULL;
 	qdf_nbuf_t mpdu_nbuf = NULL;
+	uint8_t frm_ctl;
 
 	/* sanity check */
 	if (qdf_unlikely(!pdev))
@@ -404,21 +420,35 @@ dp_tx_mon_generate_rts_frm(struct dp_pdev *pdev,
 	wh_min = (struct ieee80211_ctlframe_addr2 *)qdf_nbuf_data(mpdu_nbuf);
 	qdf_mem_zero(wh_min, MAX_DUMMY_FRM_BODY);
 
+	frm_ctl = (IEEE80211_FC0_VERSION_0 | IEEE80211_FC0_TYPE_CTL |
+		   IEEE80211_FC0_SUBTYPE_RTS);
+	TXMON_PPDU_COM(tx_ppdu_info, frame_control) = frm_ctl;
+	TXMON_PPDU_COM(tx_ppdu_info, frame_control_info_valid) = 1;
 	wh_min->i_fc[1] = 0;
-	wh_min->i_fc[0] = (IEEE80211_FC0_VERSION_0 | IEEE80211_FC0_TYPE_CTL |
-			   IEEE80211_FC0_SUBTYPE_RTS);
+	wh_min->i_fc[0] = frm_ctl;
+
 	duration_le = qdf_cpu_to_le16(TXMON_PPDU_COM(tx_ppdu_info, duration));
 	wh_min->i_aidordur[1] = (duration_le & 0xFF00) >> 8;
 	wh_min->i_aidordur[0] = (duration_le & 0xFF);
 
 	if (!tx_status_info->protection_addr)
 		tx_status_info = &tx_mon_be->data_status_info;
-	qdf_mem_copy(wh_min->i_addr1,
-		     TXMON_STATUS_INFO(tx_status_info, addr1),
-		     QDF_MAC_ADDR_SIZE);
-	qdf_mem_copy(wh_min->i_addr2,
-		     TXMON_STATUS_INFO(tx_status_info, addr2),
-		     QDF_MAC_ADDR_SIZE);
+
+	if (window_flag == INITIATOR_WINDOW) {
+		qdf_mem_copy(wh_min->i_addr1,
+			     TXMON_STATUS_INFO(tx_status_info, addr1),
+			     QDF_MAC_ADDR_SIZE);
+		qdf_mem_copy(wh_min->i_addr2,
+			     TXMON_STATUS_INFO(tx_status_info, addr2),
+			     QDF_MAC_ADDR_SIZE);
+	} else {
+		qdf_mem_copy(wh_min->i_addr1,
+			     TXMON_STATUS_INFO(tx_status_info, addr2),
+			     QDF_MAC_ADDR_SIZE);
+		qdf_mem_copy(wh_min->i_addr2,
+			     TXMON_STATUS_INFO(tx_status_info, addr1),
+			     QDF_MAC_ADDR_SIZE);
+	}
 
 	qdf_nbuf_set_pktlen(mpdu_nbuf, sizeof(*wh_min));
 	dp_tx_mon_enqueue_mpdu_nbuf(pdev, tx_ppdu_info, 0, mpdu_nbuf);
@@ -429,12 +459,14 @@ dp_tx_mon_generate_rts_frm(struct dp_pdev *pdev,
  * dp_tx_mon_generate_ack_frm() - API to generate ack frame
  * @pdev: pdev Handle
  * @tx_ppdu_info: pointer to tx ppdu info structure
+ * @window_flag: frame generated window
  *
  * Return: void
  */
 static void
 dp_tx_mon_generate_ack_frm(struct dp_pdev *pdev,
-			   struct dp_tx_ppdu_info *tx_ppdu_info)
+			   struct dp_tx_ppdu_info *tx_ppdu_info,
+			   uint8_t window_flag)
 {
 	/* allocate and populate ACK frame */
 	/* enqueue 802.11 payload to per user mpdu_q */
@@ -445,6 +477,7 @@ dp_tx_mon_generate_ack_frm(struct dp_pdev *pdev,
 	struct ieee80211_frame_min_one *wh_addr1 = NULL;
 	qdf_nbuf_t mpdu_nbuf = NULL;
 	uint8_t user_id = TXMON_PPDU(tx_ppdu_info, cur_usr_idx);
+	uint8_t frm_ctl;
 
 	/* sanity check */
 	if (qdf_unlikely(!pdev))
@@ -470,12 +503,24 @@ dp_tx_mon_generate_ack_frm(struct dp_pdev *pdev,
 		return;
 
 	wh_addr1 = (struct ieee80211_frame_min_one *)qdf_nbuf_data(mpdu_nbuf);
+
+	frm_ctl = (IEEE80211_FC0_VERSION_0 | IEEE80211_FC0_TYPE_CTL |
+		   IEEE80211_FC0_SUBTYPE_ACK);
+	TXMON_PPDU_COM(tx_ppdu_info, frame_control) = frm_ctl;
+	TXMON_PPDU_COM(tx_ppdu_info, frame_control_info_valid) = 1;
 	wh_addr1->i_fc[1] = 0;
-	wh_addr1->i_fc[0] = (IEEE80211_FC0_VERSION_0 | IEEE80211_FC0_TYPE_CTL |
-			     IEEE80211_FC0_SUBTYPE_ACK);
-	qdf_mem_copy(wh_addr1->i_addr1,
-		     TXMON_STATUS_INFO(tx_status_info, addr1),
-		     QDF_MAC_ADDR_SIZE);
+	wh_addr1->i_fc[0] = frm_ctl;
+
+	if (window_flag == INITIATOR_WINDOW) {
+		qdf_mem_copy(wh_addr1->i_addr1,
+			     TXMON_STATUS_INFO(tx_status_info, addr1),
+			     QDF_MAC_ADDR_SIZE);
+	} else {
+		qdf_mem_copy(wh_addr1->i_addr1,
+			     TXMON_STATUS_INFO(tx_status_info, addr2),
+			     QDF_MAC_ADDR_SIZE);
+	}
+
 	/* set duration zero for ack frame */
 	*(u_int16_t *)(&wh_addr1->i_dur) = qdf_cpu_to_le16(0x0000);
 
@@ -508,6 +553,7 @@ dp_tx_mon_generate_3addr_qos_null_frm(struct dp_pdev *pdev,
 	qdf_nbuf_t mpdu_nbuf = NULL;
 	uint16_t duration_le = 0;
 	uint8_t num_users = 0;
+	uint8_t frm_ctl;
 
 	/* sanity check */
 	if (qdf_unlikely(!pdev))
@@ -534,11 +580,13 @@ dp_tx_mon_generate_3addr_qos_null_frm(struct dp_pdev *pdev,
 
 	wh_addr3 = (struct ieee80211_qosframe *)qdf_nbuf_data(mpdu_nbuf);
 	qdf_mem_zero(wh_addr3, sizeof(struct ieee80211_qosframe));
-	wh_addr3->i_fc[0] = 0;
+
+	frm_ctl = (IEEE80211_FC0_VERSION_0 | IEEE80211_FC0_TYPE_DATA |
+		   IEEE80211_FC0_SUBTYPE_QOS_NULL);
+	TXMON_PPDU_COM(tx_ppdu_info, frame_control) = frm_ctl;
+	TXMON_PPDU_COM(tx_ppdu_info, frame_control_info_valid) = 1;
 	wh_addr3->i_fc[1] = 0;
-	wh_addr3->i_fc[0] = (IEEE80211_FC0_VERSION_0 |
-			     IEEE80211_FC0_TYPE_DATA |
-			     IEEE80211_FC0_SUBTYPE_QOS_NULL);
+	wh_addr3->i_fc[0] = frm_ctl;
 
 	duration_le = qdf_cpu_to_le16(TXMON_PPDU_COM(tx_ppdu_info, duration));
 	wh_addr3->i_dur[1] = (duration_le & 0xFF00) >> 8;
@@ -582,6 +630,7 @@ dp_tx_mon_generate_4addr_qos_null_frm(struct dp_pdev *pdev,
 	qdf_nbuf_t mpdu_nbuf = NULL;
 	uint16_t duration_le = 0;
 	uint8_t num_users = 0;
+	uint8_t frm_ctl;
 
 	/* sanity check */
 	if (qdf_unlikely(!pdev))
@@ -608,10 +657,13 @@ dp_tx_mon_generate_4addr_qos_null_frm(struct dp_pdev *pdev,
 
 	wh_addr4 = (struct ieee80211_qosframe_addr4 *)qdf_nbuf_data(mpdu_nbuf);
 	qdf_mem_zero(wh_addr4, sizeof(struct ieee80211_qosframe_addr4));
+
+	frm_ctl = (IEEE80211_FC0_VERSION_0 | IEEE80211_FC0_TYPE_DATA |
+		   IEEE80211_FC0_SUBTYPE_QOS_NULL);
+	TXMON_PPDU_COM(tx_ppdu_info, frame_control) = frm_ctl;
+	TXMON_PPDU_COM(tx_ppdu_info, frame_control_info_valid) = 1;
 	wh_addr4->i_fc[1] = 0;
-	wh_addr4->i_fc[0] = (IEEE80211_FC0_VERSION_0 |
-			     IEEE80211_FC0_TYPE_DATA |
-			     IEEE80211_FC0_SUBTYPE_QOS_NULL);
+	wh_addr4->i_fc[0] = frm_ctl;
 
 	duration_le = qdf_cpu_to_le16(TXMON_PPDU_COM(tx_ppdu_info, duration));
 	wh_addr4->i_dur[1] = (duration_le & 0xFF00) >> 8;
@@ -649,12 +701,14 @@ dp_tx_mon_generate_4addr_qos_null_frm(struct dp_pdev *pdev,
  * dp_tx_mon_generate_mu_block_ack_frm() - API to generate MU block ack frame
  * @pdev: pdev Handle
  * @tx_ppdu_info: pointer to tx ppdu info structure
+ * @window_flag: frame generated window
  *
  * Return: void
  */
 static void
 dp_tx_mon_generate_mu_block_ack_frm(struct dp_pdev *pdev,
-				    struct dp_tx_ppdu_info *tx_ppdu_info)
+				    struct dp_tx_ppdu_info *tx_ppdu_info,
+				    uint8_t window_flag)
 {
 	/* allocate and populate MU block ack frame */
 	/* enqueue 802.11 payload to per user mpdu_q */
@@ -668,6 +722,7 @@ dp_tx_mon_generate_mu_block_ack_frm(struct dp_pdev *pdev,
 	uint32_t ba_sz = 0;
 	uint8_t num_users = TXMON_PPDU_HAL(tx_ppdu_info, num_users);
 	uint8_t i = 0;
+	uint8_t frm_ctl;
 
 	/* sanity check */
 	if (qdf_unlikely(!pdev))
@@ -706,11 +761,13 @@ dp_tx_mon_generate_mu_block_ack_frm(struct dp_pdev *pdev,
 	wh_addr2 = (struct ieee80211_ctlframe_addr2 *)qdf_nbuf_data(mpdu_nbuf);
 	qdf_mem_zero(wh_addr2, DP_BA_ACK_FRAME_SIZE);
 
-	wh_addr2->i_fc[0] = 0;
+	frm_ctl = (IEEE80211_FC0_VERSION_0 | IEEE80211_FC0_TYPE_CTL |
+		   IEEE80211_FC0_BLOCK_ACK);
+	TXMON_PPDU_COM(tx_ppdu_info, frame_control) = frm_ctl;
+	TXMON_PPDU_COM(tx_ppdu_info, frame_control_info_valid) = 1;
 	wh_addr2->i_fc[1] = 0;
-	wh_addr2->i_fc[0] = (IEEE80211_FC0_VERSION_0 |
-			     IEEE80211_FC0_TYPE_CTL |
-			     IEEE80211_FC0_BLOCK_ACK);
+	wh_addr2->i_fc[0] = frm_ctl;
+
 	*(u_int16_t *)(&wh_addr2->i_aidordur) = qdf_cpu_to_le16(0x0000);
 
 	qdf_mem_copy(wh_addr2->i_addr2,
@@ -757,12 +814,14 @@ dp_tx_mon_generate_mu_block_ack_frm(struct dp_pdev *pdev,
  * dp_tx_mon_generate_block_ack_frm() - API to generate block ack frame
  * @pdev: pdev Handle
  * @tx_ppdu_info: pointer to tx ppdu info structure
+ * @window_flag: frame generated window
  *
  * Return: void
  */
 static void
 dp_tx_mon_generate_block_ack_frm(struct dp_pdev *pdev,
-				 struct dp_tx_ppdu_info *tx_ppdu_info)
+				 struct dp_tx_ppdu_info *tx_ppdu_info,
+				 uint8_t window_flag)
 {
 	/* allocate and populate block ack frame */
 	/* enqueue 802.11 payload to per user mpdu_q */
@@ -776,6 +835,7 @@ dp_tx_mon_generate_block_ack_frm(struct dp_pdev *pdev,
 	uint8_t user_id = TXMON_PPDU(tx_ppdu_info, cur_usr_idx);
 	uint32_t ba_bitmap_sz = TXMON_PPDU_USR(tx_ppdu_info,
 					       user_id, ba_bitmap_sz);
+	uint8_t frm_ctl;
 
 	/* sanity check */
 	if (qdf_unlikely(!pdev))
@@ -837,20 +897,31 @@ dp_tx_mon_generate_block_ack_frm(struct dp_pdev *pdev,
 	wh_addr2 = (struct ieee80211_ctlframe_addr2 *)qdf_nbuf_data(mpdu_nbuf);
 	qdf_mem_zero(wh_addr2, DP_BA_ACK_FRAME_SIZE);
 
-	wh_addr2->i_fc[0] = 0;
+	frm_ctl = (IEEE80211_FC0_VERSION_0 | IEEE80211_FC0_TYPE_CTL |
+		   IEEE80211_FC0_BLOCK_ACK);
+	TXMON_PPDU_COM(tx_ppdu_info, frame_control) = frm_ctl;
+	TXMON_PPDU_COM(tx_ppdu_info, frame_control_info_valid) = 1;
 	wh_addr2->i_fc[1] = 0;
-	wh_addr2->i_fc[0] = (IEEE80211_FC0_VERSION_0 |
-			     IEEE80211_FC0_TYPE_CTL |
-			     IEEE80211_FC0_BLOCK_ACK);
+	wh_addr2->i_fc[0] = frm_ctl;
+
 	/* duration */
 	*(u_int16_t *)(&wh_addr2->i_aidordur) = qdf_cpu_to_le16(0x0020);
 
-	qdf_mem_copy(wh_addr2->i_addr2,
-		     TXMON_STATUS_INFO(tx_status_info, addr2),
-		     QDF_MAC_ADDR_SIZE);
-	qdf_mem_copy(wh_addr2->i_addr1,
-		     TXMON_STATUS_INFO(tx_status_info, addr1),
-		     QDF_MAC_ADDR_SIZE);
+	if (window_flag) {
+		qdf_mem_copy(wh_addr2->i_addr2,
+			     TXMON_STATUS_INFO(tx_status_info, addr2),
+			     QDF_MAC_ADDR_SIZE);
+		qdf_mem_copy(wh_addr2->i_addr1,
+			     TXMON_STATUS_INFO(tx_status_info, addr1),
+			     QDF_MAC_ADDR_SIZE);
+	} else {
+		qdf_mem_copy(wh_addr2->i_addr2,
+			     TXMON_STATUS_INFO(tx_status_info, addr1),
+			     QDF_MAC_ADDR_SIZE);
+		qdf_mem_copy(wh_addr2->i_addr1,
+			     TXMON_STATUS_INFO(tx_status_info, addr2),
+			     QDF_MAC_ADDR_SIZE);
+	}
 
 	frm = (uint8_t *)&wh_addr2[1];
 	/* BA control */
@@ -1009,12 +1080,14 @@ dp_tx_mon_generate_prot_frm(struct dp_pdev *pdev,
 	case TXMON_MEDIUM_RTS_11AC_STATIC_BW:
 	case TXMON_MEDIUM_RTS_11AC_DYNAMIC_BW:
 	{
-		dp_tx_mon_generate_rts_frm(pdev, tx_ppdu_info);
+		dp_tx_mon_generate_rts_frm(pdev, tx_ppdu_info,
+					   INITIATOR_WINDOW);
 		break;
 	}
 	case TXMON_MEDIUM_CTS2SELF:
 	{
-		dp_tx_mon_generate_cts2self_frm(pdev, tx_ppdu_info);
+		dp_tx_mon_generate_cts2self_frm(pdev, tx_ppdu_info,
+						INITIATOR_WINDOW);
 		break;
 	}
 	case TXMON_MEDIUM_QOS_NULL_NO_ACK_3ADDR:
@@ -1027,63 +1100,6 @@ dp_tx_mon_generate_prot_frm(struct dp_pdev *pdev,
 		dp_tx_mon_generate_4addr_qos_null_frm(pdev, tx_ppdu_info);
 		break;
 	}
-	}
-}
-
-/**
- * dp_lite_mon_filter_subtype() - filter frames with subtype
- * @mon_pdev_be: mon pdev Handle
- * @ppdu_info: pointer to hal_tx_ppdu_info structure
- *
- * Return: QDF_STATUS
- */
-static inline QDF_STATUS
-dp_lite_mon_filter_subtype(struct dp_mon_pdev_be *mon_pdev_be,
-			   struct hal_tx_ppdu_info *ppdu_info)
-{
-	struct dp_mon_pdev *mon_pdev = &mon_pdev_be->mon_pdev;
-	uint16_t frame_control;
-	struct dp_lite_mon_tx_config *lite_mon_tx_config =
-			mon_pdev_be->lite_mon_tx_config;
-	uint16_t mgmt_filter, ctrl_filter, data_filter, type, subtype;
-
-	if (!dp_lite_mon_is_tx_enabled(mon_pdev))
-		return QDF_STATUS_SUCCESS;
-
-	if (!TXMON_HAL_STATUS(ppdu_info, frame_control_info_valid)) {
-		dp_mon_err("Queue extension is invalid");
-		return QDF_STATUS_E_ABORTED;
-	}
-
-	frame_control = TXMON_HAL_STATUS(ppdu_info, frame_control);
-	qdf_spin_lock_bh(&lite_mon_tx_config->lite_mon_tx_lock);
-	mgmt_filter = lite_mon_tx_config->tx_config.mgmt_filter[DP_MON_FRM_FILTER_MODE_FP];
-	ctrl_filter = lite_mon_tx_config->tx_config.ctrl_filter[DP_MON_FRM_FILTER_MODE_FP];
-	data_filter = lite_mon_tx_config->tx_config.data_filter[DP_MON_FRM_FILTER_MODE_FP];
-	qdf_spin_unlock_bh(&lite_mon_tx_config->lite_mon_tx_lock);
-
-	type = (frame_control & FRAME_CONTROL_TYPE_MASK) >>
-		FRAME_CONTROL_TYPE_SHIFT;
-	subtype = (frame_control & FRAME_CONTROL_SUBTYPE_MASK) >>
-		FRAME_CONTROL_SUBTYPE_SHIFT;
-
-	switch (type) {
-	case FRAME_CTRL_TYPE_MGMT:
-		if (mgmt_filter >> subtype & 0x1)
-			return QDF_STATUS_SUCCESS;
-		else
-			return QDF_STATUS_E_ABORTED;
-	case FRAME_CTRL_TYPE_CTRL:
-		if (ctrl_filter >> subtype & 0x1)
-			return QDF_STATUS_SUCCESS;
-		else
-			return QDF_STATUS_E_ABORTED;
-	case FRAME_CTRL_TYPE_DATA:
-		/* Allowing all data frames */
-		return QDF_STATUS_SUCCESS;
-	default:
-		dp_mon_err("Unknown frame type in framecontrol\n");
-		return QDF_STATUS_E_INVAL;
 	}
 }
 
@@ -1125,38 +1141,19 @@ dp_tx_mon_generated_response_frm(struct dp_pdev *pdev,
 	switch (gen_response) {
 	case TXMON_GEN_RESP_SELFGEN_ACK:
 	{
-		TXMON_PPDU_COM(tx_ppdu_info,
-			       frame_control) = ((IEEE80211_FC0_TYPE_CTL <<
-						  IEEE80211_FC0_TYPE_SHIFT) |
-						 (IEEE80211_FC0_SUBTYPE_ACK <<
-						  IEEE80211_FC0_SUBTYPE_SHIFT));
-		TXMON_PPDU_COM(tx_ppdu_info,
-			       frame_control_info_valid) = 1;
-		dp_tx_mon_generate_ack_frm(pdev, tx_ppdu_info);
+		dp_tx_mon_generate_ack_frm(pdev, tx_ppdu_info, RESPONSE_WINDOW);
 		break;
 	}
 	case TXMON_GEN_RESP_SELFGEN_CTS:
 	{
-		TXMON_PPDU_COM(tx_ppdu_info,
-			       frame_control) = ((IEEE80211_FC0_TYPE_CTL <<
-						  IEEE80211_FC0_TYPE_SHIFT) |
-						 (IEEE80211_FC0_SUBTYPE_CTS <<
-						  IEEE80211_FC0_SUBTYPE_SHIFT));
-		TXMON_PPDU_COM(tx_ppdu_info,
-			       frame_control_info_valid) = 1;
-		dp_tx_mon_generate_cts2self_frm(pdev, tx_ppdu_info);
+		dp_tx_mon_generate_cts2self_frm(pdev, tx_ppdu_info,
+						RESPONSE_WINDOW);
 		break;
 	}
 	case TXMON_GEN_RESP_SELFGEN_BA:
 	{
-		TXMON_PPDU_COM(tx_ppdu_info,
-			       frame_control) = ((IEEE80211_FC0_TYPE_CTL <<
-						  IEEE80211_FC0_TYPE_SHIFT) |
-						 (IEEE80211_FC0_BLOCK_ACK <<
-						  IEEE80211_FC0_SUBTYPE_SHIFT));
-		TXMON_PPDU_COM(tx_ppdu_info,
-			       frame_control_info_valid) = 1;
-		dp_tx_mon_generate_block_ack_frm(pdev, tx_ppdu_info);
+		dp_tx_mon_generate_block_ack_frm(pdev, tx_ppdu_info,
+						 RESPONSE_WINDOW);
 		break;
 	}
 	case TXMON_GEN_RESP_SELFGEN_MBA:
@@ -1235,18 +1232,6 @@ dp_tx_mon_update_ppdu_info_status(struct dp_pdev *pdev,
 	}
 	case HAL_MON_RX_RESPONSE_REQUIRED_INFO:
 	{
-		/*
-		 * start of Response window
-		 *
-		 * response window start and follow with
-		 * RTS(sta) - cts(AP)
-		 * BlockAckReq(sta) - BlockAck(AP)
-		 */
-		tx_status_info = &tx_mon_be->data_status_info;
-		if (TXMON_STATUS_INFO(tx_status_info, reception_type) ==
-		    TXMON_RESP_CTS)
-			dp_tx_mon_generate_cts2self_frm(pdev,
-							tx_data_ppdu_info);
 		break;
 	}
 	case HAL_MON_TX_FES_STATUS_START_PROT:
@@ -1272,7 +1257,8 @@ dp_tx_mon_update_ppdu_info_status(struct dp_pdev *pdev,
 	case HAL_MON_RX_FRAME_BITMAP_ACK:
 	{
 		/* this comes for each user */
-		dp_tx_mon_generate_ack_frm(pdev, tx_data_ppdu_info);
+		dp_tx_mon_generate_ack_frm(pdev, tx_data_ppdu_info,
+					   INITIATOR_WINDOW);
 		break;
 	}
 	case HAL_MON_RX_FRAME_BITMAP_BLOCK_ACK_256:
@@ -1287,10 +1273,12 @@ dp_tx_mon_update_ppdu_info_status(struct dp_pdev *pdev,
 
 		if (TXMON_PPDU_HAL(tx_data_ppdu_info, num_users))
 			dp_tx_mon_generate_block_ack_frm(pdev,
-							 tx_data_ppdu_info);
+							 tx_data_ppdu_info,
+							 INITIATOR_WINDOW);
 		else
 			dp_tx_mon_generate_mu_block_ack_frm(pdev,
-							    tx_data_ppdu_info);
+							    tx_data_ppdu_info,
+							    INITIATOR_WINDOW);
 
 		break;
 	}
@@ -1365,8 +1353,6 @@ dp_tx_mon_update_ppdu_info_status(struct dp_pdev *pdev,
 	case HAL_MON_RESPONSE_END_STATUS_INFO:
 	{
 		dp_tx_mon_generated_response_frm(pdev, tx_data_ppdu_info);
-		status = dp_lite_mon_filter_subtype(mon_pdev_be,
-						    &tx_data_ppdu_info->hal_txmon);
 		break;
 	}
 	case HAL_MON_TX_FES_STATUS_START:
@@ -1376,8 +1362,7 @@ dp_tx_mon_update_ppdu_info_status(struct dp_pdev *pdev,
 	}
 	case HAL_MON_TX_QUEUE_EXTENSION:
 	{
-		status = dp_lite_mon_filter_subtype(mon_pdev_be,
-						    &tx_data_ppdu_info->hal_txmon);
+		/* No action for Queue Extension TLV */
 		break;
 	}
 	default:
@@ -1469,8 +1454,7 @@ dp_tx_mon_process_tlv_2_0(struct dp_pdev *pdev,
 	}
 
 	/* iterate status buffer queue */
-	while (tx_mon_be->cur_frag_q_idx < tx_mon_be->last_frag_q_idx &&
-	       status == QDF_STATUS_SUCCESS) {
+	while (tx_mon_be->cur_frag_q_idx < tx_mon_be->last_frag_q_idx) {
 		/* get status buffer from frag_q_vec */
 		status_frag = tx_mon_be->frag_q_vec[cur_frag_q_idx].frag_buf;
 		end_offset = tx_mon_be->frag_q_vec[cur_frag_q_idx].end_offset;
@@ -1503,14 +1487,6 @@ dp_tx_mon_process_tlv_2_0(struct dp_pdev *pdev,
 							status_frag,
 							tlv_status,
 							mon_desc_list_ref);
-
-			if (status != QDF_STATUS_SUCCESS) {
-				dp_tx_mon_status_free_packet_buf(pdev,
-							status_frag,
-							end_offset,
-							mon_desc_list_ref);
-				break;
-			}
 
 			/* need api definition for hal_tx_status_get_next_tlv */
 			tx_tlv = hal_tx_status_get_next_tlv(tx_tlv);

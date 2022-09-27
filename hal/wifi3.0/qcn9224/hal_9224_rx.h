@@ -37,6 +37,9 @@
 #include "dp_types.h"
 #include "hal_api_mon.h"
 #include "phyrx_other_receive_info_ru_details.h"
+#if (defined(WLAN_SA_API_ENABLE)) && (defined(QCA_WIFI_QCA9574))
+#include "phyrx_other_receive_info_su_evm_details.h"
+#endif /* WLAN_SA_API_ENABLE && QCA_WIFI_QCA9574 */
 
 #define HAL_RX_MSDU0_BUFFER_ADDR_LSB(link_desc_va)	\
 	(uint8_t *)(link_desc_va) +			\
@@ -81,6 +84,11 @@
 		reg_val |= HAL_SM(HWIO_REO_R0_MISC_CTL,		\
 				  FRAGMENT_DEST_RING,		\
 				  (reo_params)->frag_dst_ring); \
+		reg_val |= ((reo_params)->reo_ref_peer_id_fix_enable) << 6; \
+		HAL_REG_WRITE(soc,				\
+			      HWIO_REO_R0_MISC_CTL_ADDR(	\
+				REO_REG_REG_BASE),		\
+			      reg_val);				\
 	} while (0)
 
 #define HAL_RX_MSDU_DESC_INFO_GET(msdu_details_ptr) \

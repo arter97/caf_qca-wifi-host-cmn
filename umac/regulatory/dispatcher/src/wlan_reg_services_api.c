@@ -1690,7 +1690,7 @@ QDF_STATUS
 wlan_reg_get_client_power_for_connecting_ap(struct wlan_objmgr_pdev *pdev,
 					    enum reg_6g_ap_type ap_type,
 					    qdf_freq_t chan_freq,
-					    bool *is_psd, uint16_t *tx_power,
+					    bool is_psd, uint16_t *tx_power,
 					    uint16_t *eirp_psd_power)
 {
 	return reg_get_client_power_for_connecting_ap(pdev, ap_type, chan_freq,
@@ -1897,4 +1897,10 @@ bool wlan_is_sup_chan_entry_afc_done(struct wlan_objmgr_pdev *pdev,
 }
 
 qdf_export_symbol(wlan_is_sup_chan_entry_afc_done);
+
+QDF_STATUS
+wlan_reg_display_super_chan_list(struct wlan_objmgr_pdev *pdev)
+{
+	return reg_display_super_chan_list(pdev);
+}
 #endif

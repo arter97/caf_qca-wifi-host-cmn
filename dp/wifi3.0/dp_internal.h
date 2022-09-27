@@ -21,6 +21,7 @@
 #define _DP_INTERNAL_H_
 
 #include "dp_types.h"
+#include "dp_htt.h"
 
 #define RX_BUFFER_SIZE_PKTLOG_LITE 1024
 
@@ -562,8 +563,9 @@ static inline void dp_monitor_pktlogmod_exit(struct dp_pdev *pdev)
 }
 
 static inline
-void dp_monitor_vdev_set_monitor_mode_buf_rings(struct dp_pdev *pdev)
+QDF_STATUS dp_monitor_vdev_set_monitor_mode_buf_rings(struct dp_pdev *pdev)
 {
+	return QDF_STATUS_E_FAILURE;
 }
 
 static inline
@@ -717,6 +719,18 @@ dp_monitor_get_chan_band(struct dp_pdev *pdev)
 	return 0;
 }
 
+static inline int
+dp_monitor_get_chan_num(struct dp_pdev *pdev)
+{
+	return 0;
+}
+
+static inline qdf_freq_t
+dp_monitor_get_chan_freq(struct dp_pdev *pdev)
+{
+	return 0;
+}
+
 static inline void dp_monitor_get_mpdu_status(struct dp_pdev *pdev,
 					      struct dp_soc *soc,
 					      uint8_t *rx_tlv_hdr)
@@ -803,6 +817,104 @@ static inline bool dp_monitor_is_configured(struct dp_pdev *pdev)
 static inline void
 dp_mon_rx_hdr_length_set(struct dp_soc *soc, uint32_t *msg_word,
 			 struct htt_rx_ring_tlv_filter *tlv_filter)
+{
+}
+
+static inline void dp_monitor_soc_init(struct dp_soc *soc)
+{
+}
+
+static inline void dp_monitor_soc_deinit(struct dp_soc *soc)
+{
+}
+
+static inline
+QDF_STATUS dp_monitor_config_undecoded_metadata_capture(struct dp_pdev *pdev,
+							int val)
+{
+	return QDF_STATUS_SUCCESS;
+}
+
+static inline QDF_STATUS
+dp_monitor_config_undecoded_metadata_phyrx_error_mask(struct dp_pdev *pdev,
+						      int mask1, int mask2)
+{
+	return QDF_STATUS_SUCCESS;
+}
+
+static inline QDF_STATUS
+dp_monitor_get_undecoded_metadata_phyrx_error_mask(struct dp_pdev *pdev,
+						   int *mask, int *mask_cont)
+{
+	return QDF_STATUS_SUCCESS;
+}
+
+static inline QDF_STATUS dp_monitor_soc_htt_srng_setup(struct dp_soc *soc)
+{
+	return QDF_STATUS_E_FAILURE;
+}
+
+static inline bool dp_is_monitor_mode_using_poll(struct dp_soc *soc)
+{
+	return false;
+}
+
+static inline
+uint32_t dp_tx_mon_buf_refill(struct dp_intr *int_ctx)
+{
+	return 0;
+}
+
+static inline uint32_t
+dp_tx_mon_process(struct dp_soc *soc, struct dp_intr *int_ctx,
+		  uint32_t mac_id, uint32_t quota)
+{
+	return 0;
+}
+
+static inline
+uint32_t dp_rx_mon_buf_refill(struct dp_intr *int_ctx)
+{
+	return 0;
+}
+
+static inline bool dp_monitor_is_tx_cap_enabled(struct dp_peer *peer)
+{
+	return 0;
+}
+
+static inline bool dp_monitor_is_rx_cap_enabled(struct dp_peer *peer)
+{
+	return 0;
+}
+
+static inline void
+dp_rx_mon_enable(struct dp_soc *soc, uint32_t *msg_word,
+		 struct htt_rx_ring_tlv_filter *tlv_filter)
+{
+}
+
+static inline void
+dp_mon_rx_packet_length_set(struct dp_soc *soc, uint32_t *msg_word,
+			    struct htt_rx_ring_tlv_filter *tlv_filter)
+{
+}
+
+static inline void
+dp_mon_rx_enable_mpdu_logging(struct dp_soc *soc, uint32_t *msg_word,
+			      struct htt_rx_ring_tlv_filter *tlv_filter)
+{
+}
+
+static inline void
+dp_mon_rx_wmask_subscribe(struct dp_soc *soc, uint32_t *msg_word,
+			  struct htt_rx_ring_tlv_filter *tlv_filter)
+{
+}
+
+static inline
+void dp_monitor_peer_telemetry_stats(struct dp_peer *peer,
+				     struct cdp_peer_telemetry_stats *stats)
 {
 }
 #endif
@@ -1023,25 +1135,25 @@ void DP_PRINT_STATS(const char *fmt, ...);
 	defined(QCA_ENHANCED_STATS_SUPPORT)
 #define DP_PEER_TO_STACK_INCC_PKT(_handle, _count, _bytes, _cond) \
 { \
-	if (!(_handle->hw_txrx_stats_en) || _cond) \
+	if (_cond || !(_handle->hw_txrx_stats_en)) \
 		DP_PEER_STATS_FLAT_INC_PKT(_handle, to_stack, _count, _bytes); \
 }
 
 #define DP_PEER_TO_STACK_DECC(_handle, _count, _cond) \
 { \
-	if (!(_handle->hw_txrx_stats_en) || _cond) \
+	if (_cond || !(_handle->hw_txrx_stats_en)) \
 		DP_PEER_STATS_FLAT_DEC(_handle, to_stack.num, _count); \
 }
 
 #define DP_PEER_MC_INCC_PKT(_handle, _count, _bytes, _cond) \
 { \
-	if (!(_handle->hw_txrx_stats_en) || _cond) \
+	if (_cond || !(_handle->hw_txrx_stats_en)) \
 		DP_PEER_PER_PKT_STATS_INC_PKT(_handle, rx.multicast, _count, _bytes); \
 }
 
 #define DP_PEER_BC_INCC_PKT(_handle, _count, _bytes, _cond) \
 { \
-	if (!(_handle->hw_txrx_stats_en) || _cond) \
+	if (_cond || !(_handle->hw_txrx_stats_en)) \
 		DP_PEER_PER_PKT_STATS_INC_PKT(_handle, rx.bcast, _count, _bytes); \
 }
 #elif defined(QCA_VDEV_STATS_HW_OFFLOAD_SUPPORT)
@@ -2149,6 +2261,16 @@ extern QDF_STATUS dp_rx_tid_setup_wifi3(struct dp_peer *peer, int tid,
 					uint32_t ba_window_size,
 					uint32_t start_seq);
 
+#ifdef DP_UMAC_HW_RESET_SUPPORT
+void dp_pause_reo_send_cmd(struct dp_soc *soc);
+
+void dp_resume_reo_send_cmd(struct dp_soc *soc);
+void dp_cleanup_reo_cmd_module(struct dp_soc *soc);
+void dp_reo_desc_freelist_destroy(struct dp_soc *soc);
+void dp_reset_rx_reo_tid_queue(struct dp_soc *soc, void *hw_qdesc_vaddr,
+			       uint32_t size);
+#endif
+
 extern QDF_STATUS dp_reo_send_cmd(struct dp_soc *soc,
 	enum hal_reo_cmd_type type, struct hal_reo_cmd_params *params,
 	void (*callback_fn), void *data);
@@ -2893,10 +3015,37 @@ static inline void *dp_srng_dst_prefetch(hal_soc_handle_t hal_soc,
 {
 	return hal_srng_dst_prefetch(hal_soc, hal_ring_hdl, num_entries);
 }
+
+/**
+ * dp_srng_dst_prefetch_32_byte_desc() - Wrapper function to prefetch
+ *					 32 byte descriptor starting at
+ *					 64 byte offset
+ * @hal_soc_hdl: HAL SOC handle
+ * @hal_ring: opaque pointer to the HAL Rx Destination ring
+ * @num_entries: Entry count
+ *
+ * Return: None
+ */
+static inline
+void *dp_srng_dst_prefetch_32_byte_desc(hal_soc_handle_t hal_soc,
+					hal_ring_handle_t hal_ring_hdl,
+					uint32_t num_entries)
+{
+	return hal_srng_dst_prefetch_32_byte_desc(hal_soc, hal_ring_hdl,
+						  num_entries);
+}
 #else
 static inline void *dp_srng_dst_prefetch(hal_soc_handle_t hal_soc,
 					 hal_ring_handle_t hal_ring_hdl,
 					 uint32_t num_entries)
+{
+	return NULL;
+}
+
+static inline
+void *dp_srng_dst_prefetch_32_byte_desc(hal_soc_handle_t hal_soc,
+					hal_ring_handle_t hal_ring_hdl,
+					uint32_t num_entries)
 {
 	return NULL;
 }
@@ -3197,6 +3346,14 @@ void dp_update_num_mac_rings_for_dbs(struct dp_soc *soc,
 #if defined(WLAN_SUPPORT_RX_FISA)
 void dp_rx_dump_fisa_table(struct dp_soc *soc);
 
+/**
+ * dp_print_fisa_stats() - Print FISA stats
+ * @soc: DP soc handle
+ *
+ * Return: None
+ */
+void dp_print_fisa_stats(struct dp_soc *soc);
+
 /*
  * dp_rx_fst_update_cmem_params() - Update CMEM FST params
  * @soc:		DP SoC context
@@ -3220,6 +3377,10 @@ dp_rx_fst_update_cmem_params(struct dp_soc *soc, uint16_t num_entries,
 
 static inline void
 dp_rx_fst_update_pm_suspend_status(struct dp_soc *soc, bool suspended)
+{
+}
+
+static inline void dp_print_fisa_stats(struct dp_soc *soc)
 {
 }
 #endif /* WLAN_SUPPORT_RX_FISA */

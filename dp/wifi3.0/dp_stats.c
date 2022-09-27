@@ -1877,7 +1877,6 @@ static void dp_print_tx_sounding_stats_tlv(uint32_t *tag_buf)
 		(htt_tx_sounding_stats_tlv *)tag_buf;
 	uint16_t i;
 	uint16_t max_bw = HTT_TX_PDEV_STATS_NUM_BW_COUNTERS;
-	bool cv_stats = false;
 
 	switch (dp_stats_buf->tx_sounding_mode) {
 	case HTT_TX_AC_SOUNDING_MODE:
@@ -1985,13 +1984,8 @@ static void dp_print_tx_sounding_stats_tlv(uint32_t *tag_buf)
 				dp_stats_buf->sounding[(i * max_bw) + 3],
 				dp_stats_buf->sounding_320[i]);
 		}
-		cv_stats = true;
 		break;
-	default:
-		break;
-	}
-
-	if (cv_stats) {
+	case HTT_TX_CMN_SOUNDING_MODE:
 		DP_PRINT_STATS("\n CV UPLOAD HANDLER STATS:");
 		DP_PRINT_STATS("cv_nc_mismatch_err         : %u",
 			       dp_stats_buf->cv_nc_mismatch_err);
@@ -2053,6 +2047,10 @@ static void dp_print_tx_sounding_stats_tlv(uint32_t *tag_buf)
 			       dp_stats_buf->cv_found_upload_in_progress);
 		DP_PRINT_STATS("cv_expired_during_query    : %u\n",
 			       dp_stats_buf->cv_expired_during_query);
+		break;
+	default:
+		break;
+
 	}
 }
 
@@ -5107,6 +5105,7 @@ void dp_pdev_print_tid_stats(struct dp_pdev *pdev)
 	struct cdp_tid_tx_stats total_tx;
 	struct cdp_tid_rx_stats total_rx;
 	uint8_t tid, tqm_status_idx, htt_status_idx;
+	struct cdp_tid_rx_stats *rx_wbm_stats = NULL;
 
 	DP_PRINT_STATS("Packets received in hardstart: %llu ",
 			pdev->stats.tid_stats.ingress_stack);
@@ -5115,6 +5114,8 @@ void dp_pdev_print_tid_stats(struct dp_pdev *pdev)
 	DP_PRINT_STATS("Per TID Video Stats:\n");
 
 	for (tid = 0; tid < CDP_MAX_DATA_TIDS; tid++) {
+		rx_wbm_stats = &pdev->stats.tid_stats.tid_rx_wbm_stats[0][tid];
+
 		dp_accumulate_tid_stats(pdev, tid, &total_tx, &total_rx,
 					TID_COUNTER_STATS);
 		DP_PRINT_STATS("----TID: %d----", tid);
@@ -5171,6 +5172,10 @@ void dp_pdev_print_tid_stats(struct dp_pdev *pdev)
 			       total_rx.mcast_msdu_cnt);
 		DP_PRINT_STATS("Rx Broadcast MSDU Count: %llu\n",
 			       total_rx.bcast_msdu_cnt);
+		DP_PRINT_STATS("Rx WBM Intra Bss Deliver Count: %llu",
+			       rx_wbm_stats->intrabss_cnt);
+		DP_PRINT_STATS("Rx WBM Intrabss Drop Count: %llu",
+			       rx_wbm_stats->fail_cnt[INTRABSS_DROP]);
 	}
 }
 
@@ -7084,6 +7089,8 @@ void dp_txrx_path_stats(struct dp_soc *soc)
 			       pdev->stats.tx_i.dropped.fail_per_pkt_vdev_id_check);
 		DP_PRINT_STATS("DMA Error: %u",
 			       pdev->stats.tx_i.dropped.dma_error);
+		DP_PRINT_STATS("Drop Ingress: %u",
+			       pdev->stats.tx_i.dropped.drop_ingress);
 
 		DP_PRINT_STATS("Dropped in hardware:");
 		DP_PRINT_STATS("total packets dropped: %u",
@@ -7311,6 +7318,15 @@ dp_print_pdev_tx_stats(struct dp_pdev *pdev)
 		       pdev->stats.tx_i.rcvd.num);
 	DP_PRINT_STATS("	Bytes = %llu",
 		       pdev->stats.tx_i.rcvd.bytes);
+	DP_PRINT_STATS("Received from Stack in FP:");
+	DP_PRINT_STATS("	Packets = %llu",
+		       pdev->stats.tx_i.rcvd_in_fast_xmit_flow);
+	DP_PRINT_STATS("Received from Stack per core:");
+	DP_PRINT_STATS("	Packets = %u %u %u %u",
+		       pdev->stats.tx_i.rcvd_per_core[0],
+		       pdev->stats.tx_i.rcvd_per_core[1],
+		       pdev->stats.tx_i.rcvd_per_core[2],
+		       pdev->stats.tx_i.rcvd_per_core[3]);
 	DP_PRINT_STATS("Processed:");
 	DP_PRINT_STATS("	Packets = %u",
 		       pdev->stats.tx_i.processed.num);
@@ -7345,6 +7361,8 @@ dp_print_pdev_tx_stats(struct dp_pdev *pdev)
 		       pdev->stats.tx_i.dropped.fail_per_pkt_vdev_id_check);
 	DP_PRINT_STATS("	Resources Full = %u",
 		       pdev->stats.tx_i.dropped.res_full);
+	DP_PRINT_STATS("	Drop Ingress = %u",
+		       pdev->stats.tx_i.dropped.drop_ingress);
 	DP_PRINT_STATS("Tx failed = %u",
 		       pdev->stats.tx.tx_failed);
 	DP_PRINT_STATS("	FW removed Pkts = %u",
@@ -8628,6 +8646,7 @@ void dp_update_vdev_ingress_stats(struct dp_vdev *tgtobj)
 		tgtobj->stats.tx_i.dropped.fail_per_pkt_vdev_id_check +
 		tgtobj->stats.tx_i.dropped.desc_na.num +
 		tgtobj->stats.tx_i.dropped.res_full +
+		tgtobj->stats.tx_i.dropped.drop_ingress +
 		tgtobj->stats.tx_i.dropped.headroom_insufficient;
 }
 
@@ -8647,6 +8666,11 @@ void dp_update_pdev_ingress_stats(struct dp_pdev *tgtobj,
 	DP_STATS_AGGR_PKT(tgtobj, srcobj, tx_i.nawds_mcast);
 
 	DP_STATS_AGGR_PKT(tgtobj, srcobj, tx_i.rcvd);
+	DP_STATS_AGGR(tgtobj, srcobj, tx_i.rcvd_in_fast_xmit_flow);
+	DP_STATS_AGGR(tgtobj, srcobj, tx_i.rcvd_per_core[0]);
+	DP_STATS_AGGR(tgtobj, srcobj, tx_i.rcvd_per_core[1]);
+	DP_STATS_AGGR(tgtobj, srcobj, tx_i.rcvd_per_core[2]);
+	DP_STATS_AGGR(tgtobj, srcobj, tx_i.rcvd_per_core[3]);
 	DP_STATS_AGGR_PKT(tgtobj, srcobj, tx_i.processed);
 	DP_STATS_AGGR_PKT(tgtobj, srcobj, tx_i.reinject_pkts);
 	DP_STATS_AGGR_PKT(tgtobj, srcobj, tx_i.inspect_pkts);
@@ -8672,6 +8696,7 @@ void dp_update_pdev_ingress_stats(struct dp_pdev *tgtobj,
 	DP_STATS_AGGR(tgtobj, srcobj, tx_i.dropped.fail_per_pkt_vdev_id_check);
 	DP_STATS_AGGR(tgtobj, srcobj, tx_i.dropped.desc_na.num);
 	DP_STATS_AGGR(tgtobj, srcobj, tx_i.dropped.res_full);
+	DP_STATS_AGGR(tgtobj, srcobj, tx_i.dropped.drop_ingress);
 	DP_STATS_AGGR(tgtobj, srcobj, tx_i.dropped.headroom_insufficient);
 	DP_STATS_AGGR(tgtobj, srcobj, tx_i.cce_classified);
 	DP_STATS_AGGR(tgtobj, srcobj, tx_i.cce_classified_raw);
@@ -8690,6 +8715,7 @@ void dp_update_pdev_ingress_stats(struct dp_pdev *tgtobj,
 		tgtobj->stats.tx_i.dropped.fail_per_pkt_vdev_id_check +
 		tgtobj->stats.tx_i.dropped.desc_na.num +
 		tgtobj->stats.tx_i.dropped.res_full +
+		tgtobj->stats.tx_i.dropped.drop_ingress +
 		tgtobj->stats.tx_i.dropped.headroom_insufficient;
 }
 

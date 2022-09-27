@@ -102,6 +102,10 @@ struct dbr_module_config;
 #include "wlan_coex_public_structs.h"
 #endif
 
+#ifdef WLAN_FEATURE_COAP
+#include "wlan_coap_public_structs.h"
+#endif
+
 /**
  * typedef cp_stats_event - Definition of cp stats event
  * Define stats_event from external cp stats component to cp_stats_event
@@ -1126,6 +1130,7 @@ struct wlan_lmac_if_reg_tx_ops {
  * @dfs_ocac_abort_cmd:                 Send Off-Channel CAC abort command.
  * @dfs_is_pdev_5ghz:                   Check if the given pdev is 5GHz.
  * @dfs_set_phyerr_filter_offload:      Config phyerr filter offload.
+ * @dfs_is_tgt_bangradar_320_supp:      To check host DFS 320MHZ support or not
  * @dfs_is_tgt_radar_found_chan_freq_eq_center_freq:
  *                                      Check if chan_freq parameter of the
  *                                      radar found wmi event points to channel
@@ -1177,6 +1182,7 @@ struct wlan_lmac_if_dfs_tx_ops {
 			struct wlan_objmgr_pdev *pdev,
 			bool dfs_phyerr_filter_offload);
 	bool (*dfs_is_tgt_offload)(struct wlan_objmgr_psoc *psoc);
+	bool (*dfs_is_tgt_bangradar_320_supp)(struct wlan_objmgr_psoc *psoc);
 	bool (*dfs_is_tgt_radar_found_chan_freq_eq_center_freq)
 		 (struct wlan_objmgr_psoc *psoc);
 	QDF_STATUS (*dfs_send_offload_enable_cmd)(
@@ -1471,6 +1477,35 @@ struct wlan_lmac_if_twt_rx_ops {
 struct wlan_lmac_if_spatial_reuse_tx_ops {
 	QDF_STATUS (*send_cfg)(struct wlan_objmgr_vdev *vdev, uint8_t sr_ctrl,
 			       uint8_t non_srg_max_pd_offset);
+	};
+#endif
+
+#ifdef WLAN_FEATURE_COAP
+/**
+ * struct wlan_lmac_if_coap_tx_ops - south bound tx function pointers for CoAP
+ * @attach: function pointer to attach CoAP component
+ * @detach: function pointer to detach CoAP component
+ * @offload_reply_enable: function pointer to enable CoAP offload reply
+ * @offload_reply_disable: function pointer to disable CoAP offload reply
+ * @offload_periodic_tx_enable: function pointer to enable CoAP offload
+ * periodic transmitting
+ * @offload_periodic_tx_disable: function pointer to disable CoAP offload
+ * periodic transmitting
+ * @offload_cache_get: function pointer to get cached CoAP messages
+ */
+struct wlan_lmac_if_coap_tx_ops {
+	QDF_STATUS (*attach)(struct wlan_objmgr_psoc *psoc);
+	QDF_STATUS (*detach)(struct wlan_objmgr_psoc *psoc);
+	QDF_STATUS (*offload_reply_enable)(struct wlan_objmgr_vdev *vdev,
+			struct coap_offload_reply_param *param);
+	QDF_STATUS (*offload_reply_disable)(struct wlan_objmgr_vdev *vdev,
+					    uint32_t req_id);
+	QDF_STATUS (*offload_periodic_tx_enable)(struct wlan_objmgr_vdev *vdev,
+			struct coap_offload_periodic_tx_param *param);
+	QDF_STATUS (*offload_periodic_tx_disable)(struct wlan_objmgr_vdev *vdev,
+						  uint32_t req_id);
+	QDF_STATUS (*offload_cache_get)(struct wlan_objmgr_vdev *vdev,
+					uint32_t req_id);
 };
 #endif
 
@@ -1586,6 +1621,10 @@ struct wlan_lmac_if_tx_ops {
 #if defined WLAN_FEATURE_11AX
 	struct wlan_lmac_if_spatial_reuse_tx_ops spatial_reuse_tx_ops;
 #endif
+
+#ifdef WLAN_FEATURE_COAP
+	struct wlan_lmac_if_coap_tx_ops coap_ops;
+#endif
 };
 
 /**
@@ -1629,6 +1668,10 @@ struct wlan_lmac_if_mgmt_txrx_rx_ops {
 #endif
 };
 
+/**
+ * struct wlan_lmac_if_reg_rx_ops - structure of rx function pointers
+ * @reg_display_super_chan_list: function pointer to print super channel list
+ */
 struct wlan_lmac_if_reg_rx_ops {
 	QDF_STATUS (*master_list_handler)(struct cur_regulatory_info
 					  *reg_info);
@@ -1689,6 +1732,8 @@ struct wlan_lmac_if_reg_rx_ops {
 	QDF_STATUS
 	(*reg_set_disable_upper_6g_edge_ch_supp)(struct wlan_objmgr_psoc *psoc,
 						 bool val);
+	QDF_STATUS
+	(*reg_display_super_chan_list)(struct wlan_objmgr_pdev *pdev);
 #endif
 
 #ifdef CONFIG_AFC_SUPPORT
@@ -2052,6 +2097,9 @@ struct wlan_lmac_if_wifi_pos_rx_ops {
  * @dfs_set_bw_expand:                API to set BW Expansion feature.
  * @dfs_get_bw_expand:                API to get the status of BW Expansion
  *                                    feature.
+ * @dfs_set_dfs_puncture:             API to set DFS puncturing feature.
+ * @dfs_get_dfs_puncture:             API to get the status of DFS puncturing
+ *                                    feature.
  */
 struct wlan_lmac_if_dfs_rx_ops {
 	QDF_STATUS (*dfs_get_radars)(struct wlan_objmgr_pdev *pdev);
@@ -2171,6 +2219,14 @@ struct wlan_lmac_if_dfs_rx_ops {
 	QDF_STATUS (*dfs_get_bw_expand)(
 			struct wlan_objmgr_pdev *pdev,
 			bool *value);
+#ifdef QCA_DFS_BW_PUNCTURE
+	QDF_STATUS (*dfs_set_dfs_puncture)(
+			struct wlan_objmgr_pdev *pdev,
+			bool value);
+	QDF_STATUS (*dfs_get_dfs_puncture)(
+			struct wlan_objmgr_pdev *pdev,
+			bool *value);
+#endif
 	QDF_STATUS (*dfs_set_bw_reduction)(struct wlan_objmgr_pdev *pdev,
 			bool value);
 	QDF_STATUS (*dfs_is_bw_reduction_needed)(struct wlan_objmgr_pdev *pdev,

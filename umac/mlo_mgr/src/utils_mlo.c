@@ -799,7 +799,7 @@ QDF_STATUS util_parse_partner_info_from_linkinfo(uint8_t *linkinfo,
 		subelemseqtotallen = 0;
 		subelemseqpayloadlen = 0;
 
-		ret = wlan_get_subelem_fragseq_info(WLAN_ML_BV_LINFO_SUBELEMID_FRAGMENT,
+		ret = wlan_get_subelem_fragseq_info(WLAN_ML_LINFO_SUBELEMID_FRAGMENT,
 						    linkinfo_currpos,
 						    linkinfo_remlen,
 						    &is_subelemfragseq,
@@ -818,7 +818,7 @@ QDF_STATUS util_parse_partner_info_from_linkinfo(uint8_t *linkinfo,
 				  subelemseqpayloadlen);
 
 			ret = wlan_defrag_subelem_fragseq(true,
-							  WLAN_ML_BV_LINFO_SUBELEMID_FRAGMENT,
+							  WLAN_ML_LINFO_SUBELEMID_FRAGMENT,
 							  linkinfo_currpos,
 							  linkinfo_remlen,
 							  NULL,
@@ -855,7 +855,7 @@ QDF_STATUS util_parse_partner_info_from_linkinfo(uint8_t *linkinfo,
 			subelemseqpayloadlen = linkinfo_currpos[TAG_LEN_POS];
 		}
 
-		if (subelemid == WLAN_ML_BV_LINFO_SUBELEMID_PERSTAPROFILE) {
+		if (subelemid == WLAN_ML_LINFO_SUBELEMID_PERSTAPROFILE) {
 			is_macaddr_valid = false;
 
 			ret = util_parse_bvmlie_perstaprofile_stactrl(linkinfo_currpos +
@@ -966,7 +966,7 @@ util_parse_probereq_info_from_linkinfo(uint8_t *linkinfo,
 		subelemseqtotallen = 0;
 		subelemseqpayloadlen = 0;
 
-		ret = wlan_get_subelem_fragseq_info(WLAN_ML_PRV_LINFO_SUBELEMID_FRAGMENT,
+		ret = wlan_get_subelem_fragseq_info(WLAN_ML_LINFO_SUBELEMID_FRAGMENT,
 						    linkinfo_currpos,
 						    linkinfo_remlen,
 						    &is_subelemfragseq,
@@ -985,7 +985,7 @@ util_parse_probereq_info_from_linkinfo(uint8_t *linkinfo,
 				  subelemseqpayloadlen);
 
 			ret = wlan_defrag_subelem_fragseq(true,
-							  WLAN_ML_PRV_LINFO_SUBELEMID_FRAGMENT,
+							  WLAN_ML_LINFO_SUBELEMID_FRAGMENT,
 							  linkinfo_currpos,
 							  linkinfo_remlen,
 							  NULL,
@@ -1022,7 +1022,7 @@ util_parse_probereq_info_from_linkinfo(uint8_t *linkinfo,
 			subelemseqpayloadlen = linkinfo_currpos[TAG_LEN_POS];
 		}
 
-		if (subelemid == WLAN_ML_PRV_LINFO_SUBELEMID_PERSTAPROFILE) {
+		if (subelemid == WLAN_ML_LINFO_SUBELEMID_PERSTAPROFILE) {
 			ret = util_parse_prvmlie_perstaprofile_stactrl(linkinfo_currpos +
 								      sizeof(struct subelem_header),
 								      subelemseqpayloadlen,
@@ -1831,7 +1831,7 @@ QDF_STATUS util_gen_link_reqrsp_cmn(uint8_t *frame, qdf_size_t frame_len,
 	subelemseqtotallen = 0;
 	subelemseqpayloadlen = 0;
 
-	ret = wlan_get_subelem_fragseq_info(WLAN_ML_BV_LINFO_SUBELEMID_FRAGMENT,
+	ret = wlan_get_subelem_fragseq_info(WLAN_ML_LINFO_SUBELEMID_FRAGMENT,
 					    persta_prof,
 					    persta_prof_bufflen,
 					    &is_subelemfragseq,
@@ -1853,7 +1853,7 @@ QDF_STATUS util_gen_link_reqrsp_cmn(uint8_t *frame, qdf_size_t frame_len,
 			  subelemseqpayloadlen);
 
 		ret = wlan_defrag_subelem_fragseq(true,
-						  WLAN_ML_BV_LINFO_SUBELEMID_FRAGMENT,
+						  WLAN_ML_LINFO_SUBELEMID_FRAGMENT,
 						  persta_prof,
 						  persta_prof_bufflen,
 						  NULL,
@@ -2033,7 +2033,8 @@ QDF_STATUS util_gen_link_reqrsp_cmn(uint8_t *frame, qdf_size_t frame_len,
 			mlo_debug("Reassoc req: Added Current AP address field (%u octets) to link specific frame",
 				  QDF_MAC_ADDR_SIZE);
 		}
-	} else if (subtype == WLAN_FC0_STYPE_ASSOC_RESP) {
+	} else if (subtype == WLAN_FC0_STYPE_ASSOC_RESP ||
+		   subtype == WLAN_FC0_STYPE_REASSOC_RESP) {
 		/* This is a (re)association response */
 		mlo_debug("Populating fixed fields for (re)assoc resp in link specific frame");
 
@@ -2101,19 +2102,9 @@ QDF_STATUS util_gen_link_reqrsp_cmn(uint8_t *frame, qdf_size_t frame_len,
 		/* This is a probe response */
 		mlo_debug("Populating fixed fields for probe response in link specific frame");
 
-		if (sta_prof_remlen < WLAN_TIMESTAMP_LEN) {
-			mlo_err_rl("Remaining length of STA profile %zu octets is less than length of Timestamp Length %u",
-				   sta_prof_remlen,
-				   WLAN_TIMESTAMP_LEN);
-
-			qdf_mem_free(mlieseqpayload_copy);
-			return QDF_STATUS_E_PROTO;
-		}
-
-		/* Timestamp field information is specific to the link.
-		 * Copy this from the STA profile.
-		 */
-
+		 /* Copy Timestamp from the starting of the probe response
+		  * frame.
+		  */
 		if ((link_frame_maxsize - link_frame_currlen) <
 				WLAN_TIMESTAMP_LEN) {
 			mlo_err("Insufficent space in link specific frame for Timestamp Info field. Required: %u octets, available: %zu octets",
@@ -2124,15 +2115,12 @@ QDF_STATUS util_gen_link_reqrsp_cmn(uint8_t *frame, qdf_size_t frame_len,
 			return QDF_STATUS_E_NOMEM;
 		}
 
-		qdf_mem_copy(link_frame_currpos, sta_prof_currpos,
+		qdf_mem_copy(link_frame_currpos, frame,
 			     WLAN_TIMESTAMP_LEN);
 		link_frame_currpos += WLAN_TIMESTAMP_LEN;
 		link_frame_currlen += WLAN_TIMESTAMP_LEN;
 		mlo_debug("Added Timestamp Info field (%u octets) to link specific frame",
 			  WLAN_TIMESTAMP_LEN);
-
-		sta_prof_currpos += WLAN_TIMESTAMP_LEN;
-		sta_prof_remlen -= WLAN_TIMESTAMP_LEN;
 
 		if (!is_beaconinterval_valid) {
 			mlo_err_rl("Beacon interval information not present in STA info field of per-STA profile");
@@ -2955,6 +2943,90 @@ util_get_bvmlie_eml_cap(uint8_t *mlieseq, qdf_size_t mlieseqlen,
 							 sizeof(struct wlan_ie_multilink) +
 							 eml_cap_offset));
 	}
+	return QDF_STATUS_SUCCESS;
+}
+
+QDF_STATUS
+util_get_bvmlie_msd_cap(uint8_t *mlieseq, qdf_size_t mlieseqlen,
+			bool *msd_cap_found,
+			uint16_t *msd_cap)
+{
+	struct wlan_ie_multilink *mlie_fixed;
+	enum wlan_ml_variant variant;
+	uint16_t mlcontrol;
+	uint8_t msd_cap_offset;
+	uint8_t commoninfo_len;
+	uint16_t presencebitmap;
+
+	if (!mlieseq || !mlieseqlen || !msd_cap_found || !msd_cap)
+		return QDF_STATUS_E_NULL_VALUE;
+
+	*msd_cap = 0;
+	*msd_cap_found = false;
+
+	if (mlieseqlen < sizeof(struct wlan_ie_multilink))
+		return QDF_STATUS_E_INVAL;
+
+	mlie_fixed = (struct wlan_ie_multilink *)mlieseq;
+
+	if ((mlie_fixed->elem_id != WLAN_ELEMID_EXTN_ELEM) ||
+	    (mlie_fixed->elem_id_ext != WLAN_EXTN_ELEMID_MULTI_LINK))
+		return QDF_STATUS_E_INVAL;
+
+	mlcontrol = qdf_le16_to_cpu(mlie_fixed->mlcontrol);
+
+	variant = QDF_GET_BITS(mlcontrol, WLAN_ML_CTRL_TYPE_IDX,
+			       WLAN_ML_CTRL_TYPE_BITS);
+
+	if (variant != WLAN_ML_VARIANT_BASIC)
+		return QDF_STATUS_E_INVAL;
+
+	presencebitmap = QDF_GET_BITS(mlcontrol, WLAN_ML_CTRL_PBM_IDX,
+				      WLAN_ML_CTRL_PBM_BITS);
+
+	/* msd_cap_offset stores the offset of MSD capabilities within
+	 * Common Info
+	 */
+	msd_cap_offset = WLAN_ML_BV_CINFO_LENGTH_SIZE + QDF_MAC_ADDR_SIZE;
+	if (presencebitmap & WLAN_ML_BV_CTRL_PBM_LINKIDINFO_P)
+		msd_cap_offset += WLAN_ML_BV_CINFO_LINKIDINFO_SIZE;
+	if (presencebitmap & WLAN_ML_BV_CTRL_PBM_BSSPARAMCHANGECNT_P)
+		msd_cap_offset += WLAN_ML_BSSPARAMCHNGCNT_SIZE;
+	if (presencebitmap & WLAN_ML_BV_CTRL_PBM_MEDIUMSYNCDELAYINFO_P) {
+		/* Common Info starts at
+		 * mlieseq + sizeof(struct wlan_ie_multilink).
+		 * Check if there is sufficient space in the buffer for
+		 * the Common Info Length.
+		 */
+		if (mlieseqlen < (sizeof(struct wlan_ie_multilink) +
+				  WLAN_ML_BV_CINFO_LENGTH_SIZE))
+			return QDF_STATUS_E_PROTO;
+
+		/* Check if the value indicated in the Common Info Length
+		 * subfield is sufficient to access the MSD capabilities.
+		 */
+		commoninfo_len = *(mlieseq + sizeof(struct wlan_ie_multilink));
+		if (commoninfo_len < (msd_cap_offset +
+				      WLAN_ML_BV_CINFO_MEDMSYNCDELAYINFO_SIZE))
+			return QDF_STATUS_E_PROTO;
+
+		/* Common Info starts at mlieseq + sizeof(struct
+		 * wlan_ie_multilink). Check if there is sufficient space in
+		 * Common Info for the MSD capability.
+		 */
+		if (mlieseqlen < (sizeof(struct wlan_ie_multilink) +
+				  msd_cap_offset +
+				  WLAN_ML_BV_CINFO_MEDMSYNCDELAYINFO_SIZE))
+			return QDF_STATUS_E_PROTO;
+
+		*msd_cap_found = true;
+		*msd_cap = qdf_le16_to_cpu(*(uint16_t *)(mlieseq +
+							 sizeof(struct wlan_ie_multilink) +
+							 msd_cap_offset));
+	} else {
+		mlo_debug("MSD caps not found in assoc rsp");
+	}
+
 	return QDF_STATUS_SUCCESS;
 }
 
