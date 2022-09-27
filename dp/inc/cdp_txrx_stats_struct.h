@@ -1021,6 +1021,8 @@ struct protocol_trace_count {
  *       <enum 2     1_6_us_sgi > HE related GI
  *       <enum 3     3_2_us_sgi > HE
  * @preamble_info: preamble
+ * @tx_ucast_total: total ucast count
+ * @tx_ucast_success: total ucast success count
  */
 struct cdp_tx_stats {
 	struct cdp_pkt_info comp_pkt;
@@ -1119,6 +1121,8 @@ struct cdp_tx_stats {
 		 bw_info:4,
 		 gi_info:4,
 		 preamble_info:4;
+	struct cdp_pkt_info tx_ucast_total;
+	struct cdp_pkt_info tx_ucast_success;
 };
 
 /* struct cdp_rx_stats - rx Level Stats

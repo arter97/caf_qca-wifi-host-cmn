@@ -79,6 +79,13 @@ static inline bool wlan_ipa_config_is_enabled(void)
  */
 qdf_ipa_wdi_hdl_t wlan_ipa_get_hdl(void *soc, uint8_t pdev_id);
 
+/**
+ * wlan_ipa_is_vlan enabled() - get IPA vlan support enable status
+ *
+ * Return: true - ipa vlan support is enabled
+ *         false - ipa vlan support is not enabled
+ */
+bool wlan_ipa_is_vlan_enabled(void);
 #else
 
 static inline QDF_STATUS ipa_init(void)
@@ -106,9 +113,9 @@ static inline bool wlan_ipa_config_is_enabled(void)
 	return false;
 }
 
-qdf_ipa_wdi_hdl_t wlan_ipa_get_hdl(void *soc, uint8_t pdev_id)
+static inline bool wlan_ipa_is_vlan_enabled(void)
 {
-	return IPA_INVALID_HDL;
+	return false;
 }
 
 #endif /* IPA_OFFLOAD */

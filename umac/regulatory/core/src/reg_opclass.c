@@ -1204,7 +1204,7 @@ void reg_freq_to_chan_op_class(struct wlan_objmgr_pdev *pdev,
 	enum channel_enum chan_enum;
 	struct regulatory_channel *cur_chan_list;
 	struct wlan_regulatory_pdev_priv_obj *pdev_priv_obj;
-	struct ch_params chan_params;
+	struct ch_params chan_params = {0};
 
 	pdev_priv_obj = reg_get_pdev_obj(pdev);
 

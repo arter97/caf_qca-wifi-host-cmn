@@ -16,6 +16,7 @@
  * PERFORMANCE OF THIS SOFTWARE.
  */
 
+#include <wlan_ipa_obj_mgmt_api.h>
 #include <qdf_types.h>
 #include <qdf_lock.h>
 #include <qdf_net_types.h>
@@ -823,6 +824,35 @@ static void dp_wds_flush_ast_table_wifi3(struct cdp_soc_t  *soc_hdl)
 	qdf_spin_unlock_bh(&soc->ast_lock);
 	dp_peer_mec_flush_entries(soc);
 }
+
+#if defined(IPA_WDS_EASYMESH_FEATURE) && defined(FEATURE_AST)
+/*
+ * dp_peer_send_wds_disconnect() - Send Disconnect event to IPA for each peer
+ * @soc: Datapath SOC
+ * @peer: Datapath peer
+ *
+ * Return: None
+ */
+static void
+dp_peer_send_wds_disconnect(struct dp_soc *soc, struct dp_peer *peer)
+{
+	struct dp_ast_entry *ase = NULL;
+	struct dp_ast_entry *temp_ase;
+
+	DP_PEER_ITERATE_ASE_LIST(peer, ase, temp_ase) {
+		if (ase->type == CDP_TXRX_AST_TYPE_WDS) {
+			soc->cdp_soc.ol_ops->peer_send_wds_disconnect(soc->ctrl_psoc,
+								      ase->mac_addr.raw,
+								      ase->vdev_id);
+		}
+	}
+}
+#elif defined(FEATURE_AST)
+static void
+dp_peer_send_wds_disconnect(struct dp_soc *soc, struct dp_peer *peer)
+{
+}
+#endif
 
 /**
  * dp_peer_get_ast_info_by_soc_wifi3() - search the soc AST hash table
@@ -3754,6 +3784,53 @@ static void dp_soc_disable_unused_mac_intr_mask(struct dp_soc *soc,
 					      group_number, 0x0);
 }
 
+#ifdef IPA_OFFLOAD
+#ifdef IPA_WDI3_VLAN_SUPPORT
+/*
+ * dp_soc_reset_ipa_vlan_intr_mask() - reset interrupt mask for IPA offloaded
+ * ring for vlan tagged traffic
+ * @dp_soc - DP Soc handle
+ *
+ * Return: Return void
+ */
+static void dp_soc_reset_ipa_vlan_intr_mask(struct dp_soc *soc)
+{
+	uint8_t *grp_mask = NULL;
+	int group_number, mask;
+
+	if (!wlan_ipa_is_vlan_enabled())
+		return;
+
+	grp_mask = &soc->wlan_cfg_ctx->int_rx_ring_mask[0];
+
+	group_number = dp_srng_find_ring_in_mask(IPA_ALT_REO_DEST_RING_IDX, grp_mask);
+	if (group_number < 0) {
+		dp_init_debug("%pK: ring not part of any group; ring_type: %d,ring_num %d",
+			      soc, REO_DST, IPA_ALT_REO_DEST_RING_IDX);
+		return;
+	}
+
+	mask =  wlan_cfg_get_rx_ring_mask(soc->wlan_cfg_ctx, group_number);
+
+	/* reset the interrupt mask for offloaded ring */
+	mask &= (~(1 << IPA_ALT_REO_DEST_RING_IDX));
+
+	/*
+	 * set the interrupt mask to zero for rx offloaded radio.
+	 */
+	wlan_cfg_set_rx_ring_mask(soc->wlan_cfg_ctx, group_number, mask);
+}
+#else
+static inline
+void dp_soc_reset_ipa_vlan_intr_mask(struct dp_soc *soc)
+{ }
+#endif /*  IPA_WDI3_VLAN_SUPPORT */
+#else
+static inline
+void dp_soc_reset_ipa_vlan_intr_mask(struct dp_soc *soc)
+{ }
+#endif /* IPA_OFFLOAD */
+
 /*
  * dp_soc_reset_intr_mask() - reset interrupt mask
  * @dp_soc - DP Soc handle
@@ -3925,10 +4002,20 @@ bool dp_reo_remap_config(struct dp_soc *soc, uint32_t *remap1, uint32_t *remap2)
 		break;
 
 	default:
-		hal_compute_reo_remap_ix2_ix3(soc->hal_soc, ring,
-					      soc->num_reo_dest_rings -
-					      USE_1_IPA_RX_REO_RING, remap1,
-					      remap2);
+		if (wlan_ipa_is_vlan_enabled()) {
+			hal_compute_reo_remap_ix2_ix3(
+					soc->hal_soc, ring,
+					soc->num_reo_dest_rings -
+					USE_2_IPA_RX_REO_RINGS, remap1,
+					remap2);
+
+		} else {
+			hal_compute_reo_remap_ix2_ix3(
+					soc->hal_soc, ring,
+					soc->num_reo_dest_rings -
+					USE_1_IPA_RX_REO_RING, remap1,
+					remap2);
+		}
 		break;
 	}
 
@@ -4674,6 +4761,100 @@ static int dp_setup_ipa_rx_refill_buf_ring(struct dp_soc *soc,
 	return QDF_STATUS_SUCCESS;
 }
 
+#ifdef IPA_WDI3_VLAN_SUPPORT
+static int dp_setup_ipa_rx_alt_refill_buf_ring(struct dp_soc *soc,
+					       struct dp_pdev *pdev)
+{
+	struct wlan_cfg_dp_soc_ctxt *soc_cfg_ctx;
+	int entries;
+
+	if (wlan_cfg_is_ipa_enabled(soc->wlan_cfg_ctx) &&
+	    wlan_ipa_is_vlan_enabled()) {
+		soc_cfg_ctx = soc->wlan_cfg_ctx;
+		entries =
+			wlan_cfg_get_dp_soc_rxdma_refill_ring_size(soc_cfg_ctx);
+
+		/* Setup second Rx refill buffer ring */
+		if (dp_srng_alloc(soc, &pdev->rx_refill_buf_ring3, RXDMA_BUF,
+				  entries, 0)) {
+			dp_init_err("%pK: dp_srng_alloc failed second"
+				    "rx refill ring", soc);
+			return QDF_STATUS_E_FAILURE;
+		}
+	}
+
+	return QDF_STATUS_SUCCESS;
+}
+
+static int dp_init_ipa_rx_alt_refill_buf_ring(struct dp_soc *soc,
+					      struct dp_pdev *pdev)
+{
+	if (wlan_cfg_is_ipa_enabled(soc->wlan_cfg_ctx) &&
+	     wlan_ipa_is_vlan_enabled()) {
+		if (dp_srng_init(soc, &pdev->rx_refill_buf_ring3, RXDMA_BUF,
+				 IPA_RX_ALT_REFILL_BUF_RING_IDX, pdev->pdev_id)) {
+			dp_init_err("%pK: dp_srng_init failed second"
+				    "rx refill ring", soc);
+			return QDF_STATUS_E_FAILURE;
+		}
+	}
+
+	return QDF_STATUS_SUCCESS;
+}
+
+static void dp_deinit_ipa_rx_alt_refill_buf_ring(struct dp_soc *soc,
+						 struct dp_pdev *pdev)
+{
+	if (wlan_cfg_is_ipa_enabled(soc->wlan_cfg_ctx) &&
+	     wlan_ipa_is_vlan_enabled())
+		dp_srng_deinit(soc, &pdev->rx_refill_buf_ring3, RXDMA_BUF, 0);
+}
+
+static void dp_free_ipa_rx_alt_refill_buf_ring(struct dp_soc *soc,
+					       struct dp_pdev *pdev)
+{
+	if (wlan_cfg_is_ipa_enabled(soc->wlan_cfg_ctx) &&
+	    wlan_ipa_is_vlan_enabled())
+		dp_srng_free(soc, &pdev->rx_refill_buf_ring3);
+}
+#else
+static int dp_setup_ipa_rx_alt_refill_buf_ring(struct dp_soc *soc,
+					       struct dp_pdev *pdev)
+{
+	return QDF_STATUS_SUCCESS;
+}
+
+static int dp_init_ipa_rx_alt_refill_buf_ring(struct dp_soc *soc,
+					      struct dp_pdev *pdev)
+{
+	return QDF_STATUS_SUCCESS;
+}
+
+static void dp_deinit_ipa_rx_alt_refill_buf_ring(struct dp_soc *soc,
+						 struct dp_pdev *pdev)
+{
+}
+
+static void dp_free_ipa_rx_alt_refill_buf_ring(struct dp_soc *soc,
+					       struct dp_pdev *pdev)
+{
+}
+#endif
+
+/**
+ * dp_deinit_ipa_rx_refill_buf_ring - deinit second Rx refill buffer ring
+ * @soc: data path instance
+ * @pdev: core txrx pdev context
+ *
+ * Return: void
+ */
+static void dp_deinit_ipa_rx_refill_buf_ring(struct dp_soc *soc,
+					     struct dp_pdev *pdev)
+{
+	if (wlan_cfg_is_ipa_enabled(soc->wlan_cfg_ctx))
+		dp_srng_deinit(soc, &pdev->rx_refill_buf_ring2, RXDMA_BUF, 0);
+}
+
 /**
  * dp_init_ipa_rx_refill_buf_ring - Init second Rx refill buffer ring
  * @soc: data path instance
@@ -4693,21 +4874,13 @@ static int dp_init_ipa_rx_refill_buf_ring(struct dp_soc *soc,
 			return QDF_STATUS_E_FAILURE;
 		}
 	}
-	return QDF_STATUS_SUCCESS;
-}
 
-/**
- * dp_deinit_ipa_rx_refill_buf_ring - deinit second Rx refill buffer ring
- * @soc: data path instance
- * @pdev: core txrx pdev context
- *
- * Return: void
- */
-static void dp_deinit_ipa_rx_refill_buf_ring(struct dp_soc *soc,
-					     struct dp_pdev *pdev)
-{
-	if (wlan_cfg_is_ipa_enabled(soc->wlan_cfg_ctx))
-		dp_srng_deinit(soc, &pdev->rx_refill_buf_ring2, RXDMA_BUF, 0);
+	if (dp_init_ipa_rx_alt_refill_buf_ring(soc, pdev)) {
+		dp_deinit_ipa_rx_refill_buf_ring(soc, pdev);
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	return QDF_STATUS_SUCCESS;
 }
 
 /**
@@ -4743,6 +4916,22 @@ static void dp_deinit_ipa_rx_refill_buf_ring(struct dp_soc *soc,
 
 static void dp_free_ipa_rx_refill_buf_ring(struct dp_soc *soc,
 					   struct dp_pdev *pdev)
+{
+}
+
+static int dp_setup_ipa_rx_alt_refill_buf_ring(struct dp_soc *soc,
+					       struct dp_pdev *pdev)
+{
+	return QDF_STATUS_SUCCESS;
+}
+
+static void dp_deinit_ipa_rx_alt_refill_buf_ring(struct dp_soc *soc,
+						 struct dp_pdev *pdev)
+{
+}
+
+static void dp_free_ipa_rx_alt_refill_buf_ring(struct dp_soc *soc,
+					       struct dp_pdev *pdev)
 {
 }
 #endif
@@ -5021,7 +5210,17 @@ static inline QDF_STATUS dp_pdev_attach_wifi3(struct cdp_soc_t *txrx_soc,
 		goto fail5;
 	}
 
+	/* Setup third Rx refill buffer ring */
+	if (dp_setup_ipa_rx_alt_refill_buf_ring(soc, pdev)) {
+		dp_init_err("%pK: dp_srng_alloc failed rxrefill3 ring",
+			    soc);
+		goto fail6;
+	}
+
 	return QDF_STATUS_SUCCESS;
+
+fail6:
+	dp_monitor_pdev_detach(pdev);
 fail5:
 	dp_rx_pdev_desc_pool_free(pdev);
 fail4:
@@ -5119,6 +5318,7 @@ static void dp_pdev_deinit(struct cdp_pdev *txrx_pdev, int force)
 	dp_pdev_srng_deinit(pdev);
 
 	dp_ipa_uc_detach(pdev->soc, pdev);
+	dp_deinit_ipa_rx_alt_refill_buf_ring(pdev->soc, pdev);
 	dp_deinit_ipa_rx_refill_buf_ring(pdev->soc, pdev);
 	dp_rxdma_ring_cleanup(pdev->soc, pdev);
 
@@ -5219,6 +5419,7 @@ static void dp_pdev_detach(struct cdp_pdev *txrx_pdev, int force)
 	dp_monitor_pdev_detach(pdev);
 	dp_rxdma_ring_free(pdev);
 	dp_free_ipa_rx_refill_buf_ring(soc, pdev);
+	dp_free_ipa_rx_alt_refill_buf_ring(soc, pdev);
 	dp_pdev_srng_free(pdev);
 
 	soc->pdev_count--;
@@ -5520,6 +5721,25 @@ static void dp_soc_detach_wifi3(struct cdp_soc_t *txrx_soc)
  * Return: zero on success, non-zero on failure
  */
 #ifdef QCA_HOST2FW_RXBUF_RING
+#ifdef IPA_WDI3_VLAN_SUPPORT
+static inline
+void dp_rxdma_setup_refill_ring3(struct dp_soc *soc,
+				 struct dp_pdev *pdev,
+				 uint8_t idx)
+{
+	if (pdev->rx_refill_buf_ring3.hal_srng)
+		htt_srng_setup(soc->htt_handle, idx,
+			       pdev->rx_refill_buf_ring3.hal_srng,
+			       RXDMA_BUF);
+}
+#else
+static inline
+void dp_rxdma_setup_refill_ring3(struct dp_soc *soc,
+				 struct dp_pdev *pdev,
+				 uint8_t idx)
+{ }
+#endif
+
 static QDF_STATUS dp_rxdma_ring_config(struct dp_soc *soc)
 {
 	int i;
@@ -5569,6 +5789,8 @@ static QDF_STATUS dp_rxdma_ring_config(struct dp_soc *soc)
 			QDF_TRACE(QDF_MODULE_ID_TXRX, QDF_TRACE_LEVEL_ERROR,
 					 FL("pdev_id %d max_mac_rings %d"),
 					 pdev->pdev_id, max_mac_rings);
+
+			dp_rxdma_setup_refill_ring3(soc, pdev, i);
 
 			for (mac_id = 0; mac_id < max_mac_rings; mac_id++) {
 				int mac_for_pdev =
@@ -10353,6 +10575,7 @@ dp_peer_teardown_wifi3(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
 	dp_peer_update_state(soc, peer, DP_PEER_STATE_LOGICAL_DELETE);
 
 	qdf_spin_lock_bh(&soc->ast_lock);
+	dp_peer_send_wds_disconnect(soc, peer);
 	dp_peer_delete_ast_entries(soc, peer);
 	qdf_spin_unlock_bh(&soc->ast_lock);
 
@@ -11551,7 +11774,10 @@ static struct cdp_ipa_ops dp_ops_ipa = {
 	.ipa_set_perf_level = dp_ipa_set_perf_level,
 	.ipa_rx_intrabss_fwd = dp_ipa_rx_intrabss_fwd,
 	.ipa_tx_buf_smmu_mapping = dp_ipa_tx_buf_smmu_mapping,
-	.ipa_tx_buf_smmu_unmapping = dp_ipa_tx_buf_smmu_unmapping
+	.ipa_tx_buf_smmu_unmapping = dp_ipa_tx_buf_smmu_unmapping,
+#ifdef IPA_WDS_EASYMESH_FEATURE
+	.ipa_ast_create = dp_ipa_ast_create,
+#endif
 };
 #endif
 
@@ -13456,6 +13682,9 @@ static QDF_STATUS dp_pdev_init(struct cdp_soc_t *txrx_soc,
 		dp_soc_reset_cpu_ring_map(soc);
 		dp_soc_reset_intr_mask(soc);
 	}
+
+	/* Reset the cpu ring map if radio is NSS offloaded */
+	dp_soc_reset_ipa_vlan_intr_mask(soc);
 
 	TAILQ_INIT(&pdev->vdev_list);
 	qdf_spinlock_create(&pdev->vdev_list_lock);
