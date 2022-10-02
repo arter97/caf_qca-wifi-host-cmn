@@ -338,8 +338,6 @@ typedef __qdf_nbuf_queue_t qdf_nbuf_queue_t;
  * @ba_bitmap: 256 bit block ack bitmap
  * @mpdu_retry_cnt: Rx mpdu retry count
  * @punctured_pattern: punctured pattern (0 means the band is punctured)
- * @rx_user_status: pointer to mon_rx_user_status, when set update
- * radiotap header will use userinfo from this structure.
  * @usig_common: U-SIG property of received frame
  * @usig_value: U-SIG property of received frame
  * @usig_mask: U-SIG property of received frame
@@ -367,6 +365,8 @@ typedef __qdf_nbuf_queue_t qdf_nbuf_queue_t;
  * @min_nf_dbm: min noise floor in active chains per channel
  * @xbar_config: 4 bytes, used for BB to RF Chain mapping
  * @rssi_dbm_conv_support: Rssi dbm converstion support param
+ * @rx_user_status: pointer to mon_rx_user_status, when set update
+ * radiotap header will use userinfo from this structure.
  */
 struct mon_rx_status {
 	uint64_t tsft;
@@ -374,7 +374,7 @@ struct mon_rx_status {
 	qdf_freq_t chan_freq;
 	uint16_t chan_num;
 	uint16_t chan_flags;
-	uint16_t ht_flags : 1,
+	uint32_t ht_flags : 1,
 		 vht_flags : 1,
 		 he_flags : 1,
 		 he_mu_flags : 1,
@@ -385,7 +385,7 @@ struct mon_rx_status {
 		 nss : 3,
 		 bw : 4,
 		 is_stbc : 1,
-		 sgi : 1,
+		 sgi : 2,
 		 he_re : 1,
 		 ldpc : 1,
 		 beamformed : 1,
@@ -439,7 +439,7 @@ struct mon_rx_status {
 	uint8_t he_per_user_known;
 	uint16_t he_flags1;
 	uint16_t he_flags2;
-	uint8_t he_RU[4];
+	uint8_t he_RU[8];
 	uint16_t he_data1;
 	uint16_t he_data2;
 	uint16_t he_data3;
@@ -460,7 +460,6 @@ struct mon_rx_status {
 #ifdef WLAN_FEATURE_11BE
 	uint16_t punctured_pattern;
 #endif
-	struct mon_rx_user_status *rx_user_status;
 	uint32_t usig_common;
 	uint32_t usig_value;
 	uint32_t usig_mask;
@@ -492,6 +491,7 @@ struct mon_rx_status {
 	uint32_t xbar_config;
 	bool rssi_dbm_conv_support;
 #endif
+	struct mon_rx_user_status *rx_user_status;
 };
 
 /**
@@ -584,7 +584,7 @@ struct mon_rx_user_status {
 	uint16_t vht_flag_values6;
 	uint16_t he_flags1;
 	uint16_t he_flags2;
-	uint8_t he_RU[4];
+	uint8_t he_RU[8];
 	uint16_t he_data1;
 	uint16_t he_data2;
 	uint16_t he_data3;
@@ -1033,6 +1033,7 @@ enum qdf_reception_type {
  * @CB_FTYPE_MESH_RX_INFO - Mesh Rx information
  * @CB_FTYPE_MESH_TX_INFO - Mesh Tx information
  * @CB_FTYPE_DMS - Directed Multicast Service
+ * @CB_FTYPE_SAWF - SAWF information
  */
 enum cb_ftype {
 	CB_FTYPE_INVALID = 0,
@@ -1045,12 +1046,18 @@ enum cb_ftype {
 	CB_FTYPE_MESH_RX_INFO = 7,
 	CB_FTYPE_MESH_TX_INFO = 8,
 	CB_FTYPE_DMS = 9,
+	CB_FTYPE_SAWF = 10,
 };
 
 /**
  * @qdf_nbuf_t - Platform indepedent packet abstraction
  */
 typedef __qdf_nbuf_t qdf_nbuf_t;
+
+/**
+ * @qdf_nbuf_shared_info_t- Platform indepedent shared info
+ */
+typedef __qdf_nbuf_shared_info_t qdf_nbuf_shared_info_t;
 
 /**
  * struct qdf_nbuf_track_t - Network buffer track structure
@@ -2999,6 +3006,17 @@ static inline qdf_nbuf_t qdf_nbuf_get_ext_list(qdf_nbuf_t head_buf)
 }
 
 /**
+ * qdf_nbuf_get_shinfo() - gets the shared info of head buf
+ * @head_buf: Network buffer
+ *
+ * Return: shared info of head buf
+ */
+static inline qdf_nbuf_shared_info_t qdf_nbuf_get_shinfo(qdf_nbuf_t head_buf)
+{
+	return (qdf_nbuf_shared_info_t)__qdf_nbuf_get_shinfo(head_buf);
+}
+
+/**
  * qdf_nbuf_get_tx_cksum() - gets the tx checksum offload demand
  * @buf: Network buffer
  *
@@ -4246,6 +4264,41 @@ static inline uint16_t qdf_nbuf_get_gso_segs(qdf_nbuf_t nbuf)
 }
 
 /**
+ * qdf_nbuf_set_gso_segs() - set the number of gso segments in
+ * nbuf
+ * @nbuf: Network buffer
+ * @val: val to be set
+ *
+ * Return: None
+ */
+static inline void qdf_nbuf_set_gso_segs(qdf_nbuf_t nbuf, uint16_t val)
+{
+	__qdf_nbuf_set_gso_segs(nbuf, val);
+}
+
+/**
+ * qdf_nbuf_set_gso_type_udp_l4() - set the gso type to GSO UDP L4
+ * @nbuf: Network buffer
+ *
+ * Return: None
+ */
+static inline void qdf_nbuf_set_gso_type_udp_l4(qdf_nbuf_t nbuf)
+{
+	__qdf_nbuf_set_gso_type_udp_l4(nbuf);
+}
+
+/**
+ * qdf_nbuf_set_ip_summed_partial() - set the ip summed to CHECKSUM_PARTIAL
+ * @nbuf: Network buffer
+ *
+ * Return: None
+ */
+static inline void qdf_nbuf_set_ip_summed_partial(qdf_nbuf_t nbuf)
+{
+	__qdf_nbuf_set_ip_summed_partial(nbuf);
+}
+
+/**
  * qdf_nbuf_get_gso_size() - Return the number of gso size in
  * nbuf
  * @nbuf: Network buffer
@@ -4684,6 +4737,77 @@ static inline qdf_size_t qdf_nbuf_get_data_len(qdf_nbuf_t nbuf)
 }
 
 /**
+ * qdf_nbuf_set_data_len() - Return the data_len of the nbuf
+ * @nbuf: qdf_nbuf_t
+ * @len: data_len to be set
+ *
+ * Return: set data_len value
+ */
+static inline qdf_size_t qdf_nbuf_set_data_len(qdf_nbuf_t nbuf, uint32_t len)
+{
+	return __qdf_nbuf_set_data_len(nbuf, len);
+}
+
+/**
+ * qdf_nbuf_get_only_data_len() - Return the data_len of the nbuf
+ * @nbuf: qdf_nbuf_t
+ *
+ * Return: data_len value
+ */
+static inline qdf_size_t qdf_nbuf_get_only_data_len(qdf_nbuf_t nbuf)
+{
+	return __qdf_nbuf_get_only_data_len(nbuf);
+}
+
+/**
+ * qdf_nbuf_set_hash() - set the hash of the buf
+ * @buf: Network buf instance
+ * @len: len to be set
+ *
+ * Return: none
+ */
+static inline void qdf_nbuf_set_hash(qdf_nbuf_t buf, uint32_t len)
+{
+	__qdf_nbuf_set_hash(buf, len);
+}
+
+/**
+ * qdf_nbuf_set_sw_hash() - set the sw hash of the buf
+ * @buf: Network buf instance
+ * @len: len to be set
+ *
+ * Return: none
+ */
+static inline void qdf_nbuf_set_sw_hash(qdf_nbuf_t buf, uint32_t len)
+{
+	__qdf_nbuf_set_sw_hash(buf, len);
+}
+
+/**
+ * qdf_nbuf_set_csum_start() - set the csum start of the buf
+ * @buf: Network buf instance
+ * @len: len to be set
+ *
+ * Return: none
+ */
+static inline void qdf_nbuf_set_csum_start(qdf_nbuf_t buf, uint16_t len)
+{
+	__qdf_nbuf_set_csum_start(buf, len);
+}
+
+/**
+ * qdf_nbuf_set_csum_offset() - set the csum offset of the buf
+ * @buf: Network buf instance
+ * @len: len to be set
+ *
+ * Return: none
+ */
+static inline void qdf_nbuf_set_csum_offset(qdf_nbuf_t buf, uint16_t len)
+{
+	__qdf_nbuf_set_csum_offset(buf, len);
+}
+
+/**
  * qdf_nbuf_get_end_offset() - Return the size of the nbuf from
  * head pointer to end pointer
  * @nbuf: qdf_nbuf_t
@@ -5031,9 +5155,9 @@ uint64_t qdf_nbuf_get_timestamp(qdf_nbuf_t buf);
  * qdf_nbuf_get_timestamp_us() - get the timestamp for frame
  * @buf: pointer to network buffer
  *
- * Return: timestamp stored in skb in us
+ * Return: timestamp stored in nbuf in us
  */
-uint64_t qdf_nbuf_get_timestamp_us(struct sk_buff *skb);
+uint64_t qdf_nbuf_get_timestamp_us(qdf_nbuf_t buf);
 
 /**
  * qdf_nbuf_get_timedelta_ms() - get time difference in ms
@@ -5072,9 +5196,9 @@ qdf_nbuf_get_timestamp(struct sk_buff *skb)
 }
 
 static inline uint64_t
-qdf_nbuf_get_timestamp_us(struct sk_buff *skb)
+qdf_nbuf_get_timestamp_us(qdf_nbuf_t buf)
 {
-	return __qdf_nbuf_get_timestamp_us(skb);
+	return __qdf_nbuf_get_timestamp_us(buf);
 }
 
 static inline uint64_t

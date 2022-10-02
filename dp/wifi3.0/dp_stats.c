@@ -5819,7 +5819,7 @@ dp_print_pdev_cfg_params(struct dp_pdev *pdev)
  *
  * Return: void
  */
-static void
+void
 dp_print_ring_stat_from_hal(struct dp_soc *soc,  struct dp_srng *srng,
 			    enum hal_ring_type ring_type)
 {
@@ -6031,6 +6031,11 @@ dp_print_ring_stats(struct dp_pdev *pdev)
 					    [lmac_id],
 					    RXDMA_DST);
 	}
+
+#ifdef WLAN_SUPPORT_PPEDS
+	if (pdev->soc->arch_ops.dp_txrx_ppeds_rings_status)
+		pdev->soc->arch_ops.dp_txrx_ppeds_rings_status(pdev->soc);
+#endif
 	hif_rtpm_put(HIF_RTPM_PUT_ASYNC, HIF_RTPM_ID_DP_RING_STATS);
 }
 
@@ -6349,6 +6354,54 @@ static void dp_print_hist_stats(struct cdp_hist_stats *hstats,
 		DP_PRINT_STATS("Avg = %u\n", hstats->avg);
 	}
 }
+
+#ifdef CONFIG_SAWF
+/*
+ * dp_accumulate_delay_avg_stats(): Accumulate the delay average stats
+ * @stats: cdp_delay_tid stats
+ * @dst_hstats: Destination delay Tx stats
+ * @tid: TID value
+ *
+ * Return: void
+ */
+static void dp_accumulate_delay_avg_stats(struct cdp_delay_tid_stats stats[]
+					  [CDP_MAX_TXRX_CTX],
+					  struct cdp_delay_tx_stats *dst_stats,
+					  uint8_t tid)
+{
+	uint32_t num_rings = 0;
+	uint8_t ring_id;
+
+	for (ring_id = 0; ring_id < CDP_MAX_TXRX_CTX; ring_id++) {
+		struct cdp_delay_tx_stats *dstats =
+				&stats[tid][ring_id].tx_delay;
+
+		if (dstats->swdelay_avg || dstats->hwdelay_avg) {
+			dst_stats->nwdelay_avg += dstats->nwdelay_avg;
+			dst_stats->swdelay_avg += dstats->swdelay_avg;
+			dst_stats->hwdelay_avg += dstats->hwdelay_avg;
+			num_rings++;
+		}
+	}
+
+	if (!num_rings)
+		return;
+
+	dst_stats->nwdelay_avg = qdf_do_div(dst_stats->nwdelay_avg,
+					    num_rings);
+	dst_stats->swdelay_avg = qdf_do_div(dst_stats->swdelay_avg,
+					    num_rings);
+	dst_stats->hwdelay_avg = qdf_do_div(dst_stats->hwdelay_avg,
+					    num_rings);
+}
+#else
+static void dp_accumulate_delay_avg_stats(struct cdp_delay_tid_stats stats[]
+					  [CDP_MAX_TXRX_CTX],
+					  struct cdp_delay_tx_stats *dst_stats,
+					  uint8_t tid)
+{
+}
+#endif
 
 /*
  * dp_accumulate_delay_tid_stats(): Accumulate the tid stats to the
@@ -7214,6 +7267,8 @@ void dp_txrx_path_stats(struct dp_soc *soc)
 			       pdev->soc->stats.rx.err.reo_err_oor_to_stack);
 		DP_PRINT_STATS("REO err oor msdu drop: %u",
 			       pdev->soc->stats.rx.err.reo_err_oor_drop);
+		DP_PRINT_STATS("REO err raw mpdu drop: %u",
+			       pdev->soc->stats.rx.err.reo_err_raw_mpdu_drop);
 		DP_PRINT_STATS("Rx err msdu rejected: %d",
 			       soc->stats.rx.err.rejected);
 		DP_PRINT_STATS("Rx raw frame dropped: %d",
@@ -7389,6 +7444,8 @@ dp_print_pdev_tx_stats(struct dp_pdev *pdev)
 		       pdev->stats.tx_i.dropped.res_full);
 	DP_PRINT_STATS("	Drop Ingress = %u",
 		       pdev->stats.tx_i.dropped.drop_ingress);
+	DP_PRINT_STATS("	invalid peer id in exception path = %u",
+		       pdev->stats.tx_i.dropped.invalid_peer_id_in_exc_path);
 	DP_PRINT_STATS("Tx failed = %u",
 		       pdev->stats.tx.tx_failed);
 	DP_PRINT_STATS("	FW removed Pkts = %u",
@@ -7877,6 +7934,9 @@ dp_print_soc_rx_stats(struct dp_soc *soc)
 
 	DP_PRINT_STATS("REO err oor msdu drop: %d",
 		       soc->stats.rx.err.reo_err_oor_drop);
+
+	DP_PRINT_STATS("REO err raw ampdu drop: %d",
+		       soc->stats.rx.err.reo_err_raw_mpdu_drop);
 
 	DP_PRINT_STATS("Rx err msdu rejected: %d",
 		       soc->stats.rx.err.rejected);
@@ -8673,7 +8733,8 @@ void dp_update_vdev_ingress_stats(struct dp_vdev *tgtobj)
 		tgtobj->stats.tx_i.dropped.desc_na.num +
 		tgtobj->stats.tx_i.dropped.res_full +
 		tgtobj->stats.tx_i.dropped.drop_ingress +
-		tgtobj->stats.tx_i.dropped.headroom_insufficient;
+		tgtobj->stats.tx_i.dropped.headroom_insufficient +
+		tgtobj->stats.tx_i.dropped.invalid_peer_id_in_exc_path;
 }
 
 void dp_update_vdev_rate_stats(struct cdp_vdev_stats *tgtobj,
@@ -8724,6 +8785,7 @@ void dp_update_pdev_ingress_stats(struct dp_pdev *tgtobj,
 	DP_STATS_AGGR(tgtobj, srcobj, tx_i.dropped.res_full);
 	DP_STATS_AGGR(tgtobj, srcobj, tx_i.dropped.drop_ingress);
 	DP_STATS_AGGR(tgtobj, srcobj, tx_i.dropped.headroom_insufficient);
+	DP_STATS_AGGR(tgtobj, srcobj, tx_i.dropped.invalid_peer_id_in_exc_path);
 	DP_STATS_AGGR(tgtobj, srcobj, tx_i.cce_classified);
 	DP_STATS_AGGR(tgtobj, srcobj, tx_i.cce_classified_raw);
 	DP_STATS_AGGR_PKT(tgtobj, srcobj, tx_i.sniffer_rcvd);
@@ -8742,7 +8804,8 @@ void dp_update_pdev_ingress_stats(struct dp_pdev *tgtobj,
 		tgtobj->stats.tx_i.dropped.desc_na.num +
 		tgtobj->stats.tx_i.dropped.res_full +
 		tgtobj->stats.tx_i.dropped.drop_ingress +
-		tgtobj->stats.tx_i.dropped.headroom_insufficient;
+		tgtobj->stats.tx_i.dropped.headroom_insufficient +
+		tgtobj->stats.tx_i.dropped.invalid_peer_id_in_exc_path;
 }
 
 QDF_STATUS dp_txrx_get_soc_stats(struct cdp_soc_t *soc_hdl,
@@ -8857,6 +8920,8 @@ QDF_STATUS dp_txrx_get_soc_stats(struct cdp_soc_t *soc_hdl,
 			soc->stats.rx.err.reo_err_msdu_buf_invalid_cookie;
 	soc_stats->rx.err.rx_hw_err_oor_drop =
 					soc->stats.rx.err.reo_err_oor_drop;
+	soc_stats->rx.err.rx_hw_err_raw_mpdu_drop =
+					soc->stats.rx.err.reo_err_raw_mpdu_drop;
 	soc_stats->rx.err.rx_hw_err_oor_to_stack =
 					soc->stats.rx.err.reo_err_oor_to_stack;
 	soc_stats->rx.err.rx_hw_err_oor_sg_count =
@@ -8931,6 +8996,9 @@ dp_txrx_get_peer_delay_stats(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
 					      &rx_delay->to_stack_delay, tid,
 					      CDP_HIST_TYPE_REAP_STACK);
 		tx_delay = &delay_stats[tid].tx_delay;
+		dp_accumulate_delay_avg_stats(pext_stats->delay_tid_stats,
+					      tx_delay,
+					      tid);
 		dp_accumulate_delay_tid_stats(soc, pext_stats->delay_tid_stats,
 					      &tx_delay->tx_swq_delay, tid,
 					      CDP_HIST_TYPE_SW_ENQEUE_DELAY);

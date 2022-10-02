@@ -1015,6 +1015,16 @@ dp_rx_null_q_handle_invalid_peer_id_exception(struct dp_soc *soc,
 	}
 	return false;
 }
+#else
+static inline bool
+dp_rx_null_q_handle_invalid_peer_id_exception(struct dp_soc *soc,
+					      uint8_t pool_id,
+					      uint8_t *rx_tlv_hdr,
+					      qdf_nbuf_t nbuf)
+{
+	return false;
+}
+#endif
 
 /**
  * dp_rx_check_pkt_len() - Check for pktlen validity
@@ -1035,24 +1045,6 @@ bool dp_rx_check_pkt_len(struct dp_soc *soc, uint32_t pkt_len)
 		return false;
 	}
 }
-
-#else
-static inline bool
-dp_rx_null_q_handle_invalid_peer_id_exception(struct dp_soc *soc,
-					      uint8_t pool_id,
-					      uint8_t *rx_tlv_hdr,
-					      qdf_nbuf_t nbuf)
-{
-	return false;
-}
-
-static inline
-bool dp_rx_check_pkt_len(struct dp_soc *soc, uint32_t pkt_len)
-{
-	return false;
-}
-
-#endif
 
 /*
  * dp_rx_deliver_to_osif_stack() - function to deliver rx pkts to stack
@@ -1562,6 +1554,17 @@ more_msdu_link_desc:
 		if (dp_rx_buffer_pool_refill(soc, head_nbuf,
 					     rx_desc_pool_id)) {
 			/* MSDU queued back to the pool */
+			goto process_next_msdu;
+		}
+
+		hal_rx_tlv_populate_mpdu_desc_info(soc->hal_soc,
+						   qdf_nbuf_data(head_nbuf),
+						   mpdu_desc_info);
+		if (qdf_unlikely(mpdu_desc_info->mpdu_flags &
+				 HAL_MPDU_F_RAW_AMPDU)) {
+			dp_err_rl("RAW ampdu in REO error not expected");
+			DP_STATS_INC(soc, rx.err.reo_err_raw_mpdu_drop, 1);
+			qdf_nbuf_list_free(head_nbuf);
 			goto process_next_msdu;
 		}
 

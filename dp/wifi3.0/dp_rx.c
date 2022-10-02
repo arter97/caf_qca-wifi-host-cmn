@@ -1505,12 +1505,6 @@ out:
 	if (soc->cdp_soc.ol_ops->rx_invalid_peer)
 		soc->cdp_soc.ol_ops->rx_invalid_peer(vdev->vdev_id, wh);
 free:
-	/* reset the head and tail pointers */
-	pdev = dp_get_pdev_for_lmac_id(soc, mac_id);
-	if (pdev) {
-		pdev->invalid_peer_head_msdu = NULL;
-		pdev->invalid_peer_tail_msdu = NULL;
-	}
 
 	/* Drop and free packet */
 	curr_nbuf = mpdu;
@@ -2291,7 +2285,7 @@ dp_rx_rates_stats_update(struct dp_soc *soc, qdf_nbuf_t nbuf,
 	DP_PEER_EXTD_STATS_UPD(txrx_peer, rx.rx_rate, mcs);
 
 	/* In 11b mode, the nss we get from tlv is 0, invalid and should be 1 */
-	if (pkt_type == DOT11_B)
+	if (qdf_unlikely(pkt_type == DOT11_B))
 		nss = 1;
 
 	/* here pkt_type corresponds to preamble */
@@ -2411,6 +2405,16 @@ dp_peer_update_rx_pkt_per_lmac(struct dp_txrx_peer *txrx_peer,
 			       qdf_nbuf_t nbuf)
 {
 	uint8_t lmac_id = qdf_nbuf_get_lmac_id(nbuf);
+
+	if (qdf_unlikely(lmac_id >= CDP_MAX_LMACS)) {
+		dp_err_rl("Invalid lmac_id: %u vdev_id: %u",
+			  lmac_id, QDF_NBUF_CB_RX_VDEV_ID(nbuf));
+
+		if (qdf_likely(txrx_peer))
+			dp_err_rl("peer_id: %u", txrx_peer->peer_id);
+
+		return;
+	}
 
 	/* only count stats per lmac for MLO connection*/
 	DP_PEER_PER_PKT_STATS_INCC_PKT(txrx_peer, rx.rx_lmac[lmac_id], 1,

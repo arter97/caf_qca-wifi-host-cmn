@@ -48,7 +48,7 @@
 #include "htt_stats.h"
 #include "dp_htt.h"
 #ifdef WLAN_SUPPORT_RX_FISA
-#include <dp_fisa_rx.h>
+#include <wlan_dp_fisa_rx.h>
 #endif
 #include "htt_ppdu_stats.h"
 #include "qdf_mem.h"   /* qdf_mem_malloc,free */
@@ -7185,10 +7185,7 @@ static inline void dp_vdev_fetch_tx_handler(struct dp_vdev *vdev,
 		ctx->tx_fast = dp_tx_send_vdev_id_check;
 	} else {
 		ctx->tx = dp_tx_send;
-		if (vdev->opmode == wlan_op_mode_ap)
-			ctx->tx_fast = soc->arch_ops.dp_tx_send_fast;
-		else
-			ctx->tx_fast = dp_tx_send;
+		ctx->tx_fast = soc->arch_ops.dp_tx_send_fast;
 	}
 
 	/* Avoid check in regular exception Path */
@@ -9586,6 +9583,10 @@ char *dp_srng_get_str_from_hal_ring_type(enum hal_ring_type ring_type)
 		return "Rxdma_monitor_destination";
 	case WBM_IDLE_LINK:
 		return "WBM_hw_idle_link";
+	case PPE2TCL:
+		return "PPE2TCL";
+	case REO2PPE:
+		return "REO2PPE";
 	default:
 		dp_err("Invalid ring type");
 		break;
@@ -9877,9 +9878,11 @@ void dp_get_peer_extd_stats(struct dp_peer *peer,
 	struct dp_txrx_peer *txrx_peer;
 	struct dp_peer_extd_stats *extd_stats;
 
-	txrx_peer = peer->txrx_peer;
-	if (!txrx_peer)
+	txrx_peer = dp_get_txrx_peer(peer);
+	if (qdf_unlikely(!txrx_peer)) {
+		dp_err_rl("txrx_peer NULL");
 		return;
+	}
 
 	extd_stats = &txrx_peer->stats.extd_stats;
 	DP_UPDATE_EXTD_STATS(peer_stats, extd_stats);
@@ -13579,6 +13582,21 @@ dp_get_tsf_time(struct cdp_soc_t *soc_hdl, uint32_t tsf_id, uint32_t mac_id,
 }
 #endif
 
+/**
+ * dp_set_tx_pause() - Pause or resume tx path
+ * @soc_hdl: Datapath soc handle
+ * @flag: set or clear is_tx_pause
+ *
+ * Return: None.
+ */
+static inline
+void dp_set_tx_pause(struct cdp_soc_t *soc_hdl, bool flag)
+{
+	struct dp_soc *soc = cdp_soc_t_to_dp_soc(soc_hdl);
+
+	soc->is_tx_pause = flag;
+}
+
 static struct cdp_cmn_ops dp_ops_cmn = {
 	.txrx_soc_attach_target = dp_soc_attach_target_wifi3,
 	.txrx_vdev_attach = dp_vdev_attach_wifi3,
@@ -13617,6 +13635,7 @@ static struct cdp_cmn_ops dp_ops_cmn = {
 	.tx_send = dp_tx_send,
 	.tx_send_exc = dp_tx_send_exception,
 #endif
+	.set_tx_pause = dp_set_tx_pause,
 	.txrx_pdev_init = dp_pdev_init_wifi3,
 	.txrx_get_vdev_mac_addr = dp_get_vdev_mac_addr_wifi3,
 	.txrx_get_ctrl_pdev_from_vdev = dp_get_ctrl_pdev_from_vdev_wifi3,

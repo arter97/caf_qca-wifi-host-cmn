@@ -1631,7 +1631,8 @@ dp_tx_ring_access_end_wrapper(struct dp_soc *soc,
 
 	ret = hif_rtpm_get(HIF_RTPM_GET_ASYNC, HIF_RTPM_ID_DP);
 	if (QDF_IS_STATUS_SUCCESS(ret)) {
-		if (hif_system_pm_state_check(soc->hif_handle)) {
+		if (hif_system_pm_state_check(soc->hif_handle) ||
+					qdf_unlikely(soc->is_tx_pause)) {
 			dp_tx_hal_ring_access_end_reap(soc, hal_ring_hdl);
 			hal_srng_set_event(hal_ring_hdl, HAL_SRNG_FLUSH_EVENT);
 			hal_srng_inc_flush_cnt(hal_ring_hdl);
@@ -1656,7 +1657,8 @@ dp_tx_ring_access_end_wrapper(struct dp_soc *soc,
 			      hal_ring_handle_t hal_ring_hdl,
 			      int coalesce)
 {
-	if (hif_system_pm_state_check(soc->hif_handle)) {
+	if (hif_system_pm_state_check(soc->hif_handle) ||
+					qdf_unlikely(soc->is_tx_pause)) {
 		dp_tx_hal_ring_access_end_reap(soc, hal_ring_hdl);
 		hal_srng_set_event(hal_ring_hdl, HAL_SRNG_FLUSH_EVENT);
 		hal_srng_inc_flush_cnt(hal_ring_hdl);
@@ -3134,6 +3136,21 @@ dp_tx_send_exception(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
 		goto fail;
 	}
 
+	/* for peer based metadata check if peer is valid */
+	if (tx_exc_metadata->peer_id != CDP_INVALID_PEER) {
+		struct dp_peer *peer = NULL;
+
+		 peer = dp_peer_get_ref_by_id(vdev->pdev->soc,
+					      tx_exc_metadata->peer_id,
+					      DP_MOD_ID_TX_EXCEPTION);
+		if (qdf_unlikely(!peer)) {
+			DP_STATS_INC(vdev,
+				     tx_i.dropped.invalid_peer_id_in_exc_path,
+				     1);
+			goto fail;
+		}
+		dp_peer_unref_delete(peer, DP_MOD_ID_TX_EXCEPTION);
+	}
 	/* Basic sanity checks for unsupported packets */
 
 	/* MESH mode */
@@ -3958,6 +3975,16 @@ static void dp_tx_update_peer_sawf_stats(struct dp_soc *soc,
 					   ts, tid);
 }
 
+static void dp_tx_compute_delay_avg(struct cdp_delay_tx_stats  *tx_delay,
+				    uint32_t nw_delay,
+				    uint32_t sw_delay,
+				    uint32_t hw_delay)
+{
+	dp_peer_tid_delay_avg(tx_delay,
+			      nw_delay,
+			      sw_delay,
+			      hw_delay);
+}
 #else
 static void dp_tx_update_peer_sawf_stats(struct dp_soc *soc,
 					 struct dp_vdev *vdev,
@@ -3968,6 +3995,12 @@ static void dp_tx_update_peer_sawf_stats(struct dp_soc *soc,
 {
 }
 
+static inline void
+dp_tx_compute_delay_avg(struct cdp_delay_tx_stats *tx_delay,
+			uint32_t nw_delay, uint32_t sw_delay,
+			uint32_t hw_delay)
+{
+}
 #endif
 
 #ifdef QCA_PEER_EXT_STATS
@@ -3996,6 +4029,9 @@ static void dp_tx_compute_tid_delay(struct cdp_delay_tid_stats *stats,
 							  &fwhw_transmit_delay))
 			dp_hist_update_stats(&tx_delay->hwtx_delay,
 					     fwhw_transmit_delay);
+
+	dp_tx_compute_delay_avg(tx_delay, 0, sw_enqueue_delay,
+				fwhw_transmit_delay);
 }
 #else
 /*
@@ -4715,6 +4751,26 @@ dp_tx_compute_hw_delay_us(struct hal_tx_completion_status *ts,
 	buffer_ts = ts->buffer_timestamp << 10;
 
 	delay = ts->tsf - buffer_ts - delta_tsf;
+
+	if (qdf_unlikely(delay & 0x80000000)) {
+		dp_err_rl("delay = 0x%x (-ve)\n"
+			  "release_src = %d\n"
+			  "ppdu_id = 0x%x\n"
+			  "peer_id = 0x%x\n"
+			  "tid = 0x%x\n"
+			  "release_reason = %d\n"
+			  "tsf = %u (0x%x)\n"
+			  "buffer_timestamp = %u (0x%x)\n"
+			  "delta_tsf = %u (0x%x)\n",
+			  delay, ts->release_src, ts->ppdu_id, ts->peer_id,
+			  ts->tid, ts->status, ts->tsf, ts->tsf,
+			  ts->buffer_timestamp, ts->buffer_timestamp,
+			  delta_tsf, delta_tsf);
+
+		delay = 0;
+		goto end;
+	}
+
 	delay &= 0x1FFFFFFF; /* mask 29 BITS */
 	if (delay > 0x1000000) {
 		dp_info_rl("----------------------\n"
@@ -4732,6 +4788,8 @@ dp_tx_compute_hw_delay_us(struct hal_tx_completion_status *ts,
 		return QDF_STATUS_E_FAILURE;
 	}
 
+
+end:
 	*delay_us = delay;
 
 	return QDF_STATUS_SUCCESS;

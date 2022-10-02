@@ -61,6 +61,16 @@ static struct wlan_cfg_tcl_wbm_ring_num_map g_tcl_wbm_map_array[MAX_TCL_DATA_RIN
 };
 #endif
 
+#ifdef WLAN_SUPPORT_PPEDS
+static void dp_ppeds_rings_status(struct dp_soc *soc)
+{
+	struct dp_soc_be *be_soc = dp_get_be_soc_from_dp_soc(soc);
+
+	dp_print_ring_stat_from_hal(soc, &be_soc->reo2ppe_ring, REO2PPE);
+	dp_print_ring_stat_from_hal(soc, &be_soc->ppe2tcl_ring, PPE2TCL);
+}
+#endif
+
 static void dp_soc_cfg_attach_be(struct dp_soc *soc)
 {
 	struct wlan_cfg_dp_soc_ctxt *soc_cfg_ctx = soc->wlan_cfg_ctx;
@@ -798,7 +808,16 @@ dp_rxdma_ring_sel_cfg_be(struct dp_soc *soc)
 	htt_tlv_filter.rx_msdu_start_offset = 0;
 	htt_tlv_filter.rx_attn_offset = 0;
 
-	htt_tlv_filter.rx_packet_offset = soc->rx_pkt_tlv_size;
+	/*
+	 * For monitor mode, the packet hdr tlv is enabled later during
+	 * filter update
+	 */
+	if (soc->cdp_soc.ol_ops->get_con_mode &&
+	    soc->cdp_soc.ol_ops->get_con_mode() == QDF_GLOBAL_MONITOR_MODE)
+		htt_tlv_filter.rx_packet_offset = soc->rx_mon_pkt_tlv_size;
+	else
+		htt_tlv_filter.rx_packet_offset = soc->rx_pkt_tlv_size;
+
 	/*Not subscribing rx_pkt_header*/
 	htt_tlv_filter.rx_header_offset = 0;
 	htt_tlv_filter.rx_mpdu_start_offset =
@@ -891,7 +910,16 @@ dp_rxdma_ring_sel_cfg_be(struct dp_soc *soc)
 	htt_tlv_filter.rx_msdu_start_offset = 0;
 	htt_tlv_filter.rx_attn_offset = 0;
 
-	htt_tlv_filter.rx_packet_offset = soc->rx_pkt_tlv_size;
+	/*
+	 * For monitor mode, the packet hdr tlv is enabled later during
+	 * filter update
+	 */
+	if (soc->cdp_soc.ol_ops->get_con_mode &&
+	    soc->cdp_soc.ol_ops->get_con_mode() == QDF_GLOBAL_MONITOR_MODE)
+		htt_tlv_filter.rx_packet_offset = soc->rx_mon_pkt_tlv_size;
+	else
+		htt_tlv_filter.rx_packet_offset = soc->rx_pkt_tlv_size;
+
 	htt_tlv_filter.rx_header_offset =
 				hal_rx_pkt_tlv_offset_get(soc->hal_soc);
 	htt_tlv_filter.rx_mpdu_start_offset =
@@ -2004,6 +2032,13 @@ void dp_initialize_arch_ops_be(struct dp_arch_ops *arch_ops)
 					dp_reconfig_tx_vdev_mcast_ctrl_be;
 	arch_ops->dp_cc_reg_cfg_init = dp_cc_reg_cfg_init;
 #endif
+
+#ifdef WLAN_SUPPORT_PPEDS
+	arch_ops->dp_txrx_ppeds_rings_status = dp_ppeds_rings_status;
+#else
+	arch_ops->dp_txrx_ppeds_rings_status = NULL;
+#endif
+
 	dp_init_near_full_arch_ops_be(arch_ops);
 	arch_ops->get_rx_hash_key = dp_get_rx_hash_key_be;
 	arch_ops->print_mlo_ast_stats = dp_print_mlo_ast_stats_be;

@@ -1217,6 +1217,8 @@ struct dp_soc_stats {
 			uint32_t reo_err_oor_to_stack;
 			/* REO OOR scattered msdu count */
 			uint32_t reo_err_oor_sg_count;
+			/* REO ERR RAW mpdu drops */
+			uint32_t reo_err_raw_mpdu_drop;
 			/* RX msdu rejected count on delivery to vdev stack_fn*/
 			uint32_t rejected;
 			/* Incorrect msdu count in MPDU desc info */
@@ -1398,6 +1400,7 @@ struct rx_refill_buff_pool {
 
 struct dp_tx_hw_desc_evt {
 	uint8_t tcl_desc[HAL_TX_DESC_LEN_BYTES];
+	uint8_t tcl_ring_id;
 	uint64_t posted;
 	uint32_t hp;
 	uint32_t tp;
@@ -1983,6 +1986,7 @@ struct dp_arch_ops {
 #ifdef IPA_OFFLOAD
 	int8_t (*ipa_get_bank_id)(struct dp_soc *soc);
 #endif
+	void (*dp_txrx_ppeds_rings_status)(struct dp_soc *soc);
 };
 
 /**
@@ -2563,6 +2567,7 @@ struct dp_soc {
 	/* A flag using to decide the switch of rx link speed  */
 	bool high_throughput;
 #endif
+	bool is_tx_pause;
 };
 
 #ifdef IPA_OFFLOAD
@@ -4366,7 +4371,7 @@ struct dp_fisa_rx_sw_ft {
 	/* last aggregate count fetched from RX PKT TLV */
 	uint32_t last_hal_aggr_count;
 	uint32_t cur_aggr_gso_size;
-	struct udphdr *head_skb_udp_hdr;
+	qdf_net_udphdr_t *head_skb_udp_hdr;
 	uint16_t frags_cumulative_len;
 	/* CMEM parameters */
 	uint32_t cmem_offset;

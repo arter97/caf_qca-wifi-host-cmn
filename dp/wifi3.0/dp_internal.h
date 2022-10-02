@@ -2378,6 +2378,17 @@ void dp_update_delay_stats(struct cdp_tid_tx_stats *tstats,
 void dp_print_ring_stats(struct dp_pdev *pdev);
 
 /**
+ * dp_print_ring_stat_from_hal(): Print tail and head pointer through hal
+ * @soc: soc handle
+ * @srng: srng handle
+ * @ring_type: ring type
+ *
+ * Return:void
+ */
+void
+dp_print_ring_stat_from_hal(struct dp_soc *soc,  struct dp_srng *srng,
+			    enum hal_ring_type ring_type);
+/**
  * dp_print_pdev_cfg_params() - Print the pdev cfg parameters
  * @pdev_handle: DP pdev handle
  *
@@ -2751,7 +2762,7 @@ dp_hif_update_pipe_callback(struct dp_soc *dp_soc,
 			    QDF_STATUS (*callback)(void *, qdf_nbuf_t, uint8_t),
 			    uint8_t pipe_id)
 {
-	struct hif_msg_callbacks hif_pipe_callbacks;
+	struct hif_msg_callbacks hif_pipe_callbacks = { 0 };
 
 	/* TODO: Temporary change to bypass HTC connection for this new
 	 * HIF pipe, which will be used for packet log and other high-
