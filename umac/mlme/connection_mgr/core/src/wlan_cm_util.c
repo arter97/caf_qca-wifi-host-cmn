@@ -46,16 +46,18 @@ static uint32_t cm_get_prefix_for_cm_id(enum wlan_cm_source source) {
 
 wlan_cm_id cm_get_cm_id(struct cnx_mgr *cm_ctx, enum wlan_cm_source source)
 {
-	wlan_cm_id cmd_id;
+	wlan_cm_id cm_id;
 	uint32_t prefix;
+	uint8_t vdev_id = wlan_vdev_get_id(cm_ctx->vdev);
 
 	prefix = cm_get_prefix_for_cm_id(source);
 
-	cmd_id = qdf_atomic_inc_return(&cm_ctx->global_cmd_id);
-	cmd_id = (cmd_id & CM_ID_MASK);
-	cmd_id = (cmd_id | prefix);
+	cm_id = qdf_atomic_inc_return(&cm_ctx->global_cmd_id);
+	cm_id = (cm_id & CM_ID_MASK);
+	cm_id = CM_ID_SET_VDEV_ID(cm_id, vdev_id);
+	cm_id = (cm_id | prefix);
 
-	return cmd_id;
+	return cm_id;
 }
 
 struct cnx_mgr *cm_get_cm_ctx_fl(struct wlan_objmgr_vdev *vdev,
@@ -168,7 +170,7 @@ QDF_STATUS cm_set_key(struct cnx_mgr *cm_ctx, bool unicast,
 	cipher = wlan_crypto_get_cipher(cm_ctx->vdev, unicast, key_idx);
 	if (IS_WEP_CIPHER(cipher)) {
 		wep_key_idx = wlan_crypto_get_default_key_idx(cm_ctx->vdev,
-							      !unicast);
+							      false);
 		crypto_key = wlan_crypto_get_key(cm_ctx->vdev, wep_key_idx);
 		qdf_mem_copy(crypto_key->macaddr, bssid->bytes,
 			     QDF_MAC_ADDR_SIZE);
@@ -523,8 +525,14 @@ cm_handle_disconnect_flush(struct cnx_mgr *cm_ctx, struct cm_req *cm_req)
 	qdf_mem_zero(&resp, sizeof(resp));
 	resp.req.cm_id = cm_req->cm_id;
 	resp.req.req = cm_req->discon_req.req;
-
-	cm_notify_disconnect_complete(cm_ctx, &resp);
+	/*
+	 * Indicate to OSIF to inform kernel if not already done and this is
+	 * the latest disconnect req received. If this is not the latest, it
+	 * will be dropped in OSIF as src and cm_id will not match. A flushed
+	 * disconnect can be last of this was received when previous disconnect
+	 * was already in serialization active queue and thus wasn't flushed.
+	 */
+	mlme_cm_osif_disconnect_complete(cm_ctx->vdev, &resp);
 }
 
 void cm_remove_cmd_from_serialization(struct cnx_mgr *cm_ctx, wlan_cm_id cm_id)
@@ -564,6 +572,19 @@ void cm_remove_cmd_from_serialization(struct cnx_mgr *cm_ctx, wlan_cm_id cm_id)
 			   CM_PREFIX_REF(wlan_vdev_get_id(cm_ctx->vdev), cm_id),
 			   cmd_info.cmd_type);
 		cmd_info.queue_type = WLAN_SERIALIZATION_ACTIVE_QUEUE;
+		/*
+		 * Active command id is reset during memory release, but a new
+		 * command will become active before memory release of
+		 * serialization command, and if it try to check the active
+		 * cm_id(using cm_get_active_req_type) it will be valid (), so
+		 * reset the cm id for active command before calling release
+		 * active command.
+		 * One example: For ML vdevs, disconnect on Assoc vdev can get
+		 * activated before release memory of link vdev command which
+		 * reset active CM id, and thus during RSO stop can lead to
+		 * assumption that link vdev disconnect is active when it is not.
+		 */
+		cm_reset_active_cm_id(cm_ctx->vdev, cm_id);
 		wlan_serialization_remove_cmd(&cmd_info);
 	} else {
 		mlme_debug(CM_PREFIX_FMT "Remove cmd type %d from pending",
@@ -1088,7 +1109,7 @@ bool cm_is_vdev_disconnected(struct wlan_objmgr_vdev *vdev)
 
 	cm_ctx = cm_get_cm_ctx(vdev);
 	if (!cm_ctx)
-		return false;
+		return true;
 
 	state = cm_get_state(cm_ctx);
 
@@ -1234,6 +1255,17 @@ void cm_fill_ml_partner_info(struct wlan_cm_connect_req *req,
 {
 }
 #endif
+
+bool cm_is_connect_req_reassoc(struct wlan_cm_connect_req *req)
+{
+	if (!qdf_is_macaddr_zero(&req->prev_bssid) &&
+	    (!qdf_is_macaddr_zero(&req->bssid) ||
+	     !qdf_is_macaddr_zero(&req->bssid_hint)) &&
+	    (req->chan_freq || req->chan_freq_hint))
+		return true;
+
+	return false;
+}
 
 bool cm_get_active_connect_req(struct wlan_objmgr_vdev *vdev,
 			       struct wlan_cm_vdev_connect_req *req)

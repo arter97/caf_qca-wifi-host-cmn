@@ -35,6 +35,7 @@
 #include <wlan_utility.h>
 #include <wlan_mlo_mgr_sta.h>
 #include <wlan_objmgr_vdev_obj.h>
+#include "wlan_psoc_mlme_api.h"
 
 static void
 cm_fill_failure_resp_from_cm_id(struct cnx_mgr *cm_ctx,
@@ -448,17 +449,11 @@ void cm_set_vdev_link_id(struct cnx_mgr *cm_ctx,
 			 struct cm_connect_req *req)
 {
 	uint8_t link_id;
-	uint8_t i;
 
-	for (i = 0; i < req->cur_candidate->entry->ml_info.num_links; i++) {
-		if (qdf_mem_cmp(req->cur_candidate->entry->ml_info.link_info[i].link_addr.bytes,
-				req->cur_candidate->entry->mac_addr.bytes, QDF_MAC_ADDR_SIZE))
-			continue;
-		link_id = req->cur_candidate->entry->ml_info.link_info[i].link_id;
-		if (cm_ctx->vdev) {
-			mlme_debug("setting link ID to %d", link_id);
-			wlan_vdev_set_link_id(cm_ctx->vdev, link_id);
-		}
+	link_id = req->cur_candidate->entry->ml_info.self_link_id;
+	if (cm_ctx->vdev) {
+		mlme_debug("setting link ID to %d", link_id);
+		wlan_vdev_set_link_id(cm_ctx->vdev, link_id);
 	}
 }
 
@@ -466,8 +461,14 @@ static void cm_update_vdev_mlme_macaddr(struct cnx_mgr *cm_ctx,
 					struct cm_connect_req *req)
 {
 	struct qdf_mac_addr *mac;
+	bool eht_capab;
 
 	if (wlan_vdev_mlme_get_opmode(cm_ctx->vdev) != QDF_STA_MODE)
+		return;
+
+	wlan_psoc_mlme_get_11be_capab(wlan_vdev_get_psoc(cm_ctx->vdev),
+				      &eht_capab);
+	if (!eht_capab)
 		return;
 
 	if (req->cur_candidate->entry->ie_list.multi_link) {
@@ -578,8 +579,9 @@ static void cm_create_bss_peer(struct cnx_mgr *cm_ctx,
 {
 	QDF_STATUS status;
 	struct qdf_mac_addr *bssid;
-	struct qdf_mac_addr *mld_mac;
+	struct qdf_mac_addr *mld_mac = NULL;
 	bool is_assoc_link = false;
+	bool eht_capab;
 
 	if (!cm_ctx) {
 		mlme_err("invalid cm_ctx");
@@ -589,10 +591,16 @@ static void cm_create_bss_peer(struct cnx_mgr *cm_ctx,
 		mlme_err("invalid req");
 		return;
 	}
+
+	wlan_psoc_mlme_get_11be_capab(wlan_vdev_get_psoc(cm_ctx->vdev),
+				      &eht_capab);
+	if (eht_capab) {
+		cm_set_vdev_link_id(cm_ctx, req);
+		mld_mac = cm_get_bss_peer_mld_addr(req);
+		is_assoc_link = cm_bss_peer_is_assoc_peer(req);
+	}
+
 	bssid = &req->cur_candidate->entry->bssid;
-	cm_set_vdev_link_id(cm_ctx, req);
-	mld_mac = cm_get_bss_peer_mld_addr(req);
-	is_assoc_link = cm_bss_peer_is_assoc_peer(req);
 	status = mlme_cm_bss_peer_create_req(cm_ctx->vdev, bssid,
 					     mld_mac, is_assoc_link);
 	if (QDF_IS_STATUS_ERROR(status)) {
@@ -932,8 +940,12 @@ static inline void cm_update_advance_filter(struct wlan_objmgr_pdev *pdev,
 		wlan_mlme_adaptive_11r_enabled(psoc);
 	if (wlan_vdev_mlme_get_opmode(cm_ctx->vdev) != QDF_STA_MODE)
 		return;
-
-	wlan_cm_dual_sta_roam_update_connect_channels(psoc, filter);
+	/* For link vdev, we don't filter any channels.
+	 * Dual STA mode, one link can be disabled in post connection
+	 * if needed.
+	 */
+	if (!cm_req->req.is_non_assoc_link)
+		wlan_cm_dual_sta_roam_update_connect_channels(psoc, filter);
 	filter->dot11mode = cm_req->req.dot11mode_filter;
 	cm_update_fils_scan_filter(filter, cm_req);
 }
@@ -1196,19 +1208,28 @@ static QDF_STATUS cm_is_scan_support(struct cm_connect_req *cm_req)
 #endif
 
 #if defined(WLAN_FEATURE_11BE_MLO) && defined(WLAN_FEATURE_11BE_MLO_ADV_FEATURE)
+#define CFG_MLO_ASSOC_LINK_BAND_MAX 0x70
+
 static QDF_STATUS cm_update_mlo_filter(struct wlan_objmgr_pdev *pdev,
+				       struct cm_connect_req *cm_req,
 				       struct scan_filter *filter)
 {
 	struct wlan_objmgr_psoc *psoc;
 
 	psoc = wlan_pdev_get_psoc(pdev);
 	filter->band_bitmap = wlan_mlme_get_sta_mlo_conn_band_bmp(psoc);
-	mlme_debug("band bitmap: %d", filter->band_bitmap);
+	/* Apply assoc band filter only for assoc link */
+	if (cm_req->req.is_non_assoc_link) {
+		filter->band_bitmap =  filter->band_bitmap |
+				       CFG_MLO_ASSOC_LINK_BAND_MAX;
+	}
+	mlme_debug("band bitmap: 0x%x", filter->band_bitmap);
 
 	return QDF_STATUS_SUCCESS;
 }
 #else
 static QDF_STATUS cm_update_mlo_filter(struct wlan_objmgr_pdev *pdev,
+				       struct cm_connect_req *cm_req,
 				       struct scan_filter *filter)
 {
 	return QDF_STATUS_SUCCESS;
@@ -1255,7 +1276,7 @@ static QDF_STATUS cm_connect_get_candidates(struct wlan_objmgr_pdev *pdev,
 	cm_connect_prepare_scan_filter(pdev, cm_ctx, cm_req, filter,
 				       security_valid_for_6ghz);
 
-	cm_update_mlo_filter(pdev, filter);
+	cm_update_mlo_filter(pdev, cm_req, filter);
 
 	candidate_list = wlan_scan_get_result(pdev, filter);
 	if (candidate_list) {
@@ -1333,6 +1354,15 @@ cm_handle_connect_req_in_non_init_state(struct cnx_mgr *cm_ctx,
 					struct cm_connect_req *cm_req,
 					enum wlan_cm_sm_state cm_state_substate)
 {
+	if (cm_state_substate != WLAN_CM_S_CONNECTED &&
+	    cm_is_connect_req_reassoc(&cm_req->req)) {
+		cm_req->req.reassoc_in_non_connected = true;
+		mlme_debug(CM_PREFIX_FMT "Reassoc received in %d state",
+			   CM_PREFIX_REF(wlan_vdev_get_id(cm_ctx->vdev),
+					 cm_req->cm_id),
+			   cm_state_substate);
+	}
+
 	switch (cm_state_substate) {
 	case WLAN_CM_S_ROAMING:
 		/* for FW roam/LFR3 remove the req from the list */
@@ -2081,6 +2111,67 @@ cm_resume_connect_after_peer_create(struct cnx_mgr *cm_ctx, wlan_cm_id *cm_id)
 	return status;
 }
 
+#if defined(WLAN_FEATURE_11BE_MLO) && defined(WLAN_FEATURE_11BE_MLO_ADV_FEATURE)
+static void cm_inform_bcn_probe_handler(struct cnx_mgr *cm_ctx,
+					struct scan_cache_entry *bss,
+					wlan_cm_id cm_id)
+{
+	struct element_info *bcn_probe_rsp;
+	int32_t rssi;
+	qdf_freq_t freq;
+
+	bcn_probe_rsp = &bss->raw_frame;
+	rssi = bss->rssi_raw;
+	freq = util_scan_entry_channel_frequency(bss);
+
+	cm_inform_bcn_probe(cm_ctx, bcn_probe_rsp->ptr, bcn_probe_rsp->len,
+			    freq, rssi, cm_id);
+}
+
+static void cm_update_partner_link_scan_db(struct cnx_mgr *cm_ctx,
+					   wlan_cm_id cm_id,
+					   qdf_list_t *candidate_list,
+					   struct scan_cache_entry *cur_bss)
+{
+	qdf_list_node_t *cur_node = NULL, *next_node = NULL;
+	struct scan_cache_node *candidate;
+	struct scan_cache_entry *bss;
+
+	qdf_list_peek_front(candidate_list, &cur_node);
+
+	while (cur_node) {
+		qdf_list_peek_next(candidate_list, cur_node, &next_node);
+		candidate = qdf_container_of(cur_node, struct scan_cache_node,
+					     node);
+		bss = candidate->entry;
+		/*
+		 * If BSS is ML and not current bss and BSS mld mac is same as
+		 * cur bss then inform it to scan cache to avoid scan cache
+		 * ageing out.
+		 */
+		if (!qdf_is_macaddr_equal(&bss->bssid, &cur_bss->bssid) &&
+		    bss->ml_info.num_links &&
+		    cur_bss->ml_info.num_links &&
+		    qdf_is_macaddr_equal(&bss->ml_info.mld_mac_addr,
+					 &cur_bss->ml_info.mld_mac_addr)) {
+			mlme_debug("Inform Partner bssid: " QDF_MAC_ADDR_FMT " to kernel",
+					QDF_MAC_ADDR_REF(bss->bssid.bytes));
+			cm_inform_bcn_probe_handler(cm_ctx, bss, cm_id);
+		}
+		cur_node = next_node;
+		next_node = NULL;
+	}
+}
+#else
+static
+inline void cm_update_partner_link_scan_db(struct cnx_mgr *cm_ctx,
+					   wlan_cm_id cm_id,
+					   qdf_list_t *candidate_list,
+					   struct scan_cache_entry *cur_bss)
+{
+}
+#endif
+
 /**
  * cm_update_scan_db_on_connect_success() - update scan db with beacon or
  * probe resp
@@ -2132,6 +2223,15 @@ cm_update_scan_db_on_connect_success(struct cnx_mgr *cm_ctx,
 
 	cm_inform_bcn_probe(cm_ctx, bcn_probe_rsp->ptr, bcn_probe_rsp->len,
 			    resp->freq, rssi, resp->cm_id);
+
+	/*
+	 * If vdev is an MLO vdev and not reassoc then use partner link info to
+	 * inform partner link scan entry to kernel.
+	 */
+	if (!resp->is_reassoc && wlan_vdev_mlme_is_mlo_vdev(cm_ctx->vdev))
+		cm_update_partner_link_scan_db(cm_ctx, resp->cm_id,
+				cm_req->connect_req.candidate_list,
+				cur_candidate->entry);
 }
 
 #ifdef WLAN_FEATURE_11BE_MLO
@@ -2159,11 +2259,69 @@ cm_clear_vdev_mlo_cap(struct wlan_objmgr_vdev *vdev)
 { }
 #endif /*WLAN_FEATURE_11BE_MLO*/
 
+/**
+ * cm_is_connect_id_reassoc_in_non_connected()
+ * @cm_ctx: connection manager context
+ * @cm_id: cm id
+ *
+ * If connect req is a reassoc req and received in not connected state
+ *
+ * Return: bool
+ */
+static bool cm_is_connect_id_reassoc_in_non_connected(struct cnx_mgr *cm_ctx,
+						      wlan_cm_id cm_id)
+{
+	qdf_list_node_t *cur_node = NULL, *next_node = NULL;
+	struct cm_req *cm_req;
+	uint32_t prefix = CM_ID_GET_PREFIX(cm_id);
+	bool is_reassoc = false;
+
+	if (prefix != CONNECT_REQ_PREFIX)
+		return is_reassoc;
+
+	cm_req_lock_acquire(cm_ctx);
+	qdf_list_peek_front(&cm_ctx->req_list, &cur_node);
+	while (cur_node) {
+		qdf_list_peek_next(&cm_ctx->req_list, cur_node, &next_node);
+		cm_req = qdf_container_of(cur_node, struct cm_req, node);
+
+		if (cm_req->cm_id == cm_id) {
+			if (cm_req->connect_req.req.reassoc_in_non_connected)
+				is_reassoc = true;
+			cm_req_lock_release(cm_ctx);
+			return is_reassoc;
+		}
+
+		cur_node = next_node;
+		next_node = NULL;
+	}
+	cm_req_lock_release(cm_ctx);
+
+	return is_reassoc;
+}
+
 QDF_STATUS cm_notify_connect_complete(struct cnx_mgr *cm_ctx,
 				      struct wlan_cm_connect_resp *resp)
 {
+	enum wlan_cm_sm_state sm_state;
+
+	sm_state = cm_get_state(cm_ctx);
+
 	mlme_cm_connect_complete_ind(cm_ctx->vdev, resp);
 	mlo_sta_link_connect_notify(cm_ctx->vdev, resp);
+	/*
+	 * If connect req was a reassoc req and was received in not connected
+	 * state send disconnect instead of connect resp to kernel to cleanup
+	 * kernel flags
+	 */
+	if (QDF_IS_STATUS_ERROR(resp->connect_status) &&
+	    sm_state == WLAN_CM_S_INIT &&
+	    cm_is_connect_id_reassoc_in_non_connected(cm_ctx, resp->cm_id)) {
+		resp->send_disconnect = true;
+		mlme_debug(CM_PREFIX_FMT "Set send disconnect to true to indicate disconnect instaed of connect resp",
+			   CM_PREFIX_REF(wlan_vdev_get_id(cm_ctx->vdev),
+					 resp->cm_id));
+	}
 	mlme_cm_osif_connect_complete(cm_ctx->vdev, resp);
 	cm_if_mgr_inform_connect_complete(cm_ctx->vdev,
 					  resp->connect_status);

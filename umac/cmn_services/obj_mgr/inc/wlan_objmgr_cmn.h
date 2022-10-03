@@ -288,6 +288,8 @@ typedef void (*wlan_objmgr_peer_status_handler)(
  * @WLAN_LITE_MON_ID:           Lite monitor operations
  * @WLAN_PRE_CAC_ID:            Pre-CAC operations
  * @WLAN_DP_ID:                 DP component
+ * @WLAN_COAP_ID:               Constrained Application Protocol reference id
+ * @WLAN_SAWF_ID:               Service Aware Wifi reference id
  * @WLAN_REF_ID_MAX:            Max id used to generate ref count tracking array
  */
  /* New value added to the enum must also be reflected in function
@@ -393,6 +395,9 @@ typedef enum {
 	WLAN_LITE_MON_ID      = 95,
 	WLAN_PRE_CAC_ID       = 96,
 	WLAN_DP_ID            = 97,
+	WLAN_UMAC_RESET_ID    = 98,
+	WLAN_COAP_ID          = 99,
+	WLAN_SAWF_ID          = 100,
 	WLAN_REF_ID_MAX,
 } wlan_objmgr_ref_dbgid;
 
@@ -503,7 +508,9 @@ static inline const char *string_from_dbgid(wlan_objmgr_ref_dbgid id)
 					"WLAN_TWT_ID",
 					"WLAN_LITE_MON_ID",
 					"WLAN_PRE_CAC_ID",
-					"WLAN_DP_ID"
+					"WLAN_DP_ID",
+					"WLAN_COAP_ID",
+					"WLAN_SAWF_ID"
 					};
 
 	if (id >= WLAN_REF_ID_MAX)

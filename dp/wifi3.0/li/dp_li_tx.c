@@ -245,7 +245,7 @@ void dp_tx_process_htt_completion_li(struct dp_soc *soc,
 	return;
 
 release_tx_desc:
-	dp_tx_comp_free_buf(soc, tx_desc);
+	dp_tx_comp_free_buf(soc, tx_desc, false);
 	dp_tx_desc_release(tx_desc, tx_desc->pool_id);
 	if (vdev)
 		dp_vdev_unref_delete(soc, vdev, DP_MOD_ID_HTT_COMP);
@@ -266,6 +266,14 @@ static inline uint8_t dp_tx_get_rbm_id_li(struct dp_soc *soc,
 	return (ring_id + soc->wbm_sw0_bm_id);
 }
 #else
+#ifndef QCA_DP_ENABLE_TX_COMP_RING4
+static inline uint8_t dp_tx_get_rbm_id_li(struct dp_soc *soc,
+					  uint8_t ring_id)
+{
+	return (ring_id ? HAL_WBM_SW0_BM_ID + (ring_id - 1) :
+		HAL_WBM_SW2_BM_ID);
+}
+#else
 static inline uint8_t dp_tx_get_rbm_id_li(struct dp_soc *soc,
 					  uint8_t ring_id)
 {
@@ -274,8 +282,8 @@ static inline uint8_t dp_tx_get_rbm_id_li(struct dp_soc *soc,
 	return (ring_id + HAL_WBM_SW0_BM_ID(soc->wbm_sw0_bm_id));
 }
 #endif
+#endif
 #else
-
 #ifdef TX_MULTI_TCL
 #ifdef IPA_OFFLOAD
 static inline uint8_t dp_tx_get_rbm_id_li(struct dp_soc *soc,
@@ -332,6 +340,26 @@ void dp_tx_clear_consumed_hw_descs(struct dp_soc *soc,
 }
 #endif /* CLEAR_SW2TCL_CONSUMED_DESC */
 
+#ifdef WLAN_CONFIG_TX_DELAY
+static inline
+QDF_STATUS dp_tx_compute_hw_delay_li(struct dp_soc *soc,
+				     struct dp_vdev *vdev,
+				     struct hal_tx_completion_status *ts,
+				     uint32_t *delay_us)
+{
+	return dp_tx_compute_hw_delay_us(ts, vdev->delta_tsf, delay_us);
+}
+#else
+static inline
+QDF_STATUS dp_tx_compute_hw_delay_li(struct dp_soc *soc,
+				     struct dp_vdev *vdev,
+				     struct hal_tx_completion_status *ts,
+				     uint32_t *delay_us)
+{
+	return QDF_STATUS_SUCCESS;
+}
+#endif
+
 #ifdef CONFIG_SAWF
 /**
  * dp_sawf_config_li - Configure sawf specific fields in tcl
@@ -368,30 +396,12 @@ void dp_sawf_config_li(struct dp_soc *soc, uint32_t *hal_tx_desc_cached,
 	hal_tx_desc_set_search_index_li(soc->hal_soc, hal_tx_desc_cached,
 					search_index);
 }
-
-static inline
-QDF_STATUS dp_tx_compute_hw_delay_li(struct dp_soc *soc,
-				     struct dp_vdev *vdev,
-				     struct hal_tx_completion_status *ts,
-				     uint32_t *delay_us)
-{
-	return dp_tx_compute_hw_delay_us(ts, vdev->delta_tsf, delay_us);
-}
 #else
 static inline
 void dp_sawf_config_li(struct dp_soc *soc, uint32_t *hal_tx_desc_cached,
 		       uint16_t *fw_metadata, uint16_t vdev_id,
 		       qdf_nbuf_t nbuf)
 {
-}
-
-static inline
-QDF_STATUS dp_tx_compute_hw_delay_li(struct dp_soc *soc,
-				     struct dp_vdev *vdev,
-				     struct hal_tx_completion_status *ts,
-				     uint32_t *delay_us)
-{
-	return QDF_STATUS_SUCCESS;
 }
 
 #define dp_sawf_tx_enqueue_peer_stats(soc, tx_desc)
@@ -527,7 +537,7 @@ dp_tx_hw_enqueue_li(struct dp_soc *soc, struct dp_vdev *vdev,
 	status = QDF_STATUS_SUCCESS;
 
 	dp_tx_hw_desc_update_evt((uint8_t *)hal_tx_desc_cached,
-				 hal_ring_hdl, soc);
+				 hal_ring_hdl, soc, ring_id);
 
 ring_access_fail:
 	dp_tx_ring_access_end_wrapper(soc, hal_ring_hdl, coalesce);

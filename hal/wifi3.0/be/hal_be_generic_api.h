@@ -32,7 +32,7 @@
  */
 #define SHOW_DEFINED(x) do {} while (0)
 
-#if defined(WLAN_FEATURE_TSF_UPLINK_DELAY) || defined(CONFIG_SAWF)
+#if defined(WLAN_FEATURE_TSF_UPLINK_DELAY) || defined(WLAN_CONFIG_TX_DELAY)
 static inline void
 hal_tx_comp_get_buffer_timestamp_be(void *desc,
 				    struct hal_tx_completion_status *ts)
@@ -40,7 +40,7 @@ hal_tx_comp_get_buffer_timestamp_be(void *desc,
 	ts->buffer_timestamp = HAL_TX_DESC_GET(desc, WBM2SW_COMPLETION_RING_TX,
 					       BUFFER_TIMESTAMP);
 }
-#else /* !WLAN_FEATURE_TSF_UPLINK_DELAY || CONFIG_SAWF */
+#else /* !WLAN_FEATURE_TSF_UPLINK_DELAY || WLAN_CONFIG_TX_DELAY */
 static inline void
 hal_tx_comp_get_buffer_timestamp_be(void *desc,
 				    struct hal_tx_completion_status *ts)
@@ -215,7 +215,7 @@ static void hal_rx_get_tlv_size_generic_be(uint16_t *rx_pkt_tlv_size,
 {
 	*rx_pkt_tlv_size = RX_PKT_TLVS_LEN;
 	/* For now mon pkt tlv is same as rx pkt tlv */
-	*rx_mon_pkt_tlv_size = RX_PKT_TLVS_LEN;
+	*rx_mon_pkt_tlv_size = MON_RX_PKT_TLVS_LEN;
 }
 
 /**
@@ -326,34 +326,43 @@ hal_rx_fst_get_fse_size_be(void)
 
 #ifdef QCA_MONITOR_2_0_SUPPORT
 /**
- * hal_txmon_get_buffer_addr_generic_be() - api to get buffer address
+ * hal_txmon_is_mon_buf_addr_tlv_generic_be() - api to find mon buffer tlv
  * @tx_tlv: pointer to TLV header
- * @status: hal mon buffer address status
  *
- * Return: Address to qdf_frag_t
+ * Return: bool based on tlv tag matches monitor buffer address tlv
  */
-static inline qdf_frag_t
-hal_txmon_get_buffer_addr_generic_be(void *tx_tlv,
-				     struct hal_mon_buf_addr_status *status)
+static inline bool
+hal_txmon_is_mon_buf_addr_tlv_generic_be(void *tx_tlv_hdr)
 {
-	struct mon_buffer_addr *hal_buffer_addr =
-			(struct mon_buffer_addr *)((uint8_t *)tx_tlv +
-						   HAL_RX_TLV64_HDR_SIZE);
-	qdf_frag_t buf_addr = NULL;
+	uint32_t tlv_tag;
 
-	buf_addr = (qdf_frag_t)(uintptr_t)((hal_buffer_addr->buffer_virt_addr_31_0 |
-				((unsigned long long)hal_buffer_addr->buffer_virt_addr_63_32 <<
-				 32)));
+	tlv_tag = HAL_RX_GET_USER_TLV64_TYPE(tx_tlv_hdr);
 
-	/* qdf_frag_t is derived from buffer address tlv */
-	if (qdf_unlikely(status)) {
-		qdf_mem_copy(status,
-			     (uint8_t *)tx_tlv + HAL_RX_TLV64_HDR_SIZE,
-			     sizeof(struct hal_mon_buf_addr_status));
-		/* update hal_mon_buf_addr_status */
-	}
+	if (WIFIMON_BUFFER_ADDR_E == tlv_tag)
+		return true;
 
-	return buf_addr;
+	return false;
+}
+
+/**
+ * hal_txmon_populate_packet_info_generic_be() - api to populate packet info
+ * @tx_tlv: pointer to TLV header
+ * @packet_info: place holder for packet info
+ *
+ * Return: Address to void
+ */
+static inline void
+hal_txmon_populate_packet_info_generic_be(void *tx_tlv, void *packet_info)
+{
+	struct hal_mon_packet_info *pkt_info;
+	struct mon_buffer_addr *addr = (struct mon_buffer_addr *)tx_tlv;
+
+	pkt_info = (struct hal_mon_packet_info *)packet_info;
+	pkt_info->sw_cookie = (((uint64_t)addr->buffer_virt_addr_63_32 << 32) |
+			       (addr->buffer_virt_addr_31_0));
+	pkt_info->dma_length = addr->dma_length + 1;
+	pkt_info->msdu_continuation = addr->msdu_continuation;
+	pkt_info->truncated = addr->truncated;
 }
 
 #if defined(TX_MONITOR_WORD_MASK)
@@ -389,7 +398,9 @@ hal_txmon_parse_tx_fes_setup(void *tx_tlv,
 	tx_ppdu_info->num_users = tx_fes_setup->number_of_users;
 	if (tx_ppdu_info->num_users == 0)
 		tx_ppdu_info->num_users = 1;
-	tx_ppdu_info->ppdu_id = tx_fes_setup->schedule_id;
+
+	TXMON_HAL(tx_ppdu_info, ppdu_id) = tx_fes_setup->schedule_id;
+	TXMON_HAL_STATUS(tx_ppdu_info, ppdu_id) = tx_fes_setup->schedule_id;
 }
 
 /**
@@ -494,7 +505,9 @@ hal_txmon_parse_tx_fes_setup(void *tx_tlv,
 		num_users = 1;
 
 	tx_ppdu_info->num_users = num_users;
-	tx_ppdu_info->ppdu_id = ppdu_id;
+
+	TXMON_HAL(tx_ppdu_info, ppdu_id) = ppdu_id;
+	TXMON_HAL_STATUS(tx_ppdu_info, ppdu_id) = ppdu_id;
 }
 
 /**
@@ -611,6 +624,63 @@ hal_txmon_parse_mpdu_start(void *tx_tlv, uint8_t user_id,
 #endif
 
 /**
+ * get_ru_offset_from_start_index() - api to get ru offset from ru index
+ *
+ * @ru_size: RU size
+ * @start_idx: Start index
+ *
+ * Return: uint8_t ru allocation offset
+ */
+static inline
+uint8_t get_ru_offset_from_start_index(uint8_t ru_size, uint8_t start_idx)
+{
+	uint8_t ru_alloc_offset[HAL_MAX_DL_MU_USERS][HAL_MAX_RU_INDEX] = {
+		{0, 0, 0, 0, 0, 0, 0},
+		{1, 0, 0, 0, 0, 0, 0},
+		{2, 1, 0, 0, 0, 0, 0},
+		{3, 1, 0, 0, 0, 0, 0},
+		{4, 0, 0, 0, 0, 0, 0},
+		{5, 2, 1, 0, 0, 0, 0},
+		{6, 2, 1, 0, 0, 0, 0},
+		{7, 3, 1, 0, 0, 0, 0},
+		{8, 3, 1, 0, 0, 0, 0},
+		{9, 4, 2, 1, 0, 0, 0},
+		{10, 4, 2, 1, 0, 0, 0},
+		{11, 5, 2, 1, 0, 0, 0},
+		{12, 5, 2, 1, 0, 0, 0},
+		{13, 0, 0, 1, 0, 0, 0},
+		{14, 6, 3, 1, 0, 0, 0},
+		{15, 6, 3, 1, 0, 0, 0},
+		{16, 7, 3, 1, 0, 0, 0},
+		{17, 7, 3, 1, 0, 0, 0},
+		{18, 0, 0, 0, 0, 0, 0},
+		{19, 8, 4, 2, 1, 0, 0},
+		{20, 8, 4, 2, 1, 0, 0},
+		{21, 9, 4, 2, 1, 0, 0},
+		{22, 9, 4, 2, 1, 0, 0},
+		{23, 0, 0, 2, 1, 0, 0},
+		{24, 10, 5, 2, 1, 0, 0},
+		{25, 10, 5, 2, 1, 0, 0},
+		{26, 11, 5, 2, 1, 0, 0},
+		{27, 11, 5, 2, 1, 0, 0},
+		{28, 12, 6, 3, 1, 0, 0},
+		{29, 12, 6, 3, 1, 0, 0},
+		{30, 13, 6, 3, 1, 0, 0},
+		{31, 13, 6, 3, 1, 0, 0},
+		{32, 0, 0, 3, 1, 0, 0},
+		{33, 14, 7, 3, 1, 0, 0},
+		{34, 14, 7, 3, 1, 0, 0},
+		{35, 15, 7, 3, 1, 0, 0},
+		{36, 15, 7, 3, 1, 0, 0},
+	};
+
+	if (start_idx >= HAL_MAX_UL_MU_USERS || ru_size >= HAL_MAX_RU_INDEX)
+		return 0;
+
+	return ru_alloc_offset[start_idx][ru_size];
+}
+
+/**
  * hal_txmon_status_get_num_users_generic_be() - api to get num users
  * from start of fes window
  *
@@ -655,60 +725,6 @@ hal_txmon_status_get_num_users_generic_be(void *tx_tlv_hdr, uint8_t *num_users)
 	};
 
 	return tlv_status;
-}
-
-/**
- * hal_txmon_free_status_buffer() - api to free status buffer
- * @pdev_handle: DP_PDEV handle
- * @status_frag: qdf_frag_t buffer
- * @end_offset: end offset within buffer that has valid data
- *
- * Return status
- */
-static inline QDF_STATUS
-hal_txmon_status_free_buffer_generic_be(qdf_frag_t status_frag,
-					uint32_t end_offset)
-{
-	uint32_t tlv_tag, tlv_len;
-	uint32_t tlv_status = HAL_MON_TX_STATUS_PPDU_NOT_DONE;
-	uint8_t *tx_tlv;
-	uint8_t *tx_tlv_start;
-	qdf_frag_t frag_buf = NULL;
-	QDF_STATUS status = QDF_STATUS_E_ABORTED;
-
-	tx_tlv = (uint8_t *)status_frag;
-	tx_tlv_start = tx_tlv;
-	/* parse tlv and populate tx_ppdu_info */
-	do {
-		tlv_tag = HAL_RX_GET_USER_TLV64_TYPE(tx_tlv);
-		tlv_len = HAL_RX_GET_USER_TLV64_LEN(tx_tlv);
-
-		if (((tx_tlv - tx_tlv_start) + tlv_len) > end_offset)
-			return QDF_STATUS_E_ABORTED;
-
-		if (tlv_tag == WIFIMON_BUFFER_ADDR_E) {
-			frag_buf = hal_txmon_get_buffer_addr_generic_be(tx_tlv,
-									NULL);
-			if (frag_buf)
-				qdf_frag_free(frag_buf);
-
-			frag_buf = NULL;
-		}
-
-		if (WIFITX_FES_STATUS_END_E == tlv_tag ||
-		    WIFIRESPONSE_END_STATUS_E == tlv_tag ||
-		    WIFIDUMMY_E == tlv_tag) {
-			status = QDF_STATUS_SUCCESS;
-			break;
-		}
-
-		/* need api definition for hal_tx_status_get_next_tlv */
-		tx_tlv = hal_tx_status_get_next_tlv(tx_tlv);
-		if ((tx_tlv - tx_tlv_start) >= end_offset)
-			break;
-	} while (tlv_status == HAL_MON_TX_STATUS_PPDU_NOT_DONE);
-
-	return status;
 }
 
 /**
@@ -765,9 +781,6 @@ hal_tx_get_ppdu_info(void *data_info, void *prot_info, uint32_t tlv_tag)
 		   tlv_tag == WIFITX_FES_STATUS_START_PROT_E) {
 		TXMON_HAL(prot_ppdu_info, prot_tlv_status) = tlv_tag;
 		return prot_info;
-	} else {
-		TXMON_HAL(prot_ppdu_info, prot_tlv_status) = tlv_tag;
-		return data_info;
 	}
 
 	return data_info;
@@ -794,14 +807,14 @@ hal_txmon_status_parse_tlv_generic_be(void *data_ppdu_info,
 {
 	struct hal_tx_ppdu_info *ppdu_info;
 	struct hal_tx_status_info *tx_status_info;
+	struct hal_mon_packet_info *packet_info = NULL;
 	uint32_t tlv_tag, user_id, tlv_len;
-	qdf_frag_t frag_buf = NULL;
 	uint32_t status = HAL_MON_TX_STATUS_PPDU_NOT_DONE;
 	void *tx_tlv;
 
 	tlv_tag = HAL_RX_GET_USER_TLV64_TYPE(tx_tlv_hdr);
 	/* user_id start with 1, decrement by 1 to start from 0 */
-	user_id = HAL_RX_GET_USER_TLV64_USERID(tx_tlv_hdr) - 1;
+	user_id = HAL_RX_GET_USER_TLV64_USERID(tx_tlv_hdr);
 	tlv_len = HAL_RX_GET_USER_TLV64_LEN(tx_tlv_hdr);
 
 	tx_tlv = (uint8_t *)tx_tlv_hdr + HAL_RX_TLV64_HDR_SIZE;
@@ -812,7 +825,7 @@ hal_txmon_status_parse_tlv_generic_be(void *data_ppdu_info,
 	tx_status_info = (ppdu_info->is_data ? data_status_info :
 			  prot_status_info);
 
-	user_id = user_id > ppdu_info->num_users ? 0 : ppdu_info->num_users;
+	user_id = user_id > ppdu_info->num_users ? 0 : user_id;
 
 	switch (tlv_tag) {
 	/* start of initiator FES window */
@@ -831,6 +844,9 @@ hal_txmon_status_parse_tlv_generic_be(void *data_ppdu_info,
 		/* initiator PPDU window end */
 		uint32_t ppdu_timestamp_start = 0;
 		uint32_t ppdu_timestamp_end = 0;
+		uint16_t phy_abort_reason = 0;
+		uint8_t phy_abort_is_valid = 0;
+		uint8_t abort_usr_id = 0;
 		uint8_t response_type = 0;
 		uint8_t r2r_end_status_follow = 0;
 
@@ -860,6 +876,25 @@ hal_txmon_status_parse_tlv_generic_be(void *data_ppdu_info,
 		r2r_end_status_follow =
 			HAL_TX_DESC_GET_64(tx_tlv, TX_FES_STATUS_END,
 					   R2R_END_STATUS_TO_FOLLOW);
+
+		phy_abort_is_valid =
+			HAL_TX_DESC_GET_64(tx_tlv, TX_FES_STATUS_END,
+					   PHYTX_ABORT_REQUEST_INFO_VALID);
+
+		if (phy_abort_is_valid) {
+			phy_abort_reason =
+			HAL_TX_DESC_GET_64(tx_tlv, TX_FES_STATUS_END,
+					   PHYTX_ABORT_REQUEST_INFO_DETAILS_PHYTX_ABORT_REASON);
+
+			abort_usr_id =
+			HAL_TX_DESC_GET_64(tx_tlv, TX_FES_STATUS_END,
+					   PHYTX_ABORT_REQUEST_INFO_DETAILS_USER_NUMBER);
+
+			TXMON_STATUS_INFO(tx_status_info,
+					  phy_abort_reason) = phy_abort_reason;
+			TXMON_STATUS_INFO(tx_status_info,
+					  phy_abort_user_number) = abort_usr_id;
+		}
 
 		TXMON_STATUS_INFO(tx_status_info,
 				  response_type) = response_type;
@@ -938,11 +973,19 @@ hal_txmon_status_parse_tlv_generic_be(void *data_ppdu_info,
 		uint32_t bandwidth = 0;
 		uint32_t ppdu_timestamp_start = 0;
 		uint32_t ppdu_timestamp_end = 0;
+		uint32_t mba_usr_cnt = 0;
+		uint32_t mba_fake_bitmap_cnt = 0;
 
 		status = HAL_MON_RESPONSE_END_STATUS_INFO;
 		generated_response = HAL_TX_DESC_GET_64(tx_tlv,
 							RESPONSE_END_STATUS,
 							GENERATED_RESPONSE);
+		mba_usr_cnt = HAL_TX_DESC_GET_64(tx_tlv,
+						 RESPONSE_END_STATUS,
+						 MBA_USER_COUNT);
+		mba_fake_bitmap_cnt = HAL_TX_DESC_GET_64(tx_tlv,
+							 RESPONSE_END_STATUS,
+							 MBA_FAKE_BITMAP_COUNT);
 		bandwidth = HAL_TX_DESC_GET_64(tx_tlv, RESPONSE_END_STATUS,
 					       COEX_BASED_TX_BW);
 		/* 32 bits TSF */
@@ -966,6 +1009,10 @@ hal_txmon_status_parse_tlv_generic_be(void *data_ppdu_info,
 
 		TXMON_STATUS_INFO(tx_status_info,
 				  generated_response) = generated_response;
+		TXMON_STATUS_INFO(tx_status_info, mba_count) = mba_usr_cnt;
+		TXMON_STATUS_INFO(tx_status_info,
+				  mba_fake_bitmap_count) = mba_fake_bitmap_cnt;
+
 		SHOW_DEFINED(WIFIRESPONSE_END_STATUS_E);
 		break;
 	}
@@ -1043,21 +1090,15 @@ hal_txmon_status_parse_tlv_generic_be(void *data_ppdu_info,
 	}
 	case WIFIMON_BUFFER_ADDR_E:/* DOWNSTREAM */
 	{
-		struct hal_mon_buf_addr_status buf_status = {0};
-
+		packet_info = &ppdu_info->packet_info;
 		status = HAL_MON_TX_BUFFER_ADDR;
 		/*
 		 * TODO: do we need a conversion api to convert
 		 * user_id from hw to get host user_index
 		 */
 		TXMON_HAL(ppdu_info, cur_usr_idx) = user_id;
-		frag_buf = hal_txmon_get_buffer_addr_generic_be(tx_tlv,
-								&buf_status);
-		TXMON_STATUS_INFO(tx_status_info,
-				  buffer) = (void *)frag_buf;
-		TXMON_STATUS_INFO(tx_status_info, offset) = 0;
-		TXMON_STATUS_INFO(tx_status_info,
-				  length) = buf_status.dma_length;
+
+		hal_txmon_populate_packet_info_generic_be(tx_tlv, packet_info);
 
 		SHOW_DEFINED(WIFIMON_BUFFER_ADDR_E);
 		break;
@@ -1591,10 +1632,9 @@ hal_txmon_status_parse_tlv_generic_be(void *data_ppdu_info,
 						   BA_TS_CTRL);
 		/* memcpy  ba bitmap */
 		qdf_mem_copy(TXMON_HAL_USER(ppdu_info, user_id, ba_bitmap),
-			     tx_tlv +
-			     HAL_TX_DESC_OFFSET_GET_64(tx_tlv,
-						       RX_FRAME_1K_BITMAP_ACK,
-						       BA_TS_BITMAP_31_0, 0),
+			     &HAL_SET_FLD_OFFSET_64(tx_tlv,
+						    RX_FRAME_1K_BITMAP_ACK,
+						    BA_TS_BITMAP_31_0, 0),
 			     4 << TXMON_HAL_USER(ppdu_info,
 						 user_id, ba_bitmap_sz));
 
@@ -1718,13 +1758,24 @@ hal_txmon_status_parse_tlv_generic_be(void *data_ppdu_info,
 
 	case WIFIMACTX_HE_SIG_A_SU_E:
 	{
+		uint16_t he_mu_flag_1 = 0;
+		uint16_t he_mu_flag_2 = 0;
+		uint16_t num_users = 0;
 		uint8_t mcs_of_sig_b = 0;
 		uint8_t dcm_of_sig_b = 0;
 		uint8_t sig_a_bw = 0;
-		uint16_t he_mu_flag_1 = 0;
-		uint16_t he_mu_flag_2 = 0;
+		uint8_t i = 0;
+		uint8_t bss_color_id;
+		uint8_t coding;
+		uint8_t stbc;
+		uint8_t a_factor;
+		uint8_t pe_disambiguity;
+		uint8_t txbf;
+		uint8_t txbw;
+		uint8_t txop;
 
 		status = HAL_MON_MACTX_HE_SIG_A_SU;
+		num_users = TXMON_HAL(ppdu_info, num_users);
 
 		mcs_of_sig_b = HAL_TX_DESC_GET_64(tx_tlv,
 						  MACTX_HE_SIG_A_SU_MACTX_HE_SIG_A_SU_INFO_DETAILS,
@@ -1735,6 +1786,31 @@ hal_txmon_status_parse_tlv_generic_be(void *data_ppdu_info,
 		sig_a_bw = HAL_TX_DESC_GET_64(tx_tlv,
 					      MACTX_HE_SIG_A_SU_MACTX_HE_SIG_A_SU_INFO_DETAILS,
 					      TRANSMIT_BW);
+
+		bss_color_id = HAL_TX_DESC_GET_64(tx_tlv,
+						  MACTX_HE_SIG_A_SU_MACTX_HE_SIG_A_SU_INFO_DETAILS,
+						  BSS_COLOR_ID);
+		coding = HAL_TX_DESC_GET_64(tx_tlv,
+					    MACTX_HE_SIG_A_SU_MACTX_HE_SIG_A_SU_INFO_DETAILS,
+					    CODING);
+		stbc = HAL_TX_DESC_GET_64(tx_tlv,
+					  MACTX_HE_SIG_A_SU_MACTX_HE_SIG_A_SU_INFO_DETAILS,
+					  STBC);
+		a_factor = HAL_TX_DESC_GET_64(tx_tlv,
+					      MACTX_HE_SIG_A_SU_MACTX_HE_SIG_A_SU_INFO_DETAILS,
+					      PACKET_EXTENSION_A_FACTOR);
+		pe_disambiguity = HAL_TX_DESC_GET_64(tx_tlv,
+						     MACTX_HE_SIG_A_SU_MACTX_HE_SIG_A_SU_INFO_DETAILS,
+						     PACKET_EXTENSION_PE_DISAMBIGUITY);
+		txbf = HAL_TX_DESC_GET_64(tx_tlv,
+					  MACTX_HE_SIG_A_SU_MACTX_HE_SIG_A_SU_INFO_DETAILS,
+					  TXBF);
+		txbw = HAL_TX_DESC_GET_64(tx_tlv,
+					  MACTX_HE_SIG_A_SU_MACTX_HE_SIG_A_SU_INFO_DETAILS,
+					  TRANSMIT_BW);
+		txop = HAL_TX_DESC_GET_64(tx_tlv,
+					  MACTX_HE_SIG_A_SU_MACTX_HE_SIG_A_SU_INFO_DETAILS,
+					  TXOP_DURATION);
 
 		he_mu_flag_1 |= QDF_MON_STATUS_SIG_B_MCS_KNOWN |
 				QDF_MON_STATUS_SIG_B_DCM_KNOWN |
@@ -1754,24 +1830,58 @@ hal_txmon_status_parse_tlv_generic_be(void *data_ppdu_info,
 		he_mu_flag_2 |= sig_a_bw <<
 				QDF_MON_STATUS_SIG_A_BANDWIDTH_SHIFT;
 
-		TXMON_HAL_STATUS(ppdu_info, he_flags1) = he_mu_flag_1;
-		TXMON_HAL_STATUS(ppdu_info, he_flags2) = he_mu_flag_2;
+		TXMON_HAL_STATUS(ppdu_info,
+				 he_mu_flags) = IS_MULTI_USERS(num_users);
+		for (i = 0; i < num_users; i++) {
+			TXMON_HAL_USER(ppdu_info, i, he_flags1) |= he_mu_flag_1;
+			TXMON_HAL_USER(ppdu_info, i, he_flags2) |= he_mu_flag_2;
+		}
+
+		/* HE data 1 */
+		TXMON_HAL_USER(ppdu_info, user_id, he_data1) |=
+			QDF_MON_STATUS_HE_BSS_COLOR_KNOWN |
+			QDF_MON_STATUS_HE_CODING_KNOWN;
+
+		/* HE data 2 */
+		TXMON_HAL_USER(ppdu_info, user_id, he_data2) |=
+			QDF_MON_STATUS_TXBF_KNOWN |
+			QDF_MON_STATUS_PE_DISAMBIGUITY_KNOWN |
+			QDF_MON_STATUS_TXOP_KNOWN |
+			QDF_MON_STATUS_PRE_FEC_PADDING_KNOWN |
+			QDF_MON_STATUS_MIDABLE_PERIODICITY_KNOWN;
+
+		/* HE data 3 */
+		TXMON_HAL_USER(ppdu_info, user_id, he_data3) |=
+			bss_color_id |
+			(!!txbf << QDF_MON_STATUS_BEAM_CHANGE_SHIFT) |
+			(coding << QDF_MON_STATUS_CODING_SHIFT) |
+			(stbc << QDF_MON_STATUS_STBC_SHIFT);
+
+		/* HE data 6 */
+		TXMON_HAL_USER(ppdu_info, user_id, he_data6) |=
+				(txop << QDF_MON_STATUS_TXOP_SHIFT);
 
 		SHOW_DEFINED(WIFIMACTX_HE_SIG_A_SU_E);
 		break;
 	}
 	case WIFIMACTX_HE_SIG_A_MU_DL_E:
 	{
+		uint16_t he_mu_flag_1 = 0;
+		uint16_t he_mu_flag_2 = 0;
+		uint16_t num_users = 0;
+		uint8_t bss_color_id;
+		uint8_t txop;
 		uint8_t mcs_of_sig_b = 0;
 		uint8_t dcm_of_sig_b = 0;
 		uint8_t sig_a_bw = 0;
 		uint8_t num_sig_b_symb = 0;
 		uint8_t comp_mode_sig_b = 0;
 		uint8_t punc_bw = 0;
-		uint16_t he_mu_flag_1 = 0;
-		uint16_t he_mu_flag_2 = 0;
+		uint8_t i = 0;
 
 		status = HAL_MON_MACTX_HE_SIG_A_MU_DL;
+		num_users = TXMON_HAL(ppdu_info, num_users);
+
 		mcs_of_sig_b = HAL_TX_DESC_GET_64(tx_tlv,
 						  MACTX_HE_SIG_A_MU_DL_MACTX_HE_SIG_A_MU_DL_INFO_DETAILS,
 						  MCS_OF_SIG_B);
@@ -1787,6 +1897,12 @@ hal_txmon_status_parse_tlv_generic_be(void *data_ppdu_info,
 		comp_mode_sig_b = HAL_TX_DESC_GET_64(tx_tlv,
 						     MACTX_HE_SIG_A_MU_DL_MACTX_HE_SIG_A_MU_DL_INFO_DETAILS,
 						     COMP_MODE_SIG_B);
+		bss_color_id = HAL_TX_DESC_GET_64(tx_tlv,
+						  MACTX_HE_SIG_A_MU_DL_MACTX_HE_SIG_A_MU_DL_INFO_DETAILS,
+						  BSS_COLOR_ID);
+		txop = HAL_TX_DESC_GET_64(tx_tlv,
+					  MACTX_HE_SIG_A_MU_DL_MACTX_HE_SIG_A_MU_DL_INFO_DETAILS,
+					  TXOP_DURATION);
 
 		he_mu_flag_1 |= QDF_MON_STATUS_SIG_B_MCS_KNOWN |
 				QDF_MON_STATUS_SIG_B_DCM_KNOWN |
@@ -1823,9 +1939,27 @@ hal_txmon_status_parse_tlv_generic_be(void *data_ppdu_info,
 			punc_bw << QDF_MON_STATUS_SIG_A_PUNC_BANDWIDTH_SHIFT;
 
 		/* copy per user info to all user */
-		TXMON_HAL_STATUS(ppdu_info, he_mu_flags) = 1;
-		TXMON_HAL_STATUS(ppdu_info, he_flags1) = he_mu_flag_1;
-		TXMON_HAL_STATUS(ppdu_info, he_flags2) = he_mu_flag_2;
+		TXMON_HAL_STATUS(ppdu_info,
+				 he_mu_flags) = IS_MULTI_USERS(num_users);
+		for (i = 0; i < num_users; i++) {
+			TXMON_HAL_USER(ppdu_info, i, he_flags1) |= he_mu_flag_1;
+			TXMON_HAL_USER(ppdu_info, i, he_flags2) |= he_mu_flag_2;
+		}
+
+		/* HE data 1 */
+		TXMON_HAL_USER(ppdu_info, user_id, he_data1) |=
+				QDF_MON_STATUS_HE_BSS_COLOR_KNOWN;
+
+		/* HE data 2 */
+		TXMON_HAL_USER(ppdu_info, user_id, he_data2) |=
+				QDF_MON_STATUS_TXOP_KNOWN;
+
+		/* HE data 3 */
+		TXMON_HAL_USER(ppdu_info, user_id, he_data3) |= bss_color_id;
+
+		/* HE data 6 */
+		TXMON_HAL_USER(ppdu_info, user_id, he_data6) |=
+				(txop << QDF_MON_STATUS_TXOP_SHIFT);
 
 		SHOW_DEFINED(WIFIMACTX_HE_SIG_A_MU_DL_E);
 		break;
@@ -1869,7 +2003,7 @@ hal_txmon_status_parse_tlv_generic_be(void *data_ppdu_info,
 					    STA_CODING);
 		nss = HAL_TX_DESC_GET_64(tx_tlv,
 					 MACTX_HE_SIG_B2_MU_MACTX_HE_SIG_B2_MU_INFO_DETAILS,
-					 NSTS);
+					 NSTS) + 1;
 		user_order = HAL_TX_DESC_GET_64(tx_tlv,
 						MACTX_HE_SIG_B2_MU_MACTX_HE_SIG_B2_MU_INFO_DETAILS,
 						USER_ORDER);
@@ -2142,14 +2276,14 @@ hal_txmon_status_parse_tlv_generic_be(void *data_ppdu_info,
 					      MACTX_VHT_SIG_A_MACTX_VHT_SIG_A_INFO_DETAILS,
 					      N_STS);
 		/* if it is SU */
-		nss_su = nss_comb & 0x7;
+		nss_su = (nss_comb & 0x7) + 1;
 		/* partial aid - applicable only for SU */
 		partial_aid = (nss_comb >> 3) & 0x1F;
 		/* if it is MU */
-		nss_mu[0] = nss_comb & 0x7;
-		nss_mu[1] = (nss_comb >> 3) & 0x7;
-		nss_mu[2] = (nss_comb >> 6) & 0x7;
-		nss_mu[3] = (nss_comb >> 9) & 0x7;
+		nss_mu[0] = (nss_comb & 0x7) + 1;
+		nss_mu[1] = ((nss_comb >> 3) & 0x7) + 1;
+		nss_mu[2] = ((nss_comb >> 6) & 0x7) + 1;
+		nss_mu[3] = ((nss_comb >> 9) & 0x7) + 1;
 
 		sgi = HAL_TX_DESC_GET_64(tx_tlv,
 					 MACTX_VHT_SIG_A_MACTX_VHT_SIG_A_INFO_DETAILS,
@@ -2179,25 +2313,34 @@ hal_txmon_status_parse_tlv_generic_be(void *data_ppdu_info,
 			TXMON_HAL_STATUS(ppdu_info, mcs) = mcs;
 			TXMON_HAL_STATUS(ppdu_info, nss) =
 						nss_su & VHT_SIG_SU_NSS_MASK;
+
+			TXMON_HAL_USER(ppdu_info, user_id,
+				       vht_flag_values3[0]) = ((mcs << 4) |
+							       nss_su);
 		} else {
 			TXMON_HAL_STATUS(ppdu_info, reception_type) =
 						HAL_RX_TYPE_MU_MIMO;
 			TXMON_HAL_USER(ppdu_info, user_id, mcs) = mcs;
 			TXMON_HAL_USER(ppdu_info, user_id, nss) =
 						nss_su & VHT_SIG_SU_NSS_MASK;
+
+			TXMON_HAL_USER(ppdu_info, user_id,
+				       vht_flag_values3[0]) = ((mcs << 4) |
+							       nss_su);
+			TXMON_HAL_USER(ppdu_info, user_id,
+				       vht_flag_values3[1]) = ((mcs << 4) |
+							       nss_mu[1]);
+			TXMON_HAL_USER(ppdu_info, user_id,
+				       vht_flag_values3[2]) = ((mcs << 4) |
+							       nss_mu[2]);
+			TXMON_HAL_USER(ppdu_info, user_id,
+				       vht_flag_values3[3]) = ((mcs << 4) |
+							       nss_mu[3]);
 		}
 
 		/* TODO: loop over multiple user */
 		TXMON_HAL_USER(ppdu_info, user_id,
 			       vht_flag_values2) = bandwidth;
-		TXMON_HAL_USER(ppdu_info, user_id,
-			       vht_flag_values3[0]) = (mcs << 4) | nss_su;
-		TXMON_HAL_USER(ppdu_info, user_id,
-			       vht_flag_values3[1]) = (mcs << 4) | nss_mu[1];
-		TXMON_HAL_USER(ppdu_info, user_id,
-			       vht_flag_values3[2]) = (mcs << 4) | nss_mu[2];
-		TXMON_HAL_USER(ppdu_info, user_id,
-			       vht_flag_values3[3]) = (mcs << 4) | nss_mu[3];
 		TXMON_HAL_USER(ppdu_info, user_id,
 			       vht_flag_values4) = coding;
 		TXMON_HAL_USER(ppdu_info, user_id,
@@ -2254,6 +2397,8 @@ hal_txmon_status_parse_tlv_generic_be(void *data_ppdu_info,
 	}
 	case WIFIMACTX_USER_DESC_PER_USER_E:
 	{
+		/* user tlv */
+		uint32_t bf = 0;
 		uint32_t psdu_length = 0;
 		uint8_t ru_start_index = 0;
 		uint8_t ru_size = 0;
@@ -2262,12 +2407,16 @@ hal_txmon_status_parse_tlv_generic_be(void *data_ppdu_info,
 		uint8_t dcm = 0;
 		uint8_t fec_type = 0;
 		uint8_t is_ldpc_extra_symb = 0;
-		uint32_t he_data1 = 0;
-		uint32_t he_data2 = 0;
-		uint32_t he_data3 = 0;
-		uint32_t he_data4 = 0;
-		uint32_t he_data5 = 0;
-		uint32_t he_data6 = 0;
+		uint32_t he_data1 = TXMON_HAL_USER(ppdu_info, user_id,
+						   he_data1);
+		uint32_t he_data2 = TXMON_HAL_USER(ppdu_info, user_id,
+						   he_data2);
+		uint32_t he_data3 = TXMON_HAL_USER(ppdu_info, user_id,
+						   he_data3);
+		uint32_t he_data5 = TXMON_HAL_USER(ppdu_info, user_id,
+						   he_data5);
+		uint32_t he_data6 = TXMON_HAL_USER(ppdu_info, user_id,
+						   he_data6);
 
 		status = HAL_MON_MACTX_USER_DESC_PER_USER;
 
@@ -2281,7 +2430,11 @@ hal_txmon_status_parse_tlv_generic_be(void *data_ppdu_info,
 						    RU_START_INDEX);
 		ru_size = HAL_TX_DESC_GET_64(tx_tlv, MACTX_USER_DESC_PER_USER,
 					     RU_SIZE);
-		nss = HAL_TX_DESC_GET_64(tx_tlv, MACTX_USER_DESC_PER_USER, NSS);
+		bf = HAL_TX_DESC_GET_64(tx_tlv, MACTX_USER_DESC_PER_USER,
+					USER_BF_TYPE);
+
+		nss = HAL_TX_DESC_GET_64(tx_tlv,
+					 MACTX_USER_DESC_PER_USER, NSS) + 1;
 		mcs = HAL_TX_DESC_GET_64(tx_tlv, MACTX_USER_DESC_PER_USER, MCS);
 		dcm = HAL_TX_DESC_GET_64(tx_tlv, MACTX_USER_DESC_PER_USER, DCM);
 		fec_type = HAL_TX_DESC_GET_64(tx_tlv, MACTX_USER_DESC_PER_USER,
@@ -2294,6 +2447,16 @@ hal_txmon_status_parse_tlv_generic_be(void *data_ppdu_info,
 			break;
 
 		/* update */
+		/* BEAM CHANGE */
+		he_data1 |= QDF_MON_STATUS_HE_BEAM_CHANGE_KNOWN;
+		he_data1 |= QDF_MON_STATUS_TXBF_KNOWN;
+		he_data5 |= (!!bf << QDF_MON_STATUS_TXBF_SHIFT);
+		he_data3 |= (!!bf << QDF_MON_STATUS_BEAM_CHANGE_SHIFT);
+
+		/* UL/DL known */
+		he_data1 |= QDF_MON_STATUS_HE_DL_UL_KNOWN;
+		he_data3 |= (1 << QDF_MON_STATUS_DL_UL_SHIFT);
+
 		/* MCS */
 		he_data1 |= QDF_MON_STATUS_HE_MCS_KNOWN;
 		he_data3 |= (mcs << QDF_MON_STATUS_TRANSMIT_MCS_SHIFT);
@@ -2305,85 +2468,214 @@ hal_txmon_status_parse_tlv_generic_be(void *data_ppdu_info,
 		he_data3 |= (is_ldpc_extra_symb <<
 			     QDF_MON_STATUS_LDPC_EXTRA_SYMBOL_SHIFT);
 		/* RU offset and RU */
-		he_data1 |= QDF_MON_STATUS_HE_DATA_BW_RU_KNOWN;
 		he_data2 |= QDF_MON_STATUS_RU_ALLOCATION_OFFSET_KNOWN;
-		he_data2 |= (ru_start_index <<
+		he_data2 |= (get_ru_offset_from_start_index(ru_size,
+							    ru_start_index) <<
 			     QDF_MON_STATUS_RU_ALLOCATION_SHIFT);
 
 		/* Data BW and RU allocation */
-		he_data1 |= QDF_MON_STATUS_HE_DATA_BW_RU_KNOWN;
-		he_data5 |= ru_size << 2;
+		if (ru_size < HAL_MAX_RU_INDEX) {
+			/* update bandwidth if it is full bandwidth */
+			he_data1 |= QDF_MON_STATUS_HE_DATA_BW_RU_KNOWN;
+			he_data5 = (he_data5 & 0xFFF0) | (4 + ru_size);
+		}
 
+		he_data6 |= (nss & 0xF);
 		TXMON_HAL_USER(ppdu_info, user_id, mcs) = mcs;
 
 		/* update stack variable to ppdu_info */
-		TXMON_HAL_USER(ppdu_info, user_id, he_data1) |= he_data1;
-		TXMON_HAL_USER(ppdu_info, user_id, he_data2) |= he_data2;
-		TXMON_HAL_USER(ppdu_info, user_id, he_data3) |= he_data3;
-		TXMON_HAL_USER(ppdu_info, user_id, he_data4) |= he_data4;
-		TXMON_HAL_USER(ppdu_info, user_id, he_data5) |= he_data5;
-		TXMON_HAL_USER(ppdu_info, user_id, he_data6) |= he_data6;
+		TXMON_HAL_USER(ppdu_info, user_id, he_data1) = he_data1;
+		TXMON_HAL_USER(ppdu_info, user_id, he_data2) = he_data2;
+		TXMON_HAL_USER(ppdu_info, user_id, he_data3) = he_data3;
+		TXMON_HAL_USER(ppdu_info, user_id, he_data5) = he_data5;
+		TXMON_HAL_USER(ppdu_info, user_id, he_data6) = he_data6;
 
 		SHOW_DEFINED(WIFIMACTX_USER_DESC_PER_USER_E);
 		break;
 	}
 	case WIFIMACTX_USER_DESC_COMMON_E:
 	{
+		uint16_t he_mu_flag_1 = 0;
+		uint16_t he_mu_flag_2 = 0;
+		uint16_t ru_channel_1[4] = {0};
+		uint16_t ru_channel_2[4] = {0};
+		uint16_t num_users = 0;
+		uint8_t doppler;
+		uint8_t ltf_size;
+		uint8_t num_ltf_symbols;
+		uint8_t pkt_extn_pe;
+		uint8_t a_factor;
+		uint8_t center_ru_0;
+		uint8_t center_ru_1;
+		uint8_t i = 0;
+
+		num_users = TXMON_HAL(ppdu_info, num_users);
+
+		doppler = HAL_TX_DESC_GET_64(tx_tlv,
+					     MACTX_USER_DESC_COMMON,
+					     DOPPLER_INDICATION);
+
+		ltf_size = HAL_TX_DESC_GET_64(tx_tlv,
+					      MACTX_USER_DESC_COMMON,
+					      LTF_SIZE);
+
+		num_ltf_symbols = HAL_TX_DESC_GET_64(tx_tlv,
+						     MACTX_USER_DESC_COMMON,
+						     NUM_DATA_SYMBOLS);
+
+		pkt_extn_pe = HAL_TX_DESC_GET_64(tx_tlv,
+						 MACTX_USER_DESC_COMMON,
+						 PACKET_EXTENSION_PE_DISAMBIGUITY);
+
+		a_factor = HAL_TX_DESC_GET_64(tx_tlv,
+					      MACTX_USER_DESC_COMMON,
+					      PACKET_EXTENSION_A_FACTOR);
+
+		center_ru_0 = HAL_TX_DESC_GET_64(tx_tlv,
+						 MACTX_USER_DESC_COMMON,
+						 CENTER_RU_0);
+
+		center_ru_1 = HAL_TX_DESC_GET_64(tx_tlv,
+						 MACTX_USER_DESC_COMMON,
+						 CENTER_RU_1);
+
+		ru_channel_1[0] = HAL_TX_DESC_GET_64(tx_tlv,
+						     MACTX_USER_DESC_COMMON,
+						     RU_ALLOCATION_0123_DETAILS_RU_ALLOCATION_BAND0_0);
+		ru_channel_1[1] = HAL_TX_DESC_GET_64(tx_tlv,
+						     MACTX_USER_DESC_COMMON,
+						     RU_ALLOCATION_0123_DETAILS_RU_ALLOCATION_BAND0_1);
+		ru_channel_1[2] = HAL_TX_DESC_GET_64(tx_tlv,
+						     MACTX_USER_DESC_COMMON,
+						     RU_ALLOCATION_0123_DETAILS_RU_ALLOCATION_BAND0_2);
+		ru_channel_1[3] = HAL_TX_DESC_GET_64(tx_tlv,
+						     MACTX_USER_DESC_COMMON,
+						     RU_ALLOCATION_0123_DETAILS_RU_ALLOCATION_BAND0_3);
+
+		ru_channel_2[0] = HAL_TX_DESC_GET_64(tx_tlv,
+						     MACTX_USER_DESC_COMMON,
+						     RU_ALLOCATION_0123_DETAILS_RU_ALLOCATION_BAND1_0);
+		ru_channel_2[1] = HAL_TX_DESC_GET_64(tx_tlv,
+						     MACTX_USER_DESC_COMMON,
+						     RU_ALLOCATION_0123_DETAILS_RU_ALLOCATION_BAND1_1);
+		ru_channel_2[2] = HAL_TX_DESC_GET_64(tx_tlv,
+						     MACTX_USER_DESC_COMMON,
+						     RU_ALLOCATION_0123_DETAILS_RU_ALLOCATION_BAND1_2);
+		ru_channel_2[3] = HAL_TX_DESC_GET_64(tx_tlv,
+						     MACTX_USER_DESC_COMMON,
+						     RU_ALLOCATION_0123_DETAILS_RU_ALLOCATION_BAND1_3);
+
+		/* HE data 1 */
+		TXMON_HAL_USER(ppdu_info, user_id, he_data1) |=
+					QDF_MON_STATUS_HE_DOPPLER_KNOWN;
+
+		/* HE data 2 */
+		TXMON_HAL_USER(ppdu_info, user_id, he_data2) |=
+					QDF_MON_STATUS_PE_DISAMBIGUITY_KNOWN |
+					QDF_MON_STATUS_LTF_SYMBOLS_KNOWN;
+
+		/* HE data 5 */
+		TXMON_HAL_USER(ppdu_info, user_id, he_data5) |=
+				(pkt_extn_pe <<
+				 QDF_MON_STATUS_PE_DISAMBIGUITY_SHIFT) |
+				(a_factor << QDF_MON_STATUS_PRE_FEC_PAD_SHIFT) |
+				((1 + ltf_size) <<
+				 QDF_MON_STATUS_HE_LTF_SIZE_SHIFT) |
+				(num_ltf_symbols <<
+				 QDF_MON_STATUS_HE_LTF_SYM_SHIFT);
+
+		/* HE data 6 */
+		TXMON_HAL_USER(ppdu_info, user_id, he_data6) |=
+				(doppler << QDF_MON_STATUS_DOPPLER_SHIFT);
+
+		/* number of symbol */
+		he_mu_flag_1 |=
+			(QDF_MON_STATUS_CHANNEL_2_CENTER_26_RU_KNOWN |
+			 QDF_MON_STATUS_CHANNEL_1_CENTER_26_RU_KNOWN |
+			 ((center_ru_0 <<
+			   QDF_MON_STATUS_CHANNEL_1_CENTER_26_RU_SHIFT) &
+			  QDF_MON_STATUS_CHANNEL_1_CENTER_26_RU_VALUE));
+
+		he_mu_flag_2 |= ((center_ru_1 <<
+				  QDF_MON_STATUS_CHANNEL_2_CENTER_26_RU_SHIFT) &
+				 QDF_MON_STATUS_CHANNEL_2_CENTER_26_RU_VALUE);
+
+		TXMON_HAL_STATUS(ppdu_info,
+				 he_mu_flags) = IS_MULTI_USERS(num_users);
+		for (i = 0; i < num_users; i++) {
+			TXMON_HAL_USER(ppdu_info, i, he_flags1) |= he_mu_flag_1;
+			TXMON_HAL_USER(ppdu_info, i, he_flags2) |= he_mu_flag_2;
+
+			/* channel 1 */
+			TXMON_HAL_USER(ppdu_info, i,
+				       he_RU[0]) = ru_channel_1[0];
+			TXMON_HAL_USER(ppdu_info, i,
+				       he_RU[1]) = ru_channel_1[1];
+			TXMON_HAL_USER(ppdu_info, i,
+				       he_RU[2]) = ru_channel_1[2];
+			TXMON_HAL_USER(ppdu_info, i,
+				       he_RU[3]) = ru_channel_1[3];
+			/* channel 2 */
+			TXMON_HAL_USER(ppdu_info, i,
+				       he_RU[4]) = ru_channel_2[0];
+			TXMON_HAL_USER(ppdu_info, i,
+				       he_RU[5]) = ru_channel_2[1];
+			TXMON_HAL_USER(ppdu_info, i,
+				       he_RU[6]) = ru_channel_2[2];
+			TXMON_HAL_USER(ppdu_info, i,
+				       he_RU[7]) = ru_channel_2[3];
+		}
+		/* channel 1 */
+		TXMON_HAL_STATUS(ppdu_info, he_RU[0]) = ru_channel_1[0];
+		TXMON_HAL_STATUS(ppdu_info, he_RU[1]) = ru_channel_1[1];
+		TXMON_HAL_STATUS(ppdu_info, he_RU[2]) = ru_channel_1[2];
+		TXMON_HAL_STATUS(ppdu_info, he_RU[3]) = ru_channel_1[3];
+		/* channel 2 */
+		TXMON_HAL_STATUS(ppdu_info, he_RU[4]) = ru_channel_2[0];
+		TXMON_HAL_STATUS(ppdu_info, he_RU[5]) = ru_channel_2[1];
+		TXMON_HAL_STATUS(ppdu_info, he_RU[6]) = ru_channel_2[2];
+		TXMON_HAL_STATUS(ppdu_info, he_RU[7]) = ru_channel_2[3];
+
+		/* copy per user info to all user */
 		SHOW_DEFINED(WIFIMACTX_USER_DESC_COMMON_E);
 		break;
 	}
 	case WIFIMACTX_PHY_DESC_E:
 	{
-		uint32_t bf_type = 0;
 		/* pkt_type - preamble type */
 		uint32_t pkt_type = 0;
 		uint8_t bandwidth = 0;
-		uint8_t mcs = 0;
 		uint8_t is_stbc = 0;
-		uint8_t nss = 0;
 		uint8_t is_triggered = 0;
 		uint8_t gi = 0;
 		uint8_t he_ppdu_subtype = 0;
 		uint32_t ltf_size = 0;
-		uint32_t ru_start = 0;
 		uint32_t he_data1 = 0;
 		uint32_t he_data2 = 0;
 		uint32_t he_data3 = 0;
-		uint32_t he_data4 = 0;
 		uint32_t he_data5 = 0;
-		uint32_t he_data6 = 0;
 		uint16_t he_mu_flag_1 = 0;
 		uint16_t he_mu_flag_2 = 0;
+		uint16_t num_users = 0;
 		uint8_t i = 0;
 
 		status = HAL_MON_MACTX_PHY_DESC;
 
-		bf_type = HAL_TX_DESC_GET_64(tx_tlv, MACTX_PHY_DESC, BF_TYPE);
+		num_users = TXMON_HAL(ppdu_info, num_users);
 		pkt_type = HAL_TX_DESC_GET_64(tx_tlv, MACTX_PHY_DESC, PKT_TYPE);
-
-		mcs = HAL_TX_DESC_GET_64(tx_tlv, MACTX_PHY_DESC, MCS);
 		is_stbc = HAL_TX_DESC_GET_64(tx_tlv, MACTX_PHY_DESC, STBC);
 		is_triggered = HAL_TX_DESC_GET_64(tx_tlv, MACTX_PHY_DESC,
 						  TRIGGERED);
 		if (!is_triggered) {
-			nss = HAL_TX_DESC_GET_64(tx_tlv, MACTX_PHY_DESC,
-						 HEAVY_CLIP_NSS);
 			bandwidth = HAL_TX_DESC_GET_64(tx_tlv, MACTX_PHY_DESC,
 						       BANDWIDTH);
 		} else {
-			nss = HAL_TX_DESC_GET_64(tx_tlv, MACTX_PHY_DESC, NSS);
 			/*
 			 * is_triggered, bw is minimum of AP pkt bw
 			 * or STA bw
 			 */
 			bandwidth = HAL_TX_DESC_GET_64(tx_tlv, MACTX_PHY_DESC,
 						       AP_PKT_BW);
-			if (pkt_type == TXMON_PKT_TYPE_11AX ||
-			    pkt_type == TXMON_PKT_TYPE_11BE)
-				ru_start =
-					HAL_TX_DESC_GET_64(tx_tlv,
-							   MACTX_PHY_DESC,
-							   RU_SIZE_UPDATED_V2);
 		}
 
 		gi = HAL_TX_DESC_GET_64(tx_tlv, MACTX_PHY_DESC,
@@ -2392,11 +2684,8 @@ hal_txmon_status_parse_tlv_generic_be(void *data_ppdu_info,
 		he_ppdu_subtype = HAL_TX_DESC_GET_64(tx_tlv, MACTX_PHY_DESC,
 						     HE_PPDU_SUBTYPE);
 
-		TXMON_HAL_STATUS(ppdu_info, beamformed) = bf_type;
 		TXMON_HAL_STATUS(ppdu_info, preamble_type) = pkt_type;
-		TXMON_HAL_STATUS(ppdu_info, mcs) = mcs;
 		TXMON_HAL_STATUS(ppdu_info, ltf_size) = ltf_size;
-		TXMON_HAL_STATUS(ppdu_info, nss) = nss;
 		TXMON_HAL_STATUS(ppdu_info, is_stbc) = is_stbc;
 		TXMON_HAL_STATUS(ppdu_info, bw) = bandwidth;
 
@@ -2440,22 +2729,6 @@ hal_txmon_status_parse_tlv_generic_be(void *data_ppdu_info,
 			break;
 		};
 
-		/* BEAM CHANGE */
-		he_data1 |= QDF_MON_STATUS_HE_BEAM_CHANGE_KNOWN;
-		if (ppdu_info->rx_status.beamformed) {
-			he_data1 |= QDF_MON_STATUS_TXBF_KNOWN;
-			he_data5 |= (1 << QDF_MON_STATUS_TXBF_SHIFT);
-			he_data3 |= (1 << QDF_MON_STATUS_BEAM_CHANGE_SHIFT);
-		}
-
-		/* UL/DL known */
-		he_data1 |= QDF_MON_STATUS_HE_DL_UL_KNOWN;
-		he_data3 |= (1 << QDF_MON_STATUS_DL_UL_SHIFT);
-
-		/* MCS */
-		he_data1 |= QDF_MON_STATUS_HE_MCS_KNOWN;
-		he_data3 |= (mcs << QDF_MON_STATUS_TRANSMIT_MCS_SHIFT);
-
 		/* STBC */
 		he_data1 |= QDF_MON_STATUS_HE_STBC_KNOWN;
 		he_data3 |= (is_stbc << QDF_MON_STATUS_STBC_SHIFT);
@@ -2464,30 +2737,26 @@ hal_txmon_status_parse_tlv_generic_be(void *data_ppdu_info,
 		he_data2 |= QDF_MON_STATUS_HE_GI_KNOWN;
 		he_data5 |= (gi << QDF_MON_STATUS_GI_SHIFT);
 
-		/* NSS */
-		he_data6 |= (nss << QDF_MON_STATUS_HE_DATA_6_NSS_SHIFT);
-
 		/* Data BW and RU allocation */
 		he_data1 |= QDF_MON_STATUS_HE_DATA_BW_RU_KNOWN;
-		he_data5 |= bandwidth;
+		he_data5 = (he_data5 & 0xFFF0) | bandwidth;
 
-		/* update stack variable to ppdu_info */
-		TXMON_HAL_STATUS(ppdu_info, he_data1) |= he_data1;
-		TXMON_HAL_STATUS(ppdu_info, he_data2) |= he_data2;
-		TXMON_HAL_STATUS(ppdu_info, he_data3) |= he_data3;
-		TXMON_HAL_STATUS(ppdu_info, he_data4) |= he_data4;
-		TXMON_HAL_STATUS(ppdu_info, he_data5) |= he_data5;
-		TXMON_HAL_STATUS(ppdu_info, he_data6) |= he_data6;
+		he_data2 |= QDF_MON_STATUS_LTF_SYMBOLS_KNOWN;
+		he_data5 |= ((1 + ltf_size) <<
+			     QDF_MON_STATUS_HE_LTF_SIZE_SHIFT);
 
-		for (i = 0; i < TXMON_HAL(ppdu_info, num_users); i++) {
-			TXMON_HAL_USER(ppdu_info, i, he_data1) |= he_data1;
-			TXMON_HAL_USER(ppdu_info, i, he_data2) |= he_data2;
-			TXMON_HAL_USER(ppdu_info, i, he_data3) |= he_data3;
-			TXMON_HAL_USER(ppdu_info, i, he_data4) |= he_data4;
-			TXMON_HAL_USER(ppdu_info, i, he_data5) |= he_data5;
-			TXMON_HAL_USER(ppdu_info, i, he_data6) |= he_data6;
-			TXMON_HAL_USER(ppdu_info, i, he_flags1) = he_mu_flag_1;
-			TXMON_HAL_USER(ppdu_info, i, he_flags2) = he_mu_flag_2;
+		TXMON_HAL_STATUS(ppdu_info,
+				 he_mu_flags) = IS_MULTI_USERS(num_users);
+		/* MAC TX PHY DESC is not a user tlv */
+		for (i = 0; i < num_users; i++) {
+			TXMON_HAL_USER(ppdu_info, i, he_data1) = he_data1;
+			TXMON_HAL_USER(ppdu_info, i, he_data2) = he_data2;
+			TXMON_HAL_USER(ppdu_info, i, he_data3) = he_data3;
+			TXMON_HAL_USER(ppdu_info, i, he_data5) = he_data5;
+
+			/* HE MU flags */
+			TXMON_HAL_USER(ppdu_info, i, he_flags1) |= he_mu_flag_1;
+			TXMON_HAL_USER(ppdu_info, i, he_flags2) |= he_mu_flag_2;
 		}
 
 		SHOW_DEFINED(WIFIMACTX_PHY_DESC_E);
@@ -2551,6 +2820,11 @@ hal_txmon_status_parse_tlv_generic_be(void *data_ppdu_info,
 	case WIFITRIGGER_RESPONSE_TX_DONE_E:
 	{
 		SHOW_DEFINED(WIFITRIGGER_RESPONSE_TX_DONE_E);
+		break;
+	}
+	case WIFIFW2SW_MON_E:
+	{
+		SHOW_DEFINED(WIFIFW2SW_MON_E);
 		break;
 	}
 	}
@@ -2677,17 +2951,21 @@ static void hal_reo_shared_qaddr_setup_be(hal_soc_handle_t hal_soc_hdl)
  * write start addr of MLO and Non MLO table in HW
  *
  * @hal_soc: HAL Soc handle
+ * @qref_reset: reset qref LUT
  *
  * Return: None
  */
-static void hal_reo_shared_qaddr_init_be(hal_soc_handle_t hal_soc_hdl)
+static void hal_reo_shared_qaddr_init_be(hal_soc_handle_t hal_soc_hdl,
+					 int qref_reset)
 {
 	struct hal_soc *hal = (struct hal_soc *)hal_soc_hdl;
 
-	qdf_mem_zero(hal->reo_qref.mlo_reo_qref_table_vaddr,
-		     REO_QUEUE_REF_ML_TABLE_SIZE);
-	qdf_mem_zero(hal->reo_qref.non_mlo_reo_qref_table_vaddr,
-		     REO_QUEUE_REF_NON_ML_TABLE_SIZE);
+	if (qref_reset) {
+		qdf_mem_zero(hal->reo_qref.mlo_reo_qref_table_vaddr,
+			     REO_QUEUE_REF_ML_TABLE_SIZE);
+		qdf_mem_zero(hal->reo_qref.non_mlo_reo_qref_table_vaddr,
+			     REO_QUEUE_REF_NON_ML_TABLE_SIZE);
+	}
 	/* LUT_BASE0 and BASE1 registers expect upper 32bits of LUT base address
 	 * and lower 8 bits to be 0. Shift the physical address by 8 to plug
 	 * upper 32bits only
@@ -2737,4 +3015,593 @@ static void hal_reo_shared_qaddr_detach_be(hal_soc_handle_t hal_soc_hdl)
 				hal->reo_qref.non_mlo_reo_qref_table_paddr, 0);
 }
 #endif
+
+/**
+ * hal_tx_vdev_mismatch_routing_set - set vdev mismatch exception routing
+ * @hal_soc: HAL SoC context
+ * @config: HAL_TX_VDEV_MISMATCH_TQM_NOTIFY - route via TQM
+ *          HAL_TX_VDEV_MISMATCH_FW_NOTIFY - route via FW
+ *
+ * Return: void
+ */
+#ifdef HWIO_TCL_R0_CMN_CONFIG_VDEVID_MISMATCH_EXCEPTION_BMSK
+static inline void
+hal_tx_vdev_mismatch_routing_set_generic_be(hal_soc_handle_t hal_soc_hdl,
+					    enum hal_tx_vdev_mismatch_notify
+					    config)
+{
+	struct hal_soc *hal_soc = (struct hal_soc *)hal_soc_hdl;
+	uint32_t reg_addr, reg_val = 0;
+	uint32_t val = 0;
+
+	reg_addr = HWIO_TCL_R0_CMN_CONFIG_ADDR(MAC_TCL_REG_REG_BASE);
+
+	val = HAL_REG_READ(hal_soc, reg_addr);
+
+	/* reset the corresponding bits in register */
+	val &= (~(HWIO_TCL_R0_CMN_CONFIG_VDEVID_MISMATCH_EXCEPTION_BMSK));
+
+	/* set config value */
+	reg_val = val | (config <<
+			HWIO_TCL_R0_CMN_CONFIG_VDEVID_MISMATCH_EXCEPTION_SHFT);
+
+	HAL_REG_WRITE(hal_soc, reg_addr, reg_val);
+}
+#else
+static inline void
+hal_tx_vdev_mismatch_routing_set_generic_be(hal_soc_handle_t hal_soc_hdl,
+					    enum hal_tx_vdev_mismatch_notify
+					    config)
+{
+}
+#endif
+
+/**
+ * hal_tx_mcast_mlo_reinject_routing_set - set MLO multicast reinject routing
+ * @hal_soc: HAL SoC context
+ * @config: HAL_TX_MCAST_MLO_REINJECT_FW_NOTIFY - route via FW
+ *          HAL_TX_MCAST_MLO_REINJECT_TQM_NOTIFY - route via TQM
+ *
+ * Return: void
+ */
+#if defined(HWIO_TCL_R0_CMN_CONFIG_MCAST_CMN_PN_SN_MLO_REINJECT_ENABLE_BMSK) && \
+	defined(WLAN_MCAST_MLO)
+static inline void
+hal_tx_mcast_mlo_reinject_routing_set_generic_be(
+				hal_soc_handle_t hal_soc_hdl,
+				enum hal_tx_mcast_mlo_reinject_notify config)
+{
+	struct hal_soc *hal_soc = (struct hal_soc *)hal_soc_hdl;
+	uint32_t reg_addr, reg_val = 0;
+	uint32_t val = 0;
+
+	reg_addr = HWIO_TCL_R0_CMN_CONFIG_ADDR(MAC_TCL_REG_REG_BASE);
+	val = HAL_REG_READ(hal_soc, reg_addr);
+
+	/* reset the corresponding bits in register */
+	val &= (~(HWIO_TCL_R0_CMN_CONFIG_MCAST_CMN_PN_SN_MLO_REINJECT_ENABLE_BMSK));
+
+	/* set config value */
+	reg_val = val | (config << HWIO_TCL_R0_CMN_CONFIG_MCAST_CMN_PN_SN_MLO_REINJECT_ENABLE_SHFT);
+
+	HAL_REG_WRITE(hal_soc, reg_addr, reg_val);
+}
+#else
+static inline void
+hal_tx_mcast_mlo_reinject_routing_set_generic_be(
+				hal_soc_handle_t hal_soc_hdl,
+				enum hal_tx_mcast_mlo_reinject_notify config)
+{
+}
+#endif
+
+/**
+ * hal_get_ba_aging_timeout_be - Get BA Aging timeout
+ *
+ * @hal_soc: Opaque HAL SOC handle
+ * @ac: Access category
+ * @value: window size to get
+ */
+
+static inline
+void hal_get_ba_aging_timeout_be_generic(hal_soc_handle_t hal_soc_hdl,
+					 uint8_t ac, uint32_t *value)
+{
+	struct hal_soc *soc = (struct hal_soc *)hal_soc_hdl;
+
+	switch (ac) {
+	case WME_AC_BE:
+		*value = HAL_REG_READ(soc,
+				      HWIO_REO_R0_AGING_THRESHOLD_IX_0_ADDR(
+				      REO_REG_REG_BASE)) / 1000;
+		break;
+	case WME_AC_BK:
+		*value = HAL_REG_READ(soc,
+				      HWIO_REO_R0_AGING_THRESHOLD_IX_1_ADDR(
+				      REO_REG_REG_BASE)) / 1000;
+		break;
+	case WME_AC_VI:
+		*value = HAL_REG_READ(soc,
+				      HWIO_REO_R0_AGING_THRESHOLD_IX_2_ADDR(
+				      REO_REG_REG_BASE)) / 1000;
+		break;
+	case WME_AC_VO:
+		*value = HAL_REG_READ(soc,
+				      HWIO_REO_R0_AGING_THRESHOLD_IX_3_ADDR(
+				      REO_REG_REG_BASE)) / 1000;
+		break;
+	default:
+		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_ERROR,
+			  "Invalid AC: %d\n", ac);
+	}
+}
+
+/**
+ * hal_setup_link_idle_list_generic_be - Setup scattered idle list using the
+ * buffer list provided
+ *
+ * @hal_soc: Opaque HAL SOC handle
+ * @scatter_bufs_base_paddr: Array of physical base addresses
+ * @scatter_bufs_base_vaddr: Array of virtual base addresses
+ * @num_scatter_bufs: Number of scatter buffers in the above lists
+ * @scatter_buf_size: Size of each scatter buffer
+ * @last_buf_end_offset: Offset to the last entry
+ * @num_entries: Total entries of all scatter bufs
+ *
+ * Return: None
+ */
+static inline void
+hal_setup_link_idle_list_generic_be(struct hal_soc *soc,
+				    qdf_dma_addr_t scatter_bufs_base_paddr[],
+				    void *scatter_bufs_base_vaddr[],
+				    uint32_t num_scatter_bufs,
+				    uint32_t scatter_buf_size,
+				    uint32_t last_buf_end_offset,
+				    uint32_t num_entries)
+{
+	int i;
+	uint32_t *prev_buf_link_ptr = NULL;
+	uint32_t reg_scatter_buf_size, reg_tot_scatter_buf_size;
+	uint32_t val;
+
+	/* Link the scatter buffers */
+	for (i = 0; i < num_scatter_bufs; i++) {
+		if (i > 0) {
+			prev_buf_link_ptr[0] =
+				scatter_bufs_base_paddr[i] & 0xffffffff;
+			prev_buf_link_ptr[1] = HAL_SM(
+				HWIO_WBM_R0_SCATTERED_LINK_DESC_LIST_BASE_MSB,
+				BASE_ADDRESS_39_32,
+				((uint64_t)(scatter_bufs_base_paddr[i])
+				 >> 32)) | HAL_SM(
+				HWIO_WBM_R0_SCATTERED_LINK_DESC_LIST_BASE_MSB,
+				ADDRESS_MATCH_TAG,
+				ADDRESS_MATCH_TAG_VAL);
+		}
+		prev_buf_link_ptr = (uint32_t *)(scatter_bufs_base_vaddr[i] +
+			scatter_buf_size - WBM_IDLE_SCATTER_BUF_NEXT_PTR_SIZE);
+	}
+
+	/* TBD: Register programming partly based on MLD & the rest based on
+	 * inputs from HW team. Not complete yet.
+	 */
+
+	reg_scatter_buf_size = (scatter_buf_size -
+				WBM_IDLE_SCATTER_BUF_NEXT_PTR_SIZE) / 64;
+	reg_tot_scatter_buf_size = ((scatter_buf_size -
+		WBM_IDLE_SCATTER_BUF_NEXT_PTR_SIZE) * num_scatter_bufs) / 64;
+
+	HAL_REG_WRITE(soc,
+		HWIO_WBM_R0_IDLE_LIST_CONTROL_ADDR(
+		WBM_REG_REG_BASE),
+		HAL_SM(HWIO_WBM_R0_IDLE_LIST_CONTROL, SCATTER_BUFFER_SIZE,
+		reg_scatter_buf_size) |
+		HAL_SM(HWIO_WBM_R0_IDLE_LIST_CONTROL, LINK_DESC_IDLE_LIST_MODE,
+		0x1));
+
+	HAL_REG_WRITE(soc,
+		HWIO_WBM_R0_IDLE_LIST_SIZE_ADDR(
+		WBM_REG_REG_BASE),
+		HAL_SM(HWIO_WBM_R0_IDLE_LIST_SIZE,
+		SCATTER_RING_SIZE_OF_IDLE_LINK_DESC_LIST,
+		reg_tot_scatter_buf_size));
+
+	HAL_REG_WRITE(soc,
+		HWIO_WBM_R0_SCATTERED_LINK_DESC_LIST_BASE_LSB_ADDR(
+		WBM_REG_REG_BASE),
+		scatter_bufs_base_paddr[0] & 0xffffffff);
+
+	HAL_REG_WRITE(soc,
+		HWIO_WBM_R0_SCATTERED_LINK_DESC_LIST_BASE_MSB_ADDR(
+		WBM_REG_REG_BASE),
+		((uint64_t)(scatter_bufs_base_paddr[0]) >> 32) &
+		HWIO_WBM_R0_SCATTERED_LINK_DESC_LIST_BASE_MSB_BASE_ADDRESS_39_32_BMSK);
+
+	HAL_REG_WRITE(soc,
+		HWIO_WBM_R0_SCATTERED_LINK_DESC_LIST_BASE_MSB_ADDR(
+		WBM_REG_REG_BASE),
+		HAL_SM(HWIO_WBM_R0_SCATTERED_LINK_DESC_LIST_BASE_MSB,
+		BASE_ADDRESS_39_32, ((uint64_t)(scatter_bufs_base_paddr[0])
+								>> 32)) |
+		HAL_SM(HWIO_WBM_R0_SCATTERED_LINK_DESC_LIST_BASE_MSB,
+		ADDRESS_MATCH_TAG, ADDRESS_MATCH_TAG_VAL));
+
+	/* ADDRESS_MATCH_TAG field in the above register is expected to match
+	 * with the upper bits of link pointer. The above write sets this field
+	 * to zero and we are also setting the upper bits of link pointers to
+	 * zero while setting up the link list of scatter buffers above
+	 */
+
+	/* Setup head and tail pointers for the idle list */
+	HAL_REG_WRITE(soc,
+		HWIO_WBM_R0_SCATTERED_LINK_DESC_PTR_HEAD_INFO_IX0_ADDR(
+		WBM_REG_REG_BASE),
+		scatter_bufs_base_paddr[num_scatter_bufs - 1] & 0xffffffff);
+	HAL_REG_WRITE(soc,
+		HWIO_WBM_R0_SCATTERED_LINK_DESC_PTR_HEAD_INFO_IX1_ADDR(
+		WBM_REG_REG_BASE),
+		HAL_SM(HWIO_WBM_R0_SCATTERED_LINK_DESC_PTR_HEAD_INFO_IX1,
+		BUFFER_ADDRESS_39_32,
+		((uint64_t)(scatter_bufs_base_paddr[num_scatter_bufs - 1])
+								>> 32)) |
+		HAL_SM(HWIO_WBM_R0_SCATTERED_LINK_DESC_PTR_HEAD_INFO_IX1,
+		HEAD_POINTER_OFFSET, last_buf_end_offset >> 2));
+
+	HAL_REG_WRITE(soc,
+		HWIO_WBM_R0_SCATTERED_LINK_DESC_PTR_HEAD_INFO_IX0_ADDR(
+		WBM_REG_REG_BASE),
+		scatter_bufs_base_paddr[0] & 0xffffffff);
+
+	HAL_REG_WRITE(soc,
+		HWIO_WBM_R0_SCATTERED_LINK_DESC_PTR_TAIL_INFO_IX0_ADDR(
+		WBM_REG_REG_BASE),
+		scatter_bufs_base_paddr[0] & 0xffffffff);
+	HAL_REG_WRITE(soc,
+		HWIO_WBM_R0_SCATTERED_LINK_DESC_PTR_TAIL_INFO_IX1_ADDR(
+		WBM_REG_REG_BASE),
+		HAL_SM(HWIO_WBM_R0_SCATTERED_LINK_DESC_PTR_TAIL_INFO_IX1,
+		BUFFER_ADDRESS_39_32,
+		((uint64_t)(scatter_bufs_base_paddr[0]) >>
+		32)) | HAL_SM(HWIO_WBM_R0_SCATTERED_LINK_DESC_PTR_TAIL_INFO_IX1,
+		TAIL_POINTER_OFFSET, 0));
+
+	HAL_REG_WRITE(soc,
+		HWIO_WBM_R0_SCATTERED_LINK_DESC_PTR_HP_ADDR(
+		WBM_REG_REG_BASE),
+		2 * num_entries);
+
+	/* Set RING_ID_DISABLE */
+	val = HAL_SM(HWIO_WBM_R0_WBM_IDLE_LINK_RING_MISC, RING_ID_DISABLE, 1);
+
+	/*
+	 * SRNG_ENABLE bit is not available in HWK v1 (QCA8074v1). Hence
+	 * check the presence of the bit before toggling it.
+	 */
+#ifdef HWIO_WBM_R0_WBM_IDLE_LINK_RING_MISC_SRNG_ENABLE_BMSK
+	val |= HAL_SM(HWIO_WBM_R0_WBM_IDLE_LINK_RING_MISC, SRNG_ENABLE, 1);
+#endif
+	HAL_REG_WRITE(soc,
+		      HWIO_WBM_R0_WBM_IDLE_LINK_RING_MISC_ADDR(WBM_REG_REG_BASE),
+		      val);
+}
+
+#ifdef DP_HW_COOKIE_CONVERT_EXCEPTION
+#define HAL_WBM_MISC_CONTROL_SPARE_CONTROL_FIELD_BIT15 0x8000
+#endif
+
+/**
+ * hal_cookie_conversion_reg_cfg_generic_be() - set cookie conversion relevant register
+ *					for REO/WBM
+ * @soc: HAL soc handle
+ * @cc_cfg: structure pointer for HW cookie conversion configuration
+ *
+ * Return: None
+ */
+static inline
+void hal_cookie_conversion_reg_cfg_generic_be(hal_soc_handle_t hal_soc_hdl,
+					      struct hal_hw_cc_config *cc_cfg)
+{
+	uint32_t reg_addr, reg_val = 0;
+	struct hal_soc *soc = (struct hal_soc *)hal_soc_hdl;
+
+	/* REO CFG */
+	reg_addr = HWIO_REO_R0_SW_COOKIE_CFG0_ADDR(REO_REG_REG_BASE);
+	reg_val = cc_cfg->lut_base_addr_31_0;
+	HAL_REG_WRITE(soc, reg_addr, reg_val);
+
+	reg_addr = HWIO_REO_R0_SW_COOKIE_CFG1_ADDR(REO_REG_REG_BASE);
+	reg_val = 0;
+	reg_val |= HAL_SM(HWIO_REO_R0_SW_COOKIE_CFG1,
+			  SW_COOKIE_CONVERT_GLOBAL_ENABLE,
+			  cc_cfg->cc_global_en);
+	reg_val |= HAL_SM(HWIO_REO_R0_SW_COOKIE_CFG1,
+			  SW_COOKIE_CONVERT_ENABLE,
+			  cc_cfg->cc_global_en);
+	reg_val |= HAL_SM(HWIO_REO_R0_SW_COOKIE_CFG1,
+			  PAGE_ALIGNMENT,
+			  cc_cfg->page_4k_align);
+	reg_val |= HAL_SM(HWIO_REO_R0_SW_COOKIE_CFG1,
+			  COOKIE_OFFSET_MSB,
+			  cc_cfg->cookie_offset_msb);
+	reg_val |= HAL_SM(HWIO_REO_R0_SW_COOKIE_CFG1,
+			  COOKIE_PAGE_MSB,
+			  cc_cfg->cookie_page_msb);
+	reg_val |= HAL_SM(HWIO_REO_R0_SW_COOKIE_CFG1,
+			  CMEM_LUT_BASE_ADDR_39_32,
+			  cc_cfg->lut_base_addr_39_32);
+	HAL_REG_WRITE(soc, reg_addr, reg_val);
+
+	/* WBM CFG */
+	reg_addr = HWIO_WBM_R0_SW_COOKIE_CFG0_ADDR(WBM_REG_REG_BASE);
+	reg_val = cc_cfg->lut_base_addr_31_0;
+	HAL_REG_WRITE(soc, reg_addr, reg_val);
+
+	reg_addr = HWIO_WBM_R0_SW_COOKIE_CFG1_ADDR(WBM_REG_REG_BASE);
+	reg_val = 0;
+	reg_val |= HAL_SM(HWIO_WBM_R0_SW_COOKIE_CFG1,
+			  PAGE_ALIGNMENT,
+			  cc_cfg->page_4k_align);
+	reg_val |= HAL_SM(HWIO_WBM_R0_SW_COOKIE_CFG1,
+			  COOKIE_OFFSET_MSB,
+			  cc_cfg->cookie_offset_msb);
+	reg_val |= HAL_SM(HWIO_WBM_R0_SW_COOKIE_CFG1,
+			  COOKIE_PAGE_MSB,
+			  cc_cfg->cookie_page_msb);
+	reg_val |= HAL_SM(HWIO_WBM_R0_SW_COOKIE_CFG1,
+			  CMEM_LUT_BASE_ADDR_39_32,
+			  cc_cfg->lut_base_addr_39_32);
+	HAL_REG_WRITE(soc, reg_addr, reg_val);
+
+	/*
+	 * WCSS_UMAC_WBM_R0_SW_COOKIE_CONVERT_CFG default value is 0x1FE,
+	 */
+	reg_addr = HWIO_WBM_R0_SW_COOKIE_CONVERT_CFG_ADDR(WBM_REG_REG_BASE);
+	reg_val = 0;
+	reg_val |= HAL_SM(HWIO_WBM_R0_SW_COOKIE_CONVERT_CFG,
+			  WBM_COOKIE_CONV_GLOBAL_ENABLE,
+			  cc_cfg->cc_global_en);
+	reg_val |= HAL_SM(HWIO_WBM_R0_SW_COOKIE_CONVERT_CFG,
+			  WBM2SW6_COOKIE_CONVERSION_EN,
+			  cc_cfg->wbm2sw6_cc_en);
+	reg_val |= HAL_SM(HWIO_WBM_R0_SW_COOKIE_CONVERT_CFG,
+			  WBM2SW5_COOKIE_CONVERSION_EN,
+			  cc_cfg->wbm2sw5_cc_en);
+	reg_val |= HAL_SM(HWIO_WBM_R0_SW_COOKIE_CONVERT_CFG,
+			  WBM2SW4_COOKIE_CONVERSION_EN,
+			  cc_cfg->wbm2sw4_cc_en);
+	reg_val |= HAL_SM(HWIO_WBM_R0_SW_COOKIE_CONVERT_CFG,
+			  WBM2SW3_COOKIE_CONVERSION_EN,
+			  cc_cfg->wbm2sw3_cc_en);
+	reg_val |= HAL_SM(HWIO_WBM_R0_SW_COOKIE_CONVERT_CFG,
+			  WBM2SW2_COOKIE_CONVERSION_EN,
+			  cc_cfg->wbm2sw2_cc_en);
+	reg_val |= HAL_SM(HWIO_WBM_R0_SW_COOKIE_CONVERT_CFG,
+			  WBM2SW1_COOKIE_CONVERSION_EN,
+			  cc_cfg->wbm2sw1_cc_en);
+	reg_val |= HAL_SM(HWIO_WBM_R0_SW_COOKIE_CONVERT_CFG,
+			  WBM2SW0_COOKIE_CONVERSION_EN,
+			  cc_cfg->wbm2sw0_cc_en);
+	reg_val |= HAL_SM(HWIO_WBM_R0_SW_COOKIE_CONVERT_CFG,
+			  WBM2FW_COOKIE_CONVERSION_EN,
+			  cc_cfg->wbm2fw_cc_en);
+	HAL_REG_WRITE(soc, reg_addr, reg_val);
+
+#ifdef HWIO_WBM_R0_WBM_CFG_2_COOKIE_DEBUG_SEL_BMSK
+	reg_addr = HWIO_WBM_R0_WBM_CFG_2_ADDR(WBM_REG_REG_BASE);
+	reg_val = 0;
+	reg_val |= HAL_SM(HWIO_WBM_R0_WBM_CFG_2,
+			  COOKIE_DEBUG_SEL,
+			  cc_cfg->cc_global_en);
+
+	reg_val |= HAL_SM(HWIO_WBM_R0_WBM_CFG_2,
+			  COOKIE_CONV_INDICATION_EN,
+			  cc_cfg->cc_global_en);
+
+	reg_val |= HAL_SM(HWIO_WBM_R0_WBM_CFG_2,
+			  ERROR_PATH_COOKIE_CONV_EN,
+			  cc_cfg->error_path_cookie_conv_en);
+
+	reg_val |= HAL_SM(HWIO_WBM_R0_WBM_CFG_2,
+			  RELEASE_PATH_COOKIE_CONV_EN,
+			  cc_cfg->release_path_cookie_conv_en);
+
+	HAL_REG_WRITE(soc, reg_addr, reg_val);
+#endif
+#ifdef DP_HW_COOKIE_CONVERT_EXCEPTION
+	/*
+	 * To enable indication for HW cookie conversion done or not for
+	 * WBM, WCSS_UMAC_WBM_R0_MISC_CONTROL spare_control field 15th
+	 * bit spare_control[15] should be set.
+	 */
+	reg_addr = HWIO_WBM_R0_MISC_CONTROL_ADDR(WBM_REG_REG_BASE);
+	reg_val = HAL_REG_READ(soc, reg_addr);
+	reg_val |= HAL_SM(HWIO_WCSS_UMAC_WBM_R0_MISC_CONTROL,
+			  SPARE_CONTROL,
+			  HAL_WBM_MISC_CONTROL_SPARE_CONTROL_FIELD_BIT15);
+	HAL_REG_WRITE(soc, reg_addr, reg_val);
+#endif
+}
+
+/**
+ * hal_set_ba_aging_timeout_be - Set BA Aging timeout
+ *
+ * @hal_soc: Opaque HAL SOC handle
+ * @ac: Access category
+ * ac: 0 - Background, 1 - Best Effort, 2 - Video, 3 - Voice
+ * @value: Input value to set
+ */
+static inline
+void hal_set_ba_aging_timeout_be_generic(hal_soc_handle_t hal_soc_hdl,
+					 uint8_t ac, uint32_t value)
+{
+	struct hal_soc *soc = (struct hal_soc *)hal_soc_hdl;
+
+	switch (ac) {
+	case WME_AC_BE:
+		HAL_REG_WRITE(soc,
+			      HWIO_REO_R0_AGING_THRESHOLD_IX_0_ADDR(
+			      REO_REG_REG_BASE),
+			      value * 1000);
+		break;
+	case WME_AC_BK:
+		HAL_REG_WRITE(soc,
+			      HWIO_REO_R0_AGING_THRESHOLD_IX_1_ADDR(
+			      REO_REG_REG_BASE),
+			      value * 1000);
+		break;
+	case WME_AC_VI:
+		HAL_REG_WRITE(soc,
+			      HWIO_REO_R0_AGING_THRESHOLD_IX_2_ADDR(
+			      REO_REG_REG_BASE),
+			      value * 1000);
+		break;
+	case WME_AC_VO:
+		HAL_REG_WRITE(soc,
+			      HWIO_REO_R0_AGING_THRESHOLD_IX_3_ADDR(
+			      REO_REG_REG_BASE),
+			      value * 1000);
+		break;
+	default:
+		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_ERROR,
+			  "Invalid AC: %d\n", ac);
+	}
+}
+
+/**
+ * hal_tx_populate_bank_register() - populate the bank register with
+ *		the software configs.
+ * @soc: HAL soc handle
+ * @config: bank config
+ * @bank_id: bank id to be configured
+ *
+ * Returns: None
+ */
+#ifdef HWIO_TCL_R0_SW_CONFIG_BANK_n_MCAST_PACKET_CTRL_SHFT
+static inline void
+hal_tx_populate_bank_register_be(hal_soc_handle_t hal_soc_hdl,
+				 union hal_tx_bank_config *config,
+				 uint8_t bank_id)
+{
+	struct hal_soc *hal_soc = (struct hal_soc *)hal_soc_hdl;
+	uint32_t reg_addr, reg_val = 0;
+
+	reg_addr = HWIO_TCL_R0_SW_CONFIG_BANK_n_ADDR(MAC_TCL_REG_REG_BASE,
+						     bank_id);
+
+	reg_val |= (config->epd << HWIO_TCL_R0_SW_CONFIG_BANK_n_EPD_SHFT);
+	reg_val |= (config->encap_type <<
+			HWIO_TCL_R0_SW_CONFIG_BANK_n_ENCAP_TYPE_SHFT);
+	reg_val |= (config->encrypt_type <<
+			HWIO_TCL_R0_SW_CONFIG_BANK_n_ENCRYPT_TYPE_SHFT);
+	reg_val |= (config->src_buffer_swap <<
+			HWIO_TCL_R0_SW_CONFIG_BANK_n_SRC_BUFFER_SWAP_SHFT);
+	reg_val |= (config->link_meta_swap <<
+			HWIO_TCL_R0_SW_CONFIG_BANK_n_LINK_META_SWAP_SHFT);
+	reg_val |= (config->index_lookup_enable <<
+			HWIO_TCL_R0_SW_CONFIG_BANK_n_INDEX_LOOKUP_ENABLE_SHFT);
+	reg_val |= (config->addrx_en <<
+			HWIO_TCL_R0_SW_CONFIG_BANK_n_ADDRX_EN_SHFT);
+	reg_val |= (config->addry_en <<
+			HWIO_TCL_R0_SW_CONFIG_BANK_n_ADDRY_EN_SHFT);
+	reg_val |= (config->mesh_enable <<
+			HWIO_TCL_R0_SW_CONFIG_BANK_n_MESH_ENABLE_SHFT);
+	reg_val |= (config->vdev_id_check_en <<
+			HWIO_TCL_R0_SW_CONFIG_BANK_n_VDEV_ID_CHECK_EN_SHFT);
+	reg_val |= (config->pmac_id <<
+			HWIO_TCL_R0_SW_CONFIG_BANK_n_PMAC_ID_SHFT);
+	reg_val |= (config->mcast_pkt_ctrl <<
+			HWIO_TCL_R0_SW_CONFIG_BANK_n_MCAST_PACKET_CTRL_SHFT);
+
+	HAL_REG_WRITE(hal_soc, reg_addr, reg_val);
+}
+#else
+static inline void
+hal_tx_populate_bank_register_be(hal_soc_handle_t hal_soc_hdl,
+				 union hal_tx_bank_config *config,
+				 uint8_t bank_id)
+{
+	struct hal_soc *hal_soc = (struct hal_soc *)hal_soc_hdl;
+	uint32_t reg_addr, reg_val = 0;
+
+	reg_addr = HWIO_TCL_R0_SW_CONFIG_BANK_n_ADDR(MAC_TCL_REG_REG_BASE,
+						     bank_id);
+
+	reg_val |= (config->epd << HWIO_TCL_R0_SW_CONFIG_BANK_n_EPD_SHFT);
+	reg_val |= (config->encap_type <<
+			HWIO_TCL_R0_SW_CONFIG_BANK_n_ENCAP_TYPE_SHFT);
+	reg_val |= (config->encrypt_type <<
+			HWIO_TCL_R0_SW_CONFIG_BANK_n_ENCRYPT_TYPE_SHFT);
+	reg_val |= (config->src_buffer_swap <<
+			HWIO_TCL_R0_SW_CONFIG_BANK_n_SRC_BUFFER_SWAP_SHFT);
+	reg_val |= (config->link_meta_swap <<
+			HWIO_TCL_R0_SW_CONFIG_BANK_n_LINK_META_SWAP_SHFT);
+	reg_val |= (config->index_lookup_enable <<
+			HWIO_TCL_R0_SW_CONFIG_BANK_n_INDEX_LOOKUP_ENABLE_SHFT);
+	reg_val |= (config->addrx_en <<
+			HWIO_TCL_R0_SW_CONFIG_BANK_n_ADDRX_EN_SHFT);
+	reg_val |= (config->addry_en <<
+			HWIO_TCL_R0_SW_CONFIG_BANK_n_ADDRY_EN_SHFT);
+	reg_val |= (config->mesh_enable <<
+			HWIO_TCL_R0_SW_CONFIG_BANK_n_MESH_ENABLE_SHFT);
+	reg_val |= (config->vdev_id_check_en <<
+			HWIO_TCL_R0_SW_CONFIG_BANK_n_VDEV_ID_CHECK_EN_SHFT);
+	reg_val |= (config->pmac_id <<
+			HWIO_TCL_R0_SW_CONFIG_BANK_n_PMAC_ID_SHFT);
+	reg_val |= (config->dscp_tid_map_id <<
+			HWIO_TCL_R0_SW_CONFIG_BANK_n_DSCP_TID_TABLE_NUM_SHFT);
+
+	HAL_REG_WRITE(hal_soc, reg_addr, reg_val);
+}
+#endif
+
+
+#ifdef HWIO_TCL_R0_VDEV_MCAST_PACKET_CTRL_MAP_n_VAL_SHFT
+
+#define HAL_TCL_VDEV_MCAST_PACKET_CTRL_REG_ID(vdev_id) (vdev_id >> 0x4)
+#define HAL_TCL_VDEV_MCAST_PACKET_CTRL_INDEX_IN_REG(vdev_id) (vdev_id & 0xF)
+#define HAL_TCL_VDEV_MCAST_PACKET_CTRL_MASK 0x3
+#define HAL_TCL_VDEV_MCAST_PACKET_CTRL_SHIFT 0x2
+
+/**
+ * hal_tx_vdev_mcast_ctrl_set - set mcast_ctrl value
+ * @hal_soc: HAL SoC context
+ * @mcast_ctrl_val: mcast ctrl value for this VAP
+ *
+ * Return: void
+ */
+static inline void
+hal_tx_vdev_mcast_ctrl_set_be(hal_soc_handle_t hal_soc_hdl,
+			      uint8_t vdev_id, uint8_t mcast_ctrl_val)
+{
+	struct hal_soc *hal_soc = (struct hal_soc *)hal_soc_hdl;
+	uint32_t reg_addr, reg_val = 0;
+	uint32_t val;
+	uint8_t reg_idx = HAL_TCL_VDEV_MCAST_PACKET_CTRL_REG_ID(vdev_id);
+	uint8_t index_in_reg =
+		HAL_TCL_VDEV_MCAST_PACKET_CTRL_INDEX_IN_REG(vdev_id);
+
+	reg_addr =
+	HWIO_TCL_R0_VDEV_MCAST_PACKET_CTRL_MAP_n_ADDR(MAC_TCL_REG_REG_BASE,
+						      reg_idx);
+
+	val = HAL_REG_READ(hal_soc, reg_addr);
+
+	/* mask out other stored value */
+	val &= (~(HAL_TCL_VDEV_MCAST_PACKET_CTRL_MASK <<
+		  (HAL_TCL_VDEV_MCAST_PACKET_CTRL_SHIFT * index_in_reg)));
+
+	reg_val = val |
+		((HAL_TCL_VDEV_MCAST_PACKET_CTRL_MASK & mcast_ctrl_val) <<
+		 (HAL_TCL_VDEV_MCAST_PACKET_CTRL_SHIFT * index_in_reg));
+
+	HAL_REG_WRITE(hal_soc, reg_addr, reg_val);
+}
+#else
+static inline void
+hal_tx_vdev_mcast_ctrl_set_be(hal_soc_handle_t hal_soc_hdl,
+			      uint8_t vdev_id, uint8_t mcast_ctrl_val)
+{
+}
+#endif
+
 #endif /* _HAL_BE_GENERIC_API_H_ */

@@ -115,6 +115,10 @@
 #include <target_if_mlo_mgr.h>
 #endif
 
+#ifdef WLAN_FEATURE_COAP
+#include <target_if_coap.h>
+#endif
+
 static struct target_if_ctx *g_target_if_ctx;
 
 struct target_if_ctx *target_if_get_ctx()
@@ -416,6 +420,34 @@ target_if_coex_tx_ops_register(struct wlan_lmac_if_tx_ops *tx_ops)
 }
 #endif
 
+#ifdef WLAN_FEATURE_DBAM_CONFIG
+static QDF_STATUS
+target_if_dbam_tx_ops_register(struct wlan_lmac_if_tx_ops *tx_ops)
+{
+	return target_if_dbam_register_tx_ops(tx_ops);
+}
+#else
+static inline QDF_STATUS
+target_if_dbam_tx_ops_register(struct wlan_lmac_if_tx_ops *tx_ops)
+{
+	return QDF_STATUS_SUCCESS;
+}
+#endif
+
+#ifdef WLAN_FEATURE_COAP
+static QDF_STATUS
+target_if_coap_tx_ops_register(struct wlan_lmac_if_tx_ops *tx_ops)
+{
+	return target_if_coap_register_tx_ops(tx_ops);
+}
+#else
+static inline QDF_STATUS
+target_if_coap_tx_ops_register(struct wlan_lmac_if_tx_ops *tx_ops)
+{
+	return QDF_STATUS_SUCCESS;
+}
+#endif
+
 static void target_if_target_tx_ops_register(
 		struct wlan_lmac_if_tx_ops *tx_ops)
 {
@@ -618,6 +650,10 @@ QDF_STATUS target_if_register_umac_tx_ops(struct wlan_lmac_if_tx_ops *tx_ops)
 	target_if_ipa_tx_ops_register(tx_ops);
 
 	target_if_twt_tx_ops_register(tx_ops);
+
+	target_if_dbam_tx_ops_register(tx_ops);
+
+	target_if_coap_tx_ops_register(tx_ops);
 
 	/* Converged UMAC components to register their TX-ops here */
 	return QDF_STATUS_SUCCESS;

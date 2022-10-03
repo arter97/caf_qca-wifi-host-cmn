@@ -225,6 +225,10 @@ void mlo_peer_assign_primary_umac(
 		struct wlan_mlo_peer_context *ml_peer,
 		struct wlan_mlo_link_peer_entry *peer_entry)
 {
+	struct wlan_mlo_link_peer_entry *peer_ent_iter;
+	uint8_t i;
+	uint8_t primary_umac_set = 0;
+
 	/* If MLD is within single SOC, then assoc link becomes
 	 * primary umac
 	 */
@@ -237,11 +241,40 @@ void mlo_peer_assign_primary_umac(
 			peer_entry->is_primary = false;
 		}
 	} else {
-		if (wlan_peer_get_psoc_id(peer_entry->link_peer) ==
-				ml_peer->primary_umac_psoc_id)
-			peer_entry->is_primary = true;
-		else
+		/* If this peer PSOC is not derived as Primary PSOC,
+		 * mark is_primary as false
+		 */
+		if (wlan_peer_get_psoc_id(peer_entry->link_peer) !=
+				ml_peer->primary_umac_psoc_id) {
 			peer_entry->is_primary = false;
+			return;
+		}
+
+		/* For single SOC, check whether is_primary is set for
+		 * other partner peer, then mark is_primary false for this peer
+		 */
+		for (i = 0; i < MAX_MLO_LINK_PEERS; i++) {
+			peer_ent_iter = &ml_peer->peer_list[i];
+
+			if (!peer_ent_iter->link_peer)
+				continue;
+
+			/* Check for other link peers */
+			if (peer_ent_iter == peer_entry)
+				continue;
+
+			if (wlan_peer_get_psoc_id(peer_ent_iter->link_peer) !=
+					ml_peer->primary_umac_psoc_id)
+				continue;
+
+			if (peer_ent_iter->is_primary)
+				primary_umac_set = 1;
+		}
+
+		if (primary_umac_set)
+			peer_entry->is_primary = false;
+		else
+			peer_entry->is_primary = true;
 	}
 }
 
@@ -394,6 +427,7 @@ QDF_STATUS mlo_peer_allocate_primary_umac(
 		if (!primary_umac_set)
 			ml_peer->primary_umac_psoc_id = first_link_id;
 
+		mlo_peer_assign_primary_umac(ml_peer, peer_entry);
 		mlo_info("MLD ID %d ML Peer " QDF_MAC_ADDR_FMT " primary umac soc %d ",
 			 ml_dev->mld_id,
 			 QDF_MAC_ADDR_REF(ml_peer->peer_mld_addr.bytes),

@@ -27,6 +27,13 @@
 #if !defined(__I_QDF_TRACE_H)
 #define __I_QDF_TRACE_H
 
+/* older kernels have a bug in kallsyms, so ensure module.h is included */
+#include <linux/module.h>
+#include <linux/kallsyms.h>
+#ifdef CONFIG_QCA_MINIDUMP
+#include <linux/minidump_tlv.h>
+#endif
+
 /*
  * The CONFIG_QCOM_MINIDUMP feature can only be used
  * beginning with kernel version msm-4.19 since that is
@@ -34,15 +41,12 @@
  */
 #if IS_ENABLED(CONFIG_QCOM_MINIDUMP) && \
 	(LINUX_VERSION_CODE >= KERNEL_VERSION(4, 19, 0))
+#if IS_ENABLED(CONFIG_QCOM_VA_MINIDUMP)
+#define WLAN_QCOM_VA_MINIDUMP
+#else
 #define WLAN_QCOM_MINIDUMP
 #endif
-/* older kernels have a bug in kallsyms, so ensure module.h is included */
-#include <linux/module.h>
-#include <linux/kallsyms.h>
-#ifdef CONFIG_QCA_MINIDUMP
-#include <linux/minidump_tlv.h>
-#endif
-#ifdef WLAN_QCOM_MINIDUMP
+
 #include <soc/qcom/minidump.h>
 #endif
 
@@ -91,18 +95,23 @@
  * second. This means any subsequent calls to this API from the same location
  * within 1/QDF_MAX_LOGS_PER_SEC seconds will be dropped.
  *
- * Return: None
+ * Return: return rate_limted as below:
+ *      true if the logging message is bypassed
+ *      false if the logging message is printed out
  */
 #define __QDF_TRACE_RATE_LIMITED(params...)\
-	do {\
+	({\
 		static ulong __last_ticks;\
 		ulong __ticks = jiffies;\
+		bool rate_limited = true;\
 		if (time_after(__ticks,\
 			       __last_ticks + HZ / QDF_MAX_LOGS_PER_SEC)) {\
 			QDF_TRACE(params);\
 			__last_ticks = __ticks;\
+			rate_limited = false;\
 		} \
-	} while (0)
+		rate_limited;\
+	})
 
 #define __QDF_TRACE_HEX_DUMP_RATE_LIMITED(params...)\
 	do {\
@@ -115,7 +124,7 @@
 		} \
 	} while (0)
 #else
-#define __QDF_TRACE_RATE_LIMITED(arg ...)
+#define __QDF_TRACE_RATE_LIMITED(arg ...) ({true; })
 #define __QDF_TRACE_HEX_DUMP_RATE_LIMITED(arg ...)
 #endif
 
@@ -136,6 +145,8 @@
 
 static inline void __qdf_trace_noop(QDF_MODULE_ID module,
 				    const char *format, ...) { }
+static inline bool __qdf_trace_noop_ret(QDF_MODULE_ID module,
+					const char *format, ...) {return true; }
 static inline void __qdf_trace_dummy(QDF_MODULE_ID module,
 				     QDF_TRACE_LEVEL level,
 				     const char *format, ...) { }
@@ -163,8 +174,8 @@ static inline void __qdf_trace_hexdump_dummy(QDF_MODULE_ID module,
 #else
 #define QDF_TRACE_FATAL(params...) __qdf_trace_noop(params)
 #define QDF_TRACE_FATAL_NO_FL(params...) __qdf_trace_noop(params)
-#define QDF_TRACE_FATAL_RL(params...) __qdf_trace_noop(params)
-#define QDF_TRACE_FATAL_RL_NO_FL(params...) __qdf_trace_noop(params)
+#define QDF_TRACE_FATAL_RL(params...) __qdf_trace_noop_ret(params)
+#define QDF_TRACE_FATAL_RL_NO_FL(params...) __qdf_trace_noop_ret(params)
 #define QDF_VTRACE_FATAL(params...) __qdf_trace_noop(params)
 #define QDF_TRACE_HEX_DUMP_FATAL_RL(params...) __qdf_trace_noop(params)
 #endif
@@ -185,8 +196,8 @@ static inline void __qdf_trace_hexdump_dummy(QDF_MODULE_ID module,
 #else
 #define QDF_TRACE_ERROR(params...) __qdf_trace_noop(params)
 #define QDF_TRACE_ERROR_NO_FL(params...) __qdf_trace_noop(params)
-#define QDF_TRACE_ERROR_RL(params...) __qdf_trace_noop(params)
-#define QDF_TRACE_ERROR_RL_NO_FL(params...) __qdf_trace_noop(params)
+#define QDF_TRACE_ERROR_RL(params...) __qdf_trace_noop_ret(params)
+#define QDF_TRACE_ERROR_RL_NO_FL(params...) __qdf_trace_noop_ret(params)
 #define QDF_VTRACE_ERROR(params...) __qdf_trace_noop(params)
 #define QDF_TRACE_HEX_DUMP_ERROR_RL(params...) __qdf_trace_noop(params)
 #endif
@@ -207,8 +218,8 @@ static inline void __qdf_trace_hexdump_dummy(QDF_MODULE_ID module,
 #else
 #define QDF_TRACE_WARN(params...) __qdf_trace_noop(params)
 #define QDF_TRACE_WARN_NO_FL(params...) __qdf_trace_noop(params)
-#define QDF_TRACE_WARN_RL(params...) __qdf_trace_noop(params)
-#define QDF_TRACE_WARN_RL_NO_FL(params...) __qdf_trace_noop(params)
+#define QDF_TRACE_WARN_RL(params...) __qdf_trace_noop_ret(params)
+#define QDF_TRACE_WARN_RL_NO_FL(params...) __qdf_trace_noop_ret(params)
 #define QDF_VTRACE_WARN(params...) __qdf_trace_noop(params)
 #define QDF_TRACE_HEX_DUMP_WARN_RL(params...) __qdf_trace_noop(params)
 #endif
@@ -229,8 +240,8 @@ static inline void __qdf_trace_hexdump_dummy(QDF_MODULE_ID module,
 #else
 #define QDF_TRACE_INFO(params...) __qdf_trace_noop(params)
 #define QDF_TRACE_INFO_NO_FL(params...) __qdf_trace_noop(params)
-#define QDF_TRACE_INFO_RL(params...) __qdf_trace_noop(params)
-#define QDF_TRACE_INFO_RL_NO_FL(params...) __qdf_trace_noop(params)
+#define QDF_TRACE_INFO_RL(params...) __qdf_trace_noop_ret(params)
+#define QDF_TRACE_INFO_RL_NO_FL(params...) __qdf_trace_noop_ret(params)
 #define QDF_VTRACE_INFO(params...) __qdf_trace_noop(params)
 #define QDF_TRACE_HEX_DUMP_INFO_RL(params...) __qdf_trace_noop(params)
 #endif
@@ -251,8 +262,8 @@ static inline void __qdf_trace_hexdump_dummy(QDF_MODULE_ID module,
 #else
 #define QDF_TRACE_DEBUG(params...) __qdf_trace_noop(params)
 #define QDF_TRACE_DEBUG_NO_FL(params...) __qdf_trace_noop(params)
-#define QDF_TRACE_DEBUG_RL(params...) __qdf_trace_noop(params)
-#define QDF_TRACE_DEBUG_RL_NO_FL(params...) __qdf_trace_noop(params)
+#define QDF_TRACE_DEBUG_RL(params...) __qdf_trace_noop_ret(params)
+#define QDF_TRACE_DEBUG_RL_NO_FL(params...) __qdf_trace_noop_ret(params)
 #define QDF_VTRACE_DEBUG(params...) __qdf_trace_noop(params)
 #define QDF_TRACE_HEX_DUMP_DEBUG_RL(params...) __qdf_trace_noop(params)
 #endif
@@ -470,6 +481,16 @@ static inline void __qdf_bug(void)
 
 #ifdef CONFIG_QCA_MINIDUMP
 static inline void
+__qdf_minidump_init(void)
+{
+}
+
+static inline void
+__qdf_minidump_deinit(void)
+{
+}
+
+static inline void
 __qdf_minidump_log(void *start_addr, size_t size, const char *name)
 {
 	if (minidump_fill_segments((const uintptr_t)start_addr, size,
@@ -485,6 +506,7 @@ __qdf_minidump_remove(void *addr, size_t size, const char *name)
 {
 	minidump_remove_segments((const uintptr_t)addr);
 }
+
 #elif defined(WLAN_QCOM_MINIDUMP)
 #define MAX_WLAN_MINIDUMP_ENTRIES 4
 
@@ -566,12 +588,44 @@ __qdf_minidump_remove(void *start_addr, const size_t size,
 	msm_minidump_remove_region(&md_entry);
 	minidump_table[index] = NULL;
 }
+
+static inline void
+__qdf_minidump_init(void)
+{
+}
+
+static inline void
+__qdf_minidump_deinit(void)
+{
+}
+
+#elif defined(WLAN_QCOM_VA_MINIDUMP)
+void __qdf_minidump_init(void);
+
+void __qdf_minidump_deinit(void);
+
+void __qdf_minidump_log(void *start_addr, size_t size, const char *name);
+
+void __qdf_minidump_remove(void *addr, size_t size, const char *name);
 #else
-static inline void
-__qdf_minidump_log(void *start_addr,
-		   const size_t size, const char *name) {}
-static inline void
-__qdf_minidump_remove(void *start_addr,
-		      const size_t size, const char *name) {}
+static inline
+void __qdf_minidump_init(void)
+{
+}
+
+static inline
+void __qdf_minidump_deinit(void)
+{
+}
+
+static inline
+void __qdf_minidump_log(void *start_addr, size_t size, const char *name)
+{
+}
+
+static inline
+void __qdf_minidump_remove(void *addr, size_t size, const char *name)
+{
+}
 #endif
 #endif /* __I_QDF_TRACE_H */

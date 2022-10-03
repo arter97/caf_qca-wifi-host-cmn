@@ -47,7 +47,8 @@ void hal_qca6490_attach(struct hal_soc *hal);
 void hal_qcn9000_attach(struct hal_soc *hal);
 #endif
 #ifdef QCA_WIFI_QCN9224
-void hal_qcn9224_attach(struct hal_soc *hal);
+void hal_qcn9224v1_attach(struct hal_soc *hal);
+void hal_qcn9224v2_attach(struct hal_soc *hal);
 #endif
 #ifdef QCA_WIFI_QCN6122
 void hal_qcn6122_attach(struct hal_soc *hal);
@@ -57,6 +58,9 @@ void hal_qca6750_attach(struct hal_soc *hal);
 #endif
 #ifdef QCA_WIFI_QCA5018
 void hal_qca5018_attach(struct hal_soc *hal);
+#endif
+#ifdef QCA_WIFI_QCA5332
+void hal_qca5332_attach(struct hal_soc *hal);
 #endif
 #ifdef QCA_WIFI_KIWI
 void hal_kiwi_attach(struct hal_soc *hal);
@@ -128,13 +132,11 @@ static int hal_get_srng_ring_id(struct hal_soc *hal, int ring_type,
 		return -EINVAL;
 	}
 
-	/*
-	 * For BE, dmac_cmn_src_rxbuf_ring is set. If this is set
-	 * and ring is dst and also lmac ring then provide ring id per lmac
+	/**
+	 * Some DMAC rings share a common source ring, hence don't provide them
+	 * with separate ring IDs per LMAC.
 	 */
-	if (ring_config->lmac_ring &&
-	    (!hal->dmac_cmn_src_rxbuf_ring ||
-	     ring_config->ring_dir == HAL_SRNG_DST_RING)) {
+	if (ring_config->lmac_ring && !ring_config->dmac_cmn_ring) {
 		ring_id = (ring_config->start_ring_id + ring_num +
 			   (mac_id * HAL_MAX_RINGS_PER_LMAC));
 	} else {
@@ -503,7 +505,17 @@ static void hal_target_based_configure(struct hal_soc *hal)
 	case TARGET_TYPE_QCN9224:
 		hal->use_register_windowing = true;
 		hal->static_window_map = true;
-		hal_qcn9224_attach(hal);
+		if (hal->version == 1)
+			hal_qcn9224v1_attach(hal);
+		else
+			hal_qcn9224v2_attach(hal);
+	break;
+#endif
+#ifdef QCA_WIFI_QCA5332
+	case TARGET_TYPE_QCA5332:
+		hal->use_register_windowing = true;
+		hal->static_window_map = true;
+		hal_qca5332_attach(hal);
 	break;
 #endif
 	default:
@@ -966,6 +978,38 @@ static inline void hal_delayed_reg_write_deinit(struct hal_soc *hal)
 #endif
 
 #ifdef FEATURE_HAL_DELAYED_REG_WRITE
+#ifdef HAL_RECORD_SUSPEND_WRITE
+static struct hal_suspend_write_history
+		g_hal_suspend_write_history[HAL_SUSPEND_WRITE_HISTORY_MAX];
+
+static
+void hal_event_suspend_record(uint8_t ring_id, uint32_t value, uint32_t count)
+{
+	uint32_t index = qdf_atomic_read(g_hal_suspend_write_history.index) &
+					(HAL_SUSPEND_WRITE_HISTORY_MAX - 1);
+	struct hal_suspend_write_record *cur_event =
+					&hal_suspend_write_event.record[index];
+
+	cur_event->ts = qdf_get_log_timestamp();
+	cur_event->ring_id = ring_id;
+	cur_event->value = value;
+	cur_event->direct_wcount = count;
+	qdf_atomic_inc(g_hal_suspend_write_history.index);
+}
+
+static inline
+void hal_record_suspend_write(uint8_t ring_id, uint32_t value, uint32_t count)
+{
+	if (hif_rtpm_get_state() >= HIF_RTPM_STATE_SUSPENDING)
+		hal_event_suspend_record(ring_id, value, count);
+}
+#else
+static inline
+void hal_record_suspend_write(uint8_t ring_id, uint32_t value, uint32_t count)
+{
+}
+#endif
+
 #ifdef QCA_WIFI_QCA6750
 void hal_delayed_reg_write(struct hal_soc *hal_soc,
 			   struct hal_srng *srng,
@@ -1022,6 +1066,8 @@ void hal_delayed_reg_write(struct hal_soc *hal_soc,
 	} else {
 		hal_reg_write_enqueue(hal_soc, srng, addr, value);
 	}
+
+	hal_record_suspend_write(srng->ring_id, value, srng->wstats.direct);
 }
 #endif
 #endif
@@ -1053,6 +1099,7 @@ void *hal_attach(struct hif_opaque_softc *hif_handle, qdf_device_t qdf_dev)
 	hal->hif_handle = hif_handle;
 	hal->dev_base_addr = hif_get_dev_ba(hif_handle); /* UMAC */
 	hal->dev_base_addr_ce = hif_get_dev_ba_ce(hif_handle); /* CE */
+	hal->dev_base_addr_cmem = hif_get_dev_ba_cmem(hif_handle); /* CMEM */
 	hal->qdf_dev = qdf_dev;
 	hal->shadow_rdptr_mem_vaddr = (uint32_t *)qdf_mem_alloc_consistent(
 		qdf_dev, qdf_dev->dev, sizeof(*(hal->shadow_rdptr_mem_vaddr)) *
@@ -1087,6 +1134,7 @@ void *hal_attach(struct hif_opaque_softc *hif_handle, qdf_device_t qdf_dev)
 	qdf_spinlock_create(&hal->register_access_lock);
 	hal->register_window = 0;
 	hal->target_type = hal_get_target_type(hal_soc_to_hal_soc_handle(hal));
+	hal->version = hif_get_soc_version(hif_handle);
 	hal->ops = qdf_mem_malloc(sizeof(*hal->ops));
 
 	if (!hal->ops) {
@@ -1360,14 +1408,15 @@ qdf_export_symbol(hal_srng_dst_init_hp);
  * hal_srng_hw_init - Private function to initialize SRNG HW
  * @hal_soc: HAL SOC handle
  * @srng: SRNG ring pointer
+ * @idle_check: Check if ring is idle
  */
 static inline void hal_srng_hw_init(struct hal_soc *hal,
-	struct hal_srng *srng)
+	struct hal_srng *srng, bool idle_check)
 {
 	if (srng->ring_dir == HAL_SRNG_SRC_RING)
-		hal_srng_src_hw_init(hal, srng);
+		hal_srng_src_hw_init(hal, srng, idle_check);
 	else
-		hal_srng_dst_hw_init(hal, srng);
+		hal_srng_dst_hw_init(hal, srng, idle_check);
 }
 
 #if defined(CONFIG_SHADOW_V2) || defined(CONFIG_SHADOW_V3)
@@ -1524,7 +1573,8 @@ static inline void hal_srng_update_high_wm_thresholds(struct hal_srng *srng)
  * from 0)
  * @mac_id: valid MAC Id should be passed if ring type is one of lmac rings
  * @ring_params: SRNG ring params in hal_srng_params structure.
-
+ * @idle_check: Check if ring is idle
+ *
  * Callers are expected to allocate contiguous ring memory of size
  * 'num_entries * entry_size' bytes and pass the physical and virtual base
  * addresses through 'ring_base_paddr' and 'ring_base_vaddr' in
@@ -1536,7 +1586,7 @@ static inline void hal_srng_update_high_wm_thresholds(struct hal_srng *srng)
  *		 NULL on failure (if given ring is not available)
  */
 void *hal_srng_setup(void *hal_soc, int ring_type, int ring_num,
-	int mac_id, struct hal_srng_params *ring_params)
+	int mac_id, struct hal_srng_params *ring_params, bool idle_check)
 {
 	int ring_id;
 	struct hal_soc *hal = (struct hal_soc *)hal_soc;
@@ -1575,7 +1625,8 @@ void *hal_srng_setup(void *hal_soc, int ring_type, int ring_num,
 	srng->intr_timer_thres_us = ring_params->intr_timer_thres_us;
 	srng->intr_batch_cntr_thres_entries =
 		ring_params->intr_batch_cntr_thres_entries;
-	srng->prefetch_timer = ring_params->prefetch_timer;
+	if (!idle_check)
+		srng->prefetch_timer = ring_params->prefetch_timer;
 	srng->hal_soc = hal_soc;
 	hal_srng_set_msi2_params(srng, ring_params);
 	hal_srng_update_high_wm_thresholds(srng);
@@ -1619,6 +1670,11 @@ void *hal_srng_setup(void *hal_soc, int ring_type, int ring_num,
 			&(hal->shadow_rdptr_mem_vaddr[ring_id]);
 		srng->u.src_ring.low_threshold =
 			ring_params->low_threshold * srng->entry_size;
+
+		if (srng->u.src_ring.tp_addr)
+			qdf_mem_zero(srng->u.src_ring.tp_addr,
+				     sizeof(*hal->shadow_rdptr_mem_vaddr));
+
 		if (ring_config->lmac_ring) {
 			/* For LMAC rings, head pointer updates will be done
 			 * through FW by writing to a shared memory location
@@ -1627,6 +1683,11 @@ void *hal_srng_setup(void *hal_soc, int ring_type, int ring_num,
 				&(hal->shadow_wrptr_mem_vaddr[ring_id -
 					HAL_SRNG_LMAC1_ID_START]);
 			srng->flags |= HAL_SRNG_LMAC_RING;
+
+			if (srng->u.src_ring.hp_addr)
+				qdf_mem_zero(srng->u.src_ring.hp_addr,
+					sizeof(*hal->shadow_wrptr_mem_vaddr));
+
 		} else if (ignore_shadow || (srng->u.src_ring.hp_addr == 0)) {
 			srng->u.src_ring.hp_addr =
 				hal_get_window_address(hal,
@@ -1657,6 +1718,11 @@ void *hal_srng_setup(void *hal_soc, int ring_type, int ring_num,
 		srng->u.dst_ring.tp = 0;
 		srng->u.dst_ring.hp_addr =
 			&(hal->shadow_rdptr_mem_vaddr[ring_id]);
+
+		if (srng->u.dst_ring.hp_addr)
+			qdf_mem_zero(srng->u.dst_ring.hp_addr,
+				     sizeof(*hal->shadow_rdptr_mem_vaddr));
+
 		if (ring_config->lmac_ring) {
 			/* For LMAC rings, tail pointer updates will be done
 			 * through FW by writing to a shared memory location
@@ -1665,6 +1731,11 @@ void *hal_srng_setup(void *hal_soc, int ring_type, int ring_num,
 				&(hal->shadow_wrptr_mem_vaddr[ring_id -
 				HAL_SRNG_LMAC1_ID_START]);
 			srng->flags |= HAL_SRNG_LMAC_RING;
+
+			if (srng->u.dst_ring.tp_addr)
+				qdf_mem_zero(srng->u.dst_ring.tp_addr,
+					sizeof(*hal->shadow_wrptr_mem_vaddr));
+
 		} else if (ignore_shadow || srng->u.dst_ring.tp_addr == 0) {
 			srng->u.dst_ring.tp_addr =
 				hal_get_window_address(hal,
@@ -1684,7 +1755,7 @@ void *hal_srng_setup(void *hal_soc, int ring_type, int ring_num,
 	}
 
 	if (!(ring_config->lmac_ring)) {
-		hal_srng_hw_init(hal, srng);
+		hal_srng_hw_init(hal, srng, idle_check);
 
 		if (ring_type == CE_DST) {
 			srng->u.dst_ring.max_buffer_length = ring_params->max_buffer_length;
@@ -1712,6 +1783,7 @@ void hal_srng_cleanup(void *hal_soc, hal_ring_handle_t hal_ring_hdl)
 	struct hal_srng *srng = (struct hal_srng *)hal_ring_hdl;
 	SRNG_LOCK_DESTROY(&srng->lock);
 	srng->initialized = 0;
+	hal_srng_hw_disable(hal_soc, srng);
 }
 qdf_export_symbol(hal_srng_cleanup);
 

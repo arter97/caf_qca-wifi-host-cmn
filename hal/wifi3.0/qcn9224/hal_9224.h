@@ -694,6 +694,7 @@ static uint8_t hal_rx_get_tlv_9224(void *rx_tlv)
  *
  * Return: true if msdu continuation bit is set.
  */
+static inline
 uint8_t hal_rx_wbm_err_msdu_continuation_get_9224(void *wbm_desc)
 {
 	uint32_t comp_desc = *(uint32_t *)(((uint8_t *)wbm_desc) +
@@ -703,6 +704,86 @@ uint8_t hal_rx_wbm_err_msdu_continuation_get_9224(void *wbm_desc)
 	WBM_RELEASE_RING_RX_RX_MSDU_DESC_INFO_DETAILS_MSDU_CONTINUATION_MASK) >>
 	WBM_RELEASE_RING_RX_RX_MSDU_DESC_INFO_DETAILS_MSDU_CONTINUATION_LSB;
 }
+
+#if (defined(WLAN_SA_API_ENABLE)) && (defined(QCA_WIFI_QCA9574))
+#define HAL_RX_UPDATE_SU_EVM_INFO(rx_tlv, ppdu_info, evm, pilot) \
+	(ppdu_info)->evm_info.pilot_evm[pilot] = HAL_RX_GET(rx_tlv, \
+				PHYRX_OTHER_RECEIVE_INFO, \
+				SU_EVM_DETAILS_##evm##_PILOT_##pilot##_EVM)
+
+static inline void
+hal_rx_update_su_evm_info(void *rx_tlv,
+			  void *ppdu_info_hdl)
+{
+	struct hal_rx_ppdu_info *ppdu_info =
+			(struct hal_rx_ppdu_info *)ppdu_info_hdl;
+
+	HAL_RX_UPDATE_SU_EVM_INFO(rx_tlv, ppdu_info, 1, 0);
+	HAL_RX_UPDATE_SU_EVM_INFO(rx_tlv, ppdu_info, 2, 1);
+	HAL_RX_UPDATE_SU_EVM_INFO(rx_tlv, ppdu_info, 3, 2);
+	HAL_RX_UPDATE_SU_EVM_INFO(rx_tlv, ppdu_info, 4, 3);
+	HAL_RX_UPDATE_SU_EVM_INFO(rx_tlv, ppdu_info, 5, 4);
+	HAL_RX_UPDATE_SU_EVM_INFO(rx_tlv, ppdu_info, 6, 5);
+	HAL_RX_UPDATE_SU_EVM_INFO(rx_tlv, ppdu_info, 7, 6);
+	HAL_RX_UPDATE_SU_EVM_INFO(rx_tlv, ppdu_info, 8, 7);
+	HAL_RX_UPDATE_SU_EVM_INFO(rx_tlv, ppdu_info, 9, 8);
+	HAL_RX_UPDATE_SU_EVM_INFO(rx_tlv, ppdu_info, 10, 9);
+	HAL_RX_UPDATE_SU_EVM_INFO(rx_tlv, ppdu_info, 11, 10);
+	HAL_RX_UPDATE_SU_EVM_INFO(rx_tlv, ppdu_info, 12, 11);
+	HAL_RX_UPDATE_SU_EVM_INFO(rx_tlv, ppdu_info, 13, 12);
+	HAL_RX_UPDATE_SU_EVM_INFO(rx_tlv, ppdu_info, 14, 13);
+	HAL_RX_UPDATE_SU_EVM_INFO(rx_tlv, ppdu_info, 15, 14);
+	HAL_RX_UPDATE_SU_EVM_INFO(rx_tlv, ppdu_info, 16, 15);
+	HAL_RX_UPDATE_SU_EVM_INFO(rx_tlv, ppdu_info, 17, 16);
+	HAL_RX_UPDATE_SU_EVM_INFO(rx_tlv, ppdu_info, 18, 17);
+	HAL_RX_UPDATE_SU_EVM_INFO(rx_tlv, ppdu_info, 19, 18);
+	HAL_RX_UPDATE_SU_EVM_INFO(rx_tlv, ppdu_info, 20, 19);
+	HAL_RX_UPDATE_SU_EVM_INFO(rx_tlv, ppdu_info, 21, 20);
+	HAL_RX_UPDATE_SU_EVM_INFO(rx_tlv, ppdu_info, 22, 21);
+	HAL_RX_UPDATE_SU_EVM_INFO(rx_tlv, ppdu_info, 23, 22);
+	HAL_RX_UPDATE_SU_EVM_INFO(rx_tlv, ppdu_info, 24, 23);
+	HAL_RX_UPDATE_SU_EVM_INFO(rx_tlv, ppdu_info, 25, 24);
+	HAL_RX_UPDATE_SU_EVM_INFO(rx_tlv, ppdu_info, 26, 25);
+	HAL_RX_UPDATE_SU_EVM_INFO(rx_tlv, ppdu_info, 27, 26);
+	HAL_RX_UPDATE_SU_EVM_INFO(rx_tlv, ppdu_info, 28, 27);
+	HAL_RX_UPDATE_SU_EVM_INFO(rx_tlv, ppdu_info, 29, 28);
+	HAL_RX_UPDATE_SU_EVM_INFO(rx_tlv, ppdu_info, 30, 29);
+	HAL_RX_UPDATE_SU_EVM_INFO(rx_tlv, ppdu_info, 31, 30);
+	HAL_RX_UPDATE_SU_EVM_INFO(rx_tlv, ppdu_info, 32, 31);
+}
+
+static void hal_rx_get_evm_info(void *rx_tlv_hdr, void *ppdu_info_hdl)
+{
+	struct hal_rx_ppdu_info *ppdu_info  = ppdu_info_hdl;
+	void *rx_tlv = (uint8_t *)rx_tlv_hdr + HAL_RX_TLV32_HDR_SIZE;
+	uint32_t tlv_tag;
+
+	tlv_tag = HAL_RX_GET_USER_TLV32_TYPE(rx_tlv_hdr);
+
+	switch (tlv_tag) {
+	case WIFIPHYRX_OTHER_RECEIVE_INFO_EVM_DETAILS_E:
+
+		/* Skip TLV length to get TLV content */
+		rx_tlv = (uint8_t *)rx_tlv + HAL_RX_TLV32_HDR_SIZE;
+
+		ppdu_info->evm_info.number_of_symbols = HAL_RX_GET(rx_tlv,
+				PHYRX_OTHER_RECEIVE_INFO,
+				SU_EVM_DETAILS_0_NUMBER_OF_SYMBOLS);
+		ppdu_info->evm_info.pilot_count = HAL_RX_GET(rx_tlv,
+				PHYRX_OTHER_RECEIVE_INFO,
+				SU_EVM_DETAILS_0_PILOT_COUNT);
+		ppdu_info->evm_info.nss_count = HAL_RX_GET(rx_tlv,
+				PHYRX_OTHER_RECEIVE_INFO,
+				SU_EVM_DETAILS_0_NSS_COUNT);
+		hal_rx_update_su_evm_info(rx_tlv, ppdu_info_hdl);
+		break;
+	}
+}
+#else /* WLAN_SA_API_ENABLE && QCA_WIFI_QCA9574 */
+static void hal_rx_get_evm_info(void *tlv_tag, void *ppdu_info_hdl)
+{
+}
+#endif /* WLAN_SA_API_ENABLE && QCA_WIFI_QCA9574 */
 
 /**
  * hal_rx_proc_phyrx_other_receive_info_tlv_9224(): API to get tlv info
@@ -718,6 +799,9 @@ void hal_rx_proc_phyrx_other_receive_info_tlv_9224(void *rx_tlv_hdr,
 	void *rx_tlv = (uint8_t *)rx_tlv_hdr + HAL_RX_TLV32_HDR_SIZE;
 	void *other_tlv_hdr = NULL;
 	void *other_tlv = NULL;
+
+	/* Get evm info for Smart Antenna */
+	hal_rx_get_evm_info(rx_tlv_hdr, ppdu_info_hdl);
 
 	tlv_tag = HAL_RX_GET_USER_TLV32_TYPE(rx_tlv_hdr);
 	tlv_len = HAL_RX_GET_USER_TLV32_LEN(rx_tlv_hdr);
@@ -746,13 +830,13 @@ void hal_rx_get_bb_info_9224(void *rx_tlv, void *ppdu_info_hdl)
 	struct hal_rx_ppdu_info *ppdu_info  = ppdu_info_hdl;
 
 	ppdu_info->cfr_info.bb_captured_channel =
-		HAL_RX_GET(rx_tlv, RXPCU_PPDU_END_INFO, BB_CAPTURED_CHANNEL);
+		HAL_RX_GET_64(rx_tlv, RXPCU_PPDU_END_INFO, BB_CAPTURED_CHANNEL);
 
 	ppdu_info->cfr_info.bb_captured_timeout =
-		HAL_RX_GET(rx_tlv, RXPCU_PPDU_END_INFO, BB_CAPTURED_TIMEOUT);
+		HAL_RX_GET_64(rx_tlv, RXPCU_PPDU_END_INFO, BB_CAPTURED_TIMEOUT);
 
 	ppdu_info->cfr_info.bb_captured_reason =
-		HAL_RX_GET(rx_tlv, RXPCU_PPDU_END_INFO, BB_CAPTURED_REASON);
+		HAL_RX_GET_64(rx_tlv, RXPCU_PPDU_END_INFO, BB_CAPTURED_REASON);
 }
 
 static inline
@@ -761,55 +845,64 @@ void hal_rx_get_rtt_info_9224(void *rx_tlv, void *ppdu_info_hdl)
 	struct hal_rx_ppdu_info *ppdu_info  = ppdu_info_hdl;
 
 	ppdu_info->cfr_info.rx_location_info_valid =
-	HAL_RX_GET(rx_tlv, PHYRX_LOCATION_RX_LOCATION_INFO_DETAILS,
-		   RX_LOCATION_INFO_VALID);
+	HAL_RX_GET_64(rx_tlv, PHYRX_LOCATION_RX_LOCATION_INFO_DETAILS,
+		      RX_LOCATION_INFO_VALID);
 
 	ppdu_info->cfr_info.rtt_che_buffer_pointer_low32 =
-	HAL_RX_GET(rx_tlv,
-		   PHYRX_LOCATION_RX_LOCATION_INFO_DETAILS,
-		   RTT_CHE_BUFFER_POINTER_LOW32);
+	HAL_RX_GET_64(rx_tlv,
+		      PHYRX_LOCATION_RX_LOCATION_INFO_DETAILS,
+		      RTT_CHE_BUFFER_POINTER_LOW32);
 
 	ppdu_info->cfr_info.rtt_che_buffer_pointer_high8 =
-	HAL_RX_GET(rx_tlv,
-		   PHYRX_LOCATION_RX_LOCATION_INFO_DETAILS,
-		   RTT_CHE_BUFFER_POINTER_HIGH8);
+	HAL_RX_GET_64(rx_tlv,
+		      PHYRX_LOCATION_RX_LOCATION_INFO_DETAILS,
+		      RTT_CHE_BUFFER_POINTER_HIGH8);
 
 	ppdu_info->cfr_info.chan_capture_status =
 	HAL_GET_RX_LOCATION_INFO_CHAN_CAPTURE_STATUS(rx_tlv);
 
 	ppdu_info->cfr_info.rx_start_ts =
-	HAL_RX_GET(rx_tlv,
-		   PHYRX_LOCATION_RX_LOCATION_INFO_DETAILS,
-		   RX_START_TS);
+	HAL_RX_GET_64(rx_tlv,
+		      PHYRX_LOCATION_RX_LOCATION_INFO_DETAILS,
+		      RX_START_TS);
 
 	ppdu_info->cfr_info.rtt_cfo_measurement = (int16_t)
-	HAL_RX_GET(rx_tlv,
-		   PHYRX_LOCATION_RX_LOCATION_INFO_DETAILS,
-		   RTT_CFO_MEASUREMENT);
+	HAL_RX_GET_64(rx_tlv,
+		      PHYRX_LOCATION_RX_LOCATION_INFO_DETAILS,
+		      RTT_CFO_MEASUREMENT);
 
 	ppdu_info->cfr_info.agc_gain_info0 =
-	HAL_RX_GET(rx_tlv,
-		   PHYRX_LOCATION_RX_LOCATION_INFO_DETAILS,
-		   GAIN_CHAIN0);
+	HAL_RX_GET_64(rx_tlv,
+		      PHYRX_LOCATION_RX_LOCATION_INFO_DETAILS,
+		      GAIN_CHAIN0);
 
 	ppdu_info->cfr_info.agc_gain_info0 |=
-	(((uint32_t)HAL_RX_GET(rx_tlv,
+	(((uint32_t)HAL_RX_GET_64(rx_tlv,
 		    PHYRX_LOCATION_RX_LOCATION_INFO_DETAILS,
 		    GAIN_CHAIN1)) << 16);
 
 	ppdu_info->cfr_info.agc_gain_info1 =
-	HAL_RX_GET(rx_tlv,
-		   PHYRX_LOCATION_RX_LOCATION_INFO_DETAILS,
-		   GAIN_CHAIN2);
+	HAL_RX_GET_64(rx_tlv,
+		      PHYRX_LOCATION_RX_LOCATION_INFO_DETAILS,
+		      GAIN_CHAIN2);
 
 	ppdu_info->cfr_info.agc_gain_info1 |=
-	(((uint32_t)HAL_RX_GET(rx_tlv,
+	(((uint32_t)HAL_RX_GET_64(rx_tlv,
 		    PHYRX_LOCATION_RX_LOCATION_INFO_DETAILS,
 		    GAIN_CHAIN3)) << 16);
 
 	ppdu_info->cfr_info.agc_gain_info2 = 0;
 
 	ppdu_info->cfr_info.agc_gain_info3 = 0;
+
+	ppdu_info->cfr_info.mcs_rate =
+	HAL_RX_GET_64(rx_tlv,
+		      PHYRX_LOCATION_RX_LOCATION_INFO_DETAILS,
+		      RTT_MCS_RATE);
+	ppdu_info->cfr_info.gi_type =
+	HAL_RX_GET_64(rx_tlv,
+		      PHYRX_LOCATION_RX_LOCATION_INFO_DETAILS,
+		      RTT_GI_TYPE);
 }
 #endif
 
@@ -1320,6 +1413,25 @@ void hal_compute_reo_remap_ix2_ix3_9224(uint32_t *ring, uint32_t num_rings,
 	}
 }
 
+static
+void hal_compute_reo_remap_ix0_9224(struct hal_soc *soc)
+{
+	uint32_t remap0;
+
+	remap0 = HAL_REG_READ(soc, HWIO_REO_R0_DESTINATION_RING_CTRL_IX_0_ADDR
+			      (REO_REG_REG_BASE));
+
+	remap0 &= ~(HAL_REO_REMAP_IX0(0xF, 6));
+	remap0 |= HAL_REO_REMAP_IX0(REO2PPE_DST_IND, 6);
+
+	HAL_REG_WRITE(soc, HWIO_REO_R0_DESTINATION_RING_CTRL_IX_0_ADDR
+		      (REO_REG_REG_BASE), remap0);
+
+	hal_debug("HWIO_REO_R0_DESTINATION_RING_CTRL_IX_0_ADDR 0x%x",
+		  HAL_REG_READ(soc, HWIO_REO_R0_DESTINATION_RING_CTRL_IX_0_ADDR
+		  (REO_REG_REG_BASE)));
+}
+
 /**
  * hal_rx_flow_setup_fse_9224() - Setup a flow search entry in HW FST
  * @fst: Pointer to the Rx Flow Search Table
@@ -1543,7 +1655,7 @@ static void hal_cmem_write_9224(hal_soc_handle_t hal_soc_hdl,
 {
 	struct hal_soc *hal = (struct hal_soc *)hal_soc_hdl;
 
-	pld_reg_write(hal->qdf_dev->dev, offset, value);
+	pld_reg_write(hal->qdf_dev->dev, offset, value, NULL);
 }
 
 /**
@@ -1556,7 +1668,8 @@ static uint8_t hal_tx_get_num_tcl_banks_9224(void)
 	return HAL_NUM_TCL_BANKS_9224;
 }
 
-static void hal_reo_setup_9224(struct hal_soc *soc, void *reoparams)
+static void hal_reo_setup_9224(struct hal_soc *soc, void *reoparams,
+			       int qref_reset)
 {
 	uint32_t reg_val;
 	struct hal_reo_params *reo_params = (struct hal_reo_params *)reoparams;
@@ -1606,6 +1719,8 @@ static void hal_reo_setup_9224(struct hal_soc *soc, void *reoparams)
 	 * 7: NOT_USED.
 	 */
 	if (reo_params->rx_hash_enabled) {
+		hal_compute_reo_remap_ix0_9224(soc);
+
 		HAL_REG_WRITE(soc,
 			      HWIO_REO_R0_DESTINATION_RING_CTRL_IX_1_ADDR
 			      (REO_REG_REG_BASE), reo_params->remap0);
@@ -1641,7 +1756,7 @@ static void hal_reo_setup_9224(struct hal_soc *soc, void *reoparams)
 	 * GLOBAL_LINK_DESC_COUNT_CTRL
 	 */
 
-	hal_reo_shared_qaddr_init((hal_soc_handle_t)soc);
+	hal_reo_shared_qaddr_init((hal_soc_handle_t)soc, qref_reset);
 }
 
 static uint16_t hal_get_rx_max_ba_window_qcn9224(int tid)
@@ -1719,6 +1834,7 @@ static void hal_hw_txrx_ops_attach_qcn9224(struct hal_soc *hal_soc)
 	/* init and setup */
 	hal_soc->ops->hal_srng_dst_hw_init = hal_srng_dst_hw_init_generic;
 	hal_soc->ops->hal_srng_src_hw_init = hal_srng_src_hw_init_generic;
+	hal_soc->ops->hal_srng_hw_disable = hal_srng_hw_disable_generic;
 	hal_soc->ops->hal_get_hw_hptp = hal_get_hw_hptp_generic;
 	hal_soc->ops->hal_get_window_address = hal_get_window_address_9224;
 	hal_soc->ops->hal_cmem_write = hal_cmem_write_9224;
@@ -1744,6 +1860,8 @@ static void hal_hw_txrx_ops_attach_qcn9224(struct hal_soc *hal_soc)
 			hal_tx_get_num_ppe_vp_tbl_entries_9224;
 	hal_soc->ops->hal_tx_enable_pri2tid_map =
 			hal_tx_enable_pri2tid_map_9224;
+	hal_soc->ops->hal_tx_config_rbm_mapping_be =
+				hal_tx_config_rbm_mapping_be_9224;
 
 	/* rx */
 	hal_soc->ops->hal_rx_msdu_start_nss_get = hal_rx_tlv_nss_get_be;
@@ -1805,8 +1923,8 @@ static void hal_hw_txrx_ops_attach_qcn9224(struct hal_soc *hal_soc)
 					hal_rx_get_mpdu_mac_ad4_valid_be;
 	hal_soc->ops->hal_rx_mpdu_start_sw_peer_id_get =
 		hal_rx_mpdu_start_sw_peer_id_get_be;
-	hal_soc->ops->hal_rx_mpdu_peer_meta_data_get =
-		hal_rx_mpdu_peer_meta_data_get_be;
+	hal_soc->ops->hal_rx_tlv_peer_meta_data_get =
+		hal_rx_msdu_peer_meta_data_get_be;
 	hal_soc->ops->hal_rx_mpdu_get_to_ds = hal_rx_mpdu_get_to_ds_be;
 	hal_soc->ops->hal_rx_mpdu_get_fr_ds = hal_rx_mpdu_get_fr_ds_be;
 	hal_soc->ops->hal_rx_get_mpdu_frame_control_valid =
@@ -1935,6 +2053,7 @@ static void hal_hw_txrx_ops_attach_qcn9224(struct hal_soc *hal_soc)
 			hal_rx_priv_info_get_from_tlv_be;
 	hal_soc->ops->hal_rx_pkt_hdr_get = hal_rx_pkt_hdr_get_be;
 	hal_soc->ops->hal_reo_setup = hal_reo_setup_9224;
+	hal_soc->ops->hal_reo_config_reo2ppe_dest_info = NULL;
 #ifdef REO_SHARED_QREF_TABLE_EN
 	hal_soc->ops->hal_reo_shared_qaddr_setup = hal_reo_shared_qaddr_setup_be;
 	hal_soc->ops->hal_reo_shared_qaddr_init = hal_reo_shared_qaddr_init_be;
@@ -1948,544 +2067,32 @@ static void hal_hw_txrx_ops_attach_qcn9224(struct hal_soc *hal_soc)
 	hal_soc->ops->hal_get_reo_qdesc_size = hal_qcn9224_get_reo_qdesc_size;
 	/* TX MONITOR */
 #ifdef QCA_MONITOR_2_0_SUPPORT
+	hal_soc->ops->hal_txmon_is_mon_buf_addr_tlv =
+				hal_txmon_is_mon_buf_addr_tlv_generic_be;
+	hal_soc->ops->hal_txmon_populate_packet_info =
+				hal_txmon_populate_packet_info_generic_be;
 	hal_soc->ops->hal_txmon_status_parse_tlv =
 				hal_txmon_status_parse_tlv_generic_be;
 	hal_soc->ops->hal_txmon_status_get_num_users =
 				hal_txmon_status_get_num_users_generic_be;
-	hal_soc->ops->hal_txmon_status_free_buffer =
-				hal_txmon_status_free_buffer_generic_be;
 #endif /* QCA_MONITOR_2_0_SUPPORT */
 	hal_soc->ops->hal_compute_reo_remap_ix0 = NULL;
-};
-
-struct hal_hw_srng_config hw_srng_table_9224[] = {
-	/* TODO: max_rings can populated by querying HW capabilities */
-	{ /* REO_DST */
-		.start_ring_id = HAL_SRNG_REO2SW1,
-		.max_rings = 8,
-		.entry_size = sizeof(struct reo_destination_ring) >> 2,
-		.lmac_ring = FALSE,
-		.ring_dir = HAL_SRNG_DST_RING,
-		.reg_start = {
-			HWIO_REO_R0_REO2SW1_RING_BASE_LSB_ADDR(
-				REO_REG_REG_BASE),
-			HWIO_REO_R2_REO2SW1_RING_HP_ADDR(
-				REO_REG_REG_BASE)
-		},
-		.reg_size = {
-			HWIO_REO_R0_REO2SW2_RING_BASE_LSB_ADDR(0) -
-				HWIO_REO_R0_REO2SW1_RING_BASE_LSB_ADDR(0),
-			HWIO_REO_R2_REO2SW2_RING_HP_ADDR(0) -
-				HWIO_REO_R2_REO2SW1_RING_HP_ADDR(0),
-		},
-		.max_size =
-			HWIO_REO_R0_REO2SW1_RING_BASE_MSB_RING_SIZE_BMSK >>
-			HWIO_REO_R0_REO2SW1_RING_BASE_MSB_RING_SIZE_SHFT,
-	},
-	{ /* REO_EXCEPTION */
-		/* Designating REO2SW0 ring as exception ring. This ring is
-		 * similar to other REO2SW rings though it is named as REO2SW0.
-		 * Any of theREO2SW rings can be used as exception ring.
-		 */
-		.start_ring_id = HAL_SRNG_REO2SW0,
-		.max_rings = 1,
-		.entry_size = sizeof(struct reo_destination_ring) >> 2,
-		.lmac_ring = FALSE,
-		.ring_dir = HAL_SRNG_DST_RING,
-		.reg_start = {
-			HWIO_REO_R0_REO2SW0_RING_BASE_LSB_ADDR(
-				REO_REG_REG_BASE),
-			HWIO_REO_R2_REO2SW0_RING_HP_ADDR(
-				REO_REG_REG_BASE)
-		},
-		/* Single ring - provide ring size if multiple rings of this
-		 * type are supported
-		 */
-		.reg_size = {},
-		.max_size =
-			HWIO_REO_R0_REO2SW0_RING_BASE_MSB_RING_SIZE_BMSK >>
-			HWIO_REO_R0_REO2SW0_RING_BASE_MSB_RING_SIZE_SHFT,
-	},
-	{ /* REO_REINJECT */
-		.start_ring_id = HAL_SRNG_SW2REO,
-		.max_rings = 4,
-		.entry_size = sizeof(struct reo_entrance_ring) >> 2,
-		.lmac_ring = FALSE,
-		.ring_dir = HAL_SRNG_SRC_RING,
-		.reg_start = {
-			HWIO_REO_R0_SW2REO_RING_BASE_LSB_ADDR(
-				REO_REG_REG_BASE),
-			HWIO_REO_R2_SW2REO_RING_HP_ADDR(
-				REO_REG_REG_BASE)
-		},
-		/* Single ring - provide ring size if multiple rings of this
-		 * type are supported
-		 */
-		.reg_size = {
-			HWIO_REO_R0_SW2REO1_RING_BASE_LSB_ADDR(0) -
-				HWIO_REO_R0_SW2REO_RING_BASE_LSB_ADDR(0),
-			HWIO_REO_R2_SW2REO1_RING_HP_ADDR(0) -
-				HWIO_REO_R2_SW2REO_RING_HP_ADDR(0)
-		},
-		.max_size = HWIO_REO_R0_SW2REO_RING_BASE_MSB_RING_SIZE_BMSK >>
-				HWIO_REO_R0_SW2REO_RING_BASE_MSB_RING_SIZE_SHFT,
-	},
-	{ /* REO_CMD */
-		.start_ring_id = HAL_SRNG_REO_CMD,
-		.max_rings = 1,
-		.entry_size = (sizeof(struct tlv_32_hdr) +
-			sizeof(struct reo_get_queue_stats)) >> 2,
-		.lmac_ring = FALSE,
-		.ring_dir = HAL_SRNG_SRC_RING,
-		.reg_start = {
-			HWIO_REO_R0_REO_CMD_RING_BASE_LSB_ADDR(
-				REO_REG_REG_BASE),
-			HWIO_REO_R2_REO_CMD_RING_HP_ADDR(
-				REO_REG_REG_BASE),
-		},
-		/* Single ring - provide ring size if multiple rings of this
-		 * type are supported
-		 */
-		.reg_size = {},
-		.max_size = HWIO_REO_R0_REO_CMD_RING_BASE_MSB_RING_SIZE_BMSK >>
-			HWIO_REO_R0_REO_CMD_RING_BASE_MSB_RING_SIZE_SHFT,
-	},
-	{ /* REO_STATUS */
-		.start_ring_id = HAL_SRNG_REO_STATUS,
-		.max_rings = 1,
-		.entry_size = (sizeof(struct tlv_32_hdr) +
-			sizeof(struct reo_get_queue_stats_status)) >> 2,
-		.lmac_ring = FALSE,
-		.ring_dir = HAL_SRNG_DST_RING,
-		.reg_start = {
-			HWIO_REO_R0_REO_STATUS_RING_BASE_LSB_ADDR(
-				REO_REG_REG_BASE),
-			HWIO_REO_R2_REO_STATUS_RING_HP_ADDR(
-				REO_REG_REG_BASE),
-		},
-		/* Single ring - provide ring size if multiple rings of this
-		 * type are supported
-		 */
-		.reg_size = {},
-		.max_size =
-		HWIO_REO_R0_REO_STATUS_RING_BASE_MSB_RING_SIZE_BMSK >>
-			HWIO_REO_R0_REO_STATUS_RING_BASE_MSB_RING_SIZE_SHFT,
-	},
-	{ /* TCL_DATA */
-		.start_ring_id = HAL_SRNG_SW2TCL1,
-		.max_rings = 6,
-		.entry_size = sizeof(struct tcl_data_cmd) >> 2,
-		.lmac_ring = FALSE,
-		.ring_dir = HAL_SRNG_SRC_RING,
-		.reg_start = {
-			HWIO_TCL_R0_SW2TCL1_RING_BASE_LSB_ADDR(
-				MAC_TCL_REG_REG_BASE),
-			HWIO_TCL_R2_SW2TCL1_RING_HP_ADDR(
-				MAC_TCL_REG_REG_BASE),
-		},
-		.reg_size = {
-			HWIO_TCL_R0_SW2TCL2_RING_BASE_LSB_ADDR(0) -
-				HWIO_TCL_R0_SW2TCL1_RING_BASE_LSB_ADDR(0),
-			HWIO_TCL_R2_SW2TCL2_RING_HP_ADDR(0) -
-				HWIO_TCL_R2_SW2TCL1_RING_HP_ADDR(0),
-		},
-		.max_size =
-			HWIO_TCL_R0_SW2TCL1_RING_BASE_MSB_RING_SIZE_BMSK >>
-			HWIO_TCL_R0_SW2TCL1_RING_BASE_MSB_RING_SIZE_SHFT,
-	},
-	{ /* TCL_CMD/CREDIT */
-	  /* qca8074v2 and qcn9224 uses this ring for data commands */
-		.start_ring_id = HAL_SRNG_SW2TCL_CMD,
-		.max_rings = 1,
-		.entry_size = sizeof(struct tcl_data_cmd) >> 2,
-		.lmac_ring =  FALSE,
-		.ring_dir = HAL_SRNG_SRC_RING,
-		.reg_start = {
-			HWIO_TCL_R0_SW2TCL_CREDIT_RING_BASE_LSB_ADDR(
-				MAC_TCL_REG_REG_BASE),
-			HWIO_TCL_R2_SW2TCL_CREDIT_RING_HP_ADDR(
-				MAC_TCL_REG_REG_BASE),
-		},
-		/* Single ring - provide ring size if multiple rings of this
-		 * type are supported
-		 */
-		.reg_size = {},
-		.max_size =
-		HWIO_TCL_R0_SW2TCL_CREDIT_RING_BASE_MSB_RING_SIZE_BMSK >>
-		HWIO_TCL_R0_SW2TCL_CREDIT_RING_BASE_MSB_RING_SIZE_SHFT,
-	},
-	{ /* TCL_STATUS */
-		.start_ring_id = HAL_SRNG_TCL_STATUS,
-		.max_rings = 1,
-		.entry_size = (sizeof(struct tlv_32_hdr) +
-			sizeof(struct tcl_status_ring)) >> 2,
-		.lmac_ring = FALSE,
-		.ring_dir = HAL_SRNG_DST_RING,
-		.reg_start = {
-			HWIO_TCL_R0_TCL_STATUS1_RING_BASE_LSB_ADDR(
-				MAC_TCL_REG_REG_BASE),
-			HWIO_TCL_R2_TCL_STATUS1_RING_HP_ADDR(
-				MAC_TCL_REG_REG_BASE),
-		},
-		/* Single ring - provide ring size if multiple rings of this
-		 * type are supported
-		 */
-		.reg_size = {},
-		.max_size =
-			HWIO_TCL_R0_TCL_STATUS1_RING_BASE_MSB_RING_SIZE_BMSK >>
-			HWIO_TCL_R0_TCL_STATUS1_RING_BASE_MSB_RING_SIZE_SHFT,
-	},
-	{ /* CE_SRC */
-		.start_ring_id = HAL_SRNG_CE_0_SRC,
-		.max_rings = 16,
-		.entry_size = sizeof(struct ce_src_desc) >> 2,
-		.lmac_ring = FALSE,
-		.ring_dir = HAL_SRNG_SRC_RING,
-		.reg_start = {
-		HWIO_WFSS_CE_CHANNEL_SRC_R0_SRC_RING_BASE_LSB_ADDR(
-				WFSS_CE_0_CHANNEL_SRC_REG_REG_BASE),
-		HWIO_WFSS_CE_CHANNEL_SRC_R2_SRC_RING_HP_ADDR(
-				WFSS_CE_0_CHANNEL_SRC_REG_REG_BASE),
-		},
-		.reg_size = {
-		WFSS_CE_1_CHANNEL_SRC_REG_REG_BASE -
-		WFSS_CE_0_CHANNEL_SRC_REG_REG_BASE,
-		WFSS_CE_1_CHANNEL_SRC_REG_REG_BASE -
-		WFSS_CE_0_CHANNEL_SRC_REG_REG_BASE,
-		},
-		.max_size =
-		HWIO_WFSS_CE_CHANNEL_SRC_R0_SRC_RING_BASE_MSB_RING_SIZE_BMSK >>
-		HWIO_WFSS_CE_CHANNEL_SRC_R0_SRC_RING_BASE_MSB_RING_SIZE_SHFT,
-	},
-	{ /* CE_DST */
-		.start_ring_id = HAL_SRNG_CE_0_DST,
-		.max_rings = 16,
-		.entry_size = 8 >> 2,
-		/*TODO: entry_size above should actually be
-		 * sizeof(struct ce_dst_desc) >> 2, but couldn't find definition
-		 * of struct ce_dst_desc in HW header files
-		 */
-		.lmac_ring = FALSE,
-		.ring_dir = HAL_SRNG_SRC_RING,
-		.reg_start = {
-		HWIO_WFSS_CE_CHANNEL_DST_R0_DEST_RING_BASE_LSB_ADDR(
-		WFSS_CE_0_CHANNEL_DST_REG_REG_BASE),
-		HWIO_WFSS_CE_CHANNEL_DST_R2_DEST_RING_HP_ADDR(
-		WFSS_CE_0_CHANNEL_DST_REG_REG_BASE),
-		},
-		.reg_size = {
-		WFSS_CE_1_CHANNEL_DST_REG_REG_BASE -
-		WFSS_CE_0_CHANNEL_DST_REG_REG_BASE,
-		WFSS_CE_1_CHANNEL_DST_REG_REG_BASE -
-		WFSS_CE_0_CHANNEL_DST_REG_REG_BASE,
-		},
-		.max_size =
-		HWIO_WFSS_CE_CHANNEL_DST_R0_DEST_RING_BASE_MSB_RING_SIZE_BMSK >>
-		HWIO_WFSS_CE_CHANNEL_DST_R0_DEST_RING_BASE_MSB_RING_SIZE_SHFT,
-	},
-	{ /* CE_DST_STATUS */
-		.start_ring_id = HAL_SRNG_CE_0_DST_STATUS,
-		.max_rings = 16,
-		.entry_size = sizeof(struct ce_stat_desc) >> 2,
-		.lmac_ring = FALSE,
-		.ring_dir = HAL_SRNG_DST_RING,
-		.reg_start = {
-		HWIO_WFSS_CE_CHANNEL_DST_R0_STATUS_RING_BASE_LSB_ADDR(
-				WFSS_CE_0_CHANNEL_DST_REG_REG_BASE),
-		HWIO_WFSS_CE_CHANNEL_DST_R2_STATUS_RING_HP_ADDR(
-				WFSS_CE_0_CHANNEL_DST_REG_REG_BASE),
-		},
-		/* TODO: check destination status ring registers */
-		.reg_size = {
-		WFSS_CE_1_CHANNEL_DST_REG_REG_BASE -
-		WFSS_CE_0_CHANNEL_DST_REG_REG_BASE,
-		WFSS_CE_1_CHANNEL_DST_REG_REG_BASE -
-		WFSS_CE_0_CHANNEL_DST_REG_REG_BASE,
-		},
-		.max_size =
-	HWIO_WFSS_CE_CHANNEL_DST_R0_STATUS_RING_BASE_MSB_RING_SIZE_BMSK >>
-		HWIO_WFSS_CE_CHANNEL_DST_R0_STATUS_RING_BASE_MSB_RING_SIZE_SHFT,
-	},
-	{ /* WBM_IDLE_LINK */
-		.start_ring_id = HAL_SRNG_WBM_IDLE_LINK,
-		.max_rings = 1,
-		.entry_size = sizeof(struct wbm_link_descriptor_ring) >> 2,
-		.lmac_ring = FALSE,
-		.ring_dir = HAL_SRNG_SRC_RING,
-		.reg_start = {
-		HWIO_WBM_R0_WBM_IDLE_LINK_RING_BASE_LSB_ADDR(WBM_REG_REG_BASE),
-		HWIO_WBM_R2_WBM_IDLE_LINK_RING_HP_ADDR(WBM_REG_REG_BASE),
-		},
-		/* Single ring - provide ring size if multiple rings of this
-		 * type are supported
-		 */
-		.reg_size = {},
-		.max_size =
-		HWIO_WBM_R0_WBM_IDLE_LINK_RING_BASE_MSB_RING_SIZE_BMSK >>
-		HWIO_WBM_R0_WBM_IDLE_LINK_RING_BASE_MSB_RING_SIZE_SHFT,
-	},
-	{ /* SW2WBM_RELEASE */
-		.start_ring_id = HAL_SRNG_WBM_SW_RELEASE,
-		.max_rings = 2,
-		.entry_size = sizeof(struct wbm_release_ring) >> 2,
-		.lmac_ring = FALSE,
-		.ring_dir = HAL_SRNG_SRC_RING,
-		.reg_start = {
-		HWIO_WBM_R0_SW_RELEASE_RING_BASE_LSB_ADDR(WBM_REG_REG_BASE),
-		HWIO_WBM_R2_SW_RELEASE_RING_HP_ADDR(WBM_REG_REG_BASE),
-		},
-		.reg_size = {
-		HWIO_WBM_R0_SW1_RELEASE_RING_BASE_LSB_ADDR(WBM_REG_REG_BASE) -
-		HWIO_WBM_R0_SW_RELEASE_RING_BASE_LSB_ADDR(WBM_REG_REG_BASE),
-		HWIO_WBM_R2_SW1_RELEASE_RING_HP_ADDR(WBM_REG_REG_BASE) -
-		HWIO_WBM_R2_SW_RELEASE_RING_HP_ADDR(WBM_REG_REG_BASE)
-		},
-		.max_size =
-		HWIO_WBM_R0_SW_RELEASE_RING_BASE_MSB_RING_SIZE_BMSK >>
-		HWIO_WBM_R0_SW_RELEASE_RING_BASE_MSB_RING_SIZE_SHFT,
-	},
-	{ /* WBM2SW_RELEASE */
-		.start_ring_id = HAL_SRNG_WBM2SW0_RELEASE,
-		.max_rings = 8,
-		.entry_size = sizeof(struct wbm_release_ring) >> 2,
-		.lmac_ring = FALSE,
-		.ring_dir = HAL_SRNG_DST_RING,
-		.reg_start = {
-		HWIO_WBM_R0_WBM2SW0_RELEASE_RING_BASE_LSB_ADDR(
-				WBM_REG_REG_BASE),
-		HWIO_WBM_R2_WBM2SW0_RELEASE_RING_HP_ADDR(
-				WBM_REG_REG_BASE),
-		},
-		.reg_size = {
-		HWIO_WBM_R0_WBM2SW1_RELEASE_RING_BASE_LSB_ADDR(
-				WBM_REG_REG_BASE) -
-		HWIO_WBM_R0_WBM2SW0_RELEASE_RING_BASE_LSB_ADDR(
-				WBM_REG_REG_BASE),
-		HWIO_WBM_R2_WBM2SW1_RELEASE_RING_HP_ADDR(
-				WBM_REG_REG_BASE) -
-		HWIO_WBM_R2_WBM2SW0_RELEASE_RING_HP_ADDR(
-				WBM_REG_REG_BASE),
-		},
-		.max_size =
-		HWIO_WBM_R0_WBM2SW0_RELEASE_RING_BASE_MSB_RING_SIZE_BMSK >>
-		HWIO_WBM_R0_WBM2SW0_RELEASE_RING_BASE_MSB_RING_SIZE_SHFT,
-	},
-	{ /* RXDMA_BUF */
-		.start_ring_id = HAL_SRNG_WMAC1_SW2RXDMA0_BUF0,
-#ifdef IPA_OFFLOAD
-		.max_rings = 3,
-#else
-		.max_rings = 3,
-#endif
-		.entry_size = sizeof(struct wbm_buffer_ring) >> 2,
-		.lmac_ring = TRUE,
-		.ring_dir = HAL_SRNG_SRC_RING,
-		/* reg_start is not set because LMAC rings are not accessed
-		 * from host
-		 */
-		.reg_start = {},
-		.reg_size = {},
-		.max_size = HAL_RXDMA_MAX_RING_SIZE,
-	},
-	{ /* RXDMA_DST */
-		.start_ring_id = HAL_SRNG_WMAC1_RXDMA2SW0,
-		.max_rings = 0,
-		.entry_size = 0/*sizeof(struct reo_entrance_ring) >> 2*/,
-		.lmac_ring =  TRUE,
-		.ring_dir = HAL_SRNG_DST_RING,
-		/* reg_start is not set because LMAC rings are not accessed
-		 * from host
-		 */
-		.reg_start = {},
-		.reg_size = {},
-		.max_size = HAL_RXDMA_MAX_RING_SIZE,
-	},
-#ifdef QCA_MONITOR_2_0_SUPPORT
-	{ /* RXDMA_MONITOR_BUF */
-		.start_ring_id = HAL_SRNG_WMAC1_SW2RXDMA2_BUF,
-		.max_rings = 1,
-		.entry_size = sizeof(struct mon_ingress_ring) >> 2,
-		.lmac_ring = TRUE,
-		.ring_dir = HAL_SRNG_SRC_RING,
-		/* reg_start is not set because LMAC rings are not accessed
-		 * from host
-		 */
-		.reg_start = {},
-		.reg_size = {},
-		.max_size = HAL_RXDMA_MAX_RING_SIZE_BE,
-	},
-#else
-	{},
-#endif
-	{ /* RXDMA_MONITOR_STATUS */
-		.start_ring_id = HAL_SRNG_WMAC1_SW2RXDMA1_STATBUF,
-		.max_rings = 0,
-		.entry_size = sizeof(struct wbm_buffer_ring) >> 2,
-		.lmac_ring = TRUE,
-		.ring_dir = HAL_SRNG_SRC_RING,
-		/* reg_start is not set because LMAC rings are not accessed
-		 * from host
-		 */
-		.reg_start = {},
-		.reg_size = {},
-		.max_size = HAL_RXDMA_MAX_RING_SIZE,
-	},
-#ifdef QCA_MONITOR_2_0_SUPPORT
-	{ /* RXDMA_MONITOR_DST */
-		.start_ring_id = HAL_SRNG_WMAC1_RXMON2SW0,
-		.max_rings = 2,
-		.entry_size = sizeof(struct mon_destination_ring) >> 2,
-		.lmac_ring = TRUE,
-		.ring_dir = HAL_SRNG_DST_RING,
-		/* reg_start is not set because LMAC rings are not accessed
-		 * from host
-		 */
-		.reg_start = {},
-		.reg_size = {},
-		.max_size = HAL_RXDMA_MAX_RING_SIZE_BE,
-	},
-#else
-	{},
-#endif
-	{ /* RXDMA_MONITOR_DESC */
-		.start_ring_id = HAL_SRNG_WMAC1_SW2RXDMA1_DESC,
-		.max_rings = 0,
-		.entry_size = 0/*sizeof(struct sw_monitor_ring) >> 2*/,
-		.lmac_ring = TRUE,
-		.ring_dir = HAL_SRNG_DST_RING,
-		/* reg_start is not set because LMAC rings are not accessed
-		 * from host
-		 */
-		.reg_start = {},
-		.reg_size = {},
-		.max_size = HAL_RXDMA_MAX_RING_SIZE_BE,
-	},
-
-	{ /* DIR_BUF_RX_DMA_SRC */
-		.start_ring_id = HAL_SRNG_DIR_BUF_RX_SRC_DMA_RING,
-		/* one ring for spectral and one ring for cfr */
-		.max_rings = 2,
-		.entry_size = 2,
-		.lmac_ring = TRUE,
-		.ring_dir = HAL_SRNG_SRC_RING,
-		/* reg_start is not set because LMAC rings are not accessed
-		 * from host
-		 */
-		.reg_start = {},
-		.reg_size = {},
-		.max_size = HAL_RXDMA_MAX_RING_SIZE,
-	},
-#ifdef WLAN_FEATURE_CIF_CFR
-	{ /* WIFI_POS_SRC */
-		.start_ring_id = HAL_SRNG_WIFI_POS_SRC_DMA_RING,
-		.max_rings = 1,
-		.entry_size = sizeof(wmi_oem_dma_buf_release_entry)  >> 2,
-		.lmac_ring = TRUE,
-		.ring_dir = HAL_SRNG_SRC_RING,
-		/* reg_start is not set because LMAC rings are not accessed
-		 * from host
-		 */
-		.reg_start = {},
-		.reg_size = {},
-		.max_size = HAL_RXDMA_MAX_RING_SIZE_BE,
-	},
-#endif
-	{ /* REO2PPE */
-		.start_ring_id = HAL_SRNG_REO2PPE,
-		.max_rings = 1,
-		.entry_size = sizeof(struct reo_destination_ring) >> 2,
-		.lmac_ring = FALSE,
-		.ring_dir = HAL_SRNG_DST_RING,
-		.reg_start = {
-			HWIO_REO_R0_REO2PPE_RING_BASE_LSB_ADDR(
-				REO_REG_REG_BASE),
-			HWIO_REO_R2_REO2PPE_RING_HP_ADDR(
-				REO_REG_REG_BASE),
-		},
-		/* Single ring - provide ring size if multiple rings of this
-		 * type are supported
-		 */
-		.reg_size = {},
-		.max_size =
-		HWIO_REO_R0_REO2PPE_RING_BASE_LSB_RING_BASE_ADDR_LSB_BMSK >>
-		HWIO_REO_R0_REO2PPE_RING_BASE_LSB_RING_BASE_ADDR_LSB_SHFT,
-	},
-	{ /* PPE2TCL */
-		.start_ring_id = HAL_SRNG_PPE2TCL1,
-		.max_rings = 1,
-		.entry_size = sizeof(struct tcl_entrance_from_ppe_ring) >> 2,
-		.lmac_ring = FALSE,
-		.ring_dir = HAL_SRNG_SRC_RING,
-		.reg_start = {
-			HWIO_TCL_R0_PPE2TCL1_RING_BASE_LSB_ADDR(
-				MAC_TCL_REG_REG_BASE),
-			HWIO_TCL_R2_PPE2TCL1_RING_HP_ADDR(
-				MAC_TCL_REG_REG_BASE),
-		},
-		.reg_size = {},
-		.max_size =
-			HWIO_TCL_R0_SW2TCL1_RING_BASE_MSB_RING_SIZE_BMSK >>
-			HWIO_TCL_R0_SW2TCL1_RING_BASE_MSB_RING_SIZE_SHFT,
-	},
-	{ /* PPE_RELEASE */
-		.start_ring_id = HAL_SRNG_WBM_PPE_RELEASE,
-		.max_rings = 1,
-		.entry_size = sizeof(struct wbm_release_ring) >> 2,
-		.lmac_ring = FALSE,
-		.ring_dir = HAL_SRNG_SRC_RING,
-		.reg_start = {
-		HWIO_WBM_R0_PPE_RELEASE_RING_BASE_LSB_ADDR(WBM_REG_REG_BASE),
-		HWIO_WBM_R2_PPE_RELEASE_RING_HP_ADDR(WBM_REG_REG_BASE),
-		},
-		.reg_size = {},
-		.max_size =
-		HWIO_WBM_R0_PPE_RELEASE_RING_BASE_MSB_RING_SIZE_BMSK >>
-		HWIO_WBM_R0_PPE_RELEASE_RING_BASE_MSB_RING_SIZE_SHFT,
-	},
-#ifdef QCA_MONITOR_2_0_SUPPORT
-	{ /* TX_MONITOR_BUF */
-		.start_ring_id = HAL_SRNG_SW2TXMON_BUF0,
-		.max_rings = 1,
-		.entry_size = sizeof(struct mon_ingress_ring) >> 2,
-		.lmac_ring = TRUE,
-		.ring_dir = HAL_SRNG_SRC_RING,
-		/* reg_start is not set because LMAC rings are not accessed
-		 * from host
-		 */
-		.reg_start = {},
-		.reg_size = {},
-		.max_size = HAL_RXDMA_MAX_RING_SIZE_BE,
-	},
-	{ /* TX_MONITOR_DST */
-		.start_ring_id = HAL_SRNG_WMAC1_TXMON2SW0,
-		.max_rings = 2,
-		.entry_size = sizeof(struct mon_destination_ring) >> 2,
-		.lmac_ring = TRUE,
-		.ring_dir = HAL_SRNG_DST_RING,
-		/* reg_start is not set because LMAC rings are not accessed
-		 * from host
-		 */
-		.reg_start = {},
-		.reg_size = {},
-		.max_size = HAL_RXDMA_MAX_RING_SIZE_BE,
-	},
-#else
-	{},
-	{},
-#endif
-	{ /* SW2RXDMA */
-		.start_ring_id = HAL_SRNG_SW2RXDMA_BUF0,
-		.max_rings = 3,
-		.entry_size = sizeof(struct reo_entrance_ring) >> 2,
-		.lmac_ring =  TRUE,
-		.ring_dir = HAL_SRNG_SRC_RING,
-		/* reg_start is not set because LMAC rings are not accessed
-		 * from host
-		 */
-		.reg_start = {},
-		.reg_size = {},
-		.max_size = HAL_RXDMA_MAX_RING_SIZE_BE,
-	},
+	hal_soc->ops->hal_tx_vdev_mismatch_routing_set =
+		hal_tx_vdev_mismatch_routing_set_generic_be;
+	hal_soc->ops->hal_tx_mcast_mlo_reinject_routing_set =
+		hal_tx_mcast_mlo_reinject_routing_set_generic_be;
+	hal_soc->ops->hal_get_ba_aging_timeout =
+		hal_get_ba_aging_timeout_be_generic;
+	hal_soc->ops->hal_setup_link_idle_list =
+		hal_setup_link_idle_list_generic_be;
+	hal_soc->ops->hal_cookie_conversion_reg_cfg_be =
+		hal_cookie_conversion_reg_cfg_generic_be;
+	hal_soc->ops->hal_set_ba_aging_timeout =
+		hal_set_ba_aging_timeout_be_generic;
+	hal_soc->ops->hal_tx_populate_bank_register =
+		hal_tx_populate_bank_register_be;
+	hal_soc->ops->hal_tx_vdev_mcast_ctrl_set =
+		hal_tx_vdev_mcast_ctrl_set_be;
 };
 
 /**
@@ -2504,23 +2111,4 @@ static inline void hal_srng_hw_reg_offset_init_qcn9224(struct hal_soc *hal_soc)
 	hw_reg_offset[DST_MSI2_DATA] = REG_OFFSET(DST, MSI2_DATA),
 	hw_reg_offset[DST_PRODUCER_INT2_SETUP] =
 					REG_OFFSET(DST, PRODUCER_INT2_SETUP);
-}
-
-/**
- * hal_qcn9224_attach()- Attach 9224 target specific hal_soc ops,
- *			  offset and srng table
- * Return: void
- */
-void hal_qcn9224_attach(struct hal_soc *hal_soc)
-{
-	hal_soc->hw_srng_table = hw_srng_table_9224;
-
-	hal_srng_hw_reg_offset_init_generic(hal_soc);
-	hal_srng_hw_reg_offset_init_qcn9224(hal_soc);
-
-	hal_hw_txrx_default_ops_attach_be(hal_soc);
-	hal_hw_txrx_ops_attach_qcn9224(hal_soc);
-	if (hal_soc->static_window_map)
-		hal_write_window_register(hal_soc);
-	hal_soc->dmac_cmn_src_rxbuf_ring = true;
 }

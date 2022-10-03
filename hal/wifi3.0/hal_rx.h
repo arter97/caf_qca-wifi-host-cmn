@@ -31,6 +31,7 @@
 #define HAL_RX_OFFSET(block, field) block##_##field##_OFFSET
 #define HAL_RX_LSB(block, field) block##_##field##_LSB
 #define HAL_RX_MASK(block, field) block##_##field##_MASK
+#define HAL_RX_TLV_L3_TYPE_INVALID 0xFFFF
 
 #define HAL_RX_GET(_ptr, block, field) \
 	(((*((volatile uint32_t *)_ptr + (HAL_RX_OFFSET(block, field)>>2))) & \
@@ -958,19 +959,19 @@ hal_rx_mpdu_start_sw_peer_id_get(hal_soc_handle_t hal_soc_hdl,
 }
 
 /**
- * hal_rx_mpdu_peer_meta_data_get() - Retrieve PEER_META_DATA
+ * hal_rx_tlv_peer_meta_data_get() - Retrieve PEER_META_DATA
  * @hal_soc_hdl: hal soc handle
  * @buf: pointer to rx pkt TLV.
  *
  * Return: peer meta data
  */
 static inline uint32_t
-hal_rx_mpdu_peer_meta_data_get(hal_soc_handle_t hal_soc_hdl,
-			       uint8_t *buf)
+hal_rx_tlv_peer_meta_data_get(hal_soc_handle_t hal_soc_hdl,
+			      uint8_t *buf)
 {
 	struct hal_soc *hal_soc = (struct hal_soc *)hal_soc_hdl;
 
-	return hal_soc->ops->hal_rx_mpdu_peer_meta_data_get(buf);
+	return hal_soc->ops->hal_rx_tlv_peer_meta_data_get(buf);
 }
 
 /*
@@ -2709,13 +2710,15 @@ hal_rx_tlv_get_freq(hal_soc_handle_t hal_soc_hdl, uint8_t *buf)
 }
 
 static inline void hal_mpdu_desc_info_set(hal_soc_handle_t hal_soc_hdl,
-					  void *mpdu_desc_info, uint32_t val)
+					  void *desc,
+					  void *mpdu_desc_info,
+					  uint32_t val)
 {
 	struct hal_soc *hal_soc = (struct hal_soc *)hal_soc_hdl;
 
 	if (hal_soc->ops->hal_mpdu_desc_info_set)
 		return hal_soc->ops->hal_mpdu_desc_info_set(
-				hal_soc_hdl, mpdu_desc_info, val);
+				hal_soc_hdl, desc, mpdu_desc_info, val);
 }
 
 static inline void hal_msdu_desc_info_set(hal_soc_handle_t hal_soc_hdl,
@@ -2940,18 +2943,20 @@ hal_reo_shared_qaddr_write(hal_soc_handle_t hal_soc_hdl,
 /**
  * hal_reo_shared_qaddr_init(): Initialize reo qref LUT
  * @hal_soc: Hal soc pointer
+ * @qref_reset: reset qref LUT
  *
  * Write MLO and Non MLO table start addr to HW reg
  *
  * Return: void
  */
 static inline void
-hal_reo_shared_qaddr_init(hal_soc_handle_t hal_soc_hdl)
+hal_reo_shared_qaddr_init(hal_soc_handle_t hal_soc_hdl, int qref_reset)
 {
 	struct hal_soc *hal_soc = (struct hal_soc *)hal_soc_hdl;
 
 	if (hal_soc->ops->hal_reo_shared_qaddr_init)
-		return hal_soc->ops->hal_reo_shared_qaddr_init(hal_soc_hdl);
+		return hal_soc->ops->hal_reo_shared_qaddr_init(hal_soc_hdl,
+							       qref_reset);
 }
 
 /**
@@ -2981,7 +2986,7 @@ hal_reo_shared_qaddr_write(hal_soc_handle_t hal_soc_hdl,
 			   int tid,
 			   qdf_dma_addr_t hw_qdesc_paddr) {}
 static inline void
-hal_reo_shared_qaddr_init(hal_soc_handle_t hal_soc_hdl) {}
+hal_reo_shared_qaddr_init(hal_soc_handle_t hal_soc_hdl, int qref_reset) {}
 
 static inline void
 hal_reo_shared_qaddr_cache_clear(hal_soc_handle_t hal_soc_hdl) {}
@@ -3011,6 +3016,29 @@ hal_rx_tlv_l3_type_get(hal_soc_handle_t hal_soc_hdl, uint8_t *buf)
 {
 	struct hal_soc *hal_soc = (struct hal_soc *)hal_soc_hdl;
 
-	return hal_soc->ops->hal_rx_tlv_l3_type_get(buf);
+	return hal_soc->ops->hal_rx_tlv_l3_type_get ?
+		hal_soc->ops->hal_rx_tlv_l3_type_get(buf) :
+			HAL_RX_TLV_L3_TYPE_INVALID;
+}
+
+/**
+ * hal_get_tsf_time() - Get tsf time
+ * @hal_soc_hdl: HAL soc handle
+ * @mac_id: mac_id
+ * @tsf: pointer to update tsf value
+ * @tsf_sync_soc_time: pointer to update tsf sync time
+ *
+ * Return: None.
+ */
+static inline void
+hal_get_tsf_time(hal_soc_handle_t hal_soc_hdl, uint32_t tsf_id,
+		 uint32_t mac_id, uint64_t *tsf,
+		 uint64_t *tsf_sync_soc_time)
+{
+	struct hal_soc *hal_soc = (struct hal_soc *)hal_soc_hdl;
+
+	if (hal_soc->ops->hal_get_tsf_time)
+		hal_soc->ops->hal_get_tsf_time(hal_soc_hdl, tsf_id, mac_id,
+					       tsf, tsf_sync_soc_time);
 }
 #endif /* _HAL_RX_H */

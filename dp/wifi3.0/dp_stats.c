@@ -32,6 +32,16 @@
 #endif
 
 #define DP_MAX_STRING_LEN 500
+#define DP_HTT_TX_RX_EXPECTED_TLVS (((uint64_t)1 << HTT_STATS_TX_PDEV_CMN_TAG) |\
+	((uint64_t)1 << HTT_STATS_TX_PDEV_UNDERRUN_TAG) |\
+	((uint64_t)1 << HTT_STATS_TX_PDEV_SIFS_TAG) |\
+	((uint64_t)1 << HTT_STATS_TX_PDEV_FLUSH_TAG) |\
+	((uint64_t)1 << HTT_STATS_RX_PDEV_FW_STATS_TAG) |\
+	((uint64_t)1 << HTT_STATS_RX_SOC_FW_STATS_TAG) |\
+	((uint64_t)1 << HTT_STATS_RX_SOC_FW_REFILL_RING_EMPTY_TAG) |\
+	((uint64_t)1 << HTT_STATS_RX_SOC_FW_REFILL_RING_NUM_REFILL_TAG) |\
+	((uint64_t)1 << HTT_STATS_RX_PDEV_FW_RING_MPDU_ERR_TAG) |\
+	((uint64_t)1 << HTT_STATS_RX_PDEV_FW_MPDU_DROP_TAG))
 
 #define DP_HTT_HW_INTR_NAME_LEN  HTT_STATS_MAX_HW_INTR_NAME_LEN
 #define DP_HTT_HW_MODULE_NAME_LEN  HTT_STATS_MAX_HW_MODULE_NAME_LEN
@@ -274,6 +284,7 @@ const char *mu_reception_mode[TXRX_TYPE_MU_MAX] = {
 };
 
 #ifdef QCA_ENH_V3_STATS_SUPPORT
+#ifndef WLAN_CONFIG_TX_DELAY
 const char *fw_to_hw_delay_bucket[CDP_DELAY_BUCKET_MAX + 1] = {
 	"0 to 9 ms", "10 to 19 ms",
 	"20 to 29 ms", "30 to 39 ms",
@@ -282,6 +293,16 @@ const char *fw_to_hw_delay_bucket[CDP_DELAY_BUCKET_MAX + 1] = {
 	"80 to 89 ms", "90 to 99 ms",
 	"101 to 249 ms", "250 to 499 ms", "500+ ms"
 };
+#else
+const char *fw_to_hw_delay_bucket[CDP_DELAY_BUCKET_MAX + 1] = {
+	"0 to 250 us", "250 to 500 us",
+	"500 to 750 us", "750 to 1000 us",
+	"1000 to 1500 us", "1500 to 2000 us",
+	"2000 to 2500 us", "2500 to 5000 us",
+	"5000 to 6000 us", "6000 to 7000 ms",
+	"7000 to 8000 us", "8000 to 9000 us", "9000+ us"
+};
+#endif
 #elif defined(HW_TX_DELAY_STATS_ENABLE)
 const char *fw_to_hw_delay_bucket[CDP_DELAY_BUCKET_MAX + 1] = {
 	"0 to 2 ms", "2 to 4 ms",
@@ -294,6 +315,7 @@ const char *fw_to_hw_delay_bucket[CDP_DELAY_BUCKET_MAX + 1] = {
 #endif
 
 #ifdef QCA_ENH_V3_STATS_SUPPORT
+#ifndef WLAN_CONFIG_TX_DELAY
 const char *sw_enq_delay_bucket[CDP_DELAY_BUCKET_MAX + 1] = {
 	"0 to 1 ms", "1 to 2 ms",
 	"2 to 3 ms", "3 to 4 ms",
@@ -302,6 +324,16 @@ const char *sw_enq_delay_bucket[CDP_DELAY_BUCKET_MAX + 1] = {
 	"8 to 9 ms", "9 to 10 ms",
 	"10 to 11 ms", "11 to 12 ms", "12+ ms"
 };
+#else
+const char *sw_enq_delay_bucket[CDP_DELAY_BUCKET_MAX + 1] = {
+	"0 to 250 us", "250 to 500 us",
+	"500 to 750 us", "750 to 1000 us",
+	"1000 to 1500 us", "1500 to 2000 us",
+	"2000 to 2500 us", "2500 to 5000 us",
+	"5000 to 6000 us", "6000 to 7000 ms",
+	"7000 to 8000 us", "8000 to 9000 us", "9000+ us"
+};
+#endif
 
 const char *intfrm_delay_bucket[CDP_DELAY_BUCKET_MAX + 1] = {
 	"0 to 4 ms", "5 to 9 ms",
@@ -1867,7 +1899,6 @@ static void dp_print_tx_sounding_stats_tlv(uint32_t *tag_buf)
 		(htt_tx_sounding_stats_tlv *)tag_buf;
 	uint16_t i;
 	uint16_t max_bw = HTT_TX_PDEV_STATS_NUM_BW_COUNTERS;
-	bool cv_stats = false;
 
 	switch (dp_stats_buf->tx_sounding_mode) {
 	case HTT_TX_AC_SOUNDING_MODE:
@@ -1975,13 +2006,8 @@ static void dp_print_tx_sounding_stats_tlv(uint32_t *tag_buf)
 				dp_stats_buf->sounding[(i * max_bw) + 3],
 				dp_stats_buf->sounding_320[i]);
 		}
-		cv_stats = true;
 		break;
-	default:
-		break;
-	}
-
-	if (cv_stats) {
+	case HTT_TX_CMN_SOUNDING_MODE:
 		DP_PRINT_STATS("\n CV UPLOAD HANDLER STATS:");
 		DP_PRINT_STATS("cv_nc_mismatch_err         : %u",
 			       dp_stats_buf->cv_nc_mismatch_err);
@@ -2043,6 +2069,10 @@ static void dp_print_tx_sounding_stats_tlv(uint32_t *tag_buf)
 			       dp_stats_buf->cv_found_upload_in_progress);
 		DP_PRINT_STATS("cv_expired_during_query    : %u\n",
 			       dp_stats_buf->cv_expired_during_query);
+		break;
+	default:
+		break;
+
 	}
 }
 
@@ -4713,7 +4743,9 @@ void dp_htt_stats_copy_tag(struct dp_pdev *pdev, uint8_t tag_type, uint32_t *tag
 	void *dest_ptr = NULL;
 	uint32_t size = 0;
 	uint32_t size_expected = 0;
+	uint64_t val = 1;
 
+	pdev->fw_stats_tlv_bitmap_rcvd |= (val << tag_type);
 	switch (tag_type) {
 	case HTT_STATS_TX_PDEV_CMN_TAG:
 		dest_ptr = &pdev->stats.htt_tx_pdev_stats.cmn_tlv;
@@ -4786,6 +4818,11 @@ void dp_htt_stats_copy_tag(struct dp_pdev *pdev, uint8_t tag_type, uint32_t *tag
 
 	if (dest_ptr)
 		qdf_mem_copy(dest_ptr, tag_buf, size_expected);
+
+	if (((pdev->fw_stats_tlv_bitmap_rcvd) & DP_HTT_TX_RX_EXPECTED_TLVS)
+	      == DP_HTT_TX_RX_EXPECTED_TLVS) {
+		qdf_event_set(&pdev->fw_stats_event);
+	}
 }
 
 #ifdef VDEV_PEER_PROTOCOL_COUNT
@@ -5090,6 +5127,7 @@ void dp_pdev_print_tid_stats(struct dp_pdev *pdev)
 	struct cdp_tid_tx_stats total_tx;
 	struct cdp_tid_rx_stats total_rx;
 	uint8_t tid, tqm_status_idx, htt_status_idx;
+	struct cdp_tid_rx_stats *rx_wbm_stats = NULL;
 
 	DP_PRINT_STATS("Packets received in hardstart: %llu ",
 			pdev->stats.tid_stats.ingress_stack);
@@ -5098,6 +5136,8 @@ void dp_pdev_print_tid_stats(struct dp_pdev *pdev)
 	DP_PRINT_STATS("Per TID Video Stats:\n");
 
 	for (tid = 0; tid < CDP_MAX_DATA_TIDS; tid++) {
+		rx_wbm_stats = &pdev->stats.tid_stats.tid_rx_wbm_stats[0][tid];
+
 		dp_accumulate_tid_stats(pdev, tid, &total_tx, &total_rx,
 					TID_COUNTER_STATS);
 		DP_PRINT_STATS("----TID: %d----", tid);
@@ -5154,6 +5194,10 @@ void dp_pdev_print_tid_stats(struct dp_pdev *pdev)
 			       total_rx.mcast_msdu_cnt);
 		DP_PRINT_STATS("Rx Broadcast MSDU Count: %llu\n",
 			       total_rx.bcast_msdu_cnt);
+		DP_PRINT_STATS("Rx WBM Intra Bss Deliver Count: %llu",
+			       rx_wbm_stats->intrabss_cnt);
+		DP_PRINT_STATS("Rx WBM Intrabss Drop Count: %llu",
+			       rx_wbm_stats->fail_cnt[INTRABSS_DROP]);
 	}
 }
 
@@ -5699,6 +5743,8 @@ void dp_print_soc_cfg_params(struct dp_soc *soc)
 		       soc_cfg_ctx->tcl_cmd_credit_ring);
 	DP_PRINT_STATS("TCL Status ring: %u ",
 		       soc_cfg_ctx->tcl_status_ring);
+	DP_PRINT_STATS("REO Destination ring: %u ",
+		       soc_cfg_ctx->reo_dst_ring_size);
 	DP_PRINT_STATS("REO Reinject ring: %u ",
 		       soc_cfg_ctx->reo_reinject_ring);
 	DP_PRINT_STATS("RX release ring: %u ",
@@ -5729,6 +5775,8 @@ void dp_print_soc_cfg_params(struct dp_soc *soc)
 		       soc_cfg_ctx->rx_flow_search_table_size);
 	DP_PRINT_STATS("RX Flow Search Table Per PDev : %u ",
 		       soc_cfg_ctx->is_rx_flow_search_table_per_pdev);
+	DP_PRINT_STATS("Rx desc pool size: %u ",
+		       soc_cfg_ctx->rx_sw_desc_num);
 }
 
 void
@@ -5771,7 +5819,7 @@ dp_print_pdev_cfg_params(struct dp_pdev *pdev)
  *
  * Return: void
  */
-static void
+void
 dp_print_ring_stat_from_hal(struct dp_soc *soc,  struct dp_srng *srng,
 			    enum hal_ring_type ring_type)
 {
@@ -5983,6 +6031,11 @@ dp_print_ring_stats(struct dp_pdev *pdev)
 					    [lmac_id],
 					    RXDMA_DST);
 	}
+
+#ifdef WLAN_SUPPORT_PPEDS
+	if (pdev->soc->arch_ops.dp_txrx_ppeds_rings_status)
+		pdev->soc->arch_ops.dp_txrx_ppeds_rings_status(pdev->soc);
+#endif
 	hif_rtpm_put(HIF_RTPM_PUT_ASYNC, HIF_RTPM_ID_DP_RING_STATS);
 }
 
@@ -6301,6 +6354,54 @@ static void dp_print_hist_stats(struct cdp_hist_stats *hstats,
 		DP_PRINT_STATS("Avg = %u\n", hstats->avg);
 	}
 }
+
+#ifdef CONFIG_SAWF
+/*
+ * dp_accumulate_delay_avg_stats(): Accumulate the delay average stats
+ * @stats: cdp_delay_tid stats
+ * @dst_hstats: Destination delay Tx stats
+ * @tid: TID value
+ *
+ * Return: void
+ */
+static void dp_accumulate_delay_avg_stats(struct cdp_delay_tid_stats stats[]
+					  [CDP_MAX_TXRX_CTX],
+					  struct cdp_delay_tx_stats *dst_stats,
+					  uint8_t tid)
+{
+	uint32_t num_rings = 0;
+	uint8_t ring_id;
+
+	for (ring_id = 0; ring_id < CDP_MAX_TXRX_CTX; ring_id++) {
+		struct cdp_delay_tx_stats *dstats =
+				&stats[tid][ring_id].tx_delay;
+
+		if (dstats->swdelay_avg || dstats->hwdelay_avg) {
+			dst_stats->nwdelay_avg += dstats->nwdelay_avg;
+			dst_stats->swdelay_avg += dstats->swdelay_avg;
+			dst_stats->hwdelay_avg += dstats->hwdelay_avg;
+			num_rings++;
+		}
+	}
+
+	if (!num_rings)
+		return;
+
+	dst_stats->nwdelay_avg = qdf_do_div(dst_stats->nwdelay_avg,
+					    num_rings);
+	dst_stats->swdelay_avg = qdf_do_div(dst_stats->swdelay_avg,
+					    num_rings);
+	dst_stats->hwdelay_avg = qdf_do_div(dst_stats->hwdelay_avg,
+					    num_rings);
+}
+#else
+static void dp_accumulate_delay_avg_stats(struct cdp_delay_tid_stats stats[]
+					  [CDP_MAX_TXRX_CTX],
+					  struct cdp_delay_tx_stats *dst_stats,
+					  uint8_t tid)
+{
+}
+#endif
 
 /*
  * dp_accumulate_delay_tid_stats(): Accumulate the tid stats to the
@@ -6833,6 +6934,11 @@ void dp_print_peer_stats(struct dp_peer *peer,
 		DP_PRINT_STATS("	Bytes Received = %llu",
 			       peer_stats->rx.rcvd_reo[i].bytes);
 	}
+	for (i = 0; i < CDP_MAX_LMACS; i++)
+		DP_PRINT_STATS("Packets Received on lmac[%d] = %d ( %llu ),",
+			       i, peer_stats->rx.rx_lmac[i].num,
+			       peer_stats->rx.rx_lmac[i].bytes);
+
 	DP_PRINT_STATS("Unicast Packets Received = %d",
 		       peer_stats->rx.unicast.num);
 	DP_PRINT_STATS("Unicast Bytes Received = %llu",
@@ -7062,6 +7168,8 @@ void dp_txrx_path_stats(struct dp_soc *soc)
 			       pdev->stats.tx_i.dropped.fail_per_pkt_vdev_id_check);
 		DP_PRINT_STATS("DMA Error: %u",
 			       pdev->stats.tx_i.dropped.dma_error);
+		DP_PRINT_STATS("Drop Ingress: %u",
+			       pdev->stats.tx_i.dropped.drop_ingress);
 
 		DP_PRINT_STATS("Dropped in hardware:");
 		DP_PRINT_STATS("total packets dropped: %u",
@@ -7079,6 +7187,8 @@ void dp_txrx_path_stats(struct dp_soc *soc)
 			       pdev->soc->stats.tx.tx_invalid_peer.num);
 		DP_PRINT_STATS("Tx desc freed in non-completion path: %u",
 			       pdev->soc->stats.tx.tx_comp_exception);
+		DP_PRINT_STATS("Tx desc force freed: %u",
+			       pdev->soc->stats.tx.tx_comp_force_freed);
 
 		DP_PRINT_STATS("Tx packets sent per interrupt:");
 		DP_PRINT_STATS("Single Packet: %u",
@@ -7103,7 +7213,7 @@ void dp_txrx_path_stats(struct dp_soc *soc)
 		DP_PRINT_STATS("delivered %u msdus ( %llu bytes),",
 			       pdev->stats.rx.to_stack.num,
 			       pdev->stats.rx.to_stack.bytes);
-		for (i = 0; i <  CDP_MAX_RX_RINGS; i++) {
+		for (i = 0; i < CDP_MAX_RX_RINGS; i++) {
 			if (!pdev->stats.rx.rcvd_reo[i].num)
 				continue;
 			DP_PRINT_STATS(
@@ -7111,6 +7221,10 @@ void dp_txrx_path_stats(struct dp_soc *soc)
 				       i, pdev->stats.rx.rcvd_reo[i].num,
 				       pdev->stats.rx.rcvd_reo[i].bytes);
 		}
+		for (i = 0; i < CDP_MAX_LMACS; i++)
+			DP_PRINT_STATS("received on lmac[%d] %u msdus (%llu bytes),",
+				       i, pdev->stats.rx.rx_lmac[i].num,
+				       pdev->stats.rx.rx_lmac[i].bytes);
 		DP_PRINT_STATS("intra-bss packets %u msdus ( %llu bytes),",
 			       pdev->stats.rx.intra_bss.pkts.num,
 			       pdev->stats.rx.intra_bss.pkts.bytes);
@@ -7153,6 +7267,8 @@ void dp_txrx_path_stats(struct dp_soc *soc)
 			       pdev->soc->stats.rx.err.reo_err_oor_to_stack);
 		DP_PRINT_STATS("REO err oor msdu drop: %u",
 			       pdev->soc->stats.rx.err.reo_err_oor_drop);
+		DP_PRINT_STATS("REO err raw mpdu drop: %u",
+			       pdev->soc->stats.rx.err.reo_err_raw_mpdu_drop);
 		DP_PRINT_STATS("Rx err msdu rejected: %d",
 			       soc->stats.rx.err.rejected);
 		DP_PRINT_STATS("Rx raw frame dropped: %d",
@@ -7283,6 +7399,15 @@ dp_print_pdev_tx_stats(struct dp_pdev *pdev)
 		       pdev->stats.tx_i.rcvd.num);
 	DP_PRINT_STATS("	Bytes = %llu",
 		       pdev->stats.tx_i.rcvd.bytes);
+	DP_PRINT_STATS("Received from Stack in FP:");
+	DP_PRINT_STATS("	Packets = %llu",
+		       pdev->stats.tx_i.rcvd_in_fast_xmit_flow);
+	DP_PRINT_STATS("Received from Stack per core:");
+	DP_PRINT_STATS("	Packets = %u %u %u %u",
+		       pdev->stats.tx_i.rcvd_per_core[0],
+		       pdev->stats.tx_i.rcvd_per_core[1],
+		       pdev->stats.tx_i.rcvd_per_core[2],
+		       pdev->stats.tx_i.rcvd_per_core[3]);
 	DP_PRINT_STATS("Processed:");
 	DP_PRINT_STATS("	Packets = %u",
 		       pdev->stats.tx_i.processed.num);
@@ -7317,6 +7442,10 @@ dp_print_pdev_tx_stats(struct dp_pdev *pdev)
 		       pdev->stats.tx_i.dropped.fail_per_pkt_vdev_id_check);
 	DP_PRINT_STATS("	Resources Full = %u",
 		       pdev->stats.tx_i.dropped.res_full);
+	DP_PRINT_STATS("	Drop Ingress = %u",
+		       pdev->stats.tx_i.dropped.drop_ingress);
+	DP_PRINT_STATS("	invalid peer id in exception path = %u",
+		       pdev->stats.tx_i.dropped.invalid_peer_id_in_exc_path);
 	DP_PRINT_STATS("Tx failed = %u",
 		       pdev->stats.tx.tx_failed);
 	DP_PRINT_STATS("	FW removed Pkts = %u",
@@ -7450,6 +7579,8 @@ dp_print_pdev_tx_stats(struct dp_pdev *pdev)
 void
 dp_print_pdev_rx_stats(struct dp_pdev *pdev)
 {
+	uint8_t i;
+
 	DP_PRINT_STATS("PDEV Rx Stats:\n");
 	DP_PRINT_STATS("Received From HW (Per Rx Ring):");
 	DP_PRINT_STATS("	Packets = %u %u %u %u",
@@ -7462,6 +7593,10 @@ dp_print_pdev_rx_stats(struct dp_pdev *pdev)
 		       pdev->stats.rx.rcvd_reo[1].bytes,
 		       pdev->stats.rx.rcvd_reo[2].bytes,
 		       pdev->stats.rx.rcvd_reo[3].bytes);
+	for (i = 0; i < CDP_MAX_LMACS; i++)
+		DP_PRINT_STATS("Packets Received on lmac[%d] = %d (%llu)",
+			       i, pdev->stats.rx.rx_lmac[i].num,
+			       pdev->stats.rx.rx_lmac[i].bytes);
 	DP_PRINT_STATS("Replenished:");
 	DP_PRINT_STATS("	Packets = %u",
 		       pdev->stats.replenish.pkts.num);
@@ -7799,6 +7934,9 @@ dp_print_soc_rx_stats(struct dp_soc *soc)
 
 	DP_PRINT_STATS("REO err oor msdu drop: %d",
 		       soc->stats.rx.err.reo_err_oor_drop);
+
+	DP_PRINT_STATS("REO err raw ampdu drop: %d",
+		       soc->stats.rx.err.reo_err_raw_mpdu_drop);
 
 	DP_PRINT_STATS("Rx err msdu rejected: %d",
 		       soc->stats.rx.err.rejected);
@@ -8507,11 +8645,18 @@ void dp_update_pdev_stats(struct dp_pdev *tgtobj,
 	tgtobj->stats.rx.to_stack.num += srcobj->rx.to_stack.num;
 	tgtobj->stats.rx.to_stack.bytes += srcobj->rx.to_stack.bytes;
 
-	for (i = 0; i <  CDP_MAX_RX_RINGS; i++) {
+	for (i = 0; i < CDP_MAX_RX_RINGS; i++) {
 		tgtobj->stats.rx.rcvd_reo[i].num +=
 			srcobj->rx.rcvd_reo[i].num;
 		tgtobj->stats.rx.rcvd_reo[i].bytes +=
 			srcobj->rx.rcvd_reo[i].bytes;
+	}
+
+	for (i = 0; i < CDP_MAX_LMACS; i++) {
+		tgtobj->stats.rx.rx_lmac[i].num +=
+			srcobj->rx.rx_lmac[i].num;
+		tgtobj->stats.rx.rx_lmac[i].bytes +=
+			srcobj->rx.rx_lmac[i].bytes;
 	}
 
 	srcobj->rx.unicast.num =
@@ -8587,7 +8732,9 @@ void dp_update_vdev_ingress_stats(struct dp_vdev *tgtobj)
 		tgtobj->stats.tx_i.dropped.fail_per_pkt_vdev_id_check +
 		tgtobj->stats.tx_i.dropped.desc_na.num +
 		tgtobj->stats.tx_i.dropped.res_full +
-		tgtobj->stats.tx_i.dropped.headroom_insufficient;
+		tgtobj->stats.tx_i.dropped.drop_ingress +
+		tgtobj->stats.tx_i.dropped.headroom_insufficient +
+		tgtobj->stats.tx_i.dropped.invalid_peer_id_in_exc_path;
 }
 
 void dp_update_vdev_rate_stats(struct cdp_vdev_stats *tgtobj,
@@ -8606,6 +8753,11 @@ void dp_update_pdev_ingress_stats(struct dp_pdev *tgtobj,
 	DP_STATS_AGGR_PKT(tgtobj, srcobj, tx_i.nawds_mcast);
 
 	DP_STATS_AGGR_PKT(tgtobj, srcobj, tx_i.rcvd);
+	DP_STATS_AGGR(tgtobj, srcobj, tx_i.rcvd_in_fast_xmit_flow);
+	DP_STATS_AGGR(tgtobj, srcobj, tx_i.rcvd_per_core[0]);
+	DP_STATS_AGGR(tgtobj, srcobj, tx_i.rcvd_per_core[1]);
+	DP_STATS_AGGR(tgtobj, srcobj, tx_i.rcvd_per_core[2]);
+	DP_STATS_AGGR(tgtobj, srcobj, tx_i.rcvd_per_core[3]);
 	DP_STATS_AGGR_PKT(tgtobj, srcobj, tx_i.processed);
 	DP_STATS_AGGR_PKT(tgtobj, srcobj, tx_i.reinject_pkts);
 	DP_STATS_AGGR_PKT(tgtobj, srcobj, tx_i.inspect_pkts);
@@ -8631,7 +8783,9 @@ void dp_update_pdev_ingress_stats(struct dp_pdev *tgtobj,
 	DP_STATS_AGGR(tgtobj, srcobj, tx_i.dropped.fail_per_pkt_vdev_id_check);
 	DP_STATS_AGGR(tgtobj, srcobj, tx_i.dropped.desc_na.num);
 	DP_STATS_AGGR(tgtobj, srcobj, tx_i.dropped.res_full);
+	DP_STATS_AGGR(tgtobj, srcobj, tx_i.dropped.drop_ingress);
 	DP_STATS_AGGR(tgtobj, srcobj, tx_i.dropped.headroom_insufficient);
+	DP_STATS_AGGR(tgtobj, srcobj, tx_i.dropped.invalid_peer_id_in_exc_path);
 	DP_STATS_AGGR(tgtobj, srcobj, tx_i.cce_classified);
 	DP_STATS_AGGR(tgtobj, srcobj, tx_i.cce_classified_raw);
 	DP_STATS_AGGR_PKT(tgtobj, srcobj, tx_i.sniffer_rcvd);
@@ -8649,7 +8803,9 @@ void dp_update_pdev_ingress_stats(struct dp_pdev *tgtobj,
 		tgtobj->stats.tx_i.dropped.fail_per_pkt_vdev_id_check +
 		tgtobj->stats.tx_i.dropped.desc_na.num +
 		tgtobj->stats.tx_i.dropped.res_full +
-		tgtobj->stats.tx_i.dropped.headroom_insufficient;
+		tgtobj->stats.tx_i.dropped.drop_ingress +
+		tgtobj->stats.tx_i.dropped.headroom_insufficient +
+		tgtobj->stats.tx_i.dropped.invalid_peer_id_in_exc_path;
 }
 
 QDF_STATUS dp_txrx_get_soc_stats(struct cdp_soc_t *soc_hdl,
@@ -8764,6 +8920,8 @@ QDF_STATUS dp_txrx_get_soc_stats(struct cdp_soc_t *soc_hdl,
 			soc->stats.rx.err.reo_err_msdu_buf_invalid_cookie;
 	soc_stats->rx.err.rx_hw_err_oor_drop =
 					soc->stats.rx.err.reo_err_oor_drop;
+	soc_stats->rx.err.rx_hw_err_raw_mpdu_drop =
+					soc->stats.rx.err.reo_err_raw_mpdu_drop;
 	soc_stats->rx.err.rx_hw_err_oor_to_stack =
 					soc->stats.rx.err.reo_err_oor_to_stack;
 	soc_stats->rx.err.rx_hw_err_oor_sg_count =
@@ -8838,6 +8996,9 @@ dp_txrx_get_peer_delay_stats(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
 					      &rx_delay->to_stack_delay, tid,
 					      CDP_HIST_TYPE_REAP_STACK);
 		tx_delay = &delay_stats[tid].tx_delay;
+		dp_accumulate_delay_avg_stats(pext_stats->delay_tid_stats,
+					      tx_delay,
+					      tid);
 		dp_accumulate_delay_tid_stats(soc, pext_stats->delay_tid_stats,
 					      &tx_delay->tx_swq_delay, tid,
 					      CDP_HIST_TYPE_SW_ENQEUE_DELAY);
@@ -8965,10 +9126,17 @@ dp_get_pdev_telemetry_stats(struct cdp_soc_t *soc_hdl, uint8_t pdev_id,
 {
 	struct dp_soc *soc = (struct dp_soc *)soc_hdl;
 	struct dp_pdev *pdev = dp_get_pdev_from_soc_pdev_id_wifi3(soc, pdev_id);
+	uint8_t ac = 0;
 
 	if (!pdev)
 		return QDF_STATUS_E_FAILURE;
 
+	/* consumption is in micro seconds, convert it to seconds and
+	 * then calculate %age per sec
+	 */
+	for (ac = 0; ac < WME_AC_MAX; ac++)
+		stats->link_airtime[ac] =
+			((pdev->stats.telemetry_stats.link_airtime[ac] * 100) / 1000000);
 	stats->tx_mpdu_failed = pdev->stats.telemetry_stats.tx_mpdu_failed;
 	stats->tx_mpdu_total = pdev->stats.telemetry_stats.tx_mpdu_total;
 

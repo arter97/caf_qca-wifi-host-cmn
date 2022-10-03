@@ -325,6 +325,12 @@ vdev_mgr_start_param_update_mlo(struct vdev_mlme_obj *mlme_obj,
 	    !wlan_vdev_mlme_is_mlo_link_vdev(vdev))
 		param->mlo_flags.mlo_assoc_link = 1;
 
+	if ((wlan_vdev_mlme_get_opmode(vdev) == QDF_STA_MODE) &&
+	    wlan_vdev_mlme_cap_get(vdev, WLAN_VDEV_C_EMLSR_CAP)) {
+		param->mlo_flags.emlsr_support  = 1;
+		mlme_debug("eMLSR support=%d", param->mlo_flags.emlsr_support);
+	}
+
 	if (wlan_vdev_mlme_get_opmode(vdev) == QDF_SAP_MODE) {
 		vdev_mgr_start_param_update_mlo_mcast(vdev, param);
 		vdev_mgr_start_param_update_mlo_partner(vdev, param);
@@ -679,8 +685,14 @@ QDF_STATUS vdev_mgr_up_send(struct vdev_mlme_obj *mlme_obj)
 		if (is_6g_sap_fd_enabled) {
 			fils_param.fd_period = DEFAULT_FILS_DISCOVERY_PERIOD;
 		} else {
-			fils_param.send_prb_rsp_frame = true;
-			fils_param.fd_period = DEFAULT_PROBE_RESP_PERIOD;
+			if (wlan_vdev_mlme_feat_ext2_cap_get(vdev,
+					WLAN_VDEV_FEXT2_20TU_PRB_RESP)) {
+				fils_param.send_prb_rsp_frame = true;
+				fils_param.fd_period =
+					DEFAULT_PROBE_RESP_PERIOD;
+			} else {
+				mlme_err("SAP FD and 20TU Prb both are disabled");
+			}
 		}
 		status = tgt_vdev_mgr_fils_enable_send(mlme_obj,
 						       &fils_param);

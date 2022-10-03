@@ -121,6 +121,8 @@ typedef __qdf_ipa_wdi_pipe_setup_info_smmu_t qdf_ipa_wdi_pipe_setup_info_smmu_t;
 	__QDF_IPA_WDI_SETUP_INFO_SMMU_PKT_OFFSET(txrx)
 #define QDF_IPA_WDI_SETUP_INFO_SMMU_DESC_FORMAT_TEMPLATE(txrx)	\
 	__QDF_IPA_WDI_SETUP_INFO_SMMU_DESC_FORMAT_TEMPLATE(txrx)
+#define QDF_IPA_WDI_SETUP_INFO_SMMU_RX_BANK_ID(txrx, bid)	\
+	__QDF_IPA_WDI_SETUP_INFO_SMMU_RX_BANK_ID(txrx, bid)
 
 typedef __qdf_ipa_ep_cfg_t qdf_ipa_ep_cfg_t;
 
@@ -209,7 +211,7 @@ typedef __qdf_ipa_wdi_reg_intf_in_params_t qdf_ipa_wdi_reg_intf_in_params_t;
 #define QDF_IPA_WDI_REG_INTF_IN_PARAMS_IS_TX1_USED(in)	\
 	__QDF_IPA_WDI_REG_INTF_IN_PARAMS_IS_TX1_USED(in)
 #endif
-#ifdef IPA_WDI3_RX_TWO_PIPES
+#ifdef IPA_WDI3_VLAN_SUPPORT
 #define QDF_IPA_WDI_REG_INTF_IN_PARAMS_IS_RX1_USED(in)	\
 	__QDF_IPA_WDI_REG_INTF_IN_PARAMS_IS_RX1_USED(in)
 #endif
@@ -266,6 +268,8 @@ typedef __qdf_ipa_wdi_pipe_setup_info_t qdf_ipa_wdi_pipe_setup_info_t;
 	__QDF_IPA_WDI_SETUP_INFO_PKT_OFFSET(txrx)
 #define QDF_IPA_WDI_SETUP_INFO_DESC_FORMAT_TEMPLATE(txrx)	\
 	__QDF_IPA_WDI_SETUP_INFO_DESC_FORMAT_TEMPLATE(txrx)
+#define QDF_IPA_WDI_SETUP_INFO_RX_BANK_ID(txrx, bid)	\
+	__QDF_IPA_WDI_SETUP_INFO_RX_BANK_ID(txrx, bid)
 
 /**
  * qdf_ipa_wdi_conn_in_params_t - information provided by
@@ -309,7 +313,7 @@ typedef __qdf_ipa_wdi_conn_in_params_t qdf_ipa_wdi_conn_in_params_t;
 #define QDF_IPA_WDI_CONN_OUT_PARAMS_TX_UC_ALT_DB_PA(pipe_out)	\
 	__QDF_IPA_WDI_CONN_OUT_PARAMS_TX_UC_ALT_DB_PA(pipe_out)
 #endif
-#ifdef IPA_WDI3_RX_TWO_PIPES
+#ifdef IPA_WDI3_VLAN_SUPPORT
 #define QDF_IPA_WDI_CONN_IN_PARAMS_IS_RX1_USED(pipe_in)	\
 	__QDF_IPA_WDI_CONN_IN_PARAMS_IS_RX1_USED(pipe_in)
 #define QDF_IPA_WDI_CONN_IN_PARAMS_RX_ALT(pipe_in)	\
@@ -329,7 +333,7 @@ typedef __qdf_ipa_wdi_conn_out_params_t qdf_ipa_wdi_conn_out_params_t;
 	__QDF_IPA_WDI_CONN_OUT_PARAMS_TX_UC_DB_VA(pipe_out)
 #define QDF_IPA_WDI_CONN_OUT_PARAMS_RX_UC_DB_PA(pipe_out)	\
 	__QDF_IPA_WDI_CONN_OUT_PARAMS_RX_UC_DB_PA(pipe_out)
-#ifdef IPA_WDI3_RX_TWO_PIPES
+#ifdef IPA_WDI3_VLAN_SUPPORT
 #define QDF_IPA_WDI_CONN_OUT_PARAMS_RX_ALT_UC_DB_PA(pipe_out)	\
 	__QDF_IPA_WDI_CONN_OUT_PARAMS_RX_ALT_UC_DB_PA(pipe_out)
 #endif

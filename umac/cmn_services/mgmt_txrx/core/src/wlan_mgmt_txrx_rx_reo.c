@@ -24,7 +24,6 @@
 #include <wlan_mgmt_txrx_rx_reo_tgt_api.h>
 #include "wlan_mgmt_txrx_main_i.h"
 #include <qdf_util.h>
-#include <wlan_cfr_utils_api.h>
 #include <wlan_mlo_mgr_cmn.h>
 
 static struct mgmt_rx_reo_context g_rx_reo_ctx;
@@ -915,20 +914,20 @@ mgmt_rx_reo_snapshots_check_sanity
 	return QDF_STATUS_SUCCESS;
 
 fail:
-	mgmt_rx_reo_err("HW SS: valid = %u, ctr = %u, ts = %u",
-			mac_hw_ss->valid, mac_hw_ss->mgmt_pkt_ctr,
-			mac_hw_ss->global_timestamp);
-	mgmt_rx_reo_err("FW forwarded SS: valid = %u, ctr = %u, ts = %u",
-			fw_forwarded_ss->valid,
-			fw_forwarded_ss->mgmt_pkt_ctr,
-			fw_forwarded_ss->global_timestamp);
-	mgmt_rx_reo_err("FW consumed SS: valid = %u, ctr = %u, ts = %u",
-			fw_consumed_ss->valid,
-			fw_consumed_ss->mgmt_pkt_ctr,
-			fw_consumed_ss->global_timestamp);
-	mgmt_rx_reo_err("HOST SS: valid = %u, ctr = %u, ts = %u",
-			host_ss->valid, host_ss->mgmt_pkt_ctr,
-			host_ss->global_timestamp);
+	mgmt_rx_reo_debug("HW SS: valid = %u, ctr = %u, ts = %u",
+			  mac_hw_ss->valid, mac_hw_ss->mgmt_pkt_ctr,
+			  mac_hw_ss->global_timestamp);
+	mgmt_rx_reo_debug("FW forwarded SS: valid = %u, ctr = %u, ts = %u",
+			  fw_forwarded_ss->valid,
+			  fw_forwarded_ss->mgmt_pkt_ctr,
+			  fw_forwarded_ss->global_timestamp);
+	mgmt_rx_reo_debug("FW consumed SS: valid = %u, ctr = %u, ts = %u",
+			  fw_consumed_ss->valid,
+			  fw_consumed_ss->mgmt_pkt_ctr,
+			  fw_consumed_ss->global_timestamp);
+	mgmt_rx_reo_debug("HOST SS: valid = %u, ctr = %u, ts = %u",
+			  host_ss->valid, host_ss->mgmt_pkt_ctr,
+			  host_ss->global_timestamp);
 
 	return status;
 }
@@ -964,6 +963,7 @@ wlan_mgmt_rx_reo_algo_calculate_wait_count(
 	uint8_t snapshot_id;
 	struct wlan_objmgr_pdev *pdev;
 	struct mgmt_rx_reo_pdev_info *rx_reo_pdev_ctx;
+	struct mgmt_rx_reo_pdev_info *in_frame_rx_reo_pdev_ctx;
 	struct mgmt_rx_reo_snapshot_info *snapshot_info;
 	struct mgmt_rx_reo_snapshot_params snapshot_params
 				[MGMT_RX_REO_SHARED_SNAPSHOT_MAX];
@@ -1001,6 +1001,15 @@ wlan_mgmt_rx_reo_algo_calculate_wait_count(
 	qdf_assert_always(in_frame_link < MAX_MLO_LINKS);
 	qdf_assert_always(mgmt_rx_reo_is_valid_link(in_frame_link));
 
+	in_frame_rx_reo_pdev_ctx =
+			wlan_mgmt_rx_reo_get_priv_object(in_frame_pdev);
+	if (!in_frame_rx_reo_pdev_ctx) {
+		mgmt_rx_reo_err("Reo context null for incoming frame pdev");
+		return QDF_STATUS_E_FAILURE;
+	}
+	qdf_mem_zero(in_frame_rx_reo_pdev_ctx->raw_snapshots,
+		     sizeof(in_frame_rx_reo_pdev_ctx->raw_snapshots));
+
 	/* Iterate over all the valid MLO links */
 	for (link = 0; link < MAX_MLO_LINKS; link++) {
 		/* No need wait for any frames on an invalid link */
@@ -1012,6 +1021,13 @@ wlan_mgmt_rx_reo_algo_calculate_wait_count(
 		pdev = wlan_get_pdev_from_mlo_link_id(link,
 						      WLAN_MGMT_RX_REO_ID);
 
+		/* No need to wait for any frames if the pdev is not found */
+		if (!pdev) {
+			mgmt_rx_reo_debug("pdev is null for link %d", link);
+			frames_pending = 0;
+			goto update_pending_frames;
+		}
+
 		rx_reo_pdev_ctx = wlan_mgmt_rx_reo_get_priv_object(pdev);
 		if (!rx_reo_pdev_ctx) {
 			mgmt_rx_reo_err("Mgmt reo context empty for pdev %pK",
@@ -1020,7 +1036,16 @@ wlan_mgmt_rx_reo_algo_calculate_wait_count(
 			return QDF_STATUS_E_FAILURE;
 		}
 
+		if (!rx_reo_pdev_ctx->init_complete) {
+			mgmt_rx_reo_debug("REO init in progress for link %d",
+					  link);
+			wlan_objmgr_pdev_release_ref(pdev, WLAN_MGMT_RX_REO_ID);
+			frames_pending = 0;
+			goto update_pending_frames;
+		}
+
 		host_ss = &rx_reo_pdev_ctx->host_snapshot;
+		desc->host_snapshot[link] = rx_reo_pdev_ctx->host_snapshot;
 
 		mgmt_rx_reo_info("link_id = %u HOST SS: valid = %u, ctr = %u, ts = %u",
 				 link, host_ss->valid, host_ss->mgmt_pkt_ctr,
@@ -1038,7 +1063,9 @@ wlan_mgmt_rx_reo_algo_calculate_wait_count(
 
 			status = tgt_mgmt_rx_reo_read_snapshot(
 					pdev, snapshot_info, snapshot_id,
-					&snapshot_params[snapshot_id]);
+					&snapshot_params[snapshot_id],
+					in_frame_rx_reo_pdev_ctx->raw_snapshots
+					[link][snapshot_id]);
 
 			/* Read operation shouldn't fail */
 			if (QDF_IS_STATUS_ERROR(status)) {
@@ -1080,14 +1107,6 @@ wlan_mgmt_rx_reo_algo_calculate_wait_count(
 			return status;
 		}
 
-		status = mgmt_rx_reo_snapshots_check_sanity
-			(mac_hw_ss, fw_forwarded_ss, fw_consumed_ss, host_ss);
-		if (QDF_IS_STATUS_ERROR(status)) {
-			mgmt_rx_reo_err("Snapshot sanity for link %u failed",
-					link);
-			qdf_assert_always(0);
-		}
-
 		desc->shared_snapshots[link][MGMT_RX_REO_SHARED_SNAPSHOT_MAC_HW] =
 								*mac_hw_ss;
 		desc->shared_snapshots[link][MGMT_RX_REO_SHARED_SNAPSHOT_FW_FORWADED] =
@@ -1095,6 +1114,14 @@ wlan_mgmt_rx_reo_algo_calculate_wait_count(
 		desc->shared_snapshots[link][MGMT_RX_REO_SHARED_SNAPSHOT_FW_CONSUMED] =
 								*fw_consumed_ss;
 		desc->host_snapshot[link] = *host_ss;
+
+		status = mgmt_rx_reo_snapshots_check_sanity
+			(mac_hw_ss, fw_forwarded_ss, fw_consumed_ss, host_ss);
+		if (QDF_IS_STATUS_ERROR(status)) {
+			mgmt_rx_reo_err_rl("Snapshot sanity for link %u failed",
+					   link);
+			return status;
+		}
 
 		mgmt_rx_reo_info("link_id = %u HW SS: valid = %u, ctr = %u, ts = %u",
 				 link, mac_hw_ss->valid,
@@ -2543,9 +2570,13 @@ mgmt_rx_reo_update_list(struct mgmt_rx_reo_list *reo_list,
 				pkt_ctr_delta = frame_desc->pkt_ctr_delta;
 				old_wait_count =
 				      wait_count->per_link_count[frame_link_id];
-				new_wait_count =
-				     qdf_min(old_wait_count - pkt_ctr_delta,
-					     (uint32_t)0);
+
+				if (old_wait_count >= pkt_ctr_delta)
+					new_wait_count = old_wait_count -
+							 pkt_ctr_delta;
+				else
+					new_wait_count = 0;
+
 				wait_count_diff = old_wait_count -
 						  new_wait_count;
 
@@ -5114,6 +5145,52 @@ mgmt_rx_reo_initialize_snapshot_value(struct wlan_objmgr_pdev *pdev)
 }
 
 /**
+ * mgmt_rx_reo_set_initialization_complete() - Set initialization completion
+ * for management Rx REO pdev component private object
+ * @pdev: pointer to pdev object
+ *
+ * Return: QDF_STATUS
+ */
+static QDF_STATUS
+mgmt_rx_reo_set_initialization_complete(struct wlan_objmgr_pdev *pdev)
+{
+	struct mgmt_rx_reo_pdev_info *mgmt_rx_reo_pdev_ctx;
+
+	mgmt_rx_reo_pdev_ctx = wlan_mgmt_rx_reo_get_priv_object(pdev);
+	if (!mgmt_rx_reo_pdev_ctx) {
+		mgmt_rx_reo_err("Mgmt Rx REO priv object is null");
+		return QDF_STATUS_E_NULL_VALUE;
+	}
+
+	mgmt_rx_reo_pdev_ctx->init_complete = true;
+
+	return QDF_STATUS_SUCCESS;
+}
+
+/**
+ * mgmt_rx_reo_clear_initialization_complete() - Clear initialization completion
+ * for management Rx REO pdev component private object
+ * @pdev: pointer to pdev object
+ *
+ * Return: QDF_STATUS
+ */
+static QDF_STATUS
+mgmt_rx_reo_clear_initialization_complete(struct wlan_objmgr_pdev *pdev)
+{
+	struct mgmt_rx_reo_pdev_info *mgmt_rx_reo_pdev_ctx;
+
+	mgmt_rx_reo_pdev_ctx = wlan_mgmt_rx_reo_get_priv_object(pdev);
+	if (!mgmt_rx_reo_pdev_ctx) {
+		mgmt_rx_reo_err("Mgmt Rx REO priv object is null");
+		return QDF_STATUS_E_NULL_VALUE;
+	}
+
+	mgmt_rx_reo_pdev_ctx->init_complete = false;
+
+	return QDF_STATUS_SUCCESS;
+}
+
+/**
  * mgmt_rx_reo_initialize_snapshots() - Initialize management Rx reorder
  * snapshot related data structures for a given pdev
  * @pdev: pointer to pdev object
@@ -5175,6 +5252,12 @@ mgmt_rx_reo_attach(struct wlan_objmgr_pdev *pdev)
 		return status;
 	}
 
+	status = mgmt_rx_reo_set_initialization_complete(pdev);
+	if (QDF_IS_STATUS_ERROR(status)) {
+		mgmt_rx_reo_err("Failed to set initialization complete");
+		return status;
+	}
+
 	return QDF_STATUS_SUCCESS;
 }
 
@@ -5185,6 +5268,12 @@ mgmt_rx_reo_detach(struct wlan_objmgr_pdev *pdev)
 
 	if (!wlan_mgmt_rx_reo_is_feature_enabled_at_pdev(pdev))
 		return QDF_STATUS_SUCCESS;
+
+	status = mgmt_rx_reo_clear_initialization_complete(pdev);
+	if (QDF_IS_STATUS_ERROR(status)) {
+		mgmt_rx_reo_err("Failed to clear initialization complete");
+		return status;
+	}
 
 	status = mgmt_rx_reo_clear_snapshots(pdev);
 	if (QDF_IS_STATUS_ERROR(status)) {

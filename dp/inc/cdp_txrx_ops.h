@@ -266,7 +266,8 @@ struct cdp_cmn_ops {
 
 	QDF_STATUS
 	(*txrx_peer_delete)(struct cdp_soc_t *soc, uint8_t vdev_id,
-			    uint8_t *peer_mac, uint32_t bitmap);
+			    uint8_t *peer_mac, uint32_t bitmap,
+			    enum cdp_peer_type peer_type);
 
 	QDF_STATUS (*txrx_set_monitor_mode)(struct cdp_soc_t *soc,
 					    uint8_t vdev_id,
@@ -588,6 +589,14 @@ struct cdp_cmn_ops {
 				    uint32_t value);
 
 	ol_txrx_tx_fp tx_send;
+
+	/* tx_fast_send will be called only in AP mode when all the
+	 * transmit path features are disabled including extended stats
+	 */
+	ol_txrx_tx_fast_fp tx_fast_send;
+
+	void (*set_tx_pause)(ol_txrx_soc_handle soc, bool flag);
+
 	/**
 	 * txrx_get_os_rx_handles_from_vdev() - Return function, osif vdev
 	 *					to deliver pkt to stack.
@@ -672,8 +681,14 @@ struct cdp_cmn_ops {
 
 #if defined(WLAN_FEATURE_11BE_MLO) && defined(WLAN_MLO_MULTI_CHIP)
 	void (*txrx_recovery_vdev_flush_peers)(struct cdp_soc_t *soc,
-					       uint8_t vdev_id);
+					       uint8_t vdev_id,
+					       bool mlo_peers_only);
 #endif
+	QDF_STATUS (*txrx_umac_reset_deinit)(ol_txrx_soc_handle soc);
+	void (*txrx_get_tsf_time)(struct cdp_soc_t *soc_hdl, uint32_t tsf_id,
+				  uint32_t mac_id, uint64_t *tsf,
+				  uint64_t *tsf_sync_soc_time);
+
 };
 
 struct cdp_ctrl_ops {
@@ -818,24 +833,6 @@ struct cdp_ctrl_ops {
 						   uint8_t *rssi);
 #endif
 
-#ifdef WLAN_SUPPORT_SCS
-	QDF_STATUS
-		(*txrx_enable_scs_params) (
-			   struct cdp_soc_t *soc, struct qdf_mac_addr
-			   *macaddr,
-			   uint8_t vdev_id,
-			   bool is_active);
-
-	QDF_STATUS
-		(*txrx_record_scs_params) (
-			   struct cdp_soc_t *soc, struct qdf_mac_addr
-			   *macaddr,
-			   uint8_t vdev_id,
-			   struct cdp_scs_params *scs_params,
-			   uint8_t entry_ctr,
-			   uint8_t scs_sessions);
-#endif
-
 #ifdef WLAN_SUPPORT_MSCS
 	QDF_STATUS
 		(*txrx_record_mscs_params) (
@@ -913,7 +910,7 @@ struct cdp_ctrl_ops {
 
 #endif
 
-#if defined(WLAN_FEATURE_TSF_UPLINK_DELAY) || defined(CONFIG_SAWF)
+#if defined(WLAN_FEATURE_TSF_UPLINK_DELAY) || defined(WLAN_CONFIG_TX_DELAY)
 	void (*txrx_set_delta_tsf)(struct cdp_soc_t *soc, uint8_t vdev_id,
 				   uint32_t delta_tsf);
 #endif
@@ -1213,6 +1210,9 @@ struct cdp_host_stats_ops {
 				uint8_t *addr,
 				struct cdp_peer_telemetry_stats *stats);
 #endif
+	QDF_STATUS
+		(*txrx_get_peer_extd_rate_link_stats)
+				(struct cdp_soc_t *soc, uint8_t *mac_addr);
 };
 
 struct cdp_wds_ops {
@@ -1333,9 +1333,10 @@ struct ol_if_ops {
 			       uint8_t vdev_id, uint8_t *peer_mac_addr,
 			       enum cdp_txrx_ast_entry_type peer_type,
 			       uint32_t tx_ast_hashidx);
+
 	int (*peer_unmap_event)(struct cdp_ctrl_objmgr_psoc *psoc,
 				uint16_t peer_id,
-				uint8_t vdev_id);
+				uint8_t vdev_id, uint8_t *mac_addr);
 
 	int (*get_dp_cfg_param)(struct cdp_ctrl_objmgr_psoc *psoc,
 				enum cdp_cfg_param_type param_num);
@@ -1408,7 +1409,7 @@ struct ol_if_ops {
 				   uint8_t *peer_mac_addr);
 #endif
 #ifdef DP_MEM_PRE_ALLOC
-	void *(*dp_prealloc_get_context)(uint32_t ctxt_type);
+	void *(*dp_prealloc_get_context)(uint32_t ctxt_type, size_t ctxt_size);
 
 	QDF_STATUS(*dp_prealloc_put_context)(uint32_t ctxt_type, void *vaddr);
 	void *(*dp_prealloc_get_consistent)(uint32_t *size,
@@ -1466,6 +1467,20 @@ struct ol_if_ops {
 				       enum cdp_tx_filter_action cmd,
 				       uint8_t *peer_mac);
 #endif
+#ifdef WLAN_SUPPORT_SCS
+	bool (*peer_scs_rule_match)(struct cdp_ctrl_objmgr_psoc *psoc,
+				    uint8_t vdev_id, uint32_t rule_id,
+				    uint8_t *peer_mac);
+#endif
+#ifdef DP_UMAC_HW_RESET_SUPPORT
+	void (*dp_update_tx_hardstart)(struct cdp_ctrl_objmgr_psoc *psoc,
+				       uint8_t vdev_id,
+				       struct ol_txrx_hardtart_ctxt *ctxt);
+#endif
+#if defined(IPA_WDS_EASYMESH_FEATURE) && defined(FEATURE_AST)
+void (*peer_send_wds_disconnect)(struct cdp_ctrl_objmgr_psoc *psoc,
+				 uint8_t *mac_addr, uint8_t vdev_id);
+#endif
 };
 
 #ifdef DP_PEER_EXTENDED_API
@@ -1507,6 +1522,10 @@ struct ol_if_ops {
  * @display_txrx_hw_info: Dump the DP rings info
  * @set_tx_flush_pending: Configures the ac/tid to be flushed and policy
  *			  to flush.
+ *
+ * set_bus_vote_lvl_high: The bus lvl is set to high or low based on tput
+ * get_bus_vote_lvl_high: Get bus lvl to determine whether or not get
+ *                        rx rate stats
  *
  * Function pointers for miscellaneous soc/pdev/vdev related operations.
  */
@@ -1604,6 +1623,10 @@ struct cdp_misc_ops {
 					 uint8_t vdev_id, uint8_t *addr,
 					 uint8_t ac, uint32_t tid,
 					 enum cdp_peer_txq_flush_policy policy);
+#endif
+#ifdef FEATURE_RX_LINKSPEED_ROAM_TRIGGER
+	void (*set_bus_vote_lvl_high)(struct cdp_soc_t *soc_hdl, bool high);
+	bool (*get_bus_vote_lvl_high)(struct cdp_soc_t *soc_hdl);
 #endif
 };
 
@@ -1870,6 +1893,7 @@ struct cdp_throttle_ops {
  * @ipa_tx_buf_smmu_mapping: Create SMMU mappings for Tx
  * @ipa_tx_buf_smmu_unmapping: Release SMMU mappings for Tx
  * buffers to IPA
+ * @ipa_ast_create: Create/Update ast entry
  */
 struct cdp_ipa_ops {
 	QDF_STATUS (*ipa_get_resource)(struct cdp_soc_t *soc_hdl,
@@ -1916,7 +1940,8 @@ struct cdp_ipa_ops {
 				uint32_t *rx_pipe_handle, bool is_smmu_enabled,
 				qdf_ipa_sys_connect_params_t *sys_in,
 				bool over_gsi, qdf_ipa_wdi_hdl_t hdl,
-				qdf_ipa_wdi_hdl_t id);
+				qdf_ipa_wdi_hdl_t id,
+				void *ipa_ast_notify_cb);
 #else /* CONFIG_IPA_WDI_UNIFIED_API */
 	QDF_STATUS (*ipa_setup)(struct cdp_soc_t *soc_hdl, uint8_t pdev_id,
 				void *ipa_i2w_cb, void *ipa_w2i_cb,
@@ -1946,9 +1971,17 @@ struct cdp_ipa_ops {
 	bool (*ipa_rx_intrabss_fwd)(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
 				    qdf_nbuf_t nbuf, bool *fwd_success);
 	QDF_STATUS (*ipa_tx_buf_smmu_mapping)(struct cdp_soc_t *soc_hdl,
-					      uint8_t pdev_id);
+					      uint8_t pdev_id,
+					      const char *func,
+					      uint32_t line);
 	QDF_STATUS (*ipa_tx_buf_smmu_unmapping)(struct cdp_soc_t *soc_hdl,
-						uint8_t pdev_id);
+						uint8_t pdev_id,
+						const char *func,
+						uint32_t line);
+#ifdef IPA_WDS_EASYMESH_FEATURE
+	QDF_STATUS (*ipa_ast_create)(struct cdp_soc_t *soc_hdl,
+				     qdf_ipa_ast_info_type_t *data);
+#endif
 };
 #endif
 
@@ -2058,6 +2091,18 @@ struct cdp_mesh_latency_ops {
 };
 #endif
 
+#ifdef WLAN_SUPPORT_SCS
+/**
+ * struct cdp_scs_ops - data path ops for SCS
+ * @scs_peer_lookup_n_rule_match : Handler for peer lookup and scs rule match
+ */
+struct cdp_scs_ops {
+	bool (*scs_peer_lookup_n_rule_match)(struct cdp_soc_t *soc,
+					     uint32_t rule_id,
+					     uint8_t *dst_mac_addr);
+};
+#endif
+
 #ifdef CONFIG_SAWF_DEF_QUEUES
 struct cdp_sawf_ops {
 	QDF_STATUS
@@ -2152,6 +2197,9 @@ struct cdp_ops {
 #endif
 #ifdef CONFIG_SAWF_DEF_QUEUES
 	struct cdp_sawf_ops  *sawf_ops;
+#endif
+#ifdef WLAN_SUPPORT_SCS
+	struct cdp_scs_ops   *scs_ops;
 #endif
 };
 #endif

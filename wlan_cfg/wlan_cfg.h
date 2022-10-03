@@ -39,7 +39,11 @@
 #define DP_NON_QOS_TID 16
 #define DP_NULL_DATA_TID 17
 
+#ifdef CONFIG_BERYLLIUM
+#define WLAN_CFG_RX_FST_MAX_SEARCH 16
+#else
 #define WLAN_CFG_RX_FST_MAX_SEARCH 2
+#endif
 #define WLAN_CFG_RX_FST_TOEPLITZ_KEYLEN 40
 
 #define INVALID_PDEV_ID 0xFF
@@ -256,8 +260,6 @@ struct wlan_srng_cfg {
  * @tx_rings_grp_bitmap: bitmap of group intr contexts which have
  *  non-zero tx ring mask
  * @mlo_chip_rx_ring_map: map of chip_id to rx ring map
- * @mlo_chip_default_rx_ring_id: default rx_ring of chip when hash is not found
- * @lmac_peer_id_msb: value used for hash based routing
  * @vdev_stats_hw_offload_config: HW vdev stats config
  * @vdev_stats_hw_offload_timer: HW vdev stats timer duration
  * @txmon_hw_support: TxMON HW support
@@ -294,6 +296,7 @@ struct wlan_cfg_dp_soc_ctxt {
 	int int_timer_threshold_other;
 	int int_timer_threshold_mon;
 	int tx_ring_size;
+	int time_control_bp;
 	int tx_comp_ring_size;
 	int tx_comp_ring_size_nss;
 	uint8_t int_tx_ring_mask[WLAN_CFG_INT_NUM_CONTEXTS];
@@ -420,9 +423,7 @@ struct wlan_cfg_dp_soc_ctxt {
 	uint8_t rx_rel_wbm2sw_ring_id;
 	uint32_t tx_rings_grp_bitmap;
 #if defined(WLAN_FEATURE_11BE_MLO) && defined(WLAN_MLO_MULTI_CHIP)
-	uint8_t mlo_chip_rx_ring_map[WLAN_MAX_MLO_CHIPS];
-	uint8_t mlo_chip_default_rx_ring_id[WLAN_MAX_MLO_CHIPS];
-	uint8_t lmac_peer_id_msb[WLAN_MAX_MLO_CHIPS];
+	uint8_t mlo_chip_rx_ring_map;
 #endif
 #ifdef QCA_VDEV_STATS_HW_OFFLOAD_SUPPORT
 	bool vdev_stats_hw_offload_config;
@@ -474,6 +475,8 @@ struct wlan_cfg_dp_pdev_ctxt {
  * @num_reo_exception_ring_entries: num of rx exception ring entries
  * @num_tx_desc: num of tx descriptors
  * @num_tx_ext_desc: num of tx ext descriptors
+ * @num_reo_dst_ring_entries: Number of entries in REO destination ring
+ * @num_rxdma_buf_ring_entries: Number of entries in rxdma buf ring
  */
 struct wlan_dp_prealloc_cfg {
 	int num_tx_ring_entries;
@@ -483,6 +486,8 @@ struct wlan_dp_prealloc_cfg {
 	int num_reo_exception_ring_entries;
 	int num_tx_desc;
 	int num_tx_ext_desc;
+	int num_reo_dst_ring_entries;
+	int num_rxdma_buf_ring_entries;
 };
 
 /**
@@ -1359,6 +1364,14 @@ int wlan_cfg_get_p2p_checksum_offload(struct wlan_cfg_dp_soc_ctxt *cfg);
 int wlan_cfg_tx_ring_size(struct wlan_cfg_dp_soc_ctxt *cfg);
 
 /*
+ * wlan_cfg_time_control_bp - Get time for interval in bp prints
+ * @wlan_cfg_soc_ctx
+ *
+ * Return: interval time
+ */
+int wlan_cfg_time_control_bp(struct wlan_cfg_dp_soc_ctxt *cfg);
+
+/*
  * wlan_cfg_tx_comp_ring_size - Get Tx completion ring size (WBM Ring)
  * @wlan_cfg_soc_ctx
  *
@@ -2095,38 +2108,13 @@ wlan_cfg_get_sawf_config(struct wlan_cfg_dp_soc_ctxt *cfg);
 
 #if defined(WLAN_FEATURE_11BE_MLO) && defined(WLAN_MLO_MULTI_CHIP)
 /**
- * wlan_cfg_mlo_rx_ring_map_get_by_chip_id() - get rx ring map
+ * wlan_cfg_mlo_rx_ring_map_get() - get rx ring map
  * @cfg: soc configuration context
- * @chip_id: mlo_chip_id
  *
  * Return: rx_ring_map
  */
 uint8_t
-wlan_cfg_mlo_rx_ring_map_get_by_chip_id(struct wlan_cfg_dp_soc_ctxt *cfg,
-					uint8_t chip_id);
-
-/**
- * wlan_cfg_mlo_default_rx_ring_get_by_chip_id() - get default RX ring
- * @cfg: soc configuration context
- * @chip_id: mlo_chip_id
- *
- * Return: default rx ring
- */
-uint8_t
-wlan_cfg_mlo_default_rx_ring_get_by_chip_id(struct wlan_cfg_dp_soc_ctxt *cfg,
-					    uint8_t chip_id);
-
-/**
- * wlan_cfg_mlo_lmac_peer_id_msb_get_by_chip_id() - get chip's lmac_peer_id_msb
- * @cfg: soc configuration context
- * @chip_id: mlo_chip_id
- *
- * Return: lmac_peer_id_msb
- */
-uint8_t
-wlan_cfg_mlo_lmac_peer_id_msb_get_by_chip_id(struct wlan_cfg_dp_soc_ctxt *cfg,
-					     uint8_t chip_id);
-
+wlan_cfg_mlo_rx_ring_map_get(struct wlan_cfg_dp_soc_ctxt *cfg);
 #endif
 
 /*
@@ -2190,4 +2178,14 @@ wlan_cfg_get_tx_capt_max_mem(struct wlan_cfg_dp_soc_ctxt *cfg)
  */
 uint8_t wlan_cfg_get_napi_scale_factor(struct wlan_cfg_dp_soc_ctxt *cfg);
 
+/**
+ * wlan_cfg_soc_update_tgt_params() - Update band specific params
+ * @wlan_cfg_ctx - SOC cfg context
+ * @ctrl_obj - PSOC object
+ *
+ * Return: void
+ */
+void
+wlan_cfg_soc_update_tgt_params(struct wlan_cfg_dp_soc_ctxt *wlan_cfg_ctx,
+			       struct cdp_ctrl_objmgr_psoc *ctrl_obj);
 #endif /*__WLAN_CFG_H*/

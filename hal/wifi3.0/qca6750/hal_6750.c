@@ -139,6 +139,25 @@ hal_rx_msdu_start_nss_get_6750(uint8_t *buf)
 }
 
 /**
+ * hal_rx_msdu_start_get_len_6750(): API to get the MSDU length
+ * from rx_msdu_start TLV
+ *
+ * @ buf: pointer to the start of RX PKT TLV headers
+ * Return: (uint32_t)msdu length
+ */
+static uint32_t hal_rx_msdu_start_get_len_6750(uint8_t *buf)
+{
+	struct rx_pkt_tlvs *pkt_tlvs = (struct rx_pkt_tlvs *)buf;
+	struct rx_msdu_start *msdu_start =
+				&pkt_tlvs->msdu_start_tlv.rx_msdu_start;
+	uint32_t msdu_len;
+
+	msdu_len = HAL_RX_MSDU_START_MSDU_LEN_GET(msdu_start);
+
+	return msdu_len;
+}
+
+/**
  * hal_rx_mon_hw_desc_get_mpdu_status_6750(): Retrieve MPDU status
  *
  * @ hw_desc_addr: Start address of Rx HW TLVs
@@ -1964,12 +1983,14 @@ static void hal_hw_txrx_ops_attach_qca6750(struct hal_soc *hal_soc)
 					hal_rx_get_mpdu_mac_ad4_valid_6750;
 	hal_soc->ops->hal_rx_mpdu_start_sw_peer_id_get =
 		hal_rx_mpdu_start_sw_peer_id_get_6750;
-	hal_soc->ops->hal_rx_mpdu_peer_meta_data_get =
+	hal_soc->ops->hal_rx_tlv_peer_meta_data_get =
 		hal_rx_mpdu_peer_meta_data_get_li;
 	hal_soc->ops->hal_rx_mpdu_get_to_ds = hal_rx_mpdu_get_to_ds_6750;
 	hal_soc->ops->hal_rx_mpdu_get_fr_ds = hal_rx_mpdu_get_fr_ds_6750;
 	hal_soc->ops->hal_rx_get_mpdu_frame_control_valid =
 		hal_rx_get_mpdu_frame_control_valid_6750;
+	hal_soc->ops->hal_rx_get_frame_ctrl_field =
+		hal_rx_get_frame_ctrl_field_li;
 	hal_soc->ops->hal_rx_mpdu_get_addr1 = hal_rx_mpdu_get_addr1_6750;
 	hal_soc->ops->hal_rx_mpdu_get_addr2 = hal_rx_mpdu_get_addr2_6750;
 	hal_soc->ops->hal_rx_mpdu_get_addr3 = hal_rx_mpdu_get_addr3_6750;
@@ -2070,6 +2091,8 @@ static void hal_hw_txrx_ops_attach_qca6750(struct hal_soc *hal_soc)
 #endif
 	hal_soc->ops->hal_compute_reo_remap_ix0 =
 				hal_compute_reo_remap_ix0_6750;
+	hal_soc->ops->hal_rx_tlv_msdu_len_get =
+				hal_rx_msdu_start_get_len_6750;
 };
 
 struct hal_hw_srng_config hw_srng_table_6750[] = {

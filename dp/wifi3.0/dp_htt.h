@@ -219,9 +219,16 @@ struct dp_htt_htc_pkt_union {
 	} u;
 };
 
+struct bp_handler {
+	unsigned long bp_start_tt;
+	unsigned long bp_last_tt;
+	unsigned long bp_duration;
+	unsigned long bp_counter;
+};
+
 struct dp_htt_timestamp {
-	long *umac_ttt;
-	long *lmac_ttt;
+	struct bp_handler *umac_path;
+	struct bp_handler *lmac_path;
 };
 
 struct htt_soc {
@@ -329,10 +336,10 @@ struct dp_tx_mon_downstream_tlv_config {
  * rx_frame_bitmap_ack: RX_FRAME_BITMAP_ACK TLV
  * rx_frame_1k_bitmap_ack: RX_FRAME_1K_BITMAP_ACK TLV
  * coex_tx_status: COEX_TX_STATUS TLV
- * recevied_response_info: RECEIVED_RESPONSE_INFO TLV
- * recevied_response_info_p2: RECEIVED_RESPONSE_INFO_PART2 TLV
+ * received_response_info: RECEIVED_RESPONSE_INFO TLV
+ * received_response_info_p2: RECEIVED_RESPONSE_INFO_PART2 TLV
  * ofdma_trigger_details: OFDMA_TRIGGER_DETAILS
- * recevied_trigger_info: RECEIVED_TRIGGER_INFO
+ * received_trigger_info: RECEIVED_TRIGGER_INFO
  * pdg_tx_request: PDG_TX_REQUEST
  * pdg_response: PDG_RESPONSE
  * pdg_trig_response: PDG_TRIG_RESPONSE
@@ -417,10 +424,10 @@ struct dp_tx_mon_upstream_tlv_config {
 		 rx_frame_bitmap_ack:1,
 		 rx_frame_1k_bitmap_ack:1,
 		 coex_tx_status:1,
-		 recevied_response_info:1,
-		 recevied_response_info_p2:1,
+		 received_response_info:1,
+		 received_response_info_p2:1,
 		 ofdma_trigger_details:1,
-		 recevied_trigger_info:1,
+		 received_trigger_info:1,
 		 pdg_tx_request:1,
 		 pdg_response:1,
 		 pdg_trig_response:1,
@@ -618,6 +625,10 @@ struct htt_tx_ring_tlv_filter {
  * @ctrl_mpdu_log: enable ctrl mpdu level logging
  * @data_mpdu_log: enable data mpdu level logging
  * @enable: enable rx monitor
+ * @enable_fpmo: enable/disable FPMO packet
+ * @fpmo_data_filter: FPMO mode data filter
+ * @fpmo_mgmt_filter: FPMO mode mgmt filter
+ * @fpmo_ctrl_filter: FPMO mode ctrl filter
  *
  * NOTE: Do not change the layout of this structure
  */
@@ -677,6 +688,10 @@ struct htt_rx_ring_tlv_filter {
 		 ctrl_mpdu_log:1,
 		 data_mpdu_log:1,
 		 enable:1;
+	u_int16_t enable_fpmo:1;
+	u_int16_t fpmo_data_filter;
+	u_int16_t fpmo_mgmt_filter;
+	u_int16_t fpmo_ctrl_filter;
 #endif
 };
 
@@ -938,6 +953,31 @@ struct htt_stats_context {
 	qdf_nbuf_queue_t msg;
 	uint32_t msg_len;
 };
+
+#ifdef DP_UMAC_HW_RESET_SUPPORT
+/**
+ * struct dp_htt_umac_reset_setup_cmd_params - Params for UMAC reset setup cmd
+ * @msi_data: MSI data to be used for raising the UMAC reset interrupt
+ * @shmem_addr_low: Lower 32-bits of shared memory
+ * @shmem_addr_high: Higher 32-bits of shared memory
+ */
+struct dp_htt_umac_reset_setup_cmd_params {
+	uint32_t msi_data;
+	uint32_t shmem_addr_low;
+	uint32_t shmem_addr_high;
+};
+
+/**
+ * dp_htt_umac_reset_send_setup_cmd(): Send the HTT UMAC reset setup command
+ * @soc: dp soc object
+ * @setup_params: parameters required by this command
+ *
+ * Return: Success when HTT message is sent, error on failure
+ */
+QDF_STATUS dp_htt_umac_reset_send_setup_cmd(
+		struct dp_soc *soc,
+		const struct dp_htt_umac_reset_setup_cmd_params *setup_params);
+#endif
 
 /**
  * dp_htt_rx_flow_fst_setup(): Send HTT Rx FST setup message to FW

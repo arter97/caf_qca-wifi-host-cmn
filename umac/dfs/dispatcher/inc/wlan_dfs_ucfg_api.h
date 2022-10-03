@@ -86,7 +86,8 @@ struct dfs_to_mlme {
 			uint8_t ieee,
 			uint16_t freq,
 			uint16_t vhtop_ch_freq_seg2,
-			uint64_t flags);
+			uint64_t flags,
+			uint16_t dfs_radar_bitmap);
 #ifdef CONFIG_CHAN_FREQ_API
 	QDF_STATUS (*mlme_start_csa_for_freq)(struct wlan_objmgr_pdev *pdev,
 					      uint8_t ieee_chan, uint16_t freq,
@@ -153,7 +154,7 @@ struct dfs_to_mlme {
 						    enum wlan_phymode des_mode);
 #endif
 #endif
-#ifdef QCA_SUPPORT_DFS_CHAN_POSTNOL
+#if defined(QCA_SUPPORT_DFS_CHAN_POSTNOL) || defined(QCA_DFS_BW_EXPAND)
 	QDF_STATUS
 	(*mlme_postnol_chan_switch)(struct wlan_objmgr_pdev *pdev,
 				    qdf_freq_t des_chan_freq,

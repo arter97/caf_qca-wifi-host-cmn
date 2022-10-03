@@ -117,6 +117,7 @@ do {                                            \
 #define HAL_MAX_HW_DSCP_TID_MAPS_11AX 32
 
 #define HAL_MAX_HW_DSCP_TID_V2_MAPS 48
+#define HAL_MAX_HW_DSCP_TID_V2_MAPS_5332 24
 #define HTT_META_HEADER_LEN_BYTES 64
 #define HAL_TX_EXT_DESC_WITH_META_DATA \
 	(HTT_META_HEADER_LEN_BYTES + HAL_TX_EXTENSION_DESC_LEN_BYTES)
@@ -233,7 +234,7 @@ struct hal_tx_completion_status {
 	uint8_t transmit_cnt;
 	uint8_t tid;
 	uint16_t peer_id;
-#if defined(WLAN_FEATURE_TSF_UPLINK_DELAY) || defined(CONFIG_SAWF)
+#if defined(WLAN_FEATURE_TSF_UPLINK_DELAY) || defined(WLAN_CONFIG_TX_DELAY)
 	uint32_t buffer_timestamp:19;
 #endif
 };
@@ -316,6 +317,8 @@ enum hal_tx_encap_type {
  * @HAL_TX_TQM_RR_LINK_DESC_UNAVAILABLE: Dropped due to link desc not available
  * @HAL_TX_TQM_RR_DROP_OR_INVALID_MSDU: Dropped due drop bit set or null flow
  * @HAL_TX_TQM_RR_MULTICAST_DROP: Dropped due mcast drop set for VDEV
+ * @HAL_TX_TQM_RR_VDEV_MISMATCH_DROP: Dropped due to being set with
+ *				'TCL_drop_reason'
  *
  */
 enum hal_tx_tqm_release_reason {
@@ -333,6 +336,7 @@ enum hal_tx_tqm_release_reason {
 	HAL_TX_TQM_RR_LINK_DESC_UNAVAILABLE,
 	HAL_TX_TQM_RR_DROP_OR_INVALID_MSDU,
 	HAL_TX_TQM_RR_MULTICAST_DROP,
+	HAL_TX_TQM_RR_VDEV_MISMATCH_DROP,
 };
 
 /* enum - Table IDs for 2 DSCP-TID mapping Tables that TCL H/W supports

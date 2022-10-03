@@ -705,6 +705,9 @@ void hal_mon_buff_addr_info_set(hal_soc_handle_t hal_soc_hdl,
 
 #define HAL_INVALID_PPDU_ID    0xFFFFFFFF
 
+#define HAL_MAX_DL_MU_USERS	37
+#define HAL_MAX_RU_INDEX	7
+
 enum hal_tx_tlv_status {
 	HAL_MON_TX_FES_SETUP,
 	HAL_MON_TX_FES_STATUS_END,
@@ -794,6 +797,8 @@ enum txmon_generated_response {
 	TXMON_GEN_RESP_SELFGEN_NDP_LMR
 };
 
+#define IS_MULTI_USERS(num_users)	(!!(0xFFFE & num_users))
+
 #define TXMON_HAL(hal_tx_ppdu_info, field)		\
 			hal_tx_ppdu_info->field
 #define TXMON_HAL_STATUS(hal_tx_ppdu_info, field)	\
@@ -843,8 +848,14 @@ struct hal_tx_status_info {
 		num_users		:8,
 		reserved		:10;
 
+	uint8_t mba_count;
+	uint8_t mba_fake_bitmap_count;
+
 	uint8_t sw_frame_group_id;
 	uint32_t r2r_to_follow;
+
+	uint16_t phy_abort_reason;
+	uint8_t phy_abort_user_number;
 
 	void *buffer;
 	uint32_t offset;
@@ -866,6 +877,7 @@ struct hal_tx_status_info {
  * @cur_usr_idx: Current user index of the PPDU
  * @reserved: for furture purpose
  * @prot_tlv_status: protection tlv status
+ * @packet_info: packet information
  * @rx_status: monitor mode rx status information
  * @rx_user_status: monitor mode rx user status information
  */
@@ -879,6 +891,8 @@ struct hal_tx_ppdu_info {
 
 	uint32_t prot_tlv_status;
 
+	/* placeholder to hold packet buffer info */
+	struct hal_mon_packet_info packet_info;
 	struct mon_rx_status rx_status;
 	struct mon_rx_user_status rx_user_status[];
 };
@@ -951,25 +965,6 @@ hal_txmon_status_get_num_users(hal_soc_handle_t hal_soc_hdl,
 }
 
 /**
- * hal_txmon_status_free_buffer() - api to free status buffer
- * @hal_soc: HAL soc handle
- * @status_frag: qdf_frag_t buffer
- * @end_offset: end offset within buffer that has valid data
- *
- * Return status
- */
-static inline QDF_STATUS
-hal_txmon_status_free_buffer(hal_soc_handle_t hal_soc_hdl,
-			     qdf_frag_t status_frag,
-			     uint32_t end_offset)
-{
-	struct hal_soc *hal_soc = (struct hal_soc *)hal_soc_hdl;
-
-	return hal_soc->ops->hal_txmon_status_free_buffer(status_frag,
-							  end_offset);
-}
-
-/**
  * hal_tx_status_get_tlv_tag() - api to get tlv tag
  * @tx_tlv_hdr: pointer to TLV header
  *
@@ -985,6 +980,45 @@ hal_tx_status_get_tlv_tag(void *tx_tlv_hdr)
 	return tlv_tag;
 }
 #endif
+
+/**
+ * hal_txmon_is_mon_buf_addr_tlv() - api to find packet buffer addr tlv
+ * @hal_soc: HAL soc handle
+ * @tx_tlv_hdr: pointer to TLV header
+ *
+ * Return: bool
+ */
+static inline bool
+hal_txmon_is_mon_buf_addr_tlv(hal_soc_handle_t hal_soc_hdl, void *tx_tlv_hdr)
+{
+	struct hal_soc *hal_soc = (struct hal_soc *)hal_soc_hdl;
+
+	if (qdf_unlikely(!hal_soc->ops->hal_txmon_is_mon_buf_addr_tlv))
+		return false;
+
+	return hal_soc->ops->hal_txmon_is_mon_buf_addr_tlv(tx_tlv_hdr);
+}
+
+/**
+ * hal_txmon_populate_packet_info() - api to populate packet info
+ * @hal_soc: HAL soc handle
+ * @tx_tlv_hdr: pointer to TLV header
+ * @packet_info: pointer to placeholder for packet info
+ *
+ * Return void
+ */
+static inline void
+hal_txmon_populate_packet_info(hal_soc_handle_t hal_soc_hdl,
+			       void *tx_tlv_hdr,
+			       void *packet_info)
+{
+	struct hal_soc *hal_soc = (struct hal_soc *)hal_soc_hdl;
+
+	if (qdf_unlikely(!hal_soc->ops->hal_txmon_populate_packet_info))
+		return;
+
+	hal_soc->ops->hal_txmon_populate_packet_info(tx_tlv_hdr, packet_info);
+}
 
 static inline uint32_t
 hal_rx_parse_u_sig_cmn(struct hal_soc *hal_soc, void *rx_tlv,
@@ -1489,11 +1523,13 @@ hal_rx_parse_cmn_usr_info(struct hal_soc *hal_soc, uint8_t *tlv,
 
 	ppdu_info->rx_status.eht_data[0] |= (cmn_usr_info->cp_setting <<
 					     QDF_MON_STATUS_EHT_GI_SHIFT);
-	ppdu_info->rx_status.sgi = cmn_usr_info->cp_setting;
+	if (!ppdu_info->rx_status.sgi)
+		ppdu_info->rx_status.sgi = cmn_usr_info->cp_setting;
 
 	ppdu_info->rx_status.eht_data[0] |= (cmn_usr_info->ltf_size <<
 					     QDF_MON_STATUS_EHT_LTF_SHIFT);
-	ppdu_info->rx_status.ltf_size = cmn_usr_info->ltf_size;
+	if (!ppdu_info->rx_status.ltf_size)
+		ppdu_info->rx_status.ltf_size = cmn_usr_info->ltf_size;
 
 	hal_rx_parse_punctured_pattern(cmn_usr_info, ppdu_info);
 
@@ -2974,6 +3010,8 @@ hal_rx_status_get_tlv_info_generic_be(void *rx_tlv_hdr, void *ppduinfo,
 	case 0:
 		return HAL_TLV_STATUS_PPDU_DONE;
 	case WIFIRX_STATUS_BUFFER_DONE_E:
+	case WIFIPHYRX_DATA_DONE_E:
+	case WIFIPHYRX_PKT_END_PART1_E:
 		return HAL_TLV_STATUS_PPDU_NOT_DONE;
 
 	default:

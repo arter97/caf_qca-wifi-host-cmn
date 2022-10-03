@@ -26,38 +26,132 @@
 #include <dp_mon_2.0.h>
 #include <dp_lite_mon.h>
 
+#define MAX_PPDU_INFO_LIST_DEPTH 64
+
+/**
+ * dp_tx_mon_status_free_packet_buf() - API to free packet buffer
+ * @pdev: pdev Handle
+ * @status_frag: status frag
+ * @end_offset: status fragment end offset
+ * @mon_desc_list_ref: tx monitor descriptor list reference
+ *
+ * Return: void
+ */
+void
+dp_tx_mon_status_free_packet_buf(struct dp_pdev *pdev,
+				 qdf_frag_t status_frag, uint32_t end_offset,
+				 struct dp_tx_mon_desc_list *mon_desc_list_ref)
+{
+	struct dp_mon_pdev *mon_pdev;
+	struct dp_mon_pdev_be *mon_pdev_be;
+	struct dp_pdev_tx_monitor_be *tx_mon_be;
+	struct hal_mon_packet_info packet_info = {0};
+	uint8_t *tx_tlv;
+	uint8_t *mon_buf_tx_tlv;
+	uint8_t *tx_tlv_start;
+
+	if (qdf_unlikely(!pdev))
+		return;
+
+	mon_pdev = pdev->monitor_pdev;
+	if (qdf_unlikely(!mon_pdev))
+		return;
+
+	mon_pdev_be = dp_get_be_mon_pdev_from_dp_mon_pdev(mon_pdev);
+	if (qdf_unlikely(!mon_pdev_be))
+		return;
+
+	tx_mon_be = &mon_pdev_be->tx_monitor_be;
+	tx_tlv = status_frag;
+	tx_tlv_start = tx_tlv;
+	/*
+	 * parse each status buffer and find packet buffer in it
+	 */
+	do {
+		if (hal_txmon_is_mon_buf_addr_tlv(pdev->soc->hal_soc, tx_tlv)) {
+			struct dp_mon_desc *mon_desc = NULL;
+			qdf_frag_t packet_buffer = NULL;
+
+			mon_buf_tx_tlv = ((uint8_t *)tx_tlv +
+					  HAL_RX_TLV64_HDR_SIZE);
+			hal_txmon_populate_packet_info(pdev->soc->hal_soc,
+						       mon_buf_tx_tlv,
+						       &packet_info);
+
+			mon_desc = (struct dp_mon_desc *)(uintptr_t)packet_info.sw_cookie;
+
+			qdf_assert_always(mon_desc);
+
+			if (mon_desc->magic != DP_MON_DESC_MAGIC)
+				qdf_assert_always(0);
+
+			if (!mon_desc->unmapped) {
+				qdf_mem_unmap_page(pdev->soc->osdev,
+						   (qdf_dma_addr_t)mon_desc->paddr,
+						   DP_MON_DATA_BUFFER_SIZE,
+						   QDF_DMA_FROM_DEVICE);
+				mon_desc->unmapped = 1;
+			}
+
+			packet_buffer = (qdf_frag_t)(mon_desc->buf_addr);
+			mon_desc->buf_addr = NULL;
+
+			qdf_assert_always(packet_buffer);
+			/* increment reap count */
+			mon_desc_list_ref->tx_mon_reap_cnt++;
+
+			/* add the mon_desc to free list */
+			dp_mon_add_to_free_desc_list(&mon_desc_list_ref->desc_list,
+						     &mon_desc_list_ref->tail,
+						     mon_desc);
+
+			tx_mon_be->stats.pkt_buf_recv++;
+			tx_mon_be->stats.pkt_buf_free++;
+
+			/* free buffer, mapped to descriptor */
+			qdf_frag_free(packet_buffer);
+		}
+
+		/* need api definition for hal_tx_status_get_next_tlv */
+		tx_tlv = hal_tx_status_get_next_tlv(tx_tlv);
+	} while ((tx_tlv - tx_tlv_start) < end_offset);
+}
+
 #if defined(WLAN_TX_PKT_CAPTURE_ENH_BE) && defined(QCA_MONITOR_2_0_SUPPORT)
 /**
  * dp_tx_mon_status_queue_free() - API to free status buffer
  * @pdev: pdev Handle
- * @tx_cap_be: pointer to tx_capture
+ * @tx_mon_be: pointer to tx_monitor_be
+ * @mon_desc_list_ref: tx monitor descriptor list reference
  *
  * Return: void
  */
 static void
 dp_tx_mon_status_queue_free(struct dp_pdev *pdev,
-			    struct dp_pdev_tx_capture_be *tx_cap_be)
+			    struct dp_pdev_tx_monitor_be *tx_mon_be,
+			    struct dp_tx_mon_desc_list *mon_desc_list_ref)
 {
-	uint8_t last_frag_q_idx = tx_cap_be->last_frag_q_idx;
+	uint8_t last_frag_q_idx = tx_mon_be->last_frag_q_idx;
 	qdf_frag_t status_frag = NULL;
-	uint8_t i = tx_cap_be->cur_frag_q_idx;
+	uint8_t i = tx_mon_be->cur_frag_q_idx;
 	uint32_t end_offset = 0;
 
 	for (; i < last_frag_q_idx; i++) {
-		status_frag = tx_cap_be->frag_q_vec[i].frag_buf;
+		status_frag = tx_mon_be->frag_q_vec[i].frag_buf;
 
 		if (qdf_unlikely(!status_frag))
 			continue;
 
-		end_offset = tx_cap_be->frag_q_vec[i].end_offset;
-		hal_txmon_status_free_buffer(pdev->soc->hal_soc, status_frag,
-					     end_offset);
+		end_offset = tx_mon_be->frag_q_vec[i].end_offset;
+		dp_tx_mon_status_free_packet_buf(pdev, status_frag, end_offset,
+						 mon_desc_list_ref);
+		tx_mon_be->stats.status_buf_free++;
 		qdf_frag_free(status_frag);
-		tx_cap_be->frag_q_vec[i].frag_buf = NULL;
-		tx_cap_be->frag_q_vec[i].end_offset = 0;
+		tx_mon_be->frag_q_vec[i].frag_buf = NULL;
+		tx_mon_be->frag_q_vec[i].end_offset = 0;
 	}
-	tx_cap_be->last_frag_q_idx = 0;
-	tx_cap_be->cur_frag_q_idx = 0;
+	tx_mon_be->last_frag_q_idx = 0;
+	tx_mon_be->cur_frag_q_idx = 0;
 }
 
 /**
@@ -69,9 +163,11 @@ dp_tx_mon_status_queue_free(struct dp_pdev *pdev,
  * Return: void
  */
 static void
-dp_tx_mon_enqueue_mpdu_nbuf(struct dp_tx_ppdu_info *tx_ppdu_info,
+dp_tx_mon_enqueue_mpdu_nbuf(struct dp_pdev *pdev,
+			    struct dp_tx_ppdu_info *tx_ppdu_info,
 			    uint8_t user_id, qdf_nbuf_t mpdu_nbuf)
 {
+	qdf_nbuf_t radiotap = NULL;
 	/* enqueue mpdu_nbuf to the per user mpdu_q */
 	qdf_nbuf_queue_t *usr_mpdu_q = NULL;
 
@@ -81,7 +177,18 @@ dp_tx_mon_enqueue_mpdu_nbuf(struct dp_tx_ppdu_info *tx_ppdu_info,
 
 	usr_mpdu_q = &TXMON_PPDU_USR(tx_ppdu_info, user_id, mpdu_q);
 
-	qdf_nbuf_queue_add(usr_mpdu_q, mpdu_nbuf);
+	radiotap = qdf_nbuf_alloc(pdev->soc->osdev, MAX_MONITOR_HEADER,
+				  MAX_MONITOR_HEADER,
+				  4, FALSE);
+	if (qdf_unlikely(!radiotap)) {
+		qdf_err("Unable to allocate radiotap buffer\n");
+		qdf_nbuf_free(mpdu_nbuf);
+		return;
+	}
+
+	/* append ext list */
+	qdf_nbuf_append_ext_list(radiotap, mpdu_nbuf, qdf_nbuf_len(mpdu_nbuf));
+	qdf_nbuf_queue_add(usr_mpdu_q, radiotap);
 }
 
 /*
@@ -195,22 +302,25 @@ dp_tx_mon_enqueue_mpdu_nbuf(struct dp_tx_ppdu_info *tx_ppdu_info,
  * dp_tx_mon_generate_cts2self_frm() - API to generate cts2self frame
  * @pdev: pdev Handle
  * @tx_ppdu_info: pointer to tx ppdu info structure
+ * @window_flag: frame generated window
  *
  * Return: void
  */
 static void
 dp_tx_mon_generate_cts2self_frm(struct dp_pdev *pdev,
-				struct dp_tx_ppdu_info *tx_ppdu_info)
+				struct dp_tx_ppdu_info *tx_ppdu_info,
+				uint8_t window_flag)
 {
 	/* allocate and populate CTS/ CTS2SELF frame */
 	/* enqueue 802.11 payload to per user mpdu_q */
 	struct dp_mon_pdev *mon_pdev;
 	struct dp_mon_pdev_be *mon_pdev_be;
-	struct dp_pdev_tx_capture_be *tx_cap_be;
+	struct dp_pdev_tx_monitor_be *tx_mon_be;
 	struct hal_tx_status_info *tx_status_info;
 	uint16_t duration_le = 0;
 	struct ieee80211_frame_min_one *wh_min = NULL;
 	qdf_nbuf_t mpdu_nbuf = NULL;
+	uint8_t frm_ctl;
 
 	/* sanity check */
 	if (qdf_unlikely(!pdev))
@@ -224,8 +334,12 @@ dp_tx_mon_generate_cts2self_frm(struct dp_pdev *pdev,
 	if (qdf_unlikely(!mon_pdev_be))
 		return;
 
-	tx_cap_be = &mon_pdev_be->tx_capture_be;
-	tx_status_info = &tx_cap_be->prot_status_info;
+	tx_mon_be = &mon_pdev_be->tx_monitor_be;
+
+	if (window_flag == INITIATOR_WINDOW)
+		tx_status_info = &tx_mon_be->prot_status_info;
+	else
+		tx_status_info = &tx_mon_be->data_status_info;
 
 	/*
 	 * for radiotap we allocate new skb,
@@ -239,19 +353,29 @@ dp_tx_mon_generate_cts2self_frm(struct dp_pdev *pdev,
 	wh_min = (struct ieee80211_frame_min_one *)qdf_nbuf_data(mpdu_nbuf);
 	qdf_mem_zero(wh_min, MAX_DUMMY_FRM_BODY);
 
+	frm_ctl = (IEEE80211_FC0_VERSION_0 | IEEE80211_FC0_TYPE_CTL |
+		   IEEE80211_FC0_SUBTYPE_CTS);
+	TXMON_PPDU_COM(tx_ppdu_info, frame_control) = frm_ctl;
+	TXMON_PPDU_COM(tx_ppdu_info, frame_control_info_valid) = 1;
 	wh_min->i_fc[1] = 0;
-	wh_min->i_fc[0] = (IEEE80211_FC0_VERSION_0 | IEEE80211_FC0_TYPE_CTL |
-			   IEEE80211_FC0_SUBTYPE_CTS);
+	wh_min->i_fc[0] = frm_ctl;
+
 	duration_le = qdf_cpu_to_le16(TXMON_PPDU_COM(tx_ppdu_info, duration));
 	wh_min->i_dur[1] = (duration_le & 0xFF00) >> 8;
 	wh_min->i_dur[0] = (duration_le & 0xFF);
 
-	qdf_mem_copy(wh_min->i_addr1,
-		     TXMON_STATUS_INFO(tx_status_info, addr1),
-		     QDF_MAC_ADDR_SIZE);
+	if (window_flag == INITIATOR_WINDOW) {
+		qdf_mem_copy(wh_min->i_addr1,
+			     TXMON_STATUS_INFO(tx_status_info, addr1),
+			     QDF_MAC_ADDR_SIZE);
+	} else {
+		qdf_mem_copy(wh_min->i_addr1,
+			     TXMON_STATUS_INFO(tx_status_info, addr2),
+			     QDF_MAC_ADDR_SIZE);
+	}
 
 	qdf_nbuf_set_pktlen(mpdu_nbuf, sizeof(*wh_min));
-	dp_tx_mon_enqueue_mpdu_nbuf(tx_ppdu_info, 0, mpdu_nbuf);
+	dp_tx_mon_enqueue_mpdu_nbuf(pdev, tx_ppdu_info, 0, mpdu_nbuf);
 	TXMON_PPDU_HAL(tx_ppdu_info, is_used) = 1;
 }
 
@@ -259,22 +383,25 @@ dp_tx_mon_generate_cts2self_frm(struct dp_pdev *pdev,
  * dp_tx_mon_generate_rts_frm() - API to generate rts frame
  * @pdev: pdev Handle
  * @tx_ppdu_info: pointer to tx ppdu info structure
+ * @window_flag: frame generated window
  *
  * Return: void
  */
 static void
 dp_tx_mon_generate_rts_frm(struct dp_pdev *pdev,
-			   struct dp_tx_ppdu_info *tx_ppdu_info)
+			   struct dp_tx_ppdu_info *tx_ppdu_info,
+			   uint8_t window_flag)
 {
 	/* allocate and populate RTS frame */
 	/* enqueue 802.11 payload to per user mpdu_q */
 	struct dp_mon_pdev *mon_pdev;
 	struct dp_mon_pdev_be *mon_pdev_be;
-	struct dp_pdev_tx_capture_be *tx_cap_be;
+	struct dp_pdev_tx_monitor_be *tx_mon_be;
 	struct hal_tx_status_info *tx_status_info;
 	uint16_t duration_le = 0;
 	struct ieee80211_ctlframe_addr2 *wh_min = NULL;
 	qdf_nbuf_t mpdu_nbuf = NULL;
+	uint8_t frm_ctl;
 
 	/* sanity check */
 	if (qdf_unlikely(!pdev))
@@ -288,8 +415,8 @@ dp_tx_mon_generate_rts_frm(struct dp_pdev *pdev,
 	if (qdf_unlikely(!mon_pdev_be))
 		return;
 
-	tx_cap_be = &mon_pdev_be->tx_capture_be;
-	tx_status_info = &tx_cap_be->prot_status_info;
+	tx_mon_be = &mon_pdev_be->tx_monitor_be;
+	tx_status_info = &tx_mon_be->prot_status_info;
 	/*
 	 * for radiotap we allocate new skb,
 	 * so we don't need reserver skb header
@@ -302,24 +429,38 @@ dp_tx_mon_generate_rts_frm(struct dp_pdev *pdev,
 	wh_min = (struct ieee80211_ctlframe_addr2 *)qdf_nbuf_data(mpdu_nbuf);
 	qdf_mem_zero(wh_min, MAX_DUMMY_FRM_BODY);
 
+	frm_ctl = (IEEE80211_FC0_VERSION_0 | IEEE80211_FC0_TYPE_CTL |
+		   IEEE80211_FC0_SUBTYPE_RTS);
+	TXMON_PPDU_COM(tx_ppdu_info, frame_control) = frm_ctl;
+	TXMON_PPDU_COM(tx_ppdu_info, frame_control_info_valid) = 1;
 	wh_min->i_fc[1] = 0;
-	wh_min->i_fc[0] = (IEEE80211_FC0_VERSION_0 | IEEE80211_FC0_TYPE_CTL |
-			   IEEE80211_FC0_SUBTYPE_RTS);
+	wh_min->i_fc[0] = frm_ctl;
+
 	duration_le = qdf_cpu_to_le16(TXMON_PPDU_COM(tx_ppdu_info, duration));
 	wh_min->i_aidordur[1] = (duration_le & 0xFF00) >> 8;
 	wh_min->i_aidordur[0] = (duration_le & 0xFF);
 
 	if (!tx_status_info->protection_addr)
-		tx_status_info = &tx_cap_be->data_status_info;
-	qdf_mem_copy(wh_min->i_addr1,
-		     TXMON_STATUS_INFO(tx_status_info, addr1),
-		     QDF_MAC_ADDR_SIZE);
-	qdf_mem_copy(wh_min->i_addr2,
-		     TXMON_STATUS_INFO(tx_status_info, addr2),
-		     QDF_MAC_ADDR_SIZE);
+		tx_status_info = &tx_mon_be->data_status_info;
+
+	if (window_flag == INITIATOR_WINDOW) {
+		qdf_mem_copy(wh_min->i_addr1,
+			     TXMON_STATUS_INFO(tx_status_info, addr1),
+			     QDF_MAC_ADDR_SIZE);
+		qdf_mem_copy(wh_min->i_addr2,
+			     TXMON_STATUS_INFO(tx_status_info, addr2),
+			     QDF_MAC_ADDR_SIZE);
+	} else {
+		qdf_mem_copy(wh_min->i_addr1,
+			     TXMON_STATUS_INFO(tx_status_info, addr2),
+			     QDF_MAC_ADDR_SIZE);
+		qdf_mem_copy(wh_min->i_addr2,
+			     TXMON_STATUS_INFO(tx_status_info, addr1),
+			     QDF_MAC_ADDR_SIZE);
+	}
 
 	qdf_nbuf_set_pktlen(mpdu_nbuf, sizeof(*wh_min));
-	dp_tx_mon_enqueue_mpdu_nbuf(tx_ppdu_info, 0, mpdu_nbuf);
+	dp_tx_mon_enqueue_mpdu_nbuf(pdev, tx_ppdu_info, 0, mpdu_nbuf);
 	TXMON_PPDU_HAL(tx_ppdu_info, is_used) = 1;
 }
 
@@ -327,22 +468,25 @@ dp_tx_mon_generate_rts_frm(struct dp_pdev *pdev,
  * dp_tx_mon_generate_ack_frm() - API to generate ack frame
  * @pdev: pdev Handle
  * @tx_ppdu_info: pointer to tx ppdu info structure
+ * @window_flag: frame generated window
  *
  * Return: void
  */
 static void
 dp_tx_mon_generate_ack_frm(struct dp_pdev *pdev,
-			   struct dp_tx_ppdu_info *tx_ppdu_info)
+			   struct dp_tx_ppdu_info *tx_ppdu_info,
+			   uint8_t window_flag)
 {
 	/* allocate and populate ACK frame */
 	/* enqueue 802.11 payload to per user mpdu_q */
 	struct dp_mon_pdev *mon_pdev;
 	struct dp_mon_pdev_be *mon_pdev_be;
-	struct dp_pdev_tx_capture_be *tx_cap_be;
+	struct dp_pdev_tx_monitor_be *tx_mon_be;
 	struct hal_tx_status_info *tx_status_info;
 	struct ieee80211_frame_min_one *wh_addr1 = NULL;
 	qdf_nbuf_t mpdu_nbuf = NULL;
 	uint8_t user_id = TXMON_PPDU(tx_ppdu_info, cur_usr_idx);
+	uint8_t frm_ctl;
 
 	/* sanity check */
 	if (qdf_unlikely(!pdev))
@@ -356,8 +500,8 @@ dp_tx_mon_generate_ack_frm(struct dp_pdev *pdev,
 	if (qdf_unlikely(!mon_pdev_be))
 		return;
 
-	tx_cap_be = &mon_pdev_be->tx_capture_be;
-	tx_status_info = &tx_cap_be->data_status_info;
+	tx_mon_be = &mon_pdev_be->tx_monitor_be;
+	tx_status_info = &tx_mon_be->data_status_info;
 	/*
 	 * for radiotap we allocate new skb,
 	 * so we don't need reserver skb header
@@ -368,18 +512,30 @@ dp_tx_mon_generate_ack_frm(struct dp_pdev *pdev,
 		return;
 
 	wh_addr1 = (struct ieee80211_frame_min_one *)qdf_nbuf_data(mpdu_nbuf);
+
+	frm_ctl = (IEEE80211_FC0_VERSION_0 | IEEE80211_FC0_TYPE_CTL |
+		   IEEE80211_FC0_SUBTYPE_ACK);
+	TXMON_PPDU_COM(tx_ppdu_info, frame_control) = frm_ctl;
+	TXMON_PPDU_COM(tx_ppdu_info, frame_control_info_valid) = 1;
 	wh_addr1->i_fc[1] = 0;
-	wh_addr1->i_fc[0] = (IEEE80211_FC0_VERSION_0 | IEEE80211_FC0_TYPE_CTL |
-			     IEEE80211_FC0_SUBTYPE_ACK);
-	qdf_mem_copy(wh_addr1->i_addr1,
-		     TXMON_STATUS_INFO(tx_status_info, addr1),
-		     QDF_MAC_ADDR_SIZE);
+	wh_addr1->i_fc[0] = frm_ctl;
+
+	if (window_flag == INITIATOR_WINDOW) {
+		qdf_mem_copy(wh_addr1->i_addr1,
+			     TXMON_STATUS_INFO(tx_status_info, addr1),
+			     QDF_MAC_ADDR_SIZE);
+	} else {
+		qdf_mem_copy(wh_addr1->i_addr1,
+			     TXMON_STATUS_INFO(tx_status_info, addr2),
+			     QDF_MAC_ADDR_SIZE);
+	}
+
 	/* set duration zero for ack frame */
 	*(u_int16_t *)(&wh_addr1->i_dur) = qdf_cpu_to_le16(0x0000);
 
 	qdf_nbuf_set_pktlen(mpdu_nbuf, sizeof(*wh_addr1));
 
-	dp_tx_mon_enqueue_mpdu_nbuf(tx_ppdu_info, user_id, mpdu_nbuf);
+	dp_tx_mon_enqueue_mpdu_nbuf(pdev, tx_ppdu_info, user_id, mpdu_nbuf);
 	TXMON_PPDU_HAL(tx_ppdu_info, is_used) = 1;
 }
 
@@ -400,12 +556,13 @@ dp_tx_mon_generate_3addr_qos_null_frm(struct dp_pdev *pdev,
 	/* enqueue 802.11 payload to per user mpdu_q */
 	struct dp_mon_pdev *mon_pdev;
 	struct dp_mon_pdev_be *mon_pdev_be;
-	struct dp_pdev_tx_capture_be *tx_cap_be;
+	struct dp_pdev_tx_monitor_be *tx_mon_be;
 	struct hal_tx_status_info *tx_status_info;
 	struct ieee80211_qosframe *wh_addr3 = NULL;
 	qdf_nbuf_t mpdu_nbuf = NULL;
 	uint16_t duration_le = 0;
 	uint8_t num_users = 0;
+	uint8_t frm_ctl;
 
 	/* sanity check */
 	if (qdf_unlikely(!pdev))
@@ -419,8 +576,8 @@ dp_tx_mon_generate_3addr_qos_null_frm(struct dp_pdev *pdev,
 	if (qdf_unlikely(!mon_pdev_be))
 		return;
 
-	tx_cap_be = &mon_pdev_be->tx_capture_be;
-	tx_status_info = &tx_cap_be->data_status_info;
+	tx_mon_be = &mon_pdev_be->tx_monitor_be;
+	tx_status_info = &tx_mon_be->data_status_info;
 	/*
 	 * for radiotap we allocate new skb,
 	 * so we don't need reserver skb header
@@ -432,11 +589,13 @@ dp_tx_mon_generate_3addr_qos_null_frm(struct dp_pdev *pdev,
 
 	wh_addr3 = (struct ieee80211_qosframe *)qdf_nbuf_data(mpdu_nbuf);
 	qdf_mem_zero(wh_addr3, sizeof(struct ieee80211_qosframe));
-	wh_addr3->i_fc[0] = 0;
+
+	frm_ctl = (IEEE80211_FC0_VERSION_0 | IEEE80211_FC0_TYPE_DATA |
+		   IEEE80211_FC0_SUBTYPE_QOS_NULL);
+	TXMON_PPDU_COM(tx_ppdu_info, frame_control) = frm_ctl;
+	TXMON_PPDU_COM(tx_ppdu_info, frame_control_info_valid) = 1;
 	wh_addr3->i_fc[1] = 0;
-	wh_addr3->i_fc[0] = (IEEE80211_FC0_VERSION_0 |
-			     IEEE80211_FC0_TYPE_DATA |
-			     IEEE80211_FC0_SUBTYPE_QOS_NULL);
+	wh_addr3->i_fc[0] = frm_ctl;
 
 	duration_le = qdf_cpu_to_le16(TXMON_PPDU_COM(tx_ppdu_info, duration));
 	wh_addr3->i_dur[1] = (duration_le & 0xFF00) >> 8;
@@ -453,7 +612,7 @@ dp_tx_mon_generate_3addr_qos_null_frm(struct dp_pdev *pdev,
 		     QDF_MAC_ADDR_SIZE);
 
 	qdf_nbuf_set_pktlen(mpdu_nbuf, sizeof(*wh_addr3));
-	dp_tx_mon_enqueue_mpdu_nbuf(tx_ppdu_info, num_users, mpdu_nbuf);
+	dp_tx_mon_enqueue_mpdu_nbuf(pdev, tx_ppdu_info, num_users, mpdu_nbuf);
 	TXMON_PPDU_HAL(tx_ppdu_info, is_used) = 1;
 }
 
@@ -474,12 +633,13 @@ dp_tx_mon_generate_4addr_qos_null_frm(struct dp_pdev *pdev,
 	/* enqueue 802.11 payload to per user mpdu_q */
 	struct dp_mon_pdev *mon_pdev;
 	struct dp_mon_pdev_be *mon_pdev_be;
-	struct dp_pdev_tx_capture_be *tx_cap_be;
+	struct dp_pdev_tx_monitor_be *tx_mon_be;
 	struct hal_tx_status_info *tx_status_info;
 	struct ieee80211_qosframe_addr4 *wh_addr4 = NULL;
 	qdf_nbuf_t mpdu_nbuf = NULL;
 	uint16_t duration_le = 0;
 	uint8_t num_users = 0;
+	uint8_t frm_ctl;
 
 	/* sanity check */
 	if (qdf_unlikely(!pdev))
@@ -493,8 +653,8 @@ dp_tx_mon_generate_4addr_qos_null_frm(struct dp_pdev *pdev,
 	if (qdf_unlikely(!mon_pdev_be))
 		return;
 
-	tx_cap_be = &mon_pdev_be->tx_capture_be;
-	tx_status_info = &tx_cap_be->data_status_info;
+	tx_mon_be = &mon_pdev_be->tx_monitor_be;
+	tx_status_info = &tx_mon_be->data_status_info;
 	/*
 	 * for radiotap we allocate new skb,
 	 * so we don't need reserver skb header
@@ -506,10 +666,13 @@ dp_tx_mon_generate_4addr_qos_null_frm(struct dp_pdev *pdev,
 
 	wh_addr4 = (struct ieee80211_qosframe_addr4 *)qdf_nbuf_data(mpdu_nbuf);
 	qdf_mem_zero(wh_addr4, sizeof(struct ieee80211_qosframe_addr4));
+
+	frm_ctl = (IEEE80211_FC0_VERSION_0 | IEEE80211_FC0_TYPE_DATA |
+		   IEEE80211_FC0_SUBTYPE_QOS_NULL);
+	TXMON_PPDU_COM(tx_ppdu_info, frame_control) = frm_ctl;
+	TXMON_PPDU_COM(tx_ppdu_info, frame_control_info_valid) = 1;
 	wh_addr4->i_fc[1] = 0;
-	wh_addr4->i_fc[0] = (IEEE80211_FC0_VERSION_0 |
-			     IEEE80211_FC0_TYPE_DATA |
-			     IEEE80211_FC0_SUBTYPE_QOS_NULL);
+	wh_addr4->i_fc[0] = frm_ctl;
 
 	duration_le = qdf_cpu_to_le16(TXMON_PPDU_COM(tx_ppdu_info, duration));
 	wh_addr4->i_dur[1] = (duration_le & 0xFF00) >> 8;
@@ -529,7 +692,7 @@ dp_tx_mon_generate_4addr_qos_null_frm(struct dp_pdev *pdev,
 		     QDF_MAC_ADDR_SIZE);
 
 	qdf_nbuf_set_pktlen(mpdu_nbuf, sizeof(*wh_addr4));
-	dp_tx_mon_enqueue_mpdu_nbuf(tx_ppdu_info, num_users, mpdu_nbuf);
+	dp_tx_mon_enqueue_mpdu_nbuf(pdev, tx_ppdu_info, num_users, mpdu_nbuf);
 	TXMON_PPDU_HAL(tx_ppdu_info, is_used) = 1;
 }
 
@@ -547,25 +710,29 @@ dp_tx_mon_generate_4addr_qos_null_frm(struct dp_pdev *pdev,
  * dp_tx_mon_generate_mu_block_ack_frm() - API to generate MU block ack frame
  * @pdev: pdev Handle
  * @tx_ppdu_info: pointer to tx ppdu info structure
+ * @window_flag: frame generated window
  *
  * Return: void
  */
 static void
 dp_tx_mon_generate_mu_block_ack_frm(struct dp_pdev *pdev,
-				    struct dp_tx_ppdu_info *tx_ppdu_info)
+				    struct dp_tx_ppdu_info *tx_ppdu_info,
+				    uint8_t window_flag)
 {
 	/* allocate and populate MU block ack frame */
 	/* enqueue 802.11 payload to per user mpdu_q */
 	struct dp_mon_pdev *mon_pdev;
 	struct dp_mon_pdev_be *mon_pdev_be;
-	struct dp_pdev_tx_capture_be *tx_cap_be;
+	struct dp_pdev_tx_monitor_be *tx_mon_be;
 	struct hal_tx_status_info *tx_status_info;
 	struct ieee80211_ctlframe_addr2 *wh_addr2 = NULL;
 	qdf_nbuf_t mpdu_nbuf = NULL;
+	uint16_t ba_control = 0;
 	uint8_t *frm = NULL;
 	uint32_t ba_sz = 0;
 	uint8_t num_users = TXMON_PPDU_HAL(tx_ppdu_info, num_users);
 	uint8_t i = 0;
+	uint8_t frm_ctl;
 
 	/* sanity check */
 	if (qdf_unlikely(!pdev))
@@ -579,8 +746,8 @@ dp_tx_mon_generate_mu_block_ack_frm(struct dp_pdev *pdev,
 	if (qdf_unlikely(!mon_pdev_be))
 		return;
 
-	tx_cap_be = &mon_pdev_be->tx_capture_be;
-	tx_status_info = &tx_cap_be->data_status_info;
+	tx_mon_be = &mon_pdev_be->tx_monitor_be;
+	tx_status_info = &tx_mon_be->data_status_info;
 	for (i = 0; i < num_users; i++)
 		ba_sz += (4 << TXMON_BA_INFO_SZ(TXMON_PPDU_USR(tx_ppdu_info,
 							       i,
@@ -604,25 +771,39 @@ dp_tx_mon_generate_mu_block_ack_frm(struct dp_pdev *pdev,
 	wh_addr2 = (struct ieee80211_ctlframe_addr2 *)qdf_nbuf_data(mpdu_nbuf);
 	qdf_mem_zero(wh_addr2, DP_BA_ACK_FRAME_SIZE);
 
-	wh_addr2->i_fc[0] = 0;
+	frm_ctl = (IEEE80211_FC0_VERSION_0 | IEEE80211_FC0_TYPE_CTL |
+		   IEEE80211_FC0_BLOCK_ACK);
+	TXMON_PPDU_COM(tx_ppdu_info, frame_control) = frm_ctl;
+	TXMON_PPDU_COM(tx_ppdu_info, frame_control_info_valid) = 1;
 	wh_addr2->i_fc[1] = 0;
-	wh_addr2->i_fc[0] = (IEEE80211_FC0_VERSION_0 |
-			     IEEE80211_FC0_TYPE_CTL |
-			     IEEE80211_FC0_BLOCK_ACK);
+	wh_addr2->i_fc[0] = frm_ctl;
+
 	*(u_int16_t *)(&wh_addr2->i_aidordur) = qdf_cpu_to_le16(0x0000);
 
-	qdf_mem_copy(wh_addr2->i_addr2,
-		     TXMON_STATUS_INFO(tx_status_info, addr2),
-		     QDF_MAC_ADDR_SIZE);
-	qdf_mem_copy(wh_addr2->i_addr1,
-		     TXMON_STATUS_INFO(tx_status_info, addr1),
-		     QDF_MAC_ADDR_SIZE);
+	if (window_flag == RESPONSE_WINDOW) {
+		qdf_mem_copy(wh_addr2->i_addr2,
+			     TXMON_STATUS_INFO(tx_status_info, addr2),
+			     QDF_MAC_ADDR_SIZE);
+		if (num_users > 1)
+			qdf_mem_set(wh_addr2->i_addr1, QDF_MAC_ADDR_SIZE, 0xFF);
+		else
+			qdf_mem_copy(wh_addr2->i_addr1,
+				     TXMON_STATUS_INFO(tx_status_info, addr1),
+				     QDF_MAC_ADDR_SIZE);
+	} else {
+		qdf_mem_copy(wh_addr2->i_addr2,
+			     TXMON_STATUS_INFO(tx_status_info, addr1),
+			     QDF_MAC_ADDR_SIZE);
+		qdf_mem_copy(wh_addr2->i_addr1,
+			     TXMON_STATUS_INFO(tx_status_info, addr2),
+			     QDF_MAC_ADDR_SIZE);
+	}
 
 	frm = (uint8_t *)&wh_addr2[1];
 
 	/* BA control */
-	*((uint16_t *)frm) = qdf_cpu_to_le16(TXMON_PPDU_USR(tx_ppdu_info,
-							    0, ba_control));
+	ba_control = 0x0016;
+	*((uint16_t *)frm) = qdf_cpu_to_le16(ba_control);
 	frm += 2;
 
 	for (i = 0; i < num_users; i++) {
@@ -632,8 +813,8 @@ dp_tx_mon_generate_mu_block_ack_frm(struct dp_pdev *pdev,
 					(TXMON_PPDU_USR(tx_ppdu_info, i,
 							aid) & 0x7FF));
 		frm += 2;
-		*((uint16_t *)frm) = TXMON_PPDU_USR(tx_ppdu_info,
-						    i, start_seq) & 0xFFF;
+		*((uint16_t *)frm) = qdf_cpu_to_le16(
+				TXMON_PPDU_USR(tx_ppdu_info, i, start_seq));
 		frm += 2;
 		qdf_mem_copy(frm,
 			     TXMON_PPDU_USR(tx_ppdu_info, i, ba_bitmap),
@@ -647,26 +828,30 @@ dp_tx_mon_generate_mu_block_ack_frm(struct dp_pdev *pdev,
 			    (frm - (uint8_t *)qdf_nbuf_data(mpdu_nbuf)));
 
 	/* always enqueue to first active user */
-	dp_tx_mon_enqueue_mpdu_nbuf(tx_ppdu_info, 0, mpdu_nbuf);
+	dp_tx_mon_enqueue_mpdu_nbuf(pdev, tx_ppdu_info, 0, mpdu_nbuf);
 	TXMON_PPDU_HAL(tx_ppdu_info, is_used) = 1;
+	/* HE MU fields not required for Multi Sta Block ack frame */
+	TXMON_PPDU_COM(tx_ppdu_info, he_mu_flags) = 0;
 }
 
 /**
  * dp_tx_mon_generate_block_ack_frm() - API to generate block ack frame
  * @pdev: pdev Handle
  * @tx_ppdu_info: pointer to tx ppdu info structure
+ * @window_flag: frame generated window
  *
  * Return: void
  */
 static void
 dp_tx_mon_generate_block_ack_frm(struct dp_pdev *pdev,
-				 struct dp_tx_ppdu_info *tx_ppdu_info)
+				 struct dp_tx_ppdu_info *tx_ppdu_info,
+				 uint8_t window_flag)
 {
 	/* allocate and populate block ack frame */
 	/* enqueue 802.11 payload to per user mpdu_q */
 	struct dp_mon_pdev *mon_pdev;
 	struct dp_mon_pdev_be *mon_pdev_be;
-	struct dp_pdev_tx_capture_be *tx_cap_be;
+	struct dp_pdev_tx_monitor_be *tx_mon_be;
 	struct hal_tx_status_info *tx_status_info;
 	struct ieee80211_ctlframe_addr2 *wh_addr2 = NULL;
 	qdf_nbuf_t mpdu_nbuf = NULL;
@@ -674,6 +859,7 @@ dp_tx_mon_generate_block_ack_frm(struct dp_pdev *pdev,
 	uint8_t user_id = TXMON_PPDU(tx_ppdu_info, cur_usr_idx);
 	uint32_t ba_bitmap_sz = TXMON_PPDU_USR(tx_ppdu_info,
 					       user_id, ba_bitmap_sz);
+	uint8_t frm_ctl;
 
 	/* sanity check */
 	if (qdf_unlikely(!pdev))
@@ -687,8 +873,8 @@ dp_tx_mon_generate_block_ack_frm(struct dp_pdev *pdev,
 	if (qdf_unlikely(!mon_pdev_be))
 		return;
 
-	tx_cap_be = &mon_pdev_be->tx_capture_be;
-	tx_status_info = &tx_cap_be->data_status_info;
+	tx_mon_be = &mon_pdev_be->tx_monitor_be;
+	tx_status_info = &tx_mon_be->data_status_info;
 	/*
 	 * for multi sta block ack, do we need to increase the size
 	 * or copy info on subsequent frame offset
@@ -735,20 +921,31 @@ dp_tx_mon_generate_block_ack_frm(struct dp_pdev *pdev,
 	wh_addr2 = (struct ieee80211_ctlframe_addr2 *)qdf_nbuf_data(mpdu_nbuf);
 	qdf_mem_zero(wh_addr2, DP_BA_ACK_FRAME_SIZE);
 
-	wh_addr2->i_fc[0] = 0;
+	frm_ctl = (IEEE80211_FC0_VERSION_0 | IEEE80211_FC0_TYPE_CTL |
+		   IEEE80211_FC0_BLOCK_ACK);
+	TXMON_PPDU_COM(tx_ppdu_info, frame_control) = frm_ctl;
+	TXMON_PPDU_COM(tx_ppdu_info, frame_control_info_valid) = 1;
 	wh_addr2->i_fc[1] = 0;
-	wh_addr2->i_fc[0] = (IEEE80211_FC0_VERSION_0 |
-			     IEEE80211_FC0_TYPE_CTL |
-			     IEEE80211_FC0_BLOCK_ACK);
+	wh_addr2->i_fc[0] = frm_ctl;
+
 	/* duration */
 	*(u_int16_t *)(&wh_addr2->i_aidordur) = qdf_cpu_to_le16(0x0020);
 
-	qdf_mem_copy(wh_addr2->i_addr2,
-		     TXMON_STATUS_INFO(tx_status_info, addr2),
-		     QDF_MAC_ADDR_SIZE);
-	qdf_mem_copy(wh_addr2->i_addr1,
-		     TXMON_STATUS_INFO(tx_status_info, addr1),
-		     QDF_MAC_ADDR_SIZE);
+	if (window_flag) {
+		qdf_mem_copy(wh_addr2->i_addr2,
+			     TXMON_STATUS_INFO(tx_status_info, addr2),
+			     QDF_MAC_ADDR_SIZE);
+		qdf_mem_copy(wh_addr2->i_addr1,
+			     TXMON_STATUS_INFO(tx_status_info, addr1),
+			     QDF_MAC_ADDR_SIZE);
+	} else {
+		qdf_mem_copy(wh_addr2->i_addr2,
+			     TXMON_STATUS_INFO(tx_status_info, addr1),
+			     QDF_MAC_ADDR_SIZE);
+		qdf_mem_copy(wh_addr2->i_addr1,
+			     TXMON_STATUS_INFO(tx_status_info, addr2),
+			     QDF_MAC_ADDR_SIZE);
+	}
 
 	frm = (uint8_t *)&wh_addr2[1];
 	/* BA control */
@@ -758,7 +955,7 @@ dp_tx_mon_generate_block_ack_frm(struct dp_pdev *pdev,
 	frm += 2;
 	*((uint16_t *)frm) = qdf_cpu_to_le16(TXMON_PPDU_USR(tx_ppdu_info,
 							    user_id,
-							    start_seq) & 0xFFF);
+							    start_seq));
 	frm += 2;
 	qdf_mem_copy(frm,
 		     TXMON_PPDU_USR(tx_ppdu_info, user_id, ba_bitmap),
@@ -768,7 +965,7 @@ dp_tx_mon_generate_block_ack_frm(struct dp_pdev *pdev,
 	qdf_nbuf_set_pktlen(mpdu_nbuf,
 			    (frm - (uint8_t *)qdf_nbuf_data(mpdu_nbuf)));
 
-	dp_tx_mon_enqueue_mpdu_nbuf(tx_ppdu_info, 0, mpdu_nbuf);
+	dp_tx_mon_enqueue_mpdu_nbuf(pdev, tx_ppdu_info, 0, mpdu_nbuf);
 
 	TXMON_PPDU_HAL(tx_ppdu_info, is_used) = 1;
 }
@@ -795,12 +992,12 @@ dp_tx_mon_alloc_mpdu(struct dp_pdev *pdev, struct dp_tx_ppdu_info *tx_ppdu_info)
 	 * we allocate a dummy bufffer size
 	 */
 	mpdu_nbuf = qdf_nbuf_alloc(pdev->soc->osdev,
-				   TXMON_NO_BUFFER_SZ,
-				   TXMON_NO_BUFFER_SZ,
+				   MAX_MONITOR_HEADER, MAX_MONITOR_HEADER,
 				   4, FALSE);
 	if (!mpdu_nbuf) {
 		qdf_err("%s: %d No memory to allocate mpdu_nbuf!!!!!\n",
 			__func__, __LINE__);
+		return;
 	}
 
 	usr_idx = TXMON_PPDU(tx_ppdu_info, cur_usr_idx);
@@ -818,11 +1015,12 @@ dp_tx_mon_alloc_mpdu(struct dp_pdev *pdev, struct dp_tx_ppdu_info *tx_ppdu_info)
  */
 static void
 dp_tx_mon_generate_data_frm(struct dp_pdev *pdev,
-			    struct dp_tx_ppdu_info *tx_ppdu_info)
+			    struct dp_tx_ppdu_info *tx_ppdu_info,
+			    bool take_ref)
 {
 	struct dp_mon_pdev *mon_pdev;
 	struct dp_mon_pdev_be *mon_pdev_be;
-	struct dp_pdev_tx_capture_be *tx_cap_be;
+	struct dp_pdev_tx_monitor_be *tx_mon_be;
 	struct hal_tx_status_info *tx_status_info;
 	qdf_nbuf_t mpdu_nbuf = NULL;
 	qdf_nbuf_queue_t *usr_mpdu_q = NULL;
@@ -840,9 +1038,9 @@ dp_tx_mon_generate_data_frm(struct dp_pdev *pdev,
 	if (qdf_unlikely(!mon_pdev_be))
 		return;
 
-	tx_cap_be = &mon_pdev_be->tx_capture_be;
+	tx_mon_be = &mon_pdev_be->tx_monitor_be;
 
-	tx_status_info = &tx_cap_be->data_status_info;
+	tx_status_info = &tx_mon_be->data_status_info;
 	usr_idx = TXMON_PPDU(tx_ppdu_info, cur_usr_idx);
 	usr_mpdu_q = &TXMON_PPDU_USR(tx_ppdu_info, usr_idx, mpdu_q);
 	mpdu_nbuf = qdf_nbuf_queue_last(usr_mpdu_q);
@@ -850,14 +1048,16 @@ dp_tx_mon_generate_data_frm(struct dp_pdev *pdev,
 	if (!mpdu_nbuf)
 		QDF_BUG(0);
 
+	tx_mon_be->stats.pkt_buf_processed++;
+
 	/* add function to either copy or add frag to frag_list */
 	qdf_nbuf_add_frag(pdev->soc->osdev,
 			  TXMON_STATUS_INFO(tx_status_info, buffer),
 			  mpdu_nbuf,
 			  TXMON_STATUS_INFO(tx_status_info, offset),
 			  TXMON_STATUS_INFO(tx_status_info, length),
-			  TX_MON_STATUS_BUF_SIZE,
-			  true, TXMON_NO_BUFFER_SZ);
+			  DP_MON_DATA_BUFFER_SIZE,
+			  take_ref, TXMON_NO_BUFFER_SZ);
 }
 
 /**
@@ -873,7 +1073,7 @@ dp_tx_mon_generate_prot_frm(struct dp_pdev *pdev,
 {
 	struct dp_mon_pdev *mon_pdev;
 	struct dp_mon_pdev_be *mon_pdev_be;
-	struct dp_pdev_tx_capture_be *tx_cap_be;
+	struct dp_pdev_tx_monitor_be *tx_mon_be;
 	struct hal_tx_status_info *tx_status_info;
 
 	/* sanity check */
@@ -888,12 +1088,12 @@ dp_tx_mon_generate_prot_frm(struct dp_pdev *pdev,
 	if (qdf_unlikely(!mon_pdev_be))
 		return;
 
-	tx_cap_be = &mon_pdev_be->tx_capture_be;
-	tx_status_info = &tx_cap_be->prot_status_info;
+	tx_mon_be = &mon_pdev_be->tx_monitor_be;
+	tx_status_info = &tx_mon_be->prot_status_info;
 
 	/* update medium prot type from data */
 	TXMON_STATUS_INFO(tx_status_info, medium_prot_type) =
-		tx_cap_be->data_status_info.medium_prot_type;
+		tx_mon_be->data_status_info.medium_prot_type;
 
 	switch (TXMON_STATUS_INFO(tx_status_info, medium_prot_type)) {
 	case TXMON_MEDIUM_NO_PROTECTION:
@@ -905,12 +1105,14 @@ dp_tx_mon_generate_prot_frm(struct dp_pdev *pdev,
 	case TXMON_MEDIUM_RTS_11AC_STATIC_BW:
 	case TXMON_MEDIUM_RTS_11AC_DYNAMIC_BW:
 	{
-		dp_tx_mon_generate_rts_frm(pdev, tx_ppdu_info);
+		dp_tx_mon_generate_rts_frm(pdev, tx_ppdu_info,
+					   INITIATOR_WINDOW);
 		break;
 	}
 	case TXMON_MEDIUM_CTS2SELF:
 	{
-		dp_tx_mon_generate_cts2self_frm(pdev, tx_ppdu_info);
+		dp_tx_mon_generate_cts2self_frm(pdev, tx_ppdu_info,
+						INITIATOR_WINDOW);
 		break;
 	}
 	case TXMON_MEDIUM_QOS_NULL_NO_ACK_3ADDR:
@@ -927,63 +1129,6 @@ dp_tx_mon_generate_prot_frm(struct dp_pdev *pdev,
 }
 
 /**
- * dp_lite_mon_filter_subtype() - filter frames with subtype
- * @mon_pdev_be: mon pdev Handle
- * @ppdu_info: pointer to hal_tx_ppdu_info structure
- *
- * Return: QDF_STATUS
- */
-static inline QDF_STATUS
-dp_lite_mon_filter_subtype(struct dp_mon_pdev_be *mon_pdev_be,
-			   struct hal_tx_ppdu_info *ppdu_info)
-{
-	struct dp_mon_pdev *mon_pdev = &mon_pdev_be->mon_pdev;
-	uint16_t frame_control;
-	struct dp_lite_mon_tx_config *lite_mon_tx_config =
-			mon_pdev_be->lite_mon_tx_config;
-	uint16_t mgmt_filter, ctrl_filter, data_filter, type, subtype;
-
-	if (!dp_lite_mon_is_tx_enabled(mon_pdev))
-		return QDF_STATUS_SUCCESS;
-
-	if (!TXMON_HAL_STATUS(ppdu_info, frame_control_info_valid)) {
-		dp_mon_err("Queue extension is invalid");
-		return QDF_STATUS_E_ABORTED;
-	}
-
-	frame_control = TXMON_HAL_STATUS(ppdu_info, frame_control);
-	qdf_spin_lock_bh(&lite_mon_tx_config->lite_mon_tx_lock);
-	mgmt_filter = lite_mon_tx_config->tx_config.mgmt_filter[DP_MON_FRM_FILTER_MODE_FP];
-	ctrl_filter = lite_mon_tx_config->tx_config.ctrl_filter[DP_MON_FRM_FILTER_MODE_FP];
-	data_filter = lite_mon_tx_config->tx_config.data_filter[DP_MON_FRM_FILTER_MODE_FP];
-	qdf_spin_unlock_bh(&lite_mon_tx_config->lite_mon_tx_lock);
-
-	type = (frame_control & FRAME_CONTROL_TYPE_MASK) >>
-		FRAME_CONTROL_TYPE_SHIFT;
-	subtype = (frame_control & FRAME_CONTROL_SUBTYPE_MASK) >>
-		FRAME_CONTROL_SUBTYPE_SHIFT;
-
-	switch (type) {
-	case FRAME_CTRL_TYPE_MGMT:
-		if (mgmt_filter >> subtype & 0x1)
-			return QDF_STATUS_SUCCESS;
-		else
-			return QDF_STATUS_E_ABORTED;
-	case FRAME_CTRL_TYPE_CTRL:
-		if (ctrl_filter >> subtype & 0x1)
-			return QDF_STATUS_SUCCESS;
-		else
-			return QDF_STATUS_E_ABORTED;
-	case FRAME_CTRL_TYPE_DATA:
-		/* Allowing all data frames */
-		return QDF_STATUS_SUCCESS;
-	default:
-		dp_mon_err("Unknown frame type in framecontrol\n");
-		return QDF_STATUS_E_INVAL;
-	}
-}
-
-/**
  * dp_tx_mon_generated_response_frm() - API to handle generated response frame
  * @pdev: pdev Handle
  * @tx_ppdu_info: pointer to tx ppdu info structure
@@ -996,7 +1141,7 @@ dp_tx_mon_generated_response_frm(struct dp_pdev *pdev,
 {
 	struct dp_mon_pdev *mon_pdev;
 	struct dp_mon_pdev_be *mon_pdev_be;
-	struct dp_pdev_tx_capture_be *tx_cap_be;
+	struct dp_pdev_tx_monitor_be *tx_mon_be;
 	struct hal_tx_status_info *tx_status_info;
 	QDF_STATUS status = QDF_STATUS_SUCCESS;
 	uint8_t gen_response = 0;
@@ -1013,50 +1158,33 @@ dp_tx_mon_generated_response_frm(struct dp_pdev *pdev,
 	if (qdf_unlikely(!mon_pdev_be))
 		return QDF_STATUS_E_NOMEM;
 
-	tx_cap_be = &mon_pdev_be->tx_capture_be;
+	tx_mon_be = &mon_pdev_be->tx_monitor_be;
 
-	tx_status_info = &tx_cap_be->data_status_info;
+	tx_status_info = &tx_mon_be->data_status_info;
 	gen_response = TXMON_STATUS_INFO(tx_status_info, generated_response);
 
 	switch (gen_response) {
 	case TXMON_GEN_RESP_SELFGEN_ACK:
 	{
-		TXMON_PPDU_COM(tx_ppdu_info,
-			       frame_control) = ((IEEE80211_FC0_TYPE_CTL <<
-						  IEEE80211_FC0_TYPE_SHIFT) |
-						 (IEEE80211_FC0_SUBTYPE_ACK <<
-						  IEEE80211_FC0_SUBTYPE_SHIFT));
-		TXMON_PPDU_COM(tx_ppdu_info,
-			       frame_control_info_valid) = 1;
-		dp_tx_mon_generate_ack_frm(pdev, tx_ppdu_info);
+		dp_tx_mon_generate_ack_frm(pdev, tx_ppdu_info, RESPONSE_WINDOW);
 		break;
 	}
 	case TXMON_GEN_RESP_SELFGEN_CTS:
 	{
-		TXMON_PPDU_COM(tx_ppdu_info,
-			       frame_control) = ((IEEE80211_FC0_TYPE_CTL <<
-						  IEEE80211_FC0_TYPE_SHIFT) |
-						 (IEEE80211_FC0_SUBTYPE_CTS <<
-						  IEEE80211_FC0_SUBTYPE_SHIFT));
-		TXMON_PPDU_COM(tx_ppdu_info,
-			       frame_control_info_valid) = 1;
-		dp_tx_mon_generate_cts2self_frm(pdev, tx_ppdu_info);
+		dp_tx_mon_generate_cts2self_frm(pdev, tx_ppdu_info,
+						RESPONSE_WINDOW);
 		break;
 	}
 	case TXMON_GEN_RESP_SELFGEN_BA:
 	{
-		TXMON_PPDU_COM(tx_ppdu_info,
-			       frame_control) = ((IEEE80211_FC0_TYPE_CTL <<
-						  IEEE80211_FC0_TYPE_SHIFT) |
-						 (IEEE80211_FC0_BLOCK_ACK <<
-						  IEEE80211_FC0_SUBTYPE_SHIFT));
-		TXMON_PPDU_COM(tx_ppdu_info,
-			       frame_control_info_valid) = 1;
-		dp_tx_mon_generate_block_ack_frm(pdev, tx_ppdu_info);
+		dp_tx_mon_generate_block_ack_frm(pdev, tx_ppdu_info,
+						 RESPONSE_WINDOW);
 		break;
 	}
 	case TXMON_GEN_RESP_SELFGEN_MBA:
 	{
+		dp_tx_mon_generate_mu_block_ack_frm(pdev, tx_ppdu_info,
+						    RESPONSE_WINDOW);
 		break;
 	}
 	case TXMON_GEN_RESP_SELFGEN_CBF:
@@ -1086,6 +1214,7 @@ dp_tx_mon_generated_response_frm(struct dp_pdev *pdev,
  * @tx_tlv_hdr: pointer to tx_tlv_hdr
  * @status_frag: pointer to fragment
  * @tlv_status: tlv status return from hal api
+ * @mon_desc_list_ref: tx monitor descriptor list reference
  *
  * Return: QDF_STATUS
  */
@@ -1095,11 +1224,12 @@ dp_tx_mon_update_ppdu_info_status(struct dp_pdev *pdev,
 				  struct dp_tx_ppdu_info *tx_prot_ppdu_info,
 				  void *tx_tlv_hdr,
 				  qdf_frag_t status_frag,
-				  uint32_t tlv_status)
+				  uint32_t tlv_status,
+				  struct dp_tx_mon_desc_list *mon_desc_list_ref)
 {
 	struct dp_mon_pdev *mon_pdev;
 	struct dp_mon_pdev_be *mon_pdev_be;
-	struct dp_pdev_tx_capture_be *tx_cap_be;
+	struct dp_pdev_tx_monitor_be *tx_mon_be;
 	struct hal_tx_status_info *tx_status_info;
 	QDF_STATUS status = QDF_STATUS_SUCCESS;
 
@@ -1115,7 +1245,7 @@ dp_tx_mon_update_ppdu_info_status(struct dp_pdev *pdev,
 	if (qdf_unlikely(!mon_pdev_be))
 		return QDF_STATUS_E_NOMEM;
 
-	tx_cap_be = &mon_pdev_be->tx_capture_be;
+	tx_mon_be = &mon_pdev_be->tx_monitor_be;
 
 	switch (tlv_status) {
 	case HAL_MON_TX_FES_SETUP:
@@ -1129,18 +1259,6 @@ dp_tx_mon_update_ppdu_info_status(struct dp_pdev *pdev,
 	}
 	case HAL_MON_RX_RESPONSE_REQUIRED_INFO:
 	{
-		/*
-		 * start of Response window
-		 *
-		 * response window start and follow with
-		 * RTS(sta) - cts(AP)
-		 * BlockAckReq(sta) - BlockAck(AP)
-		 */
-		tx_status_info = &tx_cap_be->data_status_info;
-		if (TXMON_STATUS_INFO(tx_status_info, reception_type) ==
-		    TXMON_RESP_CTS)
-			dp_tx_mon_generate_cts2self_frm(pdev,
-							tx_data_ppdu_info);
 		break;
 	}
 	case HAL_MON_TX_FES_STATUS_START_PROT:
@@ -1165,8 +1283,6 @@ dp_tx_mon_update_ppdu_info_status(struct dp_pdev *pdev,
 	}
 	case HAL_MON_RX_FRAME_BITMAP_ACK:
 	{
-		/* this comes for each user */
-		dp_tx_mon_generate_ack_frm(pdev, tx_data_ppdu_info);
 		break;
 	}
 	case HAL_MON_RX_FRAME_BITMAP_BLOCK_ACK_256:
@@ -1177,14 +1293,16 @@ dp_tx_mon_update_ppdu_info_status(struct dp_pdev *pdev,
 		 * BlockAck is not same as ACK, single frame can hold
 		 * multiple BlockAck info
 		 */
-		tx_status_info = &tx_cap_be->data_status_info;
-		if (TXMON_STATUS_INFO(tx_status_info, transmission_type) ==
-		    TXMON_SU_TRANSMISSION)
+		tx_status_info = &tx_mon_be->data_status_info;
+
+		if (TXMON_PPDU_HAL(tx_data_ppdu_info, num_users))
 			dp_tx_mon_generate_block_ack_frm(pdev,
-							 tx_data_ppdu_info);
+							 tx_data_ppdu_info,
+							 INITIATOR_WINDOW);
 		else
 			dp_tx_mon_generate_mu_block_ack_frm(pdev,
-							    tx_data_ppdu_info);
+							    tx_data_ppdu_info,
+							    INITIATOR_WINDOW);
 
 		break;
 	}
@@ -1199,10 +1317,57 @@ dp_tx_mon_update_ppdu_info_status(struct dp_pdev *pdev,
 		break;
 	}
 	case HAL_MON_TX_DATA:
-	case HAL_MON_TX_BUFFER_ADDR:
 	{
 		TXMON_PPDU_HAL(tx_data_ppdu_info, is_used) = 1;
-		dp_tx_mon_generate_data_frm(pdev, tx_data_ppdu_info);
+		dp_tx_mon_generate_data_frm(pdev, tx_data_ppdu_info, true);
+		break;
+	}
+	case HAL_MON_TX_BUFFER_ADDR:
+	{
+		struct hal_mon_packet_info *packet_info = NULL;
+		struct dp_mon_desc *mon_desc = NULL;
+		qdf_frag_t packet_buffer = NULL;
+		uint32_t end_offset = 0;
+
+		tx_status_info = &tx_mon_be->data_status_info;
+		/* update buffer from packet info */
+		packet_info = &TXMON_PPDU_HAL(tx_data_ppdu_info, packet_info);
+		mon_desc = (struct dp_mon_desc *)(uintptr_t)packet_info->sw_cookie;
+
+		qdf_assert_always(mon_desc);
+
+		if (mon_desc->magic != DP_MON_DESC_MAGIC)
+			qdf_assert_always(0);
+
+		qdf_assert_always(mon_desc->buf_addr);
+		tx_mon_be->stats.pkt_buf_recv++;
+
+		if (!mon_desc->unmapped) {
+			qdf_mem_unmap_page(pdev->soc->osdev,
+					   (qdf_dma_addr_t)mon_desc->paddr,
+					   DP_MON_DATA_BUFFER_SIZE,
+					   QDF_DMA_FROM_DEVICE);
+			mon_desc->unmapped = 1;
+		}
+
+		packet_buffer = mon_desc->buf_addr;
+		mon_desc->buf_addr = NULL;
+
+		/* increment reap count */
+		mon_desc_list_ref->tx_mon_reap_cnt++;
+
+		/* add the mon_desc to free list */
+		dp_mon_add_to_free_desc_list(&mon_desc_list_ref->desc_list,
+					     &mon_desc_list_ref->tail,
+					     mon_desc);
+
+		TXMON_STATUS_INFO(tx_status_info, buffer) = packet_buffer;
+		TXMON_STATUS_INFO(tx_status_info, offset) = end_offset;
+		TXMON_STATUS_INFO(tx_status_info,
+				  length) = packet_info->dma_length;
+
+		TXMON_PPDU_HAL(tx_data_ppdu_info, is_used) = 1;
+		dp_tx_mon_generate_data_frm(pdev, tx_data_ppdu_info, false);
 		break;
 	}
 	case HAL_MON_TX_FES_STATUS_END:
@@ -1212,8 +1377,6 @@ dp_tx_mon_update_ppdu_info_status(struct dp_pdev *pdev,
 	case HAL_MON_RESPONSE_END_STATUS_INFO:
 	{
 		dp_tx_mon_generated_response_frm(pdev, tx_data_ppdu_info);
-		status = dp_lite_mon_filter_subtype(mon_pdev_be,
-						    &tx_data_ppdu_info->hal_txmon);
 		break;
 	}
 	case HAL_MON_TX_FES_STATUS_START:
@@ -1223,8 +1386,7 @@ dp_tx_mon_update_ppdu_info_status(struct dp_pdev *pdev,
 	}
 	case HAL_MON_TX_QUEUE_EXTENSION:
 	{
-		status = dp_lite_mon_filter_subtype(mon_pdev_be,
-						    &tx_data_ppdu_info->hal_txmon);
+		/* No action for Queue Extension TLV */
 		break;
 	}
 	default:
@@ -1240,26 +1402,30 @@ dp_tx_mon_update_ppdu_info_status(struct dp_pdev *pdev,
 /*
  * dp_tx_mon_process_tlv_2_0() - API to parse PPDU worth information
  * @pdev_handle: DP_PDEV handle
+ * @mon_desc_list_ref: tx monitor descriptor list reference
  *
  * Return: status
  */
-QDF_STATUS dp_tx_mon_process_tlv_2_0(struct dp_pdev *pdev)
+QDF_STATUS
+dp_tx_mon_process_tlv_2_0(struct dp_pdev *pdev,
+			  struct dp_tx_mon_desc_list *mon_desc_list_ref)
 {
 	struct dp_mon_pdev *mon_pdev;
 	struct dp_mon_pdev_be *mon_pdev_be;
-	struct dp_pdev_tx_capture_be *tx_cap_be;
+	struct dp_pdev_tx_monitor_be *tx_mon_be;
 	struct dp_tx_ppdu_info *tx_prot_ppdu_info = NULL;
 	struct dp_tx_ppdu_info *tx_data_ppdu_info = NULL;
 	struct hal_tx_status_info *tx_status_prot;
 	struct hal_tx_status_info *tx_status_data;
 	qdf_frag_t status_frag = NULL;
-	uint8_t *tx_tlv;
-	uint8_t *tx_tlv_start;
+	uint32_t end_offset = 0;
 	uint32_t tlv_status;
 	uint32_t status = QDF_STATUS_SUCCESS;
+	uint8_t *tx_tlv;
+	uint8_t *tx_tlv_start;
 	uint8_t num_users = 0;
 	uint8_t cur_frag_q_idx;
-	uint32_t end_offset = 0;
+	bool schedule_wrq = false;
 
 	/* sanity check */
 	if (qdf_unlikely(!pdev))
@@ -1273,25 +1439,25 @@ QDF_STATUS dp_tx_mon_process_tlv_2_0(struct dp_pdev *pdev)
 	if (qdf_unlikely(!mon_pdev_be))
 		return QDF_STATUS_E_NOMEM;
 
-	tx_cap_be = &mon_pdev_be->tx_capture_be;
-	cur_frag_q_idx = tx_cap_be->cur_frag_q_idx;
+	tx_mon_be = &mon_pdev_be->tx_monitor_be;
+	cur_frag_q_idx = tx_mon_be->cur_frag_q_idx;
 
-	tx_status_prot = &tx_cap_be->prot_status_info;
-	tx_status_data = &tx_cap_be->data_status_info;
+	tx_status_prot = &tx_mon_be->prot_status_info;
+	tx_status_data = &tx_mon_be->data_status_info;
 
 	tx_prot_ppdu_info = dp_tx_mon_get_ppdu_info(pdev, TX_PROT_PPDU_INFO,
-						    1, tx_cap_be->be_ppdu_id);
+						    1, tx_mon_be->be_ppdu_id);
 
 	if (!tx_prot_ppdu_info) {
 		dp_mon_info("tx prot ppdu info alloc got failed!!");
 		return QDF_STATUS_E_NOMEM;
 	}
 
-	status_frag = tx_cap_be->frag_q_vec[cur_frag_q_idx].frag_buf;
-	end_offset = tx_cap_be->frag_q_vec[cur_frag_q_idx].end_offset;
+	status_frag = tx_mon_be->frag_q_vec[cur_frag_q_idx].frag_buf;
+	end_offset = tx_mon_be->frag_q_vec[cur_frag_q_idx].end_offset;
 	tx_tlv = status_frag;
 	dp_mon_debug("last_frag_q_idx: %d status_frag:%pK",
-		     tx_cap_be->last_frag_q_idx, status_frag);
+		     tx_mon_be->last_frag_q_idx, status_frag);
 
 	/* get number of user from tlv window */
 	tlv_status = hal_txmon_status_get_num_users(pdev->soc->hal_soc,
@@ -1305,18 +1471,17 @@ QDF_STATUS dp_tx_mon_process_tlv_2_0(struct dp_pdev *pdev)
 	/* allocate tx_data_ppdu_info based on num_users */
 	tx_data_ppdu_info = dp_tx_mon_get_ppdu_info(pdev, TX_DATA_PPDU_INFO,
 						    num_users,
-						    tx_cap_be->be_ppdu_id);
+						    tx_mon_be->be_ppdu_id);
 	if (!tx_data_ppdu_info) {
 		dp_mon_info("tx prot ppdu info alloc got failed!!");
 		return QDF_STATUS_E_NOMEM;
 	}
 
 	/* iterate status buffer queue */
-	while (tx_cap_be->cur_frag_q_idx < tx_cap_be->last_frag_q_idx &&
-	       status == QDF_STATUS_SUCCESS) {
+	while (tx_mon_be->cur_frag_q_idx < tx_mon_be->last_frag_q_idx) {
 		/* get status buffer from frag_q_vec */
-		status_frag = tx_cap_be->frag_q_vec[cur_frag_q_idx].frag_buf;
-		end_offset = tx_cap_be->frag_q_vec[cur_frag_q_idx].end_offset;
+		status_frag = tx_mon_be->frag_q_vec[cur_frag_q_idx].frag_buf;
+		end_offset = tx_mon_be->frag_q_vec[cur_frag_q_idx].end_offset;
 		if (qdf_unlikely(!status_frag)) {
 			dp_mon_err("status frag is NULL\n");
 			QDF_BUG(0);
@@ -1344,14 +1509,8 @@ QDF_STATUS dp_tx_mon_process_tlv_2_0(struct dp_pdev *pdev)
 							tx_prot_ppdu_info,
 							tx_tlv,
 							status_frag,
-							tlv_status);
-
-			if (status != QDF_STATUS_SUCCESS) {
-				dp_tx_mon_status_free_packet_buf(pdev,
-								 status_frag,
-								 end_offset);
-				break;
-			}
+							tlv_status,
+							mon_desc_list_ref);
 
 			/* need api definition for hal_tx_status_get_next_tlv */
 			tx_tlv = hal_tx_status_get_next_tlv(tx_tlv);
@@ -1363,14 +1522,15 @@ QDF_STATUS dp_tx_mon_process_tlv_2_0(struct dp_pdev *pdev)
 		 * free status buffer after parsing
 		 * is status_frag mapped to mpdu if so make sure
 		 */
+		tx_mon_be->stats.status_buf_free++;
 		qdf_frag_free(status_frag);
-		tx_cap_be->frag_q_vec[cur_frag_q_idx].frag_buf = NULL;
-		tx_cap_be->frag_q_vec[cur_frag_q_idx].end_offset = 0;
-		cur_frag_q_idx = ++tx_cap_be->cur_frag_q_idx;
+		tx_mon_be->frag_q_vec[cur_frag_q_idx].frag_buf = NULL;
+		tx_mon_be->frag_q_vec[cur_frag_q_idx].end_offset = 0;
+		cur_frag_q_idx = ++tx_mon_be->cur_frag_q_idx;
 	}
 
 	/* clear the unreleased frag array */
-	dp_tx_mon_status_queue_free(pdev, tx_cap_be);
+	dp_tx_mon_status_queue_free(pdev, tx_mon_be, mon_desc_list_ref);
 
 	if (TXMON_PPDU_HAL(tx_prot_ppdu_info, is_used)) {
 		if (qdf_unlikely(!TXMON_PPDU_COM(tx_prot_ppdu_info,
@@ -1393,21 +1553,20 @@ QDF_STATUS dp_tx_mon_process_tlv_2_0(struct dp_pdev *pdev)
 		 *
 		 * TODO: add a threshold check and drop the ppdu info
 		 */
-		qdf_spin_lock_bh(&tx_cap_be->tx_mon_list_lock);
-		tx_cap_be->last_prot_ppdu_info =
-					tx_cap_be->tx_prot_ppdu_info;
-		STAILQ_INSERT_TAIL(&tx_cap_be->tx_ppdu_info_queue,
+		qdf_spin_lock_bh(&tx_mon_be->tx_mon_list_lock);
+		tx_mon_be->last_prot_ppdu_info =
+					tx_mon_be->tx_prot_ppdu_info;
+		STAILQ_INSERT_TAIL(&tx_mon_be->tx_ppdu_info_queue,
 				   tx_prot_ppdu_info,
 				   tx_ppdu_info_queue_elem);
-		tx_cap_be->tx_ppdu_info_list_depth++;
+		tx_mon_be->tx_ppdu_info_list_depth++;
 
-		tx_cap_be->tx_prot_ppdu_info = NULL;
-		qdf_spin_unlock_bh(&tx_cap_be->tx_mon_list_lock);
+		tx_mon_be->tx_prot_ppdu_info = NULL;
+		qdf_spin_unlock_bh(&tx_mon_be->tx_mon_list_lock);
+		schedule_wrq = true;
 	} else {
-		/*
-		 * TODO : we can also save
-		 * allocated buffer for future use
-		 */
+		dp_tx_mon_free_ppdu_info(tx_prot_ppdu_info, tx_mon_be);
+		tx_mon_be->tx_prot_ppdu_info = NULL;
 		tx_prot_ppdu_info = NULL;
 	}
 
@@ -1432,30 +1591,26 @@ QDF_STATUS dp_tx_mon_process_tlv_2_0(struct dp_pdev *pdev)
 		 *
 		 * TODO: add a threshold check and drop the ppdu info
 		 */
-		qdf_spin_lock_bh(&tx_cap_be->tx_mon_list_lock);
-		tx_cap_be->last_data_ppdu_info =
-					tx_cap_be->tx_data_ppdu_info;
-		STAILQ_INSERT_TAIL(&tx_cap_be->tx_ppdu_info_queue,
+		qdf_spin_lock_bh(&tx_mon_be->tx_mon_list_lock);
+		tx_mon_be->last_data_ppdu_info =
+					tx_mon_be->tx_data_ppdu_info;
+		STAILQ_INSERT_TAIL(&tx_mon_be->tx_ppdu_info_queue,
 				   tx_data_ppdu_info,
 				   tx_ppdu_info_queue_elem);
-		tx_cap_be->tx_ppdu_info_list_depth++;
+		tx_mon_be->tx_ppdu_info_list_depth++;
 
-		tx_cap_be->tx_data_ppdu_info = NULL;
-		qdf_spin_unlock_bh(&tx_cap_be->tx_mon_list_lock);
+		tx_mon_be->tx_data_ppdu_info = NULL;
+		qdf_spin_unlock_bh(&tx_mon_be->tx_mon_list_lock);
+		schedule_wrq = true;
 	} else {
-		/*
-		 * TODO : we can also save
-		 * allocated buffer for future use
-		 */
+		dp_tx_mon_free_ppdu_info(tx_data_ppdu_info, tx_mon_be);
+		tx_mon_be->tx_data_ppdu_info = NULL;
 		tx_data_ppdu_info = NULL;
 	}
 
-	/*
-	 * TODO: iterate status buffer queue and free
-	 * need a wrapper function to free the status buffer
-	 */
-	qdf_queue_work(0, tx_cap_be->post_ppdu_workqueue,
-		       &tx_cap_be->post_ppdu_work);
+	if (schedule_wrq)
+		qdf_queue_work(NULL, tx_mon_be->post_ppdu_workqueue,
+			       &tx_mon_be->post_ppdu_work);
 
 	return QDF_STATUS_SUCCESS;
 }
@@ -1473,18 +1628,15 @@ void dp_tx_mon_update_end_reason(struct dp_mon_pdev *mon_pdev,
 				 int ppdu_id, int end_reason)
 {
 	struct dp_mon_pdev_be *mon_pdev_be;
-	struct dp_pdev_tx_capture_be *tx_cap_be;
+	struct dp_pdev_tx_monitor_be *tx_mon_be;
 
 	mon_pdev_be = dp_get_be_mon_pdev_from_dp_mon_pdev(mon_pdev);
 	if (qdf_unlikely(!mon_pdev_be))
 		return;
 
-	tx_cap_be = &mon_pdev_be->tx_capture_be;
+	tx_mon_be = &mon_pdev_be->tx_monitor_be;
 
-	if (tx_cap_be->be_ppdu_id != ppdu_id)
-		return;
-
-	tx_cap_be->be_end_reason_bitmap |= (1 << end_reason);
+	tx_mon_be->be_end_reason_bitmap |= (1 << end_reason);
 }
 
 /*
@@ -1496,18 +1648,21 @@ void dp_tx_mon_update_end_reason(struct dp_mon_pdev *mon_pdev,
  * @mon_ring_desc - descriptor status info
  * @addr - status buffer frag address
  * @end_offset - end offset of buffer that has valid buffer
+ * @mon_desc_list_ref: tx monitor descriptor list reference
  *
  * Return: QDF_STATUS
  */
-QDF_STATUS dp_tx_mon_process_status_tlv(struct dp_soc *soc,
-					struct dp_pdev *pdev,
-					struct hal_mon_desc *mon_ring_desc,
-					qdf_frag_t status_frag,
-					uint32_t end_offset)
+QDF_STATUS
+dp_tx_mon_process_status_tlv(struct dp_soc *soc,
+			     struct dp_pdev *pdev,
+			     struct hal_mon_desc *mon_ring_desc,
+			     qdf_frag_t status_frag,
+			     uint32_t end_offset,
+			     struct dp_tx_mon_desc_list *mon_desc_list_ref)
 {
 	struct dp_mon_pdev *mon_pdev;
 	struct dp_mon_pdev_be *mon_pdev_be;
-	struct dp_pdev_tx_capture_be *tx_cap_be;
+	struct dp_pdev_tx_monitor_be *tx_mon_be = NULL;
 	uint8_t last_frag_q_idx = 0;
 
 	/* sanity check */
@@ -1522,63 +1677,87 @@ QDF_STATUS dp_tx_mon_process_status_tlv(struct dp_soc *soc,
 	if (qdf_unlikely(!mon_pdev_be))
 		goto free_status_buffer;
 
-	tx_cap_be = &mon_pdev_be->tx_capture_be;
+	tx_mon_be = &mon_pdev_be->tx_monitor_be;
 
-	if (qdf_unlikely(tx_cap_be->last_frag_q_idx >
+	if (qdf_unlikely(tx_mon_be->last_frag_q_idx >
 			 MAX_STATUS_BUFFER_IN_PPDU)) {
 		dp_mon_err("status frag queue for a ppdu[%d] exceed %d\n",
-			   tx_cap_be->be_ppdu_id,
+			   tx_mon_be->be_ppdu_id,
 			   MAX_STATUS_BUFFER_IN_PPDU);
-		dp_tx_mon_status_queue_free(pdev, tx_cap_be);
+		dp_tx_mon_status_queue_free(pdev, tx_mon_be, mon_desc_list_ref);
 		goto free_status_buffer;
 	}
 
-	if (tx_cap_be->mode == TX_MON_BE_DISABLE &&
-	    !dp_lite_mon_is_tx_enabled(mon_pdev))
+	if (tx_mon_be->mode == TX_MON_BE_DISABLE &&
+	    !dp_lite_mon_is_tx_enabled(mon_pdev)) {
+		dp_tx_mon_status_queue_free(pdev, tx_mon_be,
+					    mon_desc_list_ref);
 		goto free_status_buffer;
+	}
 
-	if (tx_cap_be->be_ppdu_id != mon_ring_desc->ppdu_id &&
-	    tx_cap_be->last_frag_q_idx) {
-		if (tx_cap_be->be_end_reason_bitmap &
+	if (tx_mon_be->be_ppdu_id != mon_ring_desc->ppdu_id &&
+	    tx_mon_be->last_frag_q_idx) {
+		if (tx_mon_be->be_end_reason_bitmap &
 		    (1 << HAL_MON_FLUSH_DETECTED)) {
-			dp_tx_mon_status_queue_free(pdev, tx_cap_be);
-		} else if (tx_cap_be->be_end_reason_bitmap &
+			tx_mon_be->stats.ppdu_info_drop_flush++;
+			dp_tx_mon_status_queue_free(pdev, tx_mon_be,
+						    mon_desc_list_ref);
+		} else if (tx_mon_be->be_end_reason_bitmap &
 			   (1 << HAL_MON_PPDU_TRUNCATED)) {
-			dp_tx_mon_status_queue_free(pdev, tx_cap_be);
+			tx_mon_be->stats.ppdu_info_drop_trunc++;
+			dp_tx_mon_status_queue_free(pdev, tx_mon_be,
+						    mon_desc_list_ref);
 		} else {
 			dp_mon_err("End of ppdu not seen PID:%d cur_pid:%d idx:%d",
-				   tx_cap_be->be_ppdu_id,
+				   tx_mon_be->be_ppdu_id,
 				   mon_ring_desc->ppdu_id,
-				   tx_cap_be->last_frag_q_idx);
+				   tx_mon_be->last_frag_q_idx);
 			/* schedule ppdu worth information */
-			dp_tx_mon_status_queue_free(pdev, tx_cap_be);
+			dp_tx_mon_status_queue_free(pdev, tx_mon_be,
+						    mon_desc_list_ref);
 		}
 
 		/* reset end reason bitmap */
-		tx_cap_be->be_end_reason_bitmap = 0;
-		tx_cap_be->last_frag_q_idx = 0;
-		tx_cap_be->cur_frag_q_idx = 0;
+		tx_mon_be->be_end_reason_bitmap = 0;
+		tx_mon_be->last_frag_q_idx = 0;
+		tx_mon_be->cur_frag_q_idx = 0;
 	}
 
-	tx_cap_be->be_ppdu_id = mon_ring_desc->ppdu_id;
-	tx_cap_be->be_end_reason_bitmap |= (1 << mon_ring_desc->end_reason);
+	tx_mon_be->be_ppdu_id = mon_ring_desc->ppdu_id;
+	tx_mon_be->be_end_reason_bitmap |= (1 << mon_ring_desc->end_reason);
 
-	last_frag_q_idx = tx_cap_be->last_frag_q_idx;
+	last_frag_q_idx = tx_mon_be->last_frag_q_idx;
 
-	tx_cap_be->frag_q_vec[last_frag_q_idx].frag_buf = status_frag;
-	tx_cap_be->frag_q_vec[last_frag_q_idx].end_offset = end_offset;
-	tx_cap_be->last_frag_q_idx++;
+	tx_mon_be->frag_q_vec[last_frag_q_idx].frag_buf = status_frag;
+	tx_mon_be->frag_q_vec[last_frag_q_idx].end_offset = end_offset;
+	tx_mon_be->last_frag_q_idx++;
 
 	if (mon_ring_desc->end_reason == HAL_MON_END_OF_PPDU) {
-		if (dp_tx_mon_process_tlv_2_0(pdev) != QDF_STATUS_SUCCESS)
-			dp_tx_mon_status_queue_free(pdev, tx_cap_be);
+		/* drop processing of tlv, if ppdu info list exceed threshold */
+		if ((tx_mon_be->defer_ppdu_info_list_depth +
+		     tx_mon_be->tx_ppdu_info_list_depth) >
+		    MAX_PPDU_INFO_LIST_DEPTH) {
+			tx_mon_be->stats.ppdu_info_drop_th++;
+			dp_tx_mon_status_queue_free(pdev, tx_mon_be,
+						    mon_desc_list_ref);
+			return QDF_STATUS_E_PENDING;
+		}
+
+		if (dp_tx_mon_process_tlv_2_0(pdev,
+					      mon_desc_list_ref) !=
+		    QDF_STATUS_SUCCESS)
+			dp_tx_mon_status_queue_free(pdev, tx_mon_be,
+						    mon_desc_list_ref);
 	}
 
 	return QDF_STATUS_SUCCESS;
 
 free_status_buffer:
-	hal_txmon_status_free_buffer(pdev->soc->hal_soc,
-				     status_frag, end_offset);
+	dp_tx_mon_status_free_packet_buf(pdev, status_frag, end_offset,
+					 mon_desc_list_ref);
+	if (qdf_likely(tx_mon_be))
+		tx_mon_be->stats.status_buf_free++;
+
 	qdf_frag_free(status_frag);
 
 	return QDF_STATUS_E_NOMEM;
@@ -1595,17 +1774,39 @@ free_status_buffer:
  * @mon_ring_desc - descriptor status info
  * @addr - status buffer frag address
  * @end_offset - end offset of buffer that has valid buffer
+ * @mon_desc_list_ref: tx monitor descriptor list reference
  *
  * Return: QDF_STATUS
  */
-QDF_STATUS dp_tx_mon_process_status_tlv(struct dp_soc *soc,
-					struct dp_pdev *pdev,
-					struct hal_mon_desc *mon_ring_desc,
-					qdf_frag_t status_frag,
-					uint32_t end_offset)
+QDF_STATUS
+dp_tx_mon_process_status_tlv(struct dp_soc *soc,
+			     struct dp_pdev *pdev,
+			     struct hal_mon_desc *mon_ring_desc,
+			     qdf_frag_t status_frag,
+			     uint32_t end_offset,
+			     struct dp_tx_mon_desc_list *mon_desc_list_ref)
 {
-	hal_txmon_status_free_buffer(pdev->soc->hal_soc,
-				     status_frag, end_offset);
+	struct dp_mon_pdev *mon_pdev;
+	struct dp_mon_pdev_be *mon_pdev_be;
+	struct dp_pdev_tx_monitor_be *tx_mon_be;
+
+	/* sanity check */
+	if (qdf_unlikely(!pdev))
+		return QDF_STATUS_E_INVAL;
+
+	mon_pdev = pdev->monitor_pdev;
+	if (qdf_unlikely(!mon_pdev))
+		return QDF_STATUS_E_INVAL;
+
+	mon_pdev_be = dp_get_be_mon_pdev_from_dp_mon_pdev(mon_pdev);
+	if (qdf_unlikely(!mon_pdev_be))
+		return QDF_STATUS_E_INVAL;
+
+	tx_mon_be = &mon_pdev_be->tx_monitor_be;
+
+	dp_tx_mon_status_free_packet_buf(pdev, status_frag, end_offset,
+					 mon_desc_list_ref);
+	tx_mon_be->stats.status_buf_free++;
 	qdf_frag_free(status_frag);
 
 	return QDF_STATUS_E_INVAL;

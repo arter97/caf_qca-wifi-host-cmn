@@ -85,6 +85,10 @@
 
 #include <wlan_twt_api.h>
 
+#ifdef WLAN_FEATURE_COAP
+#include <wlan_coap_main.h>
+#endif
+
 /**
  * DOC: This file provides various init/deinit trigger point for new
  * components.
@@ -1007,6 +1011,28 @@ dispatcher_coex_psoc_close(struct wlan_objmgr_psoc *psoc)
 }
 #endif /* FEATURE_COEX */
 
+#ifdef WLAN_FEATURE_DBAM_CONFIG
+static QDF_STATUS dbam_psoc_enable(struct wlan_objmgr_psoc *psoc)
+{
+	return wlan_dbam_psoc_enable(psoc);
+}
+
+static QDF_STATUS dbam_psoc_disable(struct wlan_objmgr_psoc *psoc)
+{
+	return wlan_dbam_psoc_disable(psoc);
+}
+#else
+static QDF_STATUS dbam_psoc_enable(struct wlan_objmgr_psoc *psoc)
+{
+	return QDF_STATUS_SUCCESS;
+}
+
+static QDF_STATUS dbam_psoc_disable(struct wlan_objmgr_psoc *psoc)
+{
+	return QDF_STATUS_SUCCESS;
+}
+#endif /* WLAN_FEATURE_DBAM_CONFIG */
+
 #ifdef WLAN_FEATURE_11BE_MLO
 static QDF_STATUS mlo_mgr_psoc_enable(struct wlan_objmgr_psoc *psoc)
 {
@@ -1024,6 +1050,48 @@ static QDF_STATUS mlo_mgr_psoc_enable(struct wlan_objmgr_psoc *psoc)
 }
 
 static QDF_STATUS mlo_mgr_psoc_disable(struct wlan_objmgr_psoc *psoc)
+{
+	return QDF_STATUS_SUCCESS;
+}
+#endif
+
+#ifdef WLAN_FEATURE_COAP
+static QDF_STATUS dispatcher_coap_init(void)
+{
+	return wlan_coap_init();
+}
+
+static QDF_STATUS dispatcher_coap_deinit(void)
+{
+	return wlan_coap_deinit();
+}
+
+static QDF_STATUS coap_psoc_enable(struct wlan_objmgr_psoc *psoc)
+{
+	return wlan_coap_enable(psoc);
+}
+
+static QDF_STATUS coap_psoc_disable(struct wlan_objmgr_psoc *psoc)
+{
+	return wlan_coap_disable(psoc);
+}
+#else
+static QDF_STATUS dispatcher_coap_init(void)
+{
+	return QDF_STATUS_SUCCESS;
+}
+
+static QDF_STATUS dispatcher_coap_deinit(void)
+{
+	return QDF_STATUS_SUCCESS;
+}
+
+static QDF_STATUS coap_psoc_enable(struct wlan_objmgr_psoc *psoc)
+{
+	return QDF_STATUS_SUCCESS;
+}
+
+static QDF_STATUS coap_psoc_disable(struct wlan_objmgr_psoc *psoc)
 {
 	return QDF_STATUS_SUCCESS;
 }
@@ -1115,6 +1183,9 @@ QDF_STATUS dispatcher_init(void)
 	if (QDF_STATUS_SUCCESS != dispatcher_twt_init())
 		goto twt_init_fail;
 
+	if (QDF_STATUS_SUCCESS != dispatcher_coap_init())
+		goto coap_init_fail;
+
 	/*
 	 * scheduler INIT has to be the last as each component's
 	 * initialization has to happen first and then at the end
@@ -1126,6 +1197,8 @@ QDF_STATUS dispatcher_init(void)
 	return QDF_STATUS_SUCCESS;
 
 scheduler_init_fail:
+	dispatcher_coap_deinit();
+coap_init_fail:
 	dispatcher_twt_deinit();
 twt_init_fail:
 	wlan_gpio_deinit();
@@ -1192,6 +1265,8 @@ QDF_STATUS dispatcher_deinit(void)
 	QDF_STATUS status;
 
 	QDF_BUG(QDF_STATUS_SUCCESS == scheduler_deinit());
+
+	QDF_BUG(QDF_STATUS_SUCCESS == dispatcher_coap_deinit());
 
 	QDF_BUG(QDF_STATUS_SUCCESS == dispatcher_twt_deinit());
 
@@ -1423,8 +1498,18 @@ QDF_STATUS dispatcher_psoc_enable(struct wlan_objmgr_psoc *psoc)
 	if (QDF_STATUS_SUCCESS != dispatcher_twt_psoc_enable(psoc))
 		goto twt_psoc_enable_fail;
 
+	if (QDF_STATUS_SUCCESS != dbam_psoc_enable(psoc))
+		goto dbam_psoc_enable_fail;
+
+	if (QDF_STATUS_SUCCESS != coap_psoc_enable(psoc))
+		goto coap_psoc_enable_fail;
+
 	return QDF_STATUS_SUCCESS;
 
+coap_psoc_enable_fail:
+	dbam_psoc_disable(psoc);
+dbam_psoc_enable_fail:
+	dispatcher_twt_psoc_disable(psoc);
 twt_psoc_enable_fail:
 	mlo_mgr_psoc_disable(psoc);
 mlo_mgr_psoc_enable_fail:
@@ -1463,6 +1548,10 @@ qdf_export_symbol(dispatcher_psoc_enable);
 QDF_STATUS dispatcher_psoc_disable(struct wlan_objmgr_psoc *psoc)
 {
 	QDF_STATUS status;
+
+	QDF_BUG(QDF_STATUS_SUCCESS == coap_psoc_disable(psoc));
+
+	QDF_BUG(QDF_STATUS_SUCCESS == dbam_psoc_disable(psoc));
 
 	QDF_BUG(QDF_STATUS_SUCCESS == dispatcher_twt_psoc_disable(psoc));
 

@@ -90,6 +90,8 @@
 #define WLAN_CFG_IPA_UC_RX_IND_RING_COUNT 0
 #endif /* IPA_OFFLOAD */
 
+#define WLAN_CFG_TIME_CONTROL_BP 3000
+
 #if defined(WLAN_MAX_PDEVS) && (WLAN_MAX_PDEVS == 1)
 #define WLAN_CFG_PER_PDEV_RX_RING 0
 #define WLAN_CFG_PER_PDEV_LMAC_RING 0
@@ -161,6 +163,9 @@
 
 #define WLAN_CFG_TX_RING_SIZE_MIN 512
 #define WLAN_CFG_TX_RING_SIZE_MAX 0x80000
+
+#define WLAN_CFG_TIME_CONTROL_BP_MIN 3000
+#define WLAN_CFG_TIME_CONTROL_BP_MAX 1800000
 
 #define WLAN_CFG_TX_COMP_RING_SIZE_MIN 512
 #define WLAN_CFG_TX_COMP_RING_SIZE_MAX 0x80000
@@ -391,7 +396,7 @@
 #define WLAN_CFG_RX_SW_DESC_WEIGHT_SIZE_MAX 3
 #define WLAN_CFG_RX_SW_DESC_NUM_SIZE 4096
 #define WLAN_CFG_RX_SW_DESC_NUM_SIZE_MIN 1024
-#define WLAN_CFG_RX_SW_DESC_NUM_SIZE_MAX 12288
+#define WLAN_CFG_RX_SW_DESC_NUM_SIZE_MAX 16384
 
 /**
  * AP use cases need to allocate more RX Descriptors than the number of
@@ -406,7 +411,7 @@
 #define WLAN_CFG_RX_SW_DESC_WEIGHT_SIZE_MAX 3
 #define WLAN_CFG_RX_SW_DESC_NUM_SIZE 12288
 #define WLAN_CFG_RX_SW_DESC_NUM_SIZE_MIN 4096
-#define WLAN_CFG_RX_SW_DESC_NUM_SIZE_MAX 12288
+#define WLAN_CFG_RX_SW_DESC_NUM_SIZE_MAX 16384
 #endif
 
 #define WLAN_CFG_RX_FLOW_SEARCH_TABLE_SIZE 16384
@@ -450,7 +455,7 @@
 #define WLAN_CFG_PPE_RELEASE_RING_SIZE_MAX 1024
 
 #if defined(WLAN_FEATURE_11BE_MLO) && defined(WLAN_MLO_MULTI_CHIP)
-#define WLAN_CFG_MLO_RX_RING_MAP 0xF
+#define WLAN_CFG_MLO_RX_RING_MAP 0x7
 #define WLAN_CFG_MLO_RX_RING_MAP_MIN 0x0
 #define WLAN_CFG_MLO_RX_RING_MAP_MAX 0xFF
 #endif
@@ -679,6 +684,13 @@
 		WLAN_CFG_PER_PDEV_LMAC_RING_MAX, \
 		WLAN_CFG_PER_PDEV_LMAC_RING, \
 		CFG_VALUE_OR_DEFAULT, "DP pdev LMAC ring")
+
+#define CFG_DP_TIME_CONTROL_BP \
+		CFG_INI_UINT("dp_time_control_bp", \
+		WLAN_CFG_TIME_CONTROL_BP_MIN,\
+		WLAN_CFG_TIME_CONTROL_BP_MAX,\
+		WLAN_CFG_TIME_CONTROL_BP,\
+		CFG_VALUE_OR_DEFAULT, "DP time control back pressure")
 /*
  * <ini>
  * dp_rx_pending_hl_threshold - High threshold of frame number to start
@@ -1614,57 +1626,16 @@
  *
  * </ini>
  */
-#define CFG_DP_MLO_CHIP0_RX_RING_MAP \
-		CFG_INI_UINT("dp_chip0_rx_ring_map", \
+#define CFG_DP_MLO_RX_RING_MAP \
+		CFG_INI_UINT("dp_mlo_reo_rings_map", \
 		WLAN_CFG_MLO_RX_RING_MAP_MIN, \
 		WLAN_CFG_MLO_RX_RING_MAP_MAX, \
 		WLAN_CFG_MLO_RX_RING_MAP, \
-		CFG_VALUE_OR_DEFAULT, "DP Rx ring map chip0")
+		CFG_VALUE_OR_DEFAULT, "DP MLO Rx ring map")
 
-/*
- * <ini>
- * dp_chip1_rx_ring_map - Set Rx ring map for CHIP 1
- * @Min: 0x0
- * @Max: 0xFF
- * @Default: 0xF
- *
- * This ini sets Rx ring map for CHIP 1
- *
- * Usage: Internal
- *
- * </ini>
- */
-#define CFG_DP_MLO_CHIP1_RX_RING_MAP \
-		CFG_INI_UINT("dp_chip1_rx_ring_map", \
-		WLAN_CFG_MLO_RX_RING_MAP_MIN, \
-		WLAN_CFG_MLO_RX_RING_MAP_MAX, \
-		WLAN_CFG_MLO_RX_RING_MAP, \
-		CFG_VALUE_OR_DEFAULT, "DP Rx ring map chip1")
-
-/*
- * <ini>
- * dp_chip2_rx_ring_map - Set Rx ring map for CHIP 2
- * @Min: 0x0
- * @Max: 0xFF
- * @Default: 0xF
- *
- * This ini sets Rx ring map for CHIP 2
- *
- * Usage: Internal
- *
- * </ini>
- */
-#define CFG_DP_MLO_CHIP2_RX_RING_MAP \
-		CFG_INI_UINT("dp_chip2_rx_ring_map", \
-		WLAN_CFG_MLO_RX_RING_MAP_MIN, \
-		WLAN_CFG_MLO_RX_RING_MAP_MAX, \
-		WLAN_CFG_MLO_RX_RING_MAP, \
-		CFG_VALUE_OR_DEFAULT, "DP Rx ring map chip2")
 
 #define CFG_DP_MLO_CONFIG \
-	CFG(CFG_DP_MLO_CHIP0_RX_RING_MAP) \
-	CFG(CFG_DP_MLO_CHIP1_RX_RING_MAP) \
-	CFG(CFG_DP_MLO_CHIP2_RX_RING_MAP)
+	CFG(CFG_DP_MLO_RX_RING_MAP)
 #else
 #define CFG_DP_MLO_CONFIG
 #endif
@@ -1718,6 +1689,22 @@
 #define DP_MARK_NOTIFY_FRAME_SUPPORT 0
 #endif /* QCA_SUPPORT_TX_MIN_RATES_FOR_SPECIAL_FRAMES */
 
+/*
+ * <ini>
+ * Host DP AST entries database - Enable/Disable
+ *
+ * @Default: 0
+ *
+ * This ini enables/disables AST entries database on host
+ *
+ * Usage: Internal
+ *
+ * </ini>
+ */
+#define CFG_DP_HOST_AST_DB_ENABLE \
+	CFG_INI_BOOL("host_ast_db_enable", false, \
+	"Host AST entries database Enable/Disable")
+
 #define CFG_DP \
 		CFG(CFG_DP_HTT_PACKET_TYPE) \
 		CFG(CFG_DP_INT_BATCH_THRESHOLD_OTHER) \
@@ -1744,6 +1731,7 @@
 		CFG(CFG_DP_TX_RING_SIZE) \
 		CFG(CFG_DP_NSS_COMP_RING_SIZE) \
 		CFG(CFG_DP_PDEV_LMAC_RING) \
+		CFG(CFG_DP_TIME_CONTROL_BP) \
 		CFG(CFG_DP_BASE_HW_MAC_ID) \
 		CFG(CFG_DP_RX_HASH) \
 		CFG(CFG_DP_TSO) \
@@ -1828,5 +1816,6 @@
 		CFG_DP_INI_SECTION_PARAMS \
 		CFG_DP_VDEV_STATS_HW_OFFLOAD \
 		CFG(CFG_DP_TX_CAPT_MAX_MEM_MB) \
-		CFG(CFG_DP_NAPI_SCALE_FACTOR)
+		CFG(CFG_DP_NAPI_SCALE_FACTOR) \
+		CFG(CFG_DP_HOST_AST_DB_ENABLE)
 #endif /* _CFG_DP_H_ */

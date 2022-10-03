@@ -28,6 +28,9 @@
 #ifdef WLAN_SUPPORT_RF_CHARACTERIZATION
 #include "wmi_unified_param.h"
 #endif
+#ifdef WLAN_FEATURE_11BE_MLO
+#include "wlan_mlo_mgr_public_structs.h"
+#endif
 
 
 /**
@@ -267,6 +270,8 @@ struct wlan_psoc_host_hw_mode_caps {
  * @eht_supp_mcs_ext_5G: 5G EHT Supported MCS Set for Rx/Tx as per 11be D1.2
  * @eht_ppet2G: 2G EHT PPET info
  * @eht_ppet5G: 5G EHT PPET info
+ * @emlcap: EML Capabilities info
+ * @mldcap: MLD Capabilities info
  */
 struct wlan_psoc_host_mac_phy_caps_ext2 {
 	uint32_t hw_mode_id;
@@ -285,6 +290,10 @@ struct wlan_psoc_host_mac_phy_caps_ext2 {
 	uint32_t eht_supp_mcs_ext_5G[PSOC_HOST_EHT_MCS_NSS_MAP_5G_SIZE];
 	struct wlan_psoc_host_ppe_threshold eht_ppet2G;
 	struct wlan_psoc_host_ppe_threshold eht_ppet5G;
+#endif
+#ifdef WLAN_FEATURE_11BE_MLO
+	struct wlan_mlo_eml_cap emlcap;
+	struct wlan_mlo_mld_cap mldcap;
 #endif
 };
 
@@ -442,6 +451,12 @@ struct wlan_psoc_host_service_ext_param {
  * @max_users_ul_mumimo: Max number of users per-PPDU for Uplink MU-MIMO
  * @twt_ack_support_cap: TWT ack capability support
  * @target_cap_flags: Rx peer metadata version number used by target
+ * @ul_mumimo_tx_2g: UL MUMIMO Tx support for 2GHz
+ * @ul_mumimo_tx_5g: UL MUMIMO Tx support for 5GHz
+ * @ul_mumimo_tx_5g: UL MUMIMO Tx support for 6GHz
+ * @ul_mumimo_rx_2g: UL MUMIMO Rx support for 2GHz
+ * @ul_mumimo_rx_5g: UL MUMIMO Rx support for 5GHz
+ * @ul_mumimo_rx_6g: UL MUMIMO Rx support for 6GHz
  * @afc_dev_type: AFC deployment type
  */
 struct wlan_psoc_host_service_ext2_param {
@@ -460,6 +475,12 @@ struct wlan_psoc_host_service_ext2_param {
 	uint16_t max_users_ul_mumimo;
 	uint32_t twt_ack_support_cap:1;
 	uint32_t target_cap_flags;
+	uint8_t ul_mumimo_tx_2g:1,
+		ul_mumimo_tx_5g:1,
+		ul_mumimo_tx_6g:1,
+		ul_mumimo_rx_2g:1,
+		ul_mumimo_rx_5g:1,
+		ul_mumimo_rx_6g:1;
 #if defined(CONFIG_AFC_SUPPORT)
 	enum reg_afc_dev_deploy_type afc_dev_type;
 #endif

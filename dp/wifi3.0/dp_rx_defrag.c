@@ -128,7 +128,7 @@ static void dp_rx_return_head_frag_desc(struct dp_txrx_peer *txrx_peer,
 		dp_rx_add_to_free_desc_list(&head, &tail,
 					    txrx_peer->rx_tid[tid].head_frag_desc);
 		dp_rx_buffers_replenish(soc, 0, dp_rxdma_srng, rx_desc_pool,
-					1, &head, &tail);
+					1, &head, &tail, false);
 	}
 
 	if (txrx_peer->rx_tid[tid].dst_ring_desc) {
@@ -522,10 +522,6 @@ dp_rx_defrag_ccmp_decap(struct dp_soc *soc, qdf_nbuf_t nbuf, uint16_t hdrlen)
 
 	if (!(ivp[IEEE80211_WEP_IVLEN] & IEEE80211_WEP_EXTIV))
 		return QDF_STATUS_E_DEFRAG_ERROR;
-
-	qdf_mem_move(nbuf->data + dp_f_ccmp.ic_header, nbuf->data,
-		     rx_desc_len + hdrlen);
-	qdf_nbuf_pull_head(nbuf, dp_f_ccmp.ic_header);
 
 	return QDF_STATUS_SUCCESS;
 }
@@ -1340,9 +1336,8 @@ static QDF_STATUS dp_rx_defrag_reo_reinject(struct dp_txrx_peer *txrx_peer,
 		return QDF_STATUS_E_FAILURE;
 	}
 
-	dp_ipa_handle_rx_buf_smmu_mapping(soc, head,
-					  rx_desc_pool->buf_size,
-					  true);
+	dp_ipa_handle_rx_buf_smmu_mapping(soc, head, rx_desc_pool->buf_size,
+					  true, __func__, __LINE__);
 
 	/*
 	 * As part of rx frag handler bufffer was unmapped and rx desc
@@ -1391,9 +1386,10 @@ static QDF_STATUS dp_rx_defrag_reo_reinject(struct dp_txrx_peer *txrx_peer,
 	qdf_mem_zero(ent_mpdu_desc_info, sizeof(uint32_t));
 
 	mpdu_wrd = (uint32_t *)dst_mpdu_desc_info;
-	seq_no = hal_rx_get_rx_sequence(soc->hal_soc, qdf_nbuf_data(head));
+	seq_no = hal_rx_get_rx_sequence(soc->hal_soc, rx_desc->rx_buf_start);
 
-	hal_mpdu_desc_info_set(soc->hal_soc, ent_mpdu_desc_info, seq_no);
+	hal_mpdu_desc_info_set(soc->hal_soc, ent_ring_desc, ent_mpdu_desc_info,
+			       seq_no);
 	/* qdesc addr */
 	ent_qdesc_addr = hal_get_reo_ent_desc_qdesc_addr(soc->hal_soc,
 						(uint8_t *)ent_ring_desc);
@@ -1790,6 +1786,9 @@ dp_rx_defrag_store_fragment(struct dp_soc *soc,
 	pdev = txrx_peer->vdev->pdev;
 	rx_tid = &txrx_peer->rx_tid[tid];
 
+	dp_rx_err_send_pktlog(soc, pdev, mpdu_desc_info, frag,
+			      QDF_TX_RX_STATUS_OK, false);
+
 	qdf_spin_lock_bh(&rx_tid->defrag_tid_lock);
 	rx_reorder_array_elem = txrx_peer->rx_tid[tid].array;
 	if (!rx_reorder_array_elem) {
@@ -2044,7 +2043,6 @@ uint32_t dp_rx_frag_handle(struct dp_soc *soc, hal_ring_desc_t ring_desc,
 	if (rx_desc->unmapped)
 		return rx_bufs_used;
 
-	dp_rx_send_pktlog(soc, pdev, msdu, QDF_TX_RX_STATUS_OK);
 	dp_ipa_rx_buf_smmu_mapping_lock(soc);
 	dp_rx_nbuf_unmap_pool(soc, rx_desc_pool, rx_desc->nbuf);
 	rx_desc->unmapped = 1;

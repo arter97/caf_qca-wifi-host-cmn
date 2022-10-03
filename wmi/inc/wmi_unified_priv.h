@@ -103,6 +103,14 @@
 #include <wlan_twt_public_structs.h>
 #endif
 
+#ifdef WLAN_FEATURE_DBAM_CONFIG
+#include "wlan_coex_public_structs.h"
+#endif
+
+#ifdef WLAN_FEATURE_COAP
+#include "wlan_coap_public_structs.h"
+#endif
+
 #define WMI_UNIFIED_MAX_EVENT 0x100
 
 #ifdef WMI_EXT_DBG
@@ -547,10 +555,14 @@ QDF_STATUS
 (*send_pdev_utf_cmd)(wmi_unified_t wmi_handle,
 				struct pdev_utf_params *param,
 				uint8_t mac_id);
+
 QDF_STATUS
 (*send_pdev_param_cmd)(wmi_unified_t wmi_handle,
 			   struct pdev_params *param,
 				uint8_t mac_id);
+QDF_STATUS
+(*send_multiple_pdev_param_cmd)(wmi_unified_t wmi_handle,
+				struct set_multiple_pdev_vdev_param *params);
 
 QDF_STATUS
 (*send_pdev_set_hw_mode_cmd)(wmi_unified_t wmi_handle,
@@ -596,6 +608,10 @@ QDF_STATUS
 
 QDF_STATUS (*send_vdev_set_param_cmd)(wmi_unified_t wmi_handle,
 				struct vdev_set_params *param);
+
+QDF_STATUS
+(*send_multiple_vdev_param_cmd)(wmi_unified_t wmi_handle,
+				struct set_multiple_pdev_vdev_param *params);
 
 QDF_STATUS (*send_vdev_set_mu_snif_cmd)(wmi_unified_t wmi_handle,
 					struct vdev_set_mu_snif_param *param);
@@ -823,6 +839,10 @@ QDF_STATUS (*send_disconnect_roam_params)(wmi_unified_t wmi_handle,
 
 QDF_STATUS (*send_idle_roam_params)(wmi_unified_t wmi_handle,
 				    struct wlan_roam_idle_params *req);
+#ifdef WLAN_FEATURE_11BE_MLO
+QDF_STATUS (*send_roam_mlo_config)(wmi_unified_t wmi_handle,
+				   struct wlan_roam_mlo_config *req);
+#endif
 
 QDF_STATUS (*send_roam_preauth_status)(wmi_unified_t wmi_handle,
 				struct wmi_roam_auth_status_params *params);
@@ -1796,6 +1816,15 @@ QDF_STATUS
 (*send_coex_config_cmd)(wmi_unified_t wmi_handle,
 			struct coex_config_params *param);
 
+#ifdef WLAN_FEATURE_DBAM_CONFIG
+QDF_STATUS
+(*send_dbam_config_cmd)(wmi_unified_t wmi_handle,
+			struct coex_dbam_config_params *param);
+QDF_STATUS
+(*extract_dbam_config_resp_event)(wmi_unified_t wmi_handle, void *evt_buf,
+				  struct coex_dbam_config_resp *resp);
+#endif
+
 #ifdef OL_ATH_SMART_LOGGING
 QDF_STATUS
 (*send_smart_logging_enable_cmd)(wmi_unified_t wmi_handle, uint32_t param);
@@ -2078,6 +2107,16 @@ QDF_STATUS (*extract_peer_stats_count)(wmi_unified_t wmi_handle, void *evt_buf,
 
 QDF_STATUS (*extract_peer_stats_info)(wmi_unified_t wmi_handle, void *evt_buf,
 		uint32_t index, wmi_host_peer_stats_info *peer_stats_info);
+
+QDF_STATUS
+(*extract_peer_tx_pkt_per_mcs)(wmi_unified_t wmi_handle, void *evt_buf,
+			       uint32_t index,
+			       wmi_host_peer_stats_info *peer_stats_info);
+QDF_STATUS
+(*extract_peer_rx_pkt_per_mcs)(wmi_unified_t wmi_handle, void *evt_buf,
+			       uint32_t index,
+			       wmi_host_peer_stats_info *peer_stats_info);
+
 #endif /* QCA_SUPPORT_MC_CP_STATS */
 
 QDF_STATUS
@@ -2843,9 +2882,18 @@ QDF_STATUS (*send_injector_config_cmd)(wmi_unified_t wmi_handle,
 QDF_STATUS (*send_cp_stats_cmd)(wmi_unified_t wmi_handle,
 				void *buf_ptr, uint32_t buf_len);
 
+QDF_STATUS (*send_halphy_stats_cmd)(wmi_unified_t wmi_handle,
+				    void *buf_ptr, uint32_t buf_len);
+
 QDF_STATUS (*extract_cp_stats_more_pending)(wmi_unified_t wmi_handle,
 					    void *evt_buf,
 					    uint32_t *more_flag);
+QDF_STATUS (*extract_halphy_stats_end_of_event)(wmi_unified_t wmi_handle,
+						void *evt_buf,
+						uint32_t *end_of_event_flag);
+QDF_STATUS (*extract_halphy_stats_event_count)(wmi_unified_t wmi_handle,
+					       void *evt_buf,
+					       uint32_t *event_count_flag);
 #ifdef WLAN_SUPPORT_INFRA_CTRL_PATH_STATS
 QDF_STATUS
 (*extract_infra_cp_stats)(wmi_unified_t wmi_handle,
@@ -3032,11 +3080,11 @@ QDF_STATUS
 (*send_vdev_pn_mgmt_rxfilter_cmd)(wmi_unified_t wmi_handle,
 				  struct vdev_pn_mgmt_rxfilter_params *params);
 
-#if defined(WLAN_FEATURE_11BE) && defined(WLAN_FEATURE_T2LM)
+#ifdef WLAN_FEATURE_11BE
 QDF_STATUS (*send_mlo_peer_tid_to_link_map)(
 		wmi_unified_t wmi_handle,
 		struct wmi_host_tid_to_link_map_params *params);
-#endif /* defined(WLAN_FEATURE_11BE) && defined(WLAN_FEATURE_T2LM) */
+#endif /* WLAN_FEATURE_11BE */
 
 QDF_STATUS
 (*extract_pktlog_decode_info_event)(wmi_unified_t wmi_handle, void *evt_buf,
@@ -3058,6 +3106,43 @@ QDF_STATUS
 (*send_peer_txq_flush_config_cmd)(wmi_unified_t wmi_handle,
 				  struct peer_txq_flush_config_params *param);
 #endif
+
+#ifdef FEATURE_SET
+QDF_STATUS
+(*feature_set_cmd_send)(wmi_unified_t wmi_handle,
+			struct target_feature_set *feature_set);
+#endif
+
+#ifdef WLAN_FEATURE_COAP
+QDF_STATUS
+(*send_coap_add_pattern_cmd)(wmi_unified_t wmi_handle,
+			     struct coap_offload_reply_param *param);
+
+QDF_STATUS
+(*send_coap_del_pattern_cmd)(wmi_unified_t wmi_handle,
+			     uint8_t vdev_id, uint32_t pattern_id);
+
+QDF_STATUS
+(*send_coap_add_keepalive_pattern_cmd)(wmi_unified_t wmi_handle,
+		struct coap_offload_periodic_tx_param *param);
+
+QDF_STATUS
+(*send_coap_del_keepalive_pattern_cmd)(wmi_unified_t wmi_handle,
+				       uint8_t vdev_id, uint32_t pattern_id);
+
+QDF_STATUS
+(*send_coap_cache_get_cmd)(wmi_unified_t wmi_handle,
+			   uint8_t vdev_id, uint32_t pattern_id);
+
+QDF_STATUS (*extract_coap_buf_info)(wmi_unified_t wmi_handle, void *evt_buf,
+				    struct coap_buf_info *info);
+#endif
+#ifdef HEALTH_MON_SUPPORT
+QDF_STATUS
+(*extract_health_mon_init_done_info_event)(wmi_unified_t wmi_handle,
+					   void *evt_buf,
+					   struct wmi_health_mon_params *param);
+#endif /* HEALTH_MON_SUPPORT */
 };
 
 /* Forward declartion for psoc*/
@@ -3198,6 +3283,9 @@ struct wmi_soc {
 #if defined(WLAN_FEATURE_WMI_DIAG_OVER_CE7) || \
 	defined(WLAN_DIAG_AND_DBR_OVER_SEPARATE_CE)
 	HTC_ENDPOINT_ID wmi_diag_endpoint_id;
+#endif
+#if defined(WLAN_DIAG_AND_DBR_OVER_SEPARATE_CE)
+	HTC_ENDPOINT_ID wmi_dbr_endpoint_id;
 #endif
 	uint32_t wmi_events[wmi_events_max];
 	/* WMI service bitmap received from target */
@@ -3641,6 +3729,14 @@ static inline void wmi_mc_cp_stats_attach_tlv(struct wmi_unified *wmi_handle)
 {
 }
 #endif /* QCA_SUPPORT_MC_CP_STATS */
+
+#ifdef WLAN_FEATURE_COAP
+void wmi_coap_attach_tlv(wmi_unified_t wmi_handle);
+#else
+static inline void wmi_coap_attach_tlv(wmi_unified_t wmi_handle)
+{
+}
+#endif
 
 /*
  * wmi_map_ch_width() - map wmi channel width to host channel width

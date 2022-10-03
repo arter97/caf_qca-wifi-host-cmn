@@ -27,6 +27,9 @@
 #include "dp_peer.h"
 #include <wlan_utility.h>
 #include "dp_ipa.h"
+#ifdef WIFI_MONITOR_SUPPORT
+#include <dp_mon_1.0.h>
+#endif
 
 #if defined(WLAN_MAX_PDEVS) && (WLAN_MAX_PDEVS == 1)
 static struct wlan_cfg_tcl_wbm_ring_num_map g_tcl_wbm_map_array[MAX_TCL_DATA_RINGS] = {
@@ -91,18 +94,6 @@ qdf_size_t dp_get_context_size_li(enum dp_context_type context_type)
 		return sizeof(struct dp_vdev_li);
 	case DP_CONTEXT_TYPE_PEER:
 		return sizeof(struct dp_peer_li);
-	default:
-		return 0;
-	}
-}
-
-qdf_size_t dp_mon_get_context_size_li(enum dp_context_type context_type)
-{
-	switch (context_type) {
-	case DP_CONTEXT_TYPE_MON_PDEV:
-		return sizeof(struct dp_mon_pdev_li);
-	case DP_CONTEXT_TYPE_MON_SOC:
-		return sizeof(struct dp_mon_soc_li);
 	default:
 		return 0;
 	}
@@ -558,11 +549,29 @@ static void dp_get_rx_hash_key_li(struct dp_soc *soc,
 	dp_get_rx_hash_key_bytes(lro_hash);
 }
 
+static void dp_peer_get_reo_hash_li(struct dp_vdev *vdev,
+				    struct cdp_peer_setup_info *setup_info,
+				    enum cdp_host_reo_dest_ring *reo_dest,
+				    bool *hash_based,
+				    uint8_t *lmac_peer_id_msb)
+{
+	dp_vdev_get_default_reo_hash(vdev, reo_dest, hash_based);
+}
+
+static bool dp_reo_remap_config_li(struct dp_soc *soc,
+				   uint32_t *remap0,
+				   uint32_t *remap1,
+				   uint32_t *remap2)
+{
+	return dp_reo_remap_config(soc, remap0, remap1, remap2);
+}
+
 void dp_initialize_arch_ops_li(struct dp_arch_ops *arch_ops)
 {
 #ifndef QCA_HOST_MODE_WIFI_DISABLED
 	arch_ops->tx_hw_enqueue = dp_tx_hw_enqueue_li;
 	arch_ops->dp_rx_process = dp_rx_process_li;
+	arch_ops->dp_tx_send_fast = dp_tx_send;
 	arch_ops->tx_comp_get_params_from_hal_desc =
 		dp_tx_comp_get_params_from_hal_desc_li;
 	arch_ops->dp_tx_process_htt_completion =
@@ -573,12 +582,15 @@ void dp_initialize_arch_ops_li(struct dp_arch_ops *arch_ops)
 	arch_ops->dp_tx_desc_pool_deinit = dp_tx_desc_pool_deinit_li;
 	arch_ops->dp_rx_desc_pool_init = dp_rx_desc_pool_init_li;
 	arch_ops->dp_rx_desc_pool_deinit = dp_rx_desc_pool_deinit_li;
+	arch_ops->dp_tx_compute_hw_delay = dp_tx_compute_tx_delay_li;
 #else
 	arch_ops->dp_rx_desc_pool_init = dp_rx_desc_pool_init_generic;
 	arch_ops->dp_rx_desc_pool_deinit = dp_rx_desc_pool_deinit_generic;
 #endif
 	arch_ops->txrx_get_context_size = dp_get_context_size_li;
+#ifdef WIFI_MONITOR_SUPPORT
 	arch_ops->txrx_get_mon_context_size = dp_mon_get_context_size_li;
+#endif
 	arch_ops->txrx_soc_attach = dp_soc_attach_li;
 	arch_ops->txrx_soc_detach = dp_soc_detach_li;
 	arch_ops->txrx_soc_init = dp_soc_init_li;
@@ -607,7 +619,9 @@ void dp_initialize_arch_ops_li(struct dp_arch_ops *arch_ops)
 	arch_ops->dp_peer_rx_reorder_queue_setup =
 					dp_peer_rx_reorder_queue_setup_li;
 	arch_ops->dp_find_peer_by_destmac = dp_find_peer_by_destmac_li;
-	arch_ops->dp_tx_compute_hw_delay = dp_tx_compute_tx_delay_li;
+	arch_ops->peer_get_reo_hash = dp_peer_get_reo_hash_li;
+	arch_ops->reo_remap_config = dp_reo_remap_config_li;
+	arch_ops->dp_txrx_ppeds_rings_status = NULL;
 }
 
 #ifdef QCA_DP_TX_HW_SW_NBUF_DESC_PREFETCH
@@ -630,27 +644,5 @@ void dp_tx_comp_get_prefetched_params_from_hal_desc(
 			(tx_desc_id & DP_TX_DESC_ID_OFFSET_MASK) >>
 			DP_TX_DESC_ID_OFFSET_OS);
 	qdf_prefetch((uint8_t *)*r_tx_desc);
-}
-#endif
-
-#ifdef CONFIG_DP_PKT_ADD_TIMESTAMP
-void dp_pkt_add_timestamp(struct dp_vdev *vdev,
-			  enum qdf_pkt_timestamp_index index, uint64_t time,
-			  qdf_nbuf_t nbuf)
-{
-	if (qdf_unlikely(qdf_is_dp_pkt_timestamp_enabled())) {
-		uint64_t tsf_time;
-
-		if (vdev->get_tsf_time) {
-			vdev->get_tsf_time(vdev->osif_vdev, time, &tsf_time);
-			qdf_add_dp_pkt_timestamp(nbuf, index, tsf_time);
-		}
-	}
-}
-
-void dp_pkt_get_timestamp(uint64_t *time)
-{
-	if (qdf_unlikely(qdf_is_dp_pkt_timestamp_enabled()))
-		*time = qdf_get_log_timestamp();
 }
 #endif

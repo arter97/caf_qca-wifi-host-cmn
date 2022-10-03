@@ -77,6 +77,13 @@ typedef int (*wmi_legacy_service_ready_callback)(uint32_t event_id,
 						uint8_t *event_data,
 						uint32_t length);
 
+/* Enum for ext and ext2 processing status */
+enum wmi_init_status {
+	wmi_init_success,
+	wmi_init_ext_processing_failed,
+	wmi_init_ext2_processing_failed,
+};
+
 /**
  * struct target_if_ctx - target_interface context
  * @magic: magic for target if ctx
@@ -169,6 +176,7 @@ struct target_version_info {
  * @wmi_ready: is ready event received
  * @total_mac_phy_cnt: num of mac phys
  * @num_radios: number of radios
+ * @wmi_service_status: wmi service status success or failed
  * @wlan_init_status: Target init status
  * @target_type: Target type
  * @max_descs: Max descriptors
@@ -190,6 +198,7 @@ struct target_version_info {
  * @scan_radio_caps: scan radio capabilities
  * @device_mode: Global Device mode
  * @sbs_lower_band_end_freq: sbs lower band end frequency
+ * @health_mon_params: health monitor params
  */
 struct tgt_info {
 	struct host_fw_ver version;
@@ -199,6 +208,7 @@ struct tgt_info {
 	bool wmi_ready;
 	uint8_t total_mac_phy_cnt;
 	uint8_t num_radios;
+	enum wmi_init_status wmi_service_status;
 	uint32_t wlan_init_status;
 	uint32_t target_type;
 	uint32_t max_descs;
@@ -224,6 +234,9 @@ struct tgt_info {
 	struct wlan_psoc_host_scan_radio_caps *scan_radio_caps;
 	uint32_t device_mode;
 	uint32_t sbs_lower_band_end_freq;
+#ifdef HEALTH_MON_SUPPORT
+	struct wmi_health_mon_params health_mon_param;
+#endif /* HEALTH_MON_SUPPORT */
 };
 
 /**
@@ -2461,6 +2474,24 @@ static inline void target_if_set_twt_ap_pdev_count
 					info->service_ext_param.num_phy;
 }
 #else
+#ifdef WLAN_TWT_2G_PHYB_WAR
+static inline void target_if_set_twt_ap_pdev_count
+		(struct tgt_info *info, struct target_psoc_info *tgt_hdl)
+{
+	uint32_t mode;
+	uint8_t num_radios;
+
+	if (!tgt_hdl)
+		return;
+
+	mode = target_psoc_get_preferred_hw_mode(tgt_hdl);
+	num_radios = target_psoc_get_num_radios(tgt_hdl);
+	if (mode == WMI_HOST_HW_MODE_2G_PHYB && num_radios == 1)
+		num_radios += 1;
+
+	info->wlan_res_cfg.twt_ap_pdev_count = num_radios;
+}
+#else
 static inline void target_if_set_twt_ap_pdev_count
 		(struct tgt_info *info, struct target_psoc_info *tgt_hdl)
 {
@@ -2470,6 +2501,7 @@ static inline void target_if_set_twt_ap_pdev_count
 	info->wlan_res_cfg.twt_ap_pdev_count =
 					target_psoc_get_num_radios(tgt_hdl);
 }
+#endif /* WLAN_TWT_2G_PHYB_WAR */
 #endif /* WLAN_TWT_AP_PDEV_COUNT_NUM_PHY */
 #else
 static inline void target_if_set_twt_ap_pdev_count

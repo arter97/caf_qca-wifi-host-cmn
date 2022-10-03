@@ -340,6 +340,28 @@ hif_ce_latency_stats(struct hif_softc *hif_ctx)
 }
 #endif /*CE_TASKLET_DEBUG_ENABLE*/
 
+#if defined(CE_TASKLET_DEBUG_ENABLE) && defined(CE_TASKLET_SCHEDULE_ON_FULL)
+/**
+ * hif_reset_ce_full_count() - Reset ce full count
+ * @scn: hif_softc
+ * @ce_id: ce_id
+ *
+ * Return: None
+ */
+static inline void
+hif_reset_ce_full_count(struct hif_softc *scn, uint8_t ce_id)
+{
+	struct HIF_CE_state *hif_ce_state = HIF_GET_CE_STATE(scn);
+
+	hif_ce_state->stats.ce_ring_full_count[ce_id] = 0;
+}
+#else
+static inline void
+hif_reset_ce_full_count(struct hif_softc *scn, uint8_t ce_id)
+{
+}
+#endif
+
 #ifdef HIF_DETECTION_LATENCY_ENABLE
 static inline
 void hif_latency_detect_tasklet_sched(
@@ -429,6 +451,7 @@ static void ce_tasklet(unsigned long data)
 		ce_tasklet_schedule(tasklet_entry);
 		hif_latency_detect_tasklet_sched(scn, tasklet_entry);
 
+		hif_reset_ce_full_count(scn, tasklet_entry->ce_id);
 		if (scn->ce_latency_stats) {
 			ce_tasklet_update_bucket(hif_ce_state,
 						 tasklet_entry->ce_id);
@@ -509,6 +532,33 @@ void ce_tasklet_kill(struct hif_softc *scn)
 		}
 	}
 	qdf_atomic_set(&scn->active_tasklet_cnt, 0);
+}
+
+/**
+ * ce_tasklet_entry_dump() - dump tasklet entries info
+ * @hif_ce_state: ce state
+ *
+ * This function will dump all tasklet entries info
+ *
+ * Return: None
+ */
+static void ce_tasklet_entry_dump(struct HIF_CE_state *hif_ce_state)
+{
+	struct ce_tasklet_entry *tasklet_entry;
+	int i;
+
+	if (hif_ce_state) {
+		for (i = 0; i < CE_COUNT_MAX; i++) {
+			tasklet_entry = &hif_ce_state->tasklets[i];
+
+			hif_info("%02d: ce_id=%d, inited=%d, hi_tasklet_ce=%d hif_ce_state=%pK",
+				 i,
+				 tasklet_entry->ce_id,
+				 tasklet_entry->inited,
+				 tasklet_entry->hi_tasklet_ce,
+				 tasklet_entry->hif_ce_state);
+		}
+	}
 }
 
 #define HIF_CE_DRAIN_WAIT_CNT          20
@@ -697,6 +747,7 @@ static inline bool hif_tasklet_schedule(struct hif_opaque_softc *hif_ctx,
 	hif_latency_detect_tasklet_sched(scn, tasklet_entry);
 	ce_tasklet_schedule(tasklet_entry);
 
+	hif_reset_ce_full_count(scn, tasklet_entry->ce_id);
 	if (scn->ce_latency_stats)
 		hif_record_tasklet_sched_entry_ts(scn, tasklet_entry->ce_id);
 
@@ -776,8 +827,16 @@ irqreturn_t ce_dispatch_interrupt(int ce_id,
 	struct hif_opaque_softc *hif_hdl = GET_HIF_OPAQUE_HDL(scn);
 
 	if (tasklet_entry->ce_id != ce_id) {
-		hif_err("ce_id (expect %d, received %d) does not match",
-			tasklet_entry->ce_id, ce_id);
+		bool rl;
+
+		rl = hif_err_rl("ce_id (expect %d, received %d) does not match, inited=%d, ce_count=%u",
+				tasklet_entry->ce_id, ce_id,
+				tasklet_entry->inited,
+				scn->ce_count);
+
+		if (!rl)
+			ce_tasklet_entry_dump(hif_ce_state);
+
 		return IRQ_NONE;
 	}
 	if (unlikely(ce_id >= CE_COUNT_MAX)) {

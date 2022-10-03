@@ -117,6 +117,7 @@ union dp_mon_desc_list_elem_t {
  * @owner: owner for nbuf
  * @buf_size: Buffer size
  * @buf_alignment: Buffer alignment
+ * @pf_cache: page frag cache
  */
 struct dp_mon_desc_pool {
 	uint32_t pool_size;
@@ -126,6 +127,7 @@ struct dp_mon_desc_pool {
 	uint8_t owner;
 	uint16_t buf_size;
 	uint8_t buf_alignment;
+	qdf_frag_cache_t pf_cache;
 };
 
 /**
@@ -134,28 +136,38 @@ struct dp_mon_desc_pool {
  * @filter_be: filters sent to fw
  * @tx_mon_mode: tx monitor mode
  * @tx_mon_filter_length: tx monitor filter length
- * @tx_capture: pointer to tx capture function
+ * @tx_monitor_be: pointer to tx monitor be structure
  * @tx_stats: tx monitor drop stats
  * @rx_mon_wq_lock: Rx mon workqueue lock
  * @rx_mon_workqueue: Rx mon workqueue
  * @rx_mon_work: Rx mon work
  * @rx_mon_queue: RxMON queue
+ * @rx_mon_free_queue: RxMON ppdu info free element queue
+ * @ppdu_info_lock: RxPPDU ppdu info queue lock
  * @rx_mon_queue_depth: RxMON queue depth
  * @desc_count: reaped status desc count
  * @status: reaped status buffer per ppdu
+ * @lite_mon_rx_config: rx litemon config
+ * @lite_mon_tx_config: tx litemon config
+ * @prev_rxmon_desc: prev destination desc
+ * @prev_rxmon_cookie: prev rxmon cookie
+ * @ppdu_info_cache: PPDU info cache
+ * @total_free_elem: total free element in queue
  */
 struct dp_mon_pdev_be {
 	struct dp_mon_pdev mon_pdev;
 	struct dp_mon_filter_be **filter_be;
 	uint8_t tx_mon_mode;
 	uint8_t tx_mon_filter_length;
-	struct dp_pdev_tx_capture_be tx_capture_be;
+	struct dp_pdev_tx_monitor_be tx_monitor_be;
 	struct dp_tx_monitor_drop_stats tx_stats;
 	qdf_spinlock_t rx_mon_wq_lock;
 	qdf_workqueue_t *rx_mon_workqueue;
 	qdf_work_t rx_mon_work;
 
 	TAILQ_HEAD(, hal_rx_ppdu_info) rx_mon_queue;
+	TAILQ_HEAD(, hal_rx_ppdu_info) rx_mon_free_queue;
+	qdf_spinlock_t ppdu_info_lock;
 	uint16_t rx_mon_queue_depth;
 	uint16_t desc_count;
 	struct dp_mon_desc *status[DP_MON_MAX_STATUS_BUF];
@@ -165,6 +177,8 @@ struct dp_mon_pdev_be {
 #endif
 	void *prev_rxmon_desc;
 	uint32_t prev_rxmon_cookie;
+	qdf_kmem_cache_t ppdu_info_cache;
+	uint32_t total_free_elem;
 };
 
 /**
@@ -262,6 +276,7 @@ void dp_mon_pool_frag_unmap_and_free(struct dp_soc *dp_soc,
  *	       or NULL during dp rx initialization or out of buffer
  *	       interrupt.
  * @tail: tail of descs list
+ * @relenish_cnt_ref: pointer to update replenish_cnt
  *
  * Return: return success or failure
  */
@@ -270,7 +285,8 @@ QDF_STATUS dp_mon_buffers_replenish(struct dp_soc *dp_soc,
 				struct dp_mon_desc_pool *mon_desc_pool,
 				uint32_t num_req_buffers,
 				union dp_mon_desc_list_elem_t **desc_list,
-				union dp_mon_desc_list_elem_t **tail);
+				union dp_mon_desc_list_elem_t **tail,
+				uint32_t *replenish_cnt_ref);
 
 /**
  * dp_mon_filter_show_tx_filter_be() - Show the set filters
@@ -291,10 +307,12 @@ void dp_mon_filter_show_rx_filter_be(enum dp_mon_filter_mode mode,
 /**
  * dp_vdev_set_monitor_mode_buf_rings_tx_2_0() - Add buffers to tx ring
  * @pdev: Pointer to dp_pdev object
+ * @num_of_buffers: Number of buffers to allocate
  *
  * Return: QDF_STATUS
  */
-QDF_STATUS dp_vdev_set_monitor_mode_buf_rings_tx_2_0(struct dp_pdev *pdev);
+QDF_STATUS dp_vdev_set_monitor_mode_buf_rings_tx_2_0(struct dp_pdev *pdev,
+						     uint16_t num_of_buffers);
 
 /**
  * dp_vdev_set_monitor_mode_buf_rings_rx_2_0() - Add buffers to rx ring
@@ -402,4 +420,65 @@ dp_rx_mon_add_frag_to_skb(struct hal_rx_ppdu_info *ppdu_info,
 		qdf_assert_always(0);
 	}
 }
+
+#if defined(WLAN_SUPPORT_RX_PROTOCOL_TYPE_TAG) ||\
+	defined(WLAN_SUPPORT_RX_FLOW_TAG)
+/** dp_mon_rx_update_rx_err_protocol_tag_stats() - Update mon protocols's
+ *					      statistics from given protocol
+ *					      type
+ * @pdev: pdev handle
+ * @protocol_index: Protocol index for which the stats should be incremented
+ *
+ * Return: void
+ */
+void dp_mon_rx_update_rx_protocol_tag_stats(struct dp_pdev *pdev,
+					    uint16_t protocol_index);
+#endif /* WLAN_SUPPORT_RX_PROTOCOL_TYPE_TAG */
+
+#if !defined(DISABLE_MON_CONFIG) && defined(QCA_MONITOR_2_0_SUPPORT)
+/**
+ * dp_mon_get_context_size_be() - get BE specific size for mon pdev/soc
+ * @arch_ops: arch ops pointer
+ *
+ * Return: size in bytes for the context_type
+ */
+static inline
+qdf_size_t dp_mon_get_context_size_be(enum dp_context_type context_type)
+{
+	switch (context_type) {
+	case DP_CONTEXT_TYPE_MON_SOC:
+		return sizeof(struct dp_mon_soc_be);
+	case DP_CONTEXT_TYPE_MON_PDEV:
+		return sizeof(struct dp_mon_pdev_be);
+	default:
+		return 0;
+	}
+}
+#endif
+
+#ifdef QCA_MONITOR_2_0_SUPPORT
+/**
+ * dp_get_be_mon_soc_from_dp_mon_soc() - get dp_mon_soc_be from dp_mon_soc
+ * @soc: dp_mon_soc pointer
+ *
+ * Return: dp_mon_soc_be pointer
+ */
+static inline
+struct dp_mon_soc_be *dp_get_be_mon_soc_from_dp_mon_soc(struct dp_mon_soc *soc)
+{
+	return (struct dp_mon_soc_be *)soc;
+}
+
+/**
+ * dp_get_be_mon_pdev_from_dp_mon_pdev() - get dp_mon_pdev_be from dp_mon_pdev
+ * @pdev: dp_mon_pdev pointer
+ *
+ * Return: dp_mon_pdev_be pointer
+ */
+static inline
+struct dp_mon_pdev_be *dp_get_be_mon_pdev_from_dp_mon_pdev(struct dp_mon_pdev *mon_pdev)
+{
+	return (struct dp_mon_pdev_be *)mon_pdev;
+}
+#endif
 #endif /* _DP_MON_2_0_H_ */

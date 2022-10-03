@@ -752,6 +752,7 @@ enum extn_element_ie {
  * accordingly.
  *
  * @REASON_PROP_START: Start of prop reason code
+ * @REASON_OCI_MISMATCH: Reason OCI Mismatch happens
  * @REASON_HOST_TRIGGERED_ROAM_FAILURE: Reason host triggered roam failed
  * @REASON_FW_TRIGGERED_ROAM_FAILURE: Firmware triggered roam failed
  * @REASON_GATEWAY_REACHABILITY_FAILURE: Due to NUD failure
@@ -836,7 +837,14 @@ enum wlan_reason_code {
 	/* 72–65535 reserved */
 
 	/* Internal reason codes */
-	REASON_PROP_START = 65519,
+
+	/*
+	 * Internal reason codes: Add any internal reason code just after
+	 * REASON_PROP_START and decrease the value of REASON_PROP_START
+	 * accordingly.
+	 */
+	REASON_PROP_START = 65517,
+	REASON_OCI_MISMATCH = 65518,
 	REASON_HOST_TRIGGERED_ROAM_FAILURE  = 65519,
 	REASON_FW_TRIGGERED_ROAM_FAILURE = 65520,
 	REASON_GATEWAY_REACHABILITY_FAILURE = 65521,
@@ -1932,12 +1940,31 @@ struct wlan_ml_probe_req {
  * determination should be changed.
  * @WLAN_ML_VARIANT_BASIC: Basic variant
  * @WLAN_ML_VARIANT_PROBEREQ: Probe Request variant
+ * @WLAN_ML_VARIANT_RECONFIG: Reconfiguration variant
+ * @WLAN_ML_VARIANT_TDLS: TDLS variant
+ * @WLAN_ML_VARIANT_PRIORITYACCESS: Priority Access variant
  * @WLAN_ML_VARIANT_INVALIDSTART: Start of invalid value range
  */
 enum wlan_ml_variant {
 	WLAN_ML_VARIANT_BASIC = 0,
 	WLAN_ML_VARIANT_PROBEREQ = 1,
+	WLAN_ML_VARIANT_RECONFIG = 2,
+	WLAN_ML_VARIANT_TDLS = 3,
+	WLAN_ML_VARIANT_PRIORITYACCESS = 4,
 	WLAN_ML_VARIANT_INVALIDSTART,
+};
+
+/**
+ *  enum wlan_ml_linfo_subelementid - IDs for subelements in Multi-Link element
+ *  Link Info field.
+ *  @WLAN_ML_LINFO_SUBELEMID_PERSTAPROFILE: Per-STA Profile
+ *  @WLAN_ML_LINFO_SUBELEMID_VENDOR: Vendor specific
+ *  @WLAN_ML_LINFO_SUBELEMID_FRAGMENT: Fragment
+ */
+enum wlan_ml_linfo_subelementid {
+	WLAN_ML_LINFO_SUBELEMID_PERSTAPROFILE  = 0,
+	WLAN_ML_LINFO_SUBELEMID_VENDOR = 221,
+	WLAN_ML_LINFO_SUBELEMID_FRAGMENT = 254,
 };
 
 /* End of definitions related to Multi-Link element Control field applicable
@@ -2199,19 +2226,6 @@ enum wlan_ml_bv_cinfo_emlcap_transtimeout {
  */
 
 /**
- *  enum wlan_ml_bv_linfo_subelementid - IDs for subelements in Basic variant
- *  Multi-Link element Link Info field.
- *  @WLAN_ML_BV_LINFO_SUBELEMID_PERSTAPROFILE: Per-STA Profile
- *  @WLAN_ML_BV_LINFO_SUBELEMID_VENDOR: Vendor specific
- *  @WLAN_ML_BV_LINFO_SUBELEMID_FRAGMENT: Fragment
- */
-enum wlan_ml_bv_linfo_subelementid {
-	WLAN_ML_BV_LINFO_SUBELEMID_PERSTAPROFILE  = 0,
-	WLAN_ML_BV_LINFO_SUBELEMID_VENDOR = 221,
-	WLAN_ML_BV_LINFO_SUBELEMID_FRAGMENT = 254,
-};
-
-/**
  * struct wlan_ml_bv_linfo_perstaprof - Fixed fields of Per-STA Profile
  * subelement in Basic variant Multi-Link element Link Info field
  * @subelem_id: Subelement ID
@@ -2338,16 +2352,6 @@ struct wlan_ml_bv_linfo_perstaprof_stainfo_dtiminfo {
  */
 
 /**
- *  enum wlan_ml_prv_linfo_subelementid - IDs for subelements in Probe Req
- *  Multi-Link element Link Info field.
- *  @WLAN_ML_PRV_LINFO_SUBELEMID_PERSTAPROFILE: Per-STA Profile
- */
-enum wlan_ml_prv_linfo_subelementid {
-	WLAN_ML_PRV_LINFO_SUBELEMID_PERSTAPROFILE  = 0,
-	WLAN_ML_PRV_LINFO_SUBELEMID_FRAGMENT = 254,
-};
-
-/**
  * struct wlan_ml_prv_linfo_perstaprof - Fixed fields of Per-STA Profile
  * subelement in Probe Request variant Multi-Link element Link Info field
  * @subelem_id: Subelement ID
@@ -2405,6 +2409,99 @@ struct wlan_ml_prv_linfo_perstaprof {
 
 /* End of definitions related to Probe Request variant Multi-Link element. */
 
+/* Definitions related to Reconfiguration variant Multi-Link element (per
+ * IEEE802.11be D2.1.1)
+ */
+
+/* Definitions for bits in the Presence Bitmap subfield in Reconfiguration
+ * variant Multi-Link element Control field. Any unused bits are reserved.
+ */
+/* MLD MAC Address Present */
+#define WLAN_ML_RV_CTRL_PBM_MLDMACADDR_P               ((uint16_t)BIT(0))
+
+/* Definitions related to Reconfiguration variant Multi-Link element Common Info
+ * field.
+ */
+
+/* Size in octets of Common Info Length subfield of Common Info field in
+ * Reconfiguration variant Multi-Link element.
+ */
+#define WLAN_ML_RV_CINFO_LENGTH_SIZE                               1
+
+/* End of definitions related to Reconfiguration variant Multi-Link element
+ * Common Info field.
+ */
+
+/* Definitions related to Reconfiguration variant Multi-Link element Link Info
+ * field
+ */
+
+/**
+ * struct wlan_ml_rv_linfo_perstaprof - Fixed fields of Per-STA Profile
+ * subelement in Reconfiguration variant Multi-Link element Link Info field
+ * @subelem_id: Subelement ID
+ * @subelem_len: Subelement length
+ * @stacontrol: STA Control
+ */
+struct wlan_ml_rv_linfo_perstaprof {
+	uint8_t subelem_id;
+	uint8_t subelem_len;
+	uint16_t stacontrol;
+} qdf_packed;
+
+/* The above fixed fields may be followed by:
+ * STA Info (variable size)
+ */
+
+/* Size in octets of STA Control field of Per-STA Profile subelement in
+ * Reconfiguration variant Multi-Link element Link Info field.
+ */
+#define WLAN_ML_RV_LINFO_PERSTAPROF_STACTRL_SIZE                   2
+
+/* Definitions for subfields in STA Control field of Per-STA Profile subelement
+ * in Reconfiguration variant Multi-Link element Link Info field. Any unused
+ * bits are reserved.
+ */
+/* Link ID */
+#define WLAN_ML_RV_LINFO_PERSTAPROF_STACTRL_LINKID_IDX              0
+#define WLAN_ML_RV_LINFO_PERSTAPROF_STACTRL_LINKID_BITS             4
+/* Complete Profile */
+#define WLAN_ML_RV_LINFO_PERSTAPROF_STACTRL_CMPLTPROF_IDX           4
+#define WLAN_ML_RV_LINFO_PERSTAPROF_STACTRL_CMPLTPROF_BITS          1
+/* MAC Address Present */
+#define WLAN_ML_RV_LINFO_PERSTAPROF_STACTRL_MACADDRP_IDX            5
+#define WLAN_ML_RV_LINFO_PERSTAPROF_STACTRL_MACADDRP_BITS           1
+/* Delete Timer Present */
+#define WLAN_ML_RV_LINFO_PERSTAPROF_STACTRL_DELTIMERP_IDX           6
+#define WLAN_ML_RV_LINFO_PERSTAPROF_STACTRL_DELTIMERP_BITS          1
+
+/* Definitions for subfields in STA Info field of Per-STA Profile subelement
+ * in Reconfiguration variant Multi-Link element Link Info field.
+ */
+
+/* STA Info Length */
+#define WLAN_ML_RV_LINFO_PERSTAPROF_STAINFO_LENGTH_SIZE             1
+
+/* Size in octets of the Delete Timer subfield in STA info field of Per-STA
+ * Profile subelement in Reconfiguration variant Multi-Link element Link Info
+ * field.
+ */
+#define WLAN_ML_RV_LINFO_PERSTAPROF_STAINFO_DELTIMER_SIZE           2
+
+/* Max value in octets of STA Info Length in STA Info field of Per-STA Profile
+ * subelement in Reconfiguration variant Multi-Link element Link Info field.
+ */
+#define WLAN_ML_RV_LINFO_PERSTAPROF_STAINFO_LENGTH_MAX \
+	(WLAN_ML_RV_LINFO_PERSTAPROF_STAINFO_LENGTH_SIZE + \
+	 QDF_MAC_ADDR_SIZE + \
+	 WLAN_ML_RV_LINFO_PERSTAPROF_STAINFO_DELTIMER_SIZE)
+
+/* End of definitions related to Reconfiguration variant Multi-Link element Link
+ * Info field.
+ */
+
+/* End of definitions related to Reconfiguration variant Multi-Link element. */
+
 /*
  * Definitions related to MLO specific aspects of Reduced Neighbor Report
  * element.
@@ -2435,7 +2532,7 @@ struct wlan_ml_prv_linfo_perstaprof {
 #endif /* WLAN_FEATURE_11BE_MLO */
 #endif /* WLAN_FEATURE_11BE */
 
-#ifdef WLAN_FEATURE_T2LM
+#ifdef WLAN_FEATURE_11BE
 /**
  * struct wlan_ie_tid_to_link_mapping - TID-to-link mapping IE
  * @elem_id: T2LM IE
@@ -2488,7 +2585,7 @@ struct wlan_ie_multi_link_traffic_indication {
 	uint16_t ml_traffic_ind_control;
 	uint16_t per_link_traffic_ind_list[];
 } qdf_packed;
-#endif /* WLAN_FEATURE_T2LM */
+#endif /* WLAN_FEATURE_11BE */
 
 /**
  * struct he_oper_6g_param: 6 Ghz params for HE
@@ -3023,6 +3120,8 @@ struct wlan_eht_cap_info {
  * @scs_traffic_desc: SCS traffic description support
  * @max_mpdu_len: Maximum MPDU length
  * @max_a_mpdu_len_exponent_ext: Maximum A-MPDU Length Exponent Extension
+ * @eht_trs_support: EHT TRS SUPPORT
+ * @txop_return_support_txop_share_m2: TXOP Return Support in TXOP Share Mode 2
  * @reserved3: reserved bits
  * @reserved2: reserved bits
  * @support_320mhz_6ghz: support 320mhz in 6gz
@@ -3126,7 +3225,9 @@ struct wlan_eht_cap_info_network_endian {
 	uint16_t scs_traffic_desc:1;
 	uint16_t max_mpdu_len:2;
 	uint16_t max_a_mpdu_len_exponent_ext:1;
-	uint16_t reserved:7;
+	uint16_t eht_trs_support:1;
+	uint16_t txop_return_support_txop_share_m2:1;
+	uint16_t reserved:5;
 
 	uint32_t reserved2:1;
 	uint32_t support_320mhz_6ghz:1;

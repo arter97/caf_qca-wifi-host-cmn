@@ -119,6 +119,7 @@
 #define QCA6018_DEVICE_ID (0xfffd) /* Todo: replace this with actual number */
 #define QCA5018_DEVICE_ID (0xfffc) /* Todo: replace this with actual number */
 #define QCA9574_DEVICE_ID (0xfffa)
+#define QCA5332_DEVICE_ID (0xfff9)
 /* Genoa */
 #define QCN7605_DEVICE_ID  (0x1102) /* Genoa PCIe device ID*/
 #define QCN7605_COMPOSITE  (0x9901)
@@ -182,6 +183,20 @@ struct hif_latency_detect {
  * for defined here
  */
 #if defined(HIF_CONFIG_SLUB_DEBUG_ON) || defined(HIF_CE_DEBUG_DATA_BUF)
+
+#define HIF_CE_MAX_LATEST_HIST 2
+
+struct latest_evt_history {
+	uint64_t irq_entry_ts;
+	uint64_t bh_entry_ts;
+	uint64_t bh_resched_ts;
+	uint64_t bh_exit_ts;
+	uint64_t bh_work_ts;
+	int cpu_id;
+	uint32_t ring_hp;
+	uint32_t ring_tp;
+};
+
 struct ce_desc_hist {
 	qdf_atomic_t history_index[CE_COUNT_MAX];
 	uint8_t ce_id_hist_map[CE_COUNT_MAX];
@@ -191,7 +206,13 @@ struct ce_desc_hist {
 	uint32_t hist_index;
 	uint32_t hist_id;
 	void *hist_ev[CE_COUNT_MAX];
+	struct latest_evt_history latest_evt[HIF_CE_MAX_LATEST_HIST];
 };
+
+void hif_record_latest_evt(struct ce_desc_hist *ce_hist,
+			   uint8_t type,
+			   int ce_id, uint64_t time,
+			   uint32_t hp, uint32_t tp);
 #endif /*defined(HIF_CONFIG_SLUB_DEBUG_ON) || defined(HIF_CE_DEBUG_DATA_BUF)*/
 
 /**
@@ -204,12 +225,31 @@ struct hif_cfg {
 	uint8_t ce_status_ring_batch_count_threshold;
 };
 
+#ifdef DP_UMAC_HW_RESET_SUPPORT
+/**
+ * struct hif_umac_reset_ctx - UMAC HW reset context at HIF layer
+ * @intr_tq: Tasklet structure
+ * @cb_handler: Callback handler
+ * @cb_ctx: Argument to be passed to @cb_handler
+ * @os_irq: Interrupt number for this IRQ
+ * @irq_configured: Whether the IRQ has been configured
+ */
+struct hif_umac_reset_ctx {
+	struct tasklet_struct intr_tq;
+	int (*cb_handler)(void *cb_ctx);
+	void *cb_ctx;
+	uint32_t os_irq;
+	bool irq_configured;
+};
+#endif
+
 struct hif_softc {
 	struct hif_opaque_softc osc;
 	struct hif_config_info hif_config;
 	struct hif_target_info target_info;
 	void __iomem *mem;
 	void __iomem *mem_ce;
+	void __iomem *mem_cmem;
 	enum qdf_bus_type bus_type;
 	struct hif_bus_ops bus_ops;
 	void *ce_id_to_state[CE_COUNT_MAX];
@@ -323,6 +363,9 @@ struct hif_softc {
 	uint64_t cmem_start;
 	/* CMEM size target reserved */
 	uint64_t cmem_size;
+#ifdef DP_UMAC_HW_RESET_SUPPORT
+	struct hif_umac_reset_ctx umac_reset_ctx;
+#endif
 };
 
 static inline

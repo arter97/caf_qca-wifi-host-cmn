@@ -78,6 +78,26 @@
 			(uint32_t)(((dma_addr) >> 32) & 0xFF);\
 	} while (0)
 
+void hif_display_ctrl_traffic_pipes_state(struct hif_opaque_softc *hif_ctx)
+{
+	struct hif_softc *scn = HIF_GET_SOFTC(hif_ctx);
+	struct CE_state *CE_state;
+	uint32_t hp = 0, tp = 0;
+
+	CE_state = scn->ce_id_to_state[2];
+	hal_get_sw_hptp(scn->hal_soc,
+			CE_state->status_ring->srng_ctx,
+			&tp, &hp);
+	hif_info_high("CE-2 Dest status ring current snapshot HP:%u TP:%u",
+		      hp, tp);
+
+	hp = 0;
+	tp = 0;
+	CE_state = scn->ce_id_to_state[3];
+	hal_get_sw_hptp(scn->hal_soc, CE_state->src_ring->srng_ctx, &tp, &hp);
+	hif_info_high("CE-3 Source ring current snapshot HP:%u TP:%u", hp, tp);
+}
+
 #if defined(HIF_CONFIG_SLUB_DEBUG_ON) || defined(HIF_CE_DEBUG_DATA_BUF)
 void hif_record_ce_srng_desc_event(struct hif_softc *scn, int ce_id,
 				   enum hif_ce_event_type type,
@@ -131,6 +151,9 @@ void hif_record_ce_srng_desc_event(struct hif_softc *scn, int ce_id,
 
 	if (ce_hist->data_enable[ce_id])
 		hif_ce_desc_data_record(event, len);
+
+	hif_record_latest_evt(ce_hist, type, ce_id, event->time,
+			      event->current_hp, event->current_tp);
 }
 #endif /* HIF_CONFIG_SLUB_DEBUG_ON || HIF_CE_DEBUG_DATA_BUF */
 
@@ -769,7 +792,7 @@ static void ce_srng_src_ring_setup(struct hif_softc *scn, uint32_t ce_id,
 	}
 
 	src_ring->srng_ctx = hal_srng_setup(scn->hal_soc, CE_SRC, ce_id, 0,
-			&ring_params);
+					    &ring_params, 0);
 }
 
 #ifdef WLAN_WAR_CE_DISABLE_SRNG_TIMER_IRQ
@@ -865,7 +888,7 @@ static void ce_srng_dest_ring_setup(struct hif_softc *scn,
 
 	/*Dest ring is also source ring*/
 	dest_ring->srng_ctx = hal_srng_setup(scn->hal_soc, CE_DST, ce_id, 0,
-			&ring_params);
+					     &ring_params, 0);
 }
 
 #ifdef WLAN_CE_INTERRUPT_THRESHOLD_CONFIG
@@ -914,7 +937,7 @@ static void ce_srng_status_ring_setup(struct hif_softc *scn, uint32_t ce_id,
 	}
 
 	status_ring->srng_ctx = hal_srng_setup(scn->hal_soc, CE_DST_STATUS,
-			ce_id, 0, &ring_params);
+					       ce_id, 0, &ring_params, 0);
 }
 
 static int ce_ring_setup_srng(struct hif_softc *scn, uint8_t ring_type,

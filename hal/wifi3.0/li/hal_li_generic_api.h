@@ -69,7 +69,7 @@ void hal_rx_wbm_err_info_get_generic_li(void *wbm_desc,
 	wbm_er_info->rxdma_err_code = HAL_RX_WBM_RXDMA_ERROR_CODE_GET(wbm_desc);
 }
 
-#if defined(WLAN_FEATURE_TSF_UPLINK_DELAY) || defined(CONFIG_SAWF)
+#if defined(WLAN_FEATURE_TSF_UPLINK_DELAY) || defined(WLAN_CONFIG_TX_DELAY)
 static inline void
 hal_tx_comp_get_buffer_timestamp_li(void *desc,
 				    struct hal_tx_completion_status *ts)
@@ -77,13 +77,13 @@ hal_tx_comp_get_buffer_timestamp_li(void *desc,
 	ts->buffer_timestamp = HAL_TX_DESC_GET(desc, WBM_RELEASE_RING_4,
 					       BUFFER_TIMESTAMP);
 }
-#else /* !WLAN_FEATURE_TSF_UPLINK_DELAY || CONFIG_SAWF */
+#else /* !WLAN_FEATURE_TSF_UPLINK_DELAY || WLAN_CONFIG_TX_DELAY */
 static inline void
 hal_tx_comp_get_buffer_timestamp_li(void *desc,
 				    struct hal_tx_completion_status *ts)
 {
 }
-#endif /* WLAN_FEATURE_TSF_UPLINK_DELAY || CONFIG_SAWF */
+#endif /* WLAN_FEATURE_TSF_UPLINK_DELAY || WLAN_CONFIG_TX_DELAY */
 
 #ifdef QCA_UNDECODED_METADATA_SUPPORT
 static inline void
@@ -660,9 +660,6 @@ hal_rx_status_get_tlv_info_generic_li(void *rx_tlv_hdr, void *ppduinfo,
 	tlv_len = HAL_RX_GET_USER_TLV32_LEN(rx_tlv_hdr);
 
 	rx_tlv = (uint8_t *)rx_tlv_hdr + HAL_RX_TLV32_HDR_SIZE;
-
-	qdf_trace_hex_dump(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_DEBUG,
-			   rx_tlv, tlv_len);
 
 	switch (tlv_tag) {
 	case WIFIRX_PPDU_START_E:
@@ -1750,9 +1747,6 @@ hal_rx_status_get_tlv_info_generic_li(void *rx_tlv_hdr, void *ppduinfo,
 			  __func__, tlv_tag, tlv_len,
 			  unhandled == true ? "unhandled" : "");
 
-	qdf_trace_hex_dump(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_DEBUG,
-				rx_tlv, tlv_len);
-
 	return HAL_TLV_STATUS_PPDU_NOT_DONE;
 }
 
@@ -2195,9 +2189,11 @@ static inline void hal_setup_reo_swap(struct hal_soc *soc)
  *
  * @hal_soc: Opaque HAL SOC handle
  * @reo_params: parameters needed by HAL for REO config
+ * @qref_reset: reset qref
  */
 static
-void hal_reo_setup_generic_li(struct hal_soc *soc, void *reoparams)
+void hal_reo_setup_generic_li(struct hal_soc *soc, void *reoparams,
+			      int qref_reset)
 {
 	uint32_t reg_val;
 	struct hal_reo_params *reo_params = (struct hal_reo_params *)reoparams;
@@ -2639,4 +2635,22 @@ hal_rx_fst_get_fse_size_li(void)
 	return 0;
 }
 #endif /* WLAN_SUPPORT_RX_FISA */
+
+/**
+ * hal_rx_get_frame_ctrl_field(): Function to retrieve frame control field
+ *
+ * @nbuf: Network buffer
+ * Returns: rx more fragment bit
+ *
+ */
+static uint16_t hal_rx_get_frame_ctrl_field_li(uint8_t *buf)
+{
+	struct rx_pkt_tlvs *pkt_tlvs = hal_rx_get_pkt_tlvs(buf);
+	struct rx_mpdu_info *rx_mpdu_info = hal_rx_get_mpdu_info(pkt_tlvs);
+	uint16_t frame_ctrl = 0;
+
+	frame_ctrl = HAL_RX_MPDU_GET_FRAME_CONTROL_FIELD(rx_mpdu_info);
+
+	return frame_ctrl;
+}
 #endif /* _HAL_LI_GENERIC_API_H_ */

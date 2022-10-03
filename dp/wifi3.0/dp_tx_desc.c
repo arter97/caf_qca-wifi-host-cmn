@@ -63,6 +63,63 @@ dp_tx_desc_pool_counter_initialize(struct dp_tx_desc_pool_s *tx_desc_pool,
 }
 #endif
 
+#ifdef DP_UMAC_HW_RESET_SUPPORT
+/**
+ * dp_tx_desc_clean_up() -  Clean up the tx dexcriptors
+ * @ctxt: context passed
+ * @elem: element to be cleaned up
+ * @elem_list: element list
+ *
+ */
+void dp_tx_desc_clean_up(void *ctxt, void *elem, void *elem_list)
+{
+	struct dp_soc *soc = (struct dp_soc *)ctxt;
+	struct dp_tx_desc_s *tx_desc = (struct dp_tx_desc_s *)elem;
+	qdf_nbuf_t *nbuf_list = (qdf_nbuf_t *)elem_list;
+	qdf_nbuf_t nbuf = NULL;
+
+	if (tx_desc->nbuf) {
+		nbuf = dp_tx_comp_free_buf(soc, tx_desc, true);
+		dp_tx_desc_release(tx_desc, tx_desc->pool_id);
+
+		if (nbuf) {
+			if (!nbuf_list) {
+				dp_err("potential memory leak");
+				qdf_assert_always(0);
+			}
+
+			nbuf->next = *nbuf_list;
+			*nbuf_list = nbuf;
+		}
+	}
+}
+
+/**
+ * dp_tx_desc_pool_cleanup() -  Clean up the tx dexcriptor pools
+ * @soc: Handle to DP SoC structure
+ * @nbuf_list: nbuf list for delayed free
+ *
+ */
+void dp_tx_desc_pool_cleanup(struct dp_soc *soc, qdf_nbuf_t *nbuf_list)
+{
+	int i;
+	struct dp_tx_desc_pool_s *tx_desc_pool = NULL;
+	uint32_t num_pool = wlan_cfg_get_num_tx_desc_pool(soc->wlan_cfg_ctx);
+
+	for (i = 0; i < num_pool; i++) {
+		tx_desc_pool = &soc->tx_desc[i];
+
+		if (tx_desc_pool)
+			qdf_tx_desc_pool_free_bufs(soc,
+						   &tx_desc_pool->desc_pages,
+						   tx_desc_pool->elem_size,
+						   tx_desc_pool->elem_count,
+						   true, &dp_tx_desc_clean_up,
+						   nbuf_list);
+	}
+}
+#endif
+
 /**
  * dp_tx_desc_pool_alloc() - Allocate Tx Descriptor pool(s)
  * @soc Handle to DP SoC structure
@@ -99,6 +156,7 @@ QDF_STATUS dp_tx_desc_pool_alloc(struct dp_soc *soc, uint8_t pool_id,
 
 	desc_size = DP_TX_DESC_SIZE(sizeof(struct dp_tx_desc_s));
 	tx_desc_pool = &((soc)->tx_desc[(pool_id)]);
+	tx_desc_pool->desc_pages.page_size = DP_BLOCKMEM_SIZE;
 	dp_desc_multi_pages_mem_alloc(soc, DP_TX_DESC_TYPE,
 				      &tx_desc_pool->desc_pages,
 				      desc_size, num_elem,

@@ -35,6 +35,7 @@
 /* Saved profile weightage multiplier */
 #define SAVED_PROFILE_WEIGHTAGE 10
 
+#ifdef CONFIG_BAND_6GHZ
 #ifdef FEATURE_6G_SCAN_CHAN_SORT_ALGO
 
 /**
@@ -142,6 +143,7 @@ static void scm_update_rnr_info(struct wlan_objmgr_psoc *psoc,
 	struct scan_rnr_node *rnr_node;
 	struct chan_list *chan_list;
 	QDF_STATUS status;
+	bool hint = false;
 
 	if (!req)
 		return;
@@ -163,19 +165,29 @@ static void scm_update_rnr_info(struct wlan_objmgr_psoc *psoc,
 			    req->scan_req.num_hint_bssid <
 			    WLAN_SCAN_MAX_HINT_BSSID) {
 				qdf_mem_copy(&req->scan_req.hint_bssid[
-							num_bssid++].bssid,
+							num_bssid].bssid,
 					     &rnr_node->entry.bssid,
 					     QDF_MAC_ADDR_SIZE);
+				req->scan_req.hint_bssid[
+					num_bssid++].freq_flags = freq << 16;
 				req->scan_req.num_hint_bssid++;
-				total_count--;
-			} else if (rnr_node->entry.short_ssid &&
-				   req->scan_req.num_hint_s_ssid <
+				hint = true;
+			}
+			if (rnr_node->entry.short_ssid &&
+			    req->scan_req.num_hint_s_ssid <
 				   WLAN_SCAN_MAX_HINT_S_SSID) {
 				req->scan_req.hint_s_ssid[
-					num_ssid++].short_ssid =
+					num_ssid].short_ssid =
 						rnr_node->entry.short_ssid;
+				req->scan_req.hint_s_ssid[
+					num_ssid++].freq_flags = freq << 16;
 				req->scan_req.num_hint_s_ssid++;
+				hint = true;
+			}
+
+			if (hint) {
 				total_count--;
+				hint = false;
 			}
 			status = qdf_list_peek_next(&chan->rnr_list, cur_node,
 						    &next_node);
@@ -301,7 +313,7 @@ void scm_add_all_valid_6g_channels(struct wlan_objmgr_pdev *pdev,
 
 	freq_idx =
 		wlan_reg_get_chan_enum_for_freq(wlan_reg_min_6ghz_chan_freq());
-	if (freq_idx == INVALID_CHANNEL)
+	if (reg_is_chan_enum_invalid(freq_idx))
 		return;
 
 	scm_debug("freq_idx:%d", freq_idx);
@@ -558,3 +570,4 @@ end:
 
 	scm_sort_6ghz_channel_list(req->vdev, &req->scan_req.chan_list);
 }
+#endif

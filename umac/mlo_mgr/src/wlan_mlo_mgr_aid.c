@@ -167,7 +167,7 @@ static uint16_t wlan_mlo_alloc_aid(struct wlan_ml_vdev_aid_mgr *ml_aid_mgr,
 	return assoc_id;
 }
 
-#ifdef WLAN_FEATURE_T2LM
+#ifdef WLAN_FEATURE_11BE
 #define AID_NUM_BUCKET 3
 static uint16_t _wlan_mlo_peer_alloc_aid(
 		struct wlan_ml_vdev_aid_mgr *ml_aid_mgr,
@@ -176,6 +176,7 @@ static uint16_t _wlan_mlo_peer_alloc_aid(
 {
 	uint16_t assoc_id = (uint16_t)-1;
 	uint16_t start_aid, aid_end1, aid_end2, tot_aid;
+	uint16_t pool_1_max_aid;
 
 	start_aid = ml_aid_mgr->start_aid;
 	if (start_aid > ml_aid_mgr->max_aid) {
@@ -185,11 +186,13 @@ static uint16_t _wlan_mlo_peer_alloc_aid(
 	}
 
 	tot_aid = ml_aid_mgr->max_aid - start_aid;
-	aid_end1 = tot_aid / AID_NUM_BUCKET;
-	aid_end2 = aid_end1 + aid_end1;
+	pool_1_max_aid = tot_aid / AID_NUM_BUCKET;
+	aid_end1 = pool_1_max_aid + start_aid;
+	aid_end2 = pool_1_max_aid + pool_1_max_aid + start_aid;
 
-	mlo_debug("Start = %d E1 = %d E2 = %d max = %d", start_aid, aid_end1,
-		  aid_end2, ml_aid_mgr->max_aid);
+	mlo_debug("max_aid = %d start_aid = %d tot_aid = %d pool_1_max_aid = %d aid_end1 = %d aid_end2 = %d",
+		  ml_aid_mgr->max_aid, start_aid, tot_aid, pool_1_max_aid,
+		  aid_end1, aid_end2);
 	if ((start_aid > aid_end1) || (aid_end1 > aid_end2)) {
 		assoc_id = wlan_mlo_alloc_aid(ml_aid_mgr, start_aid,
 					      ml_aid_mgr->max_aid, link_ix,
@@ -533,7 +536,7 @@ uint16_t wlan_mlme_get_aid_count(struct wlan_objmgr_vdev *vdev)
 	return aid_count;
 }
 
-#ifdef WLAN_FEATURE_T2LM
+#ifdef WLAN_FEATURE_11BE
 static bool mlo_peer_t2lm_enabled(struct wlan_mlo_peer_context *ml_peer)
 {
 	if (ml_peer->t2lm_policy.t2lm_enable_val > WLAN_T2LM_NOT_SUPPORTED &&

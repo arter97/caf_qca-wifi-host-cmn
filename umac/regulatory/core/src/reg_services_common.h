@@ -939,6 +939,22 @@ reg_get_channel_state_for_pwrmode(struct wlan_objmgr_pdev *pdev,
 enum channel_state reg_get_channel_state_from_secondary_list_for_freq(
 						struct wlan_objmgr_pdev *pdev,
 						qdf_freq_t freq);
+
+/**
+ * reg_get_channel_list_with_power() - Provides the channel list with power
+ * @pdev: Pointer to pdev
+ * @ch_list: Pointer to the channel list.
+ * @num_chan: Pointer to save number of channels
+ * @in_6g_pwr_type: 6G power type corresponding to which 6G channel list is
+ * required
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS reg_get_channel_list_with_power(
+				struct wlan_objmgr_pdev *pdev,
+				struct channel_power *ch_list,
+				uint8_t *num_chan,
+				enum supported_6g_pwr_types in_6g_pwr_type);
 #endif
 
 /**
@@ -1093,6 +1109,25 @@ reg_fill_channel_list_for_pwrmode(struct wlan_objmgr_pdev *pdev,
  * Return: true if given puncture bitmap is valid
  */
 bool reg_is_punc_bitmap_valid(enum phy_ch_width bw, uint16_t puncture_bitmap);
+
+#ifdef QCA_DFS_BW_PUNCTURE
+/**
+ * reg_find_nearest_puncture_pattern() - is generated bitmap is valid or not
+ * @bw: Input channel width.
+ * @proposed_bitmap: Input puncture bitmap.
+ *
+ * Return: Radar bitmap if it is valid.
+ */
+uint16_t reg_find_nearest_puncture_pattern(enum phy_ch_width bw,
+					   uint16_t proposed_bitmap);
+#else
+static inline
+uint16_t reg_find_nearest_puncture_pattern(enum phy_ch_width bw,
+					   uint16_t proposed_bitmap)
+{
+	return 0;
+}
+#endif /* QCA_DFS_BW_PUNCTURE */
 
 /**
  * reg_extract_puncture_by_bw() - generate new puncture bitmap from original
@@ -1341,6 +1376,21 @@ bool reg_is_disable_in_secondary_list_for_freq(struct wlan_objmgr_pdev *pdev,
  */
 bool reg_is_enable_in_secondary_list_for_freq(struct wlan_objmgr_pdev *pdev,
 					      qdf_freq_t freq);
+
+/**
+ * reg_get_max_tx_power_for_pwr_mode() - Get maximum tx power
+ * @pdev: Pointer to pdev
+ * @in_6g_pwr_type: 6 GHz power type for which 6GHz frequencies needs to be
+ * considered while getting the max power
+ *
+ * Return: return the value of the maximum tx power for 2GHz/5GHz channels
+ * from current channel list and for 6GHz channels from the super channel list
+ * for the specified power mode
+ *
+ */
+uint8_t reg_get_max_tx_power_for_pwr_mode(
+				struct wlan_objmgr_pdev *pdev,
+				enum supported_6g_pwr_types in_6g_pwr_type);
 #endif
 
 /**
@@ -1737,7 +1787,7 @@ QDF_STATUS reg_get_6g_chan_ap_power(struct wlan_objmgr_pdev *pdev,
  *
  * This function is meant to be called to find the channel frequency power
  * information for a client when the device is operating as a client. It will
- * fill in the parameter is_psd, tx_power, and eirp_psd_power. eirp_psd_power
+ * fill in the parameters tx_power and eirp_psd_power. eirp_psd_power
  * will only be filled if the channel is PSD.
  *
  * Return: QDF_STATUS
@@ -1745,7 +1795,7 @@ QDF_STATUS reg_get_6g_chan_ap_power(struct wlan_objmgr_pdev *pdev,
 QDF_STATUS reg_get_client_power_for_connecting_ap(struct wlan_objmgr_pdev *pdev,
 						  enum reg_6g_ap_type ap_type,
 						  qdf_freq_t chan_freq,
-						  bool *is_psd,
+						  bool is_psd,
 						  uint16_t *tx_power,
 						  uint16_t *eirp_psd_power);
 
@@ -1875,11 +1925,10 @@ static inline
 QDF_STATUS reg_get_client_power_for_connecting_ap(struct wlan_objmgr_pdev *pdev,
 						  enum reg_6g_ap_type ap_type,
 						  qdf_freq_t chan_freq,
-						  bool *is_psd,
+						  bool is_psd,
 						  uint16_t *tx_power,
 						  uint16_t *eirp_psd_power)
 {
-	*is_psd = false;
 	*tx_power = 0;
 	*eirp_psd_power = 0;
 	return QDF_STATUS_E_NOSUPPORT;
@@ -2519,6 +2568,16 @@ enum channel_state reg_get_chan_state(struct wlan_objmgr_pdev *pdev,
 				      bool treat_nol_chan_as_disabled);
 
 /**
+ * reg_is_chan_disabled() - Check if a chanel is disabled or not
+ *
+ * @chan_flags: Channel flags
+ * @chan_state: Channel state
+ *
+ * Return: True if channel is disabled else false.
+ */
+bool reg_is_chan_disabled(uint32_t chan_flags, enum channel_state chan_state);
+
+/**
  * reg_get_chan_state_for_320() - Get the channel state of a 320 MHz
  * bonded channel.
  * @pdev: Pointer to wlan_objmgr_pdev
@@ -2590,6 +2649,16 @@ reg_is_sup_chan_entry_afc_done(struct wlan_objmgr_pdev *pdev,
 	return false;
 }
 #endif
+
+#ifdef CONFIG_BAND_6GHZ
+/**
+ * reg_display_super_chan_list() - Display super channel list for all modes
+ * @pdev: pdev pointer
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS
+reg_display_super_chan_list(struct wlan_objmgr_pdev *pdev);
 #endif
 
 /**
@@ -2601,13 +2670,4 @@ reg_is_sup_chan_entry_afc_done(struct wlan_objmgr_pdev *pdev,
  * Return: max bw
  */
 uint16_t reg_get_max_bw_5G_for_fo(struct wlan_objmgr_pdev *pdev);
-
-/**
- * reg_is_offload_enabled() - get offload_enabled
- * @pdev: PDEV object
- *
- * API to get offload_enabled from psoc.
- *
- * Return: true if offload enaled
- */
-bool reg_is_offload_enabled(struct wlan_objmgr_pdev *pdev);
+#endif

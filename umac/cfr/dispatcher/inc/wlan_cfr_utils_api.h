@@ -120,6 +120,7 @@ enum cfrradiotype {
 	CFR_CAPTURE_RADIO_WAIKIKI,
 	CFR_CAPTURE_RADIO_KIWI,
 	CFR_CAPTURE_RADIO_MANGO,
+	CFR_CAPTURE_RADIO_MIAMI,
 	CFR_CAPTURE_RADIO_MAX = 0xFF,
 };
 
@@ -254,9 +255,6 @@ struct cfr_capture_params {
 	u_int8_t   bandwidth;
 	u_int32_t  period;
 	u_int8_t   method;
-#ifdef WLAN_FEATURE_11BE
-	uint32_t   puncture_bitmap;
-#endif
 };
 
 /**
@@ -650,9 +648,6 @@ struct peer_cfr {
 	u_int8_t   bandwidth;
 	u_int32_t  period;
 	u_int8_t   capture_method;
-#ifdef WLAN_FEATURE_11BE
-	uint32_t   puncture_bitmap;
-#endif
 };
 
 /**

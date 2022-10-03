@@ -191,7 +191,7 @@ typedef struct ipa_wdi_reg_intf_in_params  __qdf_ipa_wdi_reg_intf_in_params_t;
 #define __QDF_IPA_WDI_REG_INTF_IN_PARAMS_IS_TX1_USED(in)	\
 	(((struct ipa_wdi_reg_intf_in_params *)(in))->is_tx1_used)
 #endif
-#ifdef IPA_WDI3_RX_TWO_PIPES
+#ifdef IPA_WDI3_VLAN_SUPPORT
 #define __QDF_IPA_WDI_REG_INTF_IN_PARAMS_IS_RX1_USED(in)	\
 	(((struct ipa_wdi_reg_intf_in_params *)(in))->is_rx1_used)
 #endif
@@ -285,6 +285,18 @@ typedef struct ipa_wdi_pipe_setup_info_smmu __qdf_ipa_wdi_pipe_setup_info_smmu_t
 #define __QDF_IPA_WDI_SETUP_INFO_SMMU_DESC_FORMAT_TEMPLATE(txrx)	\
 	(((struct ipa_wdi_pipe_setup_info_smmu *)(txrx))->desc_format_template)
 
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 15, 41))
+/* MSM kernel support added in I6418ae5bc4f030f6348e0f580b61b6adc1b92cf3 */
+#define __QDF_IPA_WDI_SETUP_INFO_RX_BANK_ID(txrx, bid)	\
+	((((struct ipa_wdi_pipe_setup_info *)(txrx))->rx_bank_id) = (bid))
+
+#define __QDF_IPA_WDI_SETUP_INFO_SMMU_RX_BANK_ID(txrx, bid)	\
+	((((struct ipa_wdi_pipe_setup_info_smmu *)(txrx))->rx_bank_id) = (bid))
+#else
+#define __QDF_IPA_WDI_SETUP_INFO_RX_BANK_ID(txrx, bid)
+#define __QDF_IPA_WDI_SETUP_INFO_SMMU_RX_BANK_ID(txrx, bid)
+#endif
+
 /**
  * __qdf_ipa_wdi_conn_in_params_t - information provided by
  *		uC offload client
@@ -317,7 +329,7 @@ typedef struct ipa_wdi_conn_in_params  __qdf_ipa_wdi_conn_in_params_t;
 	(((struct ipa_wdi_conn_in_params *)(pipe_in))->u_rx.rx)
 #define __QDF_IPA_WDI_CONN_IN_PARAMS_RX_SMMU(pipe_in)	\
 	(((struct ipa_wdi_conn_in_params *)(pipe_in))->u_rx.rx_smmu)
-#ifdef IPA_WDI3_RX_TWO_PIPES
+#ifdef IPA_WDI3_VLAN_SUPPORT
 #define __QDF_IPA_WDI_CONN_IN_PARAMS_IS_RX1_USED(pipe_in)	\
 	(((struct ipa_wdi_conn_in_params *)(pipe_in))->is_rx1_used)
 #define __QDF_IPA_WDI_CONN_IN_PARAMS_RX_ALT(pipe_in)	\
@@ -347,7 +359,7 @@ typedef struct ipa_wdi_conn_out_params  __qdf_ipa_wdi_conn_out_params_t;
 #endif
 #define __QDF_IPA_WDI_CONN_OUT_PARAMS_RX_UC_DB_PA(pipe_out)	\
 	(((struct ipa_wdi_conn_out_params *)(pipe_out))->rx_uc_db_pa)
-#ifdef IPA_WDI3_RX_TWO_PIPES
+#ifdef IPA_WDI3_VLAN_SUPPORT
 #define __QDF_IPA_WDI_CONN_OUT_PARAMS_RX_ALT_UC_DB_PA(pipe_out)	\
 	(((struct ipa_wdi_conn_out_params *)(pipe_out))->rx1_uc_db_pa)
 #endif

@@ -33,13 +33,18 @@
 #include <scheduler_api.h>
 #endif
 
-#define CONNECT_REQ_PREFIX          0x00C00000
-#define DISCONNECT_REQ_PREFIX       0x00D00000
-#define ROAM_REQ_PREFIX             0x00F00000
+#define CONNECT_REQ_PREFIX          0x0C000000
+#define DISCONNECT_REQ_PREFIX       0x0D000000
+#define ROAM_REQ_PREFIX             0x0F000000
 
 #define CM_ID_MASK                  0x0000FFFF
 
-#define CM_ID_GET_PREFIX(cm_id)     cm_id & 0xFFFF0000
+#define CM_ID_GET_PREFIX(cm_id)     cm_id & 0xFF000000
+#define CM_VDEV_ID_SHIFT            16
+#define CM_VDEV_ID_MASK             0x00FF0000
+#define CM_ID_GET_VDEV_ID(cm_id) (cm_id & CM_VDEV_ID_MASK) >> CM_VDEV_ID_SHIFT
+#define CM_ID_SET_VDEV_ID(cm_id, vdev_id) ((vdev_id << CM_VDEV_ID_SHIFT) & \
+					   CM_VDEV_ID_MASK) | cm_id
 
 #define CM_PREFIX_FMT "vdev %d cm_id 0x%x: "
 #define CM_PREFIX_REF(vdev_id, cm_id) (vdev_id), (cm_id)
@@ -464,15 +469,24 @@ void cm_send_disconnect_resp(struct cnx_mgr *cm_ctx, wlan_cm_id cm_id);
 /**
  * cm_disconnect_continue_after_rso_stop() - Continue disconnect after RSO stop
  * @vdev: Objmgr vdev
- * @is_ho_fail: True if ho_fail happened
  * @req: pointer to cm vdev disconnect req
  *
  * Return: QDF_STATUS
  */
 QDF_STATUS
 cm_disconnect_continue_after_rso_stop(struct wlan_objmgr_vdev *vdev,
-				      bool is_ho_fail,
 				      struct wlan_cm_vdev_discon_req *req);
+
+/**
+ * cm_handle_rso_stop_rsp() - Handle RSO stop response
+ * @vdev: Objmgr vdev
+ * @req: pointer to cm vdev disconnect req
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS
+cm_handle_rso_stop_rsp(struct wlan_objmgr_vdev *vdev,
+		       struct wlan_cm_vdev_discon_req *req);
 
 /*************** UTIL APIs ****************/
 
@@ -1179,4 +1193,12 @@ void cm_set_candidate_custom_sort_cb(
 				 qdf_list_t *list));
 
 #endif
+
+/**
+ * cm_is_connect_req_reassoc() - Is connect req for reassoc
+ * @req: connect req
+ *
+ * Return: void
+ */
+bool cm_is_connect_req_reassoc(struct wlan_cm_connect_req *req);
 #endif /* __WLAN_CM_MAIN_API_H__ */

@@ -90,6 +90,11 @@ extern "C" {
 #define TARGET_TYPE_MANGO 34
 #endif
 
+/* Miami */
+#ifndef TARGET_TYPE_QCA5332
+#define TARGET_TYPE_QCA5332   35
+#endif
+
 #ifdef __cplusplus
 }
 #endif

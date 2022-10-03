@@ -49,9 +49,10 @@
  */
 QDF_COMPILE_TIME_ASSERT(dp_tx_desc_size,
 			((sizeof(struct dp_tx_desc_s)) <=
-			 (PAGE_SIZE >> DP_TX_DESC_ID_PAGE_OS)) &&
+			 (DP_BLOCKMEM_SIZE >> DP_TX_DESC_ID_PAGE_OS)) &&
 			((sizeof(struct dp_tx_desc_s)) >
-			 (PAGE_SIZE >> (DP_TX_DESC_ID_PAGE_OS + 1))));
+			 (DP_BLOCKMEM_SIZE >> (DP_TX_DESC_ID_PAGE_OS + 1)))
+		       );
 
 #ifdef QCA_LL_TX_FLOW_CONTROL_V2
 #define TX_DESC_LOCK_CREATE(lock)
@@ -133,6 +134,10 @@ QDF_STATUS dp_tx_tso_num_seg_pool_init(struct dp_soc *soc, uint8_t pool_id,
 				       uint32_t num_elem);
 void dp_tx_tso_num_seg_pool_free(struct dp_soc *soc, uint8_t pool_id);
 void dp_tx_tso_num_seg_pool_deinit(struct dp_soc *soc, uint8_t pool_id);
+
+#ifdef DP_UMAC_HW_RESET_SUPPORT
+void dp_tx_desc_pool_cleanup(struct dp_soc *soc, qdf_nbuf_t *nbuf_list);
+#endif
 
 #ifdef QCA_LL_TX_FLOW_CONTROL_V2
 void dp_tx_flow_control_init(struct dp_soc *);

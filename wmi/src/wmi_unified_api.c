@@ -291,6 +291,27 @@ wmi_unified_pdev_param_send(wmi_unified_t wmi_handle,
 	return QDF_STATUS_E_FAILURE;
 }
 
+QDF_STATUS
+wmi_unified_multiple_pdev_param_send(wmi_unified_t wmi_handle,
+				     struct set_multiple_pdev_vdev_param *params)
+{
+	if (wmi_handle->ops->send_multiple_pdev_param_cmd)
+		return wmi_handle->ops->send_multiple_pdev_param_cmd(wmi_handle,
+								     params);
+
+	return QDF_STATUS_E_FAILURE;
+}
+
+QDF_STATUS
+wmi_unified_multiple_vdev_param_send(wmi_unified_t wmi_handle,
+				     struct set_multiple_pdev_vdev_param *params)
+{
+	if (wmi_handle->ops->send_multiple_vdev_param_cmd)
+		return wmi_handle->ops->send_multiple_vdev_param_cmd(wmi_handle,
+								     params);
+	return QDF_STATUS_E_FAILURE;
+}
+
 QDF_STATUS wmi_unified_suspend_send(wmi_unified_t wmi_handle,
 				    struct suspend_params *param,
 				    uint8_t mac_id)
@@ -1439,6 +1460,20 @@ QDF_STATUS wmi_unified_thermal_mitigation_param_cmd_send(
 
 	return QDF_STATUS_E_FAILURE;
 }
+
+#ifdef HEALTH_MON_SUPPORT
+QDF_STATUS wmi_extract_health_mon_event(
+		wmi_unified_t wmi_handle,
+		void *ev,
+		struct wmi_health_mon_params *param)
+{
+	if (wmi_handle->ops->extract_health_mon_init_done_info_event)
+		return wmi_handle->ops->extract_health_mon_init_done_info_event(
+						wmi_handle, ev, param);
+
+	return QDF_STATUS_E_FAILURE;
+}
+#endif /* HEALTH_MON_SUPPORT */
 
 QDF_STATUS
 wmi_unified_vdev_set_fwtest_param_cmd_send(wmi_unified_t wmi_handle,
@@ -2864,6 +2899,30 @@ wmi_unified_send_coex_config_cmd(wmi_unified_t wmi_handle,
 	return QDF_STATUS_E_FAILURE;
 }
 
+#ifdef WLAN_FEATURE_DBAM_CONFIG
+QDF_STATUS
+wmi_unified_send_dbam_config_cmd(wmi_unified_t wmi_handle,
+				 struct coex_dbam_config_params *param)
+{
+	if (wmi_handle->ops->send_dbam_config_cmd)
+		return wmi_handle->ops->send_dbam_config_cmd(wmi_handle,
+							     param);
+
+	return QDF_STATUS_E_FAILURE;
+}
+
+QDF_STATUS
+wmi_extract_dbam_config_response(wmi_unified_t wmi_handle, void *evt_buf,
+				 struct coex_dbam_config_resp *resp)
+{
+	if (wmi_handle->ops->extract_dbam_config_resp_event)
+		return wmi_handle->ops->extract_dbam_config_resp_event(
+					wmi_handle, evt_buf, resp);
+
+	return QDF_STATUS_E_FAILURE;
+}
+#endif
+
 QDF_STATUS
 wmi_unified_send_request_get_rcpi_cmd(wmi_unified_t wmi_handle,
 				      struct rcpi_req *get_rcpi_param)
@@ -3676,6 +3735,17 @@ QDF_STATUS wmi_unified_send_cp_stats_cmd(wmi_unified_t wmi_handle,
 	return QDF_STATUS_E_FAILURE;
 }
 
+QDF_STATUS wmi_unified_send_halphy_stats_cmd(wmi_unified_t wmi_handle,
+					     void *buf_ptr, uint32_t buf_len)
+{
+	if (wmi_handle->ops->send_halphy_stats_cmd)
+		return wmi_handle->ops->send_halphy_stats_cmd(wmi_handle,
+							      buf_ptr,
+							      buf_len);
+
+	return QDF_STATUS_E_FAILURE;
+}
+
 QDF_STATUS
 wmi_unified_extract_cp_stats_more_pending(wmi_unified_t wmi_handle,
 					  void *evt_buf, uint32_t *more_flag)
@@ -3684,6 +3754,34 @@ wmi_unified_extract_cp_stats_more_pending(wmi_unified_t wmi_handle,
 		return wmi_handle->ops->extract_cp_stats_more_pending(wmi_handle,
 								      evt_buf,
 								      more_flag);
+
+	return QDF_STATUS_E_FAILURE;
+}
+
+QDF_STATUS
+wmi_unified_extract_halphy_stats_end_of_event(wmi_unified_t wmi_handle,
+					      void *evt_buf,
+					      uint32_t *end_of_event_flag)
+{
+	if (wmi_handle->ops->extract_halphy_stats_end_of_event)
+		return
+		wmi_handle->ops->extract_halphy_stats_end_of_event(wmi_handle,
+							evt_buf,
+							end_of_event_flag);
+
+	return QDF_STATUS_E_FAILURE;
+}
+
+QDF_STATUS
+wmi_unified_extract_halphy_stats_event_count(wmi_unified_t wmi_handle,
+					     void *evt_buf,
+					     uint32_t *event_count_flag)
+{
+	if (wmi_handle->ops->extract_halphy_stats_event_count)
+		return
+		wmi_handle->ops->extract_halphy_stats_event_count(wmi_handle,
+							evt_buf,
+							event_count_flag);
 
 	return QDF_STATUS_E_FAILURE;
 }
@@ -3926,3 +4024,15 @@ QDF_STATUS wmi_extract_pdev_telemetry_stats(
 
 	return QDF_STATUS_E_FAILURE;
 }
+
+#ifdef FEATURE_SET
+QDF_STATUS wmi_feature_set_cmd_send(wmi_unified_t wmi_handle,
+				    struct target_feature_set *feature_set)
+{
+	if (wmi_handle->ops->feature_set_cmd_send)
+		return wmi_handle->ops->feature_set_cmd_send(wmi_handle,
+							     feature_set);
+
+	return QDF_STATUS_E_FAILURE;
+}
+#endif

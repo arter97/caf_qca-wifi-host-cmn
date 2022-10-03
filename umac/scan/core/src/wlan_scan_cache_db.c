@@ -1017,6 +1017,27 @@ static bool scm_is_bss_allowed_for_country(struct wlan_objmgr_psoc *psoc,
 }
 #endif
 
+/**
+ * scm_is_p2p_wildcard_ssid() - check p2p wildcard ssid or not
+ * @scan_entry: scan entry
+ *
+ * Return: true if SSID is wildcard "DIRECT-" ssid
+ */
+static bool scm_is_p2p_wildcard_ssid(struct scan_cache_entry *scan_entry)
+{
+	static const char wildcard_ssid[] = "DIRECT-";
+	uint8_t len = sizeof(wildcard_ssid) - 1;
+
+	if (!scan_entry->is_p2p)
+		return false;
+	if (!qdf_mem_cmp(scan_entry->ssid.ssid,
+			 wildcard_ssid, len) &&
+	    (scan_entry->ssid.length == len))
+		return true;
+
+	return false;
+}
+
 QDF_STATUS __scm_handle_bcn_probe(struct scan_bcn_probe_event *bcn)
 {
 	struct wlan_objmgr_psoc *psoc;
@@ -1126,6 +1147,23 @@ QDF_STATUS __scm_handle_bcn_probe(struct scan_bcn_probe_event *bcn)
 			util_scan_free_cache_entry(scan_entry);
 			qdf_mem_free(scan_node);
 			continue;
+		}
+		if (util_scan_entry_rsn(scan_entry)) {
+			status = wlan_crypto_rsnie_check(
+					&sec_params,
+					util_scan_entry_rsn(scan_entry));
+			if (QDF_IS_STATUS_ERROR(status) &&
+			    !scm_is_p2p_wildcard_ssid(scan_entry)) {
+				scm_nofl_debug("Drop frame from invalid RSN IE AP"
+					       QDF_MAC_ADDR_FMT
+					       ": RSN IE parse failed, status %d",
+					       QDF_MAC_ADDR_REF(
+					       scan_entry->bssid.bytes),
+					       status);
+				util_scan_free_cache_entry(scan_entry);
+				qdf_mem_free(scan_node);
+				continue;
+			}
 		}
 		if (wlan_cm_get_check_6ghz_security(psoc) &&
 		    wlan_reg_is_6ghz_chan_freq(scan_entry->channel.chan_freq)) {
@@ -1946,4 +1984,27 @@ QDF_STATUS scm_scan_update_mlme_by_bssinfo(struct wlan_objmgr_pdev *pdev,
 	}
 
 	return QDF_STATUS_E_INVAL;
+}
+
+uint32_t scm_get_last_scan_time_per_channel(struct wlan_objmgr_vdev *vdev,
+					    uint32_t freq)
+{
+	struct wlan_scan_obj *scan;
+	struct chan_list_scan_info *chan_info;
+	uint8_t pdev_id;
+	int i;
+
+	scan = wlan_vdev_get_scan_obj(vdev);
+	if (!scan)
+		return 0;
+
+	pdev_id = wlan_scan_vdev_get_pdev_id(vdev);
+	chan_info = &scan->pdev_info[pdev_id].chan_scan_info;
+
+	for (i = 0; i < chan_info->num_chan ; i++) {
+		if (chan_info->ch_scan_info[i].freq == freq)
+			return chan_info->ch_scan_info[i].last_scan_time;
+	}
+
+	return 0;
 }

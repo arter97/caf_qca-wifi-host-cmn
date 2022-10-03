@@ -60,7 +60,13 @@
 #define WLAN_IPA_MAX_IFACE                  MAX_IPA_IFACE
 #define WLAN_IPA_CLIENT_MAX_IFACE           MAX_IPA_IFACE
 #define WLAN_IPA_MAX_SYSBAM_PIPE            4
+
+#ifdef IPA_WDS_EASYMESH_FEATURE
+#define WLAN_IPA_MAX_SESSION                MAX_IPA_IFACE //7
+#else
 #define WLAN_IPA_MAX_SESSION                5
+#endif
+
 #ifdef WLAN_MAX_CLIENTS_ALLOWED
 #define WLAN_IPA_MAX_STA_COUNT              WLAN_MAX_CLIENTS_ALLOWED
 #else
@@ -202,7 +208,8 @@ struct wlan_ipa_tx_hdr {
  */
 #if defined(QCA_WIFI_QCA6290) || defined(QCA_WIFI_QCA6390) || \
     defined(QCA_WIFI_QCA6490) || defined(QCA_WIFI_QCA6750) || \
-    defined(QCA_WIFI_WCN7850) || defined(QCA_WIFI_QCN9000)
+    defined(QCA_WIFI_WCN7850) || defined(QCA_WIFI_QCN9000) || \
+    defined(QCA_WIFI_KIWI) || defined(QCA_WIFI_KIWI_V2)
 struct frag_header {
 	uint8_t reserved[0];
 };
@@ -229,7 +236,8 @@ struct frag_header {
 
 #if defined(QCA_WIFI_QCA6290) || defined(QCA_WIFI_QCA6390) || \
     defined(QCA_WIFI_QCA6490) || defined(QCA_WIFI_QCA6750) || \
-    defined(QCA_WIFI_WCN7850) || defined(QCA_WIFI_QCN9000)
+    defined(QCA_WIFI_WCN7850) || defined(QCA_WIFI_QCN9000) || \
+    defined(QCA_WIFI_KIWI) || defined(QCA_WIFI_KIWI_V2)
 struct ipa_header {
 	uint8_t reserved[0];
 };

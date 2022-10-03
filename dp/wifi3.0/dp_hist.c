@@ -22,6 +22,7 @@
 #include <cdp_txrx_hist_struct.h>
 #include "dp_hist.h"
 
+#ifndef WLAN_CONFIG_TX_DELAY
 /*
  * dp_hist_sw_enq_dbucket: Sofware enqueue delay bucket in ms
  * @index_0 = 0_1 ms
@@ -59,6 +60,46 @@ static uint16_t dp_hist_sw_enq_dbucket[CDP_HIST_BUCKET_MAX] = {
  */
 static uint16_t dp_hist_fw2hw_dbucket[CDP_HIST_BUCKET_MAX] = {
 	0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 250, 500};
+#else
+/*
+ * dp_hist_sw_enq_dbucket: Sofware enqueue delay bucket in us
+ * @index_0 = 0_250 us
+ * @index_1 = 250_500 us
+ * @index_2 = 500_750 us
+ * @index_3 = 750_1000 us
+ * @index_4 = 1000_1500 us
+ * @index_5 = 1500_2000 us
+ * @index_6 = 2000_2500 us
+ * @index_7 = 2500_5000 us
+ * @index_8 = 5000_6000 us
+ * @index_9 = 6000_7000 us
+ * @index_10 = 7000_8000 us
+ * @index_11 = 8000_9000 us
+ * @index_12 = 9000+ us
+ */
+static uint16_t dp_hist_sw_enq_dbucket[CDP_HIST_BUCKET_MAX] = {
+	0, 250, 500, 750, 1000, 1500, 2000, 2500, 5000, 6000, 7000, 8000, 9000};
+
+/*
+ * cdp_hist_fw2hw_dbucket: HW enqueue to Completion Delay in us
+ * @index_0 = 0_250 us
+ * @index_1 = 250_500 us
+ * @index_2 = 500_750 us
+ * @index_3 = 750_1000 us
+ * @index_4 = 1000_1500 us
+ * @index_5 = 1500_2000 us
+ * @index_6 = 2000_2500 us
+ * @index_7 = 2500_5000 us
+ * @index_8 = 5000_6000 us
+ * @index_9 = 6000_7000 us
+ * @index_10 = 7000_8000 us
+ * @index_11 = 8000_9000 us
+ * @index_12 = 9000+ us
+ */
+
+static uint16_t dp_hist_fw2hw_dbucket[CDP_HIST_BUCKET_MAX] = {
+	0, 250, 500, 750, 1000, 1500, 2000, 2500, 5000, 6000, 7000, 8000, 9000};
+#endif
 
 /*
  * dp_hist_reap2stack_bucket: Reap to stack bucket
@@ -80,7 +121,7 @@ static uint16_t dp_hist_reap2stack_bucket[CDP_HIST_BUCKET_MAX] = {
 	0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60};
 
 /*
- * dp_hist_hw_tx_comp_dbucket: Tx HW Completion Delay bucket in us
+ * dp_hist_hw_tx_comp_dbucket: tx hw completion delay bucket in us
  * @index_0 = 0_250 us
  * @index_1 = 250_500 us
  * @index_2 = 500_750 us
@@ -112,6 +153,43 @@ const char *dp_hist_tx_hw_delay_str(uint8_t index)
 	if (index > CDP_HIST_BUCKET_MAX)
 		return "Invalid index";
 	return dp_hist_hw_tx_comp_dbucket_str[index];
+}
+
+/*
+ * dp_hist_delay_percentile_dbucket: tx hw completion delay bucket in delay
+ * bound percentile
+ * @index_0 = 0_10
+ * @index_1 = 10_20
+ * @index_2 = 20_30
+ * @index_3 = 30_40
+ * @index_4 = 40_50
+ * @index_5 = 50_60
+ * @index_6 = 60_70
+ * @index_7 = 70_80
+ * @index_8 = 80_100
+ * @index_9 = 90_100
+ * @index_10 = 100_150
+ * @index_11 = 150_200
+ * @index_12 = 200+
+ */
+static uint16_t dp_hist_delay_percentile_dbucket[CDP_HIST_BUCKET_MAX] = {
+	0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 150, 200};
+
+static
+const char *dp_hist_delay_percentile_dbucket_str[CDP_HIST_BUCKET_MAX + 1] = {
+	"0 to 10%", "10 to 20%",
+	"20 to  30%", "30 to 40%",
+	"40 to 50%", "50 to 60%",
+	"60 to 70%", "70 to 80%",
+	"80 to 90% ", "90 to 100%",
+	"100 to 150% ", "150 to 200%", "200+%"
+};
+
+const char *dp_hist_delay_percentile_str(uint8_t index)
+{
+	if (index > CDP_HIST_BUCKET_MAX)
+		return "Invalid index";
+	return dp_hist_delay_percentile_dbucket_str[index];
 }
 
 /*
@@ -167,6 +245,10 @@ static void dp_hist_fill_buckets(struct cdp_hist_bucket *hist_bucket, int value)
 	case CDP_HIST_TYPE_HW_TX_COMP_DELAY:
 		idx =  dp_hist_find_bucket_idx(
 				&dp_hist_hw_tx_comp_dbucket[0], value);
+		break;
+	case CDP_HIST_TYPE_DELAY_PERCENTILE:
+		idx =  dp_hist_find_bucket_idx(
+				&dp_hist_delay_percentile_dbucket[0], value);
 		break;
 	default:
 		break;

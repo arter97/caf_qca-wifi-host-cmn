@@ -549,6 +549,13 @@ int htt_srng_setup(struct htt_soc *soc, int mac_id,
 		    (lmac_id * HAL_MAX_RINGS_PER_LMAC))) {
 			htt_ring_id = HTT_HOST2_TO_FW_RXBUF_RING;
 			htt_ring_type = HTT_SW_TO_SW_RING;
+#ifdef IPA_WDI3_VLAN_SUPPORT
+		} else if (srng_params.ring_id ==
+		    (HAL_SRNG_WMAC1_SW2RXDMA0_BUF3 +
+		    (lmac_id * HAL_MAX_RINGS_PER_LMAC))) {
+			htt_ring_id = HTT_HOST3_TO_FW_RXBUF_RING;
+			htt_ring_type = HTT_SW_TO_SW_RING;
+#endif
 #endif
 #else
 		if (srng_params.ring_id ==
@@ -1665,6 +1672,14 @@ int htt_h2t_rx_ring_cfg(struct htt_soc *htt_soc, int pdev_id,
 
 	dp_mon_rx_wmask_subscribe(soc->dp_soc, msg_word, htt_tlv_filter);
 
+#ifdef FW_SUPPORT_NOT_YET
+	/* word 17*/
+	msg_word += 3;
+	*msg_word = 0;
+
+	dp_mon_rx_enable_fpmo(soc->dp_soc, msg_word, htt_tlv_filter);
+#endif/* FW_SUPPORT_NOT_YET */
+
 	/* "response_required" field should be set if a HTT response message is
 	 * required after setting up the ring.
 	 */
@@ -2179,7 +2194,10 @@ struct htt_soc *htt_soc_attach(struct dp_soc *soc, HTC_HANDLE htc_handle)
 {
 	int i;
 	int j;
-	int alloc_size = HTT_SW_UMAC_RING_IDX_MAX * sizeof(unsigned long);
+	int umac_alloc_size = HTT_SW_UMAC_RING_IDX_MAX *
+			      sizeof(struct bp_handler);
+	int lmac_alloc_size = HTT_SW_LMAC_RING_IDX_MAX *
+			      sizeof(struct bp_handler);
 	struct htt_soc *htt_soc = NULL;
 
 	htt_soc = qdf_mem_malloc(sizeof(*htt_soc));
@@ -2189,21 +2207,26 @@ struct htt_soc *htt_soc_attach(struct dp_soc *soc, HTC_HANDLE htc_handle)
 	}
 
 	for (i = 0; i < MAX_PDEV_CNT; i++) {
-		htt_soc->pdevid_tt[i].umac_ttt = qdf_mem_malloc(alloc_size);
-		if (!htt_soc->pdevid_tt[i].umac_ttt)
+		htt_soc->pdevid_tt[i].umac_path =
+			qdf_mem_malloc(umac_alloc_size);
+		if (!htt_soc->pdevid_tt[i].umac_path)
 			break;
-		qdf_mem_set(htt_soc->pdevid_tt[i].umac_ttt, alloc_size, -1);
-		htt_soc->pdevid_tt[i].lmac_ttt = qdf_mem_malloc(alloc_size);
-		if (!htt_soc->pdevid_tt[i].lmac_ttt) {
-			qdf_mem_free(htt_soc->pdevid_tt[i].umac_ttt);
+		for (j = 0; j < HTT_SW_UMAC_RING_IDX_MAX; j++)
+			htt_soc->pdevid_tt[i].umac_path[j].bp_start_tt = -1;
+		htt_soc->pdevid_tt[i].lmac_path =
+			qdf_mem_malloc(lmac_alloc_size);
+		if (!htt_soc->pdevid_tt[i].lmac_path) {
+			qdf_mem_free(htt_soc->pdevid_tt[i].umac_path);
 			break;
 		}
-		qdf_mem_set(htt_soc->pdevid_tt[i].lmac_ttt, alloc_size, -1);
+		for (j = 0; j < HTT_SW_LMAC_RING_IDX_MAX ; j++)
+			htt_soc->pdevid_tt[i].lmac_path[j].bp_start_tt = -1;
 	}
+
 	if (i != MAX_PDEV_CNT) {
 		for (j = 0; j < i; j++) {
-			qdf_mem_free(htt_soc->pdevid_tt[j].umac_ttt);
-			qdf_mem_free(htt_soc->pdevid_tt[j].lmac_ttt);
+			qdf_mem_free(htt_soc->pdevid_tt[j].umac_path);
+			qdf_mem_free(htt_soc->pdevid_tt[j].lmac_path);
 		}
 		qdf_mem_free(htt_soc);
 		return NULL;
@@ -2491,23 +2514,31 @@ static void dp_sawf_mpdu_stats_handler(struct htt_soc *soc,
  * Return: 1 for successfully saving timestamp in array
  *	and 0 for timestamp falling within 2 seconds after last one
  */
-static bool time_allow_print(unsigned long *htt_ring_tt, u_int8_t ring_id)
+static bool time_allow_print(struct bp_handler *htt_bp_handler,
+			     u_int8_t ring_id, u_int32_t th_time)
 {
 	unsigned long tstamp;
-	unsigned long delta;
+	struct bp_handler *path = &htt_bp_handler[ring_id];
 
 	tstamp = qdf_get_system_timestamp();
 
-	if (!htt_ring_tt)
+	if (!path)
 		return 0; //unable to print backpressure messages
 
-	if (htt_ring_tt[ring_id] == -1) {
-		htt_ring_tt[ring_id] = tstamp;
+	if (path->bp_start_tt == -1) {
+		path->bp_start_tt = tstamp;
+		path->bp_duration = 0;
+		path->bp_last_tt = tstamp;
+		path->bp_counter = 1;
 		return 1;
 	}
-	delta = tstamp - htt_ring_tt[ring_id];
-	if (delta >= 2000) {
-		htt_ring_tt[ring_id] = tstamp;
+
+	path->bp_duration = tstamp - path->bp_start_tt;
+	path->bp_last_tt = tstamp;
+	path->bp_counter++;
+
+	if (path->bp_duration >= th_time) {
+		path->bp_start_tt = -1;
 		return 1;
 	}
 
@@ -2517,12 +2548,18 @@ static bool time_allow_print(unsigned long *htt_ring_tt, u_int8_t ring_id)
 static void dp_htt_alert_print(enum htt_t2h_msg_type msg_type,
 			       struct dp_pdev *pdev, u_int8_t ring_id,
 			       u_int16_t hp_idx, u_int16_t tp_idx,
-			       u_int32_t bkp_time, char *ring_stype)
+			       u_int32_t bkp_time,
+			       struct bp_handler *htt_bp_handler,
+			       char *ring_stype)
 {
 	dp_alert("seq_num %u msg_type: %d pdev_id: %d ring_type: %s ",
 		 pdev->bkp_stats.seq_num, msg_type, pdev->pdev_id, ring_stype);
 	dp_alert("ring_id: %d hp_idx: %d tp_idx: %d bkpressure_time_ms: %d ",
 		 ring_id, hp_idx, tp_idx, bkp_time);
+	dp_alert("last_bp_event: %ld, total_bp_duration: %ld, bp_counter: %ld",
+		 htt_bp_handler[ring_id].bp_last_tt,
+		 htt_bp_handler[ring_id].bp_duration,
+		 htt_bp_handler[ring_id].bp_counter);
 }
 
 /**
@@ -2866,15 +2903,19 @@ static void dp_htt_bkp_event_alert(u_int32_t *msg_word, struct htt_soc *soc)
 	u_int16_t hp_idx;
 	u_int16_t tp_idx;
 	u_int32_t bkp_time;
+	u_int32_t th_time;
 	enum htt_t2h_msg_type msg_type;
 	struct dp_soc *dpsoc;
 	struct dp_pdev *pdev;
 	struct dp_htt_timestamp *radio_tt;
+	struct wlan_cfg_dp_soc_ctxt *soc_cfg_ctx;
+
 
 	if (!soc)
 		return;
 
 	dpsoc = (struct dp_soc *)soc->dp_soc;
+	soc_cfg_ctx = dpsoc->wlan_cfg_ctx;
 	msg_type = HTT_T2H_MSG_TYPE_GET(*msg_word);
 	ring_type = HTT_T2H_RX_BKPRESSURE_RING_TYPE_GET(*msg_word);
 	target_pdev_id = HTT_T2H_RX_BKPRESSURE_PDEV_ID_GET(*msg_word);
@@ -2885,6 +2926,7 @@ static void dp_htt_bkp_event_alert(u_int32_t *msg_word, struct htt_soc *soc)
 		return;
 	}
 
+	th_time = wlan_cfg_time_control_bp(soc_cfg_ctx);
 	pdev = (struct dp_pdev *)dpsoc->pdev_list[pdev_id];
 	ring_id = HTT_T2H_RX_BKPRESSURE_RINGID_GET(*msg_word);
 	hp_idx = HTT_T2H_RX_BKPRESSURE_HEAD_IDX_GET(*(msg_word + 1));
@@ -2894,20 +2936,21 @@ static void dp_htt_bkp_event_alert(u_int32_t *msg_word, struct htt_soc *soc)
 
 	switch (ring_type) {
 	case HTT_SW_RING_TYPE_UMAC:
-		if (!time_allow_print(radio_tt->umac_ttt, ring_id))
+		if (!time_allow_print(radio_tt->umac_path, ring_id, th_time))
 			return;
 		dp_htt_alert_print(msg_type, pdev, ring_id, hp_idx, tp_idx,
-				   bkp_time, "HTT_SW_RING_TYPE_UMAC");
+				   bkp_time, radio_tt->umac_path,
+				   "HTT_SW_RING_TYPE_UMAC");
 	break;
 	case HTT_SW_RING_TYPE_LMAC:
-		if (!time_allow_print(radio_tt->lmac_ttt, ring_id))
+		if (!time_allow_print(radio_tt->lmac_path, ring_id, th_time))
 			return;
 		dp_htt_alert_print(msg_type, pdev, ring_id, hp_idx, tp_idx,
-				   bkp_time, "HTT_SW_RING_TYPE_LMAC");
+				   bkp_time, radio_tt->lmac_path,
+				   "HTT_SW_RING_TYPE_LMAC");
 	break;
 	default:
-		dp_htt_alert_print(msg_type, pdev, ring_id, hp_idx, tp_idx,
-				   bkp_time, "UNKNOWN");
+		dp_alert("Invalid ring type: %d", ring_type);
 	break;
 	}
 
@@ -3834,8 +3877,8 @@ void htt_soc_detach(struct htt_soc *htt_hdl)
 	struct htt_soc *htt_handle = (struct htt_soc *)htt_hdl;
 
 	for (i = 0; i < MAX_PDEV_CNT; i++) {
-		qdf_mem_free(htt_handle->pdevid_tt[i].umac_ttt);
-		qdf_mem_free(htt_handle->pdevid_tt[i].lmac_ttt);
+		qdf_mem_free(htt_handle->pdevid_tt[i].umac_path);
+		qdf_mem_free(htt_handle->pdevid_tt[i].lmac_path);
 	}
 
 	HTT_TX_MUTEX_DESTROY(&htt_handle->htt_tx_mutex);
@@ -3903,13 +3946,6 @@ QDF_STATUS dp_h2t_ext_stats_msg_send(struct dp_pdev *pdev,
 		qdf_nbuf_free(msg);
 		return QDF_STATUS_E_FAILURE;
 	}
-
-	dp_htt_tx_stats_info("%pK: cookie <-> %d\n config_param_0 %u\n"
-			     "config_param_1 %u\n config_param_2 %u\n"
-			     "config_param_4 %u\n -------------",
-			     pdev->soc, cookie_val,
-			     config_param_0,
-			     config_param_1, config_param_2, config_param_3);
 
 	msg_word = (uint32_t *) qdf_nbuf_data(msg);
 
@@ -4944,3 +4980,107 @@ fail:
 	qdf_disable_work(&pdev->bkp_stats.work);
 	return QDF_STATUS_E_FAILURE;
 }
+
+#ifdef DP_UMAC_HW_RESET_SUPPORT
+QDF_STATUS dp_htt_umac_reset_send_setup_cmd(
+		struct dp_soc *soc,
+		const struct dp_htt_umac_reset_setup_cmd_params *setup_params)
+{
+	struct htt_soc *htt_handle = soc->htt_handle;
+	uint32_t len;
+	qdf_nbuf_t msg;
+	u_int32_t *msg_word;
+	QDF_STATUS status;
+	uint8_t *htt_logger_bufp;
+	struct dp_htt_htc_pkt *pkt;
+
+	len = HTT_MSG_BUF_SIZE(
+		HTT_H2T_UMAC_HANG_RECOVERY_PREREQUISITE_SETUP_BYTES);
+
+	msg = qdf_nbuf_alloc(soc->osdev,
+			     len,
+			     /* reserve room for the HTC header */
+			     HTC_HEADER_LEN + HTC_HDR_ALIGNMENT_PADDING,
+			     4,
+			     TRUE);
+	if (!msg)
+		return QDF_STATUS_E_NOMEM;
+
+	/*
+	 * Set the length of the message.
+	 * The contribution from the HTC_HDR_ALIGNMENT_PADDING is added
+	 * separately during the below call to qdf_nbuf_push_head.
+	 * The contribution from the HTC header is added separately inside HTC.
+	 */
+	if (!qdf_nbuf_put_tail(
+		msg, HTT_H2T_UMAC_HANG_RECOVERY_PREREQUISITE_SETUP_BYTES)) {
+		dp_htt_err("Failed to expand head");
+		qdf_nbuf_free(msg);
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	/* fill in the message contents */
+	msg_word = (uint32_t *)qdf_nbuf_data(msg);
+
+	/* Rewind beyond alignment pad to get to the HTC header reserved area */
+	qdf_nbuf_push_head(msg, HTC_HDR_ALIGNMENT_PADDING);
+	htt_logger_bufp = (uint8_t *)msg_word;
+
+	qdf_mem_zero(msg_word,
+		     HTT_H2T_UMAC_HANG_RECOVERY_PREREQUISITE_SETUP_BYTES);
+
+	HTT_H2T_MSG_TYPE_SET(
+		*msg_word,
+		HTT_H2T_MSG_TYPE_UMAC_HANG_RECOVERY_PREREQUISITE_SETUP);
+	HTT_H2T_UMAC_HANG_RECOVERY_PREREQUISITE_SETUP_T2H_MSG_METHOD_SET(
+		*msg_word, htt_umac_hang_recovery_msg_t2h_msi_and_h2t_polling);
+	HTT_H2T_UMAC_HANG_RECOVERY_PREREQUISITE_SETUP_H2T_MSG_METHOD_SET(
+		*msg_word, htt_umac_hang_recovery_msg_t2h_msi_and_h2t_polling);
+
+	msg_word++;
+	*msg_word = setup_params->msi_data;
+
+	msg_word++;
+	*msg_word = sizeof(htt_umac_hang_recovery_msg_shmem_t);
+
+	msg_word++;
+	*msg_word = setup_params->shmem_addr_low;
+
+	msg_word++;
+	*msg_word = setup_params->shmem_addr_high;
+
+	pkt = htt_htc_pkt_alloc(htt_handle);
+	if (!pkt) {
+		qdf_err("Fail to allocate dp_htt_htc_pkt buffer");
+		qdf_assert(0);
+		qdf_nbuf_free(msg);
+		return QDF_STATUS_E_NOMEM;
+	}
+
+	pkt->soc_ctxt = NULL; /* not used during send-done callback */
+
+	SET_HTC_PACKET_INFO_TX(&pkt->htc_pkt,
+			       dp_htt_h2t_send_complete_free_netbuf,
+			       qdf_nbuf_data(msg),
+			       qdf_nbuf_len(msg),
+			       htt_handle->htc_endpoint,
+			       /* tag for no FW response msg */
+			       HTC_TX_PACKET_TAG_RUNTIME_PUT);
+
+	SET_HTC_PACKET_NET_BUF_CONTEXT(&pkt->htc_pkt, msg);
+
+	status = DP_HTT_SEND_HTC_PKT(
+			htt_handle, pkt,
+			HTT_H2T_MSG_TYPE_UMAC_HANG_RECOVERY_PREREQUISITE_SETUP,
+			htt_logger_bufp);
+
+	if (QDF_IS_STATUS_ERROR(status)) {
+		qdf_nbuf_free(msg);
+		htt_htc_pkt_free(htt_handle, pkt);
+		return status;
+	}
+
+	dp_info("HTT_H2T_MSG_TYPE_UMAC_HANG_RECOVERY_PREREQUISITE_SETUP sent");
+	return status;
+}
+#endif

@@ -24,6 +24,32 @@
 #define DP_RX_MON_PACKET_OFFSET 8
 #define DP_RX_MON_RX_HDR_OFFSET 8
 #define DP_GET_NUM_QWORDS(num)	((num) >> 3)
+
+#define DP_RX_MON_TLV_HDR_MARKER 0xFEED
+#define DP_RX_MON_TLV_HDR_MARKER_LEN 2
+#define DP_RX_MON_TLV_HDR_LEN 3 /* TLV ID field sz + TLV len field sz */
+#define DP_RX_MON_TLV_TOTAL_LEN 2
+
+#define DP_RX_MON_TLV_PF_ID 1
+#define DP_RX_MON_TLV_PPDU_ID 2
+
+#define DP_RX_MON_TLV_MSDU_CNT 2
+#define DP_RX_MON_MAX_MSDU 16
+#define DP_RX_MON_MAX_TLVS 1
+#define DP_RX_MON_PF_TLV_LEN (((DP_RX_MON_PF_TAG_LEN_PER_FRAG)\
+			       * (DP_RX_MON_MAX_MSDU) * 2)\
+			       + (DP_RX_MON_TLV_MSDU_CNT))
+
+#define DP_RX_MON_PPDU_ID_LEN 4
+
+#define DP_RX_MON_INDIV_TLV_LEN ((DP_RX_MON_PF_TLV_LEN)\
+				 + (DP_RX_MON_PPDU_ID_LEN))
+#define DP_RX_MON_TLV_ROOM ((DP_RX_MON_INDIV_TLV_LEN)\
+			    + ((DP_RX_MON_TLV_HDR_LEN) * (DP_RX_MON_MAX_TLVS))\
+			    + (DP_RX_MON_TLV_HDR_MARKER_LEN)\
+			    + (DP_RX_MON_TLV_TOTAL_LEN))
+
+#define DP_RX_MON_WQ_THRESHOLD 128
 /*
  * dp_rx_mon_buffers_alloc() - allocate rx monitor buffers
  * @soc: DP soc handle
@@ -182,4 +208,39 @@ dp_rx_mon_handle_full_mon(struct dp_pdev *pdev,
  * Return: Void
  */
 void dp_rx_mon_drain_wq(struct dp_pdev *pdev);
+
+/**
+ * dp_mon_free_parent_nbuf() - Free parent SKB
+ *
+ * @mon_pdev: monitor pdev
+ * @nbuf: SKB to be freed
+ *
+ * @Return: void
+ */
+void
+dp_mon_free_parent_nbuf(struct dp_mon_pdev *mon_pdev,
+			qdf_nbuf_t nbuf);
+#if !defined(WLAN_SUPPORT_RX_PROTOCOL_TYPE_TAG) &&\
+	!defined(WLAN_SUPPORT_RX_FLOW_TAG)
+void
+dp_rx_mon_pf_tag_to_buf_headroom_2_0(void *nbuf,
+				     struct hal_rx_ppdu_info *ppdu_info,
+				     struct dp_pdev *pdev, struct dp_soc *soc)
+{
+}
+
+void dp_rx_mon_shift_pf_tag_in_headroom(qdf_nbuf_t nbuf, struct dp_soc *soc)
+{
+}
+#endif /* WLAN_SUPPORT_RX_PROTOCOL_TYPE_TAG */
+/**
+ * dp_mon_rx_print_advanced_stats_2_0 () - print advanced monitor statistics
+ *
+ * @soc: DP soc handle
+ * @pdev: DP pdev handle
+ *
+ * Return: void
+ */
+void dp_mon_rx_print_advanced_stats_2_0(struct dp_soc *soc,
+					struct dp_pdev *pdev);
 #endif /* _DP_RX_MON_2_0_H_ */

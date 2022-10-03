@@ -194,9 +194,10 @@ struct dp_rx_desc {
 	__dp_rx_add_to_free_desc_list(head, tail, new, __func__)
 
 #define dp_rx_buffers_replenish(soc, mac_id, rxdma_srng, rx_desc_pool, \
-				num_buffers, desc_list, tail) \
+				num_buffers, desc_list, tail, req_only) \
 	__dp_rx_buffers_replenish(soc, mac_id, rxdma_srng, rx_desc_pool, \
-				  num_buffers, desc_list, tail, __func__)
+				  num_buffers, desc_list, tail, req_only, \
+				  __func__)
 
 #ifdef WLAN_SUPPORT_RX_FISA
 /**
@@ -278,6 +279,64 @@ bool dp_rx_deliver_special_frame(struct dp_soc *soc, struct dp_txrx_peer *peer,
 	return false;
 }
 #endif
+
+#ifdef FEATURE_RX_LINKSPEED_ROAM_TRIGGER
+/**
+ * dp_rx_data_is_specific() - Used to exclude specific frames
+ *                            not practical for getting rx
+ *                            stats like rate, mcs, nss, etc.
+ *
+ * @hal-soc_hdl: soc handler
+ * @rx_tlv_hdr: rx tlv header
+ * @nbuf: RX skb pointer
+ *
+ * Return: true - a specific frame  not suitable
+ *                for getting rx stats from it.
+ *         false - a common frame suitable for
+ *                 getting rx stats from it.
+ */
+static inline
+bool dp_rx_data_is_specific(hal_soc_handle_t hal_soc_hdl,
+			    uint8_t *rx_tlv_hdr,
+			    qdf_nbuf_t nbuf)
+{
+	if (qdf_unlikely(qdf_nbuf_is_da_mcbc(nbuf)))
+		return true;
+
+	if (!hal_rx_tlv_first_mpdu_get(hal_soc_hdl, rx_tlv_hdr))
+		return true;
+
+	if (!hal_rx_msdu_end_first_msdu_get(hal_soc_hdl, rx_tlv_hdr))
+		return true;
+
+	/* ARP, EAPOL is neither IPV6 ETH nor IPV4 ETH from L3 level */
+	if (qdf_likely(hal_rx_tlv_l3_type_get(hal_soc_hdl, rx_tlv_hdr) ==
+	    QDF_NBUF_TRAC_IPV4_ETH_TYPE)) {
+		if (qdf_nbuf_is_ipv4_dhcp_pkt(nbuf))
+			return true;
+	} else if (qdf_likely(hal_rx_tlv_l3_type_get(hal_soc_hdl, rx_tlv_hdr) ==
+		   QDF_NBUF_TRAC_IPV6_ETH_TYPE)) {
+		if (qdf_nbuf_is_ipv6_dhcp_pkt(nbuf))
+			return true;
+	} else {
+		return true;
+	}
+	return false;
+}
+#else
+static inline
+bool dp_rx_data_is_specific(hal_soc_handle_t hal_soc_hdl,
+			    uint8_t *rx_tlv_hdr,
+			    qdf_nbuf_t nbuf)
+
+{
+	/*
+	 * default return is true to make sure that rx stats
+	 * will not be handled when this feature is disabled
+	 */
+	return true;
+}
+#endif /* FEATURE_RX_LINKSPEED_ROAM_TRIGGER */
 
 #ifndef QCA_HOST_MODE_WIFI_DISABLED
 #ifdef DP_RX_DISABLE_NDI_MDNS_FORWARDING
@@ -487,7 +546,29 @@ struct dp_rx_desc *dp_get_rx_desc_from_cookie(struct dp_soc *soc,
 	struct rx_desc_pool *rx_desc_pool;
 	union dp_rx_desc_list_elem_t *rx_desc_elem;
 
-	if (qdf_unlikely(pool_id >= MAX_RXDESC_POOLS))
+	if (qdf_unlikely(pool_id >= MAX_PDEV_CNT))
+		return NULL;
+
+	rx_desc_pool = &pool[pool_id];
+	rx_desc_elem = (union dp_rx_desc_list_elem_t *)
+		(rx_desc_pool->desc_pages.cacheable_pages[page_id] +
+		rx_desc_pool->elem_size * offset);
+
+	return &rx_desc_elem->rx_desc;
+}
+
+static inline
+struct dp_rx_desc *dp_get_rx_mon_status_desc_from_cookie(struct dp_soc *soc,
+							 struct rx_desc_pool *pool,
+							 uint32_t cookie)
+{
+	uint8_t pool_id = DP_RX_DESC_MULTI_PAGE_COOKIE_GET_POOL_ID(cookie);
+	uint16_t page_id = DP_RX_DESC_MULTI_PAGE_COOKIE_GET_PAGE_ID(cookie);
+	uint8_t offset = DP_RX_DESC_MULTI_PAGE_COOKIE_GET_OFFSET(cookie);
+	struct rx_desc_pool *rx_desc_pool;
+	union dp_rx_desc_list_elem_t *rx_desc_elem;
+
+	if (qdf_unlikely(pool_id >= NUM_RXDMA_RINGS_PER_PDEV))
 		return NULL;
 
 	rx_desc_pool = &pool[pool_id];
@@ -540,7 +621,9 @@ static inline
 struct dp_rx_desc *dp_rx_cookie_2_va_mon_status(struct dp_soc *soc,
 						uint32_t cookie)
 {
-	return dp_get_rx_desc_from_cookie(soc, &soc->rx_desc_status[0], cookie);
+	return dp_get_rx_mon_status_desc_from_cookie(soc,
+						     &soc->rx_desc_status[0],
+						     cookie);
 }
 #else
 
@@ -1286,6 +1369,14 @@ dp_rx_wds_srcport_learn(struct dp_soc *soc,
 			struct hal_rx_msdu_metadata msdu_metadata)
 {
 }
+
+static inline void
+dp_rx_ipa_wds_srcport_learn(struct dp_soc *soc,
+			    struct dp_peer *ta_peer, qdf_nbuf_t nbuf,
+			    struct hal_rx_msdu_metadata msdu_end_info,
+			    bool ad4_valid, bool chfrag_start)
+{
+}
 #endif
 
 /*
@@ -1416,6 +1507,7 @@ dp_rx_update_flow_tag(struct dp_soc *soc, struct dp_vdev *vdev,
 }
 #endif /* WLAN_SUPPORT_RX_FLOW_TAG */
 
+#define CRITICAL_BUFFER_THRESHOLD	64
 /*
  * dp_rx_buffers_replenish() - replenish rxdma ring with rx nbufs
  *			       called during dp rx initialization
@@ -1430,6 +1522,7 @@ dp_rx_update_flow_tag(struct dp_soc *soc, struct dp_vdev *vdev,
  *	       or NULL during dp rx initialization or out of buffer
  *	       interrupt.
  * @tail: tail of descs list
+ * @req_only: If true don't replenish more than req buffers
  * @func_name: name of the caller function
  * Return: return success or failure
  */
@@ -1439,6 +1532,7 @@ QDF_STATUS __dp_rx_buffers_replenish(struct dp_soc *dp_soc, uint32_t mac_id,
 				 uint32_t num_req_buffers,
 				 union dp_rx_desc_list_elem_t **desc_list,
 				 union dp_rx_desc_list_elem_t **tail,
+				 bool req_only,
 				 const char *func_name);
 /*
  * __dp_rx_buffers_no_map_replenish() - replenish rxdma ring with rx nbufs
@@ -2055,6 +2149,7 @@ void dp_rx_update_stats(struct dp_soc *soc, qdf_nbuf_t nbuf)
  *
  * Return: void
  */
+#if defined(MAX_PDEV_CNT) && (MAX_PDEV_CNT == 1)
 static inline
 void dp_rx_cksum_offload(struct dp_pdev *pdev,
 			 qdf_nbuf_t nbuf,
@@ -2077,7 +2172,14 @@ void dp_rx_cksum_offload(struct dp_pdev *pdev,
 		DP_STATS_INCC(pdev, err.tcp_udp_csum_err, 1, tcp_udp_csum_er);
 	}
 }
-
+#else
+static inline
+void dp_rx_cksum_offload(struct dp_pdev *pdev,
+			 qdf_nbuf_t nbuf,
+			 uint8_t *rx_tlv_hdr)
+{
+}
+#endif
 #endif /* QCA_HOST_MODE_WIFI_DISABLED */
 
 #ifdef WLAN_FEATURE_RX_SOFTIRQ_TIME_LIMIT
@@ -2329,7 +2431,7 @@ void dp_rx_nbuf_unmap(struct dp_soc *soc,
 	rx_desc_pool = &soc->rx_desc_buf[rx_desc->pool_id];
 	nbuf = rx_desc->nbuf;
 
-	qdf_nbuf_dma_inv_range((void *)nbuf->data,
+	qdf_nbuf_dma_inv_range_no_dsb((void *)nbuf->data,
 			       (void *)(nbuf->data + rx_desc_pool->buf_size));
 }
 
@@ -2400,7 +2502,7 @@ void dp_rx_buffers_replenish_simple(struct dp_soc *soc, uint32_t mac_id,
 				    union dp_rx_desc_list_elem_t **tail)
 {
 	dp_rx_buffers_replenish(soc, mac_id, rxdma_srng, rx_desc_pool,
-				num_req_buffers, desc_list, tail);
+				num_req_buffers, desc_list, tail, false);
 }
 
 static inline
@@ -2412,7 +2514,7 @@ void dp_rx_buffers_lt_replenish_simple(struct dp_soc *soc, uint32_t mac_id,
 				       union dp_rx_desc_list_elem_t **tail)
 {
 	dp_rx_buffers_replenish(soc, mac_id, rxdma_srng, rx_desc_pool,
-				num_req_buffers, desc_list, tail);
+				num_req_buffers, desc_list, tail, false);
 }
 
 static inline
@@ -2442,7 +2544,7 @@ void dp_rx_nbuf_unmap(struct dp_soc *soc,
 	dp_ipa_reo_ctx_buf_mapping_lock(soc, reo_ring_num);
 	dp_ipa_handle_rx_buf_smmu_mapping(soc, rx_desc->nbuf,
 					  rx_desc_pool->buf_size,
-					  false);
+					  false, __func__, __LINE__);
 
 	qdf_nbuf_unmap_nbytes_single(soc->osdev, rx_desc->nbuf,
 				     QDF_DMA_FROM_DEVICE,
@@ -2457,7 +2559,7 @@ void dp_rx_nbuf_unmap_pool(struct dp_soc *soc,
 			   qdf_nbuf_t nbuf)
 {
 	dp_ipa_handle_rx_buf_smmu_mapping(soc, nbuf, rx_desc_pool->buf_size,
-					  false);
+					  false, __func__, __LINE__);
 	qdf_nbuf_unmap_nbytes_single(soc->osdev, nbuf, QDF_DMA_FROM_DEVICE,
 				     rx_desc_pool->buf_size);
 }
@@ -2485,6 +2587,27 @@ void dp_rx_nbuf_free(qdf_nbuf_t nbuf)
 {
 	qdf_nbuf_free(nbuf);
 }
+#endif
+
+#ifdef DP_UMAC_HW_RESET_SUPPORT
+/*
+ * dp_rx_desc_reuse() - Reuse the rx descriptors to fill the rx buf ring
+ *
+ * @soc: core txrx main context
+ * @nbuf_list: nbuf list for delayed free
+ *
+ * Return: void
+ */
+void dp_rx_desc_reuse(struct dp_soc *soc, qdf_nbuf_t *nbuf_list);
+
+/*
+ * dp_rx_desc_delayed_free() - Delayed free of the rx descs
+ *
+ * @soc: core txrx main context
+ *
+ * Return: void
+ */
+void dp_rx_desc_delayed_free(struct dp_soc *soc);
 #endif
 
 /**
@@ -2552,4 +2675,98 @@ dp_peer_rx_reorder_queue_setup(struct dp_soc *soc, struct dp_peer *peer,
 							    peer, tid,
 							    ba_window_size);
 }
+
+static inline
+void dp_rx_nbuf_list_deliver(struct dp_soc *soc,
+			     struct dp_vdev *vdev,
+			     struct dp_txrx_peer *txrx_peer,
+			     uint16_t peer_id,
+			     uint8_t pkt_capture_offload,
+			     qdf_nbuf_t deliver_list_head,
+			     qdf_nbuf_t deliver_list_tail)
+{
+	qdf_nbuf_t nbuf, next;
+
+	if (qdf_likely(deliver_list_head)) {
+		if (qdf_likely(txrx_peer)) {
+			dp_rx_deliver_to_pkt_capture(soc, vdev->pdev, peer_id,
+						     pkt_capture_offload,
+						     deliver_list_head);
+			if (!pkt_capture_offload)
+				dp_rx_deliver_to_stack(soc, vdev, txrx_peer,
+						       deliver_list_head,
+						       deliver_list_tail);
+		} else {
+			nbuf = deliver_list_head;
+			while (nbuf) {
+				next = nbuf->next;
+				nbuf->next = NULL;
+				dp_rx_deliver_to_stack_no_peer(soc, nbuf);
+				nbuf = next;
+			}
+		}
+	}
+}
+
+#ifdef DP_TX_RX_TPUT_SIMULATE
+/*
+ * Change this macro value to simulate different RX T-put,
+ * if OTA is 100 Mbps, to simulate 200 Mbps, then multiplication factor
+ * is 2, set macro value as 1 (multiplication factor - 1).
+ */
+#define DP_RX_PKTS_DUPLICATE_CNT 0
+static inline
+void dp_rx_nbuf_list_dup_deliver(struct dp_soc *soc,
+				 struct dp_vdev *vdev,
+				 struct dp_txrx_peer *txrx_peer,
+				 uint16_t peer_id,
+				 uint8_t pkt_capture_offload,
+				 qdf_nbuf_t ori_list_head,
+				 qdf_nbuf_t ori_list_tail)
+{
+	qdf_nbuf_t new_skb = NULL;
+	qdf_nbuf_t new_list_head = NULL;
+	qdf_nbuf_t new_list_tail = NULL;
+	qdf_nbuf_t nbuf = NULL;
+	int i;
+
+	for (i = 0; i < DP_RX_PKTS_DUPLICATE_CNT; i++) {
+		nbuf = ori_list_head;
+		new_list_head = NULL;
+		new_list_tail = NULL;
+
+		while (nbuf) {
+			new_skb = qdf_nbuf_copy(nbuf);
+			if (qdf_likely(new_skb))
+				DP_RX_LIST_APPEND(new_list_head,
+						  new_list_tail,
+						  new_skb);
+			else
+				dp_err("copy skb failed");
+
+			nbuf = qdf_nbuf_next(nbuf);
+		}
+
+		/* deliver the copied nbuf list */
+		dp_rx_nbuf_list_deliver(soc, vdev, txrx_peer, peer_id,
+					pkt_capture_offload,
+					new_list_head,
+					new_list_tail);
+	}
+
+	/* deliver the original skb_list */
+	dp_rx_nbuf_list_deliver(soc, vdev, txrx_peer, peer_id,
+				pkt_capture_offload,
+				ori_list_head,
+				ori_list_tail);
+}
+
+#define DP_RX_DELIVER_TO_STACK dp_rx_nbuf_list_dup_deliver
+
+#else /* !DP_TX_RX_TPUT_SIMULATE */
+
+#define DP_RX_DELIVER_TO_STACK dp_rx_nbuf_list_deliver
+
+#endif /* DP_TX_RX_TPUT_SIMULATE */
+
 #endif /* _DP_RX_H */

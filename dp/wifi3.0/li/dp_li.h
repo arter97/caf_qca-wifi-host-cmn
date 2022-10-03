@@ -20,10 +20,11 @@
 #define __DP_LI_H
 
 #include <dp_types.h>
+#ifdef WIFI_MONITOR_SUPPORT
 #include <dp_mon.h>
+#endif
 #include <hal_li_tx.h>
 #include <hal_li_rx.h>
-#include <qdf_pkt_add_timestamp.h>
 
 /* WBM2SW ring id for rx release */
 #define WBM2SW_REL_ERR_RING_NUM 3
@@ -61,22 +62,6 @@ struct dp_peer_li {
 };
 
 /**
- * struct dp_mon_soc_li - Extended DP mon soc for LI targets
- * @mon_soc: dp_mon_soc structure
- */
-struct dp_mon_soc_li {
-	struct dp_mon_soc mon_soc;
-};
-
-/**
- * struct dp_mon_pdev_li - Extended DP mon pdev for LI targets
- * @mon_pdev: dp_mon_pdev structure
- */
-struct dp_mon_pdev_li {
-	struct dp_mon_pdev mon_pdev;
-};
-
-/**
  * dp_get_soc_context_size_LI() - get context size for dp_soc_li
  *
  * Return: value in bytes for LI specific soc structure
@@ -99,44 +84,4 @@ void dp_initialize_arch_ops_li(struct dp_arch_ops *arch_ops);
  */
 
 qdf_size_t dp_get_context_size_li(enum dp_context_type context_type);
-
-/**
- * dp_mon_get_context_size_li() - get LI specific size for mon pdev/soc
- * @arch_ops: arch ops pointer
- *
- * Return: size in bytes for the context_type
- */
-
-qdf_size_t dp_mon_get_context_size_li(enum dp_context_type context_type);
-
-#ifdef CONFIG_DP_PKT_ADD_TIMESTAMP
-/**
- * dp_pkt_add_timestamp() - add timestamp in data payload
- *
- * @vdev: dp vdev
- * @index: index to decide offset in payload
- * @time: timestamp to add in data payload
- * @nbuf: network buffer
- *
- * Return: none
- */
-void dp_pkt_add_timestamp(struct dp_vdev *vdev,
-			  enum qdf_pkt_timestamp_index index, uint64_t time,
-			  qdf_nbuf_t nbuf);
-/**
- * dp_pkt_get_timestamp() - get current system time
- *
- * @time: return current system time
- *
- * Return: none
- */
-void dp_pkt_get_timestamp(uint64_t *time);
-#else
-#define dp_pkt_add_timestamp(vdev, index, time, nbuf)
-
-static inline
-void dp_pkt_get_timestamp(uint64_t *time)
-{
-}
-#endif
 #endif

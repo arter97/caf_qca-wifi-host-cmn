@@ -122,13 +122,11 @@ fail:
 void dp_rx_mon_hdr_length_set(uint32_t *msg_word,
 			      struct htt_rx_ring_tlv_filter *tlv_filter)
 {
-#ifdef FW_SUPPORT_NOT_YET
 	if (!msg_word || !tlv_filter)
 		return;
 
 	HTT_RX_RING_SELECTION_CFG_RX_HDR_LEN_SET(*msg_word,
 						 tlv_filter->rx_hdr_length);
-#endif
 }
 
 void dp_rx_mon_packet_length_set(uint32_t *msg_word,
@@ -205,6 +203,182 @@ dp_rx_mon_word_mask_subscribe(uint32_t *msg_word,
 		HTT_RX_RING_SELECTION_CFG_RX_PKT_TLV_OFFSET_SET(*msg_word,
 								tlv_filter->rx_pkt_tlv_offset);
 	}
+}
+
+void
+dp_rx_mon_enable_fpmo(uint32_t *msg_word,
+		      struct htt_rx_ring_tlv_filter *tlv_filter)
+{
+#ifdef FW_SUPPORT_NOT_YET
+	if (!msg_word || !tlv_filter)
+		return;
+
+	if (tlv_filter->enable_fpmo) {
+		/* TYPE: MGMT */
+		htt_rx_ring_pkt_enable_subtype_set(*msg_word, FLAG0,
+			FPMO, MGMT, 0000,
+			(tlv_filter->fpmo_mgmt_filter &
+			FILTER_MGMT_ASSOC_REQ) ? 1 : 0);
+		htt_rx_ring_pkt_enable_subtype_set(*msg_word, FLAG0,
+			FPMO, MGMT, 0001,
+			(tlv_filter->fpmo_mgmt_filter &
+			FILTER_MGMT_ASSOC_RES) ? 1 : 0);
+		htt_rx_ring_pkt_enable_subtype_set(*msg_word, FLAG0,
+			FPMO, MGMT, 0010,
+			(tlv_filter->fpmo_mgmt_filter &
+			FILTER_MGMT_REASSOC_REQ) ? 1 : 0);
+		htt_rx_ring_pkt_enable_subtype_set(*msg_word, FLAG0,
+			FPMO, MGMT, 0011,
+			(tlv_filter->fpmo_mgmt_filter &
+			FILTER_MGMT_REASSOC_RES) ? 1 : 0);
+		htt_rx_ring_pkt_enable_subtype_set(*msg_word, FLAG0,
+			FPMO, MGMT, 0100,
+			(tlv_filter->fpmo_mgmt_filter &
+			FILTER_MGMT_PROBE_REQ) ? 1 : 0);
+		htt_rx_ring_pkt_enable_subtype_set(*msg_word, FLAG0,
+			FPMO, MGMT, 0101,
+			(tlv_filter->fpmo_mgmt_filter &
+			FILTER_MGMT_PROBE_RES) ? 1 : 0);
+		htt_rx_ring_pkt_enable_subtype_set(*msg_word, FLAG0,
+			FPMO, MGMT, 0110,
+			(tlv_filter->fpmo_mgmt_filter &
+			FILTER_MGMT_TIM_ADVT) ? 1 : 0);
+		/* reserved */
+		htt_rx_ring_pkt_enable_subtype_set(*msg_word, FLAG0,
+			FPMO, MGMT, 0111,
+			(tlv_filter->fpmo_mgmt_filter &
+			FILTER_MGMT_RESERVED_7) ? 1 : 0);
+		htt_rx_ring_pkt_enable_subtype_set(*msg_word, FLAG0,
+			FPMO, MGMT, 1000,
+			(tlv_filter->fpmo_mgmt_filter &
+			FILTER_MGMT_BEACON) ? 1 : 0);
+		htt_rx_ring_pkt_enable_subtype_set(*msg_word, FLAG0,
+			FPMO, MGMT, 1001,
+			(tlv_filter->fpmo_mgmt_filter &
+			FILTER_MGMT_ATIM) ? 1 : 0);
+		htt_rx_ring_pkt_enable_subtype_set(*msg_word, FLAG0,
+			FPMO, MGMT, 1010,
+			(tlv_filter->fpmo_mgmt_filter &
+			FILTER_MGMT_DISASSOC) ? 1 : 0);
+		htt_rx_ring_pkt_enable_subtype_set(*msg_word, FLAG0,
+			FPMO, MGMT, 1011,
+			(tlv_filter->fpmo_mgmt_filter &
+			FILTER_MGMT_AUTH) ? 1 : 0);
+		htt_rx_ring_pkt_enable_subtype_set(*msg_word, FLAG0,
+			FPMO, MGMT, 1100,
+			(tlv_filter->fpmo_mgmt_filter &
+			FILTER_MGMT_DEAUTH) ? 1 : 0);
+		htt_rx_ring_pkt_enable_subtype_set(*msg_word, FLAG0,
+			FPMO, MGMT, 1101,
+			(tlv_filter->fpmo_mgmt_filter &
+			FILTER_MGMT_ACTION) ? 1 : 0);
+		htt_rx_ring_pkt_enable_subtype_set(*msg_word, FLAG0,
+			FPMO, MGMT, 1110,
+			(tlv_filter->fpmo_mgmt_filter &
+			FILTER_MGMT_ACT_NO_ACK) ? 1 : 0);
+		/* reserved*/
+		htt_rx_ring_pkt_enable_subtype_set(*msg_word, FLAG0,
+			FPMO, MGMT, 1111,
+			(tlv_filter->fpmo_mgmt_filter &
+			FILTER_MGMT_RESERVED_15) ? 1 : 0);
+
+		/* TYPE: CTRL */
+		/* reserved */
+		htt_rx_ring_pkt_enable_subtype_set(*msg_word, FLAG0,
+			FPMO, CTRL, 0000,
+			(tlv_filter->fpmo_ctrl_filter &
+			FILTER_CTRL_RESERVED_1) ? 1 : 0);
+		/* reserved */
+		htt_rx_ring_pkt_enable_subtype_set(*msg_word, FLAG0,
+			FPMO, CTRL, 0001,
+			(tlv_filter->fpmo_ctrl_filter &
+			FILTER_CTRL_RESERVED_2) ? 1 : 0);
+		htt_rx_ring_pkt_enable_subtype_set(*msg_word, FLAG0,
+			FPMO, CTRL, 0010,
+			(tlv_filter->fpmo_ctrl_filter &
+			FILTER_CTRL_TRIGGER) ? 1 : 0);
+		/* reserved */
+		htt_rx_ring_pkt_enable_subtype_set(*msg_word, FLAG0,
+			FPMO, CTRL, 0011,
+			(tlv_filter->fpmo_ctrl_filter &
+			FILTER_CTRL_RESERVED_4) ? 1 : 0);
+		htt_rx_ring_pkt_enable_subtype_set(*msg_word, FLAG0,
+			FPMO, CTRL, 0100,
+			(tlv_filter->fpmo_ctrl_filter &
+			FILTER_CTRL_BF_REP_POLL) ? 1 : 0);
+		htt_rx_ring_pkt_enable_subtype_set(*msg_word, FLAG0,
+			FPMO, CTRL, 0101,
+			(tlv_filter->fpmo_ctrl_filter &
+			FILTER_CTRL_VHT_NDP) ? 1 : 0);
+		htt_rx_ring_pkt_enable_subtype_set(*msg_word, FLAG0,
+			FPMO, CTRL, 0110,
+			(tlv_filter->fpmo_ctrl_filter &
+			FILTER_CTRL_FRAME_EXT) ? 1 : 0);
+		htt_rx_ring_pkt_enable_subtype_set(*msg_word, FLAG0,
+			FPMO, CTRL, 0111,
+			(tlv_filter->fpmo_ctrl_filter &
+			FILTER_CTRL_CTRLWRAP) ? 1 : 0);
+		htt_rx_ring_pkt_enable_subtype_set(*msg_word, FLAG0,
+			FPMO, CTRL, 1000,
+			(tlv_filter->fpmo_ctrl_filter &
+			FILTER_CTRL_BA_REQ) ? 1 : 0);
+		htt_rx_ring_pkt_enable_subtype_set(*msg_word, FLAG0,
+			FPMO, CTRL, 1001,
+			(tlv_filter->fpmo_ctrl_filter &
+			FILTER_CTRL_BA) ? 1 : 0);
+		htt_rx_ring_pkt_enable_subtype_set(*msg_word, FLAG0,
+			FPMO, CTRL, 1010,
+			(tlv_filter->fpmo_ctrl_filter &
+			FILTER_CTRL_PSPOLL) ? 1 : 0);
+		htt_rx_ring_pkt_enable_subtype_set(*msg_word, FLAG0,
+			FPMO, CTRL, 1011,
+			(tlv_filter->fpmo_ctrl_filter &
+			FILTER_CTRL_RTS) ? 1 : 0);
+		htt_rx_ring_pkt_enable_subtype_set(*msg_word, FLAG0,
+			FPMO, CTRL, 1100,
+			(tlv_filter->fpmo_ctrl_filter &
+			FILTER_CTRL_CTS) ? 1 : 0);
+		htt_rx_ring_pkt_enable_subtype_set(*msg_word, FLAG0,
+			FPMO, CTRL, 1101,
+			(tlv_filter->fpmo_ctrl_filter &
+			FILTER_CTRL_ACK) ? 1 : 0);
+		htt_rx_ring_pkt_enable_subtype_set(*msg_word, FLAG0,
+			FPMO, CTRL, 1110,
+			(tlv_filter->fpmo_ctrl_filter &
+			FILTER_CTRL_CFEND) ? 1 : 0);
+		htt_rx_ring_pkt_enable_subtype_set(*msg_word, FLAG0,
+			FPMO, CTRL, 1111,
+			(tlv_filter->fpmo_ctrl_filter &
+			FILTER_CTRL_CFEND_CFACK) ? 1 : 0);
+
+		/* word 18 */
+		msg_word++;
+		*msg_word = 0;
+
+		/* TYPE: DATA */
+		htt_rx_ring_pkt_enable_subtype_set(*msg_word, FLAG1,
+			FPMO, DATA, MCAST,
+			(tlv_filter->fpmo_data_filter &
+			FILTER_DATA_MCAST) ? 1 : 0);
+		htt_rx_ring_pkt_enable_subtype_set(*msg_word, FLAG1,
+			FPMO, DATA, UCAST,
+			(tlv_filter->fpmo_data_filter &
+			FILTER_DATA_UCAST) ? 1 : 0);
+		htt_rx_ring_pkt_enable_subtype_set(*msg_word, FLAG1,
+			FPMO, DATA, NULL,
+			(tlv_filter->fpmo_data_filter &
+			FILTER_DATA_NULL) ? 1 : 0);
+
+	} else {
+		/* clear word 18 if fpmo is disabled
+		 * word 17 is already cleared by caller
+		 */
+
+		/* word 18 */
+		msg_word++;
+		*msg_word = 0;
+	}
+#endif
 }
 
 static void
@@ -410,25 +584,25 @@ htt_tx_tlv_filter_mask_set_in1(uint32_t *msg_word,
 							 COEX_TX_STATUS,
 							 tlv->coex_tx_status);
 
-	if (tlv->recevied_response_info)
+	if (tlv->received_response_info)
 		htt_tx_monitor_tlv_filter_in1_enable_set(*msg_word,
 							 RECEIVED_RESPONSE_INFO,
-							 tlv->recevied_response_info);
+							 tlv->received_response_info);
 
-	if (tlv->recevied_response_info_p2)
+	if (tlv->received_response_info_p2)
 		htt_tx_monitor_tlv_filter_in1_enable_set(*msg_word,
 							 RECEIVED_RESPONSE_INFO_PART2,
-							 tlv->recevied_response_info_p2);
+							 tlv->received_response_info_p2);
 
 	if (tlv->ofdma_trigger_details)
 		htt_tx_monitor_tlv_filter_in1_enable_set(*msg_word,
 							 OFDMA_TRIGGER_DETAILS,
 							 tlv->ofdma_trigger_details);
 
-	if (tlv->recevied_trigger_info)
+	if (tlv->received_trigger_info)
 		htt_tx_monitor_tlv_filter_in1_enable_set(*msg_word,
 							 RECEIVED_TRIGGER_INFO,
-							 tlv->recevied_trigger_info);
+							 tlv->received_trigger_info);
 
 	if (tlv->pdg_tx_request)
 		htt_tx_monitor_tlv_filter_in1_enable_set(*msg_word,
@@ -1037,9 +1211,12 @@ int htt_h2t_tx_ring_cfg(struct htt_soc *htt_soc, int pdev_id,
 				 DATA,
 				 htt_tlv_filter->data_mpdu_log);
 
-	HTT_TX_MONITOR_CFG_DMA_MPDU_MGMT_SET(*msg_word, 1);
-	HTT_TX_MONITOR_CFG_DMA_MPDU_CTRL_SET(*msg_word, 1);
-	HTT_TX_MONITOR_CFG_DMA_MPDU_DATA_SET(*msg_word, 1);
+	HTT_TX_MONITOR_CFG_DMA_MPDU_MGMT_SET(*msg_word,
+					     htt_tlv_filter->mgmt_mpdu_log);
+	HTT_TX_MONITOR_CFG_DMA_MPDU_CTRL_SET(*msg_word,
+					     htt_tlv_filter->ctrl_mpdu_log);
+	HTT_TX_MONITOR_CFG_DMA_MPDU_DATA_SET(*msg_word,
+					     htt_tlv_filter->data_mpdu_log);
 
 	pkt = htt_htc_pkt_alloc(soc);
 	if (!pkt)
@@ -1143,26 +1320,6 @@ dp_mon_filter_reset_undecoded_metadata_capture_2_0(struct dp_pdev *pdev)
 {
 }
 #endif
-
-#ifdef QCA_MCOPY_SUPPORT
-void dp_mon_filter_setup_mcopy_mode_2_0(struct dp_pdev *pdev)
-{
-}
-
-void dp_mon_filter_reset_mcopy_mode_2_0(struct dp_pdev *pdev)
-{
-}
-#endif
-
-#ifdef WLAN_RX_PKT_CAPTURE_ENH
-void dp_mon_filter_setup_rx_enh_capture_2_0(struct dp_pdev *pdev)
-{
-}
-
-void dp_mon_filter_reset_rx_enh_capture_2_0(struct dp_pdev *pdev)
-{
-}
-#endif /* WLAN_RX_PKT_CAPTURE_ENH */
 
 void dp_tx_mon_filter_set_downstream_tlvs(struct htt_tx_ring_tlv_filter *filter)
 {
@@ -1347,6 +1504,7 @@ static void dp_mon_filter_set_mon_2_0(struct dp_mon_pdev *mon_pdev,
 	filter->tlv_filter.mo_ctrl_filter = mon_pdev->mo_ctrl_filter;
 	filter->tlv_filter.mo_data_filter = mon_pdev->mo_data_filter;
 	filter->tlv_filter.enable_md = 0;
+	filter->tlv_filter.enable_fpmo = 0;
 	filter->tlv_filter.offset_valid = false;
 	filter->tlv_filter.mgmt_dma_length = DEFAULT_DMA_LENGTH;
 	filter->tlv_filter.data_dma_length = DEFAULT_DMA_LENGTH;
@@ -1474,6 +1632,7 @@ static void dp_rx_mon_filter_show_filter(struct dp_mon_filter_be *filter)
 	DP_MON_FILTER_PRINT("enable_fp: %d", rx_tlv_filter->enable_fp);
 	DP_MON_FILTER_PRINT("enable_md: %d", rx_tlv_filter->enable_md);
 	DP_MON_FILTER_PRINT("enable_mo: %d", rx_tlv_filter->enable_mo);
+	DP_MON_FILTER_PRINT("enable_fpmo: %d", rx_tlv_filter->enable_fpmo);
 	DP_MON_FILTER_PRINT("fp_mgmt_filter: 0x%x",
 			    rx_tlv_filter->fp_mgmt_filter);
 	DP_MON_FILTER_PRINT("mo_mgmt_filter: 0x%x",
@@ -1492,6 +1651,12 @@ static void dp_rx_mon_filter_show_filter(struct dp_mon_filter_be *filter)
 			    rx_tlv_filter->md_mgmt_filter);
 	DP_MON_FILTER_PRINT("md_ctrl_filter: 0x%x",
 			    rx_tlv_filter->md_ctrl_filter);
+	DP_MON_FILTER_PRINT("fpmo_data_filter: 0x%x",
+			    rx_tlv_filter->fpmo_data_filter);
+	DP_MON_FILTER_PRINT("fpmo_mgmt_filter: 0x%x",
+			    rx_tlv_filter->fpmo_mgmt_filter);
+	DP_MON_FILTER_PRINT("fpmo_ctrl_filter: 0x%x",
+			    rx_tlv_filter->fpmo_ctrl_filter);
 	DP_MON_FILTER_PRINT("mgmt_dma_length: %d",
 			    rx_tlv_filter->mgmt_dma_length);
 	DP_MON_FILTER_PRINT("ctrl_dma_length: %d",
@@ -1619,14 +1784,14 @@ static void dp_tx_mon_filter_show_filter(struct dp_mon_filter_be *filter)
 			    tlv_filter->utlvs.rx_frame_1k_bitmap_ack);
 	DP_MON_FILTER_PRINT("coex_tx_status: %d",
 			    tlv_filter->utlvs.coex_tx_status);
-	DP_MON_FILTER_PRINT("recevied_response_info: %d",
-			    tlv_filter->utlvs.recevied_response_info);
-	DP_MON_FILTER_PRINT("recevied_response_info_p2: %d",
-			    tlv_filter->utlvs.recevied_response_info_p2);
+	DP_MON_FILTER_PRINT("received_response_info: %d",
+			    tlv_filter->utlvs.received_response_info);
+	DP_MON_FILTER_PRINT("received_response_info_p2: %d",
+			    tlv_filter->utlvs.received_response_info_p2);
 	DP_MON_FILTER_PRINT("ofdma_trigger_details: %d",
 			    tlv_filter->utlvs.ofdma_trigger_details);
-	DP_MON_FILTER_PRINT("recevied_trigger_info: %d",
-			    tlv_filter->utlvs.recevied_trigger_info);
+	DP_MON_FILTER_PRINT("received_trigger_info: %d",
+			    tlv_filter->utlvs.received_trigger_info);
 	DP_MON_FILTER_PRINT("pdg_tx_request: %d",
 			    tlv_filter->utlvs.pdg_tx_request);
 	DP_MON_FILTER_PRINT("pdg_response: %d",
@@ -2074,8 +2239,8 @@ void dp_mon_filter_setup_pktlog_hybrid_2_0(struct dp_pdev *pdev)
 	tlv_filter->utlvs.tx_fes_status_user_response = 1;
 	tlv_filter->utlvs.tx_fes_status_end = 1;
 	tlv_filter->utlvs.response_start_status = 1;
-	tlv_filter->utlvs.recevied_response_info = 1;
-	tlv_filter->utlvs.recevied_response_info_p2 = 1;
+	tlv_filter->utlvs.received_response_info = 1;
+	tlv_filter->utlvs.received_response_info_p2 = 1;
 	tlv_filter->utlvs.response_end_status = 1;
 
 	dp_mon_filter_show_tx_filter_be(mode, &filter);
@@ -2326,6 +2491,21 @@ dp_rx_mon_filter_h2t_setup(struct dp_soc *soc, struct dp_pdev *pdev,
 			tlv_filter->rx_pkt_tlv_offset =
 				src_tlv_filter->rx_pkt_tlv_offset;
 
+		/*
+		 * set fpmo filter settings
+		 */
+		if (src_tlv_filter->enable_fpmo &&
+		    !tlv_filter->enable_fpmo) {
+			tlv_filter->enable_fpmo =
+				src_tlv_filter->enable_fpmo;
+			tlv_filter->fpmo_data_filter =
+				src_tlv_filter->fpmo_data_filter;
+			tlv_filter->fpmo_mgmt_filter =
+				src_tlv_filter->fpmo_mgmt_filter;
+			tlv_filter->fpmo_ctrl_filter =
+				src_tlv_filter->fpmo_ctrl_filter;
+		}
+
 		dp_mon_filter_show_rx_filter_be(current_mode, mon_filter);
 	}
 }
@@ -2414,14 +2594,14 @@ void dp_tx_mon_upstream_tlv_set(struct htt_tx_ring_tlv_filter *dst_filter,
 		src_filter->utlvs.rx_frame_1k_bitmap_ack;
 	dst_filter->utlvs.coex_tx_status |=
 		src_filter->utlvs.coex_tx_status;
-	dst_filter->utlvs.recevied_response_info |=
-		src_filter->utlvs.recevied_response_info;
-	dst_filter->utlvs.recevied_response_info_p2 |=
-		src_filter->utlvs.recevied_response_info_p2;
+	dst_filter->utlvs.received_response_info |=
+		src_filter->utlvs.received_response_info;
+	dst_filter->utlvs.received_response_info_p2 |=
+		src_filter->utlvs.received_response_info_p2;
 	dst_filter->utlvs.ofdma_trigger_details |=
 		src_filter->utlvs.ofdma_trigger_details;
-	dst_filter->utlvs.recevied_trigger_info |=
-		src_filter->utlvs.recevied_trigger_info;
+	dst_filter->utlvs.received_trigger_info |=
+		src_filter->utlvs.received_trigger_info;
 	dst_filter->utlvs.pdg_tx_request |=
 		src_filter->utlvs.pdg_tx_request;
 	dst_filter->utlvs.pdg_response |=
@@ -2711,7 +2891,7 @@ QDF_STATUS dp_tx_mon_filter_update_2_0(struct dp_pdev *pdev)
 
 QDF_STATUS dp_rx_mon_filter_update_2_0(struct dp_pdev *pdev)
 {
-	struct dp_soc *soc = pdev->soc;
+	struct dp_soc *soc;
 	struct dp_mon_filter_be filter = {0};
 	struct htt_rx_ring_tlv_filter *rx_tlv_filter;
 	enum dp_mon_filter_srng_type srng_type =
@@ -2721,6 +2901,7 @@ QDF_STATUS dp_rx_mon_filter_update_2_0(struct dp_pdev *pdev)
 		dp_mon_filter_err("pdev Context is null");
 		return QDF_STATUS_E_FAILURE;
 	}
+	soc = pdev->soc;
 
 	rx_tlv_filter = &filter.rx_tlv_filter.tlv_filter;
 	dp_rx_mon_filter_h2t_setup(soc, pdev, srng_type, &filter.rx_tlv_filter);
@@ -2799,6 +2980,17 @@ dp_mon_filter_setup_rx_lite_mon(struct dp_mon_pdev_be *be_mon_pdev)
 			config->rx_config.ctrl_filter[DP_MON_FRM_FILTER_MODE_MO];
 		rx_tlv_filter->tlv_filter.mo_data_filter =
 			config->rx_config.data_filter[DP_MON_FRM_FILTER_MODE_MO];
+	}
+
+	/* configure fpmo filters if enabled */
+	if (config->rx_config.fpmo_enabled) {
+		rx_tlv_filter->tlv_filter.enable_fpmo = 1;
+		rx_tlv_filter->tlv_filter.fpmo_mgmt_filter =
+			config->rx_config.mgmt_filter[DP_MON_FRM_FILTER_MODE_FP_MO];
+		rx_tlv_filter->tlv_filter.fpmo_ctrl_filter =
+			config->rx_config.ctrl_filter[DP_MON_FRM_FILTER_MODE_FP_MO];
+		rx_tlv_filter->tlv_filter.fpmo_data_filter =
+			config->rx_config.data_filter[DP_MON_FRM_FILTER_MODE_FP_MO];
 	}
 
 	mgmt_len = config->rx_config.len[WLAN_FC0_TYPE_MGMT];
@@ -2904,8 +3096,14 @@ dp_mon_filter_reset_tx_lite_mon(struct dp_mon_pdev_be *be_mon_pdev)
 				DP_MON_FILTER_LITE_MON_MODE;
 	enum dp_mon_filter_srng_type srng_type =
 				DP_MON_FILTER_SRNG_TYPE_TXMON_DEST;
+	struct dp_lite_mon_tx_config *config = NULL;
 
 	be_mon_pdev->filter_be[filter_mode][srng_type] = filter;
+	config = be_mon_pdev->lite_mon_tx_config;
+	if (!config)
+		return;
+	config->subtype_filtering = false;
+
 }
 
 void
@@ -2945,6 +3143,9 @@ dp_mon_filter_setup_tx_lite_mon(struct dp_mon_pdev_be *be_mon_pdev)
 		if ((config->tx_config.level == CDP_LITE_MON_LEVEL_MPDU) ||
 		    (config->tx_config.level == CDP_LITE_MON_LEVEL_PPDU))
 			tx_tlv_filter->mgmt_mpdu_log = 1;
+		if (config->tx_config.mgmt_filter[DP_MON_FRM_FILTER_MODE_FP] !=
+		    CDP_LITE_MON_FILTER_ALL)
+			config->subtype_filtering = true;
 	}
 
 	/* configure ctrl filters */
@@ -2956,6 +3157,12 @@ dp_mon_filter_setup_tx_lite_mon(struct dp_mon_pdev_be *be_mon_pdev)
 		    (config->tx_config.level == CDP_LITE_MON_LEVEL_PPDU))
 			tx_tlv_filter->ctrl_mpdu_log = 1;
 	}
+	/* Since ctrl frames are generated in host, we need to do subtype
+	 * filtering even though ctrl filters are not enabled
+	 */
+	if (config->tx_config.ctrl_filter[DP_MON_FRM_FILTER_MODE_FP] !=
+	    CDP_LITE_MON_FILTER_ALL)
+		config->subtype_filtering = true;
 	/* configure data filters */
 	if (config->tx_config.data_filter[DP_MON_FRM_FILTER_MODE_FP]) {
 		tx_tlv_filter->data_filter = 1;
@@ -2964,6 +3171,9 @@ dp_mon_filter_setup_tx_lite_mon(struct dp_mon_pdev_be *be_mon_pdev)
 		if ((config->tx_config.level == CDP_LITE_MON_LEVEL_MPDU) ||
 		    (config->tx_config.level == CDP_LITE_MON_LEVEL_PPDU))
 			tx_tlv_filter->data_mpdu_log = 1;
+		if (config->tx_config.data_filter[DP_MON_FRM_FILTER_MODE_FP] !=
+		    CDP_LITE_MON_FILTER_ALL)
+			config->subtype_filtering = true;
 	}
 
 	dp_mon_filter_show_tx_filter_be(mode, &filter);
@@ -2989,10 +3199,11 @@ static void dp_cfr_filter_2_0(struct cdp_soc_t *soc_hdl,
 {
 	struct dp_soc *soc = cdp_soc_t_to_dp_soc(soc_hdl);
 	struct dp_pdev *pdev = NULL;
-	struct htt_rx_ring_tlv_filter htt_tlv_filter = {0};
-	int max_mac_rings;
-	uint8_t mac_id = 0;
+	struct htt_rx_ring_tlv_filter *htt_tlv_filter;
 	struct dp_mon_pdev *mon_pdev;
+	struct dp_mon_filter_be filter = {0};
+	enum dp_mon_filter_srng_type srng_type =
+		DP_MON_FILTER_SRNG_TYPE_RXMON_DEST;
 
 	pdev = dp_get_pdev_from_soc_pdev_id_wifi3(soc, pdev_id);
 	if (!pdev) {
@@ -3009,49 +3220,43 @@ static void dp_cfr_filter_2_0(struct cdp_soc_t *soc_hdl,
 
 	soc = pdev->soc;
 	pdev->cfr_rcc_mode = false;
-	max_mac_rings = wlan_cfg_get_num_mac_rings(pdev->wlan_cfg_ctx);
-	dp_update_num_mac_rings_for_dbs(soc, &max_mac_rings);
 
-	dp_mon_debug("Max_mac_rings %d", max_mac_rings);
+	/* Get default tlv settings */
+	htt_tlv_filter = &filter.rx_tlv_filter.tlv_filter;
+	dp_rx_mon_filter_h2t_setup(soc, pdev, srng_type, &filter.rx_tlv_filter);
+
+	if (filter.rx_tlv_filter.valid)
+		htt_tlv_filter->enable = 1;
+	else
+		htt_tlv_filter->enable = 0;
+
 	dp_mon_info("enable : %d, mode: 0x%x", enable, filter_val->mode);
 
 	if (enable) {
 		pdev->cfr_rcc_mode = true;
-		htt_tlv_filter.ppdu_start = 1;
-		htt_tlv_filter.ppdu_end = 1;
-		htt_tlv_filter.ppdu_end_user_stats = 1;
-		htt_tlv_filter.ppdu_end_user_stats_ext = 1;
-		htt_tlv_filter.ppdu_end_status_done = 1;
-		htt_tlv_filter.mpdu_start = 1;
-		htt_tlv_filter.offset_valid = false;
+		htt_tlv_filter->ppdu_start = 1;
+		htt_tlv_filter->ppdu_end = 1;
+		htt_tlv_filter->ppdu_end_user_stats = 1;
+		htt_tlv_filter->ppdu_end_user_stats_ext = 1;
+		htt_tlv_filter->ppdu_end_status_done = 1;
+		htt_tlv_filter->mpdu_start = 1;
+		htt_tlv_filter->offset_valid = false;
 
-		htt_tlv_filter.enable_fp =
+		htt_tlv_filter->enable_fp =
 			(filter_val->mode & MON_FILTER_PASS) ? 1 : 0;
-		htt_tlv_filter.enable_md = 0;
-		htt_tlv_filter.enable_mo =
+		htt_tlv_filter->enable_md = 0;
+		htt_tlv_filter->enable_mo =
 			(filter_val->mode & MON_FILTER_OTHER) ? 1 : 0;
-		htt_tlv_filter.fp_mgmt_filter = filter_val->fp_mgmt;
-		htt_tlv_filter.fp_ctrl_filter = filter_val->fp_ctrl;
-		htt_tlv_filter.fp_data_filter = filter_val->fp_data;
-		htt_tlv_filter.mo_mgmt_filter = filter_val->mo_mgmt;
-		htt_tlv_filter.mo_ctrl_filter = filter_val->mo_ctrl;
-		htt_tlv_filter.mo_data_filter = filter_val->mo_data;
+		htt_tlv_filter->fp_mgmt_filter = filter_val->fp_mgmt;
+		htt_tlv_filter->fp_ctrl_filter = filter_val->fp_ctrl;
+		htt_tlv_filter->fp_data_filter = filter_val->fp_data;
+		htt_tlv_filter->mo_mgmt_filter = filter_val->mo_mgmt;
+		htt_tlv_filter->mo_ctrl_filter = filter_val->mo_ctrl;
+		htt_tlv_filter->mo_data_filter = filter_val->mo_data;
 	}
 
-	for (mac_id = 0;
-	     mac_id  < soc->wlan_cfg_ctx->num_rxdma_dst_rings_per_pdev;
-	     mac_id++) {
-		int mac_for_pdev =
-			dp_get_mac_id_for_pdev(mac_id, pdev->pdev_id);
-
-		if (soc->wlan_cfg_ctx->rxdma1_enable) {
-			htt_h2t_rx_ring_cfg(soc->htt_handle, mac_for_pdev,
-					    soc->rxdma_mon_dst_ring[mac_id]
-					    .hal_srng, RXDMA_MONITOR_DST,
-					    RX_DATA_BUFFER_SIZE,
-					    &htt_tlv_filter);
-		}
-	}
+	dp_mon_ht2_rx_ring_cfg(soc, pdev, srng_type,
+			       &filter.rx_tlv_filter.tlv_filter);
 }
 
 void dp_cfr_filter_register_2_0(struct cdp_ops *ops)

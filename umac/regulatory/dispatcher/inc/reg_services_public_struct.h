@@ -92,6 +92,10 @@
 
 #define MAX_NUM_PWR_LEVEL 16
 
+#ifdef CONFIG_REG_CLIENT
+#define MAX_NUM_FCC_RULES 2
+#endif
+
 /**
  * enum dfs_reg - DFS region
  * @DFS_UNINIT_REGION: un-initialized region
@@ -470,7 +474,7 @@ enum channel_enum {
 	MAX_24GHZ_CHANNEL = CHAN_ENUM_2484,
 	NUM_24GHZ_CHANNELS = (MAX_24GHZ_CHANNEL - MIN_24GHZ_CHANNEL + 1),
 
-	INVALID_CHANNEL = 0xBAD,
+	INVALID_CHANNEL = NUM_CHANNELS,
 
 #ifdef CONFIG_49GHZ_CHAN
 	MIN_49GHZ_CHANNEL = CHAN_ENUM_4912,
@@ -1165,6 +1169,18 @@ struct cur_reg_rule {
 	uint16_t psd_eirp;
 };
 
+#ifdef CONFIG_REG_CLIENT
+/**
+ * struct cur_fcc_rule
+ * @center_freq: center frequency
+ * @tx_power: transmission power
+ */
+struct cur_fcc_rule {
+	uint16_t center_freq;
+	uint8_t tx_power;
+};
+#endif
+
 /**
  * struct cur_regulatory_info
  * @psoc: psoc ptr
@@ -1201,6 +1217,8 @@ struct cur_reg_rule {
  * @num_6g_reg_rules_client: list of number of 6G reg rules for client
  * @reg_rules_6g_ap_ptr: ptr to 6G AP reg rules
  * @reg_rules_6g_client_ptr: list of ptr to 6G client reg rules
+ * @fcc_rules_ptr: ptr to fcc rules
+ * @num_fcc_rules: Number of fcc rules sent by firmware
  */
 struct cur_regulatory_info {
 	struct wlan_objmgr_psoc *psoc;
@@ -1236,6 +1254,10 @@ struct cur_regulatory_info {
 	uint32_t num_6g_reg_rules_client[REG_CURRENT_MAX_AP_TYPE][REG_MAX_CLIENT_TYPE];
 	struct cur_reg_rule *reg_rules_6g_ap_ptr[REG_CURRENT_MAX_AP_TYPE];
 	struct cur_reg_rule *reg_rules_6g_client_ptr[REG_CURRENT_MAX_AP_TYPE][REG_MAX_CLIENT_TYPE];
+#ifdef CONFIG_REG_CLIENT
+	struct cur_fcc_rule *fcc_rules_ptr;
+	uint32_t num_fcc_rules;
+#endif
 };
 
 #if defined(CONFIG_AFC_SUPPORT) && defined(CONFIG_BAND_6GHZ)
@@ -1716,8 +1738,20 @@ struct reg_sched_payload {
 #define TWOG_CHAN_6_IN_MHZ         2437
 #define TWOG_CHAN_9_IN_MHZ         2452
 #define TWOG_CHAN_13_IN_MHZ        2472
+#define FIVEG_CHAN_36_IN_MHZ       5180
+#define FIVEG_CHAN_177_IN_MHZ      5885
+#define SIXG_CHAN_2_IN_MHZ         5935
+#define SIXG_CHAN_1_IN_MHZ         5955
+#define SIXG_CHAN_233_IN_MHZ       7115
 
-#define HT40_SEC_OFFSET            20
+#define HT40_SEC_OFFSET              20
+
+#define IEEE_2GHZ_CH1                 1
+#define IEEE_2GHZ_CH14               14
+#define IEEE_5GHZ_CH36               36
+#define IEEE_6GHZ_CH1                 1
+#define IEEE_6GHZ_CH2                 2
+#define IEEE_CH_SEP                   5
 
 /**
  * struct reg_ctl_params - reg ctl and regd info
@@ -2229,4 +2263,15 @@ typedef void
 			    struct reg_fw_afc_power_event *power_info,
 			    void *arg);
 #endif
+
+/**
+ * reg_is_chan_enum_invalid() - Checks if the channel enum is invalid or not.
+ * @chan_enum: Input channel enum.
+ *
+ * Return: true if channel enum is invalid else false.
+ */
+static inline bool reg_is_chan_enum_invalid(enum channel_enum chan_enum)
+{
+	return chan_enum >= INVALID_CHANNEL;
+}
 #endif

@@ -71,6 +71,7 @@ typedef struct sk_buff_head __qdf_nbuf_queue_head_t;
 #define QDF_NBUF_CB_PACKET_TYPE_ICMP   5
 #define QDF_NBUF_CB_PACKET_TYPE_ICMPv6 6
 #define QDF_NBUF_CB_PACKET_TYPE_DHCPV6 7
+#define QDF_NBUF_CB_PACKET_TYPE_END_INDICATION 8
 
 #define RADIOTAP_BASE_HEADER_LEN sizeof(struct ieee80211_radiotap_header)
 
@@ -136,6 +137,7 @@ typedef union {
  * @rx.dev.priv_cb_m.ipa_smmu_map: do IPA smmu map
  * @rx.dev.priv_cb_m.reo_dest_ind_or_sw_excpt: reo destination indication or
 					     sw execption bit from ring desc
+ * @rx.dev.priv_cb_m.lmac_id: lmac id for RX packet
  * @rx.dev.priv_cb_m.tcp_seq_num: TCP sequence number
  * @rx.dev.priv_cb_m.tcp_ack_num: TCP ACK number
  * @rx.dev.priv_cb_m.lro_ctx: LRO context
@@ -259,7 +261,7 @@ struct qdf_nbuf_cb {
 						 exc_frm:1,
 						 ipa_smmu_map:1,
 						 reo_dest_ind_or_sw_excpt:5,
-						 reserved:2,
+						 lmac_id:2,
 						 reserved1:16;
 					uint32_t tcp_seq_num;
 					uint32_t tcp_ack_num;
@@ -356,13 +358,13 @@ struct qdf_nbuf_cb {
 					is_packet_priv:1;
 				uint8_t packet_track:3,
 					to_fw:1,
-					proto_type:4;
+					/* used only for hl */
+					htt2_frm:1,
+					proto_type:3;
 				uint8_t dp_trace:1,
 					is_bcast:1,
 					is_mcast:1,
-					packet_type:3,
-					/* used only for hl*/
-					htt2_frm:1,
+					packet_type:4,
 					print:1;
 			} trace;
 			unsigned char *vaddr;
@@ -893,6 +895,8 @@ bool __qdf_nbuf_data_is_tcp_ack(uint8_t *data);
 uint16_t __qdf_nbuf_data_get_tcp_src_port(uint8_t *data);
 uint16_t __qdf_nbuf_data_get_tcp_dst_port(uint8_t *data);
 bool __qdf_nbuf_data_is_icmpv4_req(uint8_t *data);
+bool __qdf_nbuf_data_is_icmpv4_redirect(uint8_t *data);
+bool __qdf_nbuf_data_is_icmpv6_redirect(uint8_t *data);
 bool __qdf_nbuf_data_is_icmpv4_rsp(uint8_t *data);
 uint32_t __qdf_nbuf_get_icmpv4_src_ip(uint8_t *data);
 uint32_t __qdf_nbuf_get_icmpv4_tgt_ip(uint8_t *data);
@@ -903,6 +907,11 @@ enum qdf_proto_subtype  __qdf_nbuf_data_get_icmp_subtype(uint8_t *data);
 enum qdf_proto_subtype  __qdf_nbuf_data_get_icmpv6_subtype(uint8_t *data);
 uint8_t __qdf_nbuf_data_get_ipv4_proto(uint8_t *data);
 uint8_t __qdf_nbuf_data_get_ipv6_proto(uint8_t *data);
+uint8_t __qdf_nbuf_data_get_ipv4_tos(uint8_t *data);
+uint8_t __qdf_nbuf_data_get_ipv6_tc(uint8_t *data);
+void __qdf_nbuf_data_set_ipv4_tos(uint8_t *data, uint8_t tos);
+void __qdf_nbuf_data_set_ipv6_tc(uint8_t *data, uint8_t tc);
+bool __qdf_nbuf_is_ipv4_last_fragment(struct sk_buff *skb);
 
 #ifdef QDF_NBUF_GLOBAL_COUNT
 int __qdf_nbuf_count_get(void);
@@ -1091,6 +1100,25 @@ int __qdf_nbuf_shared(struct sk_buff *skb);
 static inline size_t __qdf_nbuf_get_nr_frags(struct sk_buff *skb)
 {
 	return skb_shinfo(skb)->nr_frags;
+}
+
+/**
+ * __qdf_nbuf_get_nr_frags_in_fraglist() - return the number of fragments
+ * @skb: sk buff
+ *
+ * This API returns a total number of fragments from the fraglist
+ * Return: total number of fragments
+ */
+static inline uint32_t __qdf_nbuf_get_nr_frags_in_fraglist(struct sk_buff *skb)
+{
+	uint32_t num_frag = 0;
+	struct sk_buff *list = NULL;
+
+	num_frag = skb_shinfo(skb)->nr_frags;
+	skb_walk_frags(skb, list)
+		num_frag += skb_shinfo(list)->nr_frags;
+
+	return num_frag;
 }
 
 /*
@@ -1746,6 +1774,28 @@ __qdf_nbuf_queue_insert_head(__qdf_nbuf_queue_t *qhead, __qdf_nbuf_t skb)
 	qhead->qlen++;
 }
 
+static inline struct sk_buff *
+__qdf_nbuf_queue_remove_last(__qdf_nbuf_queue_t *qhead)
+{
+	__qdf_nbuf_t tmp_tail, node = NULL;
+
+	if (qhead->head) {
+		tmp_tail = qhead->tail;
+		node = qhead->head;
+		if (qhead->head == qhead->tail) {
+			qhead->head = NULL;
+			qhead->tail = NULL;
+			return node;
+		} else {
+			while (tmp_tail != node->next)
+			       node = node->next;
+			qhead->tail = node;
+			return node->next;
+		}
+	}
+	return node;
+}
+
 /**
  * __qdf_nbuf_queue_remove() - remove a skb from the head of the queue
  * @qhead: Queue head
@@ -2208,7 +2258,7 @@ static inline uint32_t __qdf_nbuf_tcp_seq(struct sk_buff *skb)
  *
  * Return: data pointer to typecast into your priv structure
  */
-static inline uint8_t *
+static inline char *
 __qdf_nbuf_get_priv_ptr(struct sk_buff *skb)
 {
 	return &skb->cb[8];
@@ -2290,6 +2340,19 @@ static inline uint64_t
 __qdf_nbuf_get_timestamp(struct sk_buff *skb)
 {
 	return ktime_to_ms(skb_get_ktime(skb));
+}
+
+/**
+ * __qdf_nbuf_get_timestamp_us() - get the timestamp for frame
+ *
+ * @buf: sk buff
+ *
+ * Return: timestamp stored in skb in us
+ */
+static inline uint64_t
+__qdf_nbuf_get_timestamp_us(struct sk_buff *skb)
+{
+	return ktime_to_us(skb_get_ktime(skb));
 }
 
 /**

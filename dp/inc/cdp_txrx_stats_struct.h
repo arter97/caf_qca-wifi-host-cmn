@@ -113,12 +113,15 @@
 
 #define CDP_MAX_RX_RINGS 8  /* max rx rings */
 #define CDP_MAX_TX_COMP_RINGS 5 /* max tx/completion rings */
+#define CDP_MAX_RX_WBM_RINGS 1 /* max rx wbm rings */
 
 #define CDP_MAX_TX_TQM_STATUS 9  /* max tx tqm completion status */
 #define CDP_MAX_TX_HTT_STATUS 7  /* max tx htt completion status */
 
 #define CDP_DMA_CODE_MAX 14 /* max rxdma error */
 #define CDP_REO_CODE_MAX 15 /* max reo error */
+
+#define CDP_MAX_LMACS 2 /* max lmacs */
 
 /*
  * Max of TxRx context
@@ -159,6 +162,9 @@
 #define CDP_MAX_VOW_TID 4
 
 #define CDP_MAX_TIDS 17
+
+#define CDP_MAX_PKT_PER_WIN 1000
+#define CDP_MAX_WIN_MOV_AVG 10
 
 #define CDP_WDI_NUM_EVENTS WDI_NUM_EVENTS
 
@@ -1053,6 +1059,8 @@ struct cdp_tid_stats {
 					    [CDP_MAX_DATA_TIDS];
 	struct cdp_tid_rx_stats tid_rx_stats[CDP_MAX_RX_RINGS]
 					    [CDP_MAX_DATA_TIDS];
+	struct cdp_tid_rx_stats tid_rx_wbm_stats[CDP_MAX_RX_WBM_RINGS]
+						[CDP_MAX_DATA_TIDS];
 };
 
 /*
@@ -1073,10 +1081,32 @@ struct cdp_tid_stats_intf {
  * struct cdp_delay_tx_stats: Tx delay stats
  * @tx_swq_delay: software enqueue delay
  * @hwtx_delay: HW enque to completion delay
+ * @nwdelay_avg: Network delay average
+ * @swdelay_avg: Wifi SW Delay Average
+ * @hwdelay_avg: Wifi HW delay Average
+ * @sw_delay_win_total: total NW delay for each window
+ * @hw_delay_win_total: total Wifi SW delay for each window
+ * @nw_delay_win_total: total Wifi HW delay for each window
+ *
+ * @cur_win_num_pkts: number of packets processed in current window
+ * @cur_win_index: current windows index
  */
 struct cdp_delay_tx_stats {
 	struct cdp_hist_stats    tx_swq_delay;
 	struct cdp_hist_stats    hwtx_delay;
+
+#ifdef CONFIG_SAWF
+	uint32_t nwdelay_avg;
+	uint32_t swdelay_avg;
+	uint32_t hwdelay_avg;
+
+	uint64_t nw_delay_win_avg[CDP_MAX_WIN_MOV_AVG];
+	uint64_t sw_delay_win_avg[CDP_MAX_WIN_MOV_AVG];
+	uint64_t hw_delay_win_avg[CDP_MAX_WIN_MOV_AVG];
+
+	uint32_t cur_win_num_pkts;
+	uint32_t curr_win_idx;
+#endif
 };
 
 /*
@@ -1395,6 +1425,7 @@ struct protocol_trace_count {
  * @punc_bw[MAX_PUNCTURED_MODE]: MSDU count for punctured BW
  * @release_src_not_tqm: Counter to keep track of release source is not TQM
  *			 in TX completion status processing
+ * @per: Packet error ratio
  */
 struct cdp_tx_stats {
 	struct cdp_pkt_info comp_pkt;
@@ -1513,11 +1544,13 @@ struct cdp_tx_stats {
 	uint32_t punc_bw[MAX_PUNCTURED_MODE];
 #endif
 	uint32_t release_src_not_tqm;
+	uint32_t per;
 };
 
 /* struct cdp_rx_stats - rx Level Stats
  * @to_stack: Total packets sent up the stack
  * @rcvd_reo[CDP_MAX_RX_RINGS]:  Packets received on the reo ring
+ * @rx_lmac[CDP_MAX_LMACS]: Packets received on which lmac
  * @unicast: Total unicast packets
  * @multicast: Total multicast packets
  * @bcast:  Broadcast Packet Count
@@ -1605,6 +1638,7 @@ struct cdp_tx_stats {
 struct cdp_rx_stats {
 	struct cdp_pkt_info to_stack;
 	struct cdp_pkt_info rcvd_reo[CDP_MAX_RX_RINGS];
+	struct cdp_pkt_info rx_lmac[CDP_MAX_LMACS];
 	struct cdp_pkt_info unicast;
 	struct cdp_pkt_info multicast;
 	struct cdp_pkt_info bcast;
@@ -1669,7 +1703,7 @@ struct cdp_rx_stats {
 	uint32_t rx_discard;
 	uint32_t rx_ratecode;
 	uint32_t rx_flags;
-	uint32_t rx_snr_measured_time;
+	unsigned long rx_snr_measured_time;
 	uint8_t snr;
 	uint8_t last_snr;
 	uint32_t multipass_rx_pkt_drop;
@@ -1727,6 +1761,7 @@ struct cdp_rx_stats {
  * @dma_error: dma fail
  * @res_full: Resource Full: Congestion Control
  * @fail_per_pkt_vdev_id_check: Per pkt vdev id check
+ * @drop_ingress: Packets dropped during Umac reset
  * @exception_fw: packets sent to fw
  * @completion_fw: packets completions received from fw
  * @cce_classified:Number of packets classified by CCE
@@ -1735,6 +1770,8 @@ struct cdp_rx_stats {
  */
 struct cdp_tx_ingress_stats {
 	struct cdp_pkt_info rcvd;
+	uint64_t rcvd_in_fast_xmit_flow;
+	uint32_t rcvd_per_core[CDP_MAX_TX_DATA_RINGS];
 	struct cdp_pkt_info processed;
 	struct cdp_pkt_info reinject_pkts;
 	struct cdp_pkt_info inspect_pkts;
@@ -1788,6 +1825,8 @@ struct cdp_tx_ingress_stats {
 		/* headroom insufficient */
 		uint32_t headroom_insufficient;
 		uint32_t fail_per_pkt_vdev_id_check;
+		uint32_t drop_ingress;
+		uint32_t invalid_peer_id_in_exc_path;
 	} dropped;
 
 	/* Mesh packets info */
@@ -2611,6 +2650,7 @@ struct cdp_soc_stats {
 			uint32_t rx_hw_err_msdu_buf_rcved;
 			uint32_t rx_hw_err_msdu_buf_invalid_cookie;
 			uint32_t rx_hw_err_oor_drop;
+			uint32_t rx_hw_err_raw_mpdu_drop;
 			uint32_t rx_hw_err_oor_to_stack;
 			uint32_t rx_hw_err_oor_sg_count;
 			uint32_t msdu_count_mismatch;
@@ -2646,10 +2686,12 @@ struct cdp_soc_stats {
  * struct cdp_pdev_telemetry_stats- Structure to hold pdev telemetry stats
  * @tx_mpdu_failed: Tx mpdu failed
  * @tx_mpdu_total: Total tx mpdus
+ * @link_airtime: pdev airtime usage per ac per sec
  */
 struct cdp_pdev_telemetry_stats {
 	uint32_t tx_mpdu_failed;
 	uint32_t tx_mpdu_total;
+	uint32_t link_airtime[WME_AC_MAX];
 };
 
 /**
@@ -2666,7 +2708,7 @@ struct cdp_peer_telemetry_stats {
 	uint32_t tx_mpdu_total;
 	uint32_t rx_mpdu_retried;
 	uint32_t rx_mpdu_total;
-	uint8_t airtime_consumption;
+	uint8_t airtime_consumption[WME_AC_MAX];
 	uint8_t snr;
 };
 #endif
@@ -2685,6 +2727,7 @@ struct cdp_peer_telemetry_stats {
  * @map_err: Mapping failure
  * @x86_fail: x86 failures
  * @low_thresh_intrs: low threshold interrupts
+ * @free_list: RX descriptors moving back to free list
  * @rx_raw_pkts: Rx Raw Packets
  * @mesh_mem_alloc: Mesh Rx Stats Alloc fail
  * @tso_desc_cnt: TSO descriptors
@@ -2734,6 +2777,7 @@ struct cdp_pdev_stats {
 		uint32_t map_err;
 		uint32_t x86_fail;
 		uint32_t low_thresh_intrs;
+		int32_t free_list;
 	} replenish;
 
 	uint32_t rx_raw_pkts;
@@ -2820,6 +2864,7 @@ struct cdp_peer_hmwds_ast_add_status {
  * @DP_SOC_PARAM_EAPOL_OVER_CONTROL_PORT: For sending EAPOL's over control port
  * @DP_SOC_PARAM_MULTI_PEER_GRP_CMD_SUPPORT: For sending bulk AST delete
  * @DP_SOC_PARAM_RSSI_DBM_CONV_SUPPORT: To set the rssi dbm support bit
+ * @DP_SOC_PARAM_UMAC_HW_RESET_SUPPORT: Whether target supports UMAC HW reset
  */
 enum cdp_soc_param_t {
 	DP_SOC_PARAM_MSDU_EXCEPTION_DESC,
@@ -2828,6 +2873,7 @@ enum cdp_soc_param_t {
 	DP_SOC_PARAM_EAPOL_OVER_CONTROL_PORT,
 	DP_SOC_PARAM_MULTI_PEER_GRP_CMD_SUPPORT,
 	DP_SOC_PARAM_RSSI_DBM_CONV_SUPPORT,
+	DP_SOC_PARAM_UMAC_HW_RESET_SUPPORT,
 	DP_SOC_PARAM_MAX,
 };
 

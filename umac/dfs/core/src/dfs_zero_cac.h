@@ -111,6 +111,13 @@
 #define DEPTH_40_ROOT                            3
 #define DEPTH_20_ROOT                            4
 
+#ifdef QCA_DFS_BW_EXPAND
+/* Column of the phymode_decoupler array */
+enum phymode_decoupler_col {
+	CH_WIDTH_COL = 1
+};
+#endif /* QCA_DFS_BW_EXPAND */
+
 /**
  * struct precac_tree_node - Individual tree node structure for every node in
  *                           the precac forest maintained.
@@ -195,7 +202,8 @@ dfs_zero_cac_timer_init(struct dfs_soc_priv_obj *dfs_soc_obj)
  * dfs_print_precaclists() - Print precac list.
  * @dfs: Pointer to wlan_dfs structure.
  */
-#if !defined(MOBILE_DFS_SUPPORT)
+#if !defined(MOBILE_DFS_SUPPORT) && (defined(ATH_SUPPORT_ZERO_CAC_DFS) || \
+				     defined(QCA_SUPPORT_AGILE_DFS))
 void dfs_print_precaclists(struct wlan_dfs *dfs);
 #else
 static inline void dfs_print_precaclists(struct wlan_dfs *dfs)
@@ -207,7 +215,8 @@ static inline void dfs_print_precaclists(struct wlan_dfs *dfs)
  * dfs_reset_precac_lists() - Resets the precac lists.
  * @dfs: Pointer to wlan_dfs structure.
  */
-#if !defined(MOBILE_DFS_SUPPORT)
+#if !defined(MOBILE_DFS_SUPPORT) && (defined(ATH_SUPPORT_ZERO_CAC_DFS) || \
+				     defined(QCA_SUPPORT_AGILE_DFS))
 void dfs_reset_precac_lists(struct wlan_dfs *dfs);
 #else
 static inline void dfs_reset_precac_lists(struct wlan_dfs *dfs)
@@ -219,7 +228,8 @@ static inline void dfs_reset_precac_lists(struct wlan_dfs *dfs)
  * dfs_reset_precaclists() - Clears and initializes precac_list.
  * @dfs: Pointer to wlan_dfs structure.
  */
-#if !defined(MOBILE_DFS_SUPPORT)
+#if !defined(MOBILE_DFS_SUPPORT) && (defined(ATH_SUPPORT_ZERO_CAC_DFS) || \
+				     defined(QCA_SUPPORT_AGILE_DFS))
 void dfs_reset_precaclists(struct wlan_dfs *dfs);
 #else
 static inline void dfs_reset_precaclists(struct wlan_dfs *dfs)
@@ -237,7 +247,7 @@ void dfs_deinit_precac_list(struct wlan_dfs *dfs);
  * dfs_zero_cac_detach() - Free zero_cac memory.
  * @dfs: Pointer to wlan_dfs dtructure.
  */
-#if !defined(MOBILE_DFS_SUPPORT)
+#if !defined(MOBILE_DFS_SUPPORT) && defined(ATH_SUPPORT_ZERO_CAC_DFS)
 void dfs_zero_cac_detach(struct wlan_dfs *dfs);
 #else
 static inline void dfs_zero_cac_detach(struct wlan_dfs *dfs)
@@ -251,7 +261,8 @@ static inline void dfs_zero_cac_detach(struct wlan_dfs *dfs)
  */
 void dfs_init_precac_list(struct wlan_dfs *dfs);
 
-#if !defined(MOBILE_DFS_SUPPORT)
+#if !defined(MOBILE_DFS_SUPPORT) && (defined(ATH_SUPPORT_ZERO_CAC_DFS) || \
+				     defined(QCA_SUPPORT_AGILE_DFS))
 /**
  * dfs_start_precac_timer_for_freq() - Start precac timer.
  * @dfs: Pointer to wlan_dfs structure.
@@ -275,7 +286,7 @@ void dfs_start_precac_timer_for_freq(struct wlan_dfs *dfs,
  * dfs_cancel_precac_timer() - Cancel the precac timer.
  * @dfs: Pointer to wlan_dfs structure.
  */
-#if !defined(MOBILE_DFS_SUPPORT)
+#if !defined(MOBILE_DFS_SUPPORT) && defined(ATH_SUPPORT_ZERO_CAC_DFS)
 void dfs_cancel_precac_timer(struct wlan_dfs *dfs);
 #else
 static inline void dfs_cancel_precac_timer(struct wlan_dfs *dfs)
@@ -287,7 +298,7 @@ static inline void dfs_cancel_precac_timer(struct wlan_dfs *dfs)
  * dfs_zero_cac_attach() - Initialize dfs zerocac variables.
  * @dfs: Pointer to DFS structure.
  */
-#if !defined(MOBILE_DFS_SUPPORT)
+#if !defined(MOBILE_DFS_SUPPORT) && defined(ATH_SUPPORT_ZERO_CAC_DFS)
 void dfs_zero_cac_attach(struct wlan_dfs *dfs);
 #else
 static inline void dfs_zero_cac_attach(struct wlan_dfs *dfs)
@@ -299,7 +310,7 @@ static inline void dfs_zero_cac_attach(struct wlan_dfs *dfs)
  * dfs_zero_cac_reset() - Reset Zero cac DFS variables.
  * @dfs: Pointer to wlan_dfs structure.
  */
-#if !defined(MOBILE_DFS_SUPPORT)
+#if !defined(MOBILE_DFS_SUPPORT) && defined(ATH_SUPPORT_ZERO_CAC_DFS)
 void dfs_zero_cac_reset(struct wlan_dfs *dfs);
 #else
 static inline void dfs_zero_cac_reset(struct wlan_dfs *dfs)
@@ -329,7 +340,8 @@ dfs_zero_cac_timer_detach(struct dfs_soc_priv_obj *dfs_soc_obj)
  * * True:  If precac is done on channel.
  * * False: If precac is not done on channel.
  */
-#if !defined(MOBILE_DFS_SUPPORT)
+#if !defined(MOBILE_DFS_SUPPORT) && (defined(ATH_SUPPORT_ZERO_CAC_DFS) || \
+				     defined(QCA_SUPPORT_AGILE_DFS))
 bool dfs_is_precac_done(struct wlan_dfs *dfs, struct dfs_channel *chan);
 #else
 static inline bool dfs_is_precac_done(struct wlan_dfs *dfs,
@@ -390,7 +402,8 @@ uint16_t dfs_get_ieeechan_for_precac_for_freq(struct wlan_dfs *dfs,
  * @dfs: Pointer to wlan_dfs structure.
  * @precac_timeout: Precac timeout value.
  */
-#if !defined(MOBILE_DFS_SUPPORT)
+#if !defined(MOBILE_DFS_SUPPORT) && (defined(ATH_SUPPORT_ZERO_CAC_DFS) || \
+				     defined(QCA_SUPPORT_AGILE_DFS))
 int dfs_override_precac_timeout(struct wlan_dfs *dfs,
 		int precac_timeout);
 #else
@@ -406,7 +419,8 @@ static inline int dfs_override_precac_timeout(struct wlan_dfs *dfs,
  * @dfs: Pointer wlan_dfs structure.
  * @precac_timeout: Get precac timeout value in this variable.
  */
-#if !defined(MOBILE_DFS_SUPPORT)
+#if !defined(MOBILE_DFS_SUPPORT) && (defined(ATH_SUPPORT_ZERO_CAC_DFS) || \
+				     defined(QCA_SUPPORT_AGILE_DFS))
 int dfs_get_override_precac_timeout(struct wlan_dfs *dfs,
 		int *precac_timeout);
 #else
@@ -568,7 +582,8 @@ static inline void dfs_agile_soc_obj_init(struct wlan_dfs *dfs,
  * @dfs: Pointer to wlan_dfs structure.
  * @value: input value for dfs_legacy_precac_ucfg flag.
  */
-#if !defined(MOBILE_DFS_SUPPORT)
+#if !defined(MOBILE_DFS_SUPPORT) && (defined(ATH_SUPPORT_ZERO_CAC_DFS) || \
+				     defined(QCA_SUPPORT_AGILE_DFS))
 void dfs_set_precac_enable(struct wlan_dfs *dfs,
 		uint32_t value);
 #else
@@ -700,12 +715,6 @@ dfs_get_precac_chan_state_for_freq(struct wlan_dfs *dfs,
 #endif
 
 /**
- * dfs_zero_cac_reset() - Reset Zero cac DFS variables.
- * @dfs: Pointer to wlan_dfs structure.
- */
-void dfs_zero_cac_reset(struct wlan_dfs *dfs);
-
-/**
  * dfs_reinit_precac_lists() - Reinit DFS preCAC lists.
  * @src_dfs: Source DFS from which the preCAC list is copied.
  * @dest_dfs: Destination DFS to which the preCAC list is copied.
@@ -717,7 +726,8 @@ void dfs_zero_cac_reset(struct wlan_dfs *dfs);
  *
  * Return: None (void).
  */
-#if !defined(MOBILE_DFS_SUPPORT)
+#if !defined(MOBILE_DFS_SUPPORT) && (defined(ATH_SUPPORT_ZERO_CAC_DFS) || \
+				     defined(QCA_SUPPORT_AGILE_DFS))
 void dfs_reinit_precac_lists(struct wlan_dfs *src_dfs,
 			     struct wlan_dfs *dest_dfs,
 			     uint16_t low_5g_freq,
@@ -761,7 +771,8 @@ dfs_is_precac_done_on_ht20_40_80_160_165_chan_for_freq(struct wlan_dfs *dfs,
 bool dfs_is_precac_done_on_ht8080_chan(struct wlan_dfs *dfs,
 				       struct dfs_channel *chan);
 
-#if !defined(MOBILE_DFS_SUPPORT)
+#if !defined(MOBILE_DFS_SUPPORT) && (defined(ATH_SUPPORT_ZERO_CAC_DFS) || \
+				     defined(QCA_SUPPORT_AGILE_DFS))
 #ifdef CONFIG_CHAN_FREQ_API
 /**
  * dfs_find_curchwidth_and_center_chan_for_freq() - Find the channel width
@@ -863,7 +874,8 @@ static inline void dfs_unmark_precac_nol_for_freq(struct wlan_dfs *dfs,
  * dfs_is_precac_timer_running() - Check whether precac timer is running.
  * @dfs: Pointer to wlan_dfs structure.
  */
-#if !defined(MOBILE_DFS_SUPPORT)
+#if !defined(MOBILE_DFS_SUPPORT) && (defined(ATH_SUPPORT_ZERO_CAC_DFS) || \
+				     defined(QCA_SUPPORT_AGILE_DFS))
 bool dfs_is_precac_timer_running(struct wlan_dfs *dfs);
 #else
 static inline bool dfs_is_precac_timer_running(struct wlan_dfs *dfs)
@@ -1202,4 +1214,87 @@ dfs_is_subset_channel_for_freq(uint16_t *old_subchans_freq,
 			       uint16_t *new_subchans_freq,
 			       uint8_t new_n_chans);
 #endif
+
+#ifdef QCA_DFS_BW_EXPAND
+/**
+ * dfs_bwexpand_find_usr_cnf_chan() - Find the User configured channel for
+ * BW Expand.
+ * @dfs: Pointer to wlan_dfs object.
+ *
+ * Return: User configured frequency.
+ */
+qdf_freq_t dfs_bwexpand_find_usr_cnf_chan(struct wlan_dfs *dfs);
+
+/**
+ * dfs_bwexpand_try_jumping_to_target_subchan() - Expand the current channel
+ * bandwidth or jump to a (subset of) user configured target channel.
+ * Example: Current channel is 60 HT20 and user configured target channel is
+ * 100 HT160. Agile SM runs on the subchans with 20Mhz BW of 100 HT160, here
+ * Agile SM runs on 100HT20 and after completion of agile CAC, it checks
+ * the API dfs_bwexpand_try_jumping_to_target_subchan for possibility of
+ * BW Expansion and only 20Mhz subchan is available. There is no possible for
+ * higher bandwidth channel. Then agile CAC runs on the adjacent subchannel
+ * 104 HT20. After agile CAC completion, the API is checked again for possible
+ * bandwidth expansion and 102 HT40 is available. The API invokes channel change
+ * to higher bandwidth.
+ * @dfs: Pointer to wlan_dfs object.
+ *
+ * Return: TRUE, if Bandwidth expansion is success.
+ * FALSE, if Bandwidth expansion is failure.
+ */
+bool dfs_bwexpand_try_jumping_to_target_subchan(struct wlan_dfs *dfs);
+
+/**
+ * dfs_is_rcac_cac_done()- Check RCAC is completed on the subset of the
+ * user configured target channel.
+ * @dfs: Pointer to wlan_dfs.
+ * @chan: Pointer to dfs_channel object of user configured target channel.
+ * @subset_chan: Pointer to dfs_channel object of subchannel in which RCAC is
+ * completed.
+ *
+ * Return: Boolean value.
+ */
+bool dfs_is_rcac_cac_done(struct wlan_dfs *dfs,
+			  struct dfs_channel *chan,
+			  struct dfs_channel *subset_chan);
+
+/*
+ * dfs_get_configured_bwexpand_dfs_chan() - Get a DFS chan when frequency and
+ * phymode is provided.
+ * @dfs: pointer to wlan_dfs.
+ * @user_chan: pointer to dfs_channel.
+ * @target_mode: phymode of type wlan_phymode.
+ */
+bool dfs_get_configured_bwexpand_dfs_chan(struct wlan_dfs *dfs,
+					  struct dfs_channel *user_chan,
+					  enum wlan_phymode target_mode);
+#else
+static inline
+qdf_freq_t dfs_bwexpand_find_usr_cnf_chan(struct wlan_dfs *dfs)
+{
+	return 0;
+}
+
+static inline
+bool dfs_bwexpand_try_jumping_to_target_subchan(struct wlan_dfs *dfs)
+{
+	return false;
+}
+
+static inline
+bool dfs_is_rcac_cac_done(struct wlan_dfs *dfs,
+			  struct dfs_channel *chan,
+			  struct dfs_channel *subset_chan)
+{
+	return false;
+}
+
+static inline
+bool dfs_get_configured_bwexpand_dfs_chan(struct wlan_dfs *dfs,
+					  struct dfs_channel *user_chan,
+					  enum wlan_phymode target_mode)
+{
+	return false;
+}
+#endif /* QCA_DFS_BW_EXPAND */
 #endif /* _DFS_ZERO_CAC_H_ */

@@ -648,6 +648,59 @@ static inline void qdf_mempool_free(qdf_device_t osdev, qdf_mempool_t pool,
 	__qdf_mempool_free(osdev, pool, buf);
 }
 
+/**
+ * qdf_kmem_cache_create() - OS abstraction for cache creation
+ *
+ * @cache_name: Cache name
+ * @size: Size of the object to be created
+ *
+ * Return: Cache address on successful creation, else NULL
+ */
+static inline qdf_kmem_cache_t
+qdf_kmem_cache_create(const char *cache_name,
+		      qdf_size_t size)
+{
+	return __qdf_kmem_cache_create(cache_name, size);
+}
+
+/**
+ * qdf_kmem_cache_destroy() - OS abstraction for cache destructin
+ *
+ * @cache: Cache pointer
+ *
+ * Return: void
+ */
+static inline void qdf_kmem_cache_destroy(qdf_kmem_cache_t cache)
+{
+	__qdf_kmem_cache_destroy(cache);
+}
+
+/**
+ * qdf_kmem_cache_alloc() - Function to allocation object from a cache
+ *
+ * @cache: Cache address
+ *
+ * Return: Object from cache
+ *
+ */
+static inline void *qdf_kmem_cache_alloc(qdf_kmem_cache_t cache)
+{
+	return __qdf_kmem_cache_alloc(cache);
+}
+
+/**
+ * qdf_kmem_cache_free() - Function to free cache object
+ *
+ * @cache: Cache address
+ * @object: Object to be returned to cache
+ *
+ * Return: void
+ */
+static inline void qdf_kmem_cache_free(qdf_kmem_cache_t cache, void *node)
+{
+	__qdf_kmem_cache_free(cache, node);
+}
+
 void qdf_mem_dma_sync_single_for_device(qdf_device_t osdev,
 					qdf_dma_addr_t bus_addr,
 					qdf_size_t size,
@@ -1052,6 +1105,25 @@ qdf_mem_set_dma_pa(qdf_device_t osdev,
  * Return: 0 success
  */
 qdf_shared_mem_t *qdf_mem_shared_mem_alloc(qdf_device_t osdev, uint32_t size);
+
+#ifdef DP_UMAC_HW_RESET_SUPPORT
+/**
+ * qdf_tx_desc_pool_free_bufs() - Go through elems and call the registered  cb
+ * @ctxt: Context to be passed to the cb
+ * @pages: Multi page information storage
+ * @elem_size: Each element size
+ * @elem_count: Total number of elements should be allocated
+ * @cacheable: Coherent memory or cacheable memory
+ * @cb: Callback to free the elements
+ * @elem_list: elem list for delayed free
+ *
+ * Return: 0 on Succscc, or Error code
+ */
+int qdf_tx_desc_pool_free_bufs(void *ctxt, struct qdf_mem_multi_page_t *pages,
+			       uint32_t elem_size, uint32_t elem_count,
+			       uint8_t cacheable, qdf_mem_release_cb cb,
+			       void *elem_list);
+#endif
 
 /**
  * qdf_mem_shared_mem_free() - Free shared memory

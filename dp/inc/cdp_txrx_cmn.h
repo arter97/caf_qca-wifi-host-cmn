@@ -116,6 +116,16 @@ enum verbose_debug_module {
 #define dp_cdp_nofl_debug(params...) \
 	QDF_TRACE_DEBUG_NO_FL(QDF_MODULE_ID_DP_CDP, params)
 
+#define DP_PEER_INFO_PARAMS_INIT(peer_info, _vdev_id, \
+				_peer_mac, _addr_align, _peer_type) \
+({	typeof(peer_info) _peer_info = (peer_info); \
+	do {								\
+		(_peer_info)->vdev_id = (_vdev_id);			\
+		(_peer_info)->mac_addr = (_peer_mac);			\
+		(_peer_info)->mac_addr_is_aligned = (_addr_align);	\
+		(_peer_info)->peer_type = (_peer_type);			\
+	} while (0); })
+
 /**
  * @enum vdev_host_stats_id:
  * host stats update from CDP have to set one of the following stats ID
@@ -126,6 +136,19 @@ enum verbose_debug_module {
 enum {
 	DP_VDEV_STATS_PKT_CNT_ONLY,
 	DP_VDEV_STATS_TX_ME,
+};
+
+/*
+ * BW types used for RX PPDU
+ */
+enum rx_tlv_bw {
+	RX_TLV_BW_20MHZ,
+	RX_TLV_BW_40MHZ,
+	RX_TLV_BW_80MHZ,
+	RX_TLV_BW_160MHZ,
+	RX_TLV_BW_320MHZ,
+	RX_TLV_BW_240MHZ,
+	RX_TLV_BW_CNT,
 };
 
 /*
@@ -244,7 +267,9 @@ cdp_vdev_detach(ol_txrx_soc_handle soc, uint8_t vdev_id,
 
 #if defined(WLAN_FEATURE_11BE_MLO) && defined(WLAN_MLO_MULTI_CHIP)
 static inline void
-cdp_vdev_recovery_flush_peers(ol_txrx_soc_handle soc, uint8_t vdev_id)
+cdp_vdev_recovery_flush_peers(ol_txrx_soc_handle soc,
+			      uint8_t vdev_id,
+			      bool mlo_peers_only)
 {
 	if (!soc || !soc->ops) {
 		dp_cdp_debug("Invalid Instance:");
@@ -256,7 +281,9 @@ cdp_vdev_recovery_flush_peers(ol_txrx_soc_handle soc, uint8_t vdev_id)
 	    !soc->ops->cmn_drv_ops->txrx_recovery_vdev_flush_peers)
 		return;
 
-	soc->ops->cmn_drv_ops->txrx_recovery_vdev_flush_peers(soc, vdev_id);
+	soc->ops->cmn_drv_ops->txrx_recovery_vdev_flush_peers(soc,
+							      vdev_id,
+							      mlo_peers_only);
 }
 #endif
 
@@ -705,7 +732,8 @@ cdp_peer_delete(ol_txrx_soc_handle soc, uint8_t vdev_id,
 	    !soc->ops->cmn_drv_ops->txrx_peer_delete)
 		return;
 
-	soc->ops->cmn_drv_ops->txrx_peer_delete(soc, vdev_id, peer_mac, bitmap);
+	soc->ops->cmn_drv_ops->txrx_peer_delete(soc, vdev_id, peer_mac,
+						bitmap, CDP_LINK_PEER_TYPE);
 }
 
 #ifdef DP_RX_UDP_OVER_PEER_ROAM
@@ -1690,6 +1718,25 @@ static inline void cdp_txrx_intr_detach(ol_txrx_soc_handle soc)
 }
 
 /**
+ * cdp_txrx_umac_reset_deinit(): De-initialize UMAC HW reset module
+ * @soc: soc handle
+ */
+static inline void cdp_txrx_umac_reset_deinit(ol_txrx_soc_handle soc)
+{
+	if (!soc || !soc->ops) {
+		dp_cdp_debug("Invalid Instance:");
+		QDF_BUG(0);
+		return;
+	}
+
+	if (!soc->ops->cmn_drv_ops ||
+	    !soc->ops->cmn_drv_ops->txrx_umac_reset_deinit)
+		return;
+
+	soc->ops->cmn_drv_ops->txrx_umac_reset_deinit(soc);
+}
+
+/**
  * cdp_display_stats(): function to map to dump stats
  * @soc: soc handle
  * @value: statistics option
@@ -2034,6 +2081,29 @@ cdp_txrx_set_pdev_status_down(ol_txrx_soc_handle soc,
 
 	return soc->ops->cmn_drv_ops->set_pdev_status_down(soc, pdev_id,
 						    is_pdev_down);
+}
+
+/**
+ * cdp_set_tx_pause() - Pause or resume tx path
+ * @soc_hdl: Datapath soc handle
+ * @flag: set or clear is_tx_pause
+ *
+ * Return: None.
+ */
+static inline
+void cdp_set_tx_pause(ol_txrx_soc_handle soc, bool flag)
+{
+	if (!soc || !soc->ops) {
+		dp_cdp_debug("Invalid Instance:");
+		QDF_BUG(0);
+		return;
+	}
+
+	if (!soc->ops->cmn_drv_ops ||
+				!soc->ops->cmn_drv_ops->set_tx_pause)
+		return;
+
+	soc->ops->cmn_drv_ops->set_tx_pause(soc, flag);
 }
 
 /**
@@ -2858,4 +2928,29 @@ cdp_enable_mon_reap_timer(ol_txrx_soc_handle soc,
 	return soc->ops->mon_ops->txrx_enable_mon_reap_timer(soc, source,
 							     enable);
 }
+
+/**
+ * cdp_get_tsf_time() - get tsf time
+ * @soc: Datapath soc handle
+ * @mac_id: mac_id
+ * @tsf: pointer to update tsf value
+ * @tsf_sync_soc_time: pointer to update tsf sync time
+ *
+ * Return: None.
+ */
+static inline void
+cdp_get_tsf_time(ol_txrx_soc_handle soc, uint32_t tsf_id, uint32_t mac_id,
+		 uint64_t *tsf, uint64_t *tsf_sync_soc_time)
+{
+	if (!soc) {
+		dp_cdp_debug("Invalid Instance");
+		return;
+	}
+	if (!soc->ops->cmn_drv_ops || !soc->ops->cmn_drv_ops->txrx_get_tsf_time)
+		return;
+
+	soc->ops->cmn_drv_ops->txrx_get_tsf_time(soc, tsf_id, mac_id, tsf,
+						 tsf_sync_soc_time);
+}
+
 #endif /* _CDP_TXRX_CMN_H_ */
