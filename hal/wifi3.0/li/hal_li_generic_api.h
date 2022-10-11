@@ -661,9 +661,6 @@ hal_rx_status_get_tlv_info_generic_li(void *rx_tlv_hdr, void *ppduinfo,
 
 	rx_tlv = (uint8_t *)rx_tlv_hdr + HAL_RX_TLV32_HDR_SIZE;
 
-	qdf_trace_hex_dump(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_DEBUG,
-			   rx_tlv, tlv_len);
-
 	switch (tlv_tag) {
 	case WIFIRX_PPDU_START_E:
 	{
@@ -1750,9 +1747,6 @@ hal_rx_status_get_tlv_info_generic_li(void *rx_tlv_hdr, void *ppduinfo,
 			  __func__, tlv_tag, tlv_len,
 			  unhandled == true ? "unhandled" : "");
 
-	qdf_trace_hex_dump(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_DEBUG,
-				rx_tlv, tlv_len);
-
 	return HAL_TLV_STATUS_PPDU_NOT_DONE;
 }
 
@@ -2195,9 +2189,11 @@ static inline void hal_setup_reo_swap(struct hal_soc *soc)
  *
  * @hal_soc: Opaque HAL SOC handle
  * @reo_params: parameters needed by HAL for REO config
+ * @qref_reset: reset qref
  */
 static
-void hal_reo_setup_generic_li(struct hal_soc *soc, void *reoparams)
+void hal_reo_setup_generic_li(struct hal_soc *soc, void *reoparams,
+			      int qref_reset)
 {
 	uint32_t reg_val;
 	struct hal_reo_params *reo_params = (struct hal_reo_params *)reoparams;

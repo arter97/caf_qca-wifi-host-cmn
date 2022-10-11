@@ -194,9 +194,10 @@ struct dp_rx_desc {
 	__dp_rx_add_to_free_desc_list(head, tail, new, __func__)
 
 #define dp_rx_buffers_replenish(soc, mac_id, rxdma_srng, rx_desc_pool, \
-				num_buffers, desc_list, tail) \
+				num_buffers, desc_list, tail, req_only) \
 	__dp_rx_buffers_replenish(soc, mac_id, rxdma_srng, rx_desc_pool, \
-				  num_buffers, desc_list, tail, __func__)
+				  num_buffers, desc_list, tail, req_only, \
+				  __func__)
 
 #ifdef WLAN_SUPPORT_RX_FISA
 /**
@@ -1521,6 +1522,7 @@ dp_rx_update_flow_tag(struct dp_soc *soc, struct dp_vdev *vdev,
  *	       or NULL during dp rx initialization or out of buffer
  *	       interrupt.
  * @tail: tail of descs list
+ * @req_only: If true don't replenish more than req buffers
  * @func_name: name of the caller function
  * Return: return success or failure
  */
@@ -1530,6 +1532,7 @@ QDF_STATUS __dp_rx_buffers_replenish(struct dp_soc *dp_soc, uint32_t mac_id,
 				 uint32_t num_req_buffers,
 				 union dp_rx_desc_list_elem_t **desc_list,
 				 union dp_rx_desc_list_elem_t **tail,
+				 bool req_only,
 				 const char *func_name);
 /*
  * __dp_rx_buffers_no_map_replenish() - replenish rxdma ring with rx nbufs
@@ -2146,6 +2149,7 @@ void dp_rx_update_stats(struct dp_soc *soc, qdf_nbuf_t nbuf)
  *
  * Return: void
  */
+#if defined(MAX_PDEV_CNT) && (MAX_PDEV_CNT == 1)
 static inline
 void dp_rx_cksum_offload(struct dp_pdev *pdev,
 			 qdf_nbuf_t nbuf,
@@ -2168,7 +2172,14 @@ void dp_rx_cksum_offload(struct dp_pdev *pdev,
 		DP_STATS_INCC(pdev, err.tcp_udp_csum_err, 1, tcp_udp_csum_er);
 	}
 }
-
+#else
+static inline
+void dp_rx_cksum_offload(struct dp_pdev *pdev,
+			 qdf_nbuf_t nbuf,
+			 uint8_t *rx_tlv_hdr)
+{
+}
+#endif
 #endif /* QCA_HOST_MODE_WIFI_DISABLED */
 
 #ifdef WLAN_FEATURE_RX_SOFTIRQ_TIME_LIMIT
@@ -2491,7 +2502,7 @@ void dp_rx_buffers_replenish_simple(struct dp_soc *soc, uint32_t mac_id,
 				    union dp_rx_desc_list_elem_t **tail)
 {
 	dp_rx_buffers_replenish(soc, mac_id, rxdma_srng, rx_desc_pool,
-				num_req_buffers, desc_list, tail);
+				num_req_buffers, desc_list, tail, false);
 }
 
 static inline
@@ -2503,7 +2514,7 @@ void dp_rx_buffers_lt_replenish_simple(struct dp_soc *soc, uint32_t mac_id,
 				       union dp_rx_desc_list_elem_t **tail)
 {
 	dp_rx_buffers_replenish(soc, mac_id, rxdma_srng, rx_desc_pool,
-				num_req_buffers, desc_list, tail);
+				num_req_buffers, desc_list, tail, false);
 }
 
 static inline
@@ -2576,6 +2587,27 @@ void dp_rx_nbuf_free(qdf_nbuf_t nbuf)
 {
 	qdf_nbuf_free(nbuf);
 }
+#endif
+
+#ifdef DP_UMAC_HW_RESET_SUPPORT
+/*
+ * dp_rx_desc_reuse() - Reuse the rx descriptors to fill the rx buf ring
+ *
+ * @soc: core txrx main context
+ * @nbuf_list: nbuf list for delayed free
+ *
+ * Return: void
+ */
+void dp_rx_desc_reuse(struct dp_soc *soc, qdf_nbuf_t *nbuf_list);
+
+/*
+ * dp_rx_desc_delayed_free() - Delayed free of the rx descs
+ *
+ * @soc: core txrx main context
+ *
+ * Return: void
+ */
+void dp_rx_desc_delayed_free(struct dp_soc *soc);
 #endif
 
 /**

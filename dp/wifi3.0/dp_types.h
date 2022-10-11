@@ -260,6 +260,7 @@ enum dp_mod_id {
 	DP_MOD_ID_SAWF,
 	DP_MOD_ID_REINJECT,
 	DP_MOD_ID_SCS,
+	DP_MOD_ID_UMAC_RESET,
 	DP_MOD_ID_MAX,
 };
 
@@ -1391,6 +1392,9 @@ struct rx_refill_buff_pool {
 
 #ifdef DP_TX_HW_DESC_HISTORY
 #define DP_TX_HW_DESC_HIST_MAX 6144
+#define DP_TX_HW_DESC_HIST_PER_SLOT_MAX 2048
+#define DP_TX_HW_DESC_HIST_MAX_SLOTS 3
+#define DP_TX_HW_DESC_HIST_SLOT_SHIFT 11
 
 struct dp_tx_hw_desc_evt {
 	uint8_t tcl_desc[HAL_TX_DESC_LEN_BYTES];
@@ -1404,8 +1408,10 @@ struct dp_tx_hw_desc_evt {
  * @entry: history entries
  */
 struct dp_tx_hw_desc_history {
-	uint64_t index;
-	struct dp_tx_hw_desc_evt entry[DP_TX_HW_DESC_HIST_MAX];
+	qdf_atomic_t index;
+	uint16_t num_entries_per_slot;
+	uint16_t allocated;
+	struct dp_tx_hw_desc_evt *entry[DP_TX_HW_DESC_HIST_MAX_SLOTS];
 };
 #endif
 
@@ -1555,7 +1561,15 @@ enum dp_tx_event_type {
 #ifdef WLAN_FEATURE_DP_TX_DESC_HISTORY
 /* Size must be in 2 power, for bitwise index rotation */
 #define DP_TX_TCL_HISTORY_SIZE 0x4000
+#define DP_TX_TCL_HIST_PER_SLOT_MAX 2048
+#define DP_TX_TCL_HIST_MAX_SLOTS 8
+#define DP_TX_TCL_HIST_SLOT_SHIFT 11
+
+/* Size must be in 2 power, for bitwise index rotation */
 #define DP_TX_COMP_HISTORY_SIZE 0x4000
+#define DP_TX_COMP_HIST_PER_SLOT_MAX 2048
+#define DP_TX_COMP_HIST_MAX_SLOTS 8
+#define DP_TX_COMP_HIST_SLOT_SHIFT 11
 
 struct dp_tx_desc_event {
 	qdf_nbuf_t skb;
@@ -1567,12 +1581,16 @@ struct dp_tx_desc_event {
 
 struct dp_tx_tcl_history {
 	qdf_atomic_t index;
-	struct dp_tx_desc_event entry[DP_TX_TCL_HISTORY_SIZE];
+	uint16_t num_entries_per_slot;
+	uint16_t allocated;
+	struct dp_tx_desc_event *entry[DP_TX_TCL_HIST_MAX_SLOTS];
 };
 
 struct dp_tx_comp_history {
 	qdf_atomic_t index;
-	struct dp_tx_desc_event entry[DP_TX_COMP_HISTORY_SIZE];
+	uint16_t num_entries_per_slot;
+	uint16_t allocated;
+	struct dp_tx_desc_event *entry[DP_TX_COMP_HIST_MAX_SLOTS];
 };
 #endif /* WLAN_FEATURE_DP_TX_DESC_HISTORY */
 
@@ -1829,6 +1847,13 @@ struct dp_arch_ops {
 	void (*txrx_peer_map_detach)(struct dp_soc *soc);
 	QDF_STATUS (*dp_rxdma_ring_sel_cfg)(struct dp_soc *soc);
 	void (*soc_cfg_attach)(struct dp_soc *soc);
+	void (*peer_get_reo_hash)(struct dp_vdev *vdev,
+				  struct cdp_peer_setup_info *setup_info,
+				  enum cdp_host_reo_dest_ring *reo_dest,
+				  bool *hash_based,
+				  uint8_t *lmac_peer_id_msb);
+	 bool (*reo_remap_config)(struct dp_soc *soc, uint32_t *remap0,
+				  uint32_t *remap1, uint32_t *remap2);
 
 	/* TX RX Arch Ops */
 	QDF_STATUS (*tx_hw_enqueue)(struct dp_soc *soc, struct dp_vdev *vdev,
@@ -1896,7 +1921,9 @@ struct dp_arch_ops {
 
 	/* Misc Arch Ops */
 	qdf_size_t (*txrx_get_context_size)(enum dp_context_type);
+#ifdef WIFI_MONITOR_SUPPORT
 	qdf_size_t (*txrx_get_mon_context_size)(enum dp_context_type);
+#endif
 	int (*dp_srng_test_and_update_nf_params)(struct dp_soc *soc,
 						 struct dp_srng *dp_srng,
 						 int *max_reap_limit);
@@ -1933,12 +1960,24 @@ struct dp_arch_ops {
 	struct dp_peer *(*dp_find_peer_by_destmac)(struct dp_soc *soc,
 						   uint8_t *dest_mac_addr,
 						   uint8_t vdev_id);
+	void (*dp_bank_reconfig)(struct dp_soc *soc, struct dp_vdev *vdev);
+
+	void (*dp_reconfig_tx_vdev_mcast_ctrl)(struct dp_soc *soc,
+					       struct dp_vdev *vdev);
+
+	void (*dp_cc_reg_cfg_init)(struct dp_soc *soc, bool is_4k_align);
+
 	QDF_STATUS
 	(*dp_tx_compute_hw_delay)(struct dp_soc *soc,
 				  struct dp_vdev *vdev,
 				  struct hal_tx_completion_status *ts,
 				  uint32_t *delay_us);
 	void (*print_mlo_ast_stats)(struct dp_soc *soc);
+	void (*dp_partner_chips_map)(struct dp_soc *soc,
+				     struct dp_peer *peer,
+				     uint16_t peer_id);
+	void (*dp_partner_chips_unmap)(struct dp_soc *soc,
+				       uint16_t peer_id);
 };
 
 /**
@@ -2267,7 +2306,7 @@ struct dp_soc {
 	} ast_hash;
 
 #ifdef DP_TX_HW_DESC_HISTORY
-	struct dp_tx_hw_desc_history *tx_hw_desc_history;
+	struct dp_tx_hw_desc_history tx_hw_desc_history;
 #endif
 
 #ifdef WLAN_FEATURE_DP_RX_RING_HISTORY
@@ -2282,8 +2321,8 @@ struct dp_soc {
 #endif
 
 #ifdef WLAN_FEATURE_DP_TX_DESC_HISTORY
-	struct dp_tx_tcl_history *tx_tcl_history;
-	struct dp_tx_comp_history *tx_comp_history;
+	struct dp_tx_tcl_history tx_tcl_history;
+	struct dp_tx_comp_history tx_comp_history;
 #endif
 
 	qdf_spinlock_t ast_lock;
@@ -2576,8 +2615,17 @@ struct dp_ipa_resources {
  * be useful in debugging
  */
 #ifdef MAX_ALLOC_PAGE_SIZE
+#if PAGE_SIZE == 4096
 #define LINK_DESC_PAGE_ID_MASK  0x007FE0
 #define LINK_DESC_ID_SHIFT      5
+#define LINK_DESC_ID_START_21_BITS_COOKIE 0x8000
+#elif PAGE_SIZE == 65536
+#define LINK_DESC_PAGE_ID_MASK  0x007E00
+#define LINK_DESC_ID_SHIFT      9
+#define LINK_DESC_ID_START_21_BITS_COOKIE 0x800
+#else
+#error "Unsupported kernel PAGE_SIZE"
+#endif
 #define LINK_DESC_COOKIE(_desc_id, _page_id, _desc_id_start) \
 	((((_page_id) + (_desc_id_start)) << LINK_DESC_ID_SHIFT) | (_desc_id))
 #define LINK_DESC_COOKIE_PAGE_ID(_cookie) \
@@ -2589,8 +2637,8 @@ struct dp_ipa_resources {
 	((((_desc_id) + (_desc_id_start)) << LINK_DESC_ID_SHIFT) | (_page_id))
 #define LINK_DESC_COOKIE_PAGE_ID(_cookie) \
 	((_cookie) & LINK_DESC_PAGE_ID_MASK)
-#endif
 #define LINK_DESC_ID_START_21_BITS_COOKIE 0x8000
+#endif
 #define LINK_DESC_ID_START_20_BITS_COOKIE 0x4000
 
 /* same as ieee80211_nac_param */
@@ -2828,18 +2876,18 @@ struct dp_pdev {
 	 */
 
 	/* PDEV Id */
-	int pdev_id;
+	uint8_t pdev_id;
 
 	/* LMAC Id */
-	int lmac_id;
+	uint8_t lmac_id;
 
 	/* Target pdev  Id */
-	int target_pdev_id;
+	uint8_t target_pdev_id;
+
+	bool pdev_deinit;
 
 	/* TXRX SOC handle */
 	struct dp_soc *soc;
-
-	bool pdev_deinit;
 
 	/* pdev status down or up required to handle dynamic hw
 	 * mode switch between DBS and DBS_SBS.
@@ -2850,6 +2898,9 @@ struct dp_pdev {
 
 	/* Enhanced Stats is enabled */
 	bool enhanced_stats_en;
+
+	/* Flag to indicate fast RX */
+	bool rx_fast_flag;
 
 	/* Second ring used to replenish rx buffers */
 	struct dp_srng rx_refill_buf_ring2;
@@ -4234,10 +4285,23 @@ struct dp_rx_fst {
 #define DP_RX_GET_SW_FT_ENTRY_SIZE sizeof(struct dp_rx_fse)
 #elif WLAN_SUPPORT_RX_FISA
 
+/**
+ * struct dp_fisa_reo_mismatch_stats - reo mismatch sub-case stats for FISA
+ * @allow_cce_match: packet allowed due to cce mismatch
+ * @allow_fse_metdata_mismatch: packet allowed since it belongs to same flow,
+ *			only fse_metadata is not same.
+ * @allow_non_aggr: packet allowed due to any other reason.
+ */
+struct dp_fisa_reo_mismatch_stats {
+	uint32_t allow_cce_match;
+	uint32_t allow_fse_metdata_mismatch;
+	uint32_t allow_non_aggr;
+};
+
 struct dp_fisa_stats {
 	/* flow index invalid from RX HW TLV */
 	uint32_t invalid_flow_index;
-	uint32_t reo_mismatch;
+	struct dp_fisa_reo_mismatch_stats reo_mismatch;
 };
 
 enum fisa_aggr_ret {

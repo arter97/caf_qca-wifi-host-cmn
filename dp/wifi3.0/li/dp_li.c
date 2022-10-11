@@ -27,6 +27,9 @@
 #include "dp_peer.h"
 #include <wlan_utility.h>
 #include "dp_ipa.h"
+#ifdef WIFI_MONITOR_SUPPORT
+#include <dp_mon_1.0.h>
+#endif
 
 #if defined(WLAN_MAX_PDEVS) && (WLAN_MAX_PDEVS == 1)
 static struct wlan_cfg_tcl_wbm_ring_num_map g_tcl_wbm_map_array[MAX_TCL_DATA_RINGS] = {
@@ -91,18 +94,6 @@ qdf_size_t dp_get_context_size_li(enum dp_context_type context_type)
 		return sizeof(struct dp_vdev_li);
 	case DP_CONTEXT_TYPE_PEER:
 		return sizeof(struct dp_peer_li);
-	default:
-		return 0;
-	}
-}
-
-qdf_size_t dp_mon_get_context_size_li(enum dp_context_type context_type)
-{
-	switch (context_type) {
-	case DP_CONTEXT_TYPE_MON_PDEV:
-		return sizeof(struct dp_mon_pdev_li);
-	case DP_CONTEXT_TYPE_MON_SOC:
-		return sizeof(struct dp_mon_soc_li);
 	default:
 		return 0;
 	}
@@ -558,6 +549,23 @@ static void dp_get_rx_hash_key_li(struct dp_soc *soc,
 	dp_get_rx_hash_key_bytes(lro_hash);
 }
 
+static void dp_peer_get_reo_hash_li(struct dp_vdev *vdev,
+				    struct cdp_peer_setup_info *setup_info,
+				    enum cdp_host_reo_dest_ring *reo_dest,
+				    bool *hash_based,
+				    uint8_t *lmac_peer_id_msb)
+{
+	dp_vdev_get_default_reo_hash(vdev, reo_dest, hash_based);
+}
+
+static bool dp_reo_remap_config_li(struct dp_soc *soc,
+				   uint32_t *remap0,
+				   uint32_t *remap1,
+				   uint32_t *remap2)
+{
+	return dp_reo_remap_config(soc, remap0, remap1, remap2);
+}
+
 void dp_initialize_arch_ops_li(struct dp_arch_ops *arch_ops)
 {
 #ifndef QCA_HOST_MODE_WIFI_DISABLED
@@ -580,7 +588,9 @@ void dp_initialize_arch_ops_li(struct dp_arch_ops *arch_ops)
 	arch_ops->dp_rx_desc_pool_deinit = dp_rx_desc_pool_deinit_generic;
 #endif
 	arch_ops->txrx_get_context_size = dp_get_context_size_li;
+#ifdef WIFI_MONITOR_SUPPORT
 	arch_ops->txrx_get_mon_context_size = dp_mon_get_context_size_li;
+#endif
 	arch_ops->txrx_soc_attach = dp_soc_attach_li;
 	arch_ops->txrx_soc_detach = dp_soc_detach_li;
 	arch_ops->txrx_soc_init = dp_soc_init_li;
@@ -609,6 +619,8 @@ void dp_initialize_arch_ops_li(struct dp_arch_ops *arch_ops)
 	arch_ops->dp_peer_rx_reorder_queue_setup =
 					dp_peer_rx_reorder_queue_setup_li;
 	arch_ops->dp_find_peer_by_destmac = dp_find_peer_by_destmac_li;
+	arch_ops->peer_get_reo_hash = dp_peer_get_reo_hash_li;
+	arch_ops->reo_remap_config = dp_reo_remap_config_li;
 }
 
 #ifdef QCA_DP_TX_HW_SW_NBUF_DESC_PREFETCH

@@ -142,27 +142,39 @@ dp_tx_desc_history_add(struct dp_soc *soc, dma_addr_t paddr,
 		       qdf_nbuf_t skb, uint32_t sw_cookie,
 		       enum dp_tx_event_type type)
 {
+	struct dp_tx_tcl_history *tx_tcl_history = &soc->tx_tcl_history;
+	struct dp_tx_comp_history *tx_comp_history = &soc->tx_comp_history;
 	struct dp_tx_desc_event *entry;
 	uint32_t idx;
-
-	if (qdf_unlikely(!soc->tx_tcl_history || !soc->tx_comp_history))
-		return;
+	uint16_t slot;
 
 	switch (type) {
 	case DP_TX_COMP_UNMAP:
 	case DP_TX_COMP_UNMAP_ERR:
 	case DP_TX_COMP_MSDU_EXT:
-		idx = dp_history_get_next_index(&soc->tx_comp_history->index,
-						DP_TX_COMP_HISTORY_SIZE);
-		entry = &soc->tx_comp_history->entry[idx];
+		if (qdf_unlikely(!tx_comp_history->allocated))
+			return;
+
+		dp_get_frag_hist_next_atomic_idx(&tx_comp_history->index, &idx,
+						 &slot,
+						 DP_TX_COMP_HIST_SLOT_SHIFT,
+						 DP_TX_COMP_HIST_PER_SLOT_MAX,
+						 DP_TX_COMP_HISTORY_SIZE);
+		entry = &tx_comp_history->entry[slot][idx];
 		break;
 	case DP_TX_DESC_MAP:
 	case DP_TX_DESC_UNMAP:
 	case DP_TX_DESC_COOKIE:
 	case DP_TX_DESC_FLUSH:
-		idx = dp_history_get_next_index(&soc->tx_tcl_history->index,
-						DP_TX_TCL_HISTORY_SIZE);
-		entry = &soc->tx_tcl_history->entry[idx];
+		if (qdf_unlikely(!tx_tcl_history->allocated))
+			return;
+
+		dp_get_frag_hist_next_atomic_idx(&tx_tcl_history->index, &idx,
+						 &slot,
+						 DP_TX_TCL_HIST_SLOT_SHIFT,
+						 DP_TX_TCL_HIST_PER_SLOT_MAX,
+						 DP_TX_TCL_HISTORY_SIZE);
+		entry = &tx_tcl_history->entry[slot][idx];
 		break;
 	default:
 		dp_info_rl("Invalid dp_tx_event_type: %d", type);
@@ -2068,30 +2080,41 @@ static inline void dp_tx_update_mesh_flags(struct dp_soc *soc,
  * dp_mesh_tx_comp_free_buff() - Free the mesh tx packet buffer
  * @soc: dp_soc handle
  * @tx_desc: TX descriptor
- * @vdev: datapath vdev handle
+ * @delayed_free: delay the nbuf free
  *
- * Return: None
+ * Return: nbuf to be freed late
  */
-static inline void dp_mesh_tx_comp_free_buff(struct dp_soc *soc,
-					     struct dp_tx_desc_s *tx_desc)
+static inline qdf_nbuf_t dp_mesh_tx_comp_free_buff(struct dp_soc *soc,
+						   struct dp_tx_desc_s *tx_desc,
+						   bool delayed_free)
 {
 	qdf_nbuf_t nbuf = tx_desc->nbuf;
 	struct dp_vdev *vdev = NULL;
 
+	vdev = dp_vdev_get_ref_by_id(soc, tx_desc->vdev_id, DP_MOD_ID_MESH);
 	if (tx_desc->flags & DP_TX_DESC_FLAG_TO_FW) {
-		qdf_nbuf_free(nbuf);
-		DP_STATS_INC(vdev, tx_i.mesh.completion_fw, 1);
-	} else {
-		vdev = dp_vdev_get_ref_by_id(soc, tx_desc->vdev_id,
-					     DP_MOD_ID_MESH);
-		if (vdev && vdev->osif_tx_free_ext)
-			vdev->osif_tx_free_ext((nbuf));
-		else
-			qdf_nbuf_free(nbuf);
-
 		if (vdev)
-			dp_vdev_unref_delete(soc, vdev, DP_MOD_ID_MESH);
+			DP_STATS_INC(vdev, tx_i.mesh.completion_fw, 1);
+
+		if (delayed_free)
+			return nbuf;
+
+		qdf_nbuf_free(nbuf);
+	} else {
+		if (vdev && vdev->osif_tx_free_ext) {
+			vdev->osif_tx_free_ext((nbuf));
+		} else {
+			if (delayed_free)
+				return nbuf;
+
+			qdf_nbuf_free(nbuf);
+		}
 	}
+
+	if (vdev)
+		dp_vdev_unref_delete(soc, vdev, DP_MOD_ID_MESH);
+
+	return NULL;
 }
 #else
 static inline void dp_tx_update_mesh_flags(struct dp_soc *soc,
@@ -2100,9 +2123,11 @@ static inline void dp_tx_update_mesh_flags(struct dp_soc *soc,
 {
 }
 
-static inline void dp_mesh_tx_comp_free_buff(struct dp_soc *soc,
-					     struct dp_tx_desc_s *tx_desc)
+static inline qdf_nbuf_t dp_mesh_tx_comp_free_buff(struct dp_soc *soc,
+						   struct dp_tx_desc_s *tx_desc,
+						   bool delayed_free)
 {
+	return NULL;
 }
 #endif
 
@@ -2297,21 +2322,25 @@ fail_return:
  * dp_tx_comp_free_buf() - Free nbuf associated with the Tx Descriptor
  * @soc: Soc handle
  * @desc: software Tx descriptor to be processed
+ * @delayed_free: defer freeing of nbuf
  *
- * Return: none
+ * Return: nbuf to be freed later
  */
-void dp_tx_comp_free_buf(struct dp_soc *soc, struct dp_tx_desc_s *desc)
+qdf_nbuf_t dp_tx_comp_free_buf(struct dp_soc *soc, struct dp_tx_desc_s *desc,
+			       bool delayed_free)
 {
 	qdf_nbuf_t nbuf = desc->nbuf;
 	enum dp_tx_event_type type = dp_tx_get_event_type(desc->flags);
 
 	/* nbuf already freed in vdev detach path */
 	if (!nbuf)
-		return;
+		return NULL;
 
 	/* If it is TDLS mgmt, don't unmap or free the frame */
-	if (desc->flags & DP_TX_DESC_FLAG_TDLS_FRAME)
-		return dp_non_std_htt_tx_comp_free_buff(soc, desc);
+	if (desc->flags & DP_TX_DESC_FLAG_TDLS_FRAME) {
+		dp_non_std_htt_tx_comp_free_buff(soc, desc);
+		return NULL;
+	}
 
 	/* 0 : MSDU buffer, 1 : MLE */
 	if (desc->msdu_ext_desc) {
@@ -2328,8 +2357,7 @@ void dp_tx_comp_free_buf(struct dp_soc *soc, struct dp_tx_desc_s *desc)
 						desc->msdu_ext_desc->tso_desc,
 						desc->msdu_ext_desc->
 						tso_num_desc);
-			qdf_nbuf_free(nbuf);
-			return;
+			goto nbuf_free;
 		}
 
 		if (qdf_unlikely(desc->frm_type == dp_tx_frm_sg)) {
@@ -2353,8 +2381,7 @@ void dp_tx_comp_free_buf(struct dp_soc *soc, struct dp_tx_desc_s *desc)
 						   QDF_DMA_TO_DEVICE);
 			}
 
-			qdf_nbuf_free(nbuf);
-			return;
+			goto nbuf_free;
 		}
 	}
 	/* If it's ME frame, dont unmap the cloned nbuf's */
@@ -2365,13 +2392,18 @@ void dp_tx_comp_free_buf(struct dp_soc *soc, struct dp_tx_desc_s *desc)
 	dp_tx_unmap(soc, desc);
 
 	if (desc->flags & DP_TX_DESC_FLAG_MESH_MODE)
-		return dp_mesh_tx_comp_free_buff(soc, desc);
+		return dp_mesh_tx_comp_free_buff(soc, desc, delayed_free);
 
 	if (dp_tx_traffic_end_indication_enq_ind_pkt(soc, desc, nbuf))
-		return;
+		return NULL;
 
 nbuf_free:
+	if (delayed_free)
+		return nbuf;
+
 	qdf_nbuf_free(nbuf);
+
+	return NULL;
 }
 
 /**
@@ -2613,7 +2645,7 @@ qdf_nbuf_t dp_tx_send_msdu_multiple(struct dp_vdev *vdev, qdf_nbuf_t nbuf,
 				 * unmap and free current,
 				 * retransmit remaining segments
 				 */
-				dp_tx_comp_free_buf(soc, tx_desc);
+				dp_tx_comp_free_buf(soc, tx_desc, false);
 				i++;
 				dp_tx_desc_release(tx_desc, tx_q->desc_pool_id);
 				continue;
@@ -4147,6 +4179,20 @@ dp_update_no_ack_stats(qdf_nbuf_t nbuf, struct dp_txrx_peer *txrx_peer)
 #endif
 
 #ifndef QCA_ENHANCED_STATS_SUPPORT
+#ifdef DP_PEER_EXTENDED_API
+static inline uint8_t
+dp_tx_get_mpdu_retry_threshold(struct dp_txrx_peer *txrx_peer)
+{
+	return txrx_peer->mpdu_retry_threshold;
+}
+#else
+static inline uint8_t
+dp_tx_get_mpdu_retry_threshold(struct dp_txrx_peer *txrx_peer)
+{
+	return 0;
+}
+#endif
+
 /**
  * dp_tx_update_peer_extd_stats()- Update Tx extended path stats for peer
  *
@@ -4160,7 +4206,7 @@ dp_tx_update_peer_extd_stats(struct hal_tx_completion_status *ts,
 			     struct dp_txrx_peer *txrx_peer)
 {
 	uint8_t mcs, pkt_type, dst_mcs_idx;
-	uint8_t retry_threshold = txrx_peer->mpdu_retry_threshold;
+	uint8_t retry_threshold = dp_tx_get_mpdu_retry_threshold(txrx_peer);
 
 	mcs = ts->mcs;
 	pkt_type = ts->pkt_type;
@@ -4562,7 +4608,7 @@ dp_tx_comp_process_desc(struct dp_soc *soc,
 	}
 
 	desc->flags |= DP_TX_DESC_FLAG_COMPLETED_TX;
-	dp_tx_comp_free_buf(soc, desc);
+	dp_tx_comp_free_buf(soc, desc, false);
 }
 
 #ifdef DISABLE_DP_STATS
@@ -4911,7 +4957,7 @@ void dp_tx_update_peer_basic_stats(struct dp_txrx_peer *txrx_peer,
 				   uint32_t length, uint8_t tx_status,
 				   bool update)
 {
-	if ((!txrx_peer->hw_txrx_stats_en) || update) {
+	if (update || (!txrx_peer->hw_txrx_stats_en)) {
 		DP_PEER_STATS_FLAT_INC_PKT(txrx_peer, comp_pkt, 1, length);
 
 		if (tx_status != HAL_TX_TQM_RR_FRAME_ACKED)
@@ -4923,7 +4969,7 @@ void dp_tx_update_peer_basic_stats(struct dp_txrx_peer *txrx_peer,
 				   uint32_t length, uint8_t tx_status,
 				   bool update)
 {
-	if (!peer->hw_txrx_stats_en) {
+	if (!txrx_peer->hw_txrx_stats_en) {
 		DP_PEER_STATS_FLAT_INC_PKT(txrx_peer, comp_pkt, 1, length);
 
 		if (tx_status != HAL_TX_TQM_RR_FRAME_ACKED)
@@ -5216,8 +5262,9 @@ more_data:
 		num_avail_for_reap = quota;
 
 	dp_srng_dst_inv_cached_descs(soc, hal_ring_hdl, num_avail_for_reap);
-	last_prefetched_hw_desc = dp_srng_dst_prefetch(hal_soc, hal_ring_hdl,
-						       num_avail_for_reap);
+	last_prefetched_hw_desc = dp_srng_dst_prefetch_32_byte_desc(hal_soc,
+							    hal_ring_hdl,
+							    num_avail_for_reap);
 
 	/* Find head descriptor from completion ring */
 	while (qdf_likely(num_avail_for_reap--)) {
@@ -5329,7 +5376,7 @@ more_data:
 				dp_tx_comp_info_rl("pdev in down state %d",
 						   tx_desc->id);
 				tx_desc->flags |= DP_TX_DESC_FLAG_TX_COMP_ERR;
-				dp_tx_comp_free_buf(soc, tx_desc);
+				dp_tx_comp_free_buf(soc, tx_desc, false);
 				dp_tx_desc_release(tx_desc, tx_desc->pool_id);
 				goto next_desc;
 			}
@@ -5606,7 +5653,8 @@ void dp_tx_desc_flush(struct dp_pdev *pdev, struct dp_vdev *vdev,
 				 */
 				if (force_free) {
 					tx_desc->flags |= DP_TX_DESC_FLAG_FLUSH;
-					dp_tx_comp_free_buf(soc, tx_desc);
+					dp_tx_comp_free_buf(soc, tx_desc,
+							    false);
 					dp_tx_desc_release(tx_desc, i);
 				} else {
 					tx_desc->vdev_id = DP_INVALID_VDEV_ID;
@@ -5670,7 +5718,8 @@ void dp_tx_desc_flush(struct dp_pdev *pdev, struct dp_vdev *vdev,
 			if (dp_is_tx_desc_flush_match(pdev, vdev, tx_desc)) {
 				if (force_free) {
 					tx_desc->flags |= DP_TX_DESC_FLAG_FLUSH;
-					dp_tx_comp_free_buf(soc, tx_desc);
+					dp_tx_comp_free_buf(soc, tx_desc,
+							    false);
 					dp_tx_desc_release(tx_desc, i);
 				} else {
 					dp_tx_desc_reset_vdev(soc, tx_desc,

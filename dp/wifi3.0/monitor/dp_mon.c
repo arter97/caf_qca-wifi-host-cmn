@@ -827,7 +827,6 @@ dp_print_pdev_rx_mon_stats(struct dp_pdev *pdev)
 	uint32_t *dest_ring_ppdu_ids;
 	int i, idx;
 	struct dp_mon_pdev *mon_pdev = pdev->monitor_pdev;
-	struct dp_mon_soc *mon_soc = pdev->soc->monitor_soc;
 
 	rx_mon_stats = &mon_pdev->rx_mon_stats;
 
@@ -906,23 +905,8 @@ dp_print_pdev_rx_mon_stats(struct dp_pdev *pdev)
 	DP_PRINT_STATS("mon_rx_dest_stuck = %d",
 		       rx_mon_stats->mon_rx_dest_stuck);
 
-	DP_PRINT_STATS("rx_hdr_not_received = %d",
-		       rx_mon_stats->rx_hdr_not_received);
-	DP_PRINT_STATS("parent_buf_alloc = %d",
-		       rx_mon_stats->parent_buf_alloc);
-	DP_PRINT_STATS("parent_buf_free = %d",
-		       rx_mon_stats->parent_buf_free);
-	DP_PRINT_STATS("mpdus_buf_to_stack = %d",
-		       rx_mon_stats->mpdus_buf_to_stack);
-	DP_PRINT_STATS("frag_alloc = %d",
-		       mon_soc->stats.frag_alloc);
-	DP_PRINT_STATS("frag_free = %d",
-		       mon_soc->stats.frag_free);
-	DP_PRINT_STATS("status_buf_count = %d",
-		       rx_mon_stats->status_buf_count);
-	DP_PRINT_STATS("pkt_buf_count = %d",
-		       rx_mon_stats->pkt_buf_count);
 	dp_pdev_get_undecoded_capture_stats(mon_pdev, rx_mon_stats);
+	dp_mon_rx_print_advanced_stats(pdev->soc, pdev);
 }
 
 #ifdef QCA_SUPPORT_BPR
@@ -3834,6 +3818,12 @@ dp_process_ppdu_stats_sch_cmd_status_tlv(struct dp_pdev *pdev,
 			if (!peer)
 				continue;
 
+			if (!peer->monitor_peer) {
+				dp_peer_unref_delete(peer,
+						     DP_MOD_ID_TX_PPDU_STATS);
+				continue;
+			}
+
 			mon_peer = peer->monitor_peer;
 			delay_ppdu = &mon_peer->delayed_ba_ppdu_stats;
 			start_tsf = ppdu_desc->ppdu_start_timestamp;
@@ -3890,6 +3880,12 @@ dp_process_ppdu_stats_sch_cmd_status_tlv(struct dp_pdev *pdev,
 			 */
 			if (!peer)
 				continue;
+
+			if (!peer->monitor_peer) {
+				dp_peer_unref_delete(peer,
+						     DP_MOD_ID_TX_PPDU_STATS);
+				continue;
+			}
 
 			mon_peer = peer->monitor_peer;
 			if (ppdu_desc->user[i].completion_status !=
@@ -4942,6 +4938,7 @@ QDF_STATUS dp_mon_soc_cfg_init(struct dp_soc *soc)
 		mon_soc->hw_nac_monitor_support = 1;
 		break;
 	case TARGET_TYPE_QCN9224:
+	case TARGET_TYPE_QCA5332:
 		wlan_cfg_set_mon_delayed_replenish_entries(soc->wlan_cfg_ctx,
 							   MON_BUF_MIN_ENTRIES);
 		mon_soc->hw_nac_monitor_support = 1;
@@ -5033,10 +5030,19 @@ QDF_STATUS dp_mon_pdev_attach(struct dp_pdev *pdev)
 		}
 	}
 
+	if (mon_ops->mon_rx_ppdu_info_cache_create) {
+		if (mon_ops->mon_rx_ppdu_info_cache_create(pdev)) {
+			dp_mon_err("%pK: dp_rx_pdev_mon_attach failed", pdev);
+			goto fail4;
+		}
+	}
 	pdev->monitor_pdev = mon_pdev;
 	dp_mon_pdev_per_target_config(pdev);
 
 	return QDF_STATUS_SUCCESS;
+fail4:
+	if (mon_ops->rx_mon_desc_pool_free)
+		mon_ops->rx_mon_desc_pool_free(pdev);
 fail3:
 	if (mon_ops->mon_rings_free)
 		mon_ops->mon_rings_free(pdev);
@@ -5072,6 +5078,8 @@ QDF_STATUS dp_mon_pdev_detach(struct dp_pdev *pdev)
 		return QDF_STATUS_E_FAILURE;
 	}
 
+	if (mon_ops->mon_rx_ppdu_info_cache_destroy)
+		mon_ops->mon_rx_ppdu_info_cache_destroy(pdev);
 	if (mon_ops->rx_mon_desc_pool_free)
 		mon_ops->rx_mon_desc_pool_free(pdev);
 	if (mon_ops->mon_rings_free)
@@ -5604,6 +5612,7 @@ void dp_mon_ops_register(struct dp_soc *soc)
 		dp_mon_ops_register_1_0(mon_soc);
 		break;
 	case TARGET_TYPE_QCN9224:
+	case TARGET_TYPE_QCA5332:
 #ifdef QCA_MONITOR_2_0_SUPPORT
 		dp_mon_ops_register_2_0(mon_soc);
 #endif
@@ -5676,6 +5685,7 @@ void dp_mon_cdp_ops_register(struct dp_soc *soc)
 #endif
 		break;
 	case TARGET_TYPE_QCN9224:
+	case TARGET_TYPE_QCA5332:
 #ifdef QCA_MONITOR_2_0_SUPPORT
 		dp_mon_cdp_ops_register_2_0(ops);
 #ifdef ATH_SUPPORT_NAC_RSSI

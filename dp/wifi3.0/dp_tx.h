@@ -246,7 +246,8 @@ QDF_STATUS dp_tx_tso_cmn_desc_pool_alloc(struct dp_soc *soc,
 QDF_STATUS dp_tx_tso_cmn_desc_pool_init(struct dp_soc *soc,
 					uint8_t num_pool,
 					uint32_t num_desc);
-void dp_tx_comp_free_buf(struct dp_soc *soc, struct dp_tx_desc_s *desc);
+qdf_nbuf_t dp_tx_comp_free_buf(struct dp_soc *soc, struct dp_tx_desc_s *desc,
+			       bool delayed_free);
 void dp_tx_desc_release(struct dp_tx_desc_s *tx_desc, uint8_t desc_pool_id);
 void dp_tx_compute_delay(struct dp_vdev *vdev, struct dp_tx_desc_s *tx_desc,
 			 uint8_t tid, uint8_t ring_id);
@@ -430,13 +431,19 @@ void dp_tx_prefetch_hw_sw_nbuf_desc(struct dp_soc *soc,
 	}
 
 	if (num_avail_for_reap && *last_prefetched_hw_desc) {
-		dp_tx_comp_get_prefetched_params_from_hal_desc(
-						soc,
-						*last_prefetched_hw_desc,
-						last_prefetched_sw_desc);
-		*last_prefetched_hw_desc =
-			hal_srng_dst_prefetch_next_cached_desc(
+		soc->arch_ops.tx_comp_get_params_from_hal_desc(soc,
+						       *last_prefetched_hw_desc,
+						       last_prefetched_sw_desc);
+
+		if ((uintptr_t)*last_prefetched_hw_desc & 0x3f)
+			*last_prefetched_hw_desc =
+				hal_srng_dst_prefetch_next_cached_desc(
 					hal_soc,
+					hal_ring_hdl,
+					(uint8_t *)*last_prefetched_hw_desc);
+		else
+			*last_prefetched_hw_desc =
+				hal_srng_dst_get_next_32_byte_desc(hal_soc,
 					hal_ring_hdl,
 					(uint8_t *)*last_prefetched_hw_desc);
 	}
@@ -897,18 +904,22 @@ dp_tx_hw_desc_update_evt(uint8_t *hal_tx_desc_cached,
 			 hal_ring_handle_t hal_ring_hdl,
 			 struct dp_soc *soc)
 {
+	struct dp_tx_hw_desc_history *tx_hw_desc_history =
+						&soc->tx_hw_desc_history;
 	struct dp_tx_hw_desc_evt *evt;
-	uint64_t idx = 0;
+	uint32_t idx = 0;
+	uint16_t slot = 0;
 
-	if (!soc->tx_hw_desc_history)
+	if (!tx_hw_desc_history->allocated)
 		return;
 
-	idx = ++soc->tx_hw_desc_history->index;
-	if (idx == DP_TX_HW_DESC_HIST_MAX)
-		soc->tx_hw_desc_history->index = 0;
-	idx = qdf_do_div_rem(idx, DP_TX_HW_DESC_HIST_MAX);
+	dp_get_frag_hist_next_atomic_idx(&tx_hw_desc_history->index, &idx,
+					 &slot,
+					 DP_TX_HW_DESC_HIST_SLOT_SHIFT,
+					 DP_TX_HW_DESC_HIST_PER_SLOT_MAX,
+					 DP_TX_HW_DESC_HIST_MAX);
 
-	evt = &soc->tx_hw_desc_history->entry[idx];
+	evt = &tx_hw_desc_history->entry[slot][idx];
 	qdf_mem_copy(evt->tcl_desc, hal_tx_desc_cached, HAL_TX_DESC_LEN_BYTES);
 	evt->posted = qdf_get_log_timestamp();
 	hal_get_sw_hptp(soc->hal_soc, hal_ring_hdl, &evt->tp, &evt->hp);

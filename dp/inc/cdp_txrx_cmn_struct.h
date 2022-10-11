@@ -418,12 +418,14 @@ enum cdp_peer_type {
  * @is_first_link: set true for first MLO link peer
  * @is_primary_link: set true for MLO primary link peer
  * @primary_umac_id: primary umac_id
+ * @num_links: number of links in MLO
  */
 struct cdp_peer_setup_info {
 	uint8_t *mld_peer_mac;
 	uint8_t is_first_link:1,
 		is_primary_link:1;
 	uint8_t primary_umac_id;
+	uint8_t num_links;
 };
 
 /**
@@ -1491,6 +1493,7 @@ enum cdp_vdev_param_type {
 #endif
 	CDP_UPDATE_DSCP_TO_TID_MAP,
 	CDP_SET_MCAST_VDEV,
+	CDP_SET_MCAST_VDEV_HW_UPDATE,
 	CDP_DROP_3ADDR_MCAST,
 	CDP_ENABLE_WRAP,
 #ifdef DP_TRAFFIC_END_INDICATION
@@ -2072,7 +2075,7 @@ struct cdp_tx_indication_info {
 /**
  * struct cdp_tx_mgmt_comp_info - Tx mgmt comp info
  * @ppdu_id: ppdu_id
- * @is_sgen_pkt: payload recevied from wmi or htt path
+ * @is_sgen_pkt: payload received from wmi or htt path
  * @retries_count: retries count
  * @tx_tsf: 64 bit timestamp
  */

@@ -3599,6 +3599,9 @@ struct category_name_info g_qdf_category_name[MAX_SUPPORTED_CATEGORY] = {
 	[QDF_MODULE_ID_SCS] = {"SCS"},
 	[QDF_MODULE_ID_DP_UMAC_RESET] = {"UMAC_HW_RESET"},
 	[QDF_MODULE_ID_COAP] = {"COAP"},
+	[QDF_MODULE_ID_FTM_TIME_SYNC] = {"Time Sync"},
+	[QDF_MODULE_ID_WIFI_RADAR] = {"WIFI RADAR"},
+	[QDF_MODULE_ID_CDP] =  {"CDP"},
 	[QDF_MODULE_ID_ANY] = {"ANY"},
 };
 qdf_export_symbol(g_qdf_category_name);
@@ -4179,6 +4182,10 @@ static void set_default_trace_levels(struct category_info *cinfo)
 		[QDF_MODULE_ID_SCS] = QDF_TRACE_LEVEL_ERROR,
 		[QDF_MODULE_ID_DP_UMAC_RESET] = QDF_TRACE_LEVEL_ERROR,
 		[QDF_MODULE_ID_COAP] = QDF_TRACE_LEVEL_ERROR,
+		[QDF_MODULE_ID_FTM_TIME_SYNC] = QDF_TRACE_LEVEL_NONE,
+		[QDF_MODULE_ID_AFC] = QDF_TRACE_LEVEL_NONE,
+		[QDF_MODULE_ID_WIFI_RADAR] = QDF_TRACE_LEVEL_NONE,
+		[QDF_MODULE_ID_TARGET] = QDF_TRACE_LEVEL_NONE,
 		[QDF_MODULE_ID_ANY] = QDF_TRACE_LEVEL_INFO,
 	};
 
@@ -4639,10 +4646,16 @@ static struct notifier_block qdf_va_md_notif_blk = {
 
 void __qdf_minidump_init(void)
 {
+	int ret;
+
+	if (qdf_va_md_initialized)
+		return;
+
 	qdf_spinlock_create(&qdf_va_md_list_lock);
 	qdf_list_create(&qdf_va_md_list, QDF_MINIDUMP_LIST_SIZE);
-	qcom_va_md_register("qdf_va_md", &qdf_va_md_notif_blk);
-	qdf_va_md_initialized = true;
+	ret = qcom_va_md_register(qdf_trace_wlan_modname(),
+				  &qdf_va_md_notif_blk);
+	qdf_va_md_initialized = !ret;
 }
 
 qdf_export_symbol(__qdf_minidump_init);
@@ -4652,7 +4665,12 @@ void __qdf_minidump_deinit(void)
 	struct qdf_va_md_entry *entry;
 	struct qdf_va_md_entry *next;
 
+	if (!qdf_va_md_initialized)
+		return;
+
 	qdf_va_md_initialized = false;
+	qcom_va_md_unregister(qdf_trace_wlan_modname(),
+			      &qdf_va_md_notif_blk);
 	qdf_spin_lock_irqsave(&qdf_va_md_list_lock);
 	qdf_list_for_each_del(&qdf_va_md_list, entry, next, node) {
 		qdf_list_remove_node(&qdf_va_md_list, &entry->node);
