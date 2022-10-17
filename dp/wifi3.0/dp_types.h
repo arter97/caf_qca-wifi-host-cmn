@@ -748,7 +748,7 @@ struct dp_txrx_pool_stats {
  * @cached: is the srng ring memory cached or un-cached memory
  * @irq: irq number of the srng ring
  * @num_entries: number of entries in the srng ring
- * @is_mem_prealloc: Is this srng memeory pre-allocated
+ * @is_mem_prealloc: Is this srng memory pre-allocated
  * @crit_thresh: Critical threshold for near-full processing of this srng
  * @safe_thresh: Safe threshold for near-full processing of this srng
  * @near_full: Flag to indicate srng is near-full
@@ -1609,7 +1609,7 @@ struct dp_last_op_info {
 
 /**
  * struct dp_swlm_tcl_data - params for tcl register write coalescing
- *			     descision making
+ *			     decision making
  * @nbuf: TX packet
  * @tid: tid for transmitting the current packet
  * @num_ll_connections: Number of low latency connections on this vdev
@@ -1908,6 +1908,11 @@ struct dp_arch_ops {
 				       qdf_nbuf_t nbuf_copy,
 				       struct cdp_tid_rx_stats *tid_stats);
 
+	void (*dp_rx_word_mask_subscribe)(
+				struct dp_soc *soc,
+				uint32_t *msg_word,
+				void *rx_filter);
+
 	struct dp_rx_desc *(*dp_rx_desc_cookie_2_va)(struct dp_soc *soc,
 						     uint32_t cookie);
 	uint32_t (*dp_service_near_full_srngs)(struct dp_soc *soc,
@@ -1994,7 +1999,7 @@ struct dp_arch_ops {
  * @pn_in_reo_dest: PN provided by hardware in the REO destination ring.
  * @dmac_cmn_src_rxbuf_ring_enabled: Flag to indicate DMAC mode common Rx
  *				     buffer source rings
- * @rssi_dbm_conv_support: Rssi dbm converstion support param.
+ * @rssi_dbm_conv_support: Rssi dbm conversion support param.
  * @umac_hw_reset_support: UMAC HW reset support
  */
 struct dp_soc_features {
@@ -2335,7 +2340,7 @@ struct dp_soc {
 #endif
 
 	qdf_spinlock_t ast_lock;
-	/*Timer for AST entry ageout maintainance */
+	/*Timer for AST entry ageout maintenance */
 	qdf_timer_t ast_aging_timer;
 
 	/*Timer counter for WDS AST entry ageout*/
@@ -2930,7 +2935,7 @@ struct dp_pdev {
 	/**
 	 * TODO: See if we need a ring map here for LMAC rings.
 	 * 1. Monitor rings are currently planning to be processed on receiving
-	 * PPDU end interrupts and hence wont need ring based interrupts.
+	 * PPDU end interrupts and hence won't need ring based interrupts.
 	 * 2. Rx buffer rings will be replenished during REO destination
 	 * processing and doesn't require regular interrupt handling - we will
 	 * only handle low water mark interrupts which is not expected
@@ -3058,6 +3063,12 @@ struct dp_pdev {
 	/* qdf_event for fw_stats */
 	qdf_event_t fw_stats_event;
 
+	/* qdf_event for fw__obss_stats */
+	qdf_event_t fw_obss_stats_event;
+
+	/* To check if request is already sent for obss stats */
+	bool pending_fw_obss_stats_response;
+
 	/* User configured max number of tx buffers */
 	uint32_t num_tx_allowed;
 
@@ -3084,7 +3095,7 @@ struct dp_pdev {
 	 */
 	struct rx_protocol_tag_stats
 		reo_proto_tag_stats[MAX_REO_DEST_RINGS][RX_PROTOCOL_TAG_MAX];
-	/* Track msdus received from expection ring separately */
+	/* Track msdus received from exception ring separately */
 	struct rx_protocol_tag_stats
 		rx_err_proto_tag_stats[RX_PROTOCOL_TAG_MAX];
 	struct rx_protocol_tag_stats
@@ -4049,7 +4060,7 @@ struct dp_peer_stats {
 };
 
 /**
- * struct dp_txrx_peer: DP txrx_peer strcuture used in per pkt path
+ * struct dp_txrx_peer: DP txrx_peer structure used in per pkt path
  * @tx_failed: Total Tx failure
  * @cdp_pkt_info comp_pkt: Pkt Info for which completions were received
  * @to_stack: Total packets sent up the stack

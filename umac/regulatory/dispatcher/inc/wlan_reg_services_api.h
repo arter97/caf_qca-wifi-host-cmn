@@ -1470,17 +1470,6 @@ wlan_reg_get_2g_bonded_channel_state_for_freq(struct wlan_objmgr_pdev *pdev,
 					      qdf_freq_t sec_ch_freq,
 					      enum phy_ch_width bw);
 
-/**
- * wlan_reg_get_channel_state_for_freq() - Get channel state from regulatory
- * @pdev: Pointer to pdev
- * @freq: channel center frequency.
- *
- * Return: channel state
- */
-enum channel_state
-wlan_reg_get_channel_state_for_freq(struct wlan_objmgr_pdev *pdev,
-				    qdf_freq_t freq);
-
 #ifdef CONFIG_REG_6G_PWRMODE
 /**
  * wlan_reg_get_channel_state_for_pwrmode() - Get channel state from regulatory
@@ -1743,15 +1732,6 @@ bool wlan_reg_is_dsrc_freq(qdf_freq_t freq);
 bool wlan_reg_is_passive_or_disable_for_freq(struct wlan_objmgr_pdev *pdev,
 					     qdf_freq_t freq);
 
-/**
- * wlan_reg_is_disable_for_freq() - Checks chan state for disabled
- * @pdev: pdev ptr
- * @freq: Channel center frequency
- *
- * Return: true or false
- */
-bool wlan_reg_is_disable_for_freq(struct wlan_objmgr_pdev *pdev,
-				  qdf_freq_t freq);
 #ifdef CONFIG_REG_6G_PWRMODE
 /**
  * wlan_reg_is_disable_for_pwrmode() - Checks chan state for disabled

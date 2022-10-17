@@ -300,7 +300,7 @@
     defined(QCA_WIFI_QCA6750) || defined(QCA_WIFI_KIWI)
 #define WLAN_CFG_RX_RELEASE_RING_SIZE_MAX 1024
 #else
-#define WLAN_CFG_RX_RELEASE_RING_SIZE_MAX 8192
+#define WLAN_CFG_RX_RELEASE_RING_SIZE_MAX 32768
 #endif
 
 #define WLAN_CFG_REO_EXCEPTION_RING_SIZE 256
@@ -400,7 +400,7 @@
 
 /**
  * AP use cases need to allocate more RX Descriptors than the number of
- * entries avaialable in the SW2RXDMA buffer replenish ring. This is to account
+ * entries available in the SW2RXDMA buffer replenish ring. This is to account
  * for frames sitting in REO queues, HW-HW DMA rings etc. Hence using a
  * multiplication factor of 3, to allocate three times as many RX descriptors
  * as RX buffers.
@@ -442,9 +442,9 @@
 #define WLAN_CFG_RADIO_DEFAULT_REO_MIN 0x1
 #define WLAN_CFG_RADIO_DEFAULT_REO_MAX 0x4
 
-#define WLAN_CFG_REO2PPE_RING_SIZE 1024
+#define WLAN_CFG_REO2PPE_RING_SIZE 2048
 #define WLAN_CFG_REO2PPE_RING_SIZE_MIN 64
-#define WLAN_CFG_REO2PPE_RING_SIZE_MAX 1024
+#define WLAN_CFG_REO2PPE_RING_SIZE_MAX 16384
 
 #define WLAN_CFG_PPE2TCL_RING_SIZE 1024
 #define WLAN_CFG_PPE2TCL_RING_SIZE_MIN 64
@@ -1288,7 +1288,7 @@
 		WLAN_CFG_RXDMA_MONITOR_RX_DROP_THRESH_SIZE_MIN, \
 		WLAN_CFG_RXDMA_MONITOR_RX_DROP_THRESH_SIZE_MAX, \
 		WLAN_CFG_RXDMA_MONITOR_RX_DROP_THRESH_SIZE, \
-		CFG_VALUE_OR_DEFAULT, "RXDMA monitor rx drop theshold")
+		CFG_VALUE_OR_DEFAULT, "RXDMA monitor rx drop threshold")
 
 #define CFG_DP_PKTLOG_BUFFER_SIZE \
 		CFG_INI_UINT("PktlogBufSize", \

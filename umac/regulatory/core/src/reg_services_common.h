@@ -1246,7 +1246,7 @@ bool reg_chan_freq_is_49ghz(qdf_freq_t freq);
  * reg_update_nol_history_ch_for_freq() - Set nol-history flag for the channels
  * in the list.
  * @pdev: Pdev ptr.
- * @chan_list: Input channel freqeuncy list.
+ * @chan_list: Input channel frequency list.
  * @num_ch: Number of channels.
  * @nol_history_ch: NOL-History flag.
  *
@@ -1328,17 +1328,6 @@ reg_get_5g_bonded_channel_for_pwrmode(struct wlan_objmgr_pdev *pdev,
 				      enum supported_6g_pwr_types
 				      in_6g_pwr_mode);
 #endif
-
-/**
- * reg_is_disable_for_freq() - Check if the given channel frequency in
- * disable state
- * @pdev: Pointer to pdev
- * @freq: Channel frequency
- * @in_6g_pwr_type: 6g power type which decides 6G channel list lookup.
- *
- * Return: True if channel state is disabled, else false
- */
-bool reg_is_disable_for_freq(struct wlan_objmgr_pdev *pdev, qdf_freq_t freq);
 
 #ifdef CONFIG_REG_6G_PWRMODE
 /**
@@ -2568,7 +2557,7 @@ enum channel_state reg_get_chan_state(struct wlan_objmgr_pdev *pdev,
 				      bool treat_nol_chan_as_disabled);
 
 /**
- * reg_is_chan_disabled() - Check if a chanel is disabled or not
+ * reg_is_chan_disabled() - Check if a channel is disabled or not
  *
  * @chan_flags: Channel flags
  * @chan_state: Channel state

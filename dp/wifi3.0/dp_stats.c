@@ -7638,6 +7638,8 @@ dp_print_pdev_rx_stats(struct dp_pdev *pdev)
 		       pdev->stats.replenish.rxdma_err);
 	DP_PRINT_STATS("	Desc Alloc Failed: = %u",
 		       pdev->stats.err.desc_alloc_fail);
+	DP_PRINT_STATS("        Low threshold Desc Alloc Failed: = %u",
+		       pdev->stats.err.desc_lt_alloc_fail);
 	DP_PRINT_STATS("	IP checksum error = %u",
 		       pdev->stats.err.ip_csum_err);
 	DP_PRINT_STATS("	TCP/UDP checksum error = %u",
@@ -8319,7 +8321,7 @@ bool dp_peer_get_hw_txrx_stats_en(struct dp_txrx_peer *txrx_peer)
 #ifdef WLAN_FEATURE_11BE_MLO
 static inline struct dp_peer *dp_get_stats_peer(struct dp_peer *peer)
 {
-	/* ML primay link peer return mld_peer */
+	/* ML primary link peer return mld_peer */
 	if (IS_MLO_DP_LINK_PEER(peer) && peer->primary_link)
 		return peer->mld_peer;
 

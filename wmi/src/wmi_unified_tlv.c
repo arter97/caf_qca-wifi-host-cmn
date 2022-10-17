@@ -1874,6 +1874,23 @@ static QDF_STATUS send_vdev_up_cmd_tlv(wmi_unified_t wmi,
 	return 0;
 }
 
+#ifdef ENABLE_HOST_TO_TARGET_CONVERSION
+static uint32_t convert_peer_type_host_to_target(uint32_t peer_type)
+{
+	/* Host sets the peer_type as 0 for the peer create command sent to FW
+	 * other than PASN peer create command.
+	 */
+	if (peer_type == WLAN_PEER_RTT_PASN)
+		return WMI_PEER_TYPE_PASN;
+
+	return peer_type;
+}
+#else
+static uint32_t convert_peer_type_host_to_target(uint32_t peer_type)
+{
+	return peer_type;
+}
+#endif
 /**
  * send_peer_create_cmd_tlv() - send peer create command to fw
  * @wmi: wmi handle
@@ -1902,7 +1919,7 @@ static QDF_STATUS send_peer_create_cmd_tlv(wmi_unified_t wmi,
 		       WMITLV_GET_STRUCT_TLVLEN
 			       (wmi_peer_create_cmd_fixed_param));
 	WMI_CHAR_ARRAY_TO_MAC_ADDR(param->peer_addr, &cmd->peer_macaddr);
-	cmd->peer_type = param->peer_type;
+	cmd->peer_type = convert_peer_type_host_to_target(param->peer_type);
 	cmd->vdev_id = param->vdev_id;
 
 	buf_ptr = (uint8_t *)wmi_buf_data(buf);
@@ -9163,7 +9180,7 @@ static WMI_BAND_CONCURRENCY convert_host_to_target_band_concurrency(
 	case WMI_HOST_BAND_CONCURRENCY_DBS_SBS:
 		return WMI_HOST_DBS_SBS;
 	default:
-		return 0;
+		return WMI_HOST_NONE;
 	}
 }
 
@@ -9188,6 +9205,24 @@ static WMI_NUM_ANTENNAS convert_host_to_target_num_antennas(
 }
 
 /**
+ * convert_host_to_target_band_capability() -Convert host band capability to
+ * target band capability
+ * @host_band_capability: Host band capability
+ *
+ * Return: Target band capability bitmap
+ */
+static uint8_t
+convert_host_to_target_band_capability(uint32_t host_band_capability)
+{
+	uint8_t band_capability;
+
+	band_capability = (host_band_capability & WMI_HOST_BAND_CAP_2GHZ) |
+			  (host_band_capability & WMI_HOST_BAND_CAP_5GHZ) |
+			  (host_band_capability & WMI_HOST_BAND_CAP_6GHZ);
+	return band_capability;
+}
+
+/**
  * copy_feature_set_info() -Copy feaure set info from host to target
  * @feature_set_bitmap: Target feature set pointer
  * @feature_set: Host feature set structure
@@ -9202,6 +9237,7 @@ static inline void copy_feature_set_info(uint32_t *feature_set_bitmap,
 	WMI_WIFI_STANDARD wifi_standard;
 	WMI_VENDOR1_REQ1_VERSION vendor1_req1_version;
 	WMI_VENDOR1_REQ2_VERSION vendor1_req2_version;
+	uint8_t band_capability;
 
 	num_antennas = convert_host_to_target_num_antennas(
 					feature_set->num_antennas);
@@ -9213,6 +9249,10 @@ static inline void copy_feature_set_info(uint32_t *feature_set_bitmap,
 					feature_set->vendor_req_1_version);
 	vendor1_req2_version = convert_host_to_target_vendor1_req2_version(
 					feature_set->vendor_req_2_version);
+
+	band_capability =
+		convert_host_to_target_band_capability(
+						feature_set->band_capability);
 
 	WMI_SET_WIFI_STANDARD(feature_set_bitmap, wifi_standard);
 	WMI_SET_BAND_CONCURRENCY_SUPPORT(feature_set_bitmap, band_concurrency);
@@ -9329,6 +9369,7 @@ static inline void copy_feature_set_info(uint32_t *feature_set_bitmap,
 	WMI_SET_FEATURE_SET_VERSION(feature_set_bitmap,
 				    feature_set->feature_set_version);
 	WMI_SET_NUM_ANTENNAS(feature_set_bitmap, num_antennas);
+	WMI_SET_HOST_BAND_CAP(feature_set_bitmap, band_capability);
 }
 
 /**
@@ -9372,6 +9413,11 @@ static QDF_STATUS feature_set_cmd_send_tlv(
 	WMITLV_SET_HDR(buf_ptr + sizeof(*cmd), WMITLV_TAG_ARRAY_UINT32,
 		       (WMI_FEATURE_SET_BITMAP_ARRAY_LEN32 * sizeof(uint32_t)));
 	copy_feature_set_info(feature_set_bitmap, feature_set);
+
+	qdf_trace_hex_dump(QDF_MODULE_ID_WMI, QDF_TRACE_LEVEL_DEBUG,
+			   feature_set_bitmap,
+			   WMI_FEATURE_SET_BITMAP_ARRAY_LEN32 *
+			   sizeof(uint32_t));
 
 	wmi_mtrace(WMI_PDEV_FEATURESET_CMDID, NO_SESSION, 0);
 
@@ -19504,6 +19550,57 @@ extract_pdev_telemetry_stats_tlv(
 	return QDF_STATUS_SUCCESS;
 }
 
+static QDF_STATUS
+send_set_mac_addr_rx_filter_cmd_tlv(wmi_unified_t wmi_handle,
+				    struct set_rx_mac_filter *param)
+{
+	wmi_vdev_add_mac_addr_to_rx_filter_cmd_fixed_param *cmd;
+	uint32_t len;
+	wmi_buf_t buf;
+	int ret;
+
+	if (!wmi_handle) {
+		wmi_err("WMA context is invalid!");
+		return QDF_STATUS_E_INVAL;
+	}
+
+	len = sizeof(*cmd);
+	buf = wmi_buf_alloc(wmi_handle, len);
+	if (!buf) {
+		wmi_err("Failed allocate wmi buffer");
+		return QDF_STATUS_E_NOMEM;
+	}
+
+	cmd = (wmi_vdev_add_mac_addr_to_rx_filter_cmd_fixed_param *)
+		wmi_buf_data(buf);
+
+	WMITLV_SET_HDR(
+	   &cmd->tlv_header,
+	   WMITLV_TAG_STRUC_wmi_vdev_add_mac_addr_to_rx_filter_cmd_fixed_param,
+	WMITLV_GET_STRUCT_TLVLEN(
+			wmi_vdev_add_mac_addr_to_rx_filter_cmd_fixed_param));
+
+	cmd->vdev_id = param->vdev_id;
+	cmd->freq = param->freq;
+	WMI_CHAR_ARRAY_TO_MAC_ADDR(param->mac, &cmd->mac_addr);
+	if (param->set)
+		cmd->enable = 1;
+	else
+		cmd->enable = 0;
+	wmi_debug("set random mac rx vdev:%d freq:%d set:%d " QDF_MAC_ADDR_FMT,
+		  param->vdev_id, param->freq, param->set,
+		 QDF_MAC_ADDR_REF(param->mac));
+	ret = wmi_unified_cmd_send(wmi_handle, buf, len,
+				   WMI_VDEV_ADD_MAC_ADDR_TO_RX_FILTER_CMDID);
+	if (ret) {
+		wmi_err("Failed to send action frame random mac cmd");
+		wmi_buf_free(buf);
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	return QDF_STATUS_SUCCESS;
+}
+
 struct wmi_ops tlv_ops =  {
 	.send_vdev_create_cmd = send_vdev_create_cmd_tlv,
 	.send_vdev_delete_cmd = send_vdev_delete_cmd_tlv,
@@ -19979,6 +20076,7 @@ struct wmi_ops tlv_ops =  {
 		extract_health_mon_init_done_info_event_tlv,
 #endif /* HEALTH_MON_SUPPORT */
 	.send_multiple_vdev_param_cmd = send_multiple_vdev_param_cmd_tlv,
+	.set_mac_addr_rx_filter = send_set_mac_addr_rx_filter_cmd_tlv,
 };
 
 #ifdef WLAN_FEATURE_11BE_MLO

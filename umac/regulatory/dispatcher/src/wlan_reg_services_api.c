@@ -1096,12 +1096,6 @@ bool wlan_reg_is_passive_or_disable_for_freq(struct wlan_objmgr_pdev *pdev,
 	return reg_is_passive_or_disable_for_freq(pdev, freq);
 }
 
-bool wlan_reg_is_disable_for_freq(struct wlan_objmgr_pdev *pdev,
-				  qdf_freq_t freq)
-{
-	return reg_is_disable_for_freq(pdev, freq);
-}
-
 #ifdef CONFIG_REG_6G_PWRMODE
 bool wlan_reg_is_disable_for_pwrmode(struct wlan_objmgr_pdev *pdev,
 				     qdf_freq_t freq,
@@ -1339,13 +1333,6 @@ void wlan_reg_set_create_punc_bitmap(struct ch_params *ch_params,
 	reg_set_create_punc_bitmap(ch_params, is_create_punc_bitmap);
 }
 #endif /* WLAN_FEATURE_11BE */
-
-enum channel_state
-wlan_reg_get_channel_state_for_freq(struct wlan_objmgr_pdev *pdev,
-				    qdf_freq_t freq)
-{
-	return reg_get_channel_state_for_freq(pdev, freq);
-}
 
 #ifdef CONFIG_REG_6G_PWRMODE
 enum channel_state

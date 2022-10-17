@@ -590,6 +590,12 @@ done:
 
 		/* Get TID from struct cb->tid_val, save to tid */
 		tid = qdf_nbuf_get_tid_val(nbuf);
+		if (qdf_unlikely(tid >= CDP_MAX_DATA_TIDS)) {
+			DP_STATS_INC(soc, rx.err.rx_invalid_tid_err, 1);
+			dp_rx_nbuf_free(nbuf);
+			nbuf = next;
+			continue;
+		}
 
 		if (qdf_unlikely(!txrx_peer)) {
 			txrx_peer = dp_rx_get_txrx_peer_and_vdev(soc, nbuf,
@@ -1339,7 +1345,7 @@ dp_rx_intrabss_fwd_mlo_allow(struct dp_txrx_peer *ta_peer,
 /**
  * dp_rx_intrabss_ucast_check_be() - Check if intrabss is allowed
 				     for unicast frame
- * @soc: SOC hanlde
+ * @soc: SOC handle
  * @nbuf: RX packet buffer
  * @ta_peer: transmitter DP peer handle
  * @msdu_metadata: MSDU meta data info
@@ -1525,6 +1531,52 @@ rel_da_peer:
 #endif /* WLAN_MLO_MULTI_CHIP */
 #endif /* INTRA_BSS_FWD_OFFLOAD */
 
+#if defined(QCA_MONITOR_2_0_SUPPORT) || defined(CONFIG_WORD_BASED_TLV)
+void dp_rx_word_mask_subscribe_be(struct dp_soc *soc,
+				  uint32_t *msg_word,
+				  void *rx_filter)
+{
+	struct htt_rx_ring_tlv_filter *tlv_filter =
+				(struct htt_rx_ring_tlv_filter *)rx_filter;
+
+	if (!msg_word || !tlv_filter)
+		return;
+
+	/* if word mask is zero, FW will set the default values */
+	if (!(tlv_filter->rx_mpdu_start_wmask > 0 &&
+	      tlv_filter->rx_msdu_end_wmask > 0)) {
+		msg_word += 4;
+		*msg_word = 0;
+		goto config_mon;
+	}
+
+	HTT_RX_RING_SELECTION_CFG_WORD_MASK_COMPACTION_ENABLE_SET(*msg_word, 1);
+
+	/* word 14 */
+	msg_word += 3;
+	*msg_word = 0;
+
+	HTT_RX_RING_SELECTION_CFG_RX_MPDU_START_WORD_MASK_SET(
+				*msg_word,
+				tlv_filter->rx_mpdu_start_wmask);
+
+	/* word 15 */
+	msg_word++;
+	*msg_word = 0;
+	HTT_RX_RING_SELECTION_CFG_RX_MSDU_END_WORD_MASK_SET(
+				*msg_word,
+				tlv_filter->rx_msdu_end_wmask);
+config_mon:
+	msg_word--;
+	dp_mon_rx_wmask_subscribe(soc, msg_word, tlv_filter);
+}
+#else
+void dp_rx_word_mask_subscribe_be(struct dp_soc *soc,
+				  uint32_t *msg_word,
+				  void *rx_filter)
+{
+}
+#endif
 /*
  * dp_rx_intrabss_handle_nawds_be() - Forward mcbc intrabss pkts in nawds case
  * @soc: core txrx main context
