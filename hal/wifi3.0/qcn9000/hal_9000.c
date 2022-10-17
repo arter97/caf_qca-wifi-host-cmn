@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -33,6 +34,12 @@
 	RXPCU_PPDU_END_INFO_9_RX_PPDU_DURATION_MASK
 #define UNIFIED_RXPCU_PPDU_END_INFO_8_RX_PPDU_DURATION_LSB \
 	RXPCU_PPDU_END_INFO_9_RX_PPDU_DURATION_LSB
+#define UNIFIED_RXPCU_PPDU_END_INFO_11_PHYRX_ABORT_REQUEST_INFO_DETAILS_PHYRX_ABORT_REASON_OFFSET \
+	RXPCU_PPDU_END_INFO_11_PHYRX_ABORT_REQUEST_INFO_DETAILS_PHYRX_ABORT_REASON_OFFSET
+#define UNIFIED_RXPCU_PPDU_END_INFO_11_PHYRX_ABORT_REQUEST_INFO_DETAILS_PHYRX_ABORT_REASON_MASK \
+	RXPCU_PPDU_END_INFO_11_PHYRX_ABORT_REQUEST_INFO_DETAILS_PHYRX_ABORT_REASON_MASK
+#define UNIFIED_RXPCU_PPDU_END_INFO_11_PHYRX_ABORT_REQUEST_INFO_DETAILS_PHYRX_ABORT_REASON_LSB \
+	RXPCU_PPDU_END_INFO_11_PHYRX_ABORT_REQUEST_INFO_DETAILS_PHYRX_ABORT_REASON_LSB
 #define UNIFIED_PHYRX_HT_SIG_0_HT_SIG_INFO_PHYRX_HT_SIG_INFO_DETAILS_OFFSET \
 	PHYRX_HT_SIG_0_PHYRX_HT_SIG_INFO_DETAILS_MCS_OFFSET
 #define UNIFIED_PHYRX_L_SIG_B_0_L_SIG_B_INFO_PHYRX_L_SIG_B_INFO_DETAILS_OFFSET \
@@ -172,6 +179,9 @@ hal_rx_sw_mon_desc_info_get_9000(hal_ring_desc_t rxdma_dst_ring_desc,
 	desc_info->rxdma_push_reason = HAL_RX_GET(sw_mon_ring,
 						  SW_MONITOR_RING_6,
 						  RXDMA_PUSH_REASON);
+	desc_info->rxdma_error_code = HAL_RX_GET(sw_mon_ring,
+						 SW_MONITOR_RING_6,
+						 RXDMA_ERROR_CODE);
 	desc_info->ppdu_id = HAL_RX_GET(sw_mon_ring,
 					SW_MONITOR_RING_7,
 					PHY_PPDU_ID);
@@ -1846,6 +1856,8 @@ static void hal_hw_txrx_ops_attach_qcn9000(struct hal_soc *hal_soc)
 					hal_rx_get_mpdu_mac_ad4_valid_9000;
 	hal_soc->ops->hal_rx_mpdu_start_sw_peer_id_get =
 		hal_rx_mpdu_start_sw_peer_id_get_9000;
+	hal_soc->ops->hal_rx_mpdu_peer_meta_data_get =
+		hal_rx_mpdu_peer_meta_data_get_li;
 	hal_soc->ops->hal_rx_mpdu_get_to_ds = hal_rx_mpdu_get_to_ds_9000;
 	hal_soc->ops->hal_rx_mpdu_get_fr_ds = hal_rx_mpdu_get_fr_ds_9000;
 	hal_soc->ops->hal_rx_get_mpdu_frame_control_valid =
@@ -1885,6 +1897,8 @@ static void hal_hw_txrx_ops_attach_qcn9000(struct hal_soc *hal_soc)
 					hal_rx_msdu_flow_idx_timeout_9000;
 	hal_soc->ops->hal_rx_msdu_fse_metadata_get =
 					hal_rx_msdu_fse_metadata_get_9000;
+	hal_soc->ops->hal_rx_msdu_cce_match_get =
+					hal_rx_msdu_cce_match_get_li;
 	hal_soc->ops->hal_rx_msdu_cce_metadata_get =
 					hal_rx_msdu_cce_metadata_get_9000;
 	hal_soc->ops->hal_rx_msdu_get_flow_params =
@@ -1921,6 +1935,12 @@ static void hal_hw_txrx_ops_attach_qcn9000(struct hal_soc *hal_soc)
 					hal_rx_pkt_tlv_offset_get_generic;
 #endif
 	hal_soc->ops->hal_rx_flow_setup_fse = hal_rx_flow_setup_fse_9000;
+
+	hal_soc->ops->hal_rx_flow_get_tuple_info =
+					hal_rx_flow_get_tuple_info_li;
+	 hal_soc->ops->hal_rx_flow_delete_entry =
+					hal_rx_flow_delete_entry_li;
+	hal_soc->ops->hal_rx_fst_get_fse_size = hal_rx_fst_get_fse_size_li;
 	hal_soc->ops->hal_compute_reo_remap_ix2_ix3 =
 					hal_compute_reo_remap_ix2_ix3_9000;
 	hal_soc->ops->hal_setup_link_idle_list =
@@ -2210,7 +2230,7 @@ struct hal_hw_srng_config hw_srng_table_9000[] = {
 	},
 	{ /* WBM2SW_RELEASE */
 		.start_ring_id = HAL_SRNG_WBM2SW0_RELEASE,
-		.max_rings = 4,
+		.max_rings = 5,
 		.entry_size = sizeof(struct wbm_release_ring) >> 2,
 		.lmac_ring = FALSE,
 		.ring_dir = HAL_SRNG_DST_RING,

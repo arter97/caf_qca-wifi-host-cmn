@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2019-2021 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -122,6 +123,9 @@ int ucfg_cfr_start_capture(struct wlan_objmgr_pdev *pdev,
 		pe->period = params->period;
 		pe->capture_method = params->method;
 		pe->request = PEER_CFR_CAPTURE_ENABLE;
+#ifdef WLAN_FEATURE_11BE
+		pe->puncture_bitmap = params->puncture_bitmap;
+#endif
 	} else
 		pa->cfr_current_sta_count--;
 
@@ -439,7 +443,7 @@ void ucfg_cfr_capture_data(struct wlan_objmgr_psoc *psoc, uint32_t vdev_id,
 	 * find data pointer from mem index and start address of memory.
 	 */
 	payload = vaddr + mem_index;
-	payload_len = hdr->u.meta_legacy.length;
+	payload_len = hdr->u.meta_v1.length;
 
 	/* Write data into streamfs */
 	tgt_cfr_info_send(pdev, hdr, sizeof(struct csi_cfr_header),

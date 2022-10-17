@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2019-2020 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -28,7 +29,8 @@ void
 target_if_peer_set_default_routing(struct cdp_ctrl_objmgr_psoc *psoc,
 				   uint8_t pdev_id, uint8_t *peer_macaddr,
 				   uint8_t vdev_id,
-				   bool hash_based, uint8_t ring_num)
+				   bool hash_based, uint8_t ring_num,
+				   uint8_t lmac_peer_id_msb)
 {
 	uint32_t value;
 	struct peer_set_params param;
@@ -55,6 +57,10 @@ target_if_peer_set_default_routing(struct cdp_ctrl_objmgr_psoc *psoc,
 	 * fields in common wmi header file
 	 */
 	value = ((hash_based) ? 1 : 0) | (ring_num << 1);
+
+	if (lmac_peer_id_msb)
+		QDF_SET_BITS(value, PEER_ROUTING_LMAC_ID_INDEX,
+			     PEER_ROUTING_LMAC_ID_BITS, lmac_peer_id_msb);
 
 	param.param_id = WMI_HOST_PEER_SET_DEFAULT_ROUTING;
 	param.vdev_id = vdev_id;
@@ -282,3 +288,142 @@ target_if_lro_hash_config(struct cdp_ctrl_objmgr_psoc *psoc, uint8_t pdev_id,
 
 	return status;
 }
+
+#ifdef WDS_CONV_TARGET_IF_OPS_ENABLE
+QDF_STATUS
+target_if_add_wds_entry(struct cdp_ctrl_objmgr_psoc *soc, uint8_t vdev_id,
+			uint8_t *peer_mac, const uint8_t *dest_mac,
+			uint32_t flags, uint8_t type)
+{
+	struct peer_add_wds_entry_params wmi_wds_param = {0};
+	struct wmi_unified *pdev_wmi_handle;
+	struct wlan_objmgr_pdev *pdev;
+	struct wlan_objmgr_vdev *vdev;
+	struct wlan_objmgr_psoc *psoc = (struct wlan_objmgr_psoc *)soc;
+	QDF_STATUS status;
+
+	if (type == CDP_TXRX_AST_TYPE_WDS_HM_SEC)
+		return QDF_STATUS_E_FAILURE;
+
+	vdev = wlan_objmgr_get_vdev_by_id_from_psoc(psoc, vdev_id,
+						    WLAN_WDS_ID);
+	if (!vdev) {
+		target_if_err("vdev with id %d is NULL", vdev_id);
+		return QDF_STATUS_E_INVAL;
+	}
+
+	pdev = wlan_vdev_get_pdev(vdev);
+	if (!pdev) {
+		wlan_objmgr_vdev_release_ref(vdev, WLAN_WDS_ID);
+		target_if_err("pdev is NULL");
+		return QDF_STATUS_E_INVAL;
+	}
+
+	pdev_wmi_handle = lmac_get_pdev_wmi_handle(pdev);
+	if (!pdev_wmi_handle) {
+		wlan_objmgr_vdev_release_ref(vdev, WLAN_WDS_ID);
+		target_if_err("pdev_wmi_handle is NULL");
+		return QDF_STATUS_E_INVAL;
+	}
+
+	qdf_mem_copy(&wmi_wds_param.dest_addr, dest_mac, QDF_MAC_ADDR_SIZE);
+	qdf_mem_copy(&wmi_wds_param.peer_addr, peer_mac, QDF_MAC_ADDR_SIZE);
+	wmi_wds_param.vdev_id = vdev_id;
+	wmi_wds_param.flags = flags;
+
+	status = wmi_unified_peer_add_wds_entry_cmd(pdev_wmi_handle,
+						    &wmi_wds_param);
+	wlan_objmgr_vdev_release_ref(vdev, WLAN_WDS_ID);
+
+	return status;
+}
+
+void
+target_if_del_wds_entry(struct cdp_ctrl_objmgr_psoc *soc, uint8_t vdev_id,
+			uint8_t *dest_mac, uint8_t type, uint8_t delete_in_fw)
+{
+	struct peer_del_wds_entry_params wmi_wds_param = {0};
+	struct wmi_unified *pdev_wmi_handle;
+	struct wlan_objmgr_pdev *pdev;
+	struct wlan_objmgr_vdev *vdev;
+	struct wlan_objmgr_psoc *psoc = (struct wlan_objmgr_psoc *)soc;
+
+	if (!delete_in_fw || type == CDP_TXRX_AST_TYPE_WDS_HM_SEC) {
+		target_if_err("delete_in_fw: %d type: %d", delete_in_fw, type);
+		return;
+	}
+
+	vdev = wlan_objmgr_get_vdev_by_id_from_psoc(psoc, vdev_id,
+						    WLAN_WDS_ID);
+	if (!vdev) {
+		target_if_err("vdev with id %d is NULL", vdev_id);
+		return;
+	}
+
+	pdev = wlan_vdev_get_pdev(vdev);
+	if (!pdev) {
+		wlan_objmgr_vdev_release_ref(vdev, WLAN_WDS_ID);
+		target_if_err("pdev is NULL");
+		return;
+	}
+
+	pdev_wmi_handle = lmac_get_pdev_wmi_handle(pdev);
+	if (!pdev_wmi_handle) {
+		wlan_objmgr_vdev_release_ref(vdev, WLAN_WDS_ID);
+		target_if_err("pdev_wmi_handle is NULL");
+		return;
+	}
+
+	qdf_mem_copy(&wmi_wds_param.dest_addr, dest_mac, QDF_MAC_ADDR_SIZE);
+	wmi_wds_param.vdev_id = vdev_id;
+
+	wmi_unified_peer_del_wds_entry_cmd(pdev_wmi_handle,
+					   &wmi_wds_param);
+	wlan_objmgr_vdev_release_ref(vdev, WLAN_WDS_ID);
+}
+
+QDF_STATUS
+target_if_update_wds_entry(struct cdp_ctrl_objmgr_psoc *soc, uint8_t vdev_id,
+			   uint8_t *dest_mac, uint8_t *peer_mac,
+			   uint32_t flags)
+{
+	struct peer_update_wds_entry_params wmi_wds_param = {0};
+	struct wmi_unified *pdev_wmi_handle;
+	struct wlan_objmgr_pdev *pdev;
+	struct wlan_objmgr_vdev *vdev;
+	struct wlan_objmgr_psoc *psoc = (struct wlan_objmgr_psoc *)soc;
+	QDF_STATUS status;
+
+	vdev = wlan_objmgr_get_vdev_by_id_from_psoc(psoc, vdev_id,
+						    WLAN_WDS_ID);
+	if (!vdev) {
+		target_if_err("vdev with id %d is NULL", vdev_id);
+		return QDF_STATUS_E_INVAL;
+	}
+
+	pdev = wlan_vdev_get_pdev(vdev);
+	if (!pdev) {
+		wlan_objmgr_vdev_release_ref(vdev, WLAN_WDS_ID);
+		target_if_err("pdev is NULL");
+		return QDF_STATUS_E_INVAL;
+	}
+
+	pdev_wmi_handle = lmac_get_pdev_wmi_handle(pdev);
+	if (!pdev_wmi_handle) {
+		wlan_objmgr_vdev_release_ref(vdev, WLAN_WDS_ID);
+		target_if_err("pdev_wmi_handle is NULL");
+		return QDF_STATUS_E_INVAL;
+	}
+
+	qdf_mem_copy(&wmi_wds_param.dest_addr, dest_mac, QDF_MAC_ADDR_SIZE);
+	qdf_mem_copy(&wmi_wds_param.peer_addr, peer_mac, QDF_MAC_ADDR_SIZE);
+	wmi_wds_param.vdev_id = vdev_id;
+	wmi_wds_param.flags = flags;
+
+	status = wmi_unified_update_wds_entry_cmd(pdev_wmi_handle,
+						  &wmi_wds_param);
+	wlan_objmgr_vdev_release_ref(vdev, WLAN_WDS_ID);
+
+	return status;
+}
+#endif

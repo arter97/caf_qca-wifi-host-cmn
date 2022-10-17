@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2017-2021 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -57,7 +58,7 @@
 #ifdef FEATURE_WLAN_TDLS
 #include "target_if_tdls.h"
 #endif
-#ifdef QCA_SUPPORT_SON
+#if defined(QCA_SUPPORT_SON) || defined(WLAN_FEATURE_SON)
 #include <target_if_son.h>
 #endif
 #ifdef WLAN_OFFCHAN_TXRX_ENABLE
@@ -94,10 +95,20 @@
 #endif
 
 #include <target_if_gpio.h>
+#ifdef IPA_OFFLOAD
+#include <target_if_ipa.h>
+#endif
 
 #ifdef WLAN_MGMT_RX_REO_SUPPORT
 #include <target_if_mgmt_txrx.h>
 #endif /* WLAN_MGMT_RX_REO_SUPPORT */
+
+#include "wmi_unified_api.h"
+#include <target_if_twt.h>
+
+#ifdef WLAN_FEATURE_11BE_MLO
+#include <target_if_mlo_mgr.h>
+#endif
 
 static struct target_if_ctx *g_target_if_ctx;
 
@@ -266,7 +277,7 @@ static void target_if_wifi_pos_tx_ops_register(
 {
 }
 #endif
-#ifdef QCA_SUPPORT_SON
+#if defined(QCA_SUPPORT_SON) || defined(WLAN_FEATURE_SON)
 static void target_if_son_tx_ops_register(
 			struct wlan_lmac_if_tx_ops *tx_ops)
 {
@@ -399,9 +410,6 @@ static void target_if_target_tx_ops_register(
 	target_tx_ops->tgt_is_tgt_type_ar900b =
 		target_is_tgt_type_ar900b;
 
-	target_tx_ops->tgt_is_tgt_type_ipq4019 =
-		target_is_tgt_type_ipq4019;
-
 	target_tx_ops->tgt_is_tgt_type_qca9984 =
 		target_is_tgt_type_qca9984;
 
@@ -495,6 +503,43 @@ void target_if_mgmt_txrx_register_tx_ops(struct wlan_lmac_if_tx_ops *tx_ops)
 }
 #endif /* WLAN_MGMT_RX_REO_SUPPORT */
 
+#ifdef WLAN_FEATURE_11BE_MLO
+static QDF_STATUS
+target_if_mlo_tx_ops_register(struct wlan_lmac_if_tx_ops *tx_ops)
+{
+	return target_if_mlo_register_tx_ops(tx_ops);
+}
+#else
+static QDF_STATUS
+target_if_mlo_tx_ops_register(struct wlan_lmac_if_tx_ops *tx_ops)
+{
+	return QDF_STATUS_SUCCESS;
+}
+#endif
+
+#ifdef IPA_OFFLOAD
+static void target_if_ipa_tx_ops_register(struct wlan_lmac_if_tx_ops *tx_ops)
+{
+	target_if_ipa_register_tx_ops(tx_ops);
+}
+#else
+static void target_if_ipa_tx_ops_register(struct wlan_lmac_if_tx_ops *tx_ops)
+{ }
+#endif
+
+#if defined(WLAN_SUPPORT_TWT) && defined(WLAN_TWT_CONV_SUPPORTED)
+static
+void target_if_twt_tx_ops_register(struct wlan_lmac_if_tx_ops *tx_ops)
+{
+	target_if_twt_register_tx_ops(tx_ops);
+}
+#else
+static
+void target_if_twt_tx_ops_register(struct wlan_lmac_if_tx_ops *tx_ops)
+{
+}
+#endif /* WLAN_SUPPORT_TWT && WLAN_TWT_CONV_SUPPORTED */
+
 static
 QDF_STATUS target_if_register_umac_tx_ops(struct wlan_lmac_if_tx_ops *tx_ops)
 {
@@ -544,6 +589,12 @@ QDF_STATUS target_if_register_umac_tx_ops(struct wlan_lmac_if_tx_ops *tx_ops)
 	target_if_gpio_tx_ops_register(tx_ops);
 
 	target_if_mgmt_txrx_register_tx_ops(tx_ops);
+
+	target_if_mlo_tx_ops_register(tx_ops);
+
+	target_if_ipa_tx_ops_register(tx_ops);
+
+	target_if_twt_tx_ops_register(tx_ops);
 
 	/* Converged UMAC components to register their TX-ops here */
 	return QDF_STATUS_SUCCESS;
@@ -697,11 +748,6 @@ QDF_STATUS target_if_free_psoc_tgt_info(struct wlan_objmgr_psoc *psoc)
 bool target_is_tgt_type_ar900b(uint32_t target_type)
 {
 	return target_type == TARGET_TYPE_AR900B;
-}
-
-bool target_is_tgt_type_ipq4019(uint32_t target_type)
-{
-	return target_type == TARGET_TYPE_IPQ4019;
 }
 
 bool target_is_tgt_type_qca9984(uint32_t target_type)
@@ -914,5 +960,98 @@ void target_pdev_set_hw_link_id(struct wlan_objmgr_pdev *pdev,
 		return;
 
 	tgt_pdev_info->hw_link_id  = hw_link_id;
+}
+
+static QDF_STATUS target_if_mlo_setup_send(struct wlan_objmgr_pdev *pdev,
+					   struct wlan_objmgr_pdev **pdev_list,
+					   uint8_t num_links, uint8_t grp_id)
+{
+	wmi_unified_t wmi_handle;
+	struct wmi_mlo_setup_params params = {0};
+	uint8_t idx, num_valid_links = 0;
+
+	wmi_handle = lmac_get_pdev_wmi_handle(pdev);
+	if (!wmi_handle)
+		return QDF_STATUS_E_INVAL;
+
+	params.mld_grp_id = grp_id;
+	params.pdev_id = wlan_objmgr_pdev_get_pdev_id(pdev);
+
+	for (idx = 0; idx < num_links; idx++) {
+		if (pdev == pdev_list[idx])
+			continue;
+
+		params.partner_links[num_valid_links] =
+			target_if_pdev_get_hw_link_id(pdev_list[idx]);
+		num_valid_links++;
+	}
+	params.num_valid_hw_links = num_valid_links;
+
+	return wmi_mlo_setup_cmd_send(wmi_handle, &params);
+}
+
+QDF_STATUS target_if_mlo_setup_req(struct wlan_objmgr_pdev **pdev,
+				   uint8_t num_pdevs, uint8_t grp_id)
+{
+	uint8_t idx;
+
+	for (idx = 0; idx < num_pdevs; idx++)
+		target_if_mlo_setup_send(pdev[idx], pdev, num_pdevs, grp_id);
+
+	return QDF_STATUS_SUCCESS;
+}
+
+static QDF_STATUS target_if_mlo_ready_send(struct wlan_objmgr_pdev *pdev)
+{
+	wmi_unified_t wmi_handle;
+	struct wmi_mlo_ready_params params = {0};
+
+	wmi_handle = lmac_get_pdev_wmi_handle(pdev);
+	if (!wmi_handle)
+		return QDF_STATUS_E_INVAL;
+
+	params.pdev_id = wlan_objmgr_pdev_get_pdev_id(pdev);
+
+	return wmi_mlo_ready_cmd_send(wmi_handle, &params);
+}
+
+QDF_STATUS target_if_mlo_ready(struct wlan_objmgr_pdev **pdev,
+			       uint8_t num_pdevs)
+{
+	uint8_t idx;
+
+	for (idx = 0; idx < num_pdevs; idx++)
+		target_if_mlo_ready_send(pdev[idx]);
+
+	return QDF_STATUS_SUCCESS;
+}
+
+static QDF_STATUS
+target_if_mlo_teardown_send(struct wlan_objmgr_pdev *pdev,
+			    enum wmi_mlo_teardown_reason reason)
+{
+	wmi_unified_t wmi_handle;
+	struct wmi_mlo_teardown_params params = {0};
+
+	wmi_handle = lmac_get_pdev_wmi_handle(pdev);
+	if (!wmi_handle)
+		return QDF_STATUS_E_INVAL;
+
+	params.pdev_id = wlan_objmgr_pdev_get_pdev_id(pdev);
+	params.reason = reason;
+
+	return wmi_mlo_teardown_cmd_send(wmi_handle, &params);
+}
+
+QDF_STATUS target_if_mlo_teardown_req(struct wlan_objmgr_pdev **pdev,
+				      uint8_t num_pdevs,
+				      enum wmi_mlo_teardown_reason reason)
+{
+	uint8_t idx;
+
+	for (idx = 0; idx < num_pdevs; idx++)
+		target_if_mlo_teardown_send(pdev[idx], reason);
+
+	return QDF_STATUS_SUCCESS;
 }
 #endif /*WLAN_FEATURE_11BE_MLO && WLAN_MLO_MULTI_CHIP*/

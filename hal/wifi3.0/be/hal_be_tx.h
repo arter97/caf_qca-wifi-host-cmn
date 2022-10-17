@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -25,6 +26,12 @@
 /* Number of TX banks reserved i.e, will not be used by host driver. */
 /* MAX_TCL_BANK reserved for FW use */
 #define HAL_TX_NUM_RESERVED_BANKS 1
+
+/*
+ * Number of Priority to TID mapping
+ */
+#define HAL_BE_TX_MAP0_PRI2TID_MAX 10
+#define HAL_BE_TX_MAP1_PRI2TID_MAX 6
 
 enum hal_be_tx_ret_buf_manager {
 	HAL_BE_WBM_SW0_BM_ID = 5,
@@ -61,6 +68,19 @@ enum hal_tx_mcast_ctrl {
 enum hal_tx_vdev_mismatch_notify {
 	HAL_TX_VDEV_MISMATCH_TQM_NOTIFY = 0,
 	HAL_TX_VDEV_MISMATCH_FW_NOTIFY,
+};
+
+/* enum hal_tx_notify_frame_type - TX notify frame type
+ * @NO_TX_NOTIFY: Not a notify frame
+ * @TX_HARD_NOTIFY: Hard notify TX frame
+ * @TX_SOFT_NOTIFY_E: Soft Notify Tx frame
+ * @TX_SEMI_HARD_NOTIFY_E: Semi Hard notify TX frame
+ */
+enum hal_tx_notify_frame_type {
+	NO_TX_NOTIFY = 0,
+	TX_HARD_NOTIFY = 1,
+	TX_SOFT_NOTIFY_E = 2,
+	TX_SEMI_HARD_NOTIFY_E = 3
 };
 
 /*---------------------------------------------------------------------------
@@ -103,6 +123,117 @@ union hal_tx_bank_config {
 	uint32_t val;
 };
 
+/**
+ * struct hal_tx_cmn_config_ppe - SW config exception related parameters
+ * @drop_prec_err - Exception drop_prec errors.
+ * @fake_mac_hdr - Exception fake mac header.
+ * @cpu_code_inv - Exception cpu code invalid.
+ * @data_buff_err - Exception buffer length/offset erorors.
+ * @l3_l4_err - Exception m3_l4 checksum errors
+ * @data_offset_max - Maximum data offset allowed.
+ * @data_len_max - Maximum data length allowed.
+ */
+union hal_tx_cmn_config_ppe {
+	struct {
+		uint32_t drop_prec_err:1,
+			 fake_mac_hdr:1,
+			 cpu_code_inv:1,
+			 data_buff_err:1,
+			 l3_l4_err:1,
+			 data_offset_max:12,
+			 data_len_max:14;
+	};
+	uint32_t val;
+};
+
+/**
+ * hal_tx_ppe_vp_config - SW config PPE VP table
+ * @vp_num - Virtual port number
+ * @pmac_id - Lmac ID
+ * @bank_id: Bank ID correspondig to this I/F.
+ * @vdev_id: VDEV ID of the I/F.
+ * @search_idx_reg_num: Register number of this SI.
+ * @use_ppe_int_pri: Use the PPE INT_PRI to TID table
+ * @to_fw: Use FW
+ * @drop_prec_enable: Enable precendance drop.
+ */
+union hal_tx_ppe_vp_config {
+	struct {
+		uint32_t vp_num:8,
+			 pmac_id:2,
+			 bank_id:6,
+			 vdev_id:8,
+			 search_idx_reg_num:3,
+			 use_ppe_int_pri:1,
+			 to_fw:1,
+			 drop_prec_enable:1;
+	};
+	uint32_t val;
+};
+
+/**
+ * hal_tx_cmn_ppe_idx_map_config: Use ppe index mapping table
+ * @search_idx: Search index
+ * @cache_set: Cache set number
+ */
+union hal_tx_ppe_idx_map_config {
+	struct {
+		uint32_t search_idx:20,
+			 cache_set:4;
+	};
+	uint32_t val;
+};
+
+/**
+ * hal_tx_ppe_pri2tid_map0_config : Configure ppe INT_PRI to tid map
+ * @int_pri0: INT_PRI_0
+ * @int_pri1: INT_PRI_1
+ * @int_pri2: INT_PRI_2
+ * @int_pri3: INT_PRI_3
+ * @int_pri4: INT_PRI_4
+ * @int_pri5: INT_PRI_5
+ * @int_pri6: INT_PRI_6
+ * @int_pri7: INT_PRI_7
+ * @int_pri8: INT_PRI_8
+ * @int_pri9: INT_PRI_9
+ */
+union hal_tx_ppe_pri2tid_map0_config {
+	struct {
+		uint32_t int_pri0:3,
+			 int_pri1:3,
+			 int_pri2:3,
+			 int_pri3:3,
+			 int_pri4:3,
+			 int_pri5:3,
+			 int_pri6:3,
+			 int_pri7:3,
+			 int_pri8:3,
+			 int_pri9:3;
+	};
+	uint32_t val;
+};
+
+/**
+ * hal_tx_ppe_pri2tid_map1_config : Configure ppe INT_PRI to tid map
+ * @int_pri0: INT_PRI_10
+ * @int_pri1: INT_PRI_11
+ * @int_pri2: INT_PRI_12
+ * @int_pri3: INT_PRI_13
+ * @int_pri4: INT_PRI_14
+ * @int_pri5: INT_PRI_15
+ */
+union hal_tx_ppe_pri2tid_map1_config {
+	struct {
+		uint32_t int_pri10:3,
+			 int_pri11:3,
+			 int_pri12:3,
+			 int_pri13:3,
+			 int_pri14:3,
+			 int_pri15:3;
+	};
+	uint32_t val;
+};
+
 /*---------------------------------------------------------------------------
  *  Function declarations and documentation
  * ---------------------------------------------------------------------------
@@ -112,6 +243,62 @@ union hal_tx_bank_config {
  *  TCL Descriptor accessor APIs
  *---------------------------------------------------------------------------
  */
+
+/**
+ * hal_tx_desc_set_tx_notify_frame - Set TX notify_frame field in Tx desc
+ * @desc: Handle to Tx Descriptor
+ * @val: Value to be set
+ *
+ * Return: None
+ */
+static inline void hal_tx_desc_set_tx_notify_frame(void *desc,
+						   uint8_t val)
+{
+	HAL_SET_FLD(desc, TCL_DATA_CMD, TX_NOTIFY_FRAME) |=
+		HAL_TX_SM(TCL_DATA_CMD, TX_NOTIFY_FRAME, val);
+}
+
+/**
+ * hal_tx_desc_set_flow_override_enable - Set flow_override_enable field
+ * @desc: Handle to Tx Descriptor
+ * @val: Value to be set
+ *
+ * Return: None
+ */
+static inline void  hal_tx_desc_set_flow_override_enable(void *desc,
+							 uint8_t val)
+{
+	HAL_SET_FLD(desc, TCL_DATA_CMD, FLOW_OVERRIDE_ENABLE) |=
+		HAL_TX_SM(TCL_DATA_CMD, FLOW_OVERRIDE_ENABLE, val);
+}
+
+/**
+ * hal_tx_desc_set_flow_override - Set flow_override field in TX desc
+ * @desc: Handle to Tx Descriptor
+ * @val: Value to be set
+ *
+ * Return: None
+ */
+static inline void  hal_tx_desc_set_flow_override(void *desc,
+						  uint8_t val)
+{
+	HAL_SET_FLD(desc, TCL_DATA_CMD, FLOW_OVERRIDE) |=
+		HAL_TX_SM(TCL_DATA_CMD, FLOW_OVERRIDE, val);
+}
+
+/**
+ * hal_tx_desc_set_who_classify_info_sel - Set who_classify_info_sel field
+ * @desc: Handle to Tx Descriptor
+ * @val: Value to be set
+ *
+ * Return: None
+ */
+static inline void  hal_tx_desc_set_who_classify_info_sel(void *desc,
+							  uint8_t val)
+{
+	HAL_SET_FLD(desc, TCL_DATA_CMD, WHO_CLASSIFY_INFO_SEL) |=
+		HAL_TX_SM(TCL_DATA_CMD, WHO_CLASSIFY_INFO_SEL, val);
+}
 
 /**
  * hal_tx_desc_set_buf_length - Set Data length in bytes in Tx Descriptor
@@ -521,7 +708,7 @@ hal_tx_populate_bank_register(hal_soc_handle_t hal_soc_hdl,
 			HWIO_TCL_R0_SW_CONFIG_BANK_n_VDEV_ID_CHECK_EN_SHFT);
 	reg_val |= (config->pmac_id <<
 			HWIO_TCL_R0_SW_CONFIG_BANK_n_PMAC_ID_SHFT);
-	reg_val |= (config->mcast_pkt_ctrl <<
+	reg_val |= (config->dscp_tid_map_id <<
 			HWIO_TCL_R0_SW_CONFIG_BANK_n_DSCP_TID_TABLE_NUM_SHFT);
 
 	HAL_REG_WRITE(hal_soc, reg_addr, reg_val);
@@ -754,4 +941,116 @@ hal_tx_vdev_mismatch_routing_set(hal_soc_handle_t hal_soc_hdl,
 {
 }
 #endif
+
+/*
+ * hal_tx_get_num_ppe_vp_tbl_entries() - Get the total number of VP table
+ * @hal_soc: HAL SoC Context
+ *
+ * Return: Total number of entries.
+ */
+static inline
+uint32_t hal_tx_get_num_ppe_vp_tbl_entries(hal_soc_handle_t hal_soc_hdl)
+{
+	struct hal_soc *hal_soc = (struct hal_soc *)hal_soc_hdl;
+
+	return hal_soc->ops->hal_tx_get_num_ppe_vp_tbl_entries(hal_soc_hdl);
+}
+
+/**
+ * hal_tx_set_ppe_cmn_cfg()- Set the PPE common config
+ * @hal_soc: HAL SoC context
+ * @cmn_cfg: HAL PPE VP common config
+ *
+ * Return: void
+ */
+static inline void
+hal_tx_set_ppe_cmn_cfg(hal_soc_handle_t hal_soc_hdl,
+		       union hal_tx_cmn_config_ppe *cmn_cfg)
+{
+	struct hal_soc *hal_soc = (struct hal_soc *)hal_soc_hdl;
+
+	hal_soc->ops->hal_tx_set_ppe_cmn_cfg(hal_soc_hdl, cmn_cfg);
+}
+
+/**
+ * hal_tx_populate_ppe_vp_entry -  Populate ppe VP entry
+ * @hal_soc: HAL SoC context
+ * @vp_cfg: HAL PPE VP config
+ * @ppe_vp_idx: PPE VP index
+ *
+ * Return: void
+ */
+static inline void
+hal_tx_populate_ppe_vp_entry(hal_soc_handle_t hal_soc_hdl,
+			     union hal_tx_ppe_vp_config *vp_cfg,
+			     int ppe_vp_idx)
+{
+	struct hal_soc *hal_soc = (struct hal_soc *)hal_soc_hdl;
+
+	hal_soc->ops->hal_tx_set_ppe_vp_entry(hal_soc_hdl, vp_cfg, ppe_vp_idx);
+}
+
+/**
+ * hal_tx_set_int_pri2id - Set the prit2tid table.
+ * @hal_soc: HAL SoC context
+ * @pri2tid: Reference to SW INT_PRI to TID table
+ *
+ * Return: void
+ */
+static inline void
+hal_tx_set_int_pri2tid(hal_soc_handle_t hal_soc_hdl,
+		       uint32_t val, uint8_t map_no)
+{
+	struct hal_soc *hal_soc = (struct hal_soc *)hal_soc_hdl;
+
+	hal_soc->ops->hal_tx_set_ppe_pri2tid(hal_soc_hdl, val, map_no);
+}
+
+/**
+ * hal_tx_update_int_pri2id - Populate the prit2tid table.
+ * @hal_soc: HAL SoC context
+ * @pri: INT_PRI value
+ * @tid: Wi-Fi TID
+ *
+ * Return: void
+ */
+static inline void
+hal_tx_update_int_pri2tid(hal_soc_handle_t hal_soc_hdl,
+			  uint8_t pri, uint8_t tid)
+{
+	struct hal_soc *hal_soc = (struct hal_soc *)hal_soc_hdl;
+
+	hal_soc->ops->hal_tx_update_ppe_pri2tid(hal_soc_hdl, pri, tid);
+}
+
+/**
+ * hal_tx_dump_ppe_vp_entry - Dump the PPE VP entry
+ * @hal_soc_hdl: HAL SoC context
+ *
+ * Return: void
+ */
+static inline void
+hal_tx_dump_ppe_vp_entry(hal_soc_handle_t hal_soc_hdl)
+{
+	struct hal_soc *hal_soc = (struct hal_soc *)hal_soc_hdl;
+
+	hal_soc->ops->hal_tx_dump_ppe_vp_entry(hal_soc_hdl);
+}
+
+/**
+ * hal_tx_enable_pri2tid_map- Enable the priority to tid mapping
+ * @hal_soc_hdl: HAL SoC context
+ * @val: True/False value
+ *
+ * Return: void
+ */
+static inline void
+hal_tx_enable_pri2tid_map(hal_soc_handle_t hal_soc_hdl, bool val,
+			  uint8_t ppe_vp_idx)
+{
+	struct hal_soc *hal_soc = (struct hal_soc *)hal_soc_hdl;
+
+	hal_soc->ops->hal_tx_enable_pri2tid_map(hal_soc_hdl, val,
+						ppe_vp_idx);
+}
 #endif /* _HAL_BE_TX_H_ */

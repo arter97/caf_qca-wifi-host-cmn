@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2014-2021 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -1223,7 +1224,10 @@ void reg_freq_to_chan_op_class(struct wlan_objmgr_pdev *pdev,
 	}
 
 	chan_params.ch_width = CH_WIDTH_MAX;
-	reg_set_channel_params_for_freq(pdev, freq, 0, &chan_params);
+	reg_set_channel_params_for_pwrmode(pdev, freq,
+					   0,
+					   &chan_params,
+					   REG_CURRENT_PWR_MODE);
 
 	reg_freq_width_to_chan_op_class(pdev, freq,
 					reg_get_bw_value(chan_params.ch_width),
@@ -1469,6 +1473,12 @@ static uint8_t reg_get_chan_or_chan_center(const struct
 		reg_get_channel_cen(op_class_tbl,
 				    idx,
 				    NUM_20_MHZ_CHAN_IN_160_MHZ_CHAN,
+				    &center_chan);
+	} else if ((op_class_tbl->op_class == BW_40_MHZ) &&
+		   (op_class_tbl->op_class == OPCLS_132)) {
+		reg_get_channel_cen(op_class_tbl,
+				    idx,
+				    NUM_20_MHZ_CHAN_IN_40_MHZ_CHAN,
 				    &center_chan);
 	} else {
 		center_chan = op_class_tbl->channels[*idx];

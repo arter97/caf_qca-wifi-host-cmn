@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -342,7 +343,8 @@
  */
 static inline void hal_set_link_desc_addr(hal_soc_handle_t hal_soc_hdl,
 					  void *desc, uint32_t cookie,
-					  qdf_dma_addr_t link_desc_paddr)
+					  qdf_dma_addr_t link_desc_paddr,
+					  uint8_t bm_id)
 {
 	struct hal_soc *hal_soc = (struct hal_soc *)hal_soc_hdl;
 
@@ -353,7 +355,8 @@ static inline void hal_set_link_desc_addr(hal_soc_handle_t hal_soc_hdl,
 
 	if (hal_soc->ops->hal_set_link_desc_addr)
 		hal_soc->ops->hal_set_link_desc_addr(desc, cookie,
-						     link_desc_paddr);
+						     link_desc_paddr,
+						     bm_id);
 }
 
 /**
@@ -368,29 +371,30 @@ static inline
 uint32_t hal_get_reo_qdesc_size(hal_soc_handle_t hal_soc_hdl,
 				uint32_t ba_window_size, int tid)
 {
-	/* Return descriptor size corresponding to window size of 2 since
-	 * we set ba_window_size to 2 while setting up REO descriptors as
-	 * a WAR to get 2k jump exception aggregates are received without
-	 * a BA session.
-	 */
-	if (ba_window_size <= 1) {
-		if (tid != HAL_NON_QOS_TID)
-			return sizeof(struct rx_reo_queue) +
-				sizeof(struct rx_reo_queue_ext);
-		else
-			return sizeof(struct rx_reo_queue);
-	}
+	struct hal_soc *hal_soc = (struct hal_soc *)hal_soc_hdl;
 
-	if (ba_window_size <= 105)
-		return sizeof(struct rx_reo_queue) +
-			sizeof(struct rx_reo_queue_ext);
+	if (hal_soc->ops->hal_get_reo_qdesc_size)
+		return hal_soc->ops->hal_get_reo_qdesc_size(ba_window_size,
+							    tid);
 
-	if (ba_window_size <= 210)
-		return sizeof(struct rx_reo_queue) +
-			(2 * sizeof(struct rx_reo_queue_ext));
-
-	return sizeof(struct rx_reo_queue) +
-		(3 * sizeof(struct rx_reo_queue_ext));
+	return sizeof(struct rx_reo_queue);
 }
 
+/**
+ * hal_get_idle_link_bm_id() - Get idle link BM id from chid_id
+ * @chip_id: mlo chip_id
+ *
+ * Returns: RBM ID
+ */
+static inline
+uint8_t hal_get_idle_link_bm_id(hal_soc_handle_t hal_soc_hdl,
+				uint8_t chip_id)
+{
+	struct hal_soc *hal_soc = (struct hal_soc *)hal_soc_hdl;
+
+	if (hal_soc->ops->hal_get_idle_link_bm_id)
+		return hal_soc->ops->hal_get_idle_link_bm_id(chip_id);
+
+	return WBM_IDLE_DESC_LIST;
+}
 #endif /* _HAL_HW_INTERNAL_H_ */

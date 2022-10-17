@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -48,10 +49,9 @@
  */
 QDF_COMPILE_TIME_ASSERT(dp_tx_desc_size,
 			((sizeof(struct dp_tx_desc_s)) <=
-			 (DP_BLOCKMEM_SIZE >> DP_TX_DESC_ID_PAGE_OS)) &&
+			 (PAGE_SIZE >> DP_TX_DESC_ID_PAGE_OS)) &&
 			((sizeof(struct dp_tx_desc_s)) >
-			 (DP_BLOCKMEM_SIZE >> (DP_TX_DESC_ID_PAGE_OS + 1)))
-		       );
+			 (PAGE_SIZE >> (DP_TX_DESC_ID_PAGE_OS + 1))));
 
 #ifdef QCA_LL_TX_FLOW_CONTROL_V2
 #define TX_DESC_LOCK_CREATE(lock)
@@ -92,6 +92,19 @@ do {                                                   \
 } while (0)
 #endif /* !QCA_LL_TX_FLOW_CONTROL_V2 */
 #define MAX_POOL_BUFF_COUNT 10000
+
+#ifdef DP_TX_TRACKING
+static inline void dp_tx_desc_set_magic(struct dp_tx_desc_s *tx_desc,
+					uint32_t magic_pattern)
+{
+	tx_desc->magic = magic_pattern;
+}
+#else
+static inline void dp_tx_desc_set_magic(struct dp_tx_desc_s *tx_desc,
+					uint32_t magic_pattern)
+{
+}
+#endif
 
 QDF_STATUS dp_tx_desc_pool_alloc(struct dp_soc *soc, uint8_t pool_id,
 				 uint16_t num_elem);
@@ -221,6 +234,61 @@ dp_tx_is_threshold_reached(struct dp_tx_desc_pool_s *pool, uint16_t avail_desc)
 }
 
 /**
+ * dp_tx_adjust_flow_pool_state() - Adjust flow pool state
+ *
+ * @soc: dp soc
+ * @pool: flow pool
+ */
+static inline void
+dp_tx_adjust_flow_pool_state(struct dp_soc *soc,
+			     struct dp_tx_desc_pool_s *pool)
+{
+	if (pool->avail_desc > pool->stop_th[DP_TH_BE_BK]) {
+		pool->status = FLOW_POOL_ACTIVE_UNPAUSED;
+		return;
+	} else if (pool->avail_desc <= pool->stop_th[DP_TH_BE_BK] &&
+		   pool->avail_desc > pool->stop_th[DP_TH_VI]) {
+		pool->status = FLOW_POOL_BE_BK_PAUSED;
+	} else if (pool->avail_desc <= pool->stop_th[DP_TH_VI] &&
+		   pool->avail_desc > pool->stop_th[DP_TH_VO]) {
+		pool->status = FLOW_POOL_VI_PAUSED;
+	} else if (pool->avail_desc <= pool->stop_th[DP_TH_VO] &&
+		   pool->avail_desc > pool->stop_th[DP_TH_HI]) {
+		pool->status = FLOW_POOL_VO_PAUSED;
+	} else if (pool->avail_desc <= pool->stop_th[DP_TH_HI]) {
+		pool->status = FLOW_POOL_ACTIVE_PAUSED;
+	}
+
+	switch (pool->status) {
+	case FLOW_POOL_ACTIVE_PAUSED:
+		soc->pause_cb(pool->flow_pool_id,
+			      WLAN_NETIF_PRIORITY_QUEUE_OFF,
+			      WLAN_DATA_FLOW_CTRL_PRI);
+		/* fallthrough */
+
+	case FLOW_POOL_VO_PAUSED:
+		soc->pause_cb(pool->flow_pool_id,
+			      WLAN_NETIF_VO_QUEUE_OFF,
+			      WLAN_DATA_FLOW_CTRL_VO);
+		/* fallthrough */
+
+	case FLOW_POOL_VI_PAUSED:
+		soc->pause_cb(pool->flow_pool_id,
+			      WLAN_NETIF_VI_QUEUE_OFF,
+			      WLAN_DATA_FLOW_CTRL_VI);
+		/* fallthrough */
+
+	case FLOW_POOL_BE_BK_PAUSED:
+		soc->pause_cb(pool->flow_pool_id,
+			      WLAN_NETIF_BE_BK_QUEUE_OFF,
+			      WLAN_DATA_FLOW_CTRL_BE_BK);
+		break;
+	default:
+		dp_err("Invalid pool staus:%u to adjust", pool->status);
+	}
+}
+
+/**
  * dp_tx_desc_alloc() - Allocate a Software Tx descriptor from given pool
  *
  * @soc: Handle to DP SoC structure
@@ -236,39 +304,54 @@ dp_tx_desc_alloc(struct dp_soc *soc, uint8_t desc_pool_id)
 	bool is_pause = false;
 	enum netif_action_type act = WLAN_NETIF_ACTION_TYPE_NONE;
 	enum dp_fl_ctrl_threshold level = DP_TH_BE_BK;
+	enum netif_reason_type reason;
 
 	if (qdf_likely(pool)) {
 		qdf_spin_lock_bh(&pool->flow_pool_lock);
-		if (qdf_likely(pool->avail_desc)) {
+		if (qdf_likely(pool->avail_desc &&
+		    pool->status != FLOW_POOL_INVALID &&
+		    pool->status != FLOW_POOL_INACTIVE)) {
 			tx_desc = dp_tx_get_desc_flow_pool(pool);
 			tx_desc->pool_id = desc_pool_id;
 			tx_desc->flags = DP_TX_DESC_FLAG_ALLOCATED;
+			dp_tx_desc_set_magic(tx_desc,
+					     DP_TX_MAGIC_PATTERN_INUSE);
 			is_pause = dp_tx_is_threshold_reached(pool,
 							      pool->avail_desc);
+
+			if (qdf_unlikely(pool->status ==
+					 FLOW_POOL_ACTIVE_UNPAUSED_REATTACH)) {
+				dp_tx_adjust_flow_pool_state(soc, pool);
+				is_pause = false;
+			}
 
 			if (qdf_unlikely(is_pause)) {
 				switch (pool->status) {
 				case FLOW_POOL_ACTIVE_UNPAUSED:
 					/* pause network BE\BK queue */
 					act = WLAN_NETIF_BE_BK_QUEUE_OFF;
+					reason = WLAN_DATA_FLOW_CTRL_BE_BK;
 					level = DP_TH_BE_BK;
 					pool->status = FLOW_POOL_BE_BK_PAUSED;
 					break;
 				case FLOW_POOL_BE_BK_PAUSED:
 					/* pause network VI queue */
 					act = WLAN_NETIF_VI_QUEUE_OFF;
+					reason = WLAN_DATA_FLOW_CTRL_VI;
 					level = DP_TH_VI;
 					pool->status = FLOW_POOL_VI_PAUSED;
 					break;
 				case FLOW_POOL_VI_PAUSED:
 					/* pause network VO queue */
 					act = WLAN_NETIF_VO_QUEUE_OFF;
+					reason = WLAN_DATA_FLOW_CTRL_VO;
 					level = DP_TH_VO;
 					pool->status = FLOW_POOL_VO_PAUSED;
 					break;
 				case FLOW_POOL_VO_PAUSED:
 					/* pause network HI PRI queue */
 					act = WLAN_NETIF_PRIORITY_QUEUE_OFF;
+					reason = WLAN_DATA_FLOW_CTRL_PRI;
 					level = DP_TH_HI;
 					pool->status = FLOW_POOL_ACTIVE_PAUSED;
 					break;
@@ -286,7 +369,7 @@ dp_tx_desc_alloc(struct dp_soc *soc, uint8_t desc_pool_id)
 						qdf_get_system_timestamp();
 					soc->pause_cb(desc_pool_id,
 						      act,
-						      WLAN_DATA_FLOW_CONTROL);
+						      reason);
 				}
 			}
 		} else {
@@ -316,16 +399,20 @@ dp_tx_desc_free(struct dp_soc *soc, struct dp_tx_desc_s *tx_desc,
 	struct dp_tx_desc_pool_s *pool = &soc->tx_desc[desc_pool_id];
 	qdf_time_t unpause_time = qdf_get_system_timestamp(), pause_dur;
 	enum netif_action_type act = WLAN_WAKE_ALL_NETIF_QUEUE;
+	enum netif_reason_type reason;
 
 	qdf_spin_lock_bh(&pool->flow_pool_lock);
 	tx_desc->vdev_id = DP_INVALID_VDEV_ID;
 	tx_desc->nbuf = NULL;
 	tx_desc->flags = 0;
+	dp_tx_desc_set_magic(tx_desc, DP_TX_MAGIC_PATTERN_FREE);
+	tx_desc->timestamp = 0;
 	dp_tx_put_desc_flow_pool(pool, tx_desc);
 	switch (pool->status) {
 	case FLOW_POOL_ACTIVE_PAUSED:
 		if (pool->avail_desc > pool->start_th[DP_TH_HI]) {
 			act = WLAN_NETIF_PRIORITY_QUEUE_ON;
+			reason = WLAN_DATA_FLOW_CTRL_PRI;
 			pool->status = FLOW_POOL_VO_PAUSED;
 
 			/* Update maxinum pause duration for HI queue */
@@ -338,6 +425,7 @@ dp_tx_desc_free(struct dp_soc *soc, struct dp_tx_desc_s *tx_desc,
 	case FLOW_POOL_VO_PAUSED:
 		if (pool->avail_desc > pool->start_th[DP_TH_VO]) {
 			act = WLAN_NETIF_VO_QUEUE_ON;
+			reason = WLAN_DATA_FLOW_CTRL_VO;
 			pool->status = FLOW_POOL_VI_PAUSED;
 
 			/* Update maxinum pause duration for VO queue */
@@ -350,6 +438,7 @@ dp_tx_desc_free(struct dp_soc *soc, struct dp_tx_desc_s *tx_desc,
 	case FLOW_POOL_VI_PAUSED:
 		if (pool->avail_desc > pool->start_th[DP_TH_VI]) {
 			act = WLAN_NETIF_VI_QUEUE_ON;
+			reason = WLAN_DATA_FLOW_CTRL_VI;
 			pool->status = FLOW_POOL_BE_BK_PAUSED;
 
 			/* Update maxinum pause duration for VI queue */
@@ -361,7 +450,8 @@ dp_tx_desc_free(struct dp_soc *soc, struct dp_tx_desc_s *tx_desc,
 		break;
 	case FLOW_POOL_BE_BK_PAUSED:
 		if (pool->avail_desc > pool->start_th[DP_TH_BE_BK]) {
-			act = WLAN_WAKE_NON_PRIORITY_QUEUE;
+			act = WLAN_NETIF_BE_BK_QUEUE_ON;
+			reason = WLAN_DATA_FLOW_CTRL_BE_BK;
 			pool->status = FLOW_POOL_ACTIVE_UNPAUSED;
 
 			/* Update maxinum pause duration for BE_BK queue */
@@ -394,7 +484,7 @@ dp_tx_desc_free(struct dp_soc *soc, struct dp_tx_desc_s *tx_desc,
 
 	if (act != WLAN_WAKE_ALL_NETIF_QUEUE)
 		soc->pause_cb(pool->flow_pool_id,
-			      act, WLAN_DATA_FLOW_CONTROL);
+			      act, reason);
 	qdf_spin_unlock_bh(&pool->flow_pool_lock);
 }
 #else /* QCA_AC_BASED_FLOW_CONTROL */
@@ -429,6 +519,8 @@ dp_tx_desc_alloc(struct dp_soc *soc, uint8_t desc_pool_id)
 			tx_desc = dp_tx_get_desc_flow_pool(pool);
 			tx_desc->pool_id = desc_pool_id;
 			tx_desc->flags = DP_TX_DESC_FLAG_ALLOCATED;
+			dp_tx_desc_set_magic(tx_desc,
+					     DP_TX_MAGIC_PATTERN_INUSE);
 			if (qdf_unlikely(pool->avail_desc < pool->stop_th)) {
 				pool->status = FLOW_POOL_ACTIVE_PAUSED;
 				qdf_spin_unlock_bh(&pool->flow_pool_lock);
@@ -481,6 +573,8 @@ dp_tx_desc_free(struct dp_soc *soc, struct dp_tx_desc_s *tx_desc,
 	tx_desc->vdev_id = DP_INVALID_VDEV_ID;
 	tx_desc->nbuf = NULL;
 	tx_desc->flags = 0;
+	dp_tx_desc_set_magic(tx_desc, DP_TX_MAGIC_PATTERN_FREE);
+	tx_desc->timestamp = 0;
 	dp_tx_put_desc_flow_pool(pool, tx_desc);
 	switch (pool->status) {
 	case FLOW_POOL_ACTIVE_PAUSED:
@@ -563,6 +657,20 @@ static inline void dp_tx_flow_pool_unmap_handler(struct dp_pdev *pdev,
 {
 }
 
+#ifdef QCA_DP_TX_HW_SW_NBUF_DESC_PREFETCH
+static inline
+void dp_tx_prefetch_desc(struct dp_tx_desc_s *tx_desc)
+{
+	if (tx_desc)
+		prefetch(tx_desc);
+}
+#else
+static inline
+void dp_tx_prefetch_desc(struct dp_tx_desc_s *tx_desc)
+{
+}
+#endif
+
 /**
  * dp_tx_desc_alloc() - Allocate a Software Tx Descriptor from given pool
  *
@@ -590,6 +698,7 @@ static inline struct dp_tx_desc_s *dp_tx_desc_alloc(struct dp_soc *soc,
 	pool->freelist = pool->freelist->next;
 	pool->num_allocated++;
 	pool->num_free--;
+	dp_tx_prefetch_desc(pool->freelist);
 
 	tx_desc->flags = DP_TX_DESC_FLAG_ALLOCATED;
 

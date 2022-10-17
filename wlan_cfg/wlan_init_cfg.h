@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2021 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -78,4 +79,5 @@
 
 #define MAX_RX_MAC_RINGS 2
 
+#define WBM2SW_TXCOMP_RING4_NUM 4
 #endif /* __WLAN_INIT_CFG_H */

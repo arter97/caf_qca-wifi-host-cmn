@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2011,2017-2021 The Linux Foundation. All rights reserved.
- *
+ * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -98,8 +98,12 @@
 #define INVALID_FFT_SIZE                          (0xFFFF)
 #define SPECTRAL_PARAM_RPT_MODE_MIN               (0)
 #define SPECTRAL_PARAM_RPT_MODE_MAX               (3)
-#define MAX_FFTBIN_VALUE                          (255)
 #define SPECTRAL_DWORD_SIZE                       (4)
+
+#define MAX_FFTBIN_VALUE_LINEAR_MODE              (U8_MAX)
+#define MAX_FFTBIN_VALUE_DBM_MODE                 (S8_MAX)
+#define MIN_FFTBIN_VALUE_DBM_MODE                 (S8_MIN)
+#define MAX_FFTBIN_VALUE                          (255)
 
 /* DBR ring debug size for Spectral */
 #define SPECTRAL_DBR_RING_DEBUG_SIZE 512
@@ -938,6 +942,12 @@ struct vdev_spectral_enable_params;
  * channel information
  * @extract_pdev_spectral_session_detector_info: Extract Spectral scan session
  * detector information
+ * @extract_spectral_caps_fixed_param: Extract fixed parameters from Spectral
+ * capabilities event
+ * @extract_spectral_scan_bw_caps: Extract bandwidth capabilities from Spectral
+ * capabilities event
+ * @extract_spectral_fft_size_caps: Extract fft size capabilities from Spectral
+ * capabilities event
  */
 struct spectral_wmi_ops {
 	QDF_STATUS (*wmi_spectral_configure_cmd_send)(
@@ -971,6 +981,15 @@ struct spectral_wmi_ops {
 		wmi_unified_t wmi_handle, void *event,
 		struct spectral_session_det_info *det_info,
 		uint8_t det_info_idx);
+	QDF_STATUS (*extract_spectral_caps_fixed_param)(
+		wmi_unified_t wmi_handle, void *event,
+		struct spectral_capabilities_event_params *param);
+	QDF_STATUS (*extract_spectral_scan_bw_caps)(
+		wmi_unified_t wmi_handle, void *event,
+		struct spectral_scan_bw_capabilities *bw_caps);
+	QDF_STATUS (*extract_spectral_fft_size_caps)(
+		wmi_unified_t wmi_handle, void *event,
+		struct spectral_fft_size_capabilities *fft_size_caps);
 };
 
 /**
@@ -1055,7 +1074,7 @@ struct per_session_det_map {
 	uint8_t num_dest_det_info;
 	enum spectral_msg_buf_type buf_type;
 	bool send_to_upper_layers;
-	bool det_map_valid;
+	bool det_map_valid[SPECTRAL_SCAN_MODE_MAX];
 };
 
 /**
@@ -2320,6 +2339,52 @@ bool is_secondaryseg_rx_inprog(struct target_if_spectral *spectral,
 #endif
 
 /**
+ * clamp_fft_bin_value() - Clamp the FFT bin value between min and max
+ * @fft_bin_value: FFT bin value as reported by HW
+ * @pwr_format: FFT bin format (linear or dBm format)
+ *
+ * Each FFT bin value is represented as an 8 bit integer in SAMP message. But
+ * depending on the configuration, the FFT bin value reported by HW might
+ * exceed 8 bits. Clamp the FFT bin value between the min and max value
+ * which can be represented by 8 bits. For linear mode, min and max FFT bin
+ * value which can be represented by 8 bit is 0 and U8_MAX respectively. For
+ * dBm mode,  min and max FFT bin value which can be represented by 8 bit is
+ * S8_MIN and S8_MAX respectively.
+ *
+ * Return: Clamped FFT bin value
+ */
+static inline uint8_t
+clamp_fft_bin_value(uint16_t fft_bin_value, uint16_t pwr_format)
+{
+	uint8_t clamped_fft_bin_value = 0;
+
+	switch (pwr_format) {
+	case SPECTRAL_PWR_FORMAT_LINEAR:
+		if (qdf_unlikely(fft_bin_value > MAX_FFTBIN_VALUE_LINEAR_MODE))
+			clamped_fft_bin_value = MAX_FFTBIN_VALUE_LINEAR_MODE;
+		else
+			clamped_fft_bin_value = fft_bin_value;
+		break;
+
+	case SPECTRAL_PWR_FORMAT_DBM:
+		if (qdf_unlikely((int16_t)fft_bin_value >
+		    MAX_FFTBIN_VALUE_DBM_MODE))
+			clamped_fft_bin_value = MAX_FFTBIN_VALUE_DBM_MODE;
+		else if (qdf_unlikely((int16_t)fft_bin_value <
+			 MIN_FFTBIN_VALUE_DBM_MODE))
+			clamped_fft_bin_value = MIN_FFTBIN_VALUE_DBM_MODE;
+		else
+			clamped_fft_bin_value = fft_bin_value;
+		break;
+
+	default:
+		qdf_assert_always(0);
+	}
+
+	return clamped_fft_bin_value;
+}
+
+/**
  * target_if_160mhz_delivery_state_change() - State transition for 160Mhz
  *                                            Spectral
  * @spectral: Pointer to spectral object
@@ -2909,6 +2974,7 @@ spectral_is_session_info_expected_from_target(struct wlan_objmgr_pdev *pdev,
  * @dest_fft_buf: Pointer to destination FFT buffer
  * @fft_bin_count: Number of FFT bins to copy
  * @bytes_copied: Number of bytes copied by this API
+ * @pwr_format: Spectral FFT bin format (linear/dBm mode)
  *
  * Different targets supports different FFT bin widths. This API encapsulates
  * all those details and copies 8-bit FFT value into the destination buffer.
@@ -2925,6 +2991,55 @@ target_if_spectral_copy_fft_bins(struct target_if_spectral *spectral,
 				 const void *src_fft_buf,
 				 void *dest_fft_buf,
 				 uint32_t fft_bin_count,
-				 uint32_t *bytes_copied);
+				 uint32_t *bytes_copied,
+				 uint16_t pwr_format);
 #endif /* WLAN_CONV_SPECTRAL_ENABLE */
+
+struct spectral_capabilities_event_params;
+/**
+ * target_if_wmi_extract_spectral_caps_fixed_param() - Wrapper function to
+ * extract fixed params from Spectral capabilities WMI event
+ * @psoc: Pointer to psoc object
+ * @evt_buf: Event buffer
+ * @param: Spectral capabilities event parameters data structure to be filled
+ * by this API
+ *
+ * Return: QDF_STATUS of operation
+ */
+QDF_STATUS target_if_wmi_extract_spectral_caps_fixed_param(
+			struct wlan_objmgr_psoc *psoc,
+			uint8_t *evt_buf,
+			struct spectral_capabilities_event_params *param);
+
+struct spectral_scan_bw_capabilities;
+/**
+ * target_if_wmi_extract_spectral_scan_bw_caps() - Wrapper function to
+ * extract bandwidth capabilities from Spectral capabilities WMI event
+ * @psoc: Pointer to psoc object
+ * @evt_buf: Event buffer
+ * @bw_caps: Data structure to be filled by this API after extraction
+ *
+ * Return: QDF_STATUS of operation
+ */
+QDF_STATUS
+target_if_wmi_extract_spectral_scan_bw_caps(
+			struct wlan_objmgr_psoc *psoc,
+			uint8_t *evt_buf,
+			struct spectral_scan_bw_capabilities *bw_caps);
+
+struct spectral_fft_size_capabilities;
+/**
+ * target_if_wmi_extract_spectral_fft_size_caps() - Wrapper function to
+ * extract fft size capabilities from Spectral capabilities WMI event
+ * @psoc: Pointer to psoc object
+ * @evt_buf: Event buffer
+ * @fft_size_caps: Data structure to be filled by this API after extraction
+ *
+ * Return: QDF_STATUS of operation
+ */
+QDF_STATUS
+target_if_wmi_extract_spectral_fft_size_caps(
+			struct wlan_objmgr_psoc *psoc,
+			uint8_t *evt_buf,
+			struct spectral_fft_size_capabilities *fft_size_caps);
 #endif /* _TARGET_IF_SPECTRAL_H_ */
