@@ -3642,7 +3642,7 @@ QDF_STATUS dp_rx_tid_setup_wifi3(struct dp_peer *peer, int tid,
 
 	/* TODO: Allocating HW queue descriptors based on max BA window size
 	 * for all QOS TIDs so that same descriptor can be used later when
-	 * ADDBA request is recevied. This should be changed to allocate HW
+	 * ADDBA request is received. This should be changed to allocate HW
 	 * queue descriptors based on BA window size being negotiated (0 for
 	 * non BA cases), and reallocate when BA window size changes and also
 	 * send WMI message to FW to change the REO queue descriptor in Rx
@@ -4545,7 +4545,7 @@ static void dp_check_ba_buffersize(struct dp_peer *peer,
 	buffersize = QDF_MIN(buffersize, max_ba_window);
 
 	dp_info(QDF_MAC_ADDR_FMT" per_tid_basize_max_tid %d tid %d buffersize %d hw_buffer_size %d",
-		peer->mac_addr.raw,
+		QDF_MAC_ADDR_REF(peer->mac_addr.raw),
 		soc->per_tid_basize_max_tid, tid, buffersize,
 		peer->hw_buffer_size);
 

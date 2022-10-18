@@ -41,7 +41,8 @@
 #include "hif_debug.h"
 #include "mp_dev.h"
 #if defined(QCA_WIFI_QCA8074) || defined(QCA_WIFI_QCA6018) || \
-	defined(QCA_WIFI_QCA5018) || defined(QCA_WIFI_QCA9574)
+	defined(QCA_WIFI_QCA5018) || defined(QCA_WIFI_QCA9574) || \
+	defined(QCA_WIFI_QCA5332)
 #include "hal_api.h"
 #endif
 #include "hif_napi.h"
@@ -359,14 +360,39 @@ static const struct qwlan_hw qwlan_hw_list[] = {
 		.name = "QCA9379_REV1_1",
 	},
 	{
-		.id = KIWI_V1,
-		.subid = 0xE,
-		.name = "KIWI_V1",
-	},
-	{
 		.id = MANGO_V1,
 		.subid = 0xF,
 		.name = "MANGO_V1",
+	},
+	{
+		.id = KIWI_V1,
+		.subid = 0,
+		.name = "KIWI_V1",
+	},
+	{
+		.id = KIWI_V2,
+		.subid = 0,
+		.name = "KIWI_V2",
+	},
+	{
+		.id = WCN6750_V1,
+		.subid = 0,
+		.name = "WCN6750_V1",
+	},
+	{
+		.id = QCA6490_v2_1,
+		.subid = 0,
+		.name = "QCA6490",
+	},
+	{
+		.id = QCA6490_v2,
+		.subid = 0,
+		.name = "QCA6490",
+	},
+	{
+		.id = WCN3990_v2_2,
+		.subid = 0,
+		.name = "WCN3990_v2_2",
 	}
 };
 
@@ -379,6 +405,10 @@ static const struct qwlan_hw qwlan_hw_list[] = {
 static const char *hif_get_hw_name(struct hif_target_info *info)
 {
 	int i;
+
+	hif_debug("target version = %d, target revision = %d",
+		  info->target_version,
+		  info->target_revision);
 
 	if (info->hw_name)
 		return info->hw_name;
@@ -463,6 +493,21 @@ uint32_t hif_get_soc_version(struct hif_opaque_softc *hif_handle)
 }
 
 qdf_export_symbol(hif_get_soc_version);
+
+/**
+ * hif_get_dev_ba_cmem(): API to get device ce base address.
+ * @scn: scn
+ *
+ * Return: dev mem base address for CMEM
+ */
+void *hif_get_dev_ba_cmem(struct hif_opaque_softc *hif_handle)
+{
+	struct hif_softc *scn = (struct hif_softc *)hif_handle;
+
+	return scn->mem_cmem;
+}
+
+qdf_export_symbol(hif_get_dev_ba_cmem);
 
 #ifdef FEATURE_RUNTIME_PM
 void hif_runtime_prevent_linkdown(struct hif_softc *scn, bool is_get)
@@ -1077,7 +1122,7 @@ static inline int hif_get_num_active_grp_tasklets(struct hif_softc *scn)
 	defined(QCA_WIFI_QCN9000) || defined(QCA_WIFI_QCA6490) || \
 	defined(QCA_WIFI_QCA6750) || defined(QCA_WIFI_QCA5018) || \
 	defined(QCA_WIFI_KIWI) || defined(QCA_WIFI_QCN9224) || \
-	defined(QCA_WIFI_QCA9574))
+	defined(QCA_WIFI_QCA9574)) || defined(QCA_WIFI_QCA5332)
 /**
  * hif_get_num_pending_work() - get the number of entries in
  *		the workqueue pending to be completed.
@@ -1213,7 +1258,7 @@ uint8_t hif_get_ep_vote_access(struct hif_opaque_softc *hif_ctx,
 	defined(QCA_WIFI_QCN9000) || defined(QCA_WIFI_QCA6490) || \
 	defined(QCA_WIFI_QCA6750) || defined(QCA_WIFI_QCA5018) || \
 	defined(QCA_WIFI_KIWI) || defined(QCA_WIFI_QCN9224) || \
-	defined(QCA_WIFI_QCA9574))
+	defined(QCA_WIFI_QCA9574)) || defined(QCA_WIFI_QCA5332)
 static QDF_STATUS hif_hal_attach(struct hif_softc *scn)
 {
 	if (ce_srng_based(scn)) {
@@ -1656,6 +1701,12 @@ int hif_get_device_type(uint32_t device_id,
 		*hif_type = HIF_TYPE_QCA5018;
 		*target_type = TARGET_TYPE_QCA5018;
 		hif_info(" *********** qca5018 *************");
+		break;
+
+	case QCA5332_DEVICE_ID:
+		*hif_type = HIF_TYPE_QCA5332;
+		*target_type = TARGET_TYPE_QCA5332;
+		hif_info(" *********** QCA5332 *************");
 		break;
 
 	case QCA9574_DEVICE_ID:

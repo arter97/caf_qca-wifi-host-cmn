@@ -617,7 +617,8 @@ target_if_send_vdev_spectral_enable_cmd(struct target_if_spectral *spectral,
  */
 static inline bool is_spectral_arch_beryllium(uint32_t target_tpe)
 {
-	if (target_tpe == TARGET_TYPE_QCN9224)
+	if ((target_tpe == TARGET_TYPE_QCN9224) ||
+	    (target_tpe == TARGET_TYPE_QCA5332))
 		return true;
 
 	return false;
@@ -3154,6 +3155,7 @@ target_if_spectral_len_adj_swar_init(struct spectral_fft_bin_len_adj_swar *swar,
 	    target_type == TARGET_TYPE_QCA9574 ||
 	    target_type == TARGET_TYPE_QCA6018 ||
 	    target_type == TARGET_TYPE_QCN6122 ||
+	    target_type == TARGET_TYPE_QCA5332 ||
 	    target_type == TARGET_TYPE_QCA5018 ||
 	    target_type == TARGET_TYPE_QCN9000 ||
 	    target_type == TARGET_TYPE_QCA6490 ||
@@ -3201,6 +3203,7 @@ target_if_spectral_report_params_init(
 	    target_type == TARGET_TYPE_QCA5018 ||
 	    target_type == TARGET_TYPE_QCA6750 ||
 	    target_type == TARGET_TYPE_QCA6490 ||
+	    target_type == TARGET_TYPE_QCA5332 ||
 	    target_type == TARGET_TYPE_QCN9224 ||
 	    target_type == TARGET_TYPE_KIWI ||
 	    target_type == TARGET_TYPE_MANGO) {
@@ -3649,6 +3652,7 @@ target_if_pdev_spectral_init(struct wlan_objmgr_pdev *pdev)
 	if (target_type == TARGET_TYPE_QCA8074 ||
 	    target_type == TARGET_TYPE_QCA8074V2 ||
 	    target_type == TARGET_TYPE_QCA9574 ||
+	    target_type == TARGET_TYPE_QCA5332 ||
 	    target_type == TARGET_TYPE_QCA6018 ||
 	    target_type == TARGET_TYPE_QCA5018 ||
 	    target_type == TARGET_TYPE_QCA6390 ||
@@ -3672,6 +3676,7 @@ target_if_pdev_spectral_init(struct wlan_objmgr_pdev *pdev)
 	    (target_type == TARGET_TYPE_QCA9574) ||
 	    (target_type == TARGET_TYPE_QCA6018) ||
 	    (target_type == TARGET_TYPE_QCA5018) ||
+	    (target_type == TARGET_TYPE_QCA5332) ||
 	    (target_type == TARGET_TYPE_QCN6122) ||
 	    (target_type == TARGET_TYPE_QCN9000) ||
 	    (target_type == TARGET_TYPE_QCA6290) ||
@@ -6018,7 +6023,6 @@ target_if_start_spectral_scan(struct wlan_objmgr_pdev *pdev,
 		bool is_overlapping;
 		enum phy_ch_width ch_width[SPECTRAL_SCAN_MODE_MAX];
 		enum spectral_scan_mode m;
-		enum phy_ch_width op_ch_width;
 		enum phy_ch_width agile_ch_width;
 
 		m = SPECTRAL_SCAN_MODE_NORMAL;
@@ -6032,7 +6036,6 @@ target_if_start_spectral_scan(struct wlan_objmgr_pdev *pdev,
 			spectral_err("Failed to populate channel width");
 			return QDF_STATUS_E_FAILURE;
 		}
-		op_ch_width = ch_width[SPECTRAL_SCAN_MODE_NORMAL];
 		agile_ch_width = ch_width[SPECTRAL_SCAN_MODE_AGILE];
 
 		if (!spectral->params[smode].ss_frequency.cfreq1) {

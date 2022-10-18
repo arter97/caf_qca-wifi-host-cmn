@@ -1336,9 +1336,8 @@ static QDF_STATUS dp_rx_defrag_reo_reinject(struct dp_txrx_peer *txrx_peer,
 		return QDF_STATUS_E_FAILURE;
 	}
 
-	dp_ipa_handle_rx_buf_smmu_mapping(soc, head,
-					  rx_desc_pool->buf_size,
-					  true);
+	dp_ipa_handle_rx_buf_smmu_mapping(soc, head, rx_desc_pool->buf_size,
+					  true, __func__, __LINE__);
 
 	/*
 	 * As part of rx frag handler bufffer was unmapped and rx desc
@@ -1387,9 +1386,10 @@ static QDF_STATUS dp_rx_defrag_reo_reinject(struct dp_txrx_peer *txrx_peer,
 	qdf_mem_zero(ent_mpdu_desc_info, sizeof(uint32_t));
 
 	mpdu_wrd = (uint32_t *)dst_mpdu_desc_info;
-	seq_no = hal_rx_get_rx_sequence(soc->hal_soc, qdf_nbuf_data(head));
+	seq_no = hal_rx_get_rx_sequence(soc->hal_soc, rx_desc->rx_buf_start);
 
-	hal_mpdu_desc_info_set(soc->hal_soc, ent_mpdu_desc_info, seq_no);
+	hal_mpdu_desc_info_set(soc->hal_soc, ent_ring_desc, ent_mpdu_desc_info,
+			       seq_no);
 	/* qdesc addr */
 	ent_qdesc_addr = hal_get_reo_ent_desc_qdesc_addr(soc->hal_soc,
 						(uint8_t *)ent_ring_desc);

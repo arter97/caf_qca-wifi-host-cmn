@@ -81,6 +81,7 @@ typedef void *hif_handle_t;
 #define HIF_TYPE_QCN9224 27
 #define HIF_TYPE_QCA9574 28
 #define HIF_TYPE_MANGO 29
+#define HIF_TYPE_QCA5332 30
 
 #define DMA_COHERENT_MASK_DEFAULT   37
 
@@ -1943,6 +1944,13 @@ void hif_allow_link_low_power_states(struct hif_opaque_softc *hif)
 
 void *hif_get_dev_ba(struct hif_opaque_softc *hif_handle);
 void *hif_get_dev_ba_ce(struct hif_opaque_softc *hif_handle);
+
+/**
+ * hif_get_dev_ba_cmem() - get base address of CMEM
+ * @hif_ctx - the HIF context
+ *
+ */
+void *hif_get_dev_ba_cmem(struct hif_opaque_softc *hif_handle);
 
 /**
  * hif_get_soc_version() - get soc major version from target info

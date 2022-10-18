@@ -219,9 +219,16 @@ struct dp_htt_htc_pkt_union {
 	} u;
 };
 
+struct bp_handler {
+	unsigned long bp_start_tt;
+	unsigned long bp_last_tt;
+	unsigned long bp_duration;
+	unsigned long bp_counter;
+};
+
 struct dp_htt_timestamp {
-	long *umac_ttt;
-	long *lmac_ttt;
+	struct bp_handler *umac_path;
+	struct bp_handler *lmac_path;
 };
 
 struct htt_soc {
@@ -329,10 +336,10 @@ struct dp_tx_mon_downstream_tlv_config {
  * rx_frame_bitmap_ack: RX_FRAME_BITMAP_ACK TLV
  * rx_frame_1k_bitmap_ack: RX_FRAME_1K_BITMAP_ACK TLV
  * coex_tx_status: COEX_TX_STATUS TLV
- * recevied_response_info: RECEIVED_RESPONSE_INFO TLV
- * recevied_response_info_p2: RECEIVED_RESPONSE_INFO_PART2 TLV
+ * received_response_info: RECEIVED_RESPONSE_INFO TLV
+ * received_response_info_p2: RECEIVED_RESPONSE_INFO_PART2 TLV
  * ofdma_trigger_details: OFDMA_TRIGGER_DETAILS
- * recevied_trigger_info: RECEIVED_TRIGGER_INFO
+ * received_trigger_info: RECEIVED_TRIGGER_INFO
  * pdg_tx_request: PDG_TX_REQUEST
  * pdg_response: PDG_RESPONSE
  * pdg_trig_response: PDG_TRIG_RESPONSE
@@ -417,10 +424,10 @@ struct dp_tx_mon_upstream_tlv_config {
 		 rx_frame_bitmap_ack:1,
 		 rx_frame_1k_bitmap_ack:1,
 		 coex_tx_status:1,
-		 recevied_response_info:1,
-		 recevied_response_info_p2:1,
+		 received_response_info:1,
+		 received_response_info_p2:1,
 		 ofdma_trigger_details:1,
-		 recevied_trigger_info:1,
+		 received_trigger_info:1,
 		 pdg_tx_request:1,
 		 pdg_response:1,
 		 pdg_trig_response:1,

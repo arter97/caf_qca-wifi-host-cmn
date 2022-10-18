@@ -163,6 +163,9 @@
 
 #define CDP_MAX_TIDS 17
 
+#define CDP_MAX_PKT_PER_WIN 1000
+#define CDP_MAX_WIN_MOV_AVG 10
+
 #define CDP_WDI_NUM_EVENTS WDI_NUM_EVENTS
 
 #define CDP_FCTL_RETRY 0x0800
@@ -1078,10 +1081,32 @@ struct cdp_tid_stats_intf {
  * struct cdp_delay_tx_stats: Tx delay stats
  * @tx_swq_delay: software enqueue delay
  * @hwtx_delay: HW enque to completion delay
+ * @nwdelay_avg: Network delay average
+ * @swdelay_avg: Wifi SW Delay Average
+ * @hwdelay_avg: Wifi HW delay Average
+ * @sw_delay_win_total: total NW delay for each window
+ * @hw_delay_win_total: total Wifi SW delay for each window
+ * @nw_delay_win_total: total Wifi HW delay for each window
+ *
+ * @cur_win_num_pkts: number of packets processed in current window
+ * @cur_win_index: current windows index
  */
 struct cdp_delay_tx_stats {
 	struct cdp_hist_stats    tx_swq_delay;
 	struct cdp_hist_stats    hwtx_delay;
+
+#ifdef CONFIG_SAWF
+	uint32_t nwdelay_avg;
+	uint32_t swdelay_avg;
+	uint32_t hwdelay_avg;
+
+	uint64_t nw_delay_win_avg[CDP_MAX_WIN_MOV_AVG];
+	uint64_t sw_delay_win_avg[CDP_MAX_WIN_MOV_AVG];
+	uint64_t hw_delay_win_avg[CDP_MAX_WIN_MOV_AVG];
+
+	uint32_t cur_win_num_pkts;
+	uint32_t curr_win_idx;
+#endif
 };
 
 /*
@@ -1400,6 +1425,7 @@ struct protocol_trace_count {
  * @punc_bw[MAX_PUNCTURED_MODE]: MSDU count for punctured BW
  * @release_src_not_tqm: Counter to keep track of release source is not TQM
  *			 in TX completion status processing
+ * @per: Packet error ratio
  */
 struct cdp_tx_stats {
 	struct cdp_pkt_info comp_pkt;
@@ -1518,6 +1544,7 @@ struct cdp_tx_stats {
 	uint32_t punc_bw[MAX_PUNCTURED_MODE];
 #endif
 	uint32_t release_src_not_tqm;
+	uint32_t per;
 };
 
 /* struct cdp_rx_stats - rx Level Stats
@@ -1676,7 +1703,7 @@ struct cdp_rx_stats {
 	uint32_t rx_discard;
 	uint32_t rx_ratecode;
 	uint32_t rx_flags;
-	uint32_t rx_snr_measured_time;
+	unsigned long rx_snr_measured_time;
 	uint8_t snr;
 	uint8_t last_snr;
 	uint32_t multipass_rx_pkt_drop;
@@ -1799,6 +1826,7 @@ struct cdp_tx_ingress_stats {
 		uint32_t headroom_insufficient;
 		uint32_t fail_per_pkt_vdev_id_check;
 		uint32_t drop_ingress;
+		uint32_t invalid_peer_id_in_exc_path;
 	} dropped;
 
 	/* Mesh packets info */
@@ -2622,6 +2650,7 @@ struct cdp_soc_stats {
 			uint32_t rx_hw_err_msdu_buf_rcved;
 			uint32_t rx_hw_err_msdu_buf_invalid_cookie;
 			uint32_t rx_hw_err_oor_drop;
+			uint32_t rx_hw_err_raw_mpdu_drop;
 			uint32_t rx_hw_err_oor_to_stack;
 			uint32_t rx_hw_err_oor_sg_count;
 			uint32_t msdu_count_mismatch;
@@ -2657,10 +2686,12 @@ struct cdp_soc_stats {
  * struct cdp_pdev_telemetry_stats- Structure to hold pdev telemetry stats
  * @tx_mpdu_failed: Tx mpdu failed
  * @tx_mpdu_total: Total tx mpdus
+ * @link_airtime: pdev airtime usage per ac per sec
  */
 struct cdp_pdev_telemetry_stats {
 	uint32_t tx_mpdu_failed;
 	uint32_t tx_mpdu_total;
+	uint32_t link_airtime[WME_AC_MAX];
 };
 
 /**
@@ -2677,7 +2708,7 @@ struct cdp_peer_telemetry_stats {
 	uint32_t tx_mpdu_total;
 	uint32_t rx_mpdu_retried;
 	uint32_t rx_mpdu_total;
-	uint8_t airtime_consumption;
+	uint8_t airtime_consumption[WME_AC_MAX];
 	uint8_t snr;
 };
 #endif

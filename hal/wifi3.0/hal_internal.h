@@ -728,6 +728,7 @@ struct hal_hw_srng_config {
 	enum hal_srng_dir ring_dir;
 	uint32_t max_size;
 	bool nf_irq_support;
+	bool dmac_cmn_ring;
 };
 
 #define MAX_SHADOW_REGISTERS 40
@@ -877,6 +878,9 @@ struct hal_hw_txrx_ops {
 	uint32_t (*hal_tx_comp_get_buffer_source)(void *hal_desc);
 	uint32_t (*hal_tx_get_num_ppe_vp_tbl_entries)(
 					hal_soc_handle_t hal_soc_hdl);
+
+	void (*hal_reo_config_reo2ppe_dest_info)(hal_soc_handle_t hal_soc_hdl);
+
 	void (*hal_tx_set_ppe_cmn_cfg)(hal_soc_handle_t hal_soc_hdl,
 				       union hal_tx_cmn_config_ppe *cmn_cfg);
 	void (*hal_tx_set_ppe_vp_entry)(hal_soc_handle_t hal_soc_hdl,
@@ -1080,7 +1084,9 @@ struct hal_hw_txrx_ops {
 				       void *msdu_desc_info, uint32_t dst_ind,
 				       uint32_t nbuf_len);
 	void (*hal_mpdu_desc_info_set)(hal_soc_handle_t hal_soc_hdl,
-				       void *mpdu_desc_info, uint32_t seq_no);
+				       void *ent_desc,
+				       void *mpdu_desc_info,
+				       uint32_t seq_no);
 #ifdef DP_UMAC_HW_RESET_SUPPORT
 	void (*hal_unregister_reo_send_cmd)(struct hal_soc *hal_soc);
 	void (*hal_register_reo_send_cmd)(struct hal_soc *hal_soc);
@@ -1194,6 +1200,9 @@ struct hal_hw_txrx_ops {
 	void (*hal_tx_vdev_mcast_ctrl_set)(hal_soc_handle_t hal_soc_hdl,
 					   uint8_t vdev_id,
 					   uint8_t mcast_ctrl_val);
+	void (*hal_get_tsf_time)(hal_soc_handle_t hal_soc_hdl, uint32_t tsf_id,
+				 uint32_t mac_id, uint64_t *tsf,
+				 uint64_t *tsf_sync_soc_time);
 };
 
 /**
@@ -1280,6 +1289,23 @@ union hal_shadow_reg_cfg {
 #endif
 };
 
+#ifdef HAL_RECORD_SUSPEND_WRITE
+#define HAL_SUSPEND_WRITE_HISTORY_MAX 256
+
+struct hal_suspend_write_record {
+	uint64_t ts;
+	uint8_t ring_id;
+	uit32_t value;
+	uint32_t direct_wcount;
+};
+
+struct hal_suspend_write_history {
+	qdf_atomic_t index;
+	struct hal_suspend_write_record record[HAL_SUSPEND_WRITE_HISTORY_MAX];
+
+};
+#endif
+
 /**
  * struct hal_soc - HAL context to be used to access SRNG APIs
  *		    (currently used by data path and
@@ -1301,6 +1327,7 @@ struct hal_soc {
 	/* Device base address for ce - qca5018 target */
 	void *dev_base_addr_ce;
 
+	void *dev_base_addr_cmem;
 	/* HAL internal state for all SRNG rings.
 	 * TODO: See if this is required
 	 */
@@ -1442,6 +1469,7 @@ struct hal_srng *hal_ring_handle_to_hal_srng(hal_ring_handle_t hal_ring)
  * REO2PPE destination indication
  */
 #define REO2PPE_DST_IND 11
+#define REO2PPE_RULE_FAIL_FB 0x2000
 
 /**
  * enum hal_pkt_type - Type of packet type reported by HW

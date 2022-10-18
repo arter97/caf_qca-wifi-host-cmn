@@ -126,6 +126,36 @@
 
 #define LINK_DESC_SIZE (NUM_OF_DWORDS_RX_MSDU_LINK << 2)
 
+#ifdef QCA_GET_TSF_VIA_REG
+#define PCIE_PCIE_MHI_TIME_LOW 0xA28
+#define PCIE_PCIE_MHI_TIME_HIGH 0xA2C
+
+#define PMM_REG_BASE 0xB500FC
+
+#define FW_QTIME_CYCLES_PER_10_USEC 192
+
+/* enum to indicate which scratch registers hold which value*/
+/* Obtain from pcie_reg_scratch.h? */
+enum hal_scratch_reg_enum {
+	PMM_QTIMER_GLOBAL_OFFSET_LO_US,
+	PMM_QTIMER_GLOBAL_OFFSET_HI_US,
+	PMM_MAC0_TSF1_OFFSET_LO_US,
+	PMM_MAC0_TSF1_OFFSET_HI_US,
+	PMM_MAC0_TSF2_OFFSET_LO_US,
+	PMM_MAC0_TSF2_OFFSET_HI_US,
+	PMM_MAC1_TSF1_OFFSET_LO_US,
+	PMM_MAC1_TSF1_OFFSET_HI_US,
+	PMM_MAC1_TSF2_OFFSET_LO_US,
+	PMM_MAC1_TSF2_OFFSET_HI_US,
+	PMM_MLO_OFFSET_LO_US,
+	PMM_MLO_OFFSET_HI_US,
+	PMM_TQM_CLOCK_OFFSET_LO_US,
+	PMM_TQM_CLOCK_OFFSET_HI_US,
+	PMM_Q6_CRASH_REASON,
+	PMM_PMM_REG_MAX
+};
+#endif
+
 static uint32_t hal_get_link_desc_size_kiwi(void)
 {
 	return LINK_DESC_SIZE;
@@ -773,7 +803,28 @@ static inline
 void hal_register_rx_pkt_hdr_tlv_api_kiwi(struct hal_soc *hal_soc)
 {
 }
+
+static uint8_t *hal_rx_desc_get_80211_hdr_be(void *hw_desc_addr)
+{
+	uint8_t *rx_pkt_hdr;
+	struct rx_mon_pkt_tlvs *rx_desc =
+					(struct rx_mon_pkt_tlvs *)hw_desc_addr;
+
+	rx_pkt_hdr = &rx_desc->pkt_hdr_tlv.rx_pkt_hdr[0];
+
+	return rx_pkt_hdr;
+}
 #else
+static uint8_t *hal_rx_desc_get_80211_hdr_be(void *hw_desc_addr)
+{
+	struct rx_pkt_tlvs *rx_desc = (struct rx_pkt_tlvs *)hw_desc_addr;
+	uint8_t *rx_pkt_hdr;
+
+	rx_pkt_hdr = &rx_desc->pkt_hdr_tlv.rx_pkt_hdr[0];
+
+	return rx_pkt_hdr;
+}
+
 /**
  * hal_rx_dump_pkt_hdr_tlv: dump RX pkt header TLV in hex format
  * @pkt_hdr_tlv: pointer the pkt_hdr_tlv in pkt.
@@ -1059,6 +1110,36 @@ static void hal_rx_dump_pkt_tlvs_kiwi(hal_soc_handle_t hal_soc_hdl,
 }
 
 /**
+ * hal_rx_get_mpdu_flags_from_tlv() - Populate the local mpdu_flags elements
+ *				      from the rx tlvs
+ * @mpdu_info: buf address to rx_mpdu_info
+ *
+ * Return: mpdu_flags.
+ */
+static inline uint32_t
+hal_rx_get_mpdu_flags_from_tlv(struct rx_mpdu_info *mpdu_info)
+{
+	uint32_t mpdu_flags = 0;
+
+	if (mpdu_info->fragment_flag)
+		mpdu_flags |= HAL_MPDU_F_FRAGMENT;
+
+	if (mpdu_info->mpdu_retry)
+		mpdu_flags |= HAL_MPDU_F_RETRY_BIT;
+
+	if (mpdu_info->ampdu_flag)
+		mpdu_flags |= HAL_MPDU_F_AMPDU_FLAG;
+
+	if (mpdu_info->raw_mpdu)
+		mpdu_flags |= HAL_MPDU_F_RAW_AMPDU;
+
+	if (mpdu_info->mpdu_qos_control_valid)
+		mpdu_flags |= HAL_MPDU_F_QOS_CONTROL_VALID;
+
+	return mpdu_flags;
+}
+
+/**
  * hal_rx_tlv_populate_mpdu_desc_info_kiwi() - Populate the local mpdu_desc_info
  *			elements from the rx tlvs
  * @buf: start address of rx tlvs [Validated by caller]
@@ -1079,8 +1160,7 @@ hal_rx_tlv_populate_mpdu_desc_info_kiwi(uint8_t *buf,
 	struct rx_mpdu_info *mpdu_info = &mpdu_start->rx_mpdu_info_details;
 
 	mpdu_desc_info->mpdu_seq = mpdu_info->mpdu_sequence_number;
-	mpdu_desc_info->mpdu_flags = hal_rx_get_mpdu_flags((uint32_t *)
-							    mpdu_info);
+	mpdu_desc_info->mpdu_flags = hal_rx_get_mpdu_flags_from_tlv(mpdu_info);
 	mpdu_desc_info->peer_meta_data = mpdu_info->peer_meta_data;
 	mpdu_desc_info->bar_frame = mpdu_info->bar_frame;
 }
@@ -1844,6 +1924,121 @@ static uint32_t hal_get_reo_qdesc_size_kiwi(uint32_t ba_window_size, int tid)
 		sizeof(struct rx_reo_queue_1k);
 }
 
+#ifdef QCA_GET_TSF_VIA_REG
+static inline void
+hal_get_tsf_enum(uint32_t tsf_id, uint32_t mac_id,
+		 enum hal_scratch_reg_enum *tsf_enum_low,
+		 enum hal_scratch_reg_enum *tsf_enum_hi)
+{
+	if (mac_id == 0) {
+		if (tsf_id == 0) {
+			*tsf_enum_low = PMM_MAC0_TSF1_OFFSET_LO_US;
+			*tsf_enum_hi = PMM_MAC0_TSF1_OFFSET_HI_US;
+		} else if (tsf_id == 1) {
+			*tsf_enum_low = PMM_MAC0_TSF2_OFFSET_LO_US;
+			*tsf_enum_hi = PMM_MAC0_TSF2_OFFSET_HI_US;
+		}
+	} else	if (mac_id == 1) {
+		if (tsf_id == 0) {
+			*tsf_enum_low = PMM_MAC1_TSF1_OFFSET_LO_US;
+			*tsf_enum_hi = PMM_MAC1_TSF1_OFFSET_HI_US;
+		} else if (tsf_id == 1) {
+			*tsf_enum_low = PMM_MAC1_TSF2_OFFSET_LO_US;
+			*tsf_enum_hi = PMM_MAC1_TSF2_OFFSET_HI_US;
+		}
+	}
+}
+
+static inline uint32_t
+hal_tsf_read_scratch_reg(struct hal_soc *soc,
+			 enum hal_scratch_reg_enum reg_enum)
+{
+	return hal_read32_mb(soc, PMM_REG_BASE + (reg_enum * 4));
+}
+
+static inline
+uint64_t hal_tsf_get_fw_time(struct hal_soc *soc)
+{
+	uint64_t fw_time_low;
+	uint64_t fw_time_high;
+
+	fw_time_low = hal_read32_mb(soc, PCIE_PCIE_MHI_TIME_LOW);
+	fw_time_high = hal_read32_mb(soc, PCIE_PCIE_MHI_TIME_HIGH);
+	return (fw_time_high << 32 | fw_time_low);
+}
+
+static inline
+uint64_t hal_fw_qtime_to_usecs(uint64_t time)
+{
+	/*
+	 * Try to preserve precision by multiplying by 10 first.
+	 * If that would cause a wrap around, divide first instead.
+	 */
+	if (time * 10 < time) {
+		time = qdf_do_div(time, FW_QTIME_CYCLES_PER_10_USEC);
+		return time * 10;
+	}
+
+	time = time * 10;
+	time = qdf_do_div(time, FW_QTIME_CYCLES_PER_10_USEC);
+
+	return time;
+}
+
+/**
+ * hal_get_tsf_time_kiwi() - Get tsf time from scatch register
+ * @hal_soc_hdl: HAL soc handle
+ * @mac_id: mac_id
+ * @tsf: pointer to update tsf value
+ * @tsf_sync_soc_time: pointer to update tsf sync time
+ *
+ * Return: None.
+ */
+static void
+hal_get_tsf_time_kiwi(hal_soc_handle_t hal_soc_hdl, uint32_t tsf_id,
+		      uint32_t mac_id, uint64_t *tsf,
+		      uint64_t *tsf_sync_soc_time)
+{
+	struct hal_soc *soc = (struct hal_soc *)hal_soc_hdl;
+	uint64_t global_time_low_offset, global_time_high_offset;
+	uint64_t tsf_offset_low, tsf_offset_hi;
+	uint64_t fw_time, global_time, sync_time;
+	enum hal_scratch_reg_enum tsf_enum_low, tsf_enum_high;
+
+	if (hif_force_wake_request(soc->hif_handle))
+		return;
+
+	hal_get_tsf_enum(tsf_id, mac_id, &tsf_enum_low, &tsf_enum_high);
+	sync_time = qdf_get_log_timestamp();
+	fw_time = hal_tsf_get_fw_time(soc);
+
+	global_time_low_offset =
+		hal_tsf_read_scratch_reg(soc, PMM_QTIMER_GLOBAL_OFFSET_LO_US);
+	global_time_high_offset =
+		hal_tsf_read_scratch_reg(soc, PMM_QTIMER_GLOBAL_OFFSET_HI_US);
+
+	tsf_offset_low = hal_tsf_read_scratch_reg(soc, tsf_enum_low);
+	tsf_offset_hi = hal_tsf_read_scratch_reg(soc, tsf_enum_high);
+
+	fw_time = hal_fw_qtime_to_usecs(fw_time);
+	global_time = fw_time +
+		      (global_time_low_offset |
+		      (global_time_high_offset << 32));
+
+	*tsf = global_time + (tsf_offset_low | (tsf_offset_hi << 32));
+	*tsf_sync_soc_time = qdf_log_timestamp_to_usecs(sync_time);
+
+	hif_force_wake_release(soc->hif_handle);
+}
+#else
+static inline void
+hal_get_tsf_time_kiwi(hal_soc_handle_t hal_soc_hdl, uint32_t tsf_id,
+		      uint32_t mac_id, uint64_t *tsf,
+		      uint64_t *tsf_sync_soc_time)
+{
+}
+#endif
+
 static void hal_hw_txrx_ops_attach_kiwi(struct hal_soc *hal_soc)
 {
 	/* init and setup */
@@ -1882,6 +2077,7 @@ static void hal_hw_txrx_ops_attach_kiwi(struct hal_soc *hal_soc)
 	hal_soc->ops->hal_rx_dump_mpdu_start_tlv =
 					hal_rx_dump_mpdu_start_tlv_kiwi;
 	hal_soc->ops->hal_rx_dump_pkt_tlvs = hal_rx_dump_pkt_tlvs_kiwi;
+	hal_soc->ops->hal_rx_desc_get_80211_hdr = hal_rx_desc_get_80211_hdr_be;
 
 	hal_soc->ops->hal_get_link_desc_size = hal_get_link_desc_size_kiwi;
 	hal_soc->ops->hal_rx_mpdu_start_tid_get = hal_rx_tlv_tid_get_be;
@@ -2069,14 +2265,6 @@ static void hal_hw_txrx_ops_attach_kiwi(struct hal_soc *hal_soc)
 					hal_rx_msdu_start_msdu_len_set_be;
 	hal_soc->ops->hal_rx_tlv_populate_mpdu_desc_info =
 				hal_rx_tlv_populate_mpdu_desc_info_kiwi;
-	hal_soc->ops->hal_rx_tlv_get_pn_num =
-				hal_rx_tlv_get_pn_num_be;
-	hal_soc->ops->hal_get_reo_ent_desc_qdesc_addr =
-				hal_get_reo_ent_desc_qdesc_addr_be;
-	hal_soc->ops->hal_rx_get_qdesc_addr =
-				hal_rx_get_qdesc_addr_be;
-	hal_soc->ops->hal_set_reo_ent_desc_reo_dest_ind =
-				hal_set_reo_ent_desc_reo_dest_ind_be;
 	hal_soc->ops->hal_get_idle_link_bm_id = hal_get_idle_link_bm_id_kiwi;
 #ifdef WLAN_FEATURE_MARK_FIRST_WAKEUP_PACKET
 	hal_soc->ops->hal_get_first_wow_wakeup_packet =
@@ -2101,6 +2289,7 @@ static void hal_hw_txrx_ops_attach_kiwi(struct hal_soc *hal_soc)
 		hal_tx_populate_bank_register_be;
 	hal_soc->ops->hal_tx_vdev_mcast_ctrl_set =
 		hal_tx_vdev_mcast_ctrl_set_be;
+	hal_soc->ops->hal_get_tsf_time = hal_get_tsf_time_kiwi;
 };
 
 struct hal_hw_srng_config hw_srng_table_kiwi[] = {
