@@ -2828,6 +2828,7 @@ int hif_ce_msi_configure_irq_by_ceid(struct hif_softc *scn, int ce_id)
 	struct HIF_CE_state *ce_sc = HIF_GET_CE_STATE(scn);
 	struct hif_pci_softc *pci_sc = HIF_GET_PCI_SOFTC(scn);
 	int pci_slot;
+	unsigned long irq_flags;
 
 	if (ce_id >= CE_COUNT_MAX)
 		return -EINVAL;
@@ -2843,9 +2844,13 @@ int hif_ce_msi_configure_irq_by_ceid(struct hif_softc *scn, int ce_id)
 	pci_slot = hif_get_pci_slot(scn);
 	msi_data = (ce_id % msi_data_count) + msi_irq_start;
 	irq = pld_get_msi_irq(scn->qdf_dev->dev, msi_data);
-	hif_debug("%s: (ce_id %d, msi_data %d, irq %d tasklet %pK)",
-		__func__, ce_id, msi_data, irq,
-		&ce_sc->tasklets[ce_id]);
+	if (pld_is_one_msi(scn->qdf_dev->dev))
+		irq_flags = IRQF_SHARED | IRQF_NOBALANCING;
+	else
+		irq_flags = IRQF_SHARED;
+	hif_debug("%s: (ce_id %d, msi_data %d, irq %d flag 0x%lx tasklet %pK)",
+		  __func__, ce_id, msi_data, irq, irq_flags,
+		  &ce_sc->tasklets[ce_id]);
 
 	/* implies the ce is also initialized */
 	if (!ce_sc->tasklets[ce_id].inited)
@@ -2853,7 +2858,7 @@ int hif_ce_msi_configure_irq_by_ceid(struct hif_softc *scn, int ce_id)
 
 	pci_sc->ce_msi_irq_num[ce_id] = irq;
 	ret = pfrm_request_irq(scn->qdf_dev->dev,
-			       irq, hif_ce_interrupt_handler, IRQF_SHARED,
+			       irq, hif_ce_interrupt_handler, irq_flags,
 			       ce_irqname[pci_slot][ce_id],
 			       &ce_sc->tasklets[ce_id]);
 	if (ret)
@@ -2873,7 +2878,7 @@ static int hif_ce_msi_configure_irq(struct hif_softc *scn)
 	struct HIF_CE_state *ce_sc = HIF_GET_CE_STATE(scn);
 	struct CE_attr *host_ce_conf = ce_sc->host_ce_config;
 	int pci_slot;
-
+#ifndef WLAN_ONE_MSI_VECTOR
 	if (!scn->disable_wake_irq) {
 		/* do wake irq assignment */
 		ret = pld_get_user_msi_assignment(scn->qdf_dev->dev, "WAKE",
@@ -2893,7 +2898,7 @@ static int hif_ce_msi_configure_irq(struct hif_softc *scn)
 		if (ret)
 			return ret;
 	}
-
+#endif
 	/* do ce irq assignments */
 	ret = pld_get_user_msi_assignment(scn->qdf_dev->dev, "CE",
 					  &msi_data_count, &msi_data_start,
@@ -3111,6 +3116,7 @@ int hif_pci_configure_grp_irq(struct hif_softc *scn,
 	int irq = 0;
 	int j;
 	int pci_slot;
+	unsigned long irq_flags;
 
 	hif_ext_group->irq_enable = &hif_exec_grp_irq_enable;
 	hif_ext_group->irq_disable = &hif_exec_grp_irq_disable;
@@ -3122,12 +3128,16 @@ int hif_pci_configure_grp_irq(struct hif_softc *scn,
 		irq = hif_ext_group->irq[j];
 		if (scn->irq_unlazy_disable)
 			irq_set_status_flags(irq, IRQ_DISABLE_UNLAZY);
-		hif_debug("request_irq = %d for grp %d",
-			  irq, hif_ext_group->grp_id);
+		if (pld_is_one_msi(scn->qdf_dev->dev))
+			irq_flags = IRQF_SHARED | IRQF_NOBALANCING;
+		else
+			irq_flags = IRQF_SHARED | IRQF_NO_SUSPEND;
+		hif_debug("request_irq = %d for grp %d irq_flags 0x%lx",
+			  irq, hif_ext_group->grp_id, irq_flags);
 		ret = pfrm_request_irq(
 				scn->qdf_dev->dev, irq,
 				hif_ext_group_interrupt_handler,
-				IRQF_SHARED | IRQF_NO_SUSPEND,
+				irq_flags,
 				dp_irqname[pci_slot][hif_ext_group->grp_id],
 				hif_ext_group);
 		if (ret) {

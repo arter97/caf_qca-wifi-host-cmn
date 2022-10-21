@@ -2147,7 +2147,7 @@ static inline bool dp_is_mon_mask_valid(struct dp_soc *soc,
  * dp_soc_attach_poll() - Register handlers for DP interrupts
  * @txrx_soc: DP SOC handle
  *
- * Host driver will register for ‚ÄúDP_NUM_INTERRUPT_CONTEXTS‚Äù number of NAPI
+ * Host driver will register for ìDP_NUM_INTERRUPT_CONTEXTSî number of NAPI
  * contexts. Each NAPI context will have a tx_ring_mask , rx_ring_mask ,and
  * rx_monitor_ring mask to indicate the rings that are processed by the handler.
  *
@@ -2408,7 +2408,7 @@ static void dp_soc_interrupt_map_calculate(struct dp_soc *soc, int intr_ctx_num,
  * dp_soc_interrupt_attach() - Register handlers for DP interrupts
  * @txrx_soc: DP SOC handle
  *
- * Host driver will register for ‚ÄúDP_NUM_INTERRUPT_CONTEXTS‚Äù number of NAPI
+ * Host driver will register for ìDP_NUM_INTERRUPT_CONTEXTSî number of NAPI
  * contexts. Each NAPI context will have a tx_ring_mask , rx_ring_mask ,and
  * rx_monitor_ring mask to indicate the rings that are processed by the handler.
  *
@@ -6741,7 +6741,7 @@ static inline void dp_peer_rx_bufq_resources_deinit(struct dp_peer *peer)
 #endif
 
 /*
- * dp_peer_detach_wifi3() ‚Äì Detach txrx peer
+ * dp_peer_detach_wifi3() ñ Detach txrx peer
  * @soc_hdl: soc handle
  * @vdev_id: id of dp handle
  * @peer_mac: mac of datapath PEER handle
@@ -6818,7 +6818,7 @@ static QDF_STATUS dp_peer_delete_wifi3(struct cdp_soc_t *soc_hdl,
 }
 
 /*
- * dp_get_vdev_mac_addr_wifi3() ‚Äì Detach txrx peer
+ * dp_get_vdev_mac_addr_wifi3() ñ Detach txrx peer
  * @soc_hdl: Datapath soc handle
  * @vdev_id: virtual interface id
  *
