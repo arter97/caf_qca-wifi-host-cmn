@@ -354,6 +354,8 @@ static int init_deinit_service_ext2_ready_event_handler(ol_scn_t scn_handle,
 
 	target_if_reg_set_disable_upper_6g_edge_ch_info(psoc);
 
+	tgt_if_set_reg_afc_configure(tgt_hdl, psoc);
+
 	/* send init command */
 	init_deinit_set_send_init_cmd(psoc, tgt_hdl);
 
