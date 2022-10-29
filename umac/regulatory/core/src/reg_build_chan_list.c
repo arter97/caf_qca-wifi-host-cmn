@@ -3153,6 +3153,7 @@ reg_process_afc_power_event(struct afc_regulatory_info *afc_info)
 	    !wlan_reg_is_noaction_on_afc_pwr_evt(pdev))
 		tx_ops->trigger_acs_for_afc(pdev);
 
+	reg_send_afc_power_event(pdev, afc_info->power_info);
 	wlan_objmgr_pdev_release_ref(pdev, dbg_id);
 
 	return QDF_STATUS_SUCCESS;
