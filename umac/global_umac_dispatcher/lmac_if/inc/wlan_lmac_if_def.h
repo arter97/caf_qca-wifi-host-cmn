@@ -408,6 +408,8 @@ struct wlan_lmac_if_scan_tx_ops {
 	QDF_STATUS (*scan_unreg_ev_handler)(struct wlan_objmgr_psoc *psoc,
 			void *arg);
 	QDF_STATUS (*set_chan_list)(struct wlan_objmgr_pdev *pdev, void *arg);
+	bool (*is_platform_eht_capable)(struct wlan_objmgr_psoc *psoc,
+					uint8_t pdev_id);
 };
 
 /**
@@ -461,6 +463,7 @@ enum wlan_mlme_cfg_id;
  * @psoc_wake_lock_deinit: De-Initialize psoc wake lock for vdev response timer
  * @get_hw_link_id: Get hw_link_id for pdev
  * @vdev_send_set_mac_addr: API to send set MAC address request to FW
+ * @vdev_peer_set_param_send: API to send peer param to FW
  */
 struct wlan_lmac_if_mlme_tx_ops {
 	uint32_t (*get_wifi_iface_id) (struct wlan_objmgr_pdev *pdev);
@@ -559,6 +562,10 @@ QDF_STATUS (*vdev_send_set_mac_addr)(struct qdf_mac_addr mac_addr,
 				     struct qdf_mac_addr mld_addr,
 				     struct wlan_objmgr_vdev *vdev);
 #endif
+	QDF_STATUS (*vdev_peer_set_param_send)(struct wlan_objmgr_vdev *vdev,
+					       uint8_t *peer_mac_addr,
+					       uint32_t param_id,
+					       uint32_t param_value);
 };
 
 /**
@@ -902,9 +909,6 @@ struct wlan_lmac_if_iot_sim_tx_ops {
  *                                    request buffer.
  * @send_rtt_pasn_auth_status: Send PASN peers authentication status
  * @send_rtt_pasn_deauth: Send PASN peer deauth command
- * @wifi_pos_delete_all_vdev_ranging_peers_cb: Delete all ranging peers for
- * given vdev. This is called before vdev delete to cleanup all the ranging
- * peers of that vdev.
  */
 struct wlan_lmac_if_wifi_pos_tx_ops {
 	QDF_STATUS (*wifi_pos_register_events)(struct wlan_objmgr_psoc *psoc);
@@ -927,8 +931,6 @@ struct wlan_lmac_if_wifi_pos_tx_ops {
 			 struct wlan_pasn_auth_status *data);
 	QDF_STATUS (*send_rtt_pasn_deauth)(struct wlan_objmgr_psoc *psoc,
 					   struct qdf_mac_addr *peer_mac);
-	QDF_STATUS (*wifi_pos_vdev_delete_all_ranging_peers_cb)
-					(struct wlan_objmgr_vdev *vdev);
 };
 #endif
 
@@ -2008,6 +2010,9 @@ struct wlan_lmac_if_iot_sim_rx_ops {
  * pointer.
  * @wifi_pos_vdev_delete_all_ranging_peers_rsp_cb: Callback to handle vdev
  * delete all ranging peers response
+ * @wifi_pos_vdev_delete_all_ranging_peers_cb: Delete all ranging peers for
+ * given vdev. This is called before vdev delete to cleanup all the ranging
+ * peers of that vdev.
  */
 struct wlan_lmac_if_wifi_pos_rx_ops {
 	int (*oem_rsp_event_rx)(struct wlan_objmgr_psoc *psoc,
@@ -2027,6 +2032,8 @@ struct wlan_lmac_if_wifi_pos_rx_ops {
 			 uint8_t vdev_id, uint8_t num_peers);
 	QDF_STATUS (*wifi_pos_vdev_delete_all_ranging_peers_rsp_cb)
 			(struct wlan_objmgr_psoc *psoc, uint8_t vdev_id);
+	QDF_STATUS (*wifi_pos_vdev_delete_all_ranging_peers_cb)
+					(struct wlan_objmgr_vdev *vdev);
 };
 #endif
 

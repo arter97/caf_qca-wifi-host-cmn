@@ -38,6 +38,10 @@
 #include <wlan_vdev_mgr_tgt_if_rx_defs.h>
 #include <reg_services_public_struct.h>
 
+#ifndef ENABLE_HOST_TO_TARGET_CONVERSION
+#include <wmi_unified.h>
+#endif
+
 #define MAC_MAX_KEY_LENGTH 32
 #define MAC_PN_LENGTH 8
 #define MAX_MAC_HEADER_LEN 32
@@ -5114,7 +5118,9 @@ typedef enum {
 #ifdef WLAN_FEATURE_COAP
 	wmi_wow_coap_buf_info_eventid,
 #endif
+#ifdef HEALTH_MON_SUPPORT
 	wmi_extract_health_mon_init_done_info_eventid,
+#endif /* HEALTH_MON_SUPPORT */
 	wmi_events_max,
 } wmi_conv_event_id;
 
@@ -6017,6 +6023,7 @@ typedef enum {
  * @enable_rfc835: indicates rfc835 is enabled or disabled
  * @sap_5g_supported: Indicates SAP 5g is supported or not
  * @sap_6g_supported: Indicates SAP 6g is supported or not
+ * @band_capability: Band capability bit map
  * @sap_max_num_clients: Max clients supported by SAP
  * @set_country_code_hal_supported: Indicates country code hal supported or not
  * @get_valid_channel_supported: Indicates get vaid channel supported or not
@@ -6078,6 +6085,7 @@ struct target_feature_set {
 	bool enable_rfc835;
 	bool sap_5g_supported;
 	bool sap_6g_supported;
+	uint32_t band_capability;
 	uint8_t sap_max_num_clients;
 	bool set_country_code_hal_supported;
 	bool get_valid_channel_supported;
@@ -6669,6 +6677,12 @@ typedef enum {
 /* Disable aging & learning */
 #define WMI_HOST_WDS_FLAG_STATIC	0x1
 
+#ifdef ENABLE_HOST_TO_TARGET_CONVERSION
+#define PEER_PARAM(name) WMI_HOST_ ## name
+#else
+#define PEER_PARAM(name) WMI_HOST_ ## name = WMI_ ## name
+#endif /* ENABLE_HOST_TO_TARGET_CONVERSION */
+
 /**
  * Peer param enum abstracted from target
  * @WMI_HOST_PEER_MIMO_PS_STATE: mimo powersave state
@@ -6679,6 +6693,7 @@ typedef enum {
  * @WMI_HOST_PEER_NSS: peer NSS
  * @WMI_HOST_PEER_USE_4ADDR: USE 4 ADDR
  * @WMI_HOST_PEER_EXT_STATS_ENABLE: Enable extended peer stats
+ *                                  NON-TLV special
  * @WMI_HOST_PEER_USE_FIXED_PWR: Use FIXED Pwr,
  * @WMI_HOST_PEER_PARAM_FIXED_RATE: Set peer fixed rate
  * @WMI_HOST_PEER_SET_MU_ALLOWLIST: Allowlist peer TIDs
@@ -6689,7 +6704,7 @@ typedef enum {
  * @WMI_HOST_PEER_SET_HW_RETRY_CTS2S: Set hardware retry CTS to self
  * @WMI_HOST_PEER_IBSS_ATIM_WINDOW_LENGTH: IBSS ATIM window length
  * @WMI_HOST_PEER_PHYMODE: Peer Phymode
- * @WMI_HOST_PEER_SET_MAC_TX_RATE: Set MAC Tx rate
+ * @WMI_HOST_PEER_SET_MAX_TX_RATE: Set MAX Tx rate
  * @WMI_HOST_PEER_SET_DEFAULT_ROUTING: Set default Rx routing
  * @WMI_HOST_PEER_SET_MIN_TX_RATE: Set Minimum T rate
  * @WMI_HOST_PEER_NSS_VHT160: peer NSS for 160Mhz
@@ -6704,35 +6719,37 @@ typedef enum {
  *                                         puncture bitmap
  */
 enum {
-	WMI_HOST_PEER_MIMO_PS_STATE = 0x1,
-	WMI_HOST_PEER_AMPDU,
-	WMI_HOST_PEER_AUTHORIZE,
-	WMI_HOST_PEER_CHWIDTH,
-	WMI_HOST_PEER_NSS,
-	WMI_HOST_PEER_USE_4ADDR,
-	WMI_HOST_PEER_EXT_STATS_ENABLE,
-	WMI_HOST_PEER_USE_FIXED_PWR,
-	WMI_HOST_PEER_PARAM_FIXED_RATE,
-	WMI_HOST_PEER_SET_MU_ALLOWLIST,
-	WMI_HOST_PEER_MEMBERSHIP,
-	WMI_HOST_PEER_USERPOS,
-	WMI_HOST_PEER_CRIT_PROTO_HINT_ENABLED,
-	WMI_HOST_PEER_TX_FAIL_CNT_THR,
-	WMI_HOST_PEER_SET_HW_RETRY_CTS2S,
-	WMI_HOST_PEER_IBSS_ATIM_WINDOW_LENGTH,
-	WMI_HOST_PEER_PHYMODE,
-	WMI_HOST_PEER_SET_MAC_TX_RATE,
-	WMI_HOST_PEER_SET_DEFAULT_ROUTING,
-	WMI_HOST_PEER_SET_MIN_TX_RATE,
-	WMI_HOST_PEER_NSS_VHT160,
-	WMI_HOST_PEER_NSS_VHT80_80,
-	WMI_HOST_PEER_PARAM_SU_TXBF_SOUNDING_INTERVAL,
-	WMI_HOST_PEER_PARAM_MU_TXBF_SOUNDING_INTERVAL,
-	WMI_HOST_PEER_PARAM_TXBF_SOUNDING_ENABLE,
-	WMI_HOST_PEER_PARAM_MU_ENABLE,
-	WMI_HOST_PEER_PARAM_OFDMA_ENABLE,
-	WMI_HOST_PEER_PARAM_ENABLE_FT,
-	WMI_HOST_PEER_CHWIDTH_PUNCTURE_20MHZ_BITMAP,
+	PEER_PARAM(PEER_MIMO_PS_STATE),
+	PEER_PARAM(PEER_AMPDU),
+	PEER_PARAM(PEER_AUTHORIZE),
+	PEER_PARAM(PEER_CHWIDTH),
+	PEER_PARAM(PEER_NSS),
+	PEER_PARAM(PEER_USE_4ADDR),
+#if defined(WMI_NON_TLV_SUPPORT) || defined(WMI_TLV_AND_NON_TLV_SUPPORT)
+	PEER_PARAM(PEER_EXT_STATS_ENABLE),
+#endif
+	PEER_PARAM(PEER_USE_FIXED_PWR),
+	PEER_PARAM(PEER_PARAM_FIXED_RATE),
+	PEER_PARAM(PEER_SET_MU_ALLOWLIST),
+	PEER_PARAM(PEER_MEMBERSHIP),
+	PEER_PARAM(PEER_USERPOS),
+	PEER_PARAM(PEER_CRIT_PROTO_HINT_ENABLED),
+	PEER_PARAM(PEER_TX_FAIL_CNT_THR),
+	PEER_PARAM(PEER_SET_HW_RETRY_CTS2S),
+	PEER_PARAM(PEER_IBSS_ATIM_WINDOW_LENGTH),
+	PEER_PARAM(PEER_PHYMODE),
+	PEER_PARAM(PEER_SET_MAX_TX_RATE),
+	PEER_PARAM(PEER_SET_DEFAULT_ROUTING),
+	PEER_PARAM(PEER_SET_MIN_TX_RATE),
+	PEER_PARAM(PEER_NSS_VHT160),
+	PEER_PARAM(PEER_NSS_VHT80_80),
+	PEER_PARAM(PEER_PARAM_SU_TXBF_SOUNDING_INTERVAL),
+	PEER_PARAM(PEER_PARAM_MU_TXBF_SOUNDING_INTERVAL),
+	PEER_PARAM(PEER_PARAM_TXBF_SOUNDING_ENABLE),
+	PEER_PARAM(PEER_PARAM_MU_ENABLE),
+	PEER_PARAM(PEER_PARAM_OFDMA_ENABLE),
+	PEER_PARAM(PEER_PARAM_ENABLE_FT),
+	PEER_PARAM(PEER_CHWIDTH_PUNCTURE_20MHZ_BITMAP),
 };
 #define WMI_HOST_PEER_MIMO_PS_NONE	0x0
 #define WMI_HOST_PEER_MIMO_PS_STATIC	0x1
@@ -9144,6 +9161,7 @@ struct wmi_host_sw_cal_ver {
 	uint32_t status;
 };
 
+#ifdef HEALTH_MON_SUPPORT
 /**
  * struct wmi_health_mon_params - Health mon params
  * @ring_buf_paddr_low: Ring buffer physical address LOW
@@ -9157,5 +9175,6 @@ struct wmi_health_mon_params {
 	uint32_t initial_upload_period_ms;
 	uint32_t read_index;
 };
+#endif /* HEALTH_MON_SUPPORT */
 
 #endif /* _WMI_UNIFIED_PARAM_H_ */

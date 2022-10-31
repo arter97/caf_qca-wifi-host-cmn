@@ -1110,6 +1110,25 @@ reg_fill_channel_list_for_pwrmode(struct wlan_objmgr_pdev *pdev,
  */
 bool reg_is_punc_bitmap_valid(enum phy_ch_width bw, uint16_t puncture_bitmap);
 
+#ifdef QCA_DFS_BW_PUNCTURE
+/**
+ * reg_find_nearest_puncture_pattern() - is generated bitmap is valid or not
+ * @bw: Input channel width.
+ * @proposed_bitmap: Input puncture bitmap.
+ *
+ * Return: Radar bitmap if it is valid.
+ */
+uint16_t reg_find_nearest_puncture_pattern(enum phy_ch_width bw,
+					   uint16_t proposed_bitmap);
+#else
+static inline
+uint16_t reg_find_nearest_puncture_pattern(enum phy_ch_width bw,
+					   uint16_t proposed_bitmap)
+{
+	return 0;
+}
+#endif /* QCA_DFS_BW_PUNCTURE */
+
 /**
  * reg_extract_puncture_by_bw() - generate new puncture bitmap from original
  *                                puncture bitmap and bandwidth based on new
@@ -1309,17 +1328,6 @@ reg_get_5g_bonded_channel_for_pwrmode(struct wlan_objmgr_pdev *pdev,
 				      enum supported_6g_pwr_types
 				      in_6g_pwr_mode);
 #endif
-
-/**
- * reg_is_disable_for_freq() - Check if the given channel frequency in
- * disable state
- * @pdev: Pointer to pdev
- * @freq: Channel frequency
- * @in_6g_pwr_type: 6g power type which decides 6G channel list lookup.
- *
- * Return: True if channel state is disabled, else false
- */
-bool reg_is_disable_for_freq(struct wlan_objmgr_pdev *pdev, qdf_freq_t freq);
 
 #ifdef CONFIG_REG_6G_PWRMODE
 /**

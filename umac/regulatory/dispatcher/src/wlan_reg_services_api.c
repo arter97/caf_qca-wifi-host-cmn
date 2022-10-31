@@ -1096,12 +1096,6 @@ bool wlan_reg_is_passive_or_disable_for_freq(struct wlan_objmgr_pdev *pdev,
 	return reg_is_passive_or_disable_for_freq(pdev, freq);
 }
 
-bool wlan_reg_is_disable_for_freq(struct wlan_objmgr_pdev *pdev,
-				  qdf_freq_t freq)
-{
-	return reg_is_disable_for_freq(pdev, freq);
-}
-
 #ifdef CONFIG_REG_6G_PWRMODE
 bool wlan_reg_is_disable_for_pwrmode(struct wlan_objmgr_pdev *pdev,
 				     qdf_freq_t freq,
@@ -1313,6 +1307,14 @@ bool wlan_reg_is_punc_bitmap_valid(enum phy_ch_width bw,
 	return reg_is_punc_bitmap_valid(bw, puncture_bitmap);
 }
 
+#ifdef QCA_DFS_BW_PUNCTURE
+uint16_t wlan_reg_find_nearest_puncture_pattern(enum phy_ch_width bw,
+						uint16_t proposed_bitmap)
+{
+	return reg_find_nearest_puncture_pattern(bw, proposed_bitmap);
+}
+#endif /* QCA_DFS_BW_PUNCTURE */
+
 QDF_STATUS wlan_reg_extract_puncture_by_bw(enum phy_ch_width ori_bw,
 					   uint16_t ori_puncture_bitmap,
 					   qdf_freq_t freq,
@@ -1331,13 +1333,6 @@ void wlan_reg_set_create_punc_bitmap(struct ch_params *ch_params,
 	reg_set_create_punc_bitmap(ch_params, is_create_punc_bitmap);
 }
 #endif /* WLAN_FEATURE_11BE */
-
-enum channel_state
-wlan_reg_get_channel_state_for_freq(struct wlan_objmgr_pdev *pdev,
-				    qdf_freq_t freq)
-{
-	return reg_get_channel_state_for_freq(pdev, freq);
-}
 
 #ifdef CONFIG_REG_6G_PWRMODE
 enum channel_state

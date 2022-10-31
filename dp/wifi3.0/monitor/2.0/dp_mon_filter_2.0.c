@@ -58,7 +58,7 @@ void dp_mon_filter_dealloc_2_0(struct dp_pdev *pdev)
 	mon_pdev_be = dp_get_be_mon_pdev_from_dp_mon_pdev(mon_pdev);
 	mon_filter = mon_pdev_be->filter_be;
 	if (!mon_filter) {
-		dp_mon_filter_err("Found NULL memmory for the Monitor filter");
+		dp_mon_filter_err("Found NULL memory for the Monitor filter");
 		return;
 	}
 
@@ -179,11 +179,6 @@ void
 dp_rx_mon_word_mask_subscribe(uint32_t *msg_word,
 				  struct htt_rx_ring_tlv_filter *tlv_filter)
 {
-	if (!msg_word || !tlv_filter)
-		return;
-
-	HTT_RX_RING_SELECTION_CFG_RX_MPDU_START_WORD_MASK_SET(*msg_word,
-			tlv_filter->rx_mpdu_start_wmask);
 
 #ifdef QCA_MONITOR_2_0_SUPPORT_WAR /* Yet to get FW support */
 	HTT_RX_RING_SELECTION_CFG_RX_MPDU_END_WORD_MASK_SET(*msg_word,
@@ -191,9 +186,6 @@ dp_rx_mon_word_mask_subscribe(uint32_t *msg_word,
 #endif
 	/* word 15 */
 	msg_word++;
-	*msg_word = 0;
-	HTT_RX_RING_SELECTION_CFG_RX_MSDU_END_WORD_MASK_SET(*msg_word,
-			tlv_filter->rx_msdu_end_wmask);
 
 	/* word 16 */
 	msg_word++;
@@ -2277,7 +2269,7 @@ void dp_mon_filter_reset_pktlog_hybrid_2_0(struct dp_pdev *pdev)
  * dp_rx_mon_filter_h2t_setup() - Setup the filter for the Target setup
  * @soc: DP soc handle
  * @pdev: DP pdev handle
- * @srng_type: The srng type for which filter wll be set
+ * @srng_type: The srng type for which filter will be set
  * @tlv_filter: tlv filter
  */
 static void
@@ -2764,7 +2756,7 @@ void dp_tx_mon_wordmask_config_set(struct htt_tx_ring_tlv_filter *dst_filter,
  * dp_tx_mon_filter_h2t_setup() - Setup the filter
  * @soc: DP soc handle
  * @pdev: DP pdev handle
- * @srng_type: The srng type for which filter wll be set
+ * @srng_type: The srng type for which filter will be set
  * @tlv_filter: tlv filter
  */
 static
@@ -2891,7 +2883,7 @@ QDF_STATUS dp_tx_mon_filter_update_2_0(struct dp_pdev *pdev)
 
 QDF_STATUS dp_rx_mon_filter_update_2_0(struct dp_pdev *pdev)
 {
-	struct dp_soc *soc = pdev->soc;
+	struct dp_soc *soc;
 	struct dp_mon_filter_be filter = {0};
 	struct htt_rx_ring_tlv_filter *rx_tlv_filter;
 	enum dp_mon_filter_srng_type srng_type =
@@ -2901,6 +2893,7 @@ QDF_STATUS dp_rx_mon_filter_update_2_0(struct dp_pdev *pdev)
 		dp_mon_filter_err("pdev Context is null");
 		return QDF_STATUS_E_FAILURE;
 	}
+	soc = pdev->soc;
 
 	rx_tlv_filter = &filter.rx_tlv_filter.tlv_filter;
 	dp_rx_mon_filter_h2t_setup(soc, pdev, srng_type, &filter.rx_tlv_filter);
@@ -3155,10 +3148,13 @@ dp_mon_filter_setup_tx_lite_mon(struct dp_mon_pdev_be *be_mon_pdev)
 		if ((config->tx_config.level == CDP_LITE_MON_LEVEL_MPDU) ||
 		    (config->tx_config.level == CDP_LITE_MON_LEVEL_PPDU))
 			tx_tlv_filter->ctrl_mpdu_log = 1;
-		if (config->tx_config.ctrl_filter[DP_MON_FRM_FILTER_MODE_FP] !=
-		    CDP_LITE_MON_FILTER_ALL)
-			config->subtype_filtering = true;
 	}
+	/* Since ctrl frames are generated in host, we need to do subtype
+	 * filtering even though ctrl filters are not enabled
+	 */
+	if (config->tx_config.ctrl_filter[DP_MON_FRM_FILTER_MODE_FP] !=
+	    CDP_LITE_MON_FILTER_ALL)
+		config->subtype_filtering = true;
 	/* configure data filters */
 	if (config->tx_config.data_filter[DP_MON_FRM_FILTER_MODE_FP]) {
 		tx_tlv_filter->data_filter = 1;

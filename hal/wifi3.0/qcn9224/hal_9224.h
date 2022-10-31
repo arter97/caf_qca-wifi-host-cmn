@@ -1655,7 +1655,7 @@ static void hal_cmem_write_9224(hal_soc_handle_t hal_soc_hdl,
 {
 	struct hal_soc *hal = (struct hal_soc *)hal_soc_hdl;
 
-	pld_reg_write(hal->qdf_dev->dev, offset, value);
+	pld_reg_write(hal->qdf_dev->dev, offset, value, NULL);
 }
 
 /**
@@ -1677,11 +1677,6 @@ static void hal_reo_setup_9224(struct hal_soc *soc, void *reoparams,
 	reg_val = HAL_REG_READ(soc, HWIO_REO_R0_GENERAL_ENABLE_ADDR(
 		REO_REG_REG_BASE));
 
-	if (soc->version >= 2) {
-		struct hal_reo_params *reo_params = reoparams;
-
-		reo_params->reo_ref_peer_id_fix_enable = 1;
-	}
 	hal_reo_config_9224(soc, reg_val, reo_params);
 	/* Other ring enable bits and REO_ENABLE will be set by FW */
 
@@ -2098,6 +2093,12 @@ static void hal_hw_txrx_ops_attach_qcn9224(struct hal_soc *hal_soc)
 		hal_tx_populate_bank_register_be;
 	hal_soc->ops->hal_tx_vdev_mcast_ctrl_set =
 		hal_tx_vdev_mcast_ctrl_set_be;
+#ifdef CONFIG_WORD_BASED_TLV
+	hal_soc->ops->hal_rx_mpdu_start_wmask_get =
+					hal_rx_mpdu_start_wmask_get_be;
+	hal_soc->ops->hal_rx_msdu_end_wmask_get =
+					hal_rx_msdu_end_wmask_get_be;
+#endif
 };
 
 /**

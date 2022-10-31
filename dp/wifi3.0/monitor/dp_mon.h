@@ -547,7 +547,7 @@ void dp_ppdu_desc_deliver(struct dp_pdev *pdev, struct ppdu_info *ppdu_info);
 
 #ifdef QCA_RSSI_DB2DBM
 /*
- * dp_mon_pdev_params_rssi_dbm_conv() --> to set rssi in dbm converstion
+ * dp_mon_pdev_params_rssi_dbm_conv() --> to set rssi in dbm conversion
  *						params into monitor pdev.
  *@cdp_soc: dp soc handle.
  *@params: cdp_rssi_db2dbm_param_dp structure value.
@@ -820,6 +820,11 @@ struct dp_mon_ops {
 	void (*mon_lite_mon_vdev_delete)(struct dp_pdev *pdev,
 					 struct dp_vdev *vdev);
 	void (*mon_lite_mon_disable_rx)(struct dp_pdev *pdev);
+	/* Print advanced monitor stats */
+	void (*mon_rx_print_advanced_stats)
+		(struct dp_soc *soc, struct dp_pdev *pdev);
+	QDF_STATUS (*mon_rx_ppdu_info_cache_create)(struct dp_pdev *pdev);
+	void (*mon_rx_ppdu_info_cache_destroy)(struct dp_pdev *pdev);
 };
 
 /**
@@ -880,13 +885,9 @@ struct dp_mon_soc {
 };
 
 #ifdef WLAN_TELEMETRY_STATS_SUPPORT
-#define MAX_CONSUMPTION_TIME 5 /* in sec */
 struct dp_mon_peer_airtime_consumption {
 	uint32_t consumption;
-	struct {
-		uint32_t avg_consumption_per_sec[MAX_CONSUMPTION_TIME];
-		uint8_t idx;
-	} avg_consumption;
+	uint32_t avg_consumption_per_sec;
 };
 #endif
 
@@ -898,7 +899,7 @@ struct dp_mon_peer_stats {
 	dp_mon_peer_tx_stats tx;
 	dp_mon_peer_rx_stats rx;
 #ifdef WLAN_TELEMETRY_STATS_SUPPORT
-	struct dp_mon_peer_airtime_consumption airtime_consumption;
+	struct dp_mon_peer_airtime_consumption airtime_consumption[WME_AC_MAX];
 #endif
 #endif
 };
@@ -2132,7 +2133,7 @@ static inline void dp_monitor_flush_rings(struct dp_soc *soc)
 
 /*
  * dp_monitor_config_undecoded_metadata_capture() - Monitor config
- * undecoded metatdata capture
+ * undecoded metadata capture
  * @pdev: point to pdev
  * @val: val
  *
@@ -2668,7 +2669,7 @@ static inline void dp_monitor_peer_tx_capture_filter_check(struct dp_pdev *pdev,
  * dp_monitor_tx_add_to_comp_queue() - add completion msdu to queue
  *
  * This API returns QDF_STATUS_SUCCESS in case where buffer is added
- * to txmonitor queue successfuly caller will not free the buffer in
+ * to txmonitor queue successfully caller will not free the buffer in
  * this case. In other cases this API return QDF_STATUS_E_FAILURE and
  * caller frees the buffer
  *
@@ -4234,20 +4235,20 @@ void dp_monitor_peer_telemetry_stats(struct dp_peer *peer,
 				     struct cdp_peer_telemetry_stats *stats)
 {
 	struct dp_mon_peer_stats *mon_peer_stats = NULL;
-	uint8_t idx = 0;
-	uint32_t consumption = 0;
+	uint8_t ac;
 
 	if (qdf_unlikely(!peer->monitor_peer))
 		return;
 
 	mon_peer_stats = &peer->monitor_peer->stats;
-	for (idx = 0; idx < MAX_CONSUMPTION_TIME; idx++)
-		consumption +=
-			mon_peer_stats->airtime_consumption.avg_consumption.avg_consumption_per_sec[idx];
-	/* consumption is in micro seconds, convert it to seconds and
-	 * then calculate %age per 5 sec
-	 */
-	stats->airtime_consumption = ((consumption * 100) / (MAX_CONSUMPTION_TIME * 1000000));
+	for (ac = 0; ac < WME_AC_MAX; ac++) {
+		/* consumption is in micro seconds, convert it to seconds and
+		 * then calculate %age per sec
+		 */
+		stats->airtime_consumption[ac] =
+			((mon_peer_stats->airtime_consumption[ac].avg_consumption_per_sec * 100) /
+			(1000000));
+	}
 	stats->tx_mpdu_retried = mon_peer_stats->tx.retries;
 	stats->tx_mpdu_total = mon_peer_stats->tx.tx_mpdus_tried;
 	stats->rx_mpdu_retried = mon_peer_stats->rx.mpdu_retry_cnt;
@@ -4257,6 +4258,7 @@ void dp_monitor_peer_telemetry_stats(struct dp_peer *peer,
 #endif
 
 /**
+<<<<<<< HEAD
  * dp_monitor_is_tx_cap_enabled() - get tx-cature enabled/disabled
  * @peer: DP peer handle
  *
@@ -4298,4 +4300,33 @@ qdf_size_t dp_mon_get_context_size_be(enum dp_context_type context_type)
 	}
 }
 #endif
+
+/*
+ * dp_mon_rx_print_advanced_stats () - print advanced monitor stats
+ *
+ * @soc: DP soc handle
+ * @pdev: DP pdev handle
+ *
+ * Return: void
+ */
+static inline void
+dp_mon_rx_print_advanced_stats(struct dp_soc *soc,
+			       struct dp_pdev *pdev)
+{
+	struct dp_mon_soc *mon_soc = soc->monitor_soc;
+	struct dp_mon_ops *monitor_ops;
+
+	if (!mon_soc) {
+		dp_mon_debug("mon soc is NULL");
+		return;
+	}
+
+	monitor_ops = mon_soc->mon_ops;
+	if (!monitor_ops ||
+	    !monitor_ops->mon_rx_print_advanced_stats) {
+		dp_mon_debug("callback not registered");
+		return;
+	}
+	return monitor_ops->mon_rx_print_advanced_stats(soc, pdev);
+}
 #endif /* _DP_MON_H_ */

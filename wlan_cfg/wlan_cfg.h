@@ -207,7 +207,7 @@ struct wlan_srng_cfg {
  * @reo_cmd_ring: reo cmd ring size
  * @reo_status_ring: reo status ting size
  * @rxdma_refill_ring: rxdma refill ring size
- * @rxdma_err_dst_ring: rxdma error detination ring size
+ * @rxdma_err_dst_ring: rxdma error destination ring size
  * @raw_mode_war: enable/disable raw mode war
  * @enable_data_stall_detection: enable/disable specific data stall detection
  * @disable_intra_bss_fwd: flag to disable intra bss forwarding
@@ -475,6 +475,8 @@ struct wlan_cfg_dp_pdev_ctxt {
  * @num_reo_exception_ring_entries: num of rx exception ring entries
  * @num_tx_desc: num of tx descriptors
  * @num_tx_ext_desc: num of tx ext descriptors
+ * @num_reo_dst_ring_entries: Number of entries in REO destination ring
+ * @num_rxdma_buf_ring_entries: Number of entries in rxdma buf ring
  */
 struct wlan_dp_prealloc_cfg {
 	int num_tx_ring_entries;
@@ -484,6 +486,8 @@ struct wlan_dp_prealloc_cfg {
 	int num_reo_exception_ring_entries;
 	int num_tx_desc;
 	int num_tx_ext_desc;
+	int num_reo_dst_ring_entries;
+	int num_rxdma_buf_ring_entries;
 };
 
 /**
@@ -1529,9 +1533,9 @@ int
 wlan_cfg_get_dp_soc_rx_sw_desc_num(struct wlan_cfg_dp_soc_ctxt *cfg);
 
 /*
- * wlan_cfg_get_dp_caps - Get dp capablities
+ * wlan_cfg_get_dp_caps - Get dp capabilities
  * @wlan_cfg_soc_ctx
- * @dp_caps: enum for dp capablities
+ * @dp_caps: enum for dp capabilities
  *
  * Return: bool if a dp capabilities is enabled
  */

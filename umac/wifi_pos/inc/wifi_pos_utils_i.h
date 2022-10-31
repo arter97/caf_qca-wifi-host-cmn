@@ -61,8 +61,8 @@ struct wifi_pos_req_msg;
 #define wifipos_nofl_debug(params...) \
 	QDF_TRACE_DEBUG_NO_FL(QDF_MODULE_ID_WIFIPOS, params)
 
-#define OEM_APP_SIGNATURE_LEN      16
 #define OEM_APP_SIGNATURE_STR      "QUALCOMM-OEM-APP"
+#define OEM_APP_SIGNATURE_LEN      (sizeof(OEM_APP_SIGNATURE_STR) - 1)
 
 #ifndef OEM_DATA_RSP_SIZE
 #define OEM_DATA_RSP_SIZE 1724
@@ -258,6 +258,8 @@ struct wifi_pos_legacy_ops {
  * @osif_cb: Callbacks to OS_IF
  * @wifi_pos_lock: lock to access wifi pos priv object
  * @oem_6g_support_disable: oem target 6ghz support is disabled if set
+ * @enable_rsta_secure_ltf_support: Enable RSTA secure LTF support
+ * @enable_rsta_11az_ranging: Enable RSTA 802.11 az secure ranging support
  * @wifi_pos_req_handler: function pointer to handle TLV or non-TLV
  * @wifi_pos_send_rsp: function pointer to send msg to userspace APP
  * @wifi_pos_get_phy_mode: function pointer to get wlan phymode for given
@@ -312,6 +314,8 @@ struct wifi_pos_psoc_priv_obj {
 
 	qdf_spinlock_t wifi_pos_lock;
 	bool oem_6g_support_disable;
+	bool enable_rsta_secure_ltf_support;
+	bool enable_rsta_11az_ranging;
 	struct wifi_pos_legacy_ops *legacy_ops;
 	QDF_STATUS (*wifi_pos_req_handler)(struct wlan_objmgr_psoc *psoc,
 				    struct wifi_pos_req_msg *req);

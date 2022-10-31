@@ -728,6 +728,7 @@ struct hal_hw_srng_config {
 	enum hal_srng_dir ring_dir;
 	uint32_t max_size;
 	bool nf_irq_support;
+	bool dmac_cmn_ring;
 };
 
 #define MAX_SHADOW_REGISTERS 40
@@ -768,7 +769,6 @@ struct hal_reo_params {
 	uint8_t alt_dst_ind_0;
 	/** padding */
 	uint8_t padding[2];
-	uint8_t reo_ref_peer_id_fix_enable;
 };
 
 /**
@@ -1015,6 +1015,8 @@ struct hal_hw_txrx_ops {
 	uint32_t (*hal_rx_mpdu_start_offset_get)(void);
 	uint32_t (*hal_rx_mpdu_end_offset_get)(void);
 	uint32_t (*hal_rx_pkt_tlv_offset_get)(void);
+	uint32_t (*hal_rx_msdu_end_wmask_get)(void);
+	uint32_t (*hal_rx_mpdu_start_wmask_get)(void);
 	void * (*hal_rx_flow_setup_fse)(uint8_t *rx_fst,
 					uint32_t table_offset,
 					uint8_t *rx_flow);
@@ -1084,7 +1086,9 @@ struct hal_hw_txrx_ops {
 				       void *msdu_desc_info, uint32_t dst_ind,
 				       uint32_t nbuf_len);
 	void (*hal_mpdu_desc_info_set)(hal_soc_handle_t hal_soc_hdl,
-				       void *mpdu_desc_info, uint32_t seq_no);
+				       void *ent_desc,
+				       void *mpdu_desc_info,
+				       uint32_t seq_no);
 #ifdef DP_UMAC_HW_RESET_SUPPORT
 	void (*hal_unregister_reo_send_cmd)(struct hal_soc *hal_soc);
 	void (*hal_register_reo_send_cmd)(struct hal_soc *hal_soc);
@@ -1198,6 +1202,9 @@ struct hal_hw_txrx_ops {
 	void (*hal_tx_vdev_mcast_ctrl_set)(hal_soc_handle_t hal_soc_hdl,
 					   uint8_t vdev_id,
 					   uint8_t mcast_ctrl_val);
+	void (*hal_get_tsf_time)(hal_soc_handle_t hal_soc_hdl, uint32_t tsf_id,
+				 uint32_t mac_id, uint64_t *tsf,
+				 uint64_t *tsf_sync_soc_time);
 };
 
 /**
@@ -1284,6 +1291,23 @@ union hal_shadow_reg_cfg {
 #endif
 };
 
+#ifdef HAL_RECORD_SUSPEND_WRITE
+#define HAL_SUSPEND_WRITE_HISTORY_MAX 256
+
+struct hal_suspend_write_record {
+	uint64_t ts;
+	uint8_t ring_id;
+	uit32_t value;
+	uint32_t direct_wcount;
+};
+
+struct hal_suspend_write_history {
+	qdf_atomic_t index;
+	struct hal_suspend_write_record record[HAL_SUSPEND_WRITE_HISTORY_MAX];
+
+};
+#endif
+
 /**
  * struct hal_soc - HAL context to be used to access SRNG APIs
  *		    (currently used by data path and
@@ -1305,6 +1329,7 @@ struct hal_soc {
 	/* Device base address for ce - qca5018 target */
 	void *dev_base_addr_ce;
 
+	void *dev_base_addr_cmem;
 	/* HAL internal state for all SRNG rings.
 	 * TODO: See if this is required
 	 */

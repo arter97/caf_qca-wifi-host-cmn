@@ -1,5 +1,4 @@
 /*
- * Copyright (c) 2018-2020 The Linux Foundation. All rights reserved.
  * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
@@ -18,30 +17,33 @@
  */
 
 /**
- * DOC: i_qdf_talloc.h
- *
- * Linux-specific definitions for use by QDF talloc APIs
+ * DOC: wlan_psoc_mlme_ucfg_api.h
+ * This file provides PSOC mlme ucfg apis.
  */
+#ifndef _WLAN_PSOC_MLME_UCFG_API_H_
+#define _WLAN_PSOC_MLME_UCFG_API_H_
 
-#ifndef __I_QDF_TALLOC_H
-#define __I_QDF_TALLOC_H
+#include <wlan_objmgr_psoc_obj.h>
 
-#include "asm/page.h"
-#include "linux/irqflags.h"
-#include "linux/preempt.h"
-#include "linux/slab.h"
+/**
+ * ucfg_psoc_mlme_get_11be_capab() - Get the 11be capability for target
+ * @psoc: psoc handle
+ * @val: pointer to the output variable
+ *
+ * return: QDF_STATUS
+ */
+QDF_STATUS
+ucfg_psoc_mlme_get_11be_capab(struct wlan_objmgr_psoc *psoc, bool *val);
 
-#define __can_sleep() \
-	(!in_interrupt() && !irqs_disabled() && !in_atomic())
+/**
+ * ucfg_psoc_mlme_set_11be_capab() - Set the 11be capability for target
+ * @psoc: psoc handle
+ * @val: pointer to the output variable
+ *
+ * return: QDF_STATUS
+ */
+QDF_STATUS
+ucfg_psoc_mlme_set_11be_capab(struct wlan_objmgr_psoc *psoc, bool val);
 
-#define __zalloc_sleeps(size) kzalloc(size, GFP_KERNEL)
-#define __zalloc_atomic(size) kzalloc(size, GFP_ATOMIC)
-#define __zalloc_auto(size) \
-	kzalloc(size, __can_sleep() ? GFP_KERNEL : GFP_ATOMIC)
-
-#define __free(ptr) kfree(ptr)
-
-#define __qdf_alloc_size(ptr) ksize(ptr)
-
-#endif /* __I_QDF_TALLOC_H */
+#endif /* _WLAN_PSOC_MLME_UCFG_API_H_ */
 

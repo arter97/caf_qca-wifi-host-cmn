@@ -71,6 +71,9 @@ struct htt_dbgfs_cfg {
 /*Reserve for HTT Stats debugfs support: 5th bit */
 #define DBG_SYSFS_STATS_COOKIE BIT(5)
 
+/* Reserve for HTT Stats OBSS PD support: 6th bit */
+#define DBG_STATS_COOKIE_HTT_OBSS BIT(6)
+
 /**
  * Bitmap of HTT PPDU TLV types for Default mode
  */
@@ -950,7 +953,6 @@ enum timer_yield_status {
 };
 
 #if DP_PRINT_ENABLE
-#include <stdarg.h>       /* va_list */
 #include <qdf_types.h> /* qdf_vprint */
 #include <cdp_txrx_handle.h>
 
@@ -2378,6 +2380,17 @@ void dp_update_delay_stats(struct cdp_tid_tx_stats *tstats,
 void dp_print_ring_stats(struct dp_pdev *pdev);
 
 /**
+ * dp_print_ring_stat_from_hal(): Print tail and head pointer through hal
+ * @soc: soc handle
+ * @srng: srng handle
+ * @ring_type: ring type
+ *
+ * Return:void
+ */
+void
+dp_print_ring_stat_from_hal(struct dp_soc *soc,  struct dp_srng *srng,
+			    enum hal_ring_type ring_type);
+/**
  * dp_print_pdev_cfg_params() - Print the pdev cfg parameters
  * @pdev_handle: DP pdev handle
  *
@@ -2751,7 +2764,7 @@ dp_hif_update_pipe_callback(struct dp_soc *dp_soc,
 			    QDF_STATUS (*callback)(void *, qdf_nbuf_t, uint8_t),
 			    uint8_t pipe_id)
 {
-	struct hif_msg_callbacks hif_pipe_callbacks;
+	struct hif_msg_callbacks hif_pipe_callbacks = { 0 };
 
 	/* TODO: Temporary change to bypass HTC connection for this new
 	 * HIF pipe, which will be used for packet log and other high-
@@ -3164,7 +3177,7 @@ QDF_STATUS dp_rx_flow_delete_entry(struct dp_pdev *pdev,
 /**
  * dp_rx_flow_add_entry() - Add a flow entry to flow search table
  * @pdev: DP pdev instance
- * @rx_flow_info: DP flow paramaters
+ * @rx_flow_info: DP flow parameters
  *
  * Return: Success when flow is added, no-memory or already exists on error
  */
@@ -3657,6 +3670,109 @@ void dp_desc_multi_pages_mem_free(struct dp_soc *soc,
 }
 #endif
 
+/**
+ * struct dp_frag_history_opaque_atomic - Opaque struct for adding a fragmented
+ *					  history.
+ * @index: atomic index
+ * @num_entries_per_slot: Number of entries per slot
+ * @allocated: is allocated or not
+ * @entry: pointers to array of records
+ */
+struct dp_frag_history_opaque_atomic {
+	qdf_atomic_t index;
+	uint16_t num_entries_per_slot;
+	uint16_t allocated;
+	void *entry[0];
+};
+
+static inline QDF_STATUS
+dp_soc_frag_history_attach(struct dp_soc *soc, void *history_hdl,
+			   uint32_t max_slots, uint32_t max_entries_per_slot,
+			   uint32_t entry_size,
+			   bool attempt_prealloc, enum dp_ctxt_type ctxt_type)
+{
+	struct dp_frag_history_opaque_atomic *history =
+			(struct dp_frag_history_opaque_atomic *)history_hdl;
+	size_t alloc_size = max_entries_per_slot * entry_size;
+	int i;
+
+	for (i = 0; i < max_slots; i++) {
+		if (attempt_prealloc)
+			history->entry[i] = dp_context_alloc_mem(soc, ctxt_type,
+								 alloc_size);
+		else
+			history->entry[i] = qdf_mem_malloc(alloc_size);
+
+		if (!history->entry[i])
+			goto exit;
+	}
+
+	qdf_atomic_init(&history->index);
+	history->allocated = 1;
+	history->num_entries_per_slot = max_entries_per_slot;
+
+	return QDF_STATUS_SUCCESS;
+exit:
+	for (i = i - 1; i >= 0; i--) {
+		if (attempt_prealloc)
+			dp_context_free_mem(soc, ctxt_type, history->entry[i]);
+		else
+			qdf_mem_free(history->entry[i]);
+	}
+
+	return QDF_STATUS_E_NOMEM;
+}
+
+static inline
+void dp_soc_frag_history_detach(struct dp_soc *soc,
+				void *history_hdl, uint32_t max_slots,
+				bool attempt_prealloc,
+				enum dp_ctxt_type ctxt_type)
+{
+	struct dp_frag_history_opaque_atomic *history =
+			(struct dp_frag_history_opaque_atomic *)history_hdl;
+	int i;
+
+	for (i = 0; i < max_slots; i++) {
+		if (attempt_prealloc)
+			dp_context_free_mem(soc, ctxt_type, history->entry[i]);
+		else
+			qdf_mem_free(history->entry[i]);
+	}
+
+	history->allocated = 0;
+}
+
+/**
+ * dp_get_frag_hist_next_atomic_idx() - get the next entry index to record an
+ *					entry in a fragmented history with
+ *					index being atomic.
+ * @curr_idx: address of the current index where the last entry was written
+ * @next_idx: pointer to update the next index
+ * @slot: pointer to update the history slot to be selected
+ * @slot_shift: BITwise shift mask for slot (in index)
+ * @max_entries_per_slot: Max number of entries in a slot of history
+ * @max_entries: Total number of entries in the history (sum of all slots)
+ *
+ * This function assumes that the "max_entries_per_slot" and "max_entries"
+ * are a power-of-2.
+ *
+ * Return: None
+ */
+static inline void
+dp_get_frag_hist_next_atomic_idx(qdf_atomic_t *curr_idx, uint32_t *next_idx,
+				 uint16_t *slot, uint32_t slot_shift,
+				 uint32_t max_entries_per_slot,
+				 uint32_t max_entries)
+{
+	uint32_t idx;
+
+	idx = qdf_do_div_rem(qdf_atomic_inc_return(curr_idx), max_entries);
+
+	*slot = idx >> slot_shift;
+	*next_idx = idx & (max_entries_per_slot - 1);
+}
+
 #ifdef FEATURE_RUNTIME_PM
 /**
  * dp_runtime_get() - Get dp runtime refcount
@@ -4024,7 +4140,7 @@ void dp_rx_send_pktlog(struct dp_soc *soc, struct dp_pdev *pdev,
  * This API should only be called when we have not removed
  * Rx TLV from head, and head is pointing to rx_tlv
  *
- * This function is used to send rx packet from erro path
+ * This function is used to send rx packet from error path
  * for logging for which rx packet tlv is not removed.
  *
  * Return: None
@@ -4092,4 +4208,13 @@ void dp_rx_err_send_pktlog(struct dp_soc *soc, struct dp_pdev *pdev,
 {
 }
 #endif
+
+/*
+ * dp_pdev_update_fast_rx_flag() - Update Fast rx flag for a PDEV
+ * @soc  : Data path soc handle
+ * @pdev : PDEV handle
+ *
+ * return: None
+ */
+void dp_pdev_update_fast_rx_flag(struct dp_soc *soc, struct dp_pdev *pdev);
 #endif /* #ifndef _DP_INTERNAL_H_ */

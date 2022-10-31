@@ -108,8 +108,8 @@ static const uint32_t peer_param_tlv[] = {
 	[WMI_HOST_PEER_PHYMODE] = WMI_PEER_PHYMODE,
 	[WMI_HOST_PEER_USE_FIXED_PWR] = WMI_PEER_USE_FIXED_PWR,
 	[WMI_HOST_PEER_PARAM_FIXED_RATE] = WMI_PEER_PARAM_FIXED_RATE,
-	[WMI_HOST_PEER_SET_MU_ALLOWLIST] = WMI_PEER_SET_MU_WHITELIST,
-	[WMI_HOST_PEER_SET_MAC_TX_RATE] = WMI_PEER_SET_MAX_TX_RATE,
+	[WMI_HOST_PEER_SET_MU_ALLOWLIST] = WMI_PEER_SET_MU_ALLOWLIST,
+	[WMI_HOST_PEER_SET_MAX_TX_RATE] = WMI_PEER_SET_MAX_TX_RATE,
 	[WMI_HOST_PEER_SET_MIN_TX_RATE] = WMI_PEER_SET_MIN_TX_RATE,
 	[WMI_HOST_PEER_SET_DEFAULT_ROUTING] = WMI_PEER_SET_DEFAULT_ROUTING,
 	[WMI_HOST_PEER_NSS_VHT160] = WMI_PEER_NSS_VHT160,
@@ -1630,6 +1630,87 @@ static inline uint32_t convert_host_peer_param_id_to_target_id_tlv(
 }
 #endif
 
+/**
+ * wmi_host_chan_bw_to_target_chan_bw - convert wmi_host_channel_width to
+ *                                      wmi_channel_width
+ * @bw: wmi_host_channel_width channel width
+ *
+ * Return: wmi_channel_width
+ */
+static wmi_channel_width wmi_host_chan_bw_to_target_chan_bw(
+						wmi_host_channel_width bw)
+{
+	wmi_channel_width target_bw = WMI_CHAN_WIDTH_20;
+
+	switch (bw) {
+	case WMI_HOST_CHAN_WIDTH_20:
+		target_bw = WMI_CHAN_WIDTH_20;
+		break;
+	case WMI_HOST_CHAN_WIDTH_40:
+		target_bw = WMI_CHAN_WIDTH_40;
+		break;
+	case WMI_HOST_CHAN_WIDTH_80:
+		target_bw = WMI_CHAN_WIDTH_80;
+		break;
+	case WMI_HOST_CHAN_WIDTH_160:
+		target_bw = WMI_CHAN_WIDTH_160;
+		break;
+	case WMI_HOST_CHAN_WIDTH_80P80:
+		target_bw = WMI_CHAN_WIDTH_80P80;
+		break;
+	case WMI_HOST_CHAN_WIDTH_5:
+		target_bw = WMI_CHAN_WIDTH_5;
+		break;
+	case WMI_HOST_CHAN_WIDTH_10:
+		target_bw = WMI_CHAN_WIDTH_10;
+		break;
+	case WMI_HOST_CHAN_WIDTH_165:
+		target_bw = WMI_CHAN_WIDTH_165;
+		break;
+	case WMI_HOST_CHAN_WIDTH_160P160:
+		target_bw = WMI_CHAN_WIDTH_160P160;
+		break;
+	case WMI_HOST_CHAN_WIDTH_320:
+		target_bw = WMI_CHAN_WIDTH_320;
+		break;
+	default:
+		break;
+	}
+
+	return target_bw;
+}
+
+/**
+ * convert_host_peer_param_value_to_target_value_tlv() - convert host peer
+ *                                                       param value to target
+ * @param_id: target param id
+ * @param_value: host param value
+ *
+ * @Return: target param value
+ */
+static uint32_t convert_host_peer_param_value_to_target_value_tlv(
+				uint32_t param_id, uint32_t param_value)
+{
+	uint32_t fw_param_value = 0;
+	wmi_host_channel_width bw;
+	uint16_t punc;
+
+	switch (param_id) {
+	case WMI_PEER_CHWIDTH_PUNCTURE_20MHZ_BITMAP:
+		bw = QDF_GET_BITS(param_value, 0, 8);
+		punc = QDF_GET_BITS(param_value, 8, 16);
+		QDF_SET_BITS(fw_param_value, 0, 8,
+			     wmi_host_chan_bw_to_target_chan_bw(bw));
+		QDF_SET_BITS(fw_param_value, 8, 16, ~punc);
+		break;
+	default:
+		fw_param_value = param_value;
+		break;
+	}
+
+	return fw_param_value;
+}
+
 #ifdef WLAN_SUPPORT_PPEDS
 /**
  * peer_ppe_ds_param_send_tlv() - Set peer PPE DS config
@@ -1709,13 +1790,15 @@ static QDF_STATUS send_peer_param_cmd_tlv(wmi_unified_t wmi,
 	wmi_buf_t buf;
 	int32_t err;
 	uint32_t param_id;
+	uint32_t param_value;
 
 	param_id = convert_host_peer_param_id_to_target_id_tlv(param->param_id);
 	if (param_id == WMI_UNAVAILABLE_PARAM) {
 		wmi_err("Unavailable param %d", param->param_id);
 		return QDF_STATUS_E_NOSUPPORT;
 	}
-
+	param_value = convert_host_peer_param_value_to_target_value_tlv(
+						param_id, param->param_value);
 	buf = wmi_buf_alloc(wmi, sizeof(*cmd));
 	if (!buf)
 		return QDF_STATUS_E_NOMEM;
@@ -1728,7 +1811,7 @@ static QDF_STATUS send_peer_param_cmd_tlv(wmi_unified_t wmi,
 	cmd->vdev_id = param->vdev_id;
 	WMI_CHAR_ARRAY_TO_MAC_ADDR(peer_addr, &cmd->peer_macaddr);
 	cmd->param_id = param_id;
-	cmd->param_value = param->param_value;
+	cmd->param_value = param_value;
 
 	wmi_debug("vdev_id %d peer_mac: "QDF_MAC_ADDR_FMT" param_id: %u param_value: %x",
 		 cmd->vdev_id,
@@ -1791,6 +1874,23 @@ static QDF_STATUS send_vdev_up_cmd_tlv(wmi_unified_t wmi,
 	return 0;
 }
 
+#ifdef ENABLE_HOST_TO_TARGET_CONVERSION
+static uint32_t convert_peer_type_host_to_target(uint32_t peer_type)
+{
+	/* Host sets the peer_type as 0 for the peer create command sent to FW
+	 * other than PASN peer create command.
+	 */
+	if (peer_type == WLAN_PEER_RTT_PASN)
+		return WMI_PEER_TYPE_PASN;
+
+	return peer_type;
+}
+#else
+static uint32_t convert_peer_type_host_to_target(uint32_t peer_type)
+{
+	return peer_type;
+}
+#endif
 /**
  * send_peer_create_cmd_tlv() - send peer create command to fw
  * @wmi: wmi handle
@@ -1819,7 +1919,7 @@ static QDF_STATUS send_peer_create_cmd_tlv(wmi_unified_t wmi,
 		       WMITLV_GET_STRUCT_TLVLEN
 			       (wmi_peer_create_cmd_fixed_param));
 	WMI_CHAR_ARRAY_TO_MAC_ADDR(param->peer_addr, &cmd->peer_macaddr);
-	cmd->peer_type = param->peer_type;
+	cmd->peer_type = convert_peer_type_host_to_target(param->peer_type);
 	cmd->vdev_id = param->vdev_id;
 
 	buf_ptr = (uint8_t *)wmi_buf_data(buf);
@@ -9080,7 +9180,7 @@ static WMI_BAND_CONCURRENCY convert_host_to_target_band_concurrency(
 	case WMI_HOST_BAND_CONCURRENCY_DBS_SBS:
 		return WMI_HOST_DBS_SBS;
 	default:
-		return 0;
+		return WMI_HOST_NONE;
 	}
 }
 
@@ -9105,6 +9205,24 @@ static WMI_NUM_ANTENNAS convert_host_to_target_num_antennas(
 }
 
 /**
+ * convert_host_to_target_band_capability() -Convert host band capability to
+ * target band capability
+ * @host_band_capability: Host band capability
+ *
+ * Return: Target band capability bitmap
+ */
+static uint8_t
+convert_host_to_target_band_capability(uint32_t host_band_capability)
+{
+	uint8_t band_capability;
+
+	band_capability = (host_band_capability & WMI_HOST_BAND_CAP_2GHZ) |
+			  (host_band_capability & WMI_HOST_BAND_CAP_5GHZ) |
+			  (host_band_capability & WMI_HOST_BAND_CAP_6GHZ);
+	return band_capability;
+}
+
+/**
  * copy_feature_set_info() -Copy feaure set info from host to target
  * @feature_set_bitmap: Target feature set pointer
  * @feature_set: Host feature set structure
@@ -9119,6 +9237,7 @@ static inline void copy_feature_set_info(uint32_t *feature_set_bitmap,
 	WMI_WIFI_STANDARD wifi_standard;
 	WMI_VENDOR1_REQ1_VERSION vendor1_req1_version;
 	WMI_VENDOR1_REQ2_VERSION vendor1_req2_version;
+	uint8_t band_capability;
 
 	num_antennas = convert_host_to_target_num_antennas(
 					feature_set->num_antennas);
@@ -9130,6 +9249,10 @@ static inline void copy_feature_set_info(uint32_t *feature_set_bitmap,
 					feature_set->vendor_req_1_version);
 	vendor1_req2_version = convert_host_to_target_vendor1_req2_version(
 					feature_set->vendor_req_2_version);
+
+	band_capability =
+		convert_host_to_target_band_capability(
+						feature_set->band_capability);
 
 	WMI_SET_WIFI_STANDARD(feature_set_bitmap, wifi_standard);
 	WMI_SET_BAND_CONCURRENCY_SUPPORT(feature_set_bitmap, band_concurrency);
@@ -9246,6 +9369,7 @@ static inline void copy_feature_set_info(uint32_t *feature_set_bitmap,
 	WMI_SET_FEATURE_SET_VERSION(feature_set_bitmap,
 				    feature_set->feature_set_version);
 	WMI_SET_NUM_ANTENNAS(feature_set_bitmap, num_antennas);
+	WMI_SET_HOST_BAND_CAP(feature_set_bitmap, band_capability);
 }
 
 /**
@@ -9289,6 +9413,11 @@ static QDF_STATUS feature_set_cmd_send_tlv(
 	WMITLV_SET_HDR(buf_ptr + sizeof(*cmd), WMITLV_TAG_ARRAY_UINT32,
 		       (WMI_FEATURE_SET_BITMAP_ARRAY_LEN32 * sizeof(uint32_t)));
 	copy_feature_set_info(feature_set_bitmap, feature_set);
+
+	qdf_trace_hex_dump(QDF_MODULE_ID_WMI, QDF_TRACE_LEVEL_DEBUG,
+			   feature_set_bitmap,
+			   WMI_FEATURE_SET_BITMAP_ARRAY_LEN32 *
+			   sizeof(uint32_t));
 
 	wmi_mtrace(WMI_PDEV_FEATURESET_CMDID, NO_SESSION, 0);
 
@@ -19359,6 +19488,7 @@ extract_pktlog_decode_info_event_tlv(wmi_unified_t wmi_handle, void *evt_buf,
 	return QDF_STATUS_SUCCESS;
 }
 
+#ifdef HEALTH_MON_SUPPORT
 /**
  * extract_health_mon_init_done_info_event_tlv() - Extract health monitor from
  * fw
@@ -19388,6 +19518,7 @@ extract_health_mon_init_done_info_event_tlv(wmi_unified_t wmi_handle,
 
 	return QDF_STATUS_SUCCESS;
 }
+#endif /* HEALTH_MON_SUPPORT */
 
 /**
  * extract_pdev_telemetry_stats_tlv - extract pdev telemetry stats
@@ -19889,8 +20020,10 @@ struct wmi_ops tlv_ops =  {
 #ifdef FEATURE_SET
 	.feature_set_cmd_send = feature_set_cmd_send_tlv,
 #endif
+#ifdef HEALTH_MON_SUPPORT
 	.extract_health_mon_init_done_info_event =
 		extract_health_mon_init_done_info_event_tlv,
+#endif /* HEALTH_MON_SUPPORT */
 	.send_multiple_vdev_param_cmd = send_multiple_vdev_param_cmd_tlv,
 };
 
@@ -20382,8 +20515,10 @@ static void populate_tlv_events_id(uint32_t *event_ids)
 	event_ids[wmi_wow_coap_buf_info_eventid] =
 		WMI_WOW_COAP_BUF_INFO_EVENTID;
 #endif
+#ifdef HEALTH_MON_SUPPORT
 	event_ids[wmi_extract_health_mon_init_done_info_eventid] =
 		WMI_HEALTH_MON_INIT_DONE_EVENTID;
+#endif /* HEALTH_MON_SUPPORT */
 }
 
 #ifdef WLAN_FEATURE_LINK_LAYER_STATS

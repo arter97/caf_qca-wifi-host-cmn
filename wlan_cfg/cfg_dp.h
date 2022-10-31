@@ -300,7 +300,7 @@
     defined(QCA_WIFI_QCA6750) || defined(QCA_WIFI_KIWI)
 #define WLAN_CFG_RX_RELEASE_RING_SIZE_MAX 1024
 #else
-#define WLAN_CFG_RX_RELEASE_RING_SIZE_MAX 8192
+#define WLAN_CFG_RX_RELEASE_RING_SIZE_MAX 32768
 #endif
 
 #define WLAN_CFG_REO_EXCEPTION_RING_SIZE 256
@@ -396,11 +396,11 @@
 #define WLAN_CFG_RX_SW_DESC_WEIGHT_SIZE_MAX 3
 #define WLAN_CFG_RX_SW_DESC_NUM_SIZE 4096
 #define WLAN_CFG_RX_SW_DESC_NUM_SIZE_MIN 1024
-#define WLAN_CFG_RX_SW_DESC_NUM_SIZE_MAX 12288
+#define WLAN_CFG_RX_SW_DESC_NUM_SIZE_MAX 16384
 
 /**
  * AP use cases need to allocate more RX Descriptors than the number of
- * entries avaialable in the SW2RXDMA buffer replenish ring. This is to account
+ * entries available in the SW2RXDMA buffer replenish ring. This is to account
  * for frames sitting in REO queues, HW-HW DMA rings etc. Hence using a
  * multiplication factor of 3, to allocate three times as many RX descriptors
  * as RX buffers.
@@ -411,7 +411,7 @@
 #define WLAN_CFG_RX_SW_DESC_WEIGHT_SIZE_MAX 3
 #define WLAN_CFG_RX_SW_DESC_NUM_SIZE 12288
 #define WLAN_CFG_RX_SW_DESC_NUM_SIZE_MIN 4096
-#define WLAN_CFG_RX_SW_DESC_NUM_SIZE_MAX 12288
+#define WLAN_CFG_RX_SW_DESC_NUM_SIZE_MAX 16384
 #endif
 
 #define WLAN_CFG_RX_FLOW_SEARCH_TABLE_SIZE 16384
@@ -1234,7 +1234,7 @@
 			"DP Rx Flow Search Table Is Per PDev")
 
 #define CFG_DP_RX_MON_PROTOCOL_FLOW_TAG_ENABLE \
-	CFG_INI_BOOL("dp_rx_monitor_protocol_flow_tag_enable", false, \
+	CFG_INI_BOOL("dp_rx_monitor_protocol_flow_tag_enable", true, \
 		     "Enable/Disable Rx Protocol & Flow tags in Monitor mode")
 
 #define CFG_DP_TX_PER_PKT_VDEV_ID_CHECK \
@@ -1288,7 +1288,7 @@
 		WLAN_CFG_RXDMA_MONITOR_RX_DROP_THRESH_SIZE_MIN, \
 		WLAN_CFG_RXDMA_MONITOR_RX_DROP_THRESH_SIZE_MAX, \
 		WLAN_CFG_RXDMA_MONITOR_RX_DROP_THRESH_SIZE, \
-		CFG_VALUE_OR_DEFAULT, "RXDMA monitor rx drop theshold")
+		CFG_VALUE_OR_DEFAULT, "RXDMA monitor rx drop threshold")
 
 #define CFG_DP_PKTLOG_BUFFER_SIZE \
 		CFG_INI_UINT("PktlogBufSize", \

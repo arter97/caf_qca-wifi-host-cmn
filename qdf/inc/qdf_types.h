@@ -29,7 +29,6 @@
 
 /* Include Files */
 #include <i_qdf_types.h>
-#include <stdarg.h>
 #ifdef TSOSEG_DEBUG
 #include <qdf_atomic.h>
 #endif
@@ -797,11 +796,15 @@ enum QDF_GLOBAL_MODE {
 #define qdf_kstrtoint __qdf_kstrtoint
 #define qdf_kstrtouint __qdf_kstrtouint
 
+#ifdef WLAN_FEATURE_11BE_MLO
+#define QDF_MAX_CONCURRENCY_PERSONA  (WLAN_MAX_VDEVS + 1)
+#else
 #ifdef WLAN_OPEN_P2P_INTERFACE
 /* This should match with WLAN_MAX_INTERFACES */
 #define QDF_MAX_CONCURRENCY_PERSONA  (WLAN_MAX_VDEVS)
 #else
 #define QDF_MAX_CONCURRENCY_PERSONA  (WLAN_MAX_VDEVS - 1)
+#endif
 #endif
 
 #define QDF_STA_MASK (1 << QDF_STA_MODE)
@@ -1437,7 +1440,6 @@ enum qdf_suspend_type {
  * @QDF_VDEV_SM_OUT_OF_SYNC: Vdev SM is out of sync and connect req received
  * when already connected
  * @QDF_STATS_REQ_TIMEDOUT: Stats request timedout
- * @QDF_RSO_STOP_RSP_TIMEOUT: Firmware hasn't sent RSO stop response
  */
 enum qdf_hang_reason {
 	QDF_REASON_UNSPECIFIED,
@@ -1469,7 +1471,6 @@ enum qdf_hang_reason {
 	QDF_VDEV_SM_OUT_OF_SYNC,
 	QDF_STATS_REQ_TIMEDOUT,
 	QDF_TX_DESC_LEAK,
-	QDF_RSO_STOP_RSP_TIMEOUT,
 };
 
 /**
