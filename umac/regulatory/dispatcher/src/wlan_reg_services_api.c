@@ -701,6 +701,19 @@ void wlan_reg_unregister_chan_change_callback(struct wlan_objmgr_psoc *psoc,
 					    (reg_chan_change_callback)cbk);
 }
 
+void wlan_reg_register_ctry_change_callback(struct wlan_objmgr_psoc *psoc,
+					    void *cbk)
+{
+	reg_register_ctry_change_callback(psoc, (reg_ctry_change_callback)cbk);
+}
+
+void wlan_reg_unregister_ctry_change_callback(struct wlan_objmgr_psoc *psoc,
+					      void *cbk)
+{
+	reg_unregister_ctry_change_callback(psoc,
+					    (reg_ctry_change_callback)cbk);
+}
+
 bool wlan_reg_is_11d_offloaded(struct wlan_objmgr_psoc *psoc)
 {
 	return reg_is_11d_offloaded(psoc);
@@ -1090,10 +1103,13 @@ bool wlan_reg_is_dfs_for_freq(struct wlan_objmgr_pdev *pdev, qdf_freq_t freq)
 	return reg_is_dfs_for_freq(pdev, freq);
 }
 
-bool wlan_reg_is_passive_or_disable_for_freq(struct wlan_objmgr_pdev *pdev,
-					     qdf_freq_t freq)
+bool wlan_reg_is_passive_or_disable_for_pwrmode(
+				struct wlan_objmgr_pdev *pdev,
+				qdf_freq_t freq,
+				enum supported_6g_pwr_types in_6g_pwr_mode)
 {
-	return reg_is_passive_or_disable_for_freq(pdev, freq);
+	return reg_is_passive_or_disable_for_pwrmode(pdev, freq,
+						     in_6g_pwr_mode);
 }
 
 #ifdef CONFIG_REG_6G_PWRMODE
@@ -1631,6 +1647,13 @@ enum reg_phymode wlan_reg_get_max_phymode(struct wlan_objmgr_pdev *pdev,
 enum band_info wlan_reg_band_bitmap_to_band_info(uint32_t band_bitmap)
 {
 	return reg_band_bitmap_to_band_info(band_bitmap);
+}
+
+QDF_STATUS
+wlan_reg_update_tx_power_on_ctry_change(struct wlan_objmgr_pdev *pdev,
+					uint8_t vdev_id)
+{
+	return reg_update_tx_power_on_ctry_change(pdev, vdev_id);
 }
 #endif
 

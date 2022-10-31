@@ -2548,7 +2548,8 @@ static QDF_STATUS reg_get_max_psd(qdf_freq_t freq,
 				  enum reg_6g_client_type reg_client,
 				  uint8_t *tx_power)
 {
-	if (reg_ap == REG_INDOOR_AP) {
+	if (reg_ap == REG_INDOOR_AP ||
+	    reg_ap == REG_VERY_LOW_POWER_AP) {
 		switch (reg_client) {
 		case REG_DEFAULT_CLIENT:
 			*tx_power = REG_PSD_MAX_TXPOWER_FOR_DEFAULT_CLIENT;
@@ -2584,7 +2585,8 @@ static QDF_STATUS reg_get_max_eirp(struct wlan_objmgr_pdev *pdev,
 				   enum reg_6g_client_type reg_client,
 				   uint8_t *tx_power)
 {
-	if (reg_ap == REG_INDOOR_AP) {
+	if (reg_ap == REG_INDOOR_AP ||
+	    reg_ap == REG_VERY_LOW_POWER_AP) {
 		switch (reg_client) {
 		case REG_DEFAULT_CLIENT:
 			*tx_power = reg_get_channel_reg_power_for_freq(pdev,
@@ -3936,27 +3938,6 @@ wlan_reg_get_usable_channel(struct wlan_objmgr_pdev *pdev,
 }
 #endif
 
-enum channel_state reg_get_channel_state_for_freq(struct wlan_objmgr_pdev *pdev,
-						  qdf_freq_t freq)
-{
-	enum channel_enum ch_idx;
-	struct wlan_regulatory_pdev_priv_obj *pdev_priv_obj;
-
-	ch_idx = reg_get_chan_enum_for_freq(freq);
-
-	if (reg_is_chan_enum_invalid(ch_idx))
-		return CHANNEL_STATE_INVALID;
-
-	pdev_priv_obj = reg_get_pdev_obj(pdev);
-
-	if (!IS_VALID_PDEV_REG_OBJ(pdev_priv_obj)) {
-		reg_err("pdev reg obj is NULL");
-		return CHANNEL_STATE_INVALID;
-	}
-
-	return pdev_priv_obj->cur_chan_list[ch_idx].state;
-}
-
 /**
  * reg_get_nol_channel_state () - Get channel state from regulatory
  * and treat NOL channels as enabled channels
@@ -4238,8 +4219,9 @@ reg_get_5g_bonded_chan_array_for_freq(struct wlan_objmgr_pdev *pdev,
 
 	chan_cfreq =  bonded_chan_ptr->start_freq;
 	while (chan_cfreq <= bonded_chan_ptr->end_freq) {
-		temp_chan_state = reg_get_channel_state_for_freq(pdev,
-								 chan_cfreq);
+		temp_chan_state = reg_get_channel_state_for_pwrmode(
+						pdev, chan_cfreq,
+						REG_CURRENT_PWR_MODE);
 		if (temp_chan_state < chan_state)
 			chan_state = temp_chan_state;
 		chan_cfreq = chan_cfreq + 20;
@@ -4461,9 +4443,10 @@ static void reg_update_5g_bonded_channel_state_punc_for_freq(
 
 	chan_cfreq =  bonded_chan_ptr->start_freq;
 	while (chan_cfreq <= bonded_chan_ptr->end_freq) {
-		temp_chan_state =
-				reg_get_channel_state_for_freq(pdev,
-							       chan_cfreq);
+		temp_chan_state = reg_get_channel_state_for_pwrmode(
+							pdev,
+							chan_cfreq,
+							REG_CURRENT_PWR_MODE);
 		if (!reg_is_state_allowed(temp_chan_state))
 			puncture_bitmap |= BIT(i);
 		/* Remember of any of the sub20 channel is a DFS channel */
@@ -5456,7 +5439,8 @@ reg_get_5g_bonded_channel_for_freq(struct wlan_objmgr_pdev *pdev,
 				   **bonded_chan_ptr_ptr)
 {
 	if (ch_width == CH_WIDTH_20MHZ)
-		return reg_get_channel_state_for_freq(pdev, freq);
+		return reg_get_channel_state_for_pwrmode(pdev, freq,
+							 REG_CURRENT_PWR_MODE);
 
 	if (reg_is_ch_width_320(ch_width)) {
 		return reg_get_chan_state_for_320(pdev, freq, 0,
@@ -6562,6 +6546,31 @@ enum band_info reg_band_bitmap_to_band_info(uint32_t band_bitmap)
 	else
 		return BAND_UNKNOWN;
 }
+
+QDF_STATUS
+reg_update_tx_power_on_ctry_change(struct wlan_objmgr_pdev *pdev,
+				   uint8_t vdev_id)
+{
+	struct wlan_objmgr_psoc *psoc;
+	struct wlan_regulatory_psoc_priv_obj *psoc_priv_obj;
+	reg_ctry_change_callback callback = NULL;
+
+	psoc = wlan_pdev_get_psoc(pdev);
+	psoc_priv_obj = reg_get_psoc_obj(psoc);
+	if (!psoc_priv_obj) {
+		reg_err("reg psoc private obj is NULL");
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	qdf_spin_lock_bh(&psoc_priv_obj->cbk_list_lock);
+	if (psoc_priv_obj->cc_cbk.cbk)
+		callback = psoc_priv_obj->cc_cbk.cbk;
+	qdf_spin_unlock_bh(&psoc_priv_obj->cbk_list_lock);
+	if (callback)
+		callback(vdev_id);
+
+	return QDF_STATUS_SUCCESS;
+}
 #endif
 
 #if defined(CONFIG_BAND_6GHZ)
@@ -7591,6 +7600,44 @@ reg_get_afc_soc_dev_type(struct wlan_objmgr_psoc *psoc,
 
 	return QDF_STATUS_SUCCESS;
 }
+
+QDF_STATUS
+reg_set_eirp_preferred_support(struct wlan_objmgr_psoc *psoc,
+			       bool reg_is_eirp_support_preferred)
+{
+	struct wlan_regulatory_psoc_priv_obj *psoc_priv_obj;
+
+	psoc_priv_obj = reg_get_psoc_obj(psoc);
+
+	if (!IS_VALID_PSOC_REG_OBJ(psoc_priv_obj)) {
+		reg_err("psoc reg component is NULL");
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	psoc_priv_obj->reg_is_eirp_support_preferred =
+					reg_is_eirp_support_preferred;
+
+	return QDF_STATUS_SUCCESS;
+}
+
+QDF_STATUS
+reg_get_eirp_preferred_support(struct wlan_objmgr_psoc *psoc,
+			       bool *reg_is_eirp_support_preferred)
+{
+	struct wlan_regulatory_psoc_priv_obj *psoc_priv_obj;
+
+	psoc_priv_obj = reg_get_psoc_obj(psoc);
+	if (!IS_VALID_PSOC_REG_OBJ(psoc_priv_obj)) {
+		reg_err("psoc reg component is NULL");
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	*reg_is_eirp_support_preferred =
+			psoc_priv_obj->reg_is_eirp_support_preferred;
+
+	return QDF_STATUS_SUCCESS;
+}
+
 #endif /* CONFIG_AFC_SUPPORT */
 
 QDF_STATUS

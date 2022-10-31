@@ -3471,6 +3471,11 @@ static void dp_process_ppdu_stats_user_cmpltn_common_tlv(
 		HTT_PPDU_STATS_USER_CMPLTN_COMMON_TLV_RTS_SUCCESS_GET(*tag_buf);
 	ppdu_desc->rts_failure =
 		HTT_PPDU_STATS_USER_CMPLTN_COMMON_TLV_RTS_FAILURE_GET(*tag_buf);
+
+	ppdu_user_desc->mprot_type = ppdu_desc->mprot_type;
+	ppdu_user_desc->rts_success = ppdu_desc->rts_success;
+	ppdu_user_desc->rts_failure = ppdu_desc->rts_failure;
+
 	ppdu_user_desc->pream_punct =
 		HTT_PPDU_STATS_USER_CMPLTN_COMMON_TLV_PREAM_PUNC_TX_GET(*tag_buf);
 
@@ -4112,6 +4117,7 @@ void dp_ppdu_desc_user_airtime_consumption_update(
 			struct cdp_tx_completion_ppdu_user *user)
 { }
 #endif
+
 #if defined(WLAN_ATF_ENABLE) || defined(WLAN_TELEMETRY_STATS_SUPPORT)
 static void
 dp_ppdu_desc_user_phy_tx_time_update(struct dp_pdev *pdev,
@@ -4163,6 +4169,46 @@ dp_ppdu_desc_user_phy_tx_time_update(struct dp_pdev *pdev,
 {
 }
 #endif
+
+#ifdef WLAN_SUPPORT_CTRL_FRAME_STATS
+static void
+dp_tx_ctrl_stats_update(struct dp_pdev *pdev, struct dp_peer *peer,
+			struct cdp_tx_completion_ppdu_user *user)
+{
+	struct dp_mon_peer *mon_peer = NULL;
+	uint16_t fc = 0;
+
+	if (!pdev || !peer || !user)
+		return;
+
+	mon_peer = peer->monitor_peer;
+	if (qdf_unlikely(!mon_peer))
+		return;
+
+	if (user->mprot_type) {
+		DP_STATS_INCC(mon_peer,
+			      tx.rts_success, 1, user->rts_success);
+		DP_STATS_INCC(mon_peer,
+			      tx.rts_failure, 1, user->rts_failure);
+	}
+	fc = user->frame_ctrl;
+	if ((qdf_cpu_to_le16(fc) & QDF_IEEE80211_FC0_TYPE_MASK) ==
+	    QDF_IEEE80211_FC0_TYPE_CTL) {
+		if ((qdf_cpu_to_le16(fc) & QDF_IEEE80211_FC0_SUBTYPE_MASK) ==
+		    QDF_IEEE80211_FC0_SUBTYPE_VHT_NDP_AN)
+			DP_STATS_INC(mon_peer, tx.ndpa_cnt, 1);
+		if ((qdf_cpu_to_le16(fc) & QDF_IEEE80211_FC0_SUBTYPE_MASK) ==
+		    QDF_IEEE80211_FC0_SUBTYPE_BAR)
+			DP_STATS_INC(mon_peer, tx.bar_cnt, 1);
+	}
+}
+#else
+static void
+dp_tx_ctrl_stats_update(struct dp_pdev *pdev, struct dp_peer *peer,
+			struct cdp_tx_completion_ppdu_user *user)
+{
+}
+#endif /* WLAN_SUPPORT_CTRL_FRAME_STATS */
 
 /**
  * dp_ppdu_desc_user_stats_update(): Function to update TX user stats
@@ -4226,6 +4272,9 @@ dp_ppdu_desc_user_stats_update(struct dp_pdev *pdev,
 
 		dp_ppdu_desc_user_phy_tx_time_update(pdev, peer, ppdu_desc,
 						     &ppdu_desc->user[i]);
+
+		dp_tx_ctrl_stats_update(pdev, peer, &ppdu_desc->user[i]);
+
 		/*
 		 * different frame like DATA, BAR or CTRL has different
 		 * tlv bitmap expected. Apart from ACK_BA_STATUS TLV, we
@@ -4960,6 +5009,7 @@ QDF_STATUS dp_mon_soc_cfg_init(struct dp_soc *soc)
 		break;
 	case TARGET_TYPE_QCA5018:
 	case TARGET_TYPE_QCN6122:
+	case TARGET_TYPE_QCN9160:
 		wlan_cfg_set_mon_delayed_replenish_entries(soc->wlan_cfg_ctx,
 							   MON_BUF_MIN_ENTRIES);
 		mon_soc->hw_nac_monitor_support = 1;
@@ -5078,7 +5128,7 @@ fail2:
 		mon_ops->mon_pdev_free(pdev);
 fail1:
 	pdev->monitor_pdev = NULL;
-	qdf_mem_free(mon_pdev);
+	dp_context_free_mem(soc, DP_MON_PDEV_TYPE, mon_pdev);
 fail0:
 	return QDF_STATUS_E_NOMEM;
 }
@@ -5114,7 +5164,7 @@ QDF_STATUS dp_mon_pdev_detach(struct dp_pdev *pdev)
 	if (mon_ops->mon_pdev_free)
 		mon_ops->mon_pdev_free(pdev);
 
-	qdf_mem_free(mon_pdev);
+	dp_context_free_mem(pdev->soc, DP_MON_PDEV_TYPE, mon_pdev);
 	pdev->monitor_pdev = NULL;
 	return QDF_STATUS_SUCCESS;
 }
@@ -5633,6 +5683,7 @@ void dp_mon_ops_register(struct dp_soc *soc)
 	case TARGET_TYPE_QCA8074V2:
 	case TARGET_TYPE_QCA6018:
 	case TARGET_TYPE_QCA9574:
+	case TARGET_TYPE_QCN9160:
 	case TARGET_TYPE_QCN9000:
 	case TARGET_TYPE_QCA5018:
 	case TARGET_TYPE_QCN6122:
@@ -5693,6 +5744,7 @@ void dp_mon_cdp_ops_register(struct dp_soc *soc)
 	case TARGET_TYPE_QCA8074V2:
 	case TARGET_TYPE_QCA6018:
 	case TARGET_TYPE_QCA9574:
+	case TARGET_TYPE_QCN9160:
 	case TARGET_TYPE_QCN9000:
 	case TARGET_TYPE_QCA5018:
 	case TARGET_TYPE_QCN6122:
@@ -5936,11 +5988,13 @@ dp_mon_pdev_params_rssi_dbm_conv(struct cdp_soc_t *cdp_soc,
 	}
 
 	mon_pdev = pdev->monitor_pdev;
+	mon_pdev->rssi_dbm_conv_support =
+				soc->features.rssi_dbm_conv_support;
 
 	if (dp_rssi_params->rssi_temp_off_present) {
 		temp_off_param = dp_rssi_params->temp_off_param;
-		mon_pdev->ppdu_info.rx_status.rssi_temp_offset =
-					temp_off_param.rssi_temp_offset;
+		mon_pdev->rssi_offsets.rssi_temp_offset =
+				temp_off_param.rssi_temp_offset;
 	}
 	if (dp_rssi_params->rssi_dbm_info_present) {
 		conv_params = dp_rssi_params->rssi_dbm_param;
@@ -5953,16 +6007,15 @@ dp_mon_pdev_params_rssi_dbm_conv(struct cdp_soc_t *cdp_soc,
 				continue;
 			}
 		}
-		mon_pdev->ppdu_info.rx_status.xlna_bypass_offset =
+		mon_pdev->rssi_offsets.xlna_bypass_offset =
 					conv_params.xlna_bypass_offset;
-		mon_pdev->ppdu_info.rx_status.xlna_bypass_threshold =
+		mon_pdev->rssi_offsets.xlna_bypass_threshold =
 					conv_params.xlna_bypass_threshold;
-		mon_pdev->ppdu_info.rx_status.xbar_config =
-					conv_params.xbar_config;
-
-		mon_pdev->ppdu_info.rx_status.min_nf_dbm = min_nf;
-		mon_pdev->ppdu_info.rx_status.rssi_dbm_conv_support =
-					soc->features.rssi_dbm_conv_support;
+		mon_pdev->rssi_offsets.xbar_config = conv_params.xbar_config;
+		mon_pdev->rssi_offsets.min_nf_dbm = min_nf;
+		mon_pdev->rssi_offsets.rssi_offset =
+					mon_pdev->rssi_offsets.min_nf_dbm +
+				     mon_pdev->rssi_offsets.rssi_temp_offset;
 	}
 	return QDF_STATUS_SUCCESS;
 }

@@ -901,20 +901,9 @@ reg_get_channel_list_with_power_for_freq(struct wlan_objmgr_pdev *pdev,
 					 struct channel_power *ch_list,
 					 uint8_t *num_chan);
 
-/**
- * reg_get_channel_state_for_freq() - Get channel state from regulatory
- * @pdev: Pointer to pdev
- * @freq: channel center frequency.
- *
- * Return: channel state
- */
-enum channel_state
-reg_get_channel_state_for_freq(struct wlan_objmgr_pdev *pdev,
-			       qdf_freq_t freq);
-
 #ifdef CONFIG_REG_6G_PWRMODE
 /**
- * reg_get_channel_state_for_freq() - Get channel state from regulatory
+ * reg_get_channel_state_for_pwrmode() - Get channel state from regulatory
  * @pdev: Pointer to pdev
  * @freq: channel center frequency.
  * @in_6g_pwr_type: 6g power type which decides 6G channel list lookup.
@@ -1537,6 +1526,10 @@ reg_get_max_phymode(struct wlan_objmgr_pdev *pdev,
  *	BAND_5G if 5G is enabled but 2G isn't
  */
 enum band_info reg_band_bitmap_to_band_info(uint32_t band_bitmap);
+
+QDF_STATUS
+reg_update_tx_power_on_ctry_change(struct wlan_objmgr_pdev *pdev,
+				   uint8_t vdev_id);
 #endif
 
 #if defined(CONFIG_BAND_6GHZ)
@@ -1699,6 +1692,31 @@ reg_is_sta_connect_allowed(struct wlan_objmgr_pdev *pdev,
 QDF_STATUS
 reg_get_afc_soc_dev_type(struct wlan_objmgr_psoc *psoc,
 			 enum reg_afc_dev_deploy_type *reg_afc_dev_type);
+
+/**
+ * reg_set_eirp_preferred_support() - Set EIRP as the preferred
+ * support for TPC power command
+ * @psoc: psoc pointer
+ * @reg_is_eirp_support_preferred: Boolean to indicate if target prefers EIRP
+ * support for TPC power command
+ *
+ * Return: Success or Failure
+ */
+QDF_STATUS
+reg_set_eirp_preferred_support(struct wlan_objmgr_psoc *psoc,
+			       bool reg_is_eirp_support_preferred);
+
+/**
+ * reg_get_eirp_preferred_support() - Check if is EIRP support is
+ * preferred by the target for TPC power command
+ * @psoc: psoc pointer
+ * @reg_is_eirp_support_preferred: Pointer to reg_is_eirp_support_preferred
+ *
+ * Return: Success or Failure
+ */
+QDF_STATUS
+reg_get_eirp_preferred_support(struct wlan_objmgr_psoc *psoc,
+			       bool *reg_is_eirp_support_preferred);
 #endif /* CONFIG_AFC_SUPPORT */
 
 /**
