@@ -1564,7 +1564,18 @@ void reg_save_reg_rules_to_pdev(
 {
 	uint32_t reg_rule_len;
 	struct reg_rule_info *pdev_reg_rules;
+	int i;
 
+	qdf_debug("Regulatory Domain %.2s number of rules = %d",
+		  psoc_reg_rules->alpha2, psoc_reg_rules->num_of_reg_rules);
+	for (i = 0; i < psoc_reg_rules->num_of_reg_rules; i++)
+		qdf_debug("%d KHz\t%d KHz\t@ %d KHz\t%d\t\t%d\t%d",
+			  psoc_reg_rules->reg_rules[i].start_freq * 1000,
+			  psoc_reg_rules->reg_rules[i].end_freq * 1000,
+			  psoc_reg_rules->reg_rules[i].max_bw * 1000,
+			  psoc_reg_rules->reg_rules[i].ant_gain * 100,
+			  psoc_reg_rules->reg_rules[i].reg_power * 100,
+			  psoc_reg_rules->reg_rules[i].flags);
 	qdf_spin_lock_bh(&pdev_priv_obj->reg_rules_lock);
 
 	pdev_reg_rules = &pdev_priv_obj->reg_rules;
@@ -1905,6 +1916,10 @@ static void reg_store_regulatory_ext_info_to_socpriv(
 				uint8_t phy_id)
 {
 	uint32_t i;
+	struct reg_rule_info *reg_rules;
+	uint32_t num_2g_reg_rules, num_5g_reg_rules;
+	struct cur_reg_rule *reg_rule_2g, *reg_rule_5g;
+	uint16_t min_bw_2g, max_bw_2g, min_bw_5g, max_bw_5g;
 
 	soc_reg->num_phy = regulat_info->num_phy;
 	soc_reg->mas_chan_params[phy_id].phybitmap = regulat_info->phybitmap;
@@ -1920,7 +1935,8 @@ static void reg_store_regulatory_ext_info_to_socpriv(
 	qdf_mem_copy(soc_reg->cur_country,
 		     regulat_info->alpha2,
 		     REG_ALPHA2_LEN + 1);
-	reg_debug("set cur_country %.2s", soc_reg->cur_country);
+	reg_debug("set cur_country %.2s to phy%d",
+		  soc_reg->cur_country, phy_id);
 
 	soc_reg->mas_chan_params[phy_id].ap_pwr_type = REG_INDOOR_AP;
 	soc_reg->mas_chan_params[phy_id].client_type =
@@ -1941,6 +1957,44 @@ static void reg_store_regulatory_ext_info_to_socpriv(
 		qdf_mem_copy(soc_reg->domain_code_6g_client[i],
 			     regulat_info->domain_code_6g_client[i],
 			     REG_MAX_CLIENT_TYPE * sizeof(uint8_t));
+	}
+
+	min_bw_2g = regulat_info->min_bw_2g;
+	max_bw_2g = regulat_info->max_bw_2g;
+	reg_rule_2g = regulat_info->reg_rules_2g_ptr;
+	num_2g_reg_rules = regulat_info->num_2g_reg_rules;
+	reg_update_max_bw_per_rule(num_2g_reg_rules,
+				   reg_rule_2g, max_bw_2g);
+
+	min_bw_5g = regulat_info->min_bw_5g;
+	max_bw_5g = regulat_info->max_bw_5g;
+	reg_rule_5g = regulat_info->reg_rules_5g_ptr;
+	num_5g_reg_rules = regulat_info->num_5g_reg_rules;
+	reg_update_max_bw_per_rule(num_5g_reg_rules,
+				   reg_rule_5g, max_bw_5g);
+
+	reg_rules = &soc_reg->mas_chan_params[phy_id].reg_rules;
+	reg_reset_reg_rules(reg_rules);
+	reg_rules->num_of_reg_rules = num_5g_reg_rules + num_2g_reg_rules;
+	if (reg_rules->num_of_reg_rules > MAX_REG_RULES) {
+		reg_rules->num_of_reg_rules = 0;
+		reg_err("number of reg rules exceeds limit");
+		return;
+	}
+	reg_rules->alpha2[0] = soc_reg->cur_country[0];
+	reg_rules->alpha2[1] = soc_reg->cur_country[1];
+	reg_debug("Regulatory domain is %.2s", reg_rules->alpha2);
+	reg_debug("Number of reg rules is %d", reg_rules->num_of_reg_rules);
+	if (reg_rules->num_of_reg_rules) {
+		if (num_2g_reg_rules)
+			qdf_mem_copy(reg_rules->reg_rules,
+				     reg_rule_2g, num_2g_reg_rules *
+				     sizeof(struct cur_reg_rule));
+		if (num_5g_reg_rules)
+			qdf_mem_copy(reg_rules->reg_rules +
+				     num_2g_reg_rules, reg_rule_5g,
+				     num_5g_reg_rules *
+				     sizeof(struct cur_reg_rule));
 	}
 }
 
@@ -2294,6 +2348,7 @@ QDF_STATUS reg_process_master_chan_list_ext(
 	if (!QDF_IS_STATUS_SUCCESS(status))
 		return status;
 
+	soc_reg->chan_list_recvd[phy_id] = true;
 	status = reg_send_ctl_info(soc_reg, regulat_info, tx_ops);
 	if (!QDF_IS_STATUS_SUCCESS(status))
 		return status;
