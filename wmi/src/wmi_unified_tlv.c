@@ -18177,7 +18177,7 @@ static QDF_STATUS extract_green_ap_ll_ps_param_tlv(
 		((uint64_t)ll_ps_event->next_tsf_high32 << 32) |
 		ll_ps_event->next_tsf_low32;
 
-	wmi_debug("cookie : %llu next_tsf %llu", ll_ps_params->dialog_token,
+	wmi_debug("cookie : %u next_tsf %llu", ll_ps_params->dialog_token,
 		  ll_ps_params->next_tsf);
 
 	return QDF_STATUS_SUCCESS;
