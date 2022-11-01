@@ -547,6 +547,12 @@ bool reg_is_etsi13_regdmn(struct wlan_objmgr_pdev *pdev);
  * Return: true or false
  */
 bool reg_is_etsi13_srd_chan(struct wlan_objmgr_pdev *pdev, uint8_t chan);
+#else
+static inline bool reg_is_etsi13_srd_chan(struct wlan_objmgr_pdev *pdev,
+					  uint8_t chan)
+{
+	return false;
+}
 #endif /* CONFIG_CHAN_NUM_API */
 
 /**
