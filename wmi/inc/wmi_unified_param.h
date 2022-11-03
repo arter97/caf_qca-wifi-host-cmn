@@ -1285,15 +1285,19 @@ struct seg_hdr_info {
  */
 struct tx_send_params {
 	uint32_t pwr:8,
-		 mcs_mask:12,
+		 bw_mask:7,
+		 preamble_type:5,
 		 nss_mask:8,
 		 retry_limit:4;
 	uint32_t chain_mask:8,
-		 bw_mask:7,
-		 preamble_type:5,
+		 mcs_mask:14,
 		 frame_type:1,
 		 cfr_enable:1,
-		 reserved:10;
+		 stbc_mask:1,
+		 ldpc_mask:1,
+		 gi_mask:1,
+		 gi_value:2,
+		 reserved:3;
 };
 
 /**
@@ -5030,6 +5034,7 @@ typedef enum {
 	wmi_pdev_param_stats_observe_period,
 	wmi_pdev_param_max,
 	wmi_pdev_param_ul_ofdma_rtd,
+	wmi_pdev_param_preamble_power_removal,
 } wmi_conv_pdev_params_id;
 
 

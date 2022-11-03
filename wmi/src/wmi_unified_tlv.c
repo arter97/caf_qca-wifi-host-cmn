@@ -362,6 +362,7 @@ static const uint32_t pdev_param_tlv[] = {
 			WMI_PDEV_PARAM_EN_RU_106_TONE_ER_SU_DCM,
 	[wmi_pdev_param_stats_observe_period] = WMI_PDEV_PARAM_STATS_OBSERVATION_PERIOD,
 	[wmi_pdev_param_ul_ofdma_rtd] = WMI_PDEV_PARAM_UL_OFDMA_RTD,
+	[wmi_pdev_param_preamble_power_removal] = WMI_PDEV_PARAM_PREAMBLE_POWER_REMOVAL,
 };
 
 /**
@@ -3414,22 +3415,30 @@ static inline QDF_STATUS populate_tx_send_params(uint8_t *bufp,
 		       WMITLV_TAG_STRUC_wmi_tx_send_params,
 		       WMITLV_GET_STRUCT_TLVLEN(wmi_tx_send_params));
 	WMI_TX_SEND_PARAM_PWR_SET(tx_param->tx_param_dword0, param.pwr);
-	WMI_TX_SEND_PARAM_MCS_MASK_SET(tx_param->tx_param_dword0,
-				       param.mcs_mask);
+	WMI_TX_SEND_PARAM_BW_MASK_SET(tx_param->tx_param_dword0,
+				      param.bw_mask);
+	WMI_TX_SEND_PARAM_PREAMBLE_SET(tx_param->tx_param_dword0,
+				       param.preamble_type);
 	WMI_TX_SEND_PARAM_NSS_MASK_SET(tx_param->tx_param_dword0,
 				       param.nss_mask);
 	WMI_TX_SEND_PARAM_RETRY_LIMIT_SET(tx_param->tx_param_dword0,
 					  param.retry_limit);
 	WMI_TX_SEND_PARAM_CHAIN_MASK_SET(tx_param->tx_param_dword1,
 					 param.chain_mask);
-	WMI_TX_SEND_PARAM_BW_MASK_SET(tx_param->tx_param_dword1,
-				      param.bw_mask);
-	WMI_TX_SEND_PARAM_PREAMBLE_SET(tx_param->tx_param_dword1,
-				       param.preamble_type);
+	WMI_TX_SEND_PARAM_MCS_MASK_SET(tx_param->tx_param_dword1,
+				       param.mcs_mask);
 	WMI_TX_SEND_PARAM_FRAME_TYPE_SET(tx_param->tx_param_dword1,
 					 param.frame_type);
 	WMI_TX_SEND_PARAM_CFR_CAPTURE_SET(tx_param->tx_param_dword1,
 					  param.cfr_enable);
+	WMI_TX_SEND_PARAM_STBC_SET(tx_param->tx_param_dword1,
+				   param.stbc_mask);
+	WMI_TX_SEND_PARAM_LDPC_SET(tx_param->tx_param_dword1,
+				   param.ldpc_mask);
+	WMI_TX_SEND_PARAM_GI_MASK_SET(tx_param->tx_param_dword1,
+				      param.gi_mask);
+	WMI_TX_SEND_PARAM_GI_VALUE_SET(tx_param->tx_param_dword1,
+				       param.gi_value);
 
 	return status;
 }

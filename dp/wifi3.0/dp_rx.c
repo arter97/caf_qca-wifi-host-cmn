@@ -3488,7 +3488,7 @@ dp_rx_pdev_buffers_alloc(struct dp_pdev *pdev)
 
 	rx_desc_pool = &soc->rx_desc_buf[mac_for_pdev];
 
-	if (atomic_fetch_inc(&rx_desc_pool->refcnt) == 0)
+	if (qdf_atomic_inc_return(&rx_desc_pool->refcnt) == 1)
 		qdf_spinlock_create(&rx_desc_pool->lock);
 
 	/* Initialize RX buffer pool which will be
@@ -3519,7 +3519,7 @@ dp_rx_pdev_buffers_free(struct dp_pdev *pdev)
 
 	qdf_assert(atomic_read(&rx_desc_pool->refcnt));
 
-	if (atomic_fetch_dec(&rx_desc_pool->refcnt) == 1)
+	if (qdf_atomic_dec_return(&rx_desc_pool->refcnt) == 0)
 		qdf_spinlock_destroy(&rx_desc_pool->lock);
 }
 
