@@ -15143,6 +15143,8 @@ struct wmi_ops tlv_ops =  {
 	.convert_target_pdev_id_to_host =
 		convert_target_pdev_id_to_host_pdev_id,
 
+	.convert_host_vdev_param_tlv = convert_host_vdev_param_tlv,
+
 	.convert_phy_id_host_to_target =
 		convert_host_phy_id_to_target_phy_id_legacy,
 	.convert_phy_id_target_to_host =
@@ -16046,6 +16048,10 @@ static void populate_tlv_service(uint32_t *wmi_service)
 			 WMI_SERVICE_HALPHY_ANI_ERROR_SUPPORT;
 	wmi_service[wmi_service_pdev_rate_config_support] =
 			WMI_SERVICE_PDEV_RATE_CONFIG_SUPPORT;
+	wmi_service[wmi_service_rtt_ap_initiator_staggered_mode_supported] =
+			WMI_SERVICE_RTT_AP_INITIATOR_STAGGERED_MODE_SUPPORTED;
+	wmi_service[wmi_service_rtt_ap_initiator_bursted_mode_supported] =
+			WMI_SERVICE_RTT_AP_INITIATOR_BURSTED_MODE_SUPPORTED;
 }
 
 /**

@@ -1895,6 +1895,8 @@ QDF_STATUS (*send_power_dbg_cmd)(wmi_unified_t wmi_handle,
 
 QDF_STATUS (*send_multiple_vdev_restart_req_cmd)(wmi_unified_t wmi_handle,
 				struct multiple_vdev_restart_params *param);
+QDF_STATUS (*send_multiple_vdev_set_param_cmd)(wmi_unified_t wmi_handle,
+				struct multiple_vdev_set_param *param);
 #ifdef QCA_SUPPORT_AGILE_DFS
 QDF_STATUS
 (*send_adfs_ocac_abort_cmd)(wmi_unified_t wmi_handle,
@@ -2102,6 +2104,7 @@ uint32_t (*convert_phy_id_host_to_target)(wmi_unified_t wmi_handle,
 					  uint32_t phy_id);
 uint32_t (*convert_phy_id_target_to_host)(wmi_unified_t wmi_handle,
 					  uint32_t phy_id);
+uint32_t (*convert_host_vdev_param_tlv)(uint32_t param_id);
 
 /*
  * For MCL, convert_pdev_id_host_to_target returns legacy pdev id value.

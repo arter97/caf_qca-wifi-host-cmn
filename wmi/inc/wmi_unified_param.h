@@ -5432,6 +5432,8 @@ typedef enum {
 	wmi_service_halphy_cal_enable_disable_support,
 	wmi_service_halphy_get_ani_err_support,
 	wmi_service_pdev_rate_config_support,
+	wmi_service_rtt_ap_initiator_staggered_mode_supported,
+	wmi_service_rtt_ap_initiator_bursted_mode_supported,
 	wmi_services_max,
 } wmi_conv_service_ids;
 #define WMI_SERVICE_UNAVAILABLE 0xFFFF

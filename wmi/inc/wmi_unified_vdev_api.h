@@ -64,6 +64,20 @@ QDF_STATUS wmi_unified_send_multiple_vdev_restart_req_cmd(
 				struct multiple_vdev_restart_params *param);
 
 /**
+ * wmi_unified_send_multiple_vdev_set_param_cmd() - Send multiple vdev set param
+ *                                                  command
+ * @wmi_handle: wmi handle
+ * @param: multiple vdev restart parameter
+ *
+ * Send WMI_PDEV_MULTIPLE_VDEV_SET_PARAM_CMDID parameters to fw.
+ *
+ * Return: QDF_STATUS_SUCCESS on success, QDF_STATUS_E_** on error
+ */
+QDF_STATUS wmi_unified_send_multiple_vdev_set_param_cmd(
+				struct wmi_unified *wmi_handle,
+				struct multiple_vdev_set_param *param);
+
+/**
  *  wmi_unified_beacon_send_cmd() - WMI beacon send function
  *  @param wmi_handle: handle to WMI.
  *  @param macaddr: MAC address
