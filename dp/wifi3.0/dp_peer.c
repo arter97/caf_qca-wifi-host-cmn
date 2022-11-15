@@ -372,7 +372,7 @@ dp_peer_find_hash_index(struct dp_soc *soc,
  *			      peer_hash_table matching vdev_id and mac_address
  * @soc: soc handle
  * @peer_mac_addr: peer mac address
- * @mac_addr_is_aligned: is mac addr alligned
+ * @mac_addr_is_aligned: is mac addr aligned
  * @vdev_id: vdev_id
  * @mod_id: id of module requesting reference
  *
@@ -1799,7 +1799,7 @@ QDF_STATUS dp_peer_add_ast(struct dp_soc *soc,
 			 *
 			 * if ast entry exists with the requested mac address
 			 * send a delete command and register callback which
-			 * can take care of adding HMWDS ast enty on delete
+			 * can take care of adding HMWDS ast entry on delete
 			 * confirmation from target
 			 */
 			if (type == CDP_TXRX_AST_TYPE_WDS_HM) {
@@ -2084,7 +2084,7 @@ void dp_peer_del_ast(struct dp_soc *soc, struct dp_ast_entry *ast_entry)
 	/* for WDS secondary entry ast_entry->next_hop would be set so
 	 * unlinking has to be done explicitly here.
 	 * As this entry is not a mapped entry unmap notification from
-	 * FW wil not come. Hence unlinkling is done right here.
+	 * FW will not come. Hence unlinkling is done right here.
 	 */
 
 	if (ast_entry->type == CDP_TXRX_AST_TYPE_WDS_HM_SEC)
@@ -3027,7 +3027,7 @@ void dp_rx_reset_roaming_peer(struct dp_soc *soc, uint8_t vdev_id,
 
 /**
  * dp_rx_peer_map_handler() - handle peer map event from firmware
- * @soc_handle - genereic soc handle
+ * @soc_handle - generic soc handle
  * @peeri_id - peer_id from firmware
  * @hw_peer_id - ast index for this peer
  * @vdev_id - vdev ID
@@ -3074,7 +3074,7 @@ dp_rx_peer_map_handler(struct dp_soc *soc, uint16_t peer_id,
 		/*
 		 * It's the responsibility of the CP and FW to ensure
 		 * that peer is created successfully. Ideally DP should
-		 * not hit the below condition for directly assocaited
+		 * not hit the below condition for directly associated
 		 * peers.
 		 */
 		if ((!soc->ast_offload_support) && ((hw_peer_id < 0) ||
@@ -3167,7 +3167,7 @@ dp_rx_peer_map_handler(struct dp_soc *soc, uint16_t peer_id,
 
 /**
  * dp_rx_peer_unmap_handler() - handle peer unmap event from firmware
- * @soc_handle - genereic soc handle
+ * @soc_handle - generic soc handle
  * @peeri_id - peer_id from firmware
  * @vdev_id - vdev ID
  * @mac_addr - mac address of the peer or wds entry
@@ -3669,7 +3669,7 @@ try_desc_alloc:
 
 	if ((unsigned long)(rx_tid->hw_qdesc_vaddr_unaligned) %
 		hw_qdesc_align) {
-		/* Address allocated above is not alinged. Allocate extra
+		/* Address allocated above is not aligned. Allocate extra
 		 * memory for alignment
 		 */
 		qdf_mem_free(rx_tid->hw_qdesc_vaddr_unaligned);
@@ -3812,7 +3812,7 @@ static void dp_reo_desc_clean_up(struct dp_soc *soc,
 
 /*
  * dp_reo_limit_clean_batch_sz() - Limit number REO CMD queued to cmd
- * ring in aviod of REO hang
+ * ring in avoid of REO hang
  *
  * @list_size: REO desc list size to be cleaned
  */
@@ -3849,7 +3849,7 @@ static void dp_reo_desc_clean_up(struct dp_soc *soc,
 
 /*
  * dp_reo_limit_clean_batch_sz() - Limit number REO CMD queued to cmd
- * ring in aviod of REO hang
+ * ring in avoid of REO hang
  *
  * @list_size: REO desc list size to be cleaned
  */
@@ -4074,6 +4074,7 @@ static int dp_rx_tid_delete_wifi3(struct dp_peer *peer, int tid)
 	if (!freedesc) {
 		dp_peer_err("%pK: malloc failed for freedesc: tid %d",
 			    soc, tid);
+		qdf_assert(0);
 		return -ENOMEM;
 	}
 
@@ -4786,7 +4787,7 @@ int dp_delba_process_wifi3(struct cdp_soc_t *cdp_soc, uint8_t *peer_mac,
 		goto fail;
 	}
 	/* TODO: See if we can delete the existing REO queue descriptor and
-	 * replace with a new one without queue extenstion descript to save
+	 * replace with a new one without queue extension descript to save
 	 * memory
 	 */
 	rx_tid->delba_rcode = reasoncode;
@@ -5223,15 +5224,25 @@ QDF_STATUS dp_peer_jitter_stats_ctx_alloc(struct dp_pdev *pdev,
 		return QDF_STATUS_E_INVAL;
 	}
 
-	/*
-	 * Allocate memory for jitter stats only when
-	 * operating in offload enabled mode.
-	 */
-	if (!wlan_cfg_get_dp_pdev_nss_enabled(pdev->wlan_cfg_ctx))
+	if (!wlan_cfg_is_peer_jitter_stats_enabled(pdev->soc->wlan_cfg_ctx))
 		return QDF_STATUS_SUCCESS;
 
-	txrx_peer->jitter_stats =
-		qdf_mem_malloc(sizeof(struct cdp_peer_tid_stats) * DP_MAX_TIDS);
+	if (wlan_cfg_get_dp_pdev_nss_enabled(pdev->wlan_cfg_ctx)) {
+		/*
+		 * Allocate memory on per tid basis when nss is enabled
+		 */
+		txrx_peer->jitter_stats =
+			qdf_mem_malloc(sizeof(struct cdp_peer_tid_stats)
+					* DP_MAX_TIDS);
+	} else {
+		/*
+		 * Allocate memory on per tid per ring basis
+		 */
+		txrx_peer->jitter_stats =
+			qdf_mem_malloc(sizeof(struct cdp_peer_tid_stats)
+					* DP_MAX_TIDS * CDP_MAX_TXRX_CTX);
+	}
+
 	if (!txrx_peer->jitter_stats) {
 		dp_warn("Jitter stats obj alloc failed!!");
 		return QDF_STATUS_E_NOMEM;
@@ -5256,8 +5267,7 @@ void dp_peer_jitter_stats_ctx_dealloc(struct dp_pdev *pdev,
 		return;
 	}
 
-	/* Check for offload mode */
-	if (!wlan_cfg_get_dp_pdev_nss_enabled(pdev->wlan_cfg_ctx))
+	if (!wlan_cfg_is_peer_jitter_stats_enabled(pdev->soc->wlan_cfg_ctx))
 		return;
 
 	if (txrx_peer->jitter_stats) {
@@ -5275,9 +5285,33 @@ void dp_peer_jitter_stats_ctx_dealloc(struct dp_pdev *pdev,
  */
 void dp_peer_jitter_stats_ctx_clr(struct dp_txrx_peer *txrx_peer)
 {
-	if (txrx_peer->jitter_stats)
-		qdf_mem_zero(txrx_peer->jitter_stats,
-			     sizeof(struct cdp_peer_tid_stats) * DP_MAX_TIDS);
+	struct cdp_peer_tid_stats *jitter_stats = NULL;
+
+	if (!txrx_peer) {
+		dp_warn("Null peer");
+		return;
+	}
+
+	if (!wlan_cfg_is_peer_jitter_stats_enabled(txrx_peer->
+						   vdev->
+						   pdev->soc->wlan_cfg_ctx))
+		return;
+
+	jitter_stats = txrx_peer->jitter_stats;
+	if (!jitter_stats)
+		return;
+
+	if (wlan_cfg_get_dp_pdev_nss_enabled(txrx_peer->
+					     vdev->pdev->wlan_cfg_ctx))
+		qdf_mem_zero(jitter_stats,
+			     sizeof(struct cdp_peer_tid_stats) *
+			     DP_MAX_TIDS);
+
+	else
+		qdf_mem_zero(jitter_stats,
+			     sizeof(struct cdp_peer_tid_stats) *
+			     DP_MAX_TIDS * CDP_MAX_TXRX_CTX);
+
 }
 #endif
 

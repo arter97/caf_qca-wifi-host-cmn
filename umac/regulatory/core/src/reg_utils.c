@@ -490,12 +490,15 @@ void reg_get_coex_unsafe_chan_reg_disable(
 #endif
 
 #ifdef CONFIG_CHAN_FREQ_API
-bool reg_is_passive_or_disable_for_freq(struct wlan_objmgr_pdev *pdev,
-					qdf_freq_t freq)
+bool reg_is_passive_or_disable_for_pwrmode(
+				struct wlan_objmgr_pdev *pdev,
+				qdf_freq_t freq,
+				enum supported_6g_pwr_types in_6g_pwr_mode)
 {
 	enum channel_state chan_state;
 
-	chan_state = reg_get_channel_state_for_freq(pdev, freq);
+	chan_state = reg_get_channel_state_for_pwrmode(pdev, freq,
+						       in_6g_pwr_mode);
 
 	return (chan_state == CHANNEL_STATE_DFS) ||
 		(chan_state == CHANNEL_STATE_DISABLE);
@@ -750,12 +753,11 @@ QDF_STATUS reg_set_fcc_constraint(struct wlan_objmgr_pdev *pdev,
 	}
 
 	if (pdev_priv_obj->set_fcc_channel == fcc_constraint) {
-		reg_info("same fcc_constraint %d", fcc_constraint);
+		reg_debug("same fcc_constraint %d", fcc_constraint);
 		return QDF_STATUS_SUCCESS;
 	}
 
-	reg_info("set fcc_constraint: %d", fcc_constraint);
-	pdev_priv_obj->set_fcc_channel = fcc_constraint;
+	reg_debug("set fcc_constraint: %d", fcc_constraint);
 
 	psoc = wlan_pdev_get_psoc(pdev);
 	if (!psoc) {
@@ -768,6 +770,9 @@ QDF_STATUS reg_set_fcc_constraint(struct wlan_objmgr_pdev *pdev,
 		reg_err("psoc reg component is NULL");
 		return QDF_STATUS_E_INVAL;
 	}
+
+	psoc_priv_obj->set_fcc_channel = fcc_constraint;
+	pdev_priv_obj->set_fcc_channel = fcc_constraint;
 
 	reg_compute_pdev_current_chan_list(pdev_priv_obj);
 

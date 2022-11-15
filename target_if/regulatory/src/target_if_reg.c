@@ -911,6 +911,7 @@ static void
 tgt_if_register_afc_callback(struct wlan_lmac_if_reg_tx_ops *reg_ops)
 {
 	reg_ops->send_afc_ind = tgt_if_regulatory_send_afc_cmd;
+	reg_ops->reg_get_min_psd = NULL;
 }
 #else
 static void
@@ -1092,6 +1093,45 @@ target_if_reg_get_afc_dev_type(struct wlan_objmgr_psoc *psoc,
 		reg_rx_ops->reg_get_afc_dev_type(
 			psoc,
 			reg_afc_dev_type);
+
+	return QDF_STATUS_SUCCESS;
+}
+
+/**
+ * tgt_if_regulatory_is_eirp_preferred_support() - Check if FW prefers EIRP
+ * support for TPC power command.
+ *
+ * @psoc: Pointer to psoc
+ *
+ * Return: true if FW prefers EIRP format for TPC, else false
+ */
+static bool
+target_if_regulatory_is_eirp_preferred_support(struct wlan_objmgr_psoc *psoc)
+{
+	wmi_unified_t wmi_handle = get_wmi_unified_hdl_from_psoc(psoc);
+
+	if (!wmi_handle)
+		return false;
+
+	return wmi_service_enabled(wmi_handle,
+				   wmi_service_eirp_preferred_support);
+}
+
+QDF_STATUS
+target_if_set_regulatory_eirp_preferred_support(struct wlan_objmgr_psoc *psoc)
+{
+	struct wlan_lmac_if_reg_rx_ops *reg_rx_ops;
+
+	reg_rx_ops = target_if_regulatory_get_rx_ops(psoc);
+	if (!reg_rx_ops) {
+		target_if_err("reg_rx_ops is NULL");
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	if (reg_rx_ops->reg_set_eirp_preferred_support)
+		reg_rx_ops->reg_set_eirp_preferred_support(
+			psoc,
+			target_if_regulatory_is_eirp_preferred_support(psoc));
 
 	return QDF_STATUS_SUCCESS;
 }

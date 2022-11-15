@@ -339,13 +339,6 @@ wlan_mlo_peer_deauth_init(struct wlan_mlo_peer_context *ml_peer)
 			continue;
 
 		link_peer = peer_entry->link_peer;
-		/* Skip Deauth if PMF is enabled for the station */
-		if ((i == 0) &&
-		    (wlan_crypto_is_pmf_enabled(wlan_peer_get_vdev(link_peer),
-					       link_peer))) {
-			mlo_peer_lock_release(ml_peer);
-			return;
-		}
 
 		if (wlan_objmgr_peer_try_get_ref(link_peer, WLAN_MLO_MGR_ID) !=
 						QDF_STATUS_SUCCESS)
@@ -511,6 +504,8 @@ static void mlo_peer_free(struct wlan_mlo_peer_context *ml_peer)
 		return;
 	}
 
+	mlo_debug("ML Peer " QDF_MAC_ADDR_FMT " is freed",
+		  QDF_MAC_ADDR_REF(ml_peer->peer_mld_addr.bytes));
 	mlo_peer_lock_destroy(ml_peer);
 	mlo_ap_ml_peerid_free(ml_peer->mlo_peer_id);
 	mlo_peer_free_aid(ml_dev, ml_peer);
@@ -631,6 +626,9 @@ qdf_nbuf_t mlo_peer_get_link_peer_assoc_resp_buf(
 			continue;
 
 		if (peer_entry->link_ix == link_ix) {
+			if (!peer_entry->assoc_rsp_buf)
+				break;
+
 			frm_buf = qdf_nbuf_clone(peer_entry->assoc_rsp_buf);
 			break;
 		}
@@ -851,12 +849,26 @@ QDF_STATUS wlan_mlo_peer_create(struct wlan_objmgr_vdev *vdev,
 			}
 		}
 	}
-
+	/* When roam to MLO AP, partner link vdev1 is updated first,
+	 * ml peer need be created and attached for partner link peer.
+	 *
+	 * When roam target AP and current AP have same MLD address, don't
+	 * delete old ML peer and re-create new one, just update different
+	 * info.
+	 */
 	if (wlan_vdev_mlme_get_opmode(vdev) == QDF_STA_MODE) {
 		ml_peer = wlan_mlo_get_mlpeer(ml_dev,
 				 (struct qdf_mac_addr *)&link_peer->mldaddr[0]);
-		if (ml_peer)
+		if (ml_peer) {
+			mlo_debug("ML Peer " QDF_MAC_ADDR_FMT
+				" existed, state %d",
+				QDF_MAC_ADDR_REF(ml_peer->peer_mld_addr.bytes),
+				ml_peer->mlpeer_state);
+			ml_peer->mlpeer_state = ML_PEER_CREATED;
+			ml_peer->max_links = ml_info->num_partner_links;
+			wlan_mlo_peer_set_t2lm_enable_val(ml_peer, ml_info);
 			is_ml_peer_attached = true;
+		}
 	}
 	if (!ml_peer) {
 		/* Allocate MLO peer */
@@ -919,6 +931,13 @@ QDF_STATUS wlan_mlo_peer_create(struct wlan_objmgr_vdev *vdev,
 			ml_dev->mld_id,
 			QDF_MAC_ADDR_REF
 			(ml_peer->peer_mld_addr.bytes));
+		/* If there is another link peer attached for this ML peer,
+		 * ml peer can't be detached and freed.
+		 */
+		if (is_ml_peer_attached && ml_peer->link_peer_cnt)
+			return status;
+		if (is_ml_peer_attached)
+			mlo_dev_mlpeer_detach(ml_dev, ml_peer);
 		mlo_peer_free(ml_peer);
 		mlo_dev_release_link_vdevs(link_vdevs);
 		return status;

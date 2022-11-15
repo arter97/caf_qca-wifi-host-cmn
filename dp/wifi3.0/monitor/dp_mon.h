@@ -547,7 +547,7 @@ void dp_ppdu_desc_deliver(struct dp_pdev *pdev, struct ppdu_info *ppdu_info);
 
 #ifdef QCA_RSSI_DB2DBM
 /*
- * dp_mon_pdev_params_rssi_dbm_conv() --> to set rssi in dbm converstion
+ * dp_mon_pdev_params_rssi_dbm_conv() --> to set rssi in dbm conversion
  *						params into monitor pdev.
  *@cdp_soc: dp soc handle.
  *@params: cdp_rssi_db2dbm_param_dp structure value.
@@ -738,6 +738,8 @@ struct dp_mon_ops {
 	void (*mon_filter_setup_smart_monitor)(struct dp_pdev *pdev);
 	void (*mon_filter_reset_smart_monitor)(struct dp_pdev *pdev);
 #endif
+	void (*mon_filter_set_reset_mon_mac_filter)(struct dp_pdev *pdev,
+						    bool val);
 #ifdef WLAN_RX_PKT_CAPTURE_ENH
 	void (*mon_filter_setup_rx_enh_capture)(struct dp_pdev *pdev);
 	void (*mon_filter_reset_rx_enh_capture)(struct dp_pdev *pdev);
@@ -931,6 +933,21 @@ struct dp_mon_peer {
 	struct cdp_peer_rate_stats_ctx *peerstats_ctx;
 };
 
+struct dp_rx_mon_rssi_offset {
+	/* Temperature based rssi offset */
+	int32_t rssi_temp_offset;
+	/* Low noise amplifier bypass offset */
+	int32_t xlna_bypass_offset;
+	/* Low noise amplifier bypass threshold */
+	int32_t xlna_bypass_threshold;
+	/* 3 Bytes of xbar_config are used for RF to BB mapping */
+	uint32_t xbar_config;
+	/* min noise floor in active chains per channel */
+	int8_t min_nf_dbm;
+	/* this value is sum of temp_oofset + min_nf*/
+	int32_t rssi_offset;
+};
+
 struct  dp_mon_pdev {
 	/* monitor */
 	bool monitor_configured;
@@ -1119,6 +1136,9 @@ struct  dp_mon_pdev {
 
 	/* Invalid monitor peer to account for stats in mcopy mode */
 	struct dp_mon_peer *invalid_mon_peer;
+
+	bool rssi_dbm_conv_support;
+	struct dp_rx_mon_rssi_offset rssi_offsets;
 };
 
 struct  dp_mon_vdev {
@@ -2133,7 +2153,7 @@ static inline void dp_monitor_flush_rings(struct dp_soc *soc)
 
 /*
  * dp_monitor_config_undecoded_metadata_capture() - Monitor config
- * undecoded metatdata capture
+ * undecoded metadata capture
  * @pdev: point to pdev
  * @val: val
  *
@@ -2669,7 +2689,7 @@ static inline void dp_monitor_peer_tx_capture_filter_check(struct dp_pdev *pdev,
  * dp_monitor_tx_add_to_comp_queue() - add completion msdu to queue
  *
  * This API returns QDF_STATUS_SUCCESS in case where buffer is added
- * to txmonitor queue successfuly caller will not free the buffer in
+ * to txmonitor queue successfully caller will not free the buffer in
  * this case. In other cases this API return QDF_STATUS_E_FAILURE and
  * caller frees the buffer
  *

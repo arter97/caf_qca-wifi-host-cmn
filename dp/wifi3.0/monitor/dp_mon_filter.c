@@ -137,7 +137,7 @@ dp_mon_set_fp_phy_err_filter(struct htt_rx_ring_tlv_filter *tlv_filter,
  * dp_mon_filter_h2t_setup() - Setup the filter for the Target setup
  * @soc: DP soc handle
  * @pdev: DP pdev handle
- * @srng_type: The srng type for which filter wll be set
+ * @srng_type: The srng type for which filter will be set
  * @tlv_filter: tlv filter
  */
 void dp_mon_filter_h2t_setup(struct dp_soc *soc, struct dp_pdev *pdev,
@@ -434,6 +434,15 @@ void dp_mon_filter_reset_smart_monitor(struct dp_pdev *pdev)
 }
 #endif /* ATH_SUPPORT_NAC_RSSI || ATH_SUPPORT_NAC */
 
+void dp_mon_filter_set_reset_mon_mac_filter(struct dp_pdev *pdev, bool val)
+{
+	struct dp_mon_ops *mon_ops = NULL;
+
+	mon_ops = dp_mon_ops_get(pdev->soc);
+	if (mon_ops && mon_ops->mon_filter_set_reset_mon_mac_filter)
+		mon_ops->mon_filter_set_reset_mon_mac_filter(pdev, val);
+}
+
 #ifdef WLAN_RX_PKT_CAPTURE_ENH
 void dp_mon_filter_setup_rx_enh_capture(struct dp_pdev *pdev)
 {
@@ -610,7 +619,7 @@ dp_mon_filter_reset_mon_srng(struct dp_soc *soc, struct dp_pdev *pdev,
 
 	if (dp_mon_ht2_rx_ring_cfg(soc, pdev, mon_srng_type,
 				   &tlv_filter) != QDF_STATUS_SUCCESS) {
-		dp_mon_filter_err("%pK: Monitor destinatin ring filter setting failed",
+		dp_mon_filter_err("%pK: Monitor destination ring filter setting failed",
 				  soc);
 	}
 }
@@ -741,7 +750,7 @@ void dp_mon_filter_dealloc(struct dp_mon_pdev *mon_pdev)
 	 * Check if the monitor filters are already allocated to the mon_pdev.
 	 */
 	if (!mon_filter) {
-		dp_mon_filter_err("Found NULL memmory for the Monitor filter");
+		dp_mon_filter_err("Found NULL memory for the Monitor filter");
 		return;
 	}
 

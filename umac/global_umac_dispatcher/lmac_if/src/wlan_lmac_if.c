@@ -91,6 +91,9 @@
 #ifdef WLAN_FEATURE_DBAM_CONFIG
 #include "target_if_coex.h"
 #endif
+#if defined(WIFI_POS_CONVERGED) && defined(WLAN_FEATURE_RTT_11AZ_SUPPORT)
+#include <wifi_pos_pasn_api.h>
+#endif
 
 #include "target_if.h"
 
@@ -321,7 +324,17 @@ wlan_lmac_if_crypto_rx_ops_register(struct wlan_lmac_if_rx_ops *rx_ops)
 static void
 wlan_lmac_if_wifi_pos_rx_ops(struct wlan_lmac_if_rx_ops *rx_ops)
 {
-	target_if_wifi_pos_register_rx_ops(rx_ops);
+	struct wlan_lmac_if_wifi_pos_rx_ops *wifi_pos_rx_ops =
+		&rx_ops->wifi_pos_rx_ops;
+
+	wifi_pos_rx_ops->wifi_pos_ranging_peer_create_cb =
+			wifi_pos_handle_ranging_peer_create;
+	wifi_pos_rx_ops->wifi_pos_ranging_peer_create_rsp_cb =
+			wifi_pos_handle_ranging_peer_create_rsp;
+	wifi_pos_rx_ops->wifi_pos_ranging_peer_delete_cb =
+			wifi_pos_handle_ranging_peer_delete;
+	wifi_pos_rx_ops->wifi_pos_vdev_delete_all_ranging_peers_rsp_cb =
+			wifi_pos_vdev_delete_all_ranging_peers_rsp;
 }
 #else
 static inline void
@@ -365,6 +378,10 @@ static void wlan_lmac_if_register_afc_handlers(
 	rx_ops->reg_rx_ops.afc_event_handler = tgt_reg_process_afc_event;
 	rx_ops->reg_rx_ops.reg_set_afc_dev_type = tgt_reg_set_afc_dev_type;
 	rx_ops->reg_rx_ops.reg_get_afc_dev_type = tgt_reg_get_afc_dev_type;
+	rx_ops->reg_rx_ops.reg_set_eirp_preferred_support =
+				tgt_reg_set_eirp_preferred_support;
+	rx_ops->reg_rx_ops.reg_get_eirp_preferred_support =
+				tgt_reg_get_eirp_preferred_support;
 }
 #else
 static inline void wlan_lmac_if_register_afc_handlers(

@@ -410,6 +410,7 @@
  *                 Agile detector in true 160MHz supported devices).
  * @DETECTOR_ID_2: Detector ID 2 (Agile detector in 80p80MHZ supported devices).
  * @AGILE_DETECTOR_ID_TRUE_160MHZ:  Agile detector ID in true 160MHz devices.
+ * @AGILE_DETECTOR_11BE:  Agile detector ID in true 320 MHz devices.
  * @AGILE_DETECTOR_ID_80p80: Agile detector ID in 80p80MHz supported devices.
  * @INVALID_DETECTOR_ID: Invalid detector id.
  */
@@ -418,6 +419,7 @@ enum detector_id {
 	DETECTOR_ID_1,
 	DETECTOR_ID_2,
 	AGILE_DETECTOR_ID_TRUE_160MHZ = DETECTOR_ID_1,
+	AGILE_DETECTOR_11BE = DETECTOR_ID_1,
 	AGILE_DETECTOR_ID_80P80 = DETECTOR_ID_2,
 	INVALID_DETECTOR_ID,
 };
@@ -1125,6 +1127,7 @@ struct dfs_rcac_params {
  * @dfs_use_puncture:                User configured value for enabling or
  *                                   disabling DFS puncturing feature.
  * @dfs_agile_rcac_ucfg:             User configuration for Rolling CAC.
+ * @dfs_fw_adfs_support_320:         Target Agile DFS support for 320 BW.
  * @dfs_fw_adfs_support_non_160:     Target Agile DFS support for non-160 BWs.
  * @dfs_fw_adfs_support_160:         Target Agile DFS support for 160 BW.
  * @dfs_allow_hw_pulses:             Allow/Block HW pulses. When synthetic
@@ -1305,6 +1308,9 @@ struct wlan_dfs {
 #if defined(QCA_SUPPORT_ADFS_RCAC)
 		       dfs_agile_rcac_ucfg:1,
 #endif
+#ifdef WLAN_FEATURE_11BE
+		       dfs_fw_adfs_support_320:1,
+#endif
 		       dfs_fw_adfs_support_non_160:1,
 		       dfs_fw_adfs_support_160:1;
 	struct dfs_mode_switch_defer_params dfs_defer_params;
@@ -1343,7 +1349,7 @@ struct wlan_dfs_priv {
  * @pdev: pointer to PDEV object information
  * @dfs_is_phyerr_filter_offload: For some chip like Rome indicates too many
  *                                phyerr packets in a short time, which causes
- *                                OS hang. If this feild is configured as true,
+ *                                OS hang. If this field is configured as true,
  *                                FW will do the pre-check, filter out some
  *                                kinds of invalid phyerrors and indicate
  *                                radar detection related information to host.
@@ -1714,7 +1720,7 @@ int dfs_bin5_addpulse(struct wlan_dfs *dfs,
  * dfs_bin5_check() - BIN5 check.
  * @dfs: Pointer to wlan_dfs structure.
  *
- * If the dfs structure is NULL (which should be illegal if everyting is working
+ * If the dfs structure is NULL (which should be illegal if everything is working
  * properly, then signify that a bin5 radar was found.
  */
 int dfs_bin5_check(struct wlan_dfs *dfs);
@@ -2959,7 +2965,7 @@ void dfs_start_mode_switch_defer_timer(struct wlan_dfs *dfs);
 
 /**
  * dfs_complete_deferred_tasks() - Process mode switch completion event and
- * handle deffered tasks.
+ * handle deferred tasks.
  * @dfs: Pointer to wlan_dfs object.
  *
  * Return: void.
