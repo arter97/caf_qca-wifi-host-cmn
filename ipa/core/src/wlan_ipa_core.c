@@ -30,10 +30,8 @@
 #include <wmi_unified_param.h>
 #include <wlan_osif_priv.h>
 #include <net/cfg80211.h>
-#ifdef QCA_LL_TX_FLOW_CONTROL_V2
 #include <cdp_txrx_flow_ctrl_v2.h>
 #include <cdp_txrx_peer_ops.h>
-#endif
 #include <qal_vbus_dev.h>
 
 #define IPA_SPS_DESC_SIZE 8
@@ -412,7 +410,7 @@ static void wlan_ipa_forward(struct wlan_ipa_priv *ipa_ctx,
  *
  */
 
-#if !defined(QCA_IPA_LL_TX_FLOW_CONTROL) && (defined(CONFIG_LITHIUM) || defined(CONFIG_BERYLLIUM))
+#ifndef QCA_IPA_LL_TX_FLOW_CONTROL
 static inline
 bool wlan_ipa_tx_desc_thresh_reached(struct cdp_soc_t *soc, uint8_t vdev_id)
 {
