@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2017-2021 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -1345,15 +1346,27 @@ wlan_cfg80211_allow_simultaneous_scan(struct wlan_objmgr_psoc *psoc)
 }
 #endif
 
+static bool
+freq_already_in_scan_start_req(uint32_t freq, struct scan_start_request *req)
+{
+	uint32_t i;
+
+	for (i = 0; i < req->scan_req.chan_list.num_chan; i++) {
+		if (freq == req->scan_req.chan_list.chan[i].freq)
+			return true;
+	}
+	return false;
+}
+
 int wlan_cfg80211_scan(struct wlan_objmgr_vdev *vdev,
 		       struct cfg80211_scan_request *request,
 		       struct scan_params *params)
 {
 	struct scan_start_request *req;
 	struct wlan_ssid *pssid;
-	uint8_t i;
+	uint32_t i;
 	int ret = 0;
-	uint8_t num_chan = 0;
+	uint8_t *scan_req_chan_cnt = NULL;
 	uint32_t c_freq;
 	struct wlan_objmgr_pdev *pdev = wlan_vdev_get_pdev(vdev);
 	wlan_scan_requester req_id;
@@ -1512,6 +1525,9 @@ int wlan_cfg80211_scan(struct wlan_objmgr_vdev *vdev,
 	if (qdf_is_macaddr_zero(&req->scan_req.bssid_list[0]))
 		qdf_set_macaddr_broadcast(&req->scan_req.bssid_list[0]);
 
+	scan_req_chan_cnt = &req->scan_req.chan_list.num_chan;
+	*scan_req_chan_cnt = 0;
+
 	if (request->n_channels) {
 #ifdef WLAN_POLICY_MGR_ENABLE
 		bool ap_or_go_present =
@@ -1522,6 +1538,9 @@ int wlan_cfg80211_scan(struct wlan_objmgr_vdev *vdev,
 #endif
 		for (i = 0; i < request->n_channels; i++) {
 			c_freq = request->channels[i]->center_freq;
+
+			if (freq_already_in_scan_start_req(c_freq, req))
+				continue;
 			if (wlan_reg_is_dsrc_freq(c_freq))
 				continue;
 #ifdef WLAN_POLICY_MGR_ENABLE
@@ -1540,25 +1559,27 @@ int wlan_cfg80211_scan(struct wlan_objmgr_vdev *vdev,
 					continue;
 			}
 #endif
-			req->scan_req.chan_list.chan[num_chan].freq = c_freq;
+			req->scan_req.chan_list.
+				chan[*scan_req_chan_cnt].freq = c_freq;
 			band = util_scan_scm_freq_to_band(c_freq);
 			if (band == WLAN_BAND_2_4_GHZ)
-				req->scan_req.chan_list.chan[num_chan].phymode =
+				req->scan_req.chan_list.
+					chan[*scan_req_chan_cnt].phymode =
 					SCAN_PHY_MODE_11G;
 			else
-				req->scan_req.chan_list.chan[num_chan].phymode =
+				req->scan_req.chan_list.
+					chan[*scan_req_chan_cnt].phymode =
 					SCAN_PHY_MODE_11A;
-			num_chan++;
-			if (num_chan >= NUM_CHANNELS)
+			(*scan_req_chan_cnt)++;
+			if (*scan_req_chan_cnt >= NUM_CHANNELS)
 				break;
 		}
 	}
-	if (!num_chan) {
+	if (*scan_req_chan_cnt == 0) {
 		osif_err("Received zero non-dsrc channels");
 		ret = -EINVAL;
 		goto err;
 	}
-	req->scan_req.chan_list.num_chan = num_chan;
 
 	/* P2P increase the scan priority */
 	if (is_p2p_scan)
