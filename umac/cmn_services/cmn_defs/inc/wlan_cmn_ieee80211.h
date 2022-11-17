@@ -1407,6 +1407,21 @@ struct htcap_ie {
 } qdf_packed;
 
 /**
+ * struct tbtt_information_header - TBTT information header
+ * @tbbt_info_fieldtype: TBTT information field type
+ * @filter_neighbor_ap: filtered neighbor ap
+ * @tbbt_info_count: TBTT information count
+ * @tbtt_info_length: TBTT information length
+ */
+struct tbtt_information_header {
+	uint16_t tbbt_info_fieldtype:2,
+		 filtered_neighbor_ap:1,
+		 reserved:1,
+		 tbtt_info_count:4,
+		 tbtt_info_length:8;
+} qdf_packed;
+
+/**
  * struct fils_indication_ie: FILS indication IE element
  * @id: id
  * @len: len
@@ -1878,6 +1893,21 @@ struct wlan_ie_ehtops {
 
 /* Size in octets of the BSS Parameters Change Count (sub)field */
 #define WLAN_ML_BSSPARAMCHNGCNT_SIZE                    1
+
+/**
+ * struct rnr_mld_info - Reduced Neighbor Report MLD information
+ * @mld_id: MLD ID
+ * @link_id: Link ID
+ * @bss_param_change_cnt: BSS parameters change count
+ * @all_updates_included: All Updates Included
+ */
+struct rnr_mld_info {
+	uint8_t mld_id;
+	uint16_t link_id: 4,
+		 bss_param_change_cnt: 8,
+		 all_updates_included: 1,
+		 reserved: 3;
+} qdf_packed;
 
 /**
  * struct wlan_ie_multilink - Fixed fields in Multi-Link IE
@@ -2570,9 +2600,20 @@ struct wlan_ie_tid_to_link_mapping {
 	uint8_t data[];
 } qdf_packed;
 
+/* Size in octets of Tid to Link mapping control */
+#define WLAN_T2LM_CTRL_SIZE                                     2
+/* Size in octets of Mapping switch time size */
+#define WLAN_T2LM_MAPPING_SWITCH_TIME_SIZE                      2
+/* Size in octets of Expected duration size */
+#define WLAN_T2LM_EXPECTED_DURATION_SIZE                        3
+/* Size in octets of Link mapping of TID 0-7 size */
+#define WLAN_T2LM_LINK_MAPPING_SIZE                             2
+
 /* The variable length data in wlan_ie_tid_to_link_mapping structure has the
  * following fields.
- * - TID-to-link mapping control ( 1 octet)
+ * - TID-to-link mapping control (2 octet)
+ * - Mapping switch time (0 or 2 octet)
+ * - Expected duration (0 or 3 octet)
  * - Link mapping presence indicator (0 or 1 octet)
  * - Link mapping of TID 0(optional) to TID 7(optional). Each field has 0 or 2
  *   octets.
@@ -2585,7 +2626,13 @@ struct wlan_ie_tid_to_link_mapping {
 /* Default link mapping */
 #define WLAN_T2LM_CONTROL_DEFAULT_LINK_MAPPING_IDX              2
 #define WLAN_T2LM_CONTROL_DEFAULT_LINK_MAPPING_BITS             1
-/* Bit3 to Bit7 are reserved*/
+/* Mapping switch time present bit */
+#define WLAN_T2LM_CONTROL_MAPPING_SWITCH_TIME_PRESENT_IDX       3
+#define WLAN_T2LM_CONTROL_MAPPING_SWITCH_TIME_PRESENT_BITS      1
+/* Expected duration present bit */
+#define WLAN_T2LM_CONTROL_EXPECTED_DURATION_PRESENT_IDX         4
+#define WLAN_T2LM_CONTROL_EXPECTED_DURATION_PRESENT_BITS        1
+/* Bits 5-7 are reserved */
 /* Link mapping presence indicator */
 #define WLAN_T2LM_CONTROL_LINK_MAPPING_PRESENCE_INDICATOR_IDX   8
 #define WLAN_T2LM_CONTROL_LINK_MAPPING_PRESENCE_INDICATOR_BITS  8

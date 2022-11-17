@@ -7862,6 +7862,8 @@ dp_print_soc_rx_stats(struct dp_soc *soc)
 
 	DP_PRINT_STATS("No of AST Entries = %d", soc->num_ast_entries);
 	DP_PRINT_STATS("SOC Rx Stats:\n");
+	DP_PRINT_STATS("Fast recycled packets: %llu",
+		       soc->stats.rx.fast_recycled);
 	DP_PRINT_STATS("Fragmented packets: %u",
 		       soc->stats.rx.rx_frags);
 	DP_PRINT_STATS("Reo reinjected packets: %u",
@@ -9168,12 +9170,12 @@ dp_get_pdev_telemetry_stats(struct cdp_soc_t *soc_hdl, uint8_t pdev_id,
 	/* consumption is in micro seconds, convert it to seconds and
 	 * then calculate %age per sec
 	 */
-	for (ac = 0; ac < WME_AC_MAX; ac++)
+	for (ac = 0; ac < WME_AC_MAX; ac++) {
 		stats->link_airtime[ac] =
 			((pdev->stats.telemetry_stats.link_airtime[ac] * 100) / 1000000);
-	stats->tx_mpdu_failed = pdev->stats.telemetry_stats.tx_mpdu_failed;
-	stats->tx_mpdu_total = pdev->stats.telemetry_stats.tx_mpdu_total;
-
+		stats->tx_mpdu_failed[ac] = pdev->stats.telemetry_stats.tx_mpdu_failed[ac];
+		stats->tx_mpdu_total[ac] = pdev->stats.telemetry_stats.tx_mpdu_total[ac];
+	}
 	return QDF_STATUS_SUCCESS;
 }
 

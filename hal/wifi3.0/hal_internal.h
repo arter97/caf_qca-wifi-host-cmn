@@ -1148,6 +1148,9 @@ struct hal_hw_txrx_ops {
 					  uint8_t *buf);
 	void (*hal_set_reo_ent_desc_reo_dest_ind)(uint8_t *desc,
 						  uint32_t dst_ind);
+	QDF_STATUS
+	(*hal_rx_reo_ent_get_src_link_id)(hal_rxdma_desc_t rx_desc,
+					  uint8_t *src_link_id);
 
 	/* REO CMD and STATUS */
 	int (*hal_reo_send_cmd)(hal_soc_handle_t hal_soc_hdl,
@@ -1205,6 +1208,10 @@ struct hal_hw_txrx_ops {
 	void (*hal_get_tsf_time)(hal_soc_handle_t hal_soc_hdl, uint32_t tsf_id,
 				 uint32_t mac_id, uint64_t *tsf,
 				 uint64_t *tsf_sync_soc_time);
+	void (*hal_get_tsf2_scratch_reg)(hal_soc_handle_t hal_soc_hdl,
+					 uint8_t mac_id, uint64_t *value);
+	void (*hal_get_tqm_scratch_reg)(hal_soc_handle_t hal_soc_hdl,
+					uint64_t *value);
 };
 
 /**

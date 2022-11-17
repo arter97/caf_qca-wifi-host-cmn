@@ -1147,6 +1147,7 @@ struct dp_soc_stats {
 		uint32_t rxdma2rel_route_drop;
 		/* Number of frames routed from reo*/
 		uint32_t reo2rel_route_drop;
+		uint64_t fast_recycled;
 
 		struct {
 			/* Invalid RBM error count */
@@ -2131,6 +2132,8 @@ struct dp_soc {
 	uint16_t rx_mon_pkt_tlv_size;
 	/* rx pkt tlv size */
 	uint16_t rx_pkt_tlv_size;
+	/* rx pkt tlv size in current operation mode */
+	uint16_t curr_rx_pkt_tlv_size;
 
 	struct dp_arch_ops arch_ops;
 
