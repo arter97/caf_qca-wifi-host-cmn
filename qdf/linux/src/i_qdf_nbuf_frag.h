@@ -135,7 +135,11 @@ QDF_STATUS __qdf_mem_map_page(qdf_device_t osdev, __qdf_frag_t buf,
 static inline void __qdf_frag_free(__qdf_frag_t vaddr)
 {
 	if (qdf_likely(vaddr)) {
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 0, 0))
 		skb_free_frag(vaddr);
+#else
+		put_page(virt_to_head_page(vaddr));
+#endif
 		__qdf_frag_count_dec(QDF_NBUF_FRAG_DEBUG_COUNT_ONE);
 	}
 }
