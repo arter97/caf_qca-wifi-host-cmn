@@ -3765,5 +3765,207 @@ QDF_STATUS dp_ipa_update_peer_rx_stats(struct cdp_soc_t *soc,
 	return QDF_STATUS_SUCCESS;
 
 }
+
+/**
+ * dp_peer_aggregate_tid_stats - aggregate rx tid stats
+ * @peer - Data Path peer
+ *
+ * Return: void
+ */
+void
+dp_peer_aggregate_tid_stats(struct dp_peer *peer)
+{
+
+	uint8_t i = 0;
+	struct dp_rx_tid *rx_tid = NULL;
+	struct cdp_pkt_info total_rx = {0};
+
+	if (!peer->rx_tid)
+		return;
+
+	for (i = 0; i < DP_MAX_TIDS; i++) {
+		rx_tid = &peer->rx_tid[i];
+		total_rx.num += rx_tid->rx_msdu_cnt.num;
+		total_rx.bytes += rx_tid->rx_msdu_cnt.bytes;
+	}
+
+	DP_STATS_UPD(peer, rx.rx_total.num, total_rx.num);
+	DP_STATS_UPD(peer, rx.rx_total.bytes, total_rx.bytes);
+}
+
+/**
+ * dp_ipa_update_vdev_stats: update vdev stats
+ * @soc: soc handle
+ * @@srcobj: DP_PEER object
+ * @arg: point to vdev stats structure
+ *
+ * Return: void
+ */
+static inline void dp_ipa_update_vdev_stats(struct dp_soc *soc,
+					    struct dp_peer *srcobj,
+					    void *arg)
+{
+	dp_peer_aggregate_tid_stats(srcobj);
+	dp_update_vdev_stats(soc, srcobj, arg);
+}
+
+/**
+ * dp_ipa_aggregate_vdev_stats - Aggregate vdev_stats
+ * @vdev: Data path vdev
+ * @vdev_stats: buffer to hold vdev stats
+ *
+ * Return: void
+ */
+static inline void dp_ipa_aggregate_vdev_stats(struct dp_vdev *vdev,
+					       struct cdp_vdev_stats *vdev_stats)
+{
+
+	if (!vdev || !vdev->pdev)
+		return;
+
+	qdf_mem_copy(vdev_stats, &vdev->stats, sizeof(vdev->stats));
+
+	dp_vdev_iterate_peer(vdev, dp_ipa_update_vdev_stats, vdev_stats,
+			     DP_MOD_ID_GENERIC_STATS);
+
+	vdev_stats->tx.ucast = vdev_stats->tx.tx_ucast_total;
+	vdev_stats->tx.tx_success = vdev_stats->tx.tx_ucast_success;
+
+	vdev_stats->rx.to_stack = vdev_stats->rx.rx_total;
+	if (vdev_stats->rx.rx_total.num >= vdev_stats->rx.multicast.num)
+		vdev_stats->rx.unicast.num = vdev_stats->rx.rx_total.num -
+						vdev_stats->rx.multicast.num;
+	if (vdev_stats->rx.rx_total.bytes >= vdev_stats->rx.multicast.bytes)
+		vdev_stats->rx.unicast.bytes = vdev_stats->rx.rx_total.bytes -
+						vdev_stats->rx.multicast.bytes;
+}
+
+/**
+ * dp_ipa_aggregate_pdev_stats - Aggregate pdev stats
+ * @pdev: Data path pdev
+ *
+ * Return: void
+ */
+static inline void dp_ipa_aggregate_pdev_stats(struct dp_pdev *pdev)
+{
+	struct dp_vdev *vdev = NULL;
+
+	struct cdp_vdev_stats *vdev_stats =
+			qdf_mem_malloc_atomic(sizeof(struct cdp_vdev_stats));
+
+	if (!vdev_stats) {
+		dp_err("%pK: DP alloc failure - unable to get alloc vdev stats",
+		       pdev->soc);
+		return;
+	}
+
+	qdf_mem_zero(&pdev->stats.tx, sizeof(pdev->stats.tx));
+	qdf_mem_zero(&pdev->stats.rx, sizeof(pdev->stats.rx));
+	qdf_mem_zero(&pdev->stats.tx_i, sizeof(pdev->stats.tx_i));
+
+	qdf_spin_lock_bh(&pdev->vdev_list_lock);
+	TAILQ_FOREACH(vdev, &pdev->vdev_list, vdev_list_elem) {
+		dp_ipa_aggregate_vdev_stats(vdev, vdev_stats);
+		dp_update_pdev_stats(pdev, vdev_stats);
+		dp_update_pdev_ingress_stats(pdev, vdev);
+	}
+	qdf_spin_unlock_bh(&pdev->vdev_list_lock);
+	qdf_mem_free(vdev_stats);
+}
+
+/**
+ * dp_ipa_txrx_get_peer_stats - fetch peer stats
+ * @soc: soc handle
+ * @vdev_id: id of vdev handle
+ * @peer_mac: peer mac address
+ * @peer_stats: buffer to hold peer stats
+ *
+ * Return : status success/failure
+ */
+QDF_STATUS dp_ipa_txrx_get_peer_stats(struct cdp_soc_t *soc, uint8_t vdev_id,
+				      uint8_t *peer_mac,
+				      struct cdp_peer_stats *peer_stats)
+{
+	struct dp_peer *peer = dp_peer_find_hash_find((struct dp_soc *)soc,
+						      peer_mac, 0, vdev_id,
+						      DP_MOD_ID_IPA);
+
+	if (!peer)
+		return QDF_STATUS_E_FAILURE;
+
+	dp_peer_aggregate_tid_stats(peer);
+
+	qdf_mem_copy(peer_stats, &peer->stats,
+		     sizeof(struct cdp_peer_stats));
+
+	peer_stats->tx.tx_success.num = peer_stats->tx.tx_ucast_success.num;
+	peer_stats->tx.tx_success.bytes = peer_stats->tx.tx_ucast_success.bytes;
+	peer_stats->tx.ucast.num = peer_stats->tx.tx_ucast_total.num;
+	peer_stats->tx.ucast.bytes =  peer_stats->tx.tx_ucast_total.bytes;
+
+	if (peer_stats->rx.rx_total.num >= peer_stats->rx.multicast.num)
+		peer_stats->rx.unicast.num = peer_stats->rx.rx_total.num -
+					peer_stats->rx.multicast.num;
+	if (peer_stats->rx.rx_total.bytes >= peer_stats->rx.multicast.bytes)
+		peer_stats->rx.unicast.bytes = peer_stats->rx.rx_total.bytes -
+					peer_stats->rx.multicast.bytes;
+
+	dp_peer_unref_delete(peer, DP_MOD_ID_IPA);
+
+	return QDF_STATUS_SUCCESS;
+}
+
+/**
+ * dp_ipa_txrx_get_vdev_stats - fetch vdev stats
+ * @soc_hdl: soc handle
+ * @vdev_id: id of vdev handle
+ * @buf: buffer to hold vdev stats
+ * @is_aggregate: for aggregation
+ *
+ * Return : int
+ */
+int dp_ipa_txrx_get_vdev_stats(struct cdp_soc_t *soc_hdl,
+			       uint8_t vdev_id,
+			       void *buf, bool is_aggregate)
+{
+	struct dp_soc *soc = cdp_soc_t_to_dp_soc(soc_hdl);
+	struct cdp_vdev_stats *vdev_stats;
+	struct dp_vdev *vdev = dp_vdev_get_ref_by_id(soc, vdev_id,
+						     DP_MOD_ID_IPA);
+
+	if (!vdev)
+		return 1;
+
+	vdev_stats = (struct cdp_vdev_stats *)buf;
+	dp_ipa_aggregate_vdev_stats(vdev, buf);
+	dp_vdev_unref_delete(soc, vdev, DP_MOD_ID_IPA);
+
+	return 0;
+}
+
+/**
+ * dp_ipa_txrx_get_pdev_stats - fetch pdev stats
+ * @soc: DP soc handle
+ * @pdev_id: id of DP pdev handle
+ * @pdev_stats: buffer to hold pdev stats
+ *
+ * Return : status success/failure
+ */
+QDF_STATUS dp_ipa_txrx_get_pdev_stats(struct cdp_soc_t *soc,
+				      uint8_t pdev_id,
+				      struct cdp_pdev_stats *pdev_stats)
+{
+	struct dp_pdev *pdev =
+		dp_get_pdev_from_soc_pdev_id_wifi3((struct dp_soc *)soc,
+						    pdev_id);
+
+	if (!pdev)
+		return QDF_STATUS_E_FAILURE;
+
+	dp_ipa_aggregate_pdev_stats(pdev);
+	qdf_mem_copy(pdev_stats, &pdev->stats, sizeof(struct cdp_pdev_stats));
+
+	return QDF_STATUS_SUCCESS;
+}
 #endif
 #endif

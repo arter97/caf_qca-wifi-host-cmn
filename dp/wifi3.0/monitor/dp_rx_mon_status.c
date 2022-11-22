@@ -624,6 +624,7 @@ static void dp_rx_stats_update(struct dp_pdev *pdev,
 	uint16_t num_msdu;
 	uint8_t pkt_bw_offset;
 	struct dp_peer *peer;
+	uint64_t byte_count;
 	struct cdp_rx_stats_ppdu_user *ppdu_user;
 	uint32_t i;
 	enum cdp_mu_packet_type mu_pkt_type;
@@ -660,6 +661,8 @@ static void dp_rx_stats_update(struct dp_pdev *pdev,
 		}
 
 		num_msdu = ppdu_user->num_msdu;
+		byte_count = ppdu_user->mpdu_ok_byte_count +
+					ppdu_user->mpdu_err_byte_count;
 		switch (ppdu->u.bw) {
 		case CMN_BW_20MHZ:
 			pkt_bw_offset = PKT_BW_GAIN_20MHZ;
@@ -797,8 +800,12 @@ static void dp_rx_stats_update(struct dp_pdev *pdev,
 		 */
 		ac = TID_TO_WME_AC(ppdu_user->tid);
 
-		if (ppdu->tid != HAL_TID_INVALID)
+		if (ppdu->tid != HAL_TID_INVALID) {
 			DP_STATS_INC(peer, rx.wme_ac_type[ac], num_msdu);
+			DP_STATS_INC(peer, rx.wme_ac_type_bytes[ac],
+				     byte_count);
+		}
+
 		dp_peer_stats_notify(pdev, peer);
 		DP_STATS_UPD(peer, rx.last_snr, ppdu->rssi);
 
