@@ -299,8 +299,10 @@ qdf_dentry_t qdf_debugfs_create_dir(const char *name, qdf_dentry_t parent)
 	dir = debugfs_create_dir(name, parent);
 
 	if (IS_ERR_OR_NULL(dir)) {
+#ifdef CONFIG_DEBUG_FS
 		QDF_TRACE(QDF_MODULE_ID_QDF, QDF_TRACE_LEVEL_ERROR,
 			  "%s creation failed", name);
+#endif
 		dir = NULL;
 	}
 
