@@ -362,8 +362,8 @@ irqreturn_t hif_pci_legacy_ce_interrupt_handler(int irq, void *arg)
 				hif_read32_mb(sc, sc->mem + 0x80018),
 				hif_read32_mb(sc, sc->mem + 0x8001c));
 			if (cbk && cbk->trigger_ssr_from_hif) {
-				HIF_ERROR("%s: assert at LIne %d, trigger ssr",
-					   __func__, __LINE__);
+				hif_err("%s: assert at LIne %d, trigger ssr",
+					__func__, __LINE__);
 				cbk->trigger_ssr_from_hif(cbk->context,
 							  QDF_DEADBEEF_ERROR,
 							  __func__,__LINE__);
