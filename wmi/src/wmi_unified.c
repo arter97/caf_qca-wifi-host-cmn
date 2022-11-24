@@ -1309,7 +1309,6 @@ static void wmi_debugfs_remove(wmi_unified_t wmi_handle)
  */
 static QDF_STATUS wmi_debugfs_init(wmi_unified_t wmi_handle, uint32_t pdev_idx)
 {
-#ifdef CONFIG_DEBUG_FS
 	char buf[32];
 
 	snprintf(buf, sizeof(buf), "WMI_SOC%u_PDEV%u",
@@ -1319,12 +1318,13 @@ static QDF_STATUS wmi_debugfs_init(wmi_unified_t wmi_handle, uint32_t pdev_idx)
 		qdf_debugfs_create_dir(buf, NULL);
 
 	if (!wmi_handle->log_info.wmi_log_debugfs_dir) {
+#ifdef CONFIG_DEBUG_FS
 		wmi_err("error while creating debugfs dir for %s", buf);
+#endif
 		return QDF_STATUS_E_FAILURE;
 	}
 	wmi_debugfs_create(wmi_handle,
 			   wmi_handle->log_info.wmi_log_debugfs_dir);
-#endif
 
 	return QDF_STATUS_SUCCESS;
 }
