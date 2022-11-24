@@ -75,6 +75,8 @@ struct dp_ipa_reo_remap_record {
 #endif
 
 #define REO_REMAP_HISTORY_SIZE 32
+#define CB_DA_IS_BCMC 1
+#define CB_DA_IS_BCMC_MASK 0x2
 
 struct dp_ipa_reo_remap_record dp_ipa_reo_remap_history[REO_REMAP_HISTORY_SIZE];
 
@@ -3720,6 +3722,48 @@ QDF_STATUS dp_ipa_ast_create(struct cdp_soc_t *soc_hdl,
 	dp_peer_unref_delete(peer, DP_MOD_ID_IPA);
 
 	return QDF_STATUS_SUCCESS;
+}
+#endif
+
+#ifdef QCA_ENHANCED_STATS_SUPPORT
+/**
+ * dp_ipa_update_peer_rx_stats - update peer rx stats
+ * @soc: soc handle
+ * @vdev_id: vdev id
+ * @peer_mac: Peer Mac Address
+ * @nbuf: data nbuf
+ *
+ * Return: status success/failure
+ */
+
+QDF_STATUS dp_ipa_update_peer_rx_stats(struct cdp_soc_t *soc,
+				       uint8_t vdev_id, uint8_t *peer_mac,
+				       qdf_nbuf_t nbuf)
+{
+	struct dp_peer *peer = dp_peer_find_hash_find((struct dp_soc *)soc,
+						      peer_mac, 0, vdev_id,
+						      DP_MOD_ID_IPA);
+	uint8_t da_is_bcmc;
+	qdf_ether_header_t *eh;
+
+	if (!peer) {
+		dp_err("Peer Not Found");
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	da_is_bcmc = ((uint8_t)nbuf->cb[CB_DA_IS_BCMC]) & CB_DA_IS_BCMC_MASK;
+	eh = (qdf_ether_header_t *)qdf_nbuf_data(nbuf);
+
+	if (da_is_bcmc) {
+		DP_STATS_INC_PKT(peer, rx.multicast, 1, qdf_nbuf_len(nbuf));
+		if (QDF_IS_ADDR_BROADCAST(eh->ether_dhost))
+			DP_STATS_INC_PKT(peer, rx.bcast, 1, qdf_nbuf_len(nbuf));
+	}
+
+	dp_peer_unref_delete(peer, DP_MOD_ID_IPA);
+
+	return QDF_STATUS_SUCCESS;
+
 }
 #endif
 #endif

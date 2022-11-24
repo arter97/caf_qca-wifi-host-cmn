@@ -436,6 +436,10 @@ dp_ipa_ast_notify_cb(qdf_ipa_wdi_conn_in_params_t *pipe_in,
 }
 #endif
 
+#ifdef QCA_ENHANCED_STATS_SUPPORT
+QDF_STATUS dp_ipa_update_peer_rx_stats(struct cdp_soc_t *soc, uint8_t pdev_id,
+				       uint8_t *peer_mac, qdf_nbuf_t nbuf);
+#endif
 #else
 static inline int dp_ipa_uc_detach(struct dp_soc *soc, struct dp_pdev *pdev)
 {
