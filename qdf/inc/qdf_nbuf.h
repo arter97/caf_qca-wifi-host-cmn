@@ -1310,6 +1310,48 @@ qdf_nbuf_unmap_nbytes_single_paddr(qdf_device_t osdev, qdf_nbuf_t buf,
 }
 #endif /* NBUF_MAP_UNMAP_DEBUG */
 
+#ifndef NBUF_SMMU_MAP_UNMAP_DEBUG
+#ifdef IPA_OFFLOAD
+
+/**
+ * qdf_nbuf_smmu_map_debug() - map smmu buffer
+ * @nbuf: network buffer
+ * @hdl: ipa handle
+ * @num_buffers: number of buffers
+ * @info: memory info
+ * @func: function name
+ * @line: line number
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS qdf_nbuf_smmu_map_debug(qdf_nbuf_t nbuf,
+				   uint8_t hdl,
+				   uint8_t num_buffers,
+				   qdf_mem_info_t *info,
+				   const char *func,
+				   uint32_t line);
+
+/**
+ * qdf_nbuf_smmu_unmap_debug() - unmap smmu buffer
+ * @nbuf: network buffer
+ * @hdl: ipa handle
+ * @num_buffers: number of buffers
+ * @info: memory info
+ * @func: function name
+ * @line: line number
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS qdf_nbuf_smmu_unmap_debug(qdf_nbuf_t nbuf,
+				     uint8_t hdl,
+				     uint8_t num_buffers,
+				     qdf_mem_info_t *info,
+				     const char *func,
+				     uint32_t line);
+
+#endif
+#endif
+
 /**
  * qdf_nbuf_queue_head_dequeue() - dequeue nbuf from the head of queue
  * @nbuf_queue_head: pointer to nbuf queue head
@@ -2012,41 +2054,6 @@ void qdf_net_buf_debug_update_map_node(qdf_nbuf_t net_buf,
 				       const char *func_name,
 				       uint32_t line_num);
 
-/**
- * qdf_nbuf_smmu_map_debug() - map smmu buffer
- * @nbuf: network buffer
- * @hdl: ipa handle
- * @num_buffers: number of buffers
- * @info: memory info
- * @func: function name
- * @line: line number
- *
- * Return: QDF_STATUS
- */
-QDF_STATUS qdf_nbuf_smmu_map_debug(qdf_nbuf_t nbuf,
-				   uint8_t hdl,
-				   uint8_t num_buffers,
-				   qdf_mem_info_t *info,
-				   const char *func,
-				   uint32_t line);
-
-/**
- * qdf_nbuf_smmu_unmap_debug() - unmap smmu buffer
- * @nbuf: network buffer
- * @hdl: ipa handle
- * @num_buffers: number of buffers
- * @info: memory info
- * @func: function name
- * @line: line number
- *
- * Return: QDF_STATUS
- */
-QDF_STATUS qdf_nbuf_smmu_unmap_debug(qdf_nbuf_t nbuf,
-				     uint8_t hdl,
-				     uint8_t num_buffers,
-				     qdf_mem_info_t *info,
-				     const char *func,
-				     uint32_t line);
 
 #ifdef NBUF_SMMU_MAP_UNMAP_DEBUG
 /**
