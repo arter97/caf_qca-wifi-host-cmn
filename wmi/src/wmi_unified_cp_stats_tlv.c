@@ -512,7 +512,7 @@ extract_all_stats_counts_tlv(wmi_unified_t wmi_handle, void *evt_buf,
 		return QDF_STATUS_E_FAULT;
 	}
 
-	for (i = 1; i <= WMI_REQUEST_VDEV_EXTD_STAT; i = i << 1) {
+	for (i = 1; i <= WMI_REQUEST_PDEV_EXTD_STAT; i = i << 1) {
 		switch (ev->stats_id & i) {
 		case WMI_REQUEST_PEER_STAT:
 			stats_param->stats_id |= WMI_HOST_REQUEST_PEER_STAT;
@@ -560,6 +560,11 @@ extract_all_stats_counts_tlv(wmi_unified_t wmi_handle, void *evt_buf,
 			stats_param->stats_id |=
 				WMI_HOST_REQUEST_VDEV_PRB_FILS_STAT;
 			break;
+
+		case WMI_REQUEST_PDEV_EXTD_STAT:
+			stats_param->stats_id |=
+				WMI_HOST_REQUEST_PDEV_EXTD_STAT;
+			break;
 		}
 	}
 
@@ -587,7 +592,7 @@ extract_all_stats_counts_tlv(wmi_unified_t wmi_handle, void *evt_buf,
 
 	stats_param->last_event = ev->last_event;
 	stats_param->num_pdev_stats = ev->num_pdev_stats;
-	stats_param->num_pdev_ext_stats = 0;
+	stats_param->num_pdev_ext_stats = param_buf->num_pdev_extd_stats;
 	stats_param->num_vdev_stats = ev->num_vdev_stats;
 	stats_param->num_peer_stats = ev->num_peer_stats;
 	stats_param->num_peer_extd_stats = ev->num_peer_extd_stats;
@@ -712,7 +717,7 @@ extract_pdev_stats_tlv(wmi_unified_t wmi_handle, void *evt_buf, uint32_t index,
 	param_buf = (WMI_UPDATE_STATS_EVENTID_param_tlvs *) evt_buf;
 	ev_param = (wmi_stats_event_fixed_param *) param_buf->fixed_param;
 	pdev_stats->pdev_id =
-	     wmi_handle->ops->convert_pdev_id_target_to_host(wmi_handle,
+	     wmi_handle->ops->convert_target_pdev_id_to_host(wmi_handle,
 							     ev_param->pdev_id);
 
 	data = param_buf->data;
