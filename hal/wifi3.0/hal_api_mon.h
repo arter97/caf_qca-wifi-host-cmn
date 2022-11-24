@@ -342,6 +342,26 @@ enum {
 	DP_PPDU_STATUS_DONE,
 };
 
+static inline QDF_STATUS
+hal_rx_reo_ent_get_src_link_id(hal_soc_handle_t hal_soc_hdl,
+			       hal_rxdma_desc_t rx_desc,
+			       uint8_t *src_link_id)
+{
+	struct hal_soc *hal_soc = (struct hal_soc *)hal_soc_hdl;
+
+	if (!hal_soc || !hal_soc->ops) {
+		hal_err("hal handle is NULL");
+		QDF_BUG(0);
+		return QDF_STATUS_E_INVAL;
+	}
+
+	if (hal_soc->ops->hal_rx_reo_ent_get_src_link_id)
+		return hal_soc->ops->hal_rx_reo_ent_get_src_link_id(rx_desc,
+								    src_link_id);
+
+	return QDF_STATUS_E_INVAL;
+}
+
 /**
  * hal_rx_reo_ent_buf_paddr_get: Gets the physical address and
  *			cookie from the REO entrance ring element
@@ -583,6 +603,11 @@ enum {
 	HAL_RX_TYPE_MU_OFDMA_MIMO,
 };
 
+enum {
+	HAL_RX_TYPE_DL,
+	HAL_RX_TYPE_UL,
+};
+
 /*
  * enum
  * @HAL_RECEPTION_TYPE_SU: Basic SU reception
@@ -776,7 +801,7 @@ struct hal_rx_ppdu_cfr_user_info {
  *    6: 18 Mbps
  *    7: 9 Mbps
  *
- * @gi_type: Indicates the gaurd interval.
+ * @gi_type: Indicates the guard interval.
  *    0: 0.8 us
  *    1: 0.4 us
  *    2: 1.6 us
@@ -1199,6 +1224,15 @@ struct hal_rx_u_sig_info {
 		 num_eht_sig_sym : 5;
 };
 
+#ifdef WLAN_SUPPORT_CTRL_FRAME_STATS
+struct hal_rx_user_ctrl_frm_info {
+	uint8_t bar : 1,
+		ndpa : 1;
+};
+#else
+struct hal_rx_user_ctrl_frm_info {};
+#endif /* WLAN_SUPPORT_CTRL_FRAME_STATS */
+
 struct hal_rx_ppdu_info {
 	struct hal_rx_ppdu_common_info com_info;
 	struct hal_rx_u_sig_info u_sig_info;
@@ -1263,6 +1297,12 @@ struct hal_rx_ppdu_info {
 	TAILQ_ENTRY(hal_rx_ppdu_info) ppdu_free_list_elem;
 	/* placeholder to track if RX_HDR is received */
 	uint8_t rx_hdr_rcvd[HAL_MAX_UL_MU_USERS];
+	/* Per user BAR and NDPA bit flag */
+	struct hal_rx_user_ctrl_frm_info ctrl_frm_info[HAL_MAX_UL_MU_USERS];
+	/* PPDU end user stats count */
+	uint8_t end_user_stats_cnt;
+	/* PPDU start user info count */
+	uint8_t start_user_info_cnt;
 };
 
 static inline uint32_t
@@ -1323,7 +1363,7 @@ static inline void hal_rx_proc_phyrx_other_receive_info_tlv(struct hal_soc *hal_
  * @rx_tlv_hdr: pointer to TLV header
  * @ppdu_info: pointer to ppdu_info
  * @hal_soc: HAL soc handle
- * @nbuf: PPDU status netowrk buffer
+ * @nbuf: PPDU status network buffer
  *
  * Return: HAL_TLV_STATUS_PPDU_NOT_DONE or HAL_TLV_STATUS_PPDU_DONE from tlv
  */

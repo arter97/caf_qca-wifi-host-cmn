@@ -1167,7 +1167,7 @@ hal_rx_tlv_populate_mpdu_desc_info_kiwi(uint8_t *buf,
 
 /**
  * hal_reo_status_get_header_kiwi - Process reo desc info
- * @d - Pointer to reo descriptior
+ * @d - Pointer to reo descriptor
  * @b - tlv type info
  * @h1 - Pointer to hal_reo_status_header where info to be stored
  *
@@ -1693,10 +1693,10 @@ static uint32_t hal_rx_flow_get_cmem_fse_ts_kiwi(struct hal_soc *hal_soc,
  * hal_rx_flow_get_cmem_fse_kiwi() - Get FSE from CMEM
  * @hal_soc: hal_soc reference
  * @fse_offset: CMEM FSE offset
- * @fse: referece where FSE will be copied
+ * @fse: reference where FSE will be copied
  * @len: length of FSE
  *
- * Return: If read is succesfull or not
+ * Return: If read is successful or not
  */
 static void
 hal_rx_flow_get_cmem_fse_kiwi(struct hal_soc *hal_soc, uint32_t fse_offset,
@@ -1986,7 +1986,7 @@ uint64_t hal_fw_qtime_to_usecs(uint64_t time)
 }
 
 /**
- * hal_get_tsf_time_kiwi() - Get tsf time from scatch register
+ * hal_get_tsf_time_kiwi() - Get tsf time from scratch register
  * @hal_soc_hdl: HAL soc handle
  * @mac_id: mac_id
  * @tsf: pointer to update tsf value
@@ -2038,6 +2038,17 @@ hal_get_tsf_time_kiwi(hal_soc_handle_t hal_soc_hdl, uint32_t tsf_id,
 {
 }
 #endif
+
+static QDF_STATUS hal_rx_reo_ent_get_src_link_id_kiwi(hal_rxdma_desc_t rx_desc,
+						      uint8_t *src_link_id)
+{
+	struct reo_entrance_ring *reo_ent_desc =
+					(struct reo_entrance_ring *)rx_desc;
+
+	*src_link_id = reo_ent_desc->src_link_id;
+
+	return QDF_STATUS_SUCCESS;
+}
 
 static void hal_hw_txrx_ops_attach_kiwi(struct hal_soc *hal_soc)
 {
@@ -2290,6 +2301,11 @@ static void hal_hw_txrx_ops_attach_kiwi(struct hal_soc *hal_soc)
 	hal_soc->ops->hal_tx_vdev_mcast_ctrl_set =
 		hal_tx_vdev_mcast_ctrl_set_be;
 	hal_soc->ops->hal_get_tsf_time = hal_get_tsf_time_kiwi;
+	hal_soc->ops->hal_rx_reo_ent_get_src_link_id =
+					hal_rx_reo_ent_get_src_link_id_kiwi;
+#ifdef FEATURE_DIRECT_LINK
+	hal_soc->ops->hal_srng_set_msi_config = hal_srng_set_msi_config;
+#endif
 };
 
 struct hal_hw_srng_config hw_srng_table_kiwi[] = {
@@ -2593,7 +2609,9 @@ struct hal_hw_srng_config hw_srng_table_kiwi[] = {
 	},
 	{ /* RXDMA_BUF */
 		.start_ring_id = HAL_SRNG_WMAC1_SW2RXDMA0_BUF0,
-#ifdef IPA_OFFLOAD
+#if defined(IPA_OFFLOAD) && defined(FEATURE_DIRECT_LINK)
+		.max_rings = 4,
+#elif defined(IPA_OFFLOAD) || defined(FEATURE_DIRECT_LINK)
 		.max_rings = 3,
 #else
 		.max_rings = 2,

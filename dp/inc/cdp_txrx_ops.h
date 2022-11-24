@@ -154,7 +154,8 @@ struct cdp_mlo_ops {
 	void (*mlo_soc_setup)(struct cdp_soc_t *cdp_soc,
 			      struct cdp_mlo_ctxt *mlo_ctxt);
 	void (*mlo_soc_teardown)(struct cdp_soc_t *cdp_soc,
-				 struct cdp_mlo_ctxt *mlo_ctxt);
+				 struct cdp_mlo_ctxt *mlo_ctxt,
+				 bool is_force_down);
 	QDF_STATUS (*update_mlo_ptnr_list)(struct cdp_soc_t *soc_hdl,
 					   int8_t *vdev_ids, uint8_t num_vdevs,
 					   uint8_t vdev_id);
@@ -689,6 +690,9 @@ struct cdp_cmn_ops {
 				  uint32_t mac_id, uint64_t *tsf,
 				  uint64_t *tsf_sync_soc_time);
 
+	void (*txrx_get_tsf2_offset)(struct cdp_soc_t *soc_hdl, uint8_t mac_id,
+				     uint64_t *value);
+	void (*txrx_get_tqm_offset)(struct cdp_soc_t *soc_hdl, uint64_t *value);
 };
 
 struct cdp_ctrl_ops {
@@ -932,6 +936,9 @@ struct cdp_ctrl_ops {
 						     uint32_t *mask,
 						     uint32_t *mask_cont);
 #endif
+	QDF_STATUS (*txrx_update_mon_mac_filter)(struct cdp_soc_t *soc,
+						 uint8_t vdev_id,
+						 uint32_t cmd);
 };
 
 struct cdp_me_ops {
@@ -1019,7 +1026,7 @@ struct cdp_mon_ops {
 				    uint8_t pdev_id,
 				    uint8_t direction);
 #endif
-	/*To set RSSI dbm converstion params in monitor pdev */
+	/*To set RSSI dbm conversion params in monitor pdev */
 	QDF_STATUS (*txrx_set_mon_pdev_params_rssi_dbm_conv)
 		(struct cdp_soc_t *soc,
 		 struct cdp_rssi_db2dbm_param_dp *params);
@@ -1213,6 +1220,12 @@ struct cdp_host_stats_ops {
 	QDF_STATUS
 		(*txrx_get_peer_extd_rate_link_stats)
 				(struct cdp_soc_t *soc, uint8_t *mac_addr);
+	QDF_STATUS
+		(*get_pdev_obss_stats)(struct cdp_soc_t *soc, uint8_t pdev_id,
+				       struct cdp_pdev_obss_pd_stats_tlv *buf,
+				       struct cdp_txrx_stats_req *req);
+	QDF_STATUS (*clear_pdev_obss_pd_stats)(struct cdp_soc_t *soc,
+					       uint8_t pdev_id);
 };
 
 struct cdp_wds_ops {
@@ -1451,6 +1464,15 @@ struct ol_if_ops {
 				   uint32_t service_interval_ul, uint32_t burst_size_ul,
 				   uint8_t add_or_sub, uint8_t ac);
 #endif
+#ifdef CONFIG_SAWF
+	QDF_STATUS
+	(*peer_update_sawf_ul_params)(struct cdp_ctrl_objmgr_psoc *soc,
+				      uint8_t vdev_id, uint8_t *peer_mac,
+				      uint8_t tid, uint8_t ac,
+				      uint32_t service_interval,
+				      uint32_t burst_size,
+				      uint8_t add_sub);
+#endif
 	uint32_t (*dp_get_tx_inqueue)(ol_txrx_soc_handle soc);
 	QDF_STATUS(*dp_send_unit_test_cmd)(uint32_t vdev_id,
 					   uint32_t module_id,
@@ -1481,6 +1503,16 @@ struct ol_if_ops {
 void (*peer_send_wds_disconnect)(struct cdp_ctrl_objmgr_psoc *psoc,
 				 uint8_t *mac_addr, uint8_t vdev_id);
 #endif
+#ifdef WLAN_SUPPORT_PPEDS
+	QDF_STATUS
+	(*peer_set_ppe_default_routing)(struct cdp_ctrl_objmgr_psoc *psoc,
+					uint8_t *peer_macaddr,
+					uint16_t service_code,
+					uint8_t priority_valid,
+					uint16_t src_info,
+					uint8_t vdev_id, uint8_t use_ppe,
+					uint8_t routing_enabled);
+#endif /* WLAN_SUPPORT_PPEDS */
 };
 
 #ifdef DP_PEER_EXTENDED_API
@@ -1823,7 +1855,7 @@ struct cdp_flowctl_ops {
  * @set_vdev_os_queue_status: Set vdev queue status
  * @deregister_tx_flow_control_cb: Deregister tx flow control callback
  * @flow_control_cb: Call osif flow control callback
- * @get_tx_resource: Get tx resources and comapre with watermark
+ * @get_tx_resource: Get tx resources and compare with watermark
  * @ll_set_tx_pause_q_depth: set pause queue depth
  * @vdev_flush: Flush all packets on a particular vdev
  * @vdev_pause: Pause a particular vdev
@@ -2049,7 +2081,8 @@ struct cdp_cfr_ops {
 	void (*txrx_cfr_filter)(struct cdp_soc_t *soc_hdl,
 				uint8_t pdev_id,
 				bool enable,
-				struct cdp_monitor_filter *filter_val);
+				struct cdp_monitor_filter *filter_val,
+				bool cfr_enable_monitor_mode);
 	bool (*txrx_get_cfr_rcc)(struct cdp_soc_t *soc_hdl,
 				 uint8_t pdev_id);
 	void (*txrx_set_cfr_rcc)(struct cdp_soc_t *soc_hdl,
@@ -2147,9 +2180,32 @@ struct cdp_sawf_ops {
 	(*telemetry_get_drop_stats)(void *arg, uint64_t *pass, uint64_t *drop,
 				    uint64_t *drop_ttl, uint8_t tid,
 				    uint8_t msduq);
+	QDF_STATUS
+	(*peer_config_ul)(struct cdp_soc_t *hdl, uint8_t *mac_addr, uint8_t tid,
+			  uint32_t service_interval, uint32_t burst_size,
+			  uint8_t add_or_sub);
 #endif
 };
 #endif
+
+#ifdef WLAN_SUPPORT_PPEDS
+struct cdp_ppe_txrx_ops {
+	QDF_STATUS
+	(*ppeds_entry_attach)(struct cdp_soc_t *soc,
+			      uint8_t vdev_id, void *vpai,
+			      int32_t *ppe_vp_num);
+	QDF_STATUS
+	(*ppeds_enable_pri2tid)(struct cdp_soc_t *soc,
+				uint8_t vdev_id, bool val);
+	void (*ppeds_entry_detach)(struct cdp_soc_t *soc,
+				   uint8_t vdev_id);
+	void (*ppeds_set_int_pri2tid)(struct cdp_soc_t *soc,
+				      uint8_t *pri2tid);
+	void (*ppeds_update_int_pri2tid)(struct cdp_soc_t *soc,
+					 uint8_t pri, uint8_t tid);
+	void (*ppeds_entry_dump)(struct cdp_soc_t *soc);
+};
+#endif /* WLAN_SUPPORT_PPEDS */
 
 struct cdp_ops {
 	struct cdp_cmn_ops          *cmn_drv_ops;
@@ -2200,6 +2256,9 @@ struct cdp_ops {
 #endif
 #ifdef WLAN_SUPPORT_SCS
 	struct cdp_scs_ops   *scs_ops;
+#endif
+#ifdef WLAN_SUPPORT_PPEDS
+	struct cdp_ppe_txrx_ops *ppe_ops;
 #endif
 };
 #endif

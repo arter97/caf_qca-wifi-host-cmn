@@ -875,7 +875,7 @@ struct hal_tx_status_info {
  * @is_used: boolean flag to identify valid ppdu info
  * @is_data: boolean flag to identify data frame
  * @cur_usr_idx: Current user index of the PPDU
- * @reserved: for furture purpose
+ * @reserved: for future purpose
  * @prot_tlv_status: protection tlv status
  * @packet_info: packet information
  * @rx_status: monitor mode rx status information
@@ -1389,8 +1389,8 @@ static inline bool hal_rx_is_non_ofdma(struct hal_soc *hal_soc,
 static inline bool hal_rx_is_mu_mimo_user(struct hal_soc *hal_soc,
 					  struct hal_rx_ppdu_info *ppdu_info)
 {
-	if (ppdu_info->u_sig_info.ppdu_type_comp_mode == 0 &&
-	    ppdu_info->u_sig_info.ul_dl == 2)
+	if (ppdu_info->u_sig_info.ppdu_type_comp_mode == 2 &&
+	    ppdu_info->u_sig_info.ul_dl == 0)
 		return true;
 
 	return false;
@@ -1682,17 +1682,30 @@ hal_rx_parse_receive_user_info(struct hal_soc *hal_soc, uint8_t *tlv,
 		ppdu_info->rx_status.reception_type = HAL_RX_TYPE_SU;
 		break;
 	case HAL_RECEPTION_TYPE_DL_MU_MIMO:
+		ppdu_info->rx_status.mu_dl_ul = HAL_RX_TYPE_DL;
+		ppdu_info->rx_status.reception_type = HAL_RX_TYPE_MU_MIMO;
+		break;
 	case HAL_RECEPTION_TYPE_UL_MU_MIMO:
+		ppdu_info->rx_status.mu_dl_ul = HAL_RX_TYPE_UL;
 		ppdu_info->rx_status.reception_type = HAL_RX_TYPE_MU_MIMO;
 		break;
 	case HAL_RECEPTION_TYPE_DL_MU_OFMA:
+		ppdu_info->rx_status.mu_dl_ul = HAL_RX_TYPE_DL;
+		ppdu_info->rx_status.reception_type = HAL_RX_TYPE_MU_OFDMA;
+		break;
 	case HAL_RECEPTION_TYPE_UL_MU_OFDMA:
+		ppdu_info->rx_status.mu_dl_ul = HAL_RX_TYPE_UL;
 		ppdu_info->rx_status.reception_type = HAL_RX_TYPE_MU_OFDMA;
 		break;
 	case HAL_RECEPTION_TYPE_DL_MU_OFDMA_MIMO:
+		ppdu_info->rx_status.mu_dl_ul = HAL_RX_TYPE_DL;
+		ppdu_info->rx_status.reception_type = HAL_RX_TYPE_MU_OFDMA_MIMO;
 	case HAL_RECEPTION_TYPE_UL_MU_OFDMA_MIMO:
+		ppdu_info->rx_status.mu_dl_ul = HAL_RX_TYPE_UL;
 		ppdu_info->rx_status.reception_type = HAL_RX_TYPE_MU_OFDMA_MIMO;
 	}
+
+	ppdu_info->start_user_info_cnt++;
 
 	ppdu_info->rx_status.is_stbc = rx_usr_info->stbc;
 	ppdu_info->rx_status.ldpc = rx_usr_info->ldpc;
@@ -1875,6 +1888,30 @@ hal_rx_status_get_mon_buf_addr(uint8_t *rx_tlv,
 }
 #endif
 
+#ifdef WLAN_SUPPORT_CTRL_FRAME_STATS
+static inline void
+hal_update_rx_ctrl_frame_stats(struct hal_rx_ppdu_info *ppdu_info,
+			       uint32_t user_id)
+{
+	uint16_t fc = ppdu_info->nac_info.frame_control;
+
+	if (HAL_RX_GET_FRAME_CTRL_TYPE(fc) == HAL_RX_FRAME_CTRL_TYPE_CTRL) {
+		if ((fc & QDF_IEEE80211_FC0_SUBTYPE_MASK) ==
+		    QDF_IEEE80211_FC0_SUBTYPE_VHT_NDP_AN)
+			ppdu_info->ctrl_frm_info[user_id].ndpa = 1;
+		if ((fc & QDF_IEEE80211_FC0_SUBTYPE_MASK) ==
+		    QDF_IEEE80211_FC0_SUBTYPE_BAR)
+			ppdu_info->ctrl_frm_info[user_id].bar = 1;
+	}
+}
+#else
+static inline void
+hal_update_rx_ctrl_frame_stats(struct hal_rx_ppdu_info *ppdu_info,
+			       uint32_t user_id)
+{
+}
+#endif /* WLAN_SUPPORT_CTRL_FRAME_STATS */
+
 /**
  * hal_rx_status_get_tlv_info() - process receive info TLV
  * @rx_tlv_hdr: pointer to TLV header
@@ -2043,6 +2080,9 @@ hal_rx_status_get_tlv_info_generic_be(void *rx_tlv_hdr, void *ppduinfo,
 		ppdu_info->rx_status.preamble_type =
 			HAL_RX_GET_64(rx_tlv, RX_PPDU_END_USER_STATS,
 				      HT_CONTROL_FIELD_PKT_TYPE);
+
+		ppdu_info->end_user_stats_cnt++;
+
 		switch (ppdu_info->rx_status.preamble_type) {
 		case HAL_RX_PKT_TYPE_11N:
 			ppdu_info->rx_status.ht_flags = 1;
@@ -2923,6 +2963,8 @@ hal_rx_status_get_tlv_info_generic_be(void *rx_tlv_hdr, void *ppduinfo,
 
 		ppdu_info->rx_user_status[user_id].sw_peer_id =
 			rx_mpdu_start->rx_mpdu_info_details.sw_peer_id;
+
+		hal_update_rx_ctrl_frame_stats(ppdu_info, user_id);
 
 		if (ppdu_info->sw_frame_group_id ==
 		    HAL_MPDU_SW_FRAME_GROUP_NULL_DATA) {

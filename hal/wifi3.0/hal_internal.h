@@ -160,7 +160,7 @@ struct rx_msdu_desc_info;
 typedef struct rx_msdu_desc_info *rx_msdu_desc_info_t;
 
 /**
- * Opaque hanlder for PPE VP config.
+ * Opaque handler for PPE VP config.
  */
 union hal_tx_ppe_vp_config;
 union hal_tx_cmn_config_ppe;
@@ -284,9 +284,10 @@ enum hal_srng_ring_id {
 #ifdef IPA_WDI3_VLAN_SUPPORT
 	HAL_SRNG_WMAC1_SW2RXDMA0_BUF3,
 #endif
+#endif
 	HAL_SRNG_WMAC1_SW2RXDMA1_BUF,
-#else
-	HAL_SRNG_WMAC1_SW2RXDMA1_BUF,
+#ifdef FEATURE_DIRECT_LINK
+	HAL_SRNG_WMAC1_RX_DIRECT_LINK_SW_REFILL_RING,
 #endif
 	HAL_SRNG_WMAC1_SW2RXDMA2_BUF,
 	HAL_SRNG_WMAC1_SW2RXDMA0_STATBUF,
@@ -1015,6 +1016,8 @@ struct hal_hw_txrx_ops {
 	uint32_t (*hal_rx_mpdu_start_offset_get)(void);
 	uint32_t (*hal_rx_mpdu_end_offset_get)(void);
 	uint32_t (*hal_rx_pkt_tlv_offset_get)(void);
+	uint32_t (*hal_rx_msdu_end_wmask_get)(void);
+	uint32_t (*hal_rx_mpdu_start_wmask_get)(void);
 	void * (*hal_rx_flow_setup_fse)(uint8_t *rx_fst,
 					uint32_t table_offset,
 					uint8_t *rx_flow);
@@ -1146,6 +1149,9 @@ struct hal_hw_txrx_ops {
 					  uint8_t *buf);
 	void (*hal_set_reo_ent_desc_reo_dest_ind)(uint8_t *desc,
 						  uint32_t dst_ind);
+	QDF_STATUS
+	(*hal_rx_reo_ent_get_src_link_id)(hal_rxdma_desc_t rx_desc,
+					  uint8_t *src_link_id);
 
 	/* REO CMD and STATUS */
 	int (*hal_reo_send_cmd)(hal_soc_handle_t hal_soc_hdl,
@@ -1203,6 +1209,14 @@ struct hal_hw_txrx_ops {
 	void (*hal_get_tsf_time)(hal_soc_handle_t hal_soc_hdl, uint32_t tsf_id,
 				 uint32_t mac_id, uint64_t *tsf,
 				 uint64_t *tsf_sync_soc_time);
+	void (*hal_get_tsf2_scratch_reg)(hal_soc_handle_t hal_soc_hdl,
+					 uint8_t mac_id, uint64_t *value);
+	void (*hal_get_tqm_scratch_reg)(hal_soc_handle_t hal_soc_hdl,
+					uint64_t *value);
+#ifdef FEATURE_DIRECT_LINK
+	QDF_STATUS (*hal_srng_set_msi_config)(hal_ring_handle_t ring_hdl,
+					      void *ring_params);
+#endif
 };
 
 /**
@@ -1395,7 +1409,7 @@ struct hal_soc {
 
 #if defined(FEATURE_HAL_DELAYED_REG_WRITE)
 /**
- *  hal_delayed_reg_write() - delayed regiter write
+ *  hal_delayed_reg_write() - delayed register write
  * @hal_soc: HAL soc handle
  * @srng: hal srng
  * @addr: iomem address
@@ -1468,7 +1482,8 @@ struct hal_srng *hal_ring_handle_to_hal_srng(hal_ring_handle_t hal_ring)
 /*
  * REO2PPE destination indication
  */
-#define REO2PPE_DST_IND 11
+#define REO2PPE_DST_IND 6
+#define REO2PPE_DST_RING 11
 #define REO2PPE_RULE_FAIL_FB 0x2000
 
 /**

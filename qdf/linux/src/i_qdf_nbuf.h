@@ -41,6 +41,18 @@
 #include <qdf_nbuf_frag.h>
 #include "qdf_time.h"
 
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 18, 0))
+/* Since commit
+ *  baebdf48c3600 ("net: dev: Makes sure netif_rx() can be invoked in any context.")
+ *
+ * the function netif_rx() can be used in preemptible/thread context as
+ * well as in interrupt context.
+ *
+ * Use netif_rx().
+ */
+#define netif_rx_ni(skb) netif_rx(skb)
+#endif
+
 /*
  * Use socket buffer as the underlying implementation as skbuf .
  * Linux use sk_buff to represent both packet and data,
@@ -114,7 +126,7 @@ typedef union {
  *
  * Notes:
  *   1. Hard limited to 48 bytes. Please count your bytes
- *   2. The size of this structure has to be easily calculatable and
+ *   2. The size of this structure has to be easily calculable and
  *      consistently so: do not use any conditional compile flags
  *   3. Split into a common part followed by a tx/rx overlay
  *   4. There is only one extra frag, which represents the HTC/HTT header
@@ -143,7 +155,7 @@ typedef union {
  * @rx.dev.priv_cb_m.exc_frm: exception frame
  * @rx.dev.priv_cb_m.ipa_smmu_map: do IPA smmu map
  * @rx.dev.priv_cb_m.reo_dest_ind_or_sw_excpt: reo destination indication or
-					     sw execption bit from ring desc
+					     sw exception bit from ring desc
  * @rx.dev.priv_cb_m.lmac_id: lmac id for RX packet
  * @rx.dev.priv_cb_m.tcp_seq_num: TCP sequence number
  * @rx.dev.priv_cb_m.tcp_ack_num: TCP ACK number

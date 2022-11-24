@@ -181,13 +181,13 @@ struct wlan_ml_vdev_aid_mgr {
 /*
  * struct wlan_mlo_key_mgmt - MLO key management
  * @link_mac_address: list of vdevs selected for connection with the MLAP
- * @ptk: Pairwise transition keys
- * @gtk: Group transition key
+ * @vdev_id: vdev id value
+ * @keys_saved: keys saved bool
  */
 struct wlan_mlo_key_mgmt {
 	struct qdf_mac_addr link_mac_address;
-	uint32_t ptk;
-	uint32_t gtk;
+	uint8_t vdev_id;
+	bool keys_saved;
 };
 
 /**
@@ -609,7 +609,7 @@ struct wlan_mlo_mld_cap {
  * @mlo_peer_id: unique ID for the peer
  * @peer_mld_addr: MAC address of MLD link
  * @mlo_ie: MLO IE struct
- * @mlo_peer_lock: lock to access peer strucutre
+ * @mlo_peer_lock: lock to access peer structure
  * @assoc_id: Assoc ID derived by MLO manager
  * @ref_cnt: Reference counter to avoid use after free
  * @ml_dev: MLO dev context
@@ -691,13 +691,18 @@ struct mlo_partner_info {
 
 /*
  * struct mlo_probereq_info – mlo probe req link info
+ * mlid: MLID requested in the probe req
  * @num_links: no. of link info in probe req
  * @link_id: target link id of APs
+ * @is_mld_id_valid: Indicates if mld_id is valid for a given request
+ * @skip_mbssid: Skip mbssid IE
  */
 struct mlo_probereq_info {
 	uint8_t mlid;
 	uint8_t num_links;
 	uint8_t link_id[WLAN_UMAC_MLO_MAX_VDEVS];
+	bool is_mld_id_valid;
+	bool skip_mbssid;
 };
 
 /*
@@ -729,7 +734,7 @@ struct mlo_tgt_partner_info {
  * @mlo_mlme_ext_peer_assoc_fail: Callback to notify peer assoc failure
  * @mlo_mlme_ext_peer_delete: Callback to initiate link peer delete
  * @mlo_mlme_ext_assoc_resp: Callback to initiate assoc resp
- * @mlo_mlme_get_link_assoc_req: Calback to get link assoc req buffer
+ * @mlo_mlme_get_link_assoc_req: Callback to get link assoc req buffer
  * @mlo_mlme_ext_deauth: Callback to initiate deauth
  * @mlo_mlme_ext_clone_security_param: Callback to clone mlo security params
  * @mlo_mlme_ext_peer_process_auth: Callback to process pending auth
@@ -862,13 +867,17 @@ struct mlo_link_set_active_param {
 /*
  * struct mlo_link_set_active_ctx - Context for MLO link set active request
  * @vdev: pointer to vdev on which the request issued
- * @cb: callback function for MLO link set active request
+ * @set_mlo_link_cb: callback function for MLO link set active request
+ * @validate_set_mlo_link_cb: callback to validate set link request
  * @cb_arg: callback context
  */
 struct mlo_link_set_active_ctx {
 	struct wlan_objmgr_vdev *vdev;
 	void (*set_mlo_link_cb)(struct wlan_objmgr_vdev *vdev, void *arg,
 				struct mlo_link_set_active_resp *evt);
+	QDF_STATUS (*validate_set_mlo_link_cb)(
+			struct wlan_objmgr_psoc *psoc,
+			struct mlo_link_set_active_param *param);
 	void *cb_arg;
 };
 

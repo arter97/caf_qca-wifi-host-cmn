@@ -267,6 +267,13 @@ void dp_mon_filter_setup_smart_monitor(struct dp_pdev *pdev);
 void dp_mon_filter_reset_smart_monitor(struct dp_pdev *pdev);
 #endif /* ATH_SUPPORT_NAC_RSSI || ATH_SUPPORT_NAC */
 
+/**
+ * dp_mon_filter_set_reset_mon_mac_filter() - Setup the monitor mac filter
+ * @pdev: DP pdev handle
+ * @val: indicating set/reset
+ */
+void dp_mon_filter_set_reset_mon_mac_filter(struct dp_pdev *pdev, bool val);
+
 #ifdef  WLAN_RX_PKT_CAPTURE_ENH
 /**
  * dp_mon_filter_setup_rx_enh_capture() - Setup the Rx capture mode filters
@@ -402,7 +409,7 @@ void dp_mon_filter_show_filter(struct dp_mon_pdev *mon_pdev,
  * based on target
  * @soc: DP soc handle
  * @pdev: DP pdev handle
- * @srng_type: The srng type for which filter wll be set
+ * @srng_type: The srng type for which filter will be set
  * @tlv_filter: tlv filter
  */
 QDF_STATUS
