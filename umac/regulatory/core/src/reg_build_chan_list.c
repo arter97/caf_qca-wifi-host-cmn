@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2014-2021 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -1047,12 +1048,118 @@ reg_modify_disable_chan_list_for_unii1_and_unii2a(
 
 #ifdef CONFIG_BAND_6GHZ
 #ifdef CONFIG_REG_CLIENT
+
+#ifdef CONFIG_AFC_SUPPORT
+/**
+ * reg_append_mas_chan_list_for_6g_sp() - Append SP channels to the master
+ * channel list
+ * @pdev_priv_obj: Pointer to pdev private object
+ *
+ * This function appends SP channels to the master channel list
+ *
+ * Return: void.
+ */
+static void
+reg_append_mas_chan_list_for_6g_sp(struct wlan_regulatory_pdev_priv_obj
+			       *pdev_priv_obj)
+{
+	struct regulatory_channel *master_chan_list_6g_client_sp;
+
+	master_chan_list_6g_client_sp = pdev_priv_obj->afc_chan_list;
+
+	qdf_mem_copy(&pdev_priv_obj->mas_chan_list[MIN_6GHZ_CHANNEL],
+		     master_chan_list_6g_client_sp,
+		     NUM_6GHZ_CHANNELS *
+		     sizeof(struct regulatory_channel));
+}
+#else
+static inline void
+reg_append_mas_chan_list_for_6g_sp(struct wlan_regulatory_pdev_priv_obj
+			       *pdev_priv_obj)
+{
+}
+#endif
+
+/**
+ * reg_append_mas_chan_list_for_6g_lpi() - Append LPI channels to the master
+ * channel list
+ * @pdev_priv_obj: Pointer to pdev private object
+ *
+ * This function appends LPI channels to the master channel list
+ *
+ * Return: void.
+ */
+static void
+reg_append_mas_chan_list_for_6g_lpi(struct wlan_regulatory_pdev_priv_obj
+			       *pdev_priv_obj)
+{
+	struct regulatory_channel *master_chan_list_6g_client_lpi;
+	uint8_t i, j;
+
+	if (!pdev_priv_obj->reg_rules.num_of_6g_client_reg_rules[REG_INDOOR_AP]) {
+		reg_debug("No LPI reg rules");
+		return;
+	}
+
+	master_chan_list_6g_client_lpi =
+		pdev_priv_obj->mas_chan_list_6g_client[REG_INDOOR_AP]
+			[pdev_priv_obj->reg_cur_6g_client_mobility_type];
+
+	for (i = MIN_6GHZ_CHANNEL, j = 0;
+	     i <= MAX_6GHZ_CHANNEL && j < NUM_6GHZ_CHANNELS; i++, j++) {
+		if ((pdev_priv_obj->mas_chan_list[i].state ==
+			CHANNEL_STATE_DISABLE) ||
+			(pdev_priv_obj->mas_chan_list[i].chan_flags &
+			REGULATORY_CHAN_DISABLED)) {
+			qdf_mem_copy(&pdev_priv_obj->mas_chan_list[i],
+				     &master_chan_list_6g_client_lpi[j],
+				     sizeof(struct regulatory_channel));
+		}
+	}
+}
+
+/**
+ * reg_append_mas_chan_list_for_6g_VLP() - Append VLP channels to the master
+ * channel list
+ * @pdev_priv_obj: Pointer to pdev private object
+ *
+ * This function appends VLP channels to the master channel list
+ *
+ * Return: void.
+ */
+static void
+reg_append_mas_chan_list_for_6g_vlp(struct wlan_regulatory_pdev_priv_obj
+			       *pdev_priv_obj)
+{
+	struct regulatory_channel *master_chan_list_6g_client_vlp;
+	uint8_t i, j;
+
+	if (!pdev_priv_obj->reg_rules.num_of_6g_client_reg_rules[REG_VERY_LOW_POWER_AP]) {
+		reg_debug("No VLP reg rules");
+		return;
+	}
+
+	master_chan_list_6g_client_vlp =
+		pdev_priv_obj->mas_chan_list_6g_client[REG_VERY_LOW_POWER_AP]
+			[pdev_priv_obj->reg_cur_6g_client_mobility_type];
+
+	for (i = MIN_6GHZ_CHANNEL, j = 0;
+	     i <= MAX_6GHZ_CHANNEL && j < NUM_6GHZ_CHANNELS; i++, j++) {
+		if ((pdev_priv_obj->mas_chan_list[i].state ==
+			CHANNEL_STATE_DISABLE) ||
+		    (pdev_priv_obj->mas_chan_list[i].chan_flags &
+		      REGULATORY_CHAN_DISABLED)) {
+			qdf_mem_copy(&pdev_priv_obj->mas_chan_list[i],
+				     &master_chan_list_6g_client_vlp[j],
+				     sizeof(struct regulatory_channel));
+		}
+	}
+}
+
 static void
 reg_append_mas_chan_list_for_6g(struct wlan_regulatory_pdev_priv_obj
 				*pdev_priv_obj)
 {
-	struct regulatory_channel *master_chan_list_6g_client;
-
 	if (pdev_priv_obj->reg_cur_6g_ap_pwr_type >= REG_CURRENT_MAX_AP_TYPE ||
 	    pdev_priv_obj->reg_cur_6g_client_mobility_type >=
 	    REG_MAX_CLIENT_TYPE) {
@@ -1060,14 +1167,20 @@ reg_append_mas_chan_list_for_6g(struct wlan_regulatory_pdev_priv_obj
 		return;
 	}
 
-	master_chan_list_6g_client =
-		pdev_priv_obj->mas_chan_list_6g_client[REG_INDOOR_AP]
-			[pdev_priv_obj->reg_cur_6g_client_mobility_type];
+	/* Client should be able to scan all types of APs, so prepare the
+	 * client list which has all the enabled channels, first priority is
+	 * given to AFC power type and then second priority is decided based on
+	 * gindoor_channel_support ini value
+	 */
+	reg_append_mas_chan_list_for_6g_sp(pdev_priv_obj);
 
-	qdf_mem_copy(&pdev_priv_obj->mas_chan_list[MIN_6GHZ_CHANNEL],
-		     master_chan_list_6g_client,
-		     NUM_6GHZ_CHANNELS *
-		     sizeof(struct regulatory_channel));
+	if (pdev_priv_obj->indoor_chan_enabled) {
+		reg_append_mas_chan_list_for_6g_lpi(pdev_priv_obj);
+		reg_append_mas_chan_list_for_6g_vlp(pdev_priv_obj);
+	} else {
+		reg_append_mas_chan_list_for_6g_vlp(pdev_priv_obj);
+		reg_append_mas_chan_list_for_6g_lpi(pdev_priv_obj);
+	}
 }
 
 static void
@@ -2787,12 +2900,13 @@ static QDF_STATUS reg_process_cfi_chan_list(
  */
 static void reg_find_low_limit_chan_enum_for_6g(
 		struct regulatory_channel *chan_list, qdf_freq_t low_freq,
-		uint32_t *channel_enum)
+		enum channel_enum *channel_enum)
 {
 	enum channel_enum chan_enum;
 	uint16_t min_bw, max_bw, left_edge_of_min_band, left_edge_of_max_band;
 	qdf_freq_t center_freq;
 
+	*channel_enum = 0;
 	for (chan_enum = 0; chan_enum < NUM_6GHZ_CHANNELS; chan_enum++) {
 		min_bw = chan_list[chan_enum].min_bw;
 		max_bw = chan_list[chan_enum].max_bw;
@@ -2826,12 +2940,13 @@ static void reg_find_low_limit_chan_enum_for_6g(
 static void reg_find_high_limit_chan_enum_for_6g(
 		struct regulatory_channel *chan_list,
 		qdf_freq_t high_freq,
-		uint32_t *high_limit)
+		enum channel_enum *channel_enum)
 {
 	enum channel_enum chan_enum;
 	uint16_t min_bw, max_bw, right_edge_of_min_band, right_edge_of_max_band;
 	qdf_freq_t center_freq;
 
+	*channel_enum = 0;
 	for (chan_enum = NUM_6GHZ_CHANNELS - 1; chan_enum >= 0; chan_enum--) {
 		min_bw = chan_list[chan_enum].min_bw;
 		max_bw = chan_list[chan_enum].max_bw;
@@ -2848,7 +2963,7 @@ static void reg_find_high_limit_chan_enum_for_6g(
 					max_bw = min_bw;
 				chan_list[chan_enum].max_bw = max_bw;
 			}
-			*high_limit = chan_enum;
+			*channel_enum = chan_enum;
 			break;
 		}
 
@@ -2901,7 +3016,7 @@ static QDF_STATUS reg_fill_max_psd_in_afc_chan_list(
 
 	for (i = 0; i < power_info->num_freq_objs; i++) {
 		struct afc_freq_obj *freq_obj = &power_info->afc_freq_info[i];
-		uint32_t low_limit_enum, high_limit_enum;
+		enum channel_enum low_limit_enum, high_limit_enum;
 		uint8_t j;
 
 		reg_find_low_limit_chan_enum_for_6g(afc_chan_list,
@@ -3038,6 +3153,7 @@ reg_process_afc_power_event(struct afc_regulatory_info *afc_info)
 	    !wlan_reg_is_noaction_on_afc_pwr_evt(pdev))
 		tx_ops->trigger_acs_for_afc(pdev);
 
+	reg_send_afc_power_event(pdev, afc_info->power_info);
 	wlan_objmgr_pdev_release_ref(pdev, dbg_id);
 
 	return QDF_STATUS_SUCCESS;
