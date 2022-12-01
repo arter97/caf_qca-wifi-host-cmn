@@ -1225,24 +1225,22 @@ static int dp_srng_find_ring_in_mask(int ring_num, uint8_t *grp_mask)
 
 /**
  * dp_is_msi_group_number_invalid() - check msi_group_number valid or not
+ * @soc: dp_soc
  * @msi_group_number: MSI group number.
  * @msi_data_count: MSI data count.
  *
  * Return: true if msi_group_number is invalid.
  */
-#ifdef WLAN_ONE_MSI_VECTOR
-static bool dp_is_msi_group_number_invalid(int msi_group_number,
+static bool dp_is_msi_group_number_invalid(struct dp_soc *soc,
+					   int msi_group_number,
 					   int msi_data_count)
 {
-	return false;
-}
-#else
-static bool dp_is_msi_group_number_invalid(int msi_group_number,
-					   int msi_data_count)
-{
+	if (soc && soc->osdev && soc->osdev->dev &&
+	    pld_is_one_msi(soc->osdev->dev))
+		return false;
+
 	return msi_group_number > msi_data_count;
 }
-#endif
 
 #ifdef WLAN_FEATURE_NEAR_FULL_IRQ
 /**
@@ -1370,7 +1368,8 @@ dp_srng_msi2_setup(struct dp_soc *soc,
 		return;
 	}
 
-	if (dp_is_msi_group_number_invalid(nf_msi_grp_num, msi_data_count)) {
+	if (dp_is_msi_group_number_invalid(soc, nf_msi_grp_num,
+					   msi_data_count)) {
 		dp_init_warn("%pK: 2 msi_groups will share an msi for near full IRQ; msi_group_num %d",
 			     soc, nf_msi_grp_num);
 		QDF_ASSERT(0);
@@ -1681,7 +1680,8 @@ static void dp_srng_msi_setup(struct dp_soc *soc, struct hal_srng_params
 		goto configure_msi2;
 	}
 
-	if (dp_is_msi_group_number_invalid(reg_msi_grp_num, msi_data_count)) {
+	if (dp_is_msi_group_number_invalid(soc, reg_msi_grp_num,
+					   msi_data_count)) {
 		dp_init_warn("%pK: 2 msi_groups will share an msi; msi_group_num %d",
 			     soc, reg_msi_grp_num);
 		QDF_ASSERT(0);
@@ -6672,11 +6672,31 @@ QDF_STATUS dp_soc_target_ppe_rxole_rxdma_cfg(struct dp_soc *soc)
 
 	return status;
 }
+
+static inline
+void dp_soc_txrx_peer_setup(enum wlan_op_mode vdev_opmode, struct dp_soc *soc,
+			    struct dp_peer *peer)
+{
+	/* TODO: Need to check with STA mode */
+	if (vdev_opmode == wlan_op_mode_ap && soc->arch_ops.txrx_peer_setup) {
+		if (soc->arch_ops.txrx_peer_setup(soc, peer)
+				!= QDF_STATUS_SUCCESS) {
+			dp_err("unable to setup target peer features");
+			qdf_assert_always(0);
+		}
+	}
+}
 #else
 static inline
 QDF_STATUS dp_soc_target_ppe_rxole_rxdma_cfg(struct dp_soc *soc)
 {
 	return QDF_STATUS_SUCCESS;
+}
+
+static inline
+void dp_soc_txrx_peer_setup(enum wlan_op_mode vdev_opmode, struct dp_soc *soc,
+			    struct dp_peer *peer)
+{
 }
 #endif /* WLAN_SUPPORT_PPEDS */
 
@@ -8068,8 +8088,9 @@ QDF_STATUS dp_peer_mlo_setup(
 			 * during mld peer creation.
 			 */
 			dp_info("Primary link is not the first link. vdev: %pK,"
-				"vdev_ref_cnt %d", mld_peer->vdev,
-				 mld_peer->vdev->ref_cnt);
+				"vdev_id %d vdev_ref_cnt %d",
+				mld_peer->vdev, vdev_id,
+				qdf_atomic_read(&mld_peer->vdev->ref_cnt));
 			/* release the ref to original dp_vdev */
 			dp_vdev_unref_delete(soc, mld_peer->vdev,
 					     DP_MOD_ID_CHILD);
@@ -8361,6 +8382,8 @@ dp_peer_setup_wifi3(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
 			dp_peer_rx_init(pdev, peer);
 		}
 	}
+
+	dp_soc_txrx_peer_setup(vdev_opmode, soc, peer);
 
 	if (!IS_MLO_DP_MLD_PEER(peer))
 		dp_peer_ppdu_delayed_ba_init(peer);
@@ -9016,7 +9039,7 @@ static int dp_get_opmode(struct cdp_soc_t *soc_hdl, uint8_t vdev_id)
 	int opmode;
 
 	if (!vdev) {
-		dp_err("vdev for id %d is NULL", vdev_id);
+		dp_err_rl("vdev for id %d is NULL", vdev_id);
 		return -EINVAL;
 	}
 	opmode = vdev->opmode;
@@ -11507,14 +11530,15 @@ dp_txrx_stats_publish(struct cdp_soc_t *soc, uint8_t pdev_id,
  * @soc: DP soc handle
  * @pdev_id: id of DP_PDEV handle
  * @buf: to hold pdev obss stats
+ * @req: Pointer to CDP TxRx stats
  *
  * Return: status
  */
 static QDF_STATUS
 dp_get_obss_stats(struct cdp_soc_t *soc, uint8_t pdev_id,
-		  struct cdp_pdev_obss_pd_stats_tlv *buf)
+		  struct cdp_pdev_obss_pd_stats_tlv *buf,
+		  struct cdp_txrx_stats_req *req)
 {
-	struct cdp_txrx_stats_req req = {0};
 	QDF_STATUS status;
 	struct dp_pdev *pdev =
 		dp_get_pdev_from_soc_pdev_id_wifi3((struct dp_soc *)soc,
@@ -11527,12 +11551,13 @@ dp_get_obss_stats(struct cdp_soc_t *soc, uint8_t pdev_id,
 		return QDF_STATUS_E_AGAIN;
 
 	pdev->pending_fw_obss_stats_response = true;
-	req.stats = (enum cdp_stats)HTT_DBG_EXT_STATS_PDEV_OBSS_PD_STATS;
-	req.cookie_val = DBG_STATS_COOKIE_HTT_OBSS;
+	req->stats = (enum cdp_stats)HTT_DBG_EXT_STATS_PDEV_OBSS_PD_STATS;
+	req->cookie_val = DBG_STATS_COOKIE_HTT_OBSS;
 	qdf_event_reset(&pdev->fw_obss_stats_event);
-	status = dp_h2t_ext_stats_msg_send(pdev, req.stats, req.param0,
-					   req.param1, req.param2, req.param3,
-					   0, req.cookie_val, 0);
+	status = dp_h2t_ext_stats_msg_send(pdev, req->stats, req->param0,
+					   req->param1, req->param2,
+					   req->param3, 0, req->cookie_val,
+					   req->mac_id);
 	if (QDF_IS_STATUS_ERROR(status)) {
 		pdev->pending_fw_obss_stats_response = false;
 		return status;
@@ -14964,6 +14989,7 @@ static QDF_STATUS dp_bus_suspend(struct cdp_soc_t *soc_hdl, uint8_t pdev_id)
 	dp_monitor_reap_timer_suspend(soc);
 
 	dp_suspend_fse_cache_flush(soc);
+	dp_rx_fst_update_pm_suspend_status(soc, true);
 
 	return QDF_STATUS_SUCCESS;
 }
@@ -14989,6 +15015,10 @@ static QDF_STATUS dp_bus_resume(struct cdp_soc_t *soc_hdl, uint8_t pdev_id)
 
 	for (i = 0; i < soc->num_tcl_data_rings; i++)
 		dp_flush_ring_hptp(soc, soc->tcl_data_ring[i].hal_srng);
+
+	dp_rx_fst_update_pm_suspend_status(soc, false);
+
+	dp_rx_fst_requeue_wq(soc);
 
 	return QDF_STATUS_SUCCESS;
 }
@@ -17149,3 +17179,54 @@ static QDF_STATUS dp_pdev_init_wifi3(struct cdp_soc_t *txrx_soc,
 	return dp_pdev_init(txrx_soc, htc_handle, qdf_osdev, pdev_id);
 }
 
+#ifdef FEATURE_DIRECT_LINK
+struct dp_srng *dp_setup_direct_link_refill_ring(struct cdp_soc_t *soc_hdl,
+						 uint8_t pdev_id)
+{
+	struct dp_soc *soc = cdp_soc_t_to_dp_soc(soc_hdl);
+	struct dp_pdev *pdev = dp_get_pdev_from_soc_pdev_id_wifi3(soc, pdev_id);
+
+	if (!pdev) {
+		dp_err("DP pdev is NULL");
+		return NULL;
+	}
+
+	if (dp_srng_alloc(soc, &pdev->rx_refill_buf_ring4,
+			  RXDMA_BUF, DIRECT_LINK_REFILL_RING_ENTRIES, false)) {
+		dp_err("SRNG alloc failed for rx_refill_buf_ring4");
+		return NULL;
+	}
+
+	if (dp_srng_init(soc, &pdev->rx_refill_buf_ring4,
+			 RXDMA_BUF, DIRECT_LINK_REFILL_RING_IDX, 0)) {
+		dp_err("SRNG init failed for rx_refill_buf_ring4");
+		dp_srng_free(soc, &pdev->rx_refill_buf_ring4);
+		return NULL;
+	}
+
+	if (htt_srng_setup(soc->htt_handle, pdev_id,
+			   pdev->rx_refill_buf_ring4.hal_srng, RXDMA_BUF)) {
+		dp_srng_deinit(soc, &pdev->rx_refill_buf_ring4, RXDMA_BUF,
+			       DIRECT_LINK_REFILL_RING_IDX);
+		dp_srng_free(soc, &pdev->rx_refill_buf_ring4);
+		return NULL;
+	}
+
+	return &pdev->rx_refill_buf_ring4;
+}
+
+void dp_destroy_direct_link_refill_ring(struct cdp_soc_t *soc_hdl,
+					uint8_t pdev_id)
+{
+	struct dp_soc *soc = cdp_soc_t_to_dp_soc(soc_hdl);
+	struct dp_pdev *pdev = dp_get_pdev_from_soc_pdev_id_wifi3(soc, pdev_id);
+
+	if (!pdev) {
+		dp_err("DP pdev is NULL");
+		return;
+	}
+
+	dp_srng_deinit(soc, &pdev->rx_refill_buf_ring4, RXDMA_BUF, 0);
+	dp_srng_free(soc, &pdev->rx_refill_buf_ring4);
+}
+#endif

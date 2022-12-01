@@ -1104,6 +1104,12 @@ struct wlan_lmac_if_reg_tx_ops {
 	QDF_STATUS (*unregister_afc_event_handler)
 				(struct wlan_objmgr_psoc *psoc, void *arg);
 	QDF_STATUS (*trigger_acs_for_afc)(struct wlan_objmgr_pdev *pdev);
+
+	QDF_STATUS (*reg_get_min_psd) (struct wlan_objmgr_pdev *pdev,
+				       qdf_freq_t primary_freq,
+				       qdf_freq_t cen320,
+				       uint16_t punc_pattern, uint16_t bw,
+				       int16_t *min_psd);
 #endif
 	bool (*is_chip_11be)(struct wlan_objmgr_psoc *psoc,
 			     uint16_t phy_id);
@@ -1484,7 +1490,8 @@ struct wlan_lmac_if_spatial_reuse_tx_ops {
 	QDF_STATUS(*target_if_set_sr_enable_disable)(
 				struct wlan_objmgr_vdev *vdev,
 				struct wlan_objmgr_pdev *pdev,
-				bool is_sr_enable, int32_t pd_threshold);
+				bool is_sr_enable, int32_t srg_pd_threshold,
+				int32_t non_srg_pd_threshold);
 };
 #endif
 
@@ -2257,7 +2264,8 @@ struct wlan_lmac_if_dfs_rx_ops {
 	bool (*dfs_is_hw_pulses_allowed)(struct wlan_objmgr_pdev *pdev);
 	void (*dfs_set_fw_adfs_support)(struct wlan_objmgr_pdev *pdev,
 					bool fw_adfs_support_160,
-					bool fw_adfs_support_non_160);
+					bool fw_adfs_support_non_160,
+					bool fw_adfs_support_320);
 	void (*dfs_reset_dfs_prevchan)(struct wlan_objmgr_pdev *pdev);
 	void (*dfs_init_tmp_psoc_nol)(struct wlan_objmgr_pdev *pdev,
 				      uint8_t num_radios);

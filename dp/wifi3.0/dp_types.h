@@ -1251,6 +1251,8 @@ struct dp_soc_stats {
 			uint32_t rx_flush_count;
 			/* Rx invalid tid count */
 			uint32_t rx_invalid_tid_err;
+			/* Invalid address1 in defrag path*/
+			uint32_t defrag_ad1_invalid;
 		} err;
 
 		/* packet count per core - per ring */
@@ -1855,6 +1857,8 @@ struct dp_arch_ops {
 	void (*txrx_peer_map_detach)(struct dp_soc *soc);
 	QDF_STATUS (*dp_rxdma_ring_sel_cfg)(struct dp_soc *soc);
 	void (*soc_cfg_attach)(struct dp_soc *soc);
+	QDF_STATUS (*txrx_peer_setup)(struct dp_soc *soc,
+				      struct dp_peer *peer);
 	void (*peer_get_reo_hash)(struct dp_vdev *vdev,
 				  struct cdp_peer_setup_info *setup_info,
 				  enum cdp_host_reo_dest_ring *reo_dest,
@@ -1951,12 +1955,16 @@ struct dp_arch_ops {
 	bool (*dp_rx_mcast_handler)(struct dp_soc *soc, struct dp_vdev *vdev,
 				    struct dp_txrx_peer *peer, qdf_nbuf_t nbuf);
 #endif
+	struct dp_soc * (*dp_soc_get_by_idle_bm_id)(struct dp_soc *soc,
+						    uint8_t bm_id);
+
 	void (*mlo_peer_find_hash_detach)(struct dp_soc *soc);
 	QDF_STATUS (*mlo_peer_find_hash_attach)(struct dp_soc *soc);
 	void (*mlo_peer_find_hash_add)(struct dp_soc *soc,
 				       struct dp_peer *peer);
 	void (*mlo_peer_find_hash_remove)(struct dp_soc *soc,
 					  struct dp_peer *peer);
+
 	struct dp_peer *(*mlo_peer_find_hash_find)(struct dp_soc *soc,
 						   uint8_t *peer_mac_addr,
 						   int mac_addr_is_aligned,
@@ -1981,6 +1989,9 @@ struct dp_arch_ops {
 						   uint8_t *dest_mac_addr,
 						   uint8_t vdev_id);
 	void (*dp_bank_reconfig)(struct dp_soc *soc, struct dp_vdev *vdev);
+
+	struct dp_soc * (*dp_rx_replenish_soc_get)(struct dp_soc *soc,
+						   uint8_t chip_id);
 
 	void (*dp_reconfig_tx_vdev_mcast_ctrl)(struct dp_soc *soc,
 					       struct dp_vdev *vdev);
@@ -2937,6 +2948,11 @@ struct dp_pdev {
 #ifdef IPA_WDI3_VLAN_SUPPORT
 	/* Third ring used to replenish rx buffers */
 	struct dp_srng rx_refill_buf_ring3;
+#endif
+
+#ifdef FEATURE_DIRECT_LINK
+	/* Fourth ring used to replenish rx buffers */
+	struct dp_srng rx_refill_buf_ring4;
 #endif
 
 	/* Empty ring used by firmware to post rx buffers to the MAC */
@@ -4349,6 +4365,8 @@ struct dp_fisa_reo_mismatch_stats {
 struct dp_fisa_stats {
 	/* flow index invalid from RX HW TLV */
 	uint32_t invalid_flow_index;
+	/* workqueue deferred due to suspend */
+	uint32_t update_deferred;
 	struct dp_fisa_reo_mismatch_stats reo_mismatch;
 };
 
@@ -4475,7 +4493,8 @@ struct dp_rx_fst {
 	qdf_event_t cmem_resp_event;
 	bool flow_deletion_supported;
 	bool fst_in_cmem;
-	bool pm_suspended;
+	qdf_atomic_t pm_suspended;
+	bool fst_wq_defer;
 };
 
 #endif /* WLAN_SUPPORT_RX_FISA */

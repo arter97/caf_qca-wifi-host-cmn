@@ -2303,6 +2303,9 @@ static void hal_hw_txrx_ops_attach_kiwi(struct hal_soc *hal_soc)
 	hal_soc->ops->hal_get_tsf_time = hal_get_tsf_time_kiwi;
 	hal_soc->ops->hal_rx_reo_ent_get_src_link_id =
 					hal_rx_reo_ent_get_src_link_id_kiwi;
+#ifdef FEATURE_DIRECT_LINK
+	hal_soc->ops->hal_srng_set_msi_config = hal_srng_set_msi_config;
+#endif
 };
 
 struct hal_hw_srng_config hw_srng_table_kiwi[] = {
@@ -2606,7 +2609,9 @@ struct hal_hw_srng_config hw_srng_table_kiwi[] = {
 	},
 	{ /* RXDMA_BUF */
 		.start_ring_id = HAL_SRNG_WMAC1_SW2RXDMA0_BUF0,
-#ifdef IPA_OFFLOAD
+#if defined(IPA_OFFLOAD) && defined(FEATURE_DIRECT_LINK)
+		.max_rings = 4,
+#elif defined(IPA_OFFLOAD) || defined(FEATURE_DIRECT_LINK)
 		.max_rings = 3,
 #else
 		.max_rings = 2,

@@ -284,9 +284,10 @@ enum hal_srng_ring_id {
 #ifdef IPA_WDI3_VLAN_SUPPORT
 	HAL_SRNG_WMAC1_SW2RXDMA0_BUF3,
 #endif
+#endif
 	HAL_SRNG_WMAC1_SW2RXDMA1_BUF,
-#else
-	HAL_SRNG_WMAC1_SW2RXDMA1_BUF,
+#ifdef FEATURE_DIRECT_LINK
+	HAL_SRNG_WMAC1_RX_DIRECT_LINK_SW_REFILL_RING,
 #endif
 	HAL_SRNG_WMAC1_SW2RXDMA2_BUF,
 	HAL_SRNG_WMAC1_SW2RXDMA0_STATBUF,
@@ -1212,6 +1213,10 @@ struct hal_hw_txrx_ops {
 					 uint8_t mac_id, uint64_t *value);
 	void (*hal_get_tqm_scratch_reg)(hal_soc_handle_t hal_soc_hdl,
 					uint64_t *value);
+#ifdef FEATURE_DIRECT_LINK
+	QDF_STATUS (*hal_srng_set_msi_config)(hal_ring_handle_t ring_hdl,
+					      void *ring_params);
+#endif
 };
 
 /**

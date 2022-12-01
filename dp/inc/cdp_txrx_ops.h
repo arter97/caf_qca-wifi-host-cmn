@@ -1221,7 +1221,8 @@ struct cdp_host_stats_ops {
 				(struct cdp_soc_t *soc, uint8_t *mac_addr);
 	QDF_STATUS
 		(*get_pdev_obss_stats)(struct cdp_soc_t *soc, uint8_t pdev_id,
-				       struct cdp_pdev_obss_pd_stats_tlv *buf);
+				       struct cdp_pdev_obss_pd_stats_tlv *buf,
+				       struct cdp_txrx_stats_req *req);
 	QDF_STATUS (*clear_pdev_obss_pd_stats)(struct cdp_soc_t *soc,
 					       uint8_t pdev_id);
 };
@@ -1492,6 +1493,16 @@ struct ol_if_ops {
 void (*peer_send_wds_disconnect)(struct cdp_ctrl_objmgr_psoc *psoc,
 				 uint8_t *mac_addr, uint8_t vdev_id);
 #endif
+#ifdef WLAN_SUPPORT_PPEDS
+	QDF_STATUS
+	(*peer_set_ppe_default_routing)(struct cdp_ctrl_objmgr_psoc *psoc,
+					uint8_t *peer_macaddr,
+					uint16_t service_code,
+					uint8_t priority_valid,
+					uint16_t src_info,
+					uint8_t vdev_id, uint8_t use_ppe,
+					uint8_t routing_enabled);
+#endif /* WLAN_SUPPORT_PPEDS */
 };
 
 #ifdef DP_PEER_EXTENDED_API
@@ -2060,7 +2071,8 @@ struct cdp_cfr_ops {
 	void (*txrx_cfr_filter)(struct cdp_soc_t *soc_hdl,
 				uint8_t pdev_id,
 				bool enable,
-				struct cdp_monitor_filter *filter_val);
+				struct cdp_monitor_filter *filter_val,
+				bool cfr_enable_monitor_mode);
 	bool (*txrx_get_cfr_rcc)(struct cdp_soc_t *soc_hdl,
 				 uint8_t pdev_id);
 	void (*txrx_set_cfr_rcc)(struct cdp_soc_t *soc_hdl,

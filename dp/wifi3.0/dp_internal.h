@@ -46,6 +46,19 @@
 
 #define INVALID_WBM_RING_NUM 0xF
 
+#ifdef FEATURE_DIRECT_LINK
+#define DIRECT_LINK_REFILL_RING_ENTRIES 64
+#ifdef IPA_OFFLOAD
+#ifdef IPA_WDI3_VLAN_SUPPORT
+#define DIRECT_LINK_REFILL_RING_IDX     4
+#else
+#define DIRECT_LINK_REFILL_RING_IDX     3
+#endif
+#else
+#define DIRECT_LINK_REFILL_RING_IDX     2
+#endif
+#endif
+
 /* struct htt_dbgfs_cfg - structure to maintain required htt data
  * @msg_word: htt msg sent to upper layer
  * @m: qdf debugfs file pointer
@@ -3408,6 +3421,14 @@ void dp_rx_fst_update_cmem_params(struct dp_soc *soc, uint16_t num_entries,
 
 void
 dp_rx_fst_update_pm_suspend_status(struct dp_soc *soc, bool suspended);
+
+/*
+ * dp_rx_fst_requeue_wq() - Re-queue pending work queue tasks
+ * @soc:		DP SoC context
+ *
+ * Return: None
+ */
+void dp_rx_fst_requeue_wq(struct dp_soc *soc);
 #else
 static inline void
 dp_rx_fst_update_cmem_params(struct dp_soc *soc, uint16_t num_entries,
@@ -3417,6 +3438,11 @@ dp_rx_fst_update_cmem_params(struct dp_soc *soc, uint16_t num_entries,
 
 static inline void
 dp_rx_fst_update_pm_suspend_status(struct dp_soc *soc, bool suspended)
+{
+}
+
+static inline void
+dp_rx_fst_requeue_wq(struct dp_soc *soc)
 {
 }
 
@@ -4125,8 +4151,7 @@ void dp_tx_send_pktlog(struct dp_soc *soc, struct dp_pdev *pdev,
 	if (qdf_unlikely(packetdump_cb) &&
 	    dp_tx_frm_std == tx_desc->frm_type) {
 		packetdump_cb((ol_txrx_soc_handle)soc, pdev->pdev_id,
-			      QDF_NBUF_CB_TX_VDEV_CTX(nbuf),
-			      nbuf, status, QDF_TX_DATA_PKT);
+			      tx_desc->vdev_id, nbuf, status, QDF_TX_DATA_PKT);
 	}
 }
 
@@ -4244,4 +4269,40 @@ void dp_rx_err_send_pktlog(struct dp_soc *soc, struct dp_pdev *pdev,
  * return: None
  */
 void dp_pdev_update_fast_rx_flag(struct dp_soc *soc, struct dp_pdev *pdev);
+
+#ifdef FEATURE_DIRECT_LINK
+/*
+ * dp_setup_direct_link_refill_ring(): Setup direct link refill ring for pdev
+ * @soc_hdl: DP SOC handle
+ * @pdev_id: pdev id
+ *
+ * Return: Handle to SRNG
+ */
+struct dp_srng *dp_setup_direct_link_refill_ring(struct cdp_soc_t *soc_hdl,
+						 uint8_t pdev_id);
+
+/*
+ * dp_destroy_direct_link_refill_ring(): Destroy direct link refill ring for
+ *  pdev
+ * @soc_hdl: DP SOC handle
+ * @pdev_id: pdev id
+ *
+ * Return: None
+ */
+void dp_destroy_direct_link_refill_ring(struct cdp_soc_t *soc_hdl,
+					uint8_t pdev_id);
+#else
+static inline
+struct dp_srng *dp_setup_direct_link_refill_ring(struct cdp_soc_t *soc_hdl,
+						 uint8_t pdev_id)
+{
+	return NULL;
+}
+
+static inline
+void dp_destroy_direct_link_refill_ring(struct cdp_soc_t *soc_hdl,
+					uint8_t pdev_id)
+{
+}
+#endif
 #endif /* #ifndef _DP_INTERNAL_H_ */
