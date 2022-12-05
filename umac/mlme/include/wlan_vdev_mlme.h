@@ -289,8 +289,25 @@ struct vdev_mlme_eht_ops_info {
 #endif
 
 /**
+ * enum mlme_vdev_dot11_mode - Dot11 mode of the vdev
+ * MLME_VDEV_DOT11_MODE_AUTO: vdev uses mlme_dot11_mode
+ * MLME_VDEV_DOT11_MODE_11N: vdev supports 11N mode
+ * MLME_VDEV_DOT11_MODE_11AC: vdev supports 11AC mode
+ * MLME_VDEV_DOT11_MODE_11AX: vdev supports 11AX mode
+ * MLME_VDEV_DOT11_MODE_11BE: vdev supports 11BE mode
+ */
+enum mlme_vdev_dot11_mode {
+	MLME_VDEV_DOT11_MODE_AUTO,
+	MLME_VDEV_DOT11_MODE_11N,
+	MLME_VDEV_DOT11_MODE_11AC,
+	MLME_VDEV_DOT11_MODE_11AX,
+	MLME_VDEV_DOT11_MODE_11BE,
+};
+
+/**
  * struct vdev_mlme_he_ops_info - vdev protocol structure holding information
  * that is used in frames
+ * @vdev_dot11_mode: supported dot11 mode
  * @generic: generic protocol information
  * @ap: ap specific protocol information
  * @sta: sta specific protocol information
@@ -302,6 +319,7 @@ struct vdev_mlme_eht_ops_info {
  * @bss_color: 11ax HE BSS Color information
  */
 struct vdev_mlme_proto {
+	enum mlme_vdev_dot11_mode vdev_dot11_mode;
 	struct vdev_mlme_proto_generic generic;
 	struct vdev_mlme_proto_ap ap;
 	struct vdev_mlme_proto_sta sta;
@@ -343,7 +361,13 @@ struct vdev_mlme_proto {
  * @special_vdev_mode: indicates special vdev mode
  * @he_spr_sr_ctrl:     Spatial reuse SR control
  * @he_spr_non_srg_pd_max_offset: Non-SRG PD max offset
+ * @he_spr_srg_max_pd_offset: SRG PD max offset
+ * @he_spr_srg_min_pd_offset: SRG PD min offset
  * @he_spr_enabled:     Spatial reuse enabled or not
+ * @pd_threshold: pd threshold sent by userspace
+ * @he_spr_disabled_due_conc: spr disabled due to concurrency
+ * @srg_bss_color: srg bss color
+ * @srg_partial_bssid: srg partial bssid
  */
 struct vdev_mlme_mgmt_generic {
 	uint32_t rts_threshold;
@@ -370,10 +394,17 @@ struct vdev_mlme_mgmt_generic {
 	uint8_t bssid[QDF_MAC_ADDR_SIZE];
 	uint32_t phy_mode;
 	bool special_vdev_mode;
-#ifdef WLAN_FEATURE_11AX
+#ifdef WLAN_FEATURE_SR
 	uint8_t he_spr_sr_ctrl;
 	uint8_t he_spr_non_srg_pd_max_offset;
+	uint8_t he_spr_srg_max_pd_offset;
+	uint8_t he_spr_srg_min_pd_offset;
 	bool he_spr_enabled;
+	bool he_spr_disabled_due_conc;
+	bool sr_prohibit_enabled;
+	int32_t pd_threshold;
+	uint64_t srg_bss_color;
+	uint64_t srg_partial_bssid;
 #endif
 };
 
@@ -394,7 +425,7 @@ struct wlan_vdev_aid_mgr {
 /**
  * struct vdev_mlme_mgmt_ap - ap specific vdev mlme mgmt cfg
  * @hidden_ssid: flag to indicate whether it is hidden ssid
- * @cac_duration_ms: cac duration in millseconds
+ * @cac_duration_ms: cac duration in milliseconds
  * @aid_mgr: AID bitmap mgr
  * @max_chan_switch_time: Max channel switch time in milliseconds.
  * @last_bcn_ts_ms: Timestamp (in milliseconds) of the last beacon sent on the
@@ -739,7 +770,8 @@ struct vdev_mlme_ops {
 	QDF_STATUS (*mlme_vdev_sta_disconn_start)(
 				struct vdev_mlme_obj *vdev_mlme,
 				uint16_t event_data_len, void *event_data);
-
+	QDF_STATUS (*mlme_vdev_notify_mlo_sync_wait_entry)(
+				struct vdev_mlme_obj *vdev_mlme);
 };
 
 /**
@@ -1170,11 +1202,12 @@ static inline uint16_t wlan_vdev_mlme_get_he_mcs_12_13_map(
 	return vdev_mlme->mgmt.sta.he_mcs_12_13_map;
 }
 
+#ifdef WLAN_FEATURE_SR
 /**
  * wlan_vdev_mlme_get_sr_ctrl() - get spatial reuse SR control
  * @vdev: VDEV object
  *
- * API to retrieve the spatil reuse SR control from VDEV
+ * API to retrieve the spatial reuse SR control from VDEV
  *
  * Caller need to acquire lock with wlan_vdev_obj_lock()
  *
@@ -1196,7 +1229,7 @@ static inline uint8_t wlan_vdev_mlme_get_sr_ctrl(struct wlan_objmgr_vdev *vdev)
  * wlan_vdev_mlme_get_pd_offset() - get spatial reuse pd offset
  * @vdev: VDEV object
  *
- * API to retrieve the spatil reuse pd offset from VDEV
+ * API to retrieve the spatial reuse pd offset from VDEV
  *
  * Caller need to acquire lock with wlan_vdev_obj_lock()
  *
@@ -1219,7 +1252,7 @@ static inline uint8_t wlan_vdev_mlme_get_pd_offset(
  * wlan_vdev_mlme_get_he_spr_enabled() - spatial reuse enabled or not
  * @vdev: VDEV object
  *
- * API to check whether the spatil reuse enabled or not
+ * API to check whether the spatial reuse enabled or not
  *
  * Caller need to acquire lock with wlan_vdev_obj_lock()
  *
@@ -1239,10 +1272,58 @@ static inline bool wlan_vdev_mlme_get_he_spr_enabled(
 }
 
 /**
+ * wlan_vdev_mlme_is_sr_disable_due_conc() - spatial reuse disabled due
+ *					     to concurrency
+ * @vdev: VDEV object
+ *
+ * API to check whether the spatial reuse disabled due to concurrency or not
+ *
+ * Caller need to acquire lock with wlan_vdev_obj_lock()
+ *
+ * Return:
+ * true/false: true if spatial reuse disabled due to concurrency else false
+ */
+static inline
+bool wlan_vdev_mlme_is_sr_disable_due_conc(struct wlan_objmgr_vdev *vdev)
+{
+	struct vdev_mlme_obj *vdev_mlme;
+
+	vdev_mlme = wlan_vdev_mlme_get_cmpt_obj(vdev);
+	if (!vdev_mlme)
+		return false;
+
+	return vdev_mlme->mgmt.generic.he_spr_disabled_due_conc;
+}
+
+/**
+ * wlan_vdev_mlme_is_sr_prohibit_en() - spatial reuse PD prohibit enabled
+ *					/ disabled (HE_SIGA_Val15_Allowed)
+ * @vdev: VDEV object
+ *
+ * API to check whether the spatial reuse PD prohibit is enabled / disabled
+ *
+ * Caller need to acquire lock with wlan_vdev_obj_lock()
+ *
+ * Return:
+ * @sr_prohibit_enabled: Spatial reuse PD prohibit enabled / disabled
+ */
+static inline
+bool wlan_vdev_mlme_is_sr_prohibit_en(struct wlan_objmgr_vdev *vdev)
+{
+	struct vdev_mlme_obj *vdev_mlme;
+
+	vdev_mlme = wlan_vdev_mlme_get_cmpt_obj(vdev);
+	if (!vdev_mlme)
+		return false;
+
+	return vdev_mlme->mgmt.generic.sr_prohibit_enabled;
+}
+
+/**
  * wlan_vdev_mlme_set_sr_ctrl() - set spatial reuse SR control
  * @vdev: VDEV object
  *
- * API to set the spatil reuse SR control
+ * API to set the spatial reuse SR control
  *
  * Caller need to acquire lock with wlan_vdev_obj_lock()
  *
@@ -1264,7 +1345,7 @@ static inline void wlan_vdev_mlme_set_sr_ctrl(struct wlan_objmgr_vdev *vdev,
  * wlan_vdev_mlme_set_pd_offset() - set spatial reuse pd max offset
  * @vdev: VDEV object
  *
- * API to set the spatil reuse pd max offset
+ * API to set the spatial reuse pd max offset
  *
  * Caller need to acquire lock with wlan_vdev_obj_lock()
  *
@@ -1286,7 +1367,7 @@ static inline void wlan_vdev_mlme_set_pd_offset(struct wlan_objmgr_vdev *vdev,
  * wlan_vdev_mlme_set_he_spr_enabled() - set spatial reuse enabled
  * @vdev: VDEV object
  *
- * API to set the spatil reuse enabled
+ * API to set the spatial reuse enabled
  *
  * Caller need to acquire lock with wlan_vdev_obj_lock()
  *
@@ -1304,19 +1385,211 @@ static inline void wlan_vdev_mlme_set_he_spr_enabled(
 
 	vdev_mlme->mgmt.generic.he_spr_enabled = enable_he_spr;
 }
+
+/**
+ * wlan_vdev_mlme_set_sr_disable_due_conc() - set spatial reuse disabled due
+ *					      to concurrency
+ * @vdev: VDEV object
+ *
+ * API to set the spatial reuse disabled due to concurrency
+ *
+ * Caller need to acquire lock with wlan_vdev_obj_lock()
+ *
+ * Return: void
+ */
+static inline
+void wlan_vdev_mlme_set_sr_disable_due_conc(struct wlan_objmgr_vdev *vdev,
+					    bool he_spr_disabled_due_conc)
+{
+	struct vdev_mlme_obj *vdev_mlme;
+
+	vdev_mlme = wlan_vdev_mlme_get_cmpt_obj(vdev);
+	if (!vdev_mlme)
+		return;
+
+	vdev_mlme->mgmt.generic.he_spr_disabled_due_conc =
+						he_spr_disabled_due_conc;
+}
+
+/**
+ * wlan_vdev_mlme_set_sr_prohibit_en() - set spatial reuse PD prohibit enabled
+ *					 / disabled (HE_SIGA_Val15_Allowed)
+ * @vdev: VDEV object
+ * @sr_prohibit_enabled: True / False - PD Prohibit enabled / disabled
+ *
+ * API to set spatial reuse PD prohibit enabled / disabled
+ *
+ * Caller need to acquire lock with wlan_vdev_obj_lock()
+ *
+ * Return: void
+ */
+static inline
+void wlan_vdev_mlme_set_sr_prohibit_en(struct wlan_objmgr_vdev *vdev,
+				       bool sr_prohibit_enabled)
+{
+	struct vdev_mlme_obj *vdev_mlme;
+
+	vdev_mlme = wlan_vdev_mlme_get_cmpt_obj(vdev);
+	if (!vdev_mlme)
+		return;
+
+	vdev_mlme->mgmt.generic.sr_prohibit_enabled = sr_prohibit_enabled;
+}
+
+/**
+ * wlan_vdev_mlme_set_srg_pd_offset() - set spatial reuse SRG pd max/min offset
+ * @vdev: VDEV object
+ * @srg_max_pd_offset: SRG max pd offset
+ * @srg_min_pd_offset: SRG min pd offset
+ *
+ * API to set the spatial reuse SRG pd min max offset
+ *
+ * Caller need to acquire lock with wlan_vdev_obj_lock()
+ *
+ * Return: void
+ */
+static inline
+void wlan_vdev_mlme_set_srg_pd_offset(struct wlan_objmgr_vdev *vdev,
+				      uint8_t srg_max_pd_offset,
+				      uint8_t srg_min_pd_offset)
+{
+	struct vdev_mlme_obj *vdev_mlme;
+
+	vdev_mlme = wlan_vdev_mlme_get_cmpt_obj(vdev);
+	if (!vdev_mlme)
+		return;
+
+	vdev_mlme->mgmt.generic.he_spr_srg_max_pd_offset = srg_max_pd_offset;
+	vdev_mlme->mgmt.generic.he_spr_srg_min_pd_offset = srg_min_pd_offset;
+}
+
+/**
+ * wlan_vdev_mlme_get_srg_pd_offset() - get spatial reuse SRG pd min/max offset
+ * @vdev: VDEV object
+ * @srg_max_pd_offset: SRG max pd offset
+ * @srg_min_pd_offset: SRG min pd offset
+ *
+ * API to set the spatial reuse SRG pd min max offset
+ *
+ * Caller need to acquire lock with wlan_vdev_obj_lock()
+ *
+ * Return: void
+ */
+static inline
+void wlan_vdev_mlme_get_srg_pd_offset(struct wlan_objmgr_vdev *vdev,
+				      uint8_t *srg_max_pd_offset,
+				      uint8_t *srg_min_pd_offset)
+{
+	struct vdev_mlme_obj *vdev_mlme;
+
+	vdev_mlme = wlan_vdev_mlme_get_cmpt_obj(vdev);
+	if (!vdev_mlme)
+		return;
+
+	*srg_max_pd_offset = vdev_mlme->mgmt.generic.he_spr_srg_max_pd_offset;
+	*srg_min_pd_offset = vdev_mlme->mgmt.generic.he_spr_srg_min_pd_offset;
+}
+
+/**
+ * wlan_vdev_mlme_set_srg_bss_color() - set spatial reuse bss
+ *					colorbitmap
+ * @vdev: VDEV object
+ * @srg_bss_color: SRG BSS color bitmap
+ *
+ * API to set the spatial reuse bss color bit map
+ *
+ * Caller need to acquire lock with wlan_vdev_obj_lock()
+ *
+ * Return: void
+ */
+static inline
+void wlan_vdev_mlme_set_srg_bss_color_bit_map(struct wlan_objmgr_vdev *vdev,
+					      uint64_t srg_bss_color)
+{
+	struct vdev_mlme_obj *vdev_mlme;
+
+	vdev_mlme = wlan_vdev_mlme_get_cmpt_obj(vdev);
+	if (!vdev_mlme)
+		return;
+
+	vdev_mlme->mgmt.generic.srg_bss_color = srg_bss_color;
+}
+
+/**
+ * wlan_vdev_mlme_set_srg_partial_bssid_bit_map() - set spatial reuse
+ *						srg partial bitmap
+ * @vdev: VDEV object
+ * @srg_partial_bssid: SRG partial BSSID bitmap
+ *
+ * API to set the spatial reuse partial bssid bitmap
+ *
+ * Caller need to acquire lock with wlan_vdev_obj_lock()
+ *
+ * Return: void
+ */
+static inline
+void wlan_vdev_mlme_set_srg_partial_bssid_bit_map(struct wlan_objmgr_vdev *vdev,
+						  uint64_t srg_partial_bssid)
+{
+	struct vdev_mlme_obj *vdev_mlme;
+
+	vdev_mlme = wlan_vdev_mlme_get_cmpt_obj(vdev);
+	if (!vdev_mlme)
+		return;
+
+	vdev_mlme->mgmt.generic.srg_partial_bssid = srg_partial_bssid;
+}
+
+/**
+ * wlan_vdev_mlme_get_srg_bss_color_bit_map() - get spatial reuse bss
+ *						colorbitmap
+ * @vdev: VDEV object
+ * @srg_bss_color: SRG BSS color bitmap
+ *
+ * API to get the spatial reuse bss color bit map
+ *
+ * Caller need to acquire lock with wlan_vdev_obj_lock()
+ *
+ * Return: void
+ */
+static inline
+void wlan_vdev_mlme_get_srg_bss_color_bit_map(struct wlan_objmgr_vdev *vdev,
+					      uint64_t *srg_bss_color)
+{
+	struct vdev_mlme_obj *vdev_mlme;
+
+	vdev_mlme = wlan_vdev_mlme_get_cmpt_obj(vdev);
+	if (!vdev_mlme)
+		return;
+
+	*srg_bss_color = vdev_mlme->mgmt.generic.srg_bss_color;
+}
+
+/**
+ * wlan_vdev_mlme_get_srg_partial_bssid_bit_map() - get spatial reuse
+ *						    srg partial bitmap
+ * @vdev: VDEV object
+ * @srg_partial_bssid: SRG partial BSSID bitmap
+ *
+ * API to get the spatial reuse partial bssid bitmap
+ *
+ * Caller need to acquire lock with wlan_vdev_obj_lock()
+ *
+ * Return: void
+ */
+static inline void
+wlan_vdev_mlme_get_srg_partial_bssid_bit_map(struct wlan_objmgr_vdev *vdev,
+					     uint64_t *srg_partial_bssid)
+{
+	struct vdev_mlme_obj *vdev_mlme;
+
+	vdev_mlme = wlan_vdev_mlme_get_cmpt_obj(vdev);
+	if (!vdev_mlme)
+		return;
+
+	*srg_partial_bssid = vdev_mlme->mgmt.generic.srg_partial_bssid;
+}
 #else
-static inline void wlan_vdev_mlme_set_he_mcs_12_13_map(
-				struct wlan_objmgr_vdev *vdev,
-				uint16_t he_mcs_12_13_map)
-{
-}
-
-static inline uint16_t wlan_vdev_mlme_get_he_mcs_12_13_map(
-				struct wlan_objmgr_vdev *vdev)
-{
-	return 0;
-}
-
 static inline uint8_t wlan_vdev_mlme_get_sr_ctrl(struct wlan_objmgr_vdev *vdev)
 {
 	return 0;
@@ -1334,6 +1607,18 @@ static inline bool wlan_vdev_mlme_get_he_spr_enabled(
 	return 0;
 }
 
+static inline
+bool wlan_vdev_mlme_is_sr_disable_due_conc(struct wlan_objmgr_vdev *vdev)
+{
+	return false;
+}
+
+static inline
+bool wlan_vdev_mlme_is_sr_prohibit_en(struct wlan_objmgr_vdev *vdev)
+{
+	return false;
+}
+
 static inline void wlan_vdev_mlme_set_sr_ctrl(struct wlan_objmgr_vdev *vdev,
 					      uint8_t sr_ctrl)
 {
@@ -1349,6 +1634,32 @@ static inline void wlan_vdev_mlme_set_he_spr_enabled(
 						bool enable_he_spr)
 {
 }
+
+static inline
+void wlan_vdev_mlme_set_sr_disable_due_conc(struct wlan_objmgr_vdev *vdev,
+					    bool he_spr_disabled_due_conc)
+{
+}
+
+static inline
+void wlan_vdev_mlme_set_sr_prohibit_en(struct wlan_objmgr_vdev *vdev,
+				       bool sr_prohibit_enabled)
+{
+}
+#endif
+#else
+static inline void wlan_vdev_mlme_set_he_mcs_12_13_map(
+				struct wlan_objmgr_vdev *vdev,
+				uint16_t he_mcs_12_13_map)
+{
+}
+
+static inline uint16_t wlan_vdev_mlme_get_he_mcs_12_13_map(
+				struct wlan_objmgr_vdev *vdev)
+{
+	return 0;
+}
+
 #endif
 
 /**

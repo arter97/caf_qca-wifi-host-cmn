@@ -681,6 +681,10 @@ static bool scm_check_dot11mode(struct scan_cache_entry *db_entry,
 		if (!util_scan_entry_hecap(db_entry))
 			return false;
 		break;
+	case ALLOW_11BE_ONLY:
+		if (!util_scan_entry_ehtcap(db_entry))
+			return false;
+		break;
 	default:
 		scm_debug("Invalid dot11mode filter passed %d",
 			  filter->dot11mode);
@@ -699,7 +703,7 @@ static bool util_mlo_filter_match(struct wlan_objmgr_pdev *pdev,
 	struct partner_link_info *partner_link;
 	bool is_disabled;
 
-	if (!db_entry->ie_list.multi_link)
+	if (!db_entry->ie_list.multi_link_bv)
 		return true;
 	if (!filter->band_bitmap)
 		return true;

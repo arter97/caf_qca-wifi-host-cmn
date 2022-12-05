@@ -566,7 +566,7 @@ static void ce_tasklet_entry_dump(struct HIF_CE_state *hif_ce_state)
  * hif_drain_tasklets(): wait until no tasklet is pending
  * @scn: hif context
  *
- * Let running tasklets clear pending trafic.
+ * Let running tasklets clear pending traffic.
  *
  * Return: 0 if no bottom half is in progress when it returns.
  *   -EFAULT if it times out.
@@ -874,7 +874,7 @@ irqreturn_t ce_dispatch_interrupt(int ce_id,
 	struct HIF_CE_state *hif_ce_state = tasklet_entry->hif_ce_state;
 	struct hif_softc *scn = HIF_GET_SOFTC(hif_ce_state);
 	struct hif_opaque_softc *hif_hdl = GET_HIF_OPAQUE_HDL(scn);
-	struct CE_state *ce_state = scn->ce_id_to_state[ce_id];
+	struct CE_state *ce_state;
 
 	if (tasklet_entry->ce_id != ce_id) {
 		bool rl;
@@ -894,6 +894,8 @@ irqreturn_t ce_dispatch_interrupt(int ce_id,
 			tasklet_entry->ce_id, CE_COUNT_MAX);
 		return IRQ_NONE;
 	}
+
+	ce_state = scn->ce_id_to_state[ce_id];
 
 	ce_interrupt_lock(ce_state);
 	if (ce_check_tasklet_status(ce_id, tasklet_entry)) {
@@ -959,7 +961,7 @@ const char *ce_name[CE_COUNT_MAX] = {
 /**
  * ce_unregister_irq() - ce_unregister_irq
  * @hif_ce_state: hif_ce_state copy engine device handle
- * @mask: which coppy engines to unregister for.
+ * @mask: which copy engines to unregister for.
  *
  * Unregisters copy engine irqs matching mask.  If a 1 is set at bit x,
  * unregister for copy engine x.
@@ -1007,7 +1009,7 @@ QDF_STATUS ce_unregister_irq(struct HIF_CE_state *hif_ce_state, uint32_t mask)
 /**
  * ce_register_irq() - ce_register_irq
  * @hif_ce_state: hif_ce_state
- * @mask: which coppy engines to unregister for.
+ * @mask: which copy engines to unregister for.
  *
  * Registers copy engine irqs matching mask.  If a 1 is set at bit x,
  * Register for copy engine x.

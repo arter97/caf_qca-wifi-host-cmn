@@ -911,6 +911,7 @@ static void
 tgt_if_register_afc_callback(struct wlan_lmac_if_reg_tx_ops *reg_ops)
 {
 	reg_ops->send_afc_ind = tgt_if_regulatory_send_afc_cmd;
+	reg_ops->reg_get_min_psd = NULL;
 }
 #else
 static void
@@ -956,6 +957,32 @@ QDF_STATUS target_if_regulatory_set_ext_tpc(struct wlan_objmgr_psoc *psoc)
 
 	return QDF_STATUS_SUCCESS;
 }
+
+#if defined(CONFIG_BAND_6GHZ) && defined(CONFIG_AFC_SUPPORT)
+void tgt_if_set_reg_afc_configure(struct target_psoc_info *tgt_hdl,
+				  struct wlan_objmgr_psoc *psoc)
+{
+	struct tgt_info *info;
+	wmi_unified_t wmi_handle = get_wmi_unified_hdl_from_psoc(psoc);
+
+	if (!wmi_handle || !tgt_hdl)
+		return;
+
+	if (!wmi_service_enabled(wmi_handle, wmi_service_afc_support)) {
+		target_if_err("service afc support not enable");
+		return;
+	}
+
+	info = (&tgt_hdl->info);
+
+	info->wlan_res_cfg.is_6ghz_sp_pwrmode_supp_enabled =
+		ucfg_reg_get_enable_6ghz_sp_mode_support(psoc);
+	info->wlan_res_cfg.afc_timer_check_disable =
+		ucfg_reg_get_afc_disable_timer_check(psoc);
+	info->wlan_res_cfg.afc_req_id_check_disable =
+		ucfg_reg_get_afc_disable_request_id_check(psoc);
+}
+#endif
 
 #if defined(CONFIG_BAND_6GHZ)
 /**
@@ -1092,6 +1119,45 @@ target_if_reg_get_afc_dev_type(struct wlan_objmgr_psoc *psoc,
 		reg_rx_ops->reg_get_afc_dev_type(
 			psoc,
 			reg_afc_dev_type);
+
+	return QDF_STATUS_SUCCESS;
+}
+
+/**
+ * tgt_if_regulatory_is_eirp_preferred_support() - Check if FW prefers EIRP
+ * support for TPC power command.
+ *
+ * @psoc: Pointer to psoc
+ *
+ * Return: true if FW prefers EIRP format for TPC, else false
+ */
+static bool
+target_if_regulatory_is_eirp_preferred_support(struct wlan_objmgr_psoc *psoc)
+{
+	wmi_unified_t wmi_handle = get_wmi_unified_hdl_from_psoc(psoc);
+
+	if (!wmi_handle)
+		return false;
+
+	return wmi_service_enabled(wmi_handle,
+				   wmi_service_eirp_preferred_support);
+}
+
+QDF_STATUS
+target_if_set_regulatory_eirp_preferred_support(struct wlan_objmgr_psoc *psoc)
+{
+	struct wlan_lmac_if_reg_rx_ops *reg_rx_ops;
+
+	reg_rx_ops = target_if_regulatory_get_rx_ops(psoc);
+	if (!reg_rx_ops) {
+		target_if_err("reg_rx_ops is NULL");
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	if (reg_rx_ops->reg_set_eirp_preferred_support)
+		reg_rx_ops->reg_set_eirp_preferred_support(
+			psoc,
+			target_if_regulatory_is_eirp_preferred_support(psoc));
 
 	return QDF_STATUS_SUCCESS;
 }

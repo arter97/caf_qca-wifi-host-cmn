@@ -113,6 +113,7 @@
 
 #define CDP_MAX_RX_RINGS 8  /* max rx rings */
 #define CDP_MAX_TX_COMP_RINGS 5 /* max tx/completion rings */
+#define CDP_MAX_TX_COMP_PPE_RING (CDP_MAX_TX_COMP_RINGS - 1)
 #define CDP_MAX_RX_WBM_RINGS 1 /* max rx wbm rings */
 
 #define CDP_MAX_TX_TQM_STATUS 9  /* max tx tqm completion status */
@@ -1426,6 +1427,10 @@ struct protocol_trace_count {
  * @release_src_not_tqm: Counter to keep track of release source is not TQM
  *			 in TX completion status processing
  * @per: Packet error ratio
+ * @rts_success: RTS success count
+ * @rts_failure: RTS failure count
+ * @bar_cnt: Block ACK Request frame count
+ * @ndpa_cnt: NDP announcement frame count
  */
 struct cdp_tx_stats {
 	struct cdp_pkt_info comp_pkt;
@@ -1545,6 +1550,10 @@ struct cdp_tx_stats {
 #endif
 	uint32_t release_src_not_tqm;
 	uint32_t per;
+	uint32_t rts_success;
+	uint32_t rts_failure;
+	uint32_t bar_cnt;
+	uint32_t ndpa_cnt;
 };
 
 /* struct cdp_rx_stats - rx Level Stats
@@ -1634,6 +1643,8 @@ struct cdp_tx_stats {
  * @su_be_ppdu_cnt: SU Rx packet count for BE
  * @mu_be_ppdu_cnt: MU rx packet count for BE
  * @punc_bw[MAX_PUNCTURED_MODE]: MSDU count for punctured BW
+ * @bar_cnt: Block ACK Request frame count
+ * @ndpa_cnt: NDP announcement frame count
  */
 struct cdp_rx_stats {
 	struct cdp_pkt_info to_stack;
@@ -1723,6 +1734,8 @@ struct cdp_rx_stats {
 	uint32_t punc_bw[MAX_PUNCTURED_MODE];
 #endif
 	uint32_t mcast_3addr_drop;
+	uint32_t bar_cnt;
+	uint32_t ndpa_cnt;
 };
 
 /* struct cdp_tx_ingress_stats - Tx ingress Stats
@@ -1929,6 +1942,7 @@ struct cdp_peer_stats {
 };
 
 /* struct cdp_peer_tid_stats - Per peer and per TID stats
+ * @tx_prev_delay: tx previous delay
  * @tx_avg_jitter: tx average jitter
  * @tx_avg_delay: tx average delay
  * @tx_avg_err: tx average error
@@ -1937,6 +1951,7 @@ struct cdp_peer_stats {
  */
 struct cdp_peer_tid_stats {
 #ifdef WLAN_PEER_JITTER
+	uint32_t tx_prev_delay;
 	uint32_t tx_avg_jitter;
 	uint32_t tx_avg_delay;
 	uint64_t tx_avg_err;
@@ -2278,7 +2293,7 @@ struct cdp_pdev_obss_pd_stats_tlv {
 	 * opportunities created. Incoming OBSS frame RSSI is compared with per
 	 * PPDU non-SRG RSSI threshold configured in each PPDU. If incoming OBSS
 	 * RSSI < non-SRG RSSI threshold configured in each PPDU, then non-SRG
-	 * tranmission happens.
+	 * transmission happens.
 	 */
 	uint32_t num_non_srg_ppdu_tried;
 	/**
@@ -2300,7 +2315,7 @@ struct cdp_pdev_obss_pd_stats_tlv {
 	 * Incoming OBSS frame RSSI is compared with per PPDU SRG RSSI
 	 * threshold configured in each PPDU.
 	 * If incoming OBSS RSSI < SRG RSSI threshold configured in each PPDU,
-	 * then SRG tranmission happens.
+	 * then SRG transmission happens.
 	 */
 	uint32_t num_srg_ppdu_tried;
 	/**
@@ -2800,8 +2815,8 @@ struct cdp_soc_stats {
  * @link_airtime: pdev airtime usage per ac per sec
  */
 struct cdp_pdev_telemetry_stats {
-	uint32_t tx_mpdu_failed;
-	uint32_t tx_mpdu_total;
+	uint32_t tx_mpdu_failed[WME_AC_MAX];
+	uint32_t tx_mpdu_total[WME_AC_MAX];
 	uint32_t link_airtime[WME_AC_MAX];
 };
 
@@ -2931,6 +2946,26 @@ struct cdp_pdev_stats {
 		uint32_t data_rx_ppdu;
 		uint32_t data_users[OFDMA_NUM_USERS];
 	} ul_ofdma;
+
+	/**
+	 * struct eap_drop_stats: EAPOL packet drop stats information
+	 * @tx_desc_error: Total number EAPOL packets dropped due to TX
+	 *		   descriptor error
+	 * @tx_hal_ring_access_err: Total EAPOL packets dropped due to
+	 *			     HAL ring access failure
+	 * @tx_dma_map_err: EAPOL packets dropped due to error in DMA map
+	 * @tx_hw_enqueue: EAPOL packets dropped by the host due to failure
+	 *		   in HW enqueue
+	 * @tx_sw_enqueue: EAPOL packets dropped by the host due to failure
+	 *		   in SW enqueue
+	 */
+	struct {
+		uint8_t tx_desc_err;
+		uint8_t tx_hal_ring_access_err;
+		uint8_t tx_dma_map_err;
+		uint8_t tx_hw_enqueue;
+		uint8_t tx_sw_enqueue;
+	} eap_drop_stats;
 
 	struct cdp_tso_stats tso_stats;
 	struct cdp_cfr_rcc_stats rcc;

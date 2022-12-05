@@ -222,6 +222,32 @@ void dp_soc_wds_detach(struct dp_soc *soc)
 }
 #endif
 
+#ifdef QCA_SUPPORT_WDS_EXTENDED
+bool dp_peer_check_wds_ext_peer(struct dp_peer *peer)
+{
+	struct dp_vdev *vdev = peer->vdev;
+	struct dp_txrx_peer *txrx_peer;
+
+	if (!vdev->wds_ext_enabled)
+		return false;
+
+	txrx_peer = dp_get_txrx_peer(peer);
+	if (!txrx_peer)
+		return false;
+
+	if (qdf_atomic_test_bit(WDS_EXT_PEER_INIT_BIT,
+				&txrx_peer->wds_ext.init))
+		return true;
+
+	return false;
+}
+#else
+bool dp_peer_check_wds_ext_peer(struct dp_peer *peer)
+{
+	return false;
+}
+#endif
+
 #ifdef REO_QDESC_HISTORY
 static inline void
 dp_rx_reo_qdesc_history_add(struct reo_desc_list_node *free_desc,
@@ -5224,15 +5250,25 @@ QDF_STATUS dp_peer_jitter_stats_ctx_alloc(struct dp_pdev *pdev,
 		return QDF_STATUS_E_INVAL;
 	}
 
-	/*
-	 * Allocate memory for jitter stats only when
-	 * operating in offload enabled mode.
-	 */
-	if (!wlan_cfg_get_dp_pdev_nss_enabled(pdev->wlan_cfg_ctx))
+	if (!wlan_cfg_is_peer_jitter_stats_enabled(pdev->soc->wlan_cfg_ctx))
 		return QDF_STATUS_SUCCESS;
 
-	txrx_peer->jitter_stats =
-		qdf_mem_malloc(sizeof(struct cdp_peer_tid_stats) * DP_MAX_TIDS);
+	if (wlan_cfg_get_dp_pdev_nss_enabled(pdev->wlan_cfg_ctx)) {
+		/*
+		 * Allocate memory on per tid basis when nss is enabled
+		 */
+		txrx_peer->jitter_stats =
+			qdf_mem_malloc(sizeof(struct cdp_peer_tid_stats)
+					* DP_MAX_TIDS);
+	} else {
+		/*
+		 * Allocate memory on per tid per ring basis
+		 */
+		txrx_peer->jitter_stats =
+			qdf_mem_malloc(sizeof(struct cdp_peer_tid_stats)
+					* DP_MAX_TIDS * CDP_MAX_TXRX_CTX);
+	}
+
 	if (!txrx_peer->jitter_stats) {
 		dp_warn("Jitter stats obj alloc failed!!");
 		return QDF_STATUS_E_NOMEM;
@@ -5257,8 +5293,7 @@ void dp_peer_jitter_stats_ctx_dealloc(struct dp_pdev *pdev,
 		return;
 	}
 
-	/* Check for offload mode */
-	if (!wlan_cfg_get_dp_pdev_nss_enabled(pdev->wlan_cfg_ctx))
+	if (!wlan_cfg_is_peer_jitter_stats_enabled(pdev->soc->wlan_cfg_ctx))
 		return;
 
 	if (txrx_peer->jitter_stats) {
@@ -5276,9 +5311,33 @@ void dp_peer_jitter_stats_ctx_dealloc(struct dp_pdev *pdev,
  */
 void dp_peer_jitter_stats_ctx_clr(struct dp_txrx_peer *txrx_peer)
 {
-	if (txrx_peer->jitter_stats)
-		qdf_mem_zero(txrx_peer->jitter_stats,
-			     sizeof(struct cdp_peer_tid_stats) * DP_MAX_TIDS);
+	struct cdp_peer_tid_stats *jitter_stats = NULL;
+
+	if (!txrx_peer) {
+		dp_warn("Null peer");
+		return;
+	}
+
+	if (!wlan_cfg_is_peer_jitter_stats_enabled(txrx_peer->
+						   vdev->
+						   pdev->soc->wlan_cfg_ctx))
+		return;
+
+	jitter_stats = txrx_peer->jitter_stats;
+	if (!jitter_stats)
+		return;
+
+	if (wlan_cfg_get_dp_pdev_nss_enabled(txrx_peer->
+					     vdev->pdev->wlan_cfg_ctx))
+		qdf_mem_zero(jitter_stats,
+			     sizeof(struct cdp_peer_tid_stats) *
+			     DP_MAX_TIDS);
+
+	else
+		qdf_mem_zero(jitter_stats,
+			     sizeof(struct cdp_peer_tid_stats) *
+			     DP_MAX_TIDS * CDP_MAX_TXRX_CTX);
+
 }
 #endif
 
@@ -5759,22 +5818,6 @@ bool dp_find_peer_exist_on_other_vdev(struct cdp_soc_t *soc_hdl,
 	return false;
 }
 
-bool dp_find_peer_exist(struct cdp_soc_t *soc_hdl, uint8_t pdev_id,
-			uint8_t *peer_addr)
-{
-	struct dp_soc *soc = cdp_soc_t_to_dp_soc(soc_hdl);
-	struct dp_peer *peer = NULL;
-
-	peer = dp_peer_find_hash_find(soc, peer_addr, 0, DP_VDEV_ALL,
-				      DP_MOD_ID_CDP);
-	if (peer) {
-		dp_peer_unref_delete(peer, DP_MOD_ID_CDP);
-		return true;
-	}
-
-	return false;
-}
-
 void dp_set_peer_as_tdls_peer(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
 			      uint8_t *peer_mac, bool val)
 {
@@ -5796,6 +5839,22 @@ void dp_set_peer_as_tdls_peer(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
 	dp_peer_unref_delete(peer, DP_MOD_ID_CDP);
 }
 #endif
+
+bool dp_find_peer_exist(struct cdp_soc_t *soc_hdl, uint8_t pdev_id,
+			uint8_t *peer_addr)
+{
+	struct dp_soc *soc = cdp_soc_t_to_dp_soc(soc_hdl);
+	struct dp_peer *peer = NULL;
+
+	peer = dp_peer_find_hash_find(soc, peer_addr, 0, DP_VDEV_ALL,
+				      DP_MOD_ID_CDP);
+	if (peer) {
+		dp_peer_unref_delete(peer, DP_MOD_ID_CDP);
+		return true;
+	}
+
+	return false;
+}
 
 #ifdef IPA_OFFLOAD
 int dp_peer_get_rxtid_stats_ipa(struct dp_peer *peer,

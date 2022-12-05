@@ -43,7 +43,7 @@
 #endif
 
 #include "wlan_reg_services_api.h"
-/* forward declartion */
+/* forward declaration */
 struct regulatory_channel;
 
 #define REG_SET_CHANNEL_REG_POWER(reg_info_1, val) do { \
@@ -757,7 +757,7 @@ static void wifi_pos_get_vdev_list(struct wlan_objmgr_psoc *psoc,
 
 static uint32_t wifi_pos_get_vdev_count(struct wlan_objmgr_psoc *psoc)
 {
-	return psoc->soc_objmgr.wlan_vdev_count;
+	return psoc->soc_objmgr.max_vdev_count;
 }
 
 #else
@@ -790,7 +790,7 @@ static uint32_t wifi_pos_get_vdev_count(struct wlan_objmgr_psoc *tpsoc)
 	for (index = 0; index < WLAN_OBJMGR_MAX_DEVICES; index++) {
 		if (g_umac_glb_obj->psoc[index]) {
 			psoc = g_umac_glb_obj->psoc[index];
-			vdev_count += psoc->soc_objmgr.wlan_vdev_count;
+			vdev_count += psoc->soc_objmgr.max_vdev_count;
 		}
 	}
 
@@ -1167,7 +1167,7 @@ wifi_pos_peer_object_destroyed_notification(struct wlan_objmgr_peer *peer,
 						       WLAN_UMAC_COMP_WIFI_POS,
 						       (void *)peer_priv);
 	if (QDF_IS_STATUS_ERROR(status))
-		wifi_pos_err("unable to dettach peer_priv obj to peer obj");
+		wifi_pos_err("unable to detach peer_priv obj to peer obj");
 
 	qdf_mem_free(peer_priv);
 
@@ -1209,7 +1209,7 @@ int wifi_pos_oem_rsp_handler(struct wlan_objmgr_psoc *psoc,
 	wifi_pos_debug("oem data rsp, len: %d to pid: %d", len, app_pid);
 
 	if (oem_rsp->rsp_len_2 + oem_rsp->dma_len) {
-		/* stitch togther the msg data_1 + CIR/CFR + data_2 */
+		/* stitch together the msg data_1 + CIR/CFR + data_2 */
 		data = qdf_mem_malloc(len);
 		if (!data)
 			return -ENOMEM;

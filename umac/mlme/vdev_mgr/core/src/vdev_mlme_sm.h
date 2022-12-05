@@ -134,7 +134,7 @@ static inline QDF_STATUS mlme_vdev_validate_basic_params(
  * @event_data_len: data size
  * @event_data: event data
  *
- * API resets the protocol params fo vdev
+ * API resets the protocol params of vdev
  *
  * Return: SUCCESS on successful reset
  *         FAILURE, if it fails due to any
@@ -668,7 +668,7 @@ static inline void mlme_vdev_start_rsp_notify_mlo_mgr(
 }
 
 /**
- * mlme_vdev_down_cmpl_notify_mlo_mgr - notify mlo link is down complate
+ * mlme_vdev_down_cmpl_notify_mlo_mgr - notify mlo link is down complete
  * @vdev_mlme_obj:  VDEV MLME comp object
  *
  * Return: VOID.
@@ -693,6 +693,25 @@ static inline void mlme_vdev_up_active_notify_mlo_mgr(
 	    wlan_vdev_mlme_is_mlo_vdev(vdev_mlme->vdev))
 		mlo_sta_up_active_notify(vdev_mlme->vdev);
 }
+
+/**
+ * mlme_vdev_notify_mlo_sync_wait_entry - Notifies mlo sync wait state
+ * @vdev_mlme_obj:  VDEV MLME comp object
+ *
+ * Return: NO_SUPPORT if the callback is not supported.
+ *         SUCCESS if notification is handled by caller
+ */
+static inline QDF_STATUS mlme_vdev_notify_mlo_sync_wait_entry(
+				struct vdev_mlme_obj *vdev_mlme)
+{
+	QDF_STATUS ret = QDF_STATUS_E_NOSUPPORT;
+
+	if (vdev_mlme->ops &&
+	    vdev_mlme->ops->mlme_vdev_notify_mlo_sync_wait_entry)
+		ret = vdev_mlme->ops->mlme_vdev_notify_mlo_sync_wait_entry(
+				vdev_mlme);
+	return ret;
+}
 #else
 static inline void mlme_vdev_up_notify_mlo_mgr(struct vdev_mlme_obj *vdev_mlme)
 {
@@ -711,6 +730,12 @@ static inline void mlme_vdev_down_cmpl_notify_mlo_mgr(
 static inline void mlme_vdev_up_active_notify_mlo_mgr(
 					struct vdev_mlme_obj *vdev_mlme)
 {
+}
+
+static inline QDF_STATUS mlme_vdev_notify_mlo_sync_wait_entry(
+				struct vdev_mlme_obj *vdev_mlme)
+{
+	return QDF_STATUS_SUCCESS;
 }
 #endif
 

@@ -618,6 +618,7 @@ struct dp_mon_ops {
 				   struct dp_intr *int_ctx,
 				   uint32_t mac_id,
 				   uint32_t quota);
+	void (*print_txmon_ring_stat)(struct dp_pdev *pdev);
 #endif
 	void (*mon_peer_tx_init)(struct dp_pdev *pdev, struct dp_peer *peer);
 	void (*mon_peer_tx_cleanup)(struct dp_vdev *vdev,
@@ -738,6 +739,8 @@ struct dp_mon_ops {
 	void (*mon_filter_setup_smart_monitor)(struct dp_pdev *pdev);
 	void (*mon_filter_reset_smart_monitor)(struct dp_pdev *pdev);
 #endif
+	void (*mon_filter_set_reset_mon_mac_filter)(struct dp_pdev *pdev,
+						    bool val);
 #ifdef WLAN_RX_PKT_CAPTURE_ENH
 	void (*mon_filter_setup_rx_enh_capture)(struct dp_pdev *pdev);
 	void (*mon_filter_reset_rx_enh_capture)(struct dp_pdev *pdev);
@@ -760,6 +763,8 @@ struct dp_mon_ops {
 #endif
 	QDF_STATUS (*rx_mon_filter_update)(struct dp_pdev *pdev);
 	QDF_STATUS (*tx_mon_filter_update)(struct dp_pdev *pdev);
+	QDF_STATUS (*set_mon_mode_buf_rings_tx)(struct dp_pdev *pdev,
+						uint16_t num_buf);
 
 	QDF_STATUS (*tx_mon_filter_alloc)(struct dp_pdev *pdev);
 	void (*tx_mon_filter_dealloc)(struct dp_pdev *pdev);
@@ -825,6 +830,8 @@ struct dp_mon_ops {
 		(struct dp_soc *soc, struct dp_pdev *pdev);
 	QDF_STATUS (*mon_rx_ppdu_info_cache_create)(struct dp_pdev *pdev);
 	void (*mon_rx_ppdu_info_cache_destroy)(struct dp_pdev *pdev);
+	void (*mon_mac_filter_set)(uint32_t *msg_word,
+				   struct htt_rx_ring_tlv_filter *tlv_filter);
 };
 
 /**
@@ -929,6 +936,21 @@ struct dp_mon_peer {
 
 	/* peer extended statistics context */
 	struct cdp_peer_rate_stats_ctx *peerstats_ctx;
+};
+
+struct dp_rx_mon_rssi_offset {
+	/* Temperature based rssi offset */
+	int32_t rssi_temp_offset;
+	/* Low noise amplifier bypass offset */
+	int32_t xlna_bypass_offset;
+	/* Low noise amplifier bypass threshold */
+	int32_t xlna_bypass_threshold;
+	/* 3 Bytes of xbar_config are used for RF to BB mapping */
+	uint32_t xbar_config;
+	/* min noise floor in active chains per channel */
+	int8_t min_nf_dbm;
+	/* this value is sum of temp_oofset + min_nf*/
+	int32_t rssi_offset;
 };
 
 struct  dp_mon_pdev {
@@ -1119,6 +1141,9 @@ struct  dp_mon_pdev {
 
 	/* Invalid monitor peer to account for stats in mcopy mode */
 	struct dp_mon_peer *invalid_mon_peer;
+
+	bool rssi_dbm_conv_support;
+	struct dp_rx_mon_rssi_offset rssi_offsets;
 };
 
 struct  dp_mon_vdev {
@@ -2410,6 +2435,28 @@ uint32_t dp_rx_mon_buf_refill(struct dp_intr *int_ctx)
 
 	return monitor_ops->rx_mon_refill_buf_ring(int_ctx);
 }
+
+static inline
+void dp_print_txmon_ring_stat_from_hal(struct dp_pdev *pdev)
+{
+	struct dp_soc *soc = pdev->soc;
+	struct dp_mon_soc *mon_soc = soc->monitor_soc;
+	struct dp_mon_ops *monitor_ops;
+
+	if (!mon_soc) {
+		dp_mon_debug("monitor soc is NULL");
+		return;
+	}
+
+	monitor_ops = mon_soc->mon_ops;
+	if (!monitor_ops || !monitor_ops->print_txmon_ring_stat) {
+		dp_mon_debug("callback not registered");
+		return;
+	}
+
+	monitor_ops->print_txmon_ring_stat(pdev);
+}
+
 #else
 static inline
 uint32_t dp_monitor_process(struct dp_soc *soc, struct dp_intr *int_ctx,
@@ -2435,6 +2482,11 @@ static inline
 uint32_t dp_rx_mon_buf_refill(struct dp_intr *int_ctx)
 {
 	return 0;
+}
+
+static inline
+void dp_print_txmon_ring_stat_from_hal(struct dp_pdev *pdev)
+{
 }
 #endif
 
@@ -3859,6 +3911,27 @@ dp_rx_mon_enable(struct dp_soc *soc, uint32_t *msg_word,
 	}
 
 	monitor_ops->rx_mon_enable(msg_word, tlv_filter);
+}
+
+static inline void
+dp_mon_rx_mac_filter_set(struct dp_soc *soc, uint32_t *msg_word,
+			 struct htt_rx_ring_tlv_filter *tlv_filter)
+{
+	struct dp_mon_soc *mon_soc = soc->monitor_soc;
+	struct dp_mon_ops *monitor_ops;
+
+	if (!mon_soc) {
+		dp_mon_debug("mon soc is NULL");
+		return;
+	}
+
+	monitor_ops = mon_soc->mon_ops;
+	if (!monitor_ops || !monitor_ops->mon_mac_filter_set) {
+		dp_mon_debug("callback not registered");
+		return;
+	}
+
+	monitor_ops->mon_mac_filter_set(msg_word, tlv_filter);
 }
 
 #ifdef QCA_ENHANCED_STATS_SUPPORT

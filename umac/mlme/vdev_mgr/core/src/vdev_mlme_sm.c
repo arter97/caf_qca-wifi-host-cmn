@@ -1658,6 +1658,7 @@ static void mlme_vdev_subst_mlo_sync_wait_entry(void *ctx)
 		QDF_BUG(0);
 
 	mlme_vdev_set_substate(vdev, WLAN_VDEV_SS_MLO_SYNC_WAIT);
+	mlme_vdev_notify_mlo_sync_wait_entry(vdev_mlme);
 }
 
 /**
@@ -1704,13 +1705,14 @@ static bool mlme_vdev_subst_mlo_sync_wait_event(void *ctx, uint16_t event,
 		break;
 
 	case WLAN_VDEV_SM_EV_DOWN:
-		mlme_vdev_sm_transition_to(vdev_mlme, WLAN_VDEV_S_STOP);
-		mlme_vdev_sm_deliver_event(vdev_mlme, WLAN_VDEV_SM_EV_STOP_REQ,
+		mlme_vdev_sm_transition_to(vdev_mlme, WLAN_VDEV_S_SUSPEND);
+		mlme_vdev_sm_deliver_event(vdev_mlme, event,
 					   event_data_len, event_data);
 		status = true;
 		break;
 
 	case WLAN_VDEV_SM_EV_RADAR_DETECTED:
+	case WLAN_VDEV_SM_EV_CSA_RESTART:
 		mlme_vdev_sm_transition_to(vdev_mlme, WLAN_VDEV_S_START);
 		mlme_vdev_sm_deliver_event(vdev_mlme,
 					   WLAN_VDEV_SM_EV_RESTART_REQ,

@@ -331,6 +331,7 @@ struct target_ops {
 	int (*csa_switch_count_status)(
 		struct wlan_objmgr_psoc *psoc,
 		struct pdev_csa_switch_count_status csa_status);
+	void (*ema_init)(struct wlan_objmgr_pdev *pdev);
 #if defined(WLAN_FEATURE_11BE_MLO) && defined(WLAN_MLO_MULTI_CHIP)
 	bool (*mlo_capable)(struct wlan_objmgr_psoc *psoc);
 	void (*mlo_setup_done_event)(struct wlan_objmgr_psoc *psoc);
@@ -566,6 +567,14 @@ bool target_is_tgt_type_qcn9000(uint32_t target_type);
  * Return: true if the target_type is QCN6122, else false.
  */
 bool target_is_tgt_type_qcn6122(uint32_t target_type);
+
+/**
+ * target_is_tgt_type_qcn9160() - Check if the target type is QCN9160 (york)
+ * @target_type: target type to be checked.
+ *
+ * Return: true if the target_type is QCN9160, else false.
+ */
+bool target_is_tgt_type_qcn9160(uint32_t target_type);
 
 /**
  * target_is_tgt_type_qcn7605() - Check if the target type is QCN7605

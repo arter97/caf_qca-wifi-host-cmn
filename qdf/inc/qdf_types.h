@@ -289,7 +289,7 @@ typedef void (*qdf_defer_fn_t)(void *);
 
 /*
  * Prototype of the critical region function that is to be
- * executed with spinlock held and interrupt disalbed
+ * executed with spinlock held and interrupt disabled
  */
 typedef bool (*qdf_irqlocked_func_t)(void *);
 
@@ -327,7 +327,7 @@ typedef bool (*qdf_irqlocked_func_t)(void *);
  * @QDF_MODULE_ID_XRATE: rate set handling
  * @QDF_MODULE_ID_INPUT: input handling
  * @QDF_MODULE_ID_CRYPTO: crypto work
- * @QDF_MODULE_ID_DUMPPKTS: IFF_LINK2 equivalant
+ * @QDF_MODULE_ID_DUMPPKTS: IFF_LINK2 equivalent
  * @QDF_MODULE_ID_DEBUG: IFF_DEBUG equivalent
  * @QDF_MODULE_ID_MLME: MLME
  * @QDF_MODULE_ID_RRM: Radio resource measurement
@@ -363,8 +363,8 @@ typedef bool (*qdf_irqlocked_func_t)(void *);
  * @QDF_MODULE_ID_HAL: Hal abstraction module ID
  * @QDF_MODULE_ID_SOC: SOC module ID
  * @QDF_MODULE_ID_OS_IF: OS-interface module ID
- * @QDF_MODULE_ID_TARGET_IF: targer interface module ID
- * @QDF_MODULE_ID_SCHEDULER: schduler module ID
+ * @QDF_MODULE_ID_TARGET_IF: target interface module ID
+ * @QDF_MODULE_ID_SCHEDULER: scheduler module ID
  * @QDF_MODULE_ID_MGMT_TXRX: management TX/RX module ID
  * @QDF_MODULE_ID_SERIALIZATION: serialization module ID
  * @QDF_MODULE_ID_PMO: PMO (power manager and offloads) Module ID
@@ -440,6 +440,7 @@ typedef bool (*qdf_irqlocked_func_t)(void *);
  * @QDF_MODULE_ID_DP_SAWF: DP SAWF module ID
  * @QDF_MODULE_ID_SCS: SCS module ID
  * @QDF_MODULE_ID_COAP: Constrained Application Protocol module ID
+ * @QDF_MODULE_ID_QMI: QMI module ID
  * @QDF_MODULE_ID_ANY: anything
  * @QDF_MODULE_ID_MAX: Max place holder module ID
  *
@@ -604,6 +605,7 @@ typedef enum {
 	QDF_MODULE_ID_DP_SAWF,
 	QDF_MODULE_ID_SCS,
 	QDF_MODULE_ID_COAP,
+	QDF_MODULE_ID_QMI,
 	QDF_MODULE_ID_ANY,
 	QDF_MODULE_ID_MAX,
 } QDF_MODULE_ID;
@@ -952,6 +954,14 @@ QDF_STATUS qdf_uint64_parse(const char *int_str, uint64_t *out_int);
 #define QDF_MAC_ADDR_REF(a) (a)
 #endif /* WLAN_TRACE_HIDE_MAC_ADDRESS */
 
+#define QDF_SSID_FMT "%.*s"
+
+#if defined(WLAN_TRACE_HIDE_SSID)
+#define QDF_SSID_REF(_l, _s) 1, "*"
+#else
+#define QDF_SSID_REF(_l, _s) (_l), (_s)
+#endif /* WLAN_TRACE_HIDE_SSID */
+
 #define QDF_MAC_ADDR_BCAST_INIT { { 0xff, 0xff, 0xff, 0xff, 0xff, 0xff } }
 #define QDF_MAC_ADDR_ZERO_INIT { { 0, 0, 0, 0, 0, 0 } }
 
@@ -1137,6 +1147,22 @@ struct qdf_ipv6_addr {
  * Return: QDF_STATUS
  */
 QDF_STATUS qdf_ipv6_parse(const char *ipv6_str, struct qdf_ipv6_addr *out_addr);
+
+/**
+ * qdf_int32_array_parse() - parse the given string as int32 array
+ * @in_str: the input string to parse
+ * @out_array: the output uint32 array, populated on success
+ * @array_size: size of the array
+ * @out_size: size of the populated array
+ *
+ * This API is called to convert string (each value separated by
+ * a comma) into an uint32 array
+ *
+ * Return: QDF_STATUS
+ */
+
+QDF_STATUS qdf_int32_array_parse(const char *in_str, int32_t *out_array,
+				 qdf_size_t array_size, qdf_size_t *out_size);
 
 /**
  * qdf_uint32_array_parse() - parse the given string as uint32 array
@@ -1387,7 +1413,7 @@ struct qdf_tso_info_t {
 #define QDF_CE_TX_PKT_TYPE_BIT_S   6
 
 /**
- * QDF_CE_TX_PKT_OFFSET_BIT_S - 12 bits --> 16-27, in the CE desciptor
+ * QDF_CE_TX_PKT_OFFSET_BIT_S - 12 bits --> 16-27, in the CE descriptor
  *  the length of HTT/HTC descriptor
  */
 #define QDF_CE_TX_PKT_OFFSET_BIT_S  16
@@ -1599,7 +1625,7 @@ enum qdf_dp_a_status {
  * @QDF_DOMAIN_ATTR_SECURE_VMID: Domain attribute secure cmid
  * @QDF_DOMAIN_ATTR_FAST: Domain attribute fast
  * @QDF_DOMAIN_ATTR_PGTBL_INFO: Domain attribute pgtbl info
- * @QDF_DOMAIN_ATTR_USE_UPSTREAM_HINT: Domain attribute use upsteram hint
+ * @QDF_DOMAIN_ATTR_USE_UPSTREAM_HINT: Domain attribute use upstream hint
  * @QDF_DOMAIN_ATTR_EARLY_MAP: Domain attribute early map
  * @QDF_DOMAIN_ATTR_PAGE_TABLE_IS_COHERENT: Domain attribute page table
  * is coherrent
