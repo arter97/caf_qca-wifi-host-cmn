@@ -290,6 +290,7 @@
  * @WLAN_UMAC_COMP_MLO_MGR:       MLO manager
  * @WLAN_UMAC_COMP_REPEATER:      Repeater component
  * @WLAN_UMAC_COMP_MBSS:          MBSS Framework
+ * @WLAN_UMAC_COMP_AFC:           AFC component
  * @WLAN_UMAC_COMP_ID_MAX:        Maximum components in UMAC
  *
  * This id is static.
@@ -339,6 +340,7 @@ enum wlan_umac_comp_id {
 	WLAN_UMAC_COMP_MLO_MGR            = 40,
 	WLAN_UMAC_COMP_REPEATER           = 41,
 	WLAN_UMAC_COMP_MBSS               = 42,
+	WLAN_UMAC_COMP_AFC                = 43,
 	WLAN_UMAC_COMP_ID_MAX,
 };
 

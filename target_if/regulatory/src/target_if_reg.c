@@ -32,6 +32,9 @@
 #include <target_if_reg_11d.h>
 #include <target_if_reg_lte.h>
 #include <wlan_reg_ucfg_api.h>
+#ifdef CONFIG_REG_CLIENT
+#include <wlan_dcs_tgt_api.h>
+#endif
 
 /**
  * get_chan_list_cc_event_id() - Get chan_list_cc event i
@@ -820,11 +823,19 @@ static void target_if_register_afc_event_handler(
 		tgt_if_regulatory_unregister_afc_event_handler;
 }
 
+#ifdef CONFIG_REG_CLIENT
+static void target_if_register_acs_trigger_for_afc
+				(struct wlan_lmac_if_reg_tx_ops *reg_ops)
+{
+	reg_ops->trigger_acs_for_afc = tgt_afc_trigger_dcs;
+}
+#else
 static void target_if_register_acs_trigger_for_afc
 				(struct wlan_lmac_if_reg_tx_ops *reg_ops)
 {
 	reg_ops->trigger_acs_for_afc = NULL;
 }
+#endif
 #else
 static void target_if_register_afc_event_handler(
 				struct wlan_lmac_if_reg_tx_ops *reg_ops)
@@ -938,6 +949,32 @@ QDF_STATUS target_if_regulatory_set_ext_tpc(struct wlan_objmgr_psoc *psoc)
 
 	return QDF_STATUS_SUCCESS;
 }
+
+#if defined(CONFIG_BAND_6GHZ) && defined(CONFIG_AFC_SUPPORT)
+void tgt_if_set_reg_afc_configure(struct target_psoc_info *tgt_hdl,
+				  struct wlan_objmgr_psoc *psoc)
+{
+	struct tgt_info *info;
+	wmi_unified_t wmi_handle = get_wmi_unified_hdl_from_psoc(psoc);
+
+	if (!wmi_handle || !tgt_hdl)
+		return;
+
+	if (!wmi_service_enabled(wmi_handle, wmi_service_afc_support)) {
+		target_if_err("service afc support not enable");
+		return;
+	}
+
+	info = (&tgt_hdl->info);
+
+	info->wlan_res_cfg.is_6ghz_sp_pwrmode_supp_enabled =
+		ucfg_reg_get_enable_6ghz_sp_mode_support(psoc);
+	info->wlan_res_cfg.afc_timer_check_disable =
+		ucfg_reg_get_afc_disable_timer_check(psoc);
+	info->wlan_res_cfg.afc_req_id_check_disable =
+		ucfg_reg_get_afc_disable_request_id_check(psoc);
+}
+#endif
 
 #if defined(CONFIG_BAND_6GHZ)
 /**

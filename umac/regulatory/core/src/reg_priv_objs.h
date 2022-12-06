@@ -114,6 +114,11 @@ struct chan_change_cbk_entry {
  * disabled
  * @ch_avoid_ext_ind: whether need to update extended channel frequency list
  * @avoid_freq_ext_list: the extended avoid channel frequency list
+ * @enable_6ghz_sp_pwrmode_supp: Whether enable target Standard Power mode
+ *	support
+ * @afc_disable_timer_check: Whether disable target AFC timer check
+ * @afc_disable_request_id_check: Whether disable target AFC request id check
+ * @is_afc_reg_noaction: Whether no action to AFC power event
  */
 struct wlan_regulatory_psoc_priv_obj {
 	struct mas_chan_params mas_chan_params[PSOC_MAX_PHY_REG_CAP];
@@ -178,6 +183,12 @@ struct wlan_regulatory_psoc_priv_obj {
 #ifdef FEATURE_WLAN_CH_AVOID_EXT
 	bool ch_avoid_ext_ind;
 	struct ch_avoid_ind_type avoid_freq_ext_list;
+#endif
+#ifdef CONFIG_AFC_SUPPORT
+	bool enable_6ghz_sp_pwrmode_supp;
+	bool afc_disable_timer_check;
+	bool afc_disable_request_id_check;
+	bool is_afc_reg_noaction;
 #endif
 };
 

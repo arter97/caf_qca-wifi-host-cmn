@@ -1392,6 +1392,10 @@ enum restart_beaconing_on_ch_avoid_rule {
  * @enable_5dot9_ghz_chan_in_master_mode: 5.9 GHz channel support in
  * master mode
  * @retain_nol_across_regdmn_update: Retain the NOL list across the regdomain.
+ * @enable_6ghz_sp_pwrmode_supp: Enable target 6 GHz Standard Power mode support
+ * @afc_disable_timer_check: Disable target AFC timer check
+ * @afc_disable_request_id_check: Disable target AFC request id check
+ * @is_afc_reg_noaction: Whether no action to AFC power event
  */
 struct reg_config_vars {
 	uint32_t enable_11d_support;
@@ -1406,6 +1410,12 @@ struct reg_config_vars {
 	bool enable_11d_in_world_mode;
 	bool enable_5dot9_ghz_chan_in_master_mode;
 	bool retain_nol_across_regdmn_update;
+#if defined(CONFIG_AFC_SUPPORT) && defined(CONFIG_BAND_6GHZ)
+	bool enable_6ghz_sp_pwrmode_supp;
+	bool afc_disable_timer_check;
+	bool afc_disable_request_id_check;
+	bool is_afc_reg_noaction;
+#endif
 };
 
 /**
