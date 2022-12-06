@@ -207,6 +207,13 @@ void qdf_debugfs_hexdump(qdf_debugfs_file_t file, const uint8_t *buf,
 qdf_export_symbol(qdf_debugfs_hexdump);
 #endif
 
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(4, 0, 0))
+static inline bool seq_has_overflowed(struct seq_file *m)
+{
+	return m->count == m->size;
+}
+#endif
+
 bool qdf_debugfs_overflow(qdf_debugfs_file_t file)
 {
 	return seq_has_overflowed(file);

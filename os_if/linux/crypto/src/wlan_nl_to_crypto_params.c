@@ -37,6 +37,12 @@
 #include "wlan_nl_to_crypto_params.h"
 #include "wlan_crypto_global_def.h"
 
+#ifndef WLAN_CIPHER_SUITE_GCMP_256
+#define WLAN_CIPHER_SUITE_GCMP_256 0x000FAC09
+#endif
+#ifndef WLAN_CIPHER_SUITE_CCMP_256
+#define WLAN_CIPHER_SUITE_CCMP_256 0x000FAC0A
+#endif
 /**
  * struct osif_akm_crypto_mapping - mapping akm type received from
  *                                 NL to internal crypto type

@@ -174,7 +174,10 @@ QDF_STATUS osif_cm_set_crypto_params(struct wlan_cm_connect_req *connect_req,
 	return status;
 }
 
-#ifdef WLAN_FEATURE_FILS_SK
+#if defined(WLAN_FEATURE_FILS_SK) && \
+	(defined(CFG80211_FILS_SK_OFFLOAD_SUPPORT) || \
+		 (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 12, 0)))
+
 static bool osif_cm_is_akm_suite_fils(uint32_t key_mgmt)
 {
 	switch (key_mgmt) {
