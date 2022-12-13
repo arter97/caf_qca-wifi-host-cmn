@@ -116,6 +116,14 @@ enum mgmt_subtype {
  * @ACTION_CATEGORY_RVS: robust av streaming action category
  * @ACTION_CATEGORY_UNPROT_DMG: dmg action category
  * @ACTION_CATEGORY_VHT: vht action category
+ * @ACTION_CATEGORY_USIG: Unprotected S1G Action frame
+ * @ACTION_CATEGORY_SIG: S1G Action frame
+ * @ACTION_CATEGORY_FLOW_CONTROL: Flow Control Action frame
+ * @ACTION_CATEGORY_CONTROL_RSP_MCS_NEGO: Control Response MCS Negotiation frame
+ * @ACTION_CATEGORY_FIL: FILS Action frame
+ * @ACTION_CATEGORY_CDMG: CDMG Action frame
+ * @ACTION_CATEGORY_CMMG: CMMG Action frame
+ * @ACTION_CATEGORY_GLK: GLK Action frame
  * @ACTION_CATEGORY_VENDOR_SPECIFIC_PROTECTED: vendor specific protected
  *                                             action category
  * @ACTION_CATEGORY_VENDOR_SPECIFIC: vendor specific action category
@@ -144,6 +152,13 @@ enum mgmt_action_category {
 	ACTION_CATEGORY_UNPROT_DMG = 20,
 	ACTION_CATEGORY_VHT = 21,
 	ACTION_CATEGORY_USIG = 22,
+	ACTION_CATEGORY_SIG = 23,
+	ACTION_CATEGORY_FLOW_CONTROL = 24,
+	ACTION_CATEGORY_CONTROL_RSP_MCS_NEGO = 25,
+	ACTION_CATEGORY_FILS = 26,
+	ACTION_CATEGORY_CDMG = 27,
+	ACTION_CATEGORY_CMMG = 28,
+	ACTION_CATEGORY_GLK = 29,
 	ACTION_CATEGORY_VENDOR_SPECIFIC_PROTECTED = 126,
 	ACTION_CATEGORY_VENDOR_SPECIFIC = 127,
 };
@@ -206,6 +221,7 @@ enum block_ack_actioncode {
 
 /**
  * enum pub_actioncode - public action frames
+ * Reference IEEE Std 802.11-2020 Table 9-364—Public Action field values
  * @PUB_ACTION_2040_BSS_COEXISTENCE:  public 20-40 bss coex action frame
  * @PUB_ACTION_EXT_CHANNEL_SWITCH_ID: public ext channel switch id action frame
  * @PUB_ACTION_VENDOR_SPECIFIC: vendor specific public action frame
@@ -214,6 +230,8 @@ enum block_ack_actioncode {
  * @PUB_ACTION_GAS_COMEBACK_REQUEST: GAS comeback request action frame
  * @PUB_ACTION_GAS_COMEBACK_RESPONSE: GAS comeback respose action frame
  * @PUB_ACTION_TDLS_DISCRESP: tdls discovery response public action frame
+ * @PUB_ACTION_FTM_REQUEST: FTM request action frame
+ * @PUB_ACTION_FTM_RESPONSE: FTM respose action frame
  */
 enum pub_actioncode {
 	PUB_ACTION_2040_BSS_COEXISTENCE = 0,
@@ -224,6 +242,8 @@ enum pub_actioncode {
 	PUB_ACTION_GAS_COMEBACK_REQUEST = 12,
 	PUB_ACTION_GAS_COMEBACK_RESPONSE = 13,
 	PUB_ACTION_TDLS_DISCRESP = 14,
+	PUB_ACTION_FTM_REQUEST = 32,
+	PUB_ACTION_FTM_RESPONSE = 33,
 };
 
 /**
@@ -525,7 +545,9 @@ struct action_frm_hdr {
  * @MGMT_ACTION_BA_ADDBA_RESPONSE:  ADDBA response action frame
  * @MGMT_ACTION_BA_DELBA:           DELBA action frame
  * @MGMT_ACTION_2040_BSS_COEXISTENCE: 20-40 bss coex action frame
- * @MGMT_ACTION_CATEGORY_VENDOR_SPECIFIC: category vendor spcific action frame
+ * @MGMT_ACTION_CATEGORY_VENDOR_SPECIFIC: category vendor specific action frame
+ * @MGMT_ACTION_CATEGORY_VENDOR_SPECIFIC_PROTECTED: category vendor specific
+ * protected action frame
  * @MGMT_ACTION_EXT_CHANNEL_SWITCH_ID: ext channel switch id action frame
  * @MGMT_ACTION_VENDOR_SPECIFIC:    vendor specific action frame
  * @MGMT_ACTION_TDLS_DISCRESP:      TDLS discovery response frame
@@ -617,6 +639,8 @@ struct action_frm_hdr {
  * @MGMT_ACTION_TWT_SETUP: TWT setup frame
  * @MGMT_ACTION_TWT_TEARDOWN: TWT teardown frame
  * @MGMT_ACTION_TWT_INFORMATION: TWT information frame
+ * @MGMT_ACTION_FTM_REQUEST: FTM request frame
+ * @MGMT_ACTION_FTM_RESPONSE: FTM response frame
  * @MGMT_MAX_FRAME_TYPE:         max. mgmt frame types
  */
 enum mgmt_frame_type {
@@ -650,6 +674,7 @@ enum mgmt_frame_type {
 	MGMT_ACTION_BA_DELBA,
 	MGMT_ACTION_2040_BSS_COEXISTENCE,
 	MGMT_ACTION_CATEGORY_VENDOR_SPECIFIC,
+	MGMT_ACTION_CATEGORY_VENDOR_SPECIFIC_PROTECTED,
 	MGMT_ACTION_EXT_CHANNEL_SWITCH_ID,
 	MGMT_ACTION_VENDOR_SPECIFIC,
 	MGMT_ACTION_TDLS_DISCRESP,
@@ -745,6 +770,8 @@ enum mgmt_frame_type {
 	MGMT_ACTION_TWT_SETUP,
 	MGMT_ACTION_TWT_TEARDOWN,
 	MGMT_ACTION_TWT_INFORMATION,
+	MGMT_ACTION_FTM_REQUEST,
+	MGMT_ACTION_FTM_RESPONSE,
 	MGMT_MAX_FRAME_TYPE,
 };
 
@@ -900,6 +927,13 @@ QDF_STATUS wlan_mgmt_txrx_mgmt_frame_tx(struct wlan_objmgr_peer *peer,
 					mgmt_ota_comp_cb tx_ota_comp_cb,
 					enum wlan_umac_comp_id comp_id,
 					void *mgmt_tx_params);
+/**
+ * wlan_mgmt_is_rmf_mgmt_action_frame() - API to check action category is rmf
+ * @action_category: action category to check
+ *
+ * Return: true if action category is rmf else false
+ */
+bool wlan_mgmt_is_rmf_mgmt_action_frame(uint8_t action_category);
 
 /**
  * wlan_mgmt_txrx_beacon_frame_tx() - transmits mgmt. beacon

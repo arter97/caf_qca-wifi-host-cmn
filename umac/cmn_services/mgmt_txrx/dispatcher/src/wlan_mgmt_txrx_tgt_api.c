@@ -210,6 +210,12 @@ mgmt_get_public_action_subtype(uint8_t action_code)
 	case PUB_ACTION_GAS_COMEBACK_RESPONSE:
 		frm_type = MGMT_ACTION_GAS_COMEBACK_RESPONSE;
 		break;
+	case PUB_ACTION_FTM_REQUEST:
+		frm_type = MGMT_ACTION_FTM_REQUEST;
+		break;
+	case PUB_ACTION_FTM_RESPONSE:
+		frm_type = MGMT_ACTION_FTM_RESPONSE;
+		break;
 	default:
 		frm_type = MGMT_FRM_UNSPECIFIED;
 		break;
@@ -864,6 +870,9 @@ mgmt_txrx_get_action_frm_subtype(uint8_t *mpdu_data_ptr)
 		break;
 	case ACTION_CATEGORY_VENDOR_SPECIFIC:
 		frm_type = MGMT_ACTION_CATEGORY_VENDOR_SPECIFIC;
+		break;
+	case ACTION_CATEGORY_VENDOR_SPECIFIC_PROTECTED:
+		frm_type = MGMT_ACTION_CATEGORY_VENDOR_SPECIFIC_PROTECTED;
 		break;
 	case ACTION_CATEGORY_FST:
 		frm_type = mgmt_get_fst_action_subtype(action_hdr->action_code);
