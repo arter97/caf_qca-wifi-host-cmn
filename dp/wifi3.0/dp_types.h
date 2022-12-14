@@ -262,6 +262,8 @@ enum dp_mod_id {
 	DP_MOD_ID_REINJECT,
 	DP_MOD_ID_SCS,
 	DP_MOD_ID_UMAC_RESET,
+	DP_MOD_ID_TX_MCAST,
+	DP_MOD_ID_DS,
 	DP_MOD_ID_MAX,
 };
 
@@ -357,6 +359,7 @@ enum dp_tx_frm_type {
 	dp_tx_frm_audio,
 	dp_tx_frm_me,
 	dp_tx_frm_raw,
+	dp_tx_frm_rmnet,
 };
 
 /**
@@ -1110,6 +1113,8 @@ struct dp_soc_stats {
 		uint32_t tx_comp[MAX_TCL_DATA_RINGS];
 		/* Number of tx completions force freed */
 		uint32_t tx_comp_force_freed;
+		/* Tx completion ring near full */
+		uint32_t near_full;
 	} tx;
 
 	/* SOC level RX stats */
@@ -1148,6 +1153,10 @@ struct dp_soc_stats {
 		/* Number of frames routed from reo*/
 		uint32_t reo2rel_route_drop;
 		uint64_t fast_recycled;
+		/* Number of hw stats requested */
+		uint32_t rx_hw_stats_requested;
+		/* Number of hw stats request timeout */
+		uint32_t rx_hw_stats_timeout;
 
 		struct {
 			/* Invalid RBM error count */
@@ -1831,6 +1840,8 @@ enum dp_context_type {
  * 				      source from HAL desc for wbm release ring
  * @dp_service_near_full_srngs: Handler for servicing the near full IRQ
  * @txrx_set_vdev_param: target specific ops while setting vdev params
+ * @txrx_get_vdev_mcast_param: target specific ops for getting vdev
+ *			       params related to multicast
  * @dp_srng_test_and_update_nf_params: Check if the srng is in near full state
  *				and set the near-full params.
  * @ipa_get_bank_id: Get TCL bank id used by IPA
@@ -1938,6 +1949,10 @@ struct dp_arch_ops {
 					  enum cdp_vdev_param_type param,
 					  cdp_config_param_type val);
 
+	QDF_STATUS (*txrx_get_vdev_mcast_param)(struct dp_soc *soc,
+						struct dp_vdev *vdev,
+						cdp_config_param_type *val);
+
 	/* Misc Arch Ops */
 	qdf_size_t (*txrx_get_context_size)(enum dp_context_type);
 #ifdef WIFI_MONITOR_SUPPORT
@@ -2013,9 +2028,17 @@ struct dp_arch_ops {
 #ifdef IPA_OFFLOAD
 	int8_t (*ipa_get_bank_id)(struct dp_soc *soc);
 #endif
+#ifdef WLAN_SUPPORT_PPEDS
 	void (*dp_txrx_ppeds_rings_status)(struct dp_soc *soc);
+#endif
 	QDF_STATUS (*txrx_soc_ppeds_start)(struct dp_soc *soc);
 	void (*txrx_soc_ppeds_stop)(struct dp_soc *soc);
+	int (*dp_register_ppeds_interrupts)(struct dp_soc *soc,
+					    struct dp_srng *srng, int vector,
+					    int ring_type, int ring_num);
+	void (*dp_free_ppeds_interrupts)(struct dp_soc *soc,
+					 struct dp_srng *srng, int ring_type,
+					 int ring_num);
 };
 
 /**
@@ -4273,6 +4296,11 @@ struct dp_peer {
 #ifdef CONFIG_SAWF_DEF_QUEUES
 	struct dp_peer_sawf *sawf;
 #endif
+	/* AST hash index for peer in HW */
+	uint16_t ast_idx;
+
+	/* AST hash value for peer in HW */
+	uint16_t ast_hash;
 };
 
 /*
@@ -4530,6 +4558,9 @@ QDF_STATUS dp_srng_alloc(struct dp_soc *soc, struct dp_srng *srng,
 void dp_srng_free(struct dp_soc *soc, struct dp_srng *srng);
 QDF_STATUS dp_srng_init(struct dp_soc *soc, struct dp_srng *srng,
 			int ring_type, int ring_num, int mac_id);
+QDF_STATUS dp_srng_init_idx(struct dp_soc *soc, struct dp_srng *srng,
+			    int ring_type, int ring_num, int mac_id,
+			    uint32_t idx);
 void dp_srng_deinit(struct dp_soc *soc, struct dp_srng *srng,
 		    int ring_type, int ring_num);
 void dp_print_peer_txrx_stats_be(struct cdp_peer_stats *peer_stats,

@@ -1223,6 +1223,7 @@ dp_mon_register_feature_ops_1_0(struct dp_soc *soc)
 		dp_mon_filter_reset_undecoded_metadata_capture_1_0;
 #endif
 	mon_ops->mon_rx_print_advanced_stats = NULL;
+	mon_ops->mon_mac_filter_set = dp_mon_mac_filter_set;
 }
 
 struct dp_mon_ops monitor_ops_1_0 = {
@@ -1270,6 +1271,7 @@ struct dp_mon_ops monitor_ops_1_0 = {
 	.mon_filter_reset_tx_mon_mode = NULL,
 	.rx_mon_filter_update = dp_mon_filter_update_1_0,
 	.tx_mon_filter_update = NULL,
+	.set_mon_mode_buf_rings_tx = NULL,
 	.rx_mon_desc_pool_init = dp_rx_pdev_mon_desc_pool_init,
 	.rx_mon_desc_pool_deinit = dp_rx_pdev_mon_desc_pool_deinit,
 	.rx_mon_desc_pool_alloc = dp_rx_pdev_mon_desc_pool_alloc,

@@ -154,7 +154,8 @@ struct cdp_mlo_ops {
 	void (*mlo_soc_setup)(struct cdp_soc_t *cdp_soc,
 			      struct cdp_mlo_ctxt *mlo_ctxt);
 	void (*mlo_soc_teardown)(struct cdp_soc_t *cdp_soc,
-				 struct cdp_mlo_ctxt *mlo_ctxt);
+				 struct cdp_mlo_ctxt *mlo_ctxt,
+				 bool is_force_down);
 	QDF_STATUS (*update_mlo_ptnr_list)(struct cdp_soc_t *soc_hdl,
 					   int8_t *vdev_ids, uint8_t num_vdevs,
 					   uint8_t vdev_id);
@@ -1463,6 +1464,15 @@ struct ol_if_ops {
 				   uint32_t service_interval_ul, uint32_t burst_size_ul,
 				   uint8_t add_or_sub, uint8_t ac);
 #endif
+#ifdef CONFIG_SAWF
+	QDF_STATUS
+	(*peer_update_sawf_ul_params)(struct cdp_ctrl_objmgr_psoc *soc,
+				      uint8_t vdev_id, uint8_t *peer_mac,
+				      uint8_t tid, uint8_t ac,
+				      uint32_t service_interval,
+				      uint32_t burst_size,
+				      uint8_t add_sub);
+#endif
 	uint32_t (*dp_get_tx_inqueue)(ol_txrx_soc_handle soc);
 	QDF_STATUS(*dp_send_unit_test_cmd)(uint32_t vdev_id,
 					   uint32_t module_id,
@@ -1952,7 +1962,7 @@ struct cdp_ipa_ops {
 	QDF_STATUS (*ipa_disable_autonomy)(struct cdp_soc_t *soc_hdl,
 					   uint8_t pdev_id);
 
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 10, 0)) || \
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 4, 0)) || \
 	defined(CONFIG_IPA_WDI_UNIFIED_API)
 	QDF_STATUS (*ipa_setup)(struct cdp_soc_t *soc_hdl, uint8_t pdev_id,
 				void *ipa_i2w_cb, void *ipa_w2i_cb,
@@ -2170,6 +2180,14 @@ struct cdp_sawf_ops {
 	(*telemetry_get_drop_stats)(void *arg, uint64_t *pass, uint64_t *drop,
 				    uint64_t *drop_ttl, uint8_t tid,
 				    uint8_t msduq);
+	QDF_STATUS
+	(*peer_config_ul)(struct cdp_soc_t *hdl, uint8_t *mac_addr, uint8_t tid,
+			  uint32_t service_interval, uint32_t burst_size,
+			  uint8_t add_or_sub);
+	bool
+	(*swaf_peer_is_sla_configured)(struct cdp_soc_t *soc,
+				       uint8_t *mac_addr);
+
 #endif
 };
 #endif

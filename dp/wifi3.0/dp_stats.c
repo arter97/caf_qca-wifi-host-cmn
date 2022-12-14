@@ -17,6 +17,7 @@
  * PERFORMANCE OF THIS SOFTWARE.
  */
 #include "qdf_types.h"
+#include "qdf_module.h"
 #include "dp_peer.h"
 #include "dp_types.h"
 #include "dp_internal.h"
@@ -5617,6 +5618,11 @@ void dp_print_soc_cfg_params(struct dp_soc *soc)
 		       soc_cfg_ctx->int_batch_threshold_other);
 	DP_PRINT_STATS("Int timer threshold other: %u ",
 		       soc_cfg_ctx->int_timer_threshold_other);
+	DP_PRINT_STATS("Int batch threshold ppe2tcl: %u ",
+		       soc_cfg_ctx->int_batch_threshold_ppe2tcl);
+	DP_PRINT_STATS("Int timer threshold ppe2tcl: %u ",
+		       soc_cfg_ctx->int_timer_threshold_ppe2tcl);
+
 	DP_PRINT_STATS("DP NAPI scale factor: %u ",
 		       soc_cfg_ctx->napi_scale_factor);
 
@@ -5854,6 +5860,8 @@ dp_print_ring_stat_from_hal(struct dp_soc *soc,  struct dp_srng *srng,
 	}
 }
 
+qdf_export_symbol(dp_print_ring_stat_from_hal);
+
 #ifdef FEATURE_TSO_STATS
 /**
  * dp_print_tso_seg_stats - tso segment stats
@@ -6031,6 +6039,8 @@ dp_print_ring_stats(struct dp_pdev *pdev)
 					    [lmac_id],
 					    RXDMA_DST);
 	}
+
+	dp_print_txmon_ring_stat_from_hal(pdev);
 
 #ifdef WLAN_SUPPORT_PPEDS
 	if (pdev->soc->arch_ops.dp_txrx_ppeds_rings_status)
@@ -7507,6 +7517,19 @@ dp_print_pdev_tx_stats(struct dp_pdev *pdev)
 		       pdev->stats.tx_i.mcast_en.dropped_send_fail);
 	DP_PRINT_STATS("	Unicast sent = %u",
 		       pdev->stats.tx_i.mcast_en.ucast);
+
+	DP_PRINT_STATS("EAPOL Packets dropped:");
+	DP_PRINT_STATS("        Dropped: TX desc errors = %u",
+		       pdev->stats.eap_drop_stats.tx_desc_err);
+	DP_PRINT_STATS("        Dropped: Tx HAL ring access errors = %u",
+		       pdev->stats.eap_drop_stats.tx_hal_ring_access_err);
+	DP_PRINT_STATS("        Dropped: TX DMA map errors = %u",
+		       pdev->stats.eap_drop_stats.tx_dma_map_err);
+	DP_PRINT_STATS("        Dropped: Tx HW enqueue errors = %u",
+		       pdev->stats.eap_drop_stats.tx_hw_enqueue);
+	DP_PRINT_STATS("        Dropped: TX SW enqueue errors= %u",
+		       pdev->stats.eap_drop_stats.tx_sw_enqueue);
+
 	DP_PRINT_STATS("IGMP Mcast Enhancement:");
 	DP_PRINT_STATS("	IGMP packets received = %u",
 		       pdev->stats.tx_i.igmp_mcast_en.igmp_rcvd);
@@ -7986,6 +8009,10 @@ dp_print_soc_rx_stats(struct dp_soc *soc)
 	DP_PRINT_STATS("Reo2rel route drop:%d",
 		       soc->stats.rx.reo2rel_route_drop);
 	DP_PRINT_STATS("Rx Flush count:%d", soc->stats.rx.err.rx_flush_count);
+	DP_PRINT_STATS("RX HW stats request count:%d",
+		       soc->stats.rx.rx_hw_stats_requested);
+	DP_PRINT_STATS("RX HW stats request timeout:%d",
+		       soc->stats.rx.rx_hw_stats_timeout);
 	DP_PRINT_STATS("Rx invalid TID count:%d",
 		       soc->stats.rx.err.rx_invalid_tid_err);
 	DP_PRINT_STATS("Rx Defrag Address1 Invalid:%d",

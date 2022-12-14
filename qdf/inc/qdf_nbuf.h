@@ -104,6 +104,7 @@
 #define EAPOL_KEY_INFO_OFFSET			19
 #define EAPOL_PKT_LEN_OFFSET			16
 #define EAPOL_KEY_LEN_OFFSET			21
+#define EAPOL_KEY_DATA_LENGTH_OFFSET		111
 
 #define EAPOL_PACKET_TYPE_EAP                   0
 #define EAPOL_PACKET_TYPE_START                 1
@@ -1375,6 +1376,18 @@ void qdf_nbuf_queue_head_purge(qdf_nbuf_queue_head_t *nbuf_queue_head)
 }
 
 /**
+ * qdf_nbuf_queue_empty() - dequeue nbuf from the head of queue
+ * @nbuf_queue_head: pointer to nbuf queue head
+ *
+ * Return: true if queue is empty else false
+ */
+static inline
+int qdf_nbuf_queue_empty(qdf_nbuf_queue_head_t *nbuf_queue_head)
+{
+	return __qdf_nbuf_queue_empty(nbuf_queue_head);
+}
+
+/**
  * qdf_nbuf_queue_head_lock() - Acquire the nbuf_queue_head lock
  * @head: nbuf_queue_head of the nbuf_list for which lock is to be acquired
  *
@@ -1968,6 +1981,45 @@ static inline qdf_nbuf_t qdf_nbuf_next(qdf_nbuf_t buf)
 	return __qdf_nbuf_next(buf);
 }
 
+#ifdef IPA_OFFLOAD
+/**
+ * qdf_nbuf_smmu_map_debug() - map smmu buffer
+ * @nbuf: network buffer
+ * @hdl: ipa handle
+ * @num_buffers: number of buffers
+ * @info: memory info
+ * @func: function name
+ * @line: line number
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS qdf_nbuf_smmu_map_debug(qdf_nbuf_t nbuf,
+				   uint8_t hdl,
+				   uint8_t num_buffers,
+				   qdf_mem_info_t *info,
+				   const char *func,
+				   uint32_t line);
+
+/**
+ * qdf_nbuf_smmu_unmap_debug() - unmap smmu buffer
+ * @nbuf: network buffer
+ * @hdl: ipa handle
+ * @num_buffers: number of buffers
+ * @info: memory info
+ * @func: function name
+ * @line: line number
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS qdf_nbuf_smmu_unmap_debug(qdf_nbuf_t nbuf,
+				     uint8_t hdl,
+				     uint8_t num_buffers,
+				     qdf_mem_info_t *info,
+				     const char *func,
+				     uint32_t line);
+
+#endif /* IPA_OFFLOAD */
+
 #ifdef NBUF_MEMORY_DEBUG
 
 #define QDF_NET_BUF_TRACK_MAX_SIZE    (1024)
@@ -2014,42 +2066,6 @@ void qdf_net_buf_debug_update_map_node(qdf_nbuf_t net_buf,
 				       const char *func_name,
 				       uint32_t line_num);
 
-/**
- * qdf_nbuf_smmu_map_debug() - map smmu buffer
- * @nbuf: network buffer
- * @hdl: ipa handle
- * @num_buffers: number of buffers
- * @info: memory info
- * @func: function name
- * @line: line number
- *
- * Return: QDF_STATUS
- */
-QDF_STATUS qdf_nbuf_smmu_map_debug(qdf_nbuf_t nbuf,
-				   uint8_t hdl,
-				   uint8_t num_buffers,
-				   qdf_mem_info_t *info,
-				   const char *func,
-				   uint32_t line);
-
-/**
- * qdf_nbuf_smmu_unmap_debug() - unmap smmu buffer
- * @nbuf: network buffer
- * @hdl: ipa handle
- * @num_buffers: number of buffers
- * @info: memory info
- * @func: function name
- * @line: line number
- *
- * Return: QDF_STATUS
- */
-QDF_STATUS qdf_nbuf_smmu_unmap_debug(qdf_nbuf_t nbuf,
-				     uint8_t hdl,
-				     uint8_t num_buffers,
-				     qdf_mem_info_t *info,
-				     const char *func,
-				     uint32_t line);
-
 #ifdef NBUF_SMMU_MAP_UNMAP_DEBUG
 /**
  * qdf_nbuf_map_check_for_smmu_leaks() - check for nbuf smmu map leaks
@@ -2093,7 +2109,7 @@ void qdf_net_buf_debug_update_smmu_unmap_node(qdf_nbuf_t nbuf,
 					      unsigned long pa,
 					      const char *func,
 					      uint32_t line);
-#endif
+#endif /* NBUF_SMMU_MAP_UNMAP_DEBUG */
 
 /**
  * qdf_net_buf_debug_update_unmap_node() - update nbuf in debug
@@ -2232,6 +2248,21 @@ qdf_nbuf_t
 qdf_nbuf_unshare_debug(qdf_nbuf_t buf, const char *func_name,
 		       uint32_t line_num);
 
+/**
+ * qdf_nbuf_kfree_list() - Free nbuf list using kfree
+ * @buf: Pointer to network buffer head
+ *
+ * This function is called to free the nbuf list on failure cases
+ *
+ * Return: None
+ */
+#define qdf_nbuf_dev_kfree_list(d) \
+	qdf_nbuf_dev_kfree_list_debug(d, __func__, __LINE__)
+
+void
+qdf_nbuf_dev_kfree_list_debug(qdf_nbuf_queue_head_t *nbuf_queue_head,
+			      const char *func_name,
+			      uint32_t line_num);
 #else /* NBUF_MEMORY_DEBUG */
 
 static inline void qdf_net_buf_debug_init(void) {}
@@ -2361,7 +2392,37 @@ static inline qdf_nbuf_t qdf_nbuf_unshare(qdf_nbuf_t buf)
 {
 	return __qdf_nbuf_unshare(buf);
 }
+
+/**
+ * qdf_nbuf_kfree_list() - Free nbuf list using kfree
+ * @buf: Pointer to network buffer head
+ *
+ * This function is called to free the nbuf list on failure cases
+ *
+ * Return: None
+ */
+static inline void
+qdf_nbuf_dev_kfree_list(qdf_nbuf_queue_head_t *nbuf_queue_head)
+{
+	__qdf_nbuf_dev_kfree_list(nbuf_queue_head);
+}
 #endif /* NBUF_MEMORY_DEBUG */
+
+/**
+ * qdf_nbuf_dev_queue_head() - Queue a buffer at the list head
+ * @nbuf_queue_head: Pointer to buffer list head
+ * @buff: Pointer to network buffer head
+ *
+ * This function is called to queue a buffer at the list head
+ *
+ * Return: None
+ */
+static inline void
+qdf_nbuf_dev_queue_head(qdf_nbuf_queue_head_t *nbuf_queue_head,
+			qdf_nbuf_t buf)
+{
+	__qdf_nbuf_dev_queue_head(nbuf_queue_head, buf);
+}
 
 /**
  * qdf_nbuf_kfree() - Free nbuf using kfree

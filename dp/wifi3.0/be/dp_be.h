@@ -113,9 +113,15 @@ enum CMEM_MEM_CLIENTS {
 
 #define PEER_ROUTING_USE_PPE 1
 #define PEER_ROUTING_ENABLED 1
+#define DP_PPE_INTR_STRNG_LEN 32
+#define DP_PPE_INTR_MAX 3
+
 #else
 #define DP_TX_PPEDS_DESC_CMEM_OFFSET 0
 #define DP_TX_PPEDS_DESC_POOL_CMEM_SIZE 0
+
+#define DP_PPE_INTR_STRNG_LEN 0
+#define DP_PPE_INTR_MAX 0
 #endif
 
 /* tx descriptor are programmed at start of CMEM region*/
@@ -251,6 +257,16 @@ struct dp_ppe_tx_desc_pool_s {
 #endif
 
 /**
+ * struct dp_ppeds_napi - napi parameters for ppe ds
+ * @napi: napi structure to register with napi infra
+ * @ndev: net_dev structure
+ */
+struct dp_ppeds_napi {
+	struct napi_struct napi;
+	struct net_device ndev;
+};
+
+/**
  * struct dp_soc_be - Extended DP soc for BE targets
  * @soc: dp soc structure
  * @num_bank_profiles: num TX bank profiles
@@ -267,6 +283,7 @@ struct dp_ppe_tx_desc_pool_s {
  * @mld_peer_hash: peer hash table for ML peers
  *           Associated peer with this MAC address)
  * @mld_peer_hash_lock: lock to protect mld_peer_hash
+ * @ppe_ds_int_mode_enabled: PPE DS interrupt mode enabled
  * @reo2ppe_ring: REO2PPE ring
  * @ppe2tcl_ring: PPE2TCL ring
  * @ppe_release_ring: PPE release ring
@@ -292,15 +309,19 @@ struct dp_soc_be {
 	struct dp_hw_cookie_conversion_t tx_cc_ctx[MAX_TXDESC_POOLS];
 	struct dp_hw_cookie_conversion_t rx_cc_ctx[MAX_RXDESC_POOLS];
 #ifdef WLAN_SUPPORT_PPEDS
+	bool ppeds_int_mode_enabled;
 	struct dp_srng reo2ppe_ring;
 	struct dp_srng ppe2tcl_ring;
 	struct dp_srng ppe_release_ring;
+	struct dp_srng ppe_wbm_release_ring;
 	struct dp_ppe_vp_tbl_entry *ppe_vp_tbl;
 	struct dp_hw_cookie_conversion_t ppeds_tx_cc_ctx;
 	struct dp_ppe_tx_desc_pool_s ppeds_tx_desc;
+	struct dp_ppeds_napi ppeds_napi_ctxt;
 	void *ppeds_handle;
 	qdf_mutex_t ppe_vp_tbl_lock;
 	uint8_t num_ppe_vp_entries;
+	char irq_name[DP_PPE_INTR_MAX][DP_PPE_INTR_STRNG_LEN];
 #endif
 #ifdef WLAN_FEATURE_11BE_MLO
 #ifdef WLAN_MLO_MULTI_CHIP
@@ -577,6 +598,9 @@ struct dp_peer_be *dp_get_be_peer_from_dp_peer(struct dp_peer *peer)
 	return (struct dp_peer_be *)peer;
 }
 
+void dp_ppeds_disable_irq(struct dp_soc *soc, struct dp_srng *srng);
+void dp_ppeds_enable_irq(struct dp_soc *soc, struct dp_srng *srng);
+
 QDF_STATUS
 dp_hw_cookie_conversion_attach(struct dp_soc_be *be_soc,
 			       struct dp_hw_cookie_conversion_t *cc_ctx,
@@ -829,19 +853,4 @@ void dp_mlo_update_link_to_pdev_unmap(struct dp_soc *soc, struct dp_pdev *pdev)
 {
 }
 #endif
-
-/*
- * dp_txrx_set_vdev_param_be: target specific ops while setting vdev params
- * @soc : DP soc handle
- * @vdev: pointer to vdev structure
- * @param: parameter type to get value
- * @val: value
- *
- * return: QDF_STATUS
- */
-QDF_STATUS dp_txrx_set_vdev_param_be(struct dp_soc *soc,
-				     struct dp_vdev *vdev,
-				     enum cdp_vdev_param_type param,
-				     cdp_config_param_type val);
-
 #endif

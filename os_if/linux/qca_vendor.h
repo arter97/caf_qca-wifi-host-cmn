@@ -634,6 +634,16 @@
  *
  *	The attributes used with this command are defined in
  *	enum qca_wlan_vendor_attr_sr.
+ *
+ * @QCA_NL80211_VENDOR_SUBCMD_MLO_PEER_PRIM_NETDEV_EVENT: Subcommand used to
+ *	notify application layer about the primary netdev of an MLO connection.
+ *	In some implementations, MLO has multiple netdevs out of which one
+ *	netdev is designated as primary to provide a unified interface to the
+ *	bridge. In those implementations this event is sent on every MLO peer
+ *	connection.
+ *
+ *	The attributes used with this event are defined in
+ *	enum qca_wlan_vendor_attr_mlo_peer_prim_netdev_event.
  */
 
 enum qca_nl80211_vendor_subcmds {
@@ -884,6 +894,7 @@ enum qca_nl80211_vendor_subcmds {
 	QCA_NL80211_VENDOR_SUBCMD_SCS_RULE_CONFIG = 218,
 	QCA_NL80211_VENDOR_SUBCMD_GET_SAR_CAPABILITY = 219,
 	QCA_NL80211_VENDOR_SUBCMD_SR = 220,
+	QCA_NL80211_VENDOR_SUBCMD_MLO_PEER_PRIM_NETDEV_EVENT = 221,
 };
 
 enum qca_wlan_vendor_tos {
@@ -3516,6 +3527,24 @@ enum qca_vendor_attr_roam_candidate_selection_criteria {
  *	If the current RX link speed is above the threshold, roaming is not
  *	needed. If this attribute is not configured, or if it is set to 0, the
  *	driver will not consider the RX link speed in the roaming decision.
+ *
+ * @QCA_ATTR_ROAM_CONTROL_HO_DELAY_FOR_RX: u16 value in milliseconds.
+ *	Optional parameter. This configuration delays hand-off (in msec) by the
+ *	specified duration to receive pending rx frames from current BSS.
+ *
+ * @QCA_ATTR_ROAM_CONTROL_FULL_SCAN_NO_REUSE_PARTIAL_SCAN_FREQ: Unsigned 8-bit
+ *	value.
+ *	During the roam scan, if there are no desired APs found in the partial
+ *	frequency list, an immediate full scan on all the supported frequencies
+ *	is initiated as a fallback. This flag controls the frequency list
+ *	creation for the full scan on the following lines.
+ *	1 - Full scan to exclude the frequencies that were already scanned by
+ *	    the previous partial scan.
+ *	0 - Full scan to include all the supported frequencies irrespective of
+ *	    the ones part of the earlier partial scan.
+ *	If this flag is not specified, a full scan shall include all the
+ *	supported frequencies irrespective of the ones part of an earlier
+ *	partial scan.
  */
 enum qca_vendor_attr_roam_control {
 	QCA_ATTR_ROAM_CONTROL_ENABLE = 1,
@@ -3536,6 +3565,8 @@ enum qca_vendor_attr_roam_control {
 	QCA_ATTR_ROAM_CONTROL_CANDIDATE_RSSI_THRESHOLD_6GHZ = 16,
 	QCA_ATTR_ROAM_CONTROL_BAND_MASK = 17,
 	QCA_ATTR_ROAM_CONTROL_RX_LINKSPEED_THRESHOLD = 24,
+	QCA_ATTR_ROAM_CONTROL_HO_DELAY_FOR_RX = 25,
+	QCA_ATTR_ROAM_CONTROL_FULL_SCAN_NO_REUSE_PARTIAL_SCAN_FREQ = 26,
 
 	/* keep last */
 	QCA_ATTR_ROAM_CONTROL_AFTER_LAST,
@@ -5037,6 +5068,14 @@ enum qca_wlan_vendor_attr_config {
 	 * That said, it is not intended to downgrade the QOS for the frames.
 	 * Set the value to 0 ( corresponding to BE ) if the QOS upgrade needs
 	 * to disable.
+	 *
+	 * If only UDP frames of BE or BK access category needs to be upgraded
+	 * without changing the access category of VO or VI UDP frames, refer to
+	 * attribute QCA_WLAN_VENDOR_ATTR_CONFIG_UDP_QOS_UPGRADE_FOR_BE_BK.
+	 *
+	 * This attribute is not recommended to be used as it blindly forces all
+	 * UDP packets to a higher access category which could impact the
+	 * traffic pattern of all apps using UDP and can cause unknown behavior.
 	 */
 	QCA_WLAN_VENDOR_ATTR_CONFIG_UDP_QOS_UPGRADE = 72,
 
@@ -5155,6 +5194,42 @@ enum qca_wlan_vendor_attr_config {
 	 * for this attribute are defined in the enum qca_dbam_config.
 	 */
 	QCA_WLAN_VENDOR_ATTR_CONFIG_DBAM = 83,
+
+	/* 8-bit unsigned value. This attribute takes the QoS/access category
+	 * value represented by the enum qca_wlan_ac_type and expects the driver
+	 * to upgrade the UDP frames of BE or BK access category to this access
+	 * category. This attribute will not modify UDP frames of VO or VI
+	 * access category. The value of QCA_WLAN_AC_ALL is invalid for this
+	 * attribute.
+	 *
+	 * This will override the DSCP value configured in the frame with the
+	 * intention to only upgrade the access category. That said, it is not
+	 * intended to downgrade the access category for the frames.
+	 * Set the value to QCA_WLAN_AC_BK if the QoS upgrade needs to be
+	 * disabled, as BK is of the lowest priority and an upgrade to it does
+	 * not result in any changes for the frames.
+	 *
+	 * This attribute behavior is similar to
+	 * QCA_WLAN_VENDOR_ATTR_CONFIG_UDP_QOS_UPGRADE with the difference that
+	 * only UDP frames of BE or BK access category are upgraded and not
+	 * UDP frames of VI or VO access category.
+	 *
+	 * This attribute is not recommended to be used as it blindly forces all
+	 * UDP packets of BE or BK access category to a higher access category
+	 * which could impact the traffic pattern of all apps using UDP and can
+	 * cause unknown behavior.
+	 */
+	QCA_WLAN_VENDOR_ATTR_CONFIG_UDP_QOS_UPGRADE_FOR_BE_BK = 84,
+
+	/* 8-bit unsigned value to configure the driver to enable/disable the
+	 * periodic sounding for Tx beamformer functionality. The default
+	 * behavior uses algorithm to do sounding based on packet stats.
+	 *
+	 * 0 - Default behavior.
+	 * 1 - Enable the periodic sounding for Tx beamformer.
+	 * This attribute is used for testing purposes.
+	 */
+	QCA_WLAN_VENDOR_ATTR_CONFIG_BEAMFORMER_PERIODIC_SOUNDING = 85,
 
 	/* keep last */
 	QCA_WLAN_VENDOR_ATTR_CONFIG_AFTER_LAST,
@@ -14538,6 +14613,30 @@ enum qca_wlan_vendor_attr_sr {
 	QCA_WLAN_VENDOR_ATTR_SR_AFTER_LAST,
 	QCA_WLAN_VENDOR_ATTR_SR_MAX =
 	QCA_WLAN_VENDOR_ATTR_SR_AFTER_LAST - 1,
+};
+
+/**
+ * enum qca_wlan_vendor_attr_mlo_peer_prim_netdev_event - Defines the attributes
+ * used in the QCA_NL80211_VENDOR_SUBCMD_MLO_PEER_PRIM_NETDEV_EVENT subcommand.
+ *
+ * @QCA_WLAN_VENDOR_ATTR_MLO_PEER_PRIM_NETDEV_EVENT_MACADDR: 6 byte MAC address
+ * used by the peer on the link that corresponds to the link used for sending
+ * the event notification.
+ * @QCA_WLAN_VENDOR_ATTR_MLO_PEER_PRIM_NETDEV_EVENT_MLD_MAC_ADDR: 6 byte
+ * MLD MAC address of the peer.
+ * @QCA_WLAN_VENDOR_ATTR_MLO_PEER_PRIM_NETDEV_EVENT_PRIM_IFINDEX: u32 attribute,
+ * used to pass ifindex of the primary netdev.
+ */
+enum qca_wlan_vendor_attr_mlo_peer_prim_netdev_event {
+	QCA_WLAN_VENDOR_ATTR_MLO_PEER_PRIM_NETDEV_EVENT_INVALID = 0,
+	QCA_WLAN_VENDOR_ATTR_MLO_PEER_PRIM_NETDEV_EVENT_MACADDR = 1,
+	QCA_WLAN_VENDOR_ATTR_MLO_PEER_PRIM_NETDEV_EVENT_MLD_MAC_ADDR = 2,
+	QCA_WLAN_VENDOR_ATTR_MLO_PEER_PRIM_NETDEV_EVENT_PRIM_IFINDEX = 3,
+
+	/* keep last */
+	QCA_WLAN_VENDOR_ATTR_MLO_PEER_PRIM_NETDEV_EVENT_AFTER_LAST,
+	QCA_WLAN_VENDOR_ATTR_MLO_PEER_PRIM_NETDEV_EVENT_MAX =
+	QCA_WLAN_VENDOR_ATTR_MLO_PEER_PRIM_NETDEV_EVENT_AFTER_LAST - 1,
 };
 
 #endif
