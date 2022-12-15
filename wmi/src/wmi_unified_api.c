@@ -312,6 +312,16 @@ wmi_unified_multiple_vdev_param_send(wmi_unified_t wmi_handle,
 	return QDF_STATUS_E_FAILURE;
 }
 
+QDF_STATUS
+wmi_unified_set_mac_addr_rx_filter(wmi_unified_t wmi_handle,
+				   struct set_rx_mac_filter *params)
+{
+	if (wmi_handle->ops->set_mac_addr_rx_filter)
+		return wmi_handle->ops->set_mac_addr_rx_filter(wmi_handle,
+							       params);
+	return QDF_STATUS_E_FAILURE;
+}
+
 QDF_STATUS wmi_unified_suspend_send(wmi_unified_t wmi_handle,
 				    struct suspend_params *param,
 				    uint8_t mac_id)
@@ -3792,7 +3802,7 @@ wmi_unified_extract_halphy_stats_event_count(wmi_unified_t wmi_handle,
  * @vdev_id: vdev id
  *
  * TSF_TSTAMP_READ_VALUE is the only operation supported
- * Return: QDF_STATUS_SUCCESS for success or erro code
+ * Return: QDF_STATUS_SUCCESS for success or error code
  */
 QDF_STATUS wmi_unified_send_vdev_tsf_tstamp_action_cmd(wmi_unified_t wmi_hdl,
 						       uint8_t vdev_id)

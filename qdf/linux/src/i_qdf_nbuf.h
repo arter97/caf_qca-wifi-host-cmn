@@ -126,7 +126,7 @@ typedef union {
  *
  * Notes:
  *   1. Hard limited to 48 bytes. Please count your bytes
- *   2. The size of this structure has to be easily calculatable and
+ *   2. The size of this structure has to be easily calculable and
  *      consistently so: do not use any conditional compile flags
  *   3. Split into a common part followed by a tx/rx overlay
  *   4. There is only one extra frag, which represents the HTC/HTT header
@@ -155,7 +155,7 @@ typedef union {
  * @rx.dev.priv_cb_m.exc_frm: exception frame
  * @rx.dev.priv_cb_m.ipa_smmu_map: do IPA smmu map
  * @rx.dev.priv_cb_m.reo_dest_ind_or_sw_excpt: reo destination indication or
-					     sw execption bit from ring desc
+					     sw exception bit from ring desc
  * @rx.dev.priv_cb_m.lmac_id: lmac id for RX packet
  * @rx.dev.priv_cb_m.tcp_seq_num: TCP sequence number
  * @rx.dev.priv_cb_m.tcp_ack_num: TCP ACK number
@@ -1805,12 +1805,21 @@ __qdf_nbuf_queue_insert_head(__qdf_nbuf_queue_t *qhead, __qdf_nbuf_t skb)
 	qhead->qlen++;
 }
 
+/**
+ * __qdf_nbuf_queue_remove_last() - remove a skb from the tail of the queue
+ * @qhead: Queue head
+ *
+ * This is a lockless version. Driver should take care of the locks
+ *
+ * Return: skb or NULL
+ */
 static inline struct sk_buff *
 __qdf_nbuf_queue_remove_last(__qdf_nbuf_queue_t *qhead)
 {
 	__qdf_nbuf_t tmp_tail, node = NULL;
 
 	if (qhead->head) {
+		qhead->qlen--;
 		tmp_tail = qhead->tail;
 		node = qhead->head;
 		if (qhead->head == qhead->tail) {
@@ -2595,6 +2604,12 @@ void __qdf_nbuf_queue_head_purge(struct sk_buff_head *skb_queue_head)
 	return skb_queue_purge(skb_queue_head);
 }
 
+static inline
+int __qdf_nbuf_queue_empty(__qdf_nbuf_queue_head_t *nbuf_queue_head)
+{
+	return skb_queue_empty(nbuf_queue_head);
+}
+
 /**
  * __qdf_nbuf_queue_head_lock() - Acquire the skb list lock
  * @head: skb list for which lock is to be acquired
@@ -2903,6 +2918,33 @@ __qdf_nbuf_set_gso_size(struct sk_buff *skb, unsigned int val)
 static inline void __qdf_nbuf_kfree(struct sk_buff *skb)
 {
 	kfree_skb(skb);
+}
+
+/**
+ * __qdf_nbuf_dev_kfree_list() - Free nbuf list using dev based os call
+ * @skb_queue_head: Pointer to nbuf queue head
+ *
+ * This function is called to free the nbuf list on failure cases
+ *
+ * Return: None
+ */
+void
+__qdf_nbuf_dev_kfree_list(__qdf_nbuf_queue_head_t *nbuf_queue_head);
+
+/**
+ * __qdf_nbuf_dev_queue_head() - queue a buffer using dev at the list head
+ * @skb_queue_head: Pointer to skb list head
+ * @buff: Pointer to nbuf
+ *
+ * This function is called to queue buffer at the skb list head
+ *
+ * Return: None
+ */
+static inline void
+__qdf_nbuf_dev_queue_head(__qdf_nbuf_queue_head_t *nbuf_queue_head,
+			  __qdf_nbuf_t buff)
+{
+	 __skb_queue_head(nbuf_queue_head, buff);
 }
 
 /**

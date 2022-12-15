@@ -222,6 +222,32 @@ void dp_soc_wds_detach(struct dp_soc *soc)
 }
 #endif
 
+#ifdef QCA_SUPPORT_WDS_EXTENDED
+bool dp_peer_check_wds_ext_peer(struct dp_peer *peer)
+{
+	struct dp_vdev *vdev = peer->vdev;
+	struct dp_txrx_peer *txrx_peer;
+
+	if (!vdev->wds_ext_enabled)
+		return false;
+
+	txrx_peer = dp_get_txrx_peer(peer);
+	if (!txrx_peer)
+		return false;
+
+	if (qdf_atomic_test_bit(WDS_EXT_PEER_INIT_BIT,
+				&txrx_peer->wds_ext.init))
+		return true;
+
+	return false;
+}
+#else
+bool dp_peer_check_wds_ext_peer(struct dp_peer *peer)
+{
+	return false;
+}
+#endif
+
 #ifdef REO_QDESC_HISTORY
 static inline void
 dp_rx_reo_qdesc_history_add(struct reo_desc_list_node *free_desc,
@@ -2807,6 +2833,8 @@ void dp_peer_rx_reo_shared_qaddr_delete(struct dp_soc *soc,
 {
 	uint8_t tid;
 
+	if (peer->peer_id > soc->max_peer_id)
+		return;
 	if (IS_MLO_DP_LINK_PEER(peer))
 		return;
 	if (hal_reo_shared_qaddr_is_enable(soc->hal_soc)) {
@@ -3089,6 +3117,9 @@ dp_rx_peer_map_handler(struct dp_soc *soc, uint16_t peer_id,
 					   CDP_LINK_PEER_TYPE);
 
 		if (peer) {
+			/* Updating ast_hash and ast_idx in peer level */
+			peer->ast_hash = ast_hash;
+			peer->ast_idx = hw_peer_id;
 			vdev = peer->vdev;
 			/* Only check for STA Vdev and peer is not for TDLS */
 			if (wlan_op_mode_sta == vdev->opmode &&
@@ -5224,15 +5255,25 @@ QDF_STATUS dp_peer_jitter_stats_ctx_alloc(struct dp_pdev *pdev,
 		return QDF_STATUS_E_INVAL;
 	}
 
-	/*
-	 * Allocate memory for jitter stats only when
-	 * operating in offload enabled mode.
-	 */
-	if (!wlan_cfg_get_dp_pdev_nss_enabled(pdev->wlan_cfg_ctx))
+	if (!wlan_cfg_is_peer_jitter_stats_enabled(pdev->soc->wlan_cfg_ctx))
 		return QDF_STATUS_SUCCESS;
 
-	txrx_peer->jitter_stats =
-		qdf_mem_malloc(sizeof(struct cdp_peer_tid_stats) * DP_MAX_TIDS);
+	if (wlan_cfg_get_dp_pdev_nss_enabled(pdev->wlan_cfg_ctx)) {
+		/*
+		 * Allocate memory on per tid basis when nss is enabled
+		 */
+		txrx_peer->jitter_stats =
+			qdf_mem_malloc(sizeof(struct cdp_peer_tid_stats)
+					* DP_MAX_TIDS);
+	} else {
+		/*
+		 * Allocate memory on per tid per ring basis
+		 */
+		txrx_peer->jitter_stats =
+			qdf_mem_malloc(sizeof(struct cdp_peer_tid_stats)
+					* DP_MAX_TIDS * CDP_MAX_TXRX_CTX);
+	}
+
 	if (!txrx_peer->jitter_stats) {
 		dp_warn("Jitter stats obj alloc failed!!");
 		return QDF_STATUS_E_NOMEM;
@@ -5257,8 +5298,7 @@ void dp_peer_jitter_stats_ctx_dealloc(struct dp_pdev *pdev,
 		return;
 	}
 
-	/* Check for offload mode */
-	if (!wlan_cfg_get_dp_pdev_nss_enabled(pdev->wlan_cfg_ctx))
+	if (!wlan_cfg_is_peer_jitter_stats_enabled(pdev->soc->wlan_cfg_ctx))
 		return;
 
 	if (txrx_peer->jitter_stats) {
@@ -5276,9 +5316,33 @@ void dp_peer_jitter_stats_ctx_dealloc(struct dp_pdev *pdev,
  */
 void dp_peer_jitter_stats_ctx_clr(struct dp_txrx_peer *txrx_peer)
 {
-	if (txrx_peer->jitter_stats)
-		qdf_mem_zero(txrx_peer->jitter_stats,
-			     sizeof(struct cdp_peer_tid_stats) * DP_MAX_TIDS);
+	struct cdp_peer_tid_stats *jitter_stats = NULL;
+
+	if (!txrx_peer) {
+		dp_warn("Null peer");
+		return;
+	}
+
+	if (!wlan_cfg_is_peer_jitter_stats_enabled(txrx_peer->
+						   vdev->
+						   pdev->soc->wlan_cfg_ctx))
+		return;
+
+	jitter_stats = txrx_peer->jitter_stats;
+	if (!jitter_stats)
+		return;
+
+	if (wlan_cfg_get_dp_pdev_nss_enabled(txrx_peer->
+					     vdev->pdev->wlan_cfg_ctx))
+		qdf_mem_zero(jitter_stats,
+			     sizeof(struct cdp_peer_tid_stats) *
+			     DP_MAX_TIDS);
+
+	else
+		qdf_mem_zero(jitter_stats,
+			     sizeof(struct cdp_peer_tid_stats) *
+			     DP_MAX_TIDS * CDP_MAX_TXRX_CTX);
+
 }
 #endif
 
@@ -5759,22 +5823,6 @@ bool dp_find_peer_exist_on_other_vdev(struct cdp_soc_t *soc_hdl,
 	return false;
 }
 
-bool dp_find_peer_exist(struct cdp_soc_t *soc_hdl, uint8_t pdev_id,
-			uint8_t *peer_addr)
-{
-	struct dp_soc *soc = cdp_soc_t_to_dp_soc(soc_hdl);
-	struct dp_peer *peer = NULL;
-
-	peer = dp_peer_find_hash_find(soc, peer_addr, 0, DP_VDEV_ALL,
-				      DP_MOD_ID_CDP);
-	if (peer) {
-		dp_peer_unref_delete(peer, DP_MOD_ID_CDP);
-		return true;
-	}
-
-	return false;
-}
-
 void dp_set_peer_as_tdls_peer(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
 			      uint8_t *peer_mac, bool val)
 {
@@ -5797,6 +5845,22 @@ void dp_set_peer_as_tdls_peer(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
 }
 #endif
 
+bool dp_find_peer_exist(struct cdp_soc_t *soc_hdl, uint8_t pdev_id,
+			uint8_t *peer_addr)
+{
+	struct dp_soc *soc = cdp_soc_t_to_dp_soc(soc_hdl);
+	struct dp_peer *peer = NULL;
+
+	peer = dp_peer_find_hash_find(soc, peer_addr, 0, DP_VDEV_ALL,
+				      DP_MOD_ID_CDP);
+	if (peer) {
+		dp_peer_unref_delete(peer, DP_MOD_ID_CDP);
+		return true;
+	}
+
+	return false;
+}
+
 #ifdef IPA_OFFLOAD
 int dp_peer_get_rxtid_stats_ipa(struct dp_peer *peer,
 				dp_rxtid_stats_cmd_cb dp_stats_cmd_cb)
@@ -5808,14 +5872,17 @@ int dp_peer_get_rxtid_stats_ipa(struct dp_peer *peer,
 	QDF_STATUS status;
 	uint16_t peer_id = peer->peer_id;
 	unsigned long comb_peer_id_tid;
+	struct dp_rx_tid *rx_tid;
 
 	if (!dp_stats_cmd_cb)
 		return stats_cmd_sent_cnt;
 
 	qdf_mem_zero(&params, sizeof(params));
 	for (i = 0; i < DP_MAX_TIDS; i++) {
-		struct dp_rx_tid *rx_tid = &peer->rx_tid[i];
+		if ((i >= CDP_DATA_TID_MAX) && (i != CDP_DATA_NON_QOS_TID))
+			continue;
 
+		rx_tid = &peer->rx_tid[i];
 		if (rx_tid->hw_qdesc_vaddr_unaligned) {
 			params.std.need_status = 1;
 			params.std.addr_lo =
@@ -5869,13 +5936,17 @@ int dp_peer_rxtid_stats(struct dp_peer *peer,
 	int i;
 	int stats_cmd_sent_cnt = 0;
 	QDF_STATUS status;
+	struct dp_rx_tid *rx_tid;
 
 	if (!dp_stats_cmd_cb)
 		return stats_cmd_sent_cnt;
 
 	qdf_mem_zero(&params, sizeof(params));
 	for (i = 0; i < DP_MAX_TIDS; i++) {
-		struct dp_rx_tid *rx_tid = &peer->rx_tid[i];
+		if ((i >= CDP_DATA_TID_MAX) && (i != CDP_DATA_NON_QOS_TID))
+			continue;
+
+		rx_tid = &peer->rx_tid[i];
 		if (rx_tid->hw_qdesc_vaddr_unaligned) {
 			params.std.need_status = 1;
 			params.std.addr_lo =
@@ -5898,8 +5969,10 @@ int dp_peer_rxtid_stats(struct dp_peer *peer,
 			if (QDF_IS_STATUS_SUCCESS(status))
 				stats_cmd_sent_cnt++;
 
+
 			/* Flush REO descriptor from HW cache to update stats
-			 * in descriptor memory. This is to help debugging */
+			 * in descriptor memory. This is to help debugging
+			 */
 			qdf_mem_zero(&params, sizeof(params));
 			params.std.need_status = 0;
 			params.std.addr_lo =
@@ -5908,7 +5981,7 @@ int dp_peer_rxtid_stats(struct dp_peer *peer,
 				(uint64_t)(rx_tid->hw_qdesc_paddr) >> 32;
 			params.u.fl_cache_params.flush_no_inval = 1;
 			dp_reo_send_cmd(soc, CMD_FLUSH_CACHE, &params, NULL,
-				NULL);
+					NULL);
 		}
 	}
 

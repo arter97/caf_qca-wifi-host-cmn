@@ -321,6 +321,10 @@ QDF_STATUS cm_disconnect_start(struct cnx_mgr *cm_ctx,
 		cm_send_disconnect_resp(cm_ctx, req->cm_id);
 		return QDF_STATUS_E_INVAL;
 	}
+
+	if (wlan_vdev_mlme_is_mlo_vdev(cm_ctx->vdev))
+		mlo_internal_disconnect_links(cm_ctx->vdev);
+
 	cm_vdev_scan_cancel(pdev, cm_ctx->vdev);
 	mlme_cm_disconnect_start_ind(cm_ctx->vdev, &req->req);
 	cm_if_mgr_inform_disconnect_start(cm_ctx->vdev);
@@ -687,7 +691,7 @@ cm_handle_discon_req_in_non_connected_state(struct cnx_mgr *cm_ctx,
 		 * So no need to do anything here, just return failure and drop
 		 * disconnect.
 		 */
-		mlme_info("vdev %d droping disconnect req from source %d in INIT state",
+		mlme_info("vdev %d dropping disconnect req from source %d in INIT state",
 			  wlan_vdev_get_id(cm_ctx->vdev), cm_req->req.source);
 		return QDF_STATUS_E_ALREADY;
 	default:

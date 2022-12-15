@@ -100,7 +100,7 @@
 
 /* Max number of chips that can participate in MLO */
 #if defined(WLAN_FEATURE_11BE_MLO) && defined(WLAN_MLO_MULTI_CHIP)
-#define WLAN_MAX_MLO_CHIPS 3
+#define WLAN_MAX_MLO_CHIPS 4
 #define WLAN_MAX_MLO_LINKS_PER_SOC 2
 #else
 #define WLAN_MAX_MLO_CHIPS 1
@@ -207,6 +207,7 @@ struct wlan_srng_cfg {
  * @reo_cmd_ring: reo cmd ring size
  * @reo_status_ring: reo status ting size
  * @rxdma_refill_ring: rxdma refill ring size
+ * @rxdma_refill_lt_disable: rxdma refill low threshold disable
  * @rxdma_err_dst_ring: rxdma error destination ring size
  * @raw_mode_war: enable/disable raw mode war
  * @enable_data_stall_detection: enable/disable specific data stall detection
@@ -268,6 +269,8 @@ struct wlan_srng_cfg {
  * @mpdu_retry_threshold_2: MPDU retry threshold 2 to increment tx bad count
  * napi_scale_factor: scaling factor to be used for napi polls
  * @notify_frame_support: flag indicating capability to mark notify frames
+ * @is_handle_invalid_decap_type_disabled: flag to indicate if invalid decap type
+ *                                         handling is disabled
  */
 struct wlan_cfg_dp_soc_ctxt {
 	int num_int_ctxts;
@@ -288,6 +291,8 @@ struct wlan_cfg_dp_soc_ctxt {
 	int num_tx_ext_desc;
 	int max_peer_id;
 	int htt_packet_type;
+	int int_batch_threshold_ppe2tcl;
+	int int_timer_threshold_ppe2tcl;
 	int int_batch_threshold_tx;
 	int int_timer_threshold_tx;
 	int int_batch_threshold_rx;
@@ -315,6 +320,9 @@ struct wlan_cfg_dp_soc_ctxt {
 	uint8_t int_rx_ring_near_full_irq_2_mask[WLAN_CFG_INT_NUM_CONTEXTS];
 	uint8_t int_tx_ring_near_full_irq_mask[WLAN_CFG_INT_NUM_CONTEXTS];
 	uint8_t int_host2txmon_ring_mask[WLAN_CFG_INT_NUM_CONTEXTS];
+	uint8_t int_ppeds_wbm_release_ring_mask[WLAN_CFG_INT_NUM_CONTEXTS];
+	uint8_t int_ppe2tcl_ring_mask[WLAN_CFG_INT_NUM_CONTEXTS];
+	uint8_t int_reo2ppe_ring_mask[WLAN_CFG_INT_NUM_CONTEXTS];
 	uint8_t int_umac_reset_intr_mask[WLAN_CFG_INT_NUM_CONTEXTS];
 	int hw_macid[MAX_PDEV_CNT];
 	int hw_macid_pdev_id_map[MAX_NUM_LMAC_HW];
@@ -351,6 +359,7 @@ struct wlan_cfg_dp_soc_ctxt {
 	int reo_cmd_ring;
 	int reo_status_ring;
 	int rxdma_refill_ring;
+	bool rxdma_refill_lt_disable;
 	int rxdma_err_dst_ring;
 	uint32_t per_pkt_trace;
 	bool raw_mode_war;
@@ -399,6 +408,7 @@ struct wlan_cfg_dp_soc_ctxt {
 	uint8_t radio1_rx_default_reo;
 	uint8_t radio2_rx_default_reo;
 	bool wow_check_rx_pending_enable;
+	bool jitter_stats_enabled;
 #ifdef IPA_OFFLOAD
 	uint32_t ipa_tx_ring_size;
 	uint32_t ipa_tx_comp_ring_size;
@@ -414,6 +424,9 @@ struct wlan_cfg_dp_soc_ctxt {
 	int reo2ppe_ring;
 	int ppe2tcl_ring;
 	int ppe_release_ring;
+	int ppe_wbm_release_ring;
+	int ppe_num_tx_desc;
+	int ppe_tx_comp_napi_budget;
 #endif
 #ifdef WLAN_FEATURE_PKT_CAPTURE_V2
 	uint32_t pkt_capture_mode;
@@ -431,6 +444,7 @@ struct wlan_cfg_dp_soc_ctxt {
 #endif
 	uint8_t num_rxdma_dst_rings_per_pdev;
 	bool txmon_hw_support;
+	bool txmon_sw_peer_filtering;
 	uint8_t num_rxdma_status_rings_per_pdev;
 #ifdef WLAN_TX_PKT_CAPTURE_ENH
 	uint32_t tx_capt_max_mem_allowed;
@@ -438,10 +452,14 @@ struct wlan_cfg_dp_soc_ctxt {
 #ifdef CONFIG_SAWF
 	bool sawf_enabled;
 #endif
+#ifdef CONFIG_SAWF_STATS
+	uint8_t sawf_stats;
+#endif
 	uint8_t mpdu_retry_threshold_1;
 	uint8_t mpdu_retry_threshold_2;
 	uint8_t napi_scale_factor;
 	uint8_t notify_frame_support;
+	bool is_handle_invalid_decap_type_disabled;
 };
 
 /**
@@ -477,6 +495,9 @@ struct wlan_cfg_dp_pdev_ctxt {
  * @num_tx_ext_desc: num of tx ext descriptors
  * @num_reo_dst_ring_entries: Number of entries in REO destination ring
  * @num_rxdma_buf_ring_entries: Number of entries in rxdma buf ring
+ * @num_rxdma_refill_ring_entries: Number of entries in rxdma refill ring
+ * @num_reo_status_ring_entries: Number of entries in REO status ring
+ * @num_mon_status_ring_entries: Number of entries in monitor status ring
  */
 struct wlan_dp_prealloc_cfg {
 	int num_tx_ring_entries;
@@ -488,6 +509,9 @@ struct wlan_dp_prealloc_cfg {
 	int num_tx_ext_desc;
 	int num_reo_dst_ring_entries;
 	int num_rxdma_buf_ring_entries;
+	int num_rxdma_refill_ring_entries;
+	int num_reo_status_ring_entries;
+	int num_mon_status_ring_entries;
 };
 
 /**
@@ -1276,6 +1300,22 @@ int wlan_cfg_get_dp_soc_nss_cfg(struct wlan_cfg_dp_soc_ctxt *cfg);
 void wlan_cfg_set_dp_soc_nss_cfg(struct wlan_cfg_dp_soc_ctxt *cfg, int nss_cfg);
 
 /*
+ * wlan_cfg_get_int_timer_threshold_ppe2tcl - Get intr mitigation for ppe2tcl
+ * @wlan_cfg_soc_ctx
+ *
+ * Return: Timer threshold
+ */
+int wlan_cfg_get_int_timer_threshold_ppe2tcl(struct wlan_cfg_dp_soc_ctxt *cfg);
+
+/*
+ * wlan_cfg_get_int_batch_threshold_ppe2tcl - Get intr mitigation for ppe2tcl
+ * @wlan_cfg_soc_ctx
+ *
+ * Return: Batch threshold
+ */
+int wlan_cfg_get_int_batch_threshold_ppe2tcl(struct wlan_cfg_dp_soc_ctxt *cfg);
+
+/*
  * wlan_cfg_get_int_batch_threshold_tx - Get interrupt mitigation cfg for Tx
  * @wlan_cfg_soc_ctx
  *
@@ -1504,6 +1544,15 @@ wlan_cfg_get_dp_soc_tx_sw_internode_queue(struct wlan_cfg_dp_soc_ctxt *cfg);
  */
 int
 wlan_cfg_get_dp_soc_rxdma_refill_ring_size(struct wlan_cfg_dp_soc_ctxt *cfg);
+
+/*
+ * wlan_cfg_get_dp_soc_rxdma_refill_lt_disable - Get RxDMA refill LT status
+ * @wlan_cfg_soc_ctx
+ *
+ * Return: true if Low threshold disable else false
+ */
+bool
+wlan_cfg_get_dp_soc_rxdma_refill_lt_disable(struct wlan_cfg_dp_soc_ctxt *cfg);
 
 /*
  * wlan_cfg_get_dp_soc_rxdma_err_dst_ring_size - Get rxdma dst ring size
@@ -1771,6 +1820,18 @@ wlan_cfg_set_peer_ext_stats(struct wlan_cfg_dp_soc_ctxt *cfg,
 			    bool val);
 
 /**
+ * wlan_cfg_set_peer_jitter_stats() - set peer jitter stats
+ *
+ * @wlan_cfg_dp_soc_ctxt: soc configuration context
+ * @val: Flag value read from INI
+ *
+ * Return: bool
+ */
+void
+wlan_cfg_set_peer_jitter_stats(struct wlan_cfg_dp_soc_ctxt *cfg,
+			       bool val);
+
+/**
  * wlan_cfg_is_peer_ext_stats_enabled() - Check if peer extended
  *                                        stats are enabled
  *
@@ -1780,6 +1841,16 @@ wlan_cfg_set_peer_ext_stats(struct wlan_cfg_dp_soc_ctxt *cfg,
  */
 bool
 wlan_cfg_is_peer_ext_stats_enabled(struct wlan_cfg_dp_soc_ctxt *cfg);
+
+/**
+ * wlan_cfg_is_peer_jitter_stats_enabled() - check if jitter stats are enabled
+ *
+ * @wlan_cfg_dp_soc_ctxt: soc configuration context
+ *
+ * Return: bool
+ */
+bool
+wlan_cfg_is_peer_jitter_stats_enabled(struct wlan_cfg_dp_soc_ctxt *cfg);
 
 /**
  * wlan_cfg_is_poll_mode_enabled() - Check if poll mode is enabled
@@ -1952,6 +2023,24 @@ wlan_cfg_get_dp_soc_ppe2tcl_ring_size(struct wlan_cfg_dp_soc_ctxt *cfg);
  */
 int
 wlan_cfg_get_dp_soc_ppe_release_ring_size(struct wlan_cfg_dp_soc_ctxt *cfg);
+
+/*
+ * wlan_cfg_get_dp_soc_ppe_num_tx_desc() - Number of ppeds tx Descriptors
+ * @wlan_cfg_ctx - Configuration Handle
+ *
+ * Return: num_tx_desc
+ */
+int
+wlan_cfg_get_dp_soc_ppe_num_tx_desc(struct wlan_cfg_dp_soc_ctxt *cfg);
+
+/*
+ * wlan_cfg_get_dp_soc_ppe_tx_comp_napi_budget() - ppeds Tx comp napi budget
+ * @ctx - Configuration Handle
+ *
+ * Return: napi budget
+ */
+int
+wlan_cfg_get_dp_soc_ppe_tx_comp_napi_budget(struct wlan_cfg_dp_soc_ctxt *cfg);
 #else
 static inline bool
 wlan_cfg_get_dp_soc_is_ppe_enabled(struct wlan_cfg_dp_soc_ctxt *cfg)
@@ -1973,6 +2062,18 @@ wlan_cfg_get_dp_soc_ppe2tcl_ring_size(struct wlan_cfg_dp_soc_ctxt *cfg)
 
 static inline int
 wlan_cfg_get_dp_soc_ppe_release_ring_size(struct wlan_cfg_dp_soc_ctxt *cfg)
+{
+	return 0;
+}
+
+static inline int
+wlan_cfg_get_dp_soc_ppe_num_tx_desc(struct wlan_cfg_dp_soc_ctxt *cfg)
+{
+	return 0;
+}
+
+static inline int
+wlan_cfg_get_dp_soc_ppe_tx_comp_napi_budget(struct wlan_cfg_dp_soc_ctxt *cfg)
 {
 	return 0;
 }
@@ -2106,6 +2207,25 @@ wlan_cfg_set_sawf_config(struct wlan_cfg_dp_soc_ctxt *cfg, bool value);
 bool
 wlan_cfg_get_sawf_config(struct wlan_cfg_dp_soc_ctxt *cfg);
 
+/**
+ * wlan_cfg_set_sawf_stats_config() - Set SAWF stats config
+ * @cfg: config context
+ * @value: value to be set
+ *
+ * Return: void
+ */
+void
+wlan_cfg_set_sawf_stats_config(struct wlan_cfg_dp_soc_ctxt *cfg, uint8_t value);
+
+/**
+ * wlan_cfg_get_sawf_stats_config() - Get SAWF stats config
+ * @cfg: config context
+ *
+ * Return: value for sawf_stats_config
+ */
+uint8_t
+wlan_cfg_get_sawf_stats_config(struct wlan_cfg_dp_soc_ctxt *cfg);
+
 #if defined(WLAN_FEATURE_11BE_MLO) && defined(WLAN_MLO_MULTI_CHIP)
 /**
  * wlan_cfg_mlo_rx_ring_map_get() - get rx ring map
@@ -2153,6 +2273,10 @@ void wlan_cfg_set_txmon_hw_support(struct wlan_cfg_dp_soc_ctxt *cfg,
  * Return: txmon_hw_support
  */
 bool wlan_cfg_get_txmon_hw_support(struct wlan_cfg_dp_soc_ctxt *cfg);
+
+void wlan_cfg_set_txmon_sw_peer_filtering(struct wlan_cfg_dp_soc_ctxt *cfg,
+					  bool txmon_sw_peer_filtering);
+bool wlan_cfg_get_txmon_sw_peer_filtering(struct wlan_cfg_dp_soc_ctxt *cfg);
 
 #ifdef WLAN_TX_PKT_CAPTURE_ENH
 /*

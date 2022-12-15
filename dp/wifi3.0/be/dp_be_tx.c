@@ -751,7 +751,8 @@ void dp_sawf_config_be(struct dp_soc *soc, uint32_t *hal_tx_desc_cached,
 
 	if (q_id == DP_SAWF_DEFAULT_Q_INVALID)
 		return;
-	hal_tx_desc_set_hlos_tid(hal_tx_desc_cached, DP_TX_HLOS_TID_GET(q_id));
+	hal_tx_desc_set_hlos_tid(hal_tx_desc_cached,
+				 (q_id & (CDP_DATA_TID_MAX - 1)));
 	hal_tx_desc_set_flow_override_enable(hal_tx_desc_cached,
 					     DP_TX_FLOW_OVERRIDE_ENABLE);
 	hal_tx_desc_set_flow_override(hal_tx_desc_cached,
@@ -780,6 +781,113 @@ QDF_STATUS dp_sawf_tx_enqueue_fail_peer_stats(struct dp_soc *soc,
 					      struct dp_tx_desc_s *tx_desc)
 {
 	return QDF_STATUS_SUCCESS;
+}
+#endif
+
+#ifdef WLAN_SUPPORT_PPEDS
+/**
+ * dp_ppeds_tx_comp_handler()- Handle tx completions for ppe2tcl ring
+ * @soc: Handle to DP Soc structure
+ * @quota: Max number of tx completions to process
+ *
+ * Return: Number of tx completions processed
+ */
+int dp_ppeds_tx_comp_handler(struct dp_soc_be *be_soc, uint32_t quota)
+{
+	uint32_t num_avail_for_reap = 0;
+	void *tx_comp_hal_desc;
+	uint8_t buf_src;
+	uint32_t count = 0;
+	struct dp_tx_desc_s *tx_desc = NULL;
+	struct dp_tx_desc_s *head_desc = NULL;
+	struct dp_tx_desc_s *tail_desc = NULL;
+	struct dp_soc *soc = &be_soc->soc;
+	void *last_prefetch_hw_desc = NULL;
+	struct dp_tx_desc_s *last_prefetch_sw_desc = NULL;
+	hal_soc_handle_t hal_soc = soc->hal_soc;
+	hal_ring_handle_t hal_ring_hdl = be_soc->ppe_wbm_release_ring.hal_srng;
+
+	if (qdf_unlikely(dp_srng_access_start(NULL, soc, hal_ring_hdl))) {
+		dp_err("HAL RING Access Failed -- %pK", hal_ring_hdl);
+		return 0;
+	}
+
+	num_avail_for_reap = hal_srng_dst_num_valid(hal_soc, hal_ring_hdl, 0);
+
+	if (num_avail_for_reap >= quota)
+		num_avail_for_reap = quota;
+
+	dp_srng_dst_inv_cached_descs(soc, hal_ring_hdl, num_avail_for_reap);
+
+	last_prefetch_hw_desc = dp_srng_dst_prefetch(hal_soc, hal_ring_hdl,
+						     num_avail_for_reap);
+
+	while (qdf_likely(num_avail_for_reap--)) {
+		tx_comp_hal_desc =  dp_srng_dst_get_next(soc, hal_ring_hdl);
+		if (qdf_unlikely(!tx_comp_hal_desc))
+			break;
+
+		buf_src = hal_tx_comp_get_buffer_source(hal_soc,
+							tx_comp_hal_desc);
+
+		if (qdf_unlikely(buf_src != HAL_TX_COMP_RELEASE_SOURCE_TQM &&
+				 buf_src != HAL_TX_COMP_RELEASE_SOURCE_FW)) {
+			dp_err("Tx comp release_src != TQM | FW but from %d",
+			       buf_src);
+			qdf_assert_always(0);
+		}
+
+		dp_tx_comp_get_params_from_hal_desc_be(soc, tx_comp_hal_desc,
+						       &tx_desc);
+
+		if (!tx_desc) {
+			dp_err("unable to retrieve tx_desc!");
+			qdf_assert_always(0);
+			continue;
+		}
+
+		if (qdf_unlikely(!(tx_desc->flags &
+				   DP_TX_DESC_FLAG_ALLOCATED) ||
+				 !(tx_desc->flags & DP_TX_DESC_FLAG_PPEDS))) {
+			qdf_assert_always(0);
+			continue;
+		}
+
+		tx_desc->buffer_src = buf_src;
+
+		if (qdf_unlikely(buf_src == HAL_TX_COMP_RELEASE_SOURCE_FW)) {
+			qdf_nbuf_free(tx_desc->nbuf);
+			dp_ppeds_tx_desc_free(soc, tx_desc);
+		} else {
+			tx_desc->tx_status =
+				hal_tx_comp_get_tx_status(tx_comp_hal_desc);
+
+			if (!head_desc) {
+				head_desc = tx_desc;
+				tail_desc = tx_desc;
+			}
+
+			tail_desc->next = tx_desc;
+			tx_desc->next = NULL;
+			tail_desc = tx_desc;
+
+			count++;
+
+			dp_tx_prefetch_hw_sw_nbuf_desc(soc, hal_soc,
+						       num_avail_for_reap,
+						       hal_ring_hdl,
+						       &last_prefetch_hw_desc,
+						       &last_prefetch_sw_desc);
+		}
+	}
+
+	dp_srng_access_end(NULL, soc, hal_ring_hdl);
+
+	if (head_desc)
+		dp_tx_comp_process_desc_list(soc, head_desc,
+					     CDP_MAX_TX_COMP_PPE_RING);
+
+	return count;
 }
 #endif
 
@@ -1348,6 +1456,7 @@ void dp_tx_nbuf_unmap_be(struct dp_soc *soc,
  * Return: NULL on success,
  *         nbuf when it fails to send
  */
+#ifdef QCA_DP_TX_NBUF_LIST_FREE
 qdf_nbuf_t dp_tx_fast_send_be(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
 			      qdf_nbuf_t nbuf)
 {
@@ -1403,6 +1512,10 @@ qdf_nbuf_t dp_tx_fast_send_be(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
 	tx_desc->pkt_offset = 0;
 	tx_desc->length = pkt_len;
 	tx_desc->flags |= DP_TX_DESC_FLAG_SIMPLE;
+	tx_desc->nbuf->fast_recycled = 1;
+
+	if (nbuf->is_from_recycler && nbuf->fast_xmit)
+		tx_desc->flags |= DP_TX_DESC_FLAG_FAST;
 
 	paddr =  dp_tx_nbuf_map_be(vdev, tx_desc, nbuf);
 	if (!paddr) {
@@ -1482,3 +1595,4 @@ release_desc:
 
 	return nbuf;
 }
+#endif

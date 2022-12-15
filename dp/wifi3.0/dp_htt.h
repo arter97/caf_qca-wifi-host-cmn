@@ -629,6 +629,7 @@ struct htt_tx_ring_tlv_filter {
  * @fpmo_data_filter: FPMO mode data filter
  * @fpmo_mgmt_filter: FPMO mode mgmt filter
  * @fpmo_ctrl_filter: FPMO mode ctrl filter
+ * @enable_mon_mac_filter: enable/disable mac based filter on scan radio
  *
  * NOTE: Do not change the layout of this structure
  */
@@ -675,10 +676,10 @@ struct htt_rx_ring_tlv_filter {
 	u_int32_t phy_err_mask;
 	u_int32_t phy_err_mask_cont;
 #endif
-#ifdef QCA_MONITOR_2_0_SUPPORT
+#if defined(QCA_MONITOR_2_0_SUPPORT) || defined(CONFIG_WORD_BASED_TLV)
 	uint16_t rx_mpdu_start_wmask;
 	uint16_t rx_mpdu_end_wmask;
-	uint16_t rx_msdu_end_wmask;
+	uint32_t rx_msdu_end_wmask;
 	uint16_t rx_pkt_tlv_offset;
 	uint16_t mgmt_dma_length:3,
 		 ctrl_dma_length:3,
@@ -693,6 +694,7 @@ struct htt_rx_ring_tlv_filter {
 	u_int16_t fpmo_mgmt_filter;
 	u_int16_t fpmo_ctrl_filter;
 #endif
+	bool enable_mon_mac_filter;
 };
 
 /**

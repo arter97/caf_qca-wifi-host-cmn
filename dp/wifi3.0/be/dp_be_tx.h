@@ -41,7 +41,7 @@ struct __attribute__((__packed__)) dp_tx_comp_peer_id {
 #define DP_TX_HLOS_TID_GET(_var) \
 	(((_var) & 0x0e) >> 1)
 #define DP_TX_FLOW_OVERRIDE_GET(_var) \
-	((_var) & 0x1)
+	((_var >> 3) & 0x1)
 #define DP_TX_WHO_CLFY_INF_SEL_GET(_var) \
 	(((_var) & 0x30) >> 4)
 #define DP_TX_FLOW_OVERRIDE_ENABLE 0x1
@@ -70,6 +70,7 @@ QDF_STATUS dp_tx_hw_enqueue_be(struct dp_soc *soc, struct dp_vdev *vdev,
 				struct cdp_tx_exception_metadata *metadata,
 				struct dp_tx_msdu_info_s *msdu_info);
 
+#ifdef QCA_DP_TX_NBUF_LIST_FREE
 /**
  * dp_tx_hw_enqueue_be() - This is a fast send API to directly enqueue to HW
  * @soc: DP Soc Handle
@@ -82,9 +83,15 @@ QDF_STATUS dp_tx_hw_enqueue_be(struct dp_soc *soc, struct dp_vdev *vdev,
  * Return: NULL for success
  *         nbuf for failure
  */
-
 qdf_nbuf_t dp_tx_fast_send_be(struct cdp_soc_t *soc, uint8_t vdev_id,
 			      qdf_nbuf_t nbuf);
+#else
+static inline qdf_nbuf_t dp_tx_fast_send_be(struct cdp_soc_t *soc, uint8_t vdev_id,
+					    qdf_nbuf_t nbuf)
+{
+	return NULL;
+}
+#endif
 
 /**
  * dp_tx_comp_get_params_from_hal_desc_be() - Get TX desc from HAL comp desc
@@ -184,6 +191,16 @@ void dp_tx_desc_pool_deinit_be(struct dp_soc *soc,
 			       struct dp_tx_desc_pool_s *tx_desc_pool,
 			       uint8_t pool_id);
 
+#ifdef WLAN_SUPPORT_PPEDS
+/**
+ * dp_ppeds_tx_comp_handler()- Handle tx completions for ppe2tcl ring
+ * @soc: Handle to DP Soc structure
+ * @quota: Max number of tx completions to process
+ *
+ * Return: Number of tx completions processed
+ */
+int dp_ppeds_tx_comp_handler(struct dp_soc_be *be_soc, uint32_t quota);
+#endif
 #ifdef WLAN_FEATURE_11BE_MLO
 /**
  * dp_tx_mlo_mcast_handler_be() - Tx handler for Mcast packets

@@ -1284,9 +1284,12 @@ enum cdp_pdev_param_type {
  *
  * @cdp_psoc_param_en_rate_stats: set rate stats enable/disable
  * @cdp_psoc_param_en_nss_cfg: set nss cfg
+ * @cdp_psoc_param_ppeds_enabled: PPE-DS feature enable
  * @cdp_ipa_enabled : set ipa mode
  * @cdp_psoc_param_vdev_stats_hw_offload: Configure HW vdev stats offload
  * @cdp_pdev_param_undecoded_metadata_enable: Undecoded metadata capture enable
+ * @cdp_sawf_enabled: SAWF enable/disable
+ * @cdp_sawf_stats: SAWF stats config
  * @cdp_vdev_param_traffic_end_ind: Traffic end indication enable/disable
  * @cdp_skel_enable : Enable/Disable skeleton code for Umac reset debug
  */
@@ -1367,12 +1370,14 @@ typedef union cdp_config_param_t {
 	int cdp_psoc_param_en_nss_cfg;
 	int cdp_psoc_param_preferred_hw_mode;
 	bool cdp_psoc_param_pext_stats;
+	bool cdp_psoc_param_ppeds_enabled;
 
 	bool cdp_skip_bar_update;
 	bool cdp_ipa_enabled;
 	bool cdp_psoc_param_vdev_stats_hw_offload;
 	bool cdp_pdev_param_undecoded_metadata_enable;
 	bool cdp_sawf_enabled;
+	uint8_t cdp_sawf_stats;
 	bool cdp_drop_3addr_mcast;
 	bool cdp_vdev_param_traffic_end_ind;
 	bool cdp_umac_rst_skel;
@@ -1426,18 +1431,20 @@ enum cdp_pdev_bpr_param {
 	CDP_BPR_ENABLE,
 };
 
-/*
- * cdp_vdev_param_type: different types of parameters
- *			to set values in vdev
+/**
+ * enum cdp_vdev_param_type - different types of parameters
+ *			      to set values in vdev
  * @CDP_ENABLE_NAWDS: set nawds enable/disable
  * @CDP_ENABLE_MCAST_EN: enable/disable multicast enhancement
  * @CDP_ENABLE_WDS: wds sta
  * @CDP_ENABLE_MEC: MEC enable flags
  * @CDP_ENABLE_PROXYSTA: proxy sta
  * @CDP_UPDATE_TDLS_FLAGS: tdls link flags
+ * @CDP_CFG_WDS_AGING_TIMER: modify/stop wds aging timer
  * @CDP_ENABLE_AP_BRIDGE: set ap_bridging enable/disable
- * @CDP_ENABLE_CIPHER : set cipher type based on security
+ * @CDP_ENABLE_CIPHER: set cipher type based on security
  * @CDP_ENABLE_QWRAP_ISOLATION: qwrap isolation mode
+ * @CDP_UPDATE_MULTIPASS: enable/disable multipass
  * @CDP_TX_ENCAP_TYPE: tx encap type
  * @CDP_RX_DECAP_TYPE: rx decap type
  * @CDP_MESH_RX_FILTER: set mesh rx filter
@@ -1451,9 +1458,12 @@ enum cdp_pdev_bpr_param {
  * @CDP_CFG_WDS_EXT: enable/disable wds ext feature
  * @CDP_ENABLE_PEER_AUTHORIZE: enable peer authorize flag
  * @CDP_ENABLE_PEER_TID_LATENCY: set peer tid latency enable flag
- * @CDP_SET_VAP_MESH_TID : Set latency tid in vap
+ * @CDP_SET_VAP_MESH_TID: Set latency tid in vap
+ * @CDP_SKIP_BAR_UPDATE_AP: enable/disable bar
  * @CDP_UPDATE_DSCP_TO_TID_MAP: Set DSCP to TID map id
- * @CDP_SET_MCAST_VDEV : Set primary mcast vdev
+ * @CDP_SET_MCAST_VDEV: Set primary mcast vdev
+ * @CDP_SET_MCAST_VDEV_HW_UPDATE: Not in use
+ * @CDP_DROP_3ADDR_MCAST: enable/disable drop 3addr multicast flag
  * @CDP_ENABLE_WRAP: qwrap ap
  * @CDP_ENABLE_TRAFFIC_END_INDICATION: enable/disable traffic end indication
  */
@@ -1513,6 +1523,8 @@ enum cdp_vdev_param_type {
  * @CDP_IPA_ENABLE : set IPA enable mode.
  * @CDP_CFG_VDEV_STATS_HW_OFFLOAD: HW Vdev stats config
  * @CDP_UMAC_RST_SKEL_ENABLE: Enable Umac reset skeleton code for debug
+ * @CDP_CDP_PPEDS_ENABLE: PPEDS is enabled or not
+ * @CDP_SAWF_STATS : set SAWF stats config
  */
 enum cdp_psoc_param_type {
 	CDP_ENABLE_RATE_STATS,
@@ -1523,6 +1535,8 @@ enum cdp_psoc_param_type {
 	CDP_CFG_VDEV_STATS_HW_OFFLOAD,
 	CDP_SAWF_ENABLE,
 	CDP_UMAC_RST_SKEL_ENABLE,
+	CDP_PPEDS_ENABLE,
+	CDP_SAWF_STATS,
 };
 
 #define TXRX_FW_STATS_TXSTATS                     1
@@ -1867,6 +1881,9 @@ struct cdp_delayed_tx_completion_ppdu_user {
  * @mpdu_bytes: accumulated bytes per mpdu for mem limit feature
  * @punc_mode: puncutured mode to indicate punctured bw
  * @punc_pattern_bitmap: bitmap indicating punctured pattern
+ * @mprot_type: medium protection type
+ * @rts_success: rts success
+ * @rts failure: rts failure
  */
 struct cdp_tx_completion_ppdu_user {
 	uint32_t completion_status:8,
@@ -1972,6 +1989,9 @@ struct cdp_tx_completion_ppdu_user {
 	uint32_t mpdu_bytes;
 	uint8_t punc_mode;
 	uint16_t punc_pattern_bitmap;
+	uint8_t mprot_type:3,
+		rts_success:1,
+		rts_failure:1;
 };
 
 /**

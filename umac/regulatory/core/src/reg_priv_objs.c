@@ -84,12 +84,33 @@ reg_set_5dot9_ghz_chan_in_master_mode(struct wlan_regulatory_psoc_priv_obj
 {
 	soc_reg_obj->enable_5dot9_ghz_chan_in_master_mode = false;
 }
+
+static void
+reg_init_indoor_channel_list(struct wlan_regulatory_pdev_priv_obj
+			     *pdev_priv_obj)
+{
+	struct indoor_concurrency_list *list;
+	uint8_t i;
+
+	list = pdev_priv_obj->indoor_list;
+	for (i = 0; i < MAX_INDOOR_LIST_SIZE; i++, list++) {
+		list->freq = 0;
+		list->vdev_id = INVALID_VDEV_ID;
+		list->chan_range = NULL;
+	}
+}
 #else
 static void
 reg_set_5dot9_ghz_chan_in_master_mode(struct wlan_regulatory_psoc_priv_obj
 				      *soc_reg_obj)
 {
 	soc_reg_obj->enable_5dot9_ghz_chan_in_master_mode = true;
+}
+
+static void
+reg_init_indoor_channel_list(struct wlan_regulatory_pdev_priv_obj
+			     *pdev_priv_obj)
+{
 }
 #endif
 
@@ -267,11 +288,11 @@ reg_destroy_afc_cb_spinlock(struct wlan_regulatory_pdev_priv_obj *pdev_priv_obj)
 }
 
 static void
-reg_init_afc_vars(struct wlan_objmgr_psoc *psoc,
+reg_init_afc_vars(struct wlan_regulatory_psoc_priv_obj *psoc_priv_obj,
 		  struct wlan_regulatory_pdev_priv_obj *pdev_priv_obj)
 {
 	pdev_priv_obj->is_reg_noaction_on_afc_pwr_evt =
-			cfg_get(psoc, CFG_OL_AFC_REG_NO_ACTION);
+			psoc_priv_obj->is_afc_reg_noaction;
 }
 
 static inline void
@@ -293,7 +314,7 @@ reg_destroy_afc_cb_spinlock(struct wlan_regulatory_pdev_priv_obj *pdev_priv_obj)
 }
 
 static void
-reg_init_afc_vars(struct wlan_objmgr_psoc *psoc,
+reg_init_afc_vars(struct wlan_regulatory_psoc_priv_obj *psoc_priv_obj,
 		  struct wlan_regulatory_pdev_priv_obj *pdev_priv_obj)
 {
 }
@@ -400,6 +421,8 @@ QDF_STATUS wlan_regulatory_pdev_obj_created_notification(
 	pdev_priv_obj->chan_list_recvd =
 		psoc_priv_obj->chan_list_recvd[phy_id];
 
+	reg_init_indoor_channel_list(pdev_priv_obj);
+
 	status = wlan_objmgr_pdev_component_obj_attach(
 			pdev, WLAN_UMAC_COMP_REGULATORY, pdev_priv_obj,
 			QDF_STATUS_SUCCESS);
@@ -411,7 +434,7 @@ QDF_STATUS wlan_regulatory_pdev_obj_created_notification(
 
 	reg_compute_pdev_current_chan_list(pdev_priv_obj);
 
-	reg_init_afc_vars(parent_psoc, pdev_priv_obj);
+	reg_init_afc_vars(psoc_priv_obj, pdev_priv_obj);
 
 	if (!psoc_priv_obj->is_11d_offloaded)
 		reg_11d_host_scan_init(parent_psoc);
