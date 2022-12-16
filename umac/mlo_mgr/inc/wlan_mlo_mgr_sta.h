@@ -656,12 +656,14 @@ mlo_free_connect_ies(struct wlan_cm_connect_req *connect_req);
  * @scan_entry: RootAP scan entry
  * @ml_ie: Pointer to ML IE
  * @ml_ie_len: Length of ML IE
+ * @partner_info: Cached partner info
  *
  * Return: None
  */
 void mlo_process_ml_reconfig_ie(struct wlan_objmgr_vdev *vdev,
 				struct scan_cache_entry *scan_entry,
-				uint8_t *ml_ie, qdf_size_t ml_ie_len);
+				uint8_t *ml_ie, qdf_size_t ml_ie_len,
+				struct mlo_partner_info *partner_info);
 #else
 static inline
 QDF_STATUS mlo_connect(struct wlan_objmgr_vdev *vdev,
@@ -818,7 +820,8 @@ bool mlo_get_keys_saved(struct wlan_objmgr_vdev *vdev,
 static inline
 void mlo_process_ml_reconfig_ie(struct wlan_objmgr_vdev *vdev,
 				struct scan_cache_entry *scan_entry,
-				uint8_t *ml_ie, qdf_size_t ml_ie_len)
+				uint8_t *ml_ie, qdf_size_t ml_ie_len,
+				struct mlo_partner_info *partner_info)
 { }
 #endif
 #endif

@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2019-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -75,13 +75,23 @@ struct psoc_phy_config {
 };
 
 /**
+ * struct psoc_mlo_config - psoc mlo config
+ * @reconfig_reassoc_en: If reassoc on ML reconfig AP addition is enabled
+ */
+struct psoc_mlo_config {
+	uint8_t reconfig_reassoc_en;
+};
+
+/**
  * struct psoc_config - psoc level configs
  * @score_config:          BSS scoring related config
  * @phy_config:            Psoc Phy config
+ * @mlo_config:            Psoc mlo config
  */
 struct psoc_config {
 	struct scoring_cfg score_config;
 	struct psoc_phy_config phy_config;
+	struct psoc_mlo_config mlo_config;
 };
 
 /**
