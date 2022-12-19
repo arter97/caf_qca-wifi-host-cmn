@@ -369,7 +369,7 @@ int dp_tx_delete_flow_pool(struct dp_soc *soc, struct dp_tx_desc_pool_s *pool,
 	qdf_spin_lock_bh(&pool->flow_pool_lock);
 	if (!pool->pool_create_cnt) {
 		qdf_spin_unlock_bh(&pool->flow_pool_lock);
-		dp_err("flow pool either not created or alread deleted");
+		dp_debug("flow pool either not created or alread deleted");
 		return -ENOENT;
 	}
 	pool->pool_create_cnt--;
@@ -448,7 +448,7 @@ static void dp_tx_flow_pool_vdev_unmap(struct dp_pdev *pdev,
 
 	vdev = dp_vdev_get_ref_by_id(soc, vdev_id, DP_MOD_ID_CDP);
 	if (!vdev) {
-		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_ERROR,
+		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_DEBUG,
 		   "%s: invalid vdev_id %d",
 		   __func__, vdev_id);
 		return;
