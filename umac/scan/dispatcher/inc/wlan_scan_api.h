@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2017-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -489,4 +489,15 @@ wlan_scan_get_entry_by_mac_addr(struct wlan_objmgr_pdev *pdev,
 struct scan_cache_entry *
 wlan_scan_get_entry_by_bssid(struct wlan_objmgr_pdev *pdev,
 			     struct qdf_mac_addr *bssid);
+/**
+ * wlan_scan_get_last_scan_ageout_time() - API to get last scan
+ * ageout time
+ * @psoc: psoc object
+ * @last_scan_ageout_time: last scan ageout time
+ *
+ * Return: void
+ */
+void
+wlan_scan_get_last_scan_ageout_time(struct wlan_objmgr_psoc *psoc,
+				    uint32_t *last_scan_ageout_time);
 #endif

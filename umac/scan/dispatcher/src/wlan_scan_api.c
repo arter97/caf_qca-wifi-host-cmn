@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2017-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -652,6 +652,18 @@ bool wlan_scan_cfg_skip_6g_and_indoor_freq(struct wlan_objmgr_psoc *psoc)
 		return false;
 
 	return scan_obj->scan_def.skip_6g_and_indoor_freq;
+}
+
+void wlan_scan_get_last_scan_ageout_time(struct wlan_objmgr_psoc *psoc,
+					 uint32_t *last_scan_ageout_time)
+{
+	struct wlan_scan_obj *scan_obj;
+
+	scan_obj = wlan_psoc_get_scan_obj(psoc);
+	if (!scan_obj)
+		*last_scan_ageout_time = 0;
+	*last_scan_ageout_time =
+	scan_obj->scan_def.last_scan_ageout_time;
 }
 
 #ifdef FEATURE_SET
