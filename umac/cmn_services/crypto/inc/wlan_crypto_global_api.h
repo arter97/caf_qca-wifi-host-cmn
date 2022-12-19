@@ -1069,7 +1069,7 @@ wlan_crypto_selective_clear_sae_single_pmk_entries(
 		struct wlan_objmgr_vdev *vdev, struct qdf_mac_addr *conn_bssid);
 
 /**
- * wlan_crypto_set_sae_single_pmk_bss_cap - Set the peer SAE single pmk
+ * wlan_crypto_set_sae_single_pmk_bss_cap - Set the peer SAE sinlge pmk
  * feature supported status
  * @vdev: Vdev
  * @bssid: BSSID for which the flag is to be set
@@ -1079,16 +1079,6 @@ wlan_crypto_selective_clear_sae_single_pmk_entries(
 void wlan_crypto_set_sae_single_pmk_bss_cap(struct wlan_objmgr_vdev *vdev,
 					    struct qdf_mac_addr *bssid,
 					    bool single_pmk_capable_bss);
-
-/**
- * wlan_crypto_set_sae_single_pmk_info - Set the peer SAE single pmk info
- * @vdev: Vdev
- * @roam_sync_pmksa: pmk info for roamed AP
- */
-void
-wlan_crypto_set_sae_single_pmk_info(struct wlan_objmgr_vdev *vdev,
-				    struct wlan_crypto_pmksa *roam_sync_pmksa);
-
 #else
 static inline void
 wlan_crypto_selective_clear_sae_single_pmk_entries(
@@ -1100,12 +1090,6 @@ static inline
 void wlan_crypto_set_sae_single_pmk_bss_cap(struct wlan_objmgr_vdev *vdev,
 					    struct qdf_mac_addr *bssid,
 					    bool single_pmk_capable_bss)
-{
-}
-
-static inline void
-wlan_crypto_set_sae_single_pmk_info(struct wlan_objmgr_vdev *vdev,
-				    struct wlan_crypto_pmksa *roam_sync_pmksa)
 {
 }
 #endif
