@@ -390,7 +390,8 @@ void dp_sawf_config_li(struct dp_soc *soc, uint32_t *hal_tx_desc_cached,
 
 	search_index = dp_sawf_get_search_index(soc, nbuf, vdev_id,
 						q_id);
-	hal_tx_desc_set_hlos_tid(hal_tx_desc_cached, (q_id & 0x7));
+	hal_tx_desc_set_hlos_tid(hal_tx_desc_cached,
+				 (q_id & (CDP_DATA_TID_MAX - 1)));
 	hal_tx_desc_set_search_type_li(soc->hal_soc, hal_tx_desc_cached,
 				       HAL_TX_ADDR_INDEX_SEARCH);
 	hal_tx_desc_set_search_index_li(soc->hal_soc, hal_tx_desc_cached,
@@ -537,7 +538,7 @@ dp_tx_hw_enqueue_li(struct dp_soc *soc, struct dp_vdev *vdev,
 	status = QDF_STATUS_SUCCESS;
 
 	dp_tx_hw_desc_update_evt((uint8_t *)hal_tx_desc_cached,
-				 hal_ring_hdl, soc);
+				 hal_ring_hdl, soc, ring_id);
 
 ring_access_fail:
 	dp_tx_ring_access_end_wrapper(soc, hal_ring_hdl, coalesce);

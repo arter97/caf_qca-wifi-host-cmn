@@ -56,8 +56,8 @@ struct wlan_6ghz_rnr_global_cache {
  * @eht_cap: If dev is configured as EHT capable
  * @vht_24G_cap:If dev is configured as VHT capable for 2.4Ghz
  * @beamformee_cap:If dev is configured as BF capable
- * @bw_above_20_5ghz: BW greater than 20Mhz supprted for 5Ghz
- * @bw_above_20_24ghz: BW greater than 20Mhz supprted for 2.4Ghz
+ * @bw_above_20_5ghz: BW greater than 20Mhz supported for 5Ghz
+ * @bw_above_20_24ghz: BW greater than 20Mhz supported for 2.4Ghz
  * @max_chan_switch_ie: If max channel switch IE is supported
  */
 struct psoc_phy_config {
@@ -100,7 +100,7 @@ struct psoc_mlme_obj {
 #ifdef FEATURE_VDEV_OPS_WAKELOCK
 	struct psoc_mlme_wakelock psoc_mlme_wakelock;
 #endif
-	struct wlan_6ghz_rnr_global_cache rnr_6ghz_cache;
+	struct wlan_6ghz_rnr_global_cache rnr_6ghz_cache[WLAN_UMAC_MAX_PDEVS];
 	struct psoc_config psoc_cfg;
 };
 

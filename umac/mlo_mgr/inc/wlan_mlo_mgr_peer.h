@@ -22,6 +22,9 @@
 #define _WLAN_MLO_MGR_PEER_H_
 
 #include "wlan_objmgr_peer_obj.h"
+
+#define WLAN_LINK_ID_INVALID    0xff
+
 /**
  * mlo_peer_create - Initiatiate peer create on secondary link(s)
  * by posting a message
@@ -183,12 +186,17 @@ void wlan_mlo_partner_peer_assoc_post(struct wlan_objmgr_peer *assoc_peer);
 /**
  * wlan_mlo_peer_deauth_init() - Initiate Deauth of MLO peer
  * @ml_peer: MLO peer
+ * @src_peer: Source peer, if this pointer is valid, send deauth on other link
+ * @is_disassoc: to indicate, whether Disassoc to be sent instead of deauth
  *
  * This function initiates deauth on MLO peer and its links peers
  *
  * Return: void
  */
-void wlan_mlo_peer_deauth_init(struct wlan_mlo_peer_context *ml_peer);
+void
+wlan_mlo_peer_deauth_init(struct wlan_mlo_peer_context *ml_peer,
+			  struct wlan_objmgr_peer *src_peer,
+			  uint8_t is_disassoc);
 
 /**
  * wlan_mlo_partner_peer_create_failed_notify() - Notify peer creation fail
@@ -344,6 +352,17 @@ void wlan_mlo_peer_get_links_info(struct wlan_objmgr_peer *peer,
 				  struct mlo_tgt_partner_info *ml_links);
 
 /**
+ * wlan_mlo_peer_get_primary_peer_link_id() - get vdev link ID of primary peer
+ * @peer: Link peer
+ *
+ * This function checks for the peers and returns vdev link id of the primary
+ * peer.
+ *
+ * Return: link id of primary vdev
+ */
+uint8_t wlan_mlo_peer_get_primary_peer_link_id(struct wlan_objmgr_peer *peer);
+
+/**
  * wlan_mlo_peer_get_partner_links_info() - get MLO peer partner links info
  * @peer: Link peer
  * @ml_links: structure to be filled with partner link info
@@ -368,7 +387,7 @@ typedef QDF_STATUS (*wlan_mlo_op_handler)(struct wlan_mlo_dev_context *ml_dev,
  * @ml_dev: MLO DEV object
  * @handler: the handler will be called for each ml peer
  *            the handler should be implemented to perform required operation
- * @arg:     agruments passed by caller
+ * @arg:     arguments passed by caller
  *
  * API to be used for performing the operations on all ML PEER objects
  *
@@ -566,4 +585,15 @@ mlo_peer_free_auth_param(struct mlpeer_auth_params *auth_params)
 {
 }
 #endif
+
+/**
+ * wlan_mlo_partner_peer_delete_is_allowed() - Checks MLO peer delete is allowed
+ * @src_peer: Link peer
+ *
+ * This function checks whether MLO peer can be deleted along with link peer
+ * delete in link removal cases
+ *
+ * Return: true, if MLO peer can be deleted
+ */
+bool wlan_mlo_partner_peer_delete_is_allowed(struct wlan_objmgr_peer *src_peer);
 #endif

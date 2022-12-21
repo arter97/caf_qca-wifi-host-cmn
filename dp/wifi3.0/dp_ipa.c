@@ -52,8 +52,10 @@
  * this issue.
  */
 #define DP_IPA_WAR_WBM2SW_REL_RING_NO_BUF_ENTRIES 16
+
 /**
  *struct dp_ipa_reo_remap_record - history for dp ipa reo remaps
+ * @timestamp: Timestamp when remap occurs
  * @ix0_reg: reo destination ring IX0 value
  * @ix2_reg: reo destination ring IX2 value
  * @ix3_reg: reo destination ring IX3 value
@@ -110,7 +112,9 @@ static void dp_ipa_reo_remap_history_add(uint32_t ix0_val, uint32_t ix2_val,
 static QDF_STATUS __dp_ipa_handle_buf_smmu_mapping(struct dp_soc *soc,
 						   qdf_nbuf_t nbuf,
 						   uint32_t size,
-						   bool create)
+						   bool create,
+						   const char *func,
+						   uint32_t line)
 {
 	qdf_mem_info_t mem_map_table = {0};
 	QDF_STATUS ret = QDF_STATUS_SUCCESS;
@@ -133,11 +137,11 @@ static QDF_STATUS __dp_ipa_handle_buf_smmu_mapping(struct dp_soc *soc,
 		/* Assert if PA is zero */
 		qdf_assert_always(mem_map_table.pa);
 
-		ret = qdf_ipa_wdi_create_smmu_mapping(hdl, 1,
-						      &mem_map_table);
+		ret = qdf_nbuf_smmu_map_debug(nbuf, hdl, 1, &mem_map_table,
+					      func, line);
 	} else {
-		ret = qdf_ipa_wdi_release_smmu_mapping(hdl, 1,
-						       &mem_map_table);
+		ret = qdf_nbuf_smmu_unmap_debug(nbuf, hdl, 1, &mem_map_table,
+						func, line);
 	}
 	qdf_assert_always(!ret);
 
@@ -156,7 +160,8 @@ static QDF_STATUS __dp_ipa_handle_buf_smmu_mapping(struct dp_soc *soc,
 QDF_STATUS dp_ipa_handle_rx_buf_smmu_mapping(struct dp_soc *soc,
 					     qdf_nbuf_t nbuf,
 					     uint32_t size,
-					     bool create)
+					     bool create, const char *func,
+					     uint32_t line)
 {
 	struct dp_pdev *pdev;
 	int i;
@@ -195,13 +200,16 @@ QDF_STATUS dp_ipa_handle_rx_buf_smmu_mapping(struct dp_soc *soc,
 
 	qdf_nbuf_set_rx_ipa_smmu_map(nbuf, create);
 
-	return __dp_ipa_handle_buf_smmu_mapping(soc, nbuf, size, create);
+	return __dp_ipa_handle_buf_smmu_mapping(soc, nbuf, size, create,
+						func, line);
 }
 
 static QDF_STATUS __dp_ipa_tx_buf_smmu_mapping(
 	struct dp_soc *soc,
 	struct dp_pdev *pdev,
-	bool create)
+	bool create,
+	const char *func,
+	uint32_t line)
 {
 	uint32_t index;
 	QDF_STATUS ret = QDF_STATUS_SUCCESS;
@@ -221,7 +229,7 @@ static QDF_STATUS __dp_ipa_tx_buf_smmu_mapping(
 			continue;
 		buf_len = qdf_nbuf_get_data_len(nbuf);
 		ret = __dp_ipa_handle_buf_smmu_mapping(soc, nbuf, buf_len,
-						       create);
+						       create, func, line);
 	}
 
 	return ret;
@@ -252,7 +260,9 @@ static void dp_ipa_set_reo_ctx_mapping_lock_required(struct dp_soc *soc,
 #ifdef RX_DESC_MULTI_PAGE_ALLOC
 static QDF_STATUS dp_ipa_handle_rx_buf_pool_smmu_mapping(struct dp_soc *soc,
 							 struct dp_pdev *pdev,
-							 bool create)
+							 bool create,
+							 const char *func,
+							 uint32_t line)
 {
 	struct rx_desc_pool *rx_pool;
 	uint8_t pdev_id;
@@ -301,8 +311,9 @@ static QDF_STATUS dp_ipa_handle_rx_buf_pool_smmu_mapping(struct dp_soc *soc,
 		}
 		qdf_nbuf_set_rx_ipa_smmu_map(nbuf, create);
 
-		ret = __dp_ipa_handle_buf_smmu_mapping(
-				soc, nbuf, rx_pool->buf_size, create);
+		ret = __dp_ipa_handle_buf_smmu_mapping(soc, nbuf,
+						       rx_pool->buf_size,
+						       create, func, line);
 	}
 	dp_ipa_rx_buf_smmu_mapping_unlock(soc);
 	qdf_spin_unlock_bh(&rx_pool->lock);
@@ -311,9 +322,12 @@ static QDF_STATUS dp_ipa_handle_rx_buf_pool_smmu_mapping(struct dp_soc *soc,
 	return ret;
 }
 #else
-static QDF_STATUS dp_ipa_handle_rx_buf_pool_smmu_mapping(struct dp_soc *soc,
+static QDF_STATUS dp_ipa_handle_rx_buf_pool_smmu_mapping(
+							 struct dp_soc *soc,
 							 struct dp_pdev *pdev,
-							 bool create)
+							 bool create,
+							 const char *func,
+							 uint32_t line)
 {
 	struct rx_desc_pool *rx_pool;
 	uint8_t pdev_id;
@@ -352,8 +366,8 @@ static QDF_STATUS dp_ipa_handle_rx_buf_pool_smmu_mapping(struct dp_soc *soc,
 		}
 		qdf_nbuf_set_rx_ipa_smmu_map(nbuf, create);
 
-		__dp_ipa_handle_buf_smmu_mapping(soc, nbuf,
-						 rx_pool->buf_size, create);
+		__dp_ipa_handle_buf_smmu_mapping(soc, nbuf, rx_pool->buf_size,
+						 create, func, line);
 	}
 	dp_ipa_rx_buf_smmu_mapping_unlock(soc);
 	qdf_spin_unlock_bh(&rx_pool->lock);
@@ -391,6 +405,62 @@ static QDF_STATUS dp_ipa_get_shared_mem_info(qdf_device_t osdev,
 	return QDF_STATUS_SUCCESS;
 }
 
+/**
+ * dp_ipa_get_tx_bank_id - API to get TCL bank id
+ * @soc: dp_soc handle
+ * @bank_id: out parameter for bank id
+ *
+ * Return: QDF_STATUS
+ */
+static QDF_STATUS dp_ipa_get_tx_bank_id(struct dp_soc *soc, uint8_t *bank_id)
+{
+	if (soc->arch_ops.ipa_get_bank_id) {
+		*bank_id = soc->arch_ops.ipa_get_bank_id(soc);
+		if (*bank_id < 0) {
+			return QDF_STATUS_E_INVAL;
+		} else {
+			dp_info("bank_id %u", *bank_id);
+			return QDF_STATUS_SUCCESS;
+		}
+	} else {
+		return QDF_STATUS_E_NOSUPPORT;
+	}
+}
+
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 10, 0)) || \
+	defined(CONFIG_IPA_WDI_UNIFIED_API)
+static void dp_ipa_setup_tx_params_bank_id(struct dp_soc *soc,
+					   qdf_ipa_wdi_pipe_setup_info_t *tx)
+{
+	uint8_t bank_id;
+
+	if (QDF_IS_STATUS_SUCCESS(dp_ipa_get_tx_bank_id(soc, &bank_id)))
+		QDF_IPA_WDI_SETUP_INFO_RX_BANK_ID(tx, bank_id);
+}
+
+static void
+dp_ipa_setup_tx_smmu_params_bank_id(struct dp_soc *soc,
+				    qdf_ipa_wdi_pipe_setup_info_smmu_t *tx_smmu)
+{
+	uint8_t bank_id;
+
+	if (QDF_IS_STATUS_SUCCESS(dp_ipa_get_tx_bank_id(soc, &bank_id)))
+		QDF_IPA_WDI_SETUP_INFO_SMMU_RX_BANK_ID(tx_smmu, bank_id);
+}
+#else
+static inline void
+dp_ipa_setup_tx_params_bank_id(struct dp_soc *soc,
+			       qdf_ipa_wdi_pipe_setup_info_t *tx)
+{
+}
+
+static inline void
+dp_ipa_setup_tx_smmu_params_bank_id(struct dp_soc *soc,
+				    qdf_ipa_wdi_pipe_setup_info_smmu_t *tx_smmu)
+{
+}
+#endif
+
 #ifdef IPA_WDI3_TX_TWO_PIPES
 static void dp_ipa_tx_alt_pool_detach(struct dp_soc *soc, struct dp_pdev *pdev)
 {
@@ -416,7 +486,7 @@ static void dp_ipa_tx_alt_pool_detach(struct dp_soc *soc, struct dp_pdev *pdev)
 	soc->ipa_uc_tx_rsc_alt.tx_buf_pool_vaddr_unaligned = NULL;
 
 	ipa_res = &pdev->ipa_resource;
-	if (!ipa_res->is_db_ddr_mapped)
+	if (!ipa_res->is_db_ddr_mapped && ipa_res->tx_alt_comp_doorbell_vaddr)
 		iounmap(ipa_res->tx_alt_comp_doorbell_vaddr);
 
 	qdf_mem_free_sgtable(&ipa_res->tx_alt_ring.sgtable);
@@ -711,7 +781,8 @@ static void dp_ipa_unmap_ring_doorbell_paddr(struct dp_pdev *pdev)
 
 static QDF_STATUS dp_ipa_tx_alt_buf_smmu_mapping(struct dp_soc *soc,
 						 struct dp_pdev *pdev,
-						 bool create)
+						 bool create, const char *func,
+						 uint32_t line)
 {
 	QDF_STATUS ret = QDF_STATUS_SUCCESS;
 	struct ipa_dp_tx_rsc *rsc;
@@ -734,8 +805,8 @@ static QDF_STATUS dp_ipa_tx_alt_buf_smmu_mapping(struct dp_soc *soc,
 			continue;
 
 		buf_len = qdf_nbuf_get_data_len(nbuf);
-		ret = __dp_ipa_handle_buf_smmu_mapping(
-				soc, nbuf, buf_len, create);
+		ret = __dp_ipa_handle_buf_smmu_mapping(soc, nbuf, buf_len,
+						       create, func, line);
 	}
 
 	return ret;
@@ -775,6 +846,8 @@ static void dp_ipa_wdi_tx_alt_pipe_params(struct dp_soc *soc,
 		ipa_res->tx_alt_ring_num_alloc_buffer;
 
 	QDF_IPA_WDI_SETUP_INFO_PKT_OFFSET(tx) = 0;
+
+	dp_ipa_setup_tx_params_bank_id(soc, tx);
 }
 
 static void
@@ -809,6 +882,8 @@ dp_ipa_wdi_tx_alt_pipe_smmu_params(struct dp_soc *soc,
 	QDF_IPA_WDI_SETUP_INFO_SMMU_NUM_PKT_BUFFERS(tx_smmu) =
 		ipa_res->tx_alt_ring_num_alloc_buffer;
 	QDF_IPA_WDI_SETUP_INFO_SMMU_PKT_OFFSET(tx_smmu) = 0;
+
+	dp_ipa_setup_tx_smmu_params_bank_id(soc, tx_smmu);
 }
 
 static void dp_ipa_setup_tx_alt_pipe(struct dp_soc *soc,
@@ -876,6 +951,9 @@ static void dp_ipa_tx_comp_ring_init_hp(struct dp_soc *soc,
 			     res->tx_comp_doorbell_vaddr);
 
 	/* Init the alternate TX comp ring */
+	if (!res->tx_alt_comp_doorbell_paddr)
+		return;
+
 	wbm_srng = (struct hal_srng *)
 		soc->tx_comp_ring[IPA_TX_ALT_COMP_RING_IDX].hal_srng;
 
@@ -899,6 +977,9 @@ static void dp_ipa_set_tx_doorbell_paddr(struct dp_soc *soc,
 		(void *)ipa_res->tx_comp_doorbell_vaddr);
 
 	/* Setup for alternative TX comp ring */
+	if (!ipa_res->tx_alt_comp_doorbell_paddr)
+		return;
+
 	wbm_srng = (struct hal_srng *)
 			soc->tx_comp_ring[IPA_TX_ALT_COMP_RING_IDX].hal_srng;
 
@@ -1017,7 +1098,9 @@ static inline void dp_ipa_unmap_ring_doorbell_paddr(struct dp_pdev *pdev)
 
 static inline QDF_STATUS dp_ipa_tx_alt_buf_smmu_mapping(struct dp_soc *soc,
 							struct dp_pdev *pdev,
-							bool create)
+							bool create,
+							const char *func,
+							uint32_t line)
 {
 	return QDF_STATUS_SUCCESS;
 }
@@ -1216,7 +1299,7 @@ int dp_ipa_uc_detach(struct dp_soc *soc, struct dp_pdev *pdev)
  * @pdev: Physical device handle
  *
  * Allocate TX buffer from non-cacheable memory
- * Attache allocated TX buffers with WBM SRNG
+ * Attach allocated TX buffers with WBM SRNG
  *
  * Return: int
  */
@@ -2149,6 +2232,8 @@ static void dp_ipa_wdi_tx_params(struct dp_soc *soc,
 		ipa_res->tx_num_alloc_buffer;
 
 	QDF_IPA_WDI_SETUP_INFO_PKT_OFFSET(tx) = 0;
+
+	dp_ipa_setup_tx_params_bank_id(soc, tx);
 }
 
 static void dp_ipa_wdi_rx_params(struct dp_soc *soc,
@@ -2236,6 +2321,7 @@ dp_ipa_wdi_tx_smmu_params(struct dp_soc *soc,
 		ipa_res->tx_num_alloc_buffer;
 	QDF_IPA_WDI_SETUP_INFO_SMMU_PKT_OFFSET(tx_smmu) = 0;
 
+	dp_ipa_setup_tx_smmu_params_bank_id(soc, tx_smmu);
 }
 
 static void
@@ -2769,6 +2855,12 @@ QDF_STATUS dp_ipa_setup_iface(char *ifname, uint8_t *mac_addr,
 
 	qdf_mem_zero(&in, sizeof(qdf_ipa_wdi_reg_intf_in_params_t));
 
+	/* Need to reset the values to 0 as all the fields are not
+	 * updated in the Header, Unused fields will be set to 0.
+	 */
+	qdf_mem_zero(&uc_tx_vlan_hdr, sizeof(struct dp_ipa_uc_tx_vlan_hdr));
+	qdf_mem_zero(&uc_tx_vlan_hdr_v6, sizeof(struct dp_ipa_uc_tx_vlan_hdr));
+
 	dp_debug("Add Partial hdr: %s, "QDF_MAC_ADDR_FMT, ifname,
 		 QDF_MAC_ADDR_REF(mac_addr));
 	qdf_mem_zero(&hdr_info, sizeof(qdf_ipa_wdi_hdr_info_t));
@@ -2841,7 +2933,7 @@ QDF_STATUS dp_ipa_setup_iface(char *ifname, uint8_t *mac_addr,
 	ret = qdf_ipa_wdi_reg_intf(&in);
 	if (ret) {
 		QDF_TRACE(QDF_MODULE_ID_TXRX, QDF_TRACE_LEVEL_ERROR,
-			  "%s: ipa_wdi_reg_intf: register IPA interface falied: ret=%d",
+			  "%s: ipa_wdi_reg_intf: register IPA interface failed: ret=%d",
 			  __func__, ret);
 		return QDF_STATUS_E_FAILURE;
 	}
@@ -3098,7 +3190,7 @@ QDF_STATUS dp_ipa_setup_iface(char *ifname, uint8_t *mac_addr,
 
 	ret = qdf_ipa_wdi_reg_intf(&in);
 	if (ret) {
-		dp_err("ipa_wdi_reg_intf: register IPA interface falied: ret=%d",
+		dp_err("ipa_wdi_reg_intf: register IPA interface failed: ret=%d",
 		       ret);
 		return QDF_STATUS_E_FAILURE;
 	}
@@ -3204,7 +3296,8 @@ QDF_STATUS dp_ipa_enable_pipes(struct cdp_soc_t *soc_hdl, uint8_t pdev_id,
 
 	qdf_atomic_set(&soc->ipa_pipes_enabled, 1);
 	DP_IPA_EP_SET_TX_DB_PA(soc, ipa_res);
-	dp_ipa_handle_rx_buf_pool_smmu_mapping(soc, pdev, true);
+	dp_ipa_handle_rx_buf_pool_smmu_mapping(soc, pdev, true,
+					       __func__, __LINE__);
 
 	result = qdf_ipa_wdi_enable_pipes(hdl);
 	if (result) {
@@ -3213,7 +3306,8 @@ QDF_STATUS dp_ipa_enable_pipes(struct cdp_soc_t *soc_hdl, uint8_t pdev_id,
 			  __func__, result);
 		qdf_atomic_set(&soc->ipa_pipes_enabled, 0);
 		DP_IPA_RESET_TX_DB_PA(soc, ipa_res);
-		dp_ipa_handle_rx_buf_pool_smmu_mapping(soc, pdev, false);
+		dp_ipa_handle_rx_buf_pool_smmu_mapping(soc, pdev, false,
+						       __func__, __LINE__);
 		return QDF_STATUS_E_FAILURE;
 	}
 
@@ -3259,7 +3353,8 @@ QDF_STATUS dp_ipa_disable_pipes(struct cdp_soc_t *soc_hdl, uint8_t pdev_id,
 	}
 
 	qdf_atomic_set(&soc->ipa_pipes_enabled, 0);
-	dp_ipa_handle_rx_buf_pool_smmu_mapping(soc, pdev, false);
+	dp_ipa_handle_rx_buf_pool_smmu_mapping(soc, pdev, false,
+					       __func__, __LINE__);
 
 	return result ? QDF_STATUS_E_FAILURE : QDF_STATUS_SUCCESS;
 }
@@ -3357,7 +3452,7 @@ static inline bool dp_ipa_peer_check(struct dp_soc *soc,
 	}
 
 	peer = dp_peer_get_ref_by_id(soc, ast_entry->peer_id,
-				     DP_MOD_ID_AST);
+				     DP_MOD_ID_IPA);
 
 	if (!peer) {
 		qdf_spin_unlock_bh(&soc->ast_lock);
@@ -3566,7 +3661,8 @@ qdf_nbuf_t dp_ipa_handle_rx_reo_reinject(struct dp_soc *soc, qdf_nbuf_t nbuf)
 }
 
 QDF_STATUS dp_ipa_tx_buf_smmu_mapping(
-	struct cdp_soc_t *soc_hdl, uint8_t pdev_id)
+	struct cdp_soc_t *soc_hdl, uint8_t pdev_id,
+	const char *func, uint32_t line)
 {
 	QDF_STATUS ret;
 
@@ -3583,19 +3679,19 @@ QDF_STATUS dp_ipa_tx_buf_smmu_mapping(
 		dp_debug("SMMU S1 disabled");
 		return QDF_STATUS_SUCCESS;
 	}
-	ret = __dp_ipa_tx_buf_smmu_mapping(soc, pdev, true);
+	ret = __dp_ipa_tx_buf_smmu_mapping(soc, pdev, true, func, line);
 	if (ret)
 		return ret;
 
-	ret = dp_ipa_tx_alt_buf_smmu_mapping(soc, pdev, true);
+	ret = dp_ipa_tx_alt_buf_smmu_mapping(soc, pdev, true, func, line);
 	if (ret)
-		__dp_ipa_tx_buf_smmu_mapping(soc, pdev, false);
-
+		__dp_ipa_tx_buf_smmu_mapping(soc, pdev, false, func, line);
 	return ret;
 }
 
 QDF_STATUS dp_ipa_tx_buf_smmu_unmapping(
-	struct cdp_soc_t *soc_hdl, uint8_t pdev_id)
+	struct cdp_soc_t *soc_hdl, uint8_t pdev_id, const char *func,
+	uint32_t line)
 {
 	struct dp_soc *soc = cdp_soc_t_to_dp_soc(soc_hdl);
 	struct dp_pdev *pdev =
@@ -3611,8 +3707,8 @@ QDF_STATUS dp_ipa_tx_buf_smmu_unmapping(
 		return QDF_STATUS_SUCCESS;
 	}
 
-	if (__dp_ipa_tx_buf_smmu_mapping(soc, pdev, false) ||
-	    dp_ipa_tx_alt_buf_smmu_mapping(soc, pdev, false))
+	if (__dp_ipa_tx_buf_smmu_mapping(soc, pdev, false, func, line) ||
+	    dp_ipa_tx_alt_buf_smmu_mapping(soc, pdev, false, func, line))
 		return QDF_STATUS_E_FAILURE;
 
 	return QDF_STATUS_SUCCESS;

@@ -60,6 +60,14 @@
 #define DP_TX_DESC_FLAG_TX_COMP_ERR	0x1000
 #define DP_TX_DESC_FLAG_FLUSH		0x2000
 #define DP_TX_DESC_FLAG_TRAFFIC_END_IND	0x4000
+#define DP_TX_DESC_FLAG_RMNET		0x8000
+/*
+ * Since the Tx descriptor flag is of only 16-bit and no more bit is free for
+ * any new flag, therefore for time being overloading PPEDS flag with that of
+ * FLUSH flag and FLAG_FAST with TDLS which is not enabled for WIN.
+ */
+#define DP_TX_DESC_FLAG_PPEDS		0x2000
+#define DP_TX_DESC_FLAG_FAST		0x100
 
 #define DP_TX_EXT_DESC_FLAG_METADATA_VALID 0x1
 
@@ -112,7 +120,7 @@ do {                                                           \
 
 /**
  * struct dp_tx_frag_info_s
- * @vaddr: hlos vritual address for buffer
+ * @vaddr: hlos virtual address for buffer
  * @paddr_lo: physical address lower 32bits
  * @paddr_hi: physical address higher bits
  * @len: length of the buffer
@@ -218,6 +226,10 @@ struct dp_tx_msdu_info_s {
 #ifdef WLAN_DP_FEATURE_SW_LATENCY_MGR
 	uint8_t skip_hp_update;
 #endif
+#ifdef QCA_DP_TX_RMNET_OPTIMIZATION
+	uint16_t buf_len;
+	uint8_t *payload_addr;
+#endif
 };
 
 #ifndef QCA_HOST_MODE_WIFI_DISABLED
@@ -236,6 +248,9 @@ struct dp_tx_msdu_info_s {
 void dp_tx_deinit_pair_by_index(struct dp_soc *soc, int index);
 #endif /* QCA_HOST_MODE_WIFI_DISABLED */
 
+void
+dp_tx_comp_process_desc_list(struct dp_soc *soc,
+			     struct dp_tx_desc_s *comp_head, uint8_t ring_id);
 void dp_tx_tso_cmn_desc_pool_deinit(struct dp_soc *soc, uint8_t num_pool);
 void dp_tx_tso_cmn_desc_pool_free(struct dp_soc *soc, uint8_t num_pool);
 void dp_tx_tso_cmn_desc_pool_deinit(struct dp_soc *soc, uint8_t num_pool);
@@ -279,6 +294,14 @@ qdf_nbuf_t dp_tx_drop(struct cdp_soc_t *soc, uint8_t vdev_id, qdf_nbuf_t nbuf);
 qdf_nbuf_t dp_tx_exc_drop(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
 			  qdf_nbuf_t nbuf,
 			  struct cdp_tx_exception_metadata *tx_exc_metadata);
+#endif
+#ifdef WLAN_SUPPORT_PPEDS
+void dp_ppeds_tx_desc_free(struct dp_soc *soc, struct dp_tx_desc_s *tx_desc);
+#else
+static inline
+void dp_ppeds_tx_desc_free(struct dp_soc *soc, struct dp_tx_desc_s *tx_desc)
+{
+}
 #endif
 #ifndef QCA_HOST_MODE_WIFI_DISABLED
 /**
@@ -902,7 +925,7 @@ dp_set_rtpm_tput_policy_requirement(struct cdp_soc_t *soc_hdl,
 static inline void
 dp_tx_hw_desc_update_evt(uint8_t *hal_tx_desc_cached,
 			 hal_ring_handle_t hal_ring_hdl,
-			 struct dp_soc *soc)
+			 struct dp_soc *soc, uint8_t ring_id)
 {
 	struct dp_tx_hw_desc_history *tx_hw_desc_history =
 						&soc->tx_hw_desc_history;
@@ -922,13 +945,14 @@ dp_tx_hw_desc_update_evt(uint8_t *hal_tx_desc_cached,
 	evt = &tx_hw_desc_history->entry[slot][idx];
 	qdf_mem_copy(evt->tcl_desc, hal_tx_desc_cached, HAL_TX_DESC_LEN_BYTES);
 	evt->posted = qdf_get_log_timestamp();
+	evt->tcl_ring_id = ring_id;
 	hal_get_sw_hptp(soc->hal_soc, hal_ring_hdl, &evt->tp, &evt->hp);
 }
 #else
 static inline void
 dp_tx_hw_desc_update_evt(uint8_t *hal_tx_desc_cached,
 			 hal_ring_handle_t hal_ring_hdl,
-			 struct dp_soc *soc)
+			 struct dp_soc *soc, uint8_t ring_id)
 {
 }
 #endif

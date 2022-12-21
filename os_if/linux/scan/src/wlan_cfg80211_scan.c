@@ -55,7 +55,7 @@ const struct nla_policy cfg80211_scan_policy[
 /**
  * wlan_cfg80211_is_colocated_6ghz_scan_supported() - Check whether colocated
  * 6ghz scan flag present in scan request or not
- * @scan_flag: Flags bitmap comming from kernel
+ * @scan_flag: Flags bitmap coming from kernel
  *
  * Return: True if colocated 6ghz scan flag present in scan req
  */
@@ -631,9 +631,10 @@ int wlan_cfg80211_sched_scan_start(struct wlan_objmgr_vdev *vdev,
 		   req->band_rssi_pref.rssi);
 
 	for (i = 0; i < req->networks_cnt; i++)
-		osif_debug("[%d] ssid: %.*s, RSSI th %d bc NW type %u",
-			   i, req->networks_list[i].ssid.length,
-			   req->networks_list[i].ssid.ssid,
+		osif_debug("[%d] ssid: " QDF_SSID_FMT ", RSSI th %d bc NW type %u",
+			   i,
+			   QDF_SSID_REF(req->networks_list[i].ssid.length,
+					req->networks_list[i].ssid.ssid),
 			   req->networks_list[i].rssi_thresh,
 			   req->networks_list[i].bc_new_type);
 
@@ -2083,33 +2084,6 @@ static inline void wlan_cfg80211_put_bss(struct wiphy *wiphy,
 }
 #endif
 
-#ifdef WLAN_FEATURE_MBSSID
-/**
- * wlan_cfg80211_is_nontx_scan_entry() - check if the scan_entry correspond
- *                                       nontx profile
- * @scan_params: scan entry
- *
- * Return: true - if nontx profile, false - if tx profile
- */
-static inline bool
-wlan_cfg80211_is_nontx_scan_entry(struct scan_cache_entry *scan_params)
-{
-	if (scan_params->mbssid_info.profile_count &&
-	    qdf_mem_cmp(scan_params->bssid.bytes,
-			scan_params->mbssid_info.trans_bssid,
-			QDF_MAC_ADDR_SIZE) != 0)
-		return true;
-
-	return false;
-}
-#else
-static inline bool
-wlan_cfg80211_is_nontx_scan_entry(struct scan_cache_entry *scan_params)
-{
-	return false;
-}
-#endif
-
 void wlan_cfg80211_inform_bss_frame(struct wlan_objmgr_pdev *pdev,
 		struct scan_cache_entry *scan_params)
 {
@@ -2124,14 +2098,6 @@ void wlan_cfg80211_inform_bss_frame(struct wlan_objmgr_pdev *pdev,
 	}
 
 	wiphy = pdev_ospriv->wiphy;
-
-	if (!wiphy) {
-		osif_err("wiphy is NULL");
-		return;
-	}
-
-	if (wlan_cfg80211_is_nontx_scan_entry(scan_params))
-		return;
 
 	bss_data.frame_len = wlan_get_frame_len(scan_params);
 	bss_data.mgmt = qdf_mem_malloc_atomic(bss_data.frame_len);
@@ -2233,8 +2199,9 @@ QDF_STATUS  __wlan_cfg80211_unlink_bss_list(struct wiphy *wiphy,
 		osif_info("BSS "QDF_MAC_ADDR_FMT" not found",
 			  QDF_MAC_ADDR_REF(bssid));
 	} else {
-		osif_debug("unlink entry for ssid:%.*s and BSSID "QDF_MAC_ADDR_FMT,
-			   ssid_len, ssid, QDF_MAC_ADDR_REF(bssid));
+		osif_debug("unlink entry for ssid:" QDF_SSID_FMT " and BSSID " QDF_MAC_ADDR_FMT,
+			   QDF_SSID_REF(ssid_len, ssid),
+			   QDF_MAC_ADDR_REF(bssid));
 		cfg80211_unlink_bss(wiphy, bss);
 		wlan_cfg80211_put_bss(wiphy, bss);
 	}
@@ -2250,11 +2217,13 @@ QDF_STATUS  __wlan_cfg80211_unlink_bss_list(struct wiphy *wiphy,
 	 */
 	bss = wlan_cfg80211_get_bss(wiphy, NULL, bssid, NULL, 0);
 	if (!bss) {
-		osif_debug("Hidden bss not found for Ssid:%.*s BSSID: "QDF_MAC_ADDR_FMT" sid_len %d",
-			   ssid_len, ssid, QDF_MAC_ADDR_REF(bssid), ssid_len);
+		osif_debug("Hidden bss not found for ssid:" QDF_SSID_FMT " BSSID: " QDF_MAC_ADDR_FMT " sid_len %d",
+			   QDF_SSID_REF(ssid_len, ssid),
+			   QDF_MAC_ADDR_REF(bssid), ssid_len);
 	} else {
-		osif_debug("unlink entry for Hidden ssid:%.*s and BSSID "QDF_MAC_ADDR_FMT,
-			   ssid_len, ssid, QDF_MAC_ADDR_REF(bssid));
+		osif_debug("unlink entry for Hidden ssid:" QDF_SSID_FMT " and BSSID " QDF_MAC_ADDR_FMT,
+			   QDF_SSID_REF(ssid_len, ssid),
+			   QDF_MAC_ADDR_REF(bssid));
 
 		cfg80211_unlink_bss(wiphy, bss);
 		/* cfg80211_get_bss get bss with ref count so release it */

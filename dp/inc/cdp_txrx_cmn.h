@@ -2084,6 +2084,29 @@ cdp_txrx_set_pdev_status_down(ol_txrx_soc_handle soc,
 }
 
 /**
+ * cdp_set_tx_pause() - Pause or resume tx path
+ * @soc_hdl: Datapath soc handle
+ * @flag: set or clear is_tx_pause
+ *
+ * Return: None.
+ */
+static inline
+void cdp_set_tx_pause(ol_txrx_soc_handle soc, bool flag)
+{
+	if (!soc || !soc->ops) {
+		dp_cdp_debug("Invalid Instance:");
+		QDF_BUG(0);
+		return;
+	}
+
+	if (!soc->ops->cmn_drv_ops ||
+				!soc->ops->cmn_drv_ops->set_tx_pause)
+		return;
+
+	soc->ops->cmn_drv_ops->set_tx_pause(soc, flag);
+}
+
+/**
  * cdp_tx_send() - enqueue frame for transmission
  * @soc: soc opaque handle
  * @vdev_id: id of VAP device
@@ -2904,5 +2927,72 @@ cdp_enable_mon_reap_timer(ol_txrx_soc_handle soc,
 
 	return soc->ops->mon_ops->txrx_enable_mon_reap_timer(soc, source,
 							     enable);
+}
+
+/**
+ * cdp_get_tsf_time() - get tsf time
+ * @soc: Datapath soc handle
+ * @mac_id: mac_id
+ * @tsf: pointer to update tsf value
+ * @tsf_sync_soc_time: pointer to update tsf sync time
+ *
+ * Return: None.
+ */
+static inline void
+cdp_get_tsf_time(ol_txrx_soc_handle soc, uint32_t tsf_id, uint32_t mac_id,
+		 uint64_t *tsf, uint64_t *tsf_sync_soc_time)
+{
+	if (!soc) {
+		dp_cdp_debug("Invalid Instance");
+		return;
+	}
+	if (!soc->ops->cmn_drv_ops || !soc->ops->cmn_drv_ops->txrx_get_tsf_time)
+		return;
+
+	soc->ops->cmn_drv_ops->txrx_get_tsf_time(soc, tsf_id, mac_id, tsf,
+						 tsf_sync_soc_time);
+}
+
+/**
+ * cdp_get_tsf2_offset() - get tsf2 offset
+ * @soc: Datapath soc handle
+ * @mac_id: mac_id
+ * @value: pointer to update tsf2 value
+ *
+ * Return: None.
+ */
+static inline void
+cdp_get_tsf2_offset(ol_txrx_soc_handle soc, uint8_t mac_id, uint64_t *value)
+{
+	if (!soc) {
+		dp_cdp_debug("Invalid Instance");
+		return;
+	}
+	if (!soc->ops->cmn_drv_ops ||
+	    !soc->ops->cmn_drv_ops->txrx_get_tsf2_offset)
+		return;
+
+	soc->ops->cmn_drv_ops->txrx_get_tsf2_offset(soc, mac_id, value);
+}
+
+/**
+ * cdp_get_tqm_offset() - get tqm offset
+ * @soc: Datapath soc handle
+ * @value: pointer to update tqm value
+ *
+ * Return: None.
+ */
+static inline void
+cdp_get_tqm_offset(ol_txrx_soc_handle soc, uint64_t *value)
+{
+	if (!soc) {
+		dp_cdp_debug("Invalid Instance");
+		return;
+	}
+	if (!soc->ops->cmn_drv_ops ||
+	    !soc->ops->cmn_drv_ops->txrx_get_tqm_offset)
+		return;
+
+	soc->ops->cmn_drv_ops->txrx_get_tqm_offset(soc, value);
 }
 #endif /* _CDP_TXRX_CMN_H_ */

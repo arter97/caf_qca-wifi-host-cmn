@@ -72,9 +72,7 @@ QDF_STATUS cm_check_and_prepare_roam_req(struct cnx_mgr *cm_ctx,
 	 * Reject re-assoc unless freq along with prev bssid and one
 	 * of bssid or bssid hint is present.
 	 */
-	if (!freq || qdf_is_macaddr_zero(&req->prev_bssid) ||
-	    (qdf_is_macaddr_zero(&req->bssid) &&
-	     qdf_is_macaddr_zero(&req->bssid_hint)))
+	if (!cm_is_connect_req_reassoc(req))
 		return QDF_STATUS_E_FAILURE;
 
 	wlan_vdev_get_bss_peer_mac(cm_ctx->vdev, &bssid);
@@ -96,9 +94,9 @@ QDF_STATUS cm_check_and_prepare_roam_req(struct cnx_mgr *cm_ctx,
 	/* Reject re-assoc unless ssid matches. */
 	if (ssid.length != req->ssid.length ||
 	    qdf_mem_cmp(ssid.ssid, req->ssid.ssid, ssid.length)) {
-		mlme_debug("SSID didn't matched: self ssid: \"%.*s\", ssid in req: \"%.*s\"",
-			   ssid.length, ssid.ssid, req->ssid.length,
-			   req->ssid.ssid);
+		mlme_debug("SSID didn't matched: self ssid: \"" QDF_SSID_FMT "\", ssid in req: \"" QDF_SSID_FMT "\"",
+			   QDF_SSID_REF(ssid.length, ssid.ssid),
+			   QDF_SSID_REF(req->ssid.length, req->ssid.ssid));
 		return QDF_STATUS_E_FAILURE;
 	}
 

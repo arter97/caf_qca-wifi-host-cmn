@@ -28,7 +28,8 @@
 #define DP_PEER_WDS_COUNT_INVALID UINT_MAX
 
 #define DP_BLOCKMEM_SIZE 4096
-
+#define WBM2_SW_PPE_REL_RING_ID 6
+#define WBM2_SW_PPE_REL_MAP_ID 11
 /* Alignment for consistent memory for DP rings*/
 #define DP_RING_BASE_ALIGN 32
 
@@ -45,6 +46,19 @@
 #define VHT_SGI_NYSM 3
 
 #define INVALID_WBM_RING_NUM 0xF
+
+#ifdef FEATURE_DIRECT_LINK
+#define DIRECT_LINK_REFILL_RING_ENTRIES 64
+#ifdef IPA_OFFLOAD
+#ifdef IPA_WDI3_VLAN_SUPPORT
+#define DIRECT_LINK_REFILL_RING_IDX     4
+#else
+#define DIRECT_LINK_REFILL_RING_IDX     3
+#endif
+#else
+#define DIRECT_LINK_REFILL_RING_IDX     2
+#endif
+#endif
 
 /* struct htt_dbgfs_cfg - structure to maintain required htt data
  * @msg_word: htt msg sent to upper layer
@@ -70,6 +84,9 @@ struct htt_dbgfs_cfg {
 
 /*Reserve for HTT Stats debugfs support: 5th bit */
 #define DBG_SYSFS_STATS_COOKIE BIT(5)
+
+/* Reserve for HTT Stats OBSS PD support: 6th bit */
+#define DBG_STATS_COOKIE_HTT_OBSS BIT(6)
 
 /**
  * Bitmap of HTT PPDU TLV types for Default mode
@@ -256,8 +273,22 @@ dp_get_mcs_array_index_by_pkt_type_mcs(uint32_t pkt_type, uint32_t mcs)
 }
 #endif
 
+#ifdef WIFI_MONITOR_SUPPORT
 QDF_STATUS dp_mon_soc_attach(struct dp_soc *soc);
 QDF_STATUS dp_mon_soc_detach(struct dp_soc *soc);
+#else
+static inline
+QDF_STATUS dp_mon_soc_attach(struct dp_soc *soc)
+{
+	return QDF_STATUS_SUCCESS;
+}
+
+static inline
+QDF_STATUS dp_mon_soc_detach(struct dp_soc *soc)
+{
+	return QDF_STATUS_SUCCESS;
+}
+#endif
 
 /*
  * dp_rx_err_match_dhost() - function to check whether dest-mac is correct
@@ -607,6 +638,11 @@ bool dp_monitor_reap_timer_stop(struct dp_soc *soc,
 	return false;
 }
 
+static inline void
+dp_monitor_reap_timer_suspend(struct dp_soc *soc)
+{
+}
+
 static inline
 void dp_monitor_vdev_timer_init(struct dp_soc *soc)
 {
@@ -872,6 +908,12 @@ dp_tx_mon_process(struct dp_soc *soc, struct dp_intr *int_ctx,
 	return 0;
 }
 
+static inline uint32_t
+dp_print_txmon_ring_stat_from_hal(struct dp_pdev *pdev)
+{
+	return 0;
+}
+
 static inline
 uint32_t dp_rx_mon_buf_refill(struct dp_intr *int_ctx)
 {
@@ -912,12 +954,20 @@ dp_mon_rx_wmask_subscribe(struct dp_soc *soc, uint32_t *msg_word,
 {
 }
 
+static inline void
+dp_mon_rx_mac_filter_set(struct dp_soc *soc, uint32_t *msg_word,
+			 struct htt_rx_ring_tlv_filter *tlv_filter)
+{
+}
+
+#ifdef WLAN_TELEMETRY_STATS_SUPPORT
 static inline
 void dp_monitor_peer_telemetry_stats(struct dp_peer *peer,
 				     struct cdp_peer_telemetry_stats *stats)
 {
 }
-#endif
+#endif /* WLAN_TELEMETRY_STATS_SUPPORT */
+#endif /* !WIFI_MONITOR_SUPPORT */
 
 /**
  * cdp_soc_t_to_dp_soc() - typecast cdp_soc_t to
@@ -950,7 +1000,6 @@ enum timer_yield_status {
 };
 
 #if DP_PRINT_ENABLE
-#include <stdarg.h>       /* va_list */
 #include <qdf_types.h> /* qdf_vprint */
 #include <cdp_txrx_handle.h>
 
@@ -1901,6 +1950,10 @@ void dp_update_vdev_stats_on_peer_unmap(struct dp_vdev *vdev,
 		_tgtobj->tx.retries_mpdu += _srcobj->tx.retries_mpdu; \
 		_tgtobj->tx.mpdu_success_with_retries += \
 					_srcobj->tx.mpdu_success_with_retries; \
+		_tgtobj->tx.rts_success = _srcobj->tx.rts_success; \
+		_tgtobj->tx.rts_failure = _srcobj->tx.rts_failure; \
+		_tgtobj->tx.bar_cnt = _srcobj->tx.bar_cnt; \
+		_tgtobj->tx.ndpa_cnt = _srcobj->tx.ndpa_cnt; \
 		for (pream_type = 0; pream_type < DOT11_MAX; pream_type++) { \
 			for (i = 0; i < MAX_MCS; i++) \
 				_tgtobj->tx.pkt_type[pream_type].mcs_count[i] += \
@@ -1962,6 +2015,8 @@ void dp_update_vdev_stats_on_peer_unmap(struct dp_vdev *vdev,
 		_tgtobj->rx.gi_info = _srcobj->rx.gi_info; \
 		_tgtobj->rx.preamble_info = _srcobj->rx.preamble_info; \
 		_tgtobj->rx.mpdu_retry_cnt += _srcobj->rx.mpdu_retry_cnt; \
+		_tgtobj->rx.bar_cnt = _srcobj->rx.bar_cnt; \
+		_tgtobj->rx.ndpa_cnt = _srcobj->rx.ndpa_cnt; \
 		for (pream_type = 0; pream_type < DOT11_MAX; pream_type++) { \
 			for (i = 0; i < MAX_MCS; i++) { \
 				_tgtobj->rx.pkt_type[pream_type].mcs_count[i] += \
@@ -2072,17 +2127,6 @@ QDF_STATUS dp_register_peer(struct cdp_soc_t *soc_hdl, uint8_t pdev_id,
  */
 QDF_STATUS dp_clear_peer(struct cdp_soc_t *soc_hdl, uint8_t pdev_id,
 			 struct qdf_mac_addr peer_addr);
-
-/*
- * dp_find_peer_exist - find peer if already exists
- * @soc: datapath soc handle
- * @pdev_id: physical device instance id
- * @peer_mac_addr: peer mac address
- *
- * Return: true or false
- */
-bool dp_find_peer_exist(struct cdp_soc_t *soc_hdl, uint8_t pdev_id,
-			uint8_t *peer_addr);
 
 /*
  * dp_find_peer_exist_on_vdev - find if peer exists on the given vdev
@@ -2203,6 +2247,17 @@ void dp_set_peer_as_tdls_peer(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
 {
 }
 #endif
+
+/*
+ * dp_find_peer_exist - find peer if already exists
+ * @soc: datapath soc handle
+ * @pdev_id: physical device instance id
+ * @peer_mac_addr: peer mac address
+ *
+ * Return: true or false
+ */
+bool dp_find_peer_exist(struct cdp_soc_t *soc_hdl, uint8_t pdev_id,
+			uint8_t *peer_addr);
 
 int dp_addba_resp_tx_completion_wifi3(struct cdp_soc_t *cdp_soc,
 				      uint8_t *peer_mac, uint16_t vdev_id,
@@ -2378,6 +2433,17 @@ void dp_update_delay_stats(struct cdp_tid_tx_stats *tstats,
 void dp_print_ring_stats(struct dp_pdev *pdev);
 
 /**
+ * dp_print_ring_stat_from_hal(): Print tail and head pointer through hal
+ * @soc: soc handle
+ * @srng: srng handle
+ * @ring_type: ring type
+ *
+ * Return:void
+ */
+void
+dp_print_ring_stat_from_hal(struct dp_soc *soc,  struct dp_srng *srng,
+			    enum hal_ring_type ring_type);
+/**
  * dp_print_pdev_cfg_params() - Print the pdev cfg parameters
  * @pdev_handle: DP pdev handle
  *
@@ -2486,6 +2552,14 @@ void dp_print_soc_tx_stats(struct dp_soc *soc);
  */
 void dp_print_soc_interrupt_stats(struct dp_soc *soc);
 
+/**
+ * dp_print_tx_ppeds_stats() - Print Tx in use stats for the soc in DS
+ * @soc: dp_soc handle
+ *
+ * Return: None
+ */
+
+void dp_print_tx_ppeds_stats(struct dp_soc *soc);
 #ifdef WLAN_DP_SRNG_USAGE_WM_TRACKING
 /**
  * dp_dump_srng_high_wm_stats() - Print the ring usage high watermark stats
@@ -2751,7 +2825,7 @@ dp_hif_update_pipe_callback(struct dp_soc *dp_soc,
 			    QDF_STATUS (*callback)(void *, qdf_nbuf_t, uint8_t),
 			    uint8_t pipe_id)
 {
-	struct hif_msg_callbacks hif_pipe_callbacks;
+	struct hif_msg_callbacks hif_pipe_callbacks = { 0 };
 
 	/* TODO: Temporary change to bypass HTC connection for this new
 	 * HIF pipe, which will be used for packet log and other high-
@@ -3164,7 +3238,7 @@ QDF_STATUS dp_rx_flow_delete_entry(struct dp_pdev *pdev,
 /**
  * dp_rx_flow_add_entry() - Add a flow entry to flow search table
  * @pdev: DP pdev instance
- * @rx_flow_info: DP flow paramaters
+ * @rx_flow_info: DP flow parameters
  *
  * Return: Success when flow is added, no-memory or already exists on error
  */
@@ -3368,6 +3442,14 @@ void dp_rx_fst_update_cmem_params(struct dp_soc *soc, uint16_t num_entries,
 
 void
 dp_rx_fst_update_pm_suspend_status(struct dp_soc *soc, bool suspended);
+
+/*
+ * dp_rx_fst_requeue_wq() - Re-queue pending work queue tasks
+ * @soc:		DP SoC context
+ *
+ * Return: None
+ */
+void dp_rx_fst_requeue_wq(struct dp_soc *soc);
 #else
 static inline void
 dp_rx_fst_update_cmem_params(struct dp_soc *soc, uint16_t num_entries,
@@ -3377,6 +3459,11 @@ dp_rx_fst_update_cmem_params(struct dp_soc *soc, uint16_t num_entries,
 
 static inline void
 dp_rx_fst_update_pm_suspend_status(struct dp_soc *soc, bool suspended)
+{
+}
+
+static inline void
+dp_rx_fst_requeue_wq(struct dp_soc *soc)
 {
 }
 
@@ -4085,8 +4172,7 @@ void dp_tx_send_pktlog(struct dp_soc *soc, struct dp_pdev *pdev,
 	if (qdf_unlikely(packetdump_cb) &&
 	    dp_tx_frm_std == tx_desc->frm_type) {
 		packetdump_cb((ol_txrx_soc_handle)soc, pdev->pdev_id,
-			      QDF_NBUF_CB_TX_VDEV_CTX(nbuf),
-			      nbuf, status, QDF_TX_DATA_PKT);
+			      tx_desc->vdev_id, nbuf, status, QDF_TX_DATA_PKT);
 	}
 }
 
@@ -4127,7 +4213,7 @@ void dp_rx_send_pktlog(struct dp_soc *soc, struct dp_pdev *pdev,
  * This API should only be called when we have not removed
  * Rx TLV from head, and head is pointing to rx_tlv
  *
- * This function is used to send rx packet from erro path
+ * This function is used to send rx packet from error path
  * for logging for which rx packet tlv is not removed.
  *
  * Return: None
@@ -4204,4 +4290,48 @@ void dp_rx_err_send_pktlog(struct dp_soc *soc, struct dp_pdev *pdev,
  * return: None
  */
 void dp_pdev_update_fast_rx_flag(struct dp_soc *soc, struct dp_pdev *pdev);
+
+#ifdef FEATURE_DIRECT_LINK
+/*
+ * dp_setup_direct_link_refill_ring(): Setup direct link refill ring for pdev
+ * @soc_hdl: DP SOC handle
+ * @pdev_id: pdev id
+ *
+ * Return: Handle to SRNG
+ */
+struct dp_srng *dp_setup_direct_link_refill_ring(struct cdp_soc_t *soc_hdl,
+						 uint8_t pdev_id);
+
+/*
+ * dp_destroy_direct_link_refill_ring(): Destroy direct link refill ring for
+ *  pdev
+ * @soc_hdl: DP SOC handle
+ * @pdev_id: pdev id
+ *
+ * Return: None
+ */
+void dp_destroy_direct_link_refill_ring(struct cdp_soc_t *soc_hdl,
+					uint8_t pdev_id);
+#else
+static inline
+struct dp_srng *dp_setup_direct_link_refill_ring(struct cdp_soc_t *soc_hdl,
+						 uint8_t pdev_id)
+{
+	return NULL;
+}
+
+static inline
+void dp_destroy_direct_link_refill_ring(struct cdp_soc_t *soc_hdl,
+					uint8_t pdev_id)
+{
+}
+#endif
+
+/*
+ * dp_soc_interrupt_detach() - Deregister any allocations done for interrupts
+ * @txrx_soc: DP SOC handle
+ *
+ * Return: none
+ */
+void dp_soc_interrupt_detach(struct cdp_soc_t *txrx_soc);
 #endif /* #ifndef _DP_INTERNAL_H_ */

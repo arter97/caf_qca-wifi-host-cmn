@@ -44,6 +44,18 @@
 #define DP_DEFRAG_RBM(sw0_bm_id)	HAL_RX_BUF_RBM_SW3_BM(sw0_bm_id)
 #endif
 
+/* Max buffer in invalid peer SG list*/
+#define DP_MAX_INVALID_BUFFERS 10
+#ifdef DP_INVALID_PEER_ASSERT
+#define DP_PDEV_INVALID_PEER_MSDU_CHECK(head, tail) \
+		do {                                \
+			qdf_assert_always(!(head)); \
+			qdf_assert_always(!(tail)); \
+		} while (0)
+#else
+#define DP_PDEV_INVALID_PEER_MSDU_CHECK(head, tail) /* no op */
+#endif
+
 #define RX_BUFFER_RESERVATION   0
 #ifdef BE_PKTLOG_SUPPORT
 #define BUFFER_RESIDUE 1
@@ -224,7 +236,7 @@ void dp_rx_set_hdr_pad(qdf_nbuf_t nbuf, uint32_t l3_padding)
  * dp_rx_is_special_frame() - check is RX frame special needed
  *
  * @nbuf: RX skb pointer
- * @frame_mask: the mask for speical frame needed
+ * @frame_mask: the mask for special frame needed
  *
  * Check is RX frame wanted matched with mask
  *
@@ -253,7 +265,7 @@ bool dp_rx_is_special_frame(qdf_nbuf_t nbuf, uint32_t frame_mask)
  * @soc: Datapath soc handler
  * @peer: pointer to DP peer
  * @nbuf: pointer to the skb of RX frame
- * @frame_mask: the mask for speical frame needed
+ * @frame_mask: the mask for special frame needed
  * @rx_tlv_hdr: start of rx tlv header
  *
  * note: Msdu_len must have been stored in QDF_NBUF_CB_RX_PKT_LEN(nbuf) and
@@ -886,6 +898,12 @@ dp_rx_wbm_err_process(struct dp_intr *int_ctx, struct dp_soc *soc,
  */
 qdf_nbuf_t dp_rx_sg_create(struct dp_soc *soc, qdf_nbuf_t nbuf);
 
+/**
+ * dp_rx_is_sg_supported() - SG packets processing supported or not.
+ *
+ * Return: returns true when processing is supported else false.
+ */
+bool dp_rx_is_sg_supported(void);
 
 /*
  * dp_rx_desc_nbuf_and_pool_free() - free the sw rx desc pool called during
@@ -1647,7 +1665,7 @@ dp_rx_link_desc_return_by_addr(struct dp_soc *soc,
 
 /**
  * dp_rxdma_err_process() - RxDMA error processing functionality
- * @soc: core txrx main contex
+ * @soc: core txrx main context
  * @mac_id: mac id which is one of 3 mac_ids
  * @hal_ring: opaque pointer to the HAL Rx Ring, which will be serviced
  * @quota: No. of units (packets) that can be serviced in one shot.
@@ -2397,6 +2415,7 @@ void dp_rx_buffers_lt_replenish_simple(struct dp_soc *soc, uint32_t mac_id,
 					    rx_desc_pool);
 }
 
+#ifndef QCA_DP_NBUF_FAST_RECYCLE_CHECK
 static inline
 qdf_dma_addr_t dp_rx_nbuf_sync_no_dsb(struct dp_soc *dp_soc,
 				      qdf_nbuf_t nbuf,
@@ -2407,6 +2426,41 @@ qdf_dma_addr_t dp_rx_nbuf_sync_no_dsb(struct dp_soc *dp_soc,
 
 	return (qdf_dma_addr_t)qdf_mem_virt_to_phys(nbuf->data);
 }
+#else
+#define L3_HEADER_PAD 2
+static inline
+qdf_dma_addr_t dp_rx_nbuf_sync_no_dsb(struct dp_soc *dp_soc,
+				      qdf_nbuf_t nbuf,
+				      uint32_t buf_size)
+{
+	if (nbuf->recycled_for_ds) {
+		nbuf->recycled_for_ds = 0;
+		return (qdf_dma_addr_t)qdf_mem_virt_to_phys(nbuf->data);
+	}
+
+	if (unlikely(!nbuf->fast_recycled)) {
+		qdf_nbuf_dma_inv_range_no_dsb((void *)nbuf->data,
+					      (void *)(nbuf->data + buf_size));
+	} else {
+		/*
+		 * In case of fast_recycled is set we can avoid invalidating
+		 * the complete buffer as it would have been invalidated
+		 * by tx driver before giving to recycler.
+		 *
+		 * But we need to still invalidate rx_pkt_tlv_size as this
+		 * area will not be invalidated in TX path
+		 */
+		DP_STATS_INC(dp_soc, rx.fast_recycled, 1);
+		qdf_nbuf_dma_inv_range_no_dsb((void *)nbuf->data,
+					      (void *)(nbuf->data +
+						       dp_soc->rx_pkt_tlv_size +
+						       L3_HEADER_PAD));
+	}
+
+	nbuf->fast_recycled = 0;
+	return (qdf_dma_addr_t)qdf_mem_virt_to_phys(nbuf->data);
+}
+#endif
 
 static inline
 qdf_dma_addr_t dp_rx_nbuf_sync(struct dp_soc *dp_soc,
@@ -2544,7 +2598,7 @@ void dp_rx_nbuf_unmap(struct dp_soc *soc,
 	dp_ipa_reo_ctx_buf_mapping_lock(soc, reo_ring_num);
 	dp_ipa_handle_rx_buf_smmu_mapping(soc, rx_desc->nbuf,
 					  rx_desc_pool->buf_size,
-					  false);
+					  false, __func__, __LINE__);
 
 	qdf_nbuf_unmap_nbytes_single(soc->osdev, rx_desc->nbuf,
 				     QDF_DMA_FROM_DEVICE,
@@ -2559,7 +2613,7 @@ void dp_rx_nbuf_unmap_pool(struct dp_soc *soc,
 			   qdf_nbuf_t nbuf)
 {
 	dp_ipa_handle_rx_buf_smmu_mapping(soc, nbuf, rx_desc_pool->buf_size,
-					  false);
+					  false, __func__, __LINE__);
 	qdf_nbuf_unmap_nbytes_single(soc->osdev, nbuf, QDF_DMA_FROM_DEVICE,
 				     rx_desc_pool->buf_size);
 }

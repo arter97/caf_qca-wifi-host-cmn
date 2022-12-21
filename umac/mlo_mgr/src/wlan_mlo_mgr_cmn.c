@@ -259,7 +259,7 @@ qdf_nbuf_t mlo_mlme_get_link_assoc_req(struct wlan_objmgr_peer *peer,
 	return mlo_ctx->mlme_ops->mlo_mlme_get_link_assoc_req(peer, link_ix);
 }
 
-void mlo_mlme_peer_deauth(struct wlan_objmgr_peer *peer)
+void mlo_mlme_peer_deauth(struct wlan_objmgr_peer *peer, uint8_t is_disassoc)
 {
 	struct mlo_mgr_context *mlo_ctx = wlan_objmgr_get_mlo_ctx();
 
@@ -267,7 +267,7 @@ void mlo_mlme_peer_deauth(struct wlan_objmgr_peer *peer)
 	    !mlo_ctx->mlme_ops->mlo_mlme_ext_deauth)
 		return;
 
-	mlo_ctx->mlme_ops->mlo_mlme_ext_deauth(peer);
+	mlo_ctx->mlme_ops->mlo_mlme_ext_deauth(peer, is_disassoc);
 }
 
 #ifdef UMAC_MLO_AUTH_DEFER
@@ -438,15 +438,18 @@ void mlo_get_ml_vdev_list(struct wlan_objmgr_vdev *vdev,
 /**
  * mlo_link_set_active() - send MLO link set active command
  * @psoc: PSOC object
- * @param: MLO link set active params
+ * @req: MLO link set active request
  *
  * Return: QDF_STATUS
  */
 static QDF_STATUS
 mlo_link_set_active(struct wlan_objmgr_psoc *psoc,
-		    struct mlo_link_set_active_param *param)
+		    struct mlo_link_set_active_req *req)
 {
 	struct wlan_lmac_if_mlo_tx_ops *mlo_tx_ops;
+	struct mlo_link_set_active_param *param = &req->param;
+	QDF_STATUS status;
+	struct mlo_link_set_active_resp rsp_evt;
 
 	if (!psoc) {
 		mlo_err("psoc is null");
@@ -464,11 +467,24 @@ mlo_link_set_active(struct wlan_objmgr_psoc *psoc,
 		return QDF_STATUS_E_NULL_VALUE;
 	}
 
+	if (req->ctx.validate_set_mlo_link_cb) {
+		status = req->ctx.validate_set_mlo_link_cb(psoc, param);
+		if (QDF_IS_STATUS_ERROR(status)) {
+			qdf_mem_zero(&rsp_evt, sizeof(rsp_evt));
+			rsp_evt.status = status;
+			if (req->ctx.set_mlo_link_cb)
+				req->ctx.set_mlo_link_cb(req->ctx.vdev,
+							 req->ctx.cb_arg,
+							 &rsp_evt);
+			return status;
+		}
+	}
+
 	return mlo_tx_ops->link_set_active(psoc, param);
 }
 
 /**
- * mlo_release_ser_link_set_active_cmd() - relases serialization command for
+ * mlo_release_ser_link_set_active_cmd() - releases serialization command for
  *  forcing MLO link active/inactive
  * @vdev: Object manager vdev
  *
@@ -564,7 +580,7 @@ mlo_ser_set_link_cb(struct wlan_serialization_command *cmd,
 	vdev = cmd->vdev;
 	switch (reason) {
 	case WLAN_SER_CB_ACTIVATE_CMD:
-		status = mlo_link_set_active(psoc, &req->param);
+		status = mlo_link_set_active(psoc, req);
 		break;
 	case WLAN_SER_CB_CANCEL_CMD:
 	case WLAN_SER_CB_ACTIVE_CMD_TIMEOUT:

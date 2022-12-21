@@ -231,10 +231,10 @@ enum block_ack_actioncode {
  * @PUB_ACTION_GAS_INITIAL_REQUEST: GAS initial request action frame
  * @PUB_ACTION_GAS_INITIAL_RESPONSE: GAS initial response action frame
  * @PUB_ACTION_GAS_COMEBACK_REQUEST: GAS comeback request action frame
- * @PUB_ACTION_GAS_COMEBACK_RESPONSE: GAS comeback respose action frame
+ * @PUB_ACTION_GAS_COMEBACK_RESPONSE: GAS comeback response action frame
  * @PUB_ACTION_TDLS_DISCRESP: tdls discovery response public action frame
  * @PUB_ACTION_FTM_REQUEST: FTM request action frame
- * @PUB_ACTION_FTM_RESPONSE: FTM respose action frame
+ * @PUB_ACTION_FTM_RESPONSE: FTM response action frame
  */
 enum pub_actioncode {
 	PUB_ACTION_2040_BSS_COEXISTENCE = 0,
@@ -832,6 +832,32 @@ struct mgmt_rx_event_ext_params {
 	uint16_t reo_win_size;
 };
 
+#ifdef WLAN_FEATURE_11BE_MLO
+#define CU_VDEV_MAP_MASK 0xFFFF
+#define CU_MAX_MLO_LINKS 6
+#define MAX_AP_MLDS_PER_LINK 16
+/**
+ * struct mlo_mgmt_ml_info - Ongoing Critical Update information.
+ * @cu_vdev_map: Per link critical update ap vdev bit map.
+ *               bit 0  Indicate vap with least vdev id in a link
+ *               bit 15 Indicate vap with max vdev id in a link
+ * @vdev_bpcc: Each byte contains BPCC value per MLO VAP
+ *             16 byte entries for each link corresponding to AP MLD in a link.
+ *             Max number of byte entries will be
+ *             (max MLO links supported * max AP MLDs in a link).
+ *
+ * The mlo_mgmt_ml_info contain AP MLD CU indication and latest copies of BSS
+ * parameter change count BPCC values of all AP MLDs in an available MLO links.
+ * Per-link contains 16 AP MLDs at max.
+ * 16 bits to indicate respective AP MLD VDEVs in a link.
+ * Number of max links supported are 6.
+ */
+struct mlo_mgmt_ml_info {
+	uint16_t cu_vdev_map[CU_MAX_MLO_LINKS];
+	uint8_t  vdev_bpcc[MAX_AP_MLDS_PER_LINK * CU_MAX_MLO_LINKS];
+};
+#endif
+
 /**
  * struct mgmt_rx_event_params - host mgmt header params
  * @chan_freq: channel frequency on which this frame is received
@@ -858,6 +884,8 @@ struct mgmt_rx_event_ext_params {
  * @pn_params: Frame PN params
  * @ext_params: Extended params
  * @frm_con_ap: Frame is from connected ap
+ * @link_removal_info: MLO link removal information array
+ * @num_link_removal_info: Number of elements in @link_removal_info
  */
 struct mgmt_rx_event_params {
 	uint32_t    chan_freq;
@@ -880,7 +908,19 @@ struct mgmt_rx_event_params {
 	struct frame_pn_params pn_params;
 	struct mgmt_rx_event_ext_params *ext_params;
 	struct frm_conn_ap is_conn_ap;
+#ifdef WLAN_FEATURE_11BE_MLO
+	struct mlo_mgmt_ml_info cu_params;
+	struct mgmt_rx_mlo_link_removal_info *link_removal_info;
+	int num_link_removal_info;
+#endif
 };
+
+#ifdef WLAN_FEATURE_11BE_MLO
+#define free_mgmt_rx_mlo_link_removal_info(rx_params) \
+			qdf_mem_free((rx_params)->link_removal_info)
+#else
+#define free_mgmt_rx_mlo_link_removal_info(rx_params)
+#endif
 
 #ifdef WLAN_MGMT_RX_REO_SUPPORT
 static inline
@@ -918,6 +958,7 @@ free_mgmt_rx_event_params(struct mgmt_rx_event_params *rx_params)
 	if (rx_params) {
 		qdf_mem_free(rx_params->ext_params);
 		qdf_mem_free(rx_params->reo_params);
+		free_mgmt_rx_mlo_link_removal_info(rx_params);
 	}
 
 	qdf_mem_free(rx_params);
@@ -946,8 +987,10 @@ struct mgmt_rx_event_params *alloc_mgmt_rx_event_params(void)
 static inline void
 free_mgmt_rx_event_params(struct mgmt_rx_event_params *rx_params)
 {
-	if (rx_params)
+	if (rx_params) {
 		qdf_mem_free(rx_params->ext_params);
+		free_mgmt_rx_mlo_link_removal_info(rx_params);
+	}
 
 	qdf_mem_free(rx_params);
 }
@@ -1095,7 +1138,7 @@ QDF_STATUS wlan_mgmt_txrx_beacon_frame_tx(struct wlan_objmgr_peer *peer,
  * @buf: buffer to be transmitted
  * @comp_id: umac component id
  *
- * This function transmits the FILS Dicovery Action frame to
+ * This function transmits the FILS Discovery Action frame to
  * southbound interface.
  *
  * Return: QDF_STATUS_SUCCESS - in case of success

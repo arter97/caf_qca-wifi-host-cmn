@@ -38,6 +38,10 @@
 #include <wlan_vdev_mgr_tgt_if_rx_defs.h>
 #include <reg_services_public_struct.h>
 
+#ifndef ENABLE_HOST_TO_TARGET_CONVERSION
+#include <wmi_unified.h>
+#endif
+
 #define MAC_MAX_KEY_LENGTH 32
 #define MAC_PN_LENGTH 8
 #define MAX_MAC_HEADER_LEN 32
@@ -90,7 +94,6 @@
 #ifdef WLAN_FEATURE_ROAM_OFFLOAD
 #define WMI_BTK_KEY_LEN     32
 #define WMI_ROAM_R0KH_ID_MAX_LEN    48
-#define WMI_ROAM_SCAN_PSK_SIZE    48
 #endif
 #define WMI_NOISE_FLOOR_DBM_DEFAULT      (-96)
 #define WMI_EXTSCAN_MAX_HOTLIST_SSIDS                    8
@@ -1113,6 +1116,34 @@ struct wmi_host_tid_to_link_map_params {
 	uint8_t num_dir;
 	struct wlan_host_t2lm_of_tids t2lm_info[WLAN_T2LM_MAX_DIRECTION];
 };
+
+/**
+ * struct wmi_host_tid_to_link_map_ap_params - TID-to-link mapping params
+ * @pdev_id: Pdev id
+ * @vdev_id: Vdev id
+ * @num_t2lm_info: Number of t2lm IEs
+ * @hw_link_id: HW link id
+ * @disabled_link_bitmap: Disabled link bitmap info
+ * @t2lm_info: TID-to-link mapping IE info
+ */
+struct wmi_host_tid_to_link_map_ap_params {
+	uint8_t pdev_id;
+	uint8_t vdev_id;
+	uint8_t num_t2lm_info;
+	uint16_t hw_link_id;
+	uint16_t disabled_link_bitmap;
+	struct wlan_t2lm_info info[WLAN_MAX_T2LM_IE];
+};
+
+/**
+ * struct wmi_host_bcast_t2lm_info - TID-to-link mapping broadcast info
+ * @vdev_id: Vdev id
+ * @expected_duration: Expected duration for vdev t2lm ie
+ */
+struct wmi_host_bcast_t2lm_info {
+	uint8_t vdev_id;
+	uint32_t expected_duration;
+};
 #endif /* WLAN_FEATURE_11BE */
 
 #ifdef WLAN_FEATURE_11BE_MLO
@@ -1228,7 +1259,7 @@ struct peer_assoc_ml_partner_links {
  * @need_gtk_2_way: Needs 2 way GTK
  * @auth_flag: Is peer authenticated
  * @safe_mode_enabled: Safe enabled for this peer
- * @amsdu_disable: AMSDU disble
+ * @amsdu_disable: AMSDU disable
  * @peer_mac: Peer mac address
  * @he_flag: HE flags
  * @eht_flag: EHT flags
@@ -1386,7 +1417,7 @@ struct scan_chan_list_params {
 #ifdef QCA_SUPPORT_AGILE_DFS
 /**
  * struct vdev_adfs_ch_cfg_params - Agile dfs channel set request params
- * @vdev_id: Vdev indentifier
+ * @vdev_id: Vdev identifier
  * @ocac_mode: Off Channel CAC mode
  * @min_duration_ms: Minimum Off channel CAC duration
  * @max_duration_ms: Maximum Off channel CAC duration
@@ -1411,7 +1442,7 @@ struct vdev_adfs_ch_cfg_params {
 
 /**
  * struct vdev_adfs_ch_cfg_params - Agile dfs ocac abort command to stop precac.
- * @vdev_id: Vdev indentifier
+ * @vdev_id: Vdev identifier
  */
 struct vdev_adfs_abort_params {
 	uint32_t vdev_id;
@@ -1737,8 +1768,8 @@ enum thermal_mgmt_action_code {
 
 /**
  * struct thermal_cmd_params - thermal command parameters
- * @min_temp: minimum temprature
- * @max_temp: maximum temprature
+ * @min_temp: minimum temperature
+ * @max_temp: maximum temperature
  * @thermal_enable: thermal enable
  * @thermal_action: thermal action code
  */
@@ -1775,14 +1806,38 @@ struct wmi_lro_config_cmd_t {
 	uint32_t pdev_id;
 };
 
+#ifdef WLAN_FEATURE_11BE_MLO
+/**
+ * struct mlo_prb_resp_tmpl_ml_info - Impacted link critical update information
+ * @hw_link_id: Unique hw link id across SoCs
+ * CU vdev map for the Critical update category-1 (Inclusion of CU IES)
+ * @cu_vdev_map_cat1_lo: bits 31:0 to represent vdev ids 0 to 31
+ * @cu_vdev_map_cat1_hi: bits 63:32 to represent vdev ids 32 to 63
+ * CU vdev map for the Critical update category-2 (modification of CU IES)
+ * @cu_vdev_map_cat2_lo: bits 31:0 to represent vdev ids 0 to 31
+ * @cu_vdev_map_cat2_hi: bits 63:32 to represent vdev ids 32 to 63
+ */
+struct mlo_prb_resp_tmpl_ml_info {
+	uint32_t hw_link_id;
+	uint32_t cu_vdev_map_cat1_lo;
+	uint32_t cu_vdev_map_cat1_hi;
+	uint32_t cu_vdev_map_cat2_lo;
+	uint32_t cu_vdev_map_cat2_hi;
+};
+#endif
+
 /**
  * struct wmi_probe_resp_params - send probe response parameters
  * @prb_rsp_template_frm: pointer to template probe response template
  * @prb_rsp_template_len: length of probe response template
+ * @cu_ml_info: Impacted link critical update information
  */
 struct wmi_probe_resp_params {
 	uint8_t *prb_rsp_template_frm;
 	uint32_t prb_rsp_template_len;
+#ifdef WLAN_FEATURE_11BE_MLO
+	struct mlo_prb_resp_tmpl_ml_info cu_ml_info;
+#endif
 };
 
 /* struct set_key_params: structure containing
@@ -1954,7 +2009,7 @@ enum wmi_extscan_report_events_type {
 };
 
 /**
- * struct extscan_capabilities_params - ext scan capablities
+ * struct extscan_capabilities_params - ext scan capabilities
  * @request_id: request_id
  * @vdev_id: vdev id
  */
@@ -1964,7 +2019,7 @@ struct extscan_capabilities_params {
 };
 
 /**
- * struct extscan_capabilities_reset_params - ext scan capablities reset
+ * struct extscan_capabilities_reset_params - ext scan capabilities reset
  *                                            parameter
  * @request_id: request_id
  * @vdev_id: vdev id
@@ -2794,7 +2849,7 @@ typedef struct {
 
 /**
  * struct wmi_host_ext_resource_config - Extended resource config
- * @host_platform_config: Host plaform configuration.
+ * @host_platform_config: Host platform configuration.
  * @fw_featuew_bitmap: FW feature requested bitmap.
  */
 typedef struct {
@@ -3060,7 +3115,7 @@ struct thermal_mitigation_params {
 };
 
 /**
- * struct smart_ant_enable_tx_feedback_params - SA tx feeback params
+ * struct smart_ant_enable_tx_feedback_params - SA tx feedback params
  * @enable: Enable TX feedback for SA
  */
 struct smart_ant_enable_tx_feedback_params {
@@ -3508,7 +3563,7 @@ struct acparams_params {
 /**
  * struct vap_dscp_tid_map_params - DSCP tid map params
  * @vdev_id: vdev id
- * @dscp_to_tid_map: pointer to arry of tid to dscp map table
+ * @dscp_to_tid_map: pointer to array of tid to dscp map table
  */
 struct vap_dscp_tid_map_params {
 	uint8_t vdev_id;
@@ -3656,7 +3711,7 @@ struct periodic_chan_stats_params {
  * @WMI_HOST_FLAG_MU2: MU2 data
  * @WMI_HOST_FLAG_MU3: MU3 data
  * @WMI_HOST_FLAG_SERIES1: Rate series 1
- * @WMI_HOST_FLAG_SGI: Short gaurd interval
+ * @WMI_HOST_FLAG_SGI: Short guard interval
  */
 enum wmi_host_packet_power_rate_flags {
 	WMI_HOST_FLAG_RTSENA        =  0x0001,
@@ -3984,11 +4039,13 @@ struct rtt_meas_req_test_params {
 /**
  * struct peer_request_pn_param - PN request params
  * @vdev_id: vdev id
+ * @keyix: key index
  * @peer_macaddr: Peer mac address
  * @key_type: key type
  */
 struct peer_request_pn_param {
 	uint32_t vdev_id;
+	uint8_t keyix;
 	uint8_t  peer_macaddr[QDF_MAC_ADDR_SIZE];
 	uint32_t key_type;
 };
@@ -4101,8 +4158,8 @@ struct rtt_keepalive_req_params {
  * @peer_mac_addr: Peer mac address
  * @tid: TID
  * @vdev_id: vdev id
- * @hw_qdesc_paddr_lo: lower 32 bits of queue desc adddress
- * @hw_qdesc_paddr_hi: upper 32 bits of queue desc adddress
+ * @hw_qdesc_paddr_lo: lower 32 bits of queue desc address
+ * @hw_qdesc_paddr_hi: upper 32 bits of queue desc address
  * @queue_no: 16-bit number assigned by host for queue
  * @ba_window_size_valid: BA window size validity flag
  * @ba_window_size: BA window size
@@ -4630,7 +4687,7 @@ struct wmi_host_vdev_nac_rssi_event {
  * @msdu_retried: Retried msdus
  * @msdu_mul_retried: msdus retried for more than once
  * @msdu_failed: msdus failed
- * @reserved: for furure extensions
+ * @reserved: for future extensions
  */
 struct wmi_host_peer_retry_stats {
 	wmi_host_mac_addr peer_macaddr;
@@ -5080,6 +5137,7 @@ typedef enum {
 	wmi_mlo_setup_complete_event_id,
 	wmi_mlo_teardown_complete_event_id,
 	wmi_mlo_link_set_active_resp_eventid,
+	wmi_mlo_link_removal_eventid,
 #endif
 	wmi_pdev_fips_extend_event_id,
 	wmi_roam_frame_event_id,
@@ -5114,449 +5172,692 @@ typedef enum {
 #ifdef WLAN_FEATURE_COAP
 	wmi_wow_coap_buf_info_eventid,
 #endif
+#ifdef HEALTH_MON_SUPPORT
 	wmi_extract_health_mon_init_done_info_eventid,
+#endif /* HEALTH_MON_SUPPORT */
+#ifdef WLAN_FEATURE_11BE_MLO
+	wmi_mlo_ap_vdev_tid_to_link_map_eventid,
+#endif
 	wmi_events_max,
 } wmi_conv_event_id;
 
 #define WMI_UNAVAILABLE_PARAM 0
-/**
- * Host based ENUM IDs for PDEV params to abstract target enums
- */
+
+#ifdef ENABLE_HOST_TO_TARGET_CONVERSION
+#define PDEV_PARAM(host_param, target_param) wmi_ ## host_param
+#else
+#define PDEV_PARAM(host_param, target_param) wmi_ ## host_param = WMI_ ## target_param
+#endif
+
+/* Host based ENUM IDs for PDEV params to abstract target enums */
 typedef enum {
-	wmi_pdev_param_tx_chain_mask = 0,
-	wmi_pdev_param_rx_chain_mask,
-	wmi_pdev_param_txpower_limit2g,
-	wmi_pdev_param_txpower_limit5g,
-	wmi_pdev_param_txpower_scale,
-	wmi_pdev_param_beacon_gen_mode,
-	wmi_pdev_param_beacon_tx_mode,
-	wmi_pdev_param_resmgr_offchan_mode,
-	wmi_pdev_param_protection_mode,
-	wmi_pdev_param_dynamic_bw,
-	wmi_pdev_param_non_agg_sw_retry_th,
-	wmi_pdev_param_agg_sw_retry_th,
-	wmi_pdev_param_sta_kickout_th,
-	wmi_pdev_param_ac_aggrsize_scaling,
-	wmi_pdev_param_ltr_enable,
-	wmi_pdev_param_ltr_ac_latency_be,
-	wmi_pdev_param_ltr_ac_latency_bk,
-	wmi_pdev_param_ltr_ac_latency_vi,
-	wmi_pdev_param_ltr_ac_latency_vo,
-	wmi_pdev_param_ltr_ac_latency_timeout,
-	wmi_pdev_param_ltr_sleep_override,
-	wmi_pdev_param_ltr_rx_override,
-	wmi_pdev_param_ltr_tx_activity_timeout,
-	wmi_pdev_param_l1ss_enable,
-	wmi_pdev_param_dsleep_enable,
-	wmi_pdev_param_pcielp_txbuf_flush,
-	wmi_pdev_param_pcielp_txbuf_watermark,
-	wmi_pdev_param_pcielp_txbuf_tmo_en,
-	wmi_pdev_param_pcielp_txbuf_tmo_value,
-	wmi_pdev_param_pdev_stats_update_period,
-	wmi_pdev_param_vdev_stats_update_period,
-	wmi_pdev_param_peer_stats_update_period,
-	wmi_pdev_param_bcnflt_stats_update_period,
-	wmi_pdev_param_pmf_qos,
-	wmi_pdev_param_arp_ac_override,
-	wmi_pdev_param_dcs,
-	wmi_pdev_param_ani_enable,
-	wmi_pdev_param_ani_poll_period,
-	wmi_pdev_param_ani_listen_period,
-	wmi_pdev_param_ani_ofdm_level,
-	wmi_pdev_param_ani_cck_level,
-	wmi_pdev_param_dyntxchain,
-	wmi_pdev_param_proxy_sta,
-	wmi_pdev_param_idle_ps_config,
-	wmi_pdev_param_power_gating_sleep,
-	wmi_pdev_param_aggr_burst,
-	wmi_pdev_param_rx_decap_mode,
-	wmi_pdev_param_fast_channel_reset,
-	wmi_pdev_param_burst_dur,
-	wmi_pdev_param_burst_enable,
-	wmi_pdev_param_smart_antenna_default_antenna,
-	wmi_pdev_param_igmpmld_override,
-	wmi_pdev_param_igmpmld_tid,
-	wmi_pdev_param_antenna_gain,
-	wmi_pdev_param_rx_filter,
-	wmi_pdev_set_mcast_to_ucast_tid,
-	wmi_pdev_param_proxy_sta_mode,
-	wmi_pdev_param_set_mcast2ucast_mode,
-	wmi_pdev_param_set_mcast2ucast_buffer,
-	wmi_pdev_param_remove_mcast2ucast_buffer,
-	wmi_pdev_peer_sta_ps_statechg_enable,
-	wmi_pdev_param_block_interbss,
-	wmi_pdev_param_set_disable_reset_cmdid,
-	wmi_pdev_param_set_msdu_ttl_cmdid,
-	wmi_pdev_param_set_ppdu_duration_cmdid,
-	wmi_pdev_param_txbf_sound_period_cmdid,
-	wmi_pdev_param_set_promisc_mode_cmdid,
-	wmi_pdev_param_set_burst_mode_cmdid,
-	wmi_pdev_param_en_stats,
-	wmi_pdev_param_mu_group_policy,
-	wmi_pdev_param_noise_detection,
-	wmi_pdev_param_noise_threshold,
-	wmi_pdev_param_dpd_enable,
-	wmi_pdev_param_set_mcast_bcast_echo,
-	wmi_pdev_param_atf_strict_sch,
-	wmi_pdev_param_atf_sched_duration,
-	wmi_pdev_param_ant_plzn,
-	wmi_pdev_param_mgmt_retry_limit,
-	wmi_pdev_param_sensitivity_level,
-	wmi_pdev_param_signed_txpower_2g,
-	wmi_pdev_param_signed_txpower_5g,
-	wmi_pdev_param_enable_per_tid_amsdu,
-	wmi_pdev_param_enable_per_tid_ampdu,
-	wmi_pdev_param_cca_threshold,
-	wmi_pdev_param_rts_fixed_rate,
-	wmi_pdev_param_cal_period,
-	wmi_pdev_param_pdev_reset,
-	wmi_pdev_param_wapi_mbssid_offset,
-	wmi_pdev_param_arp_srcaddr,
-	wmi_pdev_param_arp_dstaddr,
-	wmi_pdev_param_txpower_decr_db,
-	wmi_pdev_param_rx_batchmode,
-	wmi_pdev_param_packet_aggr_delay,
-	wmi_pdev_param_atf_obss_noise_sch,
-	wmi_pdev_param_atf_obss_noise_scaling_factor,
-	wmi_pdev_param_cust_txpower_scale,
-	wmi_pdev_param_atf_dynamic_enable,
-	wmi_pdev_param_atf_ssid_group_policy,
-	wmi_pdev_param_rfkill_enable,
-	wmi_pdev_param_hw_rfkill_config,
-	wmi_pdev_param_low_power_rf_enable,
-	wmi_pdev_param_l1ss_track,
-	wmi_pdev_param_hyst_en,
-	wmi_pdev_param_power_collapse_enable,
-	wmi_pdev_param_led_sys_state,
-	wmi_pdev_param_led_enable,
-	wmi_pdev_param_audio_over_wlan_latency,
-	wmi_pdev_param_audio_over_wlan_enable,
-	wmi_pdev_param_whal_mib_stats_update_enable,
-	wmi_pdev_param_vdev_rate_stats_update_period,
-	wmi_pdev_param_cts_cbw,
-	wmi_pdev_param_wnts_config,
-	wmi_pdev_param_adaptive_early_rx_enable,
-	wmi_pdev_param_adaptive_early_rx_min_sleep_slop,
-	wmi_pdev_param_adaptive_early_rx_inc_dec_step,
-	wmi_pdev_param_early_rx_fix_sleep_slop,
-	wmi_pdev_param_bmiss_based_adaptive_bto_enable,
-	wmi_pdev_param_bmiss_bto_min_bcn_timeout,
-	wmi_pdev_param_bmiss_bto_inc_dec_step,
-	wmi_pdev_param_bto_fix_bcn_timeout,
-	wmi_pdev_param_ce_based_adaptive_bto_enable,
-	wmi_pdev_param_ce_bto_combo_ce_value,
-	wmi_pdev_param_tx_chain_mask_2g,
-	wmi_pdev_param_rx_chain_mask_2g,
-	wmi_pdev_param_tx_chain_mask_5g,
-	wmi_pdev_param_rx_chain_mask_5g,
-	wmi_pdev_param_tx_chain_mask_cck,
-	wmi_pdev_param_tx_chain_mask_1ss,
-	wmi_pdev_param_enable_btcoex,
-	wmi_pdev_param_atf_peer_stats,
-	wmi_pdev_param_btcoex_cfg,
-	wmi_pdev_param_mesh_mcast_enable,
-	wmi_pdev_param_tx_ack_timeout,
-	wmi_pdev_param_soft_tx_chain_mask,
-	wmi_pdev_param_cck_tx_enable,
-	wmi_pdev_param_esp_indication_period,
-	wmi_pdev_param_antenna_gain_half_db,
-	wmi_pdev_param_ru26_allowed,
-	wmi_pdev_param_esp_ba_window,
-	wmi_pdev_param_esp_airtime_fraction,
-	wmi_pdev_param_esp_ppdu_duration,
-	wmi_pdev_param_use_nol,
-	wmi_pdev_param_enable_peer_retry_stats,
-	wmi_pdev_param_ul_trig_int,
-	wmi_pdev_param_sub_channel_marking,
-	wmi_pdev_param_ul_ppdu_duration,
-	wmi_pdev_param_equal_ru_allocation_enable,
-	wmi_pdev_param_per_peer_prd_cfr_enable,
-	wmi_pdev_param_nav_override_config,
-	wmi_pdev_param_set_mgmt_ttl,
-	wmi_pdev_param_set_prb_rsp_ttl,
-	wmi_pdev_param_set_mu_ppdu_duration,
-	wmi_pdev_param_set_tbtt_ctrl,
-	wmi_pdev_param_set_cmd_obss_pd_threshold,
-	wmi_pdev_param_set_cmd_obss_pd_per_ac,
-	wmi_pdev_param_set_cong_ctrl_max_msdus,
-	wmi_pdev_param_enable_fw_dynamic_he_edca,
-	wmi_pdev_param_enable_srp,
-	wmi_pdev_param_enable_sr_prohibit,
-	wmi_pdev_param_sr_trigger_margin,
-	wmi_pdev_param_pream_punct_bw,
-	wmi_pdev_param_enable_mbssid_ctrl_frame,
-	wmi_pdev_param_set_mesh_params,
-	wmi_pdev_param_mpd_userpd_ssr,
-	wmi_pdev_param_low_latency_mode,
-	wmi_pdev_param_scan_radio_tx_on_dfs,
-	wmi_pdev_param_en_probe_all_bw,
-	wmi_pdev_param_obss_min_duration_check_for_sr,
-	wmi_pdev_param_truncate_sr,
-	wmi_pdev_param_ctrl_frame_obss_pd_threshold,
-	wmi_pdev_param_rate_upper_cap,
-	wmi_pdev_param_rate_retry_mcs_drop,
-	wmi_pdev_param_mcs_probe_intvl,
-	wmi_pdev_param_nss_probe_intvl,
-	wmi_pdev_param_dtim_synth,
-	wmi_pdev_param_1ch_dtim_optimized_chain_selection,
-	wmi_pdev_param_tx_sch_delay,
-	wmi_pdev_param_en_update_scram_seed,
-	wmi_pdev_param_secondary_retry_enable,
-	wmi_pdev_param_set_sap_xlna_bypass,
-	wmi_pdev_param_set_dfs_chan_ageout_time,
-	wmi_pdev_param_pdev_stats_tx_xretry_ext,
-	wmi_pdev_param_smart_chainmask_scheme,
-	wmi_pdev_param_alternative_chainmask_scheme,
-	wmi_pdev_param_enable_rts_sifs_bursting,
-	wmi_pdev_param_max_mpdus_in_ampdu,
-	wmi_pdev_param_set_iot_pattern,
-	wmi_pdev_param_mwscoex_scc_chavd_delay,
-	wmi_pdev_param_mwscoex_pcc_chavd_delay,
-	wmi_pdev_param_mwscoex_set_5gnr_pwr_limit,
-	wmi_pdev_param_mwscoex_4g_allow_quick_ftdm,
-	wmi_pdev_param_fast_pwr_transition,
-	wmi_pdev_auto_detect_power_failure,
-	wmi_pdev_param_gcmp_support_enable,
-	wmi_pdev_param_abg_mode_tx_chain_num,
-	wmi_pdev_param_peer_stats_info_enable,
-	wmi_pdev_param_enable_cck_txfir_override,
-	wmi_pdev_param_twt_ac_config,
-	wmi_pdev_param_pcie_hw_ilp,
-	wmi_pdev_param_disable_hw_assist,
-	wmi_pdev_param_ant_div_usrcfg,
-	wmi_pdev_param_ctrl_retry_limit,
-	wmi_pdev_param_propagation_delay,
-	wmi_pdev_param_ena_ant_div,
-	wmi_pdev_param_force_chain_ant,
-	wmi_pdev_param_ant_div_selftest,
-	wmi_pdev_param_ant_div_selftest_intvl,
-	wmi_pdev_param_data_stall_detect_enable,
-	wmi_pdev_param_cts2self_for_p2p_go_config,
-	wmi_pdev_param_txpower_reason_sar,
-	wmi_pdev_param_stats_observation_period,
-	wmi_pdev_param_max,
+	PDEV_PARAM(pdev_param_rx_chain_mask, PDEV_PARAM_RX_CHAIN_MASK),
+	PDEV_PARAM(pdev_param_txpower_limit2g, PDEV_PARAM_TXPOWER_LIMIT2G),
+	PDEV_PARAM(pdev_param_txpower_limit5g, PDEV_PARAM_TXPOWER_LIMIT5G),
+	PDEV_PARAM(pdev_param_txpower_scale, PDEV_PARAM_TXPOWER_SCALE),
+	PDEV_PARAM(pdev_param_beacon_gen_mode, PDEV_PARAM_BEACON_GEN_MODE),
+	PDEV_PARAM(pdev_param_beacon_tx_mode, PDEV_PARAM_BEACON_TX_MODE),
+	PDEV_PARAM(pdev_param_resmgr_offchan_mode,
+		   PDEV_PARAM_RESMGR_OFFCHAN_MODE),
+	PDEV_PARAM(pdev_param_protection_mode, PDEV_PARAM_PROTECTION_MODE),
+	PDEV_PARAM(pdev_param_dynamic_bw, PDEV_PARAM_DYNAMIC_BW),
+	PDEV_PARAM(pdev_param_non_agg_sw_retry_th,
+		   PDEV_PARAM_NON_AGG_SW_RETRY_TH),
+	PDEV_PARAM(pdev_param_agg_sw_retry_th, PDEV_PARAM_AGG_SW_RETRY_TH),
+	PDEV_PARAM(pdev_param_sta_kickout_th, PDEV_PARAM_STA_KICKOUT_TH),
+	PDEV_PARAM(pdev_param_ac_aggrsize_scaling,
+		   PDEV_PARAM_AC_AGGRSIZE_SCALING),
+	PDEV_PARAM(pdev_param_ltr_enable, PDEV_PARAM_LTR_ENABLE),
+	PDEV_PARAM(pdev_param_ltr_ac_latency_be, PDEV_PARAM_LTR_AC_LATENCY_BE),
+	PDEV_PARAM(pdev_param_ltr_ac_latency_bk, PDEV_PARAM_LTR_AC_LATENCY_BK),
+	PDEV_PARAM(pdev_param_tx_chain_mask, PDEV_PARAM_TX_CHAIN_MASK),
+	PDEV_PARAM(pdev_param_ltr_ac_latency_vi, PDEV_PARAM_LTR_AC_LATENCY_VI),
+	PDEV_PARAM(pdev_param_ltr_ac_latency_vo, PDEV_PARAM_LTR_AC_LATENCY_VO),
+	PDEV_PARAM(pdev_param_ltr_ac_latency_timeout,
+		   PDEV_PARAM_LTR_AC_LATENCY_TIMEOUT),
+	PDEV_PARAM(pdev_param_ltr_sleep_override,
+		   PDEV_PARAM_LTR_SLEEP_OVERRIDE),
+	PDEV_PARAM(pdev_param_ltr_rx_override, PDEV_PARAM_LTR_RX_OVERRIDE),
+	PDEV_PARAM(pdev_param_ltr_tx_activity_timeout,
+		   PDEV_PARAM_LTR_TX_ACTIVITY_TIMEOUT),
+	PDEV_PARAM(pdev_param_l1ss_enable, PDEV_PARAM_L1SS_ENABLE),
+	PDEV_PARAM(pdev_param_dsleep_enable, PDEV_PARAM_DSLEEP_ENABLE),
+	PDEV_PARAM(pdev_param_pcielp_txbuf_flush,
+		   PDEV_PARAM_PCIELP_TXBUF_FLUSH),
+	PDEV_PARAM(pdev_param_pcielp_txbuf_watermark,
+		   PDEV_PARAM_PCIELP_TXBUF_WATERMARK),
+	PDEV_PARAM(pdev_param_pcielp_txbuf_tmo_en,
+		   PDEV_PARAM_PCIELP_TXBUF_TMO_EN),
+	PDEV_PARAM(pdev_param_pcielp_txbuf_tmo_value,
+		   PDEV_PARAM_PCIELP_TXBUF_TMO_VALUE),
+	PDEV_PARAM(pdev_param_pdev_stats_update_period,
+		   PDEV_PARAM_PDEV_STATS_UPDATE_PERIOD),
+	PDEV_PARAM(pdev_param_vdev_stats_update_period,
+		   PDEV_PARAM_VDEV_STATS_UPDATE_PERIOD),
+	PDEV_PARAM(pdev_param_peer_stats_update_period,
+		   PDEV_PARAM_PEER_STATS_UPDATE_PERIOD),
+	PDEV_PARAM(pdev_param_bcnflt_stats_update_period,
+		   PDEV_PARAM_BCNFLT_STATS_UPDATE_PERIOD),
+	PDEV_PARAM(pdev_param_pmf_qos, PDEV_PARAM_PMF_QOS),
+	PDEV_PARAM(pdev_param_arp_ac_override, PDEV_PARAM_ARP_AC_OVERRIDE),
+	PDEV_PARAM(pdev_param_dcs, PDEV_PARAM_DCS),
+	PDEV_PARAM(pdev_param_ani_enable, PDEV_PARAM_ANI_ENABLE),
+	PDEV_PARAM(pdev_param_ani_poll_period, PDEV_PARAM_ANI_POLL_PERIOD),
+	PDEV_PARAM(pdev_param_ani_listen_period, PDEV_PARAM_ANI_LISTEN_PERIOD),
+	PDEV_PARAM(pdev_param_ani_ofdm_level, PDEV_PARAM_ANI_OFDM_LEVEL),
+	PDEV_PARAM(pdev_param_ani_cck_level, PDEV_PARAM_ANI_CCK_LEVEL),
+	PDEV_PARAM(pdev_param_dyntxchain, PDEV_PARAM_DYNTXCHAIN),
+	PDEV_PARAM(pdev_param_proxy_sta, PDEV_PARAM_PROXY_STA),
+	PDEV_PARAM(pdev_param_idle_ps_config, PDEV_PARAM_IDLE_PS_CONFIG),
+	PDEV_PARAM(pdev_param_power_gating_sleep,
+		   PDEV_PARAM_POWER_GATING_SLEEP),
+	PDEV_PARAM(pdev_param_rfkill_enable, PDEV_PARAM_RFKILL_ENABLE),
+	PDEV_PARAM(pdev_param_burst_dur, PDEV_PARAM_BURST_DUR),
+	PDEV_PARAM(pdev_param_burst_enable, PDEV_PARAM_BURST_ENABLE),
+	PDEV_PARAM(pdev_param_hw_rfkill_config, PDEV_PARAM_HW_RFKILL_CONFIG),
+	PDEV_PARAM(pdev_param_low_power_rf_enable,
+		   PDEV_PARAM_LOW_POWER_RF_ENABLE),
+	PDEV_PARAM(pdev_param_l1ss_track, PDEV_PARAM_L1SS_TRACK),
+	PDEV_PARAM(pdev_param_hyst_en, PDEV_PARAM_HYST_EN),
+	PDEV_PARAM(pdev_param_power_collapse_enable,
+		   PDEV_PARAM_POWER_COLLAPSE_ENABLE),
+	PDEV_PARAM(pdev_param_led_sys_state, PDEV_PARAM_LED_SYS_STATE),
+	PDEV_PARAM(pdev_param_led_enable, PDEV_PARAM_LED_ENABLE),
+	PDEV_PARAM(pdev_param_audio_over_wlan_latency,
+		   PDEV_PARAM_AUDIO_OVER_WLAN_LATENCY),
+	PDEV_PARAM(pdev_param_audio_over_wlan_enable,
+		   PDEV_PARAM_AUDIO_OVER_WLAN_ENABLE),
+	PDEV_PARAM(pdev_param_whal_mib_stats_update_enable,
+		   PDEV_PARAM_WHAL_MIB_STATS_UPDATE_ENABLE),
+	PDEV_PARAM(pdev_param_vdev_rate_stats_update_period,
+		   PDEV_PARAM_VDEV_RATE_STATS_UPDATE_PERIOD),
+	PDEV_PARAM(pdev_param_cts_cbw, PDEV_PARAM_CTS_CBW),
+	PDEV_PARAM(pdev_param_wnts_config, PDEV_PARAM_WNTS_CONFIG),
+	PDEV_PARAM(pdev_param_adaptive_early_rx_enable,
+		   PDEV_PARAM_ADAPTIVE_EARLY_RX_ENABLE),
+	PDEV_PARAM(pdev_param_adaptive_early_rx_min_sleep_slop,
+		   PDEV_PARAM_ADAPTIVE_EARLY_RX_MIN_SLEEP_SLOP),
+	PDEV_PARAM(pdev_param_adaptive_early_rx_inc_dec_step,
+		   PDEV_PARAM_ADAPTIVE_EARLY_RX_INC_DEC_STEP),
+	PDEV_PARAM(pdev_param_early_rx_fix_sleep_slop,
+		   PDEV_PARAM_EARLY_RX_FIX_SLEEP_SLOP),
+	PDEV_PARAM(pdev_param_bmiss_based_adaptive_bto_enable,
+		   PDEV_PARAM_BMISS_BASED_ADAPTIVE_BTO_ENABLE),
+	PDEV_PARAM(pdev_param_bmiss_bto_min_bcn_timeout,
+		   PDEV_PARAM_BMISS_BTO_MIN_BCN_TIMEOUT),
+	PDEV_PARAM(pdev_param_bmiss_bto_inc_dec_step,
+		   PDEV_PARAM_BMISS_BTO_INC_DEC_STEP),
+	PDEV_PARAM(pdev_param_bto_fix_bcn_timeout,
+		   PDEV_PARAM_BTO_FIX_BCN_TIMEOUT),
+	PDEV_PARAM(pdev_param_ce_based_adaptive_bto_enable,
+		   PDEV_PARAM_CE_BASED_ADAPTIVE_BTO_ENABLE),
+	PDEV_PARAM(pdev_param_ce_bto_combo_ce_value,
+		   PDEV_PARAM_CE_BTO_COMBO_CE_VALUE),
+	PDEV_PARAM(pdev_param_tx_chain_mask_2g, PDEV_PARAM_TX_CHAIN_MASK_2G),
+	PDEV_PARAM(pdev_param_rx_chain_mask_2g, PDEV_PARAM_RX_CHAIN_MASK_2G),
+	PDEV_PARAM(pdev_param_tx_chain_mask_5g, PDEV_PARAM_TX_CHAIN_MASK_5G),
+	PDEV_PARAM(pdev_param_rx_chain_mask_5g, PDEV_PARAM_RX_CHAIN_MASK_5G),
+	PDEV_PARAM(pdev_param_tx_chain_mask_cck, PDEV_PARAM_TX_CHAIN_MASK_CCK),
+	PDEV_PARAM(pdev_param_tx_chain_mask_1ss, PDEV_PARAM_TX_CHAIN_MASK_1SS),
+	PDEV_PARAM(pdev_param_cts2self_for_p2p_go_config,
+		   PDEV_PARAM_CTS2SELF_FOR_P2P_GO_CONFIG),
+	PDEV_PARAM(pdev_param_txpower_decr_db, PDEV_PARAM_TXPOWER_DECR_DB),
+	PDEV_PARAM(pdev_param_aggr_burst, PDEV_PARAM_AGGR_BURST),
+	PDEV_PARAM(pdev_param_rx_decap_mode, PDEV_PARAM_RX_DECAP_MODE),
+	PDEV_PARAM(pdev_param_fast_channel_reset,
+		   PDEV_PARAM_FAST_CHANNEL_RESET),
+	PDEV_PARAM(pdev_param_smart_antenna_default_antenna,
+		   PDEV_PARAM_SMART_ANTENNA_DEFAULT_ANTENNA),
+	PDEV_PARAM(pdev_param_antenna_gain, PDEV_PARAM_ANTENNA_GAIN),
+	PDEV_PARAM(pdev_param_rx_filter, PDEV_PARAM_RX_FILTER),
+	PDEV_PARAM(pdev_set_mcast_to_ucast_tid, PDEV_SET_MCAST_TO_UCAST_TID),
+	PDEV_PARAM(pdev_param_proxy_sta_mode, PDEV_PARAM_PROXY_STA_MODE),
+	PDEV_PARAM(pdev_param_set_mcast2ucast_mode,
+		   PDEV_PARAM_SET_MCAST2UCAST_MODE),
+	PDEV_PARAM(pdev_param_set_mcast2ucast_buffer,
+		   PDEV_PARAM_SET_MCAST2UCAST_BUFFER),
+	PDEV_PARAM(pdev_param_remove_mcast2ucast_buffer,
+		   PDEV_PARAM_REMOVE_MCAST2UCAST_BUFFER),
+	PDEV_PARAM(pdev_peer_sta_ps_statechg_enable,
+		   PDEV_PEER_STA_PS_STATECHG_ENABLE),
+	PDEV_PARAM(pdev_param_igmpmld_override, PDEV_PARAM_IGMPMLD_AC_OVERRIDE),
+	PDEV_PARAM(pdev_param_block_interbss, PDEV_PARAM_BLOCK_INTERBSS),
+	PDEV_PARAM(pdev_param_set_disable_reset_cmdid,
+		   PDEV_PARAM_SET_DISABLE_RESET_CMDID),
+	PDEV_PARAM(pdev_param_set_msdu_ttl_cmdid,
+		   PDEV_PARAM_SET_MSDU_TTL_CMDID),
+	PDEV_PARAM(pdev_param_set_ppdu_duration_cmdid,
+		   PDEV_PARAM_SET_PPDU_DURATION_CMDID),
+	PDEV_PARAM(pdev_param_txbf_sound_period_cmdid,
+		   PDEV_PARAM_TXBF_SOUND_PERIOD_CMDID),
+	PDEV_PARAM(pdev_param_set_promisc_mode_cmdid,
+		   PDEV_PARAM_SET_PROMISC_MODE_CMDID),
+	PDEV_PARAM(pdev_param_set_burst_mode_cmdid,
+		   PDEV_PARAM_SET_BURST_MODE_CMDID),
+	PDEV_PARAM(pdev_param_en_stats, PDEV_PARAM_EN_STATS),
+	PDEV_PARAM(pdev_param_mu_group_policy, PDEV_PARAM_MU_GROUP_POLICY),
+	PDEV_PARAM(pdev_param_noise_detection, PDEV_PARAM_NOISE_DETECTION),
+	PDEV_PARAM(pdev_param_noise_threshold, PDEV_PARAM_NOISE_THRESHOLD),
+	PDEV_PARAM(pdev_param_dpd_enable, PDEV_PARAM_DPD_ENABLE),
+	PDEV_PARAM(pdev_param_set_mcast_bcast_echo,
+		   PDEV_PARAM_SET_MCAST_BCAST_ECHO),
+	PDEV_PARAM(pdev_param_atf_strict_sch, PDEV_PARAM_ATF_STRICT_SCH),
+	PDEV_PARAM(pdev_param_atf_sched_duration,
+		   PDEV_PARAM_ATF_SCHED_DURATION),
+	PDEV_PARAM(pdev_param_ant_plzn, PDEV_PARAM_ANT_PLZN),
+	PDEV_PARAM(pdev_param_mgmt_retry_limit, PDEV_PARAM_MGMT_RETRY_LIMIT),
+	PDEV_PARAM(pdev_param_sensitivity_level, PDEV_PARAM_SENSITIVITY_LEVEL),
+	PDEV_PARAM(pdev_param_signed_txpower_2g, PDEV_PARAM_SIGNED_TXPOWER_2G),
+	PDEV_PARAM(pdev_param_signed_txpower_5g, PDEV_PARAM_SIGNED_TXPOWER_5G),
+	PDEV_PARAM(pdev_param_enable_per_tid_amsdu,
+		   PDEV_PARAM_ENABLE_PER_TID_AMSDU),
+	PDEV_PARAM(pdev_param_enable_per_tid_ampdu,
+		   PDEV_PARAM_ENABLE_PER_TID_AMPDU),
+	PDEV_PARAM(pdev_param_cca_threshold, PDEV_PARAM_CCA_THRESHOLD),
+	PDEV_PARAM(pdev_param_rts_fixed_rate, PDEV_PARAM_RTS_FIXED_RATE),
+	PDEV_PARAM(pdev_param_pdev_reset, PDEV_PARAM_PDEV_RESET),
+	PDEV_PARAM(pdev_param_wapi_mbssid_offset,
+		   PDEV_PARAM_WAPI_MBSSID_OFFSET),
+	PDEV_PARAM(pdev_param_arp_srcaddr, PDEV_PARAM_ARP_DBG_SRCADDR),
+	PDEV_PARAM(pdev_param_arp_dstaddr, PDEV_PARAM_ARP_DBG_DSTADDR),
+	PDEV_PARAM(pdev_param_atf_obss_noise_sch,
+		   PDEV_PARAM_ATF_OBSS_NOISE_SCH),
+	PDEV_PARAM(pdev_param_atf_obss_noise_scaling_factor,
+		   PDEV_PARAM_ATF_OBSS_NOISE_SCALING_FACTOR),
+	PDEV_PARAM(pdev_param_cust_txpower_scale,
+		   PDEV_PARAM_CUST_TXPOWER_SCALE),
+	PDEV_PARAM(pdev_param_atf_dynamic_enable,
+		   PDEV_PARAM_ATF_DYNAMIC_ENABLE),
+	PDEV_PARAM(pdev_param_ctrl_retry_limit, PDEV_PARAM_CTRL_RETRY_LIMIT),
+	PDEV_PARAM(pdev_param_propagation_delay, PDEV_PARAM_PROPAGATION_DELAY),
+	PDEV_PARAM(pdev_param_ena_ant_div, PDEV_PARAM_ENA_ANT_DIV),
+	PDEV_PARAM(pdev_param_force_chain_ant, PDEV_PARAM_FORCE_CHAIN_ANT),
+	PDEV_PARAM(pdev_param_ant_div_selftest, PDEV_PARAM_ANT_DIV_SELFTEST),
+	PDEV_PARAM(pdev_param_ant_div_selftest_intvl,
+		   PDEV_PARAM_ANT_DIV_SELFTEST_INTVL),
+	PDEV_PARAM(pdev_param_stats_observation_period,
+		   PDEV_PARAM_STATS_OBSERVATION_PERIOD),
+	PDEV_PARAM(pdev_param_tx_ppdu_delay_bin_size_ms,
+		   PDEV_PARAM_TX_PPDU_DELAY_BIN_SIZE_MS),
+	PDEV_PARAM(pdev_param_tx_ppdu_delay_array_len,
+		   PDEV_PARAM_TX_PPDU_DELAY_ARRAY_LEN),
+	PDEV_PARAM(pdev_param_tx_mpdu_aggr_array_len,
+		   PDEV_PARAM_TX_MPDU_AGGR_ARRAY_LEN),
+	PDEV_PARAM(pdev_param_rx_mpdu_aggr_array_len,
+		   PDEV_PARAM_RX_MPDU_AGGR_ARRAY_LEN),
+	PDEV_PARAM(pdev_param_tx_sch_delay, PDEV_PARAM_TX_SCH_DELAY),
+	PDEV_PARAM(pdev_param_enable_rts_sifs_bursting,
+		   PDEV_PARAM_ENABLE_RTS_SIFS_BURSTING),
+	PDEV_PARAM(pdev_param_max_mpdus_in_ampdu,
+		   PDEV_PARAM_MAX_MPDUS_IN_AMPDU),
+	PDEV_PARAM(pdev_param_peer_stats_info_enable,
+		   PDEV_PARAM_PEER_STATS_INFO_ENABLE),
+	PDEV_PARAM(pdev_param_fast_pwr_transition,
+		   PDEV_PARAM_FAST_PWR_TRANSITION),
+	PDEV_PARAM(pdev_param_radio_chan_stats_enable,
+		   PDEV_PARAM_RADIO_CHAN_STATS_ENABLE),
+	PDEV_PARAM(pdev_param_radio_diagnosis_enable,
+		   PDEV_PARAM_RADIO_DIAGNOSIS_ENABLE),
+	PDEV_PARAM(pdev_param_mesh_mcast_enable, PDEV_PARAM_MESH_MCAST_ENABLE),
+	PDEV_PARAM(pdev_param_smart_chainmask_scheme,
+		   PDEV_PARAM_SMART_CHAINMASK_SCHEME),
+	PDEV_PARAM(pdev_param_alternative_chainmask_scheme,
+		   PDEV_PARAM_ALTERNATIVE_CHAINMASK_SCHEME),
+	PDEV_PARAM(pdev_param_ant_div_usrcfg, PDEV_PARAM_ANT_DIV_USRCFG),
+	PDEV_PARAM(pdev_param_packet_power_save_level,
+		   PDEV_PARAM_PACKET_POWER_SAVE_LEVEL),
+	PDEV_PARAM(pdev_param_set_iot_pattern, PDEV_PARAM_SET_IOT_PATTERN),
+	PDEV_PARAM(pdev_param_tx_ack_timeout, PDEV_PARAM_ACK_TIMEOUT),
+	PDEV_PARAM(pdev_param_abg_mode_tx_chain_num,
+		   PDEV_PARAM_ABG_MODE_TX_CHAIN_NUM),
+	PDEV_PARAM(pdev_param_enable_cck_txfir_override,
+		   PDEV_PARAM_ENABLE_CCK_TXFIR_OVERRIDE),
+	PDEV_PARAM(pdev_param_dtim_synth, PDEV_PARAM_DTIM_SYNTH),
+	PDEV_PARAM(pdev_auto_detect_power_failure,
+		   PDEV_AUTO_DETECT_POWER_FAILURE),
+	PDEV_PARAM(pdev_update_wdcvs_algo, PDEV_UPDATE_WDCVS_ALGO),
+	PDEV_PARAM(pdev_param_data_stall_detect_enable,
+		   PDEV_PARAM_DATA_STALL_DETECT_ENABLE),
+	PDEV_PARAM(pdev_param_gcmp_support_enable,
+		   PDEV_PARAM_GCMP_SUPPORT_ENABLE),
+	PDEV_PARAM(pdev_param_1ch_dtim_optimized_chain_selection,
+		   PDEV_PARAM_1CH_DTIM_OPTIMIZED_CHAIN_SELECTION),
+	PDEV_PARAM(pdev_param_cck_tx_enable, PDEV_PARAM_CCK_TX_ENABLE),
+	PDEV_PARAM(pdev_param_antenna_gain_half_db,
+		   PDEV_PARAM_ANTENNA_GAIN_HALF_DB),
+	PDEV_PARAM(pdev_param_secondary_retry_enable,
+		   PDEV_PARAM_SECONDARY_RETRY_ENABLE),
+	PDEV_PARAM(pdev_param_ul_ppdu_duration,
+		   PDEV_PARAM_SET_UL_PPDU_DURATION),
+	PDEV_PARAM(pdev_param_ul_trig_int, PDEV_PARAM_SET_UL_BSR_TRIG_INTERVAL),
+	PDEV_PARAM(pdev_param_equal_ru_allocation_enable,
+		   PDEV_PARAM_EQUAL_RU_ALLOCATION_ENABLE),
+	PDEV_PARAM(pdev_param_mwscoex_4g_allow_quick_ftdm,
+		   PDEV_PARAM_MWSCOEX_4G_ALLOW_QUICK_FTDM),
+	PDEV_PARAM(pdev_param_mwscoex_set_5gnr_pwr_limit,
+		   PDEV_PARAM_MWSCOEX_SET_5GNR_PWR_LIMIT),
+	PDEV_PARAM(pdev_param_set_cong_ctrl_max_msdus,
+		   PDEV_PARAM_SET_CONG_CTRL_MAX_MSDUS),
+	PDEV_PARAM(pdev_param_esp_indication_period,
+		   PDEV_PARAM_ESP_INDICATION_PERIOD),
+	PDEV_PARAM(pdev_param_per_peer_prd_cfr_enable,
+		   PDEV_PARAM_PER_PEER_PERIODIC_CFR_ENABLE),
+	PDEV_PARAM(pdev_param_periodic_cfr_base_timer,
+		   PDEV_PARAM_PERIODIC_CFR_BASE_TIMER),
+	PDEV_PARAM(pdev_param_enable_optimized_periodic_cfr_timer,
+		   PDEV_PARAM_ENABLE_OPTIMIZED_PERIODIC_CFR_TIMER),
+	PDEV_PARAM(pdev_param_esp_ba_window, PDEV_PARAM_ESP_BA_WINDOW),
+	PDEV_PARAM(pdev_param_esp_airtime_fraction,
+		   PDEV_PARAM_ESP_AIRTIME_FRACTION),
+	PDEV_PARAM(pdev_param_esp_ppdu_duration, PDEV_PARAM_ESP_PPDU_DURATION),
+	PDEV_PARAM(pdev_param_use_nol, PDEV_PARAM_USE_NOL),
+	PDEV_PARAM(pdev_param_ru26_allowed, PDEV_PARAM_UL_RU26_ALLOWED),
+	PDEV_PARAM(pdev_param_sub_channel_marking,
+		   PDEV_PARAM_SUB_CHANNEL_MARKING),
+	PDEV_PARAM(pdev_param_set_mgmt_ttl, PDEV_PARAM_SET_MGMT_TTL),
+	PDEV_PARAM(pdev_param_set_prb_rsp_ttl, PDEV_PARAM_SET_PROBE_RESP_TTL),
+	PDEV_PARAM(pdev_param_set_tbtt_ctrl, PDEV_PARAM_SET_TBTT_CTRL),
+	PDEV_PARAM(pdev_param_nav_override_config,
+		   PDEV_PARAM_NAV_OVERRIDE_CONFIG),
+	PDEV_PARAM(pdev_param_set_mu_ppdu_duration,
+		   PDEV_PARAM_SET_MU_PPDU_DURATION),
+	PDEV_PARAM(pdev_param_set_test_cmd_ul_trigger_type_enable,
+		   PDEV_PARAM_SET_TEST_CMD_UL_TRIGGER_TYPE_ENABLE),
+	PDEV_PARAM(pdev_param_set_test_cmd_ul_trigger_lsig_len,
+		   PDEV_PARAM_SET_TEST_CMD_UL_TRIGGER_LSIG_LEN),
+	PDEV_PARAM(pdev_param_set_test_cmd_ul_trigger_fixed_rate,
+		   PDEV_PARAM_SET_TEST_CMD_UL_TRIGGER_FIXED_RATE),
+	PDEV_PARAM(pdev_param_set_test_cmd_ul_mac_padding,
+		   PDEV_PARAM_SET_TEST_CMD_UL_MAC_PADDING),
+	PDEV_PARAM(pdev_param_set_test_cmd_ul_bsr_fc_duration,
+		   PDEV_PARAM_SET_TEST_CMD_UL_BSR_FC_DURATION),
+	PDEV_PARAM(pdev_param_set_test_cmd_twt_sched_config,
+		   PDEV_PARAM_SET_TEST_CMD_TWT_SCHED_CONFIG),
+	PDEV_PARAM(pdev_param_set_cmd_obss_pd_threshold,
+		   PDEV_PARAM_SET_CMD_OBSS_PD_THRESHOLD),
+	PDEV_PARAM(pdev_param_enable_non_wlan_coex_from_boot,
+		   PDEV_PARAM_ENABLE_NON_WLAN_COEX_FROM_BOOT),
+	PDEV_PARAM(pdev_param_set_cmd_obss_pd_per_ac,
+		   PDEV_PARAM_SET_CMD_OBSS_PD_PER_AC),
+	PDEV_PARAM(pdev_param_enable_fw_dynamic_he_edca,
+		   PDEV_PARAM_ENABLE_FW_DYNAMIC_HE_EDCA),
+	PDEV_PARAM(pdev_param_default_6ghz_rate, PDEV_PARAM_DEFAULT_6GHZ_RATE),
+	PDEV_PARAM(pdev_param_mwscoex_pcc_chavd_delay,
+		   PDEV_PARAM_MWSCOEX_PCC_CHAVD_DELAY),
+	PDEV_PARAM(pdev_param_mwscoex_scc_chavd_delay,
+		   PDEV_PARAM_MWSCOEX_SCC_CHAVD_DELAY),
+	PDEV_PARAM(pdev_param_set_dfs_chan_ageout_time,
+		   PDEV_PARAM_SET_DFS_CHAN_AGEOUT_TIME),
+	PDEV_PARAM(pdev_param_set_sap_xlna_bypass,
+		   PDEV_PARAM_SET_SAP_XLNA_BYPASS),
+	PDEV_PARAM(pdev_param_enable_srp, PDEV_PARAM_ENABLE_SRP),
+	PDEV_PARAM(pdev_param_enable_sr_prohibit,
+		   PDEV_PARAM_ENABLE_SR_PROHIBIT),
+	PDEV_PARAM(pdev_param_enable_mbssid_ctrl_frame,
+		   PDEV_PARAM_ENABLE_MBSSID_CTRL_FRAME),
+	PDEV_PARAM(pdev_param_pream_punct_bw, PDEV_PARAM_SET_PREAM_PUNCT_BW),
+	PDEV_PARAM(pdev_param_sr_trigger_margin, PDEV_PARAM_SR_TRIGGER_MARGIN),
+	PDEV_PARAM(pdev_param_pcie_hw_ilp, PDEV_PARAM_PCIE_HW_ILP),
+	PDEV_PARAM(pdev_param_set_txtd_start_timestamp,
+		   PDEV_PARAM_SET_TXTD_START_TIMESTAMP),
+	PDEV_PARAM(pdev_param_set_mesh_params, PDEV_PARAM_SET_MESH_PARAMS),
+	PDEV_PARAM(pdev_param_low_latency_mode,
+		   PDEV_PARAM_LOW_LATENCY_SCHED_MODE),
+	PDEV_PARAM(pdev_param_mpd_userpd_ssr, PDEV_PARAM_MPD_USERPD_SSR),
+	PDEV_PARAM(pdev_param_disable_hw_assist, PDEV_PARAM_DISABLE_HW_ASSIST),
+	PDEV_PARAM(pdev_param_scan_radio_tx_on_dfs,
+		   PDEV_PARAM_SCAN_RADIO_TX_ON_DFS),
+	PDEV_PARAM(pdev_param_obss_min_duration_check_for_sr,
+		   PDEV_PARAM_OBSS_MIN_DURATION_CHECK_FOR_SR),
+	PDEV_PARAM(pdev_param_truncate_sr, PDEV_PARAM_TRUNCATE_SR),
+	PDEV_PARAM(pdev_param_ctrl_frame_obss_pd_threshold,
+		   PDEV_PARAM_CTRL_FRAME_OBSS_PD_THRESHOLD),
+	PDEV_PARAM(pdev_param_twt_ac_config, PDEV_PARAM_TWT_AC_CONFIG),
+	PDEV_PARAM(pdev_param_pdev_stats_tx_xretry_ext,
+		   PDEV_PARAM_PDEV_STATS_TX_XRETRY_EXT),
+	PDEV_PARAM(pdev_param_rate_upper_cap, PDEV_PARAM_RATE_UPPER_CAP),
+	PDEV_PARAM(pdev_param_rate_retry_mcs_drop,
+		   PDEV_PARAM_SET_RATE_DROP_DOWN_RETRY_THRESH),
+	PDEV_PARAM(pdev_param_mcs_probe_intvl,
+		   PDEV_PARAM_MIN_MAX_MCS_PROBE_INTERVAL),
+	PDEV_PARAM(pdev_param_nss_probe_intvl,
+		   PDEV_PARAM_MIN_MAX_NSS_PROBE_INTERVAL),
+	PDEV_PARAM(pdev_param_en_probe_all_bw, PDEV_PARAM_EN_PROBE_ALL_BW),
+	PDEV_PARAM(pdev_param_en_update_scram_seed,
+		   PDEV_PARAM_EN_UPDATE_SCRAM_SEED),
+	PDEV_PARAM(pdev_param_sa_parallel_mode_gpio_drive_cfg,
+		   PDEV_PARAM_SA_PARALLEL_MODE_GPIO_DRIVE_CFG),
+	PDEV_PARAM(pdev_param_disable_lpi_ant_optimization,
+		   PDEV_PARAM_DISABLE_LPI_ANT_OPTIMIZATION),
+	PDEV_PARAM(pdev_param_txpower_reason_sar,
+		   PDEV_PARAM_TXPOWER_REASON_SAR),
+	PDEV_PARAM(pdev_param_igmpmld_tid, PDEV_PARAM_IGMPMLD_AC_OVERRIDE),
+	PDEV_PARAM(pdev_param_cal_period, UNAVAILABLE_PARAM),
+	PDEV_PARAM(pdev_param_rx_batchmode, UNAVAILABLE_PARAM),
+	PDEV_PARAM(pdev_param_packet_aggr_delay, UNAVAILABLE_PARAM),
+	PDEV_PARAM(pdev_param_atf_ssid_group_policy, UNAVAILABLE_PARAM),
+	PDEV_PARAM(pdev_param_enable_btcoex, UNAVAILABLE_PARAM),
+	PDEV_PARAM(pdev_param_atf_peer_stats, UNAVAILABLE_PARAM),
+	PDEV_PARAM(pdev_param_btcoex_cfg, UNAVAILABLE_PARAM),
+	PDEV_PARAM(pdev_param_soft_tx_chain_mask, PDEV_PARAM_TX_CHAIN_MASK),
+	PDEV_PARAM(pdev_param_enable_peer_retry_stats, UNAVAILABLE_PARAM),
+	pdev_param_max,
 } wmi_conv_pdev_params_id;
 
+#ifdef ENABLE_HOST_TO_TARGET_CONVERSION
+#define VDEV_PARAM(host_param, target_param) wmi_ ## host_param
+#else
+#define VDEV_PARAM(host_param, target_param) wmi_ ## host_param = WMI_ ## target_param
+#endif
 
-/**
- * Host based ENUM IDs for VDEV params to abstract target enums
- */
+/* Host based ENUM IDs for VDEV params to abstract target enums */
 typedef enum {
-	wmi_vdev_param_rts_threshold = 0,
-	wmi_vdev_param_fragmentation_threshold,
-	wmi_vdev_param_beacon_interval,
-	wmi_vdev_param_listen_interval,
-	wmi_vdev_param_multicast_rate,
-	wmi_vdev_param_mgmt_tx_rate,
-	wmi_vdev_param_slot_time,
-	wmi_vdev_param_preamble,
-	wmi_vdev_param_swba_time,
-	wmi_vdev_stats_update_period,
-	wmi_vdev_pwrsave_ageout_time,
-	wmi_vdev_host_swba_interval,
-	wmi_vdev_param_dtim_period,
-	wmi_vdev_oc_scheduler_air_time_limit,
-	wmi_vdev_param_wds,
-	wmi_vdev_param_atim_window,
-	wmi_vdev_param_bmiss_count_max,
-	wmi_vdev_param_bmiss_first_bcnt,
-	wmi_vdev_param_bmiss_final_bcnt,
-	wmi_vdev_param_feature_wmm,
-	wmi_vdev_param_chwidth,
-	wmi_vdev_param_chextoffset,
-	wmi_vdev_param_disable_htprotection,
-	wmi_vdev_param_sta_quickkickout,
-	wmi_vdev_param_mgmt_rate,
-	wmi_vdev_param_protection_mode,
-	wmi_vdev_param_fixed_rate,
-	wmi_vdev_param_sgi,
-	wmi_vdev_param_ldpc,
-	wmi_vdev_param_tx_stbc,
-	wmi_vdev_param_rx_stbc,
-	wmi_vdev_param_intra_bss_fwd,
-	wmi_vdev_param_def_keyid,
-	wmi_vdev_param_nss,
-	wmi_vdev_param_bcast_data_rate,
-	wmi_vdev_param_mcast_data_rate,
-	wmi_vdev_param_mcast_indicate,
-	wmi_vdev_param_dhcp_indicate,
-	wmi_vdev_param_unknown_dest_indicate,
-	wmi_vdev_param_ap_keepalive_min_idle_inactive_time_secs,
-	wmi_vdev_param_ap_keepalive_max_idle_inactive_time_secs,
-	wmi_vdev_param_ap_keepalive_max_unresponsive_time_secs,
-	wmi_vdev_param_ap_enable_nawds,
-	wmi_vdev_param_mcast2ucast_set,
-	wmi_vdev_param_enable_rtscts,
-	wmi_vdev_param_rc_num_retries,
-	wmi_vdev_param_txbf,
-	wmi_vdev_param_packet_powersave,
-	wmi_vdev_param_drop_unencry,
-	wmi_vdev_param_tx_encap_type,
-	wmi_vdev_param_ap_detect_out_of_sync_sleeping_sta_time_secs,
-	wmi_vdev_param_cabq_maxdur,
-	wmi_vdev_param_mfptest_set,
-	wmi_vdev_param_rts_fixed_rate,
-	wmi_vdev_param_vht_sgimask,
-	wmi_vdev_param_vht80_ratemask,
-	wmi_vdev_param_early_rx_adjust_enable,
-	wmi_vdev_param_early_rx_tgt_bmiss_num,
-	wmi_vdev_param_early_rx_bmiss_sample_cycle,
-	wmi_vdev_param_early_rx_slop_step,
-	wmi_vdev_param_early_rx_init_slop,
-	wmi_vdev_param_early_rx_adjust_pause,
-	wmi_vdev_param_proxy_sta,
-	wmi_vdev_param_meru_vc,
-	wmi_vdev_param_rx_decap_type,
-	wmi_vdev_param_bw_nss_ratemask,
-	wmi_vdev_param_sensor_ap,
-	wmi_vdev_param_beacon_rate,
-	wmi_vdev_param_dtim_enable_cts,
-	wmi_vdev_param_sta_kickout,
-	wmi_vdev_param_tx_pwrlimit,
-	wmi_vdev_param_snr_num_for_cal,
-	wmi_vdev_param_roam_fw_offload,
-	wmi_vdev_param_enable_rmc,
-	wmi_vdev_param_ibss_max_bcn_lost_ms,
-	wmi_vdev_param_max_rate,
-	wmi_vdev_param_early_rx_drift_sample,
-	wmi_vdev_param_set_ibss_tx_fail_cnt_thr,
-	wmi_vdev_param_ebt_resync_timeout,
-	wmi_vdev_param_aggr_trig_event_enable,
-	wmi_vdev_param_is_ibss_power_save_allowed,
-	wmi_vdev_param_is_power_collapse_allowed,
-	wmi_vdev_param_is_awake_on_txrx_enabled,
-	wmi_vdev_param_inactivity_cnt,
-	wmi_vdev_param_txsp_end_inactivity_time_ms,
-	wmi_vdev_param_dtim_policy,
-	wmi_vdev_param_ibss_ps_warmup_time_secs,
-	wmi_vdev_param_ibss_ps_1rx_chain_in_atim_window_enable,
-	wmi_vdev_param_rx_leak_window,
-	wmi_vdev_param_stats_avg_factor,
-	wmi_vdev_param_disconnect_th,
-	wmi_vdev_param_rtscts_rate,
-	wmi_vdev_param_mcc_rtscts_protection_enable,
-	wmi_vdev_param_mcc_broadcast_probe_enable,
-	wmi_vdev_param_capabilities,
-	wmi_vdev_param_mgmt_tx_power,
-	wmi_vdev_param_atf_ssid_sched_policy,
-	wmi_vdev_param_disable_dyn_bw_rts,
-	wmi_vdev_param_ampdu_subframe_size_per_ac,
-	wmi_vdev_param_he_dcm_enable,
-	wmi_vdev_param_he_bss_color,
-	wmi_vdev_param_he_range_ext_enable,
-	wmi_vdev_param_set_hemu_mode,
-	wmi_vdev_param_set_he_ltf,
-	wmi_vdev_param_set_heop,
-	wmi_vdev_param_disable_cabq,
-	wmi_vdev_param_rate_dropdown_bmap,
-	wmi_vdev_param_tx_power,
-	wmi_vdev_param_set_ba_mode,
-	wmi_vdev_param_autorate_misc_cfg,
-	wmi_vdev_param_amsdu_subframe_size_per_ac,
-	wmi_vdev_param_set_he_sounding_mode,
-	wmi_vdev_param_sifs_trigger_rate,
-	wmi_vdev_param_ul_shortgi,
-	wmi_vdev_param_ul_he_ltf,
-	wmi_vdev_param_ul_nss,
-	wmi_vdev_param_ul_ppdu_bw,
-	wmi_vdev_param_ul_ldpc,
-	wmi_vdev_param_ul_stbc,
-	wmi_vdev_param_ul_fixed_rate,
-	wmi_vdev_param_rawmode_open_war,
-	wmi_vdev_param_max_mtu_size,
-	wmi_vdev_param_mcast_rc_stale_period,
-	wmi_vdev_param_enable_multi_group_key,
-	wmi_vdev_param_max_group_keys,
-	wmi_vdev_param_enable_mcast_rc,
-	wmi_vdev_param_6ghz_params,
-	wmi_vdev_param_enable_disable_roam_reason_vsie,
-	wmi_vdev_param_set_cmd_obss_pd_threshold,
-	wmi_vdev_param_set_cmd_obss_pd_per_ac,
-	wmi_vdev_param_enable_srp,
-	wmi_vdev_param_nan_config_features,
-	wmi_vdev_param_enable_disable_rtt_responder_role,
-	wmi_vdev_param_enable_disable_rtt_initiator_role,
-	wmi_vdev_param_mcast_steer,
-#ifdef WLAN_FEATURE_11BE
-	wmi_vdev_param_set_ehtop,
-	wmi_vdev_param_set_eht_mu_mode,
-	wmi_vdev_param_set_eht_puncturing_mode,
-	wmi_vdev_param_set_eht_ltf,
-	wmi_vdev_param_set_ul_eht_ltf,
-	wmi_vdev_param_set_eht_dcm,
-	wmi_vdev_param_set_eht_range_ext,
-	wmi_vdev_param_set_non_data_eht_range_ext,
-#endif
-#ifdef MULTI_CLIENT_LL_SUPPORT
-	wmi_vdev_param_set_normal_latency_flags_config,
-	wmi_vdev_param_set_xr_latency_flags_config,
-	wmi_vdev_param_set_low_latency_flags_config,
-	wmi_vdev_param_set_ultra_low_latency_flags_config,
-	wmi_vdev_param_set_normal_latency_ul_dl_config,
-	wmi_vdev_param_set_xr_latency_ul_dl_config,
-	wmi_vdev_param_set_low_latency_ul_dl_config,
-	wmi_vdev_param_set_ultra_low_latency_ul_dl_config,
-	wmi_vdev_param_set_default_ll_config,
-	wmi_vdev_param_set_multi_client_ll_feature_config,
-#endif
-	wmi_vdev_param_set_traffic_config,
-	wmi_vdev_param_he_range_ext,
-	wmi_vdev_param_non_data_he_range_ext,
-	wmi_vdev_param_ndp_inactivity_timeout,
-	wmi_vdev_param_ndp_keepalive_timeout,
-	wmi_vdev_param_final_bmiss_time_sec,
-	wmi_vdev_param_final_bmiss_time_wow_sec,
-	wmi_vdev_param_ap_keepalive_max_idle_inactive_secs,
-	wmi_vdev_param_per_band_mgmt_tx_rate,
-	wmi_vdev_param_max_li_of_moddtim,
-	wmi_vdev_param_moddtim_cnt,
-	wmi_vdev_param_max_li_of_moddtim_ms,
-	wmi_vdev_param_dyndtim_cnt,
-	wmi_vdev_param_wmm_txop_enable,
-	wmi_vdev_param_enable_bcast_probe_response,
-	wmi_vdev_param_fils_max_channel_guard_time,
-	wmi_vdev_param_probe_delay,
-	wmi_vdev_param_repeat_probe_time,
-	wmi_vdev_param_enable_disable_oce_features,
-	wmi_vdev_param_enable_disable_nan_config_features,
-	wmi_vdev_param_rsn_capability,
-	wmi_vdev_param_smps_intolerant,
-	wmi_vdev_param_abg_mode_tx_chain_num,
-	wmi_vdev_param_nth_beacon_to_host,
-	wmi_vdev_param_prohibit_data_mgmt,
-	wmi_vdev_param_skip_roam_eapol_4way_handshake,
-	wmi_vdev_param_skip_sae_roam_4way_handshake,
-	wmi_vdev_param_roam_11kv_ctrl,
-	wmi_vdev_param_disable_noa_p2p_go,
-	wmi_vdev_param_packet_capture_mode,
-	wmi_vdev_param_smart_monitor_config,
-	wmi_vdev_param_force_dtim_cnt,
-	wmi_vdev_param_sho_config,
-	wmi_vdev_param_gtx_enable,
-	wmi_vdev_param_mu_edca_fw_update_en,
-	wmi_vdev_param_enable_disable_rtt_initiator_random_mac,
-	wmi_vdev_param_allow_nan_initial_discovery_of_mp0_cluster,
-	wmi_vdev_param_txpower_scale_decr_db,
-	wmi_vdev_param_txpower_scale,
-	wmi_vdev_param_agg_sw_retry_th,
-	wmi_vdev_param_obsspd,
-	wmi_vdev_param_multi_client_ll_feature_configuration,
-	wmi_vdev_param_normal_latency_flags_configuration,
-	wmi_vdev_param_xr_latency_flags_configuration,
-	wmi_vdev_param_low_latency_flags_configuration,
-	wmi_vdev_param_ultra_low_latency_flags_configuration,
-	wmi_vdev_param_normal_latency_ul_dl_configuration,
-	wmi_vdev_param_xr_latency_ul_dl_configuration,
-	wmi_vdev_param_low_latency_ul_dl_configuration,
-	wmi_vdev_param_ultra_low_latency_ul_dl_configuration,
-	wmi_vdev_param_default_latency_level_configuration,
-	wmi_vdev_param_amsdu_aggregation_size_optimization,
-	wmi_vdev_param_non_agg_sw_retry_th,
+	VDEV_PARAM(vdev_param_rts_threshold, VDEV_PARAM_RTS_THRESHOLD),
+	VDEV_PARAM(vdev_param_fragmentation_threshold,
+		   VDEV_PARAM_FRAGMENTATION_THRESHOLD),
+	VDEV_PARAM(vdev_param_beacon_interval, VDEV_PARAM_BEACON_INTERVAL),
+	VDEV_PARAM(vdev_param_listen_interval, VDEV_PARAM_LISTEN_INTERVAL),
+	VDEV_PARAM(vdev_param_multicast_rate, VDEV_PARAM_MULTICAST_RATE),
+	VDEV_PARAM(vdev_param_mgmt_tx_rate, VDEV_PARAM_MGMT_TX_RATE),
+	VDEV_PARAM(vdev_param_slot_time, VDEV_PARAM_SLOT_TIME),
+	VDEV_PARAM(vdev_param_preamble, VDEV_PARAM_PREAMBLE),
+	VDEV_PARAM(vdev_param_swba_time, VDEV_PARAM_SWBA_TIME),
+	VDEV_PARAM(vdev_stats_update_period, VDEV_STATS_UPDATE_PERIOD),
+	VDEV_PARAM(vdev_pwrsave_ageout_time, VDEV_PWRSAVE_AGEOUT_TIME),
+	VDEV_PARAM(vdev_param_dtim_period, VDEV_PARAM_DTIM_PERIOD),
+	VDEV_PARAM(vdev_oc_scheduler_air_time_limit,
+		   VDEV_OC_SCHEDULER_AIR_TIME_LIMIT),
+	VDEV_PARAM(vdev_param_wds, VDEV_PARAM_WDS),
+	VDEV_PARAM(vdev_param_atim_window, VDEV_PARAM_ATIM_WINDOW),
+	VDEV_PARAM(vdev_param_bmiss_count_max, VDEV_PARAM_BMISS_COUNT_MAX),
+	VDEV_PARAM(vdev_param_bmiss_first_bcnt, VDEV_PARAM_BMISS_FIRST_BCNT),
+	VDEV_PARAM(vdev_param_bmiss_final_bcnt, VDEV_PARAM_BMISS_FINAL_BCNT),
+	VDEV_PARAM(vdev_param_feature_wmm, VDEV_PARAM_FEATURE_WMM),
+	VDEV_PARAM(vdev_param_chwidth, VDEV_PARAM_CHWIDTH),
+	VDEV_PARAM(vdev_param_chextoffset, VDEV_PARAM_CHEXTOFFSET),
+	VDEV_PARAM(vdev_param_disable_htprotection,
+		   VDEV_PARAM_DISABLE_HTPROTECTION),
+	VDEV_PARAM(vdev_param_sta_quickkickout, VDEV_PARAM_STA_QUICKKICKOUT),
+	VDEV_PARAM(vdev_param_mgmt_rate, VDEV_PARAM_MGMT_RATE),
+	VDEV_PARAM(vdev_param_protection_mode, VDEV_PARAM_PROTECTION_MODE),
+	VDEV_PARAM(vdev_param_fixed_rate, VDEV_PARAM_FIXED_RATE),
+	VDEV_PARAM(vdev_param_sgi, VDEV_PARAM_SGI),
+	VDEV_PARAM(vdev_param_ldpc, VDEV_PARAM_LDPC),
+	VDEV_PARAM(vdev_param_tx_stbc, VDEV_PARAM_TX_STBC),
+	VDEV_PARAM(vdev_param_rx_stbc, VDEV_PARAM_RX_STBC),
+	VDEV_PARAM(vdev_param_intra_bss_fwd, VDEV_PARAM_INTRA_BSS_FWD),
+	VDEV_PARAM(vdev_param_def_keyid, VDEV_PARAM_DEF_KEYID),
+	VDEV_PARAM(vdev_param_nss, VDEV_PARAM_NSS),
+	VDEV_PARAM(vdev_param_bcast_data_rate, VDEV_PARAM_BCAST_DATA_RATE),
+	VDEV_PARAM(vdev_param_mcast_data_rate, VDEV_PARAM_MCAST_DATA_RATE),
+	VDEV_PARAM(vdev_param_mcast_indicate, VDEV_PARAM_MCAST_INDICATE),
+	VDEV_PARAM(vdev_param_dhcp_indicate, VDEV_PARAM_DHCP_INDICATE),
+	VDEV_PARAM(vdev_param_unknown_dest_indicate,
+		   VDEV_PARAM_UNKNOWN_DEST_INDICATE),
+	VDEV_PARAM(vdev_param_ap_keepalive_min_idle_inactive_time_secs,
+		   VDEV_PARAM_AP_KEEPALIVE_MIN_IDLE_INACTIVE_TIME_SECS),
+	VDEV_PARAM(vdev_param_ap_keepalive_max_idle_inactive_time_secs,
+		   VDEV_PARAM_AP_KEEPALIVE_MAX_IDLE_INACTIVE_TIME_SECS),
+	VDEV_PARAM(vdev_param_ap_keepalive_max_unresponsive_time_secs,
+		   VDEV_PARAM_AP_KEEPALIVE_MAX_UNRESPONSIVE_TIME_SECS),
+	VDEV_PARAM(vdev_param_ap_enable_nawds, VDEV_PARAM_AP_ENABLE_NAWDS),
+	VDEV_PARAM(vdev_param_enable_rtscts, VDEV_PARAM_ENABLE_RTSCTS),
+	VDEV_PARAM(vdev_param_txbf, VDEV_PARAM_TXBF),
+	VDEV_PARAM(vdev_param_packet_powersave, VDEV_PARAM_PACKET_POWERSAVE),
+	VDEV_PARAM(vdev_param_drop_unencry, VDEV_PARAM_DROP_UNENCRY),
+	VDEV_PARAM(vdev_param_tx_encap_type, VDEV_PARAM_TX_ENCAP_TYPE),
+	VDEV_PARAM(vdev_param_ap_detect_out_of_sync_sleeping_sta_time_secs,
+		   VDEV_PARAM_AP_DETECT_OUT_OF_SYNC_SLEEPING_STA_TIME_SECS),
+	VDEV_PARAM(vdev_param_early_rx_adjust_enable,
+		   VDEV_PARAM_EARLY_RX_ADJUST_ENABLE),
+	VDEV_PARAM(vdev_param_early_rx_tgt_bmiss_num,
+		   VDEV_PARAM_EARLY_RX_TGT_BMISS_NUM),
+	VDEV_PARAM(vdev_param_early_rx_bmiss_sample_cycle,
+		   VDEV_PARAM_EARLY_RX_BMISS_SAMPLE_CYCLE),
+	VDEV_PARAM(vdev_param_early_rx_slop_step,
+		   VDEV_PARAM_EARLY_RX_SLOP_STEP),
+	VDEV_PARAM(vdev_param_early_rx_init_slop,
+		   VDEV_PARAM_EARLY_RX_INIT_SLOP),
+	VDEV_PARAM(vdev_param_early_rx_adjust_pause,
+		   VDEV_PARAM_EARLY_RX_ADJUST_PAUSE),
+	VDEV_PARAM(vdev_param_tx_pwrlimit, VDEV_PARAM_TX_PWRLIMIT),
+	VDEV_PARAM(vdev_param_snr_num_for_cal, VDEV_PARAM_SNR_NUM_FOR_CAL),
+	VDEV_PARAM(vdev_param_roam_fw_offload, VDEV_PARAM_ROAM_FW_OFFLOAD),
+	VDEV_PARAM(vdev_param_enable_rmc, VDEV_PARAM_ENABLE_RMC),
+	VDEV_PARAM(vdev_param_ibss_max_bcn_lost_ms,
+		   VDEV_PARAM_IBSS_MAX_BCN_LOST_MS),
+	VDEV_PARAM(vdev_param_max_rate, VDEV_PARAM_MAX_RATE),
+	VDEV_PARAM(vdev_param_early_rx_drift_sample,
+		   VDEV_PARAM_EARLY_RX_DRIFT_SAMPLE),
+	VDEV_PARAM(vdev_param_set_ibss_tx_fail_cnt_thr,
+		   VDEV_PARAM_SET_IBSS_TX_FAIL_CNT_THR),
+	VDEV_PARAM(vdev_param_ebt_resync_timeout,
+		   VDEV_PARAM_EBT_RESYNC_TIMEOUT),
+	VDEV_PARAM(vdev_param_aggr_trig_event_enable,
+		   VDEV_PARAM_AGGR_TRIG_EVENT_ENABLE),
+	VDEV_PARAM(vdev_param_is_ibss_power_save_allowed,
+		   VDEV_PARAM_IS_IBSS_POWER_SAVE_ALLOWED),
+	VDEV_PARAM(vdev_param_is_power_collapse_allowed,
+		   VDEV_PARAM_IS_POWER_COLLAPSE_ALLOWED),
+	VDEV_PARAM(vdev_param_is_awake_on_txrx_enabled,
+		   VDEV_PARAM_IS_AWAKE_ON_TXRX_ENABLED),
+	VDEV_PARAM(vdev_param_inactivity_cnt, VDEV_PARAM_INACTIVITY_CNT),
+	VDEV_PARAM(vdev_param_txsp_end_inactivity_time_ms,
+		   VDEV_PARAM_TXSP_END_INACTIVITY_TIME_MS),
+	VDEV_PARAM(vdev_param_dtim_policy, VDEV_PARAM_DTIM_POLICY),
+	VDEV_PARAM(vdev_param_ibss_ps_warmup_time_secs,
+		   VDEV_PARAM_IBSS_PS_WARMUP_TIME_SECS),
+	VDEV_PARAM(vdev_param_ibss_ps_1rx_chain_in_atim_window_enable,
+		   VDEV_PARAM_IBSS_PS_1RX_CHAIN_IN_ATIM_WINDOW_ENABLE),
+	VDEV_PARAM(vdev_param_rx_leak_window, VDEV_PARAM_RX_LEAK_WINDOW),
+	VDEV_PARAM(vdev_param_stats_avg_factor, VDEV_PARAM_STATS_AVG_FACTOR),
+	VDEV_PARAM(vdev_param_disconnect_th, VDEV_PARAM_DISCONNECT_TH),
+	VDEV_PARAM(vdev_param_rtscts_rate, VDEV_PARAM_RTSCTS_RATE),
+	VDEV_PARAM(vdev_param_mcc_rtscts_protection_enable,
+		   VDEV_PARAM_MCC_RTSCTS_PROTECTION_ENABLE),
+	VDEV_PARAM(vdev_param_mcc_broadcast_probe_enable,
+		   VDEV_PARAM_MCC_BROADCAST_PROBE_ENABLE),
+	VDEV_PARAM(vdev_param_txpower_scale, VDEV_PARAM_TXPOWER_SCALE),
+	VDEV_PARAM(vdev_param_txpower_scale_decr_db,
+		   VDEV_PARAM_TXPOWER_SCALE_DECR_DB),
+	VDEV_PARAM(vdev_param_mcast2ucast_set, VDEV_PARAM_MCAST2UCAST_SET),
+	VDEV_PARAM(vdev_param_rc_num_retries, VDEV_PARAM_RC_NUM_RETRIES),
+	VDEV_PARAM(vdev_param_cabq_maxdur, VDEV_PARAM_CABQ_MAXDUR),
+	VDEV_PARAM(vdev_param_mfptest_set, VDEV_PARAM_MFPTEST_SET),
+	VDEV_PARAM(vdev_param_rts_fixed_rate, VDEV_PARAM_RTS_FIXED_RATE),
+	VDEV_PARAM(vdev_param_vht_sgimask, VDEV_PARAM_VHT_SGIMASK),
+	VDEV_PARAM(vdev_param_vht80_ratemask, VDEV_PARAM_VHT80_RATEMASK),
+	VDEV_PARAM(vdev_param_proxy_sta, VDEV_PARAM_PROXY_STA),
+	VDEV_PARAM(vdev_param_virtual_cell_mode, VDEV_PARAM_VIRTUAL_CELL_MODE),
+	VDEV_PARAM(vdev_param_rx_decap_type, VDEV_PARAM_RX_DECAP_TYPE),
+	VDEV_PARAM(vdev_param_bw_nss_ratemask, VDEV_PARAM_BW_NSS_RATEMASK),
+	VDEV_PARAM(vdev_param_sensor_ap, VDEV_PARAM_SENSOR_AP),
+	VDEV_PARAM(vdev_param_beacon_rate, VDEV_PARAM_BEACON_RATE),
+	VDEV_PARAM(vdev_param_dtim_enable_cts, VDEV_PARAM_DTIM_ENABLE_CTS),
+	VDEV_PARAM(vdev_param_sta_kickout, VDEV_PARAM_STA_KICKOUT),
+	VDEV_PARAM(vdev_param_capabilities, VDEV_PARAM_CAPABILITIES),
+	VDEV_PARAM(vdev_param_tsf_increment, VDEV_PARAM_TSF_INCREMENT),
+	VDEV_PARAM(vdev_param_ampdu_subframe_size_per_ac,
+		   UNAVAILABLE_PARAM),
+	VDEV_PARAM(vdev_param_rx_filter, VDEV_PARAM_RX_FILTER),
+	VDEV_PARAM(vdev_param_mgmt_tx_power, VDEV_PARAM_MGMT_TX_POWER),
+	VDEV_PARAM(vdev_param_non_agg_sw_retry_th,
+		   VDEV_PARAM_NON_AGG_SW_RETRY_TH),
+	VDEV_PARAM(vdev_param_agg_sw_retry_th, VDEV_PARAM_AGG_SW_RETRY_TH),
+	VDEV_PARAM(vdev_param_disable_dyn_bw_rts,
+		   VDEV_PARAM_DISABLE_DYN_BW_RTS),
+	VDEV_PARAM(vdev_param_set_traffic_config,
+		   VDEV_PARAM_VDEV_TRAFFIC_CONFIG),
+	VDEV_PARAM(vdev_param_atf_ssid_sched_policy,
+		   VDEV_PARAM_ATF_SSID_SCHED_POLICY),
+	VDEV_PARAM(vdev_param_he_dcm_enable, VDEV_PARAM_HE_DCM),
+	VDEV_PARAM(vdev_param_he_range_ext_enable, VDEV_PARAM_HE_RANGE_EXT),
+	VDEV_PARAM(vdev_param_he_range_ext, VDEV_PARAM_HE_RANGE_EXT),
+	VDEV_PARAM(vdev_param_enable_bcast_probe_response,
+		   VDEV_PARAM_ENABLE_BCAST_PROBE_RESPONSE),
+	VDEV_PARAM(vdev_param_fils_max_channel_guard_time,
+		   VDEV_PARAM_FILS_MAX_CHANNEL_GUARD_TIME),
+	VDEV_PARAM(vdev_param_disable_noa_p2p_go,
+		   VDEV_PARAM_DISABLE_NOA_P2P_GO),
+	VDEV_PARAM(vdev_param_per_band_mgmt_tx_rate,
+		   VDEV_PARAM_PER_BAND_MGMT_TX_RATE),
+	VDEV_PARAM(vdev_param_11ax_txbf, VDEV_PARAM_11AX_TXBF),
+	VDEV_PARAM(vdev_param_smps_intolerant, VDEV_PARAM_SMPS_INTOLERANT),
+	VDEV_PARAM(vdev_param_probe_delay, VDEV_PARAM_PROBE_DELAY),
+	VDEV_PARAM(vdev_param_repeat_probe_time, VDEV_PARAM_REPEAT_PROBE_TIME),
+	VDEV_PARAM(vdev_param_set_he_ltf, VDEV_PARAM_HE_LTF),
+	VDEV_PARAM(vdev_param_abg_mode_tx_chain_num,
+		   VDEV_PARAM_ABG_MODE_TX_CHAIN_NUM),
+	VDEV_PARAM(vdev_param_enable_multi_group_key,
+		   VDEV_PARAM_ENABLE_MULTI_GROUP_KEY),
+	VDEV_PARAM(vdev_param_max_group_keys, VDEV_PARAM_NUM_GROUP_KEYS),
+	VDEV_PARAM(vdev_param_enable_disable_oce_features,
+		   VDEV_PARAM_ENABLE_DISABLE_OCE_FEATURES),
+	VDEV_PARAM(vdev_param_enable_disable_nan_config_features,
+		   VDEV_PARAM_ENABLE_DISABLE_NAN_CONFIG_FEATURES),
+	VDEV_PARAM(vdev_param_rate_dropdown_bmap,
+		   VDEV_PARAM_RATE_DROPDOWN_BMAP),
+	VDEV_PARAM(vdev_param_moddtim_cnt, VDEV_PARAM_MODDTIM_CNT),
+	VDEV_PARAM(vdev_param_max_li_of_moddtim, VDEV_PARAM_MAX_LI_OF_MODDTIM),
+	VDEV_PARAM(vdev_param_dyndtim_cnt, VDEV_PARAM_DYNDTIM_CNT),
+	VDEV_PARAM(vdev_param_enable_disable_rtt_responder_role,
+		   VDEV_PARAM_ENABLE_DISABLE_RTT_RESPONDER_ROLE),
+	VDEV_PARAM(vdev_param_set_ba_mode, VDEV_PARAM_BA_MODE),
+	VDEV_PARAM(vdev_param_forced_moddtim_enable,
+		   VDEV_PARAM_FORCED_MODDTIM_ENABLE),
+	VDEV_PARAM(vdev_param_autorate_misc_cfg, VDEV_PARAM_AUTORATE_MISC_CFG),
+	VDEV_PARAM(vdev_param_enable_disable_rtt_initiator_random_mac,
+		   VDEV_PARAM_ENABLE_DISABLE_RTT_INITIATOR_RANDOM_MAC),
+	VDEV_PARAM(vdev_param_tx_retries_before_rts_per_ac,
+		   VDEV_PARAM_TX_RETRIES_BEFORE_RTS_PER_AC),
+	VDEV_PARAM(vdev_param_amsdu_aggregation_size_optimization,
+		   VDEV_PARAM_AMSDU_AGGREGATION_SIZE_OPTIMIZATION),
+	VDEV_PARAM(vdev_param_rawmode_open_war, VDEV_PARAM_RAW_IS_ENCRYPTED),
+	VDEV_PARAM(vdev_param_gtx_enable, VDEV_PARAM_GTX_ENABLE),
+	VDEV_PARAM(vdev_param_disable_cabq, VDEV_PARAM_DISABLE_CABQ),
+	VDEV_PARAM(vdev_param_set_he_sounding_mode,
+		   VDEV_PARAM_SET_HE_SOUNDING_MODE),
+	VDEV_PARAM(vdev_param_ul_fixed_rate, VDEV_PARAM_UL_FIXED_RATE),
+	VDEV_PARAM(vdev_param_ul_shortgi, VDEV_PARAM_UL_GI),
+	VDEV_PARAM(vdev_param_ul_ldpc, VDEV_PARAM_UL_LDPC),
+	VDEV_PARAM(vdev_param_ul_nss, VDEV_PARAM_UL_NSS),
+	VDEV_PARAM(vdev_param_ul_stbc, VDEV_PARAM_UL_STBC),
+	VDEV_PARAM(vdev_param_ul_he_ltf, VDEV_PARAM_UL_HE_LTF),
+	VDEV_PARAM(vdev_param_ul_ppdu_bw, VDEV_PARAM_UL_PPDU_BW),
+	VDEV_PARAM(vdev_param_mu_edca_fw_update_en,
+		   VDEV_PARAM_MU_EDCA_FW_UPDATE_EN),
+	VDEV_PARAM(vdev_param_update_obss_ru_tolerance_time,
+		   VDEV_PARAM_UPDATE_OBSS_RU_TOLERANCE_TIME),
+	VDEV_PARAM(vdev_param_max_mtu_size, VDEV_PARAM_MAX_MTU_SIZE),
+	VDEV_PARAM(vdev_param_nth_beacon_to_host,
+		   VDEV_PARAM_NTH_BEACON_TO_HOST),
+	VDEV_PARAM(vdev_param_packet_capture_mode,
+		   VDEV_PARAM_PACKET_CAPTURE_MODE),
+	VDEV_PARAM(vdev_param_mcast_rc_stale_period,
+		   VDEV_PARAM_MCAST_RC_STALE_PERIOD),
+	VDEV_PARAM(vdev_param_msdu_flow_override_config,
+		   VDEV_PARAM_MSDU_FLOW_OVERRIDE_CONFIG),
+	VDEV_PARAM(vdev_param_enable_null_for_leaky_ap,
+		   VDEV_PARAM_ENABLE_NULL_FOR_LEAKY_AP),
+	VDEV_PARAM(vdev_param_ndp_inactivity_timeout,
+		   VDEV_PARAM_NDP_INACTIVITY_TIMEOUT),
+	VDEV_PARAM(vdev_param_enable_mcast_rc, VDEV_PARAM_ENABLE_MCAST_RC),
+	VDEV_PARAM(vdev_param_enable_disable_rtt_initiator_role,
+		   VDEV_PARAM_ENABLE_DISABLE_RTT_INITIATOR_ROLE),
+	VDEV_PARAM(vdev_param_ndp_keepalive_timeout,
+		   VDEV_PARAM_NDP_KEEPALIVE_TIMEOUT),
+	VDEV_PARAM(vdev_param_allow_nan_initial_discovery_of_mp0_cluster,
+		   VDEV_PARAM_ALLOW_NAN_INITIAL_DISCOVERY_OF_MP0_CLUSTER),
+	VDEV_PARAM(vdev_param_enable_disable_roam_reason_vsie,
+		   VDEV_PARAM_ENABLE_DISABLE_ROAM_REASON_VSIE),
+	VDEV_PARAM(vdev_param_set_cmd_obss_pd_threshold,
+		   VDEV_PARAM_SET_CMD_OBSS_PD_THRESHOLD),
+	VDEV_PARAM(vdev_param_set_cmd_obss_pd_per_ac,
+		   VDEV_PARAM_SET_CMD_OBSS_PD_PER_AC),
+	VDEV_PARAM(vdev_param_rsn_capability, VDEV_PARAM_RSN_CAPABILITY),
+	VDEV_PARAM(vdev_param_enable_srp, VDEV_PARAM_ENABLE_SRP),
+	VDEV_PARAM(vdev_param_roam_11kv_ctrl, VDEV_PARAM_ROAM_11KV_CTRL),
+	VDEV_PARAM(vdev_param_nan_config_features,
+		   UNAVAILABLE_PARAM),
+	VDEV_PARAM(vdev_param_sho_config, VDEV_PARAM_SHO_CONFIG),
+	VDEV_PARAM(vdev_param_non_data_he_range_ext,
+		   VDEV_PARAM_NON_DATA_HE_RANGE_EXT),
+	VDEV_PARAM(vdev_param_prohibit_data_mgmt,
+		   VDEV_PARAM_PROHIBIT_DATA_MGMT),
+	VDEV_PARAM(vdev_param_wmm_txop_enable, VDEV_PARAM_WMM_TXOP_ENABLE),
+	VDEV_PARAM(vdev_param_force_dtim_cnt, VDEV_PARAM_FORCE_DTIM_CNT),
+	VDEV_PARAM(vdev_param_smart_monitor_config,
+		   VDEV_PARAM_SMART_MONITOR_CONFIG),
+	VDEV_PARAM(vdev_param_max_li_of_moddtim_ms,
+		   VDEV_PARAM_MAX_LI_OF_MODDTIM_MS),
+	VDEV_PARAM(vdev_param_11az_security_config,
+		   VDEV_PARAM_11AZ_SECURITY_CONFIG),
+	VDEV_PARAM(vdev_param_set_normal_latency_flags_config,
+		   VDEV_PARAM_NORMAL_LATENCY_FLAGS_CONFIGURATION),
+	VDEV_PARAM(vdev_param_set_xr_latency_flags_config,
+		   VDEV_PARAM_XR_LATENCY_FLAGS_CONFIGURATION),
+	VDEV_PARAM(vdev_param_set_low_latency_flags_config,
+		   VDEV_PARAM_LOW_LATENCY_FLAGS_CONFIGURATION),
+	VDEV_PARAM(vdev_param_set_ultra_low_latency_flags_config,
+		   VDEV_PARAM_ULTRA_LOW_LATENCY_FLAGS_CONFIGURATION),
+	VDEV_PARAM(vdev_param_set_normal_latency_ul_dl_config,
+		   VDEV_PARAM_NORMAL_LATENCY_UL_DL_CONFIGURATION),
+	VDEV_PARAM(vdev_param_set_xr_latency_ul_dl_config,
+		   VDEV_PARAM_XR_LATENCY_UL_DL_CONFIGURATION),
+	VDEV_PARAM(vdev_param_set_low_latency_ul_dl_config,
+		   VDEV_PARAM_LOW_LATENCY_UL_DL_CONFIGURATION),
+	VDEV_PARAM(vdev_param_set_ultra_low_latency_ul_dl_config,
+		   VDEV_PARAM_ULTRA_LOW_LATENCY_UL_DL_CONFIGURATION),
+	VDEV_PARAM(vdev_param_set_default_ll_config,
+		   VDEV_PARAM_DEFAULT_LATENCY_LEVEL_CONFIGURATION),
+	VDEV_PARAM(vdev_param_set_multi_client_ll_feature_config,
+		   VDEV_PARAM_MULTI_CLIENT_LL_FEATURE_CONFIGURATION),
+	VDEV_PARAM(vdev_param_vdev_traffic_config,
+		   VDEV_PARAM_VDEV_TRAFFIC_CONFIG),
+	VDEV_PARAM(vdev_param_final_bmiss_time_sec,
+		   VDEV_PARAM_FINAL_BMISS_TIME_SEC),
+	VDEV_PARAM(vdev_param_final_bmiss_time_wow_sec,
+		   VDEV_PARAM_FINAL_BMISS_TIME_WOW_SEC),
+	VDEV_PARAM(vdev_param_disable_lpi_ant_optimization,
+		   VDEV_PARAM_DISABLE_LPI_ANT_OPTIMIZATION),
+	VDEV_PARAM(vdev_param_prototype, VDEV_PARAM_PROTOTYPE),
+	VDEV_PARAM(vdev_param_he_bss_color, VDEV_PARAM_BSS_COLOR),
+	VDEV_PARAM(vdev_param_set_hemu_mode, VDEV_PARAM_SET_HEMU_MODE),
+	VDEV_PARAM(vdev_param_set_heop, VDEV_PARAM_HEOPS_0_31),
+	VDEV_PARAM(vdev_param_obsspd, VDEV_PARAM_OBSSPD),
+	VDEV_PARAM(vdev_param_set_eht_mu_mode, VDEV_PARAM_SET_EHT_MU_MODE),
+	VDEV_PARAM(vdev_param_set_eht_ltf, VDEV_PARAM_EHT_LTF),
+	VDEV_PARAM(vdev_param_set_ul_eht_ltf, VDEV_PARAM_UL_EHT_LTF),
+	VDEV_PARAM(vdev_param_set_eht_dcm, VDEV_PARAM_EHT_DCM),
+	VDEV_PARAM(vdev_param_set_eht_range_ext, VDEV_PARAM_EHT_RANGE_EXT),
+	VDEV_PARAM(vdev_param_set_non_data_eht_range_ext,
+		   VDEV_PARAM_NON_DATA_EHT_RANGE_EXT),
+	VDEV_PARAM(vdev_param_fixed_puncture_pattern,
+		   VDEV_PARAM_FIXED_PUNCTURE_PATTERN),
+	VDEV_PARAM(vdev_param_set_ehtop, VDEV_PARAM_EHTOPS_0_31),
+	VDEV_PARAM(vdev_param_set_eht_puncturing_mode,
+		   VDEV_PARAM_SET_EHT_PUNCTURING_MODE),
+	VDEV_PARAM(vdev_param_mcast_steer, VDEV_PARAM_MCAST_STEERING),
+	VDEV_PARAM(vdev_param_xpan_profile, VDEV_PARAM_XPAN_PROFILE),
+	VDEV_PARAM(vdev_param_vdev_stats_id_update,
+		   VDEV_PARAM_VDEV_STATS_ID_UPDATE),
+	VDEV_PARAM(vdev_param_skip_roam_eapol_4way_handshake,
+		   VDEV_PARAM_SKIP_ROAM_EAPOL_4WAY_HANDSHAKE),
+	VDEV_PARAM(vdev_param_skip_sae_roam_4way_handshake,
+		   VDEV_PARAM_SKIP_SAE_ROAM_4WAY_HANDSHAKE),
+	VDEV_PARAM(vdev_param_tx_power, UNAVAILABLE_PARAM),
+	VDEV_PARAM(vdev_param_amsdu_subframe_size_per_ac,
+		   UNAVAILABLE_PARAM),
+	VDEV_PARAM(vdev_param_6ghz_params, VDEV_PARAM_6GHZ_PARAMS),
+	VDEV_PARAM(vdev_host_swba_interval, VDEV_HOST_SWBA_INTERVAL),
+	VDEV_PARAM(vdev_param_meru_vc, UNAVAILABLE_PARAM),
+	VDEV_PARAM(vdev_param_sifs_trigger_rate, UNAVAILABLE_PARAM),
+	VDEV_PARAM(vdev_param_ap_keepalive_max_idle_inactive_secs,
+		   VDEV_PARAM_AP_KEEPALIVE_MAX_IDLE_INACTIVE_TIME_SECS),
+	vdev_param_max,
 } wmi_conv_vdev_param_id;
 
-/**
- * Host based ENUM IDs for service bits to abstract target enums
- */
+/* Host based ENUM IDs for service bits to abstract target enums */
 typedef enum {
 	wmi_service_beacon_offload = 0,
 	wmi_service_scan_offload,
@@ -5801,9 +6102,13 @@ typedef enum {
 	wmi_service_ndi_txbf_support,
 	wmi_service_reg_cc_ext_event_support,
 	wmi_service_bang_radar_320_support,
+	wmi_service_eirp_preferred_support,
 #if defined(CONFIG_BAND_6GHZ)
 	wmi_service_lower_6g_edge_ch_supp,
 	wmi_service_disable_upper_6g_edge_ch_supp,
+#ifdef CONFIG_AFC_SUPPORT
+	wmi_service_afc_support,
+#endif
 #endif
 	wmi_service_dcs_awgn_int_support,
 #ifdef WLAN_FEATURE_IGMP_OFFLOAD
@@ -5891,6 +6196,10 @@ typedef enum {
 #ifdef WLAN_PDEV_VDEV_SEND_MULTI_PARAM
 	wmi_service_combined_set_param_support,
 #endif
+#ifdef WLAN_FEATURE_SR
+	wmi_service_obss_per_packet_sr_support,
+#endif
+	wmi_service_wpa3_sha384_roam_support,
 	wmi_services_max,
 } wmi_conv_service_ids;
 #define WMI_SERVICE_UNAVAILABLE 0xFFFF
@@ -5921,7 +6230,7 @@ typedef enum {
 
 /**
  * struct wmi_host_fw_ver - FW version in non-tlv target
- * @sw_version: Versin info
+ * @sw_version: Version info
  * @sw_version_1: Second dword of version
  */
 struct wmi_host_fw_ver {
@@ -5931,7 +6240,7 @@ struct wmi_host_fw_ver {
 
 /**
  * struct wmi_host_fw_abi_ver - FW version in non-tlv target
- * @sw_version: Versin info
+ * @sw_version: Version info
  * @abi_version: ABI version
  */
 struct wmi_host_fw_abi_ver {
@@ -5970,21 +6279,23 @@ typedef enum {
 
 /**
  * enum WMI_HOST_VENDOR1_REQ1_VERSION - Vendor 1 requirement 1 version
- * @WMI_HOST_VENDOR1_REQ2_VERSION_3_00: Major version 3, mnor version 00
- * @WMI_HOST_VENDOR1_REQ2_VERSION_3_01: Major version 3, mnor version 01
- * @WMI_HOST_VENDOR1_REQ2_VERSION_3_20: Major version 3, mnor version 20
+ * @WMI_HOST_VENDOR1_REQ2_VERSION_3_00: Major version 3, minor version 00
+ * @WMI_HOST_VENDOR1_REQ2_VERSION_3_01: Major version 3, minor version 01
+ * @WMI_HOST_VENDOR1_REQ2_VERSION_3_20: Major version 3, minor version 20
+ * @WMI_HOST_VENDOR1_REQ1_VERSION_3_30: Major version 3, minor version 30
  */
 typedef enum {
 	WMI_HOST_VENDOR1_REQ1_VERSION_3_00 = 0,
 	WMI_HOST_VENDOR1_REQ1_VERSION_3_01 = 1,
 	WMI_HOST_VENDOR1_REQ1_VERSION_3_20 = 2,
+	WMI_HOST_VENDOR1_REQ1_VERSION_3_30 = 3,
 } WMI_HOST_VENDOR1_REQ1_VERSION;
 
 /**
  * enum WMI_HOST_VENDOR1_REQ2_VERSION - Vendor 1 requirement 2 version
- * @WMI_HOST_VENDOR1_REQ2_VERSION_3_00: Major version 3, mnor version 00
- * @WMI_HOST_VENDOR1_REQ2_VERSION_3_01: Major version 3, mnor version 01
- * @WMI_HOST_VENDOR1_REQ2_VERSION_3_20: Major version 3, mnor version 20
+ * @WMI_HOST_VENDOR1_REQ2_VERSION_3_00: Major version 3, minor version 00
+ * @WMI_HOST_VENDOR1_REQ2_VERSION_3_01: Major version 3, minor version 01
+ * @WMI_HOST_VENDOR1_REQ2_VERSION_3_20: Major version 3, minor version 20
  */
 typedef enum {
 	WMI_HOST_VENDOR1_REQ2_VERSION_3_00 = 0,
@@ -6017,9 +6328,10 @@ typedef enum {
  * @enable_rfc835: indicates rfc835 is enabled or disabled
  * @sap_5g_supported: Indicates SAP 5g is supported or not
  * @sap_6g_supported: Indicates SAP 6g is supported or not
+ * @band_capability: Band capability bit map
  * @sap_max_num_clients: Max clients supported by SAP
  * @set_country_code_hal_supported: Indicates country code hal supported or not
- * @get_valid_channel_supported: Indicates get vaid channel supported or not
+ * @get_valid_channel_supported: Indicates get valid channel supported or not
  * @supported_dot11mode: Indicates supported dot11 mode
  * @sap_wpa3_support: Indicates wpa3 support for SAP
  * @vendor_req_1_version: Indicates vendor1 req1 version
@@ -6078,6 +6390,7 @@ struct target_feature_set {
 	bool enable_rfc835;
 	bool sap_5g_supported;
 	bool sap_6g_supported;
+	uint32_t band_capability;
 	uint8_t sap_max_num_clients;
 	bool set_country_code_hal_supported;
 	bool get_valid_channel_supported;
@@ -6375,9 +6688,9 @@ typedef struct {
  * Enum replicated for host abstraction with FW
  */
 typedef enum {
-	/* Event respose of START CMD */
+	/* Event response of START CMD */
 	WMI_HOST_VDEV_START_RESP_EVENT = 0,
-	/* Event respose of RESTART CMD */
+	/* Event response of RESTART CMD */
 	WMI_HOST_VDEV_RESTART_RESP_EVENT,
 } WMI_HOST_START_EVENT_PARAM;
 
@@ -6669,6 +6982,12 @@ typedef enum {
 /* Disable aging & learning */
 #define WMI_HOST_WDS_FLAG_STATIC	0x1
 
+#ifdef ENABLE_HOST_TO_TARGET_CONVERSION
+#define PEER_PARAM(name) WMI_HOST_ ## name
+#else
+#define PEER_PARAM(name) WMI_HOST_ ## name = WMI_ ## name
+#endif /* ENABLE_HOST_TO_TARGET_CONVERSION */
+
 /**
  * Peer param enum abstracted from target
  * @WMI_HOST_PEER_MIMO_PS_STATE: mimo powersave state
@@ -6679,6 +6998,7 @@ typedef enum {
  * @WMI_HOST_PEER_NSS: peer NSS
  * @WMI_HOST_PEER_USE_4ADDR: USE 4 ADDR
  * @WMI_HOST_PEER_EXT_STATS_ENABLE: Enable extended peer stats
+ *                                  NON-TLV special
  * @WMI_HOST_PEER_USE_FIXED_PWR: Use FIXED Pwr,
  * @WMI_HOST_PEER_PARAM_FIXED_RATE: Set peer fixed rate
  * @WMI_HOST_PEER_SET_MU_ALLOWLIST: Allowlist peer TIDs
@@ -6689,7 +7009,7 @@ typedef enum {
  * @WMI_HOST_PEER_SET_HW_RETRY_CTS2S: Set hardware retry CTS to self
  * @WMI_HOST_PEER_IBSS_ATIM_WINDOW_LENGTH: IBSS ATIM window length
  * @WMI_HOST_PEER_PHYMODE: Peer Phymode
- * @WMI_HOST_PEER_SET_MAC_TX_RATE: Set MAC Tx rate
+ * @WMI_HOST_PEER_SET_MAX_TX_RATE: Set MAX Tx rate
  * @WMI_HOST_PEER_SET_DEFAULT_ROUTING: Set default Rx routing
  * @WMI_HOST_PEER_SET_MIN_TX_RATE: Set Minimum T rate
  * @WMI_HOST_PEER_NSS_VHT160: peer NSS for 160Mhz
@@ -6704,35 +7024,37 @@ typedef enum {
  *                                         puncture bitmap
  */
 enum {
-	WMI_HOST_PEER_MIMO_PS_STATE = 0x1,
-	WMI_HOST_PEER_AMPDU,
-	WMI_HOST_PEER_AUTHORIZE,
-	WMI_HOST_PEER_CHWIDTH,
-	WMI_HOST_PEER_NSS,
-	WMI_HOST_PEER_USE_4ADDR,
-	WMI_HOST_PEER_EXT_STATS_ENABLE,
-	WMI_HOST_PEER_USE_FIXED_PWR,
-	WMI_HOST_PEER_PARAM_FIXED_RATE,
-	WMI_HOST_PEER_SET_MU_ALLOWLIST,
-	WMI_HOST_PEER_MEMBERSHIP,
-	WMI_HOST_PEER_USERPOS,
-	WMI_HOST_PEER_CRIT_PROTO_HINT_ENABLED,
-	WMI_HOST_PEER_TX_FAIL_CNT_THR,
-	WMI_HOST_PEER_SET_HW_RETRY_CTS2S,
-	WMI_HOST_PEER_IBSS_ATIM_WINDOW_LENGTH,
-	WMI_HOST_PEER_PHYMODE,
-	WMI_HOST_PEER_SET_MAC_TX_RATE,
-	WMI_HOST_PEER_SET_DEFAULT_ROUTING,
-	WMI_HOST_PEER_SET_MIN_TX_RATE,
-	WMI_HOST_PEER_NSS_VHT160,
-	WMI_HOST_PEER_NSS_VHT80_80,
-	WMI_HOST_PEER_PARAM_SU_TXBF_SOUNDING_INTERVAL,
-	WMI_HOST_PEER_PARAM_MU_TXBF_SOUNDING_INTERVAL,
-	WMI_HOST_PEER_PARAM_TXBF_SOUNDING_ENABLE,
-	WMI_HOST_PEER_PARAM_MU_ENABLE,
-	WMI_HOST_PEER_PARAM_OFDMA_ENABLE,
-	WMI_HOST_PEER_PARAM_ENABLE_FT,
-	WMI_HOST_PEER_CHWIDTH_PUNCTURE_20MHZ_BITMAP,
+	PEER_PARAM(PEER_MIMO_PS_STATE),
+	PEER_PARAM(PEER_AMPDU),
+	PEER_PARAM(PEER_AUTHORIZE),
+	PEER_PARAM(PEER_CHWIDTH),
+	PEER_PARAM(PEER_NSS),
+	PEER_PARAM(PEER_USE_4ADDR),
+#if defined(WMI_NON_TLV_SUPPORT) || defined(WMI_TLV_AND_NON_TLV_SUPPORT)
+	PEER_PARAM(PEER_EXT_STATS_ENABLE),
+#endif
+	PEER_PARAM(PEER_USE_FIXED_PWR),
+	PEER_PARAM(PEER_PARAM_FIXED_RATE),
+	PEER_PARAM(PEER_SET_MU_ALLOWLIST),
+	PEER_PARAM(PEER_MEMBERSHIP),
+	PEER_PARAM(PEER_USERPOS),
+	PEER_PARAM(PEER_CRIT_PROTO_HINT_ENABLED),
+	PEER_PARAM(PEER_TX_FAIL_CNT_THR),
+	PEER_PARAM(PEER_SET_HW_RETRY_CTS2S),
+	PEER_PARAM(PEER_IBSS_ATIM_WINDOW_LENGTH),
+	PEER_PARAM(PEER_PHYMODE),
+	PEER_PARAM(PEER_SET_MAX_TX_RATE),
+	PEER_PARAM(PEER_SET_DEFAULT_ROUTING),
+	PEER_PARAM(PEER_SET_MIN_TX_RATE),
+	PEER_PARAM(PEER_NSS_VHT160),
+	PEER_PARAM(PEER_NSS_VHT80_80),
+	PEER_PARAM(PEER_PARAM_SU_TXBF_SOUNDING_INTERVAL),
+	PEER_PARAM(PEER_PARAM_MU_TXBF_SOUNDING_INTERVAL),
+	PEER_PARAM(PEER_PARAM_TXBF_SOUNDING_ENABLE),
+	PEER_PARAM(PEER_PARAM_MU_ENABLE),
+	PEER_PARAM(PEER_PARAM_OFDMA_ENABLE),
+	PEER_PARAM(PEER_PARAM_ENABLE_FT),
+	PEER_PARAM(PEER_CHWIDTH_PUNCTURE_20MHZ_BITMAP),
 };
 #define WMI_HOST_PEER_MIMO_PS_NONE	0x0
 #define WMI_HOST_PEER_MIMO_PS_STATIC	0x1
@@ -6985,7 +7307,7 @@ enum wmi_host_sta_ps_param_rx_wake_policy {
 };
 enum wmi_host_sta_ps_param_pspoll_count {
 	WMI_HOST_STA_PS_PSPOLL_COUNT_NO_MAX = 0,
-	/* Values greater than 0 indicate the maximum numer of PS-Poll frames FW
+	/* Values greater than 0 indicate the maximum number of PS-Poll frames FW
 	* will send before waking up.
 	*/
 };
@@ -7051,7 +7373,7 @@ typedef struct _hp_dcs_mib_stats  {
  * struct wmi_host_dcs_im_tgt_stats - DCS IM target stats
  * @reg_tsf32: current running TSF from the TSF-1
  * @last_ack_rssi: Known last frame rssi, in case of multiple stations, if
- *      and at different ranges, this would not gaurantee that
+ *      and at different ranges, this would not guarantee that
  *      this is the least rssi.
  * @tx_waste_time: Sum of all the failed durations in the last
  *      one second interval.
@@ -7296,7 +7618,7 @@ typedef enum {
 	/* whole RTT measurement timer expire-terminate
 	** current STA measurement */
 	WMI_HOST_RTT_TIMER_EXPIRE,
-	/* channel swicth failed */
+	/* channel switch failed */
 	WMI_HOST_RTT_CHAN_SWITCH_ERROR,
 	/* TMR trans error, this dest peer will be skipped */
 	WMI_HOST_RTT_TMR_TRANS_ERROR,
@@ -7970,12 +8292,14 @@ enum wmi_host_fatal_condition_subtype_packet_log_config {
  * struct wmi_host_get_pn_event - PN event params
  * @vdev_id: vdev id
  * @peer_macaddr: Peer mac address
+ * @key_ix: Key index
  * @key_type: key type
  * @pn : pn value
  */
 struct wmi_host_get_pn_event {
 	uint32_t vdev_id;
 	uint8_t mac_addr[QDF_MAC_ADDR_SIZE];
+	uint8_t key_ix;
 	uint32_t key_type;
 	uint8_t pn[GET_PN_MAX_LEN];
 };
@@ -8141,7 +8465,7 @@ struct wmi_host_obss_spatial_reuse_set_def_thresh {
 
 /**
  * struct wmi_host_injector_frame_params - Injector frame configuration params
- * @vdev_id: vdev identifer of VAP
+ * @vdev_id: vdev identifier of VAP
  * @enable: Enable/disable flag for the frame
  * @frame_type: Frame type to be enabled
  * @frame_inject_period: Periodicity of injector frame transmission in msecs
@@ -8668,7 +8992,7 @@ struct wmi_obss_color_collision_info {
 /**
  * struct vap_pcp_tid_map_params - PCP tid map params
  * @vdev_id: vdev id
- * @pcp_to_tid_map: pointer to arry of pcp to tid map table
+ * @pcp_to_tid_map: pointer to array of pcp to tid map table
  */
 struct vap_pcp_tid_map_params {
 	uint32_t vdev_id;
@@ -8821,7 +9145,7 @@ struct wifi_pos_pasn_peer_data {
  * struct mws_coex_state - Modem Wireless Subsystem(MWS) coex info
  * @vdev_id : vdev id
  * @coex_scheme_bitmap: LTE-WLAN coexistence scheme bitmap
- * Indicates the final schemes applied for the currrent Coex scenario.
+ * Indicates the final schemes applied for the current Coex scenario.
  * Bit 0 - TDM policy
  * Bit 1 - Forced TDM policy
  * Bit 2 - Dynamic Power Back-off policy
@@ -8985,7 +9309,7 @@ struct wmi_raw_event_buffer {
 	void *evt_processed_buf;
 };
 
-/* dpd_status fron WMI_PDEV_GET_DPD_STATUS_EVENTID */
+/* dpd_status from WMI_PDEV_GET_DPD_STATUS_EVENTID */
 enum wmi_host_dpd_status {
 	WMI_HOST_DPD_STATUS_FAIL = 0,
 	WMI_HOST_DPD_STATUS_PASS = 1,
@@ -9144,6 +9468,7 @@ struct wmi_host_sw_cal_ver {
 	uint32_t status;
 };
 
+#ifdef HEALTH_MON_SUPPORT
 /**
  * struct wmi_health_mon_params - Health mon params
  * @ring_buf_paddr_low: Ring buffer physical address LOW
@@ -9157,5 +9482,15 @@ struct wmi_health_mon_params {
 	uint32_t initial_upload_period_ms;
 	uint32_t read_index;
 };
+#endif /* HEALTH_MON_SUPPORT */
 
+/**
+ * struct edca_pifs_vparam - edca/pifs param for ll sap
+ * @vdev_id: vdev id
+ * @param - pointer to wlan_edca_pifs_param_ie struct
+ */
+struct edca_pifs_vparam {
+	uint8_t vdev_id;
+	struct wlan_edca_pifs_param_ie param;
+};
 #endif /* _WMI_UNIFIED_PARAM_H_ */

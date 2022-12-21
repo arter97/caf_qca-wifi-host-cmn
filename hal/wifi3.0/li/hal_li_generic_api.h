@@ -630,6 +630,30 @@ hal_update_frame_type_cnt(uint8_t *rx_mpdu_start,
 }
 #endif
 
+#ifdef WLAN_SUPPORT_CTRL_FRAME_STATS
+static inline void
+hal_update_rx_ctrl_frame_stats(struct hal_rx_ppdu_info *ppdu_info,
+			       uint32_t user_id)
+{
+	uint16_t fc = ppdu_info->nac_info.frame_control;
+
+	if (HAL_RX_GET_FRAME_CTRL_TYPE(fc) == HAL_RX_FRAME_CTRL_TYPE_CTRL) {
+		if ((fc & QDF_IEEE80211_FC0_SUBTYPE_MASK) ==
+		    QDF_IEEE80211_FC0_SUBTYPE_VHT_NDP_AN)
+			ppdu_info->ctrl_frm_info[user_id].ndpa = 1;
+		if ((fc & QDF_IEEE80211_FC0_SUBTYPE_MASK) ==
+		    QDF_IEEE80211_FC0_SUBTYPE_BAR)
+			ppdu_info->ctrl_frm_info[user_id].bar = 1;
+	}
+}
+#else
+static inline void
+hal_update_rx_ctrl_frame_stats(struct hal_rx_ppdu_info *ppdu_info,
+			       uint32_t user_id)
+{
+}
+#endif /* WLAN_SUPPORT_CTRL_FRAME_STATS */
+
 /**
  * hal_rx_status_get_tlv_info() - process receive info TLV
  * @rx_tlv_hdr: pointer to TLV header
@@ -1018,6 +1042,7 @@ hal_rx_status_get_tlv_info_generic_li(void *rx_tlv_hdr, void *ppduinfo,
 		case TARGET_TYPE_QCA5018:
 		case TARGET_TYPE_QCN9000:
 		case TARGET_TYPE_QCN6122:
+		case TARGET_TYPE_QCN9160:
 #ifdef QCA_WIFI_QCA6390
 		case TARGET_TYPE_QCA6390:
 #endif
@@ -1660,6 +1685,8 @@ hal_rx_status_get_tlv_info_generic_li(void *rx_tlv_hdr, void *ppduinfo,
 
 		ppdu_info->rx_user_status[user_id].sw_peer_id =
 			HAL_RX_GET_SW_PEER_ID(rx_mpdu_start);
+
+		hal_update_rx_ctrl_frame_stats(ppdu_info, user_id);
 
 		if (ppdu_info->sw_frame_group_id ==
 		    HAL_MPDU_SW_FRAME_GROUP_NULL_DATA) {
@@ -2635,4 +2662,22 @@ hal_rx_fst_get_fse_size_li(void)
 	return 0;
 }
 #endif /* WLAN_SUPPORT_RX_FISA */
+
+/**
+ * hal_rx_get_frame_ctrl_field(): Function to retrieve frame control field
+ *
+ * @nbuf: Network buffer
+ * Returns: rx more fragment bit
+ *
+ */
+static uint16_t hal_rx_get_frame_ctrl_field_li(uint8_t *buf)
+{
+	struct rx_pkt_tlvs *pkt_tlvs = hal_rx_get_pkt_tlvs(buf);
+	struct rx_mpdu_info *rx_mpdu_info = hal_rx_get_mpdu_info(pkt_tlvs);
+	uint16_t frame_ctrl = 0;
+
+	frame_ctrl = HAL_RX_MPDU_GET_FRAME_CONTROL_FIELD(rx_mpdu_info);
+
+	return frame_ctrl;
+}
 #endif /* _HAL_LI_GENERIC_API_H_ */

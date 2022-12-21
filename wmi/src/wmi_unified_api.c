@@ -312,6 +312,16 @@ wmi_unified_multiple_vdev_param_send(wmi_unified_t wmi_handle,
 	return QDF_STATUS_E_FAILURE;
 }
 
+QDF_STATUS
+wmi_unified_set_mac_addr_rx_filter(wmi_unified_t wmi_handle,
+				   struct set_rx_mac_filter *params)
+{
+	if (wmi_handle->ops->set_mac_addr_rx_filter)
+		return wmi_handle->ops->set_mac_addr_rx_filter(wmi_handle,
+							       params);
+	return QDF_STATUS_E_FAILURE;
+}
+
 QDF_STATUS wmi_unified_suspend_send(wmi_unified_t wmi_handle,
 				    struct suspend_params *param,
 				    uint8_t mac_id)
@@ -1461,6 +1471,7 @@ QDF_STATUS wmi_unified_thermal_mitigation_param_cmd_send(
 	return QDF_STATUS_E_FAILURE;
 }
 
+#ifdef HEALTH_MON_SUPPORT
 QDF_STATUS wmi_extract_health_mon_event(
 		wmi_unified_t wmi_handle,
 		void *ev,
@@ -1472,6 +1483,8 @@ QDF_STATUS wmi_extract_health_mon_event(
 
 	return QDF_STATUS_E_FAILURE;
 }
+#endif /* HEALTH_MON_SUPPORT */
+
 QDF_STATUS
 wmi_unified_vdev_set_fwtest_param_cmd_send(wmi_unified_t wmi_handle,
 					   struct set_fwtest_params *param)
@@ -3789,7 +3802,7 @@ wmi_unified_extract_halphy_stats_event_count(wmi_unified_t wmi_handle,
  * @vdev_id: vdev id
  *
  * TSF_TSTAMP_READ_VALUE is the only operation supported
- * Return: QDF_STATUS_SUCCESS for success or erro code
+ * Return: QDF_STATUS_SUCCESS for success or error code
  */
 QDF_STATUS wmi_unified_send_vdev_tsf_tstamp_action_cmd(wmi_unified_t wmi_hdl,
 						       uint8_t vdev_id)
@@ -4033,3 +4046,15 @@ QDF_STATUS wmi_feature_set_cmd_send(wmi_unified_t wmi_handle,
 	return QDF_STATUS_E_FAILURE;
 }
 #endif
+
+QDF_STATUS
+wmi_unified_update_edca_pifs_param(
+			wmi_unified_t wmi_handle,
+			struct edca_pifs_vparam *edca_pifs_param)
+{
+	if (wmi_handle->ops->send_update_edca_pifs_param_cmd)
+		return wmi_handle->ops->send_update_edca_pifs_param_cmd(
+				wmi_handle, edca_pifs_param);
+
+	return QDF_STATUS_E_FAILURE;
+}

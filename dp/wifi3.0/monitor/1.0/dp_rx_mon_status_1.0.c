@@ -498,6 +498,7 @@ dp_rx_mon_status_process_tlv(struct dp_soc *soc, struct dp_intr *int_ctx,
 				 (tlv_status == HAL_TLV_STATUS_MPDU_START) ||
 				 (tlv_status == HAL_TLV_STATUS_MSDU_END));
 		}
+		dp_mon_rx_stats_update_rssi_dbm_params(mon_pdev, ppdu_info);
 		if (qdf_unlikely(mon_pdev->dp_peer_based_pktlog)) {
 			dp_rx_process_peer_based_pktlog(soc, ppdu_info,
 							status_nbuf,
@@ -564,6 +565,8 @@ dp_rx_mon_status_process_tlv(struct dp_soc *soc, struct dp_intr *int_ctx,
 			if (qdf_unlikely(mon_pdev->scan_spcl_vap_configured))
 				dp_rx_mon_update_scan_spcl_vap_stats(pdev,
 								     ppdu_info);
+
+			dp_rx_mon_update_user_ctrl_frame_stats(pdev, ppdu_info);
 
 			/*
 			* if chan_num is not fetched correctly from ppdu RX TLV,
@@ -1293,8 +1296,7 @@ uint32_t dp_mon_drop_packets_for_mac(struct dp_pdev *pdev, uint32_t mac_id,
 	uint32_t work_done;
 
 	work_done = dp_mon_status_srng_drop_for_mac(pdev, mac_id, quota);
-	if (!dp_is_rxdma_dst_ring_common(pdev))
-		dp_mon_dest_srng_drop_for_mac(pdev, mac_id);
+	dp_mon_dest_srng_drop_for_mac(pdev, mac_id);
 
 	return work_done;
 }

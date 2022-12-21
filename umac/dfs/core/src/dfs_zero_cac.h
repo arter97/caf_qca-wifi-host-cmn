@@ -202,7 +202,8 @@ dfs_zero_cac_timer_init(struct dfs_soc_priv_obj *dfs_soc_obj)
  * dfs_print_precaclists() - Print precac list.
  * @dfs: Pointer to wlan_dfs structure.
  */
-#if !defined(MOBILE_DFS_SUPPORT)
+#if !defined(MOBILE_DFS_SUPPORT) && (defined(ATH_SUPPORT_ZERO_CAC_DFS) || \
+				     defined(QCA_SUPPORT_AGILE_DFS))
 void dfs_print_precaclists(struct wlan_dfs *dfs);
 #else
 static inline void dfs_print_precaclists(struct wlan_dfs *dfs)
@@ -214,7 +215,8 @@ static inline void dfs_print_precaclists(struct wlan_dfs *dfs)
  * dfs_reset_precac_lists() - Resets the precac lists.
  * @dfs: Pointer to wlan_dfs structure.
  */
-#if !defined(MOBILE_DFS_SUPPORT)
+#if !defined(MOBILE_DFS_SUPPORT) && (defined(ATH_SUPPORT_ZERO_CAC_DFS) || \
+				     defined(QCA_SUPPORT_AGILE_DFS))
 void dfs_reset_precac_lists(struct wlan_dfs *dfs);
 #else
 static inline void dfs_reset_precac_lists(struct wlan_dfs *dfs)
@@ -226,7 +228,8 @@ static inline void dfs_reset_precac_lists(struct wlan_dfs *dfs)
  * dfs_reset_precaclists() - Clears and initializes precac_list.
  * @dfs: Pointer to wlan_dfs structure.
  */
-#if !defined(MOBILE_DFS_SUPPORT)
+#if !defined(MOBILE_DFS_SUPPORT) && (defined(ATH_SUPPORT_ZERO_CAC_DFS) || \
+				     defined(QCA_SUPPORT_AGILE_DFS))
 void dfs_reset_precaclists(struct wlan_dfs *dfs);
 #else
 static inline void dfs_reset_precaclists(struct wlan_dfs *dfs)
@@ -244,7 +247,7 @@ void dfs_deinit_precac_list(struct wlan_dfs *dfs);
  * dfs_zero_cac_detach() - Free zero_cac memory.
  * @dfs: Pointer to wlan_dfs dtructure.
  */
-#if !defined(MOBILE_DFS_SUPPORT)
+#if !defined(MOBILE_DFS_SUPPORT) && defined(ATH_SUPPORT_ZERO_CAC_DFS)
 void dfs_zero_cac_detach(struct wlan_dfs *dfs);
 #else
 static inline void dfs_zero_cac_detach(struct wlan_dfs *dfs)
@@ -258,7 +261,8 @@ static inline void dfs_zero_cac_detach(struct wlan_dfs *dfs)
  */
 void dfs_init_precac_list(struct wlan_dfs *dfs);
 
-#if !defined(MOBILE_DFS_SUPPORT)
+#if !defined(MOBILE_DFS_SUPPORT) && (defined(ATH_SUPPORT_ZERO_CAC_DFS) || \
+				     defined(QCA_SUPPORT_AGILE_DFS))
 /**
  * dfs_start_precac_timer_for_freq() - Start precac timer.
  * @dfs: Pointer to wlan_dfs structure.
@@ -282,7 +286,7 @@ void dfs_start_precac_timer_for_freq(struct wlan_dfs *dfs,
  * dfs_cancel_precac_timer() - Cancel the precac timer.
  * @dfs: Pointer to wlan_dfs structure.
  */
-#if !defined(MOBILE_DFS_SUPPORT)
+#if !defined(MOBILE_DFS_SUPPORT) && defined(ATH_SUPPORT_ZERO_CAC_DFS)
 void dfs_cancel_precac_timer(struct wlan_dfs *dfs);
 #else
 static inline void dfs_cancel_precac_timer(struct wlan_dfs *dfs)
@@ -294,7 +298,7 @@ static inline void dfs_cancel_precac_timer(struct wlan_dfs *dfs)
  * dfs_zero_cac_attach() - Initialize dfs zerocac variables.
  * @dfs: Pointer to DFS structure.
  */
-#if !defined(MOBILE_DFS_SUPPORT)
+#if !defined(MOBILE_DFS_SUPPORT) && defined(ATH_SUPPORT_ZERO_CAC_DFS)
 void dfs_zero_cac_attach(struct wlan_dfs *dfs);
 #else
 static inline void dfs_zero_cac_attach(struct wlan_dfs *dfs)
@@ -306,7 +310,7 @@ static inline void dfs_zero_cac_attach(struct wlan_dfs *dfs)
  * dfs_zero_cac_reset() - Reset Zero cac DFS variables.
  * @dfs: Pointer to wlan_dfs structure.
  */
-#if !defined(MOBILE_DFS_SUPPORT)
+#if !defined(MOBILE_DFS_SUPPORT) && defined(ATH_SUPPORT_ZERO_CAC_DFS)
 void dfs_zero_cac_reset(struct wlan_dfs *dfs);
 #else
 static inline void dfs_zero_cac_reset(struct wlan_dfs *dfs)
@@ -336,7 +340,8 @@ dfs_zero_cac_timer_detach(struct dfs_soc_priv_obj *dfs_soc_obj)
  * * True:  If precac is done on channel.
  * * False: If precac is not done on channel.
  */
-#if !defined(MOBILE_DFS_SUPPORT)
+#if !defined(MOBILE_DFS_SUPPORT) && (defined(ATH_SUPPORT_ZERO_CAC_DFS) || \
+				     defined(QCA_SUPPORT_AGILE_DFS))
 bool dfs_is_precac_done(struct wlan_dfs *dfs, struct dfs_channel *chan);
 #else
 static inline bool dfs_is_precac_done(struct wlan_dfs *dfs,
@@ -389,7 +394,7 @@ dfs_decide_precac_preferred_chan_for_freq(struct wlan_dfs *dfs,
 uint16_t dfs_get_ieeechan_for_precac_for_freq(struct wlan_dfs *dfs,
 					      uint16_t exclude_pri_chan_freq,
 					      uint16_t exclude_sec_chan_freq,
-					      uint8_t bandwidth);
+					      uint16_t bandwidth);
 #endif
 
 /**
@@ -397,7 +402,8 @@ uint16_t dfs_get_ieeechan_for_precac_for_freq(struct wlan_dfs *dfs,
  * @dfs: Pointer to wlan_dfs structure.
  * @precac_timeout: Precac timeout value.
  */
-#if !defined(MOBILE_DFS_SUPPORT)
+#if !defined(MOBILE_DFS_SUPPORT) && (defined(ATH_SUPPORT_ZERO_CAC_DFS) || \
+				     defined(QCA_SUPPORT_AGILE_DFS))
 int dfs_override_precac_timeout(struct wlan_dfs *dfs,
 		int precac_timeout);
 #else
@@ -413,7 +419,8 @@ static inline int dfs_override_precac_timeout(struct wlan_dfs *dfs,
  * @dfs: Pointer wlan_dfs structure.
  * @precac_timeout: Get precac timeout value in this variable.
  */
-#if !defined(MOBILE_DFS_SUPPORT)
+#if !defined(MOBILE_DFS_SUPPORT) && (defined(ATH_SUPPORT_ZERO_CAC_DFS) || \
+				     defined(QCA_SUPPORT_AGILE_DFS))
 int dfs_get_override_precac_timeout(struct wlan_dfs *dfs,
 		int *precac_timeout);
 #else
@@ -474,6 +481,18 @@ void dfs_set_agilecac_chan_for_freq(struct wlan_dfs *dfs,
 #endif
 
 /**
+ * dfs_compute_agile_and_curchan_width() - Compute the agile/current channel
+ * width from dfs structure.
+ * @dfs: Pointer to wlan_dfs structure.
+ * @agile_ch_width: Agile channel width.
+ * @cur_ch_width: Current home channel width.
+ */
+void
+dfs_compute_agile_and_curchan_width(struct wlan_dfs *dfs,
+				    enum phy_ch_width *agile_ch_width,
+				    enum phy_ch_width *cur_ch_width);
+
+/**
  * dfs_agile_precac_start() - Start agile precac.
  * @dfs: Pointer to wlan_dfs structure.
  */
@@ -499,12 +518,14 @@ void dfs_start_agile_precac_timer(struct wlan_dfs *dfs,
  * @dfs: Pointer to wlan_dfs structure.
  * @fw_adfs_support_160: aDFS enabled when pdev is on 160/80P80MHz.
  * @fw_adfs_support_non_160: aDFS enabled when pdev is on 20/40/80MHz.
+ * @fw_adfs_support_320: aDFS enabled when pdev is on 320 MHz.
  *
  * Return: void.
  */
 void dfs_set_fw_adfs_support(struct wlan_dfs *dfs,
 			     bool fw_adfs_support_160,
-			     bool fw_adfs_support_non_160);
+			     bool fw_adfs_support_non_160,
+			     bool fw_adfs_support_320);
 #else
 static inline void dfs_find_pdev_for_agile_precac(struct wlan_objmgr_pdev *pdev,
 						  uint8_t *cur_agile_dfs_index)
@@ -535,6 +556,13 @@ dfs_set_agilecac_chan_for_freq(struct wlan_dfs *dfs,
 }
 #endif
 
+static inline void
+dfs_compute_agile_and_curchan_width(struct wlan_dfs *dfs,
+				    enum phy_ch_width *agile_ch_width,
+				    enum phy_ch_width *cur_ch_width)
+{
+}
+
 static inline void dfs_agile_precac_start(struct wlan_dfs *dfs)
 {
 }
@@ -549,7 +577,8 @@ dfs_start_agile_precac_timer(struct wlan_dfs *dfs,
 static inline void
 dfs_set_fw_adfs_support(struct wlan_dfs *dfs,
 			bool fw_adfs_support_160,
-			bool fw_adfs_support_non_160)
+			bool fw_adfs_support_non_160,
+			bool fw_adfs_support_320)
 {
 }
 #endif
@@ -575,7 +604,8 @@ static inline void dfs_agile_soc_obj_init(struct wlan_dfs *dfs,
  * @dfs: Pointer to wlan_dfs structure.
  * @value: input value for dfs_legacy_precac_ucfg flag.
  */
-#if !defined(MOBILE_DFS_SUPPORT)
+#if !defined(MOBILE_DFS_SUPPORT) && (defined(ATH_SUPPORT_ZERO_CAC_DFS) || \
+				     defined(QCA_SUPPORT_AGILE_DFS))
 void dfs_set_precac_enable(struct wlan_dfs *dfs,
 		uint32_t value);
 #else
@@ -707,12 +737,6 @@ dfs_get_precac_chan_state_for_freq(struct wlan_dfs *dfs,
 #endif
 
 /**
- * dfs_zero_cac_reset() - Reset Zero cac DFS variables.
- * @dfs: Pointer to wlan_dfs structure.
- */
-void dfs_zero_cac_reset(struct wlan_dfs *dfs);
-
-/**
  * dfs_reinit_precac_lists() - Reinit DFS preCAC lists.
  * @src_dfs: Source DFS from which the preCAC list is copied.
  * @dest_dfs: Destination DFS to which the preCAC list is copied.
@@ -724,7 +748,8 @@ void dfs_zero_cac_reset(struct wlan_dfs *dfs);
  *
  * Return: None (void).
  */
-#if !defined(MOBILE_DFS_SUPPORT)
+#if !defined(MOBILE_DFS_SUPPORT) && (defined(ATH_SUPPORT_ZERO_CAC_DFS) || \
+				     defined(QCA_SUPPORT_AGILE_DFS))
 void dfs_reinit_precac_lists(struct wlan_dfs *src_dfs,
 			     struct wlan_dfs *dest_dfs,
 			     uint16_t low_5g_freq,
@@ -739,8 +764,8 @@ static inline void dfs_reinit_precac_lists(struct wlan_dfs *src_dfs,
 #endif
 
 /**
- * dfs_is_precac_done_on_ht20_40_80_160_165_chan_for_freq() - Is precac done on
- * a VHT20/40/80/160/165 channel.
+ * dfs_is_precac_done_on_non_80p80_chan_for_freq() - Is precac done on
+ * a 20/40/80/160/165/320 MHz channel.
  *@dfs: Pointer to wlan_dfs structure.
  *@chan: Channel frequency
  *
@@ -750,14 +775,12 @@ static inline void dfs_reinit_precac_lists(struct wlan_dfs *src_dfs,
  */
 #ifdef CONFIG_CHAN_FREQ_API
 bool
-dfs_is_precac_done_on_ht20_40_80_160_165_chan_for_freq(struct wlan_dfs *dfs,
-						       uint16_t chan_freq);
+dfs_is_precac_done_on_non_80p80_chan_for_freq(struct wlan_dfs *dfs,
+					      uint16_t chan_freq);
 #endif
 
 /**
- * dfs_is_precac_done_on_ht8080_chan() - Is precac done on VHT80+80 channel
- *                                       channel other than the restricted
- *                                       80+80 channel.
+ * dfs_is_precac_done_on_80p80_chan() - Is precac done on 80+80 MHz channel.
  * @dfs: Pointer to wlan_dfs structure.
  * @chan: Pointer to dfs_channel for which preCAC done is checked.
  *
@@ -765,10 +788,11 @@ dfs_is_precac_done_on_ht20_40_80_160_165_chan_for_freq(struct wlan_dfs *dfs,
  * * True:  If CAC is done on channel.
  * * False: If CAC is not done on channel.
  */
-bool dfs_is_precac_done_on_ht8080_chan(struct wlan_dfs *dfs,
-				       struct dfs_channel *chan);
+bool dfs_is_precac_done_on_80p80_chan(struct wlan_dfs *dfs,
+				      struct dfs_channel *chan);
 
-#if !defined(MOBILE_DFS_SUPPORT)
+#if !defined(MOBILE_DFS_SUPPORT) && (defined(ATH_SUPPORT_ZERO_CAC_DFS) || \
+				     defined(QCA_SUPPORT_AGILE_DFS))
 #ifdef CONFIG_CHAN_FREQ_API
 /**
  * dfs_find_curchwidth_and_center_chan_for_freq() - Find the channel width
@@ -870,7 +894,8 @@ static inline void dfs_unmark_precac_nol_for_freq(struct wlan_dfs *dfs,
  * dfs_is_precac_timer_running() - Check whether precac timer is running.
  * @dfs: Pointer to wlan_dfs structure.
  */
-#if !defined(MOBILE_DFS_SUPPORT)
+#if !defined(MOBILE_DFS_SUPPORT) && (defined(ATH_SUPPORT_ZERO_CAC_DFS) || \
+				     defined(QCA_SUPPORT_AGILE_DFS))
 bool dfs_is_precac_timer_running(struct wlan_dfs *dfs);
 #else
 static inline bool dfs_is_precac_timer_running(struct wlan_dfs *dfs)
@@ -1036,6 +1061,16 @@ QDF_STATUS dfs_agile_sm_destroy(struct dfs_soc_priv_obj *dfs_soc_obj);
  */
 bool dfs_is_agile_cac_enabled(struct wlan_dfs *dfs);
 
+/* dfs_translate_chwidth_enum2val() - Translate the given channel width enum
+ *                                    to it's value.
+ * @dfs:     Pointer to WLAN DFS structure.
+ * @chwidth: Channel width enum of the pdev's current channel.
+ *
+ * Return: The Bandwidth value for the given channel width enum.
+ */
+uint16_t
+dfs_translate_chwidth_enum2val(struct wlan_dfs *dfs,
+			       enum phy_ch_width chwidth);
 #else
 
 static inline
@@ -1060,6 +1095,12 @@ QDF_STATUS dfs_agile_sm_destroy(struct dfs_soc_priv_obj *dfs_soc_obj)
 }
 
 static inline bool dfs_is_agile_cac_enabled(struct wlan_dfs *dfs)
+{
+	return false;
+}
+
+static inline uint16_t dfs_translate_chwidth_enum2val(struct wlan_dfs *dfs,
+						      enum phy_ch_width chwidth)
 {
 	return false;
 }

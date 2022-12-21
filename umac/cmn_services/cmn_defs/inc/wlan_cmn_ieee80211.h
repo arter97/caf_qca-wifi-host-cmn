@@ -191,6 +191,40 @@
 #define QCA_OUI_WHC_TYPE  0x00
 #define QCA_OUI_WHC_REPT_TYPE 0x01
 
+/**
+ * enum qcn_attribute_id: QCN IE attribute ID
+ * @QCN_ATTRIB_VERSION: QCN version
+ * @QCN_ATTRIB_VHT_MCS10_11_SUPP: VHT MCS 10-11 support
+ * @QCN_ATTRIB_HE_400NS_SGI_SUPP: HE 400 NS SGI support
+ * @QCN_ATTRIB_HE_2XLTF_160_80P80_SUPP: HE 2X LTF 160 80P80 support
+ * @QCN_ATTRIB_HE_DL_OFDMA_SUPP: HE DL OFDMA support
+ * @QCN_ATTRIB_TRANSITION_REASON: Transition reason
+ * @QCN_ATTRIB_TRANSITION_REJECTION: Transition rejection
+ * @QCN_ATTRIB_HE_DL_MUMIMO_SUPP: DL MUMIMO support
+ * @QCN_ATTRIB_HE_MCS12_13_SUPP: MCS 12-13 support
+ * @QCN_ATTRIB_REPEATER_INFO: Repeater information
+ * @QCN_ATTRIB_HE_240_MHZ_SUPP: HE 240 MHZ support
+ * @QCN_ATTRIB_ECSA_SUPP: ECSA support
+ * @QCN_ATTRIB_EDCA_PIFS_PARAM: EDCA PIFS param
+ * @QCN_ATTRIB_MAX: Maximum attribute
+ */
+enum qcn_attribute_id {
+	QCN_ATTRIB_VERSION                  = 0x01,
+	QCN_ATTRIB_VHT_MCS10_11_SUPP        = 0X02,
+	QCN_ATTRIB_HE_400NS_SGI_SUPP        = 0X03,
+	QCN_ATTRIB_HE_2XLTF_160_80P80_SUPP  = 0X04,
+	QCN_ATTRIB_HE_DL_OFDMA_SUPP         = 0X05,
+	QCN_ATTRIB_TRANSITION_REASON        = 0x06,
+	QCN_ATTRIB_TRANSITION_REJECTION     = 0x07,
+	QCN_ATTRIB_HE_DL_MUMIMO_SUPP        = 0X08,
+	QCN_ATTRIB_HE_MCS12_13_SUPP         = 0X09,
+	QCN_ATTRIB_REPEATER_INFO            = 0X0A,
+	QCN_ATTRIB_HE_240_MHZ_SUPP          = 0X0B,
+	QCN_ATTRIB_ECSA_SUPP                = 0X0C,
+	QCN_ATTRIB_EDCA_PIFS_PARAM          = 0X0D,
+	QCN_ATTRIB_MAX                      = 0x0E
+};
+
 /* Extender vendor specific IE */
 #define QCA_OUI_EXTENDER_TYPE           0x03
 
@@ -345,6 +379,7 @@
 
 #define WLAN_HE_NON_SRG_PD_SR_DISALLOWED 0x02
 #define WLAN_HE_NON_SRG_OFFSET_PRESENT 0x04
+#define WLAN_HE_SIGA_SR_VAL15_ALLOWED  0x10
 
 #ifdef WLAN_FEATURE_11BE
 #define WLAN_EHT_CHWIDTH_20           0 /* 20MHz Oper Ch width */
@@ -509,6 +544,7 @@ enum ext_chan_offset {
  * @WLAN_ELEMID_AID: AID
  * @WLAN_ELEMID_QUIET_CHANNEL: Quiet Channel
  * @WLAN_ELEMID_OP_MODE_NOTIFY: Operating Mode Notification
+ * @WLAN_ELEMID_TWT: Target wake time IE
  * @WLAN_ELEMID_VENDOR: vendor private
  * @WLAN_ELEMID_FRAGMENT: Fragment
  * @WLAN_ELEMID_EXTN_ELEM: extended IE
@@ -587,6 +623,7 @@ enum element_ie {
 	WLAN_ELEMID_QUIET_CHANNEL    = 198,
 	WLAN_ELEMID_OP_MODE_NOTIFY   = 199,
 	WLAN_ELEMID_REDUCED_NEIGHBOR_REPORT = 201,
+	WLAN_ELEMID_TWT              = 216,
 	WLAN_ELEMID_VENDOR           = 221,
 	WLAN_ELEMID_FILS_INDICATION  = 240,
 	WLAN_ELEMID_FRAGMENT         = 242,
@@ -598,9 +635,11 @@ enum element_ie {
  * enum extn_element_ie :- extended management information element
  * @WLAN_EXTN_ELEMID_HECAP:  HE capabilities IE
  * @WLAN_EXTN_ELEMID_HEOP:   HE Operation IE
+ * @WLAN_EXTN_ELEMID_UORA: UL OFDMA-based random access Parameter Set element
  * @WLAN_EXTN_ELEMID_MUEDCA: MU-EDCA IE
  * @WLAN_EXTN_ELEMID_HE_6G_CAP: HE 6GHz Band Capabilities IE
  * @WLAN_EXTN_ELEMID_SRP:    spatial reuse parameter IE
+ * @WLAN_EXTN_ELEMID_BSS_COLOR_CHANGE_ANNOUNCE: BSS Color Change Announcement IE
  * @WLAN_EXTN_ELEMID_MAX_CHAN_SWITCH_TIME: Maximum Channel Switch Time IE
  * @WLAN_EXTN_ELEMID_NONINHERITANCE: Non inheritance IE
  * @WLAN_EXTN_ELEMID_EHTOP: EHT Operation IE
@@ -612,8 +651,10 @@ enum element_ie {
 enum extn_element_ie {
 	WLAN_EXTN_ELEMID_HECAP       = 35,
 	WLAN_EXTN_ELEMID_HEOP        = 36,
+	WLAN_EXTN_ELEMID_UORA        = 37,
 	WLAN_EXTN_ELEMID_MUEDCA      = 38,
 	WLAN_EXTN_ELEMID_SRP         = 39,
+	WLAN_EXTN_ELEMID_BSS_COLOR_CHANGE_ANNOUNCE = 42,
 	WLAN_EXTN_ELEMID_MAX_CHAN_SWITCH_TIME = 52,
 	WLAN_EXTN_ELEMID_NONINHERITANCE = 56,
 	WLAN_EXTN_ELEMID_HE_6G_CAP   = 59,
@@ -1086,6 +1127,7 @@ enum wlan_status_code {
 #define WLAN_AKM_FILS_FT_SHA256   0x10
 #define WLAN_AKM_FILS_FT_SHA384   0x11
 #define WLAN_AKM_OWE              0x12
+#define WLAN_AKM_SAE_EXT_KEY      0x18
 
 #define WLAN_ASE_NONE                    0x00
 #define WLAN_ASE_8021X_UNSPEC            0x01
@@ -1176,7 +1218,7 @@ struct wlan_rsn_ie_hdr {
 
 /**
  * struct wlan_wpa_ie_hdr: wpa ie header
- * @elem_id: Wpa element id, vender specific.
+ * @elem_id: Wpa element id, vendor specific.
  * @len: wpa ie length
  * @oui: 24-bit OUI followed by 8-bit OUI type
  * @version: wpa ver
@@ -1384,6 +1426,21 @@ struct htcap_ie {
 } qdf_packed;
 
 /**
+ * struct tbtt_information_header - TBTT information header
+ * @tbbt_info_fieldtype: TBTT information field type
+ * @filter_neighbor_ap: filtered neighbor ap
+ * @tbbt_info_count: TBTT information count
+ * @tbtt_info_length: TBTT information length
+ */
+struct tbtt_information_header {
+	uint16_t tbbt_info_fieldtype:2,
+		 filtered_neighbor_ap:1,
+		 reserved:1,
+		 tbtt_info_count:4,
+		 tbtt_info_length:8;
+} qdf_packed;
+
+/**
  * struct fils_indication_ie: FILS indication IE element
  * @id: id
  * @len: len
@@ -1432,7 +1489,7 @@ struct wlan_vendor_ie_htcap {
 } qdf_packed;
 
 /**
- * struct wlan_ie_htinfo_cmn: ht info comman
+ * struct wlan_ie_htinfo_cmn: ht info command
  * @hi_ctrlchannel: control channel
  * @hi_extchoff: B0-1 extension channel offset
  * @hi_txchwidth: B2 recommended xmiss width set
@@ -1857,6 +1914,21 @@ struct wlan_ie_ehtops {
 #define WLAN_ML_BSSPARAMCHNGCNT_SIZE                    1
 
 /**
+ * struct rnr_mld_info - Reduced Neighbor Report MLD information
+ * @mld_id: MLD ID
+ * @link_id: Link ID
+ * @bss_param_change_cnt: BSS parameters change count
+ * @all_updates_included: All Updates Included
+ */
+struct rnr_mld_info {
+	uint8_t mld_id;
+	uint16_t link_id: 4,
+		 bss_param_change_cnt: 8,
+		 all_updates_included: 1,
+		 reserved: 3;
+} qdf_packed;
+
+/**
  * struct wlan_ie_multilink - Fixed fields in Multi-Link IE
  * @elem_id: Element ID
  * @elem_len: Element length
@@ -1940,11 +2012,17 @@ struct wlan_ml_probe_req {
  * determination should be changed.
  * @WLAN_ML_VARIANT_BASIC: Basic variant
  * @WLAN_ML_VARIANT_PROBEREQ: Probe Request variant
+ * @WLAN_ML_VARIANT_RECONFIG: Reconfiguration variant
+ * @WLAN_ML_VARIANT_TDLS: TDLS variant
+ * @WLAN_ML_VARIANT_PRIORITYACCESS: Priority Access variant
  * @WLAN_ML_VARIANT_INVALIDSTART: Start of invalid value range
  */
 enum wlan_ml_variant {
 	WLAN_ML_VARIANT_BASIC = 0,
 	WLAN_ML_VARIANT_PROBEREQ = 1,
+	WLAN_ML_VARIANT_RECONFIG = 2,
+	WLAN_ML_VARIANT_TDLS = 3,
+	WLAN_ML_VARIANT_PRIORITYACCESS = 4,
 	WLAN_ML_VARIANT_INVALIDSTART,
 };
 
@@ -2403,6 +2481,99 @@ struct wlan_ml_prv_linfo_perstaprof {
 
 /* End of definitions related to Probe Request variant Multi-Link element. */
 
+/* Definitions related to Reconfiguration variant Multi-Link element (per
+ * IEEE802.11be D2.1.1)
+ */
+
+/* Definitions for bits in the Presence Bitmap subfield in Reconfiguration
+ * variant Multi-Link element Control field. Any unused bits are reserved.
+ */
+/* MLD MAC Address Present */
+#define WLAN_ML_RV_CTRL_PBM_MLDMACADDR_P               ((uint16_t)BIT(0))
+
+/* Definitions related to Reconfiguration variant Multi-Link element Common Info
+ * field.
+ */
+
+/* Size in octets of Common Info Length subfield of Common Info field in
+ * Reconfiguration variant Multi-Link element.
+ */
+#define WLAN_ML_RV_CINFO_LENGTH_SIZE                               1
+
+/* End of definitions related to Reconfiguration variant Multi-Link element
+ * Common Info field.
+ */
+
+/* Definitions related to Reconfiguration variant Multi-Link element Link Info
+ * field
+ */
+
+/**
+ * struct wlan_ml_rv_linfo_perstaprof - Fixed fields of Per-STA Profile
+ * subelement in Reconfiguration variant Multi-Link element Link Info field
+ * @subelem_id: Subelement ID
+ * @subelem_len: Subelement length
+ * @stacontrol: STA Control
+ */
+struct wlan_ml_rv_linfo_perstaprof {
+	uint8_t subelem_id;
+	uint8_t subelem_len;
+	uint16_t stacontrol;
+} qdf_packed;
+
+/* The above fixed fields may be followed by:
+ * STA Info (variable size)
+ */
+
+/* Size in octets of STA Control field of Per-STA Profile subelement in
+ * Reconfiguration variant Multi-Link element Link Info field.
+ */
+#define WLAN_ML_RV_LINFO_PERSTAPROF_STACTRL_SIZE                   2
+
+/* Definitions for subfields in STA Control field of Per-STA Profile subelement
+ * in Reconfiguration variant Multi-Link element Link Info field. Any unused
+ * bits are reserved.
+ */
+/* Link ID */
+#define WLAN_ML_RV_LINFO_PERSTAPROF_STACTRL_LINKID_IDX              0
+#define WLAN_ML_RV_LINFO_PERSTAPROF_STACTRL_LINKID_BITS             4
+/* Complete Profile */
+#define WLAN_ML_RV_LINFO_PERSTAPROF_STACTRL_CMPLTPROF_IDX           4
+#define WLAN_ML_RV_LINFO_PERSTAPROF_STACTRL_CMPLTPROF_BITS          1
+/* MAC Address Present */
+#define WLAN_ML_RV_LINFO_PERSTAPROF_STACTRL_MACADDRP_IDX            5
+#define WLAN_ML_RV_LINFO_PERSTAPROF_STACTRL_MACADDRP_BITS           1
+/* Delete Timer Present */
+#define WLAN_ML_RV_LINFO_PERSTAPROF_STACTRL_DELTIMERP_IDX           6
+#define WLAN_ML_RV_LINFO_PERSTAPROF_STACTRL_DELTIMERP_BITS          1
+
+/* Definitions for subfields in STA Info field of Per-STA Profile subelement
+ * in Reconfiguration variant Multi-Link element Link Info field.
+ */
+
+/* STA Info Length */
+#define WLAN_ML_RV_LINFO_PERSTAPROF_STAINFO_LENGTH_SIZE             1
+
+/* Size in octets of the Delete Timer subfield in STA info field of Per-STA
+ * Profile subelement in Reconfiguration variant Multi-Link element Link Info
+ * field.
+ */
+#define WLAN_ML_RV_LINFO_PERSTAPROF_STAINFO_DELTIMER_SIZE           2
+
+/* Max value in octets of STA Info Length in STA Info field of Per-STA Profile
+ * subelement in Reconfiguration variant Multi-Link element Link Info field.
+ */
+#define WLAN_ML_RV_LINFO_PERSTAPROF_STAINFO_LENGTH_MAX \
+	(WLAN_ML_RV_LINFO_PERSTAPROF_STAINFO_LENGTH_SIZE + \
+	 QDF_MAC_ADDR_SIZE + \
+	 WLAN_ML_RV_LINFO_PERSTAPROF_STAINFO_DELTIMER_SIZE)
+
+/* End of definitions related to Reconfiguration variant Multi-Link element Link
+ * Info field.
+ */
+
+/* End of definitions related to Reconfiguration variant Multi-Link element. */
+
 /*
  * Definitions related to MLO specific aspects of Reduced Neighbor Report
  * element.
@@ -2425,6 +2596,9 @@ struct wlan_ml_prv_linfo_perstaprof {
 /* All Updates Included */
 #define WLAN_RNR_NBRAPINFO_TBTTINFO_MLDPARAMS_ALLUPDATESINC_IDX          20
 #define WLAN_RNR_NBRAPINFO_TBTTINFO_MLDPARAMS_ALLUPDATESINC_BITS         1
+/* Disabled link indication */
+#define WLAN_RNR_NBRAPINFO_TBTTINFO_MLDPARAMS_DISABLEDLINKIND_IDX        21
+#define WLAN_RNR_NBRAPINFO_TBTTINFO_MLDPARAMS_DISABLEDLINKIND_BITS       1
 
 /*
  * End of definitions related to MLO specific aspects of Reduced Neighbor Report
@@ -2433,7 +2607,6 @@ struct wlan_ml_prv_linfo_perstaprof {
 #endif /* WLAN_FEATURE_11BE_MLO */
 #endif /* WLAN_FEATURE_11BE */
 
-#ifdef WLAN_FEATURE_11BE
 /**
  * struct wlan_ie_tid_to_link_mapping - TID-to-link mapping IE
  * @elem_id: T2LM IE
@@ -2448,9 +2621,20 @@ struct wlan_ie_tid_to_link_mapping {
 	uint8_t data[];
 } qdf_packed;
 
+/* Size in octets of Tid to Link mapping control */
+#define WLAN_T2LM_CTRL_SIZE                                     2
+/* Size in octets of Mapping switch time size */
+#define WLAN_T2LM_MAPPING_SWITCH_TIME_SIZE                      2
+/* Size in octets of Expected duration size */
+#define WLAN_T2LM_EXPECTED_DURATION_SIZE                        3
+/* Size in octets of Link mapping of TID 0-7 size */
+#define WLAN_T2LM_LINK_MAPPING_SIZE                             2
+
 /* The variable length data in wlan_ie_tid_to_link_mapping structure has the
  * following fields.
- * - TID-to-link mapping control ( 1 octet)
+ * - TID-to-link mapping control (2 octet)
+ * - Mapping switch time (0 or 2 octet)
+ * - Expected duration (0 or 3 octet)
  * - Link mapping presence indicator (0 or 1 octet)
  * - Link mapping of TID 0(optional) to TID 7(optional). Each field has 0 or 2
  *   octets.
@@ -2463,7 +2647,13 @@ struct wlan_ie_tid_to_link_mapping {
 /* Default link mapping */
 #define WLAN_T2LM_CONTROL_DEFAULT_LINK_MAPPING_IDX              2
 #define WLAN_T2LM_CONTROL_DEFAULT_LINK_MAPPING_BITS             1
-/* Bit3 to Bit7 are reserved*/
+/* Mapping switch time present bit */
+#define WLAN_T2LM_CONTROL_MAPPING_SWITCH_TIME_PRESENT_IDX       3
+#define WLAN_T2LM_CONTROL_MAPPING_SWITCH_TIME_PRESENT_BITS      1
+/* Expected duration present bit */
+#define WLAN_T2LM_CONTROL_EXPECTED_DURATION_PRESENT_IDX         4
+#define WLAN_T2LM_CONTROL_EXPECTED_DURATION_PRESENT_BITS        1
+/* Bits 5-7 are reserved */
 /* Link mapping presence indicator */
 #define WLAN_T2LM_CONTROL_LINK_MAPPING_PRESENCE_INDICATOR_IDX   8
 #define WLAN_T2LM_CONTROL_LINK_MAPPING_PRESENCE_INDICATOR_BITS  8
@@ -2486,7 +2676,34 @@ struct wlan_ie_multi_link_traffic_indication {
 	uint16_t ml_traffic_ind_control;
 	uint16_t per_link_traffic_ind_list[];
 } qdf_packed;
-#endif /* WLAN_FEATURE_11BE */
+
+/**
+ * struct wlan_action - Generic action frame format
+ * @category: Action frame category
+ * @action: action
+ */
+struct wlan_action_frame {
+	int8_t category;
+	int8_t action;
+} __packed;
+
+/**
+ * struct wlan_action_frame_args - Generic action frame arguments
+ * @category: Action frame category
+ * @action: action
+ * @arg1: argument1
+ * @arg2: argument2
+ * @arg3: argument3
+ * @arg4: Pointer to argument4
+ */
+struct wlan_action_frame_args {
+	uint8_t category;
+	uint8_t action;
+	uint32_t arg1;
+	uint32_t arg2;
+	uint32_t arg3;
+	uint8_t *arg4;
+};
 
 /**
  * struct he_oper_6g_param: 6 Ghz params for HE
@@ -3021,6 +3238,8 @@ struct wlan_eht_cap_info {
  * @scs_traffic_desc: SCS traffic description support
  * @max_mpdu_len: Maximum MPDU length
  * @max_a_mpdu_len_exponent_ext: Maximum A-MPDU Length Exponent Extension
+ * @eht_trs_support: EHT TRS SUPPORT
+ * @txop_return_support_txop_share_m2: TXOP Return Support in TXOP Share Mode 2
  * @reserved3: reserved bits
  * @reserved2: reserved bits
  * @support_320mhz_6ghz: support 320mhz in 6gz
@@ -3124,7 +3343,9 @@ struct wlan_eht_cap_info_network_endian {
 	uint16_t scs_traffic_desc:1;
 	uint16_t max_mpdu_len:2;
 	uint16_t max_a_mpdu_len_exponent_ext:1;
-	uint16_t reserved:7;
+	uint16_t eht_trs_support:1;
+	uint16_t txop_return_support_txop_share_m2:1;
+	uint16_t reserved:5;
 
 	uint32_t reserved2:1;
 	uint32_t support_320mhz_6ghz:1;
@@ -3201,6 +3422,52 @@ struct wlan_eht_cap_info_network_endian {
 	uint32_t bw_320_rx_max_nss_for_mcs_10_and_11:4;
 	uint32_t bw_320_tx_max_nss_for_mcs_10_and_11:4;
 	uint8_t bw_320_rx_max_nss_for_mcs_12_and_13:4;
+} qdf_packed;
+
+/**
+ * struct edca_param: struct for edca_param
+ * @acvo_aifsn: ac vo aifsn
+ * @acvo_acm: ac vo acm
+ * @acvo_aci: ac vo aci
+ * @unused: unused bit
+ * @acvo_cwmin: ac vo cwmin
+ * @acvo_cwmax: ac vo cwmax
+ * @acvo_txoplimit: ac vo txoplimit
+ */
+struct edca_param {
+	uint8_t acvo_aifsn:4;
+	uint8_t acvo_acm:1;
+	uint8_t acvo_aci:2;
+	uint8_t unused:1;
+	uint8_t acvo_cwmin:4;
+	uint8_t acvo_cwmax:4;
+	uint16_t acvo_txoplimit;
+};
+
+/**
+ * struct pifs_param: struct for pifs_param
+ * @sap_pifs_offset: sap pifs offset
+ * @leb_pifs_offset: left earbud offset
+ * @reb_pifs_offset: right earbud offset
+ */
+struct pifs_param {
+	uint8_t sap_pifs_offset;
+	uint8_t leb_pifs_offset;
+	uint8_t reb_pifs_offset;
+};
+
+/**
+ * struct wlan_edca_pifs_param_ie: struct for QCN_ATTRIB_EDCA_PIFS_PARAM
+ * @edca_param_type: edca param type
+ * @eparam: structure for edca_param
+ * @pparam: structure for pifs_param
+ */
+struct wlan_edca_pifs_param_ie {
+	uint8_t edca_param_type;
+	union {
+		struct edca_param eparam; /* edca_param_type = 0 */
+		struct pifs_param pparam; /* edca_param_type = 1 */
+	} qdf_packed edca_pifs_param;
 } qdf_packed;
 
 /**
@@ -3609,7 +3876,7 @@ wlan_parse_oce_reduced_wan_metrics_ie(uint8_t *mbo_oce_ie,
  * While parsing vendor IE, is_mbo_oce_oui() API does sanity of
  * length and attribute ID for MBO_OCE_OUI and after passing the
  * sanity only mbo_oce IE is stored in scan cache.
- * It is a callers responsiblity to get the mbo_oce_ie pointer
+ * It is a callers responsibility to get the mbo_oce_ie pointer
  * using util_scan_entry_mbo_oce() API, which points to mbo_oce
  * stored in scan cache. Thus caller is responsible for ensuring
  * the length of the IE is consistent with the embedded length.
@@ -3767,6 +4034,7 @@ enum mlme_csa_event_ies_present_flag {
  * @switch_mode: switch mode
  * @sec_chan_offset: secondary channel offset
  * @new_ch_width: new channel width
+ * @new_punct_bitmap: new puncture bitmap based on new channel width
  * @new_ch_freq_seg1: channel center freq 1
  * @new_ch_freq_seg2: channel center freq 2
  * @ies_present_flag: BIT MAP of MLME_CSA_EVENT_IES_PRESENT_FLAG
@@ -3777,7 +4045,10 @@ struct csa_offload_params {
 	uint32_t csa_chan_freq;
 	uint8_t switch_mode;
 	uint8_t sec_chan_offset;
-	uint8_t new_ch_width;
+	enum phy_ch_width new_ch_width;
+#ifdef WLAN_FEATURE_11BE
+	uint16_t new_punct_bitmap;
+#endif
 	uint8_t new_op_class;
 	uint8_t new_ch_freq_seg1;
 	uint8_t new_ch_freq_seg2;

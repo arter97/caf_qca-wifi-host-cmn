@@ -528,7 +528,8 @@ static int32_t cm_calculate_security_score(struct scoring_cfg *score_config,
 		    QDF_HAS_PARAM(key_mgmt, WLAN_CRYPTO_KEY_MGMT_OWE) ||
 		    QDF_HAS_PARAM(key_mgmt, WLAN_CRYPTO_KEY_MGMT_DPP) ||
 		    QDF_HAS_PARAM(key_mgmt,
-				  WLAN_CRYPTO_KEY_MGMT_FT_IEEE8021X_SHA384)) {
+				  WLAN_CRYPTO_KEY_MGMT_FT_IEEE8021X_SHA384) ||
+		    QDF_HAS_PARAM(key_mgmt, WLAN_CRYPTO_KEY_MGMT_SAE_EXT_KEY)) {
 			/*If security is WPA3, consider score_pct = 100%*/
 			score_pct = CM_GET_SCORE_PERCENTAGE(
 					score_config->security_weight_per_index,
@@ -1394,7 +1395,7 @@ cm_calculate_etp_score(struct wlan_objmgr_psoc *psoc,
 #endif
 
 /**
- * cm_get_band_score() - Get band prefernce weightage
+ * cm_get_band_score() - Get band preference weightage
  * freq: Operating frequency of the AP
  * @score_config: Score configuration
  *
@@ -1700,7 +1701,7 @@ static enum MLO_TYPE  cm_bss_mlo_type(struct wlan_objmgr_psoc *psoc,
 	bool multi_link = false;
 
 	mlo_link_num = cm_get_sta_mlo_conn_max_num(psoc);
-	if (!entry->ie_list.multi_link)
+	if (!entry->ie_list.multi_link_bv)
 		return SLO;
 	else if (!entry->ml_info.num_links)
 		return SLO;
@@ -1848,6 +1849,11 @@ static int cm_calculate_mlo_bss_score(struct wlan_objmgr_psoc *psoc,
 	struct partner_link_info *link;
 	struct wlan_objmgr_pdev *pdev;
 	bool rssi_bad_zone;
+	bool eht_capab;
+
+	wlan_psoc_mlme_get_11be_capab(psoc, &eht_capab);
+	if (!eht_capab)
+		return 0;
 
 	weight_config = &score_params->weight_config;
 	freq_entry = entry->channel.chan_freq;
@@ -2117,7 +2123,7 @@ static int cm_calculate_bss_score(struct wlan_objmgr_psoc *psoc,
 	if (congestion_pct < CM_CONGESTION_THRSHOLD_FOR_BAND_OCE_SCORE) {
 		/*
 		 * If AP is on 5/6 GHZ channel , extra weigtage is added to BSS
-		 * score. if RSSI is greater tha 5g rssi threshold or fall in
+		 * score. if RSSI is greater than 5g rssi threshold or fall in
 		 * same bucket else give weigtage to 2.4 GHZ AP.
 		 */
 		if ((entry->rssi_raw > rssi_pref_5g_rssi_thresh) &&
@@ -2460,7 +2466,7 @@ bool wlan_cm_6ghz_allowed_for_akm(struct wlan_objmgr_psoc *psoc,
 		 * Check if any AKM is allowed as per user 6Ghz allowed AKM mask
 		 */
 		if (!(config->key_mgmt_mask_6ghz & key_mgmt)) {
-			mlme_debug("user configured mask %x didnt match AKM %x",
+			mlme_debug("user configured mask %x didn't match AKM %x",
 				   config->key_mgmt_mask_6ghz , key_mgmt);
 			return false;
 		}
@@ -2483,7 +2489,8 @@ bool wlan_cm_6ghz_allowed_for_akm(struct wlan_objmgr_psoc *psoc,
 
 	/* for SAE we need to check H2E support */
 	if (!(QDF_HAS_PARAM(key_mgmt, WLAN_CRYPTO_KEY_MGMT_SAE) ||
-	    QDF_HAS_PARAM(key_mgmt, WLAN_CRYPTO_KEY_MGMT_FT_SAE)))
+	    QDF_HAS_PARAM(key_mgmt, WLAN_CRYPTO_KEY_MGMT_FT_SAE) ||
+	    QDF_HAS_PARAM(key_mgmt, WLAN_CRYPTO_KEY_MGMT_SAE_EXT_KEY)))
 		return true;
 
 	return (cm_check_h2e_support(rsnxe) ||

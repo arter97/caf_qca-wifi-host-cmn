@@ -64,6 +64,15 @@
 #include <cdp_txrx_misc.h>
 #endif
 
+/*
+ * The following commit was introduced in v5.17:
+ * cead18552660 ("exit: Rename complete_and_exit to kthread_complete_and_exit")
+ * Use the old name for kernels before 5.17
+ */
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(5, 17, 0))
+#define kthread_complete_and_exit(c, s) complete_and_exit(c, s)
+#endif
+
 #define MAX_NUM_PKT_LOG 32
 
 #define LOGGING_TRACE(level, args ...) \
@@ -195,7 +204,7 @@ struct wlan_logging {
 	bool is_active;
 	/* Flush completion check */
 	bool is_flush_complete;
-	/* paramaters  for pkt stats */
+	/* parameters  for pkt stats */
 	struct list_head pkt_stat_free_list;
 	struct list_head pkt_stat_filled_list;
 	struct pkt_stats_msg *pkt_stats_pcur_node;
@@ -206,8 +215,12 @@ struct wlan_logging {
 	bool is_flush_timer_initialized;
 	uint32_t flush_timer_period;
 	qdf_spinlock_t flush_timer_lock;
-
 	qdf_event_t flush_log_completion;
+	uint64_t wakup_ts;
+	uint64_t start_ts;
+	uint64_t reinitcompletion_ts;
+	uint64_t set_exit_ts;
+	uint64_t exit_ts;
 };
 
 /* This global variable is intentionally not marked static because it
@@ -342,11 +355,11 @@ static inline void
 log_to_console(QDF_TRACE_LEVEL level, const char *timestamp, const char *msg)
 {
 	if (qdf_detected_excessive_logging()) {
-		qdf_rl_print_supressed_inc();
+		qdf_rl_print_suppressed_inc();
 		return;
 	}
 
-	qdf_rl_print_supressed_log();
+	qdf_rl_print_suppressed_log();
 	pr_err("%s %s\n", timestamp, msg);
 }
 #else
@@ -834,6 +847,8 @@ static int wlan_logging_thread(void *Arg)
 	int ret = 0;
 	unsigned long flags;
 
+	gwlan_logging.start_ts = qdf_get_log_timestamp();
+
 	while (!gwlan_logging.exit) {
 		setup_flush_timer();
 		ret_wait_status =
@@ -923,7 +938,8 @@ static int wlan_logging_thread(void *Arg)
 			  &gwlan_logging.eventFlag);
 	}
 
-	complete_and_exit(&gwlan_logging.shutdown_comp, 0);
+	gwlan_logging.exit_ts = qdf_get_log_timestamp();
+	kthread_complete_and_exit(&gwlan_logging.shutdown_comp, 0);
 
 	return 0;
 }
@@ -1188,7 +1204,7 @@ int wlan_logging_sock_init_svc(void)
 		(gwlan_logging.pkt_stat_free_list.next);
 	list_del_init(gwlan_logging.pkt_stat_free_list.next);
 	spin_unlock_irqrestore(&gwlan_logging.pkt_stats_lock, irq_flag);
-	/* Pkt Stats intialization done */
+	/* Pkt Stats initialization done */
 
 	init_waitqueue_head(&gwlan_logging.wait_queue);
 	gwlan_logging.exit = false;
@@ -1204,6 +1220,8 @@ int wlan_logging_sock_init_svc(void)
 		goto err3;
 	}
 	wake_up_process(gwlan_logging.thread);
+	gwlan_logging.wakup_ts = qdf_get_log_timestamp();
+
 	gwlan_logging.is_active = true;
 	gwlan_logging.is_flush_complete = false;
 
@@ -1246,8 +1264,13 @@ int wlan_logging_sock_deinit_svc(void)
 
 	qdf_event_destroy(&gwlan_logging.flush_log_completion);
 
+	gwlan_logging.reinitcompletion_ts = qdf_get_log_timestamp();
 	INIT_COMPLETION(gwlan_logging.shutdown_comp);
+	qdf_wmb();
 	gwlan_logging.exit = true;
+	qdf_wmb();
+	gwlan_logging.set_exit_ts = qdf_get_log_timestamp();
+
 	gwlan_logging.is_active = false;
 #if defined(FEATURE_FW_LOG_PARSING) || defined(FEATURE_WLAN_DIAG_SUPPORT)
 	cds_set_multicast_logging(0);
@@ -1359,7 +1382,7 @@ static uint8_t grx_count;
  * wlan_get_pkt_stats_free_node() - Get the free node for pkt stats
  *
  * This function is used to get the free node for pkt stats from
- * free list/filles list
+ * free list/filled list
  *
  * Return: int
  *

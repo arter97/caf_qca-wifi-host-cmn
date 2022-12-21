@@ -18,7 +18,7 @@
  */
 
  /**
- * DOC: Public definations  for crypto service
+ * DOC: Public definitions  for crypto service
  */
 
 #ifndef _WLAN_CRYPTO_GLOBAL_DEF_H_
@@ -258,6 +258,7 @@ typedef enum wlan_crypto_key_mgmt {
 	WLAN_CRYPTO_KEY_MGMT_FT_IEEE8021X_SHA384   = 24,
 	WLAN_CRYPTO_KEY_MGMT_FT_PSK_SHA384         = 25,
 	WLAN_CRYPTO_KEY_MGMT_PSK_SHA384            = 26,
+	WLAN_CRYPTO_KEY_MGMT_SAE_EXT_KEY           = 27,
 	/** Keep WLAN_CRYPTO_KEY_MGMT_MAX at the end. */
 	WLAN_CRYPTO_KEY_MGMT_MAX,
 } wlan_crypto_key_mgmt;
@@ -274,7 +275,7 @@ enum wlan_crypto_key_type {
 #define DEFAULT_KEYMGMT_6G_MASK 0xFFFFFFFF
 
 /* AKM wlan_crypto_key_mgmt 1, 6, 8, 25 and 26 are not allowed. */
-#define ALLOWED_KEYMGMT_6G_MASK 0x01FFFEBD
+#define ALLOWED_KEYMGMT_6G_MASK 0x09FFFEBD
 
 /*
  * enum fils_erp_cryptosuite: this enum defines the cryptosuites used
@@ -311,7 +312,7 @@ struct mobility_domain_params {
  * @ssid: ssid information
  * @cache_id: cache id
  * @pmk_lifetime: Duration in seconds for which the pmk is valid
- * @pmk_lifetime_threshold: Percentage of pmk liftime within which
+ * @pmk_lifetime_threshold: Percentage of pmk lifetime within which
  * full authentication is expected to avoid disconnection.
  * @pmk_entry_ts: System timestamp at which the PMK entry was created.
  * @single_pmk_supported: SAE single pmk supported BSS
@@ -409,6 +410,7 @@ typedef enum wlan_crypto_param_type {
  * @flags:          key flags
  * @keyix:          key id
  * @cipher_type:    cipher type being used for this key
+ * @key_type:       unicast or broadcast key
  * @mac_addr:       MAC address of the peer
  * @src_addr:       Source mac address associated with the key
  * @cipher_table:   table which stores cipher related info
@@ -431,6 +433,7 @@ struct wlan_crypto_key {
 	uint16_t    flags;
 	uint16_t    keyix;
 	enum wlan_crypto_cipher_type cipher_type;
+	enum wlan_crypto_key_type key_type;
 	uint8_t     macaddr[QDF_MAC_ADDR_SIZE];
 	struct qdf_mac_addr src_addr;
 	void        *cipher_table;
@@ -515,7 +518,7 @@ struct wlan_lmac_if_crypto_tx_ops {
 			      struct wlan_crypto_key *key,
 			      enum wlan_crypto_key_type key_type);
 	QDF_STATUS(*getpn)(struct wlan_objmgr_vdev *vdev,
-			   uint8_t *macaddr, uint32_t key_type);
+			   uint8_t *macaddr, uint8_t keyix, uint32_t key_type);
 	QDF_STATUS (*set_ltf_keyseed)(struct wlan_objmgr_psoc *psoc,
 				      struct wlan_crypto_ltf_keyseed_data *ks);
 	QDF_STATUS (*set_vdev_param)(struct wlan_objmgr_psoc *psoc,
