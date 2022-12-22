@@ -2034,6 +2034,7 @@ struct dp_arch_ops {
 #endif
 #ifdef WLAN_SUPPORT_PPEDS
 	void (*dp_txrx_ppeds_rings_status)(struct dp_soc *soc);
+	void (*dp_tx_ppeds_inuse_desc)(struct dp_soc *soc);
 #endif
 	QDF_STATUS (*txrx_soc_ppeds_start)(struct dp_soc *soc);
 	void (*txrx_soc_ppeds_stop)(struct dp_soc *soc);
@@ -2626,6 +2627,13 @@ struct dp_soc {
 	bool high_throughput;
 #endif
 	bool is_tx_pause;
+
+#ifdef WLAN_SUPPORT_RX_FLOW_TAG
+	/* number of IPv4 flows inserted */
+	qdf_atomic_t ipv4_fse_cnt;
+	/* number of IPv6 flows inserted */
+	qdf_atomic_t ipv6_fse_cnt;
+#endif
 };
 
 #ifdef IPA_OFFLOAD
@@ -3257,6 +3265,7 @@ struct dp_vdev {
 
 #ifdef QCA_SUPPORT_WDS_EXTENDED
 	bool wds_ext_enabled;
+	bool drop_tx_mcast;
 #endif /* QCA_SUPPORT_WDS_EXTENDED */
 	bool drop_3addr_mcast;
 #ifdef WLAN_VENDOR_SPECIFIC_BAR_UPDATE

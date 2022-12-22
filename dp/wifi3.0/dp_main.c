@@ -3482,6 +3482,20 @@ static inline bool dp_skip_rx_mon_ring_mask_set(struct dp_soc *soc)
 #endif
 
 /*
+ * dp_soc_ppeds_stop() - Stop PPE DS processing
+ * @txrx_soc: DP SOC handle
+ *
+ * Return: none
+ */
+static void dp_soc_ppeds_stop(struct cdp_soc_t *soc_handle)
+{
+	struct dp_soc *soc = (struct dp_soc *)soc_handle;
+
+	if (soc->arch_ops.txrx_soc_ppeds_stop)
+		soc->arch_ops.txrx_soc_ppeds_stop(soc);
+}
+
+/*
  * dp_soc_interrupt_detach() - Deregister any allocations done for interrupts
  * @txrx_soc: DP SOC handle
  *
@@ -6745,8 +6759,9 @@ static inline
 void dp_soc_txrx_peer_setup(enum wlan_op_mode vdev_opmode, struct dp_soc *soc,
 			    struct dp_peer *peer)
 {
-	/* TODO: Need to check with STA mode */
-	if (vdev_opmode == wlan_op_mode_ap && soc->arch_ops.txrx_peer_setup) {
+	if (((vdev_opmode == wlan_op_mode_ap) ||
+	     (vdev_opmode == wlan_op_mode_sta)) &&
+	     (soc->arch_ops.txrx_peer_setup)) {
 		if (soc->arch_ops.txrx_peer_setup(soc, peer)
 				!= QDF_STATUS_SUCCESS) {
 			dp_err("unable to setup target peer features");
@@ -10870,6 +10885,11 @@ static QDF_STATUS dp_get_vdev_param(struct cdp_soc_t *cdp_soc, uint8_t vdev_id,
 	case CDP_SET_MCAST_VDEV:
 		soc->arch_ops.txrx_get_vdev_mcast_param(soc, vdev, val);
 		break;
+#ifdef QCA_SUPPORT_WDS_EXTENDED
+	case CDP_DROP_TX_MCAST:
+		val->cdp_drop_tx_mcast = vdev->drop_tx_mcast;
+		break;
+#endif
 	default:
 		dp_cdp_err("%pK: param value %d is wrong",
 			   soc, param);
@@ -10991,6 +11011,11 @@ dp_set_vdev_param(struct cdp_soc_t *cdp_soc, uint8_t vdev_id,
 	case CDP_CFG_WDS_EXT:
 		if (vdev->opmode == wlan_op_mode_ap)
 			vdev->wds_ext_enabled = val.cdp_vdev_param_wds_ext;
+		break;
+	case CDP_DROP_TX_MCAST:
+		dp_info("vdev_id %d drop tx mcast :%d", vdev_id,
+			val.cdp_drop_tx_mcast);
+		vdev->drop_tx_mcast = val.cdp_drop_tx_mcast;
 		break;
 #endif
 	case CDP_ENABLE_PEER_AUTHORIZE:
@@ -11151,7 +11176,7 @@ static QDF_STATUS dp_get_psoc_param(struct cdp_soc_t *cdp_soc,
 		break;
 	case CDP_PPEDS_ENABLE:
 		val->cdp_psoc_param_ppeds_enabled =
-			wlan_cfg_get_dp_soc_is_ppe_enabled(soc->wlan_cfg_ctx);
+			wlan_cfg_get_dp_soc_is_ppeds_enabled(soc->wlan_cfg_ctx);
 		break;
 	default:
 		dp_warn("Invalid param");
@@ -13968,6 +13993,7 @@ static struct cdp_cmn_ops dp_ops_cmn = {
 	.display_stats = dp_txrx_dump_stats,
 	.txrx_intr_attach = dp_soc_interrupt_attach_wrapper,
 	.txrx_intr_detach = dp_soc_interrupt_detach,
+	.txrx_ppeds_stop = dp_soc_ppeds_stop,
 	.set_pn_check = dp_set_pn_check_wifi3,
 	.set_key_sec_type = dp_set_key_sec_type_wifi3,
 	.update_config_parameters = dp_update_config_parameters,

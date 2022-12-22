@@ -6179,6 +6179,38 @@ dp_print_mu_ppdu_rates_info(struct cdp_rx_mu *rx_mu)
 	}
 }
 
+#ifdef WLAN_FEATURE_11BE
+static inline void dp_print_rx_bw_stats(struct dp_pdev *pdev)
+{
+	DP_PRINT_STATS("BW Counts = 20MHz %d, 40MHz %d, 80MHz %d, 160MHz %d, 320MHz %d",
+		       pdev->stats.rx.bw[0], pdev->stats.rx.bw[1],
+		       pdev->stats.rx.bw[2], pdev->stats.rx.bw[3],
+		       pdev->stats.rx.bw[4]);
+}
+
+static inline void dp_print_tx_bw_stats(struct dp_pdev *pdev)
+{
+	DP_PRINT_STATS("BW Counts = 20MHz %d, 40MHz %d, 80MHz %d, 160MHz %d, 320MHz %d",
+		       pdev->stats.tx.bw[0], pdev->stats.tx.bw[1],
+		       pdev->stats.tx.bw[2], pdev->stats.tx.bw[3],
+		       pdev->stats.tx.bw[4]);
+}
+#else
+static inline void dp_print_rx_bw_stats(struct dp_pdev *pdev)
+{
+	DP_PRINT_STATS("BW Counts = 20MHz %d, 40MHz %d, 80MHz %d, 160MHz %d",
+		       pdev->stats.rx.bw[0], pdev->stats.rx.bw[1],
+		       pdev->stats.rx.bw[2], pdev->stats.rx.bw[3]);
+}
+
+static inline void dp_print_tx_bw_stats(struct dp_pdev *pdev)
+{
+	DP_PRINT_STATS("BW Counts = 20MHz %d, 40MHz %d, 80MHz %d, 160MHz %d",
+		       pdev->stats.tx.bw[0], pdev->stats.tx.bw[1],
+		       pdev->stats.tx.bw[2], pdev->stats.tx.bw[3]);
+}
+#endif
+
 void dp_print_rx_rates(struct dp_vdev *vdev)
 {
 	struct dp_pdev *pdev = (struct dp_pdev *)vdev->pdev;
@@ -6202,9 +6234,9 @@ void dp_print_rx_rates(struct dp_vdev *vdev)
 		       pdev->stats.rx.sgi_count[1],
 		       pdev->stats.rx.sgi_count[2],
 		       pdev->stats.rx.sgi_count[3]);
-	DP_PRINT_STATS("BW Counts = 20MHZ %d, 40MHZ %d, 80MHZ %d, 160MHZ %d",
-		       pdev->stats.rx.bw[0], pdev->stats.rx.bw[1],
-		       pdev->stats.rx.bw[2], pdev->stats.rx.bw[3]);
+
+	dp_print_rx_bw_stats(pdev);
+
 	DP_PRINT_STATS("Reception Type ="
 		       "SU: %d MU_MIMO:%d MU_OFDMA:%d MU_OFDMA_MIMO:%d",
 		       pdev->stats.rx.reception_type[0],
@@ -6235,9 +6267,7 @@ void dp_print_tx_rates(struct dp_vdev *vdev)
 		       pdev->stats.tx.sgi_count[2],
 		       pdev->stats.tx.sgi_count[3]);
 
-	DP_PRINT_STATS("BW Counts = 20MHZ %d, 40MHZ %d, 80MHZ %d, 160MHZ %d",
-		       pdev->stats.tx.bw[0], pdev->stats.tx.bw[1],
-		       pdev->stats.tx.bw[2], pdev->stats.tx.bw[3]);
+	dp_print_tx_bw_stats(pdev);
 
 	DP_PRINT_STATS("OFDMA = %d", pdev->stats.tx.ofdma);
 	DP_PRINT_STATS("STBC = %d", pdev->stats.tx.stbc);
@@ -7458,6 +7488,8 @@ dp_print_pdev_tx_stats(struct dp_pdev *pdev)
 		       pdev->stats.tx_i.dropped.drop_ingress);
 	DP_PRINT_STATS("	invalid peer id in exception path = %u",
 		       pdev->stats.tx_i.dropped.invalid_peer_id_in_exc_path);
+	DP_PRINT_STATS("	Tx Mcast Drop = %u",
+		       pdev->stats.tx_i.dropped.tx_mcast_drop);
 	DP_PRINT_STATS("Tx failed = %u",
 		       pdev->stats.tx.tx_failed);
 	DP_PRINT_STATS("	FW removed Pkts = %u",
@@ -7601,6 +7633,20 @@ dp_print_pdev_tx_stats(struct dp_pdev *pdev)
 	dp_monitor_print_pdev_tx_capture_stats(pdev);
 }
 
+#ifdef WLAN_SUPPORT_RX_FLOW_TAG
+static inline void dp_rx_basic_fst_stats(struct dp_pdev *pdev)
+{
+	DP_PRINT_STATS("\tNo of IPv4 Flow entries inserted = %d",
+		       qdf_atomic_read(&pdev->soc->ipv4_fse_cnt));
+	DP_PRINT_STATS("\tNo of IPv6 Flow entries inserted = %d",
+		       qdf_atomic_read(&pdev->soc->ipv6_fse_cnt));
+}
+#else
+static inline void dp_rx_basic_fst_stats(struct dp_pdev *pdev)
+{
+}
+#endif
+
 void
 dp_print_pdev_rx_stats(struct dp_pdev *pdev)
 {
@@ -7685,7 +7731,21 @@ dp_print_pdev_rx_stats(struct dp_pdev *pdev)
 		       pdev->stats.rx_buffer_pool.num_bufs_alloc_success);
 	DP_PRINT_STATS("\tAllocations from the pool during replenish = %llu",
 		       pdev->stats.rx_buffer_pool.num_pool_bufs_replenish);
+
+	dp_rx_basic_fst_stats(pdev);
 }
+
+#ifdef WLAN_SUPPORT_PPEDS
+void dp_print_tx_ppeds_stats(struct dp_soc *soc)
+{
+	if (soc->arch_ops.dp_tx_ppeds_inuse_desc)
+		soc->arch_ops.dp_tx_ppeds_inuse_desc(soc);
+}
+#else
+void dp_print_tx_ppeds_stats(struct dp_soc *soc)
+{
+}
+#endif
 
 void
 dp_print_soc_tx_stats(struct dp_soc *soc)
@@ -7730,6 +7790,7 @@ dp_print_soc_tx_stats(struct dp_soc *soc)
 		       soc->stats.tx.tx_comp_loop_pkt_limit_hit);
 	DP_PRINT_STATS("Tx comp HP out of sync2 = %d",
 		       soc->stats.tx.hp_oos2);
+	dp_print_tx_ppeds_stats(soc);
 }
 
 static
@@ -8771,7 +8832,8 @@ void dp_update_vdev_ingress_stats(struct dp_vdev *tgtobj)
 		tgtobj->stats.tx_i.dropped.res_full +
 		tgtobj->stats.tx_i.dropped.drop_ingress +
 		tgtobj->stats.tx_i.dropped.headroom_insufficient +
-		tgtobj->stats.tx_i.dropped.invalid_peer_id_in_exc_path;
+		tgtobj->stats.tx_i.dropped.invalid_peer_id_in_exc_path +
+		tgtobj->stats.tx_i.dropped.tx_mcast_drop;
 }
 
 void dp_update_vdev_rate_stats(struct cdp_vdev_stats *tgtobj,
@@ -8823,6 +8885,7 @@ void dp_update_pdev_ingress_stats(struct dp_pdev *tgtobj,
 	DP_STATS_AGGR(tgtobj, srcobj, tx_i.dropped.drop_ingress);
 	DP_STATS_AGGR(tgtobj, srcobj, tx_i.dropped.headroom_insufficient);
 	DP_STATS_AGGR(tgtobj, srcobj, tx_i.dropped.invalid_peer_id_in_exc_path);
+	DP_STATS_AGGR(tgtobj, srcobj, tx_i.dropped.tx_mcast_drop);
 	DP_STATS_AGGR(tgtobj, srcobj, tx_i.cce_classified);
 	DP_STATS_AGGR(tgtobj, srcobj, tx_i.cce_classified_raw);
 	DP_STATS_AGGR_PKT(tgtobj, srcobj, tx_i.sniffer_rcvd);
@@ -8842,7 +8905,8 @@ void dp_update_pdev_ingress_stats(struct dp_pdev *tgtobj,
 		tgtobj->stats.tx_i.dropped.res_full +
 		tgtobj->stats.tx_i.dropped.drop_ingress +
 		tgtobj->stats.tx_i.dropped.headroom_insufficient +
-		tgtobj->stats.tx_i.dropped.invalid_peer_id_in_exc_path;
+		tgtobj->stats.tx_i.dropped.invalid_peer_id_in_exc_path +
+		tgtobj->stats.tx_i.dropped.tx_mcast_drop;
 }
 
 QDF_STATUS dp_txrx_get_soc_stats(struct cdp_soc_t *soc_hdl,
