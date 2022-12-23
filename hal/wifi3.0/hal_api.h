@@ -35,6 +35,14 @@
 /* Ring index for WBM2SW2 release ring */
 #define HAL_IPA_TX_COMP_RING_IDX 2
 
+#if defined(CONFIG_SHADOW_V2) || defined(CONFIG_SHADOW_V3)
+#define ignore_shadow false
+#define CHECK_SHADOW_REGISTERS true
+#else
+#define ignore_shadow true
+#define CHECK_SHADOW_REGISTERS false
+#endif
+
 /* calculate the register address offset from bar0 of shadow register x */
 #if defined(QCA_WIFI_QCA6390) || defined(QCA_WIFI_QCA6490) || \
     defined(QCA_WIFI_KIWI)
@@ -1094,7 +1102,34 @@ bool hal_srng_is_near_full_irq_supported(hal_soc_handle_t hal_soc,
  *		 NULL on failure (if given ring is not available)
  */
 extern void *hal_srng_setup(void *hal_soc, int ring_type, int ring_num,
-	int mac_id, struct hal_srng_params *ring_params, bool idle_check);
+			    int mac_id, struct hal_srng_params *ring_params,
+			    bool idle_check);
+
+/**
+ * hal_srng_setup_idx - Initialize HW SRNG ring.
+ *
+ * @hal_soc: Opaque HAL SOC handle
+ * @ring_type: one of the types from hal_ring_type
+ * @ring_num: Ring number if there are multiple rings of
+ *		same type (staring from 0)
+ * @mac_id: valid MAC Id should be passed if ring type is one of lmac rings
+ * @ring_params: SRNG ring params in hal_srng_params structure.
+ * @idle_check: Check if ring is idle
+ * @idx: Ring index
+
+ * Callers are expected to allocate contiguous ring memory of size
+ * 'num_entries * entry_size' bytes and pass the physical and virtual base
+ * addresses through 'ring_base_paddr' and 'ring_base_vaddr' in hal_srng_params
+ * structure. Ring base address should be 8 byte aligned and size of each ring
+ * entry should be queried using the API hal_srng_get_entrysize
+ *
+ * Return: Opaque pointer to ring on success
+ *		 NULL on failure (if given ring is not available)
+ */
+extern void *hal_srng_setup_idx(void *hal_soc, int ring_type, int ring_num,
+				int mac_id, struct hal_srng_params *ring_params,
+				bool idle_check, uint32_t idx);
+
 
 /* Remapping ids of REO rings */
 #define REO_REMAP_TCL 0
@@ -2606,9 +2641,17 @@ hal_srng_get_hp_addr(void *hal_soc,
 	struct hal_soc *hal = (struct hal_soc *)hal_soc;
 
 	if (srng->ring_dir == HAL_SRNG_SRC_RING) {
-		return hal->shadow_wrptr_mem_paddr +
-		  ((unsigned long)(srng->u.src_ring.hp_addr) -
-		  (unsigned long)(hal->shadow_wrptr_mem_vaddr));
+		if (srng->flags & HAL_SRNG_LMAC_RING)
+			return hal->shadow_wrptr_mem_paddr +
+				 ((unsigned long)(srng->u.src_ring.hp_addr) -
+				  (unsigned long)(hal->shadow_wrptr_mem_vaddr));
+		else if (ignore_shadow)
+			return (qdf_dma_addr_t)srng->u.src_ring.hp_addr;
+		else
+			return ((struct hif_softc *)hal->hif_handle)->mem_pa +
+				((unsigned long)srng->u.src_ring.hp_addr -
+				 (unsigned long)hal->dev_base_addr);
+
 	} else {
 		return hal->shadow_rdptr_mem_paddr +
 		  ((unsigned long)(srng->u.dst_ring.hp_addr) -
@@ -2634,9 +2677,16 @@ hal_srng_get_tp_addr(void *hal_soc, hal_ring_handle_t hal_ring_hdl)
 			((unsigned long)(srng->u.src_ring.tp_addr) -
 			(unsigned long)(hal->shadow_rdptr_mem_vaddr));
 	} else {
-		return hal->shadow_wrptr_mem_paddr +
-			((unsigned long)(srng->u.dst_ring.tp_addr) -
-			(unsigned long)(hal->shadow_wrptr_mem_vaddr));
+		if (srng->flags & HAL_SRNG_LMAC_RING)
+			return hal->shadow_wrptr_mem_paddr +
+				((unsigned long)(srng->u.dst_ring.tp_addr) -
+				 (unsigned long)(hal->shadow_wrptr_mem_vaddr));
+		else if (ignore_shadow)
+			return (qdf_dma_addr_t)srng->u.dst_ring.tp_addr;
+		else
+			return ((struct hif_softc *)hal->hif_handle)->mem_pa +
+				((unsigned long)srng->u.dst_ring.tp_addr -
+				 (unsigned long)hal->dev_base_addr);
 	}
 }
 
@@ -2689,11 +2739,13 @@ uint32_t hal_get_target_type(hal_soc_handle_t hal_soc_hdl);
  * @hal_soc: HAL SOC handle
  * @srng: SRNG ring pointer
  * @idle_check: Check if ring is idle
+ * @idx: Ring index
  */
 static inline void hal_srng_dst_hw_init(struct hal_soc *hal,
-					struct hal_srng *srng, bool idle_check)
+					struct hal_srng *srng, bool idle_check,
+					uint16_t idx)
 {
-	hal->ops->hal_srng_dst_hw_init(hal, srng, idle_check);
+	hal->ops->hal_srng_dst_hw_init(hal, srng, idle_check, idx);
 }
 
 /**
@@ -2702,11 +2754,13 @@ static inline void hal_srng_dst_hw_init(struct hal_soc *hal,
  * @hal_soc: HAL SOC handle
  * @srng: SRNG ring pointer
  * @idle_check: Check if ring is idle
+ * @idx: Ring index
  */
 static inline void hal_srng_src_hw_init(struct hal_soc *hal,
-					struct hal_srng *srng, bool idle_check)
+					struct hal_srng *srng, bool idle_check,
+					uint16_t idx)
 {
-	hal->ops->hal_srng_src_hw_init(hal, srng, idle_check);
+	hal->ops->hal_srng_src_hw_init(hal, srng, idle_check, idx);
 }
 
 /**
@@ -3387,4 +3441,33 @@ uint16_t hal_srng_dst_get_hpidx(hal_ring_handle_t hal_ring_hdl)
 
 	return hp / srng->entry_size;
 }
+
+#ifdef FEATURE_DIRECT_LINK
+/**
+ * hal_srng_set_msi_irq_config() - Set the MSI irq configuration for srng
+ * @hal_soc_hdl: hal soc handle
+ * @hal_ring_hdl: srng handle
+ * @addr: MSI address
+ * @data: MSI data
+ *
+ * Return: QDF status
+ */
+static inline QDF_STATUS
+hal_srng_set_msi_irq_config(hal_soc_handle_t hal_soc_hdl,
+			    hal_ring_handle_t hal_ring_hdl,
+			    struct hal_srng_params *ring_params)
+{
+	struct hal_soc *hal_soc = (struct hal_soc *)hal_soc_hdl;
+
+	return hal_soc->ops->hal_srng_set_msi_config(hal_ring_hdl, ring_params);
+}
+#else
+static inline QDF_STATUS
+hal_srng_set_msi_irq_config(hal_soc_handle_t hal_soc_hdl,
+			    hal_ring_handle_t hal_ring_hdl,
+			    struct hal_srng_params *ring_params)
+{
+	return QDF_STATUS_E_NOSUPPORT;
+}
+#endif
 #endif /* _HAL_APIH_ */

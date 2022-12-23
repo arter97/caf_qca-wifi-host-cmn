@@ -573,6 +573,13 @@ int htt_srng_setup(struct htt_soc *soc, int mac_id,
 			(lmac_id * HAL_MAX_RINGS_PER_LMAC))) {
 			htt_ring_id = HTT_RXDMA_HOST_BUF_RING;
 			htt_ring_type = HTT_SW_TO_HW_RING;
+#ifdef FEATURE_DIRECT_LINK
+		} else if (srng_params.ring_id ==
+			   (HAL_SRNG_WMAC1_RX_DIRECT_LINK_SW_REFILL_RING +
+			    (lmac_id * HAL_MAX_RINGS_PER_LMAC))) {
+			htt_ring_id = HTT_LPASS_TO_FW_RXBUF_RING;
+			htt_ring_type = HTT_SW_TO_SW_RING;
+#endif
 		} else {
 			QDF_TRACE(QDF_MODULE_ID_TXRX, QDF_TRACE_LEVEL_ERROR,
 				   "%s: Ring %d currently not supported",
@@ -1079,6 +1086,7 @@ int htt_h2t_rx_ring_cfg(struct htt_soc *htt_soc, int pdev_id,
 
 	dp_mon_rx_packet_length_set(soc->dp_soc, msg_word, htt_tlv_filter);
 	dp_mon_rx_hdr_length_set(soc->dp_soc, msg_word, htt_tlv_filter);
+	dp_mon_rx_mac_filter_set(soc->dp_soc, msg_word, htt_tlv_filter);
 
 	/* word 2 */
 	msg_word++;
@@ -2347,7 +2355,7 @@ static void dp_vdev_txrx_hw_stats_handler(struct htt_soc *soc,
 	payload_size =
 	HTT_T2H_VDEVS_TXRX_STATS_PERIODIC_IND_PAYLOAD_SIZE_GET(*msg_word);
 
-	qdf_trace_hex_dump(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_INFO,
+	qdf_trace_hex_dump(QDF_MODULE_ID_DP_HTT, QDF_TRACE_LEVEL_INFO,
 			   (void *)msg_word, payload_size + 16);
 
 	/* Adjust msg_word to point to the first TLV in buffer */

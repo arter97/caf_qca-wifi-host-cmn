@@ -1104,6 +1104,12 @@ struct wlan_lmac_if_reg_tx_ops {
 	QDF_STATUS (*unregister_afc_event_handler)
 				(struct wlan_objmgr_psoc *psoc, void *arg);
 	QDF_STATUS (*trigger_acs_for_afc)(struct wlan_objmgr_pdev *pdev);
+
+	QDF_STATUS (*reg_get_min_psd) (struct wlan_objmgr_pdev *pdev,
+				       qdf_freq_t primary_freq,
+				       qdf_freq_t cen320,
+				       uint16_t punc_pattern, uint16_t bw,
+				       int16_t *min_psd);
 #endif
 	bool (*is_chip_11be)(struct wlan_objmgr_psoc *psoc,
 			     uint16_t phy_id);
@@ -1381,6 +1387,8 @@ struct wlan_lmac_if_son_rx_ops {
  * @register_events: function to register event handlers with FW
  * @unregister_events: function to de-register event handlers with FW
  * @link_set_active: function to send mlo link set active command to FW
+ * @send_tid_to_link_mapping: function to send T2LM command to FW
+ * @send_link_removal_cmd: function to send MLO link removal command to FW
  */
 struct wlan_lmac_if_mlo_tx_ops {
 	QDF_STATUS (*register_events)(struct wlan_objmgr_psoc *psoc);
@@ -1390,16 +1398,29 @@ struct wlan_lmac_if_mlo_tx_ops {
 #ifdef WLAN_MLO_GLOBAL_SHMEM_SUPPORT
 	struct wlan_lmac_if_global_shmem_local_ops shmem_local_ops;
 #endif
+	QDF_STATUS (*send_tid_to_link_mapping)(struct wlan_objmgr_vdev *vdev,
+					       struct wlan_t2lm_info *t2lm);
+	QDF_STATUS (*send_link_removal_cmd)(
+		struct wlan_objmgr_psoc *psoc,
+		const struct mlo_link_removal_cmd_params *param);
 };
 
 /**
  * struct wlan_lmac_if_mlo_rx_ops - defines southbound rx callbacks for mlo
  * @process_link_set_active_resp: function pointer to rx FW events
+ * @process_mlo_vdev_tid_to_link_map_event:  function pointer to rx T2LM event
+ * @mlo_link_removal_handler: function pointer for MLO link removal handler
  */
 struct wlan_lmac_if_mlo_rx_ops {
 	QDF_STATUS
 	(*process_link_set_active_resp)(struct wlan_objmgr_psoc *psoc,
 		struct mlo_link_set_active_resp *event);
+	QDF_STATUS (*process_mlo_vdev_tid_to_link_map_event)(
+			struct wlan_objmgr_psoc *psoc,
+			struct mlo_vdev_host_tid_to_link_map_resp *event);
+	QDF_STATUS (*mlo_link_removal_handler)(
+			struct wlan_objmgr_psoc *psoc,
+			struct mlo_link_removal_evt_params *evt_params);
 };
 #endif
 
@@ -1484,7 +1505,8 @@ struct wlan_lmac_if_spatial_reuse_tx_ops {
 	QDF_STATUS(*target_if_set_sr_enable_disable)(
 				struct wlan_objmgr_vdev *vdev,
 				struct wlan_objmgr_pdev *pdev,
-				bool is_sr_enable, int32_t pd_threshold);
+				bool is_sr_enable, int32_t srg_pd_threshold,
+				int32_t non_srg_pd_threshold);
 };
 #endif
 
@@ -2257,7 +2279,8 @@ struct wlan_lmac_if_dfs_rx_ops {
 	bool (*dfs_is_hw_pulses_allowed)(struct wlan_objmgr_pdev *pdev);
 	void (*dfs_set_fw_adfs_support)(struct wlan_objmgr_pdev *pdev,
 					bool fw_adfs_support_160,
-					bool fw_adfs_support_non_160);
+					bool fw_adfs_support_non_160,
+					bool fw_adfs_support_320);
 	void (*dfs_reset_dfs_prevchan)(struct wlan_objmgr_pdev *pdev);
 	void (*dfs_init_tmp_psoc_nol)(struct wlan_objmgr_pdev *pdev,
 				      uint8_t num_radios);

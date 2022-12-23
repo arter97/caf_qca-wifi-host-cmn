@@ -1059,6 +1059,20 @@ QDF_STATUS dp_mon_filter_update_1_0(struct dp_pdev *pdev)
 	return status;
 }
 
+#ifdef QCA_MAC_FILTER_FW_SUPPORT
+void dp_mon_mac_filter_set(uint32_t *msg_word,
+			   struct htt_rx_ring_tlv_filter *tlv_filter)
+{
+	if (!msg_word || !tlv_filter)
+		return;
+
+	if (tlv_filter->enable_mon_mac_filter > 0)
+		HTT_RX_RING_SELECTION_CFG_RXPCU_FILTER_SET(*msg_word, 1);
+	else
+		HTT_RX_RING_SELECTION_CFG_RXPCU_FILTER_SET(*msg_word, 0);
+}
+#endif
+
 #if defined(WLAN_CFR_ENABLE) && defined(WLAN_ENH_CFR_ENABLE)
 /*
  * dp_cfr_filter_1_0() -  Configure HOST RX monitor status ring for CFR
@@ -1067,13 +1081,16 @@ QDF_STATUS dp_mon_filter_update_1_0(struct dp_pdev *pdev)
  * @pdev_id: id of data path pdev handle
  * @enable: Enable/Disable CFR
  * @filter_val: Flag to select Filter for monitor mode
+ * @cfr_enable_monitor_mode: Flag to be enabled when scan radio is brought up
+ * in special vap mode
  *
  * Return: void
  */
 static void dp_cfr_filter_1_0(struct cdp_soc_t *soc_hdl,
 			      uint8_t pdev_id,
 			      bool enable,
-			      struct cdp_monitor_filter *filter_val)
+			      struct cdp_monitor_filter *filter_val,
+			      bool cfr_enable_monitor_mode)
 {
 	struct dp_soc *soc = cdp_soc_t_to_dp_soc(soc_hdl);
 	struct dp_pdev *pdev = NULL;
@@ -1091,7 +1108,10 @@ static void dp_cfr_filter_1_0(struct cdp_soc_t *soc_hdl,
 	mon_pdev = pdev->monitor_pdev;
 
 	if (mon_pdev->mvdev) {
-		dp_mon_info("No action is needed since mon mode is enabled\n");
+		if (enable && cfr_enable_monitor_mode)
+			pdev->cfr_rcc_mode = true;
+		else
+			pdev->cfr_rcc_mode = false;
 		return;
 	}
 

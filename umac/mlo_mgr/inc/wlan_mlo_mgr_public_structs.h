@@ -278,6 +278,119 @@ struct wlan_mlo_peer_list {
 #endif
 };
 
+#define T2LM_MAX_NUM_TIDS 8
+
+/**
+ * enum wlan_t2lm_direction - Indicates the direction for which TID-to-link
+ * mapping is available.
+ *
+ * @WLAN_T2LM_DL_DIRECTION: Downlink
+ * @WLAN_T2LM_UL_DIRECTION: Uplink
+ * @WLAN_T2LM_BIDI_DIRECTION: Both downlink and uplink
+ * @WLAN_T2LM_MAX_DIRECTION: Max direction, this is used only internally
+ * @WLAN_T2LM_INVALID_DIRECTION: Invalid, this is used only internally to check
+ *                               if the mapping present in wlan_t2lm_info
+ *                               structure is valid or not.
+ */
+enum wlan_t2lm_direction {
+	WLAN_T2LM_DL_DIRECTION,
+	WLAN_T2LM_UL_DIRECTION,
+	WLAN_T2LM_BIDI_DIRECTION,
+	WLAN_T2LM_MAX_DIRECTION,
+	WLAN_T2LM_INVALID_DIRECTION,
+};
+
+#define T2LM_EXPECTED_DURATION_MAX_VALUE 0xFFFFFF
+/**
+ * struct wlan_t2lm_info - TID-to-Link mapping information for the frames
+ * transmitted on the uplink, downlink and bidirectional.
+ *
+ * @direction:  0 - Downlink, 1 - uplink 2 - Both uplink and downlink
+ * @default_link_mapping: value 1 indicates the default T2LM, where all the TIDs
+ *                        are mapped to all the links.
+ *                        value 0 indicates the preferred T2LM mapping
+ * @mapping_switch_time_present: Indicates if mapping switch time field present
+ *                               in the T2LM IE
+ * @expected_duration_present: Indicates if expected duration present in the
+ *                             T2LM IE
+ * @mapping_switch_time: Mapping switch time of this T2LM IE
+ * @expected_duration: Expected duration of this T2LM IE
+ * @ieee_link_map_tid: Indicates ieee link id mapping of all the TIDS
+ * @hw_link_map_tid: Indicates hw link id mapping of all the TIDS
+ * @timer_started: flag to check if T2LM timer is started for this T2LM IE
+ */
+struct wlan_t2lm_info {
+	enum wlan_t2lm_direction direction;
+	bool default_link_mapping;
+	bool mapping_switch_time_present;
+	bool expected_duration_present;
+	uint16_t mapping_switch_time;
+	uint32_t expected_duration;
+	uint16_t ieee_link_map_tid[T2LM_MAX_NUM_TIDS];
+	uint16_t hw_link_map_tid[T2LM_MAX_NUM_TIDS];
+	bool timer_started;
+};
+
+/**
+ * struct wlan_mlo_t2lm_ie - T2LM information
+ *
+ * @disabled_link_bitmap: Bitmap of disabled links. This is used to update the
+ *                        disabled link field of RNR IE
+ * @t2lm: T2LM info structure
+ */
+struct wlan_mlo_t2lm_ie {
+	uint16_t disabled_link_bitmap;
+	struct wlan_t2lm_info t2lm;
+};
+
+/*
+ * In a beacon or probe response frame, at max two T2LM IEs can be present
+ * first one to represent the already existing mapping and the other one
+ * represents the new T2LM mapping that is yet to establish.
+ */
+#define WLAN_MAX_T2LM_IE 2
+/**
+ * struct wlan_t2lm_timer - T2LM timer information
+ *
+ * @t2lm_timer: T2LM timer
+ * @timer_interval: T2LM Timer value
+ * @timer_started: T2LM timer started or not
+ * @t2lm_ie_index: T2LM IE index value
+ * @t2lm_dev_lock: lock to access struct
+ */
+struct wlan_t2lm_timer {
+	qdf_timer_t t2lm_timer;
+	uint32_t timer_interval;
+	bool timer_started;
+	uint8_t t2lm_ie_index;
+#ifdef WLAN_MLO_USE_SPINLOCK
+	qdf_spinlock_t t2lm_dev_lock;
+#else
+	qdf_mutex_t t2lm_dev_lock;
+#endif
+};
+
+/**
+ * struct wlan_t2lm_context - T2LM IE information
+ *
+ * @num_of_t2lm_ie: Number of T2LM IE
+ * @t2lm_ie: T2LM IE information
+ * @t2lm_timer: T2LM timer information
+ * @t2lm_dev_lock: t2lm dev context lock
+ * @tsf: time sync func value received via beacon
+ */
+struct wlan_t2lm_context {
+	uint8_t num_of_t2lm_ie;
+	struct wlan_mlo_t2lm_ie t2lm_ie[WLAN_MAX_T2LM_IE];
+	struct wlan_t2lm_timer t2lm_timer;
+#ifdef WLAN_MLO_USE_SPINLOCK
+	qdf_spinlock_t t2lm_dev_lock;
+#else
+	qdf_mutex_t t2lm_dev_lock;
+#endif
+	uint64_t tsf;
+};
+
 /*
  * struct wlan_mlo_dev_context - MLO device context
  * @node: QDF list node member
@@ -293,6 +406,7 @@ struct wlan_mlo_peer_list {
  * @ref_id_dbg: Reference count debug information
  * @sta_ctx: MLO STA related information
  * @ap_ctx: AP related information
+ * @t2lm_ctx: T2LM related information
  */
 struct wlan_mlo_dev_context {
 	qdf_list_node_t node;
@@ -313,6 +427,7 @@ struct wlan_mlo_dev_context {
 	qdf_atomic_t ref_id_dbg[WLAN_REF_ID_MAX];
 	struct wlan_mlo_sta *sta_ctx;
 	struct wlan_mlo_ap *ap_ctx;
+	struct wlan_t2lm_context t2lm_ctx;
 };
 
 /*
@@ -388,29 +503,6 @@ struct mlpeer_auth_params {
 	void *rs;
 };
 
-#ifdef WLAN_FEATURE_11BE
-
-/**
- * enum wlan_t2lm_direction - Indicates the direction for which TID-to-link
- * mapping is available.
- * @WLAN_T2LM_DL_DIRECTION: Downlink
- * @WLAN_T2LM_UL_DIRECTION: Uplink
- * @WLAN_T2LM_BIDI_DIRECTION: Both downlink and uplink
- * @WLAN_T2LM_MAX_DIRECTION: Max direction, this is used only internally
- * @WLAN_T2LM_INVALID_DIRECTION: Invalid, this is used only internally to check
- * if the mapping present in wlan_t2lm_of_tids structure is valid or not.
- */
-enum wlan_t2lm_direction {
-	WLAN_T2LM_DL_DIRECTION,
-	WLAN_T2LM_UL_DIRECTION,
-	WLAN_T2LM_BIDI_DIRECTION,
-	WLAN_T2LM_MAX_DIRECTION,
-	WLAN_T2LM_INVALID_DIRECTION,
-};
-
-/* Total 8 TIDs are supported, TID 0 to TID 7 */
-#define T2LM_MAX_NUM_TIDS 8
-
 /**
  * enum wlan_t2lm_category - T2LM category
  *
@@ -469,35 +561,19 @@ enum wlan_t2lm_resp_frm_type {
  * enum wlan_t2lm_enable - TID-to-link negotiation supported by the mlo peer
  *
  * @WLAN_T2LM_NOT_SUPPORTED: T2LM is not supported by the MLD
- * @WLAN_MAP_EACH_TID_TO_SAME_OR_DIFFERENET_LINK_SET: MLD supports the mapping
- *             of each TID to the same or different link set (Disjoint mapping).
- * @WLAN_MAP_ALL_TIDS_TO_SAME_LINK_SET: MLD only supports the mapping of all
- *             TIDs to the same link set.
+ * @WLAN_T2LM_MAP_ALL_TIDS_TO_SAME_LINK_SET: MLD only supports the mapping of
+ *    all TIDs to the same link set.
+ * @WLAN_T2LM_MAP_RESERVED: reserved value
+ * @WLAN_T2LM_MAP_EACH_TID_TO_SAME_OR_DIFFERENET_LINK_SET: MLD supports the
+ *    mapping of each TID to the same or different link set (Disjoint mapping).
  * @WLAN_T2LM_ENABLE_INVALID: invalid
  */
 enum wlan_t2lm_enable {
 	WLAN_T2LM_NOT_SUPPORTED = 0,
-	WLAN_MAP_EACH_TID_TO_SAME_OR_DIFFERENET_LINK_SET = 1,
-	WLAN_MAP_ALL_TIDS_TO_SAME_LINK_SET = 2,
+	WLAN_T2LM_MAP_ALL_TIDS_TO_SAME_LINK_SET = 1,
+	WLAN_T2LM_MAP_RESERVED = 2,
+	WLAN_T2LM_MAP_EACH_TID_TO_SAME_OR_DIFFERENET_LINK_SET = 3,
 	WLAN_T2LM_ENABLE_INVALID,
-};
-
-/**
- * struct wlan_t2lm_of_tids - TID-to-Link mapping information for the frames
- * transmitted on the uplink, downlink and bidirectional.
- *
- * @is_homogeneous_mapping: The t2lm_provisioned_links is homogeneous mapping
- * @direction:  0 - Downlink, 1 - uplink 2 - Both uplink and downlink
- * @default_link_mapping: value 1 indicates the default T2LM, where all the TIDs
- *                        are mapped to all the links.
- *                        value 0 indicates the preferred T2LM mapping
- * @t2lm_provisioned_links: Indicates TID to link mapping of all the TIDS.
- */
-struct wlan_t2lm_of_tids {
-	bool is_homogeneous_mapping;
-	enum wlan_t2lm_direction direction;
-	bool default_link_mapping;
-	uint16_t t2lm_provisioned_links[T2LM_MAX_NUM_TIDS];
 };
 
 /**
@@ -509,7 +585,7 @@ struct wlan_t2lm_of_tids {
  */
 struct wlan_prev_t2lm_negotiated_info {
 	uint16_t dialog_token;
-	struct wlan_t2lm_of_tids t2lm_info[WLAN_T2LM_MAX_DIRECTION];
+	struct wlan_t2lm_info t2lm_info[WLAN_T2LM_MAX_DIRECTION];
 };
 
 /**
@@ -525,7 +601,7 @@ struct wlan_prev_t2lm_negotiated_info {
 struct wlan_t2lm_onging_negotiation_info {
 	enum wlan_t2lm_category category;
 	uint8_t dialog_token;
-	struct wlan_t2lm_of_tids t2lm_info[WLAN_T2LM_MAX_DIRECTION];
+	struct wlan_t2lm_info t2lm_info[WLAN_T2LM_MAX_DIRECTION];
 	enum wlan_t2lm_tx_status t2lm_tx_status;
 	enum wlan_t2lm_resp_frm_type t2lm_resp_type;
 };
@@ -546,7 +622,6 @@ struct wlan_mlo_peer_t2lm_policy {
 	struct wlan_prev_t2lm_negotiated_info t2lm_negotiated_info;
 	struct wlan_t2lm_onging_negotiation_info ongoing_tid_to_link_mapping;
 };
-#endif /* WLAN_FEATURE_11BE */
 
 /**
  * struct wlan_mlo_eml_cap - EML capabilities of MLD
@@ -691,13 +766,18 @@ struct mlo_partner_info {
 
 /*
  * struct mlo_probereq_info – mlo probe req link info
+ * mlid: MLID requested in the probe req
  * @num_links: no. of link info in probe req
  * @link_id: target link id of APs
+ * @is_mld_id_valid: Indicates if mld_id is valid for a given request
+ * @skip_mbssid: Skip mbssid IE
  */
 struct mlo_probereq_info {
 	uint8_t mlid;
 	uint8_t num_links;
 	uint8_t link_id[WLAN_UMAC_MLO_MAX_VDEVS];
+	bool is_mld_id_valid;
+	bool skip_mbssid;
 };
 
 /*
@@ -750,7 +830,8 @@ struct mlo_mlme_ext_ops {
 	void (*mlo_mlme_ext_assoc_resp)(struct wlan_objmgr_peer *peer);
 	qdf_nbuf_t (*mlo_mlme_get_link_assoc_req)(struct wlan_objmgr_peer *peer,
 						  uint8_t link_ix);
-	void (*mlo_mlme_ext_deauth)(struct wlan_objmgr_peer *peer);
+	void (*mlo_mlme_ext_deauth)(struct wlan_objmgr_peer *peer,
+				    uint8_t is_disassoc);
 	QDF_STATUS (*mlo_mlme_ext_clone_security_param)(
 		    struct vdev_mlme_obj *vdev_mlme,
 		    struct wlan_cm_connect_req *req);
@@ -862,13 +943,17 @@ struct mlo_link_set_active_param {
 /*
  * struct mlo_link_set_active_ctx - Context for MLO link set active request
  * @vdev: pointer to vdev on which the request issued
- * @cb: callback function for MLO link set active request
+ * @set_mlo_link_cb: callback function for MLO link set active request
+ * @validate_set_mlo_link_cb: callback to validate set link request
  * @cb_arg: callback context
  */
 struct mlo_link_set_active_ctx {
 	struct wlan_objmgr_vdev *vdev;
 	void (*set_mlo_link_cb)(struct wlan_objmgr_vdev *vdev, void *arg,
 				struct mlo_link_set_active_resp *evt);
+	QDF_STATUS (*validate_set_mlo_link_cb)(
+			struct wlan_objmgr_psoc *psoc,
+			struct mlo_link_set_active_param *param);
 	void *cb_arg;
 };
 
@@ -894,5 +979,80 @@ enum mlo_chip_recovery_type {
 
 	/* Add new types above */
 	MLO_RECOVERY_MODE_MAX = 0xf
+};
+
+/**
+ * enum wlan_t2lm_status - Target status codes in event of t2lm
+ * @WLAN_MAP_SWITCH_TIMER_TSF: Mapping switch time value in TSF to be included
+ * in probe response frames
+ * @WLAN_MAP_SWITCH_TIMER_EXPIRED: Indication that the new proposed T2LM has
+ * been applied, Update the required data structures and other modules.
+ * @WLAN_EXPECTED_DUR_EXPIRED: Indication that the proposed T2LM ineffective
+ * after this duration and all TIDs fall back to default mode.
+ */
+enum wlan_t2lm_status {
+	WLAN_MAP_SWITCH_TIMER_TSF,
+	WLAN_MAP_SWITCH_TIMER_EXPIRED,
+	WLAN_EXPECTED_DUR_EXPIRED,
+};
+
+/**
+ * struct mlo_vdev_host_tid_to_link_map_resp - TID-to-link mapping response
+ * @vdev_id: Vdev id
+ * @wlan_t2lm_status: Target status for t2lm ie info
+ * @mapping_switch_tsf: Mapping switch time in tsf for probe response frames
+ */
+struct mlo_vdev_host_tid_to_link_map_resp {
+	uint8_t vdev_id;
+	enum wlan_t2lm_status status;
+	uint8_t mapping_switch_tsf;
+};
+
+/**
+ * struct mlo_link_removal_cmd_params - MLO link removal command parameters
+ * @vdev_id: vdev ID of the link to be removed
+ * @reconfig_ml_ie: Entire ML reconfiguration element
+ * @reconfig_ml_ie_size: size of the field @reconfig_ml_ie
+ */
+struct mlo_link_removal_cmd_params {
+	uint8_t vdev_id;
+	uint8_t *reconfig_ml_ie;
+	uint32_t reconfig_ml_ie_size;
+};
+
+/**
+ * struct mlo_link_removal_tbtt_info - MLO link removal TBTT info. This
+ * information will be in correspondence with an outgoing beacon instance.
+ * @tbtt_count: Delete timer TBTT count in the reported beacon
+ * @qtimer_reading: Q-timer reading when the reported beacon is sent out
+ * @tsf: TSF of the reported beacon
+ */
+struct mlo_link_removal_tbtt_info {
+	uint32_t tbtt_count;
+	uint64_t qtimer_reading;
+	uint64_t tsf;
+};
+
+/**
+ * struct mlo_link_removal_evt_params - MLO link removal event parameters
+ * @vdev_id: vdev ID of the link undergoing removal
+ * @tbtt_info: TBTT information of the link undergoing removal
+ */
+struct mlo_link_removal_evt_params {
+	uint8_t vdev_id;
+	struct mlo_link_removal_tbtt_info tbtt_info;
+};
+
+/*
+ * struct mgmt_rx_mlo_link_removal_info - Information, sent in MGMT Rx event, of
+ * a link undergoing removal from its MLD
+ * @vdev_id: Vdev ID of the link undergoing removal
+ * @hw_link_id: HW link ID of the link undergoing removal
+ * @tbtt_count: Delete timer TBTT count of the link undergoing removal
+ */
+struct mgmt_rx_mlo_link_removal_info {
+	uint8_t vdev_id;
+	uint8_t hw_link_id;
+	uint16_t tbtt_count;
 };
 #endif

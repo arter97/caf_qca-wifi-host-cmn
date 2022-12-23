@@ -87,7 +87,7 @@ uint8_t *bcn_tmpl_add_ml_partner_links(uint8_t *buf_ptr,
 size_t bcn_tmpl_ml_info_size(struct beacon_tmpl_params *param);
 
 /**
- * bcn_tmpl_add_ml_info - Add MLO info to update Critical Update info in
+ * bcn_tmpl_add_ml_info() - Add MLO info to update Critical Update info in
  *                                 beacon template command
  * @buf_ptr: pointer to beacon cmd buffer.
  * @param: pointer to beacon template params
@@ -96,6 +96,24 @@ size_t bcn_tmpl_ml_info_size(struct beacon_tmpl_params *param);
  */
 uint8_t *bcn_tmpl_add_ml_info(uint8_t *buf_ptr,
 			      struct beacon_tmpl_params *param);
+/**
+ * prb_resp_tmpl_ml_info_size() - Get ML info size in 20TU probe resp template
+ * @param: Pointer to 20TU probe response template param
+ *
+ * Return: size of ML info in 20TU probe response template
+ */
+size_t prb_resp_tmpl_ml_info_size(struct wmi_probe_resp_params *param);
+
+/**
+ * prb_resp_tmpl_add_ml_info() - Add MLO info to update Critical Update info in
+ *                             20TU probe response template command
+ * @buf_ptr: pointer to 20TU probe response cmd buffer.
+ * @param: pointer to 20TU probe response template params
+ *
+ * Return: pointer to new offset of cmd buffer
+ */
+uint8_t *prb_resp_tmpl_add_ml_info(uint8_t *buf_ptr,
+				   struct wmi_probe_resp_params *param);
 /**
  *  peer_create_add_mlo_params() - Add MLO params in peer create cmd
  *  @buf_ptr: pointer to peer create cmd buffer.
@@ -176,6 +194,22 @@ uint8_t *peer_delete_add_mlo_params(uint8_t *buf_ptr,
  *  @wmi_handle: WMI handle
  */
 void wmi_11be_attach_tlv(wmi_unified_t wmi_handle);
+
+/**
+ * extract_mgmt_rx_mlo_link_removal_tlv_count() - Extract the number of link
+ * removal TLVs from MGMT Rx event
+ * @num_link_removal_tlvs: Number of link removal TLVs
+ * @hdr: MGMT Rx event parameters to be populated
+ *
+ * Return: None
+ */
+static inline void
+extract_mgmt_rx_mlo_link_removal_tlv_count(
+	int num_link_removal_tlvs,
+	struct mgmt_rx_event_params *hdr)
+{
+	hdr->num_link_removal_info = num_link_removal_tlvs;
+}
 #else
 static uint8_t *vdev_create_add_mlo_params(uint8_t *buf_ptr,
 					   struct vdev_create_params *param)
@@ -227,6 +261,18 @@ static size_t bcn_tmpl_ml_info_size(struct beacon_tmpl_params *param)
 
 static uint8_t *bcn_tmpl_add_ml_info(uint8_t *buf_ptr,
 				     struct beacon_tmpl_params *param)
+{
+	WMITLV_SET_HDR(buf_ptr, WMITLV_TAG_ARRAY_STRUC, 0);
+	return buf_ptr + WMI_TLV_HDR_SIZE;
+}
+
+static size_t prb_resp_tmpl_ml_info_size(struct wmi_probe_resp_params *param)
+{
+	return WMI_TLV_HDR_SIZE;
+}
+
+static uint8_t *prb_resp_tmpl_add_ml_info(uint8_t *buf_ptr,
+					  struct wmi_probe_resp_params *param)
 {
 	WMITLV_SET_HDR(buf_ptr, WMITLV_TAG_ARRAY_STRUC, 0);
 	return buf_ptr + WMI_TLV_HDR_SIZE;
@@ -293,5 +339,12 @@ static uint8_t *peer_delete_add_mlo_params(uint8_t *buf_ptr,
 
 static void wmi_11be_attach_tlv(wmi_unified_t wmi_handle)
 { }
+
+static inline void
+extract_mgmt_rx_mlo_link_removal_tlv_count(
+	int num_link_removal_tlvs,
+	struct mgmt_rx_event_params *hdr)
+{
+}
 #endif /*WLAN_FEATURE_11BE_MLO*/
 #endif /*_WMI_UNIFIED_11BE_TLV_H_*/
