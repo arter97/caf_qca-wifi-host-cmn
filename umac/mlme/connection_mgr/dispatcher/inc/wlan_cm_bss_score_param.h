@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -94,6 +94,7 @@ struct weight_cfg {
  * @good_rssi_bucket_size: Channel band weightage
  * @bad_rssi_bucket_size: NSS weightage
  * @rssi_pref_5g_rssi_thresh: Beamforming caps weightage
+ * @con_non_hint_target_rssi_threshold: RSSI threshold value
  */
 struct rssi_config_score  {
 	uint8_t best_rssi_threshold;
@@ -104,6 +105,7 @@ struct rssi_config_score  {
 	uint8_t good_rssi_bucket_size;
 	uint8_t bad_rssi_bucket_size;
 	uint8_t rssi_pref_5g_rssi_thresh;
+	int8_t con_non_hint_target_rssi_threshold;
 };
 
 /**
