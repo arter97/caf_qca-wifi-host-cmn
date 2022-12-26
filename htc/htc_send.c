@@ -969,12 +969,12 @@ static enum HTC_SEND_QUEUE_RESULT htc_try_send(HTC_TARGET *target,
 	int overflow;
 	enum HTC_SEND_QUEUE_RESULT result = HTC_SEND_QUEUE_OK;
 
-	AR_DEBUG_PRINTF(ATH_DEBUG_SEND, ("+htc_try_send (Queue:%pK Depth:%d)\n",
+	/*AR_DEBUG_PRINTF(ATH_DEBUG_SEND, ("+htc_try_send (Queue:%pK Depth:%d)\n",
 					 pCallersSendQueue,
 					 (pCallersSendQueue ==
 					  NULL) ? 0 :
 					 HTC_PACKET_QUEUE_DEPTH
-						 (pCallersSendQueue)));
+						 (pCallersSendQueue)));*/
 
 	/* init the local send queue */
 	INIT_HTC_PACKET_QUEUE(&sendQueue);
@@ -1009,12 +1009,12 @@ static enum HTC_SEND_QUEUE_RESULT htc_try_send(HTC_TARGET *target,
 
 		/* if overflow is negative or zero, we are okay */
 		if (overflow > 0) {
-			AR_DEBUG_PRINTF(ATH_DEBUG_SEND,
+			/*AR_DEBUG_PRINTF(ATH_DEBUG_SEND,
 					("Endpoint %d, TX queue will overflow :%d , Tx Depth:%d, Max:%d\n",
 					 pEndpoint->Id, overflow,
 					 HTC_PACKET_QUEUE_DEPTH(&pEndpoint->
 								TxQueue),
-					 pEndpoint->MaxTxQueueDepth));
+					 pEndpoint->MaxTxQueueDepth));*/
 		}
 		if ((overflow <= 0)
 		    || (!pEndpoint->EpCallBacks.EpSendFull)) {
@@ -1050,9 +1050,9 @@ static enum HTC_SEND_QUEUE_RESULT htc_try_send(HTC_TARGET *target,
 						       QueueHead, pPacket,
 						       HTC_PACKET, ListLink) {
 
-				AR_DEBUG_PRINTF(ATH_DEBUG_SEND,
+				/*AR_DEBUG_PRINTF(ATH_DEBUG_SEND,
 						("Indicating overflowed TX packet: %pK\n",
-						 pPacket));
+						 pPacket));*/
 				/*
 				 * Remove headroom reserved for HTC_FRAME_HDR
 				 * before giving the packet back to the user via
@@ -1102,8 +1102,8 @@ static enum HTC_SEND_QUEUE_RESULT htc_try_send(HTC_TARGET *target,
 	} while (false);
 
 	if (result != HTC_SEND_QUEUE_OK) {
-		AR_DEBUG_PRINTF(ATH_DEBUG_SEND, ("-htc_try_send: %d\n",
-			result));
+		/*AR_DEBUG_PRINTF(ATH_DEBUG_SEND, ("-htc_try_send: %d\n",
+			result));*/
 		return result;
 	}
 
@@ -1144,7 +1144,7 @@ static enum HTC_SEND_QUEUE_RESULT htc_try_send(HTC_TARGET *target,
 		 */
 		qdf_atomic_dec(&pEndpoint->TxProcessCount);
 		UNLOCK_HTC_TX(target);
-		AR_DEBUG_PRINTF(ATH_DEBUG_SEND, ("-htc_try_send (busy)\n"));
+		//AR_DEBUG_PRINTF(ATH_DEBUG_SEND, ("-htc_try_send (busy)\n"));
 		return HTC_SEND_QUEUE_OK;
 	}
 
@@ -1258,7 +1258,7 @@ static enum HTC_SEND_QUEUE_RESULT htc_try_send(HTC_TARGET *target,
 
 	UNLOCK_HTC_TX(target);
 
-	AR_DEBUG_PRINTF(ATH_DEBUG_SEND, ("-htc_try_send:\n"));
+	//AR_DEBUG_PRINTF(ATH_DEBUG_SEND, ("-htc_try_send:\n"));
 
 	return HTC_SEND_QUEUE_OK;
 }
@@ -1364,30 +1364,30 @@ static inline QDF_STATUS __htc_send_pkt(HTC_HANDLE HTCHandle,
 	HTC_FRAME_HDR *htc_hdr;
 	QDF_STATUS status;
 
-	AR_DEBUG_PRINTF(ATH_DEBUG_SEND,
-			("+__htc_send_pkt\n"));
+	/*AR_DEBUG_PRINTF(ATH_DEBUG_SEND,
+			("+__htc_send_pkt\n"));*/
 
 	/* get packet at head to figure out which endpoint these packets will
 	 * go into
 	 */
 	if (!pPacket) {
 		OL_ATH_HTC_PKT_ERROR_COUNT_INCR(target, GET_HTC_PKT_Q_FAIL);
-		AR_DEBUG_PRINTF(ATH_DEBUG_SEND, ("-__htc_send_pkt\n"));
+		//AR_DEBUG_PRINTF(ATH_DEBUG_SEND, ("-__htc_send_pkt\n"));
 		return QDF_STATUS_E_INVAL;
 	}
 
 	if ((pPacket->Endpoint >= ENDPOINT_MAX) ||
 	    (pPacket->Endpoint <= ENDPOINT_UNUSED)) {
-		AR_DEBUG_PRINTF(ATH_DEBUG_SEND,
-			("%s endpoint is invalid\n", __func__));
+		/*AR_DEBUG_PRINTF(ATH_DEBUG_SEND,
+			("%s endpoint is invalid\n", __func__));*/
 		AR_DEBUG_ASSERT(0);
 		return QDF_STATUS_E_INVAL;
 	}
 	pEndpoint = &target->endpoint[pPacket->Endpoint];
 
 	if (!pEndpoint->service_id) {
-		AR_DEBUG_PRINTF(ATH_DEBUG_SEND, ("%s service_id is invalid\n",
-								__func__));
+		/*AR_DEBUG_PRINTF(ATH_DEBUG_SEND, ("%s service_id is invalid\n",
+								__func__));*/
 		return QDF_STATUS_E_INVAL;
 	}
 
@@ -1466,7 +1466,7 @@ static inline QDF_STATUS __htc_send_pkt(HTC_HANDLE HTCHandle,
 		send_packet_completion(target, pPacket);
 	}
 
-	AR_DEBUG_PRINTF(ATH_DEBUG_SEND, ("-__htc_send_pkt\n"));
+	//AR_DEBUG_PRINTF(ATH_DEBUG_SEND, ("-__htc_send_pkt\n"));
 
 	return QDF_STATUS_SUCCESS;
 }
@@ -1486,10 +1486,10 @@ QDF_STATUS htc_send_pkt(HTC_HANDLE htc_handle, HTC_PACKET *htc_packet)
 		return QDF_STATUS_E_FAILURE;
 	}
 
-	AR_DEBUG_PRINTF(ATH_DEBUG_SEND,
+	/*AR_DEBUG_PRINTF(ATH_DEBUG_SEND,
 			("+-htc_send_pkt: Enter endPointId: %d, buffer: %pK, length: %d\n",
 			 htc_packet->Endpoint, htc_packet->pBuffer,
-			 htc_packet->ActualLength));
+			 htc_packet->ActualLength));*/
 	return __htc_send_pkt(htc_handle, htc_packet);
 }
 qdf_export_symbol(htc_send_pkt);

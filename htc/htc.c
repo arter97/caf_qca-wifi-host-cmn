@@ -340,12 +340,12 @@ void htc_destroy(HTC_HANDLE HTCHandle)
 {
 	HTC_TARGET *target = GET_HTC_TARGET_FROM_HANDLE(HTCHandle);
 
-	AR_DEBUG_PRINTF(ATH_DEBUG_TRC,
-			("+htc_destroy ..  Destroying :0x%pK\n", target));
+	/*AR_DEBUG_PRINTF(ATH_DEBUG_TRC,
+			("+htc_destroy ..  Destroying :0x%pK\n", target));*/
 	hif_stop(htc_get_hif_device(HTCHandle));
 	if (target)
 		htc_cleanup(target);
-	AR_DEBUG_PRINTF(ATH_DEBUG_TRC, ("-htc_destroy\n"));
+	//AR_DEBUG_PRINTF(ATH_DEBUG_TRC, ("-htc_destroy\n"));
 }
 
 /* get the low level HIF device for the caller , the caller may wish to do low
@@ -807,7 +807,7 @@ void htc_stop(HTC_HANDLE HTCHandle)
 	qdf_nbuf_queue_t *rx_sg_queue = &target->RxSgQueue;
 #endif
 
-	AR_DEBUG_PRINTF(ATH_DEBUG_TRC, ("+htc_stop\n"));
+	//AR_DEBUG_PRINTF(ATH_DEBUG_TRC, ("+htc_stop\n"));
 
 	/* cleanup endpoints */
 	for (i = 0; i < ENDPOINT_MAX; i++) {
@@ -850,7 +850,7 @@ void htc_stop(HTC_HANDLE HTCHandle)
 
 	reset_endpoint_states(target);
 
-	AR_DEBUG_PRINTF(ATH_DEBUG_TRC, ("-htc_stop\n"));
+	//AR_DEBUG_PRINTF(ATH_DEBUG_TRC, ("-htc_stop\n"));
 }
 
 void htc_dump_credit_states(HTC_HANDLE HTCHandle)

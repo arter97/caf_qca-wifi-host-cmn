@@ -54,9 +54,9 @@ uint32_t hif_start(struct hif_opaque_softc *hif_ctx)
 	struct hif_sdio_dev *hif_device = scn->hif_handle;
 	struct hif_sdio_device *htc_sdio_device = hif_dev_from_hif(hif_device);
 
-	HIF_ENTER();
+	//HIF_ENTER();
 	hif_dev_enable_interrupts(htc_sdio_device);
-	HIF_EXIT();
+	//HIF_EXIT();
 	return QDF_STATUS_SUCCESS;
 }
 
