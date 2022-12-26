@@ -77,7 +77,7 @@ static struct epping_context *g_epping_ctx;
  */
 int epping_open(void)
 {
-	EPPING_LOG(QDF_TRACE_LEVEL_INFO_HIGH, "%s: Enter", __func__);
+	//EPPING_LOG(QDF_TRACE_LEVEL_INFO_HIGH, "%s: Enter", __func__);
 
 	g_epping_ctx = qdf_mem_malloc(sizeof(*g_epping_ctx));
 
@@ -208,8 +208,8 @@ QDF_STATUS epping_bmi_download_fw(struct ol_context *ol_ctx)
 		return QDF_STATUS_E_INVAL;
 	}
 
-	EPPING_LOG(QDF_TRACE_LEVEL_INFO_HIGH,
-		   "%s: bmi_download_firmware done", __func__);
+	/*EPPING_LOG(QDF_TRACE_LEVEL_INFO_HIGH,
+		   "%s: bmi_download_firmware done", __func__);*/
 	return QDF_STATUS_SUCCESS;
 }
 #else
@@ -240,7 +240,7 @@ int epping_enable(struct device *parent_dev, bool rtnl_held)
 	struct ol_context *ol_ctx = NULL;
 	struct hif_target_info *tgt_info;
 
-	EPPING_LOG(QDF_TRACE_LEVEL_INFO_HIGH, "%s: Enter", __func__);
+	//EPPING_LOG(QDF_TRACE_LEVEL_INFO_HIGH, "%s: Enter", __func__);
 
 	p_cds_context = cds_get_global_context();
 
@@ -315,7 +315,7 @@ int epping_enable(struct device *parent_dev, bool rtnl_held)
 			   "%s: htc_wait_target error", __func__);
 		goto error_end;
 	}
-	EPPING_LOG(QDF_TRACE_LEVEL_INFO_HIGH, "%s: HTC ready", __func__);
+	//EPPING_LOG(QDF_TRACE_LEVEL_INFO_HIGH, "%s: HTC ready", __func__);
 
 	ret = epping_connect_service(epping_ctx);
 	if (ret != 0) {
@@ -326,7 +326,7 @@ int epping_enable(struct device *parent_dev, bool rtnl_held)
 	if (htc_start(epping_ctx->HTCHandle) != QDF_STATUS_SUCCESS)
 		goto error_end;
 
-	EPPING_LOG(QDF_TRACE_LEVEL_INFO_HIGH, "%s: HTC started", __func__);
+	//EPPING_LOG(QDF_TRACE_LEVEL_INFO_HIGH, "%s: HTC started", __func__);
 
 	/* init the tx cookie resource */
 	ret = epping_cookie_init(epping_ctx);
@@ -338,7 +338,7 @@ int epping_enable(struct device *parent_dev, bool rtnl_held)
 		goto error_end;
 	}
 
-	EPPING_LOG(QDF_TRACE_LEVEL_INFO_HIGH, "%s: Exit", __func__);
+	//EPPING_LOG(QDF_TRACE_LEVEL_INFO_HIGH, "%s: Exit", __func__);
 	return ret;
 
 error_end:

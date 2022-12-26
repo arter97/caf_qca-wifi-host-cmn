@@ -428,13 +428,13 @@ void htc_destroy(HTC_HANDLE HTCHandle)
 {
 	HTC_TARGET *target = GET_HTC_TARGET_FROM_HANDLE(HTCHandle);
 
-	AR_DEBUG_PRINTF(ATH_DEBUG_TRC,
-			("+htc_destroy ..  Destroying :0x%pK\n", target));
+	/*AR_DEBUG_PRINTF(ATH_DEBUG_TRC,
+			("+htc_destroy ..  Destroying :0x%pK\n", target));*/
 	htc_hang_event_notifier_unregister();
 	hif_stop(htc_get_hif_device(HTCHandle));
 	if (target)
 		htc_cleanup(target);
-	AR_DEBUG_PRINTF(ATH_DEBUG_TRC, ("-htc_destroy\n"));
+	//AR_DEBUG_PRINTF(ATH_DEBUG_TRC, ("-htc_destroy\n"));
 }
 
 /* get the low level HIF device for the caller , the caller may wish to do low
@@ -899,11 +899,11 @@ void htc_stop(HTC_HANDLE HTCHandle)
 	qdf_nbuf_queue_t *rx_sg_queue = &target->RxSgQueue;
 #endif
 
-	AR_DEBUG_PRINTF(ATH_DEBUG_TRC, ("+htc_stop\n"));
+	//AR_DEBUG_PRINTF(ATH_DEBUG_TRC, ("+htc_stop\n"));
 
 	htc_runtime_pm_deinit(target);
 
-	HTC_INFO("%s: endpoints cleanup\n", __func__);
+	//HTC_INFO("%s: endpoints cleanup\n", __func__);
 	/* cleanup endpoints */
 	for (i = 0; i < ENDPOINT_MAX; i++) {
 		endpoint = &target->endpoint[i];
@@ -922,7 +922,7 @@ void htc_stop(HTC_HANDLE HTCHandle)
 	 * buffer leak
 	 */
 
-	HTC_INFO("%s: stopping hif layer\n", __func__);
+	//HTC_INFO("%s: stopping hif layer\n", __func__);
 	hif_stop(target->hif_dev);
 
 #ifdef RX_SG_SUPPORT
@@ -942,7 +942,7 @@ void htc_stop(HTC_HANDLE HTCHandle)
 	 * msg buffer will be left unmapped and not freed. So calling the
 	 * completion handler for this buffer will handle this scenario.
 	 */
-	HTC_INFO("%s: flush endpoints Tx lookup queue\n", __func__);
+	//HTC_INFO("%s: flush endpoints Tx lookup queue\n", __func__);
 	for (i = 0; i < ENDPOINT_MAX; i++) {
 		endpoint = &target->endpoint[i];
 		if (endpoint->service_id == WMI_CONTROL_SVC)
@@ -950,11 +950,11 @@ void htc_stop(HTC_HANDLE HTCHandle)
 		else if (endpoint->service_id == HTC_CTRL_RSVD_SVC)
 			htc_flush_endpoint_txlookupQ(target, i, true);
 	}
-	HTC_INFO("%s: resetting endpoints state\n", __func__);
+	//HTC_INFO("%s: resetting endpoints state\n", __func__);
 
 	reset_endpoint_states(target);
 
-	AR_DEBUG_PRINTF(ATH_DEBUG_TRC, ("-htc_stop\n"));
+	//AR_DEBUG_PRINTF(ATH_DEBUG_TRC, ("-htc_stop\n"));
 }
 
 void htc_dump_credit_states(HTC_HANDLE HTCHandle)

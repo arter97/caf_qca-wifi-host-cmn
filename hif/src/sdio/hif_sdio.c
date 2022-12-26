@@ -57,7 +57,7 @@ QDF_STATUS hif_start(struct hif_opaque_softc *hif_ctx)
 	struct hif_softc *hif_sc = HIF_GET_SOFTC(hif_ctx);
 	int ret = 0;
 
-	HIF_ENTER();
+	//HIF_ENTER();
 	ret = hif_sdio_bus_configure(hif_sc);
 	if (ret) {
 		hif_err("hif_sdio_bus_configure failed");
@@ -65,7 +65,7 @@ QDF_STATUS hif_start(struct hif_opaque_softc *hif_ctx)
 	}
 
 	hif_dev_enable_interrupts(htc_sdio_device);
-	HIF_EXIT();
+	//HIF_EXIT();
 	return QDF_STATUS_SUCCESS;
 }
 
