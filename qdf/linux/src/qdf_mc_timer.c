@@ -134,8 +134,8 @@ qdf_export_symbol(qdf_mc_timer_get_current_state);
  */
 void qdf_timer_module_init(void)
 {
-	QDF_TRACE(QDF_MODULE_ID_QDF, QDF_TRACE_LEVEL_INFO_HIGH,
-		  "Initializing the QDF MC timer module");
+	/*QDF_TRACE(QDF_MODULE_ID_QDF, QDF_TRACE_LEVEL_INFO_HIGH,
+		  "Initializing the QDF MC timer module");*/
 	qdf_mutex_create(&persistent_timer_count_lock);
 }
 qdf_export_symbol(qdf_timer_module_init);

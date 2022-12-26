@@ -163,8 +163,8 @@ void epping_tx_timer_expire(epping_adapter_t *adapter)
 {
 	qdf_nbuf_t nodrop_skb;
 
-	EPPING_LOG(QDF_TRACE_LEVEL_INFO, "%s: queue len: %d\n", __func__,
-		   qdf_nbuf_queue_len(&adapter->nodrop_queue));
+	/*EPPING_LOG(QDF_TRACE_LEVEL_INFO, "%s: queue len: %d\n", __func__,
+		   qdf_nbuf_queue_len(&adapter->nodrop_queue));*/
 
 	if (!qdf_nbuf_queue_len(&adapter->nodrop_queue)) {
 		/* nodrop queue is empty so no need to arm timer */
@@ -185,9 +185,9 @@ void epping_tx_timer_expire(epping_adapter_t *adapter)
 			break;
 		} else {
 			htc_set_nodrop_pkt(adapter->pEpping_ctx->HTCHandle, false);
-			EPPING_LOG(QDF_TRACE_LEVEL_INFO,
+			/*EPPING_LOG(QDF_TRACE_LEVEL_INFO,
 				   "%s: nodrop: %pK xmit ok in timer\n",
-				   __func__, nodrop_skb);
+				   __func__, nodrop_skb);*/
 		}
 	}
 
@@ -258,9 +258,9 @@ int epping_tx_send(qdf_nbuf_t skb, epping_adapter_t *adapter)
 			goto tx_fail;
 		} else {
 			htc_set_nodrop_pkt(adapter->pEpping_ctx->HTCHandle, false);
-			EPPING_LOG(QDF_TRACE_LEVEL_INFO,
+			/*EPPING_LOG(QDF_TRACE_LEVEL_INFO,
 				   "%s: nodrop: %pK xmit ok\n", __func__,
-				   nodrop_skb);
+				   nodrop_skb);*/
 		}
 	}
 
@@ -355,10 +355,10 @@ void epping_tx_complete(void *ctx, HTC_PACKET *htc_pkt)
 		}
 	}
 
-	EPPING_LOG(QDF_TRACE_LEVEL_INFO,
+	/*EPPING_LOG(QDF_TRACE_LEVEL_INFO,
 		   "%s skb=%pK data=%pK len=0x%x eid=%d ",
 		   __func__, pktSkb, htc_pkt->pBuffer,
-		   htc_pkt->ActualLength, eid);
+		   htc_pkt->ActualLength, eid);*/
 
 	if (QDF_IS_STATUS_ERROR(status)) {
 		if (status == QDF_STATUS_E_CANCELED) {
@@ -371,7 +371,7 @@ void epping_tx_complete(void *ctx, HTC_PACKET *htc_pkt)
 				   __func__, status);
 		}
 	} else {
-		EPPING_LOG(QDF_TRACE_LEVEL_INFO, "%s: OK\n", __func__);
+		//EPPING_LOG(QDF_TRACE_LEVEL_INFO, "%s: OK\n", __func__);
 		flushing = false;
 	}
 

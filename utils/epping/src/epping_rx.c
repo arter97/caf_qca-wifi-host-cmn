@@ -69,9 +69,9 @@ void epping_refill(void *ctx, HTC_ENDPOINT_ID Endpoint)
 
 	INIT_HTC_PACKET_QUEUE(&queue);
 
-	EPPING_LOG(QDF_TRACE_LEVEL_INFO,
+	/*EPPING_LOG(QDF_TRACE_LEVEL_INFO,
 		   "%s: providing htc with %d buffers at eid=%d\n",
-		   __func__, buffersToRefill, Endpoint);
+		   __func__, buffersToRefill, Endpoint);*/
 
 	for (RxBuffers = 0; RxBuffers < buffersToRefill; RxBuffers++) {
 		osBuf = qdf_nbuf_alloc(NULL, AR6000_BUFFER_SIZE,
@@ -107,10 +107,10 @@ void epping_rx(void *ctx, HTC_PACKET *pPacket)
 	HTC_ENDPOINT_ID eid = pPacket->Endpoint;
 	struct sk_buff *pktSkb = (struct sk_buff *)pPacket->pPktContext;
 
-	EPPING_LOG(QDF_TRACE_LEVEL_INFO,
+	/*EPPING_LOG(QDF_TRACE_LEVEL_INFO,
 		   "%s: adapter = 0x%pK eid=%d, skb=0x%pK, data=0x%pK, len=0x%x status:%d",
 		   __func__, adapter, eid, pktSkb, pPacket->pBuffer,
-		   pPacket->ActualLength, status);
+		   pPacket->ActualLength, status);*/
 
 	if (status != QDF_STATUS_SUCCESS) {
 		if (status != QDF_STATUS_E_CANCELED) {

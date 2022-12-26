@@ -129,7 +129,7 @@ void epping_hex_dump(void *data, int buf_len, const char *str)
 {
 	EPPING_LOG(QDF_TRACE_LEVEL_FATAL, "%s: E, %s", __func__, str);
 
-	EPPING_HEX_DUMP(QDF_TRACE_LEVEL_INFO, data, buf_len);
+	//EPPING_HEX_DUMP(QDF_TRACE_LEVEL_INFO, data, buf_len);
 
 	EPPING_LOG(QDF_TRACE_LEVEL_FATAL, "%s: X %s", __func__, str);
 }

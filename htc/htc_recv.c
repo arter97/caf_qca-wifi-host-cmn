@@ -541,11 +541,11 @@ A_STATUS htc_add_receive_pkt_multiple(HTC_HANDLE HTCHandle,
 		return A_EINVAL;
 	}
 
-	AR_DEBUG_PRINTF(ATH_DEBUG_RECV,
+	/*AR_DEBUG_PRINTF(ATH_DEBUG_RECV,
 			("+- htc_add_receive_pkt_multiple : endPointId: %d, cnt:%d, length: %d\n",
 			 pFirstPacket->Endpoint,
 			 HTC_PACKET_QUEUE_DEPTH(pPktQueue),
-			 pFirstPacket->BufferLength));
+			 pFirstPacket->BufferLength));*/
 
 	pEndpoint = &target->endpoint[pFirstPacket->Endpoint];
 
@@ -592,10 +592,10 @@ void htc_flush_rx_hold_queue(HTC_TARGET *target, HTC_ENDPOINT *pEndpoint)
 		UNLOCK_HTC_RX(target);
 		pPacket->Status = QDF_STATUS_E_CANCELED;
 		pPacket->ActualLength = 0;
-		AR_DEBUG_PRINTF(ATH_DEBUG_RECV,
+		/*AR_DEBUG_PRINTF(ATH_DEBUG_RECV,
 				("Flushing RX packet:%pK, length:%d, ep:%d\n",
 				 pPacket, pPacket->BufferLength,
-				 pPacket->Endpoint));
+				 pPacket->Endpoint));*/
 		/* give the packet back */
 		do_recv_completion_pkt(pEndpoint, pPacket);
 		LOCK_HTC_RX(target);
