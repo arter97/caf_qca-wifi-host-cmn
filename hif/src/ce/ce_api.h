@@ -597,6 +597,17 @@ struct ce_ops {
 			    struct pld_shadow_reg_v3_cfg **shadow_config,
 			    int *num_shadow_registers_configured);
 #endif
+#ifdef FEATURE_DIRECT_LINK
+	QDF_STATUS (*ce_set_irq_config_by_ceid)(struct hif_softc *scn,
+						uint8_t ce_id, uint64_t addr,
+						uint32_t data);
+	uint16_t (*ce_get_direct_link_dest_buffers)(struct hif_softc *scn,
+						    uint64_t **dma_addr,
+						    uint32_t *buf_size);
+	QDF_STATUS (*ce_get_direct_link_ring_info)(struct hif_softc *scn,
+					   struct hif_direct_link_ce_info *info,
+					   uint8_t max_ce_info_len);
+#endif
 };
 
 int hif_ce_bus_early_suspend(struct hif_softc *scn);

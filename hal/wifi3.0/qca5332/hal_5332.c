@@ -96,7 +96,9 @@
 #define UNIFIED_WBM_RELEASE_RING_6_TX_RATE_STATS_INFO_TX_RATE_STATS_LSB \
 	WBM_RELEASE_RING_TX_TX_RATE_STATS_PPDU_TRANSMISSION_TSF_LSB
 
+#ifdef QCA_MONITOR_2_0_SUPPORT
 #include "hal_be_api_mon.h"
+#endif
 
 #define CMEM_REG_BASE 0x00100000
 
@@ -107,6 +109,80 @@
 #include "hal_5332_tx.h"
 #include "hal_be_rx_tlv.h"
 #include <hal_be_generic_api.h>
+
+#define PMM_SCRATCH_BASE_QCA5332 0xCB500FC
+#define PMM_SCRATCH_SIZE 0x100
+
+/**
+ * hal_read_pmm_scratch_reg_5332(): API to read PMM Scratch register
+ *
+ * @soc: HAL soc
+ * @reg_enum: Enum of the scratch register
+ *
+ * Return: uint32_t
+ */
+static inline
+uint32_t hal_read_pmm_scratch_reg_5332(struct hal_soc *soc,
+				       enum hal_scratch_reg_enum reg_enum)
+{
+	uint32_t val = 0;
+	void __iomem *bar;
+
+	bar = ioremap_nocache(PMM_SCRATCH_BASE_QCA5332, PMM_SCRATCH_SIZE);
+	pld_reg_read(soc->qdf_dev->dev, (reg_enum * 4), &val, bar);
+	iounmap(bar);
+	return val;
+}
+
+/**
+ * hal_get_tsf2_scratch_reg_qca5332(): API to read tsf2 scratch register
+ *
+ * @hal_soc_hdl: HAL soc context
+ * @mac_id: mac id
+ * @value: Pointer to update tsf2 value
+ *
+ * Return: void
+ */
+static void hal_get_tsf2_scratch_reg_qca5332(hal_soc_handle_t hal_soc_hdl,
+					     uint8_t mac_id, uint64_t *value)
+{
+	struct hal_soc *soc = (struct hal_soc *)hal_soc_hdl;
+	uint32_t offset_lo, offset_hi;
+	enum hal_scratch_reg_enum enum_lo, enum_hi;
+
+	hal_get_tsf_enum(DEFAULT_TSF_ID, mac_id, &enum_lo, &enum_hi);
+
+	offset_lo = hal_read_pmm_scratch_reg_5332(soc,
+						  enum_lo);
+
+	offset_hi = hal_read_pmm_scratch_reg_5332(soc,
+						  enum_hi);
+
+	*value = ((uint64_t)(offset_hi) << 32 | offset_lo);
+}
+
+/**
+ * hal_get_tqm_scratch_reg_qca5332(): API to read tqm scratch register
+ *
+ * @hal_soc_hdl: HAL soc context
+ * @value: Pointer to update tqm value
+ *
+ * Return: void
+ */
+static void hal_get_tqm_scratch_reg_qca5332(hal_soc_handle_t hal_soc_hdl,
+					    uint64_t *value)
+{
+	struct hal_soc *soc = (struct hal_soc *)hal_soc_hdl;
+	uint32_t offset_lo, offset_hi;
+
+	offset_lo = hal_read_pmm_scratch_reg_5332(soc,
+						  PMM_TQM_CLOCK_OFFSET_LO_US);
+
+	offset_hi = hal_read_pmm_scratch_reg_5332(soc,
+						  PMM_TQM_CLOCK_OFFSET_HI_US);
+
+	*value = ((uint64_t)(offset_hi) << 32 | offset_lo);
+}
 
 #define LINK_DESC_SIZE (NUM_OF_DWORDS_RX_MSDU_LINK << 2)
 #define HAL_PPE_VP_ENTRIES_MAX 32
@@ -257,7 +333,7 @@ void hal_rx_get_rtt_info_5332(void *rx_tlv, void *ppdu_info_hdl)
 	ppdu_info->cfr_info.agc_gain_info3 = 0;
 }
 #endif
-
+#ifdef CONFIG_WORD_BASED_TLV
 /**
  * hal_rx_dump_mpdu_start_tlv_5332: dump RX mpdu_start TLV in structured
  *			       human readable format.
@@ -269,14 +345,9 @@ void hal_rx_get_rtt_info_5332(void *rx_tlv, void *ppdu_info_hdl)
 static inline void hal_rx_dump_mpdu_start_tlv_5332(void *mpdustart,
 						   uint8_t dbg_level)
 {
-#ifdef CONFIG_WORD_BASED_TLV
 	struct rx_mpdu_start_compact *mpdu_info =
 		(struct rx_mpdu_start_compact *)mpdustart;
-#else
-	struct rx_mpdu_start *mpdu_start = (struct rx_mpdu_start *)mpdustart;
-	struct rx_mpdu_info *mpdu_info =
-		(struct rx_mpdu_info *)&mpdu_start->rx_mpdu_info_details;
-#endif
+
 	QDF_TRACE(QDF_MODULE_ID_HAL, dbg_level,
 		  "rx_mpdu_start tlv (1/5) - "
 		  "rx_reo_queue_desc_addr_39_32 :%x"
@@ -374,13 +445,9 @@ static inline void hal_rx_dump_mpdu_start_tlv_5332(void *mpdustart,
 static void hal_rx_dump_msdu_end_tlv_5332(void *msduend,
 					  uint8_t dbg_level)
 {
-#ifdef CONFIG_WORD_BASED_TLV
 	struct rx_msdu_end_compact *msdu_end =
 		(struct rx_msdu_end_compact *)msduend;
-#else
-	struct rx_msdu_end *msdu_end =
-		(struct rx_msdu_end *)msduend;
-#endif
+
 	QDF_TRACE(QDF_MODULE_ID_DP, dbg_level,
 		  "rx_msdu_end tlv - "
 		  "key_id_octet: %d "
@@ -428,6 +495,194 @@ static void hal_rx_dump_msdu_end_tlv_5332(void *msduend,
 		  msdu_end->cce_metadata,
 		  msdu_end->sa_sw_peer_id);
 }
+#else
+static inline void hal_rx_dump_mpdu_start_tlv_5332(void *mpdustart,
+						   uint8_t dbg_level)
+{
+	struct rx_mpdu_start *mpdu_start = (struct rx_mpdu_start *)mpdustart;
+	struct rx_mpdu_info *mpdu_info =
+		(struct rx_mpdu_info *)&mpdu_start->rx_mpdu_info_details;
+
+	QDF_TRACE(QDF_MODULE_ID_HAL, dbg_level,
+		  "rx_mpdu_start tlv (1/5) - "
+		  "rx_reo_queue_desc_addr_31_0 :%x"
+		  "rx_reo_queue_desc_addr_39_32 :%x"
+		  "receive_queue_number:%x "
+		  "pre_delim_err_warning:%x "
+		  "first_delim_err:%x "
+		  "reserved_2a:%x "
+		  "pn_31_0:%x "
+		  "pn_63_32:%x "
+		  "pn_95_64:%x "
+		  "pn_127_96:%x "
+		  "epd_en:%x "
+		  "all_frames_shall_be_encrypted  :%x"
+		  "encrypt_type:%x "
+		  "wep_key_width_for_variable_key :%x"
+		  "mesh_sta:%x "
+		  "bssid_hit:%x "
+		  "bssid_number:%x "
+		  "tid:%x "
+		  "reserved_7a:%x ",
+		  mpdu_info->rx_reo_queue_desc_addr_31_0,
+		  mpdu_info->rx_reo_queue_desc_addr_39_32,
+		  mpdu_info->receive_queue_number,
+		  mpdu_info->pre_delim_err_warning,
+		  mpdu_info->first_delim_err,
+		  mpdu_info->reserved_2a,
+		  mpdu_info->pn_31_0,
+		  mpdu_info->pn_63_32,
+		  mpdu_info->pn_95_64,
+		  mpdu_info->pn_127_96,
+		  mpdu_info->epd_en,
+		  mpdu_info->all_frames_shall_be_encrypted,
+		  mpdu_info->encrypt_type,
+		  mpdu_info->wep_key_width_for_variable_key,
+		  mpdu_info->mesh_sta,
+		  mpdu_info->bssid_hit,
+		  mpdu_info->bssid_number,
+		  mpdu_info->tid,
+		  mpdu_info->reserved_7a);
+
+	QDF_TRACE(QDF_MODULE_ID_HAL, dbg_level,
+		  "rx_mpdu_start tlv (2/5) - "
+		  "ast_index:%x "
+		  "sw_peer_id:%x "
+		  "mpdu_frame_control_valid:%x "
+		  "mpdu_duration_valid:%x "
+		  "mac_addr_ad1_valid:%x "
+		  "mac_addr_ad2_valid:%x "
+		  "mac_addr_ad3_valid:%x "
+		  "mac_addr_ad4_valid:%x "
+		  "mpdu_sequence_control_valid :%x"
+		  "mpdu_qos_control_valid:%x "
+		  "mpdu_ht_control_valid:%x "
+		  "frame_encryption_info_valid :%x",
+		  mpdu_info->ast_index,
+		  mpdu_info->sw_peer_id,
+		  mpdu_info->mpdu_frame_control_valid,
+		  mpdu_info->mpdu_duration_valid,
+		  mpdu_info->mac_addr_ad1_valid,
+		  mpdu_info->mac_addr_ad2_valid,
+		  mpdu_info->mac_addr_ad3_valid,
+		  mpdu_info->mac_addr_ad4_valid,
+		  mpdu_info->mpdu_sequence_control_valid,
+		  mpdu_info->mpdu_qos_control_valid,
+		  mpdu_info->mpdu_ht_control_valid,
+		  mpdu_info->frame_encryption_info_valid);
+
+	QDF_TRACE(QDF_MODULE_ID_HAL, dbg_level,
+		  "rx_mpdu_start tlv (3/5) - "
+		  "mpdu_fragment_number:%x "
+		  "more_fragment_flag:%x "
+		  "reserved_11a:%x "
+		  "fr_ds:%x "
+		  "to_ds:%x "
+		  "encrypted:%x "
+		  "mpdu_retry:%x "
+		  "mpdu_sequence_number:%x ",
+		  mpdu_info->mpdu_fragment_number,
+		  mpdu_info->more_fragment_flag,
+		  mpdu_info->reserved_11a,
+		  mpdu_info->fr_ds,
+		  mpdu_info->to_ds,
+		  mpdu_info->encrypted,
+		  mpdu_info->mpdu_retry,
+		  mpdu_info->mpdu_sequence_number);
+
+	QDF_TRACE(QDF_MODULE_ID_HAL, dbg_level,
+		  "rx_mpdu_start tlv (4/5) - "
+		  "mpdu_frame_control_field:%x "
+		  "mpdu_duration_field:%x ",
+		  mpdu_info->mpdu_frame_control_field,
+		  mpdu_info->mpdu_duration_field);
+
+	QDF_TRACE(QDF_MODULE_ID_HAL, dbg_level,
+		  "rx_mpdu_start tlv (5/5) - "
+		  "mac_addr_ad1_31_0:%x "
+		  "mac_addr_ad1_47_32:%x "
+		  "mac_addr_ad2_15_0:%x "
+		  "mac_addr_ad2_47_16:%x "
+		  "mac_addr_ad3_31_0:%x "
+		  "mac_addr_ad3_47_32:%x "
+		  "mpdu_sequence_control_field :%x"
+		  "mac_addr_ad4_31_0:%x "
+		  "mac_addr_ad4_47_32:%x "
+		  "mpdu_qos_control_field:%x ",
+		  mpdu_info->mac_addr_ad1_31_0,
+		  mpdu_info->mac_addr_ad1_47_32,
+		  mpdu_info->mac_addr_ad2_15_0,
+		  mpdu_info->mac_addr_ad2_47_16,
+		  mpdu_info->mac_addr_ad3_31_0,
+		  mpdu_info->mac_addr_ad3_47_32,
+		  mpdu_info->mpdu_sequence_control_field,
+		  mpdu_info->mac_addr_ad4_31_0,
+		  mpdu_info->mac_addr_ad4_47_32,
+		  mpdu_info->mpdu_qos_control_field);
+}
+
+static void hal_rx_dump_msdu_end_tlv_5332(void *msduend,
+					  uint8_t dbg_level)
+{
+	struct rx_msdu_end *msdu_end =
+		(struct rx_msdu_end *)msduend;
+
+	QDF_TRACE(QDF_MODULE_ID_DP, dbg_level,
+		  "rx_msdu_end tlv - "
+		  "key_id_octet: %d "
+		  "cce_super_rule: %d "
+		  "cce_classify_not_done_truncat: %d "
+		  "cce_classify_not_done_cce_dis: %d "
+		  "rule_indication_31_0: %d "
+		  "tcp_udp_chksum: %d "
+		  "sa_idx_timeout: %d "
+		  "da_idx_timeout: %d "
+		  "msdu_limit_error: %d "
+		  "flow_idx_timeout: %d "
+		  "flow_idx_invalid: %d "
+		  "wifi_parser_error: %d "
+		  "sa_is_valid: %d "
+		  "da_is_valid: %d "
+		  "da_is_mcbc: %d "
+		  "tkip_mic_err: %d "
+		  "l3_header_padding: %d "
+		  "first_msdu: %d "
+		  "last_msdu: %d "
+		  "sa_idx: %d "
+		  "msdu_drop: %d "
+		  "reo_destination_indication: %d "
+		  "flow_idx: %d "
+		  "fse_metadata: %d "
+		  "cce_metadata: %d "
+		  "sa_sw_peer_id: %d ",
+		  msdu_end->key_id_octet,
+		  msdu_end->cce_super_rule,
+		  msdu_end->cce_classify_not_done_truncate,
+		  msdu_end->cce_classify_not_done_cce_dis,
+		  msdu_end->rule_indication_31_0,
+		  msdu_end->tcp_udp_chksum,
+		  msdu_end->sa_idx_timeout,
+		  msdu_end->da_idx_timeout,
+		  msdu_end->msdu_limit_error,
+		  msdu_end->flow_idx_timeout,
+		  msdu_end->flow_idx_invalid,
+		  msdu_end->wifi_parser_error,
+		  msdu_end->sa_is_valid,
+		  msdu_end->da_is_valid,
+		  msdu_end->da_is_mcbc,
+		  msdu_end->tkip_mic_err,
+		  msdu_end->l3_header_padding,
+		  msdu_end->first_msdu,
+		  msdu_end->last_msdu,
+		  msdu_end->sa_idx,
+		  msdu_end->msdu_drop,
+		  msdu_end->reo_destination_indication,
+		  msdu_end->flow_idx,
+		  msdu_end->fse_metadata,
+		  msdu_end->cce_metadata,
+		  msdu_end->sa_sw_peer_id);
+}
+#endif
 
 /**
  * hal_reo_status_get_header_5332 - Process reo desc info
@@ -1131,8 +1386,10 @@ static void hal_hw_txrx_ops_attach_qca5332(struct hal_soc *hal_soc)
 					hal_rx_link_desc_msdu0_ptr_5332;
 	hal_soc->ops->hal_reo_status_get_header =
 					hal_reo_status_get_header_5332;
+#ifdef QCA_MONITOR_2_0_SUPPORT
 	hal_soc->ops->hal_rx_status_get_tlv_info =
 					hal_rx_status_get_tlv_info_wrapper_be;
+#endif
 	hal_soc->ops->hal_rx_wbm_err_info_get =
 					hal_rx_wbm_err_info_get_generic_be;
 	hal_soc->ops->hal_tx_set_pcp_tid_map =
@@ -1336,6 +1593,16 @@ static void hal_hw_txrx_ops_attach_qca5332(struct hal_soc *hal_soc)
 		hal_tx_populate_bank_register_be;
 	hal_soc->ops->hal_tx_vdev_mcast_ctrl_set =
 		hal_tx_vdev_mcast_ctrl_set_be;
+	hal_soc->ops->hal_get_tsf2_scratch_reg =
+					hal_get_tsf2_scratch_reg_qca5332;
+	hal_soc->ops->hal_get_tqm_scratch_reg =
+					hal_get_tqm_scratch_reg_qca5332;
+#ifdef CONFIG_WORD_BASED_TLV
+	hal_soc->ops->hal_rx_mpdu_start_wmask_get =
+					hal_rx_mpdu_start_wmask_get_be;
+	hal_soc->ops->hal_rx_msdu_end_wmask_get =
+					hal_rx_msdu_end_wmask_get_be;
+#endif
 };
 
 struct hal_hw_srng_config hw_srng_table_5332[] = {

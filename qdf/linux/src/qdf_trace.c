@@ -30,6 +30,7 @@
 #include <qdf_module.h>
 #include <qdf_util.h>
 #include <qdf_mem.h>
+#include <qdf_list.h>
 
 /* macro to map qdf trace levels into the bitmask */
 #define QDF_TRACE_LEVEL_TO_MODULE_BITMASK(_level) ((1 << (_level)))
@@ -3607,6 +3608,7 @@ struct category_name_info g_qdf_category_name[MAX_SUPPORTED_CATEGORY] = {
 	[QDF_MODULE_ID_FTM_TIME_SYNC] = {"Time Sync"},
 	[QDF_MODULE_ID_WIFI_RADAR] = {"WIFI RADAR"},
 	[QDF_MODULE_ID_CDP] =  {"CDP"},
+	[QDF_MODULE_ID_QMI] = {"QMI"},
 	[QDF_MODULE_ID_ANY] = {"ANY"},
 };
 qdf_export_symbol(g_qdf_category_name);
@@ -3650,7 +3652,7 @@ static qdf_time_t __log_window_end;
 static qdf_atomic_t __log_window_count;
 uint32_t qdf_rl_print_count = WLAN_MAX_LOGS_PER_SEC;
 uint32_t qdf_rl_print_time = 1;
-uint32_t qdf_rl_print_supressed;
+uint32_t qdf_rl_print_suppressed;
 
 /**
  * qdf_detected_excessive_logging() - Excessive logging detected
@@ -3699,32 +3701,32 @@ void qdf_rl_print_time_set(uint32_t rl_print_time)
 
 qdf_export_symbol(qdf_rl_print_time_set);
 
-void qdf_rl_print_supressed_log(void)
+void qdf_rl_print_suppressed_log(void)
 {
-	if (qdf_rl_print_supressed) {
+	if (qdf_rl_print_suppressed) {
 		pr_err("QDF Ratelimiting: %d prints suppressed",
-		       qdf_rl_print_supressed);
-		qdf_rl_print_supressed = 0;
+		       qdf_rl_print_suppressed);
+		qdf_rl_print_suppressed = 0;
 	}
 }
 
-void qdf_rl_print_supressed_inc(void)
+void qdf_rl_print_suppressed_inc(void)
 {
-	qdf_rl_print_supressed++;
+	qdf_rl_print_suppressed++;
 }
 #else
-#define qdf_rl_print_supressed_log()
-#define qdf_rl_print_supressed_inc()
+#define qdf_rl_print_suppressed_log()
+#define qdf_rl_print_suppressed_inc()
 #endif /* WLAN_MAX_LOGS_PER_SEC */
 
 #ifdef QDF_TRACE_PRINT_ENABLE
 static inline void print_to_console(char *str_buffer)
 {
 	if (qdf_in_interrupt() && qdf_detected_excessive_logging()) {
-		qdf_rl_print_supressed_inc();
+		qdf_rl_print_suppressed_inc();
 		return;
 	}
-	qdf_rl_print_supressed_log();
+	qdf_rl_print_suppressed_log();
 	pr_err("%s\n", str_buffer);
 }
 #else
@@ -4191,6 +4193,7 @@ static void set_default_trace_levels(struct category_info *cinfo)
 		[QDF_MODULE_ID_AFC] = QDF_TRACE_LEVEL_NONE,
 		[QDF_MODULE_ID_WIFI_RADAR] = QDF_TRACE_LEVEL_NONE,
 		[QDF_MODULE_ID_TARGET] = QDF_TRACE_LEVEL_NONE,
+		[QDF_MODULE_ID_QMI] = QDF_TRACE_LEVEL_ERROR,
 		[QDF_MODULE_ID_ANY] = QDF_TRACE_LEVEL_INFO,
 	};
 

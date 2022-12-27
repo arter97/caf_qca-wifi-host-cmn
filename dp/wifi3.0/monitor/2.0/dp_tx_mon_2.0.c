@@ -258,6 +258,10 @@ dp_tx_mon_srng_process_2_0(struct dp_soc *soc, struct dp_intr *int_ctx,
 			continue;
 		}
 
+		dp_tx_process_pktlog_be(soc, pdev,
+					status_frag,
+					end_offset);
+
 		dp_tx_mon_process_status_tlv(soc, pdev,
 					     &hal_mon_tx_desc,
 					     status_frag,
@@ -297,6 +301,22 @@ dp_tx_mon_process_2_0(struct dp_soc *soc, struct dp_intr *int_ctx,
 	work_done = dp_tx_mon_srng_process_2_0(soc, int_ctx, mac_id, quota);
 
 	return work_done;
+}
+
+void
+dp_tx_mon_print_ring_stat_2_0(struct dp_pdev *pdev)
+{
+	struct dp_soc *soc = pdev->soc;
+	struct dp_mon_soc *mon_soc = soc->monitor_soc;
+	struct dp_mon_soc_be *mon_soc_be =
+		dp_get_be_mon_soc_from_dp_mon_soc(mon_soc);
+	int lmac_id;
+
+	lmac_id = dp_get_lmac_id_for_pdev_id(soc, 0, pdev->pdev_id);
+	dp_print_ring_stat_from_hal(soc, &mon_soc_be->tx_mon_buf_ring,
+				    TX_MONITOR_BUF);
+	dp_print_ring_stat_from_hal(soc, &mon_soc_be->tx_mon_dst_ring[lmac_id],
+				    TX_MONITOR_DST);
 }
 
 void
@@ -708,8 +728,10 @@ dp_lite_mon_filter_peer(struct dp_lite_mon_tx_config *config,
 {
 	struct dp_lite_mon_peer *peer;
 
-	/* Return here if peer filtering is not required */
-	if (!config->tx_config.peer_count)
+	/* Return here if sw peer filtering is not required or if peer count
+	 * is zero
+	 */
+	if (!config->sw_peer_filtering || !config->tx_config.peer_count)
 		return QDF_STATUS_SUCCESS;
 
 	TAILQ_FOREACH(peer, &config->tx_config.peer_list, peer_list_elem) {
@@ -786,7 +808,8 @@ dp_lite_mon_filter_peer_subtype(struct dp_lite_mon_tx_config *config,
 	QDF_STATUS ret;
 
 	/* Return here if subtype and peer filtering is not required */
-	if (!config->subtype_filtering && !config->tx_config.peer_count)
+	if (!config->subtype_filtering && !config->sw_peer_filtering &&
+	    !config->tx_config.peer_count)
 		return QDF_STATUS_SUCCESS;
 
 	if (dp_tx_mon_nbuf_get_num_frag(buf)) {

@@ -3031,6 +3031,30 @@ QDF_STATUS
 (*extract_mlo_link_set_active_resp)(wmi_unified_t wmi_handle,
 				    void *evt_buf,
 				    struct mlo_link_set_active_resp *resp);
+QDF_STATUS
+(*extract_mgmt_rx_ml_cu_params)(wmi_unified_t wmi_handle,
+				void *evt_buf,
+				struct mlo_mgmt_ml_info *cu_params);
+
+QDF_STATUS (*send_mlo_link_removal_cmd)(
+		wmi_unified_t wmi_handle,
+		const struct mlo_link_removal_cmd_params *params);
+
+QDF_STATUS (*extract_mlo_link_removal_evt_fixed_param)(
+		struct wmi_unified *wmi_handle,
+		void *buf,
+		struct mlo_link_removal_evt_params *params);
+
+QDF_STATUS (*extract_mlo_link_removal_tbtt_update)(
+		struct wmi_unified *wmi_handle,
+		void *buf,
+		struct mlo_link_removal_tbtt_info *tbtt_info);
+
+QDF_STATUS (*extract_mgmt_rx_mlo_link_removal_info)(
+		struct wmi_unified *wmi_handle,
+		void *buf,
+		struct mgmt_rx_mlo_link_removal_info *link_removal_info,
+		int num_link_removal_info);
 #endif
 
 #ifdef WLAN_FEATURE_SON
@@ -3088,8 +3112,22 @@ QDF_STATUS
 
 #ifdef WLAN_FEATURE_11BE
 QDF_STATUS (*send_mlo_peer_tid_to_link_map)(
-		wmi_unified_t wmi_handle,
-		struct wmi_host_tid_to_link_map_params *params);
+			wmi_unified_t wmi_handle,
+			struct wmi_host_tid_to_link_map_params *params);
+
+QDF_STATUS (*send_mlo_vdev_tid_to_link_map)(
+			wmi_unified_t wmi_handle,
+			struct wmi_host_tid_to_link_map_ap_params *params);
+
+QDF_STATUS (*extract_mlo_vdev_tid_to_link_map_event)(
+		struct wmi_unified *wmi_handle,
+		uint8_t *buf,
+		struct mlo_vdev_host_tid_to_link_map_resp *params);
+
+QDF_STATUS (*extract_mlo_vdev_bcast_tid_to_link_map_event)(
+			struct wmi_unified *wmi_handle,
+			void *buf,
+			struct wmi_host_bcast_t2lm_info *bcast_info);
 #endif /* WLAN_FEATURE_11BE */
 
 QDF_STATUS
@@ -3149,6 +3187,10 @@ QDF_STATUS
 					   void *evt_buf,
 					   struct wmi_health_mon_params *param);
 #endif /* HEALTH_MON_SUPPORT */
+
+QDF_STATUS (*send_update_edca_pifs_param_cmd)(
+			wmi_unified_t wmi_handle,
+			struct edca_pifs_vparam *edca_pifs_param);
 };
 
 /* Forward declaration for psoc*/

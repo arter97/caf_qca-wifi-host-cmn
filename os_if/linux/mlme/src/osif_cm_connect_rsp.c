@@ -496,9 +496,14 @@ osif_fill_peer_mld_mac_connect_resp(struct wlan_objmgr_vdev *vdev,
 				    struct cfg80211_connect_resp_params *conn_rsp_params)
 {
 	struct wlan_objmgr_peer *peer_obj;
+	struct wlan_objmgr_psoc *psoc;
 
-	peer_obj = wlan_objmgr_get_peer_by_mac(wlan_vdev_get_psoc(vdev),
-					       rsp->bssid.bytes, WLAN_OSIF_ID);
+	psoc = wlan_vdev_get_psoc(vdev);
+	if (!psoc)
+		return QDF_STATUS_E_INVAL;
+
+	peer_obj = wlan_objmgr_get_peer_by_mac(psoc, rsp->bssid.bytes,
+					       WLAN_OSIF_ID);
 	if (!peer_obj)
 		return QDF_STATUS_E_INVAL;
 
@@ -1121,7 +1126,7 @@ QDF_STATUS osif_connect_handler(struct wlan_objmgr_vdev *vdev,
 		 QDF_IS_STATUS_ERROR(rsp->connect_status))
 		osif_cm_indicate_disconnect(vdev, osif_priv->wdev->netdev,
 					    WLAN_REASON_UNSPECIFIED,
-					    false, NULL, 0,
+					    false, NULL, 0, -1,
 					    qdf_mem_malloc_flags());
 	else
 		osif_indcate_connect_results(vdev, osif_priv, rsp);

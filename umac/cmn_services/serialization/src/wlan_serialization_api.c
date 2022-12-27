@@ -75,6 +75,63 @@ error:
 	return status;
 }
 
+bool wlan_ser_is_non_scan_cmd_type_in_vdev_queue(struct wlan_objmgr_vdev *vdev,
+				enum wlan_serialization_cmd_type cmd_type)
+{
+	bool found = false;
+	qdf_list_t *queue;
+	struct wlan_objmgr_pdev *pdev;
+	struct wlan_ser_pdev_obj *ser_pdev_obj;
+	struct wlan_ser_vdev_obj *ser_vdev_obj;
+	struct wlan_serialization_pdev_queue *pdev_queue;
+
+	if (!vdev) {
+		ser_err("invalid cmd");
+		goto error;
+	}
+
+	if (cmd_type < WLAN_SER_CMD_NONSCAN) {
+		ser_err("invalid cmd type %d", cmd_type);
+		goto error;
+	}
+
+	pdev = wlan_vdev_get_pdev(vdev);
+	if (!pdev) {
+		ser_err("invalid pdev");
+		goto error;
+	}
+
+	ser_pdev_obj = wlan_serialization_get_pdev_obj(pdev);
+	if (!ser_pdev_obj) {
+		ser_err("invalid ser pdev obj");
+		goto error;
+	}
+
+	pdev_queue = wlan_serialization_get_pdev_queue_obj(ser_pdev_obj,
+							   cmd_type);
+	if (!pdev_queue) {
+		ser_err("pdev_queue is invalid");
+		goto error;
+	}
+	ser_vdev_obj = wlan_serialization_get_vdev_obj(vdev);
+	if (!ser_vdev_obj) {
+		ser_err("invalid ser vdev obj");
+		goto error;
+	}
+
+	wlan_serialization_acquire_lock(&pdev_queue->pdev_queue_lock);
+	queue = wlan_serialization_get_list_from_vdev_queue(ser_vdev_obj,
+							    cmd_type, false);
+	if (wlan_serialization_find_cmd(queue, WLAN_SER_MATCH_CMD_TYPE_VDEV,
+					NULL, cmd_type, NULL, vdev,
+					WLAN_SER_VDEV_NODE))
+		found = true;
+
+	wlan_serialization_release_lock(&pdev_queue->pdev_queue_lock);
+error:
+	return found;
+}
+
 bool wlan_serialization_is_cmd_present_in_active_queue(
 		struct wlan_objmgr_psoc *psoc,
 		struct wlan_serialization_command *cmd)
@@ -227,54 +284,6 @@ wlan_serialization_deregister_comp_info_cb(struct wlan_objmgr_psoc *psoc,
 
 error:
 	return status;
-}
-
-enum wlan_serialization_cmd_status
-wlan_serialization_non_scan_cmd_status(
-		struct wlan_objmgr_pdev *pdev,
-		enum wlan_serialization_cmd_type cmd_type)
-{
-	bool cmd_in_active = 0;
-	bool cmd_in_pending = 0;
-	struct wlan_ser_pdev_obj *ser_pdev_obj =
-		wlan_serialization_get_pdev_obj(pdev);
-	enum wlan_serialization_cmd_status cmd_status = WLAN_SER_CMD_NOT_FOUND;
-	struct wlan_serialization_pdev_queue *pdev_q;
-	qdf_list_node_t *node = NULL;
-	qdf_list_t *queue = NULL;
-
-	pdev_q = &ser_pdev_obj->pdev_q[SER_PDEV_QUEUE_COMP_NON_SCAN];
-
-	/* Look in the pdev non scan active queue */
-	queue = &pdev_q->active_list;
-
-	wlan_serialization_acquire_lock(&pdev_q->pdev_queue_lock);
-
-	node = wlan_serialization_find_cmd(
-			queue, WLAN_SER_MATCH_CMD_TYPE,
-			NULL, cmd_type, NULL, NULL,  WLAN_SER_PDEV_NODE);
-
-	if (node)
-		cmd_in_active = true;
-
-	node = NULL;
-
-	/* Look in the pdev non scan pending queue */
-	queue = &pdev_q->pending_list;
-
-	node = wlan_serialization_find_cmd(
-			queue, WLAN_SER_MATCH_CMD_TYPE,
-			NULL, cmd_type, NULL, NULL,  WLAN_SER_PDEV_NODE);
-
-	if (node)
-		cmd_in_pending = true;
-
-	cmd_status = wlan_serialization_is_cmd_in_active_pending(
-			cmd_in_active, cmd_in_pending);
-
-	wlan_serialization_release_lock(&pdev_q->pdev_queue_lock);
-
-	return cmd_status;
 }
 
 enum wlan_serialization_cmd_status

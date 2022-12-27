@@ -819,6 +819,167 @@ dp_pdev_get_undecoded_capture_stats(struct dp_mon_pdev *mon_pdev,
 }
 #endif
 
+static const char *
+dp_preamble_type_str[] = {
+	"preamble OFDMA     ",
+	"preamble CCK       ",
+	"preamble HT        ",
+	"preamble VHT       ",
+	"preamble HE        ",
+	"preamble EHT       ",
+	"preamble NO SUPPORT",
+};
+
+static const char *
+dp_reception_type_str[] = {
+	"reception su        ",
+	"reception mu_mimo   ",
+	"reception ofdma     ",
+	"reception ofdma mimo",
+};
+
+static const char *
+dp_mu_dl_ul_str[] = {
+	"MU DL",
+	"MU UL",
+};
+
+static inline void
+dp_print_pdev_mpdu_fcs_ok_cnt(struct cdp_pdev_mon_stats *rx_mon_sts,
+			      uint32_t pkt_t, uint32_t rx_t,
+			      uint32_t dl_ul, uint32_t user)
+{
+	DP_PRINT_STATS("%s, %s, %s, user=%d, mpdu_fcs_ok=%d",
+		       dp_preamble_type_str[pkt_t],
+		       dp_reception_type_str[rx_t],
+		       dp_mu_dl_ul_str[dl_ul],
+		       user,
+		       rx_mon_sts->mpdu_cnt_fcs_ok[pkt_t][rx_t][dl_ul][user]);
+}
+
+static inline void
+dp_print_pdev_mpdu_fcs_err_cnt(struct cdp_pdev_mon_stats *rx_mon_sts,
+			       uint32_t pkt_t, uint32_t rx_t,
+			       uint32_t dl_ul, uint32_t user)
+{
+	DP_PRINT_STATS("%s, %s, %s, user=%d, mpdu_fcs_err=%d",
+		       dp_preamble_type_str[pkt_t],
+		       dp_reception_type_str[rx_t],
+		       dp_mu_dl_ul_str[dl_ul],
+		       user,
+		       rx_mon_sts->mpdu_cnt_fcs_err[pkt_t][rx_t][dl_ul][user]);
+}
+
+static inline void
+dp_print_pdev_mpdu_cnt(struct cdp_pdev_mon_stats *rx_mon_sts,
+		       uint32_t pkt_t, uint32_t rx_t,
+		       uint32_t dl_ul, uint32_t user)
+{
+	if (rx_mon_sts->mpdu_cnt_fcs_ok[pkt_t][rx_t][dl_ul][user])
+		dp_print_pdev_mpdu_fcs_ok_cnt(rx_mon_sts, pkt_t, rx_t,
+					      dl_ul, user);
+
+	if (rx_mon_sts->mpdu_cnt_fcs_err[pkt_t][rx_t][dl_ul][user])
+		dp_print_pdev_mpdu_fcs_err_cnt(rx_mon_sts, pkt_t, rx_t,
+					       dl_ul, user);
+}
+
+static inline void
+dp_print_pdev_mpdu_user(struct cdp_pdev_mon_stats *rx_mon_sts,
+			uint32_t pkt_t, uint32_t rx_t,
+			uint32_t dl_ul)
+{
+	uint32_t user;
+
+	for (user = 0; user < CDP_MU_SNIF_USER_MAX; user++)
+		dp_print_pdev_mpdu_cnt(rx_mon_sts, pkt_t, rx_t,
+				       dl_ul, user);
+}
+
+static inline void
+dp_print_pdev_mpdu_dl_ul(struct cdp_pdev_mon_stats *rx_mon_sts,
+			 uint32_t pkt_t, uint32_t rx_t)
+{
+	uint32_t dl_ul;
+
+	for (dl_ul = CDP_MU_TYPE_DL; dl_ul < CDP_MU_TYPE_MAX; dl_ul++)
+		dp_print_pdev_mpdu_user(rx_mon_sts, pkt_t, rx_t,
+					dl_ul);
+}
+
+static inline void
+dp_print_pdev_mpdu_rx_type(struct cdp_pdev_mon_stats *rx_mon_sts,
+			   uint32_t pkt_t)
+{
+	uint32_t rx_t;
+
+	for (rx_t = CDP_RX_TYPE_SU; rx_t < CDP_RX_TYPE_MAX; rx_t++)
+		dp_print_pdev_mpdu_dl_ul(rx_mon_sts, pkt_t, rx_t);
+}
+
+static inline void
+dp_print_pdev_mpdu_pkt_type(struct cdp_pdev_mon_stats *rx_mon_sts)
+{
+	uint32_t pkt_t;
+
+	for (pkt_t = CDP_PKT_TYPE_OFDM; pkt_t < CDP_PKT_TYPE_MAX; pkt_t++)
+		dp_print_pdev_mpdu_rx_type(rx_mon_sts, pkt_t);
+}
+
+static inline void
+print_ppdu_eht_type_mode(
+	struct cdp_pdev_mon_stats *rx_mon_stats,
+	uint32_t ppdu_type_mode,
+	uint32_t dl_ul)
+{
+	DP_PRINT_STATS("type_mode=%d, dl_ul=%d, cnt=%d",
+		       ppdu_type_mode,
+		       dl_ul,
+		       rx_mon_stats->ppdu_eht_type_mode[ppdu_type_mode][dl_ul]);
+}
+
+static inline void
+print_ppdu_eth_type_mode_dl_ul(
+	struct cdp_pdev_mon_stats *rx_mon_stats,
+	uint32_t ppdu_type_mode
+)
+{
+	uint32_t dl_ul;
+
+	for (dl_ul = 0; dl_ul < CDP_MU_TYPE_MAX; dl_ul++) {
+		if (rx_mon_stats->ppdu_eht_type_mode[ppdu_type_mode][dl_ul])
+			print_ppdu_eht_type_mode(rx_mon_stats,
+						 ppdu_type_mode, dl_ul);
+	}
+}
+
+static inline void
+dp_print_pdev_eht_ppdu_cnt(struct dp_pdev *pdev)
+{
+	struct cdp_pdev_mon_stats *rx_mon_stats;
+	struct dp_mon_pdev *mon_pdev = pdev->monitor_pdev;
+	uint32_t ppdu_type_mode;
+
+	rx_mon_stats = &mon_pdev->rx_mon_stats;
+	DP_PRINT_STATS("Monitor EHT PPDU  Count");
+	for (ppdu_type_mode = 0; ppdu_type_mode < CDP_EHT_TYPE_MODE_MAX;
+	     ppdu_type_mode++) {
+		print_ppdu_eth_type_mode_dl_ul(rx_mon_stats,
+					       ppdu_type_mode);
+	}
+}
+
+static inline void
+dp_print_pdev_mpdu_stats(struct dp_pdev *pdev)
+{
+	struct cdp_pdev_mon_stats *rx_mon_stats;
+	struct dp_mon_pdev *mon_pdev = pdev->monitor_pdev;
+
+	rx_mon_stats = &mon_pdev->rx_mon_stats;
+	DP_PRINT_STATS("Monitor MPDU Count");
+	dp_print_pdev_mpdu_pkt_type(rx_mon_stats);
+}
+
 void
 dp_print_pdev_rx_mon_stats(struct dp_pdev *pdev)
 {
@@ -842,6 +1003,12 @@ dp_print_pdev_rx_mon_stats(struct dp_pdev *pdev)
 		       rx_mon_stats->status_ppdu_start_mis);
 	DP_PRINT_STATS("status_ppdu_end_mis_cnt = %d",
 		       rx_mon_stats->status_ppdu_end_mis);
+
+	DP_PRINT_STATS("start_user_info_cnt = %d",
+		       rx_mon_stats->start_user_info_cnt);
+	DP_PRINT_STATS("end_user_stats_cnt = %d",
+		       rx_mon_stats->end_user_stats_cnt);
+
 	DP_PRINT_STATS("status_ppdu_done_cnt = %d",
 		       rx_mon_stats->status_ppdu_done);
 	DP_PRINT_STATS("dest_ppdu_done_cnt = %d",
@@ -907,6 +1074,10 @@ dp_print_pdev_rx_mon_stats(struct dp_pdev *pdev)
 
 	dp_pdev_get_undecoded_capture_stats(mon_pdev, rx_mon_stats);
 	dp_mon_rx_print_advanced_stats(pdev->soc, pdev);
+
+	dp_print_pdev_mpdu_stats(pdev);
+	dp_print_pdev_eht_ppdu_cnt(pdev);
+
 }
 
 #ifdef QCA_SUPPORT_BPR
@@ -930,6 +1101,10 @@ dp_set_hybrid_pktlog_enable(struct dp_pdev *pdev,
 			    struct dp_mon_pdev *mon_pdev,
 			    struct dp_soc *soc)
 {
+	struct wlan_cfg_dp_soc_ctxt *soc_cfg_ctx;
+	struct dp_mon_ops *mon_ops = NULL;
+	uint16_t num_buffers;
+
 	if (mon_pdev->mvdev) {
 		/* Nothing needs to be done if monitor mode is
 		 * enabled
@@ -938,10 +1113,23 @@ dp_set_hybrid_pktlog_enable(struct dp_pdev *pdev,
 		return false;
 	}
 
+	mon_ops = dp_mon_ops_get(pdev->soc);
+	if (!mon_ops) {
+		dp_mon_filter_err("Mon ops uninitialized");
+		return QDF_STATUS_E_FAILURE;
+	}
+
 	if (!mon_pdev->pktlog_hybrid_mode) {
 		mon_pdev->pktlog_hybrid_mode = true;
+		soc_cfg_ctx = soc->wlan_cfg_ctx;
+		num_buffers =
+			wlan_cfg_get_dp_soc_tx_mon_buf_ring_size(soc_cfg_ctx);
+
+		if (mon_ops && mon_ops->set_mon_mode_buf_rings_tx)
+			mon_ops->set_mon_mode_buf_rings_tx(pdev, num_buffers);
+
 		dp_mon_filter_setup_pktlog_hybrid(pdev);
-		if (dp_mon_filter_update(pdev) !=
+		if (dp_tx_mon_filter_update(pdev) !=
 		    QDF_STATUS_SUCCESS) {
 			dp_cdp_err("Set hybrid filters failed");
 			dp_mon_filter_reset_pktlog_hybrid(pdev);
@@ -1003,13 +1191,11 @@ int dp_set_pktlog_wifi3(struct dp_pdev *pdev, uint32_t event,
 	if (enable) {
 		switch (event) {
 		case WDI_EVENT_RX_DESC:
-			if (mon_pdev->mvdev) {
-				/* Nothing needs to be done if monitor mode is
-				 * enabled
-				 */
-				mon_pdev->rx_pktlog_mode = DP_RX_PKTLOG_FULL;
+			/* Nothing needs to be done if monitor mode is
+			 * enabled
+			 */
+			if (mon_pdev->mvdev)
 				return 0;
-			}
 
 			if (mon_pdev->rx_pktlog_mode == DP_RX_PKTLOG_FULL)
 				break;
@@ -1030,13 +1216,11 @@ int dp_set_pktlog_wifi3(struct dp_pdev *pdev, uint32_t event,
 			break;
 
 		case WDI_EVENT_LITE_RX:
-			if (mon_pdev->mvdev) {
-				/* Nothing needs to be done if monitor mode is
-				 * enabled
-				 */
-				mon_pdev->rx_pktlog_mode = DP_RX_PKTLOG_LITE;
+			/* Nothing needs to be done if monitor mode is
+			 * enabled
+			 */
+			if (mon_pdev->mvdev)
 				return 0;
-			}
 
 			if (mon_pdev->rx_pktlog_mode == DP_RX_PKTLOG_LITE)
 				break;
@@ -1072,14 +1256,11 @@ int dp_set_pktlog_wifi3(struct dp_pdev *pdev, uint32_t event,
 			break;
 
 		case WDI_EVENT_RX_CBF:
-			if (mon_pdev->mvdev) {
-				/* Nothing needs to be done if monitor mode is
-				 * enabled
-				 */
-				dp_mon_info("Mon mode, CBF setting filters");
-				mon_pdev->rx_pktlog_cbf = true;
+			/* Nothing needs to be done if monitor mode is
+			 * enabled
+			 */
+			if (mon_pdev->mvdev)
 				return 0;
-			}
 
 			if (mon_pdev->rx_pktlog_cbf)
 				break;
@@ -1121,14 +1302,11 @@ int dp_set_pktlog_wifi3(struct dp_pdev *pdev, uint32_t event,
 		switch (event) {
 		case WDI_EVENT_RX_DESC:
 		case WDI_EVENT_LITE_RX:
-			if (mon_pdev->mvdev) {
-				/* Nothing needs to be done if monitor mode is
-				 * enabled
-				 */
-				mon_pdev->rx_pktlog_mode =
-						DP_RX_PKTLOG_DISABLED;
+			/* Nothing needs to be done if monitor mode is
+			 * enabled
+			 */
+			if (mon_pdev->mvdev)
 				return 0;
-			}
 
 			if (mon_pdev->rx_pktlog_mode == DP_RX_PKTLOG_DISABLED)
 				break;
@@ -1478,6 +1656,54 @@ fail0:
 	return 0;
 }
 #endif /* ATH_SUPPORT_NAC_RSSI || ATH_SUPPORT_NAC */
+
+/*
+ * dp_update_mon_mac_filter() - Set/reset monitor mac filter
+ * @soc_hdl: cdp soc handle
+ * @vdev_id: id of virtual device object
+ * @cmd: Add/Del command
+ *
+ * Return: 0 for success. nonzero for failure.
+ */
+static QDF_STATUS dp_update_mon_mac_filter(struct cdp_soc_t *soc_hdl,
+					   uint8_t vdev_id, uint32_t cmd)
+{
+	struct dp_soc *soc = (struct dp_soc *)soc_hdl;
+	struct dp_pdev *pdev;
+	struct dp_vdev *vdev = dp_vdev_get_ref_by_id(soc, vdev_id,
+						     DP_MOD_ID_CDP);
+	struct dp_mon_pdev *mon_pdev;
+	QDF_STATUS status = QDF_STATUS_E_FAILURE;
+
+	if (!vdev)
+		return status;
+
+	pdev = vdev->pdev;
+	if (!pdev) {
+		dp_vdev_unref_delete(soc, vdev, DP_MOD_ID_CDP);
+		return status;
+	}
+
+	mon_pdev = pdev->monitor_pdev;
+	if (cmd == DP_NAC_PARAM_ADD) {
+		/* first neighbour added */
+		dp_mon_filter_set_reset_mon_mac_filter(pdev, true);
+		status = dp_mon_filter_update(pdev);
+		if (status != QDF_STATUS_SUCCESS) {
+			dp_cdp_err("%pK: Mon mac filter set failed", soc);
+			dp_mon_filter_set_reset_mon_mac_filter(pdev, false);
+		}
+	} else if (cmd == DP_NAC_PARAM_DEL) {
+		/* last neighbour deleted */
+		dp_mon_filter_set_reset_mon_mac_filter(pdev, false);
+		status = dp_mon_filter_update(pdev);
+		if (status != QDF_STATUS_SUCCESS)
+			dp_cdp_err("%pK: Mon mac filter reset failed", soc);
+	}
+
+	dp_vdev_unref_delete(soc, vdev, DP_MOD_ID_CDP);
+	return status;
+}
 
 #ifdef ATH_SUPPORT_NAC_RSSI
 /**
@@ -2084,10 +2310,6 @@ void dp_peer_update_telemetry_stats(struct dp_peer *peer)
 
 	mon_peer = peer->monitor_peer;
 	if (qdf_likely(mon_peer)) {
-		DP_STATS_INC(pdev, telemetry_stats.tx_mpdu_failed,
-			     mon_peer->stats.tx.retries);
-		DP_STATS_INC(pdev, telemetry_stats.tx_mpdu_total,
-			     mon_peer->stats.tx.tx_mpdus_tried);
 		for (ac = 0; ac < WME_AC_MAX; ac++) {
 			mon_peer->stats.airtime_consumption[ac].avg_consumption_per_sec =
 					mon_peer->stats.airtime_consumption[ac].consumption;
@@ -2732,6 +2954,44 @@ static uint32_t dp_mon_get_ru_width_from_ru_size(uint16_t ru_size)
 }
 #endif
 
+#ifdef WLAN_TELEMETRY_STATS_SUPPORT
+/*
+ * dp_pdev_telemetry_stats_update() - Update pdev telemetry stats
+ * @pdev: Datapath pdev handle
+ * @ppdu: PPDU Descriptor
+ *
+ * Return: None
+ */
+static void
+dp_pdev_telemetry_stats_update(
+		struct dp_pdev *pdev,
+		struct cdp_tx_completion_ppdu_user *ppdu)
+{
+	uint16_t mpdu_tried;
+	uint16_t mpdu_failed;
+	uint16_t num_mpdu;
+	uint8_t ac = 0;
+
+	num_mpdu = ppdu->mpdu_success;
+	mpdu_tried = ppdu->mpdu_tried_ucast + ppdu->mpdu_tried_mcast;
+	mpdu_failed = mpdu_tried - num_mpdu;
+
+	ac = TID_TO_WME_AC(ppdu->tid);
+
+	DP_STATS_INC(pdev, telemetry_stats.tx_mpdu_failed[ac],
+		     mpdu_failed);
+
+	DP_STATS_INC(pdev, telemetry_stats.tx_mpdu_total[ac],
+		     mpdu_tried);
+}
+#else
+static inline void
+dp_pdev_telemetry_stats_update(
+		struct dp_pdev *pdev,
+		struct cdp_tx_completion_ppdu_user *ppdu)
+{ }
+#endif
+
 /*
  * dp_tx_stats_update() - Update per-peer statistics
  * @pdev: Datapath pdev handle
@@ -2790,6 +3050,7 @@ dp_tx_stats_update(struct dp_pdev *pdev, struct dp_peer *peer,
 		 * mpdu failed equal mpdu tried.
 		 */
 		DP_STATS_INC(mon_peer, tx.retries, mpdu_failed);
+		dp_pdev_telemetry_stats_update(pdev, ppdu);
 		return;
 	}
 
@@ -2896,6 +3157,7 @@ dp_tx_stats_update(struct dp_pdev *pdev, struct dp_peer *peer,
 		mon_ops->mon_tx_stats_update(mon_peer, ppdu);
 
 	dp_tx_rate_stats_update(peer, ppdu);
+	dp_pdev_telemetry_stats_update(pdev, ppdu);
 
 	dp_peer_stats_notify(pdev, peer);
 
@@ -5762,6 +6024,9 @@ void dp_mon_cdp_ops_register(struct dp_soc *soc)
 #if defined(WLAN_CFR_ENABLE) && defined(WLAN_ENH_CFR_ENABLE)
 		dp_cfr_filter_register_1_0(ops);
 #endif
+		if (target_type == TARGET_TYPE_QCN9000)
+			ops->ctrl_ops->txrx_update_mon_mac_filter =
+					dp_update_mon_mac_filter;
 		break;
 	case TARGET_TYPE_QCN9224:
 	case TARGET_TYPE_QCA5332:
@@ -6093,6 +6358,7 @@ void dp_mon_feature_ops_deregister(struct dp_soc *soc)
 #if defined(ATH_SUPPORT_NAC_RSSI) || defined(ATH_SUPPORT_NAC)
 	mon_ops->mon_filter_setup_smart_monitor = NULL;
 #endif
+	mon_ops->mon_filter_set_reset_mon_mac_filter = NULL;
 #ifdef WLAN_RX_PKT_CAPTURE_ENH
 	mon_ops->mon_filter_setup_rx_enh_capture = NULL;
 #endif

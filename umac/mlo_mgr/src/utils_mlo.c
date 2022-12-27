@@ -1057,6 +1057,7 @@ util_parse_probereq_info_from_linkinfo(uint8_t *linkinfo,
 			probereq_info->link_id[probereq_info->num_links] = linkid;
 
 			probereq_info->num_links++;
+			mlo_debug("LINK ID requested is = %u", linkid);
 		}
 
 		linkinfo_remlen -= (sizeof(struct subelem_header) +
@@ -2899,6 +2900,63 @@ util_find_mlie(uint8_t *buf, qdf_size_t buflen, uint8_t **mlieseq,
 }
 
 QDF_STATUS
+util_find_mlie_by_variant(uint8_t *buf, qdf_size_t buflen, uint8_t **mlieseq,
+			  qdf_size_t *mlieseqlen, int variant)
+{
+	uint8_t *ieseq;
+	qdf_size_t ieseqlen;
+	QDF_STATUS status;
+	int ml_variant;
+	qdf_size_t buf_parsed_len;
+
+	if (!buf || !buflen || !mlieseq || !mlieseqlen)
+		return QDF_STATUS_E_NULL_VALUE;
+
+	if (variant >= WLAN_ML_VARIANT_INVALIDSTART)
+		return QDF_STATUS_E_PROTO;
+
+	ieseq = NULL;
+	ieseqlen = 0;
+	*mlieseq = NULL;
+	*mlieseqlen = 0;
+	buf_parsed_len = 0;
+
+	while (buflen > buf_parsed_len) {
+		status = util_find_mlie(buf + buf_parsed_len,
+					buflen - buf_parsed_len,
+					&ieseq, &ieseqlen);
+
+		if (QDF_IS_STATUS_ERROR(status))
+			return status;
+
+		/* Even if the element is not found, we have successfully
+		 * examined the buffer. The caller will be provided a NULL value
+		 * for the starting of the Multi-Link element. Hence, we return
+		 * success.
+		 */
+		if (!ieseq)
+			return QDF_STATUS_SUCCESS;
+
+		status = util_get_mlie_variant(ieseq, ieseqlen,
+					       &ml_variant);
+		if (QDF_IS_STATUS_ERROR(status)) {
+			mlo_err("Unable to get Multi-link element variant");
+			return status;
+		}
+
+		if (ml_variant == variant) {
+			*mlieseq = ieseq;
+			*mlieseqlen = ieseqlen;
+			return QDF_STATUS_SUCCESS;
+		}
+
+		buf_parsed_len = ieseq + ieseqlen - buf;
+	}
+
+	return QDF_STATUS_E_INVAL;
+}
+
+QDF_STATUS
 util_get_mlie_common_info_len(uint8_t *mlieseq, qdf_size_t mlieseqlen,
 			      uint8_t *commoninfo_len)
 {
@@ -3558,8 +3616,12 @@ util_get_bvmlie_persta_partner_info(uint8_t *mlieseq,
 		return ret;
 	}
 
-	/* In case Link Info is absent, the number of partner links will remain
-	 * zero.
+	/*
+	 * If Probe Request variant Multi-Link element in the Multi-Link probe
+	 * request does not include any per-STA profile, then all APs affiliated
+	 * with the same AP MLD as the AP identified in the Addr 1 or Addr 3
+	 * field or AP MLD ID of the Multi-Link probe request are requested
+	 * APs return success here
 	 */
 	if (!linkinfo) {
 		qdf_mem_free(mlieseqpayload_copy);
@@ -3592,7 +3654,6 @@ util_get_prvmlie_persta_link_id(uint8_t *mlieseq,
 	enum wlan_ml_variant variant;
 	uint8_t *linkinfo;
 	qdf_size_t linkinfo_len;
-	struct mlo_probereq_info pinfo = {0};
 	qdf_size_t mlieseqpayloadlen;
 	uint8_t *mlieseqpayload_copy;
 	bool is_elemfragseq;
@@ -3726,20 +3787,19 @@ util_get_prvmlie_persta_link_id(uint8_t *mlieseq,
 	 * zero.
 	 */
 	if (!linkinfo) {
+		mlo_debug("No link info present");
 		qdf_mem_free(mlieseqpayload_copy);
 		return QDF_STATUS_SUCCESS;
 	}
 
 	ret = util_parse_probereq_info_from_linkinfo(linkinfo,
 						     linkinfo_len,
-						     &pinfo);
+						     probereq_info);
 
 	if (QDF_IS_STATUS_ERROR(ret)) {
 		qdf_mem_free(mlieseqpayload_copy);
 		return ret;
 	}
-
-	qdf_mem_copy(probereq_info, &pinfo, sizeof(*probereq_info));
 
 	qdf_mem_free(mlieseqpayload_copy);
 

@@ -243,6 +243,9 @@ uint32_t dp_rx_nf_process(struct dp_intr *int_ctx,
 #if defined(WLAN_FEATURE_11BE_MLO) && defined(WLAN_MLO_MULTI_CHIP)
 struct dp_soc *
 dp_rx_replensih_soc_get(struct dp_soc *soc, uint8_t chip_id);
+
+struct dp_soc *
+dp_soc_get_by_idle_bm_id(struct dp_soc *soc, uint8_t idle_bm_id);
 #else
 static inline struct dp_soc *
 dp_rx_replensih_soc_get(struct dp_soc *soc, uint8_t chip_id)
@@ -499,7 +502,7 @@ dp_rx_prefetch_hw_sw_nbuf_32_byte_desc(struct dp_soc *soc,
  * @txrx_peer: pointer to txrx_peer
  * @tid: tid value
  *
- * Return: qdesc adrress in reo destination ring buffer
+ * Return: qdesc address in reo destination ring buffer
  */
 static inline
 uint64_t dp_rx_get_reo_qdesc_addr_be(hal_soc_handle_t hal_soc,

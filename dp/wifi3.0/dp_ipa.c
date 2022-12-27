@@ -52,8 +52,10 @@
  * this issue.
  */
 #define DP_IPA_WAR_WBM2SW_REL_RING_NO_BUF_ENTRIES 16
+
 /**
  *struct dp_ipa_reo_remap_record - history for dp ipa reo remaps
+ * @timestamp: Timestamp when remap occurs
  * @ix0_reg: reo destination ring IX0 value
  * @ix2_reg: reo destination ring IX2 value
  * @ix3_reg: reo destination ring IX3 value
@@ -484,7 +486,7 @@ static void dp_ipa_tx_alt_pool_detach(struct dp_soc *soc, struct dp_pdev *pdev)
 	soc->ipa_uc_tx_rsc_alt.tx_buf_pool_vaddr_unaligned = NULL;
 
 	ipa_res = &pdev->ipa_resource;
-	if (!ipa_res->is_db_ddr_mapped)
+	if (!ipa_res->is_db_ddr_mapped && ipa_res->tx_alt_comp_doorbell_vaddr)
 		iounmap(ipa_res->tx_alt_comp_doorbell_vaddr);
 
 	qdf_mem_free_sgtable(&ipa_res->tx_alt_ring.sgtable);
@@ -949,6 +951,9 @@ static void dp_ipa_tx_comp_ring_init_hp(struct dp_soc *soc,
 			     res->tx_comp_doorbell_vaddr);
 
 	/* Init the alternate TX comp ring */
+	if (!res->tx_alt_comp_doorbell_paddr)
+		return;
+
 	wbm_srng = (struct hal_srng *)
 		soc->tx_comp_ring[IPA_TX_ALT_COMP_RING_IDX].hal_srng;
 
@@ -972,6 +977,9 @@ static void dp_ipa_set_tx_doorbell_paddr(struct dp_soc *soc,
 		(void *)ipa_res->tx_comp_doorbell_vaddr);
 
 	/* Setup for alternative TX comp ring */
+	if (!ipa_res->tx_alt_comp_doorbell_paddr)
+		return;
+
 	wbm_srng = (struct hal_srng *)
 			soc->tx_comp_ring[IPA_TX_ALT_COMP_RING_IDX].hal_srng;
 
@@ -2847,6 +2855,12 @@ QDF_STATUS dp_ipa_setup_iface(char *ifname, uint8_t *mac_addr,
 
 	qdf_mem_zero(&in, sizeof(qdf_ipa_wdi_reg_intf_in_params_t));
 
+	/* Need to reset the values to 0 as all the fields are not
+	 * updated in the Header, Unused fields will be set to 0.
+	 */
+	qdf_mem_zero(&uc_tx_vlan_hdr, sizeof(struct dp_ipa_uc_tx_vlan_hdr));
+	qdf_mem_zero(&uc_tx_vlan_hdr_v6, sizeof(struct dp_ipa_uc_tx_vlan_hdr));
+
 	dp_debug("Add Partial hdr: %s, "QDF_MAC_ADDR_FMT, ifname,
 		 QDF_MAC_ADDR_REF(mac_addr));
 	qdf_mem_zero(&hdr_info, sizeof(qdf_ipa_wdi_hdr_info_t));
@@ -3438,7 +3452,7 @@ static inline bool dp_ipa_peer_check(struct dp_soc *soc,
 	}
 
 	peer = dp_peer_get_ref_by_id(soc, ast_entry->peer_id,
-				     DP_MOD_ID_AST);
+				     DP_MOD_ID_IPA);
 
 	if (!peer) {
 		qdf_spin_unlock_bh(&soc->ast_lock);

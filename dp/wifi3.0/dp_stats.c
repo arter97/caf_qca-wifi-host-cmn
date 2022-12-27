@@ -17,6 +17,7 @@
  * PERFORMANCE OF THIS SOFTWARE.
  */
 #include "qdf_types.h"
+#include "qdf_module.h"
 #include "dp_peer.h"
 #include "dp_types.h"
 #include "dp_internal.h"
@@ -5617,6 +5618,11 @@ void dp_print_soc_cfg_params(struct dp_soc *soc)
 		       soc_cfg_ctx->int_batch_threshold_other);
 	DP_PRINT_STATS("Int timer threshold other: %u ",
 		       soc_cfg_ctx->int_timer_threshold_other);
+	DP_PRINT_STATS("Int batch threshold ppe2tcl: %u ",
+		       soc_cfg_ctx->int_batch_threshold_ppe2tcl);
+	DP_PRINT_STATS("Int timer threshold ppe2tcl: %u ",
+		       soc_cfg_ctx->int_timer_threshold_ppe2tcl);
+
 	DP_PRINT_STATS("DP NAPI scale factor: %u ",
 		       soc_cfg_ctx->napi_scale_factor);
 
@@ -5854,6 +5860,8 @@ dp_print_ring_stat_from_hal(struct dp_soc *soc,  struct dp_srng *srng,
 	}
 }
 
+qdf_export_symbol(dp_print_ring_stat_from_hal);
+
 #ifdef FEATURE_TSO_STATS
 /**
  * dp_print_tso_seg_stats - tso segment stats
@@ -6031,6 +6039,8 @@ dp_print_ring_stats(struct dp_pdev *pdev)
 					    [lmac_id],
 					    RXDMA_DST);
 	}
+
+	dp_print_txmon_ring_stat_from_hal(pdev);
 
 #ifdef WLAN_SUPPORT_PPEDS
 	if (pdev->soc->arch_ops.dp_txrx_ppeds_rings_status)
@@ -7155,6 +7165,8 @@ void dp_txrx_path_stats(struct dp_soc *soc)
 
 		DP_PRINT_STATS("Invalid release source: %u",
 			       soc->stats.tx.invalid_release_source);
+		DP_PRINT_STATS("Invalid TX desc from completion ring: %u",
+			       soc->stats.tx.invalid_tx_comp_desc);
 		DP_PRINT_STATS("Dropped in host:");
 		DP_PRINT_STATS("Total packets dropped: %u,",
 			       pdev->stats.tx_i.dropped.dropped_pkt.num);
@@ -7507,6 +7519,19 @@ dp_print_pdev_tx_stats(struct dp_pdev *pdev)
 		       pdev->stats.tx_i.mcast_en.dropped_send_fail);
 	DP_PRINT_STATS("	Unicast sent = %u",
 		       pdev->stats.tx_i.mcast_en.ucast);
+
+	DP_PRINT_STATS("EAPOL Packets dropped:");
+	DP_PRINT_STATS("        Dropped: TX desc errors = %u",
+		       pdev->stats.eap_drop_stats.tx_desc_err);
+	DP_PRINT_STATS("        Dropped: Tx HAL ring access errors = %u",
+		       pdev->stats.eap_drop_stats.tx_hal_ring_access_err);
+	DP_PRINT_STATS("        Dropped: TX DMA map errors = %u",
+		       pdev->stats.eap_drop_stats.tx_dma_map_err);
+	DP_PRINT_STATS("        Dropped: Tx HW enqueue errors = %u",
+		       pdev->stats.eap_drop_stats.tx_hw_enqueue);
+	DP_PRINT_STATS("        Dropped: TX SW enqueue errors= %u",
+		       pdev->stats.eap_drop_stats.tx_sw_enqueue);
+
 	DP_PRINT_STATS("IGMP Mcast Enhancement:");
 	DP_PRINT_STATS("	IGMP packets received = %u",
 		       pdev->stats.tx_i.igmp_mcast_en.igmp_rcvd);
@@ -7662,6 +7687,18 @@ dp_print_pdev_rx_stats(struct dp_pdev *pdev)
 		       pdev->stats.rx_buffer_pool.num_pool_bufs_replenish);
 }
 
+#ifdef WLAN_SUPPORT_PPEDS
+void dp_print_tx_ppeds_stats(struct dp_soc *soc)
+{
+	if (soc->arch_ops.dp_tx_ppeds_inuse_desc)
+		soc->arch_ops.dp_tx_ppeds_inuse_desc(soc);
+}
+#else
+void dp_print_tx_ppeds_stats(struct dp_soc *soc)
+{
+}
+#endif
+
 void
 dp_print_soc_tx_stats(struct dp_soc *soc)
 {
@@ -7691,6 +7728,8 @@ dp_print_soc_tx_stats(struct dp_soc *soc)
 		       soc->stats.tx.tcl_ring_full[3]);
 	DP_PRINT_STATS("Tx invalid completion release = %u",
 		       soc->stats.tx.invalid_release_source);
+	DP_PRINT_STATS("TX invalid Desc from completion ring = %u",
+		       soc->stats.tx.invalid_tx_comp_desc);
 	DP_PRINT_STATS("Tx comp wbm internal error = %d : [%d %d %d %d]",
 		       soc->stats.tx.wbm_internal_error[WBM_INT_ERROR_ALL],
 		       soc->stats.tx.wbm_internal_error[WBM_INT_ERROR_REO_NULL_BUFFER],
@@ -7703,6 +7742,7 @@ dp_print_soc_tx_stats(struct dp_soc *soc)
 		       soc->stats.tx.tx_comp_loop_pkt_limit_hit);
 	DP_PRINT_STATS("Tx comp HP out of sync2 = %d",
 		       soc->stats.tx.hp_oos2);
+	dp_print_tx_ppeds_stats(soc);
 }
 
 static
@@ -7862,6 +7902,8 @@ dp_print_soc_rx_stats(struct dp_soc *soc)
 
 	DP_PRINT_STATS("No of AST Entries = %d", soc->num_ast_entries);
 	DP_PRINT_STATS("SOC Rx Stats:\n");
+	DP_PRINT_STATS("Fast recycled packets: %llu",
+		       soc->stats.rx.fast_recycled);
 	DP_PRINT_STATS("Fragmented packets: %u",
 		       soc->stats.rx.rx_frags);
 	DP_PRINT_STATS("Reo reinjected packets: %u",
@@ -7984,8 +8026,14 @@ dp_print_soc_rx_stats(struct dp_soc *soc)
 	DP_PRINT_STATS("Reo2rel route drop:%d",
 		       soc->stats.rx.reo2rel_route_drop);
 	DP_PRINT_STATS("Rx Flush count:%d", soc->stats.rx.err.rx_flush_count);
+	DP_PRINT_STATS("RX HW stats request count:%d",
+		       soc->stats.rx.rx_hw_stats_requested);
+	DP_PRINT_STATS("RX HW stats request timeout:%d",
+		       soc->stats.rx.rx_hw_stats_timeout);
 	DP_PRINT_STATS("Rx invalid TID count:%d",
 		       soc->stats.rx.err.rx_invalid_tid_err);
+	DP_PRINT_STATS("Rx Defrag Address1 Invalid:%d",
+		       soc->stats.rx.err.defrag_ad1_invalid);
 }
 
 #ifdef FEATURE_TSO_STATS
@@ -8829,6 +8877,8 @@ QDF_STATUS dp_txrx_get_soc_stats(struct cdp_soc_t *soc_hdl,
 	soc_stats->tx.dropped_fw_removed = soc->stats.tx.dropped_fw_removed;
 	soc_stats->tx.invalid_release_source =
 					soc->stats.tx.invalid_release_source;
+	soc_stats->tx.invalid_tx_comp_desc =
+					soc->stats.tx.invalid_tx_comp_desc;
 	for (inx = 0; inx < CDP_MAX_WIFI_INT_ERROR_REASONS; inx++)
 		soc_stats->tx.wifi_internal_error[inx] =
 					soc->stats.tx.wbm_internal_error[inx];
@@ -9168,12 +9218,12 @@ dp_get_pdev_telemetry_stats(struct cdp_soc_t *soc_hdl, uint8_t pdev_id,
 	/* consumption is in micro seconds, convert it to seconds and
 	 * then calculate %age per sec
 	 */
-	for (ac = 0; ac < WME_AC_MAX; ac++)
+	for (ac = 0; ac < WME_AC_MAX; ac++) {
 		stats->link_airtime[ac] =
 			((pdev->stats.telemetry_stats.link_airtime[ac] * 100) / 1000000);
-	stats->tx_mpdu_failed = pdev->stats.telemetry_stats.tx_mpdu_failed;
-	stats->tx_mpdu_total = pdev->stats.telemetry_stats.tx_mpdu_total;
-
+		stats->tx_mpdu_failed[ac] = pdev->stats.telemetry_stats.tx_mpdu_failed[ac];
+		stats->tx_mpdu_total[ac] = pdev->stats.telemetry_stats.tx_mpdu_total[ac];
+	}
 	return QDF_STATUS_SUCCESS;
 }
 

@@ -113,6 +113,7 @@
 
 #define CDP_MAX_RX_RINGS 8  /* max rx rings */
 #define CDP_MAX_TX_COMP_RINGS 5 /* max tx/completion rings */
+#define CDP_MAX_TX_COMP_PPE_RING (CDP_MAX_TX_COMP_RINGS - 1)
 #define CDP_MAX_RX_WBM_RINGS 1 /* max rx wbm rings */
 
 #define CDP_MAX_TX_TQM_STATUS 9  /* max tx tqm completion status */
@@ -2633,6 +2634,7 @@ struct cdp_per_cpu_packets {
  * @tx.desc_in_use: Descriptors in use at soc
  * @tx.dropped_fw_removed: HW_release_reason == FW removed
  * @tx.invalid_release_source: tx completion release_src != HW or FW
+ * @tx.invalid_tx_comp_desc: TX Desc from completion ring Desc is not valid
  * @tx.wifi_internal_error: tx completion wifi_internal_error
  * @tx.non_wifi_internal_err: tx completion non_wifi_internal_error
  * @tx.tx_comp_loop_pkt_limit_hit: TX Comp loop packet limit hit
@@ -2716,6 +2718,7 @@ struct cdp_soc_stats {
 		uint32_t desc_in_use;
 		uint32_t dropped_fw_removed;
 		uint32_t invalid_release_source;
+		uint32_t invalid_tx_comp_desc;
 		uint32_t wifi_internal_error[CDP_MAX_WIFI_INT_ERROR_REASONS];
 		uint32_t non_wifi_internal_err;
 		uint32_t tx_comp_loop_pkt_limit_hit;
@@ -2814,8 +2817,8 @@ struct cdp_soc_stats {
  * @link_airtime: pdev airtime usage per ac per sec
  */
 struct cdp_pdev_telemetry_stats {
-	uint32_t tx_mpdu_failed;
-	uint32_t tx_mpdu_total;
+	uint32_t tx_mpdu_failed[WME_AC_MAX];
+	uint32_t tx_mpdu_total[WME_AC_MAX];
 	uint32_t link_airtime[WME_AC_MAX];
 };
 
@@ -2945,6 +2948,26 @@ struct cdp_pdev_stats {
 		uint32_t data_rx_ppdu;
 		uint32_t data_users[OFDMA_NUM_USERS];
 	} ul_ofdma;
+
+	/**
+	 * struct eap_drop_stats: EAPOL packet drop stats information
+	 * @tx_desc_error: Total number EAPOL packets dropped due to TX
+	 *		   descriptor error
+	 * @tx_hal_ring_access_err: Total EAPOL packets dropped due to
+	 *			     HAL ring access failure
+	 * @tx_dma_map_err: EAPOL packets dropped due to error in DMA map
+	 * @tx_hw_enqueue: EAPOL packets dropped by the host due to failure
+	 *		   in HW enqueue
+	 * @tx_sw_enqueue: EAPOL packets dropped by the host due to failure
+	 *		   in SW enqueue
+	 */
+	struct {
+		uint8_t tx_desc_err;
+		uint8_t tx_hal_ring_access_err;
+		uint8_t tx_dma_map_err;
+		uint8_t tx_hw_enqueue;
+		uint8_t tx_sw_enqueue;
+	} eap_drop_stats;
 
 	struct cdp_tso_stats tso_stats;
 	struct cdp_cfr_rcc_stats rcc;
