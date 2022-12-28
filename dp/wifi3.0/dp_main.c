@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -11054,6 +11054,12 @@ dp_set_vdev_param(struct cdp_soc_t *cdp_soc, uint8_t vdev_id,
 #ifdef DP_TRAFFIC_END_INDICATION
 	case CDP_ENABLE_TRAFFIC_END_INDICATION:
 		vdev->traffic_end_ind_en = val.cdp_vdev_param_traffic_end_ind;
+		break;
+#endif
+#ifdef FEATURE_DIRECT_LINK
+	case CDP_VDEV_TX_TO_FW:
+		dp_info("vdev_id %d to_fw :%d", vdev_id, val.cdp_vdev_tx_to_fw);
+		vdev->to_fw = val.cdp_vdev_tx_to_fw;
 		break;
 #endif
 	default:

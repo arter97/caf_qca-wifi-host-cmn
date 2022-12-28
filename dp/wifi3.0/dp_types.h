@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -3548,6 +3548,10 @@ struct dp_vdev {
 	bool traffic_end_ind_en;
 	/* per vdev nbuf queue for traffic end indication packets */
 	qdf_nbuf_queue_t end_ind_pkt_q;
+#endif
+#ifdef FEATURE_DIRECT_LINK
+	/* Flag to indicate if to_fw should be set for tx pkts on this vdev */
+	bool to_fw;
 #endif
 };
 
