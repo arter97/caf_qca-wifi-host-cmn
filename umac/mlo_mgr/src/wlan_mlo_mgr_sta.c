@@ -36,6 +36,11 @@
 #include <wlan_scan_api.h>
 
 #ifdef WLAN_FEATURE_11BE_MLO
+static QDF_STATUS mlo_disconnect_req(struct wlan_objmgr_vdev *vdev,
+				     enum wlan_cm_source source,
+				     enum wlan_reason_code reason_code,
+				     struct qdf_mac_addr *bssid,
+				     bool validate_req);
 
 void
 mlo_allocate_and_copy_ies(struct wlan_cm_connect_req *target,
@@ -1009,9 +1014,10 @@ static QDF_STATUS ml_activate_pend_disconn_req_cb(struct scheduler_msg *msg)
 
 	mlo_dev_ctx = vdev->mlo_dev_ctx;
 	sta_ctx = mlo_dev_ctx->sta_ctx;
-	mlo_disconnect(vdev, sta_ctx->disconn_req->source,
-		       sta_ctx->disconn_req->reason_code,
-		       &sta_ctx->disconn_req->bssid);
+	mlo_disconnect_req(vdev, sta_ctx->disconn_req->source,
+			   sta_ctx->disconn_req->reason_code,
+			   &sta_ctx->disconn_req->bssid, false);
+
 	qdf_mem_free(sta_ctx->disconn_req);
 	sta_ctx->disconn_req = NULL;
 	wlan_objmgr_vdev_release_ref(vdev, WLAN_MLO_MGR_ID);
@@ -1266,10 +1272,11 @@ mlo_send_link_disconnect_sync(struct wlan_mlo_dev_context *mlo_dev_ctx,
 	return QDF_STATUS_SUCCESS;
 }
 
-QDF_STATUS mlo_disconnect(struct wlan_objmgr_vdev *vdev,
-			  enum wlan_cm_source source,
-			  enum wlan_reason_code reason_code,
-			  struct qdf_mac_addr *bssid)
+static QDF_STATUS mlo_disconnect_req(struct wlan_objmgr_vdev *vdev,
+				     enum wlan_cm_source source,
+				     enum wlan_reason_code reason_code,
+				     struct qdf_mac_addr *bssid,
+				     bool validate_req)
 {
 	struct wlan_mlo_dev_context *mlo_dev_ctx = NULL;
 	struct wlan_mlo_sta *sta_ctx = NULL;
@@ -1290,13 +1297,16 @@ QDF_STATUS mlo_disconnect(struct wlan_objmgr_vdev *vdev,
 			sta_ctx->connect_req = NULL;
 		}
 
-		status = mlo_validate_disconn_req(vdev, source,
-						  reason_code, bssid);
-		if (QDF_IS_STATUS_ERROR(status)) {
-			mlo_debug("Connect in progress, deferring disconnect");
-			mlo_dev_lock_release(mlo_dev_ctx);
-			return status;
+		if (validate_req) {
+			status = mlo_validate_disconn_req(vdev, source,
+							  reason_code, bssid);
+			if (QDF_IS_STATUS_ERROR(status)) {
+				mlo_debug("Connect in progress, deferring disconnect");
+				mlo_dev_lock_release(mlo_dev_ctx);
+				return status;
+			}
 		}
+
 		mlo_dev_lock_release(mlo_dev_ctx);
 
 		status = mlo_send_link_disconnect(vdev, source,
@@ -1312,6 +1322,14 @@ QDF_STATUS mlo_disconnect(struct wlan_objmgr_vdev *vdev,
 		mlo_free_copied_conn_req(sta_ctx);
 
 	return status;
+}
+
+QDF_STATUS mlo_disconnect(struct wlan_objmgr_vdev *vdev,
+			  enum wlan_cm_source source,
+			  enum wlan_reason_code reason_code,
+			  struct qdf_mac_addr *bssid)
+{
+	return mlo_disconnect_req(vdev, source, reason_code, bssid, true);
 }
 
 QDF_STATUS mlo_sync_disconnect(struct wlan_objmgr_vdev *vdev,
