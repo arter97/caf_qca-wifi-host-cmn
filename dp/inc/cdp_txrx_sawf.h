@@ -81,7 +81,7 @@ cdp_sawf_peer_get_map_conf(ol_txrx_soc_handle soc,
  * cdp_get_peer_sawf_delay_stats() - Call to get SAWF delay stats
  * @soc: soc handle
  * @svc_class_id: service class ID
- * @mac: peer mac addrees
+ * @mac: peer mac address
  * @data: opaque pointer
  *
  * return: status Success/Failure
@@ -108,7 +108,7 @@ cdp_get_peer_sawf_delay_stats(ol_txrx_soc_handle soc, uint32_t svc_id,
  * cdp_get_peer_sawf_tx_stats() - Call to get SAWF Tx stats
  * @soc: soc handle
  * @svc_class_id: service class ID
- * @mac: peer mac addrees
+ * @mac: peer mac address
  * @data: opaque pointer
  *
  * return: status Success/Failure
@@ -313,6 +313,18 @@ cdp_get_drop_stats(ol_txrx_soc_handle soc, void *arg,
 }
 
 #else
+static inline QDF_STATUS
+cdp_sawf_mpdu_stats_req(ol_txrx_soc_handle soc, uint8_t enable)
+{
+	return QDF_STATUS_E_FAILURE;
+}
+
+static inline QDF_STATUS
+cdp_sawf_mpdu_details_stats_req(ol_txrx_soc_handle soc, uint8_t enable)
+{
+	return QDF_STATUS_E_FAILURE;
+}
+
 static inline QDF_STATUS
 cdp_get_peer_sawf_delay_stats(ol_txrx_soc_handle soc, uint32_t svc_id,
 			      uint8_t *mac, void *data)

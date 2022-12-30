@@ -396,7 +396,7 @@ void qdf_trace(uint8_t module, uint16_t code, uint16_t session, uint32_t data)
 		return;
 
 	qdf_get_time_of_the_day_in_hr_min_sec_usec(time, sizeof(time));
-	/* Aquire the lock so that only one thread at a time can fill the ring
+	/* Acquire the lock so that only one thread at a time can fill the ring
 	 * buffer
 	 */
 	spin_lock_irqsave(&ltrace_lock, flags);
@@ -508,7 +508,7 @@ qdf_export_symbol(qdf_trace_register);
  * @session: Session id of log
  * @count: Number of lines to dump starting from tail to head
  *
- * This function will be called up on issueing ioctl call as mentioned following
+ * This function will be called up on issuing ioctl call as mentioned following
  * [iwpriv wlan0 dumplog 0 0 <n> <bitmask_of_module>]
  *
  * <n> - number lines to dump starting from tail to head.
@@ -537,7 +537,7 @@ void qdf_trace_dump_all(void *p_mac, uint8_t code, uint8_t session,
 		  g_qdf_trace_data.num, g_qdf_trace_data.head,
 		  g_qdf_trace_data.tail);
 
-	/* aquire the lock so that only one thread at a time can read
+	/* acquire the lock so that only one thread at a time can read
 	 * the ring buffer
 	 */
 	spin_lock(&ltrace_lock);
@@ -1894,6 +1894,11 @@ void qdf_fill_wlan_connectivity_log(enum qdf_proto_type type,
 		} else if (pkt_type == EAPOL_PACKET_TYPE_KEY) {
 			wlan_diag_event.subtype =
 					qdf_eapol_get_key_type(data, subtype);
+		} else if (pkt_type == EAPOL_PACKET_TYPE_START) {
+			wlan_diag_event.subtype =
+					WLAN_CONN_DIAG_EAP_START_EVENT;
+			wlan_diag_event.eap_len =
+			    qdf_ntohs(*(uint16_t *)(data + EAPOL_PKT_LEN_OFFSET));
 		} else {
 			return;
 		}
@@ -3336,7 +3341,7 @@ void qdf_dp_trace_dump_all(uint32_t count, uint8_t pdev_id)
 		      g_qdf_dp_trace_data.num, g_qdf_dp_trace_data.head,
 		      g_qdf_dp_trace_data.tail);
 
-	/* aquire the lock so that only one thread at a time can read
+	/* acquire the lock so that only one thread at a time can read
 	 * the ring buffer
 	 */
 	spin_lock_bh(&l_dp_trace_lock);
@@ -3645,7 +3650,7 @@ static qdf_time_t __log_window_end;
 static qdf_atomic_t __log_window_count;
 uint32_t qdf_rl_print_count = WLAN_MAX_LOGS_PER_SEC;
 uint32_t qdf_rl_print_time = 1;
-uint32_t qdf_rl_print_supressed;
+uint32_t qdf_rl_print_suppressed;
 
 /**
  * qdf_detected_excessive_logging() - Excessive logging detected
@@ -3694,32 +3699,32 @@ void qdf_rl_print_time_set(uint32_t rl_print_time)
 
 qdf_export_symbol(qdf_rl_print_time_set);
 
-void qdf_rl_print_supressed_log(void)
+void qdf_rl_print_suppressed_log(void)
 {
-	if (qdf_rl_print_supressed) {
-		pr_err("QDF Ratelimiting: %d prints supressed",
-		       qdf_rl_print_supressed);
-		qdf_rl_print_supressed = 0;
+	if (qdf_rl_print_suppressed) {
+		pr_err("QDF Ratelimiting: %d prints suppressed",
+		       qdf_rl_print_suppressed);
+		qdf_rl_print_suppressed = 0;
 	}
 }
 
-void qdf_rl_print_supressed_inc(void)
+void qdf_rl_print_suppressed_inc(void)
 {
-	qdf_rl_print_supressed++;
+	qdf_rl_print_suppressed++;
 }
 #else
-#define qdf_rl_print_supressed_log()
-#define qdf_rl_print_supressed_inc()
+#define qdf_rl_print_suppressed_log()
+#define qdf_rl_print_suppressed_inc()
 #endif /* WLAN_MAX_LOGS_PER_SEC */
 
 #ifdef QDF_TRACE_PRINT_ENABLE
 static inline void print_to_console(char *str_buffer)
 {
 	if (qdf_in_interrupt() && qdf_detected_excessive_logging()) {
-		qdf_rl_print_supressed_inc();
+		qdf_rl_print_suppressed_inc();
 		return;
 	}
-	qdf_rl_print_supressed_log();
+	qdf_rl_print_suppressed_log();
 	pr_err("%s\n", str_buffer);
 }
 #else

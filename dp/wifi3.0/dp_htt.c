@@ -331,7 +331,7 @@ dp_htt_h2t_send_complete(void *context, HTC_PACKET *htc_pkt)
 #endif /* ENABLE_CE4_COMP_DISABLE_HTT_HTC_MISC_LIST */
 
 /*
- * dp_htt_h2t_add_tcl_metadata_ver_v1() - Add tcl_metadata verion V1
+ * dp_htt_h2t_add_tcl_metadata_ver_v1() - Add tcl_metadata version V1
  * @htt_soc:	HTT SOC handle
  * @msg:	Pointer to nbuf
  *
@@ -377,7 +377,7 @@ static int dp_htt_h2t_add_tcl_metadata_ver_v1(struct htt_soc *soc,
 
 #ifdef QCA_DP_TX_FW_METADATA_V2
 /*
- * dp_htt_h2t_add_tcl_metadata_ver_v2() - Add tcl_metadata verion V2
+ * dp_htt_h2t_add_tcl_metadata_ver_v2() - Add tcl_metadata version V2
  * @htt_soc:	HTT SOC handle
  * @msg:	Pointer to nbuf
  *
@@ -431,7 +431,7 @@ static int dp_htt_h2t_add_tcl_metadata_ver_v2(struct htt_soc *soc,
 }
 
 /*
- * dp_htt_h2t_add_tcl_metadata_ver() - Add tcl_metadata verion
+ * dp_htt_h2t_add_tcl_metadata_ver() - Add tcl_metadata version
  * @htt_soc:	HTT SOC handle
  * @msg:	Pointer to nbuf
  *
@@ -793,7 +793,7 @@ qdf_export_symbol(htt_srng_setup);
 
 #ifdef QCA_SUPPORT_FULL_MON
 /**
- * htt_h2t_full_mon_cfg() - Send full monitor configuarion msg to FW
+ * htt_h2t_full_mon_cfg() - Send full monitor configuration msg to FW
  *
  * @htt_soc: HTT Soc handle
  * @pdev_id: Radio id
@@ -855,7 +855,7 @@ int htt_h2t_full_mon_cfg(struct htt_soc *htt_soc,
 		HTT_RX_FULL_MONITOR_MODE_NON_ZERO_MPDU_SET(*msg_word, true);
 		HTT_RX_FULL_MONITOR_MODE_RELEASE_RINGS_SET(*msg_word, 0x2);
 	} else if (config == DP_FULL_MON_DISABLE) {
-		/* As per MAC team's suggestion, While disbaling full monitor
+		/* As per MAC team's suggestion, While disabling full monitor
 		 * mode, Set 'en' bit to true in full monitor mode register.
 		 */
 		HTT_RX_FULL_MONITOR_MODE_ENABLE_SET(*msg_word, true);
@@ -1659,6 +1659,11 @@ int htt_h2t_rx_ring_cfg(struct htt_soc *htt_soc, int pdev_id,
 		*msg_word = 0;
 	}
 
+	soc->dp_soc->arch_ops.dp_rx_word_mask_subscribe(
+						soc->dp_soc,
+						msg_word,
+						(void *)htt_tlv_filter);
+
 	if (mon_drop_th > 0)
 		HTT_RX_RING_SELECTION_CFG_RX_DROP_THRESHOLD_SET(*msg_word,
 								mon_drop_th);
@@ -1668,9 +1673,8 @@ int htt_h2t_rx_ring_cfg(struct htt_soc *htt_soc, int pdev_id,
 
 	/* word 14*/
 	msg_word += 3;
-	*msg_word = 0;
-
-	dp_mon_rx_wmask_subscribe(soc->dp_soc, msg_word, htt_tlv_filter);
+	/* word 15*/
+	msg_word++;
 
 #ifdef FW_SUPPORT_NOT_YET
 	/* word 17*/
@@ -1863,6 +1867,26 @@ dp_htt_stats_sysfs_set_event(struct dp_soc *dp_soc, uint32_t *msg_word)
 }
 #endif /* WLAN_SYSFS_DP_STATS */
 
+/* dp_htt_set_pdev_obss_stats() - Function to set pdev obss stats.
+ * @pdev: dp pdev handle
+ * @tag_type: HTT TLV tag type
+ * @tag_buf: TLV buffer pointer
+ *
+ * Return: None
+ */
+static inline void
+dp_htt_set_pdev_obss_stats(struct dp_pdev *pdev, uint32_t tag_type,
+			   uint32_t *tag_buf)
+{
+	if (tag_type != HTT_STATS_PDEV_OBSS_PD_TAG) {
+		dp_err("Tag mismatch");
+		return;
+	}
+	qdf_mem_copy(&pdev->stats.htt_tx_pdev_stats.obss_pd_stats_tlv,
+		     tag_buf, sizeof(struct cdp_pdev_obss_pd_stats_tlv));
+	qdf_event_set(&pdev->fw_obss_stats_event);
+}
+
 /**
  * dp_process_htt_stat_msg(): Process the list of buffers of HTT EXT stats
  * @htt_stats: htt stats info
@@ -1991,6 +2015,11 @@ static inline void dp_process_htt_stat_msg(struct htt_stats_context *htt_stats,
 					dp_peer_update_inactive_time(pdev,
 								     tlv_type,
 								     tlv_start);
+
+				if (cookie_msb & DBG_STATS_COOKIE_HTT_OBSS)
+					dp_htt_set_pdev_obss_stats(pdev,
+								   tlv_type,
+								   tlv_start);
 
 				msg_remain_len -= tlv_remain_len;
 
@@ -2138,7 +2167,7 @@ static inline void dp_txrx_fw_stats_handler(struct dp_soc *soc,
 
 	if (!msg_copy) {
 		QDF_TRACE(QDF_MODULE_ID_TXRX, QDF_TRACE_LEVEL_INFO,
-			  "T2H messge clone failed for HTT EXT STATS");
+			  "T2H message clone failed for HTT EXT STATS");
 		goto error;
 	}
 
@@ -3371,7 +3400,7 @@ static void dp_htt_t2h_msg_handler(void *context, HTC_PACKET *pkt)
 			 * did not process this indication runtime_put happens
 			 * properly in the cleanup path.
 			 */
-			if (htc_dec_return_runtime_cnt(soc->htc_soc) >= 0)
+			if (htc_dec_return_htt_runtime_cnt(soc->htc_soc) >= 0)
 				htc_pm_runtime_put(soc->htc_soc);
 			else
 				soc->stats.htt_ver_req_put_skip++;
@@ -3887,7 +3916,7 @@ void htt_soc_detach(struct htt_soc *htt_hdl)
 }
 
 /**
- * dp_h2t_ext_stats_msg_send(): function to contruct HTT message to pass to FW
+ * dp_h2t_ext_stats_msg_send(): function to construct HTT message to pass to FW
  * @pdev: DP PDEV handle
  * @stats_type_upload_mask: stats type requested by user
  * @config_param_0: extra configuration parameters
@@ -4142,7 +4171,7 @@ QDF_STATUS dp_h2t_hw_vdev_stats_config_send(struct dp_soc *dpsoc,
 #endif
 
 /**
- * dp_h2t_3tuple_config_send(): function to contruct 3 tuple configuration
+ * dp_h2t_3tuple_config_send(): function to construct 3 tuple configuration
  * HTT message to pass to FW
  * @pdev: DP PDEV handle
  * @tuple_mask: tuple configuration to report 3 tuple hash value in either

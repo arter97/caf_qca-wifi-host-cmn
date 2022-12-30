@@ -160,7 +160,7 @@ struct rx_msdu_desc_info;
 typedef struct rx_msdu_desc_info *rx_msdu_desc_info_t;
 
 /**
- * Opaque hanlder for PPE VP config.
+ * Opaque handler for PPE VP config.
  */
 union hal_tx_ppe_vp_config;
 union hal_tx_cmn_config_ppe;
@@ -1015,6 +1015,8 @@ struct hal_hw_txrx_ops {
 	uint32_t (*hal_rx_mpdu_start_offset_get)(void);
 	uint32_t (*hal_rx_mpdu_end_offset_get)(void);
 	uint32_t (*hal_rx_pkt_tlv_offset_get)(void);
+	uint32_t (*hal_rx_msdu_end_wmask_get)(void);
+	uint32_t (*hal_rx_mpdu_start_wmask_get)(void);
 	void * (*hal_rx_flow_setup_fse)(uint8_t *rx_fst,
 					uint32_t table_offset,
 					uint8_t *rx_flow);
@@ -1146,6 +1148,9 @@ struct hal_hw_txrx_ops {
 					  uint8_t *buf);
 	void (*hal_set_reo_ent_desc_reo_dest_ind)(uint8_t *desc,
 						  uint32_t dst_ind);
+	QDF_STATUS
+	(*hal_rx_reo_ent_get_src_link_id)(hal_rxdma_desc_t rx_desc,
+					  uint8_t *src_link_id);
 
 	/* REO CMD and STATUS */
 	int (*hal_reo_send_cmd)(hal_soc_handle_t hal_soc_hdl,
@@ -1395,7 +1400,7 @@ struct hal_soc {
 
 #if defined(FEATURE_HAL_DELAYED_REG_WRITE)
 /**
- *  hal_delayed_reg_write() - delayed regiter write
+ *  hal_delayed_reg_write() - delayed register write
  * @hal_soc: HAL soc handle
  * @srng: hal srng
  * @addr: iomem address
@@ -1468,7 +1473,8 @@ struct hal_srng *hal_ring_handle_to_hal_srng(hal_ring_handle_t hal_ring)
 /*
  * REO2PPE destination indication
  */
-#define REO2PPE_DST_IND 11
+#define REO2PPE_DST_IND 6
+#define REO2PPE_DST_RING 11
 #define REO2PPE_RULE_FAIL_FB 0x2000
 
 /**

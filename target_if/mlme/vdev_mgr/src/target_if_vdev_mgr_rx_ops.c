@@ -175,10 +175,16 @@ void target_if_vdev_mgr_rsp_timer_cb(void *arg)
 	} else if (qdf_atomic_test_bit(RSO_STOP_RESPONSE_BIT,
 				       &vdev_rsp->rsp_status)) {
 		rsp_pos = RSO_STOP_RESPONSE_BIT;
-		recovery_reason = QDF_RSO_STOP_RSP_TIMEOUT;
 		target_if_vdev_mgr_rsp_timer_stop(psoc, vdev_rsp, rsp_pos);
-		target_if_vdev_mgr_handle_recovery(psoc, vdev_id,
-						   recovery_reason, rsp_pos);
+		/**
+		 * FW did not respond to rso stop cmd, as roaming is
+		 * disabled either due to race condition
+		 * that happened during previous disconnect OR
+		 * supplicant disabled roaming.
+		 * To solve this issue, skip recovery and host will
+		 * continue disconnect and cleanup rso state.
+		 */
+		mlme_debug("No rsp from FW received , continue with disconnect");
 		target_if_send_rso_stop_failure_rsp(psoc, vdev_id);
 	} else {
 		mlme_err("PSOC_%d VDEV_%d: Unknown error",
@@ -188,7 +194,7 @@ void target_if_vdev_mgr_rsp_timer_cb(void *arg)
 }
 
 #ifdef SERIALIZE_VDEV_RESP
-static QDF_STATUS target_if_vdev_mgr_rsp_flush_cb(struct scheduler_msg *msg)
+static QDF_STATUS target_if_vdev_mgr_rsp_flush_cb_mc(struct scheduler_msg *msg)
 {
 	struct vdev_response_timer *vdev_rsp;
 	struct wlan_objmgr_psoc *psoc;
@@ -198,7 +204,7 @@ static QDF_STATUS target_if_vdev_mgr_rsp_flush_cb(struct scheduler_msg *msg)
 		return QDF_STATUS_E_INVAL;
 	}
 
-	vdev_rsp = msg->bodyptr;
+	vdev_rsp = scheduler_qdf_mc_timer_deinit_return_data_ptr(msg->bodyptr);
 	if (!vdev_rsp) {
 		mlme_err("vdev response timer is NULL");
 		return QDF_STATUS_E_INVAL;
@@ -222,6 +228,7 @@ target_if_vdev_mgr_rsp_cb_mc_ctx(void *arg)
 	struct scheduler_msg msg = {0};
 	struct vdev_response_timer *vdev_rsp = arg;
 	struct wlan_objmgr_psoc *psoc;
+	struct sched_qdf_mc_timer_cb_wrapper *mc_timer_wrapper;
 
 	psoc = vdev_rsp->psoc;
 	if (!psoc) {
@@ -232,17 +239,19 @@ target_if_vdev_mgr_rsp_cb_mc_ctx(void *arg)
 	msg.type = SYS_MSG_ID_MC_TIMER;
 	msg.reserved = SYS_MSG_COOKIE;
 
-	/* msg.callback will explicitly cast back to qdf_mc_timer_callback_t
-	 * in scheduler_timer_q_mq_handler.
-	 * but in future we do not want to introduce more this kind of
-	 * typecast by properly using QDF MC timer for MCC from get go in
-	 * common code.
-	 */
-	msg.callback =
-		(scheduler_msg_process_fn_t)target_if_vdev_mgr_rsp_timer_cb;
-	msg.bodyptr = arg;
+	mc_timer_wrapper = scheduler_qdf_mc_timer_init(
+			target_if_vdev_mgr_rsp_timer_cb,
+			arg);
+
+	if (!mc_timer_wrapper) {
+		mlme_err("failed to allocate sched_qdf_mc_timer_cb_wrapper");
+		return;
+	}
+
+	msg.callback = scheduler_qdf_mc_timer_callback_t_wrapper;
+	msg.bodyptr = mc_timer_wrapper;
 	msg.bodyval = 0;
-	msg.flush_callback = target_if_vdev_mgr_rsp_flush_cb;
+	msg.flush_callback = target_if_vdev_mgr_rsp_flush_cb_mc;
 
 	if (scheduler_post_message(QDF_MODULE_ID_TARGET_IF,
 				   QDF_MODULE_ID_TARGET_IF,
@@ -251,6 +260,7 @@ target_if_vdev_mgr_rsp_cb_mc_ctx(void *arg)
 		return;
 
 	mlme_err("Could not enqueue timer to timer queue");
+	qdf_mem_free(mc_timer_wrapper);
 	if (psoc)
 		wlan_objmgr_psoc_release_ref(psoc, WLAN_PSOC_TARGET_IF_ID);
 }

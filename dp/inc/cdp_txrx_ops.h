@@ -1019,7 +1019,7 @@ struct cdp_mon_ops {
 				    uint8_t pdev_id,
 				    uint8_t direction);
 #endif
-	/*To set RSSI dbm converstion params in monitor pdev */
+	/*To set RSSI dbm conversion params in monitor pdev */
 	QDF_STATUS (*txrx_set_mon_pdev_params_rssi_dbm_conv)
 		(struct cdp_soc_t *soc,
 		 struct cdp_rssi_db2dbm_param_dp *params);
@@ -1213,6 +1213,11 @@ struct cdp_host_stats_ops {
 	QDF_STATUS
 		(*txrx_get_peer_extd_rate_link_stats)
 				(struct cdp_soc_t *soc, uint8_t *mac_addr);
+	QDF_STATUS
+		(*get_pdev_obss_stats)(struct cdp_soc_t *soc, uint8_t pdev_id,
+				       struct cdp_pdev_obss_pd_stats_tlv *buf);
+	QDF_STATUS (*clear_pdev_obss_pd_stats)(struct cdp_soc_t *soc,
+					       uint8_t pdev_id);
 };
 
 struct cdp_wds_ops {
@@ -1823,7 +1828,7 @@ struct cdp_flowctl_ops {
  * @set_vdev_os_queue_status: Set vdev queue status
  * @deregister_tx_flow_control_cb: Deregister tx flow control callback
  * @flow_control_cb: Call osif flow control callback
- * @get_tx_resource: Get tx resources and comapre with watermark
+ * @get_tx_resource: Get tx resources and compare with watermark
  * @ll_set_tx_pause_q_depth: set pause queue depth
  * @vdev_flush: Flush all packets on a particular vdev
  * @vdev_pause: Pause a particular vdev
@@ -1930,7 +1935,7 @@ struct cdp_ipa_ops {
 	QDF_STATUS (*ipa_disable_autonomy)(struct cdp_soc_t *soc_hdl,
 					   uint8_t pdev_id);
 
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 10, 0)) || \
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 4, 0)) || \
 	defined(CONFIG_IPA_WDI_UNIFIED_API)
 	QDF_STATUS (*ipa_setup)(struct cdp_soc_t *soc_hdl, uint8_t pdev_id,
 				void *ipa_i2w_cb, void *ipa_w2i_cb,
@@ -2151,6 +2156,25 @@ struct cdp_sawf_ops {
 };
 #endif
 
+#ifdef WLAN_SUPPORT_PPEDS
+struct cdp_ppe_txrx_ops {
+	QDF_STATUS
+	(*ppeds_entry_attach)(struct cdp_soc_t *soc,
+			      uint8_t vdev_id, void *vpai,
+			      int32_t *ppe_vp_num);
+	QDF_STATUS
+	(*ppeds_enable_pri2tid)(struct cdp_soc_t *soc,
+				uint8_t vdev_id, bool val);
+	void (*ppeds_entry_detach)(struct cdp_soc_t *soc,
+				   uint8_t vdev_id);
+	void (*ppeds_set_int_pri2tid)(struct cdp_soc_t *soc,
+				      uint8_t *pri2tid);
+	void (*ppeds_update_int_pri2tid)(struct cdp_soc_t *soc,
+					 uint8_t pri, uint8_t tid);
+	void (*ppeds_entry_dump)(struct cdp_soc_t *soc);
+};
+#endif /* WLAN_SUPPORT_PPEDS */
+
 struct cdp_ops {
 	struct cdp_cmn_ops          *cmn_drv_ops;
 	struct cdp_ctrl_ops         *ctrl_ops;
@@ -2200,6 +2224,9 @@ struct cdp_ops {
 #endif
 #ifdef WLAN_SUPPORT_SCS
 	struct cdp_scs_ops   *scs_ops;
+#endif
+#ifdef WLAN_SUPPORT_PPEDS
+	struct cdp_ppe_txrx_ops *ppe_ops;
 #endif
 };
 #endif

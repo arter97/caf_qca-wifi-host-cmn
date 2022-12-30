@@ -48,7 +48,7 @@ static struct wlan_cfg_tcl_wbm_ring_num_map g_tcl_wbm_map_array[MAX_TCL_DATA_RIN
 	{2, 2, HAL_LI_WBM_SW2_BM_ID, 0},
 	/*
 	 * Although using wbm_ring 4, wbm_ring 3 is mentioned in order to match
-	 * with the tx_mask in dp_service_srngs. Please be carefull while using
+	 * with the tx_mask in dp_service_srngs. Please be careful while using
 	 * this table anywhere else.
 	 */
 	{3, 3, HAL_LI_WBM_SW4_BM_ID, 0}
@@ -515,6 +515,12 @@ dp_rx_intrabss_handle_nawds_li(struct dp_soc *soc, struct dp_txrx_peer *ta_peer,
 	return false;
 }
 
+static void dp_rx_word_mask_subscribe_li(struct dp_soc *soc,
+					 uint32_t *msg_word,
+					 void *rx_filter)
+{
+}
+
 static struct dp_peer *dp_find_peer_by_destmac_li(struct dp_soc *soc,
 						  uint8_t *dest_mac,
 						  uint8_t vdev_id)
@@ -583,6 +589,7 @@ void dp_initialize_arch_ops_li(struct dp_arch_ops *arch_ops)
 	arch_ops->dp_rx_desc_pool_init = dp_rx_desc_pool_init_li;
 	arch_ops->dp_rx_desc_pool_deinit = dp_rx_desc_pool_deinit_li;
 	arch_ops->dp_tx_compute_hw_delay = dp_tx_compute_tx_delay_li;
+	arch_ops->dp_rx_chain_msdus = dp_rx_chain_msdus_li;
 #else
 	arch_ops->dp_rx_desc_pool_init = dp_rx_desc_pool_init_generic;
 	arch_ops->dp_rx_desc_pool_deinit = dp_rx_desc_pool_deinit_generic;
@@ -609,6 +616,7 @@ void dp_initialize_arch_ops_li(struct dp_arch_ops *arch_ops)
 	arch_ops->dp_rx_desc_cookie_2_va =
 			dp_rx_desc_cookie_2_va_li;
 	arch_ops->dp_rx_intrabss_handle_nawds = dp_rx_intrabss_handle_nawds_li;
+	arch_ops->dp_rx_word_mask_subscribe = dp_rx_word_mask_subscribe_li;
 	arch_ops->dp_rxdma_ring_sel_cfg = dp_rxdma_ring_sel_cfg_li;
 	arch_ops->dp_rx_peer_metadata_peer_id_get =
 					dp_rx_peer_metadata_peer_id_get_li;
@@ -622,6 +630,9 @@ void dp_initialize_arch_ops_li(struct dp_arch_ops *arch_ops)
 	arch_ops->peer_get_reo_hash = dp_peer_get_reo_hash_li;
 	arch_ops->reo_remap_config = dp_reo_remap_config_li;
 	arch_ops->dp_txrx_ppeds_rings_status = NULL;
+	arch_ops->txrx_soc_ppeds_start = NULL;
+	arch_ops->txrx_soc_ppeds_stop = NULL;
+	arch_ops->get_reo_qdesc_addr = dp_rx_get_reo_qdesc_addr_li;
 }
 
 #ifdef QCA_DP_TX_HW_SW_NBUF_DESC_PREFETCH

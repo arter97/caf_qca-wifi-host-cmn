@@ -941,7 +941,7 @@ static struct service_to_pipe target_service_to_ce_map_qcn9224[] = {
 };
 #endif
 
-#if (defined(QCA_WIFI_QCA5018))
+#if defined(QCA_WIFI_QCA5018) || defined(QCA_WIFI_QCN9160)
 static struct service_to_pipe target_service_to_ce_map_qca5018[] = {
 	{ WMI_DATA_VO_SVC, PIPEDIR_OUT, 3, },
 	{ WMI_DATA_VO_SVC, PIPEDIR_IN, 2, },
@@ -1439,6 +1439,7 @@ static void hif_select_service_to_pipe_map(struct hif_softc *scn,
 			break;
 		case TARGET_TYPE_QCA5018:
 		case TARGET_TYPE_QCN6122:
+		case TARGET_TYPE_QCN9160:
 			*tgt_svc_map_to_use =
 				target_service_to_ce_map_qca5018;
 			*sz_tgt_svc_map_to_use =
@@ -1536,7 +1537,7 @@ uint8_t hif_get_max_wmi_ep(struct hif_opaque_softc *hif_ctx)
  * @type: "src_ring" or "dest_ring" string for identifying the ring
  *
  * Warns on non-zero index values.
- * Causes a kernel panic if the ring is not empty durring initialization.
+ * Causes a kernel panic if the ring is not empty during initialization.
  */
 static void ce_ring_test_initial_indexes(int ce_id, struct CE_ring_state *ring,
 					 char *type)
@@ -1707,6 +1708,7 @@ bool ce_srng_based(struct hif_softc *scn)
 	case TARGET_TYPE_QCA6018:
 	case TARGET_TYPE_QCN9000:
 	case TARGET_TYPE_QCN6122:
+	case TARGET_TYPE_QCN9160:
 	case TARGET_TYPE_QCA5018:
 	case TARGET_TYPE_KIWI:
 	case TARGET_TYPE_MANGO:
@@ -2258,8 +2260,8 @@ void ce_disable_polling(void *cestate)
  * initialization. It may be that only one side or the other is
  * initialized by software/firmware.
  *
- * This should be called durring the initialization sequence before
- * interupts are enabled, so we don't have to worry about thread safety.
+ * This should be called during the initialization sequence before
+ * interrupts are enabled, so we don't have to worry about thread safety.
  */
 struct CE_handle *ce_init(struct hif_softc *scn,
 			  unsigned int CE_id, struct CE_attr *attr)
@@ -2284,6 +2286,9 @@ struct CE_handle *ce_init(struct hif_softc *scn,
 
 		malloc_CE_state = true;
 		qdf_spinlock_create(&CE_state->ce_index_lock);
+#ifdef CE_TASKLET_SCHEDULE_ON_FULL
+		qdf_spinlock_create(&CE_state->ce_interrupt_lock);
+#endif
 
 		CE_state->id = CE_id;
 		CE_state->ctrl_addr = ctrl_addr;
@@ -2358,7 +2363,6 @@ struct CE_handle *ce_init(struct hif_softc *scn,
 					       src_ring, attr);
 			if (status < 0)
 				goto error_target_access;
-
 			ce_ring_test_initial_indexes(CE_id, src_ring,
 						     "src_ring");
 		}
@@ -2516,7 +2520,7 @@ static int hif_get_pktlog_ce_num(struct hif_softc *scn)
  *
  * For use in data path
  *
- * Retrun: void
+ * Return: void
  */
 void hif_enable_fastpath(struct hif_opaque_softc *hif_ctx)
 {
@@ -2571,7 +2575,7 @@ qdf_export_symbol(hif_get_ce_handle);
  *
  * This is called while dismantling CE structures. No other thread
  * should be using these structures while dismantling is occurring
- * therfore no locking is needed.
+ * therefore no locking is needed.
  *
  * Return: none
  */
@@ -2757,6 +2761,9 @@ void ce_fini(struct CE_handle *copyeng)
 	ce_deinit_ce_desc_event_log(scn, CE_id);
 
 	qdf_spinlock_destroy(&CE_state->ce_index_lock);
+#ifdef CE_TASKLET_SCHEDULE_ON_FULL
+	qdf_spinlock_destroy(&CE_state->ce_interrupt_lock);
+#endif
 	qdf_mem_free(CE_state);
 }
 
@@ -2893,7 +2900,7 @@ void hif_send_complete_check(struct hif_opaque_softc *hif_ctx, uint8_t pipe,
 #if defined(CE_TASKLET_SCHEDULE_ON_FULL) && defined(CE_TASKLET_DEBUG_ENABLE)
 #define CE_RING_FULL_THRESHOLD_TIME 3000000
 #define CE_RING_FULL_THRESHOLD 1024
-/* Ths function is called from htc_send path. If there is no resourse to send
+/* This function is called from htc_send path. If there is no resourse to send
  * packet via HTC, then check if interrupts are not processed from that
  * CE for last 3 seconds. If so, schedule a tasklet to reap available entries.
  * Also if Queue has reached 1024 entries within 3 seconds, then also schedule
@@ -2902,7 +2909,7 @@ void hif_send_complete_check(struct hif_opaque_softc *hif_ctx, uint8_t pipe,
 void hif_schedule_ce_tasklet(struct hif_opaque_softc *hif_ctx, uint8_t pipe)
 {
 	struct HIF_CE_state *hif_state = HIF_GET_CE_STATE(hif_ctx);
-	uint64_t diff_time = qdf_get_log_timestamp_usecs() -
+	int64_t diff_time = qdf_get_log_timestamp_usecs() -
 			hif_state->stats.tasklet_sched_entry_ts[pipe];
 
 	hif_state->stats.ce_ring_full_count[pipe]++;
@@ -4096,6 +4103,14 @@ void hif_ce_prepare_config(struct hif_softc *scn)
 		hif_state->target_ce_config_sz =
 					sizeof(target_ce_config_wlan_qcn6122);
 		scn->ce_count = QCN_6122_CE_COUNT;
+		scn->disable_wake_irq = 1;
+		break;
+	case TARGET_TYPE_QCN9160:
+		hif_state->host_ce_config = host_ce_config_wlan_qcn9160;
+		hif_state->target_ce_config = target_ce_config_wlan_qcn9160;
+		hif_state->target_ce_config_sz =
+					sizeof(target_ce_config_wlan_qcn9160);
+		scn->ce_count = QCN_9160_CE_COUNT;
 		scn->disable_wake_irq = 1;
 		break;
 	case TARGET_TYPE_QCA5018:

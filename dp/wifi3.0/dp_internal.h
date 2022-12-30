@@ -71,6 +71,9 @@ struct htt_dbgfs_cfg {
 /*Reserve for HTT Stats debugfs support: 5th bit */
 #define DBG_SYSFS_STATS_COOKIE BIT(5)
 
+/* Reserve for HTT Stats OBSS PD support: 6th bit */
+#define DBG_STATS_COOKIE_HTT_OBSS BIT(6)
+
 /**
  * Bitmap of HTT PPDU TLV types for Default mode
  */
@@ -256,8 +259,22 @@ dp_get_mcs_array_index_by_pkt_type_mcs(uint32_t pkt_type, uint32_t mcs)
 }
 #endif
 
+#ifdef WIFI_MONITOR_SUPPORT
 QDF_STATUS dp_mon_soc_attach(struct dp_soc *soc);
 QDF_STATUS dp_mon_soc_detach(struct dp_soc *soc);
+#else
+static inline
+QDF_STATUS dp_mon_soc_attach(struct dp_soc *soc)
+{
+	return QDF_STATUS_SUCCESS;
+}
+
+static inline
+QDF_STATUS dp_mon_soc_detach(struct dp_soc *soc)
+{
+	return QDF_STATUS_SUCCESS;
+}
+#endif
 
 /*
  * dp_rx_err_match_dhost() - function to check whether dest-mac is correct
@@ -607,6 +624,11 @@ bool dp_monitor_reap_timer_stop(struct dp_soc *soc,
 	return false;
 }
 
+static inline void
+dp_monitor_reap_timer_suspend(struct dp_soc *soc)
+{
+}
+
 static inline
 void dp_monitor_vdev_timer_init(struct dp_soc *soc)
 {
@@ -912,12 +934,14 @@ dp_mon_rx_wmask_subscribe(struct dp_soc *soc, uint32_t *msg_word,
 {
 }
 
+#ifdef WLAN_TELEMETRY_STATS_SUPPORT
 static inline
 void dp_monitor_peer_telemetry_stats(struct dp_peer *peer,
 				     struct cdp_peer_telemetry_stats *stats)
 {
 }
-#endif
+#endif /* WLAN_TELEMETRY_STATS_SUPPORT */
+#endif /* !WIFI_MONITOR_SUPPORT */
 
 /**
  * cdp_soc_t_to_dp_soc() - typecast cdp_soc_t to
@@ -950,7 +974,6 @@ enum timer_yield_status {
 };
 
 #if DP_PRINT_ENABLE
-#include <stdarg.h>       /* va_list */
 #include <qdf_types.h> /* qdf_vprint */
 #include <cdp_txrx_handle.h>
 
@@ -1901,6 +1924,10 @@ void dp_update_vdev_stats_on_peer_unmap(struct dp_vdev *vdev,
 		_tgtobj->tx.retries_mpdu += _srcobj->tx.retries_mpdu; \
 		_tgtobj->tx.mpdu_success_with_retries += \
 					_srcobj->tx.mpdu_success_with_retries; \
+		_tgtobj->tx.rts_success = _srcobj->tx.rts_success; \
+		_tgtobj->tx.rts_failure = _srcobj->tx.rts_failure; \
+		_tgtobj->tx.bar_cnt = _srcobj->tx.bar_cnt; \
+		_tgtobj->tx.ndpa_cnt = _srcobj->tx.ndpa_cnt; \
 		for (pream_type = 0; pream_type < DOT11_MAX; pream_type++) { \
 			for (i = 0; i < MAX_MCS; i++) \
 				_tgtobj->tx.pkt_type[pream_type].mcs_count[i] += \
@@ -1962,6 +1989,8 @@ void dp_update_vdev_stats_on_peer_unmap(struct dp_vdev *vdev,
 		_tgtobj->rx.gi_info = _srcobj->rx.gi_info; \
 		_tgtobj->rx.preamble_info = _srcobj->rx.preamble_info; \
 		_tgtobj->rx.mpdu_retry_cnt += _srcobj->rx.mpdu_retry_cnt; \
+		_tgtobj->rx.bar_cnt = _srcobj->rx.bar_cnt; \
+		_tgtobj->rx.ndpa_cnt = _srcobj->rx.ndpa_cnt; \
 		for (pream_type = 0; pream_type < DOT11_MAX; pream_type++) { \
 			for (i = 0; i < MAX_MCS; i++) { \
 				_tgtobj->rx.pkt_type[pream_type].mcs_count[i] += \
@@ -3175,7 +3204,7 @@ QDF_STATUS dp_rx_flow_delete_entry(struct dp_pdev *pdev,
 /**
  * dp_rx_flow_add_entry() - Add a flow entry to flow search table
  * @pdev: DP pdev instance
- * @rx_flow_info: DP flow paramaters
+ * @rx_flow_info: DP flow parameters
  *
  * Return: Success when flow is added, no-memory or already exists on error
  */
@@ -4138,7 +4167,7 @@ void dp_rx_send_pktlog(struct dp_soc *soc, struct dp_pdev *pdev,
  * This API should only be called when we have not removed
  * Rx TLV from head, and head is pointing to rx_tlv
  *
- * This function is used to send rx packet from erro path
+ * This function is used to send rx packet from error path
  * for logging for which rx packet tlv is not removed.
  *
  * Return: None

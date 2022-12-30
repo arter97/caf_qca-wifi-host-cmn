@@ -352,7 +352,7 @@ struct wlan_lmac_if_mgmt_rx_reo_rx_ops {
  * @mgmt_tx_send: function pointer to transmit mgmt tx frame
  * @beacon_send:  function pointer to transmit beacon frame
  * @fd_action_frame_send: function pointer to transmit FD action frame
- * @tx_drain_nbuf_op: function pointer for any umac nbuf realted ops for
+ * @tx_drain_nbuf_op: function pointer for any umac nbuf related ops for
  *                    pending mgmt frames cleanup
  * @reg_ev_handler: function pointer to register event handlers
  * @unreg_ev_handler: function pointer to unregister event handlers
@@ -408,6 +408,8 @@ struct wlan_lmac_if_scan_tx_ops {
 	QDF_STATUS (*scan_unreg_ev_handler)(struct wlan_objmgr_psoc *psoc,
 			void *arg);
 	QDF_STATUS (*set_chan_list)(struct wlan_objmgr_pdev *pdev, void *arg);
+	bool (*is_platform_eht_capable)(struct wlan_objmgr_psoc *psoc,
+					uint8_t pdev_id);
 };
 
 /**
@@ -585,7 +587,6 @@ struct wlan_lmac_if_scan_rx_ops {
 /* forward declarations for p2p tx ops */
 struct p2p_ps_config;
 struct p2p_lo_start;
-struct p2p_set_mac_filter;
 
 /**
  * struct wlan_lmac_if_p2p_tx_ops - structure of tx function pointers
@@ -626,7 +627,7 @@ struct wlan_lmac_if_p2p_tx_ops {
 			struct wlan_objmgr_psoc *psoc, bool reg);
 	QDF_STATUS (*set_mac_addr_rx_filter_cmd)(
 			struct wlan_objmgr_psoc *psoc,
-			struct p2p_set_mac_filter *param);
+			struct set_rx_mac_filter *param);
 #ifdef WLAN_FEATURE_MCC_QUOTA
 	QDF_STATUS (*reg_mcc_quota_ev_handler)(struct wlan_objmgr_psoc *psoc,
 					       bool reg);
@@ -907,9 +908,6 @@ struct wlan_lmac_if_iot_sim_tx_ops {
  *                                    request buffer.
  * @send_rtt_pasn_auth_status: Send PASN peers authentication status
  * @send_rtt_pasn_deauth: Send PASN peer deauth command
- * @wifi_pos_delete_all_vdev_ranging_peers_cb: Delete all ranging peers for
- * given vdev. This is called before vdev delete to cleanup all the ranging
- * peers of that vdev.
  */
 struct wlan_lmac_if_wifi_pos_tx_ops {
 	QDF_STATUS (*wifi_pos_register_events)(struct wlan_objmgr_psoc *psoc);
@@ -932,14 +930,12 @@ struct wlan_lmac_if_wifi_pos_tx_ops {
 			 struct wlan_pasn_auth_status *data);
 	QDF_STATUS (*send_rtt_pasn_deauth)(struct wlan_objmgr_psoc *psoc,
 					   struct qdf_mac_addr *peer_mac);
-	QDF_STATUS (*wifi_pos_vdev_delete_all_ranging_peers_cb)
-					(struct wlan_objmgr_vdev *vdev);
 };
 #endif
 
 #ifdef DIRECT_BUF_RX_ENABLE
 /**
- * struct wlan_lmac_if_direct_buf_rx_tx_ops - structire of direct buf rx txops
+ * struct wlan_lmac_if_direct_buf_rx_tx_ops - structure of direct buf rx txops
  * @direct_buf_rx_module_register: Registration API callback for modules
  *                                 to register with direct buf rx framework
  * @direct_buf_rx_module_unregister: Unregistration API to clean up module
@@ -1229,6 +1225,7 @@ struct wlan_lmac_if_target_tx_ops {
 	bool (*tgt_is_tgt_type_adrastea)(uint32_t);
 	bool (*tgt_is_tgt_type_qcn9000)(uint32_t);
 	bool (*tgt_is_tgt_type_qcn6122)(uint32_t);
+	bool (*tgt_is_tgt_type_qcn9160)(uint32_t);
 	bool (*tgt_is_tgt_type_qcn7605)(uint32_t);
 	uint32_t (*tgt_get_tgt_type)(struct wlan_objmgr_psoc *psoc);
 	uint32_t (*tgt_get_tgt_version)(struct wlan_objmgr_psoc *psoc);
@@ -1478,11 +1475,17 @@ struct wlan_lmac_if_twt_rx_ops {
 };
 #endif
 
-#if defined WLAN_FEATURE_11AX
+#if defined WLAN_FEATURE_SR
 struct wlan_lmac_if_spatial_reuse_tx_ops {
 	QDF_STATUS (*send_cfg)(struct wlan_objmgr_vdev *vdev, uint8_t sr_ctrl,
 			       uint8_t non_srg_max_pd_offset);
-	};
+	QDF_STATUS (*send_sr_prohibit_cfg)(struct wlan_objmgr_vdev *vdev,
+					   bool he_siga_val15_allowed);
+	QDF_STATUS(*target_if_set_sr_enable_disable)(
+				struct wlan_objmgr_vdev *vdev,
+				struct wlan_objmgr_pdev *pdev,
+				bool is_sr_enable, int32_t pd_threshold);
+};
 #endif
 
 #ifdef WLAN_FEATURE_COAP
@@ -1623,7 +1626,7 @@ struct wlan_lmac_if_tx_ops {
 	struct wlan_lmac_if_twt_tx_ops twt_tx_ops;
 #endif
 
-#if defined WLAN_FEATURE_11AX
+#if defined WLAN_FEATURE_SR
 	struct wlan_lmac_if_spatial_reuse_tx_ops spatial_reuse_tx_ops;
 #endif
 
@@ -1750,6 +1753,14 @@ struct wlan_lmac_if_reg_rx_ops {
 	(*reg_get_afc_dev_type)(struct wlan_objmgr_psoc *psoc,
 				enum reg_afc_dev_deploy_type
 				*reg_afc_dev_type);
+	QDF_STATUS
+	(*reg_set_eirp_preferred_support)(
+				struct wlan_objmgr_psoc *psoc,
+				bool reg_is_eirp_support_preferred);
+	QDF_STATUS
+	(*reg_get_eirp_preferred_support)(
+				struct wlan_objmgr_psoc *psoc,
+				bool *reg_is_eirp_support_preferred);
 #endif
 };
 
@@ -2013,6 +2024,9 @@ struct wlan_lmac_if_iot_sim_rx_ops {
  * pointer.
  * @wifi_pos_vdev_delete_all_ranging_peers_rsp_cb: Callback to handle vdev
  * delete all ranging peers response
+ * @wifi_pos_vdev_delete_all_ranging_peers_cb: Delete all ranging peers for
+ * given vdev. This is called before vdev delete to cleanup all the ranging
+ * peers of that vdev.
  */
 struct wlan_lmac_if_wifi_pos_rx_ops {
 	int (*oem_rsp_event_rx)(struct wlan_objmgr_psoc *psoc,
@@ -2032,6 +2046,8 @@ struct wlan_lmac_if_wifi_pos_rx_ops {
 			 uint8_t vdev_id, uint8_t num_peers);
 	QDF_STATUS (*wifi_pos_vdev_delete_all_ranging_peers_rsp_cb)
 			(struct wlan_objmgr_psoc *psoc, uint8_t vdev_id);
+	QDF_STATUS (*wifi_pos_vdev_delete_all_ranging_peers_cb)
+					(struct wlan_objmgr_vdev *vdev);
 };
 #endif
 

@@ -66,6 +66,12 @@
 #define targetif_nofl_debug(params...) \
 	QDF_TRACE_DEBUG_NO_FL(QDF_MODULE_ID_TARGET_IF, params)
 
+#ifdef SERIALIZE_WMI_RX_EXECUTION_CTX
+#define WMI_RX_EXECUTION_CTX WMI_RX_SERIALIZER_CTX
+#else
+#define WMI_RX_EXECUTION_CTX WMI_RX_UMAC_CTX
+#endif /* SERIALIZE_WMI_RX_EXECUTION_CTX */
+
 typedef struct wlan_objmgr_psoc *(*get_psoc_handle_callback)(
 			void *scn_handle);
 
@@ -560,6 +566,14 @@ bool target_is_tgt_type_qcn9000(uint32_t target_type);
  * Return: true if the target_type is QCN6122, else false.
  */
 bool target_is_tgt_type_qcn6122(uint32_t target_type);
+
+/**
+ * target_is_tgt_type_qcn9160() - Check if the target type is QCN9160 (york)
+ * @target_type: target type to be checked.
+ *
+ * Return: true if the target_type is QCN9160, else false.
+ */
+bool target_is_tgt_type_qcn9160(uint32_t target_type);
 
 /**
  * target_is_tgt_type_qcn7605() - Check if the target type is QCN7605
@@ -2807,6 +2821,15 @@ QDF_STATUS target_if_mlo_teardown_req(struct wlan_objmgr_pdev **pdev,
 				      uint8_t num_pdevs, uint32_t reason);
 #endif /*WLAN_FEATURE_11BE_MLO && WLAN_MLO_MULTI_CHIP*/
 
+/**
+ * target_if_is_platform_eht_capable():
+ * API to check if the platform is EHT capable
+ * @pdev: pdev object
+ *
+ * Return: True if platform is 11BE capable; else False
+ */
+bool target_if_is_platform_eht_capable(struct wlan_objmgr_psoc *psoc,
+				       uint8_t pdev_id);
 #ifdef REO_SHARED_QREF_TABLE_EN
 static inline void target_if_set_reo_shared_qref_feature(struct wlan_objmgr_psoc *psoc,
 							 struct tgt_info *info)
@@ -2820,7 +2843,8 @@ static inline void target_if_set_reo_shared_qref_feature(struct wlan_objmgr_psoc
 		return;
 	}
 
-	if (target_psoc_get_target_type(tgt_hdl) == TARGET_TYPE_QCN9224)
+	if (target_psoc_get_target_type(tgt_hdl) == TARGET_TYPE_QCN9224 ||
+	    target_psoc_get_target_type(tgt_hdl) == TARGET_TYPE_QCA5332)
 		info->wlan_res_cfg.reo_qdesc_shared_addr_table_enabled = true;
 	else
 		info->wlan_res_cfg.reo_qdesc_shared_addr_table_enabled = false;

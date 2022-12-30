@@ -66,14 +66,17 @@
 #define QDF_NBUF_SRC_MAC_OFFSET			6
 #define QDF_NBUF_TRAC_IPV4_TOS_OFFSET		15
 #define QDF_NBUF_TRAC_IPV4_PROTO_TYPE_OFFSET  23
+#define QDF_NBUF_TRAC_VLAN_IPV4_PROTO_TYPE_OFFSET  27
 #define QDF_NBUF_TRAC_IPV4_DEST_ADDR_OFFSET   30
 #define QDF_NBUF_TRAC_IPV4_SRC_ADDR_OFFSET    26
 #define QDF_NBUF_TRAC_IPV6_PROTO_TYPE_OFFSET  20
+#define QDF_NBUF_TRAC_VLAN_IPV6_PROTO_TYPE_OFFSET  24
 #define QDF_NBUF_TRAC_IPV4_ADDR_MCAST_MASK    0xE0000000
 #define QDF_NBUF_TRAC_IPV4_ADDR_BCAST_MASK    0xF0000000
 #define QDF_NBUF_TRAC_IPV6_DEST_ADDR_OFFSET   38
 #define QDF_NBUF_TRAC_IPV6_DEST_ADDR          0xFF00
 #define QDF_NBUF_TRAC_IPV6_OFFSET		14
+#define QDF_NBUF_TRAC_VLAN_IPV6_OFFSET		18
 #define QDF_NBUF_TRAC_IPV6_HEADER_SIZE   40
 #define QDF_NBUF_TRAC_ICMP_TYPE         1
 #define QDF_NBUF_TRAC_IGMP_TYPE         2
@@ -101,8 +104,12 @@
 #define EAPOL_KEY_INFO_OFFSET			19
 #define EAPOL_PKT_LEN_OFFSET			16
 #define EAPOL_KEY_LEN_OFFSET			21
-#define EAPOL_PACKET_TYPE_EAP			0
-#define EAPOL_PACKET_TYPE_KEY			3
+
+#define EAPOL_PACKET_TYPE_EAP                   0
+#define EAPOL_PACKET_TYPE_START                 1
+#define EAPOL_PACKET_TYPE_LOGOFF                2
+#define EAPOL_PACKET_TYPE_KEY                   3
+
 #define EAPOL_KEY_TYPE_MASK			0x0800
 #define EAPOL_KEY_ENCRYPTED_MASK		0x0010
 
@@ -359,13 +366,9 @@ typedef __qdf_nbuf_queue_t qdf_nbuf_queue_t;
  * @aggregation: Indicate A-MPDU format
  * @ht_stbc: Indicate stbc
  * @ht_crc: ht crc
- * @xlna_bypass_offset: Low noise amplifier bypass offset
- * @xlna_bypass_threshold: Low noise amplifier bypass threshold
- * @rssi_temp_offset: Temperature based rssi offset
- * @min_nf_dbm: min noise floor in active chains per channel
- * @xbar_config: 4 bytes, used for BB to RF Chain mapping
- * @rssi_dbm_conv_support: Rssi dbm converstion support param
  * @rx_user_status: pointer to mon_rx_user_status, when set update
+ * @rssi_offset: This offset value will use for RSSI db to dbm conversion
+ * @rssi_dbm_conv_support: Rssi dbm conversion support param
  * radiotap header will use userinfo from this structure.
  */
 struct mon_rx_status {
@@ -483,15 +486,9 @@ struct mon_rx_status {
 		 ht_stbc:2,
 		 ht_crc:8;
 #endif
-#ifdef QCA_RSSI_DB2DBM
-	int32_t xlna_bypass_offset;
-	int32_t xlna_bypass_threshold;
-	int32_t rssi_temp_offset;
-	int8_t min_nf_dbm;
-	uint32_t xbar_config;
-	bool rssi_dbm_conv_support;
-#endif
 	struct mon_rx_user_status *rx_user_status;
+	int32_t rssi_offset;
+	bool rssi_dbm_conv_support;
 };
 
 /**
@@ -1050,9 +1047,14 @@ enum cb_ftype {
 };
 
 /**
- * @qdf_nbuf_t - Platform indepedent packet abstraction
+ * @qdf_nbuf_t - Platform independent packet abstraction
  */
 typedef __qdf_nbuf_t qdf_nbuf_t;
+
+/**
+ * @qdf_nbuf_shared_info_t- Platform independent shared info
+ */
+typedef __qdf_nbuf_shared_info_t qdf_nbuf_shared_info_t;
 
 /**
  * struct qdf_nbuf_track_t - Network buffer track structure
@@ -1106,7 +1108,7 @@ struct qdf_nbuf_track_t {
 typedef struct qdf_nbuf_track_t QDF_NBUF_TRACK;
 
 /**
- * typedef qdf_nbuf_queue_head_t - Platform indepedent nbuf queue head
+ * typedef qdf_nbuf_queue_head_t - Platform independent nbuf queue head
  */
 typedef __qdf_nbuf_queue_head_t qdf_nbuf_queue_head_t;
 
@@ -1307,6 +1309,48 @@ qdf_nbuf_unmap_nbytes_single_paddr(qdf_device_t osdev, qdf_nbuf_t buf,
 	__qdf_mem_unmap_nbytes_single(osdev, phy_addr, dir, nbytes);
 }
 #endif /* NBUF_MAP_UNMAP_DEBUG */
+
+#ifndef NBUF_SMMU_MAP_UNMAP_DEBUG
+#ifdef IPA_OFFLOAD
+
+/**
+ * qdf_nbuf_smmu_map_debug() - map smmu buffer
+ * @nbuf: network buffer
+ * @hdl: ipa handle
+ * @num_buffers: number of buffers
+ * @info: memory info
+ * @func: function name
+ * @line: line number
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS qdf_nbuf_smmu_map_debug(qdf_nbuf_t nbuf,
+				   uint8_t hdl,
+				   uint8_t num_buffers,
+				   qdf_mem_info_t *info,
+				   const char *func,
+				   uint32_t line);
+
+/**
+ * qdf_nbuf_smmu_unmap_debug() - unmap smmu buffer
+ * @nbuf: network buffer
+ * @hdl: ipa handle
+ * @num_buffers: number of buffers
+ * @info: memory info
+ * @func: function name
+ * @line: line number
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS qdf_nbuf_smmu_unmap_debug(qdf_nbuf_t nbuf,
+				     uint8_t hdl,
+				     uint8_t num_buffers,
+				     qdf_mem_info_t *info,
+				     const char *func,
+				     uint32_t line);
+
+#endif
+#endif
 
 /**
  * qdf_nbuf_queue_head_dequeue() - dequeue nbuf from the head of queue
@@ -2010,41 +2054,6 @@ void qdf_net_buf_debug_update_map_node(qdf_nbuf_t net_buf,
 				       const char *func_name,
 				       uint32_t line_num);
 
-/**
- * qdf_nbuf_smmu_map_debug() - map smmu buffer
- * @nbuf: network buffer
- * @hdl: ipa handle
- * @num_buffers: number of buffers
- * @info: memory info
- * @func: function name
- * @line: line number
- *
- * Return: QDF_STATUS
- */
-QDF_STATUS qdf_nbuf_smmu_map_debug(qdf_nbuf_t nbuf,
-				   uint8_t hdl,
-				   uint8_t num_buffers,
-				   qdf_mem_info_t *info,
-				   const char *func,
-				   uint32_t line);
-
-/**
- * qdf_nbuf_smmu_unmap_debug() - unmap smmu buffer
- * @nbuf: network buffer
- * @hdl: ipa handle
- * @num_buffers: number of buffers
- * @info: memory info
- * @func: function name
- * @line: line number
- *
- * Return: QDF_STATUS
- */
-QDF_STATUS qdf_nbuf_smmu_unmap_debug(qdf_nbuf_t nbuf,
-				     uint8_t hdl,
-				     uint8_t num_buffers,
-				     qdf_mem_info_t *info,
-				     const char *func,
-				     uint32_t line);
 
 #ifdef NBUF_SMMU_MAP_UNMAP_DEBUG
 /**
@@ -2121,7 +2130,7 @@ void qdf_net_buf_debug_acquire_skb(qdf_nbuf_t net_buf,
 				   uint32_t line_num);
 void qdf_net_buf_debug_release_skb(qdf_nbuf_t net_buf);
 
-/* nbuf allocation rouines */
+/* nbuf allocation routines */
 
 #define qdf_nbuf_alloc_simple(d, s, r, a, p) \
 	__qdf_nbuf_alloc_simple(d, s, __func__, __LINE__)
@@ -2262,7 +2271,7 @@ qdf_net_buf_debug_update_unmap_node(qdf_nbuf_t net_buf,
 				    uint32_t line_num)
 {
 }
-/* Nbuf allocation rouines */
+/* Nbuf allocation routines */
 
 #define qdf_nbuf_alloc_simple(osdev, size, reserve, align, prio) \
 	qdf_nbuf_alloc_fl(osdev, size, reserve, align, prio, \
@@ -2852,7 +2861,7 @@ static inline qdf_nbuf_t qdf_nbuf_queue_next(qdf_nbuf_t buf)
  * @nbq: Network buf queue handle
  *
  * Return: true  if queue is empty
- *	   false if queue is not emty
+ *	   false if queue is not empty
  */
 static inline bool qdf_nbuf_is_queue_empty(qdf_nbuf_queue_t *nbq)
 {
@@ -2998,6 +3007,17 @@ qdf_nbuf_append_ext_list(qdf_nbuf_t head_buf, qdf_nbuf_t ext_list,
 static inline qdf_nbuf_t qdf_nbuf_get_ext_list(qdf_nbuf_t head_buf)
 {
 	return (qdf_nbuf_t)__qdf_nbuf_get_ext_list(head_buf);
+}
+
+/**
+ * qdf_nbuf_get_shinfo() - gets the shared info of head buf
+ * @head_buf: Network buffer
+ *
+ * Return: shared info of head buf
+ */
+static inline qdf_nbuf_shared_info_t qdf_nbuf_get_shinfo(qdf_nbuf_t head_buf)
+{
+	return (qdf_nbuf_shared_info_t)__qdf_nbuf_get_shinfo(head_buf);
 }
 
 /**
@@ -4248,6 +4268,41 @@ static inline uint16_t qdf_nbuf_get_gso_segs(qdf_nbuf_t nbuf)
 }
 
 /**
+ * qdf_nbuf_set_gso_segs() - set the number of gso segments in
+ * nbuf
+ * @nbuf: Network buffer
+ * @val: val to be set
+ *
+ * Return: None
+ */
+static inline void qdf_nbuf_set_gso_segs(qdf_nbuf_t nbuf, uint16_t val)
+{
+	__qdf_nbuf_set_gso_segs(nbuf, val);
+}
+
+/**
+ * qdf_nbuf_set_gso_type_udp_l4() - set the gso type to GSO UDP L4
+ * @nbuf: Network buffer
+ *
+ * Return: None
+ */
+static inline void qdf_nbuf_set_gso_type_udp_l4(qdf_nbuf_t nbuf)
+{
+	__qdf_nbuf_set_gso_type_udp_l4(nbuf);
+}
+
+/**
+ * qdf_nbuf_set_ip_summed_partial() - set the ip summed to CHECKSUM_PARTIAL
+ * @nbuf: Network buffer
+ *
+ * Return: None
+ */
+static inline void qdf_nbuf_set_ip_summed_partial(qdf_nbuf_t nbuf)
+{
+	__qdf_nbuf_set_ip_summed_partial(nbuf);
+}
+
+/**
  * qdf_nbuf_get_gso_size() - Return the number of gso size in
  * nbuf
  * @nbuf: Network buffer
@@ -4577,7 +4632,7 @@ static inline void qdf_nbuf_count_dec(qdf_nbuf_t buf)
 }
 
 /**
- * qdf_nbuf_mod_init() - Intialization routine for qdf_nbuf
+ * qdf_nbuf_mod_init() - Initialization routine for qdf_nbuf
  *
  * Return void
  */
@@ -4683,6 +4738,77 @@ static inline uint32_t qdf_nbuf_get_mark(qdf_nbuf_t nbuf)
 static inline qdf_size_t qdf_nbuf_get_data_len(qdf_nbuf_t nbuf)
 {
 	return __qdf_nbuf_get_data_len(nbuf);
+}
+
+/**
+ * qdf_nbuf_set_data_len() - Return the data_len of the nbuf
+ * @nbuf: qdf_nbuf_t
+ * @len: data_len to be set
+ *
+ * Return: set data_len value
+ */
+static inline qdf_size_t qdf_nbuf_set_data_len(qdf_nbuf_t nbuf, uint32_t len)
+{
+	return __qdf_nbuf_set_data_len(nbuf, len);
+}
+
+/**
+ * qdf_nbuf_get_only_data_len() - Return the data_len of the nbuf
+ * @nbuf: qdf_nbuf_t
+ *
+ * Return: data_len value
+ */
+static inline qdf_size_t qdf_nbuf_get_only_data_len(qdf_nbuf_t nbuf)
+{
+	return __qdf_nbuf_get_only_data_len(nbuf);
+}
+
+/**
+ * qdf_nbuf_set_hash() - set the hash of the buf
+ * @buf: Network buf instance
+ * @len: len to be set
+ *
+ * Return: none
+ */
+static inline void qdf_nbuf_set_hash(qdf_nbuf_t buf, uint32_t len)
+{
+	__qdf_nbuf_set_hash(buf, len);
+}
+
+/**
+ * qdf_nbuf_set_sw_hash() - set the sw hash of the buf
+ * @buf: Network buf instance
+ * @len: len to be set
+ *
+ * Return: none
+ */
+static inline void qdf_nbuf_set_sw_hash(qdf_nbuf_t buf, uint32_t len)
+{
+	__qdf_nbuf_set_sw_hash(buf, len);
+}
+
+/**
+ * qdf_nbuf_set_csum_start() - set the csum start of the buf
+ * @buf: Network buf instance
+ * @len: len to be set
+ *
+ * Return: none
+ */
+static inline void qdf_nbuf_set_csum_start(qdf_nbuf_t buf, uint16_t len)
+{
+	__qdf_nbuf_set_csum_start(buf, len);
+}
+
+/**
+ * qdf_nbuf_set_csum_offset() - set the csum offset of the buf
+ * @buf: Network buf instance
+ * @len: len to be set
+ *
+ * Return: none
+ */
+static inline void qdf_nbuf_set_csum_offset(qdf_nbuf_t buf, uint16_t len)
+{
+	__qdf_nbuf_set_csum_offset(buf, len);
 }
 
 /**
@@ -5099,8 +5225,8 @@ static inline qdf_ktime_t qdf_nbuf_net_timedelta(qdf_ktime_t t)
 
 #ifdef NBUF_MEMORY_DEBUG
 /**
- * qdf_set_smmu_fault_state() - Set smmu fault sate
- * @smmu_fault_state: state of the wlan smmy
+ * qdf_set_smmu_fault_state() - Set smmu fault state
+ * @smmu_fault_state: state of the wlan smmu
  *
  * Return: void
  */

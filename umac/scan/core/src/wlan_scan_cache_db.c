@@ -798,9 +798,9 @@ scm_copy_info_from_dup_entry(struct wlan_objmgr_pdev *pdev,
 			scan_entry->rssi_timestamp;
 	} else {
 		/* If elapsed time since last rssi and snr update for this
-		 * entry is smaller than a thresold, calculate a
+		 * entry is smaller than a threshold, calculate a
 		 * running average of the RSSI and SNR values.
-		 * Otherwise new frames RSSI and SNR are more representive
+		 * Otherwise new frames RSSI and SNR are more representative
 		 * of the signal strength.
 		 */
 		time_gap =
@@ -929,11 +929,12 @@ static QDF_STATUS scm_add_update_entry(struct wlan_objmgr_psoc *psoc,
 					  &dup_node);
 
 	security_type = scan_params->security_type;
-	scm_nofl_debug("Received %s: "QDF_MAC_ADDR_FMT" \"%.*s\" freq %d rssi %d tsf_delta %u seq %d snr %d phy %d hidden %d mismatch %d %s%s%s%s pdev %d boot_time %llu ns",
+	scm_nofl_debug("Received %s: " QDF_MAC_ADDR_FMT " \"" QDF_SSID_FMT "\" freq %d rssi %d tsf_delta %u seq %d snr %d phy %d hidden %d mismatch %d %s%s%s%s pdev %d boot_time %llu ns",
 		       (scan_params->frm_subtype == MGMT_SUBTYPE_PROBE_RESP) ?
 		       "prb rsp" : "bcn",
 		       QDF_MAC_ADDR_REF(scan_params->bssid.bytes),
-		       scan_params->ssid.length, scan_params->ssid.ssid,
+		       QDF_SSID_REF(scan_params->ssid.length,
+				    scan_params->ssid.ssid),
 		       scan_params->channel.chan_freq, scan_params->rssi_raw,
 		       scan_params->tsf_delta, scan_params->seq_num,
 		       scan_params->snr, scan_params->phy_mode,
@@ -1973,6 +1974,10 @@ QDF_STATUS scm_scan_update_mlme_by_bssinfo(struct wlan_objmgr_pdev *pdev,
 			qdf_spin_lock_bh(&scan_db->scan_db_lock);
 			qdf_mem_copy(&entry->mlme_info, mlme,
 					sizeof(struct mlme_info));
+			scm_debug("BSSID: "QDF_MAC_ADDR_FMT" set assoc_state to %d with age %lu ms",
+				  QDF_MAC_ADDR_REF(entry->bssid.bytes),
+				  mlme->assoc_state,
+				  util_scan_entry_age(entry));
 			scm_scan_entry_put_ref(scan_db,
 					cur_node, false);
 			qdf_spin_unlock_bh(&scan_db->scan_db_lock);

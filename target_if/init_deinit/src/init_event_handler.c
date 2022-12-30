@@ -135,8 +135,8 @@ init_deinit_update_roam_stats_cap(struct wmi_unified *wmi_handle,
 /**
  * init_deinit_update_multi_client_ll_caps() - Update multi client service
  * capability bit
- * @wmi_handle: wmi hanle
- * @psoc: psoc commom object
+ * @wmi_handle: wmi handle
+ * @psoc: psoc common object
  *
  * Return: none
  */
@@ -160,8 +160,8 @@ init_deinit_update_multi_client_ll_caps(struct wmi_unified *wmi_handle,
 /**
  * init_deinit_update_vendor_handoff_control_caps() - Update vendor handoff
  * control service capability bit
- * @wmi_handle: wmi hanle
- * @psoc: psoc commom object
+ * @wmi_handle: wmi handle
+ * @psoc: psoc common object
  *
  * Return: none
  */
@@ -532,6 +532,8 @@ static int init_deinit_service_ext2_ready_event_handler(ol_scn_t scn_handle,
 	target_if_reg_set_disable_upper_6g_edge_ch_info(psoc);
 
 	target_if_reg_set_afc_dev_type(psoc, tgt_hdl);
+
+	target_if_set_regulatory_eirp_preferred_support(psoc);
 
 	/* send init command */
 	init_deinit_set_send_init_cmd(psoc, tgt_hdl);

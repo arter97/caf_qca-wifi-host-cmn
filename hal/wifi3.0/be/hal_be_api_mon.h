@@ -875,7 +875,7 @@ struct hal_tx_status_info {
  * @is_used: boolean flag to identify valid ppdu info
  * @is_data: boolean flag to identify data frame
  * @cur_usr_idx: Current user index of the PPDU
- * @reserved: for furture purpose
+ * @reserved: for future purpose
  * @prot_tlv_status: protection tlv status
  * @packet_info: packet information
  * @rx_status: monitor mode rx status information
@@ -1874,6 +1874,30 @@ hal_rx_status_get_mon_buf_addr(uint8_t *rx_tlv,
 {
 }
 #endif
+
+#ifdef WLAN_SUPPORT_CTRL_FRAME_STATS
+static inline void
+hal_update_rx_ctrl_frame_stats(struct hal_rx_ppdu_info *ppdu_info,
+			       uint32_t user_id)
+{
+	uint16_t fc = ppdu_info->nac_info.frame_control;
+
+	if (HAL_RX_GET_FRAME_CTRL_TYPE(fc) == HAL_RX_FRAME_CTRL_TYPE_CTRL) {
+		if ((fc & QDF_IEEE80211_FC0_SUBTYPE_MASK) ==
+		    QDF_IEEE80211_FC0_SUBTYPE_VHT_NDP_AN)
+			ppdu_info->ctrl_frm_info[user_id].ndpa = 1;
+		if ((fc & QDF_IEEE80211_FC0_SUBTYPE_MASK) ==
+		    QDF_IEEE80211_FC0_SUBTYPE_BAR)
+			ppdu_info->ctrl_frm_info[user_id].bar = 1;
+	}
+}
+#else
+static inline void
+hal_update_rx_ctrl_frame_stats(struct hal_rx_ppdu_info *ppdu_info,
+			       uint32_t user_id)
+{
+}
+#endif /* WLAN_SUPPORT_CTRL_FRAME_STATS */
 
 /**
  * hal_rx_status_get_tlv_info() - process receive info TLV
@@ -2923,6 +2947,8 @@ hal_rx_status_get_tlv_info_generic_be(void *rx_tlv_hdr, void *ppduinfo,
 
 		ppdu_info->rx_user_status[user_id].sw_peer_id =
 			rx_mpdu_start->rx_mpdu_info_details.sw_peer_id;
+
+		hal_update_rx_ctrl_frame_stats(ppdu_info, user_id);
 
 		if (ppdu_info->sw_frame_group_id ==
 		    HAL_MPDU_SW_FRAME_GROUP_NULL_DATA) {

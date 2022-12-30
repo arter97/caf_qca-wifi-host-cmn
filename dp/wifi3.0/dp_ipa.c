@@ -1291,7 +1291,7 @@ int dp_ipa_uc_detach(struct dp_soc *soc, struct dp_pdev *pdev)
  * @pdev: Physical device handle
  *
  * Allocate TX buffer from non-cacheable memory
- * Attache allocated TX buffers with WBM SRNG
+ * Attach allocated TX buffers with WBM SRNG
  *
  * Return: int
  */
@@ -2919,7 +2919,7 @@ QDF_STATUS dp_ipa_setup_iface(char *ifname, uint8_t *mac_addr,
 	ret = qdf_ipa_wdi_reg_intf(&in);
 	if (ret) {
 		QDF_TRACE(QDF_MODULE_ID_TXRX, QDF_TRACE_LEVEL_ERROR,
-			  "%s: ipa_wdi_reg_intf: register IPA interface falied: ret=%d",
+			  "%s: ipa_wdi_reg_intf: register IPA interface failed: ret=%d",
 			  __func__, ret);
 		return QDF_STATUS_E_FAILURE;
 	}
@@ -3176,7 +3176,7 @@ QDF_STATUS dp_ipa_setup_iface(char *ifname, uint8_t *mac_addr,
 
 	ret = qdf_ipa_wdi_reg_intf(&in);
 	if (ret) {
-		dp_err("ipa_wdi_reg_intf: register IPA interface falied: ret=%d",
+		dp_err("ipa_wdi_reg_intf: register IPA interface failed: ret=%d",
 		       ret);
 		return QDF_STATUS_E_FAILURE;
 	}
@@ -3438,7 +3438,7 @@ static inline bool dp_ipa_peer_check(struct dp_soc *soc,
 	}
 
 	peer = dp_peer_get_ref_by_id(soc, ast_entry->peer_id,
-				     DP_MOD_ID_AST);
+				     DP_MOD_ID_IPA);
 
 	if (!peer) {
 		qdf_spin_unlock_bh(&soc->ast_lock);

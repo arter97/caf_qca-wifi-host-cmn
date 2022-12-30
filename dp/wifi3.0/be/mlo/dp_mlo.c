@@ -286,7 +286,7 @@ QDF_STATUS dp_update_mlo_ptnr_list(struct cdp_soc_t *soc_hdl,
 							dp_err("Unable to add vdev to self vdev's list");
 							dp_vdev_unref_delete(self_soc,
 								vdev, DP_MOD_ID_RX);
-							/* TODO - relase soc ref here */
+							/* TODO - release soc ref here */
 							/* dp_soc_unref_delete(soc);*/
 							ret = QDF_STATUS_E_FAILURE;
 							goto exit;
@@ -644,6 +644,9 @@ dp_rx_replensih_soc_get(struct dp_soc *soc, uint8_t chip_id)
 	struct dp_soc *replenish_soc;
 
 	if (!be_soc->mlo_enabled || !mlo_ctxt)
+		return soc;
+
+	if (be_soc->mlo_chip_id == chip_id)
 		return soc;
 
 	replenish_soc = dp_mlo_get_soc_ref_by_chip_id(mlo_ctxt, chip_id);

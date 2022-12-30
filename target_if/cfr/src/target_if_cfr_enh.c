@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2019-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -716,7 +716,8 @@ static QDF_STATUS check_dma_length(struct look_up_table *lut,
 		    lut->payload_length <= PINE_MAX_DATA_LENGTH_BYTES) {
 			return QDF_STATUS_SUCCESS;
 		}
-	} else if (target_type == TARGET_TYPE_QCN6122) {
+	} else if (target_type == TARGET_TYPE_QCN6122 ||
+		   target_type == TARGET_TYPE_QCN9160) {
 		if (lut->header_length <= SPRUCE_MAX_HEADER_LENGTH_WORDS &&
 		    lut->payload_length <= SPRUCE_MAX_DATA_LENGTH_BYTES) {
 			return QDF_STATUS_SUCCESS;
@@ -1143,7 +1144,7 @@ static uint8_t freeze_reason_to_capture_type(void *freeze_tlv)
 {
 	/*
 	 * Capture_reason field position is common between freeze_tlv v1
-	 * and v2, hence typcasting to any one is fine
+	 * and v2, hence typecasting to any one is fine
 	 */
 	struct macrx_freeze_capture_channel *freeze =
 		(struct macrx_freeze_capture_channel *)freeze_tlv;
@@ -1835,7 +1836,7 @@ target_if_register_phase_delta_for_rcc_event_handler(struct wlan_objmgr_psoc
 
 	/*
 	 * Event registration is called per pdev
-	 * Ignore erorr if event is alreday registred.
+	 * Ignore error if event is already registered.
 	 */
 	if (ret == QDF_STATUS_E_FAILURE)
 		ret = QDF_STATUS_SUCCESS;
@@ -1896,7 +1897,7 @@ target_if_register_tx_completion_enh_event_handler(struct wlan_objmgr_psoc
 						 WMI_RX_UMAC_CTX);
 	/*
 	 * Event registration is called per pdev
-	 * Ignore erorr if event is alreday registred.
+	 * Ignore error if event is already registered.
 	 */
 	if (ret == QDF_STATUS_E_FAILURE)
 		ret = QDF_STATUS_SUCCESS;
@@ -2200,7 +2201,8 @@ QDF_STATUS cfr_enh_init_pdev(struct wlan_objmgr_psoc *psoc,
 		pcfr->num_subbufs = STREAMFS_NUM_SUBBUF_MAPLE;
 		pcfr->chip_type = CFR_CAPTURE_RADIO_MAPLE;
 		pcfr->max_mu_users = MAPLE_CFR_MU_USERS;
-	} else if (target_type == TARGET_TYPE_QCN6122) {
+	} else if (target_type == TARGET_TYPE_QCN6122 ||
+		   target_type == TARGET_TYPE_QCN9160) {
 		pcfr->subbuf_size = STREAMFS_MAX_SUBBUF_SPRUCE;
 		pcfr->num_subbufs = STREAMFS_NUM_SUBBUF_SPRUCE;
 		pcfr->chip_type = CFR_CAPTURE_RADIO_SPRUCE;

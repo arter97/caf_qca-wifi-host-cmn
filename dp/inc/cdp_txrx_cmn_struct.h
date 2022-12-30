@@ -372,7 +372,7 @@ enum cdp_host_reo_dest_ring {
 };
 
 enum htt_cmn_t2h_en_stats_type {
-    /* keep this alwyas first */
+    /* keep this always first */
     HTT_CMN_T2H_EN_STATS_TYPE_START     = 0,
 
     /** ppdu_common_stats is the payload */
@@ -920,8 +920,8 @@ typedef QDF_STATUS(*ol_txrx_get_key_fp)(void *osif_dev, uint8_t *key_buf, uint8_
  * ol_txrx_rsim_rx_decap_fp - raw mode simulation function to decap the
  * packets in receive path.
  * @osif_dev  - the virtual device's OS shim object
- * @list_head - poniter to head of receive packet queue to decap
- * @list_tail - poniter to tail of receive packet queue to decap
+ * @list_head - pointer to head of receive packet queue to decap
+ * @list_tail - pointer to tail of receive packet queue to decap
  * @peer_mac  - mac address of peer handler
  */
 typedef QDF_STATUS(*ol_txrx_rsim_rx_decap_fp)(void *osif_dev,
@@ -1284,10 +1284,14 @@ enum cdp_pdev_param_type {
  *
  * @cdp_psoc_param_en_rate_stats: set rate stats enable/disable
  * @cdp_psoc_param_en_nss_cfg: set nss cfg
+ * @cdp_psoc_param_ppeds_enabled: PPE-DS feature enable
  * @cdp_ipa_enabled : set ipa mode
  * @cdp_psoc_param_vdev_stats_hw_offload: Configure HW vdev stats offload
  * @cdp_pdev_param_undecoded_metadata_enable: Undecoded metadata capture enable
+ * @cdp_sawf_enabled: SAWF enable/disable
+ * @cdp_sawf_stats: SAWF stats config
  * @cdp_vdev_param_traffic_end_ind: Traffic end indication enable/disable
+ * @cdp_skel_enable : Enable/Disable skeleton code for Umac reset debug
  */
 typedef union cdp_config_param_t {
 	/* peer params */
@@ -1366,14 +1370,17 @@ typedef union cdp_config_param_t {
 	int cdp_psoc_param_en_nss_cfg;
 	int cdp_psoc_param_preferred_hw_mode;
 	bool cdp_psoc_param_pext_stats;
+	bool cdp_psoc_param_ppeds_enabled;
 
 	bool cdp_skip_bar_update;
 	bool cdp_ipa_enabled;
 	bool cdp_psoc_param_vdev_stats_hw_offload;
 	bool cdp_pdev_param_undecoded_metadata_enable;
 	bool cdp_sawf_enabled;
+	uint8_t cdp_sawf_stats;
 	bool cdp_drop_3addr_mcast;
 	bool cdp_vdev_param_traffic_end_ind;
+	bool cdp_umac_rst_skel;
 } cdp_config_param_type;
 
 /**
@@ -1510,6 +1517,9 @@ enum cdp_vdev_param_type {
  * @CDP_CFG_PEER_EXT_STATS: Peer extended stats mode.
  * @CDP_IPA_ENABLE : set IPA enable mode.
  * @CDP_CFG_VDEV_STATS_HW_OFFLOAD: HW Vdev stats config
+ * @CDP_UMAC_RST_SKEL_ENABLE: Enable Umac reset skeleton code for debug
+ * @CDP_CDP_PPEDS_ENABLE: PPEDS is enabled or not
+ * @CDP_SAWF_STATS : set SAWF stats config
  */
 enum cdp_psoc_param_type {
 	CDP_ENABLE_RATE_STATS,
@@ -1519,6 +1529,9 @@ enum cdp_psoc_param_type {
 	CDP_IPA_ENABLE,
 	CDP_CFG_VDEV_STATS_HW_OFFLOAD,
 	CDP_SAWF_ENABLE,
+	CDP_UMAC_RST_SKEL_ENABLE,
+	CDP_PPEDS_ENABLE,
+	CDP_SAWF_STATS,
 };
 
 #define TXRX_FW_STATS_TXSTATS                     1
@@ -1863,6 +1876,9 @@ struct cdp_delayed_tx_completion_ppdu_user {
  * @mpdu_bytes: accumulated bytes per mpdu for mem limit feature
  * @punc_mode: puncutured mode to indicate punctured bw
  * @punc_pattern_bitmap: bitmap indicating punctured pattern
+ * @mprot_type: medium protection type
+ * @rts_success: rts success
+ * @rts failure: rts failure
  */
 struct cdp_tx_completion_ppdu_user {
 	uint32_t completion_status:8,
@@ -1968,6 +1984,9 @@ struct cdp_tx_completion_ppdu_user {
 	uint32_t mpdu_bytes;
 	uint8_t punc_mode;
 	uint16_t punc_pattern_bitmap;
+	uint8_t mprot_type:3,
+		rts_success:1,
+		rts_failure:1;
 };
 
 /**
@@ -2184,7 +2203,7 @@ struct cdp_tx_completion_ppdu {
  * @tx_errors : Tx error due to FW tx failure, Ring failure DMA etc
  * @tx_dropped: Tx dropped is same as tx errors as above
  * @rx_packets: Rx total packets transmitted
- * @rx_errors : Rx erros
+ * @rx_errors : Rx errors
  * @rx_dropped: Rx dropped stats
  * @tx_bytes  : Tx total bytes transmitted
  * @rx_bytes  : Rx total bytes transmitted
@@ -2808,7 +2827,7 @@ struct cdp_scan_spcl_vap_stats {
  * @qdf_osdev: QDF device
  * @ol_ops: Offload Operations
  * @device_id: Device ID
- * @ml_context: DP ML object conext
+ * @ml_context: DP ML object context
  * @mlo_chip_id: MLO chip id, for legacy SOCs chip_id need to 0
  * @mlo_enabled: MLO enable bit
  */
