@@ -495,7 +495,7 @@ struct samp_edge_extra_bin_info {
 } __packed;
 
 /* Compile time assert to check struct size is divisible by 4 Bytes */
-SPECTRAL_COMPILE_TIME_ASSERT(struct_size_4byte_assertion,
+SPECTRAL_COMPILE_TIME_ASSERT(struct_size_4byte_assertion_samp_edge,
 			     (sizeof(struct samp_edge_extra_bin_info) % 4)
 			     == 0);
 
@@ -561,7 +561,7 @@ struct samp_detector_info {
 } __packed;
 
 /* Compile time assert to check struct size is divisible by 4 Bytes */
-SPECTRAL_COMPILE_TIME_ASSERT(struct_size_4byte_assertion,
+SPECTRAL_COMPILE_TIME_ASSERT(struct_size_4byte_assertion_samp_detector,
 			     (sizeof(struct samp_detector_info) % 4) == 0);
 
 /**
@@ -580,7 +580,7 @@ struct samp_freq_span_info {
 } __packed;
 
 /* Compile time assert to check struct size is divisible by 4 Bytes */
-SPECTRAL_COMPILE_TIME_ASSERT(struct_size_4byte_assertion,
+SPECTRAL_COMPILE_TIME_ASSERT(struct_size_4byte_assertion_samp_freq,
 			     (sizeof(struct samp_freq_span_info) % 4) == 0);
 
 /**
