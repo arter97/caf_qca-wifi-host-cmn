@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -137,6 +137,24 @@ bool mlo_is_mld_disconnected(struct wlan_objmgr_vdev *vdev)
 			return false;
 	}
 	return true;
+}
+
+bool mlo_is_mld_disconnecting_connecting(struct wlan_objmgr_vdev *vdev)
+{
+	struct wlan_mlo_dev_context *mlo_dev_ctx = vdev->mlo_dev_ctx;
+	uint8_t i = 0;
+
+	if (!mlo_dev_ctx || !wlan_vdev_mlme_is_mlo_vdev(vdev))
+		return false;
+
+	for (i =  0; i < WLAN_UMAC_MLO_MAX_VDEVS; i++) {
+		if (!mlo_dev_ctx->wlan_vdev_list[i])
+			continue;
+		if (wlan_cm_is_vdev_disconnecting(mlo_dev_ctx->wlan_vdev_list[i]) ||
+		    wlan_cm_is_vdev_connecting(mlo_dev_ctx->wlan_vdev_list[i]))
+			return true;
+	}
+	return false;
 }
 
 bool ucfg_mlo_is_mld_disconnected(struct wlan_objmgr_vdev *vdev)
