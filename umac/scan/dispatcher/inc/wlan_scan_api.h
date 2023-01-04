@@ -42,6 +42,23 @@ void wlan_scan_get_feature_info(struct wlan_objmgr_psoc *psoc,
 #endif
 
 /**
+ * wlan_scan_get_scan_entry_by_mac_freq() - API to get scan entry
+ * info from scan db by mac addr
+ * @pdev: pointer to pdev object
+ * @bssid: pointer to mac addr
+ * @freq: frequency for scan filter
+ * @cache_entry: pointer to scan cache_entry
+ *
+ * Return: success if scan entry is found in scan db
+ */
+QDF_STATUS
+wlan_scan_get_scan_entry_by_mac_freq(struct wlan_objmgr_pdev *pdev,
+				     struct qdf_mac_addr *bssid,
+				     uint16_t freq,
+				     struct scan_cache_entry
+				     *cache_entry);
+
+/**
  * wlan_scan_cfg_set_active_2g_dwelltime() - API to set scan active 2g dwelltime
  * @psoc: pointer to psoc object
  * @dwell_time: scan active dwell time
