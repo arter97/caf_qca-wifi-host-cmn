@@ -876,3 +876,14 @@ wlan_scan_get_entry_by_bssid(struct wlan_objmgr_pdev *pdev,
 {
 	return scm_scan_get_entry_by_bssid(pdev, bssid);
 }
+
+QDF_STATUS
+wlan_scan_get_scan_entry_by_mac_freq(struct wlan_objmgr_pdev *pdev,
+				     struct qdf_mac_addr *bssid,
+				     uint16_t freq,
+				     struct scan_cache_entry
+				     *cache_entry)
+{
+	return scm_scan_get_scan_entry_by_mac_freq(pdev, bssid, freq,
+						   cache_entry);
+}
