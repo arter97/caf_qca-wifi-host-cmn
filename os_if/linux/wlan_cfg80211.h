@@ -31,6 +31,7 @@
 #include <qca_vendor.h>
 #include <qdf_nbuf.h>
 #include "qal_devcfg.h"
+#include "wlan_osif_features.h"
 
 #define osif_alert(params...) \
 	QDF_TRACE_FATAL(QDF_MODULE_ID_OS_IF, params)
@@ -143,6 +144,7 @@
  * @QCA_NL80211_VENDOR_SUBCMD_THERMAL_INDEX: Report thermal event index
  * @QCA_NL80211_VENDOR_SUBCMD_CONFIG_TWT_INDEX: TWT config index
  * @QCA_NL80211_VENDOR_SUBCMD_PEER_CFR_CAPTURE_CFG_INDEX: CFR data event index
+ * @QCA_NL80211_VENDOR_SUBCMD_AFC_EVENT_INDEX: AFC Event index
  */
 
 enum qca_nl80211_vendor_subcmds_index {
@@ -244,6 +246,9 @@ enum qca_nl80211_vendor_subcmds_index {
 #endif
 #ifdef WLAN_FEATURE_CONNECTIVITY_LOGGING
 	QCA_NL80211_VENDOR_SUBCMD_DIAG_EVENT_INDEX,
+#endif
+#ifdef CONFIG_AFC_SUPPORT
+	QCA_NL80211_VENDOR_SUBCMD_AFC_EVENT_INDEX,
 #endif
 };
 
@@ -454,4 +459,61 @@ wlan_cfg80211_nla_put_u64(struct sk_buff *skb, int attrtype, u64 value)
 	return nla_put_u64_64bit(skb, attrtype, value, NL80211_ATTR_PAD);
 }
 #endif
+
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(5, 11, 0))
+static inline ssize_t
+wlan_cfg80211_nla_strscpy(char *dst, const struct nlattr *nla, size_t dstsize)
+{
+	return nla_strlcpy(dst, nla, dstsize);
+}
+#else
+static inline ssize_t
+wlan_cfg80211_nla_strscpy(char *dst, const struct nlattr *nla, size_t dstsize)
+{
+	return nla_strscpy(dst, nla, dstsize);
+}
+#endif
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 12, 0)
+static inline int wlan_cfg80211_register_netdevice(struct net_device *dev)
+{
+	return cfg80211_register_netdevice(dev);
+}
+#else
+static inline int wlan_cfg80211_register_netdevice(struct net_device *dev)
+{
+	return register_netdevice(dev);
+}
+#endif
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 12, 0)
+static inline void wlan_cfg80211_unregister_netdevice(struct net_device *dev)
+{
+	cfg80211_unregister_netdevice(dev);
+}
+#else
+static inline void wlan_cfg80211_unregister_netdevice(struct net_device *dev)
+{
+	unregister_netdevice(dev);
+}
+#endif
+
+#ifdef CFG80211_SINGLE_NETDEV_MULTI_LINK_SUPPORT
+static inline
+void wlan_cfg80211_ch_switch_notify(struct net_device *dev,
+				    struct cfg80211_chan_def *chandef,
+				    unsigned int link_id)
+{
+	cfg80211_ch_switch_notify(dev, chandef, link_id);
+}
+#else
+static inline
+void wlan_cfg80211_ch_switch_notify(struct net_device *dev,
+				    struct cfg80211_chan_def *chandef,
+				    unsigned int link_id)
+{
+	cfg80211_ch_switch_notify(dev, chandef);
+}
+#endif
+
 #endif
