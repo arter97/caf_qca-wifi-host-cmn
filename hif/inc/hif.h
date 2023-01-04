@@ -131,6 +131,11 @@ enum hif_ic_irq {
 	wbm2host_tx_completions_ring2,
 	wbm2host_tx_completions_ring1,
 	tcl2host_status_ring,
+	txmon2host_monitor_destination_mac3,
+	txmon2host_monitor_destination_mac2,
+	txmon2host_monitor_destination_mac1,
+	host2tx_monitor_ring1,
+	umac_reset,
 };
 
 #ifdef QCA_SUPPORT_LEGACY_INTERRUPTS
@@ -484,6 +489,7 @@ struct hif_direct_link_ce_info {
  * @HIF_EVENT_SRNG_ACCESS_END: hal ring access end event
  * @HIF_EVENT_BH_COMPLETE: NAPI POLL completion event
  * @HIF_EVENT_BH_FORCE_BREAK: NAPI POLL force break event
+ * @HIF_EVENT_IRQ_DISABLE_EXPIRED: IRQ disable expired event
  */
 enum hif_event_type {
 	HIF_EVENT_IRQ_TRIGGER,
@@ -494,6 +500,7 @@ enum hif_event_type {
 	HIF_EVENT_SRNG_ACCESS_END,
 	HIF_EVENT_BH_COMPLETE,
 	HIF_EVENT_BH_FORCE_BREAK,
+	HIF_EVENT_IRQ_DISABLE_EXPIRED,
 	/* Do check hif_hist_skip_event_record when adding new events */
 };
 
@@ -1297,6 +1304,28 @@ QDF_STATUS hif_rtpm_register(uint32_t id, void (*hif_rpm_cbk)(void));
 QDF_STATUS hif_rtpm_deregister(uint32_t id);
 
 /**
+ * hif_rtpm_set_autosuspend_delay() - Set delay to trigger RTPM suspend
+ * @delay: delay in ms to be set
+ *
+ * Return: Success if delay is set successfully
+ */
+QDF_STATUS hif_rtpm_set_autosuspend_delay(int delay);
+
+/**
+ * hif_rtpm_restore_autosuspend_delay() - Restore delay value to default value
+ *
+ * Return: Success if reset done. E_ALREADY if delay same as config value
+ */
+QDF_STATUS hif_rtpm_restore_autosuspend_delay(void);
+
+/**
+ * hif_rtpm_get_autosuspend_delay() -Get delay to trigger RTPM suspend
+ *
+ * Return: Delay in ms
+ */
+int hif_rtpm_get_autosuspend_delay(void);
+
+/**
  * hif_runtime_lock_init() - API to initialize Runtime PM context
  * @lock: QDF lock context
  * @name: Context name
@@ -1557,7 +1586,45 @@ void hif_fastpath_resume(struct hif_opaque_softc *hif_ctx);
  * Return: state
  */
 int hif_rtpm_get_state(void);
+
+/**
+ * hif_rtpm_display_last_busy_hist() - Display runtimepm last busy history
+ * @hif_ctx: HIF context
+ *
+ * Return: None
+ */
+void hif_rtpm_display_last_busy_hist(struct hif_opaque_softc *hif_ctx);
+
+/**
+ * hif_rtpm_record_ce_last_busy_evt() - Record CE runtimepm last busy event
+ * @hif_ctx: HIF context
+ *
+ * Return: None
+ */
+void hif_rtpm_record_ce_last_busy_evt(struct hif_softc *scn,
+				      unsigned long ce_id);
 #else
+
+/**
+ * hif_rtpm_display_last_busy_hist() - Display runtimepm last busy history
+ * @hif_ctx: HIF context
+ *
+ * Return: None
+ */
+static inline
+void hif_rtpm_display_last_busy_hist(struct hif_opaque_softc *hif_ctx) { }
+
+/**
+ * hif_rtpm_record_ce_last_busy_evt() - Record CE runtimepm last busy event
+ * @hif_ctx: HIF context
+ *
+ * Return: None
+ */
+static inline
+void hif_rtpm_record_ce_last_busy_evt(struct hif_softc *scn,
+				      unsigned long ce_id)
+{ }
+
 static inline
 QDF_STATUS hif_rtpm_register(uint32_t id, void (*hif_rpm_cbk)(void))
 { return QDF_STATUS_SUCCESS; }
@@ -1565,6 +1632,16 @@ QDF_STATUS hif_rtpm_register(uint32_t id, void (*hif_rpm_cbk)(void))
 static inline
 QDF_STATUS hif_rtpm_deregister(uint32_t id)
 { return QDF_STATUS_SUCCESS; }
+
+static inline
+QDF_STATUS hif_rtpm_set_autosuspend_delay(int delay)
+{ return QDF_STATUS_SUCCESS; }
+
+static inline QDF_STATUS hif_rtpm_restore_autosuspend_delay(void)
+{ return QDF_STATUS_SUCCESS; }
+
+static inline int hif_rtpm_get_autosuspend_delay(void)
+{ return 0; }
 
 static inline
 int hif_runtime_lock_init(qdf_runtime_lock_t *lock, const char *name)
@@ -2488,11 +2565,13 @@ hif_set_irq_config_by_ceid(struct hif_opaque_softc *scn, uint8_t ce_id,
  *  buffer information
  * @hif_ctx: hif opaque handle
  * @dma_addr: pointer to array of dma addresses
+ * @buf_size: ce dest ring buffer size
  *
  * Return: Number of buffers attached to the dest srng.
  */
 uint16_t hif_get_direct_link_ce_dest_srng_buffers(struct hif_opaque_softc *scn,
-						  uint64_t **dma_addr);
+						  uint64_t **dma_addr,
+						  uint32_t *buf_size);
 
 /**
  * hif_get_direct_link_ce_srng_info() - Get Direct Link CE srng information
@@ -2515,7 +2594,9 @@ hif_set_irq_config_by_ceid(struct hif_opaque_softc *scn, uint8_t ce_id,
 }
 
 static inline
-uint16_t hif_get_direct_link_ce_dest_srng_buffers(struct hif_opaque_softc *scn)
+uint16_t hif_get_direct_link_ce_dest_srng_buffers(struct hif_opaque_softc *scn,
+						  uint64_t **dma_addr,
+						  uint32_t *buf_size)
 {
 	return 0;
 }

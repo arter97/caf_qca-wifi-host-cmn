@@ -355,7 +355,7 @@ struct rx_mpdu_start_compact {
 		 mpdu_duration_valid			:  1,
 		 mpdu_frame_control_valid		:  1;
 	uint32_t mpdu_duration_field			: 16,
-		 mpdu_frame_control_field		: 16,
+		 mpdu_frame_control_field		: 16;
 	uint32_t mac_addr_ad1_31_0			: 32;
 	uint32_t mac_addr_ad2_15_0			: 16,
 		 mac_addr_ad1_47_32			: 16;
@@ -417,9 +417,9 @@ struct rx_msdu_end_tlv {
 };
 
 struct rx_pkt_tlvs {
-	struct rx_msdu_end_tlv   msdu_end_tlv;	/*  120 bytes */
+	struct rx_msdu_end_tlv   msdu_end_tlv;	/*  136 bytes */
 	uint8_t rx_padding0[RX_BE_PADDING0_BYTES];	/*  8 bytes */
-	struct rx_mpdu_start_tlv mpdu_start_tlv;	/*  120 bytes */
+	struct rx_mpdu_start_tlv mpdu_start_tlv;	/*  128 bytes */
 #ifndef NO_RX_PKT_HDR_TLV
 	struct rx_pkt_hdr_tlv	pkt_hdr_tlv;		/* 128 bytes */
 #endif

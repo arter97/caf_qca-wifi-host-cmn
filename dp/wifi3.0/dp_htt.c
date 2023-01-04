@@ -1086,6 +1086,7 @@ int htt_h2t_rx_ring_cfg(struct htt_soc *htt_soc, int pdev_id,
 
 	dp_mon_rx_packet_length_set(soc->dp_soc, msg_word, htt_tlv_filter);
 	dp_mon_rx_hdr_length_set(soc->dp_soc, msg_word, htt_tlv_filter);
+	dp_mon_rx_mac_filter_set(soc->dp_soc, msg_word, htt_tlv_filter);
 
 	/* word 2 */
 	msg_word++;
@@ -2354,7 +2355,7 @@ static void dp_vdev_txrx_hw_stats_handler(struct htt_soc *soc,
 	payload_size =
 	HTT_T2H_VDEVS_TXRX_STATS_PERIODIC_IND_PAYLOAD_SIZE_GET(*msg_word);
 
-	qdf_trace_hex_dump(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_INFO,
+	qdf_trace_hex_dump(QDF_MODULE_ID_DP_HTT, QDF_TRACE_LEVEL_INFO,
 			   (void *)msg_word, payload_size + 16);
 
 	/* Adjust msg_word to point to the first TLV in buffer */
