@@ -79,29 +79,60 @@ struct dp_mlo_mpass_buf {
 
 extern uint8_t sec_type_map[MAX_CDP_SEC_TYPE];
 
-#ifdef DP_USE_REDUCED_PEER_ID_FIELD_WIDTH
-static inline uint16_t dp_tx_comp_get_peer_id(struct dp_soc *soc,
-					      void *tx_comp_hal_desc)
-{
-	uint16_t peer_id = hal_tx_comp_get_peer_id(tx_comp_hal_desc);
-	struct dp_tx_comp_peer_id *tx_peer_id =
-			(struct dp_tx_comp_peer_id *)&peer_id;
+#ifdef DP_TX_COMP_RING_DESC_SANITY_CHECK
+/*
+ * Value to mark ring desc is invalidated by buffer_virt_addr_63_32 field
+ * of WBM2SW ring Desc.
+ */
+#define DP_TX_COMP_DESC_BUFF_VA_32BITS_HI_INVALIDATE 0x12121212
 
-	return (tx_peer_id->peer_id |
-	        (tx_peer_id->ml_peer_valid << soc->peer_id_shift));
+/**
+ * dp_tx_comp_desc_check_and_invalidate() - sanity check for ring desc and
+ *					    invalidate it after each reaping
+ * @tx_comp_hal_desc: ring desc virtual address
+ * @r_tx_desc: pointer to current dp TX Desc pointer
+ * @tx_desc_va: the original 64 bits Desc VA got from ring Desc
+ * @hw_cc_done: HW cookie conversion done or not
+ *
+ * If HW CC is done, check the buffer_virt_addr_63_32 value to know if
+ * ring Desc is stale or not. if HW CC is not done, then compare PA between
+ * ring Desc and current TX desc.
+ *
+ * Return: None.
+ */
+static inline
+void dp_tx_comp_desc_check_and_invalidate(void *tx_comp_hal_desc,
+					  struct dp_tx_desc_s **r_tx_desc,
+					  uint64_t tx_desc_va,
+					  bool hw_cc_done)
+{
+	qdf_dma_addr_t desc_dma_addr;
+
+	if (qdf_likely(hw_cc_done)) {
+		/* Check upper 32 bits */
+		if (DP_TX_COMP_DESC_BUFF_VA_32BITS_HI_INVALIDATE ==
+		    (tx_desc_va >> 32))
+			*r_tx_desc = NULL;
+
+		/* Invalidate the ring desc for 32 ~ 63 bits of VA */
+		hal_tx_comp_set_desc_va_63_32(
+				tx_comp_hal_desc,
+				DP_TX_COMP_DESC_BUFF_VA_32BITS_HI_INVALIDATE);
+	} else {
+		/* Compare PA between ring desc and current TX desc stored */
+		desc_dma_addr = hal_tx_comp_get_paddr(tx_comp_hal_desc);
+
+		if (desc_dma_addr != (*r_tx_desc)->dma_addr)
+			*r_tx_desc = NULL;
+	}
 }
 #else
-/* Combine ml_peer_valid and peer_id field */
-#define DP_BE_TX_COMP_PEER_ID_MASK	0x00003fff
-#define DP_BE_TX_COMP_PEER_ID_SHIFT	0
-
-static inline uint16_t dp_tx_comp_get_peer_id(struct dp_soc *soc,
-					      void *tx_comp_hal_desc)
+static inline
+void dp_tx_comp_desc_check_and_invalidate(void *tx_comp_hal_desc,
+					  struct dp_tx_desc_s **r_tx_desc,
+					  uint64_t tx_desc_va,
+					  bool hw_cc_done)
 {
-	uint16_t peer_id = hal_tx_comp_get_peer_id(tx_comp_hal_desc);
-
-	return ((peer_id & DP_BE_TX_COMP_PEER_ID_MASK) >>
-		DP_BE_TX_COMP_PEER_ID_SHIFT);
 }
 #endif
 
@@ -112,12 +143,15 @@ void dp_tx_comp_get_params_from_hal_desc_be(struct dp_soc *soc,
 					    struct dp_tx_desc_s **r_tx_desc)
 {
 	uint32_t tx_desc_id;
+	uint64_t tx_desc_va = 0;
+	bool hw_cc_done =
+		hal_tx_comp_get_cookie_convert_done(tx_comp_hal_desc);
 
-	if (qdf_likely(
-		hal_tx_comp_get_cookie_convert_done(tx_comp_hal_desc))) {
+	if (qdf_likely(hw_cc_done)) {
 		/* HW cookie conversion done */
-		*r_tx_desc = (struct dp_tx_desc_s *)
-				hal_tx_comp_get_desc_va(tx_comp_hal_desc);
+		tx_desc_va = hal_tx_comp_get_desc_va(tx_comp_hal_desc);
+		*r_tx_desc = (struct dp_tx_desc_s *)(uintptr_t)tx_desc_va;
+
 	} else {
 		/* SW do cookie conversion to VA */
 		tx_desc_id = hal_tx_comp_get_desc_id(tx_comp_hal_desc);
@@ -125,21 +159,33 @@ void dp_tx_comp_get_params_from_hal_desc_be(struct dp_soc *soc,
 		(struct dp_tx_desc_s *)dp_cc_desc_find(soc, tx_desc_id);
 	}
 
+	dp_tx_comp_desc_check_and_invalidate(tx_comp_hal_desc,
+					     r_tx_desc, tx_desc_va,
+					     hw_cc_done);
+
 	if (*r_tx_desc)
-		(*r_tx_desc)->peer_id = dp_tx_comp_get_peer_id(soc,
-							       tx_comp_hal_desc);
+		(*r_tx_desc)->peer_id =
+				dp_tx_comp_get_peer_id_be(soc,
+							  tx_comp_hal_desc);
 }
 #else
 void dp_tx_comp_get_params_from_hal_desc_be(struct dp_soc *soc,
 					    void *tx_comp_hal_desc,
 					    struct dp_tx_desc_s **r_tx_desc)
 {
-	*r_tx_desc = (struct dp_tx_desc_s *)
-			hal_tx_comp_get_desc_va(tx_comp_hal_desc);
+	uint64_t tx_desc_va;
 
+	tx_desc_va = hal_tx_comp_get_desc_va(tx_comp_hal_desc);
+	*r_tx_desc = (struct dp_tx_desc_s *)(uintptr_t)tx_desc_va;
+
+	dp_tx_comp_desc_check_and_invalidate(tx_comp_hal_desc,
+					     r_tx_desc,
+					     tx_desc_va,
+					     true);
 	if (*r_tx_desc)
-		(*r_tx_desc)->peer_id = dp_tx_comp_get_peer_id(soc,
-							       tx_comp_hal_desc);
+		(*r_tx_desc)->peer_id =
+				dp_tx_comp_get_peer_id_be(soc,
+							  tx_comp_hal_desc);
 }
 #endif /* DP_HW_COOKIE_CONVERT_EXCEPTION */
 #else
@@ -155,9 +201,14 @@ void dp_tx_comp_get_params_from_hal_desc_be(struct dp_soc *soc,
 	*r_tx_desc =
 	(struct dp_tx_desc_s *)dp_cc_desc_find(soc, tx_desc_id);
 
+	dp_tx_comp_desc_check_and_invalidate(tx_comp_hal_desc,
+					     r_tx_desc, 0,
+					     false);
+
 	if (*r_tx_desc)
-		(*r_tx_desc)->peer_id = dp_tx_comp_get_peer_id(soc,
-							       tx_comp_hal_desc);
+		(*r_tx_desc)->peer_id =
+				dp_tx_comp_get_peer_id_be(soc,
+							  tx_comp_hal_desc);
 }
 #endif /* DP_FEATURE_HW_COOKIE_CONVERSION */
 
@@ -634,21 +685,6 @@ dp_tx_mlo_mcast_multipass_handler(struct dp_soc *soc, struct dp_vdev *vdev,
 }
 #endif
 
-void dp_tx_mcast_mlo_reinject_routing_set(struct dp_soc *soc, void *arg)
-{
-	hal_soc_handle_t hal_soc = soc->hal_soc;
-	uint8_t *cmd = (uint8_t *)arg;
-
-	if (*cmd)
-		hal_tx_mcast_mlo_reinject_routing_set(
-					hal_soc,
-					HAL_TX_MCAST_MLO_REINJECT_TQM_NOTIFY);
-	else
-		hal_tx_mcast_mlo_reinject_routing_set(
-					hal_soc,
-					HAL_TX_MCAST_MLO_REINJECT_FW_NOTIFY);
-}
-
 void
 dp_tx_mlo_mcast_pkt_send(struct dp_vdev_be *be_vdev,
 			 struct dp_vdev *ptnr_vdev,
@@ -719,6 +755,17 @@ void dp_tx_mlo_mcast_handler_be(struct dp_soc *soc,
 	else
 		be_vdev->seq_num++;
 }
+
+bool dp_tx_mlo_is_mcast_primary_be(struct dp_soc *soc,
+				   struct dp_vdev *vdev)
+{
+	struct dp_vdev_be *be_vdev = dp_get_be_vdev_from_dp_vdev(vdev);
+
+	if (be_vdev->mcast_primary)
+		return true;
+
+	return false;
+}
 #else
 static inline void
 dp_tx_vdev_id_set_hal_tx_desc(uint32_t *hal_tx_desc_cached,
@@ -734,6 +781,12 @@ void dp_tx_mlo_mcast_handler_be(struct dp_soc *soc,
 				struct dp_vdev *vdev,
 				qdf_nbuf_t nbuf)
 {
+}
+
+bool dp_tx_mlo_is_mcast_primary_be(struct dp_soc *soc,
+				   struct dp_vdev *vdev)
+{
+	return false;
 }
 #endif
 
@@ -805,7 +858,8 @@ int dp_ppeds_tx_comp_handler(struct dp_soc_be *be_soc, uint32_t quota)
 	void *last_prefetch_hw_desc = NULL;
 	struct dp_tx_desc_s *last_prefetch_sw_desc = NULL;
 	hal_soc_handle_t hal_soc = soc->hal_soc;
-	hal_ring_handle_t hal_ring_hdl = be_soc->ppe_wbm_release_ring.hal_srng;
+	hal_ring_handle_t hal_ring_hdl =
+				be_soc->ppeds_wbm_release_ring.hal_srng;
 
 	if (qdf_unlikely(dp_srng_access_start(NULL, soc, hal_ring_hdl))) {
 		dp_err("HAL RING Access Failed -- %pK", hal_ring_hdl);

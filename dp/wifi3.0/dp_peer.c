@@ -2833,6 +2833,8 @@ void dp_peer_rx_reo_shared_qaddr_delete(struct dp_soc *soc,
 {
 	uint8_t tid;
 
+	if (peer->peer_id > soc->max_peer_id)
+		return;
 	if (IS_MLO_DP_LINK_PEER(peer))
 		return;
 	if (hal_reo_shared_qaddr_is_enable(soc->hal_soc)) {
@@ -3115,6 +3117,9 @@ dp_rx_peer_map_handler(struct dp_soc *soc, uint16_t peer_id,
 					   CDP_LINK_PEER_TYPE);
 
 		if (peer) {
+			/* Updating ast_hash and ast_idx in peer level */
+			peer->ast_hash = ast_hash;
+			peer->ast_idx = hw_peer_id;
 			vdev = peer->vdev;
 			/* Only check for STA Vdev and peer is not for TDLS */
 			if (wlan_op_mode_sta == vdev->opmode &&
@@ -5868,7 +5873,6 @@ int dp_peer_get_rxtid_stats_ipa(struct dp_peer *peer,
 	uint16_t peer_id = peer->peer_id;
 	unsigned long comb_peer_id_tid;
 	struct dp_rx_tid *rx_tid;
-	int last_tid = 0;
 
 	if (!dp_stats_cmd_cb)
 		return stats_cmd_sent_cnt;
@@ -5891,37 +5895,23 @@ int dp_peer_get_rxtid_stats_ipa(struct dp_peer *peer,
 			status = dp_reo_send_cmd(soc, CMD_GET_QUEUE_STATS,
 						 &params, dp_stats_cmd_cb,
 						 (void *)comb_peer_id_tid);
-			if (QDF_IS_STATUS_SUCCESS(status)) {
+			if (QDF_IS_STATUS_SUCCESS(status))
 				stats_cmd_sent_cnt++;
-				last_tid = i;
-			}
+
+			/* Flush REO descriptor from HW cache to update stats
+			 * in descriptor memory. This is to help debugging
+			 */
+			qdf_mem_zero(&params, sizeof(params));
+			params.std.need_status = 0;
+			params.std.addr_lo =
+				rx_tid->hw_qdesc_paddr & 0xffffffff;
+			params.std.addr_hi =
+				(uint64_t)(rx_tid->hw_qdesc_paddr) >> 32;
+			params.u.fl_cache_params.flush_no_inval = 1;
+			dp_reo_send_cmd(soc, CMD_FLUSH_CACHE, &params, NULL,
+					NULL);
 		}
 	}
-
-	/* Flush REO descriptor from HW cache to update stats
-	 * in descriptor memory. This is to help debugging
-	 */
-	rx_tid = &peer->rx_tid[last_tid];
-	qdf_mem_zero(&params, sizeof(params));
-	params.std.need_status = 0;
-	params.std.addr_lo =
-		rx_tid->hw_qdesc_paddr & 0xffffffff;
-	params.std.addr_hi =
-		(uint64_t)(rx_tid->hw_qdesc_paddr) >> 32;
-	params.u.fl_cache_params.flush_no_inval = 1;
-	params.u.fl_cache_params.flush_entire_cache = 1;
-	dp_reo_send_cmd(soc, CMD_FLUSH_CACHE, &params, NULL,
-			NULL);
-
-	qdf_mem_zero(&params, sizeof(params));
-	params.std.need_status = 0;
-	params.std.addr_lo =
-		rx_tid->hw_qdesc_paddr & 0xffffffff;
-	params.std.addr_hi =
-		(uint64_t)(rx_tid->hw_qdesc_paddr) >> 32;
-	params.u.unblk_cache_params.type = UNBLOCK_CACHE;
-	dp_reo_send_cmd(soc, CMD_UNBLOCK_CACHE, &params, NULL,
-			NULL);
 
 	return stats_cmd_sent_cnt;
 }
@@ -5947,7 +5937,6 @@ int dp_peer_rxtid_stats(struct dp_peer *peer,
 	int stats_cmd_sent_cnt = 0;
 	QDF_STATUS status;
 	struct dp_rx_tid *rx_tid;
-	int last_tid = 0;
 
 	if (!dp_stats_cmd_cb)
 		return stats_cmd_sent_cnt;
@@ -5977,37 +5966,24 @@ int dp_peer_rxtid_stats(struct dp_peer *peer,
 						rx_tid);
 			}
 
-			if (QDF_IS_STATUS_SUCCESS(status)) {
+			if (QDF_IS_STATUS_SUCCESS(status))
 				stats_cmd_sent_cnt++;
-				last_tid = i;
-			}
+
+
+			/* Flush REO descriptor from HW cache to update stats
+			 * in descriptor memory. This is to help debugging
+			 */
+			qdf_mem_zero(&params, sizeof(params));
+			params.std.need_status = 0;
+			params.std.addr_lo =
+				rx_tid->hw_qdesc_paddr & 0xffffffff;
+			params.std.addr_hi =
+				(uint64_t)(rx_tid->hw_qdesc_paddr) >> 32;
+			params.u.fl_cache_params.flush_no_inval = 1;
+			dp_reo_send_cmd(soc, CMD_FLUSH_CACHE, &params, NULL,
+					NULL);
 		}
 	}
-
-	/* Flush REO descriptor from HW cache to update stats
-	 * in descriptor memory. This is to help debugging
-	 */
-	rx_tid = &peer->rx_tid[last_tid];
-	qdf_mem_zero(&params, sizeof(params));
-	params.std.need_status = 0;
-	params.std.addr_lo =
-		rx_tid->hw_qdesc_paddr & 0xffffffff;
-	params.std.addr_hi =
-		(uint64_t)(rx_tid->hw_qdesc_paddr) >> 32;
-	params.u.fl_cache_params.flush_no_inval = 1;
-	params.u.fl_cache_params.flush_entire_cache = 1;
-	dp_reo_send_cmd(soc, CMD_FLUSH_CACHE, &params, NULL,
-			NULL);
-
-	qdf_mem_zero(&params, sizeof(params));
-	params.std.need_status = 0;
-	params.std.addr_lo =
-		rx_tid->hw_qdesc_paddr & 0xffffffff;
-	params.std.addr_hi =
-		(uint64_t)(rx_tid->hw_qdesc_paddr) >> 32;
-	params.u.unblk_cache_params.type = UNBLOCK_CACHE;
-	dp_reo_send_cmd(soc, CMD_UNBLOCK_CACHE, &params, NULL,
-			NULL);
 
 	return stats_cmd_sent_cnt;
 }

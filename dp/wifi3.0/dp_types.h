@@ -262,6 +262,8 @@ enum dp_mod_id {
 	DP_MOD_ID_REINJECT,
 	DP_MOD_ID_SCS,
 	DP_MOD_ID_UMAC_RESET,
+	DP_MOD_ID_TX_MCAST,
+	DP_MOD_ID_DS,
 	DP_MOD_ID_MAX,
 };
 
@@ -1095,6 +1097,8 @@ struct dp_soc_stats {
 		uint32_t dropped_fw_removed;
 		/* tx completion release_src != TQM or FW */
 		uint32_t invalid_release_source;
+		/* TX descriptor from completion ring Desc is not valid */
+		uint32_t invalid_tx_comp_desc;
 		/* tx completion wbm_internal_error */
 		uint32_t wbm_internal_error[MAX_WBM_INT_ERROR_REASONS];
 		/* tx completion non_wbm_internal_error */
@@ -1838,6 +1842,8 @@ enum dp_context_type {
  * 				      source from HAL desc for wbm release ring
  * @dp_service_near_full_srngs: Handler for servicing the near full IRQ
  * @txrx_set_vdev_param: target specific ops while setting vdev params
+ * @txrx_get_vdev_mcast_param: target specific ops for getting vdev
+ *			       params related to multicast
  * @dp_srng_test_and_update_nf_params: Check if the srng is in near full state
  *				and set the near-full params.
  * @ipa_get_bank_id: Get TCL bank id used by IPA
@@ -1881,9 +1887,9 @@ struct dp_arch_ops {
 				    struct cdp_tx_exception_metadata *metadata,
 				    struct dp_tx_msdu_info_s *msdu_info);
 
-	 void (*tx_comp_get_params_from_hal_desc)(struct dp_soc *soc,
-						  void *tx_comp_hal_desc,
-						  struct dp_tx_desc_s **desc);
+	void (*tx_comp_get_params_from_hal_desc)(struct dp_soc *soc,
+						 void *tx_comp_hal_desc,
+						 struct dp_tx_desc_s **desc);
 	void (*dp_tx_process_htt_completion)(struct dp_soc *soc,
 					     struct dp_tx_desc_s *tx_desc,
 					     uint8_t *status,
@@ -1945,6 +1951,10 @@ struct dp_arch_ops {
 					  enum cdp_vdev_param_type param,
 					  cdp_config_param_type val);
 
+	QDF_STATUS (*txrx_get_vdev_mcast_param)(struct dp_soc *soc,
+						struct dp_vdev *vdev,
+						cdp_config_param_type *val);
+
 	/* Misc Arch Ops */
 	qdf_size_t (*txrx_get_context_size)(enum dp_context_type);
 #ifdef WIFI_MONITOR_SUPPORT
@@ -1961,6 +1971,8 @@ struct dp_arch_ops {
 				    qdf_nbuf_t nbuf);
 	bool (*dp_rx_mcast_handler)(struct dp_soc *soc, struct dp_vdev *vdev,
 				    struct dp_txrx_peer *peer, qdf_nbuf_t nbuf);
+	bool (*dp_tx_is_mcast_primary)(struct dp_soc *soc,
+				       struct dp_vdev *vdev);
 #endif
 	struct dp_soc * (*dp_soc_get_by_idle_bm_id)(struct dp_soc *soc,
 						    uint8_t bm_id);
@@ -2022,6 +2034,7 @@ struct dp_arch_ops {
 #endif
 #ifdef WLAN_SUPPORT_PPEDS
 	void (*dp_txrx_ppeds_rings_status)(struct dp_soc *soc);
+	void (*dp_tx_ppeds_inuse_desc)(struct dp_soc *soc);
 #endif
 	QDF_STATUS (*txrx_soc_ppeds_start)(struct dp_soc *soc);
 	void (*txrx_soc_ppeds_stop)(struct dp_soc *soc);
@@ -2614,6 +2627,13 @@ struct dp_soc {
 	bool high_throughput;
 #endif
 	bool is_tx_pause;
+
+#ifdef WLAN_SUPPORT_RX_FLOW_TAG
+	/* number of IPv4 flows inserted */
+	qdf_atomic_t ipv4_fse_cnt;
+	/* number of IPv6 flows inserted */
+	qdf_atomic_t ipv6_fse_cnt;
+#endif
 };
 
 #ifdef IPA_OFFLOAD
@@ -3245,6 +3265,7 @@ struct dp_vdev {
 
 #ifdef QCA_SUPPORT_WDS_EXTENDED
 	bool wds_ext_enabled;
+	bool drop_tx_mcast;
 #endif /* QCA_SUPPORT_WDS_EXTENDED */
 	bool drop_3addr_mcast;
 #ifdef WLAN_VENDOR_SPECIFIC_BAR_UPDATE
@@ -4288,6 +4309,11 @@ struct dp_peer {
 #ifdef CONFIG_SAWF_DEF_QUEUES
 	struct dp_peer_sawf *sawf;
 #endif
+	/* AST hash index for peer in HW */
+	uint16_t ast_idx;
+
+	/* AST hash value for peer in HW */
+	uint16_t ast_hash;
 };
 
 /*

@@ -236,7 +236,7 @@ struct dp_ppe_vp_profile {
 };
 
 /**
- * struct dp_ppe_tx_desc_pool_s - PPEDS Tx Descriptor Pool
+ * struct dp_ppeds_tx_desc_pool_s - PPEDS Tx Descriptor Pool
  * @elem_size: Size of each descriptor
  * @num_allocated: Number of used descriptors
  * @freelist: Chain of free descriptors
@@ -245,7 +245,7 @@ struct dp_ppe_vp_profile {
  * @num_free: Number of free descriptors
  * @lock- Lock for descriptor allocation/free from/to the pool
  */
-struct dp_ppe_tx_desc_pool_s {
+struct dp_ppeds_tx_desc_pool_s {
 	uint16_t elem_size;
 	uint32_t num_allocated;
 	struct dp_tx_desc_s *freelist;
@@ -283,9 +283,9 @@ struct dp_ppeds_napi {
  * @mld_peer_hash: peer hash table for ML peers
  *           Associated peer with this MAC address)
  * @mld_peer_hash_lock: lock to protect mld_peer_hash
+ * @ppe_ds_int_mode_enabled: PPE DS interrupt mode enabled
  * @reo2ppe_ring: REO2PPE ring
  * @ppe2tcl_ring: PPE2TCL ring
- * @ppe_release_ring: PPE release ring
  * @ppe_vp_tbl: PPE VP table
  * @ppe_vp_tbl_lock: PPE VP table lock
  * @num_ppe_vp_entries : Number of PPE VP entries
@@ -308,13 +308,14 @@ struct dp_soc_be {
 	struct dp_hw_cookie_conversion_t tx_cc_ctx[MAX_TXDESC_POOLS];
 	struct dp_hw_cookie_conversion_t rx_cc_ctx[MAX_RXDESC_POOLS];
 #ifdef WLAN_SUPPORT_PPEDS
+	uint8_t ppeds_int_mode_enabled:1,
+		ppeds_stopped:1;
 	struct dp_srng reo2ppe_ring;
 	struct dp_srng ppe2tcl_ring;
-	struct dp_srng ppe_release_ring;
-	struct dp_srng ppe_wbm_release_ring;
+	struct dp_srng ppeds_wbm_release_ring;
 	struct dp_ppe_vp_tbl_entry *ppe_vp_tbl;
 	struct dp_hw_cookie_conversion_t ppeds_tx_cc_ctx;
-	struct dp_ppe_tx_desc_pool_s ppeds_tx_desc;
+	struct dp_ppeds_tx_desc_pool_s ppeds_tx_desc;
 	struct dp_ppeds_napi ppeds_napi_ctxt;
 	void *ppeds_handle;
 	qdf_mutex_t ppe_vp_tbl_lock;
@@ -851,19 +852,4 @@ void dp_mlo_update_link_to_pdev_unmap(struct dp_soc *soc, struct dp_pdev *pdev)
 {
 }
 #endif
-
-/*
- * dp_txrx_set_vdev_param_be: target specific ops while setting vdev params
- * @soc : DP soc handle
- * @vdev: pointer to vdev structure
- * @param: parameter type to get value
- * @val: value
- *
- * return: QDF_STATUS
- */
-QDF_STATUS dp_txrx_set_vdev_param_be(struct dp_soc *soc,
-				     struct dp_vdev *vdev,
-				     enum cdp_vdev_param_type param,
-				     cdp_config_param_type val);
-
 #endif

@@ -1686,6 +1686,40 @@ reg_add_indoor_concurrency(struct wlan_objmgr_pdev *pdev, uint8_t vdev_id,
 QDF_STATUS
 reg_remove_indoor_concurrency(struct wlan_objmgr_pdev *pdev, uint8_t vdev_id,
 			      uint32_t freq);
+
+/**
+ * reg_init_indoor_channel_list() - Initialize the indoor concurrency list
+ *
+ * @pdev: pointer to pdev
+ *
+ * Return: None
+ */
+void
+reg_init_indoor_channel_list(struct wlan_objmgr_pdev *pdev);
+/**
+ * reg_compute_indoor_list_on_cc_change() - Recompute the indoor concurrency
+ * list on a country change
+ *
+ * @psoc: pointer to psoc
+ * @pdev: pointer to pdev
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS
+reg_compute_indoor_list_on_cc_change(struct wlan_objmgr_psoc *psoc,
+				     struct wlan_objmgr_pdev *pdev);
+#else
+static inline void
+reg_init_indoor_channel_list(struct wlan_objmgr_pdev *pdev)
+{
+}
+
+static inline QDF_STATUS
+reg_compute_indoor_list_on_cc_change(struct wlan_objmgr_psoc *psoc,
+				     struct wlan_objmgr_pdev *pdev)
+{
+	return QDF_STATUS_SUCCESS;
+}
 #endif
 
 #if defined(CONFIG_BAND_6GHZ)
@@ -1889,6 +1923,28 @@ reg_get_cur_6g_client_type(struct wlan_objmgr_pdev *pdev,
 			   *reg_cur_6g_client_mobility_type);
 
 /**
+ * reg_set_cur_6ghz_client_type() - Set the cur 6 GHz regulatory client type to
+ * the given value.
+ * @pdev: Pointer to PDEV object.
+ * @in_6ghz_client_type: Input 6 GHz client type ie. default/subordinate.
+ *
+ * Return: QDF_STATUS.
+ */
+QDF_STATUS
+reg_set_cur_6ghz_client_type(struct wlan_objmgr_pdev *pdev,
+			     enum reg_6g_client_type in_6ghz_client_type);
+
+/**
+ * reg_set_6ghz_client_type_from_target() - Set the current 6 GHz regulatory
+ * client type to the value received from target.
+ * @pdev: Pointer to PDEV object.
+ *
+ * Return: QDF_STATUS.
+ */
+QDF_STATUS
+reg_set_6ghz_client_type_from_target(struct wlan_objmgr_pdev *pdev);
+
+/**
  * reg_get_rnr_tpe_usable() - Tells if RNR IE is applicable for current domain.
  * @pdev: Pointer to PDEV object.
  * @reg_rnr_tpe_usable: Pointer to hold the bool value, true if RNR IE is
@@ -2047,6 +2103,19 @@ reg_get_cur_6g_client_type(struct wlan_objmgr_pdev *pdev,
 			   *reg_cur_6g_client_mobility_type)
 {
 	*reg_cur_6g_client_mobility_type = REG_SUBORDINATE_CLIENT;
+	return QDF_STATUS_E_NOSUPPORT;
+}
+
+static inline QDF_STATUS
+reg_set_cur_6ghz_client_type(struct wlan_objmgr_pdev *pdev,
+			     enum reg_6g_client_type in_6ghz_client_type)
+{
+	return QDF_STATUS_E_NOSUPPORT;
+}
+
+static inline QDF_STATUS
+reg_set_6ghz_client_type_from_target(struct wlan_objmgr_pdev *pdev)
+{
 	return QDF_STATUS_E_NOSUPPORT;
 }
 

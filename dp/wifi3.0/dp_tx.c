@@ -1635,8 +1635,7 @@ dp_tx_ring_access_end_wrapper(struct dp_soc *soc,
 
 	ret = hif_rtpm_get(HIF_RTPM_GET_ASYNC, HIF_RTPM_ID_DP);
 	if (QDF_IS_STATUS_SUCCESS(ret)) {
-		if (hif_system_pm_state_check(soc->hif_handle) ||
-					qdf_unlikely(soc->is_tx_pause)) {
+		if (hif_system_pm_state_check(soc->hif_handle)) {
 			dp_tx_hal_ring_access_end_reap(soc, hal_ring_hdl);
 			hal_srng_set_event(hal_ring_hdl, HAL_SRNG_FLUSH_EVENT);
 			hal_srng_inc_flush_cnt(hal_ring_hdl);
@@ -1661,8 +1660,7 @@ dp_tx_ring_access_end_wrapper(struct dp_soc *soc,
 			      hal_ring_handle_t hal_ring_hdl,
 			      int coalesce)
 {
-	if (hif_system_pm_state_check(soc->hif_handle) ||
-					qdf_unlikely(soc->is_tx_pause)) {
+	if (hif_system_pm_state_check(soc->hif_handle)) {
 		dp_tx_hal_ring_access_end_reap(soc, hal_ring_hdl);
 		hal_srng_set_event(hal_ring_hdl, HAL_SRNG_FLUSH_EVENT);
 		hal_srng_inc_flush_cnt(hal_ring_hdl);
@@ -3090,6 +3088,34 @@ static inline bool dp_tx_mcast_enhance(struct dp_vdev *vdev, qdf_nbuf_t nbuf)
 }
 #endif
 
+#ifdef QCA_SUPPORT_WDS_EXTENDED
+/**
+ * dp_tx_mcast_drop() - Drop mcast frame if drop_tx_mcast is set in WDS_EXT
+ * @vdev: vdev handle
+ * @nbuf: skb
+ *
+ * Return: true if frame is dropped, false otherwise
+ */
+static inline bool dp_tx_mcast_drop(struct dp_vdev *vdev, qdf_nbuf_t nbuf)
+{
+	/* Drop tx mcast and WDS Extended feature check */
+	if (qdf_unlikely((vdev->drop_tx_mcast) && (vdev->wds_ext_enabled))) {
+		qdf_ether_header_t *eh = (qdf_ether_header_t *)
+						qdf_nbuf_data(nbuf);
+		if (DP_FRAME_IS_MULTICAST((eh)->ether_dhost)) {
+			DP_STATS_INC(vdev, tx_i.dropped.tx_mcast_drop, 1);
+			return true;
+		}
+	}
+
+	return false;
+}
+#else
+static inline bool dp_tx_mcast_drop(struct dp_vdev *vdev, qdf_nbuf_t nbuf)
+{
+	return false;
+}
+#endif
 /**
  * dp_tx_per_pkt_vdev_id_check() - vdev id check for frame
  * @nbuf: qdf_nbuf_t
@@ -3700,6 +3726,9 @@ qdf_nbuf_t dp_tx_send(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
 
 	if (qdf_unlikely(!dp_tx_mcast_enhance(vdev, nbuf)))
 		return NULL;
+
+	if (qdf_unlikely(dp_tx_mcast_drop(vdev, nbuf)))
+		return nbuf;
 
 	/* RAW */
 	if (qdf_unlikely(vdev->tx_encap_type == htt_cmn_pkt_type_raw)) {
@@ -5472,7 +5501,8 @@ dp_tx_mcast_reinject_handler(struct dp_soc *soc, struct dp_tx_desc_s *desc)
 	struct dp_vdev *vdev = NULL;
 
 	if (desc->tx_status == HAL_TX_TQM_RR_MULTICAST_DROP) {
-		if (!soc->arch_ops.dp_tx_mcast_handler)
+		if (!soc->arch_ops.dp_tx_mcast_handler ||
+		    !soc->arch_ops.dp_tx_is_mcast_primary)
 			return false;
 
 		vdev = dp_vdev_get_ref_by_id(soc, desc->vdev_id,
@@ -5481,6 +5511,11 @@ dp_tx_mcast_reinject_handler(struct dp_soc *soc, struct dp_tx_desc_s *desc)
 		if (qdf_unlikely(!vdev)) {
 			dp_tx_comp_info_rl("Unable to get vdev ref  %d",
 					   desc->id);
+			return false;
+		}
+
+		if (!(soc->arch_ops.dp_tx_is_mcast_primary(soc, vdev))) {
+			dp_vdev_unref_delete(soc, vdev, DP_MOD_ID_REINJECT);
 			return false;
 		}
 		DP_STATS_INC_PKT(vdev, tx_i.reinject_pkts, 1,
@@ -5598,7 +5633,7 @@ dp_tx_comp_process_desc_list(struct dp_soc *soc,
 							      desc->length,
 							      desc->tx_status,
 							      false);
-			qdf_nbuf_free(desc->nbuf);
+			dp_tx_nbuf_dev_queue_free(&h, desc);
 			dp_ppeds_tx_desc_free(soc, desc);
 			desc = next;
 			continue;
@@ -5827,8 +5862,10 @@ more_data:
 		soc->arch_ops.tx_comp_get_params_from_hal_desc(soc,
 							       tx_comp_hal_desc,
 							       &tx_desc);
-		if (!tx_desc) {
+		if (qdf_unlikely(!tx_desc)) {
 			dp_err("unable to retrieve tx_desc!");
+			hal_dump_comp_desc(tx_comp_hal_desc);
+			DP_STATS_INC(soc, tx.invalid_tx_comp_desc, 1);
 			QDF_BUG(0);
 			continue;
 		}

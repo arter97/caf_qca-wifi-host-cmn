@@ -1556,6 +1556,14 @@ static int dp_srng_calculate_msi_group(struct dp_soc *soc,
 		grp_mask = &soc->wlan_cfg_ctx->int_host2txmon_ring_mask[0];
 	break;
 
+	case REO2PPE:
+		grp_mask = &soc->wlan_cfg_ctx->int_reo2ppe_ring_mask[0];
+	break;
+
+	case PPE2TCL:
+		grp_mask = &soc->wlan_cfg_ctx->int_ppe2tcl_ring_mask[0];
+	break;
+
 	case TCL_DATA:
 	/* CMD_CREDIT_RING is used as command in 8074 and credit in 9000 */
 	case TCL_CMD_CREDIT:
@@ -1922,7 +1930,7 @@ dp_srng_configure_interrupt_thresholds(struct dp_soc *soc,
 
 	wbm2_sw_rx_rel_ring_id = wlan_cfg_get_rx_rel_ring_id(soc->wlan_cfg_ctx);
 
-	if (ring_type == REO_DST) {
+	if (ring_type == REO_DST || ring_type == REO2PPE) {
 		ring_params->intr_timer_thres_us =
 			wlan_cfg_get_int_timer_threshold_rx(soc->wlan_cfg_ctx);
 		ring_params->intr_batch_cntr_thres_entries =
@@ -1963,10 +1971,15 @@ dp_srng_configure_interrupt_thresholds(struct dp_soc *soc,
 	case TCL_STATUS:
 	case WBM_IDLE_LINK:
 	case SW2WBM_RELEASE:
-	case PPE2TCL:
 	case SW2RXDMA_NEW:
 		ring_params->intr_timer_thres_us = 0;
 		ring_params->intr_batch_cntr_thres_entries = 0;
+		break;
+	case PPE2TCL:
+		ring_params->intr_timer_thres_us =
+			wlan_cfg_get_int_timer_threshold_ppe2tcl(soc->wlan_cfg_ctx);
+		ring_params->intr_batch_cntr_thres_entries =
+			wlan_cfg_get_int_batch_threshold_ppe2tcl(soc->wlan_cfg_ctx);
 		break;
 	}
 
@@ -3467,6 +3480,20 @@ static inline bool dp_skip_rx_mon_ring_mask_set(struct dp_soc *soc)
 	return false;
 }
 #endif
+
+/*
+ * dp_soc_ppeds_stop() - Stop PPE DS processing
+ * @txrx_soc: DP SOC handle
+ *
+ * Return: none
+ */
+static void dp_soc_ppeds_stop(struct cdp_soc_t *soc_handle)
+{
+	struct dp_soc *soc = (struct dp_soc *)soc_handle;
+
+	if (soc->arch_ops.txrx_soc_ppeds_stop)
+		soc->arch_ops.txrx_soc_ppeds_stop(soc);
+}
 
 /*
  * dp_soc_interrupt_detach() - Deregister any allocations done for interrupts
@@ -6732,8 +6759,9 @@ static inline
 void dp_soc_txrx_peer_setup(enum wlan_op_mode vdev_opmode, struct dp_soc *soc,
 			    struct dp_peer *peer)
 {
-	/* TODO: Need to check with STA mode */
-	if (vdev_opmode == wlan_op_mode_ap && soc->arch_ops.txrx_peer_setup) {
+	if (((vdev_opmode == wlan_op_mode_ap) ||
+	     (vdev_opmode == wlan_op_mode_sta)) &&
+	     (soc->arch_ops.txrx_peer_setup)) {
 		if (soc->arch_ops.txrx_peer_setup(soc, peer)
 				!= QDF_STATUS_SUCCESS) {
 			dp_err("unable to setup target peer features");
@@ -7023,30 +7051,12 @@ static inline void dp_vdev_register_rx_eapol(struct dp_vdev *vdev,
 #endif
 
 #ifdef WLAN_FEATURE_11BE_MLO
-#if defined(WLAN_MLO_MULTI_CHIP) && defined(WLAN_MCAST_MLO)
-static inline void dp_vdev_save_mld_info(struct dp_vdev *vdev,
-					 struct cdp_vdev_info *vdev_info)
-{
-	if (qdf_is_macaddr_zero((struct qdf_mac_addr *)vdev_info->mld_mac_addr))
-		vdev->mlo_vdev = false;
-	else
-		vdev->mlo_vdev = true;
-}
-#else
-static inline void dp_vdev_save_mld_info(struct dp_vdev *vdev,
-					 struct cdp_vdev_info *vdev_info)
-{
-}
-#endif
 static inline void dp_vdev_save_mld_addr(struct dp_vdev *vdev,
 					 struct cdp_vdev_info *vdev_info)
 {
 	if (vdev_info->mld_mac_addr)
 		qdf_mem_copy(&vdev->mld_mac_addr.raw[0],
 			     vdev_info->mld_mac_addr, QDF_MAC_ADDR_SIZE);
-
-	dp_vdev_save_mld_info(vdev, vdev_info);
-
 }
 #else
 static inline void dp_vdev_save_mld_addr(struct dp_vdev *vdev,
@@ -7238,8 +7248,8 @@ static QDF_STATUS dp_vdev_attach_wifi3(struct cdp_soc_t *cdp_soc,
 			dp_err("LRO hash setup failure!");
 	}
 
-	dp_info("Created vdev %pK ("QDF_MAC_ADDR_FMT")", vdev,
-		QDF_MAC_ADDR_REF(vdev->mac_addr.raw));
+	dp_info("Created vdev %pK ("QDF_MAC_ADDR_FMT") vdev_id %d", vdev,
+		QDF_MAC_ADDR_REF(vdev->mac_addr.raw), vdev->vdev_id);
 	DP_STATS_INIT(vdev);
 
 	if (QDF_IS_STATUS_ERROR(soc->arch_ops.txrx_vdev_attach(soc, vdev)))
@@ -7633,6 +7643,9 @@ static QDF_STATUS dp_vdev_detach_wifi3(struct cdp_soc_t *cdp_soc,
 	TAILQ_INSERT_TAIL(&soc->inactive_vdev_list, vdev, inactive_list_elem);
 	qdf_spin_unlock_bh(&soc->inactive_vdev_list_lock);
 
+	dp_info("detach vdev %pK id %d pending refs %d",
+		vdev, vdev->vdev_id, qdf_atomic_read(&vdev->ref_cnt));
+
 	/* release reference taken at dp_vdev_create */
 	dp_vdev_unref_delete(soc, vdev, DP_MOD_ID_CONFIG);
 
@@ -7941,7 +7954,13 @@ dp_peer_create_wifi3(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
 			dp_peer_hw_txrx_stats_init(soc, peer->txrx_peer);
 		}
 
-		dp_peer_update_state(soc, peer, DP_PEER_STATE_INIT);
+		dp_info("vdev %pK Reused peer %pK ("QDF_MAC_ADDR_FMT
+			") vdev_ref_cnt "
+			"%d peer_ref_cnt: %d",
+			vdev, peer, QDF_MAC_ADDR_REF(peer->mac_addr.raw),
+			qdf_atomic_read(&vdev->ref_cnt),
+			qdf_atomic_read(&peer->ref_cnt));
+			dp_peer_update_state(soc, peer, DP_PEER_STATE_INIT);
 
 		dp_vdev_unref_delete(soc, vdev, DP_MOD_ID_CDP);
 		return QDF_STATUS_SUCCESS;
@@ -8978,8 +8997,11 @@ static QDF_STATUS dp_peer_delete_wifi3(struct cdp_soc_t *soc_hdl,
 
 	peer->valid = 0;
 
-	dp_init_info("%pK: peer %pK (" QDF_MAC_ADDR_FMT ")",
-		     soc, peer, QDF_MAC_ADDR_REF(peer->mac_addr.raw));
+	dp_init_info("%pK: peer %pK (" QDF_MAC_ADDR_FMT ") pending-refs %d",
+		     soc, peer, QDF_MAC_ADDR_REF(peer->mac_addr.raw),
+		     qdf_atomic_read(&peer->ref_cnt));
+
+	dp_peer_rx_reo_shared_qaddr_delete(soc, peer);
 
 	dp_local_peer_id_free(peer->vdev->pdev, peer);
 
@@ -10797,14 +10819,14 @@ dp_calculate_delay_stats(struct cdp_soc_t *cdp_soc, uint8_t vdev_id,
 	return QDF_STATUS_SUCCESS;
 }
 
-/*
- * dp_get_vdev_param: function to get parameters from vdev
- * @cdp_soc : DP soc handle
+/**
+ * dp_get_vdev_param() - function to get parameters from vdev
+ * @cdp_soc: DP soc handle
  * @vdev_id: id of DP vdev handle
  * @param: parameter type to get value
  * @val: buffer address
  *
- * return: status
+ * Return: status
  */
 static QDF_STATUS dp_get_vdev_param(struct cdp_soc_t *cdp_soc, uint8_t vdev_id,
 				    enum cdp_vdev_param_type param,
@@ -10860,6 +10882,14 @@ static QDF_STATUS dp_get_vdev_param(struct cdp_soc_t *cdp_soc, uint8_t vdev_id,
 	case CDP_DROP_3ADDR_MCAST:
 		val->cdp_drop_3addr_mcast = vdev->drop_3addr_mcast;
 		break;
+	case CDP_SET_MCAST_VDEV:
+		soc->arch_ops.txrx_get_vdev_mcast_param(soc, vdev, val);
+		break;
+#ifdef QCA_SUPPORT_WDS_EXTENDED
+	case CDP_DROP_TX_MCAST:
+		val->cdp_drop_tx_mcast = vdev->drop_tx_mcast;
+		break;
+#endif
 	default:
 		dp_cdp_err("%pK: param value %d is wrong",
 			   soc, param);
@@ -10871,14 +10901,14 @@ static QDF_STATUS dp_get_vdev_param(struct cdp_soc_t *cdp_soc, uint8_t vdev_id,
 	return QDF_STATUS_SUCCESS;
 }
 
-/*
- * dp_set_vdev_param: function to set parameters in vdev
- * @cdp_soc : DP soc handle
+/**
+ * dp_set_vdev_param() - function to set parameters in vdev
+ * @cdp_soc: DP soc handle
  * @vdev_id: id of DP vdev handle
  * @param: parameter type to get value
  * @val: value
  *
- * return: QDF_STATUS
+ * Return: QDF_STATUS
  */
 static QDF_STATUS
 dp_set_vdev_param(struct cdp_soc_t *cdp_soc, uint8_t vdev_id,
@@ -10981,6 +11011,11 @@ dp_set_vdev_param(struct cdp_soc_t *cdp_soc, uint8_t vdev_id,
 	case CDP_CFG_WDS_EXT:
 		if (vdev->opmode == wlan_op_mode_ap)
 			vdev->wds_ext_enabled = val.cdp_vdev_param_wds_ext;
+		break;
+	case CDP_DROP_TX_MCAST:
+		dp_info("vdev_id %d drop tx mcast :%d", vdev_id,
+			val.cdp_drop_tx_mcast);
+		vdev->drop_tx_mcast = val.cdp_drop_tx_mcast;
 		break;
 #endif
 	case CDP_ENABLE_PEER_AUTHORIZE:
@@ -11141,7 +11176,7 @@ static QDF_STATUS dp_get_psoc_param(struct cdp_soc_t *cdp_soc,
 		break;
 	case CDP_PPEDS_ENABLE:
 		val->cdp_psoc_param_ppeds_enabled =
-			wlan_cfg_get_dp_soc_is_ppe_enabled(soc->wlan_cfg_ctx);
+			wlan_cfg_get_dp_soc_is_ppeds_enabled(soc->wlan_cfg_ctx);
 		break;
 	default:
 		dp_warn("Invalid param");
@@ -11641,13 +11676,15 @@ dp_get_obss_stats(struct cdp_soc_t *soc, uint8_t pdev_id,
  * dp_clear_pdev_obss_pd_stats(): Clear pdev obss stats
  * @soc: DP soc handle
  * @pdev_id: id of DP_PDEV handle
+ * @req: Pointer to CDP TxRx stats request mac_id will be
+ *	 pre-filled and should not be overwritten
  *
  * Return: status
  */
 static QDF_STATUS
-dp_clear_pdev_obss_pd_stats(struct cdp_soc_t *soc, uint8_t pdev_id)
+dp_clear_pdev_obss_pd_stats(struct cdp_soc_t *soc, uint8_t pdev_id,
+			    struct cdp_txrx_stats_req *req)
 {
-	struct cdp_txrx_stats_req req = {0};
 	struct dp_pdev *pdev =
 		dp_get_pdev_from_soc_pdev_id_wifi3((struct dp_soc *)soc,
 						   pdev_id);
@@ -11666,13 +11703,13 @@ dp_clear_pdev_obss_pd_stats(struct cdp_soc_t *soc, uint8_t pdev_id)
 	 *   - config_param2 : stats bmask from start offset + 32
 	 *   - config_param3 : stats bmask from start offset + 64
 	 */
-	req.stats = (enum cdp_stats)HTT_DBG_EXT_STATS_RESET;
-	req.param0 = HTT_DBG_EXT_STATS_PDEV_OBSS_PD_STATS;
-	req.param1 = 0x00000001;
+	req->stats = (enum cdp_stats)HTT_DBG_EXT_STATS_RESET;
+	req->param0 = HTT_DBG_EXT_STATS_PDEV_OBSS_PD_STATS;
+	req->param1 = 0x00000001;
 
-	return dp_h2t_ext_stats_msg_send(pdev, req.stats, req.param0,
-				  req.param1, req.param2, req.param3, 0,
-				cookie_val, 0);
+	return dp_h2t_ext_stats_msg_send(pdev, req->stats, req->param0,
+				  req->param1, req->param2, req->param3, 0,
+				cookie_val, req->mac_id);
 }
 
 /**
@@ -13956,6 +13993,7 @@ static struct cdp_cmn_ops dp_ops_cmn = {
 	.display_stats = dp_txrx_dump_stats,
 	.txrx_intr_attach = dp_soc_interrupt_attach_wrapper,
 	.txrx_intr_detach = dp_soc_interrupt_detach,
+	.txrx_ppeds_stop = dp_soc_ppeds_stop,
 	.set_pn_check = dp_set_pn_check_wifi3,
 	.set_key_sec_type = dp_set_key_sec_type_wifi3,
 	.update_config_parameters = dp_update_config_parameters,
@@ -14190,6 +14228,7 @@ static struct cdp_sawf_ops dp_ops_sawf = {
 	.telemetry_get_mpdu_stats = dp_sawf_get_mpdu_sched_stats,
 	.telemetry_get_drop_stats = dp_sawf_get_drop_stats,
 	.peer_config_ul = dp_sawf_peer_config_ul,
+	.swaf_peer_is_sla_configured = dp_swaf_peer_is_sla_configured,
 #endif
 };
 #endif

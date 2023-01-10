@@ -1127,6 +1127,7 @@ enum wlan_status_code {
 #define WLAN_AKM_FILS_FT_SHA256   0x10
 #define WLAN_AKM_FILS_FT_SHA384   0x11
 #define WLAN_AKM_OWE              0x12
+#define WLAN_AKM_SAE_EXT_KEY      0x18
 
 #define WLAN_ASE_NONE                    0x00
 #define WLAN_ASE_8021X_UNSPEC            0x01
@@ -2595,6 +2596,9 @@ struct wlan_ml_rv_linfo_perstaprof {
 /* All Updates Included */
 #define WLAN_RNR_NBRAPINFO_TBTTINFO_MLDPARAMS_ALLUPDATESINC_IDX          20
 #define WLAN_RNR_NBRAPINFO_TBTTINFO_MLDPARAMS_ALLUPDATESINC_BITS         1
+/* Disabled link indication */
+#define WLAN_RNR_NBRAPINFO_TBTTINFO_MLDPARAMS_DISABLEDLINKIND_IDX        21
+#define WLAN_RNR_NBRAPINFO_TBTTINFO_MLDPARAMS_DISABLEDLINKIND_BITS       1
 
 /*
  * End of definitions related to MLO specific aspects of Reduced Neighbor Report
@@ -2603,7 +2607,6 @@ struct wlan_ml_rv_linfo_perstaprof {
 #endif /* WLAN_FEATURE_11BE_MLO */
 #endif /* WLAN_FEATURE_11BE */
 
-#ifdef WLAN_FEATURE_11BE
 /**
  * struct wlan_ie_tid_to_link_mapping - TID-to-link mapping IE
  * @elem_id: T2LM IE
@@ -2701,7 +2704,6 @@ struct wlan_action_frame_args {
 	uint32_t arg3;
 	uint8_t *arg4;
 };
-#endif /* WLAN_FEATURE_11BE */
 
 /**
  * struct he_oper_6g_param: 6 Ghz params for HE
@@ -3423,8 +3425,7 @@ struct wlan_eht_cap_info_network_endian {
 } qdf_packed;
 
 /**
- * struct wlan_edca_pifs_param_ie: struct for QCN_ATTRIB_EDCA_PIFS_PARAM
- * @edca_param_type: edca param type
+ * struct edca_param: struct for edca_param
  * @acvo_aifsn: ac vo aifsn
  * @acvo_acm: ac vo acm
  * @acvo_aci: ac vo aci
@@ -3432,27 +3433,40 @@ struct wlan_eht_cap_info_network_endian {
  * @acvo_cwmin: ac vo cwmin
  * @acvo_cwmax: ac vo cwmax
  * @acvo_txoplimit: ac vo txoplimit
+ */
+struct edca_param {
+	uint8_t acvo_aifsn:4;
+	uint8_t acvo_acm:1;
+	uint8_t acvo_aci:2;
+	uint8_t unused:1;
+	uint8_t acvo_cwmin:4;
+	uint8_t acvo_cwmax:4;
+	uint16_t acvo_txoplimit;
+};
+
+/**
+ * struct pifs_param: struct for pifs_param
  * @sap_pifs_offset: sap pifs offset
  * @leb_pifs_offset: left earbud offset
  * @reb_pifs_offset: right earbud offset
  */
+struct pifs_param {
+	uint8_t sap_pifs_offset;
+	uint8_t leb_pifs_offset;
+	uint8_t reb_pifs_offset;
+};
+
+/**
+ * struct wlan_edca_pifs_param_ie: struct for QCN_ATTRIB_EDCA_PIFS_PARAM
+ * @edca_param_type: edca param type
+ * @eparam: structure for edca_param
+ * @pparam: structure for pifs_param
+ */
 struct wlan_edca_pifs_param_ie {
 	uint8_t edca_param_type;
 	union {
-		struct {
-			uint8_t acvo_aifsn:4;
-			uint8_t acvo_acm:1;
-			uint8_t acvo_aci:2;
-			uint8_t unused:1;
-			uint8_t acvo_cwmin:4;
-			uint8_t acvo_cwmax:4;
-			uint16_t acvo_txoplimit;
-		} qdf_packed edca_param; /* edca_param_type = 0 */
-		struct {
-			uint8_t sap_pifs_offset;
-			uint8_t leb_pifs_offset;
-			uint8_t reb_pifs_offset;
-		} qdf_packed pifs_params; /* edca_param_type = 1 */
+		struct edca_param eparam; /* edca_param_type = 0 */
+		struct pifs_param pparam; /* edca_param_type = 1 */
 	} qdf_packed edca_pifs_param;
 } qdf_packed;
 

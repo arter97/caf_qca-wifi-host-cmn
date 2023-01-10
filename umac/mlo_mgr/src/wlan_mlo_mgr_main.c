@@ -29,6 +29,7 @@
 #include <wlan_cm_public_struct.h>
 #include "wlan_mlo_mgr_msgq.h"
 #include <target_if_mlo_mgr.h>
+#include <wlan_mlo_t2lm.h>
 
 static void mlo_global_ctx_deinit(void)
 {
@@ -215,6 +216,34 @@ struct wlan_mlo_dev_context *mlo_get_next_mld_ctx(qdf_list_t *ml_list,
 	return mld_next;
 }
 
+uint8_t wlan_mlo_get_sta_mld_ctx_count(void)
+{
+	struct wlan_mlo_dev_context *mld_cur;
+	struct wlan_mlo_dev_context *mld_next;
+	qdf_list_t *ml_list;
+	struct mlo_mgr_context *mlo_mgr_ctx = wlan_objmgr_get_mlo_ctx();
+	uint8_t count = 0;
+
+	if (!mlo_mgr_ctx)
+		return count;
+
+	ml_link_lock_acquire(mlo_mgr_ctx);
+	ml_list = &mlo_mgr_ctx->ml_dev_list;
+	/* Get first mld context */
+	mld_cur = mlo_list_peek_head(ml_list);
+
+	while (mld_cur) {
+		/* get next mld node */
+		if (mld_cur->sta_ctx)
+			count++;
+		mld_next = mlo_get_next_mld_ctx(ml_list, mld_cur);
+		mld_cur = mld_next;
+	}
+	ml_link_lock_release(mlo_mgr_ctx);
+
+	return count;
+}
+
 struct wlan_mlo_dev_context
 *wlan_mlo_get_mld_ctx_by_mldaddr(struct qdf_mac_addr *mldaddr)
 {
@@ -259,6 +288,60 @@ bool wlan_mlo_is_mld_ctx_exist(struct qdf_mac_addr *mldaddr)
 
 	return false;
 }
+
+#ifdef WLAN_FEATURE_11BE_MLO
+bool mlo_mgr_ml_peer_exist(uint8_t *peer_addr)
+{
+	qdf_list_t *ml_list;
+	struct wlan_mlo_dev_context *mld_cur, *mld_next;
+	struct wlan_mlo_peer_list *mlo_peer_list;
+	bool ret_status = false;
+	struct mlo_mgr_context *g_mlo_ctx = wlan_objmgr_get_mlo_ctx();
+
+	if (!g_mlo_ctx || !peer_addr ||
+	    qdf_is_macaddr_zero((struct qdf_mac_addr *)peer_addr))
+		return ret_status;
+
+	ml_link_lock_acquire(g_mlo_ctx);
+	ml_list = &g_mlo_ctx->ml_dev_list;
+	if (!qdf_list_size(ml_list))
+		goto g_ml_ref;
+
+	mld_cur = mlo_list_peek_head(ml_list);
+	while (mld_cur) {
+		mlo_dev_lock_acquire(mld_cur);
+		if (qdf_is_macaddr_equal(&mld_cur->mld_addr,
+					 (struct qdf_mac_addr *)peer_addr)) {
+			mlo_dev_lock_release(mld_cur);
+			mlo_err("MLD ID %d exists with mac " QDF_MAC_ADDR_FMT,
+				mld_cur->mld_id, QDF_MAC_ADDR_REF(peer_addr));
+			ret_status = true;
+			goto g_ml_ref;
+		}
+
+		/* Check the peer list for a MAC address match */
+		mlo_peer_list = &mld_cur->mlo_peer_list;
+		ml_peerlist_lock_acquire(mlo_peer_list);
+		if (mlo_get_mlpeer(mld_cur, (struct qdf_mac_addr *)peer_addr)) {
+			ml_peerlist_lock_release(mlo_peer_list);
+			mlo_dev_lock_release(mld_cur);
+			mlo_err("MLD ID %d ML Peer exists with mac " QDF_MAC_ADDR_FMT,
+				mld_cur->mld_id, QDF_MAC_ADDR_REF(peer_addr));
+			ret_status = true;
+			goto g_ml_ref;
+		}
+		ml_peerlist_lock_release(mlo_peer_list);
+
+		mld_next = mlo_get_next_mld_ctx(ml_list, mld_cur);
+		mlo_dev_lock_release(mld_cur);
+		mld_cur = mld_next;
+	}
+
+g_ml_ref:
+	ml_link_lock_release(g_mlo_ctx);
+	return ret_status;
+}
+#endif
 
 static QDF_STATUS mlo_ap_ctx_deinit(struct wlan_mlo_dev_context *ml_dev)
 {
@@ -382,10 +465,12 @@ QDF_STATUS wlan_mlo_check_valid_config(struct wlan_mlo_dev_context *ml_dev,
  * mlo_t2lm_ctx_init() - API to initialize the t2lm context with the default
  * values.
  * @ml_dev: Pointer to ML Dev context
+ * @vdev: Pointer to vdev structure
  *
  * Return: None
  */
-static inline void mlo_t2lm_ctx_init(struct wlan_mlo_dev_context *ml_dev)
+static inline void mlo_t2lm_ctx_init(struct wlan_mlo_dev_context *ml_dev,
+				     struct wlan_objmgr_vdev *vdev)
 {
 	struct wlan_t2lm_info *t2lm;
 
@@ -396,6 +481,8 @@ static inline void mlo_t2lm_ctx_init(struct wlan_mlo_dev_context *ml_dev)
 	ml_dev->t2lm_ctx.num_of_t2lm_ie = 1;
 	t2lm->direction = WLAN_T2LM_BIDI_DIRECTION;
 	t2lm->default_link_mapping = 1;
+
+	wlan_mlo_t2lm_timer_init(vdev);
 }
 
 static QDF_STATUS mlo_dev_ctx_init(struct wlan_objmgr_vdev *vdev)
@@ -473,7 +560,7 @@ static QDF_STATUS mlo_dev_ctx_init(struct wlan_objmgr_vdev *vdev)
 		qdf_list_insert_back(&g_mlo_ctx->ml_dev_list, &ml_dev->node);
 	ml_link_lock_release(g_mlo_ctx);
 
-	mlo_t2lm_ctx_init(ml_dev);
+	mlo_t2lm_ctx_init(ml_dev, vdev);
 
 	return status;
 }

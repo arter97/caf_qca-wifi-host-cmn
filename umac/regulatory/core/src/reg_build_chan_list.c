@@ -1088,6 +1088,8 @@ static void reg_propagate_6g_mas_channel_list(
 
 	pdev_priv_obj->reg_cur_6g_client_mobility_type =
 				mas_chan_params->client_type;
+	pdev_priv_obj->reg_target_client_type =
+				mas_chan_params->client_type;
 	pdev_priv_obj->reg_rnr_tpe_usable = mas_chan_params->rnr_tpe_usable;
 	pdev_priv_obj->reg_unspecified_ap_usable =
 				mas_chan_params->unspecified_ap_usable;
@@ -3220,6 +3222,9 @@ void reg_propagate_mas_chan_list_to_pdev(struct wlan_objmgr_psoc *psoc,
 	reg_modify_chan_list_for_japan(pdev);
 	pdev_priv_obj->chan_list_recvd =
 		psoc_priv_obj->chan_list_recvd[phy_id];
+
+	reg_init_indoor_channel_list(pdev);
+	reg_compute_indoor_list_on_cc_change(psoc, pdev);
 
 	reg_update_max_phymode_chwidth_for_pdev(pdev);
 	reg_update_channel_ranges(pdev);

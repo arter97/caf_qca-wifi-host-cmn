@@ -785,6 +785,15 @@ QDF_STATUS wlan_mlo_mgr_update_mld_addr(struct qdf_mac_addr *old_mac,
 bool wlan_mlo_is_mld_ctx_exist(struct qdf_mac_addr *mldaddr);
 
 /**
+ * wlan_mlo_get_sta_mld_ctx_count() - Get number of sta mld device context
+ *
+ * API to get number of sta mld device context
+ *
+ * Return: number of sta mld device context
+ */
+uint8_t wlan_mlo_get_sta_mld_ctx_count(void);
+
+/**
  * wlan_mlo_get_mld_ctx_by_mldaddr() - Get mld device context using mld
  *                                     MAC address
  *
@@ -812,6 +821,17 @@ QDF_STATUS wlan_mlo_check_valid_config(struct wlan_mlo_dev_context *ml_dev,
 				       struct wlan_objmgr_pdev *pdev,
 				       enum QDF_OPMODE opmode);
 
+/**
+ * mlo_mgr_ml_peer_exist() - Check if MAC address matches any MLD address
+ * @peer_addr: Address to search for a match
+ *
+ * The API iterates through all the ML dev ctx in the driver and checks
+ * if MAC address pointed by @peer_addr matches the MLD address of
+ * MLD dev or any of the ML peers in the ML dev ctx.
+ *
+ * Return: True if a matching entity is found else false.
+ */
+bool mlo_mgr_ml_peer_exist(uint8_t *peer_addr);
 #else
 static inline QDF_STATUS wlan_mlo_mgr_init(void)
 {
@@ -828,6 +848,18 @@ wlan_mlo_mgr_update_mld_addr(struct qdf_mac_addr *old_mac,
 			     struct qdf_mac_addr *new_mac)
 {
 	return QDF_STATUS_SUCCESS;
+}
+
+static inline
+bool mlo_mgr_ml_peer_exist(uint8_t *peer_addr)
+{
+	return false;
+}
+
+static inline
+uint8_t wlan_mlo_get_sta_mld_ctx_count(void)
+{
+	return 0;
 }
 #endif
 #endif
