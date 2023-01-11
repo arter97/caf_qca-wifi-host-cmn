@@ -364,10 +364,12 @@ struct vdev_mlme_proto {
  * @he_spr_srg_max_pd_offset: SRG PD max offset
  * @he_spr_srg_min_pd_offset: SRG PD min offset
  * @he_spr_enabled:     Spatial reuse enabled or not
- * @pd_threshold: pd threshold sent by userspace
  * @he_spr_disabled_due_conc: spr disabled due to concurrency
  * @srg_bss_color: srg bss color
  * @srg_partial_bssid: srg partial bssid
+ * @he_curr_non_srg_pd_threshold: current configured NON-SRG PD threshold
+ * @he_curr_srg_pd_threshold: current configured SRG PD threshold
+ * @is_pd_threshold_present: PD threshold is present in SR enable command or not
  */
 struct vdev_mlme_mgmt_generic {
 	uint32_t rts_threshold;
@@ -402,9 +404,11 @@ struct vdev_mlme_mgmt_generic {
 	bool he_spr_enabled;
 	bool he_spr_disabled_due_conc;
 	bool sr_prohibit_enabled;
-	int32_t pd_threshold;
 	uint64_t srg_bss_color;
 	uint64_t srg_partial_bssid;
+	int32_t he_curr_non_srg_pd_threshold;
+	int32_t he_curr_srg_pd_threshold;
+	bool is_pd_threshold_present;
 #endif
 };
 
@@ -692,6 +696,8 @@ enum vdev_start_resp_type {
  * @mlme_vdev_dfs_cac_wait_notify:      callback to notify about CAC state
  * @mlme_vdev_csa_complete:             callback to indicate CSA complete
  * @mlme_vdev_sta_disconn_start:        callback to initiate STA disconnection
+ * @mlme_vdev_reconfig_timer_complete:  callback to process ml reconfing
+ *                                      operation
  */
 struct vdev_mlme_ops {
 	QDF_STATUS (*mlme_vdev_validate_basic_params)(
@@ -770,7 +776,10 @@ struct vdev_mlme_ops {
 	QDF_STATUS (*mlme_vdev_sta_disconn_start)(
 				struct vdev_mlme_obj *vdev_mlme,
 				uint16_t event_data_len, void *event_data);
-
+	void (*mlme_vdev_reconfig_timer_complete)(
+				struct vdev_mlme_obj *vdev_mlme);
+	QDF_STATUS (*mlme_vdev_notify_mlo_sync_wait_entry)(
+				struct vdev_mlme_obj *vdev_mlme);
 };
 
 /**
@@ -785,8 +794,8 @@ struct vdev_mlme_ops {
  * @ops:                  VDEV MLME callback table
  * @ext_vdev_ptr:         VDEV MLME legacy pointer
  * @reg_tpc_obj:          Regulatory transmit power info
- * @vdev_rt: VDEV response timer
- * @vdev_wakelock:  vdev wakelock sub structure
+ * @ml_reconfig_timer: VDEV ml reconfig timer
+ * @ml_reconfig_started:  Flag to indicate reconfig status for vdev
  */
 struct vdev_mlme_obj {
 	struct vdev_mlme_proto proto;
@@ -803,6 +812,8 @@ struct vdev_mlme_obj {
 	struct vdev_mlme_ops *ops;
 	mlme_vdev_ext_t *ext_vdev_ptr;
 	struct reg_tpc_power_info reg_tpc_obj;
+	qdf_timer_t ml_reconfig_timer;
+	bool ml_reconfig_started;
 };
 
 /**
@@ -1225,17 +1236,15 @@ static inline uint8_t wlan_vdev_mlme_get_sr_ctrl(struct wlan_objmgr_vdev *vdev)
 }
 
 /**
- * wlan_vdev_mlme_get_pd_offset() - get spatial reuse pd offset
+ * wlan_vdev_mlme_get_non_srg_pd_offset() - get spatial reuse non srg pd offset
  * @vdev: VDEV object
  *
  * API to retrieve the spatial reuse pd offset from VDEV
  *
- * Caller need to acquire lock with wlan_vdev_obj_lock()
- *
  * Return:
- * @he_spr_non_srg_pd_max_offset: max pd offset
+ * @he_spr_non_srg_pd_max_offset: max non srg pd offset
  */
-static inline uint8_t wlan_vdev_mlme_get_pd_offset(
+static inline uint8_t wlan_vdev_mlme_get_non_srg_pd_offset(
 						struct wlan_objmgr_vdev *vdev)
 {
 	struct vdev_mlme_obj *vdev_mlme;
@@ -1252,8 +1261,6 @@ static inline uint8_t wlan_vdev_mlme_get_pd_offset(
  * @vdev: VDEV object
  *
  * API to check whether the spatial reuse enabled or not
- *
- * Caller need to acquire lock with wlan_vdev_obj_lock()
  *
  * Return:
  * @he_spr_enabled: Spatial reuse enabled or not
@@ -1341,17 +1348,17 @@ static inline void wlan_vdev_mlme_set_sr_ctrl(struct wlan_objmgr_vdev *vdev,
 }
 
 /**
- * wlan_vdev_mlme_set_pd_offset() - set spatial reuse pd max offset
+ * wlan_vdev_mlme_set_non_srg_pd_offset() - set spatial reuse non srg
+ * pd max offset
  * @vdev: VDEV object
  *
  * API to set the spatial reuse pd max offset
  *
- * Caller need to acquire lock with wlan_vdev_obj_lock()
- *
  * Return: void
  */
-static inline void wlan_vdev_mlme_set_pd_offset(struct wlan_objmgr_vdev *vdev,
-						uint8_t pd_max_offset)
+static inline void
+wlan_vdev_mlme_set_non_srg_pd_offset(struct wlan_objmgr_vdev *vdev,
+				     uint8_t non_srg_pd_max_offset)
 {
 	struct vdev_mlme_obj *vdev_mlme;
 
@@ -1359,7 +1366,8 @@ static inline void wlan_vdev_mlme_set_pd_offset(struct wlan_objmgr_vdev *vdev,
 	if (!vdev_mlme)
 		return;
 
-	vdev_mlme->mgmt.generic.he_spr_non_srg_pd_max_offset = pd_max_offset;
+	vdev_mlme->mgmt.generic.he_spr_non_srg_pd_max_offset =
+						non_srg_pd_max_offset;
 }
 
 /**
@@ -1367,8 +1375,6 @@ static inline void wlan_vdev_mlme_set_pd_offset(struct wlan_objmgr_vdev *vdev,
  * @vdev: VDEV object
  *
  * API to set the spatial reuse enabled
- *
- * Caller need to acquire lock with wlan_vdev_obj_lock()
  *
  * Return: void
  */
@@ -1443,8 +1449,6 @@ void wlan_vdev_mlme_set_sr_prohibit_en(struct wlan_objmgr_vdev *vdev,
  *
  * API to set the spatial reuse SRG pd min max offset
  *
- * Caller need to acquire lock with wlan_vdev_obj_lock()
- *
  * Return: void
  */
 static inline
@@ -1469,8 +1473,6 @@ void wlan_vdev_mlme_set_srg_pd_offset(struct wlan_objmgr_vdev *vdev,
  * @srg_min_pd_offset: SRG min pd offset
  *
  * API to set the spatial reuse SRG pd min max offset
- *
- * Caller need to acquire lock with wlan_vdev_obj_lock()
  *
  * Return: void
  */
@@ -1497,8 +1499,6 @@ void wlan_vdev_mlme_get_srg_pd_offset(struct wlan_objmgr_vdev *vdev,
  *
  * API to set the spatial reuse bss color bit map
  *
- * Caller need to acquire lock with wlan_vdev_obj_lock()
- *
  * Return: void
  */
 static inline
@@ -1521,8 +1521,6 @@ void wlan_vdev_mlme_set_srg_bss_color_bit_map(struct wlan_objmgr_vdev *vdev,
  * @srg_partial_bssid: SRG partial BSSID bitmap
  *
  * API to set the spatial reuse partial bssid bitmap
- *
- * Caller need to acquire lock with wlan_vdev_obj_lock()
  *
  * Return: void
  */
@@ -1547,8 +1545,6 @@ void wlan_vdev_mlme_set_srg_partial_bssid_bit_map(struct wlan_objmgr_vdev *vdev,
  *
  * API to get the spatial reuse bss color bit map
  *
- * Caller need to acquire lock with wlan_vdev_obj_lock()
- *
  * Return: void
  */
 static inline
@@ -1572,8 +1568,6 @@ void wlan_vdev_mlme_get_srg_bss_color_bit_map(struct wlan_objmgr_vdev *vdev,
  *
  * API to get the spatial reuse partial bssid bitmap
  *
- * Caller need to acquire lock with wlan_vdev_obj_lock()
- *
  * Return: void
  */
 static inline void
@@ -1588,13 +1582,154 @@ wlan_vdev_mlme_get_srg_partial_bssid_bit_map(struct wlan_objmgr_vdev *vdev,
 
 	*srg_partial_bssid = vdev_mlme->mgmt.generic.srg_partial_bssid;
 }
+
+/**
+ * wlan_vdev_mlme_get_current_non_srg_pd_threshold() - get current non srg pd
+ * threshold
+ * @vdev: VDEV object
+ * @non_srg_pd_threshold: NON-SRG pd threshold
+ *
+ * API to get non srg pd threshold
+ *
+ * Return: void
+ */
+static inline void
+wlan_vdev_mlme_get_current_non_srg_pd_threshold(struct wlan_objmgr_vdev *vdev,
+						int32_t *non_srg_pd_threshold)
+{
+	struct vdev_mlme_obj *vdev_mlme;
+
+	vdev_mlme = wlan_vdev_mlme_get_cmpt_obj(vdev);
+	if (!vdev_mlme)
+		return;
+
+	*non_srg_pd_threshold =
+		vdev_mlme->mgmt.generic.he_curr_non_srg_pd_threshold;
+}
+
+/**
+ * wlan_vdev_mlme_get_current_srg_pd_threshold() - get current srg pd threshold
+ * @vdev: VDEV object
+ * @srg_pd_threshold: SRG pd threshold
+ *
+ * API to get srg pd threshold
+ *
+ * Return: void
+ */
+static inline void
+wlan_vdev_mlme_get_current_srg_pd_threshold(struct wlan_objmgr_vdev *vdev,
+					    int32_t *srg_pd_threshold)
+{
+	struct vdev_mlme_obj *vdev_mlme;
+
+	vdev_mlme = wlan_vdev_mlme_get_cmpt_obj(vdev);
+	if (!vdev_mlme)
+		return;
+
+	*srg_pd_threshold =
+		vdev_mlme->mgmt.generic.he_curr_srg_pd_threshold;
+}
+
+/**
+ * wlan_vdev_mlme_set_current_non_srg_pd_threshold() - set current non srg pd
+ * threshold
+ * @vdev: VDEV object
+ * @non_srg_pd_threshold: NON-SRG pd threshold
+ *
+ * API to set non srg pd threshold
+ *
+ * Return: void
+ */
+static inline void
+wlan_vdev_mlme_set_current_non_srg_pd_threshold(struct wlan_objmgr_vdev *vdev,
+						int32_t non_srg_pd_threshold)
+{
+	struct vdev_mlme_obj *vdev_mlme;
+
+	vdev_mlme = wlan_vdev_mlme_get_cmpt_obj(vdev);
+	if (!vdev_mlme)
+		return;
+
+	vdev_mlme->mgmt.generic.he_curr_non_srg_pd_threshold =
+						non_srg_pd_threshold;
+}
+
+/**
+ * wlan_vdev_mlme_set_current_srg_pd_threshold() - set current srg pd threshold
+ * @vdev: VDEV object
+ * @srg_pd_threshold: SRG pd threshold
+ *
+ * API to set srg pd threshold
+ *
+ * Return: void
+ */
+static inline void
+wlan_vdev_mlme_set_current_srg_pd_threshold(struct wlan_objmgr_vdev *vdev,
+					    int32_t srg_pd_threshold)
+{
+	struct vdev_mlme_obj *vdev_mlme;
+
+	vdev_mlme = wlan_vdev_mlme_get_cmpt_obj(vdev);
+	if (!vdev_mlme)
+		return;
+	vdev_mlme->mgmt.generic.he_curr_srg_pd_threshold =
+						srg_pd_threshold;
+}
+
+/**
+ * wlan_vdev_mlme_set_pd_threshold_present() - set is PD threshold
+ * present or not.
+ * @vdev: VDEV object
+ * @is_pd_threshold_present: is PD threshold present
+ *
+ * API to set pd threshold present flag
+ *
+ * Return: void
+ */
+static inline void
+wlan_vdev_mlme_set_pd_threshold_present(struct wlan_objmgr_vdev *vdev,
+					bool is_pd_threshold_present)
+{
+	struct vdev_mlme_obj *vdev_mlme;
+
+	vdev_mlme = wlan_vdev_mlme_get_cmpt_obj(vdev);
+	if (!vdev_mlme)
+		return;
+	vdev_mlme->mgmt.generic.is_pd_threshold_present =
+						is_pd_threshold_present;
+}
+
+/**
+ * wlan_vdev_mlme_get_pd_threshold_present() - get is PD threshold
+ * present or not.
+ * @vdev: VDEV object
+ * @is_pd_threshold_present: is PD threshold present
+ *
+ * API to get pd threshold present flag
+ *
+ * Return: void
+ */
+static inline void
+wlan_vdev_mlme_get_pd_threshold_present(struct wlan_objmgr_vdev *vdev,
+					bool *is_pd_threshold_present)
+{
+	struct vdev_mlme_obj *vdev_mlme;
+
+	vdev_mlme = wlan_vdev_mlme_get_cmpt_obj(vdev);
+	if (!vdev_mlme) {
+		*is_pd_threshold_present = false;
+		return;
+	}
+	*is_pd_threshold_present =
+			vdev_mlme->mgmt.generic.is_pd_threshold_present;
+}
 #else
 static inline uint8_t wlan_vdev_mlme_get_sr_ctrl(struct wlan_objmgr_vdev *vdev)
 {
 	return 0;
 }
 
-static inline uint8_t wlan_vdev_mlme_get_pd_offset(
+static inline uint8_t wlan_vdev_mlme_get_non_srg_pd_offset(
 						struct wlan_objmgr_vdev *vdev)
 {
 	return 0;
@@ -1623,8 +1758,9 @@ static inline void wlan_vdev_mlme_set_sr_ctrl(struct wlan_objmgr_vdev *vdev,
 {
 }
 
-static inline void wlan_vdev_mlme_set_pd_offset(struct wlan_objmgr_vdev *vdev,
-						uint8_t pd_max_offset)
+static inline void
+wlan_vdev_mlme_set_non_srg_pd_offset(struct wlan_objmgr_vdev *vdev,
+				     uint8_t non_srg_pd_max_offset)
 {
 }
 

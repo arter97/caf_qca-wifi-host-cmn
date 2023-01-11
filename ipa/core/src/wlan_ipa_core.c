@@ -30,7 +30,7 @@
 #include <wmi_unified_param.h>
 #include <wlan_osif_priv.h>
 #include <net/cfg80211.h>
-#ifdef QCA_LL_TX_FLOW_CONTROL_V2
+#if defined(QCA_LL_TX_FLOW_CONTROL_V2) || !defined(QCA_IPA_LL_TX_FLOW_CONTROL)
 #include <cdp_txrx_flow_ctrl_v2.h>
 #include <cdp_txrx_peer_ops.h>
 #endif
@@ -1384,6 +1384,10 @@ static void __wlan_ipa_w2i_cb(void *priv, qdf_ipa_dp_evt_type_t evt,
 				     QDF_NBUF_SRC_MAC_OFFSET,
 				     QDF_MAC_ADDR_SIZE);
 
+		cdp_ipa_update_peer_rx_stats(ipa_ctx->dp_soc,
+					     iface_context->session_id,
+					     &peer_mac_addr.bytes[0],
+					     skb);
 		if (qdf_nbuf_is_ipv4_eapol_pkt(skb)) {
 			is_eapol_wapi = true;
 			if (iface_context->device_mode == QDF_SAP_MODE &&
