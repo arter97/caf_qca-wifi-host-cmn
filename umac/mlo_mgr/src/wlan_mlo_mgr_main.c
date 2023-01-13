@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -214,6 +214,34 @@ struct wlan_mlo_dev_context *mlo_get_next_mld_ctx(qdf_list_t *ml_list,
 	mld_next = qdf_container_of(next_node, struct wlan_mlo_dev_context,
 				    node);
 	return mld_next;
+}
+
+uint8_t wlan_mlo_get_sta_mld_ctx_count(void)
+{
+	struct wlan_mlo_dev_context *mld_cur;
+	struct wlan_mlo_dev_context *mld_next;
+	qdf_list_t *ml_list;
+	struct mlo_mgr_context *mlo_mgr_ctx = wlan_objmgr_get_mlo_ctx();
+	uint8_t count = 0;
+
+	if (!mlo_mgr_ctx)
+		return count;
+
+	ml_link_lock_acquire(mlo_mgr_ctx);
+	ml_list = &mlo_mgr_ctx->ml_dev_list;
+	/* Get first mld context */
+	mld_cur = mlo_list_peek_head(ml_list);
+
+	while (mld_cur) {
+		/* get next mld node */
+		if (mld_cur->sta_ctx)
+			count++;
+		mld_next = mlo_get_next_mld_ctx(ml_list, mld_cur);
+		mld_cur = mld_next;
+	}
+	ml_link_lock_release(mlo_mgr_ctx);
+
+	return count;
 }
 
 struct wlan_mlo_dev_context
@@ -537,6 +565,18 @@ static QDF_STATUS mlo_dev_ctx_init(struct wlan_objmgr_vdev *vdev)
 	return status;
 }
 
+/**
+ * mlo_t2lm_ctx_deinit() - API to deinitialize the t2lm context with the default
+ * values.
+ * @vdev: Pointer to vdev structure
+ *
+ * Return: None
+ */
+static inline void mlo_t2lm_ctx_deinit(struct wlan_objmgr_vdev *vdev)
+{
+	wlan_mlo_t2lm_timer_deinit(vdev);
+}
+
 static QDF_STATUS mlo_dev_ctx_deinit(struct wlan_objmgr_vdev *vdev)
 {
 	struct wlan_mlo_dev_context *ml_dev;
@@ -612,6 +652,7 @@ static QDF_STATUS mlo_dev_ctx_deinit(struct wlan_objmgr_vdev *vdev)
 		else if (wlan_vdev_mlme_get_opmode(vdev) == QDF_SAP_MODE)
 			qdf_mem_free(ml_dev->ap_ctx);
 
+		mlo_t2lm_ctx_deinit(vdev);
 		tsf_recalculation_lock_destroy(ml_dev);
 		mlo_dev_lock_destroy(ml_dev);
 		qdf_mem_free(ml_dev);

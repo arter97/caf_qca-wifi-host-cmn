@@ -1203,6 +1203,20 @@ hal_rx_flow_setup_fse_9224(uint8_t *rx_fst, uint32_t table_offset,
 		HAL_SET_FLD_SM(RX_FLOW_SEARCH_ENTRY, L4_PROTOCOL,
 			       flow->tuple_info.l4_protocol);
 
+	HAL_CLR_FLD(fse, RX_FLOW_SEARCH_ENTRY, USE_PPE);
+	HAL_SET_FLD(fse, RX_FLOW_SEARCH_ENTRY, USE_PPE) |=
+		HAL_SET_FLD_SM(RX_FLOW_SEARCH_ENTRY, USE_PPE, flow->use_ppe_ds);
+
+	HAL_CLR_FLD(fse, RX_FLOW_SEARCH_ENTRY, PRIORITY_VALID);
+	HAL_SET_FLD(fse, RX_FLOW_SEARCH_ENTRY, PRIORITY_VALID) |=
+		HAL_SET_FLD_SM(RX_FLOW_SEARCH_ENTRY, PRIORITY_VALID,
+			       flow->priority_vld);
+
+	HAL_CLR_FLD(fse, RX_FLOW_SEARCH_ENTRY, SERVICE_CODE);
+	HAL_SET_FLD(fse, RX_FLOW_SEARCH_ENTRY, SERVICE_CODE) |=
+		HAL_SET_FLD_SM(RX_FLOW_SEARCH_ENTRY, SERVICE_CODE,
+			       flow->service_code);
+
 	HAL_CLR_FLD(fse, RX_FLOW_SEARCH_ENTRY, REO_DESTINATION_HANDLER);
 	HAL_SET_FLD(fse, RX_FLOW_SEARCH_ENTRY, REO_DESTINATION_HANDLER) |=
 		HAL_SET_FLD_SM(RX_FLOW_SEARCH_ENTRY, REO_DESTINATION_HANDLER,
@@ -1539,6 +1553,8 @@ static void hal_hw_txrx_ops_attach_qcn9224(struct hal_soc *hal_soc)
 			hal_tx_set_ppe_cmn_config_9224;
 	hal_soc->ops->hal_tx_set_ppe_vp_entry =
 			hal_tx_set_ppe_vp_entry_9224;
+	hal_soc->ops->hal_ppeds_cfg_ast_override_map_reg =
+			hal_ppeds_cfg_ast_override_map_reg_9224;
 	hal_soc->ops->hal_tx_set_ppe_pri2tid =
 			hal_tx_set_ppe_pri2tid_map_9224;
 	hal_soc->ops->hal_tx_update_ppe_pri2tid =
