@@ -710,6 +710,21 @@ mgmt_rx_reo_invalidate_stale_snapshots
 	if (!mac_hw_ss->valid)
 		return QDF_STATUS_SUCCESS;
 
+	if (host_ss->valid) {
+		if (!mgmt_rx_reo_compare_global_timestamps_gte
+					(mac_hw_ss->global_timestamp,
+					 host_ss->global_timestamp) ||
+		    !mgmt_rx_reo_compare_pkt_ctrs_gte
+					(mac_hw_ss->mgmt_pkt_ctr,
+					 host_ss->mgmt_pkt_ctr)) {
+			mgmt_rx_reo_print_snapshots(mac_hw_ss, fw_forwarded_ss,
+						    fw_consumed_ss, host_ss);
+			mgmt_rx_reo_debug("Invalidate host snapshot, link %u",
+					  link);
+			host_ss->valid = false;
+		}
+	}
+
 	if (fw_forwarded_ss->valid) {
 		if (!mgmt_rx_reo_compare_global_timestamps_gte
 					(mac_hw_ss->global_timestamp,
@@ -717,6 +732,20 @@ mgmt_rx_reo_invalidate_stale_snapshots
 		    !mgmt_rx_reo_compare_pkt_ctrs_gte
 					(mac_hw_ss->mgmt_pkt_ctr,
 					 fw_forwarded_ss->mgmt_pkt_ctr)) {
+			mgmt_rx_reo_print_snapshots(mac_hw_ss, fw_forwarded_ss,
+						    fw_consumed_ss, host_ss);
+			mgmt_rx_reo_debug("Invalidate FW forwarded SS, link %u",
+					  link);
+			fw_forwarded_ss->valid = false;
+		}
+
+		if (host_ss->valid && fw_forwarded_ss->valid &&
+		    (mgmt_rx_reo_compare_global_timestamps_gte
+					(host_ss->global_timestamp,
+					 fw_forwarded_ss->global_timestamp) !=
+		     mgmt_rx_reo_compare_pkt_ctrs_gte
+					(host_ss->mgmt_pkt_ctr,
+					 fw_forwarded_ss->mgmt_pkt_ctr))) {
 			mgmt_rx_reo_print_snapshots(mac_hw_ss, fw_forwarded_ss,
 						    fw_consumed_ss, host_ss);
 			mgmt_rx_reo_debug("Invalidate FW forwarded SS, link %u",
@@ -738,20 +767,19 @@ mgmt_rx_reo_invalidate_stale_snapshots
 					  link);
 			fw_consumed_ss->valid = false;
 		}
-	}
 
-	if (host_ss->valid) {
-		if (!mgmt_rx_reo_compare_global_timestamps_gte
-					(mac_hw_ss->global_timestamp,
-					 host_ss->global_timestamp) ||
-		    !mgmt_rx_reo_compare_pkt_ctrs_gte
-					(mac_hw_ss->mgmt_pkt_ctr,
-					 host_ss->mgmt_pkt_ctr)) {
+		if (host_ss->valid && fw_consumed_ss->valid &&
+		    (mgmt_rx_reo_compare_global_timestamps_gte
+					(host_ss->global_timestamp,
+					 fw_consumed_ss->global_timestamp) !=
+		     mgmt_rx_reo_compare_pkt_ctrs_gte
+					(host_ss->mgmt_pkt_ctr,
+					 fw_consumed_ss->mgmt_pkt_ctr))) {
 			mgmt_rx_reo_print_snapshots(mac_hw_ss, fw_forwarded_ss,
 						    fw_consumed_ss, host_ss);
-			mgmt_rx_reo_debug("Invalidate host snapshot, link %u",
+			mgmt_rx_reo_debug("Invalidate FW consumed SS, link %u",
 					  link);
-			host_ss->valid = false;
+			fw_consumed_ss->valid = false;
 		}
 	}
 
@@ -2513,6 +2541,9 @@ mgmt_rx_reo_update_list(struct mgmt_rx_reo_list *reo_list,
 			break;
 		}
 
+		qdf_assert_always(!frame_desc->is_stale ||
+				  cur_entry->is_parallel_rx);
+
 		list_insertion_pos++;
 
 		status = mgmt_rx_reo_update_wait_count(
@@ -2525,9 +2556,6 @@ mgmt_rx_reo_update_list(struct mgmt_rx_reo_list *reo_list,
 			cur_entry->status &=
 			      ~MGMT_RX_REO_STATUS_WAIT_FOR_FRAME_ON_OTHER_LINKS;
 	}
-
-	if (frame_desc->is_stale)
-		qdf_assert_always(!list_insertion_pos);
 
 	if (frame_desc->type == MGMT_RX_REO_FRAME_DESC_HOST_CONSUMED_FRAME &&
 	    !frame_desc->is_stale && frame_desc->reo_required) {

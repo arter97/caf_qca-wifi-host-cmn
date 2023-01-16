@@ -604,12 +604,8 @@ static void reg_modify_chan_list_for_indoor_channels(
 			     chan_list[chan_enum].chan_flags)) {
 				chan_list[chan_enum].state =
 					CHANNEL_STATE_DFS;
-				if (!(pdev_priv_obj->
-				      sta_sap_scc_on_indoor_channel &&
-				      reg_is_5ghz_ch_freq(
-					    chan_list[chan_enum].center_freq)))
-					chan_list[chan_enum].chan_flags |=
-							REGULATORY_CHAN_NO_IR;
+				chan_list[chan_enum].chan_flags |=
+					REGULATORY_CHAN_NO_IR;
 			}
 		}
 	}
@@ -628,8 +624,67 @@ static void reg_modify_chan_list_for_indoor_channels(
 		}
 	}
 }
+
+/**
+ *reg_modify_chan_list_for_indoor_concurrency() - Enable/Disable the indoor
+ *channels for SAP operation based on the indoor concurrency list
+ *
+ * @pdev_priv_obj: Pointer to regulatory private pdev structure.
+ */
+static void reg_modify_chan_list_for_indoor_concurrency(
+		struct wlan_regulatory_pdev_priv_obj *pdev_priv_obj)
+{
+	struct indoor_concurrency_list *indoor_list = NULL;
+	struct regulatory_channel *chan_list = pdev_priv_obj->cur_chan_list;
+	enum channel_enum chan, min_enum, max_enum;
+	uint8_t i;
+
+	if (pdev_priv_obj->indoor_chan_enabled ||
+	    !pdev_priv_obj->sta_sap_scc_on_indoor_channel)
+		return;
+
+	indoor_list = pdev_priv_obj->indoor_list;
+
+	if (!indoor_list)
+		return;
+
+	for (i = 0; i < MAX_INDOOR_LIST_SIZE; i++, indoor_list++) {
+		if (indoor_list->freq == 0 &&
+		    indoor_list->vdev_id == INVALID_VDEV_ID)
+			continue;
+
+		if (!indoor_list->chan_range) {
+			min_enum =
+				reg_get_chan_enum_for_freq(indoor_list->freq);
+			max_enum = min_enum;
+		} else {
+			min_enum =
+				reg_get_chan_enum_for_freq(
+					indoor_list->chan_range->start_freq);
+			max_enum =
+				reg_get_chan_enum_for_freq(
+					indoor_list->chan_range->end_freq);
+		}
+
+		if (min_enum == NUM_CHANNELS || max_enum == NUM_CHANNELS)
+			continue;
+
+		for (chan = min_enum; chan <= max_enum; chan++) {
+			if (chan_list[chan].chan_flags & REGULATORY_CHAN_INDOOR_ONLY &&
+			    !(chan_list[chan].chan_flags & REGULATORY_CHAN_DISABLED)) {
+				chan_list[chan].chan_flags &= ~REGULATORY_CHAN_NO_IR;
+			}
+		}
+	}
+}
+
 #else
 static void reg_modify_chan_list_for_indoor_channels(
+		struct wlan_regulatory_pdev_priv_obj *pdev_priv_obj)
+{
+}
+
+static void reg_modify_chan_list_for_indoor_concurrency(
 		struct wlan_regulatory_pdev_priv_obj *pdev_priv_obj)
 {
 }
@@ -801,6 +856,32 @@ static void reg_modify_chan_list_for_nol_list(
 		}
 	}
 }
+
+#ifdef CONFIG_REG_CLIENT
+/**
+ * reg_modify_chan_list_for_static_puncture() - Disable the channel if
+ * static_puncture is set.
+ * @chan_list: Pointer to regulatory channel list.
+ */
+static void
+reg_modify_chan_list_for_static_puncture(struct regulatory_channel *chan_list)
+{
+	enum channel_enum chan_enum;
+
+	for (chan_enum = 0; chan_enum < NUM_CHANNELS; chan_enum++) {
+		if (chan_list[chan_enum].is_static_punctured) {
+			chan_list[chan_enum].state = CHANNEL_STATE_DISABLE;
+			chan_list[chan_enum].chan_flags |=
+				REGULATORY_CHAN_DISABLED;
+		}
+	}
+}
+#else
+static void
+reg_modify_chan_list_for_static_puncture(struct regulatory_channel *chan_list)
+{
+}
+#endif
 
 /**
  * reg_find_low_limit_chan_enum() - Find low limit 2G and 5G channel enums.
@@ -1032,6 +1113,8 @@ static void reg_propagate_6g_mas_channel_list(
 	}
 
 	pdev_priv_obj->reg_cur_6g_client_mobility_type =
+				mas_chan_params->client_type;
+	pdev_priv_obj->reg_target_client_type =
 				mas_chan_params->client_type;
 	pdev_priv_obj->reg_rnr_tpe_usable = mas_chan_params->rnr_tpe_usable;
 	pdev_priv_obj->reg_unspecified_ap_usable =
@@ -2867,8 +2950,11 @@ void reg_compute_pdev_current_chan_list(struct wlan_regulatory_pdev_priv_obj
 					      pdev_priv_obj->dfs_enabled);
 
 	reg_modify_chan_list_for_nol_list(pdev_priv_obj->cur_chan_list);
+	reg_modify_chan_list_for_static_puncture(pdev_priv_obj->cur_chan_list);
 
 	reg_modify_chan_list_for_indoor_channels(pdev_priv_obj);
+
+	reg_modify_chan_list_for_indoor_concurrency(pdev_priv_obj);
 
 	reg_modify_chan_list_for_fcc_channel(pdev_priv_obj);
 
@@ -3163,6 +3249,9 @@ void reg_propagate_mas_chan_list_to_pdev(struct wlan_objmgr_psoc *psoc,
 	reg_modify_chan_list_for_japan(pdev);
 	pdev_priv_obj->chan_list_recvd =
 		psoc_priv_obj->chan_list_recvd[phy_id];
+
+	reg_init_indoor_channel_list(pdev);
+	reg_compute_indoor_list_on_cc_change(psoc, pdev);
 
 	reg_update_max_phymode_chwidth_for_pdev(pdev);
 	reg_update_channel_ranges(pdev);

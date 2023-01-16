@@ -81,6 +81,9 @@
 #define MAX_TXDESC_POOLS 4
 #endif
 
+/* Max no of descriptors to handle special frames like EAPOL */
+#define MAX_TX_SPL_DESC 1024
+
 #define MAX_RXDESC_POOLS 4
 #define MAX_PPE_TXDESC_POOLS 1
 
@@ -262,6 +265,8 @@ enum dp_mod_id {
 	DP_MOD_ID_REINJECT,
 	DP_MOD_ID_SCS,
 	DP_MOD_ID_UMAC_RESET,
+	DP_MOD_ID_TX_MCAST,
+	DP_MOD_ID_DS,
 	DP_MOD_ID_MAX,
 };
 
@@ -1095,6 +1100,8 @@ struct dp_soc_stats {
 		uint32_t dropped_fw_removed;
 		/* tx completion release_src != TQM or FW */
 		uint32_t invalid_release_source;
+		/* TX descriptor from completion ring Desc is not valid */
+		uint32_t invalid_tx_comp_desc;
 		/* tx completion wbm_internal_error */
 		uint32_t wbm_internal_error[MAX_WBM_INT_ERROR_REASONS];
 		/* tx completion non_wbm_internal_error */
@@ -1151,6 +1158,10 @@ struct dp_soc_stats {
 		/* Number of frames routed from reo*/
 		uint32_t reo2rel_route_drop;
 		uint64_t fast_recycled;
+		/* Number of hw stats requested */
+		uint32_t rx_hw_stats_requested;
+		/* Number of hw stats request timeout */
+		uint32_t rx_hw_stats_timeout;
 
 		struct {
 			/* Invalid RBM error count */
@@ -1834,6 +1845,8 @@ enum dp_context_type {
  * 				      source from HAL desc for wbm release ring
  * @dp_service_near_full_srngs: Handler for servicing the near full IRQ
  * @txrx_set_vdev_param: target specific ops while setting vdev params
+ * @txrx_get_vdev_mcast_param: target specific ops for getting vdev
+ *			       params related to multicast
  * @dp_srng_test_and_update_nf_params: Check if the srng is in near full state
  *				and set the near-full params.
  * @ipa_get_bank_id: Get TCL bank id used by IPA
@@ -1877,9 +1890,9 @@ struct dp_arch_ops {
 				    struct cdp_tx_exception_metadata *metadata,
 				    struct dp_tx_msdu_info_s *msdu_info);
 
-	 void (*tx_comp_get_params_from_hal_desc)(struct dp_soc *soc,
-						  void *tx_comp_hal_desc,
-						  struct dp_tx_desc_s **desc);
+	void (*tx_comp_get_params_from_hal_desc)(struct dp_soc *soc,
+						 void *tx_comp_hal_desc,
+						 struct dp_tx_desc_s **desc);
 	void (*dp_tx_process_htt_completion)(struct dp_soc *soc,
 					     struct dp_tx_desc_s *tx_desc,
 					     uint8_t *status,
@@ -1941,6 +1954,10 @@ struct dp_arch_ops {
 					  enum cdp_vdev_param_type param,
 					  cdp_config_param_type val);
 
+	QDF_STATUS (*txrx_get_vdev_mcast_param)(struct dp_soc *soc,
+						struct dp_vdev *vdev,
+						cdp_config_param_type *val);
+
 	/* Misc Arch Ops */
 	qdf_size_t (*txrx_get_context_size)(enum dp_context_type);
 #ifdef WIFI_MONITOR_SUPPORT
@@ -1957,6 +1974,8 @@ struct dp_arch_ops {
 				    qdf_nbuf_t nbuf);
 	bool (*dp_rx_mcast_handler)(struct dp_soc *soc, struct dp_vdev *vdev,
 				    struct dp_txrx_peer *peer, qdf_nbuf_t nbuf);
+	bool (*dp_tx_is_mcast_primary)(struct dp_soc *soc,
+				       struct dp_vdev *vdev);
 #endif
 	struct dp_soc * (*dp_soc_get_by_idle_bm_id)(struct dp_soc *soc,
 						    uint8_t bm_id);
@@ -2018,6 +2037,10 @@ struct dp_arch_ops {
 #endif
 #ifdef WLAN_SUPPORT_PPEDS
 	void (*dp_txrx_ppeds_rings_status)(struct dp_soc *soc);
+	void (*dp_tx_ppeds_inuse_desc)(struct dp_soc *soc);
+	void (*dp_tx_ppeds_cfg_astidx_cache_mapping)(struct dp_soc *soc,
+						     struct dp_vdev *vdev,
+						     bool peer_map);
 #endif
 	QDF_STATUS (*txrx_soc_ppeds_start)(struct dp_soc *soc);
 	void (*txrx_soc_ppeds_stop)(struct dp_soc *soc);
@@ -2042,6 +2065,7 @@ struct dp_soc_features {
 		dmac_cmn_src_rxbuf_ring_enabled:1;
 	bool rssi_dbm_conv_support;
 	bool umac_hw_reset_support;
+	bool wds_ext_ast_override_enable;
 };
 
 enum sysfs_printing_mode {
@@ -2455,6 +2479,10 @@ struct dp_soc {
 	qdf_atomic_t num_tx_exception;
 	/* Num Tx allowed */
 	uint32_t num_tx_allowed;
+	/* Num Regular Tx allowed */
+	uint32_t num_reg_tx_allowed;
+	/* Num Tx allowed for special frames*/
+	uint32_t num_tx_spl_allowed;
 	/* Preferred HW mode */
 	uint8_t preferred_hw_mode;
 
@@ -2610,6 +2638,13 @@ struct dp_soc {
 	bool high_throughput;
 #endif
 	bool is_tx_pause;
+
+#ifdef WLAN_SUPPORT_RX_FLOW_TAG
+	/* number of IPv4 flows inserted */
+	qdf_atomic_t ipv4_fse_cnt;
+	/* number of IPv6 flows inserted */
+	qdf_atomic_t ipv6_fse_cnt;
+#endif
 };
 
 #ifdef IPA_OFFLOAD
@@ -3114,6 +3149,15 @@ struct dp_pdev {
 	/* User configured max number of tx buffers */
 	uint32_t num_tx_allowed;
 
+	/*
+	 * User configured max num of tx buffers excluding the
+	 * number of buffers reserved for handling special frames
+	 */
+	uint32_t num_reg_tx_allowed;
+
+	/* User configured max number of tx buffers for the special frames*/
+	uint32_t num_tx_spl_allowed;
+
 	/* unique cookie required for peer session */
 	uint32_t next_peer_cookie;
 
@@ -3241,6 +3285,7 @@ struct dp_vdev {
 
 #ifdef QCA_SUPPORT_WDS_EXTENDED
 	bool wds_ext_enabled;
+	bool drop_tx_mcast;
 #endif /* QCA_SUPPORT_WDS_EXTENDED */
 	bool drop_3addr_mcast;
 #ifdef WLAN_VENDOR_SPECIFIC_BAR_UPDATE
@@ -3859,6 +3904,7 @@ struct dp_peer_per_pkt_tx_stats {
  * @rts_failure: RTS failure count
  * @bar_cnt: Block ACK Request frame count
  * @ndpa_cnt: NDP announcement frame count
+ * @wme_ac_type_bytes: Wireless Multimedia bytes Count
  */
 struct dp_peer_extd_tx_stats {
 	uint32_t stbc;
@@ -3915,6 +3961,7 @@ struct dp_peer_extd_tx_stats {
 	uint32_t rts_failure;
 	uint32_t bar_cnt;
 	uint32_t ndpa_cnt;
+	uint64_t wme_ac_type_bytes[WME_AC_MAX];
 };
 
 /**
@@ -3946,6 +3993,7 @@ struct dp_peer_extd_tx_stats {
  * @policy_check_drop: policy check drops
  * @to_stack_twt: Total packets sent up the stack in TWT session
  * @protocol_trace_cnt: per-peer protocol counters
+ * @rx_total: total rx count
  */
 struct dp_peer_per_pkt_rx_stats {
 	struct cdp_pkt_info rcvd_reo[CDP_MAX_RX_RINGS];
@@ -3982,6 +4030,9 @@ struct dp_peer_per_pkt_rx_stats {
 	struct protocol_trace_count protocol_trace_cnt[CDP_TRACE_MAX];
 #endif
 	uint32_t mcast_3addr_drop;
+#ifdef IPA_OFFLOAD
+	struct cdp_pkt_info rx_total;
+#endif
 };
 
 /**
@@ -4032,6 +4083,7 @@ struct dp_peer_per_pkt_rx_stats {
  * @punc_bw[MAX_PUNCTURED_MODE]: MSDU count for punctured bw
  * @bar_cnt: Block ACK Request frame count
  * @ndpa_cnt: NDP announcement frame count
+ * @wme_ac_type_bytes: Wireless Multimedia type Bytes Count
  */
 struct dp_peer_extd_rx_stats {
 	struct cdp_pkt_type pkt_type[DOT11_MAX];
@@ -4079,6 +4131,7 @@ struct dp_peer_extd_rx_stats {
 #endif
 	uint32_t bar_cnt;
 	uint32_t ndpa_cnt;
+	uint64_t wme_ac_type_bytes[WME_AC_MAX];
 };
 
 /**
@@ -4284,6 +4337,11 @@ struct dp_peer {
 #ifdef CONFIG_SAWF_DEF_QUEUES
 	struct dp_peer_sawf *sawf;
 #endif
+	/* AST hash index for peer in HW */
+	uint16_t ast_idx;
+
+	/* AST hash value for peer in HW */
+	uint16_t ast_hash;
 };
 
 /*

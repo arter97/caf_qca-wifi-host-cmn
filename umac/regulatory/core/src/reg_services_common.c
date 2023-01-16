@@ -4833,6 +4833,86 @@ static void reg_update_5g_bonded_channel_state_punc_for_pwrmode(
 	}
 }
 #endif
+
+#ifdef CONFIG_REG_CLIENT
+QDF_STATUS reg_apply_puncture(struct wlan_objmgr_pdev *pdev,
+			      uint16_t puncture_bitmap,
+			      qdf_freq_t freq,
+			      enum phy_ch_width bw,
+			      qdf_freq_t cen320_freq)
+{
+	const struct bonded_channel_freq *bonded_chan;
+	qdf_freq_t chan_cfreq;
+	enum channel_enum chan_enum;
+	struct regulatory_channel *mas_chan_list;
+	struct wlan_regulatory_pdev_priv_obj *pdev_priv_obj;
+	bool is_puncture;
+	uint16_t i = 0;
+
+	pdev_priv_obj = reg_get_pdev_obj(pdev);
+
+	if (!IS_VALID_PDEV_REG_OBJ(pdev_priv_obj)) {
+		reg_err_rl("pdev reg obj is NULL");
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	mas_chan_list = pdev_priv_obj->mas_chan_list;
+	if (!mas_chan_list) {
+		reg_err_rl("mas chan_list is NULL");
+		return QDF_STATUS_E_FAILURE;
+	}
+	bonded_chan = reg_get_bonded_chan_entry(freq, bw, cen320_freq);
+	if (!bonded_chan) {
+		reg_err_rl("bonded chan fails, freq %d, bw %d, cen320_freq %d",
+			   freq, bw, cen320_freq);
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	chan_cfreq = bonded_chan->start_freq;
+	while (chan_cfreq <= bonded_chan->end_freq) {
+		is_puncture = BIT(i) & puncture_bitmap;
+		if (is_puncture) {
+			chan_enum = reg_get_chan_enum_for_freq(chan_cfreq);
+			mas_chan_list[chan_enum].is_static_punctured = true;
+		}
+		i++;
+		chan_cfreq = chan_cfreq + BW_20_MHZ;
+	}
+
+	reg_compute_pdev_current_chan_list(pdev_priv_obj);
+
+	return QDF_STATUS_SUCCESS;
+}
+
+QDF_STATUS reg_remove_puncture(struct wlan_objmgr_pdev *pdev)
+{
+	enum channel_enum chan_enum;
+	struct regulatory_channel *mas_chan_list;
+	struct wlan_regulatory_pdev_priv_obj *pdev_priv_obj;
+
+	pdev_priv_obj = reg_get_pdev_obj(pdev);
+
+	if (!IS_VALID_PDEV_REG_OBJ(pdev_priv_obj)) {
+		reg_err_rl("pdev reg obj is NULL");
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	mas_chan_list = pdev_priv_obj->mas_chan_list;
+	if (!mas_chan_list) {
+		reg_err_rl("mas chan_list is NULL");
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	for (chan_enum = 0; chan_enum < NUM_CHANNELS; chan_enum++)
+		if (mas_chan_list[chan_enum].is_static_punctured)
+			mas_chan_list[chan_enum].is_static_punctured = false;
+
+	reg_compute_pdev_current_chan_list(pdev_priv_obj);
+
+	return QDF_STATUS_SUCCESS;
+}
+#endif
+
 #else
 static void reg_update_5g_bonded_channel_state_punc_for_freq(
 			struct wlan_objmgr_pdev *pdev,
@@ -6719,7 +6799,7 @@ bool reg_is_fcc_regdmn(struct wlan_objmgr_pdev *pdev)
 
 	status = reg_get_curr_regdomain(pdev, &cur_reg_dmn);
 	if (status != QDF_STATUS_SUCCESS) {
-		reg_err_rl("Failed to get reg domain");
+		reg_debug_rl("Failed to get reg domain");
 		return false;
 	}
 
@@ -6912,6 +6992,155 @@ reg_update_tx_power_on_ctry_change(struct wlan_objmgr_pdev *pdev,
 	qdf_spin_unlock_bh(&psoc_priv_obj->cbk_list_lock);
 	if (callback)
 		callback(vdev_id);
+
+	return QDF_STATUS_SUCCESS;
+}
+
+QDF_STATUS
+reg_add_indoor_concurrency(struct wlan_objmgr_pdev *pdev, uint8_t vdev_id,
+			   uint32_t freq, enum phy_ch_width width)
+{
+	struct wlan_regulatory_pdev_priv_obj *pdev_priv_obj;
+	struct indoor_concurrency_list *list;
+	const struct bonded_channel_freq *range = NULL;
+	uint8_t i = 0;
+
+	pdev_priv_obj = reg_get_pdev_obj(pdev);
+
+	if (!IS_VALID_PDEV_REG_OBJ(pdev_priv_obj)) {
+		reg_err("pdev reg component is NULL");
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	if (width > CH_WIDTH_20MHZ)
+		range = wlan_reg_get_bonded_chan_entry(freq, width, 0);
+
+	list = &pdev_priv_obj->indoor_list[0];
+	for (i = 0; i < MAX_INDOOR_LIST_SIZE; i++, list++) {
+		if (list->freq == 0 && list->vdev_id == INVALID_VDEV_ID) {
+			list->freq = freq;
+			list->vdev_id = vdev_id;
+			list->chan_range = range;
+			reg_debug("Added freq %d vdev %d width %d at idx %d",
+				  freq, vdev_id, width, i);
+			return QDF_STATUS_SUCCESS;
+		}
+	}
+	reg_err("Unable to add indoor concurrency for vdev %d freq %d width %d",
+		vdev_id, freq, width);
+	return QDF_STATUS_E_FAILURE;
+}
+
+QDF_STATUS
+reg_remove_indoor_concurrency(struct wlan_objmgr_pdev *pdev, uint8_t vdev_id,
+			      uint32_t freq)
+{
+	struct wlan_regulatory_pdev_priv_obj *pdev_priv_obj;
+	struct indoor_concurrency_list *list;
+	uint8_t i = 0;
+
+	pdev_priv_obj = reg_get_pdev_obj(pdev);
+
+	if (!IS_VALID_PDEV_REG_OBJ(pdev_priv_obj)) {
+		reg_err("pdev reg component is NULL");
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	list = &pdev_priv_obj->indoor_list[0];
+	for (i = 0; i < MAX_INDOOR_LIST_SIZE; i++, list++) {
+		if (list->freq == freq ||
+		    (vdev_id != INVALID_VDEV_ID && list->vdev_id == vdev_id)) {
+			reg_debug("Removed freq %d from idx %d", list->freq, i);
+			list->freq = 0;
+			list->vdev_id = INVALID_VDEV_ID;
+			list->chan_range = NULL;
+			return QDF_STATUS_SUCCESS;
+		}
+		continue;
+	}
+
+	return QDF_STATUS_E_FAILURE;
+}
+
+void
+reg_init_indoor_channel_list(struct wlan_objmgr_pdev *pdev)
+{
+	struct wlan_regulatory_pdev_priv_obj *pdev_priv_obj;
+	struct indoor_concurrency_list *list;
+	uint8_t i;
+
+	pdev_priv_obj = reg_get_pdev_obj(pdev);
+
+	if (!IS_VALID_PDEV_REG_OBJ(pdev_priv_obj)) {
+		reg_err("reg pdev priv obj is NULL");
+		return;
+	}
+
+	list = pdev_priv_obj->indoor_list;
+	for (i = 0; i < MAX_INDOOR_LIST_SIZE; i++, list++) {
+		list->freq = 0;
+		list->vdev_id = INVALID_VDEV_ID;
+		list->chan_range = NULL;
+	}
+}
+
+QDF_STATUS
+reg_compute_indoor_list_on_cc_change(struct wlan_objmgr_psoc *psoc,
+				     struct wlan_objmgr_pdev *pdev)
+{
+	struct wlan_objmgr_vdev *vdev;
+	struct wlan_regulatory_pdev_priv_obj *pdev_priv_obj;
+	struct wlan_channel *des_chan;
+	enum channel_enum chan_enum;
+	uint8_t vdev_id;
+
+	pdev_priv_obj = reg_get_pdev_obj(pdev);
+
+	if (!IS_VALID_PDEV_REG_OBJ(pdev_priv_obj)) {
+		reg_err("reg pdev priv obj is NULL");
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	if (pdev_priv_obj->indoor_chan_enabled ||
+	    !pdev_priv_obj->sta_sap_scc_on_indoor_channel)
+		return QDF_STATUS_SUCCESS;
+
+	/* Iterate through VDEV list */
+	for (vdev_id = 0; vdev_id < WLAN_UMAC_PSOC_MAX_VDEVS; vdev_id++) {
+		vdev =
+		wlan_objmgr_get_vdev_by_id_from_psoc(psoc, vdev_id,
+						     WLAN_REGULATORY_SB_ID);
+		if (!vdev)
+			continue;
+
+		if (vdev->vdev_mlme.vdev_opmode != QDF_STA_MODE &&
+		    vdev->vdev_mlme.vdev_opmode != QDF_P2P_CLIENT_MODE)
+			goto next;
+
+		des_chan = vdev->vdev_mlme.des_chan;
+		if (!des_chan)
+			goto next;
+
+		if (!reg_is_5ghz_ch_freq(des_chan->ch_freq))
+			goto next;
+
+		chan_enum = reg_get_chan_enum_for_freq(des_chan->ch_freq);
+		if (reg_is_chan_enum_invalid(chan_enum)) {
+			reg_err_rl("Invalid chan enum %d", chan_enum);
+			goto next;
+		}
+
+		if (pdev_priv_obj->mas_chan_list[chan_enum].state !=
+		    CHANNEL_STATE_DISABLE &&
+		    pdev_priv_obj->mas_chan_list[chan_enum].chan_flags &
+		    REGULATORY_CHAN_INDOOR_ONLY)
+			reg_add_indoor_concurrency(pdev, vdev_id,
+						   des_chan->ch_freq,
+						   des_chan->ch_width);
+
+next:
+		wlan_objmgr_vdev_release_ref(vdev, WLAN_REGULATORY_SB_ID);
+	}
 
 	return QDF_STATUS_SUCCESS;
 }
@@ -8003,6 +8232,43 @@ reg_get_cur_6g_client_type(struct wlan_objmgr_pdev *pdev,
 
 	*reg_cur_6g_client_mobility_type =
 	    pdev_priv_obj->reg_cur_6g_client_mobility_type;
+
+	return QDF_STATUS_SUCCESS;
+}
+
+QDF_STATUS
+reg_set_cur_6ghz_client_type(struct wlan_objmgr_pdev *pdev,
+			     enum reg_6g_client_type in_6ghz_client_type)
+{
+	struct wlan_regulatory_pdev_priv_obj *pdev_priv_obj;
+
+	pdev_priv_obj = reg_get_pdev_obj(pdev);
+	if (!IS_VALID_PDEV_REG_OBJ(pdev_priv_obj)) {
+		reg_err("pdev reg component is NULL");
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	if (in_6ghz_client_type >= REG_MAX_CLIENT_TYPE)
+		return QDF_STATUS_E_FAILURE;
+
+	pdev_priv_obj->reg_cur_6g_client_mobility_type = in_6ghz_client_type;
+
+	return QDF_STATUS_SUCCESS;
+}
+
+QDF_STATUS
+reg_set_6ghz_client_type_from_target(struct wlan_objmgr_pdev *pdev)
+{
+	struct wlan_regulatory_pdev_priv_obj *pdev_priv_obj;
+
+	pdev_priv_obj = reg_get_pdev_obj(pdev);
+	if (!IS_VALID_PDEV_REG_OBJ(pdev_priv_obj)) {
+		reg_err("pdev reg component is NULL");
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	pdev_priv_obj->reg_cur_6g_client_mobility_type =
+					pdev_priv_obj->reg_target_client_type;
 
 	return QDF_STATUS_SUCCESS;
 }

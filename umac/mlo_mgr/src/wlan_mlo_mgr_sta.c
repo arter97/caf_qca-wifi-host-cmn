@@ -27,6 +27,13 @@
 #include <wlan_mlo_mgr_cmn.h>
 #include <wlan_scan_api.h>
 #include <scheduler_api.h>
+#include <wlan_crypto_global_api.h>
+#include <utils_mlo.h>
+#include <wlan_mlme_cmn.h>
+#include <wlan_scan_utils_api.h>
+#include <qdf_time.h>
+#include <wlan_objmgr_peer_obj.h>
+#include <wlan_scan_api.h>
 
 #ifdef WLAN_FEATURE_11BE_MLO
 static inline void
@@ -232,6 +239,11 @@ mlo_validate_disconn_req(struct wlan_objmgr_vdev *vdev,
 {
 	return QDF_STATUS_SUCCESS;
 }
+
+static QDF_STATUS mlo_validate_mlo_cap(struct wlan_objmgr_vdev *vdev)
+{
+	return QDF_STATUS_SUCCESS;
+}
 #else
 /**
  * mlo_is_mld_connected - Check whether MLD is connected
@@ -419,7 +431,6 @@ static QDF_STATUS mlo_disconnect_no_lock(struct wlan_objmgr_vdev *vdev,
 						  reason_code, bssid);
 		if (QDF_IS_STATUS_ERROR(status)) {
 			mlo_debug("Connect in progress, deferring disconnect");
-			mlo_dev_lock_release(mlo_dev_ctx);
 			return status;
 		}
 
@@ -495,6 +506,14 @@ mlo_validate_connect_req(struct wlan_objmgr_vdev *vdev,
 	}
 	return status;
 }
+
+static QDF_STATUS mlo_validate_mlo_cap(struct wlan_objmgr_vdev *vdev)
+{
+	if (wlan_vdev_mlme_is_mlo_vdev(vdev))
+		return QDF_STATUS_SUCCESS;
+
+	return QDF_STATUS_E_FAILURE;
+}
 #endif
 
 QDF_STATUS mlo_connect(struct wlan_objmgr_vdev *vdev,
@@ -508,6 +527,10 @@ QDF_STATUS mlo_connect(struct wlan_objmgr_vdev *vdev,
 	if (mlo_dev_ctx)
 		sta_ctx = mlo_dev_ctx->sta_ctx;
 	if (sta_ctx) {
+		status = mlo_validate_mlo_cap(vdev);
+		if (QDF_IS_STATUS_ERROR(status))
+			return wlan_cm_start_connect(vdev, req);
+
 		mlo_dev_lock_acquire(mlo_dev_ctx);
 		status = mlo_validate_connect_req(vdev, mlo_dev_ctx, req);
 
@@ -670,6 +693,7 @@ mlo_send_link_connect(struct wlan_objmgr_vdev *vdev,
 		      ml_parnter_info->partner_link_info[partner_idx].link_id);
 		ml_parnter_info->partner_link_info[partner_idx].vdev_id =
 			       wlan_vdev_get_id(mlo_dev_ctx->wlan_vdev_list[i]);
+		wlan_crypto_free_vdev_key(wlan_vdev_list[i]);
 		mlo_prepare_and_send_connect(
 				wlan_vdev_list[i],
 				*ml_parnter_info,
@@ -820,17 +844,12 @@ static QDF_STATUS ml_activate_pend_disconn_req_cb(struct scheduler_msg *msg)
 
 	mlo_dev_ctx = vdev->mlo_dev_ctx;
 	sta_ctx = mlo_dev_ctx->sta_ctx;
-	if (sta_ctx->disconn_req) {
-		mlo_disconnect(vdev, sta_ctx->disconn_req->source,
-			       sta_ctx->disconn_req->reason_code,
-			       &sta_ctx->disconn_req->bssid);
-		qdf_mem_free(sta_ctx->disconn_req);
-		sta_ctx->disconn_req = NULL;
-	} else {
-		mlo_disconnect(vdev, CM_MLME_DISCONNECT,
-			       REASON_DEAUTH_NETWORK_LEAVING,
-			       NULL);
-	}
+	mlo_disconnect(vdev, sta_ctx->disconn_req->source,
+		       sta_ctx->disconn_req->reason_code,
+		       &sta_ctx->disconn_req->bssid);
+
+	qdf_mem_free(sta_ctx->disconn_req);
+	sta_ctx->disconn_req = NULL;
 	wlan_objmgr_vdev_release_ref(vdev, WLAN_MLO_MGR_ID);
 
 	return QDF_STATUS_SUCCESS;
@@ -959,7 +978,6 @@ void mlo_sta_link_connect_notify(struct wlan_objmgr_vdev *vdev,
 {
 	struct wlan_mlo_dev_context *mlo_dev_ctx = vdev->mlo_dev_ctx;
 	struct wlan_mlo_sta *sta_ctx = NULL;
-	struct wlan_objmgr_vdev *assoc_vdev;
 
 	if (mlo_dev_ctx) {
 		sta_ctx = mlo_dev_ctx->sta_ctx;
@@ -972,18 +990,6 @@ void mlo_sta_link_connect_notify(struct wlan_objmgr_vdev *vdev,
 		mlo_debug("Handle pending disocnnect for vdev %d",
 			  wlan_vdev_get_id(vdev));
 		mlo_handle_pending_disconnect(vdev);
-		return;
-	}
-
-	assoc_vdev = mlo_get_assoc_link_vdev(vdev->mlo_dev_ctx);
-	if (assoc_vdev && QDF_IS_STATUS_SUCCESS(rsp->connect_status) &&
-	    !wlan_cm_is_vdev_connected(assoc_vdev)) {
-		mlo_debug("Handle pending disconnect for vdev %d",
-			  wlan_vdev_get_id(vdev));
-		if (assoc_vdev != vdev)
-			mlo_disconnect(vdev, CM_MLME_DISCONNECT,
-				       REASON_DEAUTH_NETWORK_LEAVING,
-				       NULL);
 		return;
 	}
 
@@ -1048,19 +1054,19 @@ mlo_send_link_disconnect_sync(struct wlan_mlo_dev_context *mlo_dev_ctx,
 			      enum wlan_reason_code reason_code,
 			      struct qdf_mac_addr *bssid)
 {
-	uint8_t i = 0;
+	uint8_t i;
 	struct wlan_objmgr_vdev *assoc_vdev =
 			mlo_get_assoc_link_vdev(mlo_dev_ctx);
 
 	if (!assoc_vdev)
 		return QDF_STATUS_E_FAILURE;
 
-	for (i =  0; i < WLAN_UMAC_MLO_MAX_VDEVS; i++) {
+	for (i = 0; i < WLAN_UMAC_MLO_MAX_VDEVS; i++) {
 		if (!mlo_dev_ctx->wlan_vdev_list[i])
 			continue;
 
 		if (mlo_dev_ctx->wlan_vdev_list[i] !=
-				mlo_get_assoc_link_vdev(mlo_dev_ctx))
+		    mlo_get_assoc_link_vdev(mlo_dev_ctx))
 			wlan_cm_disconnect_sync(mlo_dev_ctx->wlan_vdev_list[i],
 						source, reason_code);
 	}
@@ -1829,11 +1835,11 @@ void mlo_internal_disconnect_links(struct wlan_objmgr_vdev *vdev)
 
 	mlo_sta_get_vdev_list(vdev, &vdev_count, wlan_vdev_list);
 	for (i =  0; i < vdev_count; i++) {
-		if (qdf_test_bit(i, sta_ctx->wlan_connected_links) &&
-		    wlan_vdev_list[i] !=
-		    mlo_get_assoc_link_vdev(mlo_dev_ctx))
+		if (wlan_vdev_list[i] != mlo_get_assoc_link_vdev(mlo_dev_ctx) &&
+		    (wlan_cm_is_vdev_connected(wlan_vdev_list[i]) ||
+		     wlan_cm_is_vdev_connecting(wlan_vdev_list[i])))
 			wlan_cm_disconnect(wlan_vdev_list[i],
-					   CM_INTERNAL_DISCONNECT,
+					   CM_MLO_LINK_VDEV_DISCONNECT,
 					   REASON_UNSPEC_FAILURE,
 					   NULL);
 		mlo_release_vdev_ref(wlan_vdev_list[i]);
@@ -1909,5 +1915,249 @@ bool mlo_get_keys_saved(struct wlan_objmgr_vdev *vdev,
 		return sta_ctx->key_mgmt[0].keys_saved;
 
 	return false;
+}
+
+static uint16_t
+mlo_get_bcn_interval_by_bssid(struct wlan_objmgr_pdev *pdev,
+			      uint8_t *bssid)
+{
+	struct scan_filter *scan_filter;
+	uint16_t bcn_int = 0;
+	qdf_list_t *list = NULL;
+	struct scan_cache_node *first_node = NULL;
+	qdf_list_node_t *cur_node = NULL;
+
+	scan_filter = qdf_mem_malloc(sizeof(*scan_filter));
+	if (!scan_filter)
+		return bcn_int;
+
+	scan_filter->num_of_bssid = 1;
+	qdf_mem_copy(scan_filter->bssid_list[0].bytes,
+		     bssid, sizeof(struct qdf_mac_addr));
+	list = wlan_scan_get_result(pdev, scan_filter);
+	qdf_mem_free(scan_filter);
+
+	if (!list || (list && !qdf_list_size(list))) {
+		mlo_debug("scan list empty");
+		goto error;
+	}
+
+	qdf_list_peek_front(list, &cur_node);
+	first_node = qdf_container_of(cur_node,
+				      struct scan_cache_node,
+				      node);
+	if (first_node && first_node->entry)
+		bcn_int = first_node->entry->bcn_int;
+error:
+	if (list)
+		wlan_scan_purge_results(list);
+
+	return bcn_int;
+}
+
+static void mlo_process_link_remove(struct wlan_objmgr_vdev *vdev,
+				    struct ml_rv_partner_link_info *link_info)
+{
+	struct vdev_mlme_obj *vdev_mlme = NULL;
+	struct wlan_objmgr_peer *bss_peer = NULL;
+	uint16_t bcn_int = 0;
+	uint16_t tbtt_count = 0;
+
+	vdev_mlme = wlan_vdev_mlme_get_cmpt_obj(vdev);
+	if (!vdev_mlme)
+		return;
+
+	if (vdev_mlme->ml_reconfig_started == true)
+		return;
+
+	bss_peer = wlan_vdev_get_bsspeer(vdev);
+	if (!bss_peer)
+		return;
+
+	/* Link delete triggered from AP,
+	 * start timer with tbtt count * beacon interval
+	 */
+	tbtt_count = link_info->delete_timer;
+	bcn_int = mlo_get_bcn_interval_by_bssid(
+			wlan_vdev_get_pdev(vdev),
+			wlan_peer_get_macaddr(bss_peer));
+	if (!bcn_int)
+		return;
+
+	vdev_mlme->ml_reconfig_started = true;
+	qdf_timer_mod(&vdev_mlme->ml_reconfig_timer,
+		      qdf_time_uint_to_ms(tbtt_count * bcn_int));
+}
+
+#ifdef WLAN_FEATURE_11BE_MLO_ADV_FEATURE
+static inline
+QDF_STATUS mlo_process_link_add(struct wlan_objmgr_psoc *psoc,
+				struct wlan_objmgr_vdev *vdev,
+				struct mlo_partner_info *cache_partner_info,
+				struct mlo_partner_info *partner_info,
+				uint16_t vdev_count)
+{
+	return QDF_STATUS_E_INVAL;
+}
+#else
+static
+QDF_STATUS mlo_process_link_add(struct wlan_objmgr_psoc *psoc,
+				struct wlan_objmgr_vdev *vdev,
+				struct mlo_partner_info *cache_partner_info,
+				struct mlo_partner_info *partner_info,
+				uint16_t vdev_count)
+{
+	struct wlan_mlo_dev_context *ml_ctx = vdev->mlo_dev_ctx;
+	struct wlan_objmgr_vdev *inactive_vdev[WLAN_UMAC_MLO_MAX_VDEVS];
+	uint8_t i = 0, j = 0, k = 0;
+	struct scan_cache_entry *scan_entry = NULL;
+	/* Check if ini to support dynamic link add is enable
+	 * or not
+	 */
+	if (!mlme_mlo_is_reconfig_reassoc_enable(psoc)) {
+		mlo_debug("ML Reconfig link add support disabled");
+		return QDF_STATUS_E_INVAL;
+	}
+
+	if (vdev_count == ml_ctx->wlan_vdev_count) {
+		/* All links are participating in current ML connection */
+		return QDF_STATUS_E_INVAL;
+	}
+
+	for (i = 0; i < WLAN_UMAC_MLO_MAX_VDEVS; i++) {
+		if (wlan_cm_is_vdev_disconnected(ml_ctx->wlan_vdev_list[i]))
+			inactive_vdev[j++] = ml_ctx->wlan_vdev_list[i];
+	}
+	/* check if any new link in scan entry */
+	if (partner_info->num_partner_links ==
+	    cache_partner_info->num_partner_links) {
+		if (!qdf_mem_cmp(cache_partner_info, partner_info,
+				 sizeof(struct mlo_partner_info))) {
+			mlo_debug("No new link found");
+			return QDF_STATUS_E_INVAL;
+		}
+	}
+
+	/* Partner info changed compared to the cached scan entry.
+	 * Process link add
+	 */
+	for (i = 0; i < j; i++) {
+		for (k = 0; k < partner_info->num_partner_links; k++) {
+			scan_entry = wlan_scan_get_entry_by_bssid(
+					wlan_vdev_get_pdev(inactive_vdev[i]),
+					&partner_info->partner_link_info[k].link_addr);
+			if (scan_entry) {
+				mlo_err("Link addition detected, issue disconnect");
+				mlo_disconnect(vdev, CM_SB_DISCONNECT,
+					       REASON_UNSPEC_FAILURE, NULL);
+				return QDF_STATUS_SUCCESS;
+			}
+		}
+	}
+
+	return QDF_STATUS_E_INVAL;
+}
+#endif
+
+void mlo_process_ml_reconfig_ie(struct wlan_objmgr_vdev *vdev,
+				struct scan_cache_entry *scan_entry,
+				uint8_t *ml_ie, qdf_size_t ml_ie_len,
+				struct mlo_partner_info *partner_info)
+{
+	struct wlan_objmgr_psoc *psoc = NULL;
+	struct wlan_objmgr_pdev *pdev = NULL;
+	struct wlan_objmgr_vdev *co_mld_vdev = NULL;
+	struct wlan_objmgr_vdev *wlan_vdev_list[WLAN_UMAC_MLO_MAX_VDEVS] = {NULL};
+	uint16_t vdev_count = 0;
+	uint8_t idx = 0;
+	uint8_t i = 0;
+	uint8_t link_ix = 0;
+	struct ml_rv_info reconfig_info = {0};
+	struct mlo_partner_info ml_partner_info = {0};
+	uint8_t *ml_rv_ie = NULL;
+	qdf_size_t ml_rv_ie_len = 0;
+	QDF_STATUS status = QDF_STATUS_SUCCESS;
+
+	if (!vdev || !mlo_is_mld_sta(vdev))
+		return;
+
+	pdev = wlan_vdev_get_pdev(vdev);
+	if (!pdev)
+		return;
+
+	psoc = wlan_pdev_get_psoc(pdev);
+	if (!psoc)
+		return;
+
+	mlo_get_ml_vdev_list(vdev, &vdev_count, wlan_vdev_list);
+	if (!vdev_count) {
+		mlo_debug("Number of VDEVs under MLD is reported as 0");
+		return;
+	}
+
+	if (!scan_entry ||
+	    QDF_IS_STATUS_ERROR(util_scan_get_ml_partner_info(scan_entry,
+							      &ml_partner_info))) {
+		mlo_debug("Unable to fetch the partner info in scan db");
+		goto check_ml_rv;
+	}
+
+	/* Processing for link add */
+	if (QDF_IS_STATUS_SUCCESS(mlo_process_link_add(psoc, vdev,
+						       partner_info,
+						       &ml_partner_info,
+						       vdev_count))) {
+		mlo_err("Issued MLD disconnect for link add");
+		goto err_release_refs;
+	}
+
+check_ml_rv:
+	/* Processing for ML Reconfig IE */
+	if (vdev_count == 1) {
+		/* Single link MLO, no need to process link delete */
+		goto err_release_refs;
+	}
+
+	status = util_find_mlie_by_variant(ml_ie,
+					   ml_ie_len,
+					   &ml_rv_ie,
+					   &ml_rv_ie_len,
+					   WLAN_ML_VARIANT_RECONFIG);
+	if (QDF_IS_STATUS_ERROR(status) || !ml_rv_ie) {
+		mlo_debug("ML IE for reconfig variant not found");
+		goto err_release_refs;
+	}
+
+	status = util_get_rvmlie_persta_link_info(ml_rv_ie, ml_rv_ie_len,
+						  &reconfig_info);
+	if (QDF_IS_STATUS_ERROR(status)) {
+		mlo_err("Unable to get persta link info from ML RV IE");
+		goto err_release_refs;
+	}
+
+	if (!reconfig_info.num_links) {
+		mlo_err("No. of links is 0 in ML reconfig IE");
+		goto err_release_refs;
+	}
+
+	for (idx = 0; idx < vdev_count; idx++) {
+		co_mld_vdev = wlan_vdev_list[idx];
+		if (!co_mld_vdev) {
+			mlo_debug("VDEV in MLD VDEV list is NULL");
+			goto err_release_refs;
+		}
+
+		link_ix = wlan_vdev_get_link_id(co_mld_vdev);
+		for (i = 0; i < reconfig_info.num_links; i++) {
+			if (link_ix == reconfig_info.link_info[i].link_id)
+				mlo_process_link_remove(co_mld_vdev,
+							&reconfig_info.link_info[i]);
+		}
+	}
+
+err_release_refs:
+
+	for (i = 0; i < vdev_count; i++)
+		mlo_release_vdev_ref(wlan_vdev_list[i]);
 }
 #endif

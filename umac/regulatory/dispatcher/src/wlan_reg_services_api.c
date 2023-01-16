@@ -1384,6 +1384,23 @@ void wlan_reg_set_create_punc_bitmap(struct ch_params *ch_params,
 {
 	reg_set_create_punc_bitmap(ch_params, is_create_punc_bitmap);
 }
+
+#ifdef CONFIG_REG_CLIENT
+QDF_STATUS wlan_reg_apply_puncture(struct wlan_objmgr_pdev *pdev,
+				   uint16_t puncture_bitmap,
+				   qdf_freq_t freq,
+				   enum phy_ch_width bw,
+				   qdf_freq_t cen320_freq)
+{
+	return reg_apply_puncture(pdev, puncture_bitmap, freq, bw,
+				  cen320_freq);
+}
+
+QDF_STATUS wlan_reg_remove_puncture(struct wlan_objmgr_pdev *pdev)
+{
+	return reg_remove_puncture(pdev);
+}
+#endif
 #endif /* WLAN_FEATURE_11BE */
 
 #ifdef CONFIG_REG_6G_PWRMODE
@@ -1727,6 +1744,21 @@ wlan_reg_get_cur_6g_client_type(struct wlan_objmgr_pdev *pdev,
 					  reg_cur_6g_client_mobility_type);
 }
 
+qdf_export_symbol(wlan_reg_get_cur_6g_client_type);
+
+QDF_STATUS
+wlan_reg_set_cur_6ghz_client_type(struct wlan_objmgr_pdev *pdev,
+				  enum reg_6g_client_type in_6ghz_client_type)
+{
+	return reg_set_cur_6ghz_client_type(pdev, in_6ghz_client_type);
+}
+
+QDF_STATUS
+wlan_reg_set_6ghz_client_type_from_target(struct wlan_objmgr_pdev *pdev)
+{
+	return reg_set_6ghz_client_type_from_target(pdev);
+}
+
 bool wlan_reg_is_6g_psd_power(struct wlan_objmgr_pdev *pdev)
 {
 	return reg_is_6g_psd_power(pdev);
@@ -1986,4 +2018,34 @@ wlan_reg_get_num_afc_freq_obj(struct wlan_objmgr_pdev *pdev,
 }
 #endif
 
+#endif
+
+#ifdef CONFIG_REG_CLIENT
+QDF_STATUS
+wlan_reg_recompute_current_chan_list(struct wlan_objmgr_psoc *psoc,
+				     struct wlan_objmgr_pdev *pdev)
+{
+	struct wlan_regulatory_pdev_priv_obj *pdev_priv_obj;
+
+	pdev_priv_obj = reg_get_pdev_obj(pdev);
+	if (!IS_VALID_PDEV_REG_OBJ(pdev_priv_obj)) {
+		reg_err("reg pdev priv obj is NULL");
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	reg_debug("Recomputing the current channel list");
+	reg_compute_pdev_current_chan_list(pdev_priv_obj);
+	return reg_send_scheduler_msg_nb(psoc, pdev);
+}
+
+QDF_STATUS
+wlan_reg_modify_indoor_concurrency(struct wlan_objmgr_pdev *pdev,
+				   uint8_t vdev_id, uint32_t freq,
+				   enum phy_ch_width width, bool add)
+{
+	if (add)
+		return reg_add_indoor_concurrency(pdev, vdev_id, freq, width);
+	else
+		return reg_remove_indoor_concurrency(pdev, vdev_id, freq);
+}
 #endif

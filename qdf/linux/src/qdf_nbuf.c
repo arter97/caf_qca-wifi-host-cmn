@@ -746,6 +746,21 @@ __qdf_nbuf_t __qdf_nbuf_clone(__qdf_nbuf_t skb)
 
 qdf_export_symbol(__qdf_nbuf_clone);
 
+#ifdef QCA_DP_TX_NBUF_LIST_FREE
+void
+__qdf_nbuf_dev_kfree_list(__qdf_nbuf_queue_head_t *nbuf_queue_head)
+{
+	dev_kfree_skb_list_fast(nbuf_queue_head);
+}
+#else
+void
+__qdf_nbuf_dev_kfree_list(__qdf_nbuf_queue_head_t *nbuf_queue_head)
+{
+}
+#endif
+
+qdf_export_symbol(__qdf_nbuf_dev_kfree_list);
+
 #ifdef NBUF_MEMORY_DEBUG
 struct qdf_nbuf_event {
 	qdf_nbuf_t nbuf;
@@ -845,6 +860,7 @@ void qdf_nbuf_map_check_for_smmu_leaks(void)
 	qdf_tracker_check_for_leaks(&qdf_nbuf_smmu_map_tracker);
 }
 
+#ifdef IPA_OFFLOAD
 QDF_STATUS qdf_nbuf_smmu_map_debug(qdf_nbuf_t nbuf,
 				   uint8_t hdl,
 				   uint8_t num_buffers,
@@ -891,6 +907,7 @@ QDF_STATUS qdf_nbuf_smmu_unmap_debug(qdf_nbuf_t nbuf,
 }
 
 qdf_export_symbol(qdf_nbuf_smmu_unmap_debug);
+#endif /* IPA_OFFLOAD */
 
 static void qdf_nbuf_panic_on_free_if_smmu_mapped(qdf_nbuf_t nbuf,
 						  const char *func,
@@ -919,7 +936,7 @@ static inline void qdf_net_buf_update_smmu_params(QDF_NBUF_TRACK *p_node)
 	p_node->smmu_map_iova_addr = 0;
 	p_node->smmu_map_pa_addr = 0;
 }
-#else
+#else /* !NBUF_SMMU_MAP_UNMAP_DEBUG */
 #ifdef NBUF_MEMORY_DEBUG
 static void qdf_nbuf_smmu_map_tracking_init(void)
 {
@@ -938,7 +955,7 @@ static void qdf_nbuf_panic_on_free_if_smmu_mapped(qdf_nbuf_t nbuf,
 static inline void qdf_net_buf_update_smmu_params(QDF_NBUF_TRACK *p_node)
 {
 }
-#endif
+#endif /* NBUF_MEMORY_DEBUG */
 
 #ifdef IPA_OFFLOAD
 QDF_STATUS qdf_nbuf_smmu_map_debug(qdf_nbuf_t nbuf,
@@ -964,8 +981,8 @@ QDF_STATUS qdf_nbuf_smmu_unmap_debug(qdf_nbuf_t nbuf,
 }
 
 qdf_export_symbol(qdf_nbuf_smmu_unmap_debug);
-#endif
-#endif
+#endif /* IPA_OFFLOAD */
+#endif /* NBUF_SMMU_MAP_UNMAP_DEBUG */
 
 #ifdef NBUF_MAP_UNMAP_DEBUG
 #define qdf_nbuf_map_tracker_bits 11 /* 2048 buckets */
@@ -3892,7 +3909,65 @@ unshare_buf:
 
 qdf_export_symbol(qdf_nbuf_unshare_debug);
 
+void
+qdf_nbuf_dev_kfree_list_debug(__qdf_nbuf_queue_head_t *nbuf_queue_head,
+			      const char *func, uint32_t line)
+{
+	qdf_nbuf_t  buf;
+
+	if (qdf_nbuf_queue_empty(nbuf_queue_head))
+		return;
+
+	if (is_initial_mem_debug_disabled)
+		return __qdf_nbuf_dev_kfree_list(nbuf_queue_head);
+
+	while ((buf = qdf_nbuf_queue_head_dequeue(nbuf_queue_head)) != NULL)
+		qdf_nbuf_free_debug(buf, func, line);
+}
+
+qdf_export_symbol(qdf_nbuf_dev_kfree_list_debug);
 #endif /* NBUF_MEMORY_DEBUG */
+
+#if defined(QCA_DP_NBUF_FAST_PPEDS)
+struct sk_buff *__qdf_nbuf_alloc_ppe_ds(qdf_device_t osdev, size_t size,
+					const char *func, uint32_t line)
+{
+	struct sk_buff *skb;
+	int flags = GFP_KERNEL;
+
+	if (in_interrupt() || irqs_disabled() || in_atomic()) {
+		flags = GFP_ATOMIC;
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 4, 0)
+		/*
+		 * Observed that kcompactd burns out CPU to make order-3
+		 * page.__netdev_alloc_skb has 4k page fallback option
+		 * just in case of
+		 * failing high order page allocation so we don't need
+		 * to be hard. Make kcompactd rest in piece.
+		 */
+		flags = flags & ~__GFP_KSWAPD_RECLAIM;
+#endif
+	}
+	skb = __netdev_alloc_skb_no_skb_reset(NULL, size, flags);
+	if (qdf_likely(is_initial_mem_debug_disabled)) {
+		if (qdf_likely(skb))
+			qdf_nbuf_count_inc(skb);
+	} else {
+		if (qdf_likely(skb)) {
+			qdf_nbuf_count_inc(skb);
+			qdf_net_buf_debug_add_node(skb, size, func, line);
+			qdf_nbuf_history_add(skb, func, line,
+					     QDF_NBUF_ALLOC);
+		} else {
+			qdf_nbuf_history_add(skb, func, line,
+					     QDF_NBUF_ALLOC_FAILURE);
+		}
+	}
+	return skb;
+}
+
+qdf_export_symbol(__qdf_nbuf_alloc_ppe_ds);
+#endif
 
 #if defined(FEATURE_TSO)
 

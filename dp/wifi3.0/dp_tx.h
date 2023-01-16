@@ -64,9 +64,10 @@
 /*
  * Since the Tx descriptor flag is of only 16-bit and no more bit is free for
  * any new flag, therefore for time being overloading PPEDS flag with that of
- * FLUSH flag.
+ * FLUSH flag and FLAG_FAST with TDLS which is not enabled for WIN.
  */
 #define DP_TX_DESC_FLAG_PPEDS		0x2000
+#define DP_TX_DESC_FLAG_FAST		0x100
 
 #define DP_TX_EXT_DESC_FLAG_METADATA_VALID 0x1
 
@@ -1161,33 +1162,77 @@ dp_update_tx_desc_stats(struct dp_pdev *pdev)
 #endif /* CONFIG_WLAN_SYSFS_MEM_STATS */
 
 #ifdef QCA_TX_LIMIT_CHECK
+static inline bool is_spl_packet(qdf_nbuf_t nbuf)
+{
+	if (qdf_nbuf_is_ipv4_eapol_pkt(nbuf))
+		return true;
+	return false;
+}
+
 /**
- * dp_tx_limit_check - Check if allocated tx descriptors reached
- * soc max limit and pdev max limit
+ * is_dp_spl_tx_limit_reached - Check if the packet is a special packet to allow
+ * allocation if allocated tx descriptors are within the soc max limit
+ * and pdev max limit.
  * @vdev: DP vdev handle
  *
  * Return: true if allocated tx descriptors reached max configured value, else
  * false
  */
 static inline bool
-dp_tx_limit_check(struct dp_vdev *vdev)
+is_dp_spl_tx_limit_reached(struct dp_vdev *vdev, qdf_nbuf_t nbuf)
+{
+	struct dp_pdev *pdev = vdev->pdev;
+	struct dp_soc *soc = pdev->soc;
+
+	if (is_spl_packet(nbuf)) {
+		if (qdf_atomic_read(&soc->num_tx_outstanding) >=
+				soc->num_tx_allowed)
+			return true;
+
+		if (qdf_atomic_read(&pdev->num_tx_outstanding) >=
+			pdev->num_tx_allowed)
+			return true;
+
+		return false;
+	}
+
+	return true;
+}
+
+/**
+ * dp_tx_limit_check - Check if allocated tx descriptors reached
+ * soc max reg limit and pdev max reg limit for regular packets. Also check if
+ * the limit is reached for special packets.
+ * @vdev: DP vdev handle
+ *
+ * Return: true if allocated tx descriptors reached max limit for regular
+ * packets and in case of special packets, if the limit is reached max
+ * configured vale for the soc/pdev, else false
+ */
+static inline bool
+dp_tx_limit_check(struct dp_vdev *vdev, qdf_nbuf_t nbuf)
 {
 	struct dp_pdev *pdev = vdev->pdev;
 	struct dp_soc *soc = pdev->soc;
 
 	if (qdf_atomic_read(&soc->num_tx_outstanding) >=
-			soc->num_tx_allowed) {
-		dp_tx_info("queued packets are more than max tx, drop the frame");
-		DP_STATS_INC(vdev, tx_i.dropped.desc_na.num, 1);
-		return true;
+			soc->num_reg_tx_allowed) {
+		if (is_dp_spl_tx_limit_reached(vdev, nbuf)) {
+			dp_tx_info("queued packets are more than max tx, drop the frame");
+			DP_STATS_INC(vdev, tx_i.dropped.desc_na.num, 1);
+			return true;
+		}
 	}
 
 	if (qdf_atomic_read(&pdev->num_tx_outstanding) >=
-			pdev->num_tx_allowed) {
-		dp_tx_info("queued packets are more than max tx, drop the frame");
-		DP_STATS_INC(vdev, tx_i.dropped.desc_na.num, 1);
-		DP_STATS_INC(vdev, tx_i.dropped.desc_na_exc_outstand.num, 1);
-		return true;
+			pdev->num_reg_tx_allowed) {
+		if (is_dp_spl_tx_limit_reached(vdev, nbuf)) {
+			dp_tx_info("queued packets are more than max tx, drop the frame");
+			DP_STATS_INC(vdev, tx_i.dropped.desc_na.num, 1);
+			DP_STATS_INC(vdev,
+				     tx_i.dropped.desc_na_exc_outstand.num, 1);
+			return true;
+		}
 	}
 	return false;
 }
@@ -1250,7 +1295,7 @@ dp_tx_outstanding_dec(struct dp_pdev *pdev)
 
 #else //QCA_TX_LIMIT_CHECK
 static inline bool
-dp_tx_limit_check(struct dp_vdev *vdev)
+dp_tx_limit_check(struct dp_vdev *vdev, qdf_nbuf_t nbuf)
 {
 	return false;
 }
@@ -1275,4 +1320,25 @@ dp_tx_outstanding_dec(struct dp_pdev *pdev)
 	dp_update_tx_desc_stats(pdev);
 }
 #endif //QCA_TX_LIMIT_CHECK
+/**
+ * dp_tx_get_pkt_len() - Get the packet length of a msdu
+ * @tx_desc: tx descriptor
+ *
+ * Return: Packet length of a msdu. If the packet is fragmented,
+ * it will return the single fragment length.
+ *
+ * In TSO mode, the msdu from stack will be fragmented into small
+ * fragments and each of these new fragments will be transmitted
+ * as an individual msdu.
+ *
+ * Please note that the length of a msdu from stack may be smaller
+ * than the length of the total length of the fragments it has been
+ * fragmentted because each of the fragments has a nbuf header.
+ */
+static inline uint32_t dp_tx_get_pkt_len(struct dp_tx_desc_s *tx_desc)
+{
+	return tx_desc->frm_type == dp_tx_frm_tso ?
+		tx_desc->msdu_ext_desc->tso_desc->seg.total_len :
+		qdf_nbuf_len(tx_desc->nbuf);
+}
 #endif
