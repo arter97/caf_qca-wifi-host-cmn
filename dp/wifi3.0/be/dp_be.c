@@ -67,7 +67,7 @@ static struct wlan_cfg_tcl_wbm_ring_num_map g_tcl_wbm_map_array[MAX_TCL_DATA_RIN
 #endif
 
 #ifdef WLAN_SUPPORT_PPEDS
-static struct cdp_ppe_txrx_ops dp_ops_ppe_be = {
+static struct cdp_ppeds_txrx_ops dp_ops_ppeds_be = {
 	.ppeds_entry_attach = dp_ppeds_attach_vdev_be,
 	.ppeds_entry_detach = dp_ppeds_detach_vdev_be,
 	.ppeds_set_int_pri2tid = dp_ppeds_set_int_pri2tid_be,
@@ -82,7 +82,7 @@ static void dp_ppeds_rings_status(struct dp_soc *soc)
 
 	dp_print_ring_stat_from_hal(soc, &be_soc->reo2ppe_ring, REO2PPE);
 	dp_print_ring_stat_from_hal(soc, &be_soc->ppe2tcl_ring, PPE2TCL);
-	dp_print_ring_stat_from_hal(soc, &be_soc->ppe_wbm_release_ring,
+	dp_print_ring_stat_from_hal(soc, &be_soc->ppeds_wbm_release_ring,
 				    WBM2SW_RELEASE);
 }
 
@@ -484,7 +484,7 @@ dp_hw_cookie_conversion_deinit(struct dp_soc_be *be_soc,
 #endif
 
 #ifdef WLAN_SUPPORT_PPEDS
-static QDF_STATUS dp_soc_ppe_attach_be(struct dp_soc *soc)
+static QDF_STATUS dp_soc_ppeds_attach_be(struct dp_soc *soc)
 {
 	struct dp_soc_be *be_soc = dp_get_be_soc_from_dp_soc(soc);
 	struct cdp_ops *cdp_ops = soc->cdp_soc.ops;
@@ -492,28 +492,28 @@ static QDF_STATUS dp_soc_ppe_attach_be(struct dp_soc *soc)
 	/*
 	 * Check if PPE DS is enabled.
 	 */
-	if (!wlan_cfg_get_dp_soc_is_ppe_enabled(soc->wlan_cfg_ctx))
+	if (!wlan_cfg_get_dp_soc_is_ppeds_enabled(soc->wlan_cfg_ctx))
 		return QDF_STATUS_SUCCESS;
 
 	if (dp_ppeds_attach_soc_be(be_soc) != QDF_STATUS_SUCCESS)
 		return QDF_STATUS_SUCCESS;
 
-	cdp_ops->ppe_ops = &dp_ops_ppe_be;
+	cdp_ops->ppeds_ops = &dp_ops_ppeds_be;
 
 	return QDF_STATUS_SUCCESS;
 }
 
-static QDF_STATUS dp_soc_ppe_detach_be(struct dp_soc *soc)
+static QDF_STATUS dp_soc_ppeds_detach_be(struct dp_soc *soc)
 {
 	struct dp_soc_be *be_soc = dp_get_be_soc_from_dp_soc(soc);
 	struct cdp_ops *cdp_ops = soc->cdp_soc.ops;
 
-	if (!wlan_cfg_get_dp_soc_is_ppe_enabled(soc->wlan_cfg_ctx))
+	if (!wlan_cfg_get_dp_soc_is_ppeds_enabled(soc->wlan_cfg_ctx))
 		return QDF_STATUS_E_FAILURE;
 
 	dp_ppeds_detach_soc_be(be_soc);
 
-	cdp_ops->ppe_ops = NULL;
+	cdp_ops->ppeds_ops = NULL;
 
 	return QDF_STATUS_SUCCESS;
 }
@@ -525,9 +525,13 @@ static QDF_STATUS dp_peer_ppeds_default_route_be(struct dp_soc *soc,
 {
 	uint16_t service_code;
 	uint8_t priority_valid;
-	uint8_t use_ppe = PEER_ROUTING_USE_PPE;
+	uint8_t use_ppe_ds = PEER_ROUTING_USE_PPE;
 	uint8_t peer_routing_enabled = PEER_ROUTING_ENABLED;
 	QDF_STATUS status = QDF_STATUS_SUCCESS;
+	struct wlan_cfg_dp_soc_ctxt *cfg = soc->wlan_cfg_ctx;
+	struct dp_vdev_be *be_vdev;
+
+	be_vdev = dp_get_be_vdev_from_dp_vdev(be_peer->peer.vdev);
 
 	/*
 	 * Program service code bypass to avoid L2 new mac address
@@ -536,18 +540,29 @@ static QDF_STATUS dp_peer_ppeds_default_route_be(struct dp_soc *soc,
 	service_code = PPE_DRV_SC_SPF_BYPASS;
 	priority_valid = be_peer->priority_valid;
 
-	if (soc->cdp_soc.ol_ops->peer_set_ppe_default_routing) {
+	/*
+	 * if FST is enabled and MLO is disabled then
+	 * let flow rule take the decision of routing
+	 * the pkt to DS or host
+	 */
+	if (wlan_cfg_is_rx_flow_tag_enabled(cfg) &&
+	    qdf_is_macaddr_zero((struct qdf_mac_addr *)
+				 be_vdev->vdev.mld_mac_addr.raw))
+		use_ppe_ds = 0;
+
+	if (soc->cdp_soc.ol_ops->peer_set_ppeds_default_routing) {
 		status =
-		soc->cdp_soc.ol_ops->peer_set_ppe_default_routing
+		soc->cdp_soc.ol_ops->peer_set_ppeds_default_routing
 				(soc->ctrl_psoc,
 				be_peer->peer.mac_addr.raw,
 				service_code, priority_valid,
-				src_info, vdev_id, use_ppe,
+				src_info, vdev_id, use_ppe_ds,
 				peer_routing_enabled);
 		if (status != QDF_STATUS_SUCCESS) {
-			qdf_err("vdev_id: %d, PPE peer routing mac:"
-				 QDF_MAC_ADDR_FMT, vdev_id,
-				QDF_MAC_ADDR_REF(be_peer->peer.mac_addr.raw));
+			dp_err("vdev_id: %d, PPE peer routing mac:"
+			       QDF_MAC_ADDR_FMT, vdev_id,
+			       QDF_MAC_ADDR_REF(be_peer->peer.mac_addr.raw));
+
 			return QDF_STATUS_E_FAILURE;
 		}
 	}
@@ -566,7 +581,7 @@ static QDF_STATUS dp_peer_setup_ppeds_be(struct dp_soc *soc,
 	QDF_STATUS qdf_status = QDF_STATUS_SUCCESS;
 
 	if (!be_peer) {
-		qdf_err("BE peer is null");
+		dp_err("BE peer is null");
 		return QDF_STATUS_E_NULL_VALUE;
 	}
 
@@ -586,15 +601,14 @@ static QDF_STATUS dp_peer_setup_ppeds_be(struct dp_soc *soc,
 			link_peer = link_peers_info.link_peers[i];
 			be_peer = dp_get_be_peer_from_dp_peer(link_peer);
 			if (!be_peer) {
-				qdf_err("BE peer is null for peer id %d ",
-							link_peer->peer_id);
+				dp_err("BE peer is null");
 				continue;
 			}
 
 			be_vdev = dp_get_be_vdev_from_dp_vdev(link_peer->vdev);
 			if (!be_vdev) {
-				qdf_err("BE vap is null for peer id %d ",
-							link_peer->peer_id);
+				dp_err("BE vap is null for peer id %d ",
+				       link_peer->peer_id);
 				continue;
 			}
 
@@ -614,7 +628,7 @@ static QDF_STATUS dp_peer_setup_ppeds_be(struct dp_soc *soc,
 
 		be_vdev = dp_get_be_vdev_from_dp_vdev(mld_peer->vdev);
 		if (!be_vdev) {
-			qdf_err("BE vap is null");
+			dp_err("BE vap is null");
 			return QDF_STATUS_E_NULL_VALUE;
 		}
 
@@ -637,12 +651,12 @@ static QDF_STATUS dp_ppeds_deinit_soc_be(struct dp_soc *soc)
 	return QDF_STATUS_SUCCESS;
 }
 
-static inline QDF_STATUS dp_soc_ppe_attach_be(struct dp_soc *soc)
+static inline QDF_STATUS dp_soc_ppeds_attach_be(struct dp_soc *soc)
 {
 	return QDF_STATUS_SUCCESS;
 }
 
-static inline QDF_STATUS dp_soc_ppe_detach_be(struct dp_soc *soc)
+static inline QDF_STATUS dp_soc_ppeds_detach_be(struct dp_soc *soc)
 {
 	return QDF_STATUS_SUCCESS;
 }
@@ -660,7 +674,7 @@ static QDF_STATUS dp_soc_detach_be(struct dp_soc *soc)
 	struct dp_soc_be *be_soc = dp_get_be_soc_from_dp_soc(soc);
 	int i = 0;
 
-	dp_soc_ppe_detach_be(soc);
+	dp_soc_ppeds_detach_be(soc);
 
 	for (i = 0; i < MAX_TXDESC_POOLS; i++)
 		dp_hw_cookie_conversion_detach(be_soc,
@@ -785,7 +799,7 @@ static QDF_STATUS dp_soc_attach_be(struct dp_soc *soc,
 
 	dp_soc_mlo_fill_params(soc, params);
 
-	qdf_status = dp_soc_ppe_attach_be(soc);
+	qdf_status = dp_soc_ppeds_attach_be(soc);
 	if (!QDF_IS_STATUS_SUCCESS(qdf_status))
 		goto fail;
 
@@ -886,7 +900,6 @@ static QDF_STATUS dp_pdev_attach_be(struct dp_pdev *pdev,
 				    struct cdp_pdev_attach_params *params)
 {
 	dp_pdev_mlo_fill_params(pdev, params);
-	dp_mlo_update_link_to_pdev_map(pdev->soc, pdev);
 
 	return QDF_STATUS_SUCCESS;
 }
@@ -968,7 +981,7 @@ static QDF_STATUS dp_peer_setup_be(struct dp_soc *soc, struct dp_peer *peer)
 	}
 
 	/*
-	 * Check if PPE routing is enabled on the associated vap.
+	 * Check if PPE DS routing is enabled on the associated vap.
 	 */
 	if (be_vdev->ppe_vp_enabled == PPE_VP_USER_TYPE_DS)
 		qdf_status = dp_peer_setup_ppeds_be(soc, peer, be_vdev);
@@ -1453,22 +1466,15 @@ dp_init_near_full_arch_ops_be(struct dp_arch_ops *arch_ops)
 #endif
 
 #ifdef WLAN_SUPPORT_PPEDS
-static void dp_soc_ppe_srng_deinit(struct dp_soc *soc)
+static void dp_soc_ppeds_srng_deinit(struct dp_soc *soc)
 {
 	struct dp_soc_be *be_soc = dp_get_be_soc_from_dp_soc(soc);
 	struct wlan_cfg_dp_soc_ctxt *soc_cfg_ctx;
 
 	soc_cfg_ctx = soc->wlan_cfg_ctx;
 
-	if (!wlan_cfg_get_dp_soc_is_ppe_enabled(soc_cfg_ctx))
+	if (!wlan_cfg_get_dp_soc_is_ppeds_enabled(soc_cfg_ctx))
 		return;
-
-	dp_srng_deinit(soc, &be_soc->ppe_release_ring, PPE_RELEASE, 0);
-	wlan_minidump_remove(be_soc->ppe_release_ring.base_vaddr_unaligned,
-			     be_soc->ppe_release_ring.alloc_size,
-			     soc->ctrl_psoc,
-			     WLAN_MD_DP_SRNG_PPE_RELEASE,
-			     "ppe_release_ring");
 
 	dp_srng_deinit(soc, &be_soc->ppe2tcl_ring, PPE2TCL, 0);
 	wlan_minidump_remove(be_soc->ppe2tcl_ring.base_vaddr_unaligned,
@@ -1484,36 +1490,34 @@ static void dp_soc_ppe_srng_deinit(struct dp_soc *soc)
 			     WLAN_MD_DP_SRNG_REO2PPE,
 			     "reo2ppe_ring");
 
-	dp_srng_deinit(soc, &be_soc->ppe_wbm_release_ring, WBM2SW_RELEASE,
+	dp_srng_deinit(soc, &be_soc->ppeds_wbm_release_ring, WBM2SW_RELEASE,
 		       WBM2_SW_PPE_REL_RING_ID);
-	wlan_minidump_remove(be_soc->ppe_wbm_release_ring.base_vaddr_unaligned,
-			     be_soc->ppe_wbm_release_ring.alloc_size,
+	wlan_minidump_remove(be_soc->ppeds_wbm_release_ring.base_vaddr_unaligned,
+			     be_soc->ppeds_wbm_release_ring.alloc_size,
 			     soc->ctrl_psoc,
 			     WLAN_MD_DP_SRNG_PPE_WBM2SW_RELEASE,
-			     "ppe_wbm_release_ring");
+			     "ppeds_wbm_release_ring");
 
 }
 
-static void dp_soc_ppe_srng_free(struct dp_soc *soc)
+static void dp_soc_ppeds_srng_free(struct dp_soc *soc)
 {
 	struct dp_soc_be *be_soc = dp_get_be_soc_from_dp_soc(soc);
 	struct wlan_cfg_dp_soc_ctxt *soc_cfg_ctx;
 
 	soc_cfg_ctx = soc->wlan_cfg_ctx;
 
-	if (!wlan_cfg_get_dp_soc_is_ppe_enabled(soc_cfg_ctx))
+	if (!wlan_cfg_get_dp_soc_is_ppeds_enabled(soc_cfg_ctx))
 		return;
 
-	dp_srng_free(soc, &be_soc->ppe_release_ring);
-
-	dp_srng_free(soc, &be_soc->ppe_wbm_release_ring);
+	dp_srng_free(soc, &be_soc->ppeds_wbm_release_ring);
 
 	dp_srng_free(soc, &be_soc->ppe2tcl_ring);
 
 	dp_srng_free(soc, &be_soc->reo2ppe_ring);
 }
 
-static QDF_STATUS dp_soc_ppe_srng_alloc(struct dp_soc *soc)
+static QDF_STATUS dp_soc_ppeds_srng_alloc(struct dp_soc *soc)
 {
 	struct dp_soc_be *be_soc = dp_get_be_soc_from_dp_soc(soc);
 	uint32_t entries;
@@ -1521,7 +1525,7 @@ static QDF_STATUS dp_soc_ppe_srng_alloc(struct dp_soc *soc)
 
 	soc_cfg_ctx = soc->wlan_cfg_ctx;
 
-	if (!wlan_cfg_get_dp_soc_is_ppe_enabled(soc_cfg_ctx))
+	if (!wlan_cfg_get_dp_soc_is_ppeds_enabled(soc_cfg_ctx))
 		return QDF_STATUS_SUCCESS;
 
 	entries = wlan_cfg_get_dp_soc_reo2ppe_ring_size(soc_cfg_ctx);
@@ -1539,27 +1543,21 @@ static QDF_STATUS dp_soc_ppe_srng_alloc(struct dp_soc *soc)
 		goto fail;
 	}
 
-	entries = wlan_cfg_get_dp_soc_ppe_release_ring_size(soc_cfg_ctx);
-	if (dp_srng_alloc(soc, &be_soc->ppe_release_ring, PPE_RELEASE,
-			  entries, 0)) {
-		dp_err("%pK: dp_srng_alloc failed for ppe_release_ring", soc);
-		goto fail;
-	}
-
 	entries = wlan_cfg_tx_comp_ring_size(soc_cfg_ctx);
-	if (dp_srng_alloc(soc, &be_soc->ppe_wbm_release_ring, WBM2SW_RELEASE,
+	if (dp_srng_alloc(soc, &be_soc->ppeds_wbm_release_ring, WBM2SW_RELEASE,
 			  entries, 1)) {
-		dp_err("%pK: dp_srng_alloc failed for ppe_release_ring", soc);
+		dp_err("%pK: dp_srng_alloc failed for ppeds_wbm_release_ring",
+		       soc);
 		goto fail;
 	}
 
 	return QDF_STATUS_SUCCESS;
 fail:
-	dp_soc_ppe_srng_free(soc);
+	dp_soc_ppeds_srng_free(soc);
 	return QDF_STATUS_E_NOMEM;
 }
 
-static QDF_STATUS dp_soc_ppe_srng_init(struct dp_soc *soc)
+static QDF_STATUS dp_soc_ppeds_srng_init(struct dp_soc *soc)
 {
 	struct dp_soc_be *be_soc = dp_get_be_soc_from_dp_soc(soc);
 	struct wlan_cfg_dp_soc_ctxt *soc_cfg_ctx;
@@ -1569,7 +1567,7 @@ static QDF_STATUS dp_soc_ppe_srng_init(struct dp_soc *soc)
 
 	soc_cfg_ctx = soc->wlan_cfg_ctx;
 
-	if (!wlan_cfg_get_dp_soc_is_ppe_enabled(soc_cfg_ctx))
+	if (!wlan_cfg_get_dp_soc_is_ppeds_enabled(soc_cfg_ctx))
 		return QDF_STATUS_SUCCESS;
 
 	if (dp_ppeds_register_soc_be(be_soc, &idx)) {
@@ -1607,49 +1605,39 @@ static QDF_STATUS dp_soc_ppe_srng_init(struct dp_soc *soc)
 				     be_soc->ppe2tcl_ring.hal_srng,
 				     WBM2_SW_PPE_REL_MAP_ID);
 
-	if (dp_srng_init(soc, &be_soc->ppe_release_ring, PPE_RELEASE, 0, 0)) {
-		dp_err("%pK: dp_srng_init failed for ppe_release_ring", soc);
-		goto fail;
-	}
-
-	wlan_minidump_log(be_soc->ppe_release_ring.base_vaddr_unaligned,
-			  be_soc->ppe_release_ring.alloc_size,
-			  soc->ctrl_psoc,
-			  WLAN_MD_DP_SRNG_PPE_RELEASE,
-			  "ppe_release_ring");
-
-	if (dp_srng_init(soc, &be_soc->ppe_wbm_release_ring, WBM2SW_RELEASE,
+	if (dp_srng_init(soc, &be_soc->ppeds_wbm_release_ring, WBM2SW_RELEASE,
 			 WBM2_SW_PPE_REL_RING_ID, 0)) {
-		dp_err("%pK: dp_srng_init failed for ppe_release_ring", soc);
+		dp_err("%pK: dp_srng_init failed for ppeds_wbm_release_ring",
+		       soc);
 		goto fail;
 	}
 
-	wlan_minidump_remove(be_soc->ppe_wbm_release_ring.base_vaddr_unaligned,
-			     be_soc->ppe_wbm_release_ring.alloc_size,
+	wlan_minidump_remove(be_soc->ppeds_wbm_release_ring.base_vaddr_unaligned,
+			     be_soc->ppeds_wbm_release_ring.alloc_size,
 			     soc->ctrl_psoc,
 			     WLAN_MD_DP_SRNG_PPE_WBM2SW_RELEASE,
-			     "ppe_wbm_release_ring");
+			     "ppeds_wbm_release_ring");
 
 	return QDF_STATUS_SUCCESS;
 fail:
-	dp_soc_ppe_srng_deinit(soc);
+	dp_soc_ppeds_srng_deinit(soc);
 	return QDF_STATUS_E_NOMEM;
 }
 #else
-static void dp_soc_ppe_srng_deinit(struct dp_soc *soc)
+static void dp_soc_ppeds_srng_deinit(struct dp_soc *soc)
 {
 }
 
-static void dp_soc_ppe_srng_free(struct dp_soc *soc)
+static void dp_soc_ppeds_srng_free(struct dp_soc *soc)
 {
 }
 
-static QDF_STATUS dp_soc_ppe_srng_alloc(struct dp_soc *soc)
+static QDF_STATUS dp_soc_ppeds_srng_alloc(struct dp_soc *soc)
 {
 	return QDF_STATUS_SUCCESS;
 }
 
-static QDF_STATUS dp_soc_ppe_srng_init(struct dp_soc *soc)
+static QDF_STATUS dp_soc_ppeds_srng_init(struct dp_soc *soc)
 {
 	return QDF_STATUS_SUCCESS;
 }
@@ -1659,7 +1647,7 @@ static void dp_soc_srng_deinit_be(struct dp_soc *soc)
 {
 	uint32_t i;
 
-	dp_soc_ppe_srng_deinit(soc);
+	dp_soc_ppeds_srng_deinit(soc);
 
 	if (soc->features.dmac_cmn_src_rxbuf_ring_enabled) {
 		for (i = 0; i < soc->num_rx_refill_buf_rings; i++) {
@@ -1673,7 +1661,7 @@ static void dp_soc_srng_free_be(struct dp_soc *soc)
 {
 	uint32_t i;
 
-	dp_soc_ppe_srng_free(soc);
+	dp_soc_ppeds_srng_free(soc);
 
 	if (soc->features.dmac_cmn_src_rxbuf_ring_enabled) {
 		for (i = 0; i < soc->num_rx_refill_buf_rings; i++)
@@ -1701,7 +1689,7 @@ static QDF_STATUS dp_soc_srng_alloc_be(struct dp_soc *soc)
 		}
 	}
 
-	if (dp_soc_ppe_srng_alloc(soc)) {
+	if (dp_soc_ppeds_srng_alloc(soc)) {
 		dp_err("%pK: ppe rings alloc failed",
 		       soc);
 		goto fail;
@@ -1728,8 +1716,8 @@ static QDF_STATUS dp_soc_srng_init_be(struct dp_soc *soc)
 		}
 	}
 
-	if (dp_soc_ppe_srng_init(soc)) {
-		dp_err("%pK: ppe rings init failed",
+	if (dp_soc_ppeds_srng_init(soc)) {
+		dp_err("%pK: ppe ds rings init failed",
 		       soc);
 		goto fail;
 	}
@@ -2505,6 +2493,8 @@ void dp_initialize_arch_ops_be(struct dp_arch_ops *arch_ops)
 	arch_ops->dp_register_ppeds_interrupts = dp_register_ppeds_interrupts;
 	arch_ops->dp_free_ppeds_interrupts = dp_free_ppeds_interrupts;
 	arch_ops->dp_tx_ppeds_inuse_desc = dp_ppeds_inuse_desc;
+	arch_ops->dp_tx_ppeds_cfg_astidx_cache_mapping =
+				dp_tx_ppeds_cfg_astidx_cache_mapping;
 #endif
 	dp_init_near_full_arch_ops_be(arch_ops);
 	arch_ops->get_reo_qdesc_addr = dp_rx_get_reo_qdesc_addr_be;

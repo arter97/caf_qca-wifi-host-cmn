@@ -146,6 +146,9 @@ typedef union {
  * @rx.dev.priv_cb_w.peer_id: peer_id for RX packet
  * @rx.dev.priv_cb_w.flag_intra_bss: flag to indicate this is intra bss packet
  * @rx.dev.priv_cb_w.protocol_tag: protocol tag set by app for rcvd packet type
+ * @rx.dev.priv_cb_w.flow_idx_invalid: flow entry is not found
+ * @rx.dev.priv_cb_w.flow_idx_timeout: flow entry search timed out
+ * @rx.dev.priv_cb_w.rsvd: rerserved bits
  * @rx.dev.priv_cb_w.flow_tag: flow tag set by application for 5 tuples rcvd
  *
  * @rx.dev.priv_cb_m.peer_cached_buf_frm: peer cached buffer
@@ -263,7 +266,10 @@ struct qdf_nbuf_cb {
 						 flag_intra_bss : 1,
 						 ipa_smmu_map : 1;
 					uint16_t peer_id;
-					uint16_t protocol_tag;
+					uint8_t protocol_tag;
+					uint8_t flow_idx_invalid: 1,
+						flow_idx_timeout: 1,
+						rsvd:6;
 					uint16_t flow_tag;
 				} priv_cb_w;
 				struct {
@@ -814,6 +820,28 @@ __qdf_nbuf_alloc(__qdf_device_t osdev, size_t size, int reserve, int align,
 
 __qdf_nbuf_t __qdf_nbuf_alloc_simple(__qdf_device_t osdev, size_t size,
 				     const char *func, uint32_t line);
+
+#if defined(QCA_DP_NBUF_FAST_PPEDS)
+/**
+ * __qdf_nbuf_alloc_ppe_ds() - Allocates nbuf
+ * @osdev: Device handle
+ * @size: Netbuf requested size
+ * @func: Function name of the call site
+ * @line: line number of the call site
+ *
+ * This allocates an nbuf for wifi module
+ * in DS mode and uses __netdev_alloc_skb_no_skb_reset API.
+ * The netdev API invokes skb_recycler_alloc with reset_skb
+ * as false. Hence, recycler pool will not do reset_struct
+ * when it allocates DS used buffer to DS module, which will
+ * helps to improve the performance
+ *
+ * Return: nbuf or %NULL if no memory
+ */
+
+__qdf_nbuf_t __qdf_nbuf_alloc_ppe_ds(__qdf_device_t osdev, size_t size,
+				     const char *func, uint32_t line);
+#endif /* QCA_DP_NBUF_FAST_PPEDS */
 
 /**
  * __qdf_nbuf_alloc_no_recycler() - Allocates skb

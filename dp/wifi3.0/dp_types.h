@@ -81,6 +81,9 @@
 #define MAX_TXDESC_POOLS 4
 #endif
 
+/* Max no of descriptors to handle special frames like EAPOL */
+#define MAX_TX_SPL_DESC 1024
+
 #define MAX_RXDESC_POOLS 4
 #define MAX_PPE_TXDESC_POOLS 1
 
@@ -2035,6 +2038,9 @@ struct dp_arch_ops {
 #ifdef WLAN_SUPPORT_PPEDS
 	void (*dp_txrx_ppeds_rings_status)(struct dp_soc *soc);
 	void (*dp_tx_ppeds_inuse_desc)(struct dp_soc *soc);
+	void (*dp_tx_ppeds_cfg_astidx_cache_mapping)(struct dp_soc *soc,
+						     struct dp_vdev *vdev,
+						     bool peer_map);
 #endif
 	QDF_STATUS (*txrx_soc_ppeds_start)(struct dp_soc *soc);
 	void (*txrx_soc_ppeds_stop)(struct dp_soc *soc);
@@ -2059,6 +2065,7 @@ struct dp_soc_features {
 		dmac_cmn_src_rxbuf_ring_enabled:1;
 	bool rssi_dbm_conv_support;
 	bool umac_hw_reset_support;
+	bool wds_ext_ast_override_enable;
 };
 
 enum sysfs_printing_mode {
@@ -2472,6 +2479,10 @@ struct dp_soc {
 	qdf_atomic_t num_tx_exception;
 	/* Num Tx allowed */
 	uint32_t num_tx_allowed;
+	/* Num Regular Tx allowed */
+	uint32_t num_reg_tx_allowed;
+	/* Num Tx allowed for special frames*/
+	uint32_t num_tx_spl_allowed;
 	/* Preferred HW mode */
 	uint8_t preferred_hw_mode;
 
@@ -2627,6 +2638,13 @@ struct dp_soc {
 	bool high_throughput;
 #endif
 	bool is_tx_pause;
+
+#ifdef WLAN_SUPPORT_RX_FLOW_TAG
+	/* number of IPv4 flows inserted */
+	qdf_atomic_t ipv4_fse_cnt;
+	/* number of IPv6 flows inserted */
+	qdf_atomic_t ipv6_fse_cnt;
+#endif
 };
 
 #ifdef IPA_OFFLOAD
@@ -3131,6 +3149,15 @@ struct dp_pdev {
 	/* User configured max number of tx buffers */
 	uint32_t num_tx_allowed;
 
+	/*
+	 * User configured max num of tx buffers excluding the
+	 * number of buffers reserved for handling special frames
+	 */
+	uint32_t num_reg_tx_allowed;
+
+	/* User configured max number of tx buffers for the special frames*/
+	uint32_t num_tx_spl_allowed;
+
 	/* unique cookie required for peer session */
 	uint32_t next_peer_cookie;
 
@@ -3258,6 +3285,7 @@ struct dp_vdev {
 
 #ifdef QCA_SUPPORT_WDS_EXTENDED
 	bool wds_ext_enabled;
+	bool drop_tx_mcast;
 #endif /* QCA_SUPPORT_WDS_EXTENDED */
 	bool drop_3addr_mcast;
 #ifdef WLAN_VENDOR_SPECIFIC_BAR_UPDATE
@@ -3876,6 +3904,7 @@ struct dp_peer_per_pkt_tx_stats {
  * @rts_failure: RTS failure count
  * @bar_cnt: Block ACK Request frame count
  * @ndpa_cnt: NDP announcement frame count
+ * @wme_ac_type_bytes: Wireless Multimedia bytes Count
  */
 struct dp_peer_extd_tx_stats {
 	uint32_t stbc;
@@ -3932,6 +3961,7 @@ struct dp_peer_extd_tx_stats {
 	uint32_t rts_failure;
 	uint32_t bar_cnt;
 	uint32_t ndpa_cnt;
+	uint64_t wme_ac_type_bytes[WME_AC_MAX];
 };
 
 /**
@@ -3963,6 +3993,7 @@ struct dp_peer_extd_tx_stats {
  * @policy_check_drop: policy check drops
  * @to_stack_twt: Total packets sent up the stack in TWT session
  * @protocol_trace_cnt: per-peer protocol counters
+ * @rx_total: total rx count
  */
 struct dp_peer_per_pkt_rx_stats {
 	struct cdp_pkt_info rcvd_reo[CDP_MAX_RX_RINGS];
@@ -3999,6 +4030,9 @@ struct dp_peer_per_pkt_rx_stats {
 	struct protocol_trace_count protocol_trace_cnt[CDP_TRACE_MAX];
 #endif
 	uint32_t mcast_3addr_drop;
+#ifdef IPA_OFFLOAD
+	struct cdp_pkt_info rx_total;
+#endif
 };
 
 /**
@@ -4049,6 +4083,7 @@ struct dp_peer_per_pkt_rx_stats {
  * @punc_bw[MAX_PUNCTURED_MODE]: MSDU count for punctured bw
  * @bar_cnt: Block ACK Request frame count
  * @ndpa_cnt: NDP announcement frame count
+ * @wme_ac_type_bytes: Wireless Multimedia type Bytes Count
  */
 struct dp_peer_extd_rx_stats {
 	struct cdp_pkt_type pkt_type[DOT11_MAX];
@@ -4096,6 +4131,7 @@ struct dp_peer_extd_rx_stats {
 #endif
 	uint32_t bar_cnt;
 	uint32_t ndpa_cnt;
+	uint64_t wme_ac_type_bytes[WME_AC_MAX];
 };
 
 /**

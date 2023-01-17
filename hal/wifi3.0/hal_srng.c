@@ -1161,13 +1161,22 @@ void *hal_attach(struct hif_opaque_softc *hif_handle, qdf_device_t qdf_dev)
 	qdf_minidump_log(hal, sizeof(*hal), "hal_soc");
 
 	qdf_atomic_init(&hal->active_work_cnt);
-	hal_delayed_reg_write_init(hal);
+	if (hal_delayed_reg_write_init(hal) != QDF_STATUS_SUCCESS) {
+		hal_err("unable to initialize delayed reg write");
+		goto fail3;
+	}
 
-	hal_reo_shared_qaddr_setup((hal_soc_handle_t)hal);
+	if (hal_reo_shared_qaddr_setup((hal_soc_handle_t)hal)
+	    != QDF_STATUS_SUCCESS) {
+		hal_err("unable to setup reo shared qaddr");
+		goto fail4;
+	}
 
 	hif_rtpm_register(HIF_RTPM_ID_HAL_REO_CMD, NULL);
 
 	return (void *)hal;
+fail4:
+	hal_delayed_reg_write_deinit(hal);
 fail3:
 	qdf_mem_free_consistent(qdf_dev, qdf_dev->dev,
 				sizeof(*hal->shadow_wrptr_mem_vaddr) *
@@ -1947,13 +1956,22 @@ hal_srng_rtpm_access_end(hal_soc_handle_t hal_soc_hdl,
 			 hal_ring_handle_t hal_ring_hdl,
 			 uint32_t rtpm_id)
 {
+	struct hal_soc *hal_soc = (struct hal_soc *)hal_soc_hdl;
+
 	if (qdf_unlikely(!hal_ring_hdl)) {
 		qdf_print("Error: Invalid hal_ring\n");
 		return;
 	}
 
 	if (hif_rtpm_get(HIF_RTPM_GET_ASYNC, rtpm_id) == 0) {
-		hal_srng_access_end(hal_soc_hdl, hal_ring_hdl);
+		if (hif_system_pm_state_check(hal_soc->hif_handle)) {
+			hal_srng_access_end_reap(hal_soc_hdl, hal_ring_hdl);
+			hal_srng_set_event(hal_ring_hdl, HAL_SRNG_FLUSH_EVENT);
+			hal_srng_inc_flush_cnt(hal_ring_hdl);
+		} else {
+			hal_srng_access_end(hal_soc_hdl, hal_ring_hdl);
+		}
+
 		hif_rtpm_put(HIF_RTPM_PUT_ASYNC, rtpm_id);
 	} else {
 		hal_srng_access_end_reap(hal_soc_hdl, hal_ring_hdl);

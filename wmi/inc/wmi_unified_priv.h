@@ -549,6 +549,16 @@ QDF_STATUS (*send_green_ap_ps_cmd)(wmi_unified_t wmi_handle,
 QDF_STATUS (*extract_green_ap_egap_status_info)(
 		uint8_t *evt_buf,
 		struct wlan_green_ap_egap_status_info *egap_status_info_params);
+#if defined(WLAN_SUPPORT_GAP_LL_PS_MODE)
+QDF_STATUS (*send_green_ap_ll_ps_cmd)(wmi_unified_t wmi_handle,
+				      struct green_ap_ll_ps_cmd_param *ll_ps_params);
+#endif
+#endif
+
+#ifdef WLAN_SUPPORT_GAP_LL_PS_MODE
+QDF_STATUS (*extract_green_ap_ll_ps_param)(
+		uint8_t *evt_buf,
+		struct wlan_green_ap_ll_ps_event_param *ll_ps_params);
 #endif
 
 QDF_STATUS
@@ -3127,7 +3137,7 @@ QDF_STATUS (*extract_mlo_vdev_tid_to_link_map_event)(
 QDF_STATUS (*extract_mlo_vdev_bcast_tid_to_link_map_event)(
 			struct wmi_unified *wmi_handle,
 			void *buf,
-			struct wmi_host_bcast_t2lm_info *bcast_info);
+			struct mlo_bcast_t2lm_info *bcast_info);
 #endif /* WLAN_FEATURE_11BE */
 
 QDF_STATUS
@@ -3339,6 +3349,7 @@ struct wmi_soc {
 	/* WMI service bitmap received from target */
 	uint32_t *wmi_service_bitmap;
 	uint32_t *wmi_ext_service_bitmap;
+	uint32_t wmi_ext2_service_bitmap_len;
 	uint32_t *wmi_ext2_service_bitmap;
 	uint32_t services[wmi_services_max];
 	uint16_t wmi_max_cmds;
