@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2013-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -170,6 +170,7 @@ static int hif_rtpm_debugfs_show(struct seq_file *s, void *data)
 		seq_puts(s, " ");
 	}
 	qdf_spin_unlock_bh(&gp_hif_rtpm_ctx->prevent_list_lock);
+	seq_puts(s, "\n");
 
 	return 0;
 }
