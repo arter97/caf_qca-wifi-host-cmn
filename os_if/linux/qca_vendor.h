@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2012-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -12080,11 +12080,15 @@ enum qca_wlan_concurrent_sta_policy_config {
  *
  * @QCA_WLAN_CONCURRENT_AP_POLICY_LOSSLESS_AUDIO_STREAMING: Select interface
  * concurrencies to meet lossless audio streaming requirements.
+ *
+ * @QCA_WLAN_CONCURRENT_AP_POLICY_XR: Select interface concurrencies to meet
+ * XR (eXtended Reality) requirements.
  */
 enum qca_wlan_concurrent_ap_policy_config {
 	QCA_WLAN_CONCURRENT_AP_POLICY_UNSPECIFIED = 0,
 	QCA_WLAN_CONCURRENT_AP_POLICY_GAMING_AUDIO = 1,
 	QCA_WLAN_CONCURRENT_AP_POLICY_LOSSLESS_AUDIO_STREAMING = 2,
+	QCA_WLAN_CONCURRENT_AP_POLICY_XR = 3,
 };
 
 /**
