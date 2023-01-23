@@ -23,8 +23,9 @@
 
 #ifdef RX_DESC_MULTI_PAGE_ALLOC
 A_COMPILE_TIME_ASSERT(cookie_size_check,
-		      PAGE_SIZE / sizeof(union dp_rx_desc_list_elem_t) <=
-		      1 << DP_RX_DESC_PAGE_ID_SHIFT);
+		      (DP_BLOCKMEM_SIZE /
+		       sizeof(union dp_rx_desc_list_elem_t))
+		      <= (1 << DP_RX_DESC_PAGE_ID_SHIFT));
 
 /*
  * dp_rx_desc_pool_is_allocated() - check if memory is allocated for the
@@ -76,7 +77,7 @@ QDF_STATUS dp_rx_desc_pool_alloc(struct dp_soc *soc,
 			desc_size, num_elem);
 		return QDF_STATUS_E_NOMEM;
 	}
-
+	rx_desc_pool->desc_pages.page_size = DP_BLOCKMEM_SIZE;
 	if (qdf_mem_multi_page_link(soc->osdev,
 				    &rx_desc_pool->desc_pages,
 				    desc_size, num_elem, true)) {
