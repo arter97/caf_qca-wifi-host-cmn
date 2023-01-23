@@ -358,6 +358,19 @@ static inline int wmi_process_qmi_fw_event(void *wmi_cb_ctx, void *buf, int len)
 }
 #endif
 
+#ifdef WLAN_SUPPORT_GAP_LL_PS_MODE
+/**
+ * wmi_unified_green_ap_ll_ps_send() - Send unified WMI command to
+ * enable/disable green ap low latency power save mode
+ * @wmi_handle: handle to WMI.
+ * @green_ap_ll_ps_params: low latency power save mode parameter
+ *
+ * Return: None
+ */
+QDF_STATUS wmi_unified_green_ap_ll_ps_send(wmi_unified_t wmi_handle,
+					   struct green_ap_ll_ps_cmd_param *green_ap_ll_ps_params);
+#endif
+
 /**
  * wmi_unified_cmd_send_pm_chk() - send unified WMI command with PM check,
  * if target is in suspended state, WMI command will be sent over QMI.
@@ -4061,6 +4074,21 @@ QDF_STATUS wmi_extract_green_ap_egap_status_info(
 	struct wlan_green_ap_egap_status_info *egap_status_info_params);
 #endif
 
+#ifdef WLAN_SUPPORT_GAP_LL_PS_MODE
+/**
+ * wmi_unified_extract_green_ap_ll_ps_param() - API to extract Green AP low
+ * latency power save event parameter
+ * @wmi_handle: wmi handle
+ * @evt_buf: pointer to the event buffer
+ * @green_ap_ll_ps_event_param: Event parameter
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS wmi_unified_extract_green_ap_ll_ps_param(
+	wmi_unified_t wmi_hdl, uint8_t *evt_buf,
+	struct wlan_green_ap_ll_ps_event_param *green_ap_ll_ps_event_param);
+#endif
+
 /**
  * wmi_unified_send_roam_scan_stats_cmd() - Wrapper to request roam scan stats
  * @wmi_handle: wmi handle
@@ -5001,4 +5029,18 @@ QDF_STATUS wmi_extract_health_mon_event(
 		void *ev,
 		struct wmi_health_mon_params *param);
 #endif /* HEALTH_MON_SUPPORT */
+
+/**
+ * wmi_unified__update_edca_pifs_param() - update EDCA/PIFS params
+ * @wmi_handle: wmi handle
+ * @edca_pifs_param: pointer to edca_pifs_vparam struct
+ *
+ * This function updates EDCA/PIFS parameters to the target
+ *
+ * Return: QDF_STATUS_SUCCESS on success and QDF_STATUS_E_FAILURE for failure
+ */
+QDF_STATUS
+wmi_unified_update_edca_pifs_param(
+			wmi_unified_t wmi_handle,
+			struct edca_pifs_vparam *edca_pifs_param);
 #endif /* _WMI_UNIFIED_API_H_ */

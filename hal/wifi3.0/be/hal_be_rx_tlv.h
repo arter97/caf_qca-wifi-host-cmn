@@ -85,7 +85,8 @@ struct rx_msdu_end_compact {
 		 wds_learning_event			:  1,
 		 wds_roaming_event			:  1,
 		 wds_keep_alive_event			:  1,
-		 reserved_9b				:  9;
+		 dest_chip_pmac_id			:  1,
+		 reserved_9b				:  8;
 	uint32_t msdu_length				: 14,
 		 stbc					:  1,
 		 ipsec_esp				:  1,
@@ -240,7 +241,8 @@ struct rx_msdu_end_compact {
 		 aggregation_count			:  8;
 	uint32_t reserved_8a				: 24,
 		 key_id_octet				:  8;
-	uint32_t reserved_9b				:  9,
+	uint32_t reserved_9b				:  8,
+		 dest_chip_pmac_id			:  1,
 		 wds_keep_alive_event			:  1,
 		 wds_roaming_event			:  1,
 		 wds_learning_event			:  1,
@@ -355,7 +357,7 @@ struct rx_mpdu_start_compact {
 		 mpdu_duration_valid			:  1,
 		 mpdu_frame_control_valid		:  1;
 	uint32_t mpdu_duration_field			: 16,
-		 mpdu_frame_control_field		: 16,
+		 mpdu_frame_control_field		: 16;
 	uint32_t mac_addr_ad1_31_0			: 32;
 	uint32_t mac_addr_ad2_15_0			: 16,
 		 mac_addr_ad1_47_32			: 16;

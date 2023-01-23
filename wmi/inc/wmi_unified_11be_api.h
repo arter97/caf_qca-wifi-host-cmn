@@ -44,7 +44,7 @@ wmi_extract_mlo_link_set_active_resp(wmi_unified_t wmi,
 
 /**
  * wmi_send_mlo_link_set_active_cmd() - send mlo link set active command
- * @wmi: WMI handle for this pdev
+ * @wmi_handle: WMI handle for this pdev
  * @param: Pointer to mlo link set active param
  *
  * Return: QDF_STATUS code
@@ -64,6 +64,61 @@ wmi_send_mlo_link_set_active_cmd(wmi_unified_t wmi_handle,
 QDF_STATUS
 wmi_extract_mgmt_rx_ml_cu_params(wmi_unified_t wmi_handle, void *evt_buf,
 				 struct mlo_mgmt_ml_info *cu_params);
+
+/**
+ * wmi_send_mlo_link_removal_cmd() - Send WMI command for MLO link removal
+ * @wmi: wmi handle
+ * @param: MLO link removal command parameters
+ *
+ * Return: QDF_STATUS_SUCCESS of operation
+ */
+QDF_STATUS wmi_send_mlo_link_removal_cmd(
+		wmi_unified_t wmi,
+		const struct mlo_link_removal_cmd_params *param);
+
+/**
+ * wmi_extract_mlo_link_removal_evt_fixed_param() - Extract fixed parameters TLV
+ * from the MLO link removal WMI  event
+ * @wmi_handle: wmi handle
+ * @buf: pointer to event buffer
+ * @params: MLO link removal event parameters
+ *
+ * Return: QDF_STATUS_SUCCESS of operation
+ */
+QDF_STATUS wmi_extract_mlo_link_removal_evt_fixed_param(
+		struct wmi_unified *wmi_handle,
+		void *buf,
+		struct mlo_link_removal_evt_params *params);
+
+/**
+ * wmi_extract_mlo_link_removal_tbtt_update() - Extract TBTT update TLV
+ * from the MLO link removal WMI  event
+ * @wmi_handle: wmi handle
+ * @buf: pointer to event buffer
+ * @tbtt_info: TBTT information
+ *
+ * Return: QDF_STATUS of operation
+ */
+QDF_STATUS wmi_extract_mlo_link_removal_tbtt_update(
+		struct wmi_unified *wmi_handle,
+		void *buf,
+		struct mlo_link_removal_tbtt_info *tbtt_info);
+
+/**
+ * wmi_extract_mgmt_rx_mlo_link_removal_info() - Extract MLO link removal info
+ * from MGMT Rx event
+ * @wmi: wmi handle
+ * @buf: event buffer
+ * @link_removal_info: link removal information array to be populated
+ * @num_link_removal_info: Number of elements in @link_removal_info
+ *
+ * Return: QDF_STATUS of operation
+ */
+QDF_STATUS wmi_extract_mgmt_rx_mlo_link_removal_info(
+		struct wmi_unified *wmi,
+		void *buf,
+		struct mgmt_rx_mlo_link_removal_info *link_removal_info,
+		int num_link_removal_info);
 #endif /*WLAN_FEATURE_11BE_MLO*/
 
 #ifdef WLAN_FEATURE_11BE
@@ -116,7 +171,7 @@ QDF_STATUS
 wmi_extract_mlo_vdev_bcast_tid_to_link_map_event(
 				     wmi_unified_t wmi,
 				     void *evt_buf,
-				     struct wmi_host_bcast_t2lm_info *bcast);
+				     struct mlo_bcast_t2lm_info *bcast);
 #endif /* WLAN_FEATURE_11BE */
 
 #endif /*_WMI_UNIFIED_11BE_API_H_*/

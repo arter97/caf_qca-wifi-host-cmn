@@ -101,6 +101,8 @@ uint8_t *vdev_start_add_mlo_params(uint8_t *buf_ptr,
 				  req->mlo_flags.mlo_enabled);
 	WMI_MLO_FLAGS_SET_ASSOC_LINK(mlo_params->mlo_flags.mlo_flags,
 				     req->mlo_flags.mlo_assoc_link);
+	WMI_MLO_FLAGS_SET_LINK_ADD(mlo_params->mlo_flags.mlo_flags,
+				   req->mlo_flags.mlo_link_add);
 	mlo_params->mlo_flags.emlsr_support = req->mlo_flags.emlsr_support;
 
 	vdev_start_add_mlo_mcast_params(&mlo_params->mlo_flags.mlo_flags,
@@ -467,6 +469,9 @@ send_mlo_link_set_active_cmd_tlv(wmi_unified_t wmi_handle,
 	case WMI_MLO_LINK_NO_FORCE:
 		num_vdev_bitmap = param->num_vdev_bitmap;
 		break;
+	default:
+		wmi_err("Invalid force reason: %d", force_mode);
+		return QDF_STATUS_E_INVAL;
 	}
 
 	len = sizeof(*cmd) +
@@ -592,6 +597,201 @@ extract_mlo_link_set_active_resp_tlv(wmi_unified_t wmi_handle, void *evt_buf,
 	for (i = 0; i < entry_num; i++) {
 		resp->inactive[i] = bitmap[i];
 		wmi_debug("inactive[%d]: 0x%x", i, resp->inactive[i]);
+	}
+
+	return QDF_STATUS_SUCCESS;
+}
+
+/**
+ * send_mlo_link_removal_cmd_tlv() - Send WMI command for MLO link removal
+ * @wmi_handle: wmi handle
+ * @params: MLO link removal command parameters
+ *
+ * Return: QDF_STATUS_SUCCESS of operation
+ */
+static QDF_STATUS send_mlo_link_removal_cmd_tlv(
+	wmi_unified_t wmi_handle,
+	const struct mlo_link_removal_cmd_params *params)
+{
+	wmi_mlo_link_removal_cmd_fixed_param *fixed_params;
+	wmi_buf_t buf;
+	uint8_t *buf_ptr;
+	uint32_t buf_len = 0;
+	uint32_t ie_len_aligned = 0;
+	QDF_STATUS ret;
+
+	if (!params) {
+		wmi_err("command params is NULL");
+		return QDF_STATUS_E_NULL_VALUE;
+	}
+
+	ie_len_aligned = roundup(params->reconfig_ml_ie_size, sizeof(uint32_t));
+
+	buf_len = sizeof(wmi_mlo_link_removal_cmd_fixed_param) +
+		  WMI_TLV_HDR_SIZE + ie_len_aligned;
+
+	buf = wmi_buf_alloc(wmi_handle, buf_len);
+	if (!buf) {
+		wmi_err("wmi buf alloc failed for link removal cmd: psoc (%pK) vdev(%u)",
+			wmi_handle->soc->wmi_psoc, params->vdev_id);
+		return QDF_STATUS_E_NOMEM;
+	}
+
+	buf_ptr = (uint8_t *)wmi_buf_data(buf);
+
+	/* Populate fixed params TLV */
+	fixed_params = (wmi_mlo_link_removal_cmd_fixed_param *)buf_ptr;
+	WMITLV_SET_HDR(&fixed_params->tlv_header,
+		       WMITLV_TAG_STRUC_wmi_mlo_link_removal_cmd_fixed_param,
+		       WMITLV_GET_STRUCT_TLVLEN(
+			   wmi_mlo_link_removal_cmd_fixed_param));
+	fixed_params->vdev_id = params->vdev_id;
+	fixed_params->reconfig_ml_ie_num_bytes_valid =
+		params->reconfig_ml_ie_size;
+	buf_ptr += sizeof(*fixed_params);
+
+	/* Populate the array of bytes TLV */
+	WMITLV_SET_HDR(buf_ptr, WMITLV_TAG_ARRAY_BYTE, ie_len_aligned);
+	buf_ptr += WMI_TLV_HDR_SIZE;
+
+	/* Populate ML reconfiguration element in raw bytes */
+	qdf_mem_copy(buf_ptr, params->reconfig_ml_ie,
+		     params->reconfig_ml_ie_size);
+
+	wmi_mtrace(WMI_MLO_LINK_REMOVAL_CMDID, fixed_params->vdev_id, 0);
+	ret = wmi_unified_cmd_send(wmi_handle, buf, buf_len,
+				   WMI_MLO_LINK_REMOVAL_CMDID);
+	if (QDF_IS_STATUS_ERROR(ret)) {
+		wmi_err("Failed to send MLO link removal cmd: psoc (%pK) vdev(%u)",
+			wmi_handle->soc->wmi_psoc, params->vdev_id);
+		wmi_buf_free(buf);
+	}
+
+	return ret;
+}
+
+/**
+ * extract_mlo_link_removal_evt_fixed_param_tlv() - Extract fixed parameters TLV
+ * from the MLO link removal WMI  event
+ * @wmi_handle: wmi handle
+ * @buf: pointer to event buffer
+ * @params: MLO link removal event parameters
+ *
+ * Return: QDF_STATUS of operation
+ */
+static QDF_STATUS
+extract_mlo_link_removal_evt_fixed_param_tlv(
+	struct wmi_unified *wmi_handle,
+	void *buf,
+	struct mlo_link_removal_evt_params *params)
+{
+	WMI_MLO_LINK_REMOVAL_EVENTID_param_tlvs *param_buf = buf;
+	wmi_mlo_link_removal_evt_fixed_param *ev;
+
+	if (!param_buf) {
+		wmi_err_rl("Param_buf is NULL");
+		return QDF_STATUS_E_NULL_VALUE;
+	}
+
+	if (!params) {
+		wmi_err_rl("params is NULL");
+		return QDF_STATUS_E_NULL_VALUE;
+	}
+
+	ev = param_buf->fixed_param;
+	params->vdev_id = ev->vdev_id;
+
+	return QDF_STATUS_SUCCESS;
+}
+
+/**
+ * extract_mlo_link_removal_tbtt_update_tlv() - Extract TBTT update TLV
+ * from the MLO link removal WMI  event
+ * @wmi_handle: wmi handle
+ * @buf: pointer to event buffer
+ * @tbtt_info: TBTT information to be populated
+ *
+ * Return: QDF_STATUS of operation
+ */
+static QDF_STATUS
+extract_mlo_link_removal_tbtt_update_tlv(
+	struct wmi_unified *wmi_handle,
+	void *buf,
+	struct mlo_link_removal_tbtt_info *tbtt_info)
+{
+	WMI_MLO_LINK_REMOVAL_EVENTID_param_tlvs *param_buf = buf;
+	wmi_mlo_link_removal_tbtt_update *tlv;
+
+	if (!param_buf) {
+		wmi_err_rl("Param_buf is NULL");
+		return QDF_STATUS_E_NULL_VALUE;
+	}
+
+	if (!tbtt_info) {
+		wmi_err_rl("Writable argument is NULL");
+		return QDF_STATUS_E_NULL_VALUE;
+	}
+
+	tlv = param_buf->tbtt_update;
+
+	tbtt_info->tbtt_count = tlv->tbtt_count;
+	tbtt_info->tsf = ((uint64_t)tlv->tsf_high << 32) | tlv->tsf_low;
+	tbtt_info->qtimer_reading =
+		((uint64_t)tlv->qtimer_ts_high << 32) | tlv->qtimer_ts_low;
+
+	return QDF_STATUS_SUCCESS;
+}
+
+/**
+ * extract_mgmt_rx_mlo_link_removal_info_tlv() - Extract MLO link removal info
+ * from MGMT Rx event
+ * @wmi_handle: wmi handle
+ * @buf: event buffer
+ * @link_removal_info: link removal information array to be populated
+ * @num_link_removal_info: Number of elements in @link_removal_info
+ *
+ * Return: QDF_STATUS of operation
+ */
+static QDF_STATUS
+extract_mgmt_rx_mlo_link_removal_info_tlv(
+	struct wmi_unified *wmi_handle,
+	void *buf,
+	struct mgmt_rx_mlo_link_removal_info *link_removal_info,
+	int num_link_removal_info)
+{
+	WMI_MGMT_RX_EVENTID_param_tlvs *param_buf = buf;
+	wmi_mlo_link_removal_tbtt_count *tlv_arr;
+	int tlv_idx = 0;
+	struct mgmt_rx_mlo_link_removal_info *info;
+
+	if (!param_buf) {
+		wmi_err_rl("Param_buf is NULL");
+		return QDF_STATUS_E_NULL_VALUE;
+	}
+
+	if (!link_removal_info) {
+		wmi_err_rl("Writable argument is NULL");
+		return QDF_STATUS_E_NULL_VALUE;
+	}
+
+	if (num_link_removal_info != param_buf->num_link_removal_tbtt_count) {
+		wmi_err_rl("link_removal_info array size (%d) is not equal to"
+			   "number of corresponding TLVs(%d) present in event",
+			   num_link_removal_info,
+			   param_buf->num_link_removal_tbtt_count);
+		return QDF_STATUS_E_RANGE;
+	}
+
+	tlv_arr = param_buf->link_removal_tbtt_count;
+	for (; tlv_idx < param_buf->num_link_removal_tbtt_count; tlv_idx++) {
+		info = &link_removal_info[tlv_idx];
+
+		info->hw_link_id = WMI_MLO_LINK_REMOVAL_GET_LINKID(
+					tlv_arr[tlv_idx].tbtt_info);
+		info->vdev_id = WMI_MLO_LINK_REMOVAL_GET_VDEVID(
+					tlv_arr[tlv_idx].tbtt_info);
+		info->tbtt_count = WMI_MLO_LINK_REMOVAL_GET_TBTT_COUNT(
+					tlv_arr[tlv_idx].tbtt_info);
 	}
 
 	return QDF_STATUS_SUCCESS;
@@ -980,10 +1180,11 @@ static QDF_STATUS
 extract_mlo_vdev_bcast_tid_to_link_map_event_tlv(
 				struct wmi_unified *wmi_handle,
 				void *buf,
-				struct wmi_host_bcast_t2lm_info *bcast_info)
+				struct mlo_bcast_t2lm_info *bcast_info)
 {
 	WMI_MGMT_RX_EVENTID_param_tlvs *param_tlvs;
 	wmi_mlo_bcast_t2lm_info *info;
+	int i;
 
 	param_tlvs = (WMI_MGMT_RX_EVENTID_param_tlvs *)buf;
 	if (!param_tlvs) {
@@ -991,19 +1192,32 @@ extract_mlo_vdev_bcast_tid_to_link_map_event_tlv(
 		return QDF_STATUS_E_INVAL;
 	}
 
-	info = param_tlvs->mlo_bcast_t2lm_info;
-	if (!info) {
-		wmi_debug("mgmt_ml_info TLV is not sent by FW");
+	if (param_tlvs->num_mlo_bcast_t2lm_info > MAX_AP_MLDS_PER_LINK) {
+		wmi_err("num_mlo_bcast_t2lm_info is greater than %d",
+			MAX_AP_MLDS_PER_LINK);
 		return QDF_STATUS_E_INVAL;
 	}
 
-	bcast_info->vdev_id =
-		WMI_MLO_BROADCAST_TID_TO_LINK_MAP_INFO_VDEV_ID_GET(
-			info->vdev_id_expec_dur);
+	info = param_tlvs->mlo_bcast_t2lm_info;
+	if (!info) {
+		wmi_debug("mlo_bcast_t2lm_info is not applicable");
+		return QDF_STATUS_SUCCESS;
+	}
 
-	bcast_info->expected_duration =
-		WMI_MLO_BROADCAST_TID_TO_LINK_MAP_INFO_EXP_DUR_GET(
-				info->vdev_id_expec_dur);
+	bcast_info->num_vdevs = param_tlvs->num_mlo_bcast_t2lm_info;
+	wmi_debug("num_vdevs:%d", bcast_info->num_vdevs);
+	for (i = 0; i < param_tlvs->num_mlo_bcast_t2lm_info; i++) {
+		bcast_info->vdev_id[i] =
+			WMI_MLO_BROADCAST_TID_TO_LINK_MAP_INFO_VDEV_ID_GET(
+					info->vdev_id_expec_dur);
+
+		bcast_info->expected_duration[i] =
+			WMI_MLO_BROADCAST_TID_TO_LINK_MAP_INFO_EXP_DUR_GET(
+					info->vdev_id_expec_dur);
+		wmi_debug("vdev_id:%d expected_duration:%d",
+			  bcast_info->vdev_id[i],
+			  bcast_info->expected_duration[i]);
+	}
 
 	return QDF_STATUS_SUCCESS;
 }
@@ -1311,4 +1525,11 @@ void wmi_11be_attach_tlv(wmi_unified_t wmi_handle)
 #endif /* WLAN_FEATURE_11BE */
 	ops->extract_mgmt_rx_ml_cu_params =
 		extract_mgmt_rx_ml_cu_params_tlv;
+	ops->send_mlo_link_removal_cmd = send_mlo_link_removal_cmd_tlv;
+	ops->extract_mlo_link_removal_evt_fixed_param =
+			extract_mlo_link_removal_evt_fixed_param_tlv;
+	ops->extract_mlo_link_removal_tbtt_update =
+			extract_mlo_link_removal_tbtt_update_tlv;
+	ops->extract_mgmt_rx_mlo_link_removal_info =
+			extract_mgmt_rx_mlo_link_removal_info_tlv;
 }

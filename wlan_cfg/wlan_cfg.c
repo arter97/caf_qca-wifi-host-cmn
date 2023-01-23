@@ -2304,10 +2304,7 @@ static struct dp_int_mask_assignment dp_mask_assignment[NUM_INTERRUPT_COMBINATIO
 #endif
 #endif
 
-/**
- * g_wlan_srng_cfg[] - Per ring_type specific configuration
- *
- */
+/* g_wlan_srng_cfg[] - Per ring_type specific configuration */
 struct wlan_srng_cfg g_wlan_srng_cfg[MAX_RING_TYPES];
 
 /* REO_DST ring configuration */
@@ -2598,8 +2595,8 @@ wlan_soc_ipa_cfg_attach(struct cdp_ctrl_objmgr_psoc *psoc,
 /**
  * wlan_soc_ipa_cfg_attach() - Update ipa config in dp soc
  *  cfg context
- * @psoc - Object manager psoc
- * @wlan_cfg_ctx - dp soc cfg ctx
+ * @psoc: Object manager psoc
+ * @wlan_cfg_ctx: dp soc cfg ctx
  *
  * Return: None
  */
@@ -2652,8 +2649,8 @@ wlan_soc_hw_cc_cfg_attach(struct cdp_ctrl_objmgr_psoc *psoc,
 /**
  * wlan_soc_ppe_cfg_attach() - Update ppe config in dp soc
  *  cfg context
- * @psoc - Object manager psoc
- * @wlan_cfg_ctx - dp soc cfg ctx
+ * @psoc: Object manager psoc
+ * @wlan_cfg_ctx: dp soc cfg ctx
  *
  * Return: None
  */
@@ -2661,13 +2658,11 @@ static void
 wlan_soc_ppe_cfg_attach(struct cdp_ctrl_objmgr_psoc *psoc,
 			struct wlan_cfg_dp_soc_ctxt *wlan_cfg_ctx)
 {
-	wlan_cfg_ctx->ppe_enable = cfg_get(psoc, CFG_DP_PPE_ENABLE);
+	wlan_cfg_ctx->ppeds_enable = cfg_get(psoc, CFG_DP_PPEDS_ENABLE);
 	wlan_cfg_ctx->reo2ppe_ring = cfg_get(psoc, CFG_DP_REO2PPE_RING);
 	wlan_cfg_ctx->ppe2tcl_ring = cfg_get(psoc, CFG_DP_PPE2TCL_RING);
-	wlan_cfg_ctx->ppe_release_ring = cfg_get(psoc,
-						 CFG_DP_PPE_RELEASE_RING);
-	wlan_cfg_ctx->ppe_num_tx_desc = cfg_get(psoc, CFG_DP_PPEDS_TX_DESC);
-	wlan_cfg_ctx->ppe_tx_comp_napi_budget =
+	wlan_cfg_ctx->ppeds_num_tx_desc = cfg_get(psoc, CFG_DP_PPEDS_TX_DESC);
+	wlan_cfg_ctx->ppeds_tx_comp_napi_budget =
 				cfg_get(psoc, CFG_DP_PPEDS_TX_CMP_NAPI_BUDGET);
 }
 #else
@@ -2681,6 +2676,7 @@ wlan_soc_ppe_cfg_attach(struct cdp_ctrl_objmgr_psoc *psoc,
 #if defined(WLAN_FEATURE_11BE_MLO) && defined(WLAN_MLO_MULTI_CHIP)
 /**
  * wlan_cfg_get_lsb_set_pos() - returns position of LSB which is set
+ * @val: value to test
  *
  * Return: position of LSB which is set
  */
@@ -2701,8 +2697,8 @@ static uint8_t wlan_cfg_get_lsb_set_pos(uint8_t val)
 /**
  * wlan_multi_soc_mlo_cfg_attach() - Update multi soc mlo config in dp soc
  *  cfg context
- * @psoc - Object manager psoc
- * @wlan_cfg_ctx - dp soc cfg ctx
+ * @psoc: Object manager psoc
+ * @wlan_cfg_ctx: dp soc cfg ctx
  *
  * Return: None
  */
@@ -2728,8 +2724,8 @@ wlan_multi_soc_mlo_cfg_attach(struct cdp_ctrl_objmgr_psoc *psoc,
 /**
  * wlan_soc_mlo_cfg_attach() - Update mlo config in dp soc
  *  cfg context
- * @psoc - Object manager psoc
- * @wlan_cfg_ctx - dp soc cfg ctx
+ * @psoc: Object manager psoc
+ * @wlan_cfg_ctx: dp soc cfg ctx
  *
  * Return: None
  */
@@ -2751,8 +2747,8 @@ wlan_soc_mlo_cfg_attach(struct cdp_ctrl_objmgr_psoc *psoc,
 /**
  * wlan_soc_vdev_hw_stats_cfg_attach() - Update hw vdev stats config in dp soc
  *  cfg context
- * @psoc - Object manager psoc
- * @wlan_cfg_ctx - dp soc cfg ctx
+ * @psoc: Object manager psoc
+ * @wlan_cfg_ctx: dp soc cfg ctx
  *
  * Return: None
  */
@@ -2799,8 +2795,8 @@ wlan_cfg_soc_update_tgt_params(struct wlan_cfg_dp_soc_ctxt *wlan_cfg_ctx,
 /**
  * wlan_soc_sawf_stats_cfg_attach() - Update sawf stats config in dp soc
  *  cfg context
- * @psoc - Object manager psoc
- * @wlan_cfg_ctx - dp soc cfg ctx
+ * @psoc: Object manager psoc
+ * @wlan_cfg_ctx: dp soc cfg ctx
  *
  * Return: None
  */
@@ -2822,14 +2818,6 @@ void wlan_cfg_set_sawf_stats_config(struct wlan_cfg_dp_soc_ctxt *cfg,
 	cfg->sawf_stats = val;
 }
 #else
-/**
- * wlan_soc_sawf_stats_cfg_attach() - Update sawf stats config in dp soc
- *  cfg context
- * @psoc - Object manager psoc
- * @wlan_cfg_ctx - dp soc cfg ctx
- *
- * Return: None
- */
 static void
 wlan_soc_sawf_stats_cfg_attach(struct cdp_ctrl_objmgr_psoc *psoc,
 			       struct wlan_cfg_dp_soc_ctxt *wlan_cfg_ctx)
@@ -2847,11 +2835,6 @@ void wlan_cfg_set_sawf_stats_config(struct wlan_cfg_dp_soc_ctxt *cfg,
 }
 #endif /* CONFIG_SAWF_STATS */
 
-/**
- * wlan_cfg_soc_attach() - Allocate and prepare SoC configuration
- * @psoc - Object manager psoc
- * Return: wlan_cfg_ctx - Handle to Configuration context
- */
 struct wlan_cfg_dp_soc_ctxt *
 wlan_cfg_soc_attach(struct cdp_ctrl_objmgr_psoc *psoc)
 {
@@ -2880,6 +2863,7 @@ wlan_cfg_soc_attach(struct cdp_ctrl_objmgr_psoc *psoc)
 	wlan_cfg_ctx->num_tx_ext_desc_pool = cfg_get(psoc,
 						     CFG_DP_TX_EXT_DESC_POOLS);
 	wlan_cfg_ctx->num_tx_desc = cfg_get(psoc, CFG_DP_TX_DESC);
+	wlan_cfg_ctx->num_tx_spl_desc = cfg_get(psoc, CFG_DP_TX_SPL_DESC);
 	wlan_cfg_ctx->min_tx_desc = WLAN_CFG_NUM_TX_DESC_MIN;
 	wlan_cfg_ctx->num_tx_ext_desc = cfg_get(psoc, CFG_DP_TX_EXT_DESC);
 	wlan_cfg_ctx->htt_packet_type = cfg_get(psoc, CFG_DP_HTT_PACKET_TYPE);
@@ -2985,6 +2969,8 @@ wlan_cfg_soc_attach(struct cdp_ctrl_objmgr_psoc *psoc)
 						CFG_DP_TX_DESC_LIMIT_2);
 	wlan_cfg_ctx->tx_device_limit = cfg_get(psoc,
 						CFG_DP_TX_DEVICE_LIMIT);
+	wlan_cfg_ctx->tx_spl_device_limit = cfg_get(psoc,
+						    CFG_DP_TX_SPL_DEVICE_LIMIT);
 	wlan_cfg_ctx->tx_sw_internode_queue = cfg_get(psoc,
 						CFG_DP_TX_SW_INTERNODE_QUEUE);
 	wlan_cfg_ctx->rxdma_err_dst_ring = cfg_get(psoc,
@@ -3543,6 +3529,11 @@ int wlan_cfg_get_num_tx_desc(struct wlan_cfg_dp_soc_ctxt *cfg)
 	return cfg->num_tx_desc;
 }
 
+int wlan_cfg_get_num_tx_spl_desc(struct wlan_cfg_dp_soc_ctxt *cfg)
+{
+	return cfg->num_tx_spl_desc;
+}
+
 void wlan_cfg_set_num_tx_desc(struct wlan_cfg_dp_soc_ctxt *cfg, int num_desc)
 {
 	cfg->num_tx_desc = num_desc;
@@ -3816,6 +3807,12 @@ int
 wlan_cfg_get_dp_soc_tx_device_limit(struct wlan_cfg_dp_soc_ctxt *cfg)
 {
 	return cfg->tx_device_limit;
+}
+
+int
+wlan_cfg_get_dp_soc_tx_spl_device_limit(struct wlan_cfg_dp_soc_ctxt *cfg)
+{
+	return cfg->tx_spl_device_limit;
 }
 
 int
@@ -4160,9 +4157,9 @@ int wlan_cfg_ipa_tx_alt_comp_ring_size(struct wlan_cfg_dp_soc_ctxt *cfg)
 
 #ifdef WLAN_SUPPORT_PPEDS
 bool
-wlan_cfg_get_dp_soc_is_ppe_enabled(struct wlan_cfg_dp_soc_ctxt *cfg)
+wlan_cfg_get_dp_soc_is_ppeds_enabled(struct wlan_cfg_dp_soc_ctxt *cfg)
 {
-	return cfg->ppe_enable;
+	return cfg->ppeds_enable;
 }
 
 int
@@ -4178,21 +4175,15 @@ wlan_cfg_get_dp_soc_ppe2tcl_ring_size(struct wlan_cfg_dp_soc_ctxt *cfg)
 }
 
 int
-wlan_cfg_get_dp_soc_ppe_release_ring_size(struct wlan_cfg_dp_soc_ctxt *cfg)
+wlan_cfg_get_dp_soc_ppeds_num_tx_desc(struct wlan_cfg_dp_soc_ctxt *cfg)
 {
-	return cfg->ppe_release_ring;
+	return cfg->ppeds_num_tx_desc;
 }
 
 int
-wlan_cfg_get_dp_soc_ppe_num_tx_desc(struct wlan_cfg_dp_soc_ctxt *cfg)
+wlan_cfg_get_dp_soc_ppeds_tx_comp_napi_budget(struct wlan_cfg_dp_soc_ctxt *cfg)
 {
-	return cfg->ppe_num_tx_desc;
-}
-
-int
-wlan_cfg_get_dp_soc_ppe_tx_comp_napi_budget(struct wlan_cfg_dp_soc_ctxt *cfg)
-{
-	return cfg->ppe_tx_comp_napi_budget;
+	return cfg->ppeds_tx_comp_napi_budget;
 }
 #endif
 

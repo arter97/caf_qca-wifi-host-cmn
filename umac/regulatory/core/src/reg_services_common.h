@@ -1233,6 +1233,42 @@ QDF_STATUS reg_extract_puncture_by_bw(enum phy_ch_width ori_bw,
  */
 void reg_set_create_punc_bitmap(struct ch_params *ch_params,
 				bool is_create_punc_bitmap);
+
+#ifdef CONFIG_REG_CLIENT
+/**
+ * reg_apply_puncture() - apply puncture to regulatory
+ * @pdev: pdev
+ * @puncture_bitmap: puncture bitmap
+ * @freq: sap operation freq
+ * @bw: band width
+ * @cen320_freq: 320 MHz center freq
+ *
+ * When start ap, apply puncture to regulatory, set static puncture flag
+ * for all 20 MHz sub channels of current bonded channel in master channel list
+ * of pdev, and disable 20 MHz sub channel in current channel list if static
+ * puncture flag is set.
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS reg_apply_puncture(struct wlan_objmgr_pdev *pdev,
+			      uint16_t puncture_bitmap,
+			      qdf_freq_t freq,
+			      enum phy_ch_width bw,
+			      qdf_freq_t cen320_freq);
+
+/**
+ * wlan_reg_remove_puncture() - Remove puncture from regulatory
+ * @pdev: pdev
+ *
+ * When stop ap, remove puncture from regulatory, clear static puncture flag
+ * for all 20 MHz sub channels in master channel list of pdev, and don't disable
+ * 20 MHz sub channel in current channel list if static puncture flag is not
+ * set.
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS reg_remove_puncture(struct wlan_objmgr_pdev *pdev);
+#endif
 #else
 static inline
 QDF_STATUS reg_extract_puncture_by_bw(enum phy_ch_width ori_bw,
@@ -1686,6 +1722,40 @@ reg_add_indoor_concurrency(struct wlan_objmgr_pdev *pdev, uint8_t vdev_id,
 QDF_STATUS
 reg_remove_indoor_concurrency(struct wlan_objmgr_pdev *pdev, uint8_t vdev_id,
 			      uint32_t freq);
+
+/**
+ * reg_init_indoor_channel_list() - Initialize the indoor concurrency list
+ *
+ * @pdev: pointer to pdev
+ *
+ * Return: None
+ */
+void
+reg_init_indoor_channel_list(struct wlan_objmgr_pdev *pdev);
+/**
+ * reg_compute_indoor_list_on_cc_change() - Recompute the indoor concurrency
+ * list on a country change
+ *
+ * @psoc: pointer to psoc
+ * @pdev: pointer to pdev
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS
+reg_compute_indoor_list_on_cc_change(struct wlan_objmgr_psoc *psoc,
+				     struct wlan_objmgr_pdev *pdev);
+#else
+static inline void
+reg_init_indoor_channel_list(struct wlan_objmgr_pdev *pdev)
+{
+}
+
+static inline QDF_STATUS
+reg_compute_indoor_list_on_cc_change(struct wlan_objmgr_psoc *psoc,
+				     struct wlan_objmgr_pdev *pdev)
+{
+	return QDF_STATUS_SUCCESS;
+}
 #endif
 
 #if defined(CONFIG_BAND_6GHZ)

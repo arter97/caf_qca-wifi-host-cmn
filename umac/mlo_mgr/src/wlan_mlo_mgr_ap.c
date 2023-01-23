@@ -26,6 +26,7 @@
 #ifdef WLAN_MLO_MULTI_CHIP
 #include "cdp_txrx_mlo.h"
 #endif
+#include "wlan_mlo_mgr_peer.h"
 
 #ifdef WLAN_MLO_MULTI_CHIP
 bool mlo_ap_vdev_attach(struct wlan_objmgr_vdev *vdev,
@@ -135,6 +136,45 @@ void mlo_ap_get_vdev_list(struct wlan_objmgr_vdev *vdev,
 	mlo_dev_lock_release(dev_ctx);
 }
 
+void mlo_ap_get_active_vdev_list(struct wlan_objmgr_vdev *vdev,
+				 uint16_t *vdev_count,
+				 struct wlan_objmgr_vdev **wlan_vdev_list)
+{
+	struct wlan_mlo_dev_context *dev_ctx;
+	int i;
+	QDF_STATUS status;
+	struct wlan_objmgr_vdev *partner_vdev = NULL;
+
+	*vdev_count = 0;
+
+	if (!vdev || !vdev->mlo_dev_ctx) {
+		mlo_err("Invalid input");
+		return;
+	}
+
+	dev_ctx = vdev->mlo_dev_ctx;
+
+	mlo_dev_lock_acquire(dev_ctx);
+	*vdev_count = 0;
+	for (i = 0; i < QDF_ARRAY_SIZE(dev_ctx->wlan_vdev_list); i++) {
+		partner_vdev = dev_ctx->wlan_vdev_list[i];
+		if (partner_vdev &&
+		    wlan_vdev_mlme_is_mlo_ap(partner_vdev)) {
+			if (wlan_vdev_chan_config_valid(partner_vdev) !=
+						 QDF_STATUS_SUCCESS)
+				continue;
+
+			status = wlan_objmgr_vdev_try_get_ref(partner_vdev,
+							      WLAN_MLO_MGR_ID);
+			if (QDF_IS_STATUS_ERROR(status))
+				break;
+			wlan_vdev_list[*vdev_count] = partner_vdev;
+			(*vdev_count) += 1;
+		}
+	}
+	mlo_dev_lock_release(dev_ctx);
+}
+
 void mlo_ap_get_partner_vdev_list_from_mld(
 		struct wlan_objmgr_vdev *vdev,
 		uint16_t *vdev_count,
@@ -199,22 +239,15 @@ static QDF_STATUS mlo_ap_vdev_is_start_resp_rcvd(struct wlan_objmgr_vdev *vdev)
 	return QDF_STATUS_E_FAILURE;
 }
 
-/**
- * mlo_is_ap_vdev_up_allowed() - Is mlo ap allowed to come up
- * @vdev: vdev pointer
- *
- * Return: true if given ap is allowed to up, false otherwise.
- */
-static bool mlo_is_ap_vdev_up_allowed(struct wlan_objmgr_vdev *vdev)
+uint16_t wlan_mlo_ap_get_active_links(struct wlan_objmgr_vdev *vdev)
 {
 	uint16_t vdev_count = 0;
 	struct wlan_mlo_dev_context *dev_ctx;
 	int i;
-	bool up_allowed = false;
 
 	if (!vdev || !vdev->mlo_dev_ctx || !vdev->mlo_dev_ctx->ap_ctx) {
 		mlo_err("Invalid input");
-		return up_allowed;
+		return vdev_count;
 	}
 
 	dev_ctx = vdev->mlo_dev_ctx;
@@ -226,9 +259,33 @@ static bool mlo_is_ap_vdev_up_allowed(struct wlan_objmgr_vdev *vdev)
 			vdev_count++;
 	}
 
+	mlo_dev_lock_release(dev_ctx);
+
+	return vdev_count;
+}
+
+/**
+ * mlo_is_ap_vdev_up_allowed() - Is mlo ap allowed to come up
+ * @vdev: vdev pointer
+ *
+ * Return: true if given ap is allowed to up, false otherwise.
+ */
+static bool mlo_is_ap_vdev_up_allowed(struct wlan_objmgr_vdev *vdev)
+{
+	uint16_t vdev_count = 0;
+	bool up_allowed = false;
+	struct wlan_mlo_dev_context *dev_ctx;
+
+	if (!vdev) {
+		mlo_err("Invalid input");
+		return up_allowed;
+	}
+
+	dev_ctx = vdev->mlo_dev_ctx;
+
+	vdev_count = wlan_mlo_ap_get_active_links(vdev);
 	if (vdev_count == dev_ctx->ap_ctx->num_ml_vdevs)
 		up_allowed = true;
-	mlo_dev_lock_release(dev_ctx);
 
 	return up_allowed;
 }
@@ -424,17 +481,20 @@ bool mlo_ap_vdev_quiet_is_any_idx_set(struct wlan_objmgr_vdev *vdev)
 			sizeof(mld_ctx->ap_ctx->mlo_vdev_quiet_bmap));
 }
 
-#ifdef UMAC_SUPPORT_MLNAWDS
 QDF_STATUS
 mlo_peer_create_get_frm_buf(
 		struct wlan_mlo_peer_context *ml_peer,
 		struct peer_create_notif_s *peer_create,
 		qdf_nbuf_t frm_buf)
 {
-	if (ml_peer->is_nawds_ml_peer) {
+	if (wlan_mlo_peer_is_nawds(ml_peer) ||
+	    wlan_mlo_peer_is_mesh(ml_peer)) {
 		peer_create->frm_buf = NULL;
 		return QDF_STATUS_SUCCESS;
 	}
+
+	if (!frm_buf)
+		return QDF_STATUS_E_FAILURE;
 
 	peer_create->frm_buf = qdf_nbuf_clone(frm_buf);
 	if (!peer_create->frm_buf)
@@ -443,6 +503,7 @@ mlo_peer_create_get_frm_buf(
 	return QDF_STATUS_SUCCESS;
 }
 
+#ifdef UMAC_SUPPORT_MLNAWDS
 void mlo_peer_populate_nawds_params(
 		struct wlan_mlo_peer_context *ml_peer,
 		struct mlo_partner_info *ml_info)
@@ -456,7 +517,7 @@ void mlo_peer_populate_nawds_params(
 	ml_peer->is_nawds_ml_peer = false;
 	for (i = 0; i < ml_info->num_partner_links; i++) {
 		nawds_config = ml_info->partner_link_info[i].nawds_config;
-		/**
+		/*
 		 * if ml_info->partner_link_info[i].nawds_config has valid
 		 * config(check for non-null mac or non-0 caps), then mark
 		 * ml_peer's is_nawds_ml_peer true & copy the config
@@ -471,17 +532,34 @@ void mlo_peer_populate_nawds_params(
 	}
 	mlo_peer_lock_release(ml_peer);
 }
-#else
-QDF_STATUS
-mlo_peer_create_get_frm_buf(
-		struct wlan_mlo_peer_context *ml_peer,
-		struct peer_create_notif_s *peer_create,
-		qdf_nbuf_t frm_buf)
-{
-	peer_create->frm_buf = qdf_nbuf_clone(frm_buf);
-	if (!peer_create->frm_buf)
-		return QDF_STATUS_E_NOMEM;
+#endif
 
-	return QDF_STATUS_SUCCESS;
+#ifdef MESH_MODE_SUPPORT
+void mlo_peer_populate_mesh_params(
+		struct wlan_mlo_peer_context *ml_peer,
+		struct mlo_partner_info *ml_info)
+{
+	uint8_t i;
+	uint8_t null_mac[QDF_MAC_ADDR_SIZE] = {0};
+	struct mlnawds_config mesh_config;
+
+	mlo_peer_lock_acquire(ml_peer);
+	ml_peer->is_mesh_ml_peer = false;
+	for (i = 0; i < ml_info->num_partner_links; i++) {
+		mesh_config = ml_info->partner_link_info[i].mesh_config;
+		/*
+		 * if ml_info->partner_link_info[i].mesh_config has valid
+		 * config(check for non-null mac or non-0 caps), then mark
+		 * ml_peer's is_mesh_ml_peer true & copy the config
+		 */
+		if ((mesh_config.caps) ||
+		    (qdf_mem_cmp(null_mac,
+				 mesh_config.mac,
+				 sizeof(null_mac)))) {
+			ml_peer->is_mesh_ml_peer = true;
+			ml_peer->mesh_config[i] = mesh_config;
+		}
+	}
+	mlo_peer_lock_release(ml_peer);
 }
 #endif

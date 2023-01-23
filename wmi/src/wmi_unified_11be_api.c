@@ -97,7 +97,7 @@ QDF_STATUS
 wmi_extract_mlo_vdev_bcast_tid_to_link_map_event(
 				     wmi_unified_t wmi,
 				     void *evt_buf,
-				     struct wmi_host_bcast_t2lm_info *bcast)
+				     struct mlo_bcast_t2lm_info *bcast)
 {
 	if (wmi->ops->extract_mlo_vdev_bcast_tid_to_link_map_event) {
 		return wmi->ops->extract_mlo_vdev_bcast_tid_to_link_map_event(
@@ -116,6 +116,55 @@ wmi_extract_mgmt_rx_ml_cu_params(wmi_unified_t wmi, void *evt_buf,
 	if (wmi->ops->extract_mgmt_rx_ml_cu_params)
 		return wmi->ops->extract_mgmt_rx_ml_cu_params(
 				wmi, evt_buf, cu_params);
+
+	return QDF_STATUS_E_FAILURE;
+}
+
+QDF_STATUS wmi_send_mlo_link_removal_cmd(
+		wmi_unified_t wmi,
+		const struct mlo_link_removal_cmd_params *param)
+{
+	if (wmi->ops->send_mlo_link_removal_cmd)
+		return wmi->ops->send_mlo_link_removal_cmd(wmi, param);
+
+	return QDF_STATUS_E_FAILURE;
+}
+
+QDF_STATUS wmi_extract_mlo_link_removal_evt_fixed_param(
+		struct wmi_unified *wmi,
+		void *buf,
+		struct mlo_link_removal_evt_params *params)
+{
+	if (wmi->ops->extract_mlo_link_removal_evt_fixed_param)
+		return wmi->ops->extract_mlo_link_removal_evt_fixed_param(
+							wmi, buf, params);
+
+	return QDF_STATUS_E_FAILURE;
+}
+
+QDF_STATUS wmi_extract_mlo_link_removal_tbtt_update(
+		struct wmi_unified *wmi,
+		void *buf,
+		struct mlo_link_removal_tbtt_info *tbtt_info)
+{
+	if (wmi->ops->extract_mlo_link_removal_tbtt_update)
+		return wmi->ops->extract_mlo_link_removal_tbtt_update(
+							wmi, buf, tbtt_info);
+
+	return QDF_STATUS_E_FAILURE;
+}
+
+QDF_STATUS wmi_extract_mgmt_rx_mlo_link_removal_info(
+		struct wmi_unified *wmi,
+		void *buf,
+		struct mgmt_rx_mlo_link_removal_info *link_removal_info,
+		int num_link_removal_info)
+{
+	if (wmi->ops->extract_mgmt_rx_mlo_link_removal_info)
+		return wmi->ops->extract_mgmt_rx_mlo_link_removal_info(
+							wmi, buf,
+							link_removal_info,
+							num_link_removal_info);
 
 	return QDF_STATUS_E_FAILURE;
 }
