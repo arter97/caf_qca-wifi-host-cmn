@@ -2528,6 +2528,7 @@ dp_rx_peer_unmap_handler(struct dp_soc *soc, uint16_t peer_id,
 	dp_rx_peer_unmap_event(soc, peer_id, vdev_id, peer->mac_addr.raw);
 
 	vdev = peer->vdev;
+	dp_peer_aggregate_tid_stats(peer);
 	DP_UPDATE_STATS(vdev, peer);
 
 	dp_peer_update_state(soc, peer, DP_PEER_STATE_INACTIVE);

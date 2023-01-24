@@ -1023,6 +1023,7 @@ struct protocol_trace_count {
  * @preamble_info: preamble
  * @tx_ucast_total: total ucast count
  * @tx_ucast_success: total ucast success count
+ * @wme_ac_type_bytes: Wireless Multimedia byte Count
  */
 struct cdp_tx_stats {
 	struct cdp_pkt_info comp_pkt;
@@ -1123,6 +1124,7 @@ struct cdp_tx_stats {
 		 preamble_info:4;
 	struct cdp_pkt_info tx_ucast_total;
 	struct cdp_pkt_info tx_ucast_success;
+	uint64_t wme_ac_type_bytes[WME_AC_MAX];
 };
 
 /* struct cdp_rx_stats - rx Level Stats
@@ -1202,6 +1204,8 @@ struct cdp_tx_stats {
  *       <enum 3     3_2_us_sgi > HE
  * @preamble_info: preamble
  * @to_stack_twt: Total packets sent up the stack in TWT session
+ * @wme_ac_type_bytes: Wireless Multimedia byte Count
+ * @rx_total: Total rx count
  */
 struct cdp_rx_stats {
 	struct cdp_pkt_info to_stack;
@@ -1278,6 +1282,10 @@ struct cdp_rx_stats {
 		 gi_info:4,
 	         preamble_info:4;
 	struct cdp_pkt_info to_stack_twt;
+	uint64_t wme_ac_type_bytes[WME_AC_MAX];
+#ifdef IPA_OFFLOAD
+	struct cdp_pkt_info rx_total;
+#endif
 };
 
 /* struct cdp_tx_ingress_stats - Tx ingress Stats

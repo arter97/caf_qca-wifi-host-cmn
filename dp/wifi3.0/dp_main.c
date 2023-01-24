@@ -11227,6 +11227,11 @@ static struct cdp_host_stats_ops dp_ops_host_stats = {
 	.txrx_get_peer_stats_param = dp_txrx_get_peer_stats_param,
 	.txrx_reset_peer_stats = dp_txrx_reset_peer_stats,
 	.txrx_get_pdev_stats = dp_txrx_get_pdev_stats,
+#if defined(IPA_OFFLOAD) && defined(QCA_ENHANCED_STATS_SUPPORT)
+	.txrx_get_peer_stats = dp_ipa_txrx_get_peer_stats,
+	.txrx_get_vdev_stats  = dp_ipa_txrx_get_vdev_stats,
+	.txrx_get_pdev_stats = dp_ipa_txrx_get_pdev_stats,
+#endif
 	.txrx_get_ratekbps = dp_txrx_get_ratekbps,
 	.txrx_update_vdev_stats = dp_txrx_update_vdev_host_stats,
 	/* TODO */
@@ -11775,6 +11780,9 @@ static struct cdp_ipa_ops dp_ops_ipa = {
 	.ipa_rx_intrabss_fwd = dp_ipa_rx_intrabss_fwd,
 	.ipa_tx_buf_smmu_mapping = dp_ipa_tx_buf_smmu_mapping,
 	.ipa_tx_buf_smmu_unmapping = dp_ipa_tx_buf_smmu_unmapping,
+#ifdef QCA_ENHANCED_STATS_SUPPORT
+	.ipa_update_peer_rx_stats = dp_ipa_update_peer_rx_stats,
+#endif
 #ifdef IPA_WDS_EASYMESH_FEATURE
 	.ipa_ast_create = dp_ipa_ast_create,
 #endif
