@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  *
  * Permission to use, copy, modify, and/or distribute this software for
@@ -251,10 +251,12 @@ struct wlan_lmac_if_global_shmem_local_ops {
 	bool implemented;
 
 	QDF_STATUS (*init_shmem_arena_ctx)(void *arena_vaddr,
-					   size_t arena_len);
-	QDF_STATUS (*deinit_shmem_arena_ctx)(void);
-	void *(*get_crash_reason_address)(uint8_t chip_id);
-	uint8_t (*get_no_of_chips_from_crash_info)(void);
+					   size_t arena_len,
+					   uint8_t grp_id);
+	QDF_STATUS (*deinit_shmem_arena_ctx)(uint8_t grp_id);
+	void *(*get_crash_reason_address)(uint8_t grp_id,
+					  uint8_t chip_id);
+	uint8_t (*get_no_of_chips_from_crash_info)(uint8_t grp_id);
 };
 #endif
 
@@ -277,13 +279,14 @@ struct wlan_lmac_if_global_shmem_local_ops {
  */
 struct wlan_lmac_if_mgmt_rx_reo_low_level_ops {
 	bool implemented;
-	int (*get_num_links)(void);
-	uint16_t (*get_valid_link_bitmap)(void);
+	int (*get_num_links)(uint8_t grp_id);
+	uint16_t (*get_valid_link_bitmap)(uint8_t grp_id);
 	void* (*get_snapshot_address)
-			(uint8_t link_id,
+			(uint8_t grp_id, uint8_t link_id,
 			 enum mgmt_rx_reo_shared_snapshot_id snapshot_id);
 	int8_t (*get_snapshot_version)
-			(enum mgmt_rx_reo_shared_snapshot_id snapshot_id);
+			(uint8_t grp_id,
+			 enum mgmt_rx_reo_shared_snapshot_id snapshot_id);
 	bool (*snapshot_is_valid)(uint32_t snapshot_low,
 				  uint8_t snapshot_version);
 	uint16_t (*snapshot_get_mgmt_pkt_ctr)(uint32_t snapshot_low,
@@ -461,6 +464,7 @@ enum wlan_mlme_cfg_id;
  * @psoc_vdev_rsp_timer_mod: function to modify the time of vdev rsp timer
  * @psoc_wake_lock_init: Initialize psoc wake lock for vdev response timer
  * @psoc_wake_lock_deinit: De-Initialize psoc wake lock for vdev response timer
+ * @get_psoc_mlo_group_id: Get MLO Group ID for the psoc
  * @get_hw_link_id: Get hw_link_id for pdev
  * @vdev_send_set_mac_addr: API to send set MAC address request to FW
  * @vdev_peer_set_param_send: API to send peer param to FW
@@ -548,6 +552,7 @@ struct wlan_lmac_if_mlme_tx_ops {
 				enum wlan_vdev_mgr_tgt_if_rsp_bit clear_bit);
 #if defined(WLAN_FEATURE_11BE_MLO) && defined(WLAN_MLO_MULTI_CHIP)
 	uint16_t (*get_hw_link_id)(struct wlan_objmgr_pdev *pdev);
+	uint8_t (*get_psoc_mlo_group_id)(struct wlan_objmgr_psoc *psoc);
 	QDF_STATUS (*target_if_mlo_setup_req)(struct wlan_objmgr_pdev **pdev,
 					      uint8_t num_pdevs,
 					      uint8_t grp_id);

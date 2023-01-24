@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -36,6 +36,12 @@
 #include <wlan_scan_api.h>
 
 #ifdef WLAN_FEATURE_11BE_MLO
+static QDF_STATUS mlo_disocnnect_req(struct wlan_objmgr_vdev *vdev,
+				     enum wlan_cm_source source,
+				     enum wlan_reason_code reason_code,
+				     struct qdf_mac_addr *bssid,
+				     bool validate_req);
+
 static inline void
 mlo_allocate_and_copy_ies(struct wlan_cm_connect_req *target,
 			  struct wlan_cm_connect_req *source)
@@ -145,6 +151,24 @@ bool mlo_is_mld_disconnected(struct wlan_objmgr_vdev *vdev)
 	return true;
 }
 
+bool mlo_is_mld_disconnecting_connecting(struct wlan_objmgr_vdev *vdev)
+{
+	struct wlan_mlo_dev_context *mlo_dev_ctx = vdev->mlo_dev_ctx;
+	uint8_t i = 0;
+
+	if (!mlo_dev_ctx || !wlan_vdev_mlme_is_mlo_vdev(vdev))
+		return false;
+
+	for (i =  0; i < WLAN_UMAC_MLO_MAX_VDEVS; i++) {
+		if (!mlo_dev_ctx->wlan_vdev_list[i])
+			continue;
+		if (wlan_cm_is_vdev_disconnecting(mlo_dev_ctx->wlan_vdev_list[i]) ||
+		    wlan_cm_is_vdev_connecting(mlo_dev_ctx->wlan_vdev_list[i]))
+			return true;
+	}
+	return false;
+}
+
 bool ucfg_mlo_is_mld_disconnected(struct wlan_objmgr_vdev *vdev)
 {
 	return mlo_is_mld_disconnected(vdev);
@@ -244,6 +268,10 @@ static QDF_STATUS mlo_validate_mlo_cap(struct wlan_objmgr_vdev *vdev)
 {
 	return QDF_STATUS_SUCCESS;
 }
+
+static inline
+void mlo_mld_clear_mlo_cap(struct wlan_objmgr_vdev *vdev)
+{ }
 #else
 /**
  * mlo_is_mld_connected - Check whether MLD is connected
@@ -533,7 +561,6 @@ QDF_STATUS mlo_connect(struct wlan_objmgr_vdev *vdev,
 
 		mlo_dev_lock_acquire(mlo_dev_ctx);
 		status = mlo_validate_connect_req(vdev, mlo_dev_ctx, req);
-
 		copied_conn_req_lock_acquire(sta_ctx);
 		if (!sta_ctx->copied_conn_req)
 			sta_ctx->copied_conn_req = qdf_mem_malloc(
@@ -560,7 +587,10 @@ QDF_STATUS mlo_connect(struct wlan_objmgr_vdev *vdev,
 			mlo_clear_connected_links_bmap(vdev);
 			mlo_dev_lock_release(mlo_dev_ctx);
 
-			return wlan_cm_start_connect(vdev, req);
+			status = wlan_cm_start_connect(vdev, req);
+			if (QDF_IS_STATUS_ERROR(status))
+				mlo_mld_clear_mlo_cap(vdev);
+			return status;
 		}
 
 		mlo_dev_lock_release(mlo_dev_ctx);
@@ -844,9 +874,9 @@ static QDF_STATUS ml_activate_pend_disconn_req_cb(struct scheduler_msg *msg)
 
 	mlo_dev_ctx = vdev->mlo_dev_ctx;
 	sta_ctx = mlo_dev_ctx->sta_ctx;
-	mlo_disconnect(vdev, sta_ctx->disconn_req->source,
-		       sta_ctx->disconn_req->reason_code,
-		       &sta_ctx->disconn_req->bssid);
+	mlo_disocnnect_req(vdev, sta_ctx->disconn_req->source,
+			   sta_ctx->disconn_req->reason_code,
+			   &sta_ctx->disconn_req->bssid, false);
 
 	qdf_mem_free(sta_ctx->disconn_req);
 	sta_ctx->disconn_req = NULL;
@@ -1076,10 +1106,11 @@ mlo_send_link_disconnect_sync(struct wlan_mlo_dev_context *mlo_dev_ctx,
 	return QDF_STATUS_SUCCESS;
 }
 
-QDF_STATUS mlo_disconnect(struct wlan_objmgr_vdev *vdev,
-			  enum wlan_cm_source source,
-			  enum wlan_reason_code reason_code,
-			  struct qdf_mac_addr *bssid)
+static QDF_STATUS mlo_disocnnect_req(struct wlan_objmgr_vdev *vdev,
+				     enum wlan_cm_source source,
+				     enum wlan_reason_code reason_code,
+				     struct qdf_mac_addr *bssid,
+				     bool validate_req)
 {
 	struct wlan_mlo_dev_context *mlo_dev_ctx = NULL;
 	struct wlan_mlo_sta *sta_ctx = NULL;
@@ -1100,13 +1131,16 @@ QDF_STATUS mlo_disconnect(struct wlan_objmgr_vdev *vdev,
 			sta_ctx->connect_req = NULL;
 		}
 
-		status = mlo_validate_disconn_req(vdev, source,
-						  reason_code, bssid);
-		if (QDF_IS_STATUS_ERROR(status)) {
-			mlo_debug("Connect in progress, deferring disconnect");
-			mlo_dev_lock_release(mlo_dev_ctx);
-			return status;
+		if (validate_req) {
+			status = mlo_validate_disconn_req(vdev, source,
+							  reason_code, bssid);
+			if (QDF_IS_STATUS_ERROR(status)) {
+				mlo_debug("Connect in progress, deferring disconnect");
+				mlo_dev_lock_release(mlo_dev_ctx);
+				return status;
+			}
 		}
+
 		mlo_dev_lock_release(mlo_dev_ctx);
 
 		status = mlo_send_link_disconnect(vdev, source,
@@ -1122,6 +1156,14 @@ QDF_STATUS mlo_disconnect(struct wlan_objmgr_vdev *vdev,
 		mlo_free_copied_conn_req(sta_ctx);
 
 	return status;
+}
+
+QDF_STATUS mlo_disconnect(struct wlan_objmgr_vdev *vdev,
+			  enum wlan_cm_source source,
+			  enum wlan_reason_code reason_code,
+			  struct qdf_mac_addr *bssid)
+{
+	return mlo_disocnnect_req(vdev, source, reason_code, bssid, true);
 }
 
 QDF_STATUS mlo_sync_disconnect(struct wlan_objmgr_vdev *vdev,
@@ -1796,6 +1838,7 @@ done:
 	return handled;
 }
 
+#ifdef WLAN_FEATURE_11BE_MLO_ADV_FEATURE
 void mlo_internal_disconnect_links(struct wlan_objmgr_vdev *vdev)
 {
 	struct wlan_mlo_dev_context *mlo_dev_ctx = NULL;
@@ -1845,6 +1888,11 @@ void mlo_internal_disconnect_links(struct wlan_objmgr_vdev *vdev)
 		mlo_release_vdev_ref(wlan_vdev_list[i]);
 	}
 }
+#else
+void mlo_internal_disconnect_links(struct wlan_objmgr_vdev *vdev)
+{
+}
+#endif /* WLAN_FEATURE_11BE_MLO_ADV_FEATURE */
 
 void mlo_sta_get_vdev_list(struct wlan_objmgr_vdev *vdev, uint16_t *vdev_count,
 			   struct wlan_objmgr_vdev **wlan_vdev_list)
