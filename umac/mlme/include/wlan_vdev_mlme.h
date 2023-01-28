@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2018-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -86,9 +86,10 @@ struct vdev_mlme_proto_generic {
 
 /**
  * struct vdev_mlme_proto_ap - ap specific mlme protocol
- * @.
+ * @mapping_switch_time: Mapping switch time of T2LM
  */
 struct vdev_mlme_proto_ap {
+	uint16_t mapping_switch_time;
 };
 
 /**
@@ -696,6 +697,8 @@ enum vdev_start_resp_type {
  * @mlme_vdev_dfs_cac_wait_notify:      callback to notify about CAC state
  * @mlme_vdev_csa_complete:             callback to indicate CSA complete
  * @mlme_vdev_sta_disconn_start:        callback to initiate STA disconnection
+ * @mlme_vdev_reconfig_timer_complete:  callback to process ml reconfing
+ *                                      operation
  */
 struct vdev_mlme_ops {
 	QDF_STATUS (*mlme_vdev_validate_basic_params)(
@@ -774,6 +777,8 @@ struct vdev_mlme_ops {
 	QDF_STATUS (*mlme_vdev_sta_disconn_start)(
 				struct vdev_mlme_obj *vdev_mlme,
 				uint16_t event_data_len, void *event_data);
+	void (*mlme_vdev_reconfig_timer_complete)(
+				struct vdev_mlme_obj *vdev_mlme);
 	QDF_STATUS (*mlme_vdev_notify_mlo_sync_wait_entry)(
 				struct vdev_mlme_obj *vdev_mlme);
 };
@@ -790,8 +795,8 @@ struct vdev_mlme_ops {
  * @ops:                  VDEV MLME callback table
  * @ext_vdev_ptr:         VDEV MLME legacy pointer
  * @reg_tpc_obj:          Regulatory transmit power info
- * @vdev_rt: VDEV response timer
- * @vdev_wakelock:  vdev wakelock sub structure
+ * @ml_reconfig_timer: VDEV ml reconfig timer
+ * @ml_reconfig_started:  Flag to indicate reconfig status for vdev
  */
 struct vdev_mlme_obj {
 	struct vdev_mlme_proto proto;
@@ -808,6 +813,8 @@ struct vdev_mlme_obj {
 	struct vdev_mlme_ops *ops;
 	mlme_vdev_ext_t *ext_vdev_ptr;
 	struct reg_tpc_power_info reg_tpc_obj;
+	qdf_timer_t ml_reconfig_timer;
+	bool ml_reconfig_started;
 };
 
 /**

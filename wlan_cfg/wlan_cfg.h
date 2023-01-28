@@ -154,6 +154,7 @@ struct wlan_srng_cfg {
  * @num_tx_desc_pool: Number of Tx Descriptor pools
  * @num_tx_ext_desc_pool: Number of Tx MSDU extension Descriptor pools
  * @num_tx_desc: Number of Tx Descriptors per pool
+ * @num_tx_spl_desc: Number of Tx Descriptors per pool to handle special frames
  * @min_tx_desc: Minimum number of Tx Descriptors per pool
  * @num_tx_ext_desc: Number of Tx MSDU extension Descriptors per pool
  * @max_peer_id: Maximum value of peer id that FW can assign for a client
@@ -249,6 +250,7 @@ struct wlan_srng_cfg {
  * @tx_desc_limit_1: tx_desc limit for 2 GHz
  * @tx_desc_limit_2: tx_desc limit for 5 GHz Low
  * @tx_device_limit: tx device limit
+ * @tx_spl_device_limit: tx device limit for special frames
  * @tx_sw_internode_queue: tx sw internode queue
  * @mon_drop_thresh:
  * @tx_comp_loop_pkt_limit: Max # of packets to be processed in 1 tx comp loop
@@ -341,6 +343,7 @@ struct wlan_cfg_dp_soc_ctxt {
 	int num_tx_desc_pool;
 	int num_tx_ext_desc_pool;
 	int num_tx_desc;
+	int num_tx_spl_desc;
 	int min_tx_desc;
 	int num_tx_ext_desc;
 	int max_peer_id;
@@ -426,6 +429,7 @@ struct wlan_cfg_dp_soc_ctxt {
 	int tx_desc_limit_1;
 	int tx_desc_limit_2;
 	int tx_device_limit;
+	int tx_spl_device_limit;
 	int tx_sw_internode_queue;
 	int mon_drop_thresh;
 #ifdef WLAN_FEATURE_RX_SOFTIRQ_TIME_LIMIT
@@ -1185,6 +1189,15 @@ void wlan_cfg_set_num_tx_ext_desc_pool(struct wlan_cfg_dp_soc_ctxt *cfg, int num
 int wlan_cfg_get_num_tx_desc(struct wlan_cfg_dp_soc_ctxt *wlan_cfg_ctx);
 
 /**
+ * wlan_cfg_get_num_tx_spl_desc() - Number of Tx Descriptors for special
+ *				    frames per pool
+ * @wlan_cfg_ctx: Configuration Handle
+ *
+ * Return: num_tx_desc
+ */
+int wlan_cfg_get_num_tx_spl_desc(struct wlan_cfg_dp_soc_ctxt *wlan_cfg_ctx);
+
+/**
  * wlan_cfg_get_min_tx_desc() - Minimum number of Tx Descriptors per pool
  * @wlan_cfg_ctx: Configuration Handle
  *
@@ -1589,6 +1602,16 @@ wlan_cfg_get_dp_soc_tx_desc_limit_2(struct wlan_cfg_dp_soc_ctxt *cfg);
  */
 int
 wlan_cfg_get_dp_soc_tx_device_limit(struct wlan_cfg_dp_soc_ctxt *cfg);
+
+/**
+ * wlan_cfg_get_dp_soc_tx_spl_device_limit - Get tx device limit for special
+ *					     frames
+ * @cfg: Configuration Handle
+ *
+ * Return: tx device limit for special frames
+ */
+int
+wlan_cfg_get_dp_soc_tx_spl_device_limit(struct wlan_cfg_dp_soc_ctxt *cfg);
 
 /**
  * wlan_cfg_get_dp_soc_tx_sw_internode_queue - Get tx sw internode queue

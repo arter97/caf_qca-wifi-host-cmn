@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -80,6 +80,9 @@
 #else
 #define MAX_TXDESC_POOLS 4
 #endif
+
+/* Max no of descriptors to handle special frames like EAPOL */
+#define MAX_TX_SPL_DESC 1024
 
 #define MAX_RXDESC_POOLS 4
 #define MAX_PPE_TXDESC_POOLS 1
@@ -1924,10 +1927,10 @@ struct dp_arch_ops {
 						struct dp_rx_desc **r_rx_desc);
 
 	bool
-	(*dp_rx_intrabss_handle_nawds)(struct dp_soc *soc,
-				       struct dp_txrx_peer *ta_txrx_peer,
-				       qdf_nbuf_t nbuf_copy,
-				       struct cdp_tid_rx_stats *tid_stats);
+	(*dp_rx_intrabss_mcast_handler)(struct dp_soc *soc,
+					struct dp_txrx_peer *ta_txrx_peer,
+					qdf_nbuf_t nbuf_copy,
+					struct cdp_tid_rx_stats *tid_stats);
 
 	void (*dp_rx_word_mask_subscribe)(
 				struct dp_soc *soc,
@@ -1997,6 +2000,10 @@ struct dp_arch_ops {
 				       unsigned int tid);
 	void (*get_rx_hash_key)(struct dp_soc *soc,
 				struct cdp_lro_hash_config *lro_hash);
+	void (*dp_set_rx_fst)(struct dp_soc *soc, struct dp_rx_fst *fst);
+	struct dp_rx_fst *(*dp_get_rx_fst)(struct dp_soc *soc);
+	uint8_t (*dp_rx_fst_deref)(struct dp_soc *soc);
+	void (*dp_rx_fst_ref)(struct dp_soc *soc);
 	void (*txrx_print_peer_stats)(struct cdp_peer_stats *peer_stats,
 				      enum peer_stats_type stats_type);
 	/* Dp peer reorder queue setup */
@@ -2012,6 +2019,7 @@ struct dp_arch_ops {
 	struct dp_soc * (*dp_rx_replenish_soc_get)(struct dp_soc *soc,
 						   uint8_t chip_id);
 
+	uint8_t (*dp_soc_get_num_soc)(struct dp_soc *soc);
 	void (*dp_reconfig_tx_vdev_mcast_ctrl)(struct dp_soc *soc,
 					       struct dp_vdev *vdev);
 
@@ -2035,6 +2043,9 @@ struct dp_arch_ops {
 #ifdef WLAN_SUPPORT_PPEDS
 	void (*dp_txrx_ppeds_rings_status)(struct dp_soc *soc);
 	void (*dp_tx_ppeds_inuse_desc)(struct dp_soc *soc);
+	void (*dp_tx_ppeds_cfg_astidx_cache_mapping)(struct dp_soc *soc,
+						     struct dp_vdev *vdev,
+						     bool peer_map);
 #endif
 	QDF_STATUS (*txrx_soc_ppeds_start)(struct dp_soc *soc);
 	void (*txrx_soc_ppeds_stop)(struct dp_soc *soc);
@@ -2059,6 +2070,7 @@ struct dp_soc_features {
 		dmac_cmn_src_rxbuf_ring_enabled:1;
 	bool rssi_dbm_conv_support;
 	bool umac_hw_reset_support;
+	bool wds_ext_ast_override_enable;
 };
 
 enum sysfs_printing_mode {
@@ -2472,6 +2484,10 @@ struct dp_soc {
 	qdf_atomic_t num_tx_exception;
 	/* Num Tx allowed */
 	uint32_t num_tx_allowed;
+	/* Num Regular Tx allowed */
+	uint32_t num_reg_tx_allowed;
+	/* Num Tx allowed for special frames*/
+	uint32_t num_tx_spl_allowed;
 	/* Preferred HW mode */
 	uint8_t preferred_hw_mode;
 
@@ -3138,6 +3154,15 @@ struct dp_pdev {
 	/* User configured max number of tx buffers */
 	uint32_t num_tx_allowed;
 
+	/*
+	 * User configured max num of tx buffers excluding the
+	 * number of buffers reserved for handling special frames
+	 */
+	uint32_t num_reg_tx_allowed;
+
+	/* User configured max number of tx buffers for the special frames*/
+	uint32_t num_tx_spl_allowed;
+
 	/* unique cookie required for peer session */
 	uint32_t next_peer_cookie;
 
@@ -3549,6 +3574,10 @@ struct dp_vdev {
 	/* per vdev nbuf queue for traffic end indication packets */
 	qdf_nbuf_queue_t end_ind_pkt_q;
 #endif
+#ifdef FEATURE_DIRECT_LINK
+	/* Flag to indicate if to_fw should be set for tx pkts on this vdev */
+	bool to_fw;
+#endif
 };
 
 enum {
@@ -3884,6 +3913,7 @@ struct dp_peer_per_pkt_tx_stats {
  * @rts_failure: RTS failure count
  * @bar_cnt: Block ACK Request frame count
  * @ndpa_cnt: NDP announcement frame count
+ * @wme_ac_type_bytes: Wireless Multimedia bytes Count
  */
 struct dp_peer_extd_tx_stats {
 	uint32_t stbc;
@@ -3940,6 +3970,7 @@ struct dp_peer_extd_tx_stats {
 	uint32_t rts_failure;
 	uint32_t bar_cnt;
 	uint32_t ndpa_cnt;
+	uint64_t wme_ac_type_bytes[WME_AC_MAX];
 };
 
 /**
@@ -3971,6 +4002,7 @@ struct dp_peer_extd_tx_stats {
  * @policy_check_drop: policy check drops
  * @to_stack_twt: Total packets sent up the stack in TWT session
  * @protocol_trace_cnt: per-peer protocol counters
+ * @rx_total: total rx count
  */
 struct dp_peer_per_pkt_rx_stats {
 	struct cdp_pkt_info rcvd_reo[CDP_MAX_RX_RINGS];
@@ -4007,6 +4039,9 @@ struct dp_peer_per_pkt_rx_stats {
 	struct protocol_trace_count protocol_trace_cnt[CDP_TRACE_MAX];
 #endif
 	uint32_t mcast_3addr_drop;
+#ifdef IPA_OFFLOAD
+	struct cdp_pkt_info rx_total;
+#endif
 };
 
 /**
@@ -4057,6 +4092,7 @@ struct dp_peer_per_pkt_rx_stats {
  * @punc_bw[MAX_PUNCTURED_MODE]: MSDU count for punctured bw
  * @bar_cnt: Block ACK Request frame count
  * @ndpa_cnt: NDP announcement frame count
+ * @wme_ac_type_bytes: Wireless Multimedia type Bytes Count
  */
 struct dp_peer_extd_rx_stats {
 	struct cdp_pkt_type pkt_type[DOT11_MAX];
@@ -4104,6 +4140,7 @@ struct dp_peer_extd_rx_stats {
 #endif
 	uint32_t bar_cnt;
 	uint32_t ndpa_cnt;
+	uint64_t wme_ac_type_bytes[WME_AC_MAX];
 };
 
 /**

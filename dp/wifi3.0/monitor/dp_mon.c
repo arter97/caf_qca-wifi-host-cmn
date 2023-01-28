@@ -165,7 +165,6 @@ dp_enable_undecoded_metadata_capture(struct dp_pdev *pdev, int val)
 {
 	QDF_STATUS status = QDF_STATUS_SUCCESS;
 	struct dp_mon_pdev *mon_pdev = pdev->monitor_pdev;
-	struct dp_mon_ops *mon_ops;
 
 	if (!mon_pdev->mvdev) {
 		qdf_err("monitor_pdev is NULL");
@@ -175,7 +174,6 @@ dp_enable_undecoded_metadata_capture(struct dp_pdev *pdev, int val)
 	mon_pdev->undecoded_metadata_capture = val;
 	mon_pdev->monitor_configured = true;
 
-	mon_ops = dp_mon_ops_get(pdev->soc);
 
 	/* Setup the undecoded metadata capture mode filter. */
 	dp_mon_filter_setup_undecoded_metadata_mode(pdev);
@@ -1171,12 +1169,10 @@ int dp_set_pktlog_wifi3(struct dp_pdev *pdev, uint32_t event,
 	int max_mac_rings = wlan_cfg_get_num_mac_rings
 					(pdev->wlan_cfg_ctx);
 	uint8_t mac_id = 0;
-	struct dp_mon_soc *mon_soc;
 	struct dp_mon_ops *mon_ops;
 	struct dp_mon_pdev *mon_pdev = pdev->monitor_pdev;
 
 	soc = pdev->soc;
-	mon_soc = soc->monitor_soc;
 	mon_ops = dp_mon_ops_get(soc);
 
 	if (!mon_ops)
@@ -3101,9 +3097,14 @@ dp_tx_stats_update(struct dp_pdev *pdev, struct dp_peer *peer,
 	DP_STATS_INC(mon_peer, tx.sgi_count[ppdu->gi], num_msdu);
 	DP_STATS_INC(mon_peer, tx.bw[ppdu->bw], num_msdu);
 	DP_STATS_INC(mon_peer, tx.nss[ppdu->nss], num_msdu);
-	if (ppdu->tid < CDP_DATA_TID_MAX)
+	if (ppdu->tid < CDP_DATA_TID_MAX) {
 		DP_STATS_INC(mon_peer, tx.wme_ac_type[TID_TO_WME_AC(ppdu->tid)],
 			     num_msdu);
+		DP_STATS_INC(mon_peer,
+			     tx.wme_ac_type_bytes[TID_TO_WME_AC(ppdu->tid)],
+			     tx_byte_count);
+	}
+
 	DP_STATS_INCC(mon_peer, tx.stbc, num_msdu, ppdu->stbc);
 	DP_STATS_INCC(mon_peer, tx.ldpc, num_msdu, ppdu->ldpc);
 	if (!(ppdu->is_mcast) && ppdu->ack_rssi_valid)
@@ -5433,7 +5434,6 @@ QDF_STATUS dp_mon_pdev_detach(struct dp_pdev *pdev)
 
 QDF_STATUS dp_mon_pdev_init(struct dp_pdev *pdev)
 {
-	struct dp_soc *soc;
 	struct dp_mon_pdev *mon_pdev;
 	struct dp_mon_ops *mon_ops = NULL;
 
@@ -5442,7 +5442,6 @@ QDF_STATUS dp_mon_pdev_init(struct dp_pdev *pdev)
 		return QDF_STATUS_E_FAILURE;
 	}
 
-	soc = pdev->soc;
 	mon_pdev = pdev->monitor_pdev;
 
 	mon_pdev->invalid_mon_peer = qdf_mem_malloc(sizeof(struct dp_mon_peer));

@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -810,8 +810,11 @@ void dp_peer_find_id_to_obj_add(struct dp_soc *soc,
 		/* Peer map event came for peer_id which
 		 * is already mapped, this is not expected
 		 */
+		dp_err("peer %pK(" QDF_MAC_ADDR_FMT ")map failed, id %d mapped to peer %pK",
+		       peer, QDF_MAC_ADDR_REF(peer->mac_addr.raw), peer_id,
+		       soc->peer_id_to_obj_map[peer_id]);
 		dp_peer_unref_delete(peer, DP_MOD_ID_CONFIG);
-		QDF_ASSERT(0);
+		qdf_assert_always(0);
 	}
 	qdf_spin_unlock_bh(&soc->peer_map_lock);
 }
@@ -3053,6 +3056,23 @@ void dp_rx_reset_roaming_peer(struct dp_soc *soc, uint8_t vdev_id,
 }
 #endif
 
+#ifdef WLAN_SUPPORT_PPEDS
+static void
+dp_tx_ppeds_cfg_astidx_cache_mapping(struct dp_soc *soc, struct dp_vdev *vdev,
+				     bool peer_map)
+{
+	if (soc->arch_ops.dp_tx_ppeds_cfg_astidx_cache_mapping)
+		soc->arch_ops.dp_tx_ppeds_cfg_astidx_cache_mapping(soc, vdev,
+								   peer_map);
+}
+#else
+static void
+dp_tx_ppeds_cfg_astidx_cache_mapping(struct dp_soc *soc, struct dp_vdev *vdev,
+				     bool peer_map)
+{
+}
+#endif
+
 /**
  * dp_rx_peer_map_handler() - handle peer map event from firmware
  * @soc_handle - generic soc handle
@@ -3117,6 +3137,8 @@ dp_rx_peer_map_handler(struct dp_soc *soc, uint16_t peer_id,
 					   CDP_LINK_PEER_TYPE);
 
 		if (peer) {
+			bool peer_map = true;
+
 			/* Updating ast_hash and ast_idx in peer level */
 			peer->ast_hash = ast_hash;
 			peer->ast_idx = hw_peer_id;
@@ -3137,6 +3159,9 @@ dp_rx_peer_map_handler(struct dp_soc *soc, uint16_t peer_id,
 					ast_hash, hw_peer_id);
 				vdev->bss_ast_hash = ast_hash;
 				vdev->bss_ast_idx = hw_peer_id;
+
+				dp_tx_ppeds_cfg_astidx_cache_mapping(soc, vdev,
+								     peer_map);
 			}
 
 			/* Add ast entry incase self ast entry is
@@ -3270,6 +3295,15 @@ dp_rx_peer_unmap_handler(struct dp_soc *soc, uint16_t peer_id,
 	 */
 	dp_peer_rx_reo_shared_qaddr_delete(soc, peer);
 
+	vdev = peer->vdev;
+
+	/* only if peer is in STA mode and not tdls peer */
+	if (wlan_op_mode_sta == vdev->opmode && !peer->is_tdls_peer) {
+		bool peer_map = false;
+
+		dp_tx_ppeds_cfg_astidx_cache_mapping(soc, vdev, peer_map);
+	}
+
 	dp_peer_find_id_to_obj_remove(soc, peer_id);
 
 	if (soc->arch_ops.dp_partner_chips_unmap)
@@ -3288,7 +3322,6 @@ dp_rx_peer_unmap_handler(struct dp_soc *soc, uint16_t peer_id,
 				peer_id, vdev_id, mac_addr);
 	}
 
-	vdev = peer->vdev;
 	dp_update_vdev_stats_on_peer_unmap(vdev, peer);
 
 	dp_peer_update_state(soc, peer, DP_PEER_STATE_INACTIVE);

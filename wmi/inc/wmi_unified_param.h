@@ -5204,6 +5204,9 @@ typedef enum {
 #ifdef WLAN_FEATURE_11BE_MLO
 	wmi_mlo_ap_vdev_tid_to_link_map_eventid,
 #endif
+#ifdef WLAN_SUPPORT_GAP_LL_PS_MODE
+	wmi_xgap_enable_complete_eventid,
+#endif
 	wmi_events_max,
 } wmi_conv_event_id;
 
@@ -6227,6 +6230,7 @@ typedef enum {
 	wmi_service_obss_per_packet_sr_support,
 #endif
 	wmi_service_wpa3_sha384_roam_support,
+	wmi_service_multiple_vdev_restart_bmap,
 	wmi_services_max,
 } wmi_conv_service_ids;
 #define WMI_SERVICE_UNAVAILABLE 0xFFFF
@@ -9564,7 +9568,7 @@ struct wmi_health_mon_params {
 /**
  * struct edca_pifs_vparam - edca/pifs param for ll sap
  * @vdev_id: vdev id
- * @param - pointer to wlan_edca_pifs_param_ie struct
+ * @param: pointer to wlan_edca_pifs_param_ie struct
  */
 struct edca_pifs_vparam {
 	uint8_t vdev_id;

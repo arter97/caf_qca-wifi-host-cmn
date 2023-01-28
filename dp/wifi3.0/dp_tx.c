@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -1110,6 +1110,26 @@ dp_tx_send_msdu_single_wrapper(struct dp_vdev *vdev, qdf_nbuf_t nbuf,
 }
 #endif
 
+#if defined(QCA_SUPPORT_WDS_EXTENDED)
+static bool
+dp_tx_is_wds_ast_override_en(struct dp_soc *soc,
+			     struct cdp_tx_exception_metadata *tx_exc_metadata)
+{
+	if (soc->features.wds_ext_ast_override_enable &&
+	    tx_exc_metadata && tx_exc_metadata->is_wds_extended)
+		return true;
+
+	return false;
+}
+#else
+static bool
+dp_tx_is_wds_ast_override_en(struct dp_soc *soc,
+			     struct cdp_tx_exception_metadata *tx_exc_metadata)
+{
+	return false;
+}
+#endif
+
 /**
  * dp_tx_desc_prepare_single - Allocate and prepare Tx descriptor
  * @vdev: DP vdev handle
@@ -1135,7 +1155,7 @@ struct dp_tx_desc_s *dp_tx_prepare_desc_single(struct dp_vdev *vdev,
 	struct dp_pdev *pdev = vdev->pdev;
 	struct dp_soc *soc = pdev->soc;
 
-	if (dp_tx_limit_check(vdev))
+	if (dp_tx_limit_check(vdev, nbuf))
 		return NULL;
 
 	/* Allocate software Tx descriptor */
@@ -1172,6 +1192,13 @@ struct dp_tx_desc_s *dp_tx_prepare_desc_single(struct dp_vdev *vdev,
 	/* Packets marked by upper layer (OS-IF) to be sent to FW */
 	if (dp_tx_is_nbuf_marked_exception(soc, nbuf))
 		is_exception = 1;
+
+	/* for BE chipsets if wds extension was enbled will not mark FW
+	 * in desc will mark ast index based search for ast index.
+	 */
+	if (dp_tx_is_wds_ast_override_en(soc, tx_exc_metadata))
+		return tx_desc;
+
 	/*
 	 * For special modes (vdev_type == ocb or mesh), data frames should be
 	 * transmitted using varying transmit parameters (tx spec) which include
@@ -1273,7 +1300,7 @@ static struct dp_tx_desc_s *dp_tx_prepare_desc(struct dp_vdev *vdev,
 	struct dp_pdev *pdev = vdev->pdev;
 	struct dp_soc *soc = pdev->soc;
 
-	if (dp_tx_limit_check(vdev))
+	if (dp_tx_limit_check(vdev, nbuf))
 		return NULL;
 
 	/* Allocate software Tx descriptor */
@@ -2422,7 +2449,6 @@ dp_tx_send_msdu_single(struct dp_vdev *vdev, qdf_nbuf_t nbuf,
 
 release_desc:
 	dp_tx_desc_release(tx_desc, tx_q->desc_pool_id);
-	tx_sw_drop_stats_inc(pdev, nbuf, drop_code);
 
 fail_return:
 	dp_tx_get_tid(vdev, nbuf, msdu_info);
@@ -2432,6 +2458,32 @@ fail_return:
 	tid_stats->swdrop_cnt[drop_code]++;
 	return nbuf;
 }
+
+/**
+ * dp_tdls_tx_comp_free_buff() - Free non std buffer when TDLS flag is set
+ * @soc: Soc handle
+ * @desc: software Tx descriptor to be processed
+ *
+ * Return: 0 if Success
+ */
+#ifdef FEATURE_WLAN_TDLS
+static inline int
+dp_tdls_tx_comp_free_buff(struct dp_soc *soc, struct dp_tx_desc_s *desc)
+{
+	/* If it is TDLS mgmt, don't unmap or free the frame */
+	if (desc->flags & DP_TX_DESC_FLAG_TDLS_FRAME) {
+		dp_non_std_htt_tx_comp_free_buff(soc, desc);
+		return 0;
+	}
+	return 1;
+}
+#else
+static inline int
+dp_tdls_tx_comp_free_buff(struct dp_soc *soc, struct dp_tx_desc_s *desc)
+{
+	return 1;
+}
+#endif
 
 /**
  * dp_tx_comp_free_buf() - Free nbuf associated with the Tx Descriptor
@@ -2451,11 +2503,8 @@ qdf_nbuf_t dp_tx_comp_free_buf(struct dp_soc *soc, struct dp_tx_desc_s *desc,
 	if (!nbuf)
 		return NULL;
 
-	/* If it is TDLS mgmt, don't unmap or free the frame */
-	if (desc->flags & DP_TX_DESC_FLAG_TDLS_FRAME) {
-		dp_non_std_htt_tx_comp_free_buff(soc, desc);
+	if (!dp_tdls_tx_comp_free_buff(soc, desc))
 		return NULL;
-	}
 
 	/* 0 : MSDU buffer, 1 : MLE */
 	if (desc->msdu_ext_desc) {
@@ -3252,7 +3301,6 @@ dp_tx_send_exception(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
 		     struct cdp_tx_exception_metadata *tx_exc_metadata)
 {
 	struct dp_soc *soc = cdp_soc_t_to_dp_soc(soc_hdl);
-	qdf_ether_header_t *eh = NULL;
 	struct dp_tx_msdu_info_s msdu_info;
 	struct dp_vdev *vdev = dp_vdev_get_ref_by_id(soc, vdev_id,
 						     DP_MOD_ID_TX_EXCEPTION);
@@ -3266,7 +3314,6 @@ dp_tx_send_exception(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
 		goto fail;
 
 	msdu_info.tid = tx_exc_metadata->tid;
-	eh = (qdf_ether_header_t *)qdf_nbuf_data(nbuf);
 	dp_verbose_debug("skb "QDF_MAC_ADDR_FMT,
 			 QDF_MAC_ADDR_REF(nbuf->data));
 
@@ -3317,6 +3364,8 @@ dp_tx_send_exception(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
 					 qdf_nbuf_len(nbuf));
 			goto fail;
 		}
+
+		DP_STATS_INC(vdev,  tx_i.rcvd.num, msdu_info.num_seg - 1);
 
 		goto send_multiple;
 	}
@@ -3597,6 +3646,25 @@ qdf_nbuf_t dp_tx_exc_drop(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
 }
 #endif
 
+#ifdef FEATURE_DIRECT_LINK
+/*
+ * dp_vdev_tx_mark_to_fw() - Mark to_fw bit for the tx packet
+ * @nbuf: skb
+ * @vdev: DP vdev handle
+ *
+ * Return: None
+ */
+static inline void dp_vdev_tx_mark_to_fw(qdf_nbuf_t nbuf, struct dp_vdev *vdev)
+{
+	if (qdf_unlikely(vdev->to_fw))
+		QDF_NBUF_CB_TX_PACKET_TO_FW(nbuf) = 1;
+}
+#else
+static inline void dp_vdev_tx_mark_to_fw(qdf_nbuf_t nbuf, struct dp_vdev *vdev)
+{
+}
+#endif
+
 /*
  * dp_tx_send() - Transmit a frame on a given VAP
  * @soc: DP soc handle
@@ -3637,12 +3705,14 @@ qdf_nbuf_t dp_tx_send(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
 	if (qdf_unlikely(!vdev))
 		return nbuf;
 
+	dp_vdev_tx_mark_to_fw(nbuf, vdev);
+
 	/*
 	 * Set Default Host TID value to invalid TID
 	 * (TID override disabled)
 	 */
 	msdu_info.tid = HTT_TX_EXT_TID_INVALID;
-	DP_STATS_INC_PKT(vdev, tx_i.rcvd, 1, qdf_nbuf_headlen(nbuf));
+	DP_STATS_INC_PKT(vdev, tx_i.rcvd, 1, qdf_nbuf_len(nbuf));
 
 	if (qdf_unlikely(vdev->mesh_vdev)) {
 		qdf_nbuf_t nbuf_mesh = dp_tx_extract_mesh_meta_data(vdev, nbuf,
@@ -3695,6 +3765,8 @@ qdf_nbuf_t dp_tx_send(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
 					 qdf_nbuf_len(nbuf));
 			return nbuf;
 		}
+
+		DP_STATS_INC(vdev,  tx_i.rcvd.num, msdu_info.num_seg - 1);
 
 		goto send_multiple;
 	}
@@ -4244,10 +4316,12 @@ static void dp_tx_update_peer_delay_stats(struct dp_txrx_peer *txrx_peer,
 	if (qdf_likely(!wlan_cfg_is_peer_ext_stats_enabled(soc->wlan_cfg_ctx)))
 		return;
 
+	if (!txrx_peer->delay_stats)
+		return;
+
 	tid = ts->tid;
 	delay_stats = txrx_peer->delay_stats;
 
-	qdf_assert(delay_stats);
 	qdf_assert(ring < CDP_MAX_TXRX_CTX);
 
 	/*
@@ -5305,7 +5379,7 @@ void dp_tx_comp_process_tx_status(struct dp_soc *soc,
 	}
 
 	eh = (qdf_ether_header_t *)qdf_nbuf_data(nbuf);
-	length = qdf_nbuf_len(nbuf);
+	length = dp_tx_get_pkt_len(tx_desc);
 
 	dp_status = dp_tx_hw_to_qdf(ts->status);
 	DPTRACE(qdf_dp_trace_ptr(tx_desc->nbuf,
@@ -6625,11 +6699,9 @@ QDF_STATUS dp_tso_soc_attach(struct cdp_soc_t *txrx_soc)
 {
 	struct dp_soc *soc = (struct dp_soc *)txrx_soc;
 	uint8_t num_pool;
-	uint32_t num_desc;
 	uint32_t num_ext_desc;
 
 	num_pool = wlan_cfg_get_num_tx_desc_pool(soc->wlan_cfg_ctx);
-	num_desc = wlan_cfg_get_num_tx_desc(soc->wlan_cfg_ctx);
 	num_ext_desc = wlan_cfg_get_num_tx_ext_desc(soc->wlan_cfg_ctx);
 
 	if (dp_tx_tso_cmn_desc_pool_alloc(soc, num_pool, num_ext_desc))

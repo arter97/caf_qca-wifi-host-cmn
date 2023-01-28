@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -432,6 +432,7 @@ static const uint32_t pdev_param_tlv[] = {
 	PARAM_MAP(pdev_param_cts2self_for_p2p_go_config,
 		  PDEV_PARAM_CTS2SELF_FOR_P2P_GO_CONFIG),
 	PARAM_MAP(pdev_param_txpower_reason_sar, PDEV_PARAM_TXPOWER_REASON_SAR),
+	PARAM_MAP(pdev_param_default_6ghz_rate, PDEV_PARAM_DEFAULT_6GHZ_RATE),
 };
 
 /* Populate vdev_param array whose index is host param, value is target param */
@@ -2061,6 +2062,47 @@ static QDF_STATUS send_green_ap_ps_cmd_tlv(wmi_unified_t wmi_handle,
 }
 #endif
 
+#ifdef WLAN_SUPPORT_GAP_LL_PS_MODE
+static QDF_STATUS send_green_ap_ll_ps_cmd_tlv(wmi_unified_t wmi_handle,
+					      struct green_ap_ll_ps_cmd_param *green_ap_ll_ps_params)
+{
+	uint32_t len;
+	wmi_buf_t buf;
+	wmi_xgap_enable_cmd_fixed_param *cmd;
+
+	len = sizeof(*cmd);
+
+	wmi_debug("Green AP low latency PS: bcn interval: %u state: %u cookie: %u",
+		  green_ap_ll_ps_params->bcn_interval,
+		  green_ap_ll_ps_params->state,
+		  green_ap_ll_ps_params->cookie);
+
+	buf = wmi_buf_alloc(wmi_handle, len);
+	if (!buf)
+		return QDF_STATUS_E_NOMEM;
+
+	cmd = (wmi_xgap_enable_cmd_fixed_param *)wmi_buf_data(buf);
+	WMITLV_SET_HDR(&cmd->tlv_header,
+		       WMITLV_TAG_STRUC_wmi_xgap_enable_cmd_fixed_param,
+		       WMITLV_GET_STRUCT_TLVLEN
+				(wmi_xgap_enable_cmd_fixed_param));
+
+	cmd->beacon_interval = green_ap_ll_ps_params->bcn_interval;
+	cmd->sap_lp_flag = green_ap_ll_ps_params->state;
+	cmd->dialog_token = green_ap_ll_ps_params->cookie;
+
+	wmi_mtrace(WMI_XGAP_ENABLE_CMDID, NO_SESSION, 0);
+	if (wmi_unified_cmd_send(wmi_handle, buf, len,
+				 WMI_XGAP_ENABLE_CMDID)) {
+		wmi_err("Green AP Low latency PS cmd Failed");
+		wmi_buf_free(buf);
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	return QDF_STATUS_SUCCESS;
+}
+#endif
+
 /**
  * send_pdev_utf_cmd_tlv() - send utf command to fw
  * @wmi_handle: wmi handle
@@ -3457,7 +3499,7 @@ static uint8_t *update_peer_flags_tlv_ehtinfo(
 	wmi_debug("EHT cap_mac %x %x ehtops %x  EHT phy %x  %x  %x  pp %x",
 		  cmd->peer_eht_cap_mac[0],
 		  cmd->peer_eht_cap_mac[1], cmd->peer_eht_ops,
-		  cmd->peer_eht_cap_phy[0], cmd->peer_he_cap_phy[1],
+		  cmd->peer_eht_cap_phy[0], cmd->peer_eht_cap_phy[1],
 		  cmd->peer_eht_cap_phy[2], cmd->puncture_20mhz_bitmap);
 
 	return buf_ptr;
@@ -5377,11 +5419,11 @@ send_update_edca_pifs_param_cmd_tlv(wmi_unified_t wmi_handle,
 			       WMITLV_GET_STRUCT_TLVLEN(wmi_wmm_params));
 
 		wmm_params->cwmin =
-			edca_pifs->param.edca_pifs_param.eparam.acvo_cwmin;
+			BIT(edca_pifs->param.edca_pifs_param.eparam.acvo_cwmin) - 1;
 		wmm_params->cwmax =
-			edca_pifs->param.edca_pifs_param.eparam.acvo_cwmax;
+			BIT(edca_pifs->param.edca_pifs_param.eparam.acvo_cwmax) - 1;
 		wmm_params->aifs =
-			edca_pifs->param.edca_pifs_param.eparam.acvo_aifsn;
+			edca_pifs->param.edca_pifs_param.eparam.acvo_aifsn - 1;
 		wmm_params->txoplimit =
 			edca_pifs->param.edca_pifs_param.eparam.acvo_txoplimit;
 		wmm_params->acm =
@@ -5706,7 +5748,7 @@ static QDF_STATUS send_p2p_go_set_beacon_ie_cmd_tlv(wmi_unified_t wmi_handle,
  *
  * set scan probe OUI parameters in firmware
  *
- * Return: CDF status
+ * Return: QDF status
  */
 static QDF_STATUS send_scan_probe_setoui_cmd_tlv(wmi_unified_t wmi_handle,
 			  struct scan_mac_oui *psetoui)
@@ -5826,7 +5868,7 @@ static QDF_STATUS send_ipa_offload_control_cmd_tlv(wmi_unified_t wmi_handle,
  *
  * This function request FW to stop ongoing PNO operation.
  *
- * Return: CDF status
+ * Return: QDF status
  */
 static QDF_STATUS send_pno_stop_cmd_tlv(wmi_unified_t wmi_handle, uint8_t vdev_id)
 {
@@ -6205,7 +6247,7 @@ static void wmi_dump_pno_scan_freq_list(struct chan_list *scan_freq_list)
  * @pno: PNO request
  *
  * This function request FW to start PNO request.
- * Request: CDF status
+ * Request: QDF status
  */
 static QDF_STATUS send_pno_start_cmd_tlv(wmi_unified_t wmi_handle,
 		   struct pno_scan_req_params *pno)
@@ -6807,7 +6849,7 @@ static QDF_STATUS send_unified_ll_stats_get_sta_cmd_tlv(
  * @wmi_handle: wmi handle
  * @vdev_id: vdev id
  *
- * Return: CDF status
+ * Return: QDF status
  */
 static QDF_STATUS send_congestion_cmd_tlv(wmi_unified_t wmi_handle,
 			uint8_t vdev_id)
@@ -6883,7 +6925,7 @@ static QDF_STATUS send_snr_request_cmd_tlv(wmi_unified_t wmi_handle)
  * @wmi_handle: wmi handle
  * @vdev_id: vdev id
  *
- * Return: CDF status
+ * Return: QDF status
  */
 static QDF_STATUS send_snr_cmd_tlv(wmi_unified_t wmi_handle, uint8_t vdev_id)
 {
@@ -6919,7 +6961,7 @@ static QDF_STATUS send_snr_cmd_tlv(wmi_unified_t wmi_handle, uint8_t vdev_id)
  * @wmi_handle: wmi handle
  * @link_status: get link params
  *
- * Return: CDF status
+ * Return: QDF status
  */
 static QDF_STATUS send_link_status_req_cmd_tlv(wmi_unified_t wmi_handle,
 				 struct link_status_params *link_status)
@@ -7166,7 +7208,7 @@ static QDF_STATUS send_stop_11d_scan_cmd_tlv(wmi_unified_t wmi_handle,
  * @data_len: the length of @data
  * @data: the pointer to data buf
  *
- * Return: CDF status
+ * Return: QDF status
  */
 static QDF_STATUS send_start_oem_data_cmd_tlv(wmi_unified_t wmi_handle,
 					      uint32_t data_len,
@@ -7383,7 +7425,7 @@ send_dfs_phyerr_filter_offload_en_cmd_tlv(wmi_unified_t wmi_handle,
  * @cmd_id: pktlog cmd id
  * @user_triggered: user triggered input for PKTLOG enable mode
  *
- * Return: CDF status
+ * Return: QDF status
  */
 static QDF_STATUS send_pktlog_wmi_send_cmd_tlv(wmi_unified_t wmi_handle,
 				   WMI_PKTLOG_EVENT pktlog_event,
@@ -7472,7 +7514,7 @@ wmi_send_failed:
  * @wmi_handle: wmi handle
  * @preq: stats ext params
  *
- * Return: CDF status
+ * Return: QDF status
  */
 static QDF_STATUS send_stats_ext_req_cmd_tlv(wmi_unified_t wmi_handle,
 			struct stats_ext_params *preq)
@@ -12178,12 +12220,21 @@ QDF_STATUS save_ext_service_bitmap_tlv(wmi_unified_t wmi_handle, void *evt_buf,
 		return QDF_STATUS_SUCCESS;
 	}
 
-	if (!soc->wmi_ext2_service_bitmap) {
+	if (!soc->wmi_ext2_service_bitmap ||
+	    (param_buf->num_wmi_service_ext_bitmap >
+	     soc->wmi_ext2_service_bitmap_len)) {
+		if (soc->wmi_ext2_service_bitmap) {
+			qdf_mem_free(soc->wmi_ext2_service_bitmap);
+			soc->wmi_ext2_service_bitmap = NULL;
+		}
 		soc->wmi_ext2_service_bitmap =
 			qdf_mem_malloc(param_buf->num_wmi_service_ext_bitmap *
 				       sizeof(uint32_t));
 		if (!soc->wmi_ext2_service_bitmap)
 			return QDF_STATUS_E_NOMEM;
+
+		soc->wmi_ext2_service_bitmap_len =
+			param_buf->num_wmi_service_ext_bitmap;
 	}
 
 	qdf_mem_copy(soc->wmi_ext2_service_bitmap,
@@ -15419,22 +15470,82 @@ static struct cur_reg_rule
 static enum cc_setting_code wmi_reg_status_to_reg_status(
 				WMI_REG_SET_CC_STATUS_CODE wmi_status_code)
 {
-	if (wmi_status_code == WMI_REG_SET_CC_STATUS_PASS)
+	if (wmi_status_code == WMI_REG_SET_CC_STATUS_PASS) {
+		wmi_nofl_debug("REG_SET_CC_STATUS_PASS");
 		return REG_SET_CC_STATUS_PASS;
-	else if (wmi_status_code == WMI_REG_CURRENT_ALPHA2_NOT_FOUND)
+	} else if (wmi_status_code == WMI_REG_CURRENT_ALPHA2_NOT_FOUND) {
+		wmi_nofl_debug("WMI_REG_CURRENT_ALPHA2_NOT_FOUND");
 		return REG_CURRENT_ALPHA2_NOT_FOUND;
-	else if (wmi_status_code == WMI_REG_INIT_ALPHA2_NOT_FOUND)
+	} else if (wmi_status_code == WMI_REG_INIT_ALPHA2_NOT_FOUND) {
+		wmi_nofl_debug("WMI_REG_INIT_ALPHA2_NOT_FOUND");
 		return REG_INIT_ALPHA2_NOT_FOUND;
-	else if (wmi_status_code == WMI_REG_SET_CC_CHANGE_NOT_ALLOWED)
+	} else if (wmi_status_code == WMI_REG_SET_CC_CHANGE_NOT_ALLOWED) {
+		wmi_nofl_debug("WMI_REG_SET_CC_CHANGE_NOT_ALLOWED");
 		return REG_SET_CC_CHANGE_NOT_ALLOWED;
-	else if (wmi_status_code == WMI_REG_SET_CC_STATUS_NO_MEMORY)
+	} else if (wmi_status_code == WMI_REG_SET_CC_STATUS_NO_MEMORY) {
+		wmi_nofl_debug("WMI_REG_SET_CC_STATUS_NO_MEMORY");
 		return REG_SET_CC_STATUS_NO_MEMORY;
-	else if (wmi_status_code == WMI_REG_SET_CC_STATUS_FAIL)
+	} else if (wmi_status_code == WMI_REG_SET_CC_STATUS_FAIL) {
+		wmi_nofl_debug("WMI_REG_SET_CC_STATUS_FAIL");
 		return REG_SET_CC_STATUS_FAIL;
+	}
 
 	wmi_debug("Unknown reg status code from WMI");
 	return REG_SET_CC_STATUS_FAIL;
 }
+
+#ifdef CONFIG_BAND_6GHZ
+/**
+ * reg_print_ap_power_type_6ghz - Prints the AP Power type
+ * @ap_type: 6ghz-AP Power type
+ *
+ * Return: void
+ */
+static void reg_print_ap_power_type_6ghz(enum reg_6g_ap_type ap_type)
+{
+	switch (ap_type) {
+	case REG_INDOOR_AP:
+		wmi_nofl_debug("AP Power type %s", "LOW POWER INDOOR");
+		break;
+	case REG_STANDARD_POWER_AP:
+		wmi_nofl_debug("AP Power type %s", "STANDARD POWER");
+		break;
+	case REG_VERY_LOW_POWER_AP:
+		wmi_nofl_debug("AP Power type %s", "VERY LOW POWER INDOOR");
+		break;
+	default:
+		wmi_nofl_debug("Invalid AP Power type %u", ap_type);
+	}
+}
+
+/**
+ * reg_print_6ghz_client_type - Prints the client type
+ * @client_type: 6ghz-client type
+ *
+ * Return: void
+ */
+static void reg_print_6ghz_client_type(enum reg_6g_client_type client_type)
+{
+	switch (client_type) {
+	case REG_DEFAULT_CLIENT:
+		wmi_nofl_debug("Client type %s", "DEFAULT CLIENT");
+		break;
+	case REG_SUBORDINATE_CLIENT:
+		wmi_nofl_debug("Client type %s", "SUBORDINATE CLIENT");
+		break;
+	default:
+		wmi_nofl_debug("Invalid Client type %u", client_type);
+	}
+}
+#else
+static inline void reg_print_ap_power_type_6ghz(enum reg_6g_ap_type ap_type)
+{
+}
+
+static inline void reg_print_6ghz_client_type(enum reg_6g_client_type client_type)
+{
+}
+#endif /* CONFIG_BAND_6GHZ */
 
 #ifdef CONFIG_BAND_6GHZ
 
@@ -15730,9 +15841,9 @@ static QDF_STATUS extract_reg_chan_list_ext_update_event_tlv(
 	wmi_nofl_debug("num_phys = %u and phy_id = %u",
 		  reg_info->num_phy, reg_info->phy_id);
 
-	wmi_nofl_debug("cc %s dfs %d BW: min_2g %d max_2g %d min_5g %d max_5g %d",
-		  reg_info->alpha2, reg_info->dfs_region, reg_info->min_bw_2g,
-		  reg_info->max_bw_2g, reg_info->min_bw_5g,
+	wmi_nofl_debug("cc %s dfs_region %d reg_dmn_pair %x BW: min_2g %d max_2g %d min_5g %d max_5g %d",
+		  reg_info->alpha2, reg_info->dfs_region, reg_info->reg_dmn_pair,
+		  reg_info->min_bw_2g, reg_info->max_bw_2g, reg_info->min_bw_5g,
 		  reg_info->max_bw_5g);
 
 	wmi_nofl_debug("min_bw_6g_ap_sp %d max_bw_6g_ap_sp %d min_bw_6g_ap_lpi %d max_bw_6g_ap_lpi %d min_bw_6g_ap_vlp %d max_bw_6g_ap_vlp %d",
@@ -15786,60 +15897,89 @@ static QDF_STATUS extract_reg_chan_list_ext_update_event_tlv(
 		create_ext_reg_rules_from_wmi(num_2g_reg_rules,
 					      ext_wmi_reg_rule);
 	ext_wmi_reg_rule += num_2g_reg_rules;
+	if (!num_2g_reg_rules)
+		wmi_nofl_debug("No 2ghz reg rule");
 	for (i = 0; i < num_2g_reg_rules; i++) {
 		if (!reg_info->reg_rules_2g_ptr)
 			break;
-		wmi_nofl_debug("2g rule %d start freq %d end freq %d flags %d",
-			  i, reg_info->reg_rules_2g_ptr[i].start_freq,
-			  reg_info->reg_rules_2g_ptr[i].end_freq,
-			  reg_info->reg_rules_2g_ptr[i].flags);
+		wmi_nofl_debug("2 GHz rule %u start freq %u end freq %u max_bw %u reg_power %u ant_gain %u flags %u psd_flag %u psd_eirp %u",
+			       i, reg_info->reg_rules_2g_ptr[i].start_freq,
+			       reg_info->reg_rules_2g_ptr[i].end_freq,
+			       reg_info->reg_rules_2g_ptr[i].max_bw,
+			       reg_info->reg_rules_2g_ptr[i].reg_power,
+			       reg_info->reg_rules_2g_ptr[i].ant_gain,
+			       reg_info->reg_rules_2g_ptr[i].flags,
+			       reg_info->reg_rules_2g_ptr[i].psd_flag,
+			       reg_info->reg_rules_2g_ptr[i].psd_eirp);
 	}
 	reg_info->reg_rules_5g_ptr =
 		create_ext_reg_rules_from_wmi(num_5g_reg_rules,
 					      ext_wmi_reg_rule);
 	ext_wmi_reg_rule += num_5g_reg_rules;
+	if (!num_5g_reg_rules)
+		wmi_nofl_debug("No 5ghz reg rule");
 	for (i = 0; i < num_5g_reg_rules; i++) {
 		if (!reg_info->reg_rules_5g_ptr)
 			break;
-		wmi_nofl_debug("5g rule %d start freq %d end freq %d flags %d",
-			  i, reg_info->reg_rules_5g_ptr[i].start_freq,
-			  reg_info->reg_rules_5g_ptr[i].end_freq,
-			  reg_info->reg_rules_5g_ptr[i].flags);
+		wmi_nofl_debug("5 GHz rule %u start freq %u end freq %u max_bw %u reg_power %u ant_gain %u flags %u psd_flag %u psd_eirp %u",
+			       i, reg_info->reg_rules_5g_ptr[i].start_freq,
+			       reg_info->reg_rules_5g_ptr[i].end_freq,
+			       reg_info->reg_rules_5g_ptr[i].max_bw,
+			       reg_info->reg_rules_5g_ptr[i].reg_power,
+			       reg_info->reg_rules_5g_ptr[i].ant_gain,
+			       reg_info->reg_rules_5g_ptr[i].flags,
+			       reg_info->reg_rules_5g_ptr[i].psd_flag,
+			       reg_info->reg_rules_5g_ptr[i].psd_eirp);
 	}
 
 	for (i = 0; i < REG_CURRENT_MAX_AP_TYPE; i++) {
+		reg_print_ap_power_type_6ghz(i);
 		reg_info->reg_rules_6g_ap_ptr[i] =
 			create_ext_reg_rules_from_wmi(num_6g_reg_rules_ap[i],
 						      ext_wmi_reg_rule);
 
 		ext_wmi_reg_rule += num_6g_reg_rules_ap[i];
+		if (!num_6g_reg_rules_ap[i])
+			wmi_nofl_debug("No 6ghz reg rule");
 		for (j = 0; j < num_6g_reg_rules_ap[i]; j++) {
 			if (!reg_info->reg_rules_6g_ap_ptr[i])
 				break;
-			wmi_nofl_debug("6g pwr type %d AP rule %d start freq %d end freq %d flags %d",
-				  i, j,
-				  reg_info->reg_rules_6g_ap_ptr[i][j].start_freq,
-				  reg_info->reg_rules_6g_ap_ptr[i][j].end_freq,
-				  reg_info->reg_rules_6g_ap_ptr[i][j].flags);
+			wmi_nofl_debug("AP 6GHz rule %u start freq %u end freq %u max_bw %u reg_power %u ant_gain %u flags %u psd_flag %u psd_eirp %u",
+				       j, reg_info->reg_rules_6g_ap_ptr[i][j].start_freq,
+				       reg_info->reg_rules_6g_ap_ptr[i][j].end_freq,
+				       reg_info->reg_rules_6g_ap_ptr[i][j].max_bw,
+				       reg_info->reg_rules_6g_ap_ptr[i][j].reg_power,
+				       reg_info->reg_rules_6g_ap_ptr[i][j].ant_gain,
+				       reg_info->reg_rules_6g_ap_ptr[i][j].flags,
+				       reg_info->reg_rules_6g_ap_ptr[i][j].psd_flag,
+				       reg_info->reg_rules_6g_ap_ptr[i][j].psd_eirp);
 		}
 	}
 
 	for (j = 0; j < REG_CURRENT_MAX_AP_TYPE; j++) {
+		reg_print_ap_power_type_6ghz(j);
 		for (i = 0; i < REG_MAX_CLIENT_TYPE; i++) {
+			reg_print_6ghz_client_type(i);
 			reg_info->reg_rules_6g_client_ptr[j][i] =
 				create_ext_reg_rules_from_wmi(
 					num_6g_reg_rules_client[j][i],
 					ext_wmi_reg_rule);
 
 			ext_wmi_reg_rule += num_6g_reg_rules_client[j][i];
+			if (!num_6g_reg_rules_client[j][i])
+				wmi_nofl_debug("No 6ghz reg rule for [%d][%d]", j, i);
 			for (k = 0; k < num_6g_reg_rules_client[j][i]; k++) {
 				if (!reg_info->reg_rules_6g_client_ptr[j][i])
 					break;
-				wmi_nofl_debug("6g pwr type %d cli type %d CLI rule %d start freq %d end freq %d flags %d",
-					  j, i, k,
-					  reg_info->reg_rules_6g_client_ptr[j][i][k].start_freq,
-					  reg_info->reg_rules_6g_client_ptr[j][i][k].end_freq,
-					  reg_info->reg_rules_6g_client_ptr[j][i][k].flags);
+				wmi_nofl_debug("CLI 6GHz rule %u start freq %u end freq %u max_bw %u reg_power %u ant_gain %u flags %u psd_flag %u psd_eirp %u",
+					       k, reg_info->reg_rules_6g_client_ptr[j][i][k].start_freq,
+					       reg_info->reg_rules_6g_client_ptr[j][i][k].end_freq,
+					       reg_info->reg_rules_6g_client_ptr[j][i][k].max_bw,
+					       reg_info->reg_rules_6g_client_ptr[j][i][k].reg_power,
+					       reg_info->reg_rules_6g_client_ptr[j][i][k].ant_gain,
+					       reg_info->reg_rules_6g_client_ptr[j][i][k].flags,
+					       reg_info->reg_rules_6g_client_ptr[j][i][k].psd_flag,
+					       reg_info->reg_rules_6g_client_ptr[j][i][k].psd_eirp);
 			}
 		}
 	}
@@ -16186,6 +16326,7 @@ static QDF_STATUS extract_reg_chan_list_update_event_tlv(
 	wmi_unified_t wmi_handle, uint8_t *evt_buf,
 	struct cur_regulatory_info *reg_info, uint32_t len)
 {
+	uint32_t i;
 	WMI_REG_CHAN_LIST_CC_EVENTID_param_tlvs *param_buf;
 	wmi_reg_chan_list_cc_event_fixed_param *chan_list_event_hdr;
 	wmi_regulatory_rule_struct *wmi_reg_rule;
@@ -16245,8 +16386,8 @@ static QDF_STATUS extract_reg_chan_list_update_event_tlv(
 	wmi_debug("num_phys = %u and phy_id = %u",
 		 reg_info->num_phy, reg_info->phy_id);
 
-	wmi_debug("cc %s dfs %d BW: min_2g %d max_2g %d min_5g %d max_5g %d",
-		 reg_info->alpha2, reg_info->dfs_region,
+	wmi_debug("cc %s dfs_region %d reg_dmn_pair %x BW: min_2g %d max_2g %d min_5g %d max_5g %d",
+		 reg_info->alpha2, reg_info->dfs_region, reg_info->reg_dmn_pair,
 		 reg_info->min_bw_2g, reg_info->max_bw_2g,
 		 reg_info->min_bw_5g, reg_info->max_bw_5g);
 
@@ -16259,9 +16400,35 @@ static QDF_STATUS extract_reg_chan_list_update_event_tlv(
 	reg_info->reg_rules_2g_ptr = create_reg_rules_from_wmi(num_2g_reg_rules,
 			wmi_reg_rule);
 	wmi_reg_rule += num_2g_reg_rules;
+	if (!num_2g_reg_rules)
+		wmi_nofl_debug("No 2ghz reg rule");
+	for (i = 0; i < num_2g_reg_rules; i++) {
+		if (!reg_info->reg_rules_2g_ptr)
+			break;
+		wmi_nofl_debug("2 GHz rule %u start freq %u end freq %u max_bw %u reg_power %u ant_gain %u flags %u",
+			       i, reg_info->reg_rules_2g_ptr[i].start_freq,
+			       reg_info->reg_rules_2g_ptr[i].end_freq,
+			       reg_info->reg_rules_2g_ptr[i].max_bw,
+			       reg_info->reg_rules_2g_ptr[i].reg_power,
+			       reg_info->reg_rules_2g_ptr[i].ant_gain,
+			       reg_info->reg_rules_2g_ptr[i].flags);
+	}
 
 	reg_info->reg_rules_5g_ptr = create_reg_rules_from_wmi(num_5g_reg_rules,
 			wmi_reg_rule);
+	if (!num_5g_reg_rules)
+		wmi_nofl_debug("No 5ghz reg rule");
+	for (i = 0; i < num_5g_reg_rules; i++) {
+		if (!reg_info->reg_rules_5g_ptr)
+			break;
+		wmi_nofl_debug("5 GHz rule %u start freq %u end freq %u max_bw %u reg_power %u ant_gain %u flags %u",
+			       i, reg_info->reg_rules_5g_ptr[i].start_freq,
+			       reg_info->reg_rules_5g_ptr[i].end_freq,
+			       reg_info->reg_rules_5g_ptr[i].max_bw,
+			       reg_info->reg_rules_5g_ptr[i].reg_power,
+			       reg_info->reg_rules_5g_ptr[i].ant_gain,
+			       reg_info->reg_rules_5g_ptr[i].flags);
+	}
 
 	wmi_debug("processed regulatory channel list");
 
@@ -17285,6 +17452,39 @@ static QDF_STATUS extract_green_ap_egap_status_info_tlv(
 	egap_status_info_params->mac_id = chainmask_event->mac_id;
 	egap_status_info_params->tx_chainmask = chainmask_event->tx_chainmask;
 	egap_status_info_params->rx_chainmask = chainmask_event->rx_chainmask;
+
+	return QDF_STATUS_SUCCESS;
+}
+#endif
+
+#ifdef WLAN_SUPPORT_GAP_LL_PS_MODE
+static QDF_STATUS extract_green_ap_ll_ps_param_tlv(
+		uint8_t *evt_buf,
+		struct wlan_green_ap_ll_ps_event_param *ll_ps_params)
+{
+	WMI_XGAP_ENABLE_COMPLETE_EVENTID_param_tlvs *param_buf;
+	wmi_xgap_enable_complete_event_fixed_param *ll_ps_event;
+
+	param_buf = (WMI_XGAP_ENABLE_COMPLETE_EVENTID_param_tlvs *)evt_buf;
+	if (!param_buf) {
+		wmi_err("Invalid XGAP SAP info status");
+		return QDF_STATUS_E_INVAL;
+	}
+
+	ll_ps_event = (wmi_xgap_enable_complete_event_fixed_param *)
+				param_buf->fixed_param;
+	if (!ll_ps_event) {
+		wmi_err("Invalid low latency power save event buffer");
+		return QDF_STATUS_E_INVAL;
+	}
+
+	ll_ps_params->dialog_token = ll_ps_event->dialog_token;
+	ll_ps_params->next_tsf =
+		((uint64_t)ll_ps_event->next_tsf_high32 << 32) |
+		ll_ps_event->next_tsf_low32;
+
+	wmi_debug("cookie : %llu next_tsf %llu", ll_ps_params->dialog_token,
+		  ll_ps_params->next_tsf);
 
 	return QDF_STATUS_SUCCESS;
 }
@@ -19244,10 +19444,10 @@ static QDF_STATUS send_set_tpc_power_cmd_tlv(wmi_unified_t wmi_handle,
 	tpc_power_info_param->psd_power = param->is_psd_power;
 	tpc_power_info_param->eirp_power = param->eirp_power;
 	tpc_power_info_param->power_type_6ghz = param->power_type_6g;
-	wmi_debug("eirp_power = %d is_psd_power = %d power_type_6ghz = %d",
+	wmi_debug("eirp_power = %d is_psd_power = %d",
 		  tpc_power_info_param->eirp_power,
-		  tpc_power_info_param->psd_power,
-		  tpc_power_info_param->power_type_6ghz);
+		  tpc_power_info_param->psd_power);
+	reg_print_ap_power_type_6ghz(tpc_power_info_param->power_type_6ghz);
 
 	buf_ptr += sizeof(wmi_vdev_set_tpc_power_fixed_param);
 	WMITLV_SET_HDR(buf_ptr, WMITLV_TAG_ARRAY_STRUC,
@@ -19892,6 +20092,10 @@ struct wmi_ops tlv_ops =  {
 	.send_green_ap_ps_cmd = send_green_ap_ps_cmd_tlv,
 	.extract_green_ap_egap_status_info =
 			extract_green_ap_egap_status_info_tlv,
+#endif
+#ifdef WLAN_SUPPORT_GAP_LL_PS_MODE
+	.send_green_ap_ll_ps_cmd = send_green_ap_ll_ps_cmd_tlv,
+	.extract_green_ap_ll_ps_param = extract_green_ap_ll_ps_param_tlv,
 #endif
 	.send_csa_offload_enable_cmd = send_csa_offload_enable_cmd_tlv,
 	.send_start_oem_data_cmd = send_start_oem_data_cmd_tlv,
@@ -20778,6 +20982,10 @@ static void populate_tlv_events_id(uint32_t *event_ids)
 	event_ids[wmi_extract_health_mon_init_done_info_eventid] =
 		WMI_HEALTH_MON_INIT_DONE_EVENTID;
 #endif /* HEALTH_MON_SUPPORT */
+#ifdef WLAN_SUPPORT_GAP_LL_PS_MODE
+	event_ids[wmi_xgap_enable_complete_eventid] =
+		WMI_XGAP_ENABLE_COMPLETE_EVENTID;
+#endif
 }
 
 #ifdef WLAN_FEATURE_LINK_LAYER_STATS
@@ -20921,6 +21129,8 @@ static void populate_tlv_service(uint32_t *wmi_service)
 	wmi_service[wmi_service_mawc] = WMI_SERVICE_MAWC;
 	wmi_service[wmi_service_multiple_vdev_restart] =
 			WMI_SERVICE_MULTIPLE_VDEV_RESTART;
+	wmi_service[wmi_service_multiple_vdev_restart_bmap] =
+			WMI_SERVICE_MULTIPLE_VDEV_RESTART_BITMAP_SUPPORT;
 	wmi_service[wmi_service_smart_antenna_sw_support] =
 				WMI_SERVICE_SMART_ANTENNA_SW_SUPPORT;
 	wmi_service[wmi_service_smart_antenna_hw_support] =

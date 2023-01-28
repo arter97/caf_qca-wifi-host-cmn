@@ -331,9 +331,17 @@ void dp_tx_process_htt_completion_be(struct dp_soc *soc,
 		ts.tsf = htt_desc[4];
 		ts.first_msdu = 1;
 		ts.last_msdu = 1;
-		ts.status = (tx_status == HTT_TX_FW2WBM_TX_STATUS_OK ?
-			     HAL_TX_TQM_RR_FRAME_ACKED :
-			     HAL_TX_TQM_RR_REM_CMD_REM);
+		switch (tx_status) {
+		case HTT_TX_FW2WBM_TX_STATUS_OK:
+			ts.status = HAL_TX_TQM_RR_FRAME_ACKED;
+			break;
+		case HTT_TX_FW2WBM_TX_STATUS_DROP:
+			ts.status = HAL_TX_TQM_RR_REM_CMD_REM;
+			break;
+		case HTT_TX_FW2WBM_TX_STATUS_TTL:
+			ts.status = HAL_TX_TQM_RR_REM_CMD_TX;
+			break;
+		}
 		tid = ts.tid;
 		if (qdf_unlikely(tid >= CDP_MAX_DATA_TIDS))
 			tid = CDP_MAX_DATA_TIDS - 1;
@@ -945,6 +953,40 @@ int dp_ppeds_tx_comp_handler(struct dp_soc_be *be_soc, uint32_t quota)
 }
 #endif
 
+#if defined(QCA_SUPPORT_WDS_EXTENDED)
+static inline void
+dp_get_peer_from_tx_exc_meta(struct dp_soc *soc, uint32_t *hal_tx_desc_cached,
+			     struct cdp_tx_exception_metadata *tx_exc_metadata,
+			     uint16_t *ast_idx, uint16_t *ast_hash)
+{
+	struct dp_peer *peer = NULL;
+
+	if (tx_exc_metadata->is_wds_extended) {
+		peer = dp_peer_get_ref_by_id(soc, tx_exc_metadata->peer_id,
+					     DP_MOD_ID_TX);
+		if (peer) {
+			*ast_idx = peer->ast_idx;
+			*ast_hash = peer->ast_hash;
+			hal_tx_desc_set_index_lookup_override
+							(soc->hal_soc,
+							 hal_tx_desc_cached,
+							 0x1);
+			dp_peer_unref_delete(peer, DP_MOD_ID_TX);
+		}
+	} else {
+		return;
+	}
+}
+
+#else
+static inline void
+dp_get_peer_from_tx_exc_meta(struct dp_soc *soc, uint32_t *hal_tx_desc_cached,
+			     struct cdp_tx_exception_metadata *tx_exc_metadata,
+			     uint16_t *ast_idx, uint16_t *ast_hash)
+{
+}
+#endif
+
 QDF_STATUS
 dp_tx_hw_enqueue_be(struct dp_soc *soc, struct dp_vdev *vdev,
 		    struct dp_tx_desc_s *tx_desc, uint16_t fw_metadata,
@@ -963,6 +1005,8 @@ dp_tx_hw_enqueue_be(struct dp_soc *soc, struct dp_vdev *vdev,
 	hal_ring_handle_t hal_ring_hdl = NULL;
 	QDF_STATUS status = QDF_STATUS_E_RESOURCES;
 	uint8_t num_desc_bytes = HAL_TX_DESC_LEN_BYTES;
+	uint16_t ast_idx = vdev->bss_ast_idx;
+	uint16_t ast_hash = vdev->bss_ast_hash;
 
 	be_vdev = dp_get_be_vdev_from_dp_vdev(vdev);
 
@@ -982,6 +1026,9 @@ dp_tx_hw_enqueue_be(struct dp_soc *soc, struct dp_vdev *vdev,
 					   CDP_INVALID_SEC_TYPE) ||
 					   tx_exc_metadata->sec_type ==
 					   vdev->sec_type);
+		dp_get_peer_from_tx_exc_meta(soc, (void *)cached_desc,
+					     tx_exc_metadata,
+					     &ast_idx, &ast_hash);
 	}
 
 	hal_tx_desc_cached = (void *)cached_desc;
@@ -999,14 +1046,14 @@ dp_tx_hw_enqueue_be(struct dp_soc *soc, struct dp_vdev *vdev,
 				   vdev->lmac_id);
 
 	hal_tx_desc_set_search_index_be(soc->hal_soc, hal_tx_desc_cached,
-					vdev->bss_ast_idx);
+					ast_idx);
 	/*
 	 * Bank_ID is used as DSCP_TABLE number in beryllium
 	 * So there is no explicit field used for DSCP_TID_TABLE_NUM.
 	 */
 
 	hal_tx_desc_set_cache_set_num(soc->hal_soc, hal_tx_desc_cached,
-				      (vdev->bss_ast_hash & 0xF));
+				      (ast_hash & 0xF));
 
 	hal_tx_desc_set_fw_metadata(hal_tx_desc_cached, fw_metadata);
 	hal_tx_desc_set_buf_length(hal_tx_desc_cached, tx_desc->length);
@@ -1062,7 +1109,7 @@ dp_tx_hw_enqueue_be(struct dp_soc *soc, struct dp_vdev *vdev,
 	coalesce = dp_tx_attempt_coalescing(soc, vdev, tx_desc, tid,
 					    msdu_info, ring_id);
 
-	DP_STATS_INC_PKT(vdev, tx_i.processed, 1, tx_desc->length);
+	DP_STATS_INC_PKT(vdev, tx_i.processed, 1, dp_tx_get_pkt_len(tx_desc));
 	DP_STATS_INC(soc, tx.tcl_enq[ring_id], 1);
 	dp_tx_update_stats(soc, tx_desc, ring_id);
 	status = QDF_STATUS_SUCCESS;
@@ -1543,7 +1590,7 @@ qdf_nbuf_t dp_tx_fast_send_be(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
 	DP_STATS_INC(vdev, tx_i.rcvd_per_core[desc_pool_id], 1);
 
 	pdev = vdev->pdev;
-	if (dp_tx_limit_check(vdev))
+	if (dp_tx_limit_check(vdev, nbuf))
 		return nbuf;
 
 	tx_desc = dp_tx_desc_alloc(soc, desc_pool_id);

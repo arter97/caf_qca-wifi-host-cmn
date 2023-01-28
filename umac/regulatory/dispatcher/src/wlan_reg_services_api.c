@@ -1321,19 +1321,6 @@ wlan_reg_get_bonded_chan_entry(qdf_freq_t freq, enum phy_ch_width chwidth,
 }
 
 #ifdef WLAN_FEATURE_11BE
-void wlan_reg_fill_channel_list(struct wlan_objmgr_pdev *pdev,
-				qdf_freq_t freq,
-				qdf_freq_t sec_ch_2g_freq,
-				enum phy_ch_width ch_width,
-				qdf_freq_t band_center_320,
-				struct reg_channel_list *chan_list,
-				bool treat_nol_chan_as_disabled)
-{
-	reg_fill_channel_list(pdev, freq, sec_ch_2g_freq, ch_width,
-			      band_center_320, chan_list,
-			      treat_nol_chan_as_disabled);
-}
-
 #ifdef CONFIG_REG_6G_PWRMODE
 void
 wlan_reg_fill_channel_list_for_pwrmode(struct wlan_objmgr_pdev *pdev,
@@ -1384,6 +1371,23 @@ void wlan_reg_set_create_punc_bitmap(struct ch_params *ch_params,
 {
 	reg_set_create_punc_bitmap(ch_params, is_create_punc_bitmap);
 }
+
+#ifdef CONFIG_REG_CLIENT
+QDF_STATUS wlan_reg_apply_puncture(struct wlan_objmgr_pdev *pdev,
+				   uint16_t puncture_bitmap,
+				   qdf_freq_t freq,
+				   enum phy_ch_width bw,
+				   qdf_freq_t cen320_freq)
+{
+	return reg_apply_puncture(pdev, puncture_bitmap, freq, bw,
+				  cen320_freq);
+}
+
+QDF_STATUS wlan_reg_remove_puncture(struct wlan_objmgr_pdev *pdev)
+{
+	return reg_remove_puncture(pdev);
+}
+#endif
 #endif /* WLAN_FEATURE_11BE */
 
 #ifdef CONFIG_REG_6G_PWRMODE

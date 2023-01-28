@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2014-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -4833,6 +4833,90 @@ static void reg_update_5g_bonded_channel_state_punc_for_pwrmode(
 	}
 }
 #endif
+
+#ifdef CONFIG_REG_CLIENT
+QDF_STATUS reg_apply_puncture(struct wlan_objmgr_pdev *pdev,
+			      uint16_t puncture_bitmap,
+			      qdf_freq_t freq,
+			      enum phy_ch_width bw,
+			      qdf_freq_t cen320_freq)
+{
+	const struct bonded_channel_freq *bonded_chan;
+	qdf_freq_t chan_cfreq;
+	enum channel_enum chan_enum;
+	struct regulatory_channel *mas_chan_list;
+	struct wlan_regulatory_pdev_priv_obj *pdev_priv_obj;
+	bool is_puncture;
+	uint16_t i = 0;
+
+	pdev_priv_obj = reg_get_pdev_obj(pdev);
+
+	if (!IS_VALID_PDEV_REG_OBJ(pdev_priv_obj)) {
+		reg_err_rl("pdev reg obj is NULL");
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	mas_chan_list = pdev_priv_obj->mas_chan_list;
+	if (!mas_chan_list) {
+		reg_err_rl("mas chan_list is NULL");
+		return QDF_STATUS_E_FAILURE;
+	}
+	bonded_chan = reg_get_bonded_chan_entry(freq, bw, cen320_freq);
+	if (!bonded_chan) {
+		reg_err_rl("bonded chan fails, freq %d, bw %d, cen320_freq %d",
+			   freq, bw, cen320_freq);
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	chan_cfreq = bonded_chan->start_freq;
+	while (chan_cfreq <= bonded_chan->end_freq) {
+		is_puncture = BIT(i) & puncture_bitmap;
+		if (is_puncture) {
+			chan_enum = reg_get_chan_enum_for_freq(chan_cfreq);
+			if (reg_is_chan_enum_invalid(chan_enum)) {
+				reg_debug_rl("Invalid chan enum %d", chan_enum);
+				return QDF_STATUS_E_FAILURE;
+			}
+			mas_chan_list[chan_enum].is_static_punctured = true;
+		}
+		i++;
+		chan_cfreq = chan_cfreq + BW_20_MHZ;
+	}
+
+	reg_compute_pdev_current_chan_list(pdev_priv_obj);
+
+	return QDF_STATUS_SUCCESS;
+}
+
+QDF_STATUS reg_remove_puncture(struct wlan_objmgr_pdev *pdev)
+{
+	enum channel_enum chan_enum;
+	struct regulatory_channel *mas_chan_list;
+	struct wlan_regulatory_pdev_priv_obj *pdev_priv_obj;
+
+	pdev_priv_obj = reg_get_pdev_obj(pdev);
+
+	if (!IS_VALID_PDEV_REG_OBJ(pdev_priv_obj)) {
+		reg_err_rl("pdev reg obj is NULL");
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	mas_chan_list = pdev_priv_obj->mas_chan_list;
+	if (!mas_chan_list) {
+		reg_err_rl("mas chan_list is NULL");
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	for (chan_enum = 0; chan_enum < NUM_CHANNELS; chan_enum++)
+		if (mas_chan_list[chan_enum].is_static_punctured)
+			mas_chan_list[chan_enum].is_static_punctured = false;
+
+	reg_compute_pdev_current_chan_list(pdev_priv_obj);
+
+	return QDF_STATUS_SUCCESS;
+}
+#endif
+
 #else
 static void reg_update_5g_bonded_channel_state_punc_for_freq(
 			struct wlan_objmgr_pdev *pdev,
@@ -7031,7 +7115,7 @@ reg_compute_indoor_list_on_cc_change(struct wlan_objmgr_psoc *psoc,
 		wlan_objmgr_get_vdev_by_id_from_psoc(psoc, vdev_id,
 						     WLAN_REGULATORY_SB_ID);
 		if (!vdev)
-			goto next;
+			continue;
 
 		if (vdev->vdev_mlme.vdev_opmode != QDF_STA_MODE &&
 		    vdev->vdev_mlme.vdev_opmode != QDF_P2P_CLIENT_MODE)

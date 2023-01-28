@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -165,6 +165,7 @@ typedef struct rx_msdu_desc_info *rx_msdu_desc_info_t;
 union hal_tx_ppe_vp_config;
 union hal_tx_cmn_config_ppe;
 union hal_tx_bank_config;
+union hal_tx_ppe_idx_map_config;
 
 /* TBD: This should be movded to shared HW header file */
 enum hal_srng_ring_id {
@@ -965,6 +966,8 @@ struct hal_hw_txrx_ops {
 	void (*hal_tx_set_ppe_vp_entry)(hal_soc_handle_t hal_soc_hdl,
 					union hal_tx_ppe_vp_config *vp_cfg,
 					int ppe_vp_idx);
+	void (*hal_ppeds_cfg_ast_override_map_reg)(hal_soc_handle_t hal_soc_hdl,
+		uint8_t idx, union hal_tx_ppe_idx_map_config *ppeds_idx_map);
 	void (*hal_tx_set_ppe_pri2tid)(hal_soc_handle_t hal_soc_hdl,
 				       uint32_t val,
 				       uint8_t map_no);
@@ -1257,7 +1260,7 @@ struct hal_hw_txrx_ops {
 	uint32_t (*hal_txmon_status_get_num_users)(void *tx_tlv_hdr,
 						   uint8_t *num_users);
 #endif /* QCA_MONITOR_2_0_SUPPORT */
-	void (*hal_reo_shared_qaddr_setup)(hal_soc_handle_t hal_soc_hdl);
+	QDF_STATUS (*hal_reo_shared_qaddr_setup)(hal_soc_handle_t hal_soc_hdl);
 	void (*hal_reo_shared_qaddr_init)(hal_soc_handle_t hal_soc_hdl,
 					  int qref_reset);
 	void (*hal_reo_shared_qaddr_detach)(hal_soc_handle_t hal_soc_hdl);
@@ -1423,6 +1426,8 @@ struct hal_soc {
 	void *dev_base_addr_ce;
 
 	void *dev_base_addr_cmem;
+
+	void *dev_base_addr_pmm;
 	/* HAL internal state for all SRNG rings.
 	 * TODO: See if this is required
 	 */

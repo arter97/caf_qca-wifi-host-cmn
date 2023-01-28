@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2014-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -42,6 +42,8 @@
 #include <net/ieee80211_radiotap.h>
 #include <pld_common.h>
 #include <qdf_crypto.h>
+#include <linux/igmp.h>
+#include <net/mld.h>
 
 #if defined(FEATURE_TSO)
 #include <net/ipv6.h>
@@ -1510,10 +1512,8 @@ __qdf_nbuf_data_get_dhcp_subtype(uint8_t *data)
 #define EAPOL_WPA_KEY_INFO_ENCR_KEY_DATA BIT(12) /* IEEE 802.11i/RSN only */
 
 /**
- * __qdf_nbuf_data_get_eapol_subtype() - get the subtype of EAPOL packet.
+ * __qdf_nbuf_data_get_eapol_key() - Get EAPOL key
  * @data: Pointer to EAPOL packet data buffer
- *
- * This func. returns the subtype of EAPOL packet.
  *
  * We can distinguish M1/M3 from M2/M4 by the ack bit in the keyinfo field
  * The ralationship between the ack bit and EAPOL type is as follows:
@@ -1529,8 +1529,8 @@ __qdf_nbuf_data_get_dhcp_subtype(uint8_t *data)
  *
  * Return: subtype of the EAPOL packet.
  */
-enum qdf_proto_subtype
-__qdf_nbuf_data_get_eapol_subtype(uint8_t *data)
+static inline enum qdf_proto_subtype
+__qdf_nbuf_data_get_eapol_key(uint8_t *data)
 {
 	uint16_t key_info, key_data_length;
 	enum qdf_proto_subtype subtype;
@@ -1557,6 +1557,64 @@ __qdf_nbuf_data_get_eapol_subtype(uint8_t *data)
 			subtype = QDF_PROTO_EAPOL_M2;
 
 	return subtype;
+}
+
+/**
+ * __qdf_nbuf_data_get_eap_code() - Get EAPOL code
+ * @data: Pointer to EAPOL packet data buffer
+ *
+ * Return: subtype of the EAPOL packet.
+ */
+static inline enum qdf_proto_subtype
+__qdf_nbuf_data_get_eap_code(uint8_t *data)
+{
+	uint8_t code = *(data + EAP_CODE_OFFSET);
+
+	switch (code) {
+	case QDF_EAP_REQUEST:
+		return QDF_PROTO_EAP_REQUEST;
+	case QDF_EAP_RESPONSE:
+		return QDF_PROTO_EAP_RESPONSE;
+	case QDF_EAP_SUCCESS:
+		return QDF_PROTO_EAP_SUCCESS;
+	case QDF_EAP_FAILURE:
+		return QDF_PROTO_EAP_FAILURE;
+	case QDF_EAP_INITIATE:
+		return QDF_PROTO_EAP_INITIATE;
+	case QDF_EAP_FINISH:
+		return QDF_PROTO_EAP_FINISH;
+	default:
+		return QDF_PROTO_INVALID;
+	}
+}
+
+/**
+ * __qdf_nbuf_data_get_eapol_subtype() - get the subtype of EAPOL packet.
+ * @data: Pointer to EAPOL packet data buffer
+ *
+ * This func. returns the subtype of EAPOL packet.
+ *
+ * Return: subtype of the EAPOL packet.
+ */
+enum qdf_proto_subtype
+__qdf_nbuf_data_get_eapol_subtype(uint8_t *data)
+{
+	uint8_t pkt_type = *(data + EAPOL_PACKET_TYPE_OFFSET);
+
+	switch (pkt_type) {
+	case EAPOL_PACKET_TYPE_EAP:
+		return __qdf_nbuf_data_get_eap_code(data);
+	case EAPOL_PACKET_TYPE_START:
+		return QDF_PROTO_EAPOL_START;
+	case EAPOL_PACKET_TYPE_LOGOFF:
+		return QDF_PROTO_EAPOL_LOGOFF;
+	case EAPOL_PACKET_TYPE_KEY:
+		return __qdf_nbuf_data_get_eapol_key(data);
+	case EAPOL_PACKET_TYPE_ASF:
+		return QDF_PROTO_EAPOL_ASF;
+	default:
+		return QDF_PROTO_INVALID;
+	}
 }
 
 qdf_export_symbol(__qdf_nbuf_data_get_eapol_subtype);
@@ -2035,6 +2093,165 @@ is_mld:
 }
 
 qdf_export_symbol(__qdf_nbuf_data_is_ipv6_igmp_pkt);
+
+/**
+ * __qdf_nbuf_is_ipv4_igmp_leave_pkt() - check if skb is a igmp leave packet
+ * @data: Pointer to network buffer
+ *
+ * This api is for ipv4 packet.
+ *
+ * Return: true if packet is igmp packet
+ *	   false otherwise.
+ */
+bool __qdf_nbuf_is_ipv4_igmp_leave_pkt(__qdf_nbuf_t buf)
+{
+	qdf_ether_header_t *eh = NULL;
+	uint16_t ether_type;
+	uint8_t eth_hdr_size = sizeof(qdf_ether_header_t);
+
+	eh = (qdf_ether_header_t *)qdf_nbuf_data(buf);
+	ether_type = eh->ether_type;
+
+	if (ether_type == htons(ETH_P_8021Q)) {
+		struct vlan_ethhdr *veth =
+				(struct vlan_ethhdr *)qdf_nbuf_data(buf);
+		ether_type = veth->h_vlan_encapsulated_proto;
+		eth_hdr_size = sizeof(struct vlan_ethhdr);
+	}
+
+	if (ether_type == QDF_SWAP_U16(QDF_NBUF_TRAC_IPV4_ETH_TYPE)) {
+		struct iphdr *iph = NULL;
+		struct igmphdr *ih = NULL;
+
+		iph = (struct iphdr *)(qdf_nbuf_data(buf) + eth_hdr_size);
+		ih = (struct igmphdr *)((uint8_t *)iph + iph->ihl * 4);
+		switch (ih->type) {
+		case IGMP_HOST_LEAVE_MESSAGE:
+			return true;
+		case IGMPV3_HOST_MEMBERSHIP_REPORT:
+		{
+			struct igmpv3_report *ihv3 = (struct igmpv3_report *)ih;
+			struct igmpv3_grec *grec = NULL;
+			int num = 0;
+			int i = 0;
+			int len = 0;
+			int type = 0;
+
+			num = ntohs(ihv3->ngrec);
+			for (i = 0; i < num; i++) {
+				grec = (void *)((uint8_t *)(ihv3->grec) + len);
+				type = grec->grec_type;
+				if ((type == IGMPV3_MODE_IS_INCLUDE) ||
+				    (type == IGMPV3_CHANGE_TO_INCLUDE))
+					return true;
+
+				len += sizeof(struct igmpv3_grec);
+				len += ntohs(grec->grec_nsrcs) * 4;
+			}
+			break;
+		}
+		default:
+			break;
+		}
+	}
+
+	return false;
+}
+
+qdf_export_symbol(__qdf_nbuf_is_ipv4_igmp_leave_pkt);
+
+/**
+ * __qdf_nbuf_is_ipv6_igmp_leave_pkt() - check if skb is a igmp leave packet
+ * @data: Pointer to network buffer
+ *
+ * This api is for ipv6 packet.
+ *
+ * Return: true if packet is igmp packet
+ *	   false otherwise.
+ */
+bool __qdf_nbuf_is_ipv6_igmp_leave_pkt(__qdf_nbuf_t buf)
+{
+	qdf_ether_header_t *eh = NULL;
+	uint16_t ether_type;
+	uint8_t eth_hdr_size = sizeof(qdf_ether_header_t);
+
+	eh = (qdf_ether_header_t *)qdf_nbuf_data(buf);
+	ether_type = eh->ether_type;
+
+	if (ether_type == htons(ETH_P_8021Q)) {
+		struct vlan_ethhdr *veth =
+				(struct vlan_ethhdr *)qdf_nbuf_data(buf);
+		ether_type = veth->h_vlan_encapsulated_proto;
+		eth_hdr_size = sizeof(struct vlan_ethhdr);
+	}
+
+	if (ether_type == QDF_SWAP_U16(QDF_NBUF_TRAC_IPV6_ETH_TYPE)) {
+		struct ipv6hdr *ip6h = NULL;
+		struct icmp6hdr *icmp6h = NULL;
+		uint8_t nexthdr;
+		uint16_t frag_off = 0;
+		int offset;
+		qdf_nbuf_t buf_copy = NULL;
+
+		ip6h = (struct ipv6hdr *)(qdf_nbuf_data(buf) + eth_hdr_size);
+		if (ip6h->nexthdr != IPPROTO_HOPOPTS ||
+		    ip6h->payload_len == 0)
+			return false;
+
+		buf_copy = qdf_nbuf_copy(buf);
+		if (qdf_likely(!buf_copy))
+			return false;
+
+		nexthdr = ip6h->nexthdr;
+		offset = ipv6_skip_exthdr(buf_copy,
+					  eth_hdr_size + sizeof(*ip6h),
+					  &nexthdr,
+					  &frag_off);
+		qdf_nbuf_free(buf_copy);
+		if (offset < 0 || nexthdr != IPPROTO_ICMPV6)
+			return false;
+
+		icmp6h = (struct icmp6hdr *)(qdf_nbuf_data(buf) + offset);
+
+		switch (icmp6h->icmp6_type) {
+		case ICMPV6_MGM_REDUCTION:
+			return true;
+		case ICMPV6_MLD2_REPORT:
+		{
+			struct mld2_report *mh = NULL;
+			struct mld2_grec *grec = NULL;
+			int num = 0;
+			int i = 0;
+			int len = 0;
+			int type = -1;
+
+			mh = (struct mld2_report *)icmp6h;
+			num = ntohs(mh->mld2r_ngrec);
+			for (i = 0; i < num; i++) {
+				grec = (void *)(((uint8_t *)mh->mld2r_grec) +
+						len);
+				type = grec->grec_type;
+				if ((type == MLD2_MODE_IS_INCLUDE) ||
+				    (type == MLD2_CHANGE_TO_INCLUDE))
+					return true;
+				else if (type == MLD2_BLOCK_OLD_SOURCES)
+					return true;
+
+				len += sizeof(struct mld2_grec);
+				len += ntohs(grec->grec_nsrcs) *
+						sizeof(struct in6_addr);
+			}
+			break;
+		}
+		default:
+			break;
+		}
+	}
+
+	return false;
+}
+
+qdf_export_symbol(__qdf_nbuf_is_ipv6_igmp_leave_pkt);
 
 /**
  * __qdf_nbuf_is_ipv4_tdls_pkt() - check if skb data is a tdls packet
@@ -3927,6 +4144,47 @@ qdf_nbuf_dev_kfree_list_debug(__qdf_nbuf_queue_head_t *nbuf_queue_head,
 
 qdf_export_symbol(qdf_nbuf_dev_kfree_list_debug);
 #endif /* NBUF_MEMORY_DEBUG */
+
+#if defined(QCA_DP_NBUF_FAST_PPEDS)
+struct sk_buff *__qdf_nbuf_alloc_ppe_ds(qdf_device_t osdev, size_t size,
+					const char *func, uint32_t line)
+{
+	struct sk_buff *skb;
+	int flags = GFP_KERNEL;
+
+	if (in_interrupt() || irqs_disabled() || in_atomic()) {
+		flags = GFP_ATOMIC;
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 4, 0)
+		/*
+		 * Observed that kcompactd burns out CPU to make order-3
+		 * page.__netdev_alloc_skb has 4k page fallback option
+		 * just in case of
+		 * failing high order page allocation so we don't need
+		 * to be hard. Make kcompactd rest in piece.
+		 */
+		flags = flags & ~__GFP_KSWAPD_RECLAIM;
+#endif
+	}
+	skb = __netdev_alloc_skb_no_skb_reset(NULL, size, flags);
+	if (qdf_likely(is_initial_mem_debug_disabled)) {
+		if (qdf_likely(skb))
+			qdf_nbuf_count_inc(skb);
+	} else {
+		if (qdf_likely(skb)) {
+			qdf_nbuf_count_inc(skb);
+			qdf_net_buf_debug_add_node(skb, size, func, line);
+			qdf_nbuf_history_add(skb, func, line,
+					     QDF_NBUF_ALLOC);
+		} else {
+			qdf_nbuf_history_add(skb, func, line,
+					     QDF_NBUF_ALLOC_FAILURE);
+		}
+	}
+	return skb;
+}
+
+qdf_export_symbol(__qdf_nbuf_alloc_ppe_ds);
+#endif
 
 #if defined(FEATURE_TSO)
 

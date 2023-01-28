@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2017-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -1345,7 +1345,7 @@ struct ol_if_ops {
 
 	void (*update_dp_stats)(void *soc, void *stats, uint16_t id,
 			uint8_t type);
-#ifdef FEATURE_NAC_RSSI
+#ifdef RX_PEER_INVALID_ENH
 	uint8_t (*rx_invalid_peer)(struct cdp_ctrl_objmgr_psoc *soc,
 				   uint8_t pdev_id, void *msg);
 #else
@@ -1383,6 +1383,10 @@ struct ol_if_ops {
 	QDF_STATUS(*set_mec_timer)(struct cdp_ctrl_objmgr_psoc *psoc,
 				   uint8_t vdev_id, uint16_t mec_timer_val);
 
+#ifdef INTRA_BSS_FWD_OFFLOAD
+	void (*vdev_set_intra_bss)(struct cdp_ctrl_objmgr_psoc *psoc,
+				   uint16_t vdev_id, bool enable);
+#endif
 #ifdef ATH_SUPPORT_NAC_RSSI
 	int (*config_fw_for_nac_rssi)(struct cdp_ctrl_objmgr_psoc *psoc,
 				      uint8_t pdev_id,
@@ -1961,6 +1965,10 @@ struct cdp_ipa_ops {
 					uint8_t vdev_id, qdf_nbuf_t skb);
 	void (*ipa_set_uc_tx_partition_base)(struct cdp_cfg *pdev,
 		uint32_t value);
+	QDF_STATUS (*ipa_update_peer_rx_stats)(struct cdp_soc_t *soc_hdl,
+					       uint8_t vdev_id,
+					       uint8_t *peer_mac,
+					       qdf_nbuf_t nbuf);
 #ifdef FEATURE_METERING
 	QDF_STATUS (*ipa_uc_get_share_stats)(struct cdp_soc_t *soc_hdl,
 					     uint8_t pdev_id,
