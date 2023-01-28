@@ -611,10 +611,12 @@ struct sk_buff *__qdf_nbuf_alloc(qdf_device_t osdev, size_t size, int reserve,
 #endif
 	}
 
-	skb = __netdev_alloc_skb(NULL, size, flags);
+	skb =  __alloc_skb(size + NET_SKB_PAD, flags, SKB_ALLOC_RX, NUMA_NO_NODE);
 
-	if (skb)
+	if (skb) {
+		skb_reserve(skb, NET_SKB_PAD);
 		goto skb_alloc;
+	}
 
 	skb = pld_nbuf_pre_alloc(size);
 
