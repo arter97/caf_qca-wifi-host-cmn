@@ -5207,6 +5207,7 @@ typedef enum {
 #ifdef WLAN_SUPPORT_GAP_LL_PS_MODE
 	wmi_xgap_enable_complete_eventid,
 #endif
+	wmi_csa_ie_received_event_id,
 	wmi_events_max,
 } wmi_conv_event_id;
 
