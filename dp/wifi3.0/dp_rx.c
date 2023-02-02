@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -1071,8 +1071,9 @@ bool dp_rx_intrabss_mcbc_fwd(struct dp_soc *soc, struct dp_txrx_peer *ta_peer,
 	qdf_mem_set(nbuf_copy->cb, 0x0, sizeof(nbuf_copy->cb));
 	dp_classify_critical_pkts(soc, ta_peer->vdev, nbuf_copy);
 
-	if (soc->arch_ops.dp_rx_intrabss_handle_nawds(soc, ta_peer, nbuf_copy,
-						      tid_stats))
+	if (soc->arch_ops.dp_rx_intrabss_mcast_handler(soc, ta_peer,
+						       nbuf_copy,
+						       tid_stats))
 		return false;
 
 	/* Don't send packets if tx is paused */
@@ -1347,7 +1348,7 @@ QDF_STATUS dp_rx_filter_mesh_packets(struct dp_vdev *vdev, qdf_nbuf_t nbuf,
 
 #endif
 
-#ifdef FEATURE_NAC_RSSI
+#ifdef RX_PEER_INVALID_ENH
 /**
  * dp_rx_process_invalid_peer(): Function to pass invalid peer list to umac
  * @soc: DP SOC handle
@@ -3128,6 +3129,12 @@ dp_pdev_rx_buffers_attach(struct dp_soc *dp_soc, uint32_t mac_id,
 					rx_desc_pool->buf_size, true,
 					__func__, __LINE__);
 
+			dp_audio_smmu_map(dp_soc->osdev,
+					  qdf_mem_paddr_from_dmaaddr(dp_soc->osdev,
+								     QDF_NBUF_CB_PADDR(nbuf)),
+					  QDF_NBUF_CB_PADDR(nbuf),
+					  rx_desc_pool->buf_size);
+
 			desc_list = next;
 		}
 
@@ -3366,7 +3373,7 @@ dp_rx_pdev_buffers_free(struct dp_pdev *pdev)
 
 	rx_desc_pool = &soc->rx_desc_buf[mac_for_pdev];
 
-	dp_rx_desc_nbuf_free(soc, rx_desc_pool);
+	dp_rx_desc_nbuf_free(soc, rx_desc_pool, false);
 	dp_rx_buffer_pool_deinit(soc, mac_for_pdev);
 }
 

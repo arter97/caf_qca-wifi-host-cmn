@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -77,7 +77,6 @@ static void mlo_global_ctx_init(void)
 	ml_aid_lock_create(mlo_mgr_ctx);
 	mlo_mgr_ctx->mlo_is_force_primary_umac = 0;
 	mlo_msgq_init();
-	mlo_setup_init();
 }
 
 QDF_STATUS wlan_mlo_mgr_psoc_enable(struct wlan_objmgr_psoc *psoc)
@@ -216,6 +215,34 @@ struct wlan_mlo_dev_context *mlo_get_next_mld_ctx(qdf_list_t *ml_list,
 	return mld_next;
 }
 
+uint8_t wlan_mlo_get_sta_mld_ctx_count(void)
+{
+	struct wlan_mlo_dev_context *mld_cur;
+	struct wlan_mlo_dev_context *mld_next;
+	qdf_list_t *ml_list;
+	struct mlo_mgr_context *mlo_mgr_ctx = wlan_objmgr_get_mlo_ctx();
+	uint8_t count = 0;
+
+	if (!mlo_mgr_ctx)
+		return count;
+
+	ml_link_lock_acquire(mlo_mgr_ctx);
+	ml_list = &mlo_mgr_ctx->ml_dev_list;
+	/* Get first mld context */
+	mld_cur = mlo_list_peek_head(ml_list);
+
+	while (mld_cur) {
+		/* get next mld node */
+		if (mld_cur->sta_ctx)
+			count++;
+		mld_next = mlo_get_next_mld_ctx(ml_list, mld_cur);
+		mld_cur = mld_next;
+	}
+	ml_link_lock_release(mlo_mgr_ctx);
+
+	return count;
+}
+
 struct wlan_mlo_dev_context
 *wlan_mlo_get_mld_ctx_by_mldaddr(struct qdf_mac_addr *mldaddr)
 {
@@ -345,16 +372,43 @@ static QDF_STATUS mlo_ap_ctx_init(struct wlan_mlo_dev_context *ml_dev)
 
 #ifdef CONFIG_AP_PLATFORM
 static inline
+QDF_STATUS wlan_mlo_check_grp_id(uint8_t ref_id,
+				 struct wlan_objmgr_vdev *vdev)
+{
+	struct wlan_objmgr_psoc *psoc;
+	uint8_t grp_id = 0;
+
+	psoc = wlan_vdev_get_psoc(vdev);
+	if (!mlo_psoc_get_grp_id(psoc, &grp_id)) {
+		mlo_err("Unable to get mlo group id");
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	if (grp_id != ref_id) {
+		mlo_err("Error : MLD VAP Configuration with different WSI/MLD Groups");
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	return QDF_STATUS_SUCCESS;
+}
+
+static inline
 QDF_STATUS wlan_mlo_pdev_check(struct wlan_objmgr_pdev *ref_pdev,
 			       struct wlan_objmgr_vdev *vdev)
 {
-	struct wlan_objmgr_pdev *pdev = NULL;
-	struct wlan_objmgr_psoc *psoc = NULL;
+	struct wlan_objmgr_pdev *pdev;
+	struct wlan_objmgr_psoc *psoc;
+	uint8_t grp_id = 0;
 
 	pdev = wlan_vdev_get_pdev(vdev);
 
 	psoc = wlan_pdev_get_psoc(ref_pdev);
-	if (mlo_check_all_pdev_state(psoc, MLO_LINK_SETUP_DONE)) {
+	if (!mlo_psoc_get_grp_id(psoc, &grp_id)) {
+		mlo_err("Unable to get the MLO Group ID for the vdev");
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	if (mlo_check_all_pdev_state(psoc, grp_id, MLO_LINK_SETUP_DONE)) {
 		mlo_err("Pdev link is not in ready state, initial link setup failed");
 		return QDF_STATUS_E_FAILURE;
 	}
@@ -363,6 +417,9 @@ QDF_STATUS wlan_mlo_pdev_check(struct wlan_objmgr_pdev *ref_pdev,
 		mlo_err("MLD vdev for this pdev already found, investigate config");
 		return QDF_STATUS_E_FAILURE;
 	}
+
+	if (wlan_mlo_check_grp_id(grp_id, vdev))
+		return QDF_STATUS_E_FAILURE;
 
 	return QDF_STATUS_SUCCESS;
 }
@@ -401,7 +458,7 @@ QDF_STATUS wlan_mlo_check_valid_config(struct wlan_mlo_dev_context *ml_dev,
 				       enum QDF_OPMODE opmode)
 {
 	uint32_t id = 0;
-	struct wlan_objmgr_vdev *vdev = NULL;
+	struct wlan_objmgr_vdev *vdev;
 
 	if (!ml_dev)
 		return QDF_STATUS_E_FAILURE;
@@ -537,6 +594,18 @@ static QDF_STATUS mlo_dev_ctx_init(struct wlan_objmgr_vdev *vdev)
 	return status;
 }
 
+/**
+ * mlo_t2lm_ctx_deinit() - API to deinitialize the t2lm context with the default
+ * values.
+ * @vdev: Pointer to vdev structure
+ *
+ * Return: None
+ */
+static inline void mlo_t2lm_ctx_deinit(struct wlan_objmgr_vdev *vdev)
+{
+	wlan_mlo_t2lm_timer_deinit(vdev);
+}
+
 static QDF_STATUS mlo_dev_ctx_deinit(struct wlan_objmgr_vdev *vdev)
 {
 	struct wlan_mlo_dev_context *ml_dev;
@@ -612,6 +681,7 @@ static QDF_STATUS mlo_dev_ctx_deinit(struct wlan_objmgr_vdev *vdev)
 		else if (wlan_vdev_mlme_get_opmode(vdev) == QDF_SAP_MODE)
 			qdf_mem_free(ml_dev->ap_ctx);
 
+		mlo_t2lm_ctx_deinit(vdev);
 		tsf_recalculation_lock_destroy(ml_dev);
 		mlo_dev_lock_destroy(ml_dev);
 		qdf_mem_free(ml_dev);

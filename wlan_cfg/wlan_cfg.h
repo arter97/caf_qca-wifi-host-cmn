@@ -154,6 +154,7 @@ struct wlan_srng_cfg {
  * @num_tx_desc_pool: Number of Tx Descriptor pools
  * @num_tx_ext_desc_pool: Number of Tx MSDU extension Descriptor pools
  * @num_tx_desc: Number of Tx Descriptors per pool
+ * @num_tx_spl_desc: Number of Tx Descriptors per pool to handle special frames
  * @min_tx_desc: Minimum number of Tx Descriptors per pool
  * @num_tx_ext_desc: Number of Tx MSDU extension Descriptors per pool
  * @max_peer_id: Maximum value of peer id that FW can assign for a client
@@ -249,6 +250,7 @@ struct wlan_srng_cfg {
  * @tx_desc_limit_1: tx_desc limit for 2 GHz
  * @tx_desc_limit_2: tx_desc limit for 5 GHz Low
  * @tx_device_limit: tx device limit
+ * @tx_spl_device_limit: tx device limit for special frames
  * @tx_sw_internode_queue: tx sw internode queue
  * @mon_drop_thresh:
  * @tx_comp_loop_pkt_limit: Max # of packets to be processed in 1 tx comp loop
@@ -298,13 +300,11 @@ struct wlan_srng_cfg {
  * @ipa_tx_alt_comp_ring_size: IPA tx alt completion ring size
  * @hw_cc_enabled: cookie conversion enabled
  * @tcl_wbm_map_array: TCL-WBM map array
- * @ppe_enable:
- * @reo2ppe_ring:
- * @ppe2tcl_ring:
- * @ppe_release_ring:
- * @ppe_wbm_release_ring:
- * @ppe_num_tx_desc:
- * @ppe_tx_comp_napi_budget:
+ * @ppeds_enable: Enable PPE Direct Switch feature
+ * @reo2ppe_ring: REO2PPE ring size
+ * @ppe2tcl_ring: PPE2TCL ring size
+ * @ppeds_num_tx_desc: Number of tx descs for PPE DS
+ * @ppeds_tx_comp_napi_budget: Napi budget for tx completions
  * @pkt_capture_mode: Packet capture mode config
  * @rx_mon_buf_ring_size: Rx monitor buf ring size
  * @tx_mon_buf_ring_size: Tx monitor buf ring size
@@ -343,6 +343,7 @@ struct wlan_cfg_dp_soc_ctxt {
 	int num_tx_desc_pool;
 	int num_tx_ext_desc_pool;
 	int num_tx_desc;
+	int num_tx_spl_desc;
 	int min_tx_desc;
 	int num_tx_ext_desc;
 	int max_peer_id;
@@ -428,6 +429,7 @@ struct wlan_cfg_dp_soc_ctxt {
 	int tx_desc_limit_1;
 	int tx_desc_limit_2;
 	int tx_device_limit;
+	int tx_spl_device_limit;
 	int tx_sw_internode_queue;
 	int mon_drop_thresh;
 #ifdef WLAN_FEATURE_RX_SOFTIRQ_TIME_LIMIT
@@ -476,13 +478,11 @@ struct wlan_cfg_dp_soc_ctxt {
 	bool hw_cc_enabled;
 	struct wlan_cfg_tcl_wbm_ring_num_map *tcl_wbm_map_array;
 #ifdef WLAN_SUPPORT_PPEDS
-	bool ppe_enable;
+	bool ppeds_enable;
 	int reo2ppe_ring;
 	int ppe2tcl_ring;
-	int ppe_release_ring;
-	int ppe_wbm_release_ring;
-	int ppe_num_tx_desc;
-	int ppe_tx_comp_napi_budget;
+	int ppeds_num_tx_desc;
+	int ppeds_tx_comp_napi_budget;
 #endif
 #ifdef WLAN_FEATURE_PKT_CAPTURE_V2
 	uint32_t pkt_capture_mode;
@@ -1189,6 +1189,15 @@ void wlan_cfg_set_num_tx_ext_desc_pool(struct wlan_cfg_dp_soc_ctxt *cfg, int num
 int wlan_cfg_get_num_tx_desc(struct wlan_cfg_dp_soc_ctxt *wlan_cfg_ctx);
 
 /**
+ * wlan_cfg_get_num_tx_spl_desc() - Number of Tx Descriptors for special
+ *				    frames per pool
+ * @wlan_cfg_ctx: Configuration Handle
+ *
+ * Return: num_tx_desc
+ */
+int wlan_cfg_get_num_tx_spl_desc(struct wlan_cfg_dp_soc_ctxt *wlan_cfg_ctx);
+
+/**
  * wlan_cfg_get_min_tx_desc() - Minimum number of Tx Descriptors per pool
  * @wlan_cfg_ctx: Configuration Handle
  *
@@ -1593,6 +1602,16 @@ wlan_cfg_get_dp_soc_tx_desc_limit_2(struct wlan_cfg_dp_soc_ctxt *cfg);
  */
 int
 wlan_cfg_get_dp_soc_tx_device_limit(struct wlan_cfg_dp_soc_ctxt *cfg);
+
+/**
+ * wlan_cfg_get_dp_soc_tx_spl_device_limit - Get tx device limit for special
+ *					     frames
+ * @cfg: Configuration Handle
+ *
+ * Return: tx device limit for special frames
+ */
+int
+wlan_cfg_get_dp_soc_tx_spl_device_limit(struct wlan_cfg_dp_soc_ctxt *cfg);
 
 /**
  * wlan_cfg_get_dp_soc_tx_sw_internode_queue - Get tx sw internode queue
@@ -2056,13 +2075,13 @@ void wlan_cfg_dp_soc_ctx_dump(struct wlan_cfg_dp_soc_ctxt *cfg);
 
 #ifdef WLAN_SUPPORT_PPEDS
 /**
- * wlan_cfg_get_dp_soc_is_ppe_enabled() - API to get ppe enable flag
+ * wlan_cfg_get_dp_soc_is_ppeds_enabled() - API to get ppe enable flag
  * @cfg: Configuration Handle
  *
  * Return: true if ppe is enabled else return false
  */
 bool
-wlan_cfg_get_dp_soc_is_ppe_enabled(struct wlan_cfg_dp_soc_ctxt *cfg);
+wlan_cfg_get_dp_soc_is_ppeds_enabled(struct wlan_cfg_dp_soc_ctxt *cfg);
 
 /**
  * wlan_cfg_get_dp_soc_reo2ppe_ring_size() - get ppe rx ring size
@@ -2083,34 +2102,25 @@ int
 wlan_cfg_get_dp_soc_ppe2tcl_ring_size(struct wlan_cfg_dp_soc_ctxt *cfg);
 
 /**
- * wlan_cfg_get_dp_soc_ppe_release_ring_size() - get ppe tx comp ring size
- * @cfg: Configuration Handle
- *
- * Return: size of ppe release ring
- */
-int
-wlan_cfg_get_dp_soc_ppe_release_ring_size(struct wlan_cfg_dp_soc_ctxt *cfg);
-
-/**
- * wlan_cfg_get_dp_soc_ppe_num_tx_desc() - Number of ppeds tx Descriptors
+ * wlan_cfg_get_dp_soc_ppeds_num_tx_desc() - Number of ppeds tx Descriptors
  * @cfg: Configuration Handle
  *
  * Return: num_tx_desc
  */
 int
-wlan_cfg_get_dp_soc_ppe_num_tx_desc(struct wlan_cfg_dp_soc_ctxt *cfg);
+wlan_cfg_get_dp_soc_ppeds_num_tx_desc(struct wlan_cfg_dp_soc_ctxt *cfg);
 
 /**
- * wlan_cfg_get_dp_soc_ppe_tx_comp_napi_budget() - ppeds Tx comp napi budget
+ * wlan_cfg_get_dp_soc_ppeds_tx_comp_napi_budget() - ppeds Tx comp napi budget
  * @cfg: Configuration Handle
  *
  * Return: napi budget
  */
 int
-wlan_cfg_get_dp_soc_ppe_tx_comp_napi_budget(struct wlan_cfg_dp_soc_ctxt *cfg);
+wlan_cfg_get_dp_soc_ppeds_tx_comp_napi_budget(struct wlan_cfg_dp_soc_ctxt *cfg);
 #else
 static inline bool
-wlan_cfg_get_dp_soc_is_ppe_enabled(struct wlan_cfg_dp_soc_ctxt *cfg)
+wlan_cfg_get_dp_soc_is_ppeds_enabled(struct wlan_cfg_dp_soc_ctxt *cfg)
 {
 	return false;
 }
@@ -2128,19 +2138,13 @@ wlan_cfg_get_dp_soc_ppe2tcl_ring_size(struct wlan_cfg_dp_soc_ctxt *cfg)
 }
 
 static inline int
-wlan_cfg_get_dp_soc_ppe_release_ring_size(struct wlan_cfg_dp_soc_ctxt *cfg)
+wlan_cfg_get_dp_soc_ppeds_num_tx_desc(struct wlan_cfg_dp_soc_ctxt *cfg)
 {
 	return 0;
 }
 
 static inline int
-wlan_cfg_get_dp_soc_ppe_num_tx_desc(struct wlan_cfg_dp_soc_ctxt *cfg)
-{
-	return 0;
-}
-
-static inline int
-wlan_cfg_get_dp_soc_ppe_tx_comp_napi_budget(struct wlan_cfg_dp_soc_ctxt *cfg)
+wlan_cfg_get_dp_soc_ppeds_tx_comp_napi_budget(struct wlan_cfg_dp_soc_ctxt *cfg)
 {
 	return 0;
 }

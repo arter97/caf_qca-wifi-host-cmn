@@ -793,6 +793,7 @@ enum extn_element_ie {
  * accordingly.
  *
  * @REASON_PROP_START: Start of prop reason code
+ * @REASON_HOST_TRIGGERED_LINK_DELETE: Dynamic link removal
  * @REASON_OCI_MISMATCH: Reason OCI Mismatch happens
  * @REASON_HOST_TRIGGERED_ROAM_FAILURE: Reason host triggered roam failed
  * @REASON_FW_TRIGGERED_ROAM_FAILURE: Firmware triggered roam failed
@@ -884,7 +885,8 @@ enum wlan_reason_code {
 	 * REASON_PROP_START and decrease the value of REASON_PROP_START
 	 * accordingly.
 	 */
-	REASON_PROP_START = 65517,
+	REASON_PROP_START = 65516,
+	REASON_HOST_TRIGGERED_LINK_DELETE = 65517,
 	REASON_OCI_MISMATCH = 65518,
 	REASON_HOST_TRIGGERED_ROAM_FAILURE  = 65519,
 	REASON_FW_TRIGGERED_ROAM_FAILURE = 65520,
@@ -1127,6 +1129,7 @@ enum wlan_status_code {
 #define WLAN_AKM_FILS_FT_SHA256   0x10
 #define WLAN_AKM_FILS_FT_SHA384   0x11
 #define WLAN_AKM_OWE              0x12
+#define WLAN_AKM_SAE_EXT_KEY      0x18
 
 #define WLAN_ASE_NONE                    0x00
 #define WLAN_ASE_8021X_UNSPEC            0x01
@@ -1640,6 +1643,10 @@ struct wlan_ie_vhtop {
 	uint8_t vht_op_ch_freq_seg2;
 	uint16_t vhtop_basic_mcs_set;
 } qdf_packed;
+
+#define WLAN_HE_PHYCAP_SU_BFER_OFFSET 3
+#define WLAN_HE_PHYCAP_SU_BFER_IDX 7
+#define WLAN_HE_PHYCAP_SU_BFER_BITS 1
 
 #define WLAN_HE_PHYCAP_160_SUPPORT BIT(2)
 #define WLAN_HE_PHYCAP_80_80_SUPPORT BIT(3)
