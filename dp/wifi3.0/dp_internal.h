@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -2379,6 +2379,12 @@ void dp_peer_update_tid_stats_from_reo(struct dp_soc *soc, void *cb_ctxt,
 				       union hal_reo_status *reo_status);
 int dp_peer_get_rxtid_stats_ipa(struct dp_peer *peer,
 				dp_rxtid_stats_cmd_cb dp_stats_cmd_cb);
+#ifdef IPA_OPT_WIFI_DP
+void dp_ipa_wdi_opt_dpath_notify_flt_rlsd(int flt0_rslt,
+					  int flt1_rslt);
+void dp_ipa_wdi_opt_dpath_notify_flt_add_rem_cb(int flt0_rslt, int flt1_rslt);
+void dp_ipa_wdi_opt_dpath_notify_flt_rsvd(bool is_success);
+#endif
 #endif
 QDF_STATUS
 dp_set_pn_check_wifi3(struct cdp_soc_t *soc, uint8_t vdev_id,
