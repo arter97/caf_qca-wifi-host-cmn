@@ -911,7 +911,8 @@ static QDF_STATUS send_stats_threshold_tlv(wmi_unified_t wmi_handle,
 	(msg)->drops = (eve)->tx_msdu_drop_cnt;\
 	(msg)->drop_bytes = (eve)->tx_drop_bytes;\
 	(msg)->retries = (eve)->tx_mpdu_retry_cnt;\
-	(msg)->failed = (eve)->tx_mpdu_fail_cnt;\
+	(msg)->mpdu_failed = (eve)->tx_mpdu_fail_cnt;\
+	(msg)->ppdu_failed = (eve)->tx_ppdu_fail_cnt;\
 } while (0)
 
 #define WMA_FILL_RX_STATS(eve, msg)       do {\

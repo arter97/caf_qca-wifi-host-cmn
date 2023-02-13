@@ -4047,7 +4047,8 @@ struct wmi_wifi_peer_signal_stats {
  *	such as WMM limitation/bandwidth limitation/radio congestion
  * @drop_bytes: bytes of dropped TX packets in the period
  * @retries: number of unacked transmissions of MPDUs
- * @failed: number of packets have not been ACKed despite retried
+ * @mpdu_failed: number of packets have not been ACKed despite retried
+ * @ppdu_failed: number of PPDU not received block ACK
  * @aggr_len: length of the MPDU aggregation size buffer
  * @mpdu_aggr_size: histogram of MPDU aggregation size
  * @success_mcs_len: length of success mcs buffer
@@ -4065,7 +4066,8 @@ struct wmi_wifi_tx {
 	uint32_t drops;
 	uint32_t drop_bytes;
 	uint32_t retries;
-	uint32_t failed;
+	uint32_t mpdu_failed;
+	uint32_t ppdu_failed;
 	uint32_t aggr_len;
 	uint32_t *mpdu_aggr_size;
 	uint32_t success_mcs_len;
