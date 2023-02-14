@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2013-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -2048,6 +2048,37 @@ int hif_prevent_link_low_power_states(struct hif_opaque_softc *hif)
 
 static inline
 void hif_allow_link_low_power_states(struct hif_opaque_softc *hif)
+{
+}
+#endif
+
+#ifdef IPA_OPT_WIFI_DP
+/**
+ * hif_prevent_l1() - Prevent from going to low power states
+ * @hif: HIF opaque context
+ *
+ * Return: 0 on success. Error code on failure.
+ */
+int hif_prevent_l1(struct hif_opaque_softc *hif);
+
+/**
+ * hif_allow_l1() - Allow link to go to low power states
+ * @hif: HIF opaque context
+ *
+ * Return: None
+ */
+void hif_allow_l1(struct hif_opaque_softc *hif);
+
+#else
+
+static inline
+int hif_prevent_l1(struct hif_opaque_softc *hif)
+{
+	return 0;
+}
+
+static inline
+void hif_allow_l1(struct hif_opaque_softc *hif)
 {
 }
 #endif

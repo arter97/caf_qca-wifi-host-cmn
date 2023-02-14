@@ -743,6 +743,50 @@ cdp_ipa_tx_buf_smmu_unmapping(ol_txrx_soc_handle soc, uint8_t pdev_id,
 	return QDF_STATUS_SUCCESS;
 }
 
+#ifdef IPA_OPT_WIFI_DP
+/*
+ * cdp_ipa_pcie_link_up() - Send request to hold PCIe link in L0
+ * @soc - cdp soc handle
+ *
+ * Return: 0 for success, negative for failure
+ */
+static inline int
+cdp_ipa_pcie_link_up(ol_txrx_soc_handle soc)
+{
+	if (!soc || !soc->ops || !soc->ops->ipa_ops) {
+		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_FATAL,
+			  "%s invalid instance", __func__);
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	if (soc->ops->ipa_ops->ipa_pcie_link_up)
+		return soc->ops->ipa_ops->ipa_pcie_link_up(soc);
+
+	return QDF_STATUS_SUCCESS;
+}
+
+/*
+ * cdp_ipa_pcie_link_down() - Release request to hold PCIe link in L0
+ * @soc - cdp soc handle
+ *
+ * Return: 0 for success, negative for failure
+ */
+static inline int
+cdp_ipa_pcie_link_down(ol_txrx_soc_handle soc)
+{
+	if (!soc || !soc->ops || !soc->ops->ipa_ops) {
+		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_FATAL,
+			  "%s invalid instance", __func__);
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	if (soc->ops->ipa_ops->ipa_pcie_link_down)
+		soc->ops->ipa_ops->ipa_pcie_link_down(soc);
+
+	return QDF_STATUS_SUCCESS;
+}
+#endif
+
 #ifdef IPA_WDS_EASYMESH_FEATURE
 /**
  * cdp_ipa_ast_create() - Create/update AST entry in AST table
@@ -867,5 +911,6 @@ cdp_ipa_opt_dp_enable_disable_low_power_mode(struct wlan_objmgr_pdev *pdev,
 	return status;
 }
 #endif /* IPA_OPT_WIFI_DP */
+
 #endif /* IPA_OFFLOAD */
 #endif /* _CDP_TXRX_IPA_H_ */
