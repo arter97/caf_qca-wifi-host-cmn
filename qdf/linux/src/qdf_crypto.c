@@ -730,9 +730,9 @@ err_tfm:
 	return ret;
 }
 #else
-int qdf_crypto_aes_gmac(uint8_t *key, uint16_t key_length,
-			uint8_t *iv, uint8_t *aad, uint8_t *data,
-			uint16_t data_len, uint8_t *mic)
+int qdf_crypto_aes_gmac(const uint8_t *key, uint16_t key_length,
+			uint8_t *iv, const uint8_t *aad,
+			const uint8_t *data, uint16_t data_len, uint8_t *mic)
 {
 	return -EINVAL;
 }

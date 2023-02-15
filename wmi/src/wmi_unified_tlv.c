@@ -10649,12 +10649,21 @@ QDF_STATUS save_ext_service_bitmap_tlv(wmi_unified_t wmi_handle, void *evt_buf,
 		return QDF_STATUS_SUCCESS;
 	}
 
-	if (!soc->wmi_ext2_service_bitmap) {
+	if (!soc->wmi_ext2_service_bitmap ||
+	    (param_buf->num_wmi_service_ext_bitmap >
+	     soc->wmi_ext2_service_bitmap_len)) {
+		if (soc->wmi_ext2_service_bitmap) {
+			qdf_mem_free(soc->wmi_ext2_service_bitmap);
+			soc->wmi_ext2_service_bitmap = NULL;
+		}
 		soc->wmi_ext2_service_bitmap =
 			qdf_mem_malloc(param_buf->num_wmi_service_ext_bitmap *
 				       sizeof(uint32_t));
 		if (!soc->wmi_ext2_service_bitmap)
 			return QDF_STATUS_E_NOMEM;
+
+		soc->wmi_ext2_service_bitmap_len =
+			param_buf->num_wmi_service_ext_bitmap;
 	}
 
 	qdf_mem_copy(soc->wmi_ext2_service_bitmap,
@@ -12266,6 +12275,51 @@ static QDF_STATUS extract_service_ready_ext_tlv(wmi_unified_t wmi_handle,
 }
 
 /**
+ * extract_hw_bdf_status() - extract service ready ext2 BDF hw status
+ * type from event
+ * @ev: pointer to event fixed param
+ *
+ * Return: void
+ */
+
+static void
+extract_hw_bdf_status(wmi_service_ready_ext2_event_fixed_param *ev)
+{
+	uint8_t hw_bdf_s;
+
+	hw_bdf_s = ev->hw_bd_status;
+	switch (hw_bdf_s) {
+	case WMI_BDF_VERSION_CHECK_DISABLED:
+		wmi_info("BDF VER is %d, FW and BDF ver check skipped",
+			 hw_bdf_s);
+		break;
+	case WMI_BDF_VERSION_CHECK_GOOD:
+		wmi_info("BDF VER is %d, FW and BDF ver check good",
+			 hw_bdf_s);
+		break;
+	case WMI_BDF_VERSION_TEMPLATE_TOO_OLD:
+		wmi_info("BDF VER is %d, BDF ver is older than the oldest version supported by FW",
+			 hw_bdf_s);
+		break;
+	case WMI_BDF_VERSION_TEMPLATE_TOO_NEW:
+		wmi_info("BDF VER is %d, BDF ver is newer than the newest version supported by FW",
+			 hw_bdf_s);
+		break;
+	case WMI_BDF_VERSION_FW_TOO_OLD:
+		wmi_info("BDF VER is %d, FW ver is older than the major version supported by BDF",
+			 hw_bdf_s);
+		break;
+	case WMI_BDF_VERSION_FW_TOO_NEW:
+		wmi_info("BDF VER is %d, FW ver is newer than the minor version supported by BDF",
+			 hw_bdf_s);
+		break;
+	default:
+		wmi_info("unknown BDF VER %d", hw_bdf_s);
+		break;
+	}
+}
+
+/**
  * extract_service_ready_ext2_tlv() - extract service ready ext2 params from
  * event
  * @wmi_handle: wmi handle
@@ -12323,6 +12377,9 @@ extract_service_ready_ext2_tlv(wmi_unified_t wmi_handle, uint8_t *event,
 						ev->max_user_per_ppdu_mumimo);
 	param->target_cap_flags = ev->target_cap_flags;
 	wmi_debug("htt peer data :%d", ev->target_cap_flags);
+
+	extract_hw_bdf_status(ev);
+
 	return QDF_STATUS_SUCCESS;
 }
 
