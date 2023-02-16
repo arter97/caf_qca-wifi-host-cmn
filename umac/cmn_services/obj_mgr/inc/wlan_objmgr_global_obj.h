@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2016-2019, 2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -514,7 +514,7 @@ QDF_STATUS wlan_objmgr_unregister_peer_status_handler(
 		wlan_objmgr_peer_status_handler handler,
 		void *args);
 
-/**
+/*
  * APIs to operations on psoc
  */
 typedef void (*wlan_objmgr_psoc_handler)(struct wlan_objmgr_psoc *psoc,
@@ -569,6 +569,7 @@ struct mlo_mgr_context *wlan_objmgr_get_mlo_ctx(void);
 
 /**
  * wlan_objmgr_set_mlo_ctx() - Set MLO context at global umac object
+ * @ctx: MLO context
  *
  * This API is used to set MLO context object at the global umac object
  *
@@ -579,17 +580,19 @@ void wlan_objmgr_set_mlo_ctx(struct mlo_mgr_context *ctx);
 /**
  * wlan_objmgr_set_dp_mlo_ctx() - set dp handle in mlo context
  * @dp_handle: Data path module handle
+ * @grp_id: MLO group id which it belongs too
  *
  * Return: void
  */
-void wlan_objmgr_set_dp_mlo_ctx(void *dp_handle);
+void wlan_objmgr_set_dp_mlo_ctx(void *dp_handle, uint8_t grp_id);
 
 /**
  * wlan_objmgr_get_dp_mlo_ctx() - get dp handle from mlo_context
+ * @grp_id: MLO Group id which it belongs to
  *
  * Return: dp handle
  */
-void *wlan_objmgr_get_dp_mlo_ctx(void);
+void *wlan_objmgr_get_dp_mlo_ctx(uint8_t grp_id);
 #else
 static inline struct mlo_mgr_context *wlan_objmgr_get_mlo_ctx(void)
 {
@@ -599,12 +602,12 @@ static inline struct mlo_mgr_context *wlan_objmgr_get_mlo_ctx(void)
 static inline void wlan_objmgr_set_mlo_ctx(struct mlo_mgr_context *ctx)
 {}
 
-static inline void *wlan_objmgr_get_dp_mlo_ctx(void)
+static inline void *wlan_objmgr_get_dp_mlo_ctx(uint8_t grp_id)
 {
 	return NULL;
 }
 
-static inline void wlan_objmgr_set_dp_mlo_ctx(void *dp_handle)
+static inline void wlan_objmgr_set_dp_mlo_ctx(void *dp_handle, uint8_t grp_id)
 {
 }
 #endif /* WLAN_FEATURE_11BE_MLO */

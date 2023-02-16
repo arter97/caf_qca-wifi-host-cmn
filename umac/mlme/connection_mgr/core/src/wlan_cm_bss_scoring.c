@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -15,7 +15,7 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/*
+/**
  * DOC: contains bss scoring logic
  */
 
@@ -84,7 +84,7 @@
 #define CM_MAX_INDEX_PER_INI 4
 #define CM_SLO_CONGESTION_MAX_SCORE 80
 
-/**
+/*
  * This macro give percentage value of security_weightage to be used as per
  * security Eg if AP security is WPA 10% will be given for AP.
  *
@@ -250,7 +250,6 @@ static int32_t cm_calculate_rssi_score(struct rssi_config_score *score_param,
 /**
  * cm_rssi_is_same_bucket() - check if both rssi fall in same bucket
  * @rssi_top_thresh: high rssi threshold of the the window
- * @low_rssi_threshold: low rssi of the window
  * @rssi_ref1: rssi ref one
  * @rssi_ref2: rssi ref two
  * @bucket_size: bucket size of the window
@@ -392,6 +391,7 @@ static int32_t cm_get_congestion_pct(struct scan_cache_entry *entry)
  * @entry: bss information
  * @score_params: bss score params
  * @congestion_pct: congestion pct
+ * @rssi_bad_zone:
  *
  * Return: congestion score
  */
@@ -460,6 +460,7 @@ static int32_t cm_calculate_congestion_score(struct scan_cache_entry *entry,
  * @score_config: scoring config
  * @ap_nss: ap nss
  * @prorated_pct: prorated % to return dependent on RSSI
+ * @sta_nss: Sta NSS
  *
  * Return: nss score
  */
@@ -1396,7 +1397,7 @@ cm_calculate_etp_score(struct wlan_objmgr_psoc *psoc,
 
 /**
  * cm_get_band_score() - Get band preference weightage
- * freq: Operating frequency of the AP
+ * @freq: Operating frequency of the AP
  * @score_config: Score configuration
  *
  * Return: Band score for AP.
@@ -1586,6 +1587,7 @@ static struct mlo_rssi_pct mlo_rssi_pcnt[CM_RSSI_BUCKET_NUM] = {
  * @rssi_weightage: rssi weightage
  * @link1_rssi: link1 rssi
  * @link2_rssi: link2 rssi
+ * @prorate_pcnt: pointer to store RSSI prorated percent
  *
  * Return: MLO AP joint rssi score
  */
@@ -1686,6 +1688,7 @@ static inline bool is_freq_dbs_or_sbs(struct wlan_objmgr_psoc *psoc,
  * cm_bss_mlo_type() - Get mlo type of bss scan entry
  * @psoc: Pointer of psoc object
  * @entry: Bss scan entry
+ * @scan_list:
  *
  * Return: MLO AP type: SLO, MLMR or EMLSR.
  */
@@ -1997,6 +2000,7 @@ static int cm_calculate_bss_score(struct wlan_objmgr_psoc *psoc,
 	bool same_bucket = false;
 	bool ap_su_beam_former = false;
 	struct wlan_ie_vhtcaps *vht_cap;
+	struct wlan_ie_hecaps *he_cap;
 	struct scoring_cfg *score_config;
 	struct weight_cfg *weight_config;
 	uint32_t sta_nss;
@@ -2105,10 +2109,18 @@ static int cm_calculate_bss_score(struct wlan_objmgr_psoc *psoc,
 				score_config->rssi_score.bad_rssi_bucket_size);
 
 	vht_cap = (struct wlan_ie_vhtcaps *)util_scan_entry_vhtcap(entry);
-	if (vht_cap && vht_cap->su_beam_former)
+	he_cap = (struct wlan_ie_hecaps *)util_scan_entry_hecap(entry);
+
+	if (vht_cap && vht_cap->su_beam_former) {
 		ap_su_beam_former = true;
-	else
+	} else if (he_cap && QDF_GET_BITS(*(he_cap->he_phy_cap.phy_cap_bytes +
+		   WLAN_HE_PHYCAP_SU_BFER_OFFSET), WLAN_HE_PHYCAP_SU_BFER_IDX,
+		   WLAN_HE_PHYCAP_SU_BFER_BITS)) {
+		ap_su_beam_former = true;
+	} else {
 		ap_su_beam_former = cm_get_su_beam_former(entry);
+	}
+
 	if (phy_config->beamformee_cap && is_vht &&
 	    ap_su_beam_former &&
 	    (entry->rssi_raw > rssi_pref_5g_rssi_thresh) && !same_bucket)
@@ -2232,6 +2244,51 @@ static void cm_list_insert_sorted(qdf_list_t *scan_list,
 		qdf_list_insert_back(scan_list, &scan_entry->node);
 }
 
+#ifdef CONN_MGR_ADV_FEATURE
+/**
+ * cm_is_bad_rssi_entry() - check the entry have rssi value, if rssi is lower
+ * than threshold limit, then it is considered ad bad rssi value.
+ * @scan_entry: pointer to scan cache entry
+ * @score_config: pointer to score config structure
+ * @bssid_hint: bssid hint
+ *
+ * Return: true if rssi is lower than threshold
+ */
+static
+bool cm_is_bad_rssi_entry(struct scan_cache_entry *scan_entry,
+			  struct scoring_cfg *score_config,
+			  struct qdf_mac_addr *bssid_hint)
+{
+	int8_t rssi_threshold =
+		score_config->rssi_score.con_non_hint_target_rssi_threshold;
+
+	 /* do not need to consider BSSID hint if it is invalid entry(zero) */
+	if (qdf_is_macaddr_zero(bssid_hint))
+		return false;
+
+	if (score_config->is_bssid_hint_priority &&
+	    !qdf_is_macaddr_equal(bssid_hint, &scan_entry->bssid) &&
+	    scan_entry->rssi_raw < rssi_threshold) {
+		mlme_nofl_debug("Candidate(  " QDF_MAC_ADDR_FMT "  freq %d): remove entry, rssi %d lower than rssi_threshold %d",
+				QDF_MAC_ADDR_REF(scan_entry->bssid.bytes),
+				scan_entry->channel.chan_freq,
+				scan_entry->rssi_raw, rssi_threshold);
+		return true;
+	}
+
+	return false;
+}
+#else
+static inline
+bool cm_is_bad_rssi_entry(struct scan_cache_entry *scan_entry,
+			  struct scoring_cfg *score_config,
+			  struct qdf_mac_addr *bssid_hint)
+
+{
+	return false;
+}
+#endif
+
 void wlan_cm_calculate_bss_score(struct wlan_objmgr_pdev *pdev,
 				 struct pcl_freq_weight_list *pcl_lst,
 				 qdf_list_t *scan_list,
@@ -2249,6 +2306,7 @@ void wlan_cm_calculate_bss_score(struct wlan_objmgr_pdev *pdev,
 	bool assoc_allowed;
 	struct scan_cache_node *force_connect_candidate = NULL;
 	bool are_all_candidate_denylisted = true;
+	bool is_rssi_bad = false;
 
 	psoc = wlan_pdev_get_psoc(pdev);
 
@@ -2287,10 +2345,13 @@ void wlan_cm_calculate_bss_score(struct wlan_objmgr_pdev *pdev,
 		scan_entry = qdf_container_of(cur_node, struct scan_cache_node,
 					      node);
 
+		is_rssi_bad = cm_is_bad_rssi_entry(scan_entry->entry,
+						   score_config, bssid_hint);
+
 		assoc_allowed = cm_is_assoc_allowed(mlme_psoc_obj,
 						    scan_entry->entry);
 
-		if (assoc_allowed)
+		if (assoc_allowed && !is_rssi_bad)
 			denylist_action = wlan_denylist_action_on_bssid(pdev,
 							scan_entry->entry);
 		else
@@ -2377,7 +2438,7 @@ void wlan_cm_calculate_bss_score(struct wlan_objmgr_pdev *pdev,
 		 */
 		if (denylist_action == CM_DLM_REMOVE ||
 		    denylist_action == CM_DLM_FORCE_REMOVE) {
-			if (assoc_allowed)
+			if (assoc_allowed && !is_rssi_bad)
 				mlme_nofl_debug("Candidate( " QDF_MAC_ADDR_FMT " freq %d): rssi %d, dlm action %d is in Denylist, remove entry",
 					QDF_MAC_ADDR_REF(scan_entry->entry->bssid.bytes),
 					scan_entry->entry->channel.chan_freq,
@@ -2533,6 +2594,19 @@ bool wlan_cm_get_check_6ghz_security(struct wlan_objmgr_psoc *psoc)
 	return mlme_psoc_obj->psoc_cfg.score_config.check_6ghz_security;
 }
 
+void wlan_cm_set_standard_6ghz_conn_policy(struct wlan_objmgr_psoc *psoc,
+					   bool value)
+{
+	struct psoc_mlme_obj *mlme_psoc_obj;
+
+	mlme_psoc_obj = wlan_psoc_mlme_get_cmpt_obj(psoc);
+	if (!mlme_psoc_obj)
+		return;
+
+	mlme_debug("6ghz standard connection policy val %x", value);
+	mlme_psoc_obj->psoc_cfg.score_config.standard_6ghz_conn_policy = value;
+}
+
 void wlan_cm_set_relaxed_6ghz_conn_policy(struct wlan_objmgr_psoc *psoc,
 					  bool value)
 {
@@ -2555,6 +2629,17 @@ bool wlan_cm_get_relaxed_6ghz_conn_policy(struct wlan_objmgr_psoc *psoc)
 		return false;
 
 	return mlme_psoc_obj->psoc_cfg.score_config.relaxed_6ghz_conn_policy;
+}
+
+bool wlan_cm_get_standard_6ghz_conn_policy(struct wlan_objmgr_psoc *psoc)
+{
+	struct psoc_mlme_obj *mlme_psoc_obj;
+
+	mlme_psoc_obj = wlan_psoc_mlme_get_cmpt_obj(psoc);
+	if (!mlme_psoc_obj)
+		return false;
+
+	return mlme_psoc_obj->psoc_cfg.score_config.standard_6ghz_conn_policy;
 }
 
 void wlan_cm_set_6ghz_key_mgmt_mask(struct wlan_objmgr_psoc *psoc,
@@ -2873,6 +2958,9 @@ void wlan_cm_init_score_config(struct wlan_objmgr_psoc *psoc,
 
 	score_cfg->rssi_score.rssi_pref_5g_rssi_thresh =
 		cfg_get(psoc, CFG_SCORING_RSSI_PREF_5G_THRESHOLD);
+
+	score_cfg->rssi_score.con_non_hint_target_rssi_threshold =
+		cfg_get(psoc, CFG_CON_NON_HINT_TARGET_MIN_RSSI);
 
 	score_cfg->esp_qbss_scoring.num_slot =
 		cfg_get(psoc, CFG_SCORING_NUM_ESP_QBSS_SLOTS);

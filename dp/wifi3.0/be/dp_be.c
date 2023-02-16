@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -541,13 +541,10 @@ static QDF_STATUS dp_peer_ppeds_default_route_be(struct dp_soc *soc,
 	priority_valid = be_peer->priority_valid;
 
 	/*
-	 * if FST is enabled and MLO is disabled then
-	 * let flow rule take the decision of routing
-	 * the pkt to DS or host
+	 * if FST is enabled then let flow rule take the decision of
+	 * routing the pkt to DS or host
 	 */
-	if (wlan_cfg_is_rx_flow_tag_enabled(cfg) &&
-	    qdf_is_macaddr_zero((struct qdf_mac_addr *)
-				 be_vdev->vdev.mld_mac_addr.raw))
+	if (wlan_cfg_is_rx_flow_tag_enabled(cfg))
 		use_ppe_ds = 0;
 
 	if (soc->cdp_soc.ol_ops->peer_set_ppeds_default_routing) {
@@ -570,6 +567,7 @@ static QDF_STATUS dp_peer_ppeds_default_route_be(struct dp_soc *soc,
 	return QDF_STATUS_SUCCESS;
 }
 
+#ifdef WLAN_FEATURE_11BE_MLO
 static QDF_STATUS dp_peer_setup_ppeds_be(struct dp_soc *soc,
 					 struct dp_peer *peer,
 					 struct dp_vdev_be *be_vdev)
@@ -641,6 +639,27 @@ static QDF_STATUS dp_peer_setup_ppeds_be(struct dp_soc *soc,
 	return qdf_status;
 }
 #else
+static QDF_STATUS dp_peer_setup_ppeds_be(struct dp_soc *soc,
+					 struct dp_peer *peer,
+					 struct dp_vdev_be *be_vdev)
+{
+	struct dp_ppe_vp_profile *ppe_vp_profile = &be_vdev->ppe_vp_profile;
+	struct dp_peer_be *be_peer = dp_get_be_peer_from_dp_peer(peer);
+	QDF_STATUS qdf_status = QDF_STATUS_SUCCESS;
+
+	if (!be_peer) {
+		dp_err("BE peer is null");
+		return QDF_STATUS_E_NULL_VALUE;
+	}
+
+	qdf_status = dp_peer_ppeds_default_route_be(soc, be_peer,
+						    be_vdev->vdev.vdev_id,
+						    ppe_vp_profile->vp_num);
+
+	return qdf_status;
+}
+#endif
+#else
 static QDF_STATUS dp_ppeds_init_soc_be(struct dp_soc *soc)
 {
 	return QDF_STATUS_SUCCESS;
@@ -669,12 +688,25 @@ QDF_STATUS dp_peer_setup_ppeds_be(struct dp_soc *soc, struct dp_peer *peer,
 }
 #endif /* WLAN_SUPPORT_PPEDS */
 
+void dp_reo_shared_qaddr_detach(struct dp_soc *soc)
+{
+	qdf_mem_free_consistent(soc->osdev, soc->osdev->dev,
+				REO_QUEUE_REF_ML_TABLE_SIZE,
+				soc->reo_qref.mlo_reo_qref_table_vaddr,
+				soc->reo_qref.mlo_reo_qref_table_paddr, 0);
+	qdf_mem_free_consistent(soc->osdev, soc->osdev->dev,
+				REO_QUEUE_REF_NON_ML_TABLE_SIZE,
+				soc->reo_qref.non_mlo_reo_qref_table_vaddr,
+				soc->reo_qref.non_mlo_reo_qref_table_paddr, 0);
+}
+
 static QDF_STATUS dp_soc_detach_be(struct dp_soc *soc)
 {
 	struct dp_soc_be *be_soc = dp_get_be_soc_from_dp_soc(soc);
 	int i = 0;
 
 	dp_soc_ppeds_detach_be(soc);
+	dp_reo_shared_qaddr_detach(soc);
 
 	for (i = 0; i < MAX_TXDESC_POOLS; i++)
 		dp_hw_cookie_conversion_detach(be_soc,
@@ -720,6 +752,26 @@ dp_mlo_mcast_deinit(struct dp_soc *soc, struct dp_vdev *vdev)
 	be_vdev->mcast_primary = false;
 	vdev->mlo_vdev = false;
 }
+
+static void dp_set_rx_fst_be(struct dp_soc *soc, struct dp_rx_fst *fst)
+{
+	dp_mlo_set_rx_fst(soc, fst);
+}
+
+static struct dp_rx_fst *dp_get_rx_fst_be(struct dp_soc *soc)
+{
+	return dp_mlo_get_rx_fst(soc);
+}
+
+static uint8_t dp_rx_fst_deref_be(struct dp_soc *soc)
+{
+	return dp_mlo_rx_fst_deref(soc);
+}
+
+static void dp_rx_fst_ref_be(struct dp_soc *soc)
+{
+	dp_mlo_rx_fst_ref(soc);
+}
 #else
 static inline void
 dp_mlo_mcast_init(struct dp_soc *soc, struct dp_vdev *vdev)
@@ -728,6 +780,24 @@ dp_mlo_mcast_init(struct dp_soc *soc, struct dp_vdev *vdev)
 
 static inline void
 dp_mlo_mcast_deinit(struct dp_soc *soc, struct dp_vdev *vdev)
+{
+}
+
+static void dp_set_rx_fst_be(struct dp_soc *soc, struct dp_rx_fst *fst)
+{
+}
+
+static struct dp_rx_fst *dp_get_rx_fst_be(struct dp_soc *soc)
+{
+	return NULL;
+}
+
+static uint8_t dp_rx_fst_deref_be(struct dp_soc *soc)
+{
+	return 1;
+}
+
+static void dp_rx_fst_ref_be(struct dp_soc *soc)
 {
 }
 #endif
@@ -764,6 +834,24 @@ static void dp_get_rx_hash_key_be(struct dp_soc *soc,
 				  struct cdp_lro_hash_config *lro_hash)
 {
 	dp_get_rx_hash_key_bytes(lro_hash);
+}
+
+static void dp_set_rx_fst_be(struct dp_soc *soc, struct dp_rx_fst *fst)
+{
+}
+
+static struct dp_rx_fst *dp_get_rx_fst_be(struct dp_soc *soc)
+{
+	return NULL;
+}
+
+static uint8_t dp_rx_fst_deref_be(struct dp_soc *soc)
+{
+	return 1;
+}
+
+static void dp_rx_fst_ref_be(struct dp_soc *soc)
+{
 }
 #endif
 
@@ -911,6 +999,20 @@ static QDF_STATUS dp_pdev_detach_be(struct dp_pdev *pdev)
 	return QDF_STATUS_SUCCESS;
 }
 
+#ifdef INTRA_BSS_FWD_OFFLOAD
+static
+void dp_vdev_set_intra_bss(struct dp_soc *soc, uint16_t vdev_id, bool enable)
+{
+	soc->cdp_soc.ol_ops->vdev_set_intra_bss(soc->ctrl_psoc, vdev_id,
+						enable);
+}
+#else
+static
+void dp_vdev_set_intra_bss(struct dp_soc *soc, uint16_t vdev_id, bool enable)
+{
+}
+#endif
+
 static QDF_STATUS dp_vdev_attach_be(struct dp_soc *soc, struct dp_vdev *vdev)
 {
 	struct dp_soc_be *be_soc = dp_get_be_soc_from_dp_soc(soc);
@@ -943,6 +1045,8 @@ static QDF_STATUS dp_vdev_attach_be(struct dp_soc *soc, struct dp_vdev *vdev)
 		else
 			hal_tx_vdev_mcast_ctrl_set(soc->hal_soc, vdev->vdev_id,
 						   HAL_TX_MCAST_CTRL_MEC_NOTIFY);
+	} else if (vdev->ap_bridge_enabled) {
+		dp_vdev_set_intra_bss(soc, vdev->vdev_id, true);
 	}
 
 	dp_mlo_mcast_init(soc, vdev);
@@ -1865,6 +1969,7 @@ dp_mlo_peer_find_hash_find_be(struct dp_soc *soc,
 	} else {
 		vdev = NULL;
 	}
+
 	/* search mld peer table if no link peer for given mac address */
 	index = dp_mlo_peer_find_hash_index(mld_hash_obj, mac_addr);
 	qdf_spin_lock_bh(&mld_hash_obj->mld_peer_hash_lock);
@@ -1926,8 +2031,11 @@ dp_mlo_peer_find_hash_remove_be(struct dp_soc *soc, struct dp_peer *peer)
 	TAILQ_REMOVE(&mld_hash_obj->mld_peer_hash.bins[index], peer,
 		     hash_list_elem);
 
+	dp_info("Peer %pK (" QDF_MAC_ADDR_FMT ") removed. (found %u)",
+		peer, QDF_MAC_ADDR_REF(peer->mac_addr.raw), found);
 	dp_peer_unref_delete(peer, DP_MOD_ID_CONFIG);
 	qdf_spin_unlock_bh(&mld_hash_obj->mld_peer_hash_lock);
+
 }
 
 static void
@@ -1955,6 +2063,9 @@ dp_mlo_peer_find_hash_add_be(struct dp_soc *soc, struct dp_peer *peer)
 	TAILQ_INSERT_TAIL(&mld_hash_obj->mld_peer_hash.bins[index], peer,
 			  hash_list_elem);
 	qdf_spin_unlock_bh(&mld_hash_obj->mld_peer_hash_lock);
+
+	dp_info("Peer %pK (" QDF_MAC_ADDR_FMT ") added",
+		peer, QDF_MAC_ADDR_REF(peer->mac_addr.raw));
 }
 
 void dp_print_mlo_ast_stats_be(struct dp_soc *soc)
@@ -2449,7 +2560,8 @@ void dp_initialize_arch_ops_be(struct dp_arch_ops *arch_ops)
 #endif
 	arch_ops->dp_rx_desc_cookie_2_va =
 			dp_rx_desc_cookie_2_va_be;
-	arch_ops->dp_rx_intrabss_handle_nawds = dp_rx_intrabss_handle_nawds_be;
+	arch_ops->dp_rx_intrabss_mcast_handler =
+				dp_rx_intrabss_mcast_handler_be;
 	arch_ops->dp_rx_word_mask_subscribe = dp_rx_word_mask_subscribe_be;
 
 	arch_ops->txrx_soc_attach = dp_soc_attach_be;
@@ -2475,6 +2587,7 @@ void dp_initialize_arch_ops_be(struct dp_arch_ops *arch_ops)
 	arch_ops->txrx_set_vdev_param = dp_txrx_set_vdev_param_be;
 	dp_initialize_arch_ops_be_mlo(arch_ops);
 	arch_ops->dp_rx_replenish_soc_get = dp_rx_replensih_soc_get;
+	arch_ops->dp_soc_get_num_soc = dp_soc_get_num_soc_be;
 	arch_ops->dp_peer_rx_reorder_queue_setup =
 					dp_peer_rx_reorder_queue_setup_be;
 	arch_ops->txrx_print_peer_stats = dp_print_peer_txrx_stats_be;
@@ -2499,6 +2612,10 @@ void dp_initialize_arch_ops_be(struct dp_arch_ops *arch_ops)
 	dp_init_near_full_arch_ops_be(arch_ops);
 	arch_ops->get_reo_qdesc_addr = dp_rx_get_reo_qdesc_addr_be;
 	arch_ops->get_rx_hash_key = dp_get_rx_hash_key_be;
+	arch_ops->dp_set_rx_fst = dp_set_rx_fst_be;
+	arch_ops->dp_get_rx_fst = dp_get_rx_fst_be;
+	arch_ops->dp_rx_fst_deref = dp_rx_fst_deref_be;
+	arch_ops->dp_rx_fst_ref = dp_rx_fst_ref_be;
 	arch_ops->print_mlo_ast_stats = dp_print_mlo_ast_stats_be;
 	arch_ops->peer_get_reo_hash = dp_peer_get_reo_hash_be;
 	arch_ops->reo_remap_config = dp_reo_remap_config_be;

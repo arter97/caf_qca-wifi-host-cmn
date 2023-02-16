@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -24,12 +24,14 @@
 #include <dp_internal.h>
 #include <wlan_cfg.h>
 #include <wlan_mlo_mgr_cmn.h>
-/*
- * dp_mlo_ctxt_attach_wifi3 () – Attach DP MLO context
+
+/**
+ * dp_mlo_ctxt_attach_wifi3() - Attach DP MLO context
+ * @ctrl_ctxt: CDP control context
  *
  * Return: DP MLO context handle on success, NULL on failure
  */
-struct cdp_mlo_ctxt *
+static struct cdp_mlo_ctxt *
 dp_mlo_ctxt_attach_wifi3(struct cdp_ctrl_mlo_mgr *ctrl_ctxt)
 {
 	struct dp_mlo_ctxt *mlo_ctxt =
@@ -60,16 +62,13 @@ dp_mlo_ctxt_attach_wifi3(struct cdp_ctrl_mlo_mgr *ctrl_ctxt)
 	return dp_mlo_ctx_to_cdp(mlo_ctxt);
 }
 
-qdf_export_symbol(dp_mlo_ctxt_attach_wifi3);
-
-/*
- * dp_mlo_ctxt_detach_wifi3 () – Detach DP MLO context
- *
- * @ml_ctxt: pointer to DP MLO context
+/**
+ * dp_mlo_ctxt_detach_wifi3() - Detach DP MLO context
+ * @cdp_ml_ctxt: pointer to CDP DP MLO context
  *
  * Return: void
  */
-void dp_mlo_ctxt_detach_wifi3(struct cdp_mlo_ctxt *cdp_ml_ctxt)
+static void dp_mlo_ctxt_detach_wifi3(struct cdp_mlo_ctxt *cdp_ml_ctxt)
 {
 	struct dp_mlo_ctxt *mlo_ctxt = cdp_mlo_ctx_to_dp(cdp_ml_ctxt);
 
@@ -80,8 +79,6 @@ void dp_mlo_ctxt_detach_wifi3(struct cdp_mlo_ctxt *cdp_ml_ctxt)
 	dp_mlo_peer_find_hash_detach_be(mlo_ctxt);
 	qdf_mem_free(mlo_ctxt);
 }
-
-qdf_export_symbol(dp_mlo_ctxt_detach_wifi3);
 
 /*
  * dp_mlo_set_soc_by_chip_id() – Add DP soc to ML context soc list
@@ -98,6 +95,15 @@ void dp_mlo_set_soc_by_chip_id(struct dp_mlo_ctxt *ml_ctxt,
 {
 	qdf_spin_lock_bh(&ml_ctxt->ml_soc_list_lock);
 	ml_ctxt->ml_soc_list[chip_id] = soc;
+
+	/* The same API is called during soc_attach and soc_detach
+	 * soc parameter is non-null or null accordingly.
+	 */
+	if (soc)
+		ml_ctxt->ml_soc_cnt++;
+	else
+		ml_ctxt->ml_soc_cnt--;
+
 	qdf_spin_unlock_bh(&ml_ctxt->ml_soc_list_lock);
 }
 
@@ -298,6 +304,7 @@ static void dp_mlo_soc_teardown(struct cdp_soc_t *soc_hdl,
 				   NULL);
 
 	dp_mlo_set_soc_by_chip_id(mlo_ctxt, NULL, be_soc->mlo_chip_id);
+	be_soc->ml_ctxt = NULL;
 }
 
 static QDF_STATUS dp_mlo_add_ptnr_vdev(struct dp_vdev *vdev1,
@@ -744,6 +751,50 @@ void dp_mlo_get_rx_hash_key(struct dp_soc *soc,
 		      LRO_IPV6_SEED_ARR_SZ));
 }
 
+void dp_mlo_set_rx_fst(struct dp_soc *soc, struct dp_rx_fst *fst)
+{
+	struct dp_soc_be *be_soc = dp_get_be_soc_from_dp_soc(soc);
+	struct dp_mlo_ctxt *ml_ctxt = be_soc->ml_ctxt;
+
+	if (be_soc->mlo_enabled && ml_ctxt)
+		ml_ctxt->rx_fst = fst;
+}
+
+struct dp_rx_fst *dp_mlo_get_rx_fst(struct dp_soc *soc)
+{
+	struct dp_soc_be *be_soc = dp_get_be_soc_from_dp_soc(soc);
+	struct dp_mlo_ctxt *ml_ctxt = be_soc->ml_ctxt;
+
+	if (be_soc->mlo_enabled && ml_ctxt)
+		return ml_ctxt->rx_fst;
+
+	return NULL;
+}
+
+void dp_mlo_rx_fst_ref(struct dp_soc *soc)
+{
+	struct dp_soc_be *be_soc = dp_get_be_soc_from_dp_soc(soc);
+	struct dp_mlo_ctxt *ml_ctxt = be_soc->ml_ctxt;
+
+	if (be_soc->mlo_enabled && ml_ctxt)
+		ml_ctxt->rx_fst_ref_cnt++;
+}
+
+uint8_t dp_mlo_rx_fst_deref(struct dp_soc *soc)
+{
+	struct dp_soc_be *be_soc = dp_get_be_soc_from_dp_soc(soc);
+	struct dp_mlo_ctxt *ml_ctxt = be_soc->ml_ctxt;
+	uint8_t rx_fst_ref_cnt;
+
+	if (be_soc->mlo_enabled && ml_ctxt) {
+		rx_fst_ref_cnt = ml_ctxt->rx_fst_ref_cnt;
+		ml_ctxt->rx_fst_ref_cnt--;
+		return rx_fst_ref_cnt;
+	}
+
+	return 1;
+}
+
 struct dp_soc *
 dp_rx_replensih_soc_get(struct dp_soc *soc, uint8_t chip_id)
 {
@@ -764,6 +815,17 @@ dp_rx_replensih_soc_get(struct dp_soc *soc, uint8_t chip_id)
 	}
 
 	return replenish_soc;
+}
+
+uint8_t dp_soc_get_num_soc_be(struct dp_soc *soc)
+{
+	struct dp_soc_be *be_soc = dp_get_be_soc_from_dp_soc(soc);
+	struct dp_mlo_ctxt *mlo_ctxt = be_soc->ml_ctxt;
+
+	if (!be_soc->mlo_enabled || !mlo_ctxt)
+		return 1;
+
+	return mlo_ctxt->ml_soc_cnt;
 }
 
 struct dp_soc *

@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -91,6 +91,25 @@ void mlo_sta_link_disconn_notify(struct wlan_objmgr_vdev *vdev,
 				 struct wlan_cm_discon_rsp *resp);
 
 /**
+ * mlo_handle_sta_link_connect_failure - Notifies that STA link connect failure
+ * @vdev: pointer to vdev
+ * @rsp: connect resp
+ *
+ * Return: none
+ */
+void mlo_handle_sta_link_connect_failure(struct wlan_objmgr_vdev *vdev,
+					 struct wlan_cm_connect_resp *rsp);
+
+/**
+ * mlo_handle_pending_disconnect - Handle pending disconnect if received
+ * while link connect is ongoing.
+ * @vdev: pointer to vdev
+ *
+ * Return: none
+ */
+void mlo_handle_pending_disconnect(struct wlan_objmgr_vdev *vdev);
+
+/**
  * mlo_is_mld_sta - Check if MLD associated with the vdev is a station
  * @vdev: pointer to vdev
  *
@@ -105,6 +124,15 @@ bool mlo_is_mld_sta(struct wlan_objmgr_vdev *vdev);
  * Return: true if mld is disconnected, false otherwise
  */
 bool ucfg_mlo_is_mld_disconnected(struct wlan_objmgr_vdev *vdev);
+
+/**
+ * mlo_is_mld_disconnecting_connecting - Check whether MLD is disconnecting or
+ * connecting
+ * @vdev: pointer to vdev
+ *
+ * Return: true if mld is disconnecting or connecting, false otherwise
+ */
+bool mlo_is_mld_disconnecting_connecting(struct wlan_objmgr_vdev *vdev);
 
 #ifndef WLAN_FEATURE_11BE_MLO_ADV_FEATURE
 /**
@@ -160,6 +188,46 @@ mlo_update_connected_links_bmap(struct wlan_mlo_dev_context *mlo_dev_ctx,
  * Return: none
  */
 void mlo_clear_connected_links_bmap(struct wlan_objmgr_vdev *vdev);
+
+/**
+ * mlo_set_cu_bpcc() - set the bpcc per link id
+ * @vdev: vdev object
+ * @vdev_id: the id of vdev
+ * @bpcc: bss parameters change count
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS mlo_set_cu_bpcc(struct wlan_objmgr_vdev *vdev, uint8_t vdev_id,
+			   uint8_t bpcc);
+
+/**
+ * mlo_get_cu_bpcc() - get the bpcc per link id
+ * @vdev: vdev object
+ * @vdev_id: the id of vdev
+ * @bpcc: the bss parameters change count pointer to save value
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS mlo_get_cu_bpcc(struct wlan_objmgr_vdev *vdev, uint8_t vdev_id,
+			   uint8_t *bpcc);
+
+/**
+ * mlo_init_cu_bpcc() - initialize the bpcc for vdev
+ * @mlo_dev_ctx: wlan mlo dev context
+ * @vdev_id: vdev id
+ *
+ * Return: void
+ */
+void mlo_init_cu_bpcc(struct wlan_mlo_dev_context *mlo_dev_ctx,
+		      uint8_t vdev_id);
+
+/**
+ * mlo_clear_cu_bpcc() - clear the bpcc info
+ * @vdev: vdev object
+ *
+ * Return: void
+ */
+void mlo_clear_cu_bpcc(struct wlan_objmgr_vdev *vdev);
 
 /**
  * API to have operation on ml vdevs
@@ -576,6 +644,25 @@ void mlo_process_ml_reconfig_ie(struct wlan_objmgr_vdev *vdev,
 				struct scan_cache_entry *scan_entry,
 				uint8_t *ml_ie, qdf_size_t ml_ie_len,
 				struct mlo_partner_info *partner_info);
+/**
+ * mlo_allocate_and_copy_ies() - allocate and copy ies
+ * @target: target connect req pointer
+ * @source: source connect req pointer
+ *
+ * Return: None
+ */
+void
+mlo_allocate_and_copy_ies(struct wlan_cm_connect_req *target,
+			  struct wlan_cm_connect_req *source);
+
+/**
+ * mlo_free_connect_ies() - free connect ies
+ * @connect_req: connect req pointer
+ *
+ * Return: None
+ */
+void
+mlo_free_connect_ies(struct wlan_cm_connect_req *connect_req);
 #else
 static inline
 QDF_STATUS mlo_connect(struct wlan_objmgr_vdev *vdev,
@@ -631,6 +718,12 @@ bool ucfg_mlo_is_mld_disconnected(struct wlan_objmgr_vdev *vdev)
 	return true;
 }
 #endif
+
+static inline
+bool mlo_is_mld_disconnecting_connecting(struct wlan_objmgr_vdev *vdev)
+{
+	return false;
+}
 
 static inline
 bool mlo_is_mld_sta(struct wlan_objmgr_vdev *vdev)

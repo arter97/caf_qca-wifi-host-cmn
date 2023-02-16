@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2018-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -518,6 +518,11 @@ static int init_deinit_service_ext2_ready_event_handler(ol_scn_t scn_handle,
 	if (err_code)
 		target_if_debug("failed to populate dbs_or_sbs cap ext2");
 
+	err_code = init_deinit_populate_sap_coex_capability(psoc, wmi_handle,
+							    event);
+	if (err_code)
+		target_if_debug("failed to populate sap_coex_capability ext2");
+
 	legacy_callback = target_if_get_psoc_legacy_service_ready_cb();
 	if (legacy_callback)
 		if (legacy_callback(wmi_service_ready_ext2_event_id,
@@ -724,16 +729,44 @@ static bool init_deinit_mlo_capable(struct wlan_objmgr_psoc *psoc)
 	return false;
 }
 
+static bool init_deinit_mlo_get_group_id(struct wlan_objmgr_psoc *psoc,
+					 uint8_t *grp_id)
+{
+	struct target_psoc_info *tgt_hdl;
+
+	tgt_hdl = wlan_psoc_get_tgt_if_handle(psoc);
+	if (!tgt_hdl) {
+		target_if_err("target_psoc_info is null");
+		return false;
+	}
+
+	if ((tgt_hdl->tif_ops) &&
+	    (tgt_hdl->tif_ops->mlo_get_group_id)) {
+		*grp_id = tgt_hdl->tif_ops->mlo_get_group_id(psoc);
+		return true;
+	}
+
+	return false;
+}
+
 static void init_deinit_mlo_update_soc_ready(struct wlan_objmgr_psoc *psoc)
 {
-	if (init_deinit_mlo_capable(psoc))
-		mlo_setup_update_soc_ready(psoc);
+	uint8_t grp_id = 0;
+
+	if (init_deinit_mlo_capable(psoc)) {
+		if (!init_deinit_mlo_get_group_id(psoc, &grp_id)) {
+			target_if_err("Invalid MLD group id");
+			return;
+		}
+		mlo_setup_update_soc_ready(psoc, grp_id);
+	}
 }
 
 static void init_deinit_send_ml_link_ready(struct wlan_objmgr_psoc *psoc,
 					   void *object, void *arg)
 {
 	struct wlan_objmgr_pdev *pdev = object;
+	uint8_t grp_id = 0;
 
 	if (!init_deinit_mlo_capable(psoc))
 		return;
@@ -741,7 +774,10 @@ static void init_deinit_send_ml_link_ready(struct wlan_objmgr_psoc *psoc,
 	qdf_assert_always(psoc);
 	qdf_assert_always(pdev);
 
-	mlo_setup_link_ready(pdev);
+	if (!init_deinit_mlo_get_group_id(psoc, &grp_id))
+		qdf_assert_always(grp_id);
+
+	mlo_setup_link_ready(pdev, grp_id);
 }
 
 static void init_deinit_mlo_update_pdev_ready(struct wlan_objmgr_psoc *psoc,
@@ -1043,6 +1079,7 @@ static int init_deinit_mlo_setup_comp_event_handler(ol_scn_t scn_handle,
 	struct target_psoc_info *tgt_hdl;
 	struct wmi_unified *wmi_handle;
 	struct wmi_mlo_setup_complete_params params;
+	uint8_t grp_id = 0;
 
 	if (!scn_handle) {
 		target_if_err("scn handle NULL");
@@ -1050,16 +1087,24 @@ static int init_deinit_mlo_setup_comp_event_handler(ol_scn_t scn_handle,
 	}
 
 	psoc = target_if_get_psoc_from_scn_hdl(scn_handle);
+
 	if (!psoc) {
 		target_if_err("psoc is null");
 		return -EINVAL;
 	}
 
+	if (!init_deinit_mlo_get_group_id(psoc, &grp_id)) {
+		target_if_err("Invalid MLD group id");
+		return -EINVAL;
+	}
+
 	tgt_hdl = wlan_psoc_get_tgt_if_handle(psoc);
+
 	if (!tgt_hdl) {
 		target_if_err("target_psoc_info is null");
 		return -EINVAL;
 	}
+
 	wmi_handle = target_psoc_get_wmi_hdl(tgt_hdl);
 
 	if (wmi_extract_mlo_setup_cmpl_event(wmi_handle, event, &params) !=
@@ -1068,8 +1113,9 @@ static int init_deinit_mlo_setup_comp_event_handler(ol_scn_t scn_handle,
 
 	pdev = wlan_objmgr_get_pdev_by_id(psoc, params.pdev_id,
 					  WLAN_INIT_DEINIT_ID);
+
 	if (pdev) {
-		mlo_link_setup_complete(pdev);
+		mlo_link_setup_complete(pdev, grp_id);
 		wlan_objmgr_pdev_release_ref(pdev, WLAN_INIT_DEINIT_ID);
 	}
 
@@ -1087,6 +1133,7 @@ static int init_deinit_mlo_teardown_comp_event_handler(ol_scn_t scn_handle,
 	struct target_psoc_info *tgt_hdl;
 	struct wmi_unified *wmi_handle;
 	struct wmi_mlo_teardown_cmpl_params params;
+	uint8_t grp_id = 0;
 
 	if (!scn_handle) {
 		target_if_err("scn handle NULL");
@@ -1096,6 +1143,11 @@ static int init_deinit_mlo_teardown_comp_event_handler(ol_scn_t scn_handle,
 	psoc = target_if_get_psoc_from_scn_hdl(scn_handle);
 	if (!psoc) {
 		target_if_err("psoc is null");
+		return -EINVAL;
+	}
+
+	if (!init_deinit_mlo_get_group_id(psoc, &grp_id)) {
+		target_if_err("Invalid MLD group id");
 		return -EINVAL;
 	}
 
@@ -1113,7 +1165,7 @@ static int init_deinit_mlo_teardown_comp_event_handler(ol_scn_t scn_handle,
 	pdev = wlan_objmgr_get_pdev_by_id(psoc, params.pdev_id,
 					  WLAN_INIT_DEINIT_ID);
 	if (pdev) {
-		mlo_link_teardown_complete(pdev);
+		mlo_link_teardown_complete(pdev, grp_id);
 		wlan_objmgr_pdev_release_ref(pdev, WLAN_INIT_DEINIT_ID);
 	}
 

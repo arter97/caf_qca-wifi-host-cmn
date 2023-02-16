@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2017-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -268,6 +268,8 @@ struct tgt_info {
  * @cfr_support_enable: CFR support enable
  * @set_pktlog_checksum: Set the pktlog checksum from FW ready event to pl_dev
  * @csa_switch_count_status: CSA event handler
+ * @mlo_capable: Checks if the SoC is MLO capable
+ * @mlo_get_group_id: Get the MLO group id of the SoC
  * @mlo_setup_done_event: MLO setup sequence complete event handler
  */
 struct target_ops {
@@ -334,6 +336,7 @@ struct target_ops {
 	void (*ema_init)(struct wlan_objmgr_pdev *pdev);
 #if defined(WLAN_FEATURE_11BE_MLO) && defined(WLAN_MLO_MULTI_CHIP)
 	bool (*mlo_capable)(struct wlan_objmgr_psoc *psoc);
+	uint8_t (*mlo_get_group_id)(struct wlan_objmgr_psoc *psoc);
 	void (*mlo_setup_done_event)(struct wlan_objmgr_psoc *psoc);
 #endif
 };
@@ -2708,6 +2711,38 @@ void target_psoc_set_sbs_lower_band_end(struct target_psoc_info *psoc_info,
 		return;
 
 	psoc_info->info.sbs_lower_band_end_freq = val;
+}
+
+/**
+ * target_psoc_set_sap_coex_fixed_chan_cap() - Set SAP coex fixed chan cap
+ * @psoc_info: Pointer to struct target_psoc_info.
+ * @val: SAP coex fixed chan support
+ *
+ * Return: None
+ */
+static inline void
+target_psoc_set_sap_coex_fixed_chan_cap(struct target_psoc_info *psoc_info,
+					bool val)
+{
+	if (!psoc_info)
+		return;
+
+	psoc_info->info.service_ext2_param.sap_coex_fixed_chan_support = val;
+}
+
+/**
+ * target_psoc_get_sap_coex_fixed_chan_cap() - Get SAP coex fixed chan cap
+ * @psoc_info: Pointer to struct target_psoc_info.
+ *
+ * Return: sap_coex_fixed_chan_support received from firmware
+ */
+static inline bool
+target_psoc_get_sap_coex_fixed_chan_cap(struct target_psoc_info *psoc_info)
+{
+	if (!psoc_info)
+		return false;
+
+	return psoc_info->info.service_ext2_param.sap_coex_fixed_chan_support;
 }
 
 /**

@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -138,7 +138,7 @@ __dp_rx_mon_free_ppdu_info(struct dp_mon_pdev *mon_pdev,
 }
 
 /**
- * dp_rx_mon_nbuf_add_rx_frag () -  Add frag to SKB
+ * dp_rx_mon_nbuf_add_rx_frag() -  Add frag to SKB
  *
  * @nbuf: SKB to which frag is going to be added
  * @frag: frag to be added to SKB
@@ -174,7 +174,7 @@ dp_rx_mon_nbuf_add_rx_frag(qdf_nbuf_t nbuf, qdf_frag_t *frag,
  * @mon_pdev: monitor pdev
  * @nbuf: SKB to be freed
  *
- * @Return: void
+ * Return: void
  */
 void
 dp_mon_free_parent_nbuf(struct dp_mon_pdev *mon_pdev,
@@ -385,7 +385,7 @@ static void dp_rx_mon_free_mpdu_queue(struct dp_mon_pdev *mon_pdev,
 }
 
 /**
- * dp_rx_mon_free_ppdu_info () - Free PPDU info
+ * dp_rx_mon_free_ppdu_info() - Free PPDU info
  * @pdev: DP pdev
  * @ppdu_info: PPDU info
  *
@@ -441,7 +441,7 @@ void dp_rx_mon_drain_wq(struct dp_pdev *pdev)
  *
  * @mon_pdev: monitor pdev
  * @mpdu: MPDU nbuf
- * @status: monitor status
+ * @rx_status: monitor status
  *
  * Return: QDF_STATUS
  */
@@ -471,7 +471,7 @@ dp_rx_mon_deliver_mpdu(struct dp_mon_pdev *mon_pdev,
 }
 
 /**
- * dp_rx_mon_process_ppdu_info () - Process PPDU info
+ * dp_rx_mon_process_ppdu_info() - Process PPDU info
  * @pdev: DP pdev
  * @ppdu_info: PPDU info
  *
@@ -565,7 +565,7 @@ dp_rx_mon_process_ppdu_info(struct dp_pdev *pdev,
 }
 
 /**
- * dp_rx_mon_process_ppdu ()-  Deferred monitor processing
+ * dp_rx_mon_process_ppdu()-  Deferred monitor processing
  * This workqueue API handles:
  * a. Full monitor
  * b. Lite monitor
@@ -610,9 +610,9 @@ void dp_rx_mon_process_ppdu(void *context)
 }
 
 /**
- * dp_rx_mon_add_ppdu_info_to_wq () - Add PPDU info to workqueue
+ * dp_rx_mon_add_ppdu_info_to_wq() - Add PPDU info to workqueue
  *
- * @mon_pdev: monitor pdev
+ * @pdev: monitor pdev
  * @ppdu_info: ppdu info to be added to workqueue
  *
  * Return: SUCCESS or FAILIRE
@@ -666,9 +666,7 @@ dp_rx_mon_handle_full_mon(struct dp_pdev *pdev,
 	uint8_t num_frags, frag_iter, l2_hdr_offset;
 	struct ieee80211_frame *wh;
 	struct ieee80211_qoscntl *qos;
-	void *hdr_frag_addr;
-	uint32_t hdr_frag_size, frag_page_offset, pad_byte_pholder,
-		 msdu_len;
+	uint32_t hdr_frag_size, frag_page_offset, pad_byte_pholder;
 	qdf_nbuf_t head_msdu, msdu_cur;
 	void *frag_addr;
 	bool prev_msdu_end_received = false;
@@ -765,7 +763,6 @@ dp_rx_mon_handle_full_mon(struct dp_pdev *pdev,
 	QDF_NBUF_CB_RX_CTX_ID(mpdu) = 0;
 
 	/* Construct destination address */
-	hdr_frag_addr = qdf_nbuf_get_frag_addr(mpdu, 0);
 	hdr_frag_size = qdf_nbuf_get_frag_size_by_idx(mpdu, 0);
 
 	/* Adjust page frag offset to point to 802.11 header */
@@ -774,7 +771,6 @@ dp_rx_mon_handle_full_mon(struct dp_pdev *pdev,
 
 	msdu_meta = (struct hal_rx_mon_msdu_info *)(((void *)qdf_nbuf_get_frag_addr(mpdu, 1)) - (DP_RX_MON_PACKET_OFFSET + DP_RX_MON_NONRAW_L2_HDR_PAD_BYTE));
 
-	msdu_len = msdu_meta->msdu_len;
 
 	/* Adjust page frag offset to appropriate after decap header */
 	frag_page_offset =
@@ -975,8 +971,78 @@ dp_rx_mon_handle_full_mon(struct dp_pdev *pdev,
 	return QDF_STATUS_SUCCESS;
 }
 
+static inline int
+dp_rx_mon_flush_packet_tlv(struct dp_pdev *pdev, void *buf, uint16_t end_offset,
+			   union dp_mon_desc_list_elem_t **desc_list,
+			   union dp_mon_desc_list_elem_t **tail)
+{
+	struct dp_soc *soc = pdev->soc;
+	struct dp_mon_pdev *mon_pdev = pdev->monitor_pdev;
+	struct dp_mon_soc *mon_soc = soc->monitor_soc;
+	uint16_t work_done = 0;
+	qdf_frag_t addr;
+	uint8_t *rx_tlv;
+	uint8_t *rx_tlv_start;
+	uint16_t tlv_status = HAL_TLV_STATUS_BUF_DONE;
+	struct hal_rx_ppdu_info *ppdu_info;
+
+	if (!buf)
+		return work_done;
+
+	ppdu_info = &mon_pdev->ppdu_info;
+	if (!ppdu_info) {
+		dp_mon_err("ppdu_info malloc failed pdev: %pK", pdev);
+		return work_done;
+	}
+	qdf_mem_zero(ppdu_info, sizeof(struct hal_rx_ppdu_info));
+	rx_tlv = buf;
+	rx_tlv_start = buf;
+
+	do {
+		tlv_status = hal_rx_status_get_tlv_info(rx_tlv,
+							ppdu_info,
+							pdev->soc->hal_soc,
+							buf);
+
+		if (tlv_status == HAL_TLV_STATUS_MON_BUF_ADDR) {
+			struct dp_mon_desc *mon_desc = (struct dp_mon_desc *)(uintptr_t)ppdu_info->packet_info.sw_cookie;
+
+			qdf_assert_always(mon_desc);
+			addr = mon_desc->buf_addr;
+
+			if (!mon_desc->unmapped) {
+				qdf_mem_unmap_page(soc->osdev,
+						   (qdf_dma_addr_t)mon_desc->paddr,
+						   DP_MON_DATA_BUFFER_SIZE,
+						   QDF_DMA_FROM_DEVICE);
+				mon_desc->unmapped = 1;
+			}
+			dp_mon_add_to_free_desc_list(desc_list, tail, mon_desc);
+			work_done++;
+
+			if (addr) {
+				qdf_frag_free(addr);
+				DP_STATS_INC(mon_soc, frag_free, 1);
+			}
+		}
+
+		rx_tlv = hal_rx_status_get_next_tlv(rx_tlv, 1);
+
+		if ((rx_tlv - rx_tlv_start) >= (end_offset + 1))
+			break;
+
+	} while ((tlv_status == HAL_TLV_STATUS_PPDU_NOT_DONE) ||
+		 (tlv_status == HAL_TLV_STATUS_HEADER) ||
+		 (tlv_status == HAL_TLV_STATUS_MPDU_END) ||
+		 (tlv_status == HAL_TLV_STATUS_MSDU_END) ||
+		 (tlv_status == HAL_TLV_STATUS_MON_BUF_ADDR) ||
+		 (tlv_status == HAL_TLV_STATUS_MPDU_START));
+
+	return work_done;
+}
+
 /**
- * dp_rx_mon_flush_status_buf_queue () - Flush status buffer queue
+ * dp_rx_mon_flush_status_buf_queue() - Flush status buffer queue
  *
  * @pdev: DP pdev handle
  *
@@ -999,6 +1065,7 @@ dp_rx_mon_flush_status_buf_queue(struct dp_pdev *pdev)
 	struct dp_mon_desc_pool *rx_mon_desc_pool = &mon_soc_be->rx_desc_mon;
 	uint16_t work_done = 0;
 	uint16_t status_buf_count;
+	uint16_t end_offset = 0;
 
 	if (!mon_pdev_be->desc_count) {
 		dp_mon_info("no of status buffer count is zero: %pK", pdev);
@@ -1014,9 +1081,13 @@ dp_rx_mon_flush_status_buf_queue(struct dp_pdev *pdev)
 		}
 
 		buf = mon_desc->buf_addr;
+		end_offset = mon_desc->end_offset;
 
 		dp_mon_add_to_free_desc_list(&desc_list, &tail, mon_desc);
 		work_done++;
+
+		work_done += dp_rx_mon_flush_packet_tlv(pdev, buf, end_offset,
+							&desc_list, &tail);
 
 		/* set status buffer pointer to NULL */
 		mon_pdev_be->status[idx] = NULL;
@@ -1037,7 +1108,7 @@ dp_rx_mon_flush_status_buf_queue(struct dp_pdev *pdev)
 }
 
 /**
- * dp_rx_mon_handle_flush_n_trucated_ppdu () - Handle flush and truncated ppdu
+ * dp_rx_mon_handle_flush_n_trucated_ppdu() - Handle flush and truncated ppdu
  *
  * @soc: DP soc handle
  * @pdev: pdev handle
@@ -1055,13 +1126,19 @@ dp_rx_mon_handle_flush_n_trucated_ppdu(struct dp_soc *soc,
 			dp_get_be_mon_soc_from_dp_mon_soc(mon_soc);
 	struct dp_mon_desc_pool *rx_mon_desc_pool = &mon_soc_be->rx_desc_mon;
 	uint16_t work_done;
+	void *buf;
+	uint16_t end_offset = 0;
 
 	/* Flush status buffers in queue */
 	dp_rx_mon_flush_status_buf_queue(pdev);
+	buf = mon_desc->buf_addr;
+	end_offset = mon_desc->end_offset;
 	qdf_frag_free(mon_desc->buf_addr);
 	DP_STATS_INC(mon_soc, frag_free, 1);
 	dp_mon_add_to_free_desc_list(&desc_list, &tail, mon_desc);
 	work_done = 1;
+	work_done += dp_rx_mon_flush_packet_tlv(pdev, buf, end_offset,
+						&desc_list, &tail);
 	if (desc_list)
 		dp_mon_add_desc_list_to_free_list(soc, &desc_list, &tail,
 						  rx_mon_desc_pool);
@@ -1420,7 +1497,7 @@ uint8_t dp_rx_mon_process_tlv_status(struct dp_pdev *pdev,
 }
 
 /**
- * dp_rx_mon_process_status_tlv () - Handle mon status process TLV
+ * dp_rx_mon_process_status_tlv() - Handle mon status process TLV
  *
  * @pdev: DP pdev handle
  *
@@ -1541,6 +1618,8 @@ dp_rx_mon_process_status_tlv(struct dp_pdev *pdev)
 	return ppdu_info;
 }
 
+#ifdef WLAN_FEATURE_11BE_MLO
+#define DP_PEER_ID_MASK 0x3FFF
 /**
  * dp_rx_mon_update_peer_id() - Update sw_peer_id with link peer_id
  *
@@ -1549,8 +1628,6 @@ dp_rx_mon_process_status_tlv(struct dp_pdev *pdev)
  *
  * Return: none
  */
-#ifdef WLAN_FEATURE_11BE_MLO
-#define DP_PEER_ID_MASK 0x3FFF
 static inline
 void dp_rx_mon_update_peer_id(struct dp_pdev *pdev,
 			      struct hal_rx_ppdu_info *ppdu_info)
@@ -1721,7 +1798,6 @@ dp_rx_mon_srng_process_2_0(struct dp_soc *soc, struct dp_intr *int_ctx,
 	uint32_t work_done = 0;
 	struct hal_rx_ppdu_info *ppdu_info = NULL;
 	QDF_STATUS status;
-
 	if (!pdev) {
 		dp_mon_err("%pK: pdev is null for mac_id = %d", soc, mac_id);
 		return work_done;
@@ -1813,9 +1889,9 @@ dp_rx_mon_srng_process_2_0(struct dp_soc *soc, struct dp_intr *int_ctx,
 
 		rx_mon_dst_ring_desc = hal_srng_dst_get_next(hal_soc, mon_dst_srng);
 
-		status = dp_rx_process_pktlog_be(soc, pdev, ppdu_info,
-						 mon_desc->buf_addr,
-						 hal_mon_rx_desc.end_offset);
+		dp_rx_process_pktlog_be(soc, pdev, ppdu_info,
+					mon_desc->buf_addr,
+					hal_mon_rx_desc.end_offset);
 
 		if (hal_mon_rx_desc.end_reason == HAL_MON_STATUS_BUFFER_FULL)
 			continue;
@@ -1912,7 +1988,6 @@ void dp_rx_mon_buf_desc_pool_free(struct dp_soc *soc)
 QDF_STATUS
 dp_rx_mon_buf_desc_pool_alloc(struct dp_soc *soc)
 {
-	struct dp_srng *mon_buf_ring;
 	struct dp_mon_desc_pool *rx_mon_desc_pool;
 	struct dp_mon_soc *mon_soc = soc->monitor_soc;
 	struct dp_mon_soc_be *mon_soc_be = dp_get_be_mon_soc_from_dp_mon_soc(mon_soc);
@@ -1922,7 +1997,6 @@ dp_rx_mon_buf_desc_pool_alloc(struct dp_soc *soc)
 	soc_cfg_ctx = soc->wlan_cfg_ctx;
 
 	entries = wlan_cfg_get_dp_soc_rx_mon_buf_ring_size(soc_cfg_ctx);
-	mon_buf_ring = &soc->rxdma_mon_buf_ring[0];
 
 	rx_mon_desc_pool = &mon_soc_be->rx_desc_mon;
 

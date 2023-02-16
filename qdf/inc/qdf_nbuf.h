@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2014-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -105,11 +105,13 @@
 #define EAPOL_PKT_LEN_OFFSET			16
 #define EAPOL_KEY_LEN_OFFSET			21
 #define EAPOL_KEY_DATA_LENGTH_OFFSET		111
+#define EAPOL_WPA_KEY_NONCE_OFFSET		31
 
 #define EAPOL_PACKET_TYPE_EAP                   0
 #define EAPOL_PACKET_TYPE_START                 1
 #define EAPOL_PACKET_TYPE_LOGOFF                2
 #define EAPOL_PACKET_TYPE_KEY                   3
+#define EAPOL_PACKET_TYPE_ASF			4
 
 #define EAPOL_KEY_TYPE_MASK			0x0800
 #define EAPOL_KEY_ENCRYPTED_MASK		0x0010
@@ -3622,6 +3624,34 @@ static inline
 bool qdf_nbuf_is_ipv6_igmp_pkt(qdf_nbuf_t buf)
 {
 	return __qdf_nbuf_data_is_ipv6_igmp_pkt(qdf_nbuf_data(buf));
+}
+
+/**
+ * qdf_nbuf_is_ipv4_igmp_leave_pkt() - check if it is a igmp leave packet or not
+ * @buf:  buffer
+ *
+ * This api is for ipv4 packet.
+ *
+ * Return: true if packet is igmp packet
+ */
+static inline
+bool qdf_nbuf_is_ipv4_igmp_leave_pkt(qdf_nbuf_t buf)
+{
+	return __qdf_nbuf_is_ipv4_igmp_leave_pkt(buf);
+}
+
+/**
+ * qdf_nbuf_is_ipv6_igmp_leave_pkt() - check if it is a igmp leave packet or not
+ * @buf:  buffer
+ *
+ * This api is for ipv6 packet.
+ *
+ * Return: true if packet is igmp packet
+ */
+static inline
+bool qdf_nbuf_is_ipv6_igmp_leave_pkt(qdf_nbuf_t buf)
+{
+	return __qdf_nbuf_is_ipv6_igmp_leave_pkt(buf);
 }
 
 /**

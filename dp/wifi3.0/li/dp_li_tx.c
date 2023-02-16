@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -178,9 +178,17 @@ void dp_tx_process_htt_completion_li(struct dp_soc *soc,
 		ts.tsf = htt_desc[3];
 		ts.first_msdu = 1;
 		ts.last_msdu = 1;
-		ts.status = (tx_status == HTT_TX_FW2WBM_TX_STATUS_OK ?
-			     HAL_TX_TQM_RR_FRAME_ACKED :
-			     HAL_TX_TQM_RR_REM_CMD_REM);
+		switch (tx_status) {
+		case HTT_TX_FW2WBM_TX_STATUS_OK:
+			ts.status = HAL_TX_TQM_RR_FRAME_ACKED;
+			break;
+		case HTT_TX_FW2WBM_TX_STATUS_DROP:
+			ts.status = HAL_TX_TQM_RR_REM_CMD_REM;
+			break;
+		case HTT_TX_FW2WBM_TX_STATUS_TTL:
+			ts.status = HAL_TX_TQM_RR_REM_CMD_TX;
+			break;
+		}
 		tid = ts.tid;
 		if (qdf_unlikely(tid >= CDP_MAX_DATA_TIDS))
 			tid = CDP_MAX_DATA_TIDS - 1;
@@ -252,12 +260,12 @@ release_tx_desc:
 }
 
 #ifdef QCA_OL_TX_MULTIQ_SUPPORT
-/*
- * dp_tx_get_rbm_id()- Get the RBM ID for data transmission completion.
- * @dp_soc - DP soc structure pointer
- * @ring_id - Transmit Queue/ring_id to be used when XPS is enabled
+/**
+ * dp_tx_get_rbm_id_li() - Get the RBM ID for data transmission completion.
+ * @soc: DP soc structure pointer
+ * @ring_id: Transmit Queue/ring_id to be used when XPS is enabled
  *
- * Return - HAL ring handle
+ * Return: HAL ring handle
  */
 #ifdef IPA_OFFLOAD
 static inline uint8_t dp_tx_get_rbm_id_li(struct dp_soc *soc,
@@ -365,7 +373,8 @@ QDF_STATUS dp_tx_compute_hw_delay_li(struct dp_soc *soc,
  * dp_sawf_config_li - Configure sawf specific fields in tcl
  *
  * @soc: DP soc handle
- * @hhal_tx_desc_cached: tx descriptor
+ * @hal_tx_desc_cached: tx descriptor
+ * @fw_metadata: firmware metadata
  * @vdev_id: vdev id
  * @nbuf: skb buffer
  *

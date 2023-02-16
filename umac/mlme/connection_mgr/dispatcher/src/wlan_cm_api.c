@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2012-2015, 2020-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -25,6 +25,11 @@
 #include "connection_mgr/core/src/wlan_cm_main_api.h"
 #include "connection_mgr/core/src/wlan_cm_roam.h"
 #include <wlan_vdev_mgr_utils_api.h>
+#ifdef WLAN_FEATURE_11BE_MLO
+#ifdef WLAN_FEATURE_11BE_MLO_ADV_FEATURE
+#include "wlan_mlo_mgr_roam.h"
+#endif
+#endif
 
 QDF_STATUS wlan_cm_start_connect(struct wlan_objmgr_vdev *vdev,
 				 struct wlan_cm_connect_req *req)
@@ -439,10 +444,11 @@ QDF_STATUS wlan_cm_sta_set_chan_param(struct wlan_objmgr_vdev *vdev,
 	if (chan_param->ch_width != CH_WIDTH_320MHZ)
 		center_freq_320 = 0;
 	qdf_mem_zero(&chan_list, sizeof(chan_list));
-	wlan_reg_fill_channel_list(pdev, ch_freq,
-				   sec_ch_2g_freq, chan_param->ch_width,
-				   center_freq_320, &chan_list,
-				   true);
+	wlan_reg_fill_channel_list_for_pwrmode(pdev, ch_freq,
+					       sec_ch_2g_freq,
+					       chan_param->ch_width,
+					       center_freq_320, &chan_list,
+					       REG_CURRENT_PWR_MODE, true);
 	*chan_param = chan_list.chan_param[0];
 	if (chan_param->ch_width == ori_bw)
 		new_punc = ori_punc;
@@ -508,3 +514,14 @@ QDF_STATUS wlan_cm_sta_update_bw_puncture(struct wlan_objmgr_vdev *vdev,
 						  bw_puncture);
 }
 #endif /* WLAN_FEATURE_11BE */
+
+#ifdef WLAN_FEATURE_11BE_MLO
+#ifdef WLAN_FEATURE_11BE_MLO_ADV_FEATURE
+bool
+wlan_cm_check_mlo_roam_auth_status(struct wlan_objmgr_vdev *vdev)
+{
+	return mlo_roam_is_auth_status_connected(wlan_vdev_get_psoc(vdev),
+					  wlan_vdev_get_id(vdev));
+}
+#endif
+#endif
