@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2012-2015,2020-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -82,6 +82,9 @@ static void cm_state_init_exit(void *ctx)
 /**
  * cm_state_init_event() - Init State event handler for connection mgr
  * @ctx: connection manager ctx
+ * @event: event
+ * @data_len: length of @data
+ * @data: event data
  *
  * API to handle events in INIT state
  *
@@ -176,6 +179,9 @@ static void cm_state_connecting_exit(void *ctx)
  * cm_state_connecting_event() - Connecting State event handler for
  * connection mgr
  * @ctx: connection manager ctx
+ * @event: event
+ * @data_len: length of @data
+ * @data: event data
  *
  * API to handle events in CONNECTING state
  *
@@ -333,6 +339,9 @@ bool cm_handle_roam_connected_event(struct cnx_mgr *cm_ctx, uint16_t event,
  * cm_state_connected_event() - Connected State event handler for
  * connection mgr
  * @ctx: connection manager ctx
+ * @event: event
+ * @data_len: length of @data
+ * @data: event data
  *
  * API to handle events in CONNECTED state
  *
@@ -427,9 +436,12 @@ static void cm_state_disconnecting_exit(void *ctx)
 }
 
 /**
- * cm_state_connected_event() - Disconnecting State event handler for
+ * cm_state_disconnecting_event() - Disconnecting State event handler for
  * connection mgr
  * @ctx: connection manager ctx
+ * @event: event
+ * @data_len: length of @data
+ * @data: event data
  *
  * API to handle events in Disconnecting state
  *
@@ -523,6 +535,9 @@ static void cm_subst_join_pending_exit(void *ctx)
  * cm_subst_join_pending_event() - Join pending sub-state event handler for
  * connection mgr
  * @ctx: connection manager ctx
+ * @event: event
+ * @data_len: length of @data
+ * @data: event data
  *
  * API to handle events in Join pending sub-state
  *
@@ -680,6 +695,9 @@ static void cm_subst_scan_exit(void *ctx)
  * cm_subst_scan_event() - Scan sub-state event handler for
  * connection mgr
  * @ctx: connection manager ctx
+ * @event: event
+ * @data_len: length of @data
+ * @data: event data
  *
  * API to handle events in scan sub-state
  *
@@ -783,6 +801,9 @@ static void cm_subst_join_active_exit(void *ctx)
  * cm_subst_join_active_event() - Join active sub-state event handler for
  * connection mgr
  * @ctx: connection manager ctx
+ * @event: event
+ * @data_len: length of @data
+ * @data: event data
  *
  * API to handle events in join active sub-state
  *
@@ -1167,7 +1188,8 @@ QDF_STATUS cm_sm_create(struct cnx_mgr *cm_ctx)
 	struct wlan_sm *sm;
 	uint8_t name[WLAN_SM_ENGINE_MAX_NAME];
 
-	qdf_scnprintf(name, sizeof(name), "CM-VDEV-%d",
+	qdf_scnprintf(name, sizeof(name), "CM-PS_%d-VD_%d",
+		      wlan_psoc_get_id(wlan_vdev_get_psoc(cm_ctx->vdev)),
 		      wlan_vdev_get_id(cm_ctx->vdev));
 	sm = wlan_sm_create(name, cm_ctx,
 			    WLAN_CM_S_INIT,

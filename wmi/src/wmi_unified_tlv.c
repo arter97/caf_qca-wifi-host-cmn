@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -5748,7 +5748,7 @@ static QDF_STATUS send_p2p_go_set_beacon_ie_cmd_tlv(wmi_unified_t wmi_handle,
  *
  * set scan probe OUI parameters in firmware
  *
- * Return: CDF status
+ * Return: QDF status
  */
 static QDF_STATUS send_scan_probe_setoui_cmd_tlv(wmi_unified_t wmi_handle,
 			  struct scan_mac_oui *psetoui)
@@ -5868,7 +5868,7 @@ static QDF_STATUS send_ipa_offload_control_cmd_tlv(wmi_unified_t wmi_handle,
  *
  * This function request FW to stop ongoing PNO operation.
  *
- * Return: CDF status
+ * Return: QDF status
  */
 static QDF_STATUS send_pno_stop_cmd_tlv(wmi_unified_t wmi_handle, uint8_t vdev_id)
 {
@@ -6247,7 +6247,7 @@ static void wmi_dump_pno_scan_freq_list(struct chan_list *scan_freq_list)
  * @pno: PNO request
  *
  * This function request FW to start PNO request.
- * Request: CDF status
+ * Request: QDF status
  */
 static QDF_STATUS send_pno_start_cmd_tlv(wmi_unified_t wmi_handle,
 		   struct pno_scan_req_params *pno)
@@ -6849,7 +6849,7 @@ static QDF_STATUS send_unified_ll_stats_get_sta_cmd_tlv(
  * @wmi_handle: wmi handle
  * @vdev_id: vdev id
  *
- * Return: CDF status
+ * Return: QDF status
  */
 static QDF_STATUS send_congestion_cmd_tlv(wmi_unified_t wmi_handle,
 			uint8_t vdev_id)
@@ -6925,7 +6925,7 @@ static QDF_STATUS send_snr_request_cmd_tlv(wmi_unified_t wmi_handle)
  * @wmi_handle: wmi handle
  * @vdev_id: vdev id
  *
- * Return: CDF status
+ * Return: QDF status
  */
 static QDF_STATUS send_snr_cmd_tlv(wmi_unified_t wmi_handle, uint8_t vdev_id)
 {
@@ -6961,7 +6961,7 @@ static QDF_STATUS send_snr_cmd_tlv(wmi_unified_t wmi_handle, uint8_t vdev_id)
  * @wmi_handle: wmi handle
  * @link_status: get link params
  *
- * Return: CDF status
+ * Return: QDF status
  */
 static QDF_STATUS send_link_status_req_cmd_tlv(wmi_unified_t wmi_handle,
 				 struct link_status_params *link_status)
@@ -7208,7 +7208,7 @@ static QDF_STATUS send_stop_11d_scan_cmd_tlv(wmi_unified_t wmi_handle,
  * @data_len: the length of @data
  * @data: the pointer to data buf
  *
- * Return: CDF status
+ * Return: QDF status
  */
 static QDF_STATUS send_start_oem_data_cmd_tlv(wmi_unified_t wmi_handle,
 					      uint32_t data_len,
@@ -7425,7 +7425,7 @@ send_dfs_phyerr_filter_offload_en_cmd_tlv(wmi_unified_t wmi_handle,
  * @cmd_id: pktlog cmd id
  * @user_triggered: user triggered input for PKTLOG enable mode
  *
- * Return: CDF status
+ * Return: QDF status
  */
 static QDF_STATUS send_pktlog_wmi_send_cmd_tlv(wmi_unified_t wmi_handle,
 				   WMI_PKTLOG_EVENT pktlog_event,
@@ -7514,7 +7514,7 @@ wmi_send_failed:
  * @wmi_handle: wmi handle
  * @preq: stats ext params
  *
- * Return: CDF status
+ * Return: QDF status
  */
 static QDF_STATUS send_stats_ext_req_cmd_tlv(wmi_unified_t wmi_handle,
 			struct stats_ext_params *preq)
@@ -9318,6 +9318,8 @@ static WMI_VENDOR1_REQ1_VERSION convert_host_to_target_vendor1_req1_version(
 		return WMI_VENDOR1_REQ1_VERSION_3_20;
 	case WMI_HOST_VENDOR1_REQ1_VERSION_3_30:
 		return WMI_VENDOR1_REQ1_VERSION_3_30;
+	case WMI_HOST_VENDOR1_REQ1_VERSION_3_40:
+		return WMI_VENDOR1_REQ1_VERSION_3_40;
 	default:
 		return WMI_VENDOR1_REQ1_VERSION_3_00;
 	}
@@ -12984,14 +12986,16 @@ static QDF_STATUS extract_mgmt_rx_ext_params_tlv(wmi_unified_t wmi_handle,
 		ext_params->ba_win_size = WMI_RX_PARAM_EXT_BA_WIN_SIZE_GET(
 					ext_params_tlv->mgmt_rx_params_ext_dword1);
 		if (ext_params->ba_win_size > 1024) {
-			wmi_err("ba win size from TLV is Invalid");
+			wmi_info("ba win size %d from TLV is Invalid",
+				 ext_params->ba_win_size);
 			return QDF_STATUS_E_INVAL;
 		}
 
 		ext_params->reo_win_size = WMI_RX_PARAM_EXT_REO_WIN_SIZE_GET(
 					ext_params_tlv->mgmt_rx_params_ext_dword1);
 		if (ext_params->reo_win_size > 2048) {
-			wmi_err("reo win size from TLV is Invalid");
+			wmi_info("reo win size %d from TLV is Invalid",
+				 ext_params->reo_win_size);
 			return QDF_STATUS_E_INVAL;
 		}
 	} else {
@@ -18931,6 +18935,12 @@ extract_roam_11kv_stats_tlv(wmi_unified_t wmi_handle, void *evt_buf,
 	dst->resp_time = src_data->neighbor_report_response_timestamp;
 	dst->btm_query_token = src_data->btm_query_token;
 	dst->btm_query_reason = src_data->btm_query_reason_code;
+	dst->req_token =
+		WMI_ROAM_NEIGHBOR_REPORT_INFO_REQUEST_TOKEN_GET(src_data->neighbor_report_detail);
+	dst->resp_token =
+		WMI_ROAM_NEIGHBOR_REPORT_INFO_RESPONSE_TOKEN_GET(src_data->neighbor_report_detail);
+	dst->num_rpt =
+		WMI_ROAM_NEIGHBOR_REPORT_INFO_NUM_OF_NRIE_GET(src_data->neighbor_report_detail);
 
 	if (!dst->num_freq || !param_buf->num_roam_neighbor_report_chan_info ||
 	    rpt_idx >= param_buf->num_roam_neighbor_report_chan_info)
@@ -20002,6 +20012,27 @@ send_set_mac_addr_rx_filter_cmd_tlv(wmi_unified_t wmi_handle,
 	return QDF_STATUS_SUCCESS;
 }
 
+static QDF_STATUS
+extract_sap_coex_fix_chan_caps(wmi_unified_t wmi_handle,
+			       uint8_t *event,
+			       struct wmi_host_coex_fix_chan_cap *cap)
+{
+	WMI_SERVICE_READY_EXT2_EVENTID_param_tlvs *param_buf;
+	WMI_COEX_FIX_CHANNEL_CAPABILITIES *fw_cap;
+
+	param_buf = (WMI_SERVICE_READY_EXT2_EVENTID_param_tlvs *)event;
+	if (!param_buf)
+		return QDF_STATUS_E_INVAL;
+
+	fw_cap = param_buf->coex_fix_channel_caps;
+	if (!fw_cap)
+		return QDF_STATUS_E_INVAL;
+
+	cap->fix_chan_priority = fw_cap->fix_channel_priority;
+
+	return QDF_STATUS_SUCCESS;
+}
+
 struct wmi_ops tlv_ops =  {
 	.send_vdev_create_cmd = send_vdev_create_cmd_tlv,
 	.send_vdev_delete_cmd = send_vdev_delete_cmd_tlv,
@@ -20411,7 +20442,7 @@ struct wmi_ops tlv_ops =  {
 #ifdef FEATURE_MEC_OFFLOAD
 	.send_pdev_set_mec_timer_cmd = send_pdev_set_mec_timer_cmd_tlv,
 #endif
-#ifdef WLAN_SUPPORT_INFRA_CTRL_PATH_STATS
+#if defined(WLAN_SUPPORT_INFRA_CTRL_PATH_STATS) || defined(WLAN_TELEMETRY_STATS_SUPPORT)
 	.extract_infra_cp_stats = extract_infra_cp_stats_tlv,
 #endif /* WLAN_SUPPORT_INFRA_CTRL_PATH_STATS */
 	.extract_cp_stats_more_pending =
@@ -20484,10 +20515,12 @@ struct wmi_ops tlv_ops =  {
 	.set_mac_addr_rx_filter = send_set_mac_addr_rx_filter_cmd_tlv,
 	.send_update_edca_pifs_param_cmd =
 			send_update_edca_pifs_param_cmd_tlv,
+	.extract_sap_coex_cap_service_ready_ext2 =
+			extract_sap_coex_fix_chan_caps,
 };
 
 #ifdef WLAN_FEATURE_11BE_MLO
-static void populate_tlv_events_id_mlo(uint32_t *event_ids)
+static void populate_tlv_events_id_mlo(WMI_EVT_ID *event_ids)
 {
 	event_ids[wmi_mlo_setup_complete_event_id] =
 			WMI_MLO_SETUP_COMPLETE_EVENTID;
@@ -20503,7 +20536,7 @@ static void populate_tlv_events_id_mlo(uint32_t *event_ids)
 			WMI_MLO_LINK_REMOVAL_EVENTID;
 }
 #else /* WLAN_FEATURE_11BE_MLO */
-static inline void populate_tlv_events_id_mlo(uint32_t *event_ids)
+static inline void populate_tlv_events_id_mlo(WMI_EVT_ID *event_ids)
 {
 }
 #endif /* WLAN_FEATURE_11BE_MLO */
@@ -20514,7 +20547,7 @@ static inline void populate_tlv_events_id_mlo(uint32_t *event_ids)
  *
  * Return: None
  */
-static void populate_tlv_events_id(uint32_t *event_ids)
+static void populate_tlv_events_id(WMI_EVT_ID *event_ids)
 {
 	event_ids[wmi_service_ready_event_id] = WMI_SERVICE_READY_EVENTID;
 	event_ids[wmi_ready_event_id] = WMI_READY_EVENTID;

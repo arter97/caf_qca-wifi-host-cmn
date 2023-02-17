@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2020-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -503,7 +503,7 @@ QDF_STATUS wlan_cm_sta_set_chan_param(struct wlan_objmgr_vdev *vdev,
 				      struct ch_params *chan_param);
 
 /**
- * wlan_cm_sta_update_puncture() - update puncture and channel width for sta
+ * wlan_cm_sta_update_bw_puncture() - update puncture and channel width for sta
  * @vdev: vdev
  * @peer_mac: peer mac address
  * @ori_punc: original puncture bitmap from EHT operation IE
@@ -519,4 +519,24 @@ QDF_STATUS wlan_cm_sta_update_bw_puncture(struct wlan_objmgr_vdev *vdev,
 					  uint8_t ccfs0, uint8_t ccfs1,
 					  enum phy_ch_width new_bw);
 #endif /* WLAN_FEATURE_11BE */
+
+#if defined(WLAN_FEATURE_11BE_MLO) && defined(WLAN_FEATURE_11BE_MLO_ADV_FEATURE)
+
+/**
+ * wlan_cm_check_mlo_roam_auth_status - api to check roam auth status on link
+ * @vdev: vdev corresponds to given link
+ *
+ * This api will be called to check if roam auth status is connected
+ *
+ * Return: boolean true or false
+ */
+bool
+wlan_cm_check_mlo_roam_auth_status(struct wlan_objmgr_vdev *vdev);
+#else
+static inline bool
+wlan_cm_check_mlo_roam_auth_status(struct wlan_objmgr_vdev *vdev)
+{
+	return false;
+}
+#endif
 #endif /* __WLAN_CM_UCFG_API_H */

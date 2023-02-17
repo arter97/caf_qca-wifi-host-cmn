@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -286,7 +286,6 @@ dp_mon_buffers_replenish(struct dp_soc *dp_soc,
 			 uint32_t *replenish_cnt_ref)
 {
 	uint32_t num_alloc_desc;
-	uint16_t num_desc_to_free = 0;
 	uint32_t num_entries_avail;
 	uint32_t count = 0;
 	int sync_hw_ptr = 1;
@@ -312,12 +311,10 @@ dp_mon_buffers_replenish(struct dp_soc *dp_soc,
 						   mon_srng, sync_hw_ptr);
 
 	if (!num_entries_avail) {
-		num_desc_to_free = num_req_buffers;
 		hal_srng_access_end(dp_soc->hal_soc, mon_srng);
 		goto free_desc;
 	}
 	if (num_entries_avail < num_req_buffers) {
-		num_desc_to_free = num_req_buffers - num_entries_avail;
 		num_req_buffers = num_entries_avail;
 	}
 
@@ -1336,9 +1333,12 @@ dp_mon_register_feature_ops_2_0(struct dp_soc *soc)
 	mon_ops->mon_htt_ppdu_stats_detach = dp_htt_ppdu_stats_detach;
 	mon_ops->mon_print_pdev_rx_mon_stats = dp_print_pdev_rx_mon_stats;
 	mon_ops->mon_set_bsscolor = dp_mon_set_bsscolor;
-	mon_ops->mon_pdev_get_filter_ucast_data = NULL;
-	mon_ops->mon_pdev_get_filter_mcast_data = NULL;
-	mon_ops->mon_pdev_get_filter_non_data = NULL;
+	mon_ops->mon_pdev_get_filter_ucast_data =
+					dp_lite_mon_get_filter_ucast_data;
+	mon_ops->mon_pdev_get_filter_mcast_data =
+					dp_lite_mon_get_filter_mcast_data;
+	mon_ops->mon_pdev_get_filter_non_data =
+					dp_lite_mon_get_filter_non_data;
 	mon_ops->mon_neighbour_peer_add_ast = NULL;
 #ifndef DISABLE_MON_CONFIG
 	mon_ops->mon_tx_process = dp_tx_mon_process_2_0;
@@ -1540,6 +1540,7 @@ struct dp_mon_ops monitor_ops_2_0 = {
 	.mon_lite_mon_dealloc = dp_lite_mon_dealloc,
 	.mon_lite_mon_vdev_delete = dp_lite_mon_vdev_delete,
 	.mon_lite_mon_disable_rx = dp_lite_mon_disable_rx,
+	.mon_lite_mon_is_rx_adv_filter_enable = dp_lite_mon_is_rx_adv_filter_enable,
 	.mon_rx_ppdu_info_cache_create = dp_rx_mon_ppdu_info_cache_create,
 	.mon_rx_ppdu_info_cache_destroy = dp_rx_mon_ppdu_info_cache_destroy,
 };
@@ -1559,6 +1560,8 @@ struct cdp_mon_ops dp_ops_mon_2_0 = {
 	.txrx_set_lite_mon_peer_config = dp_lite_mon_set_peer_config,
 	.txrx_get_lite_mon_peer_config = dp_lite_mon_get_peer_config,
 	.txrx_is_lite_mon_enabled = dp_lite_mon_is_enabled,
+	.txrx_get_lite_mon_legacy_feature_enabled =
+				dp_lite_mon_get_legacy_feature_enabled,
 #endif
 	.txrx_set_mon_pdev_params_rssi_dbm_conv =
 				dp_mon_pdev_params_rssi_dbm_conv,
