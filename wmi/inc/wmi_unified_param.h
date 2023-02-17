@@ -6247,6 +6247,7 @@ typedef enum {
 	wmi_service_wpa3_sha384_roam_support,
 	wmi_service_multiple_vdev_restart_bmap,
 	wmi_service_self_mld_roam_between_dbs_and_hbs,
+	wmi_service_cfr_capture_pdev_id_soc,
 	wmi_services_max,
 } wmi_conv_service_ids;
 #define WMI_SERVICE_UNAVAILABLE 0xFFFF
