@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2017-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -587,15 +587,18 @@ QDF_STATUS wlan_reg_read_current_country(struct wlan_objmgr_psoc *psoc,
 /**
  * wlan_reg_get_6g_power_type_for_ctry() - Return power type for 6G based
  * on country IE
- * @ap_ctry: ptr to country string in country IE
- * @sta_ctry: ptr to sta programmed country
- * @pwr_type_6g: ptr to 6G power type
+ * @psoc: pointer to psoc
+ * @pdev: pointer to pdev
+ * @ap_ctry: pointer to country string in country IE
+ * @sta_ctry: pointer to sta programmed country
+ * @pwr_type_6g: pointer to 6G power type
  * @ctry_code_match: Check for country IE and sta country code match
  * @ap_pwr_type: AP's power type for 6G as advertised in HE ops IE
  * Return: QDF_STATUS
  */
 QDF_STATUS
 wlan_reg_get_6g_power_type_for_ctry(struct wlan_objmgr_psoc *psoc,
+				    struct wlan_objmgr_pdev *pdev,
 				    uint8_t *ap_ctry, uint8_t *sta_ctry,
 				    enum reg_6g_ap_type *pwr_type_6g,
 				    bool *ctry_code_match,
@@ -2830,6 +2833,17 @@ wlan_reg_get_afc_freq_range_and_psd_limits(struct wlan_objmgr_pdev *pdev,
 QDF_STATUS
 wlan_reg_get_num_afc_freq_obj(struct wlan_objmgr_pdev *pdev,
 			      uint8_t *num_freq_obj);
+
+/**
+ * wlan_reg_set_afc_power_event_received() - Set power event received flag with
+ * given val.
+ * @pdev: pdev pointer.
+ * @val: value to be set
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS wlan_reg_set_afc_power_event_received(struct wlan_objmgr_pdev *pdev,
+						 bool val);
 #endif
 
 #else
@@ -2849,4 +2863,15 @@ wlan_reg_display_super_chan_list(struct wlan_objmgr_pdev *pdev)
 
 #endif
 
+/**
+ * wlan_reg_get_num_rules_of_ap_pwr_type() - Get the number of reg rules
+ * present for a given ap power type
+ * @pdev: Pointer to pdev
+ * @ap_pwr_type: AP power type
+ *
+ * Return: Return the number of reg rules for a given ap power type
+ */
+uint8_t
+wlan_reg_get_num_rules_of_ap_pwr_type(struct wlan_objmgr_pdev *pdev,
+				      enum reg_6g_ap_type ap_pwr_type);
 #endif

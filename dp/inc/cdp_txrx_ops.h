@@ -971,6 +971,7 @@ struct cdp_me_ops {
  * @txrx_set_advance_monitor_filter: set advanced monitor mode
  * @config_full_mon_mode: configure full monitor mode
  * @txrx_enable_mon_reap_timer: Enable/Disable reap timer of monitor status ring
+ * @txrx_get_lite_mon_legacy_feature_enabled: returns the legacy filter enabled
  */
 struct cdp_mon_ops {
 
@@ -1035,6 +1036,12 @@ struct cdp_mon_ops {
 	(*txrx_is_lite_mon_enabled)(struct cdp_soc_t *soc,
 				    uint8_t pdev_id,
 				    uint8_t direction);
+
+	/* get the legacy feature enabled */
+	int
+	(*txrx_get_lite_mon_legacy_feature_enabled)(struct cdp_soc_t *soc,
+						    uint8_t pdev_id,
+						    uint8_t direction);
 #endif
 	/*To set RSSI dbm conversion params in monitor pdev */
 	QDF_STATUS (*txrx_set_mon_pdev_params_rssi_dbm_conv)
@@ -1528,6 +1535,9 @@ void (*peer_send_wds_disconnect)(struct cdp_ctrl_objmgr_psoc *psoc,
 					  uint8_t vdev_id, uint8_t use_ppe,
 					  uint8_t routing_enabled);
 #endif /* WLAN_SUPPORT_PPEDS */
+#ifdef CONFIG_SAWF_DEF_QUEUES
+	int (*disable_sawf_svc)(uint8_t svc_id);
+#endif
 };
 
 #ifdef DP_PEER_EXTENDED_API

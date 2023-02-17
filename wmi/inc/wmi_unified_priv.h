@@ -2910,7 +2910,8 @@ QDF_STATUS (*extract_halphy_stats_end_of_event)(wmi_unified_t wmi_handle,
 QDF_STATUS (*extract_halphy_stats_event_count)(wmi_unified_t wmi_handle,
 					       void *evt_buf,
 					       uint32_t *event_count_flag);
-#ifdef WLAN_SUPPORT_INFRA_CTRL_PATH_STATS
+#if defined(WLAN_SUPPORT_INFRA_CTRL_PATH_STATS) || \
+	defined(WLAN_TELEMETRY_STATS_SUPPORT)
 QDF_STATUS
 (*extract_infra_cp_stats)(wmi_unified_t wmi_handle,
 			  void *evt_buf, uint32_t evt_buf_len,
@@ -3201,6 +3202,10 @@ QDF_STATUS
 QDF_STATUS (*send_update_edca_pifs_param_cmd)(
 			wmi_unified_t wmi_handle,
 			struct edca_pifs_vparam *edca_pifs_param);
+
+QDF_STATUS (*extract_sap_coex_cap_service_ready_ext2)(
+			wmi_unified_t wmi_handle, uint8_t *event,
+			struct wmi_host_coex_fix_chan_cap *cap);
 };
 
 /* Forward declaration for psoc*/

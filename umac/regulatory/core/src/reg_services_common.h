@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2017-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  *
  * Permission to use, copy, modify, and/or distribute this software for
@@ -2958,6 +2958,17 @@ bool
 reg_is_6ghz_freq_txable(struct wlan_objmgr_pdev *pdev,
 			qdf_freq_t freq,
 			enum supported_6g_pwr_types in_6ghz_pwr_mode);
+
+/**
+ * reg_set_afc_power_event_received() - Set power event received flag with
+ * given val.
+ * @pdev: pdev pointer.
+ * @val: value to be set
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS reg_set_afc_power_event_received(struct wlan_objmgr_pdev *pdev,
+					    bool val);
 #else
 static inline bool
 reg_is_sup_chan_entry_afc_done(struct wlan_objmgr_pdev *pdev,
@@ -2973,6 +2984,12 @@ reg_is_6ghz_freq_txable(struct wlan_objmgr_pdev *pdev,
 			enum supported_6g_pwr_types in_6ghz_pwr_mode)
 {
 	return false;
+}
+
+static inline QDF_STATUS
+reg_set_afc_power_event_received(struct wlan_objmgr_pdev *pdev, bool val)
+{
+	return QDF_STATUS_E_FAILURE;
 }
 #endif
 
@@ -3025,4 +3042,16 @@ reg_get_num_afc_freq_obj(struct wlan_objmgr_pdev *pdev, uint8_t *num_freq_obj);
  * Return: max bw
  */
 uint16_t reg_get_max_bw_5G_for_fo(struct wlan_objmgr_pdev *pdev);
+
+/**
+ * reg_get_num_rules_of_ap_pwr_type() - Get the number of reg rules present
+ * for a given ap power type
+ * @pdev: Pointer to pdev
+ * @ap_pwr_type: AP power type
+ *
+ * Return: Return the number of reg rules for a given ap power type
+ */
+uint8_t
+reg_get_num_rules_of_ap_pwr_type(struct wlan_objmgr_pdev *pdev,
+				 enum reg_6g_ap_type ap_pwr_type);
 #endif

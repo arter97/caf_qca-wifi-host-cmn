@@ -567,6 +567,7 @@ static QDF_STATUS dp_peer_ppeds_default_route_be(struct dp_soc *soc,
 	return QDF_STATUS_SUCCESS;
 }
 
+#ifdef WLAN_FEATURE_11BE_MLO
 static QDF_STATUS dp_peer_setup_ppeds_be(struct dp_soc *soc,
 					 struct dp_peer *peer,
 					 struct dp_vdev_be *be_vdev)
@@ -638,6 +639,27 @@ static QDF_STATUS dp_peer_setup_ppeds_be(struct dp_soc *soc,
 	return qdf_status;
 }
 #else
+static QDF_STATUS dp_peer_setup_ppeds_be(struct dp_soc *soc,
+					 struct dp_peer *peer,
+					 struct dp_vdev_be *be_vdev)
+{
+	struct dp_ppe_vp_profile *ppe_vp_profile = &be_vdev->ppe_vp_profile;
+	struct dp_peer_be *be_peer = dp_get_be_peer_from_dp_peer(peer);
+	QDF_STATUS qdf_status = QDF_STATUS_SUCCESS;
+
+	if (!be_peer) {
+		dp_err("BE peer is null");
+		return QDF_STATUS_E_NULL_VALUE;
+	}
+
+	qdf_status = dp_peer_ppeds_default_route_be(soc, be_peer,
+						    be_vdev->vdev.vdev_id,
+						    ppe_vp_profile->vp_num);
+
+	return qdf_status;
+}
+#endif
+#else
 static QDF_STATUS dp_ppeds_init_soc_be(struct dp_soc *soc)
 {
 	return QDF_STATUS_SUCCESS;
@@ -666,12 +688,25 @@ QDF_STATUS dp_peer_setup_ppeds_be(struct dp_soc *soc, struct dp_peer *peer,
 }
 #endif /* WLAN_SUPPORT_PPEDS */
 
+void dp_reo_shared_qaddr_detach(struct dp_soc *soc)
+{
+	qdf_mem_free_consistent(soc->osdev, soc->osdev->dev,
+				REO_QUEUE_REF_ML_TABLE_SIZE,
+				soc->reo_qref.mlo_reo_qref_table_vaddr,
+				soc->reo_qref.mlo_reo_qref_table_paddr, 0);
+	qdf_mem_free_consistent(soc->osdev, soc->osdev->dev,
+				REO_QUEUE_REF_NON_ML_TABLE_SIZE,
+				soc->reo_qref.non_mlo_reo_qref_table_vaddr,
+				soc->reo_qref.non_mlo_reo_qref_table_paddr, 0);
+}
+
 static QDF_STATUS dp_soc_detach_be(struct dp_soc *soc)
 {
 	struct dp_soc_be *be_soc = dp_get_be_soc_from_dp_soc(soc);
 	int i = 0;
 
 	dp_soc_ppeds_detach_be(soc);
+	dp_reo_shared_qaddr_detach(soc);
 
 	for (i = 0; i < MAX_TXDESC_POOLS; i++)
 		dp_hw_cookie_conversion_detach(be_soc,
@@ -2013,14 +2048,6 @@ dp_mlo_peer_find_hash_add_be(struct dp_soc *soc, struct dp_peer *peer)
 
 	if (!mld_hash_obj)
 		return;
-
-	if (dp_mlo_peer_find_hash_find_be(soc, (uint8_t *)&peer->mac_addr, 1,
-					  DP_MOD_ID_CONFIG, DP_VDEV_ALL)) {
-		dp_info("MLD peer %pK (" QDF_MAC_ADDR_FMT ") already in hash table",
-			peer, QDF_MAC_ADDR_REF(peer->mac_addr.raw));
-		dp_peer_unref_delete(peer, DP_MOD_ID_CONFIG);
-		qdf_assert_always(0);
-	}
 
 	index = dp_mlo_peer_find_hash_index(mld_hash_obj, &peer->mac_addr);
 

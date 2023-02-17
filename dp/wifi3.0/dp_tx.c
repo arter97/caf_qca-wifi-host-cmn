@@ -1513,12 +1513,7 @@ void dp_tx_update_stats(struct dp_soc *soc,
 			struct dp_tx_desc_s *tx_desc,
 			uint8_t ring_id)
 {
-	uint32_t stats_len = 0;
-
-	if (tx_desc->frm_type == dp_tx_frm_tso)
-		stats_len  = tx_desc->msdu_ext_desc->tso_desc->seg.total_len;
-	else
-		stats_len = qdf_nbuf_len(tx_desc->nbuf);
+	uint32_t stats_len = dp_tx_get_pkt_len(tx_desc);
 
 	DP_STATS_INC_PKT(soc, tx.egress[ring_id], 1, stats_len);
 }
@@ -1542,12 +1537,7 @@ dp_tx_attempt_coalescing(struct dp_soc *soc, struct dp_vdev *vdev,
 	tcl_data.nbuf = tx_desc->nbuf;
 	tcl_data.tid = tid;
 	tcl_data.ring_id = ring_id;
-	if (tx_desc->frm_type == dp_tx_frm_tso) {
-		tcl_data.pkt_len  =
-			tx_desc->msdu_ext_desc->tso_desc->seg.total_len;
-	} else {
-		tcl_data.pkt_len = qdf_nbuf_len(tx_desc->nbuf);
-	}
+	tcl_data.pkt_len = dp_tx_get_pkt_len(tx_desc);
 	tcl_data.num_ll_connections = vdev->num_latency_critical_conn;
 	swlm_query_data.tcl_data = &tcl_data;
 
@@ -2291,7 +2281,8 @@ dp_tx_update_mcast_param(uint16_t peer_id,
 						    msdu_info->gsn);
 
 		msdu_info->vdev_id = vdev->vdev_id + DP_MLO_VDEV_ID_OFFSET;
-		if (qdf_unlikely(vdev->nawds_enabled))
+		if (qdf_unlikely(vdev->nawds_enabled ||
+				 dp_vdev_is_wds_ext_enabled(vdev)))
 			HTT_TX_TCL_METADATA_GLBL_SEQ_HOST_INSPECTED_SET(
 							*htt_tcl_metadata, 1);
 	} else {
@@ -4604,6 +4595,8 @@ void dp_tx_compute_delay(struct dp_vdev *vdev, struct dp_tx_desc_s *tx_desc,
 	fwhw_transmit_delay = (uint32_t)(current_timestamp -
 					 timestamp_hw_enqueue);
 
+	if (!timestamp_hw_enqueue)
+		return;
 	/*
 	 * Delay between packet enqueued to HW and Tx completion in ms
 	 */
@@ -6474,7 +6467,7 @@ static void dp_tx_delete_static_pools(struct dp_soc *soc, int num_pool)
  * @num_pool: number of pools
  *
  */
-void dp_tx_tso_cmn_desc_pool_deinit(struct dp_soc *soc, uint8_t num_pool)
+static void dp_tx_tso_cmn_desc_pool_deinit(struct dp_soc *soc, uint8_t num_pool)
 {
 	dp_tx_tso_desc_pool_deinit(soc, num_pool);
 	dp_tx_tso_num_seg_pool_deinit(soc, num_pool);
@@ -6486,7 +6479,7 @@ void dp_tx_tso_cmn_desc_pool_deinit(struct dp_soc *soc, uint8_t num_pool)
  * @num_pool: number of pools
  *
  */
-void dp_tx_tso_cmn_desc_pool_free(struct dp_soc *soc, uint8_t num_pool)
+static void dp_tx_tso_cmn_desc_pool_free(struct dp_soc *soc, uint8_t num_pool)
 {
 	dp_tx_tso_desc_pool_free(soc, num_pool);
 	dp_tx_tso_num_seg_pool_free(soc, num_pool);
@@ -6536,17 +6529,19 @@ void dp_soc_tx_desc_sw_pools_deinit(struct dp_soc *soc)
 }
 
 /**
- * dp_tso_attach() - TSO attach handler
- * @txrx_soc: Opaque Dp handle
+ * dp_tx_tso_cmn_desc_pool_alloc() - TSO cmn desc pool allocator
+ * @soc: DP soc handle
+ * @num_pool: Number of pools
+ * @num_desc: Number of descriptors
  *
  * Reserve TSO descriptor buffers
  *
  * Return: QDF_STATUS_E_FAILURE on failure or
- * QDF_STATUS_SUCCESS on success
+ *         QDF_STATUS_SUCCESS on success
  */
-QDF_STATUS dp_tx_tso_cmn_desc_pool_alloc(struct dp_soc *soc,
-					 uint8_t num_pool,
-					 uint32_t num_desc)
+static QDF_STATUS dp_tx_tso_cmn_desc_pool_alloc(struct dp_soc *soc,
+						uint8_t num_pool,
+						uint32_t num_desc)
 {
 	if (dp_tx_tso_desc_pool_alloc(soc, num_pool, num_desc)) {
 		dp_err("TSO Desc Pool alloc %d failed %pK", num_pool, soc);
@@ -6570,12 +6565,12 @@ QDF_STATUS dp_tx_tso_cmn_desc_pool_alloc(struct dp_soc *soc,
  * Initialize TSO descriptor pools
  *
  * Return: QDF_STATUS_E_FAILURE on failure or
- * QDF_STATUS_SUCCESS on success
+ *         QDF_STATUS_SUCCESS on success
  */
 
-QDF_STATUS dp_tx_tso_cmn_desc_pool_init(struct dp_soc *soc,
-					uint8_t num_pool,
-					uint32_t num_desc)
+static QDF_STATUS dp_tx_tso_cmn_desc_pool_init(struct dp_soc *soc,
+					       uint8_t num_pool,
+					       uint32_t num_desc)
 {
 	if (dp_tx_tso_desc_pool_init(soc, num_pool, num_desc)) {
 		dp_err("TSO Desc Pool alloc %d failed %pK", num_pool, soc);

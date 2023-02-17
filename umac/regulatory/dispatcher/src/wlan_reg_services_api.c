@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2017-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  *
  * Permission to use, copy, modify, and/or distribute this software for
@@ -112,12 +112,13 @@ qdf_export_symbol(wlan_reg_get_pwrmode_chan_list);
 #ifdef CONFIG_REG_CLIENT
 QDF_STATUS
 wlan_reg_get_6g_power_type_for_ctry(struct wlan_objmgr_psoc *psoc,
+				    struct wlan_objmgr_pdev *pdev,
 				    uint8_t *ap_ctry, uint8_t *sta_ctry,
 				    enum reg_6g_ap_type *pwr_type_6g,
 				    bool *ctry_code_match,
 				    enum reg_6g_ap_type ap_pwr_type)
 {
-	return reg_get_6g_power_type_for_ctry(psoc, ap_ctry, sta_ctry,
+	return reg_get_6g_power_type_for_ctry(psoc, pdev, ap_ctry, sta_ctry,
 					      pwr_type_6g, ctry_code_match,
 					      ap_pwr_type);
 }
@@ -1801,6 +1802,15 @@ wlan_reg_set_ap_pwr_and_update_chan_list(struct wlan_objmgr_pdev *pdev,
 
 qdf_export_symbol(wlan_reg_set_ap_pwr_and_update_chan_list);
 
+uint8_t
+wlan_reg_get_num_rules_of_ap_pwr_type(struct wlan_objmgr_pdev *pdev,
+				      enum reg_6g_ap_type ap_pwr_type)
+{
+	return reg_get_num_rules_of_ap_pwr_type(pdev, ap_pwr_type);
+}
+
+qdf_export_symbol(wlan_reg_get_num_rules_of_ap_pwr_type);
+
 QDF_STATUS wlan_reg_get_superchan_entry(
 		struct wlan_objmgr_pdev *pdev,
 		enum channel_enum chan_enum,
@@ -2002,6 +2012,12 @@ wlan_reg_get_num_afc_freq_obj(struct wlan_objmgr_pdev *pdev,
 			      uint8_t *num_freq_obj)
 {
 	return reg_get_num_afc_freq_obj(pdev, num_freq_obj);
+}
+
+QDF_STATUS wlan_reg_set_afc_power_event_received(struct wlan_objmgr_pdev *pdev,
+						 bool val)
+{
+	return reg_set_afc_power_event_received(pdev, val);
 }
 #endif
 
