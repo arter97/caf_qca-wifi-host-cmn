@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -2058,6 +2058,47 @@ static QDF_STATUS send_green_ap_ps_cmd_tlv(wmi_unified_t wmi_handle,
 	}
 
 	return 0;
+}
+#endif
+
+#ifdef WLAN_SUPPORT_GAP_LL_PS_MODE
+static QDF_STATUS send_green_ap_ll_ps_cmd_tlv(wmi_unified_t wmi_handle,
+					      struct green_ap_ll_ps_cmd_param *green_ap_ll_ps_params)
+{
+	uint32_t len;
+	wmi_buf_t buf;
+	wmi_xgap_enable_cmd_fixed_param *cmd;
+
+	len = sizeof(*cmd);
+
+	wmi_debug("Green AP low latency PS: bcn interval: %u state: %u cookie: %u",
+		  green_ap_ll_ps_params->bcn_interval,
+		  green_ap_ll_ps_params->state,
+		  green_ap_ll_ps_params->cookie);
+
+	buf = wmi_buf_alloc(wmi_handle, len);
+	if (!buf)
+		return QDF_STATUS_E_NOMEM;
+
+	cmd = (wmi_xgap_enable_cmd_fixed_param *)wmi_buf_data(buf);
+	WMITLV_SET_HDR(&cmd->tlv_header,
+		       WMITLV_TAG_STRUC_wmi_xgap_enable_cmd_fixed_param,
+		       WMITLV_GET_STRUCT_TLVLEN
+				(wmi_xgap_enable_cmd_fixed_param));
+
+	cmd->beacon_interval = green_ap_ll_ps_params->bcn_interval;
+	cmd->sap_lp_flag = green_ap_ll_ps_params->state;
+	cmd->dialog_token = green_ap_ll_ps_params->cookie;
+
+	wmi_mtrace(WMI_XGAP_ENABLE_CMDID, NO_SESSION, 0);
+	if (wmi_unified_cmd_send(wmi_handle, buf, len,
+				 WMI_XGAP_ENABLE_CMDID)) {
+		wmi_err("Green AP Low latency PS cmd Failed");
+		wmi_buf_free(buf);
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	return QDF_STATUS_SUCCESS;
 }
 #endif
 
@@ -5377,11 +5418,11 @@ send_update_edca_pifs_param_cmd_tlv(wmi_unified_t wmi_handle,
 			       WMITLV_GET_STRUCT_TLVLEN(wmi_wmm_params));
 
 		wmm_params->cwmin =
-			edca_pifs->param.edca_pifs_param.eparam.acvo_cwmin;
+			BIT(edca_pifs->param.edca_pifs_param.eparam.acvo_cwmin) - 1;
 		wmm_params->cwmax =
-			edca_pifs->param.edca_pifs_param.eparam.acvo_cwmax;
+			BIT(edca_pifs->param.edca_pifs_param.eparam.acvo_cwmax) - 1;
 		wmm_params->aifs =
-			edca_pifs->param.edca_pifs_param.eparam.acvo_aifsn;
+			edca_pifs->param.edca_pifs_param.eparam.acvo_aifsn - 1;
 		wmm_params->txoplimit =
 			edca_pifs->param.edca_pifs_param.eparam.acvo_txoplimit;
 		wmm_params->acm =
@@ -9276,6 +9317,8 @@ static WMI_VENDOR1_REQ1_VERSION convert_host_to_target_vendor1_req1_version(
 		return WMI_VENDOR1_REQ1_VERSION_3_20;
 	case WMI_HOST_VENDOR1_REQ1_VERSION_3_30:
 		return WMI_VENDOR1_REQ1_VERSION_3_30;
+	case WMI_HOST_VENDOR1_REQ1_VERSION_3_40:
+		return WMI_VENDOR1_REQ1_VERSION_3_40;
 	default:
 		return WMI_VENDOR1_REQ1_VERSION_3_00;
 	}
@@ -17299,6 +17342,39 @@ static QDF_STATUS extract_green_ap_egap_status_info_tlv(
 }
 #endif
 
+#ifdef WLAN_SUPPORT_GAP_LL_PS_MODE
+static QDF_STATUS extract_green_ap_ll_ps_param_tlv(
+		uint8_t *evt_buf,
+		struct wlan_green_ap_ll_ps_event_param *ll_ps_params)
+{
+	WMI_XGAP_ENABLE_COMPLETE_EVENTID_param_tlvs *param_buf;
+	wmi_xgap_enable_complete_event_fixed_param *ll_ps_event;
+
+	param_buf = (WMI_XGAP_ENABLE_COMPLETE_EVENTID_param_tlvs *)evt_buf;
+	if (!param_buf) {
+		wmi_err("Invalid XGAP SAP info status");
+		return QDF_STATUS_E_INVAL;
+	}
+
+	ll_ps_event = (wmi_xgap_enable_complete_event_fixed_param *)
+				param_buf->fixed_param;
+	if (!ll_ps_event) {
+		wmi_err("Invalid low latency power save event buffer");
+		return QDF_STATUS_E_INVAL;
+	}
+
+	ll_ps_params->dialog_token = ll_ps_event->dialog_token;
+	ll_ps_params->next_tsf =
+		((uint64_t)ll_ps_event->next_tsf_high32 << 32) |
+		ll_ps_event->next_tsf_low32;
+
+	wmi_debug("cookie : %llu next_tsf %llu", ll_ps_params->dialog_token,
+		  ll_ps_params->next_tsf);
+
+	return QDF_STATUS_SUCCESS;
+}
+#endif
+
 /*
  * extract_comb_phyerr_tlv() - extract comb phy error from event
  * @wmi_handle: wmi handle
@@ -18740,6 +18816,12 @@ extract_roam_11kv_stats_tlv(wmi_unified_t wmi_handle, void *evt_buf,
 	dst->resp_time = src_data->neighbor_report_response_timestamp;
 	dst->btm_query_token = src_data->btm_query_token;
 	dst->btm_query_reason = src_data->btm_query_reason_code;
+	dst->req_token =
+		WMI_ROAM_NEIGHBOR_REPORT_INFO_REQUEST_TOKEN_GET(src_data->neighbor_report_detail);
+	dst->resp_token =
+		WMI_ROAM_NEIGHBOR_REPORT_INFO_RESPONSE_TOKEN_GET(src_data->neighbor_report_detail);
+	dst->num_rpt =
+		WMI_ROAM_NEIGHBOR_REPORT_INFO_NUM_OF_NRIE_GET(src_data->neighbor_report_detail);
 
 	if (!dst->num_freq || !param_buf->num_roam_neighbor_report_chan_info ||
 	    rpt_idx >= param_buf->num_roam_neighbor_report_chan_info)
@@ -19811,6 +19893,27 @@ send_set_mac_addr_rx_filter_cmd_tlv(wmi_unified_t wmi_handle,
 	return QDF_STATUS_SUCCESS;
 }
 
+static QDF_STATUS
+extract_sap_coex_fix_chan_caps(wmi_unified_t wmi_handle,
+			       uint8_t *event,
+			       struct wmi_host_coex_fix_chan_cap *cap)
+{
+	WMI_SERVICE_READY_EXT2_EVENTID_param_tlvs *param_buf;
+	WMI_COEX_FIX_CHANNEL_CAPABILITIES *fw_cap;
+
+	param_buf = (WMI_SERVICE_READY_EXT2_EVENTID_param_tlvs *)event;
+	if (!param_buf)
+		return QDF_STATUS_E_INVAL;
+
+	fw_cap = param_buf->coex_fix_channel_caps;
+	if (!fw_cap)
+		return QDF_STATUS_E_INVAL;
+
+	cap->fix_chan_priority = fw_cap->fix_channel_priority;
+
+	return QDF_STATUS_SUCCESS;
+}
+
 struct wmi_ops tlv_ops =  {
 	.send_vdev_create_cmd = send_vdev_create_cmd_tlv,
 	.send_vdev_delete_cmd = send_vdev_delete_cmd_tlv,
@@ -19901,6 +20004,10 @@ struct wmi_ops tlv_ops =  {
 	.send_green_ap_ps_cmd = send_green_ap_ps_cmd_tlv,
 	.extract_green_ap_egap_status_info =
 			extract_green_ap_egap_status_info_tlv,
+#endif
+#ifdef WLAN_SUPPORT_GAP_LL_PS_MODE
+	.send_green_ap_ll_ps_cmd = send_green_ap_ll_ps_cmd_tlv,
+	.extract_green_ap_ll_ps_param = extract_green_ap_ll_ps_param_tlv,
 #endif
 	.send_csa_offload_enable_cmd = send_csa_offload_enable_cmd_tlv,
 	.send_start_oem_data_cmd = send_start_oem_data_cmd_tlv,
@@ -20289,6 +20396,8 @@ struct wmi_ops tlv_ops =  {
 	.set_mac_addr_rx_filter = send_set_mac_addr_rx_filter_cmd_tlv,
 	.send_update_edca_pifs_param_cmd =
 			send_update_edca_pifs_param_cmd_tlv,
+	.extract_sap_coex_cap_service_ready_ext2 =
+			extract_sap_coex_fix_chan_caps,
 };
 
 #ifdef WLAN_FEATURE_11BE_MLO
@@ -20787,6 +20896,10 @@ static void populate_tlv_events_id(uint32_t *event_ids)
 	event_ids[wmi_extract_health_mon_init_done_info_eventid] =
 		WMI_HEALTH_MON_INIT_DONE_EVENTID;
 #endif /* HEALTH_MON_SUPPORT */
+#ifdef WLAN_SUPPORT_GAP_LL_PS_MODE
+	event_ids[wmi_xgap_enable_complete_eventid] =
+		WMI_XGAP_ENABLE_COMPLETE_EVENTID;
+#endif
 }
 
 #ifdef WLAN_FEATURE_LINK_LAYER_STATS

@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2017-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -587,15 +587,18 @@ QDF_STATUS wlan_reg_read_current_country(struct wlan_objmgr_psoc *psoc,
 /**
  * wlan_reg_get_6g_power_type_for_ctry() - Return power type for 6G based
  * on country IE
- * @ap_ctry: ptr to country string in country IE
- * @sta_ctry: ptr to sta programmed country
- * @pwr_type_6g: ptr to 6G power type
+ * @psoc: pointer to psoc
+ * @pdev: pointer to pdev
+ * @ap_ctry: pointer to country string in country IE
+ * @sta_ctry: pointer to sta programmed country
+ * @pwr_type_6g: pointer to 6G power type
  * @ctry_code_match: Check for country IE and sta country code match
  * @ap_pwr_type: AP's power type for 6G as advertised in HE ops IE
  * Return: QDF_STATUS
  */
 QDF_STATUS
 wlan_reg_get_6g_power_type_for_ctry(struct wlan_objmgr_psoc *psoc,
+				    struct wlan_objmgr_pdev *pdev,
 				    uint8_t *ap_ctry, uint8_t *sta_ctry,
 				    enum reg_6g_ap_type *pwr_type_6g,
 				    bool *ctry_code_match,
@@ -1643,6 +1646,58 @@ QDF_STATUS wlan_reg_extract_puncture_by_bw(enum phy_ch_width ori_bw,
  */
 void wlan_reg_set_create_punc_bitmap(struct ch_params *ch_params,
 				     bool is_create_punc_bitmap);
+
+#ifdef CONFIG_REG_CLIENT
+/**
+ * wlan_reg_apply_puncture() - apply puncture to regulatory
+ * @pdev: pdev
+ * @puncture_bitmap: puncture bitmap
+ * @freq: sap operation freq
+ * @bw: band width
+ * @cen320_freq: 320 MHz center freq
+ *
+ * When start ap, apply puncture to regulatory, set static puncture flag
+ * for all 20 MHz sub channels of current bonded channel in master channel list
+ * of pdev, and disable 20 MHz sub channel in current channel list if static
+ * puncture flag is set.
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS wlan_reg_apply_puncture(struct wlan_objmgr_pdev *pdev,
+				   uint16_t puncture_bitmap,
+				   qdf_freq_t freq,
+				   enum phy_ch_width bw,
+				   qdf_freq_t cen320_freq);
+
+/**
+ * wlan_reg_remove_puncture() - Remove puncture from regulatory
+ * @pdev: pdev
+ *
+ * When stop ap, remove puncture from regulatory, clear static puncture flag
+ * for all 20 MHz sub channels in master channel list of pdev, and don't disable
+ * 20 MHz sub channel in current channel list if static puncture flag is not
+ * set.
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS wlan_reg_remove_puncture(struct wlan_objmgr_pdev *pdev);
+#else
+static inline
+QDF_STATUS wlan_reg_apply_puncture(struct wlan_objmgr_pdev *pdev,
+				   uint16_t puncture_bitmap,
+				   qdf_freq_t freq,
+				   enum phy_ch_width bw,
+				   qdf_freq_t cen320_freq)
+{
+	return QDF_STATUS_SUCCESS;
+}
+
+static inline
+QDF_STATUS wlan_reg_remove_puncture(struct wlan_objmgr_pdev *pdev)
+{
+	return QDF_STATUS_SUCCESS;
+}
+#endif
 #ifdef CONFIG_REG_6G_PWRMODE
 /**
  * wlan_reg_fill_channel_list_for_pwrmode() - Fills the reg_channel_list
@@ -1683,6 +1738,22 @@ QDF_STATUS wlan_reg_extract_puncture_by_bw(enum phy_ch_width ori_bw,
 static inline void wlan_reg_set_create_punc_bitmap(struct ch_params *ch_params,
 						   bool is_create_punc_bitmap)
 {
+}
+
+static inline
+QDF_STATUS wlan_reg_apply_puncture(struct wlan_objmgr_pdev *pdev,
+				   uint16_t puncture_bitmap,
+				   qdf_freq_t freq,
+				   enum phy_ch_width bw,
+				   qdf_freq_t cen320_freq)
+{
+	return QDF_STATUS_SUCCESS;
+}
+
+static inline
+QDF_STATUS wlan_reg_remove_puncture(struct wlan_objmgr_pdev *pdev)
+{
+	return QDF_STATUS_SUCCESS;
 }
 
 static inline

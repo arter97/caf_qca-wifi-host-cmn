@@ -1865,6 +1865,7 @@ dp_mlo_peer_find_hash_find_be(struct dp_soc *soc,
 	} else {
 		vdev = NULL;
 	}
+
 	/* search mld peer table if no link peer for given mac address */
 	index = dp_mlo_peer_find_hash_index(mld_hash_obj, mac_addr);
 	qdf_spin_lock_bh(&mld_hash_obj->mld_peer_hash_lock);
@@ -1926,8 +1927,11 @@ dp_mlo_peer_find_hash_remove_be(struct dp_soc *soc, struct dp_peer *peer)
 	TAILQ_REMOVE(&mld_hash_obj->mld_peer_hash.bins[index], peer,
 		     hash_list_elem);
 
+	dp_info("Peer %pK (" QDF_MAC_ADDR_FMT ") removed. (found %u)",
+		peer, QDF_MAC_ADDR_REF(peer->mac_addr.raw), found);
 	dp_peer_unref_delete(peer, DP_MOD_ID_CONFIG);
 	qdf_spin_unlock_bh(&mld_hash_obj->mld_peer_hash_lock);
+
 }
 
 static void
@@ -1955,6 +1959,9 @@ dp_mlo_peer_find_hash_add_be(struct dp_soc *soc, struct dp_peer *peer)
 	TAILQ_INSERT_TAIL(&mld_hash_obj->mld_peer_hash.bins[index], peer,
 			  hash_list_elem);
 	qdf_spin_unlock_bh(&mld_hash_obj->mld_peer_hash_lock);
+
+	dp_info("Peer %pK (" QDF_MAC_ADDR_FMT ") added",
+		peer, QDF_MAC_ADDR_REF(peer->mac_addr.raw));
 }
 
 void dp_print_mlo_ast_stats_be(struct dp_soc *soc)

@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -988,7 +988,7 @@ dp_rx_pdev_mon_status_buffers_free(struct dp_pdev *pdev, uint32_t mac_id)
 
 	dp_debug("Mon RX Status Desc Pool Free pdev[%d]", pdev_id);
 
-	dp_rx_desc_nbuf_free(soc, rx_desc_pool);
+	dp_rx_desc_nbuf_free(soc, rx_desc_pool, true);
 }
 
 /*

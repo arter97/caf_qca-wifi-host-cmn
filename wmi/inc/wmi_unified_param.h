@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -5204,6 +5204,9 @@ typedef enum {
 #ifdef WLAN_FEATURE_11BE_MLO
 	wmi_mlo_ap_vdev_tid_to_link_map_eventid,
 #endif
+#ifdef WLAN_SUPPORT_GAP_LL_PS_MODE
+	wmi_xgap_enable_complete_eventid,
+#endif
 	wmi_events_max,
 } wmi_conv_event_id;
 
@@ -6310,12 +6313,14 @@ typedef enum {
  * @WMI_HOST_VENDOR1_REQ1_VERSION_3_01: Major version 3, minor version 01
  * @WMI_HOST_VENDOR1_REQ1_VERSION_3_20: Major version 3, minor version 20
  * @WMI_HOST_VENDOR1_REQ1_VERSION_3_30: Major version 3, minor version 30
+ * @WMI_HOST_VENDOR1_REQ1_VERSION_3_40: Major version 3, minor version 40
  */
 typedef enum {
 	WMI_HOST_VENDOR1_REQ1_VERSION_3_00 = 0,
 	WMI_HOST_VENDOR1_REQ1_VERSION_3_01 = 1,
 	WMI_HOST_VENDOR1_REQ1_VERSION_3_20 = 2,
 	WMI_HOST_VENDOR1_REQ1_VERSION_3_30 = 3,
+	WMI_HOST_VENDOR1_REQ1_VERSION_3_40 = 4,
 } WMI_HOST_VENDOR1_REQ1_VERSION;
 
 /**
@@ -8963,6 +8968,9 @@ struct wmi_roam_result {
  *  @btm_query_token: BTM query dialog token.
  *  @btm_query_reason: BTM query reasons as defined in
  *  IEEE802.11v spec table 7-43x
+ *  @req_token: Request token
+ *  @resp_token: Response Token
+ *  @num_rpt: Number of report element
  */
 struct wmi_neighbor_report_data {
 	bool present;
@@ -8974,6 +8982,9 @@ struct wmi_neighbor_report_data {
 	uint32_t freq[MAX_ROAM_SCAN_CHAN];
 	uint16_t btm_query_token;
 	uint8_t btm_query_reason;
+	uint8_t req_token;
+	uint8_t resp_token;
+	uint8_t num_rpt;
 };
 
 /**
@@ -9564,10 +9575,18 @@ struct wmi_health_mon_params {
 /**
  * struct edca_pifs_vparam - edca/pifs param for ll sap
  * @vdev_id: vdev id
- * @param - pointer to wlan_edca_pifs_param_ie struct
+ * @param: pointer to wlan_edca_pifs_param_ie struct
  */
 struct edca_pifs_vparam {
 	uint8_t vdev_id;
 	struct wlan_edca_pifs_param_ie param;
+};
+
+/**
+ * struct wmi_host_coex_fix_chan_cap - fw capability to support fixed chan SAP
+ * @fix_chan_priority: Fix channel priority, set to 1 if firmware supports it
+ */
+struct wmi_host_coex_fix_chan_cap {
+	uint32_t fix_chan_priority;
 };
 #endif /* _WMI_UNIFIED_PARAM_H_ */

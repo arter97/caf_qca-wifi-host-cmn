@@ -549,6 +549,16 @@ QDF_STATUS (*send_green_ap_ps_cmd)(wmi_unified_t wmi_handle,
 QDF_STATUS (*extract_green_ap_egap_status_info)(
 		uint8_t *evt_buf,
 		struct wlan_green_ap_egap_status_info *egap_status_info_params);
+#if defined(WLAN_SUPPORT_GAP_LL_PS_MODE)
+QDF_STATUS (*send_green_ap_ll_ps_cmd)(wmi_unified_t wmi_handle,
+				      struct green_ap_ll_ps_cmd_param *ll_ps_params);
+#endif
+#endif
+
+#ifdef WLAN_SUPPORT_GAP_LL_PS_MODE
+QDF_STATUS (*extract_green_ap_ll_ps_param)(
+		uint8_t *evt_buf,
+		struct wlan_green_ap_ll_ps_event_param *ll_ps_params);
 #endif
 
 QDF_STATUS
@@ -3191,6 +3201,10 @@ QDF_STATUS
 QDF_STATUS (*send_update_edca_pifs_param_cmd)(
 			wmi_unified_t wmi_handle,
 			struct edca_pifs_vparam *edca_pifs_param);
+
+QDF_STATUS (*extract_sap_coex_cap_service_ready_ext2)(
+			wmi_unified_t wmi_handle, uint8_t *event,
+			struct wmi_host_coex_fix_chan_cap *cap);
 };
 
 /* Forward declaration for psoc*/

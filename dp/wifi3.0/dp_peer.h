@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -22,6 +22,7 @@
 #include <qdf_types.h>
 #include <qdf_lock.h>
 #include "dp_types.h"
+#include "dp_internal.h"
 
 #ifdef DUMP_REO_QUEUE_INFO_IN_DDR
 #include "hal_reo.h"
@@ -1311,6 +1312,8 @@ void dp_mld_peer_add_link_peer(struct dp_peer *mld_peer,
 {
 	int i;
 	struct dp_peer_link_info *link_peer_info;
+	bool action_done = false;
+	struct dp_soc *soc = mld_peer->vdev->pdev->soc;
 
 	qdf_spin_lock_bh(&mld_peer->link_peers_info_lock);
 	for (i = 0; i < DP_MAX_MLO_LINKS; i++) {
@@ -1324,6 +1327,7 @@ void dp_mld_peer_add_link_peer(struct dp_peer *mld_peer,
 			link_peer_info->chip_id =
 				dp_mlo_get_chip_id(link_peer->vdev->pdev->soc);
 			mld_peer->num_links++;
+			action_done = true;
 			break;
 		}
 	}
@@ -1332,6 +1336,18 @@ void dp_mld_peer_add_link_peer(struct dp_peer *mld_peer,
 	if (i == DP_MAX_MLO_LINKS)
 		dp_err("fail to add link peer" QDF_MAC_ADDR_FMT "to mld peer",
 		       QDF_MAC_ADDR_REF(link_peer->mac_addr.raw));
+	else
+		dp_peer_info("%s addition of link peer %pK (" QDF_MAC_ADDR_FMT ") "
+			     "to MLD peer %pK (" QDF_MAC_ADDR_FMT "), "
+			     "idx %u num_links %u",
+			     action_done ? "Successful" : "Failed",
+			     mld_peer, QDF_MAC_ADDR_REF(mld_peer->mac_addr.raw),
+			     link_peer, QDF_MAC_ADDR_REF(link_peer->mac_addr.raw),
+			     i, mld_peer->num_links);
+
+	dp_cfg_event_record_mlo_link_delink_evt(soc, DP_CFG_EVENT_MLO_ADD_LINK,
+						mld_peer, link_peer, i,
+						action_done ? 1 : 0);
 }
 
 /**
@@ -1348,6 +1364,8 @@ uint8_t dp_mld_peer_del_link_peer(struct dp_peer *mld_peer,
 	int i;
 	struct dp_peer_link_info *link_peer_info;
 	uint8_t num_links;
+	bool action_done = false;
+	struct dp_soc *soc = mld_peer->vdev->pdev->soc;
 
 	qdf_spin_lock_bh(&mld_peer->link_peers_info_lock);
 	for (i = 0; i < DP_MAX_MLO_LINKS; i++) {
@@ -1357,6 +1375,7 @@ uint8_t dp_mld_peer_del_link_peer(struct dp_peer *mld_peer,
 					&link_peer_info->mac_addr)) {
 			link_peer_info->is_valid = false;
 			mld_peer->num_links--;
+			action_done = true;
 			break;
 		}
 	}
@@ -1366,6 +1385,18 @@ uint8_t dp_mld_peer_del_link_peer(struct dp_peer *mld_peer,
 	if (i == DP_MAX_MLO_LINKS)
 		dp_err("fail to del link peer" QDF_MAC_ADDR_FMT "to mld peer",
 		       QDF_MAC_ADDR_REF(link_peer->mac_addr.raw));
+	else
+		dp_peer_info("%s deletion of link peer %pK (" QDF_MAC_ADDR_FMT ") "
+			     "from MLD peer %pK (" QDF_MAC_ADDR_FMT "), "
+			     "idx %u num_links %u",
+			     action_done ? "Successful" : "Failed",
+			     mld_peer, QDF_MAC_ADDR_REF(mld_peer->mac_addr.raw),
+			     link_peer, QDF_MAC_ADDR_REF(link_peer->mac_addr.raw),
+			     i, mld_peer->num_links);
+
+	dp_cfg_event_record_mlo_link_delink_evt(soc, DP_CFG_EVENT_MLO_DEL_LINK,
+						mld_peer, link_peer, i,
+						action_done ? 1 : 0);
 
 	return num_links;
 }
@@ -1588,6 +1619,9 @@ void dp_peer_mlo_delete(struct dp_peer *peer)
 {
 	struct dp_peer *ml_peer;
 	struct dp_soc *soc;
+
+	dp_info("peer " QDF_MAC_ADDR_FMT " type %d",
+		QDF_MAC_ADDR_REF(peer->mac_addr.raw), peer->peer_type);
 
 	/* MLO connection link peer */
 	if (IS_MLO_DP_LINK_PEER(peer)) {
