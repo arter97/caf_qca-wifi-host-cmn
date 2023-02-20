@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2017-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -1535,6 +1535,7 @@ enum restart_beaconing_on_ch_avoid_rule {
  * @afc_disable_request_id_check: Disable target AFC request id check
  * @is_afc_reg_noaction: Whether no action to AFC power event
  * @sta_sap_scc_on_indoor_channel: Value of sap+sta scc on indoor support
+ * @p2p_indoor_ch_support: Allow P2P GO in indoor channels
  */
 struct reg_config_vars {
 	uint32_t enable_11d_support;
@@ -1560,6 +1561,7 @@ struct reg_config_vars {
 	bool is_afc_reg_noaction;
 #endif
 	bool sta_sap_scc_on_indoor_channel;
+	bool p2p_indoor_ch_support;
 };
 
 /**
