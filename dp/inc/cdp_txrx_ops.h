@@ -566,9 +566,9 @@ struct cdp_cmn_ops {
 	QDF_STATUS (*txrx_peer_flush_rate_stats)(struct cdp_soc_t *soc,
 						 uint8_t pdev_id,
 						 void *buf);
-	void* (*txrx_peer_get_rdkstats_ctx)(struct cdp_soc_t *soc,
-					    uint8_t vdev_id,
-					    uint8_t *mac_addr);
+	void* (*txrx_peer_get_peerstats_ctx)(struct cdp_soc_t *soc,
+					     uint8_t vdev_id,
+					     uint8_t *mac_addr);
 
 	QDF_STATUS (*txrx_flush_rate_stats_request)(struct cdp_soc_t *soc,
 						    uint8_t pdev_id);
@@ -1076,6 +1076,14 @@ struct cdp_host_stats_ops {
 	(*get_pdev_tx_capture_stats)(struct cdp_soc_t *soc, uint8_t pdev_id,
 				     struct cdp_pdev_tx_capture_stats *stats);
 #endif /* WLAN_TX_PKT_CAPTURE_ENH */
+#ifdef HW_TX_DELAY_STATS_ENABLE
+	void
+	(*enable_disable_vdev_tx_delay_stats)(struct cdp_soc_t *soc,
+					      uint8_t vdev_id,
+					      uint8_t value);
+	uint8_t (*is_tx_delay_stats_enabled)(struct cdp_soc_t *soc_hdl,
+					     uint8_t vdev_id);
+#endif
 };
 
 struct cdp_wds_ops {
@@ -1314,6 +1322,10 @@ struct ol_if_ops {
 				   uint8_t add_or_sub, uint8_t ac);
 #endif
 	uint32_t (*dp_get_tx_inqueue)(ol_txrx_soc_handle soc);
+	QDF_STATUS(*dp_send_unit_test_cmd)(uint32_t vdev_id,
+					   uint32_t module_id,
+					   uint32_t arg_count, uint32_t *arg);
+
 };
 
 #ifdef DP_PEER_EXTENDED_API

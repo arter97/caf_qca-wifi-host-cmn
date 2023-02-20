@@ -136,6 +136,11 @@ osif_get_connect_status_code(struct wlan_cm_connect_resp *rsp)
 	return status;
 }
 
+#if defined CFG80211_CONNECT_BSS || \
+	(LINUX_VERSION_CODE >= KERNEL_VERSION(4, 7, 0))
+
+#if defined CFG80211_CONNECT_TIMEOUT_REASON_CODE || \
+	(LINUX_VERSION_CODE >= KERNEL_VERSION(4, 11, 0))
 /**
  * osif_convert_timeout_reason() - Convert to kernel specific enum
  * @timeout_reason: reason for connect timeout
@@ -162,11 +167,6 @@ osif_convert_timeout_reason(enum wlan_cm_connect_fail_reason reason)
 	}
 }
 
-#if defined CFG80211_CONNECT_BSS || \
-	(LINUX_VERSION_CODE >= KERNEL_VERSION(4, 7, 0))
-
-#if defined CFG80211_CONNECT_TIMEOUT_REASON_CODE || \
-	(LINUX_VERSION_CODE >= KERNEL_VERSION(4, 11, 0))
 /**
  * osif_connect_timeout() - API to send connection timeout reason
  * @dev: network device
@@ -241,7 +241,7 @@ static void osif_connect_timeout(
 static void __osif_connect_bss(struct net_device *dev,
 			       struct cfg80211_bss *bss,
 			       struct wlan_cm_connect_resp *rsp,
-			       ieee80211_statuscode status)
+			       enum ieee80211_statuscode status)
 {
 	size_t req_len = 0;
 	const uint8_t *req_ptr = NULL;

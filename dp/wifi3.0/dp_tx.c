@@ -3708,7 +3708,7 @@ static void dp_tx_compute_tid_delay(struct cdp_delay_tid_stats *stats,
 
 	current_timestamp = qdf_ktime_to_ms(qdf_ktime_real_get());
 	timestamp_ingress = qdf_nbuf_get_timestamp(tx_desc->nbuf);
-	timestamp_hw_enqueue = tx_desc->timestamp;
+	timestamp_hw_enqueue = qdf_ktime_to_ms(tx_desc->timestamp);
 	sw_enqueue_delay = (uint32_t)(timestamp_hw_enqueue - timestamp_ingress);
 	fwhw_transmit_delay = (uint32_t)(current_timestamp -
 					 timestamp_hw_enqueue);
@@ -3766,6 +3766,41 @@ static inline void dp_tx_update_peer_delay_stats(struct dp_txrx_peer *txrx_peer,
 }
 #endif
 
+#ifdef HW_TX_DELAY_STATS_ENABLE
+/**
+ * dp_update_tx_delay_stats() - update the delay stats
+ * @vdev: vdev handle
+ * @delay: delay in ms or us based on the flag delay_in_us
+ * @tid: tid value
+ * @mode: type of tx delay mode
+ * @ring id: ring number
+ * @delay_in_us: flag to indicate whether the delay is in ms or us
+ *
+ * Return: none
+ */
+static inline
+void dp_update_tx_delay_stats(struct dp_vdev *vdev, uint32_t delay, uint8_t tid,
+			      uint8_t mode, uint8_t ring_id, bool delay_in_us)
+{
+	struct cdp_tid_tx_stats *tstats =
+		&vdev->stats.tid_tx_stats[ring_id][tid];
+
+	dp_update_delay_stats(tstats, NULL, delay, tid, mode, ring_id,
+			      delay_in_us);
+}
+#else
+static inline
+void dp_update_tx_delay_stats(struct dp_vdev *vdev, uint32_t delay, uint8_t tid,
+			      uint8_t mode, uint8_t ring_id, bool delay_in_us)
+{
+	struct cdp_tid_tx_stats *tstats =
+		&vdev->pdev->stats.tid_stats.tid_tx_stats[ring_id][tid];
+
+	dp_update_delay_stats(tstats, NULL, delay, tid, mode, ring_id,
+			      delay_in_us);
+}
+#endif
+
 /**
  * dp_tx_compute_delay() - Compute and fill in all timestamps
  *				to pass in correct fields
@@ -3781,29 +3816,53 @@ void dp_tx_compute_delay(struct dp_vdev *vdev, struct dp_tx_desc_s *tx_desc,
 {
 	int64_t current_timestamp, timestamp_ingress, timestamp_hw_enqueue;
 	uint32_t sw_enqueue_delay, fwhw_transmit_delay, interframe_delay;
+	uint32_t fwhw_transmit_delay_us;
 
-	if (qdf_likely(!vdev->pdev->delay_stats_flag))
+	if (qdf_likely(!vdev->pdev->delay_stats_flag) &&
+	    qdf_likely(!dp_is_vdev_tx_delay_stats_enabled(vdev)))
 		return;
 
+	if (dp_is_vdev_tx_delay_stats_enabled(vdev)) {
+		fwhw_transmit_delay_us =
+			qdf_ktime_to_us(qdf_ktime_real_get()) -
+			qdf_ktime_to_us(tx_desc->timestamp);
+
+		/*
+		 * Delay between packet enqueued to HW and Tx completion in us
+		 */
+		dp_update_tx_delay_stats(vdev, fwhw_transmit_delay_us, tid,
+					 CDP_DELAY_STATS_FW_HW_TRANSMIT,
+					 ring_id, true);
+		/*
+		 * For MCL, only enqueue to completion delay is required
+		 * so return if the vdev flag is enabled.
+		 */
+		return;
+	}
+
 	current_timestamp = qdf_ktime_to_ms(qdf_ktime_real_get());
-	timestamp_ingress = qdf_nbuf_get_timestamp(tx_desc->nbuf);
-	timestamp_hw_enqueue = tx_desc->timestamp;
-	sw_enqueue_delay = (uint32_t)(timestamp_hw_enqueue - timestamp_ingress);
+	timestamp_hw_enqueue = qdf_ktime_to_ms(tx_desc->timestamp);
 	fwhw_transmit_delay = (uint32_t)(current_timestamp -
 					 timestamp_hw_enqueue);
+
+	/*
+	 * Delay between packet enqueued to HW and Tx completion in ms
+	 */
+	dp_update_tx_delay_stats(vdev, fwhw_transmit_delay, tid,
+				 CDP_DELAY_STATS_FW_HW_TRANSMIT, ring_id,
+				 false);
+
+	timestamp_ingress = qdf_nbuf_get_timestamp(tx_desc->nbuf);
+	sw_enqueue_delay = (uint32_t)(timestamp_hw_enqueue - timestamp_ingress);
 	interframe_delay = (uint32_t)(timestamp_ingress -
 				      vdev->prev_tx_enq_tstamp);
 
 	/*
 	 * Delay in software enqueue
 	 */
-	dp_update_delay_stats(vdev->pdev, sw_enqueue_delay, tid,
-			      CDP_DELAY_STATS_SW_ENQ, ring_id);
-	/*
-	 * Delay between packet enqueued to HW and Tx completion
-	 */
-	dp_update_delay_stats(vdev->pdev, fwhw_transmit_delay, tid,
-			      CDP_DELAY_STATS_FW_HW_TRANSMIT, ring_id);
+	dp_update_tx_delay_stats(vdev, sw_enqueue_delay, tid,
+				 CDP_DELAY_STATS_SW_ENQ, ring_id,
+				 false);
 
 	/*
 	 * Update interframe delay stats calculated at hardstart receive point.
@@ -3812,8 +3871,9 @@ void dp_tx_compute_delay(struct dp_vdev *vdev, struct dp_tx_desc_s *tx_desc,
 	 * On the other side, this will help in avoiding extra per packet check
 	 * of !vdev->prev_tx_enq_tstamp.
 	 */
-	dp_update_delay_stats(vdev->pdev, interframe_delay, tid,
-			      CDP_DELAY_STATS_TX_INTERFRAME, ring_id);
+	dp_update_tx_delay_stats(vdev, interframe_delay, tid,
+				 CDP_DELAY_STATS_TX_INTERFRAME, ring_id,
+				 false);
 	vdev->prev_tx_enq_tstamp = timestamp_ingress;
 }
 
@@ -3946,7 +4006,8 @@ dp_tx_update_peer_stats(struct dp_tx_desc_s *tx_desc,
 	length = qdf_nbuf_len(tx_desc->nbuf);
 	DP_PEER_STATS_FLAT_INC_PKT(txrx_peer, comp_pkt, 1, length);
 
-	if (qdf_unlikely(pdev->delay_stats_flag))
+	if (qdf_unlikely(pdev->delay_stats_flag) ||
+	    qdf_unlikely(dp_is_vdev_tx_delay_stats_enabled(txrx_peer->vdev)))
 		dp_tx_compute_delay(txrx_peer->vdev, tx_desc, tid, ring_id);
 
 	if (ts->status < CDP_MAX_TX_TQM_STATUS) {
@@ -4162,8 +4223,8 @@ static inline void dp_tx_sojourn_stats_process(struct dp_pdev *pdev,
 
 	link_peer_soc = primary_link_peer->vdev->pdev->soc;
 	sojourn_stats->cookie = (void *)
-			dp_monitor_peer_get_rdkstats_ctx(link_peer_soc,
-							 primary_link_peer);
+			dp_monitor_peer_get_peerstats_ctx(link_peer_soc,
+							  primary_link_peer);
 
 	delta_ms = qdf_ktime_to_ms(qdf_ktime_real_get()) -
 				txdesc_ts;
@@ -4234,7 +4295,7 @@ dp_tx_comp_process_desc(struct dp_soc *soc,
 	 */
 	if (qdf_unlikely(!!desc->pdev->latency_capture_enable)) {
 		time_latency = (qdf_ktime_to_ms(qdf_ktime_real_get()) -
-				desc->timestamp);
+				qdf_ktime_to_ms(desc->timestamp));
 	}
 
 	dp_send_completion_to_pkt_capture(soc, desc, ts);
@@ -4243,7 +4304,7 @@ dp_tx_comp_process_desc(struct dp_soc *soc,
 		qdf_trace_dp_packet(desc->nbuf, QDF_TX,
 				    desc->msdu_ext_desc ?
 				    desc->msdu_ext_desc->tso_desc : NULL,
-				    desc->timestamp);
+				    qdf_ktime_to_ms(desc->timestamp));
 
 	if (!(desc->msdu_ext_desc)) {
 		dp_tx_enh_unmap(soc, desc);
@@ -4572,9 +4633,9 @@ void dp_tx_comp_process_tx_status(struct dp_soc *soc,
 				     ts, ts->tid);
 
 #ifdef QCA_SUPPORT_RDK_STATS
-	if (soc->rdkstats_enabled)
+	if (soc->peerstats_enabled)
 		dp_tx_sojourn_stats_process(vdev->pdev, txrx_peer, ts->tid,
-					    tx_desc->timestamp,
+					    qdf_ktime_to_ms(tx_desc->timestamp),
 					    ts->ppdu_id);
 #endif
 
@@ -5025,6 +5086,8 @@ next_desc:
 	/* Process the reaped descriptors */
 	if (head_desc)
 		dp_tx_comp_process_desc_list(soc, head_desc, ring_id);
+
+	DP_STATS_INC(soc, tx.tx_comp[ring_id], count);
 
 	/*
 	 * If we are processing in near-full condition, there are 3 scenario
