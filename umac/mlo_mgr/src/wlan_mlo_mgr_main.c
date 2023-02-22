@@ -345,6 +345,7 @@ g_ml_ref:
 static QDF_STATUS mlo_ap_ctx_deinit(struct wlan_mlo_dev_context *ml_dev)
 {
 	wlan_mlo_vdev_aid_mgr_deinit(ml_dev);
+	mlo_ap_lock_destroy(ml_dev->ap_ctx);
 	qdf_mem_free(ml_dev->ap_ctx);
 	ml_dev->ap_ctx = NULL;
 
@@ -362,6 +363,7 @@ static QDF_STATUS mlo_ap_ctx_init(struct wlan_mlo_dev_context *ml_dev)
 	}
 
 	ml_dev->ap_ctx = ap_ctx;
+	mlo_ap_lock_create(ml_dev->ap_ctx);
 	if (wlan_mlo_vdev_aid_mgr_init(ml_dev) != QDF_STATUS_SUCCESS) {
 		mlo_ap_ctx_deinit(ml_dev);
 		return QDF_STATUS_E_NOMEM;
@@ -503,11 +505,10 @@ static inline void mlo_t2lm_ctx_init(struct wlan_mlo_dev_context *ml_dev,
 {
 	struct wlan_t2lm_info *t2lm;
 
-	t2lm = &ml_dev->t2lm_ctx.t2lm_ie[0].t2lm;
+	t2lm = &ml_dev->t2lm_ctx.established_t2lm.t2lm;
 
 	qdf_mem_zero(&ml_dev->t2lm_ctx, sizeof(struct wlan_t2lm_context));
 
-	ml_dev->t2lm_ctx.num_of_t2lm_ie = 1;
 	t2lm->direction = WLAN_T2LM_BIDI_DIRECTION;
 	t2lm->default_link_mapping = 1;
 

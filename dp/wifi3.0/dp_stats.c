@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2017-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -3775,6 +3775,12 @@ static void dp_print_rx_pdev_rate_stats_tlv(struct dp_pdev *pdev,
 				DP_MAX_STRING_LEN - index,
 				" %u:%u,", i, dp_stats_buf->rx_mcs[i]);
 	}
+	for (i = 0; i <  DP_HTT_RX_MCS_EXT_LEN; i++) {
+		index += qdf_snprint(&str_buf[index],
+				DP_MAX_STRING_LEN - index,
+				" %u:%u,", i + DP_HTT_RX_MCS_LEN,
+				dp_stats_buf->rx_mcs_ext[i]);
+	}
 	DP_PRINT_STATS("rx_mcs = %s ", str_buf);
 
 	index = 0;
@@ -4293,7 +4299,8 @@ static void dp_print_rx_pdev_fw_mpdu_drop_tlv_v(uint32_t *tag_buf)
  * tag_buf - Buffer
  * Return - NULL
  */
-static void dp_print_rx_soc_fw_refill_ring_num_rxdma_err_tlv(uint32_t *tag_buf)
+static uint64_t
+dp_print_rx_soc_fw_refill_ring_num_rxdma_err_tlv(uint32_t *tag_buf)
 {
 	htt_rx_soc_fw_refill_ring_num_rxdma_err_tlv_v *dp_stats_buf =
 		(htt_rx_soc_fw_refill_ring_num_rxdma_err_tlv_v *)tag_buf;
@@ -4302,6 +4309,7 @@ static void dp_print_rx_soc_fw_refill_ring_num_rxdma_err_tlv(uint32_t *tag_buf)
 	uint16_t index = 0;
 	char rxdma_err_cnt[DP_MAX_STRING_LEN];
 	uint32_t tag_len = (HTT_STATS_TLV_LENGTH_GET(*tag_buf) >> 2);
+	uint64_t total_rxdma_err_cnt = 0;
 
 	tag_len = qdf_min(tag_len, (uint32_t)HTT_RX_RXDMA_MAX_ERR_CODE);
 
@@ -4312,9 +4320,12 @@ static void dp_print_rx_soc_fw_refill_ring_num_rxdma_err_tlv(uint32_t *tag_buf)
 				DP_MAX_STRING_LEN - index,
 				" %u:%u,", i,
 				dp_stats_buf->rxdma_err[i]);
+		total_rxdma_err_cnt += dp_stats_buf->rxdma_err[i];
 	}
 
 	DP_PRINT_STATS("rxdma_err = %s\n", rxdma_err_cnt);
+
+	return total_rxdma_err_cnt;
 }
 
 /*
@@ -4710,6 +4721,7 @@ void dp_htt_stats_print_tag(struct dp_pdev *pdev,
 		break;
 
 	case HTT_STATS_RX_REFILL_RXDMA_ERR_TAG:
+		pdev->stats.err.fw_reported_rxdma_error =
 		dp_print_rx_soc_fw_refill_ring_num_rxdma_err_tlv(tag_buf);
 		break;
 
@@ -5207,7 +5219,6 @@ void dp_pdev_print_delay_stats(struct dp_pdev *pdev)
 	struct dp_soc *soc = pdev->soc;
 	struct cdp_tid_tx_stats total_tx;
 	struct cdp_tid_rx_stats total_rx;
-	struct cdp_tid_stats *tid_stats;
 
 	uint8_t tid, index;
 	uint64_t count = 0;
@@ -5217,7 +5228,6 @@ void dp_pdev_print_delay_stats(struct dp_pdev *pdev)
 
 	tid = 0;
 	index = 0;
-	tid_stats = &pdev->stats.tid_stats;
 
 	DP_PRINT_STATS("Per TID Delay Non-Zero Stats:\n");
 	for (tid = 0; tid < CDP_MAX_DATA_TIDS; tid++) {
@@ -5299,14 +5309,12 @@ void dp_pdev_print_rx_error_stats(struct dp_pdev *pdev)
 	struct dp_soc *soc = pdev->soc;
 	struct cdp_tid_rx_stats total_rx;
 	struct cdp_tid_tx_stats total_tx;
-	struct cdp_tid_stats *tid_stats;
 
 	uint8_t tid, index;
 
 	if (!soc)
 		return;
 
-	tid_stats = &pdev->stats.tid_stats;
 
 	DP_PRINT_STATS("Per TID RX Error Stats:\n");
 	for (tid = 0; tid < CDP_MAX_VOW_TID; tid++) {
@@ -5835,10 +5843,8 @@ dp_print_ring_stat_from_hal(struct dp_soc *soc,  struct dp_srng *srng,
 	int32_t hw_tailp = -1;
 	uint32_t ring_usage;
 	const char *ring_name;
-	struct hal_soc *hal_soc;
 
 	if (soc && srng && srng->hal_srng) {
-		hal_soc = (struct hal_soc *)soc->hal_soc;
 		ring_name = dp_srng_get_str_from_hal_ring_type(ring_type);
 		hal_get_sw_hptp(soc->hal_soc, srng->hal_srng, &tailp, &headp);
 		ring_usage = hal_get_ring_usage(srng->hal_srng,

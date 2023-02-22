@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2014-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -4873,6 +4873,10 @@ QDF_STATUS reg_apply_puncture(struct wlan_objmgr_pdev *pdev,
 		is_puncture = BIT(i) & puncture_bitmap;
 		if (is_puncture) {
 			chan_enum = reg_get_chan_enum_for_freq(chan_cfreq);
+			if (reg_is_chan_enum_invalid(chan_enum)) {
+				reg_debug_rl("Invalid chan enum %d", chan_enum);
+				return QDF_STATUS_E_FAILURE;
+			}
 			mas_chan_list[chan_enum].is_static_punctured = true;
 		}
 		i++;
@@ -5314,6 +5318,7 @@ reg_get_320_bonded_channel_state_for_pwrmode(struct wlan_objmgr_pdev *pdev,
 	enum channel_state temp_chan_state, prim_chan_state;
 	uint16_t startchan_cfreq, endchan_cfreq;
 	uint16_t max_cont_bw, i;
+	enum channel_state update_state = CHANNEL_STATE_ENABLE;
 
 	*out_punc_bitmap = ALL_SCHANS_PUNC;
 
@@ -5338,6 +5343,9 @@ reg_get_320_bonded_channel_state_for_pwrmode(struct wlan_objmgr_pdev *pdev,
 			if (reg_is_state_allowed(temp_chan_state)) {
 				max_cont_bw += SUB_CHAN_BW;
 				*out_punc_bitmap &= ~BIT(i);
+				/* Remember if sub20 channel is DFS channel */
+				if (temp_chan_state == CHANNEL_STATE_DFS)
+					update_state = CHANNEL_STATE_DFS;
 			}
 
 			if (temp_chan_state < chan_state)
@@ -5345,6 +5353,11 @@ reg_get_320_bonded_channel_state_for_pwrmode(struct wlan_objmgr_pdev *pdev,
 		}
 		startchan_cfreq = startchan_cfreq + SUB_CHAN_BW;
 		i++;
+	}
+
+	/* Validate puncture bitmap. Update channel state. */
+	if (reg_is_punc_bitmap_valid(CH_WIDTH_320MHZ, *out_punc_bitmap)) {
+		chan_state = update_state;
 	}
 
 	prim_chan_state =
@@ -7216,15 +7229,7 @@ reg_get_reg_rules_for_pdev(struct wlan_objmgr_pdev *pdev)
 	return psoc_reg_rules;
 }
 
-/**
- * reg_get_num_rules_of_ap_pwr_type() - Get the number of reg rules present
- * for a given ap power type
- * @pdev: Pointer to pdev
- * @ap_pwr_type: AP power type
- *
- * Return: Return the number of reg rules for a given ap power type
- */
-static uint8_t
+uint8_t
 reg_get_num_rules_of_ap_pwr_type(struct wlan_objmgr_pdev *pdev,
 				 enum reg_6g_ap_type ap_pwr_type)
 {

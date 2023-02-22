@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -1513,12 +1513,7 @@ void dp_tx_update_stats(struct dp_soc *soc,
 			struct dp_tx_desc_s *tx_desc,
 			uint8_t ring_id)
 {
-	uint32_t stats_len = 0;
-
-	if (tx_desc->frm_type == dp_tx_frm_tso)
-		stats_len  = tx_desc->msdu_ext_desc->tso_desc->seg.total_len;
-	else
-		stats_len = qdf_nbuf_len(tx_desc->nbuf);
+	uint32_t stats_len = dp_tx_get_pkt_len(tx_desc);
 
 	DP_STATS_INC_PKT(soc, tx.egress[ring_id], 1, stats_len);
 }
@@ -1542,12 +1537,7 @@ dp_tx_attempt_coalescing(struct dp_soc *soc, struct dp_vdev *vdev,
 	tcl_data.nbuf = tx_desc->nbuf;
 	tcl_data.tid = tid;
 	tcl_data.ring_id = ring_id;
-	if (tx_desc->frm_type == dp_tx_frm_tso) {
-		tcl_data.pkt_len  =
-			tx_desc->msdu_ext_desc->tso_desc->seg.total_len;
-	} else {
-		tcl_data.pkt_len = qdf_nbuf_len(tx_desc->nbuf);
-	}
+	tcl_data.pkt_len = dp_tx_get_pkt_len(tx_desc);
 	tcl_data.num_ll_connections = vdev->num_latency_critical_conn;
 	swlm_query_data.tcl_data = &tcl_data;
 
@@ -3301,7 +3291,6 @@ dp_tx_send_exception(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
 		     struct cdp_tx_exception_metadata *tx_exc_metadata)
 {
 	struct dp_soc *soc = cdp_soc_t_to_dp_soc(soc_hdl);
-	qdf_ether_header_t *eh = NULL;
 	struct dp_tx_msdu_info_s msdu_info;
 	struct dp_vdev *vdev = dp_vdev_get_ref_by_id(soc, vdev_id,
 						     DP_MOD_ID_TX_EXCEPTION);
@@ -3315,7 +3304,6 @@ dp_tx_send_exception(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
 		goto fail;
 
 	msdu_info.tid = tx_exc_metadata->tid;
-	eh = (qdf_ether_header_t *)qdf_nbuf_data(nbuf);
 	dp_verbose_debug("skb "QDF_MAC_ADDR_FMT,
 			 QDF_MAC_ADDR_REF(nbuf->data));
 
@@ -3648,6 +3636,25 @@ qdf_nbuf_t dp_tx_exc_drop(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
 }
 #endif
 
+#ifdef FEATURE_DIRECT_LINK
+/*
+ * dp_vdev_tx_mark_to_fw() - Mark to_fw bit for the tx packet
+ * @nbuf: skb
+ * @vdev: DP vdev handle
+ *
+ * Return: None
+ */
+static inline void dp_vdev_tx_mark_to_fw(qdf_nbuf_t nbuf, struct dp_vdev *vdev)
+{
+	if (qdf_unlikely(vdev->to_fw))
+		QDF_NBUF_CB_TX_PACKET_TO_FW(nbuf) = 1;
+}
+#else
+static inline void dp_vdev_tx_mark_to_fw(qdf_nbuf_t nbuf, struct dp_vdev *vdev)
+{
+}
+#endif
+
 /*
  * dp_tx_send() - Transmit a frame on a given VAP
  * @soc: DP soc handle
@@ -3687,6 +3694,8 @@ qdf_nbuf_t dp_tx_send(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
 	vdev = soc->vdev_id_map[vdev_id];
 	if (qdf_unlikely(!vdev))
 		return nbuf;
+
+	dp_vdev_tx_mark_to_fw(nbuf, vdev);
 
 	/*
 	 * Set Default Host TID value to invalid TID
@@ -4585,6 +4594,8 @@ void dp_tx_compute_delay(struct dp_vdev *vdev, struct dp_tx_desc_s *tx_desc,
 	fwhw_transmit_delay = (uint32_t)(current_timestamp -
 					 timestamp_hw_enqueue);
 
+	if (!timestamp_hw_enqueue)
+		return;
 	/*
 	 * Delay between packet enqueued to HW and Tx completion in ms
 	 */
@@ -6455,7 +6466,7 @@ static void dp_tx_delete_static_pools(struct dp_soc *soc, int num_pool)
  * @num_pool: number of pools
  *
  */
-void dp_tx_tso_cmn_desc_pool_deinit(struct dp_soc *soc, uint8_t num_pool)
+static void dp_tx_tso_cmn_desc_pool_deinit(struct dp_soc *soc, uint8_t num_pool)
 {
 	dp_tx_tso_desc_pool_deinit(soc, num_pool);
 	dp_tx_tso_num_seg_pool_deinit(soc, num_pool);
@@ -6467,7 +6478,7 @@ void dp_tx_tso_cmn_desc_pool_deinit(struct dp_soc *soc, uint8_t num_pool)
  * @num_pool: number of pools
  *
  */
-void dp_tx_tso_cmn_desc_pool_free(struct dp_soc *soc, uint8_t num_pool)
+static void dp_tx_tso_cmn_desc_pool_free(struct dp_soc *soc, uint8_t num_pool)
 {
 	dp_tx_tso_desc_pool_free(soc, num_pool);
 	dp_tx_tso_num_seg_pool_free(soc, num_pool);
@@ -6517,17 +6528,19 @@ void dp_soc_tx_desc_sw_pools_deinit(struct dp_soc *soc)
 }
 
 /**
- * dp_tso_attach() - TSO attach handler
- * @txrx_soc: Opaque Dp handle
+ * dp_tx_tso_cmn_desc_pool_alloc() - TSO cmn desc pool allocator
+ * @soc: DP soc handle
+ * @num_pool: Number of pools
+ * @num_desc: Number of descriptors
  *
  * Reserve TSO descriptor buffers
  *
  * Return: QDF_STATUS_E_FAILURE on failure or
- * QDF_STATUS_SUCCESS on success
+ *         QDF_STATUS_SUCCESS on success
  */
-QDF_STATUS dp_tx_tso_cmn_desc_pool_alloc(struct dp_soc *soc,
-					 uint8_t num_pool,
-					 uint32_t num_desc)
+static QDF_STATUS dp_tx_tso_cmn_desc_pool_alloc(struct dp_soc *soc,
+						uint8_t num_pool,
+						uint32_t num_desc)
 {
 	if (dp_tx_tso_desc_pool_alloc(soc, num_pool, num_desc)) {
 		dp_err("TSO Desc Pool alloc %d failed %pK", num_pool, soc);
@@ -6551,12 +6564,12 @@ QDF_STATUS dp_tx_tso_cmn_desc_pool_alloc(struct dp_soc *soc,
  * Initialize TSO descriptor pools
  *
  * Return: QDF_STATUS_E_FAILURE on failure or
- * QDF_STATUS_SUCCESS on success
+ *         QDF_STATUS_SUCCESS on success
  */
 
-QDF_STATUS dp_tx_tso_cmn_desc_pool_init(struct dp_soc *soc,
-					uint8_t num_pool,
-					uint32_t num_desc)
+static QDF_STATUS dp_tx_tso_cmn_desc_pool_init(struct dp_soc *soc,
+					       uint8_t num_pool,
+					       uint32_t num_desc)
 {
 	if (dp_tx_tso_desc_pool_init(soc, num_pool, num_desc)) {
 		dp_err("TSO Desc Pool alloc %d failed %pK", num_pool, soc);
@@ -6680,11 +6693,9 @@ QDF_STATUS dp_tso_soc_attach(struct cdp_soc_t *txrx_soc)
 {
 	struct dp_soc *soc = (struct dp_soc *)txrx_soc;
 	uint8_t num_pool;
-	uint32_t num_desc;
 	uint32_t num_ext_desc;
 
 	num_pool = wlan_cfg_get_num_tx_desc_pool(soc->wlan_cfg_ctx);
-	num_desc = wlan_cfg_get_num_tx_desc(soc->wlan_cfg_ctx);
 	num_ext_desc = wlan_cfg_get_num_tx_ext_desc(soc->wlan_cfg_ctx);
 
 	if (dp_tx_tso_cmn_desc_pool_alloc(soc, num_pool, num_ext_desc))

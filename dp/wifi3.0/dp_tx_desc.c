@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -58,6 +58,7 @@ static void
 dp_tx_desc_pool_counter_initialize(struct dp_tx_desc_pool_s *tx_desc_pool,
 				  uint16_t num_elem)
 {
+	tx_desc_pool->elem_count = num_elem;
 	tx_desc_pool->num_free = num_elem;
 	tx_desc_pool->num_allocated = 0;
 }
@@ -65,13 +66,13 @@ dp_tx_desc_pool_counter_initialize(struct dp_tx_desc_pool_s *tx_desc_pool,
 
 #ifdef DP_UMAC_HW_RESET_SUPPORT
 /**
- * dp_tx_desc_clean_up() -  Clean up the tx dexcriptors
+ * dp_tx_desc_clean_up() - Clean up the tx descriptors
  * @ctxt: context passed
  * @elem: element to be cleaned up
  * @elem_list: element list
  *
  */
-void dp_tx_desc_clean_up(void *ctxt, void *elem, void *elem_list)
+static void dp_tx_desc_clean_up(void *ctxt, void *elem, void *elem_list)
 {
 	struct dp_soc *soc = (struct dp_soc *)ctxt;
 	struct dp_tx_desc_s *tx_desc = (struct dp_tx_desc_s *)elem;

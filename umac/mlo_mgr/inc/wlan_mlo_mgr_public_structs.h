@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -120,7 +120,13 @@ enum MLO_SOC_LIST {
  * @qdf_event_t: event for teardown completion
  * @dp_handle: pointer to DP ML context
  */
-#define MAX_MLO_LINKS 6
+
+/*
+ * Maximum number of MLO LINKS across the system,
+ * this is not the MLO links within and AP-MLD.
+ */
+
+#define MAX_MLO_LINKS 7
 #define MAX_MLO_CHIPS 5
 struct mlo_setup_info {
 	uint8_t ml_grp_id;
@@ -283,11 +289,17 @@ struct wlan_mlo_sta {
  * struct wlan_mlo_ap - MLO AP related info
  * @num_ml_vdevs: number of vdevs to form MLD
  * @ml_aid_mgr: ML AID mgr
+ * @mlo_ap_lock: lock to sync VDEV SM event
  * @mlo_vdev_quiet_bmap: Bitmap of vdevs for which quiet ie needs to enabled
  */
 struct wlan_mlo_ap {
 	uint8_t num_ml_vdevs;
 	struct wlan_ml_vdev_aid_mgr *ml_aid_mgr;
+#ifdef WLAN_MLO_USE_SPINLOCK
+	qdf_spinlock_t mlo_ap_lock;
+#else
+	qdf_mutex_t mlo_ap_lock;
+#endif
 	qdf_bitmap(mlo_vdev_quiet_bmap, WLAN_UMAC_MLO_MAX_VDEVS);
 };
 
@@ -833,7 +845,7 @@ enum wlan_t2lm_status {
 struct mlo_vdev_host_tid_to_link_map_resp {
 	uint8_t vdev_id;
 	enum wlan_t2lm_status status;
-	uint8_t mapping_switch_tsf;
+	uint32_t mapping_switch_tsf;
 };
 
 /**
