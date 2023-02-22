@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2016-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -165,7 +165,6 @@ dp_enable_undecoded_metadata_capture(struct dp_pdev *pdev, int val)
 {
 	QDF_STATUS status = QDF_STATUS_SUCCESS;
 	struct dp_mon_pdev *mon_pdev = pdev->monitor_pdev;
-	struct dp_mon_ops *mon_ops;
 
 	if (!mon_pdev->mvdev) {
 		qdf_err("monitor_pdev is NULL");
@@ -175,7 +174,6 @@ dp_enable_undecoded_metadata_capture(struct dp_pdev *pdev, int val)
 	mon_pdev->undecoded_metadata_capture = val;
 	mon_pdev->monitor_configured = true;
 
-	mon_ops = dp_mon_ops_get(pdev->soc);
 
 	/* Setup the undecoded metadata capture mode filter. */
 	dp_mon_filter_setup_undecoded_metadata_mode(pdev);
@@ -451,8 +449,9 @@ dp_scan_spcl_vap_stats_detach(struct dp_mon_vdev *mon_vdev)
 
 /**
  * dp_vdev_set_monitor_mode() - Set DP VDEV to monitor mode
- * @vdev_handle: Datapath VDEV handle
- * @smart_monitor: Flag to denote if its smart monitor mode
+ * @dp_soc: DP soc context
+ * @vdev_id: vdev ID
+ * @special_monitor: Flag to denote if its smart monitor mode
  *
  * Return: 0 on success, not 0 on failure
  */
@@ -510,6 +509,14 @@ static QDF_STATUS dp_vdev_set_monitor_mode(struct cdp_soc_t *dp_soc,
 
 	mon_pdev->monitor_configured = true;
 
+	/* If advance monitor filter is applied using lite_mon
+	 * via vap configuration, required filters are already applied
+	 * hence returning SUCCESS from here.
+	 */
+	if (dp_monitor_lite_mon_is_rx_adv_filter_enable(pdev)) {
+		status = QDF_STATUS_SUCCESS;
+		goto fail;
+	}
 	/* disable lite mon if configured, monitor vap takes
 	 * priority over lite mon when its created. Lite mon
 	 * can be configured later again.
@@ -1171,12 +1178,10 @@ int dp_set_pktlog_wifi3(struct dp_pdev *pdev, uint32_t event,
 	int max_mac_rings = wlan_cfg_get_num_mac_rings
 					(pdev->wlan_cfg_ctx);
 	uint8_t mac_id = 0;
-	struct dp_mon_soc *mon_soc;
 	struct dp_mon_ops *mon_ops;
 	struct dp_mon_pdev *mon_pdev = pdev->monitor_pdev;
 
 	soc = pdev->soc;
-	mon_soc = soc->monitor_soc;
 	mon_ops = dp_mon_ops_get(soc);
 
 	if (!mon_ops)
@@ -1481,12 +1486,12 @@ QDF_STATUS dp_peer_stats_notify(struct dp_pdev *dp_pdev, struct dp_peer *peer)
 
 #ifdef FEATURE_NAC_RSSI
 /**
- * dp_rx_nac_filter(): Function to perform filtering of non-associated
+ * dp_rx_nac_filter() - Function to perform filtering of non-associated
  * clients
  * @pdev: DP pdev handle
  * @rx_pkt_hdr: Rx packet Header
  *
- * return: dp_vdev*
+ * Return: dp_vdev*
  */
 static
 struct dp_vdev *dp_rx_nac_filter(struct dp_pdev *pdev,
@@ -1550,10 +1555,10 @@ QDF_STATUS dp_filter_neighbour_peer(struct dp_pdev *pdev,
 #endif
 
 #if defined(ATH_SUPPORT_NAC_RSSI) || defined(ATH_SUPPORT_NAC)
-/*
+/**
  * dp_update_filter_neighbour_peers() - set neighbour peers(nac clients)
  * address for smart mesh filtering
- * @txrx_soc: cdp soc handle
+ * @soc_hdl: cdp soc handle
  * @vdev_id: id of virtual device object
  * @cmd: Add/Del command
  * @macaddr: nac client mac address
@@ -1657,7 +1662,7 @@ fail0:
 }
 #endif /* ATH_SUPPORT_NAC_RSSI || ATH_SUPPORT_NAC */
 
-/*
+/**
  * dp_update_mon_mac_filter() - Set/reset monitor mac filter
  * @soc_hdl: cdp soc handle
  * @vdev_id: id of virtual device object
@@ -1707,7 +1712,7 @@ static QDF_STATUS dp_update_mon_mac_filter(struct cdp_soc_t *soc_hdl,
 
 #ifdef ATH_SUPPORT_NAC_RSSI
 /**
- * dp_vdev_get_neighbour_rssi(): Store RSSI for configured NAC
+ * dp_vdev_get_neighbour_rssi() - Store RSSI for configured NAC
  * @soc_hdl: DP soc handle
  * @vdev_id: id of DP vdev handle
  * @mac_addr: neighbour mac
@@ -1809,14 +1814,6 @@ dp_enable_mon_reap_timer(struct cdp_soc_t *soc_hdl,
 
 #if defined(DP_CON_MON)
 #ifndef REMOVE_PKT_LOG
-/**
- * dp_pkt_log_init() - API to initialize packet log
- * @soc_hdl: Datapath soc handle
- * @pdev_id: id of data path pdev handle
- * @scn: HIF context
- *
- * Return: none
- */
 void dp_pkt_log_init(struct cdp_soc_t *soc_hdl, uint8_t pdev_id, void *scn)
 {
 	struct dp_soc *soc = cdp_soc_t_to_dp_soc(soc_hdl);
@@ -1915,7 +1912,7 @@ void dp_neighbour_peers_detach(struct dp_pdev *pdev)
 }
 
 #ifdef QCA_ENHANCED_STATS_SUPPORT
-/*
+/**
  * dp_mon_tx_enable_enhanced_stats() - Enable enhanced Tx stats
  * @pdev: Datapath pdev handle
  *
@@ -1931,9 +1928,9 @@ static void dp_mon_tx_enable_enhanced_stats(struct dp_pdev *pdev)
 		mon_ops->mon_tx_enable_enhanced_stats(pdev);
 }
 
-/*
+/**
  * dp_enable_enhanced_stats()- API to enable enhanced statistcs
- * @soc_handle: DP_SOC handle
+ * @soc: DP_SOC handle
  * @pdev_id: id of DP_PDEV handle
  *
  * Return: QDF_STATUS
@@ -1978,7 +1975,7 @@ dp_enable_enhanced_stats(struct cdp_soc_t *soc, uint8_t pdev_id)
 	return QDF_STATUS_SUCCESS;
 }
 
-/*
+/**
  * dp_mon_tx_disable_enhanced_stats() - Disable enhanced Tx stats
  * @pdev: Datapath pdev handle
  *
@@ -1994,12 +1991,13 @@ static void dp_mon_tx_disable_enhanced_stats(struct dp_pdev *pdev)
 		mon_ops->mon_tx_disable_enhanced_stats(pdev);
 }
 
-/*
+/**
  * dp_disable_enhanced_stats()- API to disable enhanced statistcs
  *
- * @param soc - the soc handle
- * @param pdev_id - pdev_id of pdev
- * @return - QDF_STATUS
+ * @soc: the soc handle
+ * @pdev_id: pdev_id of pdev
+ *
+ * Return: QDF_STATUS
  */
 static QDF_STATUS
 dp_disable_enhanced_stats(struct cdp_soc_t *soc, uint8_t pdev_id)
@@ -2114,7 +2112,7 @@ dp_enable_peer_based_pktlog(struct cdp_soc_t *soc, uint8_t pdev_id,
 }
 
 /**
- * dp_peer_update_pkt_capture_params: Set Rx & Tx Capture flags for a peer
+ * dp_peer_update_pkt_capture_params() - Set Rx & Tx Capture flags for a peer
  * @soc: DP_SOC handle
  * @pdev_id: id of DP_PDEV handle
  * @is_rx_pkt_cap_enable: enable/disable Rx packet capture in monitor mode
@@ -2277,8 +2275,9 @@ QDF_STATUS dp_rx_populate_cbf_hdr(struct dp_soc *soc,
 
 #ifdef ATH_SUPPORT_EXT_STAT
 #ifdef WLAN_TELEMETRY_STATS_SUPPORT
-/* dp_pdev_clear_link_airtime_stats- clear pdev airtime stats for current index
- * @peer : Datapath peer
+/**
+ * dp_pdev_clear_link_airtime_stats() - clear pdev airtime stats for given peer
+ * @pdev: DP PDEV handle
  */
 static inline
 void dp_pdev_clear_link_airtime_stats(struct dp_pdev *pdev)
@@ -2289,8 +2288,9 @@ void dp_pdev_clear_link_airtime_stats(struct dp_pdev *pdev)
 		pdev->stats.telemetry_stats.link_airtime[ac] = 0;
 }
 
-/* dp_peer_update_telemetry_stats- update peer telemetry stats
- * @peer : Datapath peer
+/**
+ * dp_peer_update_telemetry_stats() - update peer telemetry stats
+ * @peer: Datapath peer
  */
 static inline
 void dp_peer_update_telemetry_stats(struct dp_peer *peer)
@@ -2335,10 +2335,11 @@ void dp_peer_update_telemetry_stats(struct dp_peer *peer)
 { }
 #endif
 
-/*dp_peer_cal_clients_stats_update - update peer stats on cal client timer
- * @soc : Datapath SOC
- * @peer : Datapath peer
- * @arg : argument to iter function
+/**
+ * dp_peer_cal_clients_stats_update() - update peer stats on cal client timer
+ * @soc: Datapath SOC
+ * @peer: Datapath peer
+ * @arg: argument to iter function
  */
 #ifdef IPA_OFFLOAD
 static void
@@ -2401,7 +2402,8 @@ dp_peer_cal_clients_stats_update(struct dp_soc *soc,
 }
 #endif
 
-/*dp_iterate_update_peer_list - update peer stats on cal client timer
+/**
+ * dp_iterate_update_peer_list() - update peer stats on cal client timer
  * @pdev_hdl: pdev handle
  */
 static void dp_iterate_update_peer_list(struct cdp_pdev *pdev_hdl)
@@ -2446,16 +2448,16 @@ void dp_set_atf_stats_enable(struct dp_pdev *pdev, bool value)
 #endif
 
 #ifdef QCA_ENHANCED_STATS_SUPPORT
-/*
- * dp_process_ppdu_stats_tx_mgmtctrl_payload_tlv: Process
+/**
+ * dp_process_ppdu_stats_tx_mgmtctrl_payload_tlv() - Process
  * htt_ppdu_stats_tx_mgmtctrl_payload_tlv
  * @pdev: DP PDEV handle
  * @tag_buf: buffer containing the htt_ppdu_stats_tx_mgmtctrl_payload_tlv
- * @length: tlv_length
+ * @ppdu_id: PPDU Id
  *
- * return:QDF_STATUS_SUCCESS if nbuf has to be freed in caller
+ * Return: QDF_STATUS_SUCCESS if nbuf has to be freed in caller
  */
-QDF_STATUS
+static QDF_STATUS
 dp_process_ppdu_stats_tx_mgmtctrl_payload_tlv(struct dp_pdev *pdev,
 					      qdf_nbuf_t tag_buf,
 					      uint32_t ppdu_id)
@@ -2519,14 +2521,6 @@ dp_process_ppdu_stats_tx_mgmtctrl_payload_tlv(struct dp_pdev *pdev,
 	return QDF_STATUS_E_ALREADY;
 }
 
-/*
- * dp_htt_get_ppdu_sniffer_ampdu_tlv_bitmap() - Get ppdu stats tlv
- * bitmap for sniffer mode
- * @bitmap: received bitmap
- *
- * Return: expected bitmap value, returns zero if doesn't match with
- * either 64-bit Tx window or 256-bit window tlv bitmap
- */
 int
 dp_htt_get_ppdu_sniffer_ampdu_tlv_bitmap(uint32_t bitmap)
 {
@@ -2538,7 +2532,7 @@ dp_htt_get_ppdu_sniffer_ampdu_tlv_bitmap(uint32_t bitmap)
 	return 0;
 }
 
-/*
+/**
  * dp_peer_copy_delay_stats() - copy ppdu stats to peer delayed stats.
  * @peer: Datapath peer handle
  * @ppdu: User PPDU Descriptor
@@ -2602,7 +2596,7 @@ dp_peer_copy_delay_stats(struct dp_peer *peer,
 	ppdu->debug_copied = true;
 }
 
-/*
+/**
  * dp_peer_copy_stats_to_bar() - copy delayed stats to ppdu stats.
  * @peer: Datapath peer handle
  * @ppdu: PPDU Descriptor
@@ -2651,7 +2645,7 @@ dp_peer_copy_stats_to_bar(struct dp_peer *peer,
 	ppdu->debug_copied = true;
 }
 
-/*
+/**
  * dp_tx_rate_stats_update() - Update rate per-peer statistics
  * @peer: Datapath peer handle
  * @ppdu: PPDU Descriptor
@@ -2759,7 +2753,7 @@ void dp_send_stats_event(struct dp_pdev *pdev, struct dp_peer *peer,
 #endif
 
 #ifdef WLAN_FEATURE_11BE
-/*
+/**
  * dp_get_ru_index_frm_ru_tones() - get ru index
  * @ru_tones: ru tones
  *
@@ -2826,7 +2820,7 @@ static inline enum cdp_ru_index dp_get_ru_index_frm_ru_tones(uint16_t ru_tones)
 	return ru_index;
 }
 
-/*
+/**
  * dp_mon_get_ru_width_from_ru_size() - get ru_width from ru_size enum
  * @ru_size: HTT ru_size enum
  *
@@ -2955,7 +2949,7 @@ static uint32_t dp_mon_get_ru_width_from_ru_size(uint16_t ru_size)
 #endif
 
 #ifdef WLAN_TELEMETRY_STATS_SUPPORT
-/*
+/**
  * dp_pdev_telemetry_stats_update() - Update pdev telemetry stats
  * @pdev: Datapath pdev handle
  * @ppdu: PPDU Descriptor
@@ -2992,7 +2986,7 @@ dp_pdev_telemetry_stats_update(
 { }
 #endif
 
-/*
+/**
  * dp_tx_stats_update() - Update per-peer statistics
  * @pdev: Datapath pdev handle
  * @peer: Datapath peer handle
@@ -3172,14 +3166,14 @@ dp_tx_stats_update(struct dp_pdev *pdev, struct dp_peer *peer,
 	dp_send_stats_event(pdev, peer, ppdu->peer_id);
 }
 
-/*
- * dp_get_ppdu_info_user_index: Find and allocate a per-user descriptor for a PPDU,
- * if a new peer id arrives in a PPDU
- * pdev: DP pdev handle
- * @peer_id : peer unique identifier
+/**
+ * dp_get_ppdu_info_user_index() - Find and allocate a per-user
+ * descriptor for a PPDU, if a new peer id arrives in a PPDU
+ * @pdev: DP pdev handle
+ * @peer_id: peer unique identifier
  * @ppdu_info: per ppdu tlv structure
  *
- * return:user index to be populated
+ * Return: user index to be populated
  */
 static uint8_t dp_get_ppdu_info_user_index(struct dp_pdev *pdev,
 					   uint16_t peer_id,
@@ -3212,13 +3206,13 @@ static uint8_t dp_get_ppdu_info_user_index(struct dp_pdev *pdev,
 	return ppdu_info->last_user - 1;
 }
 
-/*
- * dp_process_ppdu_stats_common_tlv: Process htt_ppdu_stats_common_tlv
- * pdev: DP pdev handle
+/**
+ * dp_process_ppdu_stats_common_tlv() - Process htt_ppdu_stats_common_tlv
+ * @pdev: DP pdev handle
  * @tag_buf: buffer containing the tlv htt_ppdu_stats_common_tlv
  * @ppdu_info: per ppdu tlv structure
  *
- * return:void
+ * Return: void
  */
 static void
 dp_process_ppdu_stats_common_tlv(struct dp_pdev *pdev,
@@ -3343,12 +3337,13 @@ dp_process_ppdu_stats_common_tlv(struct dp_pdev *pdev,
 		HTT_PPDU_STATS_COMMON_TLV_BSS_COLOR_ID_GET(*tag_buf);
 }
 
-/*
- * dp_process_ppdu_stats_user_common_tlv: Process ppdu_stats_user_common
+/**
+ * dp_process_ppdu_stats_user_common_tlv() - Process ppdu_stats_user_common
+ * @pdev: DP PDEV handle
  * @tag_buf: buffer containing the tlv htt_ppdu_stats_user_common_tlv
  * @ppdu_info: per ppdu tlv structure
  *
- * return:void
+ * Return: void
  */
 static void dp_process_ppdu_stats_user_common_tlv(
 		struct dp_pdev *pdev, uint32_t *tag_buf,
@@ -3460,7 +3455,7 @@ static void dp_process_ppdu_stats_user_common_tlv(
  * @tag_buf: T2H message buffer carrying the user rate TLV
  * @ppdu_info: per ppdu tlv structure
  *
- * return:void
+ * Return: void
  */
 static void
 dp_process_ppdu_stats_user_rate_tlv(struct dp_pdev *pdev,
@@ -3564,14 +3559,14 @@ dp_process_ppdu_stats_user_rate_tlv(struct dp_pdev *pdev,
 		HTT_PPDU_STATS_USER_RATE_TLV_PUNC_PATTERN_BITMAP_GET(*tag_buf);
 }
 
-/*
- * dp_process_ppdu_stats_enq_mpdu_bitmap_64_tlv: Process
+/**
+ * dp_process_ppdu_stats_enq_mpdu_bitmap_64_tlv() - Process
  * htt_ppdu_stats_enq_mpdu_bitmap_64_tlv
- * pdev: DP PDEV handle
+ * @pdev: DP PDEV handle
  * @tag_buf: buffer containing the tlv htt_ppdu_stats_enq_mpdu_bitmap_64_tlv
  * @ppdu_info: per ppdu tlv structure
  *
- * return:void
+ * Return: void
  */
 static void dp_process_ppdu_stats_enq_mpdu_bitmap_64_tlv(
 		struct dp_pdev *pdev, uint32_t *tag_buf,
@@ -3610,14 +3605,14 @@ static void dp_process_ppdu_stats_enq_mpdu_bitmap_64_tlv(
 						   size);
 }
 
-/*
- * dp_process_ppdu_stats_enq_mpdu_bitmap_256_tlv: Process
+/**
+ * dp_process_ppdu_stats_enq_mpdu_bitmap_256_tlv() - Process
  * htt_ppdu_stats_enq_mpdu_bitmap_256_tlv
- * soc: DP SOC handle
+ * @pdev: DP PDEV handle
  * @tag_buf: buffer containing the tlv htt_ppdu_stats_enq_mpdu_bitmap_256_tlv
  * @ppdu_info: per ppdu tlv structure
  *
- * return:void
+ * Return: void
  */
 static void dp_process_ppdu_stats_enq_mpdu_bitmap_256_tlv(
 		struct dp_pdev *pdev, uint32_t *tag_buf,
@@ -3656,14 +3651,14 @@ static void dp_process_ppdu_stats_enq_mpdu_bitmap_256_tlv(
 						   size);
 }
 
-/*
- * dp_process_ppdu_stats_user_cmpltn_common_tlv: Process
+/**
+ * dp_process_ppdu_stats_user_cmpltn_common_tlv() - Process
  * htt_ppdu_stats_user_cmpltn_common_tlv
- * soc: DP SOC handle
+ * @pdev: DP PDEV handle
  * @tag_buf: buffer containing the tlv htt_ppdu_stats_user_cmpltn_common_tlv
  * @ppdu_info: per ppdu tlv structure
  *
- * return:void
+ * Return: void
  */
 static void dp_process_ppdu_stats_user_cmpltn_common_tlv(
 		struct dp_pdev *pdev, uint32_t *tag_buf,
@@ -3785,14 +3780,14 @@ static void dp_process_ppdu_stats_user_cmpltn_common_tlv(
 		HTT_PPDU_STATS_USER_CMPLTN_COMMON_TLV_CURRENT_RATE_PER_GET(*tag_buf);
 }
 
-/*
- * dp_process_ppdu_stats_user_compltn_ba_bitmap_64_tlv: Process
+/**
+ * dp_process_ppdu_stats_user_compltn_ba_bitmap_64_tlv() - Process
  * htt_ppdu_stats_user_compltn_ba_bitmap_64_tlv
- * pdev: DP PDEV handle
+ * @pdev: DP PDEV handle
  * @tag_buf: buffer containing the htt_ppdu_stats_user_compltn_ba_bitmap_64_tlv
  * @ppdu_info: per ppdu tlv structure
  *
- * return:void
+ * Return: void
  */
 static void dp_process_ppdu_stats_user_compltn_ba_bitmap_64_tlv(
 		struct dp_pdev *pdev, uint32_t *tag_buf,
@@ -3825,14 +3820,14 @@ static void dp_process_ppdu_stats_user_compltn_ba_bitmap_64_tlv(
 	ppdu_user_desc->ba_size = CDP_BA_64_BIT_MAP_SIZE_DWORDS * 32;
 }
 
-/*
- * dp_process_ppdu_stats_user_compltn_ba_bitmap_256_tlv: Process
+/**
+ * dp_process_ppdu_stats_user_compltn_ba_bitmap_256_tlv() - Process
  * htt_ppdu_stats_user_compltn_ba_bitmap_256_tlv
- * pdev: DP PDEV handle
+ * @pdev: DP PDEV handle
  * @tag_buf: buffer containing the htt_ppdu_stats_user_compltn_ba_bitmap_256_tlv
  * @ppdu_info: per ppdu tlv structure
  *
- * return:void
+ * Return: void
  */
 static void dp_process_ppdu_stats_user_compltn_ba_bitmap_256_tlv(
 		struct dp_pdev *pdev, uint32_t *tag_buf,
@@ -3865,14 +3860,14 @@ static void dp_process_ppdu_stats_user_compltn_ba_bitmap_256_tlv(
 	ppdu_user_desc->ba_size = CDP_BA_256_BIT_MAP_SIZE_DWORDS * 32;
 }
 
-/*
- * dp_process_ppdu_stats_user_compltn_ack_ba_status_tlv: Process
+/**
+ * dp_process_ppdu_stats_user_compltn_ack_ba_status_tlv() - Process
  * htt_ppdu_stats_user_compltn_ack_ba_status_tlv
- * pdev: DP PDE handle
+ * @pdev: DP PDEV handle
  * @tag_buf: buffer containing the htt_ppdu_stats_user_compltn_ack_ba_status_tlv
  * @ppdu_info: per ppdu tlv structure
  *
- * return:void
+ * Return: void
  */
 static void dp_process_ppdu_stats_user_compltn_ack_ba_status_tlv(
 		struct dp_pdev *pdev, uint32_t *tag_buf,
@@ -3932,14 +3927,14 @@ static void dp_process_ppdu_stats_user_compltn_ack_ba_status_tlv(
 	}
 }
 
-/*
- * dp_process_ppdu_stats_user_common_array_tlv: Process
+/**
+ * dp_process_ppdu_stats_user_common_array_tlv() - Process
  * htt_ppdu_stats_user_common_array_tlv
- * pdev: DP PDEV handle
+ * @pdev: DP PDEV handle
  * @tag_buf: buffer containing the htt_ppdu_stats_user_compltn_ack_ba_status_tlv
  * @ppdu_info: per ppdu tlv structure
  *
- * return:void
+ * Return: void
  */
 static void dp_process_ppdu_stats_user_common_array_tlv(
 		struct dp_pdev *pdev, uint32_t *tag_buf,
@@ -3986,14 +3981,14 @@ static void dp_process_ppdu_stats_user_common_array_tlv(
 		HTT_PPDU_STATS_ARRAY_ITEM_TLV_TX_FAILED_MSDUS_GET(*tag_buf);
 }
 
-/*
- * dp_process_ppdu_stats_flush_tlv: Process
+/**
+ * dp_process_ppdu_stats_user_compltn_flush_tlv() - Process
  * htt_ppdu_stats_flush_tlv
  * @pdev: DP PDEV handle
  * @tag_buf: buffer containing the htt_ppdu_stats_flush_tlv
  * @ppdu_info: per ppdu tlv structure
  *
- * return:void
+ * Return: void
  */
 static void
 dp_process_ppdu_stats_user_compltn_flush_tlv(struct dp_pdev *pdev,
@@ -4054,12 +4049,12 @@ add_ppdu_to_sched_list:
 }
 
 /**
- * dp_process_ppdu_stats_sch_cmd_status_tlv: Process schedule command status tlv
+ * dp_process_ppdu_stats_sch_cmd_status_tlv() - Process schedule command status tlv
  * Here we are not going to process the buffer.
  * @pdev: DP PDEV handle
  * @ppdu_info: per ppdu tlv structure
  *
- * return:void
+ * Return: void
  */
 static void
 dp_process_ppdu_stats_sch_cmd_status_tlv(struct dp_pdev *pdev,
@@ -4108,7 +4103,7 @@ dp_process_ppdu_stats_sch_cmd_status_tlv(struct dp_pdev *pdev,
 			peer = dp_peer_get_ref_by_id
 				(pdev->soc, ppdu_desc->user[i].peer_id,
 				 DP_MOD_ID_TX_PPDU_STATS);
-			/**
+			/*
 			 * This check is to make sure peer is not deleted
 			 * after processing the TLVs.
 			 */
@@ -4125,7 +4120,7 @@ dp_process_ppdu_stats_sch_cmd_status_tlv(struct dp_pdev *pdev,
 			delay_ppdu = &mon_peer->delayed_ba_ppdu_stats;
 			start_tsf = ppdu_desc->ppdu_start_timestamp;
 			end_tsf = ppdu_desc->ppdu_end_timestamp;
-			/**
+			/*
 			 * save delayed ba user info
 			 */
 			if (ppdu_desc->user[i].delayed_ba) {
@@ -4171,7 +4166,7 @@ dp_process_ppdu_stats_sch_cmd_status_tlv(struct dp_pdev *pdev,
 				(pdev->soc,
 				 ppdu_desc->user[i].peer_id,
 				 DP_MOD_ID_TX_PPDU_STATS);
-			/**
+			/*
 			 * This check is to make sure peer is not deleted
 			 * after processing the TLVs.
 			 */
@@ -4218,16 +4213,15 @@ dp_process_ppdu_stats_sch_cmd_status_tlv(struct dp_pdev *pdev,
 }
 
 /**
- * dp_validate_fix_ppdu_tlv(): Function to validate the length of PPDU
- *
- * If the TLV length sent as part of PPDU TLV is less that expected size i.e
- * size of corresponding data structure, pad the remaining bytes with zeros
- * and continue processing the TLVs
- *
+ * dp_validate_fix_ppdu_tlv() - Function to validate the length of PPDU
  * @pdev: DP pdev handle
  * @tag_buf: TLV buffer
  * @tlv_expected_size: Expected size of Tag
  * @tlv_len: TLV length received from FW
+ *
+ * If the TLV length sent as part of PPDU TLV is less that expected size i.e
+ * size of corresponding data structure, pad the remaining bytes with zeros
+ * and continue processing the TLVs
  *
  * Return: Pointer to updated TLV
  */
@@ -4251,13 +4245,13 @@ static inline uint32_t *dp_validate_fix_ppdu_tlv(struct dp_pdev *pdev,
 }
 
 /**
- * dp_process_ppdu_tag(): Function to process the PPDU TLVs
+ * dp_process_ppdu_tag() - Function to process the PPDU TLVs
  * @pdev: DP pdev handle
  * @tag_buf: TLV buffer
  * @tlv_len: length of tlv
  * @ppdu_info: per ppdu tlv structure
  *
- * return: void
+ * Return: void
  */
 static void dp_process_ppdu_tag(struct dp_pdev *pdev,
 				uint32_t *tag_buf,
@@ -4409,7 +4403,7 @@ dp_ppdu_desc_user_phy_tx_time_update(struct dp_pdev *pdev,
 	if (!nss_ru_width_sum)
 		nss_ru_width_sum = 1;
 
-	/**
+	/*
 	 * For SU-MIMO PPDU phy Tx time is same for the single user.
 	 * For MU-MIMO phy Tx time is calculated per user as below
 	 *     user phy tx time =
@@ -4477,13 +4471,6 @@ dp_tx_ctrl_stats_update(struct dp_pdev *pdev, struct dp_peer *peer,
 }
 #endif /* WLAN_SUPPORT_CTRL_FRAME_STATS */
 
-/**
- * dp_ppdu_desc_user_stats_update(): Function to update TX user stats
- * @pdev: DP pdev handle
- * @ppdu_info: per PPDU TLV descriptor
- *
- * return: void
- */
 void
 dp_ppdu_desc_user_stats_update(struct dp_pdev *pdev,
 			       struct ppdu_info *ppdu_info)
@@ -4528,7 +4515,7 @@ dp_ppdu_desc_user_stats_update(struct dp_pdev *pdev,
 		peer = dp_peer_get_ref_by_id(pdev->soc,
 					     ppdu_desc->user[i].peer_id,
 					     DP_MOD_ID_TX_PPDU_STATS);
-		/**
+		/*
 		 * This check is to make sure peer is not deleted
 		 * after processing the TLVs.
 		 */
@@ -4563,7 +4550,7 @@ dp_ppdu_desc_user_stats_update(struct dp_pdev *pdev,
 			continue;
 		}
 
-		/**
+		/*
 		 * Update tx stats for data frames having Qos as well as
 		 * non-Qos data tid
 		 */
@@ -4586,7 +4573,7 @@ dp_ppdu_desc_user_stats_update(struct dp_pdev *pdev,
 }
 
 #if !defined(WLAN_TX_PKT_CAPTURE_ENH) || defined(QCA_MONITOR_2_0_SUPPORT)
-/*
+/**
  * dp_tx_ppdu_desc_notify() - Notify to upper layer about PPDU via WDI
  *
  * @pdev: Datapath pdev handle
@@ -4686,9 +4673,8 @@ void dp_ppdu_desc_deliver(struct dp_pdev *pdev,
 }
 #endif
 
-/*
+/**
  * dp_tx_ppdu_desc_deliver() - Deliver PPDU desc to upper layer
- *
  * @pdev: Datapath pdev handle
  * @ppdu_info: per PPDU TLV descriptor
  *
@@ -4712,7 +4698,7 @@ static void dp_tx_ppdu_desc_deliver(struct dp_pdev *pdev,
 }
 
 /**
- * dp_get_ppdu_desc(): Function to allocate new PPDU status
+ * dp_get_ppdu_desc() - Function to allocate new PPDU status
  * desc for new ppdu id
  * @pdev: DP pdev handle
  * @ppdu_id: PPDU unique identifier
@@ -4720,7 +4706,7 @@ static void dp_tx_ppdu_desc_deliver(struct dp_pdev *pdev,
  * @tsf_l32: timestamp received along with ppdu stats indication header
  * @max_users: Maximum user for that particular ppdu
  *
- * return: ppdu_info per ppdu tlv structure
+ * Return: ppdu_info per ppdu tlv structure
  */
 static
 struct ppdu_info *dp_get_ppdu_desc(struct dp_pdev *pdev, uint32_t ppdu_id,
@@ -4814,7 +4800,7 @@ struct ppdu_info *dp_get_ppdu_desc(struct dp_pdev *pdev, uint32_t ppdu_id,
 
 	if (ppdu_info) {
 		if (ppdu_info->tlv_bitmap & (1 << tlv_type)) {
-			/**
+			/*
 			 * if we get tlv_type that is already been processed
 			 * for ppdu, that means we got a new ppdu with same
 			 * ppdu id. Hence Flush the older ppdu
@@ -4829,7 +4815,7 @@ struct ppdu_info *dp_get_ppdu_desc(struct dp_pdev *pdev, uint32_t ppdu_id,
 			ppdu_desc = (struct cdp_tx_completion_ppdu *)
 				qdf_nbuf_data(ppdu_info->nbuf);
 
-			/**
+			/*
 			 * apart from ACK BA STATUS TLV rest all comes in order
 			 * so if tlv type not ACK BA STATUS TLV we can deliver
 			 * ppdu_info
@@ -4848,7 +4834,7 @@ struct ppdu_info *dp_get_ppdu_desc(struct dp_pdev *pdev, uint32_t ppdu_id,
 		}
 	}
 
-	/**
+	/*
 	 * Flush the head ppdu descriptor if ppdu desc list reaches max
 	 * threshold
 	 */
@@ -4895,7 +4881,7 @@ struct ppdu_info *dp_get_ppdu_desc(struct dp_pdev *pdev, uint32_t ppdu_id,
 
 	ppdu_info->ppdu_desc->max_users = max_users;
 	ppdu_info->tsf_l32 = tsf_l32;
-	/**
+	/*
 	 * No lock is needed because all PPDU TLVs are processed in
 	 * same context and this list is updated in same context
 	 */
@@ -4906,11 +4892,11 @@ struct ppdu_info *dp_get_ppdu_desc(struct dp_pdev *pdev, uint32_t ppdu_id,
 }
 
 /**
- * dp_htt_process_tlv(): Function to process each PPDU TLVs
+ * dp_htt_process_tlv() - Function to process each PPDU TLVs
  * @pdev: DP pdev handle
  * @htt_t2h_msg: HTT target to host message
  *
- * return: ppdu_info per ppdu tlv structure
+ * Return: ppdu_info per ppdu tlv structure
  */
 static struct ppdu_info *dp_htt_process_tlv(struct dp_pdev *pdev,
 					    qdf_nbuf_t htt_t2h_msg)
@@ -4949,7 +4935,7 @@ static struct ppdu_info *dp_htt_process_tlv(struct dp_pdev *pdev,
 
 		tlv_length += HTT_TLV_HDR_LEN;
 
-		/**
+		/*
 		 * Not allocating separate ppdu descriptor for MGMT Payload
 		 * TLV as this is sent as separate WDI indication and it
 		 * doesn't contain any ppdu information
@@ -4988,7 +4974,7 @@ static struct ppdu_info *dp_htt_process_tlv(struct dp_pdev *pdev,
 
 		dp_process_ppdu_tag(pdev, msg_word, tlv_length, ppdu_info);
 
-		/**
+		/*
 		 * Increment pdev level tlv count to monitor
 		 * missing TLVs
 		 */
@@ -5054,7 +5040,7 @@ static struct ppdu_info *dp_htt_process_tlv(struct dp_pdev *pdev,
 			return NULL;
 	}
 
-	/**
+	/*
 	 * Once all the TLVs for a given PPDU has been processed,
 	 * return PPDU status to be delivered to higher layer.
 	 * tlv_bitmap_expected can't be available for different frame type.
@@ -5104,7 +5090,7 @@ static bool dp_tx_ppdu_stats_feat_enable_check(struct dp_pdev *pdev)
  * @pdev_id: pdev id
  * @htt_t2h_msg: HTT message nbuf
  *
- * return:void
+ * Return: void
  */
 static bool dp_txrx_ppdu_stats_handler(struct dp_soc *soc,
 				       uint8_t pdev_id, qdf_nbuf_t htt_t2h_msg)
@@ -5160,14 +5146,6 @@ static bool dp_txrx_ppdu_stats_handler(struct dp_soc *soc,
 
 #if defined(WDI_EVENT_ENABLE) &&\
 	(defined(QCA_ENHANCED_STATS_SUPPORT) || !defined(REMOVE_PKT_LOG))
-/*
- * dp_ppdu_stats_ind_handler() - PPDU stats msg handler
- * @htt_soc:	 HTT SOC handle
- * @msg_word:    Pointer to payload
- * @htt_t2h_msg: HTT msg nbuf
- *
- * Return: True if buffer should be freed by caller.
- */
 bool
 dp_ppdu_stats_ind_handler(struct htt_soc *soc,
 			  uint32_t *msg_word,
@@ -5438,7 +5416,6 @@ QDF_STATUS dp_mon_pdev_detach(struct dp_pdev *pdev)
 
 QDF_STATUS dp_mon_pdev_init(struct dp_pdev *pdev)
 {
-	struct dp_soc *soc;
 	struct dp_mon_pdev *mon_pdev;
 	struct dp_mon_ops *mon_ops = NULL;
 
@@ -5447,7 +5424,6 @@ QDF_STATUS dp_mon_pdev_init(struct dp_pdev *pdev)
 		return QDF_STATUS_E_FAILURE;
 	}
 
-	soc = pdev->soc;
 	mon_pdev = pdev->monitor_pdev;
 
 	mon_pdev->invalid_mon_peer = qdf_mem_malloc(sizeof(struct dp_mon_peer));
@@ -6162,18 +6138,19 @@ void dp_mon_ppdu_stats_handler_deregister(struct dp_mon_soc *mon_soc)
 #endif
 
 #ifdef QCA_RSSI_DB2DBM
-/*
+/**
  * dp_mon_compute_min_nf() - calculate the min nf value in the
- *                      active chains 20MHZ subbands.
+ *                      active chains 20 MHz subbands.
+ * @conv_params: cdp_rssi_dbm_conv_param_dp structure value
+ * @min_nf: location to store min NF value
+ * @chain_idx: active chain index in nfHwdbm array
+ *
  * computation: Need to calculate nfInDbm[][] to A_MIN(nfHwDbm[][])
  *              considering row index as active chains and column
  *              index as 20MHZ subbands per chain.
  * example: chain_mask = 0x07 (consider 3 active chains 0,1,2 index)
  *          BandWidth = 40MHZ (40MHZ includes two 20MHZ subbands so need to
  *                      consider 0,1 index calculate min_nf value)
- *
- *@conv_params: cdp_rssi_dbm_conv_param_dp structure value
- *@chain_idx: active chain index in nfHwdbm array
  *
  * Return: QDF_STATUS_SUCCESS if value set successfully
  *         QDF_STATUS_E_INVAL false if error
@@ -6224,11 +6201,11 @@ dp_mon_compute_min_nf(struct cdp_rssi_dbm_conv_param_dp *conv_params,
 	return QDF_STATUS_SUCCESS;
 }
 
-/*
- * dp_mon_pdev_params_rssi_dbm_conv() --> to set rssi in dbm conversion
+/**
+ * dp_mon_pdev_params_rssi_dbm_conv() - to set rssi in dbm conversion
  *                                      params into monitor pdev.
- *@cdp_soc: dp soc handle.
- *@params: cdp_rssi_db2dbm_param_dp structure value.
+ * @cdp_soc: dp soc handle.
+ * @params: cdp_rssi_db2dbm_param_dp structure value.
  *
  * Return: QDF_STATUS_SUCCESS if value set successfully
  *         QDF_STATUS_E_INVAL false if error

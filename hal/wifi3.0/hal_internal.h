@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -845,8 +845,8 @@ struct hal_reo_params {
 	uint8_t frag_dst_ring;
 	/* Destination for alternate */
 	uint8_t alt_dst_ind_0;
-	/** padding */
-	uint8_t padding[2];
+	/* reo_qref struct for mlo and non mlo table */
+	struct reo_queue_ref_table *reo_qref;
 };
 
 /**
@@ -895,6 +895,22 @@ struct hal_rx_pkt_capture_flags {
 	uint32_t chan_freq;
 	uint32_t rssi_comb;
 	uint64_t tsft;
+};
+
+/**
+ * struct reo_queue_ref_table - Reo qref LUT addr
+ * @mlo_reo_qref_table_vaddr: MLO table vaddr
+ * @non_mlo_reo_qref_table_vaddr: Non MLO table vaddr
+ * @mlo_reo_qref_table_paddr: MLO table paddr
+ * @non_mlo_reo_qref_table_paddr: Non MLO table paddr
+ * @reo_qref_table_en: Enable flag
+ */
+struct reo_queue_ref_table {
+	uint64_t *mlo_reo_qref_table_vaddr;
+	uint64_t *non_mlo_reo_qref_table_vaddr;
+	qdf_dma_addr_t mlo_reo_qref_table_paddr;
+	qdf_dma_addr_t non_mlo_reo_qref_table_paddr;
+	uint8_t reo_qref_table_en;
 };
 
 struct hal_hw_txrx_ops {
@@ -1260,7 +1276,9 @@ struct hal_hw_txrx_ops {
 	uint32_t (*hal_txmon_status_get_num_users)(void *tx_tlv_hdr,
 						   uint8_t *num_users);
 #endif /* QCA_MONITOR_2_0_SUPPORT */
-	QDF_STATUS (*hal_reo_shared_qaddr_setup)(hal_soc_handle_t hal_soc_hdl);
+	QDF_STATUS (*hal_reo_shared_qaddr_setup)(hal_soc_handle_t hal_soc_hdl,
+						 struct reo_queue_ref_table
+						 *reo_qref);
 	void (*hal_reo_shared_qaddr_init)(hal_soc_handle_t hal_soc_hdl,
 					  int qref_reset);
 	void (*hal_reo_shared_qaddr_detach)(hal_soc_handle_t hal_soc_hdl);
@@ -1301,6 +1319,8 @@ struct hal_hw_txrx_ops {
 	void (*hal_tx_ring_halt_set)(hal_soc_handle_t hal_soc_hdl);
 	void (*hal_tx_ring_halt_reset)(hal_soc_handle_t hal_soc_hdl);
 	bool (*hal_tx_ring_halt_poll)(hal_soc_handle_t hal_soc_hdl);
+	uint32_t (*hal_tx_get_num_ppe_vp_search_idx_tbl_entries)(
+					hal_soc_handle_t hal_soc_hdl);
 };
 
 /**
@@ -1358,22 +1378,6 @@ struct hal_reg_write_fail_history {
 #endif
 
 /**
- * struct reo_queue_ref_table - Reo qref LUT addr
- * @mlo_reo_qref_table_vaddr: MLO table vaddr
- * @non_mlo_reo_qref_table_vaddr: Non MLO table vaddr
- * @mlo_reo_qref_table_paddr: MLO table paddr
- * @non_mlo_reo_qref_table_paddr: Non MLO table paddr
- * @reo_qref_table_en: Enable flag
- */
-struct reo_queue_ref_table {
-	uint64_t *mlo_reo_qref_table_vaddr;
-	uint64_t *non_mlo_reo_qref_table_vaddr;
-	qdf_dma_addr_t mlo_reo_qref_table_paddr;
-	qdf_dma_addr_t non_mlo_reo_qref_table_paddr;
-	uint8_t reo_qref_table_en;
-};
-
-/**
  * union hal_shadow_reg_cfg - Shadow register config
  * @addr: Place holder where shadow address is saved
  * @v2: shadow config v2 format
@@ -1426,6 +1430,8 @@ struct hal_soc {
 	void *dev_base_addr_ce;
 
 	void *dev_base_addr_cmem;
+
+	void *dev_base_addr_pmm;
 	/* HAL internal state for all SRNG rings.
 	 * TODO: See if this is required
 	 */

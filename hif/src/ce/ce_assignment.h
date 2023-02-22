@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2014-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -35,7 +35,7 @@
 #if defined(QCA_LOWMEM_CONFIG) || defined(QCA_512M_CONFIG)
 #define WMI_CE_BUF_SIZE 2048
 #else
-/**
+/*
  * WMI_CE_BUF_SIZE = (SKB_SIZE - 64BIT_SH_INFO -
  *		      NETBUF_FIXED_MIN_HEADROOM - WMI_HEADROOM)
  * 3520 = (4096 - 384 - 128 - 64)
@@ -1144,8 +1144,12 @@ static struct CE_attr host_ce_config_wlan_qca5332[] = {
 	{/*CE7*/ (CE_ATTR_FLAGS | CE_ATTR_DISABLE_INTR), 0, 0, 0, 0, NULL,},
 	/* Target HIF memcpy (Generic HIF memcypy) */
 	{/*CE8*/ (CE_ATTR_FLAGS | CE_ATTR_DISABLE_INTR), 0, 0, 0, 0, NULL,},
+	#ifdef WLAN_DIAG_AND_DBR_OVER_SEPARATE_CE
 	/* WMI logging/CFR/Spectral/Radar/ */
 	{/*CE9*/ (CE_ATTR_FLAGS), 0, 0, 2048, 128, NULL,},
+	#else
+	{/*CE9*/ (CE_ATTR_FLAGS | CE_ATTR_DISABLE_INTR), 0, 0, 0, 0, NULL,},
+	#endif
 	/* Customer reserve */
 	{/*CE10*/ (CE_ATTR_FLAGS | CE_ATTR_DISABLE_INTR), 0, 0, 0, 0, NULL,},
 	/* Un-assigned */

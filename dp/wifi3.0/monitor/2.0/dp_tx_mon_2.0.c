@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -356,7 +356,6 @@ void dp_tx_mon_buf_desc_pool_free(struct dp_soc *soc)
 QDF_STATUS
 dp_tx_mon_buf_desc_pool_alloc(struct dp_soc *soc)
 {
-	struct dp_srng *mon_buf_ring;
 	struct dp_mon_desc_pool *tx_mon_desc_pool;
 	int entries;
 	struct wlan_cfg_dp_soc_ctxt *soc_cfg_ctx;
@@ -368,7 +367,6 @@ dp_tx_mon_buf_desc_pool_alloc(struct dp_soc *soc)
 
 	entries = wlan_cfg_get_dp_soc_tx_mon_buf_ring_size(soc_cfg_ctx);
 
-	mon_buf_ring = &mon_soc_be->tx_mon_buf_ring;
 
 	tx_mon_desc_pool = &mon_soc_be->tx_desc_mon;
 
@@ -854,7 +852,8 @@ dp_tx_lite_mon_filtering(struct dp_pdev *pdev,
 		mon_pdev_be->lite_mon_tx_config;
 	QDF_STATUS ret;
 
-	if (!dp_lite_mon_is_tx_enabled(mon_pdev))
+	if (!dp_lite_mon_is_tx_enabled(mon_pdev) &&
+	    !config->tx_config.peer_count)
 		return QDF_STATUS_SUCCESS;
 
 	/* PPDU level filtering */
@@ -943,7 +942,7 @@ dp_tx_mon_send_to_stack(struct dp_pdev *pdev, qdf_nbuf_t mpdu,
  * dp_tx_mon_send_per_usr_mpdu() - API to send per usr mpdu to stack
  * @pdev: pdev Handle
  * @ppdu_info: pointer to dp_tx_ppdu_info
- * @user_id: current user index
+ * @user_idx: current user index
  *
  * Return: void
  */
@@ -1147,7 +1146,7 @@ dp_tx_mon_update_radiotap(struct dp_pdev *pdev,
  *
  * Return: none
  */
-void dp_tx_mon_ppdu_process(void *context)
+static void dp_tx_mon_ppdu_process(void *context)
 {
 	struct dp_pdev *pdev = (struct dp_pdev *)context;
 	struct dp_mon_pdev *mon_pdev;
@@ -1201,12 +1200,6 @@ void dp_tx_mon_ppdu_process(void *context)
 	}
 }
 
-/**
- * dp_tx_ppdu_stats_attach_2_0 - Initialize Tx PPDU stats and enhanced capture
- * @pdev: DP PDEV
- *
- * Return: none
- */
 void dp_tx_ppdu_stats_attach_2_0(struct dp_pdev *pdev)
 {
 	struct dp_mon_pdev *mon_pdev;
@@ -1242,12 +1235,6 @@ void dp_tx_ppdu_stats_attach_2_0(struct dp_pdev *pdev)
 			qdf_alloc_unbound_workqueue("tx_mon_ppdu_work_queue");
 }
 
-/**
- * dp_tx_ppdu_stats_detach_be - Cleanup Tx PPDU stats and enhanced capture
- * @pdev: DP PDEV
- *
- * Return: none
- */
 void dp_tx_ppdu_stats_detach_2_0(struct dp_pdev *pdev)
 {
 	struct dp_mon_pdev *mon_pdev;

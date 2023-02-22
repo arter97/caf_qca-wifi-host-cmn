@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -344,6 +344,7 @@ static bool mlo_handle_link_ready(struct wlan_objmgr_vdev *vdev)
 		return false;
 	}
 
+	mlo_ap_lock_acquire(vdev->mlo_dev_ctx->ap_ctx);
 	for (i = 0; i < num_links; i++) {
 		if (mlo_pre_link_up(vdev_list[i])) {
 			if (vdev_list[i] != vdev)
@@ -355,6 +356,7 @@ static bool mlo_handle_link_ready(struct wlan_objmgr_vdev *vdev)
 		/* Release ref taken as part of mlo_ap_get_vdev_list */
 		mlo_release_vdev_ref(vdev_list[i]);
 	}
+	mlo_ap_lock_release(vdev->mlo_dev_ctx->ap_ctx);
 	return true;
 }
 
@@ -386,23 +388,31 @@ uint16_t mlo_ap_ml_peerid_alloc(void)
 {
 	struct mlo_mgr_context *mlo_ctx = wlan_objmgr_get_mlo_ctx();
 	uint16_t i;
+	uint16_t mlo_peer_id;
 
 	ml_peerid_lock_acquire(mlo_ctx);
+	mlo_peer_id = mlo_ctx->last_mlo_peer_id;
 	for (i = 0; i < mlo_ctx->max_mlo_peer_id; i++) {
-		if (qdf_test_bit(i, mlo_ctx->mlo_peer_id_bmap))
+		mlo_peer_id = (mlo_peer_id + 1) % mlo_ctx->max_mlo_peer_id;
+
+		if (!mlo_peer_id)
 			continue;
 
-		qdf_set_bit(i, mlo_ctx->mlo_peer_id_bmap);
+		if (qdf_test_bit(mlo_peer_id, mlo_ctx->mlo_peer_id_bmap))
+			continue;
+
+		qdf_set_bit(mlo_peer_id, mlo_ctx->mlo_peer_id_bmap);
 		break;
 	}
+	mlo_ctx->last_mlo_peer_id = mlo_peer_id;
 	ml_peerid_lock_release(mlo_ctx);
 
 	if (i == mlo_ctx->max_mlo_peer_id)
 		return MLO_INVALID_PEER_ID;
 
-	mlo_debug(" ML peer id %d is allocated", i + 1);
+	mlo_debug(" ML peer id %d is allocated", mlo_peer_id);
 
-	return i + 1;
+	return mlo_peer_id;
 }
 
 void mlo_ap_ml_peerid_free(uint16_t mlo_peer_id)
@@ -421,8 +431,8 @@ void mlo_ap_ml_peerid_free(uint16_t mlo_peer_id)
 	}
 
 	ml_peerid_lock_acquire(mlo_ctx);
-	if (qdf_test_bit(mlo_peer_id - 1, mlo_ctx->mlo_peer_id_bmap))
-		qdf_clear_bit(mlo_peer_id - 1, mlo_ctx->mlo_peer_id_bmap);
+	if (qdf_test_bit(mlo_peer_id, mlo_ctx->mlo_peer_id_bmap))
+		qdf_clear_bit(mlo_peer_id, mlo_ctx->mlo_peer_id_bmap);
 
 	ml_peerid_lock_release(mlo_ctx);
 
