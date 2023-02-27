@@ -3102,6 +3102,19 @@ bool __qdf_nbuf_is_arp_local(struct sk_buff *skb)
 	return false;
 }
 
+#ifdef QCA_DP_NBUF_FAST_RECYCLE_CHECK
+bool qdf_nbuf_fast_xmit(qdf_nbuf_t nbuf)
+{
+	return nbuf->fast_xmit;
+}
+#else
+bool qdf_nbuf_fast_xmit(qdf_nbuf_t nbuf)
+{
+	return false;
+}
+#endif
+qdf_export_symbol(qdf_nbuf_fast_xmit);
+
 #ifdef NBUF_MEMORY_DEBUG
 
 static spinlock_t g_qdf_net_buf_track_lock[QDF_NET_BUF_TRACK_MAX_SIZE];
