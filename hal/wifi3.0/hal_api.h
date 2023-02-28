@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -1009,6 +1009,10 @@ struct hal_srng_params {
 	/* Safe threshold */
 	uint16_t safe_thresh;
 #endif
+	/* Timer threshold to issue ring pointer update - in micro seconds */
+	uint16_t pointer_timer_threshold;
+	/* Number threshold of ring entries to issue pointer update */
+	uint8_t pointer_num_threshold;
 };
 
 /* hal_construct_srng_shadow_regs() - initialize the shadow
