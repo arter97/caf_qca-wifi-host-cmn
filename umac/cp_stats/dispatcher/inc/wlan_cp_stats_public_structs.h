@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -42,8 +42,9 @@
 /**
  * struct twt_infra_cp_stats_event - TWT statistics event structure
  * @vdev_id: virtual interface id
- * @peer_mac_addr: peer mac address corresponding to a TWT session
+ * @peer_macaddr: peer mac address corresponding to a TWT session
  * @dialog_id: Represents dialog_id of the TWT session
+ * @status:
  * @num_sp_cycles: Number of TWT service period elapsed so far
  * @avg_sp_dur_us: Average of actual wake duration observed so far
  * @min_sp_dur_us: Minimum value of wake duration observed across
@@ -96,7 +97,7 @@ struct consecutive_bmiss_stats {
 /**
  * struct bmiss_infra_cp_stats_event -  bmiss statistics event structure
  * @vdev_id: virtual interface id
- * @peer_mac_addr: peer mac address
+ * @peer_macaddr: peer mac address
  * @num_pre_bmiss: number of pre_bmiss
  * @rssi_samples: Rssi samples at pre bmiss
  * @rssi_sample_curr_index: current index of Rssi sampelse at pre bmiss
@@ -123,6 +124,56 @@ struct bmiss_infra_cp_stats_event  {
 	struct consecutive_bmiss_stats cons_bmiss_stats;
 };
 #endif /* CONFIG_WLAN_BMISS */
+
+#ifdef WLAN_TELEMETRY_STATS_SUPPORT
+/**
+ * struct ctrl_path_pmlo_telemetry_stats_struct - pmlo telemetry
+ * stats struct
+ * @pdev_id: pdev_id for identifying the PHY
+ * @dl_inbss_airtime_ac_be: ac_be airtime in dl inbss
+ * @dl_inbss_airtime_ac_bk: ac_bk airtime in dl inbss
+ * @dl_inbss_airtime_ac_vi: ac_vi airtime in dl inbss
+ * @dl_inbss_airtime_ac_vo: ac_vo airtime in dl inbss
+ * @ul_inbss_airtime_ac_be: ac_be airtime in ul inbss
+ * @ul_inbss_airtime_ac_bk: ac_bk airtime in ul inbss
+ * @ul_inbss_airtime_ac_vi: ac_vi airtime in ul inbss
+ * @ul_inbss_airtime_ac_vo: ac_vo airtime in ul inbss
+ * @estimated_air_time_ac_be: ac_be estimated air time
+ * @estimated_air_time_ac_bk: ac_bk estimated air time
+ * @estimated_air_time_ac_vi: ac_vi estimated air time
+ * @estimated_air_time_ac_vo: ac_vo estimated air time
+ * @avg_chan_lat_per_ac: array for Average channel latency per AC,
+ * units in micro seconds.
+ * @link_obss_airtime: Percentage of OBSS used air time per link,
+ * units in percentage.
+ * @link_idle_airtime: Idle/free airtime per link, units in percentage.
+ * @ul_inbss_airtime_non_ac: ul inBSS airtime occupied by non-AC traffic,
+ * units in percentage.
+ * @dl_inbss_airtime_non_ac: dl inBSS airtime occupied by non-AC traffic,
+ * units in percentage.
+ */
+struct ctrl_path_pmlo_telemetry_stats_struct {
+	uint32_t pdev_id;
+	uint32_t dl_inbss_airtime_ac_be : 8,
+		 dl_inbss_airtime_ac_bk : 8,
+		 dl_inbss_airtime_ac_vi : 8,
+		 dl_inbss_airtime_ac_vo : 8;
+	uint32_t ul_inbss_airtime_ac_be : 8,
+		 ul_inbss_airtime_ac_bk : 8,
+		 ul_inbss_airtime_ac_vi : 8,
+		 ul_inbss_airtime_ac_vo : 8;
+	uint32_t estimated_air_time_ac_be : 8,
+		 estimated_air_time_ac_bk : 8,
+		 estimated_air_time_ac_vi : 8,
+		 estimated_air_time_ac_vo : 8;
+	uint32_t avg_chan_lat_per_ac[WIFI_AC_MAX];
+	uint32_t link_obss_airtime : 8,
+		 link_idle_airtime : 8,
+		 ul_inbss_airtime_non_ac : 8,
+		 dl_inbss_airtime_non_ac : 8;
+};
+#endif
+
 /**
  * struct infra_cp_stats_event - Event structure to store stats
  * @action: action for which this response was received
@@ -132,6 +183,9 @@ struct bmiss_infra_cp_stats_event  {
  * @num_twt_infra_cp_stats: number of twt_infra_cp_stats buffers
  *                          available
  * @twt_infra_cp_stats: pointer to TWT session statistics structures
+ * @bmiss_infra_cp_stats: pointer to beacon miss statistics
+ * @ctrl_path_pmlo_telemetry_stats_struct: pointer to pmlo telemetry
+ *                                         stats struct
  *
  * This structure is used to store the statistics information
  * extracted from firmware event(wmi_pdev_cp_fwstats_eventid)
@@ -147,6 +201,9 @@ struct infra_cp_stats_event {
 #ifdef CONFIG_WLAN_BMISS
 	struct bmiss_infra_cp_stats_event *bmiss_infra_cp_stats;
 #endif
+#ifdef WLAN_TELEMETRY_STATS_SUPPORT
+	struct ctrl_path_pmlo_telemetry_stats_struct *telemetry_stats;
+#endif
 	/* Extend with other required infra_cp_stats structs */
 };
 
@@ -155,6 +212,7 @@ enum infra_cp_stats_action {
 	ACTION_REQ_CTRL_PATH_STAT_RESET,
 	ACTION_REQ_CTRL_PATH_STAT_START,
 	ACTION_REQ_CTRL_PATH_STAT_STOP,
+	ACTION_REQ_CTRL_PATH_STAT_PERIODIC_PUBLISH,
 };
 
 enum infra_cp_stats_id {
@@ -163,6 +221,7 @@ enum infra_cp_stats_id {
 	TYPE_REQ_CTRL_PATH_MEM_STAT,
 	TYPE_REQ_CTRL_PATH_TWT_STAT,
 	TYPE_REQ_CTRL_PATH_BMISS_STAT,
+	TYPE_REQ_CTRL_PATH_PMLO_STAT,
 };
 
 /**
@@ -199,5 +258,6 @@ struct infra_cp_stats_cmd_info {
 #endif
 	void (*infra_cp_stats_resp_cb)(struct infra_cp_stats_event *ev,
 				       void *cookie);
+	uint32_t stat_periodicity;
 };
 #endif

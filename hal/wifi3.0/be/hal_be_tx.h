@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -832,7 +832,7 @@ hal_tx_mcast_mlo_reinject_routing_set(
 }
 #endif
 
-/*
+/**
  * hal_reo_config_reo2ppe_dest_info() - Configure reo2ppe dest info
  * @hal_soc_hdl: HAL SoC Context
  *
@@ -847,7 +847,7 @@ void hal_reo_config_reo2ppe_dest_info(hal_soc_handle_t hal_soc_hdl)
 		hal_soc->ops->hal_reo_config_reo2ppe_dest_info(hal_soc_hdl);
 }
 
-/*
+/**
  * hal_tx_get_num_ppe_vp_tbl_entries() - Get the total number of VP table
  * @hal_soc: HAL SoC Context
  *
@@ -859,6 +859,20 @@ uint32_t hal_tx_get_num_ppe_vp_tbl_entries(hal_soc_handle_t hal_soc_hdl)
 	struct hal_soc *hal_soc = (struct hal_soc *)hal_soc_hdl;
 
 	return hal_soc->ops->hal_tx_get_num_ppe_vp_tbl_entries(hal_soc_hdl);
+}
+
+/**
+ * hal_tx_get_num_ppe_vp_search_idx_tbl_entries() - Get the total number of search idx registers
+ * @hal_soc: HAL SoC Context
+ *
+ * Return: Total number of entries.
+ */
+static inline
+uint32_t hal_tx_get_num_ppe_vp_search_idx_tbl_entries(hal_soc_handle_t hal_soc_hdl)
+{
+	struct hal_soc *hal_soc = (struct hal_soc *)hal_soc_hdl;
+
+	return hal_soc->ops->hal_tx_get_num_ppe_vp_search_idx_tbl_entries(hal_soc_hdl);
 }
 
 /**
@@ -899,18 +913,20 @@ hal_tx_populate_ppe_vp_entry(hal_soc_handle_t hal_soc_hdl,
  * hal_ppeds_cfg_ast_override_map_reg - Set ppe index mapping table value
  * @hal_soc: HAL SoC context
  * @reg_idx: index into the table
- * @ppeds_astoveride_map: HAL PPE INDEX MAPPING config
+ * @overide_map: HAL PPE INDEX MAPPING config
  *
  * Return: void
  */
 static inline void
 hal_ppeds_cfg_ast_override_map_reg(hal_soc_handle_t hal_soc_hdl,
-	uint8_t reg_idx, union hal_tx_ppe_idx_map_config *ppeds_astoveride_map)
+	uint8_t reg_idx, union hal_tx_ppe_idx_map_config *overide_map)
 {
 	struct hal_soc *hal_soc = (struct hal_soc *)hal_soc_hdl;
 
-	hal_soc->ops->hal_ppeds_cfg_ast_override_map_reg(hal_soc_hdl, reg_idx,
-							 ppeds_astoveride_map);
+	if (hal_soc->ops->hal_ppeds_cfg_ast_override_map_reg)
+		hal_soc->ops->hal_ppeds_cfg_ast_override_map_reg(hal_soc_hdl,
+								 reg_idx,
+								 overide_map);
 }
 
 /**

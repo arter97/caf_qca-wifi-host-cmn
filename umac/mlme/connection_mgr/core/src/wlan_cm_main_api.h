@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2012-2015, 2020-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -50,6 +50,24 @@
 #define CM_PREFIX_REF(vdev_id, cm_id) (vdev_id), (cm_id)
 
 /*************** CONNECT APIs ****************/
+
+/**
+ * cm_fill_failure_resp_from_cm_id() - This API will fill failure connect
+ * response
+ * @cm_ctx: connection manager context
+ * @resp: connect failure resp
+ * @cm_id: cm_id for connect response to be filled.
+ * @reason: connect failure reason
+ *
+ * This function will fill connect failure response structure with the provided
+ * reason with the help of given cm id.
+ *
+ * Return: void
+ */
+void cm_fill_failure_resp_from_cm_id(struct cnx_mgr *cm_ctx,
+				     struct wlan_cm_connect_resp *resp,
+				     wlan_cm_id cm_id,
+				     enum wlan_cm_connect_fail_reason reason);
 
 /**
  * cm_connect_start() - This API will be called to initiate the connect
@@ -119,6 +137,7 @@ QDF_STATUS cm_connect_scan_start(struct cnx_mgr *cm_ctx,
 /**
  * cm_connect_scan_resp() - Handle the connect scan resp and next action
  * scan if no candidate are found in scan db.
+ * @cm_ctx: connection manager context
  * @scan_id: scan id of the req
  * @status: Connect scan status
  *
@@ -252,7 +271,7 @@ QDF_STATUS cm_connect_complete(struct cnx_mgr *cm_ctx,
 /**
  * cm_add_connect_req_to_list() - add connect req to the connection manager
  * req list
- * @vdev: vdev on which connect is received
+ * @cm_ctx: connection manager context
  * @req: Connection req provided
  *
  * Return: QDF status
@@ -368,7 +387,7 @@ QDF_STATUS cm_disconnect_complete(struct cnx_mgr *cm_ctx,
 /**
  * cm_add_disconnect_req_to_list() - add disconnect req to the connection
  * manager req list
- * @vdev: vdev on which connect is received
+ * @cm_ctx: connection manager context
  * @req: Disconnection req provided
  *
  * Return: QDF status
@@ -433,9 +452,9 @@ QDF_STATUS cm_vdev_down_req(struct wlan_objmgr_vdev *vdev, uint32_t status);
 /**
  * cm_disconnect_rsp() - Connection manager api to post connect event
  * @vdev: VDEV object
- * @cm_discon_rsp: Disconnect response
+ * @resp: Disconnect response
  *
- * This function is called when disconnecte response is received, to deliver
+ * This function is called when disconnect response is received, to deliver
  * disconnect event to SM
  *
  * Context: Any context.
@@ -837,6 +856,7 @@ cm_fill_disconnect_resp_from_cm_id(struct cnx_mgr *cm_ctx, wlan_cm_id cm_id,
  * @cm_ctx: connection manager context
  * @bcn_probe: beacon or probe resp received during connect
  * @len: beacon or probe resp length
+ * @freq: scan frequency in MHz
  * @rssi: rssi of the beacon or probe resp
  * @cm_id: cm id of connect/disconnect req
  *
@@ -1007,7 +1027,7 @@ bool cm_get_active_connect_req(struct wlan_objmgr_vdev *vdev,
 bool cm_get_active_disconnect_req(struct wlan_objmgr_vdev *vdev,
 				  struct wlan_cm_vdev_discon_req *req);
 
-/*
+/**
  * cm_connect_handle_event_post_fail() - initiate connect failure if msg posting
  * to SM fails
  * @cm_ctx: connection manager context
@@ -1114,7 +1134,7 @@ void cm_req_history_del(struct cnx_mgr *cm_ctx,
 			enum cm_req_del_type del_type);
 
 /**
- * cm_history_init() - Initialize the history data struct
+ * cm_req_history_init() - Initialize the history data struct
  * @cm_ctx: Connection manager context
  *
  * Return: void
@@ -1122,7 +1142,7 @@ void cm_req_history_del(struct cnx_mgr *cm_ctx,
 void cm_req_history_init(struct cnx_mgr *cm_ctx);
 
 /**
- * cm_history_deinit() - Deinitialize the history data struct
+ * cm_req_history_deinit() - Deinitialize the history data struct
  * @cm_ctx: Connection manager context
  *
  * Return: void
@@ -1130,7 +1150,7 @@ void cm_req_history_init(struct cnx_mgr *cm_ctx);
 void cm_req_history_deinit(struct cnx_mgr *cm_ctx);
 
 /**
- * cm_history_print() - Print the history data struct
+ * cm_req_history_print() - Print the history data struct
  * @cm_ctx: Connection manager context
  *
  * Return: void
@@ -1204,4 +1224,75 @@ void cm_set_candidate_custom_sort_cb(
  * Return: void
  */
 bool cm_is_connect_req_reassoc(struct wlan_cm_connect_req *req);
+
+#ifdef CONN_MGR_ADV_FEATURE
+/**
+ * cm_free_connect_rsp_ies() - Function to free all connection IEs.
+ * @connect_rsp: pointer to connect rsp
+ *
+ * Function to free up all the IE in connect response structure.
+ *
+ * Return: void
+ */
+void cm_free_connect_rsp_ies(struct wlan_cm_connect_resp *connect_rsp);
+
+/**
+ * cm_store_first_candidate_rsp() - store the connection failure response
+ * @cm_ctx: connection manager context
+ * @cm_id: cm_id for connect response to be filled
+ * @resp: first connect failure response
+ *
+ * This API would be called when candidate fails to connect. It will cache the
+ * first connect failure response in connect req structure.
+ *
+ * Return: void
+ */
+void cm_store_first_candidate_rsp(struct cnx_mgr *cm_ctx, wlan_cm_id cm_id,
+				  struct wlan_cm_connect_resp *resp);
+
+/**
+ * cm_get_first_candidate_rsp() - fetch first candidate response
+ * @cm_ctx: connection manager context
+ * @cm_id: cm_id for connect response to be filled
+ * @first_candid_rsp: first connect failure response
+ *
+ * This API would be called when last candidate is failed to connect. It will
+ * fetch the first candidate failure response which was cached in connect
+ * request structure.
+ *
+ * Return: QDF_STATUS_SUCCESS when rsp is fetch successfully
+ */
+QDF_STATUS
+cm_get_first_candidate_rsp(struct cnx_mgr *cm_ctx, wlan_cm_id cm_id,
+			   struct wlan_cm_connect_resp *first_candid_rsp);
+
+/**
+ * cm_store_n_send_failed_candidate() - stored failed connect response and sent
+ * it to osif.
+ * @cm_ctx: connection manager context
+ * @cm_id: connection manager id
+ *
+ * This API will stored failed connect response in connect request structure
+ * and sent it to osif layer.
+ *
+ * Return: void
+ */
+void cm_store_n_send_failed_candidate(struct cnx_mgr *cm_ctx, wlan_cm_id cm_id);
+#else
+static inline
+void cm_free_connect_rsp_ies(struct wlan_cm_connect_resp *connect_rsp)
+{
+}
+
+static inline
+void cm_store_first_candidate_rsp(struct cnx_mgr *cm_ctx, wlan_cm_id cm_id,
+				  struct wlan_cm_connect_resp *resp)
+{
+}
+
+static inline
+void cm_store_n_send_failed_candidate(struct cnx_mgr *cm_ctx, wlan_cm_id cm_id)
+{
+}
+#endif /* CONN_MGR_ADV_FEATURE */
 #endif /* __WLAN_CM_MAIN_API_H__ */
