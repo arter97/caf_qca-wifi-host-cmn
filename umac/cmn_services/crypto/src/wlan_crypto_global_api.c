@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2017-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -2600,6 +2600,8 @@ wlan_crypto_rsn_keymgmt_to_suite(uint32_t keymgmt)
 		return RSN_AUTH_KEY_MGMT_FT_802_1X_SUITE_B_384;
 	case WLAN_CRYPTO_KEY_MGMT_SAE_EXT_KEY:
 		return RSN_AUTH_KEY_MGMT_SAE_EXT_KEY;
+	case WLAN_CRYPTO_KEY_MGMT_FT_SAE_EXT_KEY:
+		return RSN_AUTH_KEY_MGMT_FT_SAE_EXT_KEY;
 	}
 
 	return status;
@@ -2760,6 +2762,8 @@ static int32_t wlan_crypto_rsn_suite_to_keymgmt(const uint8_t *sel)
 		return WLAN_CRYPTO_KEY_MGMT_PSK_SHA384;
 	case RSN_AUTH_KEY_MGMT_SAE_EXT_KEY:
 		return WLAN_CRYPTO_KEY_MGMT_SAE_EXT_KEY;
+	case RSN_AUTH_KEY_MGMT_FT_SAE_EXT_KEY:
+		return WLAN_CRYPTO_KEY_MGMT_FT_SAE_EXT_KEY;
 	}
 
 	return status;
