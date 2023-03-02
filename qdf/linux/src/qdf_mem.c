@@ -2039,6 +2039,12 @@ void qdf_mem_multi_pages_alloc(qdf_device_t osdev,
 	struct qdf_mem_dma_page_t *dma_pages;
 	void **cacheable_pages = NULL;
 	uint16_t i;
+#ifdef ALLOC_CONTIGUOUS_MULTI_PAGE
+	struct qdf_mem_dma_page_t temp_dma_pages;
+	struct qdf_mem_dma_page_t *total_dma_pages = &temp_dma_pages;
+	qdf_size_t total_size = 0;
+	pages->contiguous_dma_pages = false;
+#endif
 
 	if (!pages->page_size)
 		pages->page_size = qdf_page_size;
@@ -2076,6 +2082,35 @@ void qdf_mem_multi_pages_alloc(qdf_device_t osdev,
 			goto out_fail;
 
 		dma_pages = pages->dma_pages;
+#ifdef ALLOC_CONTIGUOUS_MULTI_PAGE
+		total_size = pages->page_size * pages->num_pages;
+		total_dma_pages->page_v_addr_start =
+			qdf_mem_alloc_consistent(osdev, osdev->dev,
+				total_size,
+				&total_dma_pages->page_p_addr);
+		total_dma_pages->page_v_addr_end =
+			total_dma_pages->page_v_addr_start + total_size;
+		if (!total_dma_pages->page_v_addr_start) {
+			qdf_print("qdf_mem_alloc_consistent fail, total_size: %zu",
+				total_size);
+			goto page_alloc_default;
+		}
+
+		pages->contiguous_dma_pages = true;
+		for (page_idx = 0; page_idx < pages->num_pages; page_idx++) {
+			dma_pages->page_v_addr_start =
+				total_dma_pages->page_v_addr_start + (pages->page_size * page_idx);
+			dma_pages->page_p_addr =
+				total_dma_pages->page_p_addr + (pages->page_size * page_idx);
+			dma_pages->page_v_addr_end =
+				dma_pages->page_v_addr_start + pages->page_size;
+			dma_pages++;
+		}
+		pages->cacheable_pages = NULL;
+		return;
+
+page_alloc_default:
+#endif	/* ALLOC_CONTIGUOUS_MULTI_PAGE */
 		for (page_idx = 0; page_idx < pages->num_pages; page_idx++) {
 			dma_pages->page_v_addr_start =
 				qdf_mem_alloc_consistent(osdev, osdev->dev,
@@ -2136,6 +2171,9 @@ void qdf_mem_multi_pages_free(qdf_device_t osdev,
 {
 	unsigned int page_idx;
 	struct qdf_mem_dma_page_t *dma_pages;
+#ifdef ALLOC_CONTIGUOUS_MULTI_PAGE
+	qdf_size_t total_size = 0;
+#endif
 
 	if (!pages->page_size)
 		pages->page_size = qdf_page_size;
@@ -2146,6 +2184,16 @@ void qdf_mem_multi_pages_free(qdf_device_t osdev,
 		qdf_mem_free(pages->cacheable_pages);
 	} else {
 		dma_pages = pages->dma_pages;
+#ifdef ALLOC_CONTIGUOUS_MULTI_PAGE
+		total_size = pages->page_size * pages->num_pages;
+		if (pages->contiguous_dma_pages) {
+			qdf_mem_free_consistent(
+				osdev, osdev->dev, total_size,
+				dma_pages->page_v_addr_start,
+				dma_pages->page_p_addr, memctxt);
+			goto pages_free_default;
+		}
+#endif
 		for (page_idx = 0; page_idx < pages->num_pages; page_idx++) {
 			qdf_mem_free_consistent(
 				osdev, osdev->dev, pages->page_size,
@@ -2153,6 +2201,9 @@ void qdf_mem_multi_pages_free(qdf_device_t osdev,
 				dma_pages->page_p_addr, memctxt);
 			dma_pages++;
 		}
+#ifdef ALLOC_CONTIGUOUS_MULTI_PAGE
+pages_free_default:
+#endif
 		qdf_mem_free(pages->dma_pages);
 	}
 
