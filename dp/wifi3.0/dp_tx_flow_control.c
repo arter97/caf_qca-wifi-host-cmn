@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2015-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -25,6 +25,7 @@
 #include <qdf_util.h>           /* qdf_unlikely */
 #include "dp_types.h"
 #include "dp_tx_desc.h"
+#include "dp_peer.h"
 
 #include <cdp_txrx_handle.h>
 #include "dp_internal.h"
@@ -204,13 +205,6 @@ dp_tx_flow_ctrl_reset_subqueues(struct dp_soc *soc,
 
 #endif
 
-/**
- * dp_tx_dump_flow_pool_info() - dump global_pool and flow_pool info
- *
- * @ctx: Handle to struct dp_soc.
- *
- * Return: none
- */
 void dp_tx_dump_flow_pool_info(struct cdp_soc_t *soc_hdl)
 {
 	struct dp_soc *soc = cdp_soc_t_to_dp_soc(soc_hdl);
@@ -392,6 +386,8 @@ struct dp_tx_desc_pool_s *dp_tx_create_flow_pool(struct dp_soc *soc,
 static bool dp_is_tx_flow_pool_delete_allowed(struct dp_soc *soc,
 					      uint8_t vdev_id)
 {
+	struct dp_peer *peer;
+	struct dp_peer *tmp_peer;
 	struct dp_vdev *vdev = NULL;
 	bool is_allow = true;
 
@@ -406,9 +402,19 @@ static bool dp_is_tx_flow_pool_delete_allowed(struct dp_soc *soc,
 	 * then it's not allowed to delete current pool, for legacy
 	 * connection, allowed always.
 	 */
-	is_allow = policy_mgr_is_mlo_sta_disconnected(
-			(struct wlan_objmgr_psoc *)soc->ctrl_psoc,
-			vdev_id);
+	qdf_spin_lock_bh(&vdev->peer_list_lock);
+	TAILQ_FOREACH_SAFE(peer, &vdev->peer_list,
+			   peer_list_elem,
+			   tmp_peer) {
+		if (dp_peer_get_ref(soc, peer, DP_MOD_ID_CONFIG) ==
+					QDF_STATUS_SUCCESS) {
+			if (peer->valid && !peer->sta_self_peer)
+				is_allow = false;
+			dp_peer_unref_delete(peer, DP_MOD_ID_CONFIG);
+		}
+	}
+	qdf_spin_unlock_bh(&vdev->peer_list_lock);
+
 comp_ret:
 	if (vdev)
 		dp_vdev_unref_delete(soc, vdev, DP_MOD_ID_MISC);
@@ -652,7 +658,7 @@ void dp_tx_flow_pool_unmap_handler(struct dp_pdev *pdev, uint8_t flow_id,
 
 /**
  * dp_tx_flow_control_init() - Initialize tx flow control
- * @tx_desc_pool: Handle to flow_pool
+ * @soc: Handle to struct dp_soc
  *
  * Return: none
  */
@@ -663,7 +669,7 @@ void dp_tx_flow_control_init(struct dp_soc *soc)
 
 /**
  * dp_tx_desc_pool_dealloc() - De-allocate tx desc pool
- * @tx_desc_pool: Handle to flow_pool
+ * @soc: Handle to struct dp_soc
  *
  * Return: none
  */
@@ -684,7 +690,7 @@ static inline void dp_tx_desc_pool_dealloc(struct dp_soc *soc)
 
 /**
  * dp_tx_flow_control_deinit() - Deregister fw based tx flow control
- * @tx_desc_pool: Handle to flow_pool
+ * @soc: Handle to struct dp_soc
  *
  * Return: none
  */
@@ -697,7 +703,7 @@ void dp_tx_flow_control_deinit(struct dp_soc *soc)
 
 /**
  * dp_txrx_register_pause_cb() - Register pause callback
- * @ctx: Handle to struct dp_soc
+ * @handle: Handle to struct dp_soc
  * @pause_cb: Tx pause_cb
  *
  * Return: none

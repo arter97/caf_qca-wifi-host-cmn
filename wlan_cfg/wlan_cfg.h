@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2013-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -106,6 +106,8 @@
 #define WLAN_MAX_MLO_CHIPS 1
 #endif
 
+#define UMAC_RESET_IPC 451
+
 struct wlan_cfg_dp_pdev_ctxt;
 
 /**
@@ -153,6 +155,8 @@ struct wlan_srng_cfg {
  * @num_nss_reo_dest_rings:
  * @num_tx_desc_pool: Number of Tx Descriptor pools
  * @num_tx_ext_desc_pool: Number of Tx MSDU extension Descriptor pools
+ * @num_global_tx_desc: Number of Global Tx Descriptors allowed
+ * @num_global_spcl_tx_desc: Number of Global special Tx Descriptors allowed
  * @num_tx_desc: Number of Tx Descriptors per pool
  * @num_tx_spl_desc: Number of Tx Descriptors per pool to handle special frames
  * @min_tx_desc: Minimum number of Tx Descriptors per pool
@@ -305,6 +309,7 @@ struct wlan_srng_cfg {
  * @ppe2tcl_ring: PPE2TCL ring size
  * @ppeds_num_tx_desc: Number of tx descs for PPE DS
  * @ppeds_tx_comp_napi_budget: Napi budget for tx completions
+ * @ppeds_tx_desc_hotlist_len: PPE DS tx desc hotlist max length
  * @pkt_capture_mode: Packet capture mode config
  * @rx_mon_buf_ring_size: Rx monitor buf ring size
  * @tx_mon_buf_ring_size: Tx monitor buf ring size
@@ -327,6 +332,8 @@ struct wlan_srng_cfg {
  * @notify_frame_support: flag indicating capability to mark notify frames
  * @is_handle_invalid_decap_type_disabled: flag to indicate if invalid decap
  *                                         type handling is disabled
+ * @tx_pkt_inspect_for_ilp: flag to indicate if TX packet inspection for HW
+ *			    based ILP feature is enabled
  */
 struct wlan_cfg_dp_soc_ctxt {
 	int num_int_ctxts;
@@ -342,6 +349,8 @@ struct wlan_cfg_dp_soc_ctxt {
 	int num_nss_reo_dest_rings;
 	int num_tx_desc_pool;
 	int num_tx_ext_desc_pool;
+	int num_global_tx_desc;
+	int num_global_spcl_tx_desc;
 	int num_tx_desc;
 	int num_tx_spl_desc;
 	int min_tx_desc;
@@ -483,6 +492,7 @@ struct wlan_cfg_dp_soc_ctxt {
 	int ppe2tcl_ring;
 	int ppeds_num_tx_desc;
 	int ppeds_tx_comp_napi_budget;
+	int ppeds_tx_desc_hotlist_len;
 #endif
 #ifdef WLAN_FEATURE_PKT_CAPTURE_V2
 	uint32_t pkt_capture_mode;
@@ -516,6 +526,9 @@ struct wlan_cfg_dp_soc_ctxt {
 	uint8_t napi_scale_factor;
 	uint8_t notify_frame_support;
 	bool is_handle_invalid_decap_type_disabled;
+#ifdef DP_TX_PACKET_INSPECT_FOR_ILP
+	bool tx_pkt_inspect_for_ilp;
+#endif
 };
 
 /**
@@ -1179,6 +1192,23 @@ bool wlan_cfg_get_raw_mode_war(struct wlan_cfg_dp_soc_ctxt *cfg);
  * @num_pool: Number of pool
  */
 void wlan_cfg_set_num_tx_ext_desc_pool(struct wlan_cfg_dp_soc_ctxt *cfg, int num_pool);
+
+/**
+ * wlan_cfg_get_num_global_tx_desc() - Number of global Tx Descriptors allowed
+ * @wlan_cfg_ctx: Configuration Handle
+ *
+ * Return: num_global_tx_desc
+ */
+int wlan_cfg_get_num_global_tx_desc(struct wlan_cfg_dp_soc_ctxt *wlan_cfg_ctx);
+
+/**
+ * wlan_cfg_get_num_global_spcl_tx_desc() - Number of global special Tx Descriptors
+ * allowed
+ * @wlan_cfg_ctx: Configuration Handle
+ *
+ * Return: num_global_spcl_tx_desc
+ */
+int wlan_cfg_get_num_global_spcl_tx_desc(struct wlan_cfg_dp_soc_ctxt *wlan_cfg_ctx);
 
 /**
  * wlan_cfg_get_num_tx_desc() - Number of Tx Descriptors per pool
@@ -2111,6 +2141,14 @@ int
 wlan_cfg_get_dp_soc_ppeds_num_tx_desc(struct wlan_cfg_dp_soc_ctxt *cfg);
 
 /**
+ * wlan_cfg_get_dp_soc_ppeds_tx_desc_hotlist_len() - Max hotlist len of tx descs
+ * @cfg: Configuration Handle
+ *
+ * Return: hotlist len
+ */
+int
+wlan_cfg_get_dp_soc_ppeds_tx_desc_hotlist_len(struct wlan_cfg_dp_soc_ctxt *cfg);
+/**
  * wlan_cfg_get_dp_soc_ppeds_tx_comp_napi_budget() - ppeds Tx comp napi budget
  * @cfg: Configuration Handle
  *
@@ -2145,6 +2183,12 @@ wlan_cfg_get_dp_soc_ppeds_num_tx_desc(struct wlan_cfg_dp_soc_ctxt *cfg)
 
 static inline int
 wlan_cfg_get_dp_soc_ppeds_tx_comp_napi_budget(struct wlan_cfg_dp_soc_ctxt *cfg)
+{
+	return 0;
+}
+
+static inline int
+wlan_cfg_get_dp_soc_ppeds_tx_desc_hotlist_len(struct wlan_cfg_dp_soc_ctxt *cfg)
 {
 	return 0;
 }

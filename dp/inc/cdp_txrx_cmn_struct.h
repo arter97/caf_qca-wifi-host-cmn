@@ -621,6 +621,22 @@ struct cdp_mscs_params {
 #endif
 
 /**
+ * struct cdp_ds_vp_params - Direct Switch related params
+ * @dev: Net device
+ * @peer_id: peer id
+ * @ppe_vp_profile_idx: VP profile index in be soc
+ * @wds_ext_mode: flag to indicate wds ext.
+ * @ppe_vp_type: VP type flag.
+ */
+struct cdp_ds_vp_params {
+	struct net_device *dev;
+	uint32_t peer_id;
+	int8_t ppe_vp_profile_idx;
+	bool wds_ext_mode;
+	unsigned long ppe_vp_type;
+};
+
+/**
  * enum cdp_sec_type - security type information
  * @cdp_sec_type_none:
  * @cdp_sec_type_wep128:
@@ -662,6 +678,7 @@ enum cdp_sec_type {
  * @is_intrabss_fwd:
  * @ppdu_cookie: 16-bit ppdu cookie that has to be replayed back in completions
  * @is_wds_extended:
+ * @is_mlo_mcast: Indicates if mlo_mcast enable or not
  *
  * This structure holds the parameters needed in the exception path of tx
  *
@@ -676,6 +693,9 @@ struct cdp_tx_exception_metadata {
 	uint16_t ppdu_cookie;
 #ifdef QCA_SUPPORT_WDS_EXTENDED
 	uint8_t is_wds_extended;
+#endif
+#ifdef WLAN_MCAST_MLO
+	uint8_t is_mlo_mcast;
 #endif
 };
 
@@ -2041,6 +2061,7 @@ struct cdp_delayed_tx_completion_ppdu_user {
  * @punc_mode: puncutured mode to indicate punctured bw
  * @punc_pattern_bitmap: bitmap indicating punctured pattern
  * @mprot_type: medium protection type
+ * @msduq_bitmap: msduq bitmap
  * @rts_success: rts success
  * @rts_failure: rts failure
  */
@@ -2147,6 +2168,7 @@ struct cdp_tx_completion_ppdu_user {
 	uint32_t mpdu_bytes;
 	uint8_t punc_mode;
 	uint16_t punc_pattern_bitmap;
+	uint32_t msduq_bitmap;
 	uint8_t mprot_type:3,
 		rts_success:1,
 		rts_failure:1;
@@ -2313,6 +2335,15 @@ struct cdp_tx_mgmt_comp_info {
  * @sched_cmdid: schedule command id
  * @phy_ppdu_tx_time_us: Phy per PPDU TX duration
  * @ppdu_bytes: accumulated bytes per ppdu for mem limit feature
+ * @htt_seq_type: Seq type
+ * @txmode_type: tx mode type UL/DL
+ * @txmode: tx mode
+ * @num_ul_users: Number of UL expected users
+ * @ch_access_delay: Channel access delay
+ * @backoff_ac_valid: Backoff AC valid
+ * @backoff_ac: Backoff AC
+ * @num_ul_user_resp_valid: Number of UL users response valid
+ * @num_ul_user_resp: Number of UL users response
  * @user: per-User stats (array of per-user structures)
  */
 struct cdp_tx_completion_ppdu {
@@ -2358,6 +2389,15 @@ struct cdp_tx_completion_ppdu {
 	uint16_t sched_cmdid;
 	uint16_t phy_ppdu_tx_time_us;
 	uint32_t ppdu_bytes;
+	uint8_t htt_seq_type;
+	uint8_t txmode_type;
+	uint8_t txmode;
+	uint32_t num_ul_users;
+	uint32_t ch_access_delay;
+	uint32_t backoff_ac_valid;
+	uint32_t backoff_ac;
+	uint32_t num_ul_user_resp_valid;
+	uint32_t num_ul_user_resp;
 	struct cdp_tx_completion_ppdu_user user[];
 };
 
@@ -3061,4 +3101,20 @@ struct cdp_pdev_attach_params {
 	uint8_t pdev_id;
 	uint32_t mlo_link_id;
 };
+
+/*
+ * cdp_txrx_peer_params_update
+ *
+ * @osif_vdev: Handle for OS shim virtual device
+ * @peer_mac: Peer mac address
+ * @chip_id: CHIP ID
+ * @pdev_id: PDEV ID
+ */
+struct cdp_txrx_peer_params_update {
+	void	*osif_vdev;
+	uint8_t	*peer_mac;
+	uint8_t	chip_id;
+	uint8_t	pdev_id;
+};
+
 #endif
