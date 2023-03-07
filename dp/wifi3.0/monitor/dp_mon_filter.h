@@ -437,9 +437,9 @@ dp_mon_filter_reset_mon_srng(struct dp_soc *soc, struct dp_pdev *pdev,
  * @mon_pdev: DP pdev handle
  * @filter: DP mon filter
  *
- * Return: QDF_STATUS
+ * Return: None
  */
-void dp_mon_filter_set_mon_cmn(struct dp_mon_pdev *mon_pdev,
+void dp_mon_filter_set_mon_cmn(struct dp_pdev *pdev,
 			       struct dp_mon_filter *filter);
 
 /**
