@@ -1689,6 +1689,7 @@ int dp_ipa_ring_resource_setup(struct dp_soc *soc,
 	ix0_map[6] = REO_REMAP_FW;
 	ix0_map[7] = REO_REMAP_FW;
 
+	dp_ipa_opt_dp_ixo_remap(ix0_map);
 	ix0 = hal_gen_reo_remap_val(soc->hal_soc, HAL_REO_REMAP_REG_IX0,
 				    ix0_map);
 
@@ -3408,15 +3409,18 @@ static inline bool dp_ipa_peer_check(struct dp_soc *soc,
 static inline bool dp_ipa_peer_check(struct dp_soc *soc,
 				     uint8_t *peer_mac_addr, uint8_t vdev_id)
 {
+	struct cdp_peer_info peer_info = {0};
 	struct dp_peer *peer = NULL;
 
-	peer = dp_peer_find_hash_find(soc, peer_mac_addr, 0, vdev_id,
-				      DP_MOD_ID_IPA);
-	if (!peer) {
-		return false;
-	} else {
+	DP_PEER_INFO_PARAMS_INIT(&peer_info, vdev_id, peer_mac_addr, false,
+				 CDP_WILD_PEER_TYPE);
+
+	peer = dp_peer_hash_find_wrapper(soc, &peer_info, DP_MOD_ID_IPA);
+	if (peer) {
 		dp_peer_unref_delete(peer, DP_MOD_ID_IPA);
 		return true;
+	} else {
+		return false;
 	}
 }
 #endif

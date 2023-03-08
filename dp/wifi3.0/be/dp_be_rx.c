@@ -44,10 +44,12 @@
 static inline void
 dp_rx_update_flow_info(qdf_nbuf_t nbuf, uint8_t *rx_tlv_hdr)
 {
+	/* Set the flow idx valid flag only when there is no timeout */
+	if (hal_rx_msdu_flow_idx_timeout_be(rx_tlv_hdr))
+		return;
+
 	qdf_nbuf_set_rx_flow_idx_valid(nbuf,
 				 !hal_rx_msdu_flow_idx_invalid_be(rx_tlv_hdr));
-	qdf_nbuf_set_rx_flow_idx_timeout(nbuf,
-				 hal_rx_msdu_flow_idx_timeout_be(rx_tlv_hdr));
 }
 #else
 static inline void
@@ -105,12 +107,22 @@ static inline void dp_wds_ext_peer_learn_be(struct dp_soc *soc,
 		return;
 
 	if (qdf_nbuf_is_rx_chfrag_start(nbuf) &&
-	    hal_rx_get_mpdu_mac_ad4_valid_be(rx_tlv_hdr)) {
+	    (qdf_nbuf_is_fr_ds_set(nbuf) && qdf_nbuf_is_to_ds_set(nbuf))) {
 		qdf_atomic_test_and_set_bit(WDS_EXT_PEER_INIT_BIT,
 					    &ta_txrx_peer->wds_ext.init);
 
-		ta_base_peer = dp_peer_get_ref_by_id(soc, ta_txrx_peer->peer_id,
-						     DP_MOD_ID_RX);
+		if (qdf_unlikely(ta_txrx_peer->nawds_enabled &&
+				 ta_txrx_peer->mld_peer)) {
+			ta_base_peer = dp_get_primary_link_peer_by_id(
+							soc,
+							ta_txrx_peer->peer_id,
+							DP_MOD_ID_RX);
+		} else {
+			ta_base_peer = dp_peer_get_ref_by_id(
+							soc,
+							ta_txrx_peer->peer_id,
+							DP_MOD_ID_RX);
+		}
 
 		if (!ta_base_peer)
 			return;
