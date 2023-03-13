@@ -21436,6 +21436,8 @@ static void populate_tlv_service(uint32_t *wmi_service)
 #endif
 	wmi_service[wmi_service_wpa3_sha384_roam_support] =
 			WMI_SERVICE_WMI_SERVICE_WPA3_SHA384_ROAM_SUPPORT;
+	wmi_service[wmi_service_self_mld_roam_between_dbs_and_hbs] =
+			WMI_SERVICE_SELF_MLD_ROAM_BETWEEN_DBS_AND_HBS;
 }
 
 /**
