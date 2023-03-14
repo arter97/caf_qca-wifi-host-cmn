@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -969,6 +969,9 @@ wlan_lmac_if_mlo_mgr_rx_ops_register(struct wlan_lmac_if_rx_ops *rx_ops)
 		mlo_process_link_set_active_resp;
 	rx_ops->mlo_rx_ops.process_mlo_vdev_tid_to_link_map_event =
 		wlan_mlo_vdev_tid_to_link_map_event;
+	rx_ops->mlo_rx_ops.process_mlo_link_state_info_event =
+		wlan_handle_ml_link_state_info_event;
+
 }
 #else
 static void
