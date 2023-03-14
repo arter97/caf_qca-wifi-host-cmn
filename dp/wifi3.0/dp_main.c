@@ -6348,7 +6348,7 @@ static void dp_soc_detach(struct cdp_soc_t *txrx_soc)
 	}
 
 	qdf_mem_free(soc->cdp_soc.ops);
-	qdf_mem_free(soc);
+	qdf_mem_vfree(soc);
 }
 
 /*
