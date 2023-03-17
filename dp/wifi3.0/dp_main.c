@@ -2013,7 +2013,7 @@ void *dp_context_alloc_mem(struct dp_soc *soc, enum dp_ctxt_type ctxt_type,
 dynamic_alloc:
 	dp_info("switch to dynamic-alloc for type %d, size %zu",
 		ctxt_type, ctxt_size);
-	ctxt_mem = qdf_mem_valloc(ctxt_size);
+	ctxt_mem = qdf_mem_malloc(ctxt_size);
 end:
 	return ctxt_mem;
 }
@@ -2034,7 +2034,7 @@ void dp_context_free_mem(struct dp_soc *soc, enum dp_ctxt_type ctxt_type,
 
 	if (QDF_IS_STATUS_ERROR(status)) {
 		dp_info("Context type %d not pre-allocated", ctxt_type);
-		qdf_mem_vfree(vaddr);
+		qdf_mem_free(vaddr);
 	}
 }
 
@@ -6348,7 +6348,7 @@ static void dp_soc_detach(struct cdp_soc_t *txrx_soc)
 	}
 
 	qdf_mem_free(soc->cdp_soc.ops);
-	qdf_mem_vfree(soc);
+	qdf_mem_free(soc);
 }
 
 /*
@@ -15186,7 +15186,7 @@ dp_soc_attach(struct cdp_ctrl_objmgr_psoc *ctrl_psoc,
 		goto fail0;
 	}
 	arch_id = cdp_get_arch_type_from_devid(device_id);
-	soc = qdf_mem_valloc(dp_get_soc_context_size(device_id));
+	soc = qdf_mem_malloc(dp_get_soc_context_size(device_id));
 	if (!soc) {
 		dp_err("DP SOC memory allocation failed");
 		goto fail0;
@@ -15303,7 +15303,7 @@ fail3:
 fail2:
 	qdf_mem_free(soc->cdp_soc.ops);
 fail1:
-	qdf_mem_vfree(soc);
+	qdf_mem_free(soc);
 fail0:
 	return NULL;
 }
