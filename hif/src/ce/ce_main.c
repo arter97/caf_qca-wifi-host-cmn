@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2013-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -40,6 +40,7 @@
 #include "ce_tasklet.h"
 #include "qdf_module.h"
 #include <wbuff.h>
+#include "qdf_ssr_driver_dump.h"
 
 #define CE_POLL_TIMEOUT 10      /* ms */
 
@@ -2123,6 +2124,22 @@ uint32_t hif_ce_history_max = HIF_CE_HISTORY_MAX;
 struct hif_ce_desc_event
 	hif_ce_desc_history_buff[CE_DESC_HISTORY_BUFF_CNT][HIF_CE_HISTORY_MAX];
 
+static void __hif_ce_desc_history_log_register(void)
+{
+	qdf_ssr_driver_dump_register_region("hif_ce_desc_history",
+					    hif_ce_desc_history,
+					    sizeof(hif_ce_desc_history));
+	qdf_ssr_driver_dump_register_region("hif_ce_desc_history_buff",
+					    hif_ce_desc_history_buff,
+					    sizeof(hif_ce_desc_history_buff));
+}
+
+static void __hif_ce_desc_history_log_unregister(void)
+{
+	qdf_ssr_driver_dump_unregister_region("hif_ce_desc_history_buff");
+	qdf_ssr_driver_dump_unregister_region("hif_ce_desc_history");
+}
+
 static struct hif_ce_desc_event *
 	hif_ce_debug_history_buf_get(struct hif_softc *scn, unsigned int ce_id)
 {
@@ -2207,6 +2224,11 @@ static void free_mem_ce_debug_history(struct hif_softc *scn, unsigned int ce_id)
 	ce_hist->hist_ev[ce_id] = NULL;
 }
 #else
+
+static void __hif_ce_desc_history_log_register(void) { }
+
+static void __hif_ce_desc_history_log_unregister(void) { }
+
 static inline QDF_STATUS
 alloc_mem_ce_debug_history(struct hif_softc *scn, unsigned int CE_id,
 			   uint32_t src_nentries)
@@ -2219,6 +2241,10 @@ free_mem_ce_debug_history(struct hif_softc *scn, unsigned int CE_id) { }
 #endif /* (HIF_CONFIG_SLUB_DEBUG_ON) || (HIF_CE_DEBUG_DATA_BUF) */
 #else
 #if defined(HIF_CE_DEBUG_DATA_BUF)
+
+static void __hif_ce_desc_history_log_register(void) { }
+
+static void __hif_ce_desc_history_log_unregister(void) { }
 
 static QDF_STATUS
 alloc_mem_ce_debug_history(struct hif_softc *scn, unsigned int CE_id,
@@ -2255,6 +2281,10 @@ static void free_mem_ce_debug_history(struct hif_softc *scn, unsigned int CE_id)
 }
 
 #else
+
+static void __hif_ce_desc_history_log_register(void) { }
+
+static void __hif_ce_desc_history_log_unregister(void) { }
 
 static inline QDF_STATUS
 alloc_mem_ce_debug_history(struct hif_softc *scn, unsigned int CE_id,
@@ -2525,6 +2555,11 @@ error_target_access:
 error_no_dma_mem:
 	ce_fini((struct CE_handle *)CE_state);
 	return NULL;
+}
+
+void hif_ce_desc_history_log_register(void)
+{
+	__hif_ce_desc_history_log_register();
 }
 
 /**
@@ -2817,6 +2852,11 @@ void ce_fini(struct CE_handle *copyeng)
 	qdf_spinlock_destroy(&CE_state->ce_interrupt_lock);
 #endif
 	qdf_mem_free(CE_state);
+}
+
+void hif_ce_desc_history_log_unregister(void)
+{
+	__hif_ce_desc_history_log_unregister();
 }
 
 void hif_detach_htc(struct hif_opaque_softc *hif_ctx)
