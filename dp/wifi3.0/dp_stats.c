@@ -3775,6 +3775,12 @@ static void dp_print_rx_pdev_rate_stats_tlv(struct dp_pdev *pdev,
 				DP_MAX_STRING_LEN - index,
 				" %u:%u,", i, dp_stats_buf->rx_mcs[i]);
 	}
+	for (i = 0; i <  DP_HTT_RX_MCS_EXT_LEN; i++) {
+		index += qdf_snprint(&str_buf[index],
+				DP_MAX_STRING_LEN - index,
+				" %u:%u,", i + DP_HTT_RX_MCS_LEN,
+				dp_stats_buf->rx_mcs_ext[i]);
+	}
 	DP_PRINT_STATS("rx_mcs = %s ", str_buf);
 
 	index = 0;
@@ -7315,8 +7321,6 @@ void dp_txrx_path_stats(struct dp_soc *soc)
 			       pdev->soc->stats.rx.err.reo_err_oor_to_stack);
 		DP_PRINT_STATS("REO err oor msdu drop: %u",
 			       pdev->soc->stats.rx.err.reo_err_oor_drop);
-		DP_PRINT_STATS("REO err raw mpdu drop: %u",
-			       pdev->soc->stats.rx.err.reo_err_raw_mpdu_drop);
 		DP_PRINT_STATS("Rx err msdu rejected: %d",
 			       soc->stats.rx.err.rejected);
 		DP_PRINT_STATS("Rx raw frame dropped: %d",
@@ -8033,9 +8037,6 @@ dp_print_soc_rx_stats(struct dp_soc *soc)
 	DP_PRINT_STATS("REO err oor msdu drop: %d",
 		       soc->stats.rx.err.reo_err_oor_drop);
 
-	DP_PRINT_STATS("REO err raw ampdu drop: %d",
-		       soc->stats.rx.err.reo_err_raw_mpdu_drop);
-
 	DP_PRINT_STATS("Rx err msdu rejected: %d",
 		       soc->stats.rx.err.rejected);
 
@@ -8088,6 +8089,8 @@ dp_print_soc_rx_stats(struct dp_soc *soc)
 		       soc->stats.rx.err.rx_invalid_tid_err);
 	DP_PRINT_STATS("Rx Defrag Address1 Invalid:%d",
 		       soc->stats.rx.err.defrag_ad1_invalid);
+	DP_PRINT_STATS("Rx decrypt error frame for valid peer:%d",
+		       soc->stats.rx.err.decrypt_err_drop);
 }
 
 #ifdef FEATURE_TSO_STATS
@@ -9029,8 +9032,6 @@ QDF_STATUS dp_txrx_get_soc_stats(struct cdp_soc_t *soc_hdl,
 			soc->stats.rx.err.reo_err_msdu_buf_invalid_cookie;
 	soc_stats->rx.err.rx_hw_err_oor_drop =
 					soc->stats.rx.err.reo_err_oor_drop;
-	soc_stats->rx.err.rx_hw_err_raw_mpdu_drop =
-					soc->stats.rx.err.reo_err_raw_mpdu_drop;
 	soc_stats->rx.err.rx_hw_err_oor_to_stack =
 					soc->stats.rx.err.reo_err_oor_to_stack;
 	soc_stats->rx.err.rx_hw_err_oor_sg_count =

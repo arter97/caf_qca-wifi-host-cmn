@@ -215,6 +215,18 @@ struct mlo_sta_csa_params {
 };
 
 /**
+ * mlo_sta_cu_params - critical update parameters in mlo mgr
+ * @vdev_id: vdev id
+ * @bpcc: bss parameter change count
+ * @initialized: flag about the parameter is valid or not
+ */
+struct mlo_sta_cu_params {
+	uint8_t vdev_id;
+	uint8_t bpcc;
+	bool initialized;
+};
+
+/**
  * struct mlo_sta_quiet_status - MLO sta quiet status
  * @link_id: link id
  * @quiet_status: true if corresponding ap in quiet status
@@ -235,6 +247,7 @@ struct mlo_sta_quiet_status {
  * @copied_conn_req_lock: lock for the original connect request
  * @assoc_rsp: Raw assoc response frame
  * @mlo_csa_param: CSA request parameters for mlo sta
+ * @mlo_cu_param: critical update parameters for mlo sta
  * @disconn_req: disconnect req params
  * @copied_reassoc_rsp: Reassoc response copied from assoc link roam handling
  *                      to re-use while link connect in case of deferred/need
@@ -254,6 +267,7 @@ struct wlan_mlo_sta {
 	struct element_info assoc_rsp;
 	struct mlo_sta_quiet_status mlo_quiet_status[WLAN_UMAC_MLO_MAX_VDEVS];
 	struct mlo_sta_csa_params mlo_csa_param[WLAN_UMAC_MLO_MAX_VDEVS];
+	struct mlo_sta_cu_params mlo_cu_param[WLAN_UMAC_MLO_MAX_VDEVS];
 	struct wlan_cm_disconnect_req *disconn_req;
 #ifdef WLAN_FEATURE_ROAM_OFFLOAD
 	struct wlan_cm_connect_resp *copied_reassoc_rsp;
@@ -566,6 +580,30 @@ struct mlo_probereq_info {
 };
 
 /**
+ * struct ml_rv_partner_link_info: Partner link information of an ML reconfig IE
+ * @link_id: Link id advertised by the AP
+ * @is_delete_timer_p: Delete timer is present or not
+ * @delete_timer: number of TBTTs of the AP
+ */
+struct ml_rv_partner_link_info {
+	uint8_t link_id;
+	uint8_t is_delete_timer_p;
+	uint16_t delete_timer;
+};
+
+/**
+ * struct ml_rv_info: Reconfig Multi link information of a 11be beacon
+ * @mld_mac_addr: MLD mac address
+ * @num_links: Number of links supported by ML AP
+ * @link_info: Array containing partner links information
+ */
+struct ml_rv_info {
+	struct qdf_mac_addr mld_mac_addr;
+	uint8_t num_links;
+	struct ml_rv_partner_link_info link_info[WLAN_UMAC_MLO_MAX_VDEVS];
+};
+
+/**
  * struct mlo_tgt_link_info – ML target link info
  * @vdev_id: link peer vdev id
  * @hw_mld_link_id: HW link id
@@ -651,6 +689,8 @@ struct mlo_mlme_ext_ops {
  *  Force inactive a number of links, firmware to decide which links to inactive
  * @MLO_LINK_FORCE_MODE_NO_FORCE:
  *  Cancel the force operation of specific links, allow firmware to decide
+ * @MLO_LINK_FORCE_MODE_ACTIVE_INACTIVE: Force specific links active and
+ *  force specific links inactive
  */
 enum mlo_link_force_mode {
 	MLO_LINK_FORCE_MODE_ACTIVE       = 1,
@@ -658,6 +698,7 @@ enum mlo_link_force_mode {
 	MLO_LINK_FORCE_MODE_ACTIVE_NUM   = 3,
 	MLO_LINK_FORCE_MODE_INACTIVE_NUM = 4,
 	MLO_LINK_FORCE_MODE_NO_FORCE     = 5,
+	MLO_LINK_FORCE_MODE_ACTIVE_INACTIVE = 6,
 };
 
 /**
@@ -666,10 +707,13 @@ enum mlo_link_force_mode {
  *  Set force specific links because of new connection
  * @MLO_LINK_FORCE_REASON_DISCONNECT:
  *  Set force specific links because of new dis-connection
+ * @MLO_LINK_FORCE_REASON_LINK_REMOVAL:
+ *  Set force specific links because of AP side link removal
  */
 enum mlo_link_force_reason {
 	MLO_LINK_FORCE_REASON_CONNECT    = 1,
 	MLO_LINK_FORCE_REASON_DISCONNECT = 2,
+	MLO_LINK_FORCE_REASON_LINK_REMOVAL = 3,
 };
 
 /**
@@ -708,21 +752,31 @@ struct mlo_link_num_param {
  * @reason: reason for the operation (enum mlo_link_force_reason)
  * @num_link_entry: number of the valid entries for link_num
  * @num_vdev_bitmap: number of the valid entries for vdev_bitmap
+ * @num_inactive_vdev_bitmap: number of the valid entries for
+ *  inactive_vdev_bitmap
  * @link_num: link number param array
  *  It's present only when force_mode is MLO_LINK_FORCE_MODE_ACTIVE_NUM or
  *  MLO_LINK_FORCE_MODE_INACTIVE_NUM
  * @vdev_bitmap: active/inactive vdev bitmap array
  *  It will be present when force_mode is MLO_LINK_FORCE_MODE_ACTIVE,
  *  MLO_LINK_FORCE_MODE_INACTIVE, MLO_LINK_FORCE_MODE_NO_FORCE,
- *  MLO_LINK_FORCE_MODE_ACTIVE_NUM or MLO_LINK_FORCE_MODE_INACTIVE_NUM
+ *  MLO_LINK_FORCE_MODE_ACTIVE_NUM or MLO_LINK_FORCE_MODE_INACTIVE_NUM,
+ *  and MLO_LINK_FORCE_MODE_ACTIVE_INACTIVE.
+ *  For MLO_LINK_FORCE_MODE_ACTIVE_INACTIVE, it includes the active vdev
+ *  bitmaps
+ * @inactive_vdev_bitmap: inactive vdev bitmap array
+ *  It will be present when force_mode is MLO_LINK_FORCE_MODE_ACTIVE_INACTIVE,
+ *  it includes the inactive vdev bitmaps
  */
 struct mlo_link_set_active_param {
 	uint32_t force_mode;
 	uint32_t reason;
 	uint32_t num_link_entry;
 	uint32_t num_vdev_bitmap;
+	uint32_t num_inactive_vdev_bitmap;
 	struct mlo_link_num_param link_num[MLO_LINK_NUM_SZ];
 	uint32_t vdev_bitmap[MLO_VDEV_BITMAP_SZ];
+	uint32_t inactive_vdev_bitmap[MLO_VDEV_BITMAP_SZ];
 };
 
 /**

@@ -49,6 +49,7 @@
 #endif
 
 const struct chan_map *channel_map;
+uint8_t g_reg_max_5g_chan_num;
 
 #ifdef WLAN_FEATURE_11BE
 static bool reg_is_chan_bit_punctured(uint16_t input_punc_bitmap,
@@ -1297,6 +1298,21 @@ const struct chan_map channel_map_china[NUM_CHANNELS] = {
 #endif /* CONFIG_BAND_6GHZ */
 };
 
+static uint8_t reg_calculate_max_5gh_enum(void)
+{
+	int16_t idx;
+	uint8_t max_valid_ieee_chan = INVALID_CHANNEL_NUM;
+
+	for (idx = MAX_5GHZ_CHANNEL; idx >= 0; idx--) {
+		if (channel_map[idx].chan_num != INVALID_CHANNEL_NUM) {
+			max_valid_ieee_chan = channel_map[idx].chan_num;
+			break;
+		}
+	}
+
+	return max_valid_ieee_chan;
+}
+
 void reg_init_channel_map(enum dfs_reg dfs_region)
 {
 	switch (dfs_region) {
@@ -1321,6 +1337,8 @@ void reg_init_channel_map(enum dfs_reg dfs_region)
 		channel_map = channel_map_global;
 		break;
 	}
+
+	g_reg_max_5g_chan_num = reg_calculate_max_5gh_enum();
 }
 
 #ifdef WLAN_FEATURE_11BE
@@ -3017,7 +3035,7 @@ qdf_freq_t reg_ch_to_freq(uint32_t ch_enum)
 
 uint8_t reg_max_5ghz_ch_num(void)
 {
-	return REG_MAX_5GHZ_CH_NUM;
+	return g_reg_max_5g_chan_num;
 }
 
 #ifdef CONFIG_CHAN_FREQ_API
@@ -9126,15 +9144,20 @@ reg_is_freq_idx_enabled_on_cur_chan_list(struct wlan_regulatory_pdev_priv_obj
 	return !reg_is_chan_disabled_and_not_nol(&cur_chan_list[freq_idx]);
 }
 
-static QDF_STATUS
-reg_get_min_max_bw_on_cur_chan_list(struct wlan_regulatory_pdev_priv_obj
-				*pdev_priv_obj,
-				enum channel_enum freq_idx,
-				uint16_t *min_bw,
-				uint16_t *max_bw)
+QDF_STATUS
+reg_get_min_max_bw_on_cur_chan_list(struct wlan_objmgr_pdev *pdev,
+				    enum channel_enum freq_idx,
+				    uint16_t *min_bw,
+				    uint16_t *max_bw)
 {
 	struct regulatory_channel *cur_chan_list;
+	struct wlan_regulatory_pdev_priv_obj *pdev_priv_obj;
 
+	pdev_priv_obj = reg_get_pdev_obj(pdev);
+	if (!IS_VALID_PDEV_REG_OBJ(pdev_priv_obj)) {
+		reg_err("reg pdev private obj is NULL");
+		return QDF_STATUS_E_FAILURE;
+	}
 	if (freq_idx >= NUM_CHANNELS)
 		return QDF_STATUS_E_FAILURE;
 
@@ -9247,7 +9270,8 @@ reg_get_min_max_bw_on_given_pwr_mode(struct wlan_regulatory_pdev_priv_obj
 		return QDF_STATUS_E_FAILURE;
 
 	if (freq_idx < MIN_6GHZ_CHANNEL)
-		return reg_get_min_max_bw_on_cur_chan_list(pdev_priv_obj,
+		return reg_get_min_max_bw_on_cur_chan_list(
+						       pdev_priv_obj->pdev_ptr,
 						       freq_idx,
 						       min_bw, max_bw);
 
@@ -9387,7 +9411,7 @@ reg_get_min_max_bw_on_given_pwr_mode(struct wlan_regulatory_pdev_priv_obj
 				     uint16_t *min_bw,
 				     uint16_t *max_bw)
 {
-	return reg_get_min_max_bw_on_cur_chan_list(pdev_priv_obj,
+	return reg_get_min_max_bw_on_cur_chan_list(pdev_priv_obj->pdev_ptr,
 						   freq_idx,
 						   min_bw, max_bw);
 }
@@ -9475,15 +9499,17 @@ QDF_STATUS reg_get_min_max_bw_reg_chan_list(struct wlan_objmgr_pdev *pdev,
 	}
 
 	if (freq_idx < MIN_6GHZ_CHANNEL)
-		return reg_get_min_max_bw_on_cur_chan_list(pdev_priv_obj,
-							   freq_idx,
-							   min_bw, max_bw);
+		return reg_get_min_max_bw_on_cur_chan_list(
+							pdev,
+							freq_idx,
+							min_bw, max_bw);
 
 	switch (in_6g_pwr_mode) {
 	case REG_CURRENT_PWR_MODE:
-		return reg_get_min_max_bw_on_cur_chan_list(pdev_priv_obj,
-							   freq_idx,
-							   min_bw, max_bw);
+		return reg_get_min_max_bw_on_cur_chan_list(
+							pdev,
+							freq_idx,
+							min_bw, max_bw);
 
 	case REG_BEST_PWR_MODE:
 	default:

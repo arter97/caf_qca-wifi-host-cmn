@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2017-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -1933,9 +1933,26 @@ struct cdp_throttle_ops {
  * @ipa_register_op_cb:
  * @ipa_get_stat:
  * @ipa_tx_data_frame:
+ * @ipa_set_uc_tx_partition_base:
+ * @ipa_update_peer_rx_stats:
+ * @ipa_uc_get_share_stats:
+ * @ipa_uc_set_quota:
+ * @ipa_pcie_link_up: Hold PCIe link in L0
+ * @ipa_pcie_link_down: Release PCIe link L0 hold
+ * @ipa_enable_autonomy:
+ * @ipa_disable_autonomy:
+ * @ipa_setup:
+ * @ipa_cleanup:
+ * @ipa_setup_iface:
+ * @ipa_cleanup_iface:
+ * @ipa_enable_pipes:
+ * @ipa_disable_pipes:
+ * @ipa_set_perf_level:
+ * @ipa_rx_intrabss_fwd:
  * @ipa_tx_buf_smmu_mapping: Create SMMU mappings for Tx
  * @ipa_tx_buf_smmu_unmapping: Release SMMU mappings for Tx
  * buffers to IPA
+ * @ipa_rx_super_rule_setup: Setup cce super rules based on filter tuple
  * @ipa_ast_create: Create/Update ast entry
  */
 struct cdp_ipa_ops {
@@ -1967,6 +1984,10 @@ struct cdp_ipa_ops {
 					     uint8_t reset_stats);
 	QDF_STATUS (*ipa_uc_set_quota)(struct cdp_soc_t *soc_hdl,
 				       uint8_t pdev_id, uint64_t quota_bytes);
+#endif
+#ifdef IPA_OPT_WIFI_DP
+	int (*ipa_pcie_link_up)(struct cdp_soc_t *soc_hdl);
+	void (*ipa_pcie_link_down)(struct cdp_soc_t *soc_hdl);
 #endif
 	QDF_STATUS (*ipa_enable_autonomy)(struct cdp_soc_t *soc_hdl,
 					  uint8_t pdev_id);
@@ -2021,6 +2042,10 @@ struct cdp_ipa_ops {
 						uint8_t pdev_id,
 						const char *func,
 						uint32_t line);
+#ifdef IPA_OPT_WIFI_DP
+	QDF_STATUS (*ipa_rx_super_rule_setup)(struct cdp_soc_t *soc_hdl,
+					      void *flt_params);
+#endif
 #ifdef IPA_WDS_EASYMESH_FEATURE
 	QDF_STATUS (*ipa_ast_create)(struct cdp_soc_t *soc_hdl,
 				     qdf_ipa_ast_info_type_t *data);

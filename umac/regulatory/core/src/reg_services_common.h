@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2017-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  *
  * Permission to use, copy, modify, and/or distribute this software for
@@ -41,7 +41,7 @@
 #define NUM_20_MHZ_CHAN_IN_160_MHZ_CHAN    8
 #define NUM_20_MHZ_CHAN_IN_320_MHZ_CHAN    16
 
-#define REG_MAX_5GHZ_CH_NUM channel_map[MAX_5GHZ_CHANNEL].chan_num
+#define REG_MAX_5GHZ_CH_NUM reg_max_5ghz_ch_num()
 
 #define REG_MIN_24GHZ_CH_FREQ channel_map[MIN_24GHZ_CHANNEL].center_freq
 #define REG_MAX_24GHZ_CH_FREQ channel_map[MAX_24GHZ_CHANNEL].center_freq
@@ -960,6 +960,21 @@ reg_is_freq_present_in_cur_chan_list(struct wlan_objmgr_pdev *pdev,
  * Return: Channel enum
  */
 enum channel_enum reg_get_chan_enum_for_freq(qdf_freq_t freq);
+
+/**
+ * reg_get_min_max_bw_on_cur_chan_list() - To get min and max BW supported
+ * by channel enum
+ * @pdev: pointer to pdev
+ * @chn_idx: enum channel_enum
+ * @min bw: min bw
+ * @max bw: max bw
+ *
+ * Return: SUCCESS/FAILURE
+ */
+QDF_STATUS
+reg_get_min_max_bw_on_cur_chan_list(struct wlan_objmgr_pdev *pdev,
+				    enum channel_enum chan_idx,
+				    uint16_t *min_bw, uint16_t *max_bw);
 
 /**
  * reg_get_channel_list_with_power_for_freq() - Provides the channel list with
