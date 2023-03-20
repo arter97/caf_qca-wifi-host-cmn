@@ -56,7 +56,8 @@
 #if (defined(QCA_WIFI_QCA8074) || defined(QCA_WIFI_QCA6290) || \
 	defined(QCA_WIFI_QCA6018) || defined(QCA_WIFI_QCA5018) || \
 	defined(QCA_WIFI_KIWI) || defined(QCA_WIFI_QCA5332) || \
-	defined(QCA_WIFI_QCA9574)) && !defined(QCA_WIFI_SUPPORT_SRNG)
+	defined(QCA_WIFI_QCA9574)) && !defined(QCA_WIFI_SUPPORT_SRNG) && \
+	!defined(QCA_WIFI_WCN6450)
 #define QCA_WIFI_SUPPORT_SRNG
 #endif
 
@@ -79,15 +80,6 @@ QDF_STATUS hif_post_recv_buffers_for_pipe(struct HIF_CE_pipe_info *pipe_info);
 #else
 #define BYPASS_QMI 0
 #endif
-
-#ifdef ENABLE_10_4_FW_HDR
-#if (ENABLE_10_4_FW_HDR == 1)
-#define WDI_IPA_SERVICE_GROUP 5
-#define WDI_IPA_TX_SVC MAKE_SERVICE_ID(WDI_IPA_SERVICE_GROUP, 0)
-#define HTT_DATA2_MSG_SVC MAKE_SERVICE_ID(HTT_SERVICE_GROUP, 1)
-#define HTT_DATA3_MSG_SVC MAKE_SERVICE_ID(HTT_SERVICE_GROUP, 2)
-#endif /* ENABLE_10_4_FW_HDR == 1 */
-#endif /* ENABLE_10_4_FW_HDR */
 
 static void hif_config_rri_on_ddr(struct hif_softc *scn);
 
@@ -1177,6 +1169,36 @@ static struct service_to_pipe target_service_to_ce_map_kiwi[] = {
 };
 #endif
 
+#ifdef QCA_WIFI_WCN6450
+static struct service_to_pipe target_service_to_ce_map_wcn6450[] = {
+	{ WMI_DATA_VO_SVC, PIPEDIR_OUT, 3, },
+	{ WMI_DATA_VO_SVC, PIPEDIR_IN, 2, },
+	{ WMI_DATA_BK_SVC, PIPEDIR_OUT, 3, },
+	{ WMI_DATA_BK_SVC, PIPEDIR_IN, 2, },
+	{ WMI_DATA_BE_SVC, PIPEDIR_OUT, 3, },
+	{ WMI_DATA_BE_SVC, PIPEDIR_IN, 2, },
+	{ WMI_DATA_VI_SVC, PIPEDIR_OUT, 3, },
+	{ WMI_DATA_VI_SVC, PIPEDIR_IN, 2, },
+	{ WMI_CONTROL_SVC, PIPEDIR_OUT, 3, },
+	{ WMI_CONTROL_SVC, PIPEDIR_IN, 2, },
+	{ HTC_CTRL_RSVD_SVC, PIPEDIR_OUT, 0, },
+	{ HTC_CTRL_RSVD_SVC, PIPEDIR_IN, 2, },
+	{ HTT_DATA_MSG_SVC, PIPEDIR_OUT, 4, },
+	{ HTT_DATA2_MSG_SVC, PIPEDIR_OUT, 5, },
+	{ HTT_DATA_MSG_SVC, PIPEDIR_IN, 1, },
+	{ HTT_DATA2_MSG_SVC, PIPEDIR_IN, 10, },
+	{ HTT_DATA3_MSG_SVC, PIPEDIR_IN, 11, },
+#ifdef WLAN_FEATURE_WMI_DIAG_OVER_CE7
+	{ WMI_CONTROL_DIAG_SVC, PIPEDIR_IN, 7, },
+#endif
+	/* (Additions here) */
+	{ 0, 0, 0, },
+};
+#else
+static struct service_to_pipe target_service_to_ce_map_wcn6450[] = {
+};
+#endif
+
 static struct service_to_pipe target_service_to_ce_map_ar900b[] = {
 	{
 		WMI_DATA_VO_SVC,
@@ -1451,9 +1473,15 @@ static void hif_select_service_to_pipe_map(struct hif_softc *scn,
 			break;
 		case TARGET_TYPE_KIWI:
 		case TARGET_TYPE_MANGO:
+		case TARGET_TYPE_PEACH:
 			hif_select_service_to_pipe_map_kiwi(scn,
 							 tgt_svc_map_to_use,
 							 sz_tgt_svc_map_to_use);
+			break;
+		case TARGET_TYPE_WCN6450:
+			*tgt_svc_map_to_use = target_service_to_ce_map_wcn6450;
+			*sz_tgt_svc_map_to_use =
+				 sizeof(target_service_to_ce_map_wcn6450);
 			break;
 		case TARGET_TYPE_QCA8074:
 			*tgt_svc_map_to_use = target_service_to_ce_map_qca8074;
@@ -1508,6 +1536,7 @@ static void hif_select_service_to_pipe_map(struct hif_softc *scn,
 					sizeof(struct service_to_pipe);
 }
 
+#ifndef QCA_WIFI_WCN6450
 /**
  * ce_mark_datapath() - marks the ce_state->htt_rx_data accordingly
  * @ce_state : pointer to the state context of the CE
@@ -1548,6 +1577,35 @@ static bool ce_mark_datapath(struct CE_state *ce_state)
 	}
 	return rc;
 }
+#else
+static bool ce_mark_datapath(struct CE_state *ce_state)
+{
+	struct service_to_pipe *svc_map;
+	uint32_t map_sz, map_len;
+	int i;
+
+	if (ce_state) {
+		hif_select_service_to_pipe_map(ce_state->scn, &svc_map,
+					       &map_sz);
+
+		map_len = map_sz / sizeof(struct service_to_pipe);
+		for (i = 0; i < map_len; i++) {
+			if ((svc_map[i].pipenum == ce_state->id) &&
+			    ((svc_map[i].service_id == HTT_DATA_MSG_SVC)  ||
+			     (svc_map[i].service_id == HTT_DATA2_MSG_SVC) ||
+			     (svc_map[i].service_id == HTT_DATA3_MSG_SVC)) &&
+			    (svc_map[i].pipedir == PIPEDIR_IN))
+				ce_state->htt_rx_data = true;
+			else if ((svc_map[i].pipenum == ce_state->id) &&
+				 (svc_map[i].service_id == HTT_DATA2_MSG_SVC) &&
+				 (svc_map[i].pipedir == PIPEDIR_OUT))
+				ce_state->htt_tx_data = true;
+		}
+	}
+
+	return (ce_state->htt_rx_data || ce_state->htt_tx_data);
+}
+#endif
 
 /**
  * hif_get_max_wmi_ep() - Get max WMI EPs configured in target svc map
@@ -1768,6 +1826,7 @@ bool ce_srng_based(struct hif_softc *scn)
 	case TARGET_TYPE_QCA5018:
 	case TARGET_TYPE_KIWI:
 	case TARGET_TYPE_MANGO:
+	case TARGET_TYPE_PEACH:
 	case TARGET_TYPE_QCN9224:
 	case TARGET_TYPE_QCA9574:
 	case TARGET_TYPE_QCA5332:
@@ -2878,7 +2937,7 @@ hif_send_head(struct hif_opaque_softc *hif_ctx,
 		 * Clear the packet offset for all but the first CE desc.
 		 */
 		if (i++ > 0)
-			data_attr &= ~QDF_CE_TX_PKT_OFFSET_BIT_M;
+			data_attr &= ~CE_DESC_PKT_OFFSET_BIT_M;
 
 		status = ce_sendlist_buf_add(&sendlist, frag_paddr,
 				    frag_bytes >
@@ -3666,6 +3725,39 @@ void hif_ce_stop(struct hif_softc *scn)
 	hif_state->started = false;
 }
 
+#ifdef CONFIG_SHADOW_V3
+void hif_preare_shadow_register_cfg_v3(struct hif_softc *scn)
+{
+	int shadow_cfg_idx = scn->num_shadow_registers_configured;
+	int i;
+
+	/* shadow reg config for CE SRC registers */
+	for (i = 0; i < scn->ce_count; i++) {
+		scn->shadow_regs[shadow_cfg_idx].addr =
+				CE_BASE_ADDRESS(i) + SR_WR_INDEX_ADDRESS;
+		shadow_cfg_idx++;
+	}
+
+	/* shadow reg config for CE DST registers */
+	for (i = 0; i < scn->ce_count; i++) {
+		scn->shadow_regs[shadow_cfg_idx].addr =
+				CE_BASE_ADDRESS(i) + DST_WR_INDEX_ADDRESS;
+		shadow_cfg_idx++;
+	}
+
+	scn->num_shadow_registers_configured = shadow_cfg_idx;
+}
+
+void hif_get_shadow_reg_config_v3(struct hif_softc *scn,
+				  struct pld_shadow_reg_v3_cfg **shadow_config,
+				  int *num_shadow_registers_configured)
+{
+	*shadow_config = scn->shadow_regs;
+	*num_shadow_registers_configured =
+				scn->num_shadow_registers_configured;
+}
+#endif
+
 static void hif_get_shadow_reg_cfg(struct hif_softc *scn,
 				   struct shadow_reg_cfg
 				   **target_shadow_reg_cfg_ret,
@@ -3820,8 +3912,8 @@ static inline QDF_STATUS hif_alloc_rri_on_ddr(struct hif_softc *scn)
 	qdf_dma_addr_t paddr_rri_on_ddr = 0;
 
 	scn->vaddr_rri_on_ddr =
-		(uint32_t *)qdf_mem_alloc_consistent(scn->qdf_dev,
-		scn->qdf_dev->dev, (CE_COUNT * sizeof(uint32_t)),
+		(void *)qdf_mem_alloc_consistent(scn->qdf_dev,
+		scn->qdf_dev->dev, RRI_ON_DDR_MEM_SIZE,
 		&paddr_rri_on_ddr);
 
 	if (!scn->vaddr_rri_on_ddr) {
@@ -3831,7 +3923,7 @@ static inline QDF_STATUS hif_alloc_rri_on_ddr(struct hif_softc *scn)
 
 	scn->paddr_rri_on_ddr = paddr_rri_on_ddr;
 
-	qdf_mem_zero(scn->vaddr_rri_on_ddr, CE_COUNT * sizeof(uint32_t));
+	qdf_mem_zero(scn->vaddr_rri_on_ddr, RRI_ON_DDR_MEM_SIZE);
 
 	return QDF_STATUS_SUCCESS;
 }
@@ -3857,8 +3949,8 @@ static inline void hif_config_rri_on_ddr(struct hif_softc *scn)
 	if (hif_alloc_rri_on_ddr(scn) != QDF_STATUS_SUCCESS)
 		return;
 
-	low_paddr  = BITS0_TO_31(scn->paddr_rri_on_ddr);
-	high_paddr = BITS32_TO_35(scn->paddr_rri_on_ddr);
+	low_paddr  = RRI_ON_DDR_PADDR_LOW(scn->paddr_rri_on_ddr);
+	high_paddr = RRI_ON_DDR_PADDR_HIGH(scn->paddr_rri_on_ddr);
 
 	hif_debug("using srri and drri from DDR");
 
@@ -3946,6 +4038,8 @@ int hif_wlan_enable(struct hif_softc *scn)
 	switch (tgt_info->target_type) {
 	case TARGET_TYPE_KIWI:
 	case TARGET_TYPE_MANGO:
+	case TARGET_TYPE_PEACH:
+	case TARGET_TYPE_WCN6450:
 		hif_prepare_hal_shadow_reg_cfg_v3(scn, &cfg);
 		break;
 	default:
@@ -4246,6 +4340,7 @@ void hif_ce_prepare_config(struct hif_softc *scn)
 		break;
 	case TARGET_TYPE_KIWI:
 	case TARGET_TYPE_MANGO:
+	case TARGET_TYPE_PEACH:
 		hif_ce_select_config_kiwi(hif_state);
 		scn->ce_count = KIWI_CE_COUNT;
 		break;
@@ -4266,7 +4361,12 @@ void hif_ce_prepare_config(struct hif_softc *scn)
 					sizeof(target_ce_config_wlan_adrastea);
 		}
 		break;
-
+	case TARGET_TYPE_WCN6450:
+		hif_state->host_ce_config = host_ce_config_wlan_wcn6450;
+		hif_state->target_ce_config = target_ce_config_wlan_wcn6450;
+		hif_state->target_ce_config_sz =
+				sizeof(target_ce_config_wlan_wcn6450);
+		break;
 	}
 	QDF_BUG(scn->ce_count <= CE_COUNT_MAX);
 }

@@ -80,18 +80,17 @@ static void dp_mlo_ctxt_detach_wifi3(struct cdp_mlo_ctxt *cdp_ml_ctxt)
 	qdf_mem_free(mlo_ctxt);
 }
 
-/*
- * dp_mlo_set_soc_by_chip_id() – Add DP soc to ML context soc list
- *
+/**
+ * dp_mlo_set_soc_by_chip_id() - Add DP soc to ML context soc list
  * @ml_ctxt: DP ML context handle
  * @soc: DP soc handle
  * @chip_id: MLO chip id
  *
  * Return: void
  */
-void dp_mlo_set_soc_by_chip_id(struct dp_mlo_ctxt *ml_ctxt,
-			       struct dp_soc *soc,
-			       uint8_t chip_id)
+static void dp_mlo_set_soc_by_chip_id(struct dp_mlo_ctxt *ml_ctxt,
+				      struct dp_soc *soc,
+				      uint8_t chip_id)
 {
 	qdf_spin_lock_bh(&ml_ctxt->ml_soc_list_lock);
 	ml_ctxt->ml_soc_list[chip_id] = soc;
@@ -107,16 +106,6 @@ void dp_mlo_set_soc_by_chip_id(struct dp_mlo_ctxt *ml_ctxt,
 	qdf_spin_unlock_bh(&ml_ctxt->ml_soc_list_lock);
 }
 
-/*
- * dp_mlo_get_soc_ref_by_chip_id() – Get DP soc from DP ML context.
- * This API will increment a reference count for DP soc. Caller has
- * to take care for decrementing refcount.
- *
- * @ml_ctxt: DP ML context handle
- * @chip_id: MLO chip id
- *
- * Return: dp_soc
- */
 struct dp_soc*
 dp_mlo_get_soc_ref_by_chip_id(struct dp_mlo_ctxt *ml_ctxt,
 			      uint8_t chip_id)
@@ -299,9 +288,9 @@ static void dp_mlo_soc_teardown(struct cdp_soc_t *soc_hdl,
 		return;
 
 	/* During the teardown drain the Rx buffers if any exist in the ring */
-	dp_mcast_mlo_iter_ptnr_soc(be_soc,
-				   dp_mlo_soc_drain_rx_buf,
-				   NULL);
+	dp_mlo_iter_ptnr_soc(be_soc,
+			     dp_mlo_soc_drain_rx_buf,
+			     NULL);
 
 	dp_mlo_set_soc_by_chip_id(mlo_ctxt, NULL, be_soc->mlo_chip_id);
 	be_soc->ml_ctxt = NULL;
@@ -467,6 +456,21 @@ void dp_clr_mlo_ptnr_list(struct dp_soc *soc, struct dp_vdev *vdev)
 	}
 }
 
+static QDF_STATUS
+dp_clear_mlo_ptnr_list(struct cdp_soc_t *soc_hdl, uint8_t self_vdev_id)
+{
+	struct dp_soc *soc = cdp_soc_t_to_dp_soc(soc_hdl);
+	struct dp_vdev *vdev;
+
+	vdev = dp_vdev_get_ref_by_id(soc, self_vdev_id, DP_MOD_ID_RX);
+	if (!vdev)
+		return QDF_STATUS_E_FAILURE;
+
+	dp_clr_mlo_ptnr_list(soc, vdev);
+	dp_vdev_unref_delete(soc, vdev, DP_MOD_ID_RX);
+	return QDF_STATUS_SUCCESS;
+}
+
 static void dp_mlo_setup_complete(struct cdp_mlo_ctxt *cdp_ml_ctxt)
 {
 	struct dp_mlo_ctxt *mlo_ctxt = cdp_mlo_ctx_to_dp(cdp_ml_ctxt);
@@ -535,6 +539,7 @@ static struct cdp_mlo_ops dp_mlo_ops = {
 	.mlo_soc_setup = dp_mlo_soc_setup,
 	.mlo_soc_teardown = dp_mlo_soc_teardown,
 	.update_mlo_ptnr_list = dp_update_mlo_ptnr_list,
+	.clear_mlo_ptnr_list = dp_clear_mlo_ptnr_list,
 	.mlo_setup_complete = dp_mlo_setup_complete,
 	.mlo_update_delta_tsf2 = dp_mlo_update_delta_tsf2,
 	.mlo_update_delta_tqm = dp_mlo_update_delta_tqm,
@@ -751,50 +756,6 @@ void dp_mlo_get_rx_hash_key(struct dp_soc *soc,
 		      LRO_IPV6_SEED_ARR_SZ));
 }
 
-void dp_mlo_set_rx_fst(struct dp_soc *soc, struct dp_rx_fst *fst)
-{
-	struct dp_soc_be *be_soc = dp_get_be_soc_from_dp_soc(soc);
-	struct dp_mlo_ctxt *ml_ctxt = be_soc->ml_ctxt;
-
-	if (be_soc->mlo_enabled && ml_ctxt)
-		ml_ctxt->rx_fst = fst;
-}
-
-struct dp_rx_fst *dp_mlo_get_rx_fst(struct dp_soc *soc)
-{
-	struct dp_soc_be *be_soc = dp_get_be_soc_from_dp_soc(soc);
-	struct dp_mlo_ctxt *ml_ctxt = be_soc->ml_ctxt;
-
-	if (be_soc->mlo_enabled && ml_ctxt)
-		return ml_ctxt->rx_fst;
-
-	return NULL;
-}
-
-void dp_mlo_rx_fst_ref(struct dp_soc *soc)
-{
-	struct dp_soc_be *be_soc = dp_get_be_soc_from_dp_soc(soc);
-	struct dp_mlo_ctxt *ml_ctxt = be_soc->ml_ctxt;
-
-	if (be_soc->mlo_enabled && ml_ctxt)
-		ml_ctxt->rx_fst_ref_cnt++;
-}
-
-uint8_t dp_mlo_rx_fst_deref(struct dp_soc *soc)
-{
-	struct dp_soc_be *be_soc = dp_get_be_soc_from_dp_soc(soc);
-	struct dp_mlo_ctxt *ml_ctxt = be_soc->ml_ctxt;
-	uint8_t rx_fst_ref_cnt;
-
-	if (be_soc->mlo_enabled && ml_ctxt) {
-		rx_fst_ref_cnt = ml_ctxt->rx_fst_ref_cnt;
-		ml_ctxt->rx_fst_ref_cnt--;
-		return rx_fst_ref_cnt;
-	}
-
-	return 1;
-}
-
 struct dp_soc *
 dp_rx_replensih_soc_get(struct dp_soc *soc, uint8_t chip_id)
 {
@@ -853,9 +814,9 @@ dp_soc_get_by_idle_bm_id(struct dp_soc *soc, uint8_t idle_bm_id)
 }
 
 #ifdef WLAN_MCAST_MLO
-void dp_mcast_mlo_iter_ptnr_soc(struct dp_soc_be *be_soc,
-				dp_ptnr_soc_iter_func func,
-				void *arg)
+void dp_mlo_iter_ptnr_soc(struct dp_soc_be *be_soc,
+			  dp_ptnr_soc_iter_func func,
+			  void *arg)
 {
 	int i = 0;
 	struct dp_mlo_ctxt *dp_mlo = be_soc->ml_ctxt;
@@ -870,7 +831,7 @@ void dp_mcast_mlo_iter_ptnr_soc(struct dp_soc_be *be_soc,
 	}
 }
 
-qdf_export_symbol(dp_mcast_mlo_iter_ptnr_soc);
+qdf_export_symbol(dp_mlo_iter_ptnr_soc);
 
 void dp_mcast_mlo_iter_ptnr_vdev(struct dp_soc_be *be_soc,
 				 struct dp_vdev_be *be_vdev,

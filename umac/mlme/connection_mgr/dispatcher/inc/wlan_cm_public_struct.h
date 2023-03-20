@@ -39,6 +39,9 @@ typedef uint32_t wlan_cm_id;
 	((STOP_RESPONSE_TIMER) + (DELETE_RESPONSE_TIMER) +\
 	 (RSO_STOP_RESPONSE_TIMER) + (1000))
 
+#define CM_DISCONNECT_ASSOC_VDEV_EXTRA_TIMEOUT \
+		(STOP_RESPONSE_TIMER + DELETE_RESPONSE_TIMER)
+
 /*
  * Disconnect command wait timeout VDEV timeouts + 5 sec buff for current active
  * command to complete
@@ -135,6 +138,7 @@ struct wlan_fils_con_info {
  * @CM_ROAMING_HOST: Roaming request initiated by host
  * @CM_ROAMING_NUD_FAILURE: Roaming request initiated by NUD failure
  * @CM_ROAMING_FW: Roam req initiated by FW
+ * @CM_ROAMING_LINK_REMOVAL: Roaming request initiate by link removal
  * @CM_OSIF_DISCONNECT: Disconnect req initiated by OSIF or north bound
  * @CM_PEER_DISCONNECT: Disconnect req initiated by peer sending deauth/disassoc
  * only for this localy generated will be false while indicating to kernel
@@ -158,6 +162,7 @@ enum wlan_cm_source {
 	CM_ROAMING_HOST,
 	CM_ROAMING_NUD_FAILURE,
 	CM_ROAMING_FW,
+	CM_ROAMING_LINK_REMOVAL,
 	CM_OSIF_DISCONNECT,
 	CM_PEER_DISCONNECT,
 	CM_SB_DISCONNECT,

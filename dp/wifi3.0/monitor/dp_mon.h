@@ -793,6 +793,8 @@ struct dp_mon_ops {
 				     struct htt_rx_ring_tlv_filter *tlv_filter);
 	void (*rx_wmask_subscribe)(uint32_t *msg_word,
 				   struct htt_rx_ring_tlv_filter *tlv_filter);
+	void (*rx_pkt_tlv_offset)(uint32_t *msg_word,
+				  struct htt_rx_ring_tlv_filter *tlv_filter);
 	void (*rx_enable_mpdu_logging)(uint32_t *msg_word,
 				       struct htt_rx_ring_tlv_filter *tlv_filter);
 	void (*rx_enable_fpmo)(uint32_t *msg_word,
@@ -822,6 +824,8 @@ struct dp_mon_ops {
 #endif
 	QDF_STATUS (*mon_pdev_ext_init)(struct dp_pdev *pdev);
 	QDF_STATUS (*mon_pdev_ext_deinit)(struct dp_pdev *pdev);
+	QDF_STATUS (*mon_rx_pdev_tlv_logger_init)(struct dp_pdev *pdev);
+	QDF_STATUS (*mon_rx_pdev_tlv_logger_deinit)(struct dp_pdev *pdev);
 	QDF_STATUS (*mon_lite_mon_alloc)(struct dp_pdev *pdev);
 	void (*mon_lite_mon_dealloc)(struct dp_pdev *pdev);
 	void (*mon_lite_mon_vdev_delete)(struct dp_pdev *pdev,
@@ -897,7 +901,29 @@ struct dp_mon_soc {
 #ifdef WLAN_TELEMETRY_STATS_SUPPORT
 struct dp_mon_peer_airtime_consumption {
 	uint32_t consumption;
-	uint32_t avg_consumption_per_sec;
+	uint16_t avg_consumption_per_sec;
+};
+
+/**
+ * struct dp_mon_peer_airtime_stats - Monitor peer airtime stats
+ * @tx_airtime_consumption: tx artime consumption of peer
+ * @rx_airtime_consumption: rx airtime consumption of peer
+ * @last_update_time: Time when last avergae of airtime is done
+ */
+struct dp_mon_peer_airtime_stats {
+	struct dp_mon_peer_airtime_consumption tx_airtime_consumption[WME_AC_MAX];
+	struct dp_mon_peer_airtime_consumption rx_airtime_consumption[WME_AC_MAX];
+	uint64_t last_update_time;
+};
+
+/**
+ * struct dp_mon_peer_deterministic - Monitor peer deterministic stats
+ * @deter: Deterministic stats per data tid
+ * @avg_tx_rate: Avg TX rate
+ */
+struct dp_mon_peer_deterministic {
+	struct cdp_peer_deter_stats deter[CDP_DATA_TID_MAX];
+	uint64_t avg_tx_rate;
 };
 #endif
 
@@ -905,14 +931,16 @@ struct dp_mon_peer_airtime_consumption {
  * struct dp_mon_peer_stats - Monitor peer stats
  * @tx: tx stats
  * @rx: rx stats
- * @airtime_consumption: airtime consumption per access category
+ * @airtime_stats: mon peer airtime stats
+ * @deter_stats: Deterministic stats
  */
 struct dp_mon_peer_stats {
 #ifdef QCA_ENHANCED_STATS_SUPPORT
 	dp_mon_peer_tx_stats tx;
 	dp_mon_peer_rx_stats rx;
 #ifdef WLAN_TELEMETRY_STATS_SUPPORT
-	struct dp_mon_peer_airtime_consumption airtime_consumption[WME_AC_MAX];
+	struct dp_mon_peer_airtime_stats airtime_stats;
+	struct dp_mon_peer_deterministic deter_stats;
 #endif
 #endif
 };
@@ -1036,7 +1064,7 @@ struct  dp_mon_pdev {
 	/* Neighnour peer list */
 	TAILQ_HEAD(, dp_neighbour_peer) neighbour_peers_list;
 	/* Enhanced Stats is enabled */
-	bool enhanced_stats_en;
+	uint8_t enhanced_stats_en;
 	qdf_nbuf_queue_t rx_status_q;
 
 	/* 128 bytes mpdu header queue per user for ppdu */
@@ -1144,6 +1172,8 @@ struct  dp_mon_pdev {
 	bool reset_scan_spcl_vap_stats_enable;
 #endif
 	bool is_tlv_hdr_64_bit;
+	/* TLV header size*/
+	uint8_t tlv_hdr_size;
 
 	/* Invalid monitor peer to account for stats in mcopy mode */
 	struct dp_mon_peer *invalid_mon_peer;
@@ -3804,6 +3834,7 @@ void dp_monitor_pdev_reset_scan_spcl_vap_stats_enable(struct dp_pdev *pdev,
 }
 #endif
 
+#if defined(CONFIG_MON_WORD_BASED_TLV)
 static inline void
 dp_mon_rx_wmask_subscribe(struct dp_soc *soc, uint32_t *msg_word,
 			  struct htt_rx_ring_tlv_filter *tlv_filter)
@@ -3824,6 +3855,34 @@ dp_mon_rx_wmask_subscribe(struct dp_soc *soc, uint32_t *msg_word,
 	}
 
 	monitor_ops->rx_wmask_subscribe(msg_word, tlv_filter);
+}
+#else
+static inline void
+dp_mon_rx_wmask_subscribe(struct dp_soc *soc, uint32_t *msg_word,
+			  struct htt_rx_ring_tlv_filter *tlv_filter)
+{
+}
+#endif
+
+static inline void
+dp_mon_rx_enable_pkt_tlv_offset(struct dp_soc *soc, uint32_t *msg_word,
+				struct htt_rx_ring_tlv_filter *tlv_filter)
+{
+	struct dp_mon_soc *mon_soc = soc->monitor_soc;
+	struct dp_mon_ops *monitor_ops;
+
+	if (!mon_soc) {
+		dp_mon_debug("mon soc is NULL");
+		return;
+	}
+
+	monitor_ops = mon_soc->mon_ops;
+	if (!monitor_ops || !monitor_ops->rx_pkt_tlv_offset) {
+		dp_mon_debug("callback not registered");
+		return;
+	}
+
+	monitor_ops->rx_pkt_tlv_offset(msg_word, tlv_filter);
 }
 
 static inline void
@@ -4234,7 +4293,29 @@ QDF_STATUS dp_pdev_get_rx_mon_stats(struct cdp_soc_t *soc_hdl, uint8_t pdev_id,
 bool dp_enable_mon_reap_timer(struct cdp_soc_t *soc_hdl,
 			      enum cdp_mon_reap_source source, bool enable);
 
+#ifdef QCA_ENHANCED_STATS_SUPPORT
 /**
+ * dp_enable_enhanced_stats() - enable enhanced and MLD Link Peer stats
+ * @soc: Datapath soc handle
+ * @pdev_id: Pdev Id on which stats will get enable
+ *
+ * Return: status success/failure
+ */
+QDF_STATUS
+dp_enable_enhanced_stats(struct cdp_soc_t *soc, uint8_t pdev_id);
+
+/**
+ * dp_disable_enhanced_stats() - disable enhanced and MLD Link Peer stats
+ * @soc: Datapath soc handle
+ * @pdev_id: Pdev Id on which stats will get disable
+ *
+ * Return: status success/failure
+ */
+QDF_STATUS
+dp_disable_enhanced_stats(struct cdp_soc_t *soc, uint8_t pdev_id);
+#endif /* QCA_ENHANCED_STATS_SUPPORT */
+
+/*
  * dp_monitor_lite_mon_disable_rx() - disables rx lite mon
  * @pdev: dp pdev
  *
@@ -4415,18 +4496,31 @@ void dp_monitor_peer_telemetry_stats(struct dp_peer *peer,
 
 	mon_peer_stats = &peer->monitor_peer->stats;
 	for (ac = 0; ac < WME_AC_MAX; ac++) {
-		/* consumption is in micro seconds, convert it to seconds and
-		 * then calculate %age per sec
-		 */
-		stats->airtime_consumption[ac] =
-			((mon_peer_stats->airtime_consumption[ac].avg_consumption_per_sec * 100) /
-			(1000000));
+		stats->tx_airtime_consumption[ac] =
+			mon_peer_stats->airtime_stats.tx_airtime_consumption[ac].avg_consumption_per_sec;
+		stats->rx_airtime_consumption[ac] =
+			mon_peer_stats->airtime_stats.rx_airtime_consumption[ac].avg_consumption_per_sec;
 	}
 	stats->tx_mpdu_retried = mon_peer_stats->tx.retries;
 	stats->tx_mpdu_total = mon_peer_stats->tx.tx_mpdus_tried;
 	stats->rx_mpdu_retried = mon_peer_stats->rx.mpdu_retry_cnt;
 	stats->rx_mpdu_total = mon_peer_stats->rx.rx_mpdus;
 	stats->snr = CDP_SNR_OUT(mon_peer_stats->rx.avg_snr);
+}
+
+static inline
+void dp_monitor_peer_deter_stats(struct dp_peer *peer,
+				 struct cdp_peer_deter_stats *stats)
+{
+	struct dp_mon_peer_stats *mon_peer_stats = NULL;
+	struct cdp_peer_deter_stats *deter_stats;
+
+	if (qdf_unlikely(!peer->monitor_peer))
+		return;
+
+	mon_peer_stats = &peer->monitor_peer->stats;
+	deter_stats = &mon_peer_stats->deter_stats.deter[0];
+	qdf_mem_copy(stats, deter_stats, sizeof(*stats) * CDP_DATA_TID_MAX);
 }
 #endif
 
@@ -4500,4 +4594,21 @@ dp_mon_rx_print_advanced_stats(struct dp_soc *soc,
 	}
 	return monitor_ops->mon_rx_print_advanced_stats(soc, pdev);
 }
+
+#ifdef WLAN_TELEMETRY_STATS_SUPPORT
+/*
+ * dp_update_pdev_mon_telemetry_airtime_stats() - update telemetry airtime
+ * stats in monitor pdev
+ *
+ *@soc: dp soc handle
+ *@pdev_id: pdev id
+ *
+ * This API is used to update telemetry airtime stats in monitor pdev
+ *
+ * Return: Success if stats are updated, else failure
+ */
+
+QDF_STATUS dp_pdev_update_telemetry_airtime_stats(struct cdp_soc_t *soc,
+						  uint8_t pdev_id);
+#endif
 #endif /* _DP_MON_H_ */

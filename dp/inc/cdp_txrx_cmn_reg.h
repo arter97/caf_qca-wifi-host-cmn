@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2011-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -57,6 +57,10 @@ ol_txrx_soc_handle
 ol_txrx_soc_attach(void *scn_handle, struct ol_if_ops *dp_ol_if_ops);
 #endif
 
+#if defined(QCA_WIFI_QCA8074) || defined(QCA_WIFI_QCA6018) || \
+	defined(QCA_WIFI_QCA5018) || defined(QCA_WIFI_QCA9574) || \
+	defined(QCA_WIFI_QCA5332)
+
 /**
  * dp_soc_attach_wifi3() - Attach txrx SOC
  * @ctrl_psoc:	Opaque SOC handle from Ctrl plane
@@ -64,6 +68,9 @@ ol_txrx_soc_attach(void *scn_handle, struct ol_if_ops *dp_ol_if_ops);
  *
  * Return: DP SOC handle on success, NULL on failure
  */
+struct cdp_soc_t *
+dp_soc_attach_wifi3(struct cdp_ctrl_objmgr_psoc *ctrl_psoc,
+		    struct cdp_soc_attach_params *params);
 
 /**
  * dp_soc_init_wifi3() - Initialize txrx SOC
@@ -77,12 +84,6 @@ ol_txrx_soc_attach(void *scn_handle, struct ol_if_ops *dp_ol_if_ops);
  *
  * Return: DP SOC handle on success, NULL on failure
  */
-#if defined(QCA_WIFI_QCA8074) || defined(QCA_WIFI_QCA6018) || \
-	defined(QCA_WIFI_QCA5018) || defined(QCA_WIFI_QCA9574) || \
-	defined(QCA_WIFI_QCA5332)
-struct cdp_soc_t *
-dp_soc_attach_wifi3(struct cdp_ctrl_objmgr_psoc *ctrl_psoc,
-		    struct cdp_soc_attach_params *params);
 void *dp_soc_init_wifi3(struct cdp_soc_t *soc,
 			struct cdp_ctrl_objmgr_psoc *ctrl_psoc,
 			struct hif_opaque_softc *hif_handle,
@@ -135,6 +136,7 @@ static inline int cdp_get_arch_type_from_devid(uint16_t devid)
 	case QCN9224_DEVICE_ID:
 	case QCA5332_DEVICE_ID:
 	case MANGO_DEVICE_ID:
+	case PEACH_DEVICE_ID:
 		return CDP_ARCH_TYPE_BE;
 	default:
 		return CDP_ARCH_TYPE_NONE;
@@ -180,6 +182,7 @@ ol_txrx_soc_handle cdp_soc_attach(u_int16_t devid,
 	case KIWI_DEVICE_ID:
 	case QCN9224_DEVICE_ID:
 	case MANGO_DEVICE_ID:
+	case PEACH_DEVICE_ID:
 	case QCA5332_DEVICE_ID:
 		return dp_soc_attach_wifi3(psoc, &params);
 	break;

@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2013-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -106,6 +106,8 @@
 #define WLAN_MAX_MLO_CHIPS 1
 #endif
 
+#define UMAC_RESET_IPC 451
+
 struct wlan_cfg_dp_pdev_ctxt;
 
 /**
@@ -153,6 +155,8 @@ struct wlan_srng_cfg {
  * @num_nss_reo_dest_rings:
  * @num_tx_desc_pool: Number of Tx Descriptor pools
  * @num_tx_ext_desc_pool: Number of Tx MSDU extension Descriptor pools
+ * @num_global_tx_desc: Number of Global Tx Descriptors allowed
+ * @num_global_spcl_tx_desc: Number of Global special Tx Descriptors allowed
  * @num_tx_desc: Number of Tx Descriptors per pool
  * @num_tx_spl_desc: Number of Tx Descriptors per pool to handle special frames
  * @min_tx_desc: Minimum number of Tx Descriptors per pool
@@ -294,6 +298,7 @@ struct wlan_srng_cfg {
  * @radio2_rx_default_reo:
  * @wow_check_rx_pending_enable: Enable RX frame pending check in WoW
  * @jitter_stats_enabled: true if jitter stats are enabled
+ * @peer_link_stats_enabled: true if MLO Peer Link stats are enabled
  * @ipa_tx_ring_size: IPA tx ring size
  * @ipa_tx_comp_ring_size: IPA tx completion ring size
  * @ipa_tx_alt_ring_size: IPA tx alt ring size
@@ -305,6 +310,7 @@ struct wlan_srng_cfg {
  * @ppe2tcl_ring: PPE2TCL ring size
  * @ppeds_num_tx_desc: Number of tx descs for PPE DS
  * @ppeds_tx_comp_napi_budget: Napi budget for tx completions
+ * @ppeds_tx_desc_hotlist_len: PPE DS tx desc hotlist max length
  * @pkt_capture_mode: Packet capture mode config
  * @rx_mon_buf_ring_size: Rx monitor buf ring size
  * @tx_mon_buf_ring_size: Tx monitor buf ring size
@@ -327,6 +333,10 @@ struct wlan_srng_cfg {
  * @notify_frame_support: flag indicating capability to mark notify frames
  * @is_handle_invalid_decap_type_disabled: flag to indicate if invalid decap
  *                                         type handling is disabled
+ * @tx_pkt_inspect_for_ilp: flag to indicate if TX packet inspection for HW
+ *			    based ILP feature is enabled
+ * @pointer_timer_threshold_rx: RX REO2SW ring pointer update timer threshold
+ * @pointer_num_threshold_rx: RX REO2SW ring pointer update entries threshold
  */
 struct wlan_cfg_dp_soc_ctxt {
 	int num_int_ctxts;
@@ -342,6 +352,8 @@ struct wlan_cfg_dp_soc_ctxt {
 	int num_nss_reo_dest_rings;
 	int num_tx_desc_pool;
 	int num_tx_ext_desc_pool;
+	int num_global_tx_desc;
+	int num_global_spcl_tx_desc;
 	int num_tx_desc;
 	int num_tx_spl_desc;
 	int min_tx_desc;
@@ -467,6 +479,7 @@ struct wlan_cfg_dp_soc_ctxt {
 	uint8_t radio2_rx_default_reo;
 	bool wow_check_rx_pending_enable;
 	bool jitter_stats_enabled;
+	bool peer_link_stats_enabled;
 #ifdef IPA_OFFLOAD
 	uint32_t ipa_tx_ring_size;
 	uint32_t ipa_tx_comp_ring_size;
@@ -483,6 +496,7 @@ struct wlan_cfg_dp_soc_ctxt {
 	int ppe2tcl_ring;
 	int ppeds_num_tx_desc;
 	int ppeds_tx_comp_napi_budget;
+	int ppeds_tx_desc_hotlist_len;
 #endif
 #ifdef WLAN_FEATURE_PKT_CAPTURE_V2
 	uint32_t pkt_capture_mode;
@@ -516,6 +530,11 @@ struct wlan_cfg_dp_soc_ctxt {
 	uint8_t napi_scale_factor;
 	uint8_t notify_frame_support;
 	bool is_handle_invalid_decap_type_disabled;
+#ifdef DP_TX_PACKET_INSPECT_FOR_ILP
+	bool tx_pkt_inspect_for_ilp;
+#endif
+	uint16_t pointer_timer_threshold_rx;
+	uint8_t pointer_num_threshold_rx;
 };
 
 /**
@@ -1179,6 +1198,23 @@ bool wlan_cfg_get_raw_mode_war(struct wlan_cfg_dp_soc_ctxt *cfg);
  * @num_pool: Number of pool
  */
 void wlan_cfg_set_num_tx_ext_desc_pool(struct wlan_cfg_dp_soc_ctxt *cfg, int num_pool);
+
+/**
+ * wlan_cfg_get_num_global_tx_desc() - Number of global Tx Descriptors allowed
+ * @wlan_cfg_ctx: Configuration Handle
+ *
+ * Return: num_global_tx_desc
+ */
+int wlan_cfg_get_num_global_tx_desc(struct wlan_cfg_dp_soc_ctxt *wlan_cfg_ctx);
+
+/**
+ * wlan_cfg_get_num_global_spcl_tx_desc() - Number of global special Tx Descriptors
+ * allowed
+ * @wlan_cfg_ctx: Configuration Handle
+ *
+ * Return: num_global_spcl_tx_desc
+ */
+int wlan_cfg_get_num_global_spcl_tx_desc(struct wlan_cfg_dp_soc_ctxt *wlan_cfg_ctx);
 
 /**
  * wlan_cfg_get_num_tx_desc() - Number of Tx Descriptors per pool
@@ -1964,6 +2000,27 @@ bool wlan_cfg_is_fst_in_cmem_enabled(struct wlan_cfg_dp_soc_ctxt *cfg);
  */
 bool wlan_cfg_is_swlm_enabled(struct wlan_cfg_dp_soc_ctxt *cfg);
 
+/**
+ * wlan_cfg_set_peer_link_stats() - set peer link stats
+ *
+ * @cfg: soc configuration context
+ * @val: Flag value read from INI
+ *
+ * Return: void
+ */
+void
+wlan_cfg_set_peer_link_stats(struct wlan_cfg_dp_soc_ctxt *cfg,
+			     bool val);
+/**
+ * wlan_cfg_is_peer_link_stats_enabled() - check if link peer stats are enabled
+ *
+ * @cfg: soc configuration context
+ *
+ * Return: bool
+ */
+bool
+wlan_cfg_is_peer_link_stats_enabled(struct wlan_cfg_dp_soc_ctxt *cfg);
+
 #ifdef IPA_OFFLOAD
 /**
  * wlan_cfg_ipa_tx_ring_size - Get Tx DMA ring size (TCL Data Ring)
@@ -2111,6 +2168,14 @@ int
 wlan_cfg_get_dp_soc_ppeds_num_tx_desc(struct wlan_cfg_dp_soc_ctxt *cfg);
 
 /**
+ * wlan_cfg_get_dp_soc_ppeds_tx_desc_hotlist_len() - Max hotlist len of tx descs
+ * @cfg: Configuration Handle
+ *
+ * Return: hotlist len
+ */
+int
+wlan_cfg_get_dp_soc_ppeds_tx_desc_hotlist_len(struct wlan_cfg_dp_soc_ctxt *cfg);
+/**
  * wlan_cfg_get_dp_soc_ppeds_tx_comp_napi_budget() - ppeds Tx comp napi budget
  * @cfg: Configuration Handle
  *
@@ -2145,6 +2210,12 @@ wlan_cfg_get_dp_soc_ppeds_num_tx_desc(struct wlan_cfg_dp_soc_ctxt *cfg)
 
 static inline int
 wlan_cfg_get_dp_soc_ppeds_tx_comp_napi_budget(struct wlan_cfg_dp_soc_ctxt *cfg)
+{
+	return 0;
+}
+
+static inline int
+wlan_cfg_get_dp_soc_ppeds_tx_desc_hotlist_len(struct wlan_cfg_dp_soc_ctxt *cfg)
 {
 	return 0;
 }
@@ -2384,4 +2455,25 @@ uint8_t wlan_cfg_get_napi_scale_factor(struct wlan_cfg_dp_soc_ctxt *cfg);
 void
 wlan_cfg_soc_update_tgt_params(struct wlan_cfg_dp_soc_ctxt *wlan_cfg_ctx,
 			       struct cdp_ctrl_objmgr_psoc *ctrl_obj);
+
+/**
+ * wlan_cfg_get_pointer_timer_threshold_rx() - Get timer threshold for RX
+ *                                             pointer update
+ * @cfg: soc configuration context
+ *
+ * Return: timer threshold for RX REO Dest ring  pointer update
+ */
+uint16_t
+wlan_cfg_get_pointer_timer_threshold_rx(struct wlan_cfg_dp_soc_ctxt *cfg);
+
+/**
+ * wlan_cfg_get_pointer_num_threshold_rx() - Get number threshold for RX
+ *                                           pointer update
+ * @cfg: soc configuration context
+ *
+ * Return: entries number threshold for RX REO Dest ring  pointer update
+ */
+uint8_t
+wlan_cfg_get_pointer_num_threshold_rx(struct wlan_cfg_dp_soc_ctxt *cfg);
+
 #endif /*__WLAN_CFG_H*/

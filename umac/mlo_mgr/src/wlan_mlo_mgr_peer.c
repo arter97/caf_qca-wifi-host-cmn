@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -24,6 +24,7 @@
 #include "wlan_mlo_mgr_peer.h"
 #include "wlan_mlo_mgr_ap.h"
 #include "wlan_crypto_global_api.h"
+#include "wlan_mlo_mgr_setup.h"
 
 static void mlo_partner_peer_create_post(struct wlan_mlo_dev_context *ml_dev,
 					 struct wlan_objmgr_vdev *vdev_link,
@@ -371,8 +372,53 @@ wlan_mlo_peer_deauth_init(struct wlan_mlo_peer_context *ml_peer,
 			deauth_sent = 1;
 		}
 	}
+}
 
-	return;
+void wlan_mlo_peer_delete(struct wlan_mlo_peer_context *ml_peer)
+{
+	struct wlan_mlo_dev_context *ml_dev;
+	struct wlan_objmgr_peer *link_peer;
+	struct wlan_objmgr_peer *link_peers[MAX_MLO_LINK_PEERS];
+	struct wlan_mlo_link_peer_entry *peer_entry;
+	uint16_t i;
+
+	if (!ml_peer)
+		return;
+
+	mlo_peer_lock_acquire(ml_peer);
+
+	if (ml_peer->mlpeer_state == ML_PEER_DISCONN_INITIATED) {
+		mlo_peer_lock_release(ml_peer);
+		return;
+	}
+
+	ml_dev = ml_peer->ml_dev;
+
+	for (i = 0; i < MAX_MLO_LINK_PEERS; i++) {
+		link_peers[i] = NULL;
+		peer_entry = &ml_peer->peer_list[i];
+		if (!peer_entry->link_peer)
+			continue;
+
+		link_peer = peer_entry->link_peer;
+
+		if (wlan_objmgr_peer_try_get_ref(link_peer, WLAN_MLO_MGR_ID) !=
+						QDF_STATUS_SUCCESS)
+			continue;
+
+		link_peers[i] = link_peer;
+	}
+
+	ml_peer->mlpeer_state = ML_PEER_DISCONN_INITIATED;
+
+	mlo_peer_lock_release(ml_peer);
+
+	for (i = 0; i < MAX_MLO_LINK_PEERS; i++) {
+		if (!link_peers[i])
+			continue;
+
+		mlo_link_peer_disconnect_notify(ml_dev, link_peers[i]);
+	}
 }
 
 void
@@ -588,6 +634,7 @@ static QDF_STATUS mlo_peer_attach_link_peer(
 			break;
 		}
 		peer_entry->link_peer = link_peer;
+		vdev->vdev_objmgr.wlan_ml_peer_count++;
 		qdf_copy_macaddr(&peer_entry->link_addr,
 				 (struct qdf_mac_addr *)&link_peer->macaddr[0]);
 
@@ -682,6 +729,7 @@ static QDF_STATUS mlo_peer_detach_link_peer(
 	struct wlan_mlo_link_peer_entry *peer_entry;
 	QDF_STATUS status = QDF_STATUS_E_RESOURCES;
 	uint16_t i;
+	struct wlan_objmgr_vdev *vdev;
 
 	mlo_peer_lock_acquire(ml_peer);
 
@@ -697,6 +745,9 @@ static QDF_STATUS mlo_peer_detach_link_peer(
 			qdf_nbuf_free(peer_entry->assoc_rsp_buf);
 			peer_entry->assoc_rsp_buf = NULL;
 		}
+		vdev =  wlan_peer_get_vdev(link_peer);
+		if (vdev)
+			vdev->vdev_objmgr.wlan_ml_peer_count--;
 
 		wlan_objmgr_peer_release_ref(link_peer, WLAN_MLO_MGR_ID);
 		peer_entry->link_peer = NULL;
@@ -780,6 +831,165 @@ wlan_mlo_peer_set_t2lm_enable_val(struct wlan_mlo_peer_context *ml_peer,
 				  struct mlo_partner_info *ml_info)
 {}
 #endif /* WLAN_FEATURE_11BE */
+
+#if defined(WLAN_FEATURE_11BE_MLO) && defined(WLAN_MLO_MULTI_CHIP)
+static struct wlan_objmgr_vdev*
+mlo_get_primary_umac_vdev(struct wlan_mlo_dev_context *ml_dev,
+			  uint8_t psoc_id)
+{
+	uint8_t i;
+	struct wlan_objmgr_vdev *link_vdev;
+
+	if (WLAN_OBJMGR_MAX_DEVICES <= psoc_id)
+		return NULL;
+
+	if (!ml_dev)
+		return NULL;
+
+	for (i = 0; i < WLAN_UMAC_MLO_MAX_VDEVS; i++) {
+		link_vdev = ml_dev->wlan_vdev_list[i];
+		if (!link_vdev)
+			continue;
+		if (psoc_id == wlan_vdev_get_psoc_id(link_vdev))
+			return link_vdev;
+	}
+
+	return NULL;
+}
+
+static
+QDF_STATUS mlo_bridge_peer_create_post(struct wlan_mlo_dev_context *ml_dev,
+				       struct wlan_mlo_peer_context *ml_peer,
+				       uint8_t psoc_id)
+{
+	struct peer_create_notif_s peer_create;
+	struct wlan_objmgr_vdev *vdev_link;
+	QDF_STATUS status;
+
+	vdev_link = mlo_get_primary_umac_vdev(ml_dev, psoc_id);
+
+	if (!vdev_link) {
+		mlo_err("VDEV derivation in unsuccessful");
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	if (wlan_objmgr_vdev_try_get_ref(vdev_link, WLAN_MLO_MGR_ID) !=
+							QDF_STATUS_SUCCESS) {
+		mlo_err("VDEV is not in created state");
+		return QDF_STATUS_E_FAILURE;
+	}
+	peer_create.vdev_link = vdev_link;
+	wlan_mlo_peer_get_ref(ml_peer);
+	peer_create.ml_peer = ml_peer;
+
+	qdf_copy_macaddr(&peer_create.addr,
+			 &ml_peer->peer_mld_addr);
+
+	peer_create.frm_buf = NULL;
+
+	status = mlo_msgq_post(MLO_BRIDGE_PEER_CREATE, ml_dev, &peer_create);
+	if (status != QDF_STATUS_SUCCESS) {
+		wlan_mlo_peer_release_ref(ml_peer);
+		wlan_objmgr_vdev_release_ref(vdev_link, WLAN_MLO_MGR_ID);
+	}
+
+	return status;
+}
+
+static QDF_STATUS
+wlan_mlo_check_and_create_bridge_peer(struct wlan_objmgr_vdev *vdev,
+				      struct wlan_mlo_peer_context *ml_peer,
+				      struct wlan_objmgr_vdev *link_vdevs[],
+				      uint8_t num_partner_links)
+{
+	struct wlan_mlo_dev_context *ml_dev;
+	struct wlan_objmgr_vdev *ml_vdev;
+	uint8_t psoc_ids[WLAN_NUM_TWO_LINK_PSOC];
+	uint8_t comp_psoc_id, i, is_adjacent;
+	uint8_t bridge_peer_psoc_id = WLAN_OBJMGR_MAX_DEVICES;
+	QDF_STATUS status;
+
+	if (wlan_vdev_mlme_get_opmode(vdev) != QDF_SAP_MODE)
+		return QDF_STATUS_SUCCESS;
+
+	/* Return from here for 3 link association */
+	if (WLAN_NUM_TWO_LINK_PSOC != num_partner_links)
+		return QDF_STATUS_SUCCESS;
+
+	ml_dev = vdev->mlo_dev_ctx;
+	if (!ml_dev)
+		return QDF_STATUS_E_FAILURE;
+
+	for (i = 0; i < WLAN_NUM_TWO_LINK_PSOC; i++)
+		psoc_ids[i] = wlan_vdev_get_psoc_id(link_vdevs[i]);
+
+	status = mlo_chip_adjacent(psoc_ids[0], psoc_ids[1],
+				   &is_adjacent);
+	if (QDF_STATUS_SUCCESS != status) {
+		mlo_err("Unable to get chip adjacency for " QDF_MAC_ADDR_FMT ", psoc_0 %u, psoc_1 %u",
+			QDF_MAC_ADDR_REF(ml_peer->peer_mld_addr.bytes),
+			psoc_ids[0], psoc_ids[1]);
+		return status;
+	}
+	if (is_adjacent)
+		return QDF_STATUS_SUCCESS;
+	for (i = 0; i < WLAN_UMAC_MLO_MAX_VDEVS; i++) {
+		ml_vdev = ml_dev->wlan_vdev_list[i];
+		if (!ml_vdev)
+			continue;
+		comp_psoc_id = wlan_vdev_get_psoc_id(ml_vdev);
+		if ((comp_psoc_id != psoc_ids[0]) &&
+		    (comp_psoc_id != psoc_ids[1])) {
+			bridge_peer_psoc_id = comp_psoc_id;
+			break;
+		}
+	}
+
+	if (bridge_peer_psoc_id >= WLAN_OBJMGR_MAX_DEVICES) {
+		mlo_err("Invalid psoc or psoc not found for " QDF_MAC_ADDR_FMT " psoc %u",
+			ether_sprintf(ml_peer->peer_mld_addr.bytes),
+			bridge_peer_psoc_id);
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	/* Check if derived psoc is adjecent to both links */
+	for (i = 0; i < WLAN_NUM_TWO_LINK_PSOC; i++) {
+		status = mlo_chip_adjacent(psoc_ids[i], bridge_peer_psoc_id,
+					   &is_adjacent);
+		if (QDF_STATUS_SUCCESS != status) {
+			mlo_err("Unable to get chip adjacency for " QDF_MAC_ADDR_FMT ", psoc_0 %u, psoc_1 %u",
+				QDF_MAC_ADDR_REF(ml_peer->peer_mld_addr.bytes),
+				psoc_ids[i], bridge_peer_psoc_id);
+			return status;
+		}
+		if (!is_adjacent) {
+			mlo_err("Derived psoc is not adjecent to one of the links for " QDF_MAC_ADDR_FMT ", psoc_0 %u, psoc_1 %u psoc_2 %u",
+				QDF_MAC_ADDR_REF(ml_peer->peer_mld_addr.bytes),
+				psoc_ids[0], psoc_ids[1], bridge_peer_psoc_id);
+			return QDF_STATUS_E_FAILURE;
+		}
+	}
+
+	/* Assign bridge peer PSOC as primary UMAC */
+	mlo_peer_overwrite_primary_umac(bridge_peer_psoc_id, ml_peer);
+	mlo_debug("Creating bridge peer for " QDF_MAC_ADDR_FMT " on psoc %u, is_adjacent %u",
+		  QDF_MAC_ADDR_REF(ml_peer->peer_mld_addr.bytes),
+		  bridge_peer_psoc_id, is_adjacent);
+	/* Create bridge peer */
+	status = mlo_bridge_peer_create_post(ml_dev, ml_peer,
+					     bridge_peer_psoc_id);
+	return status;
+}
+#else
+static QDF_STATUS
+wlan_mlo_check_and_create_bridge_peer(struct wlan_objmgr_vdev *vdev,
+				      struct wlan_mlo_peer_context *ml_peer,
+				      struct wlan_objmgr_vdev *link_vdevs[],
+				      uint8_t num_partner_links)
+{
+	return QDF_STATUS_SUCCESS;
+}
+#endif
 
 QDF_STATUS wlan_mlo_peer_create(struct wlan_objmgr_vdev *vdev,
 				struct wlan_objmgr_peer *link_peer,
@@ -993,6 +1203,16 @@ QDF_STATUS wlan_mlo_peer_create(struct wlan_objmgr_vdev *vdev,
 			mlo_partner_peer_create_post(ml_dev, vdev_link,
 						     ml_peer, frm_buf, ml_info);
 		}
+		status = wlan_mlo_check_and_create_bridge_peer(vdev, ml_peer,
+							       link_vdevs,
+							       ml_info->num_partner_links);
+		if (QDF_STATUS_SUCCESS != status) {
+			mlo_err("MLD ID %d: Bridge peer creation failed",
+				ml_dev->mld_id);
+			mlo_dev_release_link_vdevs(link_vdevs);
+			wlan_mlo_peer_release_ref(ml_peer);
+			return QDF_STATUS_E_FAILURE;
+		}
 	}
 	mlo_dev_release_link_vdevs(link_vdevs);
 
@@ -1108,13 +1328,16 @@ void wlan_mlo_peer_get_links_info(struct wlan_objmgr_peer *peer,
 	struct wlan_mlo_link_peer_entry *peer_entry;
 	struct wlan_objmgr_peer *link_peer;
 	struct wlan_objmgr_vdev *link_vdev;
-	uint8_t i, ix;
+	uint8_t i, ix, idx = 0;
+	struct wlan_mlo_eml_cap *ml_emlcap;
 
 	ml_peer = peer->mlo_peer_ctx;
 	ml_links->num_partner_links = 0;
 
 	if (!ml_peer)
 		return;
+
+	ml_emlcap = &ml_peer->mlpeer_emlcap;
 
 	mlo_peer_lock_acquire(ml_peer);
 
@@ -1130,6 +1353,7 @@ void wlan_mlo_peer_get_links_info(struct wlan_objmgr_peer *peer,
 
 		if (!link_peer)
 			continue;
+		idx++;
 		if (link_peer == peer)
 			continue;
 		link_vdev = wlan_peer_get_vdev(link_peer);
@@ -1142,6 +1366,14 @@ void wlan_mlo_peer_get_links_info(struct wlan_objmgr_peer *peer,
 		ix = ml_links->num_partner_links;
 		ml_links->link_info[ix].vdev_id = wlan_vdev_get_id(link_vdev);
 		ml_links->link_info[ix].hw_mld_link_id = peer_entry->hw_link_id;
+		ml_links->link_info[ix].mlo_enabled = 1;
+		ml_links->link_info[ix].mlo_assoc_link =
+			wlan_peer_mlme_is_assoc_peer(link_peer);
+		ml_links->link_info[ix].mlo_primary_umac =
+			peer_entry->is_primary;
+		ml_links->link_info[ix].mlo_logical_link_index_valid = 1;
+		ml_links->link_info[ix].emlsr_support = ml_emlcap->emlsr_supp;
+		ml_links->link_info[ix].logical_link_index = idx - 1;
 		ml_links->num_partner_links++;
 	}
 	mlo_peer_lock_release(ml_peer);
@@ -1239,6 +1471,8 @@ void wlan_mlo_peer_get_partner_links_info(struct wlan_objmgr_peer *peer,
 
 		ix = ml_links->num_partner_links;
 		ml_links->partner_link_info[ix].link_id = peer_entry->link_ix;
+		ml_links->partner_link_info[ix].is_bridge =
+		   (wlan_peer_get_peer_type(link_peer) == WLAN_PEER_MLO_BRIDGE);
 
 		qdf_copy_macaddr(&ml_links->partner_link_info[ix].link_addr,
 				 &peer_entry->link_addr);

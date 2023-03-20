@@ -77,6 +77,15 @@ dp_rx_mon_word_mask_subscribe(uint32_t *msg_word,
 			      struct htt_rx_ring_tlv_filter *tlv_filter);
 
 /**
+ * dp_rx_mon_pkt_tlv_offset_subscribe() - Setup rx monitor packet tlv offset
+ * @msg_word: msg word
+ * @tlv_filter: rx ring filter configuration
+ */
+void
+dp_rx_mon_pkt_tlv_offset_subscribe(uint32_t *msg_word,
+				   struct htt_rx_ring_tlv_filter *tlv_filter);
+
+/**
  * dp_rx_mon_enable_mpdu_logging() - Setup rx monitor per packet mpdu logging
  * @msg_word: msg word
  * @tlv_filter: rx ring filter configuration
@@ -309,10 +318,10 @@ void dp_mon_filter_reset_tx_lite_mon(struct dp_mon_pdev_be *be_mon_pdev);
 
 /**
  * dp_mon_filter_setup_tx_lite_mon() - Setup tx lite monitor filter
- * @be_mon_pdev: physical mon device handle
+ * @pdev: physical device handle
  *
  * Return: Null
  */
-void dp_mon_filter_setup_tx_lite_mon(struct dp_mon_pdev_be *be_mon_pdev);
+void dp_mon_filter_setup_tx_lite_mon(struct dp_pdev *pdev);
 #endif
 #endif /* _DP_MON_FILTER_2_0_H_ */

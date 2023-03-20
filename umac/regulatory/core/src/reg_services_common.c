@@ -49,6 +49,7 @@
 #endif
 
 const struct chan_map *channel_map;
+uint8_t g_reg_max_5g_chan_num;
 
 #ifdef WLAN_FEATURE_11BE
 static bool reg_is_chan_bit_punctured(uint16_t input_punc_bitmap,
@@ -421,8 +422,8 @@ reg_get_bonded_chan_entry(qdf_freq_t freq,
 			return &bonded_chan_arr[i];
 	}
 
-	reg_debug("Could not find a bonded pair for freq %d and width %d",
-		  freq, chwidth);
+	reg_debug("Could not find a bonded pair for freq %d and width %d cen320_freq %u",
+		  freq, chwidth, cen320_freq);
 	return NULL;
 }
 
@@ -1297,6 +1298,21 @@ const struct chan_map channel_map_china[NUM_CHANNELS] = {
 #endif /* CONFIG_BAND_6GHZ */
 };
 
+static uint8_t reg_calculate_max_5gh_enum(void)
+{
+	int16_t idx;
+	uint8_t max_valid_ieee_chan = INVALID_CHANNEL_NUM;
+
+	for (idx = MAX_5GHZ_CHANNEL; idx >= 0; idx--) {
+		if (channel_map[idx].chan_num != INVALID_CHANNEL_NUM) {
+			max_valid_ieee_chan = channel_map[idx].chan_num;
+			break;
+		}
+	}
+
+	return max_valid_ieee_chan;
+}
+
 void reg_init_channel_map(enum dfs_reg dfs_region)
 {
 	switch (dfs_region) {
@@ -1321,6 +1337,8 @@ void reg_init_channel_map(enum dfs_reg dfs_region)
 		channel_map = channel_map_global;
 		break;
 	}
+
+	g_reg_max_5g_chan_num = reg_calculate_max_5gh_enum();
 }
 
 #ifdef WLAN_FEATURE_11BE
@@ -2466,9 +2484,9 @@ static inline bool BAND_5G_PRESENT(uint8_t band_mask)
 /**
  * reg_is_freq_in_between() - Check whether freq falls within low_freq and
  * high_freq, inclusively.
- * @low_freq - Low frequency.
- * @high_freq - High frequency.
- * @freq - Frequency to be checked.
+ * @low_freq: Low frequency.
+ * @high_freq: High frequency.
+ * @freq: Frequency to be checked.
  *
  * Return: True if freq falls within low_freq and high_freq, else false.
  */
@@ -2711,7 +2729,7 @@ static QDF_STATUS reg_get_max_psd(qdf_freq_t freq,
 }
 
 /**
- * reg_get_max_txpower_for_eirp() - Get max EIRP.
+ * reg_get_max_eirp() - Get max EIRP.
  * @pdev: Pointer to pdev.
  * @freq: Channel frequency.
  * @bw: Channel bandwidth.
@@ -3017,7 +3035,7 @@ qdf_freq_t reg_ch_to_freq(uint32_t ch_enum)
 
 uint8_t reg_max_5ghz_ch_num(void)
 {
-	return REG_MAX_5GHZ_CH_NUM;
+	return g_reg_max_5g_chan_num;
 }
 
 #ifdef CONFIG_CHAN_FREQ_API
@@ -3575,6 +3593,7 @@ is_freq_present_in_resp_list(uint32_t pcl_ch,
  * @iface_mode_mask: interface type
  * @band_mask: requested band mask
  * @count: no of usable channels
+ * @in_6g_pwr_mode: Input 6GHz power mode
  *
  * Return: void
  */
@@ -3583,7 +3602,8 @@ reg_update_usable_chan_resp(struct wlan_objmgr_pdev *pdev,
 			    struct get_usable_chan_res_params *res_msg,
 			    uint32_t *pcl_ch, uint32_t len,
 			    uint32_t iface_mode_mask,
-			    uint32_t band_mask, int *count)
+			    uint32_t band_mask, int *count,
+			    enum supported_6g_pwr_types in_6g_pwr_mode)
 {
 	int i;
 	struct ch_params ch_params = {0};
@@ -3602,10 +3622,10 @@ reg_update_usable_chan_resp(struct wlan_objmgr_pdev *pdev,
 			continue;
 
 		ch_params.ch_width = CH_WIDTH_MAX;
-		reg_set_channel_params_for_freq(
+		reg_set_channel_params_for_pwrmode(
 				pdev,
 				pcl_ch[i],
-				0, &ch_params, true);
+				0, &ch_params, in_6g_pwr_mode, true);
 		res_msg[index].freq = (qdf_freq_t)pcl_ch[i];
 		res_msg[index].iface_mode_mask |= 1 << iface_mode_mask;
 		res_msg[index].bw = ch_params.ch_width;
@@ -3626,10 +3646,11 @@ reg_update_usable_chan_resp(struct wlan_objmgr_pdev *pdev,
  *				 and policy mgr mask
  * @pdev: Pointer to pdev
  * @res_msg: Response msg
- * @policy_mgr_con_mode: policy mgr mode
+ * @mode: policy mgr mode
  * @iftype: interface type
  * @band_mask: requested band mask
  * @count: no of usable channels
+ * @in_6g_pwr_mode: Input 6GHz power mode
  *
  * Return: qdf status
  */
@@ -3639,7 +3660,8 @@ reg_update_conn_chan_list(struct wlan_objmgr_pdev *pdev,
 			  enum policy_mgr_con_mode mode,
 			  uint32_t iftype,
 			  uint32_t band_mask,
-			  uint32_t *count)
+			  uint32_t *count,
+			  enum supported_6g_pwr_types in_6g_pwr_mode)
 {
 	uint32_t *pcl_ch;
 	uint8_t *weight_list;
@@ -3682,7 +3704,8 @@ reg_update_conn_chan_list(struct wlan_objmgr_pdev *pdev,
 		goto err;
 	}
 	reg_update_usable_chan_resp(pdev, res_msg, pcl_ch, len,
-				    iftype, band_mask, count);
+				    iftype, band_mask, count,
+				    in_6g_pwr_mode);
 err:
 	qdf_mem_free(pcl_ch);
 	qdf_mem_free(weight_list);
@@ -3694,8 +3717,8 @@ err:
  * @pdev: Pointer to pdev
  * @req_msg: Request msg
  * @res_msg: Response msg
- * @chan_list: reg channel list
  * @count: no of usable channels
+ * @in_6g_pwr_mode: Input 6GHz power mode
  *
  * Return: qdf status
  */
@@ -3703,7 +3726,8 @@ static QDF_STATUS
 reg_get_usable_channel_con_filter(struct wlan_objmgr_pdev *pdev,
 				  struct get_usable_chan_req_params req_msg,
 				  struct get_usable_chan_res_params *res_msg,
-				  int *count)
+				  int *count,
+				  enum supported_6g_pwr_types in_6g_pwr_mode)
 {
 	QDF_STATUS status = QDF_STATUS_SUCCESS;
 	uint32_t iface_mode_mask = req_msg.iface_mode_mask;
@@ -3713,32 +3737,36 @@ reg_get_usable_channel_con_filter(struct wlan_objmgr_pdev *pdev,
 			status =
 			reg_update_conn_chan_list(pdev, res_msg, PM_SAP_MODE,
 						  IFTYPE_AP, req_msg.band_mask,
-						  count);
+						  count, in_6g_pwr_mode);
 			iface_mode_mask &= ~(1 << IFTYPE_AP);
 		} else if (iface_mode_mask & 1 << IFTYPE_STATION) {
 			status =
 			reg_update_conn_chan_list(pdev, res_msg, PM_STA_MODE,
 						  IFTYPE_STATION,
-						  req_msg.band_mask, count);
+						  req_msg.band_mask, count,
+						  in_6g_pwr_mode);
 			iface_mode_mask &= ~(1 << IFTYPE_STATION);
 		} else if (iface_mode_mask & 1 << IFTYPE_P2P_GO) {
 			status =
 			reg_update_conn_chan_list(pdev, res_msg, PM_P2P_GO_MODE,
 						  IFTYPE_P2P_GO,
-						  req_msg.band_mask, count);
+						  req_msg.band_mask, count,
+						  in_6g_pwr_mode);
 			iface_mode_mask &= ~(1 << IFTYPE_P2P_GO);
 		} else if (iface_mode_mask & 1 << IFTYPE_P2P_CLIENT) {
 			status =
 			reg_update_conn_chan_list(pdev, res_msg,
 						  PM_P2P_CLIENT_MODE,
 						  IFTYPE_P2P_CLIENT,
-						  req_msg.band_mask, count);
+						  req_msg.band_mask, count,
+						  in_6g_pwr_mode);
 			iface_mode_mask &= ~(1 << IFTYPE_P2P_CLIENT);
 		} else if (iface_mode_mask & 1 << IFTYPE_NAN) {
 			status =
 			reg_update_conn_chan_list(pdev, res_msg,
 						  PM_NAN_DISC_MODE, IFTYPE_NAN,
-						  req_msg.band_mask, count);
+						  req_msg.band_mask, count,
+						  in_6g_pwr_mode);
 			iface_mode_mask &= ~(1 << IFTYPE_NAN);
 		} else {
 			reg_err("invalid mode");
@@ -3769,7 +3797,7 @@ reg_remove_freq(struct get_usable_chan_res_params *res_msg,
  *				  and NAN
  * @pdev: Pointer to pdev
  * @res_msg: Response msg
- * @count: no of usable channels
+ * @no_usable_channels: no of usable channels
  * @iface_mode_mask: interface mode mask
  *
  * Return: qdf status
@@ -3984,6 +4012,7 @@ reg_calculate_mode_mask(uint32_t iface_mode_mask)
  * @iface_mode_mask: interface mode mask
  * @chan_list: reg channel list
  * @count: no of usable channels
+ * @in_6g_pwr_mode: Input 6GHz power mode
  *
  * Return: qdf status
  */
@@ -3992,7 +4021,8 @@ reg_add_usable_channel_to_resp(struct wlan_objmgr_pdev *pdev,
 			       struct get_usable_chan_res_params *res_msg,
 			       uint32_t iface_mode_mask,
 			       struct regulatory_channel *chan_list,
-			       int *count)
+			       int *count,
+			       enum supported_6g_pwr_types in_6g_pwr_mode)
 {
 	enum channel_enum chan_enum;
 	struct ch_params ch_params = {0};
@@ -4004,10 +4034,11 @@ reg_add_usable_channel_to_resp(struct wlan_objmgr_pdev *pdev,
 	for (chan_enum = 0; chan_enum < *count &&
 	     chan_enum < NUM_CHANNELS; chan_enum++) {
 		ch_params.ch_width = CH_WIDTH_MAX;
-		reg_set_channel_params_for_freq(
+		reg_set_channel_params_for_pwrmode(
 				pdev,
 				chan_list[chan_enum].center_freq,
-				chan_list[chan_enum].max_bw, &ch_params, true);
+				chan_list[chan_enum].max_bw, &ch_params,
+				in_6g_pwr_mode, true);
 
 		res_msg[chan_enum].freq = chan_list[chan_enum].center_freq;
 		res_msg[chan_enum].iface_mode_mask = mode_mask;
@@ -4032,7 +4063,8 @@ QDF_STATUS
 wlan_reg_get_usable_channel(struct wlan_objmgr_pdev *pdev,
 			    struct get_usable_chan_req_params req_msg,
 			    struct get_usable_chan_res_params *res_msg,
-			    uint32_t *usable_channels)
+			    uint32_t *usable_channels,
+			    enum supported_6g_pwr_types in_6g_pwr_mode)
 {
 	struct regulatory_channel *chan_list;
 	QDF_STATUS status = QDF_STATUS_SUCCESS;
@@ -4054,7 +4086,8 @@ wlan_reg_get_usable_channel(struct wlan_objmgr_pdev *pdev,
 		status =
 		reg_add_usable_channel_to_resp(pdev, res_msg,
 					       req_msg.iface_mode_mask,
-					       chan_list, usable_channels);
+					       chan_list, usable_channels,
+					       in_6g_pwr_mode);
 		if (QDF_IS_STATUS_ERROR(status)) {
 			qdf_mem_free(chan_list);
 			return status;
@@ -4064,7 +4097,8 @@ wlan_reg_get_usable_channel(struct wlan_objmgr_pdev *pdev,
 	if (req_msg.filter_mask & 1 << FILTER_WLAN_CONCURRENCY)
 		status =
 		reg_get_usable_channel_con_filter(pdev, req_msg, res_msg,
-						  usable_channels);
+						  usable_channels,
+						  in_6g_pwr_mode);
 
 	if (req_msg.filter_mask & 1 << FILTER_CELLULAR_COEX)
 		status =
@@ -4083,10 +4117,11 @@ wlan_reg_get_usable_channel(struct wlan_objmgr_pdev *pdev,
 #endif
 
 /**
- * reg_get_nol_channel_state () - Get channel state from regulatory
+ * reg_get_nol_channel_state() - Get channel state from regulatory
  * and treat NOL channels as enabled channels
  * @pdev: Pointer to pdev
  * @freq: channel center frequency.
+ * @in_6g_pwr_mode: Input 6 GHz power mode
  *
  * Return: channel state
  */
@@ -4114,6 +4149,7 @@ reg_get_nol_channel_state(struct wlan_objmgr_pdev *pdev,
  * @pdev: Pointer to pdev.
  * @freq: Channel center frequency.
  * @bonded_chan_ptr: Pointer to bonded_channel_freq.
+ * @in_6g_pwr_mode: Input 6 GHz power mode
  * @input_punc_bitmap: input puncture bitmap
  *
  * Return: Channel State
@@ -4287,14 +4323,14 @@ static uint32_t reg_get_channel_flags_for_freq(struct wlan_objmgr_pdev *pdev,
 	chan_enum = reg_get_chan_enum_for_freq(freq);
 
 	if (reg_is_chan_enum_invalid(chan_enum)) {
-		reg_err("chan freq is not valid");
+		reg_debug("chan freq is not valid");
 		return REGULATORY_CHAN_INVALID;
 	}
 
 	pdev_priv_obj = reg_get_pdev_obj(pdev);
 
 	if (!IS_VALID_PDEV_REG_OBJ(pdev_priv_obj)) {
-		reg_err("pdev reg obj is NULL");
+		reg_debug("pdev reg obj is NULL");
 		return REGULATORY_CHAN_INVALID;
 	}
 
@@ -4422,7 +4458,9 @@ reg_decide_6ghz_power_within_bw_for_freq(struct wlan_objmgr_pdev *pdev,
 					 qdf_freq_t freq, enum phy_ch_width bw,
 					 bool *is_psd, uint16_t *min_tx_power,
 					 int16_t *min_psd_eirp,
-					 enum reg_6g_ap_type *power_type)
+					 enum reg_6g_ap_type *power_type,
+					 enum supported_6g_pwr_types pwr_mode,
+					 uint16_t input_punc_bitmap)
 {
 	const struct bonded_channel_freq *bonded_chan_ptr = NULL;
 	enum channel_state state;
@@ -4451,10 +4489,12 @@ reg_decide_6ghz_power_within_bw_for_freq(struct wlan_objmgr_pdev *pdev,
 		return QDF_STATUS_E_INVAL;
 	}
 
-	state = reg_get_5g_bonded_channel_for_freq(pdev,
-						   freq,
-						   bw,
-						   &bonded_chan_ptr);
+	state = reg_get_5g_bonded_channel_for_pwrmode(pdev,
+						      freq,
+						      bw,
+						      &bonded_chan_ptr,
+						      pwr_mode,
+						      input_punc_bitmap);
 	if (state != CHANNEL_STATE_ENABLE &&
 	    state != CHANNEL_STATE_DFS) {
 		reg_err("invalid channel state %d", state);
@@ -4511,44 +4551,6 @@ decide_power_type:
 #endif
 
 /**
- * reg_get_5g_bonded_chan_array_for_freq()- Return the channel state for a
- * 5G or 6G channel frequency based on the bonded channel.
- * @pdev: Pointer to pdev.
- * @freq: Channel center frequency.
- * @bonded_chan_ptr: Pointer to bonded_channel_freq.
- *
- * Return: Channel State
- */
-static enum channel_state
-reg_get_5g_bonded_chan_array_for_freq(struct wlan_objmgr_pdev *pdev,
-				      uint16_t freq,
-				      const struct bonded_channel_freq *
-				      bonded_chan_ptr)
-{
-	uint16_t chan_cfreq;
-	enum channel_state chan_state = CHANNEL_STATE_INVALID;
-	enum channel_state temp_chan_state;
-
-	if (!bonded_chan_ptr) {
-		reg_debug("bonded chan ptr is NULL");
-		return chan_state;
-	}
-
-	chan_cfreq =  bonded_chan_ptr->start_freq;
-	while (chan_cfreq <= bonded_chan_ptr->end_freq) {
-		temp_chan_state = reg_get_channel_state_for_pwrmode(
-						pdev, chan_cfreq,
-						REG_CURRENT_PWR_MODE);
-		if (temp_chan_state < chan_state)
-			chan_state = temp_chan_state;
-		chan_cfreq = chan_cfreq + 20;
-	}
-
-	return chan_state;
-}
-
-#ifdef CONFIG_REG_6G_PWRMODE
-/**
  * reg_get_5g_bonded_chan_array_for_pwrmode()- Return the channel state for a
  * 5G or 6G channel frequency based on the bonded channel.
  * @pdev: Pointer to pdev.
@@ -4595,7 +4597,6 @@ reg_get_5g_bonded_chan_array_for_pwrmode(struct wlan_objmgr_pdev *pdev,
 
 	return chan_state;
 }
-#endif
 
 #ifdef WLAN_FEATURE_11BE
 
@@ -4695,7 +4696,6 @@ bool reg_is_punc_bitmap_valid(enum phy_ch_width bw, uint16_t puncture_bitmap)
 	return is_punc_bitmap_valid;
 }
 
-#ifdef QCA_DFS_BW_PUNCTURE
 uint16_t reg_find_nearest_puncture_pattern(enum phy_ch_width bw,
 					   uint16_t proposed_bitmap)
 {
@@ -4736,56 +4736,7 @@ uint16_t reg_find_nearest_puncture_pattern(enum phy_ch_width bw,
 
 	return final_bitmap;
 }
-#endif /* QCA_DFS_BW_PUNCTURE */
 
-/**
- * reg_update_5g_bonded_channel_state_punc_for_freq() - update channel state
- * with static puncturing feature
- * @pdev: pointer to pdev
- * @bonded_chan_ptr: Pointer to bonded_channel_freq.
- * @ch_params: pointer to ch_params
- * @chan_state: chan_state to be updated
- *
- * Return: void
- */
-static void reg_update_5g_bonded_channel_state_punc_for_freq(
-			struct wlan_objmgr_pdev *pdev,
-			const struct bonded_channel_freq *bonded_chan_ptr,
-			struct ch_params *ch_params,
-			enum channel_state *chan_state)
-{
-	qdf_freq_t chan_cfreq;
-	enum channel_state temp_chan_state;
-	uint16_t puncture_bitmap = 0;
-	int i = 0;
-	enum channel_state update_state = CHANNEL_STATE_ENABLE;
-
-	if (!pdev || !bonded_chan_ptr || !ch_params || !chan_state ||
-	    !ch_params->is_create_punc_bitmap)
-		return;
-
-	chan_cfreq =  bonded_chan_ptr->start_freq;
-	while (chan_cfreq <= bonded_chan_ptr->end_freq) {
-		temp_chan_state = reg_get_channel_state_for_pwrmode(
-							pdev,
-							chan_cfreq,
-							REG_CURRENT_PWR_MODE);
-		if (!reg_is_state_allowed(temp_chan_state))
-			puncture_bitmap |= BIT(i);
-		/* Remember of any of the sub20 channel is a DFS channel */
-		if (temp_chan_state == CHANNEL_STATE_DFS)
-			update_state = CHANNEL_STATE_DFS;
-		chan_cfreq = chan_cfreq + BW_20_MHZ;
-		i++;
-	}
-	/* Validate puncture bitmap. Update channel state. */
-	if (reg_is_punc_bitmap_valid(ch_params->ch_width, puncture_bitmap)) {
-		*chan_state = update_state;
-		ch_params->reg_punc_bitmap = puncture_bitmap;
-	}
-}
-
-#ifdef CONFIG_REG_6G_PWRMODE
 /**
  * reg_update_5g_bonded_channel_state_punc_for_pwrmode() - update channel state
  * with static puncturing feature
@@ -4793,6 +4744,7 @@ static void reg_update_5g_bonded_channel_state_punc_for_freq(
  * @bonded_chan_ptr: Pointer to bonded_channel_freq.
  * @ch_params: pointer to ch_params
  * @chan_state: chan_state to be updated
+ * @in_6g_pwr_mode: Input 6 GHz power mode
  *
  * Return: void
  */
@@ -4806,6 +4758,7 @@ static void reg_update_5g_bonded_channel_state_punc_for_pwrmode(
 	qdf_freq_t chan_cfreq;
 	enum channel_state temp_chan_state;
 	uint16_t puncture_bitmap = 0;
+	uint16_t final_bitmap;
 	int i = 0;
 	enum channel_state update_state = CHANNEL_STATE_ENABLE;
 
@@ -4827,12 +4780,13 @@ static void reg_update_5g_bonded_channel_state_punc_for_pwrmode(
 		i++;
 	}
 	/* Validate puncture bitmap. Update channel state. */
-	if (reg_is_punc_bitmap_valid(ch_params->ch_width, puncture_bitmap)) {
+	final_bitmap = reg_find_nearest_puncture_pattern(ch_params->ch_width,
+							 puncture_bitmap);
+	if (final_bitmap) {
 		*chan_state = update_state;
-		ch_params->reg_punc_bitmap = puncture_bitmap;
+		ch_params->reg_punc_bitmap = final_bitmap;
 	}
 }
-#endif
 
 #ifdef CONFIG_REG_CLIENT
 QDF_STATUS reg_apply_puncture(struct wlan_objmgr_pdev *pdev,
@@ -4918,14 +4872,6 @@ QDF_STATUS reg_remove_puncture(struct wlan_objmgr_pdev *pdev)
 #endif
 
 #else
-static void reg_update_5g_bonded_channel_state_punc_for_freq(
-			struct wlan_objmgr_pdev *pdev,
-			const struct bonded_channel_freq *bonded_chan_ptr,
-			struct ch_params *ch_params,
-			enum channel_state *chan_state)
-{
-}
-
 static void reg_update_5g_bonded_channel_state_punc_for_pwrmode(
 			struct wlan_objmgr_pdev *pdev,
 			const struct bonded_channel_freq *bonded_chan_ptr,
@@ -4935,78 +4881,6 @@ static void reg_update_5g_bonded_channel_state_punc_for_pwrmode(
 {
 }
 #endif
-
-enum channel_state
-reg_get_5g_bonded_channel_state_for_freq(struct wlan_objmgr_pdev *pdev,
-					 qdf_freq_t freq,
-					 struct ch_params *ch_params)
-{
-	enum phy_ch_width bw;
-	enum channel_enum ch_indx;
-	enum channel_state chan_state;
-	struct regulatory_channel *reg_channels;
-	struct wlan_regulatory_pdev_priv_obj *pdev_priv_obj;
-	bool bw_enabled = false;
-	const struct bonded_channel_freq *bonded_chan_ptr = NULL;
-
-	if (!ch_params) {
-		reg_err_rl("Invalid ch_params");
-		return CHANNEL_STATE_INVALID;
-	}
-	bw = ch_params->ch_width;
-	if (bw > CH_WIDTH_80P80MHZ) {
-		reg_err_rl("bw (%d) passed is not good", bw);
-		return CHANNEL_STATE_INVALID;
-	}
-
-	chan_state = reg_get_5g_bonded_channel_for_freq(pdev, freq, bw,
-							&bonded_chan_ptr);
-
-	reg_update_5g_bonded_channel_state_punc_for_freq(pdev,
-							 bonded_chan_ptr,
-							 ch_params,
-							 &chan_state);
-
-	if ((chan_state == CHANNEL_STATE_INVALID) ||
-	    (chan_state == CHANNEL_STATE_DISABLE))
-		return chan_state;
-
-	pdev_priv_obj = reg_get_pdev_obj(pdev);
-
-	if (!IS_VALID_PDEV_REG_OBJ(pdev_priv_obj)) {
-		reg_err("pdev reg obj is NULL");
-		return CHANNEL_STATE_INVALID;
-	}
-	reg_channels = pdev_priv_obj->cur_chan_list;
-
-	ch_indx = reg_get_chan_enum_for_freq(freq);
-	if (reg_is_chan_enum_invalid(ch_indx))
-		return CHANNEL_STATE_INVALID;
-	if (bw == CH_WIDTH_5MHZ)
-		bw_enabled = true;
-	else if (bw == CH_WIDTH_10MHZ)
-		bw_enabled = (reg_channels[ch_indx].min_bw <= 10) &&
-			(reg_channels[ch_indx].max_bw >= 10);
-	else if (bw == CH_WIDTH_20MHZ)
-		bw_enabled = (reg_channels[ch_indx].min_bw <= 20) &&
-			(reg_channels[ch_indx].max_bw >= 20);
-	else if (bw == CH_WIDTH_40MHZ)
-		bw_enabled = (reg_channels[ch_indx].min_bw <= 40) &&
-			(reg_channels[ch_indx].max_bw >= 40);
-	else if (bw == CH_WIDTH_80MHZ)
-		bw_enabled = (reg_channels[ch_indx].min_bw <= 80) &&
-			(reg_channels[ch_indx].max_bw >= 80);
-	else if (bw == CH_WIDTH_160MHZ)
-		bw_enabled = (reg_channels[ch_indx].min_bw <= 160) &&
-			(reg_channels[ch_indx].max_bw >= 160);
-	else if (bw == CH_WIDTH_80P80MHZ)
-		bw_enabled = (reg_channels[ch_indx].min_bw <= 80) &&
-			(reg_channels[ch_indx].max_bw >= 80);
-
-	if (bw_enabled)
-		return chan_state;
-	return CHANNEL_STATE_DISABLE;
-}
 
 #ifdef CONFIG_REG_6G_PWRMODE
 enum channel_state
@@ -5187,6 +5061,8 @@ reg_get_20mhz_channel_state_based_on_nol(struct wlan_objmgr_pdev *pdev,
 					 in_6g_pwr_type);
 }
 
+#define MAX_NUM_BONDED_PAIR 2
+
 /**
  * reg_get_320_bonded_chan_array() - Fetches a list of bonded channel pointers
  * for the given bonded channel array. If 320 band center is specified,
@@ -5202,8 +5078,6 @@ reg_get_20mhz_channel_state_based_on_nol(struct wlan_objmgr_pdev *pdev,
  *
  * Return: number of bonded channel arrays fetched.
  */
-
-#define MAX_NUM_BONDED_PAIR 2
 static uint8_t
 reg_get_320_bonded_chan_array(struct wlan_objmgr_pdev *pdev,
 			      qdf_freq_t freq,
@@ -5426,170 +5300,36 @@ reg_fill_chan320mhz_seg0_center(struct wlan_objmgr_pdev *pdev,
 				PRIM_SEG_IEEE_CENTER_240MHZ_5G_CHAN;
 		} else {
 			ch_param->ch_width = CH_WIDTH_INVALID;
-			reg_err("Cannot find 160Mhz centers for freq %d", freq);
+			reg_debug("Cannot find 160 MHz centers for freq %d",
+				  freq);
 		}
 	}
 }
 
 /**
- * reg_fill_channel_list_for_320() - Fill 320MHZ channel list. If we
- * are unable to find a channel whose width is greater than 160MHZ and less
- * than 320 with the help of puncturing, using the given freq, set "update_bw"
- * variable to be true, lower the channel width and return to the caller.
- * The caller fetches a channel of reduced mode based on "update_bw" flag.
- *
- * If 320 band center is 0, return all the 320 channels
- * that match the primary frequency else return only channel
- * that matches 320 band center.
- *
+ * reg_fill_channel_list_for_320_for_pwrmode() - Fill 320MHZ channel list.
  * @pdev: Pointer to struct wlan_objmgr_pdev.
- * @freq: Input frequency in MHZ.
- * @ch_width: Input channel width, if a channel of the given width is not
+ * @freq: Input frequency in MHz.
+ * @in_ch_width: Input channel width, if a channel of the given width is not
  * found, reduce the channel width to the next lower mode and pass it to the
  * caller.
- * @band_center_320: Center of 320MHZ channel.
+ * @band_center_320: Center of 320 MHz channel.
  * @chan_list: Pointer to reg_channel_list to be filled.
  * @update_bw: Flag to hold if bw is updated.
- * @treat_nol_chan_as_disabled: Bool to treat NOL channels as disabled/enabled
- *
- * Return - None.
- */
-static void
-reg_fill_channel_list_for_320(struct wlan_objmgr_pdev *pdev,
-			      qdf_freq_t freq,
-			      enum phy_ch_width *in_ch_width,
-			      qdf_freq_t band_center_320,
-			      struct reg_channel_list *chan_list,
-			      bool *update_bw,
-			      bool treat_nol_chan_as_disabled)
-{
-	uint8_t num_bonded_pairs, i, num_ch_params;
-	enum channel_state chan_state;
-	uint16_t array_size = QDF_ARRAY_SIZE(bonded_chan_320mhz_list_freq);
-	uint16_t out_punc_bitmap;
-	uint16_t max_reg_bw;
-	enum channel_enum chan_enum;
-	const struct bonded_channel_freq *bonded_ch_ptr[2] = {NULL, NULL};
-	struct wlan_regulatory_pdev_priv_obj *pdev_priv_obj;
-
-	*update_bw = false;
-
-	chan_enum = reg_get_chan_enum_for_freq(freq);
-	if (reg_is_chan_enum_invalid(chan_enum)) {
-		reg_err("chan freq is not valid");
-		return;
-	}
-
-	pdev_priv_obj = reg_get_pdev_obj(pdev);
-	if (!IS_VALID_PDEV_REG_OBJ(pdev_priv_obj)) {
-		reg_err("reg pdev priv obj is NULL");
-		return;
-	}
-
-	/* Maximum bandwidth of the channel supported by regulatory for
-	 * the given freq.
-	 */
-	max_reg_bw = pdev_priv_obj->cur_chan_list[chan_enum].max_bw;
-
-	/* Regulatory does not support BW greater than 160.
-	 * Try finding a channel in a lower mode.
-	 */
-	if (max_reg_bw <= BW_160MHZ) {
-		*in_ch_width =  get_next_lower_bandwidth(*in_ch_width);
-		*update_bw = true;
-		return;
-	}
-
-	num_bonded_pairs =
-		reg_get_320_bonded_chan_array(pdev, freq, band_center_320,
-					      bonded_chan_320mhz_list_freq,
-					      array_size,
-					      bonded_ch_ptr);
-
-	if (!num_bonded_pairs) {
-		if (band_center_320) {
-			reg_debug("No bonded pair for the given band_center\n");
-			chan_list->num_ch_params = 0;
-		} else {
-			/* Could not find a 320 MHZ bonded channel pair,
-			 * find a channel of lower BW.
-			 */
-			*in_ch_width =  get_next_lower_bandwidth(*in_ch_width);
-			*update_bw = true;
-		}
-		return;
-	}
-
-	for (i = 0, num_ch_params = 0 ; i < num_bonded_pairs; i++) {
-		/* Chan_state to hold the channel state of bonding
-		 * pair of channels.
-		 */
-		uint16_t in_punc_bitmap =
-			chan_list->chan_param[i].input_punc_bitmap;
-
-		chan_state =
-		    reg_get_320_bonded_channel_state_for_pwrmode(
-						     pdev, freq,
-						     bonded_ch_ptr[i],
-						     *in_ch_width,
-						     &out_punc_bitmap,
-						     REG_CURRENT_PWR_MODE,
-						     treat_nol_chan_as_disabled,
-						     in_punc_bitmap);
-
-		if (reg_is_state_allowed(chan_state)) {
-			struct ch_params *t_chan_param =
-			    &chan_list->chan_param[num_ch_params];
-
-			t_chan_param->mhz_freq_seg1 =
-				(bonded_ch_ptr[i]->start_freq +
-				 bonded_ch_ptr[i]->end_freq) / 2;
-			t_chan_param->center_freq_seg1 =
-				reg_freq_to_chan(pdev,
-						 t_chan_param->mhz_freq_seg1);
-			t_chan_param->ch_width = *in_ch_width;
-			t_chan_param->reg_punc_bitmap = out_punc_bitmap;
-
-			reg_fill_chan320mhz_seg0_center(pdev,
-							t_chan_param,
-							freq);
-			num_ch_params++;
-			chan_list->num_ch_params = num_ch_params;
-		}
-	}
-
-	/* The bonded pairs could not create any channels,
-	 * lower the bandwidth to find a channel.
-	 */
-	if (!chan_list->num_ch_params) {
-		*in_ch_width =  get_next_lower_bandwidth(*in_ch_width);
-		*update_bw = true;
-	}
-}
-
-#ifdef CONFIG_REG_6G_PWRMODE
-/**
- * reg_fill_channel_list_for_320_for_pwrmode() - Fill 320MHZ channel list. If we
- * are unable to find a channel whose width is greater than 160MHZ and less
- * than 320 with the help of puncturing, using the given freq, set "update_bw"
- * variable to be true, lower the channel width and return to the caller.
- * The caller fetches a channel of reduced mode based on "update_bw" flag.
- *
- * If 320 band center is 0, return all the 320 channels
- * that match the primary frequency else return only channel
- * that matches 320 band center.
- *
- * @pdev: Pointer to struct wlan_objmgr_pdev.
- * @freq: Input frequency in MHZ.
- * @ch_width: Input channel width, if a channel of the given width is not
- * found, reduce the channel width to the next lower mode and pass it to the
- * caller.
- * @band_center_320: Center of 320MHZ channel.
- * @chan_list: Pointer to reg_channel_list to be filled.
- * @update_bw: Flag to hold if bw is updated.
- * @in_6g_pwr_type: Input 6g power mode which decides the which power mode based
+ * @in_6g_pwr_mode: Input 6g power mode which decides the which power mode based
  * channel list will be chosen.
  * @treat_nol_chan_as_disabled: Bool to treat NOL channels as disabled/enabled
+ *
+ * If we are unable to find a channel whose width is greater than
+ * 160 MHz and less than 320 with the help of puncturing, using the
+ * given freq, set "update_bw" variable to be true, lower the channel
+ * width and return to the caller.  The caller fetches a channel of
+ * reduced mode based on "update_bw" flag.
+ *
+ * If 320 band center is 0, return all the 320 channels
+ * that match the primary frequency else return only channel
+ * that matches 320 band center.
+ *
  *
  * Return - None.
  */
@@ -5709,36 +5449,7 @@ reg_fill_channel_list_for_320_for_pwrmode(
 		*update_bw = true;
 	}
 }
-#endif
 
-/**
- * reg_fill_pre320mhz_channel() - Fill channel params for channel width
- * less than 320.
- * @pdev: Pointer to struct wlan_objmgr_pdev
- * @chan_list: Pointer to struct reg_channel_list
- * @ch_width: Channel width
- * @freq: Center frequency of the primary channel in MHz
- * @sec_ch_2g_freq:  Secondary 2G channel frequency in MHZ
- * @treat_nol_chan_as_disabled: Bool to treat NOL channels as
- * disabled/enabled
- */
-static void
-reg_fill_pre320mhz_channel(struct wlan_objmgr_pdev *pdev,
-			   struct reg_channel_list *chan_list,
-			   enum phy_ch_width ch_width,
-			   qdf_freq_t freq,
-			   qdf_freq_t sec_ch_2g_freq,
-			   bool treat_nol_chan_as_disabled)
-{
-	chan_list->num_ch_params = 1;
-	chan_list->chan_param[0].ch_width = ch_width;
-	chan_list->chan_param[0].reg_punc_bitmap = NO_SCHANS_PUNC;
-	reg_set_channel_params_for_freq(pdev, freq, sec_ch_2g_freq,
-					&chan_list->chan_param[0],
-					treat_nol_chan_as_disabled);
-}
-
-#ifdef CONFIG_REG_6G_PWRMODE
 /**
  * reg_fill_pre320mhz_channel_for_pwrmode() - Fill channel params for channel
  * width less than 320.
@@ -5747,7 +5458,7 @@ reg_fill_pre320mhz_channel(struct wlan_objmgr_pdev *pdev,
  * @ch_width: Channel width
  * @freq: Center frequency of the primary channel in MHz
  * @sec_ch_2g_freq:  Secondary 2G channel frequency in MHZ
- * @in_6g_pwr_type: Input 6g power mode which decides the which power mode based
+ * @in_6g_pwr_mode: Input 6g power mode which decides the which power mode based
  * channel list will be chosen.
  * @treat_nol_chan_as_disabled: Bool to consider nol chan as enabled/disabled
  */
@@ -5769,48 +5480,7 @@ reg_fill_pre320mhz_channel_for_pwrmode(
 					   in_6g_pwr_mode,
 					   treat_nol_chan_as_disabled);
 }
-#endif
 
-void
-reg_fill_channel_list(struct wlan_objmgr_pdev *pdev,
-		      qdf_freq_t freq,
-		      qdf_freq_t sec_ch_2g_freq,
-		      enum phy_ch_width in_ch_width,
-		      qdf_freq_t band_center_320,
-		      struct reg_channel_list *chan_list,
-		      bool treat_nol_chan_as_disabled)
-{
-	bool update_bw;
-
-	if (!chan_list) {
-		reg_err("channel params is NULL");
-		return;
-	}
-
-	if (in_ch_width >= CH_WIDTH_MAX)
-		in_ch_width = CH_WIDTH_320MHZ;
-
-	if (in_ch_width == CH_WIDTH_320MHZ) {
-		update_bw = 0;
-		reg_fill_channel_list_for_320(pdev, freq, &in_ch_width,
-					      band_center_320, chan_list,
-					      &update_bw,
-					      treat_nol_chan_as_disabled);
-		if (!update_bw)
-			return;
-	}
-
-	/* A 320 channel is not available (or) user has not requested
-	 * for a 320MHZ channel, look for channels in lower modes,
-	 * reg_set_5g_channel_params_for_freq() finds for the
-	 * next available mode and fills ch_params.
-	 */
-	reg_fill_pre320mhz_channel(pdev, chan_list, in_ch_width, freq,
-				   sec_ch_2g_freq,
-				   treat_nol_chan_as_disabled);
-}
-
-#ifdef CONFIG_REG_6G_PWRMODE
 void
 reg_fill_channel_list_for_pwrmode(struct wlan_objmgr_pdev *pdev,
 				  qdf_freq_t freq,
@@ -5853,39 +5523,7 @@ reg_fill_channel_list_for_pwrmode(struct wlan_objmgr_pdev *pdev,
 				   treat_nol_chan_as_disabled);
 }
 #endif
-#endif
 
-enum channel_state
-reg_get_5g_bonded_channel_for_freq(struct wlan_objmgr_pdev *pdev,
-				   uint16_t freq,
-				   enum phy_ch_width ch_width,
-				   const struct bonded_channel_freq
-				   **bonded_chan_ptr_ptr)
-{
-	if (ch_width == CH_WIDTH_20MHZ)
-		return reg_get_channel_state_for_pwrmode(pdev, freq,
-							 REG_CURRENT_PWR_MODE);
-
-	if (reg_is_ch_width_320(ch_width)) {
-		return reg_get_chan_state_for_320(pdev, freq, 0,
-						  ch_width,
-						  bonded_chan_ptr_ptr,
-						  REG_CURRENT_PWR_MODE,
-						  true,
-						  NO_SCHANS_PUNC);
-	} else {
-		*bonded_chan_ptr_ptr = reg_get_bonded_chan_entry(freq,
-								 ch_width, 0);
-		if (!(*bonded_chan_ptr_ptr))
-			return CHANNEL_STATE_INVALID;
-
-		return reg_get_5g_bonded_chan_array_for_freq(
-							pdev, freq,
-							*bonded_chan_ptr_ptr);
-	}
-}
-
-#ifdef CONFIG_REG_6G_PWRMODE
 enum channel_state
 reg_get_5g_bonded_channel_for_pwrmode(struct wlan_objmgr_pdev *pdev,
 				      uint16_t freq,
@@ -5919,7 +5557,6 @@ reg_get_5g_bonded_channel_for_pwrmode(struct wlan_objmgr_pdev *pdev,
 						     in_6g_pwr_mode,
 						     input_punc_bitmap);
 }
-#endif
 
 #ifdef CONFIG_REG_6G_PWRMODE
 /**
@@ -5928,7 +5565,7 @@ reg_get_5g_bonded_channel_for_pwrmode(struct wlan_objmgr_pdev *pdev,
  * supported by the channel.
  * @pdev: Pointer to pdev.
  * @freq: Channel center frequency.
- * ch_params: Pointer to ch_params.
+ * @ch_params: Pointer to ch_params.
  * @in_6g_pwr_type: Input 6g power mode which decides the which power mode based
  * channel list will be chosen.
  * @treat_nol_chan_as_disabled: Bool to treat NOL channels as disabled/enabled
@@ -6238,52 +5875,6 @@ static void reg_copy_ch_params(struct ch_params *ch_params,
 	ch_params->sec_ch_offset = chan_list.chan_param[0].sec_ch_offset;
 	ch_params->reg_punc_bitmap = chan_list.chan_param[0].reg_punc_bitmap;
 }
-
-void reg_set_channel_params_for_freq(struct wlan_objmgr_pdev *pdev,
-				     qdf_freq_t freq,
-				     qdf_freq_t sec_ch_2g_freq,
-				     struct ch_params *ch_params,
-				     bool treat_nol_chan_as_disabled)
-{
-	if (reg_is_5ghz_ch_freq(freq) || reg_is_6ghz_chan_freq(freq)) {
-		if (reg_is_ch_width_320(ch_params->ch_width)) {
-			struct reg_channel_list chan_list;
-
-			qdf_mem_zero(&chan_list, sizeof(chan_list));
-			/* For now sending center freq as 0 */
-			reg_fill_channel_list(pdev, freq, sec_ch_2g_freq,
-					      ch_params->ch_width, 0,
-					      &chan_list,
-					      treat_nol_chan_as_disabled);
-			reg_copy_ch_params(ch_params, chan_list);
-		} else {
-			reg_set_5g_channel_params_for_pwrmode(
-						pdev, freq,
-						ch_params,
-						REG_CURRENT_PWR_MODE,
-						treat_nol_chan_as_disabled);
-		}
-	} else if  (reg_is_24ghz_ch_freq(freq)) {
-		reg_set_2g_channel_params_for_freq(pdev, freq, ch_params,
-						   sec_ch_2g_freq);
-	}
-}
-#else /* WLAN_FEATURE_11BE */
-void reg_set_channel_params_for_freq(struct wlan_objmgr_pdev *pdev,
-				     qdf_freq_t freq,
-				     qdf_freq_t sec_ch_2g_freq,
-				     struct ch_params *ch_params,
-				     bool treat_nol_chan_as_disabled)
-{
-	if (reg_is_5ghz_ch_freq(freq) || reg_is_6ghz_chan_freq(freq))
-		reg_set_5g_channel_params_for_pwrmode(
-						pdev, freq, ch_params,
-						REG_CURRENT_PWR_MODE,
-						treat_nol_chan_as_disabled);
-	else if  (reg_is_24ghz_ch_freq(freq))
-		reg_set_2g_channel_params_for_freq(pdev, freq, ch_params,
-						   sec_ch_2g_freq);
-}
 #endif /* WLAN_FEATURE_11BE */
 
 #ifdef CONFIG_REG_6G_PWRMODE
@@ -6394,7 +5985,7 @@ bool reg_is_dfs_in_secondary_list_for_freq(struct wlan_objmgr_pdev *pdev,
 }
 
 /**
- * reg_get_psoc_mas_chan_list () - Get psoc master channel list
+ * reg_get_psoc_mas_chan_list() - Get psoc master channel list
  * @pdev: pointer to pdev object
  * @psoc: pointer to psoc object
  *
@@ -7085,7 +6676,7 @@ reg_init_indoor_channel_list(struct wlan_objmgr_pdev *pdev)
 	pdev_priv_obj = reg_get_pdev_obj(pdev);
 
 	if (!IS_VALID_PDEV_REG_OBJ(pdev_priv_obj)) {
-		reg_err("reg pdev priv obj is NULL");
+		reg_debug("reg pdev priv obj is NULL");
 		return;
 	}
 
@@ -7202,7 +6793,7 @@ reg_get_cur_6g_ap_pwr_type(struct wlan_objmgr_pdev *pdev,
 }
 
 /**
- * get_reg_rules_for_pdev() - Get the pointer to the reg rules for the pdev
+ * reg_get_reg_rules_for_pdev() - Get the pointer to the reg rules for the pdev
  * @pdev: Pointer to pdev
  *
  * Return: Pointer to Standard Power regulatory rules
@@ -7293,8 +6884,8 @@ reg_assign_vars_with_range_vals(struct freq_range *in_range,
 
 /**
  * reg_intersect_ranges() - Intersect two ranges and return the intesected range
- * @first: Pointer to first input range
- * @second: Pointer to second input range
+ * @first_range: Pointer to first input range
+ * @second_range: Pointer to second input range
  *
  * Return: Intersected output range
  */
@@ -7329,8 +6920,8 @@ reg_intersect_ranges(struct freq_range *first_range,
 }
 
 /**
- * reg_act_sp_rule_cb -  A function pointer type that calculate something
- * from the input frequency range
+ * typedef reg_act_sp_rule_cb() - A function pointer type that calculates
+ *                                something from the input frequency range
  * @rule_fr: Pointer to frequency range
  * @arg: Pointer to generic argument (a.k.a. context)
  *
@@ -7345,7 +6936,7 @@ typedef void (*reg_act_sp_rule_cb)(struct freq_range *rule_fr,
  * something
  * @pdev: Pointer to pdev
  * @pdev_priv_obj: Pointer to pdev private object
- * @action_on_sp_rule: A function pointer to take some action or calculate
+ * @sp_rule_action: A function pointer to take some action or calculate
  * something for every sp rule
  * @arg: Pointer to opque object (argument/context)
  *
@@ -7418,8 +7009,9 @@ static void reg_afc_incr_num_ranges(struct freq_range *p_range,
 
 /**
  * reg_get_num_sp_freq_ranges() - Find the number of reg rules from the Standard
- * power regulatory rules
+ *                                power regulatory rules
  * @pdev: Pointer to pdev
+ * @pdev_priv_obj: Pointer to pdev private object
  *
  * Return: number of frequency ranges
  */
@@ -7516,6 +7108,7 @@ static uint16_t reg_get_frange_list_len(uint8_t num_freq_ranges)
 /**
  * reg_get_opclasses_array_len() - Calculate the length of the array of
  * opclasses objects
+ * @pdev: Pointer to pdev
  * @num_opclasses: The number of opclasses
  * @chansize_lst: The array of sizes of channel lists
  *
@@ -7539,6 +7132,7 @@ static uint16_t reg_get_opclasses_array_len(struct wlan_objmgr_pdev *pdev,
 
 /**
  * reg_get_afc_req_length() - Calculate the length of the AFC partial request
+ * @pdev: Pointer to pdev
  * @num_opclasses: The number of opclasses
  * @num_freq_ranges: The number of frequency ranges
  * @chansize_lst: The array of sizes of channel lists
@@ -7652,6 +7246,7 @@ reg_fill_afc_opclass_obj(struct wlan_afc_opclass_obj *p_obj_opclass_obj,
 
 /**
  * reg_fill_afc_opclasses_arr() - Fill the array of opclass objects
+ * @pdev: Pointer to pdev
  * @num_opclasses: The number of opclasses
  * @opclass_lst: The array of Operating classes
  * @chansize_lst: The array of sizes of channel lists
@@ -9131,15 +8726,20 @@ reg_is_freq_idx_enabled_on_cur_chan_list(struct wlan_regulatory_pdev_priv_obj
 	return !reg_is_chan_disabled_and_not_nol(&cur_chan_list[freq_idx]);
 }
 
-static QDF_STATUS
-reg_get_min_max_bw_on_cur_chan_list(struct wlan_regulatory_pdev_priv_obj
-				*pdev_priv_obj,
-				enum channel_enum freq_idx,
-				uint16_t *min_bw,
-				uint16_t *max_bw)
+QDF_STATUS
+reg_get_min_max_bw_on_cur_chan_list(struct wlan_objmgr_pdev *pdev,
+				    enum channel_enum freq_idx,
+				    uint16_t *min_bw,
+				    uint16_t *max_bw)
 {
 	struct regulatory_channel *cur_chan_list;
+	struct wlan_regulatory_pdev_priv_obj *pdev_priv_obj;
 
+	pdev_priv_obj = reg_get_pdev_obj(pdev);
+	if (!IS_VALID_PDEV_REG_OBJ(pdev_priv_obj)) {
+		reg_err("reg pdev private obj is NULL");
+		return QDF_STATUS_E_FAILURE;
+	}
 	if (freq_idx >= NUM_CHANNELS)
 		return QDF_STATUS_E_FAILURE;
 
@@ -9252,7 +8852,8 @@ reg_get_min_max_bw_on_given_pwr_mode(struct wlan_regulatory_pdev_priv_obj
 		return QDF_STATUS_E_FAILURE;
 
 	if (freq_idx < MIN_6GHZ_CHANNEL)
-		return reg_get_min_max_bw_on_cur_chan_list(pdev_priv_obj,
+		return reg_get_min_max_bw_on_cur_chan_list(
+						       pdev_priv_obj->pdev_ptr,
 						       freq_idx,
 						       min_bw, max_bw);
 
@@ -9392,7 +8993,7 @@ reg_get_min_max_bw_on_given_pwr_mode(struct wlan_regulatory_pdev_priv_obj
 				     uint16_t *min_bw,
 				     uint16_t *max_bw)
 {
-	return reg_get_min_max_bw_on_cur_chan_list(pdev_priv_obj,
+	return reg_get_min_max_bw_on_cur_chan_list(pdev_priv_obj->pdev_ptr,
 						   freq_idx,
 						   min_bw, max_bw);
 }
@@ -9480,15 +9081,17 @@ QDF_STATUS reg_get_min_max_bw_reg_chan_list(struct wlan_objmgr_pdev *pdev,
 	}
 
 	if (freq_idx < MIN_6GHZ_CHANNEL)
-		return reg_get_min_max_bw_on_cur_chan_list(pdev_priv_obj,
-							   freq_idx,
-							   min_bw, max_bw);
+		return reg_get_min_max_bw_on_cur_chan_list(
+							pdev,
+							freq_idx,
+							min_bw, max_bw);
 
 	switch (in_6g_pwr_mode) {
 	case REG_CURRENT_PWR_MODE:
-		return reg_get_min_max_bw_on_cur_chan_list(pdev_priv_obj,
-							   freq_idx,
-							   min_bw, max_bw);
+		return reg_get_min_max_bw_on_cur_chan_list(
+							pdev,
+							freq_idx,
+							min_bw, max_bw);
 
 	case REG_BEST_PWR_MODE:
 	default:
@@ -9601,7 +9204,7 @@ qdf_freq_t reg_get_thresh_priority_freq(struct wlan_objmgr_pdev *pdev)
  * reg_get_eirp_from_psd_and_reg_max_eirp() - Get the EIRP by the computing the
  * minimum(max regulatory EIRP, EIRP computed from regulatory PSD)
  * @pdev: Pointer to pdev
- * @master_chan_list: Pointer to master_chan_list
+ * @mas_chan_list: Pointer to master_chan_list
  * @freq: Frequency in mhz
  * @bw: Bandwidth in mhz
  * @reg_eirp_pwr: Pointer to reg_eirp_pwr
@@ -10373,3 +9976,16 @@ QDF_STATUS reg_set_afc_power_event_received(struct wlan_objmgr_pdev *pdev,
 	return QDF_STATUS_SUCCESS;
 }
 #endif
+
+QDF_STATUS reg_process_r2p_table_update_response(struct wlan_objmgr_psoc *psoc,
+						 uint32_t pdev_id)
+{
+	struct wlan_lmac_if_reg_tx_ops *reg_tx_ops;
+	QDF_STATUS status = QDF_STATUS_E_FAILURE;
+
+	reg_tx_ops = reg_get_psoc_tx_ops(psoc);
+	if (reg_tx_ops->end_r2p_table_update_wait)
+		status = reg_tx_ops->end_r2p_table_update_wait(psoc, pdev_id);
+
+	return status;
+}

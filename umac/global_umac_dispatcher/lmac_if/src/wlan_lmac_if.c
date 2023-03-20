@@ -524,6 +524,9 @@ static void wlan_lmac_if_umac_reg_rx_ops_register(
 	wlan_lmac_if_register_afc_handlers(rx_ops);
 
 	wlan_lmac_if_register_super_chan_display(rx_ops);
+
+	rx_ops->reg_rx_ops.reg_r2p_table_update_response_handler =
+		tgt_reg_process_r2p_table_update_response;
 }
 
 #ifdef CONVERGED_P2P_ENABLE
@@ -712,7 +715,7 @@ register_dfs_bw_expand_rx_ops(struct wlan_lmac_if_dfs_rx_ops *rx_ops)
 }
 #endif
 
-#ifdef QCA_DFS_BW_PUNCTURE
+#if defined(QCA_DFS_BW_PUNCTURE) && !defined(CONFIG_REG_CLIENT)
 /* register_dfs_puncture_rx_ops() - Register DFS Rx-Ops for DFS puncture.
  * @rx_ops: Pointer to wlan_lmac_if_dfs_rx_ops.
  */
@@ -744,6 +747,7 @@ wlan_lmac_if_mgmt_rx_reo_rx_ops_register(
 			tgt_mgmt_rx_reo_fw_consumed_event_handler;
 	mgmt_rx_reo_rx_ops->host_drop_handler =
 			tgt_mgmt_rx_reo_host_drop_handler;
+	mgmt_rx_reo_rx_ops->release_frames = tgt_mgmt_rx_reo_release_frames;
 
 	return QDF_STATUS_SUCCESS;
 }
