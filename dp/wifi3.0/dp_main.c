@@ -5727,7 +5727,7 @@ QDF_STATUS dp_pdev_attach_wifi3(struct cdp_soc_t *txrx_soc,
 	pdev_context_size =
 		soc->arch_ops.txrx_get_context_size(DP_CONTEXT_TYPE_PDEV);
 	if (pdev_context_size)
-		pdev = dp_context_alloc_mem(soc, DP_PDEV_TYPE, pdev_context_size);
+		pdev = qdf_mem_common_alloc(pdev_context_size);
 
 	if (!pdev) {
 		dp_init_err("%pK: DP PDEV memory allocation failed",
@@ -5813,7 +5813,7 @@ fail2:
 	wlan_cfg_pdev_detach(pdev->wlan_cfg_ctx);
 fail1:
 	soc->pdev_list[pdev_id] = NULL;
-	qdf_mem_free(pdev);
+	qdf_mem_common_free(pdev);
 fail0:
 	return QDF_STATUS_E_FAILURE;
 }
@@ -6065,7 +6065,7 @@ static void dp_pdev_detach(struct cdp_pdev *txrx_pdev, int force)
 	wlan_cfg_pdev_detach(pdev->wlan_cfg_ctx);
 	wlan_minidump_remove(pdev, sizeof(*pdev), soc->ctrl_psoc,
 			     WLAN_MD_DP_PDEV, "dp_pdev");
-	dp_context_free_mem(soc, DP_PDEV_TYPE, pdev);
+	qdf_mem_common_free(pdev);
 }
 
 /*
