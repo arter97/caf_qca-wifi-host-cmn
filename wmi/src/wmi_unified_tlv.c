@@ -702,6 +702,8 @@ static const uint32_t vdev_param_tlv[] = {
 		  VDEV_PARAM_NON_AGG_SW_RETRY_TH),
 	PARAM_MAP(vdev_param_set_cmd_obss_pd_threshold,
 		  VDEV_PARAM_SET_CMD_OBSS_PD_THRESHOLD),
+	PARAM_MAP(vdev_param_set_profile,
+		  VDEV_PARAM_SET_PROFILE),
 };
 #endif
 
@@ -12914,26 +12916,26 @@ static QDF_STATUS extract_mgmt_rx_params_tlv(wmi_unified_t wmi_handle,
 
 	param_tlvs = (WMI_MGMT_RX_EVENTID_param_tlvs *) evt_buf;
 	if (!param_tlvs) {
-		wmi_err("Get NULL point message from FW");
+		wmi_err_rl("Get NULL point message from FW");
 		return QDF_STATUS_E_INVAL;
 	}
 
 	ev_hdr = param_tlvs->hdr;
 	if (!hdr) {
-		wmi_err("Rx event is NULL");
+		wmi_err_rl("Rx event is NULL");
 		return QDF_STATUS_E_INVAL;
 	}
 
 	if (IS_WMI_RX_MGMT_FRAME_STATUS_INVALID(ev_hdr->status)) {
-		wmi_err("RX mgmt frame decrypt error, discard it");
+		wmi_err_rl("RX mgmt frame decrypt error, discard it");
 		return QDF_STATUS_E_INVAL;
 	}
 	if ((ev_hdr->status) & WMI_RXERR_MIC) {
-		wmi_err("RX mgmt frame MIC mismatch for beacon protected frame");
+		wmi_err_rl("RX mgmt frame MIC mismatch for beacon protected frame");
 	}
 
 	if (ev_hdr->buf_len > param_tlvs->num_bufp) {
-		wmi_err("Rx mgmt frame length mismatch, discard it");
+		wmi_err_rl("Rx mgmt frame length mismatch, discard it");
 		return QDF_STATUS_E_INVAL;
 	}
 
@@ -18765,6 +18767,15 @@ extract_roam_scan_stats_tlv(wmi_unified_t wmi_handle, void *evt_buf,
 			dst->num_chan = MAX_ROAM_SCAN_CHAN;
 
 		src_chan = &param_buf->roam_scan_chan_info[chan_idx];
+
+		if ((dst->num_chan + chan_idx) >
+		    param_buf->num_roam_scan_chan_info) {
+			wmi_err("Invalid TLV. num_chan %d chan_idx %d num_roam_scan_chan_info %d",
+				dst->num_chan, chan_idx,
+				param_buf->num_roam_scan_chan_info);
+			return QDF_STATUS_SUCCESS;
+		}
+
 		for (i = 0; i < dst->num_chan; i++) {
 			dst->chan_freq[i] = src_chan->channel;
 			src_chan++;
@@ -18960,6 +18971,14 @@ extract_roam_11kv_stats_tlv(wmi_unified_t wmi_handle, void *evt_buf,
 
 	if (dst->num_freq > MAX_ROAM_SCAN_CHAN)
 		dst->num_freq = MAX_ROAM_SCAN_CHAN;
+
+	if ((dst->num_freq + rpt_idx) >
+	    param_buf->num_roam_neighbor_report_chan_info) {
+		wmi_err("Invalid TLV. num_freq %d rpt_idx %d num_roam_neighbor_report_chan_info %d",
+			dst->num_freq, rpt_idx,
+			param_buf->num_roam_scan_chan_info);
+		return QDF_STATUS_SUCCESS;
+	}
 
 	for (i = 0; i < dst->num_freq; i++) {
 		dst->freq[i] = src_freq->channel;
