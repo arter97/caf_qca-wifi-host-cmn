@@ -34,6 +34,10 @@
 #define MAX_AFC_BW 160
 #endif
 
+/* Check if the freq lies within low_freq and high_freq (both inclusive) */
+#define IS_WITHIN_RANGE_ASYM(_freq, _low_freq, _high_freq)\
+	(((_freq) >= (_low_freq) && (_freq) <= (_high_freq)))
+
 /**
  * reg_reset_reg_rules() - provides the reg domain rules info
  * @reg_rules: reg rules pointer
