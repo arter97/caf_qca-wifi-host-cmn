@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2017-2020 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -17,7 +17,7 @@
  * PERFORMANCE OF THIS SOFTWARE.
  */
 
- /**
+/**
  * DOC: Public API initialization of crypto service with object manager
  */
 #include <qdf_types.h>
@@ -226,7 +226,8 @@ void wlan_crypto_free_vdev_key(struct wlan_objmgr_vdev *vdev)
 
 static QDF_STATUS wlan_crypto_vdev_obj_destroy_handler(
 						struct wlan_objmgr_vdev *vdev,
-						void *arg){
+						void *arg)
+{
 	struct wlan_crypto_comp_priv *crypto_priv;
 
 	if (!vdev) {
@@ -255,7 +256,8 @@ static QDF_STATUS wlan_crypto_vdev_obj_destroy_handler(
 
 static QDF_STATUS wlan_crypto_peer_obj_destroy_handler(
 						struct wlan_objmgr_peer *peer,
-						void *arg){
+						void *arg)
+{
 	struct wlan_crypto_comp_priv *crypto_priv;
 
 	if (!peer) {
@@ -277,12 +279,7 @@ static QDF_STATUS wlan_crypto_peer_obj_destroy_handler(
 
 	return QDF_STATUS_SUCCESS;
 }
-/**
- * __wlan_crypto_init - Init the crypto service with object manager
- *                    Called from crypto init context.
- *
- * Return: QDF_STATUS_SUCCESS - in case of success
- */
+
 QDF_STATUS __wlan_crypto_init(void)
 {
 	QDF_STATUS status = QDF_STATUS_SUCCESS;
@@ -326,12 +323,6 @@ register_success:
 	return status;
 }
 
-/**
- * __wlan_crypto_deinit - Deinit the crypto service with object manager
- *                         Called from crypto context.
- *
- * Return: QDF_STATUS_SUCCESS - in case of success
- */
 QDF_STATUS __wlan_crypto_deinit(void)
 {
 

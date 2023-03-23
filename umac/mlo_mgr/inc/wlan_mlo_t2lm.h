@@ -23,6 +23,9 @@
 
 #include <wlan_cmn_ieee80211.h>
 #include <wlan_mlo_mgr_public_structs.h>
+#ifdef WMI_AP_SUPPORT
+#include <wlan_cmn.h>
+#endif
 
 struct mlo_vdev_host_tid_to_link_map_resp;
 struct wlan_mlo_dev_context;
@@ -30,10 +33,25 @@ struct wlan_mlo_dev_context;
 /* Max T2LM TIDS count */
 #define T2LM_MAX_NUM_TIDS 8
 
+#ifdef WMI_AP_SUPPORT
+/* Max no. of Preferred links */
+#define MAX_PREFERRED_LINKS 4
+#endif
+
 /* Max T2LM callback handlers */
 #define MAX_T2LM_HANDLERS 50
 
 #define T2LM_EXPECTED_DURATION_MAX_VALUE 0xFFFFFF
+
+/* Mapping switch time represented as bits 10 to 25 of the TSF value */
+#define WLAN_T2LM_MAPPING_SWITCH_TSF_BITS 0x3FFFC00
+
+/* There is a delay involved to receive and process the beacon/probe response
+ * T2LM IE from AP. To match mapping switch timer expiry in both AP and STA,
+ * advance timer expiry in STA by 100ms (= 98 * 1024 / 1000 = 100).
+ */
+#define WLAN_T2LM_MAPPING_SWITCH_TIME_DELAY 98
+
 /**
  * enum wlan_t2lm_direction - Indicates the direction for which TID-to-link
  * mapping is available.
@@ -53,6 +71,81 @@ enum wlan_t2lm_direction {
 	WLAN_T2LM_MAX_DIRECTION,
 	WLAN_T2LM_INVALID_DIRECTION,
 };
+
+#ifdef WMI_AP_SUPPORT
+/**
+ * enum wlan_link_band_caps - Represents the band capability of
+ * a link.
+ *
+ * @WLAN_LINK_BAND_INVALID: Invalid band
+ * @WLAN_LINK_BAND_2GHZ: 2GHz link
+ * @WLAN_LINK_BAND_5GHZ: 5GHz link
+ * @WLAN_LINK_BAND_5GHZ_LOW: 5GHz Low band link
+ * @WLAN_LINK_BAND_5GHZ_HIGH: 5GHz High band link
+ * @WLAN_LINK_BAND_6GHZ: 6GHz link
+ * @WLAN_LINK_BAND_6GHZ_LOW: 6GHz Low band link
+ * @WLAN_LINK_BAND_6GHZ_HIGH: 6GHz High band link
+ */
+enum wlan_link_band_caps {
+	WLAN_LINK_BAND_INVALID = 0,
+	WLAN_LINK_BAND_2GHZ = 1,
+	WLAN_LINK_BAND_5GHZ = 2,
+	WLAN_LINK_BAND_5GHZ_LOW = 3,
+	WLAN_LINK_BAND_5GHZ_HIGH = 4,
+	WLAN_LINK_BAND_6GHZ = 5,
+	WLAN_LINK_BAND_6GHZ_LOW = 6,
+	WLAN_LINK_BAND_6GHZ_HIGH = 7,
+};
+
+/**
+ * struct wlan_link_preference - Preferred link structure
+ * @num_pref_links: non-zero values indicate that preferred link order
+ * is present.
+ * @pref_order: Preferred links in order.it is in form of hardware link id.
+ * @timeout: timeout values for all the access categories.
+ */
+struct wlan_link_preference {
+	uint8_t num_pref_links;
+	uint8_t pref_order[MAX_PREFERRED_LINKS];
+	uint32_t timeout[WIFI_AC_MAX];
+};
+
+/**
+ * struct wlan_t2lm_of_tids - TID-to-link mapping for a given direction
+ * @direction: direction from 'enum wlan_t2lm_direction'
+ * @t2lm_provisioned_links: Link mapping for all the TIDs.
+ * It is in form of enum wlan_link_band_caps.
+ */
+struct wlan_t2lm_of_tids {
+	enum wlan_t2lm_direction direction;
+	enum wlan_link_band_caps t2lm_provisioned_links[T2LM_MAX_NUM_TIDS];
+};
+
+/**
+ * struct wlan_preferred_links - Preferred link structure
+ * @peer_mld_mac_addr: STA MLD macaddr
+ * @num_t2lm_of_tids: non-zero value indicates that this structure is
+ * carrying the TID-to-link mapping.It indicates for how many directions,
+ * the TID-to-link mapping is present.
+ * @homogeneous_mapping: non-zero value indicates the provided mapping
+ * is homogeneous.
+ * @t2lm: Valid TID-to-link mapping for the directions
+ * @num_pref_links: non-zero values indicate that preferred link order is
+ * present.
+ * @preffered_link_order: Preferred links in order.
+ * The links will be represented interms of wlan_link_band_caps enum.
+ * @timeout: Timeout values for all the access categories.
+ */
+struct wlan_preferred_links {
+	uint8_t peer_mld_mac_addr[6];
+	uint8_t num_t2lm_of_tids;
+	int8_t homogeneous_mapping;
+	struct wlan_t2lm_of_tids t2lm[WLAN_T2LM_MAX_DIRECTION];
+	uint8_t num_pref_links;
+	enum wlan_link_band_caps preffered_link_order[MAX_PREFERRED_LINKS];
+	uint32_t timeout[WIFI_AC_MAX];
+};
+#endif
 
 /**
  * struct wlan_t2lm_info - TID-to-Link mapping information for the frames
@@ -163,10 +256,14 @@ enum wlan_t2lm_enable {
  *
  * @dialog_token: Save the dialog token used in T2LM request and response frame.
  * @t2lm_info: Provides the TID to LINK mapping information
+ * @link_preference: Provides the preferred link information
  */
 struct wlan_prev_t2lm_negotiated_info {
 	uint16_t dialog_token;
 	struct wlan_t2lm_info t2lm_info[WLAN_T2LM_MAX_DIRECTION];
+#ifdef WMI_AP_SUPPORT
+	struct wlan_link_preference link_preference;
+#endif
 };
 
 /**
@@ -178,6 +275,10 @@ struct wlan_prev_t2lm_negotiated_info {
  * @t2lm_info: Provides the TID-to-link mapping info for UL/DL/BiDi
  * @t2lm_tx_status: Status code corresponds to the transmitted T2LM frames
  * @t2lm_resp_type: T2LM status corresponds to T2LM response frame.
+ * @link_preference: Provides the preferred link information
+ * @t2lm_info_present: It will show the t2lm_info present or not
+ * @pref_link_present: It will show the preference link is present or not
+ * @ml_grp_id: MLO Group id which it belongs to
  */
 struct wlan_t2lm_onging_negotiation_info {
 	enum wlan_t2lm_category category;
@@ -185,6 +286,12 @@ struct wlan_t2lm_onging_negotiation_info {
 	struct wlan_t2lm_info t2lm_info[WLAN_T2LM_MAX_DIRECTION];
 	enum wlan_t2lm_tx_status t2lm_tx_status;
 	enum wlan_t2lm_resp_frm_type t2lm_resp_type;
+#ifdef WMI_AP_SUPPORT
+	struct wlan_link_preference link_preference;
+	bool t2lm_info_present;
+	bool pref_link_present;
+	uint8_t ml_grp_id;
+#endif
 };
 
 /**
@@ -228,14 +335,14 @@ struct wlan_mlo_t2lm_ie {
  * @t2lm_timer: T2LM timer
  * @timer_interval: T2LM Timer value
  * @timer_started: T2LM timer started or not
- * @t2lm_ie_index: T2LM IE index value
+ * @timer_out_time: T2LM timer target out time
  * @t2lm_dev_lock: lock to access struct
  */
 struct wlan_t2lm_timer {
 	qdf_timer_t t2lm_timer;
 	uint32_t timer_interval;
+	uint32_t timer_out_time;
 	bool timer_started;
-	uint8_t t2lm_ie_index;
 #ifdef WLAN_MLO_USE_SPINLOCK
 	qdf_spinlock_t t2lm_dev_lock;
 #else
@@ -259,8 +366,14 @@ typedef QDF_STATUS (*wlan_mlo_t2lm_link_update_handler)(
 /**
  * struct wlan_t2lm_context - T2LM IE information
  *
- * @num_of_t2lm_ie: Number of T2LM IE
- * @t2lm_ie: T2LM IE information
+ * @established_t2lm: Indicates the already established broadcast T2LM IE
+ *                    advertised by the AP in beacon/probe response frames.
+ *                    In this T2LM IE, expected duration flag is set to 1 and
+ *                    mapping switch time present flag is set to 0 when the
+ *                    mapping is non-default.
+ * @upcoming_t2lm: Indicates the new broadcast T2LM IE advertised by the AP in
+ *                 beacon/probe response frames. STA needs to use this mapping
+ *                 when expected duration in the established T2LM is expires.
  * @t2lm_timer: T2LM timer information
  * @t2lm_dev_lock: t2lm dev context lock
  * @tsf: time sync func value received via beacon
@@ -268,8 +381,8 @@ typedef QDF_STATUS (*wlan_mlo_t2lm_link_update_handler)(
  * @is_valid_handler: T2LM handler is valid or not
  */
 struct wlan_t2lm_context {
-	uint8_t num_of_t2lm_ie;
-	struct wlan_mlo_t2lm_ie t2lm_ie[WLAN_MAX_T2LM_IE];
+	struct wlan_mlo_t2lm_ie established_t2lm;
+	struct wlan_mlo_t2lm_ie upcoming_t2lm;
 	struct wlan_t2lm_timer t2lm_timer;
 #ifdef WLAN_MLO_USE_SPINLOCK
 	qdf_spinlock_t t2lm_dev_lock;
@@ -431,11 +544,13 @@ QDF_STATUS wlan_mlo_parse_t2lm_ie(
  * wlan_mlo_add_t2lm_ie() - API to add TID-to-link mapping IE
  * @frm: Pointer to buffer
  * @t2lm: Pointer to t2lm mapping structure
+ * @vdev: Pointer to vdev structure
  *
  * Return: Updated frame pointer
  */
 uint8_t *wlan_mlo_add_t2lm_ie(uint8_t *frm,
-			      struct wlan_t2lm_onging_negotiation_info *t2lm);
+			      struct wlan_t2lm_onging_negotiation_info *t2lm,
+			      struct wlan_objmgr_vdev *vdev);
 
 /**
  * wlan_mlo_vdev_tid_to_link_map_event() - API to process the revceived T2LM
@@ -487,13 +602,25 @@ QDF_STATUS wlan_mlo_parse_bcn_prbresp_t2lm_ie(
 		struct wlan_t2lm_context *t2lm_ctx, uint8_t *ie);
 
 /**
+ * wlan_mlo_parse_t2lm_info() - Parse T2LM IE fields
+ * @ie: Pointer to T2LM IE
+ * @t2lm: Pointer to T2LM structure
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS wlan_mlo_parse_t2lm_info(uint8_t *ie,
+				    struct wlan_t2lm_info *t2lm);
+
+/**
  * wlan_mlo_add_t2lm_info_ie() - Add T2LM IE for UL/DL/Bidirection
  * @frm: Pointer to buffer
  * @t2lm: Pointer to t2lm mapping structure
+ * @vdev: Pointer to vdev structure
  *
  * Return: Updated frame pointer
  */
-uint8_t *wlan_mlo_add_t2lm_info_ie(uint8_t *frm, struct wlan_t2lm_info *t2lm);
+uint8_t *wlan_mlo_add_t2lm_info_ie(uint8_t *frm, struct wlan_t2lm_info *t2lm,
+				   struct wlan_objmgr_vdev *vdev);
 
 /**
  * wlan_mlo_t2lm_timer_init() - API to initialize t2lm timer
@@ -517,13 +644,12 @@ wlan_mlo_t2lm_timer_deinit(struct wlan_objmgr_vdev *vdev);
  * wlan_mlo_t2lm_timer_start() - API to start T2LM timer
  * @vdev: Pointer to vdev
  * @interval: T2LM timer interval
- * @t2lm_ie_index: T2LM IE index
  *
  * Return: qdf status
  */
 QDF_STATUS
 wlan_mlo_t2lm_timer_start(struct wlan_objmgr_vdev *vdev,
-			  uint32_t interval, uint8_t t2lm_ie_index);
+			  uint32_t interval);
 
 /**
  * wlan_mlo_t2lm_timer_stop() - API to stop TID-to-link mapping timer
@@ -546,12 +672,11 @@ wlan_mlo_t2lm_timer_expiry_handler(void *vdev);
 /**
  * wlan_handle_t2lm_timer() - API to handle TID-to-link mapping timer
  * @vdev: Pointer to vdev
- * @ie_idx: ie index value
  *
  * Return: qdf status
  */
 QDF_STATUS
-wlan_handle_t2lm_timer(struct wlan_objmgr_vdev *vdev, uint8_t ie_idx);
+wlan_handle_t2lm_timer(struct wlan_objmgr_vdev *vdev);
 
 /**
  * wlan_process_bcn_prbrsp_t2lm_ie() - API to process the received T2LM IE from
@@ -566,6 +691,17 @@ QDF_STATUS wlan_process_bcn_prbrsp_t2lm_ie(struct wlan_objmgr_vdev *vdev,
 					   struct wlan_t2lm_context *rx_t2lm_ie,
 					   uint64_t tsf);
 
+/**
+ * wlan_send_tid_to_link_mapping() - API to send T2LM info received from beacon,
+ * probe response or action frame to FW.
+ *
+ * @vdev: Pointer to vdev
+ * @t2lm: T2LM info
+ *
+ * Return QDF_STATUS
+ */
+QDF_STATUS wlan_send_tid_to_link_mapping(struct wlan_objmgr_vdev *vdev,
+					 struct wlan_t2lm_info *t2lm);
 #else
 static inline QDF_STATUS wlan_mlo_parse_t2lm_ie(
 	struct wlan_t2lm_onging_negotiation_info *t2lm, uint8_t *ie)
@@ -575,7 +711,8 @@ static inline QDF_STATUS wlan_mlo_parse_t2lm_ie(
 
 static inline
 int8_t *wlan_mlo_add_t2lm_ie(uint8_t *frm,
-			     struct wlan_t2lm_onging_negotiation_info *t2lm)
+			     struct wlan_t2lm_onging_negotiation_info *t2lm,
+			     struct wlan_objmgr_vdev *vdev)
 {
 	return frm;
 }
@@ -605,7 +742,15 @@ QDF_STATUS wlan_mlo_parse_bcn_prbresp_t2lm_ie(
 }
 
 static inline
-uint8_t *wlan_mlo_add_t2lm_info_ie(uint8_t *frm, struct wlan_t2lm_info *t2lm)
+QDF_STATUS wlan_mlo_parse_t2lm_info(uint8_t *ie,
+				    struct wlan_t2lm_info *t2lm)
+{
+	return QDF_STATUS_E_FAILURE;
+}
+
+static inline
+uint8_t *wlan_mlo_add_t2lm_info_ie(uint8_t *frm, struct wlan_t2lm_info *t2lm,
+				   struct wlan_objmgr_vdev *vdev)
 {
 	return frm;
 }
@@ -624,7 +769,7 @@ wlan_mlo_t2lm_timer_deinit(struct wlan_objmgr_vdev *vdev)
 
 static inline QDF_STATUS
 wlan_mlo_t2lm_timer_start(struct wlan_objmgr_vdev *vdev,
-			  uint32_t interval, uint8_t t2lm_ie_index)
+			  uint32_t interval)
 {
 	return QDF_STATUS_E_NOSUPPORT;
 }
@@ -640,7 +785,7 @@ wlan_mlo_t2lm_timer_expiry_handler(void *vdev)
 {}
 
 static inline QDF_STATUS
-wlan_handle_t2lm_timer(struct wlan_objmgr_vdev *vdev, uint8_t ie_idx)
+wlan_handle_t2lm_timer(struct wlan_objmgr_vdev *vdev)
 {
 	return QDF_STATUS_E_NOSUPPORT;
 }
@@ -669,6 +814,13 @@ void wlan_unregister_t2lm_link_update_notify_handler(
 
 static inline QDF_STATUS wlan_mlo_dev_t2lm_notify_link_update(
 		struct wlan_mlo_dev_context *mldev)
+{
+	return QDF_STATUS_SUCCESS;
+}
+
+static inline
+QDF_STATUS wlan_send_tid_to_link_mapping(struct wlan_objmgr_vdev *vdev,
+					 struct wlan_t2lm_info *t2lm)
 {
 	return QDF_STATUS_SUCCESS;
 }

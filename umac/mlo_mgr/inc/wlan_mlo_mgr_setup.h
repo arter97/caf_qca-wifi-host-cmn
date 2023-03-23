@@ -1,4 +1,4 @@
-/* Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
+/* Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -13,7 +13,7 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/*
+/**
  * DOC: contains MLO manager public file containing setup/teardown functionality
  */
 
@@ -61,7 +61,7 @@ void mlo_get_soc_list(struct wlan_objmgr_psoc **soc_list, uint8_t grp_id,
  * mlo_setup_update_soc_id_list() - API to update the list of SOCs ids
  *                                  participating in that MLO group
  * @grp_id: ID of the required mlo group
- * @soc_list: soc ids part of that MLO group
+ * @soc_id_list: soc ids part of that MLO group
  *
  * Return: None
  */
@@ -106,7 +106,7 @@ uint8_t mlo_setup_get_total_socs(uint8_t grp_id);
 
 /**
  * mlo_setup_update_num_links() - API to update num links in soc for mlo
- * @soc_id: soc object of SoC corresponding to num_link
+ * @psoc: soc object of SoC corresponding to num_link
  * @grp_id: ID of the required mlo group
  * @num_links: Number of links in that soc
  *
@@ -115,6 +115,27 @@ uint8_t mlo_setup_get_total_socs(uint8_t grp_id);
 void mlo_setup_update_num_links(struct wlan_objmgr_psoc *psoc,
 				uint8_t grp_id,
 				uint8_t num_links);
+
+/**
+ * mlo_setup_update_chip_info() - API to update mlo chip info
+ * @psoc: soc to be checked
+ * @chip_id: chip_id to update the info about
+ * @adj_chip_id: adjacent chip ID's
+ *
+ * Return: None.
+ */
+void mlo_setup_update_chip_info(struct wlan_objmgr_psoc *psoc, uint8_t chip_id,
+				uint8_t *adj_chip_id);
+
+/**
+ * mlo_chip_adjacent() - API to return if two chips are adjacent
+ * @psoc_id_1: Psoc id 1
+ * @psoc_id_2: Psoc id 2
+ * @is_adjacent: Are the above 2 psocs adjacent or not
+ * Return: QDF_STATUS: success / failure.
+ */
+QDF_STATUS mlo_chip_adjacent(uint8_t psoc_id_1, uint8_t psoc_id_2,
+			     uint8_t *is_adjacent);
 
 /**
  * mlo_setup_update_soc_ready() - API to notify when FW init done

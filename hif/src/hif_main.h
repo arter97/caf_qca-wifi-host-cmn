@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2013-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -43,6 +43,7 @@
 #ifdef HIF_CE_LOG_INFO
 #include "qdf_notifier.h"
 #endif
+#include "pld_common.h"
 
 #define HIF_MIN_SLEEP_INACTIVITY_TIME_MS     50
 #define HIF_SLEEP_INACTIVITY_TIMER_PERIOD_MS 60
@@ -99,6 +100,7 @@
 #define QCA6490_EMULATION_DEVICE_ID (0x010a)
 #define QCA6490_DEVICE_ID (0x1103)
 #define MANGO_DEVICE_ID (0x110a)
+#define PEACH_DEVICE_ID (0x110e)
 
 /* TODO: change IDs for Moselle */
 #define QCA6750_EMULATION_DEVICE_ID (0x010c)
@@ -106,6 +108,9 @@
 
 /* TODO: change IDs for Hamilton */
 #define KIWI_DEVICE_ID (0x1107)
+
+/*TODO: change IDs for Evros */
+#define WCN6450_DEVICE_ID (0x1108)
 
 #define ADRASTEA_DEVICE_ID_P2_E12 (0x7021)
 #define AR9887_DEVICE_ID    (0x0050)
@@ -153,6 +158,12 @@
 #define NUM_CE_CONTEXT (NUM_CE_AVAILABLE + 1)
 
 #define CE_INTERRUPT_IDX(x) x
+
+#ifdef WLAN_64BIT_DATA_SUPPORT
+#define RRI_ON_DDR_MEM_SIZE CE_COUNT * sizeof(uint64_t)
+#else
+#define RRI_ON_DDR_MEM_SIZE CE_COUNT * sizeof(uint32_t)
+#endif
 
 struct ce_int_assignment {
 	uint8_t msi_idx[NUM_CE_AVAILABLE];
@@ -246,6 +257,8 @@ struct hif_umac_reset_ctx {
 };
 #endif
 
+#define MAX_SHADOW_REGS 40
+
 struct hif_softc {
 	struct hif_opaque_softc osc;
 	struct hif_config_info hif_config;
@@ -253,6 +266,7 @@ struct hif_softc {
 	void __iomem *mem;
 	void __iomem *mem_ce;
 	void __iomem *mem_cmem;
+	void __iomem *mem_pmm_base;
 	enum qdf_bus_type bus_type;
 	struct hif_bus_ops bus_ops;
 	void *ce_id_to_state[CE_COUNT_MAX];
@@ -282,7 +296,7 @@ struct hif_softc {
 	atomic_t active_tasklet_cnt;
 	atomic_t active_grp_tasklet_cnt;
 	atomic_t link_suspended;
-	uint32_t *vaddr_rri_on_ddr;
+	void *vaddr_rri_on_ddr;
 	qdf_dma_addr_t paddr_rri_on_ddr;
 #ifdef CONFIG_BYPASS_QMI
 	uint32_t *vaddr_qmi_bypass;
@@ -368,6 +382,10 @@ struct hif_softc {
 #ifdef DP_UMAC_HW_RESET_SUPPORT
 	struct hif_umac_reset_ctx umac_reset_ctx;
 #endif
+#ifdef CONFIG_SHADOW_V3
+	struct pld_shadow_reg_v3_cfg shadow_regs[MAX_SHADOW_REGS];
+	int num_shadow_registers_configured;
+#endif
 };
 
 static inline
@@ -412,7 +430,7 @@ static inline int hif_get_num_active_tasklets(struct hif_softc *scn)
 	return qdf_atomic_read(&scn->active_tasklet_cnt);
 }
 
-/**
+/*
  * Max waiting time during Runtime PM suspend to finish all
  * the tasks. This is in the multiple of 10ms.
  */
@@ -509,7 +527,7 @@ bool hif_is_target_ready(struct hif_softc *scn);
 
 /**
  * hif_get_bandwidth_level() - API to get the current bandwidth level
- * @scn: HIF Context
+ * @hif_handle: HIF Context
  *
  * Return: PLD bandwidth level
  */
@@ -586,8 +604,14 @@ static inline void hif_usb_ramdump_handler(struct hif_opaque_softc *scn) {}
  */
 irqreturn_t hif_wake_interrupt_handler(int irq, void *context);
 
-#ifdef HIF_SNOC
+#if defined(HIF_SNOC)
 bool hif_is_target_register_access_allowed(struct hif_softc *hif_sc);
+#elif defined(HIF_IPCI)
+static inline bool
+hif_is_target_register_access_allowed(struct hif_softc *hif_sc)
+{
+	return !(hif_sc->recovery);
+}
 #else
 static inline
 bool hif_is_target_register_access_allowed(struct hif_softc *hif_sc)
@@ -618,6 +642,12 @@ static inline
 void hif_runtime_prevent_linkdown(struct hif_softc *scn, bool is_get)
 {
 }
+#endif
+
+#ifdef HIF_HAL_REG_ACCESS_SUPPORT
+void hif_reg_window_write(struct hif_softc *scn,
+			  uint32_t offset, uint32_t value);
+uint32_t hif_reg_window_read(struct hif_softc *scn, uint32_t offset);
 #endif
 
 #endif /* __HIF_MAIN_H__ */

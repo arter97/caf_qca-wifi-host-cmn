@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2014-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -104,12 +104,6 @@ QDF_STATUS reg_read_current_country(struct wlan_objmgr_psoc *psoc,
 	return QDF_STATUS_SUCCESS;
 }
 
-/**
- * reg_set_default_country() - Read the default country for the regdomain
- * @country: country code.
- *
- * Return: QDF_STATUS
- */
 QDF_STATUS reg_set_default_country(struct wlan_objmgr_psoc *psoc,
 				   uint8_t *country)
 {
@@ -398,20 +392,36 @@ QDF_STATUS reg_get_domain_from_country_code(v_REGDOMAIN_t *reg_domain_ptr,
 }
 
 #ifdef CONFIG_REG_CLIENT
+#ifdef CONFIG_BAND_6GHZ
 QDF_STATUS
 reg_get_6g_power_type_for_ctry(struct wlan_objmgr_psoc *psoc,
+			       struct wlan_objmgr_pdev *pdev,
 			       uint8_t *ap_ctry, uint8_t *sta_ctry,
 			       enum reg_6g_ap_type *pwr_type_6g,
 			       bool *ctry_code_match,
 			       enum reg_6g_ap_type ap_pwr_type)
 {
-	*pwr_type_6g = REG_INDOOR_AP;
+	struct wlan_regulatory_pdev_priv_obj *pdev_priv_obj;
 
-	reg_debug("Country IE:%c%c, STA country:%c%c", ap_ctry[0],
-		  ap_ctry[1], sta_ctry[0], sta_ctry[1]);
+	*pwr_type_6g = ap_pwr_type;
+	pdev_priv_obj = reg_get_pdev_obj(pdev);
+	if (!pdev_priv_obj) {
+		reg_err("pdev priv obj null");
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	reg_debug("STA country: %c%c, AP country: %c%c, AP power type: %d",
+		  sta_ctry[0], sta_ctry[1], ap_ctry[0], ap_ctry[1],
+		  ap_pwr_type);
 
 	if (!qdf_mem_cmp(ap_ctry, sta_ctry, REG_ALPHA2_LEN)) {
 		*ctry_code_match = true;
+		if (ap_pwr_type == REG_VERY_LOW_POWER_AP) {
+			if (!pdev_priv_obj->reg_rules.num_of_6g_client_reg_rules[ap_pwr_type]) {
+				reg_err("VLP not supported, can't connect");
+				return QDF_STATUS_E_NOSUPPORT;
+			}
+		}
 		return QDF_STATUS_SUCCESS;
 	}
 
@@ -451,6 +461,18 @@ reg_get_6g_power_type_for_ctry(struct wlan_objmgr_psoc *psoc,
 
 	return QDF_STATUS_SUCCESS;
 }
+#else
+QDF_STATUS
+reg_get_6g_power_type_for_ctry(struct wlan_objmgr_psoc *psoc,
+			       struct wlan_objmgr_pdev *pdev,
+			       uint8_t *ap_ctry, uint8_t *sta_ctry,
+			       enum reg_6g_ap_type *pwr_type_6g,
+			       bool *ctry_code_match,
+			       enum reg_6g_ap_type ap_pwr_type)
+{
+	return QDF_STATUS_SUCCESS;
+}
+#endif
 #endif
 
 #ifdef FEATURE_WLAN_CH_AVOID_EXT
@@ -801,18 +823,6 @@ bool reg_get_fcc_constraint(struct wlan_objmgr_pdev *pdev, uint32_t freq)
 }
 
 #ifdef CONFIG_BAND_6GHZ
-/**
- * reg_is_afc_available() - check if the automated frequency control system is
- * available, function will need to be updated once AFC is implemented
- * @pdev: Pointer to pdev structure
- *
- * Return: false since the AFC system is not yet available
- */
-static bool reg_is_afc_available(struct wlan_objmgr_pdev *pdev)
-{
-	return false;
-}
-
 enum reg_6g_ap_type reg_decide_6g_ap_pwr_type(struct wlan_objmgr_pdev *pdev)
 {
 	struct wlan_regulatory_pdev_priv_obj *pdev_priv_obj;
@@ -824,7 +834,8 @@ enum reg_6g_ap_type reg_decide_6g_ap_pwr_type(struct wlan_objmgr_pdev *pdev)
 		return REG_VERY_LOW_POWER_AP;
 	}
 
-	if (reg_is_afc_available(pdev)) {
+	if (wlan_reg_is_afc_power_event_received(pdev) &&
+	    pdev_priv_obj->reg_rules.num_of_6g_ap_reg_rules[REG_STANDARD_POWER_AP]) {
 		ap_pwr_type = REG_STANDARD_POWER_AP;
 	} else if (pdev_priv_obj->indoor_chan_enabled) {
 		if (pdev_priv_obj->reg_rules.num_of_6g_ap_reg_rules[REG_INDOOR_AP])
@@ -878,6 +889,8 @@ static void reg_change_pdev_for_config(struct wlan_objmgr_psoc *psoc,
 	pdev_priv_obj->band_capability = psoc_priv_obj->band_capability;
 	pdev_priv_obj->sta_sap_scc_on_indoor_channel =
 		psoc_priv_obj->sta_sap_scc_on_indoor_channel;
+	pdev_priv_obj->p2p_indoor_ch_support =
+		psoc_priv_obj->p2p_indoor_ch_support;
 
 	reg_compute_pdev_current_chan_list(pdev_priv_obj);
 
@@ -940,6 +953,9 @@ QDF_STATUS reg_set_config_vars(struct wlan_objmgr_psoc *psoc,
 	reg_get_coex_unsafe_chan_reg_disable(psoc_priv_obj, config_vars);
 	psoc_priv_obj->sta_sap_scc_on_indoor_channel =
 		config_vars.sta_sap_scc_on_indoor_channel;
+	psoc_priv_obj->p2p_indoor_ch_support =
+		config_vars.p2p_indoor_ch_support;
+
 	reg_set_afc_vars(psoc_priv_obj, &config_vars);
 
 	status = wlan_objmgr_psoc_try_get_ref(psoc, WLAN_REGULATORY_SB_ID);

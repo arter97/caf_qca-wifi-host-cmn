@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -63,10 +63,10 @@ dp_mon_populate_ppdu_info_1_0(struct hal_rx_ppdu_info *hal_ppdu_info,
 	ppdu->punc_bw = 0;
 }
 
-/*
+/**
  * is_ppdu_txrx_capture_enabled() - API to check both pktlog and debug_sniffer
  *                              modes are enabled or not.
- * @dp_pdev: dp pdev handle.
+ * @pdev: dp pdev handle.
  *
  * Return: bool
  */
@@ -219,10 +219,8 @@ static
 void dp_mon_rings_deinit_1_0(struct dp_pdev *pdev)
 {
 	int mac_id = 0;
-	struct wlan_cfg_dp_pdev_ctxt *pdev_cfg_ctx;
 	struct dp_soc *soc = pdev->soc;
 
-	pdev_cfg_ctx = pdev->wlan_cfg_ctx;
 
 	for (mac_id = 0;
 	     mac_id  < soc->wlan_cfg_ctx->num_rxdma_status_rings_per_pdev;
@@ -241,10 +239,8 @@ static
 void dp_mon_rings_free_1_0(struct dp_pdev *pdev)
 {
 	int mac_id = 0;
-	struct wlan_cfg_dp_pdev_ctxt *pdev_cfg_ctx;
 	struct dp_soc *soc = pdev->soc;
 
-	pdev_cfg_ctx = pdev->wlan_cfg_ctx;
 
 	for (mac_id = 0;
 	     mac_id  < soc->wlan_cfg_ctx->num_rxdma_status_rings_per_pdev;
@@ -263,9 +259,6 @@ QDF_STATUS dp_mon_rings_init_1_0(struct dp_pdev *pdev)
 {
 	struct dp_soc *soc = pdev->soc;
 	int mac_id = 0;
-	struct wlan_cfg_dp_pdev_ctxt *pdev_cfg_ctx;
-
-	pdev_cfg_ctx = pdev->wlan_cfg_ctx;
 
 	for (mac_id = 0;
 	     mac_id  < soc->wlan_cfg_ctx->num_rxdma_status_rings_per_pdev;
@@ -400,7 +393,6 @@ QDF_STATUS dp_vdev_set_monitor_mode_buf_rings(struct dp_pdev *pdev)
 QDF_STATUS dp_vdev_set_monitor_mode_rings(struct dp_pdev *pdev,
 					  uint8_t delayed_replenish)
 {
-	struct wlan_cfg_dp_pdev_ctxt *pdev_cfg_ctx;
 	uint32_t mac_id;
 	uint32_t mac_for_pdev;
 	struct dp_soc *soc = pdev->soc;
@@ -409,7 +401,6 @@ QDF_STATUS dp_vdev_set_monitor_mode_rings(struct dp_pdev *pdev,
 	uint32_t num_entries;
 	struct dp_mon_pdev *mon_pdev = pdev->monitor_pdev;
 
-	pdev_cfg_ctx = pdev->wlan_cfg_ctx;
 
 	/* If monitor rings are already initialized, return from here */
 	if (mon_pdev->pdev_mon_init)
@@ -543,7 +534,7 @@ budget_done:
 
 /* MCL specific functions */
 #if defined(DP_CON_MON)
-/*
+/**
  * dp_mon_reap_timer_handler()- timer to reap monitor rings
  * reqd as we are not getting ppdu end interrupts
  * @arg: SoC Handle
@@ -709,7 +700,6 @@ static void dp_mon_neighbour_peer_add_ast(struct dp_pdev *pdev,
 	struct dp_neighbour_peer *neighbour_peer = NULL;
 	struct dp_mon_pdev *mon_pdev = pdev->monitor_pdev;
 	struct dp_soc *soc = pdev->soc;
-	uint32_t ret = 0;
 
 	if (mon_pdev->neighbour_peers_added) {
 		qdf_mem_copy(mac_addr,
@@ -724,11 +714,11 @@ static void dp_mon_neighbour_peer_add_ast(struct dp_pdev *pdev,
 			if (!qdf_mem_cmp(&neighbour_peer->neighbour_peers_macaddr,
 					 mac_addr,
 					 QDF_MAC_ADDR_SIZE)) {
-				ret = dp_peer_add_ast(soc,
-						      ta_peer,
-						      mac_addr,
-						      CDP_TXRX_AST_TYPE_WDS,
-						      flags);
+				dp_peer_add_ast(soc,
+						ta_peer,
+						mac_addr,
+						CDP_TXRX_AST_TYPE_WDS,
+						flags);
 				QDF_TRACE(QDF_MODULE_ID_DP,
 					  QDF_TRACE_LEVEL_INFO,
 					  "sa valid and nac roamed to wds");
@@ -826,8 +816,8 @@ QDF_STATUS dp_mon_htt_srng_setup_1_0(struct dp_soc *soc,
 /* MCL specific functions */
 #if defined(DP_CON_MON)
 
-/*
- * dp_service_mon_rings()- service monitor rings
+/**
+ * dp_service_mon_rings() - service monitor rings
  * @soc: soc dp handle
  * @quota: number of ring entry that can be serviced
  *
@@ -851,8 +841,8 @@ void dp_service_mon_rings(struct  dp_soc *soc, uint32_t quota)
 }
 #endif
 
-/*
- * dp_mon_peer_tx_init() – Initialize receive TID state in monitor peer
+/**
+ * dp_mon_peer_tx_init() - Initialize receive TID state in monitor peer
  * @pdev: Datapath pdev
  * @peer: Datapath peer
  *
@@ -867,8 +857,8 @@ dp_mon_peer_tx_init(struct dp_pdev *pdev, struct dp_peer *peer)
 	dp_peer_update_80211_hdr(peer->vdev, peer);
 }
 
-/*
- * dp_mon_peer_tx_cleanup() – Deinitialize receive TID state in monitor peer
+/**
+ * dp_mon_peer_tx_cleanup() - Deinitialize receive TID state in monitor peer
  * @vdev: Datapath vdev
  * @peer: Datapath peer
  *
@@ -950,7 +940,7 @@ static void dp_ppdu_desc_notify_1_0(struct dp_pdev *pdev, qdf_nbuf_t nbuf)
 
 	ppdu_desc = (struct cdp_tx_completion_ppdu *)qdf_nbuf_data(nbuf);
 
-	/**
+	/*
 	 * Deliver PPDU stats only for valid (acked) data
 	 * frames if sniffer mode is not enabled.
 	 * If sniffer mode is enabled, PPDU stats
@@ -981,7 +971,7 @@ static void dp_ppdu_desc_notify_1_0(struct dp_pdev *pdev, qdf_nbuf_t nbuf)
 #endif
 
 /**
- * dp_ppdu_stats_feat_enable_check_1_0 - Check if feature(s) is enabled to
+ * dp_ppdu_stats_feat_enable_check_1_0() - Check if feature(s) is enabled to
  *				consume ppdu stats from FW
  *
  * @pdev: Datapath pdev handle
@@ -1000,12 +990,12 @@ static bool dp_ppdu_stats_feat_enable_check_1_0(struct dp_pdev *pdev)
 }
 
 /**
- * dp_mon_tx_stats_update_1_0 - Update Tx stats from HTT PPDU completion path
+ * dp_mon_tx_stats_update_1_0() - Update Tx stats from HTT PPDU completion path
  *
- * @monitor: Monitor peer
+ * @mon_peer: Monitor peer
  * @ppdu: Tx PPDU user completion info
  */
-void
+static void
 dp_mon_tx_stats_update_1_0(struct dp_mon_peer *mon_peer,
 			   struct cdp_tx_completion_ppdu_user *ppdu)
 {
@@ -1015,7 +1005,7 @@ dp_mon_tx_stats_update_1_0(struct dp_mon_peer *mon_peer,
 
 #ifndef QCA_SUPPORT_FULL_MON
 /**
- * dp_rx_mon_process () - Core brain processing for monitor mode
+ * dp_rx_mon_process() - Core brain processing for monitor mode
  *
  * This API processes monitor destination ring followed by monitor status ring
  * Called from bottom half (tasklet/NET_RX_SOFTIRQ)
@@ -1025,7 +1015,7 @@ dp_mon_tx_stats_update_1_0(struct dp_mon_peer *mon_peer,
  * @mac_id: mac_id on which interrupt is received
  * @quota: Number of status ring entry that can be serviced in one shot.
  *
- * @Return: Number of reaped status ring entries
+ * Return: Number of reaped status ring entries
  */
 static inline uint32_t
 dp_rx_mon_process(struct dp_soc *soc, struct dp_intr *int_ctx,
@@ -1202,6 +1192,7 @@ dp_mon_register_feature_ops_1_0(struct dp_soc *soc)
 	mon_ops->rx_packet_length_set = NULL;
 	mon_ops->rx_mon_enable = NULL;
 	mon_ops->rx_wmask_subscribe = NULL;
+	mon_ops->rx_pkt_tlv_offset = NULL;
 	mon_ops->rx_enable_mpdu_logging = NULL;
 	mon_ops->rx_enable_fpmo = NULL;
 	mon_ops->mon_neighbour_peers_detach = dp_neighbour_peers_detach;
@@ -1305,6 +1296,7 @@ struct dp_mon_ops monitor_ops_1_0 = {
 	.mon_lite_mon_dealloc = NULL,
 	.mon_lite_mon_vdev_delete = NULL,
 	.mon_lite_mon_disable_rx = NULL,
+	.mon_lite_mon_is_rx_adv_filter_enable = NULL,
 };
 
 struct cdp_mon_ops dp_ops_mon_1_0 = {
@@ -1322,6 +1314,7 @@ struct cdp_mon_ops dp_ops_mon_1_0 = {
 	.txrx_set_lite_mon_peer_config = NULL,
 	.txrx_get_lite_mon_peer_config = NULL,
 	.txrx_is_lite_mon_enabled = NULL,
+	.txrx_get_lite_mon_legacy_feature_enabled = NULL,
 #endif
 	.txrx_set_mon_pdev_params_rssi_dbm_conv =
 				dp_mon_pdev_params_rssi_dbm_conv,

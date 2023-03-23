@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -327,26 +327,59 @@ static bool mlo_pre_link_up(struct wlan_objmgr_vdev *vdev)
 static bool mlo_handle_link_ready(struct wlan_objmgr_vdev *vdev)
 {
 	struct wlan_objmgr_vdev *vdev_list[WLAN_UMAC_MLO_MAX_VDEVS] = {NULL};
+	struct wlan_mlo_dev_context *mld_ctx = NULL;
 	uint16_t num_links = 0;
 	uint8_t i;
+	uint8_t idx;
+	enum wlan_vdev_state state;
+
 
 	if (!vdev || !vdev->mlo_dev_ctx) {
 		mlo_err("Invalid input");
 		return false;
 	}
 
-	if (!mlo_is_ap_vdev_up_allowed(vdev))
+	mld_ctx = vdev->mlo_dev_ctx;
+	mlo_ap_lock_acquire(vdev->mlo_dev_ctx->ap_ctx);
+	state = wlan_vdev_mlme_get_state(vdev);
+	if (state == WLAN_VDEV_S_UP) {
+		idx = mlo_get_link_vdev_ix(mld_ctx, vdev);
+		if (idx == MLO_INVALID_LINK_IDX) {
+			mlo_ap_lock_release(vdev->mlo_dev_ctx->ap_ctx);
+			return false;
+		}
+		wlan_util_change_map_index(mld_ctx->ap_ctx->mlo_vdev_up_bmap,
+					   idx, 1);
+	}
+
+	if (!mlo_is_ap_vdev_up_allowed(vdev)) {
+		mlo_ap_lock_release(vdev->mlo_dev_ctx->ap_ctx);
 		return false;
+	}
 
 	mlo_ap_get_vdev_list(vdev, &num_links, vdev_list);
 	if (!num_links || (num_links > QDF_ARRAY_SIZE(vdev_list))) {
 		mlo_err("Invalid number of VDEVs under AP-MLD");
+		mlo_ap_lock_release(vdev->mlo_dev_ctx->ap_ctx);
 		return false;
 	}
 
 	for (i = 0; i < num_links; i++) {
 		if (mlo_pre_link_up(vdev_list[i])) {
-			if (vdev_list[i] != vdev)
+			if (vdev_list[i] == vdev) {
+				mlo_release_vdev_ref(vdev_list[i]);
+				continue;
+			}
+
+			idx = mlo_get_link_vdev_ix(mld_ctx, vdev_list[i]);
+			if (idx == MLO_INVALID_LINK_IDX) {
+				mlo_release_vdev_ref(vdev_list[i]);
+				continue;
+			}
+
+			if (wlan_util_map_index_is_set(
+				vdev->mlo_dev_ctx->ap_ctx->mlo_vdev_up_bmap,
+				idx))
 				wlan_vdev_mlme_sm_deliver_evt(
 					vdev_list[i],
 					WLAN_VDEV_SM_EV_MLO_SYNC_COMPLETE,
@@ -355,6 +388,7 @@ static bool mlo_handle_link_ready(struct wlan_objmgr_vdev *vdev)
 		/* Release ref taken as part of mlo_ap_get_vdev_list */
 		mlo_release_vdev_ref(vdev_list[i]);
 	}
+	mlo_ap_lock_release(vdev->mlo_dev_ctx->ap_ctx);
 	return true;
 }
 
@@ -386,23 +420,31 @@ uint16_t mlo_ap_ml_peerid_alloc(void)
 {
 	struct mlo_mgr_context *mlo_ctx = wlan_objmgr_get_mlo_ctx();
 	uint16_t i;
+	uint16_t mlo_peer_id;
 
 	ml_peerid_lock_acquire(mlo_ctx);
+	mlo_peer_id = mlo_ctx->last_mlo_peer_id;
 	for (i = 0; i < mlo_ctx->max_mlo_peer_id; i++) {
-		if (qdf_test_bit(i, mlo_ctx->mlo_peer_id_bmap))
+		mlo_peer_id = (mlo_peer_id + 1) % mlo_ctx->max_mlo_peer_id;
+
+		if (!mlo_peer_id)
 			continue;
 
-		qdf_set_bit(i, mlo_ctx->mlo_peer_id_bmap);
+		if (qdf_test_bit(mlo_peer_id, mlo_ctx->mlo_peer_id_bmap))
+			continue;
+
+		qdf_set_bit(mlo_peer_id, mlo_ctx->mlo_peer_id_bmap);
 		break;
 	}
+	mlo_ctx->last_mlo_peer_id = mlo_peer_id;
 	ml_peerid_lock_release(mlo_ctx);
 
 	if (i == mlo_ctx->max_mlo_peer_id)
 		return MLO_INVALID_PEER_ID;
 
-	mlo_debug(" ML peer id %d is allocated", i + 1);
+	mlo_debug(" ML peer id %d is allocated", mlo_peer_id);
 
-	return i + 1;
+	return mlo_peer_id;
 }
 
 void mlo_ap_ml_peerid_free(uint16_t mlo_peer_id)
@@ -421,8 +463,8 @@ void mlo_ap_ml_peerid_free(uint16_t mlo_peer_id)
 	}
 
 	ml_peerid_lock_acquire(mlo_ctx);
-	if (qdf_test_bit(mlo_peer_id - 1, mlo_ctx->mlo_peer_id_bmap))
-		qdf_clear_bit(mlo_peer_id - 1, mlo_ctx->mlo_peer_id_bmap);
+	if (qdf_test_bit(mlo_peer_id, mlo_ctx->mlo_peer_id_bmap))
+		qdf_clear_bit(mlo_peer_id, mlo_ctx->mlo_peer_id_bmap);
 
 	ml_peerid_lock_release(mlo_ctx);
 

@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2017-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -17,7 +17,7 @@
  * PERFORMANCE OF THIS SOFTWARE.
  */
 
- /**
+/**
  * DOC: Public definitions  for crypto service
  */
 
@@ -190,15 +190,14 @@ typedef enum wlan_crypto_rsn_cap {
 } wlan_crypto_rsn_cap;
 
 /**
- * wlan_crypto_rsnx_cap - RSNXE capabilities
- * WLAN_CRYPTO_RSNX_CAP_PROTECTED_TWT: Protected TWT
- * WLAN_CRYPTO_RSNX_CAP_SAE_H2E: SAE Hash to Element
- * WLAN_CRYPTO_RSNX_CAP_SAE_PK: SAE PK
- * WLAN_CRYPTO_RSNX_CAP_SECURE_LTF: Secure LTF
- * WLAN_CRYPTO_RSNX_CAP_SECURE_RTT: Secure RTT
- * WLAN_CRYPTO_RSNX_CAP_PROT_RANGE_NEG: Protected Range Negotiation
- * WLAN_CRYPTO_RSNX_CAP_URNM_MFPR: Same as WLAN_CRYPTO_RSNX_CAP_PROT_RANGE_NEG
- *                                 and it's just a spec format.
+ * enum wlan_crypto_rsnx_cap - RSNXE capabilities
+ * @WLAN_CRYPTO_RSNX_CAP_PROTECTED_TWT: Protected TWT
+ * @WLAN_CRYPTO_RSNX_CAP_SAE_H2E: SAE Hash to Element
+ * @WLAN_CRYPTO_RSNX_CAP_SAE_PK: SAE PK
+ * @WLAN_CRYPTO_RSNX_CAP_SECURE_LTF: Secure LTF
+ * @WLAN_CRYPTO_RSNX_CAP_SECURE_RTT: Secure RTT
+ * @WLAN_CRYPTO_RSNX_CAP_URNM_MFPR: Unassociated Range
+ * Negotiation and Measurement MFP Required
  *
  * Definition: (IEEE Std 802.11-2020, 9.4.2.241, Table 9-780)
  * The Extended RSN Capabilities field, except its first 4 bits, is a
@@ -213,12 +212,11 @@ enum wlan_crypto_rsnx_cap {
 	WLAN_CRYPTO_RSNX_CAP_SAE_PK = 0x40,
 	WLAN_CRYPTO_RSNX_CAP_SECURE_LTF = 0x100,
 	WLAN_CRYPTO_RSNX_CAP_SECURE_RTT = 0x200,
-	WLAN_CRYPTO_RSNX_CAP_PROT_RANGE_NEG = 0x400,
-	WLAN_CRYPTO_RSNX_CAP_URNM_MFPR = WLAN_CRYPTO_RSNX_CAP_PROT_RANGE_NEG,
+	WLAN_CRYPTO_RSNX_CAP_URNM_MFPR = 0x8000,
 };
 
 /**
- * wlan_crypto_vdev_pasn_caps  - PASN peer related vdev
+ * enum wlan_crypto_vdev_pasn_caps  - PASN peer related vdev
  * crypto parameters
  * @WLAN_CRYPTO_URNM_MFPR: URNM MFP required in RSNXE
  * @WLAN_CRYPTO_MFPC: MFP capable bit from RSN IE
@@ -337,7 +335,7 @@ struct wlan_crypto_pmksa {
 
 #ifdef WLAN_ADAPTIVE_11R
 /**
- * struct wlan_crypto_pmksa - structure to store AKM(s) present in RSN IE of
+ * struct key_mgmt_list - structure to store AKM(s) present in RSN IE of
  * Beacon/Probe response
  * @key_mgmt: AKM(s) present in RSN IE of Beacon/Probe response
  */
@@ -411,7 +409,7 @@ typedef enum wlan_crypto_param_type {
  * @keyix:          key id
  * @cipher_type:    cipher type being used for this key
  * @key_type:       unicast or broadcast key
- * @mac_addr:       MAC address of the peer
+ * @macaddr:        MAC address of the peer
  * @src_addr:       Source mac address associated with the key
  * @cipher_table:   table which stores cipher related info
  * @private:        private pointer to save cipher context
@@ -465,7 +463,7 @@ struct wlan_crypto_key {
  * @keytsc:                     key transmit sequence counter
  * @keydata:                    key value
  * @txiv:                       wapi key tx iv
- * @rxiv:                       wapi key rx iv
+ * @recviv:                     wapi key rx iv
  * @filsaad:                    FILS AEAD data
  *
  * Key request structure used for setkey, getkey or delkey
@@ -501,7 +499,6 @@ struct wlan_crypto_req_key {
  * @register_events: function pointer to register wmi event handler
  * @deregister_events: function pointer to deregister wmi event handler
  */
-
 struct wlan_lmac_if_crypto_tx_ops {
 	QDF_STATUS (*allockey)(struct wlan_objmgr_vdev *vdev,
 			       struct wlan_crypto_key *key,
@@ -531,10 +528,11 @@ struct wlan_lmac_if_crypto_tx_ops {
 /**
  * struct wlan_lmac_if_crypto_rx_ops - structure of crypto rx  function
  *                  pointers
- * @encap: function pointer to encap tx frame
- * @decap:  function pointer to decap rx frame in hw
- * @enmic: function pointer to enmic tx frame
- * @demic: function pointer to demic rx frame
+ * @crypto_encap: function pointer to encap tx frame
+ * @crypto_decap:  function pointer to decap rx frame in hw
+ * @crypto_enmic: function pointer to enmic tx frame
+ * @crypto_demic: function pointer to demic rx frame
+ * @set_peer_wep_keys: function pointer to set WEP keys
  * @get_rxpn: function pointer to get current Rx pn value of peer
  */
 
@@ -589,5 +587,14 @@ struct wlan_lmac_if_crypto_rx_ops {
 	 QDF_HAS_PARAM(akm, WLAN_CRYPTO_KEY_MGMT_FT_FILS_SHA384) || \
 	 QDF_HAS_PARAM(akm, WLAN_CRYPTO_KEY_MGMT_FT_PSK_SHA384) || \
 	 QDF_HAS_PARAM(akm, WLAN_CRYPTO_KEY_MGMT_PSK_SHA384))
+
+#define WLAN_CRYPTO_IS_WPA3(akm) \
+	(QDF_HAS_PARAM(akm, WLAN_CRYPTO_KEY_MGMT_SAE) || \
+	 QDF_HAS_PARAM(akm, WLAN_CRYPTO_KEY_MGMT_FT_SAE) || \
+	 QDF_HAS_PARAM(akm, WLAN_CRYPTO_KEY_MGMT_IEEE8021X_SUITE_B_192) || \
+	 QDF_HAS_PARAM(akm, WLAN_CRYPTO_KEY_MGMT_OWE) || \
+	 QDF_HAS_PARAM(akm, WLAN_CRYPTO_KEY_MGMT_DPP) || \
+	 QDF_HAS_PARAM(akm, WLAN_CRYPTO_KEY_MGMT_FT_IEEE8021X_SHA384) || \
+	 QDF_HAS_PARAM(akm, WLAN_CRYPTO_KEY_MGMT_SAE_EXT_KEY))
 
 #endif /* end of _WLAN_CRYPTO_GLOBAL_DEF_H_ */

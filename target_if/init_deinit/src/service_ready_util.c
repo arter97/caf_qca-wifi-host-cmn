@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2017-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023, Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -263,7 +263,7 @@ static bool new_hw_mode_preferred(uint32_t current_hw_mode,
 }
 
 /**
- * select_preferred_mode() - Select preferred hw mode based on current mode.
+ * select_preferred_hw_mode() - Select preferred hw mode based on current mode.
  * @tgt_hdl: target_psoc_info object
  * @hw_mode_caps: HW mode caps of new mode id that needs to checked for
  *                selection.
@@ -583,6 +583,29 @@ exit:
 	return qdf_status_to_os_return(status);
 }
 
+int init_deinit_populate_sap_coex_capability(struct wlan_objmgr_psoc *psoc,
+					     wmi_unified_t handle,
+					     uint8_t *event)
+{
+	struct wmi_host_coex_fix_chan_cap sap_coex_fixed_chan_cap;
+	struct target_psoc_info *psoc_info;
+	QDF_STATUS status;
+
+	qdf_mem_zero(&sap_coex_fixed_chan_cap,
+		     sizeof(struct wmi_host_coex_fix_chan_cap));
+
+	status = wmi_extract_sap_coex_cap_service_ready_ext2(handle, event,
+					&sap_coex_fixed_chan_cap);
+	if (QDF_IS_STATUS_ERROR(status)) {
+		target_if_err("Extraction of sap_coex_chan_pref cap failed");
+		goto exit;
+	}
+	psoc_info = wlan_psoc_get_tgt_if_handle(psoc);
+	target_psoc_set_sap_coex_fixed_chan_cap(psoc_info,
+				!!sap_coex_fixed_chan_cap.fix_chan_priority);
+exit:
+	return qdf_status_to_os_return(status);
+}
 
 QDF_STATUS init_deinit_dbr_ring_cap_free(
 		struct target_psoc_info *tgt_psoc_info)
@@ -622,7 +645,7 @@ qdf_export_symbol(init_deinit_spectral_scaling_params_free);
  * init_deinit_update_phy_reg_cap() - Update the low/high frequency for phy0.
  * @psoc: PSOC common object
  * @info: FW or lower layer related info
- * @wlan_psoc_host_hal_reg_capabilities_ext: Reg caps per PHY
+ * @reg_cap: Reg caps per PHY
  *
  * For the DBS_SBS capable board, update the low or high frequency
  * for phy0 by leveraging the frequency populated for phy2

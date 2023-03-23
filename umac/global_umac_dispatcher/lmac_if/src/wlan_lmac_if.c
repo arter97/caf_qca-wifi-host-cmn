@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -182,6 +182,7 @@ wlan_target_if_dcs_rx_ops_register(struct wlan_lmac_if_rx_ops *rx_ops)
 #ifdef WLAN_ATF_ENABLE
 /**
  * wlan_lmac_if_atf_rx_ops_register() - Function to register ATF RX ops.
+ * @rx_ops: Pointer to wlan_lmac_if_rx_ops
  */
 static void
 wlan_lmac_if_atf_rx_ops_register(struct wlan_lmac_if_rx_ops *rx_ops)
@@ -252,6 +253,7 @@ wlan_lmac_if_fd_rx_ops_register(struct wlan_lmac_if_rx_ops *rx_ops)
 #ifdef WLAN_SA_API_ENABLE
 /**
  * wlan_lmac_if_sa_api_rx_ops_register() - Function to register SA_API RX ops.
+ * @rx_ops: Pointer to wlan_lmac_if_rx_ops
  */
 static void
 wlan_lmac_if_sa_api_rx_ops_register(struct wlan_lmac_if_rx_ops *rx_ops)
@@ -291,6 +293,7 @@ wlan_lmac_if_sa_api_rx_ops_register(struct wlan_lmac_if_rx_ops *rx_ops)
 #ifdef WLAN_CFR_ENABLE
 /**
  * wlan_lmac_if_cfr_rx_ops_register() - Function to register CFR RX ops
+ * @rx_ops: Pointer to wlan_lmac_if_rx_ops
  */
 static void
 wlan_lmac_if_cfr_rx_ops_register(struct wlan_lmac_if_rx_ops *rx_ops)
@@ -429,7 +432,7 @@ static inline void wlan_lmac_if_register_6g_edge_chan_supp(
 /**
  * wlan_lmac_if_umac_reg_rx_ops_register_po() - Function to register Reg RX ops
  * for Partial Offload
- * rx_ops: Pointer to wlan_lmac_if_dfs_rx_ops
+ * @rx_ops: Pointer to wlan_lmac_if_rx_ops
  *
  * Return: void
  */
@@ -521,6 +524,9 @@ static void wlan_lmac_if_umac_reg_rx_ops_register(
 	wlan_lmac_if_register_afc_handlers(rx_ops);
 
 	wlan_lmac_if_register_super_chan_display(rx_ops);
+
+	rx_ops->reg_rx_ops.reg_r2p_table_update_response_handler =
+		tgt_reg_process_r2p_table_update_response;
 }
 
 #ifdef CONVERGED_P2P_ENABLE
@@ -709,7 +715,7 @@ register_dfs_bw_expand_rx_ops(struct wlan_lmac_if_dfs_rx_ops *rx_ops)
 }
 #endif
 
-#ifdef QCA_DFS_BW_PUNCTURE
+#if defined(QCA_DFS_BW_PUNCTURE) && !defined(CONFIG_REG_CLIENT)
 /* register_dfs_puncture_rx_ops() - Register DFS Rx-Ops for DFS puncture.
  * @rx_ops: Pointer to wlan_lmac_if_dfs_rx_ops.
  */
@@ -741,6 +747,7 @@ wlan_lmac_if_mgmt_rx_reo_rx_ops_register(
 			tgt_mgmt_rx_reo_fw_consumed_event_handler;
 	mgmt_rx_reo_rx_ops->host_drop_handler =
 			tgt_mgmt_rx_reo_host_drop_handler;
+	mgmt_rx_reo_rx_ops->release_frames = tgt_mgmt_rx_reo_release_frames;
 
 	return QDF_STATUS_SUCCESS;
 }
@@ -1075,17 +1082,6 @@ wlan_lmac_if_umac_rx_ops_register(struct wlan_lmac_if_rx_ops *rx_ops)
 	return QDF_STATUS_SUCCESS;
 }
 
-/**
- * wlan_lmac_if_set_umac_txops_registration_cb() - tx registration
- * callback assignment
- * @dev_type: Dev type can be either Direct attach or Offload
- * @handler: handler to be called for LMAC tx ops registration
- *
- * API to assign appropriate tx registration callback handler based on the
- * device type(Offload or Direct attach)
- *
- * Return: QDF_STATUS_SUCCESS - in case of success
- */
 QDF_STATUS wlan_lmac_if_set_umac_txops_registration_cb(QDF_STATUS (*handler)
 				(struct wlan_lmac_if_tx_ops *))
 {
@@ -1094,17 +1090,6 @@ QDF_STATUS wlan_lmac_if_set_umac_txops_registration_cb(QDF_STATUS (*handler)
 }
 qdf_export_symbol(wlan_lmac_if_set_umac_txops_registration_cb);
 
-/**
- * wlan_lmac_if_set_umac_crypto_rxpn_ops_registration_cb() - crypto rxpn
- * registration callback assignment
- * @dev_type: Dev type can be either Direct attach or Offload
- * @handler: handler to be called for LMAC crypto rxpn ops registration
- *
- * API to assign appropriate crypto rxpn registration callback handler
- * based on the device type
- *
- * Return: QDF_STATUS_SUCCESS - in case of success
- */
 QDF_STATUS wlan_lmac_if_set_umac_crypto_rxpn_ops_registration_cb(
 		QDF_STATUS (*handler)(struct wlan_lmac_if_rx_ops *))
 {

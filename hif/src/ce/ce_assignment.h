@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2014-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -35,7 +35,7 @@
 #if defined(QCA_LOWMEM_CONFIG) || defined(QCA_512M_CONFIG)
 #define WMI_CE_BUF_SIZE 2048
 #else
-/**
+/*
  * WMI_CE_BUF_SIZE = (SKB_SIZE - 64BIT_SH_INFO -
  *		      NETBUF_FIXED_MIN_HEADROOM - WMI_HEADROOM)
  * 3520 = (4096 - 384 - 128 - 64)
@@ -1144,8 +1144,12 @@ static struct CE_attr host_ce_config_wlan_qca5332[] = {
 	{/*CE7*/ (CE_ATTR_FLAGS | CE_ATTR_DISABLE_INTR), 0, 0, 0, 0, NULL,},
 	/* Target HIF memcpy (Generic HIF memcypy) */
 	{/*CE8*/ (CE_ATTR_FLAGS | CE_ATTR_DISABLE_INTR), 0, 0, 0, 0, NULL,},
+	#ifdef WLAN_DIAG_AND_DBR_OVER_SEPARATE_CE
 	/* WMI logging/CFR/Spectral/Radar/ */
 	{/*CE9*/ (CE_ATTR_FLAGS), 0, 0, 2048, 128, NULL,},
+	#else
+	{/*CE9*/ (CE_ATTR_FLAGS | CE_ATTR_DISABLE_INTR), 0, 0, 0, 0, NULL,},
+	#endif
 	/* Customer reserve */
 	{/*CE10*/ (CE_ATTR_FLAGS | CE_ATTR_DISABLE_INTR), 0, 0, 0, 0, NULL,},
 	/* Un-assigned */
@@ -1779,4 +1783,75 @@ static struct CE_pipe_config target_ce_config_wlan_qcn9224[] = {
 };
 #endif
 
+static struct CE_attr host_ce_config_wlan_wcn6450[] = {
+	/* host->target HTC control and raw streams */
+	{ /* CE0 */ CE_ATTR_FLAGS, 0, 16, 2048, 0, NULL,},
+	/* target->host HTT + HTC control */
+	{ /* CE1 */ CE_ATTR_FLAGS, 0, 0,  2048, 512, NULL,},
+	/* target->host WMI */
+	{ /* CE2 */ CE_ATTR_FLAGS, 0, 0,  2048, 128, NULL,},
+	/* host->target WMI */
+	{ /* CE3 */ CE_ATTR_FLAGS, 0, 32, 2048, 0, NULL,},
+	/* host->target HTT command*/
+	{ /* CE4 */ CE_ATTR_FLAGS, 0,
+		CE_HTT_H2T_MSG_SRC_NENTRIES, 256, 0, NULL,},
+	/* host->target HTT data */
+	{ /* CE5 */ (CE_ATTR_FLAGS | CE_ATTR_DISABLE_INTR), 0,
+		CE_HTT_H2T_MSG_SRC_NENTRIES, 256, 0, NULL,},
+	/* target->target M3 image download + HIF MEMCPY(offload)
+	 * HIF memcpy(ring refill)
+	 */
+	{ /* CE6 */ CE_ATTR_FLAGS, 0, 0, 0, 0, NULL,},
+#ifdef WLAN_FEATURE_WMI_DIAG_OVER_CE7
+	/* target->host WMI logging */
+	{ /* CE7 */ CE_ATTR_FLAGS, 0, 0, 2048, 32, NULL,},
+#else
+	/* ce_diag, the Diagnostic Window */
+	{ /* CE7 */ (CE_ATTR_DIAG_FLAGS | CE_ATTR_DISABLE_INTR), 0,
+		0, DIAG_TRANSFER_LIMIT, 0, NULL,},
+#endif
+	/* Unused*/
+	{ /* CE8 */ CE_ATTR_FLAGS, 0, 0, 0, 0, NULL,},
+	/* target->host RDDM */
+	{ /* CE9 */ CE_ATTR_FLAGS, 0, 0, 0, 0, NULL,},
+	/* target->host HTT */
+	{ /* CE10 */ CE_ATTR_FLAGS, 0, 0,  2048, 512, NULL,},
+	/* target->host HTT */
+	{ /* CE11 */ CE_ATTR_FLAGS, 0, 0, 2048, 512, NULL,},
+};
+
+static struct CE_pipe_config target_ce_config_wlan_wcn6450[] = {
+	/* host->target HTC control and raw streams */
+	{ /* CE0 */ 0, PIPEDIR_OUT, 32, 2048, CE_ATTR_FLAGS, 0,},
+	/* target->host HTT */
+	{ /* CE1 */ 1, PIPEDIR_IN,  32, 2048, CE_ATTR_FLAGS, 0,},
+	/* target->host WMI  + HTC control */
+	{ /* CE2 */ 2, PIPEDIR_IN,  64, 2048, CE_ATTR_FLAGS, 0,},
+	/* host->target WMI */
+	{ /* CE3 */ 3, PIPEDIR_OUT, 32, 2048, CE_ATTR_FLAGS, 0,},
+	/* host->target HTT command*/
+	{ /* CE4 */ 4, PIPEDIR_OUT, 256, 256,
+		(CE_ATTR_FLAGS | CE_ATTR_DISABLE_INTR), 0,},
+	/* host->target HTT data */
+	{ /* CE5 */ 5, PIPEDIR_OUT, 256, 256,
+		(CE_ATTR_FLAGS | CE_ATTR_DISABLE_INTR), 0,},
+	/* target->target HIF_memcpy*/
+	{ /* CE6 */ 6, PIPEDIR_INOUT, 1024, 2048, CE_ATTR_FLAGS, 0,},
+#ifdef WLAN_FEATURE_WMI_DIAG_OVER_CE7
+	/* target->host WMI logging */
+	{ /* CE7 */ 7, PIPEDIR_IN, 32, 2048, CE_ATTR_FLAGS, 0,},
+#else
+	/* CE7 used only by Host */
+	{ /* CE7 */ 7, PIPEDIR_INOUT_H2H, 0, 0,
+		(CE_ATTR_FLAGS | CE_ATTR_DISABLE_INTR), 0,},
+#endif
+	/* CE8 unused */
+	{ /* CE8 */ 8, PIPEDIR_IN, 0, 0, CE_ATTR_FLAGS, 0,},
+	/* CE9 target->host RDDM*/
+	{ /* CE9 */ 9, PIPEDIR_IN,  32, 2048, CE_ATTR_FLAGS, 0,},
+	/* CE10 target->host HTT */
+	{ /* CE10 */ 10, PIPEDIR_IN,  32, 2048, CE_ATTR_FLAGS, 0,},
+	/* Target->host HTT */
+	{ /* CE11 */ 11, PIPEDIR_IN,  32, 2048, CE_ATTR_FLAGS, 0,},
+};
 #endif /* __HIF_PCI_INTERNAL_H__ */

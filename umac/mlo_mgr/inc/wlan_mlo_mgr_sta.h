@@ -41,7 +41,7 @@ QDF_STATUS mlo_connect(struct wlan_objmgr_vdev *vdev,
  * mlo_sta_link_connect_notify - Called by connection manager to notify the
  * STA link connect is complete
  * @vdev: pointer to vdev
- * @mlo_ie: MLO information element
+ * @rsp: MLO connect response
  *
  * Connection manager will notify the MLO manager when the link has started
  * and MLO manager will start the subsequent connections, if necessary
@@ -91,6 +91,25 @@ void mlo_sta_link_disconn_notify(struct wlan_objmgr_vdev *vdev,
 				 struct wlan_cm_discon_rsp *resp);
 
 /**
+ * mlo_handle_sta_link_connect_failure - Notifies that STA link connect failure
+ * @vdev: pointer to vdev
+ * @rsp: connect resp
+ *
+ * Return: none
+ */
+void mlo_handle_sta_link_connect_failure(struct wlan_objmgr_vdev *vdev,
+					 struct wlan_cm_connect_resp *rsp);
+
+/**
+ * mlo_handle_pending_disconnect - Handle pending disconnect if received
+ * while link connect is ongoing.
+ * @vdev: pointer to vdev
+ *
+ * Return: none
+ */
+void mlo_handle_pending_disconnect(struct wlan_objmgr_vdev *vdev);
+
+/**
  * mlo_is_mld_sta - Check if MLD associated with the vdev is a station
  * @vdev: pointer to vdev
  *
@@ -135,7 +154,7 @@ void ucfg_mlo_mld_clear_mlo_cap(struct wlan_objmgr_vdev *vdev);
 
 /**
  * ucfg_mlo_get_assoc_link_vdev - API to get assoc link vdev
- * @mlo_dev_ctx: mlo dev ctx
+ * @vdev: vdev object
  *
  * Return: MLD assoc link vdev
  */
@@ -144,7 +163,7 @@ ucfg_mlo_get_assoc_link_vdev(struct wlan_objmgr_vdev *vdev);
 
 /**
  * wlan_mlo_get_assoc_link_vdev - API to get assoc link vdev
- * @mlo_dev_ctx: mlo dev ctx
+ * @vdev: vdev object
  *
  * Return: MLD assoc link vdev
  */
@@ -160,10 +179,10 @@ wlan_mlo_get_assoc_link_vdev(struct wlan_objmgr_vdev *vdev);
  */
 void
 mlo_update_connected_links_bmap(struct wlan_mlo_dev_context *mlo_dev_ctx,
-				struct mlo_partner_info ml_parnter_info);
+				struct mlo_partner_info ml_partner_info);
 
 /**
- * mlo_clear_connected_links: clear connected links bitmap
+ * mlo_clear_connected_links_bmap() - clear connected links bitmap
  * @vdev: vdev object
  *
  * Return: none
@@ -171,7 +190,49 @@ mlo_update_connected_links_bmap(struct wlan_mlo_dev_context *mlo_dev_ctx,
 void mlo_clear_connected_links_bmap(struct wlan_objmgr_vdev *vdev);
 
 /**
- * API to have operation on ml vdevs
+ * mlo_set_cu_bpcc() - set the bpcc per link id
+ * @vdev: vdev object
+ * @vdev_id: the id of vdev
+ * @bpcc: bss parameters change count
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS mlo_set_cu_bpcc(struct wlan_objmgr_vdev *vdev, uint8_t vdev_id,
+			   uint8_t bpcc);
+
+/**
+ * mlo_get_cu_bpcc() - get the bpcc per link id
+ * @vdev: vdev object
+ * @vdev_id: the id of vdev
+ * @bpcc: the bss parameters change count pointer to save value
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS mlo_get_cu_bpcc(struct wlan_objmgr_vdev *vdev, uint8_t vdev_id,
+			   uint8_t *bpcc);
+
+/**
+ * mlo_init_cu_bpcc() - initialize the bpcc for vdev
+ * @mlo_dev_ctx: wlan mlo dev context
+ * @vdev_id: vdev id
+ *
+ * Return: void
+ */
+void mlo_init_cu_bpcc(struct wlan_mlo_dev_context *mlo_dev_ctx,
+		      uint8_t vdev_id);
+
+/**
+ * mlo_clear_cu_bpcc() - clear the bpcc info
+ * @vdev: vdev object
+ *
+ * Return: void
+ */
+void mlo_clear_cu_bpcc(struct wlan_objmgr_vdev *vdev);
+
+/**
+ * typedef mlo_vdev_op_handler() - API to have operation on ml vdevs
+ * @vdev: vdev object
+ * @arg: operation-specific argument
  */
 typedef void (*mlo_vdev_op_handler)(struct wlan_objmgr_vdev *vdev,
 				    void *arg);
@@ -214,7 +275,7 @@ void mlo_iterate_connected_vdev_list(struct wlan_objmgr_vdev *vdev,
  * call_handler_for_standalone_ap: Iterate on all standalone ML vdevs in
  * ML AP context and call handler only for standalone AP
  *
- * @vdev: vdev object
+ * @ap_dev_ctx: AP vdev context
  * @handler: the handler will be called for each object in ML list
  * @arg: argument to be passed to handler
  *
@@ -239,7 +300,7 @@ call_handler_for_standalone_ap(struct wlan_mlo_dev_context *ap_dev_ctx,
 	}
 }
 
-/*
+/**
  * mlo_iterate_ml_standalone_vdev_list: Iterate on all standalone ML vdevs in
  * ML link
  *
@@ -363,7 +424,7 @@ mlo_is_vdev_connect_req_link(struct wlan_objmgr_vdev *vdev)
 }
 
 /**
- * mlo_clear_connect_req_links: clear connect req links bitmap
+ * mlo_clear_connect_req_links_bmap() - clear connect req links bitmap
  * @vdev: vdev object
  *
  * Return: none
@@ -561,6 +622,31 @@ bool mlo_is_sta_csa_param_handled(struct wlan_objmgr_vdev *vdev,
 void mlo_internal_disconnect_links(struct wlan_objmgr_vdev *vdev);
 
 /**
+ * mlo_sta_vdev_get_reconfig_timer_state() - Get ml reconfig timer state on
+ * vdev
+ * @vdev: vdev pointer
+ *
+ * Return: true if reconfig timer is active, otherwise false
+ */
+bool mlo_sta_vdev_get_reconfig_timer_state(struct wlan_objmgr_vdev *vdev);
+
+/**
+ * mlo_sta_stop_reconfig_timer_by_vdev() - Stop ml reconfig timer
+ * @vdev: vdev pointer
+ *
+ * Return: None
+ */
+void mlo_sta_stop_reconfig_timer_by_vdev(struct wlan_objmgr_vdev *vdev);
+
+/**
+ * mlo_sta_stop_reconfig_timer() - Stop reconfig timer on all vdev on ml dev
+ * @vdev: vdev pointer
+ *
+ * Return: None
+ */
+void mlo_sta_stop_reconfig_timer(struct wlan_objmgr_vdev *vdev);
+
+/**
  * mlo_sta_get_vdev_list() - get mlo vdev list
  * @vdev: vdev pointer
  * @vdev_count: vdev count
@@ -585,6 +671,25 @@ void mlo_process_ml_reconfig_ie(struct wlan_objmgr_vdev *vdev,
 				struct scan_cache_entry *scan_entry,
 				uint8_t *ml_ie, qdf_size_t ml_ie_len,
 				struct mlo_partner_info *partner_info);
+/**
+ * mlo_allocate_and_copy_ies() - allocate and copy ies
+ * @target: target connect req pointer
+ * @source: source connect req pointer
+ *
+ * Return: None
+ */
+void
+mlo_allocate_and_copy_ies(struct wlan_cm_connect_req *target,
+			  struct wlan_cm_connect_req *source);
+
+/**
+ * mlo_free_connect_ies() - free connect ies
+ * @connect_req: connect req pointer
+ *
+ * Return: None
+ */
+void
+mlo_free_connect_ies(struct wlan_cm_connect_req *connect_req);
 #else
 static inline
 QDF_STATUS mlo_connect(struct wlan_objmgr_vdev *vdev,
@@ -722,6 +827,21 @@ static inline
 void mlo_sta_get_vdev_list(struct wlan_objmgr_vdev *vdev,
 			   uint16_t *vdev_count,
 			   struct wlan_objmgr_vdev **wlan_vdev_list)
+{
+}
+
+static inline bool
+mlo_sta_vdev_get_reconfig_timer_state(struct wlan_objmgr_vdev *vdev)
+{
+	return false;
+}
+
+static inline void
+mlo_sta_stop_reconfig_timer_by_vdev(struct wlan_objmgr_vdev *vdev)
+{
+}
+
+static inline void mlo_sta_stop_reconfig_timer(struct wlan_objmgr_vdev *vdev)
 {
 }
 

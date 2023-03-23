@@ -72,6 +72,7 @@ static void mlo_global_ctx_init(void)
 
 	qdf_list_create(&mlo_mgr_ctx->ml_dev_list, WLAN_UMAC_MLO_MAX_DEV);
 	mlo_mgr_ctx->max_mlo_peer_id = MAX_MLO_PEER_ID;
+	mlo_mgr_ctx->last_mlo_peer_id = 0;
 	ml_peerid_lock_create(mlo_mgr_ctx);
 	ml_link_lock_create(mlo_mgr_ctx);
 	ml_aid_lock_create(mlo_mgr_ctx);
@@ -289,12 +290,15 @@ bool wlan_mlo_is_mld_ctx_exist(struct qdf_mac_addr *mldaddr)
 }
 
 #ifdef WLAN_FEATURE_11BE_MLO
-bool mlo_mgr_ml_peer_exist(uint8_t *peer_addr)
+bool mlo_mgr_ml_peer_exist_on_diff_ml_ctx(uint8_t *peer_addr,
+					  uint8_t *peer_vdev_id)
 {
 	qdf_list_t *ml_list;
+	uint32_t idx, count;
 	struct wlan_mlo_dev_context *mld_cur, *mld_next;
 	struct wlan_mlo_peer_list *mlo_peer_list;
-	bool ret_status = false;
+	struct wlan_objmgr_vdev *vdev;
+	bool ret_status = false, same_ml_ctx = false;
 	struct mlo_mgr_context *g_mlo_ctx = wlan_objmgr_get_mlo_ctx();
 
 	if (!g_mlo_ctx || !peer_addr ||
@@ -311,23 +315,57 @@ bool mlo_mgr_ml_peer_exist(uint8_t *peer_addr)
 		mlo_dev_lock_acquire(mld_cur);
 		if (qdf_is_macaddr_equal(&mld_cur->mld_addr,
 					 (struct qdf_mac_addr *)peer_addr)) {
+			/* For self peer, the address passed will match the
+			 * MLD address of its own ML dev context, so allow
+			 * peer creation in this scenario as both are in
+			 * same ML dev context.
+			 */
+			if (peer_vdev_id) {
+				count = QDF_ARRAY_SIZE(mld_cur->wlan_vdev_list);
+				for (idx = 0; idx < count; idx++) {
+					vdev = mld_cur->wlan_vdev_list[idx];
+					if (!vdev)
+						continue;
+					if (*peer_vdev_id ==
+					    wlan_vdev_get_id(vdev)) {
+						same_ml_ctx = true;
+						break;
+					}
+				}
+			}
 			mlo_dev_lock_release(mld_cur);
 			mlo_err("MLD ID %d exists with mac " QDF_MAC_ADDR_FMT,
 				mld_cur->mld_id, QDF_MAC_ADDR_REF(peer_addr));
 			ret_status = true;
-			goto g_ml_ref;
+			goto check_same_ml_ctx;
 		}
 
 		/* Check the peer list for a MAC address match */
 		mlo_peer_list = &mld_cur->mlo_peer_list;
 		ml_peerlist_lock_acquire(mlo_peer_list);
 		if (mlo_get_mlpeer(mld_cur, (struct qdf_mac_addr *)peer_addr)) {
+			/* If peer_vdev_id is NULL, then API will treat any
+			 * match as happening on another dev context
+			 */
+			if (peer_vdev_id) {
+				count = QDF_ARRAY_SIZE(mld_cur->wlan_vdev_list);
+				for (idx = 0; idx < count; idx++) {
+					vdev = mld_cur->wlan_vdev_list[idx];
+					if (!vdev)
+						continue;
+					if (*peer_vdev_id ==
+					    wlan_vdev_get_id(vdev)) {
+						same_ml_ctx = true;
+						break;
+					}
+				}
+			}
 			ml_peerlist_lock_release(mlo_peer_list);
 			mlo_dev_lock_release(mld_cur);
 			mlo_err("MLD ID %d ML Peer exists with mac " QDF_MAC_ADDR_FMT,
 				mld_cur->mld_id, QDF_MAC_ADDR_REF(peer_addr));
 			ret_status = true;
-			goto g_ml_ref;
+			goto check_same_ml_ctx;
 		}
 		ml_peerlist_lock_release(mlo_peer_list);
 
@@ -336,15 +374,132 @@ bool mlo_mgr_ml_peer_exist(uint8_t *peer_addr)
 		mld_cur = mld_next;
 	}
 
+check_same_ml_ctx:
+	if (same_ml_ctx)
+		ret_status = false;
+
 g_ml_ref:
 	ml_link_lock_release(g_mlo_ctx);
 	return ret_status;
+}
+
+#define WLAN_HDD_MGMT_FRAME_DA_OFFSET 4
+#define WLAN_HDD_MGMT_FRAME_SA_OFFSET (WLAN_HDD_MGMT_FRAME_DA_OFFSET + 6)
+#define WLAN_HDD_MGMT_FRAME_BSSID_OFFSET (WLAN_HDD_MGMT_FRAME_SA_OFFSET + 6)
+#define WLAN_HDD_MGMT_FRAME_ACTION_CATEGORY_OFFSET \
+				(WLAN_HDD_MGMT_FRAME_BSSID_OFFSET + 6 + 2)
+#define WLAN_HDD_MGMT_FRAME_ACTION_TYPE_OFFSET \
+				(WLAN_HDD_MGMT_FRAME_ACTION_CATEGORY_OFFSET + 1)
+#define WLAN_HDD_ACTION_FRAME_CATEGORY_PUBLIC 0x04
+
+/*
+ * Typical 802.11 Action Frame Format
+ * +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-
+ * | FC | DUR |  DA  |   SA  | BSSID |Seq.|Cat.|Act|   Elements   | FCS |
+ * +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-
+ *    2    2     6       6       6     2    1    1   Variable Len    4
+ */
+void wlan_mlo_update_action_frame_from_user(struct wlan_objmgr_vdev *vdev,
+					    uint8_t *frame,
+					    uint32_t frame_len)
+{
+	struct wlan_objmgr_peer *peer;
+	uint8_t *da, *sa, *bssid;
+
+	if (!wlan_vdev_mlme_is_mlo_vdev(vdev) ||
+	    (wlan_vdev_mlme_get_opmode(vdev) != QDF_STA_MODE))
+		return;
+
+	if (frame_len <= WLAN_HDD_MGMT_FRAME_ACTION_TYPE_OFFSET) {
+		mlo_debug("Not a valid Action frame len: %d", frame_len);
+		return;
+	}
+
+	/* Translate address only for action frames
+	 * which are not of public category.
+	 * Reference: 802.11-2012, Subclause: 8.5
+	 */
+
+	if (frame[WLAN_HDD_MGMT_FRAME_ACTION_CATEGORY_OFFSET] ==
+				WLAN_HDD_ACTION_FRAME_CATEGORY_PUBLIC)
+		return;
+
+	da = frame + WLAN_HDD_MGMT_FRAME_DA_OFFSET;
+	sa = frame + WLAN_HDD_MGMT_FRAME_SA_OFFSET;
+	bssid = frame + WLAN_HDD_MGMT_FRAME_BSSID_OFFSET;
+
+	peer = wlan_objmgr_vdev_try_get_bsspeer(vdev, WLAN_MLO_MGR_ID);
+	if (!peer) {
+		mlo_debug("Peer not found");
+		return;
+	}
+
+	mlo_debug("Change MLD addr to link addr for non-Public action frame");
+	/* DA = VDEV's BSS peer's link address.
+	 * SA = VDEV's link address.
+	 * BSSID = VDEV's BSS peer's link address.
+	 */
+
+	qdf_ether_addr_copy(da, wlan_peer_get_macaddr(peer));
+	qdf_ether_addr_copy(sa, wlan_vdev_mlme_get_macaddr(vdev));
+	qdf_ether_addr_copy(bssid, wlan_peer_get_macaddr(peer));
+
+	wlan_objmgr_peer_release_ref(peer, WLAN_MLO_MGR_ID);
+}
+
+void wlan_mlo_update_action_frame_to_user(struct wlan_objmgr_vdev *vdev,
+					  uint8_t *frame,
+					  uint32_t frame_len)
+{
+	struct wlan_objmgr_peer *peer;
+	uint8_t *da, *sa, *bssid;
+
+	if (!wlan_vdev_mlme_is_mlo_vdev(vdev) ||
+	    (wlan_vdev_mlme_get_opmode(vdev) != QDF_STA_MODE))
+		return;
+
+	if (frame_len <= WLAN_HDD_MGMT_FRAME_ACTION_TYPE_OFFSET) {
+		mlo_debug("Not a valid Action frame len: %d", frame_len);
+		return;
+	}
+
+	/* Translate address only for action frames
+	 * which are not of public category.
+	 * Reference: 802.11-2012, Subclause: 8.5
+	 */
+
+	if (frame[WLAN_HDD_MGMT_FRAME_ACTION_CATEGORY_OFFSET] ==
+				WLAN_HDD_ACTION_FRAME_CATEGORY_PUBLIC)
+		return;
+
+	da = frame + WLAN_HDD_MGMT_FRAME_DA_OFFSET;
+	sa = frame + WLAN_HDD_MGMT_FRAME_SA_OFFSET;
+	bssid = frame + WLAN_HDD_MGMT_FRAME_BSSID_OFFSET;
+
+	peer = wlan_objmgr_vdev_try_get_bsspeer(vdev, WLAN_MLO_MGR_ID);
+	if (!peer) {
+		mlo_debug("Peer not found");
+		return;
+	}
+
+	mlo_debug("Change link addr to MLD addr for non-Public action frame");
+	/* DA = VDEV's MLD address.
+	 * SA = VDEV's BSS peer's MLD address.
+	 * BSSID = VDEV's BSS peer's MLD address.
+	 */
+
+	qdf_ether_addr_copy(da, wlan_vdev_mlme_get_mldaddr(vdev));
+	qdf_ether_addr_copy(sa, wlan_peer_mlme_get_mldaddr(peer));
+	qdf_ether_addr_copy(bssid, wlan_peer_mlme_get_mldaddr(peer));
+
+	wlan_objmgr_peer_release_ref(peer, WLAN_MLO_MGR_ID);
 }
 #endif
 
 static QDF_STATUS mlo_ap_ctx_deinit(struct wlan_mlo_dev_context *ml_dev)
 {
 	wlan_mlo_vdev_aid_mgr_deinit(ml_dev);
+	mlo_ap_lock_destroy(ml_dev->ap_ctx);
 	qdf_mem_free(ml_dev->ap_ctx);
 	ml_dev->ap_ctx = NULL;
 
@@ -362,6 +517,7 @@ static QDF_STATUS mlo_ap_ctx_init(struct wlan_mlo_dev_context *ml_dev)
 	}
 
 	ml_dev->ap_ctx = ap_ctx;
+	mlo_ap_lock_create(ml_dev->ap_ctx);
 	if (wlan_mlo_vdev_aid_mgr_init(ml_dev) != QDF_STATUS_SUCCESS) {
 		mlo_ap_ctx_deinit(ml_dev);
 		return QDF_STATUS_E_NOMEM;
@@ -503,11 +659,10 @@ static inline void mlo_t2lm_ctx_init(struct wlan_mlo_dev_context *ml_dev,
 {
 	struct wlan_t2lm_info *t2lm;
 
-	t2lm = &ml_dev->t2lm_ctx.t2lm_ie[0].t2lm;
+	t2lm = &ml_dev->t2lm_ctx.established_t2lm.t2lm;
 
 	qdf_mem_zero(&ml_dev->t2lm_ctx, sizeof(struct wlan_t2lm_context));
 
-	ml_dev->t2lm_ctx.num_of_t2lm_ie = 1;
 	t2lm->direction = WLAN_T2LM_BIDI_DIRECTION;
 	t2lm->default_link_mapping = 1;
 
