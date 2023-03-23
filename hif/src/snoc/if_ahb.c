@@ -214,6 +214,7 @@ static void hif_ahb_get_bar_addr_pld(struct hif_pci_softc *sc,
 
 	ret = pld_get_soc_info(dev, &info);
 	sc->mem = info.v_addr;
+	pld_set_bar_addr(dev, info.v_addr);
 	sc->ce_sc.ol_sc.mem    = info.v_addr;
 	sc->ce_sc.ol_sc.mem_pa = info.p_addr;
 }
@@ -584,6 +585,7 @@ QDF_STATUS hif_ahb_enable_bus(struct hif_softc *ol_sc,
 			return QDF_STATUS_E_IO;
 		}
 		ol_sc->mem_ce = sc->mem_ce;
+		pld_set_bar_addr(dev, sc->mem_ce);
 	}
 
 	if (tgt_info->target_type == TARGET_TYPE_QCA5332) {
