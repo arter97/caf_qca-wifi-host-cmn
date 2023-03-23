@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2014-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -908,5 +908,16 @@ int qdf_fls(uint32_t x)
 static inline int qdf_get_smp_processor_id(void)
 {
 	return __qdf_get_smp_processor_id();
+}
+
+/**
+ * qdf_in_atomic: Check whether current thread running in atomic context
+ *
+ * Return: true if current thread is running in the atomic context
+ *	   else it will be return false.
+ */
+static inline bool qdf_in_atomic(void)
+{
+	return __qdf_in_atomic();
 }
 #endif /*_QDF_UTIL_H*/
