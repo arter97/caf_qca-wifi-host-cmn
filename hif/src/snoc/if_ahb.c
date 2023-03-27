@@ -567,11 +567,7 @@ QDF_STATUS hif_ahb_enable_bus(struct hif_softc *ol_sc,
 	    tgt_info->target_type == TARGET_TYPE_QCA5332) {
 		struct hif_softc *scn = HIF_GET_SOFTC(sc);
 
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 15, 0))
-		sc->mem_ce = ioremap(HOST_CE_ADDRESS, HOST_CE_SIZE);
-#else
 		sc->mem_ce = ioremap_nocache(HOST_CE_ADDRESS, HOST_CE_SIZE);
-#endif
 		if (IS_ERR(sc->mem_ce)) {
 			hif_err("CE: ioremap failed");
 			return QDF_STATUS_E_IO;
@@ -586,13 +582,8 @@ QDF_STATUS hif_ahb_enable_bus(struct hif_softc *ol_sc,
 		 * In QCA5332 CMEM region is outside WCSS block.
 		 * Allocate separate I/O remap to access CMEM address.
 		 */
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 15, 0))
-		sc->mem_cmem = ioremap(HOST_CMEM_ADDRESS,
-					       HOST_CMEM_SIZE);
-#else
 		sc->mem_cmem = ioremap_nocache(HOST_CMEM_ADDRESS,
 					       HOST_CMEM_SIZE);
-#endif
 		if (IS_ERR(sc->mem_cmem)) {
 			hif_err("CE: ioremap failed");
 			return QDF_STATUS_E_IO;
@@ -602,13 +593,8 @@ QDF_STATUS hif_ahb_enable_bus(struct hif_softc *ol_sc,
 		/*
 		 * PMM SCRATCH Register for QCA5332
 		 */
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 15, 0))
-		sc->mem_pmm_base = ioremap(PMM_SCRATCH_BASE,
-						   PMM_SCRATCH_SIZE);
-#else
 		sc->mem_pmm_base = ioremap_nocache(PMM_SCRATCH_BASE,
 						   PMM_SCRATCH_SIZE);
-#endif
 		if (IS_ERR(sc->mem_pmm_base)) {
 			hif_err("CE: ioremap failed");
 			return QDF_STATUS_E_IO;
