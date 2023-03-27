@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -1309,6 +1309,113 @@ static void dp_mon_register_intr_ops_2_0(struct dp_soc *soc)
 	dp_mon_ppdu_stats_handler_register(mon_soc);
 }
 
+#ifdef MONITOR_TLV_RECORDING_ENABLE
+/*
+ * dp_mon_pdev_tlv_logger_init() - initializes struct dp_mon_tlv_logger
+ *
+ * @pdev: pointer to dp_pdev
+ *
+ * Return: QDF_STATUS
+ */
+static
+QDF_STATUS dp_mon_pdev_tlv_logger_init(struct dp_pdev *pdev)
+{
+	struct dp_mon_pdev *mon_pdev = NULL;
+	struct dp_mon_pdev_be *mon_pdev_be = NULL;
+	struct dp_mon_tlv_logger *tlv_log = NULL;
+
+	if (!pdev)
+		return QDF_STATUS_E_INVAL;
+
+	mon_pdev = pdev->monitor_pdev;
+	if (!mon_pdev)
+		return QDF_STATUS_E_INVAL;
+
+	mon_pdev_be = dp_get_be_mon_pdev_from_dp_mon_pdev(mon_pdev);
+
+	tlv_log = qdf_mem_malloc(sizeof(struct dp_mon_tlv_logger));
+	if (!tlv_log) {
+		qdf_err("Memory allocation failed");
+		return QDF_STATUS_E_NOMEM;
+	}
+
+	tlv_log->curr_ppdu_pos = 0;
+	tlv_log->wrap_flag = 0;
+	tlv_log->ppdu_start_idx = 0;
+	tlv_log->mpdu_idx = MAX_PPDU_START_TLV_NUM;
+	tlv_log->ppdu_end_idx = MAX_PPDU_START_TLV_NUM + MAX_MPDU_TLV_NUM;
+	tlv_log->max_ppdu_start_idx = MAX_PPDU_START_TLV_NUM - 1;
+	tlv_log->max_mpdu_idx = MAX_PPDU_START_TLV_NUM + MAX_MPDU_TLV_NUM - 1;
+	tlv_log->max_ppdu_end_idx = MAX_TLVS_PER_PPDU - 1;
+
+	tlv_log->buff = qdf_mem_malloc(MAX_TLV_LOGGING_SIZE *
+					sizeof(struct dp_mon_tlv_info));
+	if (!tlv_log->buff) {
+		qdf_err("Memory allocation failed");
+		qdf_mem_free(tlv_log);
+		tlv_log = NULL;
+		return QDF_STATUS_E_NOMEM;
+	}
+
+	tlv_log->tlv_logging_enable = 1;
+
+	mon_pdev_be->rx_tlv_log = tlv_log;
+
+	return QDF_STATUS_SUCCESS;
+}
+
+/*
+ * dp_mon_pdev_tlv_logger_deinit() - deinitializes struct dp_mon_tlv_logger
+ *
+ * @pdev: pointer to dp_pdev
+ *
+ * Return: QDF_STATUS
+ */
+static
+QDF_STATUS dp_mon_pdev_tlv_logger_deinit(struct dp_pdev *pdev)
+{
+	struct dp_mon_pdev *mon_pdev = NULL;
+	struct dp_mon_pdev_be *mon_pdev_be = NULL;
+	struct dp_mon_tlv_logger *tlv_log = NULL;
+
+	if (!pdev)
+		return QDF_STATUS_E_INVAL;
+
+	mon_pdev = pdev->monitor_pdev;
+	if (!mon_pdev)
+		return QDF_STATUS_E_INVAL;
+
+	mon_pdev_be = dp_get_be_mon_pdev_from_dp_mon_pdev(mon_pdev);
+
+	tlv_log = mon_pdev_be->rx_tlv_log;
+	if (!tlv_log || !(tlv_log->buff))
+		return QDF_STATUS_E_INVAL;
+
+	tlv_log->tlv_logging_enable = 0;
+	qdf_mem_free(tlv_log->buff);
+	tlv_log->buff = NULL;
+	qdf_mem_free(tlv_log);
+	tlv_log = NULL;
+
+	return QDF_STATUS_SUCCESS;
+}
+
+#else
+
+static inline
+QDF_STATUS dp_mon_pdev_tlv_logger_init(struct dp_pdev *pdev)
+{
+	return QDF_STATUS_SUCCESS;
+}
+
+static inline
+QDF_STATUS dp_mon_pdev_tlv_logger_deinit(struct dp_pdev *pdev)
+{
+	return QDF_STATUS_SUCCESS;
+}
+
+#endif
+
 /**
  * dp_mon_register_feature_ops_2_0() - register feature ops
  *
@@ -1333,9 +1440,12 @@ dp_mon_register_feature_ops_2_0(struct dp_soc *soc)
 	mon_ops->mon_htt_ppdu_stats_detach = dp_htt_ppdu_stats_detach;
 	mon_ops->mon_print_pdev_rx_mon_stats = dp_print_pdev_rx_mon_stats;
 	mon_ops->mon_set_bsscolor = dp_mon_set_bsscolor;
-	mon_ops->mon_pdev_get_filter_ucast_data = NULL;
-	mon_ops->mon_pdev_get_filter_mcast_data = NULL;
-	mon_ops->mon_pdev_get_filter_non_data = NULL;
+	mon_ops->mon_pdev_get_filter_ucast_data =
+					dp_lite_mon_get_filter_ucast_data;
+	mon_ops->mon_pdev_get_filter_mcast_data =
+					dp_lite_mon_get_filter_mcast_data;
+	mon_ops->mon_pdev_get_filter_non_data =
+					dp_lite_mon_get_filter_non_data;
 	mon_ops->mon_neighbour_peer_add_ast = NULL;
 #ifndef DISABLE_MON_CONFIG
 	mon_ops->mon_tx_process = dp_tx_mon_process_2_0;
@@ -1424,6 +1534,7 @@ dp_mon_register_feature_ops_2_0(struct dp_soc *soc)
 	mon_ops->rx_packet_length_set = dp_rx_mon_packet_length_set;
 	mon_ops->rx_mon_enable = dp_rx_mon_enable_set;
 	mon_ops->rx_wmask_subscribe = dp_rx_mon_word_mask_subscribe;
+	mon_ops->rx_pkt_tlv_offset = dp_rx_mon_pkt_tlv_offset_subscribe;
 	mon_ops->rx_enable_mpdu_logging = dp_rx_mon_enable_mpdu_logging;
 	mon_ops->mon_neighbour_peers_detach = NULL;
 	mon_ops->mon_vdev_set_monitor_mode_buf_rings =
@@ -1537,8 +1648,11 @@ struct dp_mon_ops monitor_ops_2_0 = {
 	.mon_lite_mon_dealloc = dp_lite_mon_dealloc,
 	.mon_lite_mon_vdev_delete = dp_lite_mon_vdev_delete,
 	.mon_lite_mon_disable_rx = dp_lite_mon_disable_rx,
+	.mon_lite_mon_is_rx_adv_filter_enable = dp_lite_mon_is_rx_adv_filter_enable,
 	.mon_rx_ppdu_info_cache_create = dp_rx_mon_ppdu_info_cache_create,
 	.mon_rx_ppdu_info_cache_destroy = dp_rx_mon_ppdu_info_cache_destroy,
+	.mon_rx_pdev_tlv_logger_init = dp_mon_pdev_tlv_logger_init,
+	.mon_rx_pdev_tlv_logger_deinit = dp_mon_pdev_tlv_logger_deinit,
 };
 
 struct cdp_mon_ops dp_ops_mon_2_0 = {
@@ -1556,9 +1670,15 @@ struct cdp_mon_ops dp_ops_mon_2_0 = {
 	.txrx_set_lite_mon_peer_config = dp_lite_mon_set_peer_config,
 	.txrx_get_lite_mon_peer_config = dp_lite_mon_get_peer_config,
 	.txrx_is_lite_mon_enabled = dp_lite_mon_is_enabled,
+	.txrx_get_lite_mon_legacy_feature_enabled =
+				dp_lite_mon_get_legacy_feature_enabled,
 #endif
 	.txrx_set_mon_pdev_params_rssi_dbm_conv =
 				dp_mon_pdev_params_rssi_dbm_conv,
+#ifdef WLAN_TELEMETRY_STATS_SUPPORT
+	.txrx_update_pdev_mon_telemetry_airtime_stats =
+			dp_pdev_update_telemetry_airtime_stats,
+#endif
 };
 
 #ifdef QCA_MONITOR_OPS_PER_SOC_SUPPORT

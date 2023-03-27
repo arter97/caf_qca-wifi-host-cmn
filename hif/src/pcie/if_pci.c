@@ -177,7 +177,7 @@ char *legacy_ic_irqname[] = {
  * use TargetCPU warm reset * instead of SOC_GLOBAL_RESET
  */
 #define CPU_WARM_RESET_WAR
-#define WLAN_CFG_MAX_PCIE_GROUPS 4
+#define WLAN_CFG_MAX_PCIE_GROUPS 5
 #ifdef QCA_WIFI_QCN9224
 #define WLAN_CFG_MAX_CE_COUNT 16
 #else
@@ -3726,6 +3726,7 @@ static bool hif_is_pld_based_target(struct hif_pci_softc *sc,
 	case QCN7605_DEVICE_ID:
 	case KIWI_DEVICE_ID:
 	case MANGO_DEVICE_ID:
+	case PEACH_DEVICE_ID:
 		return true;
 	}
 	return false;
@@ -3755,6 +3756,7 @@ static void hif_pci_init_reg_windowing_support(struct hif_pci_softc *sc,
 	case TARGET_TYPE_QCA6390:
 	case TARGET_TYPE_KIWI:
 	case TARGET_TYPE_MANGO:
+	case TARGET_TYPE_PEACH:
 		sc->use_register_windowing = true;
 		qdf_spinlock_create(&sc->register_access_lock);
 		sc->register_window = 0;
@@ -3977,7 +3979,8 @@ int hif_pci_addr_in_boundary(struct hif_softc *scn, uint32_t offset)
 	    tgt_info->target_type == TARGET_TYPE_QCN7605 ||
 	    tgt_info->target_type == TARGET_TYPE_QCA8074 ||
 	    tgt_info->target_type == TARGET_TYPE_KIWI ||
-	    tgt_info->target_type == TARGET_TYPE_MANGO) {
+	    tgt_info->target_type == TARGET_TYPE_MANGO ||
+	    tgt_info->target_type == TARGET_TYPE_PEACH) {
 		/*
 		 * Need to consider offset's memtype for QCA6290/QCA8074,
 		 * also mem_len and DRAM_BASE_ADDRESS/DRAM_SIZE need to be
@@ -4223,5 +4226,17 @@ int hif_prevent_link_low_power_states(struct hif_opaque_softc *hif)
 void hif_allow_link_low_power_states(struct hif_opaque_softc *hif)
 {
 	pld_allow_l1(HIF_GET_SOFTC(hif)->qdf_dev->dev);
+}
+#endif
+
+#ifdef IPA_OPT_WIFI_DP
+int hif_prevent_l1(struct hif_opaque_softc *hif)
+{
+	return hif_force_wake_request(hif);
+}
+
+void hif_allow_l1(struct hif_opaque_softc *hif)
+{
+	hif_force_wake_release(hif);
 }
 #endif

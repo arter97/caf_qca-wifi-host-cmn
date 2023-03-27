@@ -16,9 +16,10 @@
  * TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
  * PERFORMANCE OF THIS SOFTWARE.
  */
- /**
-  * DOC: Public APIs to perform operations on Global objects
-  */
+
+/**
+ * DOC: Public APIs to perform operations on Global objects
+ */
 
 #include "wlan_objmgr_global_obj_i.h"
 #include <wlan_objmgr_global_obj.h>
@@ -33,8 +34,8 @@ struct wlan_objmgr_global *g_umac_glb_obj;
 qdf_export_symbol(g_umac_glb_obj);
 
 /*
-** APIs to Create/Delete Global object APIs
-*/
+ * APIs to Create/Delete Global object APIs
+ */
 QDF_STATUS wlan_objmgr_global_obj_init(void)
 {
 	struct wlan_objmgr_global *umac_global_obj;
@@ -84,8 +85,8 @@ QDF_STATUS wlan_objmgr_global_obj_deinit(void)
 }
 qdf_export_symbol(wlan_objmgr_global_obj_deinit);
 
-/**
- ** APIs to register/unregister handlers
+/*
+ * APIs to register/unregister handlers
  */
 QDF_STATUS wlan_objmgr_register_psoc_create_handler(
 		enum wlan_umac_comp_id id,
@@ -898,6 +899,22 @@ struct wlan_objmgr_psoc
 }
 
 qdf_export_symbol(wlan_objmgr_get_psoc_by_id);
+
+#ifdef QCA_SUPPORT_DP_GLOBAL_CTX
+struct dp_global_context *wlan_objmgr_get_global_ctx(void)
+{
+	return g_umac_glb_obj->global_ctx;
+}
+
+qdf_export_symbol(wlan_objmgr_get_global_ctx);
+
+void wlan_objmgr_set_global_ctx(struct dp_global_context *ctx)
+{
+	g_umac_glb_obj->global_ctx = ctx;
+}
+
+qdf_export_symbol(wlan_objmgr_set_global_ctx);
+#endif
 
 #ifdef WLAN_FEATURE_11BE_MLO
 struct mlo_mgr_context *wlan_objmgr_get_mlo_ctx(void)

@@ -34,10 +34,12 @@ static uint32_t cm_get_prefix_for_cm_id(enum wlan_cm_source source) {
 	switch (source) {
 	case CM_OSIF_CONNECT:
 	case CM_OSIF_CFG_CONNECT:
+	case CM_MLO_LINK_VDEV_CONNECT:
 		return CONNECT_REQ_PREFIX;
 	case CM_ROAMING_HOST:
 	case CM_ROAMING_FW:
 	case CM_ROAMING_NUD_FAILURE:
+	case CM_ROAMING_LINK_REMOVAL:
 		return ROAM_REQ_PREFIX;
 	default:
 		return DISCONNECT_REQ_PREFIX;
@@ -1646,8 +1648,8 @@ void cm_req_history_del(struct cnx_mgr *cm_ctx,
 
 void cm_req_history_init(struct cnx_mgr *cm_ctx)
 {
-	qdf_spinlock_create(&cm_ctx->req_history.cm_req_hist_lock);
 	qdf_mem_zero(&cm_ctx->req_history, sizeof(struct cm_req_history));
+	qdf_spinlock_create(&cm_ctx->req_history.cm_req_hist_lock);
 }
 
 void cm_req_history_deinit(struct cnx_mgr *cm_ctx)

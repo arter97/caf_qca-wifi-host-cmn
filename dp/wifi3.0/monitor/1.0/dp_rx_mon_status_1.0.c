@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -47,7 +47,7 @@ QDF_STATUS dp_rx_mon_status_buffers_replenish(struct dp_soc *dp_soc,
 					      uint8_t owner);
 
 /**
- * dp_rx_mon_handle_status_buf_done () - Handle status buf DMA not done
+ * dp_rx_mon_handle_status_buf_done() - Handle status buf DMA not done
  *
  * @pdev: DP pdev handle
  * @mon_status_srng: Monitor status SRNG
@@ -487,8 +487,11 @@ dp_rx_mon_status_process_tlv(struct dp_soc *soc, struct dp_intr *int_ctx,
 				rx_tlv = hal_rx_status_get_next_tlv(rx_tlv,
 						mon_pdev->is_tlv_hdr_64_bit);
 
-				if (qdf_unlikely((rx_tlv - rx_tlv_start)) >=
-					RX_MON_STATUS_BUF_SIZE)
+				if (qdf_unlikely(((rx_tlv - rx_tlv_start) >=
+						RX_MON_STATUS_BUF_SIZE) ||
+						(RX_MON_STATUS_BUF_SIZE -
+						(rx_tlv - rx_tlv_start) <
+						mon_pdev->tlv_hdr_size)))
 					break;
 
 			} while ((tlv_status == HAL_TLV_STATUS_PPDU_NOT_DONE) ||

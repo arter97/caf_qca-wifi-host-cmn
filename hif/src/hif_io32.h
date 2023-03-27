@@ -38,7 +38,11 @@
 #else
 #define WINDOW_ENABLE_BIT 0x80000000
 #endif
+#ifdef QCA_WIFI_PEACH
+#define WINDOW_REG_ADDRESS 0x3278
+#else
 #define WINDOW_REG_ADDRESS 0x310C
+#endif
 #define WINDOW_SHIFT 19
 #define WINDOW_VALUE_MASK 0x3F
 #define WINDOW_START MAX_UNWINDOWED_ADDRESS
@@ -297,7 +301,12 @@ static inline uint32_t hif_read32_mb_reg_window(void *scn, void __iomem *addr)
 }
 #endif
 
-#ifdef CONFIG_IO_MEM_ACCESS_DEBUG
+#if defined(HIF_HAL_REG_ACCESS_SUPPORT)
+#define A_TARGET_READ(scn, offset) \
+	hif_reg_window_read(scn, offset)
+#define A_TARGET_WRITE(scn, offset, value) \
+	hif_reg_window_write(scn, offset, value)
+#elif defined(CONFIG_IO_MEM_ACCESS_DEBUG)
 uint32_t hif_target_read_checked(struct hif_softc *scn,
 					uint32_t offset);
 void hif_target_write_checked(struct hif_softc *scn, uint32_t offset,

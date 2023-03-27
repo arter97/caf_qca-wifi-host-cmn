@@ -72,7 +72,7 @@
 #define DP_QOS_TID 0x0f
 #define DP_IPV6_PRIORITY_SHIFT 20
 #define MAX_MON_LINK_DESC_BANKS 2
-#define DP_VDEV_ALL 0xff
+#define DP_VDEV_ALL CDP_VDEV_ALL
 
 #if defined(WLAN_MAX_PDEVS) && (WLAN_MAX_PDEVS == 1)
 #define WLAN_DP_RESET_MON_BUF_RING_FILTER
@@ -1196,6 +1196,8 @@ struct dp_soc_stats {
 		uint32_t tx_comp_force_freed;
 		/* Tx completion ring near full */
 		uint32_t near_full;
+		/* Tx drops with buffer src as HAL_TX_COMP_RELEASE_SOURCE_FW */
+		uint32_t fw2wbm_tx_drop;
 	} tx;
 
 	/* SOC level RX stats */
@@ -1341,6 +1343,8 @@ struct dp_soc_stats {
 			uint32_t rx_invalid_tid_err;
 			/* Invalid address1 in defrag path*/
 			uint32_t defrag_ad1_invalid;
+			/* decrypt error drop */
+			uint32_t decrypt_err_drop;
 		} err;
 
 		/* packet count per core - per ring */
@@ -1732,6 +1736,7 @@ struct dp_peer_cmn_ops_desc {
  * @idx: index at which link peer got added in MLD peer's list
  * @num_links: num links added in the MLD peer's list
  * @action_result: add/del was success or not
+ * @reserved: reserved bit
  * @link_peer: link peer handle
  * @mld_peer: MLD peer handle
  * @link_mac_addr: link peer mac address
@@ -1790,6 +1795,7 @@ struct dp_rx_peer_map_unmap_desc {
  * @is_first_link: is the current link the first link created
  * @is_primary_link: is the current link primary link
  * @vdev_id: vdev id of the vdev on which the current link peer exists
+ * @reserved: reserved bit
  */
 struct dp_peer_setup_desc {
 	struct dp_peer *peer;
@@ -2139,6 +2145,7 @@ enum dp_context_type {
  * @tx_hw_enqueue: enqueue TX data to HW
  * @tx_comp_get_params_from_hal_desc: get software tx descriptor and release
  * 				      source from HAL desc for wbm release ring
+ * @dp_tx_mlo_mcast_send: Tx send handler for MLO multicast enhance
  * @dp_tx_process_htt_completion:
  * @dp_rx_process:
  * @dp_tx_send_fast:
@@ -2196,6 +2203,8 @@ enum dp_context_type {
  * @txrx_soc_ppeds_stop:
  * @dp_register_ppeds_interrupts:
  * @dp_free_ppeds_interrupts:
+ * @dp_rx_wbm_err_reap_desc: Reap WBM Error Ring Descriptor
+ * @dp_rx_null_q_desc_handle: Handle Null Queue Exception Error
  */
 struct dp_arch_ops {
 	/* INIT/DEINIT Arch Ops */
@@ -2239,6 +2248,13 @@ struct dp_arch_ops {
 	void (*tx_comp_get_params_from_hal_desc)(struct dp_soc *soc,
 						 void *tx_comp_hal_desc,
 						 struct dp_tx_desc_s **desc);
+
+	qdf_nbuf_t (*dp_tx_mlo_mcast_send)(struct dp_soc *soc,
+					   struct dp_vdev *vdev,
+					   qdf_nbuf_t nbuf,
+					   struct cdp_tx_exception_metadata
+					   *tx_exc_metadata);
+
 	void (*dp_tx_process_htt_completion)(struct dp_soc *soc,
 					     struct dp_tx_desc_s *tx_desc,
 					     uint8_t *status,
@@ -2346,10 +2362,10 @@ struct dp_arch_ops {
 				       unsigned int tid);
 	void (*get_rx_hash_key)(struct dp_soc *soc,
 				struct cdp_lro_hash_config *lro_hash);
-	void (*dp_set_rx_fst)(struct dp_soc *soc, struct dp_rx_fst *fst);
-	struct dp_rx_fst *(*dp_get_rx_fst)(struct dp_soc *soc);
-	uint8_t (*dp_rx_fst_deref)(struct dp_soc *soc);
-	void (*dp_rx_fst_ref)(struct dp_soc *soc);
+	void (*dp_set_rx_fst)(struct dp_rx_fst *fst);
+	struct dp_rx_fst *(*dp_get_rx_fst)(void);
+	uint32_t (*dp_rx_fst_deref)(void);
+	void (*dp_rx_fst_ref)(void);
 	void (*txrx_print_peer_stats)(struct cdp_peer_stats *peer_stats,
 				      enum peer_stats_type stats_type);
 	QDF_STATUS (*dp_peer_rx_reorder_queue_setup)(struct dp_soc *soc,
@@ -2400,6 +2416,17 @@ struct dp_arch_ops {
 	void (*dp_free_ppeds_interrupts)(struct dp_soc *soc,
 					 struct dp_srng *srng, int ring_type,
 					 int ring_num);
+	qdf_nbuf_t (*dp_rx_wbm_err_reap_desc)(struct dp_intr *int_ctx,
+					      struct dp_soc *soc,
+					      hal_ring_handle_t hal_ring_hdl,
+					      uint32_t quota,
+					      uint32_t *rx_bufs_used);
+	QDF_STATUS (*dp_rx_null_q_desc_handle)(struct dp_soc *soc,
+					       qdf_nbuf_t nbuf,
+					       uint8_t *rx_tlv_hdr,
+					       uint8_t pool_id,
+					       struct dp_txrx_peer *txrx_peer,
+					       bool is_reo_exception);
 };
 
 /**
@@ -2999,6 +3026,8 @@ struct dp_soc {
 	/* number of IPv6 flows inserted */
 	qdf_atomic_t ipv6_fse_cnt;
 #endif
+	/* Reo queue ref table items */
+	struct reo_queue_ref_table reo_qref;
 };
 
 #ifdef IPA_OFFLOAD

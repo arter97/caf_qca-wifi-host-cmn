@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -886,6 +886,12 @@ static struct dp_int_mask_assignment dp_mask_assignment[NUM_INTERRUPT_COMBINATIO
 		/* tx mon ring masks */
 		{WLAN_CFG_TX_MON_RING_MASK_0, WLAN_CFG_TX_MON_RING_MASK_1, 0,
 		 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+		/* ppe ds wbm release ring ring mask */
+		{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+		/* Reo2ppe ring mask */
+		{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+		/* ppe2tcl ring mask */
+		{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
 		/* umac reset mask */
 		{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
 		 WLAN_CFG_UMAC_RESET_INTR_MASK_0},
@@ -2658,10 +2664,35 @@ static void
 wlan_soc_ppe_cfg_attach(struct cdp_ctrl_objmgr_psoc *psoc,
 			struct wlan_cfg_dp_soc_ctxt *wlan_cfg_ctx)
 {
+	uint32_t ppeds_cfg;
+	uint8_t psoc_id;
+
+	/*
+	 * The CFG_DP_PPEDS_WIFI_SOC_CFG provides WLAN SoC level PPEDS
+	 * enable/disable support. The bit map position corresponds to
+	 * WLAN SoC position in config/wireless file. With this we can
+	 * configure PPEDS for multiple WLAN SoC having same device ID.
+	 */
+	psoc_id = wlan_psoc_get_id((struct wlan_objmgr_psoc *)psoc);
+	ppeds_cfg = cfg_get(psoc, CFG_DP_PPEDS_WIFI_SOC_CFG);
+	if (!(ppeds_cfg & (1 << psoc_id))) {
+		dp_info("ppeds_cfg is disabled for psoc_id  %d", psoc_id);
+		return;
+	}
+
+	/*
+	 * The CFG_DP_PPEDS_ENABLE provides ppeds enable/disable support
+	 * based on device ID in corresponding INI file.
+	 */
 	wlan_cfg_ctx->ppeds_enable = cfg_get(psoc, CFG_DP_PPEDS_ENABLE);
+	if (!wlan_cfg_ctx->ppeds_enable)
+		return;
+
 	wlan_cfg_ctx->reo2ppe_ring = cfg_get(psoc, CFG_DP_REO2PPE_RING);
 	wlan_cfg_ctx->ppe2tcl_ring = cfg_get(psoc, CFG_DP_PPE2TCL_RING);
 	wlan_cfg_ctx->ppeds_num_tx_desc = cfg_get(psoc, CFG_DP_PPEDS_TX_DESC);
+	wlan_cfg_ctx->ppeds_tx_desc_hotlist_len =
+				cfg_get(psoc, CFG_DP_PPEDS_TX_DESC_HOTLIST_LEN);
 	wlan_cfg_ctx->ppeds_tx_comp_napi_budget =
 				cfg_get(psoc, CFG_DP_PPEDS_TX_CMP_NAPI_BUDGET);
 }
@@ -2834,6 +2865,29 @@ void wlan_cfg_set_sawf_stats_config(struct wlan_cfg_dp_soc_ctxt *cfg,
 {
 }
 #endif /* CONFIG_SAWF_STATS */
+
+#ifdef DP_TX_PACKET_INSPECT_FOR_ILP
+/**
+ * wlan_soc_tx_packet_inspect_attach() - Update TX packet inspection config
+ * @psoc: object manager psoc
+ * @wlan_cfg_ctx: dp soc cfg ctx
+ *
+ * Return: None
+ */
+static void
+wlan_soc_tx_packet_inspect_attach(struct cdp_ctrl_objmgr_psoc *psoc,
+				  struct wlan_cfg_dp_soc_ctxt *wlan_cfg_ctx)
+{
+	wlan_cfg_ctx->tx_pkt_inspect_for_ilp =
+			cfg_get(psoc, CFG_TX_PKT_INSPECT_FOR_ILP);
+}
+#else
+static void
+wlan_soc_tx_packet_inspect_attach(struct cdp_ctrl_objmgr_psoc *psoc,
+				  struct wlan_cfg_dp_soc_ctxt *wlan_cfg_ctx)
+{
+}
+#endif
 
 struct wlan_cfg_dp_soc_ctxt *
 wlan_cfg_soc_attach(struct cdp_ctrl_objmgr_psoc *psoc)
@@ -3030,6 +3084,10 @@ wlan_cfg_soc_attach(struct cdp_ctrl_objmgr_psoc *psoc)
 			cfg_get(psoc, CFG_DP_WOW_CHECK_RX_PENDING);
 	wlan_cfg_ctx->delay_mon_replenish = cfg_get(psoc,
 			CFG_DP_DELAY_MON_REPLENISH);
+	wlan_cfg_ctx->num_global_tx_desc = cfg_get(psoc,
+					CFG_DP_TX_DESC_GLOBAL_COUNT);
+	wlan_cfg_ctx->num_global_spcl_tx_desc = cfg_get(psoc,
+					CFG_DP_SPCL_TX_DESC_GLOBAL_COUNT);
 	wlan_cfg_ctx->rx_mon_buf_ring_size = cfg_get(psoc,
 					CFG_DP_RXDMA_MONITOR_BUF_RING);
 	wlan_cfg_ctx->tx_mon_buf_ring_size = cfg_get(psoc,
@@ -3059,6 +3117,8 @@ wlan_cfg_soc_attach(struct cdp_ctrl_objmgr_psoc *psoc)
 			cfg_get(psoc, CFG_DP_HANDLE_INVALID_DECAP_TYPE_DISABLE);
 	wlan_cfg_ctx->txmon_sw_peer_filtering =
 			cfg_get(psoc, CFG_DP_TXMON_SW_PEER_FILTERING);
+	wlan_soc_tx_packet_inspect_attach(psoc, wlan_cfg_ctx);
+
 	return wlan_cfg_ctx;
 }
 
@@ -3522,6 +3582,16 @@ void wlan_cfg_set_raw_mode_war(struct wlan_cfg_dp_soc_ctxt *cfg,
 bool wlan_cfg_get_raw_mode_war(struct wlan_cfg_dp_soc_ctxt *cfg)
 {
 	return cfg->raw_mode_war;
+}
+
+int wlan_cfg_get_num_global_tx_desc(struct wlan_cfg_dp_soc_ctxt *cfg)
+{
+	return cfg->num_global_tx_desc;
+}
+
+int wlan_cfg_get_num_global_spcl_tx_desc(struct wlan_cfg_dp_soc_ctxt *cfg)
+{
+	return cfg->num_global_spcl_tx_desc;
 }
 
 int wlan_cfg_get_num_tx_desc(struct wlan_cfg_dp_soc_ctxt *cfg)
@@ -4184,6 +4254,12 @@ int
 wlan_cfg_get_dp_soc_ppeds_tx_comp_napi_budget(struct wlan_cfg_dp_soc_ctxt *cfg)
 {
 	return cfg->ppeds_tx_comp_napi_budget;
+}
+
+int
+wlan_cfg_get_dp_soc_ppeds_tx_desc_hotlist_len(struct wlan_cfg_dp_soc_ctxt *cfg)
+{
+	return cfg->ppeds_tx_desc_hotlist_len;
 }
 #endif
 

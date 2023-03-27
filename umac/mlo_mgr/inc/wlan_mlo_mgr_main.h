@@ -902,16 +902,58 @@ QDF_STATUS wlan_mlo_check_valid_config(struct wlan_mlo_dev_context *ml_dev,
 				       enum QDF_OPMODE opmode);
 
 /**
- * mlo_mgr_ml_peer_exist() - Check if MAC address matches any MLD address
+ * mlo_mgr_ml_peer_exist_on_diff_ml_ctx() - Check if MAC address matches any
+ * MLD address
  * @peer_addr: Address to search for a match
+ * @peer_vdev_id: vdev ID of peer
  *
- * The API iterates through all the ML dev ctx in the driver and checks
- * if MAC address pointed by @peer_addr matches the MLD address of
- * MLD dev or any of the ML peers in the ML dev ctx.
+ * The API iterates through all the ML dev ctx in the global MLO
+ * manager to check if MAC address pointed by @peer_addr matches
+ * the MLD address of any ML dev context or its ML peers.
+ * If @peer_vdev_id is a valid pointer address, then API returns
+ * true only if the matching MAC address is not part of the same
+ * ML dev context.
  *
  * Return: True if a matching entity is found else false.
  */
-bool mlo_mgr_ml_peer_exist(uint8_t *peer_addr);
+bool mlo_mgr_ml_peer_exist_on_diff_ml_ctx(uint8_t *peer_addr,
+					  uint8_t *peer_vdev_id);
+
+/**
+ * wlan_mlo_update_action_frame_from_user() - Change MAC address in WLAN frame
+ * received from userspace.
+ * @vdev: VDEV objmgr pointer.
+ * @frame: Pointer to start of WLAN MAC frame.
+ * @frame_len: Length of the frame.
+ *
+ * The API will translate MLD address in the SA, DA, BSSID for the action
+ * frames received from userspace with link address to send over the air.
+ * The API will not modify if the frame is a Public Action category frame and
+ * for VDEV other then STA mode.
+ *
+ * Return: void
+ */
+void wlan_mlo_update_action_frame_from_user(struct wlan_objmgr_vdev *vdev,
+					    uint8_t *frame,
+					    uint32_t frame_len);
+
+/**
+ * wlan_mlo_update_action_frame_to_user() - Change MAC address in WLAN frame
+ * received over the air.
+ * @vdev: VDEV objmgr pointer.
+ * @frame: Pointer to start of WLAN MAC frame.
+ * @frame_len: Length of the frame.
+ *
+ * The API will translate link address in the SA, DA, BSSID for the action
+ * frames received over the air with MLD address to send to userspace.
+ * The API will not modify if the frame is a Public Action category frame and
+ * for VDEV other then STA mode.
+ *
+ * Return: void
+ */
+void wlan_mlo_update_action_frame_to_user(struct wlan_objmgr_vdev *vdev,
+					  uint8_t *frame,
+					  uint32_t frame_len);
 #else
 static inline QDF_STATUS wlan_mlo_mgr_init(void)
 {
@@ -931,9 +973,24 @@ wlan_mlo_mgr_update_mld_addr(struct qdf_mac_addr *old_mac,
 }
 
 static inline
-bool mlo_mgr_ml_peer_exist(uint8_t *peer_addr)
+bool mlo_mgr_ml_peer_exist_on_diff_ml_ctx(uint8_t *peer_addr,
+					  uint8_t *peer_vdev_id)
 {
 	return false;
+}
+
+static inline
+void wlan_mlo_update_action_frame_from_user(struct wlan_objmgr_vdev *vdev,
+					    uint8_t *frame,
+					    uint32_t frame_len)
+{
+}
+
+static inline
+void wlan_mlo_update_action_frame_to_user(struct wlan_objmgr_vdev *vdev,
+					  uint8_t *frame,
+					  uint32_t frame_len)
+{
 }
 
 static inline

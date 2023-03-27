@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -414,12 +414,12 @@ release_tx_desc:
 
 #ifdef QCA_OL_TX_MULTIQ_SUPPORT
 #ifdef DP_TX_IMPLICIT_RBM_MAPPING
-/*
- * dp_tx_get_rbm_id()- Get the RBM ID for data transmission completion.
- * @dp_soc - DP soc structure pointer
- * @ring_id - Transmit Queue/ring_id to be used when XPS is enabled
+/**
+ * dp_tx_get_rbm_id_be() - Get the RBM ID for data transmission completion.
+ * @soc: DP soc structure pointer
+ * @ring_id: Transmit Queue/ring_id to be used when XPS is enabled
  *
- * Return - RBM ID corresponding to TCL ring_id
+ * Return: RBM ID corresponding to TCL ring_id
  */
 static inline uint8_t dp_tx_get_rbm_id_be(struct dp_soc *soc,
 					  uint8_t ring_id)
@@ -445,20 +445,21 @@ static inline uint8_t dp_tx_get_rbm_id_be(struct dp_soc *soc,
 	return rbm;
 }
 #endif
+
 #ifdef QCA_SUPPORT_TX_MIN_RATES_FOR_SPECIAL_FRAMES
 
-/*
+/**
  * dp_tx_set_min_rates_for_critical_frames()- sets min-rates for critical pkts
- * @dp_soc - DP soc structure pointer
- * @hal_tx_desc - HAL descriptor where fields are set
- * nbuf - skb to be considered for min rates
+ * @soc: DP soc structure pointer
+ * @hal_tx_desc: HAL descriptor where fields are set
+ * @nbuf: skb to be considered for min rates
  *
  * The function relies on upper layers to set QDF_NBUF_CB_TX_EXTRA_IS_CRITICAL
  * and uses it to determine if the frame is critical. For a critical frame,
  * flow override bits are set to classify the frame into HW's high priority
  * queue. The HW will pick pre-configured min rates for such packets.
  *
- * Return - None
+ * Return: None
  */
 static void
 dp_tx_set_min_rates_for_critical_frames(struct dp_soc *soc,
@@ -486,6 +487,40 @@ static inline void
 dp_tx_set_min_rates_for_critical_frames(struct dp_soc *soc,
 					uint32_t *hal_tx_desc_cached,
 					qdf_nbuf_t nbuf)
+{
+}
+#endif
+
+#ifdef DP_TX_PACKET_INSPECT_FOR_ILP
+/**
+ * dp_tx_set_particular_tx_queue() - set particular TX TQM flow queue 3 for
+ *				     TX packets, currently TCP ACK only
+ * @soc: DP soc structure pointer
+ * @hal_tx_desc: HAL descriptor where fields are set
+ * @nbuf: skb to be considered for particular TX queue
+ *
+ * Return: None
+ */
+static inline
+void dp_tx_set_particular_tx_queue(struct dp_soc *soc,
+				   uint32_t *hal_tx_desc,
+				   qdf_nbuf_t nbuf)
+{
+	if (!soc->wlan_cfg_ctx->tx_pkt_inspect_for_ilp)
+		return;
+
+	if (qdf_unlikely(QDF_NBUF_CB_GET_PACKET_TYPE(nbuf) ==
+			 QDF_NBUF_CB_PACKET_TYPE_TCP_ACK)) {
+		hal_tx_desc_set_flow_override_enable(hal_tx_desc, 1);
+		hal_tx_desc_set_flow_override(hal_tx_desc, 1);
+		hal_tx_desc_set_who_classify_info_sel(hal_tx_desc, 1);
+	}
+}
+#else
+static inline
+void dp_tx_set_particular_tx_queue(struct dp_soc *soc,
+				   uint32_t *hal_tx_desc,
+				   qdf_nbuf_t nbuf)
 {
 }
 #endif
@@ -714,6 +749,16 @@ dp_tx_mlo_mcast_pkt_send(struct dp_vdev_be *be_vdev,
 		nbuf_clone = nbuf;
 	}
 
+	/* NAWDS clients will accepts on 4 addr format MCAST packets
+	 * This will ensure to send packets in 4 addr format to NAWDS clients.
+	 */
+	if (qdf_unlikely(ptnr_vdev->nawds_enabled)) {
+		qdf_mem_zero(&msdu_info, sizeof(msdu_info));
+		dp_tx_get_queue(ptnr_vdev, nbuf_clone, &msdu_info.tx_queue);
+		dp_tx_nawds_handler(ptnr_vdev->pdev->soc, ptnr_vdev,
+				    &msdu_info, nbuf_clone, DP_INVALID_PEER);
+	}
+
 	qdf_mem_zero(&msdu_info, sizeof(msdu_info));
 	dp_tx_get_queue(ptnr_vdev, nbuf_clone, &msdu_info.tx_queue);
 	msdu_info.gsn = be_vdev->seq_num;
@@ -774,6 +819,79 @@ bool dp_tx_mlo_is_mcast_primary_be(struct dp_soc *soc,
 
 	return false;
 }
+
+#if defined(CONFIG_MLO_SINGLE_DEV)
+static void
+dp_tx_mlo_mcast_enhance_be(struct dp_vdev_be *be_vdev,
+			   struct dp_vdev *ptnr_vdev,
+			   void *arg)
+{
+	struct dp_vdev *vdev = (struct dp_vdev *)be_vdev;
+	qdf_nbuf_t  nbuf = (qdf_nbuf_t)arg;
+
+	if (vdev == ptnr_vdev)
+		return;
+
+	/*
+	 * Hold the reference to avoid free of nbuf in
+	 * dp_tx_mcast_enhance() in case of successful
+	 * conversion
+	 */
+	qdf_nbuf_ref(nbuf);
+
+	if (qdf_unlikely(!dp_tx_mcast_enhance(ptnr_vdev, nbuf)))
+		return;
+
+	qdf_nbuf_free(nbuf);
+}
+
+qdf_nbuf_t
+dp_tx_mlo_mcast_send_be(struct dp_soc *soc, struct dp_vdev *vdev,
+			qdf_nbuf_t nbuf,
+			struct cdp_tx_exception_metadata *tx_exc_metadata)
+{
+	struct dp_vdev_be *be_vdev = dp_get_be_vdev_from_dp_vdev(vdev);
+	struct dp_soc_be *be_soc = dp_get_be_soc_from_dp_soc(soc);
+
+	if (!tx_exc_metadata->is_mlo_mcast)
+		return nbuf;
+
+	if (!be_vdev->mcast_primary) {
+		qdf_nbuf_free(nbuf);
+		return NULL;
+	}
+
+	/*
+	 * In the single netdev model avoid reinjection path as mcast
+	 * packet is identified in upper layers while peer search to find
+	 * primary TQM based on dest mac addr
+	 *
+	 * New bonding interface added into the bridge so MCSD will update
+	 * snooping table and wifi driver populates the entries in appropriate
+	 * child net devices.
+	 */
+	if (vdev->mcast_enhancement_en) {
+		/*
+		 * As dp_tx_mcast_enhance() can consume the nbuf incase of
+		 * successful conversion hold the reference of nbuf.
+		 *
+		 * Hold the reference to tx on partner links
+		 */
+		qdf_nbuf_ref(nbuf);
+		if (qdf_unlikely(!dp_tx_mcast_enhance(vdev, nbuf))) {
+			dp_mcast_mlo_iter_ptnr_vdev(be_soc, be_vdev,
+						    dp_tx_mlo_mcast_enhance_be,
+						    nbuf, DP_MOD_ID_TX);
+			qdf_nbuf_free(nbuf);
+			return NULL;
+		}
+		/* release reference taken above */
+		qdf_nbuf_free(nbuf);
+	}
+	dp_tx_mlo_mcast_handler_be(soc, vdev, nbuf);
+	return NULL;
+}
+#endif
 #else
 static inline void
 dp_tx_vdev_id_set_hal_tx_desc(uint32_t *hal_tx_desc_cached,
@@ -846,18 +964,38 @@ QDF_STATUS dp_sawf_tx_enqueue_fail_peer_stats(struct dp_soc *soc,
 #endif
 
 #ifdef WLAN_SUPPORT_PPEDS
+
 /**
- * dp_ppeds_tx_comp_handler()- Handle tx completions for ppe2tcl ring
+ * dp_ppeds_stats() - Accounting fw2wbm_tx_drop drops in Tx path
  * @soc: Handle to DP Soc structure
- * @quota: Max number of tx completions to process
+ * @peer_id: Peer ID in the descriptor
  *
- * Return: Number of tx completions processed
+ * Return: NONE
  */
+static inline
+void dp_ppeds_stats(struct dp_soc *soc, uint16_t peer_id)
+{
+	struct dp_vdev *vdev = NULL;
+	struct dp_txrx_peer *txrx_peer = NULL;
+	dp_txrx_ref_handle txrx_ref_handle = NULL;
+
+	DP_STATS_INC(soc, tx.fw2wbm_tx_drop, 1);
+	txrx_peer = dp_txrx_peer_get_ref_by_id(soc,
+					       peer_id,
+					       &txrx_ref_handle,
+					       DP_MOD_ID_TX_COMP);
+	if (txrx_peer) {
+		vdev = txrx_peer->vdev;
+		DP_STATS_INC(vdev, tx_i.dropped.fw2wbm_tx_drop, 1);
+		dp_txrx_peer_unref_delete(txrx_ref_handle, DP_MOD_ID_TX_COMP);
+	}
+}
+
 int dp_ppeds_tx_comp_handler(struct dp_soc_be *be_soc, uint32_t quota)
 {
 	uint32_t num_avail_for_reap = 0;
 	void *tx_comp_hal_desc;
-	uint8_t buf_src;
+	uint8_t buf_src, status = 0;
 	uint32_t count = 0;
 	struct dp_tx_desc_s *tx_desc = NULL;
 	struct dp_tx_desc_s *head_desc = NULL;
@@ -865,6 +1003,7 @@ int dp_ppeds_tx_comp_handler(struct dp_soc_be *be_soc, uint32_t quota)
 	struct dp_soc *soc = &be_soc->soc;
 	void *last_prefetch_hw_desc = NULL;
 	struct dp_tx_desc_s *last_prefetch_sw_desc = NULL;
+	qdf_nbuf_t  nbuf;
 	hal_soc_handle_t hal_soc = soc->hal_soc;
 	hal_ring_handle_t hal_ring_hdl =
 				be_soc->ppeds_wbm_release_ring.hal_srng;
@@ -918,8 +1057,12 @@ int dp_ppeds_tx_comp_handler(struct dp_soc_be *be_soc, uint32_t quota)
 		tx_desc->buffer_src = buf_src;
 
 		if (qdf_unlikely(buf_src == HAL_TX_COMP_RELEASE_SOURCE_FW)) {
-			qdf_nbuf_free(tx_desc->nbuf);
-			dp_ppeds_tx_desc_free(soc, tx_desc);
+			status = hal_tx_comp_get_tx_status(tx_comp_hal_desc);
+			if (status != HTT_TX_FW2WBM_TX_STATUS_OK)
+				dp_ppeds_stats(soc, tx_desc->peer_id);
+
+			nbuf = dp_ppeds_tx_desc_free(soc, tx_desc);
+			qdf_nbuf_free(nbuf);
 		} else {
 			tx_desc->tx_status =
 				hal_tx_comp_get_tx_status(tx_comp_hal_desc);
@@ -1079,6 +1222,8 @@ dp_tx_hw_enqueue_be(struct dp_soc *soc, struct dp_vdev *vdev,
 
 	dp_tx_set_min_rates_for_critical_frames(soc, hal_tx_desc_cached,
 						tx_desc->nbuf);
+	dp_tx_set_particular_tx_queue(soc, hal_tx_desc_cached,
+				      tx_desc->nbuf);
 	dp_tx_desc_set_ktimestamp(vdev, tx_desc);
 
 	hal_ring_hdl = dp_tx_get_hal_ring_hdl(soc, ring_id);
@@ -1544,19 +1689,6 @@ void dp_tx_nbuf_unmap_be(struct dp_soc *soc,
 {
 }
 
-/**
- * dp_tx_fast_send_be() - Transmit a frame on a given VAP
- * @soc: DP soc handle
- * @vdev_id: id of DP vdev handle
- * @nbuf: skb
- *
- * Entry point for Core Tx layer (DP_TX) invoked from
- * hard_start_xmit in OSIF/HDD or from dp_rx_process for intravap forwarding
- * cases
- *
- * Return: NULL on success,
- *         nbuf when it fails to send
- */
 #ifdef QCA_DP_TX_NBUF_LIST_FREE
 qdf_nbuf_t dp_tx_fast_send_be(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
 			      qdf_nbuf_t nbuf)

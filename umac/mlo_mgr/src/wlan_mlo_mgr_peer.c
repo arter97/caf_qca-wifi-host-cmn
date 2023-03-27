@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -371,8 +371,53 @@ wlan_mlo_peer_deauth_init(struct wlan_mlo_peer_context *ml_peer,
 			deauth_sent = 1;
 		}
 	}
+}
 
-	return;
+void wlan_mlo_peer_delete(struct wlan_mlo_peer_context *ml_peer)
+{
+	struct wlan_mlo_dev_context *ml_dev;
+	struct wlan_objmgr_peer *link_peer;
+	struct wlan_objmgr_peer *link_peers[MAX_MLO_LINK_PEERS];
+	struct wlan_mlo_link_peer_entry *peer_entry;
+	uint16_t i;
+
+	if (!ml_peer)
+		return;
+
+	mlo_peer_lock_acquire(ml_peer);
+
+	if (ml_peer->mlpeer_state == ML_PEER_DISCONN_INITIATED) {
+		mlo_peer_lock_release(ml_peer);
+		return;
+	}
+
+	ml_dev = ml_peer->ml_dev;
+
+	for (i = 0; i < MAX_MLO_LINK_PEERS; i++) {
+		link_peers[i] = NULL;
+		peer_entry = &ml_peer->peer_list[i];
+		if (!peer_entry->link_peer)
+			continue;
+
+		link_peer = peer_entry->link_peer;
+
+		if (wlan_objmgr_peer_try_get_ref(link_peer, WLAN_MLO_MGR_ID) !=
+						QDF_STATUS_SUCCESS)
+			continue;
+
+		link_peers[i] = link_peer;
+	}
+
+	ml_peer->mlpeer_state = ML_PEER_DISCONN_INITIATED;
+
+	mlo_peer_lock_release(ml_peer);
+
+	for (i = 0; i < MAX_MLO_LINK_PEERS; i++) {
+		if (!link_peers[i])
+			continue;
+
+		mlo_link_peer_disconnect_notify(ml_dev, link_peers[i]);
+	}
 }
 
 void
@@ -1108,13 +1153,16 @@ void wlan_mlo_peer_get_links_info(struct wlan_objmgr_peer *peer,
 	struct wlan_mlo_link_peer_entry *peer_entry;
 	struct wlan_objmgr_peer *link_peer;
 	struct wlan_objmgr_vdev *link_vdev;
-	uint8_t i, ix;
+	uint8_t i, ix, idx = 0;
+	struct wlan_mlo_eml_cap *ml_emlcap;
 
 	ml_peer = peer->mlo_peer_ctx;
 	ml_links->num_partner_links = 0;
 
 	if (!ml_peer)
 		return;
+
+	ml_emlcap = &ml_peer->mlpeer_emlcap;
 
 	mlo_peer_lock_acquire(ml_peer);
 
@@ -1130,6 +1178,7 @@ void wlan_mlo_peer_get_links_info(struct wlan_objmgr_peer *peer,
 
 		if (!link_peer)
 			continue;
+		idx++;
 		if (link_peer == peer)
 			continue;
 		link_vdev = wlan_peer_get_vdev(link_peer);
@@ -1142,6 +1191,14 @@ void wlan_mlo_peer_get_links_info(struct wlan_objmgr_peer *peer,
 		ix = ml_links->num_partner_links;
 		ml_links->link_info[ix].vdev_id = wlan_vdev_get_id(link_vdev);
 		ml_links->link_info[ix].hw_mld_link_id = peer_entry->hw_link_id;
+		ml_links->link_info[ix].mlo_enabled = 1;
+		ml_links->link_info[ix].mlo_assoc_link =
+			wlan_peer_mlme_is_assoc_peer(link_peer);
+		ml_links->link_info[ix].mlo_primary_umac =
+			peer_entry->is_primary;
+		ml_links->link_info[ix].mlo_logical_link_index_valid = 1;
+		ml_links->link_info[ix].emlsr_support = ml_emlcap->emlsr_supp;
+		ml_links->link_info[ix].logical_link_index = idx - 1;
 		ml_links->num_partner_links++;
 	}
 	mlo_peer_lock_release(ml_peer);

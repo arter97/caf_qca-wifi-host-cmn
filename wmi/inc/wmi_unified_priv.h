@@ -1401,6 +1401,14 @@ QDF_STATUS (*send_peer_update_wds_entry_cmd)(wmi_unified_t wmi_handle,
 QDF_STATUS (*send_set_ctl_table_cmd)(wmi_unified_t wmi_handle,
 		struct ctl_table_params *param);
 
+QDF_STATUS
+(*send_set_sta_max_pwr_table_cmd)(wmi_unified_t wmi_handle,
+				  struct sta_max_pwr_table_params *param);
+
+QDF_STATUS
+(*send_set_power_table_cmd)(wmi_unified_t wmi_handle,
+			    struct rate2power_table_params *param);
+
 QDF_STATUS (*send_set_mimogain_table_cmd)(wmi_unified_t wmi_handle,
 		struct mimogain_table_params *param);
 
@@ -1523,6 +1531,9 @@ QDF_STATUS (*extract_mgmt_tx_compl_param)(wmi_unified_t wmi_handle,
 
 QDF_STATUS (*extract_chan_info_event)(wmi_unified_t wmi_handle, void *evt_buf,
 				   wmi_host_chan_info_event *chan_info);
+
+QDF_STATUS (*extract_scan_blanking_params)(wmi_unified_t wmi_handle,
+	    void *evt_buf, wmi_host_scan_blanking_params *blanking_params);
 
 QDF_STATUS (*extract_channel_hopping_event)(wmi_unified_t wmi_handle,
 		void *evt_buf,
@@ -2910,7 +2921,8 @@ QDF_STATUS (*extract_halphy_stats_end_of_event)(wmi_unified_t wmi_handle,
 QDF_STATUS (*extract_halphy_stats_event_count)(wmi_unified_t wmi_handle,
 					       void *evt_buf,
 					       uint32_t *event_count_flag);
-#ifdef WLAN_SUPPORT_INFRA_CTRL_PATH_STATS
+#if defined(WLAN_SUPPORT_INFRA_CTRL_PATH_STATS) || \
+	defined(WLAN_TELEMETRY_STATS_SUPPORT)
 QDF_STATUS
 (*extract_infra_cp_stats)(wmi_unified_t wmi_handle,
 			  void *evt_buf, uint32_t evt_buf_len,
@@ -3205,6 +3217,18 @@ QDF_STATUS (*send_update_edca_pifs_param_cmd)(
 QDF_STATUS (*extract_sap_coex_cap_service_ready_ext2)(
 			wmi_unified_t wmi_handle, uint8_t *event,
 			struct wmi_host_coex_fix_chan_cap *cap);
+
+#ifdef WMI_AP_SUPPORT
+QDF_STATUS
+(*send_wmi_tdma_schedule_request_cmd)(wmi_unified_t wmi_handle,
+				      struct wlan_tdma_sched_cmd_param *param);
+#endif
+
+QDF_STATUS
+(*extract_tgtr2p_table_event)(wmi_unified_t wmi_handle,
+			      uint8_t *evt_buf,
+			      struct r2p_table_update_status_obj *update_status,
+			      uint32_t len);
 };
 
 /* Forward declaration for psoc*/

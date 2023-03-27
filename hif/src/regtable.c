@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2013-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -25,6 +25,7 @@
 #include "ar6320v2def.h"
 #include "hif_main.h"
 #include "adrastea_reg_def.h"
+#include "wcn6450def.h"
 
 #include "targetdef.h"
 #include "hostdef.h"
@@ -208,6 +209,12 @@ void hif_target_register_tbl_attach(struct hif_softc *scn, u32 target_type)
 		scn->target_ce_def = KIWI_CE_TARGETdef;
 		hif_info("TARGET_TYPE_MANGO");
 		break;
+
+	case TARGET_TYPE_PEACH:
+		scn->targetdef = KIWI_TARGETdef;
+		scn->target_ce_def = KIWI_CE_TARGETdef;
+		hif_info("TARGET_TYPE_PEACH");
+		break;
 #endif /* KIWI_HEADERS_DEF */
 
 #if defined(QCA6750_HEADERS_DEF)
@@ -217,6 +224,15 @@ void hif_target_register_tbl_attach(struct hif_softc *scn, u32 target_type)
 		hif_info("TARGET_TYPE_QCA6750");
 		break;
 #endif /* QCA6750_HEADERS_DEF */
+
+#if defined(WCN6450_HEADERS_DEF)
+	case TARGET_TYPE_WCN6450:
+		scn->targetdef = &wcn6450_targetdef;
+		scn->target_ce_def = &wcn6450_ce_targetdef;
+		hif_info("TARGET_TYPE_WCN6450");
+		break;
+#endif /* WCN6450_HEADERS_DEF */
+
 	default:
 		break;
 	}
@@ -363,6 +379,11 @@ void hif_register_tbl_attach(struct hif_softc *scn, u32 hif_type)
 		scn->hostdef = KIWI_HOSTdef;
 		hif_info("HIF_TYPE_MANGO");
 		break;
+
+	case HIF_TYPE_PEACH:
+		scn->hostdef = KIWI_HOSTdef;
+		hif_info("HIF_TYPE_PEACH");
+		break;
 #endif /* KIWI_HEADERS_DEF */
 
 #if defined(QCA6750_HEADERS_DEF)
@@ -371,6 +392,15 @@ void hif_register_tbl_attach(struct hif_softc *scn, u32 hif_type)
 		hif_info("HIF_TYPE_QCA6750");
 		break;
 #endif /* QCA6750_HEADERS_DEF */
+
+#if defined(WCN6450_HEADERS_DEF)
+	case HIF_TYPE_WCN6450:
+		scn->hostdef = &wcn6450_hostdef;
+		scn->host_shadow_regs = &wcn6450_host_shadow_regs;
+		hif_info("HIF_TYPE_WCN6450");
+		break;
+#endif /* WCN6450_HEADERS_DEF */
+
 	default:
 		break;
 	}

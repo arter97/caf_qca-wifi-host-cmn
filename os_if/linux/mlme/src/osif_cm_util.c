@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2012-2015, 2020-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -216,8 +216,8 @@ osif_cm_failed_candidate_cb(struct wlan_objmgr_vdev *vdev,
  * osif_cm_update_id_and_src_cb() - Callback to update id and
  * source of the connect/disconnect request
  * @vdev: vdev pointer
- * @Source: Source of the connect req
- * @id: Connect/disconnect id
+ * @source: Source of the connect req
+ * @cm_id: Connect/disconnect id
  *
  * Context: Any context. Takes and releases cmd id spinlock
  * Return: QDF_STATUS
@@ -244,7 +244,7 @@ osif_cm_update_id_and_src_cb(struct wlan_objmgr_vdev *vdev,
 /**
  * osif_cm_disconnect_complete_cb() - Disconnect done callback
  * @vdev: vdev pointer
- * @disconnect_rsp: Disconnect response
+ * @rsp: Disconnect response
  *
  * Context: Any context
  * Return: QDF_STATUS
@@ -309,7 +309,7 @@ osif_cm_roam_sync_cb(struct wlan_objmgr_vdev *vdev)
 }
 
 /**
- * @osif_pmksa_candidate_notify_cb: Roam pmksa candidate notify callback
+ * osif_pmksa_candidate_notify_cb() - Roam pmksa candidate notify callback
  * @vdev: vdev pointer
  * @bssid: bssid
  * @index: index
@@ -328,6 +328,9 @@ osif_pmksa_candidate_notify_cb(struct wlan_objmgr_vdev *vdev,
 /**
  * osif_cm_send_keys_cb() - Send keys callback
  * @vdev: vdev pointer
+ * @key_index: key index
+ * @pairwise: true if pairwise
+ * @cipher_type: cipher type
  *
  * This callback indicates os_if that
  * so that os_if can stop all the activity on this connection
@@ -406,7 +409,6 @@ osif_cm_roam_abort_cb(struct wlan_objmgr_vdev *vdev)
 /**
  * osif_cm_roam_cmpl_cb() - Roam sync complete callback
  * @vdev: vdev pointer
- * @rsp: connect rsp
  *
  * This callback indicates os_if that roam sync is complete
  * so that os_if can stop all the activity on this connection
@@ -418,6 +420,50 @@ static QDF_STATUS
 osif_cm_roam_cmpl_cb(struct wlan_objmgr_vdev *vdev)
 {
 	return osif_cm_napi_serialize(false);
+}
+
+/**
+ * osif_cm_get_scan_ie_params() - Function to get scan ie params
+ * @vdev: vdev pointer
+ * @scan_ie: Pointer to scan_ie
+ * @dot11mode_filter: Pointer to dot11mode_filter
+ *
+ * Get scan IE params from adapter corresponds to given vdev
+ *
+ * Return: QDF_STATUS
+ */
+static QDF_STATUS
+osif_cm_get_scan_ie_params(struct wlan_objmgr_vdev *vdev,
+			   struct element_info *scan_ie,
+			   enum dot11_mode_filter *dot11mode_filter)
+{
+	osif_cm_get_scan_ie_params_cb cb = NULL;
+
+	if (osif_cm_legacy_ops)
+		cb = osif_cm_legacy_ops->get_scan_ie_params_cb;
+	if (cb)
+		return cb(vdev, scan_ie, dot11mode_filter);
+
+	return QDF_STATUS_E_FAILURE;
+}
+
+/**
+ * osif_cm_get_scan_ie_info_cb() - Roam get scan ie params callback
+ * @vdev: vdev pointer
+ * @scan_ie: pointer to scan ie
+ * @dot11mode_filter: pointer to dot11 mode filter
+ *
+ * This callback gets scan ie params from os_if
+ *
+ * Return: QDF_STATUS
+ */
+
+static QDF_STATUS
+osif_cm_get_scan_ie_info_cb(struct wlan_objmgr_vdev *vdev,
+			    struct element_info *scan_ie,
+			    enum dot11_mode_filter *dot11mode_filter)
+{
+	return osif_cm_get_scan_ie_params(vdev, scan_ie, dot11mode_filter);
 }
 #endif
 
@@ -493,6 +539,7 @@ static struct mlme_cm_ops cm_ops = {
 	.mlme_cm_roam_start_cb = osif_cm_roam_start_cb,
 	.mlme_cm_roam_abort_cb = osif_cm_roam_abort_cb,
 	.mlme_cm_roam_cmpl_cb = osif_cm_roam_cmpl_cb,
+	.mlme_cm_roam_get_scan_ie_cb = osif_cm_get_scan_ie_info_cb,
 #endif
 #ifdef WLAN_FEATURE_PREAUTH_ENABLE
 	.mlme_cm_ft_preauth_cmpl_cb = osif_cm_ft_preauth_cmpl_cb,

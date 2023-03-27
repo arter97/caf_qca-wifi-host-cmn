@@ -942,7 +942,7 @@ dp_tx_mon_send_to_stack(struct dp_pdev *pdev, qdf_nbuf_t mpdu,
  * dp_tx_mon_send_per_usr_mpdu() - API to send per usr mpdu to stack
  * @pdev: pdev Handle
  * @ppdu_info: pointer to dp_tx_ppdu_info
- * @user_id: current user index
+ * @user_idx: current user index
  *
  * Return: void
  */
@@ -1106,6 +1106,12 @@ dp_tx_mon_update_radiotap(struct dp_pdev *pdev,
 	    dp_populate_tsft_from_phy_timestamp(pdev, ppdu_info))
 		return;
 
+	/* update mlo timestamp */
+	TXMON_PPDU_COM(ppdu_info, tsft) =
+			(TXMON_PPDU_COM(ppdu_info, tsft) +
+			 pdev->timestamp.mlo_offset_lo_us +
+			 ((uint64_t)pdev->timestamp.mlo_offset_hi_us << 32));
+
 	for (usr_idx = 0; usr_idx < num_users; usr_idx++) {
 		qdf_nbuf_queue_t *mpdu_q = NULL;
 
@@ -1146,7 +1152,7 @@ dp_tx_mon_update_radiotap(struct dp_pdev *pdev,
  *
  * Return: none
  */
-void dp_tx_mon_ppdu_process(void *context)
+static void dp_tx_mon_ppdu_process(void *context)
 {
 	struct dp_pdev *pdev = (struct dp_pdev *)context;
 	struct dp_mon_pdev *mon_pdev;
@@ -1200,12 +1206,6 @@ void dp_tx_mon_ppdu_process(void *context)
 	}
 }
 
-/**
- * dp_tx_ppdu_stats_attach_2_0 - Initialize Tx PPDU stats and enhanced capture
- * @pdev: DP PDEV
- *
- * Return: none
- */
 void dp_tx_ppdu_stats_attach_2_0(struct dp_pdev *pdev)
 {
 	struct dp_mon_pdev *mon_pdev;
@@ -1241,12 +1241,6 @@ void dp_tx_ppdu_stats_attach_2_0(struct dp_pdev *pdev)
 			qdf_alloc_unbound_workqueue("tx_mon_ppdu_work_queue");
 }
 
-/**
- * dp_tx_ppdu_stats_detach_be - Cleanup Tx PPDU stats and enhanced capture
- * @pdev: DP PDEV
- *
- * Return: none
- */
 void dp_tx_ppdu_stats_detach_2_0(struct dp_pdev *pdev)
 {
 	struct dp_mon_pdev *mon_pdev;
