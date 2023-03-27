@@ -2840,6 +2840,10 @@ struct dp_soc {
 	/* number of IPv6 flows inserted */
 	qdf_atomic_t ipv6_fse_cnt;
 #endif
+#ifdef DP_TX_PACKET_INSPECT_FOR_ILP
+	/* Flag to show if TX ILP is enabled */
+	bool tx_ilp_enable;
+#endif
 };
 
 #ifdef IPA_OFFLOAD
