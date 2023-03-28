@@ -6617,6 +6617,7 @@ struct target_feature_set {
  * @num_max_active_vdevs: max number of active virtual devices (VAPs) to
  * support
  * @notify_frame_support: capability to mark notify frames from host
+ * @tx_ilp_enable: capability to support TX ILP from host
  */
 typedef struct {
 	uint32_t num_vdevs;
@@ -6744,6 +6745,9 @@ typedef struct {
 	bool reo_qdesc_shared_addr_table_enabled;
 	uint32_t num_max_active_vdevs;
 	uint8_t notify_frame_support;
+#ifdef DP_TX_PACKET_INSPECT_FOR_ILP
+	uint8_t tx_ilp_enable;
+#endif
 } target_resource_config;
 
 /**
