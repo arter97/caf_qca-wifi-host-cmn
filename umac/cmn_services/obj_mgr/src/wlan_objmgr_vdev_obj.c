@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -1420,6 +1420,16 @@ void wlan_objmgr_vdev_peer_freed_notify(struct wlan_objmgr_vdev *vdev)
 		if (stat_handler)
 			stat_handler(vdev);
 	}
+}
+
+QDF_STATUS
+wlan_vdev_get_bss_peer_mac_for_pmksa(struct wlan_objmgr_vdev *vdev,
+				     struct qdf_mac_addr *bss_peer_mac)
+{
+	if (wlan_vdev_mlme_is_mlo_vdev(vdev))
+		return wlan_vdev_get_bss_peer_mld_mac(vdev, bss_peer_mac);
+
+	return wlan_vdev_get_bss_peer_mac(vdev, bss_peer_mac);
 }
 
 QDF_STATUS wlan_vdev_get_bss_peer_mac(struct wlan_objmgr_vdev *vdev,
