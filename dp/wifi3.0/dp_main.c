@@ -5727,7 +5727,7 @@ QDF_STATUS dp_pdev_attach_wifi3(struct cdp_soc_t *txrx_soc,
 	pdev_context_size =
 		soc->arch_ops.txrx_get_context_size(DP_CONTEXT_TYPE_PDEV);
 	if (pdev_context_size)
-		pdev = dp_context_alloc_mem(soc, DP_PDEV_TYPE, pdev_context_size);
+		pdev = qdf_mem_common_alloc(pdev_context_size);
 
 	if (!pdev) {
 		dp_init_err("%pK: DP PDEV memory allocation failed",
@@ -5813,7 +5813,7 @@ fail2:
 	wlan_cfg_pdev_detach(pdev->wlan_cfg_ctx);
 fail1:
 	soc->pdev_list[pdev_id] = NULL;
-	qdf_mem_free(pdev);
+	qdf_mem_common_free(pdev);
 fail0:
 	return QDF_STATUS_E_FAILURE;
 }
@@ -6065,7 +6065,7 @@ static void dp_pdev_detach(struct cdp_pdev *txrx_pdev, int force)
 	wlan_cfg_pdev_detach(pdev->wlan_cfg_ctx);
 	wlan_minidump_remove(pdev, sizeof(*pdev), soc->ctrl_psoc,
 			     WLAN_MD_DP_PDEV, "dp_pdev");
-	dp_context_free_mem(soc, DP_PDEV_TYPE, pdev);
+	qdf_mem_common_free(pdev);
 }
 
 /*
@@ -6348,7 +6348,7 @@ static void dp_soc_detach(struct cdp_soc_t *txrx_soc)
 	}
 
 	qdf_mem_free(soc->cdp_soc.ops);
-	qdf_mem_free(soc);
+	qdf_mem_common_free(soc);
 }
 
 /*
@@ -14123,10 +14123,10 @@ static bool dp_tx_comp_delay_check(struct dp_tx_desc_s *tx_desc)
 	qdf_ktime_t current_time = qdf_ktime_real_get();
 	qdf_ktime_t timestamp = tx_desc->timestamp;
 
-	if (!timestamp)
-		return false;
-
 	if (dp_tx_pkt_tracepoints_enabled()) {
+		if (!timestamp)
+			return false;
+
 		time_latency = qdf_ktime_to_ms(current_time) -
 				qdf_ktime_to_ms(timestamp);
 		if (time_latency >= DP_TX_COMP_MAX_LATENCY_MS) {
@@ -14135,12 +14135,15 @@ static bool dp_tx_comp_delay_check(struct dp_tx_desc_s *tx_desc)
 			return true;
 		}
 	} else {
+		if (!timestamp_tick)
+			return false;
+
 		current_time = qdf_system_ticks();
 		time_latency = qdf_system_ticks_to_msecs(current_time -
 							 timestamp_tick);
 		if (time_latency >= DP_TX_COMP_MAX_LATENCY_MS) {
 			dp_err_rl("enqueued: %u ms, current : %u ms",
-				  qdf_system_ticks_to_msecs(timestamp),
+				  qdf_system_ticks_to_msecs(timestamp_tick),
 				  qdf_system_ticks_to_msecs(current_time));
 			return true;
 		}
@@ -15186,7 +15189,7 @@ dp_soc_attach(struct cdp_ctrl_objmgr_psoc *ctrl_psoc,
 		goto fail0;
 	}
 	arch_id = cdp_get_arch_type_from_devid(device_id);
-	soc = qdf_mem_malloc(dp_get_soc_context_size(device_id));
+	soc = qdf_mem_common_alloc(dp_get_soc_context_size(device_id));
 	if (!soc) {
 		dp_err("DP SOC memory allocation failed");
 		goto fail0;
@@ -15303,7 +15306,7 @@ fail3:
 fail2:
 	qdf_mem_free(soc->cdp_soc.ops);
 fail1:
-	qdf_mem_free(soc);
+	qdf_mem_common_free(soc);
 fail0:
 	return NULL;
 }
