@@ -918,7 +918,7 @@ wlan_send_peer_level_tid_to_link_mapping(struct wlan_objmgr_vdev *vdev,
 
 	for (dir = 0; dir < WLAN_T2LM_MAX_DIRECTION; dir++) {
 		t2lm_info = &ml_peer->t2lm_policy.t2lm_negotiated_info.t2lm_info[dir];
-		if (t2lm_info && t2lm_info[dir].direction !=
+		if (t2lm_info && t2lm_info->direction !=
 		    WLAN_T2LM_INVALID_DIRECTION) {
 			t2lm_debug("send peer-level mapping to FW for dir: %d", dir);
 
