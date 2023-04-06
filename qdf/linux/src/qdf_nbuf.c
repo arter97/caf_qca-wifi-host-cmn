@@ -2883,13 +2883,15 @@ qdf_export_symbol(__qdf_nbuf_is_bcast_pkt);
  */
 bool __qdf_nbuf_is_mcast_replay(qdf_nbuf_t nbuf)
 {
-	struct ethhdr *eh = (struct ethhdr *)qdf_nbuf_data(nbuf);
+	struct sk_buff *skb = (struct sk_buff *)nbuf;
+	struct ethhdr *eth = eth_hdr(skb);
 
-	if (unlikely(nbuf->pkt_type == PACKET_MULTICAST)) {
-		if (unlikely(ether_addr_equal(eh->h_source,
-					      nbuf->dev->dev_addr)))
-			return true;
-	}
+	if (qdf_likely(skb->pkt_type != PACKET_MULTICAST))
+		return false;
+
+	if (qdf_unlikely(ether_addr_equal(eth->h_source, skb->dev->dev_addr)))
+		return true;
+
 	return false;
 }
 
@@ -5606,7 +5608,9 @@ qdf_nbuf_update_radiotap_eht_flags(struct mon_rx_status *rx_status,
 	put_unaligned_le32(rx_status->eht_data[5], &rtap_buf[rtap_len]);
 	rtap_len += 4;
 
-	for (user = 0; user < rx_status->num_eht_user_info_valid; user++) {
+	for (user = 0; user < EHT_USER_INFO_LEN &&
+	     rx_status->num_eht_user_info_valid &&
+	     user < rx_status->num_eht_user_info_valid; user++) {
 		put_unaligned_le32(rx_status->eht_user_info[user],
 				   &rtap_buf[rtap_len]);
 		rtap_len += 4;

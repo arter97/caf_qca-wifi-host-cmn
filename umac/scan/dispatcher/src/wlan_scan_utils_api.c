@@ -1320,8 +1320,6 @@ util_scan_parse_vendor_ie(struct scan_cache_entry *scan_params,
 		scan_params->ie_list.p2p = (uint8_t *)ie;
 	} else if (is_qca_son_oui((uint8_t *)ie,
 				  QCA_OUI_WHC_AP_INFO_SUBTYPE)) {
-		if (ie->ie_len > WLAN_VENDOR_SON_IE_LEN)
-			return QDF_STATUS_E_INVAL;
 
 		scan_params->ie_list.sonadv = (uint8_t *)ie;
 	} else if (is_ht_cap((uint8_t *)ie)) {
@@ -3052,7 +3050,7 @@ static uint32_t util_gen_new_ie(uint8_t *ie, uint32_t ielen,
 	 */
 	tmp_new = sub_copy;
 	while (((tmp_new + tmp_new[1] + MIN_IE_LEN) - sub_copy) <=
-	       subie_len) {
+	       (subie_len - 1)) {
 		if (!(tmp_new[0] == WLAN_ELEMID_NONTX_BSSID_CAP ||
 		      tmp_new[0] == WLAN_ELEMID_SSID ||
 		      tmp_new[0] == WLAN_ELEMID_MULTI_BSSID_IDX ||
@@ -3066,7 +3064,7 @@ static uint32_t util_gen_new_ie(uint8_t *ie, uint32_t ielen,
 			}
 		}
 		if (((tmp_new + tmp_new[1] + MIN_IE_LEN) - sub_copy) >=
-		    subie_len)
+		    (subie_len - 1))
 			break;
 		tmp_new += tmp_new[1] + MIN_IE_LEN;
 	}
@@ -3206,6 +3204,7 @@ static QDF_STATUS util_scan_parse_mbssid(struct wlan_objmgr_pdev *pdev,
 					 struct mgmt_rx_event_params *rx_param,
 					 qdf_list_t *scan_list)
 {
+	struct wlan_scan_obj *scan_obj;
 	struct wlan_bcn_frame *bcn;
 	struct wlan_frame_hdr *hdr;
 	struct scan_mbssid_info mbssid_info = {0};
@@ -3220,6 +3219,10 @@ static QDF_STATUS util_scan_parse_mbssid(struct wlan_objmgr_pdev *pdev,
 	int new_frame_len = 0, split_prof_len = 0;
 	enum nontx_profile_reasoncode retval;
 	uint8_t *nontx_profile = NULL;
+
+	scan_obj = wlan_pdev_get_scan_obj(pdev);
+	if (!scan_obj)
+		return QDF_STATUS_E_INVAL;
 
 	hdr = (struct wlan_frame_hdr *)frame;
 	bcn = (struct wlan_bcn_frame *)(frame + sizeof(struct wlan_frame_hdr));
@@ -3490,6 +3493,11 @@ static QDF_STATUS util_scan_parse_mbssid(struct wlan_objmgr_pdev *pdev,
 				     offsetof(struct wlan_bcn_frame, ie) +
 				     sizeof(struct wlan_frame_hdr),
 				     new_ie, new_ie_len);
+			if (scan_obj->cb.inform_mbssid_bcn_prb_rsp)
+				scan_obj->cb.inform_mbssid_bcn_prb_rsp(
+						       new_frame, new_frame_len,
+						       frm_subtype, new_bssid);
+
 			status = util_scan_gen_scan_entry(pdev, new_frame,
 							  new_frame_len,
 							  frm_subtype,

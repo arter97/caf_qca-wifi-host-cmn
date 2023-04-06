@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2013-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -23,6 +23,7 @@
 #include "cdp_txrx_ipa.h"
 #include "qdf_platform.h"
 
+#ifdef IPA_OFFLOAD
 /**
  * wlan_ipa_uc_rt_debug_host_fill - fill rt debug buffer
  * @ctext: pointer to ipa context.
@@ -1046,3 +1047,4 @@ void wlan_ipa_wdi_meter_notifier_cb(qdf_ipa_wdi_meter_evt_type_t evt,
 	qdf_op_unprotect(op_sync);
 }
 #endif /* FEATURE_METERING */
+#endif /* IPA_OFFLOAD */
