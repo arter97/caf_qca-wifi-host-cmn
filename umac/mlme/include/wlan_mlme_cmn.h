@@ -59,6 +59,9 @@
  * @index: index
  * @preauth: preauth flag
  *
+ * @mlme_cm_link_reconfig_notify_cb:
+ * @vdev: vdev object
+ *
  * @mlme_cm_roam_start_cb: Roam start callback
  * @vdev: vdev pointer
  *
@@ -106,6 +109,8 @@ struct mlme_cm_ops {
 	QDF_STATUS (*mlme_cm_send_keys_cb)(struct wlan_objmgr_vdev *vdev,
 					   uint8_t key_index, bool pairwise,
 					   enum wlan_crypto_cipher_type cipher_type);
+	QDF_STATUS (*mlme_cm_link_reconfig_notify_cb)(
+					struct wlan_objmgr_vdev *vdev);
 #endif
 #ifdef WLAN_FEATURE_ROAM_OFFLOAD
 	QDF_STATUS (*mlme_cm_roam_start_cb)(struct wlan_objmgr_vdev *vdev);
@@ -887,6 +892,14 @@ QDF_STATUS mlme_cm_osif_pmksa_candidate_notify(struct wlan_objmgr_vdev *vdev,
 QDF_STATUS mlme_cm_osif_send_keys(struct wlan_objmgr_vdev *vdev,
 				  uint8_t key_index, bool pairwise,
 				  enum wlan_crypto_cipher_type cipher_type);
+
+/**
+ * mlme_cm_osif_link_reconfig_notify() - notify link reconfig event
+ * @vdev: vdev pointer
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS mlme_cm_osif_link_reconfig_notify(struct wlan_objmgr_vdev *vdev);
 #else
 static inline
 QDF_STATUS mlme_cm_osif_roam_sync_ind(struct wlan_objmgr_vdev *vdev)
@@ -898,6 +911,12 @@ static inline
 QDF_STATUS mlme_cm_osif_send_keys(struct wlan_objmgr_vdev *vdev,
 				  uint8_t key_index, bool pairwise,
 				  enum wlan_crypto_cipher_type cipher_type)
+{
+	return QDF_STATUS_SUCCESS;
+}
+
+static inline
+QDF_STATUS mlme_cm_osif_link_reconfig_notify(struct wlan_objmgr_vdev *vdev)
 {
 	return QDF_STATUS_SUCCESS;
 }
