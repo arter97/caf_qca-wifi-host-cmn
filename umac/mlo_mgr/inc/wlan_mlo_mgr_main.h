@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -517,6 +517,62 @@ void tsf_recalculation_lock_release(struct wlan_mlo_dev_context *mldev)
 {
 	qdf_spin_unlock_bh(&mldev->tsf_recalculation_lock);
 }
+
+/**
+ * mlo_ap_lock_create - Create MLO AP mutex/spinlock
+ * @ap_ctx:  ML device AP context
+ *
+ * Creates mutex/spinlock
+ *
+ * Return: void
+ */
+static inline
+void mlo_ap_lock_create(struct wlan_mlo_ap *ap_ctx)
+{
+	qdf_spinlock_create(&ap_ctx->mlo_ap_lock);
+}
+
+/**
+ * mlo_ap_lock_destroy - Destroy MLO AP mutex/spinlock
+ * @ap_ctx:  ML device AP context
+ *
+ * Destroy mutex/spinlock
+ *
+ * Return: void
+ */
+static inline
+void mlo_ap_lock_destroy(struct wlan_mlo_ap *ap_ctx)
+{
+	qdf_spinlock_destroy(&ap_ctx->mlo_ap_lock);
+}
+
+/**
+ * mlo_ap_lock_acquire - Acquire MLO AP mutex/spinlock
+ * @ap_ctx:  ML device AP context
+ *
+ * acquire mutex/spinlock
+ *
+ * return: void
+ */
+static inline
+void mlo_ap_lock_acquire(struct wlan_mlo_ap *ap_ctx)
+{
+	qdf_spin_lock_bh(&ap_ctx->mlo_ap_lock);
+}
+
+/**
+ * mlo_ap_lock_release - Release MLO AP mutex/spinlock
+ * @ap_ctx:  ML device AP context
+ *
+ * release mutex/spinlock
+ *
+ * return: void
+ */
+static inline
+void mlo_ap_lock_release(struct wlan_mlo_ap *ap_ctx)
+{
+	qdf_spin_unlock_bh(&ap_ctx->mlo_ap_lock);
+}
 #else /* WLAN_MLO_USE_SPINLOCK */
 static inline
 void ml_link_lock_create(struct mlo_mgr_context *mlo_ctx)
@@ -739,6 +795,30 @@ void tsf_recalculation_lock_release(struct wlan_mlo_dev_context *mldev)
 {
 	qdf_mutex_release(&mldev->tsf_recalculation_lock);
 }
+
+static inline
+void mlo_ap_lock_create(struct wlan_mlo_ap *ap_ctx)
+{
+	qdf_mutex_create(&ap_ctx->mlo_ap_lock);
+}
+
+static inline
+void mlo_ap_lock_destroy(struct wlan_mlo_ap *ap_ctx)
+{
+	qdf_mutex_destroy(&ap_ctx->mlo_ap_lock);
+}
+
+static inline
+void mlo_ap_lock_acquire(struct wlan_mlo_ap *ap_ctx)
+{
+	qdf_mutex_acquire(&ap_ctx->mlo_ap_lock);
+}
+
+static inline
+void mlo_ap_lock_release(struct wlan_mlo_ap *ap_ctx)
+{
+	qdf_mutex_release(&ap_ctx->mlo_ap_lock);
+}
 #endif /* WLAN_MLO_USE_SPINLOCK */
 
 /**
@@ -807,6 +887,30 @@ struct wlan_mlo_dev_context
 *wlan_mlo_get_mld_ctx_by_mldaddr(struct qdf_mac_addr *mldaddr);
 
 /**
+ * wlan_mlo_list_peek_head() - Returns the head of linked list
+ *
+ * @ml_list: Pointer to the list of MLDs
+ *
+ * API to retrieve the head from the list of active MLDs
+ *
+ * Return: Pointer to mlo device context
+ */
+struct wlan_mlo_dev_context *wlan_mlo_list_peek_head(qdf_list_t *ml_list);
+
+/**
+ * wlan_mlo_get_next_mld_ctx() - Return next mlo dev node from the list
+ *
+ * @ml_list:  Pointer to the list of MLDs
+ * @mld_cur: Pointer to the current mlo dev node
+ *
+ * API to retrieve the next node from the list of active MLDs
+ *
+ * Return: Pointer to mlo device context
+ */
+struct wlan_mlo_dev_context *wlan_mlo_get_next_mld_ctx(qdf_list_t *ml_list,
+					struct wlan_mlo_dev_context *mld_cur);
+
+/**
  * wlan_mlo_check_valid_config() - Check vap config is valid for mld
  *
  * @ml_dev: Pointer to structure of mlo device context
@@ -822,16 +926,58 @@ QDF_STATUS wlan_mlo_check_valid_config(struct wlan_mlo_dev_context *ml_dev,
 				       enum QDF_OPMODE opmode);
 
 /**
- * mlo_mgr_ml_peer_exist() - Check if MAC address matches any MLD address
+ * mlo_mgr_ml_peer_exist_on_diff_ml_ctx() - Check if MAC address matches any
+ * MLD address
  * @peer_addr: Address to search for a match
+ * @peer_vdev_id: vdev ID of peer
  *
- * The API iterates through all the ML dev ctx in the driver and checks
- * if MAC address pointed by @peer_addr matches the MLD address of
- * MLD dev or any of the ML peers in the ML dev ctx.
+ * The API iterates through all the ML dev ctx in the global MLO
+ * manager to check if MAC address pointed by @peer_addr matches
+ * the MLD address of any ML dev context or its ML peers.
+ * If @peer_vdev_id is a valid pointer address, then API returns
+ * true only if the matching MAC address is not part of the same
+ * ML dev context.
  *
  * Return: True if a matching entity is found else false.
  */
-bool mlo_mgr_ml_peer_exist(uint8_t *peer_addr);
+bool mlo_mgr_ml_peer_exist_on_diff_ml_ctx(uint8_t *peer_addr,
+					  uint8_t *peer_vdev_id);
+
+/**
+ * wlan_mlo_update_action_frame_from_user() - Change MAC address in WLAN frame
+ * received from userspace.
+ * @vdev: VDEV objmgr pointer.
+ * @frame: Pointer to start of WLAN MAC frame.
+ * @frame_len: Length of the frame.
+ *
+ * The API will translate MLD address in the SA, DA, BSSID for the action
+ * frames received from userspace with link address to send over the air.
+ * The API will not modify if the frame is a Public Action category frame and
+ * for VDEV other then STA mode.
+ *
+ * Return: void
+ */
+void wlan_mlo_update_action_frame_from_user(struct wlan_objmgr_vdev *vdev,
+					    uint8_t *frame,
+					    uint32_t frame_len);
+
+/**
+ * wlan_mlo_update_action_frame_to_user() - Change MAC address in WLAN frame
+ * received over the air.
+ * @vdev: VDEV objmgr pointer.
+ * @frame: Pointer to start of WLAN MAC frame.
+ * @frame_len: Length of the frame.
+ *
+ * The API will translate link address in the SA, DA, BSSID for the action
+ * frames received over the air with MLD address to send to userspace.
+ * The API will not modify if the frame is a Public Action category frame and
+ * for VDEV other then STA mode.
+ *
+ * Return: void
+ */
+void wlan_mlo_update_action_frame_to_user(struct wlan_objmgr_vdev *vdev,
+					  uint8_t *frame,
+					  uint32_t frame_len);
 #else
 static inline QDF_STATUS wlan_mlo_mgr_init(void)
 {
@@ -851,9 +997,24 @@ wlan_mlo_mgr_update_mld_addr(struct qdf_mac_addr *old_mac,
 }
 
 static inline
-bool mlo_mgr_ml_peer_exist(uint8_t *peer_addr)
+bool mlo_mgr_ml_peer_exist_on_diff_ml_ctx(uint8_t *peer_addr,
+					  uint8_t *peer_vdev_id)
 {
 	return false;
+}
+
+static inline
+void wlan_mlo_update_action_frame_from_user(struct wlan_objmgr_vdev *vdev,
+					    uint8_t *frame,
+					    uint32_t frame_len)
+{
+}
+
+static inline
+void wlan_mlo_update_action_frame_to_user(struct wlan_objmgr_vdev *vdev,
+					  uint8_t *frame,
+					  uint32_t frame_len)
+{
 }
 
 static inline

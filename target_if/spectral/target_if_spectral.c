@@ -33,7 +33,7 @@
 #include <wlan_reg_services_api.h>
 #include <wlan_dfs_ucfg_api.h>
 
-/**
+/*
  * @spectral_ops - Spectral function table, holds the Spectral functions that
  * depend on whether the architecture is Direct Attach or Offload. This is used
  * to populate the actual Spectral function table present in the Spectral
@@ -624,7 +624,7 @@ static inline bool is_spectral_arch_beryllium(uint32_t target_tpe)
 	return false;
 }
 
-/**
+/*
  * List of supported sscan BWs. Make sure to maintain the array elements in the
  * same order of BWs as that of struct spectral_supported_bws bitmap.
  */
@@ -1001,8 +1001,7 @@ target_if_log_read_spectral_enabled(
 }
 
 /**
- * target_if_log_read_spectral_enabled() - Helper function to log spectral
- * parameters after reading cache
+ * target_if_log_read_spectral_params() - log spectral parameters
  * @function_name: Function name
  * @pparam: Spectral parameters
  *
@@ -2119,7 +2118,8 @@ target_if_init_spectral_param_min_max(
 		    target_type == TARGET_TYPE_QCA5018 ||
 		    target_type == TARGET_TYPE_QCA6490 ||
 		    target_type == TARGET_TYPE_KIWI ||
-		    target_type == TARGET_TYPE_MANGO) {
+		    target_type == TARGET_TYPE_MANGO ||
+		    target_type == TARGET_TYPE_PEACH) {
 			param_min_max->fft_size_max[CH_WIDTH_40MHZ] =
 				SPECTRAL_PARAM_FFT_SIZE_MAX_GEN3_QCN9000;
 			param_min_max->fft_size_max[CH_WIDTH_80MHZ] =
@@ -2481,7 +2481,8 @@ target_if_init_spectral_capability(struct target_if_spectral *spectral,
 	    target_type == TARGET_TYPE_QCN9160 ||
 	    target_type == TARGET_TYPE_QCA6490 ||
 	    target_type == TARGET_TYPE_KIWI ||
-	    target_type == TARGET_TYPE_MANGO) {
+	    target_type == TARGET_TYPE_MANGO ||
+	    target_type == TARGET_TYPE_PEACH) {
 		pcap->num_detectors_160mhz = 1;
 		pcap->num_detectors_80p80mhz = 1;
 		pcap->num_detectors_320mhz = 0;
@@ -3055,7 +3056,7 @@ target_if_spectral_detach_simulation(struct target_if_spectral *spectral)
 
 /**
  * target_if_spectral_detach() - De-initialize target_if Spectral
- * @pdev: Pointer to pdev object
+ * @spectral: Pointer to Spectral target_if internal private data
  *
  * Function to detach target_if spectral
  *
@@ -3140,7 +3141,8 @@ target_if_spectral_len_adj_swar_init(struct spectral_fft_bin_len_adj_swar *swar,
 	    target_type == TARGET_TYPE_QCA6750 ||
 	    target_type == TARGET_TYPE_QCA6490 ||
 	    target_type == TARGET_TYPE_KIWI ||
-	    target_type == TARGET_TYPE_MANGO) {
+	    target_type == TARGET_TYPE_MANGO ||
+	    target_type == TARGET_TYPE_PEACH) {
 		swar->fftbin_size_war = SPECTRAL_FFTBIN_SIZE_WAR_2BYTE_TO_1BYTE;
 		rparams->hw_fft_bin_width = 2;
 	} else if (target_type == TARGET_TYPE_QCA8074 ||
@@ -3165,7 +3167,8 @@ target_if_spectral_len_adj_swar_init(struct spectral_fft_bin_len_adj_swar *swar,
 	    target_type == TARGET_TYPE_QCA6490 ||
 	    target_type == TARGET_TYPE_QCN9224 ||
 	    target_type == TARGET_TYPE_KIWI ||
-	    target_type == TARGET_TYPE_MANGO) {
+	    target_type == TARGET_TYPE_MANGO ||
+	    target_type == TARGET_TYPE_PEACH) {
 		swar->inband_fftbin_size_adj = 1;
 		swar->null_fftbin_adj = 1;
 	} else {
@@ -3211,7 +3214,8 @@ target_if_spectral_report_params_init(
 	    target_type == TARGET_TYPE_QCA5332 ||
 	    target_type == TARGET_TYPE_QCN9224 ||
 	    target_type == TARGET_TYPE_KIWI ||
-	    target_type == TARGET_TYPE_MANGO) {
+	    target_type == TARGET_TYPE_MANGO ||
+	    target_type == TARGET_TYPE_PEACH) {
 		rparams->version = SPECTRAL_REPORT_FORMAT_VERSION_2;
 		rparams->num_spectral_detectors =
 				NUM_SPECTRAL_DETECTORS_GEN3_V2;
@@ -3229,13 +3233,13 @@ target_if_spectral_report_params_init(
 
 	switch (rparams->version) {
 	case SPECTRAL_REPORT_FORMAT_VERSION_1:
-		rparams->ssumaary_padding_bytes =
+		rparams->ssummary_padding_bytes =
 			NUM_PADDING_BYTES_SSCAN_SUMARY_REPORT_GEN3_V1;
 		rparams->fft_report_hdr_len =
 			FFT_REPORT_HEADER_LENGTH_GEN3_V1;
 		break;
 	case SPECTRAL_REPORT_FORMAT_VERSION_2:
-		rparams->ssumaary_padding_bytes =
+		rparams->ssummary_padding_bytes =
 			NUM_PADDING_BYTES_SSCAN_SUMARY_REPORT_GEN3_V2;
 		rparams->fft_report_hdr_len =
 			FFT_REPORT_HEADER_LENGTH_GEN3_V2;
@@ -3252,7 +3256,8 @@ target_if_spectral_report_params_init(
 	    target_type == TARGET_TYPE_QCN9160 ||
 	    target_type == TARGET_TYPE_QCA6490 ||
 	    target_type == TARGET_TYPE_KIWI ||
-	    target_type == TARGET_TYPE_MANGO) {
+	    target_type == TARGET_TYPE_MANGO ||
+	    target_type == TARGET_TYPE_PEACH) {
 		rparams->detid_mode_table[SPECTRAL_DETECTOR_ID_1] =
 						SPECTRAL_SCAN_MODE_AGILE;
 		rparams->detid_mode_table[SPECTRAL_DETECTOR_ID_2] =
@@ -3674,7 +3679,8 @@ target_if_pdev_spectral_init(struct wlan_objmgr_pdev *pdev)
 	    target_type == TARGET_TYPE_QCA6750 ||
 	    target_type == TARGET_TYPE_QCN9224 ||
 	    target_type == TARGET_TYPE_KIWI ||
-	    target_type == TARGET_TYPE_MANGO)
+	    target_type == TARGET_TYPE_MANGO ||
+	    target_type == TARGET_TYPE_PEACH)
 		spectral->direct_dma_support = true;
 
 	target_if_spectral_report_params_init(&spectral->rparams,
@@ -3698,7 +3704,8 @@ target_if_pdev_spectral_init(struct wlan_objmgr_pdev *pdev)
 	    (target_type == TARGET_TYPE_QCN9224) ||
 	    (target_type == TARGET_TYPE_QCA6750) ||
 	    (target_type == TARGET_TYPE_KIWI) ||
-	    (target_type == TARGET_TYPE_MANGO)) {
+	    (target_type == TARGET_TYPE_MANGO) ||
+	    (target_type == TARGET_TYPE_PEACH)) {
 		spectral->spectral_gen = SPECTRAL_GEN3;
 		spectral->hdr_sig_exp = SPECTRAL_PHYERR_SIGNATURE_GEN3;
 		spectral->tag_sscan_summary_exp =
@@ -3879,13 +3886,13 @@ fail:
 }
 
 /**
- * target_if_calculate_center_freq() - Helper routine to
- * check whether given frequency is center frequency of a
- * WLAN channel
- *
- * @spectral: Pointer to Spectral object
+ * target_if_is_center_freq_of_any_chan() - Check for center frequency
+ * @pdev: Pointer to pdev object
  * @chan_freq: Center frequency of a WLAN channel
  * @is_valid: Indicates whether given frequency is valid
+ *
+ * Helper routine to check whether given frequency is center frequency
+ * of a WLAN channel
  *
  * Return: QDF_STATUS
  */
@@ -3939,14 +3946,14 @@ target_if_is_center_freq_of_any_chan(struct wlan_objmgr_pdev *pdev,
 }
 
 /**
- * target_if_calculate_center_freq() - Helper routine to
- * find the center frequency of the agile span from a
- * WLAN channel center frequency
- *
+ * target_if_calculate_center_freq() - find center frequency of agile span
  * @spectral: Pointer to Spectral object
  * @ch_width: Channel width array
  * @chan_freq: Center frequency of a WLAN channel
  * @center_freq: Pointer to center frequency
+ *
+ * Helper routine to find the center frequency of the agile span from
+ * a WLAN channel center frequency
  *
  * Return: QDF_STATUS
  */
@@ -4004,13 +4011,13 @@ target_if_calculate_center_freq(struct target_if_spectral *spectral,
 }
 
 /**
- * target_if_validate_center_freq() - Helper routine to
- * validate user provided agile center frequency
- *
+ * target_if_validate_center_freq() - validate agile center frequency
  * @spectral: Pointer to Spectral object
  * @ch_width: Channel width array
  * @center_freq: User provided agile span center frequency
  * @is_valid: Indicates whether agile span center frequency is valid
+ *
+ * Helper routine to validate user provided agile center frequency
  *
  * Return: QDF_STATUS
  */
@@ -4774,7 +4781,6 @@ target_if_set_spectral_config(struct wlan_objmgr_pdev *pdev,
 /**
  * target_if_get_fft_bin_count() - Get fft bin count for a given fft length
  * @fft_len: FFT length
- * @pdev: Pointer to pdev object
  *
  * API to get fft bin count for a given fft length
  *
@@ -5437,8 +5443,8 @@ target_if_is_aspectral_prohibited_by_adfs(struct wlan_objmgr_psoc *psoc,
 
 /**
  * target_if_get_curr_band() - Get current operating band of pdev
- *
  * @pdev: pointer to pdev object
+ * @vdev_id: id of vdev
  *
  * API to get current operating band of a given pdev.
  *

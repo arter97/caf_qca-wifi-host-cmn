@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2013-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -127,8 +127,8 @@
 
 /**
  * enum WMI_MSG_TYPE - WMI message types
- * @ WMI_MSG_TYPE_CMD - Message is of type WMI command
- * @ WMI_MSG_TYPE_EVENT - Message is of type WMI event
+ * @WMI_MSG_TYPE_CMD: Message is of type WMI command
+ * @WMI_MSG_TYPE_EVENT: Message is of type WMI event
  */
 enum WMI_MSG_TYPE {
 	WMI_MSG_TYPE_CMD = 0,
@@ -137,11 +137,11 @@ enum WMI_MSG_TYPE {
 
 /**
  * struct wmi_ext_dbg_msg - WMI command/event msg details
- * @ node - qdf list node of wmi messages
- * @ len - command/event message length
- * @ ts - Time of WMI command/event handling
- * @ WMI_MSG_TYPE - message type
- * @ bug - command/event buffer
+ * @node: qdf list node of wmi messages
+ * @len: command/event message length
+ * @ts: Time of WMI command/event handling
+ * @type: message type
+ * @buf: command/event buffer
  */
 struct wmi_ext_dbg_msg {
 	qdf_list_node_t node;
@@ -225,9 +225,9 @@ struct wmi_ext_dbg_msg {
 
 /**
  * struct wmi_command_debug - WMI command log buffer data type
- * @ command - Store WMI Command id
- * @ data - Stores WMI command data
- * @ time - Time of WMI command handling
+ * @command: Store WMI Command id
+ * @data: Stores WMI command data
+ * @time: Time of WMI command handling
  */
 struct wmi_command_debug {
 	uint32_t command;
@@ -238,11 +238,11 @@ struct wmi_command_debug {
 
 /**
  * struct wmi_command_cmp_debug - WMI command completion log buffer data type
- * @ command - Store WMI Command id
- * @ data - Stores WMI command data
- * @ time - Time of WMI command handling
- * @ dma_addr - dma address of the WMI buffer
- * @ phy_addr - physical address of the WMI buffer
+ * @command: Store WMI Command id
+ * @data: Stores WMI command data
+ * @time: Time of WMI command handling
+ * @dma_addr: dma address of the WMI buffer
+ * @phy_addr: physical address of the WMI buffer
  */
 struct wmi_command_cmp_debug {
 	uint32_t command;
@@ -255,9 +255,9 @@ struct wmi_command_cmp_debug {
 
 /**
  * struct wmi_event_debug - WMI event log buffer data type
- * @ command - Store WMI Event id
- * @ data - Stores WMI Event data
- * @ time - Time of WMI Event handling
+ * @event: Store WMI Event id
+ * @data: Stores WMI Event data
+ * @time: Time of WMI Event handling
  */
 struct wmi_event_debug {
 	uint32_t event;
@@ -268,9 +268,9 @@ struct wmi_event_debug {
 
 /**
  * struct wmi_command_header - Type for accessing frame data
- * @ type - 802.11 Frame type
- * @ subType - 802.11 Frame subtype
- * @ protVer - 802.11 Version
+ * @type: 802.11 Frame type
+ * @sub_type: 802.11 Frame subtype
+ * @prot_ver: 802.11 Version
  */
 struct wmi_command_header {
 #ifndef ANI_LITTLE_BIT_ENDIAN
@@ -291,12 +291,12 @@ struct wmi_command_header {
 
 /**
  * struct wmi_log_buf_t - WMI log buffer information type
- * @buf - Reference to WMI log buffer
- * @ length - length of buffer
- * @ buf_tail_idx - Tail index of buffer
- * @ p_buf_tail_idx - reference to buffer tail index. It is added to accommodate
+ * @buf: Reference to WMI log buffer
+ * @length: length of buffer
+ * @buf_tail_idx: Tail index of buffer
+ * @p_buf_tail_idx: reference to buffer tail index. It is added to accommodate
  * unified design since MCL uses global variable for buffer tail index
- * @ size - the size of the buffer in number of entries
+ * @size: the size of the buffer in number of entries
  */
 struct wmi_log_buf_t {
 	void *buf;
@@ -309,29 +309,29 @@ struct wmi_log_buf_t {
 /**
  * struct wmi_debug_log_info - Meta data to hold information of all buffers
  * used for WMI logging
- * @wmi_command_log_buf_info - Buffer info for WMI Command log
- * @wmi_command_tx_cmp_log_buf_info - Buffer info for WMI Command Tx completion
+ * @wmi_command_log_buf_info: Buffer info for WMI Command log
+ * @wmi_command_tx_cmp_log_buf_info: Buffer info for WMI Command Tx completion
  * log
- * @wmi_event_log_buf_info - Buffer info for WMI Event log
- * @wmi_rx_event_log_buf_info - Buffer info for WMI event received log
- * @wmi_mgmt_command_log_buf_info - Buffer info for WMI Management Command log
- * @wmi_mgmt_command_tx_cmp_log_buf_info - Buffer info for WMI Management
+ * @wmi_event_log_buf_info: Buffer info for WMI Event log
+ * @wmi_rx_event_log_buf_info: Buffer info for WMI event received log
+ * @wmi_mgmt_command_log_buf_info: Buffer info for WMI Management Command log
+ * @wmi_mgmt_command_tx_cmp_log_buf_info: Buffer info for WMI Management
  * Command Tx completion log
- * @wmi_mgmt_event_log_buf_info - Buffer info for WMI Management event log
- * @wmi_diag_event_log_buf_info - Buffer info for WMI diag event log
- * @wmi_record_lock - Lock WMI recording
- * @wmi_logging_enable - Enable/Disable state for WMI logging
- * @wmi_id_to_name - Function reference to API to convert Command id to
+ * @wmi_mgmt_event_log_buf_info: Buffer info for WMI Management event log
+ * @wmi_diag_event_log_buf_info: Buffer info for WMI diag event log
+ * @wmi_record_lock: Lock WMI recording
+ * @wmi_logging_enable: Enable/Disable state for WMI logging
+ * @wmi_id_to_name: Function reference to API to convert Command id to
  * string name
- * @wmi_log_debugfs_dir - reference to debugfs directory
- * @filtered_wmi_cmds - Buffer to save inputs from user on
+ * @wmi_log_debugfs_dir: reference to debugfs directory
+ * @filtered_wmi_cmds: Buffer to save inputs from user on
  * which WMI commands to record
- * @filtered_wmi_cmds_idx - target cmd index
- * @filtered_wmi_evts - Buffer to save inputs from user on
+ * @filtered_wmi_cmds_idx: target cmd index
+ * @filtered_wmi_evts: Buffer to save inputs from user on
  * which WMI event to record
- * @filtered_wmi_evts_idx - target evt index
- * @wmi_filtered_command_log - buffer to record user specified WMI commands
- * @wmi_filtered_event_log - buffer to record user specified WMI events
+ * @filtered_wmi_evts_idx: target evt index
+ * @wmi_filtered_command_log: buffer to record user specified WMI commands
+ * @wmi_filtered_event_log: buffer to record user specified WMI events
  */
 struct wmi_debug_log_info {
 	struct wmi_log_buf_t wmi_command_log_buf_info;
@@ -361,8 +361,8 @@ struct wmi_debug_log_info {
 
 /**
  * enum WMI_RECORD_TYPE - User specified WMI logging types
- * @ WMI_CMD - wmi command id
- * @ WMI_EVT - wmi event id
+ * @WMI_CMD: wmi command id
+ * @WMI_EVT: wmi event id
  */
 enum WMI_RECORD_TYPE {
 	WMI_CMD = 1,
@@ -381,9 +381,9 @@ struct fwdebug {
 
 /**
  * struct wmi_wq_dbg_info - WMI WQ debug info
- * @ wd_msg_type_id - wmi event id
- * @ wmi_wq - WMI workqueue struct
- * @ task - WMI workqueue task struct
+ * @wd_msg_type_id: wmi event id
+ * @wmi_wq: WMI workqueue struct
+ * @task: WMI workqueue task struct
  */
 struct wmi_wq_dbg_info {
 	uint32_t wd_msg_type_id;
@@ -422,7 +422,7 @@ QDF_STATUS
  * @wmi_handle: WMI handle
  * @evt_buf: Event buffer
  * @len: evt buffer data len
- * @synd_ind: roam sync ptr
+ * @sync_ind: roam sync ptr
  *
  * This api will allocate memory for roam sync info, extract
  * the information sent by FW and pass to CM.The memory will be
@@ -1401,6 +1401,14 @@ QDF_STATUS (*send_peer_update_wds_entry_cmd)(wmi_unified_t wmi_handle,
 QDF_STATUS (*send_set_ctl_table_cmd)(wmi_unified_t wmi_handle,
 		struct ctl_table_params *param);
 
+QDF_STATUS
+(*send_set_sta_max_pwr_table_cmd)(wmi_unified_t wmi_handle,
+				  struct sta_max_pwr_table_params *param);
+
+QDF_STATUS
+(*send_set_power_table_cmd)(wmi_unified_t wmi_handle,
+			    struct rate2power_table_params *param);
+
 QDF_STATUS (*send_set_mimogain_table_cmd)(wmi_unified_t wmi_handle,
 		struct mimogain_table_params *param);
 
@@ -1523,6 +1531,22 @@ QDF_STATUS (*extract_mgmt_tx_compl_param)(wmi_unified_t wmi_handle,
 
 QDF_STATUS (*extract_chan_info_event)(wmi_unified_t wmi_handle, void *evt_buf,
 				   wmi_host_chan_info_event *chan_info);
+
+QDF_STATUS (*extract_scan_blanking_params)(wmi_unified_t wmi_handle,
+	    void *evt_buf, wmi_host_scan_blanking_params *blanking_params);
+
+#ifdef QCA_MANUAL_TRIGGERED_ULOFDMA
+QDF_STATUS
+(*extract_ulofdma_trigger_feedback_event)(
+		wmi_unified_t wmi_handle,
+		void *evt_buf,
+		wmi_host_manual_ul_ofdma_trig_feedback_evt *feedback);
+
+QDF_STATUS
+(*extract_ul_ofdma_trig_rx_peer_userinfo)(wmi_unified_t wmi_handle,
+		void *evt_buf,
+		struct wmi_host_rx_peer_userinfo_evt_data *resp);
+#endif
 
 QDF_STATUS (*extract_channel_hopping_event)(wmi_unified_t wmi_handle,
 		void *evt_buf,
@@ -1818,6 +1842,10 @@ QDF_STATUS
 QDF_STATUS
 (*send_btcoex_duty_cycle_cmd)(wmi_unified_t wmi_handle,
 			struct btcoex_cfg_params *param);
+
+QDF_STATUS
+(*send_egid_info_cmd)(wmi_unified_t wmi_handle,
+		      struct esl_egid_params *param);
 
 QDF_STATUS
 (*send_coex_ver_cfg_cmd)(wmi_unified_t wmi_handle, coex_ver_cfg_t *param);
@@ -2264,6 +2292,11 @@ QDF_STATUS (*extract_dbr_buf_metadata)(
 			wmi_unified_t wmi_handle,
 			uint8_t *evt_buf, uint8_t idx,
 			struct direct_buf_rx_metadata *param);
+
+QDF_STATUS (*extract_dbr_buf_cv_metadata)(
+			wmi_unified_t wmi_handle,
+			uint8_t *evt_buf, uint8_t idx,
+			struct direct_buf_rx_cv_metadata *param);
 #endif
 
 QDF_STATUS (*extract_pdev_utf_event)(wmi_unified_t wmi_hdl,
@@ -2689,6 +2722,15 @@ QDF_STATUS(*extract_twt_session_stats_data)
 		);
 #endif
 
+#ifdef QCA_STANDALONE_SOUNDING_TRIGGER
+QDF_STATUS (*extract_standalone_sounding_evt_params)
+		(
+		wmi_unified_t wmi_handle,
+		void *evt_buf,
+		struct wmi_host_standalone_sounding_evt_params *ss_params
+		);
+#endif
+
 #ifdef QCA_SUPPORT_CP_STATS
 QDF_STATUS (*extract_cca_stats)(wmi_unified_t wmi_handle, void *evt_buf,
 				struct wmi_host_congestion_stats *stats);
@@ -2910,7 +2952,8 @@ QDF_STATUS (*extract_halphy_stats_end_of_event)(wmi_unified_t wmi_handle,
 QDF_STATUS (*extract_halphy_stats_event_count)(wmi_unified_t wmi_handle,
 					       void *evt_buf,
 					       uint32_t *event_count_flag);
-#ifdef WLAN_SUPPORT_INFRA_CTRL_PATH_STATS
+#if defined(WLAN_SUPPORT_INFRA_CTRL_PATH_STATS) || \
+	defined(WLAN_CONFIG_TELEMETRY_AGENT)
 QDF_STATUS
 (*extract_infra_cp_stats)(wmi_unified_t wmi_handle,
 			  void *evt_buf, uint32_t evt_buf_len,
@@ -2951,7 +2994,21 @@ QDF_STATUS (*config_peer_latency_info_cmd)(
 				*param);
 #endif
 #endif
+#ifdef QCA_MANUAL_TRIGGERED_ULOFDMA
+QDF_STATUS
+(*trigger_ulofdma_su_cmd)(wmi_unified_t wmi,
+			  struct wmi_trigger_ul_ofdma_su_params *param);
+QDF_STATUS
+(*trigger_ulofdma_mu_cmd)(wmi_unified_t wmi,
+			  struct wmi_trigger_ul_ofdma_mu_params *param);
+#endif
 
+#ifdef QCA_STANDALONE_SOUNDING_TRIGGER
+QDF_STATUS
+(*config_txbf_sounding_trig_info_cmd)(wmi_unified_t wmi,
+				      struct wmi_txbf_sounding_trig_param
+				      *sounding_params);
+#endif
 QDF_STATUS (*send_set_tpc_power_cmd)(wmi_unified_t wmi_handle,
 				     uint8_t vdev_id,
 				     struct reg_tpc_power_info *param);
@@ -3123,7 +3180,8 @@ QDF_STATUS
 #ifdef WLAN_FEATURE_11BE
 QDF_STATUS (*send_mlo_peer_tid_to_link_map)(
 			wmi_unified_t wmi_handle,
-			struct wmi_host_tid_to_link_map_params *params);
+			struct wmi_host_tid_to_link_map_params *params,
+			bool t2lm_info);
 
 QDF_STATUS (*send_mlo_vdev_tid_to_link_map)(
 			wmi_unified_t wmi_handle,
@@ -3201,13 +3259,29 @@ QDF_STATUS
 QDF_STATUS (*send_update_edca_pifs_param_cmd)(
 			wmi_unified_t wmi_handle,
 			struct edca_pifs_vparam *edca_pifs_param);
+
+QDF_STATUS (*extract_sap_coex_cap_service_ready_ext2)(
+			wmi_unified_t wmi_handle, uint8_t *event,
+			struct wmi_host_coex_fix_chan_cap *cap);
+
+#ifdef WMI_AP_SUPPORT
+QDF_STATUS
+(*send_wmi_tdma_schedule_request_cmd)(wmi_unified_t wmi_handle,
+				      struct wlan_tdma_sched_cmd_param *param);
+#endif
+
+QDF_STATUS
+(*extract_tgtr2p_table_event)(wmi_unified_t wmi_handle,
+			      uint8_t *evt_buf,
+			      struct r2p_table_update_status_obj *update_status,
+			      uint32_t len);
 };
 
 /* Forward declaration for psoc*/
 struct wlan_objmgr_psoc;
 
 /**
- * struct wmi_init_cmd - Saved wmi INIT command
+ * struct wmi_cmd_init - Saved wmi INIT command
  * @buf: Buffer containing the wmi INIT command
  * @buf_len: Length of the buffer
  */
@@ -3217,6 +3291,7 @@ struct wmi_cmd_init {
 };
 
 /**
+ * struct wmi_host_abi_version - HOST WMI ABI version
  * @abi_version_0: WMI Major and Minor versions
  * @abi_version_1: WMI change revision
  * @abi_version_ns_0: ABI version namespace first four dwords

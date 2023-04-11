@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2017-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  *
  * Permission to use, copy, modify, and/or distribute this software for
@@ -48,6 +48,7 @@ bool reg_is_world_ctry_code(uint16_t ctry_code);
 /**
  * reg_chan_has_dfs_attribute_for_freq() - check channel frequency has dfs
  * attribute or not
+ * @pdev: Pointer to physical dev
  * @freq: channel frequency.
  *
  * This API gets initial dfs attribute flag of the channel frequency from
@@ -62,7 +63,7 @@ bool reg_chan_has_dfs_attribute_for_freq(struct wlan_objmgr_pdev *pdev,
  * reg_is_passive_or_disable_for_pwrmode() - Check if the given channel is
  * passive or disabled.
  * @pdev: Pointer to physical dev
- * @chan: Channel frequency
+ * @freq: Channel frequency
  * @in_6g_pwr_mode: Input 6GHz power mode
  *
  * Return: true if channel frequency is passive or disabled, else false.
@@ -157,7 +158,8 @@ QDF_STATUS reg_get_band(struct wlan_objmgr_pdev *pdev, uint32_t *band_bitmap);
 
 /**
  * reg_set_fcc_constraint() - Apply fcc constraints on channels 12/13
- * @pdev: The physical dev to set the band for
+ * @pdev: The physical dev to set
+ * @fcc_constraint: true to set FCC constraint
  *
  * This function reduces the transmit power on channels 12 and 13, to comply
  * with FCC regulations in the USA.
@@ -190,7 +192,7 @@ QDF_STATUS reg_read_current_country(struct wlan_objmgr_psoc *psoc,
 /**
  * reg_set_default_country() - Set the default regulatory country
  * @psoc: The physical SoC to set default country for
- * @req: The country information to configure
+ * @country: The country code to configure
  *
  * Return: QDF_STATUS
  */
@@ -261,15 +263,18 @@ QDF_STATUS reg_get_domain_from_country_code(v_REGDOMAIN_t *reg_domain_ptr,
 #ifdef CONFIG_REG_CLIENT
 /**
  * reg_get_6g_power_type_for_ctry() - Return power type for 6G based on cntry IE
- * @ap_ctry: ptr to country string in country IE
- * @sta_ctry: ptr to sta programmed country
- * @pwr_type_6g: ptr to 6G power type
+ * @psoc: pointer to psoc
+ * @pdev: pointer to pdev
+ * @ap_ctry: pointer to country string in country IE
+ * @sta_ctry: pointer to sta programmed country
+ * @pwr_type_6g: pointer to 6G power type
  * @ctry_code_match: Check for country IE and sta country code match
  * @ap_pwr_type: AP's power type as advertised in HE ops IE
  * Return: QDF_STATUS
  */
 QDF_STATUS
 reg_get_6g_power_type_for_ctry(struct wlan_objmgr_psoc *psoc,
+			       struct wlan_objmgr_pdev *pdev,
 			       uint8_t *ap_ctry, uint8_t *sta_ctry,
 			       enum reg_6g_ap_type *pwr_type_6g,
 			       bool *ctry_code_match,
@@ -277,7 +282,7 @@ reg_get_6g_power_type_for_ctry(struct wlan_objmgr_psoc *psoc,
 #endif
 
 /**
- * reg_set_config_vars () - set configuration variables
+ * reg_set_config_vars() - set configuration variables
  * @psoc: psoc ptr
  * @config_vars: configuration struct
  *
@@ -469,9 +474,8 @@ reg_decide_6g_ap_pwr_type(struct wlan_objmgr_pdev *pdev)
 
 #if defined(WLAN_FEATURE_DSRC) && defined(CONFIG_REG_CLIENT)
 /**
- * reg_is_dsrc_freq () - Checks the channel frequency is DSRC or not
+ * reg_is_dsrc_freq() - Checks the channel frequency is DSRC or not
  * @freq: Channel center frequency
- * @pdev: pdev ptr
  *
  * Return: true or false
  */
@@ -515,7 +519,7 @@ bool reg_is_etsi13_srd_chan_for_freq(struct wlan_objmgr_pdev
 #endif /*CONFIG_CHAN_FREQ_API */
 
 /**
- * reg_is_etsi13_regdmn () - Checks if the current reg domain is ETSI13 or not
+ * reg_is_etsi13_regdmn() - Checks if the current reg domain is ETSI13 or not
  * @pdev: pdev ptr
  *
  * Return: true or false

@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2012-2015,2020-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -38,6 +38,9 @@ typedef uint32_t wlan_cm_id;
 #define DISCONNECT_TIMEOUT \
 	((STOP_RESPONSE_TIMER) + (DELETE_RESPONSE_TIMER) +\
 	 (RSO_STOP_RESPONSE_TIMER) + (1000))
+
+#define CM_DISCONNECT_ASSOC_VDEV_EXTRA_TIMEOUT \
+		(STOP_RESPONSE_TIMER + DELETE_RESPONSE_TIMER)
 
 /*
  * Disconnect command wait timeout VDEV timeouts + 5 sec buff for current active
@@ -114,6 +117,7 @@ enum wlan_fils_auth_type {
  * @next_seq_num: next seq number
  * @rrk_len: rrk length
  * @rrk: rrk
+ * @auth_type: FILS authentication type
  */
 struct wlan_fils_con_info {
 	bool is_fils_connection;
@@ -134,6 +138,7 @@ struct wlan_fils_con_info {
  * @CM_ROAMING_HOST: Roaming request initiated by host
  * @CM_ROAMING_NUD_FAILURE: Roaming request initiated by NUD failure
  * @CM_ROAMING_FW: Roam req initiated by FW
+ * @CM_ROAMING_LINK_REMOVAL: Roaming request initiate by link removal
  * @CM_OSIF_DISCONNECT: Disconnect req initiated by OSIF or north bound
  * @CM_PEER_DISCONNECT: Disconnect req initiated by peer sending deauth/disassoc
  * only for this localy generated will be false while indicating to kernel
@@ -147,6 +152,8 @@ struct wlan_fils_con_info {
  * @CM_OSIF_CFG_CONNECT: Connect request initiated due to config change
  * @CM_OSIF_CFG_DISCONNECT: Disconnect request initiated due to config change
  * @CM_MLO_LINK_VDEV_DISCONNECT: Disconnect req for ML link
+ * @CM_MLO_LINK_VDEV_CONNECT: Connect req for ML link
+ * @CM_MLO_ROAM_INTERNAL_DISCONNECT: Disconnect req triggered for mlo roaming
  * @CM_SOURCE_MAX: max value of connection manager source
  * @CM_SOURCE_INVALID: Invalid connection manager req source
  */
@@ -155,6 +162,7 @@ enum wlan_cm_source {
 	CM_ROAMING_HOST,
 	CM_ROAMING_NUD_FAILURE,
 	CM_ROAMING_FW,
+	CM_ROAMING_LINK_REMOVAL,
 	CM_OSIF_DISCONNECT,
 	CM_PEER_DISCONNECT,
 	CM_SB_DISCONNECT,
@@ -164,6 +172,8 @@ enum wlan_cm_source {
 	CM_OSIF_CFG_CONNECT,
 	CM_OSIF_CFG_DISCONNECT,
 	CM_MLO_LINK_VDEV_DISCONNECT,
+	CM_MLO_LINK_VDEV_CONNECT,
+	CM_MLO_ROAM_INTERNAL_DISCONNECT,
 	CM_SOURCE_MAX,
 	CM_SOURCE_INVALID = CM_SOURCE_MAX,
 };
@@ -306,6 +316,7 @@ struct wlan_cm_roam_req {
  * @vdev_id: vdev id
  * @cm_id: Connect manager id
  * @self_reassoc: if self reassoc
+ * @prev_bssid: previous BSSID
  * @bss: scan entry for the candidate
  */
 struct wlan_cm_vdev_reassoc_req {
@@ -364,6 +375,7 @@ struct wlan_cm_vdev_discon_req {
  * @CM_SER_FAILURE: Failed to serialize command
  * @CM_SER_TIMEOUT: Serialization cmd timeout
  * @CM_GENERIC_FAILURE: Generic failure apart from above
+ * @CM_VALID_CANDIDATE_CHECK_FAIL: Valid Candidate Check fail
  */
 enum wlan_cm_connect_fail_reason {
 	CM_NO_CANDIDATE_FOUND,
@@ -380,6 +392,7 @@ enum wlan_cm_connect_fail_reason {
 	CM_SER_FAILURE,
 	CM_SER_TIMEOUT,
 	CM_GENERIC_FAILURE,
+	CM_VALID_CANDIDATE_CHECK_FAIL,
 };
 
 #ifdef WLAN_FEATURE_FILS_SK
@@ -423,12 +436,13 @@ struct fils_connect_rsp_params {
 #endif
 
 /**
- * struct connect_rsp_ies - connect rsp ies stored in vdev filled during connect
+ * struct wlan_connect_rsp_ies - connect rsp ies stored in vdev filled during
+ *                               connect
  * @bcn_probe_rsp: Raw beacon or probe rsp of connected AP
  * @link_bcn_probe_rsp: Raw beacon or probe rsp of connected non-assoc link
  * @assoc_req: assoc req IE pointer send during connect
- * @assoc_rsq: assoc rsp IE received during connection
- * @fills_ie: fills connection ie received during connection
+ * @assoc_rsp: assoc rsp IE received during connection
+ * @fils_ie: fills connection ie received during connection
  */
 struct wlan_connect_rsp_ies {
 	struct element_info bcn_probe_rsp;
@@ -479,7 +493,7 @@ struct wlan_roam_sync_info {
 #endif
 
 /**
- * struct wlan_cm_connect_rsp - connect resp from VDEV mgr and will be sent to
+ * struct wlan_cm_connect_resp - connect resp from VDEV mgr and will be sent to
  * OSIF
  * @vdev_id: vdev id
  * @is_wps_connection: if its wps connection
@@ -531,16 +545,42 @@ struct wlan_cm_connect_resp {
 };
 
 #ifdef WLAN_VENDOR_HANDOFF_CONTROL
-/* As per enum WMI_ROAM_GET_VENDOR_CONTROL_PARAM_ID */
+/* As per enum vendor_control_roam_param */
 #define MAX_VENDOR_CONTROL_PARAMS 8
+
+/**
+ * enum vendor_control_roam_param - vendor control roam parameters
+ * @VENDOR_CONTROL_PARAM_ROAM_TRIGGER: roam trigger
+ * @VENDOR_CONTROL_PARAM_ROAM_DELTA: roam delta
+ * @VENDOR_CONTROL_PARAM_ROAM_FULL_SCANPERIOD: full scan period
+ * @VENDOR_CONTROL_PARAM_ROAM_PARTIAL_SCANPERIOD: partial scan period
+ * @VENDOR_CONTROL_PARAM_ROAM_ACTIVE_CH_DWELLTIME: active ch dwell time
+ * @VENDOR_CONTROL_PARAM_ROAM_PASSIVE_CH_DWELLTIME: passive ch dwell time
+ * @VENDOR_CONTROL_PARAM_ROAM_HOME_CH_TIME: home ch dwell time
+ * @VENDOR_CONTROL_PARAM_ROAM_AWAY_TIME: away time
+ * @VENDOR_CONTROL_PARAM_ROAM_ALL: Sending query for all params of
+ * enum vendor_control_roam_param
+ */
+enum vendor_control_roam_param {
+	VENDOR_CONTROL_PARAM_ROAM_TRIGGER = 1,
+	VENDOR_CONTROL_PARAM_ROAM_DELTA,
+	VENDOR_CONTROL_PARAM_ROAM_FULL_SCANPERIOD,
+	VENDOR_CONTROL_PARAM_ROAM_PARTIAL_SCANPERIOD,
+	VENDOR_CONTROL_PARAM_ROAM_ACTIVE_CH_DWELLTIME,
+	VENDOR_CONTROL_PARAM_ROAM_PASSIVE_CH_DWELLTIME,
+	VENDOR_CONTROL_PARAM_ROAM_HOME_CH_TIME,
+	VENDOR_CONTROL_PARAM_ROAM_AWAY_TIME,
+	VENDOR_CONTROL_PARAM_ROAM_ALL = 0xFFFFFFFF,
+};
+
 /*
  * struct roam_param_info: vendor handoff related parameters
- * @param_id : vendor control Param ID from enum
- * WMI_ROAM_GET_VENDOR_CONTROL_PARAM_ID
- * @param_value : vendor control param value
+ * @param_id: vendor control Param ID from enum
+ * vendor_control_roam_param
+ * @param_value: vendor control param value
  */
 struct roam_param_info {
-	uint32_t param_id;
+	enum vendor_control_roam_param param_id;
 	uint32_t param_value;
 };
 

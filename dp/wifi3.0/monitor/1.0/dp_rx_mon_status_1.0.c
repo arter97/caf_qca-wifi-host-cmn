@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -47,7 +47,7 @@ QDF_STATUS dp_rx_mon_status_buffers_replenish(struct dp_soc *dp_soc,
 					      uint8_t owner);
 
 /**
- * dp_rx_mon_handle_status_buf_done () - Handle status buf DMA not done
+ * dp_rx_mon_handle_status_buf_done() - Handle status buf DMA not done
  *
  * @pdev: DP pdev handle
  * @mon_status_srng: Monitor status SRNG
@@ -363,6 +363,7 @@ dp_rx_mon_status_ring_record_entry(struct dp_soc *soc,
 	record = &soc->mon_status_ring_history->entry[idx];
 
 	record->timestamp = qdf_get_log_timestamp();
+	record->event = event;
 	if (event == DP_MON_STATUS_BUF_REAP) {
 		hal_rx_buffer_addr_info_get_paddr(ring_desc, &hbi);
 
@@ -427,7 +428,6 @@ dp_rx_mon_status_process_tlv(struct dp_soc *soc, struct dp_intr *int_ctx,
 	uint8_t *rx_tlv;
 	uint8_t *rx_tlv_start;
 	uint32_t tlv_status = HAL_TLV_STATUS_BUF_DONE;
-	QDF_STATUS enh_log_status = QDF_STATUS_SUCCESS;
 	struct cdp_pdev_mon_stats *rx_mon_stats;
 	int smart_mesh_status;
 	enum WDI_EVENT pktlog_mode = WDI_NO_VAL;
@@ -488,8 +488,11 @@ dp_rx_mon_status_process_tlv(struct dp_soc *soc, struct dp_intr *int_ctx,
 				rx_tlv = hal_rx_status_get_next_tlv(rx_tlv,
 						mon_pdev->is_tlv_hdr_64_bit);
 
-				if (qdf_unlikely((rx_tlv - rx_tlv_start)) >=
-					RX_MON_STATUS_BUF_SIZE)
+				if (qdf_unlikely(((rx_tlv - rx_tlv_start) >=
+						RX_MON_STATUS_BUF_SIZE) ||
+						(RX_MON_STATUS_BUF_SIZE -
+						(rx_tlv - rx_tlv_start) <
+						mon_pdev->tlv_hdr_size)))
 					break;
 
 			} while ((tlv_status == HAL_TLV_STATUS_PPDU_NOT_DONE) ||
@@ -533,7 +536,6 @@ dp_rx_mon_status_process_tlv(struct dp_soc *soc, struct dp_intr *int_ctx,
 				qdf_nbuf_free(status_nbuf);
 
 			if (tlv_status == HAL_TLV_STATUS_PPDU_DONE)
-				enh_log_status =
 				dp_rx_handle_enh_capture(soc,
 							 pdev, ppdu_info);
 		} else {
@@ -850,11 +852,9 @@ dp_rx_pdev_mon_status_buffers_alloc(struct dp_pdev *pdev, uint32_t mac_id)
 	struct dp_srng *mon_status_ring;
 	uint32_t num_entries;
 	struct rx_desc_pool *rx_desc_pool;
-	struct wlan_cfg_dp_soc_ctxt *soc_cfg_ctx;
 	union dp_rx_desc_list_elem_t *desc_list = NULL;
 	union dp_rx_desc_list_elem_t *tail = NULL;
 
-	soc_cfg_ctx = soc->wlan_cfg_ctx;
 	mon_status_ring = &soc->rxdma_mon_status_ring[mac_id];
 
 	num_entries = mon_status_ring->num_entries;
@@ -878,9 +878,7 @@ dp_rx_pdev_mon_status_desc_pool_alloc(struct dp_pdev *pdev, uint32_t mac_id)
 	struct dp_srng *mon_status_ring;
 	uint32_t num_entries;
 	struct rx_desc_pool *rx_desc_pool;
-	struct wlan_cfg_dp_soc_ctxt *soc_cfg_ctx;
 
-	soc_cfg_ctx = soc->wlan_cfg_ctx;
 	mon_status_ring = &soc->rxdma_mon_status_ring[mac_id];
 
 	num_entries = mon_status_ring->num_entries;
@@ -902,10 +900,8 @@ dp_rx_pdev_mon_status_desc_pool_init(struct dp_pdev *pdev, uint32_t mac_id)
 	struct dp_srng *mon_status_ring;
 	uint32_t num_entries;
 	struct rx_desc_pool *rx_desc_pool;
-	struct wlan_cfg_dp_soc_ctxt *soc_cfg_ctx;
 	struct dp_mon_pdev *mon_pdev = pdev->monitor_pdev;
 
-	soc_cfg_ctx = soc->wlan_cfg_ctx;
 	mon_status_ring = &soc->rxdma_mon_status_ring[mac_id];
 
 	num_entries = mon_status_ring->num_entries;

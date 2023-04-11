@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -435,13 +435,13 @@ uint16_t wlan_mlme_get_aid_count(struct wlan_objmgr_vdev *vdev);
  * This function allocates MLO peer ID
  *
  * Return: mlo_peer_id on success,
-	 MLO_INVALID_PEER_ID on failure
+ *	 MLO_INVALID_PEER_ID on failure
  */
 uint16_t mlo_ap_ml_peerid_alloc(void);
 
 /**
  * mlo_ap_ml_peerid_free() - public API to free MLO peer id
- * @ml_peer_id: ML peer id
+ * @mlo_peer_id: ML peer id
  *
  * This function frees MLO peer ID
  *
@@ -463,11 +463,27 @@ void mlo_peer_assign_primary_umac(
 		struct wlan_mlo_peer_context *ml_peer,
 		struct wlan_mlo_link_peer_entry *peer_entry);
 
+#if defined(WLAN_FEATURE_11BE_MLO) && defined(WLAN_MLO_MULTI_CHIP)
+/**
+ * mlo_peer_overwrite_primary_umac() - Overwrite Primary UMAC config
+ * @psoc_id: PSOC ID
+ * @ml_peer: MLO peer object
+ *
+ * This function overwrites previous primary UMAC configuration
+ * with given PSOC.
+ *
+ * Return: QDF_STATUS_SUCCESS if it overwrites successfully.
+ * QDF_STATUS_E_FAILURE otherwise.
+ */
+QDF_STATUS mlo_peer_overwrite_primary_umac(uint8_t psoc_id,
+					   struct wlan_mlo_peer_context *ml_peer);
+#endif
+
 /**
  * mlo_peer_allocate_primary_umac() - Allocate Primary UMAC
  * @ml_dev: MLO DEV context
  * @ml_peer: MLO peer object
- * @link_vdev: link vdev array
+ * @link_vdevs: link vdev array
  *
  * This function allocates primary UMAC for a MLO peer
  *

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -18,10 +18,6 @@
 #include "cdp_txrx_ops.h"
 
 struct cdp_mlo_ctxt;
-
-struct
-cdp_mlo_ctxt *dp_mlo_ctxt_attach_wifi3(struct cdp_ctrl_mlo_mgr *ctrl_ctxt);
-void dp_mlo_ctxt_detach_wifi3(struct cdp_mlo_ctxt *ml_ctxt);
 
 static inline
 struct cdp_mlo_ctxt *cdp_mlo_ctxt_attach(ol_txrx_soc_handle soc,
@@ -105,6 +101,25 @@ cdp_update_mlo_ptnr_list(ol_txrx_soc_handle soc, int8_t vdev_ids[],
 	if (soc->ops->mlo_ops->update_mlo_ptnr_list)
 		return soc->ops->mlo_ops->update_mlo_ptnr_list(soc, vdev_ids,
 						num_vdevs, vdev_id);
+
+	return QDF_STATUS_SUCCESS;
+}
+
+/*
+ * cdp_clear_mlo_ptnr_list - Remove vdev from MLO partner list
+ * @soc: soc handle
+ * @vdev_id: caller's vdev id
+ *
+ * return: QDF_STATUS
+ */
+static inline QDF_STATUS
+cdp_clear_mlo_ptnr_list(ol_txrx_soc_handle soc, uint8_t vdev_id)
+{
+	if (!soc || !soc->ops || !soc->ops->mlo_ops)
+		return QDF_STATUS_E_INVAL;
+
+	if (soc->ops->mlo_ops->update_mlo_ptnr_list)
+		return soc->ops->mlo_ops->clear_mlo_ptnr_list(soc, vdev_id);
 
 	return QDF_STATUS_SUCCESS;
 }

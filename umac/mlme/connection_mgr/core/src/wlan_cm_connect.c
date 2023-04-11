@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2012-2015, 2020-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -36,10 +36,11 @@
 #endif
 #include <wlan_utility.h>
 #include <wlan_mlo_mgr_sta.h>
+#include "wlan_mlo_mgr_op.h"
 #include <wlan_objmgr_vdev_obj.h>
 #include "wlan_psoc_mlme_api.h"
 
-static void
+void
 cm_fill_failure_resp_from_cm_id(struct cnx_mgr *cm_ctx,
 				struct wlan_cm_connect_resp *resp,
 				wlan_cm_id cm_id,
@@ -601,6 +602,7 @@ static void cm_create_bss_peer(struct cnx_mgr *cm_ctx,
 				      &eht_capab);
 	if (eht_capab) {
 		cm_set_vdev_link_id(cm_ctx, req);
+		wlan_mlo_init_cu_bpcc(cm_ctx->vdev);
 		mld_mac = cm_get_bss_peer_mld_addr(req);
 		is_assoc_link = cm_bss_peer_is_assoc_peer(req);
 	}
@@ -791,7 +793,8 @@ static void cm_get_vdev_id_with_active_vdev_op(struct wlan_objmgr_pdev *pdev,
 		return;
 	}
 
-	if (opmode == QDF_SAP_MODE || opmode == QDF_P2P_GO_MODE) {
+	if (opmode == QDF_SAP_MODE || opmode == QDF_P2P_GO_MODE ||
+	    opmode == QDF_NDI_MODE) {
 		/* Check if START/STOP AP OP is in progress */
 		if (wlan_ser_is_non_scan_cmd_type_in_vdev_queue(vdev,
 					WLAN_SER_CMD_VDEV_START_BSS) ||
@@ -851,7 +854,7 @@ cm_is_any_other_vdev_connecting_disconnecting(struct cnx_mgr *cm_ctx,
 	 */
 	if (cm_req->connect_req.cur_candidate &&
 	    vdev_arg.sap_go_vdev_id != WLAN_INVALID_VDEV_ID) {
-		mlme_info(CM_PREFIX_FMT "Avoid next candidate as SAP/GO vdev %d has pending vdev op",
+		mlme_info(CM_PREFIX_FMT "Avoid next candidate as SAP/GO/NDI vdev %d has pending vdev op",
 			  CM_PREFIX_REF(cur_vdev_id, cm_req->cm_id),
 			  vdev_arg.sap_go_vdev_id);
 		return true;
@@ -1694,6 +1697,12 @@ static QDF_STATUS cm_get_valid_candidate(struct cnx_mgr *cm_ctx,
 			break;
 		}
 
+		/*
+		 * stored failure response for first candidate only but
+		 * indicate the failure response to osif for all candidates.
+		 */
+		cm_store_n_send_failed_candidate(cm_ctx, cm_req->cm_id);
+
 		cur_node = next_node;
 		next_node = NULL;
 	}
@@ -1799,12 +1808,16 @@ QDF_STATUS cm_try_next_candidate(struct cnx_mgr *cm_ctx,
 		goto connect_err;
 
 	/*
+	 * cached the first failure response if candidate is different from
+	 * previous.
 	 * Do not indicate to OSIF if same candidate is used again as we are not
 	 * done with this candidate. So inform once we move to next candidate.
 	 * This will also avoid flush for the scan entry.
 	 */
-	if (!same_candidate_used)
+	if (!same_candidate_used) {
+		cm_store_first_candidate_rsp(cm_ctx, resp->cm_id, resp);
 		mlme_cm_osif_failed_candidate_ind(cm_ctx->vdev, resp);
+	}
 
 	cm_update_ser_timer_for_new_candidate(cm_ctx, resp->cm_id);
 
@@ -1881,8 +1894,12 @@ QDF_STATUS cm_connect_active(struct cnx_mgr *cm_ctx, wlan_cm_id *cm_id)
 				qdf_mc_timer_get_system_time();
 	req = &cm_req->connect_req.req;
 	wlan_vdev_mlme_set_ssid(cm_ctx->vdev, req->ssid.ssid, req->ssid.length);
-	/* free vdev keys before setting crypto params */
-	if (!wlan_vdev_mlme_is_mlo_link_vdev(cm_ctx->vdev))
+	/*
+	 * free vdev keys before setting crypto params for 1x/ owe roaming,
+	 * link vdev keys would be cleaned in osif
+	 */
+	if (!wlan_vdev_mlme_is_mlo_link_vdev(cm_ctx->vdev) &&
+	    !wlan_cm_check_mlo_roam_auth_status(cm_ctx->vdev))
 		wlan_crypto_free_vdev_key(cm_ctx->vdev);
 	cm_fill_vdev_crypto_params(cm_ctx, req);
 	cm_store_wep_key(cm_ctx, &req->crypto, *cm_id);
@@ -1982,48 +1999,50 @@ void cm_update_per_peer_key_mgmt_crypto_params(struct wlan_objmgr_vdev *vdev,
 	 * As there can be multiple AKM present select the most secured AKM
 	 * present
 	 */
-	if (QDF_HAS_PARAM(neg_akm, WLAN_CRYPTO_KEY_MGMT_FT_SAE))
+	if (QDF_HAS_PARAM(neg_akm, WLAN_CRYPTO_KEY_MGMT_FT_FILS_SHA384))
+		QDF_SET_PARAM(key_mgmt, WLAN_CRYPTO_KEY_MGMT_FT_FILS_SHA384);
+	else if (QDF_HAS_PARAM(neg_akm, WLAN_CRYPTO_KEY_MGMT_FT_FILS_SHA256))
+		QDF_SET_PARAM(key_mgmt, WLAN_CRYPTO_KEY_MGMT_FT_FILS_SHA256);
+	else if (QDF_HAS_PARAM(neg_akm, WLAN_CRYPTO_KEY_MGMT_FILS_SHA384))
+		QDF_SET_PARAM(key_mgmt, WLAN_CRYPTO_KEY_MGMT_FILS_SHA384);
+	else if (QDF_HAS_PARAM(neg_akm, WLAN_CRYPTO_KEY_MGMT_FILS_SHA256))
+		QDF_SET_PARAM(key_mgmt, WLAN_CRYPTO_KEY_MGMT_FILS_SHA256);
+	else if (QDF_HAS_PARAM(neg_akm,
+			       WLAN_CRYPTO_KEY_MGMT_FT_IEEE8021X_SHA384))
+		QDF_SET_PARAM(key_mgmt,
+			      WLAN_CRYPTO_KEY_MGMT_FT_IEEE8021X_SHA384);
+	else if (QDF_HAS_PARAM(neg_akm,
+			       WLAN_CRYPTO_KEY_MGMT_IEEE8021X_SUITE_B_192))
+		QDF_SET_PARAM(key_mgmt,
+			      WLAN_CRYPTO_KEY_MGMT_IEEE8021X_SUITE_B_192);
+	else if (QDF_HAS_PARAM(neg_akm, WLAN_CRYPTO_KEY_MGMT_IEEE8021X_SUITE_B))
+		QDF_SET_PARAM(key_mgmt, WLAN_CRYPTO_KEY_MGMT_IEEE8021X_SUITE_B);
+	else if (QDF_HAS_PARAM(neg_akm, WLAN_CRYPTO_KEY_MGMT_FT_SAE))
 		QDF_SET_PARAM(key_mgmt, WLAN_CRYPTO_KEY_MGMT_FT_SAE);
 	else if (QDF_HAS_PARAM(neg_akm, WLAN_CRYPTO_KEY_MGMT_SAE_EXT_KEY))
 		QDF_SET_PARAM(key_mgmt, WLAN_CRYPTO_KEY_MGMT_SAE_EXT_KEY);
 	else if (QDF_HAS_PARAM(neg_akm, WLAN_CRYPTO_KEY_MGMT_SAE))
 		QDF_SET_PARAM(key_mgmt, WLAN_CRYPTO_KEY_MGMT_SAE);
-	else if (QDF_HAS_PARAM(neg_akm, WLAN_CRYPTO_KEY_MGMT_IEEE8021X_SUITE_B))
-		QDF_SET_PARAM(key_mgmt, WLAN_CRYPTO_KEY_MGMT_IEEE8021X_SUITE_B);
-	else if (QDF_HAS_PARAM(neg_akm,
-			       WLAN_CRYPTO_KEY_MGMT_IEEE8021X_SUITE_B_192))
-		QDF_SET_PARAM(key_mgmt,
-			      WLAN_CRYPTO_KEY_MGMT_IEEE8021X_SUITE_B_192);
-	else if (QDF_HAS_PARAM(neg_akm, WLAN_CRYPTO_KEY_MGMT_FILS_SHA256))
-		QDF_SET_PARAM(key_mgmt, WLAN_CRYPTO_KEY_MGMT_FILS_SHA256);
-	else if (QDF_HAS_PARAM(neg_akm, WLAN_CRYPTO_KEY_MGMT_FILS_SHA384))
-		QDF_SET_PARAM(key_mgmt, WLAN_CRYPTO_KEY_MGMT_FILS_SHA384);
-	else if (QDF_HAS_PARAM(neg_akm, WLAN_CRYPTO_KEY_MGMT_FT_FILS_SHA256))
-		QDF_SET_PARAM(key_mgmt, WLAN_CRYPTO_KEY_MGMT_FT_FILS_SHA256);
-	else if (QDF_HAS_PARAM(neg_akm, WLAN_CRYPTO_KEY_MGMT_FT_FILS_SHA384))
-		QDF_SET_PARAM(key_mgmt, WLAN_CRYPTO_KEY_MGMT_FT_FILS_SHA384);
 	else if (QDF_HAS_PARAM(neg_akm, WLAN_CRYPTO_KEY_MGMT_OWE))
 		QDF_SET_PARAM(key_mgmt, WLAN_CRYPTO_KEY_MGMT_OWE);
 	else if (QDF_HAS_PARAM(neg_akm, WLAN_CRYPTO_KEY_MGMT_DPP))
 		QDF_SET_PARAM(key_mgmt, WLAN_CRYPTO_KEY_MGMT_DPP);
-	else if (QDF_HAS_PARAM(neg_akm,
-			       WLAN_CRYPTO_KEY_MGMT_FT_IEEE8021X_SHA384))
-		QDF_SET_PARAM(key_mgmt,
-			      WLAN_CRYPTO_KEY_MGMT_FT_IEEE8021X_SHA384);
-	else if (QDF_HAS_PARAM(neg_akm, WLAN_CRYPTO_KEY_MGMT_FT_PSK))
-		QDF_SET_PARAM(key_mgmt, WLAN_CRYPTO_KEY_MGMT_FT_PSK);
 	else if (QDF_HAS_PARAM(neg_akm, WLAN_CRYPTO_KEY_MGMT_FT_IEEE8021X))
 		QDF_SET_PARAM(key_mgmt, WLAN_CRYPTO_KEY_MGMT_FT_IEEE8021X);
-	else if (QDF_HAS_PARAM(neg_akm, WLAN_CRYPTO_KEY_MGMT_PSK))
-		QDF_SET_PARAM(key_mgmt, WLAN_CRYPTO_KEY_MGMT_PSK);
 	else if (QDF_HAS_PARAM(neg_akm, WLAN_CRYPTO_KEY_MGMT_IEEE8021X_SHA256))
 		QDF_SET_PARAM(key_mgmt, WLAN_CRYPTO_KEY_MGMT_IEEE8021X_SHA256);
-	else if (QDF_HAS_PARAM(neg_akm, WLAN_CRYPTO_KEY_MGMT_PSK_SHA256))
-		QDF_SET_PARAM(key_mgmt, WLAN_CRYPTO_KEY_MGMT_PSK_SHA256);
+	else if (QDF_HAS_PARAM(neg_akm, WLAN_CRYPTO_KEY_MGMT_IEEE8021X))
+		QDF_SET_PARAM(key_mgmt, WLAN_CRYPTO_KEY_MGMT_IEEE8021X);
 	else if (QDF_HAS_PARAM(neg_akm, WLAN_CRYPTO_KEY_MGMT_FT_PSK_SHA384))
 		QDF_SET_PARAM(key_mgmt, WLAN_CRYPTO_KEY_MGMT_FT_PSK_SHA384);
 	else if (QDF_HAS_PARAM(neg_akm, WLAN_CRYPTO_KEY_MGMT_PSK_SHA384))
 		QDF_SET_PARAM(key_mgmt, WLAN_CRYPTO_KEY_MGMT_PSK_SHA384);
+	else if (QDF_HAS_PARAM(neg_akm, WLAN_CRYPTO_KEY_MGMT_PSK_SHA256))
+		QDF_SET_PARAM(key_mgmt, WLAN_CRYPTO_KEY_MGMT_PSK_SHA256);
+	else if (QDF_HAS_PARAM(neg_akm, WLAN_CRYPTO_KEY_MGMT_FT_PSK))
+		QDF_SET_PARAM(key_mgmt, WLAN_CRYPTO_KEY_MGMT_FT_PSK);
+	else if (QDF_HAS_PARAM(neg_akm, WLAN_CRYPTO_KEY_MGMT_PSK))
+		QDF_SET_PARAM(key_mgmt, WLAN_CRYPTO_KEY_MGMT_PSK);
 	else if (QDF_HAS_PARAM(neg_akm, WLAN_CRYPTO_KEY_MGMT_WAPI_PSK))
 		QDF_SET_PARAM(key_mgmt, WLAN_CRYPTO_KEY_MGMT_WAPI_PSK);
 	else if (QDF_HAS_PARAM(neg_akm, WLAN_CRYPTO_KEY_MGMT_WAPI_CERT))
@@ -2034,8 +2053,6 @@ void cm_update_per_peer_key_mgmt_crypto_params(struct wlan_objmgr_vdev *vdev,
 		QDF_SET_PARAM(key_mgmt, WLAN_CRYPTO_KEY_MGMT_OSEN);
 	else if (QDF_HAS_PARAM(neg_akm, WLAN_CRYPTO_KEY_MGMT_WPS))
 		QDF_SET_PARAM(key_mgmt, WLAN_CRYPTO_KEY_MGMT_WPS);
-	else if (QDF_HAS_PARAM(neg_akm, WLAN_CRYPTO_KEY_MGMT_IEEE8021X))
-		QDF_SET_PARAM(key_mgmt, WLAN_CRYPTO_KEY_MGMT_IEEE8021X);
 	else if (QDF_HAS_PARAM(neg_akm, WLAN_CRYPTO_KEY_MGMT_IEEE8021X_NO_WPA))
 		QDF_SET_PARAM(key_mgmt, WLAN_CRYPTO_KEY_MGMT_IEEE8021X_NO_WPA);
 	else if (QDF_HAS_PARAM(neg_akm, WLAN_CRYPTO_KEY_MGMT_WPA_NONE))
@@ -2381,6 +2398,44 @@ static bool cm_is_connect_id_reassoc_in_non_connected(struct cnx_mgr *cm_ctx,
 	return is_reassoc;
 }
 
+#ifdef CONN_MGR_ADV_FEATURE
+/**
+ * cm_osif_connect_complete() - This API will send the response to osif layer
+ * @cm_ctx: connection manager context
+ * @resp: connect resp sent to osif
+ *
+ * This function fetches the first response in case of connect failure and sent
+ * it to the osif layer, otherwise, sent the provided response to osif.
+ *
+ * Return:void
+ */
+static void cm_osif_connect_complete(struct cnx_mgr *cm_ctx,
+				     struct wlan_cm_connect_resp *resp)
+{
+	struct wlan_cm_connect_resp first_failure_resp = {0};
+	QDF_STATUS status = QDF_STATUS_E_FAILURE;
+	struct wlan_cm_connect_resp *connect_rsp = resp;
+
+	if (QDF_IS_STATUS_ERROR(resp->connect_status)) {
+		status = cm_get_first_candidate_rsp(cm_ctx, resp->cm_id,
+						    &first_failure_resp);
+		if (QDF_IS_STATUS_SUCCESS(status))
+			connect_rsp = &first_failure_resp;
+	}
+
+	mlme_cm_osif_connect_complete(cm_ctx->vdev, connect_rsp);
+
+	if (QDF_IS_STATUS_SUCCESS(status))
+		cm_free_connect_rsp_ies(connect_rsp);
+}
+#else
+static void cm_osif_connect_complete(struct cnx_mgr *cm_ctx,
+				     struct wlan_cm_connect_resp *resp)
+{
+	mlme_cm_osif_connect_complete(cm_ctx->vdev, resp);
+}
+#endif
+
 QDF_STATUS cm_notify_connect_complete(struct cnx_mgr *cm_ctx,
 				      struct wlan_cm_connect_resp *resp,
 				      bool acquire_lock)
@@ -2410,11 +2465,10 @@ QDF_STATUS cm_notify_connect_complete(struct cnx_mgr *cm_ctx,
 		if (acquire_lock)
 			cm_req_lock_release(cm_ctx);
 	}
-	mlme_cm_osif_connect_complete(cm_ctx->vdev, resp);
+	cm_osif_connect_complete(cm_ctx, resp);
 	cm_if_mgr_inform_connect_complete(cm_ctx->vdev,
 					  resp->connect_status);
 	cm_inform_dlm_connect_complete(cm_ctx->vdev, resp);
-
 	if (QDF_IS_STATUS_ERROR(resp->connect_status) &&
 	    sm_state == WLAN_CM_S_INIT)
 		cm_clear_vdev_mlo_cap(cm_ctx->vdev);

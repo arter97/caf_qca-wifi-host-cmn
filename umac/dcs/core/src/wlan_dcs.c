@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2020-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -714,15 +714,7 @@ static void wlan_dcs_frequency_control(struct wlan_objmgr_psoc *psoc,
 	}
 }
 
-/**
- * wlan_dcs_switch_chan() - switch channel for vdev
- * @vdev: vdev ptr
- * @tgt_freq: target frequency
- * @tgt_width: target channel width
- *
- * Return: QDF_STATUS
- */
-static QDF_STATUS
+QDF_STATUS
 wlan_dcs_switch_chan(struct wlan_objmgr_vdev *vdev, qdf_freq_t tgt_freq,
 		     enum phy_ch_width tgt_width)
 {
@@ -1024,7 +1016,7 @@ wlan_dcs_get_available_chan_for_bw(struct wlan_objmgr_pdev *pdev,
 		if (!WLAN_REG_IS_SAME_BAND_FREQS(freq, awgn_info->center_freq))
 			continue;
 
-		/**
+		/*
 		 * DFS channel may need CAC during restart, which costs time
 		 * and may cause failure.
 		 */
@@ -1096,7 +1088,7 @@ wlan_dcs_get_available_chan_for_bw(struct wlan_objmgr_pdev *pdev,
 }
 
 /**
- * wlan_dcs_sap_get_available_chan() - get available channel for sap
+ * wlan_dcs_sap_select_chan() - get available channel for sap
  * @vdev: vdev ptr
  * @awgn_info: pointer to awgn info
  * @tgt_freq: frequency of the selected channel
@@ -1329,7 +1321,7 @@ static void wlan_dcs_process_awgn_sap(struct wlan_objmgr_pdev *pdev,
 }
 
 /**
- * wlan_dcs_awgnim_process() - process awgn IM
+ * wlan_dcs_awgn_process() - process awgn IM
  * @psoc: psoc ptr
  * @pdev_id: pdev id
  * @awgn_info: pointer to awgn info
@@ -1514,8 +1506,9 @@ static enum phy_ch_width wlan_dcs_afc_reduce_bw(struct wlan_objmgr_pdev *pdev,
 		return input_bw;
 
 	while (input_bw > CH_WIDTH_20MHZ) {
-		state = wlan_reg_get_5g_bonded_channel_and_state_for_freq(
-				pdev, freq, input_bw, &bonded_chan_ptr);
+		state = wlan_reg_get_5g_bonded_channel_and_state_for_pwrmode(
+				pdev, freq, input_bw, &bonded_chan_ptr,
+				REG_CURRENT_PWR_MODE, NO_SCHANS_PUNC);
 		if (state != CHANNEL_STATE_ENABLE) {
 			input_bw = wlan_reg_get_next_lower_bandwidth(input_bw);
 			continue;

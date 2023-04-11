@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2013-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -56,7 +56,8 @@
 #if (defined(QCA_WIFI_QCA8074) || defined(QCA_WIFI_QCA6290) || \
 	defined(QCA_WIFI_QCA6018) || defined(QCA_WIFI_QCA5018) || \
 	defined(QCA_WIFI_KIWI) || defined(QCA_WIFI_QCA5332) || \
-	defined(QCA_WIFI_QCA9574)) && !defined(QCA_WIFI_SUPPORT_SRNG)
+	defined(QCA_WIFI_QCA9574)) && !defined(QCA_WIFI_SUPPORT_SRNG) && \
+	!defined(QCA_WIFI_WCN6450)
 #define QCA_WIFI_SUPPORT_SRNG
 #endif
 
@@ -79,15 +80,6 @@ QDF_STATUS hif_post_recv_buffers_for_pipe(struct HIF_CE_pipe_info *pipe_info);
 #else
 #define BYPASS_QMI 0
 #endif
-
-#ifdef ENABLE_10_4_FW_HDR
-#if (ENABLE_10_4_FW_HDR == 1)
-#define WDI_IPA_SERVICE_GROUP 5
-#define WDI_IPA_TX_SVC MAKE_SERVICE_ID(WDI_IPA_SERVICE_GROUP, 0)
-#define HTT_DATA2_MSG_SVC MAKE_SERVICE_ID(HTT_SERVICE_GROUP, 1)
-#define HTT_DATA3_MSG_SVC MAKE_SERVICE_ID(HTT_SERVICE_GROUP, 2)
-#endif /* ENABLE_10_4_FW_HDR == 1 */
-#endif /* ENABLE_10_4_FW_HDR */
 
 static void hif_config_rri_on_ddr(struct hif_softc *scn);
 
@@ -904,7 +896,10 @@ static struct service_to_pipe target_service_to_ce_map_qca5332[] = {
 	{ HTT_DATA_MSG_SVC, PIPEDIR_OUT, 4, },
 	{ HTT_DATA_MSG_SVC, PIPEDIR_IN, 1, },
 	{ PACKET_LOG_SVC, PIPEDIR_IN, 5, },
+#ifdef WLAN_DIAG_AND_DBR_OVER_SEPARATE_CE
 	{ WMI_CONTROL_DIAG_SVC, PIPEDIR_IN, 9, },
+	{ WMI_CONTROL_DBR_SVC, PIPEDIR_IN, 9, },
+#endif
 	/* (Additions here) */
 	{ 0, 0, 0, },
 };
@@ -1174,6 +1169,36 @@ static struct service_to_pipe target_service_to_ce_map_kiwi[] = {
 };
 #endif
 
+#ifdef QCA_WIFI_WCN6450
+static struct service_to_pipe target_service_to_ce_map_wcn6450[] = {
+	{ WMI_DATA_VO_SVC, PIPEDIR_OUT, 3, },
+	{ WMI_DATA_VO_SVC, PIPEDIR_IN, 2, },
+	{ WMI_DATA_BK_SVC, PIPEDIR_OUT, 3, },
+	{ WMI_DATA_BK_SVC, PIPEDIR_IN, 2, },
+	{ WMI_DATA_BE_SVC, PIPEDIR_OUT, 3, },
+	{ WMI_DATA_BE_SVC, PIPEDIR_IN, 2, },
+	{ WMI_DATA_VI_SVC, PIPEDIR_OUT, 3, },
+	{ WMI_DATA_VI_SVC, PIPEDIR_IN, 2, },
+	{ WMI_CONTROL_SVC, PIPEDIR_OUT, 3, },
+	{ WMI_CONTROL_SVC, PIPEDIR_IN, 2, },
+	{ HTC_CTRL_RSVD_SVC, PIPEDIR_OUT, 0, },
+	{ HTC_CTRL_RSVD_SVC, PIPEDIR_IN, 2, },
+	{ HTT_DATA_MSG_SVC, PIPEDIR_OUT, 4, },
+	{ HTT_DATA2_MSG_SVC, PIPEDIR_OUT, 5, },
+	{ HTT_DATA_MSG_SVC, PIPEDIR_IN, 1, },
+	{ HTT_DATA2_MSG_SVC, PIPEDIR_IN, 10, },
+	{ HTT_DATA3_MSG_SVC, PIPEDIR_IN, 11, },
+#ifdef WLAN_FEATURE_WMI_DIAG_OVER_CE7
+	{ WMI_CONTROL_DIAG_SVC, PIPEDIR_IN, 7, },
+#endif
+	/* (Additions here) */
+	{ 0, 0, 0, },
+};
+#else
+static struct service_to_pipe target_service_to_ce_map_wcn6450[] = {
+};
+#endif
+
 static struct service_to_pipe target_service_to_ce_map_ar900b[] = {
 	{
 		WMI_DATA_VO_SVC,
@@ -1365,6 +1390,8 @@ void hif_select_ce_map_qcn9224(struct service_to_pipe **tgt_svc_map_to_use,
  * hif_select_service_to_pipe_map_kiwi() - Select service to CE map
  *  configuration for Kiwi
  * @scn: HIF context
+ * @tgt_svc_map_to_use: returned service map
+ * @sz_tgt_svc_map_to_use: returned length of the service map
  *
  * Return: None
  */
@@ -1446,9 +1473,15 @@ static void hif_select_service_to_pipe_map(struct hif_softc *scn,
 			break;
 		case TARGET_TYPE_KIWI:
 		case TARGET_TYPE_MANGO:
+		case TARGET_TYPE_PEACH:
 			hif_select_service_to_pipe_map_kiwi(scn,
 							 tgt_svc_map_to_use,
 							 sz_tgt_svc_map_to_use);
+			break;
+		case TARGET_TYPE_WCN6450:
+			*tgt_svc_map_to_use = target_service_to_ce_map_wcn6450;
+			*sz_tgt_svc_map_to_use =
+				 sizeof(target_service_to_ce_map_wcn6450);
 			break;
 		case TARGET_TYPE_QCA8074:
 			*tgt_svc_map_to_use = target_service_to_ce_map_qca8074;
@@ -1503,6 +1536,7 @@ static void hif_select_service_to_pipe_map(struct hif_softc *scn,
 					sizeof(struct service_to_pipe);
 }
 
+#ifndef QCA_WIFI_WCN6450
 /**
  * ce_mark_datapath() - marks the ce_state->htt_rx_data accordingly
  * @ce_state : pointer to the state context of the CE
@@ -1543,6 +1577,35 @@ static bool ce_mark_datapath(struct CE_state *ce_state)
 	}
 	return rc;
 }
+#else
+static bool ce_mark_datapath(struct CE_state *ce_state)
+{
+	struct service_to_pipe *svc_map;
+	uint32_t map_sz, map_len;
+	int i;
+
+	if (ce_state) {
+		hif_select_service_to_pipe_map(ce_state->scn, &svc_map,
+					       &map_sz);
+
+		map_len = map_sz / sizeof(struct service_to_pipe);
+		for (i = 0; i < map_len; i++) {
+			if ((svc_map[i].pipenum == ce_state->id) &&
+			    ((svc_map[i].service_id == HTT_DATA_MSG_SVC)  ||
+			     (svc_map[i].service_id == HTT_DATA2_MSG_SVC) ||
+			     (svc_map[i].service_id == HTT_DATA3_MSG_SVC)) &&
+			    (svc_map[i].pipedir == PIPEDIR_IN))
+				ce_state->htt_rx_data = true;
+			else if ((svc_map[i].pipenum == ce_state->id) &&
+				 (svc_map[i].service_id == HTT_DATA2_MSG_SVC) &&
+				 (svc_map[i].pipedir == PIPEDIR_OUT))
+				ce_state->htt_tx_data = true;
+		}
+	}
+
+	return (ce_state->htt_rx_data || ce_state->htt_tx_data);
+}
+#endif
 
 /**
  * hif_get_max_wmi_ep() - Get max WMI EPs configured in target svc map
@@ -1604,7 +1667,7 @@ static void ce_ring_test_initial_indexes(int ce_id, struct CE_ring_state *ring,
 /**
  * ce_alloc_desc_ring() - Allocate copyengine descriptor ring
  * @scn: softc instance
- * @ce_id: ce in question
+ * @CE_id: ce in question
  * @base_addr: pointer to copyengine ring base address
  * @ce_ring: copyengine instance
  * @nentries: number of entries should be allocated
@@ -1655,7 +1718,7 @@ static QDF_STATUS ce_alloc_desc_ring(struct hif_softc *scn, unsigned int CE_id,
 /**
  * ce_free_desc_ring() - Frees copyengine descriptor ring
  * @scn: softc instance
- * @ce_id: ce in question
+ * @CE_id: ce in question
  * @ce_ring: copyengine instance
  * @desc_size: ce desc size
  *
@@ -1735,7 +1798,7 @@ qdf_export_symbol(ce_service_register_module);
 
 /**
  * ce_srng_based() - Does this target use srng
- * @ce_state : pointer to the state context of the CE
+ * @scn: pointer to the state context of the CE
  *
  * Description:
  *   returns true if the target is SRNG based
@@ -1763,6 +1826,7 @@ bool ce_srng_based(struct hif_softc *scn)
 	case TARGET_TYPE_QCA5018:
 	case TARGET_TYPE_KIWI:
 	case TARGET_TYPE_MANGO:
+	case TARGET_TYPE_PEACH:
 	case TARGET_TYPE_QCN9224:
 	case TARGET_TYPE_QCA9574:
 	case TARGET_TYPE_QCA5332:
@@ -2038,7 +2102,7 @@ static void ce_oom_recovery(void *context)
  * the CE descriptors.
  * Allocate HIF_CE_HISTORY_MAX records by CE_DEBUG_MAX_DATA_BUF_SIZE
  * @scn: hif scn handle
- * ce_id: Copy Engine Id
+ * @ce_id: Copy Engine Id
  *
  * Return: QDF_STATUS
  */
@@ -2072,7 +2136,7 @@ QDF_STATUS alloc_mem_ce_debug_hist_data(struct hif_softc *scn, uint32_t ce_id)
  * free_mem_ce_debug_hist_data() - Free mem of the data pointed by
  * the CE descriptors.
  * @scn: hif scn handle
- * ce_id: Copy Engine Id
+ * @ce_id: Copy Engine Id
  *
  * Return:
  */
@@ -2106,7 +2170,7 @@ void free_mem_ce_debug_hist_data(struct hif_softc *scn, uint32_t ce_id)
 struct hif_ce_desc_event *hif_ce_desc_history[CE_COUNT_MAX];
 uint32_t hif_ce_history_max = HIF_CE_HISTORY_MAX;
 
-/**
+/*
  * for debug build, it will enable ce history for all ce, but for
  * perf build(if CONFIG_SLUB_DEBUG_ON is N), it only enable for
  * ce2(wmi event) & ce3(wmi cmd) history.
@@ -2566,7 +2630,7 @@ static int hif_get_pktlog_ce_num(struct hif_softc *scn)
 
 #ifdef WLAN_FEATURE_FASTPATH
 /**
- * hif_enable_fastpath() Update that we have enabled fastpath mode
+ * hif_enable_fastpath() - Update that we have enabled fastpath mode
  * @hif_ctx: HIF context
  *
  * For use in data path
@@ -2618,7 +2682,7 @@ void *hif_get_ce_handle(struct hif_opaque_softc *hif_ctx, int id)
 qdf_export_symbol(hif_get_ce_handle);
 
 /**
- * ce_h2t_tx_ce_cleanup() Place holder function for H2T CE cleanup.
+ * ce_h2t_tx_ce_cleanup() - Place holder function for H2T CE cleanup.
  * No processing is required inside this function.
  * @ce_hdl: Cope engine handle
  * Using an assert, this function makes sure that,
@@ -2873,7 +2937,7 @@ hif_send_head(struct hif_opaque_softc *hif_ctx,
 		 * Clear the packet offset for all but the first CE desc.
 		 */
 		if (i++ > 0)
-			data_attr &= ~QDF_CE_TX_PKT_OFFSET_BIT_M;
+			data_attr &= ~CE_DESC_PKT_OFFSET_BIT_M;
 
 		status = ce_sendlist_buf_add(&sendlist, frag_paddr,
 				    frag_bytes >
@@ -2947,6 +3011,74 @@ void hif_send_complete_check(struct hif_opaque_softc *hif_ctx, uint8_t pipe,
 	ce_per_engine_service(scn, pipe);
 #endif
 }
+
+#ifdef CUSTOM_CB_SCHEDULER_SUPPORT
+QDF_STATUS
+hif_register_ce_custom_cb(struct hif_opaque_softc *hif_ctx, uint8_t pipe,
+			  void (*custom_cb)(void *), void *custom_cb_context)
+{
+	struct hif_softc *scn = HIF_GET_SOFTC(hif_ctx);
+	struct HIF_CE_state *hif_state = HIF_GET_CE_STATE(scn);
+	struct HIF_CE_pipe_info *pipe_info;
+
+	if (pipe >= CE_COUNT_MAX)
+		return QDF_STATUS_E_INVAL;
+
+	pipe_info = &hif_state->pipe_info[pipe];
+	ce_register_custom_cb(pipe_info->ce_hdl, custom_cb, custom_cb_context);
+
+	return QDF_STATUS_SUCCESS;
+}
+
+QDF_STATUS
+hif_unregister_ce_custom_cb(struct hif_opaque_softc *hif_ctx, uint8_t pipe)
+{
+	struct hif_softc *scn = HIF_GET_SOFTC(hif_ctx);
+	struct HIF_CE_state *hif_state = HIF_GET_CE_STATE(scn);
+	struct HIF_CE_pipe_info *pipe_info;
+
+	if (pipe >= CE_COUNT_MAX)
+		return QDF_STATUS_E_INVAL;
+
+	pipe_info = &hif_state->pipe_info[pipe];
+	ce_unregister_custom_cb(pipe_info->ce_hdl);
+
+	return QDF_STATUS_SUCCESS;
+}
+
+QDF_STATUS
+hif_enable_ce_custom_cb(struct hif_opaque_softc *hif_ctx, uint8_t pipe)
+{
+	struct hif_softc *scn = HIF_GET_SOFTC(hif_ctx);
+	struct HIF_CE_state *hif_state = HIF_GET_CE_STATE(scn);
+	struct HIF_CE_pipe_info *pipe_info;
+
+	if (pipe >= CE_COUNT_MAX)
+		return QDF_STATUS_E_INVAL;
+
+	pipe_info = &hif_state->pipe_info[pipe];
+	ce_enable_custom_cb(pipe_info->ce_hdl);
+	ce_dispatch_interrupt(pipe, &hif_state->tasklets[pipe]);
+
+	return QDF_STATUS_SUCCESS;
+}
+
+QDF_STATUS
+hif_disable_ce_custom_cb(struct hif_opaque_softc *hif_ctx, uint8_t pipe)
+{
+	struct hif_softc *scn = HIF_GET_SOFTC(hif_ctx);
+	struct HIF_CE_state *hif_state = HIF_GET_CE_STATE(scn);
+	struct HIF_CE_pipe_info *pipe_info;
+
+	if (pipe >= CE_COUNT_MAX)
+		return QDF_STATUS_E_INVAL;
+
+	pipe_info = &hif_state->pipe_info[pipe];
+	ce_disable_custom_cb(pipe_info->ce_hdl);
+
+	return QDF_STATUS_SUCCESS;
+}
+#endif /* CUSTOM_CB_SCHEDULER_SUPPORT */
 
 #if defined(CE_TASKLET_SCHEDULE_ON_FULL) && defined(CE_TASKLET_DEBUG_ENABLE)
 #define CE_RING_FULL_THRESHOLD_TIME 3000000
@@ -3032,7 +3164,7 @@ hif_pci_ce_send_done(struct CE_handle *copyeng, void *ce_context,
 /**
  * hif_ce_do_recv(): send message from copy engine to upper layers
  * @msg_callbacks: structure containing callback and callback context
- * @netbuff: skb containing message
+ * @netbuf: skb containing message
  * @nbytes: number of bytes in the message
  * @pipe_info: used for the pipe_number info
  *
@@ -3661,6 +3793,39 @@ void hif_ce_stop(struct hif_softc *scn)
 	hif_state->started = false;
 }
 
+#ifdef CONFIG_SHADOW_V3
+void hif_preare_shadow_register_cfg_v3(struct hif_softc *scn)
+{
+	int shadow_cfg_idx = scn->num_shadow_registers_configured;
+	int i;
+
+	/* shadow reg config for CE SRC registers */
+	for (i = 0; i < scn->ce_count; i++) {
+		scn->shadow_regs[shadow_cfg_idx].addr =
+				CE_BASE_ADDRESS(i) + SR_WR_INDEX_ADDRESS;
+		shadow_cfg_idx++;
+	}
+
+	/* shadow reg config for CE DST registers */
+	for (i = 0; i < scn->ce_count; i++) {
+		scn->shadow_regs[shadow_cfg_idx].addr =
+				CE_BASE_ADDRESS(i) + DST_WR_INDEX_ADDRESS;
+		shadow_cfg_idx++;
+	}
+
+	scn->num_shadow_registers_configured = shadow_cfg_idx;
+}
+
+void hif_get_shadow_reg_config_v3(struct hif_softc *scn,
+				  struct pld_shadow_reg_v3_cfg **shadow_config,
+				  int *num_shadow_registers_configured)
+{
+	*shadow_config = scn->shadow_regs;
+	*num_shadow_registers_configured =
+				scn->num_shadow_registers_configured;
+}
+#endif
+
 static void hif_get_shadow_reg_cfg(struct hif_softc *scn,
 				   struct shadow_reg_cfg
 				   **target_shadow_reg_cfg_ret,
@@ -3674,6 +3839,7 @@ static void hif_get_shadow_reg_cfg(struct hif_softc *scn,
 
 /**
  * hif_get_target_ce_config() - get copy engine configuration
+ * @scn: HIF context
  * @target_ce_config_ret: basic copy engine configuration
  * @target_ce_config_sz_ret: size of the basic configuration in bytes
  * @target_service_to_ce_map_ret: service mapping for the copy engines
@@ -3814,8 +3980,8 @@ static inline QDF_STATUS hif_alloc_rri_on_ddr(struct hif_softc *scn)
 	qdf_dma_addr_t paddr_rri_on_ddr = 0;
 
 	scn->vaddr_rri_on_ddr =
-		(uint32_t *)qdf_mem_alloc_consistent(scn->qdf_dev,
-		scn->qdf_dev->dev, (CE_COUNT * sizeof(uint32_t)),
+		(void *)qdf_mem_alloc_consistent(scn->qdf_dev,
+		scn->qdf_dev->dev, RRI_ON_DDR_MEM_SIZE,
 		&paddr_rri_on_ddr);
 
 	if (!scn->vaddr_rri_on_ddr) {
@@ -3825,7 +3991,7 @@ static inline QDF_STATUS hif_alloc_rri_on_ddr(struct hif_softc *scn)
 
 	scn->paddr_rri_on_ddr = paddr_rri_on_ddr;
 
-	qdf_mem_zero(scn->vaddr_rri_on_ddr, CE_COUNT * sizeof(uint32_t));
+	qdf_mem_zero(scn->vaddr_rri_on_ddr, RRI_ON_DDR_MEM_SIZE);
 
 	return QDF_STATUS_SUCCESS;
 }
@@ -3851,8 +4017,8 @@ static inline void hif_config_rri_on_ddr(struct hif_softc *scn)
 	if (hif_alloc_rri_on_ddr(scn) != QDF_STATUS_SUCCESS)
 		return;
 
-	low_paddr  = BITS0_TO_31(scn->paddr_rri_on_ddr);
-	high_paddr = BITS32_TO_35(scn->paddr_rri_on_ddr);
+	low_paddr  = RRI_ON_DDR_PADDR_LOW(scn->paddr_rri_on_ddr);
+	high_paddr = RRI_ON_DDR_PADDR_HIGH(scn->paddr_rri_on_ddr);
 
 	hif_debug("using srri and drri from DDR");
 
@@ -3940,6 +4106,8 @@ int hif_wlan_enable(struct hif_softc *scn)
 	switch (tgt_info->target_type) {
 	case TARGET_TYPE_KIWI:
 	case TARGET_TYPE_MANGO:
+	case TARGET_TYPE_PEACH:
+	case TARGET_TYPE_WCN6450:
 		hif_prepare_hal_shadow_reg_cfg_v3(scn, &cfg);
 		break;
 	default:
@@ -4240,6 +4408,7 @@ void hif_ce_prepare_config(struct hif_softc *scn)
 		break;
 	case TARGET_TYPE_KIWI:
 	case TARGET_TYPE_MANGO:
+	case TARGET_TYPE_PEACH:
 		hif_ce_select_config_kiwi(hif_state);
 		scn->ce_count = KIWI_CE_COUNT;
 		break;
@@ -4260,7 +4429,12 @@ void hif_ce_prepare_config(struct hif_softc *scn)
 					sizeof(target_ce_config_wlan_adrastea);
 		}
 		break;
-
+	case TARGET_TYPE_WCN6450:
+		hif_state->host_ce_config = host_ce_config_wlan_wcn6450;
+		hif_state->target_ce_config = target_ce_config_wlan_wcn6450;
+		hif_state->target_ce_config_sz =
+				sizeof(target_ce_config_wlan_wcn6450);
+		break;
 	}
 	QDF_BUG(scn->ce_count <= CE_COUNT_MAX);
 }
@@ -4642,7 +4816,7 @@ err:
 
 /**
  * hif_config_ce_pktlog() - configure copy engines
- * @scn: hif context
+ * @hif_hdl: hif context
  *
  * Prepares fw, copy engine hardware and host sw according
  * to the attributes selected by hif_ce_prepare_config.
@@ -4707,7 +4881,7 @@ err:
 /**
  * hif_ce_ipa_get_ce_resource() - get uc resource on hif
  * @scn: bus context
- * @ce_sr_base_paddr: copyengine source ring base physical address
+ * @ce_sr: copyengine source ring base physical address
  * @ce_sr_ring_size: copyengine source ring size
  * @ce_reg_paddr: copyengine register physical address
  *
@@ -4954,7 +5128,7 @@ void *hif_ce_get_lro_ctx(struct hif_opaque_softc *hif_hdl, int ctx_id)
 /**
  * hif_map_service_to_pipe() - returns  the ce ids pertaining to
  * this service
- * @scn: hif_softc pointer.
+ * @hif_hdl: hif_softc pointer.
  * @svc_id: Service ID for which the mapping is needed.
  * @ul_pipe: address of the container in which ul pipe is returned.
  * @dl_pipe: address of the container in which dl pipe is returned.

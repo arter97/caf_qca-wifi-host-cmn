@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2017-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -22,6 +22,9 @@
 #include "qdf_module.h"
 #include "qdf_net_if.h"
 #include <pld_common.h>
+#ifdef DP_UMAC_HW_RESET_SUPPORT
+#include "if_pci.h"
+#endif
 
 /* mapping NAPI budget 0 to internal budget 0
  * NAPI budget 1 to internal budget [1,scaler -1]
@@ -499,10 +502,10 @@ static void hif_exec_tasklet_schedule(struct hif_exec_context *ctx)
 }
 
 /**
- * hif_exec_tasklet() - grp tasklet
- * data: context
+ * hif_exec_tasklet_fn() - grp tasklet
+ * @data: context
  *
- * return: void
+ * Return: void
  */
 static void hif_exec_tasklet_fn(unsigned long data)
 {
@@ -526,9 +529,9 @@ static void hif_exec_tasklet_fn(unsigned long data)
 
 /**
  * hif_latency_profile_measure() - calculate latency and update histogram
- * hif_ext_group: hif exec context
+ * @hif_ext_group: hif exec context
  *
- * return: None
+ * Return: None
  */
 #ifdef HIF_LATENCY_PROFILE_ENABLE
 static void hif_latency_profile_measure(struct hif_exec_context *hif_ext_group)
@@ -571,9 +574,9 @@ void hif_latency_profile_measure(struct hif_exec_context *hif_ext_group)
 
 /**
  * hif_latency_profile_start() - Update the start timestamp for HIF ext group
- * hif_ext_group: hif exec context
+ * @hif_ext_group: hif exec context
  *
- * return: None
+ * Return: None
  */
 #ifdef HIF_LATENCY_PROFILE_ENABLE
 static void hif_latency_profile_start(struct hif_exec_context *hif_ext_group)
@@ -630,8 +633,8 @@ hif_irq_disabled_time_limit_reached(struct hif_exec_context *hif_ext_group)
 
 /**
  * hif_exec_poll() - napi poll
- * napi: napi struct
- * budget: budget for napi
+ * @napi: napi struct
+ * @budget: budget for napi
  *
  * Return: mapping of internal budget to napi
  */
@@ -646,6 +649,7 @@ static int hif_exec_poll(struct napi_struct *napi, int budget)
 	int actual_dones;
 	int shift = hif_ext_group->scale_bin_shift;
 	int cpu = smp_processor_id();
+	bool force_complete = false;
 
 	hif_record_event(hif_ext_group->hif, hif_ext_group->grp_id,
 			 0, 0, 0, HIF_EVENT_BH_SCHED);
@@ -663,7 +667,13 @@ static int hif_exec_poll(struct napi_struct *napi, int budget)
 
 	actual_dones = work_done;
 
-	if (hif_is_force_napi_complete_required(hif_ext_group) ||
+	if (hif_is_force_napi_complete_required(hif_ext_group)) {
+		force_complete = true;
+		if (work_done >= normalized_budget)
+			work_done = normalized_budget - 1;
+	}
+
+	if (qdf_unlikely(force_complete) ||
 	    (!hif_ext_group->force_break && work_done < normalized_budget) ||
 	    ((pld_is_one_msi(scn->qdf_dev->dev) &&
 	    hif_irq_disabled_time_limit_reached(hif_ext_group)))) {
@@ -788,7 +798,7 @@ struct hif_execution_ops tasklet_sched_ops = {
 };
 
 /**
- * hif_exec_tasklet_schedule() -  allocate and initialize a tasklet exec context
+ * hif_exec_tasklet_create() -  allocate and initialize a tasklet exec context
  */
 static struct hif_exec_context *hif_exec_tasklet_create(void)
 {
@@ -992,7 +1002,7 @@ irqreturn_t hif_ext_group_interrupt_handler(int irq, void *context)
 
 /**
  * hif_exec_kill() - grp tasklet kill
- * scn: hif_softc
+ * @hif_ctx: hif_softc
  *
  * return: void
  */
@@ -1029,7 +1039,9 @@ hif_init_force_napi_complete(struct hif_exec_context *hif_ext_group)
  * @irq: array of irq values
  * @handler: callback interrupt handler function
  * @cb_ctx: context to passed in callback
+ * @context_name: context name
  * @type: napi vs tasklet
+ * @scale:
  *
  * Return: QDF_STATUS
  */
@@ -1084,6 +1096,7 @@ qdf_export_symbol(hif_register_ext_group);
 /**
  * hif_exec_create() - create an execution context
  * @type: the type of execution context to create
+ * @scale:
  */
 struct hif_exec_context *hif_exec_create(enum hif_exec_type type,
 						uint32_t scale)
@@ -1184,14 +1197,36 @@ static irqreturn_t hif_umac_reset_irq_handler(int irq, void *ctx)
 {
 	struct hif_umac_reset_ctx *umac_reset_ctx = ctx;
 
-	/* Schedule the tasklet and exit */
-	tasklet_hi_schedule(&umac_reset_ctx->intr_tq);
+	/* Schedule the tasklet if it is umac reset interrupt and exit */
+	if (umac_reset_ctx->irq_handler(umac_reset_ctx->cb_ctx))
+		tasklet_hi_schedule(&umac_reset_ctx->intr_tq);
 
 	return IRQ_HANDLED;
 }
 
+QDF_STATUS hif_get_umac_reset_irq(struct hif_opaque_softc *hif_scn,
+				  int *umac_reset_irq)
+{
+	int ret;
+	struct hif_softc *hif_sc = HIF_GET_SOFTC(hif_scn);
+	struct hif_pci_softc *sc = HIF_GET_PCI_SOFTC(hif_sc);
+	struct platform_device *pdev = (struct platform_device *)sc->pdev;
+
+	ret = pfrm_get_irq(&pdev->dev, (struct qdf_pfm_hndl *)pdev,
+			   "umac_reset", 0, umac_reset_irq);
+
+	if (ret) {
+		hif_err("umac reset get irq failed ret %d\n", ret);
+		return QDF_STATUS_E_FAILURE;
+	}
+	return QDF_STATUS_SUCCESS;
+}
+
+qdf_export_symbol(hif_get_umac_reset_irq);
+
 QDF_STATUS hif_register_umac_reset_handler(struct hif_opaque_softc *hif_scn,
-					   int (*handler)(void *cb_ctx),
+					   bool (*irq_handler)(void *cb_ctx),
+					   int (*tl_handler)(void *cb_ctx),
 					   void *cb_ctx, int irq)
 {
 	struct hif_softc *hif_sc = HIF_GET_SOFTC(hif_scn);
@@ -1205,7 +1240,8 @@ QDF_STATUS hif_register_umac_reset_handler(struct hif_opaque_softc *hif_scn,
 
 	umac_reset_ctx = &hif_sc->umac_reset_ctx;
 
-	umac_reset_ctx->cb_handler = handler;
+	umac_reset_ctx->irq_handler = irq_handler;
+	umac_reset_ctx->cb_handler = tl_handler;
 	umac_reset_ctx->cb_ctx = cb_ctx;
 	umac_reset_ctx->os_irq = irq;
 

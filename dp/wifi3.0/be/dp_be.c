@@ -74,6 +74,7 @@ static struct cdp_ppeds_txrx_ops dp_ops_ppeds_be = {
 	.ppeds_update_int_pri2tid = dp_ppeds_update_int_pri2tid_be,
 	.ppeds_entry_dump = dp_ppeds_dump_ppe_vp_tbl_be,
 	.ppeds_enable_pri2tid = dp_ppeds_vdev_enable_pri2tid_be,
+	.ppeds_vp_setup_recovery = dp_ppeds_vp_setup_on_fw_recovery,
 };
 
 static void dp_ppeds_rings_status(struct dp_soc *soc)
@@ -567,14 +568,21 @@ static QDF_STATUS dp_peer_ppeds_default_route_be(struct dp_soc *soc,
 	return QDF_STATUS_SUCCESS;
 }
 
-static QDF_STATUS dp_peer_setup_ppeds_be(struct dp_soc *soc,
-					 struct dp_peer *peer,
-					 struct dp_vdev_be *be_vdev)
+#ifdef WLAN_FEATURE_11BE_MLO
+QDF_STATUS dp_peer_setup_ppeds_be(struct dp_soc *soc,
+				  struct dp_peer *peer,
+				  struct dp_vdev_be *be_vdev,
+				  void *args)
 {
-	struct dp_ppe_vp_profile *ppe_vp_profile = &be_vdev->ppe_vp_profile;
+	struct dp_peer *mld_peer;
+	struct dp_soc *mld_soc;
+	struct dp_soc_be *be_soc;
+	struct cdp_soc_t *cdp_soc;
+	struct dp_peer_be *be_peer = dp_get_be_peer_from_dp_peer(peer);
+	struct cdp_ds_vp_params vp_params = {0};
+	struct dp_ppe_vp_profile *ppe_vp_profile = (struct dp_ppe_vp_profile *)args;
 	uint16_t src_info = ppe_vp_profile->vp_num;
 	uint8_t vdev_id = be_vdev->vdev.vdev_id;
-	struct dp_peer_be *be_peer = dp_get_be_peer_from_dp_peer(peer);
 	QDF_STATUS qdf_status = QDF_STATUS_SUCCESS;
 
 	if (!be_peer) {
@@ -610,6 +618,7 @@ static QDF_STATUS dp_peer_setup_ppeds_be(struct dp_soc *soc,
 			}
 
 			vdev_id = be_vdev->vdev.vdev_id;
+			soc = link_peer->vdev->pdev->soc;
 			qdf_status = dp_peer_ppeds_default_route_be(soc,
 								    be_peer,
 								    vdev_id,
@@ -618,25 +627,80 @@ static QDF_STATUS dp_peer_setup_ppeds_be(struct dp_soc *soc,
 
 		dp_release_link_peers_ref(&link_peers_info, DP_MOD_ID_DS);
 	} else {
-		struct dp_peer *mld_peer = DP_GET_MLD_PEER_FROM_PEER(peer);
+		mld_peer = DP_GET_MLD_PEER_FROM_PEER(peer);
 
 		if (!mld_peer)
 			return qdf_status;
 
+		/*
+		 * In case of MLO link peer,
+		 * Fetch the VP profile from the mld vdev.
+		 */
 		be_vdev = dp_get_be_vdev_from_dp_vdev(mld_peer->vdev);
 		if (!be_vdev) {
 			dp_err("BE vap is null");
 			return QDF_STATUS_E_NULL_VALUE;
 		}
 
-		ppe_vp_profile = &be_vdev->ppe_vp_profile;
+		/*
+		 * Extract the VP profile from the vap
+		 * in case of MLO peer, we have to get the profile from
+		 * the MLD vdev's osif handle and not the link peer.
+		 */
+		mld_soc = mld_peer->vdev->pdev->soc;
+		cdp_soc = &mld_soc->cdp_soc;
+		if (!cdp_soc->ol_ops->get_ppeds_profile_info_for_vap) {
+			dp_err("%pK: Register PPEDS profile info API before use\n", cdp_soc);
+			return QDF_STATUS_E_NULL_VALUE;
+		}
+
+		qdf_status = cdp_soc->ol_ops->get_ppeds_profile_info_for_vap(mld_soc->ctrl_psoc,
+									     mld_peer->vdev->vdev_id,
+									     &vp_params);
+		if (qdf_status == QDF_STATUS_E_NULL_VALUE) {
+			dp_err("%pK: Failed to get ppeds profile for mld soc\n", mld_soc);
+			return qdf_status;
+		}
+
+		/*
+		 * Check if PPE DS routing is enabled on
+		 * the associated vap.
+		 */
+		if (vp_params.ppe_vp_type != PPE_VP_USER_TYPE_DS)
+			return qdf_status;
+
+		be_soc = dp_get_be_soc_from_dp_soc(mld_soc);
+		ppe_vp_profile = &be_soc->ppe_vp_profile[vp_params.ppe_vp_profile_idx];
 		src_info = ppe_vp_profile->vp_num;
+
 		qdf_status = dp_peer_ppeds_default_route_be(soc, be_peer,
 							    vdev_id, src_info);
 	}
 
 	return qdf_status;
 }
+#else
+static QDF_STATUS dp_peer_setup_ppeds_be(struct dp_soc *soc,
+					 struct dp_peer *peer,
+					 struct dp_vdev_be *be_vdev
+					 void *args)
+{
+	struct dp_ppe_vp_profile *vp_profile = (struct dp_ppe_vp_profile *)args;
+	struct dp_peer_be *be_peer = dp_get_be_peer_from_dp_peer(peer);
+	QDF_STATUS qdf_status = QDF_STATUS_SUCCESS;
+
+	if (!be_peer) {
+		dp_err("BE peer is null");
+		return QDF_STATUS_E_NULL_VALUE;
+	}
+
+	qdf_status = dp_peer_ppeds_default_route_be(soc, be_peer,
+						    be_vdev->vdev.vdev_id,
+						    vp_profile->vp_num);
+
+	return qdf_status;
+}
+#endif
 #else
 static QDF_STATUS dp_ppeds_init_soc_be(struct dp_soc *soc)
 {
@@ -658,13 +722,25 @@ static inline QDF_STATUS dp_soc_ppeds_detach_be(struct dp_soc *soc)
 	return QDF_STATUS_SUCCESS;
 }
 
-static inline
 QDF_STATUS dp_peer_setup_ppeds_be(struct dp_soc *soc, struct dp_peer *peer,
-				  struct dp_vdev_be *be_vdev)
+				  struct dp_vdev_be *be_vdev,
+				  void *args)
 {
 	return QDF_STATUS_SUCCESS;
 }
 #endif /* WLAN_SUPPORT_PPEDS */
+
+void dp_reo_shared_qaddr_detach(struct dp_soc *soc)
+{
+	qdf_mem_free_consistent(soc->osdev, soc->osdev->dev,
+				REO_QUEUE_REF_ML_TABLE_SIZE,
+				soc->reo_qref.mlo_reo_qref_table_vaddr,
+				soc->reo_qref.mlo_reo_qref_table_paddr, 0);
+	qdf_mem_free_consistent(soc->osdev, soc->osdev->dev,
+				REO_QUEUE_REF_NON_ML_TABLE_SIZE,
+				soc->reo_qref.non_mlo_reo_qref_table_vaddr,
+				soc->reo_qref.non_mlo_reo_qref_table_paddr, 0);
+}
 
 static QDF_STATUS dp_soc_detach_be(struct dp_soc *soc)
 {
@@ -672,6 +748,7 @@ static QDF_STATUS dp_soc_detach_be(struct dp_soc *soc)
 	int i = 0;
 
 	dp_soc_ppeds_detach_be(soc);
+	dp_reo_shared_qaddr_detach(soc);
 
 	for (i = 0; i < MAX_TXDESC_POOLS; i++)
 		dp_hw_cookie_conversion_detach(be_soc,
@@ -686,6 +763,66 @@ static QDF_STATUS dp_soc_detach_be(struct dp_soc *soc)
 
 	return QDF_STATUS_SUCCESS;
 }
+
+#ifdef QCA_SUPPORT_DP_GLOBAL_CTX
+static void dp_set_rx_fst_be(struct dp_rx_fst *fst)
+{
+	struct dp_global_context *dp_global = wlan_objmgr_get_global_ctx();
+
+	if (dp_global)
+		dp_global->fst_ctx = fst;
+}
+
+static struct dp_rx_fst *dp_get_rx_fst_be(void)
+{
+	struct dp_global_context *dp_global = wlan_objmgr_get_global_ctx();
+
+	if (dp_global)
+		return dp_global->fst_ctx;
+
+	return NULL;
+}
+
+static uint32_t dp_rx_fst_release_ref_be(void)
+{
+	struct dp_global_context *dp_global = wlan_objmgr_get_global_ctx();
+	uint32_t rx_fst_ref_cnt;
+
+	if (dp_global) {
+		rx_fst_ref_cnt = qdf_atomic_read(&dp_global->rx_fst_ref_cnt);
+		qdf_atomic_dec(&dp_global->rx_fst_ref_cnt);
+		return rx_fst_ref_cnt;
+	}
+
+	return 1;
+}
+
+static void dp_rx_fst_get_ref_be(void)
+{
+	struct dp_global_context *dp_global = wlan_objmgr_get_global_ctx();
+
+	if (dp_global)
+		qdf_atomic_inc(&dp_global->rx_fst_ref_cnt);
+}
+#else
+static void dp_set_rx_fst_be(struct dp_rx_fst *fst)
+{
+}
+
+static struct dp_rx_fst *dp_get_rx_fst_be(void)
+{
+	return NULL;
+}
+
+static uint32_t dp_rx_fst_release_ref_be(void)
+{
+	return 1;
+}
+
+static void dp_rx_fst_get_ref_be(void)
+{
+}
+#endif
 
 #ifdef WLAN_MLO_MULTI_CHIP
 #ifdef WLAN_MCAST_MLO
@@ -718,25 +855,6 @@ dp_mlo_mcast_deinit(struct dp_soc *soc, struct dp_vdev *vdev)
 	vdev->mlo_vdev = false;
 }
 
-static void dp_set_rx_fst_be(struct dp_soc *soc, struct dp_rx_fst *fst)
-{
-	dp_mlo_set_rx_fst(soc, fst);
-}
-
-static struct dp_rx_fst *dp_get_rx_fst_be(struct dp_soc *soc)
-{
-	return dp_mlo_get_rx_fst(soc);
-}
-
-static uint8_t dp_rx_fst_deref_be(struct dp_soc *soc)
-{
-	return dp_mlo_rx_fst_deref(soc);
-}
-
-static void dp_rx_fst_ref_be(struct dp_soc *soc)
-{
-	dp_mlo_rx_fst_ref(soc);
-}
 #else
 static inline void
 dp_mlo_mcast_init(struct dp_soc *soc, struct dp_vdev *vdev)
@@ -745,24 +863,6 @@ dp_mlo_mcast_init(struct dp_soc *soc, struct dp_vdev *vdev)
 
 static inline void
 dp_mlo_mcast_deinit(struct dp_soc *soc, struct dp_vdev *vdev)
-{
-}
-
-static void dp_set_rx_fst_be(struct dp_soc *soc, struct dp_rx_fst *fst)
-{
-}
-
-static struct dp_rx_fst *dp_get_rx_fst_be(struct dp_soc *soc)
-{
-	return NULL;
-}
-
-static uint8_t dp_rx_fst_deref_be(struct dp_soc *soc)
-{
-	return 1;
-}
-
-static void dp_rx_fst_ref_be(struct dp_soc *soc)
 {
 }
 #endif
@@ -801,23 +901,6 @@ static void dp_get_rx_hash_key_be(struct dp_soc *soc,
 	dp_get_rx_hash_key_bytes(lro_hash);
 }
 
-static void dp_set_rx_fst_be(struct dp_soc *soc, struct dp_rx_fst *fst)
-{
-}
-
-static struct dp_rx_fst *dp_get_rx_fst_be(struct dp_soc *soc)
-{
-	return NULL;
-}
-
-static uint8_t dp_rx_fst_deref_be(struct dp_soc *soc)
-{
-	return 1;
-}
-
-static void dp_rx_fst_ref_be(struct dp_soc *soc)
-{
-}
 #endif
 
 static QDF_STATUS dp_soc_attach_be(struct dp_soc *soc,
@@ -964,6 +1047,20 @@ static QDF_STATUS dp_pdev_detach_be(struct dp_pdev *pdev)
 	return QDF_STATUS_SUCCESS;
 }
 
+#ifdef INTRA_BSS_FWD_OFFLOAD
+static
+void dp_vdev_set_intra_bss(struct dp_soc *soc, uint16_t vdev_id, bool enable)
+{
+	soc->cdp_soc.ol_ops->vdev_set_intra_bss(soc->ctrl_psoc, vdev_id,
+						enable);
+}
+#else
+static
+void dp_vdev_set_intra_bss(struct dp_soc *soc, uint16_t vdev_id, bool enable)
+{
+}
+#endif
+
 static QDF_STATUS dp_vdev_attach_be(struct dp_soc *soc, struct dp_vdev *vdev)
 {
 	struct dp_soc_be *be_soc = dp_get_be_soc_from_dp_soc(soc);
@@ -996,6 +1093,8 @@ static QDF_STATUS dp_vdev_attach_be(struct dp_soc *soc, struct dp_vdev *vdev)
 		else
 			hal_tx_vdev_mcast_ctrl_set(soc->hal_soc, vdev->vdev_id,
 						   HAL_TX_MCAST_CTRL_MEC_NOTIFY);
+	} else if (vdev->ap_bridge_enabled) {
+		dp_vdev_set_intra_bss(soc, vdev->vdev_id, true);
 	}
 
 	dp_mlo_mcast_init(soc, vdev);
@@ -1026,6 +1125,9 @@ static QDF_STATUS dp_peer_setup_be(struct dp_soc *soc, struct dp_peer *peer)
 {
 	struct dp_vdev_be *be_vdev;
 	QDF_STATUS qdf_status = QDF_STATUS_SUCCESS;
+	struct dp_soc_be *be_soc = dp_get_be_soc_from_dp_soc(soc);
+	struct cdp_ds_vp_params vp_params = {0};
+	struct cdp_soc_t *cdp_soc = &soc->cdp_soc;
 
 	be_vdev = dp_get_be_vdev_from_dp_vdev(peer->vdev);
 	if (!be_vdev) {
@@ -1034,10 +1136,28 @@ static QDF_STATUS dp_peer_setup_be(struct dp_soc *soc, struct dp_peer *peer)
 	}
 
 	/*
+	 * Extract the VP profile from the VAP
+	 */
+	if (!cdp_soc->ol_ops->get_ppeds_profile_info_for_vap) {
+		dp_err("%pK: Register get ppeds profile info first\n", cdp_soc);
+		return QDF_STATUS_E_NULL_VALUE;
+	}
+
+	/*
 	 * Check if PPE DS routing is enabled on the associated vap.
 	 */
-	if (be_vdev->ppe_vp_enabled == PPE_VP_USER_TYPE_DS)
-		qdf_status = dp_peer_setup_ppeds_be(soc, peer, be_vdev);
+	qdf_status = cdp_soc->ol_ops->get_ppeds_profile_info_for_vap(soc->ctrl_psoc,
+								     peer->vdev->vdev_id,
+								     &vp_params);
+	if (qdf_status == QDF_STATUS_E_NULL_VALUE) {
+		dp_err("%pK: Could not find ppeds profile info vdev\n", be_vdev);
+		return QDF_STATUS_E_NULL_VALUE;
+	}
+
+	if (vp_params.ppe_vp_type == PPE_VP_USER_TYPE_DS) {
+		qdf_status = dp_peer_setup_ppeds_be(soc, peer, be_vdev,
+						    (void *)&be_soc->ppe_vp_profile[vp_params.ppe_vp_profile_idx]);
+	}
 
 	return qdf_status;
 }
@@ -1665,11 +1785,10 @@ static QDF_STATUS dp_soc_ppeds_srng_init(struct dp_soc *soc)
 		goto fail;
 	}
 
-	wlan_minidump_remove(be_soc->ppeds_wbm_release_ring.base_vaddr_unaligned,
-			     be_soc->ppeds_wbm_release_ring.alloc_size,
-			     soc->ctrl_psoc,
-			     WLAN_MD_DP_SRNG_PPE_WBM2SW_RELEASE,
-			     "ppeds_wbm_release_ring");
+	wlan_minidump_log(be_soc->ppeds_wbm_release_ring.base_vaddr_unaligned,
+			  be_soc->ppeds_wbm_release_ring.alloc_size,
+			  soc->ctrl_psoc, WLAN_MD_DP_SRNG_PPE_WBM2SW_RELEASE,
+			  "ppeds_wbm_release_ring");
 
 	return QDF_STATUS_SUCCESS;
 fail:
@@ -1880,6 +1999,22 @@ static void dp_mlo_peer_find_hash_detach_wrapper(struct dp_soc *soc)
 }
 #endif
 
+#ifdef DP_MLO_LINK_STATS_SUPPORT
+static uint8_t
+dp_get_hw_link_id_be(struct dp_pdev *pdev)
+{
+	struct dp_pdev_be *be_pdev = dp_get_be_pdev_from_dp_pdev(pdev);
+
+	return ((be_pdev->mlo_link_id) + 1);
+}
+#else
+static uint8_t
+dp_get_hw_link_id_be(struct dp_pdev *pdev)
+{
+	return 0;
+}
+#endif
+
 static struct dp_peer *
 dp_mlo_peer_find_hash_find_be(struct dp_soc *soc,
 			      uint8_t *peer_mac_addr,
@@ -1918,6 +2053,7 @@ dp_mlo_peer_find_hash_find_be(struct dp_soc *soc,
 	} else {
 		vdev = NULL;
 	}
+
 	/* search mld peer table if no link peer for given mac address */
 	index = dp_mlo_peer_find_hash_index(mld_hash_obj, mac_addr);
 	qdf_spin_lock_bh(&mld_hash_obj->mld_peer_hash_lock);
@@ -1979,8 +2115,11 @@ dp_mlo_peer_find_hash_remove_be(struct dp_soc *soc, struct dp_peer *peer)
 	TAILQ_REMOVE(&mld_hash_obj->mld_peer_hash.bins[index], peer,
 		     hash_list_elem);
 
+	dp_info("Peer %pK (" QDF_MAC_ADDR_FMT ") removed. (found %u)",
+		peer, QDF_MAC_ADDR_REF(peer->mac_addr.raw), found);
 	dp_peer_unref_delete(peer, DP_MOD_ID_CONFIG);
 	qdf_spin_unlock_bh(&mld_hash_obj->mld_peer_hash_lock);
+
 }
 
 static void
@@ -2008,6 +2147,9 @@ dp_mlo_peer_find_hash_add_be(struct dp_soc *soc, struct dp_peer *peer)
 	TAILQ_INSERT_TAIL(&mld_hash_obj->mld_peer_hash.bins[index], peer,
 			  hash_list_elem);
 	qdf_spin_unlock_bh(&mld_hash_obj->mld_peer_hash_lock);
+
+	dp_info("Peer %pK (" QDF_MAC_ADDR_FMT ") added",
+		peer, QDF_MAC_ADDR_REF(peer->mac_addr.raw));
 }
 
 void dp_print_mlo_ast_stats_be(struct dp_soc *soc)
@@ -2095,6 +2237,32 @@ static void dp_mlo_mcast_reset_pri_mcast(struct dp_vdev_be *be_vdev,
 	be_ptnr_vdev->mcast_primary = false;
 }
 
+#if defined(CONFIG_MLO_SINGLE_DEV)
+static void dp_txrx_set_mlo_mcast_primary_vdev_param_be(
+					struct dp_vdev *vdev,
+					cdp_config_param_type val)
+{
+	struct dp_vdev_be *be_vdev = dp_get_be_vdev_from_dp_vdev(vdev);
+	struct dp_soc_be *be_soc = dp_get_be_soc_from_dp_soc(
+						be_vdev->vdev.pdev->soc);
+
+	be_vdev->mcast_primary = val.cdp_vdev_param_mcast_vdev;
+	vdev->mlo_vdev = true;
+
+	if (be_vdev->mcast_primary) {
+		struct cdp_txrx_peer_params_update params = {0};
+
+		params.chip_id = be_soc->mlo_chip_id;
+		params.pdev_id = be_vdev->vdev.pdev->pdev_id;
+		params.osif_vdev = be_vdev->vdev.osif_vdev;
+		dp_wdi_event_handler(
+				WDI_EVENT_MCAST_PRIMARY_UPDATE,
+				be_vdev->vdev.pdev->soc,
+				(void *)&params, CDP_INVALID_PEER,
+				WDI_NO_VAL, params.pdev_id);
+	}
+}
+#else
 static void dp_txrx_set_mlo_mcast_primary_vdev_param_be(
 					struct dp_vdev *vdev,
 					cdp_config_param_type val)
@@ -2110,12 +2278,24 @@ static void dp_txrx_set_mlo_mcast_primary_vdev_param_be(
 				   HAL_TX_MCAST_CTRL_NO_SPECIAL);
 
 	if (be_vdev->mcast_primary) {
+		struct cdp_txrx_peer_params_update params = {0};
+
 		dp_mcast_mlo_iter_ptnr_vdev(be_soc, be_vdev,
 					    dp_mlo_mcast_reset_pri_mcast,
 					    (void *)&be_vdev->mcast_primary,
 					    DP_MOD_ID_TX_MCAST);
+
+		params.chip_id = be_soc->mlo_chip_id;
+		params.pdev_id = vdev->pdev->pdev_id;
+		params.osif_vdev = vdev->osif_vdev;
+		dp_wdi_event_handler(
+				WDI_EVENT_MCAST_PRIMARY_UPDATE,
+				vdev->pdev->soc,
+				(void *)&params, CDP_INVALID_PEER,
+				WDI_NO_VAL, params.pdev_id);
 	}
 }
+#endif
 
 static void dp_txrx_reset_mlo_mcast_primary_vdev_param_be(
 					struct dp_vdev *vdev,
@@ -2368,6 +2548,7 @@ dp_initialize_arch_ops_be_mlo(struct dp_arch_ops *arch_ops)
 	arch_ops->mlo_peer_find_hash_add = dp_mlo_peer_find_hash_add_be;
 	arch_ops->mlo_peer_find_hash_remove = dp_mlo_peer_find_hash_remove_be;
 	arch_ops->mlo_peer_find_hash_find = dp_mlo_peer_find_hash_find_be;
+	arch_ops->get_hw_link_id = dp_get_hw_link_id_be;
 }
 #else /* WLAN_FEATURE_11BE_MLO */
 static inline void
@@ -2459,6 +2640,19 @@ static bool dp_reo_remap_config_be(struct dp_soc *soc,
 }
 #endif
 
+#ifdef CONFIG_MLO_SINGLE_DEV
+static inline
+void dp_initialize_arch_ops_be_single_dev(struct dp_arch_ops *arch_ops)
+{
+	arch_ops->dp_tx_mlo_mcast_send = dp_tx_mlo_mcast_send_be;
+}
+#else
+static inline
+void dp_initialize_arch_ops_be_single_dev(struct dp_arch_ops *arch_ops)
+{
+}
+#endif
+
 #ifdef IPA_OFFLOAD
 static int8_t dp_ipa_get_bank_id_be(struct dp_soc *soc)
 {
@@ -2467,9 +2661,21 @@ static int8_t dp_ipa_get_bank_id_be(struct dp_soc *soc)
 	return be_soc->ipa_bank_id;
 }
 
+#ifdef QCA_IPA_LL_TX_FLOW_CONTROL
+static void dp_ipa_get_wdi_version_be(uint8_t *wdi_ver)
+{
+	*wdi_ver = IPA_WDI_4;
+}
+#else
+static inline void dp_ipa_get_wdi_version_be(uint8_t *wdi_ver)
+{
+}
+#endif
+
 static inline void dp_initialize_arch_ops_be_ipa(struct dp_arch_ops *arch_ops)
 {
 	arch_ops->ipa_get_bank_id = dp_ipa_get_bank_id_be;
+	arch_ops->ipa_get_wdi_ver = dp_ipa_get_wdi_version_be;
 }
 #else /* !IPA_OFFLOAD */
 static inline void dp_initialize_arch_ops_be_ipa(struct dp_arch_ops *arch_ops)
@@ -2487,6 +2693,8 @@ void dp_initialize_arch_ops_be(struct dp_arch_ops *arch_ops)
 		dp_tx_comp_get_params_from_hal_desc_be;
 	arch_ops->dp_tx_process_htt_completion =
 				dp_tx_process_htt_completion_be;
+	arch_ops->dp_tx_desc_pool_alloc = dp_tx_desc_pool_alloc_be;
+	arch_ops->dp_tx_desc_pool_free = dp_tx_desc_pool_free_be;
 	arch_ops->dp_tx_desc_pool_init = dp_tx_desc_pool_init_be;
 	arch_ops->dp_tx_desc_pool_deinit = dp_tx_desc_pool_deinit_be;
 	arch_ops->dp_rx_desc_pool_init = dp_rx_desc_pool_init_be;
@@ -2495,6 +2703,8 @@ void dp_initialize_arch_ops_be(struct dp_arch_ops *arch_ops)
 				dp_wbm_get_rx_desc_from_hal_desc_be;
 	arch_ops->dp_tx_compute_hw_delay = dp_tx_compute_tx_delay_be;
 	arch_ops->dp_rx_chain_msdus = dp_rx_chain_msdus_be;
+	arch_ops->dp_rx_wbm_err_reap_desc = dp_rx_wbm_err_reap_desc_be;
+	arch_ops->dp_rx_null_q_desc_handle = dp_rx_null_q_desc_handle_be;
 #endif
 	arch_ops->txrx_get_context_size = dp_get_context_size_be;
 #ifdef WIFI_MONITOR_SUPPORT
@@ -2524,6 +2734,8 @@ void dp_initialize_arch_ops_be(struct dp_arch_ops *arch_ops)
 	arch_ops->dp_rxdma_ring_sel_cfg = dp_rxdma_ring_sel_cfg_be;
 	arch_ops->dp_rx_peer_metadata_peer_id_get =
 					dp_rx_peer_metadata_peer_id_get_be;
+	arch_ops->dp_rx_peer_mdata_link_id_get =
+					dp_rx_peer_mdata_link_id_get_be;
 	arch_ops->soc_cfg_attach = dp_soc_cfg_attach_be;
 	arch_ops->tx_implicit_rbm_set = dp_tx_implicit_rbm_set_be;
 	arch_ops->txrx_set_vdev_param = dp_txrx_set_vdev_param_be;
@@ -2556,11 +2768,223 @@ void dp_initialize_arch_ops_be(struct dp_arch_ops *arch_ops)
 	arch_ops->get_rx_hash_key = dp_get_rx_hash_key_be;
 	arch_ops->dp_set_rx_fst = dp_set_rx_fst_be;
 	arch_ops->dp_get_rx_fst = dp_get_rx_fst_be;
-	arch_ops->dp_rx_fst_deref = dp_rx_fst_deref_be;
-	arch_ops->dp_rx_fst_ref = dp_rx_fst_ref_be;
+	arch_ops->dp_rx_fst_deref = dp_rx_fst_release_ref_be;
+	arch_ops->dp_rx_fst_ref = dp_rx_fst_get_ref_be;
 	arch_ops->print_mlo_ast_stats = dp_print_mlo_ast_stats_be;
 	arch_ops->peer_get_reo_hash = dp_peer_get_reo_hash_be;
 	arch_ops->reo_remap_config = dp_reo_remap_config_be;
 	arch_ops->txrx_get_vdev_mcast_param = dp_txrx_get_vdev_mcast_param_be;
 	dp_initialize_arch_ops_be_ipa(arch_ops);
+	dp_initialize_arch_ops_be_single_dev(arch_ops);
 }
+
+#ifdef QCA_SUPPORT_PRIMARY_LINK_MIGRATE
+static void
+dp_primary_link_migration(struct dp_soc *soc, void *cb_ctxt,
+			  union hal_reo_status *reo_status)
+{
+	struct dp_soc_be *be_soc = dp_get_be_soc_from_dp_soc(soc);
+	struct dp_mlo_ctxt *dp_mlo = be_soc->ml_ctxt;
+	struct dp_soc *pr_soc = NULL;
+	struct dp_peer_info *pr_peer_info = (struct dp_peer_info *)cb_ctxt;
+	struct dp_peer *new_primary_peer = NULL;
+	struct dp_peer *mld_peer = NULL;
+	uint8_t primary_vdev_id;
+	struct cdp_txrx_peer_params_update params = {0};
+
+	pr_soc = dp_mlo_get_soc_ref_by_chip_id(dp_mlo, pr_peer_info->chip_id);
+	if (!pr_soc) {
+		dp_htt_err("Invalid soc");
+		qdf_mem_free(pr_peer_info);
+		return;
+	}
+
+	new_primary_peer = pr_soc->peer_id_to_obj_map[
+				pr_peer_info->primary_peer_id];
+
+	mld_peer = DP_GET_MLD_PEER_FROM_PEER(new_primary_peer);
+	if (!mld_peer) {
+		dp_htt_err("Invalid peer");
+		qdf_mem_free(pr_peer_info);
+		return;
+	}
+
+	new_primary_peer->primary_link = 1;
+
+	if (pr_soc && pr_soc->cdp_soc.ol_ops->update_primary_link)
+		pr_soc->cdp_soc.ol_ops->update_primary_link(pr_soc->ctrl_psoc,
+						new_primary_peer->mac_addr.raw);
+
+	primary_vdev_id = new_primary_peer->vdev->vdev_id;
+
+	dp_vdev_unref_delete(soc, mld_peer->vdev, DP_MOD_ID_CHILD);
+	mld_peer->vdev = dp_vdev_get_ref_by_id(pr_soc, primary_vdev_id,
+			 DP_MOD_ID_CHILD);
+	mld_peer->txrx_peer->vdev = mld_peer->vdev;
+
+	params.osif_vdev = (void *)new_primary_peer->vdev->osif_vdev;
+	params.peer_mac = mld_peer->mac_addr.raw;
+	params.chip_id = pr_peer_info->chip_id;
+	params.pdev_id = new_primary_peer->vdev->pdev->pdev_id;
+
+	if (new_primary_peer->vdev->opmode == wlan_op_mode_sta) {
+		dp_wdi_event_handler(
+				WDI_EVENT_STA_PRIMARY_UMAC_UPDATE,
+				pr_soc, (void *)&params,
+				new_primary_peer->peer_id,
+				WDI_NO_VAL, params.pdev_id);
+	} else {
+		dp_wdi_event_handler(
+				WDI_EVENT_PEER_PRIMARY_UMAC_UPDATE,
+				pr_soc, (void *)&params,
+				new_primary_peer->peer_id,
+				WDI_NO_VAL, params.pdev_id);
+	}
+	qdf_mem_free(pr_peer_info);
+}
+
+QDF_STATUS dp_htt_reo_migration(struct dp_soc *soc, uint16_t peer_id,
+				uint16_t ml_peer_id, uint16_t vdev_id,
+				uint8_t pdev_id, uint8_t chip_id)
+{
+	struct dp_soc_be *be_soc = dp_get_be_soc_from_dp_soc(soc);
+	struct dp_mlo_ctxt *dp_mlo = be_soc->ml_ctxt;
+	uint16_t mld_peer_id = dp_gen_ml_peer_id(soc, ml_peer_id);
+	struct dp_soc *pr_soc = NULL;
+	struct dp_soc *current_pr_soc = NULL;
+	struct hal_reo_cmd_params params;
+	struct dp_rx_tid *rx_tid;
+	struct dp_peer *pr_peer = NULL;
+	struct dp_peer *mld_peer = NULL;
+	struct dp_soc *mld_soc = NULL;
+	struct dp_peer *current_pr_peer = NULL;
+	struct dp_peer_info *peer_info;
+	struct dp_vdev_be *be_vdev;
+	struct cdp_ds_vp_params vp_params = {0};
+	struct cdp_soc_t *cdp_soc;
+	struct dp_soc_be *be_soc_mld = NULL;
+	struct dp_ppe_vp_profile *ppe_vp_profile;
+	QDF_STATUS qdf_status = QDF_STATUS_SUCCESS;
+	uint16_t src_info;
+	QDF_STATUS status;
+
+	if (!dp_mlo) {
+		dp_htt_err("Invalid dp_mlo ctxt");
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	pr_soc = dp_mlo_get_soc_ref_by_chip_id(dp_mlo, chip_id);
+	if (!pr_soc) {
+		dp_htt_err("Invalid soc");
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	pr_peer = pr_soc->peer_id_to_obj_map[peer_id];
+	if (!pr_peer || !(IS_MLO_DP_LINK_PEER(pr_peer))) {
+		dp_htt_err("Invalid peer");
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	mld_peer = DP_GET_MLD_PEER_FROM_PEER(pr_peer);
+
+	if (!mld_peer || (mld_peer->peer_id != mld_peer_id)) {
+		dp_htt_err("Invalid mld peer");
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	current_pr_peer = dp_get_primary_link_peer_by_id(
+						pr_soc,
+						mld_peer->peer_id,
+						DP_MOD_ID_HTT);
+	if (!current_pr_peer || (current_pr_peer == pr_peer)) {
+		dp_htt_err("Invalid peer");
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	be_vdev = dp_get_be_vdev_from_dp_vdev(pr_peer->vdev);
+	if (!be_vdev) {
+		dp_htt_err("Invalid be vdev");
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	mld_soc = mld_peer->vdev->pdev->soc;
+	cdp_soc = &mld_soc->cdp_soc;
+	/*
+	 * Extract the VP profile from the VAP
+	 */
+	if (!cdp_soc->ol_ops->get_ppeds_profile_info_for_vap) {
+		dp_err("%pK: Register get ppeds profile info first\n", cdp_soc);
+		return QDF_STATUS_E_NULL_VALUE;
+	}
+
+	/*
+	 * Check if PPE DS routing is enabled on the associated vap.
+	 */
+	qdf_status = cdp_soc->ol_ops->get_ppeds_profile_info_for_vap(
+							mld_soc->ctrl_psoc,
+							pr_peer->vdev->vdev_id,
+							&vp_params);
+	if (qdf_status == QDF_STATUS_E_NULL_VALUE) {
+		dp_err("%pK: Could not find ppeds profile info \n", be_vdev);
+		return QDF_STATUS_E_NULL_VALUE;
+	}
+	/* Check if PPE DS routing is enabled on
+	 * the associated vap.
+	 */
+	if (vp_params.ppe_vp_type != PPE_VP_USER_TYPE_DS)
+		return qdf_status;
+
+	be_soc_mld = dp_get_be_soc_from_dp_soc(mld_soc);
+	ppe_vp_profile = &be_soc_mld->ppe_vp_profile[
+				vp_params.ppe_vp_profile_idx];
+	src_info = ppe_vp_profile->vp_num;
+
+	current_pr_soc = current_pr_peer->vdev->pdev->soc;
+	/* Making existing primary peer as non primary */
+	current_pr_peer->primary_link = 0;
+	dp_peer_unref_delete(current_pr_peer, DP_MOD_ID_HTT);
+
+	dp_peer_rx_reo_shared_qaddr_delete(current_pr_soc, mld_peer);
+
+	peer_info = qdf_mem_malloc(sizeof(struct dp_peer_info));
+	if (!peer_info) {
+		dp_htt_err("Malloc failed");
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	peer_info->primary_peer_id = peer_id;
+	peer_info->chip_id = chip_id;
+
+	qdf_mem_zero(&params, sizeof(params));
+
+	rx_tid = &mld_peer->rx_tid[0];
+	params.std.need_status = 1;
+	params.std.addr_lo = rx_tid->hw_qdesc_paddr & 0xffffffff;
+	params.std.addr_hi = (uint64_t)(rx_tid->hw_qdesc_paddr) >> 32;
+	params.u.fl_cache_params.flush_no_inval = 0;
+	params.u.fl_cache_params.flush_entire_cache = 1;
+	status = dp_reo_send_cmd(current_pr_soc, CMD_FLUSH_CACHE, &params,
+				 dp_primary_link_migration,
+				 (void *)peer_info);
+
+	if (status != QDF_STATUS_SUCCESS) {
+		dp_htt_err("Reo flush failed");
+		qdf_mem_free(peer_info);
+		dp_h2t_ptqm_migration_msg_send(pr_soc, vdev_id, pdev_id,
+					       chip_id, peer_id, ml_peer_id,
+					       src_info, QDF_STATUS_E_FAILURE);
+	}
+
+	qdf_mem_zero(&params, sizeof(params));
+	params.std.need_status = 0;
+	params.std.addr_lo = rx_tid->hw_qdesc_paddr & 0xffffffff;
+	params.std.addr_hi = (uint64_t)(rx_tid->hw_qdesc_paddr) >> 32;
+	params.u.unblk_cache_params.type = UNBLOCK_CACHE;
+	dp_reo_send_cmd(current_pr_soc, CMD_UNBLOCK_CACHE, &params, NULL, NULL);
+
+	dp_h2t_ptqm_migration_msg_send(pr_soc, vdev_id, pdev_id,
+				       chip_id, peer_id, ml_peer_id,
+				       src_info, QDF_STATUS_SUCCESS);
+	return QDF_STATUS_SUCCESS;
+}
+#endif

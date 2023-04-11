@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2013-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -375,6 +375,49 @@ QDF_STATUS ce_completed_send_next(struct CE_handle *copyeng,
 				  unsigned int *hw_idx,
 				  uint32_t *toeplitz_hash_result);
 
+#ifdef CUSTOM_CB_SCHEDULER_SUPPORT
+/*==================CE custom callbacks=================================*/
+
+/**
+ * ce_register_custom_cb() - Helper API to register the custom callback
+ * @copyeng: Pointer to CE handle
+ * @custom_cb: Custom call back function pointer
+ * @custom_cb_context: Custom callback context
+ *
+ * return: void
+ */
+void
+ce_register_custom_cb(struct CE_handle *copyeng, void (*custom_cb)(void *),
+		      void *custom_cb_context);
+
+/**
+ * ce_unregister_custom_cb() - Helper API to unregister the custom callback
+ * @copyeng: Pointer to CE handle
+ *
+ * return: void
+ */
+void
+ce_unregister_custom_cb(struct CE_handle *copyeng);
+
+/**
+ * ce_enable_custom_cb() - Helper API to enable the custom callback
+ * @copyeng: Pointer to CE handle
+ *
+ * return: void
+ */
+void
+ce_enable_custom_cb(struct CE_handle *copyeng);
+
+/**
+ * ce_disable_custom_cb() - Helper API to disable the custom callback
+ * @copyeng: Pointer to CE handle
+ *
+ * return: void
+ */
+void
+ce_disable_custom_cb(struct CE_handle *copyeng);
+#endif /* CUSTOM_CB_SCHEDULER_SUPPORT */
+
 /*==================CE Engine Initialization=================================*/
 
 /* Initialize an instance of a CE */
@@ -425,6 +468,9 @@ bool ce_get_rx_pending(struct hif_softc *scn);
 
 /**
  * war_ce_src_ring_write_idx_set() - Set write index for CE source ring
+ * @scn: HIF context
+ * @ctrl_addr: address
+ * @write_index: write index
  *
  * Return: None
  */

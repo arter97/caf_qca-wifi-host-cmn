@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2015-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -40,7 +40,8 @@
  * struct tasklet_work
  *
  * @id: ce_id
- * @work: work
+ * @data: data
+ * @reg_work: work
  */
 struct tasklet_work {
 	enum ce_id_type id;
@@ -109,8 +110,9 @@ static void init_tasklet_work(struct work_struct *work,
 }
 
 /**
- * init_tasklet_workers() - init_tasklet_workers
+ * init_tasklet_worker_by_ceid() - init_tasklet_workers
  * @scn: HIF Context
+ * @ce_id: copy engine ID
  *
  * Return: N/A
  */
@@ -236,10 +238,8 @@ hif_ce_latency_stats(struct hif_softc *hif_ctx)
 /**
  * ce_tasklet_update_bucket() - update ce execution and scehduled time latency
  *                              in corresponding time buckets
- * @stats: struct ce_stats
+ * @hif_ce_state: HIF CE state
  * @ce_id: ce_id_type
- * @entry_us: timestamp when tasklet is started to execute
- * @exit_us: timestamp when tasklet is completed execution
  *
  * Return: N/A
  */
@@ -400,6 +400,46 @@ void hif_latency_detect_tasklet_exec(
 {}
 #endif
 
+#ifdef CUSTOM_CB_SCHEDULER_SUPPORT
+/**
+ * ce_get_custom_cb_pending() - Helper API to check whether the custom
+ * callback is pending
+ * @CE_state: Pointer to CE state
+ *
+ * return: bool
+ */
+static bool
+ce_get_custom_cb_pending(struct CE_state *CE_state)
+{
+	return (qdf_atomic_dec_if_positive(&CE_state->custom_cb_pending) >= 0);
+}
+
+/**
+ * ce_execute_custom_cb() - Helper API to execute custom callback
+ * @CE_state: Pointer to CE state
+ *
+ * return: void
+ */
+static void
+ce_execute_custom_cb(struct CE_state *CE_state)
+{
+	while (ce_get_custom_cb_pending(CE_state) && CE_state->custom_cb &&
+	       CE_state->custom_cb_context)
+		CE_state->custom_cb(CE_state->custom_cb_context);
+}
+#else
+/**
+ * ce_execute_custom_cb() - Helper API to execute custom callback
+ * @CE_state: Pointer to CE state
+ *
+ * return: void
+ */
+static void
+ce_execute_custom_cb(struct CE_state *CE_state)
+{
+}
+#endif /* CUSTOM_CB_SCHEDULER_SUPPORT */
+
 /**
  * ce_tasklet() - ce_tasklet
  * @data: data
@@ -427,6 +467,8 @@ static void ce_tasklet(unsigned long data)
 			tasklet_entry->ce_id);
 		QDF_BUG(0);
 	}
+
+	ce_execute_custom_cb(CE_state);
 
 	ce_per_engine_service(scn, tasklet_entry->ce_id);
 
@@ -506,7 +548,7 @@ void ce_tasklet_init(struct HIF_CE_state *hif_ce_state, uint32_t mask)
 }
 /**
  * ce_tasklet_kill() - ce_tasklet_kill
- * @hif_ce_state: hif_ce_state
+ * @scn: HIF context
  *
  * Context: Non-Atomic context
  * Return: N/A
@@ -656,7 +698,7 @@ hif_ce_increment_interrupt_count(struct HIF_CE_state *hif_ce_state, int ce_id)
 
 /**
  * hif_display_ce_stats() - display ce stats
- * @hif_ce_state: ce state
+ * @hif_ctx: HIF context
  *
  * Return: none
  */
@@ -933,11 +975,6 @@ irqreturn_t ce_dispatch_interrupt(int ce_id,
 	return IRQ_HANDLED;
 }
 
-/**
- * const char *ce_name
- *
- * @ce_name: ce_name
- */
 const char *ce_name[CE_COUNT_MAX] = {
 	"WLAN_CE_0",
 	"WLAN_CE_1",

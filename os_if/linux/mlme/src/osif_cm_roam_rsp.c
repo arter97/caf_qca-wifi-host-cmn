@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2012-2015,2020-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -34,6 +34,7 @@
 #include "wlan_mlme_ucfg_api.h"
 #endif
 #include "wlan_crypto_global_api.h"
+#include <osif_cm_req.h>
 
 #ifdef CONN_MGR_ADV_FEATURE
 #ifdef WLAN_FEATURE_FILS_SK
@@ -52,17 +53,6 @@ static inline void osif_update_fils_hlp_data(struct net_device *dev,
 }
 #endif
 
-/**
- * osif_roamed_ind() - send roamed indication to cfg80211
- * @dev: network device
- * @bss: cfg80211 roamed bss pointer
- * @req_ie: IEs used in reassociation request
- * @req_ie_len: Length of the @req_ie
- * @resp_ie: IEs received in successful reassociation response
- * @resp_ie_len: Length of @resp_ie
- *
- * Return: none
- */
 #if defined CFG80211_ROAMED_API_UNIFIED || \
 	(LINUX_VERSION_CODE >= KERNEL_VERSION(4, 12, 0))
 #ifdef CFG80211_SINGLE_NETDEV_MULTI_LINK_SUPPORT
@@ -196,6 +186,19 @@ static void osif_fill_mlo_roam_params(struct wlan_objmgr_vdev *vdev,
 				      struct cfg80211_roam_info *info)
 {}
 #endif
+/**
+ * osif_roamed_ind() - send roamed indication to cfg80211
+ * @dev: network device
+ * @vdev: vdev object
+ * @rsp: CM connect response
+ * @bss: cfg80211 roamed bss pointer
+ * @req_ie: IEs used in reassociation request
+ * @req_ie_len: Length of the @req_ie
+ * @resp_ie: IEs received in successful reassociation response
+ * @resp_ie_len: Length of @resp_ie
+ *
+ * Return: none
+ */
 static void osif_roamed_ind(struct net_device *dev,
 			    struct wlan_objmgr_vdev *vdev,
 			    struct wlan_cm_connect_resp *rsp,
@@ -232,7 +235,7 @@ static inline void osif_roamed_ind(struct net_device *dev,
 #ifdef WLAN_FEATURE_ROAM_OFFLOAD
 #ifdef WLAN_FEATURE_FILS_SK
 /**
- * wlan_hdd_add_fils_params_roam_auth_event() - Adds FILS params in roam auth
+ * osif_add_fils_params_roam_auth_event() - Adds FILS params in roam auth
  * @skb: SK buffer
  * @roam_info: Roam info
  *
@@ -334,6 +337,7 @@ static uint8_t *osif_get_bss_mac_addr(struct wlan_objmgr_vdev *vdev)
  * links event response to kernel
  * @skb : sk buffer pointer
  * @vdev: vdev pointer
+ * @osif_priv: osif vdev private data
  * @rsp: Connection manager response
  *
  * This is called when wlan driver needs to send the mlo links roaming
@@ -443,6 +447,10 @@ osif_send_roam_auth_mlo_links_event(struct sk_buff *skb,
  * @vdev: vdev pointer
  * @osif_priv: OS private structure of vdev
  * @rsp: Connection manager response
+ * @req_ie: request IE
+ * @req_ie_len: request IE length
+ * @resp_ie: response IE
+ * @resp_ie_len: response IE length
  *
  * This is called when wlan driver needs to send the roaming and
  * authorization information after roaming.
@@ -687,6 +695,7 @@ void osif_indicate_reassoc_results(struct wlan_objmgr_vdev *vdev,
 	struct cfg80211_bss *bss;
 	struct ieee80211_channel *chan;
 	struct wlan_objmgr_psoc *psoc;
+	QDF_STATUS status;
 
 	if (wlan_vdev_mlme_is_mlo_vdev(vdev) &&
 	    wlan_vdev_mlme_is_mlo_link_vdev(vdev))
@@ -699,13 +708,17 @@ void osif_indicate_reassoc_results(struct wlan_objmgr_vdev *vdev,
 	if (!psoc)
 		return;
 
-	chan = ieee80211_get_channel(osif_priv->wdev->wiphy,
-				     rsp->freq);
+	chan = ieee80211_get_channel(osif_priv->wdev->wiphy, rsp->freq);
+
 	bss = wlan_cfg80211_get_bss(osif_priv->wdev->wiphy, chan,
 				    rsp->bssid.bytes, rsp->ssid.ssid,
 				    rsp->ssid.length);
-	if (!bss)
-		osif_warn("not able to find bss");
+	if (!bss) {
+		osif_warn("BSS "QDF_MAC_ADDR_FMT" is null, issue disconnect",
+			  QDF_MAC_ADDR_REF(rsp->bssid.bytes));
+		goto issue_disconnect;
+	}
+
 	if (rsp->is_assoc)
 		osif_cm_get_assoc_req_ie_data(&rsp->connect_ies.assoc_req,
 					      &req_len, &req_ie);
@@ -719,6 +732,12 @@ void osif_indicate_reassoc_results(struct wlan_objmgr_vdev *vdev,
 				  rsp_len);
 
 	osif_update_fils_hlp_data(dev, vdev, rsp);
+	return;
+
+issue_disconnect:
+	status = osif_cm_disconnect(dev, vdev, REASON_UNSPEC_FAILURE);
+	if (QDF_IS_STATUS_ERROR(status))
+		osif_err("Disconnect failed with status %d", status);
 }
 
 QDF_STATUS

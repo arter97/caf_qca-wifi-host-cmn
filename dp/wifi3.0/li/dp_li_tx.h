@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -26,10 +26,9 @@
  * @soc: DP Soc Handle
  * @vdev: DP vdev handle
  * @tx_desc: Tx Descriptor Handle
- * @tid: TID from HLOS for overriding default DSCP-TID mapping
  * @fw_metadata: Metadata to send to Target Firmware along with frame
- * @ring_id: Ring ID of H/W ring to which we enqueue the packet
  * @tx_exc_metadata: Handle that holds exception path meta data
+ * @msdu_info: MSDU information
  *
  *  Gets the next free TCL HW DMA descriptor and sets up required parameters
  *  from software Tx descriptor
@@ -58,7 +57,7 @@ void dp_tx_comp_get_params_from_hal_desc_li(struct dp_soc *soc,
  * dp_tx_process_htt_completion_li() - Tx HTT Completion Indication Handler
  * @soc: Handle to DP soc structure
  * @tx_desc: software descriptor head pointer
- * @status : Tx completion status from HTT descriptor
+ * @status: Tx completion status from HTT descriptor
  * @ring_id: ring number
  *
  * This function will process HTT Tx indication messages from Target
@@ -107,4 +106,24 @@ QDF_STATUS dp_tx_compute_tx_delay_li(struct dp_soc *soc,
 				     struct dp_vdev *vdev,
 				     struct hal_tx_completion_status *ts,
 				     uint32_t *delay_us);
+
+/**
+ * dp_tx_desc_pool_alloc_li() - Allocate TX descriptor pool
+ * @soc: Handle to DP Soc structure
+ * @num_elem: Number of elements to allocate
+ * @pool_id: TCL descriptor pool ID
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS dp_tx_desc_pool_alloc_li(struct dp_soc *soc, uint32_t num_elem,
+				    uint8_t pool_id);
+
+/**
+ * dp_tx_desc_pool_free_li() - Free TX descriptor pool
+ * @soc: Handle to DP Soc structure
+ * @pool_id: TCL descriptor pool ID
+ *
+ * Return: none
+ */
+void dp_tx_desc_pool_free_li(struct dp_soc *soc, uint8_t pool_id);
 #endif

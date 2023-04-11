@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2015-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -63,6 +63,7 @@ void hif_dump(struct hif_opaque_softc *hif_ctx, uint8_t cmd_id, bool start)
 
 /**
  * hif_get_target_id(): hif_get_target_id
+ * @scn: scn
  *
  * Return the virtual memory base address to the caller
  *
@@ -77,7 +78,7 @@ A_target_id_t hif_get_target_id(struct hif_softc *scn)
 
 /**
  * hif_get_targetdef(): hif_get_targetdef
- * @scn: scn
+ * @hif_ctx: hif context
  *
  * Return: void *
  */
@@ -110,6 +111,7 @@ void hif_shutdown_notifier_cb(void *hif_ctx)
 
 /**
  * hif_vote_link_down(): unvote for link up
+ * @hif_ctx: hif context
  *
  * Call hif_vote_link_down to release a previous request made using
  * hif_vote_link_up. A hif_vote_link_down call should only be made
@@ -139,6 +141,7 @@ void hif_vote_link_down(struct hif_opaque_softc *hif_ctx)
 
 /**
  * hif_vote_link_up(): vote to prevent bus from suspending
+ * @hif_ctx: hif context
  *
  * Makes hif guarantee that fw can message the host normally
  * during suspend.
@@ -161,6 +164,7 @@ void hif_vote_link_up(struct hif_opaque_softc *hif_ctx)
 
 /**
  * hif_can_suspend_link(): query if hif is permitted to suspend the link
+ * @hif_ctx: hif context
  *
  * Hif will ensure that the link won't be suspended if the upperlayers
  * don't want it to.
@@ -363,6 +367,12 @@ static const struct qwlan_hw qwlan_hw_list[] = {
 		.name = "MANGO_V1",
 	},
 	{
+		.id = PEACH_V1,
+		.subid = 0,
+		.name = "PEACH_V1",
+	},
+
+	{
 		.id = KIWI_V1,
 		.subid = 0,
 		.name = "KIWI_V1",
@@ -376,6 +386,11 @@ static const struct qwlan_hw qwlan_hw_list[] = {
 		.id = WCN6750_V1,
 		.subid = 0,
 		.name = "WCN6750_V1",
+	},
+	{
+		.id = WCN6450_V1,
+		.subid = 0,
+		.name = "WCN6450_V1",
 	},
 	{
 		.id = QCA6490_v2_1,
@@ -485,6 +500,7 @@ static const char *hif_get_hw_name(struct hif_target_info *info)
  * @scn: scn
  * @version: version
  * @revision: revision
+ * @target_name: target name
  *
  * Return: n/a
  */
@@ -504,11 +520,9 @@ void hif_get_hw_info(struct hif_opaque_softc *scn, u32 *version, u32 *revision,
 
 /**
  * hif_get_dev_ba(): API to get device base address.
- * @scn: scn
- * @version: version
- * @revision: revision
+ * @hif_handle: hif handle
  *
- * Return: n/a
+ * Return: device base address
  */
 void *hif_get_dev_ba(struct hif_opaque_softc *hif_handle)
 {
@@ -520,7 +534,7 @@ qdf_export_symbol(hif_get_dev_ba);
 
 /**
  * hif_get_dev_ba_ce(): API to get device ce base address.
- * @scn: scn
+ * @hif_handle: hif handle
  *
  * Return: dev mem base address for CE
  */
@@ -533,6 +547,22 @@ void *hif_get_dev_ba_ce(struct hif_opaque_softc *hif_handle)
 
 qdf_export_symbol(hif_get_dev_ba_ce);
 
+/**
+ * hif_get_dev_ba_pmm(): API to get device pmm base address.
+ * @hif_handle: scn
+ *
+ * Return: dev mem base address for PMM
+ */
+
+void *hif_get_dev_ba_pmm(struct hif_opaque_softc *hif_handle)
+{
+	struct hif_softc *scn = (struct hif_softc *)hif_handle;
+
+	return scn->mem_pmm_base;
+}
+
+qdf_export_symbol(hif_get_dev_ba_pmm);
+
 uint32_t hif_get_soc_version(struct hif_opaque_softc *hif_handle)
 {
 	struct hif_softc *scn = (struct hif_softc *)hif_handle;
@@ -544,7 +574,7 @@ qdf_export_symbol(hif_get_soc_version);
 
 /**
  * hif_get_dev_ba_cmem(): API to get device ce base address.
- * @scn: scn
+ * @hif_handle: hif handle
  *
  * Return: dev mem base address for CMEM
  */
@@ -738,6 +768,7 @@ QDF_STATUS hif_unregister_recovery_notifier(struct hif_softc *hif_handle)
 #ifdef HIF_CPU_PERF_AFFINE_MASK
 /**
  * __hif_cpu_hotplug_notify() - CPU hotplug event handler
+ * @context: HIF context
  * @cpu: CPU Id of the CPU generating the event
  * @cpu_up: true if the CPU is online
  *
@@ -764,6 +795,7 @@ static void __hif_cpu_hotplug_notify(void *context,
 /**
  * hif_cpu_hotplug_notify - cpu core up/down notification
  * handler
+ * @context: HIF context
  * @cpu: CPU generating the event
  * @cpu_up: true if the CPU is online
  *
@@ -1137,7 +1169,7 @@ void hif_uninit_rri_on_ddr(struct hif_softc *scn)
 {
 	if (scn->vaddr_rri_on_ddr)
 		qdf_mem_free_consistent(scn->qdf_dev, scn->qdf_dev->dev,
-					(CE_COUNT * sizeof(uint32_t)),
+					RRI_ON_DDR_MEM_SIZE,
 					scn->vaddr_rri_on_ddr,
 					scn->paddr_rri_on_ddr, 0);
 	scn->vaddr_rri_on_ddr = NULL;
@@ -1241,6 +1273,19 @@ QDF_STATUS hif_try_complete_tasks(struct hif_softc *scn)
 	return QDF_STATUS_SUCCESS;
 }
 
+#ifdef HIF_HAL_REG_ACCESS_SUPPORT
+void hif_reg_window_write(struct hif_softc *scn, uint32_t offset,
+			  uint32_t value)
+{
+	hal_write32_mb(scn->hal_soc, offset, value);
+}
+
+uint32_t hif_reg_window_read(struct hif_softc *scn, uint32_t offset)
+{
+	return hal_read32_mb(scn->hal_soc, offset);
+}
+#endif
+
 #if defined(HIF_IPCI) && defined(FEATURE_HAL_DELAYED_REG_WRITE)
 QDF_STATUS hif_try_prevent_ep_vote_access(struct hif_opaque_softc *hif_ctx)
 {
@@ -1331,7 +1376,25 @@ uint8_t hif_get_ep_vote_access(struct hif_opaque_softc *hif_ctx,
 }
 #endif
 
-#if (defined(QCA_WIFI_QCA8074) || defined(QCA_WIFI_QCA6018) || \
+#if defined(QCA_WIFI_WCN6450)
+static QDF_STATUS hif_hal_attach(struct hif_softc *scn)
+{
+	scn->hal_soc = hal_attach(hif_softc_to_hif_opaque_softc(scn),
+				  scn->qdf_dev);
+	if (!scn->hal_soc)
+		return QDF_STATUS_E_FAILURE;
+
+	return QDF_STATUS_SUCCESS;
+}
+
+static QDF_STATUS hif_hal_detach(struct hif_softc *scn)
+{
+	hal_detach(scn->hal_soc);
+	scn->hal_soc = NULL;
+
+	return QDF_STATUS_SUCCESS;
+}
+#elif (defined(QCA_WIFI_QCA8074) || defined(QCA_WIFI_QCA6018) || \
 	defined(QCA_WIFI_QCA6290) || defined(QCA_WIFI_QCA6390) || \
 	defined(QCA_WIFI_QCN9000) || defined(QCA_WIFI_QCA6490) || \
 	defined(QCA_WIFI_QCA6750) || defined(QCA_WIFI_QCA5018) || \
@@ -1586,7 +1649,6 @@ void hif_crash_shutdown(struct hif_opaque_softc *hif_ctx)
 /**
  * hif_check_fw_reg(): hif_check_fw_reg
  * @scn: scn
- * @state:
  *
  * Return: int
  */
@@ -1763,6 +1825,12 @@ int hif_get_device_type(uint32_t device_id,
 		hif_info(" *********** MANGO *************");
 		break;
 
+	case PEACH_DEVICE_ID:
+		*hif_type = HIF_TYPE_PEACH;
+		*target_type = TARGET_TYPE_PEACH;
+		hif_info(" *********** PEACH *************");
+		break;
+
 	case QCA8074V2_DEVICE_ID:
 		*hif_type = HIF_TYPE_QCA8074V2;
 		*target_type = TARGET_TYPE_QCA8074V2;
@@ -1799,6 +1867,12 @@ int hif_get_device_type(uint32_t device_id,
 		hif_info(" *********** QCA9574 *************");
 		break;
 
+	case WCN6450_DEVICE_ID:
+		*hif_type = HIF_TYPE_WCN6450;
+		*target_type = TARGET_TYPE_WCN6450;
+		hif_info(" *********** WCN6450 *************");
+		break;
+
 	default:
 		hif_err("Unsupported device ID = 0x%x!", device_id);
 		ret = -ENODEV;
@@ -1815,6 +1889,7 @@ end:
 
 /**
  * hif_get_bus_type() - return the bus type
+ * @hif_hdl: HIF Context
  *
  * Return: enum qdf_bus_type
  */
@@ -1825,7 +1900,7 @@ enum qdf_bus_type hif_get_bus_type(struct hif_opaque_softc *hif_hdl)
 	return scn->bus_type;
 }
 
-/**
+/*
  * Target info and ini parameters are global to the driver
  * Hence these structures are exposed to all the modules in
  * the driver and they don't need to maintains multiple copies
@@ -2167,9 +2242,10 @@ void hif_mem_free_consistent_unaligned(struct hif_softc *scn,
  * hif_batch_send() - API to access hif specific function
  * ce_batch_send.
  * @osc: HIF Context
- * @msdu : list of msdus to be sent
- * @transfer_id : transfer id
- * @len : downloaded length
+ * @msdu: list of msdus to be sent
+ * @transfer_id: transfer id
+ * @len: downloaded length
+ * @sendhead:
  *
  * Return: list of msds not sent
  */
@@ -2190,7 +2266,7 @@ qdf_export_symbol(hif_batch_send);
  * hif_update_tx_ring() - API to access hif specific function
  * ce_update_tx_ring.
  * @osc: HIF Context
- * @num_htt_cmpls : number of htt compl received.
+ * @num_htt_cmpls: number of htt compl received.
  *
  * Return: void
  */

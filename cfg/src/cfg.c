@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2018-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -445,7 +445,7 @@ cfg_store_alloc(const char *path, struct cfg_value_store **out_store)
 
 	cfg_enter();
 
-	store = qdf_mem_malloc(sizeof(*store));
+	store = qdf_mem_common_alloc(sizeof(*store));
 	if (!store)
 		return QDF_STATUS_E_NOMEM;
 
@@ -472,7 +472,7 @@ free_path:
 	qdf_mem_free(store->path);
 
 free_store:
-	qdf_mem_free(store);
+	qdf_mem_common_free(store);
 
 	return status;
 }
@@ -491,7 +491,7 @@ static void cfg_store_free(struct cfg_value_store *store)
 				status);
 
 	qdf_mem_free(store->path);
-	qdf_mem_free(store);
+	qdf_mem_common_free(store);
 }
 
 static QDF_STATUS
@@ -895,6 +895,13 @@ free_store:
 	cfg_store_free(store);
 
 	return status;
+}
+
+bool cfg_valid_ini_check(const char *path)
+{
+	cfg_enter();
+
+	return qdf_valid_ini_check(path);
 }
 
 void cfg_release(void)

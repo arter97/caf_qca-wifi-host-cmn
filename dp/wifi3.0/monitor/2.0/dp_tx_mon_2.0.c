@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -31,6 +31,9 @@
 #include <dp_mon_filter_2.0.h>
 #ifdef FEATURE_PERPKT_INFO
 #include "dp_ratetable.h"
+#endif
+#ifdef QCA_SUPPORT_LITE_MONITOR
+#include "dp_lite_mon.h"
 #endif
 
 #define MAX_TX_MONITOR_STUCK 50
@@ -356,7 +359,6 @@ void dp_tx_mon_buf_desc_pool_free(struct dp_soc *soc)
 QDF_STATUS
 dp_tx_mon_buf_desc_pool_alloc(struct dp_soc *soc)
 {
-	struct dp_srng *mon_buf_ring;
 	struct dp_mon_desc_pool *tx_mon_desc_pool;
 	int entries;
 	struct wlan_cfg_dp_soc_ctxt *soc_cfg_ctx;
@@ -368,7 +370,6 @@ dp_tx_mon_buf_desc_pool_alloc(struct dp_soc *soc)
 
 	entries = wlan_cfg_get_dp_soc_tx_mon_buf_ring_size(soc_cfg_ctx);
 
-	mon_buf_ring = &mon_soc_be->tx_mon_buf_ring;
 
 	tx_mon_desc_pool = &mon_soc_be->tx_desc_mon;
 
@@ -592,6 +593,25 @@ void dp_print_pdev_tx_monitor_stats_2_0(struct dp_pdev *pdev)
 	DP_PRINT_STATS("\t\ttlv drop : %llu", stats.tlv_drop_cnt);
 }
 
+#ifdef QCA_SUPPORT_LITE_MONITOR
+static void dp_lite_mon_free_tx_peers(struct dp_pdev *pdev)
+{
+	struct dp_mon_pdev *mon_pdev = pdev->monitor_pdev;
+	struct dp_mon_pdev_be *mon_pdev_be =
+			dp_get_be_mon_pdev_from_dp_mon_pdev(mon_pdev);
+	struct dp_lite_mon_tx_config *lite_mon_tx_config;
+
+	lite_mon_tx_config = mon_pdev_be->lite_mon_tx_config;
+	qdf_spin_lock_bh(&lite_mon_tx_config->lite_mon_tx_lock);
+	dp_lite_mon_free_peers(pdev, &lite_mon_tx_config->tx_config);
+	qdf_spin_unlock_bh(&lite_mon_tx_config->lite_mon_tx_lock);
+}
+#else
+static void dp_lite_mon_free_tx_peers(struct dp_pdev *pdev)
+{
+}
+#endif
+
 /*
  * dp_config_enh_tx_monitor_2_0()- API to enable/disable enhanced tx capture
  * @pdev_handle: DP_PDEV handle
@@ -619,6 +639,8 @@ dp_config_enh_tx_monitor_2_0(struct dp_pdev *pdev, uint8_t val)
 		tx_mon_be->mode = TX_MON_BE_DISABLE;
 		mon_pdev_be->tx_mon_mode = 0;
 		mon_pdev_be->tx_mon_filter_length = DMA_LENGTH_64B;
+		/* Free any peers that were added for tx peer filtering */
+		dp_lite_mon_free_tx_peers(pdev);
 		break;
 	}
 	case TX_MON_BE_FULL_CAPTURE:
@@ -854,7 +876,8 @@ dp_tx_lite_mon_filtering(struct dp_pdev *pdev,
 		mon_pdev_be->lite_mon_tx_config;
 	QDF_STATUS ret;
 
-	if (!dp_lite_mon_is_tx_enabled(mon_pdev))
+	if (!dp_lite_mon_is_tx_enabled(mon_pdev) &&
+	    !config->tx_config.peer_count)
 		return QDF_STATUS_SUCCESS;
 
 	/* PPDU level filtering */
@@ -943,7 +966,7 @@ dp_tx_mon_send_to_stack(struct dp_pdev *pdev, qdf_nbuf_t mpdu,
  * dp_tx_mon_send_per_usr_mpdu() - API to send per usr mpdu to stack
  * @pdev: pdev Handle
  * @ppdu_info: pointer to dp_tx_ppdu_info
- * @user_id: current user index
+ * @user_idx: current user index
  *
  * Return: void
  */
@@ -1107,6 +1130,12 @@ dp_tx_mon_update_radiotap(struct dp_pdev *pdev,
 	    dp_populate_tsft_from_phy_timestamp(pdev, ppdu_info))
 		return;
 
+	/* update mlo timestamp */
+	TXMON_PPDU_COM(ppdu_info, tsft) =
+			(TXMON_PPDU_COM(ppdu_info, tsft) +
+			 pdev->timestamp.mlo_offset_lo_us +
+			 ((uint64_t)pdev->timestamp.mlo_offset_hi_us << 32));
+
 	for (usr_idx = 0; usr_idx < num_users; usr_idx++) {
 		qdf_nbuf_queue_t *mpdu_q = NULL;
 
@@ -1147,7 +1176,7 @@ dp_tx_mon_update_radiotap(struct dp_pdev *pdev,
  *
  * Return: none
  */
-void dp_tx_mon_ppdu_process(void *context)
+static void dp_tx_mon_ppdu_process(void *context)
 {
 	struct dp_pdev *pdev = (struct dp_pdev *)context;
 	struct dp_mon_pdev *mon_pdev;
@@ -1201,12 +1230,6 @@ void dp_tx_mon_ppdu_process(void *context)
 	}
 }
 
-/**
- * dp_tx_ppdu_stats_attach_2_0 - Initialize Tx PPDU stats and enhanced capture
- * @pdev: DP PDEV
- *
- * Return: none
- */
 void dp_tx_ppdu_stats_attach_2_0(struct dp_pdev *pdev)
 {
 	struct dp_mon_pdev *mon_pdev;
@@ -1242,12 +1265,6 @@ void dp_tx_ppdu_stats_attach_2_0(struct dp_pdev *pdev)
 			qdf_alloc_unbound_workqueue("tx_mon_ppdu_work_queue");
 }
 
-/**
- * dp_tx_ppdu_stats_detach_be - Cleanup Tx PPDU stats and enhanced capture
- * @pdev: DP PDEV
- *
- * Return: none
- */
 void dp_tx_ppdu_stats_detach_2_0(struct dp_pdev *pdev)
 {
 	struct dp_mon_pdev *mon_pdev;

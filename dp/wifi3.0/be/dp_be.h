@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -42,13 +42,18 @@ enum CMEM_MEM_CLIENTS {
 #define DP_CC_SPT_PAGE_MAX_ENTRIES_MASK (DP_CC_SPT_PAGE_MAX_ENTRIES - 1)
 
 /* maximum number of entries in primary page table */
-#define DP_CC_PPT_MAX_ENTRIES 1024
+#define DP_CC_PPT_MAX_ENTRIES \
+	DP_CC_PPT_MEM_SIZE / DP_CC_PPT_ENTRY_SIZE_4K_ALIGNED
 
 /* cookie conversion required CMEM offset from CMEM pool */
 #define DP_CC_MEM_OFFSET_IN_CMEM 0
 
 /* cookie conversion primary page table size 4K */
+#if defined(WLAN_MAX_PDEVS) && (WLAN_MAX_PDEVS == 1)
 #define DP_CC_PPT_MEM_SIZE 4096
+#else
+#define DP_CC_PPT_MEM_SIZE 8192
+#endif
 
 /* FST required CMEM offset from CMEM pool */
 #define DP_FST_MEM_OFFSET_IN_CMEM \
@@ -149,12 +154,10 @@ enum CMEM_MEM_CLIENTS {
 
 /**
  * struct dp_spt_page_desc - secondary page table page descriptors
- * @next: pointer to next linked SPT page Desc
  * @page_v_addr: page virtual address
  * @page_p_addr: page physical address
  * @ppt_index: entry index in primary page table where this page physical
-		address stored
- * @avail_entry_index: index for available entry that store TX/RX Desc VA
+ *		address stored
  */
 struct dp_spt_page_desc {
 	uint8_t *page_v_addr;
@@ -219,7 +222,16 @@ struct dp_ppe_vp_tbl_entry {
 };
 
 /**
+ * struct dp_ppe_vp_search_idx_tbl_entry - PPE Virtual search table entry
+ * @is_configured: Boolean that the entry is configured.
+ */
+struct dp_ppe_vp_search_idx_tbl_entry {
+	bool is_configured;
+};
+
+/**
  * struct dp_ppe_vp_profile - PPE direct switch profiler per vdev
+ * @is_configured: Boolean that the entry is configured.
  * @vp_num: Virtual port number
  * @ppe_vp_num_idx: Index to the PPE VP table entry
  * @search_idx_reg_num: Address search Index register number
@@ -228,6 +240,7 @@ struct dp_ppe_vp_tbl_entry {
  * @use_ppe_int_pri: Use PPE INT_PRI to TID mapping table
  */
 struct dp_ppe_vp_profile {
+	bool is_configured;
 	uint8_t vp_num;
 	uint8_t ppe_vp_num_idx;
 	uint8_t search_idx_reg_num;
@@ -239,17 +252,21 @@ struct dp_ppe_vp_profile {
 /**
  * struct dp_ppeds_tx_desc_pool_s - PPEDS Tx Descriptor Pool
  * @elem_size: Size of each descriptor
+ * @hot_list_len: Length of hotlist chain
  * @num_allocated: Number of used descriptors
  * @freelist: Chain of free descriptors
+ * @hotlist: Chain of descriptors with attached nbufs
  * @desc_pages: multiple page allocation information for actual descriptors
  * @elem_count: Number of descriptors in the pool
  * @num_free: Number of free descriptors
- * @lock- Lock for descriptor allocation/free from/to the pool
+ * @lock: Lock for descriptor allocation/free from/to the pool
  */
 struct dp_ppeds_tx_desc_pool_s {
 	uint16_t elem_size;
 	uint32_t num_allocated;
+	uint32_t hot_list_len;
 	struct dp_tx_desc_s *freelist;
+	struct dp_tx_desc_s *hotlist;
 	struct qdf_mem_multi_page_t desc_pages;
 	uint16_t elem_count;
 	uint32_t num_free;
@@ -267,33 +284,42 @@ struct dp_ppeds_napi {
 	struct net_device ndev;
 };
 
-/**
+/*
+ * NB: intentionally not using kernel-doc comment because the kernel-doc
+ *     script does not handle the TAILQ_HEAD macro
  * struct dp_soc_be - Extended DP soc for BE targets
  * @soc: dp soc structure
  * @num_bank_profiles: num TX bank profiles
+ * @tx_bank_lock: lock for @bank_profiles
  * @bank_profiles: bank profiles for various TX banks
+ * @page_desc_base:
  * @cc_cmem_base: cmem offset reserved for CC
  * @tx_cc_ctx: Cookie conversion context for tx desc pools
  * @rx_cc_ctx: Cookie conversion context for rx desc pools
- * @monitor_soc_be: BE specific monitor object
+ * @ppeds_int_mode_enabled: PPE DS interrupt mode enabled
+ * @ppeds_stopped:
+ * @reo2ppe_ring: REO2PPE ring
+ * @ppe2tcl_ring: PPE2TCL ring
+ * @ppeds_wbm_release_ring:
+ * @ppe_vp_tbl: PPE VP table
+ * @ppe_vp_search_idx_tbl: PPE VP search idx table
+ * @ppeds_tx_cc_ctx: Cookie conversion context for ppeds tx desc pool
+ * @ppeds_tx_desc: PPEDS tx desc pool
+ * @ppeds_napi_ctxt:
+ * @ppeds_handle: PPEDS soc instance handle
+ * @dp_ppeds_txdesc_hotlist_len: PPEDS tx desc hotlist length
+ * @ppe_vp_tbl_lock: PPE VP table lock
+ * @num_ppe_vp_entries: Number of PPE VP entries
+ * @num_ppe_vp_search_idx_entries: PPEDS VP search idx entries
+ * @irq_name: PPEDS VP irq names
  * @mlo_enabled: Flag to indicate MLO is enabled or not
  * @mlo_chip_id: MLO chip_id
  * @ml_ctxt: pointer to global ml_context
  * @delta_tqm: delta_tqm
  * @mlo_tstamp_offset: mlo timestamp offset
- * @mld_peer_hash: peer hash table for ML peers
- *           Associated peer with this MAC address)
  * @mld_peer_hash_lock: lock to protect mld_peer_hash
- * @ppe_ds_int_mode_enabled: PPE DS interrupt mode enabled
- * @reo2ppe_ring: REO2PPE ring
- * @ppe2tcl_ring: PPE2TCL ring
- * @ppe_vp_tbl: PPE VP table
- * @ppe_vp_tbl_lock: PPE VP table lock
- * @num_ppe_vp_entries : Number of PPE VP entries
+ * @mld_peer_hash: peer hash table for ML peers
  * @ipa_bank_id: TCL bank id used by IPA
- * @ppeds_tx_cc_ctx: Cookie conversion context for ppeds tx desc pool
- * @ppeds_tx_desc: PPEDS tx desc pool
- * @ppeds_handle: PPEDS soc instance handle
  */
 struct dp_soc_be {
 	struct dp_soc soc;
@@ -315,12 +341,17 @@ struct dp_soc_be {
 	struct dp_srng ppe2tcl_ring;
 	struct dp_srng ppeds_wbm_release_ring;
 	struct dp_ppe_vp_tbl_entry *ppe_vp_tbl;
+	struct dp_ppe_vp_search_idx_tbl_entry *ppe_vp_search_idx_tbl;
+	struct dp_ppe_vp_profile *ppe_vp_profile;
 	struct dp_hw_cookie_conversion_t ppeds_tx_cc_ctx;
 	struct dp_ppeds_tx_desc_pool_s ppeds_tx_desc;
 	struct dp_ppeds_napi ppeds_napi_ctxt;
 	void *ppeds_handle;
+	int dp_ppeds_txdesc_hotlist_len;
 	qdf_mutex_t ppe_vp_tbl_lock;
 	uint8_t num_ppe_vp_entries;
+	uint8_t num_ppe_vp_search_idx_entries;
+	uint8_t num_ppe_vp_profiles;
 	char irq_name[DP_PPE_INTR_MAX][DP_PPE_INTR_STRNG_LEN];
 #endif
 #ifdef WLAN_FEATURE_11BE_MLO
@@ -369,34 +400,29 @@ struct dp_pdev_be {
  * @vdev: dp vdev structure
  * @bank_id: bank_id to be used for TX
  * @vdev_id_check_en: flag if HW vdev_id check is enabled for vdev
- * @ppe_vp_enabled: flag to check if PPE VP is enabled for vdev
- * @ppe_vp_profile: PPE VP profile
+ * @partner_vdev_list: partner list used for Intra-BSS
+ * @seq_num: DP MLO seq number
+ * @mcast_primary: MLO Mcast primary vdev
  */
 struct dp_vdev_be {
 	struct dp_vdev vdev;
 	int8_t bank_id;
 	uint8_t vdev_id_check_en;
 #ifdef WLAN_MLO_MULTI_CHIP
-	/* partner list used for Intra-BSS */
 	uint8_t partner_vdev_list[WLAN_MAX_MLO_CHIPS][WLAN_MAX_MLO_LINKS_PER_SOC];
 #ifdef WLAN_FEATURE_11BE_MLO
 #ifdef WLAN_MCAST_MLO
-	/* DP MLO seq number */
 	uint16_t seq_num;
-	/* MLO Mcast primary vdev */
 	bool mcast_primary;
 #endif
 #endif
-#endif
-	unsigned long ppe_vp_enabled;
-#ifdef WLAN_SUPPORT_PPEDS
-	struct dp_ppe_vp_profile ppe_vp_profile;
 #endif
 };
 
 /**
  * struct dp_peer_be - Extended DP peer for BE targets
- * @dp_peer: dp peer structure
+ * @peer: dp peer structure
+ * @priority_valid:
  */
 struct dp_peer_be {
 	struct dp_peer peer;
@@ -422,7 +448,7 @@ void dp_initialize_arch_ops_be(struct dp_arch_ops *arch_ops);
 
 /**
  * dp_get_context_size_be() - get BE specific size for peer/vdev/pdev/soc
- * @arch_ops: arch ops pointer
+ * @context_type: context type for which the size is needed
  *
  * Return: size in bytes for the context_type
  */
@@ -439,12 +465,22 @@ static inline struct dp_soc_be *dp_get_be_soc_from_dp_soc(struct dp_soc *soc)
 	return (struct dp_soc_be *)soc;
 }
 
+/**
+ * dp_mlo_iter_ptnr_soc() - iterate through mlo soc list and call the callback
+ * @be_soc: dp_soc_be pointer
+ * @func: Function to be called for each soc
+ * @arg: context to be passed to the callback
+ *
+ * Return: true if mlo is enabled, false if mlo is disabled
+ */
+bool dp_mlo_iter_ptnr_soc(struct dp_soc_be *be_soc, dp_ptnr_soc_iter_func func,
+			  void *arg);
+
 #ifdef WLAN_MLO_MULTI_CHIP
 typedef struct dp_mlo_ctxt *dp_mld_peer_hash_obj_t;
 
-/*
+/**
  * dp_mlo_get_peer_hash_obj() - return the container struct of MLO hash table
- *
  * @soc: soc handle
  *
  * return: MLD peer hash object
@@ -484,14 +520,13 @@ void dp_mlo_partner_chips_unmap(struct dp_soc *soc,
 typedef void dp_ptnr_vdev_iter_func(struct dp_vdev_be *be_vdev,
 				    struct dp_vdev *ptnr_vdev,
 				    void *arg);
-typedef void dp_ptnr_soc_iter_func(struct dp_soc *ptnr_soc,
-				   void *arg);
-/*
- * dp_mcast_mlo_iter_ptnr_vdev - API to iterate through ptnr vdev list
+
+/**
+ * dp_mcast_mlo_iter_ptnr_vdev() - API to iterate through ptnr vdev list
  * @be_soc: dp_soc_be pointer
  * @be_vdev: dp_vdev_be pointer
- * @func        : function to be called for each peer
- * @arg         : argument need to be passed to func
+ * @func: function to be called for each peer
+ * @arg: argument need to be passed to func
  * @mod_id: module id
  *
  * Return: None
@@ -501,19 +536,9 @@ void dp_mcast_mlo_iter_ptnr_vdev(struct dp_soc_be *be_soc,
 				 dp_ptnr_vdev_iter_func func,
 				 void *arg,
 				 enum dp_mod_id mod_id);
-/*
- * dp_mcast_mlo_iter_ptnr_soc - API to iterate through ptnr soc list
- * @be_soc: dp_soc_be pointer
- * @func        : function to be called for each peer
- * @arg         : argument need to be passed to func
- *
- * Return: None
- */
-void dp_mcast_mlo_iter_ptnr_soc(struct dp_soc_be *be_soc,
-				dp_ptnr_soc_iter_func func,
-				void *arg);
-/*
- * dp_mlo_get_mcast_primary_vdev- get ref to mcast primary vdev
+
+/**
+ * dp_mlo_get_mcast_primary_vdev() - get ref to mcast primary vdev
  * @be_soc: dp_soc_be pointer
  * @be_vdev: dp_vdev_be pointer
  * @mod_id: module id
@@ -541,24 +566,23 @@ static inline void  dp_clr_mlo_ptnr_list(struct dp_soc *soc,
 }
 #endif
 
-/*
+/**
  * dp_mlo_peer_find_hash_attach_be() - API to initialize ML peer hash table
- *
  * @mld_hash_obj: Peer has object
  * @hash_elems: number of entries in hash table
  *
- * return: QDF_STATUS_SUCCESS when attach is success else QDF_STATUS_FAILURE
+ * Return: QDF_STATUS_SUCCESS when attach is success else QDF_STATUS_FAILURE
  */
 QDF_STATUS
 dp_mlo_peer_find_hash_attach_be(dp_mld_peer_hash_obj_t mld_hash_obj,
 				int hash_elems);
 
-/*
+/**
  * dp_mlo_peer_find_hash_detach_be() - API to de-initialize ML peer hash table
  *
  * @mld_hash_obj: Peer has object
  *
- * return: void
+ * Return: void
  */
 void dp_mlo_peer_find_hash_detach_be(dp_mld_peer_hash_obj_t mld_hash_obj);
 
@@ -601,12 +625,18 @@ struct dp_peer_be *dp_get_be_peer_from_dp_peer(struct dp_peer *peer)
 void dp_ppeds_disable_irq(struct dp_soc *soc, struct dp_srng *srng);
 void dp_ppeds_enable_irq(struct dp_soc *soc, struct dp_srng *srng);
 
+QDF_STATUS dp_peer_setup_ppeds_be(struct dp_soc *soc, struct dp_peer *peer,
+				  struct dp_vdev_be *be_vdev,
+				  void *args);
+
 QDF_STATUS
 dp_hw_cookie_conversion_attach(struct dp_soc_be *be_soc,
 			       struct dp_hw_cookie_conversion_t *cc_ctx,
 			       uint32_t num_descs,
 			       enum dp_desc_type desc_type,
 			       uint8_t desc_pool_id);
+
+void dp_reo_shared_qaddr_detach(struct dp_soc *soc);
 
 QDF_STATUS
 dp_hw_cookie_conversion_detach(struct dp_soc_be *be_soc,
@@ -617,6 +647,7 @@ dp_hw_cookie_conversion_init(struct dp_soc_be *be_soc,
 QDF_STATUS
 dp_hw_cookie_conversion_deinit(struct dp_soc_be *be_soc,
 			       struct dp_hw_cookie_conversion_t *cc_ctx);
+
 /**
  * dp_cc_spt_page_desc_alloc() - allocate SPT DDR page descriptor from pool
  * @be_soc: beryllium soc handler
@@ -630,6 +661,7 @@ uint16_t dp_cc_spt_page_desc_alloc(struct dp_soc_be *be_soc,
 				   struct dp_spt_page_desc **list_head,
 				   struct dp_spt_page_desc **list_tail,
 				   uint16_t num_desc);
+
 /**
  * dp_cc_spt_page_desc_free() - free SPT DDR page descriptor to pool
  * @be_soc: beryllium soc handler
@@ -644,7 +676,7 @@ void dp_cc_spt_page_desc_free(struct dp_soc_be *be_soc,
 
 /**
  * dp_cc_desc_id_generate() - generate SW cookie ID according to
-				DDR page 4K aligned or not
+ *				DDR page 4K aligned or not
  * @ppt_index: offset index in primary page table
  * @spt_index: offset index in sceondary DDR page
  *
@@ -668,8 +700,8 @@ static inline uint32_t dp_cc_desc_id_generate(uint32_t ppt_index,
 }
 
 /**
- * dp_cc_desc_va_find() - find TX/RX Descs virtual address by ID
- * @be_soc: be soc handle
+ * dp_cc_desc_find() - find TX/RX Descs virtual address by ID
+ * @soc: be soc handle
  * @desc_id: TX/RX Dess ID
  *
  * Return: TX/RX Desc virtual address
@@ -737,7 +769,7 @@ static inline int dp_srng_check_ring_near_full(struct dp_soc *soc,
  *			consumer srng and return the level of the srng
  *			near full state.
  * @soc: Datapath SoC Handle [To be validated by the caller]
- * @hal_ring_hdl: SRNG handle
+ * @dp_srng: SRNG handle
  *
  * Return: near-full level
  */
@@ -761,7 +793,7 @@ dp_srng_get_near_full_level(struct dp_soc *soc, struct dp_srng *dp_srng)
 #define DP_SRNG_PER_LOOP_NF_REAP_MULTIPLIER	2
 
 /**
- * dp_srng_test_and_update_nf_params() - Test the near full level and update
+ * _dp_srng_test_and_update_nf_params() - Test the near full level and update
  *			the reap_limit and flags to reflect the state.
  * @soc: Datapath soc handle
  * @srng: Datapath handle for the srng

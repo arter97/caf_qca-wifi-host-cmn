@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2013-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -21,6 +21,32 @@
 #define __COPY_ENGINE_INTERNAL_H__
 
 #include <hif.h>                /* A_TARGET_WRITE */
+
+#ifndef QCA_WIFI_WCN6450
+/* Mask for packet offset in the CE descriptor */
+#define CE_DESC_PKT_OFFSET_BIT_M 0x0FFF0000
+
+/* Packet offset start bit position in CE descriptor */
+#define CE_DESC_PKT_OFFSET_BIT_S 16
+
+/* Packet type start bit position in CE descriptor */
+#define CE_DESC_PKT_TYPE_BIT_S 6
+
+/* Tx classify start bit position in CE descriptor */
+#define CE_DESC_TX_CLASSIFY_BIT_S 5
+#else
+/* Mask for packet offset in the CE descriptor */
+#define CE_DESC_PKT_OFFSET_BIT_M 0x7FF80000
+
+/* Packet offset start bit position in CE descriptor */
+#define CE_DESC_PKT_OFFSET_BIT_S  19
+
+/* Packet type start bit position in CE descriptor */
+#define CE_DESC_PKT_TYPE_BIT_S   9
+
+/* Tx classify start bit position in CE descriptor */
+#define CE_DESC_TX_CLASSIFY_BIT_S   8
+#endif
 
 /* Copy Engine operational state */
 enum CE_op_state {
@@ -125,6 +151,11 @@ struct CE_state {
 	CE_watermark_cb watermark_cb;
 	void *wm_context;
 
+#ifdef CUSTOM_CB_SCHEDULER_SUPPORT
+	qdf_atomic_t custom_cb_pending;
+	void (*custom_cb)(void *arg);
+	void *custom_cb_context;
+#endif /* CUSTOM_CB_SCHEDULER_SUPPORT */
 	/*Record the state of the copy compl interrupt */
 	int disable_copy_compl_intr;
 
@@ -170,13 +201,90 @@ struct CE_state {
 #ifdef QCA_WIFI_3_0
 #define HIF_CE_DESC_ADDR_TO_DMA(desc) \
 	(qdf_dma_addr_t)(((uint64_t)(desc)->buffer_addr + \
-	((uint64_t)((desc)->buffer_addr_hi & 0x1F) << 32)))
+	((uint64_t)((desc)->buffer_addr_hi & CE_RING_BASE_ADDR_HIGH_MASK) << \
+	 32)))
 #else
 #define HIF_CE_DESC_ADDR_TO_DMA(desc) \
 	(qdf_dma_addr_t)((desc)->buffer_addr)
 #endif
 
-#ifdef QCA_WIFI_3_0
+#if defined(QCA_WIFI_WCN6450)
+struct CE_src_desc {
+	uint32_t buffer_addr:32;
+#if _BYTE_ORDER == _BIG_ENDIAN
+	uint32_t gather:1,
+		 packet_result_offset:12,
+		 toeplitz_hash_enable:1, /* reserved */
+		 addr_x_search_disable:1, /* reserved */
+		 addr_y_search_disable:1, /* reserved */
+		 misc_int_disable:1,
+		 target_int_disable:1,
+		 host_int_disable:1,
+		 dest_byte_swap:1,
+		 byte_swap:1,
+		 type:2, /* reserved */
+		 tx_classify:1,
+		 buffer_addr_hi:8;
+	uint32_t meta_data:16,
+		 nbytes:16;
+#else
+	uint32_t buffer_addr_hi:8,
+		 tx_classify:1,
+		 type:2, /* reserved */
+		 byte_swap:1, /* src_byte_swap */
+		 dest_byte_swap:1,
+		 host_int_disable:1,
+		 target_int_disable:1,
+		 misc_int_disable:1,
+		 addr_y_search_disable:1, /* reserved */
+		 addr_x_search_disable:1, /* reserved */
+		 toeplitz_hash_enable:1, /* reserved */
+		 packet_result_offset:12,
+		 gather:1;
+	uint32_t nbytes:16,
+		 meta_data:16;
+#endif
+	uint32_t toeplitz_hash_result:32;
+};
+
+struct CE_dest_desc {
+	uint32_t buffer_addr:32;
+#if _BYTE_ORDER == _BIG_ENDIAN
+	uint32_t gather:1,
+		 packet_result_offset:12,
+		 toeplitz_hash_enable:1, /* reserved */
+		 addr_x_search_disable:1, /* reserved */
+		 addr_y_search_disable:1, /* reserved */
+		 misc_int_disable:1,
+		 target_int_disable:1,
+		 host_int_disable:1,
+		 byte_swap:1, /* dest_byte_swap */
+		 src_byte_swap:1,
+		 type:2, /* reserved */
+		 tx_classify:1,
+		 buffer_addr_hi:8;
+	uint32_t meta_data:16,
+		 nbytes:16;
+#else
+	uint32_t buffer_addr_hi:8,
+		 tx_classify:1,
+		 type:2, /* reserved */
+		 src_byte_swap:1,
+		 byte_swap:1, /* dest_byte_swap */
+		 host_int_disable:1,
+		 target_int_disable:1,
+		 misc_int_disable:1,
+		 addr_y_search_disable:1, /* reserved */
+		 addr_x_search_disable:1, /* reserved */
+		 toeplitz_hash_enable:1, /* reserved */
+		 packet_result_offset:12,
+		 gather:1;
+	uint32_t nbytes:16,
+		 meta_data:16;
+#endif
+	uint32_t toeplitz_hash_result:32;
+};
+#elif defined(QCA_WIFI_3_0)
 struct CE_src_desc {
 	uint32_t buffer_addr:32;
 #if _BYTE_ORDER == _BIG_ENDIAN
@@ -299,7 +407,7 @@ struct CE_dest_desc {
 		 meta_data:12;
 #endif
 };
-#endif /* QCA_WIFI_3_0 */
+#endif /* QCA_WIFI_WCN6450 */
 
 struct ce_srng_src_desc {
 	uint32_t buffer_addr_lo;
@@ -383,6 +491,8 @@ struct ce_srng_dest_status_desc {
 
 /**
  * union ce_desc - unified data type for ce descriptors
+ * @src_desc: source descriptor
+ * @dest_desc: destination descriptor
  *
  * Both src and destination descriptors follow the same format.
  * They use different data structures for different access semantics.
@@ -424,6 +534,7 @@ union ce_srng_desc {
  *	the write index in fastpath
  * @FAST_TX_SOFTWARE_INDEX_UPDATE: event recorded before updating the software
  *	index of the RX ring in fastpath
+ * @RESUME_WRITE_INDEX_UPDATE:
  * @HIF_IRQ_EVENT: event recorded in the irq before scheduling the bh
  * @HIF_CE_TASKLET_ENTRY: records the start of the ce_tasklet
  * @HIF_CE_TASKLET_RESCHEDULE: records the rescheduling of the wlan_tasklet
@@ -444,6 +555,7 @@ union ce_srng_desc {
  * @HIF_RX_DESC_PRE_NBUF_ALLOC: record the packet before nbuf allocation
  * @HIF_RX_DESC_PRE_NBUF_MAP: record the packet before nbuf map
  * @HIF_RX_DESC_POST_NBUF_MAP: record the packet after nbuf map
+ * @HIF_EVENT_TYPE_MAX: max event
  */
 enum hif_ce_event_type {
 	HIF_RX_DESC_POST,
@@ -582,6 +694,7 @@ int hif_get_fw_diag_ce_id(struct hif_softc *scn, uint8_t *ce_id);
  * @index: location of the descriptor in the ce ring;
  * @type: what the event was
  * @time: when it happened
+ * @cpu_id:
  * @current_hp: holds the current ring hp value
  * @current_tp: holds the current ring tp value
  * @descriptor: descriptor enqueued or dequeued
@@ -715,7 +828,7 @@ void hif_ce_desc_data_record(struct hif_ce_desc_event *event, int len)
  * ce_validate_nbytes() - validate nbytes for slub builds on tx descriptors
  * @nbytes: nbytes value being written into a send descriptor
  * @ce_state: context of the copy engine
-
+ *
  * nbytes should be non-zero and less than max configured for the copy engine
  *
  * Return: none
@@ -738,6 +851,7 @@ static inline void ce_validate_nbytes(uint32_t nbytes,
  * hif_ce_desc_record_rx_paddr() - record physical address for IOMMU
  * IOVA addr and MMU virtual addr for Rx
  * @scn: hif_softc
+ * @event: event details
  * @nbuf: buffer posted to fw
  *
  * record physical address for ce_event_type HIF_RX_DESC_POST and

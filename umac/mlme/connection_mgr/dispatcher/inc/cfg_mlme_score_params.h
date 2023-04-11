@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2012-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -26,10 +26,16 @@
 #define RoamAPScore_RSSIWeight_min 0
 #define RoamAPScore_RSSIWeight_max 100
 #define RoamAPScore_RSSIWeight_default 65
+# define ROAMAPSCORE_CUWEIGHT_MIN 0
+# define ROAMAPSCORE_CUWEIGHT_MAX 100
+# define ROAMAPSCORE_CUWEIGHT_DEFAULT 35
 #else
 #define RoamAPScore_RSSIWeight_min 0
 #define RoamAPScore_RSSIWeight_max 100
 #define RoamAPScore_RSSIWeight_default 20
+# define ROAMAPSCORE_CUWEIGHT_MIN 0
+# define ROAMAPSCORE_CUWEIGHT_MAX 100
+# define ROAMAPSCORE_CUWEIGHT_DEFAULT 25
 #endif
 /*
  * <ini>
@@ -278,7 +284,7 @@
 
 /*
  * <ini>
- * channel_congestion_weightage/RoamAPScore_CUWeight - channel Congestion
+ * channel_congestion_weightage - channel Congestion
  * Weightage to
  * calculate best candidate
  * @Min: 0
@@ -296,11 +302,32 @@
  *
  * </ini>
  */
+
+/*
+ * <ini>
+ * RoamAPScore_CUWeight - roamapscore cu weight
+ * Weightage to
+ * calculate best candidate
+ * @Min: 0
+ * @Max: 100
+ * @Default: 35
+ *
+ * This ini is used to increase/decrease channel congestion weightage in
+ * candidate selection. Congestion is measured with the help of ESP/QBSS load.
+ *
+ * Related: num_esp_qbss_slots
+ *
+ * Supported Feature: STA Candidate selection
+ *
+ * Usage: External
+ *
+ * </ini>
+ */
 #define CFG_SCORING_CHAN_CONGESTION_WEIGHTAGE CFG_INI_UINT( \
 	"channel_congestion_weightage RoamAPScore_CUWeight", \
-	0, \
-	100, \
-	25, \
+	ROAMAPSCORE_CUWEIGHT_MIN, \
+	ROAMAPSCORE_CUWEIGHT_MAX, \
+	ROAMAPSCORE_CUWEIGHT_DEFAULT, \
 	CFG_VALUE_OR_DEFAULT, \
 	"Channel Congestion Weightage")
 
@@ -632,6 +659,30 @@
 	76, \
 	CFG_VALUE_OR_DEFAULT, \
 	"RSSI Pref 5G Threshold")
+
+/*
+ * <ini>
+ * ConNonHint_TargetMinRSSI - min RSSI value for connection.
+ * @Min: -95
+ * @Max: -40
+ * @Default: -75
+ *
+ * This ini sets threshold for RSSI, below which BSSID is not considered for
+ * connection.
+ *
+ * Supported Feature: STA Candidate selection
+ *
+ * Usage: External
+ *
+ * </ini>
+ */
+#define CFG_CON_NON_HINT_TARGET_MIN_RSSI CFG_INI_UINT(\
+			"ConNonHint_TargetMinRSSI",\
+			-95, \
+			-40,\
+			-75, \
+			CFG_VALUE_OR_DEFAULT, \
+			"Threshold RSSI value for connection")
 
 #ifdef WLAN_FEATURE_11BE
 /*
@@ -1291,7 +1342,7 @@
 #endif
 
 #ifdef WLAN_FEATURE_11BE_MLO
-/**
+/*
  * <ini>
  * eht_caps_weightage - EHT caps Weightage to calculate best candidate
  * @Min: 0
@@ -1318,7 +1369,7 @@
 	CFG_VALUE_OR_DEFAULT, \
 	"EHT Caps Weightage")
 
-/**
+/*
  * <ini>
  * mlo_weightage - MLO Weightage to calculate best candidate
  * @Min: 0
@@ -1345,7 +1396,7 @@
 	CFG_VALUE_OR_DEFAULT, \
 	"MLO Weightage")
 
-/**
+/*
  * <ini>
  * emlsr_weightage - eMLSR Weightage to calculate best candidate
  * @Min: 0
@@ -1372,7 +1423,7 @@
 	CFG_VALUE_OR_DEFAULT, \
 	"eMLSR Weightage")
 
-/**
+/*
  * <ini>
  * wlm_indication_weightage - WLM indication Weightage to calculate best
  *                            candidate
@@ -1400,7 +1451,7 @@
 	CFG_VALUE_OR_DEFAULT, \
 	"WLM indication Weightage")
 
-/**
+/*
  * <ini>
  * mlsr_link_selection - MLSR link selection criteria
  * @Min: 0
@@ -1429,7 +1480,7 @@
 	CFG_VALUE_OR_DEFAULT, \
 	"MLSR link selection")
 
-/**
+/*
  * <ini>
  * joint_rssi_alpha - Joint RSSI alpha to select best ML candidate
  * @Min: 0
@@ -1458,7 +1509,7 @@
 	CFG_VALUE_OR_DEFAULT, \
 	"Joint RSSI alpha")
 
-/**
+/*
  * <ini>
  * low_band_rssi_boost - Low band RSSI boost in joint RSSI calculation
  * @Min: 0
@@ -1490,7 +1541,7 @@
 				1, \
 				"Low band RSSI boost ")
 
-/**
+/*
  * <ini>
  * joint_esp_alpha - Joint ESP alpha to select best ML candidate
  * @Min: 0
@@ -1519,7 +1570,7 @@
 	CFG_VALUE_OR_DEFAULT, \
 	"Joint ESP alpha")
 
-/**
+/*
  * <ini>
  * low_band_esp_boost - Low band ESP boost in joint ESP calculation
  * @Min: 0
@@ -1551,7 +1602,7 @@
 				1, \
 				"Low band ESP boost ")
 
-/**
+/*
  * <ini>
  * joint_oce_alpha - Joint OCE alpha to select best ML candidate
  * @Min: 0
@@ -1580,7 +1631,7 @@
 	CFG_VALUE_OR_DEFAULT, \
 	"Joint OCE alpha")
 
-/**
+/*
  * <ini>
  * low_band_oce_boost - Low band OCE boost in joint OCE calculation
  * @Min: 0
@@ -1904,6 +1955,7 @@
 	CFG(CFG_SCORING_GOOD_RSSI_BUCKET_SIZE) \
 	CFG(CFG_SCORING_BAD_RSSI_BUCKET_SIZE) \
 	CFG(CFG_SCORING_RSSI_PREF_5G_THRESHOLD) \
+	CFG(CFG_CON_NON_HINT_TARGET_MIN_RSSI) \
 	CFG(CFG_SCORING_BW_WEIGHT_PER_IDX) \
 	CFG(CFG_SCORING_NSS_WEIGHT_PER_IDX) \
 	CFG(CFG_SCORING_BAND_WEIGHT_PER_IDX) \

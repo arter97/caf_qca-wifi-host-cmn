@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2011-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -59,7 +59,6 @@
 
 #define CDP_BA_256_BIT_MAP_SIZE_DWORDS 8
 #define CDP_BA_64_BIT_MAP_SIZE_DWORDS 2
-#define CDP_RSSI_CHAIN_LEN 8
 
 #define OL_TXRX_INVALID_PDEV_ID 0xff
 #define OL_TXRX_INVALID_LOCAL_PEER_ID 0xffff
@@ -117,6 +116,8 @@
 #define CDP_DATA_NON_QOS_TID 16
 
 #define CDP_NUM_SA_BW 4
+/* Smart Antenna 320MHz BW Phy MAX Rate Code Index */
+#define CDP_SA_BW320_INX 4
 #define CDP_PERCENT_MACRO 100
 #define CDP_NUM_KB_IN_MB 1000
 /*
@@ -621,6 +622,22 @@ struct cdp_mscs_params {
 #endif
 
 /**
+ * struct cdp_ds_vp_params - Direct Switch related params
+ * @dev: Net device
+ * @peer_id: peer id
+ * @ppe_vp_profile_idx: VP profile index in be soc
+ * @wds_ext_mode: flag to indicate wds ext.
+ * @ppe_vp_type: VP type flag.
+ */
+struct cdp_ds_vp_params {
+	struct net_device *dev;
+	uint32_t peer_id;
+	int8_t ppe_vp_profile_idx;
+	bool wds_ext_mode;
+	unsigned long ppe_vp_type;
+};
+
+/**
  * enum cdp_sec_type - security type information
  * @cdp_sec_type_none:
  * @cdp_sec_type_wep128:
@@ -662,6 +679,7 @@ enum cdp_sec_type {
  * @is_intrabss_fwd:
  * @ppdu_cookie: 16-bit ppdu cookie that has to be replayed back in completions
  * @is_wds_extended:
+ * @is_mlo_mcast: Indicates if mlo_mcast enable or not
  *
  * This structure holds the parameters needed in the exception path of tx
  *
@@ -676,6 +694,9 @@ struct cdp_tx_exception_metadata {
 	uint16_t ppdu_cookie;
 #ifdef QCA_SUPPORT_WDS_EXTENDED
 	uint8_t is_wds_extended;
+#endif
+#ifdef WLAN_MCAST_MLO
+	uint8_t is_mlo_mcast;
 #endif
 };
 
@@ -1422,6 +1443,7 @@ enum cdp_pdev_param_type {
  * @cdp_vdev_param_traffic_end_ind: Traffic end indication enable/disable
  * @cdp_skel_enable : Enable/Disable skeleton code for Umac reset debug
  * @cdp_drop_tx_mcast: Enable/Disable tx mcast drop
+ * @cdp_vdev_tx_to_fw: Set to_fw bit for all tx packets for the vdev
  */
 typedef union cdp_config_param_t {
 	/* peer params */
@@ -1512,6 +1534,7 @@ typedef union cdp_config_param_t {
 	bool cdp_vdev_param_traffic_end_ind;
 	bool cdp_umac_rst_skel;
 	bool cdp_drop_tx_mcast;
+	bool cdp_vdev_tx_to_fw;
 } cdp_config_param_type;
 
 /**
@@ -1601,6 +1624,7 @@ enum cdp_pdev_bpr_param {
  * @CDP_DROP_3ADDR_MCAST: enable/disable drop 3addr multicast flag
  * @CDP_ENABLE_WRAP: qwrap ap
  * @CDP_ENABLE_TRAFFIC_END_INDICATION: enable/disable traffic end indication
+ * @CDP_VDEV_TX_TO_FW: Set to_fw bit for tx packets for the vdev
  */
 enum cdp_vdev_param_type {
 	CDP_ENABLE_NAWDS,
@@ -1648,6 +1672,9 @@ enum cdp_vdev_param_type {
 #ifdef DP_TRAFFIC_END_INDICATION
 	CDP_ENABLE_TRAFFIC_END_INDICATION,
 #endif
+#ifdef FEATURE_DIRECT_LINK
+	CDP_VDEV_TX_TO_FW,
+#endif
 };
 
 /**
@@ -1663,6 +1690,7 @@ enum cdp_vdev_param_type {
  * @CDP_UMAC_RST_SKEL_ENABLE: Enable Umac reset skeleton code for debug
  * @CDP_PPEDS_ENABLE: PPEDS is enabled or not
  * @CDP_SAWF_STATS: set SAWF stats config
+ * @CDP_UMAC_RESET_STATS: UMAC reset stats
  */
 enum cdp_psoc_param_type {
 	CDP_ENABLE_RATE_STATS,
@@ -1675,6 +1703,7 @@ enum cdp_psoc_param_type {
 	CDP_UMAC_RST_SKEL_ENABLE,
 	CDP_PPEDS_ENABLE,
 	CDP_SAWF_STATS,
+	CDP_UMAC_RESET_STATS,
 };
 
 #define TXRX_FW_STATS_TXSTATS                     1
@@ -2035,6 +2064,7 @@ struct cdp_delayed_tx_completion_ppdu_user {
  * @punc_mode: puncutured mode to indicate punctured bw
  * @punc_pattern_bitmap: bitmap indicating punctured pattern
  * @mprot_type: medium protection type
+ * @msduq_bitmap: msduq bitmap
  * @rts_success: rts success
  * @rts_failure: rts failure
  */
@@ -2100,24 +2130,24 @@ struct cdp_tx_completion_ppdu_user {
 	uint8_t is_ppdu_cookie_valid;
 	uint16_t ppdu_cookie;
 	uint8_t sa_is_training;
-	uint32_t rssi_chain[CDP_RSSI_CHAIN_LEN];
+	int32_t rssi_chain[CDP_RSSI_CHAIN_LEN];
 	uint32_t sa_tx_antenna;
-	/*Max rates for BW: 20MHZ, 40MHZ and 80MHZ and 160MHZ
-	 * |---------------------------------------|
-	 * | 16 bits | 16 bits | 16 bits | 16 bits |
-	 * |   BW-1  |   BW-2  |   BW-3  |   BW-4  |
-	 * |      /\  \                            |
-	 * |     /  \  \                           |
-	 * |    /    \  \                          |
-	 * |   /      \  \                         |
-	 * |  /        \  \                        |
-	 * | /          \  \                       |
-	 * |/            \  \                      |
-	 * |[11|8]     [5|8] \                     |
-	 * | BW1      PADDED  \                    |
-	 * |---------------------------------------|
+	/*Max rates for BW: 20MHZ, 40MHZ and 80MHZ and 160MHZ and 320MHZ
+	 * |-------------------------------------------------|
+	 * | 16 bits | 16 bits | 16 bits | 16 bits | 16 bits |
+	 * |   BW-1  |   BW-2  |   BW-3  |   BW-4  |   BW-5  |
+	 * |      /\  \                                      |
+	 * |     /  \  \                                     |
+	 * |    /    \  \                                    |
+	 * |   /      \  \                                   |
+	 * |  /        \  \                                  |
+	 * | /          \  \                                 |
+	 * |/            \  \                                |
+	 * |[11|8]     [5|8] \                               |
+	 * | BW1      PADDED  \                              |
+	 * |-------------------------------------------------|
 	 */
-	uint16_t sa_max_rates[CDP_NUM_SA_BW];
+	uint16_t sa_max_rates[CDP_NUM_SA_BW + 1];
 	uint32_t sa_goodput;
 	/* below field is used to calculate goodput in non-training period
 	 * Note: As host is exposing goodput and hence current_rate_per is
@@ -2141,6 +2171,7 @@ struct cdp_tx_completion_ppdu_user {
 	uint32_t mpdu_bytes;
 	uint8_t punc_mode;
 	uint16_t punc_pattern_bitmap;
+	uint32_t msduq_bitmap;
 	uint8_t mprot_type:3,
 		rts_success:1,
 		rts_failure:1;
@@ -2307,6 +2338,15 @@ struct cdp_tx_mgmt_comp_info {
  * @sched_cmdid: schedule command id
  * @phy_ppdu_tx_time_us: Phy per PPDU TX duration
  * @ppdu_bytes: accumulated bytes per ppdu for mem limit feature
+ * @htt_seq_type: Seq type
+ * @txmode_type: tx mode type UL/DL
+ * @txmode: tx mode
+ * @num_ul_users: Number of UL expected users
+ * @ch_access_delay: Channel access delay
+ * @backoff_ac_valid: Backoff AC valid
+ * @backoff_ac: Backoff AC
+ * @num_ul_user_resp_valid: Number of UL users response valid
+ * @num_ul_user_resp: Number of UL users response
  * @user: per-User stats (array of per-user structures)
  */
 struct cdp_tx_completion_ppdu {
@@ -2352,6 +2392,15 @@ struct cdp_tx_completion_ppdu {
 	uint16_t sched_cmdid;
 	uint16_t phy_ppdu_tx_time_us;
 	uint32_t ppdu_bytes;
+	uint8_t htt_seq_type;
+	uint8_t txmode_type;
+	uint8_t txmode;
+	uint32_t num_ul_users;
+	uint32_t ch_access_delay;
+	uint32_t backoff_ac_valid;
+	uint32_t backoff_ac;
+	uint32_t num_ul_user_resp_valid;
+	uint32_t num_ul_user_resp;
 	struct cdp_tx_completion_ppdu_user user[];
 };
 
@@ -3055,4 +3104,20 @@ struct cdp_pdev_attach_params {
 	uint8_t pdev_id;
 	uint32_t mlo_link_id;
 };
+
+/*
+ * cdp_txrx_peer_params_update
+ *
+ * @osif_vdev: Handle for OS shim virtual device
+ * @peer_mac: Peer mac address
+ * @chip_id: CHIP ID
+ * @pdev_id: PDEV ID
+ */
+struct cdp_txrx_peer_params_update {
+	void	*osif_vdev;
+	uint8_t	*peer_mac;
+	uint8_t	chip_id;
+	uint8_t	pdev_id;
+};
+
 #endif

@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2020-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -23,7 +23,7 @@
 #include <dp_mon_filter.h>
 #include <dp_mon.h>
 
-/**
+/*
  * dp_mon_filter_mode_type_to_str
  * Monitor Filter mode to string
  */
@@ -135,13 +135,7 @@ dp_mon_set_fp_phy_err_filter(struct htt_rx_ring_tlv_filter *tlv_filter,
 {
 }
 #endif
-/**
- * dp_mon_filter_h2t_setup() - Setup the filter for the Target setup
- * @soc: DP soc handle
- * @pdev: DP pdev handle
- * @srng_type: The srng type for which filter will be set
- * @tlv_filter: tlv filter
- */
+
 void dp_mon_filter_h2t_setup(struct dp_soc *soc, struct dp_pdev *pdev,
 			     enum dp_mon_filter_srng_type srng_type,
 			     struct dp_mon_filter *filter)
@@ -278,6 +272,7 @@ dp_mon_ht2_rx_ring_cfg(struct dp_soc *soc,
 	int mac_id;
 	int max_mac_rings = wlan_cfg_get_num_mac_rings(pdev->wlan_cfg_ctx);
 	QDF_STATUS status = QDF_STATUS_SUCCESS;
+	uint32_t target_type = hal_get_target_type(soc->hal_soc);
 
 	/*
 	 * Overwrite the max_mac_rings for the status rings.
@@ -301,7 +296,12 @@ dp_mon_ht2_rx_ring_cfg(struct dp_soc *soc,
 
 		switch (srng_type) {
 		case DP_MON_FILTER_SRNG_TYPE_RXDMA_BUF:
-			hal_ring_hdl = pdev->rx_mac_buf_ring[lmac_id].hal_srng;
+			if (target_type == TARGET_TYPE_QCN9160)
+				hal_ring_hdl =
+				soc->rx_refill_buf_ring[lmac_id].hal_srng;
+			else
+				hal_ring_hdl =
+					pdev->rx_mac_buf_ring[lmac_id].hal_srng;
 			hal_ring_type = RXDMA_BUF;
 			ring_buf_size = RX_DATA_BUFFER_SIZE;
 			break;
@@ -628,9 +628,37 @@ dp_mon_filter_reset_mon_srng(struct dp_soc *soc, struct dp_pdev *pdev,
 	}
 }
 
-void dp_mon_filter_set_mon_cmn(struct dp_mon_pdev *mon_pdev,
+/**
+ * dp_mon_filter_adjust() - adjust the mon filters per target basis
+ * @pdev: DP pdev handle
+ * @filter: DP mon filter
+ *
+ * Return: None
+ */
+static inline
+void dp_mon_filter_adjust(struct dp_pdev *pdev, struct dp_mon_filter *filter)
+{
+	struct dp_soc *soc = pdev->soc;
+
+	switch (hal_get_target_type(soc->hal_soc)) {
+	case TARGET_TYPE_KIWI:
+	case TARGET_TYPE_MANGO:
+	case TARGET_TYPE_PEACH:
+		filter->tlv_filter.msdu_start = 0;
+		filter->tlv_filter.mpdu_end = 0;
+		filter->tlv_filter.packet_header = 0;
+		filter->tlv_filter.attention = 0;
+		break;
+	default:
+		break;
+	}
+}
+
+void dp_mon_filter_set_mon_cmn(struct dp_pdev *pdev,
 			       struct dp_mon_filter *filter)
 {
+	struct dp_mon_pdev *mon_pdev = pdev->monitor_pdev;
+
 	filter->tlv_filter.mpdu_start = 1;
 	filter->tlv_filter.msdu_start = 1;
 	filter->tlv_filter.packet = 1;
@@ -656,6 +684,7 @@ void dp_mon_filter_set_mon_cmn(struct dp_mon_pdev *mon_pdev,
 	filter->tlv_filter.mo_ctrl_filter = mon_pdev->mo_ctrl_filter;
 	filter->tlv_filter.mo_data_filter = mon_pdev->mo_data_filter;
 	filter->tlv_filter.offset_valid = false;
+	dp_mon_filter_adjust(pdev, filter);
 }
 
 void dp_mon_filter_set_status_cmn(struct dp_mon_pdev *mon_pdev,
@@ -733,11 +762,6 @@ void dp_mon_filter_set_cbf_cmn(struct dp_pdev *pdev,
 	filter->tlv_filter.enable_mo = 0;
 }
 
-/**
- * dp_mon_filter_dealloc() - Deallocate the filter objects to be stored in
- * the radio object.
- * @pdev: DP pdev handle
- */
 void dp_mon_filter_dealloc(struct dp_mon_pdev *mon_pdev)
 {
 	enum dp_mon_filter_mode mode;
@@ -774,11 +798,6 @@ void dp_mon_filter_dealloc(struct dp_mon_pdev *mon_pdev)
 	mon_pdev->filter = NULL;
 }
 
-/**
- * dp_mon_filter_alloc() - Allocate the filter objects to be stored in
- * the radio object.
- * @mon_pdev: Monitor pdev handle
- */
 struct dp_mon_filter **dp_mon_filter_alloc(struct dp_mon_pdev *mon_pdev)
 {
 	struct dp_mon_filter **mon_filter = NULL;
