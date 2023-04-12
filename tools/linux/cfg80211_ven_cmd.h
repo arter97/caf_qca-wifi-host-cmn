@@ -857,6 +857,10 @@ enum {
 	IEEE80211_PARAM_TPE_PWR_UNIT = 798, /* User config to choose PSD or EIRP in a TPE IE */
 	IEEE80211_PARAM_MAX_MPDU_LENGTH =799, /* MAX MPDU LENGTH */
 #endif
+#ifdef WLAN_FEATURE_11BE_MLO
+	IEEE80211_PARAM_HW_LINK_ID = 800,
+	IEEE80211_PARAM_IEEE_LINK_ID = 801,
+#endif
 };
 
 enum {
@@ -2558,6 +2562,10 @@ struct vendor_commands vap_vendor_cmds[] = {
 	{"get_tpe_common_psd", IEEE80211_PARAM_TPE_COMMON_PSD, GET_PARAM, 0},
 	{"set_tpe_pwr_unit",   IEEE80211_PARAM_TPE_PWR_UNIT, SET_PARAM, 1},
 	{"get_tpe_pwr_unit",   IEEE80211_PARAM_TPE_PWR_UNIT, GET_PARAM, 1},
+#endif
+#ifdef WLAN_FEATURE_11BE_MLO
+	{"get_hw_link_id", IEEE80211_PARAM_HW_LINK_ID, GET_PARAM, 0},
+	{"get_ieee_link_id", IEEE80211_PARAM_IEEE_LINK_ID, GET_PARAM, 0},
 #endif
 };
 
