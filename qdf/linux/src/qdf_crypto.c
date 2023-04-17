@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2017-2021 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -176,7 +177,11 @@ static inline void leftshift_onebit(const uint8_t *input, uint8_t *output)
 static void
 generate_subkey(struct crypto_aes_ctx *aes_ctx, uint8_t *k1, uint8_t *k2)
 {
-	uint8_t l[AES_BLOCK_SIZE], tmp[AES_BLOCK_SIZE];
+	uint8_t l[AES_BLOCK_SIZE] = {
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
+	};
+	uint8_t tmp[AES_BLOCK_SIZE];
 	const uint8_t const_rb[AES_BLOCK_SIZE] = {
 		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x87
@@ -730,9 +735,9 @@ err_tfm:
 	return ret;
 }
 #else
-int qdf_crypto_aes_gmac(uint8_t *key, uint16_t key_length,
-			uint8_t *iv, uint8_t *aad, uint8_t *data,
-			uint16_t data_len, uint8_t *mic)
+int qdf_crypto_aes_gmac(const uint8_t *key, uint16_t key_length,
+			uint8_t *iv, const uint8_t *aad,
+			const uint8_t *data, uint16_t data_len, uint8_t *mic)
 {
 	return -EINVAL;
 }

@@ -72,6 +72,9 @@ struct qdf_mem_multi_page_t {
 #ifdef DP_MEM_PRE_ALLOC
 	uint8_t is_mem_prealloc;
 #endif
+#ifdef ALLOC_CONTIGUOUS_MULTI_PAGE
+	bool contiguous_dma_pages;
+#endif
 };
 
 

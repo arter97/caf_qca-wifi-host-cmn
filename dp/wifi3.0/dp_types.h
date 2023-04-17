@@ -559,6 +559,7 @@ struct dp_tx_desc_s {
 	uint16_t length;
 #ifdef DP_TX_TRACKING
 	uint32_t magic;
+	uint64_t timestamp_tick;
 #endif
 	uint16_t flags;
 	uint32_t id;
@@ -574,7 +575,7 @@ struct dp_tx_desc_s {
 	uint8_t pkt_offset;
 	uint8_t  pool_id;
 	struct dp_tx_ext_desc_elem_s *msdu_ext_desc;
-	uint64_t timestamp;
+	qdf_ktime_t timestamp;
 	struct hal_tx_desc_comp_s comp;
 };
 
@@ -1043,6 +1044,10 @@ struct dp_soc_stats {
 		uint32_t tx_comp_exception;
 		/* TQM drops after/during peer delete */
 		uint64_t tqm_drop_no_peer;
+		/* Number of tx completions reaped per WBM2SW release ring */
+		uint32_t tx_comp[MAX_TCL_DATA_RINGS];
+		/* Number of tx completions force freed */
+		uint32_t tx_comp_force_freed;
 	} tx;
 
 	/* SOC level RX stats */
@@ -2176,10 +2181,10 @@ struct dp_soc {
 	uint8_t da_war_enabled;
 	/* number of active ast entries */
 	uint32_t num_ast_entries;
-	/* rdk rate statistics context at soc level*/
+	/* peer extended rate statistics context at soc level*/
 	struct cdp_soc_rate_stats_ctx *rate_stats_ctx;
-	/* rdk rate statistics control flag */
-	bool rdkstats_enabled;
+	/* peer extended rate statistics control flag */
+	bool peerstats_enabled;
 
 	/* 8021p PCP-TID map values */
 	uint8_t pcp_tid_map[PCP_TID_MAP_MAX];
@@ -3153,6 +3158,10 @@ struct dp_vdev {
 
 	/* vdev_stats_id - ID used for stats collection by FW from HW*/
 	uint8_t vdev_stats_id;
+#ifdef HW_TX_DELAY_STATS_ENABLE
+	/* hw tx delay stats enable */
+	uint8_t hw_tx_delay_stats_enabled;
+#endif
 };
 
 enum {

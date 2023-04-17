@@ -34,6 +34,7 @@
 #include "a_types.h"
 #include "dummy.h"
 #include "qdf_module.h"
+#include "hif_exec.h"
 
 /**
  * hif_initialize_default_ops() - initializes default operations values
