@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2013-2020 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -2482,6 +2483,10 @@ QDF_STATUS (*send_big_data_stats_request_cmd)(
 		wmi_unified_t wmi_handle,
 		struct stats_request_params *param);
 #endif
+
+QDF_STATUS
+(*extract_csa_ie_received_ev_params)(wmi_unified_t wmi_handle, void *evt_buf,
+				     struct csa_offload_params *csa_event);
 };
 
 /* Forward declartion for psoc*/
