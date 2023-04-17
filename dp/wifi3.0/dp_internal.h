@@ -2022,6 +2022,8 @@ void dp_update_vdev_stats_on_peer_unmap(struct dp_vdev *vdev,
 					_srcobj->tx.dropped.invalid_rr; \
 		_tgtobj->tx.failed_retry_count += \
 					_srcobj->tx.failed_retry_count; \
+		_tgtobj->tx.inval_link_id_pkt_cnt += \
+					_srcobj->tx.inval_link_id_pkt_cnt; \
 		_tgtobj->tx.retry_count += _srcobj->tx.retry_count; \
 		_tgtobj->tx.multiple_retry_count += \
 					_srcobj->tx.multiple_retry_count; \
@@ -2084,6 +2086,8 @@ void dp_update_vdev_stats_on_peer_unmap(struct dp_vdev *vdev,
 		_tgtobj->rx.to_stack_twt.bytes += \
 					_srcobj->rx.to_stack_twt.bytes; \
 		_tgtobj->rx.last_rx_ts = _srcobj->rx.last_rx_ts; \
+		_tgtobj->rx.inval_link_id_pkt_cnt += \
+					_srcobj->rx.inval_link_id_pkt_cnt; \
 		for (i = 0; i < CDP_MAX_RX_RINGS; i++) { \
 			_tgtobj->rx.rcvd_reo[i].num += \
 					 _srcobj->rx.rcvd_reo[i].num; \
