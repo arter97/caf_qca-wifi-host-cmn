@@ -424,7 +424,10 @@ force_reason_host_to_fw(enum mlo_link_force_reason host_reason,
 		*fw_reason = WMI_MLO_LINK_FORCE_REASON_NEW_CONNECT;
 		break;
 	case MLO_LINK_FORCE_REASON_DISCONNECT:
-		*fw_reason =  WMI_MLO_LINK_FORCE_REASON_NEW_DISCONNECT;
+		*fw_reason = WMI_MLO_LINK_FORCE_REASON_NEW_DISCONNECT;
+		break;
+	case MLO_LINK_FORCE_REASON_TDLS:
+		*fw_reason = WMI_MLO_LINK_FORCE_REASON_TDLS;
 		break;
 	case MLO_LINK_FORCE_REASON_LINK_REMOVAL:
 		*fw_reason =  WMI_MLO_LINK_FORCE_REASON_LINK_REMOVAL;
@@ -914,60 +917,98 @@ uint8_t *peer_assoc_add_tid_to_link_map(uint8_t *buf_ptr,
 
 #ifdef WMI_AP_SUPPORT
 static uint32_t find_buf_len_pref_link(
-		struct wmi_host_tid_to_link_map_params *params)
+		struct wmi_host_tid_to_link_map_params *params,
+		bool t2lm_info)
 {
 	uint32_t buf_len = 0;
 
-	buf_len = sizeof(wmi_peer_tid_to_link_map_fixed_param) +
-		WMI_TLV_HDR_SIZE + (params->num_dir * T2LM_MAX_NUM_TIDS *
-		 sizeof(wmi_tid_to_link_map)) +
-		WMI_TLV_HDR_SIZE + sizeof(wmi_peer_preferred_link_map);
+	buf_len = sizeof(wmi_peer_tid_to_link_map_fixed_param);
+
+	/* Update the length for T2LM info TLV */
+	if (t2lm_info) {
+		buf_len += (WMI_TLV_HDR_SIZE +
+				(params->num_dir * T2LM_MAX_NUM_TIDS *
+				sizeof(wmi_tid_to_link_map)));
+	} else {
+		buf_len += WMI_TLV_HDR_SIZE;
+	}
+
+	/* Update the length for Preferred Link TLV.
+	 * The Link Preference TLV is planned to be deprecated,
+	 * so the TLV is going to be exlcuded by default
+	 */
+	buf_len += WMI_TLV_HDR_SIZE;
+
+	/* Update the length for Link control TLV */
+	if (params->preferred_links.num_pref_links) {
+		buf_len += (WMI_TLV_HDR_SIZE +
+			sizeof(wmi_mlo_peer_link_control_param));
+	} else {
+		buf_len += WMI_TLV_HDR_SIZE;
+	}
+
 	return buf_len;
 }
 
-static uint8_t *populate_preferred_link_tlv(
+static uint8_t *populate_link_control_tlv(
 		uint8_t *buf_ptr,
 		struct wmi_host_tid_to_link_map_params *params)
 {
-	wmi_peer_preferred_link_map *pref_links;
+	wmi_mlo_peer_link_control_param *link_control;
 	uint8_t pref_link = 0;
 	uint8_t latency = 0;
 	uint8_t links = 0;
 
-	WMITLV_SET_HDR(buf_ptr, WMITLV_TAG_ARRAY_STRUC,
-		       sizeof(wmi_peer_preferred_link_map));
-	buf_ptr += sizeof(uint32_t);
+	/* The Link Preference TLV is planned to be deprecated,
+	 * so the TLV is going to be exlcuded by default.
+	 */
+	WMITLV_SET_HDR(buf_ptr, WMITLV_TAG_ARRAY_STRUC, 0);
+	buf_ptr = buf_ptr + WMI_TLV_HDR_SIZE;
 
-	pref_links = (wmi_peer_preferred_link_map *)buf_ptr;
+	if (params->preferred_links.num_pref_links) {
+		WMITLV_SET_HDR(buf_ptr, WMITLV_TAG_ARRAY_STRUC,
+			sizeof(wmi_mlo_peer_link_control_param));
+		buf_ptr += sizeof(uint32_t);
 
-	WMITLV_SET_HDR(&pref_links->tlv_header,
-		       WMITLV_TAG_STRUC_wmi_peer_preferred_link_map,
-		       WMITLV_GET_STRUCT_TLVLEN(wmi_peer_preferred_link_map));
+		link_control = (wmi_mlo_peer_link_control_param *)buf_ptr;
 
-	pref_links->num_preferred_links =
-		params->preferred_links.num_pref_links;
-	links = params->preferred_links.num_pref_links;
+		WMITLV_SET_HDR(&link_control->tlv_header,
+			WMITLV_TAG_STRUC_wmi_mlo_peer_link_control_param,
+			WMITLV_GET_STRUCT_TLVLEN(wmi_mlo_peer_link_control_param));
 
-	for (pref_link = 0; pref_link < links; pref_link++) {
-		pref_links->preferred_link_order[pref_link] =
-			params->preferred_links.preffered_link_order[pref_link];
-		wmi_debug("Add preference link TLV: preffered_link_order: %d",
-			  pref_links->preferred_link_order[pref_link]);
+		link_control->num_links = params->preferred_links.num_pref_links;
+		links = params->preferred_links.num_pref_links;
+
+		for (pref_link = 0; pref_link < links; pref_link++) {
+			link_control->link_priority_order[pref_link] =
+			    params->preferred_links.preffered_link_order[pref_link];
+			wmi_debug("Add preference link TLV: preffered_link_order: %d",
+			    link_control->link_priority_order[pref_link]);
+		}
+
+		link_control->flags =
+			params->preferred_links.link_control_flags;
+		link_control->tx_link_tuple_bitmap =
+			params->preferred_links.tlt_characterization_params;
+
+		for (latency = 0; latency < WLAN_MAX_AC; latency++) {
+			link_control->max_timeout_ms[latency] =
+			    params->preferred_links.timeout[latency];
+			wmi_debug("Add preference link TLV: expected_timeout_ms: %d",
+			    link_control->max_timeout_ms[latency]);
+		}
+		buf_ptr += sizeof(wmi_mlo_peer_link_control_param);
+	} else {
+		WMITLV_SET_HDR(buf_ptr, WMITLV_TAG_ARRAY_STRUC, 0);
+		buf_ptr = buf_ptr + WMI_TLV_HDR_SIZE;
 	}
 
-	for (latency = 0; latency < WLAN_MAX_AC; latency++) {
-		pref_links->expected_max_latency_ms[latency] =
-			params->preferred_links.timeout[latency];
-		wmi_debug("Add preference link TLV: expected_timeout_ms: %d",
-			  pref_links->expected_max_latency_ms[latency]);
-	}
-
-	buf_ptr += sizeof(wmi_peer_preferred_link_map);
 	return buf_ptr;
 }
 #else
 static uint32_t find_buf_len_pref_link(
-		struct wmi_host_tid_to_link_map_params *params)
+		struct wmi_host_tid_to_link_map_params *params,
+		bool t2lm_info)
 {
 	uint32_t buf_len = 0;
 
@@ -977,7 +1018,7 @@ static uint32_t find_buf_len_pref_link(
 	return buf_len;
 }
 
-static uint8_t *populate_preferred_link_tlv(
+static uint8_t *populate_link_control_tlv(
 		uint8_t *buf_ptr,
 		struct wmi_host_tid_to_link_map_params *params)
 {
@@ -985,9 +1026,107 @@ static uint8_t *populate_preferred_link_tlv(
 }
 #endif
 
+static QDF_STATUS
+send_link_state_request_cmd_tlv(wmi_unified_t wmi_handle,
+				struct wmi_host_link_state_params *params)
+{
+	wmi_mlo_vdev_get_link_info_cmd_fixed_param *cmd;
+	wmi_buf_t buf;
+	uint8_t *buf_ptr;
+	QDF_STATUS ret = QDF_STATUS_SUCCESS;
+	uint32_t buf_len = 0;
+
+	buf_len = sizeof(wmi_mlo_vdev_get_link_info_cmd_fixed_param);
+
+	buf = wmi_buf_alloc(wmi_handle, buf_len);
+	if (!buf) {
+		wmi_err("wmi buf alloc failed for vdev id %d while link state cmd send: ",
+			params->vdev_id);
+		return QDF_STATUS_E_NOMEM;
+	}
+
+	buf_ptr = (uint8_t *)wmi_buf_data(buf);
+	cmd = (wmi_mlo_vdev_get_link_info_cmd_fixed_param *)buf_ptr;
+
+	WMITLV_SET_HDR(
+		&cmd->tlv_header,
+		WMITLV_TAG_STRUC_wmi_mlo_vdev_get_link_info_cmd_fixed_param,
+		WMITLV_GET_STRUCT_TLVLEN(
+		wmi_mlo_vdev_get_link_info_cmd_fixed_param));
+
+	cmd->vdev_id = params->vdev_id;
+	WMI_CHAR_ARRAY_TO_MAC_ADDR(params->mld_mac, &cmd->mld_macaddr);
+	buf_ptr += sizeof(wmi_mlo_vdev_get_link_info_cmd_fixed_param);
+	wmi_mtrace(WMI_MLO_VDEV_GET_LINK_INFO_CMDID, cmd->vdev_id, 0);
+	ret = wmi_unified_cmd_send(wmi_handle, buf, buf_len,
+				   WMI_MLO_VDEV_GET_LINK_INFO_CMDID);
+	if (ret) {
+		wmi_err("Failed to send ml link state command to FW: %d vdev id %d",
+			ret, cmd->vdev_id);
+		wmi_buf_free(buf);
+	}
+	return ret;
+}
+
+static QDF_STATUS
+extract_mlo_link_state_event_tlv(struct wmi_unified *wmi_handle,
+				 void *buf,
+				 struct  ml_link_state_info_event *params)
+{
+	WMI_MLO_VDEV_LINK_INFO_EVENTID_param_tlvs *param_buf;
+	wmi_mlo_vdev_link_info_event_fixed_param *ev;
+	wmi_mlo_vdev_link_info  *link_info = NULL;
+	int num_info = 0;
+	uint8_t *mld_addr;
+	uint32_t num_link_info = 0;
+
+	param_buf = (WMI_MLO_VDEV_LINK_INFO_EVENTID_param_tlvs *)buf;
+
+	if (!param_buf) {
+		wmi_err_rl("Param_buf is NULL");
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	ev = (wmi_mlo_vdev_link_info_event_fixed_param *)
+	param_buf->fixed_param;
+	link_info = (wmi_mlo_vdev_link_info *)param_buf->mlo_vdev_link_info;
+
+	num_link_info = param_buf->num_mlo_vdev_link_info;
+	params->status = ev->status;
+	params->vdev_id = ev->vdev_id;
+	params->hw_mode_index = ev->hw_mode_index;
+	params->num_mlo_vdev_link_info = num_link_info;
+	mld_addr = params->mldaddr.bytes;
+	WMI_MAC_ADDR_TO_CHAR_ARRAY(&ev->mld_macaddr, mld_addr);
+
+	if (params->num_mlo_vdev_link_info > WLAN_MLO_MAX_VDEVS) {
+		wmi_err_rl("Invalid number of vdev link info");
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	for (num_info = 0; num_info < num_link_info; num_info++) {
+		params->link_info[num_info].vdev_id =
+		WMI_MLO_VDEV_LINK_INFO_GET_VDEVID(link_info->link_info);
+
+		params->link_info[num_info].link_id =
+		WMI_MLO_VDEV_LINK_INFO_GET_LINKID(link_info->link_info);
+
+		params->link_info[num_info].link_status =
+		WMI_MLO_VDEV_LINK_INFO_GET_LINK_STATUS(link_info->link_info);
+
+		params->link_info[num_info].chan_freq =
+		link_info->chan_freq;
+
+		link_info++;
+	}
+
+	return QDF_STATUS_SUCCESS;
+}
+
 static QDF_STATUS send_mlo_peer_tid_to_link_map_cmd_tlv(
 		wmi_unified_t wmi_handle,
-		struct wmi_host_tid_to_link_map_params *params)
+		struct wmi_host_tid_to_link_map_params *params,
+		bool t2lm_info)
 {
 	wmi_peer_tid_to_link_map_fixed_param *cmd;
 	wmi_tid_to_link_map *t2lm;
@@ -998,7 +1137,7 @@ static QDF_STATUS send_mlo_peer_tid_to_link_map_cmd_tlv(
 	uint8_t dir = 0;
 	uint8_t tid_num = 0;
 
-	buf_len = find_buf_len_pref_link(params);
+	buf_len = find_buf_len_pref_link(params, t2lm_info);
 	buf = wmi_buf_alloc(wmi_handle, buf_len);
 	if (!buf) {
 		wmi_err("wmi buf alloc failed for mlo_peer_mac: "
@@ -1022,53 +1161,58 @@ static QDF_STATUS send_mlo_peer_tid_to_link_map_cmd_tlv(
 
 	buf_ptr += sizeof(wmi_peer_tid_to_link_map_fixed_param);
 
-	WMITLV_SET_HDR(buf_ptr, WMITLV_TAG_ARRAY_STRUC,
+	if (t2lm_info) {
+		WMITLV_SET_HDR(buf_ptr, WMITLV_TAG_ARRAY_STRUC,
 		       (params->num_dir * T2LM_MAX_NUM_TIDS *
 		       sizeof(wmi_tid_to_link_map)));
-	buf_ptr += sizeof(uint32_t);
+		buf_ptr += sizeof(uint32_t);
 
-	for (dir = 0; dir < params->num_dir; dir++) {
-		wmi_debug("Add T2LM TLV for peer: " QDF_MAC_ADDR_FMT " direction:%d",
+		for (dir = 0; dir < params->num_dir; dir++) {
+			wmi_debug("Add T2LM TLV for peer: " QDF_MAC_ADDR_FMT " direction:%d",
 				QDF_MAC_ADDR_REF(params->peer_macaddr),
 				params->t2lm_info[dir].direction);
 
-		for (tid_num = 0; tid_num < T2LM_MAX_NUM_TIDS; tid_num++) {
-			t2lm = (wmi_tid_to_link_map *)buf_ptr;
+			for (tid_num = 0; tid_num < T2LM_MAX_NUM_TIDS; tid_num++) {
+				t2lm = (wmi_tid_to_link_map *)buf_ptr;
 
-			WMITLV_SET_HDR(&t2lm->tlv_header,
+				WMITLV_SET_HDR(&t2lm->tlv_header,
 				       WMITLV_TAG_STRUC_wmi_tid_to_link_map,
 				       WMITLV_GET_STRUCT_TLVLEN(
 					   wmi_tid_to_link_map));
 
-			/* Populate TID number */
-			WMI_TID_TO_LINK_MAP_TID_NUM_SET(
+				/* Populate TID number */
+				WMI_TID_TO_LINK_MAP_TID_NUM_SET(
 					t2lm->tid_to_link_map_info, tid_num);
 
-			/* Populate the direction */
-			WMI_TID_TO_LINK_MAP_DIR_SET(
+				/* Populate the direction */
+				WMI_TID_TO_LINK_MAP_DIR_SET(
 					t2lm->tid_to_link_map_info,
 					params->t2lm_info[dir].direction);
 
-			/* Populate the default link mapping value */
-			WMI_TID_TO_LINK_MAP_DEFAULT_MAPPING_SET(
+				/* Populate the default link mapping value */
+				WMI_TID_TO_LINK_MAP_DEFAULT_MAPPING_SET(
 					t2lm->tid_to_link_map_info,
 					params->t2lm_info[dir].default_link_mapping);
 
-			/* Populate the T2LM provisioned links for the
-			 * corresponding TID number.
-			 */
-			WMI_TID_TO_LINK_MAP_LINK_MASK_SET(
+				/* Populate the T2LM provisioned links for the
+				 * corresponding TID number.
+				 */
+				WMI_TID_TO_LINK_MAP_LINK_MASK_SET(
 					t2lm->tid_to_link_map_info,
 					params->t2lm_info[dir].t2lm_provisioned_links[tid_num]);
 
-			buf_ptr += sizeof(wmi_tid_to_link_map);
+				buf_ptr += sizeof(wmi_tid_to_link_map);
 
-			wmi_debug("Add T2LM TLV: tid_to_link_map_info:%x",
+				wmi_debug("Add T2LM TLV: tid_to_link_map_info:%x",
 				  t2lm->tid_to_link_map_info);
+			}
 		}
+	} else {
+		WMITLV_SET_HDR(buf_ptr, WMITLV_TAG_ARRAY_STRUC, 0);
+		buf_ptr = buf_ptr + WMI_TLV_HDR_SIZE;
 	}
 
-	buf_ptr = populate_preferred_link_tlv(buf_ptr, params);
+	buf_ptr = populate_link_control_tlv(buf_ptr, params);
 	wmi_mtrace(WMI_MLO_PEER_TID_TO_LINK_MAP_CMDID, cmd->pdev_id, 0);
 	ret = wmi_unified_cmd_send(wmi_handle, buf, buf_len,
 				   WMI_MLO_PEER_TID_TO_LINK_MAP_CMDID);
@@ -1102,6 +1246,10 @@ static void update_t2lm_ie_info_params(
 	WMI_MLO_VDEV_TID_TO_LINK_MAP_CTRL_DUR_TIME_SET(
 			info->tid_to_link_map_ctrl,
 			params->expected_duration_present);
+
+	WMI_MLO_VDEV_TID_TO_LINK_MAP_CTRL_LINK_MAP_SIZE_SET(
+			info->tid_to_link_map_ctrl,
+			params->link_mapping_size);
 
 	wmi_debug("tid_to_link_map_ctrl:%x map_switch_time:%d expected_duration:%d",
 		  info->tid_to_link_map_ctrl, info->map_switch_time,
@@ -1633,10 +1781,14 @@ void wmi_11be_attach_tlv(wmi_unified_t wmi_handle)
 		send_mlo_peer_tid_to_link_map_cmd_tlv;
 	ops->send_mlo_vdev_tid_to_link_map =
 		send_mlo_vdev_tid_to_link_map_cmd_tlv;
+	ops->send_mlo_link_state_request =
+		send_link_state_request_cmd_tlv;
 	ops->extract_mlo_vdev_tid_to_link_map_event =
 		extract_mlo_vdev_tid_to_link_map_event_tlv;
 	ops->extract_mlo_vdev_bcast_tid_to_link_map_event =
 		extract_mlo_vdev_bcast_tid_to_link_map_event_tlv;
+	ops->extract_mlo_link_state_event =
+		extract_mlo_link_state_event_tlv;
 #endif /* WLAN_FEATURE_11BE */
 	ops->extract_mgmt_rx_ml_cu_params =
 		extract_mgmt_rx_ml_cu_params_tlv;

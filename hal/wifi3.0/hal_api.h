@@ -243,7 +243,8 @@ static inline void hal_tx_init_cmd_credit_ring(hal_soc_handle_t hal_soc_hdl,
  *                            that window would be a bug
  */
 #if !defined(QCA_WIFI_QCA6390) && !defined(QCA_WIFI_QCA6490) && \
-    !defined(QCA_WIFI_QCA6750) && !defined(QCA_WIFI_KIWI)
+    !defined(QCA_WIFI_QCA6750) && !defined(QCA_WIFI_KIWI) && \
+    !defined(QCA_WIFI_WCN6450)
 static inline void hal_write32_mb(struct hal_soc *hal_soc, uint32_t offset,
 				  uint32_t value)
 {
@@ -466,6 +467,7 @@ static inline void hal_srng_write_address_32_mb(struct hal_soc *hal_soc,
 						uint32_t value)
 {
 	qdf_iowrite32(addr, value);
+	hal_srng_reg_his_add(srng, value);
 }
 #elif defined(FEATURE_HAL_DELAYED_REG_WRITE)
 static inline void hal_srng_write_address_32_mb(struct hal_soc *hal_soc,
@@ -482,11 +484,13 @@ static inline void hal_srng_write_address_32_mb(struct hal_soc *hal_soc,
 						uint32_t value)
 {
 	hal_write_address_32_mb(hal_soc, addr, value, false);
+	hal_srng_reg_his_add(srng, value);
 }
 #endif
 
 #if !defined(QCA_WIFI_QCA6390) && !defined(QCA_WIFI_QCA6490) && \
-    !defined(QCA_WIFI_QCA6750) && !defined(QCA_WIFI_KIWI)
+    !defined(QCA_WIFI_QCA6750) && !defined(QCA_WIFI_KIWI) && \
+    !defined(QCA_WIFI_WCN6450)
 /**
  * hal_read32_mb() - Access registers to read configuration
  * @hal_soc: hal soc handle
@@ -1021,6 +1025,10 @@ struct hal_srng_params {
 	/* Safe threshold */
 	uint16_t safe_thresh;
 #endif
+	/* Timer threshold to issue ring pointer update - in micro seconds */
+	uint16_t pointer_timer_threshold;
+	/* Number threshold of ring entries to issue pointer update */
+	uint8_t pointer_num_threshold;
 };
 
 /**

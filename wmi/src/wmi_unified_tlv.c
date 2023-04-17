@@ -437,6 +437,8 @@ static const uint32_t pdev_param_tlv[] = {
 	PARAM_MAP(pdev_param_default_6ghz_rate, PDEV_PARAM_DEFAULT_6GHZ_RATE),
 	PARAM_MAP(pdev_param_scan_blanking_mode,
 		  PDEV_PARAM_SET_SCAN_BLANKING_MODE),
+	PARAM_MAP(pdev_param_set_conc_low_latency_mode,
+		  PDEV_PARAM_SET_CONC_LOW_LATENCY_MODE),
 };
 
 /* Populate vdev_param array whose index is host param, value is target param */
@@ -710,6 +712,8 @@ static const uint32_t vdev_param_tlv[] = {
 		  VDEV_PARAM_SET_PROFILE),
 	PARAM_MAP(vdev_param_set_disabled_modes,
 		  VDEV_PARAM_SET_DISABLED_SCHED_MODES),
+	PARAM_MAP(vdev_param_set_sap_ps_with_twt,
+		  VDEV_PARAM_SET_SAP_PS_WITH_TWT),
 };
 #endif
 
@@ -1875,10 +1879,13 @@ static QDF_STATUS send_vdev_up_cmd_tlv(wmi_unified_t wmi,
 static uint32_t convert_peer_type_host_to_target(uint32_t peer_type)
 {
 	/* Host sets the peer_type as 0 for the peer create command sent to FW
-	 * other than PASN peer create command.
+	 * other than PASN and BRIDGE peer create command.
 	 */
 	if (peer_type == WLAN_PEER_RTT_PASN)
 		return WMI_PEER_TYPE_PASN;
+
+	if (peer_type == WLAN_PEER_MLO_BRIDGE)
+		return WMI_PEER_TYPE_BRIDGE;
 
 	return peer_type;
 }
@@ -2728,7 +2735,7 @@ static QDF_STATUS send_set_sta_ps_param_cmd_tlv(wmi_unified_t wmi_handle,
 /**
  * send_crash_inject_cmd_tlv() - inject fw crash
  * @wmi_handle: wmi handle
- * @param: ponirt to crash inject parameter structure
+ * @param: pointer to crash inject parameter structure
  *
  * Return: QDF_STATUS_SUCCESS for success or return error
  */
@@ -5489,6 +5496,79 @@ fail:
 }
 
 /**
+ * extract_csa_ie_received_ev_params_tlv() - extract csa IE received event
+ * @wmi_handle: wmi handle
+ * @evt_buf: pointer to event buffer
+ * @vdev_id: VDEV ID
+ * @csa_event: csa event data
+ *
+ * Return: QDF_STATUS_SUCCESS on success, QDF_STATUS_E_** on error
+ */
+static QDF_STATUS
+extract_csa_ie_received_ev_params_tlv(wmi_unified_t wmi_handle,
+				      void *evt_buf, uint8_t *vdev_id,
+				      struct csa_offload_params *csa_event)
+{
+	WMI_CSA_IE_RECEIVED_EVENTID_param_tlvs *param_buf;
+	wmi_csa_event_fixed_param *csa_ev;
+	struct xcsa_ie *xcsa_ie;
+	struct csa_ie *csa_ie;
+	uint8_t *bssid;
+	bool ret;
+
+	param_buf = (WMI_CSA_IE_RECEIVED_EVENTID_param_tlvs *)evt_buf;
+	if (!param_buf) {
+		wmi_err("Invalid csa event buffer");
+		return QDF_STATUS_E_FAILURE;
+	}
+	csa_ev = param_buf->fixed_param;
+	WMI_MAC_ADDR_TO_CHAR_ARRAY(&csa_ev->i_addr2,
+				   &csa_event->bssid.bytes[0]);
+
+	bssid = csa_event->bssid.bytes;
+	ret = wlan_get_connected_vdev_from_psoc_by_bssid(wmi_handle->soc->wmi_psoc,
+							 bssid, vdev_id);
+	if (!ret) {
+		wmi_err("VDEV is not connected with BSSID");
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	if (csa_ev->ies_present_flag & WMI_CSA_IE_PRESENT) {
+		csa_ie = (struct csa_ie *)(&csa_ev->csa_ie[0]);
+		csa_event->channel = csa_ie->new_channel;
+		csa_event->switch_mode = csa_ie->switch_mode;
+		csa_event->ies_present_flag |= MLME_CSA_IE_PRESENT;
+	} else if (csa_ev->ies_present_flag & WMI_XCSA_IE_PRESENT) {
+		xcsa_ie = (struct xcsa_ie *)(&csa_ev->xcsa_ie[0]);
+		csa_event->channel = xcsa_ie->new_channel;
+		csa_event->switch_mode = xcsa_ie->switch_mode;
+		csa_event->new_op_class = xcsa_ie->new_class;
+		csa_event->ies_present_flag |= MLME_XCSA_IE_PRESENT;
+	} else {
+		wmi_err("CSA Event error: No CSA IE present");
+		return QDF_STATUS_E_INVAL;
+	}
+
+	wmi_debug("CSA IE Received: BSSID " QDF_MAC_ADDR_FMT " chan %d freq %d flag 0x%x width = %d freq1 = %d freq2 = %d op class = %d",
+		  QDF_MAC_ADDR_REF(csa_event->bssid.bytes),
+		  csa_event->channel,
+		  csa_event->csa_chan_freq,
+		  csa_event->ies_present_flag,
+		  csa_event->new_ch_width,
+		  csa_event->new_ch_freq_seg1,
+		  csa_event->new_ch_freq_seg2,
+		  csa_event->new_op_class);
+
+	if (!csa_event->channel) {
+		wmi_err("CSA Event with channel %d. Ignore !!",
+			csa_event->channel);
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	return QDF_STATUS_SUCCESS;
+}
+
+/**
  * send_probe_rsp_tmpl_send_cmd_tlv() - send probe response template to fw
  * @wmi_handle: wmi handle
  * @vdev_id: vdev id
@@ -6653,6 +6733,7 @@ static QDF_STATUS send_process_ll_stats_get_cmd_tlv(wmi_unified_t wmi_handle,
 	wmi_buf_t buf;
 	uint8_t *buf_ptr;
 	int ret;
+	bool is_link_stats_over_qmi;
 
 	len = sizeof(*cmd);
 	buf = wmi_buf_alloc(wmi_handle, len);
@@ -6681,8 +6762,20 @@ static QDF_STATUS send_process_ll_stats_get_cmd_tlv(wmi_unified_t wmi_handle,
 		 QDF_MAC_ADDR_REF(get_req->peer_macaddr.bytes));
 
 	wmi_mtrace(WMI_REQUEST_LINK_STATS_CMDID, cmd->vdev_id, 0);
-	ret = wmi_unified_cmd_send_pm_chk(wmi_handle, buf, len,
-					  WMI_REQUEST_LINK_STATS_CMDID, true);
+	is_link_stats_over_qmi = is_service_enabled_tlv(
+			wmi_handle,
+			WMI_SERVICE_UNIFIED_LL_GET_STA_OVER_QMI_SUPPORT);
+
+	if (is_link_stats_over_qmi) {
+		ret = wmi_unified_cmd_send_over_qmi(
+					wmi_handle, buf, len,
+					WMI_REQUEST_LINK_STATS_CMDID);
+	} else {
+		ret = wmi_unified_cmd_send_pm_chk(
+					wmi_handle, buf, len,
+					WMI_REQUEST_LINK_STATS_CMDID, true);
+	}
+
 	if (ret) {
 		wmi_buf_free(buf);
 		return QDF_STATUS_E_FAILURE;
@@ -18647,6 +18740,10 @@ wlan_roam_fail_reason_code(uint16_t wmi_roam_fail_reason)
 		return ROAM_FAIL_REASON_SAE_PREAUTH_FAIL;
 	case WMI_ROAM_FAIL_REASON_UNABLE_TO_START_ROAM_HO:
 		return ROAM_FAIL_REASON_UNABLE_TO_START_ROAM_HO;
+	case WMI_ROAM_FAIL_REASON_NO_AP_FOUND_AND_FINAL_BMISS_SENT:
+		return ROAM_FAIL_REASON_NO_AP_FOUND_AND_FINAL_BMISS_SENT;
+	case WMI_ROAM_FAIL_REASON_NO_CAND_AP_FOUND_AND_FINAL_BMISS_SENT:
+		return ROAM_FAIL_REASON_NO_CAND_AP_FOUND_AND_FINAL_BMISS_SENT;
 	default:
 		return ROAM_FAIL_REASON_UNKNOWN;
 	}
@@ -18844,6 +18941,7 @@ extract_roam_trigger_stats_tlv(wmi_unified_t wmi_handle, void *evt_buf,
 		trig->trigger_reason =
 			wmi_convert_fw_to_cm_trig_reason(trig_reason);
 		trig->timestamp = cmn_data->timestamp;
+		trig->common_roam = true;
 	} else if (src_data) {
 		trig_reason = src_data->trigger_reason;
 		trig->trigger_reason =
@@ -18852,6 +18950,7 @@ extract_roam_trigger_stats_tlv(wmi_unified_t wmi_handle, void *evt_buf,
 			wmi_convert_roam_sub_reason(src_data->trigger_sub_reason);
 		trig->current_rssi = src_data->current_rssi;
 		trig->timestamp = src_data->timestamp;
+		trig->common_roam = false;
 	}
 
 	if (param_buf->roam_trigger_rssi)
@@ -19211,6 +19310,15 @@ extract_roam_scan_stats_tlv(wmi_unified_t wmi_handle, void *evt_buf,
 			dst->num_chan = MAX_ROAM_SCAN_CHAN;
 
 		src_chan = &param_buf->roam_scan_chan_info[chan_idx];
+
+		if ((dst->num_chan + chan_idx) >
+		    param_buf->num_roam_scan_chan_info) {
+			wmi_err("Invalid TLV. num_chan %d chan_idx %d num_roam_scan_chan_info %d",
+				dst->num_chan, chan_idx,
+				param_buf->num_roam_scan_chan_info);
+			return QDF_STATUS_SUCCESS;
+		}
+
 		for (i = 0; i < dst->num_chan; i++) {
 			dst->chan_freq[i] = src_chan->channel;
 			dst->dwell_type[i] =
@@ -19329,6 +19437,14 @@ extract_roam_11kv_stats_tlv(wmi_unified_t wmi_handle, void *evt_buf,
 
 	if (dst->num_freq > MAX_ROAM_SCAN_CHAN)
 		dst->num_freq = MAX_ROAM_SCAN_CHAN;
+
+	if ((dst->num_freq + rpt_idx) >
+	    param_buf->num_roam_neighbor_report_chan_info) {
+		wmi_err("Invalid TLV. num_freq %d rpt_idx %d num_roam_neighbor_report_chan_info %d",
+			dst->num_freq, rpt_idx,
+			param_buf->num_roam_scan_chan_info);
+		return QDF_STATUS_SUCCESS;
+	}
 
 	for (i = 0; i < dst->num_freq; i++) {
 		dst->freq[i] = src_freq->channel;
@@ -20242,6 +20358,38 @@ send_vdev_pn_mgmt_rxfilter_cmd_tlv(wmi_unified_t wmi_handle,
 }
 
 static QDF_STATUS
+send_egid_info_cmd_tlv(wmi_unified_t wmi_handle,
+		       struct esl_egid_params *param)
+{
+	wmi_esl_egid_cmd_fixed_param *cmd;
+	wmi_buf_t buf;
+
+	uint32_t len = sizeof(*cmd);
+
+	buf = wmi_buf_alloc(wmi_handle, len);
+	if (!buf) {
+		wmi_err("wmi_buf_alloc failed");
+		return QDF_STATUS_E_NOMEM;
+	}
+
+	cmd = (wmi_esl_egid_cmd_fixed_param *)wmi_buf_data(buf);
+	WMITLV_SET_HDR(
+		&cmd->tlv_header,
+		WMITLV_TAG_STRUC_wmi_esl_egid_cmd_fixed_param,
+		WMITLV_GET_STRUCT_TLVLEN(wmi_esl_egid_cmd_fixed_param));
+	qdf_mem_copy(cmd->egid_info,
+		     param->egid_info,
+		     sizeof(param->egid_info));
+	if (wmi_unified_cmd_send(wmi_handle, buf, len, WMI_ESL_EGID_CMDID)) {
+		wmi_err("Failed to send WMI command");
+		wmi_buf_free(buf);
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	return QDF_STATUS_SUCCESS;
+}
+
+static QDF_STATUS
 extract_pktlog_decode_info_event_tlv(wmi_unified_t wmi_handle, void *evt_buf,
 				     uint8_t *pdev_id, uint8_t *software_image,
 				     uint8_t *chip_info,
@@ -20839,7 +20987,7 @@ struct wmi_ops tlv_ops =  {
 #ifdef FEATURE_MEC_OFFLOAD
 	.send_pdev_set_mec_timer_cmd = send_pdev_set_mec_timer_cmd_tlv,
 #endif
-#if defined(WLAN_SUPPORT_INFRA_CTRL_PATH_STATS) || defined(WLAN_TELEMETRY_STATS_SUPPORT)
+#if defined(WLAN_SUPPORT_INFRA_CTRL_PATH_STATS) || defined(WLAN_CONFIG_TELEMETRY_AGENT)
 	.extract_infra_cp_stats = extract_infra_cp_stats_tlv,
 #endif /* WLAN_SUPPORT_INFRA_CTRL_PATH_STATS */
 	.extract_cp_stats_more_pending =
@@ -20915,6 +21063,9 @@ struct wmi_ops tlv_ops =  {
 	.extract_sap_coex_cap_service_ready_ext2 =
 			extract_sap_coex_fix_chan_caps,
 	.extract_tgtr2p_table_event = extract_tgtr2p_table_event_tlv,
+	.send_egid_info_cmd = send_egid_info_cmd_tlv,
+	.extract_csa_ie_received_ev_params =
+			extract_csa_ie_received_ev_params_tlv,
 };
 
 #ifdef WLAN_FEATURE_11BE_MLO
@@ -20932,6 +21083,8 @@ static void populate_tlv_events_id_mlo(WMI_EVT_ID *event_ids)
 			WMI_MLO_AP_VDEV_TID_TO_LINK_MAP_EVENTID;
 	event_ids[wmi_mlo_link_removal_eventid] =
 			WMI_MLO_LINK_REMOVAL_EVENTID;
+	event_ids[wmi_mlo_link_state_info_eventid] =
+			WMI_MLO_VDEV_LINK_INFO_EVENTID;
 }
 #else /* WLAN_FEATURE_11BE_MLO */
 static inline void populate_tlv_events_id_mlo(WMI_EVT_ID *event_ids)
@@ -21419,6 +21572,18 @@ static void populate_tlv_events_id(WMI_EVT_ID *event_ids)
 #endif
 	event_ids[wmi_pdev_set_tgtr2p_table_eventid] =
 		WMI_PDEV_SET_TGTR2P_TABLE_EVENTID;
+#ifdef QCA_MANUAL_TRIGGERED_ULOFDMA
+	event_ids[wmi_manual_ul_ofdma_trig_feedback_eventid] =
+		WMI_MANUAL_UL_OFDMA_TRIG_FEEDBACK_EVENTID;
+	event_ids[wmi_manual_ul_ofdma_trig_rx_peer_userinfo_eventid] =
+		WMI_MANUAL_UL_OFDMA_TRIG_RX_PEER_USERINFO_EVENTID;
+#endif
+#ifdef QCA_STANDALONE_SOUNDING_TRIGGER
+	event_ids[wmi_vdev_standalone_sound_complete_eventid] =
+		WMI_VDEV_STANDALONE_SOUND_COMPLETE_EVENTID;
+#endif
+	event_ids[wmi_csa_ie_received_event_id] =
+		WMI_CSA_IE_RECEIVED_EVENTID;
 }
 
 #ifdef WLAN_FEATURE_LINK_LAYER_STATS
@@ -21792,6 +21957,8 @@ static void populate_tlv_service(uint32_t *wmi_service)
 			WMI_SERVICE_RTT_11AZ_NTB_SUPPORT;
 	wmi_service[wmi_service_rtt_11az_tb_support] =
 			WMI_SERVICE_RTT_11AZ_TB_SUPPORT;
+	wmi_service[wmi_service_rtt_11az_tb_rsta_support] =
+			WMI_SERVICE_RTT_11AZ_TB_RSTA_SUPPORT;
 	wmi_service[wmi_service_rtt_11az_mac_sec_support] =
 			WMI_SERVICE_RTT_11AZ_MAC_SEC_SUPPORT;
 	wmi_service[wmi_service_rtt_11az_mac_phy_sec_support] =
@@ -21811,8 +21978,15 @@ static void populate_tlv_service(uint32_t *wmi_service)
 #endif
 	wmi_service[wmi_service_tdls_wideband_support] =
 			WMI_SERVICE_TDLS_WIDEBAND_SUPPORT;
+	wmi_service[wmi_service_tdls_concurrency_support] =
+			WMI_SERVICE_TDLS_CONCURRENCY_SUPPORT;
 #endif
-
+#ifdef FEATURE_WLAN_TDLS
+#ifdef WLAN_FEATURE_11BE
+	wmi_service[wmi_service_tdls_mlo_support] =
+			WMI_SERVICE_11BE_MLO_TDLS_SUPPORT;
+#endif
+#endif
 #ifdef WLAN_SUPPORT_TWT
 	wmi_service[wmi_service_twt_bcast_req_support] =
 			WMI_SERVICE_BROADCAST_TWT_REQUESTER;
@@ -21958,8 +22132,21 @@ static void populate_tlv_service(uint32_t *wmi_service)
 #endif
 	wmi_service[wmi_service_wpa3_sha384_roam_support] =
 			WMI_SERVICE_WMI_SERVICE_WPA3_SHA384_ROAM_SUPPORT;
+	wmi_service[wmi_service_self_mld_roam_between_dbs_and_hbs] =
+			WMI_SERVICE_SELF_MLD_ROAM_BETWEEN_DBS_AND_HBS;
+	/* TODO: Assign FW Enum after FW Shared header changes are merged */
 	wmi_service[wmi_service_v1a_v1b_supported] =
 			WMI_SERVICE_PEER_METADATA_V1A_V1B_SUPPORT;
+#ifdef QCA_MANUAL_TRIGGERED_ULOFDMA
+	wmi_service[wmi_service_manual_ulofdma_trigger_support] =
+			WMI_SERVICE_MANUAL_ULOFDMA_TRIGGER_SUPPORT;
+#endif
+	wmi_service[wmi_service_pre_rx_timeout] =
+				WMI_SERVICE_PRE_RX_TO;
+#ifdef QCA_STANDALONE_SOUNDING_TRIGGER
+	wmi_service[wmi_service_standalone_sound] =
+			WMI_SERVICE_STANDALONE_SOUND;
+#endif
 }
 
 /**

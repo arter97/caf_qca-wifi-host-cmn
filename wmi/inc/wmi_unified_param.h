@@ -516,6 +516,7 @@
 
 #define WMI_MAX_AOA_PHASE_DELTA 31
 #define WMI_MAX_CHAINS_PHASE 2
+#define EGID_INFO_SIZE 4
 
 #include "qdf_atomic.h"
 
@@ -1111,11 +1112,21 @@ typedef struct {
  * is present.
  * @preffered_link_order: Preferred links in order.
  * @timeout: timeout values for all the access categories.
+ * @tlt_characterization_params: Bitmask to select Tx-Link Tuple from ordered
+ *  list.
+ *  Bit 0-15 : Each bit maps to the corresponding Link ID
+ *  Bit 16-31: Reserved
+ * @link_control_flags: Link control flags.
+ *  Bit 0: TLT enable/disable
+ *  Bit 1: Preferred Link enable/disable
+ *  Bit 2-31: Reserved
  */
 struct wlan_host_preferred_links {
 	uint8_t num_pref_links;
 	uint8_t  preffered_link_order[MAX_PREFERRED_LINKS];
 	uint32_t timeout[WMI_HOST_WLAN_MAX_AC];
+	uint32_t tlt_characterization_params;
+	uint32_t link_control_flags;
 };
 #endif
 
@@ -1180,6 +1191,17 @@ struct wmi_host_tid_to_link_map_resp {
 	enum wlan_t2lm_status status;
 	uint8_t mapping_switch_tsf;
 };
+
+/**
+ * struct wmi_host_link_state_params - MLO link state params
+ * @vdev_id: Vdev id
+ * @mld_mac: mld mac address
+ */
+struct wmi_host_link_state_params {
+	uint8_t vdev_id;
+	uint8_t mld_mac[QDF_MAC_ADDR_SIZE];
+};
+
 #endif /* WLAN_FEATURE_11BE */
 
 #ifdef WLAN_FEATURE_11BE_MLO
@@ -4053,6 +4075,14 @@ struct btcoex_cfg_params {
 	uint32_t wlan_duration;
 };
 
+/**
+ * struct esl_egid_params - Contains the EGID information
+ * @egid_info: egid_info contains the 128-bit ESL EGID information
+ */
+struct esl_egid_params {
+	uint32_t egid_info[EGID_INFO_SIZE];
+};
+
 #define WMI_HOST_COEX_CONFIG_BUF_MAX_LEN 32 /* 128 bytes */
 /**
  * struct coex_ver_cfg_t
@@ -5252,6 +5282,17 @@ typedef enum {
 	wmi_xgap_enable_complete_eventid,
 #endif
 	wmi_pdev_set_tgtr2p_table_eventid,
+#ifdef QCA_MANUAL_TRIGGERED_ULOFDMA
+	wmi_manual_ul_ofdma_trig_feedback_eventid,
+	wmi_manual_ul_ofdma_trig_rx_peer_userinfo_eventid,
+#endif
+#ifdef QCA_STANDALONE_SOUNDING_TRIGGER
+	wmi_vdev_standalone_sound_complete_eventid,
+#endif
+	wmi_csa_ie_received_event_id,
+#ifdef WLAN_FEATURE_11BE_MLO
+	wmi_mlo_link_state_info_eventid,
+#endif
 	wmi_events_max,
 } wmi_conv_event_id;
 
@@ -5619,6 +5660,8 @@ typedef enum {
 		   PDEV_PARAM_SET_SCAN_BLANKING_MODE),
 	PDEV_PARAM(pdev_param_set_disabled_sched_modes,
 		   PDEV_PARAM_SET_DISABLED_SCHED_MODES),
+	PDEV_PARAM(pdev_param_set_conc_low_latency_mode,
+		   PDEV_PARAM_SET_CONC_LOW_LATENCY_MODE),
 	pdev_param_max,
 } wmi_conv_pdev_params_id;
 
@@ -5935,6 +5978,8 @@ typedef enum {
 	VDEV_PARAM(vdev_param_set_extra_eht_ltf, VDEV_PARAM_EXTRA_EHT_LTF),
 	VDEV_PARAM(vdev_param_set_disabled_modes,
 		   VDEV_PARAM_SET_DISABLED_SCHED_MODES),
+	VDEV_PARAM(vdev_param_set_sap_ps_with_twt,
+		   VDEV_PARAM_SET_SAP_PS_WITH_TWT),
 	vdev_param_max,
 } wmi_conv_vdev_param_id;
 
@@ -6204,6 +6249,11 @@ typedef enum {
 	wmi_service_tdls_ax_support,
 #endif
 #endif
+#ifdef WLAN_FEATURE_11BE_MLO
+#ifdef FEATURE_WLAN_TDLS
+	wmi_service_tdls_mlo_support,
+#endif
+#endif
 #ifdef WLAN_FEATURE_BIG_DATA_STATS
 	wmi_service_big_data_support,
 #endif
@@ -6253,6 +6303,7 @@ typedef enum {
 	wmi_service_rtt_11az_mac_sec_support,
 	wmi_service_rtt_11az_ntb_support,
 	wmi_service_rtt_11az_tb_support,
+	wmi_service_rtt_11az_tb_rsta_support,
 #endif
 	wmi_service_pktlog_decode_info_support,
 #ifdef WLAN_FEATURE_ROAM_OFFLOAD
@@ -6269,6 +6320,7 @@ typedef enum {
 	wmi_service_tdls_6g_support,
 #endif
 	wmi_service_tdls_wideband_support,
+	wmi_service_tdls_concurrency_support,
 #endif
 	wmi_service_is_my_mgmt_frame,
 	wmi_service_linkspeed_roam_trigger_support,
@@ -6284,7 +6336,15 @@ typedef enum {
 	wmi_service_wpa3_sha384_roam_support,
 	wmi_service_multiple_vdev_restart_bmap,
 	wmi_service_v1a_v1b_supported,
+	wmi_service_self_mld_roam_between_dbs_and_hbs,
 	wmi_service_cfr_capture_pdev_id_soc,
+#ifdef QCA_MANUAL_TRIGGERED_ULOFDMA
+	wmi_service_manual_ulofdma_trigger_support,
+#endif
+	wmi_service_pre_rx_timeout,
+#ifdef QCA_STANDALONE_SOUNDING_TRIGGER
+	wmi_service_standalone_sound,
+#endif
 	wmi_services_max,
 } wmi_conv_service_ids;
 #define WMI_SERVICE_UNAVAILABLE 0xFFFF
@@ -9174,6 +9234,7 @@ struct wmi_neighbor_report_data {
 /**
  * struct wmi_roam_trigger_info() - Roam trigger related details
  * @present:            Flag to check if the roam_trigger_info tlv is present
+ * @common_roam:        Flag to indicate common roam or special roam
  * @trigger_reason:     Roam trigger reason(enum WMI_ROAM_TRIGGER_REASON_ID)
  * @trigger_sub_reason: Sub reason for roam trigger if multiple roam scans
  * @current_rssi:       Connected AP RSSI
@@ -9199,6 +9260,7 @@ struct wmi_neighbor_report_data {
  */
 struct wmi_roam_trigger_info {
 	bool present;
+	bool common_roam;
 	uint32_t trigger_reason;
 	uint32_t trigger_sub_reason;
 	uint32_t current_rssi;

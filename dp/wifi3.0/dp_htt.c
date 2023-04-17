@@ -263,12 +263,7 @@ dp_htt_h2t_send_complete_free_netbuf(
 }
 
 #ifdef ENABLE_CE4_COMP_DISABLE_HTT_HTC_MISC_LIST
-/**
- * dp_htt_h2t_send_complete() - H2T completion handler
- * @context:	Opaque context (HTT SOC handle)
- * @htc_pkt:	HTC packet
- */
-static void
+void
 dp_htt_h2t_send_complete(void *context, HTC_PACKET *htc_pkt)
 {
 	struct htt_soc *soc =  (struct htt_soc *) context;
@@ -290,7 +285,7 @@ dp_htt_h2t_send_complete(void *context, HTC_PACKET *htc_pkt)
 
 #else /* ENABLE_CE4_COMP_DISABLE_HTT_HTC_MISC_LIST */
 
-static void
+void
 dp_htt_h2t_send_complete(void *context, HTC_PACKET *htc_pkt)
 {
 	void (*send_complete_part2)(
@@ -491,8 +486,8 @@ QDF_STATUS htt_h2t_rx_cce_super_rule_setup(struct htt_soc *soc, void *param)
 	qdf_nbuf_t msg;
 	uint32_t *msg_word;
 	uint8_t *htt_logger_bufp;
-	uint8_t ver = 0;
-	uint8_t i, j, valid = 0;
+	uint16_t ver = 0;
+	uint8_t i, valid = 0;
 	uint8_t num_filters = flt_params->num_filters;
 	uint8_t pdev_id = flt_params->pdev_id;
 	uint8_t op = flt_params->op;
@@ -500,7 +495,7 @@ QDF_STATUS htt_h2t_rx_cce_super_rule_setup(struct htt_soc *soc, void *param)
 	uint16_t ipv6 = qdf_ntohs(QDF_NBUF_TRAC_IPV6_ETH_TYPE);
 	QDF_STATUS status;
 
-	if (num_filters > IPA_WDI_MAX_FILTER) {
+	if (num_filters > RX_CCE_SUPER_RULE_SETUP_NUM) {
 		dp_htt_err("Wrong filter count %d", num_filters);
 		return QDF_STATUS_FILT_REQ_ERROR;
 	}
@@ -528,7 +523,7 @@ QDF_STATUS htt_h2t_rx_cce_super_rule_setup(struct htt_soc *soc, void *param)
 	HTT_RX_CCE_SUPER_RULE_SETUP_OPERATION_SET(*msg_word, op);
 
 	/* Set cce_super_rule_params */
-	for (i = 0; i < num_filters; i++) {
+	for (i = 0; i < RX_CCE_SUPER_RULE_SETUP_NUM; i++) {
 		valid = flt_params->flt_addr_params[i].valid;
 		ver = flt_params->flt_addr_params[i].l3_type;
 		msg_word++;
@@ -542,8 +537,7 @@ QDF_STATUS htt_h2t_rx_cce_super_rule_setup(struct htt_soc *soc, void *param)
 				msg_word,
 				flt_params->flt_addr_params[i].src_ipv6_addr);
 		} else {
-			dp_htt_err("Wrong ip version. Cannot set src_addr.");
-			return QDF_STATUS_FILT_REQ_ERROR;
+			dp_htt_debug("Filter %d not in use.", i);
 		}
 
 		/* move uint32_t *msg_word by IPV6 addr size */
@@ -558,8 +552,7 @@ QDF_STATUS htt_h2t_rx_cce_super_rule_setup(struct htt_soc *soc, void *param)
 				msg_word,
 				flt_params->flt_addr_params[i].dst_ipv6_addr);
 		} else {
-			dp_htt_err("Wrong ip version. Cannot set dst_addr.");
-			return QDF_STATUS_FILT_REQ_ERROR;
+			dp_htt_debug("Filter %d not in use.", i);
 		}
 
 		/* move uint32_t *msg_word by IPV6 addr size */
@@ -577,7 +570,7 @@ QDF_STATUS htt_h2t_rx_cce_super_rule_setup(struct htt_soc *soc, void *param)
 				*msg_word,
 				flt_params->flt_addr_params[i].dst_port);
 
-		dp_info("opt_dp:: pdev: %u ver %u, flt_num %u, op %u,"
+		dp_info("opt_dp:: pdev: %u ver %u, flt_num %u, op %u",
 			pdev_id, ver, i, op);
 		dp_info("valid %u", valid);
 	}
@@ -2409,6 +2402,112 @@ dp_pktlog_msg_handler(struct htt_soc *soc,
 }
 #endif
 
+#ifdef QCA_SUPPORT_PRIMARY_LINK_MIGRATE
+QDF_STATUS
+dp_h2t_ptqm_migration_msg_send(struct dp_soc *dp_soc, uint16_t vdev_id,
+			       uint8_t pdev_id,
+			       uint8_t chip_id, uint16_t peer_id,
+			       uint16_t ml_peer_id, uint16_t src_info,
+			       QDF_STATUS status)
+{
+	struct htt_soc *soc = dp_soc->htt_handle;
+	struct dp_htt_htc_pkt *pkt;
+	uint8_t *htt_logger_bufp;
+	qdf_nbuf_t msg;
+	uint32_t *msg_word;
+	QDF_STATUS ret = QDF_STATUS_SUCCESS;
+	bool src_info_valid = false;
+
+	msg = qdf_nbuf_alloc(
+			soc->osdev,
+			HTT_MSG_BUF_SIZE(sizeof(htt_h2t_primary_link_peer_migrate_resp_t)),
+			HTC_HEADER_LEN + HTC_HDR_ALIGNMENT_PADDING, 4, TRUE);
+
+	if (!msg)
+		return QDF_STATUS_E_NOMEM;
+
+	/*
+	 * Set the length of the message.
+	 * The contribution from the HTC_HDR_ALIGNMENT_PADDING is added
+	 * separately during the below call to qdf_nbuf_push_head.
+	 * The contribution from the HTC header is added separately inside HTC.
+	 */
+	if (qdf_nbuf_put_tail(msg, sizeof(htt_h2t_primary_link_peer_migrate_resp_t))
+			      == NULL) {
+		dp_htt_err("Failed to expand head for"
+			   "HTT_H2T_MSG_TYPE_PRIMARY_LINK_PEER_MIGRATE_RESP");
+		qdf_nbuf_free(msg);
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	msg_word = (uint32_t *)qdf_nbuf_data(msg);
+	memset(msg_word, 0, sizeof(htt_h2t_primary_link_peer_migrate_resp_t));
+
+	qdf_nbuf_push_head(msg, HTC_HDR_ALIGNMENT_PADDING);
+	htt_logger_bufp = (uint8_t *)msg_word;
+	*msg_word = 0;
+	HTT_H2T_MSG_TYPE_SET(*msg_word,
+			     HTT_H2T_MSG_TYPE_PRIMARY_LINK_PEER_MIGRATE_RESP);
+	HTT_H2T_PRIMARY_LINK_PEER_MIGRATE_PDEV_ID_SET(*msg_word, pdev_id);
+	HTT_H2T_PRIMARY_LINK_PEER_MIGRATE_CHIP_ID_SET(*msg_word, chip_id);
+	HTT_H2T_PRIMARY_LINK_PEER_MIGRATE_VDEV_ID_SET(*msg_word, vdev_id);
+
+	/* word 1 */
+	msg_word++;
+	*msg_word = 0;
+	HTT_H2T_PRIMARY_LINK_PEER_MIGRATE_SW_LINK_PEER_ID_SET(*msg_word,
+							      peer_id);
+	HTT_H2T_PRIMARY_LINK_PEER_MIGRATE_ML_PEER_ID_SET(*msg_word,
+							 ml_peer_id);
+
+	/* word 1 */
+	msg_word++;
+	*msg_word = 0;
+
+	if (src_info != 0)
+		src_info_valid = true;
+
+	HTT_H2T_PRIMARY_LINK_PEER_MIGRATE_SRC_INFO_VALID_SET(*msg_word,
+							     src_info_valid);
+	HTT_H2T_PRIMARY_LINK_PEER_MIGRATE_SRC_INFO_SET(*msg_word,
+						       src_info);
+	HTT_H2T_PRIMARY_LINK_PEER_MIGRATE_STATUS_SET(*msg_word,
+						     status);
+
+	pkt = htt_htc_pkt_alloc(soc);
+	if (!pkt) {
+		dp_htt_err("Fail to allocate dp_htt_htc_pkt buffer");
+		qdf_nbuf_free(msg);
+		return QDF_STATUS_E_NOMEM;
+	}
+
+	pkt->soc_ctxt = NULL;
+
+	/* macro to set packet parameters for TX */
+	SET_HTC_PACKET_INFO_TX(
+			&pkt->htc_pkt,
+			dp_htt_h2t_send_complete_free_netbuf,
+			qdf_nbuf_data(msg),
+			qdf_nbuf_len(msg),
+			soc->htc_endpoint,
+			HTC_TX_PACKET_TAG_RUNTIME_PUT);
+
+	SET_HTC_PACKET_NET_BUF_CONTEXT(&pkt->htc_pkt, msg);
+
+	ret = DP_HTT_SEND_HTC_PKT(
+			soc, pkt,
+			HTT_H2T_MSG_TYPE_PRIMARY_LINK_PEER_MIGRATE_RESP,
+			htt_logger_bufp);
+
+	if (ret != QDF_STATUS_SUCCESS) {
+		qdf_nbuf_free(msg);
+		htt_htc_pkt_free(soc, pkt);
+	}
+
+	return ret;
+}
+#endif
+
 #ifdef QCA_VDEV_STATS_HW_OFFLOAD_SUPPORT
 /**
  * dp_vdev_txrx_hw_stats_handler - Handle vdev stats received from FW
@@ -3231,6 +3330,40 @@ static void dp_htt_mlo_peer_map_handler(struct htt_soc *soc,
 				   mlo_flow_info, mlo_link_info);
 }
 
+#ifdef QCA_SUPPORT_PRIMARY_LINK_MIGRATE
+static void dp_htt_t2h_primary_link_migration(struct htt_soc *soc,
+					      uint32_t *msg_word)
+{
+	u_int16_t peer_id;
+	u_int16_t ml_peer_id;
+	u_int16_t vdev_id;
+	u_int8_t pdev_id;
+	u_int8_t chip_id;
+
+	vdev_id = HTT_T2H_PRIMARY_LINK_PEER_MIGRATE_VDEV_ID_GET(
+			*msg_word);
+	pdev_id = HTT_T2H_PRIMARY_LINK_PEER_MIGRATE_PDEV_ID_GET(
+			*msg_word);
+	chip_id = HTT_T2H_PRIMARY_LINK_PEER_MIGRATE_CHIP_ID_GET(
+			*msg_word);
+	ml_peer_id = HTT_T2H_PRIMARY_LINK_PEER_MIGRATE_ML_PEER_ID_GET(
+			*(msg_word + 1));
+	peer_id = HTT_T2H_PRIMARY_LINK_PEER_MIGRATE_SW_LINK_PEER_ID_GET(
+			*(msg_word + 1));
+
+	dp_htt_info("HTT_T2H_MSG_TYPE_PRIMARY_PEER_MIGRATE_IND msg"
+		    "for peer id %d vdev id %d", peer_id, vdev_id);
+
+	dp_htt_reo_migration(soc->dp_soc, peer_id, ml_peer_id,
+			vdev_id, pdev_id, chip_id);
+}
+#else
+static void dp_htt_t2h_primary_link_migration(struct htt_soc *soc,
+					      uint32_t *msg_word)
+{
+}
+#endif
+
 static void dp_htt_mlo_peer_unmap_handler(struct htt_soc *soc,
 					  uint32_t *msg_word)
 {
@@ -3323,6 +3456,11 @@ dp_rx_mlo_timestamp_ind_handler(void *soc_handle,
 				uint32_t *msg_word)
 {
 	qdf_assert_always(0);
+}
+
+static void dp_htt_t2h_primary_link_migration(struct htt_soc *soc,
+					      uint32_t *msg_word)
+{
 }
 #endif
 
@@ -3421,24 +3559,25 @@ static void dp_ipa_rx_cce_super_rule_setup_done_handler(struct htt_soc *soc,
 								*msg_word);
 		if (is_rules_enough == 1) {
 			is_success = true;
-			reserve_fail_cnt = 0;
+			soc->stats.reserve_fail_cnt = 0;
 		} else {
 			is_success = false;
-			soc->reserve_fail_cnt++;
-			if (soc->reserve_fail_cnt > MAX_RESERVE_FAIL_ATTEMPT) {
+			soc->stats.reserve_fail_cnt++;
+			if (soc->stats.reserve_fail_cnt >
+					MAX_RESERVE_FAIL_ATTEMPT) {
 				/*
 				 * IPA will retry only after an hour by default
 				 * after MAX_RESERVE_FAIL_ATTEMPT
 				 */
-				soc->abort_count++;
-				soc->reserve_fail_cnt = 0;
+				soc->stats.abort_count++;
+				soc->stats.reserve_fail_cnt = 0;
 				dp_info(
 				  "opt_dp: Filter reserve failed max attempts");
 			}
 			dp_info("opt_dp:: Filter reserve failed. Rules avail %d",
 				num_rules_avail);
 		}
-		dp_ipa_wdi_opt_dpath_notify_flt_rsvd_per_inst(is_success);
+		dp_ipa_wdi_opt_dpath_notify_flt_rsvd(is_success);
 		break;
 	}
 	case HTT_RX_CCE_SUPER_RULE_INSTALL_RESPONSE:
@@ -3463,8 +3602,8 @@ static void dp_ipa_rx_cce_super_rule_setup_done_handler(struct htt_soc *soc,
 			HTT_RX_CCE_SUPER_RULE_SETUP_DONE_CFG_RESULT_1_GET(
 								     *msg_word);
 
-		dp_ipa_wdi_opt_dpath_notify_flt_rlsd_per_inst(filter0_result,
-							      filter1_result);
+		dp_ipa_wdi_opt_dpath_notify_flt_rlsd(filter0_result,
+						     filter1_result);
 		break;
 	}
 	default:
@@ -3483,12 +3622,7 @@ static void dp_ipa_rx_cce_super_rule_setup_done_handler(struct htt_soc *soc,
 }
 #endif
 
-/*
- * dp_htt_t2h_msg_handler() - Generic Target to host Msg/event handler
- * @context:	Opaque context (HTT SOC handle)
- * @pkt:	HTC packet
- */
-static void dp_htt_t2h_msg_handler(void *context, HTC_PACKET *pkt)
+void dp_htt_t2h_msg_handler(void *context, HTC_PACKET *pkt)
 {
 	struct htt_soc *soc = (struct htt_soc *) context;
 	qdf_nbuf_t htt_t2h_msg = (qdf_nbuf_t) pkt->pPktContext;
@@ -3894,6 +4028,11 @@ static void dp_htt_t2h_msg_handler(void *context, HTC_PACKET *pkt)
 
 		break;
 	}
+	case HTT_T2H_MSG_TYPE_PRIMARY_LINK_PEER_MIGRATE_IND:
+	{
+		dp_htt_t2h_primary_link_migration(soc, msg_word);
+		break;
+	}
 	case HTT_T2H_MSG_TYPE_MLO_RX_PEER_MAP:
 	{
 		dp_htt_mlo_peer_map_handler(soc, msg_word);
@@ -3944,32 +4083,13 @@ static void dp_htt_t2h_msg_handler(void *context, HTC_PACKET *pkt)
 		qdf_nbuf_free(htt_t2h_msg);
 }
 
-/**
- * dp_htt_h2t_full() - Send full handler (called from HTC)
- * @context:	Opaque context (HTT SOC handle)
- * @pkt:	HTC packet
- *
- * Return: enum htc_send_full_action
- */
-static enum htc_send_full_action
+enum htc_send_full_action
 dp_htt_h2t_full(void *context, HTC_PACKET *pkt)
 {
 	return HTC_SEND_FULL_KEEP;
 }
 
-/**
- * dp_htt_hif_t2h_hp_callback() - HIF callback for high priority T2H messages
- * @context:	Opaque context (HTT SOC handle)
- * @nbuf:	nbuf containing T2H message
- * @pipe_id:	HIF pipe ID
- *
- * Return: QDF_STATUS
- *
- * TODO: Temporary change to bypass HTC connection for this new HIF pipe, which
- * will be used for packet log and other high-priority HTT messages. Proper
- * HTC connection to be added later once required FW changes are available
- */
-static QDF_STATUS
+QDF_STATUS
 dp_htt_hif_t2h_hp_callback (void *context, qdf_nbuf_t nbuf, uint8_t pipe_id)
 {
 	QDF_STATUS rc = QDF_STATUS_SUCCESS;
@@ -5265,6 +5385,97 @@ QDF_STATUS dp_htt_umac_reset_send_setup_cmd(
 	}
 
 	dp_info("HTT_H2T_MSG_TYPE_UMAC_HANG_RECOVERY_PREREQUISITE_SETUP sent");
+	return status;
+}
+
+QDF_STATUS dp_htt_umac_reset_send_start_pre_reset_cmd(
+		struct dp_soc *soc, bool is_initiator, bool is_umac_hang)
+{
+	struct htt_soc *htt_handle = soc->htt_handle;
+	uint32_t len;
+	qdf_nbuf_t msg;
+	u_int32_t *msg_word;
+	QDF_STATUS status;
+	uint8_t *htt_logger_bufp;
+	struct dp_htt_htc_pkt *pkt;
+
+	len = HTT_MSG_BUF_SIZE(
+		HTT_H2T_UMAC_HANG_RECOVERY_START_PRE_RESET_BYTES);
+
+	msg = qdf_nbuf_alloc(soc->osdev,
+			     len,
+			     /* reserve room for the HTC header */
+			     HTC_HEADER_LEN + HTC_HDR_ALIGNMENT_PADDING,
+			     4,
+			     TRUE);
+	if (!msg)
+		return QDF_STATUS_E_NOMEM;
+
+	/*
+	 * Set the length of the message.
+	 * The contribution from the HTC_HDR_ALIGNMENT_PADDING is added
+	 * separately during the below call to qdf_nbuf_push_head.
+	 * The contribution from the HTC header is added separately inside HTC.
+	 */
+	if (!qdf_nbuf_put_tail(
+		msg, HTT_H2T_UMAC_HANG_RECOVERY_START_PRE_RESET_BYTES)) {
+		dp_htt_err("Failed to expand head");
+		qdf_nbuf_free(msg);
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	/* fill in the message contents */
+	msg_word = (uint32_t *)qdf_nbuf_data(msg);
+
+	/* Rewind beyond alignment pad to get to the HTC header reserved area */
+	qdf_nbuf_push_head(msg, HTC_HDR_ALIGNMENT_PADDING);
+	htt_logger_bufp = (uint8_t *)msg_word;
+
+	qdf_mem_zero(msg_word,
+		     HTT_H2T_UMAC_HANG_RECOVERY_START_PRE_RESET_BYTES);
+
+	HTT_H2T_MSG_TYPE_SET(
+		*msg_word,
+		HTT_H2T_MSG_TYPE_UMAC_HANG_RECOVERY_SOC_START_PRE_RESET);
+
+	HTT_H2T_UMAC_HANG_RECOVERY_START_PRE_RESET_IS_INITIATOR_SET(
+		*msg_word, is_initiator);
+
+	HTT_H2T_UMAC_HANG_RECOVERY_START_PRE_RESET_IS_UMAC_HANG_SET(
+		*msg_word, is_umac_hang);
+
+	pkt = htt_htc_pkt_alloc(htt_handle);
+	if (!pkt) {
+		qdf_err("Fail to allocate dp_htt_htc_pkt buffer");
+		qdf_assert(0);
+		qdf_nbuf_free(msg);
+		return QDF_STATUS_E_NOMEM;
+	}
+
+	pkt->soc_ctxt = NULL; /* not used during send-done callback */
+
+	SET_HTC_PACKET_INFO_TX(&pkt->htc_pkt,
+			       dp_htt_h2t_send_complete_free_netbuf,
+			       qdf_nbuf_data(msg),
+			       qdf_nbuf_len(msg),
+			       htt_handle->htc_endpoint,
+			       /* tag for no FW response msg */
+			       HTC_TX_PACKET_TAG_RUNTIME_PUT);
+
+	SET_HTC_PACKET_NET_BUF_CONTEXT(&pkt->htc_pkt, msg);
+
+	status = DP_HTT_SEND_HTC_PKT(
+			htt_handle, pkt,
+			HTT_H2T_MSG_TYPE_UMAC_HANG_RECOVERY_SOC_START_PRE_RESET,
+			htt_logger_bufp);
+
+	if (QDF_IS_STATUS_ERROR(status)) {
+		qdf_nbuf_free(msg);
+		htt_htc_pkt_free(htt_handle, pkt);
+		return status;
+	}
+
+	dp_info("HTT_H2T_MSG_TYPE_UMAC_HANG_RECOVERY_SOC_START_PRE_RESET sent");
 	return status;
 }
 #endif

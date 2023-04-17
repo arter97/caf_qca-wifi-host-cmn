@@ -253,6 +253,12 @@
 /* Restricted TWT */
 #define WLAN_SOC_F_RESTRICTED_TWT           0x00000080
 
+/* Support for TDLS Concurrencies for Legacy STA & ML STA*/
+#define WLAN_TDLS_CONCURRENCIES_SUPPORT           0x0000100
+
+/* 11AZ Trigger based ranging Responder support */
+#define WLAN_RTT_11AZ_TB_RSTA_SUPPORT 0x00000200
+
 /* PSOC op flags */
 
 	/* Invalid VHT cap */

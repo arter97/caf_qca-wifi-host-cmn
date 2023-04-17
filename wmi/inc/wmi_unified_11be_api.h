@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -126,10 +126,12 @@ QDF_STATUS wmi_extract_mgmt_rx_mlo_link_removal_info(
  * wmi_send_mlo_peer_tid_to_link_map_cmd() - send TID-to-link mapping command
  * @wmi: WMI handle for this pdev
  * @params: Pointer to TID-to-link mapping params
+ * @t2lm_info: T2LM info presence flag
  */
 QDF_STATUS wmi_send_mlo_peer_tid_to_link_map_cmd(
 		wmi_unified_t wmi,
-		struct wmi_host_tid_to_link_map_params *params);
+		struct wmi_host_tid_to_link_map_params *params,
+		bool t2lm_info);
 
 /**
  * wmi_send_mlo_vdev_tid_to_link_map_cmd() - send TID-to-link mapping command
@@ -140,6 +142,14 @@ QDF_STATUS wmi_send_mlo_peer_tid_to_link_map_cmd(
 QDF_STATUS wmi_send_mlo_vdev_tid_to_link_map_cmd(
 		wmi_unified_t wmi,
 		struct wmi_host_tid_to_link_map_ap_params *params);
+/**
+ * wmi_send_mlo_link_state_request_cmd - send mlo link status command
+ * @wmi: wmi handle
+ * @params: Pointer to link state params
+ */
+QDF_STATUS wmi_send_mlo_link_state_request_cmd(
+		wmi_unified_t wmi,
+		struct wmi_host_link_state_params *params);
 
 /**
  * wmi_extract_mlo_vdev_tid_to_link_map_event() - extract mlo t2lm info for vdev
@@ -172,6 +182,18 @@ wmi_extract_mlo_vdev_bcast_tid_to_link_map_event(
 				     wmi_unified_t wmi,
 				     void *evt_buf,
 				     struct mlo_bcast_t2lm_info *bcast);
+
+/**
+ * wmi_extract_mlo_link_state_info_event - extract mlo link status info
+ * @wmi: wmi handle
+ * @evt_buf: pointer to event buffer
+ * @params: pointer to host struct to get mlo link state
+ */
+QDF_STATUS wmi_extract_mlo_link_state_info_event(
+			wmi_unified_t wmi,
+			void *evt_buf,
+			struct ml_link_state_info_event *params);
+
 #endif /* WLAN_FEATURE_11BE */
 
 #endif /*_WMI_UNIFIED_11BE_API_H_*/

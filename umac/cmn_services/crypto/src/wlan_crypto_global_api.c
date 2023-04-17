@@ -2418,6 +2418,8 @@ wlan_crypto_rsn_keymgmt_to_suite(uint32_t keymgmt)
 		return RSN_AUTH_KEY_MGMT_FT_802_1X_SUITE_B_384;
 	case WLAN_CRYPTO_KEY_MGMT_SAE_EXT_KEY:
 		return RSN_AUTH_KEY_MGMT_SAE_EXT_KEY;
+	case WLAN_CRYPTO_KEY_MGMT_FT_SAE_EXT_KEY:
+		return RSN_AUTH_KEY_MGMT_FT_SAE_EXT_KEY;
 	}
 
 	return status;
@@ -2579,6 +2581,8 @@ static int32_t wlan_crypto_rsn_suite_to_keymgmt(const uint8_t *sel)
 		return WLAN_CRYPTO_KEY_MGMT_PSK_SHA384;
 	case RSN_AUTH_KEY_MGMT_SAE_EXT_KEY:
 		return WLAN_CRYPTO_KEY_MGMT_SAE_EXT_KEY;
+	case RSN_AUTH_KEY_MGMT_FT_SAE_EXT_KEY:
+		return WLAN_CRYPTO_KEY_MGMT_FT_SAE_EXT_KEY;
 	}
 
 	return status;
@@ -3075,6 +3079,11 @@ uint8_t *wlan_crypto_build_rsnie_with_pmksa(struct wlan_objmgr_vdev *vdev,
 
 		selcnt[0]++;
 		RSN_ADD_KEYMGMT_TO_SUITE(frm, kmgmt);
+	}
+	if (HAS_KEY_MGMT(crypto_params, WLAN_CRYPTO_KEY_MGMT_FT_SAE_EXT_KEY)) {
+		selcnt[0]++;
+		RSN_ADD_KEYMGMT_TO_SUITE(frm,
+					 WLAN_CRYPTO_KEY_MGMT_FT_SAE_EXT_KEY);
 	}
 add_rsn_caps:
 	WLAN_CRYPTO_ADDSHORT(frm, crypto_params->rsn_caps);

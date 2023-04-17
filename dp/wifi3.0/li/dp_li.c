@@ -18,6 +18,7 @@
  */
 
 #include "dp_types.h"
+#include "dp_rings.h"
 #include <dp_internal.h>
 #include <dp_htt.h>
 #include "dp_li.h"
@@ -77,6 +78,8 @@ static void dp_soc_cfg_attach_li(struct dp_soc *soc)
 {
 	struct wlan_cfg_dp_soc_ctxt *soc_cfg_ctx = soc->wlan_cfg_ctx;
 
+	dp_soc_cfg_attach(soc);
+
 	wlan_cfg_set_rx_rel_ring_id(soc_cfg_ctx, WBM2SW_REL_ERR_RING_NUM);
 
 	soc_cfg_ctx->tcl_wbm_map_array = g_tcl_wbm_map_array;
@@ -112,13 +115,27 @@ static QDF_STATUS dp_soc_detach_li(struct dp_soc *soc)
 	return QDF_STATUS_SUCCESS;
 }
 
-static QDF_STATUS dp_soc_init_li(struct dp_soc *soc)
+static void *dp_soc_init_li(struct dp_soc *soc, HTC_HANDLE htc_handle,
+			    struct hif_opaque_softc *hif_handle)
 {
-	return QDF_STATUS_SUCCESS;
+	wlan_minidump_log(soc, sizeof(*soc), soc->ctrl_psoc,
+			  WLAN_MD_DP_SOC, "dp_soc");
+
+	soc->hif_handle = hif_handle;
+
+	soc->hal_soc = hif_get_hal_handle(soc->hif_handle);
+	if (!soc->hal_soc)
+		return NULL;
+
+	return dp_soc_init(soc, htc_handle, hif_handle);
 }
 
 static QDF_STATUS dp_soc_deinit_li(struct dp_soc *soc)
 {
+	qdf_atomic_set(&soc->cmn_init_done, 0);
+
+	dp_soc_deinit(soc);
+
 	return QDF_STATUS_SUCCESS;
 }
 
@@ -194,9 +211,11 @@ static QDF_STATUS dp_peer_map_attach_li(struct dp_soc *soc)
 }
 #endif
 
-static QDF_STATUS dp_peer_setup_li(struct dp_soc *soc, struct dp_peer *peer)
+static QDF_STATUS dp_peer_setup_li(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
+				   uint8_t *peer_mac,
+				   struct cdp_peer_setup_info *setup_info)
 {
-	return QDF_STATUS_SUCCESS;
+	return dp_peer_setup_wifi3(soc_hdl, vdev_id, peer_mac, setup_info);
 }
 
 qdf_size_t dp_get_soc_context_size_li(void)
@@ -219,6 +238,10 @@ dp_rxdma_ring_sel_cfg_li(struct dp_soc *soc)
 	struct htt_rx_ring_tlv_filter htt_tlv_filter = {0};
 	struct dp_srng *rx_mac_srng;
 	QDF_STATUS status = QDF_STATUS_SUCCESS;
+	uint32_t target_type = hal_get_target_type(soc->hal_soc);
+
+	if (target_type == TARGET_TYPE_QCN9160)
+		return status;
 
 	htt_tlv_filter.mpdu_start = 1;
 	htt_tlv_filter.msdu_start = 1;
@@ -300,6 +323,10 @@ dp_rxdma_ring_sel_cfg_li(struct dp_soc *soc)
 	struct htt_rx_ring_tlv_filter htt_tlv_filter = {0};
 	struct dp_srng *rx_mac_srng;
 	QDF_STATUS status = QDF_STATUS_SUCCESS;
+	uint32_t target_type = hal_get_target_type(soc->hal_soc);
+
+	if (target_type == TARGET_TYPE_QCN9160)
+		return status;
 
 	htt_tlv_filter.mpdu_start = 1;
 	htt_tlv_filter.msdu_start = 1;
@@ -373,6 +400,13 @@ dp_rxdma_ring_sel_cfg_li(struct dp_soc *soc)
 
 }
 #endif
+
+static inline
+QDF_STATUS dp_srng_init_li(struct dp_soc *soc, struct dp_srng *srng,
+			   int ring_type, int ring_num, int mac_id)
+{
+	return dp_srng_init_idx(soc, srng, ring_type, ring_num, mac_id, 0);
+}
 
 #ifdef QCA_DP_ENABLE_TX_COMP_RING4
 static inline
@@ -515,7 +549,8 @@ static QDF_STATUS dp_txrx_set_vdev_param_li(struct dp_soc *soc,
 bool
 dp_rx_intrabss_handle_nawds_li(struct dp_soc *soc, struct dp_txrx_peer *ta_peer,
 			       qdf_nbuf_t nbuf_copy,
-			       struct cdp_tid_rx_stats *tid_stats)
+			       struct cdp_tid_rx_stats *tid_stats,
+			       uint8_t link_id)
 {
 	return false;
 }
@@ -595,6 +630,11 @@ static QDF_STATUS dp_txrx_get_vdev_mcast_param_li(struct dp_soc *soc,
 	return QDF_STATUS_SUCCESS;
 }
 
+static uint8_t dp_get_hw_link_id_li(struct dp_pdev *pdev)
+{
+	return 0;
+}
+
 void dp_initialize_arch_ops_li(struct dp_arch_ops *arch_ops)
 {
 #ifndef QCA_HOST_MODE_WIFI_DISABLED
@@ -607,6 +647,8 @@ void dp_initialize_arch_ops_li(struct dp_arch_ops *arch_ops)
 			dp_tx_process_htt_completion_li;
 	arch_ops->dp_wbm_get_rx_desc_from_hal_desc =
 			dp_wbm_get_rx_desc_from_hal_desc_li;
+	arch_ops->dp_tx_desc_pool_alloc = dp_tx_desc_pool_alloc_li;
+	arch_ops->dp_tx_desc_pool_free = dp_tx_desc_pool_free_li;
 	arch_ops->dp_tx_desc_pool_init = dp_tx_desc_pool_init_li;
 	arch_ops->dp_tx_desc_pool_deinit = dp_tx_desc_pool_deinit_li;
 	arch_ops->dp_rx_desc_pool_init = dp_rx_desc_pool_init_li;
@@ -651,6 +693,8 @@ void dp_initialize_arch_ops_li(struct dp_arch_ops *arch_ops)
 	arch_ops->dp_rxdma_ring_sel_cfg = dp_rxdma_ring_sel_cfg_li;
 	arch_ops->dp_rx_peer_metadata_peer_id_get =
 					dp_rx_peer_metadata_peer_id_get_li;
+	arch_ops->dp_rx_peer_mdata_link_id_get =
+					dp_rx_peer_mdata_link_id_get_li;
 	arch_ops->soc_cfg_attach = dp_soc_cfg_attach_li;
 	arch_ops->tx_implicit_rbm_set = dp_tx_implicit_rbm_set_li;
 	arch_ops->txrx_set_vdev_param = dp_txrx_set_vdev_param_li;
@@ -664,6 +708,8 @@ void dp_initialize_arch_ops_li(struct dp_arch_ops *arch_ops)
 	arch_ops->dp_soc_get_num_soc = dp_soc_get_num_soc_li;
 	arch_ops->get_reo_qdesc_addr = dp_rx_get_reo_qdesc_addr_li;
 	arch_ops->txrx_get_vdev_mcast_param = dp_txrx_get_vdev_mcast_param_li;
+	arch_ops->get_hw_link_id = dp_get_hw_link_id_li;
+	arch_ops->txrx_srng_init = dp_srng_init_li;
 }
 
 #ifdef QCA_DP_TX_HW_SW_NBUF_DESC_PREFETCH

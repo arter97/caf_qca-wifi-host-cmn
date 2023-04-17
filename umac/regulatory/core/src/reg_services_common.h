@@ -965,9 +965,9 @@ enum channel_enum reg_get_chan_enum_for_freq(qdf_freq_t freq);
  * reg_get_min_max_bw_on_cur_chan_list() - To get min and max BW supported
  * by channel enum
  * @pdev: pointer to pdev
- * @chn_idx: enum channel_enum
- * @min bw: min bw
- * @max bw: max bw
+ * @chan_idx: enum channel_enum
+ * @min_bw: min bw
+ * @max_bw: max bw
  *
  * Return: SUCCESS/FAILURE
  */
@@ -1059,24 +1059,6 @@ reg_get_2g_bonded_channel_state_for_freq(struct wlan_objmgr_pdev *pdev,
 					 qdf_freq_t oper_ch_freq,
 					 qdf_freq_t sec_ch_freq,
 					 enum phy_ch_width bw);
-
-/**
- * reg_set_channel_params_for_freq() - Sets channel parameteres for given
- * bandwidth
- * @pdev: Pointer to pdev
- * @freq: Channel center frequency.
- * @sec_ch_2g_freq: Secondary 2G channel frequency
- * @ch_params: pointer to the channel parameters.
- * @treat_nol_chan_as_disabled: bool to treat nol channel as enabled or
- * disabled. If set to true, nol chan is considered as disabled in chan search.
- *
- * Return: None
- */
-void reg_set_channel_params_for_freq(struct wlan_objmgr_pdev *pdev,
-				     qdf_freq_t freq,
-				     qdf_freq_t sec_ch_2g_freq,
-				     struct ch_params *ch_params,
-				     bool treat_nol_chan_as_disabled);
 
 #ifdef CONFIG_REG_6G_PWRMODE
 /**
@@ -1738,7 +1720,18 @@ reg_get_cur_6g_ap_pwr_type(struct wlan_objmgr_pdev *pdev,
 QDF_STATUS reg_afc_start(struct wlan_objmgr_pdev *pdev, uint64_t req_id);
 
 /**
- * reg_get_partial_afc_req_info() - Get the AFC partial request information
+ * reg_free_afc_req() - Free the  memory allocated for AFC request structure and
+ * its members.
+ * @pdev: Pointer to pdev.
+ * @afc_req: Pointer to AFC request structure.
+ *
+ * Return: void
+ */
+void reg_free_afc_req(struct wlan_objmgr_pdev *pdev,
+		      struct wlan_afc_host_request *afc_req);
+
+/**
+ * reg_get_afc_req_info() - Get the AFC request information.
  * @pdev: Pointer to pdev
  * @afc_req: Address of AFC request pointer
  *
@@ -1747,20 +1740,19 @@ QDF_STATUS reg_afc_start(struct wlan_objmgr_pdev *pdev, uint64_t req_id);
  * Return: QDF_STATUS
  */
 QDF_STATUS
-reg_get_partial_afc_req_info(struct wlan_objmgr_pdev *pdev,
-			     struct wlan_afc_host_partial_request **afc_req);
+reg_get_afc_req_info(struct wlan_objmgr_pdev *pdev,
+		     struct wlan_afc_host_request **afc_req);
 
 /**
- * reg_print_partial_afc_req_info() - Print the AFC partial request
- *                                    information
+ * reg_print_afc_req_info() - Print the AFC request information.
  * @pdev: Pointer to pdev
  * @afc_req: Pointer to AFC request
  *
  * Return: Void
  */
 void
-reg_print_partial_afc_req_info(struct wlan_objmgr_pdev *pdev,
-			       struct wlan_afc_host_partial_request *afc_req);
+reg_print_afc_req_info(struct wlan_objmgr_pdev *pdev,
+		       struct wlan_afc_host_request *afc_req);
 
 /**
  * reg_register_afc_req_rx_callback() - add AFC request received callback
@@ -2534,14 +2526,14 @@ bool reg_is_afc_expiry_event_received(struct wlan_objmgr_pdev *pdev);
 bool reg_is_noaction_on_afc_pwr_evt(struct wlan_objmgr_pdev *pdev);
 
 /**
- * reg_dmn_set_afc_req_id() - Set the request ID in the AFC partial request
+ * reg_dmn_set_afc_req_id() - Set the request ID in the AFC request
  *                            object
- * @afc_req: pointer to AFC partial request
+ * @afc_req: pointer to AFC request
  * @req_id: AFC request ID
  *
  * Return: Void
  */
-void reg_dmn_set_afc_req_id(struct wlan_afc_host_partial_request *afc_req,
+void reg_dmn_set_afc_req_id(struct wlan_afc_host_request *afc_req,
 			    uint64_t req_id);
 #endif
 

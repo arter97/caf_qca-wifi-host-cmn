@@ -1217,7 +1217,7 @@ dp_rx_mon_flush_packet_tlv(struct dp_pdev *pdev, void *buf, uint16_t end_offset,
 
 	ppdu_info = &mon_pdev->ppdu_info;
 	if (!ppdu_info) {
-		dp_mon_err("ppdu_info malloc failed pdev: %pK", pdev);
+		dp_mon_debug("ppdu_info malloc failed pdev: %pK", pdev);
 		return work_done;
 	}
 	qdf_mem_zero(ppdu_info, sizeof(struct hal_rx_ppdu_info));
@@ -1359,12 +1359,14 @@ dp_rx_mon_handle_flush_n_trucated_ppdu(struct dp_soc *soc,
 	dp_rx_mon_flush_status_buf_queue(pdev);
 	buf = mon_desc->buf_addr;
 	end_offset = mon_desc->end_offset;
-	qdf_frag_free(mon_desc->buf_addr);
-	DP_STATS_INC(mon_soc, frag_free, 1);
 	dp_mon_add_to_free_desc_list(&desc_list, &tail, mon_desc);
 	work_done = 1;
 	work_done += dp_rx_mon_flush_packet_tlv(pdev, buf, end_offset,
 						&desc_list, &tail);
+	if (buf) {
+		qdf_frag_free(buf);
+		DP_STATS_INC(mon_soc, frag_free, 1);
+	}
 	if (desc_list)
 		dp_mon_add_desc_list_to_free_list(soc, &desc_list, &tail,
 						  rx_mon_desc_pool);
@@ -1412,7 +1414,7 @@ uint8_t dp_rx_mon_process_tlv_status(struct dp_pdev *pdev,
 			 *                          * mapped via nr frags
 			 *                                                   */
 			if (qdf_unlikely(!nbuf)) {
-				dp_mon_err("malloc failed pdev: %pK ", pdev);
+				dp_mon_debug("malloc failed pdev: %pK ", pdev);
 				return num_buf_reaped;
 			}
 
@@ -1759,7 +1761,7 @@ dp_rx_mon_process_status_tlv(struct dp_pdev *pdev)
 	ppdu_info = dp_rx_mon_get_ppdu_info(mon_pdev);
 
 	if (!ppdu_info) {
-		dp_mon_err("ppdu_info malloc failed pdev: %pK", pdev);
+		dp_mon_debug("ppdu_info malloc failed pdev: %pK", pdev);
 		dp_rx_mon_flush_status_buf_queue(pdev);
 		return NULL;
 	}

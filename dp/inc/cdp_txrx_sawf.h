@@ -76,6 +76,23 @@ cdp_sawf_peer_get_map_conf(ol_txrx_soc_handle soc,
 	return soc->ops->sawf_ops->sawf_def_queues_get_map_report(soc, mac);
 }
 
+static inline QDF_STATUS
+cdp_sawf_peer_get_msduq_info(ol_txrx_soc_handle soc, uint8_t *mac)
+{
+	if (!soc || !soc->ops) {
+		dp_cdp_debug("Invalid Instance");
+		QDF_BUG(0);
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	if (!soc->ops->sawf_ops ||
+	    !soc->ops->sawf_ops->sawf_get_peer_msduq_info) {
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	return soc->ops->sawf_ops->sawf_get_peer_msduq_info(soc, mac);
+}
+
 #ifdef CONFIG_SAWF
 /**
  * cdp_get_peer_sawf_delay_stats() - Call to get SAWF delay stats
@@ -322,6 +339,8 @@ cdp_get_drop_stats(ol_txrx_soc_handle soc, void *arg,
  * @tid: TID
  * @service_interval: Service Interval
  * @burst_size: Burst Size
+ * @min_tput: Min throughput
+ * @max_latency: Max latency
  * @add_or_sub: Add or Sub parameters
  *
  * Return: QDF_STATUS
@@ -329,6 +348,7 @@ cdp_get_drop_stats(ol_txrx_soc_handle soc, void *arg,
 static inline QDF_STATUS
 cdp_sawf_peer_config_ul(ol_txrx_soc_handle soc, uint8_t *mac_addr, uint8_t tid,
 			uint32_t service_interval, uint32_t burst_size,
+			uint32_t min_tput, uint32_t max_latency,
 			uint8_t add_or_sub)
 {
 	if (!soc || !soc->ops || !soc->ops->sawf_ops ||
@@ -340,6 +360,7 @@ cdp_sawf_peer_config_ul(ol_txrx_soc_handle soc, uint8_t *mac_addr, uint8_t tid,
 
 	return soc->ops->sawf_ops->peer_config_ul(soc, mac_addr, tid,
 						  service_interval, burst_size,
+						  min_tput, max_latency,
 						  add_or_sub);
 }
 

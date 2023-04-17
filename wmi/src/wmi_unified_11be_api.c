@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -62,10 +62,11 @@ wmi_send_mlo_link_set_active_cmd(wmi_unified_t wmi,
 #ifdef WLAN_FEATURE_11BE
 QDF_STATUS wmi_send_mlo_peer_tid_to_link_map_cmd(
 		wmi_unified_t wmi,
-		struct wmi_host_tid_to_link_map_params *params)
+		struct wmi_host_tid_to_link_map_params *params,
+		bool t2lm_info)
 {
 	if (wmi->ops->send_mlo_peer_tid_to_link_map)
-		return wmi->ops->send_mlo_peer_tid_to_link_map(wmi, params);
+		return wmi->ops->send_mlo_peer_tid_to_link_map(wmi, params, t2lm_info);
 
 	return QDF_STATUS_E_FAILURE;
 }
@@ -77,6 +78,15 @@ QDF_STATUS wmi_send_mlo_vdev_tid_to_link_map_cmd(
 	if (wmi->ops->send_mlo_vdev_tid_to_link_map)
 		return wmi->ops->send_mlo_vdev_tid_to_link_map(wmi, params);
 
+	return QDF_STATUS_E_FAILURE;
+}
+
+QDF_STATUS wmi_send_mlo_link_state_request_cmd(
+		wmi_unified_t wmi,
+		struct wmi_host_link_state_params *params)
+{
+	if (wmi->ops->send_mlo_link_state_request)
+		return wmi->ops->send_mlo_link_state_request(wmi, params);
 	return QDF_STATUS_E_FAILURE;
 }
 
@@ -107,6 +117,18 @@ wmi_extract_mlo_vdev_bcast_tid_to_link_map_event(
 	}
 	return QDF_STATUS_E_FAILURE;
 }
+
+QDF_STATUS wmi_extract_mlo_link_state_info_event(
+		wmi_unified_t wmi,
+		void *evt_buf,
+		struct ml_link_state_info_event *params)
+{
+	if (wmi->ops->extract_mlo_link_state_event)
+		return wmi->ops->extract_mlo_link_state_event(
+				wmi, evt_buf, params);
+	return QDF_STATUS_E_FAILURE;
+}
+
 #endif /* WLAN_FEATURE_11BE */
 
 QDF_STATUS

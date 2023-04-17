@@ -43,6 +43,11 @@
 #define WLAN_UMAC_MLO_MAX_DEV 2
 #endif
 
+/* MAX MLO Assoc Links per MLD */
+#ifndef WLAN_UMAC_MLO_ASSOC_MAX_SUPPORTED_LINKS
+#define WLAN_UMAC_MLO_ASSOC_MAX_SUPPORTED_LINKS 1
+#endif
+
 /* Max PEER support */
 #define MAX_MLO_PEER 512
 
@@ -247,6 +252,64 @@ struct wlan_mlo_key_mgmt {
 	bool keys_saved;
 };
 
+#ifdef WLAN_FEATURE_11BE_MLO
+/**
+ * struct mlo_link_state_cmd_params - MLO link state params
+ * @vdev_id: Vdev id
+ * @mld_mac: mld mac address
+ */
+struct mlo_link_state_cmd_params {
+	uint8_t vdev_id;
+	uint8_t mld_mac[QDF_MAC_ADDR_SIZE];
+};
+
+/**
+ * struct ml_link_info - ml link information
+ * @vdev_id: vdev id for this link
+ * @link_id: link id defined as in 802.11 BE spec.
+ * @link_status: active 0, inactive 1
+ * @reserved: reserved bits
+ * @chan_freq: Channel frequency in MHz
+ */
+struct ml_link_info {
+	uint32_t vdev_id:8,
+		 link_id:8,
+		 link_status:2,
+		 reserved:14;
+	uint32_t chan_freq;
+};
+
+/**
+ * struct ml_link_state_info_event - ML link state info response
+ * @status: to indicate the status for ml link info
+ * @hw_mode_index: current hardware mode index
+ * @link_info: link information
+ * @num_mlo_vdev_link_info: number of mlo vdev link info
+ * @vdev_id: vdev_id
+ * @mldaddr: mld addr
+ */
+struct ml_link_state_info_event {
+	uint32_t status;
+	uint32_t hw_mode_index;
+	struct ml_link_info link_info[WLAN_MLO_MAX_VDEVS];
+	uint16_t num_mlo_vdev_link_info;
+	uint8_t vdev_id;
+	struct qdf_mac_addr mldaddr;
+};
+
+/**
+ * struct ml_link_state_cmd_info - ml link state command info
+ * @request_cookie: request cookie
+ * @ml_link_state_resp_cb: callback function to handle response
+ * @ml_link_state_req_context: request context
+ */
+struct ml_link_state_cmd_info {
+	void *request_cookie;
+	void (*ml_link_state_resp_cb)(struct ml_link_state_info_event *ev,
+				      void *cookie);
+	void *ml_link_state_req_context;
+};
+#endif
 /**
  * struct mlo_sta_csa_params - CSA request parameters in mlo mgr
  * @csa_param: csa parameters
@@ -309,7 +372,7 @@ struct mlo_sta_quiet_status {
  * @copied_reassoc_rsp: Reassoc response copied from assoc link roam handling
  *                      to re-use while link connect in case of deferred/need
  *                      basis link connect (e.g. MLO OWE roaming).
- *
+ * @ml_link_state: ml link state command info param
  * NB: not using kernel-doc format since the kernel-doc script doesn't
  *     handle the qdf_bitmap() macro
  */
@@ -331,6 +394,9 @@ struct wlan_mlo_sta {
 	struct wlan_cm_disconnect_req *disconn_req;
 #ifdef WLAN_FEATURE_ROAM_OFFLOAD
 	struct wlan_cm_connect_resp *copied_reassoc_rsp;
+#endif
+#ifdef WLAN_FEATURE_11BE_MLO
+	struct ml_link_state_cmd_info ml_link_state;
 #endif
 };
 
@@ -603,6 +669,7 @@ struct wlan_mlo_peer_context {
  * struct mlo_link_info - ML link info
  * @link_addr: link mac address
  * @link_id: link index
+ * @is_bridge : Bridge peer or not
  * @chan_freq: Operating channel frequency
  * @nawds_config: peer's NAWDS configurarion
  * @vdev_id: VDEV ID
@@ -611,6 +678,7 @@ struct wlan_mlo_peer_context {
 struct mlo_link_info {
 	struct qdf_mac_addr link_addr;
 	uint8_t link_id;
+	bool is_bridge;
 	uint16_t chan_freq;
 #ifdef UMAC_SUPPORT_MLNAWDS
 	struct mlnawds_config nawds_config;
@@ -724,6 +792,7 @@ struct mlo_tgt_partner_info {
  * @mlo_mlme_ext_validate_conn_req: Callback to validate connect request
  * @mlo_mlme_ext_create_link_vdev: Callback to create link vdev for ML STA
  * @mlo_mlme_ext_peer_create: Callback to create link peer
+ * @mlo_mlme_ext_bridge_peer_create: Callback to create bridge peer
  * @mlo_mlme_ext_peer_assoc: Callback to initiate peer assoc
  * @mlo_mlme_ext_peer_assoc_fail: Callback to notify peer assoc failure
  * @mlo_mlme_ext_peer_delete: Callback to initiate link peer delete
@@ -741,6 +810,10 @@ struct mlo_mlme_ext_ops {
 	QDF_STATUS (*mlo_mlme_ext_create_link_vdev)(
 		    struct vdev_mlme_obj *vdev_mlme, void *ext_data);
 	QDF_STATUS (*mlo_mlme_ext_peer_create)(struct wlan_objmgr_vdev *vdev,
+					struct wlan_mlo_peer_context *ml_peer,
+					struct qdf_mac_addr *addr,
+					qdf_nbuf_t frm_buf);
+	QDF_STATUS (*mlo_mlme_ext_bridge_peer_create)(struct wlan_objmgr_vdev *vdev,
 					struct wlan_mlo_peer_context *ml_peer,
 					struct qdf_mac_addr *addr,
 					qdf_nbuf_t frm_buf);
@@ -806,11 +879,14 @@ enum mlo_link_force_mode {
  *  Set force specific links because of new dis-connection
  * @MLO_LINK_FORCE_REASON_LINK_REMOVAL:
  *  Set force specific links because of AP side link removal
+ * @MLO_LINK_FORCE_REASON_TDLS:
+ *  Set force specific links because of TDLS operation
  */
 enum mlo_link_force_reason {
 	MLO_LINK_FORCE_REASON_CONNECT    = 1,
 	MLO_LINK_FORCE_REASON_DISCONNECT = 2,
 	MLO_LINK_FORCE_REASON_LINK_REMOVAL = 3,
+	MLO_LINK_FORCE_REASON_TDLS = 4,
 };
 
 /**
@@ -991,4 +1067,5 @@ struct mgmt_rx_mlo_link_removal_info {
 	uint8_t hw_link_id;
 	uint16_t tbtt_count;
 };
+
 #endif
