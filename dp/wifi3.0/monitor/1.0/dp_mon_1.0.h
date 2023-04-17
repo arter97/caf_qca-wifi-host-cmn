@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -47,11 +47,12 @@ void dp_service_mon_rings(struct  dp_soc *soc, uint32_t quota);
  * @pdev: DP pdev
  * @mac_id: mac id
  * @quota: max number of status ring entries that can be processed
+ * @force_flush: Force flush ring
  *
  * Return: work done
  */
 uint32_t dp_mon_drop_packets_for_mac(struct dp_pdev *pdev, uint32_t mac_id,
-				     uint32_t quota);
+				     uint32_t quota, bool force_flush);
 
 /**
  * struct dp_mon_soc_li - Extended DP mon soc for LI targets
