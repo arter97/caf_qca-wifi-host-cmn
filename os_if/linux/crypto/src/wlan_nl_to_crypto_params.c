@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2019-2020 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -203,6 +203,13 @@ static const struct osif_akm_type_crypto_mapping
 #endif
 		.akm_suite = WLAN_AKM_SUITE_SAE_EXT_KEY,
 		.akm_type_crypto = WLAN_CRYPTO_KEY_MGMT_SAE_EXT_KEY,
+	},
+	{
+#ifndef WLAN_AKM_SUITE_FT_SAE_EXT_KEY
+#define WLAN_AKM_SUITE_FT_SAE_EXT_KEY 0x000FAC19
+#endif
+		.akm_suite = WLAN_AKM_SUITE_FT_SAE_EXT_KEY,
+		.akm_type_crypto = WLAN_CRYPTO_KEY_MGMT_FT_SAE_EXT_KEY,
 	},
 };
 

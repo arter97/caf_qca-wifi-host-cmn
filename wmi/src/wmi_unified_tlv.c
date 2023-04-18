@@ -18873,6 +18873,10 @@ wlan_roam_fail_reason_code(uint16_t wmi_roam_fail_reason)
 		return ROAM_FAIL_REASON_SAE_PREAUTH_FAIL;
 	case WMI_ROAM_FAIL_REASON_UNABLE_TO_START_ROAM_HO:
 		return ROAM_FAIL_REASON_UNABLE_TO_START_ROAM_HO;
+	case WMI_ROAM_FAIL_REASON_NO_AP_FOUND_AND_FINAL_BMISS_SENT:
+		return ROAM_FAIL_REASON_NO_AP_FOUND_AND_FINAL_BMISS_SENT;
+	case WMI_ROAM_FAIL_REASON_NO_CAND_AP_FOUND_AND_FINAL_BMISS_SENT:
+		return ROAM_FAIL_REASON_NO_CAND_AP_FOUND_AND_FINAL_BMISS_SENT;
 	default:
 		return ROAM_FAIL_REASON_UNKNOWN;
 	}
@@ -21574,6 +21578,8 @@ static void populate_tlv_service(uint32_t *wmi_service)
 #endif
 	wmi_service[wmi_service_wpa3_sha384_roam_support] =
 			WMI_SERVICE_WMI_SERVICE_WPA3_SHA384_ROAM_SUPPORT;
+	wmi_service[wmi_service_self_mld_roam_between_dbs_and_hbs] =
+			WMI_SERVICE_SELF_MLD_ROAM_BETWEEN_DBS_AND_HBS;
 }
 
 /**

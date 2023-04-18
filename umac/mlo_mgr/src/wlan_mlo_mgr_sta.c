@@ -169,6 +169,42 @@ bool mlo_is_mld_disconnecting_connecting(struct wlan_objmgr_vdev *vdev)
 	return false;
 }
 
+bool mlo_is_ml_connection_in_progress(struct wlan_objmgr_psoc *psoc,
+				      uint8_t vdev_id)
+{
+	struct wlan_objmgr_vdev *vdev;
+	struct wlan_mlo_dev_context *mlo_dev_ctx;
+	uint8_t i = 0;
+	bool val = false;
+
+	vdev = wlan_objmgr_get_vdev_by_id_from_psoc(psoc, vdev_id,
+						    WLAN_MLO_MGR_ID);
+
+	if (!vdev) {
+		mlo_err("Invalid vdev");
+		return false;
+	}
+
+	mlo_dev_ctx = vdev->mlo_dev_ctx;
+	if (!mlo_dev_ctx || !wlan_vdev_mlme_is_mlo_vdev(vdev))
+		goto end;
+
+	for (i =  0; i < WLAN_UMAC_MLO_MAX_VDEVS; i++) {
+		if (!mlo_dev_ctx->wlan_vdev_list[i])
+			continue;
+		if (qdf_test_bit(i, mlo_dev_ctx->sta_ctx->wlan_connected_links)) {
+			if (!wlan_cm_is_vdev_connected(mlo_dev_ctx->wlan_vdev_list[i])) {
+				val = true;
+				goto end;
+			}
+		}
+	}
+
+end:
+	wlan_objmgr_vdev_release_ref(vdev, WLAN_MLO_MGR_ID);
+	return val;
+}
+
 bool ucfg_mlo_is_mld_disconnected(struct wlan_objmgr_vdev *vdev)
 {
 	return mlo_is_mld_disconnected(vdev);
@@ -1197,10 +1233,14 @@ mlo_send_link_disconnect_sync(struct wlan_mlo_dev_context *mlo_dev_ctx,
 		if (!mlo_dev_ctx->wlan_vdev_list[i])
 			continue;
 
+		/*
+		 * To initiate disconnect on all links at once, no need to use
+		 * sync API for link Vdev
+		 */
 		if (mlo_dev_ctx->wlan_vdev_list[i] !=
 		    mlo_get_assoc_link_vdev(mlo_dev_ctx))
-			wlan_cm_disconnect_sync(mlo_dev_ctx->wlan_vdev_list[i],
-						source, reason_code);
+			wlan_cm_disconnect(mlo_dev_ctx->wlan_vdev_list[i],
+					   source, reason_code, NULL);
 	}
 
 	wlan_cm_disconnect_sync(assoc_vdev,
@@ -2027,6 +2067,73 @@ void mlo_sta_get_vdev_list(struct wlan_objmgr_vdev *vdev, uint16_t *vdev_count,
 		}
 	}
 	mlo_dev_lock_release(dev_ctx);
+}
+
+bool mlo_sta_vdev_get_reconfig_timer_state(struct wlan_objmgr_vdev *vdev)
+{
+	struct vdev_mlme_obj *vdev_mlme;
+
+	if (!vdev || !mlo_is_mld_sta(vdev))
+		return false;
+
+	vdev_mlme = wlan_vdev_mlme_get_cmpt_obj(vdev);
+	if (!vdev_mlme) {
+		mlo_err("vdev mlme is null");
+		return false;
+	}
+
+	return vdev_mlme->ml_reconfig_started;
+}
+
+void mlo_sta_stop_reconfig_timer_by_vdev(struct wlan_objmgr_vdev *vdev)
+{
+	struct vdev_mlme_obj *vdev_mlme;
+
+	if (!vdev || !mlo_is_mld_sta(vdev))
+		return;
+
+	vdev_mlme = wlan_vdev_mlme_get_cmpt_obj(vdev);
+	if (!vdev_mlme) {
+		mlo_err("vdev mlme is null");
+		return;
+	}
+
+	if (!vdev_mlme->ml_reconfig_started)
+		return;
+
+	qdf_timer_stop(&vdev_mlme->ml_reconfig_timer);
+
+	mlo_debug("vdev %d reconfig timer active to stop",
+		  wlan_vdev_get_id(vdev));
+	vdev_mlme->ml_reconfig_started = false;
+}
+
+void mlo_sta_stop_reconfig_timer(struct wlan_objmgr_vdev *vdev)
+{
+	struct wlan_objmgr_vdev *wlan_vdev_list[WLAN_UMAC_MLO_MAX_VDEVS] = {0};
+	uint16_t vdev_count = 0;
+	uint8_t i;
+
+	if (!vdev || !mlo_is_mld_sta(vdev))
+		return;
+
+	mlo_get_ml_vdev_list(vdev, &vdev_count, wlan_vdev_list);
+	if (!vdev_count) {
+		mlo_err("vdev num 0 in mld dev");
+		return;
+	}
+
+	for (i = 0; i < vdev_count; i++) {
+		if (!wlan_vdev_list[i]) {
+			mlo_err("vdev is null in mld");
+			goto release_ref;
+		}
+		mlo_sta_stop_reconfig_timer_by_vdev(wlan_vdev_list[i]);
+	}
+
+release_ref:
+	for (i = 0; i < vdev_count; i++)
+		mlo_release_vdev_ref(wlan_vdev_list[i]);
 }
 
 void mlo_set_keys_saved(struct wlan_objmgr_vdev *vdev,
