@@ -257,6 +257,7 @@ typedef enum wlan_crypto_key_mgmt {
 	WLAN_CRYPTO_KEY_MGMT_FT_PSK_SHA384         = 25,
 	WLAN_CRYPTO_KEY_MGMT_PSK_SHA384            = 26,
 	WLAN_CRYPTO_KEY_MGMT_SAE_EXT_KEY           = 27,
+	WLAN_CRYPTO_KEY_MGMT_FT_SAE_EXT_KEY        = 28,
 	/** Keep WLAN_CRYPTO_KEY_MGMT_MAX at the end. */
 	WLAN_CRYPTO_KEY_MGMT_MAX,
 } wlan_crypto_key_mgmt;
@@ -273,7 +274,7 @@ enum wlan_crypto_key_type {
 #define DEFAULT_KEYMGMT_6G_MASK 0xFFFFFFFF
 
 /* AKM wlan_crypto_key_mgmt 1, 6, 8, 25 and 26 are not allowed. */
-#define ALLOWED_KEYMGMT_6G_MASK 0x09FFFEBD
+#define ALLOWED_KEYMGMT_6G_MASK 0x19FFFEBD
 
 /*
  * enum fils_erp_cryptosuite: this enum defines the cryptosuites used

@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2020-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -433,9 +433,9 @@ dp_mon_filter_reset_mon_srng(struct dp_soc *soc, struct dp_pdev *pdev,
  * @pdev: DP pdev handle
  * @filter: DP mon filter
  *
- * Return: QDF_STATUS
+ * Return: None
  */
-void dp_mon_filter_set_mon_cmn(struct dp_mon_pdev *mon_pdev,
+void dp_mon_filter_set_mon_cmn(struct dp_pdev *pdev,
 			       struct dp_mon_filter *filter);
 
 /**

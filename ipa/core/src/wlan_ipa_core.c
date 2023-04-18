@@ -1736,7 +1736,8 @@ QDF_STATUS wlan_ipa_uc_enable_pipes(struct wlan_ipa_priv *ipa_ctx)
 	}
 end:
 	qdf_spin_lock_bh(&ipa_ctx->enable_disable_lock);
-	if (!qdf_atomic_read(&ipa_ctx->autonomy_disabled) &&
+	if (((!qdf_atomic_read(&ipa_ctx->autonomy_disabled)) ||
+	     ipa_ctx->opt_wifi_datapath) &&
 	    !qdf_atomic_read(&ipa_ctx->pipes_disabled))
 		ipa_ctx->ipa_pipes_down = false;
 
@@ -1761,6 +1762,9 @@ wlan_ipa_uc_disable_pipes(struct wlan_ipa_priv *ipa_ctx, bool force_disable)
 	if (ipa_ctx->ipa_pipes_down || ipa_ctx->pipes_down_in_progress) {
 		qdf_spin_unlock_bh(&ipa_ctx->enable_disable_lock);
 		ipa_info("IPA WDI Pipes are already deactivated");
+		ipa_info("pipes_down %d, pipes_down_in_progress %d",
+			 ipa_ctx->ipa_pipes_down,
+			 ipa_ctx->pipes_down_in_progress);
 		return QDF_STATUS_E_ALREADY;
 	}
 	ipa_ctx->pipes_down_in_progress = true;
@@ -5094,7 +5098,7 @@ int wlan_ipa_wdi_opt_dpath_flt_rem_cb(
 	}
 	dp_flt_params->op = HTT_RX_CCE_SUPER_RULE_INSTALL;
 	dp_flt_params->pdev_id = ipa_obj->dp_pdev_id;
-	dp_flt_params->num_filters = IPA_WDI_MAX_FILTER;
+	dp_flt_params->num_filters = num_flts;
 	qdf_event_reset(&ipa_obj->ipa_flt_evnt);
 
 	ipa_info("opt_dp: op %d, pdev_id %d. num_flts %d,",
