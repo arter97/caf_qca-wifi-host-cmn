@@ -1130,6 +1130,7 @@ enum wlan_status_code {
 #define WLAN_AKM_FILS_FT_SHA384   0x11
 #define WLAN_AKM_OWE              0x12
 #define WLAN_AKM_SAE_EXT_KEY      0x18
+#define WLAN_AKM_FT_SAE_EXT_KEY   0x19
 
 #define WLAN_ASE_NONE                    0x00
 #define WLAN_ASE_8021X_UNSPEC            0x01
@@ -3652,7 +3653,6 @@ is_p2p_oui(const uint8_t *frm)
 		(frm[5] == P2P_WFA_VER);
 }
 
-#define WLAN_VENDOR_SON_IE_LEN 31
 /**
  * is_qca_son_oui() - If vendor IE is QCA WHC type
  * @frm: vendor IE pointer

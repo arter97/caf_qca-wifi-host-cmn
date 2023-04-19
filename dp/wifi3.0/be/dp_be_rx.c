@@ -348,7 +348,6 @@ more_data:
 					&tail[rx_desc->chip_id][rx_desc->pool_id],
 					rx_desc);
 			}
-			hal_srng_dst_get_next(hal_soc, hal_ring_hdl);
 			continue;
 		}
 
@@ -365,9 +364,6 @@ more_data:
 			dp_info_rl("Reaping rx_desc not in use!");
 			dp_rx_dump_info_and_assert(soc, hal_ring_hdl,
 						   ring_desc, rx_desc);
-			/* ignore duplicate RX desc and continue to process */
-			/* Pop out the descriptor */
-			hal_srng_dst_get_next(hal_soc, hal_ring_hdl);
 			continue;
 		}
 
@@ -378,7 +374,6 @@ more_data:
 			dp_rx_dump_info_and_assert(soc, hal_ring_hdl,
 						   ring_desc, rx_desc);
 			rx_desc->in_err_state = 1;
-			hal_srng_dst_get_next(hal_soc, hal_ring_hdl);
 			continue;
 		}
 

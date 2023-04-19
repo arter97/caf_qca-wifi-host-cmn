@@ -1865,6 +1865,37 @@ static void dp_print_peer_table(struct dp_vdev *vdev)
 			     DP_MOD_ID_GENERIC_STATS);
 }
 
+/**
+ * dp_srng_configure_pointer_update_thresholds() - Retrieve pointer
+ * update threshold value from wlan_cfg_ctx
+ * @soc: device handle
+ * @ring_params: per ring specific parameters
+ * @ring_type: Ring type
+ * @ring_num: Ring number for a given ring type
+ * @num_entries: number of entries to fill
+ *
+ * Fill the ring params with the pointer update threshold
+ * configuration parameters available in wlan_cfg_ctx
+ *
+ * Return: None
+ */
+static void
+dp_srng_configure_pointer_update_thresholds(
+				struct dp_soc *soc,
+				struct hal_srng_params *ring_params,
+				int ring_type, int ring_num,
+				int num_entries)
+{
+	if (ring_type == REO_DST) {
+		ring_params->pointer_timer_threshold =
+			wlan_cfg_get_pointer_timer_threshold_rx(
+						soc->wlan_cfg_ctx);
+		ring_params->pointer_num_threshold =
+			wlan_cfg_get_pointer_num_threshold_rx(
+						soc->wlan_cfg_ctx);
+	}
+}
+
 #ifdef WLAN_DP_PER_RING_TYPE_CONFIG
 /**
  * dp_srng_configure_interrupt_thresholds() - Retrieve interrupt
@@ -2397,6 +2428,9 @@ QDF_STATUS dp_srng_init_idx(struct dp_soc *soc, struct dp_srng *srng,
 					       srng->num_entries);
 
 	dp_srng_set_nf_thresholds(soc, srng, &ring_params);
+	dp_srng_configure_pointer_update_thresholds(soc, &ring_params,
+						    ring_type, ring_num,
+						    srng->num_entries);
 
 	if (srng->cached)
 		ring_params.flags |= HAL_SRNG_CACHED_DESC;
@@ -8525,6 +8559,9 @@ static void dp_peer_setup_get_reo_hash(struct dp_vdev *vdev,
 		} else if (vdev->opmode == wlan_op_mode_sta &&
 			   dp_ipa_is_mdm_platform()) {
 			*reo_dest = IPA_REO_DEST_RING_IDX + 1;
+		} else if (vdev->opmode == wlan_op_mode_sta &&
+			   (!dp_ipa_is_mdm_platform())) {
+			dp_debug("opt_dp: default reo ring is set");
 		}
 	}
 }
@@ -14818,7 +14855,7 @@ dp_txrx_post_data_stall_event(struct cdp_soc_t *soc_hdl,
 
 #ifdef WLAN_FEATURE_STATS_EXT
 /* rx hw stats event wait timeout in ms */
-#define DP_REO_STATUS_STATS_TIMEOUT 850
+#define DP_REO_STATUS_STATS_TIMEOUT 100
 /**
  * dp_txrx_ext_stats_request - request dp txrx extended stats request
  * @soc_hdl: soc handle
@@ -15276,6 +15313,11 @@ static struct cdp_ipa_ops dp_ops_ipa = {
 	.ipa_tx_buf_smmu_unmapping = dp_ipa_tx_buf_smmu_unmapping,
 #ifdef QCA_ENHANCED_STATS_SUPPORT
 	.ipa_update_peer_rx_stats = dp_ipa_update_peer_rx_stats,
+#endif
+#ifdef IPA_OPT_WIFI_DP
+	.ipa_rx_super_rule_setup = dp_ipa_rx_super_rule_setup,
+	.ipa_pcie_link_up = dp_ipa_pcie_link,
+	.ipa_pcie_link_down = dp_ipa_pcie_link_down,
 #endif
 #ifdef IPA_WDS_EASYMESH_FEATURE
 	.ipa_ast_create = dp_ipa_ast_create,

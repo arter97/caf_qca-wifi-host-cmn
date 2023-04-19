@@ -33,7 +33,9 @@
 #endif
 #include "qdf_mem.h"   /* qdf_mem_malloc,free */
 #include "cdp_txrx_cmn_struct.h"
-
+#ifdef IPA_OPT_WIFI_DP
+#include "cdp_txrx_ipa.h"
+#endif
 #ifdef FEATURE_PERPKT_INFO
 #include "dp_ratetable.h"
 #endif
@@ -503,7 +505,7 @@ QDF_STATUS htt_h2t_rx_cce_super_rule_setup(struct htt_soc *soc, void *param)
 	qdf_nbuf_t msg;
 	uint32_t *msg_word;
 	uint8_t *htt_logger_bufp;
-	uint8_t ver = 0;
+	uint16_t ver = 0;
 	uint8_t i, valid = 0;
 	uint8_t num_filters = flt_params->num_filters;
 	uint8_t pdev_id = flt_params->pdev_id;
@@ -540,7 +542,7 @@ QDF_STATUS htt_h2t_rx_cce_super_rule_setup(struct htt_soc *soc, void *param)
 	HTT_RX_CCE_SUPER_RULE_SETUP_OPERATION_SET(*msg_word, op);
 
 	/* Set cce_super_rule_params */
-	for (i = 0; i < num_filters; i++) {
+	for (i = 0; i < RX_CCE_SUPER_RULE_SETUP_NUM; i++) {
 		valid = flt_params->flt_addr_params[i].valid;
 		ver = flt_params->flt_addr_params[i].l3_type;
 		msg_word++;
@@ -554,8 +556,7 @@ QDF_STATUS htt_h2t_rx_cce_super_rule_setup(struct htt_soc *soc, void *param)
 				msg_word,
 				flt_params->flt_addr_params[i].src_ipv6_addr);
 		} else {
-			dp_htt_err("Wrong ip version. Cannot set src_addr.");
-			return QDF_STATUS_FILT_REQ_ERROR;
+			dp_htt_debug("Filter %d not in use.", i);
 		}
 
 		/* move uint32_t *msg_word by IPV6 addr size */
@@ -570,8 +571,7 @@ QDF_STATUS htt_h2t_rx_cce_super_rule_setup(struct htt_soc *soc, void *param)
 				msg_word,
 				flt_params->flt_addr_params[i].dst_ipv6_addr);
 		} else {
-			dp_htt_err("Wrong ip version. Cannot set dst_addr.");
-			return QDF_STATUS_FILT_REQ_ERROR;
+			dp_htt_debug("Filter %d not in use.", i);
 		}
 
 		/* move uint32_t *msg_word by IPV6 addr size */
@@ -933,7 +933,7 @@ qdf_export_symbol(htt_srng_setup);
  *
  * @htt_soc: HTT Soc handle
  * @pdev_id: Radio id
- * @dp_full_mon_config: enabled/disable configuration
+ * @config: enabled/disable configuration
  *
  * Return: Success when HTT message is sent, error on failure
  */
@@ -2027,6 +2027,7 @@ dp_htt_set_pdev_obss_stats(struct dp_pdev *pdev, uint32_t tag_type,
 /**
  * dp_process_htt_stat_msg(): Process the list of buffers of HTT EXT stats
  * @htt_stats: htt stats info
+ * @soc: dp_soc
  *
  * The FW sends the HTT EXT STATS as a stream of T2H messages. Each T2H message
  * contains sub messages which are identified by a TLV header.
@@ -2733,6 +2734,8 @@ static void dp_htt_alert_print(enum htt_t2h_msg_type msg_type,
  * @soc: DP_SOC handle
  * @srng: DP_SRNG handle
  * @ring_type: srng src/dst ring
+ * @state: ring state
+ * @pdev: pdev
  *
  * Return: void
  */
@@ -2844,7 +2847,8 @@ dp_get_tcl_status_ring_state_from_hal(struct dp_pdev *pdev,
 #endif
 
 /**
- * dp_queue_srng_ring_stats(): Print pdev hal level ring stats
+ * dp_queue_ring_stats() - Print pdev hal level ring stats
+ * dp_queue_ring_stats(): Print pdev hal level ring stats
  * @pdev: DP_pdev handle
  *
  * Return: void
@@ -4154,6 +4158,8 @@ void htt_soc_detach(struct htt_soc *htt_hdl)
  * @config_param_1: extra configuration parameters
  * @config_param_2: extra configuration parameters
  * @config_param_3: extra configuration parameters
+ * @cookie_val: cookie value
+ * @cookie_msb: msb of debug status cookie
  * @mac_id: mac number
  *
  * return: QDF STATUS
@@ -4407,6 +4413,7 @@ QDF_STATUS dp_h2t_hw_vdev_stats_config_send(struct dp_soc *dpsoc,
  * @pdev: DP PDEV handle
  * @tuple_mask: tuple configuration to report 3 tuple hash value in either
  * toeplitz_2_or_4 or flow_id_toeplitz in MSDU START TLV.
+ * @mac_id: mac id
  *
  * tuple_mask[1:0]:
  *   00 - Do not report 3 tuple hash value
@@ -4919,7 +4926,7 @@ dp_htt_rx_flow_fse_operation(struct dp_pdev *pdev,
 /**
  * dp_htt_rx_fisa_config(): Send HTT msg to configure FISA
  * @pdev: DP pdev handle
- * @fse_op_info: Flow entry parameters
+ * @fisa_config: Fisa config struct
  *
  * Return: Success when HTT message is sent, error on failure
  */
@@ -5019,7 +5026,7 @@ dp_htt_rx_fisa_config(struct dp_pdev *pdev,
 #ifdef WLAN_SUPPORT_PPEDS
 /**
  * dp_htt_rxdma_rxole_ppe_cfg_set() - Send RxOLE and RxDMA PPE config
- * @dp_osc: Data path SoC handle
+ * @soc: Data path SoC handle
  * @cfg: RxDMA and RxOLE PPE config
  *
  * Return: Success when HTT message is sent, error on failure
