@@ -5671,6 +5671,12 @@ more_data:
 				continue;
 			}
 
+			/* if the tx desc force to be freed in the dp_bus_suspend, skip it */
+			if (!tx_desc->pdev) {
+				DP_STATS_INC(soc, tx.tx_comp_exception, 1);
+				continue;
+			}
+
 			if (qdf_unlikely(tx_desc->pdev->is_pdev_down)) {
 				dp_tx_comp_info_rl("pdev in down state %d",
 						   tx_desc->id);
