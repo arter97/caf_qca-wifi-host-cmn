@@ -4312,7 +4312,7 @@ dp_print_rx_soc_fw_refill_ring_num_rxdma_err_tlv(uint32_t *tag_buf)
 
 	uint8_t i;
 	uint16_t index = 0;
-	char rxdma_err_cnt[DP_MAX_STRING_LEN];
+	char rxdma_err_cnt[DP_MAX_STRING_LEN] = {'\0'};
 	uint32_t tag_len = (HTT_STATS_TLV_LENGTH_GET(*tag_buf) >> 2);
 	uint64_t total_rxdma_err_cnt = 0;
 
@@ -4347,7 +4347,7 @@ static void dp_print_rx_soc_fw_refill_ring_num_reo_err_tlv(uint32_t *tag_buf)
 
 	uint8_t i;
 	uint16_t index = 0;
-	char reo_err_cnt[DP_MAX_STRING_LEN];
+	char reo_err_cnt[DP_MAX_STRING_LEN] = {'\0'};
 	uint32_t tag_len = (HTT_STATS_TLV_LENGTH_GET(*tag_buf) >> 2);
 
 	tag_len = qdf_min(tag_len, (uint32_t)HTT_RX_REO_MAX_ERR_CODE);
@@ -5549,7 +5549,7 @@ void dp_print_soc_cfg_params(struct dp_soc *soc)
 {
 	struct wlan_cfg_dp_soc_ctxt *soc_cfg_ctx;
 	uint8_t index = 0, i = 0;
-	char ring_mask[DP_MAX_INT_CONTEXTS_STRING_LENGTH];
+	char ring_mask[DP_MAX_INT_CONTEXTS_STRING_LENGTH] = {'\0'};
 	int num_of_int_contexts;
 
 	if (!soc) {
@@ -6699,6 +6699,55 @@ void dp_print_peer_txrx_stats_li(struct cdp_peer_stats *peer_stats,
 	}
 }
 
+void dp_print_peer_txrx_stats_rh(struct cdp_peer_stats *peer_stats,
+				 enum peer_stats_type stats_type)
+{
+	if (stats_type == PEER_TX_STATS) {
+		DP_PRINT_STATS("BW Counts = 20MHZ %d 40MHZ %d 80MHZ %d 160MHZ %d\n",
+			       peer_stats->tx.bw[CMN_BW_20MHZ],
+			       peer_stats->tx.bw[CMN_BW_40MHZ],
+			       peer_stats->tx.bw[CMN_BW_80MHZ],
+			       peer_stats->tx.bw[CMN_BW_160MHZ]);
+		DP_PRINT_STATS("RU Locations");
+		DP_PRINT_STATS("%s: MSDUs Success = %d MPDUs Success = %d MPDUs Tried = %d",
+			       cdp_ru_string[RU_26_INDEX].ru_type,
+			       peer_stats->tx.ru_loc[RU_26_INDEX].num_msdu,
+			       peer_stats->tx.ru_loc[RU_26_INDEX].num_mpdu,
+			       peer_stats->tx.ru_loc[RU_26_INDEX].mpdu_tried);
+		DP_PRINT_STATS("%s: MSDUs Success = %d MPDUs Success = %d MPDUs Tried = %d",
+			       cdp_ru_string[RU_52_INDEX].ru_type,
+			       peer_stats->tx.ru_loc[RU_52_INDEX].num_msdu,
+			       peer_stats->tx.ru_loc[RU_52_INDEX].num_mpdu,
+			       peer_stats->tx.ru_loc[RU_52_INDEX].mpdu_tried);
+		DP_PRINT_STATS("%s: MSDUs Success = %d MPDUs Success = %d MPDUs Tried = %d",
+			       cdp_ru_string[RU_106_INDEX].ru_type,
+			       peer_stats->tx.ru_loc[RU_106_INDEX].num_msdu,
+			       peer_stats->tx.ru_loc[RU_106_INDEX].num_mpdu,
+			       peer_stats->tx.ru_loc[RU_106_INDEX].mpdu_tried);
+		DP_PRINT_STATS("%s: MSDUs Success = %d MPDUs Success = %d MPDUs Tried = %d",
+			       cdp_ru_string[RU_242_INDEX].ru_type,
+			       peer_stats->tx.ru_loc[RU_242_INDEX].num_msdu,
+			       peer_stats->tx.ru_loc[RU_242_INDEX].num_mpdu,
+			       peer_stats->tx.ru_loc[RU_242_INDEX].mpdu_tried);
+		DP_PRINT_STATS("%s: MSDUs Success = %d MPDUs Success = %d MPDUs Tried = %d",
+			       cdp_ru_string[RU_484_INDEX].ru_type,
+			       peer_stats->tx.ru_loc[RU_484_INDEX].num_msdu,
+			       peer_stats->tx.ru_loc[RU_484_INDEX].num_mpdu,
+			       peer_stats->tx.ru_loc[RU_484_INDEX].mpdu_tried);
+		DP_PRINT_STATS("%s: MSDUs Success = %d MPDUs Success = %d MPDUs Tried = %d",
+			       cdp_ru_string[RU_996_INDEX].ru_type,
+			       peer_stats->tx.ru_loc[RU_996_INDEX].num_msdu,
+			       peer_stats->tx.ru_loc[RU_996_INDEX].num_mpdu,
+			       peer_stats->tx.ru_loc[RU_996_INDEX].mpdu_tried);
+	} else {
+		DP_PRINT_STATS("BW Counts = 20MHZ %d 40MHZ %d 80MHZ %d 160MHZ %d",
+			       peer_stats->rx.bw[CMN_BW_20MHZ],
+			       peer_stats->rx.bw[CMN_BW_40MHZ],
+			       peer_stats->rx.bw[CMN_BW_80MHZ],
+			       peer_stats->rx.bw[CMN_BW_160MHZ]);
+	}
+}
+
 #ifdef REO_SHARED_QREF_TABLE_EN
 static void dp_peer_print_reo_qref_table(struct dp_peer *peer)
 {
@@ -6950,6 +6999,10 @@ void dp_print_peer_stats(struct dp_peer *peer,
 		dp_peer_print_tx_delay_stats(pdev, peer);
 	}
 
+	if (IS_MLO_DP_MLD_PEER(peer))
+		DP_PRINT_STATS("TX Invalid Link ID Packet Count = %u",
+			       peer_stats->tx.inval_link_id_pkt_cnt);
+
 	DP_PRINT_STATS("Node Rx Stats:");
 	DP_PRINT_STATS("Packets Sent To Stack = %d",
 		       peer_stats->rx.to_stack.num);
@@ -7122,6 +7175,10 @@ void dp_print_peer_stats(struct dp_peer *peer,
 
 	if (!IS_MLO_DP_LINK_PEER(peer))
 		dp_peer_print_rx_delay_stats(pdev, peer);
+
+	if (IS_MLO_DP_MLD_PEER(peer))
+		DP_PRINT_STATS("RX Invalid Link ID Packet Count = %u",
+			       peer_stats->rx.inval_link_id_pkt_cnt);
 
 	dp_peer_print_reo_qref_table(peer);
 }
@@ -7387,6 +7444,7 @@ void dp_txrx_path_stats(struct dp_soc *soc)
 	}
 }
 
+#ifndef WLAN_SOFTUMAC_SUPPORT
 /**
  * dp_peer_ctrl_frames_stats_get() - function to agreegate peer stats
  * Current scope is bar received count
@@ -7416,6 +7474,25 @@ dp_peer_ctrl_frames_stats_get(struct dp_soc *soc,
 	}
 	qdf_atomic_set(&pdev->stats_cmd_complete, 0);
 }
+
+#else
+/**
+ * dp_peer_ctrl_frames_stats_get() - function to agreegate peer stats
+ * Current scope is bar received count
+ *
+ * @soc : Datapath SOC handle
+ * @peer: Datapath peer handle
+ * @arg : argument to iterate function
+ *
+ * Return: void
+ */
+static void
+dp_peer_ctrl_frames_stats_get(struct dp_soc *soc,
+			      struct dp_peer *peer,
+			      void *arg)
+{
+}
+#endif /* WLAN_SOFTUMAC_SUPPORT */
 
 void
 dp_print_pdev_tx_stats(struct dp_pdev *pdev)
@@ -7614,8 +7691,8 @@ dp_print_pdev_tx_stats(struct dp_pdev *pdev)
 		       pdev->stats.ppdu_wrap_drop);
 
 	for (i = 0; i < CDP_WDI_NUM_EVENTS; i++) {
-		if (!pdev->stats.wdi_event[i])
-			DP_PRINT_STATS("Wdi msgs received from fw[%d]:%d",
+		if (pdev->stats.wdi_event[i])
+			DP_PRINT_STATS("Wdi msgs received for event ID[%d]:%d",
 				       i, pdev->stats.wdi_event[i]);
 	}
 
@@ -8519,9 +8596,6 @@ void dp_update_vdev_stats(struct dp_soc *soc, struct dp_peer *srcobj,
 	if (qdf_unlikely(!txrx_peer))
 		goto link_stats;
 
-	if (qdf_unlikely(dp_is_wds_extended(txrx_peer)))
-		return;
-
 	if (dp_peer_is_primary_link_peer(srcobj)) {
 		dp_update_vdev_basic_stats(txrx_peer, vdev_stats);
 		per_pkt_stats = &txrx_peer->stats[0].per_pkt_stats;
@@ -8565,10 +8639,11 @@ void dp_update_vdev_stats_on_peer_unmap(struct dp_vdev *vdev,
 
 	if (IS_MLO_DP_LINK_PEER(peer)) {
 		link_id = dp_get_peer_hw_link_id(soc, pdev);
-		per_pkt_stats = &txrx_peer->
-				stats[link_id].per_pkt_stats;
-		DP_UPDATE_PER_PKT_STATS(vdev_stats,
-					per_pkt_stats);
+		if (link_id > 0) {
+			per_pkt_stats =
+				&txrx_peer->stats[link_id].per_pkt_stats;
+			DP_UPDATE_PER_PKT_STATS(vdev_stats, per_pkt_stats);
+		}
 	}
 
 link_stats:
@@ -8872,6 +8947,8 @@ void dp_update_pdev_stats(struct dp_pdev *tgtobj,
 		srcobj->tx.last_ack_rssi;
 	tgtobj->stats.rx.mec_drop.num += srcobj->rx.mec_drop.num;
 	tgtobj->stats.rx.mec_drop.bytes += srcobj->rx.mec_drop.bytes;
+	tgtobj->stats.rx.ppeds_drop.num += srcobj->rx.ppeds_drop.num;
+	tgtobj->stats.rx.ppeds_drop.bytes += srcobj->rx.ppeds_drop.bytes;
 	tgtobj->stats.rx.multipass_rx_pkt_drop +=
 		srcobj->rx.multipass_rx_pkt_drop;
 	tgtobj->stats.rx.peer_unauth_rx_pkt_drop +=
@@ -9341,7 +9418,7 @@ dp_pdev_get_tx_capture_stats(struct cdp_soc_t *soc_hdl, uint8_t pdev_id,
 }
 #endif /* WLAN_TX_PKT_CAPTURE_ENH */
 
-#ifdef WLAN_TELEMETRY_STATS_SUPPORT
+#ifdef WLAN_CONFIG_TELEMETRY_AGENT
 QDF_STATUS
 dp_get_pdev_telemetry_stats(struct cdp_soc_t *soc_hdl, uint8_t pdev_id,
 			    struct cdp_pdev_telemetry_stats *stats)
@@ -9397,9 +9474,9 @@ dp_get_pdev_deter_stats(struct cdp_soc_t *soc_hdl, uint8_t pdev_id,
 	qdf_mem_copy(stats->ul_ofdma_usr, pdev->stats.deter_stats.ul_ofdma_usr,
 		     sizeof(stats->ul_ofdma_usr[0]) * CDP_MU_MAX_USERS);
 	qdf_mem_copy(stats->dl_mimo_usr, pdev->stats.deter_stats.dl_mimo_usr,
-		     sizeof(stats->dl_mimo_usr[0]) * CDP_MU_MAX_USERS);
+		     sizeof(stats->dl_mimo_usr[0]) * CDP_MU_MAX_MIMO_USERS);
 	qdf_mem_copy(stats->ul_mimo_usr, pdev->stats.deter_stats.ul_mimo_usr,
-		     sizeof(stats->ul_mimo_usr[0]) * CDP_MU_MAX_USERS);
+		     sizeof(stats->ul_mimo_usr[0]) * CDP_MU_MAX_MIMO_USERS);
 
 	qdf_mem_copy(stats->ul_mode_cnt, pdev->stats.deter_stats.ul_mode_cnt,
 		     sizeof(stats->ul_mode_cnt[0]) * TX_MODE_UL_MAX);

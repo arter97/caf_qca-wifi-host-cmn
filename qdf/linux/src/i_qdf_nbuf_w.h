@@ -423,6 +423,10 @@ QDF_COMPILE_TIME_ASSERT(qdf_nbuf_cb_size,
 	(((struct qdf_nbuf_cb *) \
 	  ((skb)->cb))->u.rx.hw_info.desc_info.mpdu_desc_info[1])
 
+#define QDF_NBUF_CB_RX_ERROR_CODE_INFO(skb) \
+	(((struct qdf_nbuf_cb *) \
+	  ((skb)->cb))->u.rx.hw_info.desc_info.rx_error_codes)
+
 #define QDF_NBUF_CB_RX_PEER_ID(skb) \
 	(((struct qdf_nbuf_cb *) \
 	  ((skb)->cb))->u.rx.hw_info.desc_tlv_members.peer_id)

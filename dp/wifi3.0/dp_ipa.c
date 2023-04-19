@@ -15,8 +15,6 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-#ifdef IPA_OFFLOAD
-
 #include <wlan_ipa_ucfg_api.h>
 #include <wlan_ipa_core.h>
 #include <qdf_ipa_wdi3.h>
@@ -41,6 +39,11 @@
 #ifdef FEATURE_WDS
 #include "dp_txrx_wds.h"
 #endif
+#ifdef QCA_IPA_LL_TX_FLOW_CONTROL
+#include <pld_common.h>
+#endif
+
+#ifdef IPA_OFFLOAD
 
 /* Hard coded config parameters until dp_ops_cfg.cfg_attach implemented */
 #define CFG_IPA_UC_TX_BUF_SIZE_DEFAULT            (2048)
@@ -462,6 +465,80 @@ dp_ipa_setup_tx_smmu_params_bank_id(struct dp_soc *soc,
 }
 #endif
 
+#ifdef QCA_IPA_LL_TX_FLOW_CONTROL
+static void
+dp_ipa_setup_tx_alt_params_pmac_id(struct dp_soc *soc,
+				   qdf_ipa_wdi_pipe_setup_info_t *tx)
+{
+	uint8_t pmac_id = 0;
+
+	/* Set Pmac ID, extract pmac_id from second radio for TX_ALT ring */
+	if (soc->pdev_count > 1)
+		pmac_id = soc->pdev_list[soc->pdev_count - 1]->lmac_id;
+
+	QDF_IPA_WDI_SETUP_INFO_RX_PMAC_ID(tx, pmac_id);
+}
+
+static void
+dp_ipa_setup_tx_alt_smmu_params_pmac_id(struct dp_soc *soc,
+					qdf_ipa_wdi_pipe_setup_info_smmu_t *tx_smmu)
+{
+	uint8_t pmac_id = 0;
+
+	/* Set Pmac ID, extract pmac_id from second radio for TX_ALT ring */
+	if (soc->pdev_count > 1)
+		pmac_id = soc->pdev_list[soc->pdev_count - 1]->lmac_id;
+
+	QDF_IPA_WDI_SETUP_INFO_SMMU_RX_PMAC_ID(tx_smmu, pmac_id);
+}
+
+static void
+dp_ipa_setup_tx_params_pmac_id(struct dp_soc *soc,
+			       qdf_ipa_wdi_pipe_setup_info_t *tx)
+{
+	uint8_t pmac_id;
+
+	pmac_id = soc->pdev_list[0]->lmac_id;
+
+	QDF_IPA_WDI_SETUP_INFO_RX_PMAC_ID(tx, pmac_id);
+}
+
+static void
+dp_ipa_setup_tx_smmu_params_pmac_id(struct dp_soc *soc,
+				    qdf_ipa_wdi_pipe_setup_info_smmu_t *tx_smmu)
+{
+	uint8_t pmac_id;
+
+	pmac_id = soc->pdev_list[0]->lmac_id;
+
+	QDF_IPA_WDI_SETUP_INFO_SMMU_RX_PMAC_ID(tx_smmu, pmac_id);
+}
+#else
+static inline void
+dp_ipa_setup_tx_alt_params_pmac_id(struct dp_soc *soc,
+				   qdf_ipa_wdi_pipe_setup_info_t *tx)
+{
+}
+
+static inline void
+dp_ipa_setup_tx_alt_smmu_params_pmac_id(struct dp_soc *soc,
+					qdf_ipa_wdi_pipe_setup_info_smmu_t *tx_smmu)
+{
+}
+
+static inline void
+dp_ipa_setup_tx_params_pmac_id(struct dp_soc *soc,
+			       qdf_ipa_wdi_pipe_setup_info_t *tx)
+{
+}
+
+static inline void
+dp_ipa_setup_tx_smmu_params_pmac_id(struct dp_soc *soc,
+				    qdf_ipa_wdi_pipe_setup_info_smmu_t *tx_smmu)
+{
+}
+#endif
+
 #ifdef IPA_WDI3_TX_TWO_PIPES
 static void dp_ipa_tx_alt_pool_detach(struct dp_soc *soc, struct dp_pdev *pdev)
 {
@@ -849,6 +926,9 @@ static void dp_ipa_wdi_tx_alt_pipe_params(struct dp_soc *soc,
 	QDF_IPA_WDI_SETUP_INFO_PKT_OFFSET(tx) = 0;
 
 	dp_ipa_setup_tx_params_bank_id(soc, tx);
+
+	/* Set Pmac ID, extract pmac_id from second radio for TX_ALT ring */
+	dp_ipa_setup_tx_alt_params_pmac_id(soc, tx);
 }
 
 static void
@@ -885,6 +965,9 @@ dp_ipa_wdi_tx_alt_pipe_smmu_params(struct dp_soc *soc,
 	QDF_IPA_WDI_SETUP_INFO_SMMU_PKT_OFFSET(tx_smmu) = 0;
 
 	dp_ipa_setup_tx_smmu_params_bank_id(soc, tx_smmu);
+
+	/* Set Pmac ID, extract pmac_id from second radio for TX_ALT ring */
+	dp_ipa_setup_tx_alt_smmu_params_pmac_id(soc, tx_smmu);
 }
 
 static void dp_ipa_setup_tx_alt_pipe(struct dp_soc *soc,
@@ -1274,6 +1357,36 @@ void dp_rx_alt_ipa_uc_detach(struct dp_soc *soc, struct dp_pdev *pdev)
 { }
 #endif
 
+/**
+ * dp_ipa_opt_wifi_dp_cleanup() - Cleanup ipa opt wifi dp filter setup
+ * @soc: data path instance
+ * @pdev: core txrx pdev context
+ *
+ * This function will cleanup filter setup for optional wifi dp.
+ *
+ * Return: none
+ */
+
+#ifdef IPA_OPT_WIFI_DP
+static void dp_ipa_opt_wifi_dp_cleanup(struct dp_soc *soc, struct dp_pdev *pdev)
+{
+	struct hal_soc *hal_soc = (struct hal_soc *)soc->hal_soc;
+	struct hif_softc *hif = (struct hif_softc *)(hal_soc->hif_handle);
+	int count = qdf_atomic_read(&hif->opt_wifi_dp_rtpm_cnt);
+	int i;
+
+	for (i = count; i > 0; i--) {
+		dp_info("opt_dp: cleanup call pcie link down");
+		dp_ipa_pcie_link_down((struct cdp_soc_t *)soc);
+	}
+}
+#else
+static inline
+void dp_ipa_opt_wifi_dp_cleanup(struct dp_soc *soc, struct dp_pdev *pdev)
+{
+}
+#endif
+
 int dp_ipa_uc_detach(struct dp_soc *soc, struct dp_pdev *pdev)
 {
 	if (!wlan_cfg_is_ipa_enabled(soc->wlan_cfg_ctx))
@@ -1290,6 +1403,8 @@ int dp_ipa_uc_detach(struct dp_soc *soc, struct dp_pdev *pdev)
 
 	/* Cleanup 2nd RX pipe resources */
 	dp_rx_alt_ipa_uc_detach(soc, pdev);
+
+	dp_ipa_opt_wifi_dp_cleanup(soc, pdev);
 
 	return QDF_STATUS_SUCCESS;	/* success */
 }
@@ -2029,11 +2144,63 @@ bool dp_ipa_is_target_ready(struct dp_soc *soc)
 	else
 		return true;
 }
+
+/**
+ * dp_ipa_update_txr_db_status() - Indicate transfer ring DB is SMMU mapped or not
+ * @dev: Pointer to device
+ * @txrx_smmu: WDI TX/RX configuration
+ *
+ * Return: None
+ */
+static inline
+void dp_ipa_update_txr_db_status(struct device *dev,
+				 qdf_ipa_wdi_pipe_setup_info_smmu_t *txrx_smmu)
+{
+	int pcie_slot = pld_get_pci_slot(dev);
+
+	if (pcie_slot)
+		QDF_IPA_WDI_SETUP_INFO_SMMU_IS_TXR_RN_DB_PCIE_ADDR(txrx_smmu) = false;
+	else
+		QDF_IPA_WDI_SETUP_INFO_SMMU_IS_TXR_RN_DB_PCIE_ADDR(txrx_smmu) = true;
+}
+
+/**
+ * dp_ipa_update_evt_db_status() - Indicate evt ring DB is SMMU mapped or not
+ * @dev: Pointer to device
+ * @txrx_smmu: WDI TX/RX configuration
+ *
+ * Return: None
+ */
+static inline
+void dp_ipa_update_evt_db_status(struct device *dev,
+				 qdf_ipa_wdi_pipe_setup_info_smmu_t *txrx_smmu)
+{
+	int pcie_slot = pld_get_pci_slot(dev);
+
+	if (pcie_slot)
+		QDF_IPA_WDI_SETUP_INFO_SMMU_IS_EVT_RN_DB_PCIE_ADDR(txrx_smmu) = false;
+	else
+		QDF_IPA_WDI_SETUP_INFO_SMMU_IS_EVT_RN_DB_PCIE_ADDR(txrx_smmu) = true;
+}
 #else
 static inline
 bool dp_ipa_is_target_ready(struct dp_soc *soc)
 {
 	return true;
+}
+
+static inline
+void dp_ipa_update_txr_db_status(struct device *dev,
+				 qdf_ipa_wdi_pipe_setup_info_smmu_t *txrx_smmu)
+{
+	QDF_IPA_WDI_SETUP_INFO_SMMU_IS_TXR_RN_DB_PCIE_ADDR(txrx_smmu) = true;
+}
+
+static inline
+void dp_ipa_update_evt_db_status(struct device *dev,
+				 qdf_ipa_wdi_pipe_setup_info_smmu_t *txrx_smmu)
+{
+	QDF_IPA_WDI_SETUP_INFO_SMMU_IS_EVT_RN_DB_PCIE_ADDR(txrx_smmu) = true;
 }
 #endif
 
@@ -2222,6 +2389,9 @@ static void dp_ipa_wdi_tx_params(struct dp_soc *soc,
 	QDF_IPA_WDI_SETUP_INFO_PKT_OFFSET(tx) = 0;
 
 	dp_ipa_setup_tx_params_bank_id(soc, tx);
+
+	/* Set Pmac ID, extract pmac_id from pdev_id 0 for TX ring */
+	dp_ipa_setup_tx_params_pmac_id(soc, tx);
 }
 
 static void dp_ipa_wdi_rx_params(struct dp_soc *soc,
@@ -2278,6 +2448,9 @@ dp_ipa_wdi_tx_smmu_params(struct dp_soc *soc,
 		else if (hdl == DP_IPA_HDL_SECOND)
 			QDF_IPA_WDI_SETUP_INFO_SMMU_CLIENT(tx_smmu) =
 				IPA_CLIENT_WLAN4_CONS;
+		else if (hdl == DP_IPA_HDL_THIRD)
+			QDF_IPA_WDI_SETUP_INFO_SMMU_CLIENT(tx_smmu) =
+				IPA_CLIENT_WLAN1_CONS;
 	} else {
 		QDF_IPA_WDI_SETUP_INFO_SMMU_CLIENT(tx_smmu) =
 			IPA_CLIENT_WLAN1_CONS;
@@ -2292,7 +2465,7 @@ dp_ipa_wdi_tx_smmu_params(struct dp_soc *soc,
 	/* WBM Tail Pointer Address */
 	QDF_IPA_WDI_SETUP_INFO_SMMU_TRANSFER_RING_DOORBELL_PA(tx_smmu) =
 		soc->ipa_uc_tx_rsc.ipa_wbm_tp_paddr;
-	QDF_IPA_WDI_SETUP_INFO_SMMU_IS_TXR_RN_DB_PCIE_ADDR(tx_smmu) = true;
+	dp_ipa_update_txr_db_status(soc->osdev->dev, tx_smmu);
 
 	qdf_mem_copy(&QDF_IPA_WDI_SETUP_INFO_SMMU_EVENT_RING_BASE(tx_smmu),
 		     &ipa_res->tx_ring.sgtable,
@@ -2303,13 +2476,16 @@ dp_ipa_wdi_tx_smmu_params(struct dp_soc *soc,
 	/* TCL Head Pointer Address */
 	QDF_IPA_WDI_SETUP_INFO_SMMU_EVENT_RING_DOORBELL_PA(tx_smmu) =
 		soc->ipa_uc_tx_rsc.ipa_tcl_hp_paddr;
-	QDF_IPA_WDI_SETUP_INFO_SMMU_IS_EVT_RN_DB_PCIE_ADDR(tx_smmu) = true;
+	dp_ipa_update_evt_db_status(soc->osdev->dev, tx_smmu);
 
 	QDF_IPA_WDI_SETUP_INFO_SMMU_NUM_PKT_BUFFERS(tx_smmu) =
 		ipa_res->tx_num_alloc_buffer;
 	QDF_IPA_WDI_SETUP_INFO_SMMU_PKT_OFFSET(tx_smmu) = 0;
 
 	dp_ipa_setup_tx_smmu_params_bank_id(soc, tx_smmu);
+
+	/* Set Pmac ID, extract pmac_id from first pdev for TX ring */
+	dp_ipa_setup_tx_smmu_params_pmac_id(soc, tx_smmu);
 }
 
 static void
@@ -2326,6 +2502,9 @@ dp_ipa_wdi_rx_smmu_params(struct dp_soc *soc,
 		else if (hdl == DP_IPA_HDL_SECOND)
 			QDF_IPA_WDI_SETUP_INFO_SMMU_CLIENT(rx_smmu) =
 				IPA_CLIENT_WLAN3_PROD;
+		else if (hdl == DP_IPA_HDL_THIRD)
+			QDF_IPA_WDI_SETUP_INFO_SMMU_CLIENT(rx_smmu) =
+				IPA_CLIENT_WLAN1_PROD;
 	} else {
 		QDF_IPA_WDI_SETUP_INFO_SMMU_CLIENT(rx_smmu) =
 					IPA_CLIENT_WLAN1_PROD;
@@ -2340,7 +2519,7 @@ dp_ipa_wdi_rx_smmu_params(struct dp_soc *soc,
 	/* REO Tail Pointer Address */
 	QDF_IPA_WDI_SETUP_INFO_SMMU_TRANSFER_RING_DOORBELL_PA(rx_smmu) =
 		soc->ipa_uc_rx_rsc.ipa_reo_tp_paddr;
-	QDF_IPA_WDI_SETUP_INFO_SMMU_IS_TXR_RN_DB_PCIE_ADDR(rx_smmu) = true;
+	dp_ipa_update_txr_db_status(soc->osdev->dev, rx_smmu);
 
 	qdf_mem_copy(&QDF_IPA_WDI_SETUP_INFO_SMMU_EVENT_RING_BASE(rx_smmu),
 		     &ipa_res->rx_refill_ring.sgtable,
@@ -2386,6 +2565,9 @@ dp_ipa_wdi_rx_alt_pipe_smmu_params(struct dp_soc *soc,
 		else if (hdl == DP_IPA_HDL_SECOND)
 			QDF_IPA_WDI_SETUP_INFO_SMMU_CLIENT(rx_smmu) =
 				IPA_CLIENT_WLAN3_PROD1;
+		else if (hdl == DP_IPA_HDL_THIRD)
+			QDF_IPA_WDI_SETUP_INFO_CLIENT(rx_smmu) =
+				IPA_CLIENT_WLAN1_PROD1;
 	} else {
 		QDF_IPA_WDI_SETUP_INFO_SMMU_CLIENT(rx_smmu) =
 					IPA_CLIENT_WLAN1_PROD;
@@ -2444,6 +2626,9 @@ static void dp_ipa_wdi_rx_alt_pipe_params(struct dp_soc *soc,
 		else if (hdl == DP_IPA_HDL_SECOND)
 			QDF_IPA_WDI_SETUP_INFO_CLIENT(rx) =
 				IPA_CLIENT_WLAN3_PROD1;
+		else if (hdl == DP_IPA_HDL_THIRD)
+			QDF_IPA_WDI_SETUP_INFO_CLIENT(rx) =
+				IPA_CLIENT_WLAN1_PROD1;
 	} else {
 		QDF_IPA_WDI_SETUP_INFO_CLIENT(rx) =
 					IPA_CLIENT_WLAN1_PROD;
@@ -4009,4 +4194,23 @@ QDF_STATUS dp_ipa_txrx_get_peer_stats(struct cdp_soc_t *soc, uint8_t vdev_id,
 	return QDF_STATUS_SUCCESS;
 }
 #endif
+
+/**
+ * dp_ipa_get_wdi_version() - Get WDI version
+ * @soc_hdl: data path soc handle
+ * @wdi_ver: Out parameter for wdi version
+ *
+ * Get WDI version based on soc arch
+ *
+ * Return: None
+ */
+void dp_ipa_get_wdi_version(struct cdp_soc_t *soc_hdl, uint8_t *wdi_ver)
+{
+	struct dp_soc *soc = cdp_soc_t_to_dp_soc(soc_hdl);
+
+	if (soc->arch_ops.ipa_get_wdi_ver)
+		soc->arch_ops.ipa_get_wdi_ver(wdi_ver);
+	else
+		*wdi_ver = IPA_WDI_3;
+}
 #endif

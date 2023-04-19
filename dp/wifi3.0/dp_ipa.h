@@ -18,7 +18,8 @@
 #ifndef _DP_IPA_H_
 #define _DP_IPA_H_
 
-#if defined(QCA_WIFI_KIWI) || defined(QCA_WIFI_KIWI_V2)
+#if defined(QCA_WIFI_KIWI) || defined(QCA_WIFI_KIWI_V2) || \
+	defined(QCA_WIFI_QCN9224)
 /* Index into soc->tcl_data_ring[] */
 #define IPA_TCL_DATA_RING_IDX	3
 #else
@@ -96,6 +97,7 @@ struct dp_ipa_uc_rx_hdr {
 #define DP_IPA_HDL_INVALID	0xFF
 #define DP_IPA_HDL_FIRST	0
 #define DP_IPA_HDL_SECOND	1
+#define DP_IPA_HDL_THIRD	2
 /**
  * wlan_ipa_get_hdl() - Get ipa handle from IPA component
  * @psoc: control psoc object
@@ -594,6 +596,16 @@ QDF_STATUS dp_ipa_txrx_get_pdev_stats(struct cdp_soc_t *soc, uint8_t pdev_id,
 QDF_STATUS dp_ipa_update_peer_rx_stats(struct cdp_soc_t *soc, uint8_t vdev_id,
 				       uint8_t *peer_mac, qdf_nbuf_t nbuf);
 #endif
+/**
+ * dp_ipa_get_wdi_version() - Get WDI version
+ * @soc_hdl: data path soc handle
+ * @wdi_ver: Out parameter for wdi version
+ *
+ * Get WDI version based on soc arch
+ *
+ * Return: None
+ */
+void dp_ipa_get_wdi_version(struct cdp_soc_t *soc_hdl, uint8_t *wdi_ver);
 #else
 static inline int dp_ipa_uc_detach(struct dp_soc *soc, struct dp_pdev *pdev)
 {
@@ -672,6 +684,9 @@ static inline QDF_STATUS dp_ipa_ast_create(struct cdp_soc_t *soc_hdl,
 	return QDF_STATUS_SUCCESS;
 }
 #endif
-
+static inline void dp_ipa_get_wdi_version(struct cdp_soc_t *soc_hdl,
+					  uint8_t *wdi_ver)
+{
+}
 #endif
 #endif /* _DP_IPA_H_ */

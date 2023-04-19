@@ -746,7 +746,7 @@ hal_be_get_mon_dest_status(hal_soc_handle_t hal_soc,
 }
 #endif
 
-#if defined(RX_PPDU_END_USER_STATS_SW_RESPONSE_REFERENCE_PTR_OFFSET) && \
+#if defined(RX_PPDU_END_USER_STATS_OFDMA_INFO_VALID_OFFSET) && \
 defined(RX_PPDU_END_USER_STATS_SW_RESPONSE_REFERENCE_PTR_EXT_OFFSET)
 
 static inline void
@@ -1431,6 +1431,27 @@ hal_tx_status_get_tlv_tag(void *tx_tlv_hdr)
 	tlv_tag = HAL_RX_GET_USER_TLV32_TYPE(tx_tlv_hdr);
 
 	return tlv_tag;
+}
+
+/**
+ * hal_txmon_get_word_mask() - api to get word mask for tx monitor
+ * @hal_soc_hdl: HAL soc handle
+ * @wmask: pointer to hal_txmon_word_mask_config_t
+ *
+ * Return: bool
+ */
+static inline bool
+hal_txmon_get_word_mask(hal_soc_handle_t hal_soc_hdl,
+			hal_txmon_word_mask_config_t *wmask)
+{
+	struct hal_soc *hal_soc = (struct hal_soc *)hal_soc_hdl;
+
+	if (hal_soc->ops->hal_txmon_get_word_mask) {
+		hal_soc->ops->hal_txmon_get_word_mask(wmask);
+		return true;
+	}
+
+	return false;
 }
 #endif
 
@@ -2320,8 +2341,8 @@ hal_rx_status_get_mon_buf_addr(uint8_t *rx_tlv,
 {
 	struct mon_buffer_addr *addr = (struct mon_buffer_addr *)rx_tlv;
 
-	ppdu_info->packet_info.sw_cookie = (((uint64_t)addr->buffer_virt_addr_63_32 << 32) |
-					    (addr->buffer_virt_addr_31_0));
+	ppdu_info->packet_info.sw_cookie = (((uint64_t)qdf_le32_to_cpu(addr->buffer_virt_addr_63_32) << 32) |
+					    qdf_le32_to_cpu(addr->buffer_virt_addr_31_0));
 	/* HW DMA length is '-1' of actual DMA length*/
 	ppdu_info->packet_info.dma_length = addr->dma_length + 1;
 	ppdu_info->packet_info.msdu_continuation = addr->msdu_continuation;

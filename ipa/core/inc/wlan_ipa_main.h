@@ -24,13 +24,12 @@
 #ifndef _WLAN_IPA_MAIN_H_
 #define _WLAN_IPA_MAIN_H_
 
-#ifdef IPA_OFFLOAD
-
 #include <wlan_objmgr_psoc_obj.h>
 #include <wlan_objmgr_pdev_obj.h>
 #include <wlan_ipa_public_struct.h>
 #include <wlan_ipa_priv.h>
 
+#ifdef IPA_OFFLOAD
 /* Declare a variable for IPA instancess added based on pdev */
 extern uint8_t g_instances_added;
 #define IPA_INVALID_HDL 0xFF
@@ -158,6 +157,13 @@ bool ipa_config_is_enabled(void);
  * Return: true if IPA uC is enabled in IPA config
  */
 bool ipa_config_is_uc_enabled(void);
+
+/**
+ * ipa_config_is_opt_wifi_dp_enabled() - Is IPA optional wifi dp enabled?
+ *
+ * Return: true if IPA opt wifi dp is enabled in IPA config
+ */
+bool ipa_config_is_opt_wifi_dp_enabled(void);
 
 /**
  * ipa_config_is_vlan_enabled() - Is IPA vlan config enabled?

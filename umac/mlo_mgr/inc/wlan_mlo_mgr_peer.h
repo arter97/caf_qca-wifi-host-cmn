@@ -373,6 +373,19 @@ void wlan_mlo_peer_get_links_info(struct wlan_objmgr_peer *peer,
 uint8_t wlan_mlo_peer_get_primary_peer_link_id(struct wlan_objmgr_peer *peer);
 
 /**
+ * wlan_mlo_peer_get_primary_peer_link_id_by_ml_peer() - get vdev link ID of
+ * primary peer using ml peer.
+ * @ml_peer: ML peer
+ *
+ * This function checks for the peers and returns vdev link id of the primary
+ * peer.
+ *
+ * Return: link id of primary vdev
+ */
+uint8_t wlan_mlo_peer_get_primary_peer_link_id_by_ml_peer(
+				struct wlan_mlo_peer_context *ml_peer);
+
+/**
  * wlan_mlo_peer_get_partner_links_info() - get MLO peer partner links info
  * @peer: Link peer
  * @ml_links: structure to be filled with partner link info
@@ -649,4 +662,16 @@ mlo_peer_free_auth_param(struct mlpeer_auth_params *auth_params)
  * Return: true, if MLO peer can be deleted
  */
 bool wlan_mlo_partner_peer_delete_is_allowed(struct wlan_objmgr_peer *src_peer);
+
+#ifdef QCA_SUPPORT_PRIMARY_LINK_MIGRATE
+/**
+ * wlan_objmgr_mlo_update_primary_info() - Update is_primary flag
+ * @peer: new primary link peer object
+ *
+ * API to update is_primary flag in peer list
+ *
+ * Return: void
+ */
+void wlan_objmgr_mlo_update_primary_info(struct wlan_objmgr_peer *peer);
+#endif
 #endif

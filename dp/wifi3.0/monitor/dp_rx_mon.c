@@ -57,9 +57,8 @@ dp_rx_mon_handle_cfr_mu_info(struct dp_pdev *pdev,
 
 	num_users = ppdu_info->com_info.num_users;
 	for (user_id = 0; user_id < num_users; user_id++) {
-		if (user_id > OFDMA_NUM_USERS) {
+		if (user_id >= OFDMA_NUM_USERS)
 			return;
-		}
 
 		rx_user_status =  &ppdu_info->rx_user_status[user_id];
 		rx_stats_peruser = &cdp_rx_ppdu->user[user_id];
@@ -356,7 +355,7 @@ dp_rx_populate_su_evm_details(struct hal_rx_ppdu_info *ppdu_info,
 	pilot_count = ppdu_info->evm_info.pilot_count;
 
 	if ((nss_count * pilot_count) > DP_RX_MAX_SU_EVM_COUNT) {
-		qdf_err("pilot evm count is more than expected");
+		qdf_debug("pilot evm count is more than expected");
 		return;
 	}
 	cdp_rx_ppdu->evm_info.pilot_count = pilot_count;
@@ -398,23 +397,6 @@ dp_rx_inc_rusize_cnt(struct dp_pdev *pdev,
 	return is_data;
 }
 
-#ifdef QCA_MANUAL_TRIGGERED_ULOFDMA
-static inline void
-dp_rx_update_manual_ulofdma_trig(struct mon_rx_user_status *rx_user_status,
-				 struct cdp_rx_stats_ppdu_user *user)
-{
-	user->is_manual_ulofdma_trig =
-		HTT_UL_OFDMA_USER_INFO_V0_W0_MANUAL_ULOFDMA_TRIG_GET(
-		rx_user_status->mu_ul_user_v0_word0);
-}
-#else
-static inline void
-dp_rx_update_manual_ulofdma_trig(struct mon_rx_user_status *rx_user_status,
-				 struct cdp_rx_stats_ppdu_user *user)
-{
-}
-#endif
-
 /**
  * dp_rx_populate_cdp_indication_ppdu_user() - Populate per user cdp indication
  * @pdev: pdev ctx
@@ -443,7 +425,7 @@ dp_rx_populate_cdp_indication_ppdu_user(struct dp_pdev *pdev,
 
 	num_users = ppdu_info->com_info.num_users;
 	for (i = 0; i < num_users; i++) {
-		if (i > OFDMA_NUM_USERS)
+		if (i >= OFDMA_NUM_USERS)
 			return;
 
 		rx_user_status =  &ppdu_info->rx_user_status[i];
@@ -518,9 +500,6 @@ dp_rx_populate_cdp_indication_ppdu_user(struct dp_pdev *pdev,
 		cdp_rx_ppdu->vdev_id = peer->vdev->vdev_id;
 		rx_stats_peruser->vdev_id = peer->vdev->vdev_id;
 		rx_stats_peruser->mu_ul_info_valid = 0;
-
-		dp_rx_update_manual_ulofdma_trig(rx_user_status,
-						 rx_stats_peruser);
 
 		mon_ops = dp_mon_ops_get(soc);
 		if (mon_ops && mon_ops->mon_rx_populate_ppdu_usr_info)
@@ -828,7 +807,7 @@ static inline uint8_t dp_get_bw_offset_frm_bw(struct dp_soc *soc,
 }
 #endif
 
-#ifdef WLAN_TELEMETRY_STATS_SUPPORT
+#ifdef WLAN_CONFIG_TELEMETRY_AGENT
 static void
 dp_ppdu_desc_user_rx_time_update(struct dp_pdev *pdev,
 				 struct dp_peer *peer,

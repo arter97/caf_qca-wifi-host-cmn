@@ -311,6 +311,11 @@ enum qcn_attribute_id {
  */
 #define WLAN_TPE_IE_MAX_LEN                      9
 
+#ifdef WLAN_FEATURE_11BE
+/* Bandwidth indication element IE minimum length */
+#define WLAN_BW_IND_IE_MIN_LEN              3
+#endif
+
 /* Max channel switch time IE length */
 #define WLAN_MAX_CHAN_SWITCH_TIME_IE_LEN         4
 
@@ -532,6 +537,7 @@ enum ext_chan_offset {
  * @WLAN_ELEMID_TFS_RESPONSE: TFS resp IE
  * @WLAN_ELEMID_TIM_BCAST_REQUEST: TIM bcast req IE
  * @WLAN_ELEMID_TIM_BCAST_RESPONSE: TIM bcast resp IE
+ * @WLAN_ELEMID_LINK_IDENTIFIER: link id IE
  * @WLAN_ELEMID_INTERWORKING: Interworking IE
  * @WLAN_ELEMID_QOS_MAP: QOS MAP IE
  * @WLAN_ELEMID_XCAPS: Extended capability IE
@@ -615,6 +621,7 @@ enum element_ie {
 	WLAN_ELEMID_TFS_RESPONSE     = 92,
 	WLAN_ELEMID_TIM_BCAST_REQUEST  = 94,
 	WLAN_ELEMID_TIM_BCAST_RESPONSE = 95,
+	WLAN_ELEMID_LINK_IDENTIFIER  = 101,
 	WLAN_ELEMID_INTERWORKING     = 107,
 	WLAN_ELEMID_QOS_MAP          = 110,
 	WLAN_ELEMID_XCAPS            = 127,
@@ -655,6 +662,7 @@ enum element_ie {
  * @WLAN_EXTN_ELEMID_EHTCAP: EHT Capabilities IE
  * @WLAN_EXTN_ELEMID_T2LM: TID-to-link mapping IE
  * @WLAN_EXTN_ELEMID_MULTI_LINK_TRAFFIC_IND: Multi-link Traffic Indication IE
+ * @WLAN_EXTN_ELEMID_BW_IND: Bandwidth Indication Element Sub IE
  */
 enum extn_element_ie {
 	WLAN_EXTN_ELEMID_ESP         = 11,
@@ -678,6 +686,9 @@ enum extn_element_ie {
 #endif
 	WLAN_EXTN_ELEMID_T2LM        = 109,
 	WLAN_EXTN_ELEMID_MULTI_LINK_TRAFFIC_IND = 110,
+#ifdef WLAN_FEATURE_11BE
+	WLAN_EXTN_ELEMID_BW_IND = 135,
+#endif
 };
 
 /**
@@ -1138,6 +1149,7 @@ enum wlan_status_code {
 #define WLAN_AKM_FILS_FT_SHA384   0x11
 #define WLAN_AKM_OWE              0x12
 #define WLAN_AKM_SAE_EXT_KEY      0x18
+#define WLAN_AKM_FT_SAE_EXT_KEY   0x19
 
 #define WLAN_ASE_NONE                    0x00
 #define WLAN_ASE_8021X_UNSPEC            0x01
@@ -1928,6 +1940,29 @@ struct wlan_ie_ehtops {
 	uint8_t disabled_sub_chan_bitmap[2];
 } qdf_packed;
 
+/**
+ * struct wlan_ie_bw_ind - Bandwidth Indication Element
+ * @elem_id: Element ID
+ * @elem_len: Element length
+ * @elem_id_extn: Element ID extension
+ * @bw_ind_param: bw indication element parameters
+ * @control: Control field in bw_ind Operation Information
+ * @ccfs0: EHT Channel Centre Frequency Segment0 information
+ * @ccfs1: EHT Channel Centre Frequency Segment1 information
+ * @disabled_sub_chan_bitmap: Bitmap to indicate 20MHz subchannel
+ *                            is punctured or not
+ */
+struct wlan_ie_bw_ind {
+	uint8_t elem_id;
+	uint8_t elem_len;
+	uint8_t elem_id_extn;
+	uint8_t bw_ind_param;
+	uint8_t control;
+	uint8_t ccfs0;
+	uint8_t ccfs1;
+	uint8_t disabled_sub_chan_bitmap[2];
+} qdf_packed;
+
 #ifdef WLAN_FEATURE_11BE_MLO
 #define WLAN_MLO_MAX_VDEVS 2
 
@@ -2661,8 +2696,8 @@ struct wlan_ie_tid_to_link_mapping {
  * - Mapping switch time (0 or 2 octet)
  * - Expected duration (0 or 3 octet)
  * - Link mapping presence indicator (0 or 1 octet)
- * - Link mapping of TID 0(optional) to TID 7(optional). Each field has 0 or 2
- *   octets.
+ * - Link mapping of TID 0(optional) to TID 7(optional). Each field has 0 or 1
+ *   or 2 octets.
  */
 
 /* Definitions related TID-to-link mapping control*/
@@ -2678,6 +2713,9 @@ struct wlan_ie_tid_to_link_mapping {
 /* Expected duration present bit */
 #define WLAN_T2LM_CONTROL_EXPECTED_DURATION_PRESENT_IDX         4
 #define WLAN_T2LM_CONTROL_EXPECTED_DURATION_PRESENT_BITS        1
+/* Link Mapping size bit */
+#define WLAN_T2LM_CONTROL_LINK_MAPPING_SIZE_IDX                 5
+#define WLAN_T2LM_CONTROL_LINK_MAPPING_SIZE_BITS                1
 /* Bits 5-7 are reserved */
 /* Link mapping presence indicator */
 #define WLAN_T2LM_CONTROL_LINK_MAPPING_PRESENCE_INDICATOR_IDX   8
@@ -3510,6 +3548,40 @@ struct wlan_edca_pifs_param_ie {
 } qdf_packed;
 
 /**
+ * struct csa_ie: Channel Switch Announcement IE
+ * @id: CSA IE
+ * @len: CSA IE len
+ * @switch_mode: Channel Switch Mode
+ * @new_channel: New channel to which CSA is announced
+ * @tbtt_count: CSA count in beacon intervals
+ */
+struct csa_ie {
+	uint8_t id;
+	uint8_t len;
+	uint8_t switch_mode;
+	uint8_t new_channel;
+	uint8_t tbtt_count;
+} qdf_packed;
+
+/**
+ * struct xcsa_ie: Extended Channel Switch Announcement IE
+ * @id: CSA IE
+ * @len: CSA IE len
+ * @switch_mode: Channel Switch Mode
+ * @new_class: New operating class
+ * @new_channel: New channel to which CSA is announced
+ * @tbtt_count: CSA count in beacon intervals
+ */
+struct xcsa_ie {
+	uint8_t id;
+	uint8_t len;
+	uint8_t switch_mode;
+	uint8_t new_class;
+	uint8_t new_channel;
+	uint8_t tbtt_count;
+} qdf_packed;
+
+/**
  * struct oce_reduced_wan_metrics: struct for oce wan metrics
  * @downlink_av_cap: Download available capacity
  * @uplink_av_cap: Upload available capacity
@@ -3685,7 +3757,6 @@ is_p2p_oui(const uint8_t *frm)
 		(frm[5] == P2P_WFA_VER);
 }
 
-#define WLAN_VENDOR_SON_IE_LEN 31
 /**
  * is_qca_son_oui() - If vendor IE is QCA WHC type
  * @frm: vendor IE pointer

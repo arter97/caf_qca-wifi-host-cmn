@@ -59,7 +59,6 @@
 
 #define CDP_BA_256_BIT_MAP_SIZE_DWORDS 8
 #define CDP_BA_64_BIT_MAP_SIZE_DWORDS 2
-#define CDP_RSSI_CHAIN_LEN 8
 
 #define OL_TXRX_INVALID_PDEV_ID 0xff
 #define OL_TXRX_INVALID_LOCAL_PEER_ID 0xffff
@@ -117,6 +116,8 @@
 #define CDP_DATA_NON_QOS_TID 16
 
 #define CDP_NUM_SA_BW 4
+/* Smart Antenna 320MHz BW Phy MAX Rate Code Index */
+#define CDP_SA_BW320_INX 4
 #define CDP_PERCENT_MACRO 100
 #define CDP_NUM_KB_IN_MB 1000
 /*
@@ -1689,6 +1690,7 @@ enum cdp_vdev_param_type {
  * @CDP_UMAC_RST_SKEL_ENABLE: Enable Umac reset skeleton code for debug
  * @CDP_PPEDS_ENABLE: PPEDS is enabled or not
  * @CDP_SAWF_STATS: set SAWF stats config
+ * @CDP_UMAC_RESET_STATS: UMAC reset stats
  */
 enum cdp_psoc_param_type {
 	CDP_ENABLE_RATE_STATS,
@@ -1701,6 +1703,7 @@ enum cdp_psoc_param_type {
 	CDP_UMAC_RST_SKEL_ENABLE,
 	CDP_PPEDS_ENABLE,
 	CDP_SAWF_STATS,
+	CDP_UMAC_RESET_STATS,
 };
 
 #define TXRX_FW_STATS_TXSTATS                     1
@@ -2127,7 +2130,7 @@ struct cdp_tx_completion_ppdu_user {
 	uint8_t is_ppdu_cookie_valid;
 	uint16_t ppdu_cookie;
 	uint8_t sa_is_training;
-	uint32_t rssi_chain[CDP_RSSI_CHAIN_LEN];
+	int32_t rssi_chain[CDP_RSSI_CHAIN_LEN];
 	uint32_t sa_tx_antenna;
 	/*Max rates for BW: 20MHZ, 40MHZ and 80MHZ and 160MHZ and 320MHZ
 	 * |-------------------------------------------------|
@@ -2496,7 +2499,6 @@ struct cdp_tx_completion_msdu {
  * @ofdma_ru_width: size of RU in units of 1(26tone)RU
  * @nss: NSS 1,2, ...8
  * @mcs: MCS index
- * @is_manual_ulofdma_trig: manual ulofdma trig or not?
  * @user_index: user ID in multi-user case
  * @is_bss_peer: is bss peer check
  * @ast_index: ast index in multi-user case
@@ -2535,13 +2537,7 @@ struct cdp_rx_stats_ppdu_user {
 		 ofdma_ru_start_index:7,
 		 ofdma_ru_width:7,
 		 nss:4,
-		 mcs:4,
-#ifdef QCA_MANUAL_TRIGGERED_ULOFDMA
-		 is_manual_ulofdma_trig:1,
-		 reserved:8;
-#else
-		 reserved:9;
-#endif
+		 mcs:4;
 	/* user id */
 	uint8_t  user_index;
 	uint8_t is_bss_peer;

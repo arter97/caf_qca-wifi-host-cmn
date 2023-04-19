@@ -20,10 +20,10 @@
 #ifndef _WLAN_IPA_CORE_H_
 #define _WLAN_IPA_CORE_H_
 
-#ifdef IPA_OFFLOAD
-
 #include "wlan_ipa_priv.h"
 #include "wlan_ipa_public_struct.h"
+
+#ifdef IPA_OFFLOAD
 
 /**
  * wlan_ipa_is_enabled() - Is IPA enabled?
@@ -45,6 +45,18 @@ static inline bool wlan_ipa_is_enabled(struct wlan_ipa_config *ipa_cfg)
 static inline bool wlan_ipa_uc_is_enabled(struct wlan_ipa_config *ipa_cfg)
 {
 	return WLAN_IPA_IS_CONFIG_ENABLED(ipa_cfg, WLAN_IPA_UC_ENABLE_MASK);
+}
+
+/**
+ * wlan_ipa_is_opt_wifi_dp_enabled() - Is IPA optional wifi dp enabled?
+ * @ipa_cfg: IPA config
+ *
+ * Return: true if IPA opt wifi dp is enabled, false otherwise
+ */
+static inline bool wlan_ipa_is_opt_wifi_dp_enabled(
+						struct wlan_ipa_config *ipa_cfg)
+{
+	return WLAN_IPA_IS_CONFIG_ENABLED(ipa_cfg, WLAN_IPA_OPT_WIFI_DP);
 }
 
 /**
@@ -875,8 +887,8 @@ void wlan_ipa_flush_pending_vdev_events(struct wlan_ipa_priv *ipa_ctx,
 #ifdef IPA_OPT_WIFI_DP
 /**
  * wlan_ipa_wdi_opt_dpath_flt_rsrv_cb() - reserve cce super rules for Rx filter
- * @ipa_ctx - ipa_context
- * out_params - filter reservation params
+ * @ipa_ctx: ipa_context
+ * @out_params: filter reservation params
  *
  * Return:int 0 on success, negative on failure
  *
@@ -888,17 +900,16 @@ int wlan_ipa_wdi_opt_dpath_flt_rsrv_cb(
 /**
  * wlan_ipa_wdi_opt_dpath_notify_flt_rsvd() - notify filter reservation
  * response to IPA
+ * @is_success: result of filter reservation
  *
- * @is_success : result of filter reservation
- *
- * @Return 0 on success, negative on failure
+ * Return 0 on success, negative on failure
  */
 int wlan_ipa_wdi_opt_dpath_notify_flt_rsvd(bool is_success);
 
 /**
  * wlan_ipa_wdi_opt_dpath_flt_add_cb - Add rx filter tuple to cce filter
  * @ipa_ctx: IPA context
- * in_out - filter tuple info
+ * @in_out: filter tuple info
  *
  * Return: 0 on success, negative on failure
  */
@@ -909,7 +920,7 @@ int wlan_ipa_wdi_opt_dpath_flt_add_cb(
 /**
  * wlan_ipa_wdi_opt_dpath_flt_rem_cb() - Remove rx filter tuple from cce filter
  * @ipa_ctx: IPA context
- * in - filter tuple info
+ * @in: filter tuple info
  *
  * Return: 0 on success, negative on failure
  */
@@ -920,9 +931,8 @@ int wlan_ipa_wdi_opt_dpath_flt_rem_cb(
 /**
  * wlan_ipa_wdi_opt_dpath_notify_flt_add_rem_cb() - notify filter add/remove
  * result to IPA
- *
- * @result0 : result of add/remove filter0
- * @result1 : result of add/remove filter1
+ * @result0: result of add/remove filter0
+ * @result1: result of add/remove filter1
  *
  * Return: void
  */
@@ -940,11 +950,10 @@ int wlan_ipa_wdi_opt_dpath_flt_rsrv_rel_cb(void *ipa_ctx);
 /**
  * wlan_ipa_wdi_opt_dpath_notify_flt_rlsd() - notify filter release
  * response to IPA
+ * @result0: result of filter0 release
+ * @result1: result of filter1 release
  *
- * @result0 : result of filter0 release
- * @result1 : result of filter1 release
- *
- * @Return: 0 on success, negative on failure
+ * Return: 0 on success, negative on failure
  */
 int wlan_ipa_wdi_opt_dpath_notify_flt_rlsd(int result0, int result1);
 

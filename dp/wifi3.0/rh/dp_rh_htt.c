@@ -23,6 +23,8 @@
 #include "dp_rh_rx.h"
 #include "qdf_mem.h"
 #include "cdp_txrx_cmn_struct.h"
+#include "dp_tx_desc.h"
+#include "dp_rh.h"
 
 #define HTT_MSG_BUF_SIZE(msg_bytes) \
 	((msg_bytes) + HTC_HEADER_LEN + HTC_HDR_ALIGNMENT_PADDING)
@@ -39,6 +41,86 @@
 					PCI_DMA_FROMDEVICE);		\
 	} while (0)
 
+/**
+ * dp_htt_flow_pool_map_handler_rh() - HTT_T2H_MSG_TYPE_FLOW_POOL_MAP handler
+ * @soc: Handle to DP Soc structure
+ * @flow_id: flow id
+ * @flow_type: flow type
+ * @flow_pool_id: pool id
+ * @flow_pool_size: pool size
+ *
+ * Return: QDF_STATUS_SUCCESS - success, others - failure
+ */
+static QDF_STATUS
+dp_htt_flow_pool_map_handler_rh(struct dp_soc *soc, uint8_t flow_id,
+				uint8_t flow_type, uint8_t flow_pool_id,
+				uint32_t flow_pool_size)
+{
+	struct dp_vdev *vdev;
+	struct dp_pdev *pdev;
+	QDF_STATUS status;
+
+	if (flow_pool_id >= MAX_TXDESC_POOLS) {
+		dp_err("invalid flow_pool_id %d", flow_pool_id);
+		return QDF_STATUS_E_INVAL;
+	}
+
+	vdev = dp_vdev_get_ref_by_id(soc, flow_id, DP_MOD_ID_HTT);
+	if (vdev) {
+		pdev = vdev->pdev;
+		dp_vdev_unref_delete(soc, vdev, DP_MOD_ID_HTT);
+	} else {
+		pdev = soc->pdev_list[0];
+	}
+
+	status = dp_tx_flow_pool_map_handler(pdev, flow_id, flow_type,
+					     flow_pool_id, flow_pool_size);
+	if (QDF_IS_STATUS_ERROR(status)) {
+		dp_err("failed to create tx flow pool %d\n", flow_pool_id);
+		goto err_out;
+	}
+
+	return QDF_STATUS_SUCCESS;
+
+err_out:
+	/* TODO: is assert needed ? */
+	qdf_assert_always(0);
+	return status;
+}
+
+/**
+ * dp_htt_flow_pool_unmap_handler_rh() - HTT_T2H_MSG_TYPE_FLOW_POOL_UNMAP handler
+ * @soc: Handle to DP Soc structure
+ * @flow_id: flow id
+ * @flow_type: flow type
+ * @flow_pool_id: pool id
+ *
+ * Return: none
+ */
+static void
+dp_htt_flow_pool_unmap_handler_rh(struct dp_soc *soc, uint8_t flow_id,
+				  uint8_t flow_type, uint8_t flow_pool_id)
+{
+	struct dp_vdev *vdev;
+	struct dp_pdev *pdev;
+
+	if (flow_pool_id >= MAX_TXDESC_POOLS) {
+		dp_err("invalid flow_pool_id %d", flow_pool_id);
+		return;
+	}
+
+	vdev = dp_vdev_get_ref_by_id(soc, flow_id, DP_MOD_ID_HTT);
+	if (vdev) {
+		pdev = vdev->pdev;
+		dp_vdev_unref_delete(soc, vdev, DP_MOD_ID_HTT);
+	} else {
+		pdev = soc->pdev_list[0];
+	}
+
+	dp_tx_flow_pool_unmap_handler(pdev, flow_id, flow_type,
+				      flow_pool_id);
+}
+
 /*
  * dp_htt_h2t_send_complete_free_netbuf() - Free completed buffer
  * @soc:	SOC handle
@@ -50,6 +132,87 @@ dp_htt_h2t_send_complete_free_netbuf(
 	void *soc, A_STATUS status, qdf_nbuf_t netbuf)
 {
 	qdf_nbuf_free(netbuf);
+}
+
+QDF_STATUS dp_htt_h2t_rx_ring_rfs_cfg(struct htt_soc *soc)
+{
+	struct dp_htt_htc_pkt *pkt;
+	qdf_nbuf_t msg;
+	uint32_t *msg_word;
+	QDF_STATUS status;
+	uint8_t *htt_logger_bufp;
+
+	/*
+	 * TODO check do we need ini support in Evros
+	 * Receive flow steering configuration,
+	 * disable gEnableFlowSteering(=0) in ini if
+	 * FW doesn't support it
+	 */
+
+	/* reserve room for the HTC header */
+	msg = qdf_nbuf_alloc(soc->osdev,
+			     HTT_MSG_BUF_SIZE(HTT_RFS_CFG_REQ_BYTES),
+			     HTC_HEADER_LEN + HTC_HDR_ALIGNMENT_PADDING, 4,
+			     true);
+	if (!msg) {
+		dp_err("htt_msg alloc failed for RFS config");
+		return QDF_STATUS_E_NOMEM;
+	}
+	/*
+	 * Set the length of the message.
+	 * The contribution from the HTC_HDR_ALIGNMENT_PADDING is added
+	 * separately during the below call to qdf_nbuf_push_head.
+	 * The contribution from the HTC header is added separately inside HTC.
+	 */
+	qdf_nbuf_put_tail(msg, HTT_RFS_CFG_REQ_BYTES);
+
+	/* fill in the message contents */
+	msg_word = (uint32_t *)qdf_nbuf_data(msg);
+
+	/* rewind beyond alignment pad to get to the HTC header reserved area */
+	qdf_nbuf_push_head(msg, HTC_HDR_ALIGNMENT_PADDING);
+
+	/* word 0 */
+	*msg_word = 0;
+	htt_logger_bufp = (uint8_t *)msg_word;
+	HTT_H2T_MSG_TYPE_SET(*msg_word, HTT_H2T_MSG_TYPE_RFS_CONFIG);
+	HTT_RX_RFS_CONFIG_SET(*msg_word, 1);
+
+	/*
+	 * TODO value should be obtained from ini maxMSDUsPerRxInd
+	 * currently this ini is legacy ol and available only from cds
+	 * make this ini common to HL and evros DP
+	 */
+	*msg_word |= ((32 & 0xff) << 16);
+
+	dp_htt_info("RFS sent to F.W: 0x%08x", *msg_word);
+
+	/*start*/
+	pkt = htt_htc_pkt_alloc(soc);
+	if (!pkt) {
+		qdf_nbuf_free(msg);
+		return QDF_STATUS_E_NOMEM;
+	}
+
+	pkt->soc_ctxt = NULL; /* not used during send-done callback */
+	SET_HTC_PACKET_INFO_TX(
+		&pkt->htc_pkt,
+		dp_htt_h2t_send_complete_free_netbuf,
+		qdf_nbuf_data(msg),
+		qdf_nbuf_len(msg),
+		soc->htc_endpoint,
+		HTC_TX_PACKET_TAG_RUNTIME_PUT); /* tag for no FW response msg */
+
+	SET_HTC_PACKET_NET_BUF_CONTEXT(&pkt->htc_pkt, msg);
+	status = DP_HTT_SEND_HTC_PKT(soc, pkt, HTT_H2T_MSG_TYPE_RFS_CONFIG,
+				     htt_logger_bufp);
+
+	if (status != QDF_STATUS_SUCCESS) {
+		qdf_nbuf_free(msg);
+		htt_htc_pkt_free(soc, pkt);
+	}
+
+	return status;
 }
 
 static void
@@ -101,9 +264,42 @@ dp_htt_t2h_msg_handler_fast(void *context, qdf_nbuf_t *cmpl_msdus,
 		switch (msg_type) {
 		case HTT_T2H_MSG_TYPE_RX_DATA_IND:
 		{
+			uint16_t vdev_id, msdu_cnt;
+			uint16_t peer_id, frag_ind;
+
+			peer_id = HTT_RX_DATA_IND_PEER_ID_GET(*msg_word);
+			frag_ind = HTT_RX_DATA_IND_FRAG_GET(*(msg_word + 1));
+			vdev_id = HTT_RX_DATA_IND_VDEV_ID_GET(*msg_word);
+
+			if (qdf_unlikely(frag_ind)) {
+				dp_rx_frag_indication_handler(soc->dp_soc,
+							      htt_t2h_msg,
+							      vdev_id, peer_id);
+				break;
+			}
+
+			msdu_cnt =
+				HTT_RX_DATA_IND_MSDU_CNT_GET(*(msg_word + 1));
+			dp_rx_data_indication_handler(soc->dp_soc, htt_t2h_msg,
+						      vdev_id, peer_id,
+						      msdu_cnt);
 			break;
 		}
-		/* TODO add support for TX completion handling */
+		case HTT_T2H_MSG_TYPE_SOFT_UMAC_TX_COMPL_IND:
+		{
+			uint32_t num_msdus;
+
+			num_msdus = HTT_SOFT_UMAC_TX_COMP_IND_MSDU_COUNT_GET(*msg_word);
+
+			if ((num_msdus * HTT_TX_MSDU_INFO_SIZE +
+			     HTT_SOFT_UMAC_TX_COMPL_IND_SIZE) > msg_len) {
+				dp_htt_err("Invalid msdu count in tx compl indication %d", num_msdus);
+				break;
+			}
+
+			dp_tx_compl_handler_rh(soc->dp_soc, htt_t2h_msg);
+			break;
+		}
 		case HTT_T2H_MSG_TYPE_RX_PN_IND:
 		{
 			/* TODO check and add PN IND handling */
@@ -165,6 +361,54 @@ dp_htt_t2h_msg_handler_fast(void *context, qdf_nbuf_t *cmpl_msdus,
 			dp_htt_t2h_msg_handler(context, &htc_pkt);
 			break;
 		}
+		case HTT_T2H_MSG_TYPE_FLOW_POOL_MAP:
+		{
+			uint8_t num_flows;
+			struct htt_flow_pool_map_payload_t *pool_map;
+
+			num_flows = HTT_FLOW_POOL_MAP_NUM_FLOWS_GET(*msg_word);
+
+			if (((HTT_FLOW_POOL_MAP_PAYLOAD_SZ /
+			      HTT_FLOW_POOL_MAP_HEADER_SZ) * num_flows + 1) * sizeof(*msg_word) > msg_len) {
+				dp_htt_err("Invalid flow count in flow pool map message");
+				WARN_ON(1);
+				break;
+			}
+
+			msg_word++;
+
+			while (num_flows) {
+				pool_map = (struct htt_flow_pool_map_payload_t *)msg_word;
+				dp_htt_flow_pool_map_handler_rh(
+					soc->dp_soc, pool_map->flow_id,
+					pool_map->flow_type,
+					pool_map->flow_pool_id,
+					pool_map->flow_pool_size);
+
+				msg_word += (HTT_FLOW_POOL_MAP_PAYLOAD_SZ /
+							 HTT_FLOW_POOL_MAP_HEADER_SZ);
+				num_flows--;
+			}
+
+			break;
+		}
+		case HTT_T2H_MSG_TYPE_FLOW_POOL_UNMAP:
+		{
+			struct htt_flow_pool_unmap_t *pool_unmap;
+
+			if (msg_len < sizeof(struct htt_flow_pool_unmap_t)) {
+				dp_htt_err("Invalid length in flow pool unmap message %d", msg_len);
+				WARN_ON(1);
+				break;
+			}
+
+			pool_unmap = (struct htt_flow_pool_unmap_t *)msg_word;
+			dp_htt_flow_pool_unmap_handler_rh(
+				soc->dp_soc, pool_unmap->flow_id,
+				pool_unmap->flow_type,
+				pool_unmap->flow_pool_id);
+			break;
+		}
 		default:
 		{
 			HTC_PACKET htc_pkt = {0};
@@ -191,6 +435,7 @@ dp_htt_t2h_msg_handler_fast(void *context, qdf_nbuf_t *cmpl_msdus,
 static QDF_STATUS
 dp_htt_htc_attach(struct htt_soc *soc, uint16_t service_id)
 {
+	struct dp_soc_rh *rh_soc = dp_get_rh_soc_from_dp_soc(soc->dp_soc);
 	struct htc_service_connect_req connect;
 	struct htc_service_connect_resp response;
 	QDF_STATUS status;
@@ -234,11 +479,10 @@ dp_htt_htc_attach(struct htt_soc *soc, uint16_t service_id)
 	if (service_id == HTT_DATA_MSG_SVC)
 		soc->htc_endpoint = response.Endpoint;
 
-	/*
-	 * TODO do we need to set tx_svc end point
-	 * hif_save_htc_htt_config_endpoint(dpsoc->hif_handle,
-	 * soc->htc_endpoint);
-	 */
+	/* Save the EP_ID of the TX pipe that to be used during TX enqueue */
+	if (service_id == HTT_DATA2_MSG_SVC)
+		rh_soc->tx_endpoint = response.Endpoint;
+
 	return QDF_STATUS_SUCCESS;
 }
 

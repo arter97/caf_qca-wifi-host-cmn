@@ -664,6 +664,7 @@ static inline void mlo_t2lm_ctx_init(struct wlan_mlo_dev_context *ml_dev,
 
 	t2lm->direction = WLAN_T2LM_BIDI_DIRECTION;
 	t2lm->default_link_mapping = 1;
+	t2lm->link_mapping_size = 0;
 
 	wlan_mlo_t2lm_timer_init(vdev);
 }
@@ -858,6 +859,8 @@ QDF_STATUS wlan_mlo_mgr_vdev_created_notification(struct wlan_objmgr_vdev *vdev,
 	mlo_debug("MLD addr" QDF_MAC_ADDR_FMT,
 		  QDF_MAC_ADDR_REF(mld_addr->bytes));
 	status = mlo_dev_ctx_init(vdev);
+
+	wlan_vdev_set_link_id(vdev, WLAN_LINK_ID_INVALID);
 
 	return status;
 }

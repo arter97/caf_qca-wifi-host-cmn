@@ -1373,6 +1373,46 @@ void cm_fill_ml_partner_info(struct wlan_cm_connect_req *req,
 }
 #endif
 
+bool cm_find_bss_from_candidate_list(qdf_list_t *candidate_list,
+				     struct qdf_mac_addr *bssid,
+				     struct scan_cache_node **entry_found)
+{
+	struct scan_cache_node *scan_entry;
+	qdf_list_node_t *cur_node = NULL, *next_node = NULL;
+	struct qdf_mac_addr *bssid2;
+
+	if (qdf_is_macaddr_zero(bssid) ||
+	    qdf_is_macaddr_broadcast(bssid))
+		return false;
+
+	if (qdf_list_peek_front(candidate_list, &cur_node) !=
+					QDF_STATUS_SUCCESS) {
+		mlme_err("failed to peer front of candidate_list");
+		return false;
+	}
+
+	while (cur_node) {
+		qdf_list_peek_next(candidate_list, cur_node, &next_node);
+
+		scan_entry = qdf_container_of(cur_node, struct scan_cache_node,
+					      node);
+		bssid2 = &scan_entry->entry->bssid;
+		if (qdf_is_macaddr_zero(bssid2))
+			goto next;
+
+		if (qdf_is_macaddr_equal(bssid, bssid2)) {
+			if (entry_found)
+				*entry_found = scan_entry;
+			return true;
+		}
+next:
+		cur_node = next_node;
+		next_node = NULL;
+	}
+
+	return false;
+}
+
 bool cm_is_connect_req_reassoc(struct wlan_cm_connect_req *req)
 {
 	if (!qdf_is_macaddr_zero(&req->prev_bssid) &&
@@ -1526,22 +1566,26 @@ wlan_cm_id cm_get_cm_id_by_scan_id(struct cnx_mgr *cm_ctx,
 #ifdef WLAN_POLICY_MGR_ENABLE
 static void
 cm_get_pcl_chan_weigtage_for_sta(struct wlan_objmgr_pdev *pdev,
-				 struct pcl_freq_weight_list *pcl_lst)
+				 struct pcl_freq_weight_list *pcl_lst,
+				 struct wlan_objmgr_vdev *vdev)
 {
 	enum QDF_OPMODE opmode = QDF_STA_MODE;
 	enum policy_mgr_con_mode pm_mode;
 	uint32_t num_entries = 0;
+	uint8_t vdev_id;
 	QDF_STATUS status;
 
-	if (!pcl_lst)
+	if (!pcl_lst || !vdev)
 		return;
+
+	vdev_id = wlan_vdev_get_id(vdev);
 
 	if (policy_mgr_map_concurrency_mode(&opmode, &pm_mode)) {
 		status = policy_mgr_get_pcl(wlan_pdev_get_psoc(pdev), pm_mode,
 					    pcl_lst->pcl_freq_list,
 					    &num_entries,
 					    pcl_lst->pcl_weight_list,
-					    NUM_CHANNELS);
+					    NUM_CHANNELS, vdev_id);
 		if (QDF_IS_STATUS_ERROR(status))
 			return;
 		pcl_lst->num_of_pcl_channels = num_entries;
@@ -1556,13 +1600,15 @@ void cm_calculate_scores(struct cnx_mgr *cm_ctx,
 
 	if (!filter->num_of_bssid) {
 		pcl_lst = qdf_mem_malloc(sizeof(*pcl_lst));
-		cm_get_pcl_chan_weigtage_for_sta(pdev, pcl_lst);
+		cm_get_pcl_chan_weigtage_for_sta(pdev, pcl_lst, cm_ctx->vdev);
 		if (pcl_lst && !pcl_lst->num_of_pcl_channels) {
 			qdf_mem_free(pcl_lst);
 			pcl_lst = NULL;
 		}
 	}
-	wlan_cm_calculate_bss_score(pdev, pcl_lst, list, &filter->bssid_hint);
+	wlan_cm_calculate_bss_score(pdev, pcl_lst, list, &filter->bssid_hint,
+				    (struct qdf_mac_addr *)
+				    wlan_vdev_mlme_get_macaddr(cm_ctx->vdev));
 	if (pcl_lst)
 		qdf_mem_free(pcl_lst);
 }
@@ -1572,7 +1618,8 @@ void cm_calculate_scores(struct cnx_mgr *cm_ctx,
 			 struct wlan_objmgr_pdev *pdev,
 			 struct scan_filter *filter, qdf_list_t *list)
 {
-	wlan_cm_calculate_bss_score(pdev, NULL, list, &filter->bssid_hint);
+	wlan_cm_calculate_bss_score(pdev, NULL, list, &filter->bssid_hint,
+				    NULL);
 
 	/*
 	 * Custom sorting if enabled

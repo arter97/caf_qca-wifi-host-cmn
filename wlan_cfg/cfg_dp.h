@@ -104,7 +104,7 @@
 #define WLAN_CFG_PER_PDEV_RX_RING 0
 #define WLAN_CFG_PER_PDEV_LMAC_RING 0
 #define WLAN_LRO_ENABLE 0
-#ifdef QCA_WIFI_QCA6750
+#if defined(QCA_WIFI_QCA6750) || defined(QCA_WIFI_WCN6450)
 #define WLAN_CFG_MAC_PER_TARGET 1
 #else
 #define WLAN_CFG_MAC_PER_TARGET 2
@@ -1456,7 +1456,7 @@
 		CFG_INI_BOOL("peer_ext_stats", \
 		false, "Peer extended stats")
 
-#ifdef QCA_ENHANCED_STATS_SUPPORT
+#if defined QCA_ENHANCED_STATS_SUPPORT || defined DP_MLO_LINK_STATS_SUPPORT
 #define DEFAULT_PEER_LINK_STATS_VALUE true
 #else
 #define DEFAULT_PEER_LINK_STATS_VALUE false

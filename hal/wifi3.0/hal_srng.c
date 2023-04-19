@@ -48,7 +48,6 @@ void hal_qca6490_attach(struct hal_soc *hal);
 void hal_qcn9000_attach(struct hal_soc *hal);
 #endif
 #ifdef QCA_WIFI_QCN9224
-void hal_qcn9224v1_attach(struct hal_soc *hal);
 void hal_qcn9224v2_attach(struct hal_soc *hal);
 #endif
 #if defined(QCA_WIFI_QCN6122) || defined(QCA_WIFI_QCN9160)
@@ -520,7 +519,7 @@ static void hal_target_based_configure(struct hal_soc *hal)
 		hal->use_register_windowing = true;
 		hal->static_window_map = true;
 		if (hal->version == 1)
-			hal_qcn9224v1_attach(hal);
+			qdf_assert_always(0);
 		else
 			hal_qcn9224v2_attach(hal);
 	break;
@@ -530,6 +529,13 @@ static void hal_target_based_configure(struct hal_soc *hal)
 		hal->use_register_windowing = true;
 		hal->static_window_map = true;
 		hal_qca5332_attach(hal);
+	break;
+#endif
+#ifdef QCA_WIFI_WCN6450
+	case TARGET_TYPE_WCN6450:
+		hal->use_register_windowing = true;
+		hal->static_window_map = true;
+		hal_wcn6450_attach(hal);
 	break;
 #endif
 	default:
@@ -575,6 +581,7 @@ char *hal_fill_reg_write_srng_stats(struct hal_srng *srng,
 /* bytes for local buffer */
 #define HAL_REG_WRITE_SRNG_STATS_LEN 100
 
+#ifndef WLAN_SOFTUMAC_SUPPORT
 void hal_dump_reg_write_srng_stats(hal_soc_handle_t hal_soc_hdl)
 {
 	struct hal_srng *srng;
@@ -601,6 +608,11 @@ void hal_dump_reg_write_srng_stats(hal_soc_handle_t hal_soc_hdl)
 	hal_debug("REO2SW3: %s",
 		  hal_fill_reg_write_srng_stats(srng, buf, sizeof(buf)));
 }
+#else
+void hal_dump_reg_write_srng_stats(hal_soc_handle_t hal_soc_hdl)
+{
+}
+#endif
 
 void hal_dump_reg_write_stats(hal_soc_handle_t hal_soc_hdl)
 {
@@ -673,6 +685,7 @@ hal_process_reg_write_q_elem(struct hal_soc *hal,
 					srng->u.dst_ring.tp, false);
 		write_val = srng->u.dst_ring.tp;
 	}
+	hal_srng_reg_his_add(srng, write_val);
 
 	q_elem->valid = 0;
 	srng->last_dequeue_time = q_elem->dequeue_time;
@@ -1043,6 +1056,7 @@ void hal_delayed_reg_write(struct hal_soc *hal_soc,
 		     PLD_MHI_STATE_L0 ==
 		     pld_get_mhi_state(hal_soc->qdf_dev->dev))) {
 			hal_write_address_32_mb(hal_soc, addr, value, false);
+			hal_srng_reg_his_add(srng, value);
 			qdf_atomic_inc(&hal_soc->stats.wstats.direct);
 			srng->wstats.direct++;
 		} else {
@@ -1057,6 +1071,7 @@ void hal_delayed_reg_write(struct hal_soc *hal_soc,
 		    PLD_MHI_STATE_L0 ==
 		    pld_get_mhi_state(hal_soc->qdf_dev->dev)) {
 			hal_write_address_32_mb(hal_soc, addr, value, false);
+			hal_srng_reg_his_add(srng, value);
 			qdf_atomic_inc(&hal_soc->stats.wstats.direct);
 			srng->wstats.direct++;
 		} else {
@@ -1077,6 +1092,7 @@ void hal_delayed_reg_write(struct hal_soc *hal_soc,
 		qdf_atomic_inc(&hal_soc->stats.wstats.direct);
 		srng->wstats.direct++;
 		hal_write_address_32_mb(hal_soc, addr, value, false);
+		hal_srng_reg_his_add(srng, value);
 	} else {
 		hal_reg_write_enqueue(hal_soc, srng, addr, value);
 	}
@@ -1091,7 +1107,7 @@ void *hal_attach(struct hif_opaque_softc *hif_handle, qdf_device_t qdf_dev)
 	struct hal_soc *hal;
 	int i;
 
-	hal = qdf_mem_malloc(sizeof(*hal));
+	hal = qdf_mem_common_alloc(sizeof(*hal));
 
 	if (!hal) {
 		QDF_TRACE(QDF_MODULE_ID_TXRX, QDF_TRACE_LEVEL_ERROR,
@@ -1177,7 +1193,7 @@ fail2:
 		sizeof(*(hal->shadow_rdptr_mem_vaddr)) * HAL_SRNG_ID_MAX,
 		hal->shadow_rdptr_mem_vaddr, hal->shadow_rdptr_mem_paddr, 0);
 fail1:
-	qdf_mem_free(hal);
+	qdf_mem_common_free(hal);
 fail0:
 	return NULL;
 }
@@ -1215,7 +1231,7 @@ void hal_detach(void *hal_soc)
 	qdf_mem_free_consistent(hal->qdf_dev, hal->qdf_dev->dev,
 		sizeof(*(hal->shadow_wrptr_mem_vaddr)) * HAL_MAX_LMAC_RINGS,
 		hal->shadow_wrptr_mem_vaddr, hal->shadow_wrptr_mem_paddr, 0);
-	qdf_mem_free(hal);
+	qdf_mem_common_free(hal);
 
 	return;
 }
@@ -1543,6 +1559,7 @@ void *hal_srng_setup_idx(void *hal_soc, int ring_type, int ring_num, int mac_id,
 		return NULL;
 	}
 
+	hal_srng_reg_his_init(srng);
 	dev_base_addr = hal->dev_base_addr;
 	srng->ring_id = ring_id;
 	srng->ring_type = ring_type;

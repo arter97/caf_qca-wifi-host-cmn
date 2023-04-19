@@ -881,8 +881,8 @@ QDF_STATUS dp_rx_mon_refill_buf_ring_2_0(struct dp_intr *int_ctx)
 	struct dp_srng *rx_mon_buf_ring;
 	struct dp_intr_stats *intr_stats = &int_ctx->intr_stats;
 	struct dp_mon_soc_be *mon_soc_be = dp_get_be_mon_soc_from_dp_mon_soc(mon_soc);
-	uint32_t num_entries_avail;
-	int sync_hw_ptr = 1, hp = 0, tp = 0, num_entries;
+	uint32_t num_entries_avail, num_entries, num_entries_in_ring;
+	int sync_hw_ptr = 1, hp = 0, tp = 0;
 	void *hal_srng;
 
 	rx_mon_buf_ring = &soc->rxdma_mon_buf_ring[0];
@@ -894,18 +894,22 @@ QDF_STATUS dp_rx_mon_refill_buf_ring_2_0(struct dp_intr *int_ctx)
 	num_entries_avail = hal_srng_src_num_avail(soc->hal_soc,
 						   hal_srng,
 						   sync_hw_ptr);
+	num_entries_in_ring = rx_mon_buf_ring->num_entries - num_entries_avail;
 	hal_get_sw_hptp(soc->hal_soc, (hal_ring_handle_t)hal_srng, &tp, &hp);
 	hal_srng_access_end(soc->hal_soc, hal_srng);
 
-	num_entries = num_entries_avail;
-	if (mon_soc_be->rx_mon_ring_fill_level < rx_mon_buf_ring->num_entries)
-		num_entries = num_entries_avail - mon_soc_be->rx_mon_ring_fill_level;
+	if (num_entries_avail) {
+		if (num_entries_in_ring < mon_soc_be->rx_mon_ring_fill_level)
+			num_entries = mon_soc_be->rx_mon_ring_fill_level
+				      - num_entries_in_ring;
+		else
+			return QDF_STATUS_SUCCESS;
 
-	if (num_entries)
 		dp_mon_buffers_replenish(soc, rx_mon_buf_ring,
 					 &mon_soc_be->rx_desc_mon,
 					 num_entries, &desc_list, &tail,
 					 NULL);
+	}
 
 	return QDF_STATUS_SUCCESS;
 }
@@ -1668,6 +1672,13 @@ struct cdp_mon_ops dp_ops_mon_2_0 = {
 	.txrx_enable_enhanced_stats = dp_enable_enhanced_stats_2_0,
 	.txrx_disable_enhanced_stats = dp_disable_enhanced_stats_2_0,
 #endif /* QCA_ENHANCED_STATS_SUPPORT */
+#if defined(ATH_SUPPORT_NAC_RSSI) || defined(ATH_SUPPORT_NAC)
+	.txrx_update_filter_neighbour_peers = dp_lite_mon_config_nac_peer,
+#endif
+#ifdef ATH_SUPPORT_NAC_RSSI
+	.txrx_vdev_config_for_nac_rssi = dp_lite_mon_config_nac_rssi_peer,
+	.txrx_vdev_get_neighbour_rssi = dp_lite_mon_get_nac_peer_rssi,
+#endif
 #ifdef QCA_SUPPORT_LITE_MONITOR
 	.txrx_set_lite_mon_config = dp_lite_mon_set_config,
 	.txrx_get_lite_mon_config = dp_lite_mon_get_config,
@@ -1679,7 +1690,7 @@ struct cdp_mon_ops dp_ops_mon_2_0 = {
 #endif
 	.txrx_set_mon_pdev_params_rssi_dbm_conv =
 				dp_mon_pdev_params_rssi_dbm_conv,
-#ifdef WLAN_TELEMETRY_STATS_SUPPORT
+#ifdef WLAN_CONFIG_TELEMETRY_AGENT
 	.txrx_update_pdev_mon_telemetry_airtime_stats =
 			dp_pdev_update_telemetry_airtime_stats,
 #endif
@@ -1735,8 +1746,8 @@ void dp_mon_cdp_ops_register_2_0(struct cdp_ops *ops)
 }
 #endif
 
-#if defined(WLAN_SUPPORT_RX_PROTOCOL_TYPE_TAG) ||\
-	defined(WLAN_SUPPORT_RX_FLOW_TAG)
+#if defined(WLAN_SUPPORT_RX_PROTOCOL_TYPE_TAG) &&\
+	defined(WLAN_SUPPORT_RX_TAG_STATISTICS)
 /** dp_mon_rx_update_rx_protocol_tag_stats() - Update mon protocols's
  *					      statistics
  * @pdev: pdev handle
@@ -1759,7 +1770,8 @@ void dp_mon_rx_update_rx_protocol_tag_stats(struct dp_pdev *pdev,
 
 #ifdef QCA_ENHANCED_STATS_SUPPORT
 static void
-dp_enable_enhanced_stats_for_each_pdev(struct dp_soc *soc, void *arg) {
+dp_enable_enhanced_stats_for_each_pdev(struct dp_soc *soc, void *arg,
+				       int chip_id) {
 	uint8_t i = 0;
 
 	for (i = 0; i < MAX_PDEV_CNT; i++)
@@ -1781,7 +1793,8 @@ dp_enable_enhanced_stats_2_0(struct cdp_soc_t *soc, uint8_t pdev_id)
 }
 
 static void
-dp_disable_enhanced_stats_for_each_pdev(struct dp_soc *soc, void *arg) {
+dp_disable_enhanced_stats_for_each_pdev(struct dp_soc *soc, void *arg,
+					int chip_id) {
 	uint8_t i = 0;
 
 	for (i = 0; i < MAX_PDEV_CNT; i++)

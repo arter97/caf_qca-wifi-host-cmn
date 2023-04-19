@@ -134,6 +134,18 @@ bool ucfg_mlo_is_mld_disconnected(struct wlan_objmgr_vdev *vdev);
  */
 bool mlo_is_mld_disconnecting_connecting(struct wlan_objmgr_vdev *vdev);
 
+/**
+ * mlo_is_ml_connection_in_progress - Check whether MLD assoc or link vdev is
+ * connecting
+ *
+ * @psoc: pointer to psoc
+ * @vdev_id: vdev id
+ *
+ * Return: true if mld is disconnecting, false otherwise
+ */
+bool mlo_is_ml_connection_in_progress(struct wlan_objmgr_psoc *psoc,
+				      uint8_t vdev_id);
+
 #ifndef WLAN_FEATURE_11BE_MLO_ADV_FEATURE
 /**
  * ucfg_mlo_is_mld_connected - Check whether MLD is connected
@@ -151,6 +163,26 @@ bool ucfg_mlo_is_mld_connected(struct wlan_objmgr_vdev *vdev);
  */
 void ucfg_mlo_mld_clear_mlo_cap(struct wlan_objmgr_vdev *vdev);
 #endif
+
+#ifdef WLAN_MLO_MULTI_CHIP
+/**
+ * mlo_get_central_umac_id - get central umac in 3 link topology
+ * @psoc_ids: pointer to psoc_ids
+ *
+ * Return: central umac if success, -1 all soc are adjacent to each other
+ */
+
+int8_t mlo_get_central_umac_id(uint8_t *psoc_ids);
+#endif
+
+/**
+ * wlan_mlo_get_tdls_link_vdev() - API to get tdls link vdev
+ * @vdev: vdev object
+ *
+ * Return: MLD tdls link vdev
+ */
+struct wlan_objmgr_vdev *
+wlan_mlo_get_tdls_link_vdev(struct wlan_objmgr_vdev *vdev);
 
 /**
  * ucfg_mlo_get_assoc_link_vdev - API to get assoc link vdev
@@ -690,6 +722,18 @@ mlo_allocate_and_copy_ies(struct wlan_cm_connect_req *target,
  */
 void
 mlo_free_connect_ies(struct wlan_cm_connect_req *connect_req);
+
+/**
+ * mlo_get_link_state_context() - get ml link context
+ * @psoc: psoc handler
+ * @resp_cb: api to handle link state callback
+ * @context: response context
+ * @vdev_id: vdev id
+ */
+QDF_STATUS
+mlo_get_link_state_context(struct wlan_objmgr_psoc *psoc,
+			   get_ml_link_state_cb *resp_cb,
+			   void **context, uint8_t vdev_id);
 #else
 static inline
 QDF_STATUS mlo_connect(struct wlan_objmgr_vdev *vdev,
@@ -748,6 +792,13 @@ bool ucfg_mlo_is_mld_disconnected(struct wlan_objmgr_vdev *vdev)
 
 static inline
 bool mlo_is_mld_disconnecting_connecting(struct wlan_objmgr_vdev *vdev)
+{
+	return false;
+}
+
+static inline
+bool mlo_is_ml_connection_in_progress(struct wlan_objmgr_psoc *psoc,
+				      uint8_t vdev_id)
 {
 	return false;
 }
@@ -864,5 +915,14 @@ void mlo_process_ml_reconfig_ie(struct wlan_objmgr_vdev *vdev,
 				uint8_t *ml_ie, qdf_size_t ml_ie_len,
 				struct mlo_partner_info *partner_info)
 { }
+#ifdef WLAN_FEATURE_11BE_MLO
+static inline QDF_STATUS
+mlo_get_link_state_context(struct wlan_objmgr_psoc *psoc,
+			   get_ml_link_state_cb *resp_cb,
+			   void **context, uint8_t vdev_id)
+{
+	return QDF_STATUS_SUCCESS;
+}
+#endif
 #endif
 #endif

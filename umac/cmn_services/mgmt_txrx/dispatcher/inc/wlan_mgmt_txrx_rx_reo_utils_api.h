@@ -30,6 +30,7 @@
 
 struct mgmt_txrx_priv_pdev_context;
 
+#ifdef WLAN_MGMT_RX_REO_SUPPORT
 /**
  * wlan_get_mlo_link_id_from_pdev() - Helper API to get the MLO HW link id
  * from the pdev object.
@@ -65,6 +66,24 @@ wlan_get_mlo_grp_id_from_pdev(struct wlan_objmgr_pdev *pdev);
 struct wlan_objmgr_pdev *
 wlan_get_pdev_from_mlo_link_id(uint8_t mlo_link_id, uint8_t ml_grp_id,
 			       wlan_objmgr_ref_dbgid refdbgid);
+#else
+static inline int8_t
+wlan_get_mlo_link_id_from_pdev(struct wlan_objmgr_pdev *pdev)
+{
+	return 0;
+}
+static inline int8_t
+wlan_get_mlo_grp_id_from_pdev(struct wlan_objmgr_pdev *pdev)
+{
+	return 0;
+}
+static inline struct wlan_objmgr_pdev *
+wlan_get_pdev_from_mlo_link_id(uint8_t mlo_link_id, uint8_t ml_grp_id,
+			       wlan_objmgr_ref_dbgid refdbgid)
+{
+	return NULL;
+}
+#endif
 
 #ifdef WLAN_MGMT_RX_REO_SUPPORT
 
@@ -353,6 +372,26 @@ bool
 wlan_mgmt_rx_reo_is_feature_enabled_at_pdev(struct wlan_objmgr_pdev *pdev);
 
 /**
+ * wlan_mgmt_rx_reo_is_scheduler_enabled_at_psoc() - Check if MGMT Rx REO
+ * scheduler is enabled on a given psoc
+ * @psoc: pointer to psoc object
+ *
+ * Return: true if the scheduler is enabled, else false
+ */
+bool
+wlan_mgmt_rx_reo_is_scheduler_enabled_at_psoc(struct wlan_objmgr_psoc *psoc);
+
+/**
+ * wlan_mgmt_rx_reo_is_scheduler_enabled_at_pdev() - Check if MGMT Rx REO
+ * scheduler is enabled on a given pdev
+ * @pdev: pointer to pdev object
+ *
+ * Return: true if the scheduler is enabled, else false
+ */
+bool
+wlan_mgmt_rx_reo_is_scheduler_enabled_at_pdev(struct wlan_objmgr_pdev *pdev);
+
+/**
  * wlan_mgmt_rx_reo_get_pkt_ctr_delta_thresh() - Get the packet counter delta
  * threshold value
  * @psoc: pointer to psoc object
@@ -383,6 +422,16 @@ wlan_mgmt_rx_reo_get_ingress_frame_debug_list_size
 uint16_t
 wlan_mgmt_rx_reo_get_egress_frame_debug_list_size
 					(struct wlan_objmgr_psoc *psoc);
+
+/**
+ * wlan_mgmt_rx_reo_get_scheduler_debug_list_size() - Get the size of
+ * scheduler debug list
+ * @psoc: pointer to psoc object
+ *
+ * Return: Size of scheduler debug list
+ */
+uint16_t
+wlan_mgmt_rx_reo_get_scheduler_debug_list_size(struct wlan_objmgr_psoc *psoc);
 
 /**
  * wlan_mgmt_rx_reo_is_simulation_in_progress() - API to check whether

@@ -25,8 +25,6 @@
 #ifndef _WLAN_IPA_PRIV_STRUCT_H_
 #define _WLAN_IPA_PRIV_STRUCT_H_
 
-#ifdef IPA_OFFLOAD
-
 #include <linux/version.h>
 #include <linux/kernel.h>
 
@@ -48,6 +46,7 @@
 #include "cdp_txrx_ipa.h"
 #endif
 
+#ifdef IPA_OFFLOAD
 #define WLAN_IPA_RX_INACTIVITY_MSEC_DELAY   1000
 #define WLAN_IPA_UC_WLAN_8023_HDR_SIZE      14
 
@@ -85,6 +84,7 @@
 #define WLAN_IPA_UC_ENABLE_MASK             BIT(5)
 #define WLAN_IPA_UC_STA_ENABLE_MASK         BIT(6)
 #define WLAN_IPA_REAL_TIME_DEBUGGING        BIT(8)
+#define WLAN_IPA_OPT_WIFI_DP                BIT(9)
 
 #ifdef QCA_IPA_LL_TX_FLOW_CONTROL
 #define WLAN_IPA_MAX_BANDWIDTH              4800

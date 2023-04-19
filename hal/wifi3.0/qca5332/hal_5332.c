@@ -1572,6 +1572,13 @@ static void hal_hw_txrx_ops_attach_qca5332(struct hal_soc *hal_soc)
 				hal_txmon_status_parse_tlv_generic_be;
 	hal_soc->ops->hal_txmon_status_get_num_users =
 				hal_txmon_status_get_num_users_generic_be;
+#if defined(TX_MONITOR_WORD_MASK)
+	hal_soc->ops->hal_txmon_get_word_mask =
+				hal_txmon_get_word_mask_qca5332;
+#else
+	hal_soc->ops->hal_txmon_get_word_mask =
+				hal_txmon_get_word_mask_generic_be;
+#endif /* TX_MONITOR_WORD_MASK */
 #endif /* QCA_MONITOR_2_0_SUPPORT */
 	hal_soc->ops->hal_compute_reo_remap_ix0 = NULL;
 	hal_soc->ops->hal_tx_vdev_mismatch_routing_set =
@@ -2005,8 +2012,10 @@ struct hal_hw_srng_config hw_srng_table_5332[] = {
 
 	{ /* DIR_BUF_RX_DMA_SRC */
 		.start_ring_id = HAL_SRNG_DIR_BUF_RX_SRC_DMA_RING,
-		/* one ring for spectral and one ring for cfr */
-		.max_rings = 2,
+		/* one ring for spectral, one ring for cfr and
+		 * another one ring for txbf cv upload.
+		 */
+		.max_rings = 3,
 		.entry_size = 2,
 		.lmac_ring = TRUE,
 		.ring_dir = HAL_SRNG_SRC_RING,

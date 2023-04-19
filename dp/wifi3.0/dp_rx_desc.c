@@ -288,7 +288,7 @@ QDF_STATUS dp_rx_desc_pool_alloc(struct dp_soc *soc,
 				 uint32_t pool_size,
 				 struct rx_desc_pool *rx_desc_pool)
 {
-	rx_desc_pool->array = qdf_mem_malloc(pool_size *
+	rx_desc_pool->array = qdf_mem_common_alloc(pool_size *
 				     sizeof(union dp_rx_desc_list_elem_t));
 
 	if (!(rx_desc_pool->array)) {
@@ -345,6 +345,23 @@ void dp_rx_desc_pool_init(struct dp_soc *soc, uint32_t pool_id,
 
 qdf_export_symbol(dp_rx_desc_pool_init);
 
+#ifdef WLAN_SUPPORT_PPEDS
+static inline
+qdf_nbuf_t dp_rx_desc_get_nbuf(struct rx_desc_pool *rx_desc_pool, int i)
+{
+	if (rx_desc_pool->array[i].rx_desc.has_reuse_nbuf)
+		return rx_desc_pool->array[i].rx_desc.reuse_nbuf;
+	else
+		return rx_desc_pool->array[i].rx_desc.nbuf;
+}
+#else
+static inline
+qdf_nbuf_t dp_rx_desc_get_nbuf(struct rx_desc_pool *rx_desc_pool, int i)
+{
+	return rx_desc_pool->array[i].rx_desc.nbuf;
+}
+#endif
+
 void dp_rx_desc_nbuf_and_pool_free(struct dp_soc *soc, uint32_t pool_id,
 				   struct rx_desc_pool *rx_desc_pool)
 {
@@ -354,7 +371,7 @@ void dp_rx_desc_nbuf_and_pool_free(struct dp_soc *soc, uint32_t pool_id,
 	qdf_spin_lock_bh(&rx_desc_pool->lock);
 	for (i = 0; i < rx_desc_pool->pool_size; i++) {
 		if (rx_desc_pool->array[i].rx_desc.in_use) {
-			nbuf = rx_desc_pool->array[i].rx_desc.nbuf;
+			nbuf = dp_rx_desc_get_nbuf(rx_desc_pool, i);
 
 			if (!(rx_desc_pool->array[i].rx_desc.unmapped)) {
 				dp_rx_nbuf_unmap_pool(soc, rx_desc_pool, nbuf);
@@ -363,7 +380,7 @@ void dp_rx_desc_nbuf_and_pool_free(struct dp_soc *soc, uint32_t pool_id,
 			dp_rx_nbuf_free(nbuf);
 		}
 	}
-	qdf_mem_free(rx_desc_pool->array);
+	qdf_mem_common_free(rx_desc_pool->array);
 	qdf_spin_unlock_bh(&rx_desc_pool->lock);
 	qdf_spinlock_destroy(&rx_desc_pool->lock);
 }
@@ -379,7 +396,7 @@ void dp_rx_desc_nbuf_free(struct dp_soc *soc,
 	for (i = 0; i < rx_desc_pool->pool_size; i++) {
 		dp_rx_desc_free_dbg_info(&rx_desc_pool->array[i].rx_desc);
 		if (rx_desc_pool->array[i].rx_desc.in_use) {
-			nbuf = rx_desc_pool->array[i].rx_desc.nbuf;
+			nbuf = dp_rx_desc_get_nbuf(rx_desc_pool, i);
 
 			if (!(rx_desc_pool->array[i].rx_desc.unmapped)) {
 				dp_rx_nbuf_unmap_pool(soc, rx_desc_pool, nbuf);
@@ -426,7 +443,7 @@ qdf_export_symbol(dp_rx_desc_frag_free);
 void dp_rx_desc_pool_free(struct dp_soc *soc,
 			  struct rx_desc_pool *rx_desc_pool)
 {
-	qdf_mem_free(rx_desc_pool->array);
+	qdf_mem_common_free(rx_desc_pool->array);
 }
 
 qdf_export_symbol(dp_rx_desc_pool_free);

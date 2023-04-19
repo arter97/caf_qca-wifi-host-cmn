@@ -582,6 +582,7 @@ QDF_STATUS dp_tx_desc_pool_init_li(struct dp_soc *soc,
 
 		tx_desc->id = id;
 		tx_desc->pool_id = pool_id;
+		tx_desc->vdev_id = DP_INVALID_VDEV_ID;
 		dp_tx_desc_set_magic(tx_desc, DP_TX_MAGIC_PATTERN_FREE);
 		tx_desc = tx_desc->next;
 		count++;
@@ -602,4 +603,14 @@ QDF_STATUS dp_tx_compute_tx_delay_li(struct dp_soc *soc,
 				     uint32_t *delay_us)
 {
 	return dp_tx_compute_hw_delay_li(soc, vdev, ts, delay_us);
+}
+
+QDF_STATUS dp_tx_desc_pool_alloc_li(struct dp_soc *soc, uint32_t num_elem,
+				    uint8_t pool_id)
+{
+	return QDF_STATUS_SUCCESS;
+}
+
+void dp_tx_desc_pool_free_li(struct dp_soc *soc, uint8_t pool_id)
+{
 }

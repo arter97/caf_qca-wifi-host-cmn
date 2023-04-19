@@ -46,7 +46,7 @@ struct __attribute__((__packed__)) dp_tx_comp_peer_id {
 	(((_var) & 0x30) >> 4)
 #define DP_TX_FLOW_OVERRIDE_ENABLE 0x1
 
-#define DP_TX_FAST_DESC_SIZE	24
+#define DP_TX_FAST_DESC_SIZE	28
 #define DP_TX_L3_L4_CSUM_ENABLE	0x1f
 
 #ifdef DP_USE_REDUCED_PEER_ID_FIELD_WIDTH
@@ -336,4 +336,24 @@ QDF_STATUS dp_tx_compute_tx_delay_be(struct dp_soc *soc,
 				     struct dp_vdev *vdev,
 				     struct hal_tx_completion_status *ts,
 				     uint32_t *delay_us);
+
+/**
+ * dp_tx_desc_pool_alloc_be() - Allocate TX descriptor pool
+ * @soc: Handle to DP Soc structure
+ * @num_elem: Number of elements to allocate
+ * @pool_id: TCL descriptor pool ID
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS dp_tx_desc_pool_alloc_be(struct dp_soc *soc, uint32_t num_elem,
+				    uint8_t pool_id);
+
+/**
+ * dp_tx_desc_pool_free_be() - Free TX descriptor pool
+ * @soc: Handle to DP Soc structure
+ * @pool_id: TCL descriptor pool ID
+ *
+ * Return: none
+ */
+void dp_tx_desc_pool_free_be(struct dp_soc *soc, uint8_t pool_id);
 #endif

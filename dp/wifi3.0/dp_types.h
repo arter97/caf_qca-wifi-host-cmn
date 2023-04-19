@@ -46,6 +46,20 @@
 #include <hal_api_mon.h>
 #include "hal_rx.h"
 
+#define dp_init_alert(params...) QDF_TRACE_FATAL(QDF_MODULE_ID_DP_INIT, params)
+#define dp_init_err(params...) QDF_TRACE_ERROR(QDF_MODULE_ID_DP_INIT, params)
+#define dp_init_warn(params...) QDF_TRACE_WARN(QDF_MODULE_ID_DP_INIT, params)
+#define dp_init_info(params...) \
+	__QDF_TRACE_FL(QDF_TRACE_LEVEL_INFO_HIGH, QDF_MODULE_ID_DP_INIT, ## params)
+#define dp_init_debug(params...) QDF_TRACE_DEBUG(QDF_MODULE_ID_DP_INIT, params)
+
+#define dp_vdev_alert(params...) QDF_TRACE_FATAL(QDF_MODULE_ID_DP_VDEV, params)
+#define dp_vdev_err(params...) QDF_TRACE_ERROR(QDF_MODULE_ID_DP_VDEV, params)
+#define dp_vdev_warn(params...) QDF_TRACE_WARN(QDF_MODULE_ID_DP_VDEV, params)
+#define dp_vdev_info(params...) \
+	__QDF_TRACE_FL(QDF_TRACE_LEVEL_INFO_HIGH, QDF_MODULE_ID_DP_VDEV, ## params)
+#define dp_vdev_debug(params...) QDF_TRACE_DEBUG(QDF_MODULE_ID_DP_VDEV, params)
+
 #define MAX_BW 8
 #define MAX_RETRIES 4
 #define MAX_RECEPTION_TYPES 4
@@ -165,6 +179,8 @@
 #define DP_TX_MAGIC_PATTERN_INUSE	0xABCD1234
 #define DP_TX_MAGIC_PATTERN_FREE	0xDEADBEEF
 
+#define DP_INTR_POLL_TIMER_MS	5
+
 #ifdef IPA_OFFLOAD
 #define DP_PEER_REO_STATS_TID_SHIFT 16
 #define DP_PEER_REO_STATS_TID_MASK 0xFFFF0000
@@ -175,6 +191,9 @@
 #define DP_PEER_GET_REO_STATS_PEER_ID(comb_peer_id_tid) \
 	(comb_peer_id_tid & DP_PEER_REO_STATS_PEER_ID_MASK)
 #endif
+
+typedef void dp_ptnr_soc_iter_func(struct dp_soc *ptnr_soc, void *arg,
+				   int chip_id);
 
 enum rx_pktlog_mode {
 	DP_RX_PKTLOG_DISABLED = 0,
@@ -515,6 +534,7 @@ enum dp_ctxt_type {
  * @DP_RX_DESC_STATUS_TYPE: DP RX SW descriptor for monitor status
  * @DP_HW_LINK_DESC_TYPE: DP HW link descriptor
  * @DP_HW_CC_SPT_PAGE_TYPE: DP pages for HW CC secondary page table
+ * @DP_TX_TCL_DESC_TYPE: DP TCL descriptor
  */
 enum dp_desc_type {
 	DP_TX_DESC_TYPE,
@@ -527,6 +547,7 @@ enum dp_desc_type {
 	DP_RX_DESC_STATUS_TYPE,
 	DP_HW_LINK_DESC_TYPE,
 	DP_HW_CC_SPT_PAGE_TYPE,
+	DP_TX_TCL_DESC_TYPE,
 };
 
 /**
@@ -635,6 +656,8 @@ struct dp_tx_ext_desc_pool_s {
  * @msdu_ext_desc: MSDU extension descriptor
  * @timestamp:
  * @comp:
+ * @tcl_cmd_vaddr: VADDR of the TCL descriptor, valid for soft-umac arch
+ * @tcl_cmd_paddr: PADDR of the TCL descriptor, valid for soft-umac arch
  */
 struct dp_tx_desc_s {
 	struct dp_tx_desc_s *next;
@@ -661,6 +684,10 @@ struct dp_tx_desc_s {
 	struct dp_tx_ext_desc_elem_s *msdu_ext_desc;
 	qdf_ktime_t timestamp;
 	struct hal_tx_desc_comp_s comp;
+#ifdef WLAN_SOFTUMAC_SUPPORT
+	void *tcl_cmd_vaddr;
+	qdf_dma_addr_t tcl_cmd_paddr;
+#endif
 };
 
 #ifdef QCA_AC_BASED_FLOW_CONTROL
@@ -2154,7 +2181,6 @@ enum dp_context_type {
  * @dp_service_near_full_srngs: Handler for servicing the near full IRQ
  * @tx_implicit_rbm_set:
  * @dp_rx_peer_metadata_peer_id_get:
- * @dp_rx_peer_mdata_link_id_get: Handle to get link id
  * @dp_rx_chain_msdus:
  * @txrx_set_vdev_param: target specific ops while setting vdev params
  * @txrx_get_vdev_mcast_param: target specific ops for getting vdev
@@ -2192,6 +2218,7 @@ enum dp_context_type {
  * @dp_partner_chips_map:
  * @dp_partner_chips_unmap:
  * @ipa_get_bank_id: Get TCL bank id used by IPA
+ * @ipa_get_wdi_ver: Get WDI version
  * @dp_txrx_ppeds_rings_status:
  * @dp_tx_ppeds_inuse_desc:
  * @dp_tx_ppeds_cfg_astidx_cache_mapping:
@@ -2201,13 +2228,22 @@ enum dp_context_type {
  * @dp_free_ppeds_interrupts:
  * @dp_rx_wbm_err_reap_desc: Reap WBM Error Ring Descriptor
  * @dp_rx_null_q_desc_handle: Handle Null Queue Exception Error
+ * @dp_tx_desc_pool_alloc: Allocate arch specific TX descriptor pool
+ * @dp_tx_desc_pool_free: Free arch specific TX descriptor pool
+ * @txrx_srng_init: Init txrx srng
+ * @txrx_soc_ppeds_interrupt_stop:
+ * @txrx_soc_ppeds_interrupt_start:
+ * @txrx_soc_ppeds_service_status_update:
+ * @txrx_soc_ppeds_enabled_check:
+ * @txrx_soc_ppeds_txdesc_pool_reset:
  */
 struct dp_arch_ops {
 	/* INIT/DEINIT Arch Ops */
 	QDF_STATUS (*txrx_soc_attach)(struct dp_soc *soc,
 				      struct cdp_soc_attach_params *params);
 	QDF_STATUS (*txrx_soc_detach)(struct dp_soc *soc);
-	QDF_STATUS (*txrx_soc_init)(struct dp_soc *soc);
+	void* (*txrx_soc_init)(struct dp_soc *soc, HTC_HANDLE htc_handle,
+			       struct hif_opaque_softc *hif_handle);
 	QDF_STATUS (*txrx_soc_deinit)(struct dp_soc *soc);
 	QDF_STATUS (*txrx_soc_srng_alloc)(struct dp_soc *soc);
 	QDF_STATUS (*txrx_soc_srng_init)(struct dp_soc *soc);
@@ -2224,8 +2260,9 @@ struct dp_arch_ops {
 	void (*txrx_peer_map_detach)(struct dp_soc *soc);
 	QDF_STATUS (*dp_rxdma_ring_sel_cfg)(struct dp_soc *soc);
 	void (*soc_cfg_attach)(struct dp_soc *soc);
-	QDF_STATUS (*txrx_peer_setup)(struct dp_soc *soc,
-				      struct dp_peer *peer);
+	QDF_STATUS (*txrx_peer_setup)(struct cdp_soc_t *soc_hdl,
+				      uint8_t vdev_id, uint8_t *peer_mac,
+				      struct cdp_peer_setup_info *setup_info);
 	void (*peer_get_reo_hash)(struct dp_vdev *vdev,
 				  struct cdp_peer_setup_info *setup_info,
 				  enum cdp_host_reo_dest_ring *reo_dest,
@@ -2305,7 +2342,6 @@ struct dp_arch_ops {
 				    uint8_t bm_id);
 	uint16_t (*dp_rx_peer_metadata_peer_id_get)(struct dp_soc *soc,
 						    uint32_t peer_metadata);
-	uint8_t (*dp_rx_peer_mdata_link_id_get)(uint32_t peer_metadata);
 	bool (*dp_rx_chain_msdus)(struct dp_soc *soc, qdf_nbuf_t nbuf,
 				  uint8_t *rx_tlv_hdr, uint8_t mac_id);
 	/* Control Arch Ops */
@@ -2400,6 +2436,7 @@ struct dp_arch_ops {
 
 #ifdef IPA_OFFLOAD
 	int8_t (*ipa_get_bank_id)(struct dp_soc *soc);
+	void (*ipa_get_wdi_ver)(uint8_t *wdi_ver);
 #endif
 #ifdef WLAN_SUPPORT_PPEDS
 	void (*dp_txrx_ppeds_rings_status)(struct dp_soc *soc);
@@ -2428,6 +2465,23 @@ struct dp_arch_ops {
 					       struct dp_txrx_peer *txrx_peer,
 					       bool is_reo_exception,
 					       uint8_t link_id);
+
+	QDF_STATUS (*dp_tx_desc_pool_alloc)(struct dp_soc *soc,
+					    uint32_t num_elem,
+					    uint8_t pool_id);
+	void (*dp_tx_desc_pool_free)(struct dp_soc *soc, uint8_t pool_id);
+
+	QDF_STATUS (*txrx_srng_init)(struct dp_soc *soc, struct dp_srng *srng,
+				     int ring_type, int ring_num, int mac_id);
+#ifdef WLAN_SUPPORT_PPEDS
+	void (*txrx_soc_ppeds_interrupt_stop)(struct dp_soc *soc);
+	void (*txrx_soc_ppeds_interrupt_start)(struct dp_soc *soc);
+	void (*txrx_soc_ppeds_service_status_update)(struct dp_soc *soc,
+						     bool enable);
+	bool (*txrx_soc_ppeds_enabled_check)(struct dp_soc *soc);
+	void (*txrx_soc_ppeds_txdesc_pool_reset)(struct dp_soc *soc,
+						 qdf_nbuf_t *nbuf_list);
+#endif
 };
 
 /**
@@ -3029,6 +3083,10 @@ struct dp_soc {
 #endif
 	/* Reo queue ref table items */
 	struct reo_queue_ref_table reo_qref;
+#ifdef DP_TX_PACKET_INSPECT_FOR_ILP
+	/* Flag to show if TX ILP is enabled */
+	bool tx_ilp_enable;
+#endif
 };
 
 #ifdef IPA_OFFLOAD
@@ -4224,6 +4282,7 @@ typedef void *dp_txrx_ref_handle;
  * @protocol_trace_cnt: per-peer protocol counter
  * @release_src_not_tqm: Counter to keep track of release source is not TQM
  *			 in TX completion status processing
+ * @inval_link_id_pkt_cnt: Counter to capture Invalid Link Id
  */
 struct dp_peer_per_pkt_tx_stats {
 	struct cdp_pkt_info ucast;
@@ -4262,6 +4321,7 @@ struct dp_peer_per_pkt_tx_stats {
 	struct protocol_trace_count protocol_trace_cnt[CDP_TRACE_MAX];
 #endif
 	uint32_t release_src_not_tqm;
+	uint32_t inval_link_id_pkt_cnt;
 };
 
 /**
@@ -4321,6 +4381,7 @@ struct dp_peer_per_pkt_tx_stats {
  * @rts_failure: RTS failure count
  * @bar_cnt: Block ACK Request frame count
  * @ndpa_cnt: NDP announcement frame count
+ * @rssi_chain: rssi chain
  * @wme_ac_type_bytes: Wireless Multimedia bytes Count
  */
 struct dp_peer_extd_tx_stats {
@@ -4378,6 +4439,7 @@ struct dp_peer_extd_tx_stats {
 	uint32_t rts_failure;
 	uint32_t bar_cnt;
 	uint32_t ndpa_cnt;
+	int32_t rssi_chain[CDP_RSSI_CHAIN_LEN];
 	uint64_t wme_ac_type_bytes[WME_AC_MAX];
 };
 
@@ -4391,6 +4453,7 @@ struct dp_peer_extd_tx_stats {
  * @raw: Raw Pakets received
  * @nawds_mcast_drop: Total NAWDS multicast packets dropped
  * @mec_drop: Total MEC packets dropped
+ * @ppeds_drop: Total DS packets dropped
  * @last_rx_ts: last timestamp in jiffies when RX happened
  * @intra_bss: Intra BSS statistics
  * @intra_bss.pkts: Intra BSS packets received
@@ -4414,6 +4477,7 @@ struct dp_peer_extd_tx_stats {
  * @protocol_trace_cnt: per-peer protocol counters
  * @mcast_3addr_drop:
  * @rx_total: total rx count
+ * @inval_link_id_pkt_cnt: Counter to capture Invalid Link Id
  */
 struct dp_peer_per_pkt_rx_stats {
 	struct cdp_pkt_info rcvd_reo[CDP_MAX_RX_RINGS];
@@ -4424,6 +4488,7 @@ struct dp_peer_per_pkt_rx_stats {
 	struct cdp_pkt_info raw;
 	uint32_t nawds_mcast_drop;
 	struct cdp_pkt_info mec_drop;
+	struct cdp_pkt_info ppeds_drop;
 	unsigned long last_rx_ts;
 	struct {
 		struct cdp_pkt_info pkts;
@@ -4453,6 +4518,7 @@ struct dp_peer_per_pkt_rx_stats {
 #ifdef IPA_OFFLOAD
 	struct cdp_pkt_info rx_total;
 #endif
+	uint32_t inval_link_id_pkt_cnt;
 };
 
 /**
@@ -4763,6 +4829,11 @@ struct dp_peer {
 	enum cdp_peer_type peer_type;
 	/*---------for link peer---------*/
 	struct dp_peer *mld_peer;
+
+	/*Link ID of link peer*/
+	uint8_t link_id;
+	bool link_id_valid;
+
 	/*---------for mld peer----------*/
 	struct dp_peer_link_info link_peers[DP_MAX_MLO_LINKS];
 	uint8_t num_links;
@@ -5017,6 +5088,7 @@ struct dp_req_rx_hw_stats_t {
 #endif
 /* soc level structure to declare arch specific ops for DP */
 
+#ifndef WLAN_SOFTUMAC_SUPPORT
 /**
  * dp_hw_link_desc_pool_banks_free() - Free h/w link desc pool banks
  * @soc: DP SOC handle
@@ -5050,6 +5122,23 @@ QDF_STATUS dp_hw_link_desc_pool_banks_alloc(struct dp_soc *soc,
  * Return: None
  */
 void dp_link_desc_ring_replenish(struct dp_soc *soc, uint32_t mac_id);
+#else
+static inline void dp_hw_link_desc_pool_banks_free(struct dp_soc *soc,
+						   uint32_t mac_id)
+{
+}
+
+static inline QDF_STATUS dp_hw_link_desc_pool_banks_alloc(struct dp_soc *soc,
+							  uint32_t mac_id)
+{
+	return QDF_STATUS_SUCCESS;
+}
+
+static inline void dp_link_desc_ring_replenish(struct dp_soc *soc,
+					       uint32_t mac_id)
+{
+}
+#endif
 
 #ifdef WLAN_FEATURE_RX_PREALLOC_BUFFER_POOL
 void dp_rx_refill_buff_pool_enqueue(struct dp_soc *soc);
@@ -5123,6 +5212,9 @@ void dp_srng_deinit(struct dp_soc *soc, struct dp_srng *srng,
 void dp_print_peer_txrx_stats_be(struct cdp_peer_stats *peer_stats,
 				 enum peer_stats_type stats_type);
 void dp_print_peer_txrx_stats_li(struct cdp_peer_stats *peer_stats,
+				 enum peer_stats_type stats_type);
+
+void dp_print_peer_txrx_stats_rh(struct cdp_peer_stats *peer_stats,
 				 enum peer_stats_type stats_type);
 
 /**

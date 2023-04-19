@@ -209,6 +209,7 @@ struct channel_info {
  * @rsnxe: Pointer to rsnxe IE
  * @ehtcap: pointer to ehtcap ie
  * @ehtop: pointer to eht op ie
+ * @bw_ind: pointer to bandwidth indication element sub ie
  * @multi_link_bv: pointer to multi link basic variant IE
  * @multi_link_rv: pointer to multi link reconfig IE
  * @t2lm: array of pointers to t2lm op ie
@@ -276,6 +277,7 @@ struct ie_list {
 #ifdef WLAN_FEATURE_11BE
 	uint8_t *ehtcap;
 	uint8_t *ehtop;
+	uint8_t *bw_ind;
 #endif
 #ifdef WLAN_FEATURE_11BE_MLO
 	uint8_t *multi_link_bv;
@@ -1519,6 +1521,20 @@ struct scan_user_cfg {
 	struct probe_req_allowlist_attr ie_allowlist;
 	uint32_t sta_miracast_mcc_rest_time;
 };
+
+/**
+ * typedef update_mbssid_bcn_prb_rsp() - cb to inform mbssid beacon or prob resp
+ * @frame: the pointer of frame data
+ * @frame_len: the length of frame data
+ * @frm_subtype: frame type
+ * @bssid: the pointer of bssid
+ *
+ * Return: QDF_STATUS
+ */
+typedef QDF_STATUS (*update_mbssid_bcn_prb_rsp)(uint8_t *frame,
+						uint32_t frame_len,
+						uint8_t frm_subtype,
+						char *bssid);
 
 /**
  * typedef update_beacon_cb() - cb to inform/update beacon

@@ -1865,6 +1865,14 @@ static uint8_t dp_htt_tx_comp_get_status(struct dp_soc *soc, char *htt_desc)
 		tx_status = HTT_TX_WBM_COMPLETION_V3_TX_STATUS_GET(htt_desc[0]);
 		break;
 
+	case CDP_ARCH_TYPE_RH:
+		{
+			uint32_t *msg_word = (uint32_t *)htt_desc;
+
+			tx_status = HTT_TX_MSDU_INFO_RELEASE_REASON_GET(
+							*(msg_word + 3));
+		}
+		break;
 	default:
 		dp_err("Incorrect CDP_ARCH %d", soc->arch_id);
 		QDF_BUG(0);
@@ -1998,6 +2006,9 @@ is_nbuf_frm_rmnet(qdf_nbuf_t nbuf, struct dp_tx_msdu_info_s *msdu_info)
 	uint8_t *payload_addr = NULL;
 
 	ingress_dev = dev_get_by_index(dev_net(nbuf->dev), nbuf->skb_iif);
+
+	if (!ingress_dev)
+		return false;
 
 	if ((ingress_dev->priv_flags & IFF_PHONY_HEADROOM)) {
 		dev_put(ingress_dev);
@@ -3227,6 +3238,28 @@ void dp_tx_nawds_handler(struct dp_soc *soc, struct dp_vdev *vdev,
 	qdf_spin_unlock_bh(&vdev->peer_list_lock);
 }
 
+#ifdef WLAN_MCAST_MLO
+static inline bool
+dp_tx_check_mesh_vdev(struct dp_vdev *vdev,
+		      struct cdp_tx_exception_metadata *tx_exc_metadata)
+{
+	if (!tx_exc_metadata->is_mlo_mcast && qdf_unlikely(vdev->mesh_vdev))
+		return true;
+
+	return false;
+}
+#else
+static inline bool
+dp_tx_check_mesh_vdev(struct dp_vdev *vdev,
+		      struct cdp_tx_exception_metadata *tx_exc_metadata)
+{
+	if (qdf_unlikely(vdev->mesh_vdev))
+		return true;
+
+	return false;
+}
+#endif
+
 qdf_nbuf_t
 dp_tx_send_exception(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
 		     qdf_nbuf_t nbuf,
@@ -3274,7 +3307,7 @@ dp_tx_send_exception(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
 	/* Basic sanity checks for unsupported packets */
 
 	/* MESH mode */
-	if (qdf_unlikely(vdev->mesh_vdev)) {
+	if (dp_tx_check_mesh_vdev(vdev, tx_exc_metadata)) {
 		dp_tx_err("Mesh mode is not supported in exception path");
 		goto fail;
 	}
@@ -4560,8 +4593,8 @@ dp_tx_update_peer_extd_stats(struct hal_tx_completion_status *ts,
 }
 #endif
 
-#ifdef WLAN_FEATURE_11BE_MLO
-static inline int
+#if defined(WLAN_FEATURE_11BE_MLO) && defined(QCA_ENHANCED_STATS_SUPPORT)
+static inline uint8_t
 dp_tx_get_link_id_from_ppdu_id(struct dp_soc *soc,
 			       struct hal_tx_completion_status *ts,
 			       struct dp_txrx_peer *txrx_peer,
@@ -4577,13 +4610,19 @@ dp_tx_get_link_id_from_ppdu_id(struct dp_soc *soc,
 	link_id_offset = soc->link_id_offset;
 	link_id_bits = soc->link_id_bits;
 	ppdu_id = ts->ppdu_id;
-	hw_link_id = DP_GET_HW_LINK_ID_FRM_PPDU_ID(ppdu_id, link_id_offset,
-						   link_id_bits);
+	hw_link_id = ((DP_GET_HW_LINK_ID_FRM_PPDU_ID(ppdu_id, link_id_offset,
+						   link_id_bits)) + 1);
+	if (hw_link_id > DP_MAX_MLO_LINKS) {
+		hw_link_id = 0;
+		DP_PEER_PER_PKT_STATS_INC(
+				txrx_peer,
+				tx.inval_link_id_pkt_cnt, 1, hw_link_id);
+	}
 
-	return (hw_link_id + 1);
+	return hw_link_id;
 }
 #else
-static inline int
+static inline uint8_t
 dp_tx_get_link_id_from_ppdu_id(struct dp_soc *soc,
 			       struct hal_tx_completion_status *ts,
 			       struct dp_txrx_peer *txrx_peer,
@@ -5297,11 +5336,7 @@ void dp_tx_comp_process_tx_status(struct dp_soc *soc,
 	}
 	vdev = txrx_peer->vdev;
 
-#ifdef DP_MLO_LINK_STATS_SUPPORT
 	link_id = dp_tx_get_link_id_from_ppdu_id(soc, ts, txrx_peer, vdev);
-	if (link_id < 1 || link_id > DP_MAX_MLO_LINKS)
-		link_id = 0;
-#endif
 
 	dp_tx_update_connectivity_stats(soc, vdev, tx_desc, ts->status);
 	dp_tx_update_uplink_delay(soc, vdev, ts);
@@ -5540,6 +5575,51 @@ dp_tx_nbuf_dev_kfree_list(qdf_nbuf_queue_head_t *nbuf_queue_head)
 }
 #endif
 
+#ifdef WLAN_SUPPORT_PPEDS
+static inline void
+dp_tx_update_ppeds_tx_comp_stats(struct dp_soc *soc,
+				 struct dp_txrx_peer *txrx_peer,
+				 struct hal_tx_completion_status *ts,
+				 struct dp_tx_desc_s *desc,
+				 uint8_t ring_id)
+{
+	uint8_t link_id = 0;
+	struct dp_vdev *vdev = NULL;
+
+	if (qdf_likely(txrx_peer)) {
+		dp_tx_update_peer_basic_stats(txrx_peer,
+					      desc->length,
+					      desc->tx_status,
+					      false);
+		if (!(desc->flags & DP_TX_DESC_FLAG_SIMPLE)) {
+			hal_tx_comp_get_status(&desc->comp,
+					       ts,
+					       soc->hal_soc);
+			vdev = txrx_peer->vdev;
+			link_id = dp_tx_get_link_id_from_ppdu_id(soc,
+								 ts,
+								 txrx_peer,
+								 vdev);
+			if (link_id < 1 || link_id > DP_MAX_MLO_LINKS)
+				link_id = 0;
+			dp_tx_update_peer_stats(desc, ts,
+						txrx_peer,
+						ring_id,
+						link_id);
+		}
+	}
+}
+#else
+static inline void
+dp_tx_update_ppeds_tx_comp_stats(struct dp_soc *soc,
+				 struct dp_txrx_peer *txrx_peer,
+				 struct hal_tx_completion_status *ts,
+				 struct dp_tx_desc_s *desc,
+				 uint8_t ring_id)
+{
+}
+#endif
+
 void
 dp_tx_comp_process_desc_list(struct dp_soc *soc,
 			     struct dp_tx_desc_s *comp_head, uint8_t ring_id)
@@ -5578,12 +5658,9 @@ dp_tx_comp_process_desc_list(struct dp_soc *soc,
 
 		if (desc->flags & DP_TX_DESC_FLAG_PPEDS) {
 			qdf_nbuf_t nbuf;
+			dp_tx_update_ppeds_tx_comp_stats(soc, txrx_peer, &ts,
+							 desc, ring_id);
 
-			if (qdf_likely(txrx_peer))
-				dp_tx_update_peer_basic_stats(txrx_peer,
-							      desc->length,
-							      desc->tx_status,
-							      false);
 			nbuf = dp_ppeds_tx_desc_free(soc, desc);
 			dp_tx_nbuf_dev_queue_free_no_flag(&h, nbuf);
 			desc = next;
@@ -5703,6 +5780,7 @@ void dp_tx_desc_check_corruption(struct dp_tx_desc_s *tx_desc)
 }
 #endif
 
+#ifndef WLAN_SOFTUMAC_SUPPORT
 uint32_t dp_tx_comp_handler(struct dp_intr *int_ctx, struct dp_soc *soc,
 			    hal_ring_handle_t hal_ring_hdl, uint8_t ring_id,
 			    uint32_t quota)
@@ -5969,6 +6047,7 @@ next_desc:
 
 	return num_processed;
 }
+#endif
 
 #ifdef FEATURE_WLAN_TDLS
 qdf_nbuf_t dp_tx_non_std(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
@@ -6329,6 +6408,7 @@ static void dp_tx_tso_cmn_desc_pool_free(struct dp_soc *soc, uint8_t num_pool)
 	dp_tx_tso_num_seg_pool_free(soc, num_pool);
 }
 
+#ifndef WLAN_SOFTUMAC_SUPPORT
 void dp_soc_tx_desc_sw_pools_free(struct dp_soc *soc)
 {
 	uint8_t num_pool;
@@ -6351,6 +6431,26 @@ void dp_soc_tx_desc_sw_pools_deinit(struct dp_soc *soc)
 	dp_tx_ext_desc_pool_deinit(soc, num_pool);
 	dp_tx_deinit_static_pools(soc, num_pool);
 }
+#else
+void dp_soc_tx_desc_sw_pools_free(struct dp_soc *soc)
+{
+	uint8_t num_pool;
+
+	num_pool = wlan_cfg_get_num_tx_desc_pool(soc->wlan_cfg_ctx);
+
+	dp_tx_delete_static_pools(soc, num_pool);
+}
+
+void dp_soc_tx_desc_sw_pools_deinit(struct dp_soc *soc)
+{
+	uint8_t num_pool;
+
+	num_pool = wlan_cfg_get_num_tx_desc_pool(soc->wlan_cfg_ctx);
+
+	dp_tx_flow_control_deinit(soc);
+	dp_tx_deinit_static_pools(soc, num_pool);
+}
+#endif /*WLAN_SOFTUMAC_SUPPORT*/
 
 /**
  * dp_tx_tso_cmn_desc_pool_alloc() - TSO cmn desc pool allocator
@@ -6409,6 +6509,7 @@ static QDF_STATUS dp_tx_tso_cmn_desc_pool_init(struct dp_soc *soc,
 	return QDF_STATUS_SUCCESS;
 }
 
+#ifndef WLAN_SOFTUMAC_SUPPORT
 QDF_STATUS dp_soc_tx_desc_sw_pools_alloc(struct dp_soc *soc)
 {
 	uint8_t num_pool;
@@ -6482,6 +6583,46 @@ fail2:
 fail1:
 	return QDF_STATUS_E_RESOURCES;
 }
+
+#else
+QDF_STATUS dp_soc_tx_desc_sw_pools_alloc(struct dp_soc *soc)
+{
+	uint8_t num_pool;
+	uint32_t num_desc;
+
+	num_pool = wlan_cfg_get_num_tx_desc_pool(soc->wlan_cfg_ctx);
+	num_desc = wlan_cfg_get_num_tx_desc(soc->wlan_cfg_ctx);
+
+	QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_INFO,
+		  "%s Tx Desc Alloc num_pool = %d, descs = %d",
+		  __func__, num_pool, num_desc);
+
+	if ((num_pool > MAX_TXDESC_POOLS) ||
+	    (num_desc > WLAN_CFG_NUM_TX_DESC_MAX))
+		return QDF_STATUS_E_RESOURCES;
+
+	if (dp_tx_alloc_static_pools(soc, num_pool, num_desc))
+		return QDF_STATUS_E_RESOURCES;
+
+	return QDF_STATUS_SUCCESS;
+}
+
+QDF_STATUS dp_soc_tx_desc_sw_pools_init(struct dp_soc *soc)
+{
+	uint8_t num_pool;
+	uint32_t num_desc;
+
+	num_pool = wlan_cfg_get_num_tx_desc_pool(soc->wlan_cfg_ctx);
+	num_desc = wlan_cfg_get_num_tx_desc(soc->wlan_cfg_ctx);
+
+	if (dp_tx_init_static_pools(soc, num_pool, num_desc))
+		return QDF_STATUS_E_RESOURCES;
+
+	dp_tx_flow_control_init(soc);
+	soc->process_tx_status = CONFIG_PROCESS_TX_STATUS;
+	return QDF_STATUS_SUCCESS;
+}
+#endif
 
 QDF_STATUS dp_tso_soc_attach(struct cdp_soc_t *txrx_soc)
 {

@@ -1541,6 +1541,11 @@ QDF_STATUS
 		wmi_unified_t wmi_handle,
 		void *evt_buf,
 		wmi_host_manual_ul_ofdma_trig_feedback_evt *feedback);
+
+QDF_STATUS
+(*extract_ul_ofdma_trig_rx_peer_userinfo)(wmi_unified_t wmi_handle,
+		void *evt_buf,
+		struct wmi_host_rx_peer_userinfo_evt_data *resp);
 #endif
 
 QDF_STATUS (*extract_channel_hopping_event)(wmi_unified_t wmi_handle,
@@ -1837,6 +1842,10 @@ QDF_STATUS
 QDF_STATUS
 (*send_btcoex_duty_cycle_cmd)(wmi_unified_t wmi_handle,
 			struct btcoex_cfg_params *param);
+
+QDF_STATUS
+(*send_egid_info_cmd)(wmi_unified_t wmi_handle,
+		      struct esl_egid_params *param);
 
 QDF_STATUS
 (*send_coex_ver_cfg_cmd)(wmi_unified_t wmi_handle, coex_ver_cfg_t *param);
@@ -2244,6 +2253,11 @@ QDF_STATUS (*extract_scan_radio_cap_service_ready_ext2)(
 			uint8_t *evt_buf, uint8_t idx,
 			struct wlan_psoc_host_scan_radio_caps *param);
 
+QDF_STATUS (*extract_msdu_idx_qtype_map_service_ready_ext2)(
+			wmi_unified_t wmi_handle,
+			uint8_t *evt_buf, uint8_t idx,
+			uint8_t *msdu_qtype);
+
 QDF_STATUS (*extract_sw_cal_ver_ext2)(wmi_unified_t wmi_handle,
 				      uint8_t *event,
 				      struct wmi_host_sw_cal_ver *cal);
@@ -2283,6 +2297,11 @@ QDF_STATUS (*extract_dbr_buf_metadata)(
 			wmi_unified_t wmi_handle,
 			uint8_t *evt_buf, uint8_t idx,
 			struct direct_buf_rx_metadata *param);
+
+QDF_STATUS (*extract_dbr_buf_cv_metadata)(
+			wmi_unified_t wmi_handle,
+			uint8_t *evt_buf, uint8_t idx,
+			struct direct_buf_rx_cv_metadata *param);
 #endif
 
 QDF_STATUS (*extract_pdev_utf_event)(wmi_unified_t wmi_hdl,
@@ -2708,6 +2727,15 @@ QDF_STATUS(*extract_twt_session_stats_data)
 		);
 #endif
 
+#ifdef QCA_STANDALONE_SOUNDING_TRIGGER
+QDF_STATUS (*extract_standalone_sounding_evt_params)
+		(
+		wmi_unified_t wmi_handle,
+		void *evt_buf,
+		struct wmi_host_standalone_sounding_evt_params *ss_params
+		);
+#endif
+
 #ifdef QCA_SUPPORT_CP_STATS
 QDF_STATUS (*extract_cca_stats)(wmi_unified_t wmi_handle, void *evt_buf,
 				struct wmi_host_congestion_stats *stats);
@@ -2930,7 +2958,7 @@ QDF_STATUS (*extract_halphy_stats_event_count)(wmi_unified_t wmi_handle,
 					       void *evt_buf,
 					       uint32_t *event_count_flag);
 #if defined(WLAN_SUPPORT_INFRA_CTRL_PATH_STATS) || \
-	defined(WLAN_TELEMETRY_STATS_SUPPORT)
+	defined(WLAN_CONFIG_TELEMETRY_AGENT)
 QDF_STATUS
 (*extract_infra_cp_stats)(wmi_unified_t wmi_handle,
 			  void *evt_buf, uint32_t evt_buf_len,
@@ -3142,6 +3170,11 @@ QDF_STATUS
 QDF_STATUS (*extract_quiet_offload_event)(
 				wmi_unified_t wmi_handle, void *evt_buf,
 				struct vdev_sta_quiet_event *quiet_event);
+
+QDF_STATUS (*extract_mlo_link_state_event)(
+				struct wmi_unified *wmi_handle,
+				void *buf,
+				struct ml_link_state_info_event *params);
 #endif
 
 #ifdef WLAN_SUPPORT_PPEDS
@@ -3164,6 +3197,10 @@ QDF_STATUS (*send_mlo_vdev_tid_to_link_map)(
 			wmi_unified_t wmi_handle,
 			struct wmi_host_tid_to_link_map_ap_params *params);
 
+QDF_STATUS (*send_mlo_link_state_request)(
+			wmi_unified_t wmi_handle,
+			struct wmi_host_link_state_params *params);
+
 QDF_STATUS (*extract_mlo_vdev_tid_to_link_map_event)(
 		struct wmi_unified *wmi_handle,
 		uint8_t *buf,
@@ -3173,6 +3210,7 @@ QDF_STATUS (*extract_mlo_vdev_bcast_tid_to_link_map_event)(
 			struct wmi_unified *wmi_handle,
 			void *buf,
 			struct mlo_bcast_t2lm_info *bcast_info);
+
 #endif /* WLAN_FEATURE_11BE */
 
 QDF_STATUS
@@ -3252,6 +3290,10 @@ QDF_STATUS
 			      uint8_t *evt_buf,
 			      struct r2p_table_update_status_obj *update_status,
 			      uint32_t len);
+QDF_STATUS
+(*extract_csa_ie_received_ev_params)(wmi_unified_t wmi_handle,
+				     void *evt_buf, uint8_t *vdev_id,
+				     struct csa_offload_params *csa_event);
 };
 
 /* Forward declaration for psoc*/

@@ -315,7 +315,8 @@ void mlo_mlme_handle_sta_csa_param(struct wlan_objmgr_vdev *vdev,
 #define INVALID_HW_LINK_ID 0xFFFF
 #define WLAN_MLO_INVALID_NUM_LINKS             (-1)
 #ifdef WLAN_MLO_MULTI_CHIP
-#define WLAN_MLO_GROUP_INVALID                 (-1)
+#define WLAN_MLO_GROUP_INVALID                 0xFF
+#define WLAN_MLO_CHIP_ID_INVALID               0xFF
 /**
  * wlan_mlo_get_max_num_links() - Get the maximum number of MLO links
  * possible in the system
@@ -359,6 +360,14 @@ uint16_t wlan_mlo_get_pdev_hw_link_id(struct wlan_objmgr_pdev *pdev);
  * Return: MLO group id of the psoc
  */
 uint8_t wlan_mlo_get_psoc_group_id(struct wlan_objmgr_psoc *psoc);
+
+/**
+ * wlan_mlo_get_psoc_mlo_chip_id() - Get MLO chip id of psoc
+ * @psoc: psoc object
+ *
+ * Return: MLO group id of the psoc
+ */
+uint8_t wlan_mlo_get_psoc_mlo_chip_id(struct wlan_objmgr_psoc *psoc);
 
 /**
  * wlan_mlo_get_psoc_capable() - Get if MLO capable psoc
@@ -541,5 +550,35 @@ QDF_STATUS
 mlo_get_mlstats_vdev_params(struct wlan_objmgr_psoc *psoc,
 			    struct mlo_stats_vdev_params *ml_vdev_info,
 			    uint8_t vdev_id);
+
+/**
+ * typedef get_ml_link_state_cb() - api to handle link state callback
+ * @ev: pointer to event parameter of structure
+ * @cookie: a cookie for request context
+ */
+typedef void (*get_ml_link_state_cb)(struct ml_link_state_info_event *ev,
+				     void *cookie);
+/**
+ * wlan_handle_ml_link_state_info_event() - Event handler for ml link state
+ * @psoc: psoc handler
+ * @event: pointer to event parameter of structure
+ */
+QDF_STATUS
+wlan_handle_ml_link_state_info_event(struct wlan_objmgr_psoc *psoc,
+				     struct ml_link_state_info_event *event);
+/**
+ * mlo_get_link_state_register_resp_cb() - Register link state callback
+ * @vdev: vdev handler
+ * @req: pointer to request parameter of structure
+ */
+QDF_STATUS
+mlo_get_link_state_register_resp_cb(struct wlan_objmgr_vdev *vdev,
+				    struct ml_link_state_cmd_info *req);
+/**
+ * ml_post_get_link_state_msg() - Post get link state msg
+ * @vdev: vdev handler
+ */
+QDF_STATUS ml_post_get_link_state_msg(struct wlan_objmgr_vdev *vdev);
+
 #endif
 #endif
