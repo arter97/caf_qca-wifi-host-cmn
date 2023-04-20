@@ -1575,6 +1575,7 @@ enum restart_beaconing_on_ch_avoid_rule {
  * @afc_disable_request_id_check: Disable target AFC request id check
  * @is_afc_reg_noaction: Whether no action to AFC power event
  * @sta_sap_scc_on_indoor_channel: Value of sap+sta scc on indoor support
+ * @p2p_indoor_ch_support: Allow P2P GO in indoor channels
  */
 struct reg_config_vars {
 	uint32_t enable_11d_support;
@@ -1600,6 +1601,7 @@ struct reg_config_vars {
 	bool is_afc_reg_noaction;
 #endif
 	bool sta_sap_scc_on_indoor_channel;
+	bool p2p_indoor_ch_support;
 };
 
 /**
@@ -2344,4 +2346,14 @@ static inline bool reg_is_chan_enum_invalid(enum channel_enum chan_enum)
 {
 	return chan_enum >= INVALID_CHANNEL;
 }
+
+/**
+ * struct r2p_table_update_status_obj
+ * @pdev_id: pdev id from target
+ * @status: rate2power update status
+ */
+struct r2p_table_update_status_obj {
+	uint32_t pdev_id;
+	uint32_t status;
+};
 #endif

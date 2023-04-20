@@ -356,7 +356,7 @@ dp_rx_populate_su_evm_details(struct hal_rx_ppdu_info *ppdu_info,
 	pilot_count = ppdu_info->evm_info.pilot_count;
 
 	if ((nss_count * pilot_count) > DP_RX_MAX_SU_EVM_COUNT) {
-		qdf_err("pilot evm count is more than expected");
+		qdf_debug("pilot evm count is more than expected");
 		return;
 	}
 	cdp_rx_ppdu->evm_info.pilot_count = pilot_count;
@@ -808,7 +808,7 @@ static inline uint8_t dp_get_bw_offset_frm_bw(struct dp_soc *soc,
 }
 #endif
 
-#ifdef WLAN_TELEMETRY_STATS_SUPPORT
+#ifdef WLAN_CONFIG_TELEMETRY_AGENT
 static void
 dp_ppdu_desc_user_rx_time_update(struct dp_pdev *pdev,
 				 struct dp_peer *peer,

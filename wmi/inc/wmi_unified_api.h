@@ -670,6 +670,15 @@ void
 wmi_flush_endpoint(wmi_unified_t wmi_handle);
 
 /**
+ * wmi_get_endpoint() - API to get endpoint ID
+ * @wmi_handle: handle to WMI.
+ *
+ * Return Handle to endpoint
+ */
+HTC_ENDPOINT_ID
+wmi_get_endpoint(wmi_unified_t wmi_handle);
+
+/**
  * wmi_interface_sequence_stop() - API to stop wmi sequence check
  *
  * @wmi_handle: handle to WMI.
@@ -2076,6 +2085,18 @@ wmi_unified_send_btcoex_wlan_priority_cmd(wmi_unified_t wmi_handle,
 QDF_STATUS
 wmi_unified_send_btcoex_duty_cycle_cmd(wmi_unified_t wmi_handle,
 				       struct btcoex_cfg_params *param);
+/**
+ *  wmi_unified_send_egid_info_cmd() - send ESL egid_info commands
+ * @wmi_handle: wmi handle
+ * @param: esl_egid params
+ *
+ * Send WMI_ESL_EGID_CMDID parameters to fw.
+ *
+ * Return: QDF_STATUS_SUCCESS on success, QDF_STATUS_E_** on error
+ */
+QDF_STATUS
+wmi_unified_send_egid_info_cmd(wmi_unified_t wmi_handle,
+			       struct esl_egid_params *param);
 
 /**
  * wmi_unified_send_coex_ver_cfg_cmd() - send coex ver cfg command

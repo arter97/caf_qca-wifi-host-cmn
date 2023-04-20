@@ -123,6 +123,7 @@
 #define CTL_5G_SIZE 1536
 #define CTL_2G_SIZE 684
 #define MAX_CTL_SIZE (CTL_5G_SIZE > CTL_2G_SIZE ? CTL_5G_SIZE : CTL_2G_SIZE)
+#define MAX_PWTAB_SIZE 3392
 #define IEEE80211_MICBUF_SIZE   (8+8)
 #define IEEE80211_TID_SIZE	17
 #define WME_NUM_AC	4
@@ -515,6 +516,7 @@
 
 #define WMI_MAX_AOA_PHASE_DELTA 31
 #define WMI_MAX_CHAINS_PHASE 2
+#define EGID_INFO_SIZE 4
 
 #include "qdf_atomic.h"
 
@@ -1110,11 +1112,21 @@ typedef struct {
  * is present.
  * @preffered_link_order: Preferred links in order.
  * @timeout: timeout values for all the access categories.
+ * @tlt_characterization_params: Bitmask to select Tx-Link Tuple from ordered
+ *  list.
+ *  Bit 0-15 : Each bit maps to the corresponding Link ID
+ *  Bit 16-31: Reserved
+ * @link_control_flags: Link control flags.
+ *  Bit 0: TLT enable/disable
+ *  Bit 1: Preferred Link enable/disable
+ *  Bit 2-31: Reserved
  */
 struct wlan_host_preferred_links {
 	uint8_t num_pref_links;
 	uint8_t  preffered_link_order[MAX_PREFERRED_LINKS];
 	uint32_t timeout[WMI_HOST_WLAN_MAX_AC];
+	uint32_t tlt_characterization_params;
+	uint32_t link_control_flags;
 };
 #endif
 
@@ -4052,6 +4064,14 @@ struct btcoex_cfg_params {
 	uint32_t wlan_duration;
 };
 
+/**
+ * struct esl_egid_params - Contains the EGID information
+ * @egid_info: egid_info contains the 128-bit ESL EGID information
+ */
+struct esl_egid_params {
+	uint32_t egid_info[EGID_INFO_SIZE];
+};
+
 #define WMI_HOST_COEX_CONFIG_BUF_MAX_LEN 32 /* 128 bytes */
 /**
  * struct coex_ver_cfg_t
@@ -5250,6 +5270,14 @@ typedef enum {
 #ifdef WLAN_SUPPORT_GAP_LL_PS_MODE
 	wmi_xgap_enable_complete_eventid,
 #endif
+	wmi_pdev_set_tgtr2p_table_eventid,
+#ifdef QCA_MANUAL_TRIGGERED_ULOFDMA
+	wmi_manual_ul_ofdma_trig_feedback_eventid,
+	wmi_manual_ul_ofdma_trig_rx_peer_userinfo_eventid,
+#endif
+#ifdef QCA_STANDALONE_SOUNDING_TRIGGER
+	wmi_vdev_standalone_sound_complete_eventid,
+#endif
 	wmi_events_max,
 } wmi_conv_event_id;
 
@@ -5617,6 +5645,8 @@ typedef enum {
 		   PDEV_PARAM_SET_SCAN_BLANKING_MODE),
 	PDEV_PARAM(pdev_param_set_disabled_sched_modes,
 		   PDEV_PARAM_SET_DISABLED_SCHED_MODES),
+	PDEV_PARAM(pdev_param_set_conc_low_latency_mode,
+		   PDEV_PARAM_SET_CONC_LOW_LATENCY_MODE),
 	pdev_param_max,
 } wmi_conv_pdev_params_id;
 
@@ -5931,6 +5961,10 @@ typedef enum {
 	VDEV_PARAM(vdev_param_ap_keepalive_max_idle_inactive_secs,
 		   VDEV_PARAM_AP_KEEPALIVE_MAX_IDLE_INACTIVE_TIME_SECS),
 	VDEV_PARAM(vdev_param_set_extra_eht_ltf, VDEV_PARAM_EXTRA_EHT_LTF),
+	VDEV_PARAM(vdev_param_set_disabled_modes,
+		   VDEV_PARAM_SET_DISABLED_SCHED_MODES),
+	VDEV_PARAM(vdev_param_set_sap_ps_with_twt,
+		   VDEV_PARAM_SET_SAP_PS_WITH_TWT),
 	vdev_param_max,
 } wmi_conv_vdev_param_id;
 
@@ -6200,6 +6234,11 @@ typedef enum {
 	wmi_service_tdls_ax_support,
 #endif
 #endif
+#ifdef WLAN_FEATURE_11BE_MLO
+#ifdef FEATURE_WLAN_TDLS
+	wmi_service_tdls_mlo_support,
+#endif
+#endif
 #ifdef WLAN_FEATURE_BIG_DATA_STATS
 	wmi_service_big_data_support,
 #endif
@@ -6265,6 +6304,7 @@ typedef enum {
 	wmi_service_tdls_6g_support,
 #endif
 	wmi_service_tdls_wideband_support,
+	wmi_service_tdls_concurrency_support,
 #endif
 	wmi_service_is_my_mgmt_frame,
 	wmi_service_linkspeed_roam_trigger_support,
@@ -6280,6 +6320,15 @@ typedef enum {
 	wmi_service_wpa3_sha384_roam_support,
 	wmi_service_multiple_vdev_restart_bmap,
 	wmi_service_v1a_v1b_supported,
+	wmi_service_self_mld_roam_between_dbs_and_hbs,
+	wmi_service_cfr_capture_pdev_id_soc,
+#ifdef QCA_MANUAL_TRIGGERED_ULOFDMA
+	wmi_service_manual_ulofdma_trigger_support,
+#endif
+	wmi_service_pre_rx_timeout,
+#ifdef QCA_STANDALONE_SOUNDING_TRIGGER
+	wmi_service_standalone_sound,
+#endif
 	wmi_services_max,
 } wmi_conv_service_ids;
 #define WMI_SERVICE_UNAVAILABLE 0xFFFF
@@ -7023,7 +7072,8 @@ typedef struct {
 /* Maximum MCS rates supported; 4 rates in each dword */
 /* Maximum MCS ratecodes with 11ax */
 #define WMI_SA_MAX_MCS_RATES 96
-#define WMI_SA_MAX_RATE_COUNTERS 4
+/* Maximum ratecode per BW supported legacy, 20, 40, 80, 160 and 320 MHz */
+#define WMI_SA_MAX_RATE_COUNTERS 6
 /* Maximum rate series used for transmission */
 #define SA_MAX_RATE_SERIES 2
 
@@ -7040,14 +7090,21 @@ typedef struct {
 #define SA_MAX_LEGACY_RATE_WORDS 6
 #define SA_MAX_HT_RATE_WORDS 48
 
-/* TODO: ratecode_160 needs to add for future chips */
+#define SA_INVALID_PARAM_VALUE 0xffff
+/* Mask to check PER threshold */
+#define SA_MASK_PER_TH         0xff
+/* Mask to check Minimum packets for Smart Antenna Training */
+#define SA_MASK_MIN_PKTS       0xffff
+
 /**
  * struct wmi_sa_rate_cap - smart antenna rat capabilities
  * @pdev_id: pdev_id
  * @ratecode_legacy: Rate code array for CCK OFDM
- * @ratecode_20: Rate code array for 20MHz BW
- * @ratecode_40: Rate code array for 40MHz BW
- * @ratecode_80: Rate code array for 80MHz BW
+ * @ratecode_20: Rate code array for 20 MHz BW
+ * @ratecode_40: Rate code array for 40 MHz BW
+ * @ratecode_80: Rate code array for 80 MHz BW
+ * @ratecode_160: Rate code array for 160 MHz BW
+ * @ratecode_320: Rate code array for 320 MHz BW
  * @ratecount: Max Rate count for each mode
  */
 typedef struct {
@@ -7055,6 +7112,8 @@ typedef struct {
 	uint16_t ratecode_20[WMI_SA_MAX_MCS_RATES];
 	uint16_t ratecode_40[WMI_SA_MAX_MCS_RATES];
 	uint16_t ratecode_80[WMI_SA_MAX_MCS_RATES];
+	uint16_t ratecode_160[WMI_SA_MAX_MCS_RATES];
+	uint16_t ratecode_320[WMI_SA_MAX_MCS_RATES];
 	uint8_t ratecount[WMI_SA_MAX_RATE_COUNTERS];
 } wmi_sa_rate_cap;
 

@@ -103,22 +103,27 @@ enum wlan_link_band_caps {
  * is present.
  * @pref_order: Preferred links in order.it is in form of hardware link id.
  * @timeout: timeout values for all the access categories.
+ * @tlt_characterization_params: Bitmask to select Tx-Link Tuple from ordered
+ *  list.
+ *  Bit 0-15: Each bit maps to the corresponding Link ID
+ *  Bit 16-31: Reserved
  */
 struct wlan_link_preference {
 	uint8_t num_pref_links;
 	uint8_t pref_order[MAX_PREFERRED_LINKS];
 	uint32_t timeout[WIFI_AC_MAX];
+	uint32_t tlt_characterization_params;
 };
 
 /**
  * struct wlan_t2lm_of_tids - TID-to-link mapping for a given direction
  * @direction: direction from 'enum wlan_t2lm_direction'
- * @t2lm_provisioned_links: Link mapping for all the TIDs.
- * It is in form of enum wlan_link_band_caps.
+ * @t2lm_provisioned_links: Link mapping for all the TIDs. Represented as
+ *                          bitmap of type wlan_link_band_caps enum.
  */
 struct wlan_t2lm_of_tids {
 	enum wlan_t2lm_direction direction;
-	enum wlan_link_band_caps t2lm_provisioned_links[T2LM_MAX_NUM_TIDS];
+	uint16_t t2lm_provisioned_links[T2LM_MAX_NUM_TIDS];
 };
 
 /**
@@ -164,6 +169,9 @@ struct wlan_preferred_links {
  * @ieee_link_map_tid: Indicates ieee link id mapping of all the TIDS
  * @hw_link_map_tid: Indicates hw link id mapping of all the TIDS
  * @timer_started: flag to check if T2LM timer is started for this T2LM IE
+ * @link_mapping_size: value 1 indicates the length of Link Mapping Of TIDn
+ *                     field is 1 octet, value 0 indicates the length of the
+ *                     Link Mapping of TIDn field is 2 octets
  */
 struct wlan_t2lm_info {
 	enum wlan_t2lm_direction direction;
@@ -175,6 +183,7 @@ struct wlan_t2lm_info {
 	uint16_t ieee_link_map_tid[T2LM_MAX_NUM_TIDS];
 	uint16_t hw_link_map_tid[T2LM_MAX_NUM_TIDS];
 	bool timer_started;
+	bool link_mapping_size;
 };
 
 /**

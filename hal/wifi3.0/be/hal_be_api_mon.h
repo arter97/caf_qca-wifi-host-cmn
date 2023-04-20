@@ -1166,6 +1166,74 @@ enum hal_ppdu_tlv_category {
 };
 #endif
 
+/**
+ * struct hal_txmon_user_desc_per_user - user desc per user information
+ * @psdu_length: PSDU length of the user in octet
+ * @ru_start_index: RU number to which user is assigned
+ * @ru_size: Size of the RU for that user
+ * @ofdma_mu_mimo_enabled: mu mimo transmission within the RU
+ * @nss: Number of spatial stream occupied by the user
+ * @stream_offset: Stream Offset from which the User occupies the Streams
+ * @mcs: Modulation Coding Scheme for the User
+ * @dcm: Indicates whether dual sub-carrier modulation is applied
+ * @fec_type: Indicates whether it is BCC or LDPC
+ * @user_bf_type: user beamforming type
+ * @drop_user_cbf: frame dropped because of CBF FCS failure
+ * @ldpc_extra_symbol: LDPC encoding process
+ * @force_extra_symbol: force an extra OFDM symbol
+ * @reserved: reserved
+ * @sw_peer_id: user sw peer id
+ * @per_user_subband_mask: Per user sub band mask
+ */
+struct hal_txmon_user_desc_per_user {
+	uint32_t psdu_length;
+	uint32_t ru_start_index		:8,
+		 ru_size		:4,
+		 ofdma_mu_mimo_enabled	:1,
+		 nss			:3,
+		 stream_offset		:3,
+		 mcs			:4,
+		 dcm			:1,
+		 fec_type		:1,
+		 user_bf_type		:2,
+		 drop_user_cbf		:1,
+		 ldpc_extra_symbol	:1,
+		 force_extra_symbol	:1,
+		 reserved		:2;
+	uint32_t sw_peer_id		:16,
+		 per_user_subband_mask	:16;
+};
+
+/**
+ * struct hal_txmon_usr_desc_common - user desc common information
+ * @num_users: Number of users
+ * @ltf_size: LTF size
+ * @pkt_extn_pe: packet extension duration of the trigger-based PPDU
+ * @a_factor: packet extension duration of the trigger-based PPDU
+ * @center_ru_0: Center RU is occupied in the lower 80 MHz band
+ * @center_ru_1: Center RU is occupied in the upper 80 MHz band
+ * @num_ltf_symbols: number of LTF symbols
+ * @doppler_indication: doppler indication
+ * @reserved: reserved
+ * @spatial_reuse: spatial reuse
+ * @ru_channel_0: RU arrangement for band 0
+ * @ru_channel_1: RU arrangement for band 1
+ */
+struct hal_txmon_usr_desc_common {
+	uint32_t num_users		:6,
+		 ltf_size		:2,
+		 pkt_extn_pe		:1,
+		 a_factor		:2,
+		 center_ru_0		:1,
+		 center_ru_1		:1,
+		 num_ltf_symbols	:16,
+		 doppler_indication	:1,
+		 reserved		:2;
+	uint16_t spatial_reuse;
+	uint16_t ru_channel_0[8];
+	uint16_t ru_channel_1[8];
+};
+
 #define IS_MULTI_USERS(num_users)	(!!(0xFFFE & num_users))
 
 #define TXMON_HAL(hal_tx_ppdu_info, field)		\
@@ -1363,6 +1431,27 @@ hal_tx_status_get_tlv_tag(void *tx_tlv_hdr)
 	tlv_tag = HAL_RX_GET_USER_TLV32_TYPE(tx_tlv_hdr);
 
 	return tlv_tag;
+}
+
+/**
+ * hal_txmon_get_word_mask() - api to get word mask for tx monitor
+ * @hal_soc_hdl: HAL soc handle
+ * @wmask: pointer to hal_txmon_word_mask_config_t
+ *
+ * Return: bool
+ */
+static inline bool
+hal_txmon_get_word_mask(hal_soc_handle_t hal_soc_hdl,
+			hal_txmon_word_mask_config_t *wmask)
+{
+	struct hal_soc *hal_soc = (struct hal_soc *)hal_soc_hdl;
+
+	if (hal_soc->ops->hal_txmon_get_word_mask) {
+		hal_soc->ops->hal_txmon_get_word_mask(wmask);
+		return true;
+	}
+
+	return false;
 }
 #endif
 
@@ -2252,8 +2341,8 @@ hal_rx_status_get_mon_buf_addr(uint8_t *rx_tlv,
 {
 	struct mon_buffer_addr *addr = (struct mon_buffer_addr *)rx_tlv;
 
-	ppdu_info->packet_info.sw_cookie = (((uint64_t)addr->buffer_virt_addr_63_32 << 32) |
-					    (addr->buffer_virt_addr_31_0));
+	ppdu_info->packet_info.sw_cookie = (((uint64_t)qdf_le32_to_cpu(addr->buffer_virt_addr_63_32) << 32) |
+					    qdf_le32_to_cpu(addr->buffer_virt_addr_31_0));
 	/* HW DMA length is '-1' of actual DMA length*/
 	ppdu_info->packet_info.dma_length = addr->dma_length + 1;
 	ppdu_info->packet_info.msdu_continuation = addr->msdu_continuation;

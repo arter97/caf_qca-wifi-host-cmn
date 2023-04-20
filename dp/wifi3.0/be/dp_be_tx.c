@@ -917,8 +917,20 @@ bool dp_tx_mlo_is_mcast_primary_be(struct dp_soc *soc,
 #endif
 
 #ifdef CONFIG_SAWF
+/**
+ * dp_sawf_config_be - Configure sawf specific fields in tcl
+ *
+ * @soc: DP soc handle
+ * @hal_tx_desc_cached: tx descriptor
+ * @fw_metadata: firmware metadata
+ * @nbuf: skb buffer
+ * @msdu_info: msdu info
+ *
+ * Return: void
+ */
 void dp_sawf_config_be(struct dp_soc *soc, uint32_t *hal_tx_desc_cached,
-		       uint16_t *fw_metadata, qdf_nbuf_t nbuf)
+		       uint16_t *fw_metadata, qdf_nbuf_t nbuf,
+		       struct dp_tx_msdu_info_s *msdu_info)
 {
 	uint8_t q_id = 0;
 
@@ -930,6 +942,7 @@ void dp_sawf_config_be(struct dp_soc *soc, uint32_t *hal_tx_desc_cached,
 
 	if (q_id == DP_SAWF_DEFAULT_Q_INVALID)
 		return;
+	msdu_info->tid = (q_id & (CDP_DATA_TID_MAX - 1));
 	hal_tx_desc_set_hlos_tid(hal_tx_desc_cached,
 				 (q_id & (CDP_DATA_TID_MAX - 1)));
 	hal_tx_desc_set_flow_override_enable(hal_tx_desc_cached,
@@ -944,7 +957,8 @@ void dp_sawf_config_be(struct dp_soc *soc, uint32_t *hal_tx_desc_cached,
 
 static inline
 void dp_sawf_config_be(struct dp_soc *soc, uint32_t *hal_tx_desc_cached,
-		       uint16_t *fw_metadata, qdf_nbuf_t nbuf)
+		       uint16_t *fw_metadata, qdf_nbuf_t nbuf,
+		       struct dp_tx_msdu_info_s *msdu_info)
 {
 }
 
@@ -1007,6 +1021,11 @@ int dp_ppeds_tx_comp_handler(struct dp_soc_be *be_soc, uint32_t quota)
 	hal_soc_handle_t hal_soc = soc->hal_soc;
 	hal_ring_handle_t hal_ring_hdl =
 				be_soc->ppeds_wbm_release_ring.hal_srng;
+	struct dp_txrx_peer *txrx_peer = NULL;
+	uint16_t peer_id = CDP_INVALID_PEER;
+	dp_txrx_ref_handle txrx_ref_handle = NULL;
+	struct dp_vdev *vdev = NULL;
+	struct dp_pdev *pdev = NULL;
 
 	if (qdf_unlikely(dp_srng_access_start(NULL, soc, hal_ring_hdl))) {
 		dp_err("HAL RING Access Failed -- %pK", hal_ring_hdl);
@@ -1067,6 +1086,50 @@ int dp_ppeds_tx_comp_handler(struct dp_soc_be *be_soc, uint32_t quota)
 			tx_desc->tx_status =
 				hal_tx_comp_get_tx_status(tx_comp_hal_desc);
 
+			/*
+			 * Add desc sync to account for extended statistics
+			 * during Tx completion.
+			 */
+			if (peer_id != tx_desc->peer_id) {
+				if (txrx_peer) {
+					dp_txrx_peer_unref_delete(txrx_ref_handle,
+								  DP_MOD_ID_TX_COMP);
+					txrx_peer = NULL;
+					vdev = NULL;
+					pdev = NULL;
+				}
+				peer_id = tx_desc->peer_id;
+				txrx_peer =
+					dp_txrx_peer_get_ref_by_id(soc, peer_id,
+								   &txrx_ref_handle,
+								   DP_MOD_ID_TX_COMP);
+				if (txrx_peer) {
+					vdev = txrx_peer->vdev;
+					if (!vdev)
+						goto next_desc;
+
+					pdev = vdev->pdev;
+					if (!pdev)
+						goto next_desc;
+
+					dp_tx_desc_update_fast_comp_flag(soc,
+									 tx_desc,
+									 !pdev->enhanced_stats_en);
+					if (pdev->enhanced_stats_en) {
+						hal_tx_comp_desc_sync(tx_comp_hal_desc,
+								      &tx_desc->comp, 1);
+					}
+				}
+			} else if (txrx_peer && vdev && pdev) {
+				dp_tx_desc_update_fast_comp_flag(soc,
+								 tx_desc,
+								 !pdev->enhanced_stats_en);
+				if (pdev->enhanced_stats_en) {
+					hal_tx_comp_desc_sync(tx_comp_hal_desc,
+							      &tx_desc->comp, 1);
+				}
+			}
+next_desc:
 			if (!head_desc) {
 				head_desc = tx_desc;
 				tail_desc = tx_desc;
@@ -1088,6 +1151,9 @@ int dp_ppeds_tx_comp_handler(struct dp_soc_be *be_soc, uint32_t quota)
 
 	dp_srng_access_end(NULL, soc, hal_ring_hdl);
 
+	if (txrx_peer)
+		dp_txrx_peer_unref_delete(txrx_ref_handle,
+					  DP_MOD_ID_TX_COMP);
 	if (head_desc)
 		dp_tx_comp_process_desc_list(soc, head_desc,
 					     CDP_MAX_TX_COMP_PPE_RING);
@@ -1141,7 +1207,7 @@ dp_tx_hw_enqueue_be(struct dp_soc *soc, struct dp_vdev *vdev,
 	int coalesce = 0;
 	struct dp_tx_queue *tx_q = &msdu_info->tx_queue;
 	uint8_t ring_id = tx_q->ring_id;
-	uint8_t tid = msdu_info->tid;
+	uint8_t tid;
 	struct dp_vdev_be *be_vdev;
 	uint8_t cached_desc[HAL_TX_DESC_LEN_BYTES] = { 0 };
 	uint8_t bm_id = dp_tx_get_rbm_id_be(soc, ring_id);
@@ -1178,7 +1244,7 @@ dp_tx_hw_enqueue_be(struct dp_soc *soc, struct dp_vdev *vdev,
 
 	if (dp_sawf_tag_valid_get(tx_desc->nbuf)) {
 		dp_sawf_config_be(soc, hal_tx_desc_cached,
-				  &fw_metadata, tx_desc->nbuf);
+				  &fw_metadata, tx_desc->nbuf, msdu_info);
 		dp_sawf_tx_enqueue_peer_stats(soc, tx_desc);
 	}
 
@@ -1217,6 +1283,7 @@ dp_tx_hw_enqueue_be(struct dp_soc *soc, struct dp_vdev *vdev,
 
 	dp_tx_vdev_id_set_hal_tx_desc(hal_tx_desc_cached, vdev, msdu_info);
 
+	tid = msdu_info->tid;
 	if (tid != HTT_TX_EXT_TID_INVALID)
 		hal_tx_desc_set_hlos_tid(hal_tx_desc_cached, tid);
 
@@ -1829,3 +1896,13 @@ release_desc:
 	return nbuf;
 }
 #endif
+
+QDF_STATUS dp_tx_desc_pool_alloc_be(struct dp_soc *soc, uint32_t num_elem,
+				    uint8_t pool_id)
+{
+	return QDF_STATUS_SUCCESS;
+}
+
+void dp_tx_desc_pool_free_be(struct dp_soc *soc, uint8_t pool_id)
+{
+}

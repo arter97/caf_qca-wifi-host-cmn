@@ -18,6 +18,7 @@
 #ifdef IPA_OFFLOAD
 
 #include <wlan_ipa_ucfg_api.h>
+#include <wlan_ipa_core.h>
 #include <qdf_ipa_wdi3.h>
 #include <qdf_types.h>
 #include <qdf_lock.h>
@@ -461,6 +462,80 @@ dp_ipa_setup_tx_smmu_params_bank_id(struct dp_soc *soc,
 }
 #endif
 
+#ifdef QCA_IPA_LL_TX_FLOW_CONTROL
+static void
+dp_ipa_setup_tx_alt_params_pmac_id(struct dp_soc *soc,
+				   qdf_ipa_wdi_pipe_setup_info_t *tx)
+{
+	uint8_t pmac_id = 0;
+
+	/* Set Pmac ID, extract pmac_id from second radio for TX_ALT ring */
+	if (soc->pdev_count > 1)
+		pmac_id = soc->pdev_list[soc->pdev_count - 1]->lmac_id;
+
+	QDF_IPA_WDI_SETUP_INFO_RX_PMAC_ID(tx, pmac_id);
+}
+
+static void
+dp_ipa_setup_tx_alt_smmu_params_pmac_id(struct dp_soc *soc,
+					qdf_ipa_wdi_pipe_setup_info_smmu_t *tx_smmu)
+{
+	uint8_t pmac_id = 0;
+
+	/* Set Pmac ID, extract pmac_id from second radio for TX_ALT ring */
+	if (soc->pdev_count > 1)
+		pmac_id = soc->pdev_list[soc->pdev_count - 1]->lmac_id;
+
+	QDF_IPA_WDI_SETUP_INFO_SMMU_RX_PMAC_ID(tx_smmu, pmac_id);
+}
+
+static void
+dp_ipa_setup_tx_params_pmac_id(struct dp_soc *soc,
+			       qdf_ipa_wdi_pipe_setup_info_t *tx)
+{
+	uint8_t pmac_id;
+
+	pmac_id = soc->pdev_list[0]->lmac_id;
+
+	QDF_IPA_WDI_SETUP_INFO_RX_PMAC_ID(tx, pmac_id);
+}
+
+static void
+dp_ipa_setup_tx_smmu_params_pmac_id(struct dp_soc *soc,
+				    qdf_ipa_wdi_pipe_setup_info_smmu_t *tx_smmu)
+{
+	uint8_t pmac_id;
+
+	pmac_id = soc->pdev_list[0]->lmac_id;
+
+	QDF_IPA_WDI_SETUP_INFO_SMMU_RX_PMAC_ID(tx_smmu, pmac_id);
+}
+#else
+static inline void
+dp_ipa_setup_tx_alt_params_pmac_id(struct dp_soc *soc,
+				   qdf_ipa_wdi_pipe_setup_info_t *tx)
+{
+}
+
+static inline void
+dp_ipa_setup_tx_alt_smmu_params_pmac_id(struct dp_soc *soc,
+					qdf_ipa_wdi_pipe_setup_info_smmu_t *tx_smmu)
+{
+}
+
+static inline void
+dp_ipa_setup_tx_params_pmac_id(struct dp_soc *soc,
+			       qdf_ipa_wdi_pipe_setup_info_t *tx)
+{
+}
+
+static inline void
+dp_ipa_setup_tx_smmu_params_pmac_id(struct dp_soc *soc,
+				    qdf_ipa_wdi_pipe_setup_info_smmu_t *tx_smmu)
+{
+}
+#endif
+
 #ifdef IPA_WDI3_TX_TWO_PIPES
 static void dp_ipa_tx_alt_pool_detach(struct dp_soc *soc, struct dp_pdev *pdev)
 {
@@ -848,6 +923,9 @@ static void dp_ipa_wdi_tx_alt_pipe_params(struct dp_soc *soc,
 	QDF_IPA_WDI_SETUP_INFO_PKT_OFFSET(tx) = 0;
 
 	dp_ipa_setup_tx_params_bank_id(soc, tx);
+
+	/* Set Pmac ID, extract pmac_id from second radio for TX_ALT ring */
+	dp_ipa_setup_tx_alt_params_pmac_id(soc, tx);
 }
 
 static void
@@ -884,6 +962,9 @@ dp_ipa_wdi_tx_alt_pipe_smmu_params(struct dp_soc *soc,
 	QDF_IPA_WDI_SETUP_INFO_SMMU_PKT_OFFSET(tx_smmu) = 0;
 
 	dp_ipa_setup_tx_smmu_params_bank_id(soc, tx_smmu);
+
+	/* Set Pmac ID, extract pmac_id from second radio for TX_ALT ring */
+	dp_ipa_setup_tx_alt_smmu_params_pmac_id(soc, tx_smmu);
 }
 
 static void dp_ipa_setup_tx_alt_pipe(struct dp_soc *soc,
@@ -2221,6 +2302,9 @@ static void dp_ipa_wdi_tx_params(struct dp_soc *soc,
 	QDF_IPA_WDI_SETUP_INFO_PKT_OFFSET(tx) = 0;
 
 	dp_ipa_setup_tx_params_bank_id(soc, tx);
+
+	/* Set Pmac ID, extract pmac_id from pdev_id 0 for TX ring */
+	dp_ipa_setup_tx_params_pmac_id(soc, tx);
 }
 
 static void dp_ipa_wdi_rx_params(struct dp_soc *soc,
@@ -2309,6 +2393,9 @@ dp_ipa_wdi_tx_smmu_params(struct dp_soc *soc,
 	QDF_IPA_WDI_SETUP_INFO_SMMU_PKT_OFFSET(tx_smmu) = 0;
 
 	dp_ipa_setup_tx_smmu_params_bank_id(soc, tx_smmu);
+
+	/* Set Pmac ID, extract pmac_id from first pdev for TX ring */
+	dp_ipa_setup_tx_smmu_params_pmac_id(soc, tx_smmu);
 }
 
 static void
@@ -3353,16 +3440,94 @@ static qdf_nbuf_t dp_ipa_intrabss_send(struct dp_pdev *pdev,
 
 	if (dp_tx_send((struct cdp_soc_t *)pdev->soc, vdev->vdev_id, nbuf)) {
 		DP_PEER_PER_PKT_STATS_INC_PKT(vdev_peer->txrx_peer,
-					      rx.intra_bss.fail, 1, len);
+					      rx.intra_bss.fail, 1, len,
+					      0);
 		dp_peer_unref_delete(vdev_peer, DP_MOD_ID_IPA);
 		return nbuf;
 	}
 
 	DP_PEER_PER_PKT_STATS_INC_PKT(vdev_peer->txrx_peer,
-				      rx.intra_bss.pkts, 1, len);
+				      rx.intra_bss.pkts, 1, len, 0);
 	dp_peer_unref_delete(vdev_peer, DP_MOD_ID_IPA);
 	return NULL;
 }
+
+#ifdef IPA_OPT_WIFI_DP
+/**
+ * dp_ipa_rx_super_rule_setup()- pass cce super rule params to fw from ipa
+ *
+ * @soc_hdl: cdp soc
+ * @flt_params: filter tuple
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS dp_ipa_rx_super_rule_setup(struct cdp_soc_t *soc_hdl,
+				      void *flt_params)
+{
+	struct dp_soc *soc = cdp_soc_t_to_dp_soc(soc_hdl);
+
+	return htt_h2t_rx_cce_super_rule_setup(soc->htt_handle, flt_params);
+}
+
+/**
+ * dp_ipa_wdi_opt_dpath_notify_flt_add_rem_cb()- send cce super rule filter
+ * add/remove result to ipa
+ *
+ * @flt0_rslt : result for filter0 add/remove
+ * @flt1_rslt : result for filter1 add/remove
+ *
+ * Return: void
+ */
+void dp_ipa_wdi_opt_dpath_notify_flt_add_rem_cb(int flt0_rslt, int flt1_rslt)
+{
+	wlan_ipa_wdi_opt_dpath_notify_flt_add_rem_cb(flt0_rslt, flt1_rslt);
+}
+
+int dp_ipa_pcie_link_up(struct cdp_soc_t *soc_hdl)
+{
+	struct dp_soc *soc = cdp_soc_t_to_dp_soc(soc_hdl);
+	struct hal_soc *hal_soc = (struct hal_soc *)soc->hal_soc;
+	int response = 0;
+
+	response = hif_prevent_l1((hal_soc->hif_handle));
+	return response;
+}
+
+void dp_ipa_pcie_link_down(struct cdp_soc_t *soc_hdl)
+{
+	struct dp_soc *soc = cdp_soc_t_to_dp_soc(soc_hdl);
+	struct hal_soc *hal_soc = (struct hal_soc *)soc->hal_soc;
+
+	hif_allow_l1(hal_soc->hif_handle);
+}
+
+/**
+ * dp_ipa_wdi_opt_dpath_notify_flt_rlsd()- send cce super rule release
+ * notification to ipa
+ *
+ * @flt0_rslt : result for filter0 release
+ * @flt1_rslt : result for filter1 release
+ *
+ *Return: void
+ */
+void dp_ipa_wdi_opt_dpath_notify_flt_rlsd(int flt0_rslt, int flt1_rslt)
+{
+	wlan_ipa_wdi_opt_dpath_notify_flt_rlsd(flt0_rslt, flt1_rslt);
+}
+
+/**
+ * dp_ipa_wdi_opt_dpath_notify_flt_rsvd()- send cce super rule reserve
+ * notification to ipa
+ *
+ *@is_success : result of filter reservatiom
+ *
+ *Return: void
+ */
+void dp_ipa_wdi_opt_dpath_notify_flt_rsvd(bool is_success)
+{
+	wlan_ipa_wdi_opt_dpath_notify_flt_rsvd(is_success);
+}
+#endif
 
 #ifdef IPA_WDS_EASYMESH_FEATURE
 /**
@@ -3710,10 +3875,10 @@ QDF_STATUS dp_ipa_update_peer_rx_stats(struct cdp_soc_t *soc,
 
 	if (da_is_bcmc) {
 		DP_PEER_PER_PKT_STATS_INC_PKT(txrx_peer, rx.multicast, 1,
-					      qdf_nbuf_len(nbuf));
+					      qdf_nbuf_len(nbuf), 0);
 		if (QDF_IS_ADDR_BROADCAST(eh->ether_dhost))
 			DP_PEER_PER_PKT_STATS_INC_PKT(txrx_peer, rx.bcast,
-						      1, qdf_nbuf_len(nbuf));
+						      1, qdf_nbuf_len(nbuf), 0);
 	}
 
 	dp_peer_unref_delete(peer, DP_MOD_ID_IPA);
@@ -3744,9 +3909,9 @@ dp_peer_aggregate_tid_stats(struct dp_peer *peer)
 	}
 
 	DP_PEER_PER_PKT_STATS_UPD(txrx_peer, rx.rx_total.num,
-				  rx_total.num);
+				  rx_total.num, 0);
 	DP_PEER_PER_PKT_STATS_UPD(txrx_peer, rx.rx_total.bytes,
-				  rx_total.bytes);
+				  rx_total.bytes, 0);
 }
 
 /**
@@ -3930,4 +4095,23 @@ QDF_STATUS dp_ipa_txrx_get_peer_stats(struct cdp_soc_t *soc, uint8_t vdev_id,
 	return QDF_STATUS_SUCCESS;
 }
 #endif
+
+/**
+ * dp_ipa_get_wdi_version() - Get WDI version
+ * @soc_hdl: data path soc handle
+ * @wdi_ver: Out parameter for wdi version
+ *
+ * Get WDI version based on soc arch
+ *
+ * Return: None
+ */
+void dp_ipa_get_wdi_version(struct cdp_soc_t *soc_hdl, uint8_t *wdi_ver)
+{
+	struct dp_soc *soc = cdp_soc_t_to_dp_soc(soc_hdl);
+
+	if (soc->arch_ops.ipa_get_wdi_ver)
+		soc->arch_ops.ipa_get_wdi_ver(wdi_ver);
+	else
+		*wdi_ver = IPA_WDI_3;
+}
 #endif

@@ -680,6 +680,42 @@ static inline QDF_STATUS cdp_peer_ast_delete_by_pdev
 					 cookie);
 }
 
+/**
+ * cdp_peer_HMWDS_ast_delete() - delete the ast entry from soc AST hash table
+ *                               for HMWDS rem-addr command
+ *
+ * @soc: data path soc handle
+ * @vdev_id: vdev id
+ * @dest_mac: AST entry mac address to delete
+ * @type: cdp_txrx_ast_entry_type to send to FW
+ * @delete_in_fw: flag to indicate AST entry deletion in FW
+ *
+ * Return: QDF_STATUS_SUCCESS if ast entry found with ast_mac_addr and delete
+ *         is sent
+ *         QDF_STATUS_E_INVAL false if ast entry not found
+ */
+static inline QDF_STATUS cdp_peer_HMWDS_ast_delete
+	(ol_txrx_soc_handle soc, uint8_t vdev_id, uint8_t *dest_mac,
+	 uint8_t type, uint8_t delete_in_fw)
+{
+	if (!soc || !soc->ops) {
+		dp_cdp_debug("Invalid Instance:");
+		QDF_BUG(0);
+		return QDF_STATUS_E_INVAL;
+	}
+
+	if (!soc->ops->cmn_drv_ops ||
+	    !soc->ops->cmn_drv_ops->txrx_peer_HMWDS_ast_delete)
+		return QDF_STATUS_E_INVAL;
+
+	return soc->ops->cmn_drv_ops->txrx_peer_HMWDS_ast_delete
+					(soc,
+					 vdev_id,
+					 dest_mac,
+					 type,
+					 delete_in_fw);
+}
+
 static inline int cdp_peer_add_ast
 	(ol_txrx_soc_handle soc, uint8_t vdev_id, uint8_t *peer_mac,
 	uint8_t *mac_addr,
@@ -1828,6 +1864,28 @@ static inline void cdp_txrx_umac_reset_deinit(ol_txrx_soc_handle soc)
 }
 
 /**
+ * cdp_notify_asserted_soc(): function to notify asserted SoC
+ * @soc: soc handle
+ *
+ * Return: QDF_STATUS
+ */
+static inline QDF_STATUS
+cdp_notify_asserted_soc(ol_txrx_soc_handle soc)
+{
+	if (!soc || !soc->ops) {
+		dp_cdp_debug("Invalid Instance:");
+		QDF_BUG(0);
+		return QDF_STATUS_E_NULL_VALUE;
+	}
+
+	if (!soc->ops->cmn_drv_ops ||
+	    !soc->ops->cmn_drv_ops->notify_asserted_soc)
+		return QDF_STATUS_E_NULL_VALUE;
+
+	return soc->ops->cmn_drv_ops->notify_asserted_soc(soc);
+}
+
+/**
  * cdp_display_stats(): function to map to dump stats
  * @soc: soc handle
  * @value: statistics option
@@ -2875,6 +2933,27 @@ cdp_wds_ext_set_peer_rx(ol_txrx_soc_handle soc, uint8_t vdev_id,
 	return soc->ops->cmn_drv_ops->set_wds_ext_peer_rx
 			(soc, vdev_id, mac, rx, osif_peer);
 }
+
+static inline QDF_STATUS
+cdp_wds_ext_get_peer_osif_handle(
+			ol_txrx_soc_handle soc, uint8_t vdev_id,
+			uint8_t *mac,
+			ol_osif_peer_handle *osif_peer)
+{
+	if (!soc || !soc->ops) {
+		dp_cdp_debug("Invalid Instance");
+		QDF_BUG(0);
+		return QDF_STATUS_E_FAULT;
+	}
+
+	if (!soc->ops->cmn_drv_ops ||
+	    !soc->ops->cmn_drv_ops->get_wds_ext_peer_osif_handle)
+		return QDF_STATUS_E_FAULT;
+
+	return soc->ops->cmn_drv_ops->get_wds_ext_peer_osif_handle
+			(soc, vdev_id, mac, osif_peer);
+}
+
 #endif /* QCA_SUPPORT_WDS_EXTENDED */
 
 /**

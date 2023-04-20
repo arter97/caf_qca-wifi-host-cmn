@@ -173,6 +173,7 @@ union hal_tx_cmn_config_ppe;
 union hal_tx_bank_config;
 union hal_tx_ppe_idx_map_config;
 
+#ifndef WLAN_SOFTUMAC_SUPPORT
 /* TBD: This should be movded to shared HW header file */
 enum hal_srng_ring_id {
 	/* UMAC rings */
@@ -307,6 +308,43 @@ enum hal_srng_ring_id {
 	HAL_SRNG_WIFI_POS_SRC_DMA_RING,
 	HAL_SRNG_DIR_BUF_RX_SRC_DMA_RING,
 	HAL_SRNG_DIR_BUF_RX_SRC_DMA_RING1,
+	HAL_SRNG_DIR_BUF_RX_SRC_DMA_RING2,
+#else
+	HAL_SRNG_DIR_BUF_RX_SRC_DMA_RING,
+	HAL_SRNG_DIR_BUF_RX_SRC_DMA_RING1,
+	HAL_SRNG_DIR_BUF_RX_SRC_DMA_RING2,
+#endif
+	HAL_SRNG_WMAC1_TXMON2SW0,
+	HAL_SRNG_SW2TXMON_BUF0,
+	HAL_SRNG_LMAC1_ID_END = (HAL_SRNG_SW2TXMON_BUF0 + 2),
+};
+#else
+/* lmac rings are remains same for evros */
+enum hal_srng_ring_id {
+	HAL_SRNG_LMAC1_ID_START,
+	HAL_SRNG_WMAC1_SW2RXDMA0_BUF0 = HAL_SRNG_LMAC1_ID_START,
+#ifdef IPA_OFFLOAD
+	HAL_SRNG_WMAC1_SW2RXDMA0_BUF1,
+	HAL_SRNG_WMAC1_SW2RXDMA0_BUF2,
+#ifdef IPA_WDI3_VLAN_SUPPORT
+	HAL_SRNG_WMAC1_SW2RXDMA0_BUF3,
+#endif
+#endif
+	HAL_SRNG_WMAC1_SW2RXDMA1_BUF,
+#ifdef FEATURE_DIRECT_LINK
+	HAL_SRNG_WMAC1_RX_DIRECT_LINK_SW_REFILL_RING,
+#endif
+	HAL_SRNG_WMAC1_SW2RXDMA2_BUF,
+	HAL_SRNG_WMAC1_SW2RXDMA0_STATBUF,
+	HAL_SRNG_WMAC1_SW2RXDMA1_STATBUF,
+	HAL_SRNG_WMAC1_RXDMA2SW0,
+	HAL_SRNG_WMAC1_RXDMA2SW1,
+	HAL_SRNG_WMAC1_RXMON2SW0 = HAL_SRNG_WMAC1_RXDMA2SW1,
+	HAL_SRNG_WMAC1_SW2RXDMA1_DESC,
+#ifdef WLAN_FEATURE_CIF_CFR
+	HAL_SRNG_WIFI_POS_SRC_DMA_RING,
+	HAL_SRNG_DIR_BUF_RX_SRC_DMA_RING,
+	HAL_SRNG_DIR_BUF_RX_SRC_DMA_RING1,
 #else
 	HAL_SRNG_DIR_BUF_RX_SRC_DMA_RING,
 	HAL_SRNG_DIR_BUF_RX_SRC_DMA_RING1,
@@ -315,6 +353,10 @@ enum hal_srng_ring_id {
 	HAL_SRNG_SW2TXMON_BUF0,
 	HAL_SRNG_LMAC1_ID_END = (HAL_SRNG_SW2TXMON_BUF0 + 2),
 };
+
+#define HAL_SRNG_DMAC_CMN_ID_END 0
+#define HAL_SRNG_WBM_IDLE_LINK 120
+#endif
 
 #define HAL_RXDMA_MAX_RING_SIZE 0xFFFF
 #define HAL_MAX_LMACS 3
@@ -368,6 +410,7 @@ enum SRNG_REGISTERS {
 	DST_MSI1_BASE_LSB,
 	DST_MSI1_BASE_MSB,
 	DST_MSI1_DATA,
+	DST_MISC_1,
 #ifdef CONFIG_BERYLLIUM
 	DST_MSI2_BASE_LSB,
 	DST_MSI2_BASE_MSB,
@@ -649,6 +692,32 @@ hal_get_tsf_enum(uint32_t tsf_id, uint32_t mac_id,
 	}
 }
 
+#ifdef HAL_SRNG_REG_HIS_DEBUG
+
+#define HAL_SRNG_REG_MAX_ENTRIES 64
+
+/**
+ * struct hal_srng_reg_his_entry - history entry for single srng pointer
+ *                                 register update
+ * @write_time: register write timestamp
+ * @write_value: register write value
+ */
+struct hal_srng_reg_his_entry {
+	qdf_time_t write_time;
+	uint32_t write_value;
+};
+
+/**
+ * struct hal_srng_reg_his_ctx - context for srng pointer writing history
+ * @current_idx: the index which has recorded srng pointer writing
+ * @reg_his_arr: array to record the history
+ */
+struct hal_srng_reg_his_ctx {
+	qdf_atomic_t current_idx;
+	struct hal_srng_reg_his_entry reg_his_arr[HAL_SRNG_REG_MAX_ENTRIES];
+};
+#endif
+
 /* Common SRNG ring structure for source and destination rings */
 struct hal_srng {
 	/* Unique SRNG ring ID */
@@ -800,7 +869,63 @@ struct hal_srng {
 #ifdef WLAN_DP_SRNG_USAGE_WM_TRACKING
 	struct hal_srng_high_wm_info high_wm;
 #endif
+	/* Timer threshold to issue ring pointer update - in micro seconds */
+	uint16_t pointer_timer_threshold;
+	/* Number threshold of ring entries to issue pointer update */
+	uint8_t pointer_num_threshold;
+#ifdef HAL_SRNG_REG_HIS_DEBUG
+	/* pointer register writing history for this srng */
+	struct hal_srng_reg_his_ctx reg_his_ctx;
+#endif
 };
+
+#ifdef HAL_SRNG_REG_HIS_DEBUG
+/**
+ * hal_srng_reg_his_init() - SRNG register history context initialize
+ *
+ * @srng: SRNG handle pointer
+ *
+ * Return: None
+ */
+static inline
+void hal_srng_reg_his_init(struct hal_srng *srng)
+{
+	qdf_atomic_set(&srng->reg_his_ctx.current_idx, -1);
+}
+
+/**
+ * hal_srng_reg_his_add() - add pointer writing history to SRNG
+ *
+ * @srng: SRNG handle pointer
+ * @reg_val: pointer value to write
+ *
+ * Return: None
+ */
+static inline
+void hal_srng_reg_his_add(struct hal_srng *srng, uint32_t reg_val)
+{
+	uint32_t write_idx;
+	struct hal_srng_reg_his_entry *reg_his_entry;
+
+	write_idx = qdf_atomic_inc_return(&srng->reg_his_ctx.current_idx);
+	write_idx = write_idx & (HAL_SRNG_REG_MAX_ENTRIES - 1);
+
+	reg_his_entry = &srng->reg_his_ctx.reg_his_arr[write_idx];
+
+	reg_his_entry->write_time = qdf_get_log_timestamp();
+	reg_his_entry->write_value = reg_val;
+}
+#else
+static inline
+void hal_srng_reg_his_init(struct hal_srng *srng)
+{
+}
+
+static inline
+void hal_srng_reg_his_add(struct hal_srng *srng, uint32_t reg_val)
+{
+}
+#endif
 
 /* HW SRNG configuration table */
 struct hal_hw_srng_config {
@@ -1282,6 +1407,7 @@ struct hal_hw_txrx_ops {
 					       qdf_frag_t status_frag);
 	uint32_t (*hal_txmon_status_get_num_users)(void *tx_tlv_hdr,
 						   uint8_t *num_users);
+	void (*hal_txmon_get_word_mask)(void *wmask);
 #endif /* QCA_MONITOR_2_0_SUPPORT */
 	QDF_STATUS (*hal_reo_shared_qaddr_setup)(hal_soc_handle_t hal_soc_hdl,
 						 struct reo_queue_ref_table
@@ -1546,6 +1672,7 @@ void hal_kiwi_attach(struct hal_soc *hal_soc);
 
 void hal_qcn9224v1_attach(struct hal_soc *hal_soc);
 void hal_qcn9224v2_attach(struct hal_soc *hal_soc);
+void hal_wcn6450_attach(struct hal_soc *hal_soc);
 
 /**
  * hal_soc_to_hal_soc_handle() - API to convert hal_soc to opaque

@@ -1169,7 +1169,7 @@ void hif_uninit_rri_on_ddr(struct hif_softc *scn)
 {
 	if (scn->vaddr_rri_on_ddr)
 		qdf_mem_free_consistent(scn->qdf_dev, scn->qdf_dev->dev,
-					(CE_COUNT * sizeof(uint32_t)),
+					RRI_ON_DDR_MEM_SIZE,
 					scn->vaddr_rri_on_ddr,
 					scn->paddr_rri_on_ddr, 0);
 	scn->vaddr_rri_on_ddr = NULL;
@@ -1376,7 +1376,25 @@ uint8_t hif_get_ep_vote_access(struct hif_opaque_softc *hif_ctx,
 }
 #endif
 
-#if (defined(QCA_WIFI_QCA8074) || defined(QCA_WIFI_QCA6018) || \
+#if defined(QCA_WIFI_WCN6450)
+static QDF_STATUS hif_hal_attach(struct hif_softc *scn)
+{
+	scn->hal_soc = hal_attach(hif_softc_to_hif_opaque_softc(scn),
+				  scn->qdf_dev);
+	if (!scn->hal_soc)
+		return QDF_STATUS_E_FAILURE;
+
+	return QDF_STATUS_SUCCESS;
+}
+
+static QDF_STATUS hif_hal_detach(struct hif_softc *scn)
+{
+	hal_detach(scn->hal_soc);
+	scn->hal_soc = NULL;
+
+	return QDF_STATUS_SUCCESS;
+}
+#elif (defined(QCA_WIFI_QCA8074) || defined(QCA_WIFI_QCA6018) || \
 	defined(QCA_WIFI_QCA6290) || defined(QCA_WIFI_QCA6390) || \
 	defined(QCA_WIFI_QCN9000) || defined(QCA_WIFI_QCA6490) || \
 	defined(QCA_WIFI_QCA6750) || defined(QCA_WIFI_QCA5018) || \

@@ -1276,6 +1276,7 @@ __qdf_nbuf_set_rx_cksum(struct sk_buff *skb, qdf_nbuf_rx_cksum_t *cksum)
 		break;
 	case QDF_NBUF_RX_CKSUM_TCP_UDP_UNNECESSARY:
 		skb->ip_summed = CHECKSUM_UNNECESSARY;
+		skb->csum_level = cksum->csum_level;
 		break;
 	case QDF_NBUF_RX_CKSUM_TCP_UDP_HW:
 		skb->ip_summed = CHECKSUM_PARTIAL;
@@ -2662,6 +2663,19 @@ bool __qdf_nbuf_is_ipv4_v6_pure_tcp_ack(struct sk_buff *skb)
 
 	return is_tcp_ack;
 }
+
+#ifdef QCA_DP_NBUF_FAST_RECYCLE_CHECK
+bool qdf_nbuf_fast_xmit(qdf_nbuf_t nbuf)
+{
+	return nbuf->fast_xmit;
+}
+#else
+bool qdf_nbuf_fast_xmit(qdf_nbuf_t nbuf)
+{
+	return false;
+}
+#endif
+qdf_export_symbol(qdf_nbuf_fast_xmit);
 
 #ifdef NBUF_MEMORY_DEBUG
 
@@ -5119,7 +5133,9 @@ qdf_nbuf_update_radiotap_eht_flags(struct mon_rx_status *rx_status,
 	put_unaligned_le32(rx_status->eht_data[5], &rtap_buf[rtap_len]);
 	rtap_len += 4;
 
-	for (user = 0; user < rx_status->num_eht_user_info_valid; user++) {
+	for (user = 0; user < EHT_USER_INFO_LEN &&
+	     rx_status->num_eht_user_info_valid &&
+	     user < rx_status->num_eht_user_info_valid; user++) {
 		put_unaligned_le32(rx_status->eht_user_info[user],
 				   &rtap_buf[rtap_len]);
 		rtap_len += 4;
