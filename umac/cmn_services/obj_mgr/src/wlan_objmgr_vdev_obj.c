@@ -1532,6 +1532,7 @@ void wlan_vdev_mlme_set_mlo_vdev(struct wlan_objmgr_vdev *vdev)
 	wlan_pdev_inc_mlo_vdev_count(pdev);
 
 	wlan_release_vdev_mlo_lock(vdev);
+	obj_mgr_debug("Set MLO flag: vdev_id: %d", wlan_vdev_get_id(vdev));
 }
 
 void wlan_vdev_mlme_clear_mlo_vdev(struct wlan_objmgr_vdev *vdev)
@@ -1560,6 +1561,7 @@ void wlan_vdev_mlme_clear_mlo_vdev(struct wlan_objmgr_vdev *vdev)
 	wlan_pdev_dec_mlo_vdev_count(pdev);
 
 	wlan_release_vdev_mlo_lock(vdev);
+	obj_mgr_debug("Clear MLO flag: vdev_id: %d", wlan_vdev_get_id(vdev));
 }
 
 void wlan_vdev_mlme_set_mlo_link_vdev(struct wlan_objmgr_vdev *vdev)
@@ -1579,6 +1581,7 @@ void wlan_vdev_mlme_set_mlo_link_vdev(struct wlan_objmgr_vdev *vdev)
 	wlan_vdev_mlme_feat_ext2_cap_set(vdev, WLAN_VDEV_FEXT2_MLO_STA_LINK);
 
 	wlan_release_vdev_mlo_lock(vdev);
+	obj_mgr_debug("Set MLO link flag: vdev_id: %d", wlan_vdev_get_id(vdev));
 }
 
 void wlan_vdev_mlme_clear_mlo_link_vdev(struct wlan_objmgr_vdev *vdev)
@@ -1598,5 +1601,7 @@ void wlan_vdev_mlme_clear_mlo_link_vdev(struct wlan_objmgr_vdev *vdev)
 	wlan_vdev_mlme_feat_ext2_cap_clear(vdev, WLAN_VDEV_FEXT2_MLO_STA_LINK);
 
 	wlan_release_vdev_mlo_lock(vdev);
+	obj_mgr_debug("Clear MLO link flag: vdev_id: %d",
+		      wlan_vdev_get_id(vdev));
 }
 #endif /* WLAN_FEATURE_11BE_MLO */
