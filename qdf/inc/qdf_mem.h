@@ -72,6 +72,9 @@ struct qdf_mem_multi_page_t {
 #ifdef DP_MEM_PRE_ALLOC
 	uint8_t is_mem_prealloc;
 #endif
+#ifdef ALLOC_CONTIGUOUS_MULTI_PAGE
+	bool contiguous_dma_pages;
+#endif
 };
 
 
@@ -1317,6 +1320,30 @@ void qdf_mem_tx_desc_cnt_update(qdf_atomic_t pending_tx_descs,
  * Return: Pointer to the starting address of the allocated virtual memory
  */
 #define qdf_mem_valloc(size) __qdf_mem_valloc(size, __func__, __LINE__)
+
+#ifdef ENABLE_VALLOC_REPLACE_MALLOC
+/**
+ * qdf_mem_common_alloc() - Common function to allocate memory for the
+ * given size, allocation method decided by ENABLE_VALLOC_REPLACE_MALLOC
+ * @size: Number of bytes of memory to be allocated
+ *
+ * Return: Pointer to the starting address of the allocated memory
+ */
+#define qdf_mem_common_alloc(size) qdf_mem_valloc(size)
+
+/**
+ * qdf_mem_common_free() - Common function to free the memory pointed
+ * to by ptr, memory free method decided by ENABLE_VALLOC_REPLACE_MALLOC
+ * @ptr: Pointer to the starting address of the memory to
+ * be freed.
+ *
+ * Return: None
+ */
+#define qdf_mem_common_free(ptr) qdf_mem_vfree(ptr)
+#else
+#define qdf_mem_common_alloc(size) qdf_mem_malloc(size)
+#define qdf_mem_common_free(ptr) qdf_mem_free(ptr)
+#endif
 
 #if IS_ENABLED(CONFIG_ARM_SMMU) && defined(ENABLE_SMMU_S1_TRANSLATION)
 /*

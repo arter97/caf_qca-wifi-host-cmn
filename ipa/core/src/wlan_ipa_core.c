@@ -3528,7 +3528,7 @@ static inline void wlan_ipa_free_tx_desc_list(struct wlan_ipa_priv *ipa_ctx)
 	qdf_spin_unlock_bh(&ipa_ctx->q_lock);
 
 	qdf_list_destroy(&ipa_ctx->tx_desc_free_list);
-	qdf_mem_free(ipa_ctx->tx_desc_pool);
+	qdf_mem_vfree(ipa_ctx->tx_desc_pool);
 	ipa_ctx->tx_desc_pool = NULL;
 
 	ipa_ctx->stats.num_tx_desc_q_cnt = 0;
@@ -3549,7 +3549,7 @@ wlan_ipa_alloc_tx_desc_free_list(struct wlan_ipa_priv *ipa_ctx)
 
 	max_desc_cnt = ipa_ctx->config->txbuf_count;
 
-	ipa_ctx->tx_desc_pool = qdf_mem_malloc(sizeof(struct wlan_ipa_tx_desc) *
+	ipa_ctx->tx_desc_pool = qdf_mem_valloc(sizeof(struct wlan_ipa_tx_desc) *
 					       max_desc_cnt);
 	if (!ipa_ctx->tx_desc_pool)
 		return QDF_STATUS_E_NOMEM;

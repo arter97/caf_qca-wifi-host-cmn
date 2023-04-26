@@ -29,7 +29,7 @@ QDF_STATUS wlan_scan_psoc_created_notification(struct wlan_objmgr_psoc *psoc,
 	struct wlan_scan_obj *scan_obj;
 	QDF_STATUS status = QDF_STATUS_SUCCESS;
 
-	scan_obj = qdf_mem_malloc_atomic(sizeof(struct wlan_scan_obj));
+	scan_obj = qdf_mem_valloc(sizeof(struct wlan_scan_obj));
 	if (!scan_obj) {
 		scm_err("Failed to allocate memory");
 		return QDF_STATUS_E_NOMEM;
@@ -67,7 +67,7 @@ QDF_STATUS wlan_scan_psoc_destroyed_notification(
 	if (QDF_IS_STATUS_ERROR(status))
 		scm_err("Failed to detach psoc scan component");
 
-	qdf_mem_free(scan_obj);
+	qdf_mem_vfree(scan_obj);
 
 	return status;
 }
