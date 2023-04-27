@@ -5346,6 +5346,7 @@ typedef enum {
 #ifdef QCA_SUPPORT_PRIMARY_LINK_MIGRATE
 	wmi_peer_ptqm_migration_response_eventid,
 #endif
+	wmi_pdev_set_rf_path_resp_eventid,
 	wmi_events_max,
 } wmi_conv_event_id;
 
