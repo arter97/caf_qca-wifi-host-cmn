@@ -3382,6 +3382,7 @@ void wmi_unified_detach(struct wmi_unified *wmi_handle)
 
 			wmi_interface_sequence_deinit(soc->wmi_pdev[i]);
 			wmi_ext_dbgfs_deinit(soc->wmi_pdev[i]);
+			wmi_clear_wow_enable_ack_failed(soc->wmi_pdev[i]);
 
 			qdf_mem_free(soc->wmi_pdev[i]);
 		}
