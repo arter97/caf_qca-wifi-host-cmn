@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -545,6 +545,19 @@ struct wlan_objmgr_vdev *wlan_objmgr_pdev_get_first_vdev(
 		struct wlan_objmgr_pdev *pdev,
 		wlan_objmgr_ref_dbgid dbg_id);
 #endif
+
+/**
+ * wlan_objmgr_pdev_get_roam_vdev() - Get roam vdev of pdev
+ * @pdev: PDEV object
+ * @dbg_id: Object Manager ref debug id
+ *
+ * API to get reference to vdev which is in roaming from pdev.
+ *
+ * Return: reference to roam vdev
+ */
+struct wlan_objmgr_vdev *wlan_objmgr_pdev_get_roam_vdev(
+						struct wlan_objmgr_pdev *pdev,
+						wlan_objmgr_ref_dbgid dbg_id);
 
 /**
  * wlan_objmgr_pdev_get_comp_private_obj() - get pdev component private object
