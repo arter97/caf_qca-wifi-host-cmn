@@ -571,7 +571,7 @@ void wlan_ipa_reg_send_to_nw_cb(struct wlan_ipa_priv *ipa_ctx,
 	ipa_ctx->send_to_nw = cb;
 }
 
-#ifdef QCA_CONFIG_RPS
+#if defined(QCA_CONFIG_RPS) && !defined(MDM_PLATFORM)
 /**
  * wlan_ipa_reg_rps_enable_cb() - Register callback to enable RPS
  * @ipa_ctx: IPA context
@@ -585,17 +585,6 @@ void wlan_ipa_reg_rps_enable_cb(struct wlan_ipa_priv *ipa_ctx,
 {
 	ipa_ctx->rps_enable = cb;
 }
-
-/**
- * ipa_set_rps_enable(): Enable/disable RPS for all interfaces of specific mode
- * @ipa_ctx: IPA context
- * @mode: mode of interface for which RPS needs to be enabled
- * @enable: Set true to enable RPS
- *
- * Return: None
- */
-void ipa_set_rps(struct wlan_ipa_priv *ipa_ctx, enum QDF_OPMODE mode,
-		 bool enable);
 
 /**
  * ipa_set_rps_per_vdev(): Enable/disable RPS for a specific vdev
@@ -628,12 +617,6 @@ void wlan_ipa_handle_multiple_sap_evt(struct wlan_ipa_priv *ipa_ctx,
 
 #else
 static inline
-void ipa_set_rps(struct wlan_ipa_priv *ipa_ctx, enum QDF_OPMODE mode,
-		 bool enable)
-{
-}
-
-static inline
 void ipa_set_rps_per_vdev(struct wlan_ipa_priv *ipa_ctx, uint8_t vdev_id,
 			  bool enable)
 {
@@ -644,7 +627,6 @@ void wlan_ipa_handle_multiple_sap_evt(struct wlan_ipa_priv *ipa_ctx,
 				      qdf_ipa_wlan_event type)
 {
 }
-
 #endif
 
 /**
