@@ -2531,9 +2531,9 @@ static inline struct dp_peer *dp_peer_find_add_id(struct dp_soc *soc,
 	/* check if there's already a peer object with this MAC address */
 	peer = dp_peer_find_hash_find(soc, peer_mac_addr,
 		0 /* is aligned */, vdev_id, DP_MOD_ID_CONFIG);
-	dp_peer_err("%pK: peer %pK ID %d vid %d mac " QDF_MAC_ADDR_FMT,
-		    soc, peer, peer_id, vdev_id,
-		    QDF_MAC_ADDR_REF(peer_mac_addr));
+	dp_peer_debug("%pK: peer %pK ID %d vid %d mac " QDF_MAC_ADDR_FMT,
+		      soc, peer, peer_id, vdev_id,
+		      QDF_MAC_ADDR_REF(peer_mac_addr));
 
 	if (peer) {
 		/* peer's ref count was already incremented by
@@ -5153,7 +5153,7 @@ void dp_local_peer_id_pool_init(struct dp_pdev *pdev)
 	pdev->local_peer_ids.pool[i] = i;
 
 	qdf_spinlock_create(&pdev->local_peer_ids.lock);
-	DP_TRACE(INFO, "Peer pool init");
+	dp_info("Peer pool init");
 }
 
 /**
