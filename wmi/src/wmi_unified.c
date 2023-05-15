@@ -3365,8 +3365,6 @@ void wmi_unified_detach(struct wmi_unified *wmi_handle)
 		soc->wmi_ext2_service_bitmap = NULL;
 	}
 
-	wmi_clear_wow_enable_ack_failed(wmi_handle);
-
 	/* Decrease the ref count once refcount infra is present */
 	soc->wmi_psoc = NULL;
 	qdf_mem_free(soc);
