@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2015-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
 
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -830,6 +830,7 @@ void hif_latency_detect_credit_record_time(
 	struct hif_opaque_softc *hif_ctx)
 {
 	struct hif_softc *scn = HIF_GET_SOFTC(hif_ctx);
+	qdf_time_t old_report_time = 0;
 
 	if (!scn) {
 		hif_err("Could not do runtime put, scn is null");
@@ -839,12 +840,17 @@ void hif_latency_detect_credit_record_time(
 	if (QDF_GLOBAL_MISSION_MODE != hif_get_conparam(scn))
 		return;
 
-	if (HIF_REQUEST_CREDIT == type)
+	if (HIF_REQUEST_CREDIT == type) {
 		scn->latency_detect.credit_request_time = qdf_system_ticks();
-	else if (HIF_PROCESS_CREDIT_REPORT == type)
+	} else if (HIF_PROCESS_CREDIT_REPORT == type) {
 		scn->latency_detect.credit_report_time = qdf_system_ticks();
+		old_report_time = scn->latency_detect.credit_report_time;
+	}
 
-	hif_check_detection_latency(scn, false, BIT(HIF_DETECT_CREDIT));
+	if (!qdf_system_time_after_eq(old_report_time,
+				scn->latency_detect.credit_request_time)) {
+		hif_check_detection_latency(scn, false, BIT(HIF_DETECT_CREDIT));
+	}
 }
 
 void hif_set_enable_detection(struct hif_opaque_softc *hif_ctx, bool value)
