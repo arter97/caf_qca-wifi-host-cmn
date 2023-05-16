@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2013-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -330,6 +330,9 @@ struct hif_softc {
 #endif /*defined(HIF_CONFIG_SLUB_DEBUG_ON) || defined(HIF_CE_DEBUG_DATA_BUF)*/
 #ifdef IPA_OFFLOAD
 	qdf_shared_mem_t *ipa_ce_ring;
+#endif
+#ifdef IPA_OPT_WIFI_DP
+	qdf_atomic_t opt_wifi_dp_rtpm_cnt;
 #endif
 	struct hif_cfg ini_cfg;
 #ifdef HIF_CE_LOG_INFO

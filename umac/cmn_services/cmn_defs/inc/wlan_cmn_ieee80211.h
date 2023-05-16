@@ -311,6 +311,25 @@ enum qcn_attribute_id {
  */
 #define WLAN_TPE_IE_MAX_LEN                      9
 
+#ifdef WLAN_FEATURE_11BE
+/* Bandwidth indication element IE maximum length */
+#define WLAN_BW_IND_IE_MAX_LEN              9
+
+/* header length is id(1) + length(1)*/
+#define WLAN_IE_HDR_LEN                     2
+
+/* 20MHz Operating Channel width */
+#define IEEE80211_11BEOP_CHWIDTH_20              0
+/* 40MHz Operating Channel width */
+#define IEEE80211_11BEOP_CHWIDTH_40              1
+/* 80MHz Operating Channel width */
+#define IEEE80211_11BEOP_CHWIDTH_80              2
+/* 160 MHz Operating Channel width */
+#define IEEE80211_11BEOP_CHWIDTH_160             3
+/* 320 MHz Operating Channel width */
+#define IEEE80211_11BEOP_CHWIDTH_320             4
+#endif
+
 /* Max channel switch time IE length */
 #define WLAN_MAX_CHAN_SWITCH_TIME_IE_LEN         4
 
@@ -647,6 +666,7 @@ enum element_ie {
  * @WLAN_EXTN_ELEMID_EHTCAP: EHT Capabilities IE
  * @WLAN_EXTN_ELEMID_T2LM: TID-to-link mapping IE
  * @WLAN_EXTN_ELEMID_MULTI_LINK_TRAFFIC_IND: Multi-link Traffic Indication IE
+ * @WLAN_EXTN_ELEMID_BW_IND: Bandwidth Indication Element Sub IE
  */
 enum extn_element_ie {
 	WLAN_EXTN_ELEMID_HECAP       = 35,
@@ -670,6 +690,9 @@ enum extn_element_ie {
 #endif
 	WLAN_EXTN_ELEMID_T2LM        = 109,
 	WLAN_EXTN_ELEMID_MULTI_LINK_TRAFFIC_IND = 110,
+#ifdef WLAN_FEATURE_11BE
+	WLAN_EXTN_ELEMID_BW_IND = 135,
+#endif
 };
 
 /**
@@ -1828,6 +1851,12 @@ struct subelem_header {
 #define EHTOP_INFO_CHAN_WIDTH_IDX          0
 #define EHTOP_INFO_CHAN_WIDTH_BITS         3
 
+#define BW_IND_PARAM_DISABLED_SC_BITMAP_PRESENT_IDX       1
+#define BW_IND_PARAM_DISABLED_SC_BITMAP_PRESENT_BITS      1
+
+#define BW_IND_CHAN_WIDTH_IDX              0
+#define BW_IND_CHAN_WIDTH_BITS             3
+
 #define EHTOP_RX_MCS_NSS_MAP_IDX                       0
 #define EHTOP_RX_MCS_NSS_MAP_BITS                      4
 #define EHTOP_TX_MCS_NSS_MAP_IDX                       4
@@ -1904,6 +1933,29 @@ struct wlan_ie_ehtops {
 	uint8_t elem_id_extn;
 	uint8_t ehtop_param;
 	struct eht_basic_mcs_nss_set basic_mcs_nss_set;
+	uint8_t control;
+	uint8_t ccfs0;
+	uint8_t ccfs1;
+	uint8_t disabled_sub_chan_bitmap[2];
+} qdf_packed;
+
+/**
+ * struct wlan_ie_bw_ind - Bandwidth Indication Element
+ * @elem_id: Element ID
+ * @elem_len: Element length
+ * @elem_id_extn: Element ID extension
+ * @bw_ind_param: bw indication element parameters
+ * @control: Control field in bw_ind Operation Information
+ * @ccfs0: EHT Channel Centre Frequency Segment0 information
+ * @ccfs1: EHT Channel Centre Frequency Segment1 information
+ * @disabled_sub_chan_bitmap: Bitmap to indicate 20MHz subchannel
+ *                            is punctured or not
+ */
+struct wlan_ie_bw_ind {
+	uint8_t elem_id;
+	uint8_t elem_len;
+	uint8_t elem_id_extn;
+	uint8_t bw_ind_param;
 	uint8_t control;
 	uint8_t ccfs0;
 	uint8_t ccfs1;
@@ -4022,12 +4074,14 @@ wlan_parse_oce_ap_tx_pwr_ie(uint8_t *mbo_oce_ie, int8_t *ap_tx_pwr_dbm)
  * @MLME_XCSA_IE_PRESENT: extend CSA IE is present
  * @MLME_WBW_IE_PRESENT: wide bandwidth channel switch IE is present
  * @MLME_CSWRAP_IE_EXTENDED_PRESENT: channel switch wrapper IE is present
+ * @MLME_CSWRAP_IE_EXT_V2_PRESENT: channel switch wrapper IE V2 is present
  */
 enum mlme_csa_event_ies_present_flag {
 	MLME_CSA_IE_PRESENT    = 0x00000001,
 	MLME_XCSA_IE_PRESENT   = 0x00000002,
 	MLME_WBW_IE_PRESENT    = 0x00000004,
 	MLME_CSWRAP_IE_EXTENDED_PRESENT = 0x00000008,
+	MLME_CSWRAP_IE_EXT_V2_PRESENT    = 0x00000010,
 };
 
 /**

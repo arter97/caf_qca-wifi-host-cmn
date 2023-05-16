@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
  * above copyright notice and this permission notice appear in all
@@ -249,6 +249,12 @@
 
 /* Delete all vdev peer support */
 #define WLAN_VDEV_DELETE_ALL_PEER_SUPPORT         0x00000040
+
+
+/* CCA busy info for each 20Mhz subband of wideband scan channel support */
+#define WLAN_CCA_BUSY_INFO_FOREACH_20MHZ               0x00000400
+/* ch width notify support */
+#define WLAN_VDEV_PARAM_CHWIDTH_WITH_NOTIFY_SUPPORT    0x00000800
 
 /* PSOC op flags */
 

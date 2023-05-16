@@ -643,7 +643,7 @@ static inline void wlan_ipa_wdi_init_metering(struct wlan_ipa_priv *ipa_ctxt,
 
 #ifdef IPA_OPT_WIFI_DP
 /**
- * wlan_ipa_wdi_init_set_opt_wifi_dp - set if optional wifi dp feature enabled_
+ * wlan_ipa_wdi_init_set_opt_wifi_dp - set if optional wifi dp enabled from IPA
  * @ipa_ctxt: IPA context
  * @out: IPA WDI out param
  *
@@ -656,11 +656,26 @@ static inline void wlan_ipa_wdi_init_set_opt_wifi_dp(
 	ipa_ctxt->opt_wifi_datapath =
 				QDF_IPA_WDI_INIT_OUT_PARAMS_OPT_WIFI_DP(out);
 }
+
+/**
+ * wlan_ipa_opt_wifi_dp_enabled - set if optional wifi dp enabled in WLAN
+ *
+ * Return: bool
+ */
+static inline bool wlan_ipa_opt_wifi_dp_enabled(void)
+{
+	return true;
+}
 #else
 static inline void wlan_ipa_wdi_init_set_opt_wifi_dp(
 					     struct wlan_ipa_priv *ipa_ctxt,
 					     qdf_ipa_wdi_init_out_params_t *out)
 {
+}
+
+static inline bool wlan_ipa_opt_wifi_dp_enabled(void)
+{
+	return false;
 }
 #endif
 
@@ -1725,7 +1740,7 @@ QDF_STATUS wlan_ipa_uc_enable_pipes(struct wlan_ipa_priv *ipa_ctx)
 	qdf_event_reset(&ipa_ctx->ipa_resource_comp);
 
 	if (qdf_atomic_read(&ipa_ctx->autonomy_disabled)) {
-		if (ipa_ctx->opt_wifi_datapath) {
+		if (wlan_ipa_opt_wifi_dp_enabled()) {
 			/* Default packet routing is to HOST REO rings */
 			ipa_info("opt_dp: enable pipes. Do not enable autonomy");
 		} else {
@@ -1737,7 +1752,7 @@ QDF_STATUS wlan_ipa_uc_enable_pipes(struct wlan_ipa_priv *ipa_ctx)
 end:
 	qdf_spin_lock_bh(&ipa_ctx->enable_disable_lock);
 	if (((!qdf_atomic_read(&ipa_ctx->autonomy_disabled)) ||
-	     ipa_ctx->opt_wifi_datapath) &&
+	     wlan_ipa_opt_wifi_dp_enabled()) &&
 	    !qdf_atomic_read(&ipa_ctx->pipes_disabled))
 		ipa_ctx->ipa_pipes_down = false;
 
@@ -4085,12 +4100,6 @@ QDF_STATUS wlan_ipa_setup(struct wlan_ipa_priv *ipa_ctx,
 
 		status = wlan_ipa_wdi_init(ipa_ctx);
 
-		/* Register call backs for opt wifi dp */
-		if (ipa_ctx->opt_wifi_datapath) {
-			status = wlan_ipa_reg_flt_cbs(ipa_ctx);
-			ipa_info("opt_dp: Register cb status %d", status);
-		}
-
 		if (status == QDF_STATUS_SUCCESS) {
 			/* Setup IPA system pipes */
 			if (wlan_ipa_uc_sta_is_enabled(ipa_ctx->config)) {
@@ -4116,6 +4125,19 @@ QDF_STATUS wlan_ipa_setup(struct wlan_ipa_priv *ipa_ctx,
 		ret = wlan_ipa_setup_sys_pipe(ipa_ctx);
 		if (ret)
 			goto ipa_wdi_destroy;
+	}
+
+	/* Register call backs for opt wifi dp */
+	if (ipa_ctx->opt_wifi_datapath) {
+		if (ipa_config_is_opt_wifi_dp_enabled()) {
+			status = wlan_ipa_reg_flt_cbs(ipa_ctx);
+			ipa_info("opt_dp: Register cb. status %d",
+				 status);
+		} else {
+			ipa_info("opt_dp: Disabled from WLAN INI");
+		}
+	} else {
+		ipa_info("opt_dp: Disabled from IPA");
 	}
 
 	qdf_event_create(&ipa_ctx->ipa_resource_comp);
@@ -4185,7 +4207,8 @@ QDF_STATUS wlan_ipa_cleanup(struct wlan_ipa_priv *ipa_ctx)
 	if (!wlan_ipa_uc_is_enabled(ipa_ctx->config))
 		wlan_ipa_teardown_sys_pipe(ipa_ctx);
 
-	wlan_ipa_destroy_opt_wifi_flt_cb_event(ipa_ctx);
+	if (ipa_ctx->uc_loaded)
+		wlan_ipa_destroy_opt_wifi_flt_cb_event(ipa_ctx);
 
 	/* Teardown IPA sys_pipe for MCC */
 	if (wlan_ipa_uc_sta_is_enabled(ipa_ctx->config)) {
@@ -4218,13 +4241,6 @@ QDF_STATUS wlan_ipa_cleanup(struct wlan_ipa_priv *ipa_ctx)
 	}
 
 	gp_ipa = NULL;
-
-	/* Acquire lock */
-	ipa_init_deinit_lock();
-	if (g_instances_added)
-		g_instances_added--;
-	/* Unlock */
-	ipa_init_deinit_unlock();
 
 	ipa_ctx->handle_initialized = false;
 
@@ -4878,7 +4894,25 @@ int wlan_ipa_wdi_opt_dpath_flt_rsrv_cb(
 {
 	struct wifi_dp_flt_setup *dp_flt_params = NULL;
 	struct wlan_ipa_priv *ipa_obj = (struct wlan_ipa_priv *)ipa_ctx;
-	int i;
+	int i, pdev_id, param_val;
+	struct wlan_objmgr_pdev *pdev;
+	int response = 0;
+
+	pdev = ipa_obj->pdev;
+	pdev_id = ipa_obj->dp_pdev_id;
+	/* Disable Low power features before filter reservation */
+	ipa_info("opt_dp: Disable low power features to reserve filter");
+	param_val = 0;
+	response = cdp_ipa_opt_dp_enable_disable_low_power_mode(pdev, pdev_id,
+								param_val);
+	if (response) {
+		ipa_err("Low power feature disable failed. status %d",
+			response);
+		return QDF_STATUS_FILT_REQ_ERROR;
+	}
+
+	response = cdp_ipa_pcie_link_up(ipa_obj->dp_soc);
+	ipa_info("opt_dp: Pcie link up status %d", response);
 
 	ipa_info("opt_dp: Send filter reserve req");
 	dp_flt_params = &(ipa_obj->dp_cce_super_rule_flt_param);
@@ -4898,11 +4932,10 @@ int wlan_ipa_wdi_opt_dpath_flt_add_cb(
 	struct ipa_wdi_opt_dpath_flt_add_cb_params *ipa_flt =
 			 (struct ipa_wdi_opt_dpath_flt_add_cb_params *)(in_out);
 	struct wlan_ipa_priv *ipa_obj = (struct wlan_ipa_priv *)ipa_ctx;
-	int i, j, flt, param_val, pdev_id;
+	int i, j, flt, response = 0;
 	uint8_t num_flts;
 	uint32_t src_ip_addr, dst_ip_addr;
 	uint32_t *host_ipv6;
-	int response = 0;
 	struct wlan_objmgr_pdev *pdev;
 	struct wlan_objmgr_psoc *psoc;
 	struct wifi_dp_flt_setup *dp_flt_param = NULL;
@@ -4910,9 +4943,7 @@ int wlan_ipa_wdi_opt_dpath_flt_add_cb(
 
 	pdev = ipa_obj->pdev;
 	psoc = wlan_pdev_get_psoc(pdev);
-	pdev_id = ipa_obj->dp_pdev_id;
 	num_flts = ipa_flt->num_tuples;
-
 	htc_handle = lmac_get_htc_hdl(psoc);
 	if (!htc_handle) {
 		ipa_err("HTC Handle is null");
@@ -4925,19 +4956,6 @@ int wlan_ipa_wdi_opt_dpath_flt_add_cb(
 		ipa_err("Wrong IPA flt count %d", num_flts);
 		return QDF_STATUS_FILT_REQ_ERROR;
 	}
-
-	/* Disable Low power features before filter addition */
-	ipa_info("opt_dp: Disable low power features to add filter param");
-	param_val = 0;
-	response = cdp_ipa_opt_dp_enable_disable_low_power_mode(pdev, pdev_id,
-								param_val);
-	if (response) {
-		ipa_err("Low power feature disable failed. status %d",
-			response);
-		return QDF_STATUS_FILT_REQ_ERROR;
-	}
-	response = cdp_ipa_pcie_link_up(ipa_obj->dp_soc);
-	ipa_info("opt_dp: Pcie link up status %d", response);
 
 	for (flt = 0; flt < num_flts; flt++) {
 		for (i = 0; i < IPA_WDI_MAX_FILTER; i++)
@@ -5049,14 +5067,12 @@ int wlan_ipa_wdi_opt_dpath_flt_rem_cb(
 	struct wlan_ipa_priv *ipa_obj = (struct wlan_ipa_priv *)ipa_ctx;
 	struct wlan_objmgr_pdev *pdev;
 	struct wlan_objmgr_psoc *psoc;
-	int pdev_id;
 	uint8_t num_flts;
-	uint32_t i, j, response = 0, param_val = 0;
+	uint32_t i, j, response = 0;
 	void *htc_handle;
 
 	pdev = ipa_obj->pdev;
 	psoc = wlan_pdev_get_psoc(pdev);
-	pdev_id = ipa_obj->dp_pdev_id;
 	num_flts = rem_flt->num_tuples;
 
 	htc_handle = lmac_get_htc_hdl(psoc);
@@ -5064,18 +5080,6 @@ int wlan_ipa_wdi_opt_dpath_flt_rem_cb(
 		ipa_err("HTC Handle is null");
 		return QDF_STATUS_FILT_REQ_ERROR;
 	}
-	/* Enable Low power features before filter deletion */
-	ipa_info("opt_dp: Enable low power features to delete filter param");
-	param_val = 1;
-	response = cdp_ipa_opt_dp_enable_disable_low_power_mode(pdev, pdev_id,
-								param_val);
-	if (response) {
-		ipa_err("Low power feature enable failed. status %d", response);
-		return QDF_STATUS_FILT_REQ_ERROR;
-	}
-
-	response = cdp_ipa_pcie_link_up(ipa_obj->dp_soc);
-	ipa_info("opt_dp: Vote for PCIe link up");
 
 	dp_flt_params = &(ipa_obj->dp_cce_super_rule_flt_param);
 	for (i = 0; i < num_flts; i++) {
@@ -5132,8 +5136,25 @@ int wlan_ipa_wdi_opt_dpath_flt_rsrv_rel_cb(void *ipa_ctx)
 {
 	struct wifi_dp_flt_setup *dp_flt_params = NULL;
 	struct wlan_ipa_priv *ipa_obj = (struct wlan_ipa_priv *)ipa_ctx;
-	int i;
+	int i, param_val = 0;
+	struct wlan_objmgr_pdev *pdev;
+	int pdev_id;
+	int response = 0;
 
+	pdev = ipa_obj->pdev;
+	pdev_id = ipa_obj->dp_pdev_id;
+	/* Enable Low power features before filter release */
+	ipa_info("opt_dp: Enable low power features to release filter");
+	param_val = 1;
+	response = cdp_ipa_opt_dp_enable_disable_low_power_mode(pdev, pdev_id,
+								param_val);
+	if (response) {
+		ipa_err("Low power feature enable failed. status %d", response);
+		return QDF_STATUS_FILT_REQ_ERROR;
+	}
+
+	response = cdp_ipa_pcie_link_down(ipa_obj->dp_soc);
+	ipa_info("opt_dp: Vote for PCIe link down");
 	dp_flt_params = &(ipa_obj->dp_cce_super_rule_flt_param);
 	for (i = 0; i < IPA_WDI_MAX_FILTER; i++)
 		 dp_flt_params->flt_addr_params[i].valid = 0;

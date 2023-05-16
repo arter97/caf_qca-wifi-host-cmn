@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -2776,6 +2776,20 @@ QDF_STATUS wmi_extract_scan_radio_cap_service_ready_ext2(
 		       extract_scan_radio_cap_service_ready_ext2(
 				wmi_handle,
 				evt_buf, idx, param);
+
+	return QDF_STATUS_E_FAILURE;
+}
+
+QDF_STATUS wmi_extract_msdu_idx_qtype_map_service_ready_ext2(
+			wmi_unified_t wmi_handle,
+			uint8_t *evt_buf, uint8_t idx,
+			uint8_t *msdu_qtype)
+{
+	if (wmi_handle->ops->extract_msdu_idx_qtype_map_service_ready_ext2)
+		return wmi_handle->ops->
+		       extract_msdu_idx_qtype_map_service_ready_ext2(
+				wmi_handle,
+				evt_buf, idx, msdu_qtype);
 
 	return QDF_STATUS_E_FAILURE;
 }

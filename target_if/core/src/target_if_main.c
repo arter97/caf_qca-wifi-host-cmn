@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2017-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -792,6 +792,7 @@ QDF_STATUS target_if_free_psoc_tgt_info(struct wlan_objmgr_psoc *psoc)
 	init_deinit_dbr_ring_cap_free(tgt_psoc_info);
 	init_deinit_spectral_scaling_params_free(tgt_psoc_info);
 	init_deinit_scan_radio_cap_free(tgt_psoc_info);
+	init_deinit_msdu_idx_qtype_map_free(tgt_psoc_info);
 
 	qdf_event_destroy(&tgt_psoc_info->info.event);
 

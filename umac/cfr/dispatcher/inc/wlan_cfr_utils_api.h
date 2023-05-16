@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2019-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -262,6 +262,7 @@ struct cfr_capture_params {
  * struct psoc_cfr - private psoc object for cfr
  * psoc_obj: pointer to psoc object
  * is_cfr_capable: flag to determine if cfr is enabled or not
+ * is_cfr_pdev_id_soc: flag to send cfr request with PDEV_ID_SOC
  * is_cap_interval_mode_sel_support: flag to determine if target supports both
  *				     capture_count and capture_duration modes
  *				     with a nob provided to configure
@@ -270,6 +271,7 @@ struct cfr_capture_params {
 struct psoc_cfr {
 	struct wlan_objmgr_psoc *psoc_obj;
 	uint8_t is_cfr_capable;
+	uint8_t is_cfr_pdev_id_soc;
 #ifdef WLAN_ENH_CFR_ENABLE
 	uint8_t is_cap_interval_mode_sel_support;
 	uint8_t is_mo_marking_support;
