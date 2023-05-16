@@ -1447,6 +1447,9 @@ enum _ol_ath_param_t {
 #ifdef QCA_R2P_UPDATE_ENABLED
 	OL_ATH_PARAM_R2P_HCHAN_RESTORE = 527,
 #endif
+#ifdef CONFIG_AFC_SUPPORT
+	OL_ATH_PARAM_AFC_SEND_CMD = 528,
+#endif /* CONFIG_AFC_SUPPORT */
 };
 
 #ifdef CONFIG_SUPPORT_VENCMDTABLE
@@ -3614,6 +3617,8 @@ struct vendor_commands radio_vendor_cmds[] = {
 	{"g_dcs_afc_chan_sel_config",
 		OL_ATH_PARAM_SHIFT | OL_ATH_PARAM_DCS_AFC_CHAN_SEL_CONFIG,
 		GET_PARAM, 0},
+	{"afc_send_cmd",
+		OL_ATH_PARAM_SHIFT | OL_ATH_PARAM_AFC_SEND_CMD, SET_PARAM, 1},
 #endif
 	{"enable_rtt",
 		OL_ATH_PARAM_SHIFT | OL_ATH_PARAM_RTT_ENABLE, SET_PARAM, 1},
