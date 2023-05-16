@@ -750,7 +750,7 @@ void dp_tx_tso_num_seg_pool_free(struct dp_soc *soc, uint8_t num_pool)
 
 QDF_STATUS
 dp_tx_tso_num_seg_pool_init_by_id(struct dp_soc *soc, uint32_t num_elem,
-				  uint8_t pool_id);
+				  uint8_t pool_id)
 {
 	return QDF_STATUS_SUCCESS;
 }
