@@ -5060,7 +5060,7 @@ void hif_cleanup_static_buf_to_target(struct hif_softc *scn)
 	qdf_mem_free_consistent(scn->qdf_dev, scn->qdf_dev->dev,
 				FW_SHARED_MEM, target_va,
 				target_pa, 0);
-	hif_write32_mb(snc, scn->mem + BYPASS_QMI_TEMP_REGISTER, 0);
+	hif_write32_mb(scn, scn->mem + BYPASS_QMI_TEMP_REGISTER, 0);
 }
 #endif
 
