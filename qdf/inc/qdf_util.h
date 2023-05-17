@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2014-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -122,6 +122,17 @@ typedef __qdf_wait_queue_head_t qdf_wait_queue_head_t;
 	 (_a)[3] == 0xff &&        \
 	 (_a)[4] == 0xff &&        \
 	 (_a)[5] == 0xff)
+
+/**
+ * QDF_IS_LAST_3_BYTES_OF_MAC_SAME - check the last 3 bytes
+ * same or not for two mac addresses
+ * @mac1: mac address 1
+ * @mac2: mac address 2
+ */
+#define QDF_IS_LAST_3_BYTES_OF_MAC_SAME(mac1, mac2) \
+	((mac1)->bytes[3] == (mac2)->bytes[3] && \
+	 (mac1)->bytes[4] == (mac2)->bytes[4] && \
+	 (mac1)->bytes[5] == (mac2)->bytes[5])
 
 /* Get number of bits from the index bit */
 #define QDF_GET_BITS(_val, _index, _num_bits) \
@@ -908,5 +919,16 @@ int qdf_fls(uint32_t x)
 static inline int qdf_get_smp_processor_id(void)
 {
 	return __qdf_get_smp_processor_id();
+}
+
+/**
+ * qdf_in_atomic: Check whether current thread running in atomic context
+ *
+ * Return: true if current thread is running in the atomic context
+ *	   else it will be return false.
+ */
+static inline bool qdf_in_atomic(void)
+{
+	return __qdf_in_atomic();
 }
 #endif /*_QDF_UTIL_H*/

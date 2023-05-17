@@ -2082,6 +2082,59 @@ uint32_t scm_get_last_scan_time_per_channel(struct wlan_objmgr_vdev *vdev,
 }
 
 QDF_STATUS
+scm_scan_get_scan_entry_by_mac_freq(struct wlan_objmgr_pdev *pdev,
+				    struct qdf_mac_addr *bssid,
+				    uint16_t freq,
+				    struct scan_cache_entry
+				    *cache_entry)
+{
+	struct scan_filter *scan_filter;
+	qdf_list_t *list = NULL;
+	struct scan_cache_node *first_node = NULL;
+	qdf_list_node_t *cur_node = NULL;
+	QDF_STATUS status = QDF_STATUS_E_FAILURE;
+
+	scan_filter = qdf_mem_malloc(sizeof(*scan_filter));
+	if (!scan_filter)
+		return QDF_STATUS_E_NOMEM;
+	scan_filter->num_of_bssid = 1;
+	scan_filter->chan_freq_list[0] = freq;
+	scan_filter->num_of_channels = 1;
+	qdf_copy_macaddr(&scan_filter->bssid_list[0], bssid);
+
+	list = scm_get_scan_result(pdev, scan_filter);
+	qdf_mem_free(scan_filter);
+	if (!list || (list && !qdf_list_size(list))) {
+		status = QDF_STATUS_E_INVAL;
+		goto done;
+	}
+	/*
+	 * There might be multiple scan results in the scan db with given mac
+	 * address(e.g. SSID/some capabilities of the AP have just changed and
+	 * old entry is not aged out yet). scm_get_scan_result() inserts the
+	 * latest scan result at the front of the given list. So, it's ok to
+	 * pick scan result from the front node alone.
+	 */
+	qdf_list_peek_front(list, &cur_node);
+	first_node = qdf_container_of(cur_node,
+				      struct scan_cache_node,
+				      node);
+
+	if (first_node && first_node->entry) {
+		qdf_mem_copy(cache_entry,
+			     first_node->entry,
+			     sizeof(struct scan_cache_entry));
+		status = QDF_STATUS_SUCCESS;
+	}
+
+done:
+	if (list)
+		scm_purge_scan_results(list);
+
+	return status;
+}
+
+QDF_STATUS
 scm_scan_get_entry_by_mac_addr(struct wlan_objmgr_pdev *pdev,
 			       struct qdf_mac_addr *bssid,
 			       struct element_info *frame)
@@ -2132,6 +2185,34 @@ done:
 
 	return status;
 }
+
+#ifdef WLAN_FEATURE_11BE_MLO
+QDF_STATUS scm_get_mld_addr_by_link_addr(struct wlan_objmgr_pdev *pdev,
+					 struct qdf_mac_addr *link_addr,
+					 struct qdf_mac_addr *mld_mac_addr)
+{
+	struct scan_cache_entry *entry = NULL;
+
+	/* For ML connection, BSSID is link address */
+	entry = scm_scan_get_entry_by_bssid(pdev, link_addr);
+	if (!entry) {
+		scm_err("scan entry not found for link addr: " QDF_MAC_ADDR_FMT,
+			QDF_MAC_ADDR_REF(link_addr));
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	if (qdf_is_macaddr_zero(&entry->ml_info.mld_mac_addr)) {
+		util_scan_free_cache_entry(entry);
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	qdf_mem_copy(mld_mac_addr, &entry->ml_info.mld_mac_addr,
+		     QDF_MAC_ADDR_SIZE);
+	util_scan_free_cache_entry(entry);
+
+	return QDF_STATUS_SUCCESS;
+}
+#endif
 
 struct scan_cache_entry *
 scm_scan_get_entry_by_bssid(struct wlan_objmgr_pdev *pdev,

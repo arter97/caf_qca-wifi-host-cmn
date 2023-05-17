@@ -258,13 +258,14 @@ struct wlan_mlo_dev_context;
 /**
  * typedef wlan_mlo_t2lm_link_update_handler - T2LM handler API to notify the
  * link update.
- * @mldev: Pointer to mlo_dev_context
- * @arg: ieee_link_map
+ * @vdev: Pointer to vdev context
+ * @t2lm: Pointer to wlan_t2lm_info
  *
  * Return: QDF_STATUS
  */
 typedef QDF_STATUS (*wlan_mlo_t2lm_link_update_handler)(
-		struct wlan_mlo_dev_context *mldev, void *arg);
+					struct wlan_objmgr_vdev *vdev,
+					struct wlan_t2lm_info *t2lm);
 
 /**
  * struct wlan_t2lm_context - T2LM IE information
@@ -426,12 +427,14 @@ void wlan_unregister_t2lm_link_update_notify_handler(
 /**
  * wlan_mlo_dev_t2lm_notify_link_update() - API to call the registered handlers
  * when there is a link update happens using T2LM
- * @mldev: Pointer to mlo context
+ * @vdev: Pointer to vdev
+ * @t2lm: Pointer to T2LM info
  *
  * Return: QDF_STATUS
  */
 QDF_STATUS wlan_mlo_dev_t2lm_notify_link_update(
-		struct wlan_mlo_dev_context *mldev);
+		struct wlan_objmgr_vdev *vdev,
+		struct wlan_t2lm_info *t2lm);
 
 /**
  * wlan_mlo_parse_t2lm_ie() - API to parse the T2LM IE
@@ -605,6 +608,29 @@ QDF_STATUS wlan_process_bcn_prbrsp_t2lm_ie(struct wlan_objmgr_vdev *vdev,
  */
 QDF_STATUS wlan_send_tid_to_link_mapping(struct wlan_objmgr_vdev *vdev,
 					 struct wlan_t2lm_info *t2lm);
+/**
+ * wlan_get_t2lm_mapping_status() - API to get T2LM info
+ * @vdev: Pointer to vdev
+ * @t2lm: T2LM info
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS wlan_get_t2lm_mapping_status(struct wlan_objmgr_vdev *vdev,
+					struct wlan_t2lm_info *t2lm);
+
+/**
+ * wlan_send_peer_level_tid_to_link_mapping() - API to send peer level T2LM info
+ * negotiated using action frames to FW.
+ *
+ * @vdev: Pointer to vdev
+ * @peer: pointer to peer
+ *
+ * Return QDF_STATUS
+ */
+QDF_STATUS
+wlan_send_peer_level_tid_to_link_mapping(struct wlan_objmgr_vdev *vdev,
+					 struct wlan_objmgr_peer *peer);
+
 #else
 static inline QDF_STATUS wlan_mlo_parse_t2lm_ie(
 	struct wlan_t2lm_onging_negotiation_info *t2lm, uint8_t *ie)
@@ -716,7 +742,8 @@ void wlan_unregister_t2lm_link_update_notify_handler(
 }
 
 static inline QDF_STATUS wlan_mlo_dev_t2lm_notify_link_update(
-		struct wlan_mlo_dev_context *mldev)
+		struct wlan_objmgr_vdev *vdev,
+		struct wlan_t2lm_info *t2lm)
 {
 	return QDF_STATUS_SUCCESS;
 }
@@ -724,6 +751,13 @@ static inline QDF_STATUS wlan_mlo_dev_t2lm_notify_link_update(
 static inline
 QDF_STATUS wlan_send_tid_to_link_mapping(struct wlan_objmgr_vdev *vdev,
 					 struct wlan_t2lm_info *t2lm)
+{
+	return QDF_STATUS_SUCCESS;
+}
+
+static inline QDF_STATUS
+wlan_send_peer_level_tid_to_link_mapping(struct wlan_objmgr_vdev *vdev,
+					 struct wlan_objmgr_peer *peer)
 {
 	return QDF_STATUS_SUCCESS;
 }
