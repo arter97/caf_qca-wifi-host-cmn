@@ -23845,6 +23845,11 @@ static void populate_tlv_service(uint32_t *wmi_service)
 			WMI_SERVICE_MLO_MODE2_RECOVERY_SUPPORTED;
 	wmi_service[wmi_service_dynamic_wsi_remap_support] =
 			WMI_SERVICE_DYNAMIC_WSI_REMAP_SUPPORT;
+
+#ifdef WLAN_FEATURE_NAN
+	wmi_service[wmi_service_nan_pairing_peer_create] =
+				WMI_SERVICE_NAN_PAIRING_PEER_CREATE_BY_HOST;
+#endif
 }
 
 /**
