@@ -10693,6 +10693,10 @@ static QDF_STATUS dp_get_pdev_param(struct cdp_soc_t *cdp_soc, uint8_t pdev_id,
 		val->cdp_pdev_param_mon_freq =
 			dp_monitor_get_chan_freq((struct dp_pdev *)pdev);
 		break;
+	case CDP_CONFIG_RXDMA_BUF_RING_SIZE:
+		val->cdp_rxdma_buf_ring_size =
+			wlan_cfg_get_rx_dma_buf_ring_size(((struct dp_pdev *)pdev)->wlan_cfg_ctx);
+		break;
 	default:
 		return QDF_STATUS_E_FAILURE;
 	}
@@ -10823,6 +10827,10 @@ static QDF_STATUS dp_set_pdev_param(struct cdp_soc_t *cdp_soc, uint8_t pdev_id,
 	case CDP_CONFIG_UNDECODED_METADATA_CAPTURE_ENABLE:
 		return dp_monitor_config_undecoded_metadata_capture(pdev,
 				val.cdp_pdev_param_undecoded_metadata_enable);
+		break;
+	case CDP_CONFIG_RXDMA_BUF_RING_SIZE:
+		wlan_cfg_set_rx_dma_buf_ring_size(pdev->wlan_cfg_ctx,
+						  val.cdp_rxdma_buf_ring_size);
 		break;
 	default:
 		return QDF_STATUS_E_INVAL;
@@ -11256,6 +11264,40 @@ dp_set_psoc_param(struct cdp_soc_t *cdp_soc,
 		wlan_cfg_set_sawf_stats_config(wlan_cfg_ctx,
 					       val.cdp_sawf_stats);
 		break;
+	case CDP_CFG_TX_DESC_NUM:
+		wlan_cfg_set_num_tx_desc(wlan_cfg_ctx,
+					 val.cdp_tx_desc_num);
+		break;
+	case CDP_CFG_TX_EXT_DESC_NUM:
+		wlan_cfg_set_num_tx_ext_desc(wlan_cfg_ctx,
+					     val.cdp_tx_ext_desc_num);
+		break;
+	case CDP_CFG_TX_RING_SIZE:
+		wlan_cfg_set_tx_ring_size(wlan_cfg_ctx,
+					  val.cdp_tx_ring_size);
+		break;
+	case CDP_CFG_TX_COMPL_RING_SIZE:
+		wlan_cfg_set_tx_comp_ring_size(wlan_cfg_ctx,
+					       val.cdp_tx_comp_ring_size);
+		break;
+	case CDP_CFG_RX_SW_DESC_NUM:
+		wlan_cfg_set_dp_soc_rx_sw_desc_num(wlan_cfg_ctx,
+						   val.cdp_rx_sw_desc_num);
+		break;
+	case CDP_CFG_REO_DST_RING_SIZE:
+		wlan_cfg_set_reo_dst_ring_size(wlan_cfg_ctx,
+					       val.cdp_reo_dst_ring_size);
+		break;
+	case CDP_CFG_RXDMA_REFILL_RING_SIZE:
+		wlan_cfg_set_dp_soc_rxdma_refill_ring_size(wlan_cfg_ctx,
+					val.cdp_rxdma_refill_ring_size);
+		break;
+#ifdef WLAN_FEATURE_RX_PREALLOC_BUFFER_POOL
+	case CDP_CFG_RX_REFILL_POOL_NUM:
+		wlan_cfg_set_rx_refill_buf_pool_size(wlan_cfg_ctx,
+						val.cdp_rx_refill_buf_pool_size);
+		break;
+#endif
 	default:
 		break;
 	}
@@ -11266,7 +11308,7 @@ dp_set_psoc_param(struct cdp_soc_t *cdp_soc,
 /*
  * dp_get_psoc_param: function to get parameters in soc
  * @cdp_soc : DP soc handle
- * @param: parameter type to be set
+ * @param: parameter type to be get
  * @val: address of buffer
  *
  * return: status
@@ -11276,18 +11318,21 @@ static QDF_STATUS dp_get_psoc_param(struct cdp_soc_t *cdp_soc,
 				    cdp_config_param_type *val)
 {
 	struct dp_soc *soc = (struct dp_soc *)cdp_soc;
+	struct wlan_cfg_dp_soc_ctxt *wlan_cfg_ctx;
 
 	if (!soc)
 		return QDF_STATUS_E_FAILURE;
 
+	wlan_cfg_ctx = soc->wlan_cfg_ctx;
+
 	switch (param) {
 	case CDP_CFG_PEER_EXT_STATS:
 		val->cdp_psoc_param_pext_stats =
-			wlan_cfg_is_peer_ext_stats_enabled(soc->wlan_cfg_ctx);
+			wlan_cfg_is_peer_ext_stats_enabled(wlan_cfg_ctx);
 		break;
 	case CDP_CFG_VDEV_STATS_HW_OFFLOAD:
 		val->cdp_psoc_param_vdev_stats_hw_offload =
-			wlan_cfg_get_vdev_stats_hw_offload_config(soc->wlan_cfg_ctx);
+			wlan_cfg_get_vdev_stats_hw_offload_config(wlan_cfg_ctx);
 		break;
 	case CDP_UMAC_RST_SKEL_ENABLE:
 		val->cdp_umac_rst_skel = dp_umac_rst_skel_enable_get(soc);
@@ -11296,6 +11341,38 @@ static QDF_STATUS dp_get_psoc_param(struct cdp_soc_t *cdp_soc,
 		val->cdp_psoc_param_ppeds_enabled =
 			wlan_cfg_get_dp_soc_is_ppeds_enabled(soc->wlan_cfg_ctx);
 		break;
+	case CDP_CFG_TX_DESC_NUM:
+		val->cdp_tx_desc_num = wlan_cfg_get_num_tx_desc(wlan_cfg_ctx);
+		break;
+	case CDP_CFG_TX_EXT_DESC_NUM:
+		val->cdp_tx_ext_desc_num =
+			wlan_cfg_get_num_tx_ext_desc(wlan_cfg_ctx);
+		break;
+	case CDP_CFG_TX_RING_SIZE:
+		val->cdp_tx_ring_size = wlan_cfg_tx_ring_size(wlan_cfg_ctx);
+		break;
+	case CDP_CFG_TX_COMPL_RING_SIZE:
+		val->cdp_tx_comp_ring_size =
+			wlan_cfg_tx_comp_ring_size(wlan_cfg_ctx);
+		break;
+	case CDP_CFG_RX_SW_DESC_NUM:
+		val->cdp_rx_sw_desc_num =
+			wlan_cfg_get_dp_soc_rx_sw_desc_num(wlan_cfg_ctx);
+		break;
+	case CDP_CFG_REO_DST_RING_SIZE:
+		val->cdp_reo_dst_ring_size =
+			wlan_cfg_get_reo_dst_ring_size(wlan_cfg_ctx);
+		break;
+	case CDP_CFG_RXDMA_REFILL_RING_SIZE:
+		val->cdp_rxdma_refill_ring_size =
+			wlan_cfg_get_dp_soc_rxdma_refill_ring_size(wlan_cfg_ctx);
+		break;
+#ifdef WLAN_FEATURE_RX_PREALLOC_BUFFER_POOL
+	case CDP_CFG_RX_REFILL_POOL_NUM:
+		val->cdp_rx_refill_buf_pool_size =
+			wlan_cfg_get_rx_refill_buf_pool_size(wlan_cfg_ctx);
+		break;
+#endif
 	default:
 		dp_warn("Invalid param");
 		break;
