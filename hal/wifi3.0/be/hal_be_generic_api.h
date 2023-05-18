@@ -350,7 +350,7 @@ hal_txmon_is_mon_buf_addr_tlv_generic_be(void *tx_tlv_hdr)
 {
 	uint32_t tlv_tag;
 
-	tlv_tag = HAL_RX_GET_USER_TLV64_TYPE(tx_tlv_hdr);
+	tlv_tag = HAL_RX_GET_USER_TLV32_TYPE(tx_tlv_hdr);
 
 	if (WIFIMON_BUFFER_ADDR_E == tlv_tag)
 		return true;
@@ -1559,9 +1559,9 @@ hal_txmon_status_parse_tlv_generic_be(void *data_ppdu_info,
 	uint32_t status = HAL_MON_TX_STATUS_PPDU_NOT_DONE;
 	void *tx_tlv;
 
-	tlv_tag = HAL_RX_GET_USER_TLV64_TYPE(tx_tlv_hdr);
-	tlv_user_id = HAL_RX_GET_USER_TLV64_USERID(tx_tlv_hdr);
-	tlv_len = HAL_RX_GET_USER_TLV64_LEN(tx_tlv_hdr);
+	tlv_tag = HAL_RX_GET_USER_TLV32_TYPE(tx_tlv_hdr);
+	tlv_user_id = HAL_RX_GET_USER_TLV32_USERID(tx_tlv_hdr);
+	tlv_len = HAL_RX_GET_USER_TLV32_LEN(tx_tlv_hdr);
 
 	tx_tlv = (uint8_t *)tx_tlv_hdr + HAL_RX_TLV64_HDR_SIZE;
 

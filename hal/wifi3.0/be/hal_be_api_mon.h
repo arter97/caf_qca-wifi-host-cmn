@@ -2360,8 +2360,9 @@ hal_rx_status_get_mon_buf_addr(uint8_t *rx_tlv,
 {
 	struct mon_buffer_addr *addr = (struct mon_buffer_addr *)rx_tlv;
 
-	ppdu_info->packet_info.sw_cookie = (((uint64_t)qdf_le32_to_cpu(addr->buffer_virt_addr_63_32) << 32) |
-					    qdf_le32_to_cpu(addr->buffer_virt_addr_31_0));
+	ppdu_info->packet_info.sw_cookie =
+			(((uint64_t)addr->buffer_virt_addr_63_32 << 32) |
+			(addr->buffer_virt_addr_31_0));
 	/* HW DMA length is '-1' of actual DMA length*/
 	ppdu_info->packet_info.dma_length = addr->dma_length + 1;
 	ppdu_info->packet_info.msdu_continuation = addr->msdu_continuation;
@@ -2496,9 +2497,9 @@ hal_rx_status_get_tlv_info_generic_be(void *rx_tlv_hdr, void *ppduinfo,
 	struct hal_rx_ppdu_info *ppdu_info =
 			(struct hal_rx_ppdu_info *)ppduinfo;
 
-	tlv_tag = HAL_RX_GET_USER_TLV64_TYPE(rx_tlv_hdr);
-	user_id = HAL_RX_GET_USER_TLV64_USERID(rx_tlv_hdr);
-	tlv_len = HAL_RX_GET_USER_TLV64_LEN(rx_tlv_hdr);
+	tlv_tag = HAL_RX_GET_USER_TLV32_TYPE(rx_tlv_hdr);
+	user_id = HAL_RX_GET_USER_TLV32_USERID(rx_tlv_hdr);
+	tlv_len = HAL_RX_GET_USER_TLV32_LEN(rx_tlv_hdr);
 
 	rx_tlv = (uint8_t *)rx_tlv_hdr + HAL_RX_TLV_HDR_SIZE;
 
@@ -3686,9 +3687,9 @@ hal_rx_status_aggr_tlv(struct hal_soc *hal_soc, void *rx_tlv_hdr,
 	uint32_t tlv_tag, user_id, tlv_len;
 	void *rx_tlv;
 
-	tlv_tag = HAL_RX_GET_USER_TLV64_TYPE(rx_tlv_hdr);
-	user_id = HAL_RX_GET_USER_TLV64_USERID(rx_tlv_hdr);
-	tlv_len = HAL_RX_GET_USER_TLV64_LEN(rx_tlv_hdr);
+	tlv_tag = HAL_RX_GET_USER_TLV32_TYPE(rx_tlv_hdr);
+	user_id = HAL_RX_GET_USER_TLV32_USERID(rx_tlv_hdr);
+	tlv_len = HAL_RX_GET_USER_TLV32_LEN(rx_tlv_hdr);
 
 	rx_tlv = (uint8_t *)rx_tlv_hdr + HAL_RX_TLV_HDR_SIZE;
 
@@ -3712,9 +3713,9 @@ hal_rx_status_start_new_aggr_tlv(struct hal_soc *hal_soc, void *rx_tlv_hdr,
 {
 	uint32_t tlv_tag, user_id, tlv_len;
 
-	tlv_tag = HAL_RX_GET_USER_TLV64_TYPE(rx_tlv_hdr);
-	user_id = HAL_RX_GET_USER_TLV64_USERID(rx_tlv_hdr);
-	tlv_len = HAL_RX_GET_USER_TLV64_LEN(rx_tlv_hdr);
+	tlv_tag = HAL_RX_GET_USER_TLV32_TYPE(rx_tlv_hdr);
+	user_id = HAL_RX_GET_USER_TLV32_USERID(rx_tlv_hdr);
+	tlv_len = HAL_RX_GET_USER_TLV32_LEN(rx_tlv_hdr);
 
 	ppdu_info->tlv_aggr.in_progress = 1;
 	ppdu_info->tlv_aggr.tlv_tag = tlv_tag;
@@ -3733,9 +3734,9 @@ hal_rx_status_get_tlv_info_wrapper_be(void *rx_tlv_hdr, void *ppduinfo,
 	struct hal_rx_ppdu_info *ppdu_info =
 			(struct hal_rx_ppdu_info *)ppduinfo;
 
-	tlv_tag = HAL_RX_GET_USER_TLV64_TYPE(rx_tlv_hdr);
-	user_id = HAL_RX_GET_USER_TLV64_USERID(rx_tlv_hdr);
-	tlv_len = HAL_RX_GET_USER_TLV64_LEN(rx_tlv_hdr);
+	tlv_tag = HAL_RX_GET_USER_TLV32_TYPE(rx_tlv_hdr);
+	user_id = HAL_RX_GET_USER_TLV32_USERID(rx_tlv_hdr);
+	tlv_len = HAL_RX_GET_USER_TLV32_LEN(rx_tlv_hdr);
 
 	/*
 	 * Handle the case where aggregation is in progress
