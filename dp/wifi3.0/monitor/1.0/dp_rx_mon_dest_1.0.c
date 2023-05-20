@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -230,6 +230,11 @@ dp_rx_mon_mpdu_pop(struct dp_soc *soc, uint32_t mac_id,
 	is_first_msdu = true;
 
 	do {
+		if (!msdu_cnt) {
+			drop_mpdu = true;
+			DP_STATS_INC(dp_pdev, invalid_msdu_cnt, 1);
+		}
+
 		/* WAR for duplicate link descriptors received from HW */
 		if (qdf_unlikely(mon_pdev->mon_last_linkdesc_paddr ==
 		    buf_info.paddr)) {
@@ -239,7 +244,7 @@ dp_rx_mon_mpdu_pop(struct dp_soc *soc, uint32_t mac_id,
 
 		rx_msdu_link_desc =
 			dp_rx_cookie_2_mon_link_desc(dp_pdev,
-						     buf_info, mac_id);
+						     &buf_info, mac_id);
 
 		qdf_assert_always(rx_msdu_link_desc);
 
@@ -384,7 +389,7 @@ dp_rx_mon_mpdu_pop(struct dp_soc *soc, uint32_t mac_id,
 						    rx_desc_tlv,
 						    &first_rx_desc_tlv,
 						    &is_frag_non_raw, data);
-			if (!is_frag)
+			if (!is_frag && msdu_cnt)
 				msdu_cnt--;
 
 			dp_rx_mon_dest_debug("total_len %u frag_len %u flags %u",
@@ -457,7 +462,7 @@ next_msdu:
 						   bm_action)
 						   != QDF_STATUS_SUCCESS)
 			dp_err_rl("monitor link desc return failed");
-	} while (buf_info.paddr && msdu_cnt);
+	} while (buf_info.paddr);
 
 	dp_rx_mon_init_tail_msdu(head_msdu, msdu, last, tail_msdu);
 	dp_rx_mon_remove_raw_frame_fcs_len(soc, head_msdu, tail_msdu);
@@ -506,7 +511,7 @@ static int dp_rx_mon_drop_one_mpdu(struct dp_pdev *pdev,
 
 	do {
 		rx_msdu_link_desc = dp_rx_cookie_2_mon_link_desc(pdev,
-								 buf_info,
+								 &buf_info,
 								 mac_id);
 		if (qdf_unlikely(!rx_msdu_link_desc)) {
 			mon_pdev->rx_mon_stats.mon_link_desc_invalid++;
@@ -949,7 +954,8 @@ dp_rx_pdev_mon_buf_desc_pool_alloc(struct dp_pdev *pdev, uint32_t mac_id)
 
 #if !defined(DISABLE_MON_CONFIG) && defined(MON_ENABLE_DROP_FOR_MAC)
 uint32_t
-dp_mon_dest_srng_drop_for_mac(struct dp_pdev *pdev, uint32_t mac_id)
+dp_mon_dest_srng_drop_for_mac(struct dp_pdev *pdev, uint32_t mac_id,
+			      bool force_flush)
 {
 	struct dp_soc *soc = pdev->soc;
 	hal_rxdma_desc_t rxdma_dst_ring_desc;
@@ -987,8 +993,8 @@ dp_mon_dest_srng_drop_for_mac(struct dp_pdev *pdev, uint32_t mac_id)
 
 	while ((rxdma_dst_ring_desc =
 		hal_srng_dst_peek(hal_soc, mon_dst_srng)) &&
-		reap_cnt < MON_DROP_REAP_LIMIT) {
-		if (is_rxdma_dst_ring_common) {
+		(reap_cnt < MON_DROP_REAP_LIMIT || force_flush)) {
+		if (is_rxdma_dst_ring_common && !force_flush) {
 			if (QDF_STATUS_SUCCESS ==
 			    dp_rx_mon_check_n_drop_mpdu(pdev, mac_id,
 							rxdma_dst_ring_desc,
@@ -1933,7 +1939,7 @@ dp_rx_mon_frag_restitch_mpdu_from_msdus(struct dp_soc *soc,
 	 *  ------------------------------------------------------------
 	 */
 	pad_byte_pholder =
-		(RX_MONITOR_BUFFER_SIZE - soc->rx_pkt_tlv_size) - frag_size;
+		(RX_MONITOR_BUFFER_SIZE - soc->rx_mon_pkt_tlv_size) - frag_size;
 	/* Construct destination address
 	 *  --------------------------------------------------------------
 	 * | RX_PKT_TLV | L2_HDR_PAD   |   Decap HDR   |      Payload     |
@@ -2062,7 +2068,7 @@ dp_rx_mon_frag_restitch_mpdu_from_msdus(struct dp_soc *soc,
 			 * to accommodate amsdu pad byte
 			 */
 			pad_byte_pholder =
-				(RX_MONITOR_BUFFER_SIZE - soc->rx_pkt_tlv_size)
+				(RX_MONITOR_BUFFER_SIZE - soc->rx_mon_pkt_tlv_size)
 				- frag_size;
 			/*
 			 * We will come here only only three condition:

@@ -18,6 +18,7 @@
  */
 
 #include "wlan_ipa_ucfg_api.h"
+#include "wlan_ipa_main.h"
 #if defined(CONFIG_HL_SUPPORT)
 #include "wlan_tgt_def_config_hl.h"
 #else
@@ -226,8 +227,13 @@ static const  uint8_t rxdma2host_ring_mask_msi[WLAN_CFG_INT_NUM_CONTEXTS] = {
 #endif /* CONFIG_BERYLLIUM */
 
 #ifdef CONFIG_BERYLLIUM
+#ifdef WLAN_FEATURE_LOCAL_PKT_CAPTURE
+static const  uint8_t rx_mon_ring_mask_msi[WLAN_CFG_INT_NUM_CONTEXTS] = {
+	[14] = WLAN_CFG_RX_MON_RING_MASK_0 | WLAN_CFG_RX_MON_RING_MASK_1};
+#else
 static const  uint8_t rx_mon_ring_mask_msi[WLAN_CFG_INT_NUM_CONTEXTS] = {
 	[5] = WLAN_CFG_RX_MON_RING_MASK_0};
+#endif
 #else
 static const  uint8_t rx_mon_ring_mask_msi[WLAN_CFG_INT_NUM_CONTEXTS] = {
 	[1] = WLAN_CFG_RX_MON_RING_MASK_0, [2] = WLAN_CFG_RX_MON_RING_MASK_1};
@@ -280,6 +286,17 @@ static const uint8_t rx_ring_near_full_irq_2_mask_msi[WLAN_CFG_INT_NUM_CONTEXTS]
 	0 };
 static const uint8_t tx_ring_near_full_irq_mask_msi[WLAN_CFG_INT_NUM_CONTEXTS] = {
 	0 };
+#endif
+
+#ifdef CONFIG_BERYLLIUM
+#ifdef WLAN_FEATURE_LOCAL_PKT_CAPTURE
+static const  uint8_t tx_mon_ring_mask_msi[WLAN_CFG_INT_NUM_CONTEXTS] = {
+	[13] = WLAN_CFG_TX_MON_RING_MASK_0 | WLAN_CFG_TX_MON_RING_MASK_1};
+#else
+static const  uint8_t tx_mon_ring_mask_msi[WLAN_CFG_INT_NUM_CONTEXTS] = {0};
+#endif /* WLAN_FEATURE_LOCAL_PKT_CAPTURE */
+#else
+static const  uint8_t tx_mon_ring_mask_msi[WLAN_CFG_INT_NUM_CONTEXTS] = {0};
 #endif
 
 #else
@@ -3313,7 +3330,8 @@ static const uint8_t rx_fst_toeplitz_key[WLAN_CFG_RX_FST_TOEPLITZ_KEYLEN] = {
 void wlan_cfg_fill_interrupt_mask(struct wlan_cfg_dp_soc_ctxt *wlan_cfg_ctx,
 				  int num_dp_msi,
 				  int interrupt_mode,
-				  bool is_monitor_mode)
+				  bool is_monitor_mode,
+				  bool ppeds_attached)
 {	int i = 0;
 
 	for (i = 0; i < WLAN_CFG_INT_NUM_CONTEXTS; i++) {
@@ -3343,7 +3361,8 @@ void wlan_cfg_fill_interrupt_mask(struct wlan_cfg_dp_soc_ctxt *wlan_cfg_ctx,
 void wlan_cfg_fill_interrupt_mask(struct wlan_cfg_dp_soc_ctxt *wlan_cfg_ctx,
 				  int num_dp_msi,
 				  int interrupt_mode,
-				  bool is_monitor_mode)
+				  bool is_monitor_mode,
+				  bool ppeds_attached)
 {	int i = 0;
 	const uint8_t *tx_ring_intr_mask =
 				wlan_cfg_get_tx_ring_int_mask(wlan_cfg_ctx);
@@ -3355,7 +3374,7 @@ void wlan_cfg_fill_interrupt_mask(struct wlan_cfg_dp_soc_ctxt *wlan_cfg_ctx,
 
 		wlan_cfg_ctx->int_rx_mon_ring_mask[i] =
 							rx_mon_ring_mask_msi[i];
-		wlan_cfg_ctx->int_tx_mon_ring_mask[i] = 0;
+		wlan_cfg_ctx->int_tx_mon_ring_mask[i] = tx_mon_ring_mask_msi[i];
 		wlan_cfg_ctx->int_rx_err_ring_mask[i] =
 							rx_err_ring_mask_msi[i];
 		wlan_cfg_ctx->int_rx_wbm_rel_ring_mask[i] =
@@ -3466,7 +3485,8 @@ wlan_cfg_mask_assignment(struct wlan_cfg_dp_soc_ctxt *wlan_cfg_ctx,
 void wlan_cfg_fill_interrupt_mask(struct wlan_cfg_dp_soc_ctxt *wlan_cfg_ctx,
 				     int num_dp_msi,
 				     int interrupt_mode,
-				     bool is_monitor_mode)
+				     bool is_monitor_mode,
+				     bool ppeds_attached)
 {
 	int i = 0;
 	int interrupt_index = 0;
@@ -3482,7 +3502,7 @@ void wlan_cfg_fill_interrupt_mask(struct wlan_cfg_dp_soc_ctxt *wlan_cfg_ctx,
 	}
 
 	for (i = 0; i < WLAN_CFG_INT_NUM_CONTEXTS; i++) {
-		if (!wlan_cfg_get_dp_soc_is_ppeds_enabled(wlan_cfg_ctx))
+		if (!ppeds_attached)
 			mask_assignment = &dp_mask_assignment[interrupt_index];
 		else if (interrupt_index == 8)
 			mask_assignment = &dp_ds_mask_assignment_8msi;
@@ -3515,8 +3535,8 @@ wlan_soc_ipa_cfg_attach(struct cdp_ctrl_objmgr_psoc *psoc,
 {
 	if (ucfg_ipa_get_pld_enable()) {
 		wlan_cfg_ctx->ipa_enabled =
-			(cfg_get(psoc, CFG_DP_IPA_OFFLOAD_CONFIG) &
-			WLAN_CFG_IPA_ENABLE_MASK);
+			(get_ipa_config((struct wlan_objmgr_psoc *)psoc) &
+			 WLAN_CFG_IPA_ENABLE_MASK);
 		dp_info("is IPA enabled from ini: %d",
 			wlan_cfg_ctx->ipa_enabled);
 	} else {
@@ -3547,8 +3567,8 @@ wlan_soc_ipa_cfg_attach(struct cdp_ctrl_objmgr_psoc *psoc,
 {
 	if (ucfg_ipa_get_pld_enable()) {
 		wlan_cfg_ctx->ipa_enabled =
-			(cfg_get(psoc, CFG_DP_IPA_OFFLOAD_CONFIG) &
-			WLAN_CFG_IPA_ENABLE_MASK);
+			(get_ipa_config((struct wlan_objmgr_psoc *)psoc) &
+			 WLAN_CFG_IPA_ENABLE_MASK);
 		dp_info("is IPA enabled from ini: %d",
 			wlan_cfg_ctx->ipa_enabled);
 	} else {
@@ -3745,6 +3765,22 @@ static void wlan_soc_tx_capt_cfg_attach(struct cdp_ctrl_objmgr_psoc *psoc,
 #else
 static void wlan_soc_tx_capt_cfg_attach(struct cdp_ctrl_objmgr_psoc *psoc,
 				struct wlan_cfg_dp_soc_ctxt *wlan_cfg_ctx)
+{
+}
+#endif
+
+#ifdef WLAN_FEATURE_LOCAL_PKT_CAPTURE
+static void
+wlan_soc_local_pkt_capture_cfg_attach(struct cdp_ctrl_objmgr_psoc *psoc,
+				      struct wlan_cfg_dp_soc_ctxt *wlan_cfg_ctx)
+{
+	wlan_cfg_ctx->local_pkt_capture =
+				cfg_get(psoc, CFG_DP_LOCAL_PKT_CAPTURE);
+}
+#else
+static void
+wlan_soc_local_pkt_capture_cfg_attach(struct cdp_ctrl_objmgr_psoc *psoc,
+				      struct wlan_cfg_dp_soc_ctxt *wlan_cfg_ctx)
 {
 }
 #endif
@@ -4240,7 +4276,7 @@ wlan_cfg_soc_attach(struct cdp_ctrl_objmgr_psoc *psoc)
 	wlan_cfg_ctx->pointer_num_threshold_rx =
 			cfg_get(psoc, CFG_DP_POINTER_NUM_THRESHOLD_RX);
 	wlan_soc_tx_packet_inspect_attach(psoc, wlan_cfg_ctx);
-
+	wlan_soc_local_pkt_capture_cfg_attach(psoc, wlan_cfg_ctx);
 	return wlan_cfg_ctx;
 }
 #endif
@@ -5380,7 +5416,7 @@ int wlan_cfg_ipa_tx_alt_comp_ring_size(struct wlan_cfg_dp_soc_ctxt *cfg)
 
 #ifdef WLAN_SUPPORT_PPEDS
 bool
-wlan_cfg_get_dp_soc_is_ppeds_enabled(struct wlan_cfg_dp_soc_ctxt *cfg)
+wlan_cfg_get_dp_soc_ppeds_enable(struct wlan_cfg_dp_soc_ctxt *cfg)
 {
 	return cfg->ppeds_enable;
 }
@@ -5444,6 +5480,10 @@ wlan_cfg_get_prealloc_cfg(struct cdp_ctrl_objmgr_psoc *ctrl_psoc,
 						   CFG_DP_REO_STATUS_RING);
 	cfg->num_mon_status_ring_entries = cfg_get(ctrl_psoc,
 						   CFG_DP_RXDMA_MONITOR_STATUS_RING);
+	cfg->num_tx_mon_buf_ring_entries = cfg_get(ctrl_psoc,
+						   CFG_DP_TX_MONITOR_BUF_RING);
+	cfg->num_tx_mon_dst_ring_entries = cfg_get(ctrl_psoc,
+						   CFG_DP_TX_MONITOR_DST_RING);
 }
 
 #ifdef WLAN_FEATURE_PKT_CAPTURE_V2

@@ -269,6 +269,51 @@ bool wlan_cm_is_vdev_roam_reassoc_state(struct wlan_objmgr_vdev *vdev)
 #endif
 
 /**
+ * wlan_cm_connect_resp_fill_mld_addr_from_cm_id() - API to get MLD of
+ * current candidate from connect request ID.
+ * @vdev: VDEV objmgr pointer.
+ * @cm_id: connect request ID.
+ * @rsp: connect resp pointer.
+ *
+ * This wrapper API fills MLD address in @rsp from connect request ID.
+ *
+ * Return: void
+ */
+void
+wlan_cm_connect_resp_fill_mld_addr_from_cm_id(struct wlan_objmgr_vdev *vdev,
+					      wlan_cm_id cm_id,
+					      struct wlan_cm_connect_resp *rsp);
+
+/**
+ * wlan_cm_connect_resp_fill_mld_addr_from_vdev_id() - API to get MLD
+ * from scan entry in join request.
+ * @psoc: PSOC objmgr pointer.
+ * @vdev_id: session ID.
+ * @entry: Scan entry of the candidate.
+ * @rsp: connect response pointer.
+ *
+ * This wrapper API gets VDEV from join request and fills MLD address
+ * in @rsp from the scan entry in join request.
+ *
+ * Return: void
+ */
+#ifdef WLAN_FEATURE_11BE_MLO
+void
+wlan_cm_connect_resp_fill_mld_addr_from_vdev_id(struct wlan_objmgr_psoc *psoc,
+						uint8_t vdev_id,
+						struct scan_cache_entry *entry,
+						struct wlan_cm_connect_resp *rsp);
+#else
+static inline void
+wlan_cm_connect_resp_fill_mld_addr_from_vdev_id(struct wlan_objmgr_psoc *psoc,
+						uint8_t vdev_id,
+						struct scan_cache_entry *entry,
+						struct wlan_cm_connect_resp *rsp)
+{
+}
+#endif
+
+/**
  * wlan_cm_get_active_connect_req() - Get copy of active connect request
  * @vdev: vdev pointer
  * @req: pointer to the copy of the active connect request
@@ -455,11 +500,12 @@ void wlan_cm_set_candidate_custom_sort_cb(
  * wlan_cm_get_rnr() - get rnr
  * @vdev:vdev
  * @cm_id: connect mgr id
+ * @rnr: pointer to copy rnr info
  *
- * Return: rnr pointer
+ * Return: QDF_STATUS
  */
-struct reduced_neighbor_report *wlan_cm_get_rnr(struct wlan_objmgr_vdev *vdev,
-						wlan_cm_id cm_id);
+QDF_STATUS wlan_cm_get_rnr(struct wlan_objmgr_vdev *vdev, wlan_cm_id cm_id,
+			   struct reduced_neighbor_report *rnr);
 
 /**
  * wlan_cm_disc_cont_after_rso_stop() - Continue disconnect after RSO stop

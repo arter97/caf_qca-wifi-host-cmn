@@ -527,6 +527,14 @@ dp_rx_mon_status_process_tlv(struct dp_soc *soc, struct dp_intr *int_ctx,
 						pdev, ppdu_info, status_nbuf);
 			if (smart_mesh_status)
 				qdf_nbuf_free(status_nbuf);
+		} else if (qdf_unlikely(IS_LOCAL_PKT_CAPTURE_RUNNING(mon_pdev,
+				is_local_pkt_capture_running))) {
+			int ret;
+
+			ret = dp_rx_handle_local_pkt_capture(pdev, ppdu_info,
+							     status_nbuf);
+			if (ret)
+				qdf_nbuf_free(status_nbuf);
 		} else if (qdf_unlikely(mon_pdev->mcopy_mode)) {
 			dp_rx_process_mcopy_mode(soc, pdev,
 						 ppdu_info, tlv_status,
@@ -1287,18 +1295,18 @@ dp_mon_status_srng_drop_for_mac(struct dp_pdev *pdev, uint32_t mac_id,
 }
 
 uint32_t dp_mon_drop_packets_for_mac(struct dp_pdev *pdev, uint32_t mac_id,
-				     uint32_t quota)
+				     uint32_t quota, bool force_flush)
 {
 	uint32_t work_done;
 
 	work_done = dp_mon_status_srng_drop_for_mac(pdev, mac_id, quota);
-	dp_mon_dest_srng_drop_for_mac(pdev, mac_id);
+	dp_mon_dest_srng_drop_for_mac(pdev, mac_id, force_flush);
 
 	return work_done;
 }
 #else
 uint32_t dp_mon_drop_packets_for_mac(struct dp_pdev *pdev, uint32_t mac_id,
-				     uint32_t quota)
+				     uint32_t quota, bool force_flush)
 {
 	return 0;
 }

@@ -125,6 +125,8 @@ static const uint32_t peer_param_tlv[] = {
 	[WMI_HOST_PEER_PARAM_ENABLE_FT] = WMI_PEER_PARAM_ENABLE_FT,
 	[WMI_HOST_PEER_CHWIDTH_PUNCTURE_20MHZ_BITMAP] =
 					WMI_PEER_CHWIDTH_PUNCTURE_20MHZ_BITMAP,
+	[WMI_HOST_PEER_FT_ROAMING_PEER_UPDATE] =
+					WMI_PEER_FT_ROAMING_PEER_UPDATE,
 };
 
 #define PARAM_MAP(name, NAME) [wmi_ ## name] = WMI_ ##NAME
@@ -439,6 +441,8 @@ static const uint32_t pdev_param_tlv[] = {
 		  PDEV_PARAM_SET_SCAN_BLANKING_MODE),
 	PARAM_MAP(pdev_param_set_conc_low_latency_mode,
 		  PDEV_PARAM_SET_CONC_LOW_LATENCY_MODE),
+	PARAM_MAP(pdev_param_rtt_11az_rsid_range,
+		  PDEV_PARAM_RTT_11AZ_RSID_RANGE),
 };
 
 /* Populate vdev_param array whose index is host param, value is target param */
@@ -3347,6 +3351,27 @@ static inline void copy_peer_flags_tlv_11be(
 {
 }
 #endif
+#ifdef WLAN_FEATURE_11BE_MLO
+static inline void copy_peer_flags_tlv_vendor(
+			wmi_peer_assoc_complete_cmd_fixed_param * cmd,
+			struct peer_assoc_params *param)
+{
+	if (!(param->mlo_params.mlo_enabled))
+		return;
+	if (param->qcn_node_flag)
+		cmd->peer_flags_ext |= WMI_PEER_EXT_IS_QUALCOMM_NODE;
+	if (param->mesh_node_flag)
+		cmd->peer_flags_ext |= WMI_PEER_EXT_IS_MESH_NODE;
+
+	wmi_debug("peer_flags_ext 0x%x", cmd->peer_flags_ext);
+}
+#else
+static inline void copy_peer_flags_tlv_vendor(
+			wmi_peer_assoc_complete_cmd_fixed_param * cmd,
+			struct peer_assoc_params *param)
+{
+}
+#endif
 
 static inline void copy_peer_flags_tlv(
 			wmi_peer_assoc_complete_cmd_fixed_param * cmd,
@@ -3378,6 +3403,7 @@ static inline void copy_peer_flags_tlv(
 			cmd->peer_flags |= WMI_PEER_160MHZ;
 
 		copy_peer_flags_tlv_11be(cmd, param);
+		copy_peer_flags_tlv_vendor(cmd, param);
 
 		/* Typically if STBC is enabled for VHT it should be enabled
 		 * for HT as well
@@ -3816,6 +3842,12 @@ static inline void copy_scan_event_cntrl_flags(
 	if (param->scan_f_en_ie_allowlist_in_probe)
 		cmd->scan_ctrl_flags |=
 			WMI_SCAN_ENABLE_IE_WHTELIST_IN_PROBE_REQ;
+	if (param->scan_f_pause_home_channel)
+		cmd->scan_ctrl_flags |=
+			WMI_SCAN_FLAG_PAUSE_HOME_CHANNEL;
+	if (param->scan_f_report_cca_busy_for_each_20mhz)
+		cmd->scan_ctrl_flags |=
+			WMI_SCAN_FLAG_REPORT_CCA_BUSY_FOREACH_20MHZ;
 
 	/* for adaptive scan mode using 3 bits (21 - 23 bits) */
 	WMI_SCAN_SET_DWELL_MODE(cmd->scan_ctrl_flags,
@@ -6896,6 +6928,7 @@ static QDF_STATUS send_unified_ll_stats_get_sta_cmd_tlv(
 					 WMI_REQUEST_PEER_STAT |
 					 WMI_REQUEST_VDEV_STAT |
 					 WMI_REQUEST_PDEV_STAT |
+					 WMI_REQUEST_VDEV_EXTD_STAT |
 					 WMI_REQUEST_PEER_EXTD2_STAT |
 					 WMI_REQUEST_RSSI_PER_CHAIN_STAT);
 	unified_cmd->pdev_id = wmi_handle->ops->convert_pdev_id_host_to_target(
@@ -9093,6 +9126,23 @@ void wmi_copy_afc_deployment_config(wmi_resource_config *resource_cfg,
 }
 #endif
 
+#ifdef DP_TX_PACKET_INSPECT_FOR_ILP
+static inline
+void wmi_copy_latency_flowq_support(wmi_resource_config *resource_cfg,
+				    target_resource_config *tgt_res_cfg)
+{
+	if (tgt_res_cfg->tx_ilp_enable)
+		WMI_RSRC_CFG_FLAGS2_LATENCY_FLOWQ_SUPPORT_SET(
+						resource_cfg->flags2, 1);
+}
+#else
+static inline
+void wmi_copy_latency_flowq_support(wmi_resource_config *resource_cfg,
+				    target_resource_config *tgt_res_cfg)
+{
+}
+#endif
+
 static
 void wmi_copy_resource_config(wmi_resource_config *resource_cfg,
 				target_resource_config *tgt_res_cfg)
@@ -9371,25 +9421,19 @@ void wmi_copy_resource_config(wmi_resource_config *resource_cfg,
 	/*
 	 * DP Peer Meta data FW version
 	 */
-	if (tgt_res_cfg->dp_peer_meta_data_ver) {
-#ifdef CONFIG_AP_PLATFORM
-		WMI_RSRC_CFG_FLAGS2_RX_PEER_METADATA_VERSION_SET(
-			resource_cfg->flags2, 3);
-#else
-		WMI_RSRC_CFG_FLAGS2_RX_PEER_METADATA_VERSION_SET(
-			resource_cfg->flags2, 2);
-#endif
-	} else {
-		WMI_RSRC_CFG_FLAGS2_RX_PEER_METADATA_VERSION_SET(
+	WMI_RSRC_CFG_FLAGS2_RX_PEER_METADATA_VERSION_SET(
 			resource_cfg->flags2,
-			WMI_TARGET_CAP_FLAGS_RX_PEER_METADATA_VERSION_GET(
-			tgt_res_cfg->target_cap_flags));
-	}
+			tgt_res_cfg->dp_peer_meta_data_ver);
 
 	if (tgt_res_cfg->notify_frame_support)
 		WMI_RSRC_CFG_FLAGS2_NOTIFY_FRAME_CONFIG_ENABLE_SET(
 			resource_cfg->flags2, 1);
 
+	if (tgt_res_cfg->rf_path)
+		WMI_RSRC_CFG_FLAGS2_RF_PATH_MODE_SET(
+			resource_cfg->flags2, tgt_res_cfg->rf_path);
+
+	wmi_copy_latency_flowq_support(resource_cfg, tgt_res_cfg);
 }
 
 #ifdef FEATURE_SET
@@ -13649,6 +13693,45 @@ static QDF_STATUS extract_bcn_stats_tlv(wmi_unified_t wmi_handle,
 	return QDF_STATUS_SUCCESS;
 }
 
+#ifdef WLAN_FEATURE_11BE_MLO
+/**
+ * wmi_is_mlo_vdev_active() - get if mlo vdev is active or not
+ * @flag: vdev link status info
+ *
+ * Return: True if active, else False
+ */
+static bool wmi_is_mlo_vdev_active(uint32_t flag)
+{
+	if ((flag & WMI_VDEV_STATS_FLAGS_LINK_ACTIVE_FLAG_IS_VALID_MASK) &&
+	    (flag & WMI_VDEV_STATS_FLAGS_IS_LINK_ACTIVE_MASK))
+		return true;
+
+	return false;
+}
+
+static QDF_STATUS
+extract_mlo_vdev_status_info(WMI_UPDATE_STATS_EVENTID_param_tlvs *param_buf,
+			     wmi_vdev_extd_stats *ev,
+			     struct wmi_host_vdev_prb_fils_stats *vdev_stats)
+{
+	if (!param_buf->num_vdev_extd_stats) {
+		wmi_err("No vdev_extd_stats in the event buffer");
+		return QDF_STATUS_E_INVAL;
+	}
+
+	vdev_stats->is_mlo_vdev_active = wmi_is_mlo_vdev_active(ev->flags);
+	return QDF_STATUS_SUCCESS;
+}
+#else
+static QDF_STATUS
+extract_mlo_vdev_status_info(WMI_UPDATE_STATS_EVENTID_param_tlvs *param_buf,
+			     wmi_vdev_extd_stats *ev,
+			     struct wmi_host_vdev_prb_fils_stats *vdev_stats)
+{
+	return QDF_STATUS_SUCCESS;
+}
+#endif
+
 /**
  * extract_vdev_prb_fils_stats_tlv() - extract vdev probe and fils
  * stats from event
@@ -13666,6 +13749,7 @@ extract_vdev_prb_fils_stats_tlv(wmi_unified_t wmi_handle,
 {
 	WMI_UPDATE_STATS_EVENTID_param_tlvs *param_buf;
 	wmi_vdev_extd_stats *ev;
+	QDF_STATUS status = QDF_STATUS_SUCCESS;
 
 	param_buf = (WMI_UPDATE_STATS_EVENTID_param_tlvs *)evt_buf;
 
@@ -13679,13 +13763,15 @@ extract_vdev_prb_fils_stats_tlv(wmi_unified_t wmi_handle,
 			ev->unsolicited_prb_succ_cnt;
 		vdev_stats->unsolicited_prb_fail_cnt =
 			ev->unsolicited_prb_fail_cnt;
+		status = extract_mlo_vdev_status_info(param_buf, ev,
+						      vdev_stats);
 		wmi_debug("vdev: %d, fd_s: %d, fd_f: %d, prb_s: %d, prb_f: %d",
 			 ev->vdev_id, ev->fd_succ_cnt, ev->fd_fail_cnt,
 			 ev->unsolicited_prb_succ_cnt,
 			 ev->unsolicited_prb_fail_cnt);
 	}
 
-	return QDF_STATUS_SUCCESS;
+	return status;
 }
 
 /**
@@ -14281,11 +14367,15 @@ extract_service_ready_ext2_tlv(wmi_unified_t wmi_handle, uint8_t *event,
 	param->num_msdu_idx_qtype_map =
 				param_buf->num_htt_msdu_idx_to_qtype_map;
 
-	if (param_buf->nan_cap)
+	if (param_buf->nan_cap) {
 		param->max_ndp_sessions =
 			param_buf->nan_cap->max_ndp_sessions;
-	else
+		param->max_nan_pairing_sessions =
+			param_buf->nan_cap->max_pairing_sessions;
+	} else {
 		param->max_ndp_sessions = 0;
+		param->max_nan_pairing_sessions = 0;
+	}
 
 	param->preamble_puncture_bw_cap = ev->preamble_puncture_bw;
 	param->num_scan_radio_caps = param_buf->num_wmi_scan_radio_caps;
@@ -14298,6 +14388,10 @@ extract_service_ready_ext2_tlv(wmi_unified_t wmi_handle, uint8_t *event,
 	param->max_users_ul_mumimo = WMI_MAX_USER_PER_PPDU_UL_MUMIMO_GET(
 						ev->max_user_per_ppdu_mumimo);
 	param->target_cap_flags = ev->target_cap_flags;
+
+	param->dp_peer_meta_data_ver =
+			WMI_TARGET_CAP_FLAGS_RX_PEER_METADATA_VERSION_GET(
+						ev->target_cap_flags);
 	extract_ul_mumimo_support(param);
 	wmi_debug("htt peer data :%d", ev->target_cap_flags);
 
@@ -18780,6 +18874,8 @@ wlan_roam_fail_reason_code(uint16_t wmi_roam_fail_reason)
 		return ROAM_FAIL_REASON_NO_AP_FOUND_AND_FINAL_BMISS_SENT;
 	case WMI_ROAM_FAIL_REASON_NO_CAND_AP_FOUND_AND_FINAL_BMISS_SENT:
 		return ROAM_FAIL_REASON_NO_CAND_AP_FOUND_AND_FINAL_BMISS_SENT;
+	case WMI_ROAM_FAIL_REASON_CURR_AP_STILL_OK:
+		return ROAM_FAIL_REASON_CURR_AP_STILL_OK;
 	default:
 		return ROAM_FAIL_REASON_UNKNOWN;
 	}
@@ -18976,6 +19072,8 @@ extract_roam_trigger_stats_tlv(wmi_unified_t wmi_handle, void *evt_buf,
 		trig_reason = cmn_data->trigger_reason;
 		trig->trigger_reason =
 			wmi_convert_fw_to_cm_trig_reason(trig_reason);
+		trig->trigger_sub_reason =
+			wmi_convert_roam_sub_reason(cmn_data->trigger_sub_reason);
 		trig->timestamp = cmn_data->timestamp;
 		trig->common_roam = true;
 	} else if (src_data) {
@@ -21123,6 +21221,8 @@ static void populate_tlv_events_id_mlo(WMI_EVT_ID *event_ids)
 			WMI_MLO_LINK_REMOVAL_EVENTID;
 	event_ids[wmi_mlo_link_state_info_eventid] =
 			WMI_MLO_VDEV_LINK_INFO_EVENTID;
+	event_ids[wmi_mlo_link_disable_request_eventid] =
+			WMI_MLO_LINK_DISABLE_REQUEST_EVENTID;
 }
 #else /* WLAN_FEATURE_11BE_MLO */
 static inline void populate_tlv_events_id_mlo(WMI_EVT_ID *event_ids)
@@ -22185,6 +22285,10 @@ static void populate_tlv_service(uint32_t *wmi_service)
 	wmi_service[wmi_service_standalone_sound] =
 			WMI_SERVICE_STANDALONE_SOUND;
 #endif
+	wmi_service[wmi_service_cca_busy_info_for_each_20mhz] =
+			WMI_SERVICE_CCA_BUSY_INFO_FOREACH_20MHZ;
+	wmi_service[wmi_service_vdev_param_chwidth_with_notify_support] =
+			WMI_SERVICE_VDEV_PARAM_CHWIDTH_WITH_NOTIFY_SUPPORT;
 }
 
 /**

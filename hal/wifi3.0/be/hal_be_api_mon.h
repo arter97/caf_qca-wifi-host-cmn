@@ -19,7 +19,7 @@
 #define _HAL_BE_API_MON_H_
 
 #include "hal_be_hw_headers.h"
-#ifdef QCA_MONITOR_2_0_SUPPORT
+#ifdef WLAN_PKT_CAPTURE_TX_2_0
 #include <mon_ingress_ring.h>
 #include <mon_destination_ring.h>
 #include <mon_drop.h>
@@ -30,7 +30,7 @@
 #include <hal_generic_api.h>
 #include <hal_api_mon.h>
 
-#if defined(QCA_MONITOR_2_0_SUPPORT) || \
+#if defined(WLAN_PKT_CAPTURE_TX_2_0) || \
 defined(QCA_SINGLE_WIFI_3_0)
 #define HAL_MON_BUFFER_ADDR_INFO_0_BUFFER_ADDR_31_0_OFFSET 0x00000000
 #define HAL_MON_BUFFER_ADDR_INFO_0_BUFFER_ADDR_31_0_LSB 0
@@ -707,7 +707,7 @@ struct hal_mon_buf_addr_status {
 	uint32_t tlv64_padding;
 };
 
-#ifdef QCA_MONITOR_2_0_SUPPORT
+#ifdef WLAN_PKT_CAPTURE_TX_2_0
 /**
  * hal_be_get_mon_dest_status() - Get monitor descriptor status
  * @hal_soc: HAL Soc handle
@@ -949,7 +949,7 @@ hal_update_frame_type_cnt(hal_rx_mon_mpdu_start_t *rx_mpdu_start,
 }
 #endif
 
-#ifdef QCA_MONITOR_2_0_SUPPORT
+#ifdef WLAN_PKT_CAPTURE_TX_2_0
 /**
  * hal_mon_buff_addr_info_set() - set desc address in cookie
  * @hal_soc_hdl: HAL Soc handle
@@ -1353,18 +1353,22 @@ struct hal_tx_ppdu_info {
 /**
  * hal_tx_status_get_next_tlv() - get next tx status TLV
  * @tx_tlv: pointer to TLV header
+ * @is_tlv_hdr_64_bit: Flag to indicate tlv hdr 64 bit
  *
  * Return: pointer to next tlv info
  */
 static inline uint8_t*
-hal_tx_status_get_next_tlv(uint8_t *tx_tlv) {
-	uint32_t tlv_len, tlv_tag;
+hal_tx_status_get_next_tlv(uint8_t *tx_tlv, bool is_tlv_hdr_64_bit) {
+	uint32_t tlv_len, tlv_hdr_size;
 
 	tlv_len = HAL_RX_GET_USER_TLV32_LEN(tx_tlv);
-	tlv_tag = HAL_RX_GET_USER_TLV32_TYPE(tx_tlv);
+	tlv_hdr_size = is_tlv_hdr_64_bit ? HAL_RX_TLV64_HDR_SIZE :
+					   HAL_RX_TLV32_HDR_SIZE;
 
-	return (uint8_t *)(((unsigned long)(tx_tlv + tlv_len +
-					    HAL_RX_TLV32_HDR_SIZE + 7)) & (~7));
+	return (uint8_t *)(uintptr_t)qdf_align((uint64_t)((uintptr_t)tx_tlv +
+							  tlv_len +
+							  tlv_hdr_size),
+					       tlv_hdr_size);
 }
 
 /**
@@ -2326,7 +2330,7 @@ hal_rx_parse_receive_user_info(struct hal_soc *hal_soc, uint8_t *tlv,
 	return HAL_TLV_STATUS_PPDU_NOT_DONE;
 }
 
-#ifdef QCA_MONITOR_2_0_SUPPORT
+#ifdef WLAN_PKT_CAPTURE_RX_2_0
 static inline void
 hal_rx_status_get_mpdu_retry_cnt(struct hal_rx_ppdu_info *ppdu_info,
 				 hal_rx_mon_ppdu_end_user_t *rx_ppdu_end_user)
@@ -2841,6 +2845,7 @@ hal_rx_status_get_tlv_info_generic_be(void *rx_tlv_hdr, void *ppduinfo,
 		case TARGET_TYPE_QCA5018:
 		case TARGET_TYPE_QCN9000:
 		case TARGET_TYPE_QCN6122:
+		case TARGET_TYPE_QCN6432:
 #ifdef QCA_WIFI_QCA6390
 		case TARGET_TYPE_QCA6390:
 #endif

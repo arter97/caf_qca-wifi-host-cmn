@@ -378,7 +378,7 @@ struct wlan_cm_vdev_discon_req {
  * @CM_VALID_CANDIDATE_CHECK_FAIL: Valid Candidate Check fail
  */
 enum wlan_cm_connect_fail_reason {
-	CM_NO_CANDIDATE_FOUND,
+	CM_NO_CANDIDATE_FOUND = 1,
 	CM_ABORT_DUE_TO_NEW_REQ_RECVD,
 	CM_BSS_SELECT_IND_FAILED,
 	CM_PEER_CREATE_FAILED,
@@ -514,6 +514,7 @@ struct wlan_roam_sync_info {
  * @connect_ies: connect related IE required by osif to send to kernel
  * @roaming_info: roam sync info received
  * @is_fils_connection: is fils connection
+ * @mld_addr: MLD address of the ML AP
  * @ml_parnter_info: ml partner link info
  */
 struct wlan_cm_connect_resp {
@@ -540,6 +541,7 @@ struct wlan_cm_connect_resp {
 	bool is_fils_connection;
 #endif
 #ifdef WLAN_FEATURE_11BE_MLO
+	struct qdf_mac_addr mld_addr;
 	struct mlo_partner_info ml_parnter_info;
 #endif
 };

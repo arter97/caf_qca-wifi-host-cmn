@@ -31,6 +31,8 @@
 #define DP_BLOCKMEM_SIZE 4096
 #define WBM2_SW_PPE_REL_RING_ID 6
 #define WBM2_SW_PPE_REL_MAP_ID 11
+#define DP_TX_PPEDS_POOL_ID 0xF
+
 /* Alignment for consistent memory for DP rings*/
 #define DP_RING_BASE_ALIGN 32
 
@@ -60,6 +62,11 @@
 #define DIRECT_LINK_REFILL_RING_IDX     2
 #endif
 #endif
+
+#define DP_MAX_VLAN_IDS 4096
+#define DP_VLAN_UNTAGGED 0
+#define DP_VLAN_TAGGED_MULTICAST 1
+#define DP_VLAN_TAGGED_UNICAST 2
 
 /**
  * struct htt_dbgfs_cfg - structure to maintain required htt data
@@ -2700,12 +2707,16 @@ void dp_umac_reset_complete_umac_recovery(struct dp_soc *soc);
 /**
  * dp_umac_reset_initiate_umac_recovery() - Initiate Umac reset session
  * @soc: dp soc handle
+ * @umac_reset_ctx: Umac reset context
+ * @rx_event: Rx event received
  * @is_target_recovery: Flag to indicate if it is triggered for target recovery
  *
- * Return: void
+ * Return: status
  */
-void dp_umac_reset_initiate_umac_recovery(struct dp_soc *soc,
-					  bool is_target_recovery);
+QDF_STATUS dp_umac_reset_initiate_umac_recovery(struct dp_soc *soc,
+				struct dp_soc_umac_reset_ctx *umac_reset_ctx,
+				enum umac_reset_rx_event rx_event,
+				bool is_target_recovery);
 
 /**
  * dp_umac_reset_handle_action_cb() - Function to call action callback
@@ -5314,6 +5325,19 @@ void dp_get_peer_stats(struct dp_peer *peer,
 		       struct cdp_peer_stats *peer_stats);
 
 /**
+ * dp_get_per_link_peer_stats()- Get per link peer stats
+ * @peer: Datapath peer
+ * @peer_stats: buffer for peer stats
+ * @peer_type: Peer type
+ * @num_link: Number of ML links
+ *
+ * Return: status success/failure
+ */
+QDF_STATUS dp_get_per_link_peer_stats(struct dp_peer *peer,
+				      struct cdp_peer_stats *peer_stats,
+				      enum cdp_peer_type peer_type,
+				      uint8_t num_link);
+/**
  * dp_get_peer_hw_link_id() - get peer hardware link id
  * @soc: soc handle
  * @pdev: data path pdev
@@ -5329,4 +5353,24 @@ dp_get_peer_hw_link_id(struct dp_soc *soc,
 
 	return 0;
 }
+
+#ifdef QCA_MULTIPASS_SUPPORT
+/**
+ * dp_tx_remove_vlan_tag() - Remove 4 bytes of vlan tag
+ * @vdev: DP vdev handle
+ * @nbuf: network buffer
+ *
+ * Return: void
+ */
+void dp_tx_remove_vlan_tag(struct dp_vdev *vdev, qdf_nbuf_t nbuf);
+#endif
+
+/**
+ * dp_print_per_link_stats() - Print per link peer stats.
+ * @soc_hdl: soc handle.
+ * @vdev_id: vdev_id.
+ *
+ * Return: None.
+ */
+void dp_print_per_link_stats(struct cdp_soc_t *soc_hdl, uint8_t vdev_id);
 #endif /* #ifndef _DP_INTERNAL_H_ */

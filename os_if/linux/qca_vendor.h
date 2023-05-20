@@ -663,6 +663,14 @@
  *	The attributes used with this subcommand are defined in
  *	enum qca_wlan_vendor_attr_dozed_ap.
  *
+ * @QCA_NL80211_VENDOR_SUBCMD_GET_MONITOR_MODE: This vendor subcommand is used
+ *	to get the status of local packet capture of monitor mode. The monitor
+ *	mode can be started using QCA_NL80211_VENDOR_SUBCMD_SET_MONITOR_MODE
+ *	subcommand.
+ *
+ *	The attributes used with this command are defined in enum
+ *	qca_wlan_vendor_attr_get_monitor_mode.
+ *
  * @QCA_NL80211_VENDOR_SUBCMD_ROAM_STATS: This vendor command is used to
  *	get roam information from the driver to user space. It provides the
  *	latest several instances of roam information cached in the driver.
@@ -673,6 +681,22 @@
  *	configure and fetch the state information of the MLO links affiliated
  *	with the STA interface. The attributes used with this command are
  *	defined in enum qca_wlan_vendor_attr_mlo_link_state.
+ *
+ * @QCA_NL80211_VENDOR_SUBCMD_CONNECTED_CHANNEL_STATS: Userspace can use this
+ *	vendor subcommand to trigger channel utilization measurement on entire
+ *	channel width of the connected channel(s). For MLO connection, connected
+ *	channel utilization measurement shall be done on all the MLO links.
+ *	The driver may use regular scan or wideband energy detection feature
+ *	based on the hardware capability for connected channel(s) utilization
+ *	measurement. The driver indicates the connected channel(s) utilization
+ *	measurement completion as an asynchronous event with this command ID to
+ *	userspace. Upon receiving this event, userspace can use
+ *	%NL80211_CMD_GET_INTERFACE to determine the channel width of the current
+ *	connected channel(s) and can derive the channel utilization percentage
+ *	(CU) of each 20 MHz sub-channel of the entire connected channel using
+ *	%NL80211_CMD_GET_SURVEY response.
+ *	CU = %NL80211_SURVEY_INFO_TIME_BUSY * 100 / %NL80211_SURVEY_INFO_TIME.
+ *	This command is only used for STA mode.
  */
 
 enum qca_nl80211_vendor_subcmds {
@@ -927,8 +951,10 @@ enum qca_nl80211_vendor_subcmds {
 	QCA_NL80211_VENDOR_SUBCMD_AFC_EVENT = 222,
 	QCA_NL80211_VENDOR_SUBCMD_AFC_RESPONSE = 223,
 	QCA_NL80211_VENDOR_SUBCMD_DOZED_AP = 224,
+	QCA_NL80211_VENDOR_SUBCMD_GET_MONITOR_MODE = 225,
 	QCA_NL80211_VENDOR_SUBCMD_ROAM_STATS = 226,
 	QCA_NL80211_VENDOR_SUBCMD_MLO_LINK_STATE = 227,
+	QCA_NL80211_VENDOR_SUBCMD_CONNECTED_CHANNEL_STATS = 228,
 };
 
 enum qca_wlan_vendor_tos {
@@ -3285,6 +3311,8 @@ enum qca_vendor_roam_triggers {
  * @QCA_ROAM_FAIL_REASON_SAE_PREAUTH_TIMEOUT: WPA3-SAE pre-authentication times
  * out.
  * @QCA_ROAM_FAIL_REASON_SAE_PREAUTH_FAIL: WPA3-SAE pre-authentication fails.
+ * @QCA_ROAM_FAIL_REASON_CURR_AP_STILL_OK: Roam scan did not happen since the
+ * current network conditions are fine.
  */
 enum qca_vendor_roam_fail_reasons {
 	QCA_ROAM_FAIL_REASON_NONE = 0,
@@ -3317,6 +3345,7 @@ enum qca_vendor_roam_fail_reasons {
 	QCA_ROAM_FAIL_REASON_SAE_INVALID_PMKID = 27,
 	QCA_ROAM_FAIL_REASON_SAE_PREAUTH_TIMEOUT = 28,
 	QCA_ROAM_FAIL_REASON_SAE_PREAUTH_FAIL = 29,
+	QCA_ROAM_FAIL_REASON_CURR_AP_STILL_OK = 30,
 };
 
 /*
@@ -4399,6 +4428,9 @@ enum qca_wlan_vendor_attr_nd_offload {
  *	measurement management frames. If
  *	NL80211_EXT_FEATURE_PROT_RANGE_NEGO_AND_MEASURE is set, then
  *	QCA_WLAN_VENDOR_FEATURE_PROT_RANGE_NEGO_AND_MEASURE_AP will be ignored.
+ * @QCA_WLAN_VENDOR_FEATURE_AP_ALLOWED_FREQ_LIST: Flag indicates that the device
+ *	in AP mode supports configuring allowed frequency list for AP operation
+ *	with %QCA_WLAN_VENDOR_ATTR_CONFIG_AP_ALLOWED_FREQ_LIST.
  * @NUM_QCA_WLAN_VENDOR_FEATURES: Number of assigned feature bits
  */
 enum qca_wlan_vendor_features {
@@ -4424,6 +4456,7 @@ enum qca_wlan_vendor_features {
 	QCA_WLAN_VENDOR_FEATURE_SECURE_RTT_AP		= 19,
 	QCA_WLAN_VENDOR_FEATURE_PROT_RANGE_NEGO_AND_MEASURE_STA = 20,
 	QCA_WLAN_VENDOR_FEATURE_PROT_RANGE_NEGO_AND_MEASURE_AP = 21,
+	QCA_WLAN_VENDOR_FEATURE_AP_ALLOWED_FREQ_LIST = 22,
 	NUM_QCA_WLAN_VENDOR_FEATURES /* keep last */
 };
 
@@ -5347,6 +5380,33 @@ enum qca_wlan_vendor_attr_config {
 	 * Uses enum qca_wlan_eht_mlo_mode values.
 	 */
 	QCA_WLAN_VENDOR_ATTR_CONFIG_EHT_MLO_MODE = 90,
+
+	/* Nested attribute with frequencies in u32 attributes to configure a
+	 * list of allowed 20 MHz channel center frequencies in MHz for AP
+	 * operation. Whenever performing a channel selection operation, the
+	 * driver shall generate a new list based on this provided list by
+	 * filtering out channels that cannot be used at that time due to
+	 * regulatory or other constraints. The resulting list is used as the
+	 * list of all allowed channels, i.e., operation on any channel that is
+	 * not included is not allowed, whenever performing operations like ACS
+	 * and DFS.
+	 *
+	 * Userspace shall configure this before starting the AP and the
+	 * configuration is valid only from the next BSS start and until the
+	 * BSS is stopped. The driver shall clear this configuration when the
+	 * AP is stopped and fall back to the default behavior for subsequent
+	 * AP operation.
+	 *
+	 * The default behavior when this configuration is not applicable is the
+	 * driver can choose any of the channels supported by the hardware
+	 * except the channels that cannot be used due to regulatory or other
+	 * constraints.
+	 *
+	 * The driver shall reject this configuration if done after the AP is
+	 * started. This attribute can be used to specify user's choice of
+	 * frequencies and static puncture channel list, etc.
+	 */
+	QCA_WLAN_VENDOR_ATTR_CONFIG_AP_ALLOWED_FREQ_LIST = 91,
 
 	/* keep last */
 	QCA_WLAN_VENDOR_ATTR_CONFIG_AFTER_LAST,
@@ -15775,6 +15835,41 @@ enum qca_wlan_vendor_attr_dozed_ap {
 };
 
 /**
+ * enum qca_wlan_vendor_monitor_mode_status - Represents the status codes
+ * used with QCA_NL80211_VENDOR_SUBCMD_GET_MONITOR_MODE.
+ * @QCA_WLAN_VENDOR_MONITOR_MODE_NO_CAPTURE_RUNNING: Used to indicate no
+ * capture running status.
+ * @QCA_WLAN_VENDOR_MONITOR_MODE_CAPTURE_RUNNING: Used to indicate
+ * capture running status.
+ **/
+
+enum qca_wlan_vendor_monitor_mode_status {
+	QCA_WLAN_VENDOR_MONITOR_MODE_NO_CAPTURE_RUNNING = 0,
+	QCA_WLAN_VENDOR_MONITOR_MODE_CAPTURE_RUNNING = 1,
+};
+
+/**
+ * enum qca_wlan_vendor_attr_get_monitor_mode - Used by the
+ * vendor command QCA_NL80211_VENDOR_SUBCMD_GET_MONITOR_MODE to report
+ * information regarding the local packet capture over the monitor mode.
+ *
+ * @QCA_WLAN_VENDOR_ATTR_GET_MONITOR_MODE_STATUS: u32 attribute. This attribute
+ * represents the status of the start capture commands. The values used with
+ * this attribute are defined in enum qca_wlan_vendor_monitor_mode_status. This
+ * is returned by the driver in the response to the command.
+ */
+
+enum qca_wlan_vendor_attr_get_monitor_mode {
+	QCA_WLAN_VENDOR_ATTR_GET_MONITOR_MODE_INVALID = 0,
+	QCA_WLAN_VENDOR_ATTR_GET_MONITOR_MODE_STATUS = 1,
+
+	/* Keep last */
+	QCA_WLAN_VENDOR_ATTR_GET_MONITOR_MODE_AFTER_LAST,
+	QCA_WLAN_VENDOR_ATTR_GET_MONITOR_MODE_MAX =
+	QCA_WLAN_VENDOR_ATTR_GET_MONITOR_MODE_AFTER_LAST - 1,
+};
+
+/**
  * enum qca_wlan_vendor_link_state_op_types - Defines different types of
  * operations for which %QCA_NL80211_VENDOR_SUBCMD_MLO_LINK_STATE can be used.
  * Will be used with %QCA_WLAN_VENDOR_ATTR_LINK_STATE_OP_TYPE attribute.
@@ -15927,5 +16022,4 @@ enum qca_wlan_vendor_attr_mlo_link_state {
 	QCA_WLAN_VENDOR_ATTR_LINK_STATE_MAX =
 	QCA_WLAN_VENDOR_ATTR_LINK_STATE_AFTER_LAST - 1,
 };
-
 #endif

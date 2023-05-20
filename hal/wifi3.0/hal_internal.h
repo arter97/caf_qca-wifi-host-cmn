@@ -1376,6 +1376,7 @@ struct hal_hw_txrx_ops {
 	uint8_t *(*hal_get_reo_ent_desc_qdesc_addr)(uint8_t *desc);
 	uint64_t (*hal_rx_get_qdesc_addr)(uint8_t *dst_ring_desc,
 					  uint8_t *buf);
+	uint8_t (*hal_rx_get_phy_ppdu_id_size)(void);
 	void (*hal_set_reo_ent_desc_reo_dest_ind)(uint8_t *desc,
 						  uint32_t dst_ind);
 	QDF_STATUS
@@ -1398,7 +1399,7 @@ struct hal_hw_txrx_ops {
 	void (*hal_txmon_populate_packet_info)(void *tx_tlv_hdr,
 					       void *pkt_info);
 	/* TX MONITOR */
-#ifdef QCA_MONITOR_2_0_SUPPORT
+#ifdef WLAN_PKT_CAPTURE_TX_2_0
 	uint32_t (*hal_txmon_status_parse_tlv)(void *data_ppdu_info,
 					       void *prot_ppdu_info,
 					       void *data_status_info,
@@ -1408,7 +1409,7 @@ struct hal_hw_txrx_ops {
 	uint32_t (*hal_txmon_status_get_num_users)(void *tx_tlv_hdr,
 						   uint8_t *num_users);
 	void (*hal_txmon_get_word_mask)(void *wmask);
-#endif /* QCA_MONITOR_2_0_SUPPORT */
+#endif /* WLAN_PKT_CAPTURE_TX_2_0 */
 	QDF_STATUS (*hal_reo_shared_qaddr_setup)(hal_soc_handle_t hal_soc_hdl,
 						 struct reo_queue_ref_table
 						 *reo_qref);
@@ -1454,6 +1455,8 @@ struct hal_hw_txrx_ops {
 	bool (*hal_tx_ring_halt_poll)(hal_soc_handle_t hal_soc_hdl);
 	uint32_t (*hal_tx_get_num_ppe_vp_search_idx_tbl_entries)(
 					hal_soc_handle_t hal_soc_hdl);
+	uint32_t (*hal_tx_ring_halt_get)(hal_soc_handle_t hal_soc_hdl);
+	bool (*hal_rx_en_mcast_fp_data_filter)(void);
 };
 
 /**

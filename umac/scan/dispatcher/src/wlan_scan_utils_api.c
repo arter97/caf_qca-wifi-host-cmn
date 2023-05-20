@@ -955,7 +955,7 @@ util_scan_parse_chan_switch_wrapper_ie(struct scan_cache_entry *scan_params,
 			break;
 #ifdef WLAN_FEATURE_11BE
 		case WLAN_EXTN_ELEMID_BW_IND:
-			if (sub_ie->ie_len < WLAN_BW_IND_IE_MIN_LEN)
+			if (sub_ie->ie_len > WLAN_BW_IND_IE_MAX_LEN)
 				return QDF_STATUS_E_INVAL;
 			scan_params->ie_list.bw_ind = (uint8_t *)sub_ie;
 			break;
@@ -1132,10 +1132,9 @@ util_scan_parse_rnr_ie(struct scan_cache_entry *scan_entry,
 		tbtt_count = neighbor_ap_info->tbtt_header.tbtt_info_count;
 		tbtt_length = neighbor_ap_info->tbtt_header.tbtt_info_length;
 		fieldtype = neighbor_ap_info->tbtt_header.tbbt_info_fieldtype;
-		scm_debug("channel number %d, op class %d",
+		scm_debug("chan %d, opclass %d tbtt_cnt %d, tbtt_len %d, fieldtype %d",
 			  neighbor_ap_info->channel_number,
-			  neighbor_ap_info->operting_class);
-		scm_debug("tbtt_count %d, tbtt_length %d, fieldtype %d",
+			  neighbor_ap_info->operting_class,
 			  tbtt_count, tbtt_length, fieldtype);
 		data += sizeof(struct neighbor_ap_info_field);
 

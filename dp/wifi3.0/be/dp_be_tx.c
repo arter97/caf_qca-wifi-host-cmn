@@ -759,6 +759,12 @@ dp_tx_mlo_mcast_pkt_send(struct dp_vdev_be *be_vdev,
 				    &msdu_info, nbuf_clone, DP_INVALID_PEER);
 	}
 
+	if (qdf_unlikely(dp_tx_proxy_arp(ptnr_vdev, nbuf_clone) !=
+			 QDF_STATUS_SUCCESS)) {
+		qdf_nbuf_free(nbuf_clone);
+		return;
+	}
+
 	qdf_mem_zero(&msdu_info, sizeof(msdu_info));
 	dp_tx_get_queue(ptnr_vdev, nbuf_clone, &msdu_info.tx_queue);
 	msdu_info.gsn = be_vdev->seq_num;
@@ -937,7 +943,6 @@ void dp_sawf_config_be(struct dp_soc *soc, uint32_t *hal_tx_desc_cached,
 	if (!wlan_cfg_get_sawf_config(soc->wlan_cfg_ctx))
 		return;
 
-	dp_sawf_tcl_cmd(fw_metadata, nbuf);
 	q_id = dp_sawf_queue_id_get(nbuf);
 
 	if (q_id == DP_SAWF_DEFAULT_Q_INVALID)
@@ -945,6 +950,12 @@ void dp_sawf_config_be(struct dp_soc *soc, uint32_t *hal_tx_desc_cached,
 	msdu_info->tid = (q_id & (CDP_DATA_TID_MAX - 1));
 	hal_tx_desc_set_hlos_tid(hal_tx_desc_cached,
 				 (q_id & (CDP_DATA_TID_MAX - 1)));
+
+	if ((q_id >= DP_SAWF_DEFAULT_QUEUE_MIN) &&
+	    (q_id < DP_SAWF_DEFAULT_QUEUE_MAX))
+		return;
+
+	dp_sawf_tcl_cmd(fw_metadata, nbuf);
 	hal_tx_desc_set_flow_override_enable(hal_tx_desc_cached,
 					     DP_TX_FLOW_OVERRIDE_ENABLE);
 	hal_tx_desc_set_flow_override(hal_tx_desc_cached,

@@ -1133,15 +1133,29 @@ static inline bool dp_rx_mlo_igmp_wds_ext_handler(struct dp_txrx_peer *peer)
 }
 #endif
 
+#ifdef EXT_HYBRID_MLO_MODE
+static inline
+bool dp_rx_check_ext_hybrid_mode(struct dp_soc *soc, struct dp_vdev *vdev)
+{
+	return ((DP_MLD_MODE_HYBRID_NONBOND == soc->mld_mode_ap) &&
+		(wlan_op_mode_ap == vdev->opmode));
+}
+#else
+static inline
+bool dp_rx_check_ext_hybrid_mode(struct dp_soc *soc, struct dp_vdev *vdev)
+{
+	return false;
+}
+#endif
+
 bool dp_rx_mlo_igmp_handler(struct dp_soc *soc,
 			    struct dp_vdev *vdev,
 			    struct dp_txrx_peer *peer,
 			    qdf_nbuf_t nbuf,
 			    uint8_t link_id)
 {
-	struct dp_vdev *mcast_primary_vdev = NULL;
+	qdf_nbuf_t nbuf_copy;
 	struct dp_vdev_be *be_vdev = dp_get_be_vdev_from_dp_vdev(vdev);
-	struct dp_soc_be *be_soc = dp_get_be_soc_from_dp_soc(soc);
 	uint8_t tid = qdf_nbuf_get_tid_val(nbuf);
 	struct cdp_tid_rx_stats *tid_stats = &peer->vdev->pdev->stats.
 					tid_stats.tid_rx_wbm_stats[0][tid];
@@ -1165,51 +1179,57 @@ bool dp_rx_mlo_igmp_handler(struct dp_soc *soc,
 			dp_rx_err("forwarding failed");
 	}
 
-	/*
-	 * In the case of ME6, Backhaul WDS, NAWDS
-	 * send the igmp pkt on the same link where it received,
-	 * as these features will use peer based tcl metadata
-	 */
-
 	qdf_nbuf_set_next(nbuf, NULL);
 
-	if (vdev->mcast_enhancement_en || be_vdev->mcast_primary ||
-	    peer->nawds_enabled)
-		goto send_pkt;
+	/* REO sends IGMP to driver only if AP is operating in hybrid
+	 *  mld mode.
+	 */
 
-	if (qdf_unlikely(dp_rx_mlo_igmp_wds_ext_handler(peer)))
-		goto send_pkt;
-
-	mcast_primary_vdev = dp_mlo_get_mcast_primary_vdev(be_soc, be_vdev,
-							   DP_MOD_ID_RX);
-	if (!mcast_primary_vdev) {
-		dp_rx_debug("Non mlo vdev");
-		goto send_pkt;
-	}
-
-	if (qdf_unlikely(vdev->wrap_vdev)) {
-		/* In the case of qwrap repeater send the original
-		 * packet on the interface where it received,
-		 * packet with dummy src on the mcast primary interface.
+	if (qdf_unlikely(dp_rx_mlo_igmp_wds_ext_handler(peer))) {
+		/* send the IGMP to the netdev corresponding to the interface
+		 * its received on
 		 */
-		qdf_nbuf_t nbuf_copy;
-
-		nbuf_copy = qdf_nbuf_copy(nbuf);
-		if (qdf_likely(nbuf_copy))
-			dp_rx_deliver_to_stack(soc, vdev, peer, nbuf_copy,
-					       NULL);
+		goto send_pkt;
 	}
+
+	if (dp_rx_check_ext_hybrid_mode(soc, vdev)) {
+		/* send the IGMP to the netdev corresponding to the interface
+		 * its received on
+		 */
+		goto send_pkt;
+	}
+
+	/*
+	 * In the case of ME5/ME6, Backhaul WDS for a mld peer, NAWDS,
+	 * legacy non-mlo AP vdev & non-AP vdev(which is very unlikely),
+	 * send the igmp pkt on the same link where it received, as these
+	 *  features will use peer based tcl metadata.
+	 */
+	if (vdev->mcast_enhancement_en ||
+	    peer->is_mld_peer ||
+	    peer->nawds_enabled ||
+	    !vdev->mlo_vdev ||
+	    qdf_unlikely(wlan_op_mode_ap != vdev->opmode)) {
+		/* send the IGMP to the netdev corresponding to the interface
+		 * its received on
+		 */
+		goto send_pkt;
+	}
+
+	/* We are here, it means a legacy non-wds sta is connected
+	 * to a hybrid mld ap, So send a clone of the IGPMP packet
+	 * on the interface where it was received.
+	 */
+	nbuf_copy = qdf_nbuf_copy(nbuf);
+	if (qdf_likely(nbuf_copy))
+		dp_rx_deliver_to_stack(soc, vdev, peer, nbuf_copy, NULL);
 
 	dp_rx_dummy_src_mac(vdev, nbuf);
-	dp_rx_deliver_to_stack(mcast_primary_vdev->pdev->soc,
-			       mcast_primary_vdev,
-			       peer,
-			       nbuf,
-			       NULL);
-	dp_vdev_unref_delete(mcast_primary_vdev->pdev->soc,
-			     mcast_primary_vdev,
-			     DP_MOD_ID_RX);
-	return true;
+	/* Set the ml peer valid bit in skb peer metadata, so that osif
+	 * can deliver the SA mangled IGMP packet to mld netdev.
+	 */
+	QDF_NBUF_CB_RX_SET_ML_PEER_VALID(nbuf);
+	/* Deliver the original IGMP with dummy src on the mld netdev */
 send_pkt:
 	dp_rx_deliver_to_stack(be_vdev->vdev.pdev->soc,
 			       &be_vdev->vdev,
@@ -1504,7 +1524,7 @@ rel_da_peer:
 #endif /* WLAN_MLO_MULTI_CHIP */
 #endif /* INTRA_BSS_FWD_OFFLOAD */
 
-#if defined(QCA_MONITOR_2_0_SUPPORT) || defined(CONFIG_WORD_BASED_TLV)
+#if defined(WLAN_PKT_CAPTURE_RX_2_0) || defined(CONFIG_WORD_BASED_TLV)
 void dp_rx_word_mask_subscribe_be(struct dp_soc *soc,
 				  uint32_t *msg_word,
 				  void *rx_filter)
@@ -1759,18 +1779,21 @@ dp_rx_wbm_err_reap_desc_be(struct dp_intr *int_ctx, struct dp_soc *soc,
 	union dp_rx_desc_list_elem_t
 		*tail[WLAN_MAX_MLO_CHIPS][MAX_PDEV_CNT] = { { NULL } };
 	uint32_t rx_bufs_reaped[WLAN_MAX_MLO_CHIPS][MAX_PDEV_CNT] = { { 0 } };
+	uint8_t buf_type;
 	uint8_t mac_id;
 	struct dp_srng *dp_rxdma_srng;
 	struct rx_desc_pool *rx_desc_pool;
 	qdf_nbuf_t nbuf_head = NULL;
 	qdf_nbuf_t nbuf_tail = NULL;
 	qdf_nbuf_t nbuf;
+	struct hal_wbm_err_desc_info wbm_err_info = { 0 };
 	uint8_t msdu_continuation = 0;
 	bool process_sg_buf = false;
+	uint32_t wbm_err_src;
 	QDF_STATUS status;
 	struct dp_soc *replenish_soc;
 	uint8_t chip_id;
-	union hal_wbm_err_info_u wbm_err = { 0 };
+	struct hal_rx_mpdu_desc_info mpdu_desc_info = { 0 };
 
 	qdf_assert(soc && hal_ring_hdl);
 	hal_soc = soc->hal_soc;
@@ -1789,22 +1812,32 @@ dp_rx_wbm_err_reap_desc_be(struct dp_intr *int_ctx, struct dp_soc *soc,
 
 	while (qdf_likely(quota)) {
 		ring_desc = hal_srng_dst_get_next(hal_soc, hal_ring_hdl);
-
 		if (qdf_unlikely(!ring_desc))
 			break;
 
-		/* Get SW Desc from HAL desc */
-		if (dp_wbm_get_rx_desc_from_hal_desc_be(soc,
-							ring_desc,
-							&rx_desc)) {
-			dp_rx_err_err("get rx sw desc from hal_desc failed");
+		/* XXX */
+		buf_type = HAL_RX_WBM_BUF_TYPE_GET(ring_desc);
+
+		/*
+		 * For WBM ring, expect only MSDU buffers
+		 */
+		qdf_assert_always(buf_type == HAL_RX_WBM_BUF_TYPE_REL_BUF);
+
+		wbm_err_src = hal_rx_wbm_err_src_get(hal_soc, ring_desc);
+		qdf_assert((wbm_err_src == HAL_RX_WBM_ERR_SRC_RXDMA) ||
+			   (wbm_err_src == HAL_RX_WBM_ERR_SRC_REO));
+
+		if (soc->arch_ops.dp_wbm_get_rx_desc_from_hal_desc(soc,
+								   ring_desc,
+								   &rx_desc)) {
+			dp_rx_err_err("get rx desc from hal_desc failed");
 			continue;
 		}
 
 		qdf_assert_always(rx_desc);
 
 		if (!dp_rx_desc_check_magic(rx_desc)) {
-			dp_rx_err_err("%pK: Invalid rx_desc %pK",
+			dp_rx_err_err("%pk: Invalid rx_desc %pk",
 				      soc, rx_desc);
 			continue;
 		}
@@ -1823,12 +1856,15 @@ dp_rx_wbm_err_reap_desc_be(struct dp_intr *int_ctx, struct dp_soc *soc,
 			continue;
 		}
 
+		hal_rx_wbm_err_info_get(ring_desc, &wbm_err_info, hal_soc);
+		nbuf = rx_desc->nbuf;
+
 		status = dp_rx_wbm_desc_nbuf_sanity_check(soc, hal_ring_hdl,
 							  ring_desc, rx_desc);
 		if (qdf_unlikely(QDF_IS_STATUS_ERROR(status))) {
 			DP_STATS_INC(soc, rx.err.nbuf_sanity_fail, 1);
-			dp_info_rl("Rx error Nbuf %pK sanity check failure!",
-				   rx_desc->nbuf);
+			dp_info_rl("Rx error Nbuf %pk sanity check failure!",
+				   nbuf);
 			rx_desc->in_err_state = 1;
 			rx_desc->unmapped = 1;
 			rx_bufs_reaped[rx_desc->chip_id][rx_desc->pool_id]++;
@@ -1840,29 +1876,12 @@ dp_rx_wbm_err_reap_desc_be(struct dp_intr *int_ctx, struct dp_soc *soc,
 			continue;
 		}
 
-		nbuf = rx_desc->nbuf;
-		wbm_err.info_bit.pool_id = rx_desc->pool_id;
+		/* Get MPDU DESC info */
+		hal_rx_mpdu_desc_info_get(hal_soc, ring_desc, &mpdu_desc_info);
 
-		/*
-		 * Read wbm err info , MSDU info , MPDU info , peer meta data,
-		 * from desc. Save all the info in nbuf CB/TLV.
-		 * We will need this info when we do the actual nbuf processing
-		 */
-		wbm_err.info = dp_rx_wbm_err_copy_desc_info_in_nbuf(soc,
-								    ring_desc,
-								    nbuf);
-		/*
-		 * For WBM ring, expect only MSDU buffers
-		 */
-		qdf_assert_always(wbm_err.info_bit.buffer_or_desc_type ==
-				  HAL_RX_WBM_BUF_TYPE_REL_BUF);
-		/*
-		 * Errors are handled only if the source is RXDMA or REO
-		 */
-		qdf_assert((wbm_err.info_bit.wbm_err_src ==
-			    HAL_RX_WBM_ERR_SRC_RXDMA) ||
-			   (wbm_err.info_bit.wbm_err_src ==
-			    HAL_RX_WBM_ERR_SRC_REO));
+		if (qdf_likely(mpdu_desc_info.mpdu_flags &
+			       HAL_MPDU_F_QOS_CONTROL_VALID))
+			qdf_nbuf_set_tid_val(rx_desc->nbuf, mpdu_desc_info.tid);
 
 		rx_desc_pool = &soc->rx_desc_buf[rx_desc->pool_id];
 		dp_ipa_rx_buf_smmu_mapping_lock(soc);
@@ -1872,12 +1891,11 @@ dp_rx_wbm_err_reap_desc_be(struct dp_intr *int_ctx, struct dp_soc *soc,
 
 		if (qdf_unlikely(
 			soc->wbm_release_desc_rx_sg_support &&
-			dp_rx_is_sg_formation_required(&wbm_err.info_bit))) {
+			dp_rx_is_sg_formation_required(&wbm_err_info))) {
 			/* SG is detected from continuation bit */
 			msdu_continuation =
-				dp_rx_wbm_err_msdu_continuation_get(soc,
-								    ring_desc,
-								    nbuf);
+				hal_rx_wbm_err_msdu_continuation_get(hal_soc,
+								     ring_desc);
 			if (msdu_continuation &&
 			    !(soc->wbm_sg_param.wbm_is_first_msdu_in_sg)) {
 				/* Update length from first buffer in SG */
@@ -1903,6 +1921,14 @@ dp_rx_wbm_err_reap_desc_be(struct dp_intr *int_ctx, struct dp_soc *soc,
 				process_sg_buf = true;
 			}
 		}
+
+		/*
+		 * save the wbm desc info in nbuf TLV. We will need this
+		 * info when we do the actual nbuf processing
+		 */
+		wbm_err_info.pool_id = rx_desc->pool_id;
+
+		dp_rx_set_err_info(soc, nbuf, wbm_err_info);
 
 		rx_bufs_reaped[rx_desc->chip_id][rx_desc->pool_id]++;
 
@@ -1971,6 +1997,33 @@ done:
 	}
 	return nbuf_head;
 }
+
+#ifdef WLAN_FEATURE_11BE_MLO
+/**
+ * check_extap_multicast_loopback() - Check if rx packet is a loopback packet.
+ *
+ * @vdev: vdev on which rx packet is received
+ * @addr: src address of the received packet
+ *
+ */
+static bool check_extap_multicast_loopback(struct dp_vdev *vdev, uint8_t *addr)
+{
+	 /* if src mac addr matches with vdev mac address then drop the pkt */
+	if (!(qdf_mem_cmp(addr, vdev->mac_addr.raw, QDF_MAC_ADDR_SIZE)))
+		return true;
+
+	 /* if src mac addr matches with mld mac address then drop the pkt */
+	if (!(qdf_mem_cmp(addr, vdev->mld_mac_addr.raw, QDF_MAC_ADDR_SIZE)))
+		return true;
+
+	return false;
+}
+#else
+static bool check_extap_multicast_loopback(struct dp_vdev *vdev, uint8_t *addr)
+{
+	return false;
+}
+#endif
 
 QDF_STATUS
 dp_rx_null_q_desc_handle_be(struct dp_soc *soc, qdf_nbuf_t nbuf,
@@ -2200,6 +2253,18 @@ dp_rx_null_q_desc_handle_be(struct dp_soc *soc, qdf_nbuf_t nbuf,
 	 */
 	if (qdf_unlikely(dp_rx_err_cce_drop(soc, vdev, nbuf, rx_tlv_hdr)))
 		goto drop_nbuf;
+
+	/*
+	 * In extap mode if the received packet matches with mld mac address
+	 * drop it. For non IP packets conversion might not be possible
+	 * due to that MEC entry will not be updated, resulting loopback.
+	 */
+	if (qdf_unlikely(check_extap_multicast_loopback(vdev,
+							eh->ether_shost))) {
+		DP_PEER_PER_PKT_STATS_INC_PKT(txrx_peer, rx.mec_drop, 1,
+					      qdf_nbuf_len(nbuf), link_id);
+		goto drop_nbuf;
+	}
 
 	if (qdf_unlikely(vdev->rx_decap_type == htt_cmn_pkt_type_raw)) {
 		qdf_nbuf_set_next(nbuf, NULL);

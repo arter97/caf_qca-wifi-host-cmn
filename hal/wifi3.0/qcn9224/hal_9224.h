@@ -39,7 +39,7 @@
 #include <uniform_reo_status_header.h>
 #include <wbm_release_ring_tx.h>
 #include <phyrx_location.h>
-#ifdef QCA_MONITOR_2_0_SUPPORT
+#ifdef WLAN_PKT_CAPTURE_TX_2_0
 #include <mon_ingress_ring.h>
 #include <mon_destination_ring.h>
 #endif
@@ -98,7 +98,7 @@
 #define UNIFIED_WBM_RELEASE_RING_6_TX_RATE_STATS_INFO_TX_RATE_STATS_LSB \
 	WBM_RELEASE_RING_TX_TX_RATE_STATS_PPDU_TRANSMISSION_TSF_LSB
 
-#ifdef QCA_MONITOR_2_0_SUPPORT
+#if defined(WLAN_PKT_CAPTURE_TX_2_0) || defined(WLAN_PKT_CAPTURE_RX_2_0)
 #include "hal_be_api_mon.h"
 #endif
 
@@ -1588,7 +1588,7 @@ static void hal_hw_txrx_ops_attach_qcn9224(struct hal_soc *hal_soc)
 					hal_rx_link_desc_msdu0_ptr_9224;
 	hal_soc->ops->hal_reo_status_get_header =
 					hal_reo_status_get_header_9224;
-#ifdef QCA_MONITOR_2_0_SUPPORT
+#ifdef WLAN_PKT_CAPTURE_RX_2_0
 	hal_soc->ops->hal_rx_status_get_tlv_info =
 					hal_rx_status_get_tlv_info_wrapper_be;
 #endif
@@ -1770,7 +1770,7 @@ static void hal_hw_txrx_ops_attach_qcn9224(struct hal_soc *hal_soc)
 					hal_get_rx_max_ba_window_qcn9224;
 	hal_soc->ops->hal_get_reo_qdesc_size = hal_qcn9224_get_reo_qdesc_size;
 	/* TX MONITOR */
-#ifdef QCA_MONITOR_2_0_SUPPORT
+#ifdef WLAN_PKT_CAPTURE_TX_2_0
 	hal_soc->ops->hal_txmon_is_mon_buf_addr_tlv =
 				hal_txmon_is_mon_buf_addr_tlv_generic_be;
 	hal_soc->ops->hal_txmon_populate_packet_info =
@@ -1786,7 +1786,7 @@ static void hal_hw_txrx_ops_attach_qcn9224(struct hal_soc *hal_soc)
 	hal_soc->ops->hal_txmon_get_word_mask =
 				hal_txmon_get_word_mask_generic_be;
 #endif /* TX_MONITOR_WORD_MASK */
-#endif /* QCA_MONITOR_2_0_SUPPORT */
+#endif /* WLAN_PKT_CAPTURE_TX_2_0 */
 	hal_soc->ops->hal_compute_reo_remap_ix0 = NULL;
 	hal_soc->ops->hal_tx_vdev_mismatch_routing_set =
 		hal_tx_vdev_mismatch_routing_set_generic_be;
@@ -1821,6 +1821,7 @@ static void hal_hw_txrx_ops_attach_qcn9224(struct hal_soc *hal_soc)
 					hal_tx_ppe2tcl_ring_halt_done_9224;
 	hal_soc->ops->hal_tx_get_num_ppe_vp_search_idx_tbl_entries =
 			hal_tx_get_num_ppe_vp_search_idx_reg_entries_9224;
+	hal_soc->ops->hal_tx_ring_halt_get = hal_tx_ppe2tcl_ring_halt_get_9224;
 };
 
 /**

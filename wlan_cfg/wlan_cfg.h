@@ -338,6 +338,7 @@ struct wlan_srng_cfg {
  *			    based ILP feature is enabled
  * @pointer_timer_threshold_rx: RX REO2SW ring pointer update timer threshold
  * @pointer_num_threshold_rx: RX REO2SW ring pointer update entries threshold
+ * @local_pkt_capture: flag indicating enable/disable of local packet capture
  */
 struct wlan_cfg_dp_soc_ctxt {
 	int num_int_ctxts;
@@ -537,6 +538,9 @@ struct wlan_cfg_dp_soc_ctxt {
 #endif
 	uint16_t pointer_timer_threshold_rx;
 	uint8_t pointer_num_threshold_rx;
+#ifdef WLAN_FEATURE_LOCAL_PKT_CAPTURE
+	bool local_pkt_capture;
+#endif
 };
 
 /**
@@ -577,6 +581,9 @@ struct wlan_cfg_dp_pdev_ctxt {
  * @num_rxdma_refill_ring_entries: Number of entries in rxdma refill ring
  * @num_reo_status_ring_entries: Number of entries in REO status ring
  * @num_mon_status_ring_entries: Number of entries in monitor status ring
+ * @num_tx_mon_buf_ring_entries: Number of entries in Tx monitor buf ring
+ * @num_tx_mon_dst_ring_entries: Number of entries in Tx monitor
+ *				 destination ring
  */
 struct wlan_dp_prealloc_cfg {
 	int num_tx_ring_entries;
@@ -591,6 +598,8 @@ struct wlan_dp_prealloc_cfg {
 	int num_rxdma_refill_ring_entries;
 	int num_reo_status_ring_entries;
 	int num_mon_status_ring_entries;
+	int num_tx_mon_buf_ring_entries;
+	int num_tx_mon_dst_ring_entries;
 };
 
 /**
@@ -1868,12 +1877,13 @@ wlan_cfg_is_tx_per_pkt_vdev_id_check_enabled(struct wlan_cfg_dp_soc_ctxt *cfg);
  * @num_dp_msi: Number of DP interrupts available (0 for integrated)
  * @interrupt_mode: Type of interrupt
  * @is_monitor_mode: is monitor mode enabled
+ * @ppeds_attached: is ppeds attached
  *
  * Return: void
  */
 void wlan_cfg_fill_interrupt_mask(struct wlan_cfg_dp_soc_ctxt *wlan_cfg_ctx,
 				  int num_dp_msi, int interrupt_mode,
-				  bool is_monitor_mode);
+				  bool is_monitor_mode, bool ppeds_attached);
 
 /**
  * wlan_cfg_is_rx_fisa_enabled() - Get Rx FISA enabled flag
@@ -2143,13 +2153,13 @@ void wlan_cfg_dp_soc_ctx_dump(struct wlan_cfg_dp_soc_ctxt *cfg);
 
 #ifdef WLAN_SUPPORT_PPEDS
 /**
- * wlan_cfg_get_dp_soc_is_ppeds_enabled() - API to get ppe enable flag
+ * wlan_cfg_get_dp_soc_ppeds_enable() - API to get ppe enable flag
  * @cfg: Configuration Handle
  *
- * Return: true if ppe is enabled else return false
+ * Return: true if ppeds support is enabled else return false
  */
 bool
-wlan_cfg_get_dp_soc_is_ppeds_enabled(struct wlan_cfg_dp_soc_ctxt *cfg);
+wlan_cfg_get_dp_soc_ppeds_enable(struct wlan_cfg_dp_soc_ctxt *cfg);
 
 /**
  * wlan_cfg_get_dp_soc_reo2ppe_ring_size() - get ppe rx ring size
@@ -2196,7 +2206,7 @@ int
 wlan_cfg_get_dp_soc_ppeds_tx_comp_napi_budget(struct wlan_cfg_dp_soc_ctxt *cfg);
 #else
 static inline bool
-wlan_cfg_get_dp_soc_is_ppeds_enabled(struct wlan_cfg_dp_soc_ctxt *cfg)
+wlan_cfg_get_dp_soc_ppeds_enable(struct wlan_cfg_dp_soc_ctxt *cfg)
 {
 	return false;
 }
@@ -2501,4 +2511,17 @@ wlan_cfg_get_pointer_timer_threshold_rx(struct wlan_cfg_dp_soc_ctxt *cfg);
 uint8_t
 wlan_cfg_get_pointer_num_threshold_rx(struct wlan_cfg_dp_soc_ctxt *cfg);
 
+#ifdef WLAN_FEATURE_LOCAL_PKT_CAPTURE
+static inline
+bool wlan_cfg_get_local_pkt_capture(struct wlan_cfg_dp_soc_ctxt *cfg)
+{
+	return cfg->local_pkt_capture;
+}
+#else
+static inline
+bool wlan_cfg_get_local_pkt_capture(struct wlan_cfg_dp_soc_ctxt *cfg)
+{
+	return false;
+}
+#endif
 #endif /*__WLAN_CFG_H*/

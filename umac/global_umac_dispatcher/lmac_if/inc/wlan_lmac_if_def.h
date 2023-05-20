@@ -253,6 +253,8 @@ struct wlan_target_if_dcs_rx_ops {
  * @deinit_shmem_arena_ctx: De-initialize shmem arena context
  * @get_crash_reason_address: Get the address of the crash reason associated
  * with chip_id
+ * @get_recovery_mode_address: Get the address of the recovery mode associated
+ * with chip_id
  * @get_no_of_chips_from_crash_info: Get the number of chips participated in the
  * mlo from global shmem crash info
  */
@@ -267,6 +269,8 @@ struct wlan_lmac_if_global_shmem_local_ops {
 					     uint8_t recovery);
 	void *(*get_crash_reason_address)(uint8_t grp_id,
 					  uint8_t chip_id);
+	void *(*get_recovery_mode_address)(uint8_t grp_id,
+					   uint8_t chip_id);
 	uint8_t (*get_no_of_chips_from_crash_info)(uint8_t grp_id);
 };
 #endif
@@ -1293,6 +1297,7 @@ struct wlan_lmac_if_dfs_tx_ops {
  * @tgt_is_tgt_type_qcn6122: To check QCN6122 (Spruce) target type.
  * @tgt_is_tgt_type_qcn9160: To check QCN9160 target type.
  * @tgt_is_tgt_type_qcn7605: To check QCN7605 target type.
+ * @tgt_is_tgt_type_qcn6432: To check QCN6432 (Pebble) target type.
  * @tgt_get_tgt_type:        Get target type
  * @tgt_get_tgt_version:     Get target version
  * @tgt_get_tgt_revision:    Get target revision
@@ -1306,6 +1311,7 @@ struct wlan_lmac_if_target_tx_ops {
 	bool (*tgt_is_tgt_type_qcn6122)(uint32_t);
 	bool (*tgt_is_tgt_type_qcn9160)(uint32_t);
 	bool (*tgt_is_tgt_type_qcn7605)(uint32_t);
+	bool (*tgt_is_tgt_type_qcn6432)(uint32_t);
 	uint32_t (*tgt_get_tgt_type)(struct wlan_objmgr_psoc *psoc);
 	uint32_t (*tgt_get_tgt_version)(struct wlan_objmgr_psoc *psoc);
 	uint32_t (*tgt_get_tgt_revision)(struct wlan_objmgr_psoc *psoc);
@@ -1530,6 +1536,7 @@ struct wlan_lmac_if_mlo_tx_ops {
  * @process_mlo_vdev_tid_to_link_map_event:  function pointer to rx T2LM event
  * @mlo_link_removal_handler: function pointer for MLO link removal handler
  * @process_mlo_link_state_info_event: function pointer for mlo link state
+ * @mlo_link_disable_request_handler: function ptr for mlo link disable request
  */
 struct wlan_lmac_if_mlo_rx_ops {
 	QDF_STATUS
@@ -1544,6 +1551,9 @@ struct wlan_lmac_if_mlo_rx_ops {
 	QDF_STATUS (*process_mlo_link_state_info_event)(
 			struct wlan_objmgr_psoc *psoc,
 			struct ml_link_state_info_event *event);
+	QDF_STATUS (*mlo_link_disable_request_handler)(
+			struct wlan_objmgr_psoc *psoc,
+			void *evt_params);
 };
 #endif
 
@@ -1625,7 +1635,7 @@ struct wlan_lmac_if_spatial_reuse_tx_ops {
 			       uint8_t non_srg_max_pd_offset);
 	QDF_STATUS (*send_sr_prohibit_cfg)(struct wlan_objmgr_vdev *vdev,
 					   bool he_siga_val15_allowed);
-	QDF_STATUS(*target_if_set_sr_enable_disable)(
+	QDF_STATUS (*target_if_set_sr_enable_disable)(
 				struct wlan_objmgr_vdev *vdev,
 				struct wlan_objmgr_pdev *pdev,
 				bool is_sr_enable, int32_t srg_pd_threshold,
@@ -1662,6 +1672,35 @@ struct wlan_lmac_if_coap_tx_ops {
 };
 #endif
 
+#ifdef CONFIG_SAWF
+/**
+ * struct wlan_lmac_if_sawf_tx_ops - Target function pointers for SAWF
+ *
+ * @sawf_svc_create_send: function pointer to send SAWF SVC create
+ * @sawf_svc_disable_send: function pointer to send SAWF SVC disable
+ * @sawf_ul_svc_update_send: function pointer to update
+ *                           peer uplink QoS parameters
+ * @sawf_update_ul_params: function pointer to update flow uplink QoS parameters
+ */
+struct wlan_lmac_if_sawf_tx_ops {
+	QDF_STATUS
+	(*sawf_svc_create_send)(struct wlan_objmgr_pdev *pdev, void *params);
+	QDF_STATUS
+	(*sawf_svc_disable_send)(struct wlan_objmgr_pdev *pdev, void *params);
+	QDF_STATUS
+	(*sawf_ul_svc_update_send)(struct wlan_objmgr_pdev *pdev,
+				   uint8_t vdev_id, uint8_t *peer_mac,
+				   uint8_t ac, uint8_t add_or_sub,
+				   void *svc_params);
+	QDF_STATUS
+	(*sawf_update_ul_params)(struct wlan_objmgr_pdev *pdev, uint8_t vdev_id,
+				 uint8_t *peer_mac, uint8_t tid, uint8_t ac,
+				 uint32_t service_interval, uint32_t burst_size,
+				 uint32_t min_tput, uint32_t max_latency,
+				 uint8_t add_or_sub);
+};
+#endif
+
 /**
  * struct wlan_lmac_if_tx_ops - south bound tx function pointers
  * @mgmt_txrx_tx_ops: mgmt txrx tx ops
@@ -1695,6 +1734,7 @@ struct wlan_lmac_if_coap_tx_ops {
  * @twt_tx_ops: TWT tx ops
  * @spatial_reuse_tx_ops: Spatial Reuse tx ops
  * @coap_ops: COAP tx ops
+ * @sawf_tx_ops: SAWF tx ops
  *
  * Callback function tabled to be registered with umac.
  * umac will use the functional table to send events/frames to wmi
@@ -1800,6 +1840,9 @@ struct wlan_lmac_if_tx_ops {
 
 #ifdef WLAN_FEATURE_COAP
 	struct wlan_lmac_if_coap_tx_ops coap_ops;
+#endif
+#ifdef CONFIG_SAWF
+	struct wlan_lmac_if_sawf_tx_ops sawf_tx_ops;
 #endif
 };
 

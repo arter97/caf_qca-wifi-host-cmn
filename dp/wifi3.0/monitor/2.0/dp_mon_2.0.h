@@ -133,7 +133,7 @@ enum dp_mpdu_filter_category {
  */
 struct dp_mon_filter_be {
 	struct dp_mon_filter rx_tlv_filter;
-#ifdef QCA_MONITOR_2_0_SUPPORT
+#ifdef WLAN_PKT_CAPTURE_TX_2_0
 	struct htt_tx_ring_tlv_filter tx_tlv_filter;
 #endif
 	bool tx_valid;
@@ -490,22 +490,8 @@ dp_rx_mon_add_frag_to_skb(struct hal_rx_ppdu_info *ppdu_info,
 	}
 }
 
-#if defined(WLAN_SUPPORT_RX_PROTOCOL_TYPE_TAG) ||\
-	defined(WLAN_SUPPORT_RX_FLOW_TAG)
-/**
- * dp_mon_rx_update_rx_protocol_tag_stats() - Update mon protocols's
- *					      statistics from given protocol
- *					      type
- * @pdev: pdev handle
- * @protocol_index: Protocol index for which the stats should be incremented
- *
- * Return: void
- */
-void dp_mon_rx_update_rx_protocol_tag_stats(struct dp_pdev *pdev,
-					    uint16_t protocol_index);
-#endif /* WLAN_SUPPORT_RX_PROTOCOL_TYPE_TAG */
-
-#if !defined(DISABLE_MON_CONFIG) && defined(QCA_MONITOR_2_0_SUPPORT)
+#if !defined(DISABLE_MON_CONFIG) && (defined(WLAN_PKT_CAPTURE_TX_2_0) || \
+	defined(WLAN_PKT_CAPTURE_RX_2_0))
 /**
  * dp_mon_get_context_size_be() - get BE specific size for mon pdev/soc
  * @context_type: context type for which the size is needed
@@ -526,7 +512,7 @@ qdf_size_t dp_mon_get_context_size_be(enum dp_context_type context_type)
 }
 #endif
 
-#ifdef QCA_MONITOR_2_0_SUPPORT
+#ifdef WLAN_PKT_CAPTURE_TX_2_0
 /**
  * dp_get_be_mon_soc_from_dp_mon_soc() - get dp_mon_soc_be from dp_mon_soc
  * @soc: dp_mon_soc pointer

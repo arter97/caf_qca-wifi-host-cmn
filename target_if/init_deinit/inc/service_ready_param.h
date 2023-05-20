@@ -455,6 +455,7 @@ struct wlan_psoc_host_service_ext_param {
  * @num_dbr_ring_caps: Number of direct buf rx ring capabilities
  * @chwidth_num_peer_caps: Peer limit for peer_chan_width_switch WMI cmd
  * @max_ndp_sessions: Max number of ndp session fw supports
+ * @max_nan_pairing_sessions: max number of PASN pairing session allowed on NAN
  * @preamble_puncture_bw_cap: Preamble Puncturing Tx support
  * @num_scan_radio_caps: Number of scan radio capabilities
  * @max_users_dl_ofdma: Max number of users per-PPDU for Downlink OFDMA
@@ -465,6 +466,7 @@ struct wlan_psoc_host_service_ext_param {
  * @sap_coex_fixed_chan_support: Indicates if fw supports coex SAP in
  *                               fixed chan config
  * @target_cap_flags: Rx peer metadata version number used by target
+ * @dp_peer_meta_data_ver: DP peer metadata version reported by target
  * @ul_mumimo_tx_2g: UL MUMIMO Tx support for 2GHz
  * @ul_mumimo_tx_5g: UL MUMIMO Tx support for 5GHz
  * @ul_mumimo_tx_6g: UL MUMIMO Tx support for 6GHz
@@ -483,6 +485,7 @@ struct wlan_psoc_host_service_ext2_param {
 	uint32_t num_dbr_ring_caps;
 	uint32_t chwidth_num_peer_caps;
 	uint32_t max_ndp_sessions;
+	uint32_t max_nan_pairing_sessions;
 	uint32_t preamble_puncture_bw_cap;
 	uint8_t num_scan_radio_caps;
 	uint16_t max_users_dl_ofdma;
@@ -492,6 +495,7 @@ struct wlan_psoc_host_service_ext2_param {
 	uint32_t twt_ack_support_cap:1;
 	uint32_t sap_coex_fixed_chan_support:1;
 	uint32_t target_cap_flags;
+	uint8_t dp_peer_meta_data_ver;
 	uint8_t ul_mumimo_tx_2g:1,
 		ul_mumimo_tx_5g:1,
 		ul_mumimo_tx_6g:1,

@@ -25,7 +25,8 @@
 #include "dp_be_tx.h"
 #include "dp_be_rx.h"
 #ifdef WIFI_MONITOR_SUPPORT
-#if !defined(DISABLE_MON_CONFIG) && defined(QCA_MONITOR_2_0_SUPPORT)
+#if !defined(DISABLE_MON_CONFIG) && (defined(WLAN_PKT_CAPTURE_TX_2_0) || \
+	defined(WLAN_PKT_CAPTURE_RX_2_0))
 #include "dp_mon_2.0.h"
 #endif
 #include "dp_mon.h"
@@ -507,12 +508,14 @@ dp_hw_cookie_conversion_deinit(struct dp_soc_be *be_soc,
 static QDF_STATUS dp_soc_ppeds_attach_be(struct dp_soc *soc)
 {
 	struct dp_soc_be *be_soc = dp_get_be_soc_from_dp_soc(soc);
+	int target_type = hal_get_target_type(soc->hal_soc);
 	struct cdp_ops *cdp_ops = soc->cdp_soc.ops;
 
 	/*
-	 * Check if PPE DS is enabled.
+	 * Check if PPE DS is enabled and wlan soc supports it.
 	 */
-	if (!wlan_cfg_get_dp_soc_is_ppeds_enabled(soc->wlan_cfg_ctx))
+	if (!wlan_cfg_get_dp_soc_ppeds_enable(soc->wlan_cfg_ctx) ||
+	    !dp_ppeds_target_supported(target_type))
 		return QDF_STATUS_SUCCESS;
 
 	if (dp_ppeds_attach_soc_be(be_soc) != QDF_STATUS_SUCCESS)
@@ -528,7 +531,7 @@ static QDF_STATUS dp_soc_ppeds_detach_be(struct dp_soc *soc)
 	struct dp_soc_be *be_soc = dp_get_be_soc_from_dp_soc(soc);
 	struct cdp_ops *cdp_ops = soc->cdp_soc.ops;
 
-	if (!wlan_cfg_get_dp_soc_is_ppeds_enabled(soc->wlan_cfg_ctx))
+	if (!be_soc->ppeds_handle)
 		return QDF_STATUS_E_FAILURE;
 
 	dp_ppeds_detach_soc_be(be_soc);
@@ -1181,11 +1184,13 @@ static void dp_soc_txrx_peer_setup_be(struct dp_soc *soc, uint8_t vdev_id,
 {
 	struct dp_vdev_be *be_vdev;
 	QDF_STATUS qdf_status = QDF_STATUS_SUCCESS;
-	struct dp_soc_be *be_soc = dp_get_be_soc_from_dp_soc(soc);
+	struct dp_soc_be *be_soc;
 	struct cdp_ds_vp_params vp_params = {0};
-	struct cdp_soc_t *cdp_soc = &soc->cdp_soc;
+	struct cdp_soc_t *cdp_soc;
 	enum wlan_op_mode vdev_opmode;
 	struct dp_peer *peer;
+	struct dp_peer *tgt_peer = NULL;
+	struct dp_soc *tgt_soc = NULL;
 
 	peer = dp_peer_find_hash_find(soc, peer_mac, 0, vdev_id, DP_MOD_ID_CDP);
 	if (!peer)
@@ -1198,7 +1203,12 @@ static void dp_soc_txrx_peer_setup_be(struct dp_soc *soc, uint8_t vdev_id,
 		return;
 	}
 
-	be_vdev = dp_get_be_vdev_from_dp_vdev(peer->vdev);
+	tgt_peer = dp_get_tgt_peer_from_peer(peer);
+	tgt_soc = tgt_peer->vdev->pdev->soc;
+	be_soc = dp_get_be_soc_from_dp_soc(tgt_soc);
+	cdp_soc = &tgt_soc->cdp_soc;
+
+	be_vdev = dp_get_be_vdev_from_dp_vdev(tgt_peer->vdev);
 	if (!be_vdev) {
 		qdf_err("BE vap is null");
 		qdf_status = QDF_STATUS_E_NULL_VALUE;
@@ -1217,9 +1227,10 @@ static void dp_soc_txrx_peer_setup_be(struct dp_soc *soc, uint8_t vdev_id,
 	/*
 	 * Check if PPE DS routing is enabled on the associated vap.
 	 */
-	qdf_status = cdp_soc->ol_ops->get_ppeds_profile_info_for_vap(soc->ctrl_psoc,
-								     peer->vdev->vdev_id,
-								     &vp_params);
+	qdf_status =
+	cdp_soc->ol_ops->get_ppeds_profile_info_for_vap(tgt_soc->ctrl_psoc,
+							tgt_peer->vdev->vdev_id,
+							&vp_params);
 	if (qdf_status == QDF_STATUS_E_NULL_VALUE) {
 		dp_err("%pK: Could not find ppeds profile info vdev\n", be_vdev);
 		qdf_status = QDF_STATUS_E_NULL_VALUE;
@@ -1227,7 +1238,7 @@ static void dp_soc_txrx_peer_setup_be(struct dp_soc *soc, uint8_t vdev_id,
 	}
 
 	if (vp_params.ppe_vp_type == PPE_VP_USER_TYPE_DS) {
-		qdf_status = dp_peer_setup_ppeds_be(soc, peer, be_vdev,
+		qdf_status = dp_peer_setup_ppeds_be(tgt_soc, tgt_peer, be_vdev,
 						    (void *)&be_soc->ppe_vp_profile[vp_params.ppe_vp_profile_idx]);
 	}
 
@@ -1427,8 +1438,10 @@ dp_rxdma_ring_sel_cfg_be(struct dp_soc *soc)
 	htt_tlv_filter.fp_mgmt_filter = 0;
 	htt_tlv_filter.fp_ctrl_filter = FILTER_CTRL_BA_REQ;
 	htt_tlv_filter.fp_data_filter = (FILTER_DATA_UCAST |
-					 FILTER_DATA_MCAST |
 					 FILTER_DATA_DATA);
+	htt_tlv_filter.fp_data_filter |=
+		hal_rx_en_mcast_fp_data_filter(soc->hal_soc) ?
+					FILTER_DATA_MCAST : 0;
 	htt_tlv_filter.mo_mgmt_filter = 0;
 	htt_tlv_filter.mo_ctrl_filter = 0;
 	htt_tlv_filter.mo_data_filter = 0;
@@ -1531,8 +1544,10 @@ dp_rxdma_ring_sel_cfg_be(struct dp_soc *soc)
 	htt_tlv_filter.fp_mgmt_filter = 0;
 	htt_tlv_filter.fp_ctrl_filter = FILTER_CTRL_BA_REQ;
 	htt_tlv_filter.fp_data_filter = (FILTER_DATA_UCAST |
-					 FILTER_DATA_MCAST |
 					 FILTER_DATA_DATA);
+	htt_tlv_filter.fp_data_filter |=
+		hal_rx_en_mcast_fp_data_filter(soc->hal_soc) ?
+					FILTER_DATA_MCAST : 0;
 	htt_tlv_filter.mo_mgmt_filter = 0;
 	htt_tlv_filter.mo_ctrl_filter = 0;
 	htt_tlv_filter.mo_data_filter = 0;
@@ -1751,7 +1766,7 @@ static void dp_soc_ppeds_srng_deinit(struct dp_soc *soc)
 
 	soc_cfg_ctx = soc->wlan_cfg_ctx;
 
-	if (!wlan_cfg_get_dp_soc_is_ppeds_enabled(soc_cfg_ctx))
+	if (!be_soc->ppeds_handle)
 		return;
 
 	dp_srng_deinit(soc, &be_soc->ppe2tcl_ring, PPE2TCL, 0);
@@ -1785,9 +1800,6 @@ static void dp_soc_ppeds_srng_free(struct dp_soc *soc)
 
 	soc_cfg_ctx = soc->wlan_cfg_ctx;
 
-	if (!wlan_cfg_get_dp_soc_is_ppeds_enabled(soc_cfg_ctx))
-		return;
-
 	dp_srng_free(soc, &be_soc->ppeds_wbm_release_ring);
 
 	dp_srng_free(soc, &be_soc->ppe2tcl_ring);
@@ -1803,7 +1815,7 @@ static QDF_STATUS dp_soc_ppeds_srng_alloc(struct dp_soc *soc)
 
 	soc_cfg_ctx = soc->wlan_cfg_ctx;
 
-	if (!wlan_cfg_get_dp_soc_is_ppeds_enabled(soc_cfg_ctx))
+	if (!be_soc->ppeds_handle)
 		return QDF_STATUS_SUCCESS;
 
 	entries = wlan_cfg_get_dp_soc_reo2ppe_ring_size(soc_cfg_ctx);
@@ -1845,7 +1857,7 @@ static QDF_STATUS dp_soc_ppeds_srng_init(struct dp_soc *soc)
 
 	soc_cfg_ctx = soc->wlan_cfg_ctx;
 
-	if (!wlan_cfg_get_dp_soc_is_ppeds_enabled(soc_cfg_ctx))
+	if (!be_soc->ppeds_handle)
 		return QDF_STATUS_SUCCESS;
 
 	if (dp_ppeds_register_soc_be(be_soc, &idx)) {
@@ -2839,6 +2851,8 @@ void dp_initialize_arch_ops_be(struct dp_arch_ops *arch_ops)
 	arch_ops->dp_rxdma_ring_sel_cfg = dp_rxdma_ring_sel_cfg_be;
 	arch_ops->dp_rx_peer_metadata_peer_id_get =
 					dp_rx_peer_metadata_peer_id_get_be;
+	arch_ops->dp_rx_peer_mdata_link_id_get =
+					dp_rx_peer_mdata_link_id_get_be;
 	arch_ops->soc_cfg_attach = dp_soc_cfg_attach_be;
 	arch_ops->tx_implicit_rbm_set = dp_tx_implicit_rbm_set_be;
 	arch_ops->txrx_set_vdev_param = dp_txrx_set_vdev_param_be;
@@ -2857,6 +2871,7 @@ void dp_initialize_arch_ops_be(struct dp_arch_ops *arch_ops)
 #endif
 
 #ifdef WLAN_SUPPORT_PPEDS
+	arch_ops->ppeds_handle_attached = dp_ppeds_handle_attached;
 	arch_ops->dp_txrx_ppeds_rings_status = dp_ppeds_rings_status;
 	arch_ops->txrx_soc_ppeds_start = dp_ppeds_start_soc_be;
 	arch_ops->txrx_soc_ppeds_stop = dp_ppeds_stop_soc_be;
@@ -2887,6 +2902,9 @@ void dp_initialize_arch_ops_be(struct dp_arch_ops *arch_ops)
 	arch_ops->reo_remap_config = dp_reo_remap_config_be;
 	arch_ops->txrx_get_vdev_mcast_param = dp_txrx_get_vdev_mcast_param_be;
 	arch_ops->txrx_srng_init = dp_srng_init_be;
+#if defined(DP_POWER_SAVE) || defined(FEATURE_RUNTIME_PM)
+	arch_ops->dp_update_ring_hptp = dp_update_ring_hptp;
+#endif
 	dp_initialize_arch_ops_be_ipa(arch_ops);
 	dp_initialize_arch_ops_be_single_dev(arch_ops);
 }

@@ -371,13 +371,13 @@ enum WMI_RECORD_TYPE {
 
 #endif /*WMI_INTERFACE_EVENT_LOGGING */
 
-#ifdef WLAN_OPEN_SOURCE
+#ifdef WLAN_DBGLOG_DEBUGFS
 struct fwdebug {
 	struct sk_buff_head fwlog_queue;
 	struct completion fwlog_completion;
 	A_BOOL fwlog_open;
 };
-#endif /* WLAN_OPEN_SOURCE */
+#endif /* WLAN_DBGLOG_DEBUGFS */
 
 /**
  * struct wmi_wq_dbg_info - WMI WQ debug info
@@ -3127,6 +3127,11 @@ QDF_STATUS (*extract_mgmt_rx_mlo_link_removal_info)(
 		void *buf,
 		struct mgmt_rx_mlo_link_removal_info *link_removal_info,
 		int num_link_removal_info);
+
+QDF_STATUS (*extract_mlo_link_disable_request_evt_param)(
+		struct wmi_unified *wmi_handle,
+		void *buf,
+		struct mlo_link_disable_request_evt_params *params);
 #endif
 
 #ifdef WLAN_FEATURE_SON
@@ -3146,7 +3151,9 @@ QDF_STATUS (*extract_update_mac_address_event)(wmi_unified_t wmi_handle,
 QDF_STATUS
 (*send_soc_tqm_reset_enable_disable_cmd)(wmi_unified_t wmi_handle,
 					 uint32_t enable);
-
+QDF_STATUS
+(*send_set_peer_disable_mode)(wmi_unified_t wmi_handle, uint8_t *peer_mac,
+			      uint8_t pdev_id, uint32_t disabled_modes);
 #ifdef CONFIG_SAWF_DEF_QUEUES
 QDF_STATUS
 (*send_set_rate_upper_cap_cmd)(wmi_unified_t wmi_handle, uint8_t pdev_id,
@@ -3360,10 +3367,10 @@ struct wmi_unified {
 	struct wmi_host_abi_version final_abi_vers;
 	uint32_t num_of_diag_events_logs;
 	uint32_t *events_logs_list;
-#ifdef WLAN_OPEN_SOURCE
+#ifdef WLAN_DBGLOG_DEBUGFS
 	struct fwdebug dbglog;
 	struct dentry *debugfs_phy;
-#endif /* WLAN_OPEN_SOURCE */
+#endif /* WLAN_DBGLOG_DEBUGFS */
 
 #ifdef WMI_INTERFACE_EVENT_LOGGING
 	struct wmi_debug_log_info log_info;
@@ -3379,6 +3386,7 @@ struct wmi_unified {
 	qdf_atomic_t runtime_pm_inprogress;
 #endif
 	qdf_atomic_t is_wow_bus_suspended;
+	qdf_atomic_t is_wow_enable_ack_failed;
 	bool tag_crash_inject;
 	bool tgt_force_assert_enable;
 	enum wmi_target_type target_type;
