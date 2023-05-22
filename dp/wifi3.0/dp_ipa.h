@@ -18,7 +18,8 @@
 #ifndef _DP_IPA_H_
 #define _DP_IPA_H_
 
-#if defined(QCA_WIFI_KIWI) || defined(QCA_WIFI_KIWI_V2)
+#if defined(QCA_WIFI_KIWI) || defined(QCA_WIFI_KIWI_V2) || \
+	defined(QCA_WIFI_QCN9224)
 /* Index into soc->tcl_data_ring[] */
 #define IPA_TCL_DATA_RING_IDX	3
 #else
@@ -96,6 +97,7 @@ struct dp_ipa_uc_rx_hdr {
 #define DP_IPA_HDL_INVALID	0xFF
 #define DP_IPA_HDL_FIRST	0
 #define DP_IPA_HDL_SECOND	1
+#define DP_IPA_HDL_THIRD	2
 /**
  * wlan_ipa_get_hdl() - Get ipa handle from IPA component
  * @psoc: control psoc object
@@ -351,6 +353,12 @@ QDF_STATUS dp_ipa_disable_pipes(struct cdp_soc_t *soc_hdl, uint8_t pdev_id,
  */
 QDF_STATUS dp_ipa_set_perf_level(int client, uint32_t max_supported_bw_mbps,
 				 qdf_ipa_wdi_hdl_t hdl);
+#ifdef IPA_OPT_WIFI_DP
+QDF_STATUS dp_ipa_rx_super_rule_setup(struct cdp_soc_t *soc_hdl,
+				      void *flt_params);
+int dp_ipa_pcie_link_up(struct cdp_soc_t *soc_hdl);
+void dp_ipa_pcie_link_down(struct cdp_soc_t *soc_hdl);
+#endif
 
 /**
  * dp_ipa_rx_intrabss_fwd() - Perform intra-bss fwd for IPA RX path
@@ -522,6 +530,23 @@ dp_ipa_ast_notify_cb(qdf_ipa_wdi_conn_in_params_t *pipe_in,
 }
 #endif
 
+#ifdef IPA_OPT_WIFI_DP
+static inline void dp_ipa_opt_dp_ixo_remap(uint8_t *ix0_map)
+{
+	ix0_map[0] = REO_REMAP_SW1;
+	ix0_map[1] = REO_REMAP_SW1;
+	ix0_map[2] = REO_REMAP_SW2;
+	ix0_map[3] = REO_REMAP_SW3;
+	ix0_map[4] = REO_REMAP_SW4;
+	ix0_map[5] = REO_REMAP_RELEASE;
+	ix0_map[6] = REO_REMAP_FW;
+	ix0_map[7] = REO_REMAP_FW;
+}
+#else
+static inline void dp_ipa_opt_dp_ixo_remap(uint8_t *ix0_map)
+{
+}
+#endif
 #ifdef QCA_ENHANCED_STATS_SUPPORT
 /**
  * dp_ipa_txrx_get_peer_stats - fetch peer stats
@@ -571,6 +596,16 @@ QDF_STATUS dp_ipa_txrx_get_pdev_stats(struct cdp_soc_t *soc, uint8_t pdev_id,
 QDF_STATUS dp_ipa_update_peer_rx_stats(struct cdp_soc_t *soc, uint8_t vdev_id,
 				       uint8_t *peer_mac, qdf_nbuf_t nbuf);
 #endif
+/**
+ * dp_ipa_get_wdi_version() - Get WDI version
+ * @soc_hdl: data path soc handle
+ * @wdi_ver: Out parameter for wdi version
+ *
+ * Get WDI version based on soc arch
+ *
+ * Return: None
+ */
+void dp_ipa_get_wdi_version(struct cdp_soc_t *soc_hdl, uint8_t *wdi_ver);
 #else
 static inline int dp_ipa_uc_detach(struct dp_soc *soc, struct dp_pdev *pdev)
 {
@@ -649,6 +684,9 @@ static inline QDF_STATUS dp_ipa_ast_create(struct cdp_soc_t *soc_hdl,
 	return QDF_STATUS_SUCCESS;
 }
 #endif
-
+static inline void dp_ipa_get_wdi_version(struct cdp_soc_t *soc_hdl,
+					  uint8_t *wdi_ver)
+{
+}
 #endif
 #endif /* _DP_IPA_H_ */

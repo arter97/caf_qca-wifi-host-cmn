@@ -990,7 +990,7 @@ struct regulatory_channel {
 	uint8_t chan_num;
 	enum channel_state state;
 	uint32_t chan_flags;
-	uint32_t tx_power;
+	int32_t tx_power;
 	uint16_t min_bw;
 	uint16_t max_bw;
 	uint8_t ant_gain;
@@ -1395,7 +1395,7 @@ struct afc_freq_obj {
  */
 struct chan_eirp_obj {
 	uint8_t cfi;
-	uint16_t eirp_power;
+	int16_t eirp_power;
 };
 
 /**
@@ -1575,6 +1575,7 @@ enum restart_beaconing_on_ch_avoid_rule {
  * @afc_disable_request_id_check: Disable target AFC request id check
  * @is_afc_reg_noaction: Whether no action to AFC power event
  * @sta_sap_scc_on_indoor_channel: Value of sap+sta scc on indoor support
+ * @p2p_indoor_ch_support: Allow P2P GO in indoor channels
  */
 struct reg_config_vars {
 	uint32_t enable_11d_support;
@@ -1600,6 +1601,7 @@ struct reg_config_vars {
 	bool is_afc_reg_noaction;
 #endif
 	bool sta_sap_scc_on_indoor_channel;
+	bool p2p_indoor_ch_support;
 };
 
 /**
@@ -1869,7 +1871,7 @@ enum reg_phymode {
  */
 struct chan_power_info {
 	qdf_freq_t chan_cfreq;
-	uint8_t tx_power;
+	int8_t tx_power;
 };
 
 /**
@@ -1886,7 +1888,7 @@ struct chan_power_info {
  */
 struct reg_tpc_power_info {
 	bool is_psd_power;
-	uint8_t eirp_power;
+	int8_t eirp_power;
 	uint8_t power_type_6g;
 	uint8_t num_pwr_levels;
 	uint8_t reg_max[MAX_NUM_PWR_LEVEL];
@@ -2310,13 +2312,13 @@ struct reg_afc_resp_rx_ind_info {
  * typedef afc_req_rx_evt_handler() - Function prototype of AFC request
  *                                    received event handler
  * @pdev: Pointer to pdev
- * @afc_par_req: Pointer to AFC partial request
+ * @afc_req: Pointer to AFC request
  * @arg: Pointer to void (opaque) argument object
  *
  * Return: void
  */
 typedef void (*afc_req_rx_evt_handler)(struct wlan_objmgr_pdev *pdev,
-				       struct wlan_afc_host_partial_request *afc_par_req,
+				       struct wlan_afc_host_request *afc_req,
 				       void *arg);
 
 /**
@@ -2332,6 +2334,18 @@ typedef void
 (*afc_power_tx_evt_handler)(struct wlan_objmgr_pdev *pdev,
 			    struct reg_fw_afc_power_event *power_info,
 			    void *arg);
+
+/**
+ * typedef afc_payload_reset_tx_evt_handler() - Function prototype of AFC
+ * payload reset event sent handler
+ * @pdev: Pointer to pdev
+ * @arg: Pointer to void (opaque) argument object
+ *
+ * Return: void
+ */
+typedef void
+(*afc_payload_reset_tx_evt_handler)(struct wlan_objmgr_pdev *pdev,
+				    void *arg);
 #endif
 
 /**
@@ -2344,4 +2358,14 @@ static inline bool reg_is_chan_enum_invalid(enum channel_enum chan_enum)
 {
 	return chan_enum >= INVALID_CHANNEL;
 }
+
+/**
+ * struct r2p_table_update_status_obj
+ * @pdev_id: pdev id from target
+ * @status: rate2power update status
+ */
+struct r2p_table_update_status_obj {
+	uint32_t pdev_id;
+	uint32_t status;
+};
 #endif

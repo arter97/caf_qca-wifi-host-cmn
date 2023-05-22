@@ -229,22 +229,42 @@ ucfg_reg_unregister_afc_power_event_callback(struct wlan_objmgr_pdev *pdev,
 	return reg_unregister_afc_power_event_callback(pdev, cbf);
 }
 
-QDF_STATUS ucfg_reg_get_partial_afc_req_info(
+QDF_STATUS
+ucfg_reg_register_afc_payload_reset_event_callback(
 		struct wlan_objmgr_pdev *pdev,
-		struct wlan_afc_host_partial_request **afc_req,
-		uint64_t req_id)
+		afc_payload_reset_tx_evt_handler cbf,
+		void *arg) {
+	return reg_register_afc_payload_reset_event_callback(pdev, cbf, arg);
+}
+
+qdf_export_symbol(ucfg_reg_register_afc_payload_reset_event_callback);
+
+QDF_STATUS ucfg_reg_unregister_afc_payload_reset_event_callback(
+		struct wlan_objmgr_pdev *pdev,
+		afc_payload_reset_tx_evt_handler cbf)
+{
+	return reg_unregister_afc_payload_reset_event_callback(pdev, cbf);
+}
+
+QDF_STATUS ucfg_reg_get_afc_req_info(struct wlan_objmgr_pdev *pdev,
+				     struct wlan_afc_host_request **afc_req,
+				     uint64_t req_id)
 {
 	QDF_STATUS status;
 
-	status = reg_get_partial_afc_req_info(pdev, afc_req);
-
-	if (!afc_req)
-		return QDF_STATUS_E_NOMEM;
+	status = reg_get_afc_req_info(pdev, afc_req);
 
 	if (status == QDF_STATUS_SUCCESS)
 		reg_dmn_set_afc_req_id(*afc_req, req_id);
 
 	return status;
+}
+
+void
+ucfg_reg_free_afc_req(struct wlan_objmgr_pdev *pdev,
+		      struct wlan_afc_host_request *afc_req)
+{
+	reg_free_afc_req(pdev, afc_req);
 }
 #endif
 

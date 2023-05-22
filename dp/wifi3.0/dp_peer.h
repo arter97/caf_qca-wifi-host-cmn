@@ -67,6 +67,27 @@ struct ast_del_ctxt {
 	int del_count;
 };
 
+#ifdef QCA_SUPPORT_WDS_EXTENDED
+/**
+ * dp_peer_is_wds_ext_peer() - peer is WDS_EXT peer
+ *
+ * @peer: DP peer context
+ *
+ * This API checks whether the peer is WDS_EXT peer or not
+ *
+ * Return: true in the wds_ext peer else flase
+ */
+static inline bool dp_peer_is_wds_ext_peer(struct dp_txrx_peer *peer)
+{
+	return qdf_atomic_test_bit(WDS_EXT_PEER_INIT_BIT, &peer->wds_ext.init);
+}
+#else
+static inline bool dp_peer_is_wds_ext_peer(struct dp_txrx_peer *peer)
+{
+	return false;
+}
+#endif
+
 typedef void dp_peer_iter_func(struct dp_soc *soc, struct dp_peer *peer,
 			       void *arg);
 /**
@@ -112,9 +133,6 @@ struct dp_peer *dp_peer_find_hash_find(struct dp_soc *soc,
  */
 bool dp_peer_find_by_id_valid(struct dp_soc *soc, uint16_t peer_id);
 
-#ifdef DP_UMAC_HW_RESET_SUPPORT
-void dp_reset_tid_q_setup(struct dp_soc *soc);
-#endif
 /**
  * dp_peer_get_ref() - Returns peer object given the peer id
  *
@@ -672,9 +690,6 @@ void dp_rx_sec_ind_handler(struct dp_soc *soc, uint16_t peer_id,
 			   enum cdp_sec_type sec_type, int is_unicast,
 			   u_int32_t *michael_key, u_int32_t *rx_pn);
 
-QDF_STATUS dp_rx_delba_ind_handler(void *soc_handle, uint16_t peer_id,
-				   uint8_t tid, uint16_t win_sz);
-
 uint8_t dp_get_peer_mac_addr_frm_id(struct cdp_soc_t *soc_handle,
 		uint16_t peer_id, uint8_t *peer_mac);
 
@@ -1040,18 +1055,6 @@ void dp_peer_ast_index_flow_queue_map_create(void *soc_hdl,
 		    struct dp_ast_flow_override_info *ast_info);
 #endif
 
-/**
- * dp_rx_tid_delete_cb() - Callback to flush reo descriptor HW cache
- * after deleting the entries (ie., setting valid=0)
- *
- * @soc: DP SOC handle
- * @cb_ctxt: Callback context
- * @reo_status: REO command status
- */
-void dp_rx_tid_delete_cb(struct dp_soc *soc,
-			 void *cb_ctxt,
-			 union hal_reo_status *reo_status);
-
 #ifdef QCA_PEER_EXT_STATS
 /**
  * dp_peer_delay_stats_ctx_alloc() - Allocate peer delay stats content
@@ -1237,6 +1240,22 @@ QDF_STATUS dp_peer_ast_hash_attach(struct dp_soc *soc);
  */
 QDF_STATUS dp_peer_mec_hash_attach(struct dp_soc *soc);
 
+/**
+ * dp_del_wds_entry_wrapper() - delete a WDS AST entry
+ * @soc: DP soc structure pointer
+ * @vdev_id: vdev_id
+ * @wds_macaddr: MAC address of ast node
+ * @type: type from enum cdp_txrx_ast_entry_type
+ * @delete_in_fw: Flag to indicate if entry needs to be deleted in fw
+ *
+ * This API is used to delete an AST entry from fw
+ *
+ * Return: None
+ */
+void dp_del_wds_entry_wrapper(struct dp_soc *soc, uint8_t vdev_id,
+			      uint8_t *wds_macaddr, uint8_t type,
+			      uint8_t delete_in_fw);
+
 void dp_soc_wds_attach(struct dp_soc *soc);
 
 /**
@@ -1344,57 +1363,6 @@ static inline void dp_peer_mec_flush_entries(struct dp_soc *soc)
 }
 #endif
 
-#ifdef DUMP_REO_QUEUE_INFO_IN_DDR
-/**
- * dp_send_cache_flush_for_rx_tid() - Send cache flush cmd to REO per tid
- * @soc: dp_soc handle
- * @peer: peer
- *
- * This function is used to send cache flush cmd to reo and
- * to register the callback to handle the dumping of the reo
- * queue stas from DDR
- *
- * Return: none
- */
-void dp_send_cache_flush_for_rx_tid(
-	struct dp_soc *soc, struct dp_peer *peer);
-
-/**
- * dp_get_rx_reo_queue_info() - Handler to get rx tid info
- * @soc_hdl: cdp_soc_t handle
- * @vdev_id: vdev id
- *
- * Handler to get rx tid info from DDR after h/w cache is
- * invalidated first using the cache flush cmd.
- *
- * Return: none
- */
-void dp_get_rx_reo_queue_info(
-	struct cdp_soc_t *soc_hdl, uint8_t vdev_id);
-
-/**
- * dp_dump_rx_reo_queue_info() - Callback function to dump reo queue stats
- * @soc: dp_soc handle
- * @cb_ctxt: callback context
- * @reo_status: vdev id
- *
- * This is the callback function registered after sending the reo cmd
- * to flush the h/w cache and invalidate it. In the callback the reo
- * queue desc info is dumped from DDR.
- *
- * Return: none
- */
-void dp_dump_rx_reo_queue_info(
-	struct dp_soc *soc, void *cb_ctxt, union hal_reo_status *reo_status);
-
-#else /* DUMP_REO_QUEUE_INFO_IN_DDR */
-
-static inline void dp_get_rx_reo_queue_info(
-	struct cdp_soc_t *soc_hdl, uint8_t vdev_id)
-{
-}
-#endif /* DUMP_REO_QUEUE_INFO_IN_DDR */
-
 static inline int dp_peer_find_mac_addr_cmp(
 	union dp_align_mac_addr *mac_addr1,
 	union dp_align_mac_addr *mac_addr2)
@@ -1496,7 +1464,7 @@ dp_link_peer_hash_find_by_chip_id(struct dp_soc *soc,
  * @vdev_id: vdev_id
  * @mod_id: id of module requesting reference
  *
- * Return: peer in sucsess
+ * Return: peer in success
  *         NULL in failure
  */
 static inline
@@ -2241,53 +2209,6 @@ static inline void dp_print_mlo_ast_stats_be(struct dp_soc *soc)
 #endif /* WLAN_FEATURE_11BE_MLO */
 
 static inline
-QDF_STATUS dp_peer_rx_tids_create(struct dp_peer *peer)
-{
-	uint8_t i;
-
-	if (IS_MLO_DP_MLD_PEER(peer)) {
-		dp_peer_info("skip for mld peer");
-		return QDF_STATUS_SUCCESS;
-	}
-
-	if (peer->rx_tid) {
-		QDF_BUG(0);
-		dp_peer_err("peer rx_tid mem already exist");
-		return QDF_STATUS_E_FAILURE;
-	}
-
-	peer->rx_tid = qdf_mem_malloc(DP_MAX_TIDS *
-				      sizeof(struct dp_rx_tid));
-
-	if (!peer->rx_tid) {
-		dp_err("fail to alloc tid for peer" QDF_MAC_ADDR_FMT,
-		       QDF_MAC_ADDR_REF(peer->mac_addr.raw));
-		return QDF_STATUS_E_NOMEM;
-	}
-
-	qdf_mem_zero(peer->rx_tid, DP_MAX_TIDS * sizeof(struct dp_rx_tid));
-	for (i = 0; i < DP_MAX_TIDS; i++)
-		qdf_spinlock_create(&peer->rx_tid[i].tid_lock);
-
-	return QDF_STATUS_SUCCESS;
-}
-
-static inline
-void dp_peer_rx_tids_destroy(struct dp_peer *peer)
-{
-	uint8_t i;
-
-	if (!IS_MLO_DP_LINK_PEER(peer)) {
-		for (i = 0; i < DP_MAX_TIDS; i++)
-			qdf_spinlock_destroy(&peer->rx_tid[i].tid_lock);
-
-		qdf_mem_free(peer->rx_tid);
-	}
-
-	peer->rx_tid = NULL;
-}
-
-static inline
 void dp_peer_defrag_rx_tids_init(struct dp_txrx_peer *txrx_peer)
 {
 	uint8_t i;
@@ -2425,4 +2346,14 @@ static inline void dp_peer_rx_reo_shared_qaddr_delete(struct dp_soc *soc,
  * Return: True for WDS ext peer, false otherwise
  */
 bool dp_peer_check_wds_ext_peer(struct dp_peer *peer);
+
+/**
+ * dp_gen_ml_peer_id() - Generate MLD peer id for DP
+ *
+ * @soc: DP soc context
+ * @peer_id: mld peer id
+ *
+ * Return: DP MLD peer id
+ */
+uint16_t dp_gen_ml_peer_id(struct dp_soc *soc, uint16_t peer_id);
 #endif /* _DP_PEER_H_ */

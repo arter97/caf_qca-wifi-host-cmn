@@ -24,6 +24,7 @@
 #include "wlan_objmgr_peer_obj.h"
 
 #define WLAN_LINK_ID_INVALID    0xff
+#define WLAN_NUM_TWO_LINK_PSOC  2
 
 /**
  * mlo_peer_create - Initiatiate peer create on secondary link(s)
@@ -183,6 +184,18 @@ bool wlan_mlo_peer_is_assoc_peer(struct wlan_mlo_peer_context *ml_peer,
 				 struct wlan_objmgr_peer *peer);
 
 /**
+ * wlan_mlo_peer_is_link_peer() - check whether the peer is link peer
+ * @ml_peer: MLO peer
+ * @peer: Link peer
+ *
+ * This function checks whether the peer is link peer of MLO peer
+ *
+ * Return: true, if it is link peer
+ */
+bool wlan_mlo_peer_is_link_peer(struct wlan_mlo_peer_context *ml_peer,
+				struct wlan_objmgr_peer *peer);
+
+/**
  * wlan_mlo_partner_peer_assoc_post() - Notify partner peer assoc
  * @assoc_peer: Link peer
  *
@@ -248,6 +261,23 @@ QDF_STATUS wlan_mlo_peer_create(struct wlan_objmgr_vdev *vdev,
 				uint16_t aid);
 
 /**
+ * wlan_mlo_peer_asreq() - MLO peer process assoc req
+ * @vdev: Link VDEV
+ * @link_peer: Link peer
+ * @ml_info: ML links info
+ * @frm_buf: Assoc req buffer
+ *
+ * This function process assoc req on existing MLO peer and notifies other
+ * partner peers to process assoc request
+ *
+ * Return: SUCCESS, if MLO peer is successfully processed
+ */
+QDF_STATUS wlan_mlo_peer_asreq(struct wlan_objmgr_vdev *vdev,
+			       struct wlan_objmgr_peer *link_peer,
+			       struct mlo_partner_info *ml_info,
+			       qdf_nbuf_t frm_buf);
+
+/**
  * mlo_peer_cleanup() - Free MLO peer
  * @ml_peer: MLO peer
  *
@@ -300,6 +330,20 @@ static inline void wlan_mlo_peer_release_ref(
 QDF_STATUS wlan_mlo_link_peer_attach(struct wlan_mlo_peer_context *ml_peer,
 				     struct wlan_objmgr_peer *peer,
 				     qdf_nbuf_t frm_buf);
+
+/**
+ * wlan_mlo_link_asresp_attach() - MLO link peer assoc resp attach
+ * @ml_peer: MLO peer
+ * @peer: Link peer
+ * @frm_buf: Assoc resp buffer of non-assoc link
+ *
+ * This function attaches assoc resp of link peer to MLO peer
+ *
+ * Return: SUCCESS, if peer is successfully attached to MLO peer
+ */
+QDF_STATUS wlan_mlo_link_asresp_attach(struct wlan_mlo_peer_context *ml_peer,
+				       struct wlan_objmgr_peer *peer,
+				       qdf_nbuf_t frm_buf);
 
 /**
  * wlan_mlo_link_peer_delete() - MLO link peer delete
@@ -372,6 +416,19 @@ void wlan_mlo_peer_get_links_info(struct wlan_objmgr_peer *peer,
 uint8_t wlan_mlo_peer_get_primary_peer_link_id(struct wlan_objmgr_peer *peer);
 
 /**
+ * wlan_mlo_peer_get_primary_peer_link_id_by_ml_peer() - get vdev link ID of
+ * primary peer using ml peer.
+ * @ml_peer: ML peer
+ *
+ * This function checks for the peers and returns vdev link id of the primary
+ * peer.
+ *
+ * Return: link id of primary vdev
+ */
+uint8_t wlan_mlo_peer_get_primary_peer_link_id_by_ml_peer(
+				struct wlan_mlo_peer_context *ml_peer);
+
+/**
  * wlan_mlo_peer_get_partner_links_info() - get MLO peer partner links info
  * @peer: Link peer
  * @ml_links: structure to be filled with partner link info
@@ -433,6 +490,19 @@ struct wlan_mlo_peer_context *wlan_mlo_get_mlpeer_by_linkmac(
 struct wlan_mlo_peer_context *wlan_mlo_get_mlpeer_by_mld_mac(
 				struct wlan_mlo_dev_context *ml_dev,
 				struct qdf_mac_addr *mld_mac);
+
+/**
+ * wlan_mlo_get_mlpeer_by_peer_mladdr() - Get ML peer from the list of MLD's
+ *                                        using MLD MAC address
+ *
+ * @mldaddr: MAC address of the ML peer
+ * @mldev: Update corresponding ML dev context in which peer is found
+ *
+ * Return: Pointer to mlo peer context
+ */
+struct wlan_mlo_peer_context
+*wlan_mlo_get_mlpeer_by_peer_mladdr(struct qdf_mac_addr *mldaddr,
+				    struct wlan_mlo_dev_context **mldev);
 
 /**
  * wlan_mlo_get_mlpeer_by_aid() - find ML peer by AID
@@ -635,4 +705,26 @@ mlo_peer_free_auth_param(struct mlpeer_auth_params *auth_params)
  * Return: true, if MLO peer can be deleted
  */
 bool wlan_mlo_partner_peer_delete_is_allowed(struct wlan_objmgr_peer *src_peer);
+
+/**
+ * wlan_mlo_validate_reassocreq() - Checks MLO peer reassoc processing
+ * @ml_peer: ML peer
+ *
+ * This function checks whether Reassoc from MLO peer is processed successfully
+ *
+ * Return: SUCCESS, if Reassoc processing is done
+ */
+QDF_STATUS wlan_mlo_validate_reassocreq(struct wlan_mlo_peer_context *ml_peer);
+
+#ifdef QCA_SUPPORT_PRIMARY_LINK_MIGRATE
+/**
+ * wlan_objmgr_mlo_update_primary_info() - Update is_primary flag
+ * @peer: new primary link peer object
+ *
+ * API to update is_primary flag in peer list
+ *
+ * Return: void
+ */
+void wlan_objmgr_mlo_update_primary_info(struct wlan_objmgr_peer *peer);
+#endif
 #endif

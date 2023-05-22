@@ -113,11 +113,13 @@ dp_rx_pdev_mon_buf_desc_pool_init(struct dp_pdev *pdev, uint32_t mac_id)
  *  a given mac
  * @pdev: DP pdev
  * @mac_id: mac id
+ * @force_flush: Force flush ring
  *
  * Return: None
  */
 uint32_t
-dp_mon_dest_srng_drop_for_mac(struct dp_pdev *pdev, uint32_t mac_id);
+dp_mon_dest_srng_drop_for_mac(struct dp_pdev *pdev, uint32_t mac_id,
+			      bool force_flush);
 #endif
 
 /**
@@ -192,7 +194,7 @@ static inline void dp_mon_adjust_frag_len(struct dp_soc *soc,
 					  uint32_t *frag_len,
 					  uint16_t l2_hdr_pad)
 {
-	uint32_t rx_pkt_tlv_len = soc->rx_pkt_tlv_size;
+	uint32_t rx_pkt_tlv_len = soc->rx_mon_pkt_tlv_size;
 
 	if (*total_len >= (RX_MONITOR_BUFFER_SIZE - rx_pkt_tlv_len)) {
 		*frag_len = RX_MONITOR_BUFFER_SIZE - rx_pkt_tlv_len -
@@ -414,7 +416,7 @@ dp_rx_mon_parse_desc_buffer(struct dp_soc *dp_soc,
 {
 	struct hal_rx_mon_dest_buf_info frame_info;
 	uint16_t tot_payload_len =
-			RX_MONITOR_BUFFER_SIZE - dp_soc->rx_pkt_tlv_size;
+			RX_MONITOR_BUFFER_SIZE - dp_soc->rx_mon_pkt_tlv_size;
 
 	if (msdu_info->msdu_flags & HAL_MSDU_F_MSDU_CONTINUATION) {
 		/* First buffer of MSDU */
@@ -892,21 +894,21 @@ uint8_t *dp_rx_mon_get_buffer_data(struct dp_rx_desc *rx_desc)
 /**
  * dp_rx_cookie_2_mon_link_desc() - Retrieve Link descriptor based on target
  * @pdev: core physical device context
- * @buf_info: structure holding the buffer info
+ * @buf_info: ptr to structure holding the buffer info
  * @mac_id: mac number
  *
  * Return: link descriptor address
  */
 static inline
 void *dp_rx_cookie_2_mon_link_desc(struct dp_pdev *pdev,
-				   struct hal_buf_info buf_info,
+				   struct hal_buf_info *buf_info,
 				   uint8_t mac_id)
 {
 	if (pdev->soc->wlan_cfg_ctx->rxdma1_enable)
-		return dp_rx_cookie_2_mon_link_desc_va(pdev, &buf_info,
+		return dp_rx_cookie_2_mon_link_desc_va(pdev, buf_info,
 						       mac_id);
 
-	return dp_rx_cookie_2_link_desc_va(pdev->soc, &buf_info);
+	return dp_rx_cookie_2_link_desc_va(pdev->soc, buf_info);
 }
 
 /**

@@ -22,6 +22,32 @@
 
 #include <hif.h>                /* A_TARGET_WRITE */
 
+#ifndef QCA_WIFI_WCN6450
+/* Mask for packet offset in the CE descriptor */
+#define CE_DESC_PKT_OFFSET_BIT_M 0x0FFF0000
+
+/* Packet offset start bit position in CE descriptor */
+#define CE_DESC_PKT_OFFSET_BIT_S 16
+
+/* Packet type start bit position in CE descriptor */
+#define CE_DESC_PKT_TYPE_BIT_S 6
+
+/* Tx classify start bit position in CE descriptor */
+#define CE_DESC_TX_CLASSIFY_BIT_S 5
+#else
+/* Mask for packet offset in the CE descriptor */
+#define CE_DESC_PKT_OFFSET_BIT_M 0x7FF80000
+
+/* Packet offset start bit position in CE descriptor */
+#define CE_DESC_PKT_OFFSET_BIT_S  19
+
+/* Packet type start bit position in CE descriptor */
+#define CE_DESC_PKT_TYPE_BIT_S   9
+
+/* Tx classify start bit position in CE descriptor */
+#define CE_DESC_TX_CLASSIFY_BIT_S   8
+#endif
+
 /* Copy Engine operational state */
 enum CE_op_state {
 	CE_UNUSED,
@@ -35,6 +61,11 @@ enum ol_ath_hif_ce_ecodes {
 };
 
 struct CE_src_desc;
+
+/* CE ring BIT mask
+ * CE_RING_FLUSH_EVENT: flush ce ring index in case of link down
+ */
+#define CE_RING_FLUSH_EVENT BIT(0)
 
 /* Copy Engine Ring internal state */
 struct CE_ring_state {
@@ -97,6 +128,11 @@ struct CE_ring_state {
 	uint8_t is_ring_prealloc;
 
 	OS_DMA_MEM_CONTEXT(ce_dmacontext); /* OS Specific DMA context */
+
+	/*ce ring event */
+	unsigned long event;
+	/* last flushed time stamp */
+	uint64_t last_flush_ts;
 };
 
 /* Copy Engine internal state */
@@ -125,6 +161,11 @@ struct CE_state {
 	CE_watermark_cb watermark_cb;
 	void *wm_context;
 
+#ifdef CUSTOM_CB_SCHEDULER_SUPPORT
+	qdf_atomic_t custom_cb_pending;
+	void (*custom_cb)(void *arg);
+	void *custom_cb_context;
+#endif /* CUSTOM_CB_SCHEDULER_SUPPORT */
 	/*Record the state of the copy compl interrupt */
 	int disable_copy_compl_intr;
 
@@ -161,6 +202,8 @@ struct CE_state {
 	/* CE tasklet sched time in nanoseconds */
 	unsigned long long ce_tasklet_sched_time;
 #endif
+	bool msi_supported;
+	bool batch_intr_supported;
 };
 
 /* Descriptor rings must be aligned to this boundary */
@@ -170,13 +213,90 @@ struct CE_state {
 #ifdef QCA_WIFI_3_0
 #define HIF_CE_DESC_ADDR_TO_DMA(desc) \
 	(qdf_dma_addr_t)(((uint64_t)(desc)->buffer_addr + \
-	((uint64_t)((desc)->buffer_addr_hi & 0x1F) << 32)))
+	((uint64_t)((desc)->buffer_addr_hi & CE_RING_BASE_ADDR_HIGH_MASK) << \
+	 32)))
 #else
 #define HIF_CE_DESC_ADDR_TO_DMA(desc) \
 	(qdf_dma_addr_t)((desc)->buffer_addr)
 #endif
 
-#ifdef QCA_WIFI_3_0
+#if defined(QCA_WIFI_WCN6450)
+struct CE_src_desc {
+	uint32_t buffer_addr:32;
+#if _BYTE_ORDER == _BIG_ENDIAN
+	uint32_t gather:1,
+		 packet_result_offset:12,
+		 toeplitz_hash_enable:1, /* reserved */
+		 addr_x_search_disable:1, /* reserved */
+		 addr_y_search_disable:1, /* reserved */
+		 misc_int_disable:1,
+		 target_int_disable:1,
+		 host_int_disable:1,
+		 dest_byte_swap:1,
+		 byte_swap:1,
+		 type:2, /* reserved */
+		 tx_classify:1,
+		 buffer_addr_hi:8;
+	uint32_t meta_data:16,
+		 nbytes:16;
+#else
+	uint32_t buffer_addr_hi:8,
+		 tx_classify:1,
+		 type:2, /* reserved */
+		 byte_swap:1, /* src_byte_swap */
+		 dest_byte_swap:1,
+		 host_int_disable:1,
+		 target_int_disable:1,
+		 misc_int_disable:1,
+		 addr_y_search_disable:1, /* reserved */
+		 addr_x_search_disable:1, /* reserved */
+		 toeplitz_hash_enable:1, /* reserved */
+		 packet_result_offset:12,
+		 gather:1;
+	uint32_t nbytes:16,
+		 meta_data:16;
+#endif
+	uint32_t toeplitz_hash_result:32;
+};
+
+struct CE_dest_desc {
+	uint32_t buffer_addr:32;
+#if _BYTE_ORDER == _BIG_ENDIAN
+	uint32_t gather:1,
+		 packet_result_offset:12,
+		 toeplitz_hash_enable:1, /* reserved */
+		 addr_x_search_disable:1, /* reserved */
+		 addr_y_search_disable:1, /* reserved */
+		 misc_int_disable:1,
+		 target_int_disable:1,
+		 host_int_disable:1,
+		 byte_swap:1, /* dest_byte_swap */
+		 src_byte_swap:1,
+		 type:2, /* reserved */
+		 tx_classify:1,
+		 buffer_addr_hi:8;
+	uint32_t meta_data:16,
+		 nbytes:16;
+#else
+	uint32_t buffer_addr_hi:8,
+		 tx_classify:1,
+		 type:2, /* reserved */
+		 src_byte_swap:1,
+		 byte_swap:1, /* dest_byte_swap */
+		 host_int_disable:1,
+		 target_int_disable:1,
+		 misc_int_disable:1,
+		 addr_y_search_disable:1, /* reserved */
+		 addr_x_search_disable:1, /* reserved */
+		 toeplitz_hash_enable:1, /* reserved */
+		 packet_result_offset:12,
+		 gather:1;
+	uint32_t nbytes:16,
+		 meta_data:16;
+#endif
+	uint32_t toeplitz_hash_result:32;
+};
+#elif defined(QCA_WIFI_3_0)
 struct CE_src_desc {
 	uint32_t buffer_addr:32;
 #if _BYTE_ORDER == _BIG_ENDIAN
@@ -299,7 +419,7 @@ struct CE_dest_desc {
 		 meta_data:12;
 #endif
 };
-#endif /* QCA_WIFI_3_0 */
+#endif /* QCA_WIFI_WCN6450 */
 
 struct ce_srng_src_desc {
 	uint32_t buffer_addr_lo;
@@ -762,4 +882,51 @@ void hif_ce_desc_record_rx_paddr(struct hif_softc *scn,
 {
 }
 #endif /* HIF_RECORD_PADDR */
+
+static inline void ce_ring_aquire_lock(struct CE_handle *handle)
+{
+	struct CE_state *ce_state = (struct CE_state *)handle;
+
+	qdf_spin_lock_bh(&ce_state->ce_index_lock);
+}
+
+static inline void ce_ring_release_lock(struct CE_handle *handle)
+{
+	struct CE_state *ce_state = (struct CE_state *)handle;
+
+	qdf_spin_unlock_bh(&ce_state->ce_index_lock);
+}
+
+/*
+ * ce_ring_clear_event() - Clear ring event
+ * @ring: Ring pointer
+ * @event: ring event type
+ *
+ */
+static inline void ce_ring_clear_event(struct CE_ring_state *ring, int event)
+{
+	qdf_atomic_clear_bit(event, &ring->event);
+}
+
+/*
+ * ce_ring_set_event() - Set ring event
+ * @ring: Ring pointer
+ * @event: Ring event type
+ *
+ */
+static inline void ce_ring_set_event(struct CE_ring_state *ring, int event)
+{
+	qdf_atomic_set_bit(event, &ring->event);
+}
+
+/*
+ * ce_ring_get_clear_event() - Clear ring event and return old value
+ * @ring: Ring pointer
+ * @event: Ring event type
+ *
+ */
+static inline int ce_ring_get_clear_event(struct CE_ring_state *ring, int event)
+{
+	return qdf_atomic_test_and_clear_bit(event, &ring->event);
+}
 #endif /* __COPY_ENGINE_INTERNAL_H__ */

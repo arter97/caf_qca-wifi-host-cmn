@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2013-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -94,9 +94,15 @@ QDF_STATUS wlan_ipa_update_perf_level(struct wlan_ipa_priv *ipa_ctx, int client)
 static inline
 QDF_STATUS wlan_ipa_update_perf_level(struct wlan_ipa_priv *ipa_ctx, int client)
 {
-	return cdp_ipa_set_perf_level(ipa_ctx->dp_soc,
-				      client,
-				      WLAN_IPA_MAX_BANDWIDTH, ipa_ctx->hdl);
+	uint32_t bw;
+
+	if (ipa_ctx->opt_wifi_datapath)
+		bw = WLAN_IPA_MAX_BANDWIDTH;
+	else
+		bw = WLAN_IPA_MAX_BW_NOMINAL;
+
+	return cdp_ipa_set_perf_level(ipa_ctx->dp_soc, client, bw,
+				      ipa_ctx->hdl);
 }
 #endif
 
@@ -131,6 +137,13 @@ void wlan_ipa_init_metering(struct wlan_ipa_priv *ipa_ctx)
 {
 	qdf_event_create(&ipa_ctx->ipa_uc_sharing_stats_comp);
 	qdf_event_create(&ipa_ctx->ipa_uc_set_quota_comp);
+}
+#endif
+
+#ifdef IPA_OPT_WIFI_DP
+void wlan_ipa_add_rem_flt_cb_event(struct wlan_ipa_priv *ipa_ctx)
+{
+	qdf_event_create(&ipa_ctx->ipa_flt_evnt);
 }
 #endif
 

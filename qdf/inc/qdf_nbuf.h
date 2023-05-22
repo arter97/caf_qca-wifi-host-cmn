@@ -242,6 +242,8 @@ enum wsc_op_code {
 #define MAX_CHAIN 8
 #define QDF_MON_STATUS_MPDU_FCS_BMAP_NWORDS 8
 
+#define EHT_USER_INFO_LEN 4
+
 /**
  * typedef qdf_nbuf_queue_t - Platform independent packet queue abstraction
  */
@@ -512,7 +514,7 @@ struct mon_rx_status {
 	uint32_t usig_mask;
 	uint32_t eht_known;
 	uint32_t eht_data[6];
-	uint32_t eht_user_info[4];
+	uint32_t eht_user_info[EHT_USER_INFO_LEN];
 #ifdef QCA_UNDECODED_METADATA_SUPPORT
 	uint32_t phyrx_abort:1,
 		 phyrx_abort_reason:8,
@@ -1874,6 +1876,28 @@ static inline void qdf_nbuf_set_raw_frame(qdf_nbuf_t buf, uint8_t val)
 static inline int qdf_nbuf_is_raw_frame(qdf_nbuf_t buf)
 {
 	return __qdf_nbuf_is_raw_frame(buf);
+}
+
+/**
+ * qdf_nbuf_is_fr_ds_set() - get from DS bit
+ * @buf: Network buffer
+ *
+ * Return: integer value - 0/1
+ */
+static inline int qdf_nbuf_is_fr_ds_set(qdf_nbuf_t buf)
+{
+	return __qdf_nbuf_is_fr_ds_set(buf);
+}
+
+/**
+ * qdf_nbuf_is_to_ds_set() - get to DS bit
+ * @buf: Network buffer
+ *
+ * Return: integer value - 0/1
+ */
+static inline int qdf_nbuf_is_to_ds_set(qdf_nbuf_t buf)
+{
+	return __qdf_nbuf_is_to_ds_set(buf);
 }
 
 /**
@@ -4867,6 +4891,31 @@ qdf_nbuf_get_priv_ptr(qdf_nbuf_t buf)
 }
 
 /**
+ * qdf_nbuf_has_fraglist() - check if nbuf has attached frag list
+ * @nbuf: Pointer to nbuf
+ *
+ * Return: bool
+ */
+static inline bool
+qdf_nbuf_has_fraglist(qdf_nbuf_t nbuf)
+{
+	return __qdf_nbuf_has_fraglist(nbuf);
+}
+
+/**
+ * qdf_nbuf_get_last_frag_list_nbuf() - Fetch pointer to last nbuf in frag list
+ * @nbuf: Pointer to nbuf
+ *
+ * Return: Pointer to last nbuf in frag list if parent nbuf has extended frag
+ *         list or else return NULL
+ */
+static inline qdf_nbuf_t
+qdf_nbuf_get_last_frag_list_nbuf(qdf_nbuf_t nbuf)
+{
+	return __qdf_nbuf_get_last_frag_list_nbuf(nbuf);
+}
+
+/**
  * qdf_nbuf_update_radiotap() - update radiotap at head of nbuf.
  * @rx_status: rx_status containing required info to update radiotap
  * @nbuf: Pointer to nbuf
@@ -5565,5 +5614,15 @@ void qdf_nbuf_stop_replenish_timer(void);
  * Return: qdf_nbuf_t
  */
 qdf_nbuf_t qdf_get_nbuf_valid_frag(qdf_nbuf_t nbuf);
+
+/**
+ * qdf_nbuf_fast_xmit() - Check if packet has fast_xmit support
+ * @nbuf: qdf_nbuf_t master nbuf
+ *
+ * This function checks if skb has fast_xmit or not.
+ *
+ * Return: True if skb support fast_xmit otherwise false
+ */
+bool qdf_nbuf_fast_xmit(qdf_nbuf_t nbuf);
 
 #endif /* _QDF_NBUF_H */

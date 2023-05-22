@@ -670,6 +670,15 @@ void
 wmi_flush_endpoint(wmi_unified_t wmi_handle);
 
 /**
+ * wmi_get_endpoint() - API to get endpoint ID
+ * @wmi_handle: handle to WMI.
+ *
+ * Return Handle to endpoint
+ */
+HTC_ENDPOINT_ID
+wmi_get_endpoint(wmi_unified_t wmi_handle);
+
+/**
  * wmi_interface_sequence_stop() - API to stop wmi sequence check
  *
  * @wmi_handle: handle to WMI.
@@ -727,6 +736,34 @@ static inline bool wmi_get_runtime_pm_inprogress(wmi_unified_t wmi_handle)
 	return false;
 }
 #endif
+
+/**
+ * wmi_set_wow_enable_ack_failed() - set wow enable ack failed status
+ *     if wow enable ack failed, which means host and fw have some problem
+ *     to exchange wmi cmd. set indication here and block wmi cmds.
+ *     the cmds can be sent again after wmi re-init in subsystem recovery.
+ * @wmi_handle: wmi context
+ *
+ * return: none
+ */
+void wmi_set_wow_enable_ack_failed(wmi_unified_t wmi_handle);
+
+/**
+ * wmi_clear_wow_enable_ack_failed() - clear wow enable ack failed status
+ *     explicitly clear this status when wmi close of SSR
+ * @wmi_handle: wmi context
+ *
+ * return: none
+ */
+void wmi_clear_wow_enable_ack_failed(wmi_unified_t wmi_handle);
+
+/**
+ * wmi_has_wow_enable_ack_failed() - get wow enable ack failed status
+ * @wmi_handle: wmi context
+ *
+ * Return: true if wow enable ack already failed. other false
+ */
+bool wmi_has_wow_enable_ack_failed(wmi_unified_t wmi_handle);
 
 /**
  * wmi_unified_get_soc_handle: Get WMI SoC handle
@@ -2076,6 +2113,18 @@ wmi_unified_send_btcoex_wlan_priority_cmd(wmi_unified_t wmi_handle,
 QDF_STATUS
 wmi_unified_send_btcoex_duty_cycle_cmd(wmi_unified_t wmi_handle,
 				       struct btcoex_cfg_params *param);
+/**
+ *  wmi_unified_send_egid_info_cmd() - send ESL egid_info commands
+ * @wmi_handle: wmi handle
+ * @param: esl_egid params
+ *
+ * Send WMI_ESL_EGID_CMDID parameters to fw.
+ *
+ * Return: QDF_STATUS_SUCCESS on success, QDF_STATUS_E_** on error
+ */
+QDF_STATUS
+wmi_unified_send_egid_info_cmd(wmi_unified_t wmi_handle,
+			       struct esl_egid_params *param);
 
 /**
  * wmi_unified_send_coex_ver_cfg_cmd() - send coex ver cfg command
@@ -3837,6 +3886,23 @@ QDF_STATUS wmi_extract_scan_radio_cap_service_ready_ext2(
 			struct wlan_psoc_host_scan_radio_caps *param);
 
 /**
+ * wmi_extract_msdu_idx_qtype_map_service_ready_ext2: Extract HTT MSDU index
+ *                                                    to qtype map received
+ *                                                    through extended service
+ *                                                    ready2 event
+ * @wmi_handle: WMI handle
+ * @evt_buf: Event buffer
+ * @idx: HTT MSDU index in array
+ * @msdu_qtype: MSDU Qtype pointer
+ *
+ * Return: QDF status of operation
+ */
+QDF_STATUS wmi_extract_msdu_idx_qtype_map_service_ready_ext2(
+			wmi_unified_t wmi_handle,
+			uint8_t *evt_buf, uint8_t idx,
+			uint8_t *msdu_qtype);
+
+/**
  * wmi_extract_sw_cal_ver_ext2: Extract sw cal version received through
  *                              extended service ready2 event
  * @wmi_handle: WMI handle
@@ -5096,4 +5162,18 @@ QDF_STATUS wmi_extract_sap_coex_cap_service_ready_ext2(
 			wmi_unified_t wmi_handle,
 			uint8_t *evt_buf,
 			struct wmi_host_coex_fix_chan_cap *cap);
+
+/**
+ * wmi_extract_csa_ie_received_event() - extract csa IE received event
+ * @wmi_handle: wmi handle
+ * @evt_buf: pointer to event buffer
+ * @vdev_id: VDEV ID
+ * @csa_event: csa event data
+ *
+ * Return: QDF_STATUS_SUCCESS on success, QDF_STATUS_E_** on error
+ */
+QDF_STATUS
+wmi_extract_csa_ie_received_event(wmi_unified_t wmi_handle,
+				  void *evt_buf, uint8_t *vdev_id,
+				  struct csa_offload_params *csa_event);
 #endif /* _WMI_UNIFIED_API_H_ */

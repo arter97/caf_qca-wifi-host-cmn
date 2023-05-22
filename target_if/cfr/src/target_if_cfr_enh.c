@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2019-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -705,7 +705,8 @@ extract_peer_mac_from_freeze_tlv(void *freeze_tlv, uint8_t *peermac)
 
 /**
  * check_dma_length() - Sanity check DMA header and payload length
- * @dma_hdr: pointer to enhanced DMA header
+ * @lut: lookup table entry to check
+ * @target_type: target type
  *
  * Return: QDF_STATUS
  */
@@ -731,6 +732,11 @@ static QDF_STATUS check_dma_length(struct look_up_table *lut,
 	} else if (target_type == TARGET_TYPE_QCN9224) {
 		if (lut->header_length <= WAIKIKI_MAX_HEADER_LENGTH_WORDS &&
 		    lut->payload_length <= WAIKIKI_MAX_DATA_LENGTH_BYTES) {
+			return QDF_STATUS_SUCCESS;
+		}
+	} else if (target_type == TARGET_TYPE_QCN6432) {
+		if (lut->header_length <= QCN6432_MAX_HEADER_LENGTH_WORDS &&
+		    lut->payload_length <= QCN6432_MAX_DATA_LENGTH_BYTES) {
 			return QDF_STATUS_SUCCESS;
 		}
 	} else {
@@ -870,7 +876,7 @@ done:
 /**
  * target_if_cfr_rx_tlv_process() - Process PPDU status TLVs and store info in
  * lookup table
- * @pdev_obj: PDEV object
+ * @pdev: PDEV object
  * @nbuf: ppdu info
  *
  * Return: none
@@ -1557,6 +1563,7 @@ target_if_pdev_aoa_phasedaelta_event_handler(ol_scn_t sc,
  * enh_prepare_cfr_header_txstatus() - Prepare CFR metadata for TX failures
  * @tx_evt_param: ptr to WMI TX completion event
  * @header: pointer to metadata
+ * @target_type: target type
  *
  * Return: none
  */
@@ -1956,10 +1963,12 @@ target_if_unregister_tx_completion_enh_event_handler(struct wlan_objmgr_psoc
 	return status;
 }
 
-/**
+/*
  * lut_ageout_timer_task() - Timer to flush pending TXRX/DBR events
  *
  * Return: none
+ * NB: kernel-doc script doesn't parse os_timer_func
+
  */
 static os_timer_func(lut_ageout_timer_task)
 {
@@ -2237,6 +2246,11 @@ QDF_STATUS cfr_enh_init_pdev(struct wlan_objmgr_psoc *psoc,
 		pcfr->num_subbufs = STREAMFS_NUM_SUBBUF_WAIKIKI;
 		pcfr->chip_type = CFR_CAPTURE_RADIO_WAIKIKI;
 		pcfr->max_mu_users = WAIKIKI_CFR_MU_USERS;
+	} else if (target_type == TARGET_TYPE_QCN6432) {
+		pcfr->subbuf_size = STREAMFS_MAX_SUBBUF_QCN6432;
+		pcfr->num_subbufs = STREAMFS_NUM_SUBBUF_QCN6432;
+		pcfr->chip_type = CFR_CAPTURE_RADIO_PEBBLE;
+		pcfr->max_mu_users = QCN6432_CFR_MU_USERS;
 	} else {
 		pcfr->subbuf_size = STREAMFS_MAX_SUBBUF_CYP;
 		pcfr->num_subbufs = STREAMFS_NUM_SUBBUF_CYP;

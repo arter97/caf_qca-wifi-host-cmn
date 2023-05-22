@@ -57,6 +57,8 @@
 #include <linux/byteorder/generic.h>
 #endif
 
+#include <linux/rcupdate.h>
+
 typedef wait_queue_head_t __qdf_wait_queue_head_t;
 
 /* Generic compiler-dependent macros if defined by the OS */
@@ -209,6 +211,18 @@ static inline bool __qdf_is_macaddr_equal(const struct qdf_mac_addr *mac_addr1,
 			QDF_BUG_ON_ASSERT(0); \
 		} \
 } while (0)
+
+#define __qdf_assert_with_debug(expr, debug_fp, ...)			\
+	do {								\
+		typeof(debug_fp) _debug_fp = debug_fp;			\
+		if (unlikely(!(expr))) {				\
+			pr_err("Assertion failed! %s:%s %s:%d\n",	\
+			       # expr, __func__, __FILE__, __LINE__);	\
+			if (_debug_fp)					\
+				_debug_fp(__VA_ARGS__);			\
+			QDF_BUG_ON_ASSERT(0);				\
+		}							\
+	} while (0)
 
 #define __qdf_target_assert(expr)  do {    \
 	if (unlikely(!(expr))) {                                 \
@@ -500,4 +514,19 @@ static inline int __qdf_get_smp_processor_id(void)
 {
 	return smp_processor_id();
 }
+
+/**
+ * __qdf_in_atomic: Check whether current thread running in atomic context
+ *
+ * Return: true if current thread is running in the atomic context
+ *	   else it will be return false.
+ */
+static inline bool __qdf_in_atomic(void)
+{
+	if (in_interrupt() || !preemptible() || rcu_preempt_depth())
+		return true;
+
+	return false;
+}
+
 #endif /*_I_QDF_UTIL_H*/

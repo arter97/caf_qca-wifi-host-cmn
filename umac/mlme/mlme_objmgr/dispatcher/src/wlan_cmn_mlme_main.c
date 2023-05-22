@@ -140,6 +140,26 @@ QDF_STATUS mlme_psoc_ops_ext_hdl_create(struct psoc_mlme_obj *psoc_mlme)
 	return ret;
 }
 
+QDF_STATUS mlme_psoc_ext_enable_cb(struct wlan_objmgr_psoc *psoc)
+{
+	QDF_STATUS ret = QDF_STATUS_SUCCESS;
+
+	if (glbl_ops && glbl_ops->mlme_psoc_ext_hdl_enable)
+		ret = glbl_ops->mlme_psoc_ext_hdl_enable(psoc);
+
+	return ret;
+}
+
+QDF_STATUS mlme_psoc_ext_disable_cb(struct wlan_objmgr_psoc *psoc)
+{
+	QDF_STATUS ret = QDF_STATUS_SUCCESS;
+
+	if (glbl_ops && glbl_ops->mlme_psoc_ext_hdl_disable)
+		ret = glbl_ops->mlme_psoc_ext_hdl_disable(psoc);
+
+	return ret;
+}
+
 QDF_STATUS mlme_psoc_ops_ext_hdl_destroy(struct psoc_mlme_obj *psoc_mlme)
 {
 	QDF_STATUS ret = QDF_STATUS_SUCCESS;
@@ -602,6 +622,16 @@ mlme_cm_osif_roam_complete(struct wlan_objmgr_vdev *vdev)
 	return ret;
 }
 
+void
+mlme_cm_osif_roam_rt_stats(struct roam_stats_event *roam_stats,
+			   uint8_t idx)
+{
+	if (glbl_cm_ops &&
+	    glbl_cm_ops->mlme_cm_roam_rt_stats_cb)
+		glbl_cm_ops->mlme_cm_roam_rt_stats_cb(roam_stats,
+						      idx);
+}
+
 QDF_STATUS
 mlme_cm_osif_roam_get_scan_params(struct wlan_objmgr_vdev *vdev,
 				  struct element_info *scan_ie,
@@ -662,6 +692,14 @@ void mlme_set_osif_twt_cb(osif_twt_get_global_ops_cb osif_twt_ops)
 void mlme_set_ops_register_cb(mlme_get_global_ops_cb ops_cb)
 {
 	glbl_ops_cb = ops_cb;
+}
+
+void mlme_send_scan_done_complete_cb(uint8_t vdev_id)
+{
+	if (glbl_vdev_mgr_ops &&
+	    glbl_vdev_mgr_ops->mlme_vdev_mgr_send_scan_done_complete_cb)
+		glbl_vdev_mgr_ops->mlme_vdev_mgr_send_scan_done_complete_cb(
+							vdev_id);
 }
 
 bool mlme_max_chan_switch_is_set(struct wlan_objmgr_psoc *psoc)

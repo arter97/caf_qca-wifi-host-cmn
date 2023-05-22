@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2013-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -814,6 +814,7 @@ static bool hif_is_pld_based_target(struct hif_ipci_softc *sc,
 #ifdef QCA_WIFI_QCA6750
 	case QCA6750_DEVICE_ID:
 #endif
+	case WCN6450_DEVICE_ID:
 		return true;
 	}
 	return false;
@@ -846,7 +847,7 @@ QDF_STATUS hif_ipci_enable_bus(struct hif_softc *ol_sc,
 	struct hif_opaque_softc *hif_hdl = GET_HIF_OPAQUE_HDL(ol_sc);
 	uint16_t revision_id = 0;
 	struct hif_target_info *tgt_info;
-	int device_id = QCA6750_DEVICE_ID;
+	int device_id = HIF_IPCI_DEVICE_ID;
 
 	if (!ol_sc) {
 		hif_err("hif_ctx is NULL");
@@ -1051,6 +1052,7 @@ void hif_allow_link_low_power_states(struct hif_opaque_softc *hif)
 }
 #endif
 
+#ifndef QCA_WIFI_WCN6450
 int hif_ipci_enable_grp_irqs(struct hif_softc *scn)
 {
 	struct hif_ipci_softc *ipci_scn = HIF_GET_IPCI_SOFTC(scn);
@@ -1084,3 +1086,4 @@ int hif_ipci_disable_grp_irqs(struct hif_softc *scn)
 
 	return status;
 }
+#endif

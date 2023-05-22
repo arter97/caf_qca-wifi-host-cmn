@@ -225,6 +225,7 @@ struct wlan_objmgr_vdev *wlan_objmgr_vdev_obj_create(
 
 	/* peer count to 0 */
 	vdev->vdev_objmgr.wlan_peer_count = 0;
+	wlan_objmgr_vdev_set_ml_peer_count(vdev, 0);
 	qdf_atomic_init(&vdev->vdev_objmgr.ref_cnt);
 	vdev->vdev_objmgr.print_cnt = 0;
 	wlan_objmgr_vdev_get_ref(vdev, WLAN_OBJMGR_ID);
@@ -1421,6 +1422,16 @@ void wlan_objmgr_vdev_peer_freed_notify(struct wlan_objmgr_vdev *vdev)
 	}
 }
 
+QDF_STATUS
+wlan_vdev_get_bss_peer_mac_for_pmksa(struct wlan_objmgr_vdev *vdev,
+				     struct qdf_mac_addr *bss_peer_mac)
+{
+	if (wlan_vdev_mlme_is_mlo_vdev(vdev))
+		return wlan_vdev_get_bss_peer_mld_mac(vdev, bss_peer_mac);
+
+	return wlan_vdev_get_bss_peer_mac(vdev, bss_peer_mac);
+}
+
 QDF_STATUS wlan_vdev_get_bss_peer_mac(struct wlan_objmgr_vdev *vdev,
 				      struct qdf_mac_addr *bss_peer_mac)
 {
@@ -1473,6 +1484,28 @@ QDF_STATUS wlan_vdev_get_bss_peer_mld_mac(struct wlan_objmgr_vdev *vdev,
 
 	return QDF_STATUS_SUCCESS;
 }
+
+bool wlan_vdev_mlme_is_tdls_vdev(struct wlan_objmgr_vdev *vdev)
+{
+	bool is_tdls_vdev;
+
+	if (!vdev) {
+		obj_mgr_err("vdev is NULL");
+		return false;
+	}
+
+	wlan_acquire_vdev_mlo_lock(vdev);
+
+	is_tdls_vdev =
+		wlan_vdev_mlme_feat_ext2_cap_get(vdev,
+						 WLAN_VDEV_FEXT2_MLO_STA_TDLS);
+
+	wlan_release_vdev_mlo_lock(vdev);
+
+	return is_tdls_vdev;
+}
+
+qdf_export_symbol(wlan_vdev_mlme_is_tdls_vdev);
 
 bool wlan_vdev_mlme_is_mlo_vdev(struct wlan_objmgr_vdev *vdev)
 {

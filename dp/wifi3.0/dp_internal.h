@@ -22,6 +22,7 @@
 
 #include "dp_types.h"
 #include "dp_htt.h"
+#include "dp_rx_tid.h"
 
 #define RX_BUFFER_SIZE_PKTLOG_LITE 1024
 
@@ -30,6 +31,8 @@
 #define DP_BLOCKMEM_SIZE 4096
 #define WBM2_SW_PPE_REL_RING_ID 6
 #define WBM2_SW_PPE_REL_MAP_ID 11
+#define DP_TX_PPEDS_POOL_ID 0xF
+
 /* Alignment for consistent memory for DP rings*/
 #define DP_RING_BASE_ALIGN 32
 
@@ -59,6 +62,11 @@
 #define DIRECT_LINK_REFILL_RING_IDX     2
 #endif
 #endif
+
+#define DP_MAX_VLAN_IDS 4096
+#define DP_VLAN_UNTAGGED 0
+#define DP_VLAN_TAGGED_MULTICAST 1
+#define DP_VLAN_TAGGED_UNICAST 2
 
 /**
  * struct htt_dbgfs_cfg - structure to maintain required htt data
@@ -973,7 +981,7 @@ dp_mon_rx_enable_fpmo(struct dp_soc *soc, uint32_t *msg_word,
 {
 }
 
-#ifdef WLAN_TELEMETRY_STATS_SUPPORT
+#ifdef WLAN_CONFIG_TELEMETRY_AGENT
 static inline
 void dp_monitor_peer_telemetry_stats(struct dp_peer *peer,
 				     struct cdp_peer_telemetry_stats *stats)
@@ -985,7 +993,7 @@ void dp_monitor_peer_deter_stats(struct dp_peer *peer,
 				 struct cdp_peer_telemetry_stats *stats)
 {
 }
-#endif /* WLAN_TELEMETRY_STATS_SUPPORT */
+#endif /* WLAN_CONFIG_TELEMETRY_AGENT */
 #endif /* !WIFI_MONITOR_SUPPORT */
 
 /**
@@ -1072,14 +1080,26 @@ void DP_PRINT_STATS(const char *fmt, ...);
 #define DP_STATS_INIT(_handle) \
 	qdf_mem_zero(&((_handle)->stats), sizeof((_handle)->stats))
 
+#define DP_TXRX_PEER_STATS_INIT(_handle, size) \
+	qdf_mem_zero(&((_handle)->stats[0]), size)
+
 #define DP_STATS_CLR(_handle) \
 	qdf_mem_zero(&((_handle)->stats), sizeof((_handle)->stats))
+
+#define DP_TXRX_PEER_STATS_CLR(_handle, size) \
+	qdf_mem_zero(&((_handle)->stats[0]), size)
 
 #ifndef DISABLE_DP_STATS
 #define DP_STATS_INC(_handle, _field, _delta) \
 { \
 	if (likely(_handle)) \
 		_handle->stats._field += _delta; \
+}
+
+#define DP_PEER_LINK_STATS_INC(_handle, _field, _delta, _link) \
+{ \
+	if (likely(_handle)) \
+		_handle->stats[_link]._field += _delta; \
 }
 
 #define DP_PEER_STATS_FLAT_INC(_handle, _field, _delta) \
@@ -1092,6 +1112,12 @@ void DP_PRINT_STATS(const char *fmt, ...);
 { \
 	if (_cond && likely(_handle)) \
 		_handle->stats._field += _delta; \
+}
+
+#define DP_PEER_LINK_STATS_INCC(_handle, _field, _delta, _cond, _link) \
+{ \
+	if (_cond && likely(_handle)) \
+		_handle->stats[_link]._field += _delta; \
 }
 
 #define DP_STATS_DEC(_handle, _field, _delta) \
@@ -1110,6 +1136,12 @@ void DP_PRINT_STATS(const char *fmt, ...);
 { \
 	if (likely(_handle)) \
 		_handle->stats._field = _delta; \
+}
+
+#define DP_PEER_LINK_STATS_UPD(_handle, _field, _delta, _link) \
+{ \
+	if (likely(_handle)) \
+		_handle->stats[_link]._field = _delta; \
 }
 
 #define DP_STATS_INC_PKT(_handle, _field, _count, _bytes) \
@@ -1148,11 +1180,14 @@ void DP_PRINT_STATS(const char *fmt, ...);
 
 #else
 #define DP_STATS_INC(_handle, _field, _delta)
+#define DP_PEER_LINK_STATS_INC(_handle, _field, _delta, _link)
 #define DP_PEER_STATS_FLAT_INC(_handle, _field, _delta)
 #define DP_STATS_INCC(_handle, _field, _delta, _cond)
+#define DP_PEER_LINK_STATS_INCC(_handle, _field, _delta, _cond, _link)
 #define DP_STATS_DEC(_handle, _field, _delta)
 #define DP_PEER_STATS_FLAT_DEC(_handle, _field, _delta)
 #define DP_STATS_UPD(_handle, _field, _delta)
+#define DP_PEER_LINK_STATS_UPD(_handle, _field, _delta, _link)
 #define DP_STATS_INC_PKT(_handle, _field, _count, _bytes)
 #define DP_PEER_STATS_FLAT_INC_PKT(_handle, _field, _count, _bytes)
 #define DP_STATS_INCC_PKT(_handle, _field, _count, _bytes, _cond)
@@ -1160,47 +1195,47 @@ void DP_PRINT_STATS(const char *fmt, ...);
 #define DP_STATS_AGGR_PKT(_handle_a, _handle_b, _field)
 #endif
 
-#define DP_PEER_PER_PKT_STATS_INC(_handle, _field, _delta) \
+#define DP_PEER_PER_PKT_STATS_INC(_handle, _field, _delta, _link) \
 { \
-	DP_STATS_INC(_handle, per_pkt_stats._field, _delta); \
+	DP_PEER_LINK_STATS_INC(_handle, per_pkt_stats._field, _delta, _link); \
 }
 
-#define DP_PEER_PER_PKT_STATS_INCC(_handle, _field, _delta, _cond) \
+#define DP_PEER_PER_PKT_STATS_INCC(_handle, _field, _delta, _cond, _link) \
 { \
-	DP_STATS_INCC(_handle, per_pkt_stats._field, _delta, _cond); \
+	DP_PEER_LINK_STATS_INCC(_handle, per_pkt_stats._field, _delta, _cond, _link); \
 }
 
-#define DP_PEER_PER_PKT_STATS_INC_PKT(_handle, _field, _count, _bytes) \
+#define DP_PEER_PER_PKT_STATS_INC_PKT(_handle, _field, _count, _bytes, _link) \
 { \
-	DP_PEER_PER_PKT_STATS_INC(_handle, _field.num, _count); \
-	DP_PEER_PER_PKT_STATS_INC(_handle, _field.bytes, _bytes) \
+	DP_PEER_PER_PKT_STATS_INC(_handle, _field.num, _count, _link); \
+	DP_PEER_PER_PKT_STATS_INC(_handle, _field.bytes, _bytes, _link) \
 }
 
-#define DP_PEER_PER_PKT_STATS_INCC_PKT(_handle, _field, _count, _bytes, _cond) \
+#define DP_PEER_PER_PKT_STATS_INCC_PKT(_handle, _field, _count, _bytes, _cond, _link) \
 { \
-	DP_PEER_PER_PKT_STATS_INCC(_handle, _field.num, _count, _cond); \
-	DP_PEER_PER_PKT_STATS_INCC(_handle, _field.bytes, _bytes, _cond) \
+	DP_PEER_PER_PKT_STATS_INCC(_handle, _field.num, _count, _cond, _link); \
+	DP_PEER_PER_PKT_STATS_INCC(_handle, _field.bytes, _bytes, _cond, _link) \
 }
 
-#define DP_PEER_PER_PKT_STATS_UPD(_handle, _field, _delta) \
+#define DP_PEER_PER_PKT_STATS_UPD(_handle, _field, _delta, _link) \
 { \
-	DP_STATS_UPD(_handle, per_pkt_stats._field, _delta); \
+	DP_PEER_LINK_STATS_UPD(_handle, per_pkt_stats._field, _delta, _link); \
 }
 
 #ifndef QCA_ENHANCED_STATS_SUPPORT
-#define DP_PEER_EXTD_STATS_INC(_handle, _field, _delta) \
+#define DP_PEER_EXTD_STATS_INC(_handle, _field, _delta, _link) \
 { \
-	DP_STATS_INC(_handle, extd_stats._field, _delta); \
+	DP_PEER_LINK_STATS_INC(_handle, extd_stats._field, _delta, _link); \
 }
 
-#define DP_PEER_EXTD_STATS_INCC(_handle, _field, _delta, _cond) \
+#define DP_PEER_EXTD_STATS_INCC(_handle, _field, _delta, _cond, _link) \
 { \
-	DP_STATS_INCC(_handle, extd_stats._field, _delta, _cond); \
+	DP_PEER_LINK_STATS_INCC(_handle, extd_stats._field, _delta, _cond, _link); \
 }
 
-#define DP_PEER_EXTD_STATS_UPD(_handle, _field, _delta) \
+#define DP_PEER_EXTD_STATS_UPD(_handle, _field, _delta, _link) \
 { \
-	DP_STATS_UPD(_handle, extd_stats._field, _delta); \
+	DP_PEER_LINK_STATS_UPD(_handle, extd_stats._field, _delta, _link); \
 }
 #endif
 
@@ -1218,16 +1253,22 @@ void DP_PRINT_STATS(const char *fmt, ...);
 		DP_PEER_STATS_FLAT_DEC(_handle, to_stack.num, _count); \
 }
 
-#define DP_PEER_MC_INCC_PKT(_handle, _count, _bytes, _cond) \
+#define DP_PEER_MC_INCC_PKT(_handle, _count, _bytes, _cond, _link) \
 { \
 	if (_cond || !(_handle->hw_txrx_stats_en)) \
-		DP_PEER_PER_PKT_STATS_INC_PKT(_handle, rx.multicast, _count, _bytes); \
+		DP_PEER_PER_PKT_STATS_INC_PKT(_handle, rx.multicast, _count, _bytes, _link); \
 }
 
-#define DP_PEER_BC_INCC_PKT(_handle, _count, _bytes, _cond) \
+#define DP_PEER_BC_INCC_PKT(_handle, _count, _bytes, _cond, _link) \
 { \
 	if (_cond || !(_handle->hw_txrx_stats_en)) \
-		DP_PEER_PER_PKT_STATS_INC_PKT(_handle, rx.bcast, _count, _bytes); \
+		DP_PEER_PER_PKT_STATS_INC_PKT(_handle, rx.bcast, _count, _bytes, _link); \
+}
+
+#define DP_PEER_UC_INCC_PKT(_handle, _count, _bytes, _cond, _link) \
+{ \
+	if (_cond || !(_handle->hw_txrx_stats_en)) \
+		DP_PEER_PER_PKT_STATS_INC_PKT(_handle, rx.unicast, _count, _bytes, _link); \
 }
 #elif defined(QCA_VDEV_STATS_HW_OFFLOAD_SUPPORT)
 #define DP_PEER_TO_STACK_INCC_PKT(_handle, _count, _bytes, _cond) \
@@ -1242,16 +1283,22 @@ void DP_PRINT_STATS(const char *fmt, ...);
 		DP_PEER_STATS_FLAT_DEC(_handle, to_stack.num, _count); \
 }
 
-#define DP_PEER_MC_INCC_PKT(_handle, _count, _bytes, _cond) \
+#define DP_PEER_MC_INCC_PKT(_handle, _count, _bytes, _cond, _link) \
 { \
 	if (!(_handle->hw_txrx_stats_en)) \
-		DP_PEER_PER_PKT_STATS_INC_PKT(_handle, rx.multicast, _count, _bytes); \
+		DP_PEER_PER_PKT_STATS_INC_PKT(_handle, rx.multicast, _count, _bytes, _link); \
 }
 
-#define DP_PEER_BC_INCC_PKT(_handle, _count, _bytes, _cond) \
+#define DP_PEER_BC_INCC_PKT(_handle, _count, _bytes, _cond, _link) \
 { \
 	if (!(_handle->hw_txrx_stats_en)) \
-		DP_PEER_PER_PKT_STATS_INC_PKT(_handle, rx.bcast, _count, _bytes); \
+		DP_PEER_PER_PKT_STATS_INC_PKT(_handle, rx.bcast, _count, _bytes, _link); \
+}
+
+#define DP_PEER_UC_INCC_PKT(_handle, _count, _bytes, _cond, _link) \
+{ \
+	if (!(_handle->hw_txrx_stats_en)) \
+		DP_PEER_PER_PKT_STATS_INC_PKT(_handle, rx.unicast, _count, _bytes, _link); \
 }
 #else
 #define DP_PEER_TO_STACK_INCC_PKT(_handle, _count, _bytes, _cond) \
@@ -1260,11 +1307,14 @@ void DP_PRINT_STATS(const char *fmt, ...);
 #define DP_PEER_TO_STACK_DECC(_handle, _count, _cond) \
 	DP_PEER_STATS_FLAT_DEC(_handle, to_stack.num, _count);
 
-#define DP_PEER_MC_INCC_PKT(_handle, _count, _bytes, _cond) \
-	DP_PEER_PER_PKT_STATS_INC_PKT(_handle, rx.multicast, _count, _bytes);
+#define DP_PEER_MC_INCC_PKT(_handle, _count, _bytes, _cond, _link) \
+	DP_PEER_PER_PKT_STATS_INC_PKT(_handle, rx.multicast, _count, _bytes, _link);
 
-#define DP_PEER_BC_INCC_PKT(_handle, _count, _bytes, _cond) \
-	DP_PEER_PER_PKT_STATS_INC_PKT(_handle, rx.bcast, _count, _bytes);
+#define DP_PEER_BC_INCC_PKT(_handle, _count, _bytes, _cond, _link) \
+	DP_PEER_PER_PKT_STATS_INC_PKT(_handle, rx.bcast, _count, _bytes, _link);
+
+#define DP_PEER_UC_INCC_PKT(_handle, _count, _bytes, _cond, _link) \
+	DP_PEER_PER_PKT_STATS_INC_PKT(_handle, rx.unicast, _count, _bytes, _link);
 #endif
 
 #ifdef ENABLE_DP_HIST_STATS
@@ -1703,10 +1753,6 @@ void dp_update_vdev_stats_on_peer_unmap(struct dp_vdev *vdev,
 				      tx.wme_ac_type_bytes[i]); \
 			DP_STATS_AGGR(_tgtobj, _srcobj, \
 				      rx.wme_ac_type_bytes[i]); \
-			DP_STATS_AGGR(_tgtobj, _srcobj, \
-					tx.wme_ac_type_bytes[i]); \
-			DP_STATS_AGGR(_tgtobj, _srcobj, \
-					rx.wme_ac_type_bytes[i]); \
 			DP_STATS_AGGR(_tgtobj, _srcobj, tx.excess_retries_per_ac[i]); \
 		\
 		} \
@@ -1913,18 +1959,16 @@ void dp_update_vdev_stats_on_peer_unmap(struct dp_vdev *vdev,
 		_tgtobj->rx.multicast.bytes += _srcobj->rx.multicast.bytes; \
 		_tgtobj->rx.bcast.num += _srcobj->rx.bcast.num; \
 		_tgtobj->rx.bcast.bytes += _srcobj->rx.bcast.bytes; \
-		if (_tgtobj->rx.to_stack.num >= _tgtobj->rx.multicast.num) \
-			_tgtobj->rx.unicast.num = \
-				_tgtobj->rx.to_stack.num - _tgtobj->rx.multicast.num; \
-		if (_tgtobj->rx.to_stack.bytes >= _tgtobj->rx.multicast.bytes) \
-			_tgtobj->rx.unicast.bytes = \
-				_tgtobj->rx.to_stack.bytes - _tgtobj->rx.multicast.bytes; \
+		_tgtobj->rx.unicast.num += _srcobj->rx.unicast.num; \
+		_tgtobj->rx.unicast.bytes += _srcobj->rx.unicast.bytes; \
 		_tgtobj->rx.raw.num += _srcobj->rx.raw.num; \
 		_tgtobj->rx.raw.bytes += _srcobj->rx.raw.bytes; \
 		_tgtobj->rx.nawds_mcast_drop += _srcobj->rx.nawds_mcast_drop; \
 		_tgtobj->rx.mcast_3addr_drop += _srcobj->rx.mcast_3addr_drop; \
 		_tgtobj->rx.mec_drop.num += _srcobj->rx.mec_drop.num; \
 		_tgtobj->rx.mec_drop.bytes += _srcobj->rx.mec_drop.bytes; \
+		_tgtobj->rx.ppeds_drop.num += _srcobj->rx.ppeds_drop.num; \
+		_tgtobj->rx.ppeds_drop.bytes += _srcobj->rx.ppeds_drop.bytes; \
 		_tgtobj->rx.intra_bss.pkts.num += \
 					_srcobj->rx.intra_bss.pkts.num; \
 		_tgtobj->rx.intra_bss.pkts.bytes += \
@@ -2060,6 +2104,8 @@ void dp_update_vdev_stats_on_peer_unmap(struct dp_vdev *vdev,
 		_tgtobj->tx.tx_ucast_success.bytes += \
 				_srcobj->tx.tx_ucast_success.bytes; \
 		\
+		for (i = 0; i < CDP_RSSI_CHAIN_LEN; i++) \
+			_tgtobj->tx.rssi_chain[i] = _srcobj->tx.rssi_chain[i]; \
 		_tgtobj->rx.mpdu_cnt_fcs_ok += _srcobj->rx.mpdu_cnt_fcs_ok; \
 		_tgtobj->rx.mpdu_cnt_fcs_err += _srcobj->rx.mpdu_cnt_fcs_err; \
 		_tgtobj->rx.non_ampdu_cnt += _srcobj->rx.non_ampdu_cnt; \
@@ -2130,6 +2176,153 @@ void dp_update_vdev_stats_on_peer_unmap(struct dp_vdev *vdev,
 		DP_UPDATE_11BE_STATS(_tgtobj, _srcobj); \
 	} while (0)
 
+#define DP_UPDATE_INGRESS_STATS(_tgtobj, _srcobj) \
+	do { \
+		uint8_t i = 0; \
+		_tgtobj->tx_i.rcvd.num += _srcobj->tx_i.rcvd.num; \
+		_tgtobj->tx_i.rcvd.bytes += _srcobj->tx_i.rcvd.bytes; \
+		_tgtobj->tx_i.rcvd_in_fast_xmit_flow += \
+					_srcobj->tx_i.rcvd_in_fast_xmit_flow; \
+		for (i = 0; i < CDP_MAX_TX_DATA_RINGS; i++) { \
+			_tgtobj->tx_i.rcvd_per_core[i] += \
+					_srcobj->tx_i.rcvd_per_core[i]; \
+		} \
+		_tgtobj->tx_i.processed.num += _srcobj->tx_i.processed.num; \
+		_tgtobj->tx_i.processed.bytes += \
+						_srcobj->tx_i.processed.bytes; \
+		_tgtobj->tx_i.reinject_pkts.num += \
+					_srcobj->tx_i.reinject_pkts.num; \
+		_tgtobj->tx_i.reinject_pkts.bytes += \
+					_srcobj->tx_i.reinject_pkts.bytes; \
+		_tgtobj->tx_i.inspect_pkts.num += \
+					_srcobj->tx_i.inspect_pkts.num; \
+		_tgtobj->tx_i.inspect_pkts.bytes += \
+				_srcobj->tx_i.inspect_pkts.bytes; \
+		_tgtobj->tx_i.nawds_mcast.num += \
+					_srcobj->tx_i.nawds_mcast.num; \
+		_tgtobj->tx_i.nawds_mcast.bytes += \
+					_srcobj->tx_i.nawds_mcast.bytes; \
+		_tgtobj->tx_i.bcast.num += _srcobj->tx_i.bcast.num; \
+		_tgtobj->tx_i.bcast.bytes += _srcobj->tx_i.bcast.bytes; \
+		_tgtobj->tx_i.raw.raw_pkt.num += \
+					_srcobj->tx_i.raw.raw_pkt.num; \
+		_tgtobj->tx_i.raw.raw_pkt.bytes += \
+					_srcobj->tx_i.raw.raw_pkt.bytes; \
+		_tgtobj->tx_i.raw.dma_map_error += \
+					_srcobj->tx_i.raw.dma_map_error; \
+		_tgtobj->tx_i.raw.invalid_raw_pkt_datatype += \
+				_srcobj->tx_i.raw.invalid_raw_pkt_datatype; \
+		_tgtobj->tx_i.raw.num_frags_overflow_err += \
+				_srcobj->tx_i.raw.num_frags_overflow_err; \
+		_tgtobj->tx_i.sg.sg_pkt.num += _srcobj->tx_i.sg.sg_pkt.num; \
+		_tgtobj->tx_i.sg.sg_pkt.bytes += \
+					_srcobj->tx_i.sg.sg_pkt.bytes; \
+		_tgtobj->tx_i.sg.non_sg_pkts.num += \
+					_srcobj->tx_i.sg.non_sg_pkts.num; \
+		_tgtobj->tx_i.sg.non_sg_pkts.bytes += \
+					_srcobj->tx_i.sg.non_sg_pkts.bytes; \
+		_tgtobj->tx_i.sg.dropped_host.num += \
+					_srcobj->tx_i.sg.dropped_host.num; \
+		_tgtobj->tx_i.sg.dropped_host.bytes += \
+					_srcobj->tx_i.sg.dropped_host.bytes; \
+		_tgtobj->tx_i.sg.dropped_target += \
+					_srcobj->tx_i.sg.dropped_target; \
+		_tgtobj->tx_i.sg.dma_map_error += \
+					_srcobj->tx_i.sg.dma_map_error; \
+		_tgtobj->tx_i.mcast_en.mcast_pkt.num += \
+					_srcobj->tx_i.mcast_en.mcast_pkt.num; \
+		_tgtobj->tx_i.mcast_en.mcast_pkt.bytes += \
+				_srcobj->tx_i.mcast_en.mcast_pkt.bytes; \
+		_tgtobj->tx_i.mcast_en.dropped_map_error += \
+				_srcobj->tx_i.mcast_en.dropped_map_error; \
+		_tgtobj->tx_i.mcast_en.dropped_self_mac += \
+				_srcobj->tx_i.mcast_en.dropped_self_mac; \
+		_tgtobj->tx_i.mcast_en.dropped_send_fail += \
+				_srcobj->tx_i.mcast_en.dropped_send_fail; \
+		_tgtobj->tx_i.mcast_en.ucast += _srcobj->tx_i.mcast_en.ucast; \
+		_tgtobj->tx_i.mcast_en.fail_seg_alloc += \
+					_srcobj->tx_i.mcast_en.fail_seg_alloc; \
+		_tgtobj->tx_i.mcast_en.clone_fail += \
+					_srcobj->tx_i.mcast_en.clone_fail; \
+		_tgtobj->tx_i.igmp_mcast_en.igmp_rcvd += \
+				_srcobj->tx_i.igmp_mcast_en.igmp_rcvd; \
+		_tgtobj->tx_i.igmp_mcast_en.igmp_ucast_converted += \
+			_srcobj->tx_i.igmp_mcast_en.igmp_ucast_converted; \
+		_tgtobj->tx_i.dropped.desc_na.num += \
+				_srcobj->tx_i.dropped.desc_na.num; \
+		_tgtobj->tx_i.dropped.desc_na.bytes += \
+				_srcobj->tx_i.dropped.desc_na.bytes; \
+		_tgtobj->tx_i.dropped.desc_na_exc_alloc_fail.num += \
+			_srcobj->tx_i.dropped.desc_na_exc_alloc_fail.num; \
+		_tgtobj->tx_i.dropped.desc_na_exc_alloc_fail.bytes += \
+			_srcobj->tx_i.dropped.desc_na_exc_alloc_fail.bytes; \
+		_tgtobj->tx_i.dropped.desc_na_exc_outstand.num += \
+			_srcobj->tx_i.dropped.desc_na_exc_outstand.num; \
+		_tgtobj->tx_i.dropped.desc_na_exc_outstand.bytes += \
+			_srcobj->tx_i.dropped.desc_na_exc_outstand.bytes; \
+		_tgtobj->tx_i.dropped.exc_desc_na.num += \
+				_srcobj->tx_i.dropped.exc_desc_na.num; \
+		_tgtobj->tx_i.dropped.exc_desc_na.bytes += \
+				_srcobj->tx_i.dropped.exc_desc_na.bytes; \
+		_tgtobj->tx_i.dropped.ring_full += \
+					_srcobj->tx_i.dropped.ring_full; \
+		_tgtobj->tx_i.dropped.enqueue_fail += \
+					_srcobj->tx_i.dropped.enqueue_fail; \
+		_tgtobj->tx_i.dropped.dma_error += \
+					_srcobj->tx_i.dropped.dma_error; \
+		_tgtobj->tx_i.dropped.res_full += \
+					_srcobj->tx_i.dropped.res_full; \
+		_tgtobj->tx_i.dropped.headroom_insufficient += \
+				_srcobj->tx_i.dropped.headroom_insufficient; \
+		_tgtobj->tx_i.dropped.fail_per_pkt_vdev_id_check += \
+			_srcobj->tx_i.dropped.fail_per_pkt_vdev_id_check; \
+		_tgtobj->tx_i.dropped.drop_ingress += \
+				_srcobj->tx_i.dropped.drop_ingress; \
+		_tgtobj->tx_i.dropped.invalid_peer_id_in_exc_path += \
+			_srcobj->tx_i.dropped.invalid_peer_id_in_exc_path; \
+		_tgtobj->tx_i.dropped.tx_mcast_drop += \
+					_srcobj->tx_i.dropped.tx_mcast_drop; \
+		_tgtobj->tx_i.dropped.fw2wbm_tx_drop += \
+					_srcobj->tx_i.dropped.fw2wbm_tx_drop; \
+		_tgtobj->tx_i.dropped.dropped_pkt.num = \
+			_tgtobj->tx_i.dropped.dma_error + \
+			_tgtobj->tx_i.dropped.ring_full + \
+			_tgtobj->tx_i.dropped.enqueue_fail + \
+			_tgtobj->tx_i.dropped.fail_per_pkt_vdev_id_check + \
+			_tgtobj->tx_i.dropped.desc_na.num + \
+			_tgtobj->tx_i.dropped.res_full + \
+			_tgtobj->tx_i.dropped.drop_ingress + \
+			_tgtobj->tx_i.dropped.headroom_insufficient + \
+			_tgtobj->tx_i.dropped.invalid_peer_id_in_exc_path + \
+			_tgtobj->tx_i.dropped.tx_mcast_drop + \
+			_tgtobj->tx_i.dropped.fw2wbm_tx_drop; \
+		_tgtobj->tx_i.dropped.dropped_pkt.bytes += \
+				_srcobj->tx_i.dropped.dropped_pkt.bytes; \
+		_tgtobj->tx_i.mesh.exception_fw += \
+					_srcobj->tx_i.mesh.exception_fw; \
+		_tgtobj->tx_i.mesh.completion_fw += \
+					_srcobj->tx_i.mesh.completion_fw; \
+		_tgtobj->tx_i.cce_classified += \
+					_srcobj->tx_i.cce_classified; \
+		_tgtobj->tx_i.cce_classified_raw += \
+					_srcobj->tx_i.cce_classified_raw; \
+		_tgtobj->tx_i.sniffer_rcvd.num += \
+					_srcobj->tx_i.sniffer_rcvd.num; \
+		_tgtobj->tx_i.sniffer_rcvd.bytes += \
+					_srcobj->tx_i.sniffer_rcvd.bytes; \
+		_tgtobj->rx_i.reo_rcvd_pkt.num += \
+					_srcobj->rx_i.reo_rcvd_pkt.num; \
+		_tgtobj->rx_i.reo_rcvd_pkt.bytes += \
+					_srcobj->rx_i.reo_rcvd_pkt.bytes; \
+		_tgtobj->rx_i.null_q_desc_pkt.num += \
+					_srcobj->rx_i.null_q_desc_pkt.num; \
+		_tgtobj->rx_i.null_q_desc_pkt.bytes += \
+					_srcobj->rx_i.null_q_desc_pkt.bytes; \
+		_tgtobj->rx_i.routed_eapol_pkt.num += \
+					_srcobj->rx_i.routed_eapol_pkt.num; \
+		_tgtobj->rx_i.routed_eapol_pkt.bytes += \
+					_srcobj->rx_i.routed_eapol_pkt.bytes; \
+	} while (0)
 /**
  * dp_peer_find_attach() - Allocates memory for peer objects
  * @soc: SoC handle
@@ -2256,14 +2449,6 @@ void dp_peer_rx_init(struct dp_pdev *pdev, struct dp_peer *peer);
  *
  */
 void dp_peer_cleanup(struct dp_vdev *vdev, struct dp_peer *peer);
-
-/**
- * dp_peer_rx_cleanup() - Cleanup receive TID state
- * @vdev: Datapath vdev
- * @peer: Datapath peer
- *
- */
-void dp_peer_rx_cleanup(struct dp_vdev *vdev, struct dp_peer *peer);
 
 #ifdef DP_PEER_EXTENDED_API
 /**
@@ -2466,130 +2651,6 @@ void dp_set_peer_as_tdls_peer(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
 bool dp_find_peer_exist(struct cdp_soc_t *soc_hdl, uint8_t pdev_id,
 			uint8_t *peer_addr);
 
-/**
- * dp_addba_resp_tx_completion_wifi3() - Update Rx Tid State
- *
- * @cdp_soc: Datapath soc handle
- * @peer_mac: Datapath peer mac address
- * @vdev_id: id of atapath vdev
- * @tid: TID number
- * @status: tx completion status
- * Return: 0 on success, error code on failure
- */
-int dp_addba_resp_tx_completion_wifi3(struct cdp_soc_t *cdp_soc,
-				      uint8_t *peer_mac, uint16_t vdev_id,
-				      uint8_t tid,
-				      int status);
-
-/**
- * dp_addba_requestprocess_wifi3() - Process ADDBA request from peer
- * @cdp_soc: Datapath soc handle
- * @peer_mac: Datapath peer mac address
- * @vdev_id: id of atapath vdev
- * @dialogtoken: dialogtoken from ADDBA frame
- * @tid: TID number
- * @batimeout: BA timeout
- * @buffersize: BA window size
- * @startseqnum: Start seq. number received in BA sequence control
- *
- * Return: 0 on success, error code on failure
- */
-int dp_addba_requestprocess_wifi3(struct cdp_soc_t *cdp_soc,
-				  uint8_t *peer_mac, uint16_t vdev_id,
-				  uint8_t dialogtoken, uint16_t tid,
-				  uint16_t batimeout,
-				  uint16_t buffersize,
-				  uint16_t startseqnum);
-
-/**
- * dp_addba_responsesetup_wifi3() - Process ADDBA request from peer
- * @cdp_soc: Datapath soc handle
- * @peer_mac: Datapath peer mac address
- * @vdev_id: id of atapath vdev
- * @tid: TID number
- * @dialogtoken: output dialogtoken
- * @statuscode: output dialogtoken
- * @buffersize: Output BA window size
- * @batimeout: Output BA timeout
- */
-QDF_STATUS dp_addba_responsesetup_wifi3(struct cdp_soc_t *cdp_soc,
-					uint8_t *peer_mac, uint16_t vdev_id,
-					uint8_t tid, uint8_t *dialogtoken,
-					uint16_t *statuscode,
-					uint16_t *buffersize,
-					uint16_t *batimeout);
-
-/**
- * dp_set_addba_response() - Set a user defined ADDBA response status code
- * @cdp_soc: Datapath soc handle
- * @peer_mac: Datapath peer mac address
- * @vdev_id: id of atapath vdev
- * @tid: TID number
- * @statuscode: response status code to be set
- */
-QDF_STATUS dp_set_addba_response(struct cdp_soc_t *cdp_soc,
-				 uint8_t *peer_mac,
-				 uint16_t vdev_id, uint8_t tid,
-				 uint16_t statuscode);
-
-/**
- * dp_delba_process_wifi3() - Process DELBA from peer
- * @cdp_soc: Datapath soc handle
- * @peer_mac: Datapath peer mac address
- * @vdev_id: id of atapath vdev
- * @tid: TID number
- * @reasoncode: Reason code received in DELBA frame
- *
- * Return: 0 on success, error code on failure
- */
-int dp_delba_process_wifi3(struct cdp_soc_t *cdp_soc, uint8_t *peer_mac,
-			   uint16_t vdev_id, int tid,
-			   uint16_t reasoncode);
-
-/**
- * dp_rx_tid_update_ba_win_size() - Update the DP tid BA window size
- * @cdp_soc: soc handle
- * @peer_mac: mac address of peer handle
- * @vdev_id: id of vdev handle
- * @tid: tid
- * @buffersize: BA window size
- *
- * Return: success/failure of tid update
- */
-QDF_STATUS dp_rx_tid_update_ba_win_size(struct cdp_soc_t *cdp_soc,
-					uint8_t *peer_mac, uint16_t vdev_id,
-					uint8_t tid, uint16_t buffersize);
-
-/**
- * dp_delba_tx_completion_wifi3() -  Handle delba tx completion
- * @cdp_soc: soc handle
- * @peer_mac: peer mac address
- * @vdev_id: id of the vdev handle
- * @tid: Tid number
- * @status: Tx completion status
- *
- * Indicate status of delba Tx to DP for stats update and retry
- * delba if tx failed.
- *
- * Return: 0 on success, error code on failure
- */
-int dp_delba_tx_completion_wifi3(struct cdp_soc_t *cdp_soc, uint8_t *peer_mac,
-				 uint16_t vdev_id, uint8_t tid,
-				 int status);
-
-/**
- * dp_rx_tid_setup_wifi3() - Setup receive TID state
- * @peer: Datapath peer handle
- * @tid: TID
- * @ba_window_size: BlockAck window size
- * @start_seq: Starting sequence number
- *
- * Return: QDF_STATUS code
- */
-QDF_STATUS dp_rx_tid_setup_wifi3(struct dp_peer *peer, int tid,
-				 uint32_t ba_window_size,
-				 uint32_t start_seq);
-
 #ifdef DP_UMAC_HW_RESET_SUPPORT
 /**
  * dp_pause_reo_send_cmd() - Pause Reo send commands.
@@ -2633,8 +2694,111 @@ void dp_reo_desc_freelist_destroy(struct dp_soc *soc);
  */
 void dp_reset_rx_reo_tid_queue(struct dp_soc *soc, void *hw_qdesc_vaddr,
 			       uint32_t size);
+
+#if defined(WLAN_FEATURE_11BE_MLO) && defined(WLAN_MLO_MULTI_CHIP)
+/**
+ * dp_umac_reset_complete_umac_recovery() - Complete Umac reset session
+ * @soc: dp soc handle
+ *
+ * Return: void
+ */
+void dp_umac_reset_complete_umac_recovery(struct dp_soc *soc);
+
+/**
+ * dp_umac_reset_initiate_umac_recovery() - Initiate Umac reset session
+ * @soc: dp soc handle
+ * @umac_reset_ctx: Umac reset context
+ * @rx_event: Rx event received
+ * @is_target_recovery: Flag to indicate if it is triggered for target recovery
+ *
+ * Return: status
+ */
+QDF_STATUS dp_umac_reset_initiate_umac_recovery(struct dp_soc *soc,
+				struct dp_soc_umac_reset_ctx *umac_reset_ctx,
+				enum umac_reset_rx_event rx_event,
+				bool is_target_recovery);
+
+/**
+ * dp_umac_reset_handle_action_cb() - Function to call action callback
+ * @soc: dp soc handle
+ * @umac_reset_ctx: Umac reset context
+ * @action: Action to call the callback for
+ *
+ * Return: QDF_STATUS status
+ */
+QDF_STATUS dp_umac_reset_handle_action_cb(struct dp_soc *soc,
+				struct dp_soc_umac_reset_ctx *umac_reset_ctx,
+				enum umac_reset_action action);
+
+/**
+ * dp_umac_reset_post_tx_cmd() - Iterate partner socs and post Tx command
+ * @umac_reset_ctx: UMAC reset context
+ * @tx_cmd: Tx command to be posted
+ *
+ * Return: QDF status of operation
+ */
+QDF_STATUS
+dp_umac_reset_post_tx_cmd(struct dp_soc_umac_reset_ctx *umac_reset_ctx,
+			  enum umac_reset_tx_cmd tx_cmd);
+
+/**
+ * dp_umac_reset_initiator_check() - Check if soc is the Umac reset initiator
+ * @soc: dp soc handle
+ *
+ * Return: true if the soc is initiator or false otherwise
+ */
+bool dp_umac_reset_initiator_check(struct dp_soc *soc);
+
+/**
+ * dp_umac_reset_target_recovery_check() - Check if this is for target recovery
+ * @soc: dp soc handle
+ *
+ * Return: true if the session is for target recovery or false otherwise
+ */
+bool dp_umac_reset_target_recovery_check(struct dp_soc *soc);
+
+/**
+ * dp_umac_reset_is_soc_ignored() - Check if this soc is to be ignored
+ * @soc: dp soc handle
+ *
+ * Return: true if the soc is ignored or false otherwise
+ */
+bool dp_umac_reset_is_soc_ignored(struct dp_soc *soc);
+
+/**
+ * dp_mlo_umac_reset_stats_print() - API to print MLO umac reset stats
+ * @soc: dp soc handle
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS dp_mlo_umac_reset_stats_print(struct dp_soc *soc);
+#else
+static inline
+QDF_STATUS dp_mlo_umac_reset_stats_print(struct dp_soc *soc)
+{
+	return QDF_STATUS_SUCCESS;
+}
 #endif
 
+#endif
+
+#if defined(DP_UMAC_HW_RESET_SUPPORT) && defined(WLAN_FEATURE_11BE_MLO) && defined(WLAN_MLO_MULTI_CHIP)
+/**
+ * dp_umac_reset_notify_asserted_soc() - API to notify the asserted SOC
+ * @soc: dp soc
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS dp_umac_reset_notify_asserted_soc(struct dp_soc *soc);
+#else
+static inline
+QDF_STATUS dp_umac_reset_notify_asserted_soc(struct dp_soc *soc)
+{
+	return QDF_STATUS_SUCCESS;
+}
+#endif
+
+#ifndef WLAN_SOFTUMAC_SUPPORT
 QDF_STATUS dp_reo_send_cmd(struct dp_soc *soc, enum hal_reo_cmd_type type,
 			   struct hal_reo_cmd_params *params,
 			   void (*callback_fn), void *data);
@@ -2656,6 +2820,7 @@ void dp_reo_cmdlist_destroy(struct dp_soc *soc);
  */
 uint32_t dp_reo_status_ring_handler(struct dp_intr *int_ctx,
 				    struct dp_soc *soc);
+#endif
 
 /**
  * dp_aggregate_vdev_stats() - Consolidate stats at VDEV level
@@ -2666,9 +2831,6 @@ uint32_t dp_reo_status_ring_handler(struct dp_intr *int_ctx,
  */
 void dp_aggregate_vdev_stats(struct dp_vdev *vdev,
 			     struct cdp_vdev_stats *vdev_stats);
-
-void dp_rx_tid_stats_cb(struct dp_soc *soc, void *cb_ctxt,
-	union hal_reo_status *reo_status);
 
 /**
  * dp_rx_bar_stats_cb() - BAR received stats callback
@@ -2751,27 +2913,6 @@ void dp_htt_stats_copy_tag(struct dp_pdev *pdev, uint8_t tag_type, uint32_t *tag
  */
 QDF_STATUS dp_h2t_3tuple_config_send(struct dp_pdev *pdev, uint32_t tuple_mask,
 				     uint8_t mac_id);
-/**
- * typedef dp_rxtid_stats_cmd_cb() - function pointer for peer
- *			             rx tid stats cmd call_back
- * @soc:
- * @cb_ctxt:
- * @reo_status:
- */
-typedef void (*dp_rxtid_stats_cmd_cb)(struct dp_soc *soc, void *cb_ctxt,
-				      union hal_reo_status *reo_status);
-
-/**
- * dp_peer_rxtid_stats() - Retried Rx TID (REO queue) stats from HW
- * @peer: DP peer handle
- * @dp_stats_cmd_cb: REO command callback function
- * @cb_ctxt: Callback context
- *
- * Return: count of tid stats cmd send succeeded
- */
-int dp_peer_rxtid_stats(struct dp_peer *peer,
-			dp_rxtid_stats_cmd_cb dp_stats_cmd_cb,
-			void *cb_ctxt);
 
 #ifdef IPA_OFFLOAD
 /**
@@ -2787,14 +2928,19 @@ void dp_peer_update_tid_stats_from_reo(struct dp_soc *soc, void *cb_ctxt,
 
 int dp_peer_get_rxtid_stats_ipa(struct dp_peer *peer,
 				dp_rxtid_stats_cmd_cb dp_stats_cmd_cb);
-
+#ifdef IPA_OPT_WIFI_DP
+void dp_ipa_wdi_opt_dpath_notify_flt_rlsd(int flt0_rslt,
+					  int flt1_rslt);
+void dp_ipa_wdi_opt_dpath_notify_flt_add_rem_cb(int flt0_rslt, int flt1_rslt);
+void dp_ipa_wdi_opt_dpath_notify_flt_rsvd(bool is_success);
+#endif
+#ifdef QCA_ENHANCED_STATS_SUPPORT
 /**
  * dp_peer_aggregate_tid_stats - aggregate rx tid stats
  * @peer: Data Path peer
  *
  * Return: void
  */
-#ifdef QCA_ENHANCED_STATS_SUPPORT
 void dp_peer_aggregate_tid_stats(struct dp_peer *peer);
 #endif
 #else
@@ -2802,20 +2948,6 @@ static inline void dp_peer_aggregate_tid_stats(struct dp_peer *peer)
 {
 }
 #endif
-
-/**
- * dp_set_pn_check_wifi3() - enable PN check in REO for security
- * @soc: Datapath soc handle
- * @vdev_id: id of atapath vdev
- * @peer_mac: Datapath peer mac address
- * @sec_type: security type
- * @rx_pn: Receive pn starting number
- *
- */
-QDF_STATUS
-dp_set_pn_check_wifi3(struct cdp_soc_t *soc, uint8_t vdev_id,
-		      uint8_t *peer_mac, enum cdp_sec_type sec_type,
-		      uint32_t *rx_pn);
 
 /**
  * dp_set_key_sec_type_wifi3() - set security mode of key
@@ -3925,20 +4057,6 @@ dp_get_pdev_from_soc_pdev_id_wifi3(struct dp_soc *soc,
 }
 
 /**
- * dp_rx_tid_update_wifi3() - Update receive TID state
- * @peer: Datapath peer handle
- * @tid: TID
- * @ba_window_size: BlockAck window size
- * @start_seq: Starting sequence number
- * @bar_update: BAR update triggered
- *
- * Return: QDF_STATUS code
- */
-QDF_STATUS dp_rx_tid_update_wifi3(struct dp_peer *peer, int tid,
-				  uint32_t ba_window_size, uint32_t start_seq,
-				  bool bar_update);
-
-/**
  * dp_get_peer_mac_list(): function to get peer mac list of vdev
  * @soc: Datapath soc handle
  * @vdev_id: vdev id
@@ -4187,6 +4305,23 @@ QDF_STATUS dp_wds_ext_set_peer_rx(ol_txrx_soc_handle soc,
 				  uint8_t *mac,
 				  ol_txrx_rx_fp rx,
 				  ol_osif_peer_handle osif_peer);
+
+/**
+ * dp_wds_ext_get_peer_osif_handle(): function to get peer osif handle
+ * @soc: Datapath soc handle
+ * @vdev_id: vdev id
+ * @mac: Peer mac address
+ * @osif_peer: OSIF peer handle
+ *
+ * Return: QDF_STATUS_SUCCESS on success
+ *         QDF_STATUS_E_INVAL if peer is not found
+ */
+QDF_STATUS dp_wds_ext_get_peer_osif_handle(
+				ol_txrx_soc_handle soc,
+				uint8_t vdev_id,
+				uint8_t *mac,
+				ol_osif_peer_handle *osif_peer);
+
 #endif /* QCA_SUPPORT_WDS_EXTENDED */
 
 #ifdef DP_MEM_PRE_ALLOC
@@ -4676,7 +4811,7 @@ dp_get_rx_hash_key_bytes(struct cdp_lro_hash_config *lro_hash)
 			      LRO_IPV6_SEED_ARR_SZ));
 }
 
-#ifdef WLAN_TELEMETRY_STATS_SUPPORT
+#ifdef WLAN_CONFIG_TELEMETRY_AGENT
 /**
  * dp_get_pdev_telemetry_stats- API to get pdev telemetry stats
  * @soc_hdl: soc handle
@@ -4691,7 +4826,7 @@ dp_get_pdev_telemetry_stats(struct cdp_soc_t *soc_hdl, uint8_t pdev_id,
 			    struct cdp_pdev_telemetry_stats *stats);
 
 /**
- * dp_get_peer_telemetry_stats- API to get peer telemetry stats
+ * dp_get_peer_telemetry_stats() - API to get peer telemetry stats
  * @soc_hdl: soc handle
  * @addr: peer mac
  * @stats: pointer to peer telemetry stats
@@ -4703,8 +4838,8 @@ QDF_STATUS
 dp_get_peer_telemetry_stats(struct cdp_soc_t *soc_hdl, uint8_t *addr,
 			    struct cdp_peer_telemetry_stats *stats);
 
-/*
- * dp_get_peer_deter_stats- API to get peer deterministic stats
+/**
+ * dp_get_peer_deter_stats() - API to get peer deterministic stats
  * @soc_hdl: soc handle
  * @vdev_id: id of vdev handle
  * @addr: peer mac
@@ -4719,8 +4854,8 @@ dp_get_peer_deter_stats(struct cdp_soc_t *soc_hdl,
 			uint8_t *addr,
 			struct cdp_peer_deter_stats *stats);
 
-/*
- * dp_get_pdev_deter_stats- API to get pdev deterministic stats
+/**
+ * dp_get_pdev_deter_stats() - API to get pdev deterministic stats
  * @soc_hdl: soc handle
  * @pdev_id: id of pdev handle
  * @stats: pointer to pdev deterministic stats
@@ -4732,8 +4867,8 @@ QDF_STATUS
 dp_get_pdev_deter_stats(struct cdp_soc_t *soc_hdl, uint8_t pdev_id,
 			struct cdp_pdev_deter_stats *stats);
 
-/*
- * dp_update_pdev_chan_util_stats- API to update channel utilization stats
+/**
+ * dp_update_pdev_chan_util_stats() - API to update channel utilization stats
  * @soc_hdl: soc handle
  * @pdev_id: id of pdev handle
  * @ch_util: Pointer to channel util stats
@@ -4744,7 +4879,7 @@ dp_get_pdev_deter_stats(struct cdp_soc_t *soc_hdl, uint8_t pdev_id,
 QDF_STATUS
 dp_update_pdev_chan_util_stats(struct cdp_soc_t *soc_hdl, uint8_t pdev_id,
 			       struct cdp_pdev_chan_util_stats *ch_util);
-#endif /* WLAN_TELEMETRY_STATS_SUPPORT */
+#endif /* WLAN_CONFIG_TELEMETRY_AGENT */
 
 #ifdef CONNECTIVITY_PKTLOG
 /**
@@ -5169,6 +5304,7 @@ dp_cfg_event_record_peer_setup_evt(struct dp_soc *soc,
 }
 #endif
 
+#ifndef WLAN_SOFTUMAC_SUPPORT
 /**
  * dp_soc_interrupt_detach() - Deregister any allocations done for interrupts
  * @txrx_soc: DP SOC handle
@@ -5176,6 +5312,7 @@ dp_cfg_event_record_peer_setup_evt(struct dp_soc *soc,
  * Return: none
  */
 void dp_soc_interrupt_detach(struct cdp_soc_t *txrx_soc);
+#endif
 
 /**
  * dp_get_peer_stats()- Get peer stats
@@ -5187,4 +5324,53 @@ void dp_soc_interrupt_detach(struct cdp_soc_t *txrx_soc);
 void dp_get_peer_stats(struct dp_peer *peer,
 		       struct cdp_peer_stats *peer_stats);
 
+/**
+ * dp_get_per_link_peer_stats()- Get per link peer stats
+ * @peer: Datapath peer
+ * @peer_stats: buffer for peer stats
+ * @peer_type: Peer type
+ * @num_link: Number of ML links
+ *
+ * Return: status success/failure
+ */
+QDF_STATUS dp_get_per_link_peer_stats(struct dp_peer *peer,
+				      struct cdp_peer_stats *peer_stats,
+				      enum cdp_peer_type peer_type,
+				      uint8_t num_link);
+/**
+ * dp_get_peer_hw_link_id() - get peer hardware link id
+ * @soc: soc handle
+ * @pdev: data path pdev
+ *
+ * Return: link_id
+ */
+static inline int
+dp_get_peer_hw_link_id(struct dp_soc *soc,
+		       struct dp_pdev *pdev)
+{
+	if (wlan_cfg_is_peer_link_stats_enabled(soc->wlan_cfg_ctx))
+		return ((soc->arch_ops.get_hw_link_id(pdev)) + 1);
+
+	return 0;
+}
+
+#ifdef QCA_MULTIPASS_SUPPORT
+/**
+ * dp_tx_remove_vlan_tag() - Remove 4 bytes of vlan tag
+ * @vdev: DP vdev handle
+ * @nbuf: network buffer
+ *
+ * Return: void
+ */
+void dp_tx_remove_vlan_tag(struct dp_vdev *vdev, qdf_nbuf_t nbuf);
+#endif
+
+/**
+ * dp_print_per_link_stats() - Print per link peer stats.
+ * @soc_hdl: soc handle.
+ * @vdev_id: vdev_id.
+ *
+ * Return: None.
+ */
+void dp_print_per_link_stats(struct cdp_soc_t *soc_hdl, uint8_t vdev_id);
 #endif /* #ifndef _DP_INTERNAL_H_ */

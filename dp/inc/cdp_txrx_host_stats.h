@@ -153,11 +153,11 @@ cdp_enable_enhanced_stats(ol_txrx_soc_handle soc, uint8_t pdev_id)
 		return QDF_STATUS_E_FAILURE;
 	}
 
-	if (!soc->ops->host_stats_ops ||
-	    !soc->ops->host_stats_ops->txrx_enable_enhanced_stats)
+	if (!soc->ops->mon_ops ||
+	    !soc->ops->mon_ops->txrx_enable_enhanced_stats)
 		return QDF_STATUS_E_FAILURE;
 
-	return soc->ops->host_stats_ops->txrx_enable_enhanced_stats
+	return soc->ops->mon_ops->txrx_enable_enhanced_stats
 			(soc, pdev_id);
 }
 
@@ -177,11 +177,11 @@ cdp_disable_enhanced_stats(ol_txrx_soc_handle soc, uint8_t pdev_id)
 		return QDF_STATUS_E_FAILURE;
 	}
 
-	if (!soc->ops->host_stats_ops ||
-	    !soc->ops->host_stats_ops->txrx_disable_enhanced_stats)
+	if (!soc->ops->mon_ops ||
+	    !soc->ops->mon_ops->txrx_disable_enhanced_stats)
 		return QDF_STATUS_E_FAILURE;
 
-	return soc->ops->host_stats_ops->txrx_disable_enhanced_stats
+	return soc->ops->mon_ops->txrx_disable_enhanced_stats
 			(soc, pdev_id);
 }
 
@@ -539,6 +539,44 @@ cdp_host_get_peer_stats(ol_txrx_soc_handle soc, uint8_t vdev_id,
 	return soc->ops->host_stats_ops->txrx_get_peer_stats(soc, vdev_id,
 							     peer_mac,
 							     peer_stats);
+}
+
+/**
+ * cdp_host_get_per_link_peer_stats() - Call to get peer stats
+ * @soc: soc handle
+ * @vdev_id: vdev_id of vdev object
+ * @peer_mac: mac address of the peer
+ * @peer_stats: destination buffer
+ * @peer_type: Peer type
+ * @num_link: Number of ML links
+ *
+ * NOTE: For peer_type = CDP_MLD_PEER_TYPE peer_stats should point to
+ *       buffer of size = (sizeof(*peer_stats) * num_link)
+ *
+ * Return: QDF_STATUS
+ */
+static inline QDF_STATUS
+cdp_host_get_per_link_peer_stats(ol_txrx_soc_handle soc, uint8_t vdev_id,
+				 uint8_t *peer_mac,
+				 struct cdp_peer_stats *peer_stats,
+				 enum cdp_peer_type peer_type,
+				 uint8_t num_link)
+{
+	if (!soc || !soc->ops) {
+		dp_cdp_debug("Invalid Instance");
+		QDF_BUG(0);
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	if (!soc->ops->host_stats_ops ||
+	    !soc->ops->host_stats_ops->txrx_get_per_link_stats)
+		return QDF_STATUS_E_FAILURE;
+
+	return soc->ops->host_stats_ops->txrx_get_per_link_stats(soc, vdev_id,
+								 peer_mac,
+								 peer_stats,
+								 peer_type,
+								 num_link);
 }
 
 /**
@@ -982,7 +1020,7 @@ cdp_get_pdev_tid_stats(ol_txrx_soc_handle soc, uint8_t pdev_id,
 								 tid_stats);
 }
 
-#ifdef WLAN_TELEMETRY_STATS_SUPPORT
+#ifdef WLAN_CONFIG_TELEMETRY_AGENT
 /**
  * cdp_get_pdev_telemetry_stats() - function to get pdev telemetry stats
  * @soc: soc handle

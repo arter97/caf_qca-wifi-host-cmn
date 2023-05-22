@@ -168,6 +168,8 @@
 #define WLAN_VDEV_FEXT2_MLO_MCAST           0x00000004
 	/* 20TU BCAST PROBE RESP on 6G SAP*/
 #define WLAN_VDEV_FEXT2_20TU_PRB_RESP       0x00000008
+	/* STA VDEV is TDLS link type */
+#define WLAN_VDEV_FEXT2_MLO_STA_TDLS        0x00000010
 
 /* VDEV OP flags  */
   /* if the vap destroyed by user */
@@ -236,6 +238,11 @@
 
 /* MLO link removal is in progress on this VDEV */
 #define WLAN_VDEV_OP_MLO_LINK_REMOVAL_IN_PROGRESS 0x01000000
+
+ /* flag to indicate disconnect only legacy peers due to moving to DFS channel
+  * from non-DFS channel
+  */
+#define WLAN_VDEV_OP_MLME_LEGACY_PEER_DISCON_TRIG 0x02000000
 
  /* CAPABILITY: IBSS available */
 #define WLAN_VDEV_C_IBSS                    0x00000001
@@ -339,6 +346,7 @@ struct wlan_channel {
  * @mldaddr:            MLD address
  * @linkaddr:           Link MAC address
  * @mlo_link_id: link id for mlo connection
+ * @mlo_external_sae_auth: MLO external SAE auth
  * @wlan_vdev_mlo_lock: lock to protect the set/clear of
  * WLAN_VDEV_FEXT2_MLO feature flag in vdev MLME
  */
@@ -359,6 +367,7 @@ struct wlan_objmgr_vdev_mlme {
 	uint8_t  linkaddr[QDF_MAC_ADDR_SIZE];
 #ifdef WLAN_FEATURE_11BE_MLO
 	uint8_t  mlo_link_id;
+	bool mlo_external_sae_auth;
 #ifdef WLAN_MLO_USE_SPINLOCK
 	qdf_spinlock_t wlan_vdev_mlo_lock;
 #else
@@ -377,18 +386,19 @@ struct wlan_objmgr_vdev_nif {
 
 /**
  *  struct wlan_objmgr_vdev_objmgr - vdev object manager sub structure
- *  @vdev_id:           VDEV id
- *  @print_cnt:         Count to throttle Logical delete prints
- *  @self_peer:         Self PEER
- *  @bss_peer:          BSS PEER
- *  @wlan_peer_list:    PEER list
- *  @wlan_pdev:         PDEV pointer
- *  @wlan_peer_count:   Peer count
- *  @max_peer_count:    Max Peer count
- *  @c_flags:           creation specific flags
- *  @ref_cnt:           Ref count
- *  @ref_id_dbg:        Array to track Ref count
- *  @trace:             Trace ref and deref
+ *  @vdev_id:            VDEV id
+ *  @print_cnt:          Count to throttle Logical delete prints
+ *  @self_peer:          Self PEER
+ *  @bss_peer:           BSS PEER
+ *  @wlan_peer_list:     PEER list
+ *  @wlan_pdev:          PDEV pointer
+ *  @wlan_peer_count:    Peer count
+ *  @wlan_ml_peer_count: Multilink Peer count
+ *  @max_peer_count:     Max Peer count
+ *  @c_flags:            creation specific flags
+ *  @ref_cnt:            Ref count
+ *  @ref_id_dbg:         Array to track Ref count
+ *  @trace:              Trace ref and deref
  */
 struct wlan_objmgr_vdev_objmgr {
 	uint8_t vdev_id;
@@ -398,6 +408,9 @@ struct wlan_objmgr_vdev_objmgr {
 	qdf_list_t wlan_peer_list;
 	struct wlan_objmgr_pdev *wlan_pdev;
 	uint16_t wlan_peer_count;
+#ifdef WLAN_FEATURE_11BE_MLO
+	uint16_t wlan_ml_peer_count;
+#endif
 	uint16_t max_peer_count;
 	uint32_t c_flags;
 	qdf_atomic_t ref_cnt;
@@ -729,6 +742,26 @@ static inline uint8_t wlan_vdev_get_psoc_id(struct wlan_objmgr_vdev *vdev)
 	psoc = wlan_vdev_get_psoc(vdev);
 
 	return wlan_psoc_get_id(psoc);
+}
+
+/**
+ * wlan_vdev_skip_pumac() - get primary umac support
+ * @vdev: VDEV object
+ *
+ * API to get Primary umac support for MLO
+ *
+ * Return: get primary umac support (bool)
+ */
+static inline bool wlan_vdev_skip_pumac(struct wlan_objmgr_vdev *vdev)
+{
+	struct wlan_objmgr_psoc *psoc;
+
+	psoc = wlan_vdev_get_psoc(vdev);
+
+	if (wlan_psoc_get_pumac_skip(psoc))
+		return true;
+
+	return false;
 }
 
 /**
@@ -1563,6 +1596,29 @@ static inline uint16_t wlan_vdev_get_peer_count(struct wlan_objmgr_vdev *vdev)
 	return vdev->vdev_objmgr.wlan_peer_count;
 }
 
+#ifdef WLAN_FEATURE_11BE_MLO
+/**
+ * wlan_vdev_get_legacy_peer_count() - get vdev peer count
+ * @vdev: VDEV object
+ *
+ * API to get legacy peer count from VDEV
+ *
+ * Return: peer_count - vdev's peer count
+ */
+static inline uint16_t wlan_vdev_get_legacy_peer_count(
+					struct wlan_objmgr_vdev *vdev)
+{
+	return vdev->vdev_objmgr.wlan_peer_count -
+	       vdev->vdev_objmgr.wlan_ml_peer_count;
+}
+#else
+static inline uint16_t wlan_vdev_get_legacy_peer_count(
+					struct wlan_objmgr_vdev *vdev)
+{
+	return vdev->vdev_objmgr.wlan_peer_count;
+}
+#endif
+
 /**
  * wlan_vdev_mlme_is_ap() - Check whether @vdev is an AP or not
  * @vdev: VDEV object
@@ -1583,6 +1639,15 @@ static inline bool wlan_vdev_mlme_is_ap(struct wlan_objmgr_vdev *vdev)
  * Return: True if it is MLO, otherwise false.
  */
 bool wlan_vdev_mlme_is_mlo_vdev(struct wlan_objmgr_vdev *vdev);
+
+/**
+ * wlan_vdev_mlme_is_tdls_vdev() - Determine whether the given vdev is tdls MLO
+ * vdev or not
+ * @vdev: VDEV object
+ *
+ * Return: True if it is tdls MLO, otherwise false.
+ */
+bool wlan_vdev_mlme_is_tdls_vdev(struct wlan_objmgr_vdev *vdev);
 
 /**
  * wlan_vdev_mlme_is_mlo_ap() - whether it is mlo ap or not
@@ -1967,6 +2032,36 @@ static inline uint16_t wlan_vdev_get_max_peer_count(
 	return vdev->vdev_objmgr.max_peer_count;
 }
 
+#ifdef WLAN_FEATURE_11BE_MLO
+/**wlan_vdev_set_mlo_external_sae_auth_conversion() - set MLO external sae auth
+ * @vdev: VDEV object
+ * @val: true or false
+ *
+ * API to set mlo external sae auth of VDEV
+ *
+ * Return: void
+ */
+static inline void
+wlan_vdev_set_mlo_external_sae_auth_conversion(struct wlan_objmgr_vdev *vdev,
+					       bool val)
+{
+	vdev->vdev_mlme.mlo_external_sae_auth = val;
+}
+
+/**wlan_vdev_get_mlo_external_sae_auth_conversion() - get MLO external sae auth
+ * @vdev: VDEV object
+ *
+ * API to get mlo external sae auth of VDEV
+ *
+ * Return: mlo external sae auth of VDEV
+ */
+static inline bool
+wlan_vdev_get_mlo_external_sae_auth_conversion(struct wlan_objmgr_vdev *vdev)
+{
+	return vdev->vdev_mlme.mlo_external_sae_auth;
+}
+#endif
+
 /**
  * wlan_print_vdev_info() - print vdev members
  * @vdev: vdev object pointer
@@ -2037,6 +2132,24 @@ wlan_objmgr_vdev_trace_del_ref_list(struct wlan_objmgr_vdev *vdev)
 #endif
 
 /**
+ * wlan_vdev_get_bss_peer_mac_for_pmksa() - To get bss peer mac/mld
+ * address based on association to cache/retrieve PMK.
+ * @vdev: Pointer to vdev
+ * @bss_peer_mac: Pointer to BSS peer MAC address.
+ *
+ * The PMKSA entry for an ML candaidate will be present with MLD
+ * address, whereas for non-ML candidate legacy MAC address is used
+ * to save the PMKSA. To get the right entry during lookup, this API
+ * will return MLD address if the VDEV is MLO VDEV else return
+ * MAC address of BSS peer.
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS
+wlan_vdev_get_bss_peer_mac_for_pmksa(struct wlan_objmgr_vdev *vdev,
+				     struct qdf_mac_addr *bss_peer_mac);
+
+/**
  * wlan_vdev_get_bss_peer_mac() - to get bss peer mac address
  * @vdev: pointer to vdev
  * @bss_peer_mac: pointer to bss_peer_mac_address
@@ -2064,6 +2177,63 @@ QDF_STATUS wlan_vdev_get_bss_peer_mac(struct wlan_objmgr_vdev *vdev,
  */
 QDF_STATUS wlan_vdev_get_bss_peer_mld_mac(struct wlan_objmgr_vdev *vdev,
 					  struct qdf_mac_addr *mld_mac);
+
+/**
+ * wlan_vdev_get_mlo_dev_ctx() - get MLO dev context
+ * @vdev: VDEV object
+ *
+ * API to get MLO dev context pointer from vdev
+ *
+ * Return: MLO dev context pointer
+ */
+static inline struct wlan_mlo_dev_context *wlan_vdev_get_mlo_dev_ctx(
+				struct wlan_objmgr_vdev *vdev)
+{
+	return vdev->mlo_dev_ctx;
+}
+
+/**
+ * wlan_objmgr_vdev_set_ml_peer_count() - set ml_peer_count value
+ * @vdev: vdev object pointer
+ * @ml_peer_count: ml peer count to be set
+ *
+ * Return: void
+ */
+static inline void
+wlan_objmgr_vdev_set_ml_peer_count(struct wlan_objmgr_vdev *vdev,
+				   uint16_t ml_peer_count)
+{
+	vdev->vdev_objmgr.wlan_ml_peer_count = ml_peer_count;
+}
+#else
+static inline
+QDF_STATUS wlan_vdev_get_bss_peer_mld_mac(struct wlan_objmgr_vdev *vdev,
+					  struct qdf_mac_addr *mld_mac)
+{
+	return QDF_STATUS_E_INVAL;
+}
+
+static inline void
+wlan_objmgr_vdev_set_ml_peer_count(struct wlan_objmgr_vdev *vdev,
+				   uint16_t ml_peer_count)
+{
+}
 #endif
+
+/**
+ * wlan_mlo_peer_delete_is_not_allowed()
+ * @vdev: VDEV object
+ *
+ * API to check if WLAN_VDEV_OP_MLME_LEGACY_PEER_DISCON_TRIG is set therefore
+ * whether mlo peer delete should be allowed or not
+ *
+ * Return: True if MLO peer delete is not allowed, otherwise false.
+ */
+static inline bool wlan_mlo_peer_delete_is_not_allowed(
+		struct wlan_objmgr_vdev *vdev)
+{
+	return wlan_vdev_mlme_op_flags_get(vdev,
+				WLAN_VDEV_OP_MLME_LEGACY_PEER_DISCON_TRIG);
+}
 
 #endif /* _WLAN_OBJMGR_VDEV_OBJ_H_*/

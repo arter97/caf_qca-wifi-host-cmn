@@ -57,9 +57,8 @@ dp_rx_mon_handle_cfr_mu_info(struct dp_pdev *pdev,
 
 	num_users = ppdu_info->com_info.num_users;
 	for (user_id = 0; user_id < num_users; user_id++) {
-		if (user_id > OFDMA_NUM_USERS) {
+		if (user_id >= OFDMA_NUM_USERS)
 			return;
-		}
 
 		rx_user_status =  &ppdu_info->rx_user_status[user_id];
 		rx_stats_peruser = &cdp_rx_ppdu->user[user_id];
@@ -131,6 +130,8 @@ dp_rx_mon_populate_cfr_ppdu_info(struct dp_pdev *pdev,
 	cdp_rx_ppdu->peer_id = peer->peer_id;
 	cdp_rx_ppdu->vdev_id = peer->vdev->vdev_id;
 	cdp_rx_ppdu->num_users = num_users;
+
+	dp_peer_unref_delete(peer, DP_MOD_ID_RX_PPDU_STATS);
 }
 
 bool
@@ -356,7 +357,7 @@ dp_rx_populate_su_evm_details(struct hal_rx_ppdu_info *ppdu_info,
 	pilot_count = ppdu_info->evm_info.pilot_count;
 
 	if ((nss_count * pilot_count) > DP_RX_MAX_SU_EVM_COUNT) {
-		qdf_err("pilot evm count is more than expected");
+		qdf_debug("pilot evm count is more than expected");
 		return;
 	}
 	cdp_rx_ppdu->evm_info.pilot_count = pilot_count;
@@ -426,7 +427,7 @@ dp_rx_populate_cdp_indication_ppdu_user(struct dp_pdev *pdev,
 
 	num_users = ppdu_info->com_info.num_users;
 	for (i = 0; i < num_users; i++) {
-		if (i > OFDMA_NUM_USERS)
+		if (i >= OFDMA_NUM_USERS)
 			return;
 
 		rx_user_status =  &ppdu_info->rx_user_status[i];
@@ -808,7 +809,7 @@ static inline uint8_t dp_get_bw_offset_frm_bw(struct dp_soc *soc,
 }
 #endif
 
-#ifdef WLAN_TELEMETRY_STATS_SUPPORT
+#ifdef WLAN_CONFIG_TELEMETRY_AGENT
 static void
 dp_ppdu_desc_user_rx_time_update(struct dp_pdev *pdev,
 				 struct dp_peer *peer,
@@ -1710,6 +1711,54 @@ dp_rx_handle_smart_mesh_mode(struct dp_soc *soc, struct dp_pdev *pdev,
 	mon_pdev->ppdu_info.rx_status.monitor_direct_used = 0;
 	return 0;
 }
+
+#ifdef WLAN_FEATURE_LOCAL_PKT_CAPTURE
+int dp_rx_handle_local_pkt_capture(struct dp_pdev *pdev,
+				   struct hal_rx_ppdu_info *ppdu_info,
+				   qdf_nbuf_t nbuf)
+{
+	uint8_t size;
+	struct dp_mon_vdev *mon_vdev;
+	struct dp_mon_pdev *mon_pdev = pdev->monitor_pdev;
+
+	if (!mon_pdev->mvdev) {
+		dp_info_rl("Monitor vdev is NULL !!");
+		return 1;
+	}
+
+	mon_vdev = mon_pdev->mvdev->monitor_vdev;
+
+	if (!ppdu_info->msdu_info.first_msdu_payload) {
+		dp_info_rl("First msdu payload not present");
+		return 1;
+	}
+
+	/* Adding 8 bytes to get to start of 802.11 frame after phy_ppdu_id */
+	size = (ppdu_info->msdu_info.first_msdu_payload -
+		qdf_nbuf_data(nbuf)) + mon_pdev->phy_ppdu_id_size;
+	ppdu_info->msdu_info.first_msdu_payload = NULL;
+
+	if (!qdf_nbuf_pull_head(nbuf, size)) {
+		dp_info_rl("No header present");
+		return 1;
+	}
+
+	/* Only retain RX MSDU payload in the skb */
+	qdf_nbuf_trim_tail(nbuf, qdf_nbuf_len(nbuf) -
+			   ppdu_info->msdu_info.payload_len +
+			   mon_pdev->phy_ppdu_id_size);
+	if (!qdf_nbuf_update_radiotap(&mon_pdev->ppdu_info.rx_status, nbuf,
+				      qdf_nbuf_headroom(nbuf))) {
+		DP_STATS_INC(pdev, dropped.mon_radiotap_update_err, 1);
+		return 1;
+	}
+
+	if (mon_vdev && mon_vdev->osif_rx_mon)
+		mon_vdev->osif_rx_mon(mon_pdev->mvdev->osif_vdev, nbuf, NULL);
+
+	return 0;
+}
+#endif
 
 qdf_nbuf_t
 dp_rx_nbuf_prepare(struct dp_soc *soc, struct dp_pdev *pdev)

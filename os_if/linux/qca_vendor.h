@@ -663,11 +663,40 @@
  *	The attributes used with this subcommand are defined in
  *	enum qca_wlan_vendor_attr_dozed_ap.
  *
+ * @QCA_NL80211_VENDOR_SUBCMD_GET_MONITOR_MODE: This vendor subcommand is used
+ *	to get the status of local packet capture of monitor mode. The monitor
+ *	mode can be started using QCA_NL80211_VENDOR_SUBCMD_SET_MONITOR_MODE
+ *	subcommand.
+ *
+ *	The attributes used with this command are defined in enum
+ *	qca_wlan_vendor_attr_get_monitor_mode.
+ *
  * @QCA_NL80211_VENDOR_SUBCMD_ROAM_STATS: This vendor command is used to
  *	get roam information from the driver to user space. It provides the
  *	latest several instances of roam information cached in the driver.
  *	The command is only used for STA mode. The attributes used with this
  *	command are defined in enum qca_wlan_vendor_attr_roam_cached_stats.
+ *
+ * @QCA_NL80211_VENDOR_SUBCMD_MLO_LINK_STATE: This vendor subcommand is used to
+ *	configure and fetch the state information of the MLO links affiliated
+ *	with the STA interface. The attributes used with this command are
+ *	defined in enum qca_wlan_vendor_attr_mlo_link_state.
+ *
+ * @QCA_NL80211_VENDOR_SUBCMD_CONNECTED_CHANNEL_STATS: Userspace can use this
+ *	vendor subcommand to trigger channel utilization measurement on entire
+ *	channel width of the connected channel(s). For MLO connection, connected
+ *	channel utilization measurement shall be done on all the MLO links.
+ *	The driver may use regular scan or wideband energy detection feature
+ *	based on the hardware capability for connected channel(s) utilization
+ *	measurement. The driver indicates the connected channel(s) utilization
+ *	measurement completion as an asynchronous event with this command ID to
+ *	userspace. Upon receiving this event, userspace can use
+ *	%NL80211_CMD_GET_INTERFACE to determine the channel width of the current
+ *	connected channel(s) and can derive the channel utilization percentage
+ *	(CU) of each 20 MHz sub-channel of the entire connected channel using
+ *	%NL80211_CMD_GET_SURVEY response.
+ *	CU = %NL80211_SURVEY_INFO_TIME_BUSY * 100 / %NL80211_SURVEY_INFO_TIME.
+ *	This command is only used for STA mode.
  */
 
 enum qca_nl80211_vendor_subcmds {
@@ -922,7 +951,10 @@ enum qca_nl80211_vendor_subcmds {
 	QCA_NL80211_VENDOR_SUBCMD_AFC_EVENT = 222,
 	QCA_NL80211_VENDOR_SUBCMD_AFC_RESPONSE = 223,
 	QCA_NL80211_VENDOR_SUBCMD_DOZED_AP = 224,
+	QCA_NL80211_VENDOR_SUBCMD_GET_MONITOR_MODE = 225,
 	QCA_NL80211_VENDOR_SUBCMD_ROAM_STATS = 226,
+	QCA_NL80211_VENDOR_SUBCMD_MLO_LINK_STATE = 227,
+	QCA_NL80211_VENDOR_SUBCMD_CONNECTED_CHANNEL_STATS = 228,
 };
 
 enum qca_wlan_vendor_tos {
@@ -2194,113 +2226,183 @@ enum qca_vendor_attr_interop_issues_ap {
 
 #ifdef WLAN_FEATURE_LINK_LAYER_STATS
 
-/**
- * enum qca_wlan_vendor_attr_ll_stats_set - vendor attribute set stats
- *
- * @QCA_WLAN_VENDOR_ATTR_LL_STATS_SET_INVALID: Invalid initial value
- * @QCA_WLAN_VENDOR_ATTR_LL_STATS_SET_CONFIG_MPDU_SIZE_THRESHOLD: Size threshold
- * @QCA_WLAN_VENDOR_ATTR_LL_STATS_SET_CONFIG_AGGRESSIVE_STATS_GATHERING:
- *	Aggressive stats gathering
- * @QCA_WLAN_VENDOR_ATTR_LL_STATS_SET_AFTER_LAST: After last
- * @QCA_WLAN_VENDOR_ATTR_LL_STATS_SET_MAX: Max value
- */
 enum qca_wlan_vendor_attr_ll_stats_set {
 	QCA_WLAN_VENDOR_ATTR_LL_STATS_SET_INVALID = 0,
+	/* Unsigned 32-bit value */
 	QCA_WLAN_VENDOR_ATTR_LL_STATS_SET_CONFIG_MPDU_SIZE_THRESHOLD = 1,
-	QCA_WLAN_VENDOR_ATTR_LL_STATS_SET_CONFIG_AGGRESSIVE_STATS_GATHERING,
+	QCA_WLAN_VENDOR_ATTR_LL_STATS_SET_CONFIG_AGGRESSIVE_STATS_GATHERING = 2,
 	/* keep last */
 	QCA_WLAN_VENDOR_ATTR_LL_STATS_SET_AFTER_LAST,
 	QCA_WLAN_VENDOR_ATTR_LL_STATS_SET_MAX =
-		QCA_WLAN_VENDOR_ATTR_LL_STATS_SET_AFTER_LAST - 1
+	QCA_WLAN_VENDOR_ATTR_LL_STATS_SET_AFTER_LAST - 1,
 };
 
 /**
- * enum qca_wlan_vendor_attr_ll_stats_get - vendor attribute get stats
+ * qca_wlan_ll_stats_clr_req_bitmap - Represents the bitmap to clear LL STATS
+ * values for %QCA_WLAN_VENDOR_ATTR_LL_STATS_CLR_CONFIG_REQ_MASK.
  *
- * @QCA_WLAN_VENDOR_ATTR_LL_STATS_GET_INVALID: Invalid initial value
- * @QCA_WLAN_VENDOR_ATTR_LL_STATS_GET_CONFIG_REQ_ID: Unsigned 32bit value
- *	provided by the caller issuing the GET stats command. When reporting
- *	the stats results, the driver uses the same value to indicate which
- *	GET request the results correspond to.
- * @QCA_WLAN_VENDOR_ATTR_LL_STATS_GET_CONFIG_REQ_MASK: Get config request mask
- * @QCA_WLAN_VENDOR_ATTR_LL_STATS_CLR_CONFIG_RSP_MASK: Config response mask
- * @QCA_WLAN_VENDOR_ATTR_LL_STATS_CLR_CONFIG_STOP_RSP: Config stop response
- * @QCA_WLAN_VENDOR_ATTR_LL_STATS_GET_AFTER_LAST: After last
- * @QCA_WLAN_VENDOR_ATTR_LL_STATS_GET_MAX: Max value
+ * @QCA_WLAN_LL_STATS_CLR_REQ_BITMAP_RADIO: Clear all radio statistics.
+ *
+ * @QCA_WLAN_LL_STATS_CLR_REQ_BITMAP_RADIO_CCA: Clear cca_busy_time within
+ * radio statistics.
+ *
+ * @QCA_WLAN_LL_STATS_CLR_REQ_BITMAP_RADIO_CHANNEL: Clear all channel
+ * statistics within radio statistics.
+ *
+ * @QCA_WLAN_LL_STATS_CLR_REQ_BITMAP_SCAN: Clear all scan statistics within
+ * radio statistics.
+ *
+ * @QCA_WLAN_LL_STATS_CLR_REQ_BITMAP_IFACE: Clear all interface statistics.
+ *
+ * @QCA_WLAN_LL_STATS_CLR_REQ_BITMAP_IFACE_TXRATE: Clear all TX rate statistics
+ * within interface statistics.
+ *
+ * @QCA_WLAN_LL_STATS_CLR_REQ_BITMAP_IFACE_AC: Clear all AC statistics within
+ * interface statistics.
+ *
+ * @QCA_WLAN_LL_STATS_CLR_REQ_BITMAP_IFACE_CONTENTION: Clear all contention
+ * (min, max, avg) statistics within AC statistics.
+ *
+ * @QCA_WLAN_LL_STATS_CLR_REQ_BITMAP_IFACE_ALL_PEER: Clear all peer statistics
+ * on this interface.
+ *
+ * @QCA_WLAN_LL_STATS_CLR_REQ_BITMAP_IFACE_PER_PEER: Clear particular peer
+ * statistics depending on the peer_mac.
  */
-enum qca_wlan_vendor_attr_ll_stats_get {
-	QCA_WLAN_VENDOR_ATTR_LL_STATS_GET_INVALID = 0,
-	QCA_WLAN_VENDOR_ATTR_LL_STATS_GET_CONFIG_REQ_ID,
-	QCA_WLAN_VENDOR_ATTR_LL_STATS_GET_CONFIG_REQ_MASK,
-	QCA_WLAN_VENDOR_ATTR_LL_STATS_GET_AFTER_LAST,
-	QCA_WLAN_VENDOR_ATTR_LL_STATS_GET_MAX =
-		QCA_WLAN_VENDOR_ATTR_LL_STATS_GET_AFTER_LAST - 1
+enum qca_wlan_ll_stats_clr_req_bitmap {
+	QCA_WLAN_LL_STATS_CLR_REQ_BITMAP_RADIO =		BIT(0),
+	QCA_WLAN_LL_STATS_CLR_REQ_BITMAP_RADIO_CCA =		BIT(1),
+	QCA_WLAN_LL_STATS_CLR_REQ_BITMAP_RADIO_CHANNELS =	BIT(2),
+	QCA_WLAN_LL_STATS_CLR_REQ_BITMAP_RADIO_SCAN =		BIT(3),
+	QCA_WLAN_LL_STATS_CLR_REQ_BITMAP_IFACE =		BIT(4),
+	QCA_WLAN_LL_STATS_CLR_REQ_BITMAP_IFACE_TXRATE =		BIT(5),
+	QCA_WLAN_LL_STATS_CLR_REQ_BITMAP_IFACE_AC =		BIT(6),
+	QCA_WLAN_LL_STATS_CLR_REQ_BITMAP_IFACE_CONTENTION =	BIT(7),
+	QCA_WLAN_LL_STATS_CLR_REQ_BITMAP_IFACE_ALL_PEER =	BIT(8),
+	QCA_WLAN_LL_STATS_CLR_REQ_BITMAP_IFACE_PER_PEER =	BIT(9),
 };
 
-/**
- * enum qca_wlan_vendor_attr_ll_stats_clr - vendor attribute clear stats
- *
- * @QCA_WLAN_VENDOR_ATTR_LL_STATS_CLR_INVALID: Invalid initial value
- * @QCA_WLAN_VENDOR_ATTR_LL_STATS_CLR_CONFIG_REQ_MASK: Config request mask
- * @QCA_WLAN_VENDOR_ATTR_LL_STATS_CLR_CONFIG_STOP_REQ: Config stop mask
- * @QCA_WLAN_VENDOR_ATTR_LL_STATS_CLR_CONFIG_RSP_MASK: Config response mask
- * @QCA_WLAN_VENDOR_ATTR_LL_STATS_CLR_CONFIG_STOP_RSP: Config stop response
- * @QCA_WLAN_VENDOR_ATTR_LL_STATS_CLR_AFTER_LAST: After last
- * @QCA_WLAN_VENDOR_ATTR_LL_STATS_CLR_MAX: Max value
- */
 enum qca_wlan_vendor_attr_ll_stats_clr {
 	QCA_WLAN_VENDOR_ATTR_LL_STATS_CLR_INVALID = 0,
-	QCA_WLAN_VENDOR_ATTR_LL_STATS_CLR_CONFIG_REQ_MASK,
-	QCA_WLAN_VENDOR_ATTR_LL_STATS_CLR_CONFIG_STOP_REQ,
-	QCA_WLAN_VENDOR_ATTR_LL_STATS_CLR_CONFIG_RSP_MASK,
-	QCA_WLAN_VENDOR_ATTR_LL_STATS_CLR_CONFIG_STOP_RSP,
+	/* Unsigned 32bit bitmap for clearing statistics, specified
+	 * in the enum qca_wlan_ll_stats_clr_req_bitmap.
+	 */
+	QCA_WLAN_VENDOR_ATTR_LL_STATS_CLR_CONFIG_REQ_MASK = 1,
+	/* Unsigned 8 bit value: Request to stop statistics collection */
+	QCA_WLAN_VENDOR_ATTR_LL_STATS_CLR_CONFIG_STOP_REQ = 2,
+
+	/* Unsigned 32 bit bitmap: Response from the driver
+	 * for the cleared statistics
+	 */
+	QCA_WLAN_VENDOR_ATTR_LL_STATS_CLR_CONFIG_RSP_MASK = 3,
+	/* Unsigned 8 bit value: Response from driver/firmware
+	 * for the stop request
+	 */
+	QCA_WLAN_VENDOR_ATTR_LL_STATS_CLR_CONFIG_STOP_RSP = 4,
+	/* keep last */
 	QCA_WLAN_VENDOR_ATTR_LL_STATS_CLR_AFTER_LAST,
 	QCA_WLAN_VENDOR_ATTR_LL_STATS_CLR_MAX =
-		QCA_WLAN_VENDOR_ATTR_LL_STATS_CLR_AFTER_LAST - 1
+	QCA_WLAN_VENDOR_ATTR_LL_STATS_CLR_AFTER_LAST - 1,
 };
 
 /**
- * enum qca_wlan_vendor_attr_ll_stats_results_type - ll stats result type
+ * qca_wlan_ll_stats_get_req_bitmap - Represents the bitmap to request LL STATS
+ * values for %QCA_WLAN_VENDOR_ATTR_LL_STATS_GET_CONFIG_REQ_MASK.
  *
- * @QCA_WLAN_VENDOR_ATTR_LL_STATS_TYPE_INVALID: Initial invalid value
- * @QCA_WLAN_VENDOR_ATTR_LL_STATS_TYPE_RADIO: Link layer stats type radio
- * @QCA_WLAN_VENDOR_ATTR_LL_STATS_TYPE_IFACE: Link layer stats type interface
- * @QCA_WLAN_VENDOR_ATTR_LL_STATS_TYPE_PEER: Link layer stats type peer
- * @QCA_WLAN_VENDOR_ATTR_LL_STATS_TYPE_AFTER_LAST: Last value
- * @QCA_WLAN_VENDOR_ATTR_LL_STATS_TYPE_MAX: Max value
+ * @QCA_WLAN_LL_STATS_GET_REQ_BITMAP_RADIO: Request all radio statistics.
+ *
+ * @QCA_WLAN_LL_STATS_GET_REQ_BITMAP_IFACE: Request interface statistics.
+ *
+ * @QCA_WLAN_LL_STATS_GET_REQ_BITMAP_ALL_PEER: Request all peer statistics.
+ *
+ * @QCA_WLAN_LL_STATS_GET_REQ_BITMAP_PER_PEER: Request per peer statistics.
  */
-enum qca_wlan_vendor_attr_ll_stats_results_type {
-	QCA_WLAN_VENDOR_ATTR_LL_STATS_TYPE_INVALID = 0,
+enum qca_wlan_ll_stats_get_req_bitmap {
+	QCA_WLAN_LL_STATS_GET_REQ_BITMAP_RADIO =	BIT(0),
+	QCA_WLAN_LL_STATS_GET_REQ_BITMAP_IFACE =	BIT(1),
+	QCA_WLAN_LL_STATS_GET_REQ_BITMAP_ALL_PEER =	BIT(2),
+	QCA_WLAN_LL_STATS_GET_REQ_BITMAP_PER_PEER =	BIT(3),
+};
 
-	QCA_WLAN_VENDOR_ATTR_LL_STATS_TYPE_RADIO = 1,
-	QCA_WLAN_VENDOR_ATTR_LL_STATS_TYPE_IFACE,
-	QCA_WLAN_VENDOR_ATTR_LL_STATS_TYPE_PEER,
-
-	QCA_WLAN_VENDOR_ATTR_LL_STATS_TYPE_AFTER_LAST,
-	QCA_WLAN_VENDOR_ATTR_LL_STATS_TYPE_MAX =
-		QCA_WLAN_VENDOR_ATTR_LL_STATS_TYPE_AFTER_LAST - 1
+enum qca_wlan_vendor_attr_ll_stats_get {
+	QCA_WLAN_VENDOR_ATTR_LL_STATS_GET_INVALID = 0,
+	/* Unsigned 32 bit value provided by the caller issuing the GET stats
+	 * command. When reporting the stats results, the driver uses the same
+	 * value to indicate which GET request the results correspond to.
+	 */
+	QCA_WLAN_VENDOR_ATTR_LL_STATS_GET_CONFIG_REQ_ID = 1,
+	/* Unsigned 32 bit value - bit mask to identify what statistics are
+	 * requested for retrieval specified in the enum
+	 * qca_wlan_ll_stats_get_req_bitmap
+	 */
+	QCA_WLAN_VENDOR_ATTR_LL_STATS_GET_CONFIG_REQ_MASK = 2,
+	/* keep last */
+	QCA_WLAN_VENDOR_ATTR_LL_STATS_GET_AFTER_LAST,
+	QCA_WLAN_VENDOR_ATTR_LL_STATS_GET_MAX =
+	QCA_WLAN_VENDOR_ATTR_LL_STATS_GET_AFTER_LAST - 1,
 };
 
 enum qca_wlan_vendor_attr_ll_stats_results {
 	QCA_WLAN_VENDOR_ATTR_LL_STATS_INVALID = 0,
+
+	/*
+	 * For Multi Link Operation (MLO) connection, per-link statistics will
+	 * be sent inside of %QCA_WLAN_VENDOR_ATTR_LL_STATS_MLO_LINK and
+	 * cumulative statistics will be sent outside of
+	 * %QCA_WLAN_VENDOR_ATTR_LL_STATS_MLO_LINK to maintain backward
+	 * compatibility with legacy user space. Attributes which don't have
+	 * explicit documentation for MLO will be sent only outside of
+	 * %QCA_WLAN_VENDOR_ATTR_LL_STATS_MLO_LINK, such attributes values
+	 * don't depend on whether the connection is MLO capable or not, e.g.,
+	 * radio and channel specific attributes.
+	 */
+
 	/* Unsigned 32bit value. Used by the driver; must match the request id
 	 * provided with the QCA_NL80211_VENDOR_SUBCMD_LL_STATS_GET command.
 	 */
 	QCA_WLAN_VENDOR_ATTR_LL_STATS_RESULTS_REQ_ID = 1,
 
-	/* Unsigned 32 bit value */
+	/* Unsigned 32 bit value. For an MLO connection, indicates the value of
+	 * the link with the best RSSI outside
+	 * %QCA_WLAN_VENDOR_ATTR_LL_STATS_MLO_LINK and the link specific value
+	 * inside %QCA_WLAN_VENDOR_ATTR_LL_STATS_MLO_LINK.
+	 */
 	QCA_WLAN_VENDOR_ATTR_LL_STATS_IFACE_BEACON_RX = 2,
-	/* Unsigned 32 bit value */
+	/* Unsigned 32 bit value. For an MLO connection, indicates the value of
+	 * the link with the best RSSI outside
+	 * %QCA_WLAN_VENDOR_ATTR_LL_STATS_MLO_LINK and the link specific value
+	 * inside %QCA_WLAN_VENDOR_ATTR_LL_STATS_MLO_LINK.
+	 */
 	QCA_WLAN_VENDOR_ATTR_LL_STATS_IFACE_MGMT_RX = 3,
-	/* Unsigned 32 bit value */
+	/* Unsigned 32 bit value. For an MLO connection, indicates the value of
+	 * the link with the best RSSI outside
+	 * %QCA_WLAN_VENDOR_ATTR_LL_STATS_MLO_LINK and the link specific value
+	 * inside %QCA_WLAN_VENDOR_ATTR_LL_STATS_MLO_LINK.
+	 */
 	QCA_WLAN_VENDOR_ATTR_LL_STATS_IFACE_MGMT_ACTION_RX = 4,
-	/* Unsigned 32 bit value */
+	/* Unsigned 32 bit value. For an MLO connection, indicates the value of
+	 * the link with the best RSSI outside
+	 * %QCA_WLAN_VENDOR_ATTR_LL_STATS_MLO_LINK and the link specific value
+	 * inside %QCA_WLAN_VENDOR_ATTR_LL_STATS_MLO_LINK.
+	 */
 	QCA_WLAN_VENDOR_ATTR_LL_STATS_IFACE_MGMT_ACTION_TX = 5,
-	/* Signed 32 bit value */
+	/* Unsigned 32 bit value. For an MLO connection, indicates the value of
+	 * the link with the best RSSI outside
+	 * %QCA_WLAN_VENDOR_ATTR_LL_STATS_MLO_LINK and the link specific value
+	 * inside %QCA_WLAN_VENDOR_ATTR_LL_STATS_MLO_LINK.
+	 */
 	QCA_WLAN_VENDOR_ATTR_LL_STATS_IFACE_RSSI_MGMT = 6,
-	/* Signed 32 bit value */
+	/* Unsigned 32 bit value. For an MLO connection, indicates the value of
+	 * the link with the best RSSI outside
+	 * %QCA_WLAN_VENDOR_ATTR_LL_STATS_MLO_LINK and the link specific value
+	 * inside %QCA_WLAN_VENDOR_ATTR_LL_STATS_MLO_LINK.
+	 */
 	QCA_WLAN_VENDOR_ATTR_LL_STATS_IFACE_RSSI_DATA = 7,
-	/* Signed 32 bit value */
+	/* Unsigned 32 bit value. For an MLO connection, indicates the value of
+	 * the link with the best RSSI outside
+	 * %QCA_WLAN_VENDOR_ATTR_LL_STATS_MLO_LINK and the link specific value
+	 * inside %QCA_WLAN_VENDOR_ATTR_LL_STATS_MLO_LINK.
+	 */
 	QCA_WLAN_VENDOR_ATTR_LL_STATS_IFACE_RSSI_ACK = 8,
 
 	/* Attributes of type QCA_WLAN_VENDOR_ATTR_LL_STATS_IFACE_INFO_* are
@@ -2324,7 +2426,9 @@ enum qca_wlan_vendor_attr_ll_stats_results {
 	QCA_WLAN_VENDOR_ATTR_LL_STATS_IFACE_INFO_CAPABILITIES = 13,
 	/* NULL terminated SSID. An array of 33 Unsigned 8bit values */
 	QCA_WLAN_VENDOR_ATTR_LL_STATS_IFACE_INFO_SSID = 14,
-	/* BSSID. An array of 6 unsigned 8 bit values */
+	/* For non-MLO connection, BSSID of the AP. For MLO connection, MLD
+	 * address of the AP. An array of 6 unsigned 8 bit values
+	 */
 	QCA_WLAN_VENDOR_ATTR_LL_STATS_IFACE_INFO_BSSID = 15,
 	/* Country string advertised by AP. An array of 3 unsigned 8 bit
 	 * values.
@@ -2337,6 +2441,15 @@ enum qca_wlan_vendor_attr_ll_stats_results {
 
 	/* Attributes of type QCA_WLAN_VENDOR_ATTR_LL_STATS_WMM_AC_* could
 	 * be nested within the interface stats.
+	 * For an MLO connection, all %QCA_WLAN_VENDOR_ATTR_LL_STATS_WMM_AC_*
+	 * attributes except %QCA_WLAN_VENDOR_ATTR_LL_STATS_WMM_AC_CONTENTION_*
+	 * indicate the aggregate of all links outside
+	 * %QCA_WLAN_VENDOR_ATTR_LL_STATS_MLO_LINK.
+	 * %QCA_WLAN_VENDOR_ATTR_LL_STATS_WMM_AC_CONTENTION_* attributes
+	 * indicate value of the MLO link with the best RSSI outside
+	 * %QCA_WLAN_VENDOR_ATTR_LL_STATS_MLO_LINK.
+	 * These attributes indicate the link specific value inside
+	 * %QCA_WLAN_VENDOR_ATTR_LL_STATS_MLO_LINK.
 	 */
 
 	/* Type = enum wifi_traffic_ac, e.g., V0, VI, BE and BK */
@@ -2439,6 +2552,12 @@ enum qca_wlan_vendor_attr_ll_stats_results {
 	 */
 	QCA_WLAN_VENDOR_ATTR_LL_STATS_RATE_RETRIES_LONG = 48,
 
+	/* Unsigned 32 bit value. This is used to indicate radio ID of the radio
+	 * statistics when %QCA_WLAN_VENDOR_ATTR_LL_STATS_TYPE is
+	 * %QCA_WLAN_VENDOR_ATTR_LL_STATS_TYPE_RADIO. This is also used
+	 * inside %QCA_WLAN_VENDOR_ATTR_LL_STATS_MLO_LINK to indicate radio ID
+	 * of the MLO link.
+	 */
 	QCA_WLAN_VENDOR_ATTR_LL_STATS_RADIO_ID = 49,
 	/* Unsigned 32 bit value. Total number of msecs the radio is awake
 	 * accruing over time.
@@ -2485,7 +2604,13 @@ enum qca_wlan_vendor_attr_ll_stats_results {
 
 	/* Type = enum wifi_channel_width. Channel width, e.g., 20, 40, 80 */
 	QCA_WLAN_VENDOR_ATTR_LL_STATS_CHANNEL_INFO_WIDTH = 60,
-	/* Unsigned 32 bit value. Primary 20 MHz channel. */
+	/* Unsigned 32 bit value. Primary 20 MHz channel. This is used to
+	 * indicate the primary frequency of the channel when
+	 * %QCA_WLAN_VENDOR_ATTR_LL_STATS_TYPE is
+	 * %QCA_WLAN_VENDOR_ATTR_LL_STATS_TYPE_RADIO. This is also used inside
+	 * %QCA_WLAN_VENDOR_ATTR_LL_STATS_MLO_LINK to indicate the frequency
+	 * on which the MLO link is operating.
+	 */
 	QCA_WLAN_VENDOR_ATTR_LL_STATS_CHANNEL_INFO_CENTER_FREQ = 61,
 	/* Unsigned 32 bit value. Center frequency (MHz) first segment. */
 	QCA_WLAN_VENDOR_ATTR_LL_STATS_CHANNEL_INFO_CENTER_FREQ0 = 62,
@@ -2515,7 +2640,9 @@ enum qca_wlan_vendor_attr_ll_stats_results {
 	QCA_WLAN_VENDOR_ATTR_LL_STATS_CH_INFO = 67,
 
 	/* Signifies the nested list of peer info attributes
-	 * QCA_WLAN_VENDOR_ATTR_LL_STATS_PEER_INFO_*
+	 * QCA_WLAN_VENDOR_ATTR_LL_STATS_PEER_INFO_*. For MLO connection,
+	 * this also contains %QCA_WLAN_VENDOR_ATTR_LL_STATS_MLO_LINK_ID to
+	 * indicate on which link the peer is connected.
 	 */
 	QCA_WLAN_VENDOR_ATTR_LL_STATS_PEER_INFO = 68,
 
@@ -2536,16 +2663,32 @@ enum qca_wlan_vendor_attr_ll_stats_results {
 	 */
 	QCA_WLAN_VENDOR_ATTR_LL_STATS_RESULTS_MORE_DATA = 71,
 
-	/* Unsigned 64 bit value */
+	/* Unsigned 64 bit value. For an MLO connection, indicates the value of
+	 * the link with the best RSSI outside
+	 * %QCA_WLAN_VENDOR_ATTR_LL_STATS_MLO_LINK and the link specific value
+	 * inside %QCA_WLAN_VENDOR_ATTR_LL_STATS_MLO_LINK.
+	 */
 	QCA_WLAN_VENDOR_ATTR_LL_STATS_IFACE_AVERAGE_TSF_OFFSET = 72,
 
-	/* Unsigned 32 bit value */
+	/* Unsigned 32 bit value. For an MLO connection, indicates the value of
+	 * the link with the best RSSI outside
+	 * %QCA_WLAN_VENDOR_ATTR_LL_STATS_MLO_LINK and the link specific value
+	 * inside %QCA_WLAN_VENDOR_ATTR_LL_STATS_MLO_LINK.
+	 */
 	QCA_WLAN_VENDOR_ATTR_LL_STATS_IFACE_LEAKY_AP_DETECTED = 73,
 
-	/* Unsigned 32 bit value */
+	/* Unsigned 32 bit value. For an MLO connection, indicates the value of
+	 * the link with the best RSSI outside
+	 * %QCA_WLAN_VENDOR_ATTR_LL_STATS_MLO_LINK and the link specific value
+	 * inside %QCA_WLAN_VENDOR_ATTR_LL_STATS_MLO_LINK.
+	 */
 	QCA_WLAN_VENDOR_ATTR_LL_STATS_IFACE_LEAKY_AP_AVG_NUM_FRAMES_LEAKED = 74,
 
-	/* Unsigned 32 bit value */
+	/* Unsigned 32 bit value. For an MLO connection, indicates the value of
+	 * the link with the best RSSI outside
+	 * %QCA_WLAN_VENDOR_ATTR_LL_STATS_MLO_LINK and the link specific value
+	 * inside %QCA_WLAN_VENDOR_ATTR_LL_STATS_MLO_LINK.
+	 */
 	QCA_WLAN_VENDOR_ATTR_LL_STATS_IFACE_LEAKY_AP_GUARD_TIME = 75,
 
 	/* Unsigned 32 bit value */
@@ -2558,13 +2701,29 @@ enum qca_wlan_vendor_attr_ll_stats_results {
 	 */
 	QCA_WLAN_VENDOR_ATTR_LL_STATS_RADIO_TX_TIME_PER_LEVEL = 78,
 
-	/* Unsigned 32 bit value */
+	/* Unsigned 32 bit value. For an MLO connection, indicates the value of
+	 * the link with the best RSSI outside
+	 * %QCA_WLAN_VENDOR_ATTR_LL_STATS_MLO_LINK and the link specific value
+	 * inside %QCA_WLAN_VENDOR_ATTR_LL_STATS_MLO_LINK.
+	 */
 	QCA_WLAN_VENDOR_ATTR_LL_STATS_IFACE_RTS_SUCC_CNT = 79,
-	/* Unsigned 32 bit value */
+	/* Unsigned 32 bit value. For an MLO connection, indicates the value of
+	 * the link with the best RSSI outside
+	 * %QCA_WLAN_VENDOR_ATTR_LL_STATS_MLO_LINK and the link specific value
+	 * inside %QCA_WLAN_VENDOR_ATTR_LL_STATS_MLO_LINK.
+	 */
 	QCA_WLAN_VENDOR_ATTR_LL_STATS_IFACE_RTS_FAIL_CNT = 80,
-	/* Unsigned 32 bit value */
+	/* Unsigned 32 bit value. For an MLO connection, indicates the value of
+	 * the link with the best RSSI outside
+	 * %QCA_WLAN_VENDOR_ATTR_LL_STATS_MLO_LINK and the link specific value
+	 * inside %QCA_WLAN_VENDOR_ATTR_LL_STATS_MLO_LINK.
+	 */
 	QCA_WLAN_VENDOR_ATTR_LL_STATS_IFACE_PPDU_SUCC_CNT = 81,
-	/* Unsigned 32 bit value */
+	/* Unsigned 32 bit value. For an MLO connection, indicates the value of
+	 * the link with the best RSSI outside
+	 * %QCA_WLAN_VENDOR_ATTR_LL_STATS_MLO_LINK and the link specific value
+	 * inside %QCA_WLAN_VENDOR_ATTR_LL_STATS_MLO_LINK.
+	 */
 	QCA_WLAN_VENDOR_ATTR_LL_STATS_IFACE_PPDU_FAIL_CNT = 82,
 
 	/* Unsigned int 32 value.
@@ -2588,24 +2747,67 @@ enum qca_wlan_vendor_attr_ll_stats_results {
 	 */
 	QCA_WLAN_VENDOR_ATTR_LL_STATS_CHANNEL_LOAD_PERCENTAGE = 86,
 	/* u8 value representing the time slicing duty cycle percentage.
-	 * Possible values are 0-100.
+	 * Possible values are 0-100. For an MLO connection, indicates the value
+	 * of the link with the best RSSI outside
+	 * %QCA_WLAN_VENDOR_ATTR_LL_STATS_MLO_LINK and the link specific value
+	 * inside %QCA_WLAN_VENDOR_ATTR_LL_STATS_MLO_LINK.
 	 */
 	QCA_WLAN_VENDOR_ATTR_LL_STATS_IFACE_INFO_TS_DUTY_CYCLE = 87,
 	/* Unsigned 32 bit value. The number of Beacon frames which are received
 	 * from the associated AP and indicate buffered unicast frame(s) for us
-	 * in the TIM element.
+	 * in the TIM element. For an MLO connection, indicates the value of the
+	 * link with the best RSSI outside
+	 * %QCA_WLAN_VENDOR_ATTR_LL_STATS_MLO_LINK and the link specific value
+	 * inside %QCA_WLAN_VENDOR_ATTR_LL_STATS_MLO_LINK.
 	 */
 	QCA_WLAN_VENDOR_ATTR_LL_STATS_TIM_BEACON = 88,
 	/* Unsigned 32 bit value. The total number of Beacon frames received
 	 * from the associated AP that have wrongly indicated buffered unicast
 	 * traffic in the TIM element for us.
 	 * Below scenarios will be considered as wrong TIM element beacon:
-	 * 1) The related TIM element is set in the beacon for STA but STA
-	 *    doesn’t receive any unicast data after this beacon.
-	 * 2) The related TIM element is still set in the beacon for STA
-	 *    after STA has indicated power save exit by QoS Null Data frame.
+	 * 1)	The related TIM element is set in the beacon for STA but STA
+	 *      doesn’t receive any unicast data after this beacon.
+	 * 2)	The related TIM element is still set in the beacon for STA
+	 *	after STA has indicated power save exit by QoS Null Data frame.
+	 * For an MLO connection, indicates the value of the link with the best
+	 * RSSI outside %QCA_WLAN_VENDOR_ATTR_LL_STATS_MLO_LINK and the link
+	 * specific value inside %QCA_WLAN_VENDOR_ATTR_LL_STATS_MLO_LINK.
 	 */
 	QCA_WLAN_VENDOR_ATTR_LL_STATS_TIM_BEACON_ERR = 89,
+
+	/* Signed 32 bit value. It represents the noise floor calibration value.
+	 * Possible values are -120~-50 dBm. For an MLO connection, indicates
+	 * the value of the link with the best RSSI outside
+	 * %QCA_WLAN_VENDOR_ATTR_LL_STATS_MLO_LINK and the link specific value
+	 * inside %QCA_WLAN_VENDOR_ATTR_LL_STATS_MLO_LINK.
+	 */
+	QCA_WLAN_VENDOR_ATTR_LL_STATS_IFACE_NF_CAL_VAL = 90,
+
+	/* Attribute used for padding for 64-bit alignment */
+	QCA_WLAN_VENDOR_ATTR_LL_STATS_PAD = 91,
+
+	/* Unsigned u8 value, link ID of an MLO link. Used inside nested
+	 * attribute %QCA_WLAN_VENDOR_ATTR_LL_STATS_MLO_LINK to represent the
+	 * link ID of the MLO link for which the statistics are embedded in the
+	 * nested attribute. Used inside nested attribute
+	 * %QCA_WLAN_VENDOR_ATTR_LL_STATS_PEER_INFO to represent the connected
+	 * link ID of the peer.
+	 */
+	QCA_WLAN_VENDOR_ATTR_LL_STATS_MLO_LINK_ID = 92,
+
+	/* A nested array of attributes for each MLO link, each containing
+	 * per-link statistics of a multi link connection. The attributes used
+	 * inside this nested attribute are defined in enum
+	 * qca_wlan_vendor_attr_ll_stats_results.
+	 *
+	 * For non-MLO connection, this attribute is not present and the
+	 * statistics will be sent outside this attribute (without nesting).
+	 *
+	 * For MLO connection, this attribute is present and also cumulative
+	 * statistics of all the links will be sent outside of this attribute
+	 * to be compatible with legacy user space.
+	 */
+	QCA_WLAN_VENDOR_ATTR_LL_STATS_MLO_LINK = 93,
 
 	/* keep last */
 	QCA_WLAN_VENDOR_ATTR_LL_STATS_AFTER_LAST,
@@ -3274,6 +3476,8 @@ enum qca_vendor_roam_triggers {
  * @QCA_ROAM_FAIL_REASON_SAE_PREAUTH_TIMEOUT: WPA3-SAE pre-authentication times
  * out.
  * @QCA_ROAM_FAIL_REASON_SAE_PREAUTH_FAIL: WPA3-SAE pre-authentication fails.
+ * @QCA_ROAM_FAIL_REASON_CURR_AP_STILL_OK: Roam scan did not happen since the
+ * current network conditions are fine.
  */
 enum qca_vendor_roam_fail_reasons {
 	QCA_ROAM_FAIL_REASON_NONE = 0,
@@ -3306,6 +3510,7 @@ enum qca_vendor_roam_fail_reasons {
 	QCA_ROAM_FAIL_REASON_SAE_INVALID_PMKID = 27,
 	QCA_ROAM_FAIL_REASON_SAE_PREAUTH_TIMEOUT = 28,
 	QCA_ROAM_FAIL_REASON_SAE_PREAUTH_FAIL = 29,
+	QCA_ROAM_FAIL_REASON_CURR_AP_STILL_OK = 30,
 };
 
 /*
@@ -4388,6 +4593,9 @@ enum qca_wlan_vendor_attr_nd_offload {
  *	measurement management frames. If
  *	NL80211_EXT_FEATURE_PROT_RANGE_NEGO_AND_MEASURE is set, then
  *	QCA_WLAN_VENDOR_FEATURE_PROT_RANGE_NEGO_AND_MEASURE_AP will be ignored.
+ * @QCA_WLAN_VENDOR_FEATURE_AP_ALLOWED_FREQ_LIST: Flag indicates that the device
+ *	in AP mode supports configuring allowed frequency list for AP operation
+ *	with %QCA_WLAN_VENDOR_ATTR_CONFIG_AP_ALLOWED_FREQ_LIST.
  * @NUM_QCA_WLAN_VENDOR_FEATURES: Number of assigned feature bits
  */
 enum qca_wlan_vendor_features {
@@ -4413,6 +4621,7 @@ enum qca_wlan_vendor_features {
 	QCA_WLAN_VENDOR_FEATURE_SECURE_RTT_AP		= 19,
 	QCA_WLAN_VENDOR_FEATURE_PROT_RANGE_NEGO_AND_MEASURE_STA = 20,
 	QCA_WLAN_VENDOR_FEATURE_PROT_RANGE_NEGO_AND_MEASURE_AP = 21,
+	QCA_WLAN_VENDOR_FEATURE_AP_ALLOWED_FREQ_LIST = 22,
 	NUM_QCA_WLAN_VENDOR_FEATURES /* keep last */
 };
 
@@ -5336,6 +5545,33 @@ enum qca_wlan_vendor_attr_config {
 	 * Uses enum qca_wlan_eht_mlo_mode values.
 	 */
 	QCA_WLAN_VENDOR_ATTR_CONFIG_EHT_MLO_MODE = 90,
+
+	/* Nested attribute with frequencies in u32 attributes to configure a
+	 * list of allowed 20 MHz channel center frequencies in MHz for AP
+	 * operation. Whenever performing a channel selection operation, the
+	 * driver shall generate a new list based on this provided list by
+	 * filtering out channels that cannot be used at that time due to
+	 * regulatory or other constraints. The resulting list is used as the
+	 * list of all allowed channels, i.e., operation on any channel that is
+	 * not included is not allowed, whenever performing operations like ACS
+	 * and DFS.
+	 *
+	 * Userspace shall configure this before starting the AP and the
+	 * configuration is valid only from the next BSS start and until the
+	 * BSS is stopped. The driver shall clear this configuration when the
+	 * AP is stopped and fall back to the default behavior for subsequent
+	 * AP operation.
+	 *
+	 * The default behavior when this configuration is not applicable is the
+	 * driver can choose any of the channels supported by the hardware
+	 * except the channels that cannot be used due to regulatory or other
+	 * constraints.
+	 *
+	 * The driver shall reject this configuration if done after the AP is
+	 * started. This attribute can be used to specify user's choice of
+	 * frequencies and static puncture channel list, etc.
+	 */
+	QCA_WLAN_VENDOR_ATTR_CONFIG_AP_ALLOWED_FREQ_LIST = 91,
 
 	/* keep last */
 	QCA_WLAN_VENDOR_ATTR_CONFIG_AFTER_LAST,
@@ -12472,13 +12708,19 @@ enum qca_wlan_vendor_attr_radar_history {
  *	command it clears MCC quota setting and restores adaptive scheduling.
  * @QCA_WLAN_VENDOR_MCC_QUOTA_TYPE_FIXED: Channel time quota is fixed and
  *      will not be changed.
+ *      This quota type is present in command/event.
  * @QCA_WLAN_VENDOR_MCC_QUOTA_TYPE_DYNAMIC: Channel time quota is dynamic
  *      and the target may change the quota based on the data activity.
+ *      This quota type is only present in event.
+ * @QCA_WLAN_VENDOR_MCC_QUOTA_TYPE_LOW_LATENCY: Channel time quota is optimized
+ *      by the target for low latency.
+ *      This quota type is only present in command.
  */
 enum qca_wlan_vendor_mcc_quota_type {
 	QCA_WLAN_VENDOR_MCC_QUOTA_TYPE_CLEAR = 0,
 	QCA_WLAN_VENDOR_MCC_QUOTA_TYPE_FIXED = 1,
 	QCA_WLAN_VENDOR_MCC_QUOTA_TYPE_DYNAMIC = 2,
+	QCA_WLAN_VENDOR_MCC_QUOTA_TYPE_LOW_LATENCY = 3,
 };
 
 /**
@@ -12515,6 +12757,15 @@ enum qca_wlan_vendor_mcc_quota_type {
  * configurations are applied. This is required in a command only. Only one
  * interface index may be specified. If not specified, the configuration is
  * rejected.
+ *
+ * @QCA_WLAN_VENDOR_ATTR_MCC_QUOTA_LOW_LATENCY_MODE_ENABLE
+ * 8-bit unsigned value to enable/disable Multi-Channel Concurrency
+ * low latency mode. The firmware will do optimization for low
+ * latency in Multi-Channel concurrency state if enabled. And all existing
+ * user quota setting will be overwritten by the target.
+ * 0 - disable(default), 1 - enable.
+ * It is only present in a command with quota type of
+ * QCA_WLAN_VENDOR_MCC_QUOTA_TYPE_LOW_LATENCY.
  */
 enum qca_wlan_vendor_attr_mcc_quota {
 	QCA_WLAN_VENDOR_ATTR_MCC_QUOTA_INVALID = 0,
@@ -12523,6 +12774,7 @@ enum qca_wlan_vendor_attr_mcc_quota {
 	QCA_WLAN_VENDOR_ATTR_MCC_QUOTA_CHAN_FREQ = 3,
 	QCA_WLAN_VENDOR_ATTR_MCC_QUOTA_CHAN_TIME_PERCENTAGE = 4,
 	QCA_WLAN_VENDOR_ATTR_MCC_QUOTA_IFINDEX = 5,
+	QCA_WLAN_VENDOR_ATTR_MCC_QUOTA_LOW_LATENCY_MODE_ENABLE = 6,
 
 	/* keep last */
 	QCA_WLAN_VENDOR_ATTR_MCC_QUOTA_LAST,
@@ -15747,4 +15999,192 @@ enum qca_wlan_vendor_attr_dozed_ap {
 	QCA_WLAN_VENDOR_ATTR_DOZED_AP_AFTER_LAST - 1,
 };
 
+/**
+ * enum qca_wlan_vendor_monitor_mode_status - Represents the status codes
+ * used with QCA_NL80211_VENDOR_SUBCMD_GET_MONITOR_MODE.
+ * @QCA_WLAN_VENDOR_MONITOR_MODE_NO_CAPTURE_RUNNING: Used to indicate no
+ * capture running status.
+ * @QCA_WLAN_VENDOR_MONITOR_MODE_CAPTURE_RUNNING: Used to indicate
+ * capture running status.
+ **/
+
+enum qca_wlan_vendor_monitor_mode_status {
+	QCA_WLAN_VENDOR_MONITOR_MODE_NO_CAPTURE_RUNNING = 0,
+	QCA_WLAN_VENDOR_MONITOR_MODE_CAPTURE_RUNNING = 1,
+};
+
+/**
+ * enum qca_wlan_vendor_attr_get_monitor_mode - Used by the
+ * vendor command QCA_NL80211_VENDOR_SUBCMD_GET_MONITOR_MODE to report
+ * information regarding the local packet capture over the monitor mode.
+ *
+ * @QCA_WLAN_VENDOR_ATTR_GET_MONITOR_MODE_STATUS: u32 attribute. This attribute
+ * represents the status of the start capture commands. The values used with
+ * this attribute are defined in enum qca_wlan_vendor_monitor_mode_status. This
+ * is returned by the driver in the response to the command.
+ */
+
+enum qca_wlan_vendor_attr_get_monitor_mode {
+	QCA_WLAN_VENDOR_ATTR_GET_MONITOR_MODE_INVALID = 0,
+	QCA_WLAN_VENDOR_ATTR_GET_MONITOR_MODE_STATUS = 1,
+
+	/* Keep last */
+	QCA_WLAN_VENDOR_ATTR_GET_MONITOR_MODE_AFTER_LAST,
+	QCA_WLAN_VENDOR_ATTR_GET_MONITOR_MODE_MAX =
+	QCA_WLAN_VENDOR_ATTR_GET_MONITOR_MODE_AFTER_LAST - 1,
+};
+
+/**
+ * enum qca_wlan_vendor_link_state_op_types - Defines different types of
+ * operations for which %QCA_NL80211_VENDOR_SUBCMD_MLO_LINK_STATE can be used.
+ * Will be used with %QCA_WLAN_VENDOR_ATTR_LINK_STATE_OP_TYPE attribute.
+ *
+ * @QCA_WLAN_VENDOR_LINK_STATE_OP_GET - Get the MLO links state information.
+ * @QCA_WLAN_VENDOR_LINK_STATE_OP_SET - Set the MLO links state information.
+ */
+enum qca_wlan_vendor_link_state_op_types {
+	QCA_WLAN_VENDOR_LINK_STATE_OP_GET = 0,
+	QCA_WLAN_VENDOR_LINK_STATE_OP_SET = 1,
+};
+
+/**
+ * enum qca_wlan_vendor_link_state_control_modes - Represents the types of MLO
+ * links state control modes. This enum is used by
+ * %QCA_WLAN_VENDOR_ATTR_LINK_STATE_CONTROL_MODE attribute.
+ *
+ * @QCA_WLAN_VENDOR_LINK_STATE_CONTROL_MODE_DEFAULT: MLO links state controlled
+ * by the driver.
+ * @QCA_WLAN_VENDOR_LINK_STATE_CONTROL_MODE_USER: MLO links state controlled by
+ * user space.
+ * @QCA_WLAN_VENDOR_LINK_STATE_CONTROL_MODE_MIXED: User space provides the
+ * desired number of MLO links to operate in active state at any given time.
+ * The driver will choose which MLO links should operate in the active state.
+ * See enum qca_wlan_vendor_link_state for active state definition.
+ */
+enum qca_wlan_vendor_link_state_control_modes {
+	QCA_WLAN_VENDOR_LINK_STATE_CONTROL_MODE_DEFAULT = 0,
+	QCA_WLAN_VENDOR_LINK_STATE_CONTROL_MODE_USER = 1,
+	QCA_WLAN_VENDOR_LINK_STATE_CONTROL_MODE_MIXED = 2,
+};
+
+/**
+ * enum qca_wlan_vendor_link_state_operation_modes - Represents the types of MLO
+ * links state operation modes. This enum is used by
+ * %QCA_WLAN_VENDOR_ATTR_LINK_STATE_OPERATION_MODE attribute.
+ *
+ * @QCA_WLAN_VENDOR_LINK_STATE_OPERATION_MODE_DEFAULT: In the default operation
+ * mode, the driver selects the operating mode of the links, without any
+ * guidance from the user space.
+ * @QCA_WLAN_VENDOR_LINK_STATE_OPERATION_MODE_LOW_LATENCY: In the low latency
+ * operation mode the driver should select MLO links that will achieve low
+ * latency.
+ * @QCA_WLAN_VENDOR_LINK_STATE_OPERATION_MODE_HIGH_THROUGHPUT: In the high
+ * throughput operation mode the driver should select MLO links that will
+ * achieve higher throughput.
+ * @QCA_WLAN_VENDOR_LINK_STATE_OPERATION_MODE_LOW_POWER: In the low power
+ * operation mode the driver should select MLO links that will achieve low
+ * power.
+ */
+enum qca_wlan_vendor_link_state_operation_modes {
+	QCA_WLAN_VENDOR_LINK_STATE_OPERATION_MODE_DEFAULT = 0,
+	QCA_WLAN_VENDOR_LINK_STATE_OPERATION_MODE_LOW_LATENCY = 1,
+	QCA_WLAN_VENDOR_LINK_STATE_OPERATION_MODE_HIGH_THROUGHPUT = 2,
+	QCA_WLAN_VENDOR_LINK_STATE_OPERATION_MODE_LOW_POWER = 3,
+};
+
+/**
+ * enum qca_wlan_vendor_link_state - Represents the possible link states of an
+ * MLO link.
+ *
+ * @QCA_WLAN_VENDOR_LINK_STATE_INACTIVE: In this state, the link will not
+ * be used for data transmission but it can have TIDs mapped to it. It will be
+ * in doze state always and does not monitor the beacons.
+ * @QCA_WLAN_VENDOR_LINK_STATE_ACTIVE: In this state, the link will be
+ * used for data TX/RX and monitors the beacons to check TIM bit indication.
+ * It may enter doze state and comes out based on the transmit data traffic and
+ * TIM bit indication in the beacon.
+ */
+enum qca_wlan_vendor_link_state {
+	QCA_WLAN_VENDOR_LINK_STATE_INACTIVE = 0,
+	QCA_WLAN_VENDOR_LINK_STATE_ACTIVE = 1,
+};
+
+/**
+ * enum qca_wlan_vendor_attr_link_state_config - Definition of attributes used
+ * inside nested attribute %QCA_WLAN_VENDOR_ATTR_LINK_STATE_CONFIG.
+ *
+ * @QCA_WLAN_VENDOR_ATTR_LINK_STATE_CONFIG_LINK_ID: u8 attribute, link ID of the
+ * MLO link.
+ * @QCA_WLAN_VENDOR_ATTR_LINK_STATE_CONFIG_STATE: u32 attribute. See
+ * enum qca_wlan_vendor_link_state for possible MLO link states.
+ */
+
+enum qca_wlan_vendor_attr_link_state_config {
+	QCA_WLAN_VENDOR_ATTR_LINK_STATE_CONFIG_INVALID = 0,
+	QCA_WLAN_VENDOR_ATTR_LINK_STATE_CONFIG_LINK_ID = 1,
+	QCA_WLAN_VENDOR_ATTR_LINK_STATE_CONFIG_STATE = 2,
+
+	/* Keep last */
+	QCA_WLAN_VENDOR_ATTR_LINK_STATE_CONFIG_AFTER_LAST,
+	QCA_WLAN_VENDOR_ATTR_LINK_STATE_CONFIG_MAX =
+	QCA_WLAN_VENDOR_ATTR_LINK_STATE_CONFIG_AFTER_LAST - 1,
+};
+
+/**
+ * enum qca_wlan_vendor_attr_mlo_link_state - Attributes used by
+ * %QCA_NL80211_VENDOR_SUBCMD_MLO_LINK_STATE vendor command.
+ *
+ * @QCA_WLAN_VENDOR_ATTR_LINK_STATE_OP_TYPE: u32 attribute. Indicates the type
+ * of the operation %QCA_NL80211_VENDOR_SUBCMD_MLO_LINK_STATE intended for.
+ * Required only in a command. Possible values for this attribute are defined in
+ * enum qca_wlan_vendor_link_state_op_types.
+ *
+ * @QCA_WLAN_VENDOR_ATTR_LINK_STATE_CONTROL_MODE: u32 attribute. Indicates MLO
+ * links control mode type. Optional attribute in a command when
+ * %QCA_WLAN_VENDOR_ATTR_LINK_STATE_OP_TYPE is set to
+ * %QCA_WLAN_VENDOR_LINK_STATE_OP_SET. Required attribute in a response when
+ * %QCA_WLAN_VENDOR_ATTR_LINK_STATE_OP_TYPE is set to
+ * %QCA_WLAN_VENDOR_LINK_STATE_OP_GET.
+ * See enum qca_wlan_vendor_link_state_control_modes for possible control modes.
+ *
+ * @QCA_WLAN_VENDOR_ATTR_LINK_STATE_CONFIG: Array of nested attributes.
+ * Indicates the state of the each MLO link affiliated with the interface.
+ * Required attribute in a command when %QCA_WLAN_VENDOR_ATTR_LINK_STATE_OP_TYPE
+ * is set to %QCA_WLAN_VENDOR_LINK_STATE_OP_SET and
+ * %QCA_WLAN_VENDOR_ATTR_LINK_STATE_CONTROL_MODE is set to
+ * %QCA_WLAN_VENDOR_LINK_STATE_CONTROL_MODE_USER. Required attribute in a
+ * response when %QCA_WLAN_VENDOR_ATTR_LINK_STATE_OP_TYPE is set to
+ * %QCA_WLAN_VENDOR_LINK_STATE_OP_GET.
+ * See enum qca_wlan_vendor_attr_link_state_config for the nested attributes.
+ *
+ * @QCA_WLAN_VENDOR_ATTR_LINK_STATE_MIXED_MODE_ACTIVE_NUM_LINKS: u8 attribute.
+ * Represents the number of active state links. See enum
+ * qca_wlan_vendor_link_state for active state definition.
+ * Required attribute in a command when %QCA_WLAN_VENDOR_ATTR_LINK_STATE_OP_TYPE
+ * is set to %QCA_WLAN_VENDOR_LINK_STATE_OP_SET and
+ * %QCA_WLAN_VENDOR_ATTR_LINK_STATE_CONTROL_MODE is set to
+ * %QCA_WLAN_VENDOR_LINK_STATE_CONTROL_MODE_MIXED.
+ *
+ * @QCA_WLAN_VENDOR_ATTR_LINK_STATE_OPERATION_MODE: u32 attribute. Indicates MLO
+ * links operation mode type. Optional attribute in a command when
+ * %QCA_WLAN_VENDOR_ATTR_LINK_STATE_OP_TYPE is set to
+ * %QCA_WLAN_VENDOR_LINK_STATE_OP_SET. Required attribute in a response when
+ * %QCA_WLAN_VENDOR_ATTR_LINK_STATE_OP_TYPE is set to
+ * %QCA_WLAN_VENDOR_LINK_STATE_OP_GET.
+ * See enum qca_wlan_vendor_link_state_operation_modes for possible operation
+ * modes.
+ */
+enum qca_wlan_vendor_attr_mlo_link_state {
+	QCA_WLAN_VENDOR_ATTR_LINK_STATE_INVALID = 0,
+	QCA_WLAN_VENDOR_ATTR_LINK_STATE_OP_TYPE = 1,
+	QCA_WLAN_VENDOR_ATTR_LINK_STATE_CONTROL_MODE = 2,
+	QCA_WLAN_VENDOR_ATTR_LINK_STATE_CONFIG = 3,
+	QCA_WLAN_VENDOR_ATTR_LINK_STATE_MIXED_MODE_ACTIVE_NUM_LINKS = 4,
+	QCA_WLAN_VENDOR_ATTR_LINK_STATE_OPERATION_MODE = 5,
+
+	/* keep last */
+	QCA_WLAN_VENDOR_ATTR_LINK_STATE_AFTER_LAST,
+	QCA_WLAN_VENDOR_ATTR_LINK_STATE_MAX =
+	QCA_WLAN_VENDOR_ATTR_LINK_STATE_AFTER_LAST - 1,
+};
 #endif

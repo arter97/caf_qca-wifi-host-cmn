@@ -116,6 +116,8 @@ dp_tx_mon_status_free_packet_buf(struct dp_pdev *pdev,
 				 uint32_t end_offset,
 				 struct dp_tx_mon_desc_list *mon_desc_list_ref);
 
+#if defined(WLAN_TX_PKT_CAPTURE_ENH_BE) && defined(WLAN_PKT_CAPTURE_TX_2_0) && \
+	defined(BE_PKTLOG_SUPPORT)
 /**
  * dp_tx_process_pktlog_be() - process pktlog
  * @soc: dp soc handle
@@ -131,6 +133,15 @@ dp_tx_mon_status_free_packet_buf(struct dp_pdev *pdev,
 QDF_STATUS
 dp_tx_process_pktlog_be(struct dp_soc *soc, struct dp_pdev *pdev,
 			void *status_frag, uint32_t end_offset);
+#else
+static inline QDF_STATUS
+dp_tx_process_pktlog_be(struct dp_soc *soc, struct dp_pdev *pdev,
+			void *status_frag, uint32_t end_offset)
+{
+	return QDF_STATUS_SUCCESS;
+}
+#endif
+
 /**
  * dp_tx_mon_process_status_tlv() - API to processed TLV
  * invoked from interrupt handler
@@ -176,7 +187,7 @@ dp_tx_mon_print_ring_stat_2_0(struct dp_pdev *pdev);
 #define MAX_MONITOR_HEADER (512)
 #define MAX_DUMMY_FRM_BODY (128)
 
-#define MAX_STATUS_BUFFER_IN_PPDU (64)
+#define MAX_STATUS_BUFFER_IN_PPDU (128)
 #define TXMON_NO_BUFFER_SZ (64)
 
 #define DP_BA_ACK_FRAME_SIZE (sizeof(struct ieee80211_ctlframe_addr2) + 36)
@@ -748,6 +759,84 @@ QDF_STATUS dp_peer_set_tx_capture_enabled_2_0(struct dp_pdev *pdev_handle,
  * Return: QDF_STATUS
  */
 QDF_STATUS dp_config_enh_tx_core_monitor_2_0(struct dp_pdev *pdev, uint8_t val);
+#endif
+
+#ifdef WLAN_PKT_CAPTURE_TX_2_0
+QDF_STATUS dp_tx_mon_pdev_htt_srng_setup_2_0(struct dp_soc *soc,
+					     struct dp_pdev *pdev,
+					     int mac_id,
+					     int mac_for_pdev);
+QDF_STATUS dp_tx_mon_soc_htt_srng_setup_2_0(struct dp_soc *soc,
+					    int mac_id);
+QDF_STATUS dp_tx_mon_pdev_rings_alloc_2_0(struct dp_pdev *pdev, uint32_t lmac_id);
+void dp_tx_mon_pdev_rings_free_2_0(struct dp_pdev *pdev, uint32_t lmac_id);
+QDF_STATUS dp_tx_mon_pdev_rings_init_2_0(struct dp_pdev *pdev, uint32_t lmac_id);
+void dp_tx_mon_pdev_rings_deinit_2_0(struct dp_pdev *pdev, uint32_t lmac_id);
+QDF_STATUS dp_tx_mon_soc_init_2_0(struct dp_soc *soc);
+QDF_STATUS dp_tx_mon_soc_attach_2_0(struct dp_soc *soc, uint32_t lmac_id);
+QDF_STATUS dp_tx_mon_soc_detach_2_0(struct dp_soc *soc, uint32_t lmac_id);
+void dp_tx_mon_soc_deinit_2_0(struct dp_soc *soc, uint32_t lmac_id);
+#else
+static inline
+QDF_STATUS dp_tx_mon_pdev_htt_srng_setup_2_0(struct dp_soc *soc,
+					     struct dp_pdev *pdev,
+					     int mac_id,
+					     int mac_for_pdev)
+{
+	return QDF_STATUS_SUCCESS;
+}
+
+static inline
+QDF_STATUS dp_tx_mon_soc_htt_srng_setup_2_0(struct dp_soc *soc,
+					    int mac_id)
+{
+	return QDF_STATUS_SUCCESS;
+}
+
+static inline
+QDF_STATUS dp_tx_mon_pdev_rings_alloc_2_0(struct dp_pdev *pdev, uint32_t lmac_id)
+{
+	return QDF_STATUS_SUCCESS;
+}
+
+static inline
+void dp_tx_mon_pdev_rings_free_2_0(struct dp_pdev *pdev, uint32_t lmac_id)
+{
+}
+
+static inline
+QDF_STATUS dp_tx_mon_pdev_rings_init_2_0(struct dp_pdev *pdev, uint32_t lmac_id);
+{
+	return QDF_STATUS_SUCCESS;
+}
+
+static inline
+void dp_tx_mon_pdev_rings_deinit_2_0(struct dp_pdev *pdev, uint32_t lmac_id)
+{
+}
+
+static inline
+QDF_STATUS dp_tx_mon_soc_init_2_0(struct dp_soc *soc)
+{
+	return QDF_STATUS_SUCCESS;
+}
+
+static inline
+QDF_STATUS dp_tx_mon_soc_attach_2_0(struct dp_soc *soc, uint32_t lmac_id)
+{
+	return QDF_STATUS_SUCCESS;
+}
+
+static inline
+QDF_STATUS dp_tx_mon_soc_detach_2_0(struct dp_soc *soc, uint32_t lmac_id)
+{
+	return QDF_STATUS_SUCCESS;
+}
+
+static inline
+void dp_tx_mon_soc_deinit_2_0(struct dp_soc *soc, uint32_t lmac_id)
+{
+}
 #endif
 
 #endif /* _DP_TX_MON_2_0_H_ */

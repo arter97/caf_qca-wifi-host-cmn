@@ -47,6 +47,58 @@
 
 #define MAX_NUM_PPDU_RECORD 4
 #define MAX_TLVS_PER_PPDU 255
+
+/*
+ * struct dp_mon_tlv_info - recorded information of each TLV
+ * @tlv_tag: tlv tag
+ * @data: union of struct of fields to be recorded for each TLV
+ *
+ * Tag and its corresponding important fields are stored in this struct
+ */
+struct dp_mon_tlv_info {
+	uint32_t tlv_tag:10;
+	union {
+		struct hal_ppdu_start_tlv_record ppdu_start;
+		struct hal_ppdu_start_user_info_tlv_record  ppdu_start_user_info;
+		struct hal_mpdu_start_tlv_record mpdu_start;
+		struct hal_mpdu_end_tlv_record mpdu_end;
+		struct hal_header_tlv_record header;
+		struct hal_msdu_end_tlv_record msdu_end;
+		struct hal_mon_buffer_addr_tlv_record mon_buffer_addr;
+		struct hal_phy_location_tlv_record phy_location;
+		struct hal_ppdu_end_user_stats_tlv_record ppdu_end_user_stats;
+		struct hal_pcu_ppdu_end_info_tlv_record pcu_ppdu_end_info;
+		struct hal_phy_rx_ht_sig_tlv_record phy_rx_ht_sig;
+		uint32_t data:22;
+	} data;
+};
+
+/**
+ * struct dp_mon_tlv_logger - contains indexes and other data of the buffer
+ * @buff: buffer in which TLVs are stored
+ * @curr_ppdu_pos: position of the next ppdu to be written
+ * @ppdu_start_idx: starting index form which PPDU start level TLVs are stored for a ppdu
+ * @mpdu_idx: starting index form which MPDU TLVs are stored for a ppdu
+ * @ppdu_end_idx: starting index form which PPDU end level TLVs are stored for a ppdu
+ * @max_ppdu_start_idx: ending index for PPDU start level TLVs for a ppdu
+ * @max_mpdu_idx: ending index for MPDU level TLVs for a ppdu
+ * @max_ppdu_end_idx: ending index for PPDU end level TLVs for a ppdu
+ * @wrap_flag: flag toggle between consecutive PPDU
+ * @tlv_logging_enable: check is tlv logging is enabled
+ *
+ */
+struct dp_mon_tlv_logger {
+	void *buff;
+	uint16_t curr_ppdu_pos;
+	uint16_t ppdu_start_idx;
+	uint16_t mpdu_idx;
+	uint16_t ppdu_end_idx;
+	uint16_t max_ppdu_start_idx;
+	uint16_t max_ppdu_end_idx;
+	uint16_t max_mpdu_idx;
+	uint8_t wrap_flag;
+	bool tlv_logging_enable;
+};
 #endif
 
 /* monitor frame filter modes */
@@ -81,7 +133,7 @@ enum dp_mpdu_filter_category {
  */
 struct dp_mon_filter_be {
 	struct dp_mon_filter rx_tlv_filter;
-#ifdef QCA_MONITOR_2_0_SUPPORT
+#ifdef WLAN_PKT_CAPTURE_TX_2_0
 	struct htt_tx_ring_tlv_filter tx_tlv_filter;
 #endif
 	bool tx_valid;
@@ -166,6 +218,7 @@ struct dp_mon_desc_pool {
  * @prev_rxmon_cookie: prev rxmon cookie
  * @ppdu_info_cache: PPDU info cache
  * @total_free_elem: total free element in queue
+ * @rx_tlv_logger: Rx TLV logger struct
  */
 struct dp_mon_pdev_be {
 	struct dp_mon_pdev mon_pdev;
@@ -192,6 +245,9 @@ struct dp_mon_pdev_be {
 	uint32_t prev_rxmon_cookie;
 	qdf_kmem_cache_t ppdu_info_cache;
 	uint32_t total_free_elem;
+#ifdef MONITOR_TLV_RECORDING_ENABLE
+	struct dp_mon_tlv_logger *rx_tlv_log;
+#endif
 };
 
 /**
@@ -434,22 +490,8 @@ dp_rx_mon_add_frag_to_skb(struct hal_rx_ppdu_info *ppdu_info,
 	}
 }
 
-#if defined(WLAN_SUPPORT_RX_PROTOCOL_TYPE_TAG) ||\
-	defined(WLAN_SUPPORT_RX_FLOW_TAG)
-/**
- * dp_mon_rx_update_rx_protocol_tag_stats() - Update mon protocols's
- *					      statistics from given protocol
- *					      type
- * @pdev: pdev handle
- * @protocol_index: Protocol index for which the stats should be incremented
- *
- * Return: void
- */
-void dp_mon_rx_update_rx_protocol_tag_stats(struct dp_pdev *pdev,
-					    uint16_t protocol_index);
-#endif /* WLAN_SUPPORT_RX_PROTOCOL_TYPE_TAG */
-
-#if !defined(DISABLE_MON_CONFIG) && defined(QCA_MONITOR_2_0_SUPPORT)
+#if !defined(DISABLE_MON_CONFIG) && (defined(WLAN_PKT_CAPTURE_TX_2_0) || \
+	defined(WLAN_PKT_CAPTURE_RX_2_0))
 /**
  * dp_mon_get_context_size_be() - get BE specific size for mon pdev/soc
  * @context_type: context type for which the size is needed
@@ -470,7 +512,7 @@ qdf_size_t dp_mon_get_context_size_be(enum dp_context_type context_type)
 }
 #endif
 
-#ifdef QCA_MONITOR_2_0_SUPPORT
+#ifdef WLAN_PKT_CAPTURE_TX_2_0
 /**
  * dp_get_be_mon_soc_from_dp_mon_soc() - get dp_mon_soc_be from dp_mon_soc
  * @soc: dp_mon_soc pointer
@@ -495,4 +537,27 @@ struct dp_mon_pdev_be *dp_get_be_mon_pdev_from_dp_mon_pdev(struct dp_mon_pdev *m
 	return (struct dp_mon_pdev_be *)mon_pdev;
 }
 #endif
+
+#ifdef QCA_ENHANCED_STATS_SUPPORT
+/*
+ * dp_enable_enhanced_stats_2_0() - BE Wrapper to enable stats
+ * @soc: Datapath soc handle
+ * @pdev_id: Pdev Id on which stats will get enable
+ *
+ * Return: status success/failure
+ */
+QDF_STATUS
+dp_enable_enhanced_stats_2_0(struct cdp_soc_t *soc, uint8_t pdev_id);
+
+/*
+ * dp_disable_enhanced_stats_2_0() - BE Wrapper to disable stats
+ * @soc: Datapath soc handle
+ * @pdev_id: Pdev Id on which stats will get disable
+ *
+ * Return: status success/failure
+ */
+QDF_STATUS
+dp_disable_enhanced_stats_2_0(struct cdp_soc_t *soc, uint8_t pdev_id);
+#endif /* QCA_ENHANCED_STATS_SUPPORT */
+
 #endif /* _DP_MON_2_0_H_ */

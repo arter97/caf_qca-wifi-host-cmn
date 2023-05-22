@@ -104,6 +104,16 @@ extern "C" {
 #define TARGET_TYPE_PEACH    37
 #endif
 
+/* Evros */
+#ifndef TARGET_TYPE_WCN6450
+#define TARGET_TYPE_WCN6450 38
+#endif
+
+/* Pebble */
+#ifndef TARGET_TYPE_QCN6432
+#define TARGET_TYPE_QCN6432   39
+#endif
+
 #ifdef __cplusplus
 }
 #endif

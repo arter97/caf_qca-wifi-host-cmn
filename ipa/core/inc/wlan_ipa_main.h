@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2018-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -30,10 +30,16 @@
 #include <wlan_objmgr_pdev_obj.h>
 #include <wlan_ipa_public_struct.h>
 #include <wlan_ipa_priv.h>
+#include "cfg_ucfg_api.h"
 
 /* Declare a variable for IPA instancess added based on pdev */
 extern uint8_t g_instances_added;
 #define IPA_INVALID_HDL 0xFF
+#define IPA_OFFLOAD_CFG 0x7D
+
+#define INTRL_MODE_DISABLE 0xEEEEEEEE
+#define INTRL_MODE_ENABLE 0x27D
+
 #define ipa_fatal(params...) \
 	QDF_TRACE_FATAL(QDF_MODULE_ID_IPA, params)
 #define ipa_err(params...) \
@@ -95,7 +101,7 @@ bool ipa_get_pld_enable(void);
 bool ipa_check_hw_present(void);
 
 /**
- * wlan_get_pdev_ipa_obj() - private API to get ipa pdev object
+ * ipa_pdev_get_priv_obj() - private API to get ipa pdev object
  * @pdev: pdev object
  *
  * Return: ipa object
@@ -111,6 +117,14 @@ ipa_pdev_get_priv_obj(struct wlan_objmgr_pdev *pdev)
 
 	return pdev_obj;
 }
+
+/**
+ * get_ipa_config() - API to get IPAConfig INI
+ * @psoc : psoc handle
+ *
+ * Return: IPA config value
+ */
+uint32_t get_ipa_config(struct wlan_objmgr_psoc *psoc);
 
 /**
  * ipa_priv_obj_get_pdev() - API to get pdev from IPA object
@@ -158,6 +172,13 @@ bool ipa_config_is_enabled(void);
  * Return: true if IPA uC is enabled in IPA config
  */
 bool ipa_config_is_uc_enabled(void);
+
+/**
+ * ipa_config_is_opt_wifi_dp_enabled() - Is IPA optional wifi dp enabled?
+ *
+ * Return: true if IPA opt wifi dp is enabled in IPA config
+ */
+bool ipa_config_is_opt_wifi_dp_enabled(void);
 
 /**
  * ipa_config_is_vlan_enabled() - Is IPA vlan config enabled?
@@ -389,7 +410,7 @@ QDF_STATUS ipa_suspend(struct wlan_objmgr_pdev *pdev);
 QDF_STATUS ipa_resume(struct wlan_objmgr_pdev *pdev);
 
 /**
- * ucfg_ipa_uc_ol_init() - Initialize IPA uC offload
+ * ipa_uc_ol_init() - Initialize IPA uC offload
  * @pdev: pdev obj
  * @osdev: OS dev
  *
@@ -399,7 +420,7 @@ QDF_STATUS ipa_uc_ol_init(struct wlan_objmgr_pdev *pdev,
 			  qdf_device_t osdev);
 
 /**
- * ucfg_ipa_uc_ol_deinit() - Deinitialize IPA uC offload
+ * ipa_uc_ol_deinit() - Deinitialize IPA uC offload
  * @pdev: pdev obj
  *
  * Return: QDF STATUS
@@ -430,8 +451,8 @@ QDF_STATUS ipa_send_mcc_scc_msg(struct wlan_objmgr_pdev *pdev,
  * @net_dev: Interface net device
  * @device_mode: Net interface device mode
  * @session_id: session id for the event
- * @type: event enum of type ipa_wlan_event
- * @mac_address: MAC address associated with the event
+ * @ipa_event_type: event enum of type ipa_wlan_event
+ * @mac_addr: MAC address associated with the event
  * @is_2g_iface: true if interface is operating on 2G band, otherwise false
  *
  * Return: QDF_STATUS

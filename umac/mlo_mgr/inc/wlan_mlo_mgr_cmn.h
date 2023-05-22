@@ -199,6 +199,20 @@ void mlo_mlme_peer_create(struct wlan_objmgr_vdev *vdev,
 			  qdf_nbuf_t frm_buf);
 
 /**
+ * mlo_mlme_bridge_peer_create() - Create mlo bridge peer
+ * @vdev: Object manager vdev
+ * @ml_peer: MLO peer context
+ * @addr: Peer addr
+ * @frm_buf: Frame buffer for IE processing
+ *
+ * Return: void
+ */
+void mlo_mlme_bridge_peer_create(struct wlan_objmgr_vdev *vdev,
+				 struct wlan_mlo_peer_context *ml_peer,
+				 struct qdf_mac_addr *addr,
+				 qdf_nbuf_t frm_buf);
+
+/**
  * mlo_mlme_peer_assoc() - Send ML Peer assoc
  * @peer: Object manager peer
  *
@@ -265,6 +279,20 @@ mlo_mlme_peer_process_auth(struct mlpeer_auth_params *auth_param)
 #endif
 
 /**
+ * mlo_mlme_peer_reassoc() - Reassoc mlo peer
+ * @vdev: Object manager vdev
+ * @ml_peer: MLO peer context
+ * @addr: Peer addr
+ * @frm_buf: Frame buffer for IE processing
+ *
+ * Return: void
+ */
+void mlo_mlme_peer_reassoc(struct wlan_objmgr_vdev *vdev,
+			   struct wlan_mlo_peer_context *ml_peer,
+			   struct qdf_mac_addr *addr,
+			   qdf_nbuf_t frm_buf);
+
+/**
  * mlo_get_link_vdev_ix() - Get index of link VDEV in MLD
  * @mldev: ML device context
  * @vdev: VDEV object
@@ -301,7 +329,8 @@ void mlo_mlme_handle_sta_csa_param(struct wlan_objmgr_vdev *vdev,
 #define INVALID_HW_LINK_ID 0xFFFF
 #define WLAN_MLO_INVALID_NUM_LINKS             (-1)
 #ifdef WLAN_MLO_MULTI_CHIP
-#define WLAN_MLO_GROUP_INVALID                 (-1)
+#define WLAN_MLO_GROUP_INVALID                 0xFF
+#define WLAN_MLO_CHIP_ID_INVALID               0xFF
 /**
  * wlan_mlo_get_max_num_links() - Get the maximum number of MLO links
  * possible in the system
@@ -345,6 +374,14 @@ uint16_t wlan_mlo_get_pdev_hw_link_id(struct wlan_objmgr_pdev *pdev);
  * Return: MLO group id of the psoc
  */
 uint8_t wlan_mlo_get_psoc_group_id(struct wlan_objmgr_psoc *psoc);
+
+/**
+ * wlan_mlo_get_psoc_mlo_chip_id() - Get MLO chip id of psoc
+ * @psoc: psoc object
+ *
+ * Return: MLO group id of the psoc
+ */
+uint8_t wlan_mlo_get_psoc_mlo_chip_id(struct wlan_objmgr_psoc *psoc);
 
 /**
  * wlan_mlo_get_psoc_capable() - Get if MLO capable psoc
@@ -527,5 +564,64 @@ QDF_STATUS
 mlo_get_mlstats_vdev_params(struct wlan_objmgr_psoc *psoc,
 			    struct mlo_stats_vdev_params *ml_vdev_info,
 			    uint8_t vdev_id);
+
+/**
+ * typedef get_ml_link_state_cb() - api to handle link state callback
+ * @ev: pointer to event parameter of structure
+ * @cookie: a cookie for request context
+ */
+typedef void (*get_ml_link_state_cb)(struct ml_link_state_info_event *ev,
+				     void *cookie);
+/**
+ * wlan_handle_ml_link_state_info_event() - Event handler for ml link state
+ * @psoc: psoc handler
+ * @event: pointer to event parameter of structure
+ */
+QDF_STATUS
+wlan_handle_ml_link_state_info_event(struct wlan_objmgr_psoc *psoc,
+				     struct ml_link_state_info_event *event);
+/**
+ * mlo_get_link_state_register_resp_cb() - Register link state callback
+ * @vdev: vdev handler
+ * @req: pointer to request parameter of structure
+ */
+QDF_STATUS
+mlo_get_link_state_register_resp_cb(struct wlan_objmgr_vdev *vdev,
+				    struct ml_link_state_cmd_info *req);
+/**
+ * ml_post_get_link_state_msg() - Post get link state msg
+ * @vdev: vdev handler
+ */
+QDF_STATUS ml_post_get_link_state_msg(struct wlan_objmgr_vdev *vdev);
+
 #endif
+#endif
+#ifdef WLAN_FEATURE_11BE
+/**
+ * util_add_bw_ind() - Adding bandwidth indiacation element
+ * @bw_ind: pointer to bandwidth indication element
+ * @ccfs0: EHT Channel Centre Frequency Segment0 information
+ * @ccfs1: EHT Channel Centre Frequency Segment1 information
+ * @ch_width: channel width
+ * @puncture_bitmap: puncturing information
+ * @bw_ind_len: pointer to length of bandwidth indication element
+ */
+QDF_STATUS
+util_add_bw_ind(struct wlan_ie_bw_ind *bw_ind, uint8_t ccfs0,
+		uint8_t ccfs1, enum phy_ch_width ch_width,
+		uint16_t puncture_bitmap, int *bw_ind_len);
+
+/**
+ * util_parse_bw_ind() - Parsing of bandwidth indiacation element
+ * @bw_ind: pointer to bandwidth indication element
+ * @ccfs0: EHT Channel Centre Frequency Segment0 information
+ * @ccfs1: EHT Channel Centre Frequency Segment1 information
+ * @ch_width: channel width
+ * @puncture_bitmap: puncturing information
+ */
+
+QDF_STATUS
+util_parse_bw_ind(struct wlan_ie_bw_ind *bw_ind, uint8_t *ccfs0,
+		  uint8_t *ccfs1, enum phy_ch_width *ch_width,
+		  uint16_t *puncture_bitmap);
 #endif

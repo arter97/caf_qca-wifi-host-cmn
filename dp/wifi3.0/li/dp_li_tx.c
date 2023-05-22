@@ -377,16 +377,17 @@ QDF_STATUS dp_tx_compute_hw_delay_li(struct dp_soc *soc,
  * @fw_metadata: firmware metadata
  * @vdev_id: vdev id
  * @nbuf: skb buffer
+ * @msdu_info: msdu info
  *
  * Return: void
  */
 static inline
 void dp_sawf_config_li(struct dp_soc *soc, uint32_t *hal_tx_desc_cached,
 		       uint16_t *fw_metadata, uint16_t vdev_id,
-		       qdf_nbuf_t nbuf)
+		       qdf_nbuf_t nbuf, struct dp_tx_msdu_info_s *msdu_info)
 {
 	uint8_t q_id = 0;
-	uint32_t search_index;
+	uint32_t flow_idx = 0;
 
 	if (!wlan_cfg_get_sawf_config(soc->wlan_cfg_ctx))
 		return;
@@ -395,22 +396,31 @@ void dp_sawf_config_li(struct dp_soc *soc, uint32_t *hal_tx_desc_cached,
 	if (q_id == DP_SAWF_DEFAULT_Q_INVALID)
 		return;
 
-	dp_sawf_tcl_cmd(fw_metadata, nbuf);
-
-	search_index = dp_sawf_get_search_index(soc, nbuf, vdev_id,
-						q_id);
+	msdu_info->tid = (q_id & (CDP_DATA_TID_MAX - 1));
 	hal_tx_desc_set_hlos_tid(hal_tx_desc_cached,
 				 (q_id & (CDP_DATA_TID_MAX - 1)));
+
+	if ((q_id >= DP_SAWF_DEFAULT_QUEUE_MIN) &&
+	    (q_id < DP_SAWF_DEFAULT_QUEUE_MAX))
+		return;
+
+	dp_sawf_tcl_cmd(fw_metadata, nbuf);
+
+	/* For SAWF, q_id starts from DP_SAWF_Q_MAX */
+	if (!dp_sawf_get_search_index(soc, nbuf, vdev_id,
+				      q_id, &flow_idx))
+		hal_tx_desc_set_to_fw(hal_tx_desc_cached, true);
+
 	hal_tx_desc_set_search_type_li(soc->hal_soc, hal_tx_desc_cached,
 				       HAL_TX_ADDR_INDEX_SEARCH);
 	hal_tx_desc_set_search_index_li(soc->hal_soc, hal_tx_desc_cached,
-					search_index);
+					flow_idx);
 }
 #else
 static inline
 void dp_sawf_config_li(struct dp_soc *soc, uint32_t *hal_tx_desc_cached,
 		       uint16_t *fw_metadata, uint16_t vdev_id,
-		       qdf_nbuf_t nbuf)
+		       qdf_nbuf_t nbuf, struct dp_tx_msdu_info_s *msdu_info)
 {
 }
 
@@ -429,7 +439,7 @@ dp_tx_hw_enqueue_li(struct dp_soc *soc, struct dp_vdev *vdev,
 	int coalesce = 0;
 	struct dp_tx_queue *tx_q = &msdu_info->tx_queue;
 	uint8_t ring_id = tx_q->ring_id & DP_TX_QUEUE_MASK;
-	uint8_t tid = msdu_info->tid;
+	uint8_t tid;
 
 	/*
 	 * Setting it initialization statically here to avoid
@@ -474,7 +484,7 @@ dp_tx_hw_enqueue_li(struct dp_soc *soc, struct dp_vdev *vdev,
 
 	if (dp_sawf_tag_valid_get(tx_desc->nbuf)) {
 		dp_sawf_config_li(soc, hal_tx_desc_cached, &fw_metadata,
-				  vdev->vdev_id, tx_desc->nbuf);
+				  vdev->vdev_id, tx_desc->nbuf, msdu_info);
 		dp_sawf_tx_enqueue_peer_stats(soc, tx_desc);
 	}
 
@@ -496,6 +506,7 @@ dp_tx_hw_enqueue_li(struct dp_soc *soc, struct dp_vdev *vdev,
 		hal_tx_desc_set_l4_checksum_en(hal_tx_desc_cached, 1);
 	}
 
+	tid = msdu_info->tid;
 	if (tid != HTT_TX_EXT_TID_INVALID)
 		hal_tx_desc_set_hlos_tid(hal_tx_desc_cached, tid);
 
@@ -579,6 +590,7 @@ QDF_STATUS dp_tx_desc_pool_init_li(struct dp_soc *soc,
 
 		tx_desc->id = id;
 		tx_desc->pool_id = pool_id;
+		tx_desc->vdev_id = DP_INVALID_VDEV_ID;
 		dp_tx_desc_set_magic(tx_desc, DP_TX_MAGIC_PATTERN_FREE);
 		tx_desc = tx_desc->next;
 		count++;
@@ -599,4 +611,14 @@ QDF_STATUS dp_tx_compute_tx_delay_li(struct dp_soc *soc,
 				     uint32_t *delay_us)
 {
 	return dp_tx_compute_hw_delay_li(soc, vdev, ts, delay_us);
+}
+
+QDF_STATUS dp_tx_desc_pool_alloc_li(struct dp_soc *soc, uint32_t num_elem,
+				    uint8_t pool_id)
+{
+	return QDF_STATUS_SUCCESS;
+}
+
+void dp_tx_desc_pool_free_li(struct dp_soc *soc, uint8_t pool_id)
+{
 }

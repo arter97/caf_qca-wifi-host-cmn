@@ -401,6 +401,41 @@ bool hif_ce_service_should_yield(struct hif_softc *scn,
 qdf_export_symbol(hif_ce_service_should_yield);
 #endif
 
+void ce_flush_tx_ring_write_idx(struct CE_handle *ce_tx_hdl, bool force_flush)
+{
+	struct CE_state *ce_state = (struct CE_state *)ce_tx_hdl;
+	struct CE_ring_state *src_ring = ce_state->src_ring;
+	struct hif_softc *scn = ce_state->scn;
+
+	if (force_flush)
+		ce_ring_set_event(src_ring, CE_RING_FLUSH_EVENT);
+
+	if (ce_ring_get_clear_event(src_ring, CE_RING_FLUSH_EVENT)) {
+		qdf_spin_lock_bh(&ce_state->ce_index_lock);
+		CE_SRC_RING_WRITE_IDX_SET(scn, ce_state->ctrl_addr,
+					  src_ring->write_index);
+		qdf_spin_unlock_bh(&ce_state->ce_index_lock);
+
+		src_ring->last_flush_ts = qdf_get_log_timestamp();
+		hif_debug("flushed");
+	}
+}
+
+/* Make sure this wrapper is called under ce_index_lock */
+void ce_tx_ring_write_idx_update_wrapper(struct CE_handle *ce_tx_hdl,
+					 bool flush)
+{
+	struct CE_state *ce_state = (struct CE_state *)ce_tx_hdl;
+	struct CE_ring_state *src_ring = ce_state->src_ring;
+	struct hif_softc *scn = ce_state->scn;
+
+	if (flush)
+		CE_SRC_RING_WRITE_IDX_SET(scn, ce_state->ctrl_addr,
+					  src_ring->write_index);
+	else
+		ce_ring_set_event(src_ring, CE_RING_FLUSH_EVENT);
+}
+
 /*
  * Guts of ce_send, used by both ce_send and ce_sendlist_send.
  * The caller takes responsibility for any needed locking.
@@ -1150,7 +1185,7 @@ more_watermarks:
 	 * more copy completions happened while the misc interrupts were being
 	 * handled.
 	 */
-	if (!ce_srng_based(scn)) {
+	if (!ce_srng_based(scn) && !CE_state->msi_supported) {
 		if (TARGET_REGISTER_ACCESS_ALLOWED(scn)) {
 			CE_ENGINE_INT_STATUS_CLEAR(scn, ctrl_addr,
 					   CE_WATERMARK_MASK |
@@ -1177,7 +1212,8 @@ more_watermarks:
 		    more_comp_cnt++ < CE_TXRX_COMP_CHECK_THRESHOLD) {
 			goto more_completions;
 		} else {
-			if (!ce_srng_based(scn)) {
+			if (!ce_srng_based(scn) &&
+			    !CE_state->batch_intr_supported) {
 				hif_err_rl(
 					"Potential infinite loop detected during Rx processing id:%u nentries_mask:0x%x sw read_idx:0x%x hw read_idx:0x%x",
 					CE_state->id,
@@ -1196,7 +1232,8 @@ more_watermarks:
 		    more_snd_comp_cnt++ < CE_TXRX_COMP_CHECK_THRESHOLD) {
 			goto more_completions;
 		} else {
-			if (!ce_srng_based(scn)) {
+			if (!ce_srng_based(scn) &&
+			    !CE_state->batch_intr_supported) {
 				hif_err_rl(
 					"Potential infinite loop detected during send completion id:%u mask:0x%x sw read_idx:0x%x hw_index:0x%x write_index: 0x%x hw read_idx:0x%x",
 					CE_state->id,
@@ -1480,6 +1517,53 @@ ce_watermark_cb_register(struct CE_handle *copyeng,
 	if (fn_ptr)
 		CE_state->misc_cbs = 1;
 }
+
+#ifdef CUSTOM_CB_SCHEDULER_SUPPORT
+void
+ce_register_custom_cb(struct CE_handle *copyeng, void (*custom_cb)(void *),
+		      void *custom_cb_context)
+{
+	struct CE_state *CE_state = (struct CE_state *)copyeng;
+
+	CE_state->custom_cb = custom_cb;
+	CE_state->custom_cb_context = custom_cb_context;
+	qdf_atomic_init(&CE_state->custom_cb_pending);
+}
+
+void
+ce_unregister_custom_cb(struct CE_handle *copyeng)
+{
+	struct CE_state *CE_state = (struct CE_state *)copyeng;
+
+	qdf_assert_always(!qdf_atomic_read(&CE_state->custom_cb_pending));
+	CE_state->custom_cb = NULL;
+	CE_state->custom_cb_context = NULL;
+}
+
+void
+ce_enable_custom_cb(struct CE_handle *copyeng)
+{
+	struct CE_state *CE_state = (struct CE_state *)copyeng;
+	int32_t custom_cb_pending;
+
+	qdf_assert_always(CE_state->custom_cb);
+	qdf_assert_always(CE_state->custom_cb_context);
+
+	custom_cb_pending = qdf_atomic_inc_return(&CE_state->custom_cb_pending);
+	qdf_assert_always(custom_cb_pending >= 1);
+}
+
+void
+ce_disable_custom_cb(struct CE_handle *copyeng)
+{
+	struct CE_state *CE_state = (struct CE_state *)copyeng;
+
+	qdf_assert_always(CE_state->custom_cb);
+	qdf_assert_always(CE_state->custom_cb_context);
+
+	qdf_atomic_dec_if_positive(&CE_state->custom_cb_pending);
+}
+#endif /* CUSTOM_CB_SCHEDULER_SUPPORT */
 
 bool ce_get_rx_pending(struct hif_softc *scn)
 {

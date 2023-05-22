@@ -524,6 +524,9 @@ static void wlan_lmac_if_umac_reg_rx_ops_register(
 	wlan_lmac_if_register_afc_handlers(rx_ops);
 
 	wlan_lmac_if_register_super_chan_display(rx_ops);
+
+	rx_ops->reg_rx_ops.reg_r2p_table_update_response_handler =
+		tgt_reg_process_r2p_table_update_response;
 }
 
 #ifdef CONVERGED_P2P_ENABLE
@@ -744,6 +747,7 @@ wlan_lmac_if_mgmt_rx_reo_rx_ops_register(
 			tgt_mgmt_rx_reo_fw_consumed_event_handler;
 	mgmt_rx_reo_rx_ops->host_drop_handler =
 			tgt_mgmt_rx_reo_host_drop_handler;
+	mgmt_rx_reo_rx_ops->release_frames = tgt_mgmt_rx_reo_release_frames;
 
 	return QDF_STATUS_SUCCESS;
 }
@@ -972,6 +976,10 @@ wlan_lmac_if_mlo_mgr_rx_ops_register(struct wlan_lmac_if_rx_ops *rx_ops)
 		mlo_process_link_set_active_resp;
 	rx_ops->mlo_rx_ops.process_mlo_vdev_tid_to_link_map_event =
 		wlan_mlo_vdev_tid_to_link_map_event;
+	rx_ops->mlo_rx_ops.process_mlo_link_state_info_event =
+		wlan_handle_ml_link_state_info_event;
+	rx_ops->mlo_rx_ops.mlo_link_disable_request_handler =
+		wlan_mlo_link_disable_request_handler;
 }
 #else
 static void

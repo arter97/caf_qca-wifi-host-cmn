@@ -43,6 +43,7 @@
 #ifdef HIF_CE_LOG_INFO
 #include "qdf_notifier.h"
 #endif
+#include "pld_common.h"
 
 #define HIF_MIN_SLEEP_INACTIVITY_TIME_MS     50
 #define HIF_SLEEP_INACTIVITY_TIMER_PERIOD_MS 60
@@ -93,6 +94,7 @@
 #define QCN9224_DEVICE_ID (0x1109)
 #define QCN6122_DEVICE_ID (0xFFFB)
 #define QCN9160_DEVICE_ID (0xFFF8)
+#define QCN6432_DEVICE_ID (0xFFF7)
 #define QCA6390_EMULATION_DEVICE_ID (0x0108)
 #define QCA6390_DEVICE_ID (0x1101)
 /* TODO: change IDs for HastingsPrime */
@@ -107,6 +109,9 @@
 
 /* TODO: change IDs for Hamilton */
 #define KIWI_DEVICE_ID (0x1107)
+
+/*TODO: change IDs for Evros */
+#define WCN6450_DEVICE_ID (0x1108)
 
 #define ADRASTEA_DEVICE_ID_P2_E12 (0x7021)
 #define AR9887_DEVICE_ID    (0x0050)
@@ -154,6 +159,12 @@
 #define NUM_CE_CONTEXT (NUM_CE_AVAILABLE + 1)
 
 #define CE_INTERRUPT_IDX(x) x
+
+#ifdef WLAN_64BIT_DATA_SUPPORT
+#define RRI_ON_DDR_MEM_SIZE CE_COUNT * sizeof(uint64_t)
+#else
+#define RRI_ON_DDR_MEM_SIZE CE_COUNT * sizeof(uint32_t)
+#endif
 
 struct ce_int_assignment {
 	uint8_t msi_idx[NUM_CE_AVAILABLE];
@@ -233,6 +244,7 @@ struct hif_cfg {
 /**
  * struct hif_umac_reset_ctx - UMAC HW reset context at HIF layer
  * @intr_tq: Tasklet structure
+ * @irq_handler: IRQ handler
  * @cb_handler: Callback handler
  * @cb_ctx: Argument to be passed to @cb_handler
  * @os_irq: Interrupt number for this IRQ
@@ -240,12 +252,15 @@ struct hif_cfg {
  */
 struct hif_umac_reset_ctx {
 	struct tasklet_struct intr_tq;
+	bool (*irq_handler)(void *cb_ctx);
 	int (*cb_handler)(void *cb_ctx);
 	void *cb_ctx;
 	uint32_t os_irq;
 	bool irq_configured;
 };
 #endif
+
+#define MAX_SHADOW_REGS 40
 
 struct hif_softc {
 	struct hif_opaque_softc osc;
@@ -284,7 +299,8 @@ struct hif_softc {
 	atomic_t active_tasklet_cnt;
 	atomic_t active_grp_tasklet_cnt;
 	atomic_t link_suspended;
-	uint32_t *vaddr_rri_on_ddr;
+	void *vaddr_rri_on_ddr;
+	atomic_t active_wake_req_cnt;
 	qdf_dma_addr_t paddr_rri_on_ddr;
 #ifdef CONFIG_BYPASS_QMI
 	uint32_t *vaddr_qmi_bypass;
@@ -333,6 +349,9 @@ struct hif_softc {
 #ifdef IPA_OFFLOAD
 	qdf_shared_mem_t *ipa_ce_ring;
 #endif
+#ifdef IPA_OPT_WIFI_DP
+	qdf_atomic_t opt_wifi_dp_rtpm_cnt;
+#endif
 	struct hif_cfg ini_cfg;
 #ifdef HIF_CE_LOG_INFO
 	qdf_notif_block hif_recovery_notifier;
@@ -369,6 +388,10 @@ struct hif_softc {
 	uint64_t cmem_size;
 #ifdef DP_UMAC_HW_RESET_SUPPORT
 	struct hif_umac_reset_ctx umac_reset_ctx;
+#endif
+#ifdef CONFIG_SHADOW_V3
+	struct pld_shadow_reg_v3_cfg shadow_regs[MAX_SHADOW_REGS];
+	int num_shadow_registers_configured;
 #endif
 };
 
@@ -418,7 +441,11 @@ static inline int hif_get_num_active_tasklets(struct hif_softc *scn)
  * Max waiting time during Runtime PM suspend to finish all
  * the tasks. This is in the multiple of 10ms.
  */
+#ifdef PANIC_ON_BUG
+#define HIF_TASK_DRAIN_WAIT_CNT 200
+#else
 #define HIF_TASK_DRAIN_WAIT_CNT 25
+#endif
 
 /**
  * hif_try_complete_tasks() - Try to complete all the pending tasks
@@ -588,8 +615,14 @@ static inline void hif_usb_ramdump_handler(struct hif_opaque_softc *scn) {}
  */
 irqreturn_t hif_wake_interrupt_handler(int irq, void *context);
 
-#ifdef HIF_SNOC
+#if defined(HIF_SNOC)
 bool hif_is_target_register_access_allowed(struct hif_softc *hif_sc);
+#elif defined(HIF_IPCI)
+static inline bool
+hif_is_target_register_access_allowed(struct hif_softc *hif_sc)
+{
+	return !(hif_sc->recovery);
+}
 #else
 static inline
 bool hif_is_target_register_access_allowed(struct hif_softc *hif_sc)
@@ -620,6 +653,12 @@ static inline
 void hif_runtime_prevent_linkdown(struct hif_softc *scn, bool is_get)
 {
 }
+#endif
+
+#ifdef HIF_HAL_REG_ACCESS_SUPPORT
+void hif_reg_window_write(struct hif_softc *scn,
+			  uint32_t offset, uint32_t value);
+uint32_t hif_reg_window_read(struct hif_softc *scn, uint32_t offset);
 #endif
 
 #endif /* __HIF_MAIN_H__ */

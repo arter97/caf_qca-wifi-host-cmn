@@ -26,6 +26,7 @@ extern "C" {
 
 /* Header files */
 #include <qdf_status.h>
+#include "qdf_ipa.h"
 #include "qdf_nbuf.h"
 #include "qdf_lro.h"
 #include "ol_if_athvar.h"
@@ -84,6 +85,8 @@ typedef void *hif_handle_t;
 #define HIF_TYPE_QCA5332 30
 #define HIF_TYPE_QCN9160 31
 #define HIF_TYPE_PEACH 32
+#define HIF_TYPE_WCN6450 33
+#define HIF_TYPE_QCN6432 34
 
 #define DMA_COHERENT_MASK_DEFAULT   37
 
@@ -1074,6 +1077,51 @@ struct hif_pipe_addl_info {
 
 struct hif_bus_id;
 
+#ifdef CUSTOM_CB_SCHEDULER_SUPPORT
+/**
+ * hif_register_ce_custom_cb() - Helper API to register the custom callback
+ * @hif_ctx: HIF opaque context
+ * @pipe: Pipe number
+ * @custom_cb: Custom call back function pointer
+ * @custom_cb_context: Custom callback context
+ *
+ * return: QDF_STATUS
+ */
+QDF_STATUS
+hif_register_ce_custom_cb(struct hif_opaque_softc *hif_ctx, uint8_t pipe,
+			  void (*custom_cb)(void *), void *custom_cb_context);
+
+/**
+ * hif_unregister_ce_custom_cb() - Helper API to unregister the custom callback
+ * @hif_ctx: HIF opaque context
+ * @pipe: Pipe number
+ *
+ * return: QDF_STATUS
+ */
+QDF_STATUS
+hif_unregister_ce_custom_cb(struct hif_opaque_softc *hif_ctx, uint8_t pipe);
+
+/**
+ * hif_enable_ce_custom_cb() - Helper API to enable the custom callback
+ * @hif_ctx: HIF opaque context
+ * @pipe: Pipe number
+ *
+ * return: QDF_STATUS
+ */
+QDF_STATUS
+hif_enable_ce_custom_cb(struct hif_opaque_softc *hif_ctx, uint8_t pipe);
+
+/**
+ * hif_disable_ce_custom_cb() - Helper API to disable the custom callback
+ * @hif_ctx: HIF opaque context
+ * @pipe: Pipe number
+ *
+ * return: QDF_STATUS
+ */
+QDF_STATUS
+hif_disable_ce_custom_cb(struct hif_opaque_softc *hif_ctx, uint8_t pipe);
+#endif /* CUSTOM_CB_SCHEDULER_SUPPORT */
+
 void hif_claim_device(struct hif_opaque_softc *hif_ctx);
 QDF_STATUS hif_get_config_item(struct hif_opaque_softc *hif_ctx,
 		     int opcode, void *config, uint32_t config_len);
@@ -1776,7 +1824,7 @@ enum ipa_hw_type hif_get_ipa_hw_type(void)
 static inline
 bool hif_get_ipa_present(void)
 {
-	if (ipa_uc_reg_rdyCB(NULL) != -EPERM)
+	if (qdf_ipa_uc_reg_rdyCB(NULL) != -EPERM)
 		return true;
 	else
 		return false;
@@ -2083,6 +2131,37 @@ int hif_prevent_link_low_power_states(struct hif_opaque_softc *hif)
 
 static inline
 void hif_allow_link_low_power_states(struct hif_opaque_softc *hif)
+{
+}
+#endif
+
+#ifdef IPA_OPT_WIFI_DP
+/**
+ * hif_prevent_l1() - Prevent from going to low power states
+ * @hif: HIF opaque context
+ *
+ * Return: 0 on success. Error code on failure.
+ */
+int hif_prevent_l1(struct hif_opaque_softc *hif);
+
+/**
+ * hif_allow_l1() - Allow link to go to low power states
+ * @hif: HIF opaque context
+ *
+ * Return: None
+ */
+void hif_allow_l1(struct hif_opaque_softc *hif);
+
+#else
+
+static inline
+int hif_prevent_l1(struct hif_opaque_softc *hif)
+{
+	return 0;
+}
+
+static inline
+void hif_allow_l1(struct hif_opaque_softc *hif)
 {
 }
 #endif
@@ -2548,14 +2627,16 @@ uint8_t hif_get_max_wmi_ep(struct hif_opaque_softc *scn);
 /**
  * hif_register_umac_reset_handler() - Register UMAC HW reset handler
  * @hif_scn: hif opaque handle
- * @handler: callback handler function
+ * @irq_handler: irq callback handler function
+ * @tl_handler: tasklet callback handler function
  * @cb_ctx: context to passed to @handler
  * @irq: irq number to be used for UMAC HW reset interrupt
  *
  * Return: QDF_STATUS of operation
  */
 QDF_STATUS hif_register_umac_reset_handler(struct hif_opaque_softc *hif_scn,
-					   int (*handler)(void *cb_ctx),
+					   bool (*irq_handler)(void *cb_ctx),
+					   int (*tl_handler)(void *cb_ctx),
 					   void *cb_ctx, int irq);
 
 /**
@@ -2570,7 +2651,8 @@ QDF_STATUS hif_get_umac_reset_irq(struct hif_opaque_softc *hif_scn,
 #else
 static inline
 QDF_STATUS hif_register_umac_reset_handler(struct hif_opaque_softc *hif_scn,
-					   int (*handler)(void *cb_ctx),
+					   bool (*irq_handler)(void *cb_ctx),
+					   int (*tl_handler)(void *cb_ctx),
 					   void *cb_ctx, int irq)
 {
 	return QDF_STATUS_SUCCESS;

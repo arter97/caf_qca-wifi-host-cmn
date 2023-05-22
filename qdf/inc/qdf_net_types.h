@@ -70,8 +70,12 @@ typedef __in6_addr_t in6_addr_t;
 #define QDF_IEEE80211_FC1_FROMDS        0x02
 #define QDF_IEEE80211_FC1_PM            0x10
 
+#define QDF_IEEE80211_FC0_VERSION_0     0x00
+#define QDF_IEEE80211_FC0_VERSION_MASK  0x03
 #define QDF_IEEE80211_FC0_TYPE_MASK     0x0c
 #define QDF_IEEE80211_FC0_SUBTYPE_MASK  0xf0
+
+#define QDF_IEEE80211_FC0_TYPE_MGT      0x00
 
 #define QDF_IEEE80211_FC0_TYPE_DATA     0x08
 #define QDF_IEEE80211_FC0_SUBTYPE_DATA  0x00
@@ -89,6 +93,7 @@ typedef __in6_addr_t in6_addr_t;
 #define QDF_IEEE80211_FC0_SUBTYPE_BA    0x90
 #define QDF_IEEE80211_FC0_SUBTYPE_PSPOLL  0xA0
 #define QDF_IEEE80211_FC0_SUBTYPE_RTS   0xB0
+#define QDF_IEEE80211_FC0_SUBTYPE_CTS   0xC0
 #define QDF_IEEE80211_FC0_SUBTYPE_ACK   0xD0
 #define QDF_IEEE80211_FC0_SUBTYPE_CF_END 0xE0
 #define QDF_IEEE80211_FC0_SUBTYPE_CF_END_CF_ACK 0xF0
@@ -275,11 +280,13 @@ typedef enum {
  * typedef qdf_nbuf_rx_cksum_t - receive checksum type
  * @l4_type: L4 type
  * @l4_result: L4 result
+ * @csum_level: indicates number of checksum are calculated
  */
 typedef struct {
 	qdf_nbuf_l4_rx_cksum_type_t l4_type;
 	qdf_nbuf_l4_rx_cksum_result_t l4_result;
 	uint32_t val;
+	uint32_t csum_level;
 } qdf_nbuf_rx_cksum_t;
 
 #define QDF_ARP_REQ       1 /* ARP request */
@@ -656,4 +663,5 @@ typedef struct {
 		} __packed type_raw;
 	} llc_un /* XXX __packed ??? */;
 } qdf_llc_t;
+
 #endif /*_QDF_NET_TYPES_H*/

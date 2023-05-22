@@ -195,6 +195,7 @@ struct indoor_concurrency_list {
  * @afc_disable_request_id_check: Whether disable target AFC request id check
  * @is_afc_reg_noaction: Whether no action to AFC power event
  * @sta_sap_scc_on_indoor_channel: Value of sap+sta scc on indoor support
+ * @p2p_indoor_ch_support: Allow P2P GO in indoor channels
  * @fcc_rules_ptr: Value of fcc channel frequency and tx_power list received
  * from firmware
  * @set_fcc_channel: Flag to set fcc channels
@@ -275,6 +276,7 @@ struct wlan_regulatory_psoc_priv_obj {
 	bool is_afc_reg_noaction;
 #endif
 	bool sta_sap_scc_on_indoor_channel;
+	bool p2p_indoor_ch_support;
 #ifdef CONFIG_REG_CLIENT
 	struct cur_fcc_rule fcc_rules_ptr[MAX_NUM_FCC_RULES];
 #endif
@@ -342,6 +344,8 @@ struct wlan_regulatory_psoc_priv_obj {
  * @afc_cb_obj: The object containing the callback function and opaque argument
  * @afc_pow_evt_cb_obj: The object containing the callback function and opaque
  * argument for the AFC power event
+ * @afc_payload_reset_evt_cb_obj: The object containing the callback function
+ * and opaque argument for the AFC payload reset event
  * @afc_request_id: The last AFC request id received from FW/halphy
  * @is_6g_afc_power_event_received: indicates if the AFC power event is
  * received
@@ -356,6 +360,7 @@ struct wlan_regulatory_psoc_priv_obj {
  * take action when AFC Power event is received
  * @reg_afc_dev_deployment_type: AFC device deployment type from BDF
  * @sta_sap_scc_on_indoor_channel: Value of sap+sta scc on indoor support
+ * @p2p_indoor_ch_support: Allow P2P GO in indoor channels
  * @fcc_rules_ptr : Value of fcc channel frequency and tx_power list received
  * from firmware
  * @indoor_list: List of current indoor station interfaces
@@ -426,6 +431,7 @@ struct wlan_regulatory_pdev_priv_obj {
 	qdf_spinlock_t afc_cb_lock;
 	struct afc_cb_handler afc_cb_obj;
 	struct afc_pow_evt_cb_handler afc_pow_evt_cb_obj;
+	struct afc_payload_reset_evt_cb_handler afc_payload_reset_evt_cb_obj;
 	uint64_t afc_request_id;
 	bool is_6g_afc_power_event_received;
 	bool is_6g_afc_expiry_event_received;
@@ -436,6 +442,7 @@ struct wlan_regulatory_pdev_priv_obj {
 	enum reg_afc_dev_deploy_type reg_afc_dev_deployment_type;
 #endif
 	bool sta_sap_scc_on_indoor_channel;
+	bool p2p_indoor_ch_support;
 #ifdef CONFIG_REG_CLIENT
 	struct cur_fcc_rule fcc_rules_ptr[MAX_NUM_FCC_RULES];
 	struct indoor_concurrency_list indoor_list[MAX_INDOOR_LIST_SIZE];

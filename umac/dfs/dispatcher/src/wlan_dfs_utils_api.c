@@ -809,6 +809,7 @@ static void utils_dfs_get_channel_list(struct wlan_objmgr_pdev *pdev,
 	struct wlan_objmgr_psoc *psoc;
 	uint32_t conn_count = 0;
 	enum policy_mgr_con_mode mode;
+	uint8_t vdev_id = WLAN_INVALID_VDEV_ID;
 
 	psoc = wlan_pdev_get_psoc(pdev);
 	if (!psoc) {
@@ -820,20 +821,22 @@ static void utils_dfs_get_channel_list(struct wlan_objmgr_pdev *pdev,
 	len = QDF_ARRAY_SIZE(pcl_ch);
 	weight_len = QDF_ARRAY_SIZE(weight_list);
 
-	if (vdev)
+	if (vdev) {
 		mode = policy_mgr_convert_device_mode_to_qdf_type(
 				wlan_vdev_mlme_get_opmode(vdev));
-	else
+		vdev_id = wlan_vdev_get_id(vdev);
+	} else {
 		mode = PM_SAP_MODE;
+	}
 	conn_count = policy_mgr_mode_specific_connection_count(
 			psoc, mode, NULL);
 	if (0 == conn_count)
 		policy_mgr_get_pcl(psoc, mode, pcl_ch,
-				   &len, weight_list, weight_len);
+				   &len, weight_list, weight_len, vdev_id);
 	else
 		policy_mgr_get_pcl_for_existing_conn(
 			psoc, mode, pcl_ch, &len, weight_list,
-			weight_len, true);
+			weight_len, true, vdev_id);
 
 	if (*num_chan < len) {
 		dfs_err(NULL, WLAN_DEBUG_DFS_ALWAYS,
@@ -1437,17 +1440,8 @@ utils_dfs_precac_status_for_channel(struct wlan_objmgr_pdev *pdev,
 #define FIRST_DFS_CHAN_NUM  52
 #define CHAN_NUM_SPACING     4
 #define INVALID_INDEX     (-1)
-#define IS_CHAN_DFS(_flags) ((_flags) & REGULATORY_CHAN_RADAR)
-/**
- * utils_dfs_convert_freq_to_index() - Converts a DFS channel frequency
- * to the DFS channel state array index. The input frequency should be a DFS
- * channel frequency and this check should be done in the caller.
- * @freq: Input DFS channel frequency.
- * @index: Output DFS channel state array index.
- *
- * Return: QDF_STATUS.
- */
-static void utils_dfs_convert_freq_to_index(qdf_freq_t freq, int8_t *index)
+
+void utils_dfs_convert_freq_to_index(qdf_freq_t freq, int8_t *index)
 {
 	uint16_t chan_num;
 	int8_t tmp_index;
@@ -1467,7 +1461,7 @@ static void utils_dfs_convert_freq_to_index(qdf_freq_t freq, int8_t *index)
  * @state: Input DFS state with which the value indexed by frequency will be
  * updated with.
  *
- * Return: void.
+ * Return: QDF_STATUS
  */
 static QDF_STATUS
 utils_dfs_update_chan_state_array_element(struct wlan_dfs *dfs,
@@ -1475,8 +1469,14 @@ utils_dfs_update_chan_state_array_element(struct wlan_dfs *dfs,
 					  enum channel_dfs_state state)
 {
 	int8_t index;
+	enum channel_enum chan_enum;
 
 	if (state == CH_DFS_S_INVALID)
+		return QDF_STATUS_E_INVAL;
+
+	chan_enum = wlan_reg_get_chan_enum_for_freq(freq);
+	/* Do not send DFS events on invalid IEEE channels */
+	if (chan_enum == INVALID_CHANNEL)
 		return QDF_STATUS_E_INVAL;
 
 	utils_dfs_convert_freq_to_index(freq, &index);
@@ -1496,18 +1496,17 @@ QDF_STATUS dfs_init_chan_state_array(struct wlan_objmgr_pdev *pdev)
 	int i;
 
 	dfs = wlan_pdev_get_dfs_obj(pdev);
-
 	if (!dfs)
 		return QDF_STATUS_E_FAILURE;
 
 	cur_chan_list = qdf_mem_malloc(NUM_CHANNELS *
 			sizeof(struct regulatory_channel));
-
 	if (!cur_chan_list)
 		return QDF_STATUS_E_NOMEM;
 
 	if (wlan_reg_get_current_chan_list(
 				pdev, cur_chan_list) != QDF_STATUS_SUCCESS) {
+		qdf_mem_free(cur_chan_list);
 		dfs_alert(dfs, WLAN_DEBUG_DFS_ALWAYS,
 			  "failed to get curr channel list");
 		return QDF_STATUS_E_FAILURE;

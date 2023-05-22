@@ -44,6 +44,7 @@
 #endif
 
 #define CDP_MU_MAX_USERS 37
+#define CDP_MU_MAX_MIMO_USERS 8
 /* 1 additional MCS is for invalid values */
 #ifdef WLAN_FEATURE_11BE
 #define MAX_MCS (16 + 1)
@@ -1544,6 +1545,7 @@ struct protocol_trace_count {
  * @rts_failure: RTS failure count
  * @bar_cnt: Block ACK Request frame count
  * @ndpa_cnt: NDP announcement frame count
+ * @inval_link_id_pkt_cnt: Counter to capture Invalid Link Id
  * @wme_ac_type_bytes: Wireless Multimedia Type Bytes Count
  * @tx_ucast_total: Total tx unicast count
  * @tx_ucast_success: Total tx unicast success count
@@ -1619,7 +1621,7 @@ struct cdp_tx_stats {
 	uint32_t fw_ratecount;
 
 	uint32_t ac_nobufs[WME_AC_MAX];
-	uint32_t rssi_chain[WME_AC_MAX];
+	int32_t rssi_chain[CDP_RSSI_CHAIN_LEN];
 	uint32_t inactive_time;
 
 	uint32_t tx_flags;
@@ -1668,6 +1670,7 @@ struct cdp_tx_stats {
 	uint32_t rts_failure;
 	uint32_t bar_cnt;
 	uint32_t ndpa_cnt;
+	uint32_t inval_link_id_pkt_cnt;
 	uint64_t wme_ac_type_bytes[WME_AC_MAX];
 	struct cdp_pkt_info tx_ucast_total;
 	struct cdp_pkt_info tx_ucast_success;
@@ -1684,6 +1687,7 @@ struct cdp_tx_stats {
  * @raw: Raw Pakets received
  * @nawds_mcast_drop: Total multicast packets
  * @mec_drop: Total MEC packets dropped
+ * @ppeds_drop: Total DS packets dropped
  * @last_rx_ts: last timestamp in jiffies when RX happened
  * @intra_bss: Intra-bss statistics
  * @intra_bss.pkts: Intra BSS packets received
@@ -1760,6 +1764,7 @@ struct cdp_tx_stats {
  * @mcast_3addr_drop:
  * @bar_cnt: Block ACK Request frame count
  * @ndpa_cnt: NDP announcement frame count
+ * @inval_link_id_pkt_cnt: Counter to capture Invalid Link Id
  * @wme_ac_type_bytes: Wireless Multimedia type Byte Count
  * @rx_total: Total rx count
  */
@@ -1773,6 +1778,7 @@ struct cdp_rx_stats {
 	struct cdp_pkt_info raw;
 	uint32_t nawds_mcast_drop;
 	struct cdp_pkt_info mec_drop;
+	struct cdp_pkt_info ppeds_drop;
 	unsigned long last_rx_ts;
 	struct {
 		struct cdp_pkt_info pkts;
@@ -1853,6 +1859,7 @@ struct cdp_rx_stats {
 	uint32_t mcast_3addr_drop;
 	uint32_t bar_cnt;
 	uint32_t ndpa_cnt;
+	uint32_t inval_link_id_pkt_cnt;
 	uint64_t wme_ac_type_bytes[WME_AC_MAX];
 #ifdef IPA_OFFLOAD
 	struct cdp_pkt_info rx_total;
@@ -2068,10 +2075,12 @@ struct cdp_calibr_stats_intf {
 
 /**
  * struct cdp_peer_stats - peer stats structure
+ * @mac_addr: MAC address
  * @tx: cdp tx stats
  * @rx: cdp rx stats
  */
 struct cdp_peer_stats {
+	struct qdf_mac_addr mac_addr;
 	struct cdp_tx_stats tx;
 	struct cdp_rx_stats rx;
 };
@@ -2956,7 +2965,7 @@ struct cdp_soc_stats {
 	} mec;
 };
 
-#ifdef WLAN_TELEMETRY_STATS_SUPPORT
+#ifdef WLAN_CONFIG_TELEMETRY_AGENT
 /**
  * struct cdp_pdev_telemetry_stats- Structure to hold pdev telemetry stats
  * @tx_mpdu_failed: Tx mpdu failed
@@ -3036,7 +3045,7 @@ struct cdp_peer_deter_stats {
 };
 
 /**
- * struct cdp_pdev_chan_util_stats - pdev channel utilization stats
+ * struct cdp_pdev_chan_util_stats- Structure to hold channel utilization stats
  * @ap_chan_util: Channel utilization
  * @ap_tx_util: TX utilization
  * @ap_rx_util: RX utilization
@@ -3073,8 +3082,8 @@ struct cdp_pdev_ul_trigger_status {
 struct cdp_pdev_deter_stats {
 	uint64_t dl_ofdma_usr[CDP_MU_MAX_USERS];
 	uint64_t ul_ofdma_usr[CDP_MU_MAX_USERS];
-	uint64_t dl_mimo_usr[CDP_MU_MAX_USERS];
-	uint64_t ul_mimo_usr[CDP_MU_MAX_USERS];
+	uint64_t dl_mimo_usr[CDP_MU_MAX_MIMO_USERS];
+	uint64_t ul_mimo_usr[CDP_MU_MAX_MIMO_USERS];
 	uint64_t dl_mode_cnt[TX_MODE_DL_MAX];
 	uint64_t ul_mode_cnt[TX_MODE_UL_MAX];
 	uint64_t rx_su_cnt;
@@ -3159,6 +3168,7 @@ struct cdp_pdev_deter_stats {
  * @peer_unauth_rx_pkt_drop: stats counter for drops due to unauthorized peer
  * @telemetry_stats: pdev telemetry stats
  * @deter_stats:
+ * @invalid_msdu_cnt: Invalid MSDU count received counter
  */
 struct cdp_pdev_stats {
 	struct {
@@ -3252,10 +3262,11 @@ struct cdp_pdev_stats {
 	} rx_refill_buff_pool;
 
 	uint32_t peer_unauth_rx_pkt_drop;
-#ifdef WLAN_TELEMETRY_STATS_SUPPORT
+#ifdef WLAN_CONFIG_TELEMETRY_AGENT
 	struct cdp_pdev_telemetry_stats telemetry_stats;
 	struct cdp_pdev_deter_stats deter_stats;
 #endif
+	uint32_t invalid_msdu_cnt;
 };
 
 /**

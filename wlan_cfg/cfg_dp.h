@@ -104,7 +104,7 @@
 #define WLAN_CFG_PER_PDEV_RX_RING 0
 #define WLAN_CFG_PER_PDEV_LMAC_RING 0
 #define WLAN_LRO_ENABLE 0
-#ifdef QCA_WIFI_QCA6750
+#if defined(QCA_WIFI_QCA6750) || defined(QCA_WIFI_WCN6450)
 #define WLAN_CFG_MAC_PER_TARGET 1
 #else
 #define WLAN_CFG_MAC_PER_TARGET 2
@@ -509,6 +509,10 @@
 #define WLAN_CFG_DP_NAPI_SCALE_FACTOR_MIN 0
 #define WLAN_CFG_DP_NAPI_SCALE_FACTOR_MAX 4
 
+#define CFG_DP_PPEDS_WIFI_SOC_CFG_NONE 0
+#define CFG_DP_PPEDS_WIFI_SOC_CFG_ALL 0xFF
+#define CFG_DP_PPEDS_WIFI_SOC_CFG_DEFAULT 0xFF
+
 #ifdef CONFIG_SAWF_STATS
 #define WLAN_CFG_SAWF_STATS 0x0
 #define WLAN_CFG_SAWF_STATS_MIN 0x0
@@ -765,6 +769,31 @@
 #define CFG_DP_SAWF_STATS_CONFIG CFG(CFG_DP_SAWF_STATS)
 #else
 #define CFG_DP_SAWF_STATS_CONFIG
+#endif
+
+#ifdef WLAN_FEATURE_LOCAL_PKT_CAPTURE
+/*
+ * <ini>
+ * local_pkt_capture - Enable/Disable Local packet capture
+ * @Default: false
+ *
+ * This ini is used to enable/disable local packet capture.
+ *
+ * Related: None
+ *
+ * Usage: External
+ *
+ * </ini>
+ */
+#define CFG_DP_LOCAL_PKT_CAPTURE \
+		CFG_INI_BOOL( \
+		"local_packet_capture", \
+		false, \
+		"Local packet capture")
+
+#define CFG_DP_LOCAL_PKT_CAPTURE_CONFIG CFG(CFG_DP_LOCAL_PKT_CAPTURE)
+#else
+#define CFG_DP_LOCAL_PKT_CAPTURE_CONFIG
 #endif
 
 /*
@@ -1350,6 +1379,16 @@
 	CFG_INI_BOOL("tx_litemon_sw_peer_filtering", false, \
 		     "Enable SW based tx monitor peer fitlering")
 
+#define CFG_DP_POINTER_TIMER_THRESHOLD_RX \
+	CFG_INI_UINT("dp_rx_ptr_timer_threshold", \
+	0, 0xFFFF, 0, \
+	CFG_VALUE_OR_DEFAULT, "RX pointer update timer threshold")
+
+#define CFG_DP_POINTER_NUM_THRESHOLD_RX \
+	CFG_INI_UINT("dp_rx_ptr_num_threshold", \
+	0, 63, 0, \
+	CFG_VALUE_OR_DEFAULT, "RX pointer update entries number threshold")
+
 /*
  * <ini>
  * dp_rx_fisa_enable - Control Rx datapath FISA
@@ -1441,6 +1480,16 @@
 #define CFG_DP_PEER_EXT_STATS \
 		CFG_INI_BOOL("peer_ext_stats", \
 		false, "Peer extended stats")
+
+#if defined QCA_ENHANCED_STATS_SUPPORT || defined DP_MLO_LINK_STATS_SUPPORT
+#define DEFAULT_PEER_LINK_STATS_VALUE true
+#else
+#define DEFAULT_PEER_LINK_STATS_VALUE false
+#endif /* QCA_ENHANCED_STATS_SUPPORT */
+
+#define CFG_DP_PEER_LINK_STATS \
+		CFG_INI_BOOL("peer_link_stats", \
+		DEFAULT_PEER_LINK_STATS_VALUE, "Peer Link stats")
 
 #define CFG_DP_PEER_JITTER_STATS \
 		CFG_INI_BOOL("peer_jitter_stats", \
@@ -1692,7 +1741,7 @@
 
 #ifdef WLAN_SUPPORT_PPEDS
 #define WLAN_CFG_NUM_PPEDS_TX_DESC_MIN 16
-#define WLAN_CFG_NUM_PPEDS_TX_DESC_MAX 0x8000
+#define WLAN_CFG_NUM_PPEDS_TX_DESC_MAX 0xFA00
 #define WLAN_CFG_NUM_PPEDS_TX_DESC 0x8000
 
 #define WLAN_CFG_NUM_PPEDS_TX_CMP_NAPI_MIN 8
@@ -1742,13 +1791,21 @@
 		WLAN_CFG_PPE2TCL_RING_SIZE, \
 		CFG_VALUE_OR_DEFAULT, "DP PPE2TCL rings")
 
+#define CFG_DP_PPEDS_WIFI_SOC_CFG \
+		CFG_INI_UINT("ppeds_wifi_soc_cfg", \
+		CFG_DP_PPEDS_WIFI_SOC_CFG_NONE, \
+		CFG_DP_PPEDS_WIFI_SOC_CFG_ALL, \
+		CFG_DP_PPEDS_WIFI_SOC_CFG_DEFAULT, \
+		CFG_VALUE_OR_DEFAULT, "PPEDS enable per WiFi SoC")
+
 #define CFG_DP_PPEDS_CONFIG \
 		CFG(CFG_DP_PPEDS_TX_CMP_NAPI_BUDGET) \
 		CFG(CFG_DP_PPEDS_TX_DESC_HOTLIST_LEN) \
 		CFG(CFG_DP_PPEDS_TX_DESC) \
 		CFG(CFG_DP_PPEDS_ENABLE) \
 		CFG(CFG_DP_REO2PPE_RING) \
-		CFG(CFG_DP_PPE2TCL_RING)
+		CFG(CFG_DP_PPE2TCL_RING) \
+		CFG(CFG_DP_PPEDS_WIFI_SOC_CFG)
 #else
 #define CFG_DP_PPEDS_CONFIG
 #define WLAN_CFG_NUM_PPEDS_TX_DESC_MAX 0
@@ -1961,6 +2018,7 @@
 		CFG(CFG_DP_REO_RINGS_MAP) \
 		CFG(CFG_DP_PEER_EXT_STATS) \
 		CFG(CFG_DP_PEER_JITTER_STATS) \
+		CFG(CFG_DP_PEER_LINK_STATS) \
 		CFG(CFG_DP_RX_BUFF_POOL_ENABLE) \
 		CFG(CFG_DP_RX_REFILL_BUFF_POOL_ENABLE) \
 		CFG(CFG_DP_RX_PENDING_HL_THRESHOLD) \
@@ -1992,5 +2050,8 @@
 		CFG_DP_SAWF_STATS_CONFIG \
 		CFG(CFG_DP_HANDLE_INVALID_DECAP_TYPE_DISABLE) \
 		CFG(CFG_DP_TXMON_SW_PEER_FILTERING) \
-		CFG_TX_PKT_INSPECT_FOR_ILP_CFG
+		CFG_TX_PKT_INSPECT_FOR_ILP_CFG \
+		CFG(CFG_DP_POINTER_TIMER_THRESHOLD_RX) \
+		CFG(CFG_DP_POINTER_NUM_THRESHOLD_RX) \
+		CFG_DP_LOCAL_PKT_CAPTURE_CONFIG
 #endif /* _CFG_DP_H_ */

@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2018-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -94,6 +94,11 @@ bool ipa_config_is_enabled(void)
 bool ipa_config_is_uc_enabled(void)
 {
 	return g_ipa_config ? wlan_ipa_uc_is_enabled(g_ipa_config) : 0;
+}
+
+bool ipa_config_is_opt_wifi_dp_enabled(void)
+{
+	return g_ipa_config ? wlan_ipa_is_opt_wifi_dp_enabled(g_ipa_config) : 0;
 }
 
 bool ipa_config_is_vlan_enabled(void)
@@ -648,10 +653,14 @@ QDF_STATUS ipa_uc_ol_deinit(struct wlan_objmgr_pdev *pdev)
 
 	status = wlan_ipa_uc_ol_deinit(ipa_obj);
 	ipa_obj_cleanup(ipa_obj);
+
+out:
+	if (g_instances_added)
+		g_instances_added--;
+
 	if (!g_instances_added)
 		ipa_disable_register_cb();
 
-out:
 	ipa_init_deinit_unlock();
 	return status;
 }
@@ -814,6 +823,34 @@ void ipa_fw_rejuvenate_send_msg(struct wlan_objmgr_pdev *pdev)
 	return wlan_ipa_fw_rejuvenate_send_msg(ipa_obj);
 }
 
+#ifdef IPA_OPT_WIFI_DP
+uint32_t get_ipa_config(struct wlan_objmgr_psoc *psoc)
+{
+	uint32_t val = cfg_get(psoc, CFG_DP_IPA_OFFLOAD_CONFIG);
+
+	if (val == INTRL_MODE_DISABLE) {
+		val = 0;
+	} else {
+		if (val == IPA_OFFLOAD_CFG)
+			ipa_err("Invalid IPA Config 0x%x", val);
+		val = INTRL_MODE_ENABLE;
+	}
+	ipa_info("IPAConfig set as 0x%x", val);
+	return val;
+}
+#else
+uint32_t get_ipa_config(struct wlan_objmgr_psoc *psoc)
+{
+	uint32_t val = cfg_get(psoc, CFG_DP_IPA_OFFLOAD_CONFIG);
+
+	if (val & WLAN_IPA_OPT_WIFI_DP) {
+		val &= ~WLAN_IPA_OPT_WIFI_DP;
+		ipa_info("Resetting IPAConfig val to 0x%x", val);
+	}
+	return val;
+}
+#endif
+
 void ipa_component_config_update(struct wlan_objmgr_psoc *psoc)
 {
 	QDF_STATUS status;
@@ -825,8 +862,7 @@ void ipa_component_config_update(struct wlan_objmgr_psoc *psoc)
 	}
 
 	if (g_ipa_pld_enable) {
-		g_ipa_config->ipa_config = cfg_get(psoc,
-						   CFG_DP_IPA_OFFLOAD_CONFIG);
+		g_ipa_config->ipa_config = get_ipa_config(psoc);
 		ipa_info("IPA ini configuration: 0x%x",
 			 g_ipa_config->ipa_config);
 	} else {

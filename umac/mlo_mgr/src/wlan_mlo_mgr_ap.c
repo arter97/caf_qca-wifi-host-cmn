@@ -327,27 +327,81 @@ static bool mlo_pre_link_up(struct wlan_objmgr_vdev *vdev)
 static bool mlo_handle_link_ready(struct wlan_objmgr_vdev *vdev)
 {
 	struct wlan_objmgr_vdev *vdev_list[WLAN_UMAC_MLO_MAX_VDEVS] = {NULL};
+	struct wlan_mlo_dev_context *mld_ctx = NULL;
 	uint16_t num_links = 0;
 	uint8_t i;
+	uint8_t idx;
+	enum wlan_vdev_state state;
+	enum wlan_vdev_state substate;
+
 
 	if (!vdev || !vdev->mlo_dev_ctx) {
 		mlo_err("Invalid input");
 		return false;
 	}
 
-	if (!mlo_is_ap_vdev_up_allowed(vdev))
+	mld_ctx = vdev->mlo_dev_ctx;
+	/*
+	 * The last vdev in MLD to receive start response is responsible for
+	 * dispatching MLO_SYNC_COMPLETE event all the partner vdevs and then to
+	 * self.
+	 *
+	 * If vdev_up_bmap is set, then return.
+	 */
+	idx = mlo_get_link_vdev_ix(mld_ctx, vdev);
+	if (idx == MLO_INVALID_LINK_IDX)
 		return false;
 
-	mlo_ap_get_vdev_list(vdev, &num_links, vdev_list);
-	if (!num_links || (num_links > QDF_ARRAY_SIZE(vdev_list))) {
-		mlo_err("Invalid number of VDEVs under AP-MLD");
+	if (wlan_util_map_index_is_set(mld_ctx->ap_ctx->mlo_vdev_up_bmap,
+				       idx)) {
+		mlo_debug("Bmap is set for idx:%u mld_addr " QDF_MAC_ADDR_FMT,
+			  idx, QDF_MAC_ADDR_REF(mld_ctx->mld_addr.bytes));
 		return false;
 	}
 
 	mlo_ap_lock_acquire(vdev->mlo_dev_ctx->ap_ctx);
+	state = wlan_vdev_mlme_get_state(vdev);
+	substate = wlan_vdev_mlme_get_substate(vdev);
+	if (state == WLAN_VDEV_S_UP && substate == WLAN_VDEV_SS_MLO_SYNC_WAIT) {
+		idx = mlo_get_link_vdev_ix(mld_ctx, vdev);
+		if (idx == MLO_INVALID_LINK_IDX) {
+			mlo_ap_lock_release(vdev->mlo_dev_ctx->ap_ctx);
+			return false;
+		}
+		wlan_util_change_map_index(mld_ctx->ap_ctx->mlo_vdev_up_bmap,
+					   idx, 1);
+		mlo_debug("Setting Bmap for idx:%u mld_addr " QDF_MAC_ADDR_FMT,
+			  idx, QDF_MAC_ADDR_REF(mld_ctx->mld_addr.bytes));
+	}
+
+	if (!mlo_is_ap_vdev_up_allowed(vdev)) {
+		mlo_ap_lock_release(vdev->mlo_dev_ctx->ap_ctx);
+		return false;
+	}
+
+	mlo_ap_get_vdev_list(vdev, &num_links, vdev_list);
+	if (!num_links || (num_links > QDF_ARRAY_SIZE(vdev_list))) {
+		mlo_err("Invalid number of VDEVs under AP-MLD");
+		mlo_ap_lock_release(vdev->mlo_dev_ctx->ap_ctx);
+		return false;
+	}
+
 	for (i = 0; i < num_links; i++) {
 		if (mlo_pre_link_up(vdev_list[i])) {
-			if (vdev_list[i] != vdev)
+			if (vdev_list[i] == vdev) {
+				mlo_release_vdev_ref(vdev_list[i]);
+				continue;
+			}
+
+			idx = mlo_get_link_vdev_ix(mld_ctx, vdev_list[i]);
+			if (idx == MLO_INVALID_LINK_IDX) {
+				mlo_release_vdev_ref(vdev_list[i]);
+				continue;
+			}
+
+			if (wlan_util_map_index_is_set(
+				vdev->mlo_dev_ctx->ap_ctx->mlo_vdev_up_bmap,
+				idx))
 				wlan_vdev_mlme_sm_deliver_evt(
 					vdev_list[i],
 					WLAN_VDEV_SM_EV_MLO_SYNC_COMPLETE,
@@ -424,7 +478,8 @@ void mlo_ap_ml_peerid_free(uint16_t mlo_peer_id)
 		return;
 	}
 
-	if (mlo_peer_id > mlo_ctx->max_mlo_peer_id) {
+	if ((mlo_peer_id > mlo_ctx->max_mlo_peer_id) ||
+	    (mlo_peer_id > MAX_MLO_PEER_ID)) {
 		mlo_err(" ML peer id %d is invalid", mlo_peer_id);
 		QDF_BUG(0);
 		return;

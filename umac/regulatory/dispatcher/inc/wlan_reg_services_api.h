@@ -586,24 +586,19 @@ QDF_STATUS wlan_reg_read_current_country(struct wlan_objmgr_psoc *psoc,
 
 #ifdef CONFIG_REG_CLIENT
 /**
- * wlan_reg_get_6g_power_type_for_ctry() - Return power type for 6G based
- * on country IE
+ * wlan_reg_get_best_6g_power_type() - Return best power type for 6GHz
+ * connection
  * @psoc: pointer to psoc
  * @pdev: pointer to pdev
- * @ap_ctry: pointer to country string in country IE
- * @sta_ctry: pointer to sta programmed country
  * @pwr_type_6g: pointer to 6G power type
- * @ctry_code_match: Check for country IE and sta country code match
  * @ap_pwr_type: AP's power type for 6G as advertised in HE ops IE
  * Return: QDF_STATUS
  */
 QDF_STATUS
-wlan_reg_get_6g_power_type_for_ctry(struct wlan_objmgr_psoc *psoc,
-				    struct wlan_objmgr_pdev *pdev,
-				    uint8_t *ap_ctry, uint8_t *sta_ctry,
-				    enum reg_6g_ap_type *pwr_type_6g,
-				    bool *ctry_code_match,
-				    enum reg_6g_ap_type ap_pwr_type);
+wlan_reg_get_best_6g_power_type(struct wlan_objmgr_psoc *psoc,
+				struct wlan_objmgr_pdev *pdev,
+				enum reg_6g_ap_type *pwr_type_6g,
+				enum reg_6g_ap_type ap_pwr_type);
 #endif
 
 #ifdef CONFIG_CHAN_FREQ_API
@@ -1396,6 +1391,7 @@ wlan_reg_disable_chan_coex(struct wlan_objmgr_pdev *pdev,
  * @req_msg: Request msg
  * @res_msg: Response msg
  * @count: no of usable channels
+ * @in_6g_pwr_mode: Input 6GHz power mode
  *
  * Return: qdf status
  */
@@ -1403,7 +1399,8 @@ QDF_STATUS
 wlan_reg_get_usable_channel(struct wlan_objmgr_pdev *pdev,
 			    struct get_usable_chan_req_params req_msg,
 			    struct get_usable_chan_res_params *res_msg,
-			    uint32_t *count);
+			    uint32_t *count,
+			    enum supported_6g_pwr_types in_6g_pwr_mode);
 #endif
 
 #ifdef CONFIG_CHAN_FREQ_API
@@ -1433,9 +1430,9 @@ enum channel_enum wlan_reg_get_chan_enum_for_freq(qdf_freq_t freq);
  * wlan_reg_get_min_max_bw_for_chan_index() - To get min and max BW supported
  * by channel enum
  * @pdev: pointer to pdev
- * @chn_idx: enum channel_enum
- * @min bw: min bw
- * @max bw: max bw
+ * @chan_idx: enum channel_enum
+ * @min_bw: min bw
+ * @max_bw: max bw
  *
  * Return: SUCCESS/FAILURE
  */
@@ -1713,6 +1710,7 @@ static inline
 QDF_STATUS wlan_reg_extract_puncture_by_bw(enum phy_ch_width ori_bw,
 					   uint16_t ori_puncture_bitmap,
 					   qdf_freq_t freq,
+					   qdf_freq_t cen320_freq,
 					   enum phy_ch_width new_bw,
 					   uint16_t *new_puncture_bitmap)
 {
@@ -2231,7 +2229,7 @@ QDF_STATUS
 wlan_reg_modify_indoor_concurrency(struct wlan_objmgr_pdev *pdev,
 				   uint8_t vdev_id, uint32_t freq,
 				   enum phy_ch_width width, bool add);
-
+#endif
 /**
  * wlan_reg_recompute_current_chan_list() - Recompute the current channel list
  * based on the regulatory change
@@ -2244,7 +2242,6 @@ wlan_reg_modify_indoor_concurrency(struct wlan_objmgr_pdev *pdev,
 QDF_STATUS
 wlan_reg_recompute_current_chan_list(struct wlan_objmgr_psoc *psoc,
 				     struct wlan_objmgr_pdev *pdev);
-#endif
 
 #if defined(CONFIG_BAND_6GHZ)
 /**

@@ -749,6 +749,53 @@ wmi_print_cmd_log_buffer(struct wmi_log_buf_t *log_buffer, uint32_t count,
 }
 
 /**
+ * wmi_dump_last_cmd_rec_info() - last wmi command tx completion time print
+ * @wmi_handle: wmi handle
+ *
+ * Return: None
+ */
+static void
+wmi_dump_last_cmd_rec_info(wmi_unified_t wmi_handle) {
+	uint32_t idx, idx_tx_cmp, cmd_tmp_log, cmd_tmp_tx_cmp;
+	uint64_t secs, secs_tx_cmp, usecs, usecs_tx_cmp;
+	struct wmi_command_debug *cmd_log;
+	struct wmi_command_debug *cmd_log_tx_cmp;
+	struct wmi_log_buf_t *log_buf =
+		&wmi_handle->log_info.wmi_command_log_buf_info;
+	struct wmi_log_buf_t *log_buf_tx_cmp =
+		&wmi_handle->log_info.wmi_command_tx_cmp_log_buf_info;
+
+	qdf_spin_lock_bh(&wmi_handle->log_info.wmi_record_lock);
+
+	(*log_buf->p_buf_tail_idx == 0) ? (idx = log_buf->size) :
+		(idx = *log_buf->p_buf_tail_idx - 1);
+	idx %= log_buf->size;
+
+	(*log_buf_tx_cmp->p_buf_tail_idx == 0) ? (idx_tx_cmp =
+		log_buf_tx_cmp->size) : (idx_tx_cmp =
+		*log_buf_tx_cmp->p_buf_tail_idx - 1);
+	idx_tx_cmp %= log_buf_tx_cmp->size;
+	cmd_log = &((struct wmi_command_debug *)log_buf->buf)[idx];
+	cmd_log_tx_cmp = &((struct wmi_command_debug *)log_buf_tx_cmp->buf)
+		[idx_tx_cmp];
+	cmd_tmp_log = cmd_log->command;
+	cmd_tmp_tx_cmp = cmd_log_tx_cmp->command;
+	qdf_log_timestamp_to_secs(cmd_log->time, &secs, &usecs);
+	qdf_log_timestamp_to_secs(cmd_log_tx_cmp->time, &secs_tx_cmp,
+				  &usecs_tx_cmp);
+
+	qdf_spin_unlock_bh(&wmi_handle->log_info.wmi_record_lock);
+
+	wmi_nofl_err("Last wmi command Time (s) = % 8lld.%06lld ",
+		     secs, usecs);
+	wmi_nofl_err("Last wmi Cmd_Id = (0x%06x) ", cmd_tmp_log);
+	wmi_nofl_err("Last wmi command tx completion Time (s) = % 8lld.%06lld",
+		     secs_tx_cmp, usecs_tx_cmp);
+	wmi_nofl_err("Last wmi command tx completion Cmd_Id = (0x%06x) ",
+		     cmd_tmp_tx_cmp);
+}
+
+/**
  * wmi_print_cmd_cmp_log_buffer() - wmi command completion log printer
  * @log_buffer: the command completion log buffer metadata of the buffer to print
  * @count: the maximum number of entries to print
@@ -1394,6 +1441,7 @@ void wmi_mgmt_cmd_record(wmi_unified_t wmi_handle, uint32_t cmd,
 static inline void wmi_log_buffer_free(struct wmi_unified *wmi_handle) { }
 static void wmi_minidump_detach(struct wmi_unified *wmi_handle) { }
 static void wmi_minidump_attach(struct wmi_unified *wmi_handle) { }
+static void wmi_dump_last_cmd_rec_info(wmi_unified_t wmi_handle) { }
 #endif /*WMI_INTERFACE_EVENT_LOGGING */
 qdf_export_symbol(wmi_mgmt_cmd_record);
 
@@ -2051,6 +2099,12 @@ QDF_STATUS wmi_unified_cmd_send_fl(wmi_unified_t wmi_handle, wmi_buf_t buf,
 		return QDF_STATUS_E_INVAL;
 	}
 
+	if (wmi_has_wow_enable_ack_failed(wmi_handle)) {
+		wmi_nofl_err("wow enable ack already failed(via %s:%u)",
+			     func, line);
+		return QDF_STATUS_E_INVAL;
+	}
+
 #ifndef WMI_NON_TLV_SUPPORT
 	/* Do sanity check on the TLV parameter structure */
 	if (wmi_handle->target_type == WMI_TLV_TARGET) {
@@ -2077,6 +2131,7 @@ QDF_STATUS wmi_unified_cmd_send_fl(wmi_unified_t wmi_handle, wmi_buf_t buf,
 	qdf_atomic_inc(&wmi_handle->pending_cmds);
 	if (qdf_atomic_read(&wmi_handle->pending_cmds) >=
 			wmi_handle->wmi_max_cmds) {
+		wmi_dump_last_cmd_rec_info(wmi_handle);
 		wmi_nofl_err("hostcredits = %d",
 			     wmi_get_host_credits(wmi_handle));
 		htc_dump_counter_info(wmi_handle->htc_handle);
@@ -3019,6 +3074,21 @@ static void wmi_runtime_pm_init(struct wmi_unified *wmi_handle)
 }
 #endif
 
+void wmi_set_wow_enable_ack_failed(wmi_unified_t wmi_handle)
+{
+	qdf_atomic_set(&wmi_handle->is_wow_enable_ack_failed, 1);
+}
+
+void wmi_clear_wow_enable_ack_failed(wmi_unified_t wmi_handle)
+{
+	qdf_atomic_set(&wmi_handle->is_wow_enable_ack_failed, 0);
+}
+
+bool wmi_has_wow_enable_ack_failed(wmi_unified_t wmi_handle)
+{
+	return qdf_atomic_read(&wmi_handle->is_wow_enable_ack_failed);
+}
+
 void *wmi_unified_get_soc_handle(struct wmi_unified *wmi_handle)
 {
 	return wmi_handle->soc;
@@ -3110,6 +3180,7 @@ void *wmi_unified_get_pdev_handle(struct wmi_soc *soc, uint32_t pdev_idx)
 		wmi_interface_logging_init(wmi_handle, pdev_idx);
 		qdf_atomic_init(&wmi_handle->pending_cmds);
 		qdf_atomic_init(&wmi_handle->is_target_suspended);
+		qdf_atomic_init(&wmi_handle->is_wow_enable_ack_failed);
 		wmi_handle->target_type = soc->target_type;
 		wmi_handle->wmi_max_cmds = soc->wmi_max_cmds;
 
@@ -3239,6 +3310,7 @@ void *wmi_unified_attach(void *scn_handle,
 	qdf_atomic_init(&wmi_handle->is_target_suspended);
 	qdf_atomic_init(&wmi_handle->is_target_suspend_acked);
 	qdf_atomic_init(&wmi_handle->num_stats_over_qmi);
+	qdf_atomic_init(&wmi_handle->is_wow_enable_ack_failed);
 	wmi_runtime_pm_init(wmi_handle);
 	wmi_interface_logging_init(wmi_handle, WMI_HOST_PDEV_ID_0);
 
@@ -3322,6 +3394,7 @@ void wmi_unified_detach(struct wmi_unified *wmi_handle)
 
 			wmi_interface_sequence_deinit(soc->wmi_pdev[i]);
 			wmi_ext_dbgfs_deinit(soc->wmi_pdev[i]);
+			wmi_clear_wow_enable_ack_failed(soc->wmi_pdev[i]);
 
 			qdf_mem_free(soc->wmi_pdev[i]);
 		}
@@ -3713,6 +3786,11 @@ wmi_flush_endpoint(wmi_unified_t wmi_handle)
 		wmi_handle->wmi_endpoint_id, 0);
 }
 qdf_export_symbol(wmi_flush_endpoint);
+
+HTC_ENDPOINT_ID wmi_get_endpoint(wmi_unified_t wmi_handle)
+{
+	return wmi_handle->wmi_endpoint_id;
+}
 
 void wmi_pdev_id_conversion_enable(wmi_unified_t wmi_handle,
 				   uint32_t *pdev_id_map,

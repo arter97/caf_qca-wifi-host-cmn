@@ -388,6 +388,11 @@ static const struct qwlan_hw qwlan_hw_list[] = {
 		.name = "WCN6750_V1",
 	},
 	{
+		.id = WCN6450_V1,
+		.subid = 0,
+		.name = "WCN6450_V1",
+	},
+	{
 		.id = QCA6490_v2_1,
 		.subid = 0,
 		.name = "QCA6490",
@@ -396,11 +401,6 @@ static const struct qwlan_hw qwlan_hw_list[] = {
 		.id = QCA6490_v2,
 		.subid = 0,
 		.name = "QCA6490",
-	},
-	{
-		.id = WCN3990_v2_2,
-		.subid = 0,
-		.name = "WCN3990_v2_2",
 	},
 	{
 		.id = WCN3990_TALOS,
@@ -1164,7 +1164,7 @@ void hif_uninit_rri_on_ddr(struct hif_softc *scn)
 {
 	if (scn->vaddr_rri_on_ddr)
 		qdf_mem_free_consistent(scn->qdf_dev, scn->qdf_dev->dev,
-					(CE_COUNT * sizeof(uint32_t)),
+					RRI_ON_DDR_MEM_SIZE,
 					scn->vaddr_rri_on_ddr,
 					scn->paddr_rri_on_ddr, 0);
 	scn->vaddr_rri_on_ddr = NULL;
@@ -1258,6 +1258,9 @@ QDF_STATUS hif_try_complete_tasks(struct hif_softc *scn)
 		if (++task_drain_wait_cnt > HIF_TASK_DRAIN_WAIT_CNT) {
 			hif_err("pending tasklets %d grp tasklets %d work %d",
 				tasklet, grp_tasklet, work);
+			QDF_DEBUG_PANIC("Complete tasks takes more than %u ms: tasklets %d grp tasklets %d work %d",
+					HIF_TASK_DRAIN_WAIT_CNT * 10,
+					tasklet, grp_tasklet, work);
 			return QDF_STATUS_E_FAULT;
 		}
 		hif_info("waiting for tasklets %d grp tasklets %d work %d",
@@ -1267,6 +1270,19 @@ QDF_STATUS hif_try_complete_tasks(struct hif_softc *scn)
 
 	return QDF_STATUS_SUCCESS;
 }
+
+#ifdef HIF_HAL_REG_ACCESS_SUPPORT
+void hif_reg_window_write(struct hif_softc *scn, uint32_t offset,
+			  uint32_t value)
+{
+	hal_write32_mb(scn->hal_soc, offset, value);
+}
+
+uint32_t hif_reg_window_read(struct hif_softc *scn, uint32_t offset)
+{
+	return hal_read32_mb(scn->hal_soc, offset);
+}
+#endif
 
 #if defined(HIF_IPCI) && defined(FEATURE_HAL_DELAYED_REG_WRITE)
 QDF_STATUS hif_try_prevent_ep_vote_access(struct hif_opaque_softc *hif_ctx)
@@ -1358,7 +1374,25 @@ uint8_t hif_get_ep_vote_access(struct hif_opaque_softc *hif_ctx,
 }
 #endif
 
-#if (defined(QCA_WIFI_QCA8074) || defined(QCA_WIFI_QCA6018) || \
+#if defined(QCA_WIFI_WCN6450)
+static QDF_STATUS hif_hal_attach(struct hif_softc *scn)
+{
+	scn->hal_soc = hal_attach(hif_softc_to_hif_opaque_softc(scn),
+				  scn->qdf_dev);
+	if (!scn->hal_soc)
+		return QDF_STATUS_E_FAILURE;
+
+	return QDF_STATUS_SUCCESS;
+}
+
+static QDF_STATUS hif_hal_detach(struct hif_softc *scn)
+{
+	hal_detach(scn->hal_soc);
+	scn->hal_soc = NULL;
+
+	return QDF_STATUS_SUCCESS;
+}
+#elif (defined(QCA_WIFI_QCA8074) || defined(QCA_WIFI_QCA6018) || \
 	defined(QCA_WIFI_QCA6290) || defined(QCA_WIFI_QCA6390) || \
 	defined(QCA_WIFI_QCN9000) || defined(QCA_WIFI_QCA6490) || \
 	defined(QCA_WIFI_QCA6750) || defined(QCA_WIFI_QCA5018) || \
@@ -1746,6 +1780,12 @@ int hif_get_device_type(uint32_t device_id,
 		hif_info(" *********** QCN9160 *************");
 		break;
 
+	case QCN6432_DEVICE_ID:
+		*hif_type = HIF_TYPE_QCN6432;
+		*target_type = TARGET_TYPE_QCN6432;
+		hif_info(" *********** QCN6432 *************");
+		break;
+
 	case QCN7605_DEVICE_ID:
 	case QCN7605_COMPOSITE:
 	case QCN7605_STANDALONE:
@@ -1829,6 +1869,12 @@ int hif_get_device_type(uint32_t device_id,
 		*hif_type = HIF_TYPE_QCA9574;
 		*target_type = TARGET_TYPE_QCA9574;
 		hif_info(" *********** QCA9574 *************");
+		break;
+
+	case WCN6450_DEVICE_ID:
+		*hif_type = HIF_TYPE_WCN6450;
+		*target_type = TARGET_TYPE_WCN6450;
+		hif_info(" *********** WCN6450 *************");
 		break;
 
 	default:

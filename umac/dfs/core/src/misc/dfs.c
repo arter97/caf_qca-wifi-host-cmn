@@ -821,6 +821,8 @@ void dfs_set_current_channel_for_freq(struct wlan_dfs *dfs,
 
 	if (is_channel_updated)
 		*is_channel_updated = true;
+	if (dfs->dfs_use_puncture)
+		dfs_handle_dfs_puncture_unpuncture(dfs);
 }
 #endif
 
@@ -871,6 +873,11 @@ bool dfs_is_true_160mhz_supported(struct wlan_dfs *dfs)
 	if (tgt_tx_ops->tgt_is_tgt_type_qcn9160 &&
 	    tgt_tx_ops->tgt_is_tgt_type_qcn9160(target_type))
 		return true;
+
+	if (tgt_tx_ops->tgt_is_tgt_type_qcn6432 &&
+	    tgt_tx_ops->tgt_is_tgt_type_qcn6432(target_type))
+		return true;
+
 	return false;
 }
 

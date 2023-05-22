@@ -282,6 +282,7 @@ struct wlan_srng_cfg {
  * @is_tso_desc_attach_defer:
  * @delayed_replenish_entries:
  * @reo_rings_mapping:
+ * @rx_rings_mapping: DP RX rings mapping mask
  * @pext_stats_enabled: Flag to enable and disabled peer extended stats
  * @is_rx_buff_pool_enabled: flag to enable/disable emergency RX buffer
  *                           pool support
@@ -298,6 +299,7 @@ struct wlan_srng_cfg {
  * @radio2_rx_default_reo:
  * @wow_check_rx_pending_enable: Enable RX frame pending check in WoW
  * @jitter_stats_enabled: true if jitter stats are enabled
+ * @peer_link_stats_enabled: true if MLO Peer Link stats are enabled
  * @ipa_tx_ring_size: IPA tx ring size
  * @ipa_tx_comp_ring_size: IPA tx completion ring size
  * @ipa_tx_alt_ring_size: IPA tx alt ring size
@@ -334,6 +336,9 @@ struct wlan_srng_cfg {
  *                                         type handling is disabled
  * @tx_pkt_inspect_for_ilp: flag to indicate if TX packet inspection for HW
  *			    based ILP feature is enabled
+ * @pointer_timer_threshold_rx: RX REO2SW ring pointer update timer threshold
+ * @pointer_num_threshold_rx: RX REO2SW ring pointer update entries threshold
+ * @local_pkt_capture: flag indicating enable/disable of local packet capture
  */
 struct wlan_cfg_dp_soc_ctxt {
 	int num_int_ctxts;
@@ -462,6 +467,7 @@ struct wlan_cfg_dp_soc_ctxt {
 	bool is_tso_desc_attach_defer;
 	uint32_t delayed_replenish_entries;
 	uint32_t reo_rings_mapping;
+	uint32_t rx_rings_mapping;
 	bool pext_stats_enabled;
 	bool is_rx_buff_pool_enabled;
 	bool is_rx_refill_buff_pool_enabled;
@@ -476,6 +482,7 @@ struct wlan_cfg_dp_soc_ctxt {
 	uint8_t radio2_rx_default_reo;
 	bool wow_check_rx_pending_enable;
 	bool jitter_stats_enabled;
+	bool peer_link_stats_enabled;
 #ifdef IPA_OFFLOAD
 	uint32_t ipa_tx_ring_size;
 	uint32_t ipa_tx_comp_ring_size;
@@ -529,6 +536,11 @@ struct wlan_cfg_dp_soc_ctxt {
 #ifdef DP_TX_PACKET_INSPECT_FOR_ILP
 	bool tx_pkt_inspect_for_ilp;
 #endif
+	uint16_t pointer_timer_threshold_rx;
+	uint8_t pointer_num_threshold_rx;
+#ifdef WLAN_FEATURE_LOCAL_PKT_CAPTURE
+	bool local_pkt_capture;
+#endif
 };
 
 /**
@@ -569,6 +581,9 @@ struct wlan_cfg_dp_pdev_ctxt {
  * @num_rxdma_refill_ring_entries: Number of entries in rxdma refill ring
  * @num_reo_status_ring_entries: Number of entries in REO status ring
  * @num_mon_status_ring_entries: Number of entries in monitor status ring
+ * @num_tx_mon_buf_ring_entries: Number of entries in Tx monitor buf ring
+ * @num_tx_mon_dst_ring_entries: Number of entries in Tx monitor
+ *				 destination ring
  */
 struct wlan_dp_prealloc_cfg {
 	int num_tx_ring_entries;
@@ -583,6 +598,8 @@ struct wlan_dp_prealloc_cfg {
 	int num_rxdma_refill_ring_entries;
 	int num_reo_status_ring_entries;
 	int num_mon_status_ring_entries;
+	int num_tx_mon_buf_ring_entries;
+	int num_tx_mon_dst_ring_entries;
 };
 
 /**
@@ -1860,12 +1877,13 @@ wlan_cfg_is_tx_per_pkt_vdev_id_check_enabled(struct wlan_cfg_dp_soc_ctxt *cfg);
  * @num_dp_msi: Number of DP interrupts available (0 for integrated)
  * @interrupt_mode: Type of interrupt
  * @is_monitor_mode: is monitor mode enabled
+ * @ppeds_attached: is ppeds attached
  *
  * Return: void
  */
 void wlan_cfg_fill_interrupt_mask(struct wlan_cfg_dp_soc_ctxt *wlan_cfg_ctx,
 				  int num_dp_msi, int interrupt_mode,
-				  bool is_monitor_mode);
+				  bool is_monitor_mode, bool ppeds_attached);
 
 /**
  * wlan_cfg_is_rx_fisa_enabled() - Get Rx FISA enabled flag
@@ -1922,6 +1940,15 @@ bool wlan_cfg_is_tso_desc_attach_defer(struct wlan_cfg_dp_soc_ctxt *cfg);
  * Return: reo ring bitmap.
  */
 uint32_t wlan_cfg_get_reo_rings_mapping(struct wlan_cfg_dp_soc_ctxt *cfg);
+
+/**
+ * wlan_cfg_get_rx_rings_mapping() - Get RX ring bitmap
+ *
+ * @cfg: soc configuration context
+ *
+ * Return: rx ring bitmap.
+ */
+uint32_t wlan_cfg_get_rx_rings_mapping(struct wlan_cfg_dp_soc_ctxt *cfg);
 
 /**
  * wlan_cfg_set_peer_ext_stats() - set peer extended stats
@@ -1993,6 +2020,27 @@ bool wlan_cfg_is_fst_in_cmem_enabled(struct wlan_cfg_dp_soc_ctxt *cfg);
  * Return: true if enabled, false otherwise.
  */
 bool wlan_cfg_is_swlm_enabled(struct wlan_cfg_dp_soc_ctxt *cfg);
+
+/**
+ * wlan_cfg_set_peer_link_stats() - set peer link stats
+ *
+ * @cfg: soc configuration context
+ * @val: Flag value read from INI
+ *
+ * Return: void
+ */
+void
+wlan_cfg_set_peer_link_stats(struct wlan_cfg_dp_soc_ctxt *cfg,
+			     bool val);
+/**
+ * wlan_cfg_is_peer_link_stats_enabled() - check if link peer stats are enabled
+ *
+ * @cfg: soc configuration context
+ *
+ * Return: bool
+ */
+bool
+wlan_cfg_is_peer_link_stats_enabled(struct wlan_cfg_dp_soc_ctxt *cfg);
 
 #ifdef IPA_OFFLOAD
 /**
@@ -2105,13 +2153,13 @@ void wlan_cfg_dp_soc_ctx_dump(struct wlan_cfg_dp_soc_ctxt *cfg);
 
 #ifdef WLAN_SUPPORT_PPEDS
 /**
- * wlan_cfg_get_dp_soc_is_ppeds_enabled() - API to get ppe enable flag
+ * wlan_cfg_get_dp_soc_ppeds_enable() - API to get ppe enable flag
  * @cfg: Configuration Handle
  *
- * Return: true if ppe is enabled else return false
+ * Return: true if ppeds support is enabled else return false
  */
 bool
-wlan_cfg_get_dp_soc_is_ppeds_enabled(struct wlan_cfg_dp_soc_ctxt *cfg);
+wlan_cfg_get_dp_soc_ppeds_enable(struct wlan_cfg_dp_soc_ctxt *cfg);
 
 /**
  * wlan_cfg_get_dp_soc_reo2ppe_ring_size() - get ppe rx ring size
@@ -2158,7 +2206,7 @@ int
 wlan_cfg_get_dp_soc_ppeds_tx_comp_napi_budget(struct wlan_cfg_dp_soc_ctxt *cfg);
 #else
 static inline bool
-wlan_cfg_get_dp_soc_is_ppeds_enabled(struct wlan_cfg_dp_soc_ctxt *cfg)
+wlan_cfg_get_dp_soc_ppeds_enable(struct wlan_cfg_dp_soc_ctxt *cfg)
 {
 	return false;
 }
@@ -2410,6 +2458,20 @@ wlan_cfg_get_tx_capt_max_mem(struct wlan_cfg_dp_soc_ctxt *cfg)
 }
 #endif /* WLAN_TX_PKT_CAPTURE_ENH */
 
+#ifdef DP_TX_PACKET_INSPECT_FOR_ILP
+/**
+ * wlan_cfg_get_tx_ilp_inspect_config() - Get TX ILP configuration
+ * @cfg: Configuration Handle
+ *
+ * Return: TX ILP enable or not
+ */
+static inline bool
+wlan_cfg_get_tx_ilp_inspect_config(struct wlan_cfg_dp_soc_ctxt *cfg)
+{
+	return cfg->tx_pkt_inspect_for_ilp;
+}
+#endif
+
 /**
  * wlan_cfg_get_napi_scale_factor() - Get napi scale factor
  * @cfg: soc configuration context
@@ -2428,4 +2490,38 @@ uint8_t wlan_cfg_get_napi_scale_factor(struct wlan_cfg_dp_soc_ctxt *cfg);
 void
 wlan_cfg_soc_update_tgt_params(struct wlan_cfg_dp_soc_ctxt *wlan_cfg_ctx,
 			       struct cdp_ctrl_objmgr_psoc *ctrl_obj);
+
+/**
+ * wlan_cfg_get_pointer_timer_threshold_rx() - Get timer threshold for RX
+ *                                             pointer update
+ * @cfg: soc configuration context
+ *
+ * Return: timer threshold for RX REO Dest ring  pointer update
+ */
+uint16_t
+wlan_cfg_get_pointer_timer_threshold_rx(struct wlan_cfg_dp_soc_ctxt *cfg);
+
+/**
+ * wlan_cfg_get_pointer_num_threshold_rx() - Get number threshold for RX
+ *                                           pointer update
+ * @cfg: soc configuration context
+ *
+ * Return: entries number threshold for RX REO Dest ring  pointer update
+ */
+uint8_t
+wlan_cfg_get_pointer_num_threshold_rx(struct wlan_cfg_dp_soc_ctxt *cfg);
+
+#ifdef WLAN_FEATURE_LOCAL_PKT_CAPTURE
+static inline
+bool wlan_cfg_get_local_pkt_capture(struct wlan_cfg_dp_soc_ctxt *cfg)
+{
+	return cfg->local_pkt_capture;
+}
+#else
+static inline
+bool wlan_cfg_get_local_pkt_capture(struct wlan_cfg_dp_soc_ctxt *cfg)
+{
+	return false;
+}
+#endif
 #endif /*__WLAN_CFG_H*/

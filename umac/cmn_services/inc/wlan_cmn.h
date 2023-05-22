@@ -73,8 +73,12 @@
 /* Max vdev_id */
 #define WLAN_UMAC_VDEV_ID_MAX 0xFF
 
+/* Number of AID values to be reserved for 11az TBR RSTA ranging*/
+#define WLAN_RTT_11AZ_NUM_RSID 16
+
 /* MAX AID */
-#define WLAN_UMAC_MAX_AID 2008
+/* Reserving AID value 1992-2007 from AID pool for 11az TBR RSTA ranging. */
+#define WLAN_UMAC_MAX_AID (2008 - WLAN_RTT_11AZ_NUM_RSID - 1)
 
 /* Invalid pdev_id */
 #define WLAN_INVALID_PDEV_ID 0xFFFFFFFF
@@ -301,6 +305,7 @@
  * @WLAN_UMAC_COMP_COAP:          Constrained Application Protocol component
  * @WLAN_UMAC_COMP_QMI:           QMI component
  * @WLAN_UMAC_COMP_AFC:           AFC component
+ * @WLAN_UMAC_COMP_SAWF:          SAWF component
  * @WLAN_UMAC_COMP_ID_MAX:        Maximum components in UMAC
  *
  * This id is static.
@@ -358,6 +363,7 @@ enum wlan_umac_comp_id {
 	WLAN_UMAC_COMP_COAP               = 48,
 	WLAN_UMAC_COMP_QMI                = 49,
 	WLAN_UMAC_COMP_AFC                = 50,
+	WLAN_UMAC_COMP_SAWF               = 51,
 	WLAN_UMAC_COMP_ID_MAX,
 };
 
@@ -631,6 +637,7 @@ enum wifi_traffic_ac {
  * @WLAN_PEER_NDP:      NDP Peer
  * @WLAN_PEER_MLO_TEMP: MLO Peer Temp (host only node)
  * @WLAN_PEER_RTT_PASN: Ranging PASN peer
+ * @WLAN_PEER_MLO_BRIDGE: MLO Bridge peer
  */
 enum wlan_peer_type {
 	WLAN_PEER_SELF     = 1,
@@ -645,6 +652,7 @@ enum wlan_peer_type {
 	WLAN_PEER_NDP      = 10,
 	WLAN_PEER_MLO_TEMP = 11,
 	WLAN_PEER_RTT_PASN = 12,
+	WLAN_PEER_MLO_BRIDGE = 13,
 };
 
 /**

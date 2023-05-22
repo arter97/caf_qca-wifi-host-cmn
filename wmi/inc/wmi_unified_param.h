@@ -123,6 +123,7 @@
 #define CTL_5G_SIZE 1536
 #define CTL_2G_SIZE 684
 #define MAX_CTL_SIZE (CTL_5G_SIZE > CTL_2G_SIZE ? CTL_5G_SIZE : CTL_2G_SIZE)
+#define MAX_PWTAB_SIZE 3392
 #define IEEE80211_MICBUF_SIZE   (8+8)
 #define IEEE80211_TID_SIZE	17
 #define WME_NUM_AC	4
@@ -515,6 +516,7 @@
 
 #define WMI_MAX_AOA_PHASE_DELTA 31
 #define WMI_MAX_CHAINS_PHASE 2
+#define EGID_INFO_SIZE 4
 
 #include "qdf_atomic.h"
 
@@ -555,6 +557,13 @@
 #define TARGET_GET_INIT_STATUS_MODULE_ID(status) (((status) >> 16) & 0xffff)
 
 #define MAX_ASSOC_IE_LENGTH 1024
+
+/*
+ * The WLAN_MAX_AC macro cannot be changed without breaking
+ * WMI compatibility.
+ * The maximum value of access category
+ */
+#define WMI_HOST_WLAN_MAX_AC  4
 typedef uint32_t TARGET_INIT_STATUS;
 
 /*
@@ -1096,6 +1105,31 @@ typedef struct {
 } wmi_host_mac_addr;
 
 #ifdef WLAN_FEATURE_11BE
+#ifdef WMI_AP_SUPPORT
+/**
+ * struct wlan_host_preferred_links - Preferred link info.
+ * @num_pref_links: non-zero values indicate that preferred link order
+ * is present.
+ * @preffered_link_order: Preferred links in order.
+ * @timeout: timeout values for all the access categories.
+ * @tlt_characterization_params: Bitmask to select Tx-Link Tuple from ordered
+ *  list.
+ *  Bit 0-15 : Each bit maps to the corresponding Link ID
+ *  Bit 16-31: Reserved
+ * @link_control_flags: Link control flags.
+ *  Bit 0: TLT enable/disable
+ *  Bit 1: Preferred Link enable/disable
+ *  Bit 2-31: Reserved
+ */
+struct wlan_host_preferred_links {
+	uint8_t num_pref_links;
+	uint8_t  preffered_link_order[MAX_PREFERRED_LINKS];
+	uint32_t timeout[WMI_HOST_WLAN_MAX_AC];
+	uint32_t tlt_characterization_params;
+	uint32_t link_control_flags;
+};
+#endif
+
 /**
  * struct wlan_host_t2lm_of_tids - TID-to-link mapping info
  * @direction:  0 - Downlink, 1 - uplink 2 - Both uplink and downlink
@@ -1116,12 +1150,16 @@ struct wlan_host_t2lm_of_tids {
  * @peer_macaddr: link peer macaddr
  * @num_dir: number of directions for which T2LM info is available
  * @t2lm_info: TID-to-link mapping info for the given directions
+ * @preferred_links: Preferred link info.
  */
 struct wmi_host_tid_to_link_map_params {
 	uint8_t pdev_id;
 	uint8_t peer_macaddr[QDF_MAC_ADDR_SIZE];
 	uint8_t num_dir;
 	struct wlan_host_t2lm_of_tids t2lm_info[WLAN_T2LM_MAX_DIRECTION];
+#ifdef WMI_AP_SUPPORT
+	struct wlan_host_preferred_links preferred_links;
+#endif
 };
 
 /**
@@ -1153,6 +1191,17 @@ struct wmi_host_tid_to_link_map_resp {
 	enum wlan_t2lm_status status;
 	uint8_t mapping_switch_tsf;
 };
+
+/**
+ * struct wmi_host_link_state_params - MLO link state params
+ * @vdev_id: Vdev id
+ * @mld_mac: mld mac address
+ */
+struct wmi_host_link_state_params {
+	uint8_t vdev_id;
+	uint8_t mld_mac[QDF_MAC_ADDR_SIZE];
+};
+
 #endif /* WLAN_FEATURE_11BE */
 
 #ifdef WLAN_FEATURE_11BE_MLO
@@ -1209,10 +1258,33 @@ struct peer_assoc_mlo_params {
  * struct ml_partner_info - partner link info
  * @vdev_id: vdev id
  * @hw_mld_link_id: unique hw link id across SoCs
+ * @mlo_enabled: indicate is MLO enabled
+ * @mlo_assoc_link: indicate is the link used to initialize the association
+ *                  of mlo connection
+ * @mlo_primary_umac: indicate is the link on primary UMAC, WIN only flag
+ * @mlo_logical_link_index_valid: indicate if the logial link index in is valid
+ * @mlo_peer_id_valid: indicate if the mlo peer id is valid
+ * @mlo_force_link_inactive: force the peer inactive
+ * @emlsr_support: indicate if eMLSR supported
+ * @emlmr_support: indicate if eMLMR supported
+ * @msd_cap_support: indicate if MSD supported
+ * @unused: spare bits
+ * @logical_link_index: Unique index for links of the mlo. Starts with Zero
  */
 struct ml_partner_info {
 	uint32_t vdev_id;
 	uint32_t hw_mld_link_id;
+	uint32_t mlo_enabled:1,
+		 mlo_assoc_link:1,
+		 mlo_primary_umac:1,
+		 mlo_logical_link_index_valid:1,
+		 mlo_peer_id_valid:1,
+		 mlo_force_link_inactive:1,
+		 emlsr_support:1,
+		 emlmr_support:1,
+		 msd_cap_support:1,
+		 unused:23;
+	uint32_t logical_link_index;
 };
 
 /**
@@ -1298,6 +1370,8 @@ struct peer_assoc_ml_partner_links {
  * @akm: AKM info
  * @mlo_params: MLO assoc params
  * @ml_links: MLO partner links
+ * @qcn_node_flag: if node is QCN node
+ * @mesh_node_flag: if node is 4 addr node
  * @peer_dms_capable: is peer DMS capable
  * @reserved: spare bits
  * @t2lm_params: TID-to-link mapping params
@@ -1384,6 +1458,8 @@ struct peer_assoc_params {
 #ifdef WLAN_FEATURE_11BE_MLO
 	struct peer_assoc_mlo_params mlo_params;
 	struct peer_assoc_ml_partner_links ml_links;
+	bool qcn_node_flag;
+	bool mesh_node_flag;
 #endif
 	uint8_t peer_dms_capable:1,
 		reserved:7;
@@ -4003,6 +4079,14 @@ struct btcoex_cfg_params {
 	uint32_t wlan_duration;
 };
 
+/**
+ * struct esl_egid_params - Contains the EGID information
+ * @egid_info: egid_info contains the 128-bit ESL EGID information
+ */
+struct esl_egid_params {
+	uint32_t egid_info[EGID_INFO_SIZE];
+};
+
 #define WMI_HOST_COEX_CONFIG_BUF_MAX_LEN 32 /* 128 bytes */
 /**
  * struct coex_ver_cfg_t
@@ -4573,12 +4657,6 @@ typedef struct {
 #define WMI_HOST_MAX_TX_RATE_VALUES	10	/*Max Tx Rates */
 #define WMI_HOST_MAX_RSSI_VALUES	10	/*Max Rssi values */
 
-/* The WLAN_MAX_AC macro cannot be changed without breaking
- *  * WMI compatibility.
- *   * The maximum value of access category
- *	*/
-#define WMI_HOST_WLAN_MAX_AC  4
-
 /* The WMI_HOST_MAX_CHAINS macro cannot be changed without breaking WMI
  * compatibility.
  * The maximum value of number of chains
@@ -4679,6 +4757,7 @@ typedef struct {
  * @fd_fail_cnt: Toatl number of Fils discovery failed count
  * @unsolicited_prb_succ_cnt: Successful unsolicited probe response frames cnt
  * @unsolicited_prb_fail_cnt: Failed unsolictied probe response frames cnt
+ * @is_mlo_vdev_active: is the mlo vdev currently active
  */
 struct wmi_host_vdev_prb_fils_stats {
 	uint32_t vdev_id;
@@ -4686,6 +4765,7 @@ struct wmi_host_vdev_prb_fils_stats {
 	uint32_t fd_fail_cnt;
 	uint32_t unsolicited_prb_succ_cnt;
 	uint32_t unsolicited_prb_fail_cnt;
+	bool is_mlo_vdev_active;
 };
 
 /**
@@ -5164,6 +5244,7 @@ typedef enum {
 	wmi_mlo_teardown_complete_event_id,
 	wmi_mlo_link_set_active_resp_eventid,
 	wmi_mlo_link_removal_eventid,
+	wmi_mlo_link_disable_request_eventid,
 #endif
 	wmi_pdev_fips_extend_event_id,
 	wmi_roam_frame_event_id,
@@ -5206,6 +5287,18 @@ typedef enum {
 #endif
 #ifdef WLAN_SUPPORT_GAP_LL_PS_MODE
 	wmi_xgap_enable_complete_eventid,
+#endif
+	wmi_pdev_set_tgtr2p_table_eventid,
+#ifdef QCA_MANUAL_TRIGGERED_ULOFDMA
+	wmi_manual_ul_ofdma_trig_feedback_eventid,
+	wmi_manual_ul_ofdma_trig_rx_peer_userinfo_eventid,
+#endif
+#ifdef QCA_STANDALONE_SOUNDING_TRIGGER
+	wmi_vdev_standalone_sound_complete_eventid,
+#endif
+	wmi_csa_ie_received_event_id,
+#ifdef WLAN_FEATURE_11BE_MLO
+	wmi_mlo_link_state_info_eventid,
 #endif
 	wmi_events_max,
 } wmi_conv_event_id;
@@ -5572,6 +5665,12 @@ typedef enum {
 	PDEV_PARAM(pdev_param_enable_peer_retry_stats, UNAVAILABLE_PARAM),
 	PDEV_PARAM(pdev_param_scan_blanking_mode,
 		   PDEV_PARAM_SET_SCAN_BLANKING_MODE),
+	PDEV_PARAM(pdev_param_set_disabled_sched_modes,
+		   PDEV_PARAM_SET_DISABLED_SCHED_MODES),
+	PDEV_PARAM(pdev_param_set_conc_low_latency_mode,
+		   PDEV_PARAM_SET_CONC_LOW_LATENCY_MODE),
+	PDEV_PARAM(pdev_param_rtt_11az_rsid_range,
+		   PDEV_PARAM_RTT_11AZ_RSID_RANGE),
 	pdev_param_max,
 } wmi_conv_pdev_params_id;
 
@@ -5886,6 +5985,12 @@ typedef enum {
 	VDEV_PARAM(vdev_param_ap_keepalive_max_idle_inactive_secs,
 		   VDEV_PARAM_AP_KEEPALIVE_MAX_IDLE_INACTIVE_TIME_SECS),
 	VDEV_PARAM(vdev_param_set_extra_eht_ltf, VDEV_PARAM_EXTRA_EHT_LTF),
+	VDEV_PARAM(vdev_param_set_disabled_modes,
+		   VDEV_PARAM_SET_DISABLED_SCHED_MODES),
+	VDEV_PARAM(vdev_param_set_sap_ps_with_twt,
+		   VDEV_PARAM_SET_SAP_PS_WITH_TWT),
+	VDEV_PARAM(vdev_param_chwidth_with_notify,
+		   VDEV_PARAM_CHWIDTH_WITH_NOTIFY),
 	vdev_param_max,
 } wmi_conv_vdev_param_id;
 
@@ -6155,6 +6260,11 @@ typedef enum {
 	wmi_service_tdls_ax_support,
 #endif
 #endif
+#ifdef WLAN_FEATURE_11BE_MLO
+#ifdef FEATURE_WLAN_TDLS
+	wmi_service_tdls_mlo_support,
+#endif
+#endif
 #ifdef WLAN_FEATURE_BIG_DATA_STATS
 	wmi_service_big_data_support,
 #endif
@@ -6204,6 +6314,7 @@ typedef enum {
 	wmi_service_rtt_11az_mac_sec_support,
 	wmi_service_rtt_11az_ntb_support,
 	wmi_service_rtt_11az_tb_support,
+	wmi_service_rtt_11az_tb_rsta_support,
 #endif
 	wmi_service_pktlog_decode_info_support,
 #ifdef WLAN_FEATURE_ROAM_OFFLOAD
@@ -6220,6 +6331,7 @@ typedef enum {
 	wmi_service_tdls_6g_support,
 #endif
 	wmi_service_tdls_wideband_support,
+	wmi_service_tdls_concurrency_support,
 #endif
 	wmi_service_is_my_mgmt_frame,
 	wmi_service_linkspeed_roam_trigger_support,
@@ -6235,6 +6347,18 @@ typedef enum {
 	wmi_service_wpa3_sha384_roam_support,
 	wmi_service_multiple_vdev_restart_bmap,
 	wmi_service_v1a_v1b_supported,
+	wmi_service_self_mld_roam_between_dbs_and_hbs,
+	wmi_service_cfr_capture_pdev_id_soc,
+#ifdef QCA_MANUAL_TRIGGERED_ULOFDMA
+	wmi_service_manual_ulofdma_trigger_support,
+#endif
+	wmi_service_pre_rx_timeout,
+#ifdef QCA_STANDALONE_SOUNDING_TRIGGER
+	wmi_service_standalone_sound,
+#endif
+	wmi_service_cca_busy_info_for_each_20mhz,
+	wmi_service_vdev_param_chwidth_with_notify_support,
+
 	wmi_services_max,
 } wmi_conv_service_ids;
 #define WMI_SERVICE_UNAVAILABLE 0xFFFF
@@ -6605,6 +6729,8 @@ struct target_feature_set {
  * support
  * @notify_frame_support: capability to mark notify frames from host
  * @dp_peer_meta_data_ver: datapath peer meta data version flag
+ * @tx_ilp_enable: capability to support TX ILP from host
+ * @rf_path: Indicates RF path 0 primary, 1 secondary
  */
 typedef struct {
 	uint32_t num_vdevs;
@@ -6733,6 +6859,10 @@ typedef struct {
 	uint32_t num_max_active_vdevs;
 	uint8_t notify_frame_support;
 	uint8_t dp_peer_meta_data_ver;
+#ifdef DP_TX_PACKET_INSPECT_FOR_ILP
+	uint8_t tx_ilp_enable;
+#endif
+	bool rf_path;
 } target_resource_config;
 
 /**
@@ -6978,7 +7108,8 @@ typedef struct {
 /* Maximum MCS rates supported; 4 rates in each dword */
 /* Maximum MCS ratecodes with 11ax */
 #define WMI_SA_MAX_MCS_RATES 96
-#define WMI_SA_MAX_RATE_COUNTERS 4
+/* Maximum ratecode per BW supported legacy, 20, 40, 80, 160 and 320 MHz */
+#define WMI_SA_MAX_RATE_COUNTERS 6
 /* Maximum rate series used for transmission */
 #define SA_MAX_RATE_SERIES 2
 
@@ -6995,14 +7126,21 @@ typedef struct {
 #define SA_MAX_LEGACY_RATE_WORDS 6
 #define SA_MAX_HT_RATE_WORDS 48
 
-/* TODO: ratecode_160 needs to add for future chips */
+#define SA_INVALID_PARAM_VALUE 0xffff
+/* Mask to check PER threshold */
+#define SA_MASK_PER_TH         0xff
+/* Mask to check Minimum packets for Smart Antenna Training */
+#define SA_MASK_MIN_PKTS       0xffff
+
 /**
  * struct wmi_sa_rate_cap - smart antenna rat capabilities
  * @pdev_id: pdev_id
  * @ratecode_legacy: Rate code array for CCK OFDM
- * @ratecode_20: Rate code array for 20MHz BW
- * @ratecode_40: Rate code array for 40MHz BW
- * @ratecode_80: Rate code array for 80MHz BW
+ * @ratecode_20: Rate code array for 20 MHz BW
+ * @ratecode_40: Rate code array for 40 MHz BW
+ * @ratecode_80: Rate code array for 80 MHz BW
+ * @ratecode_160: Rate code array for 160 MHz BW
+ * @ratecode_320: Rate code array for 320 MHz BW
  * @ratecount: Max Rate count for each mode
  */
 typedef struct {
@@ -7010,6 +7148,8 @@ typedef struct {
 	uint16_t ratecode_20[WMI_SA_MAX_MCS_RATES];
 	uint16_t ratecode_40[WMI_SA_MAX_MCS_RATES];
 	uint16_t ratecode_80[WMI_SA_MAX_MCS_RATES];
+	uint16_t ratecode_160[WMI_SA_MAX_MCS_RATES];
+	uint16_t ratecode_320[WMI_SA_MAX_MCS_RATES];
 	uint8_t ratecount[WMI_SA_MAX_RATE_COUNTERS];
 } wmi_sa_rate_cap;
 
@@ -7103,6 +7243,8 @@ typedef enum {
  * @WMI_HOST_PEER_PARAM_ENABLE_FT: Notify FT roam
  * @WMI_HOST_PEER_CHWIDTH_PUNCTURE_20MHZ_BITMAP: Peer channel bandwidth and
  *                                         puncture bitmap
+ * @WMI_HOST_PEER_FT_ROAMING_PEER_UPDATE: Reset PN value on
+ *                                        every roam event
  */
 enum {
 	PEER_PARAM(PEER_MIMO_PS_STATE),
@@ -7136,6 +7278,8 @@ enum {
 	PEER_PARAM(PEER_PARAM_OFDMA_ENABLE),
 	PEER_PARAM(PEER_PARAM_ENABLE_FT),
 	PEER_PARAM(PEER_CHWIDTH_PUNCTURE_20MHZ_BITMAP),
+	PEER_PARAM(PEER_FT_ROAMING_PEER_UPDATE),
+
 };
 #define WMI_HOST_PEER_MIMO_PS_NONE	0x0
 #define WMI_HOST_PEER_MIMO_PS_STATIC	0x1
@@ -9114,6 +9258,7 @@ struct wmi_neighbor_report_data {
 /**
  * struct wmi_roam_trigger_info() - Roam trigger related details
  * @present:            Flag to check if the roam_trigger_info tlv is present
+ * @common_roam:        Flag to indicate common roam or special roam
  * @trigger_reason:     Roam trigger reason(enum WMI_ROAM_TRIGGER_REASON_ID)
  * @trigger_sub_reason: Sub reason for roam trigger if multiple roam scans
  * @current_rssi:       Connected AP RSSI
@@ -9139,6 +9284,7 @@ struct wmi_neighbor_report_data {
  */
 struct wmi_roam_trigger_info {
 	bool present;
+	bool common_roam;
 	uint32_t trigger_reason;
 	uint32_t trigger_sub_reason;
 	uint32_t current_rssi;

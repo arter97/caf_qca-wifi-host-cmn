@@ -25,6 +25,9 @@
 #include <include/wlan_pdev_mlme.h>
 #include <include/wlan_vdev_mlme.h>
 #include "wlan_cm_public_struct.h"
+#ifdef WLAN_FEATURE_ROAM_OFFLOAD
+#include "wlan_cm_roam_public_struct.h"
+#endif
 #include "wlan_twt_public_structs.h"
 
 /**
@@ -79,6 +82,10 @@
  * @scan_ie: scan ie element pointer
  * @dot11mode_filter: dot11mode filter enumn pointer
  *
+ * @mlme_cm_roam_rt_stats_cb: Roam stats cb
+ * @roam_stats_event: roam_stats_event pointer
+ * @idx: TLV idx for roam_stats_event
+ *
  * @mlme_cm_ft_preauth_cmpl_cb: Roam ft preauth complete cb
  * @vdev: vdev pointer
  * @rsp: preauth response pointer
@@ -125,6 +132,8 @@ struct mlme_cm_ops {
 	QDF_STATUS (*mlme_cm_roam_get_scan_ie_cb)(struct wlan_objmgr_vdev *vdev,
 				struct element_info *scan_ie,
 				enum dot11_mode_filter *dot11mode_filter);
+	void (*mlme_cm_roam_rt_stats_cb)(struct roam_stats_event *roam_stats,
+					 uint8_t idx);
 #endif
 #ifdef WLAN_FEATURE_PREAUTH_ENABLE
 	QDF_STATUS (*mlme_cm_ft_preauth_cmpl_cb)(
@@ -147,12 +156,15 @@ struct mlme_cm_ops {
  * struct mlme_vdev_mgr_ops - MLME VDEV mgr osif callbacks
  * @mlme_vdev_mgr_set_mac_addr_response: Callback to indicate set MAC address
  *                                       response to osif
+ * @mlme_vdev_mgr_send_scan_done_complete_cb: Callback to indicate scan done
+ *                                            complete to osif
  */
 struct mlme_vdev_mgr_ops {
 #ifdef WLAN_FEATURE_DYNAMIC_MAC_ADDR_UPDATE
 	QDF_STATUS (*mlme_vdev_mgr_set_mac_addr_response)(uint8_t vdev_id,
 							  uint8_t resp_status);
 #endif
+	void (*mlme_vdev_mgr_send_scan_done_complete_cb)(uint8_t vdev_id);
 };
 
 /**
@@ -301,6 +313,8 @@ struct mlme_twt_ops {
  * @mlme_cm_ext_rso_stop_cb:                callback to send rso stop to FW
  * @mlme_cm_ext_reassoc_req_cb:             callback for reassoc request to
  *                                          VDEV/PEER SM
+ * @mlme_psoc_ext_hdl_enable: to enable mlme ext param handler
+ * @mlme_psoc_ext_hdl_disable: to disable mlme ext param handler
  * @mlme_vdev_send_set_mac_addr:            callback to send set MAC address
  *                                          request to FW
  * @mlme_ext_get_acs_inprogress:            callback to determine if ACS is
@@ -376,6 +390,8 @@ struct mlme_ext_ops {
 	QDF_STATUS (*mlme_cm_ext_reassoc_req_cb)(
 				struct wlan_objmgr_vdev *vdev,
 				struct wlan_cm_vdev_reassoc_req *req);
+	QDF_STATUS (*mlme_psoc_ext_hdl_enable)(struct wlan_objmgr_psoc *psoc);
+	QDF_STATUS (*mlme_psoc_ext_hdl_disable)(struct wlan_objmgr_psoc *psoc);
 #ifdef WLAN_FEATURE_DYNAMIC_MAC_ADDR_UPDATE
 	QDF_STATUS (*mlme_vdev_send_set_mac_addr)(
 						struct qdf_mac_addr mac_addr,
@@ -437,6 +453,22 @@ QDF_STATUS mlme_psoc_ops_ext_hdl_create(struct psoc_mlme_obj *psoc_mlme);
  *         Else FAILURE
  */
 QDF_STATUS mlme_psoc_ops_ext_hdl_destroy(struct psoc_mlme_obj *psoc_mlme);
+
+/**
+ * mlme_psoc_ext_enable_cb() - to enable mlme ext param handler callback
+ * @psoc: psoc common object
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS mlme_psoc_ext_enable_cb(struct wlan_objmgr_psoc *psoc);
+
+/**
+ * mlme_psoc_ext_disable_cb() - to disable mlme ext param handler callback
+ * @psoc: psoc common object
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS mlme_psoc_ext_disable_cb(struct wlan_objmgr_psoc *psoc);
 
 /**
  * mlme_pdev_ops_ext_hdl_create - Alloc PDEV mlme ext handle
@@ -933,6 +965,14 @@ QDF_STATUS mlme_cm_osif_roam_abort_ind(struct wlan_objmgr_vdev *vdev);
 QDF_STATUS mlme_cm_osif_roam_complete(struct wlan_objmgr_vdev *vdev);
 
 /**
+ * mlme_cm_osif_roam_rt_stats() - osif Roam stats callback
+ * @roam_stats: roam_stats_event pointer
+ * @idx: TLV idx for roam_stats_event
+ *
+ * Return: void
+ */
+void mlme_cm_osif_roam_rt_stats(struct roam_stats_event *roam_stats, uint8_t idx);
+/**
  * mlme_cm_osif_roam_get_scan_params() - osif Roam get scan params callback
  * @vdev: vdev pointer
  * @scan_ie: Pointer to scan_ie
@@ -1041,6 +1081,14 @@ void mlme_set_osif_twt_cb(osif_twt_get_global_ops_cb twt_osif_ops);
  * Return: True if max chan switch is enabled else false
  */
 bool mlme_max_chan_switch_is_set(struct wlan_objmgr_psoc *psoc);
+
+/**
+ * mlme_send_scan_done_complete_cb() - send scan done indication to upper layer
+ * @vdev_id: vdev id
+ *
+ * Return: none
+ */
+void mlme_send_scan_done_complete_cb(uint8_t vdev_id);
 
 #ifdef WLAN_FEATURE_DYNAMIC_MAC_ADDR_UPDATE
 /**

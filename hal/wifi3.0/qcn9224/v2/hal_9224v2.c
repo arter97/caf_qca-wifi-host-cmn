@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -358,7 +358,7 @@ struct hal_hw_srng_config hw_srng_table_9224v2[] = {
 		.reg_size = {},
 		.max_size = HAL_RXDMA_MAX_RING_SIZE,
 	},
-#ifdef QCA_MONITOR_2_0_SUPPORT
+#ifdef WLAN_PKT_CAPTURE_RX_2_0
 	{ /* RXDMA_MONITOR_BUF */
 		.start_ring_id = HAL_SRNG_WMAC1_SW2RXDMA2_BUF,
 		.max_rings = 1,
@@ -388,7 +388,7 @@ struct hal_hw_srng_config hw_srng_table_9224v2[] = {
 		.reg_size = {},
 		.max_size = HAL_RXDMA_MAX_RING_SIZE,
 	},
-#ifdef QCA_MONITOR_2_0_SUPPORT
+#ifdef WLAN_PKT_CAPTURE_RX_2_0
 	{ /* RXDMA_MONITOR_DST */
 		.start_ring_id = HAL_SRNG_WMAC1_RXMON2SW0,
 		.max_rings = 2,
@@ -421,8 +421,10 @@ struct hal_hw_srng_config hw_srng_table_9224v2[] = {
 
 	{ /* DIR_BUF_RX_DMA_SRC */
 		.start_ring_id = HAL_SRNG_DIR_BUF_RX_SRC_DMA_RING,
-		/* one ring for spectral and one ring for cfr */
-		.max_rings = 2,
+		/* one ring for spectral, one ring for cfr and
+		 * another one ring for txbf cv upload
+		 */
+		.max_rings = 3,
 		.entry_size = 2,
 		.lmac_ring = TRUE,
 		.ring_dir = HAL_SRNG_SRC_RING,
@@ -500,7 +502,7 @@ struct hal_hw_srng_config hw_srng_table_9224v2[] = {
 		HWIO_WBM_R0_PPE_RELEASE_RING_BASE_MSB_RING_SIZE_BMSK >>
 		HWIO_WBM_R0_PPE_RELEASE_RING_BASE_MSB_RING_SIZE_SHFT,
 	},
-#ifdef QCA_MONITOR_2_0_SUPPORT
+#ifdef WLAN_PKT_CAPTURE_TX_2_0
 	{ /* TX_MONITOR_BUF */
 		.start_ring_id = HAL_SRNG_SW2TXMON_BUF0,
 		.max_rings = 1,
@@ -547,8 +549,8 @@ struct hal_hw_srng_config hw_srng_table_9224v2[] = {
 	},
 };
 
-/*
- * hal_reo_config_reo2ppe_dest_info() - Configure reo2ppe dest info
+/**
+ * hal_reo_config_reo2ppe_dest_info_9224() - Configure reo2ppe dest info
  * @hal_soc_hdl: HAL SoC Context
  *
  * Return: None.
@@ -564,8 +566,7 @@ void hal_reo_config_reo2ppe_dest_info_9224(hal_soc_handle_t hal_soc_hdl)
 #define PMM_REG_BASE_QCN9224_V2 0xB500FC
 
 /**
- * hal_get_tsf2_scratch_reg_qcn9224_v2(): API to read tsf2 scratch register
- *
+ * hal_get_tsf2_scratch_reg_qcn9224_v2() - API to read tsf2 scratch register
  * @hal_soc_hdl: HAL soc context
  * @mac_id: mac id
  * @value: Pointer to update tsf2 value
@@ -593,8 +594,7 @@ static void hal_get_tsf2_scratch_reg_qcn9224_v2(hal_soc_handle_t hal_soc_hdl,
 }
 
 /**
- * hal_get_tqm_scratch_reg_qcn9224_v2(): API to read tqm scratch register
- *
+ * hal_get_tqm_scratch_reg_qcn9224_v2() - API to read tqm scratch register
  * @hal_soc_hdl: HAL soc context
  * @value: Pointer to update tqm value
  *
@@ -628,8 +628,10 @@ static void hal_hw_txrx_ops_override_qcn9224_v2(struct hal_soc *hal_soc)
 					hal_get_tqm_scratch_reg_qcn9224_v2;
 }
 /**
- * hal_qcn9224_attach()- Attach 9224 target specific hal_soc ops,
- *			  offset and srng table
+ * hal_qcn9224v2_attach() - Attach 9224v2 target specific hal_soc ops,
+ *			    offset and srng table
+ * @hal_soc: HAL SoC context
+ *
  * Return: void
  */
 void hal_qcn9224v2_attach(struct hal_soc *hal_soc)
