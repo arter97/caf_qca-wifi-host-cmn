@@ -15,8 +15,6 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-#ifdef IPA_OFFLOAD
-
 #include <wlan_ipa_ucfg_api.h>
 #include <wlan_ipa_core.h>
 #include <qdf_ipa_wdi3.h>
@@ -41,6 +39,8 @@
 #ifdef FEATURE_WDS
 #include "dp_txrx_wds.h"
 #endif
+
+#ifdef IPA_OFFLOAD
 
 /* Hard coded config parameters until dp_ops_cfg.cfg_attach implemented */
 #define CFG_IPA_UC_TX_BUF_SIZE_DEFAULT            (2048)
@@ -1299,7 +1299,7 @@ static void dp_ipa_opt_wifi_dp_cleanup(struct dp_soc *soc, struct dp_pdev *pdev)
 }
 #else
 static inline
-void dp_opt_wifi_dp(struct dp_soc *soc, struct dp_pdev *pdev)
+void dp_ipa_opt_wifi_dp_cleanup(struct dp_soc *soc, struct dp_pdev *pdev)
 {
 }
 #endif

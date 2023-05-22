@@ -3130,6 +3130,10 @@ QDF_STATUS (*send_mlo_vdev_tid_to_link_map)(
 			wmi_unified_t wmi_handle,
 			struct wmi_host_tid_to_link_map_ap_params *params);
 
+QDF_STATUS (*send_mlo_link_state_request)(
+			wmi_unified_t wmi_handle,
+			struct wmi_host_link_state_params *params);
+
 QDF_STATUS (*extract_mlo_vdev_tid_to_link_map_event)(
 		struct wmi_unified *wmi_handle,
 		uint8_t *buf,
@@ -3139,6 +3143,12 @@ QDF_STATUS (*extract_mlo_vdev_bcast_tid_to_link_map_event)(
 			struct wmi_unified *wmi_handle,
 			void *buf,
 			struct mlo_bcast_t2lm_info *bcast_info);
+
+QDF_STATUS (*extract_mlo_link_state_event)(
+			struct wmi_unified *wmi_handle,
+			void *buf,
+			struct ml_link_state_info_event *params);
+
 #endif /* WLAN_FEATURE_11BE */
 
 QDF_STATUS
@@ -3206,6 +3216,10 @@ QDF_STATUS (*send_update_edca_pifs_param_cmd)(
 QDF_STATUS (*extract_sap_coex_cap_service_ready_ext2)(
 			wmi_unified_t wmi_handle, uint8_t *event,
 			struct wmi_host_coex_fix_chan_cap *cap);
+QDF_STATUS
+(*extract_csa_ie_received_ev_params)(wmi_unified_t wmi_handle,
+				     void *evt_buf, uint8_t *vdev_id,
+				     struct csa_offload_params *csa_event);
 };
 
 /* Forward declaration for psoc*/
