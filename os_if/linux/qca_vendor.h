@@ -11199,11 +11199,14 @@ enum qca_coex_config_profiles {
  *	weights to default values.
  * @QCA_WLAN_VENDOR_ATTR_COEX_CONFIG_THREE_WAY_COEX_START: Start to config
  *	weights with configurability value.
+ * @QCA_WLAN_VENDOR_ATTR_COEX_CONFIG_SET_BT_RX_PER_THRESHOLD: Set the bt per
+ * threshold value.
  */
 enum qca_vendor_attr_coex_config_types {
 	QCA_WLAN_VENDOR_ATTR_COEX_CONFIG_INVALID = 0,
 	QCA_WLAN_VENDOR_ATTR_COEX_CONFIG_THREE_WAY_COEX_RESET = 1,
 	QCA_WLAN_VENDOR_ATTR_COEX_CONFIG_THREE_WAY_COEX_START = 2,
+	QCA_WLAN_VENDOR_ATTR_COEX_CONFIG_SET_BT_RX_PER_THRESHOLD = 3,
 	QCA_WLAN_VENDOR_ATTR_COEX_CONFIG_TYPE_MAX
 };
 
