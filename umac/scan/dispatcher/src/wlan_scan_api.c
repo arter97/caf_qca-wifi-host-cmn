@@ -886,3 +886,21 @@ wlan_scan_get_scan_entry_by_mac_freq(struct wlan_objmgr_pdev *pdev,
 {
 	return scm_scan_get_scan_entry_by_mac_freq(pdev, bssid, freq);
 }
+
+bool wlan_scan_get_aux_support(struct wlan_objmgr_psoc *psoc)
+
+{
+	struct wlan_scan_obj *scan_obj;
+
+	scan_obj = wlan_psoc_get_scan_obj(psoc);
+	if (!scan_obj)
+		return false;
+
+	if (scan_obj->aux_mac_support)
+		scm_debug("aux mac support: %d", scan_obj->aux_mac_support);
+	else
+		scm_debug("aux mac not supported");
+
+	return scan_obj->aux_mac_support;
+}
+
