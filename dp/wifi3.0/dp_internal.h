@@ -3662,14 +3662,14 @@ static inline
 void *dp_context_alloc_mem(struct dp_soc *soc, enum dp_ctxt_type ctxt_type,
 			   size_t ctxt_size)
 {
-	return qdf_mem_valloc(ctxt_size);
+	return qdf_mem_malloc(ctxt_size);
 }
 
 static inline
 void dp_context_free_mem(struct dp_soc *soc, enum dp_ctxt_type ctxt_type,
 			 void *vaddr)
 {
-	qdf_mem_vfree(vaddr);
+	qdf_mem_free(vaddr);
 }
 
 static inline
