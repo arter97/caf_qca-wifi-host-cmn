@@ -1,6 +1,7 @@
 
 /*
  * Copyright (c) 2013-2020 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -192,14 +193,4 @@ QDF_STATUS wmi_extract_nan_event_rsp(wmi_unified_t wmi_handle, void *evt_buf,
 				     struct nan_event_params *temp_evt_params,
 				     uint8_t **nan_msg_buf);
 
-/**
- * wmi_extract_ndp_host_event - api to extract ndp event from event buffer
- * @wmi_hdl: wmi handle
- * @data: event buffer
- * @evt: event buffer to populate
- *
- * Return: status of operation
- */
-QDF_STATUS wmi_extract_ndp_host_event(wmi_unified_t wmi_handle, uint8_t *data,
-				      struct nan_datapath_host_event *evt);
 #endif /* _WMI_UNIFIED_NAN_API_H_ */
