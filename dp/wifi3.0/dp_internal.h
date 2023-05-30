@@ -3688,7 +3688,7 @@ void dp_context_free_mem(struct dp_soc *soc, enum dp_ctxt_type ctxt_type,
  * Return: None
  */
 void dp_desc_multi_pages_mem_alloc(struct dp_soc *soc,
-				   enum dp_desc_type desc_type,
+				   enum qdf_dp_desc_type desc_type,
 				   struct qdf_mem_multi_page_t *pages,
 				   size_t element_size,
 				   uint32_t element_num,
@@ -3710,7 +3710,7 @@ void dp_desc_multi_pages_mem_alloc(struct dp_soc *soc,
  * Return: None
  */
 void dp_desc_multi_pages_mem_free(struct dp_soc *soc,
-				  enum dp_desc_type desc_type,
+				  enum qdf_dp_desc_type desc_type,
 				  struct qdf_mem_multi_page_t *pages,
 				  qdf_dma_context_t memctxt,
 				  bool cacheable);
@@ -3732,7 +3732,7 @@ void dp_context_free_mem(struct dp_soc *soc, enum dp_ctxt_type ctxt_type,
 
 static inline
 void dp_desc_multi_pages_mem_alloc(struct dp_soc *soc,
-				   enum dp_desc_type desc_type,
+				   enum qdf_dp_desc_type desc_type,
 				   struct qdf_mem_multi_page_t *pages,
 				   size_t element_size,
 				   uint32_t element_num,
@@ -3745,7 +3745,7 @@ void dp_desc_multi_pages_mem_alloc(struct dp_soc *soc,
 
 static inline
 void dp_desc_multi_pages_mem_free(struct dp_soc *soc,
-				  enum dp_desc_type desc_type,
+				  enum qdf_dp_desc_type desc_type,
 				  struct qdf_mem_multi_page_t *pages,
 				  qdf_dma_context_t memctxt,
 				  bool cacheable)
