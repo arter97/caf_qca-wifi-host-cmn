@@ -39,7 +39,7 @@ static ATH_DEBUG_MASK_DESCRIPTION g_htc_debug_description[] = {
 ATH_DEBUG_INSTANTIATE_MODULE_VAR(htc,
 				 "htc",
 				 "Host Target Communications",
-				 ATH_DEBUG_MASK_DEFAULTS | ATH_DEBUG_INFO |
+				 ATH_DEBUG_MASK_DEFAULTS |
 				 ATH_DEBUG_SETUP,
 				 ATH_DEBUG_DESCRIPTION_COUNT
 					 (g_htc_debug_description),
