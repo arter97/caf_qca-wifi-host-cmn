@@ -20,10 +20,10 @@
 #ifndef _WLAN_IPA_CORE_H_
 #define _WLAN_IPA_CORE_H_
 
-#ifdef IPA_OFFLOAD
-
 #include "wlan_ipa_priv.h"
 #include "wlan_ipa_public_struct.h"
+
+#ifdef IPA_OFFLOAD
 
 /**
  * wlan_ipa_is_enabled() - Is IPA enabled?
@@ -45,6 +45,18 @@ static inline bool wlan_ipa_is_enabled(struct wlan_ipa_config *ipa_cfg)
 static inline bool wlan_ipa_uc_is_enabled(struct wlan_ipa_config *ipa_cfg)
 {
 	return WLAN_IPA_IS_CONFIG_ENABLED(ipa_cfg, WLAN_IPA_UC_ENABLE_MASK);
+}
+
+/**
+ * wlan_ipa_is_opt_wifi_dp_enabled() - Is IPA optional wifi dp enabled?
+ * @ipa_cfg: IPA config
+ *
+ * Return: true if IPA opt wifi dp is enabled, false otherwise
+ */
+static inline bool wlan_ipa_is_opt_wifi_dp_enabled(
+						struct wlan_ipa_config *ipa_cfg)
+{
+	return WLAN_IPA_IS_CONFIG_ENABLED(ipa_cfg, WLAN_IPA_OPT_WIFI_DP);
 }
 
 /**

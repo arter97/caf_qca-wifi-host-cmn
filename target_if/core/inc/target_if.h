@@ -205,6 +205,7 @@ struct target_version_info {
  * @pdev_id_to_phy_id_map: pdev id to phy id map
  * @is_pdevid_to_phyid_map: true if @pdev_id_to_phy_id_map is valid
  * @scan_radio_caps: scan radio capabilities
+ * @msdu_idx_qtype_map: HTT msdu index to qtype mapping table
  * @device_mode: Global Device mode
  * @sbs_lower_band_end_freq: sbs lower band end frequency
  * @health_mon_param: health monitor params
@@ -241,6 +242,7 @@ struct tgt_info {
 	uint8_t pdev_id_to_phy_id_map[WLAN_UMAC_MAX_PDEVS];
 	bool is_pdevid_to_phyid_map;
 	struct wlan_psoc_host_scan_radio_caps *scan_radio_caps;
+	uint8_t *msdu_idx_qtype_map;
 	uint32_t device_mode;
 	uint32_t sbs_lower_band_end_freq;
 #ifdef HEALTH_MON_SUPPORT
@@ -580,6 +582,14 @@ bool target_is_tgt_type_qcn6122(uint32_t target_type);
  * Return: true if the target_type is QCN9160, else false.
  */
 bool target_is_tgt_type_qcn9160(uint32_t target_type);
+
+/**
+ * target_is_tgt_type_qcn6432() - Check if the target type is QCN6432 (Pebble)
+ * @target_type: target type to be checked.
+ *
+ * Return: true if the target_type is QCN6432, else false.
+ */
+bool target_is_tgt_type_qcn6432(uint32_t target_type);
 
 /**
  * target_is_tgt_type_qcn7605() - Check if the target type is QCN7605
@@ -2819,6 +2829,22 @@ static inline uint32_t target_psoc_get_target_cap_flags
 	return psoc_info->info.service_ext2_param.target_cap_flags;
 }
 
+/**
+ * target_psoc_get_target_dp_peer_meta_data_ver() - Get DP RX peer metadata
+ *                                                  version reported by target
+ * @psoc_info:  pointer to structure target_psoc_info
+ *
+ * Return: value of DP RX peer metadata version
+ */
+static inline uint8_t target_psoc_get_target_dp_peer_meta_data_ver(
+				struct target_psoc_info *psoc_info)
+{
+	if (!psoc_info)
+		return 0;
+
+	return psoc_info->info.service_ext2_param.dp_peer_meta_data_ver;
+}
+
 #if defined(WLAN_FEATURE_11BE_MLO) && defined(WLAN_MLO_MULTI_CHIP)
 #define PDEV_INVALID_HW_LINK_ID 0xFFFF
 
@@ -2901,7 +2927,8 @@ static inline void target_if_set_reo_shared_qref_feature(struct wlan_objmgr_psoc
 	}
 
 	if (target_psoc_get_target_type(tgt_hdl) == TARGET_TYPE_QCN9224 ||
-	    target_psoc_get_target_type(tgt_hdl) == TARGET_TYPE_QCA5332)
+	    target_psoc_get_target_type(tgt_hdl) == TARGET_TYPE_QCA5332 ||
+	    target_psoc_get_target_type(tgt_hdl) == TARGET_TYPE_QCN6432)
 		info->wlan_res_cfg.reo_qdesc_shared_addr_table_enabled = true;
 	else
 		info->wlan_res_cfg.reo_qdesc_shared_addr_table_enabled = false;

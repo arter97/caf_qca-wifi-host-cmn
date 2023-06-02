@@ -1454,6 +1454,8 @@ struct hal_hw_txrx_ops {
 	bool (*hal_tx_ring_halt_poll)(hal_soc_handle_t hal_soc_hdl);
 	uint32_t (*hal_tx_get_num_ppe_vp_search_idx_tbl_entries)(
 					hal_soc_handle_t hal_soc_hdl);
+	uint32_t (*hal_tx_ring_halt_get)(hal_soc_handle_t hal_soc_hdl);
+	bool (*hal_rx_en_mcast_fp_data_filter)(void);
 };
 
 /**
@@ -1670,7 +1672,6 @@ void hal_qca8074_attach(struct hal_soc *hal_soc);
  */
 void hal_kiwi_attach(struct hal_soc *hal_soc);
 
-void hal_qcn9224v1_attach(struct hal_soc *hal_soc);
 void hal_qcn9224v2_attach(struct hal_soc *hal_soc);
 void hal_wcn6450_attach(struct hal_soc *hal_soc);
 

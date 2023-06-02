@@ -479,6 +479,9 @@ static void target_if_target_tx_ops_register(
 	target_tx_ops->tgt_is_tgt_type_qcn9160 =
 		target_is_tgt_type_qcn9160;
 
+	target_tx_ops->tgt_is_tgt_type_qcn6432 =
+		target_is_tgt_type_qcn6432;
+
 	target_tx_ops->tgt_is_tgt_type_qcn7605 =
 		target_is_tgt_type_qcn7605;
 
@@ -792,6 +795,7 @@ QDF_STATUS target_if_free_psoc_tgt_info(struct wlan_objmgr_psoc *psoc)
 	init_deinit_dbr_ring_cap_free(tgt_psoc_info);
 	init_deinit_spectral_scaling_params_free(tgt_psoc_info);
 	init_deinit_scan_radio_cap_free(tgt_psoc_info);
+	init_deinit_msdu_idx_qtype_map_free(tgt_psoc_info);
 
 	qdf_event_destroy(&tgt_psoc_info->info.event);
 
@@ -838,6 +842,11 @@ bool target_is_tgt_type_qcn6122(uint32_t target_type)
 bool target_is_tgt_type_qcn9160(uint32_t target_type)
 {
 	return target_type == TARGET_TYPE_QCN9160;
+}
+
+bool target_is_tgt_type_qcn6432(uint32_t target_type)
+{
+	return target_type == TARGET_TYPE_QCN6432;
 }
 
 bool target_is_tgt_type_qcn7605(uint32_t target_type)
@@ -1029,6 +1038,10 @@ target_is_scan_blanking_enabled(struct wlan_objmgr_pdev *pdev,
 	int32_t phy_id;
 	struct target_psoc_info *tgt_psoc_info;
 	struct target_pdev_info *tgt_pdev;
+	uint32_t target_type = TARGET_TYPE_UNKNOWN;
+	struct wlan_lmac_if_target_tx_ops *target_type_tx_ops;
+	struct wlan_lmac_if_tx_ops *tx_ops;
+
 
 	if (!blanking_en) {
 		target_if_err("input argument is null");
@@ -1051,6 +1064,21 @@ target_is_scan_blanking_enabled(struct wlan_objmgr_pdev *pdev,
 	if (!tgt_psoc_info) {
 		target_if_err("target_psoc_info is null");
 		return QDF_STATUS_E_NULL_VALUE;
+	}
+
+	tx_ops = wlan_psoc_get_lmac_if_txops(psoc);
+	if (!tx_ops) {
+		target_if_err("tx_ops is null");
+		return QDF_STATUS_E_NULL_VALUE;
+	}
+
+	target_type_tx_ops = &tx_ops->target_tx_ops;
+	if (target_type_tx_ops->tgt_get_tgt_type)
+		target_type = target_type_tx_ops->tgt_get_tgt_type(psoc);
+
+	if (target_type == TARGET_TYPE_AR9888) {
+		*blanking_en = false;
+		return QDF_STATUS_SUCCESS;
 	}
 
 	num_scan_radio_caps =

@@ -351,32 +351,46 @@ void wlan_cm_set_candidate_custom_sort_cb(
 
 #endif
 
-struct reduced_neighbor_report *wlan_cm_get_rnr(struct wlan_objmgr_vdev *vdev,
-						wlan_cm_id cm_id)
+QDF_STATUS wlan_cm_get_rnr(struct wlan_objmgr_vdev *vdev, wlan_cm_id cm_id,
+			   struct reduced_neighbor_report *rnr)
 {
 	enum QDF_OPMODE op_mode = wlan_vdev_mlme_get_opmode(vdev);
-	struct cm_req *cm_req;
-	struct cnx_mgr *cm_ctx;
 
 	if (op_mode != QDF_STA_MODE && op_mode != QDF_P2P_CLIENT_MODE) {
 		mlme_err("vdev %d Invalid mode %d",
 			 wlan_vdev_get_id(vdev), op_mode);
-		return NULL;
+		return QDF_STATUS_E_NOSUPPORT;
 	}
 
-	cm_ctx = cm_get_cm_ctx(vdev);
-	if (!cm_ctx)
-		return NULL;
-	cm_req = cm_get_req_by_cm_id(cm_ctx, cm_id);
-	if (!cm_req)
-		return NULL;
-
-	if (cm_req->connect_req.cur_candidate &&
-	    cm_req->connect_req.cur_candidate->entry)
-		return &cm_req->connect_req.cur_candidate->entry->rnr;
-
-	return NULL;
+	return cm_get_rnr(vdev, cm_id, rnr);
 }
+
+void
+wlan_cm_connect_resp_fill_mld_addr_from_cm_id(struct wlan_objmgr_vdev *vdev,
+					     wlan_cm_id cm_id,
+					     struct wlan_cm_connect_resp *rsp)
+{
+	return cm_connect_resp_fill_mld_addr_from_cm_id(vdev, cm_id, rsp);
+}
+
+#ifdef WLAN_FEATURE_11BE_MLO
+void
+wlan_cm_connect_resp_fill_mld_addr_from_vdev_id(struct wlan_objmgr_psoc *psoc,
+						uint8_t vdev_id,
+						struct scan_cache_entry *entry,
+						struct wlan_cm_connect_resp *rsp)
+{
+	struct wlan_objmgr_vdev *vdev;
+
+	vdev = wlan_objmgr_get_vdev_by_id_from_psoc(psoc, vdev_id,
+						    WLAN_MLME_CM_ID);
+	if (!vdev)
+		return;
+
+	cm_connect_resp_fill_mld_addr_from_candidate(vdev, entry, rsp);
+	wlan_objmgr_vdev_release_ref(vdev, WLAN_MLME_CM_ID);
+}
+#endif
 
 QDF_STATUS
 wlan_cm_disc_cont_after_rso_stop(struct wlan_objmgr_vdev *vdev,

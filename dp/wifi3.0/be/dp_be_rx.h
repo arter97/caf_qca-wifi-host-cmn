@@ -190,18 +190,25 @@ dp_rx_desc_sw_cc_check(struct dp_soc *soc,
 
 #define DP_PEER_METADATA_OFFLOAD_GET_BE(_peer_metadata)		(0)
 
+#define HTT_RX_PEER_META_DATA_FIELD_GET(_var, _field_s, _field_m) \
+	(((_var) & (_field_m)) >> (_field_s))
+
 #ifdef DP_USE_REDUCED_PEER_ID_FIELD_WIDTH
 static inline uint16_t
 dp_rx_peer_metadata_peer_id_get_be(struct dp_soc *soc, uint32_t peer_metadata)
 {
-	struct htt_rx_peer_metadata_v1 *metadata =
-			(struct htt_rx_peer_metadata_v1 *)&peer_metadata;
+	uint8_t ml_peer_valid;
 	uint16_t peer_id;
 
-	peer_id = metadata->peer_id |
-		  (metadata->ml_peer_valid << soc->peer_id_shift);
+	peer_id = HTT_RX_PEER_META_DATA_FIELD_GET(peer_metadata,
+						  soc->htt_peer_id_s,
+						  soc->htt_peer_id_m);
+	ml_peer_valid = HTT_RX_PEER_META_DATA_FIELD_GET(
+						peer_metadata,
+						soc->htt_mld_peer_valid_s,
+						soc->htt_mld_peer_valid_m);
 
-	return peer_id;
+	return (peer_id | (ml_peer_valid << soc->peer_id_shift));
 }
 #else
 /* Combine ml_peer_valid and peer_id field */
@@ -219,10 +226,10 @@ dp_rx_peer_metadata_peer_id_get_be(struct dp_soc *soc, uint32_t peer_metadata)
 static inline uint16_t
 dp_rx_peer_metadata_vdev_id_get_be(struct dp_soc *soc, uint32_t peer_metadata)
 {
-	struct htt_rx_peer_metadata_v1 *metadata =
-			(struct htt_rx_peer_metadata_v1 *)&peer_metadata;
 
-	return metadata->vdev_id;
+	return HTT_RX_PEER_META_DATA_FIELD_GET(peer_metadata,
+					       soc->htt_vdev_id_s,
+					       soc->htt_vdev_id_m);
 }
 
 static inline uint8_t
@@ -231,14 +238,6 @@ dp_rx_peer_metadata_lmac_id_get_be(uint32_t peer_metadata)
 	return HTT_RX_PEER_META_DATA_V1_LMAC_ID_GET(peer_metadata);
 }
 
-static inline uint8_t
-dp_rx_peer_mdata_link_id_get_be(uint32_t peer_metadata)
-{
-#ifdef DP_MLO_LINK_STATS_SUPPORT
-	return HTT_RX_PEER_META_DATA_V1A_LOGICAL_LINK_ID_GET(peer_metadata);
-#endif
-	return 0;
-}
 
 #ifdef WLAN_FEATURE_NEAR_FULL_IRQ
 /**
@@ -637,6 +636,19 @@ dp_rx_set_msdu_lmac_id(qdf_nbuf_t nbuf, uint32_t peer_mdata)
 	lmac_id = dp_rx_peer_metadata_lmac_id_get_be(peer_mdata);
 	qdf_nbuf_set_lmac_id(nbuf, lmac_id);
 }
+#else
+static inline void
+dp_rx_set_msdu_lmac_id(qdf_nbuf_t nbuf, uint32_t peer_mdata)
+{
+}
+#endif
+
+#ifndef CONFIG_NBUF_AP_PLATFORM
+static inline uint8_t
+dp_rx_peer_mdata_link_id_get_be(uint32_t peer_metadata)
+{
+	return 0;
+}
 
 static inline void
 dp_rx_set_msdu_hw_link_id(qdf_nbuf_t nbuf, uint32_t peer_mdata)
@@ -648,29 +660,12 @@ dp_rx_set_msdu_hw_link_id(qdf_nbuf_t nbuf, uint32_t peer_mdata)
 }
 
 static inline uint8_t
-dp_rx_get_msdu_hw_link_id(qdf_nbuf_t nbuf)
+dp_rx_get_stats_arr_idx_from_link_id(qdf_nbuf_t nbuf,
+				     struct dp_txrx_peer *txrx_peer)
 {
 	return QDF_NBUF_CB_RX_LOGICAL_LINK_ID(nbuf);
 }
-#else
-static inline void
-dp_rx_set_msdu_lmac_id(qdf_nbuf_t nbuf, uint32_t peer_mdata)
-{
-}
 
-static inline void
-dp_rx_set_msdu_hw_link_id(qdf_nbuf_t nbuf, uint32_t peer_mdata)
-{
-}
-
-static inline uint8_t
-dp_rx_get_msdu_hw_link_id(qdf_nbuf_t nbuf)
-{
-	return QDF_NBUF_CB_RX_HW_LINK_ID(nbuf);
-}
-#endif
-
-#ifndef CONFIG_NBUF_AP_PLATFORM
 static inline uint16_t
 dp_rx_get_peer_id_be(qdf_nbuf_t nbuf)
 {
@@ -774,6 +769,41 @@ static inline uint8_t hal_rx_get_l3_pad_bytes_be(qdf_nbuf_t nbuf,
 	return HAL_RX_TLV_L3_HEADER_PADDING_GET(rx_tlv_hdr);
 }
 #else
+static inline uint8_t
+dp_rx_peer_mdata_link_id_get_be(uint32_t peer_metadata)
+{
+	uint8_t link_id = 0;
+
+	link_id = (HTT_RX_PEER_META_DATA_V1A_LOGICAL_LINK_ID_GET(peer_metadata)
+		   + 1);
+	if (link_id > DP_MAX_MLO_LINKS)
+		link_id = 0;
+
+	return link_id;
+}
+
+static inline void
+dp_rx_set_msdu_hw_link_id(qdf_nbuf_t nbuf, uint32_t peer_mdata)
+{
+}
+
+static inline uint8_t
+dp_rx_get_stats_arr_idx_from_link_id(qdf_nbuf_t nbuf,
+				     struct dp_txrx_peer *txrx_peer)
+{
+	uint8_t link_id = 0;
+
+	link_id = (QDF_NBUF_CB_RX_HW_LINK_ID(nbuf) + 1);
+	if (link_id > DP_MAX_MLO_LINKS) {
+		link_id = 0;
+		DP_PEER_PER_PKT_STATS_INC(txrx_peer,
+					  rx.inval_link_id_pkt_cnt,
+					  1, link_id);
+	}
+
+	return link_id;
+}
+
 static inline uint16_t
 dp_rx_get_peer_id_be(qdf_nbuf_t nbuf)
 {

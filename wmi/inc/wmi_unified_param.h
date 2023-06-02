@@ -1191,6 +1191,17 @@ struct wmi_host_tid_to_link_map_resp {
 	enum wlan_t2lm_status status;
 	uint8_t mapping_switch_tsf;
 };
+
+/**
+ * struct wmi_host_link_state_params - MLO link state params
+ * @vdev_id: Vdev id
+ * @mld_mac: mld mac address
+ */
+struct wmi_host_link_state_params {
+	uint8_t vdev_id;
+	uint8_t mld_mac[QDF_MAC_ADDR_SIZE];
+};
+
 #endif /* WLAN_FEATURE_11BE */
 
 #ifdef WLAN_FEATURE_11BE_MLO
@@ -5227,6 +5238,7 @@ typedef enum {
 	wmi_mlo_teardown_complete_event_id,
 	wmi_mlo_link_set_active_resp_eventid,
 	wmi_mlo_link_removal_eventid,
+	wmi_mlo_link_disable_request_eventid,
 #endif
 	wmi_pdev_fips_extend_event_id,
 	wmi_roam_frame_event_id,
@@ -5277,6 +5289,10 @@ typedef enum {
 #endif
 #ifdef QCA_STANDALONE_SOUNDING_TRIGGER
 	wmi_vdev_standalone_sound_complete_eventid,
+#endif
+	wmi_csa_ie_received_event_id,
+#ifdef WLAN_FEATURE_11BE_MLO
+	wmi_mlo_link_state_info_eventid,
 #endif
 	wmi_events_max,
 } wmi_conv_event_id;
@@ -5647,6 +5663,8 @@ typedef enum {
 		   PDEV_PARAM_SET_DISABLED_SCHED_MODES),
 	PDEV_PARAM(pdev_param_set_conc_low_latency_mode,
 		   PDEV_PARAM_SET_CONC_LOW_LATENCY_MODE),
+	PDEV_PARAM(pdev_param_rtt_11az_rsid_range,
+		   PDEV_PARAM_RTT_11AZ_RSID_RANGE),
 	pdev_param_max,
 } wmi_conv_pdev_params_id;
 
@@ -5965,6 +5983,8 @@ typedef enum {
 		   VDEV_PARAM_SET_DISABLED_SCHED_MODES),
 	VDEV_PARAM(vdev_param_set_sap_ps_with_twt,
 		   VDEV_PARAM_SET_SAP_PS_WITH_TWT),
+	VDEV_PARAM(vdev_param_chwidth_with_notify,
+		   VDEV_PARAM_CHWIDTH_WITH_NOTIFY),
 	vdev_param_max,
 } wmi_conv_vdev_param_id;
 
@@ -6234,6 +6254,11 @@ typedef enum {
 	wmi_service_tdls_ax_support,
 #endif
 #endif
+#ifdef WLAN_FEATURE_11BE_MLO
+#ifdef FEATURE_WLAN_TDLS
+	wmi_service_tdls_mlo_support,
+#endif
+#endif
 #ifdef WLAN_FEATURE_BIG_DATA_STATS
 	wmi_service_big_data_support,
 #endif
@@ -6283,6 +6308,7 @@ typedef enum {
 	wmi_service_rtt_11az_mac_sec_support,
 	wmi_service_rtt_11az_ntb_support,
 	wmi_service_rtt_11az_tb_support,
+	wmi_service_rtt_11az_tb_rsta_support,
 #endif
 	wmi_service_pktlog_decode_info_support,
 #ifdef WLAN_FEATURE_ROAM_OFFLOAD
@@ -6299,6 +6325,7 @@ typedef enum {
 	wmi_service_tdls_6g_support,
 #endif
 	wmi_service_tdls_wideband_support,
+	wmi_service_tdls_concurrency_support,
 #endif
 	wmi_service_is_my_mgmt_frame,
 	wmi_service_linkspeed_roam_trigger_support,
@@ -6323,6 +6350,9 @@ typedef enum {
 #ifdef QCA_STANDALONE_SOUNDING_TRIGGER
 	wmi_service_standalone_sound,
 #endif
+	wmi_service_cca_busy_info_for_each_20mhz,
+	wmi_service_vdev_param_chwidth_with_notify_support,
+
 	wmi_services_max,
 } wmi_conv_service_ids;
 #define WMI_SERVICE_UNAVAILABLE 0xFFFF
@@ -6693,6 +6723,8 @@ struct target_feature_set {
  * support
  * @notify_frame_support: capability to mark notify frames from host
  * @dp_peer_meta_data_ver: datapath peer meta data version flag
+ * @tx_ilp_enable: capability to support TX ILP from host
+ * @rf_path: Indicates RF path 0 primary, 1 secondary
  */
 typedef struct {
 	uint32_t num_vdevs;
@@ -6821,6 +6853,10 @@ typedef struct {
 	uint32_t num_max_active_vdevs;
 	uint8_t notify_frame_support;
 	uint8_t dp_peer_meta_data_ver;
+#ifdef DP_TX_PACKET_INSPECT_FOR_ILP
+	uint8_t tx_ilp_enable;
+#endif
+	bool rf_path;
 } target_resource_config;
 
 /**
@@ -9212,6 +9248,7 @@ struct wmi_neighbor_report_data {
 /**
  * struct wmi_roam_trigger_info() - Roam trigger related details
  * @present:            Flag to check if the roam_trigger_info tlv is present
+ * @common_roam:        Flag to indicate common roam or special roam
  * @trigger_reason:     Roam trigger reason(enum WMI_ROAM_TRIGGER_REASON_ID)
  * @trigger_sub_reason: Sub reason for roam trigger if multiple roam scans
  * @current_rssi:       Connected AP RSSI
@@ -9237,6 +9274,7 @@ struct wmi_neighbor_report_data {
  */
 struct wmi_roam_trigger_info {
 	bool present;
+	bool common_roam;
 	uint32_t trigger_reason;
 	uint32_t trigger_sub_reason;
 	uint32_t current_rssi;

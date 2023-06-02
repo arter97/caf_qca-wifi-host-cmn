@@ -42,6 +42,7 @@
 #ifdef DP_RATETABLE_SUPPORT
 #include "dp_ratetable.h"
 #endif
+#include "enet.h"
 
 #ifndef WLAN_SOFTUMAC_SUPPORT /* WLAN_SOFTUMAC_SUPPORT */
 
@@ -458,7 +459,9 @@ __dp_rx_buffers_no_map_lt_replenish(struct dp_soc *soc, uint32_t mac_id,
 		qdf_assert_always(rxdma_ring_entry);
 
 		desc_list->rx_desc.nbuf = nbuf;
+		dp_rx_set_reuse_nbuf(&desc_list->rx_desc, nbuf);
 		desc_list->rx_desc.rx_buf_start = nbuf->data;
+		desc_list->rx_desc.paddr_buf_start = paddr;
 		desc_list->rx_desc.unmapped = 0;
 
 		/* rx_desc.in_use should be zero at this time*/
@@ -560,7 +563,9 @@ __dp_rx_buffers_no_map_replenish(struct dp_soc *soc, uint32_t mac_id,
 			break;
 
 		(*desc_list)->rx_desc.nbuf = nbuf;
+		dp_rx_set_reuse_nbuf(&(*desc_list)->rx_desc, nbuf);
 		(*desc_list)->rx_desc.rx_buf_start = nbuf->data;
+		(*desc_list)->rx_desc.paddr_buf_start = QDF_NBUF_CB_PADDR(nbuf);
 		(*desc_list)->rx_desc.unmapped = 0;
 
 		/* rx_desc.in_use should be zero at this time*/
@@ -599,6 +604,99 @@ __dp_rx_buffers_no_map_replenish(struct dp_soc *soc, uint32_t mac_id,
 
 	return QDF_STATUS_SUCCESS;
 }
+
+#ifdef WLAN_SUPPORT_PPEDS
+QDF_STATUS
+__dp_rx_comp2refill_replenish(struct dp_soc *soc, uint32_t mac_id,
+			      struct dp_srng *dp_rxdma_srng,
+			      struct rx_desc_pool *rx_desc_pool,
+			      uint32_t num_req_buffers,
+			      union dp_rx_desc_list_elem_t **desc_list,
+			      union dp_rx_desc_list_elem_t **tail)
+{
+	struct dp_pdev *dp_pdev = dp_get_pdev_for_lmac_id(soc, mac_id);
+	uint32_t count;
+	void *rxdma_ring_entry;
+	union dp_rx_desc_list_elem_t *next;
+	union dp_rx_desc_list_elem_t *cur;
+	void *rxdma_srng;
+	qdf_nbuf_t nbuf;
+
+	rxdma_srng = dp_rxdma_srng->hal_srng;
+
+	if (qdf_unlikely(!dp_pdev)) {
+		dp_rx_err("%pK: pdev is null for mac_id = %d",
+			  soc, mac_id);
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	if (qdf_unlikely(!rxdma_srng)) {
+		dp_rx_debug("%pK: rxdma srng not initialized", soc);
+		DP_STATS_INC(dp_pdev, replenish.rxdma_err, num_req_buffers);
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	hal_srng_access_start(soc->hal_soc, rxdma_srng);
+
+	for (count = 0; count < num_req_buffers; count++) {
+		next = (*desc_list)->next;
+		qdf_prefetch(next);
+
+		rxdma_ring_entry = (struct dp_buffer_addr_info *)
+			hal_srng_src_get_next(soc->hal_soc, rxdma_srng);
+
+		if (!rxdma_ring_entry)
+			break;
+
+		(*desc_list)->rx_desc.in_use = 1;
+		(*desc_list)->rx_desc.in_err_state = 0;
+		(*desc_list)->rx_desc.nbuf = (*desc_list)->rx_desc.reuse_nbuf;
+
+		hal_rxdma_buff_addr_info_set(soc->hal_soc, rxdma_ring_entry,
+				     (*desc_list)->rx_desc.paddr_buf_start,
+				     (*desc_list)->rx_desc.cookie,
+				     rx_desc_pool->owner);
+
+		*desc_list = next;
+	}
+	hal_srng_access_end(soc->hal_soc, rxdma_srng);
+
+	/* No need to count the number of bytes received during replenish.
+	 * Therefore set replenish.pkts.bytes as 0.
+	 */
+	DP_STATS_INC_PKT(dp_pdev, replenish.pkts, count, 0);
+	DP_STATS_INC(dp_pdev, buf_freelist, (num_req_buffers - count));
+
+	/*
+	 * add any available free desc back to the free list
+	 */
+	cur = *desc_list;
+	for ( ; count < num_req_buffers; count++) {
+		next = cur->next;
+		qdf_prefetch(next);
+
+		nbuf = cur->rx_desc.reuse_nbuf;
+
+		cur->rx_desc.nbuf = NULL;
+		cur->rx_desc.in_use = 0;
+		cur->rx_desc.has_reuse_nbuf = false;
+		cur->rx_desc.reuse_nbuf = NULL;
+		if (!nbuf->recycled_for_ds)
+			dp_rx_nbuf_unmap_pool(soc, rx_desc_pool, nbuf);
+
+		nbuf->recycled_for_ds = 0;
+		nbuf->fast_recycled = 0;
+		qdf_nbuf_free(nbuf);
+		cur = next;
+	}
+
+	if (*desc_list)
+		dp_rx_add_desc_list_to_free_list(soc, desc_list, tail,
+						 mac_id, rx_desc_pool);
+
+	return QDF_STATUS_SUCCESS;
+}
+#endif
 
 QDF_STATUS __dp_pdev_rx_buffers_no_map_attach(struct dp_soc *soc,
 					      uint32_t mac_id,
@@ -665,7 +763,9 @@ QDF_STATUS __dp_pdev_rx_buffers_no_map_attach(struct dp_soc *soc,
 		qdf_assert_always(rxdma_ring_entry);
 
 		desc_list->rx_desc.nbuf = nbuf;
+		dp_rx_set_reuse_nbuf(&desc_list->rx_desc, nbuf);
 		desc_list->rx_desc.rx_buf_start = nbuf->data;
+		desc_list->rx_desc.paddr_buf_start = paddr;
 		desc_list->rx_desc.unmapped = 0;
 
 		/* rx_desc.in_use should be zero at this time*/
@@ -1292,6 +1392,22 @@ void dp_rx_fill_mesh_stats(struct dp_vdev *vdev, qdf_nbuf_t nbuf,
 	rate_mcs = hal_rx_tlv_rate_mcs_get(soc->hal_soc, rx_tlv_hdr);
 	bw = hal_rx_tlv_bw_get(soc->hal_soc, rx_tlv_hdr);
 	nss = hal_rx_msdu_start_nss_get(soc->hal_soc, rx_tlv_hdr);
+
+	/*
+	 * The MCS index does not start with 0 when NSS>1 in HT mode.
+	 * MCS params for optional 20/40MHz, NSS=1~3, EQM(NSS>1):
+	 * ------------------------------------------------------
+	 *         NSS     |   1   |   2    |    3    |    4
+	 * ------------------------------------------------------
+	 * MCS index: HT20 | 0 ~ 7 | 8 ~ 15 | 16 ~ 23 | 24 ~ 31
+	 * ------------------------------------------------------
+	 * MCS index: HT40 | 0 ~ 7 | 8 ~ 15 | 16 ~ 23 | 24 ~ 31
+	 * ------------------------------------------------------
+	 * Currently, the MAX_NSS=2. If NSS>2, MCS index = 8 * (NSS-1)
+	 */
+	if ((pkt_type == DOT11_N) && (nss == 2))
+		rate_mcs += 8;
+
 	rx_info->rs_ratephy1 = rate_mcs | (nss << 0x8) | (pkt_type << 16) |
 				(bw << 24);
 
@@ -2358,7 +2474,8 @@ static inline void
 dp_rx_rates_stats_update(struct dp_soc *soc, qdf_nbuf_t nbuf,
 			 uint8_t *rx_tlv_hdr, struct dp_txrx_peer *txrx_peer,
 			 uint32_t sgi, uint32_t mcs,
-			 uint32_t nss, uint32_t bw, uint32_t pkt_type)
+			 uint32_t nss, uint32_t bw, uint32_t pkt_type,
+			 uint8_t link_id)
 {
 }
 #endif /* FEATURE_RX_LINKSPEED_ROAM_TRIGGER */
@@ -2405,6 +2522,21 @@ void dp_rx_msdu_extd_stats_update(struct dp_soc *soc, qdf_nbuf_t nbuf,
 	/* do HW to SW pkt type conversion */
 	pkt_type = (pkt_type >= HAL_DOT11_MAX ? DOT11_MAX :
 		    hal_2_dp_pkt_type_map[pkt_type]);
+
+	/*
+	 * The MCS index does not start with 0 when NSS>1 in HT mode.
+	 * MCS params for optional 20/40MHz, NSS=1~3, EQM(NSS>1):
+	 * ------------------------------------------------------
+	 *         NSS     |   1   |   2    |    3    |    4
+	 * ------------------------------------------------------
+	 * MCS index: HT20 | 0 ~ 7 | 8 ~ 15 | 16 ~ 23 | 24 ~ 31
+	 * ------------------------------------------------------
+	 * MCS index: HT40 | 0 ~ 7 | 8 ~ 15 | 16 ~ 23 | 24 ~ 31
+	 * ------------------------------------------------------
+	 * Currently, the MAX_NSS=2. If NSS>2, MCS index = 8 * (NSS-1)
+	 */
+	if ((pkt_type == DOT11_N) && (nss == 2))
+		mcs += 8;
 
 	DP_PEER_EXTD_STATS_INCC(txrx_peer, rx.rx_mpdu_cnt[mcs], 1,
 		      ((mcs < MAX_MCS) && QDF_NBUF_CB_RX_CHFRAG_START(nbuf)),
@@ -3200,3 +3332,33 @@ bool dp_rx_deliver_special_frame(struct dp_soc *soc,
 	return false;
 }
 #endif
+
+#ifdef QCA_MULTIPASS_SUPPORT
+bool dp_rx_multipass_process(struct dp_txrx_peer *txrx_peer, qdf_nbuf_t nbuf,
+			     uint8_t tid)
+{
+	struct vlan_ethhdr *vethhdrp;
+
+	if (qdf_unlikely(!txrx_peer->vlan_id))
+		return true;
+
+	vethhdrp = (struct vlan_ethhdr *)qdf_nbuf_data(nbuf);
+	/*
+	 * h_vlan_proto & h_vlan_TCI should be 0x8100 & zero respectively
+	 * as it is expected to be padded by 0
+	 * return false if frame doesn't have above tag so that caller will
+	 * drop the frame.
+	 */
+	if (qdf_unlikely(vethhdrp->h_vlan_proto != htons(QDF_ETH_TYPE_8021Q)) ||
+	    qdf_unlikely(vethhdrp->h_vlan_TCI != 0))
+		return false;
+
+	vethhdrp->h_vlan_TCI = htons(((tid & 0x7) << VLAN_PRIO_SHIFT) |
+		(txrx_peer->vlan_id & VLAN_VID_MASK));
+
+	if (vethhdrp->h_vlan_encapsulated_proto == htons(ETHERTYPE_PAE))
+		dp_tx_remove_vlan_tag(txrx_peer->vdev, nbuf);
+
+	return true;
+}
+#endif /* QCA_MULTIPASS_SUPPORT */

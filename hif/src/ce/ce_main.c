@@ -39,6 +39,7 @@
 #include "ce_assignment.h"
 #include "ce_tasklet.h"
 #include "qdf_module.h"
+#include "qdf_ssr_driver_dump.h"
 
 #define CE_POLL_TIMEOUT 10      /* ms */
 
@@ -877,7 +878,7 @@ static struct service_to_pipe target_service_to_ce_map_qcn9000[] = {
 };
 #endif
 
-#if (defined(QCA_WIFI_QCA5332))
+#if (defined(QCA_WIFI_QCA5332) || defined(QCA_WIFI_QCN6432))
 static struct service_to_pipe target_service_to_ce_map_qca5332[] = {
 	{ WMI_DATA_VO_SVC, PIPEDIR_OUT, 3, },
 	{ WMI_DATA_VO_SVC, PIPEDIR_IN, 2, },
@@ -1517,6 +1518,7 @@ static void hif_select_service_to_pipe_map(struct hif_softc *scn,
 						  sz_tgt_svc_map_to_use);
 			break;
 		case TARGET_TYPE_QCA5332:
+		case TARGET_TYPE_QCN6432:
 			*tgt_svc_map_to_use = target_service_to_ce_map_qca5332;
 			*sz_tgt_svc_map_to_use =
 				sizeof(target_service_to_ce_map_qca5332);
@@ -1830,6 +1832,7 @@ bool ce_srng_based(struct hif_softc *scn)
 	case TARGET_TYPE_QCN9224:
 	case TARGET_TYPE_QCA9574:
 	case TARGET_TYPE_QCA5332:
+	case TARGET_TYPE_QCN6432:
 		return true;
 	default:
 		return false;
@@ -2186,6 +2189,22 @@ uint32_t hif_ce_history_max = HIF_CE_HISTORY_MAX;
 struct hif_ce_desc_event
 	hif_ce_desc_history_buff[CE_DESC_HISTORY_BUFF_CNT][HIF_CE_HISTORY_MAX];
 
+static void __hif_ce_desc_history_log_register(void)
+{
+	qdf_ssr_driver_dump_register_region("hif_ce_desc_history",
+					    hif_ce_desc_history,
+					    sizeof(hif_ce_desc_history));
+	qdf_ssr_driver_dump_register_region("hif_ce_desc_history_buff",
+					    hif_ce_desc_history_buff,
+					    sizeof(hif_ce_desc_history_buff));
+}
+
+static void __hif_ce_desc_history_log_unregister(void)
+{
+	qdf_ssr_driver_dump_unregister_region("hif_ce_desc_history_buff");
+	qdf_ssr_driver_dump_unregister_region("hif_ce_desc_history");
+}
+
 static struct hif_ce_desc_event *
 	hif_ce_debug_history_buf_get(struct hif_softc *scn, unsigned int ce_id)
 {
@@ -2270,6 +2289,11 @@ static void free_mem_ce_debug_history(struct hif_softc *scn, unsigned int ce_id)
 	ce_hist->hist_ev[ce_id] = NULL;
 }
 #else
+
+static void __hif_ce_desc_history_log_register(void) { }
+
+static void __hif_ce_desc_history_log_unregister(void) { }
+
 static inline QDF_STATUS
 alloc_mem_ce_debug_history(struct hif_softc *scn, unsigned int CE_id,
 			   uint32_t src_nentries)
@@ -2282,6 +2306,10 @@ free_mem_ce_debug_history(struct hif_softc *scn, unsigned int CE_id) { }
 #endif /* (HIF_CONFIG_SLUB_DEBUG_ON) || (HIF_CE_DEBUG_DATA_BUF) */
 #else
 #if defined(HIF_CE_DEBUG_DATA_BUF)
+
+static void __hif_ce_desc_history_log_register(void) { }
+
+static void __hif_ce_desc_history_log_unregister(void) { }
 
 static QDF_STATUS
 alloc_mem_ce_debug_history(struct hif_softc *scn, unsigned int CE_id,
@@ -2318,6 +2346,10 @@ static void free_mem_ce_debug_history(struct hif_softc *scn, unsigned int CE_id)
 }
 
 #else
+
+static void __hif_ce_desc_history_log_register(void) { }
+
+static void __hif_ce_desc_history_log_unregister(void) { }
 
 static inline QDF_STATUS
 alloc_mem_ce_debug_history(struct hif_softc *scn, unsigned int CE_id,
@@ -2480,6 +2512,16 @@ struct CE_handle *ce_init(struct hif_softc *scn,
 				goto error_target_access;
 			ce_ring_test_initial_indexes(CE_id, src_ring,
 						     "src_ring");
+			if (CE_state->attr_flags & CE_ATTR_ENABLE_POLL) {
+				qdf_timer_init(scn->qdf_dev,
+					       &CE_state->poll_timer,
+					       ce_poll_timeout,
+					       CE_state,
+					       QDF_TIMER_TYPE_WAKE_APPS);
+				ce_enable_polling(CE_state);
+				qdf_timer_mod(&CE_state->poll_timer,
+					      CE_POLL_TIMEOUT);
+			}
 		}
 	}
 
@@ -2588,6 +2630,11 @@ error_target_access:
 error_no_dma_mem:
 	ce_fini((struct CE_handle *)CE_state);
 	return NULL;
+}
+
+void hif_ce_desc_history_log_register(void)
+{
+	__hif_ce_desc_history_log_register();
 }
 
 /**
@@ -2880,6 +2927,11 @@ void ce_fini(struct CE_handle *copyeng)
 	qdf_spinlock_destroy(&CE_state->ce_interrupt_lock);
 #endif
 	qdf_mem_free(CE_state);
+}
+
+void hif_ce_desc_history_log_unregister(void)
+{
+	__hif_ce_desc_history_log_unregister();
 }
 
 void hif_detach_htc(struct hif_opaque_softc *hif_ctx)
@@ -4367,6 +4419,14 @@ void hif_ce_prepare_config(struct hif_softc *scn)
 		hif_state->target_ce_config_sz =
 					sizeof(target_ce_config_wlan_qcn9160);
 		scn->ce_count = QCN_9160_CE_COUNT;
+		scn->ini_cfg.disable_wake_irq = 1;
+		break;
+	case TARGET_TYPE_QCN6432:
+		hif_state->host_ce_config = host_ce_config_wlan_qcn6432;
+		hif_state->target_ce_config = target_ce_config_wlan_qcn6432;
+		hif_state->target_ce_config_sz =
+					sizeof(target_ce_config_wlan_qcn6432);
+		scn->ce_count = QCN_6432_CE_COUNT;
 		scn->ini_cfg.disable_wake_irq = 1;
 		break;
 	case TARGET_TYPE_QCA5018:

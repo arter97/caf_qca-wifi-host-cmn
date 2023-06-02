@@ -25,8 +25,6 @@
 #ifndef _WLAN_IPA_PRIV_STRUCT_H_
 #define _WLAN_IPA_PRIV_STRUCT_H_
 
-#ifdef IPA_OFFLOAD
-
 #include <linux/version.h>
 #include <linux/kernel.h>
 
@@ -48,6 +46,7 @@
 #include "cdp_txrx_ipa.h"
 #endif
 
+#ifdef IPA_OFFLOAD
 #define WLAN_IPA_RX_INACTIVITY_MSEC_DELAY   1000
 #define WLAN_IPA_UC_WLAN_8023_HDR_SIZE      14
 
@@ -85,6 +84,7 @@
 #define WLAN_IPA_UC_ENABLE_MASK             BIT(5)
 #define WLAN_IPA_UC_STA_ENABLE_MASK         BIT(6)
 #define WLAN_IPA_REAL_TIME_DEBUGGING        BIT(8)
+#define WLAN_IPA_OPT_WIFI_DP                BIT(9)
 
 #ifdef QCA_IPA_LL_TX_FLOW_CONTROL
 #define WLAN_IPA_MAX_BANDWIDTH              4800
@@ -303,11 +303,13 @@ struct wlan_ipa_rx_hdr {
  * @exception: Exception packet
  * @iface_context: Interface context
  * @ipa_tx_desc: IPA TX descriptor
+ * @send_to_nw: RX exception packet that needs to be passed up to stack
  */
 struct wlan_ipa_pm_tx_cb {
 	bool exception;
 	struct wlan_ipa_iface_context *iface_context;
 	qdf_ipa_rx_data_t *ipa_tx_desc;
+	bool send_to_nw;
 };
 
 /**

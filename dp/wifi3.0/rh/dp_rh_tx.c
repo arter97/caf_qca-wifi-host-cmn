@@ -28,6 +28,7 @@
 #include "dp_rh.h"
 #include <ce_api.h>
 #include <ce_internal.h>
+#include "dp_rh_htt.h"
 
 extern uint8_t sec_type_map[MAX_CDP_SEC_TYPE];
 
@@ -80,6 +81,40 @@ void dp_tx_comp_get_params_from_hal_desc_rh(struct dp_soc *soc,
 {
 }
 
+/**
+ * dp_tx_comp_find_tx_desc_rh() - Find software TX descriptor using sw_cookie
+ *
+ * @soc: Handle to DP SoC structure
+ * @sw_cookie: Key to find the TX descriptor
+ *
+ * Return: TX descriptor handle or NULL (if not found)
+ */
+static struct dp_tx_desc_s *
+dp_tx_comp_find_tx_desc_rh(struct dp_soc *soc, uint32_t sw_cookie)
+{
+	uint8_t pool_id;
+	struct dp_tx_desc_s *tx_desc;
+
+	pool_id = (sw_cookie & DP_TX_DESC_ID_POOL_MASK) >>
+			DP_TX_DESC_ID_POOL_OS;
+
+	/* Find Tx descriptor */
+	tx_desc = dp_tx_desc_find(soc, pool_id,
+				  (sw_cookie & DP_TX_DESC_ID_PAGE_MASK) >>
+						DP_TX_DESC_ID_PAGE_OS,
+				  (sw_cookie & DP_TX_DESC_ID_OFFSET_MASK) >>
+						DP_TX_DESC_ID_OFFSET_OS);
+	/* pool id is not matching. Error */
+	if (tx_desc && tx_desc->pool_id != pool_id) {
+		dp_tx_comp_alert("Tx Comp pool id %d not matched %d",
+				 pool_id, tx_desc->pool_id);
+
+		qdf_assert_always(0);
+	}
+
+	return tx_desc;
+}
+
 void dp_tx_process_htt_completion_rh(struct dp_soc *soc,
 				     struct dp_tx_desc_s *tx_desc,
 				     uint8_t *status,
@@ -117,6 +152,93 @@ static inline void dp_tx_fill_nbuf_data_attr_rh(qdf_nbuf_t nbuf)
 
 	qdf_nbuf_data_attr_set(nbuf, data_attr);
 }
+
+#ifdef DP_TX_HW_DESC_HISTORY
+static inline void
+dp_tx_record_hw_desc_rh(uint8_t *hal_tx_desc_cached, struct dp_soc *soc)
+{
+	struct dp_tx_hw_desc_history *tx_hw_desc_history =
+						&soc->tx_hw_desc_history;
+	struct dp_tx_hw_desc_evt *evt;
+	uint32_t idx = 0;
+	uint16_t slot = 0;
+
+	if (!tx_hw_desc_history->allocated)
+		return;
+
+	dp_get_frag_hist_next_atomic_idx(&tx_hw_desc_history->index, &idx,
+					 &slot,
+					 DP_TX_HW_DESC_HIST_SLOT_SHIFT,
+					 DP_TX_HW_DESC_HIST_PER_SLOT_MAX,
+					 DP_TX_HW_DESC_HIST_MAX);
+
+	evt = &tx_hw_desc_history->entry[slot][idx];
+	qdf_mem_copy(evt->tcl_desc, hal_tx_desc_cached, HAL_TX_DESC_LEN_BYTES);
+	evt->posted = qdf_get_log_timestamp();
+	evt->tcl_ring_id = 0;
+}
+#else
+static inline void
+dp_tx_record_hw_desc_rh(uint8_t *hal_tx_desc_cached, struct dp_soc *soc)
+{
+}
+#endif
+
+#if defined(FEATURE_RUNTIME_PM)
+static void dp_tx_update_write_index(struct dp_soc *soc,
+				     struct dp_tx_ep_info_rh *tx_ep_info)
+{
+	int ret;
+
+	/* Avoid runtime get and put APIs under high throughput scenarios */
+	if (dp_get_rtpm_tput_policy_requirement(soc)) {
+		ce_tx_ring_write_idx_update_wrapper(tx_ep_info->ce_tx_hdl,
+						    true);
+		return;
+	}
+
+	ret = hif_rtpm_get(HIF_RTPM_GET_ASYNC, HIF_RTPM_ID_DP);
+	if (QDF_IS_STATUS_SUCCESS(ret)) {
+		if (hif_system_pm_state_check(soc->hif_handle)) {
+			ce_tx_ring_write_idx_update_wrapper(tx_ep_info->ce_tx_hdl, false);
+			ce_ring_set_event(((struct CE_state *)(tx_ep_info->ce_tx_hdl))->src_ring,
+					  CE_RING_FLUSH_EVENT);
+		} else {
+			ce_tx_ring_write_idx_update_wrapper(tx_ep_info->ce_tx_hdl,
+							    true);
+		}
+	} else {
+		dp_runtime_get(soc);
+		ce_tx_ring_write_idx_update_wrapper(tx_ep_info->ce_tx_hdl,
+						    false);
+		ce_ring_set_event(((struct CE_state *)(tx_ep_info->ce_tx_hdl))->src_ring,
+				  CE_RING_FLUSH_EVENT);
+		qdf_atomic_inc(&soc->tx_pending_rtpm);
+		dp_runtime_put(soc);
+	}
+}
+#elif defined(DP_POWER_SAVE)
+static void dp_tx_update_write_index(struct dp_soc *soc,
+				     struct dp_tx_ep_info_rh *tx_ep_info)
+{
+	if (hif_system_pm_state_check(soc->hif_handle)) {
+		ce_tx_ring_write_idx_update_wrapper(tx_ep_info->ce_tx_hdl,
+						    false);
+		ce_ring_set_event(((struct CE_state *)(tx_ep_info->ce_tx_hdl))->src_ring,
+				  CE_RING_FLUSH_EVENT);
+	} else {
+		ce_tx_ring_write_idx_update_wrapper(tx_ep_info->ce_tx_hdl,
+						    true);
+	}
+}
+#else
+static void dp_tx_update_write_index(struct dp_soc *soc,
+				     struct dp_tx_ep_info_rh *tx_ep_info)
+{
+	ce_tx_ring_write_idx_update_wrapper(tx_ep_info->ce_tx_hdl,
+					    true);
+}
+#endif
 
 QDF_STATUS
 dp_tx_hw_enqueue_rh(struct dp_soc *soc, struct dp_vdev *vdev,
@@ -215,9 +337,11 @@ dp_tx_hw_enqueue_rh(struct dp_soc *soc, struct dp_vdev *vdev,
 
 	dp_tx_fill_nbuf_data_attr_rh(nbuf);
 
-	ret = ce_send_fast(tx_ep_info->ce_tx_hdl, nbuf,
-			   tx_ep_info->tx_endpoint, download_len);
-	if (!ret) {
+	ce_ring_aquire_lock(tx_ep_info->ce_tx_hdl);
+	ret = ce_enqueue_desc(tx_ep_info->ce_tx_hdl, nbuf,
+			      tx_ep_info->tx_endpoint, download_len);
+	if (ret) {
+		ce_ring_release_lock(tx_ep_info->ce_tx_hdl);
 		dp_verbose_debug("CE tx ring full");
 		/* TODO: Should this be a separate ce_ring_full stat? */
 		DP_STATS_INC(soc, tx.tcl_ring_full[0], 1);
@@ -225,10 +349,15 @@ dp_tx_hw_enqueue_rh(struct dp_soc *soc, struct dp_vdev *vdev,
 		goto enqueue_fail;
 	}
 
+	dp_tx_update_write_index(soc, tx_ep_info);
+	ce_ring_release_lock(tx_ep_info->ce_tx_hdl);
+
 	tx_desc->flags |= DP_TX_DESC_FLAG_QUEUED_TX;
 	dp_vdev_peer_stats_update_protocol_cnt_tx(vdev, nbuf);
 	DP_STATS_INC_PKT(vdev, tx_i.processed, 1, tx_desc->length);
 	status = QDF_STATUS_SUCCESS;
+
+	dp_tx_record_hw_desc_rh((uint8_t *)hal_tx_desc_cached, soc);
 
 enqueue_fail:
 	dp_pkt_add_timestamp(vdev, QDF_PKT_TX_DRIVER_EXIT,
@@ -523,4 +652,102 @@ void dp_tx_desc_pool_free_rh(struct dp_soc *soc, uint8_t pool_id)
 	dp_tx_tso_desc_pool_free_by_id(soc, pool_id);
 	dp_tx_ext_desc_pool_free_by_id(soc, pool_id);
 	dp_tx_tcl_desc_pool_free_rh(soc, pool_id);
+}
+
+void dp_tx_compl_handler_rh(struct dp_soc *soc, qdf_nbuf_t htt_msg)
+{
+	struct dp_tx_desc_s *tx_desc = NULL;
+	struct dp_tx_desc_s *head_desc = NULL;
+	struct dp_tx_desc_s *tail_desc = NULL;
+	uint32_t sw_cookie;
+	uint32_t num_msdus;
+	uint32_t *msg_word;
+	uint8_t ring_id;
+	uint8_t tx_status;
+	int i;
+
+	DP_HIST_INIT();
+
+	msg_word = (uint32_t *)qdf_nbuf_data(htt_msg);
+	num_msdus = HTT_SOFT_UMAC_TX_COMP_IND_MSDU_COUNT_GET(*msg_word);
+	msg_word += HTT_SOFT_UMAC_TX_COMPL_IND_SIZE >> 2;
+
+	for (i = 0; i < num_msdus; i++) {
+		sw_cookie = HTT_TX_BUFFER_ADDR_INFO_SW_BUFFER_COOKIE_GET(*(msg_word + 1));
+
+		tx_desc = dp_tx_comp_find_tx_desc_rh(soc, sw_cookie);
+		if (!tx_desc) {
+			dp_err("failed to find tx desc");
+			qdf_assert_always(0);
+		}
+
+		/*
+		 * If the descriptor is already freed in vdev_detach,
+		 * continue to next descriptor
+		 */
+		if (qdf_unlikely((tx_desc->vdev_id == DP_INVALID_VDEV_ID) &&
+				 !tx_desc->flags)) {
+			dp_tx_comp_info_rl("Descriptor freed in vdev_detach %d",
+					   tx_desc->id);
+			DP_STATS_INC(soc, tx.tx_comp_exception, 1);
+			dp_tx_desc_check_corruption(tx_desc);
+			goto next_msdu;
+		}
+
+		if (qdf_unlikely(tx_desc->pdev->is_pdev_down)) {
+			dp_tx_comp_info_rl("pdev in down state %d",
+					   tx_desc->id);
+			tx_desc->flags |= DP_TX_DESC_FLAG_TX_COMP_ERR;
+			dp_tx_comp_free_buf(soc, tx_desc, false);
+			dp_tx_desc_release(tx_desc, tx_desc->pool_id);
+			goto next_msdu;
+		}
+
+		if (!(tx_desc->flags & DP_TX_DESC_FLAG_ALLOCATED) ||
+		    !(tx_desc->flags & DP_TX_DESC_FLAG_QUEUED_TX)) {
+			dp_tx_comp_alert("Txdesc invalid, flgs = %x,id = %d",
+					 tx_desc->flags, tx_desc->id);
+			qdf_assert_always(0);
+		}
+
+		if (HTT_TX_BUFFER_ADDR_INFO_RELEASE_SOURCE_GET(*(msg_word + 1)) ==
+		    HTT_TX_MSDU_RELEASE_SOURCE_FW)
+			tx_desc->buffer_src = HAL_TX_COMP_RELEASE_SOURCE_FW;
+		else
+			tx_desc->buffer_src = HAL_TX_COMP_RELEASE_SOURCE_TQM;
+
+		tx_desc->peer_id = HTT_TX_MSDU_INFO_SW_PEER_ID_GET(*(msg_word + 2));
+		tx_status = HTT_TX_MSDU_INFO_RELEASE_REASON_GET(*(msg_word + 3));
+
+		tx_desc->tx_status =
+			(tx_status == HTT_TX_MSDU_RELEASE_REASON_FRAME_ACKED ?
+			 HAL_TX_TQM_RR_FRAME_ACKED : HAL_TX_TQM_RR_REM_CMD_REM);
+
+		qdf_mem_copy(&tx_desc->comp, msg_word, HTT_TX_MSDU_INFO_SIZE);
+
+		DP_HIST_PACKET_COUNT_INC(tx_desc->pdev->pdev_id);
+
+		/* First ring descriptor on the cycle */
+		if (!head_desc) {
+			head_desc = tx_desc;
+			tail_desc = tx_desc;
+		}
+
+		tail_desc->next = tx_desc;
+		tx_desc->next = NULL;
+		tail_desc = tx_desc;
+next_msdu:
+		msg_word += HTT_TX_MSDU_INFO_SIZE >> 2;
+	}
+
+	/* For now, pass ring_id as 0 (zero) as WCN6450 only
+	 * supports one TX ring.
+	 */
+	ring_id = 0;
+
+	if (head_desc)
+		dp_tx_comp_process_desc_list(soc, head_desc, ring_id);
+
+	DP_STATS_INC(soc, tx.tx_comp[ring_id], num_msdus);
+	DP_TX_HIST_STATS_PER_PDEV();
 }

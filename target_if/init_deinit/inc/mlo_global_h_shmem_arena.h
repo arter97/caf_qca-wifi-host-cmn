@@ -80,10 +80,12 @@ struct wlan_host_mlo_glb_rx_reo_snapshot_info {
  * information in MLO global shared memory
  * @chip_id: MLO Chip ID
  * @crash_reason: Address of the crash_reason corresponding to chip_id
+ * @recovery_mode: Address of the recovery mode corresponding to chip_id
  */
 struct wlan_host_mlo_glb_per_chip_crash_info {
 	uint8_t chip_id;
 	void *crash_reason;
+	void *recovery_mode;
 };
 
 /*
@@ -125,21 +127,24 @@ struct wlan_host_mlo_glb_h_shmem_arena_ctx {
  * @arena_vaddr: Virtual address of the MLO Global shared memory arena
  * @arena_len: Length (in bytes) of the MLO Global shared memory arena
  * @grp_id: Id of the required MLO Group
+ * @recovery: MLO recovery is in progress
  *
  * Return: QDF_STATUS of operation
  */
 QDF_STATUS mlo_glb_h_shmem_arena_ctx_init(void *arena_vaddr,
 					  size_t arena_len,
-					  uint8_t grp_id);
+					  uint8_t grp_id,
+					  uint8_t recovery);
 
 /**
  * mlo_glb_h_shmem_arena_ctx_deinit() - De-initialize MLO Global shared memory
  * arena context on Host
  * @grp_id: Id of the required MLO Group
+ * @recovery: MLO recovery is in progress
  *
  * Return: QDF_STATUS of operation
  */
-QDF_STATUS mlo_glb_h_shmem_arena_ctx_deinit(uint8_t grp_id);
+QDF_STATUS mlo_glb_h_shmem_arena_ctx_deinit(uint8_t grp_id, uint8_t recovery);
 #endif
 
 #ifdef WLAN_MLO_GLOBAL_SHMEM_SUPPORT
@@ -154,6 +159,18 @@ QDF_STATUS mlo_glb_h_shmem_arena_ctx_deinit(uint8_t grp_id);
  */
 void *mlo_glb_h_shmem_arena_get_crash_reason_address(uint8_t grp_id,
 						     uint8_t chip_id);
+
+/**
+ * mlo_glb_h_shmem_arena_get_recovery_mode_address() - get the address of
+ * recovery mode associated with chip_id
+ * @grp_id: Id of the required MLO Group
+ * @chip_id: MLO Chip Id
+ *
+ * Return: Address of recovery mode field from global shmem arena in case of
+ * success, else returns NULL
+ */
+void *mlo_glb_h_shmem_arena_get_recovery_mode_address(uint8_t grp_id,
+						      uint8_t chip_id);
 
 /**
  * mlo_glb_h_shmem_arena_get_no_of_chips_from_crash_info() - Get number of chips

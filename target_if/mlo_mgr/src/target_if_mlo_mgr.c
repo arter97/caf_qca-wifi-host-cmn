@@ -192,6 +192,62 @@ target_if_extract_mlo_link_removal_info_mgmt_rx(
 }
 
 /**
+ * target_if_mlo_link_disable_request_event_handler() - Handler for MLO
+ * link disable request event sent by the FW
+ * @scn: scn handle
+ * @data: data buffer for event
+ * @datalen: data length
+ *
+ * Return: 0 on success, else error on failure
+ */
+static int
+target_if_mlo_link_disable_request_event_handler(ol_scn_t scn, uint8_t *data,
+						 uint32_t datalen)
+{
+	struct wlan_objmgr_psoc *psoc;
+	struct wmi_unified *wmi_handle;
+	struct wlan_lmac_if_mlo_rx_ops *mlo_rx_ops;
+	QDF_STATUS status;
+	struct mlo_link_disable_request_evt_params evt_params;
+
+	if (!scn || !data) {
+		target_if_err("scn: 0x%pK, data: 0x%pK", scn, data);
+		return -EINVAL;
+	}
+
+	psoc = target_if_get_psoc_from_scn_hdl(scn);
+	if (!psoc) {
+		target_if_err("null psoc");
+		return -EINVAL;
+	}
+
+	mlo_rx_ops = target_if_mlo_get_rx_ops(psoc);
+	if (!mlo_rx_ops || !mlo_rx_ops->mlo_link_disable_request_handler) {
+		target_if_err("callback not registered");
+		return -EINVAL;
+	}
+
+	wmi_handle = get_wmi_unified_hdl_from_psoc(psoc);
+	if (!wmi_handle) {
+		target_if_err("wmi_handle is null");
+		return -EINVAL;
+	}
+
+	status = wmi_extract_mlo_link_disable_request_evt(wmi_handle, data,
+							  &evt_params);
+	if (QDF_IS_STATUS_ERROR(status)) {
+		target_if_err("Unable to extract fixed param, ret = %d",
+			      status);
+		goto exit;
+	}
+
+	status = mlo_rx_ops->mlo_link_disable_request_handler(psoc,
+							      &evt_params);
+exit:
+	return qdf_status_to_os_return(status);
+}
+
+/**
  * target_if_mlo_register_event_handler() - function to register handler for
  *  mlo related wmi event from firmware.
  * @psoc: psoc pointer
@@ -236,6 +292,15 @@ target_if_mlo_register_event_handler(struct wlan_objmgr_psoc *psoc)
 	}
 
 	target_if_mlo_register_vdev_tid_to_link_map_event(wmi_handle);
+	target_if_mlo_register_mlo_link_state_info_event(wmi_handle);
+
+	status = wmi_unified_register_event(
+			wmi_handle,
+			wmi_mlo_link_disable_request_eventid,
+			target_if_mlo_link_disable_request_event_handler);
+	if (QDF_IS_STATUS_ERROR(status))
+		target_if_err("Couldn't register handler for Link removal WMI event %d",
+			      status);
 
 	return status;
 }
@@ -270,6 +335,10 @@ target_if_mlo_unregister_event_handler(struct wlan_objmgr_psoc *psoc)
 				     wmi_mlo_link_removal_eventid);
 
 	target_if_mlo_unregister_vdev_tid_to_link_map_event(wmi_handle);
+	target_if_mlo_unregister_mlo_link_state_info_event(wmi_handle);
+
+	wmi_unified_unregister_event(wmi_handle,
+				     wmi_mlo_link_disable_request_eventid);
 
 	return QDF_STATUS_SUCCESS;
 }
@@ -365,6 +434,65 @@ void target_if_mlo_unregister_vdev_tid_to_link_map_event(
 			wmi_handle, wmi_mlo_ap_vdev_tid_to_link_map_eventid);
 }
 
+static int target_if_mlo_link_state_info_event_handler(
+		ol_scn_t scn, uint8_t *event_buff, uint32_t len)
+{
+	struct wlan_objmgr_psoc *psoc;
+	struct wmi_unified *wmi_handle;
+	QDF_STATUS status;
+	struct wlan_lmac_if_mlo_rx_ops *mlo_rx_ops;
+	struct ml_link_state_info_event event = {0};
+
+	if (!event_buff) {
+		target_if_err("Received NULL event ptr from FW");
+		return -EINVAL;
+	}
+
+	psoc = target_if_get_psoc_from_scn_hdl(scn);
+	if (!psoc) {
+		target_if_err("PSOC is NULL");
+		return -EINVAL;
+	}
+
+	mlo_rx_ops = target_if_mlo_get_rx_ops(psoc);
+	if (!mlo_rx_ops || !mlo_rx_ops->process_mlo_link_state_info_event) {
+		target_if_err("callback not registered");
+		return -EINVAL;
+	}
+
+	wmi_handle = get_wmi_unified_hdl_from_psoc(psoc);
+	if (!wmi_handle) {
+		target_if_err("wmi_handle is null");
+		return -EINVAL;
+	}
+
+	if (wmi_extract_mlo_link_state_info_event(wmi_handle, event_buff,
+						  &event)) {
+		target_if_err("Failed to extract link status event");
+		return -EINVAL;
+	}
+
+	status = mlo_rx_ops->process_mlo_link_state_info_event(psoc, &event);
+	return qdf_status_to_os_return(status);
+}
+
+void target_if_mlo_register_mlo_link_state_info_event(
+		struct wmi_unified *wmi_handle)
+{
+	wmi_unified_register_event_handler(
+		wmi_handle, wmi_mlo_link_state_info_eventid,
+		target_if_mlo_link_state_info_event_handler,
+		WMI_RX_EXECUTION_CTX);
+}
+
+void  target_if_mlo_unregister_mlo_link_state_info_event(
+		struct wmi_unified *wmi_handle)
+{
+	wmi_unified_unregister_event_handler(
+			wmi_handle,
+			wmi_mlo_link_state_info_eventid);
+}
+
 #ifdef WLAN_FEATURE_11BE_MLO_ADV_FEATURE
 /**
  * target_if_fill_provisioned_links() - API to fill the provisioned links
@@ -451,6 +579,38 @@ target_if_mlo_send_tid_to_link_mapping(struct wlan_objmgr_vdev *vdev,
 	return status;
 }
 
+static QDF_STATUS
+target_if_request_ml_link_state_info(struct wlan_objmgr_psoc *psoc,
+				     struct mlo_link_state_cmd_params *cmd)
+{
+	struct wmi_unified *wmi_handle = NULL;
+	struct wmi_host_link_state_params params = {0};
+	QDF_STATUS status;
+
+	if (!psoc) {
+		target_if_err("null pdev");
+		return QDF_STATUS_E_NULL_VALUE;
+	}
+
+	wmi_handle = get_wmi_unified_hdl_from_psoc(psoc);
+	if (!wmi_handle) {
+		target_if_err("null wmi handle");
+		return QDF_STATUS_E_NULL_VALUE;
+	}
+
+	if (!cmd) {
+		target_if_err("cmd is null");
+		return QDF_STATUS_E_NULL_VALUE;
+	}
+
+	params.vdev_id = cmd->vdev_id;
+	qdf_mem_copy(params.mld_mac, cmd->mld_mac,
+		     QDF_MAC_ADDR_SIZE);
+
+	status = wmi_send_mlo_link_state_request_cmd(wmi_handle, &params);
+	return status;
+}
+
 QDF_STATUS target_if_mlo_send_link_removal_cmd(
 		struct wlan_objmgr_psoc *psoc,
 		const struct mlo_link_removal_cmd_params *param)
@@ -502,7 +662,8 @@ target_if_mlo_register_tx_ops(struct wlan_lmac_if_tx_ops *tx_ops)
 	mlo_tx_ops->send_tid_to_link_mapping =
 		target_if_mlo_send_tid_to_link_mapping;
 	mlo_tx_ops->send_link_removal_cmd = target_if_mlo_send_link_removal_cmd;
-
+	mlo_tx_ops->request_link_state_info_cmd =
+		target_if_request_ml_link_state_info;
 	return QDF_STATUS_SUCCESS;
 }
 

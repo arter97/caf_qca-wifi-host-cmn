@@ -543,6 +543,60 @@ static void dp_mlo_update_mlo_ts_offset(struct cdp_soc_t *soc_hdl,
 	be_soc->mlo_tstamp_offset = offset;
 }
 
+#ifdef CONFIG_MLO_SINGLE_DEV
+static void dp_mlo_aggregate_mld_vdev_stats(struct dp_vdev_be *be_vdev,
+					    struct dp_vdev *ptnr_vdev,
+					    void *arg)
+{
+	struct cdp_vdev_stats *tgt_vdev_stats = (struct cdp_vdev_stats *)arg;
+	struct cdp_vdev_stats *src_vdev_stats = &ptnr_vdev->stats;
+
+	/* Aggregate vdev ingress stats */
+	DP_UPDATE_INGRESS_STATS(tgt_vdev_stats, src_vdev_stats);
+
+	/* Aggregate unmapped peers stats */
+	DP_UPDATE_PER_PKT_STATS(tgt_vdev_stats, src_vdev_stats);
+	DP_UPDATE_EXTD_STATS(tgt_vdev_stats, src_vdev_stats);
+
+	/* Aggregate associated peers stats */
+	dp_vdev_iterate_peer(ptnr_vdev, dp_update_vdev_stats, tgt_vdev_stats,
+			     DP_MOD_ID_GENERIC_STATS);
+}
+
+static QDF_STATUS dp_mlo_get_mld_vdev_stats(struct cdp_soc_t *soc_hdl,
+					    uint8_t vdev_id, void *buf)
+{
+	struct dp_soc *soc = cdp_soc_t_to_dp_soc(soc_hdl);
+	struct dp_soc_be *be_soc = dp_get_be_soc_from_dp_soc(soc);
+	struct cdp_vdev_stats *vdev_stats;
+	struct dp_vdev *vdev = dp_vdev_get_ref_by_id(soc, vdev_id,
+						     DP_MOD_ID_GENERIC_STATS);
+	struct dp_vdev_be *vdev_be = NULL;
+
+	if (!vdev)
+		return QDF_STATUS_E_FAILURE;
+
+	vdev_be = dp_get_be_vdev_from_dp_vdev(vdev);
+	if (!vdev_be) {
+		dp_vdev_unref_delete(soc, vdev, DP_MOD_ID_GENERIC_STATS);
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	vdev_stats = (struct cdp_vdev_stats *)buf;
+
+	dp_aggregate_vdev_stats(vdev, buf);
+
+	/* Aggregate stats from partner vdevs */
+	dp_mlo_iter_ptnr_vdev(be_soc, vdev_be,
+			      dp_mlo_aggregate_mld_vdev_stats, buf,
+			      DP_MOD_ID_GENERIC_STATS);
+
+	dp_vdev_unref_delete(soc, vdev, DP_MOD_ID_GENERIC_STATS);
+
+	return QDF_STATUS_SUCCESS;
+}
+#endif
+
 static struct cdp_mlo_ops dp_mlo_ops = {
 	.mlo_soc_setup = dp_mlo_soc_setup,
 	.mlo_soc_teardown = dp_mlo_soc_teardown,
@@ -554,6 +608,9 @@ static struct cdp_mlo_ops dp_mlo_ops = {
 	.mlo_update_mlo_ts_offset = dp_mlo_update_mlo_ts_offset,
 	.mlo_ctxt_attach = dp_mlo_ctxt_attach_wifi3,
 	.mlo_ctxt_detach = dp_mlo_ctxt_detach_wifi3,
+#ifdef CONFIG_MLO_SINGLE_DEV
+	.mlo_get_mld_vdev_stats = dp_mlo_get_mld_vdev_stats,
+#endif
 };
 
 void dp_soc_mlo_fill_params(struct dp_soc *soc,
@@ -821,12 +878,12 @@ dp_soc_get_by_idle_bm_id(struct dp_soc *soc, uint8_t idle_bm_id)
 	return NULL;
 }
 
-#ifdef WLAN_MCAST_MLO
-void dp_mcast_mlo_iter_ptnr_vdev(struct dp_soc_be *be_soc,
-				 struct dp_vdev_be *be_vdev,
-				 dp_ptnr_vdev_iter_func func,
-				 void *arg,
-				 enum dp_mod_id mod_id)
+#ifdef WLAN_MLO_MULTI_CHIP
+void dp_mlo_iter_ptnr_vdev(struct dp_soc_be *be_soc,
+			   struct dp_vdev_be *be_vdev,
+			   dp_ptnr_vdev_iter_func func,
+			   void *arg,
+			   enum dp_mod_id mod_id)
 {
 	int i = 0;
 	int j = 0;
@@ -855,8 +912,10 @@ void dp_mcast_mlo_iter_ptnr_vdev(struct dp_soc_be *be_soc,
 	}
 }
 
-qdf_export_symbol(dp_mcast_mlo_iter_ptnr_vdev);
+qdf_export_symbol(dp_mlo_iter_ptnr_vdev);
+#endif
 
+#ifdef WLAN_MCAST_MLO
 struct dp_vdev *dp_mlo_get_mcast_primary_vdev(struct dp_soc_be *be_soc,
 					      struct dp_vdev_be *be_vdev,
 					      enum dp_mod_id mod_id)
@@ -864,6 +923,15 @@ struct dp_vdev *dp_mlo_get_mcast_primary_vdev(struct dp_soc_be *be_soc,
 	int i = 0;
 	int j = 0;
 	struct dp_mlo_ctxt *dp_mlo = be_soc->ml_ctxt;
+	struct dp_vdev *vdev = (struct dp_vdev *)be_vdev;
+
+	if (be_vdev->mcast_primary) {
+		if (dp_vdev_get_ref((struct dp_soc *)be_soc, vdev, mod_id) !=
+					QDF_STATUS_SUCCESS)
+			return NULL;
+
+		return vdev;
+	}
 
 	for (i = 0; i < WLAN_MAX_MLO_CHIPS ; i++) {
 		struct dp_soc *ptnr_soc =
@@ -1001,6 +1069,30 @@ static void dp_umac_reset_update_partner_map(struct dp_mlo_ctxt *mlo_ctx,
 		qdf_atomic_clear_bit(chip_id, &grp_umac_reset_ctx->partner_map);
 }
 
+QDF_STATUS dp_umac_reset_notify_asserted_soc(struct dp_soc *soc)
+{
+	struct dp_mlo_ctxt *mlo_ctx;
+	struct dp_soc_be *be_soc;
+
+	be_soc = dp_get_be_soc_from_dp_soc(soc);
+	if (!be_soc) {
+		dp_umac_reset_err("null be_soc");
+		return QDF_STATUS_E_NULL_VALUE;
+	}
+
+	mlo_ctx = be_soc->ml_ctxt;
+	if (!mlo_ctx) {
+		/* This API can be called for non-MLO SOC as well. Hence, return
+		 * the status as success when mlo_ctx is NULL.
+		 */
+		return QDF_STATUS_SUCCESS;
+	}
+
+	dp_umac_reset_update_partner_map(mlo_ctx, be_soc->mlo_chip_id, false);
+
+	return QDF_STATUS_SUCCESS;
+}
+
 /**
  * dp_umac_reset_complete_umac_recovery() - Complete Umac reset session
  * @soc: dp soc handle
@@ -1036,26 +1128,44 @@ void dp_umac_reset_complete_umac_recovery(struct dp_soc *soc)
 /**
  * dp_umac_reset_initiate_umac_recovery() - Initiate Umac reset session
  * @soc: dp soc handle
+ * @umac_reset_ctx: Umac reset context
+ * @rx_event: Rx event received
  * @is_target_recovery: Flag to indicate if it is triggered for target recovery
  *
- * Return: void
+ * Return: status
  */
-void dp_umac_reset_initiate_umac_recovery(struct dp_soc *soc,
-					  bool is_target_recovery)
+QDF_STATUS dp_umac_reset_initiate_umac_recovery(struct dp_soc *soc,
+				struct dp_soc_umac_reset_ctx *umac_reset_ctx,
+				enum umac_reset_rx_event rx_event,
+				bool is_target_recovery)
 {
 	struct dp_soc_be *be_soc = dp_get_be_soc_from_dp_soc(soc);
 	struct dp_mlo_ctxt *mlo_ctx = be_soc->ml_ctxt;
 	struct dp_soc_mlo_umac_reset_ctx *grp_umac_reset_ctx;
+	QDF_STATUS status = QDF_STATUS_SUCCESS;
 
 	if (!mlo_ctx)
-		return;
+		return dp_umac_reset_validate_n_update_state_machine_on_rx(
+					umac_reset_ctx, rx_event,
+					UMAC_RESET_STATE_WAIT_FOR_TRIGGER,
+					UMAC_RESET_STATE_DO_TRIGGER_RECEIVED);
 
 	grp_umac_reset_ctx = &mlo_ctx->grp_umac_reset_ctx;
 	qdf_spin_lock_bh(&grp_umac_reset_ctx->grp_ctx_lock);
 
 	if (grp_umac_reset_ctx->umac_reset_in_progress) {
 		qdf_spin_unlock_bh(&grp_umac_reset_ctx->grp_ctx_lock);
-		return;
+		return QDF_STATUS_E_INVAL;
+	}
+
+	status = dp_umac_reset_validate_n_update_state_machine_on_rx(
+					umac_reset_ctx, rx_event,
+					UMAC_RESET_STATE_WAIT_FOR_TRIGGER,
+					UMAC_RESET_STATE_DO_TRIGGER_RECEIVED);
+
+	if (status != QDF_STATUS_SUCCESS) {
+		qdf_spin_unlock_bh(&grp_umac_reset_ctx->grp_ctx_lock);
+		return status;
 	}
 
 	grp_umac_reset_ctx->umac_reset_in_progress = true;
@@ -1068,6 +1178,8 @@ void dp_umac_reset_initiate_umac_recovery(struct dp_soc *soc,
 	grp_umac_reset_ctx->umac_reset_count++;
 
 	qdf_spin_unlock_bh(&grp_umac_reset_ctx->grp_ctx_lock);
+
+	return QDF_STATUS_SUCCESS;
 }
 
 /**

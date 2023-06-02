@@ -57,6 +57,9 @@ typedef struct qdf_sglist {
 
 #define QDF_MAX_SCATTER __QDF_MAX_SCATTER
 #define QDF_NSEC_PER_MSEC __QDF_NSEC_PER_MSEC
+#define QDF_NSEC_PER_USEC __QDF_NSEC_PER_USEC
+#define QDF_USEC_PER_MSEC __QDF_USEC_PER_MSEC
+#define QDF_NSEC_PER_SEC __QDF_NSEC_PER_SEC
 
 /**
  * QDF_SWAP_U16 - swap input u16 value
@@ -450,6 +453,8 @@ typedef bool (*qdf_irqlocked_func_t)(void *);
  * @QDF_MODULE_ID_COAP: Constrained Application Protocol module ID
  * @QDF_MODULE_ID_QMI: QMI module ID
  * @QDF_MODULE_ID_ANY: anything
+ * @QDF_MODULE_ID_SOUNDING: txbf SOUNDING
+ * @QDF_MODULE_ID_SAWF: SAWF module ID
  * @QDF_MODULE_ID_MAX: Max place holder module ID
  *
  * New module ID needs to be added in qdf trace along with this enum.
@@ -614,6 +619,8 @@ typedef enum {
 	QDF_MODULE_ID_SCS,
 	QDF_MODULE_ID_COAP,
 	QDF_MODULE_ID_QMI,
+	QDF_MODULE_ID_SOUNDING,
+	QDF_MODULE_ID_SAWF,
 	QDF_MODULE_ID_ANY,
 	QDF_MODULE_ID_MAX,
 } QDF_MODULE_ID;

@@ -1114,8 +1114,10 @@ more_msdu_link_desc:
 		DP_RX_LIST_APPEND(head_nbuf, tail_nbuf, nbuf);
 
 		if (qdf_unlikely(msdu_list.msdu_info[i].msdu_flags &
-				 HAL_MSDU_F_MSDU_CONTINUATION))
+				 HAL_MSDU_F_MSDU_CONTINUATION)) {
+			qdf_nbuf_set_rx_chfrag_cont(nbuf, 1);
 			continue;
+		}
 
 		if (dp_rx_buffer_pool_refill(soc, head_nbuf,
 					     rx_desc_pool_id)) {
@@ -1180,6 +1182,15 @@ more_msdu_link_desc:
 		rx_tlv_hdr_last = qdf_nbuf_data(tail_nbuf);
 
 		if (qdf_unlikely(head_nbuf != tail_nbuf)) {
+			/*
+			 * For SG case, only the length of last skb is valid
+			 * as HW only populate the msdu_len for last msdu
+			 * in rx link descriptor, use the length from
+			 * last skb to overwrite the head skb for further
+			 * SG processing.
+			 */
+			QDF_NBUF_CB_RX_PKT_LEN(head_nbuf) =
+					QDF_NBUF_CB_RX_PKT_LEN(tail_nbuf);
 			nbuf = dp_rx_sg_create(soc, head_nbuf);
 			qdf_nbuf_set_is_frag(nbuf, 1);
 			DP_STATS_INC(soc, rx.err.reo_err_oor_sg_count, 1);
@@ -1523,7 +1534,7 @@ fail:
 }
 
 #if defined(WLAN_FEATURE_11BE_MLO) && defined(WLAN_MLO_MULTI_CHIP) && \
-	defined(WLAN_MCAST_MLO) && !defined(CONFIG_MLO_SINGLE_DEV)
+	defined(WLAN_MCAST_MLO)
 static bool dp_rx_igmp_handler(struct dp_soc *soc,
 			       struct dp_vdev *vdev,
 			       struct dp_txrx_peer *peer,
@@ -1577,6 +1588,22 @@ dp_rx_err_route_hdl(struct dp_soc *soc, qdf_nbuf_t nbuf,
 	struct hal_rx_msdu_metadata msdu_metadata;
 	bool is_eapol;
 
+	qdf_nbuf_set_rx_chfrag_start(
+				nbuf,
+				hal_rx_msdu_end_first_msdu_get(soc->hal_soc,
+							       rx_tlv_hdr));
+	qdf_nbuf_set_rx_chfrag_end(nbuf,
+				   hal_rx_msdu_end_last_msdu_get(soc->hal_soc,
+								 rx_tlv_hdr));
+	qdf_nbuf_set_da_mcbc(nbuf, hal_rx_msdu_end_da_is_mcbc_get(soc->hal_soc,
+								  rx_tlv_hdr));
+	qdf_nbuf_set_da_valid(nbuf,
+			      hal_rx_msdu_end_da_is_valid_get(soc->hal_soc,
+							      rx_tlv_hdr));
+	qdf_nbuf_set_sa_valid(nbuf,
+			      hal_rx_msdu_end_sa_is_valid_get(soc->hal_soc,
+							      rx_tlv_hdr));
+
 	hal_rx_msdu_metadata_get(soc->hal_soc, rx_tlv_hdr, &msdu_metadata);
 	msdu_len = hal_rx_msdu_start_msdu_len_get(soc->hal_soc, rx_tlv_hdr);
 	pkt_len = msdu_len + msdu_metadata.l3_hdr_pad + soc->rx_pkt_tlv_size;
@@ -1622,6 +1649,7 @@ dp_rx_err_route_hdl(struct dp_soc *soc, qdf_nbuf_t nbuf,
 		qdf_nbuf_pull_head(nbuf, (msdu_metadata.l3_hdr_pad +
 				   soc->rx_pkt_tlv_size));
 
+	QDF_NBUF_CB_RX_PEER_ID(nbuf) = txrx_peer->peer_id;
 	if (dp_rx_igmp_handler(soc, vdev, txrx_peer, nbuf, link_id))
 		return;
 
@@ -2372,10 +2400,7 @@ dp_rx_wbm_err_process(struct dp_intr *int_ctx, struct dp_soc *soc,
 		 * retrieve the wbm desc info from nbuf TLV, so we can
 		 * handle error cases appropriately
 		 */
-		hal_rx_priv_info_get_from_tlv(soc->hal_soc, rx_tlv_hdr,
-					      (uint8_t *)&wbm_err_info,
-					      sizeof(wbm_err_info));
-
+		wbm_err_info = dp_rx_get_err_info(soc, nbuf);
 		peer_meta_data = hal_rx_tlv_peer_meta_data_get(soc->hal_soc,
 							       rx_tlv_hdr);
 		peer_id = dp_rx_peer_metadata_peer_id_get(soc, peer_meta_data);
@@ -2422,11 +2447,15 @@ dp_rx_wbm_err_process(struct dp_intr *int_ctx, struct dp_soc *soc,
 
 		if (dp_pdev && dp_pdev->link_peer_stats &&
 		    txrx_peer && txrx_peer->is_mld_peer) {
-			link_id = ((dp_rx_peer_mdata_link_id_get(
+			link_id = dp_rx_peer_mdata_link_id_get(
 							soc,
-							peer_meta_data)) + 1);
-			if (link_id < 1 || link_id > DP_MAX_MLO_LINKS)
-				link_id = 0;
+							peer_meta_data);
+				if (!link_id) {
+					DP_PEER_PER_PKT_STATS_INC(
+						  txrx_peer,
+						  rx.inval_link_id_pkt_cnt,
+						  1, link_id);
+				}
 		} else {
 			link_id = 0;
 		}

@@ -486,8 +486,8 @@ QDF_STATUS htt_h2t_rx_cce_super_rule_setup(struct htt_soc *soc, void *param)
 	qdf_nbuf_t msg;
 	uint32_t *msg_word;
 	uint8_t *htt_logger_bufp;
-	uint8_t ver = 0;
-	uint8_t i, j, valid = 0;
+	uint16_t ver = 0;
+	uint8_t i, valid = 0;
 	uint8_t num_filters = flt_params->num_filters;
 	uint8_t pdev_id = flt_params->pdev_id;
 	uint8_t op = flt_params->op;
@@ -495,7 +495,7 @@ QDF_STATUS htt_h2t_rx_cce_super_rule_setup(struct htt_soc *soc, void *param)
 	uint16_t ipv6 = qdf_ntohs(QDF_NBUF_TRAC_IPV6_ETH_TYPE);
 	QDF_STATUS status;
 
-	if (num_filters > IPA_WDI_MAX_FILTER) {
+	if (num_filters > RX_CCE_SUPER_RULE_SETUP_NUM) {
 		dp_htt_err("Wrong filter count %d", num_filters);
 		return QDF_STATUS_FILT_REQ_ERROR;
 	}
@@ -523,7 +523,7 @@ QDF_STATUS htt_h2t_rx_cce_super_rule_setup(struct htt_soc *soc, void *param)
 	HTT_RX_CCE_SUPER_RULE_SETUP_OPERATION_SET(*msg_word, op);
 
 	/* Set cce_super_rule_params */
-	for (i = 0; i < num_filters; i++) {
+	for (i = 0; i < RX_CCE_SUPER_RULE_SETUP_NUM; i++) {
 		valid = flt_params->flt_addr_params[i].valid;
 		ver = flt_params->flt_addr_params[i].l3_type;
 		msg_word++;
@@ -537,8 +537,7 @@ QDF_STATUS htt_h2t_rx_cce_super_rule_setup(struct htt_soc *soc, void *param)
 				msg_word,
 				flt_params->flt_addr_params[i].src_ipv6_addr);
 		} else {
-			dp_htt_err("Wrong ip version. Cannot set src_addr.");
-			return QDF_STATUS_FILT_REQ_ERROR;
+			dp_htt_debug("Filter %d not in use.", i);
 		}
 
 		/* move uint32_t *msg_word by IPV6 addr size */
@@ -553,8 +552,7 @@ QDF_STATUS htt_h2t_rx_cce_super_rule_setup(struct htt_soc *soc, void *param)
 				msg_word,
 				flt_params->flt_addr_params[i].dst_ipv6_addr);
 		} else {
-			dp_htt_err("Wrong ip version. Cannot set dst_addr.");
-			return QDF_STATUS_FILT_REQ_ERROR;
+			dp_htt_debug("Filter %d not in use.", i);
 		}
 
 		/* move uint32_t *msg_word by IPV6 addr size */
@@ -572,14 +570,14 @@ QDF_STATUS htt_h2t_rx_cce_super_rule_setup(struct htt_soc *soc, void *param)
 				*msg_word,
 				flt_params->flt_addr_params[i].dst_port);
 
-		dp_info("opt_dp:: pdev: %u ver %u, flt_num %u, op %u,"
+		dp_info("opt_dp:: pdev: %u ver %u, flt_num %u, op %u",
 			pdev_id, ver, i, op);
 		dp_info("valid %u", valid);
 	}
 
 	pkt = htt_htc_pkt_alloc(soc);
 	if (!pkt) {
-		dp_htt_err("%pK: Fail to allocate dp_htt_htc_pkt buffer");
+		dp_htt_err("Fail to allocate dp_htt_htc_pkt buffer");
 		qdf_assert(0);
 		qdf_nbuf_free(msg);
 		return QDF_STATUS_E_NOMEM;
@@ -2418,10 +2416,11 @@ dp_h2t_ptqm_migration_msg_send(struct dp_soc *dp_soc, uint16_t vdev_id,
 	qdf_nbuf_t msg;
 	uint32_t *msg_word;
 	QDF_STATUS ret = QDF_STATUS_SUCCESS;
+	bool src_info_valid = false;
 
 	msg = qdf_nbuf_alloc(
 			soc->osdev,
-			HTT_MSG_BUF_SIZE(HTT_H2T_REO_MIGRATION_RESP_MSG_SZ),
+			HTT_MSG_BUF_SIZE(sizeof(htt_h2t_primary_link_peer_migrate_resp_t)),
 			HTC_HEADER_LEN + HTC_HDR_ALIGNMENT_PADDING, 4, TRUE);
 
 	if (!msg)
@@ -2433,7 +2432,7 @@ dp_h2t_ptqm_migration_msg_send(struct dp_soc *dp_soc, uint16_t vdev_id,
 	 * separately during the below call to qdf_nbuf_push_head.
 	 * The contribution from the HTC header is added separately inside HTC.
 	 */
-	if (qdf_nbuf_put_tail(msg, HTT_H2T_REO_MIGRATION_RESP_MSG_SZ)
+	if (qdf_nbuf_put_tail(msg, sizeof(htt_h2t_primary_link_peer_migrate_resp_t))
 			      == NULL) {
 		dp_htt_err("Failed to expand head for"
 			   "HTT_H2T_MSG_TYPE_PRIMARY_LINK_PEER_MIGRATE_RESP");
@@ -2442,7 +2441,7 @@ dp_h2t_ptqm_migration_msg_send(struct dp_soc *dp_soc, uint16_t vdev_id,
 	}
 
 	msg_word = (uint32_t *)qdf_nbuf_data(msg);
-	memset(msg_word, 0, HTT_H2T_REO_MIGRATION_RESP_MSG_SZ);
+	memset(msg_word, 0, sizeof(htt_h2t_primary_link_peer_migrate_resp_t));
 
 	qdf_nbuf_push_head(msg, HTC_HDR_ALIGNMENT_PADDING);
 	htt_logger_bufp = (uint8_t *)msg_word;
@@ -2464,8 +2463,14 @@ dp_h2t_ptqm_migration_msg_send(struct dp_soc *dp_soc, uint16_t vdev_id,
 	/* word 1 */
 	msg_word++;
 	*msg_word = 0;
-	HTT_H2T_PRIMARY_LINK_PEER_MIGRATE_SRCINFO_SET(*msg_word,
-						      src_info);
+
+	if (src_info != 0)
+		src_info_valid = true;
+
+	HTT_H2T_PRIMARY_LINK_PEER_MIGRATE_SRC_INFO_VALID_SET(*msg_word,
+							     src_info_valid);
+	HTT_H2T_PRIMARY_LINK_PEER_MIGRATE_SRC_INFO_SET(*msg_word,
+						       src_info);
 	HTT_H2T_PRIMARY_LINK_PEER_MIGRATE_STATUS_SET(*msg_word,
 						     status);
 
@@ -3235,9 +3240,22 @@ static inline void dp_update_mlo_ts_offset(struct dp_soc *soc,
 	soc->cdp_soc.ops->mlo_ops->mlo_update_mlo_ts_offset
 		((struct cdp_soc_t *)soc, mlo_offset);
 }
+
+static inline
+void dp_update_mlo_delta_tsf2(struct dp_soc *soc, struct dp_pdev *pdev)
+{
+	uint64_t delta_tsf2 = 0;
+
+	hal_get_tsf2_offset(soc->hal_soc, pdev->lmac_id, &delta_tsf2);
+	soc->cdp_soc.ops->mlo_ops->mlo_update_delta_tsf2
+		((struct cdp_soc_t *)soc, pdev->pdev_id, delta_tsf2);
+}
 #else
 static inline void dp_update_mlo_ts_offset(struct dp_soc *soc,
 					   uint32_t ts_lo, uint32_t ts_hi)
+{}
+static inline
+void dp_update_mlo_delta_tsf2(struct dp_soc *soc, struct dp_pdev *pdev)
 {}
 #endif
 static void dp_htt_mlo_peer_map_handler(struct htt_soc *soc,
@@ -3432,6 +3450,8 @@ dp_rx_mlo_timestamp_ind_handler(struct dp_soc *soc,
 	dp_update_mlo_ts_offset(soc,
 				pdev->timestamp.mlo_offset_lo_us,
 				pdev->timestamp.mlo_offset_hi_us);
+
+	dp_update_mlo_delta_tsf2(soc, pdev);
 }
 #else
 static void dp_htt_mlo_peer_map_handler(struct htt_soc *soc,
@@ -3554,24 +3574,25 @@ static void dp_ipa_rx_cce_super_rule_setup_done_handler(struct htt_soc *soc,
 								*msg_word);
 		if (is_rules_enough == 1) {
 			is_success = true;
-			reserve_fail_cnt = 0;
+			soc->stats.reserve_fail_cnt = 0;
 		} else {
 			is_success = false;
-			soc->reserve_fail_cnt++;
-			if (soc->reserve_fail_cnt > MAX_RESERVE_FAIL_ATTEMPT) {
+			soc->stats.reserve_fail_cnt++;
+			if (soc->stats.reserve_fail_cnt >
+					MAX_RESERVE_FAIL_ATTEMPT) {
 				/*
 				 * IPA will retry only after an hour by default
 				 * after MAX_RESERVE_FAIL_ATTEMPT
 				 */
-				soc->abort_count++;
-				soc->reserve_fail_cnt = 0;
+				soc->stats.abort_count++;
+				soc->stats.reserve_fail_cnt = 0;
 				dp_info(
 				  "opt_dp: Filter reserve failed max attempts");
 			}
 			dp_info("opt_dp:: Filter reserve failed. Rules avail %d",
 				num_rules_avail);
 		}
-		dp_ipa_wdi_opt_dpath_notify_flt_rsvd_per_inst(is_success);
+		dp_ipa_wdi_opt_dpath_notify_flt_rsvd(is_success);
 		break;
 	}
 	case HTT_RX_CCE_SUPER_RULE_INSTALL_RESPONSE:
@@ -3596,8 +3617,8 @@ static void dp_ipa_rx_cce_super_rule_setup_done_handler(struct htt_soc *soc,
 			HTT_RX_CCE_SUPER_RULE_SETUP_DONE_CFG_RESULT_1_GET(
 								     *msg_word);
 
-		dp_ipa_wdi_opt_dpath_notify_flt_rlsd_per_inst(filter0_result,
-							      filter1_result);
+		dp_ipa_wdi_opt_dpath_notify_flt_rlsd(filter0_result,
+						     filter1_result);
 		break;
 	}
 	default:
@@ -3818,10 +3839,7 @@ void dp_htt_t2h_msg_handler(void *context, HTC_PACKET *pkt)
 			u_int8_t vdev_id;
 			bool is_wds;
 			u_int16_t ast_hash;
-			struct dp_ast_flow_override_info ast_flow_info;
-
-			qdf_mem_set(&ast_flow_info, 0,
-					    sizeof(struct dp_ast_flow_override_info));
+			struct dp_ast_flow_override_info ast_flow_info = {0};
 
 			peer_id = HTT_RX_PEER_MAP_V2_SW_PEER_ID_GET(*msg_word);
 			hw_peer_id =

@@ -84,6 +84,41 @@ mlo_free_connect_ies(struct wlan_cm_connect_req *connect_req)
 }
 
 /*
+ * mlo_get_tdls_link_vdev() - API to get tdls link vdev
+ * @mlo_dev_ctx: pointer to mlo dev context
+ *
+ * Return: MLD tdls link vdev
+ */
+static inline struct wlan_objmgr_vdev *
+mlo_get_tdls_link_vdev(struct wlan_mlo_dev_context *mlo_dev_ctx)
+{
+	uint8_t i = 0;
+
+	if (!mlo_dev_ctx)
+		return NULL;
+
+	for (i =  0; i < WLAN_UMAC_MLO_MAX_VDEVS; i++) {
+		if (!mlo_dev_ctx->wlan_vdev_list[i])
+			continue;
+
+		if (wlan_vdev_mlme_is_tdls_vdev(mlo_dev_ctx->wlan_vdev_list[i]))
+			return mlo_dev_ctx->wlan_vdev_list[i];
+	}
+	return NULL;
+}
+
+struct wlan_objmgr_vdev *
+wlan_mlo_get_tdls_link_vdev(struct wlan_objmgr_vdev *vdev)
+{
+	struct wlan_mlo_dev_context *mlo_dev_ctx = vdev->mlo_dev_ctx;
+
+	if (!mlo_dev_ctx || !wlan_vdev_mlme_is_mlo_vdev(vdev))
+		return NULL;
+
+	return mlo_get_tdls_link_vdev(mlo_dev_ctx);
+}
+
+/*
  * mlo_get_assoc_link_vdev - API to get assoc link vdev
  *
  * @mlo_dev_ctx: pointer to mlo dev context
@@ -2420,4 +2455,48 @@ err_release_refs:
 	for (i = 0; i < vdev_count; i++)
 		mlo_release_vdev_ref(wlan_vdev_list[i]);
 }
+
+QDF_STATUS
+mlo_get_link_state_context(struct wlan_objmgr_psoc *psoc,
+			   get_ml_link_state_cb *resp_cb,
+			   void **context, uint8_t vdev_id)
+{
+	struct wlan_mlo_dev_context *mlo_ctx;
+	struct wlan_mlo_sta *sta_ctx = NULL;
+	struct wlan_objmgr_vdev *vdev;
+
+	vdev = wlan_objmgr_get_vdev_by_id_from_psoc(psoc, vdev_id,
+						    WLAN_MLO_MGR_ID);
+	if (!vdev)
+		return QDF_STATUS_E_NULL_VALUE;
+
+	if (!wlan_vdev_mlme_is_mlo_vdev(vdev)) {
+		wlan_objmgr_vdev_release_ref(vdev, WLAN_MLO_MGR_ID);
+		return QDF_STATUS_E_NULL_VALUE;
+	}
+
+	mlo_ctx = vdev->mlo_dev_ctx;
+
+	if (!mlo_ctx) {
+		mlo_err("null mlo_dev_ctx");
+		wlan_objmgr_vdev_release_ref(vdev, WLAN_MLO_MGR_ID);
+		return QDF_STATUS_E_NULL_VALUE;
+	}
+
+	sta_ctx = mlo_ctx->sta_ctx;
+
+	if (!sta_ctx) {
+		wlan_objmgr_vdev_release_ref(vdev, WLAN_MLO_MGR_ID);
+		return QDF_STATUS_E_INVAL;
+	}
+
+	mlo_dev_lock_acquire(mlo_ctx);
+	*resp_cb = sta_ctx->ml_link_state.ml_link_state_resp_cb;
+	*context = sta_ctx->ml_link_state.ml_link_state_req_context;
+
+	mlo_dev_lock_release(mlo_ctx);
+	wlan_objmgr_vdev_release_ref(vdev, WLAN_MLO_MGR_ID);
+	return QDF_STATUS_SUCCESS;
+}
+
 #endif

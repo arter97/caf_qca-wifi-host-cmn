@@ -254,8 +254,6 @@ dp_tx_tso_history_add(struct dp_soc *soc, struct qdf_tso_info_t tso_info,
 }
 #endif /* WLAN_FEATURE_DP_TX_DESC_HISTORY */
 
-static int dp_get_rtpm_tput_policy_requirement(struct dp_soc *soc);
-
 /**
  * dp_is_tput_high() - Check if throughput is high
  *
@@ -1597,14 +1595,6 @@ dp_tx_check_and_flush_hp(struct dp_soc *soc,
 #endif
 
 #ifdef FEATURE_RUNTIME_PM
-static inline int dp_get_rtpm_tput_policy_requirement(struct dp_soc *soc)
-{
-	int ret;
-
-	ret = qdf_atomic_read(&soc->rtpm_high_tput_flag) &&
-	      (hif_rtpm_get_state() <= HIF_RTPM_STATE_ON);
-	return ret;
-}
 void
 dp_tx_ring_access_end_wrapper(struct dp_soc *soc,
 			      hal_ring_handle_t hal_ring_hdl,
@@ -1656,11 +1646,6 @@ dp_tx_ring_access_end_wrapper(struct dp_soc *soc,
 	}
 }
 #endif
-
-static inline int dp_get_rtpm_tput_policy_requirement(struct dp_soc *soc)
-{
-	return 0;
-}
 #endif
 
 /**
@@ -1865,6 +1850,14 @@ static uint8_t dp_htt_tx_comp_get_status(struct dp_soc *soc, char *htt_desc)
 		tx_status = HTT_TX_WBM_COMPLETION_V3_TX_STATUS_GET(htt_desc[0]);
 		break;
 
+	case CDP_ARCH_TYPE_RH:
+		{
+			uint32_t *msg_word = (uint32_t *)htt_desc;
+
+			tx_status = HTT_TX_MSDU_INFO_RELEASE_REASON_GET(
+							*(msg_word + 3));
+		}
+		break;
 	default:
 		dp_err("Incorrect CDP_ARCH %d", soc->arch_id);
 		QDF_BUG(0);
@@ -1998,6 +1991,9 @@ is_nbuf_frm_rmnet(qdf_nbuf_t nbuf, struct dp_tx_msdu_info_s *msdu_info)
 	uint8_t *payload_addr = NULL;
 
 	ingress_dev = dev_get_by_index(dev_net(nbuf->dev), nbuf->skb_iif);
+
+	if (!ingress_dev)
+		return false;
 
 	if ((ingress_dev->priv_flags & IFF_PHONY_HEADROOM)) {
 		dev_put(ingress_dev);
@@ -2267,9 +2263,7 @@ dp_tx_update_mcast_param(uint16_t peer_id,
 						    msdu_info->gsn);
 
 		msdu_info->vdev_id = vdev->vdev_id + DP_MLO_VDEV_ID_OFFSET;
-		if (qdf_unlikely(vdev->nawds_enabled ||
-				 dp_vdev_is_wds_ext_enabled(vdev)))
-			HTT_TX_TCL_METADATA_GLBL_SEQ_HOST_INSPECTED_SET(
+		HTT_TX_TCL_METADATA_GLBL_SEQ_HOST_INSPECTED_SET(
 							*htt_tcl_metadata, 1);
 	} else {
 		msdu_info->vdev_id = vdev->vdev_id;
@@ -3807,7 +3801,6 @@ qdf_nbuf_t dp_tx_send_vdev_id_check(struct cdp_soc_t *soc_hdl,
  *
  * Return: status
  */
-static inline
 int dp_tx_proxy_arp(struct dp_vdev *vdev, qdf_nbuf_t nbuf)
 {
 	if (vdev->osif_proxy_arp)
@@ -3823,7 +3816,6 @@ int dp_tx_proxy_arp(struct dp_vdev *vdev, qdf_nbuf_t nbuf)
 	return QDF_STATUS_NOT_INITIALIZED;
 }
 #else
-static inline
 int dp_tx_proxy_arp(struct dp_vdev *vdev, qdf_nbuf_t nbuf)
 {
 	return QDF_STATUS_SUCCESS;
@@ -4582,8 +4574,8 @@ dp_tx_update_peer_extd_stats(struct hal_tx_completion_status *ts,
 }
 #endif
 
-#ifdef WLAN_FEATURE_11BE_MLO
-static inline int
+#if defined(WLAN_FEATURE_11BE_MLO) && defined(QCA_ENHANCED_STATS_SUPPORT)
+static inline uint8_t
 dp_tx_get_link_id_from_ppdu_id(struct dp_soc *soc,
 			       struct hal_tx_completion_status *ts,
 			       struct dp_txrx_peer *txrx_peer,
@@ -4599,13 +4591,19 @@ dp_tx_get_link_id_from_ppdu_id(struct dp_soc *soc,
 	link_id_offset = soc->link_id_offset;
 	link_id_bits = soc->link_id_bits;
 	ppdu_id = ts->ppdu_id;
-	hw_link_id = DP_GET_HW_LINK_ID_FRM_PPDU_ID(ppdu_id, link_id_offset,
-						   link_id_bits);
+	hw_link_id = ((DP_GET_HW_LINK_ID_FRM_PPDU_ID(ppdu_id, link_id_offset,
+						   link_id_bits)) + 1);
+	if (hw_link_id > DP_MAX_MLO_LINKS) {
+		hw_link_id = 0;
+		DP_PEER_PER_PKT_STATS_INC(
+				txrx_peer,
+				tx.inval_link_id_pkt_cnt, 1, hw_link_id);
+	}
 
-	return (hw_link_id + 1);
+	return hw_link_id;
 }
 #else
-static inline int
+static inline uint8_t
 dp_tx_get_link_id_from_ppdu_id(struct dp_soc *soc,
 			       struct hal_tx_completion_status *ts,
 			       struct dp_txrx_peer *txrx_peer,
@@ -5299,14 +5297,15 @@ void dp_tx_comp_process_tx_status(struct dp_soc *soc,
 			 "transmit_cnt = %d \n"
 			 "tid = %d \n"
 			 "peer_id = %d\n"
-			 "tx_status = %d\n",
+			 "tx_status = %d\n"
+			 "tx_release_source = %d\n",
 			 ts->ack_frame_rssi, ts->first_msdu,
 			 ts->last_msdu, ts->msdu_part_of_amsdu,
 			 ts->valid, ts->bw, ts->pkt_type, ts->stbc,
 			 ts->ldpc, ts->sgi, ts->mcs, ts->ofdma,
 			 ts->tones_in_ru, ts->tsf, ts->ppdu_id,
 			 ts->transmit_cnt, ts->tid, ts->peer_id,
-			 ts->status);
+			 ts->status, ts->release_src);
 
 	/* Update SoC level stats */
 	DP_STATS_INCC(soc, tx.dropped_fw_removed, 1,
@@ -5319,11 +5318,7 @@ void dp_tx_comp_process_tx_status(struct dp_soc *soc,
 	}
 	vdev = txrx_peer->vdev;
 
-#ifdef DP_MLO_LINK_STATS_SUPPORT
 	link_id = dp_tx_get_link_id_from_ppdu_id(soc, ts, txrx_peer, vdev);
-	if (link_id < 1 || link_id > DP_MAX_MLO_LINKS)
-		link_id = 0;
-#endif
 
 	dp_tx_update_connectivity_stats(soc, vdev, tx_desc, ts->status);
 	dp_tx_update_uplink_delay(soc, vdev, ts);
@@ -5562,6 +5557,50 @@ dp_tx_nbuf_dev_kfree_list(qdf_nbuf_queue_head_t *nbuf_queue_head)
 }
 #endif
 
+#ifdef WLAN_SUPPORT_PPEDS
+static inline void
+dp_tx_update_ppeds_tx_comp_stats(struct dp_soc *soc,
+				 struct dp_txrx_peer *txrx_peer,
+				 struct hal_tx_completion_status *ts,
+				 struct dp_tx_desc_s *desc,
+				 uint8_t ring_id)
+{
+	uint8_t link_id = 0;
+	struct dp_vdev *vdev = NULL;
+
+	if (qdf_likely(txrx_peer)) {
+		if (!(desc->flags & DP_TX_DESC_FLAG_SIMPLE)) {
+			hal_tx_comp_get_status(&desc->comp,
+					       ts,
+					       soc->hal_soc);
+			vdev = txrx_peer->vdev;
+			link_id = dp_tx_get_link_id_from_ppdu_id(soc,
+								 ts,
+								 txrx_peer,
+								 vdev);
+			if (link_id < 1 || link_id > DP_MAX_MLO_LINKS)
+				link_id = 0;
+			dp_tx_update_peer_stats(desc, ts,
+						txrx_peer,
+						ring_id,
+						link_id);
+		} else {
+			dp_tx_update_peer_basic_stats(txrx_peer, desc->length,
+						      desc->tx_status, false);
+		}
+	}
+}
+#else
+static inline void
+dp_tx_update_ppeds_tx_comp_stats(struct dp_soc *soc,
+				 struct dp_txrx_peer *txrx_peer,
+				 struct hal_tx_completion_status *ts,
+				 struct dp_tx_desc_s *desc,
+				 uint8_t ring_id)
+{
+}
+#endif
+
 void
 dp_tx_comp_process_desc_list(struct dp_soc *soc,
 			     struct dp_tx_desc_s *comp_head, uint8_t ring_id)
@@ -5600,14 +5639,19 @@ dp_tx_comp_process_desc_list(struct dp_soc *soc,
 
 		if (desc->flags & DP_TX_DESC_FLAG_PPEDS) {
 			qdf_nbuf_t nbuf;
+			dp_tx_update_ppeds_tx_comp_stats(soc, txrx_peer, &ts,
+							 desc, ring_id);
 
-			if (qdf_likely(txrx_peer))
-				dp_tx_update_peer_basic_stats(txrx_peer,
-							      desc->length,
-							      desc->tx_status,
-							      false);
-			nbuf = dp_ppeds_tx_desc_free(soc, desc);
-			dp_tx_nbuf_dev_queue_free_no_flag(&h, nbuf);
+			if (desc->pool_id != DP_TX_PPEDS_POOL_ID) {
+				nbuf = desc->nbuf;
+				dp_tx_nbuf_dev_queue_free_no_flag(&h, nbuf);
+				dp_tx_desc_free(soc, desc, desc->pool_id);
+
+				__dp_tx_outstanding_dec(soc);
+			} else {
+				nbuf = dp_ppeds_tx_desc_free(soc, desc);
+				dp_tx_nbuf_dev_queue_free_no_flag(&h, nbuf);
+			}
 			desc = next;
 			continue;
 		}
@@ -5725,6 +5769,7 @@ void dp_tx_desc_check_corruption(struct dp_tx_desc_s *tx_desc)
 }
 #endif
 
+#ifndef WLAN_SOFTUMAC_SUPPORT
 uint32_t dp_tx_comp_handler(struct dp_intr *int_ctx, struct dp_soc *soc,
 			    hal_ring_handle_t hal_ring_hdl, uint8_t ring_id,
 			    uint32_t quota)
@@ -5991,6 +6036,7 @@ next_desc:
 
 	return num_processed;
 }
+#endif
 
 #ifdef FEATURE_WLAN_TDLS
 qdf_nbuf_t dp_tx_non_std(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
@@ -6351,6 +6397,7 @@ static void dp_tx_tso_cmn_desc_pool_free(struct dp_soc *soc, uint8_t num_pool)
 	dp_tx_tso_num_seg_pool_free(soc, num_pool);
 }
 
+#ifndef WLAN_SOFTUMAC_SUPPORT
 void dp_soc_tx_desc_sw_pools_free(struct dp_soc *soc)
 {
 	uint8_t num_pool;
@@ -6373,6 +6420,26 @@ void dp_soc_tx_desc_sw_pools_deinit(struct dp_soc *soc)
 	dp_tx_ext_desc_pool_deinit(soc, num_pool);
 	dp_tx_deinit_static_pools(soc, num_pool);
 }
+#else
+void dp_soc_tx_desc_sw_pools_free(struct dp_soc *soc)
+{
+	uint8_t num_pool;
+
+	num_pool = wlan_cfg_get_num_tx_desc_pool(soc->wlan_cfg_ctx);
+
+	dp_tx_delete_static_pools(soc, num_pool);
+}
+
+void dp_soc_tx_desc_sw_pools_deinit(struct dp_soc *soc)
+{
+	uint8_t num_pool;
+
+	num_pool = wlan_cfg_get_num_tx_desc_pool(soc->wlan_cfg_ctx);
+
+	dp_tx_flow_control_deinit(soc);
+	dp_tx_deinit_static_pools(soc, num_pool);
+}
+#endif /*WLAN_SOFTUMAC_SUPPORT*/
 
 /**
  * dp_tx_tso_cmn_desc_pool_alloc() - TSO cmn desc pool allocator
@@ -6431,6 +6498,7 @@ static QDF_STATUS dp_tx_tso_cmn_desc_pool_init(struct dp_soc *soc,
 	return QDF_STATUS_SUCCESS;
 }
 
+#ifndef WLAN_SOFTUMAC_SUPPORT
 QDF_STATUS dp_soc_tx_desc_sw_pools_alloc(struct dp_soc *soc)
 {
 	uint8_t num_pool;
@@ -6505,6 +6573,46 @@ fail1:
 	return QDF_STATUS_E_RESOURCES;
 }
 
+#else
+QDF_STATUS dp_soc_tx_desc_sw_pools_alloc(struct dp_soc *soc)
+{
+	uint8_t num_pool;
+	uint32_t num_desc;
+
+	num_pool = wlan_cfg_get_num_tx_desc_pool(soc->wlan_cfg_ctx);
+	num_desc = wlan_cfg_get_num_tx_desc(soc->wlan_cfg_ctx);
+
+	QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_INFO,
+		  "%s Tx Desc Alloc num_pool = %d, descs = %d",
+		  __func__, num_pool, num_desc);
+
+	if ((num_pool > MAX_TXDESC_POOLS) ||
+	    (num_desc > WLAN_CFG_NUM_TX_DESC_MAX))
+		return QDF_STATUS_E_RESOURCES;
+
+	if (dp_tx_alloc_static_pools(soc, num_pool, num_desc))
+		return QDF_STATUS_E_RESOURCES;
+
+	return QDF_STATUS_SUCCESS;
+}
+
+QDF_STATUS dp_soc_tx_desc_sw_pools_init(struct dp_soc *soc)
+{
+	uint8_t num_pool;
+	uint32_t num_desc;
+
+	num_pool = wlan_cfg_get_num_tx_desc_pool(soc->wlan_cfg_ctx);
+	num_desc = wlan_cfg_get_num_tx_desc(soc->wlan_cfg_ctx);
+
+	if (dp_tx_init_static_pools(soc, num_pool, num_desc))
+		return QDF_STATUS_E_RESOURCES;
+
+	dp_tx_flow_control_init(soc);
+	soc->process_tx_status = CONFIG_PROCESS_TX_STATUS;
+	return QDF_STATUS_SUCCESS;
+}
+#endif
+
 QDF_STATUS dp_tso_soc_attach(struct cdp_soc_t *txrx_soc)
 {
 	struct dp_soc *soc = (struct dp_soc *)txrx_soc;
@@ -6556,3 +6664,179 @@ void dp_pkt_get_timestamp(uint64_t *time)
 }
 #endif
 
+#ifdef QCA_MULTIPASS_SUPPORT
+void dp_tx_add_groupkey_metadata(struct dp_vdev *vdev,
+				 struct dp_tx_msdu_info_s *msdu_info,
+				 uint16_t group_key)
+{
+	struct htt_tx_msdu_desc_ext2_t *meta_data =
+		(struct htt_tx_msdu_desc_ext2_t *)&msdu_info->meta_data[0];
+
+	qdf_mem_zero(meta_data, sizeof(struct htt_tx_msdu_desc_ext2_t));
+
+	/*
+	 * When attempting to send a multicast packet with multi-passphrase,
+	 * host shall add HTT EXT meta data "struct htt_tx_msdu_desc_ext2_t"
+	 * ref htt.h indicating the group_id field in "key_flags" also having
+	 * "valid_key_flags" as 1. Assign “key_flags = group_key_ix”.
+	 */
+	HTT_TX_MSDU_EXT2_DESC_FLAG_VALID_KEY_FLAGS_SET(msdu_info->meta_data[0],
+						       1);
+	HTT_TX_MSDU_EXT2_DESC_KEY_FLAGS_SET(msdu_info->meta_data[2], group_key);
+}
+
+#if defined(WLAN_FEATURE_11BE_MLO) && defined(WLAN_MLO_MULTI_CHIP) && \
+	defined(WLAN_MCAST_MLO)
+/**
+ * dp_tx_need_mcast_reinject() - If frame needs to be processed in reinject path
+ * @vdev: DP vdev handle
+ *
+ * Return: true if reinject handling is required else false
+ */
+static inline bool
+dp_tx_need_mcast_reinject(struct dp_vdev *vdev)
+{
+	if (vdev->mlo_vdev && vdev->opmode == wlan_op_mode_ap)
+		return true;
+
+	return false;
+}
+#else
+static inline bool
+dp_tx_need_mcast_reinject(struct dp_vdev *vdev)
+{
+	return false;
+}
+#endif
+
+/**
+ * dp_tx_need_multipass_process() - If frame needs multipass phrase processing
+ * @soc: dp soc handle
+ * @vdev: DP vdev handle
+ * @buf: frame
+ * @vlan_id: vlan id of frame
+ *
+ * Return: whether peer is special or classic
+ */
+static
+uint8_t dp_tx_need_multipass_process(struct dp_soc *soc, struct dp_vdev *vdev,
+				     qdf_nbuf_t buf, uint16_t *vlan_id)
+{
+	struct dp_txrx_peer *txrx_peer = NULL;
+	struct dp_peer *peer = NULL;
+	qdf_ether_header_t *eh = (qdf_ether_header_t *)qdf_nbuf_data(buf);
+	struct vlan_ethhdr *veh = NULL;
+	bool not_vlan = ((vdev->tx_encap_type == htt_cmn_pkt_type_raw) ||
+			(htons(eh->ether_type) != ETH_P_8021Q));
+
+	if (qdf_unlikely(not_vlan))
+		return DP_VLAN_UNTAGGED;
+
+	veh = (struct vlan_ethhdr *)eh;
+	*vlan_id = (ntohs(veh->h_vlan_TCI) & VLAN_VID_MASK);
+
+	if (qdf_unlikely(DP_FRAME_IS_MULTICAST((eh)->ether_dhost))) {
+		/* look for handling of multicast packets in reinject path */
+		if (dp_tx_need_mcast_reinject(vdev))
+			return DP_VLAN_UNTAGGED;
+
+		qdf_spin_lock_bh(&vdev->mpass_peer_mutex);
+		TAILQ_FOREACH(txrx_peer, &vdev->mpass_peer_list,
+			      mpass_peer_list_elem) {
+			if (*vlan_id == txrx_peer->vlan_id) {
+				qdf_spin_unlock_bh(&vdev->mpass_peer_mutex);
+				return DP_VLAN_TAGGED_MULTICAST;
+			}
+		}
+		qdf_spin_unlock_bh(&vdev->mpass_peer_mutex);
+		return DP_VLAN_UNTAGGED;
+	}
+
+	peer = dp_peer_find_hash_find(soc, eh->ether_dhost, 0, DP_VDEV_ALL,
+				      DP_MOD_ID_TX_MULTIPASS);
+	if (qdf_unlikely(!peer))
+		return DP_VLAN_UNTAGGED;
+
+	/*
+	 * Do not drop the frame when vlan_id doesn't match.
+	 * Send the frame as it is.
+	 */
+	if (*vlan_id == peer->txrx_peer->vlan_id) {
+		dp_peer_unref_delete(peer, DP_MOD_ID_TX_MULTIPASS);
+		return DP_VLAN_TAGGED_UNICAST;
+	}
+
+	dp_peer_unref_delete(peer, DP_MOD_ID_TX_MULTIPASS);
+	return DP_VLAN_UNTAGGED;
+}
+
+bool dp_tx_multipass_process(struct dp_soc *soc, struct dp_vdev *vdev,
+			     qdf_nbuf_t nbuf,
+			     struct dp_tx_msdu_info_s *msdu_info)
+{
+	uint16_t vlan_id = 0;
+	uint16_t group_key = 0;
+	uint8_t is_spcl_peer = DP_VLAN_UNTAGGED;
+	qdf_nbuf_t nbuf_copy = NULL;
+
+	if (HTT_TX_MSDU_EXT2_DESC_FLAG_VALID_KEY_FLAGS_GET(msdu_info->meta_data[0]))
+		return true;
+
+	is_spcl_peer = dp_tx_need_multipass_process(soc, vdev, nbuf, &vlan_id);
+
+	if ((is_spcl_peer != DP_VLAN_TAGGED_MULTICAST) &&
+	    (is_spcl_peer != DP_VLAN_TAGGED_UNICAST))
+		return true;
+
+	if (is_spcl_peer == DP_VLAN_TAGGED_UNICAST) {
+		dp_tx_remove_vlan_tag(vdev, nbuf);
+		return true;
+	}
+
+	/* AP can have classic clients, special clients &
+	 * classic repeaters.
+	 * 1. Classic clients & special client:
+	 *	Remove vlan header, find corresponding group key
+	 *	index, fill in metaheader and enqueue multicast
+	 *	frame to TCL.
+	 * 2. Classic repeater:
+	 *	Pass through to classic repeater with vlan tag
+	 *	intact without any group key index. Hardware
+	 *	will know which key to use to send frame to
+	 *	repeater.
+	 */
+	nbuf_copy = qdf_nbuf_copy(nbuf);
+
+	/*
+	 * Send multicast frame to special peers even
+	 * if pass through to classic repeater fails.
+	 */
+	if (nbuf_copy) {
+		struct dp_tx_msdu_info_s msdu_info_copy;
+
+		qdf_mem_zero(&msdu_info_copy, sizeof(msdu_info_copy));
+		msdu_info_copy.tid = HTT_TX_EXT_TID_INVALID;
+		HTT_TX_MSDU_EXT2_DESC_FLAG_VALID_KEY_FLAGS_SET(msdu_info_copy.meta_data[0], 1);
+		nbuf_copy = dp_tx_send_msdu_single(vdev, nbuf_copy,
+						   &msdu_info_copy,
+						   HTT_INVALID_PEER, NULL);
+		if (nbuf_copy) {
+			qdf_nbuf_free(nbuf_copy);
+			qdf_err("nbuf_copy send failed");
+		}
+	}
+
+	group_key = vdev->iv_vlan_map[vlan_id];
+
+	/*
+	 * If group key is not installed, drop the frame.
+	 */
+	if (!group_key)
+		return false;
+
+	dp_tx_remove_vlan_tag(vdev, nbuf);
+	dp_tx_add_groupkey_metadata(vdev, msdu_info, group_key);
+	msdu_info->exception_fw = 1;
+	return true;
+}
+#endif /* QCA_MULTIPASS_SUPPORT */

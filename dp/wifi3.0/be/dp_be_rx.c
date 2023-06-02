@@ -565,16 +565,14 @@ done:
 
 		rx_bufs_used++;
 
-#ifdef DP_MLO_LINK_STATS_SUPPORT
 		/* MLD Link Peer Statistics support */
 		if (txrx_peer->is_mld_peer && rx_pdev->link_peer_stats) {
-			link_id = ((dp_rx_get_msdu_hw_link_id(nbuf)) + 1);
-			if (link_id < 1 || link_id > DP_MAX_MLO_LINKS)
-				link_id = 0;
+			link_id = dp_rx_get_stats_arr_idx_from_link_id(
+								nbuf,
+								txrx_peer);
 		} else {
 			link_id = 0;
 		}
-#endif
 
 		/* when hlos tid override is enabled, save tid in
 		 * skb->priority
@@ -761,15 +759,6 @@ done:
 			dp_rx_update_flow_tag(soc, vdev, nbuf, rx_tlv_hdr,
 					      true);
 
-			if (qdf_likely(vdev->rx_decap_type ==
-				       htt_cmn_pkt_type_ethernet) &&
-			    qdf_likely(!vdev->mesh_vdev)) {
-				dp_rx_wds_learn(soc, vdev,
-						rx_tlv_hdr,
-						txrx_peer,
-						nbuf);
-			}
-
 			if (qdf_unlikely(vdev->mesh_vdev)) {
 				if (dp_rx_filter_mesh_packets(vdev, nbuf,
 							      rx_tlv_hdr)
@@ -787,6 +776,15 @@ done:
 				dp_rx_fill_mesh_stats(vdev, nbuf, rx_tlv_hdr,
 						      txrx_peer);
 			}
+		}
+
+		if (qdf_likely(vdev->rx_decap_type ==
+			       htt_cmn_pkt_type_ethernet) &&
+		    qdf_likely(!vdev->mesh_vdev)) {
+			dp_rx_wds_learn(soc, vdev,
+					rx_tlv_hdr,
+					txrx_peer,
+					nbuf);
 		}
 
 		dp_rx_msdu_stats_update(soc, nbuf, rx_tlv_hdr, txrx_peer,
@@ -1135,15 +1133,29 @@ static inline bool dp_rx_mlo_igmp_wds_ext_handler(struct dp_txrx_peer *peer)
 }
 #endif
 
+#ifdef EXT_HYBRID_MLO_MODE
+static inline
+bool dp_rx_check_ext_hybrid_mode(struct dp_soc *soc, struct dp_vdev *vdev)
+{
+	return ((DP_MLD_MODE_HYBRID_NONBOND == soc->mld_mode_ap) &&
+		(wlan_op_mode_ap == vdev->opmode));
+}
+#else
+static inline
+bool dp_rx_check_ext_hybrid_mode(struct dp_soc *soc, struct dp_vdev *vdev)
+{
+	return false;
+}
+#endif
+
 bool dp_rx_mlo_igmp_handler(struct dp_soc *soc,
 			    struct dp_vdev *vdev,
 			    struct dp_txrx_peer *peer,
 			    qdf_nbuf_t nbuf,
 			    uint8_t link_id)
 {
-	struct dp_vdev *mcast_primary_vdev = NULL;
+	qdf_nbuf_t nbuf_copy;
 	struct dp_vdev_be *be_vdev = dp_get_be_vdev_from_dp_vdev(vdev);
-	struct dp_soc_be *be_soc = dp_get_be_soc_from_dp_soc(soc);
 	uint8_t tid = qdf_nbuf_get_tid_val(nbuf);
 	struct cdp_tid_rx_stats *tid_stats = &peer->vdev->pdev->stats.
 					tid_stats.tid_rx_wbm_stats[0][tid];
@@ -1167,51 +1179,57 @@ bool dp_rx_mlo_igmp_handler(struct dp_soc *soc,
 			dp_rx_err("forwarding failed");
 	}
 
-	/*
-	 * In the case of ME6, Backhaul WDS, NAWDS
-	 * send the igmp pkt on the same link where it received,
-	 * as these features will use peer based tcl metadata
-	 */
-
 	qdf_nbuf_set_next(nbuf, NULL);
 
-	if (vdev->mcast_enhancement_en || be_vdev->mcast_primary ||
-	    peer->nawds_enabled)
-		goto send_pkt;
+	/* REO sends IGMP to driver only if AP is operating in hybrid
+	 *  mld mode.
+	 */
 
-	if (qdf_unlikely(dp_rx_mlo_igmp_wds_ext_handler(peer)))
-		goto send_pkt;
-
-	mcast_primary_vdev = dp_mlo_get_mcast_primary_vdev(be_soc, be_vdev,
-							   DP_MOD_ID_RX);
-	if (!mcast_primary_vdev) {
-		dp_rx_debug("Non mlo vdev");
-		goto send_pkt;
-	}
-
-	if (qdf_unlikely(vdev->wrap_vdev)) {
-		/* In the case of qwrap repeater send the original
-		 * packet on the interface where it received,
-		 * packet with dummy src on the mcast primary interface.
+	if (qdf_unlikely(dp_rx_mlo_igmp_wds_ext_handler(peer))) {
+		/* send the IGMP to the netdev corresponding to the interface
+		 * its received on
 		 */
-		qdf_nbuf_t nbuf_copy;
-
-		nbuf_copy = qdf_nbuf_copy(nbuf);
-		if (qdf_likely(nbuf_copy))
-			dp_rx_deliver_to_stack(soc, vdev, peer, nbuf_copy,
-					       NULL);
+		goto send_pkt;
 	}
+
+	if (dp_rx_check_ext_hybrid_mode(soc, vdev)) {
+		/* send the IGMP to the netdev corresponding to the interface
+		 * its received on
+		 */
+		goto send_pkt;
+	}
+
+	/*
+	 * In the case of ME5/ME6, Backhaul WDS for a mld peer, NAWDS,
+	 * legacy non-mlo AP vdev & non-AP vdev(which is very unlikely),
+	 * send the igmp pkt on the same link where it received, as these
+	 *  features will use peer based tcl metadata.
+	 */
+	if (vdev->mcast_enhancement_en ||
+	    peer->is_mld_peer ||
+	    peer->nawds_enabled ||
+	    !vdev->mlo_vdev ||
+	    qdf_unlikely(wlan_op_mode_ap != vdev->opmode)) {
+		/* send the IGMP to the netdev corresponding to the interface
+		 * its received on
+		 */
+		goto send_pkt;
+	}
+
+	/* We are here, it means a legacy non-wds sta is connected
+	 * to a hybrid mld ap, So send a clone of the IGPMP packet
+	 * on the interface where it was received.
+	 */
+	nbuf_copy = qdf_nbuf_copy(nbuf);
+	if (qdf_likely(nbuf_copy))
+		dp_rx_deliver_to_stack(soc, vdev, peer, nbuf_copy, NULL);
 
 	dp_rx_dummy_src_mac(vdev, nbuf);
-	dp_rx_deliver_to_stack(mcast_primary_vdev->pdev->soc,
-			       mcast_primary_vdev,
-			       peer,
-			       nbuf,
-			       NULL);
-	dp_vdev_unref_delete(mcast_primary_vdev->pdev->soc,
-			     mcast_primary_vdev,
-			     DP_MOD_ID_RX);
-	return true;
+	/* Set the ml peer valid bit in skb peer metadata, so that osif
+	 * can deliver the SA mangled IGMP packet to mld netdev.
+	 */
+	QDF_NBUF_CB_RX_SET_ML_PEER_VALID(nbuf);
+	/* Deliver the original IGMP with dummy src on the mld netdev */
 send_pkt:
 	dp_rx_deliver_to_stack(be_vdev->vdev.pdev->soc,
 			       &be_vdev->vdev,
@@ -1313,9 +1331,19 @@ dp_rx_intrabss_ucast_check_be(qdf_nbuf_t nbuf,
 	if (!qdf_nbuf_is_intra_bss(nbuf))
 		return false;
 
+	hal_rx_tlv_get_dest_chip_pmac_id(rx_tlv_hdr,
+					 &dest_chip_id,
+					 &dest_chip_pmac_id);
+
+	params->dest_soc =
+		dp_mlo_get_soc_ref_by_chip_id(be_soc->ml_ctxt,
+					      dest_chip_id);
+	if (!params->dest_soc)
+		return false;
+
 	da_peer_id = HAL_RX_PEER_ID_GET(msdu_metadata);
 
-	da_peer = dp_peer_get_tgt_peer_by_id(&be_soc->soc, da_peer_id,
+	da_peer = dp_peer_get_tgt_peer_by_id(params->dest_soc, da_peer_id,
 					     DP_MOD_ID_RX);
 	if (da_peer) {
 		if (da_peer->bss_peer || (da_peer->txrx_peer == ta_peer)) {
@@ -1324,10 +1352,6 @@ dp_rx_intrabss_ucast_check_be(qdf_nbuf_t nbuf,
 		}
 		dp_peer_unref_delete(da_peer, DP_MOD_ID_RX);
 	}
-
-	hal_rx_tlv_get_dest_chip_pmac_id(rx_tlv_hdr,
-					 &dest_chip_id,
-					 &dest_chip_pmac_id);
 
 	qdf_assert_always(dest_chip_id <= (DP_MLO_MAX_DEST_CHIP_ID - 1));
 
@@ -1343,12 +1367,6 @@ dp_rx_intrabss_ucast_check_be(qdf_nbuf_t nbuf,
 
 	params->tx_vdev_id =
 		be_vdev->partner_vdev_list[dest_chip_id][dest_chip_pmac_id];
-
-	params->dest_soc =
-		dp_mlo_get_soc_ref_by_chip_id(be_soc->ml_ctxt,
-					      dest_chip_id);
-	if (!params->dest_soc)
-		return false;
 
 	return true;
 }
@@ -1562,10 +1580,12 @@ bool dp_rx_intrabss_mlo_mcbc_fwd(struct dp_soc *soc, struct dp_vdev *vdev,
 	struct dp_soc_be *be_soc = dp_get_be_soc_from_dp_soc(soc);
 	struct cdp_tx_exception_metadata tx_exc_metadata = {0};
 
-	if (!vdev->mlo_vdev)
-		return false;
-
 	tx_exc_metadata.is_mlo_mcast = 1;
+	tx_exc_metadata.tx_encap_type = CDP_INVALID_TX_ENCAP_TYPE;
+	tx_exc_metadata.sec_type = CDP_INVALID_SEC_TYPE;
+	tx_exc_metadata.peer_id = CDP_INVALID_PEER;
+	tx_exc_metadata.tid = CDP_INVALID_TID;
+
 	mcast_primary_vdev = dp_mlo_get_mcast_primary_vdev(be_soc,
 							   be_vdev,
 							   DP_MOD_ID_RX);
@@ -1907,12 +1927,9 @@ dp_rx_wbm_err_reap_desc_be(struct dp_intr *int_ctx, struct dp_soc *soc,
 		 * info when we do the actual nbuf processing
 		 */
 		wbm_err_info.pool_id = rx_desc->pool_id;
-		hal_rx_priv_info_set_in_tlv(soc->hal_soc,
-					    qdf_nbuf_data(nbuf),
-					    (uint8_t *)&wbm_err_info,
-					    sizeof(wbm_err_info));
 
-		dp_rx_err_tlv_invalidate(soc, nbuf);
+		dp_rx_set_err_info(soc, nbuf, wbm_err_info);
+
 		rx_bufs_reaped[rx_desc->chip_id][rx_desc->pool_id]++;
 
 		if (qdf_nbuf_is_rx_chfrag_cont(nbuf) || process_sg_buf) {
@@ -1969,12 +1986,12 @@ done:
 
 			rx_desc_pool = &replenish_soc->rx_desc_buf[mac_id];
 
-			dp_rx_buffers_replenish(replenish_soc, mac_id,
+			dp_rx_buffers_replenish_simple(replenish_soc, mac_id,
 						dp_rxdma_srng,
 						rx_desc_pool,
 						rx_bufs_reaped[chip_id][mac_id],
 						&head[chip_id][mac_id],
-						&tail[chip_id][mac_id], false);
+						&tail[chip_id][mac_id]);
 			*rx_bufs_used += rx_bufs_reaped[chip_id][mac_id];
 		}
 	}
@@ -2185,10 +2202,9 @@ dp_rx_null_q_desc_handle_be(struct dp_soc *soc, qdf_nbuf_t nbuf,
 	eh = (qdf_ether_header_t *)qdf_nbuf_data(nbuf);
 
 	if (!txrx_peer->authorize) {
-		is_eapol = qdf_nbuf_is_ipv4_eapol_pkt(nbuf) ||
-			   qdf_nbuf_is_ipv4_wapi_pkt(nbuf);
+		is_eapol = qdf_nbuf_is_ipv4_eapol_pkt(nbuf);
 
-		if (is_eapol) {
+		if (is_eapol || qdf_nbuf_is_ipv4_wapi_pkt(nbuf)) {
 			if (!dp_rx_err_match_dhost(eh, vdev))
 				goto drop_nbuf;
 		} else {

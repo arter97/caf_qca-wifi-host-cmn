@@ -282,6 +282,7 @@ struct wlan_srng_cfg {
  * @is_tso_desc_attach_defer:
  * @delayed_replenish_entries:
  * @reo_rings_mapping:
+ * @rx_rings_mapping: DP RX rings mapping mask
  * @pext_stats_enabled: Flag to enable and disabled peer extended stats
  * @is_rx_buff_pool_enabled: flag to enable/disable emergency RX buffer
  *                           pool support
@@ -465,6 +466,7 @@ struct wlan_cfg_dp_soc_ctxt {
 	bool is_tso_desc_attach_defer;
 	uint32_t delayed_replenish_entries;
 	uint32_t reo_rings_mapping;
+	uint32_t rx_rings_mapping;
 	bool pext_stats_enabled;
 	bool is_rx_buff_pool_enabled;
 	bool is_rx_refill_buff_pool_enabled;
@@ -1866,12 +1868,13 @@ wlan_cfg_is_tx_per_pkt_vdev_id_check_enabled(struct wlan_cfg_dp_soc_ctxt *cfg);
  * @num_dp_msi: Number of DP interrupts available (0 for integrated)
  * @interrupt_mode: Type of interrupt
  * @is_monitor_mode: is monitor mode enabled
+ * @ppeds_attached: is ppeds attached
  *
  * Return: void
  */
 void wlan_cfg_fill_interrupt_mask(struct wlan_cfg_dp_soc_ctxt *wlan_cfg_ctx,
 				  int num_dp_msi, int interrupt_mode,
-				  bool is_monitor_mode);
+				  bool is_monitor_mode, bool ppeds_attached);
 
 /**
  * wlan_cfg_is_rx_fisa_enabled() - Get Rx FISA enabled flag
@@ -1928,6 +1931,15 @@ bool wlan_cfg_is_tso_desc_attach_defer(struct wlan_cfg_dp_soc_ctxt *cfg);
  * Return: reo ring bitmap.
  */
 uint32_t wlan_cfg_get_reo_rings_mapping(struct wlan_cfg_dp_soc_ctxt *cfg);
+
+/**
+ * wlan_cfg_get_rx_rings_mapping() - Get RX ring bitmap
+ *
+ * @cfg: soc configuration context
+ *
+ * Return: rx ring bitmap.
+ */
+uint32_t wlan_cfg_get_rx_rings_mapping(struct wlan_cfg_dp_soc_ctxt *cfg);
 
 /**
  * wlan_cfg_set_peer_ext_stats() - set peer extended stats
@@ -2132,13 +2144,13 @@ void wlan_cfg_dp_soc_ctx_dump(struct wlan_cfg_dp_soc_ctxt *cfg);
 
 #ifdef WLAN_SUPPORT_PPEDS
 /**
- * wlan_cfg_get_dp_soc_is_ppeds_enabled() - API to get ppe enable flag
+ * wlan_cfg_get_dp_soc_ppeds_enable() - API to get ppe enable flag
  * @cfg: Configuration Handle
  *
- * Return: true if ppe is enabled else return false
+ * Return: true if ppeds support is enabled else return false
  */
 bool
-wlan_cfg_get_dp_soc_is_ppeds_enabled(struct wlan_cfg_dp_soc_ctxt *cfg);
+wlan_cfg_get_dp_soc_ppeds_enable(struct wlan_cfg_dp_soc_ctxt *cfg);
 
 /**
  * wlan_cfg_get_dp_soc_reo2ppe_ring_size() - get ppe rx ring size
@@ -2185,7 +2197,7 @@ int
 wlan_cfg_get_dp_soc_ppeds_tx_comp_napi_budget(struct wlan_cfg_dp_soc_ctxt *cfg);
 #else
 static inline bool
-wlan_cfg_get_dp_soc_is_ppeds_enabled(struct wlan_cfg_dp_soc_ctxt *cfg)
+wlan_cfg_get_dp_soc_ppeds_enable(struct wlan_cfg_dp_soc_ctxt *cfg)
 {
 	return false;
 }
@@ -2436,6 +2448,20 @@ wlan_cfg_get_tx_capt_max_mem(struct wlan_cfg_dp_soc_ctxt *cfg)
 	return cfg->tx_capt_max_mem_allowed;
 }
 #endif /* WLAN_TX_PKT_CAPTURE_ENH */
+
+#ifdef DP_TX_PACKET_INSPECT_FOR_ILP
+/**
+ * wlan_cfg_get_tx_ilp_inspect_config() - Get TX ILP configuration
+ * @cfg: Configuration Handle
+ *
+ * Return: TX ILP enable or not
+ */
+static inline bool
+wlan_cfg_get_tx_ilp_inspect_config(struct wlan_cfg_dp_soc_ctxt *cfg)
+{
+	return cfg->tx_pkt_inspect_for_ilp;
+}
+#endif
 
 /**
  * wlan_cfg_get_napi_scale_factor() - Get napi scale factor

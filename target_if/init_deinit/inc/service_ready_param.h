@@ -465,6 +465,7 @@ struct wlan_psoc_host_service_ext_param {
  * @sap_coex_fixed_chan_support: Indicates if fw supports coex SAP in
  *                               fixed chan config
  * @target_cap_flags: Rx peer metadata version number used by target
+ * @dp_peer_meta_data_ver: DP peer metadata version reported by target
  * @ul_mumimo_tx_2g: UL MUMIMO Tx support for 2GHz
  * @ul_mumimo_tx_5g: UL MUMIMO Tx support for 5GHz
  * @ul_mumimo_tx_6g: UL MUMIMO Tx support for 6GHz
@@ -472,6 +473,8 @@ struct wlan_psoc_host_service_ext_param {
  * @ul_mumimo_rx_5g: UL MUMIMO Rx support for 5GHz
  * @ul_mumimo_rx_6g: UL MUMIMO Rx support for 6GHz
  * @afc_dev_type: AFC deployment type
+ * @num_msdu_idx_qtype_map: Number of HTT_MSDUQ_INDEX to HTT_MSDU_QTYPE
+ *                          mapping
  */
 struct wlan_psoc_host_service_ext2_param {
 	uint8_t reg_db_version_major;
@@ -490,6 +493,7 @@ struct wlan_psoc_host_service_ext2_param {
 	uint32_t twt_ack_support_cap:1;
 	uint32_t sap_coex_fixed_chan_support:1;
 	uint32_t target_cap_flags;
+	uint8_t dp_peer_meta_data_ver;
 	uint8_t ul_mumimo_tx_2g:1,
 		ul_mumimo_tx_5g:1,
 		ul_mumimo_tx_6g:1,
@@ -499,6 +503,7 @@ struct wlan_psoc_host_service_ext2_param {
 #if defined(CONFIG_AFC_SUPPORT)
 	enum reg_afc_dev_deploy_type afc_dev_type;
 #endif
+	uint32_t num_msdu_idx_qtype_map;
 };
 
 #endif /* _SERVICE_READY_PARAM_H_*/

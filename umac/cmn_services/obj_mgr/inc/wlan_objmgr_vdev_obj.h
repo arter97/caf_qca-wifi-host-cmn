@@ -168,6 +168,8 @@
 #define WLAN_VDEV_FEXT2_MLO_MCAST           0x00000004
 	/* 20TU BCAST PROBE RESP on 6G SAP*/
 #define WLAN_VDEV_FEXT2_20TU_PRB_RESP       0x00000008
+	/* STA VDEV is TDLS link type */
+#define WLAN_VDEV_FEXT2_MLO_STA_TDLS        0x00000010
 
 /* VDEV OP flags  */
   /* if the vap destroyed by user */
@@ -740,6 +742,26 @@ static inline uint8_t wlan_vdev_get_psoc_id(struct wlan_objmgr_vdev *vdev)
 	psoc = wlan_vdev_get_psoc(vdev);
 
 	return wlan_psoc_get_id(psoc);
+}
+
+/**
+ * wlan_vdev_skip_pumac() - get primary umac support
+ * @vdev: VDEV object
+ *
+ * API to get Primary umac support for MLO
+ *
+ * Return: get primary umac support (bool)
+ */
+static inline bool wlan_vdev_skip_pumac(struct wlan_objmgr_vdev *vdev)
+{
+	struct wlan_objmgr_psoc *psoc;
+
+	psoc = wlan_vdev_get_psoc(vdev);
+
+	if (wlan_psoc_get_pumac_skip(psoc))
+		return true;
+
+	return false;
 }
 
 /**
@@ -1619,6 +1641,15 @@ static inline bool wlan_vdev_mlme_is_ap(struct wlan_objmgr_vdev *vdev)
 bool wlan_vdev_mlme_is_mlo_vdev(struct wlan_objmgr_vdev *vdev);
 
 /**
+ * wlan_vdev_mlme_is_tdls_vdev() - Determine whether the given vdev is tdls MLO
+ * vdev or not
+ * @vdev: VDEV object
+ *
+ * Return: True if it is tdls MLO, otherwise false.
+ */
+bool wlan_vdev_mlme_is_tdls_vdev(struct wlan_objmgr_vdev *vdev);
+
+/**
  * wlan_vdev_mlme_is_mlo_ap() - whether it is mlo ap or not
  * @vdev: VDEV object
  *
@@ -2101,6 +2132,24 @@ wlan_objmgr_vdev_trace_del_ref_list(struct wlan_objmgr_vdev *vdev)
 #endif
 
 /**
+ * wlan_vdev_get_bss_peer_mac_for_pmksa() - To get bss peer mac/mld
+ * address based on association to cache/retrieve PMK.
+ * @vdev: Pointer to vdev
+ * @bss_peer_mac: Pointer to BSS peer MAC address.
+ *
+ * The PMKSA entry for an ML candaidate will be present with MLD
+ * address, whereas for non-ML candidate legacy MAC address is used
+ * to save the PMKSA. To get the right entry during lookup, this API
+ * will return MLD address if the VDEV is MLO VDEV else return
+ * MAC address of BSS peer.
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS
+wlan_vdev_get_bss_peer_mac_for_pmksa(struct wlan_objmgr_vdev *vdev,
+				     struct qdf_mac_addr *bss_peer_mac);
+
+/**
  * wlan_vdev_get_bss_peer_mac() - to get bss peer mac address
  * @vdev: pointer to vdev
  * @bss_peer_mac: pointer to bss_peer_mac_address
@@ -2142,7 +2191,6 @@ static inline struct wlan_mlo_dev_context *wlan_vdev_get_mlo_dev_ctx(
 {
 	return vdev->mlo_dev_ctx;
 }
-#endif
 
 /**
  * wlan_objmgr_vdev_set_ml_peer_count() - set ml_peer_count value
@@ -2151,7 +2199,6 @@ static inline struct wlan_mlo_dev_context *wlan_vdev_get_mlo_dev_ctx(
  *
  * Return: void
  */
-#ifdef WLAN_FEATURE_11BE_MLO
 static inline void
 wlan_objmgr_vdev_set_ml_peer_count(struct wlan_objmgr_vdev *vdev,
 				   uint16_t ml_peer_count)
@@ -2159,6 +2206,13 @@ wlan_objmgr_vdev_set_ml_peer_count(struct wlan_objmgr_vdev *vdev,
 	vdev->vdev_objmgr.wlan_ml_peer_count = ml_peer_count;
 }
 #else
+static inline
+QDF_STATUS wlan_vdev_get_bss_peer_mld_mac(struct wlan_objmgr_vdev *vdev,
+					  struct qdf_mac_addr *mld_mac)
+{
+	return QDF_STATUS_E_INVAL;
+}
+
 static inline void
 wlan_objmgr_vdev_set_ml_peer_count(struct wlan_objmgr_vdev *vdev,
 				   uint16_t ml_peer_count)

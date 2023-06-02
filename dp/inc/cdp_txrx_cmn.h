@@ -1845,6 +1845,25 @@ static inline void cdp_txrx_ppeds_stop(ol_txrx_soc_handle soc)
 }
 
 /**
+ * cdp_txrx_umac_reset_init(): De-initialize UMAC HW reset module
+ * @soc: soc handle
+ */
+static inline void cdp_txrx_umac_reset_init(ol_txrx_soc_handle soc)
+{
+	if (!soc || !soc->ops) {
+		dp_cdp_debug("Invalid Instance:");
+		QDF_BUG(0);
+		return;
+	}
+
+	if (!soc->ops->cmn_drv_ops ||
+	    !soc->ops->cmn_drv_ops->txrx_umac_reset_init)
+		return;
+
+	soc->ops->cmn_drv_ops->txrx_umac_reset_init(soc);
+}
+
+/**
  * cdp_txrx_umac_reset_deinit(): De-initialize UMAC HW reset module
  * @soc: soc handle
  */
@@ -1861,6 +1880,28 @@ static inline void cdp_txrx_umac_reset_deinit(ol_txrx_soc_handle soc)
 		return;
 
 	soc->ops->cmn_drv_ops->txrx_umac_reset_deinit(soc);
+}
+
+/**
+ * cdp_notify_asserted_soc(): function to notify asserted SoC
+ * @soc: soc handle
+ *
+ * Return: QDF_STATUS
+ */
+static inline QDF_STATUS
+cdp_notify_asserted_soc(ol_txrx_soc_handle soc)
+{
+	if (!soc || !soc->ops) {
+		dp_cdp_debug("Invalid Instance:");
+		QDF_BUG(0);
+		return QDF_STATUS_E_NULL_VALUE;
+	}
+
+	if (!soc->ops->cmn_drv_ops ||
+	    !soc->ops->cmn_drv_ops->notify_asserted_soc)
+		return QDF_STATUS_E_NULL_VALUE;
+
+	return soc->ops->cmn_drv_ops->notify_asserted_soc(soc);
 }
 
 /**

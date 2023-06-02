@@ -193,6 +193,17 @@ struct afc_pow_evt_cb_handler {
 };
 
 /**
+ * struct afc_payload_reset_evt_cb_handler - Structure for afc payload reset
+ * event  handler call back function and argument
+ * @func: handler function pointer
+ * @arg: argument to handler function
+ */
+struct afc_payload_reset_evt_cb_handler {
+	afc_payload_reset_tx_evt_handler func;
+	void *arg;
+};
+
+/**
  * reg_init_freq_range() - Initialize a freq_range object
  * @left: The left frequency range
  * @right: The right frequency range
@@ -1720,7 +1731,18 @@ reg_get_cur_6g_ap_pwr_type(struct wlan_objmgr_pdev *pdev,
 QDF_STATUS reg_afc_start(struct wlan_objmgr_pdev *pdev, uint64_t req_id);
 
 /**
- * reg_get_partial_afc_req_info() - Get the AFC partial request information
+ * reg_free_afc_req() - Free the  memory allocated for AFC request structure and
+ * its members.
+ * @pdev: Pointer to pdev.
+ * @afc_req: Pointer to AFC request structure.
+ *
+ * Return: void
+ */
+void reg_free_afc_req(struct wlan_objmgr_pdev *pdev,
+		      struct wlan_afc_host_request *afc_req);
+
+/**
+ * reg_get_afc_req_info() - Get the AFC request information.
  * @pdev: Pointer to pdev
  * @afc_req: Address of AFC request pointer
  *
@@ -1729,20 +1751,19 @@ QDF_STATUS reg_afc_start(struct wlan_objmgr_pdev *pdev, uint64_t req_id);
  * Return: QDF_STATUS
  */
 QDF_STATUS
-reg_get_partial_afc_req_info(struct wlan_objmgr_pdev *pdev,
-			     struct wlan_afc_host_partial_request **afc_req);
+reg_get_afc_req_info(struct wlan_objmgr_pdev *pdev,
+		     struct wlan_afc_host_request **afc_req);
 
 /**
- * reg_print_partial_afc_req_info() - Print the AFC partial request
- *                                    information
+ * reg_print_afc_req_info() - Print the AFC request information.
  * @pdev: Pointer to pdev
  * @afc_req: Pointer to AFC request
  *
  * Return: Void
  */
 void
-reg_print_partial_afc_req_info(struct wlan_objmgr_pdev *pdev,
-			       struct wlan_afc_host_partial_request *afc_req);
+reg_print_afc_req_info(struct wlan_objmgr_pdev *pdev,
+		       struct wlan_afc_host_request *afc_req);
 
 /**
  * reg_register_afc_req_rx_callback() - add AFC request received callback
@@ -1792,6 +1813,32 @@ reg_unregister_afc_power_event_callback(struct wlan_objmgr_pdev *pdev,
 					afc_power_tx_evt_handler cbf);
 
 /**
+ * reg_register_afc_payload_reset_event_callback() - Add AFC payload reset
+ * event received callback
+ * @pdev: Pointer to pdev
+ * @cbf: Pointer to callback function
+ * @arg: Pointer to opaque argument
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS reg_register_afc_payload_reset_event_callback(
+		struct wlan_objmgr_pdev *pdev,
+		afc_payload_reset_tx_evt_handler cbf,
+		void *arg);
+
+/**
+ * reg_unregister_afc_payload_reset_event_callback() - Remove AFC payload
+ * reset event received callback
+ * @pdev: Pointer to pdev
+ * @cbf: Pointer to callback function
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS reg_unregister_afc_payload_reset_event_callback(
+		struct wlan_objmgr_pdev *pdev,
+		afc_payload_reset_tx_evt_handler cbf);
+
+/**
  * reg_send_afc_power_event() - Send AFC power event to registered
  * recipient
  * @pdev: Pointer to pdev
@@ -1801,6 +1848,15 @@ reg_unregister_afc_power_event_callback(struct wlan_objmgr_pdev *pdev,
  */
 QDF_STATUS reg_send_afc_power_event(struct wlan_objmgr_pdev *pdev,
 				    struct reg_fw_afc_power_event *power_info);
+
+/**
+ * reg_send_afc_payload_reset_event() - Send AFC payload reset event to
+ * registered recipient
+ * @pdev: Pointer to pdev
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS reg_send_afc_payload_reset_event(struct wlan_objmgr_pdev *pdev);
 
 /**
  * reg_get_afc_dev_deploy_type() - Get AFC device deployment type
@@ -2516,14 +2572,14 @@ bool reg_is_afc_expiry_event_received(struct wlan_objmgr_pdev *pdev);
 bool reg_is_noaction_on_afc_pwr_evt(struct wlan_objmgr_pdev *pdev);
 
 /**
- * reg_dmn_set_afc_req_id() - Set the request ID in the AFC partial request
+ * reg_dmn_set_afc_req_id() - Set the request ID in the AFC request
  *                            object
- * @afc_req: pointer to AFC partial request
+ * @afc_req: pointer to AFC request
  * @req_id: AFC request ID
  *
  * Return: Void
  */
-void reg_dmn_set_afc_req_id(struct wlan_afc_host_partial_request *afc_req,
+void reg_dmn_set_afc_req_id(struct wlan_afc_host_request *afc_req,
 			    uint64_t req_id);
 #endif
 

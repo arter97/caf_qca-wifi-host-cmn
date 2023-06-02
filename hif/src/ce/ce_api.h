@@ -164,6 +164,17 @@ int ce_send_fast(struct CE_handle *copyeng, qdf_nbuf_t msdu,
 
 #endif
 
+/*
+ * ce_enqueue_desc() - enqueu desc to CE ring.
+ * @copyeng: which copy engine to use
+ * @msdu: data buffer
+ * @transfer_id: arbitrary ID; reflected to destination
+ * @download_len: length of the packet download to FW.
+ *
+ */
+int ce_enqueue_desc(struct CE_handle *copyeng, qdf_nbuf_t msdu,
+		    unsigned int transfer_id, uint32_t download_len);
+
 void ce_update_tx_ring(struct CE_handle *ce_tx_hdl, uint32_t num_htt_cmpls);
 extern qdf_nbuf_t ce_batch_send(struct CE_handle *ce_tx_hdl,
 		qdf_nbuf_t msdu,
@@ -424,6 +435,14 @@ ce_disable_custom_cb(struct CE_handle *copyeng);
 struct CE_handle *ce_init(struct hif_softc *scn,
 			  unsigned int CE_id, struct CE_attr *attr);
 
+/*
+ * hif_ce_desc_history_log_register() - Register hif_ce_desc_history buffers
+ * to SSR driver dump.
+ *
+ * Return: None
+ */
+void hif_ce_desc_history_log_register(void);
+
 /*==================CE Engine Shutdown=======================================*/
 /*
  * Support clean shutdown by allowing the caller to revoke
@@ -451,6 +470,14 @@ ce_cancel_send_next(struct CE_handle *copyeng,
 		    uint32_t *toeplitz_hash_result);
 
 void ce_fini(struct CE_handle *copyeng);
+
+/*
+ * hif_ce_desc_history_log_unregister() - unregister hif_ce_desc_history
+ * buffers from SSR driver dump.
+ *
+ * Return: None
+ */
+void hif_ce_desc_history_log_unregister(void);
 
 /*==================CE Interrupt Handlers====================================*/
 void ce_per_engine_service_any(int irq, struct hif_softc *scn);
@@ -680,4 +707,15 @@ void ce_engine_service_reg(struct hif_softc *scn, int CE_id);
  */
 void ce_per_engine_service_fast(struct hif_softc *scn, int ce_id);
 
+void ce_tx_ring_write_idx_update_wrapper(struct CE_handle *ce_tx_hdl,
+					 bool flush);
+
+/*
+ * ce_ring_flush_write_idx() - CE handler to flush write index
+ * @ce_tx_hdl: ce handle
+ * @force_flush: force flush the write idx if it set to true.
+ *
+ * Returns void
+ */
+void ce_flush_tx_ring_write_idx(struct CE_handle *ce_tx_hdl, bool force_flush);
 #endif /* __COPY_ENGINE_API_H__ */

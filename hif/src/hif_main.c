@@ -403,11 +403,6 @@ static const struct qwlan_hw qwlan_hw_list[] = {
 		.name = "QCA6490",
 	},
 	{
-		.id = WCN3990_v2_2,
-		.subid = 0,
-		.name = "WCN3990_v2_2",
-	},
-	{
 		.id = WCN3990_TALOS,
 		.subid = 0,
 		.name = "WCN3990",
@@ -1263,6 +1258,9 @@ QDF_STATUS hif_try_complete_tasks(struct hif_softc *scn)
 		if (++task_drain_wait_cnt > HIF_TASK_DRAIN_WAIT_CNT) {
 			hif_err("pending tasklets %d grp tasklets %d work %d",
 				tasklet, grp_tasklet, work);
+			QDF_DEBUG_PANIC("Complete tasks takes more than %u ms: tasklets %d grp tasklets %d work %d",
+					HIF_TASK_DRAIN_WAIT_CNT * 10,
+					tasklet, grp_tasklet, work);
 			return QDF_STATUS_E_FAULT;
 		}
 		hif_info("waiting for tasklets %d grp tasklets %d work %d",
@@ -1780,6 +1778,12 @@ int hif_get_device_type(uint32_t device_id,
 		*hif_type = HIF_TYPE_QCN9160;
 		*target_type = TARGET_TYPE_QCN9160;
 		hif_info(" *********** QCN9160 *************");
+		break;
+
+	case QCN6432_DEVICE_ID:
+		*hif_type = HIF_TYPE_QCN6432;
+		*target_type = TARGET_TYPE_QCN6432;
+		hif_info(" *********** QCN6432 *************");
 		break;
 
 	case QCN7605_DEVICE_ID:

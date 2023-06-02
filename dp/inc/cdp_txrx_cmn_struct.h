@@ -206,11 +206,13 @@ struct cdp_stats_cookie;
  * enum cdp_cfg_param_type - DP configuration parameters
  * @CDP_CFG_MAX_PEER_ID: Maximum peer id
  * @CDP_CFG_CCE_DISABLE: CCE disable
+ * @CDP_CFG_MLD_NETDEV_MODE_AP: Ap's mld netdev model
  * @CDP_CFG_NUM_PARAMS: Total number of params
  */
 enum cdp_cfg_param_type {
 	CDP_CFG_MAX_PEER_ID,
 	CDP_CFG_CCE_DISABLE,
+	CDP_CFG_MLD_NETDEV_MODE_AP,
 	CDP_CFG_NUM_PARAMS
 };
 
@@ -312,6 +314,7 @@ enum htt_cmn_dbg_stats_type {
  * @TXRX_SOC_REO_HW_DESC_DUMP: HW REO queue desc dump
  * @TXRX_SOC_WBM_IDLE_HPTP_DUMP: WBM idle link desc SRNG HP/TP dump
  * @TXRX_SRNG_USAGE_WM_STATS: SRNG usage watermark stats
+ * @TXRX_PEER_STATS: Per link peer stats
  * @TXRX_HOST_STATS_MAX:
  */
 enum cdp_host_txrx_stats {
@@ -334,6 +337,7 @@ enum cdp_host_txrx_stats {
 	TXRX_SOC_REO_HW_DESC_DUMP = 15,
 	TXRX_SOC_WBM_IDLE_HPTP_DUMP = 16,
 	TXRX_SRNG_USAGE_WM_STATS = 17,
+	TXRX_PEER_STATS   = 18,
 	TXRX_HOST_STATS_MAX,
 };
 
@@ -1434,7 +1438,6 @@ enum cdp_pdev_param_type {
  *
  * @cdp_psoc_param_en_rate_stats: set rate stats enable/disable
  * @cdp_psoc_param_en_nss_cfg: set nss cfg
- * @cdp_psoc_param_ppeds_enabled: PPE-DS feature enable
  * @cdp_ipa_enabled : set ipa mode
  * @cdp_psoc_param_vdev_stats_hw_offload: Configure HW vdev stats offload
  * @cdp_pdev_param_undecoded_metadata_enable: Undecoded metadata capture enable
@@ -1444,6 +1447,7 @@ enum cdp_pdev_param_type {
  * @cdp_skel_enable : Enable/Disable skeleton code for Umac reset debug
  * @cdp_drop_tx_mcast: Enable/Disable tx mcast drop
  * @cdp_vdev_tx_to_fw: Set to_fw bit for all tx packets for the vdev
+ * @cdp_peer_metadata_ver: DP rx peer metadata version configuration
  */
 typedef union cdp_config_param_t {
 	/* peer params */
@@ -1522,7 +1526,6 @@ typedef union cdp_config_param_t {
 	int cdp_psoc_param_en_nss_cfg;
 	int cdp_psoc_param_preferred_hw_mode;
 	bool cdp_psoc_param_pext_stats;
-	bool cdp_psoc_param_ppeds_enabled;
 
 	bool cdp_skip_bar_update;
 	bool cdp_ipa_enabled;
@@ -1535,6 +1538,7 @@ typedef union cdp_config_param_t {
 	bool cdp_umac_rst_skel;
 	bool cdp_drop_tx_mcast;
 	bool cdp_vdev_tx_to_fw;
+	uint8_t cdp_peer_metadata_ver;
 } cdp_config_param_type;
 
 /**
@@ -1688,9 +1692,9 @@ enum cdp_vdev_param_type {
  * @CDP_CFG_VDEV_STATS_HW_OFFLOAD: HW Vdev stats config
  * @CDP_SAWF_ENABLE:
  * @CDP_UMAC_RST_SKEL_ENABLE: Enable Umac reset skeleton code for debug
- * @CDP_PPEDS_ENABLE: PPEDS is enabled or not
  * @CDP_SAWF_STATS: set SAWF stats config
  * @CDP_UMAC_RESET_STATS: UMAC reset stats
+ * @CDP_CFG_RX_PEER_METADATA_VER: RX peer metadata configuration
  */
 enum cdp_psoc_param_type {
 	CDP_ENABLE_RATE_STATS,
@@ -1701,10 +1705,17 @@ enum cdp_psoc_param_type {
 	CDP_CFG_VDEV_STATS_HW_OFFLOAD,
 	CDP_SAWF_ENABLE,
 	CDP_UMAC_RST_SKEL_ENABLE,
-	CDP_PPEDS_ENABLE,
 	CDP_SAWF_STATS,
 	CDP_UMAC_RESET_STATS,
+	CDP_CFG_RX_PEER_METADATA_VER,
 };
+
+#ifdef CONFIG_AP_PLATFORM
+/* RX peer metadata version if v1a_v1b is supported */
+#define CDP_RX_PEER_METADATA_V1_A_B 3
+#else
+#define CDP_RX_PEER_METADATA_V1_A_B 2
+#endif
 
 #define TXRX_FW_STATS_TXSTATS                     1
 #define TXRX_FW_STATS_RXSTATS                     2

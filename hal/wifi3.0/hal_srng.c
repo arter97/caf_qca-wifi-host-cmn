@@ -48,11 +48,13 @@ void hal_qca6490_attach(struct hal_soc *hal);
 void hal_qcn9000_attach(struct hal_soc *hal);
 #endif
 #ifdef QCA_WIFI_QCN9224
-void hal_qcn9224v1_attach(struct hal_soc *hal);
 void hal_qcn9224v2_attach(struct hal_soc *hal);
 #endif
 #if defined(QCA_WIFI_QCN6122) || defined(QCA_WIFI_QCN9160)
 void hal_qcn6122_attach(struct hal_soc *hal);
+#endif
+#ifdef QCA_WIFI_QCN6432
+void hal_qcn6432_attach(struct hal_soc *hal);
 #endif
 #ifdef QCA_WIFI_QCA6750
 void hal_qca6750_attach(struct hal_soc *hal);
@@ -497,6 +499,18 @@ static void hal_target_based_configure(struct hal_soc *hal)
 		break;
 #endif
 
+#if defined(QCA_WIFI_QCN6432)
+	case TARGET_TYPE_QCN6432:
+		hal->use_register_windowing = true;
+		/*
+		 * Static window map  is enabled for qcn6432 to use 2mb bar
+		 * size and use multiple windows to write into registers.
+		 */
+		hal->static_window_map = true;
+		hal_qcn6432_attach(hal);
+		break;
+#endif
+
 #ifdef QCA_WIFI_QCN9000
 	case TARGET_TYPE_QCN9000:
 		hal->use_register_windowing = true;
@@ -520,7 +534,7 @@ static void hal_target_based_configure(struct hal_soc *hal)
 		hal->use_register_windowing = true;
 		hal->static_window_map = true;
 		if (hal->version == 1)
-			hal_qcn9224v1_attach(hal);
+			qdf_assert_always(0);
 		else
 			hal_qcn9224v2_attach(hal);
 	break;
@@ -1712,6 +1726,22 @@ void *hal_srng_setup_idx(void *hal_soc, int ring_type, int ring_num, int mac_id,
 	}
 
 	if (!(ring_config->lmac_ring)) {
+		/*
+		 * UMAC reset has idle check enabled.
+		 * During UMAC reset Tx ring halt is set
+		 * by Wi-Fi FW during pre-reset stage,
+		 * avoid Tx ring halt again.
+		 */
+		if (idle_check && idx) {
+			if (!hal->ops->hal_tx_ring_halt_get(hal_hdl)) {
+				qdf_print("\nTx ring halt not set:Ring(%d, %d)",
+					  ring_type, ring_num);
+				qdf_assert_always(0);
+			}
+			hal_srng_hw_init(hal, srng, idle_check, idx);
+			goto ce_setup;
+		}
+
 		if (idx) {
 			hal->ops->hal_tx_ring_halt_set(hal_hdl);
 			do {
@@ -1724,7 +1754,7 @@ void *hal_srng_setup_idx(void *hal_soc, int ring_type, int ring_num, int mac_id,
 			hal->ops->hal_tx_ring_halt_reset(hal_hdl);
 		}
 
-
+ce_setup:
 		if (ring_type == CE_DST) {
 			srng->u.dst_ring.max_buffer_length = ring_params->max_buffer_length;
 			hal_ce_dst_setup(hal, srng, ring_num);
@@ -1770,12 +1800,14 @@ void *hal_srng_setup(void *hal_soc, int ring_type, int ring_num,
 }
 qdf_export_symbol(hal_srng_setup);
 
-void hal_srng_cleanup(void *hal_soc, hal_ring_handle_t hal_ring_hdl)
+void hal_srng_cleanup(void *hal_soc, hal_ring_handle_t hal_ring_hdl,
+		      bool umac_reset_inprogress)
 {
 	struct hal_srng *srng = (struct hal_srng *)hal_ring_hdl;
 	SRNG_LOCK_DESTROY(&srng->lock);
 	srng->initialized = 0;
-	hal_srng_hw_disable(hal_soc, srng);
+	if (umac_reset_inprogress)
+		hal_srng_hw_disable(hal_soc, srng);
 }
 qdf_export_symbol(hal_srng_cleanup);
 

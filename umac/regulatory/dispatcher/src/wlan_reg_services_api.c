@@ -104,16 +104,13 @@ qdf_export_symbol(wlan_reg_get_pwrmode_chan_list);
 
 #ifdef CONFIG_REG_CLIENT
 QDF_STATUS
-wlan_reg_get_6g_power_type_for_ctry(struct wlan_objmgr_psoc *psoc,
-				    struct wlan_objmgr_pdev *pdev,
-				    uint8_t *ap_ctry, uint8_t *sta_ctry,
-				    enum reg_6g_ap_type *pwr_type_6g,
-				    bool *ctry_code_match,
-				    enum reg_6g_ap_type ap_pwr_type)
+wlan_reg_get_best_6g_power_type(struct wlan_objmgr_psoc *psoc,
+				struct wlan_objmgr_pdev *pdev,
+				enum reg_6g_ap_type *pwr_type_6g,
+				enum reg_6g_ap_type ap_pwr_type)
 {
-	return reg_get_6g_power_type_for_ctry(psoc, pdev, ap_ctry, sta_ctry,
-					      pwr_type_6g, ctry_code_match,
-					      ap_pwr_type);
+	return reg_get_best_6g_power_type(psoc, pdev, pwr_type_6g,
+					  ap_pwr_type);
 }
 #endif
 
@@ -650,6 +647,8 @@ qdf_freq_t wlan_reg_legacy_chan_to_freq(struct wlan_objmgr_pdev *pdev,
 	return reg_legacy_chan_to_freq(pdev, chan_num);
 }
 
+qdf_export_symbol(wlan_reg_legacy_chan_to_freq);
+
 QDF_STATUS wlan_reg_set_country(struct wlan_objmgr_pdev *pdev,
 				       uint8_t *country)
 {
@@ -796,6 +795,8 @@ QDF_STATUS wlan_reg_get_freq_range(struct wlan_objmgr_pdev *pdev,
 	return QDF_STATUS_SUCCESS;
 }
 
+qdf_export_symbol(wlan_reg_get_freq_range);
+
 struct wlan_lmac_if_reg_tx_ops *
 wlan_reg_get_tx_ops(struct wlan_objmgr_psoc *psoc)
 {
@@ -904,6 +905,8 @@ bool wlan_reg_is_range_overlap_6g(qdf_freq_t low_freq, qdf_freq_t high_freq)
 {
 	return reg_is_range_overlap_6g(low_freq, high_freq);
 }
+
+qdf_export_symbol(wlan_reg_is_range_overlap_6g);
 #endif
 
 uint16_t wlan_reg_min_6ghz_chan_freq(void)
@@ -1399,6 +1402,8 @@ void wlan_reg_freq_width_to_chan_op_class(struct wlan_objmgr_pdev *pdev,
 					       chan_num);
 }
 
+qdf_export_symbol(wlan_reg_freq_width_to_chan_op_class);
+
 void wlan_reg_freq_width_to_chan_op_class_auto(struct wlan_objmgr_pdev *pdev,
 					       qdf_freq_t freq,
 					       uint16_t chan_width,
@@ -1515,11 +1520,15 @@ bool wlan_reg_is_2ghz_op_class(const uint8_t *country, uint8_t op_class)
 	return reg_is_2ghz_op_class(country, op_class);
 }
 
+qdf_export_symbol(wlan_reg_is_2ghz_op_class);
+
 bool wlan_reg_is_6ghz_op_class(struct wlan_objmgr_pdev *pdev,
 			       uint8_t op_class)
 {
 	return reg_is_6ghz_op_class(pdev, op_class);
 }
+
+qdf_export_symbol(wlan_reg_is_6ghz_op_class);
 
 #ifdef CONFIG_REG_CLIENT
 bool wlan_reg_is_6ghz_supported(struct wlan_objmgr_psoc *psoc)
@@ -1904,7 +1913,6 @@ QDF_STATUS wlan_reg_set_afc_power_event_received(struct wlan_objmgr_pdev *pdev,
 
 #endif
 
-#ifdef CONFIG_REG_CLIENT
 QDF_STATUS
 wlan_reg_recompute_current_chan_list(struct wlan_objmgr_psoc *psoc,
 				     struct wlan_objmgr_pdev *pdev)
@@ -1922,6 +1930,7 @@ wlan_reg_recompute_current_chan_list(struct wlan_objmgr_psoc *psoc,
 	return reg_send_scheduler_msg_nb(psoc, pdev);
 }
 
+#ifdef CONFIG_REG_CLIENT
 QDF_STATUS
 wlan_reg_modify_indoor_concurrency(struct wlan_objmgr_pdev *pdev,
 				   uint8_t vdev_id, uint32_t freq,

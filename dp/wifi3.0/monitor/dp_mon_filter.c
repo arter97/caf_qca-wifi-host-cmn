@@ -296,14 +296,16 @@ dp_mon_ht2_rx_ring_cfg(struct dp_soc *soc,
 
 		switch (srng_type) {
 		case DP_MON_FILTER_SRNG_TYPE_RXDMA_BUF:
-			if (target_type == TARGET_TYPE_QCN9160)
+			if (target_type == TARGET_TYPE_QCN9160) {
 				hal_ring_hdl =
 				soc->rx_refill_buf_ring[lmac_id].hal_srng;
-			else
+				ring_buf_size = RX_MONITOR_BUFFER_SIZE;
+			} else {
 				hal_ring_hdl =
 					pdev->rx_mac_buf_ring[lmac_id].hal_srng;
+				ring_buf_size = RX_DATA_BUFFER_SIZE;
+			}
 			hal_ring_type = RXDMA_BUF;
-			ring_buf_size = RX_DATA_BUFFER_SIZE;
 			break;
 
 		case DP_MON_FILTER_SRNG_TYPE_RXDMA_MONITOR_STATUS:
@@ -331,14 +333,14 @@ dp_mon_ht2_rx_ring_cfg(struct dp_soc *soc,
 			hal_ring_hdl =
 				soc->rxdma_mon_buf_ring[lmac_id].hal_srng;
 			hal_ring_type = RXDMA_MONITOR_BUF;
-			ring_buf_size = RX_DATA_BUFFER_SIZE;
+			ring_buf_size = RX_MONITOR_BUFFER_SIZE;
 			break;
 
 		case DP_MON_FILTER_SRNG_TYPE_RXMON_DEST:
 			hal_ring_hdl =
 				soc->rxdma_mon_dst_ring[lmac_id].hal_srng;
 			hal_ring_type = RXDMA_MONITOR_DST;
-			ring_buf_size = RX_DATA_BUFFER_SIZE;
+			ring_buf_size = RX_MONITOR_BUFFER_SIZE;
 			break;
 		default:
 			return QDF_STATUS_E_FAILURE;
@@ -701,6 +703,7 @@ void dp_mon_filter_set_status_cmn(struct dp_mon_pdev *mon_pdev,
 	filter->tlv_filter.ppdu_end_user_stats = 1;
 	filter->tlv_filter.ppdu_end_user_stats_ext = 1;
 	filter->tlv_filter.ppdu_end_status_done = 1;
+	filter->tlv_filter.ppdu_start_user_info = 1;
 	filter->tlv_filter.enable_fp = 1;
 	filter->tlv_filter.enable_md = 0;
 	filter->tlv_filter.fp_mgmt_filter = FILTER_MGMT_ALL;
@@ -732,6 +735,7 @@ void dp_mon_filter_set_status_cbf(struct dp_pdev *pdev,
 	filter->tlv_filter.ppdu_end_user_stats = 1;
 	filter->tlv_filter.ppdu_end_user_stats_ext = 1;
 	filter->tlv_filter.ppdu_end_status_done = 1;
+	filter->tlv_filter.ppdu_start_user_info = 1;
 	filter->tlv_filter.enable_fp = 1;
 	filter->tlv_filter.enable_md = 0;
 	filter->tlv_filter.fp_mgmt_filter = FILTER_MGMT_ACT_NO_ACK;
@@ -755,6 +759,7 @@ void dp_mon_filter_set_cbf_cmn(struct dp_pdev *pdev,
 	filter->tlv_filter.ppdu_end_user_stats = 0;
 	filter->tlv_filter.ppdu_end_user_stats_ext = 0;
 	filter->tlv_filter.ppdu_end_status_done = 0;
+	filter->tlv_filter.ppdu_start_user_info = 0;
 	filter->tlv_filter.enable_fp = 1;
 	filter->tlv_filter.enable_md = 0;
 	filter->tlv_filter.fp_mgmt_filter = FILTER_MGMT_ACT_NO_ACK;

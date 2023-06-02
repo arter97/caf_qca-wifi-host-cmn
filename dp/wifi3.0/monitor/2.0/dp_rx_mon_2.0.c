@@ -106,7 +106,7 @@ dp_rx_mon_get_ppdu_info(struct dp_mon_pdev *mon_pdev)
 	qdf_spin_lock_bh(&mon_pdev_be->ppdu_info_lock);
 	TAILQ_FOREACH_SAFE(ppdu_info,
 			   &mon_pdev_be->rx_mon_free_queue,
-			   ppdu_list_elem,
+			   ppdu_free_list_elem,
 			   temp_ppdu_info) {
 		TAILQ_REMOVE(&mon_pdev_be->rx_mon_free_queue,
 			     ppdu_info, ppdu_free_list_elem);
@@ -999,14 +999,15 @@ dp_rx_mon_handle_full_mon(struct dp_pdev *pdev,
 
 	msdu_meta = (struct hal_rx_mon_msdu_info *)(((void *)qdf_nbuf_get_frag_addr(mpdu, 1)) - DP_RX_MON_PACKET_OFFSET);
 
+	frag_size = qdf_nbuf_get_frag_size_by_idx(head_msdu, 1);
+	pad_byte_pholder =
+		RX_MONITOR_BUFFER_SIZE - (frag_size + DP_RX_MON_PACKET_OFFSET);
+
 	/* Adjust page frag offset to appropriate after decap header */
 	frag_page_offset =
 		decap_hdr_pull_bytes + l2_hdr_offset;
 	qdf_nbuf_move_frag_page_offset(head_msdu, 1, frag_page_offset);
-
-	frag_size = qdf_nbuf_get_frag_size_by_idx(head_msdu, 1);
-	pad_byte_pholder =
-		RX_MONITOR_BUFFER_SIZE - (frag_size + DP_RX_MON_PACKET_OFFSET + DP_RX_MON_NONRAW_L2_HDR_PAD_BYTE);
+	frag_size = frag_size - frag_page_offset;
 
 	if (msdu_meta->first_buffer && msdu_meta->last_buffer) {
 		/* MSDU with single buffer */
@@ -1098,8 +1099,7 @@ dp_rx_mon_handle_full_mon(struct dp_pdev *pdev,
 			 * to accommodate amsdu pad byte
 			 */
 			pad_byte_pholder =
-				RX_MONITOR_BUFFER_SIZE - (frag_size + (DP_RX_MON_PACKET_OFFSET +
-							  DP_RX_MON_NONRAW_L2_HDR_PAD_BYTE));
+				RX_MONITOR_BUFFER_SIZE - (frag_size + DP_RX_MON_PACKET_OFFSET);
 			/*
 			 * We will come here only only three condition:
 			 * 1. Msdu with single Buffer
@@ -1217,7 +1217,7 @@ dp_rx_mon_flush_packet_tlv(struct dp_pdev *pdev, void *buf, uint16_t end_offset,
 
 	ppdu_info = &mon_pdev->ppdu_info;
 	if (!ppdu_info) {
-		dp_mon_err("ppdu_info malloc failed pdev: %pK", pdev);
+		dp_mon_debug("ppdu_info malloc failed pdev: %pK", pdev);
 		return work_done;
 	}
 	qdf_mem_zero(ppdu_info, sizeof(struct hal_rx_ppdu_info));
@@ -1359,17 +1359,44 @@ dp_rx_mon_handle_flush_n_trucated_ppdu(struct dp_soc *soc,
 	dp_rx_mon_flush_status_buf_queue(pdev);
 	buf = mon_desc->buf_addr;
 	end_offset = mon_desc->end_offset;
-	qdf_frag_free(mon_desc->buf_addr);
-	DP_STATS_INC(mon_soc, frag_free, 1);
 	dp_mon_add_to_free_desc_list(&desc_list, &tail, mon_desc);
 	work_done = 1;
 	work_done += dp_rx_mon_flush_packet_tlv(pdev, buf, end_offset,
 						&desc_list, &tail);
+	if (buf) {
+		qdf_frag_free(buf);
+		DP_STATS_INC(mon_soc, frag_free, 1);
+	}
 	if (desc_list)
 		dp_mon_add_desc_list_to_free_list(soc, &desc_list, &tail,
 						  rx_mon_desc_pool);
 }
 
+/**
+ * dp_rx_mon_append_nbuf() - Append nbuf to parent nbuf
+ * @nbuf: Parent nbuf
+ * @tmp_nbuf: nbuf to be attached to parent
+ *
+ * Return: void
+ */
+static void dp_rx_mon_append_nbuf(qdf_nbuf_t nbuf, qdf_nbuf_t tmp_nbuf)
+{
+	qdf_nbuf_t last_nbuf;
+
+	/*
+	 * If nbuf does not have fraglist, then append tmp_nbuf as fraglist,
+	 * else append tmp_nbuf as next of last_nbuf present in nbuf fraglist.
+	 */
+	if (!qdf_nbuf_has_fraglist(nbuf))
+		qdf_nbuf_append_ext_list(nbuf, tmp_nbuf,
+					 qdf_nbuf_len(tmp_nbuf));
+	else {
+		last_nbuf = qdf_nbuf_get_last_frag_list_nbuf(nbuf);
+
+		if (qdf_likely(last_nbuf))
+			qdf_nbuf_set_next(last_nbuf, tmp_nbuf);
+	}
+}
 uint8_t dp_rx_mon_process_tlv_status(struct dp_pdev *pdev,
 				     struct hal_rx_ppdu_info *ppdu_info,
 				     void *status_frag,
@@ -1412,7 +1439,7 @@ uint8_t dp_rx_mon_process_tlv_status(struct dp_pdev *pdev,
 			 *                          * mapped via nr frags
 			 *                                                   */
 			if (qdf_unlikely(!nbuf)) {
-				dp_mon_err("malloc failed pdev: %pK ", pdev);
+				dp_mon_debug("malloc failed pdev: %pK ", pdev);
 				return num_buf_reaped;
 			}
 
@@ -1466,9 +1493,7 @@ uint8_t dp_rx_mon_process_tlv_status(struct dp_pdev *pdev,
 					qdf_assert_always(0);
 				}
 				mon_pdev->rx_mon_stats.parent_buf_alloc++;
-				/* add new skb to frag list */
-				qdf_nbuf_append_ext_list(nbuf, tmp_nbuf,
-							 qdf_nbuf_len(tmp_nbuf));
+				dp_rx_mon_append_nbuf(nbuf, tmp_nbuf);
 			}
 			dp_rx_mon_nbuf_add_rx_frag(tmp_nbuf, status_frag,
 						   ppdu_info->hdr_len - DP_RX_MON_RX_HDR_OFFSET,
@@ -1520,6 +1545,9 @@ uint8_t dp_rx_mon_process_tlv_status(struct dp_pdev *pdev,
 		nbuf = qdf_nbuf_queue_last(&ppdu_info->mpdu_q[user_id]);
 		if (qdf_unlikely(!nbuf)) {
 			dp_mon_debug("nbuf is NULL");
+			DP_STATS_INC(mon_soc, frag_free, 1);
+			DP_STATS_INC(mon_soc, empty_queue, 1);
+			qdf_frag_free(addr);
 			return num_buf_reaped;
 		}
 
@@ -1557,9 +1585,7 @@ uint8_t dp_rx_mon_process_tlv_status(struct dp_pdev *pdev,
 				return num_buf_reaped;
 			}
 			mon_pdev->rx_mon_stats.parent_buf_alloc++;
-			/* add new skb to frag list */
-			qdf_nbuf_append_ext_list(nbuf, tmp_nbuf,
-						 qdf_nbuf_len(tmp_nbuf));
+			dp_rx_mon_append_nbuf(nbuf, tmp_nbuf);
 		}
 		mpdu_info->full_pkt = true;
 
@@ -1759,7 +1785,7 @@ dp_rx_mon_process_status_tlv(struct dp_pdev *pdev)
 	ppdu_info = dp_rx_mon_get_ppdu_info(mon_pdev);
 
 	if (!ppdu_info) {
-		dp_mon_err("ppdu_info malloc failed pdev: %pK", pdev);
+		dp_mon_debug("ppdu_info malloc failed pdev: %pK", pdev);
 		dp_rx_mon_flush_status_buf_queue(pdev);
 		return NULL;
 	}
@@ -2151,7 +2177,7 @@ dp_rx_mon_srng_process_2_0(struct dp_soc *soc, struct dp_intr *int_ctx,
 		status = dp_rx_mon_add_ppdu_info_to_wq(pdev, ppdu_info);
 		if (status != QDF_STATUS_SUCCESS) {
 			if (ppdu_info)
-				__dp_rx_mon_free_ppdu_info(mon_pdev, ppdu_info);
+				dp_rx_mon_free_ppdu_info(pdev, ppdu_info);
 		}
 
 		work_done++;
@@ -2397,8 +2423,10 @@ void dp_mon_rx_print_advanced_stats_2_0(struct dp_soc *soc,
 		       rx_mon_stats->mpdus_buf_to_stack);
 	DP_PRINT_STATS("frag_alloc = %d",
 		       mon_soc->stats.frag_alloc);
-	DP_PRINT_STATS("frag_free = %d",
+	DP_PRINT_STATS("total frag_free = %d",
 		       mon_soc->stats.frag_free);
+	DP_PRINT_STATS("frag_free due to empty queue= %d",
+		       mon_soc->stats.empty_queue);
 	DP_PRINT_STATS("status_buf_count = %d",
 		       rx_mon_stats->status_buf_count);
 	DP_PRINT_STATS("pkt_buf_count = %d",

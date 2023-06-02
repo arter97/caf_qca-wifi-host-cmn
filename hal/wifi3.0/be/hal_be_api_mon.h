@@ -2341,8 +2341,8 @@ hal_rx_status_get_mon_buf_addr(uint8_t *rx_tlv,
 {
 	struct mon_buffer_addr *addr = (struct mon_buffer_addr *)rx_tlv;
 
-	ppdu_info->packet_info.sw_cookie = (((uint64_t)addr->buffer_virt_addr_63_32 << 32) |
-					    (addr->buffer_virt_addr_31_0));
+	ppdu_info->packet_info.sw_cookie = (((uint64_t)qdf_le32_to_cpu(addr->buffer_virt_addr_63_32) << 32) |
+					    qdf_le32_to_cpu(addr->buffer_virt_addr_31_0));
 	/* HW DMA length is '-1' of actual DMA length*/
 	ppdu_info->packet_info.dma_length = addr->dma_length + 1;
 	ppdu_info->packet_info.msdu_continuation = addr->msdu_continuation;
@@ -2841,6 +2841,7 @@ hal_rx_status_get_tlv_info_generic_be(void *rx_tlv_hdr, void *ppduinfo,
 		case TARGET_TYPE_QCA5018:
 		case TARGET_TYPE_QCN9000:
 		case TARGET_TYPE_QCN6122:
+		case TARGET_TYPE_QCN6432:
 #ifdef QCA_WIFI_QCA6390
 		case TARGET_TYPE_QCA6390:
 #endif

@@ -107,8 +107,6 @@ enum CMEM_MEM_CLIENTS {
 /* The MAX PPE PRI2TID */
 #define DP_TX_INT_PRI2TID_MAX 15
 
-#define DP_TX_PPEDS_POOL_ID 0
-
 /* size of CMEM needed for a ppeds tx desc pool */
 #define DP_TX_PPEDS_DESC_POOL_CMEM_SIZE \
 	((WLAN_CFG_NUM_PPEDS_TX_DESC_MAX / DP_CC_SPT_PAGE_MAX_ENTRIES) * \
@@ -516,13 +514,13 @@ void dp_mlo_partner_chips_map(struct dp_soc *soc,
 void dp_mlo_partner_chips_unmap(struct dp_soc *soc,
 				uint16_t peer_id);
 
-#ifdef WLAN_MCAST_MLO
+#ifdef WLAN_MLO_MULTI_CHIP
 typedef void dp_ptnr_vdev_iter_func(struct dp_vdev_be *be_vdev,
 				    struct dp_vdev *ptnr_vdev,
 				    void *arg);
 
 /**
- * dp_mcast_mlo_iter_ptnr_vdev() - API to iterate through ptnr vdev list
+ * dp_mlo_iter_ptnr_vdev() - API to iterate through ptnr vdev list
  * @be_soc: dp_soc_be pointer
  * @be_vdev: dp_vdev_be pointer
  * @func: function to be called for each peer
@@ -531,12 +529,13 @@ typedef void dp_ptnr_vdev_iter_func(struct dp_vdev_be *be_vdev,
  *
  * Return: None
  */
-void dp_mcast_mlo_iter_ptnr_vdev(struct dp_soc_be *be_soc,
-				 struct dp_vdev_be *be_vdev,
-				 dp_ptnr_vdev_iter_func func,
-				 void *arg,
-				 enum dp_mod_id mod_id);
+void dp_mlo_iter_ptnr_vdev(struct dp_soc_be *be_soc,
+			   struct dp_vdev_be *be_vdev,
+			   dp_ptnr_vdev_iter_func func, void *arg,
+			   enum dp_mod_id mod_id);
+#endif
 
+#ifdef WLAN_MCAST_MLO
 /**
  * dp_mlo_get_mcast_primary_vdev() - get ref to mcast primary vdev
  * @be_soc: dp_soc_be pointer

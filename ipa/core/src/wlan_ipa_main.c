@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2018-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2021-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -27,6 +27,7 @@
 #include "cfg_ucfg_api.h"
 #include "wlan_ipa_obj_mgmt_api.h"
 
+#ifdef IPA_OFFLOAD
 static struct wlan_ipa_config *g_ipa_config;
 static bool g_ipa_hw_support;
 static bool g_ipa_pld_enable = true;
@@ -94,6 +95,11 @@ bool ipa_config_is_enabled(void)
 bool ipa_config_is_uc_enabled(void)
 {
 	return g_ipa_config ? wlan_ipa_uc_is_enabled(g_ipa_config) : 0;
+}
+
+bool ipa_config_is_opt_wifi_dp_enabled(void)
+{
+	return g_ipa_config ? wlan_ipa_is_opt_wifi_dp_enabled(g_ipa_config) : 0;
 }
 
 bool ipa_config_is_vlan_enabled(void)
@@ -648,10 +654,14 @@ QDF_STATUS ipa_uc_ol_deinit(struct wlan_objmgr_pdev *pdev)
 
 	status = wlan_ipa_uc_ol_deinit(ipa_obj);
 	ipa_obj_cleanup(ipa_obj);
+
+out:
+	if (g_instances_added)
+		g_instances_added--;
+
 	if (!g_instances_added)
 		ipa_disable_register_cb();
 
-out:
 	ipa_init_deinit_unlock();
 	return status;
 }
@@ -911,3 +921,4 @@ bool ipa_is_wds_enabled(void)
 {
 	return g_ipa_config ? g_ipa_config->ipa_wds : 0;
 }
+#endif /* IPA_OFFLOAD */
