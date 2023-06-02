@@ -345,10 +345,10 @@ QDF_STATUS wlan_regulatory_pdev_obj_created_notification(
 	pdev_priv_obj->pdev_ptr = pdev;
 	pdev_priv_obj->dfs_enabled = psoc_priv_obj->dfs_enabled;
 	pdev_priv_obj->set_fcc_channel = psoc_priv_obj->set_fcc_channel;
-	pdev_priv_obj->keep_6ghz_sta_cli_connection = false;
 	pdev_priv_obj->band_capability = psoc_priv_obj->band_capability;
 	pdev_priv_obj->indoor_chan_enabled =
 		psoc_priv_obj->indoor_chan_enabled;
+	reg_set_keep_6ghz_sta_cli_connection(pdev, false);
 
 	reg_set_pdev_afc_dev_type(pdev_priv_obj, psoc_priv_obj);
 

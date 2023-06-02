@@ -468,8 +468,8 @@ struct wlan_regulatory_pdev_priv_obj {
 #ifdef CONFIG_REG_CLIENT
 	struct cur_fcc_rule fcc_rules_ptr[MAX_NUM_FCC_RULES];
 	struct indoor_concurrency_list indoor_list[MAX_INDOOR_LIST_SIZE];
-#endif
 	bool keep_6ghz_sta_cli_connection;
+#endif
 };
 
 /**
