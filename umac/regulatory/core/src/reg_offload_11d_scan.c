@@ -219,21 +219,19 @@ void reg_run_11d_state_machine(struct wlan_objmgr_psoc *psoc)
 	temp_11d_support = psoc_priv_obj->enable_11d_supp;
 	if ((psoc_priv_obj->enable_11d_in_world_mode) && (world_mode))
 		psoc_priv_obj->enable_11d_supp = true;
-	else if (((psoc_priv_obj->user_ctry_set) &&
-		  (psoc_priv_obj->user_ctry_priority)) ||
-		 (psoc_priv_obj->master_vdev_cnt))
+	else if (psoc_priv_obj->user_ctry_set &&
+		 psoc_priv_obj->user_ctry_priority)
 		psoc_priv_obj->enable_11d_supp = false;
 	else
 		psoc_priv_obj->enable_11d_supp =
 			psoc_priv_obj->enable_11d_supp_original;
 
-	reg_debug("inside 11d state machine:tmp %d 11d_supp %d org %d set %d pri %d cnt %d vdev %d",
+	reg_debug("inside 11d state machine:tmp %d 11d_supp %d org %d set %d pri %d vdev %d",
 		  temp_11d_support,
 		  psoc_priv_obj->enable_11d_supp,
 		  psoc_priv_obj->enable_11d_supp_original,
 		  psoc_priv_obj->user_ctry_set,
 		  psoc_priv_obj->user_ctry_priority,
-		  psoc_priv_obj->master_vdev_cnt,
 		  psoc_priv_obj->vdev_id_for_11d_scan);
 
 	if (temp_11d_support != psoc_priv_obj->enable_11d_supp) {
@@ -291,12 +289,6 @@ QDF_STATUS reg_11d_vdev_created_update(struct wlan_objmgr_vdev *vdev)
 		psoc_priv_obj->vdev_cnt_11d++;
 	}
 
-	if ((op_mode == QDF_P2P_GO_MODE) || (op_mode == QDF_SAP_MODE)) {
-		reg_debug("running 11d state machine, opmode %d", op_mode);
-		psoc_priv_obj->master_vdev_cnt++;
-		reg_run_11d_state_machine(parent_psoc);
-	}
-
 	return QDF_STATUS_SUCCESS;
 }
 
@@ -310,14 +302,6 @@ QDF_STATUS reg_11d_vdev_delete_update(struct wlan_objmgr_psoc *psoc,
 	if (!psoc_priv_obj) {
 		reg_err("NULL reg psoc private obj");
 		return QDF_STATUS_E_FAULT;
-	}
-
-	if ((op_mode == QDF_P2P_GO_MODE) || (op_mode == QDF_SAP_MODE)) {
-		psoc_priv_obj->master_vdev_cnt--;
-		reg_debug("run 11d state machine, deleted opmode %d",
-			  op_mode);
-		reg_run_11d_state_machine(psoc);
-		return QDF_STATUS_SUCCESS;
 	}
 
 	if ((op_mode == QDF_STA_MODE) || (op_mode == QDF_P2P_DEVICE_MODE) ||

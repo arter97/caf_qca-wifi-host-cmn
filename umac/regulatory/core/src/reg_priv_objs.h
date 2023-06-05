@@ -166,7 +166,6 @@ struct indoor_concurrency_list {
  * @enable_11d_supp:
  * @is_11d_offloaded:
  * @vdev_id_for_11d_scan:
- * @master_vdev_cnt:
  * @vdev_cnt_11d:
  * @scan_11d_interval:
  * @is_host_11d_inited:
@@ -245,7 +244,6 @@ struct wlan_regulatory_psoc_priv_obj {
 	bool enable_11d_supp;
 	bool is_11d_offloaded;
 	uint8_t vdev_id_for_11d_scan;
-	uint8_t master_vdev_cnt;
 	uint8_t vdev_cnt_11d;
 	uint32_t scan_11d_interval;
 #ifdef HOST_11D_SCAN
