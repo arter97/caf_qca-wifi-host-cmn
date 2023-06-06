@@ -27,30 +27,8 @@
 
 #include <qdf_nbuf.h>
 
-/* Number of modules supported by wbuff */
-#define WBUFF_MAX_MODULES 4
-
 /* Number of pools supported per module */
 #define WBUFF_MAX_POOLS 4
-
-/* Max buffer size supported by wbuff in bytes */
-#define WBUFF_MAX_BUFFER_SIZE 2048
-
-/* wbuff pool buffer lengths in bytes*/
-#define WBUFF_LEN_POOL0 256
-#define WBUFF_LEN_POOL1 512
-#define WBUFF_LEN_POOL2 1024
-#define WBUFF_LEN_POOL3 2048
-
-/* wbuff max pool sizes */
-/* Allocation of size 256 bytes */
-#define WBUFF_POOL_0_MAX 256
-/* Allocation of size 512 bytes */
-#define WBUFF_POOL_1_MAX 128
-/* Allocation of size 1024 bytes */
-#define WBUFF_POOL_2_MAX 64
-/* Allocation of size 2048 bytes */
-#define WBUFF_POOL_3_MAX 32
 
 #define WBUFF_MODULE_ID_SHIFT 4
 #define WBUFF_MODULE_ID_BITMASK 0xF0
@@ -58,18 +36,26 @@
 #define WBUFF_POOL_ID_SHIFT 1
 #define WBUFF_POOL_ID_BITMASK 0xE
 
-/* Comparison array for maximum allocation per pool*/
-uint16_t wbuff_alloc_max[WBUFF_MAX_POOLS] = {WBUFF_POOL_0_MAX,
-					     WBUFF_POOL_1_MAX,
-					     WBUFF_POOL_2_MAX,
-					     WBUFF_POOL_3_MAX};
-
 /**
  * struct wbuff_handle - wbuff handle to the registered module
  * @id: the identifier for the registered module.
  */
 struct wbuff_handle {
 	uint8_t id;
+};
+
+/**
+ * struct wbuff_pool - structure representing wbuff pool
+ * @initialized: To identify whether pool is initialized
+ * @pool: nbuf pool
+ * @buffer_size: size of the buffer in this @pool
+ * @pool_id: pool identifier
+ */
+struct wbuff_pool {
+	bool initialized;
+	qdf_nbuf_t pool;
+	uint16_t buffer_size;
+	uint8_t pool_id;
 };
 
 /**
@@ -81,7 +67,7 @@ struct wbuff_handle {
  * @handle: wbuff handle for the registered module
  * @reserve: nbuf headroom to start with
  * @align: alignment for the nbuf
- * @pool: pools for all available buffers for the module
+ * @wbuff_pool: pools for all available buffers for the module
  */
 struct wbuff_module {
 	bool registered;
@@ -90,7 +76,7 @@ struct wbuff_module {
 	struct wbuff_handle handle;
 	int reserve;
 	int align;
-	qdf_nbuf_t pool[WBUFF_MAX_POOLS];
+	struct wbuff_pool wbuff_pool[WBUFF_MAX_POOLS];
 };
 
 /**
