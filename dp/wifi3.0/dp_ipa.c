@@ -68,11 +68,8 @@ struct dp_ipa_reo_remap_record {
 	uint32_t ix3_reg;
 };
 
-#ifdef IPA_WDS_EASYMESH_FEATURE
-#define WLAN_IPA_META_DATA_MASK htonl(0x000000FF)
-#else
+#define WLAN_IPA_AST_META_DATA_MASK htonl(0x000000FF)
 #define WLAN_IPA_META_DATA_MASK htonl(0x00FF0000)
-#endif
 
 #define REO_REMAP_HISTORY_SIZE 32
 #define CB_DA_IS_BCMC 1
@@ -1090,7 +1087,10 @@ static void dp_ipa_set_pipe_db(struct dp_ipa_resources *res,
 static void dp_ipa_setup_iface_session_id(qdf_ipa_wdi_reg_intf_in_params_t *in,
 					  uint8_t session_id)
 {
-	QDF_IPA_WDI_REG_INTF_IN_PARAMS_META_DATA(in) = htonl(session_id);
+	if (ucfg_ipa_is_wds_enabled())
+		QDF_IPA_WDI_REG_INTF_IN_PARAMS_META_DATA(in) = htonl(session_id);
+	else
+		QDF_IPA_WDI_REG_INTF_IN_PARAMS_META_DATA(in) = htonl(session_id << 16);
 }
 #else
 static void dp_ipa_setup_iface_session_id(qdf_ipa_wdi_reg_intf_in_params_t *in,
@@ -2781,11 +2781,32 @@ dp_ipa_set_wdi_hdr_type(qdf_ipa_wdi_hdr_info_t *hdr_info)
 	else
 		QDF_IPA_WDI_HDR_INFO_HDR_TYPE(hdr_info) = IPA_HDR_L2_ETHERNET_II;
 }
+
+/**
+ * dp_ipa_setup_meta_data_mask() - Pass meta data mask to IPA
+ * @in: ipa in params
+ *
+ * Pass meta data mask to IPA.
+ *
+ * Return: none
+ */
+static void dp_ipa_setup_meta_data_mask(qdf_ipa_wdi_reg_intf_in_params_t *in)
+{
+	if (ucfg_ipa_is_wds_enabled())
+		QDF_IPA_WDI_REG_INTF_IN_PARAMS_META_DATA_MASK(in) = WLAN_IPA_AST_META_DATA_MASK;
+	else
+		QDF_IPA_WDI_REG_INTF_IN_PARAMS_META_DATA_MASK(in) = WLAN_IPA_META_DATA_MASK;
+}
 #else
 static inline void
 dp_ipa_set_wdi_hdr_type(qdf_ipa_wdi_hdr_info_t *hdr_info)
 {
 	QDF_IPA_WDI_HDR_INFO_HDR_TYPE(hdr_info) = IPA_HDR_L2_ETHERNET_II;
+}
+
+static void dp_ipa_setup_meta_data_mask(qdf_ipa_wdi_reg_intf_in_params_t *in)
+{
+	QDF_IPA_WDI_REG_INTF_IN_PARAMS_META_DATA_MASK(in) = WLAN_IPA_META_DATA_MASK;
 }
 #endif
 
@@ -2866,7 +2887,7 @@ QDF_STATUS dp_ipa_setup_iface(char *ifname, uint8_t *mac_addr,
 		     &hdr_info, sizeof(qdf_ipa_wdi_hdr_info_t));
 	QDF_IPA_WDI_REG_INTF_IN_PARAMS_ALT_DST_PIPE(&in) = cons_client;
 	QDF_IPA_WDI_REG_INTF_IN_PARAMS_IS_META_DATA_VALID(&in) = 1;
-	QDF_IPA_WDI_REG_INTF_IN_PARAMS_META_DATA_MASK(&in) = WLAN_IPA_META_DATA_MASK;
+	dp_ipa_setup_meta_data_mask(&in);
 	QDF_IPA_WDI_REG_INTF_IN_PARAMS_HANDLE(&in) = hdl;
 	dp_ipa_setup_iface_session_id(&in, session_id);
 	dp_debug("registering for session_id: %u", session_id);
