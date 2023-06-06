@@ -3864,6 +3864,20 @@ enum qca_vendor_attr_roam_candidate_selection_criteria {
  *	    discovered.
  *	The default behavior if this flag is not specified is to include all
  *	the supported 6 GHz PSC frequencies in the roam full scan.
+ *
+ * @QCA_ATTR_ROAM_CONTROL_NEIGHBOR_LOOKUP_RSSI_THRESHOLD: Signed 8-bit value
+ *	in dBm.
+ *	This attribute is used to control the RSSI threshold for neighbor
+ *	lookup. It is used to set value of neighbor lookup rssi to wlan driver
+ *	and wlan firmware, and it is also used to get the value of neighbor
+ *	lookup rssi from wlan driver.
+ *
+ * @QCA_ATTR_ROAM_CONTROL_ROAM_RSSI_DIFF: Unsigned 8-bit value.
+ *	This attribute is used to decide whether to Roam or not based on RSSI.
+ *	AP1 is the currently associated AP and AP2 is chosen for roaming. The
+ *	Roaming will happen only if AP2 has better Signal Quality and it has a
+ *	RSSI better than AP2. RoamRssiDiff is the number of units AP2 is better
+ *	than AP1.
  */
 enum qca_vendor_attr_roam_control {
 	QCA_ATTR_ROAM_CONTROL_ENABLE = 1,
@@ -3887,6 +3901,8 @@ enum qca_vendor_attr_roam_control {
 	QCA_ATTR_ROAM_CONTROL_HO_DELAY_FOR_RX = 25,
 	QCA_ATTR_ROAM_CONTROL_FULL_SCAN_NO_REUSE_PARTIAL_SCAN_FREQ = 26,
 	QCA_ATTR_ROAM_CONTROL_FULL_SCAN_6GHZ_ONLY_ON_PRIOR_DISCOVERY = 27,
+	QCA_ATTR_ROAM_CONTROL_NEIGHBOR_LOOKUP_RSSI_THRESHOLD = 28,
+	QCA_ATTR_ROAM_CONTROL_ROAM_RSSI_DIFF = 29,
 
 	/* keep last */
 	QCA_ATTR_ROAM_CONTROL_AFTER_LAST,
