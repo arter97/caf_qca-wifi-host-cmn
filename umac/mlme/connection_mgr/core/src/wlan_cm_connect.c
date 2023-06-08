@@ -2791,6 +2791,10 @@ QDF_STATUS cm_connect_complete(struct cnx_mgr *cm_ctx,
 					&bss_info, &mlme_info);
 	}
 
+	cm_standby_link_update_mlme_by_bssid(cm_ctx->vdev,
+					     mlme_info.assoc_state,
+					     resp->ssid);
+
 	mlme_debug(CM_PREFIX_FMT,
 		   CM_PREFIX_REF(wlan_vdev_get_id(cm_ctx->vdev),
 				 resp->cm_id));

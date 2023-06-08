@@ -167,6 +167,15 @@ struct mlo_link_info
 	return NULL;
 }
 
+struct mlo_link_info
+*mlo_mgr_get_ap_link(struct wlan_objmgr_vdev *vdev)
+{
+	if (!vdev || !vdev->mlo_dev_ctx)
+		return NULL;
+
+	return &vdev->mlo_dev_ctx->link_ctx->links_info[0];
+}
+
 static
 void mlo_mgr_alloc_link_info_wmi_chan(struct wlan_mlo_dev_context *ml_dev)
 {

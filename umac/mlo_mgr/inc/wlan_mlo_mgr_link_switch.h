@@ -221,6 +221,16 @@ struct mlo_link_info*
 mlo_mgr_get_ap_link_by_link_id(struct wlan_objmgr_vdev *vdev, int link_id);
 
 /**
+ * mlo_mgr_get_ap_link() - Assoc mlo link info from link id
+ * @vdev: Object Manager vdev
+ *
+ * Get Assoc link info.
+ *
+ * Return: Pointer of link info
+ */
+struct mlo_link_info *mlo_mgr_get_ap_link(struct wlan_objmgr_vdev *vdev);
+
+/**
  * mlo_mgr_link_switch_request_params() - Link switch request params from FW.
  * @psoc: PSOC object manager
  * @evt_params: Link switch params received from FW.

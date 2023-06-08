@@ -380,6 +380,9 @@ cm_update_scan_mlme_on_disconnect(struct wlan_objmgr_vdev *vdev,
 
 	bss_info.freq = chan->ch_freq;
 
+	cm_standby_link_update_mlme_by_bssid(vdev, mlme.assoc_state,
+					     bss_info.ssid);
+
 	wlan_scan_update_mlme_by_bssinfo(pdev, &bss_info, &mlme);
 }
 
