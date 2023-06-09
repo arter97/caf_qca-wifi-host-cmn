@@ -708,4 +708,21 @@ ucfg_reg_send_afc_resp_rx_ind(struct wlan_objmgr_pdev *pdev,
  */
 QDF_STATUS ucfg_reg_afc_start(struct wlan_objmgr_pdev *pdev, uint64_t req_id);
 #endif
+
+#ifndef CONFIG_REG_CLIENT
+static inline
+bool ucfg_reg_is_user_country_set_allowed(struct wlan_objmgr_psoc *psoc)
+{
+	return true;
+}
+#else
+/**
+ * ucfg_reg_is_user_country_set_allowed() - Checks whether user country is
+ * allowed to set
+ * @psoc: psoc ptr
+ *
+ * Return: bool
+ */
+bool ucfg_reg_is_user_country_set_allowed(struct wlan_objmgr_psoc *psoc);
+#endif
 #endif
