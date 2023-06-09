@@ -209,6 +209,7 @@ struct channel_info {
  * @rsnxe: Pointer to rsnxe IE
  * @ehtcap: pointer to ehtcap ie
  * @ehtop: pointer to eht op ie
+ * @bw_ind: pointer to bandwidth indication element sub ie
  * @multi_link_bv: pointer to multi link basic variant IE
  * @multi_link_rv: pointer to multi link reconfig IE
  * @t2lm: array of pointers to t2lm op ie
@@ -276,6 +277,7 @@ struct ie_list {
 #ifdef WLAN_FEATURE_11BE
 	uint8_t *ehtcap;
 	uint8_t *ehtop;
+	uint8_t *bw_ind;
 #endif
 #ifdef WLAN_FEATURE_11BE_MLO
 	uint8_t *multi_link_bv;
@@ -593,6 +595,7 @@ struct ml_info {
  * @raw_frame: contain raw frame and the length of the raw frame
  * @pdev_id: pdev id
  * @ml_info: Multi link information
+ * @non_intersected_phymode: Non intersected phy mode of the AP
  */
 struct scan_cache_entry {
 	uint8_t frm_subtype;
@@ -646,6 +649,7 @@ struct scan_cache_entry {
 #ifdef WLAN_FEATURE_11BE_MLO
 	struct ml_info ml_info;
 #endif
+	enum wlan_phymode non_intersected_phymode;
 };
 
 #define MAX_FAVORED_BSSID 16
@@ -826,6 +830,16 @@ enum scan_priority {
  * @SCAN_PHY_MODE_11AX_HE20_2G: 2GHz 11ax he20 mode
  * @SCAN_PHY_MODE_11AX_HE40_2G: 2GHz 11ax he40 mode
  * @SCAN_PHY_MODE_11AX_HE80_2G: 2GHz 11ax he80 mode
+ * @SCAN_PHY_MODE_11BE_EHT20: 11be EHT 20 mode
+ * @SCAN_PHY_MODE_11BE_EHT40: 11be EHT 40 mode
+ * @SCAN_PHY_MODE_11BE_EHT80: 11be EHT 80 mode
+ * @SCAN_PHY_MODE_11BE_EHT80_80: 11be EHT 80+80 mode
+ * @SCAN_PHY_MODE_11BE_EHT160: 11be EHT 160 mode
+ * @SCAN_PHY_MODE_11BE_EHT160_160: 11be EHT 160+160 mode
+ * @SCAN_PHY_MODE_11BE_EHT320: 11be EHT 320 mode
+ * @SCAN_PHY_MODE_11BE_EHT20_2G: 2GHz 11be EHT 20 mode
+ * @SCAN_PHY_MODE_11BE_EHT40_2G: 2GHz 11be EHT 40 mode
+ * @SCAN_PHY_MODE_11BE_EHT80_2G: 2GHz 11be EHT 80 mode
  * @SCAN_PHY_MODE_UNKNOWN: unknown phy mode
  * @SCAN_PHY_MODE_MAX: max valid phymode
  */
@@ -854,8 +868,20 @@ enum scan_phy_mode {
 	SCAN_PHY_MODE_11AX_HE20_2G = 21,
 	SCAN_PHY_MODE_11AX_HE40_2G = 22,
 	SCAN_PHY_MODE_11AX_HE80_2G = 23,
-	SCAN_PHY_MODE_UNKNOWN = 24,
-	SCAN_PHY_MODE_MAX = 24
+#ifdef WLAN_FEATURE_11BE
+	SCAN_PHY_MODE_11BE_EHT20 = 24,
+	SCAN_PHY_MODE_11BE_EHT40 = 25,
+	SCAN_PHY_MODE_11BE_EHT80 = 26,
+	SCAN_PHY_MODE_11BE_EHT80_80 = 27,
+	SCAN_PHY_MODE_11BE_EHT160 = 28,
+	SCAN_PHY_MODE_11BE_EHT160_160 = 29,
+	SCAN_PHY_MODE_11BE_EHT320 = 30,
+	SCAN_PHY_MODE_11BE_EHT20_2G = 31,
+	SCAN_PHY_MODE_11BE_EHT40_2G = 32,
+	SCAN_PHY_MODE_11BE_EHT80_2G = 33,
+#endif
+	SCAN_PHY_MODE_UNKNOWN = 34,
+	SCAN_PHY_MODE_MAX = 34
 };
 
 /**
@@ -1046,6 +1072,10 @@ enum scan_request_type {
  * @scan_f_2ghz: scan 2.4 GHz channels
  * @scan_f_5ghz: scan 5 GHz channels
  * @scan_f_wide_band: scan in 40 MHz or higher bandwidth
+ * @scan_f_pause_home_channel: To pause home channel in FW when scan channel is
+ * same as home channel
+ * @scan_f_report_cca_busy_for_each_20mhz: Allow FW to report CCA busy for each
+ * possible 20Mhz subbands of the wideband scan channel
  * @scan_flags: variable to read and set scan_f_* flags in one shot
  *              can be used to dump all scan_f_* flags for debug
  * @scan_policy_high_accuracy:
@@ -1072,7 +1102,6 @@ enum scan_request_type {
  * @hint_s_ssid: short SSID hints
  * @hint_bssid: BSSID hints
  */
-
 struct scan_req_params {
 	uint32_t scan_id;
 	uint32_t scan_req_id;
@@ -1138,7 +1167,9 @@ struct scan_req_params {
 				 scan_f_forced:1,
 				 scan_f_2ghz:1,
 				 scan_f_5ghz:1,
-				 scan_f_wide_band:1;
+				 scan_f_wide_band:1,
+				 scan_f_pause_home_channel:1,
+				 scan_f_report_cca_busy_for_each_20mhz:1;
 		};
 		uint32_t scan_flags;
 	};

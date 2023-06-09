@@ -683,7 +683,7 @@ struct hal_rx_ppdu_common_info {
  */
 struct hal_rx_msdu_payload_info {
 	uint8_t *first_msdu_payload;
-	uint8_t payload_len;
+	uint16_t payload_len;
 };
 
 /**
@@ -1316,7 +1316,7 @@ struct hal_rx_ppdu_info {
 	struct hal_rx_mon_mpdu_info mpdu_info[HAL_MAX_UL_MU_USERS];
 	 /* placeholder to hold packet buffer info */
 	struct hal_mon_packet_info packet_info;
-#ifdef QCA_MONITOR_2_0_SUPPORT
+#ifdef WLAN_PKT_CAPTURE_RX_2_0
 	 /* per user per MPDU queue */
 	qdf_nbuf_queue_t mpdu_q[HAL_MAX_UL_MU_USERS];
 #endif
@@ -1444,7 +1444,7 @@ hal_clear_rx_status_done(uint8_t *rx_tlv)
 	return QDF_STATUS_SUCCESS;
 }
 
-#ifdef QCA_MONITOR_2_0_SUPPORT
+#ifdef WLAN_PKT_CAPTURE_TX_2_0
 /**
  * struct hal_txmon_word_mask_config - hal tx monitor word mask filter setting
  * @pcu_ppdu_setup_init: PCU_PPDU_SETUP TLV word mask
@@ -1477,5 +1477,5 @@ struct hal_txmon_word_mask_config {
  * typedef hal_txmon_word_mask_config_t - handle for tx monitor word mask
  */
 typedef struct hal_txmon_word_mask_config hal_txmon_word_mask_config_t;
-#endif /* QCA_MONITOR_2_0_SUPPORT */
+#endif /* WLAN_PKT_CAPTURE_TX_2_0 */
 #endif

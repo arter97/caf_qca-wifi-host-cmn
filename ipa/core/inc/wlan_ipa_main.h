@@ -24,15 +24,22 @@
 #ifndef _WLAN_IPA_MAIN_H_
 #define _WLAN_IPA_MAIN_H_
 
+#ifdef IPA_OFFLOAD
+
 #include <wlan_objmgr_psoc_obj.h>
 #include <wlan_objmgr_pdev_obj.h>
 #include <wlan_ipa_public_struct.h>
 #include <wlan_ipa_priv.h>
+#include "cfg_ucfg_api.h"
 
-#ifdef IPA_OFFLOAD
 /* Declare a variable for IPA instancess added based on pdev */
 extern uint8_t g_instances_added;
 #define IPA_INVALID_HDL 0xFF
+#define IPA_OFFLOAD_CFG 0x7D
+
+#define INTRL_MODE_DISABLE 0xEEEEEEEE
+#define INTRL_MODE_ENABLE 0x27D
+
 #define ipa_fatal(params...) \
 	QDF_TRACE_FATAL(QDF_MODULE_ID_IPA, params)
 #define ipa_err(params...) \
@@ -112,6 +119,14 @@ ipa_pdev_get_priv_obj(struct wlan_objmgr_pdev *pdev)
 }
 
 /**
+ * get_ipa_config() - API to get IPAConfig INI
+ * @psoc : psoc handle
+ *
+ * Return: IPA config value
+ */
+uint32_t get_ipa_config(struct wlan_objmgr_psoc *psoc);
+
+/**
  * ipa_priv_obj_get_pdev() - API to get pdev from IPA object
  * @ipa_obj: IPA object
  *
@@ -157,6 +172,13 @@ bool ipa_config_is_enabled(void);
  * Return: true if IPA uC is enabled in IPA config
  */
 bool ipa_config_is_uc_enabled(void);
+
+/**
+ * ipa_config_is_opt_wifi_dp_enabled() - Is IPA optional wifi dp enabled?
+ *
+ * Return: true if IPA opt wifi dp is enabled in IPA config
+ */
+bool ipa_config_is_opt_wifi_dp_enabled(void);
 
 /**
  * ipa_config_is_vlan_enabled() - Is IPA vlan config enabled?
@@ -304,7 +326,7 @@ void ipa_reg_sap_xmit_cb(struct wlan_objmgr_pdev *pdev,
 void ipa_reg_send_to_nw_cb(struct wlan_objmgr_pdev *pdev,
 			   wlan_ipa_send_to_nw cb);
 
-#ifdef QCA_CONFIG_RPS
+#if defined(QCA_CONFIG_RPS) && !defined(MDM_PLATFORM)
 /**
  * ipa_reg_rps_enable_cb() - Register cb to enable RPS
  * @pdev: pdev obj

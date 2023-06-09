@@ -39,6 +39,10 @@
 #define DP_MON_MIN_FRAGS_FOR_RESTITCH 2
 
 #ifdef MONITOR_TLV_RECORDING_ENABLE
+#define MONITOR_TLV_RECORDING_RX 1
+#define MONITOR_TLV_RECORDING_TX 2
+#define MONITOR_TLV_RECORDING_RXTX 3
+
 #define MAX_TLV_LOGGING_SIZE 1024
 
 #define MAX_PPDU_START_TLV_NUM 38
@@ -69,6 +73,22 @@ struct dp_mon_tlv_info {
 		struct hal_ppdu_end_user_stats_tlv_record ppdu_end_user_stats;
 		struct hal_pcu_ppdu_end_info_tlv_record pcu_ppdu_end_info;
 		struct hal_phy_rx_ht_sig_tlv_record phy_rx_ht_sig;
+		uint32_t data:22;
+	} data;
+};
+
+/*
+ * struct dp_tx_mon_tlv_info - recorded information of each Tx TLV
+ * @tlv_tag: tlv tag
+ * @data: union of struct of fields to be recorded for each TLV
+ *
+ * Tag and its corresponding important fields are stored in this struct
+ */
+
+struct dp_tx_mon_tlv_info {
+	uint32_t tlv_tag:10;
+	union {
+		/*struct of Tx TLVs to be added here*/
 		uint32_t data:22;
 	} data;
 };
@@ -133,7 +153,7 @@ enum dp_mpdu_filter_category {
  */
 struct dp_mon_filter_be {
 	struct dp_mon_filter rx_tlv_filter;
-#ifdef QCA_MONITOR_2_0_SUPPORT
+#ifdef WLAN_PKT_CAPTURE_TX_2_0
 	struct htt_tx_ring_tlv_filter tx_tlv_filter;
 #endif
 	bool tx_valid;
@@ -247,6 +267,7 @@ struct dp_mon_pdev_be {
 	uint32_t total_free_elem;
 #ifdef MONITOR_TLV_RECORDING_ENABLE
 	struct dp_mon_tlv_logger *rx_tlv_log;
+	struct dp_mon_tlv_logger *tx_tlv_log;
 #endif
 };
 
@@ -490,22 +511,8 @@ dp_rx_mon_add_frag_to_skb(struct hal_rx_ppdu_info *ppdu_info,
 	}
 }
 
-#if defined(WLAN_SUPPORT_RX_PROTOCOL_TYPE_TAG) ||\
-	defined(WLAN_SUPPORT_RX_FLOW_TAG)
-/**
- * dp_mon_rx_update_rx_protocol_tag_stats() - Update mon protocols's
- *					      statistics from given protocol
- *					      type
- * @pdev: pdev handle
- * @protocol_index: Protocol index for which the stats should be incremented
- *
- * Return: void
- */
-void dp_mon_rx_update_rx_protocol_tag_stats(struct dp_pdev *pdev,
-					    uint16_t protocol_index);
-#endif /* WLAN_SUPPORT_RX_PROTOCOL_TYPE_TAG */
-
-#if !defined(DISABLE_MON_CONFIG) && defined(QCA_MONITOR_2_0_SUPPORT)
+#if !defined(DISABLE_MON_CONFIG) && (defined(WLAN_PKT_CAPTURE_TX_2_0) || \
+	defined(WLAN_PKT_CAPTURE_RX_2_0))
 /**
  * dp_mon_get_context_size_be() - get BE specific size for mon pdev/soc
  * @context_type: context type for which the size is needed
@@ -526,7 +533,7 @@ qdf_size_t dp_mon_get_context_size_be(enum dp_context_type context_type)
 }
 #endif
 
-#ifdef QCA_MONITOR_2_0_SUPPORT
+#ifdef WLAN_PKT_CAPTURE_TX_2_0
 /**
  * dp_get_be_mon_soc_from_dp_mon_soc() - get dp_mon_soc_be from dp_mon_soc
  * @soc: dp_mon_soc pointer

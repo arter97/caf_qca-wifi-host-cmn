@@ -219,10 +219,12 @@ void target_if_cfr_fill_header(struct csi_cfr_header *hdr,
 		hdr->cmn.cfr_metadata_version = CFR_META_VERSION_8;
 		hdr->cmn.chip_type = CFR_CAPTURE_RADIO_ALDER;
 	} else {
-		if (target_type == TARGET_TYPE_QCN9000)
+		if ((target_type == TARGET_TYPE_QCN9000) ||
+		    (target_type == TARGET_TYPE_QCN9160) ||
+		    (target_type == TARGET_TYPE_QCN9224))
 			hdr->cmn.cfr_metadata_version = CFR_META_VERSION_9;
-		else if (target_type == TARGET_TYPE_QCN9224 ||
-			 target_type == TARGET_TYPE_QCA5332 ||
+		else if (target_type == TARGET_TYPE_QCA5332 ||
+			 target_type == TARGET_TYPE_QCN6432 ||
 			 target_type == TARGET_TYPE_QCA6490 ||
 			 target_type == TARGET_TYPE_QCA6750 ||
 			 target_type == TARGET_TYPE_KIWI ||
@@ -243,6 +245,8 @@ void target_if_cfr_fill_header(struct csi_cfr_header *hdr,
 			hdr->cmn.chip_type = CFR_CAPTURE_RADIO_SPRUCE;
 		else if (target_type == TARGET_TYPE_QCN9160)
 			hdr->cmn.chip_type = CFR_CAPTURE_RADIO_YORK;
+		else if (target_type == TARGET_TYPE_QCN6432)
+			hdr->cmn.chip_type = CFR_CAPTURE_RADIO_PEBBLE;
 		else if (target_type == TARGET_TYPE_QCN9224)
 			hdr->cmn.chip_type = CFR_CAPTURE_RADIO_WAIKIKI;
 		else if (target_type == TARGET_TYPE_QCA5332)
@@ -450,7 +454,8 @@ target_if_cfr_init_pdev(struct wlan_objmgr_psoc *psoc,
 		   (target_type == TARGET_TYPE_QCA5018) ||
 		   (target_type == TARGET_TYPE_QCA5332) ||
 		   (target_type == TARGET_TYPE_QCN9224) ||
-		   (target_type == TARGET_TYPE_QCN9160)) {
+		   (target_type == TARGET_TYPE_QCN9160) ||
+		   (target_type == TARGET_TYPE_QCN6432)) {
 		pa->is_cfr_capable = cfr_sc->is_cfr_capable;
 		return cfr_enh_init_pdev(psoc, pdev);
 	} else
@@ -479,7 +484,8 @@ target_if_cfr_deinit_pdev(struct wlan_objmgr_psoc *psoc,
 		   (target_type == TARGET_TYPE_QCA5018) ||
 		   (target_type == TARGET_TYPE_QCA5332) ||
 		   (target_type == TARGET_TYPE_QCN9224) ||
-		   (target_type == TARGET_TYPE_QCN9160)) {
+		   (target_type == TARGET_TYPE_QCN9160) ||
+		   (target_type == TARGET_TYPE_QCN6432)) {
 		return cfr_enh_deinit_pdev(psoc, pdev);
 	} else
 		return QDF_STATUS_E_NOSUPPORT;

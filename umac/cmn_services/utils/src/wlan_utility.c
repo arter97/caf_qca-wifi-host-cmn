@@ -227,6 +227,83 @@ static const uint8_t *wlan_get_ie_ptr_from_eid_n_oui(uint8_t eid,
 	return NULL;
 }
 
+void wlan_iecap_set(uint8_t *iecap,
+		    uint8_t bit_pos,
+		    uint8_t tot_bits,
+		    uint32_t value)
+{
+	uint8_t fit_bits;
+	uint8_t byte_cnt;
+	uint8_t prev_fit_bits = 0;
+	uint32_t shift_value;
+
+	/* calculate byte position of the field in IE capability */
+	byte_cnt = bit_pos / 8;
+	/* calculate the bit position in the start byte that needs to be set */
+	bit_pos = bit_pos % 8;
+	fit_bits = 8 - bit_pos;
+	fit_bits = (tot_bits > fit_bits) ? 8 - bit_pos : tot_bits;
+
+	while ((bit_pos + tot_bits) > 8) {
+		/* clear the target bit */
+		QDF_SET_BITS(iecap[byte_cnt], bit_pos, fit_bits, value);
+		tot_bits = tot_bits - fit_bits;
+		bit_pos = bit_pos + fit_bits;
+		if (bit_pos == 8) {
+			bit_pos = 0;
+			byte_cnt++;
+		}
+		prev_fit_bits = prev_fit_bits + fit_bits;
+		fit_bits = 8 - bit_pos;
+		fit_bits = (tot_bits > fit_bits) ? 8 - bit_pos : tot_bits;
+	}
+
+	if ((bit_pos + tot_bits) <= 8) {
+		/* clear the target bit */
+		shift_value = value >> prev_fit_bits;
+		QDF_SET_BITS(iecap[byte_cnt], bit_pos, fit_bits, shift_value);
+	}
+}
+
+uint32_t wlan_iecap_get(uint8_t *iecap,
+			uint8_t bit_pos,
+			uint32_t tot_bits)
+{
+	uint8_t fit_bits;
+	uint8_t byte_cnt;
+	uint8_t temp_val;
+	uint8_t cur_bit_pos = 0;
+	uint32_t val = 0;
+
+	/* calculate byte position of the field in IE capability */
+	byte_cnt = bit_pos / 8;
+	temp_val = *(iecap + byte_cnt);
+	/* calculate the bit position in the start byte */
+	bit_pos = bit_pos % 8;
+	fit_bits = 8 - bit_pos;
+	fit_bits = (tot_bits > fit_bits) ? 8 - bit_pos : tot_bits;
+
+	while ((tot_bits + bit_pos) > 8) {
+		val |= QDF_GET_BITS(temp_val, bit_pos, fit_bits) << cur_bit_pos;
+		tot_bits = tot_bits - fit_bits;
+		bit_pos = bit_pos + fit_bits;
+		if (bit_pos == 8) {
+			bit_pos = 0;
+			byte_cnt++;
+			temp_val = *(iecap + byte_cnt);
+		}
+		cur_bit_pos = cur_bit_pos + fit_bits;
+
+		fit_bits = 8 - bit_pos;
+		fit_bits = (tot_bits > fit_bits) ? 8 - bit_pos : tot_bits;
+	}
+
+	if ((bit_pos + tot_bits) <= 8)
+		val |= QDF_GET_BITS(temp_val, bit_pos, fit_bits) << cur_bit_pos;
+
+	return val;
+}
+
 const uint8_t *wlan_get_ie_ptr_from_eid(uint8_t eid,
 					const uint8_t *ie,
 					int ie_len)
@@ -2246,3 +2323,31 @@ void wlan_minidump_remove(void *start_addr, const size_t size,
 		qdf_minidump_remove(start_addr, size, name);
 }
 qdf_export_symbol(wlan_minidump_remove);
+
+static void vdev_cac_in_progress(struct wlan_objmgr_pdev *pdev,
+				 void *object, void *arg)
+{
+	struct wlan_objmgr_vdev *vdev = (struct wlan_objmgr_vdev *)object;
+	bool *cac_is_in_progress = (bool *)arg;
+
+	if (*cac_is_in_progress)
+		return;
+
+	if (wlan_vdev_is_dfs_cac_wait(vdev) == QDF_STATUS_SUCCESS)
+		*cac_is_in_progress = true;
+}
+
+bool wlan_util_is_vdev_in_cac_wait(struct wlan_objmgr_pdev *pdev,
+				   wlan_objmgr_ref_dbgid dbg_id)
+{
+	bool cac_is_in_progress = false;
+
+	wlan_objmgr_pdev_iterate_obj_list(pdev, WLAN_VDEV_OP,
+					  vdev_cac_in_progress,
+					  &cac_is_in_progress, 0,
+					  dbg_id);
+
+	return cac_is_in_progress;
+}
+
+qdf_export_symbol(wlan_util_is_vdev_in_cac_wait);

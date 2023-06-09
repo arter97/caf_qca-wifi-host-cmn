@@ -109,7 +109,7 @@ static inline int hal_history_get_next_index(qdf_atomic_t *table_index,
 }
 #else
 #define HAL_REG_WRITE_FAIL_HIST_ADD(hal_soc, offset, wr_val, rd_val) \
-	hal_err("write failed at reg offset 0x%x, write 0x%x read 0x%x\n", \
+	hal_err("write failed at reg offset 0x%x, write 0x%x read 0x%x", \
 		offset,	\
 		wr_val,	\
 		rd_val)
@@ -1254,8 +1254,10 @@ void hal_srng_dst_init_hp(struct hal_soc_handle *hal_soc,
  * hal_srng_cleanup() - Deinitialize HW SRNG ring.
  * @hal_soc: Opaque HAL SOC handle
  * @hal_ring_hdl: Opaque HAL SRNG pointer
+ * @umac_reset_inprogress: UMAC reset enabled/disabled.
  */
-void hal_srng_cleanup(void *hal_soc, hal_ring_handle_t hal_ring_hdl);
+void hal_srng_cleanup(void *hal_soc, hal_ring_handle_t hal_ring_hdl,
+		      bool umac_reset_inprogress);
 
 static inline bool hal_srng_initialized(hal_ring_handle_t hal_ring_hdl)
 {

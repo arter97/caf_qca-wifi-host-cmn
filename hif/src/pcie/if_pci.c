@@ -1743,7 +1743,8 @@ int hif_pci_bus_configure(struct hif_softc *hif_sc)
 	     (hif_sc->target_info.target_type == TARGET_TYPE_QCA5018) ||
 	     (hif_sc->target_info.target_type == TARGET_TYPE_QCN6122) ||
 	     (hif_sc->target_info.target_type == TARGET_TYPE_QCN9160) ||
-	     (hif_sc->target_info.target_type == TARGET_TYPE_QCA6018)) &&
+	     (hif_sc->target_info.target_type == TARGET_TYPE_QCA6018) ||
+	     (hif_sc->target_info.target_type == TARGET_TYPE_QCN6432)) &&
 	    (hif_sc->bus_type == QDF_BUS_TYPE_AHB)) {
 		hif_sc->per_ce_irq = true;
 	}
@@ -1768,7 +1769,8 @@ int hif_pci_bus_configure(struct hif_softc *hif_sc)
 	     (hif_sc->target_info.target_type == TARGET_TYPE_QCA5018) ||
 	     (hif_sc->target_info.target_type == TARGET_TYPE_QCN6122) ||
 	     (hif_sc->target_info.target_type == TARGET_TYPE_QCN9160) ||
-	     (hif_sc->target_info.target_type == TARGET_TYPE_QCA6018)) &&
+	     (hif_sc->target_info.target_type == TARGET_TYPE_QCA6018) ||
+	     (hif_sc->target_info.target_type == TARGET_TYPE_QCN6432)) &&
 	    (hif_sc->bus_type == QDF_BUS_TYPE_PCI))
 		hif_debug("Skip irq config for PCI based 8074 target");
 	else {
@@ -3212,16 +3214,17 @@ void hif_pci_irq_set_affinity_hint(struct hif_exec_context *hif_ext_group,
 	int i, ret;
 	unsigned int cpus;
 	bool mask_set = false;
-	int cpu_cluster = perf ? CPU_CLUSTER_TYPE_PERF :
-						CPU_CLUSTER_TYPE_LITTLE;
+	int package_id;
+	int cpu_cluster = perf ? hif_get_perf_cluster_bitmap() :
+				 BIT(CPU_CLUSTER_TYPE_LITTLE);
 
 	for (i = 0; i < hif_ext_group->numirq; i++)
 		qdf_cpumask_clear(&hif_ext_group->new_cpu_mask[i]);
 
 	for (i = 0; i < hif_ext_group->numirq; i++) {
 		qdf_for_each_online_cpu(cpus) {
-			if (qdf_topology_physical_package_id(cpus) ==
-			    cpu_cluster) {
+			package_id = qdf_topology_physical_package_id(cpus);
+			if (package_id >= 0 && BIT(package_id) & cpu_cluster) {
 				qdf_cpumask_set_cpu(cpus,
 						    &hif_ext_group->
 						    new_cpu_mask[i]);
@@ -3253,8 +3256,7 @@ void hif_pci_irq_set_affinity_hint(struct hif_exec_context *hif_ext_group,
 #endif
 
 #ifdef HIF_CPU_PERF_AFFINE_MASK
-void hif_pci_ce_irq_set_affinity_hint(
-	struct hif_softc *scn)
+void hif_pci_ce_irq_set_affinity_hint(struct hif_softc *scn)
 {
 	int ret;
 	unsigned int cpus;
@@ -3263,13 +3265,15 @@ void hif_pci_ce_irq_set_affinity_hint(
 	struct CE_attr *host_ce_conf;
 	int ce_id;
 	qdf_cpu_mask ce_cpu_mask;
+	int perf_cpu_cluster = hif_get_perf_cluster_bitmap();
+	int package_id;
 
 	host_ce_conf = ce_sc->host_ce_config;
 	qdf_cpumask_clear(&ce_cpu_mask);
 
 	qdf_for_each_online_cpu(cpus) {
-		if (qdf_topology_physical_package_id(cpus) ==
-			CPU_CLUSTER_TYPE_PERF) {
+		package_id = qdf_topology_physical_package_id(cpus);
+		if (package_id >= 0 && BIT(package_id) & perf_cpu_cluster) {
 			qdf_cpumask_set_cpu(cpus,
 					    &ce_cpu_mask);
 		} else {
@@ -3701,7 +3705,7 @@ static void hif_pci_get_soc_info_pld(struct hif_pci_softc *sc,
 	sc->device_version.major_version = info.device_version.major_version;
 	sc->device_version.minor_version = info.device_version.minor_version;
 
-	hif_info("%s: fam num %u dev ver %u maj ver %u min ver %u\n", __func__,
+	hif_info("%s: fam num %u dev ver %u maj ver %u min ver %u", __func__,
 		 sc->device_version.family_number,
 		 sc->device_version.device_number,
 		 sc->device_version.major_version,

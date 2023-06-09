@@ -31,6 +31,8 @@
 #define DP_BLOCKMEM_SIZE 4096
 #define WBM2_SW_PPE_REL_RING_ID 6
 #define WBM2_SW_PPE_REL_MAP_ID 11
+#define DP_TX_PPEDS_POOL_ID 0xF
+
 /* Alignment for consistent memory for DP rings*/
 #define DP_RING_BASE_ALIGN 32
 
@@ -60,6 +62,11 @@
 #define DIRECT_LINK_REFILL_RING_IDX     2
 #endif
 #endif
+
+#define DP_MAX_VLAN_IDS 4096
+#define DP_VLAN_UNTAGGED 0
+#define DP_VLAN_TAGGED_MULTICAST 1
+#define DP_VLAN_TAGGED_UNICAST 2
 
 /**
  * struct htt_dbgfs_cfg - structure to maintain required htt data
@@ -1448,6 +1455,7 @@ bool dp_vdev_is_wds_ext_enabled(struct dp_vdev *vdev);
 #ifdef QCA_SUPPORT_WDS_EXTENDED
 static inline void dp_wds_ext_peer_init(struct dp_txrx_peer *txrx_peer)
 {
+	txrx_peer->wds_ext.osif_peer = NULL;
 	txrx_peer->wds_ext.init = 0;
 }
 #else
@@ -1884,6 +1892,15 @@ void dp_update_vdev_stats_on_peer_unmap(struct dp_vdev *vdev,
 #define DP_UPDATE_11BE_STATS(_tgtobj, _srcobj)
 #endif
 
+#define DP_UPDATE_BASIC_STATS(_tgtobj, _srcobj) \
+	do { \
+		_tgtobj->tx.comp_pkt.num += _srcobj->tx.comp_pkt.num; \
+		_tgtobj->tx.comp_pkt.bytes += _srcobj->tx.comp_pkt.bytes; \
+		_tgtobj->tx.tx_failed += _srcobj->tx.tx_failed; \
+		_tgtobj->rx.to_stack.num += _srcobj->rx.to_stack.num; \
+		_tgtobj->rx.to_stack.bytes += _srcobj->rx.to_stack.bytes; \
+	} while (0)
+
 #define DP_UPDATE_PER_PKT_STATS(_tgtobj, _srcobj) \
 	do { \
 		uint8_t i; \
@@ -2167,6 +2184,13 @@ void dp_update_vdev_stats_on_peer_unmap(struct dp_vdev *vdev,
 			_tgtobj->rx.bw[i] += _srcobj->rx.bw[i]; \
 		} \
 		DP_UPDATE_11BE_STATS(_tgtobj, _srcobj); \
+	} while (0)
+
+#define DP_UPDATE_VDEV_STATS_FOR_UNMAPPED_PEERS(_tgtobj, _srcobj) \
+	do { \
+		DP_UPDATE_BASIC_STATS(_tgtobj, _srcobj); \
+		DP_UPDATE_PER_PKT_STATS(_tgtobj, _srcobj); \
+		DP_UPDATE_EXTD_STATS(_tgtobj, _srcobj); \
 	} while (0)
 
 #define DP_UPDATE_INGRESS_STATS(_tgtobj, _srcobj) \
@@ -2700,12 +2724,16 @@ void dp_umac_reset_complete_umac_recovery(struct dp_soc *soc);
 /**
  * dp_umac_reset_initiate_umac_recovery() - Initiate Umac reset session
  * @soc: dp soc handle
+ * @umac_reset_ctx: Umac reset context
+ * @rx_event: Rx event received
  * @is_target_recovery: Flag to indicate if it is triggered for target recovery
  *
- * Return: void
+ * Return: status
  */
-void dp_umac_reset_initiate_umac_recovery(struct dp_soc *soc,
-					  bool is_target_recovery);
+QDF_STATUS dp_umac_reset_initiate_umac_recovery(struct dp_soc *soc,
+				struct dp_soc_umac_reset_ctx *umac_reset_ctx,
+				enum umac_reset_rx_event rx_event,
+				bool is_target_recovery);
 
 /**
  * dp_umac_reset_handle_action_cb() - Function to call action callback
@@ -2787,6 +2815,22 @@ QDF_STATUS dp_umac_reset_notify_asserted_soc(struct dp_soc *soc)
 }
 #endif
 
+#ifdef DP_UMAC_HW_RESET_SUPPORT
+/**
+ * dp_umac_reset_is_inprogress() - Check if umac reset is in progress
+ * @psoc: dp soc handle
+ *
+ * Return: true if umac reset is in progress, else false.
+ */
+bool dp_umac_reset_is_inprogress(struct cdp_soc_t *psoc);
+#else
+static inline
+bool dp_umac_reset_is_inprogress(struct cdp_soc_t *psoc)
+{
+	return false;
+}
+#endif
+
 #ifndef WLAN_SOFTUMAC_SUPPORT
 QDF_STATUS dp_reo_send_cmd(struct dp_soc *soc, enum hal_reo_cmd_type type,
 			   struct hal_reo_cmd_params *params,
@@ -2820,6 +2864,19 @@ uint32_t dp_reo_status_ring_handler(struct dp_intr *int_ctx,
  */
 void dp_aggregate_vdev_stats(struct dp_vdev *vdev,
 			     struct cdp_vdev_stats *vdev_stats);
+
+/**
+ * dp_txrx_get_vdev_stats() - Update buffer with cdp_vdev_stats
+ * @soc_hdl: CDP SoC handle
+ * @vdev_id: vdev Id
+ * @buf: buffer for vdev stats
+ * @is_aggregate: are aggregate stats being collected
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS
+dp_txrx_get_vdev_stats(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
+		       void *buf, bool is_aggregate);
 
 /**
  * dp_rx_bar_stats_cb() - BAR received stats callback
@@ -5314,6 +5371,19 @@ void dp_get_peer_stats(struct dp_peer *peer,
 		       struct cdp_peer_stats *peer_stats);
 
 /**
+ * dp_get_per_link_peer_stats()- Get per link peer stats
+ * @peer: Datapath peer
+ * @peer_stats: buffer for peer stats
+ * @peer_type: Peer type
+ * @num_link: Number of ML links
+ *
+ * Return: status success/failure
+ */
+QDF_STATUS dp_get_per_link_peer_stats(struct dp_peer *peer,
+				      struct cdp_peer_stats *peer_stats,
+				      enum cdp_peer_type peer_type,
+				      uint8_t num_link);
+/**
  * dp_get_peer_hw_link_id() - get peer hardware link id
  * @soc: soc handle
  * @pdev: data path pdev
@@ -5329,4 +5399,24 @@ dp_get_peer_hw_link_id(struct dp_soc *soc,
 
 	return 0;
 }
+
+#ifdef QCA_MULTIPASS_SUPPORT
+/**
+ * dp_tx_remove_vlan_tag() - Remove 4 bytes of vlan tag
+ * @vdev: DP vdev handle
+ * @nbuf: network buffer
+ *
+ * Return: void
+ */
+void dp_tx_remove_vlan_tag(struct dp_vdev *vdev, qdf_nbuf_t nbuf);
+#endif
+
+/**
+ * dp_print_per_link_stats() - Print per link peer stats.
+ * @soc_hdl: soc handle.
+ * @vdev_id: vdev_id.
+ *
+ * Return: None.
+ */
+void dp_print_per_link_stats(struct cdp_soc_t *soc_hdl, uint8_t vdev_id);
 #endif /* #ifndef _DP_INTERNAL_H_ */

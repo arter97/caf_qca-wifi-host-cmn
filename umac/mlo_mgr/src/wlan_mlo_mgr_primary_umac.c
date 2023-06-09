@@ -173,6 +173,12 @@ mld_get_best_primary_umac_w_rssi(struct wlan_mlo_peer_context *ml_peer,
 		if (id >= WLAN_OBJMGR_MAX_DEVICES)
 			continue;
 
+		if (wlan_vdev_skip_pumac(link_vdevs[i])) {
+			mlo_err("Skip Radio for Primary MLO umac");
+			mld_sta_links[id] = false;
+			continue;
+		}
+
 		tqm_params = &rssi_data.psoc_tqm_parms[id];
 		mld_sta_links[id] = true;
 
@@ -526,22 +532,6 @@ static QDF_STATUS mlo_set_3_link_primary_umac(
 		struct wlan_objmgr_vdev *link_vdevs[])
 {
 	return QDF_STATUS_E_FAILURE;
-}
-#endif
-
-#if defined(WLAN_FEATURE_11BE_MLO) && defined(WLAN_MLO_MULTI_CHIP)
-QDF_STATUS mlo_peer_overwrite_primary_umac(uint8_t psoc_id,
-					   struct wlan_mlo_peer_context *ml_peer)
-{
-	if (psoc_id >= WLAN_OBJMGR_MAX_DEVICES)
-		return QDF_STATUS_E_FAILURE;
-	if (!ml_peer)
-		return QDF_STATUS_E_FAILURE;
-
-	ml_peer->primary_umac_psoc_id = psoc_id;
-	mlo_peer_assign_primary_umac(ml_peer, &ml_peer->peer_list[0]);
-
-	return QDF_STATUS_SUCCESS;
 }
 #endif
 

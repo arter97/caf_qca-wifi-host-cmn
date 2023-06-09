@@ -305,6 +305,18 @@ cm_send_connect_start_fail(struct cnx_mgr *cm_ctx,
 			   struct cm_connect_req *req,
 			   enum wlan_cm_connect_fail_reason reason);
 
+/**
+ * cm_find_bss_from_candidate_list() - get bss entry by bssid value
+ * @candidate_list: candidate list
+ * @bssid: bssid to find
+ * @entry_found: found bss entry
+ *
+ * Return: true if find bss entry with bssid
+ */
+bool cm_find_bss_from_candidate_list(qdf_list_t *candidate_list,
+				     struct qdf_mac_addr *bssid,
+				     struct scan_cache_node **entry_found);
+
 #ifdef WLAN_POLICY_MGR_ENABLE
 /**
  * cm_hw_mode_change_resp() - HW mode change response
@@ -1056,6 +1068,72 @@ cm_connect_handle_event_post_fail(struct cnx_mgr *cm_ctx, wlan_cm_id cm_id);
 struct cm_req *cm_get_req_by_scan_id(struct cnx_mgr *cm_ctx,
 				     wlan_scan_id scan_id);
 
+#ifdef WLAN_FEATURE_11BE_MLO
+/**
+ * cm_connect_resp_fill_mld_addr_from_candidate() - API to fill MLD
+ * address in connect resp from scan entry.
+ * @vdev: VDEV objmgr pointer.
+ * @entry: Scan entry.
+ * @resp: connect response pointer.
+ *
+ * If the MLO VDEV flag is set, get the MLD address from the scan
+ * entry and fill in MLD address field in @resp.
+ *
+ * Return: void
+ */
+void
+cm_connect_resp_fill_mld_addr_from_candidate(struct wlan_objmgr_vdev *vdev,
+					     struct scan_cache_entry *entry,
+					     struct wlan_cm_connect_resp *resp);
+/**
+ * cm_connect_resp_fill_mld_addr_from_cm_id() - API to fill MLD address
+ * in connect resp from connect request ID.
+ * @vdev: VDEV objmgr pointer.
+ * @cm_id: connect request ID.
+ * @rsp: connect resp pointer.
+ *
+ * The API gets scan entry from the connect request using the connect request
+ * ID and fills MLD address from the scan entry into the connect response.
+ *
+ * Return: void
+ */
+void
+cm_connect_resp_fill_mld_addr_from_cm_id(struct wlan_objmgr_vdev *vdev,
+					 wlan_cm_id cm_id,
+					 struct wlan_cm_connect_resp *rsp);
+
+static inline void
+cm_connect_rsp_get_mld_addr_or_bssid(struct wlan_cm_connect_resp *resp,
+				     struct qdf_mac_addr *bssid)
+{
+	if (!qdf_is_macaddr_zero(&resp->mld_addr))
+		qdf_copy_macaddr(bssid, &resp->mld_addr);
+	else
+		qdf_copy_macaddr(bssid, &resp->bssid);
+}
+#else
+static inline void
+cm_connect_resp_fill_mld_addr_from_candidate(struct wlan_objmgr_vdev *vdev,
+					     struct scan_cache_entry *entry,
+					     struct wlan_cm_connect_resp *resp)
+{
+}
+
+static inline void
+cm_connect_resp_fill_mld_addr_from_cm_id(struct wlan_objmgr_vdev *vdev,
+					 wlan_cm_id cm_id,
+					 struct wlan_cm_connect_resp *rsp)
+{
+}
+
+static inline void
+cm_connect_rsp_get_mld_addr_or_bssid(struct wlan_cm_connect_resp *resp,
+				     struct qdf_mac_addr *bssid)
+{
+	qdf_copy_macaddr(bssid, &resp->bssid);
+}
+#endif
+
 /**
  * cm_get_cm_id_by_scan_id() - Get cm id by matching the scan id
  * @cm_ctx: connection manager context
@@ -1224,6 +1302,17 @@ void cm_set_candidate_custom_sort_cb(
  * Return: void
  */
 bool cm_is_connect_req_reassoc(struct wlan_cm_connect_req *req);
+
+/**
+ * cm_get_rnr() - get rnr
+ * @vdev:vdev
+ * @cm_id: connect mgr id
+ * @rnr: pointer to copy rnr info
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS cm_get_rnr(struct wlan_objmgr_vdev *vdev, wlan_cm_id cm_id,
+		      struct reduced_neighbor_report *rnr);
 
 #ifdef CONN_MGR_ADV_FEATURE
 /**

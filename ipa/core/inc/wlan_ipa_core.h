@@ -20,10 +20,10 @@
 #ifndef _WLAN_IPA_CORE_H_
 #define _WLAN_IPA_CORE_H_
 
+#ifdef IPA_OFFLOAD
+
 #include "wlan_ipa_priv.h"
 #include "wlan_ipa_public_struct.h"
-
-#ifdef IPA_OFFLOAD
 
 /**
  * wlan_ipa_is_enabled() - Is IPA enabled?
@@ -45,6 +45,18 @@ static inline bool wlan_ipa_is_enabled(struct wlan_ipa_config *ipa_cfg)
 static inline bool wlan_ipa_uc_is_enabled(struct wlan_ipa_config *ipa_cfg)
 {
 	return WLAN_IPA_IS_CONFIG_ENABLED(ipa_cfg, WLAN_IPA_UC_ENABLE_MASK);
+}
+
+/**
+ * wlan_ipa_is_opt_wifi_dp_enabled() - Is IPA optional wifi dp enabled?
+ * @ipa_cfg: IPA config
+ *
+ * Return: true if IPA opt wifi dp is enabled, false otherwise
+ */
+static inline bool wlan_ipa_is_opt_wifi_dp_enabled(
+						struct wlan_ipa_config *ipa_cfg)
+{
+	return WLAN_IPA_IS_CONFIG_ENABLED(ipa_cfg, WLAN_IPA_OPT_WIFI_DP);
 }
 
 /**
@@ -585,7 +597,7 @@ void wlan_ipa_reg_send_to_nw_cb(struct wlan_ipa_priv *ipa_ctx,
 	ipa_ctx->send_to_nw = cb;
 }
 
-#ifdef QCA_CONFIG_RPS
+#if defined(QCA_CONFIG_RPS) && !defined(MDM_PLATFORM)
 /**
  * wlan_ipa_reg_rps_enable_cb() - Register callback to enable RPS
  * @ipa_ctx: IPA context
@@ -599,17 +611,6 @@ void wlan_ipa_reg_rps_enable_cb(struct wlan_ipa_priv *ipa_ctx,
 {
 	ipa_ctx->rps_enable = cb;
 }
-
-/**
- * ipa_set_rps(): Enable/disable RPS for all interfaces of specific mode
- * @ipa_ctx: IPA context
- * @mode: mode of interface for which RPS needs to be enabled
- * @enable: Set true to enable RPS
- *
- * Return: None
- */
-void ipa_set_rps(struct wlan_ipa_priv *ipa_ctx, enum QDF_OPMODE mode,
-		 bool enable);
 
 /**
  * ipa_set_rps_per_vdev(): Enable/disable RPS for a specific vdev
@@ -642,12 +643,6 @@ void wlan_ipa_handle_multiple_sap_evt(struct wlan_ipa_priv *ipa_ctx,
 
 #else
 static inline
-void ipa_set_rps(struct wlan_ipa_priv *ipa_ctx, enum QDF_OPMODE mode,
-		 bool enable)
-{
-}
-
-static inline
 void ipa_set_rps_per_vdev(struct wlan_ipa_priv *ipa_ctx, uint8_t vdev_id,
 			  bool enable)
 {
@@ -658,7 +653,6 @@ void wlan_ipa_handle_multiple_sap_evt(struct wlan_ipa_priv *ipa_ctx,
 				      qdf_ipa_wlan_event type)
 {
 }
-
 #endif
 
 /**

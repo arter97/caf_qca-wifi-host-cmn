@@ -26,6 +26,7 @@ extern "C" {
 
 /* Header files */
 #include <qdf_status.h>
+#include "qdf_ipa.h"
 #include "qdf_nbuf.h"
 #include "qdf_lro.h"
 #include "ol_if_athvar.h"
@@ -85,6 +86,7 @@ typedef void *hif_handle_t;
 #define HIF_TYPE_QCN9160 31
 #define HIF_TYPE_PEACH 32
 #define HIF_TYPE_WCN6450 33
+#define HIF_TYPE_QCN6432 34
 
 #define DMA_COHERENT_MASK_DEFAULT   37
 
@@ -1822,7 +1824,7 @@ enum ipa_hw_type hif_get_ipa_hw_type(void)
 static inline
 bool hif_get_ipa_present(void)
 {
-	if (ipa_uc_reg_rdyCB(NULL) != -EPERM)
+	if (qdf_ipa_uc_reg_rdyCB(NULL) != -EPERM)
 		return true;
 	else
 		return false;
@@ -2442,8 +2444,6 @@ void hif_latency_detect_credit_record_time(
 
 void hif_latency_detect_timer_start(struct hif_opaque_softc *hif_ctx);
 void hif_latency_detect_timer_stop(struct hif_opaque_softc *hif_ctx);
-void hif_tasklet_latency(struct hif_softc *scn, bool from_timer);
-void hif_credit_latency(struct hif_softc *scn, bool from_timer);
 void hif_check_detection_latency(struct hif_softc *scn,
 				 bool from_timer,
 				 uint32_t bitmap_type);

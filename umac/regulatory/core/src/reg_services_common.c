@@ -7667,6 +7667,29 @@ QDF_STATUS reg_send_afc_power_event(struct wlan_objmgr_pdev *pdev,
 	return QDF_STATUS_SUCCESS;
 }
 
+QDF_STATUS reg_send_afc_payload_reset_event(struct wlan_objmgr_pdev *pdev)
+{
+	afc_payload_reset_tx_evt_handler cbf;
+	void *arg;
+	struct wlan_regulatory_pdev_priv_obj *pdev_priv_obj;
+
+	pdev_priv_obj = reg_get_pdev_obj(pdev);
+	if (!IS_VALID_PDEV_REG_OBJ(pdev_priv_obj)) {
+		reg_err("pdev reg component is NULL");
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	qdf_spin_lock_bh(&pdev_priv_obj->afc_cb_lock);
+	cbf = pdev_priv_obj->afc_payload_reset_evt_cb_obj.func;
+	if (cbf) {
+		arg = pdev_priv_obj->afc_payload_reset_evt_cb_obj.arg;
+		cbf(pdev, arg);
+	}
+	qdf_spin_unlock_bh(&pdev_priv_obj->afc_cb_lock);
+
+	return QDF_STATUS_SUCCESS;
+}
+
 QDF_STATUS reg_register_afc_req_rx_callback(struct wlan_objmgr_pdev *pdev,
 					    afc_req_rx_evt_handler cbf,
 					    void *arg)
@@ -7749,6 +7772,52 @@ reg_unregister_afc_power_event_callback(struct wlan_objmgr_pdev *pdev,
 	if (pdev_priv_obj->afc_pow_evt_cb_obj.func == cbf) {
 		pdev_priv_obj->afc_pow_evt_cb_obj.func = NULL;
 		pdev_priv_obj->afc_pow_evt_cb_obj.arg = NULL;
+	} else {
+		reg_err("cb function=0x%pK not found", cbf);
+	}
+	qdf_spin_unlock_bh(&pdev_priv_obj->afc_cb_lock);
+
+	return QDF_STATUS_SUCCESS;
+}
+
+QDF_STATUS
+reg_register_afc_payload_reset_event_callback(struct wlan_objmgr_pdev *pdev,
+					      afc_payload_reset_tx_evt_handler cbf,
+					      void *arg)
+{
+	struct wlan_regulatory_pdev_priv_obj *pdev_priv_obj;
+
+	pdev_priv_obj = reg_get_pdev_obj(pdev);
+	if (!IS_VALID_PDEV_REG_OBJ(pdev_priv_obj)) {
+		reg_err("pdev reg component is NULL");
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	qdf_spin_lock_bh(&pdev_priv_obj->afc_cb_lock);
+	pdev_priv_obj->afc_payload_reset_evt_cb_obj.func = cbf;
+	pdev_priv_obj->afc_payload_reset_evt_cb_obj.arg = arg;
+	qdf_spin_unlock_bh(&pdev_priv_obj->afc_cb_lock);
+	reg_debug("afc_payload_reset_event_cb: 0x%pK, arg: 0x%pK", cbf, arg);
+
+	return QDF_STATUS_SUCCESS;
+}
+
+QDF_STATUS
+reg_unregister_afc_payload_reset_event_callback(struct wlan_objmgr_pdev *pdev,
+						afc_payload_reset_tx_evt_handler cbf)
+{
+	struct wlan_regulatory_pdev_priv_obj *pdev_priv_obj;
+
+	pdev_priv_obj = reg_get_pdev_obj(pdev);
+	if (!IS_VALID_PDEV_REG_OBJ(pdev_priv_obj)) {
+		reg_err("pdev reg component is NULL");
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	qdf_spin_lock_bh(&pdev_priv_obj->afc_cb_lock);
+	if (pdev_priv_obj->afc_payload_reset_evt_cb_obj.func == cbf) {
+		pdev_priv_obj->afc_payload_reset_evt_cb_obj.func = NULL;
+		pdev_priv_obj->afc_payload_reset_evt_cb_obj.arg = NULL;
 	} else {
 		reg_err("cb function=0x%pK not found", cbf);
 	}
@@ -9325,7 +9394,7 @@ reg_get_mas_chan_list_for_lookup(struct wlan_objmgr_pdev *pdev,
 }
 
 /**
- * reg_get_eirp_for_non_sp() -  For the given power mode, using the bandwidth
+ * reg_get_eirp_from_mas_chan_list() -  For the given power mode, using the bandwidth
  * and psd(from master channel entry), calculate an EIRP value. The minimum
  * of calculated EIRP and regulatory max EIRP is returned.
  * @pdev: Pointer to pdev
@@ -9339,20 +9408,14 @@ reg_get_mas_chan_list_for_lookup(struct wlan_objmgr_pdev *pdev,
  * Return: EIRP
  */
 static uint8_t
-reg_get_eirp_for_non_sp(struct wlan_objmgr_pdev *pdev, qdf_freq_t freq,
-			uint16_t bw, enum reg_6g_ap_type ap_pwr_type,
-			bool is_client_list_lookup_needed,
-			enum reg_6g_client_type client_type)
+reg_get_eirp_from_mas_chan_list(struct wlan_objmgr_pdev *pdev, qdf_freq_t freq,
+				uint16_t bw, enum reg_6g_ap_type ap_pwr_type,
+				bool is_client_list_lookup_needed,
+				enum reg_6g_client_type client_type)
 {
 	bool is_psd;
 	struct regulatory_channel *master_chan_list = NULL;
 	uint16_t txpower = 0;
-
-	if (!((ap_pwr_type == REG_INDOOR_AP) ||
-	      (ap_pwr_type == REG_VERY_LOW_POWER_AP))) {
-		reg_err("Only LPI and VLP are supported in this function ");
-		return 0;
-	}
 
 	reg_get_mas_chan_list_for_lookup(pdev, &master_chan_list, ap_pwr_type,
 					 is_client_list_lookup_needed,
@@ -9420,11 +9483,11 @@ static inline bool reg_is_320_opclass(qdf_freq_t freq, uint8_t op_class)
  *
  * Return: EIRP power
  */
-static uint8_t reg_find_eirp_in_afc_eirp_obj(struct wlan_objmgr_pdev *pdev,
-					     struct chan_eirp_obj *eirp_obj,
-					     qdf_freq_t freq,
-					     qdf_freq_t cen320,
-					     uint8_t op_class)
+static int8_t reg_find_eirp_in_afc_eirp_obj(struct wlan_objmgr_pdev *pdev,
+					    struct chan_eirp_obj *eirp_obj,
+					    qdf_freq_t freq,
+					    qdf_freq_t cen320,
+					    uint8_t op_class)
 {
 	uint8_t k;
 	uint8_t subchannels[NUM_20_MHZ_CHAN_IN_320_MHZ_CHAN];
@@ -9463,11 +9526,11 @@ static uint8_t reg_find_eirp_in_afc_eirp_obj(struct wlan_objmgr_pdev *pdev,
  *
  * Return: EIRP power
  */
-static uint8_t reg_find_eirp_in_afc_chan_obj(struct wlan_objmgr_pdev *pdev,
-					     struct afc_chan_obj *chan_obj,
-					     qdf_freq_t freq,
-					     qdf_freq_t cen320,
-					     uint8_t op_class)
+static int8_t reg_find_eirp_in_afc_chan_obj(struct wlan_objmgr_pdev *pdev,
+					    struct afc_chan_obj *chan_obj,
+					    qdf_freq_t freq,
+					    qdf_freq_t cen320,
+					    uint8_t op_class)
 {
 	uint8_t j;
 
@@ -9475,7 +9538,7 @@ static uint8_t reg_find_eirp_in_afc_chan_obj(struct wlan_objmgr_pdev *pdev,
 		return 0;
 
 	for (j = 0; j < chan_obj->num_chans; j++) {
-		uint8_t afc_eirp;
+		int8_t afc_eirp;
 		struct chan_eirp_obj *eirp_obj = &chan_obj->chan_eirp_info[j];
 
 		afc_eirp = reg_find_eirp_in_afc_eirp_obj(pdev, eirp_obj,
@@ -9612,6 +9675,53 @@ reg_get_sp_eirp_for_punc_chans(struct wlan_objmgr_pdev *pdev,
 }
 
 /**
+ * reg_get_sp_eirp_before_afc_resp_rx() - Before the AFC response is received
+ * from the target, for a given input frequency and bw, find the EIRP values
+ * based on the deployment type and, the presence of SP AP and VLP AP reg rules.
+ * @pdev: Pointer to pdev
+ * @freq: Frequency in MHz
+ * @bw: Bandwidth in MHz
+ * @is_client_list_lookup_needed: Boolean to indicate if client list lookup is
+ * needed
+ * @client_type: Client power type
+ *
+ * Return: EIRP
+ */
+static uint8_t
+reg_get_sp_eirp_before_afc_resp_rx(struct wlan_objmgr_pdev *pdev,
+				   qdf_freq_t freq,
+				   uint16_t bw,
+				   bool is_client_list_lookup_needed,
+				   enum reg_6g_client_type client_type)
+{
+	enum reg_afc_dev_deploy_type reg_afc_dev_type;
+	struct wlan_objmgr_psoc *psoc;
+	uint8_t num_ap_sp_rules, num_ap_vlp_rules;
+
+	psoc = wlan_pdev_get_psoc(pdev);
+
+	if (!psoc) {
+		reg_err("psoc is NULL");
+		return 0;
+	}
+
+	reg_get_afc_soc_dev_type(psoc, &reg_afc_dev_type);
+	num_ap_sp_rules =
+		reg_get_num_rules_of_ap_pwr_type(pdev, REG_STANDARD_POWER_AP);
+	num_ap_vlp_rules =
+		reg_get_num_rules_of_ap_pwr_type(pdev, REG_VERY_LOW_POWER_AP);
+
+	if (reg_afc_dev_type == AFC_DEPLOYMENT_OUTDOOR && num_ap_sp_rules &&
+	    !num_ap_vlp_rules)
+		return reg_get_eirp_from_mas_chan_list(pdev, freq, bw,
+						       REG_STANDARD_POWER_AP,
+						       is_client_list_lookup_needed,
+						       client_type);
+	else
+		return 0;
+}
+
+/**
  * reg_get_sp_eirp() - For the given power mode, using the bandwidth, find the
  * corresponding EIRP values from the afc power info array. The minimum of found
  * EIRP and regulatory max EIRP is returned
@@ -9634,7 +9744,8 @@ static uint8_t reg_get_sp_eirp(struct wlan_objmgr_pdev *pdev,
 			       bool is_client_list_lookup_needed,
 			       enum reg_6g_client_type client_type)
 {
-	uint8_t i, op_class = 0, chan_num = 0, afc_eirp_pwr = 0;
+	uint8_t i, op_class = 0, chan_num = 0;
+	int8_t afc_eirp_pwr = 0;
 	struct wlan_regulatory_pdev_priv_obj *pdev_priv_obj;
 	struct regulatory_channel *sp_master_chan_list = NULL;
 	struct reg_fw_afc_power_event *power_info;
@@ -9649,7 +9760,9 @@ static uint8_t reg_get_sp_eirp(struct wlan_objmgr_pdev *pdev,
 	}
 
 	if (!reg_is_afc_power_event_received(pdev))
-		return 0;
+		return reg_get_sp_eirp_before_afc_resp_rx(pdev, freq, bw,
+							  is_client_list_lookup_needed,
+							  client_type);
 
 	sp_master_chan_list =
 		pdev_priv_obj->mas_chan_list_6g_ap[REG_STANDARD_POWER_AP];
@@ -9714,7 +9827,7 @@ static uint8_t reg_get_sp_eirp(struct wlan_objmgr_pdev *pdev,
 						       &reg_sp_eirp_pwr);
 
 	if (afc_eirp_pwr)
-		return QDF_MIN(afc_eirp_pwr, reg_sp_eirp_pwr);
+		return QDF_MIN(afc_eirp_pwr, (int8_t)reg_sp_eirp_pwr);
 
 	return 0;
 }
@@ -9727,29 +9840,9 @@ static uint8_t reg_get_sp_eirp(struct wlan_objmgr_pdev *pdev,
 			       bool is_client_list_lookup_needed,
 			       enum reg_6g_client_type client_type)
 {
-	struct regulatory_channel *sp_master_chan_list = NULL;
-	uint16_t reg_sp_eirp_pwr = 0;
-	bool is_psd;
-
-	reg_get_mas_chan_list_for_lookup(pdev, &sp_master_chan_list,
-					 REG_STANDARD_POWER_AP,
-					 is_client_list_lookup_needed,
-					 client_type);
-	if (!sp_master_chan_list) {
-		reg_err("sp_master_chan_list is NULL");
-		return 0;
-	}
-
-	reg_find_txpower_from_6g_list(freq, sp_master_chan_list,
-				      &reg_sp_eirp_pwr);
-	is_psd = reg_is_6g_psd_power(pdev);
-	if (is_psd)
-		reg_get_eirp_from_psd_and_reg_max_eirp(pdev,
-						       sp_master_chan_list,
-						       freq, bw,
-						       &reg_sp_eirp_pwr);
-
-	return reg_sp_eirp_pwr;
+	return reg_get_eirp_from_mas_chan_list(pdev, freq, bw, REG_STANDARD_POWER_AP,
+					       is_client_list_lookup_needed,
+					       client_type);
 }
 #endif
 
@@ -9765,9 +9858,17 @@ static enum reg_6g_ap_type
 reg_get_best_pwr_mode_from_eirp_list(uint8_t *eirp_list, uint8_t size)
 {
 	uint8_t max = 0, i;
-	enum reg_6g_ap_type best_pwr_mode = REG_INDOOR_AP;
+	enum reg_6g_ap_type best_pwr_mode = REG_CURRENT_MAX_AP_TYPE;
 
 	for (i = 0; i < size; i++) {
+		/* Assuming the eirp = 0 means the mode is not available,
+		 * skip the mode.
+		 * EIRP = 0 may be a valid value. We need to fix this in
+		 * future by setting the min negative value (-128) to
+		 * the channels for which power mode is not available.
+		 */
+		if (!eirp_list[i])
+			continue;
 		if (eirp_list[i] > max) {
 			max = eirp_list[i];
 			best_pwr_mode = i;
@@ -9789,9 +9890,9 @@ uint8_t reg_get_eirp_pwr(struct wlan_objmgr_pdev *pdev, qdf_freq_t freq,
 				       is_client_list_lookup_needed,
 				       client_type);
 
-	return reg_get_eirp_for_non_sp(pdev, freq, bw, ap_pwr_type,
-				       is_client_list_lookup_needed,
-				       client_type);
+	return reg_get_eirp_from_mas_chan_list(pdev, freq, bw, ap_pwr_type,
+					       is_client_list_lookup_needed,
+					       client_type);
 }
 
 enum reg_6g_ap_type reg_get_best_pwr_mode(struct wlan_objmgr_pdev *pdev,

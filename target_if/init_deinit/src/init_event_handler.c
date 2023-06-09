@@ -33,6 +33,9 @@
 #include <service_ready_param.h>
 #include <init_cmd_api.h>
 #include <cdp_txrx_cmn.h>
+#ifdef DP_TX_PACKET_INSPECT_FOR_ILP
+#include <cdp_txrx_misc.h>
+#endif
 #include <wlan_reg_ucfg_api.h>
 #if defined(WLAN_FEATURE_11BE_MLO) && defined(WLAN_MLO_MULTI_CHIP)
 #include <wlan_mlo_mgr_cmn.h>
@@ -136,6 +139,27 @@ init_deinit_update_roam_stats_cap(struct wmi_unified *wmi_handle,
 {}
 #endif
 
+#ifdef DP_TX_PACKET_INSPECT_FOR_ILP
+static void
+init_deinit_update_tx_ilp_cap(struct wlan_objmgr_psoc *psoc,
+			      struct tgt_info *info)
+{
+	ol_txrx_soc_handle soc;
+
+	soc = wlan_psoc_get_dp_handle(psoc);
+	info->wlan_res_cfg.tx_ilp_enable =
+		cdp_evaluate_update_tx_ilp_cfg(
+			soc, info->service_ext2_param.num_msdu_idx_qtype_map,
+			info->msdu_idx_qtype_map);
+}
+#else
+static void
+init_deinit_update_tx_ilp_cap(struct wlan_objmgr_psoc *psoc,
+			      struct tgt_info *info)
+{
+}
+#endif
+
 #ifdef MULTI_CLIENT_LL_SUPPORT
 /**
  * init_deinit_update_multi_client_ll_caps() - Update multi client service
@@ -199,6 +223,9 @@ static inline void init_deinit_update_tdls_caps(struct wmi_unified *wmi_handle,
 						struct wlan_objmgr_psoc *psoc)
 {}
 #endif
+
+static void init_deinit_mlo_tsf_sync_support(struct wmi_unified *wmi_handle,
+					     struct wlan_objmgr_psoc *psoc);
 
 static int init_deinit_service_ready_event_handler(ol_scn_t scn_handle,
 							uint8_t *event,
@@ -356,6 +383,8 @@ static int init_deinit_service_ready_event_handler(ol_scn_t scn_handle,
 	init_deinit_update_wifi_pos_caps(wmi_handle, psoc);
 	init_deinit_update_tdls_caps(wmi_handle, psoc);
 
+	init_deinit_mlo_tsf_sync_support(wmi_handle, psoc);
+
 	/* override derived value, if it exceeds max peer count */
 	if ((wlan_psoc_get_max_peer_count(psoc) >
 		tgt_hdl->info.wlan_res_cfg.num_active_peers) &&
@@ -426,6 +455,15 @@ static int init_deinit_service_ready_event_handler(ol_scn_t scn_handle,
 	init_deinit_update_multi_client_ll_caps(wmi_handle, psoc);
 
 	init_deinit_update_vendor_handoff_control_caps(wmi_handle, psoc);
+
+	if (wmi_service_enabled(wmi_handle,
+				wmi_service_cca_busy_info_for_each_20mhz))
+		wlan_psoc_nif_fw_ext2_cap_set(psoc,
+					WLAN_CCA_BUSY_INFO_FOREACH_20MHZ);
+	if (wmi_service_enabled(wmi_handle,
+			wmi_service_vdev_param_chwidth_with_notify_support))
+		wlan_psoc_nif_fw_ext2_cap_set(psoc,
+				WLAN_VDEV_PARAM_CHWIDTH_WITH_NOTIFY_SUPPORT);
 
 	if (wmi_service_enabled(wmi_handle, wmi_service_ext_msg)) {
 		target_if_debug("Wait for EXT message");
@@ -527,6 +565,16 @@ static int init_deinit_service_ext2_ready_event_handler(ol_scn_t scn_handle,
 		target_if_err("failed to populate scan radio cap ext2");
 		goto exit;
 	}
+
+	err_code = init_deinit_populate_msdu_idx_qtype_map_ext2(wmi_handle,
+								event, info);
+
+	if (err_code) {
+		target_if_err("failed to populate msdu index qtype map ext2");
+		goto exit;
+	}
+
+	init_deinit_update_tx_ilp_cap(psoc, info);
 
 	err_code = init_deinit_populate_twt_cap_ext2(psoc, wmi_handle, event,
 						     info);
@@ -811,11 +859,29 @@ static void init_deinit_mlo_update_pdev_ready(struct wlan_objmgr_psoc *psoc,
 				     init_deinit_send_ml_link_ready,
 				     NULL, 0, WLAN_INIT_DEINIT_ID);
 }
+
+static void init_deinit_mlo_tsf_sync_support(struct wmi_unified *wmi_handle,
+					     struct wlan_objmgr_psoc *psoc)
+{
+	bool mlo_tsf_sync_enab = false;
+
+	if (!init_deinit_mlo_capable(psoc))
+		return;
+
+	if (wmi_service_enabled(wmi_handle, wmi_service_mlo_tsf_sync))
+		mlo_tsf_sync_enab = true;
+
+	mlo_update_tsf_sync_support(psoc, mlo_tsf_sync_enab);
+}
+
 #else
 static void init_deinit_mlo_update_soc_ready(struct wlan_objmgr_psoc *psoc)
 {}
 static void init_deinit_mlo_update_pdev_ready(struct wlan_objmgr_psoc *psoc,
 					      uint8_t num_radios)
+{}
+static void init_deinit_mlo_tsf_sync_support(struct wmi_unified *wmi_handle,
+					     struct wlan_objmgr_psoc *psoc)
 {}
 #endif /*WLAN_FEATURE_11BE_MLO && WLAN_MLO_MULTI_CHIP*/
 

@@ -180,7 +180,8 @@ struct cdp_mlo_ops {
 	void (*mlo_update_mlo_ts_offset)(struct cdp_soc_t *soc_hdl,
 					 uint64_t offset);
 	QDF_STATUS (*mlo_get_mld_vdev_stats)(struct cdp_soc_t *soc,
-					     uint8_t vdev_id, void *buf);
+					     uint8_t vdev_id, void *buf,
+					     bool link_vdev_only);
 };
 #endif
 
@@ -281,7 +282,7 @@ struct cdp_cmn_ops {
 
 	QDF_STATUS (*txrx_peer_HMWDS_ast_delete)
 		(ol_txrx_soc_handle soc, uint8_t vdev_id, uint8_t *dest_mac,
-		 uint8_t type);
+		 uint8_t type, uint8_t delete_in_fw);
 
 	QDF_STATUS
 	(*txrx_peer_delete)(struct cdp_soc_t *soc, uint8_t vdev_id,
@@ -596,12 +597,10 @@ struct cdp_cmn_ops {
 
 	QDF_STATUS (*txrx_peer_reset_ast)
 		(ol_txrx_soc_handle soc, uint8_t *ast_macaddr,
-		 uint8_t *peer_macaddr, uint8_t vdev_id,
-		 enum cdp_txrx_ast_entry_type type);
+		 uint8_t *peer_macaddr, uint8_t vdev_id);
 
-	QDF_STATUS (*txrx_peer_reset_ast_table)
-		(ol_txrx_soc_handle soc, uint8_t vdev_id,
-		 enum cdp_txrx_ast_entry_type type);
+	QDF_STATUS (*txrx_peer_reset_ast_table)(ol_txrx_soc_handle soc,
+						uint8_t vdev_id);
 
 	void (*txrx_peer_flush_ast_table)(ol_txrx_soc_handle soc);
 	void (*txrx_set_ba_aging_timeout)(struct cdp_soc_t *soc_handle,
@@ -720,6 +719,7 @@ struct cdp_cmn_ops {
 					       bool mlo_peers_only);
 #endif
 	QDF_STATUS (*txrx_umac_reset_deinit)(ol_txrx_soc_handle soc);
+	QDF_STATUS (*txrx_umac_reset_init)(ol_txrx_soc_handle soc);
 	void (*txrx_get_tsf_time)(struct cdp_soc_t *soc_hdl, uint32_t tsf_id,
 				  uint32_t mac_id, uint64_t *tsf,
 				  uint64_t *tsf_sync_soc_time);
@@ -953,9 +953,7 @@ struct cdp_ctrl_ops {
 						     uint32_t *mask,
 						     uint32_t *mask_cont);
 #endif
-	QDF_STATUS (*txrx_update_mon_mac_filter)(struct cdp_soc_t *soc,
-						 uint8_t vdev_id,
-						 uint32_t cmd);
+	bool (*umac_reset_is_inprogress)(struct cdp_soc_t *psoc);
 };
 
 struct cdp_me_ops {
@@ -996,6 +994,10 @@ struct cdp_me_ops {
  * @txrx_update_pdev_mon_telemetry_airtime_stats: update telemetry airtime
  *                                                stats in monitor pdev
  * @txrx_cfr_filter: Handler to configure host rx monitor status ring
+ * @txrx_update_mon_mac_filter: Handler to configure mon mac filter
+ * @start_local_pkt_capture: start local packet capture
+ * @stop_local_pkt_capture: stop local packet capture
+ * @is_local_pkt_capture_running: is local packet capture running
  */
 struct cdp_mon_ops {
 
@@ -1100,6 +1102,20 @@ struct cdp_mon_ops {
 				struct cdp_monitor_filter *filter_val,
 				bool cfr_enable_monitor_mode);
 #endif
+
+	QDF_STATUS (*txrx_update_mon_mac_filter)(struct cdp_soc_t *soc,
+						 uint8_t vdev_id,
+						 uint32_t cmd);
+#ifdef WLAN_FEATURE_LOCAL_PKT_CAPTURE
+	QDF_STATUS (*start_local_pkt_capture)
+			(struct cdp_soc_t *soc, uint8_t pdev_id,
+			 struct cdp_monitor_filter *filter);
+
+	QDF_STATUS (*stop_local_pkt_capture)(struct cdp_soc_t *soc,
+					     uint8_t pdev_id);
+	bool (*is_local_pkt_capture_running)(struct cdp_soc_t *soc,
+					     uint8_t pdev_id);
+#endif
 };
 
 /**
@@ -1123,6 +1139,7 @@ struct cdp_mon_ops {
  * @txrx_update_pdev_stats:
  * @txrx_get_peer_stats_param:
  * @txrx_get_peer_stats:
+ * @txrx_get_per_link_stats:
  * @txrx_get_soc_stats:
  * @txrx_reset_peer_ald_stats:
  * @txrx_reset_peer_stats:
@@ -1152,6 +1169,7 @@ struct cdp_mon_ops {
  * @txrx_get_peer_extd_rate_link_stats:
  * @get_pdev_obss_stats:
  * @clear_pdev_obss_pd_stats:
+ * @txrx_get_interface_stats:
  */
 struct cdp_host_stats_ops {
 	int (*txrx_host_stats_get)(struct cdp_soc_t *soc, uint8_t vdev_id,
@@ -1223,6 +1241,12 @@ struct cdp_host_stats_ops {
 				       uint8_t *peer_mac,
 				       struct cdp_peer_stats *peer_stats);
 	QDF_STATUS
+		(*txrx_get_per_link_stats)(struct cdp_soc_t *soc,
+					   uint8_t vdev_id, uint8_t *peer_mac,
+					   struct cdp_peer_stats *stats,
+					   enum cdp_peer_type peer_type,
+					   uint8_t num_link);
+	QDF_STATUS
 		(*txrx_get_soc_stats)(struct cdp_soc_t *soc,
 				      struct cdp_soc_stats *soc_stats);
 	QDF_STATUS
@@ -1232,7 +1256,7 @@ struct cdp_host_stats_ops {
 	QDF_STATUS
 		(*txrx_reset_peer_stats)(struct cdp_soc_t *soc,
 					 uint8_t vdev_id, uint8_t *peer_mac);
-	int
+	QDF_STATUS
 		(*txrx_get_vdev_stats)(struct cdp_soc_t *soc, uint8_t vdev_id,
 				       void *buf, bool is_aggregate);
 	int
@@ -1345,6 +1369,10 @@ struct cdp_host_stats_ops {
 	QDF_STATUS (*clear_pdev_obss_pd_stats)(struct cdp_soc_t *soc,
 					       uint8_t pdev_id,
 					       struct cdp_txrx_stats_req *req);
+	QDF_STATUS (*txrx_get_interface_stats)(struct cdp_soc_t *soc,
+					       uint8_t vdev_id,
+					       void *buf,
+					       bool is_aggregate);
 };
 
 /**
@@ -1717,6 +1745,7 @@ void (*peer_send_wds_disconnect)(struct cdp_ctrl_objmgr_psoc *psoc,
  * @set_bus_vote_lvl_high: The bus lvl is set to high or low based on tput
  * @get_bus_vote_lvl_high: Get bus lvl to determine whether or not get
  *                         rx rate stats
+ * @evaluate_update_tx_ilp_cfg: Evaluate and update DP TX ILP configuration
  *
  * Function pointers for miscellaneous soc/pdev/vdev related operations.
  */
@@ -1818,6 +1847,11 @@ struct cdp_misc_ops {
 #ifdef FEATURE_RX_LINKSPEED_ROAM_TRIGGER
 	void (*set_bus_vote_lvl_high)(struct cdp_soc_t *soc_hdl, bool high);
 	bool (*get_bus_vote_lvl_high)(struct cdp_soc_t *soc_hdl);
+#endif
+#ifdef DP_TX_PACKET_INSPECT_FOR_ILP
+	bool (*evaluate_update_tx_ilp_cfg)(struct cdp_soc_t *soc_hdl,
+					   uint8_t num_msdu_idx_map,
+					   uint8_t *msdu_idx_map_arr);
 #endif
 };
 
@@ -2381,10 +2415,14 @@ struct cdp_sawf_ops {
 			  uint32_t service_interval, uint32_t burst_size,
 			  uint32_t min_tput, uint32_t max_latency,
 			  uint8_t add_or_sub);
-	bool
-	(*swaf_peer_is_sla_configured)(struct cdp_soc_t *soc,
-				       uint8_t *mac_addr);
+	QDF_STATUS
+	(*swaf_peer_sla_configuration)(struct cdp_soc_t *soc,
+				       uint8_t *mac_addr, uint16_t *sla_mask);
 
+	QDF_STATUS
+	(*sawf_peer_flow_count)(struct cdp_soc_t *hdl, uint8_t *mac_addr,
+				uint8_t svc_id, uint8_t direction,
+				uint8_t start_or_stop, uint8_t *peer_mac);
 #endif
 };
 #endif
@@ -2417,6 +2455,21 @@ struct cdp_ppeds_txrx_ops {
 			    void *stats);
 };
 #endif /* WLAN_SUPPORT_PPEDS */
+
+#ifdef WLAN_SUPPORT_RX_FLOW_TAG
+struct cdp_fse_ops {
+	QDF_STATUS
+	(*fse_rule_add)(struct cdp_soc_t *soc,
+			uint32_t *src_ip, uint32_t src_port,
+			uint32_t *dest_ip, uint32_t dest_port,
+			uint8_t protocol, uint8_t version);
+	QDF_STATUS
+	(*fse_rule_delete)(struct cdp_soc_t *soc,
+			   uint32_t *src_ip, uint32_t src_port,
+			   uint32_t *dest_ip, uint32_t dest_port,
+			   uint8_t protocol, uint8_t version);
+};
+#endif /* WLAN_SUPPORT_RX_FLOW_TAG */
 
 struct cdp_ops {
 	struct cdp_cmn_ops          *cmn_drv_ops;
@@ -2470,6 +2523,9 @@ struct cdp_ops {
 #endif
 #ifdef WLAN_SUPPORT_PPEDS
 	struct cdp_ppeds_txrx_ops *ppeds_ops;
+#endif
+#ifdef WLAN_SUPPORT_RX_FLOW_TAG
+	struct cdp_fse_ops *fse_ops;
 #endif
 };
 #endif

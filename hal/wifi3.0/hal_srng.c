@@ -53,6 +53,9 @@ void hal_qcn9224v2_attach(struct hal_soc *hal);
 #if defined(QCA_WIFI_QCN6122) || defined(QCA_WIFI_QCN9160)
 void hal_qcn6122_attach(struct hal_soc *hal);
 #endif
+#ifdef QCA_WIFI_QCN6432
+void hal_qcn6432_attach(struct hal_soc *hal);
+#endif
 #ifdef QCA_WIFI_QCA6750
 void hal_qca6750_attach(struct hal_soc *hal);
 #endif
@@ -493,6 +496,18 @@ static void hal_target_based_configure(struct hal_soc *hal)
 		 */
 		hal->static_window_map = true;
 		hal_qcn6122_attach(hal);
+		break;
+#endif
+
+#if defined(QCA_WIFI_QCN6432)
+	case TARGET_TYPE_QCN6432:
+		hal->use_register_windowing = true;
+		/*
+		 * Static window map  is enabled for qcn6432 to use 2mb bar
+		 * size and use multiple windows to write into registers.
+		 */
+		hal->static_window_map = true;
+		hal_qcn6432_attach(hal);
 		break;
 #endif
 
@@ -1102,6 +1117,42 @@ void hal_delayed_reg_write(struct hal_soc *hal_soc,
 #endif
 #endif
 
+#ifdef HAL_SRNG_REG_HIS_DEBUG
+inline void hal_free_srng_history(struct hal_soc *hal)
+{
+	int i;
+
+	for (i = 0; i < HAL_SRNG_ID_MAX; i++)
+		qdf_mem_free(hal->srng_list[i].reg_his_ctx);
+}
+
+inline bool hal_alloc_srng_history(struct hal_soc *hal)
+{
+	int i;
+
+	for (i = 0; i < HAL_SRNG_ID_MAX; i++) {
+		hal->srng_list[i].reg_his_ctx =
+			qdf_mem_malloc(sizeof(struct hal_srng_reg_his_ctx));
+		if (!hal->srng_list[i].reg_his_ctx) {
+			hal_err("srng_hist alloc failed");
+			hal_free_srng_history(hal);
+			return false;
+		}
+	}
+
+	return true;
+}
+#else
+inline void hal_free_srng_history(struct hal_soc *hal)
+{
+}
+
+inline bool hal_alloc_srng_history(struct hal_soc *hal)
+{
+	return true;
+}
+#endif
+
 void *hal_attach(struct hif_opaque_softc *hif_handle, qdf_device_t qdf_dev)
 {
 	struct hal_soc *hal;
@@ -1144,6 +1195,9 @@ void *hal_attach(struct hif_opaque_softc *hif_handle, qdf_device_t qdf_dev)
 	}
 	qdf_mem_zero(hal->shadow_wrptr_mem_vaddr,
 		sizeof(*(hal->shadow_wrptr_mem_vaddr)) * HAL_MAX_LMAC_RINGS);
+
+	if (!hal_alloc_srng_history(hal))
+		goto fail2;
 
 	for (i = 0; i < HAL_SRNG_ID_MAX; i++) {
 		hal->srng_list[i].initialized = 0;
@@ -1225,6 +1279,7 @@ void hal_detach(void *hal_soc)
 	qdf_minidump_remove(hal, sizeof(*hal), "hal_soc");
 	qdf_mem_free(hal->ops);
 
+	hal_free_srng_history(hal);
 	qdf_mem_free_consistent(hal->qdf_dev, hal->qdf_dev->dev,
 		sizeof(*(hal->shadow_rdptr_mem_vaddr)) * HAL_SRNG_ID_MAX,
 		hal->shadow_rdptr_mem_vaddr, hal->shadow_rdptr_mem_paddr, 0);
@@ -1381,7 +1436,7 @@ void hal_srng_dst_init_hp(struct hal_soc_handle *hal_soc,
 
 	if (vaddr) {
 		*srng->u.dst_ring.hp_addr = srng->u.dst_ring.cached_hp;
-		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_ERROR,
+		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_DEBUG,
 			  "hp_addr=%pK, cached_hp=%d",
 			  (void *)srng->u.dst_ring.hp_addr,
 			  srng->u.dst_ring.cached_hp);
@@ -1711,10 +1766,26 @@ void *hal_srng_setup_idx(void *hal_soc, int ring_type, int ring_num, int mac_id,
 	}
 
 	if (!(ring_config->lmac_ring)) {
+		/*
+		 * UMAC reset has idle check enabled.
+		 * During UMAC reset Tx ring halt is set
+		 * by Wi-Fi FW during pre-reset stage,
+		 * avoid Tx ring halt again.
+		 */
+		if (idle_check && idx) {
+			if (!hal->ops->hal_tx_ring_halt_get(hal_hdl)) {
+				qdf_print("\nTx ring halt not set:Ring(%d, %d)",
+					  ring_type, ring_num);
+				qdf_assert_always(0);
+			}
+			hal_srng_hw_init(hal, srng, idle_check, idx);
+			goto ce_setup;
+		}
+
 		if (idx) {
 			hal->ops->hal_tx_ring_halt_set(hal_hdl);
 			do {
-				hal_info("Waiting for ring reset\n");
+				hal_info("Waiting for ring reset");
 			} while (!(hal->ops->hal_tx_ring_halt_poll(hal_hdl)));
 		}
 		hal_srng_hw_init(hal, srng, idle_check, idx);
@@ -1723,7 +1794,7 @@ void *hal_srng_setup_idx(void *hal_soc, int ring_type, int ring_num, int mac_id,
 			hal->ops->hal_tx_ring_halt_reset(hal_hdl);
 		}
 
-
+ce_setup:
 		if (ring_type == CE_DST) {
 			srng->u.dst_ring.max_buffer_length = ring_params->max_buffer_length;
 			hal_ce_dst_setup(hal, srng, ring_num);
@@ -1769,12 +1840,14 @@ void *hal_srng_setup(void *hal_soc, int ring_type, int ring_num,
 }
 qdf_export_symbol(hal_srng_setup);
 
-void hal_srng_cleanup(void *hal_soc, hal_ring_handle_t hal_ring_hdl)
+void hal_srng_cleanup(void *hal_soc, hal_ring_handle_t hal_ring_hdl,
+		      bool umac_reset_inprogress)
 {
 	struct hal_srng *srng = (struct hal_srng *)hal_ring_hdl;
 	SRNG_LOCK_DESTROY(&srng->lock);
 	srng->initialized = 0;
-	hal_srng_hw_disable(hal_soc, srng);
+	if (umac_reset_inprogress)
+		hal_srng_hw_disable(hal_soc, srng);
 }
 qdf_export_symbol(hal_srng_cleanup);
 

@@ -62,12 +62,6 @@ dp_umac_reset_send_setup_cmd(struct dp_soc *soc)
 	uint32_t msi_base_data, msi_vector_start;
 	struct dp_htt_umac_reset_setup_cmd_params params;
 
-	if (wlan_cfg_get_dp_soc_is_ppeds_enabled(soc->wlan_cfg_ctx)) {
-		dp_umac_reset_err(
-			"Umac reset is currently not supported in DS config");
-		return QDF_STATUS_E_NOSUPPORT;
-	}
-
 	umac_reset_ctx = &soc->umac_reset_ctx;
 	qdf_mem_zero(&params, sizeof(params));
 	ret = pld_get_user_msi_assignment(soc->osdev->dev, "DP",
@@ -88,8 +82,9 @@ dp_umac_reset_send_setup_cmd(struct dp_soc *soc)
 	return dp_htt_umac_reset_send_setup_cmd(soc, &params);
 }
 
-QDF_STATUS dp_soc_umac_reset_init(struct dp_soc *soc)
+QDF_STATUS dp_soc_umac_reset_init(struct cdp_soc_t *txrx_soc)
 {
+	struct dp_soc *soc = (struct dp_soc *)txrx_soc;
 	struct dp_soc_umac_reset_ctx *umac_reset_ctx;
 	size_t alloc_size;
 	QDF_STATUS status;
@@ -282,7 +277,7 @@ dp_umac_reset_get_rx_event(struct dp_soc_umac_reset_ctx *umac_reset_ctx)
  *
  * Return: QDF_STATUS of operation
  */
-static QDF_STATUS
+QDF_STATUS
 dp_umac_reset_validate_n_update_state_machine_on_rx(
 	struct dp_soc_umac_reset_ctx *umac_reset_ctx,
 	enum umac_reset_rx_event rx_event,
@@ -330,13 +325,21 @@ bool dp_check_umac_reset_in_progress(struct dp_soc *soc)
 /**
  * dp_umac_reset_initiate_umac_recovery() - Initiate Umac reset session
  * @soc: dp soc handle
+ * @umac_reset_ctx: Umac reset context
+ * @rx_event: Rx event received
  * @is_target_recovery: Flag to indicate if it is triggered for target recovery
  *
- * Return: void
+ * Return: status
  */
-static void dp_umac_reset_initiate_umac_recovery(struct dp_soc *soc,
-						 bool is_target_recovery)
+static QDF_STATUS dp_umac_reset_initiate_umac_recovery(struct dp_soc *soc,
+				struct dp_soc_umac_reset_ctx *umac_reset_ctx,
+				enum umac_reset_rx_event rx_event,
+				bool is_target_recovery)
 {
+	return dp_umac_reset_validate_n_update_state_machine_on_rx(
+					umac_reset_ctx, rx_event,
+					UMAC_RESET_STATE_WAIT_FOR_TRIGGER,
+					UMAC_RESET_STATE_DO_TRIGGER_RECEIVED);
 }
 
 /**
@@ -476,20 +479,17 @@ static int dp_umac_reset_rx_event_handler(void *dp_ctx)
 		target_recovery = true;
 		/* Fall through */
 	case UMAC_RESET_RX_EVENT_DO_TRIGGER_RECOVERY:
-		status = dp_umac_reset_validate_n_update_state_machine_on_rx(
-			umac_reset_ctx, rx_event,
-			UMAC_RESET_STATE_WAIT_FOR_TRIGGER,
-			UMAC_RESET_STATE_DO_TRIGGER_RECEIVED);
+		status =
+		dp_umac_reset_initiate_umac_recovery(soc, umac_reset_ctx,
+						     rx_event, target_recovery);
 
-		if (status == QDF_STATUS_E_FAILURE)
-			goto exit;
+		if (status != QDF_STATUS_SUCCESS)
+			break;
 
 		umac_reset_ctx->ts.trigger_start =
 						qdf_get_log_timestamp_usecs();
 
 		action = UMAC_RESET_ACTION_DO_TRIGGER_RECOVERY;
-
-		dp_umac_reset_initiate_umac_recovery(soc, target_recovery);
 
 		break;
 
@@ -587,7 +587,8 @@ QDF_STATUS dp_umac_reset_interrupt_attach(struct dp_soc *soc)
 	} else {
 		if (umac_reset_ctx->intr_offset < 0 ||
 		    umac_reset_ctx->intr_offset >= WLAN_CFG_INT_NUM_CONTEXTS) {
-			dp_umac_reset_err("Invalid interrupt offset");
+			dp_umac_reset_err("Invalid interrupt offset: %d",
+					  umac_reset_ctx->intr_offset);
 			return QDF_STATUS_E_FAILURE;
 		}
 
@@ -686,19 +687,21 @@ dp_umac_reset_post_tx_cmd_via_shmem(struct dp_soc *soc, void *ctxt, int chip_id)
 	case UMAC_RESET_TX_CMD_TRIGGER_DONE:
 		/* Send htt message to the partner soc */
 		initiator = dp_umac_reset_initiator_check(soc);
+		if (!initiator)
+			umac_reset_ctx->current_state =
+					UMAC_RESET_STATE_WAIT_FOR_DO_PRE_RESET;
+
 		status = dp_htt_umac_reset_send_start_pre_reset_cmd(soc,
 								    initiator,
 				!dp_umac_reset_target_recovery_check(soc));
 
-		if (status != QDF_STATUS_SUCCESS)
+		if (status != QDF_STATUS_SUCCESS) {
 			dp_umac_reset_err("Unable to send Umac trigger");
-		else
+			qdf_assert_always(0);
+		} else {
 			dp_umac_reset_debug("Sent trigger for soc (chip_id %d)",
 					    chip_id);
-
-		if (!initiator)
-			umac_reset_ctx->current_state =
-					UMAC_RESET_STATE_WAIT_FOR_DO_PRE_RESET;
+		}
 
 		umac_reset_ctx->ts.trigger_done = qdf_get_log_timestamp_usecs();
 		break;
@@ -780,15 +783,19 @@ dp_umac_reset_notify_target(struct dp_soc_umac_reset_ctx *umac_reset_ctx)
 		return QDF_STATUS_E_FAILURE;
 	}
 
+	/*
+	 * Update the state machine before sending the command to firmware
+	 * as we might get the response from firmware even before the state
+	 * is updated.
+	 */
+	umac_reset_ctx->current_state = next_state;
+
 	status = dp_umac_reset_post_tx_cmd(umac_reset_ctx, tx_cmd);
 	if (QDF_IS_STATUS_ERROR(status)) {
 		dp_umac_reset_err("Couldn't post Tx cmd");
 		qdf_assert_always(0);
 		return status;
 	}
-
-	/* Update the state machine */
-	umac_reset_ctx->current_state = next_state;
 
 	return status;
 }
@@ -874,7 +881,7 @@ QDF_STATUS dp_umac_reset_notify_action_completion(
 		break;
 
 	default:
-		dp_umac_reset_err("Invalid action");
+		dp_umac_reset_err("Invalid action: %u", action);
 		return QDF_STATUS_E_FAILURE;
 	}
 
@@ -974,6 +981,8 @@ static inline const char *dp_umac_reset_pending_action_to_str(
 		return "UMAC_RESET_RX_EVENT_NONE";
 	case UMAC_RESET_RX_EVENT_DO_TRIGGER_RECOVERY:
 		return "UMAC_RESET_RX_EVENT_DO_TRIGGER_RECOVERY";
+	case UMAC_RESET_RX_EVENT_DO_TRIGGER_TR_SYNC:
+		return "UMAC_RESET_RX_EVENT_DO_TRIGGER_TR_SYNC";
 	case UMAC_RESET_RX_EVENT_DO_PRE_RESET:
 		return "UMAC_RESET_RX_EVENT_DO_PRE_RESET";
 	case UMAC_RESET_RX_EVENT_DO_POST_RESET_START:

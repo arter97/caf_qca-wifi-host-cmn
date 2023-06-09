@@ -340,7 +340,7 @@ static void hal_compute_reo_remap_ix0_6450(uint32_t *remap0)
 {
 }
 
-/*TODO: update proper values */
+#define UMAC_WINDOW_REMAP_RANGE 0x14
 #define CE_WINDOW_REMAP_RANGE 0X37
 #define CMEM_WINDOW_REMAP_RANGE 0x2
 
@@ -361,13 +361,16 @@ static inline qdf_iomem_t hal_get_window_address_6450(struct hal_soc *hal_soc,
 	offset = addr - hal_soc->dev_base_addr;
 	window = (offset >> WINDOW_SHIFT) & WINDOW_VALUE_MASK;
 
-	/* CE: 2nd window, CMEM: 3rd window, unused: 4th window */
+	/* UMAC: 2nd window(unused) CE: 3rd window, CMEM: 4th window */
 	switch (window) {
-	case CE_WINDOW_REMAP_RANGE:
+	case UMAC_WINDOW_REMAP_RANGE:
 		scale = 1;
 		break;
-	case CMEM_WINDOW_REMAP_RANGE:
+	case CE_WINDOW_REMAP_RANGE:
 		scale = 2;
+		break;
+	case CMEM_WINDOW_REMAP_RANGE:
+		scale = 3;
 		break;
 	default:
 		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_ERROR,
@@ -908,7 +911,7 @@ static void hal_rx_print_pn_6450(uint8_t *buf)
 	uint32_t pn_95_64 = HAL_RX_MPDU_PN_95_64_GET(mpdu_info);
 	uint32_t pn_127_96 = HAL_RX_MPDU_PN_127_96_GET(mpdu_info);
 
-	hal_debug("PN number pn_127_96 0x%x pn_95_64 0x%x pn_63_32 0x%x pn_31_0 0x%x ",
+	hal_debug("PN number pn_127_96 0x%x pn_95_64 0x%x pn_63_32 0x%x pn_31_0 0x%x",
 		  pn_127_96, pn_95_64, pn_63_32, pn_31_0);
 }
 
