@@ -14188,11 +14188,15 @@ extract_service_ready_ext2_tlv(wmi_unified_t wmi_handle, uint8_t *event,
 	param->num_msdu_idx_qtype_map =
 				param_buf->num_htt_msdu_idx_to_qtype_map;
 
-	if (param_buf->nan_cap)
+	if (param_buf->nan_cap) {
 		param->max_ndp_sessions =
 			param_buf->nan_cap->max_ndp_sessions;
-	else
+		param->max_nan_pairing_sessions =
+			param_buf->nan_cap->max_pairing_sessions;
+	} else {
 		param->max_ndp_sessions = 0;
+		param->max_nan_pairing_sessions = 0;
+	}
 
 	param->preamble_puncture_bw_cap = ev->preamble_puncture_bw;
 	param->num_scan_radio_caps = param_buf->num_wmi_scan_radio_caps;
@@ -20502,6 +20506,8 @@ static void populate_tlv_events_id_mlo(uint32_t *event_ids)
 			WMI_MLO_LINK_REMOVAL_EVENTID;
 	event_ids[wmi_mlo_link_state_info_eventid] =
 			WMI_MLO_VDEV_LINK_INFO_EVENTID;
+	event_ids[wmi_mlo_link_disable_request_eventid] =
+			WMI_MLO_LINK_DISABLE_REQUEST_EVENTID;
 }
 #else /* WLAN_FEATURE_11BE_MLO */
 static inline void populate_tlv_events_id_mlo(uint32_t *event_ids)
@@ -21390,6 +21396,7 @@ static void populate_tlv_service(uint32_t *wmi_service)
 			WMI_SERVICE_TWT_ALL_DIALOG_ID;
 	wmi_service[wmi_service_twt_statistics] =
 			WMI_SERVICE_TWT_STATS;
+	wmi_service[wmi_service_restricted_twt] = WMI_SERVICE_RESTRICTED_TWT;
 #endif
 	wmi_service[wmi_service_spectral_scan_disabled] =
 			WMI_SERVICE_SPECTRAL_SCAN_DISABLED;

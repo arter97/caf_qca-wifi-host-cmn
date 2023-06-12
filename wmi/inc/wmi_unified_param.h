@@ -5175,6 +5175,7 @@ typedef enum {
 	wmi_mlo_teardown_complete_event_id,
 	wmi_mlo_link_set_active_resp_eventid,
 	wmi_mlo_link_removal_eventid,
+	wmi_mlo_link_disable_request_eventid,
 #endif
 	wmi_pdev_fips_extend_event_id,
 	wmi_roam_frame_event_id,
@@ -6140,6 +6141,7 @@ typedef enum {
 	wmi_service_twt_nudge,
 	wmi_service_all_twt,
 	wmi_service_twt_statistics,
+	wmi_service_restricted_twt,
 #endif
 	wmi_service_wapi_concurrency_supported,
 	wmi_service_sap_connected_d3_wow,
