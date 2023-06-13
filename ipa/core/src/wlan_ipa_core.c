@@ -5003,6 +5003,11 @@ int wlan_ipa_wdi_opt_dpath_flt_rsrv_cb(
 	struct wlan_objmgr_pdev *pdev;
 	int response = 0;
 
+	if (ipa_obj->ipa_pipes_down || ipa_obj->pipes_down_in_progress) {
+		ipa_err("Pipes are going down. Reject flt rsrv request");
+		return QDF_STATUS_FILT_REQ_ERROR;
+	}
+
 	pdev = ipa_obj->pdev;
 	pdev_id = ipa_obj->dp_pdev_id;
 
@@ -5020,7 +5025,7 @@ int wlan_ipa_wdi_opt_dpath_flt_rsrv_cb(
 	if (response) {
 		ipa_err("Low power feature disable failed. status %d",
 			response);
-		return QDF_STATUS_FILT_REQ_ERROR;
+		goto error;
 	}
 
 	response = cdp_ipa_pcie_link_up(ipa_obj->dp_soc);
@@ -5035,6 +5040,11 @@ int wlan_ipa_wdi_opt_dpath_flt_rsrv_cb(
 		dp_flt_params->flt_addr_params[i].ipa_flt_in_use = false;
 	}
 	return cdp_ipa_rx_cce_super_rule_setup(ipa_obj->dp_soc, dp_flt_params);
+
+error:
+	qdf_wake_lock_release(&ipa_obj->opt_dp_wake_lock,
+			      WIFI_POWER_EVENT_WAKELOCK_OPT_WIFI_DP);
+	return QDF_STATUS_FILT_REQ_ERROR;
 }
 
 int wlan_ipa_wdi_opt_dpath_flt_add_cb(
@@ -5052,6 +5062,11 @@ int wlan_ipa_wdi_opt_dpath_flt_add_cb(
 	struct wlan_objmgr_psoc *psoc;
 	struct wifi_dp_flt_setup *dp_flt_param = NULL;
 	void *htc_handle;
+
+	if (ipa_obj->ipa_pipes_down || ipa_obj->pipes_down_in_progress) {
+		ipa_err("Pipes are going down. Reject flt add request");
+		return QDF_STATUS_FILT_REQ_ERROR;
+	}
 
 	pdev = ipa_obj->pdev;
 	psoc = wlan_pdev_get_psoc(pdev);
@@ -5262,11 +5277,11 @@ int wlan_ipa_wdi_opt_dpath_flt_rsrv_rel_cb(void *ipa_ctx)
 								param_val);
 	if (response) {
 		ipa_err("Low power feature enable failed. status %d", response);
-		return QDF_STATUS_FILT_REQ_ERROR;
 	}
 
 	response = cdp_ipa_pcie_link_down(ipa_obj->dp_soc);
 	ipa_info("opt_dp: Vote for PCIe link down");
+
 	dp_flt_params = &(ipa_obj->dp_cce_super_rule_flt_param);
 	for (i = 0; i < IPA_WDI_MAX_FILTER; i++)
 		 dp_flt_params->flt_addr_params[i].valid = 0;
