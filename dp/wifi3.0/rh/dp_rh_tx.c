@@ -392,7 +392,7 @@ dp_tx_tcl_desc_pool_alloc_rh(struct dp_soc *soc, uint32_t num_elem,
 	/* Allocate tcl descriptors in coherent memory */
 	tcl_desc_pool = &rh_soc->tcl_desc_pool[pool_id];
 	memctx = qdf_get_dma_mem_context(tcl_desc_pool, memctx);
-	dp_desc_multi_pages_mem_alloc(soc, DP_TX_TCL_DESC_TYPE,
+	dp_desc_multi_pages_mem_alloc(soc, QDF_DP_TX_TCL_DESC_TYPE,
 				      &tcl_desc_pool->desc_pages,
 				      elem_size, num_elem, memctx, false);
 
@@ -405,7 +405,7 @@ dp_tx_tcl_desc_pool_alloc_rh(struct dp_soc *soc, uint32_t num_elem,
 	return status;
 
 err_alloc_fail:
-	dp_desc_multi_pages_mem_free(soc, DP_TX_TCL_DESC_TYPE,
+	dp_desc_multi_pages_mem_free(soc, QDF_DP_TX_TCL_DESC_TYPE,
 				     &tcl_desc_pool->desc_pages,
 				     memctx, false);
 	return status;
@@ -429,7 +429,7 @@ static void dp_tx_tcl_desc_pool_free_rh(struct dp_soc *soc, uint8_t pool_id)
 	tcl_desc_pool = &rh_soc->tcl_desc_pool[pool_id];
 	memctx = qdf_get_dma_mem_context(tcl_desc_pool, memctx);
 
-	dp_desc_multi_pages_mem_free(soc, DP_TX_TCL_DESC_TYPE,
+	dp_desc_multi_pages_mem_free(soc, QDF_DP_TX_TCL_DESC_TYPE,
 				     &tcl_desc_pool->desc_pages,
 				     memctx, false);
 }
@@ -610,25 +610,25 @@ QDF_STATUS dp_tx_desc_pool_alloc_rh(struct dp_soc *soc, uint32_t num_elem,
 
 	status = dp_tx_tcl_desc_pool_alloc_rh(soc, num_elem, pool_id);
 	if (QDF_IS_STATUS_ERROR(status)) {
-		dp_err("failed to allocate tcl desc pool %d\n", pool_id);
+		dp_err("failed to allocate tcl desc pool %d", pool_id);
 		goto err_tcl_desc_pool;
 	}
 
 	status = dp_tx_ext_desc_pool_alloc_by_id(soc, num_elem, pool_id);
 	if (QDF_IS_STATUS_ERROR(status)) {
-		dp_err("failed to allocate tx ext desc pool %d\n", pool_id);
+		dp_err("failed to allocate tx ext desc pool %d", pool_id);
 		goto err_free_tcl_pool;
 	}
 
 	status = dp_tx_tso_desc_pool_alloc_by_id(soc, num_elem, pool_id);
 	if (QDF_IS_STATUS_ERROR(status)) {
-		dp_err("failed to allocate tso desc pool %d\n", pool_id);
+		dp_err("failed to allocate tso desc pool %d", pool_id);
 		goto err_free_tx_ext_pool;
 	}
 
 	status = dp_tx_tso_num_seg_pool_alloc_by_id(soc, num_elem, pool_id);
 	if (QDF_IS_STATUS_ERROR(status)) {
-		dp_err("failed to allocate tso num seg pool %d\n", pool_id);
+		dp_err("failed to allocate tso num seg pool %d", pool_id);
 		goto err_free_tso_pool;
 	}
 
@@ -699,7 +699,7 @@ void dp_tx_compl_handler_rh(struct dp_soc *soc, qdf_nbuf_t htt_msg)
 					   tx_desc->id);
 			tx_desc->flags |= DP_TX_DESC_FLAG_TX_COMP_ERR;
 			dp_tx_comp_free_buf(soc, tx_desc, false);
-			dp_tx_desc_release(tx_desc, tx_desc->pool_id);
+			dp_tx_desc_release(soc, tx_desc, tx_desc->pool_id);
 			goto next_msdu;
 		}
 

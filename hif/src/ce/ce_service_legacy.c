@@ -470,10 +470,11 @@ more_data:
 
 	qdf_atomic_set(&ce_state->rx_pending, 0);
 	if (TARGET_REGISTER_ACCESS_ALLOWED(scn)) {
-		CE_ENGINE_INT_STATUS_CLEAR(scn, ctrl_addr,
-					   HOST_IS_COPY_COMPLETE_MASK);
+		if (!ce_state->msi_supported)
+			CE_ENGINE_INT_STATUS_CLEAR(scn, ctrl_addr,
+						   HOST_IS_COPY_COMPLETE_MASK);
 	} else {
-		hif_err_rl("%s: target access is not allowed", __func__);
+		hif_err_rl("Target access is not allowed");
 		return;
 	}
 
@@ -1097,11 +1098,14 @@ ce_per_engine_handler_adjust_legacy(struct CE_state *CE_state,
 
 	CE_state->disable_copy_compl_intr = disable_copy_compl_intr;
 
+	if (CE_state->msi_supported)
+		return;
+
 	if (Q_TARGET_ACCESS_BEGIN(scn) < 0)
 		return;
 
 	if (!TARGET_REGISTER_ACCESS_ALLOWED(scn)) {
-		hif_err_rl("%s: target access is not allowed", __func__);
+		hif_err_rl("Target access is not allowed");
 		return;
 	}
 
@@ -1279,8 +1283,7 @@ static void ce_legacy_msi_param_setup(struct hif_softc *scn, uint32_t ctrl_addr,
 
 	/* msi config not found */
 	if (ret) {
-		hif_debug("%s: failed to get user msi assignment ret %d",
-			  __func__, ret);
+		hif_debug("Failed to get user msi assignment ret %d", ret);
 		return;
 	}
 
@@ -1307,17 +1310,15 @@ static void ce_legacy_src_intr_thres_setup(struct hif_softc *scn,
 	tmp = CE_CHANNEL_SRC_BATCH_TIMER_INT_SETUP_GET(scn, ctrl_addr);
 
 	if (count_thrs) {
-		tmp &= ~(CE_SRC_BATCH_COUNTER_THRESH_MASK <<
-			 CE_SRC_BATCH_COUNTER_THRESH_LSB);
-		tmp |= ((count_thrs & CE_SRC_BATCH_COUNTER_THRESH_MASK) <<
-			CE_SRC_BATCH_COUNTER_THRESH_LSB);
+		tmp &= ~CE_SRC_BATCH_COUNTER_THRESH_MASK;
+		tmp |= ((count_thrs << CE_SRC_BATCH_COUNTER_THRESH_LSB) &
+			 CE_SRC_BATCH_COUNTER_THRESH_MASK);
 	}
 
 	if (timer_thrs) {
-		tmp &= ~(CE_SRC_BATCH_TIMER_THRESH_MASK <<
-			 CE_SRC_BATCH_TIMER_THRESH_LSB);
-		tmp |= ((timer_thrs & CE_SRC_BATCH_TIMER_THRESH_MASK) <<
-			CE_SRC_BATCH_TIMER_THRESH_LSB);
+		tmp &= ~CE_SRC_BATCH_TIMER_THRESH_MASK;
+		tmp |= ((timer_thrs  << CE_SRC_BATCH_TIMER_THRESH_LSB) &
+			CE_SRC_BATCH_TIMER_THRESH_MASK);
 	}
 
 	CE_CHANNEL_SRC_BATCH_TIMER_INT_SETUP(scn, ctrl_addr, tmp);
@@ -1335,17 +1336,15 @@ static void ce_legacy_dest_intr_thres_setup(struct hif_softc *scn,
 	tmp = CE_CHANNEL_DST_BATCH_TIMER_INT_SETUP_GET(scn, ctrl_addr);
 
 	if (count_thrs) {
-		tmp &= ~(CE_DST_BATCH_COUNTER_THRESH_MASK <<
-			 CE_DST_BATCH_COUNTER_THRESH_LSB);
-		tmp |= ((count_thrs & CE_DST_BATCH_COUNTER_THRESH_MASK) <<
-			CE_DST_BATCH_COUNTER_THRESH_LSB);
+		tmp &= ~CE_DST_BATCH_COUNTER_THRESH_MASK;
+		tmp |= ((count_thrs << CE_DST_BATCH_COUNTER_THRESH_LSB) &
+			 CE_DST_BATCH_COUNTER_THRESH_MASK);
 	}
 
 	if (timer_thrs) {
-		tmp &= ~(CE_DST_BATCH_TIMER_THRESH_MASK <<
-			 CE_DST_BATCH_TIMER_THRESH_LSB);
-		tmp |= ((timer_thrs & CE_DST_BATCH_TIMER_THRESH_MASK) <<
-			CE_DST_BATCH_TIMER_THRESH_LSB);
+		tmp &= ~CE_DST_BATCH_TIMER_THRESH_MASK;
+		tmp |= ((timer_thrs  << CE_DST_BATCH_TIMER_THRESH_LSB) &
+			 CE_DST_BATCH_TIMER_THRESH_MASK);
 	}
 
 	CE_CHANNEL_DST_BATCH_TIMER_INT_SETUP(scn, ctrl_addr, tmp);

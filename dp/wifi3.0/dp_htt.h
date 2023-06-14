@@ -274,7 +274,7 @@ struct htt_soc {
 	HTT_TX_MUTEX_TYPE htt_tx_mutex;
 };
 
-#ifdef QCA_MONITOR_2_0_SUPPORT
+#ifdef WLAN_PKT_CAPTURE_TX_2_0
 /**
  * struct dp_tx_mon_downstream_tlv_config - Enable/Disable TxMon
  * downstream TLVs
@@ -596,7 +596,7 @@ struct htt_tx_ring_tlv_filter {
 		 data_mpdu_log:1;
 	uint8_t  enable:1;
 };
-#endif /* QCA_MONITOR_2_0_SUPPORT */
+#endif /* WLAN_PKT_CAPTURE_TX_2_0 */
 
 /**
  * struct htt_rx_ring_tlv_filter - Rx ring TLV filter
@@ -706,8 +706,9 @@ struct htt_rx_ring_tlv_filter {
 	u_int32_t phy_err_mask;
 	u_int32_t phy_err_mask_cont;
 #endif
-#if defined(QCA_MONITOR_2_0_SUPPORT) || defined(CONFIG_WORD_BASED_TLV) || \
-	defined(CONFIG_MON_WORD_BASED_TLV)
+#if defined(WLAN_PKT_CAPTURE_RX_2_0) || defined(CONFIG_WORD_BASED_TLV) || \
+	defined(CONFIG_MON_WORD_BASED_TLV) || \
+	defined(WLAN_FEATURE_LOCAL_PKT_CAPTURE)
 	uint32_t rx_mpdu_start_wmask;
 	uint16_t rx_mpdu_end_wmask;
 	uint32_t rx_msdu_end_wmask;

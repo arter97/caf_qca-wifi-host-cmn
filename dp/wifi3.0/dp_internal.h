@@ -1455,6 +1455,7 @@ bool dp_vdev_is_wds_ext_enabled(struct dp_vdev *vdev);
 #ifdef QCA_SUPPORT_WDS_EXTENDED
 static inline void dp_wds_ext_peer_init(struct dp_txrx_peer *txrx_peer)
 {
+	txrx_peer->wds_ext.osif_peer = NULL;
 	txrx_peer->wds_ext.init = 0;
 }
 #else
@@ -1891,6 +1892,15 @@ void dp_update_vdev_stats_on_peer_unmap(struct dp_vdev *vdev,
 #define DP_UPDATE_11BE_STATS(_tgtobj, _srcobj)
 #endif
 
+#define DP_UPDATE_BASIC_STATS(_tgtobj, _srcobj) \
+	do { \
+		_tgtobj->tx.comp_pkt.num += _srcobj->tx.comp_pkt.num; \
+		_tgtobj->tx.comp_pkt.bytes += _srcobj->tx.comp_pkt.bytes; \
+		_tgtobj->tx.tx_failed += _srcobj->tx.tx_failed; \
+		_tgtobj->rx.to_stack.num += _srcobj->rx.to_stack.num; \
+		_tgtobj->rx.to_stack.bytes += _srcobj->rx.to_stack.bytes; \
+	} while (0)
+
 #define DP_UPDATE_PER_PKT_STATS(_tgtobj, _srcobj) \
 	do { \
 		uint8_t i; \
@@ -2174,6 +2184,13 @@ void dp_update_vdev_stats_on_peer_unmap(struct dp_vdev *vdev,
 			_tgtobj->rx.bw[i] += _srcobj->rx.bw[i]; \
 		} \
 		DP_UPDATE_11BE_STATS(_tgtobj, _srcobj); \
+	} while (0)
+
+#define DP_UPDATE_VDEV_STATS_FOR_UNMAPPED_PEERS(_tgtobj, _srcobj) \
+	do { \
+		DP_UPDATE_BASIC_STATS(_tgtobj, _srcobj); \
+		DP_UPDATE_PER_PKT_STATS(_tgtobj, _srcobj); \
+		DP_UPDATE_EXTD_STATS(_tgtobj, _srcobj); \
 	} while (0)
 
 #define DP_UPDATE_INGRESS_STATS(_tgtobj, _srcobj) \
@@ -2790,11 +2807,25 @@ QDF_STATUS dp_mlo_umac_reset_stats_print(struct dp_soc *soc)
  * Return: QDF_STATUS
  */
 QDF_STATUS dp_umac_reset_notify_asserted_soc(struct dp_soc *soc);
+
+/**
+ * dp_umac_reset_is_inprogress() - Check if umac reset is in progress
+ * @psoc: dp soc handle
+ *
+ * Return: true if umac reset is in progress, else false.
+ */
+bool dp_umac_reset_is_inprogress(struct cdp_soc_t *psoc);
 #else
 static inline
 QDF_STATUS dp_umac_reset_notify_asserted_soc(struct dp_soc *soc)
 {
 	return QDF_STATUS_SUCCESS;
+}
+
+static inline
+bool dp_umac_reset_is_inprogress(struct cdp_soc_t *psoc)
+{
+	return false;
 }
 #endif
 
@@ -2831,6 +2862,19 @@ uint32_t dp_reo_status_ring_handler(struct dp_intr *int_ctx,
  */
 void dp_aggregate_vdev_stats(struct dp_vdev *vdev,
 			     struct cdp_vdev_stats *vdev_stats);
+
+/**
+ * dp_txrx_get_vdev_stats() - Update buffer with cdp_vdev_stats
+ * @soc_hdl: CDP SoC handle
+ * @vdev_id: vdev Id
+ * @buf: buffer for vdev stats
+ * @is_aggregate: are aggregate stats being collected
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS
+dp_txrx_get_vdev_stats(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
+		       void *buf, bool is_aggregate);
 
 /**
  * dp_rx_bar_stats_cb() - BAR received stats callback
@@ -4366,7 +4410,7 @@ void dp_context_free_mem(struct dp_soc *soc, enum dp_ctxt_type ctxt_type,
  * Return: None
  */
 void dp_desc_multi_pages_mem_alloc(struct dp_soc *soc,
-				   enum dp_desc_type desc_type,
+				   enum qdf_dp_desc_type desc_type,
 				   struct qdf_mem_multi_page_t *pages,
 				   size_t element_size,
 				   uint32_t element_num,
@@ -4388,7 +4432,7 @@ void dp_desc_multi_pages_mem_alloc(struct dp_soc *soc,
  * Return: None
  */
 void dp_desc_multi_pages_mem_free(struct dp_soc *soc,
-				  enum dp_desc_type desc_type,
+				  enum qdf_dp_desc_type desc_type,
 				  struct qdf_mem_multi_page_t *pages,
 				  qdf_dma_context_t memctxt,
 				  bool cacheable);
@@ -4410,7 +4454,7 @@ void dp_context_free_mem(struct dp_soc *soc, enum dp_ctxt_type ctxt_type,
 
 static inline
 void dp_desc_multi_pages_mem_alloc(struct dp_soc *soc,
-				   enum dp_desc_type desc_type,
+				   enum qdf_dp_desc_type desc_type,
 				   struct qdf_mem_multi_page_t *pages,
 				   size_t element_size,
 				   uint32_t element_num,
@@ -4423,7 +4467,7 @@ void dp_desc_multi_pages_mem_alloc(struct dp_soc *soc,
 
 static inline
 void dp_desc_multi_pages_mem_free(struct dp_soc *soc,
-				  enum dp_desc_type desc_type,
+				  enum qdf_dp_desc_type desc_type,
 				  struct qdf_mem_multi_page_t *pages,
 				  qdf_dma_context_t memctxt,
 				  bool cacheable)

@@ -1041,7 +1041,8 @@ static inline bool dp_skip_msi_cfg(struct dp_soc *soc, int ring_type)
 	    soc->cdp_soc.ol_ops->get_con_mode() == QDF_GLOBAL_MONITOR_MODE) {
 		if (ring_type == REO_DST || ring_type == RXDMA_DST)
 			return true;
-	} else if (ring_type == RXDMA_MONITOR_STATUS) {
+	} else if (ring_type == RXDMA_MONITOR_STATUS &&
+		  !wlan_cfg_get_local_pkt_capture(soc->wlan_cfg_ctx)) {
 		return true;
 	}
 
@@ -1295,7 +1296,7 @@ uint32_t dp_service_srngs(void *dp_ctx, uint32_t dp_budget, int cpu)
 	rx_wbm_rel_mask = int_ctx->rx_wbm_rel_ring_mask;
 	reo_status_mask = int_ctx->reo_status_ring_mask;
 
-	dp_verbose_debug("tx %x rx %x rx_err %x rx_wbm_rel %x reo_status %x rx_mon_ring %x host2rxdma %x rxdma2host %x\n",
+	dp_verbose_debug("tx %x rx %x rx_err %x rx_wbm_rel %x reo_status %x rx_mon_ring %x host2rxdma %x rxdma2host %x",
 			 tx_mask, rx_mask, rx_err_mask, rx_wbm_rel_mask,
 			 reo_status_mask,
 			 int_ctx->rx_mon_ring_mask,
@@ -1807,7 +1808,8 @@ dp_soc_near_full_interrupt_attach(struct dp_soc *soc, int num_irq,
 static inline bool dp_skip_rx_mon_ring_mask_set(struct dp_soc *soc)
 {
 	return !!(soc->cdp_soc.ol_ops->get_con_mode() !=
-			QDF_GLOBAL_MONITOR_MODE);
+		 QDF_GLOBAL_MONITOR_MODE &&
+		 !wlan_cfg_get_local_pkt_capture(soc->wlan_cfg_ctx));
 }
 #else
 static inline bool dp_skip_rx_mon_ring_mask_set(struct dp_soc *soc)
@@ -2014,7 +2016,7 @@ void dp_hw_link_desc_pool_banks_free(struct dp_soc *soc, uint32_t mac_id)
 				     soc->ctrl_psoc,
 				     WLAN_MD_DP_SRNG_WBM_IDLE_LINK,
 				     "hw_link_desc_bank");
-		dp_desc_multi_pages_mem_free(soc, DP_HW_LINK_DESC_TYPE,
+		dp_desc_multi_pages_mem_free(soc, QDF_DP_HW_LINK_DESC_TYPE,
 					     pages, 0, false);
 	}
 }
@@ -2103,7 +2105,7 @@ QDF_STATUS dp_hw_link_desc_pool_banks_alloc(struct dp_soc *soc, uint32_t mac_id)
 		     soc, total_mem_size);
 
 	dp_set_max_page_size(pages, max_alloc_size);
-	dp_desc_multi_pages_mem_alloc(soc, DP_HW_LINK_DESC_TYPE,
+	dp_desc_multi_pages_mem_alloc(soc, QDF_DP_HW_LINK_DESC_TYPE,
 				      pages,
 				      link_desc_size,
 				      *total_link_descs,
@@ -2310,7 +2312,6 @@ void dp_link_desc_ring_replenish(struct dp_soc *soc, uint32_t mac_id)
 		page_idx = 0;
 		count = 0;
 		offset = 0;
-		pages = &soc->link_desc_pages;
 		while ((desc = hal_srng_src_get_next(soc->hal_soc,
 						     desc_srng)) &&
 			(count < total_link_descs)) {
@@ -2342,7 +2343,6 @@ void dp_link_desc_ring_replenish(struct dp_soc *soc, uint32_t mac_id)
 		scatter_buf_ptr = (uint8_t *)(
 			soc->wbm_idle_scatter_buf_base_vaddr[scatter_buf_num]);
 		rem_entries = num_entries_per_buf;
-		pages = &soc->link_desc_pages;
 		page_idx = 0; count = 0;
 		offset = 0;
 		num_descs_per_page = pages->num_element_per_page;
@@ -4003,7 +4003,7 @@ void dp_drain_txrx(struct cdp_soc_t *soc_handle)
 	 * pendings writes(HP/TP) are flushed before read returns.
 	 */
 	val = HAL_REG_READ((struct hal_soc *)soc->hal_soc, 0);
-	dp_debug("Register value at offset 0: %u\n", val);
+	dp_debug("Register value at offset 0: %u", val);
 }
 #endif
 
@@ -4234,7 +4234,7 @@ qdf_export_symbol(dp_soc_set_txrx_ring_map);
 static void dp_soc_cfg_dump(struct dp_soc *soc, uint32_t target_type)
 {
 	dp_init_info("DP soc Dump for Target = %d", target_type);
-	dp_init_info("ast_override_support = %d, da_war_enabled = %d,",
+	dp_init_info("ast_override_support = %d da_war_enabled = %d",
 		     soc->ast_override_support, soc->da_war_enabled);
 
 	wlan_cfg_dp_soc_ctx_dump(soc->wlan_cfg_ctx);
@@ -4498,6 +4498,10 @@ void *dp_soc_init(struct dp_soc *soc, HTC_HANDLE htc_handle,
 
 	wlan_cfg_set_rx_hash(soc->wlan_cfg_ctx,
 			     cfg_get(soc->ctrl_psoc, CFG_DP_RX_HASH));
+#ifdef WLAN_SUPPORT_RX_FLOW_TAG
+	wlan_cfg_set_rx_rr(soc->wlan_cfg_ctx,
+			   cfg_get(soc->ctrl_psoc, CFG_DP_RX_RR));
+#endif
 	soc->cce_disable = false;
 	soc->max_ast_ageout_count = MAX_AST_AGEOUT_COUNT;
 

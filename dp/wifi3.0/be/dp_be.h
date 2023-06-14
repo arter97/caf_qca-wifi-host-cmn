@@ -399,6 +399,7 @@ struct dp_pdev_be {
  * @bank_id: bank_id to be used for TX
  * @vdev_id_check_en: flag if HW vdev_id check is enabled for vdev
  * @partner_vdev_list: partner list used for Intra-BSS
+ * @mlo_stats: structure to hold stats for mlo unmapped peers
  * @seq_num: DP MLO seq number
  * @mcast_primary: MLO Mcast primary vdev
  */
@@ -408,6 +409,7 @@ struct dp_vdev_be {
 	uint8_t vdev_id_check_en;
 #ifdef WLAN_MLO_MULTI_CHIP
 	uint8_t partner_vdev_list[WLAN_MAX_MLO_CHIPS][WLAN_MAX_MLO_LINKS_PER_SOC];
+	struct cdp_vdev_stats mlo_stats;
 #ifdef WLAN_FEATURE_11BE_MLO
 #ifdef WLAN_MCAST_MLO
 	uint16_t seq_num;
@@ -632,7 +634,7 @@ QDF_STATUS
 dp_hw_cookie_conversion_attach(struct dp_soc_be *be_soc,
 			       struct dp_hw_cookie_conversion_t *cc_ctx,
 			       uint32_t num_descs,
-			       enum dp_desc_type desc_type,
+			       enum qdf_dp_desc_type desc_type,
 			       uint8_t desc_pool_id);
 
 void dp_reo_shared_qaddr_detach(struct dp_soc *soc);
@@ -843,17 +845,17 @@ _dp_srng_test_and_update_nf_params(struct dp_soc *soc,
 
 static inline
 uint32_t dp_desc_pool_get_cmem_base(uint8_t chip_id, uint8_t desc_pool_id,
-				    enum dp_desc_type desc_type)
+				    enum qdf_dp_desc_type desc_type)
 {
 	switch (desc_type) {
-	case DP_TX_DESC_TYPE:
+	case QDF_DP_TX_DESC_TYPE:
 		return (DP_TX_DESC_CMEM_OFFSET +
 			(desc_pool_id * DP_TX_DESC_POOL_CMEM_SIZE));
-	case DP_RX_DESC_BUF_TYPE:
+	case QDF_DP_RX_DESC_BUF_TYPE:
 		return (DP_RX_DESC_CMEM_OFFSET +
 			((chip_id * MAX_RXDESC_POOLS) + desc_pool_id) *
 			DP_RX_DESC_POOL_CMEM_SIZE);
-	case DP_TX_PPEDS_DESC_TYPE:
+	case QDF_DP_TX_PPEDS_DESC_TYPE:
 		return DP_TX_PPEDS_DESC_CMEM_OFFSET;
 	default:
 			QDF_BUG(0);

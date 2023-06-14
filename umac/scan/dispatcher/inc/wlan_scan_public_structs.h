@@ -595,6 +595,7 @@ struct ml_info {
  * @raw_frame: contain raw frame and the length of the raw frame
  * @pdev_id: pdev id
  * @ml_info: Multi link information
+ * @non_intersected_phymode: Non intersected phy mode of the AP
  */
 struct scan_cache_entry {
 	uint8_t frm_subtype;
@@ -648,6 +649,7 @@ struct scan_cache_entry {
 #ifdef WLAN_FEATURE_11BE_MLO
 	struct ml_info ml_info;
 #endif
+	enum wlan_phymode non_intersected_phymode;
 };
 
 #define MAX_FAVORED_BSSID 16
@@ -828,6 +830,16 @@ enum scan_priority {
  * @SCAN_PHY_MODE_11AX_HE20_2G: 2GHz 11ax he20 mode
  * @SCAN_PHY_MODE_11AX_HE40_2G: 2GHz 11ax he40 mode
  * @SCAN_PHY_MODE_11AX_HE80_2G: 2GHz 11ax he80 mode
+ * @SCAN_PHY_MODE_11BE_EHT20: 11be EHT 20 mode
+ * @SCAN_PHY_MODE_11BE_EHT40: 11be EHT 40 mode
+ * @SCAN_PHY_MODE_11BE_EHT80: 11be EHT 80 mode
+ * @SCAN_PHY_MODE_11BE_EHT80_80: 11be EHT 80+80 mode
+ * @SCAN_PHY_MODE_11BE_EHT160: 11be EHT 160 mode
+ * @SCAN_PHY_MODE_11BE_EHT160_160: 11be EHT 160+160 mode
+ * @SCAN_PHY_MODE_11BE_EHT320: 11be EHT 320 mode
+ * @SCAN_PHY_MODE_11BE_EHT20_2G: 2GHz 11be EHT 20 mode
+ * @SCAN_PHY_MODE_11BE_EHT40_2G: 2GHz 11be EHT 40 mode
+ * @SCAN_PHY_MODE_11BE_EHT80_2G: 2GHz 11be EHT 80 mode
  * @SCAN_PHY_MODE_UNKNOWN: unknown phy mode
  * @SCAN_PHY_MODE_MAX: max valid phymode
  */
@@ -856,8 +868,20 @@ enum scan_phy_mode {
 	SCAN_PHY_MODE_11AX_HE20_2G = 21,
 	SCAN_PHY_MODE_11AX_HE40_2G = 22,
 	SCAN_PHY_MODE_11AX_HE80_2G = 23,
-	SCAN_PHY_MODE_UNKNOWN = 24,
-	SCAN_PHY_MODE_MAX = 24
+#ifdef WLAN_FEATURE_11BE
+	SCAN_PHY_MODE_11BE_EHT20 = 24,
+	SCAN_PHY_MODE_11BE_EHT40 = 25,
+	SCAN_PHY_MODE_11BE_EHT80 = 26,
+	SCAN_PHY_MODE_11BE_EHT80_80 = 27,
+	SCAN_PHY_MODE_11BE_EHT160 = 28,
+	SCAN_PHY_MODE_11BE_EHT160_160 = 29,
+	SCAN_PHY_MODE_11BE_EHT320 = 30,
+	SCAN_PHY_MODE_11BE_EHT20_2G = 31,
+	SCAN_PHY_MODE_11BE_EHT40_2G = 32,
+	SCAN_PHY_MODE_11BE_EHT80_2G = 33,
+#endif
+	SCAN_PHY_MODE_UNKNOWN = 34,
+	SCAN_PHY_MODE_MAX = 34
 };
 
 /**

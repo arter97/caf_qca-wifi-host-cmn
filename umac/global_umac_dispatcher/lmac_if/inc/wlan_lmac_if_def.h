@@ -589,9 +589,8 @@ struct wlan_lmac_if_mlme_tx_ops {
 					      uint8_t grp_id);
 	QDF_STATUS (*target_if_mlo_ready)(struct wlan_objmgr_pdev **pdev,
 					  uint8_t num_pdevs);
-	QDF_STATUS (*target_if_mlo_teardown_req)(struct wlan_objmgr_pdev **pdev,
-						 uint8_t num_pdevs,
-						 uint32_t grp_id);
+	QDF_STATUS (*target_if_mlo_teardown_req)(struct wlan_objmgr_pdev *pdev,
+						 uint32_t grp_id, bool reset);
 #endif
 #ifdef WLAN_FEATURE_DYNAMIC_MAC_ADDR_UPDATE
 QDF_STATUS (*vdev_send_set_mac_addr)(struct qdf_mac_addr mac_addr,
@@ -677,7 +676,7 @@ struct wlan_lmac_if_p2p_tx_ops {
  * struct wlan_lmac_if_atf_tx_ops - ATF specific tx function pointers
  * @atf_enable_disable:           Set atf peer stats enable/disable
  * @atf_ssid_sched_policy:        Set ssid schedule policy
- * @atf_set:                      Set atf
+ * @atf_send_peer_list:           Send atf list of peers
  * @atf_set_grouping:             Set atf grouping
  * @atf_set_group_ac:             Set atf Group AC
  * @atf_send_peer_request:        Send peer requests
@@ -693,9 +692,9 @@ struct wlan_lmac_if_atf_tx_ops {
 				      uint8_t value);
 	int32_t (*atf_ssid_sched_policy)(struct wlan_objmgr_vdev *vdev,
 					 uint8_t value);
-	int32_t (*atf_set)(struct wlan_objmgr_pdev *pdev,
-			   struct pdev_atf_req *atf_req,
-			   uint8_t atf_tput_based);
+	int32_t (*atf_send_peer_list)(struct wlan_objmgr_pdev *pdev,
+				      struct pdev_atf_req *atf_req,
+				      uint8_t atf_tput_based);
 	int32_t (*atf_set_grouping)(struct wlan_objmgr_pdev *pdev,
 				    struct pdev_atf_ssid_group_req *atf_grp_req,
 				    uint8_t atf_tput_based);
@@ -1111,6 +1110,7 @@ struct wlan_lmac_if_ftm_rx_ops {
  * @register_afc_event_handler: pointer to register afc event handler
  * @unregister_afc_event_handler: pointer to unregister afc event handler
  * @trigger_acs_for_afc: pointer to trigger acs for afc
+ * @trigger_update_channel_list: pointer to trigger_update_channel_list
  * @reg_get_min_psd:
  * @is_chip_11be:
  * @register_rate2power_table_update_event_handler: pointer to register
@@ -1170,7 +1170,8 @@ struct wlan_lmac_if_reg_tx_ops {
 	QDF_STATUS (*unregister_afc_event_handler)
 				(struct wlan_objmgr_psoc *psoc, void *arg);
 	QDF_STATUS (*trigger_acs_for_afc)(struct wlan_objmgr_pdev *pdev);
-
+	QDF_STATUS (*trigger_update_channel_list)
+				(struct wlan_objmgr_pdev *pdev);
 	QDF_STATUS (*reg_get_min_psd) (struct wlan_objmgr_pdev *pdev,
 				       qdf_freq_t primary_freq,
 				       qdf_freq_t cen320,

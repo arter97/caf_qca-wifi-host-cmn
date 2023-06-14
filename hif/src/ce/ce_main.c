@@ -1579,6 +1579,10 @@ static bool ce_mark_datapath(struct CE_state *ce_state)
 	}
 	return rc;
 }
+
+static void ce_update_msi_batch_intr_flags(struct CE_state *ce_state)
+{
+}
 #else
 static bool ce_mark_datapath(struct CE_state *ce_state)
 {
@@ -1606,6 +1610,12 @@ static bool ce_mark_datapath(struct CE_state *ce_state)
 	}
 
 	return (ce_state->htt_rx_data || ce_state->htt_tx_data);
+}
+
+static void ce_update_msi_batch_intr_flags(struct CE_state *ce_state)
+{
+	ce_state->msi_supported = true;
+	ce_state->batch_intr_supported = true;
 }
 #endif
 
@@ -2624,6 +2634,8 @@ struct CE_handle *ce_init(struct hif_softc *scn,
 	if (mem_status != QDF_STATUS_SUCCESS)
 		goto error_target_access;
 
+	ce_update_msi_batch_intr_flags(CE_state);
+
 	return (struct CE_handle *)CE_state;
 
 error_target_access:
@@ -3318,23 +3330,23 @@ static int hif_completion_thread_startup_by_ceid(struct HIF_CE_state *hif_state,
 	if (!hif_msg_callbacks ||
 	    !hif_msg_callbacks->rxCompletionHandler ||
 	    !hif_msg_callbacks->txCompletionHandler) {
-		hif_err("%s: no completion handler registered", __func__);
+		hif_err("no completion handler registered");
 		return -EFAULT;
 	}
 
 	attr = hif_state->host_ce_config[pipe_num];
 	if (attr.src_nentries) {
 		/* pipe used to send to target */
-		hif_debug("%s: pipe_num:%d pipe_info:0x%pK\n",
-			  __func__, pipe_num, pipe_info);
+		hif_debug("pipe_num:%d pipe_info:0x%pK\n",
+			  pipe_num, pipe_info);
 		ce_send_cb_register(pipe_info->ce_hdl,
 				    hif_pci_ce_send_done, pipe_info,
 				    attr.flags & CE_ATTR_DISABLE_INTR);
 		pipe_info->num_sends_allowed = attr.src_nentries - 1;
 	}
 	if (attr.dest_nentries) {
-		hif_debug("%s: pipe_num:%d pipe_info:0x%pK\n",
-			  __func__, pipe_num, pipe_info);
+		hif_debug("pipe_num:%d pipe_info:0x%pK\n",
+			  pipe_num, pipe_info);
 		/* pipe used to receive from target */
 		ce_recv_cb_register(pipe_info->ce_hdl,
 				    hif_pci_ce_recv_data, pipe_info,
@@ -3573,6 +3585,89 @@ QDF_STATUS hif_post_recv_buffers_for_pipe(struct HIF_CE_pipe_info *pipe_info)
 	return QDF_STATUS_SUCCESS;
 }
 
+#ifdef FEATURE_DIRECT_LINK
+static QDF_STATUS
+hif_alloc_pages_for_direct_link_recv_pipe(struct HIF_CE_state *hif_ce_state,
+					  int pipe_num)
+{
+	struct hif_softc *scn = HIF_GET_SOFTC(hif_ce_state);
+	struct service_to_pipe *tgt_svc_cfg;
+	struct HIF_CE_pipe_info *pipe_info;
+	int32_t recv_bufs_needed;
+	qdf_dma_addr_t dma_addr;
+	uint16_t num_elem_per_page;
+	uint16_t i;
+	bool is_found = false;
+
+	tgt_svc_cfg = hif_ce_state->tgt_svc_map;
+
+	for (i = 0; i < hif_ce_state->sz_tgt_svc_map; i++) {
+		if (tgt_svc_cfg[i].service_id != LPASS_DATA_MSG_SVC ||
+		    tgt_svc_cfg[i].pipedir != PIPEDIR_IN ||
+		    tgt_svc_cfg[i].pipenum != pipe_num)
+			continue;
+
+		pipe_info = &hif_ce_state->pipe_info[pipe_num];
+		recv_bufs_needed = atomic_read(&pipe_info->recv_bufs_needed);
+
+		if (!pipe_info->buf_sz || !recv_bufs_needed)
+			continue;
+
+		is_found = true;
+		break;
+	}
+
+	if (!is_found)
+		return QDF_STATUS_E_NOSUPPORT;
+
+	scn->dl_recv_pipe_num = pipe_num;
+
+	hif_prealloc_get_multi_pages(scn, QDF_DP_RX_DIRECT_LINK_CE_BUF_TYPE,
+				     pipe_info->buf_sz, recv_bufs_needed,
+				     &scn->dl_recv_pages, false);
+	if (!scn->dl_recv_pages.num_pages)
+		return QDF_STATUS_E_NOMEM;
+
+	num_elem_per_page = scn->dl_recv_pages.num_element_per_page;
+	for (i = 0; i < recv_bufs_needed; i++) {
+		dma_addr = scn->dl_recv_pages.dma_pages[i / num_elem_per_page].page_p_addr;
+		dma_addr += (i % num_elem_per_page) * pipe_info->buf_sz;
+		ce_recv_buf_enqueue(pipe_info->ce_hdl, NULL, dma_addr);
+	}
+
+	return QDF_STATUS_SUCCESS;
+}
+
+static QDF_STATUS
+hif_free_pages_for_direct_link_recv_pipe(struct HIF_CE_state *hif_ce_state,
+					 int pipe_num)
+{
+	struct hif_softc *scn = HIF_GET_SOFTC(hif_ce_state);
+
+	if (pipe_num != scn->dl_recv_pipe_num)
+		return QDF_STATUS_E_NOSUPPORT;
+
+	hif_prealloc_put_multi_pages(scn, QDF_DP_RX_DIRECT_LINK_CE_BUF_TYPE,
+				     &scn->dl_recv_pages, false);
+
+	return QDF_STATUS_SUCCESS;
+}
+#else
+static inline QDF_STATUS
+hif_alloc_pages_for_direct_link_recv_pipe(struct HIF_CE_state *hif_ce_state,
+					  int pipe_num)
+{
+	return QDF_STATUS_E_NOSUPPORT;
+}
+
+static inline QDF_STATUS
+hif_free_pages_for_direct_link_recv_pipe(struct HIF_CE_state *hif_ce_state,
+					 int pipe_num)
+{
+	return QDF_STATUS_E_NOSUPPORT;
+}
+#endif
+
 /*
  * Try to post all desired receive buffers for all pipes.
  * Returns 0 for non fastpath rx copy engine as
@@ -3603,6 +3698,12 @@ static QDF_STATUS hif_post_recv_buffers(struct hif_softc *scn)
 
 		if (hif_is_nss_wifi_enabled(scn) &&
 		    ce_state && (ce_state->htt_rx_data))
+			continue;
+
+		qdf_status =
+			hif_alloc_pages_for_direct_link_recv_pipe(hif_state,
+								  pipe_num);
+		if (QDF_IS_STATUS_SUCCESS(qdf_status))
 			continue;
 
 		qdf_status = hif_post_recv_buffers_for_pipe(pipe_info);
@@ -3655,6 +3756,7 @@ static void hif_recv_buffer_cleanup_on_pipe(struct HIF_CE_pipe_info *pipe_info)
 	qdf_nbuf_t netbuf;
 	qdf_dma_addr_t CE_data;
 	void *per_CE_context;
+	QDF_STATUS status;
 
 	buf_sz = pipe_info->buf_sz;
 	/* Unused Copy Engine */
@@ -3671,6 +3773,12 @@ static void hif_recv_buffer_cleanup_on_pipe(struct HIF_CE_pipe_info *pipe_info)
 
 	if (!scn->qdf_dev)
 		return;
+
+	status = hif_free_pages_for_direct_link_recv_pipe(hif_state,
+							  pipe_info->pipe_num);
+	if (QDF_IS_STATUS_SUCCESS(status))
+		return;
+
 	while (ce_revoke_recv_next
 		       (ce_hdl, &per_CE_context, (void **)&netbuf,
 			&CE_data) == QDF_STATUS_SUCCESS) {
@@ -4855,7 +4963,7 @@ int hif_config_ce(struct hif_softc *scn)
 	scn->athdiag_procfs_inited = true;
 
 	hif_debug("ce_init done");
-	hif_debug("%s: X, ret = %d", __func__, rv);
+	hif_debug("X, ret = %d", rv);
 
 #ifdef ADRASTEA_SHADOW_REGISTERS
 	hif_debug("Using Shadow Registers instead of CE Registers");
@@ -4918,7 +5026,7 @@ int hif_config_ce_pktlog(struct hif_opaque_softc *hif_hdl)
 
 	qdf_status = hif_completion_thread_startup_by_ceid(hif_state, pipe_num);
 	if (!QDF_IS_STATUS_SUCCESS(qdf_status)) {
-		hif_err("%s:failed to start hif thread", __func__);
+		hif_err("Failed to start hif thread");
 		goto err;
 	}
 
@@ -4926,14 +5034,14 @@ int hif_config_ce_pktlog(struct hif_opaque_softc *hif_hdl)
 	qdf_status = hif_post_recv_buffers_for_pipe(pipe_info);
 	if (!QDF_IS_STATUS_SUCCESS(qdf_status)) {
 		/* cleanup is done in hif_ce_disable */
-		hif_err("%s:failed to post buffers", __func__);
+		hif_err("Failed to post buffers");
 		return qdf_status;
 	}
 	scn->pktlog_init = true;
 	return qdf_status != QDF_STATUS_SUCCESS;
 
 err:
-	hif_debug("%s: X, ret = %d", __func__, qdf_status);
+	hif_debug("X, ret = %d", qdf_status);
 	return QDF_STATUS_SUCCESS != QDF_STATUS_E_FAILURE;
 }
 
@@ -5623,6 +5731,7 @@ void hif_log_ce_info(struct hif_softc *scn, uint8_t *data,
 	qdf_mem_copy(data + *offset, &info, size);
 	*offset = *offset + size;
 }
+#endif
 
 #ifdef FEATURE_DIRECT_LINK
 QDF_STATUS
@@ -5674,5 +5783,4 @@ hif_get_direct_link_ce_srng_info(struct hif_opaque_softc *scn,
 
 	return QDF_STATUS_E_NOSUPPORT;
 }
-#endif
 #endif

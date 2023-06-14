@@ -15,6 +15,8 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
+#ifdef IPA_OFFLOAD
+
 #include <wlan_ipa_ucfg_api.h>
 #include <wlan_ipa_core.h>
 #include <qdf_ipa_wdi3.h>
@@ -42,8 +44,6 @@
 #ifdef QCA_IPA_LL_TX_FLOW_CONTROL
 #include <pld_common.h>
 #endif
-
-#ifdef IPA_OFFLOAD
 
 /* Hard coded config parameters until dp_ops_cfg.cfg_attach implemented */
 #define CFG_IPA_UC_TX_BUF_SIZE_DEFAULT            (2048)
@@ -3868,7 +3868,7 @@ QDF_STATUS dp_ipa_tx_buf_smmu_mapping(
 		dp_get_pdev_from_soc_pdev_id_wifi3(soc, pdev_id);
 
 	if (!pdev) {
-		dp_err("%s invalid instance", __func__);
+		dp_err("Invalid instance");
 		return QDF_STATUS_E_FAILURE;
 	}
 
@@ -3895,7 +3895,7 @@ QDF_STATUS dp_ipa_tx_buf_smmu_unmapping(
 		dp_get_pdev_from_soc_pdev_id_wifi3(soc, pdev_id);
 
 	if (!pdev) {
-		dp_err("%s invalid instance", __func__);
+		dp_err("Invalid instance");
 		return QDF_STATUS_E_FAILURE;
 	}
 

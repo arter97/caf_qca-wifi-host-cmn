@@ -530,8 +530,7 @@ dp_rx_populate_cdp_indication_ppdu_user(struct dp_pdev *pdev,
 				 * HTT_UL_OFDMA_V0_RU_SIZE_RU_996x2
 				 */
 				if (qdf_unlikely(ru_size >= OFDMA_NUM_RU_SIZE)) {
-					dp_err("invalid ru_size %d\n",
-					       ru_size);
+					dp_err("invalid ru_size %d", ru_size);
 					return;
 				}
 				is_data = dp_rx_inc_rusize_cnt(pdev,
@@ -1138,7 +1137,11 @@ static void dp_rx_stats_update(struct dp_pdev *pdev,
 		dp_send_stats_event(pdev, peer, ppdu_user->peer_id);
 
 		dp_ppdu_desc_user_rx_time_update(pdev, peer, ppdu, ppdu_user);
-		dp_rx_mon_update_user_deter_stats(pdev, peer, ppdu, ppdu_user);
+
+		if (wlan_cfg_get_sawf_stats_config(pdev->soc->wlan_cfg_ctx))
+			dp_rx_mon_update_user_deter_stats(pdev, peer,
+							  ppdu, ppdu_user);
+
 		dp_peer_unref_delete(peer, DP_MOD_ID_RX_PPDU_STATS);
 	}
 }
@@ -1225,8 +1228,12 @@ dp_rx_handle_ppdu_stats(struct dp_soc *soc, struct dp_pdev *pdev,
 		if (!qdf_unlikely(qdf_nbuf_put_tail(ppdu_nbuf,
 				       sizeof(struct cdp_rx_indication_ppdu))))
 			return;
-		if (cdp_rx_ppdu->u.ppdu_type == HAL_RX_TYPE_SU)
-			dp_rx_mon_update_pdev_deter_stats(pdev, cdp_rx_ppdu);
+
+		if (wlan_cfg_get_sawf_stats_config(pdev->soc->wlan_cfg_ctx)) {
+			if (cdp_rx_ppdu->u.ppdu_type == HAL_RX_TYPE_SU)
+				dp_rx_mon_update_pdev_deter_stats(pdev,
+								  cdp_rx_ppdu);
+		}
 
 		dp_rx_stats_update(pdev, cdp_rx_ppdu);
 
@@ -1711,6 +1718,54 @@ dp_rx_handle_smart_mesh_mode(struct dp_soc *soc, struct dp_pdev *pdev,
 	mon_pdev->ppdu_info.rx_status.monitor_direct_used = 0;
 	return 0;
 }
+
+#ifdef WLAN_FEATURE_LOCAL_PKT_CAPTURE
+int dp_rx_handle_local_pkt_capture(struct dp_pdev *pdev,
+				   struct hal_rx_ppdu_info *ppdu_info,
+				   qdf_nbuf_t nbuf)
+{
+	uint8_t size;
+	struct dp_mon_vdev *mon_vdev;
+	struct dp_mon_pdev *mon_pdev = pdev->monitor_pdev;
+
+	if (!mon_pdev->mvdev) {
+		dp_info_rl("Monitor vdev is NULL !!");
+		return 1;
+	}
+
+	mon_vdev = mon_pdev->mvdev->monitor_vdev;
+
+	if (!ppdu_info->msdu_info.first_msdu_payload) {
+		dp_info_rl("First msdu payload not present");
+		return 1;
+	}
+
+	/* Adding 8 bytes to get to start of 802.11 frame after phy_ppdu_id */
+	size = (ppdu_info->msdu_info.first_msdu_payload -
+		qdf_nbuf_data(nbuf)) + mon_pdev->phy_ppdu_id_size;
+	ppdu_info->msdu_info.first_msdu_payload = NULL;
+
+	if (!qdf_nbuf_pull_head(nbuf, size)) {
+		dp_info_rl("No header present");
+		return 1;
+	}
+
+	/* Only retain RX MSDU payload in the skb */
+	qdf_nbuf_trim_tail(nbuf, qdf_nbuf_len(nbuf) -
+			   ppdu_info->msdu_info.payload_len +
+			   mon_pdev->phy_ppdu_id_size);
+	if (!qdf_nbuf_update_radiotap(&mon_pdev->ppdu_info.rx_status, nbuf,
+				      qdf_nbuf_headroom(nbuf))) {
+		DP_STATS_INC(pdev, dropped.mon_radiotap_update_err, 1);
+		return 1;
+	}
+
+	if (mon_vdev && mon_vdev->osif_rx_mon)
+		mon_vdev->osif_rx_mon(mon_pdev->mvdev->osif_vdev, nbuf, NULL);
+
+	return 0;
+}
+#endif
 
 qdf_nbuf_t
 dp_rx_nbuf_prepare(struct dp_soc *soc, struct dp_pdev *pdev)

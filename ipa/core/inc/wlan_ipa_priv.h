@@ -25,6 +25,8 @@
 #ifndef _WLAN_IPA_PRIV_STRUCT_H_
 #define _WLAN_IPA_PRIV_STRUCT_H_
 
+#ifdef IPA_OFFLOAD
+
 #include <linux/version.h>
 #include <linux/kernel.h>
 
@@ -46,7 +48,6 @@
 #include "cdp_txrx_ipa.h"
 #endif
 
-#ifdef IPA_OFFLOAD
 #define WLAN_IPA_RX_INACTIVITY_MSEC_DELAY   1000
 #define WLAN_IPA_UC_WLAN_8023_HDR_SIZE      14
 
@@ -89,9 +90,18 @@
 #ifdef QCA_IPA_LL_TX_FLOW_CONTROL
 #define WLAN_IPA_MAX_BANDWIDTH              4800
 #define WLAN_IPA_MAX_BANDWIDTH_2G           1400
-#else
+#else /* !QCA_IPA_LL_TX_FLOW_CONTROL */
+
 #define WLAN_IPA_MAX_BANDWIDTH              800
+
+#if defined(QCA_WIFI_KIWI) || defined(QCA_WIFI_KIWI_V2)
+/* Iaeeb22a75f00d023e0e0972db330a48e9b250408 defines nominal vote bandwidth */
+#define WLAN_IPA_MAX_BW_NOMINAL 4800
+#else
+#define WLAN_IPA_MAX_BW_NOMINAL WLAN_IPA_MAX_BANDWIDTH
 #endif
+
+#endif /* QCA_IPA_LL_TX_FLOW_CONTROL */
 
 #define WLAN_IPA_MAX_PENDING_EVENT_COUNT    20
 
@@ -750,7 +760,7 @@ struct wlan_ipa_priv {
 	wlan_ipa_softap_xmit softap_xmit;
 	wlan_ipa_send_to_nw send_to_nw;
 
-#ifdef QCA_CONFIG_RPS
+#if defined(QCA_CONFIG_RPS) && !defined(MDM_PLATFORM)
 	/*Callback to enable RPS for STA in STA+SAP scenario*/
 	wlan_ipa_rps_enable rps_enable;
 #endif

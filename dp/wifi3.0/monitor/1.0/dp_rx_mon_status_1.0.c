@@ -527,6 +527,14 @@ dp_rx_mon_status_process_tlv(struct dp_soc *soc, struct dp_intr *int_ctx,
 						pdev, ppdu_info, status_nbuf);
 			if (smart_mesh_status)
 				qdf_nbuf_free(status_nbuf);
+		} else if (qdf_unlikely(IS_LOCAL_PKT_CAPTURE_RUNNING(mon_pdev,
+				is_local_pkt_capture_running))) {
+			int ret;
+
+			ret = dp_rx_handle_local_pkt_capture(pdev, ppdu_info,
+							     status_nbuf);
+			if (ret)
+				qdf_nbuf_free(status_nbuf);
 		} else if (qdf_unlikely(mon_pdev->mcopy_mode)) {
 			dp_rx_process_mcopy_mode(soc, pdev,
 						 ppdu_info, tlv_status,
@@ -887,7 +895,7 @@ dp_rx_pdev_mon_status_desc_pool_alloc(struct dp_pdev *pdev, uint32_t mac_id)
 
 	dp_debug("Mon RX Desc Pool[%d] entries=%u", pdev_id, num_entries);
 
-	rx_desc_pool->desc_type = DP_RX_DESC_STATUS_TYPE;
+	rx_desc_pool->desc_type = QDF_DP_RX_DESC_STATUS_TYPE;
 	return dp_rx_desc_pool_alloc(soc, num_entries + 1, rx_desc_pool);
 }
 

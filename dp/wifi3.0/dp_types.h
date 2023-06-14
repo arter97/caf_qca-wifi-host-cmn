@@ -172,6 +172,10 @@
 #define DP_RX_REFILL_THRD_THRESHOLD  512
 #endif
 
+#ifdef WLAN_SUPPORT_RX_FLOW_TAG
+#define DP_RX_FSE_FLOW_MATCH_SFE 0xAAAA
+#endif
+
 #ifdef WLAN_VENDOR_SPECIFIC_BAR_UPDATE
 #define DP_SKIP_BAR_UPDATE_TIMEOUT 5000
 #endif
@@ -326,6 +330,18 @@ enum dp_mod_id {
 	DP_MOD_ID_TX_MCAST,
 	DP_MOD_ID_DS,
 	DP_MOD_ID_MAX,
+};
+
+/**
+ * enum dp_peer_type - DP peer type
+ * @DP_PEER_TYPE_LEGACY:
+ * @DP_PEER_TYPE_MLO_LINK:
+ * @DP_PEER_TYPE_MLO:
+ */
+enum dp_peer_type {
+	DP_PEER_TYPE_LEGACY,
+	DP_PEER_TYPE_MLO_LINK,
+	DP_PEER_TYPE_MLO,
 };
 
 #define DP_PDEV_ITERATE_VDEV_LIST(_pdev, _vdev) \
@@ -530,34 +546,6 @@ enum dp_ctxt_type {
 };
 
 /**
- * enum dp_desc_type - source type for multiple pages allocation
- * @DP_TX_DESC_TYPE: DP SW TX descriptor
- * @DP_TX_PPEDS_DESC_TYPE: DP PPE-DS Tx descriptor
- * @DP_TX_EXT_DESC_TYPE: DP TX msdu extension descriptor
- * @DP_TX_EXT_DESC_LINK_TYPE: DP link descriptor for msdu ext_desc
- * @DP_TX_TSO_DESC_TYPE: DP TX TSO descriptor
- * @DP_TX_TSO_NUM_SEG_TYPE: DP TX number of segments
- * @DP_RX_DESC_BUF_TYPE: DP RX SW descriptor
- * @DP_RX_DESC_STATUS_TYPE: DP RX SW descriptor for monitor status
- * @DP_HW_LINK_DESC_TYPE: DP HW link descriptor
- * @DP_HW_CC_SPT_PAGE_TYPE: DP pages for HW CC secondary page table
- * @DP_TX_TCL_DESC_TYPE: DP TCL descriptor
- */
-enum dp_desc_type {
-	DP_TX_DESC_TYPE,
-	DP_TX_PPEDS_DESC_TYPE,
-	DP_TX_EXT_DESC_TYPE,
-	DP_TX_EXT_DESC_LINK_TYPE,
-	DP_TX_TSO_DESC_TYPE,
-	DP_TX_TSO_NUM_SEG_TYPE,
-	DP_RX_DESC_BUF_TYPE,
-	DP_RX_DESC_STATUS_TYPE,
-	DP_HW_LINK_DESC_TYPE,
-	DP_HW_CC_SPT_PAGE_TYPE,
-	DP_TX_TCL_DESC_TYPE,
-};
-
-/**
  * struct rx_desc_pool
  * @pool_size: number of RX descriptor in the pool
  * @elem_size: Element size
@@ -585,7 +573,7 @@ struct rx_desc_pool {
 	uint16_t buf_size;
 	uint8_t buf_alignment;
 	bool rx_mon_dest_frag_enable;
-	enum dp_desc_type desc_type;
+	enum qdf_dp_desc_type desc_type;
 };
 
 /**
@@ -2188,7 +2176,6 @@ enum dp_context_type {
  * @dp_service_near_full_srngs: Handler for servicing the near full IRQ
  * @tx_implicit_rbm_set:
  * @dp_rx_peer_metadata_peer_id_get:
- * @dp_rx_peer_mdata_link_id_get: Handle to get link id
  * @dp_rx_chain_msdus:
  * @txrx_set_vdev_param: target specific ops while setting vdev params
  * @txrx_get_vdev_mcast_param: target specific ops for getting vdev
@@ -2207,6 +2194,7 @@ enum dp_context_type {
  * @mlo_peer_find_hash_remove:
  * @mlo_peer_find_hash_find:
  * @get_hw_link_id:
+ * @dp_rx_peer_set_link_id: set link id in nbuf cb
  * @get_reo_qdesc_addr:
  * @get_rx_hash_key:
  * @dp_set_rx_fst:
@@ -2239,6 +2227,8 @@ enum dp_context_type {
  * @dp_tx_desc_pool_alloc: Allocate arch specific TX descriptor pool
  * @dp_tx_desc_pool_free: Free arch specific TX descriptor pool
  * @txrx_srng_init: Init txrx srng
+ * @dp_get_vdev_stats_for_unmap_peer: Get vdev stats pointer for unmap peer
+ * @dp_get_interface_stats: Get interface stats
  * @ppeds_handle_attached:
  * @txrx_soc_ppeds_interrupt_stop:
  * @txrx_soc_ppeds_interrupt_start:
@@ -2352,7 +2342,6 @@ struct dp_arch_ops {
 				    uint8_t bm_id);
 	uint16_t (*dp_rx_peer_metadata_peer_id_get)(struct dp_soc *soc,
 						    uint32_t peer_metadata);
-	uint8_t (*dp_rx_peer_mdata_link_id_get)(uint32_t peer_metadata);
 	bool (*dp_rx_chain_msdus)(struct dp_soc *soc, qdf_nbuf_t nbuf,
 				  uint8_t *rx_tlv_hdr, uint8_t mac_id);
 	/* Control Arch Ops */
@@ -2402,6 +2391,7 @@ struct dp_arch_ops {
 						   uint8_t vdev_id);
 #endif
 	uint8_t (*get_hw_link_id)(struct dp_pdev *pdev);
+	void (*dp_rx_peer_set_link_id)(qdf_nbuf_t nbuf, uint32_t peer_mdata);
 	uint64_t (*get_reo_qdesc_addr)(hal_soc_handle_t hal_soc_hdl,
 				       uint8_t *dst_ring_desc,
 				       uint8_t *buf,
@@ -2485,6 +2475,15 @@ struct dp_arch_ops {
 
 	QDF_STATUS (*txrx_srng_init)(struct dp_soc *soc, struct dp_srng *srng,
 				     int ring_type, int ring_num, int mac_id);
+
+	void (*dp_get_vdev_stats_for_unmap_peer)(
+					struct dp_vdev *vdev,
+					struct dp_peer *peer,
+					struct cdp_vdev_stats **vdev_stats);
+	QDF_STATUS (*dp_get_interface_stats)(struct cdp_soc_t *soc_hdl,
+					     uint8_t vdev_id,
+					     void *buf,
+					     bool is_aggregate);
 #ifdef WLAN_SUPPORT_PPEDS
 	void (*txrx_soc_ppeds_interrupt_stop)(struct dp_soc *soc);
 	void (*txrx_soc_ppeds_interrupt_start)(struct dp_soc *soc);
@@ -4944,6 +4943,8 @@ struct dp_rx_fst {
 	qdf_atomic_t is_cache_update_pending;
 	/* Flag to indicate completion of FSE setup in HW/FW */
 	bool fse_setup_done;
+	/* Last ring id used to add a flow */
+	uint8_t ring_id;
 };
 
 #define DP_RX_GET_SW_FT_ENTRY_SIZE sizeof(struct dp_rx_fse)
@@ -5096,6 +5097,8 @@ struct dp_rx_fst {
 	bool fst_in_cmem;
 	qdf_atomic_t pm_suspended;
 	bool fst_wq_defer;
+	/* Hash based routing supported */
+	bool rx_hash_enabled;
 };
 
 #endif /* WLAN_SUPPORT_RX_FISA */
