@@ -25,9 +25,7 @@
 #define _I_WBUFF_H
 
 #include <qdf_nbuf.h>
-
-/* Number of pools supported per module */
-#define WBUFF_MAX_POOLS 4
+#include <wbuff.h>
 
 #define WBUFF_MODULE_ID_SHIFT 4
 #define WBUFF_MODULE_ID_BITMASK 0xF0

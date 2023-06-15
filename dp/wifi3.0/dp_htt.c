@@ -43,6 +43,7 @@
 #ifdef CONFIG_SAWF_DEF_QUEUES
 #include <dp_sawf_htt.h>
 #endif
+#include <wbuff.h>
 
 #define HTT_TLV_HDR_LEN HTT_T2H_EXT_STATS_CONF_TLV_HDR_SIZE
 
@@ -3505,6 +3506,20 @@ static void dp_ipa_rx_cce_super_rule_setup_done_handler(struct htt_soc *soc,
 }
 #endif
 
+#ifdef WLAN_FEATURE_CE_RX_BUFFER_REUSE
+static void dp_htt_rx_nbuf_free(qdf_nbuf_t nbuf)
+{
+	nbuf = wbuff_buff_put(nbuf);
+	if (nbuf)
+		qdf_nbuf_free(nbuf);
+}
+#else
+static inline void dp_htt_rx_nbuf_free(qdf_nbuf_t nbuf)
+{
+	return qdf_nbuf_free(nbuf);
+}
+#endif
+
 /*
  * dp_htt_t2h_msg_handler() - Generic Target to host Msg/event handler
  * @context:	Opaque context (HTT SOC handle)
@@ -3523,7 +3538,7 @@ static void dp_htt_t2h_msg_handler(void *context, HTC_PACKET *pkt)
 		if (pkt->Status != QDF_STATUS_E_CANCELED)
 			soc->stats.htc_err_cnt++;
 
-		qdf_nbuf_free(htt_t2h_msg);
+		dp_htt_rx_nbuf_free(htt_t2h_msg);
 		return;
 	}
 
@@ -3963,7 +3978,7 @@ static void dp_htt_t2h_msg_handler(void *context, HTC_PACKET *pkt)
 
 	/* Free the indication buffer */
 	if (free_buf)
-		qdf_nbuf_free(htt_t2h_msg);
+		dp_htt_rx_nbuf_free(htt_t2h_msg);
 }
 
 /*
