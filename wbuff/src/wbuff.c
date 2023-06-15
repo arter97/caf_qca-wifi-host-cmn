@@ -203,6 +203,9 @@ wbuff_module_register(struct wbuff_alloc_request *req, uint8_t num_pools,
 		len = req[i].buffer_size;
 		wbuff_pool = &mod->wbuff_pool[pool_id];
 
+		if (!pool_size)
+			continue;
+
 		/**
 		 * Allocate pool_size number of buffers for
 		 * the pool given by pool_id
@@ -240,6 +243,7 @@ QDF_STATUS wbuff_module_deregister(struct wbuff_mod_handle *hdl)
 	struct wbuff_module *mod = NULL;
 	uint8_t module_id = 0, pool_id = 0;
 	qdf_nbuf_t first = NULL, buf = NULL;
+	struct wbuff_pool *wbuff_pool;
 
 	handle = (struct wbuff_handle *)hdl;
 
@@ -251,7 +255,12 @@ QDF_STATUS wbuff_module_deregister(struct wbuff_mod_handle *hdl)
 
 	qdf_spin_lock_bh(&mod->lock);
 	for (pool_id = 0; pool_id < WBUFF_MAX_POOLS; pool_id++) {
-		first = mod->wbuff_pool[pool_id].pool;
+		wbuff_pool = &mod->wbuff_pool[pool_id];
+
+		if (!wbuff_pool->initialized)
+			continue;
+
+		first = wbuff_pool->pool;
 		while (first) {
 			buf = first;
 			first = qdf_nbuf_next(buf);
@@ -264,26 +273,29 @@ QDF_STATUS wbuff_module_deregister(struct wbuff_mod_handle *hdl)
 	return QDF_STATUS_SUCCESS;
 }
 
-qdf_nbuf_t wbuff_buff_get(struct wbuff_mod_handle *hdl, uint32_t len,
-			  const char *func_name, uint32_t line_num)
+qdf_nbuf_t
+wbuff_buff_get(struct wbuff_mod_handle *hdl, uint8_t pool_id, uint32_t len,
+	       const char *func_name, uint32_t line_num)
 {
 	struct wbuff_handle *handle;
 	struct wbuff_module *mod = NULL;
 	struct wbuff_pool *wbuff_pool;
 	uint8_t module_id = 0;
-	uint8_t pool_id = 0;
 	qdf_nbuf_t buf = NULL;
 
 	handle = (struct wbuff_handle *)hdl;
 
-	if ((!wbuff.initialized) || (!wbuff_is_valid_handle(handle)) || !len)
+	if ((!wbuff.initialized) || (!wbuff_is_valid_handle(handle)) ||
+	    ((pool_id >= WBUFF_MAX_POOL_ID && !len)))
 		return NULL;
 
 	module_id = handle->id;
 	mod = &wbuff.mod[module_id];
 
-	pool_id = wbuff_get_pool_slot_from_len(mod, len);
-	if (pool_id == WBUFF_MAX_POOLS)
+	if (pool_id == WBUFF_MAX_POOL_ID && len)
+		pool_id = wbuff_get_pool_slot_from_len(mod, len);
+
+	if (pool_id >= WBUFF_MAX_POOLS)
 		return NULL;
 
 	wbuff_pool = &mod->wbuff_pool[pool_id];
