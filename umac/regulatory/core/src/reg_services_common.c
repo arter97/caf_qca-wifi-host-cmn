@@ -4505,7 +4505,8 @@ bool reg_is_disable_for_freq(struct wlan_objmgr_pdev *pdev, qdf_freq_t freq)
 
 	ch_state = reg_get_channel_state_for_freq(pdev, freq);
 
-	return ch_state == CHANNEL_STATE_DISABLE;
+	return (ch_state == CHANNEL_STATE_DISABLE) ||
+		(ch_state == CHANNEL_STATE_INVALID);
 }
 
 #ifdef CONFIG_REG_CLIENT
