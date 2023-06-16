@@ -5175,6 +5175,7 @@ typedef enum {
 	wmi_mlo_teardown_complete_event_id,
 	wmi_mlo_link_set_active_resp_eventid,
 	wmi_mlo_link_removal_eventid,
+	wmi_mlo_link_disable_request_eventid,
 #endif
 	wmi_pdev_fips_extend_event_id,
 	wmi_roam_frame_event_id,
@@ -5899,6 +5900,8 @@ typedef enum {
 	VDEV_PARAM(vdev_param_ap_keepalive_max_idle_inactive_secs,
 		   VDEV_PARAM_AP_KEEPALIVE_MAX_IDLE_INACTIVE_TIME_SECS),
 	VDEV_PARAM(vdev_param_set_extra_eht_ltf, VDEV_PARAM_EXTRA_EHT_LTF),
+	VDEV_PARAM(vdev_param_chwidth_with_notify,
+		   VDEV_PARAM_CHWIDTH_WITH_NOTIFY),
 	vdev_param_max,
 } wmi_conv_vdev_param_id;
 
@@ -6139,6 +6142,7 @@ typedef enum {
 	wmi_service_twt_nudge,
 	wmi_service_all_twt,
 	wmi_service_twt_statistics,
+	wmi_service_restricted_twt,
 #endif
 	wmi_service_wapi_concurrency_supported,
 	wmi_service_sap_connected_d3_wow,
@@ -6248,6 +6252,9 @@ typedef enum {
 	wmi_service_multiple_vdev_restart_bmap,
 	wmi_service_self_mld_roam_between_dbs_and_hbs,
 	wmi_service_cfr_capture_pdev_id_soc,
+	wmi_service_cca_busy_info_for_each_20mhz,
+	wmi_service_vdev_param_chwidth_with_notify_support,
+
 	wmi_services_max,
 } wmi_conv_service_ids;
 #define WMI_SERVICE_UNAVAILABLE 0xFFFF
@@ -6617,6 +6624,7 @@ struct target_feature_set {
  * @num_max_active_vdevs: max number of active virtual devices (VAPs) to
  * support
  * @notify_frame_support: capability to mark notify frames from host
+ * @tx_ilp_enable: capability to support TX ILP from host
  */
 typedef struct {
 	uint32_t num_vdevs;
@@ -6744,6 +6752,9 @@ typedef struct {
 	bool reo_qdesc_shared_addr_table_enabled;
 	uint32_t num_max_active_vdevs;
 	uint8_t notify_frame_support;
+#ifdef DP_TX_PACKET_INSPECT_FOR_ILP
+	uint8_t tx_ilp_enable;
+#endif
 } target_resource_config;
 
 /**

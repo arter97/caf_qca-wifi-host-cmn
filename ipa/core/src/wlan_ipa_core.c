@@ -642,7 +642,7 @@ static inline void wlan_ipa_wdi_init_metering(struct wlan_ipa_priv *ipa_ctxt,
 
 #ifdef IPA_OPT_WIFI_DP
 /**
- * wlan_ipa_wdi_init_set_opt_wifi_dp - set if optional wifi dp feature enabled_
+ * wlan_ipa_wdi_init_set_opt_wifi_dp - set if optional wifi dp enabled from IPA
  * @ipa_ctxt: IPA context
  * @out: IPA WDI out param
  *
@@ -655,11 +655,26 @@ static inline void wlan_ipa_wdi_init_set_opt_wifi_dp(
 	ipa_ctxt->opt_wifi_datapath =
 				QDF_IPA_WDI_INIT_OUT_PARAMS_OPT_WIFI_DP(&out);
 }
+
+/**
+ * wlan_ipa_opt_wifi_dp_enabled - set if optional wifi dp enabled in WLAN
+ *
+ * Return: bool
+ */
+static inline bool wlan_ipa_opt_wifi_dp_enabled(void)
+{
+	return true;
+}
 #else
 static inline void wlan_ipa_wdi_init_set_opt_wifi_dp(
 					     struct wlan_ipa_priv *ipa_ctxt,
 					     qdf_ipa_wdi_init_out_params_t out)
 {
+}
+
+static inline bool wlan_ipa_opt_wifi_dp_enabled(void)
+{
+	return false;
 }
 #endif
 
@@ -1729,7 +1744,7 @@ QDF_STATUS wlan_ipa_uc_enable_pipes(struct wlan_ipa_priv *ipa_ctx)
 	qdf_event_reset(&ipa_ctx->ipa_resource_comp);
 
 	if (qdf_atomic_read(&ipa_ctx->autonomy_disabled)) {
-		if (ipa_ctx->opt_wifi_datapath) {
+		if (wlan_ipa_opt_wifi_dp_enabled()) {
 			/* Default packet routing is to HOST REO rings */
 			ipa_info("opt_dp: enable pipes. Do not enable autonomy");
 		} else {
@@ -1741,7 +1756,7 @@ QDF_STATUS wlan_ipa_uc_enable_pipes(struct wlan_ipa_priv *ipa_ctx)
 end:
 	qdf_spin_lock_bh(&ipa_ctx->enable_disable_lock);
 	if (((!qdf_atomic_read(&ipa_ctx->autonomy_disabled)) ||
-	     ipa_ctx->opt_wifi_datapath) &&
+	     wlan_ipa_opt_wifi_dp_enabled()) &&
 	    !qdf_atomic_read(&ipa_ctx->pipes_disabled))
 		ipa_ctx->ipa_pipes_down = false;
 
@@ -4120,8 +4135,15 @@ QDF_STATUS wlan_ipa_setup(struct wlan_ipa_priv *ipa_ctx,
 
 	/* Register call backs for opt wifi dp */
 	if (ipa_ctx->opt_wifi_datapath) {
-		status = wlan_ipa_reg_flt_cbs(ipa_ctx);
-		ipa_info("opt_dp: Register cb status %d", status);
+		if (ipa_config_is_opt_wifi_dp_enabled()) {
+			status = wlan_ipa_reg_flt_cbs(ipa_ctx);
+			ipa_info("opt_dp: Register cb. status %d",
+				 status);
+		} else {
+			ipa_info("opt_dp: Disabled from WLAN INI");
+		}
+	} else {
+		ipa_info("opt_dp: Disabled from IPA");
 	}
 
 	qdf_event_create(&ipa_ctx->ipa_resource_comp);
@@ -4225,13 +4247,6 @@ QDF_STATUS wlan_ipa_cleanup(struct wlan_ipa_priv *ipa_ctx)
 	}
 
 	gp_ipa = NULL;
-
-	/* Acquire lock */
-	ipa_init_deinit_lock();
-	if (g_instances_added)
-		g_instances_added--;
-	/* Unlock */
-	ipa_init_deinit_unlock();
 
 	ipa_ctx->handle_initialized = false;
 

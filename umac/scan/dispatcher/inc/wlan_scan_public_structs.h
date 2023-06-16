@@ -205,6 +205,7 @@ struct channel_info {
  * @rsnxe: Pointer to rsnxe IE
  * @ehtcap: pointer to ehtcap ie
  * @ehtop: pointer to eht op ie
+ * @bw_ind: pointer to bandwidth indication element sub ie
  * @multi_link_bv: pointer to multi link basic variant IE
  * @multi_link_rv: pointer to multi link reconfig IE
  * @t2lm: array of pointers to t2lm op ie
@@ -272,6 +273,7 @@ struct ie_list {
 #ifdef WLAN_FEATURE_11BE
 	uint8_t *ehtcap;
 	uint8_t *ehtop;
+	uint8_t *bw_ind;
 #endif
 #ifdef WLAN_FEATURE_11BE_MLO
 	uint8_t *multi_link_bv;
@@ -1040,6 +1042,10 @@ enum scan_request_type {
  * @scan_f_2ghz: scan 2.4 GHz channels
  * @scan_f_5ghz: scan 5 GHz channels
  * @scan_f_wide_band: scan in 40 MHz or higher bandwidth
+ * @scan_f_pause_home_channel: To pause home channel in FW when scan channel is
+ * same as home channel
+ * @scan_f_report_cca_busy_for_each_20mhz: Allow FW to report CCA busy for each
+ * possible 20Mhz subbands of the wideband scan channel
  * @scan_flags: variable to read and set scan_f_* flags in one shot
  *              can be used to dump all scan_f_* flags for debug
  * @burst_duration: burst duration
@@ -1060,7 +1066,6 @@ enum scan_request_type {
  * @hint_s_ssid: short SSID hints
  * @hint_bssid: BSSID hints
  */
-
 struct scan_req_params {
 	uint32_t scan_id;
 	uint32_t scan_req_id;
@@ -1126,7 +1131,9 @@ struct scan_req_params {
 				 scan_f_forced:1,
 				 scan_f_2ghz:1,
 				 scan_f_5ghz:1,
-				 scan_f_wide_band:1;
+				 scan_f_wide_band:1,
+				 scan_f_pause_home_channel:1,
+				 scan_f_report_cca_busy_for_each_20mhz:1;
 		};
 		uint32_t scan_flags;
 	};

@@ -521,6 +521,9 @@ enum dp_ctxt_type {
  * @DP_RX_DESC_STATUS_TYPE: DP RX SW descriptor for monitor status
  * @DP_HW_LINK_DESC_TYPE: DP HW link descriptor
  * @DP_HW_CC_SPT_PAGE_TYPE: DP pages for HW CC secondary page table
+ * @DP_TX_DIRECT_LINK_CE_BUF_TYPE: DP tx direct link CE source ring buf pages
+ * @DP_TX_DIRECT_LINK_BUF_TYPE: DP tx direct link buffer pages
+ * @DP_DESC_TYPE_MAX: DP max desc type
  */
 enum dp_desc_type {
 	DP_TX_DESC_TYPE,
@@ -533,6 +536,11 @@ enum dp_desc_type {
 	DP_RX_DESC_STATUS_TYPE,
 	DP_HW_LINK_DESC_TYPE,
 	DP_HW_CC_SPT_PAGE_TYPE,
+#ifdef FEATURE_DIRECT_LINK
+	DP_TX_DIRECT_LINK_CE_BUF_TYPE,
+	DP_TX_DIRECT_LINK_BUF_TYPE,
+#endif
+	DP_DESC_TYPE_MAX
 };
 
 /**
@@ -3003,6 +3011,10 @@ struct dp_soc {
 #endif
 	/* Reo queue ref table items */
 	struct reo_queue_ref_table reo_qref;
+#ifdef DP_TX_PACKET_INSPECT_FOR_ILP
+	/* Flag to show if TX ILP is enabled */
+	bool tx_ilp_enable;
+#endif
 };
 
 #ifdef IPA_OFFLOAD
