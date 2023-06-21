@@ -2136,6 +2136,8 @@ extract_mlo_setup_cmpl_event_tlv(struct wmi_unified *wmi_handle,
 	else
 		params->status = WMI_MLO_SETUP_STATUS_FAILURE;
 
+	params->max_ml_peer_ids = ev->max_ml_peer_ids;
+
 	return QDF_STATUS_SUCCESS;
 }
 

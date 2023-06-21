@@ -39,6 +39,7 @@
 #include <wlan_reg_ucfg_api.h>
 #if defined(WLAN_FEATURE_11BE_MLO) && defined(WLAN_MLO_MULTI_CHIP)
 #include <wlan_mlo_mgr_cmn.h>
+#include <wlan_mlo_mgr_ap.h>
 #include <wlan_mlo_mgr_setup.h>
 #endif
 #include <target_if_twt.h>
@@ -1212,6 +1213,13 @@ static int init_deinit_mlo_setup_comp_event_handler(ol_scn_t scn_handle,
 
 	pdev = wlan_objmgr_get_pdev_by_id(psoc, params.pdev_id,
 					  WLAN_INIT_DEINIT_ID);
+
+	if (mlo_ap_update_max_ml_peer_ids(
+				params.pdev_id, params.max_ml_peer_ids)
+			!= QDF_STATUS_SUCCESS) {
+		target_if_err("max_ml_peer_ids update failed for pdev_id: %d",
+			      params.pdev_id);
+	}
 
 	if (pdev) {
 		mlo_link_setup_complete(pdev, grp_id);

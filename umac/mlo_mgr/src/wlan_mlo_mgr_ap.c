@@ -18,6 +18,7 @@
 /*
  * DOC: contains MLO manager ap related functionality
  */
+#include <qdf_module.h>
 #include "wlan_objmgr_vdev_obj.h"
 #include "wlan_mlo_mgr_ap.h"
 #include <wlan_mlo_mgr_cmn.h>
@@ -600,6 +601,33 @@ void mlo_ap_link_down_cmpl_notify(struct wlan_objmgr_vdev *vdev)
 {
 	mlo_ap_vdev_detach(vdev);
 }
+
+QDF_STATUS
+mlo_ap_update_max_ml_peer_ids(uint32_t pdev_id, uint32_t max_ml_peer_ids)
+{
+	struct mlo_mgr_context *mlo_mgr_ctx = wlan_objmgr_get_mlo_ctx();
+	uint16_t max_mlo_peer_id_stale;
+
+	max_mlo_peer_id_stale = mlo_mgr_ctx->max_mlo_peer_id;
+
+	ml_peerid_lock_acquire(mlo_mgr_ctx);
+
+	/* Reset the value to default if max_ml_peer_ids received is "0" */
+	mlo_mgr_ctx->max_mlo_peer_id = max_ml_peer_ids ?
+				max_ml_peer_ids : MAX_MLO_PEER_ID;
+
+	mlo_info("max_ml_peer_ids update from: %d to: %d for pdev: %d",
+		 max_mlo_peer_id_stale,
+		 mlo_mgr_ctx->max_mlo_peer_id, pdev_id);
+
+	mlo_info("max_peer support from target obtained :%d", max_ml_peer_ids);
+
+	ml_peerid_lock_release(mlo_mgr_ctx);
+
+	return QDF_STATUS_SUCCESS;
+}
+
+qdf_export_symbol(mlo_ap_update_max_ml_peer_ids);
 
 uint16_t mlo_ap_ml_peerid_alloc(void)
 {

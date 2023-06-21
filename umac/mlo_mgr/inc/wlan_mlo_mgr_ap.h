@@ -525,6 +525,16 @@ QDF_STATUS mlme_set_aid(struct wlan_objmgr_vdev *vdev,
 uint16_t wlan_mlme_get_aid_count(struct wlan_objmgr_vdev *vdev);
 
 /**
+ * mlo_ap_update_max_ml_peer_ids() - public API to update max MLO peer ids
+ * @pdev_id: PDEV id
+ * @max_ml_peer_ids: maximum ml peer ids supported
+ *
+ * This function updated the maximum MLO peer ids supported for the psoc
+ */
+QDF_STATUS mlo_ap_update_max_ml_peer_ids(
+		uint32_t pdev_id, uint32_t max_ml_peer_ids);
+
+/**
  * mlo_ap_ml_peerid_alloc() - public API to allocate MLO peer id
  *
  * This function allocates MLO peer ID
