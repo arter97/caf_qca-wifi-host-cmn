@@ -178,12 +178,7 @@ void wlan_scan_update_pno_dwell_time(struct wlan_objmgr_vdev *vdev,
 	if (!psoc)
 		return;
 
-	sap_or_p2p_present = policy_mgr_mode_specific_connection_count
-			       (psoc,
-				PM_SAP_MODE, NULL) ||
-				policy_mgr_mode_specific_connection_count
-			       (psoc,
-				PM_P2P_GO_MODE, NULL) ||
+	sap_or_p2p_present = policy_mgr_get_beaconing_mode_count(psoc, NULL) ||
 				policy_mgr_mode_specific_connection_count
 			       (psoc,
 				PM_P2P_CLIENT_MODE, NULL);

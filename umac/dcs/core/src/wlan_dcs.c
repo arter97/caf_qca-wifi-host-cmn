@@ -758,6 +758,7 @@ static uint32_t wlan_dcs_get_pcl_for_sap(struct wlan_objmgr_vdev *vdev,
 	enum channel_state state;
 	QDF_STATUS status;
 	int i, j;
+	enum policy_mgr_con_mode mode;
 
 	psoc = wlan_vdev_get_psoc(vdev);
 	if (!psoc)
@@ -771,9 +772,11 @@ static uint32_t wlan_dcs_get_pcl_for_sap(struct wlan_objmgr_vdev *vdev,
 	if (!pcl)
 		return 0;
 
-	status = policy_mgr_get_pcl_for_vdev_id(psoc,
-						PM_SAP_MODE,
-						pcl->pcl_list, &pcl->pcl_len,
+	mode = policy_mgr_qdf_opmode_to_pm_con_mode(psoc, QDF_SAP_MODE,
+						    wlan_vdev_get_id(vdev));
+
+	status = policy_mgr_get_pcl_for_vdev_id(psoc, mode, pcl->pcl_list,
+						&pcl->pcl_len,
 						pcl->weight_list,
 						QDF_ARRAY_SIZE(pcl->weight_list),
 						wlan_vdev_get_id(vdev));

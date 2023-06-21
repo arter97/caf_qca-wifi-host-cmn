@@ -1752,8 +1752,6 @@ cm_get_pcl_chan_weigtage_for_sta(struct wlan_objmgr_pdev *pdev,
 				 struct pcl_freq_weight_list *pcl_lst,
 				 struct wlan_objmgr_vdev *vdev)
 {
-	enum QDF_OPMODE opmode = QDF_STA_MODE;
-	enum policy_mgr_con_mode pm_mode;
 	uint32_t num_entries = 0;
 	uint8_t vdev_id;
 	QDF_STATUS status;
@@ -1763,16 +1761,15 @@ cm_get_pcl_chan_weigtage_for_sta(struct wlan_objmgr_pdev *pdev,
 
 	vdev_id = wlan_vdev_get_id(vdev);
 
-	if (policy_mgr_map_concurrency_mode(&opmode, &pm_mode)) {
-		status = policy_mgr_get_pcl(wlan_pdev_get_psoc(pdev), pm_mode,
-					    pcl_lst->pcl_freq_list,
-					    &num_entries,
-					    pcl_lst->pcl_weight_list,
-					    NUM_CHANNELS, vdev_id);
-		if (QDF_IS_STATUS_ERROR(status))
-			return;
-		pcl_lst->num_of_pcl_channels = num_entries;
-	}
+	status = policy_mgr_get_pcl(wlan_pdev_get_psoc(pdev),
+				    PM_STA_MODE,
+				    pcl_lst->pcl_freq_list,
+				    &num_entries,
+				    pcl_lst->pcl_weight_list,
+				    NUM_CHANNELS, vdev_id);
+	if (QDF_IS_STATUS_ERROR(status))
+		return;
+	pcl_lst->num_of_pcl_channels = num_entries;
 }
 
 void cm_calculate_scores(struct cnx_mgr *cm_ctx,
