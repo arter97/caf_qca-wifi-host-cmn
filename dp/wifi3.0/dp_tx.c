@@ -109,10 +109,12 @@ dp_update_tx_desc_stats(struct dp_pdev *pdev)
 static inline
 void dp_tx_enh_unmap(struct dp_soc *soc, struct dp_tx_desc_s *desc)
 {
-	qdf_nbuf_unmap_nbytes_single(soc->osdev, desc->nbuf,
-				     QDF_DMA_TO_DEVICE,
-				     desc->nbuf->len);
-	desc->flags |= DP_TX_DESC_FLAG_UNMAP_DONE;
+	if (qdf_likely(!(desc->flags & DP_TX_DESC_FLAG_UNMAP_DONE))) {
+		qdf_nbuf_unmap_nbytes_single(soc->osdev, desc->nbuf,
+					     QDF_DMA_TO_DEVICE,
+					     desc->nbuf->len);
+		desc->flags |= DP_TX_DESC_FLAG_UNMAP_DONE;
+	}
 }
 
 static inline void dp_tx_unmap(struct dp_soc *soc, struct dp_tx_desc_s *desc)
