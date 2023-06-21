@@ -617,6 +617,24 @@ static inline void target_psoc_set_wlan_init_status
 	psoc_info->info.wlan_init_status = wlan_init_status;
 }
 
+#ifdef QCA_MULTIPASS_SUPPORT
+/**
+ * target_is_multipass_sap() - Get multipass sap capabilities
+ * @psoc_info: pointer to structure target_psoc_info
+ *
+ * Return: True is FW support multipass SAP.
+ */
+static inline bool target_is_multipass_sap(struct target_psoc_info *psoc_info)
+{
+	return psoc_info->info.service_ext2_param.is_multipass_sap;
+}
+#else
+static inline bool target_is_multipass_sap(struct target_psoc_info *psoc_info)
+{
+	return false;
+}
+#endif
+
 /**
  * target_psoc_get_wlan_init_status() - get info wlan_init_status
  * @psoc_info:  pointer to structure target_psoc_info
@@ -2893,14 +2911,14 @@ QDF_STATUS target_if_mlo_ready(struct wlan_objmgr_pdev **pdev,
 
 /**
  * target_if_mlo_teardown_req() - API to trigger MLO teardown sequence
- * @pdev: Array of pointers to pdev object that are part of ML group
- * @num_pdevs: Number of pdevs in above array
+ * @pdev: Pointer to pdev object
  * @reason: Reason for triggering teardown
+ * @reset: UMAC reset for mode1 SSR
  *
  * Return: QDF_STATUS codes
  */
-QDF_STATUS target_if_mlo_teardown_req(struct wlan_objmgr_pdev **pdev,
-				      uint8_t num_pdevs, uint32_t reason);
+QDF_STATUS target_if_mlo_teardown_req(struct wlan_objmgr_pdev *pdev,
+				      uint32_t reason, bool reset);
 #endif /*WLAN_FEATURE_11BE_MLO && WLAN_MLO_MULTI_CHIP*/
 
 /**

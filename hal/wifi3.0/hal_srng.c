@@ -1117,6 +1117,42 @@ void hal_delayed_reg_write(struct hal_soc *hal_soc,
 #endif
 #endif
 
+#ifdef HAL_SRNG_REG_HIS_DEBUG
+inline void hal_free_srng_history(struct hal_soc *hal)
+{
+	int i;
+
+	for (i = 0; i < HAL_SRNG_ID_MAX; i++)
+		qdf_mem_free(hal->srng_list[i].reg_his_ctx);
+}
+
+inline bool hal_alloc_srng_history(struct hal_soc *hal)
+{
+	int i;
+
+	for (i = 0; i < HAL_SRNG_ID_MAX; i++) {
+		hal->srng_list[i].reg_his_ctx =
+			qdf_mem_malloc(sizeof(struct hal_srng_reg_his_ctx));
+		if (!hal->srng_list[i].reg_his_ctx) {
+			hal_err("srng_hist alloc failed");
+			hal_free_srng_history(hal);
+			return false;
+		}
+	}
+
+	return true;
+}
+#else
+inline void hal_free_srng_history(struct hal_soc *hal)
+{
+}
+
+inline bool hal_alloc_srng_history(struct hal_soc *hal)
+{
+	return true;
+}
+#endif
+
 void *hal_attach(struct hif_opaque_softc *hif_handle, qdf_device_t qdf_dev)
 {
 	struct hal_soc *hal;
@@ -1159,6 +1195,9 @@ void *hal_attach(struct hif_opaque_softc *hif_handle, qdf_device_t qdf_dev)
 	}
 	qdf_mem_zero(hal->shadow_wrptr_mem_vaddr,
 		sizeof(*(hal->shadow_wrptr_mem_vaddr)) * HAL_MAX_LMAC_RINGS);
+
+	if (!hal_alloc_srng_history(hal))
+		goto fail2;
 
 	for (i = 0; i < HAL_SRNG_ID_MAX; i++) {
 		hal->srng_list[i].initialized = 0;
@@ -1240,6 +1279,7 @@ void hal_detach(void *hal_soc)
 	qdf_minidump_remove(hal, sizeof(*hal), "hal_soc");
 	qdf_mem_free(hal->ops);
 
+	hal_free_srng_history(hal);
 	qdf_mem_free_consistent(hal->qdf_dev, hal->qdf_dev->dev,
 		sizeof(*(hal->shadow_rdptr_mem_vaddr)) * HAL_SRNG_ID_MAX,
 		hal->shadow_rdptr_mem_vaddr, hal->shadow_rdptr_mem_paddr, 0);
@@ -1396,7 +1436,7 @@ void hal_srng_dst_init_hp(struct hal_soc_handle *hal_soc,
 
 	if (vaddr) {
 		*srng->u.dst_ring.hp_addr = srng->u.dst_ring.cached_hp;
-		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_ERROR,
+		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_DEBUG,
 			  "hp_addr=%pK, cached_hp=%d",
 			  (void *)srng->u.dst_ring.hp_addr,
 			  srng->u.dst_ring.cached_hp);
@@ -1745,7 +1785,7 @@ void *hal_srng_setup_idx(void *hal_soc, int ring_type, int ring_num, int mac_id,
 		if (idx) {
 			hal->ops->hal_tx_ring_halt_set(hal_hdl);
 			do {
-				hal_info("Waiting for ring reset\n");
+				hal_info("Waiting for ring reset");
 			} while (!(hal->ops->hal_tx_ring_halt_poll(hal_hdl)));
 		}
 		hal_srng_hw_init(hal, srng, idle_check, idx);

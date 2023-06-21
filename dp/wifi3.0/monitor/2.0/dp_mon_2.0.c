@@ -275,7 +275,7 @@ void
 dp_mon_tx_stats_update_2_0(struct dp_mon_peer *mon_peer,
 			   struct cdp_tx_completion_ppdu_user *ppdu)
 {
-	uint8_t preamble, mcs, punc_mode;
+	uint8_t preamble, mcs, punc_mode, res_mcs;
 
 	preamble = ppdu->preamble;
 	mcs = ppdu->mcs;
@@ -285,42 +285,23 @@ dp_mon_tx_stats_update_2_0(struct dp_mon_peer *mon_peer,
 	ppdu->punc_mode = punc_mode;
 
 	DP_STATS_INC(mon_peer, tx.punc_bw[punc_mode], ppdu->num_msdu);
-	DP_STATS_INCC(mon_peer,
-		      tx.pkt_type[preamble].mcs_count[MAX_MCS - 1],
-		      ppdu->num_msdu,
-		      ((mcs >= MAX_MCS_11BE) && (preamble == DOT11_BE)));
-	DP_STATS_INCC(mon_peer,
-		      tx.pkt_type[preamble].mcs_count[mcs],
-		      ppdu->num_msdu,
-		      ((mcs < MAX_MCS_11BE) && (preamble == DOT11_BE)));
-	DP_STATS_INCC(mon_peer,
-		      tx.su_be_ppdu_cnt.mcs_count[MAX_MCS - 1], 1,
-		      ((mcs >= MAX_MCS_11BE) && (preamble == DOT11_BE) &&
-		      (ppdu->ppdu_type == HTT_PPDU_STATS_PPDU_TYPE_SU)));
-	DP_STATS_INCC(mon_peer,
-		      tx.su_be_ppdu_cnt.mcs_count[mcs], 1,
-		      ((mcs < MAX_MCS_11BE) && (preamble == DOT11_BE) &&
-		      (ppdu->ppdu_type == HTT_PPDU_STATS_PPDU_TYPE_SU)));
-	DP_STATS_INCC(mon_peer,
-		      tx.mu_be_ppdu_cnt[TXRX_TYPE_MU_OFDMA].mcs_count[MAX_MCS - 1],
-		      1, ((mcs >= MAX_MCS_11BE) &&
-		      (preamble == DOT11_BE) &&
-		      (ppdu->ppdu_type == HTT_PPDU_STATS_PPDU_TYPE_MU_OFDMA)));
-	DP_STATS_INCC(mon_peer,
-		      tx.mu_be_ppdu_cnt[TXRX_TYPE_MU_OFDMA].mcs_count[mcs],
-		      1, ((mcs < MAX_MCS_11BE) &&
-		      (preamble == DOT11_BE) &&
-		      (ppdu->ppdu_type == HTT_PPDU_STATS_PPDU_TYPE_MU_OFDMA)));
-	DP_STATS_INCC(mon_peer,
-		      tx.mu_be_ppdu_cnt[TXRX_TYPE_MU_MIMO].mcs_count[MAX_MCS - 1],
-		      1, ((mcs >= MAX_MCS_11BE) &&
-		      (preamble == DOT11_BE) &&
-		      (ppdu->ppdu_type == HTT_PPDU_STATS_PPDU_TYPE_MU_MIMO)));
-	DP_STATS_INCC(mon_peer,
-		      tx.mu_be_ppdu_cnt[TXRX_TYPE_MU_MIMO].mcs_count[mcs],
-		      1, ((mcs < MAX_MCS_11BE) &&
-		      (preamble == DOT11_BE) &&
-		      (ppdu->ppdu_type == HTT_PPDU_STATS_PPDU_TYPE_MU_MIMO)));
+
+	if (preamble == DOT11_BE) {
+		res_mcs = (mcs < MAX_MCS_11BE) ? mcs : (MAX_MCS - 1);
+
+		DP_STATS_INC(mon_peer,
+			     tx.pkt_type[preamble].mcs_count[res_mcs],
+			     ppdu->num_msdu);
+		DP_STATS_INCC(mon_peer,
+			      tx.su_be_ppdu_cnt.mcs_count[res_mcs], 1,
+			      (ppdu->ppdu_type == HTT_PPDU_STATS_PPDU_TYPE_SU));
+		DP_STATS_INCC(mon_peer,
+			      tx.mu_be_ppdu_cnt[TXRX_TYPE_MU_OFDMA].mcs_count[res_mcs],
+			      1, (ppdu->ppdu_type == HTT_PPDU_STATS_PPDU_TYPE_MU_OFDMA));
+		DP_STATS_INCC(mon_peer,
+			      tx.mu_be_ppdu_cnt[TXRX_TYPE_MU_MIMO].mcs_count[res_mcs],
+			      1, (ppdu->ppdu_type == HTT_PPDU_STATS_PPDU_TYPE_MU_MIMO));
+	}
 }
 
 enum cdp_punctured_modes
@@ -1072,32 +1053,37 @@ static void dp_mon_register_intr_ops_2_0(struct dp_soc *soc)
 }
 
 #ifdef MONITOR_TLV_RECORDING_ENABLE
-/*
- * dp_mon_pdev_tlv_logger_init() - initializes struct dp_mon_tlv_logger
+/**
+ * dp_mon_pdev_initialize_tlv_logger() - initialize dp_mon_tlv_logger for
+ *					Rx and Tx
  *
- * @pdev: pointer to dp_pdev
- *
+ * @tlv_logger : double pointer to dp_mon_tlv_logger
+ * @direction: Rx/Tx
  * Return: QDF_STATUS
  */
-static
-QDF_STATUS dp_mon_pdev_tlv_logger_init(struct dp_pdev *pdev)
+static QDF_STATUS
+dp_mon_pdev_initialize_tlv_logger(struct dp_mon_tlv_logger **tlv_logger,
+				  uint8_t direction)
 {
-	struct dp_mon_pdev *mon_pdev = NULL;
-	struct dp_mon_pdev_be *mon_pdev_be = NULL;
 	struct dp_mon_tlv_logger *tlv_log = NULL;
-
-	if (!pdev)
-		return QDF_STATUS_E_INVAL;
-
-	mon_pdev = pdev->monitor_pdev;
-	if (!mon_pdev)
-		return QDF_STATUS_E_INVAL;
-
-	mon_pdev_be = dp_get_be_mon_pdev_from_dp_mon_pdev(mon_pdev);
 
 	tlv_log = qdf_mem_malloc(sizeof(struct dp_mon_tlv_logger));
 	if (!tlv_log) {
-		qdf_err("Memory allocation failed");
+		dp_mon_err("Memory allocation failed");
+		return QDF_STATUS_E_NOMEM;
+	}
+
+	if (direction == MONITOR_TLV_RECORDING_RX)
+		tlv_log->buff = qdf_mem_malloc(MAX_TLV_LOGGING_SIZE *
+					sizeof(struct dp_mon_tlv_info));
+	else if (direction == MONITOR_TLV_RECORDING_TX)
+		tlv_log->buff = qdf_mem_malloc(MAX_TLV_LOGGING_SIZE *
+					sizeof(struct dp_tx_mon_tlv_info));
+
+	if (!tlv_log->buff) {
+		dp_mon_err("Memory allocation failed");
+		qdf_mem_free(tlv_log);
+		tlv_log = NULL;
 		return QDF_STATUS_E_NOMEM;
 	}
 
@@ -1110,18 +1096,71 @@ QDF_STATUS dp_mon_pdev_tlv_logger_init(struct dp_pdev *pdev)
 	tlv_log->max_mpdu_idx = MAX_PPDU_START_TLV_NUM + MAX_MPDU_TLV_NUM - 1;
 	tlv_log->max_ppdu_end_idx = MAX_TLVS_PER_PPDU - 1;
 
-	tlv_log->buff = qdf_mem_malloc(MAX_TLV_LOGGING_SIZE *
-					sizeof(struct dp_mon_tlv_info));
-	if (!tlv_log->buff) {
-		qdf_err("Memory allocation failed");
-		qdf_mem_free(tlv_log);
-		tlv_log = NULL;
-		return QDF_STATUS_E_NOMEM;
-	}
-
 	tlv_log->tlv_logging_enable = 1;
+	*tlv_logger = tlv_log;
 
-	mon_pdev_be->rx_tlv_log = tlv_log;
+	return QDF_STATUS_SUCCESS;
+}
+
+/*
+ * dp_mon_pdev_tlv_logger_init() - initializes struct dp_mon_tlv_logger
+ *
+ * @pdev: pointer to dp_pdev
+ *
+ * Return: QDF_STATUS
+ */
+static
+QDF_STATUS dp_mon_pdev_tlv_logger_init(struct dp_pdev *pdev)
+{
+	struct dp_mon_pdev *mon_pdev = NULL;
+	struct dp_mon_pdev_be *mon_pdev_be = NULL;
+	struct dp_soc *soc = NULL;
+
+	if (!pdev)
+		return QDF_STATUS_E_INVAL;
+
+	soc = pdev->soc;
+	mon_pdev = pdev->monitor_pdev;
+	if (!mon_pdev)
+		return QDF_STATUS_E_INVAL;
+
+	mon_pdev_be = dp_get_be_mon_pdev_from_dp_mon_pdev(mon_pdev);
+
+	if (dp_mon_pdev_initialize_tlv_logger(&mon_pdev_be->rx_tlv_log,
+					      MONITOR_TLV_RECORDING_RX))
+		return QDF_STATUS_E_FAILURE;
+
+	if (dp_mon_pdev_initialize_tlv_logger(&mon_pdev_be->tx_tlv_log,
+					      MONITOR_TLV_RECORDING_TX))
+		return QDF_STATUS_E_FAILURE;
+
+	return QDF_STATUS_SUCCESS;
+}
+
+/**
+ * dp_mon_pdev_deinitialize_tlv_logger() - deinitialize dp_mon_tlv_logger for
+ *					Rx and Tx
+ *
+ * @tlv_logger : double pointer to dp_mon_tlv_logger
+ *
+ * Return: QDF_STATUS
+ */
+static QDF_STATUS
+dp_mon_pdev_deinitialize_tlv_logger(struct dp_mon_tlv_logger **tlv_logger)
+{
+	struct dp_mon_tlv_logger *tlv_log = *tlv_logger;
+
+	if (!tlv_log)
+		return QDF_STATUS_SUCCESS;
+	if (!(tlv_log->buff))
+		return QDF_STATUS_E_INVAL;
+
+	tlv_log->tlv_logging_enable = 0;
+	qdf_mem_free(tlv_log->buff);
+	tlv_log->buff = NULL;
+	qdf_mem_free(tlv_log);
+	tlv_log = NULL;
+	*tlv_logger = NULL;
 
 	return QDF_STATUS_SUCCESS;
 }
@@ -1138,7 +1177,6 @@ QDF_STATUS dp_mon_pdev_tlv_logger_deinit(struct dp_pdev *pdev)
 {
 	struct dp_mon_pdev *mon_pdev = NULL;
 	struct dp_mon_pdev_be *mon_pdev_be = NULL;
-	struct dp_mon_tlv_logger *tlv_log = NULL;
 
 	if (!pdev)
 		return QDF_STATUS_E_INVAL;
@@ -1149,15 +1187,10 @@ QDF_STATUS dp_mon_pdev_tlv_logger_deinit(struct dp_pdev *pdev)
 
 	mon_pdev_be = dp_get_be_mon_pdev_from_dp_mon_pdev(mon_pdev);
 
-	tlv_log = mon_pdev_be->rx_tlv_log;
-	if (!tlv_log || !(tlv_log->buff))
-		return QDF_STATUS_E_INVAL;
-
-	tlv_log->tlv_logging_enable = 0;
-	qdf_mem_free(tlv_log->buff);
-	tlv_log->buff = NULL;
-	qdf_mem_free(tlv_log);
-	tlv_log = NULL;
+	if (dp_mon_pdev_deinitialize_tlv_logger(&mon_pdev_be->rx_tlv_log))
+		return QDF_STATUS_E_FAILURE;
+	if (dp_mon_pdev_deinitialize_tlv_logger(&mon_pdev_be->tx_tlv_log))
+		return QDF_STATUS_E_FAILURE;
 
 	return QDF_STATUS_SUCCESS;
 }
@@ -1427,8 +1460,8 @@ struct cdp_mon_ops dp_ops_mon_2_0 = {
 	.get_mon_pdev_rx_stats = dp_pdev_get_rx_mon_stats,
 	.txrx_enable_mon_reap_timer = NULL,
 #ifdef QCA_ENHANCED_STATS_SUPPORT
-	.txrx_enable_enhanced_stats = dp_enable_enhanced_stats_2_0,
-	.txrx_disable_enhanced_stats = dp_disable_enhanced_stats_2_0,
+	.txrx_enable_enhanced_stats = dp_enable_enhanced_stats,
+	.txrx_disable_enhanced_stats = dp_disable_enhanced_stats,
 #endif /* QCA_ENHANCED_STATS_SUPPORT */
 #if defined(ATH_SUPPORT_NAC_RSSI) || defined(ATH_SUPPORT_NAC)
 	.txrx_update_filter_neighbour_peers = dp_lite_mon_config_nac_peer,
@@ -1566,6 +1599,12 @@ dp_enable_enhanced_stats_2_0(struct cdp_soc_t *soc, uint8_t pdev_id)
 
 	be_soc = dp_get_be_soc_from_dp_soc(dp_soc);
 
+	/* enable only on one soc if MLD is disabled */
+	if (!be_soc->mlo_enabled || !be_soc->ml_ctxt) {
+		dp_enable_enhanced_stats(soc, pdev_id);
+		return QDF_STATUS_SUCCESS;
+	}
+
 	dp_mlo_iter_ptnr_soc(be_soc,
 			     dp_enable_enhanced_stats_for_each_pdev,
 			     NULL);
@@ -1588,6 +1627,12 @@ dp_disable_enhanced_stats_2_0(struct cdp_soc_t *soc, uint8_t pdev_id)
 	struct dp_soc_be *be_soc = NULL;
 
 	be_soc = dp_get_be_soc_from_dp_soc(dp_soc);
+
+	/* enable only on one soc if MLD is disabled */
+	if (!be_soc->mlo_enabled || !be_soc->ml_ctxt) {
+		dp_disable_enhanced_stats(soc, pdev_id);
+		return QDF_STATUS_SUCCESS;
+	}
 
 	dp_mlo_iter_ptnr_soc(be_soc,
 			     dp_disable_enhanced_stats_for_each_pdev,

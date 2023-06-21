@@ -54,6 +54,12 @@
 
 #define HAL_RX_TLV64_HDR_SIZE			8
 
+#ifdef CONFIG_4_BYTES_TLV_TAG
+#define HAL_RX_TLV_HDR_SIZE HAL_RX_TLV32_HDR_SIZE
+#else
+#define HAL_RX_TLV_HDR_SIZE HAL_RX_TLV64_HDR_SIZE
+#endif
+
 #define HAL_RX_GET_USER_TLV64_TYPE(rx_status_tlv_ptr) \
 		((qdf_le64_to_cpu(*((uint64_t *)(rx_status_tlv_ptr))) & \
 		HAL_RX_USER_TLV64_TYPE_MASK) >> \
@@ -305,7 +311,7 @@ struct hal_rx_mon_mpdu_info {
  * @msdu_count:              msdu count
  * @end_of_ppdu:             end of ppdu
  * @link_desc:               msdu link descriptor address
- * @status_buf:              for a PPDU, status buffers can span acrosss
+ * @status_buf:              for a PPDU, status buffers can span across
  *                           multiple buffers, status_buf points to first
  *                           status buffer address of PPDU
  * @drop_ppdu:               flag to indicate current destination

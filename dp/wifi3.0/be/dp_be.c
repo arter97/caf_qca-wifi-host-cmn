@@ -132,6 +132,48 @@ qdf_size_t dp_get_context_size_be(enum dp_context_type context_type)
 	}
 }
 
+#if defined(DP_FEATURE_HW_COOKIE_CONVERSION) || defined(WLAN_SUPPORT_RX_FISA)
+static uint64_t dp_get_cmem_chunk(struct dp_soc *soc, uint64_t size,
+				  enum CMEM_MEM_CLIENTS client)
+{
+	uint64_t cmem_chunk;
+
+	dp_info("cmem base 0x%llx, total size 0x%llx avail_size 0x%llx",
+		soc->cmem_base, soc->cmem_total_size, soc->cmem_avail_size);
+
+	/* Check if requested cmem space is available */
+	if (soc->cmem_avail_size < size) {
+		dp_err("cmem_size 0x%llx bytes < requested size 0x%llx bytes",
+		       soc->cmem_avail_size, size);
+		return 0;
+	}
+
+	cmem_chunk = soc->cmem_base +
+		     (soc->cmem_total_size - soc->cmem_avail_size);
+	soc->cmem_avail_size -= size;
+	dp_info("Reserved cmem space 0x%llx, size 0x%llx for client %d",
+		cmem_chunk, size, client);
+
+	return cmem_chunk;
+}
+#endif
+
+#if defined(WLAN_SUPPORT_RX_FISA)
+static inline QDF_STATUS dp_fisa_fst_cmem_addr_init(struct dp_soc *soc)
+{
+	soc->fst_cmem_size = DP_CMEM_FST_SIZE;
+	soc->fst_cmem_base = dp_get_cmem_chunk(soc, soc->fst_cmem_size,
+					       FISA_FST);
+
+	return QDF_STATUS_SUCCESS;
+}
+#else /* !WLAN_SUPPORT_RX_FISA */
+static inline QDF_STATUS dp_fisa_fst_cmem_addr_init(struct dp_soc *soc)
+{
+	return QDF_STATUS_SUCCESS;
+}
+#endif
+
 #ifdef DP_FEATURE_HW_COOKIE_CONVERSION
 #if defined(WLAN_MAX_PDEVS) && (WLAN_MAX_PDEVS == 1)
 /**
@@ -183,35 +225,6 @@ void dp_cc_wbm_sw_en_cfg(struct hal_hw_cc_config *cc_cfg)
 	cc_cfg->wbm2sw1_cc_en = 1;
 	cc_cfg->wbm2sw0_cc_en = 1;
 	cc_cfg->wbm2fw_cc_en = 0;
-}
-#endif
-
-#if defined(WLAN_SUPPORT_RX_FISA)
-static QDF_STATUS dp_fisa_fst_cmem_addr_init(struct dp_soc *soc)
-{
-	dp_info("cmem base 0x%llx, total size 0x%llx avail_size 0x%llx",
-		soc->cmem_base, soc->cmem_total_size, soc->cmem_avail_size);
-	/* get CMEM for cookie conversion */
-	if (soc->cmem_avail_size < DP_CMEM_FST_SIZE) {
-		dp_err("cmem_size 0x%llx bytes < 16K", soc->cmem_avail_size);
-		return QDF_STATUS_E_NOMEM;
-	}
-
-	soc->fst_cmem_size = DP_CMEM_FST_SIZE;
-
-	soc->fst_cmem_base = soc->cmem_base +
-			     (soc->cmem_total_size - soc->cmem_avail_size);
-	soc->cmem_avail_size -= soc->fst_cmem_size;
-
-	dp_info("fst_cmem_base 0x%llx, fst_cmem_size 0x%llx",
-		soc->fst_cmem_base, soc->fst_cmem_size);
-
-	return QDF_STATUS_SUCCESS;
-}
-#else /* !WLAN_SUPPORT_RX_FISA */
-static QDF_STATUS dp_fisa_fst_cmem_addr_init(struct dp_soc *soc)
-{
-	return QDF_STATUS_SUCCESS;
 }
 #endif
 
@@ -281,23 +294,28 @@ static inline QDF_STATUS dp_hw_cc_cmem_addr_init(struct dp_soc *soc)
 {
 	struct dp_soc_be *be_soc = dp_get_be_soc_from_dp_soc(soc);
 
-	dp_info("cmem base 0x%llx, total size 0x%llx avail_size 0x%llx",
-		soc->cmem_base, soc->cmem_total_size, soc->cmem_avail_size);
-	/* get CMEM for cookie conversion */
-	if (soc->cmem_avail_size < DP_CC_PPT_MEM_SIZE) {
-		dp_err("cmem_size 0x%llx bytes < 4K", soc->cmem_avail_size);
-		return QDF_STATUS_E_RESOURCES;
-	}
-	be_soc->cc_cmem_base = (uint32_t)(soc->cmem_base +
-					  DP_CC_MEM_OFFSET_IN_CMEM);
-
-	soc->cmem_avail_size -= DP_CC_PPT_MEM_SIZE;
-
-	dp_info("cc_cmem_base 0x%x, cmem_avail_size 0x%llx",
-		be_soc->cc_cmem_base, soc->cmem_avail_size);
+	be_soc->cc_cmem_base = dp_get_cmem_chunk(soc, DP_CC_PPT_MEM_SIZE,
+					      COOKIE_CONVERSION);
 	return QDF_STATUS_SUCCESS;
 }
 
+#else
+
+static inline void dp_cc_reg_cfg_init(struct dp_soc *soc,
+				      bool is_4k_align) {}
+
+static inline void dp_hw_cc_cmem_write(hal_soc_handle_t hal_soc_hdl,
+				       uint32_t offset,
+				       uint32_t value)
+{ }
+
+static inline QDF_STATUS dp_hw_cc_cmem_addr_init(struct dp_soc *soc)
+{
+	return QDF_STATUS_SUCCESS;
+}
+#endif
+
+#if defined(DP_FEATURE_HW_COOKIE_CONVERSION) || defined(WLAN_SUPPORT_RX_FISA)
 static QDF_STATUS dp_get_cmem_allocation(struct dp_soc *soc,
 					 uint8_t for_feature)
 {
@@ -316,35 +334,19 @@ static QDF_STATUS dp_get_cmem_allocation(struct dp_soc *soc,
 
 	return status;
 }
-
 #else
-
-static inline void dp_cc_reg_cfg_init(struct dp_soc *soc,
-				      bool is_4k_align) {}
-
-static inline void dp_hw_cc_cmem_write(hal_soc_handle_t hal_soc_hdl,
-				       uint32_t offset,
-				       uint32_t value)
-{ }
-
-static inline QDF_STATUS dp_hw_cc_cmem_addr_init(struct dp_soc *soc)
-{
-	return QDF_STATUS_SUCCESS;
-}
-
 static QDF_STATUS dp_get_cmem_allocation(struct dp_soc *soc,
 					 uint8_t for_feature)
 {
 	return QDF_STATUS_SUCCESS;
 }
-
 #endif
 
 QDF_STATUS
 dp_hw_cookie_conversion_attach(struct dp_soc_be *be_soc,
 			       struct dp_hw_cookie_conversion_t *cc_ctx,
 			       uint32_t num_descs,
-			       enum dp_desc_type desc_type,
+			       enum qdf_dp_desc_type desc_type,
 			       uint8_t desc_pool_id)
 {
 	struct dp_soc *soc = DP_SOC_BE_GET_SOC(be_soc);
@@ -359,7 +361,7 @@ dp_hw_cookie_conversion_attach(struct dp_soc_be *be_soc,
 					num_spt_pages : DP_CC_PPT_MAX_ENTRIES;
 	dp_info("num_spt_pages needed %d", num_spt_pages);
 
-	dp_desc_multi_pages_mem_alloc(soc, DP_HW_CC_SPT_PAGE_TYPE,
+	dp_desc_multi_pages_mem_alloc(soc, QDF_DP_HW_CC_SPT_PAGE_TYPE,
 				      &cc_ctx->page_pool, qdf_page_size,
 				      num_spt_pages, 0, false);
 	if (!cc_ctx->page_pool.dma_pages) {
@@ -402,7 +404,7 @@ dp_hw_cookie_conversion_attach(struct dp_soc_be *be_soc,
 fail_1:
 	qdf_mem_free(cc_ctx->page_desc_base);
 fail_0:
-	dp_desc_multi_pages_mem_free(soc, DP_HW_CC_SPT_PAGE_TYPE,
+	dp_desc_multi_pages_mem_free(soc, QDF_DP_HW_CC_SPT_PAGE_TYPE,
 				     &cc_ctx->page_pool, 0, false);
 
 	return QDF_STATUS_E_FAILURE;
@@ -415,7 +417,7 @@ dp_hw_cookie_conversion_detach(struct dp_soc_be *be_soc,
 	struct dp_soc *soc = DP_SOC_BE_GET_SOC(be_soc);
 
 	qdf_mem_free(cc_ctx->page_desc_base);
-	dp_desc_multi_pages_mem_free(soc, DP_HW_CC_SPT_PAGE_TYPE,
+	dp_desc_multi_pages_mem_free(soc, QDF_DP_HW_CC_SPT_PAGE_TYPE,
 				     &cc_ctx->page_pool, 0, false);
 	qdf_spinlock_destroy(&cc_ctx->cc_lock);
 
@@ -672,7 +674,7 @@ QDF_STATUS dp_peer_setup_ppeds_be(struct dp_soc *soc,
 		mld_soc = mld_peer->vdev->pdev->soc;
 		cdp_soc = &mld_soc->cdp_soc;
 		if (!cdp_soc->ol_ops->get_ppeds_profile_info_for_vap) {
-			dp_err("%pK: Register PPEDS profile info API before use\n", cdp_soc);
+			dp_err("%pK: Register PPEDS profile info API before use", cdp_soc);
 			return QDF_STATUS_E_NULL_VALUE;
 		}
 
@@ -680,7 +682,7 @@ QDF_STATUS dp_peer_setup_ppeds_be(struct dp_soc *soc,
 									     mld_peer->vdev->vdev_id,
 									     &vp_params);
 		if (qdf_status == QDF_STATUS_E_NULL_VALUE) {
-			dp_err("%pK: Failed to get ppeds profile for mld soc\n", mld_soc);
+			dp_err("%pK: Failed to get ppeds profile for mld soc", mld_soc);
 			return qdf_status;
 		}
 
@@ -971,7 +973,7 @@ static QDF_STATUS dp_soc_attach_be(struct dp_soc *soc,
 			dp_hw_cookie_conversion_attach(be_soc,
 						       &be_soc->tx_cc_ctx[i],
 						       num_entries,
-						       DP_TX_DESC_TYPE, i);
+						       QDF_DP_TX_DESC_TYPE, i);
 		if (!QDF_IS_STATUS_SUCCESS(qdf_status))
 			goto fail;
 	}
@@ -987,7 +989,8 @@ static QDF_STATUS dp_soc_attach_be(struct dp_soc *soc,
 			dp_hw_cookie_conversion_attach(be_soc,
 						       &be_soc->rx_cc_ctx[i],
 						       num_entries,
-						       DP_RX_DESC_BUF_TYPE, i);
+						       QDF_DP_RX_DESC_BUF_TYPE,
+						       i);
 		if (!QDF_IS_STATUS_SUCCESS(qdf_status))
 			goto fail;
 	}
@@ -1219,7 +1222,7 @@ static void dp_soc_txrx_peer_setup_be(struct dp_soc *soc, uint8_t vdev_id,
 	 * Extract the VP profile from the VAP
 	 */
 	if (!cdp_soc->ol_ops->get_ppeds_profile_info_for_vap) {
-		dp_err("%pK: Register get ppeds profile info first\n", cdp_soc);
+		dp_err("%pK: Register get ppeds profile info first", cdp_soc);
 		qdf_status = QDF_STATUS_E_NULL_VALUE;
 		goto fail;
 	}
@@ -1232,7 +1235,7 @@ static void dp_soc_txrx_peer_setup_be(struct dp_soc *soc, uint8_t vdev_id,
 							tgt_peer->vdev->vdev_id,
 							&vp_params);
 	if (qdf_status == QDF_STATUS_E_NULL_VALUE) {
-		dp_err("%pK: Could not find ppeds profile info vdev\n", be_vdev);
+		dp_err("%pK: Could not find ppeds profile info vdev", be_vdev);
 		qdf_status = QDF_STATUS_E_NULL_VALUE;
 		goto fail;
 	}
@@ -1312,6 +1315,7 @@ void dp_free_ppeds_interrupts(struct dp_soc *soc, struct dp_srng *srng,
 			      int ring_type, int ring_num)
 {
 	if (srng->irq >= 0) {
+		qdf_dev_clear_irq_status_flags(srng->irq, IRQ_DISABLE_UNLAZY);
 		if (ring_type == WBM2SW_RELEASE &&
 		    ring_num == WBM2_SW_PPE_REL_RING_ID)
 			pld_pfrm_free_irq(soc->osdev->dev, srng->irq, soc);
@@ -1331,6 +1335,7 @@ int dp_register_ppeds_interrupts(struct dp_soc *soc, struct dp_srng *srng,
 
 	srng->irq = -1;
 	irq = pld_get_msi_irq(soc->osdev->dev, vector);
+	qdf_dev_set_irq_status_flags(irq, IRQ_DISABLE_UNLAZY);
 
 	if (ring_type == WBM2SW_RELEASE &&
 	    ring_num == WBM2_SW_PPE_REL_RING_ID) {
@@ -1380,6 +1385,7 @@ int dp_register_ppeds_interrupts(struct dp_soc *soc, struct dp_srng *srng,
 fail:
 	dp_err("Unable to config irq : ring type %d irq %d vector %d",
 	       ring_type, irq, vector);
+	qdf_dev_clear_irq_status_flags(irq, IRQ_DISABLE_UNLAZY);
 
 	return ret;
 }
@@ -2164,7 +2170,7 @@ dp_mlo_peer_find_hash_find_be(struct dp_soc *soc,
 	if (vdev_id != DP_VDEV_ALL) {
 		vdev = dp_vdev_get_ref_by_id(soc, vdev_id, mod_id);
 		if (!vdev) {
-			dp_err("vdev is null\n");
+			dp_err("vdev is null");
 			return NULL;
 		}
 	} else {
@@ -2379,6 +2385,17 @@ static void dp_txrx_set_mlo_mcast_primary_vdev_param_be(
 				WDI_NO_VAL, params.pdev_id);
 	}
 }
+
+static
+void dp_get_vdev_stats_for_unmap_peer_be(struct dp_vdev *vdev,
+					 struct dp_peer *peer,
+					 struct cdp_vdev_stats **vdev_stats)
+{
+	struct dp_vdev_be *be_vdev = dp_get_be_vdev_from_dp_vdev(vdev);
+
+	if (!IS_DP_LEGACY_PEER(peer))
+		*vdev_stats = &be_vdev->mlo_stats;
+}
 #else
 static void dp_txrx_set_mlo_mcast_primary_vdev_param_be(
 					struct dp_vdev *vdev,
@@ -2469,6 +2486,13 @@ QDF_STATUS dp_txrx_get_vdev_mcast_param_be(struct dp_soc *soc,
 					   cdp_config_param_type *val)
 {
 	return QDF_STATUS_SUCCESS;
+}
+
+static
+void dp_get_vdev_stats_for_unmap_peer_be(struct dp_vdev *vdev,
+					 struct dp_peer *peer,
+					 struct cdp_vdev_stats **vdev_stats)
+{
 }
 #endif
 
@@ -2851,16 +2875,17 @@ void dp_initialize_arch_ops_be(struct dp_arch_ops *arch_ops)
 	arch_ops->dp_rxdma_ring_sel_cfg = dp_rxdma_ring_sel_cfg_be;
 	arch_ops->dp_rx_peer_metadata_peer_id_get =
 					dp_rx_peer_metadata_peer_id_get_be;
-	arch_ops->dp_rx_peer_mdata_link_id_get =
-					dp_rx_peer_mdata_link_id_get_be;
 	arch_ops->soc_cfg_attach = dp_soc_cfg_attach_be;
 	arch_ops->tx_implicit_rbm_set = dp_tx_implicit_rbm_set_be;
 	arch_ops->txrx_set_vdev_param = dp_txrx_set_vdev_param_be;
 	dp_initialize_arch_ops_be_mlo(arch_ops);
-	arch_ops->dp_rx_replenish_soc_get = dp_rx_replensih_soc_get;
+#ifdef WLAN_MLO_MULTI_CHIP
+	arch_ops->dp_get_soc_by_chip_id = dp_get_soc_by_chip_id_be;
+#endif
 	arch_ops->dp_soc_get_num_soc = dp_soc_get_num_soc_be;
 	arch_ops->dp_peer_rx_reorder_queue_setup =
 					dp_peer_rx_reorder_queue_setup_be;
+	arch_ops->dp_rx_peer_set_link_id = dp_rx_set_link_id_be;
 	arch_ops->txrx_print_peer_stats = dp_print_peer_txrx_stats_be;
 	arch_ops->dp_find_peer_by_destmac = dp_find_peer_by_destmac_be;
 #if defined(DP_UMAC_HW_HARD_RESET) && defined(DP_UMAC_HW_RESET_SUPPORT)
@@ -2902,6 +2927,11 @@ void dp_initialize_arch_ops_be(struct dp_arch_ops *arch_ops)
 	arch_ops->reo_remap_config = dp_reo_remap_config_be;
 	arch_ops->txrx_get_vdev_mcast_param = dp_txrx_get_vdev_mcast_param_be;
 	arch_ops->txrx_srng_init = dp_srng_init_be;
+	arch_ops->dp_get_vdev_stats_for_unmap_peer =
+					dp_get_vdev_stats_for_unmap_peer_be;
+#ifdef WLAN_MLO_MULTI_CHIP
+	arch_ops->dp_get_interface_stats = dp_get_interface_stats_be;
+#endif
 #if defined(DP_POWER_SAVE) || defined(FEATURE_RUNTIME_PM)
 	arch_ops->dp_update_ring_hptp = dp_update_ring_hptp;
 #endif
@@ -2922,6 +2952,7 @@ dp_primary_link_migration(struct dp_soc *soc, void *cb_ctxt,
 	struct dp_peer *mld_peer = NULL;
 	uint8_t primary_vdev_id;
 	struct cdp_txrx_peer_params_update params = {0};
+	uint8_t tid;
 
 	pr_soc = dp_mlo_get_soc_ref_by_chip_id(dp_mlo, pr_peer_info->chip_id);
 	if (!pr_soc) {
@@ -2935,12 +2966,27 @@ dp_primary_link_migration(struct dp_soc *soc, void *cb_ctxt,
 
 	mld_peer = DP_GET_MLD_PEER_FROM_PEER(new_primary_peer);
 	if (!mld_peer) {
-		dp_htt_err("Invalid peer");
+		dp_htt_err("MLD peer is NULL");
 		qdf_mem_free(pr_peer_info);
 		return;
 	}
 
 	new_primary_peer->primary_link = 1;
+
+	/*
+	 * Check if reo_qref_table_en is set and if
+	 * rx_tid qdesc for tid 0 is already setup and perform
+	 * qref write to LUT for Tid 0 and 16.
+	 *
+	 */
+	if (hal_reo_shared_qaddr_is_enable(pr_soc->hal_soc) &&
+	    mld_peer->rx_tid[0].hw_qdesc_vaddr_unaligned) {
+		for (tid = 0; tid < DP_MAX_TIDS; tid++)
+			hal_reo_shared_qaddr_write(pr_soc->hal_soc,
+						   mld_peer->peer_id,
+						   tid,
+						   mld_peer->rx_tid[tid].hw_qdesc_paddr);
+	}
 
 	if (pr_soc && pr_soc->cdp_soc.ol_ops->update_primary_link)
 		pr_soc->cdp_soc.ol_ops->update_primary_link(pr_soc->ctrl_psoc,

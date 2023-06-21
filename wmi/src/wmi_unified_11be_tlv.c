@@ -296,6 +296,9 @@ uint8_t *peer_assoc_add_mlo_params(uint8_t *buf_ptr,
 	mlo_params->msd_max_num_txops =
 			req->mlo_params.medium_sync_max_txop_num;
 
+	mlo_params->max_num_simultaneous_links =
+			req->mlo_params.max_num_simultaneous_links;
+
 	return buf_ptr + sizeof(wmi_peer_assoc_mlo_params);
 }
 
@@ -711,6 +714,59 @@ static QDF_STATUS send_mlo_link_removal_cmd_tlv(
 	if (QDF_IS_STATUS_ERROR(ret)) {
 		wmi_err("Failed to send MLO link removal cmd: psoc (%pK) vdev(%u)",
 			wmi_handle->soc->wmi_psoc, params->vdev_id);
+		wmi_buf_free(buf);
+	}
+
+	return ret;
+}
+
+/**
+ * send_mlo_vdev_pause_cmd_tlv() - Send WMI command for MLO vdev pause
+ * @wmi_handle: wmi handle
+ * @info: MLO vdev pause information
+ *
+ * Return: QDF_STATUS of operation
+ */
+static QDF_STATUS send_mlo_vdev_pause_cmd_tlv(wmi_unified_t wmi_handle,
+					      struct mlo_vdev_pause *info)
+{
+	wmi_vdev_pause_cmd_fixed_param *fixed_params;
+	wmi_buf_t buf;
+	uint32_t buf_len = 0;
+	QDF_STATUS ret;
+
+	if (!info) {
+		wmi_err("ML vdev pause info is NULL");
+		return QDF_STATUS_E_NULL_VALUE;
+	}
+
+	buf_len = sizeof(*fixed_params);
+
+	buf = wmi_buf_alloc(wmi_handle, buf_len);
+	if (!buf) {
+		wmi_err("wmi buf alloc failed for vdev pause cmd: psoc (%pK) vdev(%u)",
+			wmi_handle->soc->wmi_psoc, info->vdev_id);
+		return QDF_STATUS_E_NOMEM;
+	}
+
+	/* Populate fixed params TLV */
+	fixed_params = (wmi_vdev_pause_cmd_fixed_param *)wmi_buf_data(buf);
+	WMITLV_SET_HDR(&fixed_params->tlv_header,
+		       WMITLV_TAG_STRUC_wmi_vdev_pause_cmd_fixed_param,
+		       WMITLV_GET_STRUCT_TLVLEN(wmi_vdev_pause_cmd_fixed_param));
+	fixed_params->vdev_id = info->vdev_id;
+	fixed_params->pause_dur_ms = info->vdev_pause_duration;
+	fixed_params->pause_type = WMI_VDEV_PAUSE_TYPE_MLO_LINK;
+	wmi_debug("vdev id: %d pause duration: %d pause type %d",
+		  fixed_params->vdev_id, fixed_params->pause_dur_ms,
+		  fixed_params->pause_type);
+
+	wmi_mtrace(WMI_VDEV_PAUSE_CMDID, fixed_params->vdev_id, 0);
+	ret = wmi_unified_cmd_send(wmi_handle, buf, buf_len,
+				   WMI_VDEV_PAUSE_CMDID);
+	if (QDF_IS_STATUS_ERROR(ret)) {
+		wmi_err("Failed to send vdev pause cmd: psoc (%pK) vdev(%u)",
+			wmi_handle->soc->wmi_psoc, info->vdev_id);
 		wmi_buf_free(buf);
 	}
 
@@ -1645,6 +1701,7 @@ QDF_STATUS mlo_teardown_cmd_send_tlv(struct wmi_unified *wmi_handle,
 								param->pdev_id);
 	switch (param->reason) {
 	case WMI_MLO_TEARDOWN_REASON_SSR:
+	case WMI_MLO_TEARDOWN_REASON_MODE1_SSR:
 		cmd->reason_code = WMI_MLO_TEARDOWN_SSR_REASON;
 		break;
 	case WMI_MLO_TEARDOWN_REASON_DOWN:
@@ -1652,6 +1709,8 @@ QDF_STATUS mlo_teardown_cmd_send_tlv(struct wmi_unified *wmi_handle,
 		cmd->reason_code = WMI_MLO_TEARDOWN_SSR_REASON + 1;
 		break;
 	}
+
+	cmd->trigger_umac_reset = param->umac_reset;
 
 	wmi_mtrace(WMI_MLO_TEARDOWN_CMDID, NO_SESSION, 0);
 	ret = wmi_unified_cmd_send(wmi_handle, buf, len,
@@ -1842,4 +1901,6 @@ void wmi_11be_attach_tlv(wmi_unified_t wmi_handle)
 			extract_mgmt_rx_mlo_link_removal_info_tlv;
 	ops->extract_mlo_link_disable_request_evt_param =
 			extract_mlo_link_disable_request_evt_param_tlv;
+	ops->send_mlo_vdev_pause =
+			send_mlo_vdev_pause_cmd_tlv;
 }

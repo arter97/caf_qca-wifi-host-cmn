@@ -31,7 +31,9 @@
 #ifdef WLAN_FEATURE_11BE_MLO
 #include "wlan_mlo_mgr_public_structs.h"
 #endif
-
+#ifdef CONFIG_AFC_SUPPORT
+#include "wlan_reg_afc.h"
+#endif
 
 /**
  * struct wlan_psoc_hal_reg_capability - hal reg table in psoc
@@ -278,6 +280,7 @@ struct wlan_psoc_host_hw_mode_caps {
  * @eht_ppet5G: 5G EHT PPET info
  * @emlcap: EML Capabilities info
  * @mldcap: MLD Capabilities info
+ * @msdcap: Medium Synchronization Delay capabilities info
  */
 struct wlan_psoc_host_mac_phy_caps_ext2 {
 	uint32_t hw_mode_id;
@@ -300,6 +303,7 @@ struct wlan_psoc_host_mac_phy_caps_ext2 {
 #ifdef WLAN_FEATURE_11BE_MLO
 	struct wlan_mlo_eml_cap emlcap;
 	struct wlan_mlo_mld_cap mldcap;
+	struct wlan_mlo_msd_cap msdcap;
 #endif
 };
 
@@ -476,6 +480,7 @@ struct wlan_psoc_host_service_ext_param {
  * @afc_dev_type: AFC deployment type
  * @num_msdu_idx_qtype_map: Number of HTT_MSDUQ_INDEX to HTT_MSDU_QTYPE
  *                          mapping
+ * @is_multipass_sap: Multipass sap flag
  */
 struct wlan_psoc_host_service_ext2_param {
 	uint8_t reg_db_version_major;
@@ -506,6 +511,9 @@ struct wlan_psoc_host_service_ext2_param {
 	enum reg_afc_dev_deploy_type afc_dev_type;
 #endif
 	uint32_t num_msdu_idx_qtype_map;
+#ifdef QCA_MULTIPASS_SUPPORT
+	bool is_multipass_sap;
+#endif
 };
 
 #endif /* _SERVICE_READY_PARAM_H_*/

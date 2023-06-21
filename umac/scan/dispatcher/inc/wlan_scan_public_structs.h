@@ -548,6 +548,20 @@ struct ml_info {
 	struct partner_link_info link_info[MLD_MAX_LINKS - 1];
 	uint16_t ml_bss_score;
 };
+
+/**
+ * enum number_of_partner_link: Enumeration for number of partner links
+ * @NO_LINK:    Default value
+ * @ONE_LINK:   Single Link
+ * @TWO_LINK:   2 Links
+ * @THREE_LINK: 3 Links
+ */
+enum number_of_partner_link {
+	NO_LINK,
+	ONE_LINK,
+	TWO_LINK,
+	THREE_LINK,
+};
 #endif
 
 /**
@@ -830,6 +844,16 @@ enum scan_priority {
  * @SCAN_PHY_MODE_11AX_HE20_2G: 2GHz 11ax he20 mode
  * @SCAN_PHY_MODE_11AX_HE40_2G: 2GHz 11ax he40 mode
  * @SCAN_PHY_MODE_11AX_HE80_2G: 2GHz 11ax he80 mode
+ * @SCAN_PHY_MODE_11BE_EHT20: 11be EHT 20 mode
+ * @SCAN_PHY_MODE_11BE_EHT40: 11be EHT 40 mode
+ * @SCAN_PHY_MODE_11BE_EHT80: 11be EHT 80 mode
+ * @SCAN_PHY_MODE_11BE_EHT80_80: 11be EHT 80+80 mode
+ * @SCAN_PHY_MODE_11BE_EHT160: 11be EHT 160 mode
+ * @SCAN_PHY_MODE_11BE_EHT160_160: 11be EHT 160+160 mode
+ * @SCAN_PHY_MODE_11BE_EHT320: 11be EHT 320 mode
+ * @SCAN_PHY_MODE_11BE_EHT20_2G: 2GHz 11be EHT 20 mode
+ * @SCAN_PHY_MODE_11BE_EHT40_2G: 2GHz 11be EHT 40 mode
+ * @SCAN_PHY_MODE_11BE_EHT80_2G: 2GHz 11be EHT 80 mode
  * @SCAN_PHY_MODE_UNKNOWN: unknown phy mode
  * @SCAN_PHY_MODE_MAX: max valid phymode
  */
@@ -858,8 +882,20 @@ enum scan_phy_mode {
 	SCAN_PHY_MODE_11AX_HE20_2G = 21,
 	SCAN_PHY_MODE_11AX_HE40_2G = 22,
 	SCAN_PHY_MODE_11AX_HE80_2G = 23,
-	SCAN_PHY_MODE_UNKNOWN = 24,
-	SCAN_PHY_MODE_MAX = 24
+#ifdef WLAN_FEATURE_11BE
+	SCAN_PHY_MODE_11BE_EHT20 = 24,
+	SCAN_PHY_MODE_11BE_EHT40 = 25,
+	SCAN_PHY_MODE_11BE_EHT80 = 26,
+	SCAN_PHY_MODE_11BE_EHT80_80 = 27,
+	SCAN_PHY_MODE_11BE_EHT160 = 28,
+	SCAN_PHY_MODE_11BE_EHT160_160 = 29,
+	SCAN_PHY_MODE_11BE_EHT320 = 30,
+	SCAN_PHY_MODE_11BE_EHT20_2G = 31,
+	SCAN_PHY_MODE_11BE_EHT40_2G = 32,
+	SCAN_PHY_MODE_11BE_EHT80_2G = 33,
+#endif
+	SCAN_PHY_MODE_UNKNOWN = 34,
+	SCAN_PHY_MODE_MAX = 34
 };
 
 /**

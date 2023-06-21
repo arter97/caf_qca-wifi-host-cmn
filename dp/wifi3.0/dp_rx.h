@@ -1220,7 +1220,7 @@ void dp_rx_process_invalid_peer_wrapper(struct dp_soc *soc,
 		qdf_nbuf_set_next((ptail), NULL);                     \
 	} while (0)
 
-#if defined(QCA_PADDR_CHECK_ON_3TH_PLATFORM)
+#if defined(QCA_PADDR_CHECK_ON_3RD_PARTY_PLATFORM)
 /*
  * on some third-party platform, the memory below 0x2000
  * is reserved for target use, so any memory allocated in this
@@ -1238,7 +1238,7 @@ void dp_rx_process_invalid_peer_wrapper(struct dp_soc *soc,
 #define DP_PHY_ADDR_RESERVED	0x50000000
 #endif
 
-#if defined(QCA_PADDR_CHECK_ON_3TH_PLATFORM) || defined(BUILD_X86)
+#if defined(QCA_PADDR_CHECK_ON_3RD_PARTY_PLATFORM) || defined(BUILD_X86)
 /**
  * dp_check_paddr() - check if current phy address is valid or not
  * @dp_soc: core txrx main context
@@ -2419,11 +2419,32 @@ dp_rx_peer_metadata_peer_id_get(struct dp_soc *soc, uint32_t peer_metadata)
 							     peer_metadata);
 }
 
-static inline uint8_t
-dp_rx_peer_mdata_link_id_get(struct dp_soc *soc, uint32_t peer_metadata)
+#if defined(WLAN_FEATURE_11BE_MLO) && defined(DP_MLO_LINK_STATS_SUPPORT)
+/**
+ * dp_rx_nbuf_set_link_id_from_tlv() - Set link id in nbuf cb
+ * @soc: SOC handle
+ * @tlv_hdr: rx tlv header
+ * @nbuf: nbuf pointer
+ *
+ * Return: None
+ */
+static inline void
+dp_rx_nbuf_set_link_id_from_tlv(struct dp_soc *soc, uint8_t *tlv_hdr,
+				qdf_nbuf_t nbuf)
 {
-	return soc->arch_ops.dp_rx_peer_mdata_link_id_get(peer_metadata);
+	uint32_t peer_metadata = hal_rx_tlv_peer_meta_data_get(soc->hal_soc,
+								tlv_hdr);
+
+	if (soc->arch_ops.dp_rx_peer_set_link_id)
+		soc->arch_ops.dp_rx_peer_set_link_id(nbuf, peer_metadata);
 }
+#else
+static inline void
+dp_rx_nbuf_set_link_id_from_tlv(struct dp_soc *soc, uint8_t *tlv_hdr,
+				qdf_nbuf_t nbuf)
+{
+}
+#endif
 
 /**
  * dp_rx_desc_pool_init_generic() - Generic Rx descriptors initialization
@@ -2501,20 +2522,6 @@ void dp_audio_smmu_unmap(qdf_device_t qdf_dev, qdf_dma_addr_t iova,
 #endif
 
 #if defined(QCA_DP_RX_NBUF_NO_MAP_UNMAP) && !defined(BUILD_X86)
-static inline
-void dp_rx_set_err_info(struct dp_soc *soc, qdf_nbuf_t nbuf,
-			struct hal_wbm_err_desc_info wbm_err_info)
-{
-	QDF_NBUF_CB_RX_ERR_CODES(nbuf) = *((uint32_t *)&wbm_err_info);
-}
-
-static inline
-struct hal_wbm_err_desc_info dp_rx_get_err_info(struct dp_soc *soc,
-						qdf_nbuf_t nbuf)
-{
-	return *(struct hal_wbm_err_desc_info *)&QDF_NBUF_CB_RX_ERR_CODES(nbuf);
-}
-
 static inline
 QDF_STATUS dp_pdev_rx_buffers_attach_simple(struct dp_soc *soc, uint32_t mac_id,
 					    struct dp_srng *rxdma_srng,
@@ -2669,29 +2676,6 @@ void  dp_rx_nbuf_free(qdf_nbuf_t nbuf)
 	qdf_nbuf_free_simple(nbuf);
 }
 #else
-static inline
-void dp_rx_set_err_info(struct dp_soc *soc, qdf_nbuf_t nbuf,
-			struct hal_wbm_err_desc_info wbm_err_info)
-{
-	hal_rx_priv_info_set_in_tlv(soc->hal_soc,
-				    qdf_nbuf_data(nbuf),
-				    (uint8_t *)&wbm_err_info,
-				    sizeof(wbm_err_info));
-}
-
-static inline
-struct hal_wbm_err_desc_info dp_rx_get_err_info(struct dp_soc *soc,
-						qdf_nbuf_t nbuf)
-{
-	struct hal_wbm_err_desc_info wbm_err_info = { 0 };
-
-	hal_rx_priv_info_get_from_tlv(soc->hal_soc, qdf_nbuf_data(nbuf),
-				      (uint8_t *)&wbm_err_info,
-				      sizeof(struct hal_wbm_err_desc_info));
-
-	return wbm_err_info;
-}
-
 static inline
 QDF_STATUS dp_pdev_rx_buffers_attach_simple(struct dp_soc *soc, uint32_t mac_id,
 					    struct dp_srng *rxdma_srng,
@@ -3087,6 +3071,19 @@ dp_rx_deliver_to_osif_stack(struct dp_soc *soc,
 			    qdf_nbuf_t nbuf,
 			    qdf_nbuf_t tail,
 			    bool is_eapol);
+
+/**
+ * dp_rx_set_wbm_err_info_in_nbuf() - function to set wbm err info in nbuf
+ * @soc: DP soc
+ * @nbuf: skb list head
+ * @wbm_err: wbm error info details
+ *
+ * Return: None
+ */
+void
+dp_rx_set_wbm_err_info_in_nbuf(struct dp_soc *soc,
+			       qdf_nbuf_t nbuf,
+			       union hal_wbm_err_info_u wbm_err);
 
 #ifndef WLAN_SOFTUMAC_SUPPORT /* WLAN_SOFTUMAC_SUPPORT */
 /**
@@ -3524,5 +3521,31 @@ dp_rx_get_rx_bm_id(struct dp_soc *soc)
 	return 0;
 }
 #endif /* WLAN_SOFTUMAC_SUPPORT */
+
+#ifndef CONFIG_NBUF_AP_PLATFORM
+static inline uint8_t
+dp_rx_get_stats_arr_idx_from_link_id(qdf_nbuf_t nbuf,
+				     struct dp_txrx_peer *txrx_peer)
+{
+	return QDF_NBUF_CB_RX_LOGICAL_LINK_ID(nbuf);
+}
+#else
+static inline uint8_t
+dp_rx_get_stats_arr_idx_from_link_id(qdf_nbuf_t nbuf,
+				     struct dp_txrx_peer *txrx_peer)
+{
+	uint8_t link_id = 0;
+
+	link_id = (QDF_NBUF_CB_RX_HW_LINK_ID(nbuf) + 1);
+	if (link_id > DP_MAX_MLO_LINKS) {
+		link_id = 0;
+		DP_PEER_PER_PKT_STATS_INC(txrx_peer,
+					  rx.inval_link_id_pkt_cnt,
+					  1, link_id);
+	}
+
+	return link_id;
+}
+#endif /* CONFIG_NBUF_AP_PLATFORM */
 
 #endif /* _DP_RX_H */

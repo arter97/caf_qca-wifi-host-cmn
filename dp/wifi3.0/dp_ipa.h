@@ -18,8 +18,7 @@
 #ifndef _DP_IPA_H_
 #define _DP_IPA_H_
 
-#if defined(QCA_WIFI_KIWI) || defined(QCA_WIFI_KIWI_V2) || \
-	defined(QCA_WIFI_QCN9224)
+#if defined(QCA_WIFI_KIWI) || defined(QCA_WIFI_KIWI_V2)
 /* Index into soc->tcl_data_ring[] */
 #define IPA_TCL_DATA_RING_IDX	3
 #else
@@ -47,6 +46,9 @@
 #if defined(QCA_WIFI_KIWI) || defined(QCA_WIFI_KIWI_V2)
 /* Index into soc->tcl_data_ring[] and soc->tx_comp_ring[] */
 #define IPA_TX_ALT_RING_IDX 4
+#define IPA_TX_ALT_COMP_RING_IDX IPA_TX_ALT_RING_IDX
+#elif defined(QCA_WIFI_QCN9224)
+#define IPA_TX_ALT_RING_IDX 3
 #define IPA_TX_ALT_COMP_RING_IDX IPA_TX_ALT_RING_IDX
 #else /* !KIWI */
 #define IPA_TX_ALT_RING_IDX 1
@@ -103,7 +105,7 @@ struct dp_ipa_uc_rx_hdr {
  * @psoc: control psoc object
  * @pdev_id: pdev id
  *
- * IPA componenet will return the IPA handle based on pdev_id
+ * IPA component will return the IPA handle based on pdev_id
  *
  * Return: IPA handle
  */

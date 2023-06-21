@@ -1413,14 +1413,7 @@ dp_rx_mon_handle_flush_n_trucated_ppdu(struct dp_soc *soc,
 						  rx_mon_desc_pool);
 }
 
-/**
- * dp_rx_mon_append_nbuf() - Append nbuf to parent nbuf
- * @nbuf: Parent nbuf
- * @tmp_nbuf: nbuf to be attached to parent
- *
- * Return: void
- */
-static void dp_rx_mon_append_nbuf(qdf_nbuf_t nbuf, qdf_nbuf_t tmp_nbuf)
+void dp_rx_mon_append_nbuf(qdf_nbuf_t nbuf, qdf_nbuf_t tmp_nbuf)
 {
 	qdf_nbuf_t last_nbuf;
 
@@ -1607,6 +1600,7 @@ uint8_t dp_rx_mon_process_tlv_status(struct dp_pdev *pdev,
 				dp_mon_err("Decap type invalid");
 				qdf_assert_always(0);
 			}
+			ppdu_info->rx_hdr_rcvd[user_id] = false;
 			return num_buf_reaped;
 		}
 
@@ -2381,7 +2375,7 @@ void dp_rx_mon_stats_update_2_0(struct dp_mon_peer *mon_peer,
 				struct cdp_rx_indication_ppdu *ppdu,
 				struct cdp_rx_stats_ppdu_user *ppdu_user)
 {
-	uint8_t mcs, preamble, ppdu_type, punc_mode;
+	uint8_t mcs, preamble, ppdu_type, punc_mode, res_mcs;
 	uint32_t num_msdu;
 
 	preamble = ppdu->u.preamble;
@@ -2396,40 +2390,22 @@ void dp_rx_mon_stats_update_2_0(struct dp_mon_peer *mon_peer,
 
 	DP_STATS_INC(mon_peer, rx.mpdu_retry_cnt, ppdu_user->mpdu_retries);
 	DP_STATS_INC(mon_peer, rx.punc_bw[punc_mode], num_msdu);
-	DP_STATS_INCC(mon_peer,
-		      rx.pkt_type[preamble].mcs_count[MAX_MCS - 1], num_msdu,
-		      ((mcs >= MAX_MCS_11BE) && (preamble == DOT11_BE)));
-	DP_STATS_INCC(mon_peer,
-		      rx.pkt_type[preamble].mcs_count[mcs], num_msdu,
-		      ((mcs < MAX_MCS_11BE) && (preamble == DOT11_BE)));
-	DP_STATS_INCC(mon_peer,
-		      rx.su_be_ppdu_cnt.mcs_count[MAX_MCS - 1], 1,
-		      ((mcs >= (MAX_MCS_11BE)) && (preamble == DOT11_BE) &&
-		      (ppdu_type == HAL_RX_TYPE_SU)));
-	DP_STATS_INCC(mon_peer,
-		      rx.su_be_ppdu_cnt.mcs_count[mcs], 1,
-		      ((mcs < (MAX_MCS_11BE)) && (preamble == DOT11_BE) &&
-		      (ppdu_type == HAL_RX_TYPE_SU)));
-	DP_STATS_INCC(mon_peer,
-		      rx.mu_be_ppdu_cnt[TXRX_TYPE_MU_OFDMA].mcs_count[MAX_MCS - 1],
-		      1, ((mcs >= (MAX_MCS_11BE)) &&
-		      (preamble == DOT11_BE) &&
-		      (ppdu_type == HAL_RX_TYPE_MU_OFDMA)));
-	DP_STATS_INCC(mon_peer,
-		      rx.mu_be_ppdu_cnt[TXRX_TYPE_MU_OFDMA].mcs_count[mcs],
-		      1, ((mcs < (MAX_MCS_11BE)) &&
-		      (preamble == DOT11_BE) &&
-		      (ppdu_type == HAL_RX_TYPE_MU_OFDMA)));
-	DP_STATS_INCC(mon_peer,
-		      rx.mu_be_ppdu_cnt[TXRX_TYPE_MU_MIMO].mcs_count[MAX_MCS - 1],
-		      1, ((mcs >= (MAX_MCS_11BE)) &&
-		      (preamble == DOT11_BE) &&
-		      (ppdu_type == HAL_RX_TYPE_MU_MIMO)));
-	DP_STATS_INCC(mon_peer,
-		      rx.mu_be_ppdu_cnt[TXRX_TYPE_MU_MIMO].mcs_count[mcs],
-		      1, ((mcs < (MAX_MCS_11BE)) &&
-		      (preamble == DOT11_BE) &&
-		      (ppdu_type == HAL_RX_TYPE_MU_MIMO)));
+
+	if (preamble == DOT11_BE) {
+		res_mcs = (mcs < MAX_MCS_11BE) ? mcs : (MAX_MCS - 1);
+
+		DP_STATS_INC(mon_peer,
+			     rx.pkt_type[preamble].mcs_count[res_mcs], num_msdu);
+		DP_STATS_INCC(mon_peer,
+			      rx.su_be_ppdu_cnt.mcs_count[res_mcs], 1,
+			      (ppdu_type == HAL_RX_TYPE_SU));
+		DP_STATS_INCC(mon_peer,
+			      rx.mu_be_ppdu_cnt[TXRX_TYPE_MU_OFDMA].mcs_count[res_mcs],
+			      1, (ppdu_type == HAL_RX_TYPE_MU_OFDMA));
+		DP_STATS_INCC(mon_peer,
+			      rx.mu_be_ppdu_cnt[TXRX_TYPE_MU_MIMO].mcs_count[res_mcs],
+			      1, (ppdu_type == HAL_RX_TYPE_MU_MIMO));
+	}
 }
 
 void

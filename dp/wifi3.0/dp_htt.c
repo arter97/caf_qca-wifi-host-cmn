@@ -409,7 +409,7 @@ static int dp_htt_h2t_add_tcl_metadata_ver_v2(struct htt_soc *soc,
 	HTT_OPTION_TLV_TAG_SET(*msg_word, HTT_OPTION_TLV_TAG_TCL_METADATA_VER);
 	HTT_OPTION_TLV_LENGTH_SET(*msg_word, HTT_TCL_METADATA_VER_SZ);
 	HTT_OPTION_TLV_TCL_METADATA_VER_SET(*msg_word,
-					    HTT_OPTION_TLV_TCL_METADATA_V2);
+					    HTT_OPTION_TLV_TCL_METADATA_V21);
 
 	return QDF_STATUS_SUCCESS;
 }
@@ -2721,6 +2721,21 @@ static void dp_sawf_msduq_map(struct htt_soc *soc, uint32_t *msg_word,
 }
 
 /**
+ * dp_sawf_dynamic_ast_update() - Dynamic AST index update for SAWF peer
+ * from target
+ * @soc: soc handle.
+ * @msg_word: Pointer to htt msg word.
+ * @htt_t2h_msg: HTT message nbuf
+ *
+ * Return: void
+ */
+static void dp_sawf_dynamic_ast_update(struct htt_soc *soc, uint32_t *msg_word,
+				       qdf_nbuf_t htt_t2h_msg)
+{
+	dp_htt_sawf_dynamic_ast_update(soc, msg_word, htt_t2h_msg);
+}
+
+/**
  * dp_sawf_mpdu_stats_handler() - HTT message handler for MPDU stats
  * @soc: soc handle.
  * @htt_t2h_msg: HTT message nbuf
@@ -2738,6 +2753,9 @@ static void dp_sawf_msduq_map(struct htt_soc *soc, uint32_t *msg_word,
 {}
 
 static void dp_sawf_mpdu_stats_handler(struct htt_soc *soc,
+				       qdf_nbuf_t htt_t2h_msg)
+{}
+static void dp_sawf_dynamic_ast_update(struct htt_soc *soc, uint32_t *msg_word,
 				       qdf_nbuf_t htt_t2h_msg)
 {}
 #endif
@@ -3439,7 +3457,7 @@ dp_rx_mlo_timestamp_ind_handler(struct dp_soc *soc,
 	HTT_T2H_MLO_TIMESTAMP_OFFSET_MLO_TIMESTAMP_COMP_PERIOD_US_GET(
 							*(msg_word + 7));
 
-	dp_htt_debug("tsf_lo=%d tsf_hi=%d, mlo_ofst_lo=%d, mlo_ofst_hi=%d\n",
+	dp_htt_debug("tsf_lo=%d tsf_hi=%d, mlo_ofst_lo=%d, mlo_ofst_hi=%d",
 		     pdev->timestamp.sync_tstmp_lo_us,
 		     pdev->timestamp.sync_tstmp_hi_us,
 		     pdev->timestamp.mlo_offset_lo_us,
@@ -3625,7 +3643,7 @@ static void dp_ipa_rx_cce_super_rule_setup_done_handler(struct htt_soc *soc,
 		dp_info("opt_dp:: Wrong Super rule setup response");
 	};
 
-	dp_info("opt_dp:: cce super rule resp type: %d, is_rules_enough: %d,",
+	dp_info("opt_dp:: cce super rule resp type: %d, is_rules_enough: %d",
 		resp_type, is_rules_enough);
 	dp_info("num_rules_avail: %d, rslt0: %d, rslt1: %d",
 		num_rules_avail, filter0_result, filter1_result);
@@ -4074,6 +4092,11 @@ void dp_htt_t2h_msg_handler(void *context, HTC_PACKET *pkt)
 	case HTT_T2H_SAWF_MSDUQ_INFO_IND:
 	{
 		dp_sawf_msduq_map(soc, msg_word, htt_t2h_msg);
+		break;
+	}
+	case HTT_T2H_MSG_TYPE_PEER_AST_OVERRIDE_INDEX_IND:
+	{
+		dp_sawf_dynamic_ast_update(soc, msg_word, htt_t2h_msg);
 		break;
 	}
 	case HTT_T2H_MSG_TYPE_STREAMING_STATS_IND:
@@ -4706,7 +4729,7 @@ dp_peer_update_inactive_time(struct dp_pdev *pdev, uint32_t tag_type,
 	}
 	break;
 	default:
-		qdf_err("Invalid tag_type");
+		qdf_err("Invalid tag_type: %u", tag_type);
 	}
 }
 

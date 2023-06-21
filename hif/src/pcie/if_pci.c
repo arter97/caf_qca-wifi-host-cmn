@@ -3071,6 +3071,8 @@ int hif_ce_msi_configure_irq_by_ceid(struct hif_softc *scn, int ce_id)
 
 	pci_sc->ce_irq_num[ce_id] = irq;
 
+	hif_affinity_mgr_init_ce_irq(scn, ce_id, irq);
+
 	qdf_scnprintf(ce_irqname[pci_slot][ce_id],
 		      DP_IRQ_NAME_LEN, "pci%u_wlan_ce_%u",
 		      pci_slot, ce_id);
@@ -3214,16 +3216,17 @@ void hif_pci_irq_set_affinity_hint(struct hif_exec_context *hif_ext_group,
 	int i, ret;
 	unsigned int cpus;
 	bool mask_set = false;
-	int cpu_cluster = perf ? CPU_CLUSTER_TYPE_PERF :
-						CPU_CLUSTER_TYPE_LITTLE;
+	int package_id;
+	int cpu_cluster = perf ? hif_get_perf_cluster_bitmap() :
+				 BIT(CPU_CLUSTER_TYPE_LITTLE);
 
 	for (i = 0; i < hif_ext_group->numirq; i++)
 		qdf_cpumask_clear(&hif_ext_group->new_cpu_mask[i]);
 
 	for (i = 0; i < hif_ext_group->numirq; i++) {
 		qdf_for_each_online_cpu(cpus) {
-			if (qdf_topology_physical_package_id(cpus) ==
-			    cpu_cluster) {
+			package_id = qdf_topology_physical_package_id(cpus);
+			if (package_id >= 0 && BIT(package_id) & cpu_cluster) {
 				qdf_cpumask_set_cpu(cpus,
 						    &hif_ext_group->
 						    new_cpu_mask[i]);
@@ -3233,14 +3236,10 @@ void hif_pci_irq_set_affinity_hint(struct hif_exec_context *hif_ext_group,
 	}
 	for (i = 0; i < hif_ext_group->numirq; i++) {
 		if (mask_set) {
-			qdf_dev_modify_irq_status(hif_ext_group->os_irq[i],
-						  IRQ_NO_BALANCING, 0);
-			ret = qdf_dev_set_irq_affinity(hif_ext_group->os_irq[i],
-						       (struct qdf_cpu_mask *)
-						       &hif_ext_group->
-						       new_cpu_mask[i]);
-			qdf_dev_modify_irq_status(hif_ext_group->os_irq[i],
-						  0, IRQ_NO_BALANCING);
+			ret = hif_affinity_mgr_set_qrg_irq_affinity((struct hif_softc *)hif_ext_group->hif,
+								    hif_ext_group->os_irq[i],
+								    hif_ext_group->grp_id, i,
+								    &hif_ext_group->new_cpu_mask[i]);
 			if (ret)
 				qdf_debug("Set affinity %*pbl fails for IRQ %d ",
 					  qdf_cpumask_pr_args(&hif_ext_group->
@@ -3255,8 +3254,7 @@ void hif_pci_irq_set_affinity_hint(struct hif_exec_context *hif_ext_group,
 #endif
 
 #ifdef HIF_CPU_PERF_AFFINE_MASK
-void hif_pci_ce_irq_set_affinity_hint(
-	struct hif_softc *scn)
+void hif_pci_ce_irq_set_affinity_hint(struct hif_softc *scn)
 {
 	int ret;
 	unsigned int cpus;
@@ -3264,14 +3262,16 @@ void hif_pci_ce_irq_set_affinity_hint(
 	struct hif_pci_softc *pci_sc = HIF_GET_PCI_SOFTC(scn);
 	struct CE_attr *host_ce_conf;
 	int ce_id;
-	qdf_cpu_mask ce_cpu_mask;
+	qdf_cpu_mask ce_cpu_mask, updated_mask;
+	int perf_cpu_cluster = hif_get_perf_cluster_bitmap();
+	int package_id;
 
 	host_ce_conf = ce_sc->host_ce_config;
 	qdf_cpumask_clear(&ce_cpu_mask);
 
 	qdf_for_each_online_cpu(cpus) {
-		if (qdf_topology_physical_package_id(cpus) ==
-			CPU_CLUSTER_TYPE_PERF) {
+		package_id = qdf_topology_physical_package_id(cpus);
+		if (package_id >= 0 && BIT(package_id) & perf_cpu_cluster) {
 			qdf_cpumask_set_cpu(cpus,
 					    &ce_cpu_mask);
 		} else {
@@ -3286,16 +3286,13 @@ void hif_pci_ce_irq_set_affinity_hint(
 	for (ce_id = 0; ce_id < scn->ce_count; ce_id++) {
 		if (host_ce_conf[ce_id].flags & CE_ATTR_DISABLE_INTR)
 			continue;
+		qdf_cpumask_copy(&updated_mask, &ce_cpu_mask);
+		ret = hif_affinity_mgr_set_ce_irq_affinity(scn, pci_sc->ce_irq_num[ce_id],
+							   ce_id,
+							   &updated_mask);
 		qdf_cpumask_clear(&pci_sc->ce_irq_cpu_mask[ce_id]);
 		qdf_cpumask_copy(&pci_sc->ce_irq_cpu_mask[ce_id],
-				 &ce_cpu_mask);
-		qdf_dev_modify_irq_status(pci_sc->ce_irq_num[ce_id],
-					  IRQ_NO_BALANCING, 0);
-		ret = qdf_dev_set_irq_affinity(
-			pci_sc->ce_irq_num[ce_id],
-			(struct qdf_cpu_mask *)&pci_sc->ce_irq_cpu_mask[ce_id]);
-		qdf_dev_modify_irq_status(pci_sc->ce_irq_num[ce_id],
-					  0, IRQ_NO_BALANCING);
+				 &updated_mask);
 		if (ret)
 			hif_err_rl("Set affinity %*pbl fails for CE IRQ %d",
 				   qdf_cpumask_pr_args(
@@ -3325,14 +3322,10 @@ void hif_pci_config_irq_clear_cpu_affinity(struct hif_softc *scn,
 			qdf_cpumask_setall(&hif_ext_group->new_cpu_mask[i]);
 			qdf_cpumask_clear_cpu(cpu,
 					      &hif_ext_group->new_cpu_mask[i]);
-			qdf_dev_modify_irq_status(hif_ext_group->os_irq[i],
-						  IRQ_NO_BALANCING, 0);
-			ret = qdf_dev_set_irq_affinity(hif_ext_group->os_irq[i],
-						       (struct qdf_cpu_mask *)
-						       &hif_ext_group->
-						       new_cpu_mask[i]);
-			qdf_dev_modify_irq_status(hif_ext_group->os_irq[i],
-						  0, IRQ_NO_BALANCING);
+			ret = hif_affinity_mgr_set_qrg_irq_affinity((struct hif_softc *)hif_ext_group->hif,
+								    hif_ext_group->os_irq[i],
+								    hif_ext_group->grp_id, i,
+								    &hif_ext_group->new_cpu_mask[i]);
 			if (ret)
 				hif_err("Set affinity %*pbl fails for IRQ %d ",
 					qdf_cpumask_pr_args(&hif_ext_group->
@@ -3492,6 +3485,8 @@ int hif_pci_configure_grp_irq(struct hif_softc *scn,
 			return -EFAULT;
 		}
 		hif_ext_group->os_irq[j] = irq;
+		hif_affinity_mgr_init_grp_irq(scn, hif_ext_group->grp_id,
+					      j, irq);
 	}
 	hif_ext_group->irq_requested = true;
 	return 0;
@@ -3703,7 +3698,7 @@ static void hif_pci_get_soc_info_pld(struct hif_pci_softc *sc,
 	sc->device_version.major_version = info.device_version.major_version;
 	sc->device_version.minor_version = info.device_version.minor_version;
 
-	hif_info("%s: fam num %u dev ver %u maj ver %u min ver %u\n", __func__,
+	hif_info("%s: fam num %u dev ver %u maj ver %u min ver %u", __func__,
 		 sc->device_version.family_number,
 		 sc->device_version.device_number,
 		 sc->device_version.major_version,

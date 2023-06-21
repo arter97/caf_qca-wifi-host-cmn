@@ -748,6 +748,7 @@ enum wlan_op_subtype {
  * @vdev_stats_id: Stats ID of the vdev
  * @op_mode: Operation mode of the vdev
  * @subtype: subtype of the vdev
+ * @qdf_opmode: Operation mode of the vdev
  * @mld_mac_addr: MLD mac addr of the current vdev.
  */
 struct cdp_vdev_info {
@@ -756,6 +757,7 @@ struct cdp_vdev_info {
 	uint8_t vdev_stats_id;
 	enum wlan_op_mode op_mode;
 	enum wlan_op_subtype subtype;
+	enum QDF_OPMODE qdf_opmode;
 #ifdef WLAN_FEATURE_11BE_MLO
 	uint8_t *mld_mac_addr;
 #endif
@@ -1334,6 +1336,7 @@ enum cdp_peer_param_type {
  * @CDP_CONFIG_ENHANCED_STATS_ENABLE:
  * @CDP_ISOLATION: set isolation flag
  * @CDP_CONFIG_UNDECODED_METADATA_CAPTURE_ENABLE: Undecoded metadata capture
+ * @CDP_CONFIG_RXDMA_BUF_RING_SIZE: RXDMA buffer ring size configure
  */
 enum cdp_pdev_param_type {
 	CDP_CONFIG_DEBUG_SNIFFER,
@@ -1369,6 +1372,7 @@ enum cdp_pdev_param_type {
 	CDP_CONFIG_ENHANCED_STATS_ENABLE,
 	CDP_ISOLATION,
 	CDP_CONFIG_UNDECODED_METADATA_CAPTURE_ENABLE,
+	CDP_CONFIG_RXDMA_BUF_RING_SIZE,
 };
 
 /**
@@ -1448,6 +1452,17 @@ enum cdp_pdev_param_type {
  * @cdp_drop_tx_mcast: Enable/Disable tx mcast drop
  * @cdp_vdev_tx_to_fw: Set to_fw bit for all tx packets for the vdev
  * @cdp_peer_metadata_ver: DP rx peer metadata version configuration
+ * @hal_soc_hdl: DP HAL soc handle
+ * @cdp_tx_desc_num: DP TX desc number config
+ * @cdp_tx_ext_desc_num: number of TX EXT desc config
+ * @cdp_tx_ring_size: TX ring size config
+ * @cdp_tx_comp_ring_size: TX completion ring size config
+ * @cdp_rx_sw_desc_num: RX SW descriptor number config
+ * @cdp_reo_dst_ring_size: REO destination ring size config
+ * @cdp_rxdma_refill_ring_size: RXDMA refill ring size config
+ * @cdp_rx_refill_buf_pool_size: RX refill ring size config
+ * @cdp_rxdma_buf_ring_size: RXDMA buf ring size config
+ * @mac_addr: vdev mac address
  */
 typedef union cdp_config_param_t {
 	/* peer params */
@@ -1539,6 +1554,19 @@ typedef union cdp_config_param_t {
 	bool cdp_drop_tx_mcast;
 	bool cdp_vdev_tx_to_fw;
 	uint8_t cdp_peer_metadata_ver;
+	void *hal_soc_hdl;
+
+	int cdp_tx_desc_num;
+	int cdp_tx_ext_desc_num;
+	int cdp_tx_ring_size;
+	int cdp_tx_comp_ring_size;
+	int cdp_rx_sw_desc_num;
+	int cdp_reo_dst_ring_size;
+	int cdp_rxdma_refill_ring_size;
+	int cdp_rx_refill_buf_pool_size;
+	int cdp_rxdma_buf_ring_size;
+
+	uint8_t mac_addr[QDF_MAC_ADDR_SIZE];
 } cdp_config_param_type;
 
 /**
@@ -1629,6 +1657,7 @@ enum cdp_pdev_bpr_param {
  * @CDP_ENABLE_WRAP: qwrap ap
  * @CDP_ENABLE_TRAFFIC_END_INDICATION: enable/disable traffic end indication
  * @CDP_VDEV_TX_TO_FW: Set to_fw bit for tx packets for the vdev
+ * @CDP_VDEV_SET_MAC_ADDR: Set mac address for vdev
  */
 enum cdp_vdev_param_type {
 	CDP_ENABLE_NAWDS,
@@ -1679,6 +1708,7 @@ enum cdp_vdev_param_type {
 #ifdef FEATURE_DIRECT_LINK
 	CDP_VDEV_TX_TO_FW,
 #endif
+	CDP_VDEV_SET_MAC_ADDR,
 };
 
 /**
@@ -1695,6 +1725,15 @@ enum cdp_vdev_param_type {
  * @CDP_SAWF_STATS: set SAWF stats config
  * @CDP_UMAC_RESET_STATS: UMAC reset stats
  * @CDP_CFG_RX_PEER_METADATA_VER: RX peer metadata configuration
+ * @CDP_TXRX_HAL_SOC_HDL: HAL soc handle
+ * @CDP_CFG_TX_DESC_NUM: number of TX descriptors config
+ * @CDP_CFG_TX_EXT_DESC_NUM: number of TX EXT descriptors config
+ * @CDP_CFG_TX_RING_SIZE: TX ring size config param
+ * @CDP_CFG_TX_COMPL_RING_SIZE: TX completion ring size param
+ * @CDP_CFG_RX_SW_DESC_NUM: RX SW descriptor number
+ * @CDP_CFG_REO_DST_RING_SIZE: REO destination ring size config
+ * @CDP_CFG_RXDMA_REFILL_RING_SIZE: RXDMA refill ring size config
+ * @CDP_CFG_RX_REFILL_POOL_NUM: RX refill pool size config param
  */
 enum cdp_psoc_param_type {
 	CDP_ENABLE_RATE_STATS,
@@ -1708,6 +1747,17 @@ enum cdp_psoc_param_type {
 	CDP_SAWF_STATS,
 	CDP_UMAC_RESET_STATS,
 	CDP_CFG_RX_PEER_METADATA_VER,
+	CDP_TXRX_HAL_SOC_HDL,
+	CDP_CFG_TX_DESC_NUM,
+	CDP_CFG_TX_EXT_DESC_NUM,
+	CDP_CFG_TX_RING_SIZE,
+	CDP_CFG_TX_COMPL_RING_SIZE,
+	CDP_CFG_RX_SW_DESC_NUM,
+	CDP_CFG_REO_DST_RING_SIZE,
+	CDP_CFG_RXDMA_REFILL_RING_SIZE,
+#ifdef WLAN_FEATURE_RX_PREALLOC_BUFFER_POOL
+	CDP_CFG_RX_REFILL_POOL_NUM,
+#endif
 };
 
 #ifdef CONFIG_AP_PLATFORM

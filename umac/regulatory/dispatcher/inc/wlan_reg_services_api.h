@@ -573,6 +573,22 @@ bool wlan_reg_is_regdb_offloaded(struct wlan_objmgr_psoc *psoc);
  */
 bool wlan_reg_get_fcc_constraint(struct wlan_objmgr_pdev *pdev, uint32_t freq);
 
+/**
+ * wlan_reg_is_6ghz_band_set - Check if 6 GHz band set
+ * @pdev: Pointer to pdev
+ *
+ * Return: True if 6 GHz band set else return flase
+ */
+bool wlan_reg_is_6ghz_band_set(struct wlan_objmgr_pdev *pdev);
+
+/**
+ * wlan_reg_get_keep_6ghz_sta_cli_connection() - Get keep 6ghz sta cli
+ *                                               connection flag
+ * @pdev: Pointer to pdev
+ *
+ * Return: Return true if keep 6ghz sta cli connection set else return false
+ */
+bool wlan_reg_get_keep_6ghz_sta_cli_connection(struct wlan_objmgr_pdev *pdev);
 #ifdef CONFIG_REG_CLIENT
 /**
  * wlan_reg_read_current_country() - Read the current country for the regdomain
@@ -592,13 +608,16 @@ QDF_STATUS wlan_reg_read_current_country(struct wlan_objmgr_psoc *psoc,
  * @pdev: pointer to pdev
  * @pwr_type_6g: pointer to 6G power type
  * @ap_pwr_type: AP's power type for 6G as advertised in HE ops IE
+ * @chan_freq: Connection channel frequency
+ *
  * Return: QDF_STATUS
  */
 QDF_STATUS
 wlan_reg_get_best_6g_power_type(struct wlan_objmgr_psoc *psoc,
 				struct wlan_objmgr_pdev *pdev,
 				enum reg_6g_ap_type *pwr_type_6g,
-				enum reg_6g_ap_type ap_pwr_type);
+				enum reg_6g_ap_type ap_pwr_type,
+				uint32_t chan_freq);
 #endif
 
 #ifdef CONFIG_CHAN_FREQ_API
@@ -2857,4 +2876,28 @@ wlan_reg_display_super_chan_list(struct wlan_objmgr_pdev *pdev)
 uint8_t
 wlan_reg_get_num_rules_of_ap_pwr_type(struct wlan_objmgr_pdev *pdev,
 				      enum reg_6g_ap_type ap_pwr_type);
+
+/**
+ * wlan_reg_register_is_chan_connected_callback() - Register callback to check
+ *                                                  if channel is connected.
+ * @psoc: Pointer to global psoc structure.
+ * @cbk: Pointer to callback function.
+ *
+ * Return: None
+ */
+void
+wlan_reg_register_is_chan_connected_callback(struct wlan_objmgr_psoc *psoc,
+					     void *cbk);
+
+/**
+ * wlan_reg_unregister_is_chan_connected_callback() - Unregister callback to
+ * check if channel is connected.
+ * @psoc: Pointer to global psoc structure.
+ * @cbk: Pointer to callback function.
+ *
+ * Return: None
+ */
+void
+wlan_reg_unregister_is_chan_connected_callback(struct wlan_objmgr_psoc *psoc,
+					       void *cbk);
 #endif

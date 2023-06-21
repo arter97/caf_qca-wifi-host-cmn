@@ -1372,6 +1372,13 @@ QDF_STATUS mlo_sync_disconnect(struct wlan_objmgr_vdev *vdev,
 			sta_ctx->connect_req = NULL;
 		}
 
+		status = mlo_validate_disconn_req(vdev, source,
+						  reason_code, bssid);
+		if (QDF_IS_STATUS_ERROR(status)) {
+			mlo_err("Connect in progress, deferring disconnect");
+			return status;
+		}
+
 		status = mlo_send_link_disconnect_sync(mlo_dev_ctx, source,
 						       reason_code, bssid);
 		if (QDF_IS_STATUS_SUCCESS(status))
@@ -1450,7 +1457,7 @@ static QDF_STATUS ml_activate_connect_req_sched_cb(struct scheduler_msg *msg)
 	}
 
 	sta_ctx = mlo_dev_ctx->sta_ctx;
-	if (!sta_ctx) {
+	if (!sta_ctx || !sta_ctx->connect_req) {
 		wlan_objmgr_vdev_release_ref(vdev, WLAN_MLO_MGR_ID);
 		return QDF_STATUS_E_INVAL;
 	}
@@ -2274,7 +2281,7 @@ static void mlo_process_link_remove(struct wlan_objmgr_vdev *vdev,
 	/* Link delete triggered from AP,
 	 * start timer with tbtt count * beacon interval
 	 */
-	tbtt_count = link_info->delete_timer;
+	tbtt_count = link_info->ap_removal_timer;
 	bcn_int = mlo_get_bcn_interval_by_bssid(
 			wlan_vdev_get_pdev(vdev),
 			wlan_peer_get_macaddr(bss_peer));
@@ -2496,4 +2503,31 @@ mlo_get_link_state_context(struct wlan_objmgr_psoc *psoc,
 	return QDF_STATUS_SUCCESS;
 }
 
+void
+wlan_mlo_send_vdev_pause(struct wlan_objmgr_psoc *psoc,
+			 struct wlan_objmgr_vdev *vdev,
+			 uint16_t session_id,
+			 uint16_t vdev_pause_dur)
+{
+	struct wlan_lmac_if_mlo_tx_ops *mlo_tx_ops;
+	struct mlo_vdev_pause vdev_pause_info;
+	QDF_STATUS status = QDF_STATUS_E_FAILURE;
+
+	mlo_tx_ops = &psoc->soc_cb.tx_ops->mlo_ops;
+	if (!mlo_tx_ops) {
+		mlo_err("tx_ops is null!");
+		return;
+	}
+
+	if (!mlo_tx_ops->send_vdev_pause) {
+		mlo_err("send_vdev_pause is null");
+		return;
+	}
+
+	vdev_pause_info.vdev_id = session_id;
+	vdev_pause_info.vdev_pause_duration = vdev_pause_dur;
+	status = mlo_tx_ops->send_vdev_pause(psoc, &vdev_pause_info);
+	if (QDF_IS_STATUS_ERROR(status))
+		mlo_err("Failed to send vdev pause to FW");
+}
 #endif

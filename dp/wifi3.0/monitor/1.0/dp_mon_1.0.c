@@ -193,6 +193,9 @@ void dp_flush_monitor_rings(struct dp_soc *soc)
 		dp_info("failed to reset monitor filters");
 	qdf_spin_unlock_bh(&mon_pdev->mon_lock);
 
+	if (qdf_unlikely(mon_pdev->mon_chan_band >= REG_BAND_UNKNOWN))
+		return;
+
 	lmac_id = pdev->ch_band_lmac_id_mapping[mon_pdev->mon_chan_band];
 	if (qdf_unlikely(lmac_id == DP_MON_INVALID_LMAC_ID))
 		return;
@@ -388,7 +391,7 @@ QDF_STATUS dp_vdev_set_monitor_mode_rings(struct dp_pdev *pdev,
 		/* Allocate sw rx descriptor pool for mon RxDMA buffer ring */
 		status = dp_rx_pdev_mon_buf_desc_pool_alloc(pdev, mac_for_pdev);
 		if (!QDF_IS_STATUS_SUCCESS(status)) {
-			dp_err("%s: dp_rx_pdev_mon_buf_desc_pool_alloc() failed\n",
+			dp_err("%s: dp_rx_pdev_mon_buf_desc_pool_alloc() failed",
 			       __func__);
 			goto fail0;
 		}

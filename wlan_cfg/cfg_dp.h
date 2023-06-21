@@ -100,6 +100,8 @@
 
 #define WLAN_CFG_TIME_CONTROL_BP 3000
 
+#define WLAN_CFG_QREF_CONTROL_SIZE 0
+
 #if defined(WLAN_MAX_PDEVS) && (WLAN_MAX_PDEVS == 1)
 #define WLAN_CFG_PER_PDEV_RX_RING 0
 #define WLAN_CFG_PER_PDEV_LMAC_RING 0
@@ -177,6 +179,9 @@
 
 #define WLAN_CFG_TIME_CONTROL_BP_MIN 3000
 #define WLAN_CFG_TIME_CONTROL_BP_MAX 1800000
+
+#define WLAN_CFG_QREF_CONTROL_SIZE_MIN 0
+#define WLAN_CFG_QREF_CONTROL_SIZE_MAX 4000
 
 #define WLAN_CFG_TX_COMP_RING_SIZE_MIN 512
 #define WLAN_CFG_TX_COMP_RING_SIZE_MAX 0x80000
@@ -518,6 +523,7 @@
 #define WLAN_CFG_SAWF_STATS_MIN 0x0
 #define WLAN_CFG_SAWF_STATS_MAX 0x7
 #endif
+
 /*
  * <ini>
  * "dp_tx_capt_max_mem_mb"- maximum memory used by Tx capture
@@ -759,6 +765,13 @@
 		WLAN_CFG_TIME_CONTROL_BP,\
 		CFG_VALUE_OR_DEFAULT, "DP time control back pressure")
 
+#define CFG_DP_QREF_CONTROL_SIZE \
+		CFG_INI_UINT("dp_qref_control_size", \
+		WLAN_CFG_QREF_CONTROL_SIZE_MIN,\
+		WLAN_CFG_QREF_CONTROL_SIZE_MAX,\
+		WLAN_CFG_QREF_CONTROL_SIZE,\
+		CFG_VALUE_OR_DEFAULT, "DP array size for qref debug")
+
 #ifdef CONFIG_SAWF_STATS
 #define CFG_DP_SAWF_STATS \
 		CFG_INI_UINT("dp_sawf_stats", \
@@ -788,7 +801,7 @@
 #define CFG_DP_LOCAL_PKT_CAPTURE \
 		CFG_INI_BOOL( \
 		"local_packet_capture", \
-		false, \
+		true, \
 		"Local packet capture")
 
 #define CFG_DP_LOCAL_PKT_CAPTURE_CONFIG CFG(CFG_DP_LOCAL_PKT_CAPTURE)
@@ -848,6 +861,10 @@
 #define CFG_DP_RX_HASH \
 	CFG_INI_BOOL("dp_rx_hash", true, \
 	"DP Rx Hash")
+
+#define CFG_DP_RX_RR \
+	CFG_INI_BOOL("dp_rx_rr", true, \
+	"DP Rx Round Robin")
 
 #define CFG_DP_TSO \
 	CFG_INI_BOOL("TSOEnable", false, \
@@ -1811,6 +1828,10 @@
 #define WLAN_CFG_NUM_PPEDS_TX_DESC_MAX 0
 #endif
 
+#define WLAN_CFG_SPECIAL_MSK_MIN 0
+#define WLAN_CFG_SPECIAL_MSK_MAX 0xFFFFFFFF
+#define WLAN_CFG_SPECIAL_MSK 0xF
+
 #if defined(WLAN_FEATURE_11BE_MLO) && defined(WLAN_MLO_MULTI_CHIP)
 /*
  * <ini>
@@ -1925,6 +1946,27 @@
 #define CFG_TX_PKT_INSPECT_FOR_ILP_CFG
 #endif
 
+/*
+ * <ini>
+ * special_frame_msk - frame mask to mark special frame type
+ * @Min: 0
+ * @Max: 0xFFFFFFFF
+ * @Default: 15
+ *
+ * This ini entry is used to set frame types to deliver to stack
+ * in error receive path
+ *
+ * Usage: External
+ *
+ * </ini>
+ */
+#define CFG_SPECIAL_FRAME_MSK \
+		CFG_INI_UINT("special_frame_msk", \
+		WLAN_CFG_SPECIAL_MSK_MIN, \
+		WLAN_CFG_SPECIAL_MSK_MAX, \
+		WLAN_CFG_SPECIAL_MSK, \
+		CFG_VALUE_OR_DEFAULT, "special frame to deliver to stack")
+
 #define CFG_DP \
 		CFG(CFG_DP_HTT_PACKET_TYPE) \
 		CFG(CFG_DP_INT_BATCH_THRESHOLD_OTHER) \
@@ -1955,8 +1997,10 @@
 		CFG(CFG_DP_NSS_COMP_RING_SIZE) \
 		CFG(CFG_DP_PDEV_LMAC_RING) \
 		CFG(CFG_DP_TIME_CONTROL_BP) \
+		CFG(CFG_DP_QREF_CONTROL_SIZE) \
 		CFG(CFG_DP_BASE_HW_MAC_ID) \
 		CFG(CFG_DP_RX_HASH) \
+		CFG(CFG_DP_RX_RR) \
 		CFG(CFG_DP_TSO) \
 		CFG(CFG_DP_LRO) \
 		CFG(CFG_DP_SG) \
@@ -2053,5 +2097,6 @@
 		CFG_TX_PKT_INSPECT_FOR_ILP_CFG \
 		CFG(CFG_DP_POINTER_TIMER_THRESHOLD_RX) \
 		CFG(CFG_DP_POINTER_NUM_THRESHOLD_RX) \
-		CFG_DP_LOCAL_PKT_CAPTURE_CONFIG
+		CFG_DP_LOCAL_PKT_CAPTURE_CONFIG \
+		CFG(CFG_SPECIAL_FRAME_MSK)
 #endif /* _CFG_DP_H_ */
