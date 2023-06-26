@@ -9548,14 +9548,13 @@ static inline void copy_fw_abi_version_tlv(wmi_unified_t wmi_handle,
 			(struct _wmi_abi_version *)&wmi_handle->fw_abi_version,
 			&cmd->host_abi_vers);
 
-	qdf_print("%s: INIT_CMD version: %d, %d, 0x%x, 0x%x, 0x%x, 0x%x",
-			__func__,
-			WMI_VER_GET_MAJOR(cmd->host_abi_vers.abi_version_0),
-			WMI_VER_GET_MINOR(cmd->host_abi_vers.abi_version_0),
-			cmd->host_abi_vers.abi_version_ns_0,
-			cmd->host_abi_vers.abi_version_ns_1,
-			cmd->host_abi_vers.abi_version_ns_2,
-			cmd->host_abi_vers.abi_version_ns_3);
+	wmi_debug("INIT_CMD version: %d, %d, 0x%x, 0x%x, 0x%x, 0x%x",
+		  WMI_VER_GET_MAJOR(cmd->host_abi_vers.abi_version_0),
+		  WMI_VER_GET_MINOR(cmd->host_abi_vers.abi_version_0),
+		  cmd->host_abi_vers.abi_version_ns_0,
+		  cmd->host_abi_vers.abi_version_ns_1,
+		  cmd->host_abi_vers.abi_version_ns_2,
+		  cmd->host_abi_vers.abi_version_ns_3);
 
 	/* Save version sent from host -
 	 * Will be used to check ready event
@@ -12636,7 +12635,7 @@ static uint32_t ready_extract_init_status_tlv(wmi_unified_t wmi_handle,
 	param_buf = (WMI_READY_EVENTID_param_tlvs *) evt_buf;
 	ev = param_buf->fixed_param;
 
-	qdf_print("%s:%d", __func__, ev->status);
+	wmi_info("%s:%d", __func__, ev->status);
 
 	return ev->status;
 }
