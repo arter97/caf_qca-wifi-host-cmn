@@ -97,7 +97,8 @@ static qdf_nbuf_t wbuff_prepare_nbuf(uint8_t module_id, uint8_t pool_id,
 	qdf_nbuf_t buf;
 	unsigned long dev_scratch = 0;
 
-	buf = qdf_nbuf_alloc(NULL, len, reserve, align, false);
+	buf = qdf_nbuf_page_frag_alloc(NULL, len, reserve, align,
+				       &wbuff.pf_cache);
 	if (!buf)
 		return NULL;
 	dev_scratch = module_id;
