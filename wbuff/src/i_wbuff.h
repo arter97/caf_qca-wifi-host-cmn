@@ -79,9 +79,11 @@ struct wbuff_module {
 /**
  * struct wbuff_holder - allocation holder for wbuff
  * @initialized: to identified whether module is initialized
+ * @pf_cache: Reference to page frag cache, used for nbuf allocations
  */
 struct wbuff_holder {
 	bool initialized;
 	struct wbuff_module mod[WBUFF_MAX_MODULES];
+	qdf_frag_cache_t pf_cache;
 };
 #endif /* _WBUFF_H */
