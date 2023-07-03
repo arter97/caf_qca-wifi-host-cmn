@@ -4998,6 +4998,18 @@ static inline qdf_size_t qdf_nbuf_get_truesize(qdf_nbuf_t nbuf)
 	return __qdf_nbuf_get_truesize(nbuf);
 }
 
+/**
+ * qdf_nbuf_get_allocsize() - Return the actual size of the skb->head
+ * excluding the header and variable data area
+ * @nbuf: qdf_nbuf_t
+ *
+ * Return: actual allocated size of network buffer
+ */
+static inline qdf_size_t qdf_nbuf_get_allocsize(qdf_nbuf_t nbuf)
+{
+	return __qdf_nbuf_get_allocsize(nbuf);
+}
+
 #ifdef NBUF_FRAG_MEMORY_DEBUG
 
 #define qdf_nbuf_move_frag_page_offset(f, i, o) \
