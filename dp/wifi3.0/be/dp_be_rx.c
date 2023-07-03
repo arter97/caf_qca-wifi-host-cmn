@@ -1094,7 +1094,22 @@ QDF_STATUS dp_wbm_get_rx_desc_from_hal_desc_be(struct dp_soc *soc,
 	return QDF_STATUS_SUCCESS;
 }
 #endif /* DP_HW_COOKIE_CONVERT_EXCEPTION */
+struct dp_rx_desc *dp_rx_desc_ppeds_cookie_2_va(struct dp_soc *soc,
+						unsigned long cookie)
+{
+	return (struct dp_rx_desc *)cookie;
+}
+
 #else
+struct dp_rx_desc *dp_rx_desc_ppeds_cookie_2_va(struct dp_soc *soc,
+						unsigned long cookie)
+{
+	if (!cookie)
+		return NULL;
+
+	return (struct dp_rx_desc *)dp_cc_desc_find(soc, cookie);
+}
+
 QDF_STATUS dp_wbm_get_rx_desc_from_hal_desc_be(struct dp_soc *soc,
 					       void *ring_desc,
 					       struct dp_rx_desc **r_rx_desc)
