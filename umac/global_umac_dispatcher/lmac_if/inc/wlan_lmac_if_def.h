@@ -1129,6 +1129,8 @@ struct wlan_lmac_if_ftm_rx_ops {
  *			rate2power table update event handler.
  * @end_r2p_table_update_wait: Call-back function to end the wait on r2p update
  *			response from fw.
+ * @is_80p80_supported: Callback function to check if the device supports a
+ * 6GHz 80p80 channel.
  */
 struct wlan_lmac_if_reg_tx_ops {
 	QDF_STATUS (*register_master_handler)(struct wlan_objmgr_psoc *psoc,
@@ -1199,6 +1201,7 @@ struct wlan_lmac_if_reg_tx_ops {
 	QDF_STATUS (*end_r2p_table_update_wait)(
 			struct wlan_objmgr_psoc *psoc,
 			uint32_t pdev_id);
+	bool (*is_80p80_supported)(struct wlan_objmgr_pdev *pdev);
 };
 
 /**

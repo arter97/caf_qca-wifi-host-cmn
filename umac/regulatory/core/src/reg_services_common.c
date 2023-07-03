@@ -10162,3 +10162,28 @@ QDF_STATUS reg_process_r2p_table_update_response(struct wlan_objmgr_psoc *psoc,
 
 	return status;
 }
+
+#ifndef CONFIG_REG_CLIENT
+bool reg_is_dev_supports_80p80(struct wlan_objmgr_pdev *pdev)
+{
+	struct wlan_lmac_if_reg_tx_ops *reg_tx_ops;
+	struct wlan_objmgr_psoc *psoc;
+
+	psoc = wlan_pdev_get_psoc(pdev);
+	if (!psoc) {
+		reg_err("psoc is NULL");
+		return false;
+	}
+
+	reg_tx_ops = reg_get_psoc_tx_ops(psoc);
+	if (!reg_tx_ops) {
+		reg_err("reg_tx_ops is NULL");
+		return false;
+	}
+
+	if (reg_tx_ops->is_80p80_supported)
+		return reg_tx_ops->is_80p80_supported(pdev);
+
+	return false;
+}
+#endif
