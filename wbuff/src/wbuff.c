@@ -23,6 +23,9 @@
  */
 
 #include <wbuff.h>
+#include <linux/debugfs.h>
+#include <linux/seq_file.h>
+#include <qdf_debugfs.h>
 #include "i_wbuff.h"
 
 /**
@@ -96,6 +99,8 @@ static qdf_nbuf_t wbuff_prepare_nbuf(uint8_t module_id, uint8_t pool_id,
 {
 	qdf_nbuf_t buf;
 	unsigned long dev_scratch = 0;
+	struct wbuff_module *mod = &wbuff.mod[module_id];
+	struct wbuff_pool *wbuff_pool = &mod->wbuff_pool[pool_id];
 
 	buf = qdf_nbuf_page_frag_alloc(NULL, len, reserve, align,
 				       &wbuff.pf_cache);
@@ -105,6 +110,8 @@ static qdf_nbuf_t wbuff_prepare_nbuf(uint8_t module_id, uint8_t pool_id,
 	dev_scratch <<= WBUFF_MODULE_ID_SHIFT;
 	dev_scratch |= ((pool_id << WBUFF_POOL_ID_SHIFT) | 1);
 	qdf_nbuf_set_dev_scratch(buf, dev_scratch);
+
+	wbuff_pool->mem_alloc += qdf_nbuf_get_allocsize(buf);
 
 	return buf;
 }
@@ -125,6 +132,115 @@ static bool wbuff_is_valid_handle(struct wbuff_handle *handle)
 	return false;
 }
 
+static char *wbuff_get_mod_name(enum wbuff_module_id module_id)
+{
+	char *str;
+
+	switch (module_id) {
+	case WBUFF_MODULE_WMI_TX:
+		str = "WBUFF_MODULE_WMI_TX";
+		break;
+	case WBUFF_MODULE_CE_RX:
+		str = "WBUFF_MODULE_CE_RX";
+		break;
+	default:
+		str = "Invalid Module ID";
+		break;
+	}
+
+	return str;
+}
+
+static void wbuff_debugfs_print(qdf_debugfs_file_t file, const char *fmt, ...)
+{
+	va_list args;
+
+	va_start(args, fmt);
+	seq_vprintf(file, fmt, args);
+	va_end(args);
+}
+
+static int wbuff_stats_debugfs_show(qdf_debugfs_file_t file, void *data)
+{
+	struct wbuff_module *mod;
+	struct wbuff_pool *wbuff_pool;
+	int i, j;
+
+	wbuff_debugfs_print(file, "WBUFF POOL STATS:\n");
+	wbuff_debugfs_print(file, "=================\n");
+
+	for (i = 0; i < WBUFF_MAX_MODULES; i++) {
+		mod = &wbuff.mod[i];
+
+		if (!mod->registered)
+			continue;
+
+		wbuff_debugfs_print(file, "Module (%d) : %s\n", i,
+				    wbuff_get_mod_name(i));
+
+		wbuff_debugfs_print(file, "%s %25s %20s %20s\n", "Pool ID",
+				    "Mem Allocated (In Bytes)",
+				    "Wbuff Success Count",
+				    "Wbuff Fail Count");
+
+		for (j = 0; j < WBUFF_MAX_POOLS; j++) {
+			wbuff_pool = &mod->wbuff_pool[j];
+
+			if (!wbuff_pool->initialized)
+				continue;
+
+			wbuff_debugfs_print(file, "%d %30llu %20llu %20llu\n",
+					    j, wbuff_pool->mem_alloc,
+					    wbuff_pool->alloc_success,
+					    wbuff_pool->alloc_fail);
+		}
+		wbuff_debugfs_print(file, "\n");
+	}
+
+	return 0;
+}
+
+static int wbuff_stats_debugfs_open(struct inode *inode, struct file *file)
+{
+	return single_open(file, wbuff_stats_debugfs_show,
+			   inode->i_private);
+}
+
+static const struct file_operations wbuff_stats_fops = {
+	.owner          = THIS_MODULE,
+	.open           = wbuff_stats_debugfs_open,
+	.release        = single_release,
+	.read           = seq_read,
+	.llseek         = seq_lseek,
+};
+
+static QDF_STATUS wbuff_debugfs_init(void)
+{
+	wbuff.wbuff_debugfs_dir =
+		qdf_debugfs_create_dir("wbuff", NULL);
+
+	if (!wbuff.wbuff_debugfs_dir)
+		return QDF_STATUS_E_FAILURE;
+
+	wbuff.wbuff_stats_dentry =
+		qdf_debugfs_create_entry("wbuff_stats", QDF_FILE_USR_READ,
+					 wbuff.wbuff_debugfs_dir, NULL,
+					 &wbuff_stats_fops);
+	if (!wbuff.wbuff_stats_dentry)
+		return QDF_STATUS_E_FAILURE;
+
+	return QDF_STATUS_SUCCESS;
+}
+
+static void wbuff_debugfs_exit(void)
+{
+	if (!wbuff.wbuff_debugfs_dir)
+		return;
+
+	debugfs_remove_recursive(wbuff.wbuff_debugfs_dir);
+	wbuff.wbuff_debugfs_dir = NULL;
+}
+
 QDF_STATUS wbuff_module_init(void)
 {
 	struct wbuff_module *mod = NULL;
@@ -142,6 +258,9 @@ QDF_STATUS wbuff_module_init(void)
 			mod->wbuff_pool[pool_id].pool = NULL;
 		mod->registered = false;
 	}
+
+	wbuff_debugfs_init();
+
 	wbuff.initialized = true;
 
 	return QDF_STATUS_SUCCESS;
@@ -156,6 +275,8 @@ QDF_STATUS wbuff_module_deinit(void)
 		return QDF_STATUS_E_INVAL;
 
 	wbuff.initialized = false;
+	wbuff_debugfs_exit();
+
 	for (module_id = 0; module_id < WBUFF_MAX_MODULES; module_id++) {
 		mod = &wbuff.mod[module_id];
 		if (mod->registered)
@@ -267,6 +388,11 @@ QDF_STATUS wbuff_module_deregister(struct wbuff_mod_handle *hdl)
 			first = qdf_nbuf_next(buf);
 			qdf_nbuf_free(buf);
 		}
+
+		wbuff_pool->mem_alloc = 0;
+		wbuff_pool->alloc_success = 0;
+		wbuff_pool->alloc_fail = 0;
+
 	}
 	mod->registered = false;
 	qdf_spin_unlock_bh(&mod->lock);
@@ -312,6 +438,9 @@ wbuff_buff_get(struct wbuff_mod_handle *hdl, uint8_t pool_id, uint32_t len,
 	if (buf) {
 		qdf_nbuf_set_next(buf, NULL);
 		qdf_net_buf_debug_update_node(buf, func_name, line_num);
+		wbuff_pool->alloc_success++;
+	} else {
+		wbuff_pool->alloc_fail++;
 	}
 
 	return buf;
