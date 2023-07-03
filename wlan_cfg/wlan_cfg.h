@@ -2737,4 +2737,12 @@ void wlan_cfg_set_ast_indication_disable(struct wlan_cfg_dp_soc_ctxt *cfg,
  * Return: true or false
  */
 bool wlan_cfg_get_ast_indication_disable(struct wlan_cfg_dp_soc_ctxt *cfg);
+
+/**
+ * wlan_cfg_get_dp_soc_dpdk_cfg - Return soc dpdk config
+ * @psoc: psoc object
+ *
+ * Return: dpdk_cfg
+ */
+int wlan_cfg_get_dp_soc_dpdk_cfg(struct cdp_ctrl_objmgr_psoc *psoc);
 #endif /*__WLAN_CFG_H*/

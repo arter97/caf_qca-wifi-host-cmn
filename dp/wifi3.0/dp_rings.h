@@ -863,4 +863,17 @@ dp_srng_configure_nf_interrupt_thresholds(struct dp_soc *soc,
 {
 }
 #endif
+
+#ifdef WLAN_SUPPORT_DPDK
+/*
+ * dp_soc_reset_dpdk_intr_mask() - reset interrupt mask
+ * @dp_soc - DP Soc handle
+ *
+ * Return: Return void
+ */
+void dp_soc_reset_dpdk_intr_mask(struct dp_soc *soc);
+#else
+static inline void dp_soc_reset_dpdk_intr_mask(struct dp_soc *soc)
+{ }
+#endif
 #endif /* _DP_RINGS_H_ */

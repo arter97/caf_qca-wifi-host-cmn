@@ -4258,3 +4258,122 @@ void dp_pdev_set_default_reo(struct dp_pdev *pdev)
 	}
 }
 
+#ifdef WLAN_SUPPORT_DPDK
+void dp_soc_reset_dpdk_intr_mask(struct dp_soc *soc)
+{
+	uint8_t j;
+	uint8_t *grp_mask = NULL;
+	int group_number, mask, num_ring;
+
+	/* number of tx ring */
+	num_ring = soc->num_tcl_data_rings;
+
+	/*
+	 * group mask for tx completion  ring.
+	 */
+	grp_mask =  &soc->wlan_cfg_ctx->int_tx_ring_mask[0];
+
+	for (j = 0; j < WLAN_CFG_NUM_TCL_DATA_RINGS; j++) {
+		/*
+		 * Group number corresponding to tx offloaded ring.
+		 */
+		group_number = dp_srng_find_ring_in_mask(j, grp_mask);
+		if (group_number < 0) {
+			dp_init_debug("%pK: ring not part of any group; ring_type: %d, ring_num %d",
+				      soc, WBM2SW_RELEASE, j);
+			continue;
+		}
+
+		mask = wlan_cfg_get_tx_ring_mask(soc->wlan_cfg_ctx,
+						 group_number);
+
+		/* reset the tx mask for offloaded ring */
+		mask &= (~(1 << j));
+
+		/*
+		 * reset the interrupt mask for offloaded ring.
+		 */
+		wlan_cfg_set_tx_ring_mask(soc->wlan_cfg_ctx,
+					  group_number, mask);
+	}
+
+	/* number of rx rings */
+	num_ring = soc->num_reo_dest_rings;
+
+	/*
+	 * group mask for reo destination ring.
+	 */
+	grp_mask = &soc->wlan_cfg_ctx->int_rx_ring_mask[0];
+
+	for (j = 0; j < WLAN_CFG_NUM_REO_DEST_RING; j++) {
+		/*
+		 * Group number corresponding to rx offloaded ring.
+		 */
+		group_number = dp_srng_find_ring_in_mask(j, grp_mask);
+		if (group_number < 0) {
+			dp_init_debug("%pK: ring not part of any group; ring_type: %d,ring_num %d",
+				      soc, REO_DST, j);
+			continue;
+		}
+
+		mask =  wlan_cfg_get_rx_ring_mask(soc->wlan_cfg_ctx,
+						  group_number);
+
+		/* reset the interrupt mask for offloaded ring */
+		mask &= (~(1 << j));
+
+		/*
+		 * set the interrupt mask to zero for rx offloaded radio.
+		 */
+		wlan_cfg_set_rx_ring_mask(soc->wlan_cfg_ctx,
+					  group_number, mask);
+	}
+
+	/*
+	 * group mask for Rx buffer refill ring
+	 */
+	grp_mask = &soc->wlan_cfg_ctx->int_host2rxdma_ring_mask[0];
+
+	for (j = 0; j < MAX_PDEV_CNT; j++) {
+		int lmac_id = wlan_cfg_get_hw_mac_idx(soc->wlan_cfg_ctx, j);
+
+		/*
+		 * Group number corresponding to rx offloaded ring.
+		 */
+		group_number = dp_srng_find_ring_in_mask(lmac_id, grp_mask);
+		if (group_number < 0) {
+			dp_init_debug("%pK: ring not part of any group; ring_type: %d,ring_num %d",
+				      soc, REO_DST, lmac_id);
+			continue;
+		}
+
+		/* set the interrupt mask for offloaded ring */
+		mask =  wlan_cfg_get_host2rxdma_ring_mask(soc->wlan_cfg_ctx,
+							  group_number);
+		mask &= (~(1 << lmac_id));
+
+		/*
+		 * set the interrupt mask to zero for rx offloaded radio.
+		 */
+		wlan_cfg_set_host2rxdma_ring_mask(soc->wlan_cfg_ctx,
+						  group_number, mask);
+	}
+
+	grp_mask = &soc->wlan_cfg_ctx->int_rx_err_ring_mask[0];
+
+	for (j = 0; j < num_ring; j++) {
+		/*
+		 * Group number corresponding to rx err ring.
+		 */
+		group_number = dp_srng_find_ring_in_mask(j, grp_mask);
+		if (group_number < 0) {
+			dp_init_debug("%pK: ring not part of any group; ring_type: %d,ring_num %d",
+				      soc, REO_EXCEPTION, j);
+			continue;
+		}
+
+		wlan_cfg_set_rx_err_ring_mask(soc->wlan_cfg_ctx,
+					      group_number, 0);
+	}
+}
+#endif

@@ -745,6 +745,10 @@ struct cdp_cmn_ops {
 				     uint64_t *value);
 	void (*txrx_get_tqm_offset)(struct cdp_soc_t *soc_hdl, uint64_t *value);
 	uint64_t (*get_fst_cmem_base)(struct cdp_soc_t *soc_hdl, uint64_t size);
+#ifdef WLAN_SUPPORT_DPDK
+	void (*dpdk_get_ring_info)(struct cdp_soc_t *soc_hdl,
+				   qdf_uio_info_t *uio_info);
+#endif
 };
 
 struct cdp_ctrl_ops {

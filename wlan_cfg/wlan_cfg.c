@@ -5916,3 +5916,15 @@ bool wlan_cfg_get_ast_indication_disable(struct wlan_cfg_dp_soc_ctxt *cfg)
 {
 	return cfg->fw_ast_indication_disable;
 }
+
+#ifdef WLAN_SUPPORT_DPDK
+int wlan_cfg_get_dp_soc_dpdk_cfg(struct cdp_ctrl_objmgr_psoc *psoc)
+{
+	return cfg_get(psoc, CFG_DPDK_WIFI);
+}
+#else
+int wlan_cfg_get_dp_soc_dpdk_cfg(struct cdp_ctrl_objmgr_psoc *psoc)
+{
+	return 0;
+}
+#endif
