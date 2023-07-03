@@ -2837,6 +2837,19 @@ static inline unsigned int __qdf_nbuf_get_truesize(struct sk_buff *skb)
 	return skb->truesize;
 }
 
+/**
+ * __qdf_nbuf_get_allocsize() - Return the actual size of the skb->head
+ * excluding the header and variable data area
+ * @skb: sk buff
+ *
+ * Return: actual allocated size of network buffer
+ */
+static inline unsigned int __qdf_nbuf_get_allocsize(struct sk_buff *skb)
+{
+	return SKB_WITH_OVERHEAD(skb->truesize) -
+		SKB_DATA_ALIGN(sizeof(struct sk_buff));
+}
+
 #ifdef CONFIG_WLAN_SYSFS_MEM_STATS
 /**
  * __qdf_record_nbuf_nbytes() - add or subtract the size of the nbuf
