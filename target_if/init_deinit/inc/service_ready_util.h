@@ -257,6 +257,17 @@ QDF_STATUS init_deinit_spectral_scaling_params_free(
 				struct target_psoc_info *tgt_psoc_info);
 
 /**
+ * init_deinit_aux_dev_cap_free() - free aux dev capability buffer
+ * @tgt_psoc_info: target psoc info object
+ *
+ * API to free aux dev capability buffer
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS init_deinit_aux_dev_cap_free(
+				struct target_psoc_info *tgt_psoc_info);
+
+/**
  * init_deinit_populate_phy_reg_cap() - populate phy reg capability
  * @psoc: PSOC object
  * @wmi_handle: WMI handle pointer
@@ -373,6 +384,23 @@ int init_deinit_populate_dbs_or_sbs_cap_ext2(struct wlan_objmgr_psoc *psoc,
 					     wmi_unified_t handle,
 					     uint8_t *event,
 					     struct tgt_info *info);
+
+/**
+ * init_deinit_populate_aux_dev_cap_ext2() - populate aux dev capability
+ * from service ready ext2 event
+ *
+ * @psoc: PSOC object
+ * @handle: WMI handle pointer
+ * @event: event buffer received from FW
+ * @info: tgt_info object
+ *
+ * API to populate aux dev capability from service ready ext2 event.
+ * Return: zero on successful or failure
+ */
+
+int init_deinit_populate_aux_dev_cap_ext2(struct wlan_objmgr_psoc *psoc,
+					  wmi_unified_t handle, uint8_t *event,
+					  struct tgt_info *info);
 
 /**
  * init_deinit_populate_sap_coex_capability() - SAP coex capability

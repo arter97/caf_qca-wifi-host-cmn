@@ -410,6 +410,27 @@ struct wlan_psoc_host_chainmask_table {
 	struct wlan_psoc_host_chainmask_capabilities *cap_list;
 };
 
+/* struct wlan_psoc_host_aux_dev_caps - wlan psoc aux dev capability.
+ *                                      retrieved from wmi_aux_dev_capabilities.
+ *
+ * @aux_index: aux index
+ * @hw_mode_id：hw mode which defined in WMI_HW_MODE_CONFIG_TYPE
+ * @supported_modes_bitmap: indicate which mode this AUX supports for the
+ *                          HW mode defined in hw_mode_id. bitmap defined in
+ *                          WMI_AUX_DEV_CAPS_SUPPORTED_MODE.
+ * @listen_pdev_id_map: indicate which AUX MAC can listen/scan for the HW mode
+ *                      described in hw_mode_id
+ * @emlsr_pdev_id_map: indicate which AUX MAC can perform eMLSR for the HW mode
+ *                     described in hw_mode_id.
+ */
+struct wlan_psoc_host_aux_dev_caps {
+	uint32_t aux_index;
+	uint32_t hw_mode_id;
+	uint32_t supported_modes_bitmap;
+	uint32_t listen_pdev_id_map;
+	uint32_t emlsr_pdev_id_map;
+};
+
 /**
  * struct wlan_psoc_host_service_ext_param - EXT service base params in event
  * @default_conc_scan_config_bits: Default concurrenct scan config
@@ -482,6 +503,7 @@ struct wlan_psoc_host_service_ext_param {
  *                          mapping
  * @is_multipass_sap: Multipass sap flag
  * @num_max_mlo_link_per_ml_bss_supp: max link number per MLD FW supports.
+ * @num_aux_dev_caps: number of aux dev capabilities
  */
 struct wlan_psoc_host_service_ext2_param {
 	uint8_t reg_db_version_major;
@@ -516,6 +538,7 @@ struct wlan_psoc_host_service_ext2_param {
 	bool is_multipass_sap;
 #endif
 	uint32_t num_max_mlo_link_per_ml_bss_supp;
+	uint32_t num_aux_dev_caps;
 };
 
 #endif /* _SERVICE_READY_PARAM_H_*/

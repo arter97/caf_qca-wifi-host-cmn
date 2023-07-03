@@ -3335,6 +3335,12 @@ QDF_STATUS (*extract_peer_entry_ptqm_migrate_event)(
 		uint32_t index,
 		struct peer_entry_ptqm_migrate_event_params *entry);
 #endif /* QCA_SUPPORT_PRIMARY_LINK_MIGRATE */
+
+QDF_STATUS (*extract_aux_dev_cap_service_ready_ext2)(
+			wmi_unified_t wmi_handle,
+			uint8_t *evt_buf, uint8_t idx,
+			struct wlan_psoc_host_aux_dev_caps *param);
+
 };
 
 /* Forward declaration for psoc*/

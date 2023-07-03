@@ -4059,3 +4059,17 @@ wmi_extract_csa_ie_received_event(wmi_unified_t wmi_handle,
 
 	return QDF_STATUS_E_FAILURE;
 }
+
+QDF_STATUS wmi_extract_aux_dev_cap_service_ready_ext2(
+		wmi_unified_t wmi_handle,
+		uint8_t *evt_buf, uint8_t idx,
+		struct wlan_psoc_host_aux_dev_caps *param)
+{
+	if (wmi_handle->ops->extract_aux_dev_cap_service_ready_ext2)
+		return wmi_handle->ops->extract_aux_dev_cap_service_ready_ext2(
+				wmi_handle,
+				evt_buf, idx, param);
+
+	return QDF_STATUS_E_FAILURE;
+}
+

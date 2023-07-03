@@ -8154,7 +8154,7 @@ enum wmi_userspace_log_level {
 
 /**
  * enum wmi_host_hw_mode_config_type - HW mode config type replicated from
- *                                     FW header
+ *                                     wmi_hw_mode_config_type in FW header
  * @WMI_HOST_HW_MODE_SINGLE: Only one PHY is active.
  * @WMI_HOST_HW_MODE_DBS: Both PHYs are active in different bands,
  *                        one in 2G and another in 5G.
@@ -8170,8 +8170,20 @@ enum wmi_userspace_log_level {
  *                           as in WMI_HW_MODE_SBS, and 3rd on the other band
  * @WMI_HOST_HW_MODE_DBS_OR_SBS: Two PHY with one PHY capabale of both 2G and
  *                        5G. It can support SBS (5G + 5G) OR DBS (5G + 2G).
- * @WMI_HOST_HW_MODE_FW_INTERNAL: FW specific internal mode
+ * @WMI_HOST_HW_MODE_DBS_2G_5G: Both PHYs are active in different bands.
+ *                              PhyA 2G and PhyB 5G
  * @WMI_HOST_HW_MODE_2G_PHYB: Only one phy is active. 2G mode on PhyB.
+ * @WMI_HOST_HW_MODE_EMLSR: Both PHYs are active in listen mode in 1x1
+ *                          and Tx/Rx trigger on any PHY will switch
+ *                          from 1x1 to 2x2 on that Phy
+ * @WMI_HOST_HW_MODE_AUX_EMLSR_SINGLE:  PHYA0 and AUX are active in listen mode
+ *                                      in 1x1 and Tx/Rx trigger on any.
+ *                                      PHY will switch from 1x1 to 2x2
+ *                                      on that Phy.
+ * @WMI_HOST_HW_MODE_AUX_EMLSR_SPLIT: PHYA1 and AUX are active in listen mode
+ *                                    in 1x1 and Tx/Rx trigger on any.
+ *                                    PHY will switch from 1x1 to 2x2
+ *                                    on that Phy.
  * @WMI_HOST_HW_MODE_MAX: Max hw_mode_id. Used to indicate invalid mode.
  * @WMI_HOST_HW_MODE_DETECT: Mode id used by host to choose mode from target
  *                        supported modes.
@@ -8183,8 +8195,11 @@ enum wmi_host_hw_mode_config_type {
 	WMI_HOST_HW_MODE_SBS          = 3,
 	WMI_HOST_HW_MODE_DBS_SBS      = 4,
 	WMI_HOST_HW_MODE_DBS_OR_SBS   = 5,
-	WMI_HOST_HW_MODE_FW_INTERNAL  = 6,
+	WMI_HOST_HW_MODE_DBS_2G_5G    = 6,
 	WMI_HOST_HW_MODE_2G_PHYB      = 7,
+	WMI_HOST_HW_MODE_EMLSR        = 8,
+	WMI_HOST_HW_MODE_AUX_EMLSR_SINGLE = 9,
+	WMI_HOST_HW_MODE_AUX_EMLSR_SPLIT  = 10,
 	WMI_HOST_HW_MODE_MAX,
 	WMI_HOST_HW_MODE_DETECT,
 };

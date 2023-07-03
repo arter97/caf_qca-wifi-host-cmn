@@ -14558,6 +14558,8 @@ extract_service_ready_ext2_tlv(wmi_unified_t wmi_handle, uint8_t *event,
 
 	extract_num_max_mlo_link(ev, param);
 
+	param->num_aux_dev_caps = param_buf->num_aux_dev_caps;
+
 	return QDF_STATUS_SUCCESS;
 }
 
@@ -15253,6 +15255,46 @@ static QDF_STATUS extract_sw_cal_ver_ext2_tlv(wmi_unified_t wmi_handle,
 	cal->bdf_cal_ver = fw_cap->bdf_cal_ver;
 	cal->ftm_cal_ver = fw_cap->ftm_cal_ver;
 	cal->status = fw_cap->status;
+
+	return QDF_STATUS_SUCCESS;
+}
+
+static QDF_STATUS extract_aux_dev_cap_service_ready_ext2_tlv(
+			wmi_unified_t wmi_handle,
+			uint8_t *event, uint8_t idx,
+			struct wlan_psoc_host_aux_dev_caps *param)
+
+{
+	WMI_SERVICE_READY_EXT2_EVENTID_param_tlvs *param_buf;
+	wmi_aux_dev_capabilities *aux_dev_caps;
+
+	param_buf = (WMI_SERVICE_READY_EXT2_EVENTID_param_tlvs *)event;
+
+	if (!param_buf->num_aux_dev_caps)
+		return QDF_STATUS_E_INVAL;
+
+	if (!param_buf->aux_dev_caps) {
+		wmi_err("aux_dev_caps is NULL");
+		return QDF_STATUS_E_INVAL;
+	}
+
+	if (idx >= param_buf->num_aux_dev_caps)
+		return QDF_STATUS_E_INVAL;
+
+	aux_dev_caps = &param_buf->aux_dev_caps[idx];
+
+	param->aux_index = aux_dev_caps->aux_index;
+	param->hw_mode_id = aux_dev_caps->hw_mode_id;
+	param->supported_modes_bitmap = aux_dev_caps->supported_modes_bitmap;
+	param->listen_pdev_id_map = aux_dev_caps->listen_pdev_id_map;
+	param->emlsr_pdev_id_map = aux_dev_caps->emlsr_pdev_id_map;
+
+	wmi_info("idx %u aux_index %u, hw_mode_id %u, supported_modes_bitmap 0x%x, listen_pdev_id_map 0x%x, emlsr_pdev_id_map 0x%x",
+		 idx, aux_dev_caps->aux_index,
+		 aux_dev_caps->hw_mode_id,
+		 aux_dev_caps->supported_modes_bitmap,
+		 aux_dev_caps->listen_pdev_id_map,
+		 aux_dev_caps->emlsr_pdev_id_map);
 
 	return QDF_STATUS_SUCCESS;
 }
@@ -21127,6 +21169,8 @@ struct wmi_ops tlv_ops =  {
 	.extract_msdu_idx_qtype_map_service_ready_ext2 =
 			extract_msdu_idx_qtype_map_service_ready_ext2_tlv,
 	.extract_sw_cal_ver_ext2 = extract_sw_cal_ver_ext2_tlv,
+	.extract_aux_dev_cap_service_ready_ext2 =
+				extract_aux_dev_cap_service_ready_ext2_tlv,
 	.extract_sar_cap_service_ready_ext =
 				extract_sar_cap_service_ready_ext_tlv,
 	.extract_pdev_utf_event = extract_pdev_utf_event_tlv,

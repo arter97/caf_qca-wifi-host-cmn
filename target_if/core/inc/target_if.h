@@ -209,6 +209,7 @@ struct target_version_info {
  * @device_mode: Global Device mode
  * @sbs_lower_band_end_freq: sbs lower band end frequency
  * @health_mon_param: health monitor params
+ * @aux_dev_caps: aux device capability
  */
 struct tgt_info {
 	struct host_fw_ver version;
@@ -248,6 +249,7 @@ struct tgt_info {
 #ifdef HEALTH_MON_SUPPORT
 	struct wmi_health_mon_params health_mon_param;
 #endif /* HEALTH_MON_SUPPORT */
+	struct wlan_psoc_host_aux_dev_caps *aux_dev_caps;
 };
 
 /**
