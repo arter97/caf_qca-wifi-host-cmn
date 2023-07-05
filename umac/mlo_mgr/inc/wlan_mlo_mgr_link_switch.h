@@ -282,6 +282,21 @@ QDF_STATUS mlo_mgr_link_switch_disconnect_done(struct wlan_objmgr_vdev *vdev,
 					       QDF_STATUS status);
 
 /**
+ * mlo_mgr_link_switch_set_mac_addr_resp() - Handle response of set MAC addr
+ * for VDEV under going link switch.
+ * @vdev: VDEV object manager
+ * @resp_status: Status of MAC address set request.
+ *
+ * The function will handle the response for set MAC address request sent to FW
+ * as part of link switch. If the response is error, then abort the link switch
+ * and send the appropirate status to FW
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS mlo_mgr_link_switch_set_mac_addr_resp(struct wlan_objmgr_vdev *vdev,
+						 uint8_t resp_status);
+
+/**
  * mlo_mgr_link_switch_init_state() - Set the current state of link switch
  * to init state.
  * @mlo_dev_ctx: MLO dev context
@@ -465,6 +480,13 @@ mlo_mgr_link_switch_disconnect_done(struct wlan_objmgr_vdev *vdev,
 				    QDF_STATUS status)
 {
 	return QDF_STATUS_SUCCESS;
+}
+
+static inline QDF_STATUS
+mlo_mgr_link_switch_set_mac_addr_resp(struct wlan_objmgr_vdev *vdev,
+				      uint8_t resp_status)
+{
+	return QDF_STATUS_E_NOSUPPORT;
 }
 
 static inline QDF_STATUS

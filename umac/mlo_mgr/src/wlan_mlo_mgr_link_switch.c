@@ -428,7 +428,10 @@ mlo_mgr_osif_update_connect_info(struct wlan_objmgr_vdev *vdev, int32_t link_id)
 QDF_STATUS mlo_mgr_link_switch_disconnect_done(struct wlan_objmgr_vdev *vdev,
 					       QDF_STATUS status)
 {
+	QDF_STATUS qdf_status;
 	enum mlo_link_switch_req_state cur_state;
+	struct mlo_link_info *new_link_info;
+	struct qdf_mac_addr mac_addr, mld_addr;
 	struct wlan_mlo_dev_context *mlo_dev_ctx = vdev->mlo_dev_ctx;
 	struct wlan_mlo_link_switch_req *req = &mlo_dev_ctx->link_ctx->last_req;
 
@@ -444,8 +447,73 @@ QDF_STATUS mlo_mgr_link_switch_disconnect_done(struct wlan_objmgr_vdev *vdev,
 	mlo_debug("VDEV %d link switch disconnect complete",
 		  wlan_vdev_get_id(vdev));
 
+	new_link_info =
+		mlo_mgr_get_ap_link_by_link_id(vdev, req->new_ieee_link_id);
+	if (!new_link_info) {
+		mlo_err("New link not found in mlo dev ctx");
+		mlo_mgr_remove_link_switch_cmd(vdev);
+		return QDF_STATUS_E_INVAL;
+	}
+
+	qdf_copy_macaddr(&mld_addr, &mlo_dev_ctx->mld_addr);
+	qdf_copy_macaddr(&mac_addr, &new_link_info->link_addr);
+
+	mlo_mgr_link_switch_trans_next_state(mlo_dev_ctx);
+
+	qdf_status = wlan_vdev_mlme_send_set_mac_addr(mac_addr, mld_addr, vdev);
+	if (QDF_IS_STATUS_ERROR(qdf_status))
+		mlo_mgr_remove_link_switch_cmd(vdev);
+
+	return qdf_status;
+}
+
+QDF_STATUS mlo_mgr_link_switch_set_mac_addr_resp(struct wlan_objmgr_vdev *vdev,
+						 uint8_t resp_status)
+{
+	QDF_STATUS status = QDF_STATUS_E_INVAL;
+	enum mlo_link_switch_req_state cur_state;
+	struct mlo_mgr_context *g_mlo_ctx = wlan_objmgr_get_mlo_ctx();
+	struct wlan_mlo_link_switch_req *req;
+	struct mlo_link_info *new_link_info;
+
+	if (resp_status) {
+		mlo_err("VDEV %d set MAC address response %d",
+			wlan_vdev_get_id(vdev), resp_status);
+		mlo_mgr_remove_link_switch_cmd(vdev);
+		return status;
+	}
+
+	if (!g_mlo_ctx) {
+		mlo_err("global mlo ctx NULL");
+		mlo_mgr_remove_link_switch_cmd(vdev);
+		return status;
+	}
+
+	req = &vdev->mlo_dev_ctx->link_ctx->last_req;
+	cur_state = mlo_mgr_link_switch_get_curr_state(vdev->mlo_dev_ctx);
+	if (cur_state != MLO_LINK_SWITCH_STATE_SET_MAC_ADDR) {
+		mlo_err("Link switch cmd flushed, there can be MAC addr mismatch with FW");
+		mlo_mgr_remove_link_switch_cmd(vdev);
+		return status;
+	}
+
+	new_link_info =
+		mlo_mgr_get_ap_link_by_link_id(vdev, req->new_ieee_link_id);
+	if (!new_link_info) {
+		mlo_mgr_remove_link_switch_cmd(vdev);
+		return status;
+	}
+
+	wlan_vdev_mlme_set_macaddr(vdev, new_link_info->link_addr.bytes);
+	wlan_vdev_mlme_set_linkaddr(vdev, new_link_info->link_addr.bytes);
+
+	status = g_mlo_ctx->osif_ops->mlo_mgr_osif_update_mac_addr(
+							req->curr_ieee_link_id,
+							req->new_ieee_link_id,
+							req->vdev_id);
+
 	mlo_mgr_remove_link_switch_cmd(vdev);
-	return status;
+	return QDF_STATUS_SUCCESS;
 }
 
 static QDF_STATUS

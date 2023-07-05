@@ -21,7 +21,7 @@
 #ifndef _WLAN_MLO_MGR_PUBLIC_API_H_
 #define _WLAN_MLO_MGR_PUBLIC_API_H_
 
-#include <wlan_mlo_mgr_public_structs.h>
+#include <wlan_mlo_mgr_link_switch.h>
 
 /**
  * wlan_mlo_mgr_register_link_switch_notifier() - Components to register
@@ -101,5 +101,20 @@ static inline struct wlan_objmgr_vdev *
 wlan_mlo_mgr_link_switch_get_assoc_vdev(struct wlan_objmgr_vdev *vdev)
 {
 	return mlo_mgr_link_switch_get_assoc_vdev(vdev);
+}
+
+/**
+ * wlan_mlo_mgr_link_switch_set_mac_addr_resp() - Dispatcher API to call to
+ * notify about status of set mac addr request.
+ * @vdev: VDEV object manager
+ * @resp_status: Status of request
+ *
+ * Return: QDF_STATUS
+ */
+static inline QDF_STATUS
+wlan_mlo_mgr_link_switch_set_mac_addr_resp(struct wlan_objmgr_vdev *vdev,
+					   uint8_t resp_status)
+{
+	return mlo_mgr_link_switch_set_mac_addr_resp(vdev, resp_status);
 }
 #endif /* _WLAN_MLO_MGR_PUBLIC_API_H_ */
