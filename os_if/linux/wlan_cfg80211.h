@@ -181,6 +181,8 @@
  *	Driver disconnect reason index
  * @QCA_NL80211_VENDOR_SUBCMD_TID_TO_LINK_MAP_INDEX: TID-to-link map index
  * @QCA_NL80211_VENDOR_SUBCMD_LINK_RECONFIG_INDEX: link reconfig event index
+ * @QCA_NL80211_VENDOR_SUBCMD_AUDIO_TRANSPORT_SWITCH_INDEX: Audio transport
+ * switch event index
  */
 
 enum qca_nl80211_vendor_subcmds_index {
@@ -312,6 +314,7 @@ enum qca_nl80211_vendor_subcmds_index {
 	QCA_NL80211_VENDOR_SUBCMD_LINK_RECONFIG_INDEX,
 #endif
 #endif
+	QCA_NL80211_VENDOR_SUBCMD_AUDIO_TRANSPORT_SWITCH_INDEX,
 };
 
 #if !defined(SUPPORT_WDEV_CFG80211_VENDOR_EVENT_ALLOC) && \
