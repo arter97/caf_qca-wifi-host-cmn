@@ -59,6 +59,7 @@
 #define MAX_MLO_PEER 512
 
 struct mlo_mlme_ext_ops;
+struct mlo_osif_ext_ops;
 struct vdev_mlme_obj;
 struct wlan_t2lm_context;
 struct mlo_link_switch_context;
@@ -216,6 +217,7 @@ struct mlo_state_params {
  * @setup_info: Pointer to MLO setup_info of all groups
  * @total_grp: Total number of MLO groups
  * @mlme_ops: MLO MLME callback function pointers
+ * @osif_ops: MLO to OSIF callback function pointers
  * @msgq_ctx: Context switch mgr
  * @mlo_is_force_primary_umac: Force Primary UMAC enable
  * @mlo_forced_primary_umac_id: Force Primary UMAC ID
@@ -243,6 +245,9 @@ struct mlo_mgr_context {
 	uint8_t total_grp;
 #endif
 	struct mlo_mlme_ext_ops *mlme_ops;
+#ifdef WLAN_FEATURE_11BE_MLO_ADV_FEATURE
+	struct mlo_osif_ext_ops *osif_ops;
+#endif
 	struct ctxt_switch_mgr *msgq_ctx;
 	bool mlo_is_force_primary_umac;
 	uint8_t mlo_forced_primary_umac_id;
@@ -986,6 +991,23 @@ struct mlo_mlme_ext_ops {
 					struct wlan_mlo_peer_context *ml_peer,
 					struct qdf_mac_addr *addr,
 					qdf_nbuf_t frm_buf);
+};
+
+/*
+ * struct mlo_osif_ext_ops - MLO manager to OSIF callback functions
+ * @mlo_mgr_osif_update_bss_info: Callback to update each link connection info.
+ * @mlo_mgr_osif_update_mac_addr: Callback to notify MAC addr update complete
+ *                                from old link id to new link id for the vdev.
+ */
+struct mlo_osif_ext_ops {
+	QDF_STATUS
+	(*mlo_mgr_osif_update_bss_info)(struct qdf_mac_addr *self_mac,
+					struct qdf_mac_addr *bssid,
+					int32_t link_id);
+
+	QDF_STATUS (*mlo_mgr_osif_update_mac_addr)(int32_t ieee_old_link_id,
+						   int32_t ieee_new_link_id,
+						   uint8_t vdev_id);
 };
 
 /* maximum size of vdev bitmap array for MLO link set active command */

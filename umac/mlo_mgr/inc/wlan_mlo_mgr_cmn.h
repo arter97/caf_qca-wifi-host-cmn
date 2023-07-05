@@ -144,6 +144,41 @@ QDF_STATUS mlo_reg_mlme_ext_cb(struct mlo_mgr_context *ctx,
  */
 QDF_STATUS mlo_unreg_mlme_ext_cb(struct mlo_mgr_context *ctx);
 
+#ifdef WLAN_FEATURE_11BE_MLO_ADV_FEATURE
+/**
+ * wlan_mlo_mgr_register_osif_ext_ops() - Function to register OSIF callbacks
+ * @mlo_ctx: Global MLO manager pointer
+ * @ops: Pointer to the struct containing OSIF callbacks.
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS wlan_mlo_mgr_register_osif_ext_ops(struct mlo_mgr_context *mlo_ctx,
+					      struct mlo_osif_ext_ops *ops);
+
+/**
+ * wlan_mlo_mgr_unregister_osif_ext_ops() - Function to unregister OSIF
+ * callbacks
+ * @mlo_ctx: Global MLO manager pointer
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS
+wlan_mlo_mgr_unregister_osif_ext_ops(struct mlo_mgr_context *mlo_ctx);
+#else
+static inline QDF_STATUS
+wlan_mlo_mgr_register_osif_ext_ops(struct mlo_mgr_context *mlo_ctx,
+				   struct mlo_osif_ext_ops *ops)
+{
+	return QDF_STATUS_SUCCESS;
+}
+
+static inline QDF_STATUS
+wlan_mlo_mgr_unregister_osif_ext_ops(struct mlo_mgr_context *mlo_ctx)
+{
+	return QDF_STATUS_SUCCESS;
+}
+#endif
+
 /**
  * mlo_mlme_clone_sta_security() - Clone Security params in partner vdevs
  * @vdev: Object manager vdev
