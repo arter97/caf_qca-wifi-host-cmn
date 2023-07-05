@@ -235,3 +235,32 @@ QDF_STATUS mlo_mgr_link_switch_deinit(struct wlan_mlo_dev_context *ml_dev)
 	ml_dev->link_ctx = NULL;
 	return QDF_STATUS_SUCCESS;
 }
+
+#ifdef WLAN_FEATURE_11BE_MLO_ADV_FEATURE
+void
+mlo_mgr_osif_update_connect_info(struct wlan_objmgr_vdev *vdev, int32_t link_id)
+{
+	struct mlo_mgr_context *g_mlo_ctx = wlan_objmgr_get_mlo_ctx();
+	struct mlo_link_info *link_info;
+	QDF_STATUS(*osif_bss_update_cb)(struct qdf_mac_addr *self_mac,
+					struct qdf_mac_addr *bssid,
+					int32_t link_id);
+
+	if (!g_mlo_ctx || !vdev->mlo_dev_ctx || !g_mlo_ctx->osif_ops ||
+	    !g_mlo_ctx->osif_ops->mlo_mgr_osif_update_bss_info)
+		return;
+
+	link_info = mlo_mgr_get_ap_link_by_link_id(vdev, link_id);
+	if (!link_info)
+		return;
+
+	mlo_debug("VDEV ID %d, Link ID %d, STA MAC " QDF_MAC_ADDR_FMT ", BSSID " QDF_MAC_ADDR_FMT,
+		  link_info->vdev_id, link_id,
+		  QDF_MAC_ADDR_REF(link_info->link_addr.bytes),
+		  QDF_MAC_ADDR_REF(link_info->ap_link_addr.bytes));
+	osif_bss_update_cb = g_mlo_ctx->osif_ops->mlo_mgr_osif_update_bss_info;
+
+	osif_bss_update_cb(&link_info->link_addr, &link_info->ap_link_addr,
+			   link_id);
+}
+#endif

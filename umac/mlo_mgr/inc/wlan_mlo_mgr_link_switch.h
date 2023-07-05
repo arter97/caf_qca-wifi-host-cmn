@@ -230,6 +230,29 @@ mlo_mgr_get_ap_link_by_link_id(struct wlan_objmgr_vdev *vdev, int link_id);
  */
 struct mlo_link_info *mlo_mgr_get_ap_link(struct wlan_objmgr_vdev *vdev);
 
+#ifdef WLAN_FEATURE_11BE_MLO_ADV_FEATURE
+/**
+ * mlo_mgr_osif_update_connect_info() - Update connection info to OSIF
+ * layer on successful connection complete.
+ * @vdev: VDEV object manager.
+ * @link_id: IEEE protocol link id.
+ *
+ * The API will call OSIF connection update callback to update IEEE link id
+ * as part of connection to MLO capable BSS. This is specifically needed to
+ * make OSIF aware of all the links part of connection even about the links
+ * for which VDEV doesn't exist.
+ *
+ * Return: void
+ */
+void mlo_mgr_osif_update_connect_info(struct wlan_objmgr_vdev *vdev,
+				      int32_t link_id);
+#else
+static inline void
+mlo_mgr_osif_update_connect_info(struct wlan_objmgr_vdev *vdev, int32_t link_id)
+{
+}
+#endif
+
 /**
  * mlo_mgr_link_switch_request_params() - Link switch request params from FW.
  * @psoc: PSOC object manager

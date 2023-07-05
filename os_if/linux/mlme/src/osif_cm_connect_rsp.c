@@ -490,6 +490,7 @@ void osif_populate_connect_response_for_link(struct wlan_objmgr_vdev *vdev,
 	conn_rsp_params->links[link_id].bssid = bss->bssid;
 	conn_rsp_params->links[link_id].bss = bss;
 	conn_rsp_params->links[link_id].addr = link_addr;
+	mlo_mgr_osif_update_connect_info(vdev, link_id);
 }
 
 static QDF_STATUS
