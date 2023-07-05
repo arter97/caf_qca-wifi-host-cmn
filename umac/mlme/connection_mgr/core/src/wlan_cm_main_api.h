@@ -39,7 +39,7 @@
 
 #define CM_ID_MASK                  0x0000FFFF
 
-#define CM_ID_GET_PREFIX(cm_id)     cm_id & 0xFF000000
+#define CM_ID_GET_PREFIX(cm_id)     cm_id & 0x0F000000
 #define CM_VDEV_ID_SHIFT            16
 #define CM_VDEV_ID_MASK             0x00FF0000
 #define CM_ID_GET_VDEV_ID(cm_id) (cm_id & CM_VDEV_ID_MASK) >> CM_VDEV_ID_SHIFT

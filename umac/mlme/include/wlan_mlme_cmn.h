@@ -119,7 +119,8 @@ struct mlme_cm_ops {
 					struct wlan_objmgr_vdev *vdev,
 					struct wlan_cm_discon_rsp *rsp);
 	QDF_STATUS (*mlme_cm_disconnect_start_cb)(
-					struct wlan_objmgr_vdev *vdev);
+					struct wlan_objmgr_vdev *vdev,
+					enum wlan_cm_source source);
 #ifdef CONN_MGR_ADV_FEATURE
 	QDF_STATUS (*mlme_cm_roam_sync_cb)(struct wlan_objmgr_vdev *vdev);
 	QDF_STATUS (*mlme_cm_pmksa_candidate_notify_cb)(
@@ -882,10 +883,12 @@ mlme_cm_osif_disconnect_complete(struct wlan_objmgr_vdev *vdev,
 /**
  * mlme_cm_osif_disconnect_start_ind() - osif Disconnect start indication
  * @vdev: vdev pointer
+ * @source: Source of disconnect
  *
  * Return: QDF_STATUS
  */
-QDF_STATUS mlme_cm_osif_disconnect_start_ind(struct wlan_objmgr_vdev *vdev);
+QDF_STATUS mlme_cm_osif_disconnect_start_ind(struct wlan_objmgr_vdev *vdev,
+					     enum wlan_cm_source source);
 
 #ifdef WLAN_VENDOR_HANDOFF_CONTROL
 /**

@@ -29,6 +29,7 @@
 #endif
 #include "wlan_cm_roam.h"
 #include <qdf_platform.h>
+#include <wlan_mlo_mgr_link_switch.h>
 
 static uint32_t cm_get_prefix_for_cm_id(enum wlan_cm_source source) {
 	switch (source) {
@@ -58,6 +59,8 @@ wlan_cm_id cm_get_cm_id(struct cnx_mgr *cm_ctx, enum wlan_cm_source source)
 	cm_id = (cm_id & CM_ID_MASK);
 	cm_id = CM_ID_SET_VDEV_ID(cm_id, vdev_id);
 	cm_id = (cm_id | prefix);
+	if (source == CM_MLO_LINK_SWITCH_DISCONNECT)
+		cm_id |= CM_ID_LSWITCH_BIT;
 
 	return cm_id;
 }
@@ -623,6 +626,12 @@ cm_handle_disconnect_flush(struct cnx_mgr *cm_ctx, struct cm_req *cm_req)
 	 * was already in serialization active queue and thus wasn't flushed.
 	 */
 	mlme_cm_osif_disconnect_complete(cm_ctx->vdev, &resp);
+
+	if (resp.req.cm_id & CM_ID_LSWITCH_BIT) {
+		cm_reset_active_cm_id(cm_ctx->vdev, resp.req.cm_id);
+		mlo_mgr_link_switch_disconnect_done(cm_ctx->vdev,
+						    QDF_STATUS_E_ABORTED);
+	}
 }
 
 void cm_remove_cmd_from_serialization(struct cnx_mgr *cm_ctx, wlan_cm_id cm_id)
@@ -1130,6 +1139,11 @@ void cm_remove_cmd(struct cnx_mgr *cm_ctx, wlan_cm_id *cm_id_to_remove)
 	status = cm_delete_req_from_list(cm_ctx, cm_id);
 	if (QDF_IS_STATUS_ERROR(status))
 		return;
+
+	if (cm_id & CM_ID_LSWITCH_BIT) {
+		mlme_debug("Skip cmd remove for link switch connect/disconnect");
+		return;
+	}
 
 	cm_remove_cmd_from_serialization(cm_ctx, cm_id);
 }

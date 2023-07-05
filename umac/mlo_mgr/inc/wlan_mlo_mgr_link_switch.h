@@ -267,6 +267,21 @@ void mlo_mgr_osif_update_connect_info(struct wlan_objmgr_vdev *vdev,
 				      int32_t link_id);
 
 /**
+ * mlo_mgr_link_switch_disconnect_done() - Notify MLO manager on link switch
+ * disconnect complete.
+ * @vdev: VDEV object manager
+ * @status: Status of disconnect
+ *
+ * The API to decide on next sequence of tasks based on status on disconnect
+ * request send as part of link switch. If the status is error, then abort
+ * link switch or else continue.
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS mlo_mgr_link_switch_disconnect_done(struct wlan_objmgr_vdev *vdev,
+					       QDF_STATUS status);
+
+/**
  * mlo_mgr_link_switch_init_state() - Set the current state of link switch
  * to init state.
  * @mlo_dev_ctx: MLO dev context
@@ -443,6 +458,13 @@ QDF_STATUS mlo_mgr_link_switch_deinit(struct wlan_mlo_dev_context *ml_dev);
 static inline void
 mlo_mgr_osif_update_connect_info(struct wlan_objmgr_vdev *vdev, int32_t link_id)
 {
+}
+
+static inline QDF_STATUS
+mlo_mgr_link_switch_disconnect_done(struct wlan_objmgr_vdev *vdev,
+				    QDF_STATUS status)
+{
+	return QDF_STATUS_SUCCESS;
 }
 
 static inline QDF_STATUS

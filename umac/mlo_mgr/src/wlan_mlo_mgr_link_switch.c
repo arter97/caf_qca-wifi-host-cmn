@@ -425,6 +425,29 @@ mlo_mgr_osif_update_connect_info(struct wlan_objmgr_vdev *vdev, int32_t link_id)
 			   link_id);
 }
 
+QDF_STATUS mlo_mgr_link_switch_disconnect_done(struct wlan_objmgr_vdev *vdev,
+					       QDF_STATUS status)
+{
+	enum mlo_link_switch_req_state cur_state;
+	struct wlan_mlo_dev_context *mlo_dev_ctx = vdev->mlo_dev_ctx;
+	struct wlan_mlo_link_switch_req *req = &mlo_dev_ctx->link_ctx->last_req;
+
+	cur_state = mlo_mgr_link_switch_get_curr_state(mlo_dev_ctx);
+	if (QDF_IS_STATUS_ERROR(status) ||
+	    cur_state != MLO_LINK_SWITCH_STATE_DISCONNECT_CURR_LINK) {
+		mlo_err("VDEV %d link switch disconnect req failed",
+			req->vdev_id);
+		mlo_mgr_remove_link_switch_cmd(vdev);
+		return status;
+	}
+
+	mlo_debug("VDEV %d link switch disconnect complete",
+		  wlan_vdev_get_id(vdev));
+
+	mlo_mgr_remove_link_switch_cmd(vdev);
+	return status;
+}
+
 static QDF_STATUS
 mlo_mgr_start_link_switch(struct wlan_objmgr_vdev *vdev,
 			  struct wlan_serialization_command *cmd)
@@ -435,6 +458,7 @@ mlo_mgr_start_link_switch(struct wlan_objmgr_vdev *vdev,
 	struct mlo_mgr_context *mlo_mgr_ctx = wlan_objmgr_get_mlo_ctx();
 	struct mlo_link_switch_context *link_ctx = vdev->mlo_dev_ctx->link_ctx;
 	struct wlan_mlo_link_switch_req *req = &link_ctx->last_req;
+	struct qdf_mac_addr bssid;
 
 	if (!mlo_mgr_ctx) {
 		mlo_err("Global mlo mgr NULL");
@@ -453,6 +477,15 @@ mlo_mgr_start_link_switch(struct wlan_objmgr_vdev *vdev,
 		return status;
 	}
 
+	if (!wlan_cm_is_vdev_connected(vdev)) {
+		mlo_err("VDEV %d not in connected state", vdev_id);
+		return status;
+	}
+
+	status = wlan_vdev_get_bss_peer_mac(vdev, &bssid);
+	if (QDF_IS_STATUS_ERROR(status))
+		return status;
+
 	status = wlan_vdev_get_bss_peer_mld_mac(vdev, &req->peer_mld_addr);
 	if (QDF_IS_STATUS_ERROR(status))
 		return status;
@@ -469,8 +502,14 @@ mlo_mgr_start_link_switch(struct wlan_objmgr_vdev *vdev,
 	}
 
 	wlan_vdev_mlme_set_mlo_link_switch_in_progress(vdev);
+	mlo_mgr_link_switch_trans_next_state(vdev->mlo_dev_ctx);
 
-	mlo_mgr_remove_link_switch_cmd(vdev);
+	status = wlan_cm_disconnect(vdev, CM_MLO_LINK_SWITCH_DISCONNECT,
+				    REASON_FW_TRIGGERED_LINK_SWITCH, &bssid);
+
+	if (QDF_IS_STATUS_ERROR(status))
+		mlo_err("VDEV %d disconnect request not handled", req->vdev_id);
+
 	return status;
 }
 
