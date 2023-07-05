@@ -297,6 +297,33 @@ QDF_STATUS mlo_mgr_link_switch_set_mac_addr_resp(struct wlan_objmgr_vdev *vdev,
 						 uint8_t resp_status);
 
 /**
+ * mlo_mgr_link_switch_start_connect() - Start link switch connect on new link
+ * @vdev: VDEV pointer.
+ *
+ * Call the API to initiate connection for link switch post successful set mac
+ * address on @vdev.
+ *
+ * Return:QDF_STATUS
+ */
+QDF_STATUS mlo_mgr_link_switch_start_connect(struct wlan_objmgr_vdev *vdev);
+
+/**
+ * mlo_mgr_link_switch_connect_done() - Link switch connect done indication.
+ * @vdev: VDEV object manager
+ * @status: Status of connect request.
+ *
+ * The callback from connection manager with connect response.
+ * If the response is failure, don't change the state of link switch.
+ * If the response if success, set link switch state to
+ * MLO_LINK_SWITCH_STATE_COMPLETE_SUCCESS.
+ * Finally call remove link switch cmd from serialization.
+ *
+ * Return: void
+ */
+void mlo_mgr_link_switch_connect_done(struct wlan_objmgr_vdev *vdev,
+				      QDF_STATUS status);
+
+/**
  * mlo_mgr_link_switch_init_state() - Set the current state of link switch
  * to init state.
  * @mlo_dev_ctx: MLO dev context
@@ -487,6 +514,18 @@ mlo_mgr_link_switch_set_mac_addr_resp(struct wlan_objmgr_vdev *vdev,
 				      uint8_t resp_status)
 {
 	return QDF_STATUS_E_NOSUPPORT;
+}
+
+static inline QDF_STATUS
+mlo_mgr_link_switch_start_connect(struct wlan_objmgr_vdev *vdev)
+{
+	return QDF_STATUS_E_NOSUPPORT;
+}
+
+static inline void
+mlo_mgr_link_switch_connect_done(struct wlan_objmgr_vdev *vdev,
+				 QDF_STATUS status)
+{
 }
 
 static inline QDF_STATUS

@@ -1047,7 +1047,8 @@ static void osif_indcate_connect_results(struct wlan_objmgr_vdev *vdev,
 static inline
 bool osif_cm_is_unlink_bss_required(struct wlan_cm_connect_resp *rsp)
 {
-	if (QDF_IS_STATUS_SUCCESS(rsp->connect_status))
+	if (QDF_IS_STATUS_SUCCESS(rsp->connect_status) ||
+	    rsp->cm_id & CM_ID_LSWITCH_BIT)
 		return false;
 
 	if (rsp->reason == CM_NO_CANDIDATE_FOUND ||
@@ -1107,7 +1108,7 @@ QDF_STATUS osif_connect_handler(struct wlan_objmgr_vdev *vdev,
 	osif_check_and_unlink_bss(vdev, rsp);
 
 	status = osif_validate_connect_and_reset_src_id(osif_priv, rsp);
-	if (QDF_IS_STATUS_ERROR(status)) {
+	if (QDF_IS_STATUS_ERROR(status) || rsp->cm_id & CM_ID_LSWITCH_BIT) {
 		osif_cm_connect_comp_ind(vdev, rsp, OSIF_NOT_HANDLED);
 		return status;
 	}

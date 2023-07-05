@@ -483,6 +483,85 @@ struct wlan_link_force_context {
 	struct ml_link_force_state force_state;
 };
 
+#if defined(UMAC_SUPPORT_MLNAWDS) || defined(MESH_MODE_SUPPORT)
+/**
+ * struct mlnawds_config - MLO NAWDS configuration
+ * @caps: Bandwidth & NSS capabilities to be configured on NAWDS peer
+ * @puncture_bitmap: puncture bitmap to be configured on NAWDS peer
+ * @mac: MAC address of the NAWDS peer to which the caps & puncture bitmap is
+ * to be configured.
+ */
+struct mlnawds_config {
+	uint64_t caps;
+	uint16_t puncture_bitmap;
+	uint8_t  mac[QDF_MAC_ADDR_SIZE];
+};
+#endif
+
+/**
+ * struct mlo_link_info - ML link info
+ * @link_addr: link mac address
+ * @link_id: link index
+ * @is_bridge : Bridge peer or not
+ * @chan_freq: Operating channel frequency
+ * @nawds_config: peer's NAWDS configurarion
+ * @vdev_id: VDEV ID
+ * @mesh_config: peer's MESH configurarion
+ * @link_status_flags: Current status of link
+ * @ap_link_addr: Associated link BSSID
+ * @link_chan_info: Associated link channel info
+ */
+struct mlo_link_info {
+	struct qdf_mac_addr link_addr;
+	uint8_t link_id;
+	bool is_bridge;
+	uint16_t chan_freq;
+#ifdef UMAC_SUPPORT_MLNAWDS
+	struct mlnawds_config nawds_config;
+#endif
+	uint8_t vdev_id;
+#ifdef MESH_MODE_SUPPORT
+	struct mlnawds_config mesh_config;
+#endif
+#ifdef WLAN_FEATURE_11BE_MLO_ADV_FEATURE
+	uint8_t link_status_flags;
+	struct qdf_mac_addr ap_link_addr;
+	struct wlan_channel *link_chan_info;
+#endif
+};
+
+/**
+ * struct mlo_nstr_info - MLO NSTR capability info
+ * @link_id: Lind Id
+ * @nstr_lp_present: Flag for NSTR link pair presence
+ * @nstr_bmp_size: NSTR Bitmap Size
+ * @nstr_lp_bitmap: NSTR link pair bitmap of link_id
+ */
+struct mlo_nstr_info {
+	uint8_t link_id;
+	bool nstr_lp_present;
+	uint8_t nstr_bmp_size;
+	uint16_t nstr_lp_bitmap;
+};
+
+/**
+ * struct mlo_partner_info - mlo partner link info
+ * @num_partner_links: no. of partner links
+ * @partner_link_info: per partner link info
+ * @t2lm_enable_val: enum wlan_t2lm_enable
+ * @nstr_info: NSTR Capability info
+ * @num_nstr_info_links: No. of links for which NSTR info is present
+ */
+struct mlo_partner_info {
+	uint8_t num_partner_links;
+	struct mlo_link_info partner_link_info[WLAN_UMAC_MLO_MAX_VDEVS];
+#ifdef WLAN_FEATURE_11BE
+	enum wlan_t2lm_enable t2lm_enable_val;
+	struct mlo_nstr_info nstr_info[WLAN_UMAC_MLO_MAX_VDEVS];
+	uint8_t num_nstr_info_links;
+#endif
+};
+
 /*
  * struct wlan_mlo_sta - MLO sta additional info
  * @wlan_connect_req_links: list of vdevs selected for connection with the MLAP
@@ -527,6 +606,7 @@ struct wlan_mlo_sta {
 #ifdef WLAN_FEATURE_11BE_MLO
 	struct ml_link_state_cmd_info ml_link_state;
 	struct wlan_t2lm_context copied_t2lm_ie_assoc_rsp;
+	struct mlo_partner_info ml_partner_info;
 #endif
 #ifdef WLAN_FEATURE_11BE_MLO_ADV_FEATURE
 	struct wlan_link_force_context link_force_ctx;
@@ -578,53 +658,6 @@ struct wlan_mlo_peer_list {
 struct mlo_vdev_link_mac_info {
 	uint8_t vdev_id;
 	struct qdf_mac_addr link_mac_addr;
-};
-
-#if defined(UMAC_SUPPORT_MLNAWDS) || defined(MESH_MODE_SUPPORT)
-/**
- * struct mlnawds_config - MLO NAWDS configuration
- * @caps: Bandwidth & NSS capabilities to be configured on NAWDS peer
- * @puncture_bitmap: puncture bitmap to be configured on NAWDS peer
- * @mac: MAC address of the NAWDS peer to which the caps & puncture bitmap is
- * to be configured.
- */
-struct mlnawds_config {
-	uint64_t caps;
-	uint16_t puncture_bitmap;
-	uint8_t  mac[QDF_MAC_ADDR_SIZE];
-};
-#endif
-
-/**
- * struct mlo_link_info - ML link info
- * @link_addr: link mac address
- * @link_id: link index
- * @is_bridge : Bridge peer or not
- * @chan_freq: Operating channel frequency
- * @nawds_config: peer's NAWDS configurarion
- * @vdev_id: VDEV ID
- * @mesh_config: peer's MESH configurarion
- * @link_status_flags: Current status of link
- * @ap_link_addr: Associated link BSSID
- * @link_chan_info: Associated link channel info
- */
-struct mlo_link_info {
-	struct qdf_mac_addr link_addr;
-	uint8_t link_id;
-	bool is_bridge;
-	uint16_t chan_freq;
-#ifdef UMAC_SUPPORT_MLNAWDS
-	struct mlnawds_config nawds_config;
-#endif
-	uint8_t vdev_id;
-#ifdef MESH_MODE_SUPPORT
-	struct mlnawds_config mesh_config;
-#endif
-#ifdef WLAN_FEATURE_11BE_MLO_ADV_FEATURE
-	uint8_t link_status_flags;
-	struct qdf_mac_addr ap_link_addr;
-	struct wlan_channel *link_chan_info;
-#endif
 };
 
 /**
@@ -822,20 +855,6 @@ struct wlan_mlo_mld_cap {
 };
 
 /**
- * struct mlo_nstr_info - MLO NSTR capability info
- * @link_id: Lind Id
- * @nstr_lp_present: Flag for NSTR link pair presence
- * @nstr_bmp_size: NSTR Bitmap Size
- * @nstr_lp_bitmap: NSTR link pair bitmap of link_id
- */
-struct mlo_nstr_info {
-	uint8_t link_id;
-	bool nstr_lp_present;
-	uint8_t nstr_bmp_size;
-	uint16_t nstr_lp_bitmap;
-};
-
-/**
  * struct wlan_mlo_peer_context - MLO peer context
  *
  * @peer_node:     peer list node for ml_dev qdf list
@@ -912,24 +931,6 @@ struct wlan_mlo_peer_context {
 	struct mlo_nstr_info mlpeer_nstrinfo[WLAN_UMAC_MLO_MAX_VDEVS];
 	uint8_t migrate_primary_umac_psoc_id;
 	bool primary_umac_migration_in_progress;
-};
-
-/**
- * struct mlo_partner_info - mlo partner link info
- * @num_partner_links: no. of partner links
- * @partner_link_info: per partner link info
- * @t2lm_enable_val: enum wlan_t2lm_enable
- * @nstr_info: NSTR Capability info
- * @num_nstr_info_links: No. of links for which NSTR info is present
- */
-struct mlo_partner_info {
-	uint8_t num_partner_links;
-	struct mlo_link_info partner_link_info[WLAN_UMAC_MLO_MAX_VDEVS];
-#ifdef WLAN_FEATURE_11BE
-	enum wlan_t2lm_enable t2lm_enable_val;
-	struct mlo_nstr_info nstr_info[WLAN_UMAC_MLO_MAX_VDEVS];
-	uint8_t num_nstr_info_links;
-#endif
 };
 
 /**

@@ -36,6 +36,7 @@ static uint32_t cm_get_prefix_for_cm_id(enum wlan_cm_source source) {
 	case CM_OSIF_CONNECT:
 	case CM_OSIF_CFG_CONNECT:
 	case CM_MLO_LINK_VDEV_CONNECT:
+	case CM_MLO_LINK_SWITCH_CONNECT:
 		return CONNECT_REQ_PREFIX;
 	case CM_ROAMING_HOST:
 	case CM_ROAMING_FW:
@@ -59,7 +60,8 @@ wlan_cm_id cm_get_cm_id(struct cnx_mgr *cm_ctx, enum wlan_cm_source source)
 	cm_id = (cm_id & CM_ID_MASK);
 	cm_id = CM_ID_SET_VDEV_ID(cm_id, vdev_id);
 	cm_id = (cm_id | prefix);
-	if (source == CM_MLO_LINK_SWITCH_DISCONNECT)
+	if (source == CM_MLO_LINK_SWITCH_DISCONNECT ||
+	    source == CM_MLO_LINK_SWITCH_CONNECT)
 		cm_id |= CM_ID_LSWITCH_BIT;
 
 	return cm_id;
@@ -597,6 +599,14 @@ cm_handle_connect_flush(struct cnx_mgr *cm_ctx, struct cm_req *cm_req)
 	cm_fill_connect_resp_from_req(cm_ctx->vdev, resp, cm_req);
 
 	cm_notify_connect_complete(cm_ctx, resp, 0);
+
+	/* For link switch connect request, notify MLO mgr */
+	if (resp->cm_id & CM_ID_LSWITCH_BIT) {
+		cm_reset_active_cm_id(cm_ctx->vdev, resp->cm_id);
+		mlo_mgr_link_switch_connect_done(cm_ctx->vdev,
+						 resp->connect_status);
+	}
+
 	qdf_mem_free(resp);
 }
 

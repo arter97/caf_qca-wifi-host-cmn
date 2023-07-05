@@ -38,6 +38,7 @@
 #ifdef WLAN_FEATURE_11BE_MLO
 #include <wlan_mlo_mgr_peer.h>
 #endif
+#include <wlan_mlo_mgr_link_switch.h>
 #include <wlan_mlo_mgr_sta.h>
 #include "wlan_mlo_mgr_op.h"
 #include <wlan_objmgr_vdev_obj.h>
@@ -1660,6 +1661,14 @@ cm_handle_connect_req_in_non_init_state(struct cnx_mgr *cm_ctx,
 			   cm_state_substate);
 	}
 
+	/* Reject any link switch connect request while in non-init state */
+	if (cm_req->req.source == CM_MLO_LINK_SWITCH_CONNECT) {
+		mlme_info(CM_PREFIX_FMT "Ignore disconnect req from source %d state %d",
+			  CM_PREFIX_REF(vdev_id, cm_req->cm_id),
+			  cm_req->req.source, cm_state_substate);
+		return QDF_STATUS_E_INVAL;
+	}
+
 	switch (cm_state_substate) {
 	case WLAN_CM_S_ROAMING:
 		/* for FW roam/LFR3 remove the req from the list */
@@ -1796,7 +1805,18 @@ QDF_STATUS cm_connect_start(struct cnx_mgr *cm_ctx,
 		return QDF_STATUS_SUCCESS;
 	}
 
-	status = cm_ser_connect_req(pdev, cm_ctx, cm_req);
+	if (cm_req->req.source == CM_MLO_LINK_SWITCH_CONNECT) {
+		/* The error handling has to be different here.not corresponds
+		 * to connect req serialization now.
+		 */
+		status = cm_sm_deliver_event_sync(cm_ctx,
+						  WLAN_CM_SM_EV_CONNECT_ACTIVE,
+						  sizeof(wlan_cm_id),
+						  &cm_req->cm_id);
+	} else {
+		status = cm_ser_connect_req(pdev, cm_ctx, cm_req);
+	}
+
 	if (QDF_IS_STATUS_ERROR(status)) {
 		reason = CM_SER_FAILURE;
 		goto connect_err;
@@ -2757,7 +2777,7 @@ QDF_STATUS cm_notify_connect_complete(struct cnx_mgr *cm_ctx,
 					  resp->connect_status);
 	cm_inform_dlm_connect_complete(cm_ctx->vdev, resp);
 	if (QDF_IS_STATUS_ERROR(resp->connect_status) &&
-	    sm_state == WLAN_CM_S_INIT)
+	    sm_state == WLAN_CM_S_INIT && !(resp->cm_id & CM_ID_LSWITCH_BIT))
 		cm_clear_vdev_mlo_cap(cm_ctx->vdev);
 
 	return QDF_STATUS_SUCCESS;
@@ -2818,6 +2838,12 @@ QDF_STATUS cm_connect_complete(struct cnx_mgr *cm_ctx,
 		   CM_PREFIX_REF(wlan_vdev_get_id(cm_ctx->vdev),
 				 resp->cm_id));
 	cm_remove_cmd(cm_ctx, &resp->cm_id);
+
+	if (resp->cm_id & CM_ID_LSWITCH_BIT) {
+		cm_reset_active_cm_id(cm_ctx->vdev, resp->cm_id);
+		mlo_mgr_link_switch_connect_done(cm_ctx->vdev,
+						 resp->connect_status);
+	}
 
 	return QDF_STATUS_SUCCESS;
 }

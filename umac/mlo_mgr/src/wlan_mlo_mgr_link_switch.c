@@ -512,8 +512,86 @@ QDF_STATUS mlo_mgr_link_switch_set_mac_addr_resp(struct wlan_objmgr_vdev *vdev,
 							req->new_ieee_link_id,
 							req->vdev_id);
 
+	mlo_mgr_link_switch_trans_next_state(vdev->mlo_dev_ctx);
+	status = mlo_mgr_link_switch_start_connect(vdev);
+
+	return status;
+}
+
+QDF_STATUS mlo_mgr_link_switch_start_connect(struct wlan_objmgr_vdev *vdev)
+{
+	QDF_STATUS status = QDF_STATUS_E_INVAL;
+	struct wlan_cm_connect_req conn_req = {0};
+	struct mlo_link_info *mlo_link_info;
+	uint8_t *vdev_mac;
+	struct wlan_mlo_sta *sta_ctx;
+	struct wlan_mlo_link_switch_req *req =
+					&vdev->mlo_dev_ctx->link_ctx->last_req;
+
+	sta_ctx = vdev->mlo_dev_ctx->sta_ctx;
+
+	mlo_link_info =
+		mlo_mgr_get_ap_link_by_link_id(vdev, req->new_ieee_link_id);
+
+	if (!mlo_link_info) {
+		mlo_err("New link ID not found");
+		goto out;
+	}
+
+	vdev_mac = wlan_vdev_mlme_get_linkaddr(vdev);
+	if (!qdf_is_macaddr_equal(&mlo_link_info->link_addr,
+				  (struct qdf_mac_addr *)vdev_mac)) {
+		mlo_err("MAC address not equal for the new Link ID VDEV: " QDF_MAC_ADDR_FMT ", MLO_LINK: " QDF_MAC_ADDR_FMT,
+			QDF_MAC_ADDR_REF(vdev_mac),
+			QDF_MAC_ADDR_REF(mlo_link_info->link_addr.bytes));
+		goto out;
+	}
+
+	wlan_vdev_set_link_id(vdev, req->new_ieee_link_id);
+	copied_conn_req_lock_acquire(sta_ctx);
+	if (sta_ctx->copied_conn_req) {
+		qdf_mem_copy(&conn_req, sta_ctx->copied_conn_req,
+			     sizeof(struct wlan_cm_connect_req));
+	} else {
+		copied_conn_req_lock_release(sta_ctx);
+		goto out;
+	}
+	copied_conn_req_lock_release(sta_ctx);
+
+	conn_req.vdev_id = wlan_vdev_get_id(vdev);
+	conn_req.source = CM_MLO_LINK_SWITCH_CONNECT;
+	qdf_copy_macaddr(&conn_req.bssid, &mlo_link_info->ap_link_addr);
+	mlo_allocate_and_copy_ies(&conn_req, sta_ctx->copied_conn_req);
+	conn_req.crypto.auth_type = 0;
+	conn_req.ml_parnter_info = sta_ctx->ml_partner_info;
+	status = wlan_cm_start_connect(vdev, &conn_req);
+	if (QDF_IS_STATUS_SUCCESS(status))
+		mlo_update_connected_links(vdev, 1);
+
+	wlan_cm_free_connect_req_param(&conn_req);
+
+out:
+	if (QDF_IS_STATUS_ERROR(status)) {
+		mlo_err("VDEV %d link switch connect request failed",
+			wlan_vdev_get_id(vdev));
+		mlo_mgr_remove_link_switch_cmd(vdev);
+	}
+
+	return status;
+}
+
+void mlo_mgr_link_switch_connect_done(struct wlan_objmgr_vdev *vdev,
+				      QDF_STATUS status)
+{
+	struct wlan_mlo_link_switch_req *req;
+
+	req = &vdev->mlo_dev_ctx->link_ctx->last_req;
+	if (QDF_IS_STATUS_SUCCESS(status))
+		mlo_mgr_link_switch_trans_next_state(vdev->mlo_dev_ctx);
+	else
+		mlo_err("VDEV %d link switch connect failed", req->vdev_id);
+
 	mlo_mgr_remove_link_switch_cmd(vdev);
-	return QDF_STATUS_SUCCESS;
 }
 
 static QDF_STATUS

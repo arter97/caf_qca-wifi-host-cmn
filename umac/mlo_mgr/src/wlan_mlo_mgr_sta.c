@@ -1219,6 +1219,11 @@ void mlo_sta_link_connect_notify(struct wlan_objmgr_vdev *vdev,
 		return;
 	}
 
+	if (rsp->cm_id & CM_ID_LSWITCH_BIT) {
+		mlo_info("Skip for link switch connect request");
+		return;
+	}
+
 	if (mlo_sta_ignore_link_connect_fail(vdev))
 		return;
 
@@ -1254,6 +1259,7 @@ void mlo_sta_link_connect_notify(struct wlan_objmgr_vdev *vdev,
 				qdf_mem_copy(sta_ctx->assoc_rsp.ptr,
 					     rsp->connect_ies.assoc_rsp.ptr,
 					     rsp->connect_ies.assoc_rsp.len);
+			sta_ctx->ml_partner_info = rsp->ml_parnter_info;
 			/* Update connected_links_bmap for all vdev taking
 			 * part in association
 			 */
