@@ -1597,6 +1597,8 @@ enum qdf_suspend_type {
  * @QDF_FLUSH_LOGS : Recovery needed when sending flush completion to userspace
  * @QDF_WMI_CMD_SENT_DURING_SUSPEND: WMI command is received when target is
  * suspended
+ * @QDF_VDEV_MAC_ADDR_UPDATE_RESPONSE_TIMED_OUT: VDEV MAC address update
+ * request for Link switch timedout.
  */
 enum qdf_hang_reason {
 	QDF_REASON_UNSPECIFIED,
@@ -1634,6 +1636,7 @@ enum qdf_hang_reason {
 	QDF_DEL_SELF_STA_FAILED,
 	QDF_FLUSH_LOGS,
 	QDF_WMI_CMD_SENT_DURING_SUSPEND,
+	QDF_VDEV_MAC_ADDR_UPDATE_RESPONSE_TIMED_OUT,
 };
 
 /**

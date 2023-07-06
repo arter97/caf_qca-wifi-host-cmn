@@ -2681,7 +2681,8 @@ struct wlan_lmac_if_mlme_rx_ops {
 						struct wlan_objmgr_psoc *psoc,
 						uint8_t vdev_id);
 #ifdef WLAN_FEATURE_DYNAMIC_MAC_ADDR_UPDATE
-	void (*vdev_mgr_set_mac_addr_response)(uint8_t vdev_id, uint8_t status);
+	void (*vdev_mgr_set_mac_addr_response)(struct wlan_objmgr_vdev *vdev,
+					       uint8_t status);
 #endif
 	void (*vdev_mgr_set_max_channel_switch_time)
 		(struct wlan_objmgr_psoc *psoc,
