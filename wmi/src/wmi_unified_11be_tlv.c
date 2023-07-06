@@ -1413,6 +1413,89 @@ static uint8_t *populate_link_control_tlv(
 }
 #endif
 
+#ifdef WLAN_FEATURE_11BE_MLO_ADV_FEATURE
+/**
+ * extract_mlo_link_switch_request_event_tlv() - Extract fixed
+ * params TLV from MLO link switch request WMI event.
+ * @wmi_handle: wmi handle
+ * @buf: Pointer to event buffer.
+ * @req: MLO Link switch event parameters.
+ *
+ * Return: QDF_STATUS
+ */
+static QDF_STATUS
+extract_mlo_link_switch_request_event_tlv(struct wmi_unified *wmi_handle,
+					  void *buf,
+					  struct wlan_mlo_link_switch_req *req)
+{
+	WMI_MLO_LINK_SWITCH_REQUEST_EVENTID_param_tlvs *param_buf = buf;
+	wmi_mlo_link_switch_req_evt_fixed_param *ev;
+
+	if (!param_buf) {
+		wmi_err_rl("buf is NULL");
+		return QDF_STATUS_E_NULL_VALUE;
+	}
+
+	if (!req) {
+		wmi_err_rl("req is NULL");
+		return QDF_STATUS_E_NULL_VALUE;
+	}
+
+	ev = param_buf->fixed_param;
+	req->vdev_id = ev->vdev_id;
+	req->curr_ieee_link_id = ev->curr_ieee_link_id;
+	req->new_ieee_link_id = ev->new_ieee_link_id;
+	req->new_primary_freq = ev->new_primary_freq;
+	req->new_phymode = ev->new_phymode;
+	req->reason = ev->reason;
+
+	return QDF_STATUS_SUCCESS;
+}
+
+static QDF_STATUS
+send_link_switch_request_cnf_cmd_tlv(wmi_unified_t wmi_handle,
+				     struct wlan_mlo_link_switch_cnf *params)
+{
+	wmi_mlo_link_switch_cnf_fixed_param *cmd;
+	wmi_buf_t buf;
+	uint8_t *buf_ptr;
+	QDF_STATUS ret = QDF_STATUS_SUCCESS;
+	uint32_t buf_len;
+
+	buf_len = sizeof(wmi_mlo_link_switch_cnf_fixed_param);
+
+	buf = wmi_buf_alloc(wmi_handle, buf_len);
+	if (!buf) {
+		wmi_err("wmi buf alloc failed for vdev id %d while link state cmd send: ",
+			params->vdev_id);
+		return QDF_STATUS_E_NOMEM;
+	}
+
+	buf_ptr = (uint8_t *)wmi_buf_data(buf);
+	cmd = (wmi_mlo_link_switch_cnf_fixed_param *)buf_ptr;
+
+	WMITLV_SET_HDR(
+		&cmd->tlv_header,
+		WMITLV_TAG_STRUC_wmi_mlo_link_switch_cnf_fixed_param,
+		WMITLV_GET_STRUCT_TLVLEN(
+			wmi_mlo_link_switch_cnf_fixed_param));
+
+	cmd->vdev_id = params->vdev_id;
+	cmd->status = params->status;
+	cmd->reason = params->reason;
+	buf_ptr += sizeof(wmi_mlo_link_switch_cnf_fixed_param);
+	wmi_mtrace(WMI_MLO_LINK_SWITCH_CONF_CMDID, cmd->vdev_id, 0);
+	ret = wmi_unified_cmd_send(wmi_handle, buf, buf_len,
+				   WMI_MLO_LINK_SWITCH_CONF_CMDID);
+	if (ret) {
+		wmi_err("Failed to send ml link switch cnf command to FW: %d vdev id %d",
+			ret, cmd->vdev_id);
+		wmi_buf_free(buf);
+	}
+	return ret;
+}
+#endif /* WLAN_FEATURE_11BE_MLO_ADV_FEATURE */
+
 static QDF_STATUS
 send_link_state_request_cmd_tlv(wmi_unified_t wmi_handle,
 				struct wmi_host_link_state_params *params)
@@ -2365,4 +2448,10 @@ void wmi_11be_attach_tlv(wmi_unified_t wmi_handle)
 	ops->extract_peer_ptqm_migrate_event = extract_peer_ptqm_migrate_evt_param_tlv;
 	ops->extract_peer_entry_ptqm_migrate_event = extract_peer_entry_ptqm_migrate_evt_param_tlv;
 #endif /* QCA_SUPPORT_PRIMARY_LINK_MIGRATE */
+#ifdef WLAN_FEATURE_11BE_MLO_ADV_FEATURE
+	ops->extract_mlo_link_switch_request_event =
+			extract_mlo_link_switch_request_event_tlv;
+	ops->send_mlo_link_switch_req_cnf_cmd =
+			send_link_switch_request_cnf_cmd_tlv;
+#endif /* WLAN_FEATURE_11BE_MLO_ADV_FEATURE */
 }

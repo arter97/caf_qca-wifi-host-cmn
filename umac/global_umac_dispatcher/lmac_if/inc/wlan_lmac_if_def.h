@@ -59,6 +59,10 @@
 #include <wlan_ipa_public_struct.h>
 #endif
 
+#ifdef WLAN_FEATURE_11BE_MLO_ADV_FEATURE
+#include <wlan_mlo_mgr_link_switch.h>
+#endif
+
 /* Number of dev type: Direct attach and Offload */
 #define MAX_DEV_TYPE 2
 
@@ -1526,6 +1530,7 @@ struct wlan_lmac_if_son_rx_ops {
  * @send_link_removal_cmd: function to send MLO link removal command to FW
  * @send_vdev_pause: function to send MLO vdev pause to FW
  * @peer_ptqm_migrate_send: API to send peer ptqm migration request to FW
+ * @send_mlo_link_switch_cnf_cmd: Send link switch status to FW
  */
 struct wlan_lmac_if_mlo_tx_ops {
 	QDF_STATUS (*register_events)(struct wlan_objmgr_psoc *psoc);
@@ -1551,6 +1556,11 @@ struct wlan_lmac_if_mlo_tx_ops {
 					struct wlan_objmgr_vdev *vdev,
 					struct peer_ptqm_migrate_params *param);
 #endif /* QCA_SUPPORT_PRIMARY_LINK_MIGRATE */
+#ifdef WLAN_FEATURE_11BE_MLO_ADV_FEATURE
+	QDF_STATUS
+	(*send_mlo_link_switch_cnf_cmd)(struct wlan_objmgr_psoc *psoc,
+					struct wlan_mlo_link_switch_cnf *params);
+#endif /* WLAN_FEATURE_11BE_MLO_ADV_FEATURE */
 };
 
 /**
@@ -1560,6 +1570,8 @@ struct wlan_lmac_if_mlo_tx_ops {
  * @mlo_link_removal_handler: function pointer for MLO link removal handler
  * @process_mlo_link_state_info_event: function pointer for mlo link state
  * @mlo_link_disable_request_handler: function ptr for mlo link disable request
+ * @mlo_link_switch_request_handler: Handler function pointer to deliver link
+ * switch request params from FW to host.
  */
 struct wlan_lmac_if_mlo_rx_ops {
 	QDF_STATUS
@@ -1577,6 +1589,11 @@ struct wlan_lmac_if_mlo_rx_ops {
 	QDF_STATUS (*mlo_link_disable_request_handler)(
 			struct wlan_objmgr_psoc *psoc,
 			void *evt_params);
+#ifdef WLAN_FEATURE_11BE_MLO_ADV_FEATURE
+	QDF_STATUS
+	(*mlo_link_switch_request_handler)(struct wlan_objmgr_psoc *psoc,
+					   void *evt_params);
+#endif /* WLAN_FEATURE_11BE_MLO_ADV_FEATURE */
 };
 #endif
 

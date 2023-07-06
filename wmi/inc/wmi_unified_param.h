@@ -1224,6 +1224,8 @@ struct wmi_host_link_state_params {
  * @nstr_bitmap_size: Indicates size of NSTR bitmap,
  *                    as per the 802.11be specification
  * @mlo_bridge_peer: indicate if it is bridge peer
+ * @link_switch_in_progress: Flag to indicate FW MLO peer assoc params are sent
+ *                           for the peer due to link switch
  * @unused: spare bits
  * @mld_mac: MLD mac address
  * @logical_link_index: Unique index for links of the mlo. Starts with Zero
@@ -1257,7 +1259,8 @@ struct peer_assoc_mlo_params {
 		 nstr_bitmap_present:1,
 		 nstr_bitmap_size:1,
 		 mlo_bridge_peer:1,
-		 unused:20;
+		 link_switch_in_progress:1,
+		 unused:19;
 	uint8_t mld_mac[QDF_MAC_ADDR_SIZE];
 	uint32_t logical_link_index;
 	uint32_t ml_peer_id;
@@ -5282,6 +5285,9 @@ typedef enum {
 	wmi_mlo_link_set_active_resp_eventid,
 	wmi_mlo_link_removal_eventid,
 	wmi_mlo_link_disable_request_eventid,
+#ifdef WLAN_FEATURE_11BE_MLO_ADV_FEATURE
+	wmi_mlo_link_switch_request_eventid,
+#endif
 #endif
 	wmi_pdev_fips_extend_event_id,
 	wmi_roam_frame_event_id,

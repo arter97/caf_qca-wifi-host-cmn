@@ -204,6 +204,47 @@ QDF_STATUS wmi_extract_mlo_link_state_info_event(
 			void *evt_buf,
 			struct ml_link_state_info_event *params);
 
+#ifdef WLAN_FEATURE_11BE_MLO_ADV_FEATURE
+/**
+ * wmi_send_mlo_link_switch_req_cnf_cmd() - Send WMI command to FW on
+ * status of Link switch request received.
+ * @wmi: wmi handle
+ * @params: Params to send to FW.
+ *
+ * Return: QDF_STATUS.
+ */
+QDF_STATUS
+wmi_send_mlo_link_switch_req_cnf_cmd(wmi_unified_t wmi,
+				     struct wlan_mlo_link_switch_cnf *params);
+
+/**
+ * wmi_extract_mlo_link_switch_request_evt() - Extract fixed params TLV
+ * from the MLO link switch request WMI event.
+ * @wmi: wmi handle
+ * @buf: pointer to event buffer
+ * @req: MLO link switch request event params.
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS
+wmi_extract_mlo_link_switch_request_evt(struct wmi_unified *wmi, void *buf,
+					struct wlan_mlo_link_switch_req *req);
+#else
+static inline QDF_STATUS
+wmi_send_mlo_link_switch_req_cnf_cmd(wmi_unified_t wmi,
+				     struct wlan_mlo_link_switch_cnf *params)
+{
+	return QDF_STATUS_SUCCESS;
+}
+
+static inline QDF_STATUS
+wmi_extract_mlo_link_switch_request_evt(struct wmi_unified *wmi, void *buf,
+					struct wlan_mlo_link_switch_req *req)
+{
+	return QDF_STATUS_SUCCESS;
+}
+#endif
+
 /**
  * wmi_extract_mlo_link_disable_request_evt() - Extract fixed parameters TLV
  * from the MLO link disable request WMI event

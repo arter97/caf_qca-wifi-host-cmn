@@ -92,10 +92,27 @@ enum wlan_mlo_link_switch_reason {
 	MLO_LINK_SWITCH_REASON_MAX,
 };
 
+/*
+ * enum mlo_link_switch_req_state - Enum to maintain the current state of
+ * link switch request.
+ * @MLO_LINK_SWITCH_STATE_IDLE: The last link switch request is inactive
+ * @MLO_LINK_SWITCH_STATE_DISCONNECT_CURR_LINK: Current link disconnect
+ *                                              in progress.
+ * @MLO_LINK_SWITCH_STATE_SET_MAC_ADDR: MAC address update in progress
+ * @MLO_LINK_SWITCH_STATE_CONNECT_NEW_LINK: New link connect in progress.
+ * @MLO_LINK_SWITCH_STATE_COMPLETE_SUCCESS: Link switch completed successfully
+ */
+enum mlo_link_switch_req_state {
+	MLO_LINK_SWITCH_STATE_IDLE,
+	MLO_LINK_SWITCH_STATE_DISCONNECT_CURR_LINK,
+	MLO_LINK_SWITCH_STATE_SET_MAC_ADDR,
+	MLO_LINK_SWITCH_STATE_CONNECT_NEW_LINK,
+	MLO_LINK_SWITCH_STATE_COMPLETE_SUCCESS,
+};
+
 /**
  * struct wlan_mlo_link_switch_req - Data Structure because of link switch
  * request
- * @is_in_progress: is link switch in progress
  * @restore_vdev_flag: VDEV Flag to be restored post link switch.
  * @vdev_id: VDEV Id of the link which is under link switch
  * @curr_ieee_link_id: Current link id of the ML link
@@ -103,11 +120,11 @@ enum wlan_mlo_link_switch_reason {
  * @peer_mld_addr: Peer MLD address
  * @new_primary_freq: primary frequency of link switch link
  * @new_phymode: Phy mode of link switch link
+ * @state: Current state of link switch
  * @reason: Link switch reason
  * @link_switch_ts: Link switch timestamp
  */
 struct wlan_mlo_link_switch_req {
-	bool is_in_progress;
 	bool restore_vdev_flag;
 	uint8_t vdev_id;
 	uint8_t curr_ieee_link_id;
@@ -115,6 +132,7 @@ struct wlan_mlo_link_switch_req {
 	struct qdf_mac_addr peer_mld_addr;
 	uint32_t new_primary_freq;
 	uint32_t new_phymode;
+	enum mlo_link_switch_req_state state;
 	enum wlan_mlo_link_switch_reason reason;
 	qdf_time_t link_switch_ts;
 };
@@ -246,12 +264,108 @@ struct mlo_link_info *mlo_mgr_get_ap_link(struct wlan_objmgr_vdev *vdev);
  */
 void mlo_mgr_osif_update_connect_info(struct wlan_objmgr_vdev *vdev,
 				      int32_t link_id);
-#else
-static inline void
-mlo_mgr_osif_update_connect_info(struct wlan_objmgr_vdev *vdev, int32_t link_id)
-{
-}
-#endif
+
+/**
+ * mlo_mgr_link_switch_init_state() - Set the current state of link switch
+ * to init state.
+ * @mlo_dev_ctx: MLO dev context
+ *
+ * Sets the current state of link switch to MLO_LINK_SWITCH_STATE_IDLE with
+ * MLO dev context lock held.
+ *
+ * Return: void
+ */
+void mlo_mgr_link_switch_init_state(struct wlan_mlo_dev_context *mlo_dev_ctx);
+
+/**
+ * mlo_mgr_link_switch_trans_next_state() - Transition to next state based
+ * on current state.
+ * @mlo_dev_ctx: MLO dev context
+ *
+ * Move to next state in link switch process based on current state with
+ * MLO dev context lock held.
+ *
+ * Return: void
+ */
+void
+mlo_mgr_link_switch_trans_next_state(struct wlan_mlo_dev_context *mlo_dev_ctx);
+
+/**
+ * mlo_mgr_link_switch_get_curr_state() - Get the current state of link switch.
+ * @mlo_dev_ctx: MLO dev context.
+ *
+ * Get the current state of link switch with MLO dev context lock held.
+ *
+ * Return: void
+ */
+enum mlo_link_switch_req_state
+mlo_mgr_link_switch_get_curr_state(struct wlan_mlo_dev_context *mlo_dev_ctx);
+
+/**
+ * mlo_mgr_is_link_switch_in_progress() - Check in link ctx in MLO dev context
+ * if the last received link switch is in progress.
+ * @vdev: VDEV object manager
+ *
+ * The API is to be called for VDEV which has MLO dev context and link context
+ * initialized. Returns the value of 'is_in_progress' flag in last received
+ * link switch request.
+ *
+ * Return: bool
+ */
+bool mlo_mgr_is_link_switch_in_progress(struct wlan_objmgr_vdev *vdev);
+
+/**
+ * mlo_mgr_is_link_switch_on_assoc_vdev() - API to query whether link switch
+ * is on-going on assoc VDEV.
+ * @vdev: VDEV object manager
+ *
+ * Return: bool
+ */
+bool mlo_mgr_is_link_switch_on_assoc_vdev(struct wlan_objmgr_vdev *vdev);
+
+/**
+ * mlo_mgr_ser_link_switch_cmd() - The API will serialize link switch
+ * command in serialization queue.
+ * @vdev: VDEV objmgr pointer
+ * @req: Link switch request parameters
+ *
+ * On receiving link switch request with valid parameters from FW, this
+ * API will serialize the link switch command to procced for link switch
+ * on @vdev once the command comes to active queue.
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS mlo_mgr_ser_link_switch_cmd(struct wlan_objmgr_vdev *vdev,
+				       struct wlan_mlo_link_switch_req *req);
+
+/**
+ * mlo_mgr_remove_link_switch_cmd() - The API will remove the link switch
+ * command from active serialization queue.
+ * @vdev: VDEV object manager
+ *
+ * Once link switch process on @vdev is completed either in success of failure
+ * case, the API removes the link switch command from serialization queue.
+ *
+ * Return: void
+ */
+void mlo_mgr_remove_link_switch_cmd(struct wlan_objmgr_vdev *vdev);
+
+/**
+ * mlo_mgr_link_switch_validate_request() - Validate link switch request
+ * received from FW.
+ * @vdev: VDEV object manager
+ * @req: Request params from FW
+ *
+ * The API performs initial validation of link switch params received from FW
+ * before serializing the link switch cmd. If any of the params is invalid or
+ * the current status of MLO manager can't allow link switch, the API returns
+ * failure and link switch has to be terminated.
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS
+mlo_mgr_link_switch_validate_request(struct wlan_objmgr_vdev *vdev,
+				     struct wlan_mlo_link_switch_req *req);
 
 /**
  * mlo_mgr_link_switch_request_params() - Link switch request params from FW.
@@ -277,7 +391,6 @@ QDF_STATUS mlo_mgr_link_switch_request_params(struct wlan_objmgr_psoc *psoc,
  */
 QDF_STATUS mlo_mgr_link_switch_complete(struct wlan_objmgr_vdev *vdev);
 
-#ifdef WLAN_FEATURE_11BE_MLO_ADV_FEATURE
 /**
  * mlo_mgr_link_switch_init() - API to initialize link switch
  * @ml_dev: MLO dev context
@@ -300,6 +413,11 @@ QDF_STATUS mlo_mgr_link_switch_init(struct wlan_mlo_dev_context *ml_dev);
  */
 QDF_STATUS mlo_mgr_link_switch_deinit(struct wlan_mlo_dev_context *ml_dev);
 #else
+static inline void
+mlo_mgr_osif_update_connect_info(struct wlan_objmgr_vdev *vdev, int32_t link_id)
+{
+}
+
 static inline QDF_STATUS
 mlo_mgr_link_switch_deinit(struct wlan_mlo_dev_context *ml_dev)
 {
@@ -310,6 +428,66 @@ static inline QDF_STATUS
 mlo_mgr_link_switch_init(struct wlan_mlo_dev_context *ml_dev)
 {
 	return QDF_STATUS_SUCCESS;
+}
+
+static inline void
+mlo_mgr_link_switch_init_state(struct wlan_mlo_dev_context *mlo_dev_ctx)
+{
+}
+
+static inline void
+mlo_mgr_link_switch_trans_next_state(struct wlan_mlo_dev_context *mlo_dev_ctx)
+{
+}
+
+static inline enum mlo_link_switch_req_state
+mlo_mgr_link_switch_get_curr_state(struct wlan_mlo_dev_context *mlo_dev_ctx)
+{
+	return MLO_LINK_SWITCH_STATE_IDLE;
+}
+
+static inline bool
+mlo_mgr_is_link_switch_in_progress(struct wlan_objmgr_vdev *vdev)
+{
+	return false;
+}
+
+static inline bool
+mlo_mgr_is_link_switch_on_assoc_vdev(struct wlan_objmgr_vdev *vdev)
+{
+	return false;
+}
+
+static inline QDF_STATUS
+mlo_mgr_ser_link_switch_cmd(struct wlan_objmgr_vdev *vdev,
+			    struct wlan_mlo_link_switch_req *req)
+{
+	return QDF_STATUS_E_NOSUPPORT;
+}
+
+static inline void
+mlo_mgr_remove_link_switch_cmd(struct wlan_objmgr_vdev *vdev)
+{
+}
+
+static inline QDF_STATUS
+mlo_mgr_link_switch_validate_request(struct wlan_objmgr_vdev *vdev,
+				     struct wlan_mlo_link_switch_req *req)
+{
+	return QDF_STATUS_E_NOSUPPORT;
+}
+
+static inline QDF_STATUS
+mlo_mgr_link_switch_request_params(struct wlan_objmgr_psoc *psoc,
+				   void *evt_params)
+{
+	return QDF_STATUS_E_NOSUPPORT;
+}
+
+static inline QDF_STATUS
+mlo_mgr_link_switch_complete(struct wlan_objmgr_vdev *vdev)
+{
+	return QDF_STATUS_E_NOSUPPORT;
 }
 #endif
 #endif

@@ -238,6 +238,8 @@
 
 /* MLO link removal is in progress on this VDEV */
 #define WLAN_VDEV_OP_MLO_LINK_REMOVAL_IN_PROGRESS 0x01000000
+/* MLO link switch is in progress on this VDEV */
+#define WLAN_VDEV_OP_MLO_LINK_SWITCH_IN_PROGRESS 0x02000000
 
  /* flag to indicate disconnect only legacy peers due to moving to DFS channel
   * from non-DFS channel
@@ -1760,6 +1762,70 @@ void wlan_vdev_mlme_set_mlo_link_vdev(struct wlan_objmgr_vdev *vdev);
  * Return: void
  */
 void wlan_vdev_mlme_clear_mlo_link_vdev(struct wlan_objmgr_vdev *vdev);
+
+#ifdef WLAN_FEATURE_11BE_MLO_ADV_FEATURE
+/**
+ * wlan_vdev_mlme_set_mlo_link_switch_in_progress() - Set link switch in
+ * progress flag for VDEV.
+ * @vdev: VDEV object manager.
+ *
+ * Return: void
+ */
+static inline void
+wlan_vdev_mlme_set_mlo_link_switch_in_progress(struct wlan_objmgr_vdev *vdev)
+{
+	unsigned long flag = WLAN_VDEV_OP_MLO_LINK_SWITCH_IN_PROGRESS;
+
+	wlan_vdev_mlme_op_flags_set(vdev, flag);
+}
+
+/**
+ * wlan_vdev_mlme_clear_mlo_link_switch_in_progress() - Clear link switch in
+ * progress flag for VDEV.
+ * @vdev: VDEV object manager
+ *
+ * Return: void
+ */
+static inline void
+wlan_vdev_mlme_clear_mlo_link_switch_in_progress(struct wlan_objmgr_vdev *vdev)
+{
+	unsigned long flag = WLAN_VDEV_OP_MLO_LINK_SWITCH_IN_PROGRESS;
+
+	wlan_vdev_mlme_op_flags_clear(vdev, flag);
+}
+
+/**
+ * wlan_vdev_mlme_is_mlo_link_switch_in_progress() - Return true if VDEV is
+ * in link transitioning state.
+ * @vdev: VDEV object manager.
+ *
+ * Return: bool
+ */
+static inline bool
+wlan_vdev_mlme_is_mlo_link_switch_in_progress(struct wlan_objmgr_vdev *vdev)
+{
+	unsigned long flag = WLAN_VDEV_OP_MLO_LINK_SWITCH_IN_PROGRESS;
+
+	return wlan_vdev_mlme_op_flags_get(vdev, flag);
+}
+#else
+static inline void
+wlan_vdev_mlme_set_mlo_link_switch_in_progress(struct wlan_objmgr_vdev *vdev)
+{
+}
+
+static inline void
+wlan_vdev_mlme_clear_mlo_link_switch_in_progress(struct wlan_objmgr_vdev *vdev)
+{
+}
+
+static inline bool
+wlan_vdev_mlme_is_mlo_link_switch_in_progress(struct wlan_objmgr_vdev *vdev)
+{
+	return false;
+}
+#endif /* WLAN_FEATURE_11BE_MLO_ADV_FEATURE  */
+
 #ifdef WLAN_MCAST_MLO
 /**
  * wlan_vdev_mlme_is_mlo_mcast_vdev() - whether it is mlo mcast vdev or not
@@ -1873,6 +1939,22 @@ void wlan_vdev_mlme_set_mlo_link_vdev(struct wlan_objmgr_vdev *vdev)
 static inline
 void wlan_vdev_mlme_clear_mlo_link_vdev(struct wlan_objmgr_vdev *vdev)
 {
+}
+
+static inline void
+wlan_vdev_mlme_set_mlo_link_switch_in_progress(struct wlan_objmgr_vdev *vdev)
+{
+}
+
+static inline void
+wlan_vdev_mlme_clear_mlo_link_switch_in_progress(struct wlan_objmgr_vdev *vdev)
+{
+}
+
+static inline bool
+wlan_vdev_mlme_is_mlo_link_switch_in_progress(struct wlan_objmgr_vdev *vdev)
+{
+	return false;
 }
 
 static inline

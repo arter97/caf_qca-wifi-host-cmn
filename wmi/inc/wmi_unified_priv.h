@@ -97,6 +97,7 @@
 #ifdef WLAN_FEATURE_11BE_MLO
 #include <wmi_unified_11be_param.h>
 #include "wlan_mlo_mgr_public_structs.h"
+#include <wlan_mlo_mgr_link_switch.h>
 #endif
 
 #if defined(WLAN_SUPPORT_TWT) && defined(WLAN_TWT_CONV_SUPPORTED)
@@ -3146,6 +3147,16 @@ QDF_STATUS (*extract_mlo_link_disable_request_evt_param)(
 		struct wmi_unified *wmi_handle,
 		void *buf,
 		struct mlo_link_disable_request_evt_params *params);
+
+#ifdef WLAN_FEATURE_11BE_MLO_ADV_FEATURE
+QDF_STATUS
+(*extract_mlo_link_switch_request_event)(struct wmi_unified *wmi_handle,
+					 void *buf,
+					 struct wlan_mlo_link_switch_req *req);
+QDF_STATUS
+(*send_mlo_link_switch_req_cnf_cmd)(wmi_unified_t wmi_handle,
+				    struct wlan_mlo_link_switch_cnf *params);
+#endif
 #endif
 
 #ifdef WLAN_FEATURE_SON
