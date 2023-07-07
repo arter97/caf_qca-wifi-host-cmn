@@ -6598,6 +6598,7 @@ typedef enum {
  * @peer_getstainfo_support: Indicates getstainfo support
  * @feature_set_version: Indicates feature set version info
  * @num_antennas: Indicates number of antennas supported
+ * @sta_dump_support: Indicates sta dump info support
  */
 struct target_feature_set {
 	WMI_HOST_WIFI_STANDARD wifi_standard;
@@ -6657,6 +6658,7 @@ struct target_feature_set {
 	bool peer_getstainfo_support;
 	uint16_t feature_set_version;
 	WMI_HOST_NUM_ANTENNAS num_antennas;
+	bool sta_dump_support;
 };
 #endif
 
