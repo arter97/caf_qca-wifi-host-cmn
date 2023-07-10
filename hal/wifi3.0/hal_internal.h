@@ -497,6 +497,7 @@ typedef struct hal_ring_handle *hal_ring_handle_t;
  * @work_scheduled_time: work scheduled time (qdf_log_timestamp)
  * @dequeue_time: dequeue time (qdf_log_timestamp)
  * @cpu_id: record cpuid when schedule work
+ * @ring_id: record srng id
  */
 struct hal_reg_write_q_elem {
 	struct hal_srng *srng;
@@ -508,6 +509,7 @@ struct hal_reg_write_q_elem {
 	qdf_time_t work_scheduled_time;
 	qdf_time_t dequeue_time;
 	int cpu_id;
+	int ring_id;
 };
 
 /**
@@ -517,6 +519,7 @@ struct hal_reg_write_q_elem {
  * @coalesces: writes not enqueued since srng is already queued up
  * @direct: writes not enqueued and written to register directly
  * @dequeue_delay: dequeue operation be delayed
+ * @pending: number of buffers pending in delay reg write
  */
 struct hal_reg_write_srng_stats {
 	uint32_t enqueues;
@@ -524,6 +527,7 @@ struct hal_reg_write_srng_stats {
 	uint32_t coalesces;
 	uint32_t direct;
 	uint32_t dequeue_delay;
+	qdf_atomic_t pending;
 };
 
 /**
