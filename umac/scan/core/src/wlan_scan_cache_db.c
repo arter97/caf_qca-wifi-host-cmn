@@ -2237,7 +2237,7 @@ QDF_STATUS scm_get_mld_addr_by_link_addr(struct wlan_objmgr_pdev *pdev,
 	entry = scm_scan_get_entry_by_bssid(pdev, link_addr);
 	if (!entry) {
 		scm_err("scan entry not found for link addr: " QDF_MAC_ADDR_FMT,
-			QDF_MAC_ADDR_REF(link_addr));
+			QDF_MAC_ADDR_REF(link_addr->bytes));
 		return QDF_STATUS_E_FAILURE;
 	}
 

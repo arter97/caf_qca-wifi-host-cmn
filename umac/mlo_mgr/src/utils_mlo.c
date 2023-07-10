@@ -468,7 +468,7 @@ util_parse_bvmlie_perstaprofile_stactrl(uint8_t *subelempayload,
 				     QDF_MAC_ADDR_SIZE);
 
 			mlo_nofl_debug("Copied MAC address: " QDF_MAC_ADDR_FMT,
-				       subelempayload + parsed_payload_len);
+				       QDF_MAC_ADDR_REF(macaddr->bytes));
 
 			if (is_macaddr_valid)
 				*is_macaddr_valid = true;
@@ -4333,7 +4333,7 @@ util_parse_rvmlie_perstaprofile_stactrl(uint8_t *subelempayload,
 				     subelempayload + parsed_payload_len,
 				     QDF_MAC_ADDR_SIZE);
 			mlo_nofl_debug("Copied MAC address: " QDF_MAC_ADDR_FMT,
-				       subelempayload + parsed_payload_len);
+				       QDF_MAC_ADDR_REF(macaddr->bytes));
 
 			if (is_macaddr_valid)
 				*is_macaddr_valid = true;

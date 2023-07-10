@@ -1434,7 +1434,7 @@ wlan_mlo_link_disable_request_handler(struct wlan_objmgr_psoc *psoc,
 							   &vdev_id);
 	if (!is_connected) {
 		t2lm_err("Not connected to peer MLD " QDF_MAC_ADDR_FMT,
-			 params->mld_addr.bytes);
+			 QDF_MAC_ADDR_REF(params->mld_addr.bytes));
 		return QDF_STATUS_E_FAILURE;
 	}
 
