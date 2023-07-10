@@ -54,6 +54,9 @@
 #include "qdf_mem.h"   /* qdf_mem_malloc,free */
 #include "cfg_ucfg_api.h"
 #include <wlan_module_ids.h>
+#ifdef QCA_MULTIPASS_SUPPORT
+#include <enet.h>
+#endif
 
 #ifdef QCA_LL_TX_FLOW_CONTROL_V2
 #include "cdp_txrx_flow_ctrl_v2.h"
@@ -10731,6 +10734,9 @@ static QDF_STATUS dp_set_peer_param(struct cdp_soc_t *cdp_soc,  uint8_t vdev_id,
 		txrx_peer->nawds_enabled = val.cdp_peer_param_nawds;
 		break;
 	case CDP_CONFIG_ISOLATION:
+		dp_info("Peer " QDF_MAC_ADDR_FMT " vdev_id %d, isolation %d",
+			QDF_MAC_ADDR_REF(peer_mac), vdev_id,
+			val.cdp_peer_param_isolation);
 		dp_set_peer_isolation(txrx_peer, val.cdp_peer_param_isolation);
 		break;
 	case CDP_CONFIG_IN_TWT:
@@ -11210,6 +11216,8 @@ dp_set_vdev_param(struct cdp_soc_t *cdp_soc, uint8_t vdev_id,
 		break;
 	case CDP_UPDATE_MULTIPASS:
 		vdev->multipass_en = val.cdp_vdev_param_update_multipass;
+		dp_info("vdev %d Multipass enable %d", vdev_id,
+			vdev->multipass_en);
 		break;
 	case CDP_TX_ENCAP_TYPE:
 		vdev->tx_encap_type = val.cdp_vdev_param_tx_encap;
@@ -17673,3 +17681,100 @@ void dp_destroy_direct_link_refill_ring(struct cdp_soc_t *soc_hdl,
 	dp_srng_free(soc, &pdev->rx_refill_buf_ring4);
 }
 #endif
+
+#ifdef QCA_MULTIPASS_SUPPORT
+QDF_STATUS dp_set_vlan_groupkey(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
+				uint16_t vlan_id, uint16_t group_key)
+{
+	struct dp_soc *soc = cdp_soc_t_to_dp_soc(soc_hdl);
+	struct dp_vdev *vdev = dp_vdev_get_ref_by_id(soc, vdev_id,
+						     DP_MOD_ID_TX_MULTIPASS);
+	QDF_STATUS status;
+
+	dp_info("Try: vdev_id %d, vdev %pK, multipass_en %d, vlan_id %d, group_key %d",
+		vdev_id, vdev, vdev ? vdev->multipass_en : 0, vlan_id,
+		group_key);
+	if (!vdev || !vdev->multipass_en) {
+		status = QDF_STATUS_E_INVAL;
+		goto fail;
+	}
+
+	if (!vdev->iv_vlan_map) {
+		uint16_t vlan_map_size = (sizeof(uint16_t)) * DP_MAX_VLAN_IDS;
+
+		vdev->iv_vlan_map = (uint16_t *)qdf_mem_malloc(vlan_map_size);
+		if (!vdev->iv_vlan_map) {
+			QDF_TRACE_ERROR(QDF_MODULE_ID_DP, "iv_vlan_map");
+			status = QDF_STATUS_E_NOMEM;
+			goto fail;
+		}
+
+		/*
+		 * 0 is invalid group key.
+		 * Initilalize array with invalid group keys.
+		 */
+		qdf_mem_zero(vdev->iv_vlan_map, vlan_map_size);
+	}
+
+	if (vlan_id >= DP_MAX_VLAN_IDS) {
+		status = QDF_STATUS_E_INVAL;
+		goto fail;
+	}
+
+	dp_info("Successful setting: vdev_id %d, vlan_id %d, group_key %d",
+		vdev_id, vlan_id, group_key);
+	vdev->iv_vlan_map[vlan_id] = group_key;
+	status = QDF_STATUS_SUCCESS;
+fail:
+	if (vdev)
+		dp_vdev_unref_delete(soc, vdev, DP_MOD_ID_TX_MULTIPASS);
+	return status;
+}
+
+void dp_tx_remove_vlan_tag(struct dp_vdev *vdev, qdf_nbuf_t nbuf)
+{
+	struct vlan_ethhdr veth_hdr;
+	struct vlan_ethhdr *veh = (struct vlan_ethhdr *)nbuf->data;
+
+	/*
+	 * Extract VLAN header of 4 bytes:
+	 * Frame Format : {dst_addr[6], src_addr[6], 802.1Q header[4],
+	 *		   EtherType[2], Payload}
+	 * Before Removal : xx xx xx xx xx xx xx xx xx xx xx xx 81 00 00 02
+	 *		    08 00 45 00 00...
+	 * After Removal  : xx xx xx xx xx xx xx xx xx xx xx xx 08 00 45 00
+	 *		    00...
+	 */
+	qdf_mem_copy(&veth_hdr, veh, sizeof(veth_hdr));
+	qdf_nbuf_pull_head(nbuf, ETHERTYPE_VLAN_LEN);
+	veh = (struct vlan_ethhdr *)nbuf->data;
+	qdf_mem_copy(veh, &veth_hdr, 2 * QDF_MAC_ADDR_SIZE);
+}
+
+void dp_tx_vdev_multipass_deinit(struct dp_vdev *vdev)
+{
+	struct dp_txrx_peer *txrx_peer = NULL;
+
+	qdf_spin_lock_bh(&vdev->mpass_peer_mutex);
+	TAILQ_FOREACH(txrx_peer, &vdev->mpass_peer_list, mpass_peer_list_elem)
+		qdf_err("Peers present in mpass list : %d", txrx_peer->peer_id);
+	qdf_spin_unlock_bh(&vdev->mpass_peer_mutex);
+
+	if (vdev->iv_vlan_map) {
+		qdf_mem_free(vdev->iv_vlan_map);
+		vdev->iv_vlan_map = NULL;
+	}
+
+	qdf_spinlock_destroy(&vdev->mpass_peer_mutex);
+}
+
+void dp_peer_multipass_list_init(struct dp_vdev *vdev)
+{
+	/*
+	 * vdev->iv_vlan_map is allocated when the first configuration command
+	 * is issued to avoid unnecessary allocation for regular mode VAP.
+	 */
+	TAILQ_INIT(&vdev->mpass_peer_list);
+	qdf_spinlock_create(&vdev->mpass_peer_mutex);
+}
+#endif /* QCA_MULTIPASS_SUPPORT */
