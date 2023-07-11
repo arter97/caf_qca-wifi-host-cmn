@@ -600,6 +600,17 @@ bool target_is_tgt_type_qcn6432(uint32_t target_type);
 bool target_is_tgt_type_qcn7605(uint32_t target_type);
 
 /**
+ * target_if_is_vdev_valid - vdev id is valid or not
+ * @vdev_id: vdev id
+ *
+ * Return: true or false
+ */
+static inline bool target_if_is_vdev_valid(uint8_t vdev_id)
+{
+	return (vdev_id < WLAN_UMAC_PSOC_MAX_VDEVS ? true : false);
+}
+
+/**
  * target_psoc_set_wlan_init_status() - set info wlan_init_status
  * @psoc_info:          pointer to structure target_psoc_info
  * @wlan_init_status:   FW init status
