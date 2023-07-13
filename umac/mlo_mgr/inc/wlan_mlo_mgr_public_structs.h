@@ -397,6 +397,9 @@ struct mlo_sta_quiet_status {
  * @force_active_num_bitmap: force active num link bitmap
  * @force_inactive_num: force inactive link num
  * @force_inactive_num_bitmap: force inactive num link bitmap
+ * @curr_dynamic_inactive_bitmap: dynamic inactive link bitmap
+ * @curr_active_bitmap: current active link bitmap
+ * @curr_inactive_bitmap: current inactive link bitmap
  */
 struct ml_link_force_state {
 	uint16_t force_active_bitmap;
@@ -405,6 +408,9 @@ struct ml_link_force_state {
 	uint16_t force_active_num_bitmap;
 	uint8_t force_inactive_num;
 	uint16_t force_inactive_num_bitmap;
+	uint16_t curr_dynamic_inactive_bitmap;
+	uint16_t curr_active_bitmap;
+	uint16_t curr_inactive_bitmap;
 };
 
 /**
@@ -1086,8 +1092,10 @@ enum mlo_link_force_reason {
  * @use_ieee_link_id: link id is valid in active_linkid_bitmap or
  *	inactive_linkid_bitmap
  * @ap_mld_mac_addr: AP MLD mac address
- * @active_linkid_bitmap: current active link id bitmap
- * @inactive_linkid_bitmap: current inactive link id bitmap
+ * @active_linkid_bitmap: current forced active link id bitmap
+ * @inactive_linkid_bitmap: current forced inactive link id bitmap
+ * @curr_inactive_linkid_bitmap: current inactive link id bitmap
+ * @curr_active_linkid_bitmap: current active link id bitmap
  */
 struct mlo_link_set_active_resp {
 	uint32_t status;
@@ -1099,6 +1107,8 @@ struct mlo_link_set_active_resp {
 	struct qdf_mac_addr  ap_mld_mac_addr;
 	uint32_t active_linkid_bitmap;
 	uint32_t inactive_linkid_bitmap;
+	uint32_t curr_inactive_linkid_bitmap;
+	uint32_t curr_active_linkid_bitmap;
 };
 
 /**

@@ -902,6 +902,21 @@ extract_mlo_link_set_active_resp_tlv(wmi_unified_t wmi_handle, void *evt_buf,
 		  resp->status,
 		  evt->use_ieee_link_id_bitmap,
 		  QDF_MAC_ADDR_REF(resp->ap_mld_mac_addr.bytes));
+
+	bitmap = param_buf->current_active_ieee_link_id_bitmap;
+	if (bitmap &&
+	    param_buf->num_current_active_ieee_link_id_bitmap > 0)
+		resp->curr_active_linkid_bitmap = bitmap[0];
+	bitmap = param_buf->current_inactive_ieee_link_id_bitmap;
+	if (bitmap &&
+	    param_buf->num_current_inactive_ieee_link_id_bitmap > 0)
+		resp->curr_inactive_linkid_bitmap = bitmap[0];
+	wmi_debug("curr active links: 0x%x inactive links: 0x%x num: %x %x",
+		  resp->curr_active_linkid_bitmap,
+		  resp->curr_inactive_linkid_bitmap,
+		  param_buf->num_current_active_ieee_link_id_bitmap,
+		  param_buf->num_current_inactive_ieee_link_id_bitmap);
+
 	if (evt->use_ieee_link_id_bitmap) {
 		bitmap = param_buf->force_active_ieee_link_id_bitmap;
 		if (bitmap &&
@@ -913,7 +928,7 @@ extract_mlo_link_set_active_resp_tlv(wmi_unified_t wmi_handle, void *evt_buf,
 		    param_buf->num_force_inactive_ieee_link_id_bitmap > 0)
 			resp->inactive_linkid_bitmap = bitmap[0];
 		resp->use_ieee_link_id = true;
-		wmi_debug("active links: 0x%x inactive links: 0x%x num: %x %x",
+		wmi_debug("forced active links: 0x%x inactive links: 0x%x num: %x %x",
 			  resp->active_linkid_bitmap,
 			  resp->inactive_linkid_bitmap,
 			  param_buf->num_force_active_ieee_link_id_bitmap,
@@ -927,7 +942,7 @@ extract_mlo_link_set_active_resp_tlv(wmi_unified_t wmi_handle, void *evt_buf,
 	resp->active_sz = entry_num;
 	for (i = 0; i < entry_num; i++) {
 		resp->active[i] = bitmap[i];
-		wmi_debug("active[%d]: 0x%x", i, resp->active[i]);
+		wmi_debug("vdev active[%d]: 0x%x", i, resp->active[i]);
 	}
 
 	bitmap = param_buf->force_inactive_vdev_bitmap;
@@ -936,7 +951,7 @@ extract_mlo_link_set_active_resp_tlv(wmi_unified_t wmi_handle, void *evt_buf,
 	resp->inactive_sz = entry_num;
 	for (i = 0; i < entry_num; i++) {
 		resp->inactive[i] = bitmap[i];
-		wmi_debug("inactive[%d]: 0x%x", i, resp->inactive[i]);
+		wmi_debug("vdev inactive[%d]: 0x%x", i, resp->inactive[i]);
 	}
 
 	return QDF_STATUS_SUCCESS;
