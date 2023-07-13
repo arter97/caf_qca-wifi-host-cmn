@@ -6044,6 +6044,8 @@ typedef enum {
 		   VDEV_PARAM_RTT_11AZ_NTB_MAX_TIME_BW_MEAS),
 	VDEV_PARAM(vdev_param_rtt_11az_ntb_min_time_bw_meas,
 		   VDEV_PARAM_RTT_11AZ_NTB_MIN_TIME_BW_MEAS),
+	VDEV_PARAM(vdev_param_disable_2g_twt,
+		   VDEV_PARAM_DISABLE_2G_TWT),
 	vdev_param_max,
 } wmi_conv_vdev_param_id;
 
