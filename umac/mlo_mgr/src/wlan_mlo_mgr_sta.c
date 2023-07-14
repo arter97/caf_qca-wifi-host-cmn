@@ -1171,6 +1171,27 @@ void mlo_handle_pending_disconnect(struct wlan_objmgr_vdev *vdev)
 	}
 }
 
+#ifdef WLAN_FEATURE_11BE_MLO_ADV_FEATURE
+static bool
+mlo_sta_ignore_link_connect_fail(struct wlan_objmgr_vdev *vdev)
+{
+	if (wlan_cm_is_vdev_disconnected(vdev)) {
+		if (!wlan_vdev_mlme_is_mlo_link_vdev(vdev))
+			return false;
+		else
+			return true;
+	}
+
+	return false;
+}
+#else
+static inline bool
+mlo_sta_ignore_link_connect_fail(struct wlan_objmgr_vdev *vdev)
+{
+	return false;
+}
+#endif
+
 void mlo_sta_link_connect_notify(struct wlan_objmgr_vdev *vdev,
 				 struct wlan_cm_connect_resp *rsp)
 {
@@ -1191,12 +1212,13 @@ void mlo_sta_link_connect_notify(struct wlan_objmgr_vdev *vdev,
 		return;
 	}
 
-	if (wlan_cm_is_vdev_disconnected(vdev))
-		mlo_free_copied_conn_req(sta_ctx);
+	if (mlo_sta_ignore_link_connect_fail(vdev))
+		return;
 
 	if (wlan_vdev_mlme_is_mlo_vdev(vdev)) {
 		mlo_debug("Vdev: %d", wlan_vdev_get_id(vdev));
 		if (wlan_cm_is_vdev_disconnected(vdev)) {
+			mlo_free_copied_conn_req(sta_ctx);
 			mlo_handle_sta_link_connect_failure(vdev, rsp);
 			return;
 		} else if (!wlan_cm_is_vdev_connected(vdev)) {
