@@ -3010,10 +3010,13 @@ static QDF_STATUS __wlan_ipa_wlan_evt(qdf_netdev_t net_dev, uint8_t device_mode,
 
 		if (wlan_ipa_uc_is_enabled(ipa_ctx->config)) {
 			qdf_mutex_release(&ipa_ctx->event_lock);
+#ifndef MDM_PLATFORM
 			if (qdf_ipa_get_lan_rx_napi() &&
 			    (ipa_ctx->num_sap_connected > 1)) {
 				wlan_ipa_handle_multiple_sap_evt(ipa_ctx, type);
-			} else {
+			} else
+#endif
+			{
 				wlan_ipa_uc_offload_enable_disable(ipa_ctx,
 							WMI_AP_RX_DATA_OFFLOAD,
 							session_id, true);
