@@ -528,10 +528,15 @@ static void wlan_ipa_print_session_info(struct wlan_ipa_priv *ipa_ctx)
 		if (iface_context->session_id == WLAN_IPA_MAX_SESSION)
 			continue;
 
-		ipa_info("\nIFACE[%d]: mode:%d, offload:%d",
-			 i, iface_context->device_mode,
-			 ipa_ctx->vdev_offload_enabled[iface_context->
-						       session_id]);
+		if (iface_context->session_id <  WLAN_IPA_MAX_SESSION)
+			ipa_info("\nIFACE[%d]: mode:%d, offload:%d",
+				 i, iface_context->device_mode,
+				 ipa_ctx->vdev_offload_enabled[iface_context->
+							       session_id]);
+		else
+			ipa_info("\nIFACE[%d]: mode:%d, wrong session_id:%d",
+				 i, iface_context->device_mode,
+				 iface_context->session_id);
 	}
 
 	for (i = 0; i < QDF_IPA_WLAN_EVENT_MAX; i++)
