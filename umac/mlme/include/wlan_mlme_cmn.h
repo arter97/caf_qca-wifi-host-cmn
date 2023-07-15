@@ -68,6 +68,9 @@
  * @pairwise: true if a pairwise key
  * @cipher_type: key cipher type
  *
+ * @mlme_cm_link_reconfig_notify_cb:
+ * @vdev: vdev object
+ *
  * @mlme_cm_roam_start_cb: Roam start callback
  * @vdev: vdev pointer
  *
@@ -98,6 +101,8 @@
  * @psoc: psoc pointer
  * @rsp: vendor handoff response pointer
  * @vendor_handoff_context: vendor handoff context
+ *
+ * @mlme_cm_perfd_reset_cpufreq_ctrl_cb: callback to reset CPU min freq
  */
 struct mlme_cm_ops {
 	QDF_STATUS (*mlme_cm_connect_complete_cb)(
@@ -124,6 +129,8 @@ struct mlme_cm_ops {
 	QDF_STATUS (*mlme_cm_send_keys_cb)(struct wlan_objmgr_vdev *vdev,
 					   uint8_t key_index, bool pairwise,
 					   enum wlan_crypto_cipher_type cipher_type);
+	QDF_STATUS (*mlme_cm_link_reconfig_notify_cb)(
+					struct wlan_objmgr_vdev *vdev);
 #endif
 #ifdef WLAN_FEATURE_ROAM_OFFLOAD
 	QDF_STATUS (*mlme_cm_roam_start_cb)(struct wlan_objmgr_vdev *vdev);
@@ -149,6 +156,9 @@ struct mlme_cm_ops {
 	QDF_STATUS (*mlme_cm_get_vendor_handoff_params_cb)(
 				struct wlan_objmgr_psoc *psoc,
 				void *vendor_handoff_context);
+#endif
+#ifdef WLAN_BOOST_CPU_FREQ_IN_ROAM
+	void (*mlme_cm_perfd_reset_cpufreq_ctrl_cb)(void);
 #endif
 };
 
@@ -923,6 +933,14 @@ QDF_STATUS mlme_cm_osif_pmksa_candidate_notify(struct wlan_objmgr_vdev *vdev,
 QDF_STATUS mlme_cm_osif_send_keys(struct wlan_objmgr_vdev *vdev,
 				  uint8_t key_index, bool pairwise,
 				  enum wlan_crypto_cipher_type cipher_type);
+
+/**
+ * mlme_cm_osif_link_reconfig_notify() - notify link reconfig event
+ * @vdev: vdev pointer
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS mlme_cm_osif_link_reconfig_notify(struct wlan_objmgr_vdev *vdev);
 #else
 static inline
 QDF_STATUS mlme_cm_osif_roam_sync_ind(struct wlan_objmgr_vdev *vdev)
@@ -934,6 +952,12 @@ static inline
 QDF_STATUS mlme_cm_osif_send_keys(struct wlan_objmgr_vdev *vdev,
 				  uint8_t key_index, bool pairwise,
 				  enum wlan_crypto_cipher_type cipher_type)
+{
+	return QDF_STATUS_SUCCESS;
+}
+
+static inline
+QDF_STATUS mlme_cm_osif_link_reconfig_notify(struct wlan_objmgr_vdev *vdev)
 {
 	return QDF_STATUS_SUCCESS;
 }
@@ -1342,4 +1366,21 @@ void mlme_vdev_reconfig_timer_cb(void *arg);
  * Return: True if reassoc on mlo reconfig link add ie enable
  */
 bool mlme_mlo_is_reconfig_reassoc_enable(struct wlan_objmgr_psoc *psoc);
+
+#ifdef WLAN_BOOST_CPU_FREQ_IN_ROAM
+/**
+ * mlme_cm_osif_perfd_reset_cpufreq() - Function to reset CPU freq
+ *
+ * This function is to reset the CPU freq
+ *
+ * Return: None
+ */
+void mlme_cm_osif_perfd_reset_cpufreq(void);
+#else
+static inline
+void mlme_cm_osif_perfd_reset_cpufreq(void)
+{
+}
+#endif
+
 #endif

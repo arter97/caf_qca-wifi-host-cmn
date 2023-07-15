@@ -1152,6 +1152,9 @@ struct hal_phy_rx_ht_sig_tlv_record {
 		 fes_coding:1,
 		 cbw:1;
 };
+
+/* Tx TLVs - structs of Tx TLV with fields to be added here*/
+
 /*
  * enum hal_ppdu_tlv_category - Categories of TLV
  * @PPDU_START: PPDU start level TLV
@@ -1246,6 +1249,14 @@ struct hal_txmon_usr_desc_common {
 #define TXMON_STATUS_INFO(hal_tx_status_info, field)	\
 			hal_tx_status_info->field
 
+#ifdef MONITOR_TLV_RECORDING_ENABLE
+struct hal_tx_tlv_info {
+	uint32_t tlv_tag;
+	uint8_t tlv_category;
+	uint8_t is_data_ppdu_info;
+};
+#endif
+
 /**
  * struct hal_tx_status_info - status info that wasn't populated in rx_status
  * @reception_type: su or uplink mu reception type
@@ -1330,6 +1341,7 @@ struct hal_tx_status_info {
  * @cur_usr_idx: Current user index of the PPDU
  * @reserved: for future purpose
  * @prot_tlv_status: protection tlv status
+ * @tx_tlv_info: store tx tlv info for recording
  * @packet_info: packet information
  * @rx_status: monitor mode rx status information
  * @rx_user_status: monitor mode rx user status information
@@ -1344,6 +1356,9 @@ struct hal_tx_ppdu_info {
 
 	uint32_t prot_tlv_status;
 
+#ifdef MONITOR_TLV_RECORDING_ENABLE
+	struct hal_tx_tlv_info tx_tlv_info;
+#endif
 	/* placeholder to hold packet buffer info */
 	struct hal_mon_packet_info packet_info;
 	struct mon_rx_status rx_status;
@@ -2485,7 +2500,7 @@ hal_rx_status_get_tlv_info_generic_be(void *rx_tlv_hdr, void *ppduinfo,
 	user_id = HAL_RX_GET_USER_TLV64_USERID(rx_tlv_hdr);
 	tlv_len = HAL_RX_GET_USER_TLV64_LEN(rx_tlv_hdr);
 
-	rx_tlv = (uint8_t *)rx_tlv_hdr + HAL_RX_TLV64_HDR_SIZE;
+	rx_tlv = (uint8_t *)rx_tlv_hdr + HAL_RX_TLV_HDR_SIZE;
 
 	qdf_trace_hex_dump(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_DEBUG,
 			   rx_tlv, tlv_len);
@@ -3675,7 +3690,7 @@ hal_rx_status_aggr_tlv(struct hal_soc *hal_soc, void *rx_tlv_hdr,
 	user_id = HAL_RX_GET_USER_TLV64_USERID(rx_tlv_hdr);
 	tlv_len = HAL_RX_GET_USER_TLV64_LEN(rx_tlv_hdr);
 
-	rx_tlv = (uint8_t *)rx_tlv_hdr + HAL_RX_TLV64_HDR_SIZE;
+	rx_tlv = (uint8_t *)rx_tlv_hdr + HAL_RX_TLV_HDR_SIZE;
 
 	if (tlv_len <= HAL_RX_MON_MAX_AGGR_SIZE - ppdu_info->tlv_aggr.cur_len) {
 		qdf_mem_copy(ppdu_info->tlv_aggr.buf +

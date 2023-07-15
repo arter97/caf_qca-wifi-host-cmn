@@ -367,7 +367,7 @@ void dp_tx_process_htt_completion_be(struct dp_soc *soc,
 		dp_tx_comp_process_tx_status(soc, tx_desc, &ts, txrx_peer,
 					     ring_id);
 		dp_tx_comp_process_desc(soc, tx_desc, &ts, txrx_peer);
-		dp_tx_desc_release(tx_desc, tx_desc->pool_id);
+		dp_tx_desc_release(soc, tx_desc, tx_desc->pool_id);
 
 		if (qdf_likely(txrx_peer))
 			dp_txrx_peer_unref_delete(txrx_ref_handle,
@@ -407,7 +407,7 @@ void dp_tx_process_htt_completion_be(struct dp_soc *soc,
 
 release_tx_desc:
 	dp_tx_comp_free_buf(soc, tx_desc, false);
-	dp_tx_desc_release(tx_desc, tx_desc->pool_id);
+	dp_tx_desc_release(soc, tx_desc, tx_desc->pool_id);
 	if (vdev)
 		dp_vdev_unref_delete(soc, vdev, DP_MOD_ID_HTT_COMP);
 }
@@ -1037,6 +1037,7 @@ int dp_ppeds_tx_comp_handler(struct dp_soc_be *be_soc, uint32_t quota)
 	dp_txrx_ref_handle txrx_ref_handle = NULL;
 	struct dp_vdev *vdev = NULL;
 	struct dp_pdev *pdev = NULL;
+	struct dp_srng *srng;
 
 	if (qdf_unlikely(dp_srng_access_start(NULL, soc, hal_ring_hdl))) {
 		dp_err("HAL RING Access Failed -- %pK", hal_ring_hdl);
@@ -1052,6 +1053,14 @@ int dp_ppeds_tx_comp_handler(struct dp_soc_be *be_soc, uint32_t quota)
 
 	last_prefetch_hw_desc = dp_srng_dst_prefetch(hal_soc, hal_ring_hdl,
 						     num_avail_for_reap);
+
+	srng = &be_soc->ppeds_wbm_release_ring;
+
+	if (srng) {
+		hal_update_ring_util(soc->hal_soc, srng->hal_srng,
+				     WBM2SW_RELEASE,
+				     &be_soc->ppeds_wbm_release_ring.stats);
+	}
 
 	while (qdf_likely(num_avail_for_reap--)) {
 		tx_comp_hal_desc =  dp_srng_dst_get_next(soc, hal_ring_hdl);
@@ -1899,7 +1908,7 @@ ring_access_fail2:
 	return NULL;
 
 release_desc:
-	dp_tx_desc_release(tx_desc, desc_pool_id);
+	dp_tx_desc_release(soc, tx_desc, desc_pool_id);
 
 	return nbuf;
 }

@@ -779,11 +779,21 @@ scm_copy_info_from_dup_entry(struct wlan_objmgr_pdev *pdev,
 	 *   -- RSSI is less than -80, this indicate that the signal has leaked
 	 *       in adjacent channel.
 	 */
-	if ((scan_params->frm_subtype == MGMT_SUBTYPE_BEACON) &&
+	time_gap =
+		scan_params->scan_entry_time -
+		scan_entry->rssi_timestamp;
+
+	if ((scan_params->frm_subtype == MGMT_SUBTYPE_BEACON ||
+	     scan_params->frm_subtype == MGMT_SUBTYPE_PROBE_RESP) &&
 	    !util_scan_entry_htinfo(scan_params) &&
 	    !util_scan_entry_ds_param(scan_params) &&
+	    !util_scan_entry_vhtop(scan_params) &&
+	    !util_scan_entry_heop(scan_params) &&
 	    (scan_params->channel.chan_freq != scan_entry->channel.chan_freq) &&
-	    (scan_params->rssi_raw  < ADJACENT_CHANNEL_RSSI_THRESHOLD)) {
+	    (scan_params->rssi_raw  < ADJACENT_CHANNEL_RSSI_THRESHOLD ||
+	     (time_gap < WLAN_RSSI_AVERAGING_TIME &&
+	      (scan_params->rssi_raw + ADJACENT_CHANNEL_RSSI_DIFF_THRESHOLD) <
+	      scan_entry->rssi_raw))) {
 		scan_params->channel.chan_freq = scan_entry->channel.chan_freq;
 		scan_params->channel_mismatch = true;
 	}
@@ -803,9 +813,6 @@ scm_copy_info_from_dup_entry(struct wlan_objmgr_pdev *pdev,
 		 * Otherwise new frames RSSI and SNR are more representative
 		 * of the signal strength.
 		 */
-		time_gap =
-			scan_params->scan_entry_time -
-			scan_entry->rssi_timestamp;
 		if (time_gap > WLAN_RSSI_AVERAGING_TIME) {
 			scan_params->avg_rssi =
 				WLAN_RSSI_IN(scan_params->rssi_raw);
@@ -1132,7 +1139,7 @@ QDF_STATUS __scm_handle_bcn_probe(struct scan_bcn_probe_event *bcn)
 		return QDF_STATUS_E_INVAL;
 	}
 	if (!bcn->rx_data) {
-		scm_err("rx_data iS NULL");
+		scm_err("rx_data is NULL");
 		status = QDF_STATUS_E_INVAL;
 		goto free_nbuf;
 	}
@@ -1147,13 +1154,12 @@ QDF_STATUS __scm_handle_bcn_probe(struct scan_bcn_probe_event *bcn)
 	pdev = wlan_objmgr_get_pdev_by_id(psoc,
 			   bcn->rx_data->pdev_id, WLAN_SCAN_ID);
 	if (!pdev) {
-		scm_err("pdev is NULL");
+		scm_err("pdev is NULL for pdev %d", bcn->rx_data->pdev_id);
 		status = QDF_STATUS_E_INVAL;
 		goto free_nbuf;
 	}
 	scan_obj = wlan_psoc_get_scan_obj(psoc);
 	if (!scan_obj) {
-		scm_err("scan_obj is NULL");
 		status = QDF_STATUS_E_INVAL;
 		goto free_nbuf;
 	}
@@ -1176,8 +1182,8 @@ QDF_STATUS __scm_handle_bcn_probe(struct scan_bcn_probe_event *bcn)
 			qdf_nbuf_len(bcn->buf), bcn->frm_type,
 			bcn->rx_data);
 	if (!scan_list || qdf_list_empty(scan_list)) {
-		scm_debug("failed to unpack %d frame BSSID: "QDF_MAC_ADDR_FMT,
-			  bcn->frm_type, QDF_MAC_ADDR_REF(hdr->i_addr3));
+		scm_debug(QDF_MAC_ADDR_FMT ": failed to unpack %d frame",
+			  QDF_MAC_ADDR_REF(hdr->i_addr3), bcn->frm_type);
 		status = QDF_STATUS_E_INVAL;
 		goto free_nbuf;
 	}
@@ -1186,8 +1192,9 @@ QDF_STATUS __scm_handle_bcn_probe(struct scan_bcn_probe_event *bcn)
 	for (i = 0; i < list_count; i++) {
 		status = qdf_list_remove_front(scan_list, &next_node);
 		if (QDF_IS_STATUS_ERROR(status) || !next_node) {
-			scm_debug("list remove failure i:%d, lsize:%d, BSSID: "QDF_MAC_ADDR_FMT,
-				  i, list_count, QDF_MAC_ADDR_REF(hdr->i_addr3));
+			scm_debug(QDF_MAC_ADDR_FMT ": list remove failure i %d, lsize %d",
+				  QDF_MAC_ADDR_REF(hdr->i_addr3), i,
+				  list_count);
 			status = QDF_STATUS_E_INVAL;
 			goto free_nbuf;
 		}
@@ -1199,10 +1206,13 @@ QDF_STATUS __scm_handle_bcn_probe(struct scan_bcn_probe_event *bcn)
 
 		if (scan_obj->drop_bcn_on_chan_mismatch &&
 		    scan_entry->channel_mismatch) {
-			scm_nofl_debug("Drop frame for chan mismatch "QDF_MAC_ADDR_FMT" Seq Num: %d freq %d RSSI %d",
-				       QDF_MAC_ADDR_REF(scan_entry->bssid.bytes),
+			scm_nofl_debug(QDF_MAC_ADDR_FMT ": Drop frame(%d) for chan mismatch, seq %d frame freq %d rx data freq %d RSSI %d",
+				       QDF_MAC_ADDR_REF(
+				       scan_entry->bssid.bytes),
+				       bcn->frm_type,
 				       scan_entry->seq_num,
 				       scan_entry->channel.chan_freq,
+				       bcn->rx_data->chan_freq,
 				       scan_entry->rssi_raw);
 			util_scan_free_cache_entry(scan_entry);
 			qdf_mem_free(scan_node);
@@ -1210,13 +1220,14 @@ QDF_STATUS __scm_handle_bcn_probe(struct scan_bcn_probe_event *bcn)
 		}
 		/* Do not add invalid channel entry as kernel will reject it */
 		if (scan_obj->drop_bcn_on_invalid_freq &&
-		    wlan_reg_is_disable_for_pwrmode(
-					pdev,
-					scan_entry->channel.chan_freq,
-					REG_BEST_PWR_MODE)) {
-			scm_nofl_debug("Drop frame for invalid freq %d: "QDF_MAC_ADDR_FMT" Seq Num: %d RSSI %d",
+		    !wlan_reg_is_freq_enabled(pdev,
+					      scan_entry->channel.chan_freq,
+					      REG_BEST_PWR_MODE)) {
+			scm_nofl_debug(QDF_MAC_ADDR_FMT ": Drop frame(%d) for invalid freq %d seq %d RSSI %d",
+				       QDF_MAC_ADDR_REF(
+				       scan_entry->bssid.bytes),
+				       bcn->frm_type,
 				       scan_entry->channel.chan_freq,
-				       QDF_MAC_ADDR_REF(scan_entry->bssid.bytes),
 				       scan_entry->seq_num,
 				       scan_entry->rssi_raw);
 			util_scan_free_cache_entry(scan_entry);
@@ -1229,11 +1240,11 @@ QDF_STATUS __scm_handle_bcn_probe(struct scan_bcn_probe_event *bcn)
 					util_scan_entry_rsn(scan_entry));
 			if (QDF_IS_STATUS_ERROR(status) &&
 			    !scm_is_p2p_wildcard_ssid(scan_entry)) {
-				scm_nofl_debug("Drop frame from invalid RSN IE AP"
-					       QDF_MAC_ADDR_FMT
-					       ": RSN IE parse failed, status %d",
+				scm_nofl_debug(QDF_MAC_ADDR_FMT ": Drop frame(%d) with invalid RSN IE freq %d, parse status %d",
 					       QDF_MAC_ADDR_REF(
 					       scan_entry->bssid.bytes),
+					       bcn->frm_type,
+					       scan_entry->channel.chan_freq,
 					       status);
 				util_scan_free_cache_entry(scan_entry);
 				qdf_mem_free(scan_node);
@@ -1243,11 +1254,11 @@ QDF_STATUS __scm_handle_bcn_probe(struct scan_bcn_probe_event *bcn)
 		if (wlan_cm_get_check_6ghz_security(psoc) &&
 		    wlan_reg_is_6ghz_chan_freq(scan_entry->channel.chan_freq)) {
 			if (!util_scan_entry_rsn(scan_entry)) {
-				scm_info_rl(
-					"Drop frame from "QDF_MAC_ADDR_FMT
-					": No RSN IE for 6GHz AP",
-					QDF_MAC_ADDR_REF(
-						scan_entry->bssid.bytes));
+				scm_info_rl(QDF_MAC_ADDR_FMT ": Drop frame(%d) with No RSN IE in 6GHz(%d)",
+					    QDF_MAC_ADDR_REF(
+					    scan_entry->bssid.bytes),
+					    bcn->frm_type,
+					    scan_entry->channel.chan_freq);
 				util_scan_free_cache_entry(scan_entry);
 				qdf_mem_free(scan_node);
 				continue;
@@ -1255,13 +1266,12 @@ QDF_STATUS __scm_handle_bcn_probe(struct scan_bcn_probe_event *bcn)
 			status = wlan_crypto_rsnie_check(&sec_params,
 					util_scan_entry_rsn(scan_entry));
 			if (QDF_IS_STATUS_ERROR(status)) {
-				scm_info_rl(
-					"Drop frame from 6GHz AP "
-					QDF_MAC_ADDR_FMT
-					": RSN IE parse failed, status %d",
-					QDF_MAC_ADDR_REF(
-						scan_entry->bssid.bytes),
-					status);
+				scm_info_rl(QDF_MAC_ADDR_FMT ": Drop frame(%d) with invalid RSN IE in 6GHz(%d), parse status %d",
+					    QDF_MAC_ADDR_REF(
+					    scan_entry->bssid.bytes),
+					    bcn->frm_type,
+					    scan_entry->channel.chan_freq,
+					    status);
 				util_scan_free_cache_entry(scan_entry);
 				qdf_mem_free(scan_node);
 				continue;
@@ -1274,12 +1284,12 @@ QDF_STATUS __scm_handle_bcn_probe(struct scan_bcn_probe_event *bcn)
 					   WLAN_CRYPTO_CIPHER_WEP_40)) ||
 			    (QDF_HAS_PARAM(sec_params.ucastcipherset,
 					   WLAN_CRYPTO_CIPHER_WEP_104))) {
-				scm_info_rl(
-					"Drop frame from "QDF_MAC_ADDR_FMT
-					": Invalid sec type %0X for 6GHz AP",
-					QDF_MAC_ADDR_REF(
-						scan_entry->bssid.bytes),
-					sec_params.ucastcipherset);
+				scm_info_rl(QDF_MAC_ADDR_FMT ": Drop frame(%d) with Invalid sec type %0X for 6GHz(%d)",
+					    QDF_MAC_ADDR_REF(
+					    scan_entry->bssid.bytes),
+					    bcn->frm_type,
+					    sec_params.ucastcipherset,
+					    scan_entry->channel.chan_freq);
 				util_scan_free_cache_entry(scan_entry);
 				qdf_mem_free(scan_node);
 				continue;
@@ -1289,12 +1299,12 @@ QDF_STATUS __scm_handle_bcn_probe(struct scan_bcn_probe_event *bcn)
 					sec_params.rsn_caps,
 					util_scan_entry_rsnxe(scan_entry),
 					0, false)) {
-				scm_info_rl(
-					"Drop frame from "QDF_MAC_ADDR_FMT
-					": Invalid AKM suite %0X for 6GHz AP",
-					QDF_MAC_ADDR_REF(
-						scan_entry->bssid.bytes),
-					sec_params.key_mgmt);
+				scm_info_rl(QDF_MAC_ADDR_FMT ": Drop frame(%d) with Invalid AKM suite %0X for 6GHz(%d)",
+					    QDF_MAC_ADDR_REF(
+					    scan_entry->bssid.bytes),
+					    bcn->frm_type,
+					    sec_params.key_mgmt,
+					    scan_entry->channel.chan_freq);
 				util_scan_free_cache_entry(scan_entry);
 				qdf_mem_free(scan_node);
 				continue;
@@ -1314,10 +1324,10 @@ QDF_STATUS __scm_handle_bcn_probe(struct scan_bcn_probe_event *bcn)
 		if (!wlan_cm_get_standard_6ghz_conn_policy(psoc) &&
 		    !scm_is_bss_allowed_for_country(psoc, scan_entry) &&
 		    wlan_cm_get_check_6ghz_security(psoc)) {
-			scm_info_rl(
-				"Drop frame from "QDF_MAC_ADDR_FMT
-				": AP in VLP mode not supported for US",
-				QDF_MAC_ADDR_REF(scan_entry->bssid.bytes));
+			scm_info_rl(QDF_MAC_ADDR_FMT ": Drop frame(%d) freq %d, as country not present OR VLP mode not supported for US",
+				    QDF_MAC_ADDR_REF(scan_entry->bssid.bytes),
+				    bcn->frm_type,
+				    scan_entry->channel.chan_freq);
 			util_scan_free_cache_entry(scan_entry);
 			qdf_mem_free(scan_node);
 			continue;
@@ -1325,9 +1335,11 @@ QDF_STATUS __scm_handle_bcn_probe(struct scan_bcn_probe_event *bcn)
 
 		status = scm_add_update_entry(psoc, pdev, scan_entry);
 		if (QDF_IS_STATUS_ERROR(status)) {
-			scm_debug("failed to add entry for BSSID: "QDF_MAC_ADDR_FMT" Seq Num: %d",
+			scm_debug(QDF_MAC_ADDR_FMT ": Failed to add entry for frame(%d) seq %d freq %d",
 				  QDF_MAC_ADDR_REF(scan_entry->bssid.bytes),
-				  scan_entry->seq_num);
+				  bcn->frm_type,
+				  scan_entry->seq_num,
+				  scan_entry->channel.chan_freq);
 			util_scan_free_cache_entry(scan_entry);
 			qdf_mem_free(scan_node);
 			continue;

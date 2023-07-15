@@ -646,13 +646,13 @@ int htt_srng_setup(struct htt_soc *soc, int mac_id,
 			htt_ring_type = HTT_SW_TO_SW_RING;
 #ifdef IPA_OFFLOAD
 		} else if (srng_params.ring_id ==
-		    (HAL_SRNG_WMAC1_SW2RXDMA0_BUF2 +
+		    (HAL_SRNG_WMAC1_SW2RXDMA0_BUF1 +
 		    (lmac_id * HAL_MAX_RINGS_PER_LMAC))) {
 			htt_ring_id = HTT_HOST2_TO_FW_RXBUF_RING;
 			htt_ring_type = HTT_SW_TO_SW_RING;
 #ifdef IPA_WDI3_VLAN_SUPPORT
 		} else if (srng_params.ring_id ==
-		    (HAL_SRNG_WMAC1_SW2RXDMA0_BUF3 +
+		    (HAL_SRNG_WMAC1_SW2RXDMA0_BUF2 +
 		    (lmac_id * HAL_MAX_RINGS_PER_LMAC))) {
 			htt_ring_id = HTT_HOST3_TO_FW_RXBUF_RING;
 			htt_ring_type = HTT_SW_TO_SW_RING;
@@ -666,11 +666,7 @@ int htt_srng_setup(struct htt_soc *soc, int mac_id,
 			htt_ring_type = HTT_SW_TO_HW_RING;
 #endif
 		} else if (srng_params.ring_id ==
-#ifdef IPA_OFFLOAD
-			 (HAL_SRNG_WMAC1_SW2RXDMA0_BUF1 +
-#else
 			 (HAL_SRNG_WMAC1_SW2RXDMA1_BUF +
-#endif
 			(lmac_id * HAL_MAX_RINGS_PER_LMAC))) {
 			htt_ring_id = HTT_RXDMA_HOST_BUF_RING;
 			htt_ring_type = HTT_SW_TO_HW_RING;
@@ -718,6 +714,10 @@ int htt_srng_setup(struct htt_soc *soc, int mac_id,
 	case TX_MONITOR_DST:
 		htt_ring_id = HTT_TX_MON_MON2HOST_DEST_RING;
 		htt_ring_type = HTT_HW_TO_SW_RING;
+		break;
+	case SW2RXDMA_LINK_RELEASE:
+		htt_ring_id = HTT_RXDMA_MONITOR_DESC_RING;
+		htt_ring_type = HTT_SW_TO_HW_RING;
 		break;
 
 	default:
@@ -3457,7 +3457,7 @@ dp_rx_mlo_timestamp_ind_handler(struct dp_soc *soc,
 	HTT_T2H_MLO_TIMESTAMP_OFFSET_MLO_TIMESTAMP_COMP_PERIOD_US_GET(
 							*(msg_word + 7));
 
-	dp_htt_debug("tsf_lo=%d tsf_hi=%d, mlo_ofst_lo=%d, mlo_ofst_hi=%d\n",
+	dp_htt_debug("tsf_lo=%d tsf_hi=%d, mlo_ofst_lo=%d, mlo_ofst_hi=%d",
 		     pdev->timestamp.sync_tstmp_lo_us,
 		     pdev->timestamp.sync_tstmp_hi_us,
 		     pdev->timestamp.mlo_offset_lo_us,
@@ -3643,7 +3643,7 @@ static void dp_ipa_rx_cce_super_rule_setup_done_handler(struct htt_soc *soc,
 		dp_info("opt_dp:: Wrong Super rule setup response");
 	};
 
-	dp_info("opt_dp:: cce super rule resp type: %d, is_rules_enough: %d,",
+	dp_info("opt_dp:: cce super rule resp type: %d, is_rules_enough: %d",
 		resp_type, is_rules_enough);
 	dp_info("num_rules_avail: %d, rslt0: %d, rslt1: %d",
 		num_rules_avail, filter0_result, filter1_result);
@@ -3651,6 +3651,36 @@ static void dp_ipa_rx_cce_super_rule_setup_done_handler(struct htt_soc *soc,
 #else
 static void dp_ipa_rx_cce_super_rule_setup_done_handler(struct htt_soc *soc,
 							uint32_t *msg_word)
+{
+}
+#endif
+#if defined(WLAN_FEATURE_11BE_MLO) && defined(DP_MLO_LINK_STATS_SUPPORT)
+static inline void
+dp_htt_peer_ext_evt(struct htt_soc *soc, uint32_t *msg_word)
+{
+	struct dp_peer_ext_evt_info info;
+	uint8_t mac_addr_deswizzle_buf[QDF_MAC_ADDR_SIZE];
+
+	info.peer_id = HTT_RX_PEER_EXTENDED_PEER_ID_GET(*msg_word);
+	info.vdev_id = HTT_RX_PEER_EXTENDED_VDEV_ID_GET(*msg_word);
+	info.link_id =
+		HTT_RX_PEER_EXTENDED_LOGICAL_LINK_ID_GET(*(msg_word + 2));
+	info.link_id_valid =
+		HTT_RX_PEER_EXTENDED_LOGICAL_LINK_ID_VALID_GET(*(msg_word + 2));
+
+	info.peer_mac_addr =
+	htt_t2h_mac_addr_deswizzle((u_int8_t *)(msg_word + 1),
+				   &mac_addr_deswizzle_buf[0]);
+
+	dp_htt_info("peer id %u, vdev id %u, link id %u, valid %u,peer_mac " QDF_MAC_ADDR_FMT,
+		    info.peer_id, info.vdev_id, info.link_id,
+		    info.link_id_valid, QDF_MAC_ADDR_REF(info.peer_mac_addr));
+
+	dp_rx_peer_ext_evt(soc->dp_soc, &info);
+}
+#else
+static inline void
+dp_htt_peer_ext_evt(struct htt_soc *soc, uint32_t *msg_word)
 {
 }
 #endif
@@ -4107,6 +4137,11 @@ void dp_htt_t2h_msg_handler(void *context, HTC_PACKET *pkt)
 	case HTT_T2H_MSG_TYPE_RX_CCE_SUPER_RULE_SETUP_DONE:
 	{
 		dp_ipa_rx_cce_super_rule_setup_done_handler(soc, msg_word);
+		break;
+	}
+	case HTT_T2H_MSG_TYPE_PEER_EXTENDED_EVENT:
+	{
+		dp_htt_peer_ext_evt(soc, msg_word);
 		break;
 	}
 	default:
@@ -4729,7 +4764,7 @@ dp_peer_update_inactive_time(struct dp_pdev *pdev, uint32_t tag_type,
 	}
 	break;
 	default:
-		qdf_err("Invalid tag_type");
+		qdf_err("Invalid tag_type: %u", tag_type);
 	}
 }
 

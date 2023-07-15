@@ -285,7 +285,7 @@ dp_rx_mon_add_msdu_to_list_failure_handler(void *rx_tlv_hdr,
 	qdf_frag_free(rx_tlv_hdr);
 	if (head_msdu)
 		qdf_nbuf_list_free(*head_msdu);
-	dp_err("[%s] failed to allocate subsequent parent buffer to hold all frag\n",
+	dp_err("[%s] failed to allocate subsequent parent buffer to hold all frag",
 	       func_name);
 	if (head_msdu)
 		*head_msdu = NULL;
@@ -555,7 +555,7 @@ QDF_STATUS dp_rx_mon_add_msdu_to_list(struct dp_soc *soc, qdf_nbuf_t *head_msdu,
 	/* Here head_msdu and *head_msdu must not be NULL */
 	/* Dont add frag to skb if frag length is zero. Drop frame */
 	if (qdf_unlikely(!frag_len || !head_msdu || !(*head_msdu))) {
-		dp_err("[%s] frag_len[%d] || head_msdu[%pK] || *head_msdu is Null while adding frag to skb\n",
+		dp_err("[%s] frag_len[%d] || head_msdu[%pK] || *head_msdu is Null while adding frag to skb",
 		       __func__, frag_len, head_msdu);
 		return QDF_STATUS_E_FAILURE;
 	}
@@ -568,7 +568,7 @@ QDF_STATUS dp_rx_mon_add_msdu_to_list(struct dp_soc *soc, qdf_nbuf_t *head_msdu,
 
 	/* Current msdu must not be NULL */
 	if (qdf_unlikely(!msdu_curr)) {
-		dp_err("[%s] Current msdu can't be Null while adding frag to skb\n",
+		dp_err("[%s] Current msdu can't be Null while adding frag to skb",
 		       __func__);
 		return QDF_STATUS_E_FAILURE;
 	}
@@ -911,6 +911,7 @@ void *dp_rx_cookie_2_mon_link_desc(struct dp_pdev *pdev,
 	return dp_rx_cookie_2_link_desc_va(pdev->soc, buf_info);
 }
 
+#ifndef WLAN_SOFTUMAC_SUPPORT
 /**
  * dp_rx_monitor_link_desc_return() - Return Link descriptor based on target
  * @pdev: core physical device context
@@ -933,6 +934,17 @@ QDF_STATUS dp_rx_monitor_link_desc_return(struct dp_pdev *pdev,
 	return dp_rx_link_desc_return_by_addr(pdev->soc, p_last_buf_addr_info,
 				      bm_action);
 }
+#else
+static inline
+QDF_STATUS dp_rx_monitor_link_desc_return(struct dp_pdev *pdev,
+					  hal_buff_addrinfo_t
+					  p_last_buf_addr_info,
+					  uint8_t mac_id, uint8_t bm_action)
+{
+	return dp_rx_mon_link_desc_return(pdev, p_last_buf_addr_info,
+					  mac_id);
+}
+#endif
 
 static inline bool dp_is_rxdma_dst_ring_common(struct dp_pdev *pdev)
 {

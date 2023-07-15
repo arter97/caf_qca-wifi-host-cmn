@@ -139,7 +139,7 @@ void dp_peer_update_tid_stats_from_reo(struct dp_soc *soc, void *cb_ctxt,
 	uint16_t peer_id;
 
 	if (queue_status->header.status != HAL_REO_CMD_SUCCESS) {
-		dp_err("REO stats failure %d\n",
+		dp_err("REO stats failure %d",
 		       queue_status->header.status);
 		return;
 	}
@@ -174,7 +174,7 @@ void dp_rx_tid_stats_cb(struct dp_soc *soc, void *cb_ctxt,
 		return;
 
 	if (queue_status->header.status != HAL_REO_CMD_SUCCESS) {
-		DP_PRINT_STATS("REO stats failure %d for TID %d\n",
+		DP_PRINT_STATS("REO stats failure %d for TID %d",
 			       queue_status->header.status, rx_tid->tid);
 		return;
 	}
@@ -484,6 +484,33 @@ static void dp_reo_desc_defer_free(struct dp_soc *soc)
 }
 #endif /* !WLAN_DP_FEATURE_DEFERRED_REO_QDESC_DESTROY */
 
+void check_free_list_for_invalid_flush(struct dp_soc *soc)
+{
+	uint32_t i;
+	uint32_t *addr_deref_val;
+	unsigned long curr_ts = qdf_get_system_timestamp();
+	uint32_t max_list_size;
+
+	max_list_size = soc->wlan_cfg_ctx->qref_control_size;
+
+	if (max_list_size == 0)
+		return;
+
+	for (i = 0; i < soc->free_addr_list_idx; i++) {
+		addr_deref_val = (uint32_t *)
+			    soc->list_qdesc_addr_free[i].hw_qdesc_vaddr_unalign;
+
+		if (*addr_deref_val == 0xDDBEEF84 ||
+		    *addr_deref_val == 0xADBEEF84 ||
+		    *addr_deref_val == 0xBDBEEF84 ||
+		    *addr_deref_val == 0xCDBEEF84) {
+			if (soc->list_qdesc_addr_free[i].ts_hw_flush_back == 0)
+				soc->list_qdesc_addr_free[i].ts_hw_flush_back =
+									curr_ts;
+		}
+	}
+}
+
 /**
  * dp_reo_desc_free() - Callback free reo descriptor memory after
  * HW cache flush
@@ -519,12 +546,16 @@ static void dp_reo_desc_free(struct dp_soc *soc, void *cb_ctxt,
 		goto out;
 
 	DP_RX_REO_QDESC_FREE_EVT(freedesc);
+	add_entry_free_list(soc, rx_tid);
 
 	hal_reo_shared_qaddr_cache_clear(soc->hal_soc);
 	qdf_mem_unmap_nbytes_single(soc->osdev,
 				    rx_tid->hw_qdesc_paddr,
 				    QDF_DMA_BIDIRECTIONAL,
 				    rx_tid->hw_qdesc_alloc_size);
+	check_free_list_for_invalid_flush(soc);
+
+	*(uint32_t *)rx_tid->hw_qdesc_vaddr_unaligned = 0;
 	qdf_mem_free(rx_tid->hw_qdesc_vaddr_unaligned);
 out:
 	qdf_mem_free(freedesc);
@@ -672,6 +703,8 @@ try_desc_alloc:
 	qdf_mem_map_nbytes_single(soc->osdev, hw_qdesc_vaddr,
 		QDF_DMA_BIDIRECTIONAL, rx_tid->hw_qdesc_alloc_size,
 		&(rx_tid->hw_qdesc_paddr));
+
+	add_entry_alloc_list(soc, rx_tid, peer, hw_qdesc_vaddr);
 
 	if (dp_reo_desc_addr_chk(rx_tid->hw_qdesc_paddr) !=
 			QDF_STATUS_SUCCESS) {
@@ -1246,7 +1279,7 @@ int dp_addba_resp_tx_completion_wifi3(struct cdp_soc_t *cdp_soc,
 	struct dp_rx_tid *rx_tid = NULL;
 
 	if (!peer) {
-		dp_peer_debug("%pK: Peer is NULL!\n", cdp_soc);
+		dp_peer_debug("%pK: Peer is NULL!", cdp_soc);
 		goto fail;
 	}
 	rx_tid = &peer->rx_tid[tid];
@@ -1339,7 +1372,7 @@ dp_addba_responsesetup_wifi3(struct cdp_soc_t *cdp_soc, uint8_t *peer_mac,
 						       DP_MOD_ID_CDP);
 
 	if (!peer) {
-		dp_peer_debug("%pK: Peer is NULL!\n", cdp_soc);
+		dp_peer_debug("%pK: Peer is NULL!", cdp_soc);
 		return QDF_STATUS_E_FAILURE;
 	}
 	rx_tid = &peer->rx_tid[tid];
@@ -1439,7 +1472,7 @@ QDF_STATUS dp_rx_tid_update_ba_win_size(struct cdp_soc_t *cdp_soc,
 					      peer_mac, 0, vdev_id,
 					      DP_MOD_ID_CDP);
 	if (!peer) {
-		dp_peer_debug("%pK: Peer is NULL!\n", cdp_soc);
+		dp_peer_debug("%pK: Peer is NULL!", cdp_soc);
 		return QDF_STATUS_E_FAILURE;
 	}
 
@@ -1477,7 +1510,7 @@ int dp_addba_requestprocess_wifi3(struct cdp_soc_t *cdp_soc,
 					      DP_MOD_ID_CDP);
 
 	if (!peer) {
-		dp_peer_debug("%pK: Peer is NULL!\n", cdp_soc);
+		dp_peer_debug("%pK: Peer is NULL!", cdp_soc);
 		return QDF_STATUS_E_FAILURE;
 	}
 	rx_tid = &peer->rx_tid[tid];
@@ -1554,7 +1587,7 @@ dp_set_addba_response(struct cdp_soc_t *cdp_soc, uint8_t *peer_mac,
 	struct dp_rx_tid *rx_tid;
 
 	if (!peer) {
-		dp_peer_debug("%pK: Peer is NULL!\n", cdp_soc);
+		dp_peer_debug("%pK: Peer is NULL!", cdp_soc);
 		return QDF_STATUS_E_FAILURE;
 	}
 
@@ -1578,7 +1611,7 @@ int dp_delba_process_wifi3(struct cdp_soc_t *cdp_soc, uint8_t *peer_mac,
 					DP_MOD_ID_CDP);
 
 	if (!peer) {
-		dp_peer_debug("%pK: Peer is NULL!\n", cdp_soc);
+		dp_peer_debug("%pK: Peer is NULL!", cdp_soc);
 		return QDF_STATUS_E_FAILURE;
 	}
 	rx_tid = &peer->rx_tid[tid];
@@ -1682,14 +1715,14 @@ dp_set_pn_check_wifi3(struct cdp_soc_t *soc_t, uint8_t vdev_id,
 					      DP_MOD_ID_CDP);
 
 	if (!peer) {
-		dp_peer_debug("%pK: Peer is NULL!\n", soc);
+		dp_peer_debug("%pK: Peer is NULL!", soc);
 		return QDF_STATUS_E_FAILURE;
 	}
 
 	vdev = peer->vdev;
 
 	if (!vdev) {
-		dp_peer_debug("%pK: VDEV is NULL!\n", soc);
+		dp_peer_debug("%pK: VDEV is NULL!", soc);
 		dp_peer_unref_delete(peer, DP_MOD_ID_CDP);
 		return QDF_STATUS_E_FAILURE;
 	}

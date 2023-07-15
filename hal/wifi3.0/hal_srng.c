@@ -623,11 +623,6 @@ void hal_dump_reg_write_srng_stats(hal_soc_handle_t hal_soc_hdl)
 	hal_debug("REO2SW3: %s",
 		  hal_fill_reg_write_srng_stats(srng, buf, sizeof(buf)));
 }
-#else
-void hal_dump_reg_write_srng_stats(hal_soc_handle_t hal_soc_hdl)
-{
-}
-#endif
 
 void hal_dump_reg_write_stats(hal_soc_handle_t hal_soc_hdl)
 {
@@ -647,6 +642,16 @@ void hal_dump_reg_write_stats(hal_soc_handle_t hal_soc_hdl)
 		  hist[REG_WRITE_SCHED_DELAY_SUB_5000us],
 		  hist[REG_WRITE_SCHED_DELAY_GT_5000us]);
 }
+#else
+void hal_dump_reg_write_srng_stats(hal_soc_handle_t hal_soc_hdl)
+{
+}
+
+/* TODO: Need separate logic for Evros */
+void hal_dump_reg_write_stats(hal_soc_handle_t hal_soc_hdl)
+{
+}
+#endif
 
 int hal_get_reg_write_pending_work(void *hal_soc)
 {
@@ -1436,7 +1441,7 @@ void hal_srng_dst_init_hp(struct hal_soc_handle *hal_soc,
 
 	if (vaddr) {
 		*srng->u.dst_ring.hp_addr = srng->u.dst_ring.cached_hp;
-		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_ERROR,
+		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_DEBUG,
 			  "hp_addr=%pK, cached_hp=%d",
 			  (void *)srng->u.dst_ring.hp_addr,
 			  srng->u.dst_ring.cached_hp);
@@ -1785,7 +1790,7 @@ void *hal_srng_setup_idx(void *hal_soc, int ring_type, int ring_num, int mac_id,
 		if (idx) {
 			hal->ops->hal_tx_ring_halt_set(hal_hdl);
 			do {
-				hal_info("Waiting for ring reset\n");
+				hal_info("Waiting for ring reset");
 			} while (!(hal->ops->hal_tx_ring_halt_poll(hal_hdl)));
 		}
 		hal_srng_hw_init(hal, srng, idle_check, idx);

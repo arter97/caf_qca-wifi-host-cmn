@@ -175,9 +175,37 @@ struct hal_hw_srng_config hw_srng_table_wcn6450[] = {
 	},
 	{/* RXDMA_MONITOR_DST */ 0},
 	{/* RXDMA_MONITOR_DESC */ 0},
-	{/* DIR_BUF_RX_DMA_SRC */ 0},
+	{/* DIR_BUF_RX_DMA_SRC */
+		.start_ring_id = HAL_SRNG_DIR_BUF_RX_SRC_DMA_RING,
+		/*
+		 * one ring is for spectral scan
+		 * the other is for cfr
+		 */
+		.max_rings = 2,
+		.entry_size = 2,
+		.lmac_ring = TRUE,
+		.ring_dir = HAL_SRNG_SRC_RING,
+		/* reg_start is not set because LMAC rings are not accessed
+		 * from host
+		 */
+		.reg_start = {},
+		.reg_size = {},
+		.max_size = HAL_RXDMA_MAX_RING_SIZE,
+	},
 #ifdef WLAN_FEATURE_CIF_CFR
-	{/* WIFI_POS_SRC */ 0},
+	{/* WIFI_POS_SRC */
+		.start_ring_id = HAL_SRNG_WIFI_POS_SRC_DMA_RING,
+		.max_rings = 1,
+		.entry_size = sizeof(wmi_oem_dma_buf_release_entry)  >> 2,
+		.lmac_ring = TRUE,
+		.ring_dir = HAL_SRNG_SRC_RING,
+		/* reg_start is not set because LMAC rings are not accessed
+		 * from host
+		 */
+		.reg_start = {},
+		.reg_size = {},
+		.max_size = HAL_RXDMA_MAX_RING_SIZE,
+	},
 #endif
 	{ /* REO2PPE */ 0},
 	{ /* PPE2TCL */ 0},
@@ -185,6 +213,20 @@ struct hal_hw_srng_config hw_srng_table_wcn6450[] = {
 	{ /* TX_MONITOR_BUF */ 0},
 	{ /* TX_MONITOR_DST */ 0},
 	{ /* SW2RXDMA_NEW */ 0},
+	{ /* SW2RXDMA_LINK_RELEASE */
+		.start_ring_id = HAL_SRNG_WMAC1_SW2RXDMA_LINK_RING,
+		.max_rings = 1,
+		.entry_size = sizeof(struct wbm_buffer_ring) >> 2,
+		.lmac_ring = TRUE,
+		.ring_dir = HAL_SRNG_SRC_RING,
+		/* reg_start is not set because LMAC rings are not accessed
+		 * from host
+		 */
+		.reg_start = {},
+		.reg_size = {},
+		.max_size = HAL_RXDMA_MAX_RING_SIZE,
+	},
+
 };
 
 static void hal_get_hw_hptp_6450(struct hal_soc *hal_soc,
@@ -232,9 +274,10 @@ static void hal_tx_init_cmd_credit_ring_6450(hal_soc_handle_t hal_soc_hdl,
 {
 }
 
+#define LINK_DESC_SIZE (NUM_OF_DWORDS_RX_MSDU_LINK << 2)
 static uint32_t hal_get_link_desc_size_6450(void)
 {
-	return 0;
+	return LINK_DESC_SIZE;
 }
 
 static void hal_reo_status_get_header_6450(hal_ring_desc_t ring_desc,
@@ -911,7 +954,7 @@ static void hal_rx_print_pn_6450(uint8_t *buf)
 	uint32_t pn_95_64 = HAL_RX_MPDU_PN_95_64_GET(mpdu_info);
 	uint32_t pn_127_96 = HAL_RX_MPDU_PN_127_96_GET(mpdu_info);
 
-	hal_debug("PN number pn_127_96 0x%x pn_95_64 0x%x pn_63_32 0x%x pn_31_0 0x%x ",
+	hal_debug("PN number pn_127_96 0x%x pn_95_64 0x%x pn_63_32 0x%x pn_31_0 0x%x",
 		  pn_127_96, pn_95_64, pn_63_32, pn_31_0);
 }
 
