@@ -129,6 +129,7 @@ cdp_dump_flow_pool_info(struct cdp_soc_t *soc)
 #define DP_TX_TCL_METADATA_PDEV_ID_SET(_var, _val) \
 		HTT_TX_TCL_METADATA_PDEV_ID_SET(_var, _val)
 #endif
+#define MLD_MODE_INVALID 0xFF
 
 QDF_COMPILE_TIME_ASSERT(max_rx_rings_check,
 			MAX_REO_DEST_RINGS == CDP_MAX_RX_RINGS);
@@ -8157,6 +8158,24 @@ dp_set_psoc_param(struct cdp_soc_t *cdp_soc,
 	return QDF_STATUS_SUCCESS;
 }
 
+#if defined(WLAN_FEATURE_11BE_MLO) && defined(WLAN_MLO_MULTI_CHIP)
+/**
+ * dp_get_mldev_mode: function to get mlo operation mode
+ * @soc: soc structure for data path
+ *
+ * Return: uint8_t
+ */
+static uint8_t dp_get_mldev_mode(struct dp_soc *soc)
+{
+	return soc->mld_mode_ap;
+}
+#else
+static uint8_t dp_get_mldev_mode(struct dp_soc *cdp_soc)
+{
+	return MLD_MODE_INVALID;
+}
+#endif
+
 /**
  * dp_get_psoc_param: function to get parameters in soc
  * @cdp_soc: DP soc handle
@@ -8233,6 +8252,9 @@ static QDF_STATUS dp_get_psoc_param(struct cdp_soc_t *cdp_soc,
 		break;
 	case CDP_RX_PKT_TLV_SIZE:
 		val->rx_pkt_tlv_size = soc->rx_pkt_tlv_size;
+		break;
+	case CDP_CFG_GET_MLO_OPER_MODE:
+		val->cdp_psoc_param_mlo_oper_mode = dp_get_mldev_mode(soc);
 		break;
 	default:
 		dp_warn("Invalid param: %u", param);

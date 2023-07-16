@@ -1475,6 +1475,7 @@ enum cdp_pdev_param_type {
  * @fisa_params.rx_toeplitz_hash_key: RX hash key
  * @rx_pkt_tlv_size: RX packet TLV size
  * @cdp_ast_indication_disable: AST indication disable
+ * @cdp_psoc_param_mlo_oper_mode: mlo operation mode
  */
 typedef union cdp_config_param_t {
 	/* peer params */
@@ -1587,6 +1588,7 @@ typedef union cdp_config_param_t {
 	} fisa_params;
 	uint16_t rx_pkt_tlv_size;
 	bool cdp_ast_indication_disable;
+	uint8_t cdp_psoc_param_mlo_oper_mode;
 } cdp_config_param_type;
 
 /**
@@ -1757,6 +1759,7 @@ enum cdp_vdev_param_type {
  * @CDP_CFG_FISA_PARAMS: FISA params
  * @CDP_RX_PKT_TLV_SIZE: RX pkt tlv size
  * @CDP_CFG_AST_INDICATION_DISABLE: AST indication disable
+ * @CDP_CFG_GET_MLO_OPER_MODE: Get MLO operation mode
  */
 enum cdp_psoc_param_type {
 	CDP_ENABLE_RATE_STATS,
@@ -1784,6 +1787,7 @@ enum cdp_psoc_param_type {
 	CDP_CFG_FISA_PARAMS,
 	CDP_RX_PKT_TLV_SIZE,
 	CDP_CFG_AST_INDICATION_DISABLE,
+	CDP_CFG_GET_MLO_OPER_MODE,
 };
 
 #ifdef CONFIG_AP_PLATFORM
