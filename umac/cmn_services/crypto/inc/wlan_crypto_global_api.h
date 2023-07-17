@@ -896,7 +896,7 @@ QDF_STATUS
 wlan_crypto_save_ml_sta_key(struct wlan_objmgr_psoc *psoc,
 			    uint8_t key_index,
 			    struct wlan_crypto_key *crypto_key,
-			    struct qdf_mac_addr *link_addr, int8_t link_id);
+			    struct qdf_mac_addr *link_addr, uint8_t link_id);
 
 /**
  * wlan_crypto_save_key() - Allocate memory for storing key
@@ -910,6 +910,19 @@ QDF_STATUS wlan_crypto_save_key(struct wlan_objmgr_vdev *vdev,
 				uint8_t key_index,
 				struct wlan_crypto_key *crypto_key);
 
+/**
+ * wlan_crypto_get_ml_sta_link_key() - Get the stored key info
+ *						by link id
+ * @psoc: psoc handler
+ * @key_index: key index
+ * @link_addr: link address
+ * @link_id: link id
+ */
+struct wlan_crypto_key *wlan_crypto_get_ml_sta_link_key(
+				struct wlan_objmgr_psoc *psoc,
+				uint8_t key_index,
+				struct qdf_mac_addr *link_addr,
+				uint8_t link_id);
 /**
  * wlan_crypto_get_key() - Get the stored key information
  * @vdev: vdev object

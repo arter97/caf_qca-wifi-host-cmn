@@ -650,4 +650,15 @@ wlan_crypto_key_entry * crypto_hash_find_by_linkid_and_macaddr(
 				struct crypto_psoc_priv_obj *psoc,
 				uint8_t link_id,
 				uint8_t *mac_addr);
+
+/**
+ * wlan_crypto_free_key_by_link_id - free key by link id
+ * @psoc: psoc handler
+ * @link_addr: link address
+ * @link_id: link id
+ */
+void wlan_crypto_free_key_by_link_id(struct wlan_objmgr_psoc *psoc,
+				     struct qdf_mac_addr *link_addr,
+				     uint8_t link_id);
+
 #endif /* end of _WLAN_CRYPTO_DEF_I_H_ */

@@ -631,6 +631,47 @@ void wlan_crypto_free_vdev_key(struct wlan_objmgr_vdev *vdev)
 }
 #endif
 
+#ifdef WLAN_FEATURE_11BE_MLO_ADV_FEATURE
+void wlan_crypto_free_key_by_link_id(struct wlan_objmgr_psoc *psoc,
+				     struct qdf_mac_addr *link_addr,
+				     uint8_t link_id)
+{
+	struct wlan_crypto_key_entry *hash_entry;
+	struct crypto_psoc_priv_obj *crypto_psoc_obj;
+
+	TAILQ_HEAD(, wlan_crypto_key_entry) free_list;
+	TAILQ_INIT(&free_list);
+
+	crypto_psoc_obj = wlan_objmgr_psoc_get_comp_private_obj(
+				psoc,
+				WLAN_UMAC_COMP_CRYPTO);
+	if (!crypto_psoc_obj) {
+		crypto_err("crypto_psoc_obj NULL");
+		return;
+	}
+
+	if (!crypto_psoc_obj->crypto_key_holder.mask)
+		return;
+
+	if (!crypto_psoc_obj->crypto_key_holder.bins)
+		return;
+
+	if (!qdf_atomic_read(&crypto_psoc_obj->crypto_key_cnt))
+		return;
+
+	qdf_mutex_acquire(&crypto_psoc_obj->crypto_key_lock);
+	hash_entry = crypto_hash_find_by_linkid_and_macaddr(
+					crypto_psoc_obj, link_id,
+					(uint8_t *)link_addr);
+	if (hash_entry) {
+		crypto_remove_entry(crypto_psoc_obj, hash_entry, &free_list);
+		crypto_free_list(crypto_psoc_obj, &free_list);
+	}
+
+	qdf_mutex_release(&crypto_psoc_obj->crypto_key_lock);
+}
+
+#endif
 static QDF_STATUS wlan_crypto_vdev_obj_destroy_handler(
 						struct wlan_objmgr_vdev *vdev,
 						void *arg)

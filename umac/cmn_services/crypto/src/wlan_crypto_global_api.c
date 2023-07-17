@@ -4290,11 +4290,12 @@ static bool is_mlo_adv_enable(void)
 
 #endif
 
+#ifdef WLAN_FEATURE_11BE_MLO_ADV_FEATURE
 QDF_STATUS wlan_crypto_save_ml_sta_key(
 				struct wlan_objmgr_psoc *psoc,
 				uint8_t key_index,
 				struct wlan_crypto_key *crypto_key,
-				struct qdf_mac_addr *link_addr, int8_t link_id)
+				struct qdf_mac_addr *link_addr, uint8_t link_id)
 {
 	struct crypto_psoc_priv_obj *crypto_psoc_obj;
 	int status = QDF_STATUS_SUCCESS;
@@ -4327,6 +4328,16 @@ QDF_STATUS wlan_crypto_save_ml_sta_key(
 	crypto_key->valid = true;
 	return QDF_STATUS_SUCCESS;
 }
+#else
+QDF_STATUS wlan_crypto_save_ml_sta_key(
+			struct wlan_objmgr_psoc *psoc,
+			uint8_t key_index,
+			struct wlan_crypto_key *crypto_key,
+			struct qdf_mac_addr *link_addr, uint8_t link_id)
+{
+	return QDF_STATUS_SUCCESS;
+}
+#endif
 
 static QDF_STATUS wlan_crypto_save_key_sta(struct wlan_objmgr_vdev *vdev,
 					   uint8_t key_index,
@@ -4413,6 +4424,62 @@ QDF_STATUS wlan_crypto_save_key(struct wlan_objmgr_vdev *vdev,
 	}
 	return QDF_STATUS_SUCCESS;
 }
+
+#ifdef WLAN_FEATURE_11BE_MLO_ADV_FEATURE
+struct wlan_crypto_key *wlan_crypto_get_ml_sta_link_key(
+			struct wlan_objmgr_psoc *psoc,
+			uint8_t key_index,
+			struct qdf_mac_addr *link_addr, uint8_t link_id)
+{
+	struct crypto_psoc_priv_obj *crypto_psoc_obj;
+	struct wlan_crypto_key_entry *key_entry = NULL;
+
+	crypto_debug("crypto get key index %d link_id %d ", key_index, link_id);
+
+	if (!psoc) {
+		crypto_err("psoc NULL");
+		return NULL;
+	}
+
+	if (!link_addr) {
+		crypto_err("link_addr NULL");
+		return NULL;
+	}
+
+	crypto_psoc_obj = wlan_objmgr_psoc_get_comp_private_obj(
+							psoc,
+							WLAN_UMAC_COMP_CRYPTO);
+	if (!crypto_psoc_obj) {
+		crypto_err("crypto_psoc_obj NULL");
+		return NULL;
+	}
+
+	key_entry = crypto_hash_find_by_linkid_and_macaddr(
+							crypto_psoc_obj,
+							link_id,
+							(uint8_t *)link_addr);
+	if (key_entry) {
+		if (key_index < WLAN_CRYPTO_MAXKEYIDX)
+			return key_entry->keys.key[key_index];
+		else if (is_igtk(key_index))
+			return key_entry->keys.igtk_key[key_index
+						- WLAN_CRYPTO_MAXKEYIDX];
+		else
+			return key_entry->keys.bigtk_key[key_index
+						- WLAN_CRYPTO_MAXKEYIDX
+						- WLAN_CRYPTO_MAXIGTKKEYIDX];
+	}
+	return NULL;
+}
+#else
+struct wlan_crypto_key *wlan_crypto_get_ml_sta_link_key(
+			struct wlan_objmgr_psoc *psoc,
+			uint8_t key_index,
+			struct qdf_mac_addr *link_addr, uint8_t link_id)
+{
+	return NULL;
+}
+#endif
 
 static struct wlan_crypto_key *wlan_crypto_get_ml_key_sta(
 					struct wlan_objmgr_vdev *vdev,
