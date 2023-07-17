@@ -552,8 +552,8 @@ dp_rx_oor_handle(struct dp_soc *soc,
 		 uint16_t peer_id,
 		 uint8_t *rx_tlv_hdr)
 {
-	uint32_t frame_mask = FRAME_MASK_IPV4_ARP | FRAME_MASK_IPV4_DHCP |
-				FRAME_MASK_IPV4_EAPOL | FRAME_MASK_IPV6_DHCP;
+	uint32_t frame_mask = wlan_cfg_get_special_frame_cfg(soc->wlan_cfg_ctx);
+
 	struct dp_txrx_peer *txrx_peer = NULL;
 	dp_txrx_ref_handle txrx_ref_handle = NULL;
 
@@ -1420,6 +1420,7 @@ dp_rx_reo_err_entry_process(struct dp_soc *soc,
 	struct dp_rx_desc *rx_desc;
 	struct rx_desc_pool *rx_desc_pool;
 	qdf_nbuf_t nbuf;
+	qdf_nbuf_t next_nbuf;
 	struct hal_buf_info buf_info;
 	struct hal_rx_msdu_list msdu_list;
 	uint16_t num_msdus;
@@ -1510,6 +1511,7 @@ more_msdu_link_desc:
 					     rx_desc_pool_id)) {
 			/* MSDU queued back to the pool */
 			msdu_dropped = true;
+			head_nbuf = NULL;
 			goto process_next_msdu;
 		}
 
@@ -1534,9 +1536,8 @@ more_msdu_link_desc:
 					/*
 					 * We do not have valid mpdu_desc_info
 					 * to process this nbuf, hence drop it.
+					 * TODO - Increment stats
 					 */
-					dp_rx_nbuf_free(nbuf);
-					/* TODO - Increment stats */
 					goto process_next_msdu;
 				}
 				/*
@@ -1551,7 +1552,6 @@ more_msdu_link_desc:
 			if (QDF_IS_STATUS_ERROR(status)) {
 				DP_STATS_INC(soc, rx.err.pn_in_dest_check_fail,
 					     1);
-				dp_rx_nbuf_free(nbuf);
 				goto process_next_msdu;
 			}
 
@@ -1582,6 +1582,7 @@ more_msdu_link_desc:
 			qdf_nbuf_set_is_frag(nbuf, 1);
 			DP_STATS_INC(soc, rx.err.reo_err_oor_sg_count, 1);
 		}
+		head_nbuf = NULL;
 
 		switch (err_code) {
 		case HAL_REO_ERR_REGULAR_FRAME_2K_JUMP:
@@ -1624,6 +1625,12 @@ more_msdu_link_desc:
 		}
 
 process_next_msdu:
+		nbuf = head_nbuf;
+		while (nbuf) {
+			next_nbuf = qdf_nbuf_next(nbuf);
+			dp_rx_nbuf_free(nbuf);
+			nbuf = next_nbuf;
+		}
 		msdu_processed++;
 		head_nbuf = NULL;
 		tail_nbuf = NULL;
