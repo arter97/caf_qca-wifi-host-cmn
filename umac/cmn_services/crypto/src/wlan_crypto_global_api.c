@@ -4301,7 +4301,7 @@ QDF_STATUS wlan_crypto_save_ml_sta_key(
 
 	crypto_debug("save crypto key index %d link_id %d link addr "
 		     QDF_MAC_ADDR_FMT, key_index, link_id,
-		     QDF_MAC_ADDR_REF(link_addr));
+		     QDF_MAC_ADDR_REF(link_addr->bytes));
 	if (!is_valid_keyix(key_index)) {
 		crypto_err("Invalid Key index %d", key_index);
 		return QDF_STATUS_E_FAILURE;
@@ -4358,7 +4358,7 @@ static QDF_STATUS wlan_crypto_save_key_sta(struct wlan_objmgr_vdev *vdev,
 
 	crypto_debug("save crypto key index %d link_id %d link addr "
 		     QDF_MAC_ADDR_FMT, key_index, link_id,
-		     QDF_MAC_ADDR_REF(link_addr));
+		     QDF_MAC_ADDR_REF(link_addr->bytes));
 	status = crypto_add_entry(crypto_psoc_obj,
 				  link_id, (uint8_t *)link_addr,
 				  crypto_key, key_index);
