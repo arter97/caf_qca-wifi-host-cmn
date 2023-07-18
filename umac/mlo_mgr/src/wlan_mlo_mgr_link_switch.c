@@ -76,6 +76,7 @@ void mlo_mgr_update_ap_link_info(struct wlan_objmgr_vdev *vdev, uint8_t link_id,
 
 	qdf_mem_copy(&link_info->ap_link_addr, ap_link_addr, QDF_MAC_ADDR_SIZE);
 	qdf_mem_copy(link_info->link_chan_info, &channel, sizeof(channel));
+	link_info->link_status_flags = 0;
 	link_info->link_id = link_id;
 
 	mlo_debug("Update AP Link info for link_id: %d, vdev_id:%d, link_addr:" QDF_MAC_ADDR_FMT,
@@ -127,6 +128,7 @@ void mlo_mgr_update_link_info_reset(struct wlan_mlo_dev_context *ml_dev)
 			     sizeof(*link_info->link_chan_info));
 		link_info->vdev_id = WLAN_INVALID_VDEV_ID;
 		link_info->link_id = WLAN_INVALID_LINK_ID;
+		link_info->link_status_flags = 0;
 		link_info++;
 	}
 }
@@ -160,6 +162,7 @@ void mlo_mgr_reset_ap_link_info(struct wlan_objmgr_vdev *vdev)
 		qdf_mem_zero(link_info->link_chan_info,
 			     sizeof(*link_info->link_chan_info));
 		link_info->link_id = WLAN_INVALID_LINK_ID;
+		link_info->link_status_flags = 0;
 		link_info++;
 	}
 }

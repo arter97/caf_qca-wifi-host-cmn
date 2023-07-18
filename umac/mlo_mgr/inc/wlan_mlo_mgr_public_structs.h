@@ -498,6 +498,11 @@ struct mlnawds_config {
 };
 #endif
 
+/* AP removed link flag bit position for link_status_flags in
+ * struct mlo_link_info
+ */
+#define LS_F_AP_REMOVAL_BIT 0
+
 /**
  * struct mlo_link_info - ML link info
  * @link_addr: link mac address
@@ -524,7 +529,7 @@ struct mlo_link_info {
 	struct mlnawds_config mesh_config;
 #endif
 #ifdef WLAN_FEATURE_11BE_MLO_ADV_FEATURE
-	uint8_t link_status_flags;
+	unsigned long link_status_flags;
 	struct qdf_mac_addr ap_link_addr;
 	struct wlan_channel *link_chan_info;
 #endif
