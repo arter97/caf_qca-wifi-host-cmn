@@ -528,8 +528,6 @@ struct dp_rx_nbuf_frag_info {
  * @DP_MON_PDEV_TYPE: Datapath monitor pdev context
  * @DP_MON_STATUS_BUF_HIST_TYPE: DP monitor status buffer history
  * @DP_CFG_EVENT_HIST_TYPE: DP config events history
- * @DP_MON_TX_DESC_POOL_TYPE: DP TX desc pool buffer
- * @DP_MON_RX_DESC_POOL_TYPE: DP RX desc pool buffer
  */
 enum dp_ctxt_type {
 	DP_PDEV_TYPE,
@@ -545,8 +543,6 @@ enum dp_ctxt_type {
 	DP_MON_PDEV_TYPE,
 	DP_MON_STATUS_BUF_HIST_TYPE,
 	DP_CFG_EVENT_HIST_TYPE,
-	DP_MON_TX_DESC_POOL_TYPE,
-	DP_MON_RX_DESC_POOL_TYPE,
 };
 
 /**
