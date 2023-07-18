@@ -6038,6 +6038,8 @@ typedef enum {
 		   VDEV_PARAM_CHWIDTH_WITH_NOTIFY),
 	VDEV_PARAM(vdev_param_rtt_11az_tb_max_session_expiry,
 		   VDEV_PARAM_RTT_11AZ_TB_MAX_SESSION_EXPIRY),
+	VDEV_PARAM(vdev_param_wifi_standard_version,
+		   VDEV_PARAM_WIFI_STANDARD_VERSION),
 	VDEV_PARAM(vdev_param_rtt_11az_ntb_max_time_bw_meas,
 		   VDEV_PARAM_RTT_11AZ_NTB_MAX_TIME_BW_MEAS),
 	VDEV_PARAM(vdev_param_rtt_11az_ntb_min_time_bw_meas,
@@ -6468,7 +6470,6 @@ struct wmi_host_fw_abi_ver {
 	uint32_t    abi_version;
 };
 
-#ifdef FEATURE_SET
 /**
  * enum WMI_HOST_WIFI_STANDARD - Supported wifi standard
  * @WMI_HOST_WIFI_STANDARD_4: Wifi standard 4
@@ -6485,6 +6486,7 @@ typedef enum {
 	WMI_HOST_WIFI_STANDARD_7 = 4,
 } WMI_HOST_WIFI_STANDARD;
 
+#ifdef FEATURE_SET
 /**
  * enum WMI_HOST_BAND_CONCURRENCY - Enum to represent supported concurrency
  * @WMI_HOST_BAND_CONCURRENCY_NONE: No concurrency is supported
