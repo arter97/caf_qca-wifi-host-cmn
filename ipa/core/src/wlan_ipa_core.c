@@ -4147,82 +4147,24 @@ static inline QDF_STATUS wlan_ipa_reg_flt_cbs(struct wlan_ipa_priv *ipa_ctx)
 }
 
 /**
- * wlan_ipa_opt_dp_init() - Check if OPT_WIFI_DP enabled from both IPA
- * and WLAN, and perform required init steps
- * @ipa_ctx: IPA context
- *
- *
- * Return: QDF_STATUS enumeration
- */
-static inline
-QDF_STATUS wlan_ipa_opt_dp_init(struct wlan_ipa_priv *ipa_ctx)
-{
-	QDF_STATUS status = QDF_STATUS_SUCCESS;
-
-	/* Register call backs for opt wifi dp */
-	if (ipa_ctx->opt_wifi_datapath) {
-		if (ipa_config_is_opt_wifi_dp_enabled()) {
-			status = wlan_ipa_reg_flt_cbs(ipa_ctx);
-			ipa_info("opt_dp: Register flt cb. status %d", status);
-			qdf_wake_lock_create(&ipa_ctx->opt_dp_wake_lock,
-					     "opt_dp");
-		} else {
-			ipa_info("opt_dp: Disabled from WLAN INI");
-		}
-	} else {
-		ipa_info("opt_dp: Disabled from IPA");
-	}
-
-	return status;
-}
-
-/**
  * wlan_ipa_destroy_opt_wifi_flt_cb_event - destroy filter cb event
  * @ipa_ctx: IPA context
  *
  *Return: void
  */
-static inline
-void wlan_ipa_destroy_opt_wifi_flt_cb_event(struct wlan_ipa_priv *ipa_ctx)
+static inline void wlan_ipa_destroy_opt_wifi_flt_cb_event(
+						  struct wlan_ipa_priv *ipa_ctx)
 {
 	qdf_event_destroy(&ipa_ctx->ipa_flt_evnt);
 }
-
-/**
- * wlan_ipa_opt_dp_deinit() - Perform opt_wifi_dp deinit steps
- * @ipa_ctx: IPA context
- *
- * Return: None
- */
-static inline
-void wlan_ipa_opt_dp_deinit(struct wlan_ipa_priv *ipa_ctx)
-{
-	if (ipa_ctx->uc_loaded)
-		wlan_ipa_destroy_opt_wifi_flt_cb_event(ipa_ctx);
-
-	if (ipa_ctx->opt_wifi_datapath && ipa_config_is_opt_wifi_dp_enabled())
-		qdf_wake_lock_destroy(&ipa_ctx->opt_dp_wake_lock);
-}
-
 #else
 static inline QDF_STATUS wlan_ipa_reg_flt_cbs(struct wlan_ipa_priv *ipa_ctx)
 {
 	return QDF_STATUS_SUCCESS;
 }
 
-static inline
-QDF_STATUS wlan_ipa_opt_dp_init(struct wlan_ipa_priv *ipa_ctx)
-{
-	return QDF_STATUS_SUCCESS;
-}
-
-static inline
-void wlan_ipa_destroy_opt_wifi_flt_cb_event(struct wlan_ipa_priv *ipa_ctx)
-{
-}
-
-static inline
-void wlan_ipa_opt_dp_deinit(struct wlan_ipa_priv *ipa_ctx)
+static inline void wlan_ipa_destroy_opt_wifi_flt_cb_event(
+						  struct wlan_ipa_priv *ipa_ctx)
 {
 }
 #endif
@@ -4334,7 +4276,18 @@ QDF_STATUS wlan_ipa_setup(struct wlan_ipa_priv *ipa_ctx,
 			goto ipa_wdi_destroy;
 	}
 
-	status = wlan_ipa_opt_dp_init(ipa_ctx);
+	/* Register call backs for opt wifi dp */
+	if (ipa_ctx->opt_wifi_datapath) {
+		if (ipa_config_is_opt_wifi_dp_enabled()) {
+			status = wlan_ipa_reg_flt_cbs(ipa_ctx);
+			ipa_info("opt_dp: Register cb. status %d",
+				 status);
+		} else {
+			ipa_info("opt_dp: Disabled from WLAN INI");
+		}
+	} else {
+		ipa_info("opt_dp: Disabled from IPA");
+	}
 
 	qdf_event_create(&ipa_ctx->ipa_resource_comp);
 
@@ -4403,7 +4356,8 @@ QDF_STATUS wlan_ipa_cleanup(struct wlan_ipa_priv *ipa_ctx)
 	if (!wlan_ipa_uc_is_enabled(ipa_ctx->config))
 		wlan_ipa_teardown_sys_pipe(ipa_ctx);
 
-	wlan_ipa_opt_dp_deinit(ipa_ctx);
+	if (ipa_ctx->uc_loaded)
+		wlan_ipa_destroy_opt_wifi_flt_cb_event(ipa_ctx);
 
 	/* Teardown IPA sys_pipe for MCC */
 	if (wlan_ipa_uc_sta_is_enabled(ipa_ctx->config)) {
@@ -5120,13 +5074,6 @@ int wlan_ipa_wdi_opt_dpath_flt_rsrv_cb(
 
 	pdev = ipa_obj->pdev;
 	pdev_id = ipa_obj->dp_pdev_id;
-
-	/* Hold wakelock */
-	qdf_wake_lock_acquire(&ipa_obj->opt_dp_wake_lock,
-			      WIFI_POWER_EVENT_WAKELOCK_OPT_WIFI_DP);
-	qdf_pm_system_wakeup();
-	ipa_info("opt_dp: Wakelock acquired");
-
 	/* Disable Low power features before filter reservation */
 	ipa_info("opt_dp: Disable low power features to reserve filter");
 	param_val = 0;
@@ -5420,9 +5367,7 @@ void wlan_ipa_wdi_opt_dpath_notify_flt_rlsd(int flt0_rslt, int flt1_rslt)
 	uc_op_work = &ipa_ctx->uc_op_work[WLAN_IPA_FILTER_REL_NOTIFY];
 	uc_op_work->msg = msg;
 	qdf_sched_work(0, &uc_op_work->work);
-	qdf_wake_lock_release(&ipa_ctx->opt_dp_wake_lock,
-			      WIFI_POWER_EVENT_WAKELOCK_OPT_WIFI_DP);
-	ipa_info("opt_dp: Wakelock released");
+	ipa_info("opt_dp: sched flt_rel notify is_success: %d", msg->rsvd);
 }
 
 void wlan_ipa_wdi_opt_dpath_notify_flt_add_rem_cb(int flt0_rslt, int flt1_rslt)
