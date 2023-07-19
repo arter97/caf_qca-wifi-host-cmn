@@ -713,6 +713,19 @@ void dp_rx_peer_unmap_handler(struct dp_soc *soc, uint16_t peer_id,
 			      uint8_t vdev_id, uint8_t *peer_mac_addr,
 			      uint8_t is_wds, uint32_t free_wds_count);
 
+#if defined(WLAN_FEATURE_11BE_MLO) && defined(DP_MLO_LINK_STATS_SUPPORT)
+/**
+ * dp_rx_peer_ext_evt() - handle peer extended event from firmware
+ * @soc: DP soc handle
+ * @info: extended evt info
+ *
+ *
+ * Return: QDF_STATUS
+ */
+
+QDF_STATUS
+dp_rx_peer_ext_evt(struct dp_soc *soc, struct dp_peer_ext_evt_info *info);
+#endif
 #ifdef DP_RX_UDP_OVER_PEER_ROAM
 /**
  * dp_rx_reset_roaming_peer() - Reset the roamed peer in vdev
@@ -2479,4 +2492,23 @@ bool dp_peer_check_wds_ext_peer(struct dp_peer *peer);
  * Return: DP MLD peer id
  */
 uint16_t dp_gen_ml_peer_id(struct dp_soc *soc, uint16_t peer_id);
+
+#ifdef FEATURE_AST
+/**
+ * dp_peer_host_add_map_ast() - Add ast entry with HW AST Index
+ * @soc: SoC handle
+ * @peer_id: peer id from firmware
+ * @mac_addr: MAC address of ast node
+ * @hw_peer_id: HW AST Index returned by target in peer map event
+ * @vdev_id: vdev id for VAP to which the peer belongs to
+ * @ast_hash: ast hash value in HW
+ * @is_wds: flag to indicate peer map event for WDS ast entry
+ *
+ * Return: QDF_STATUS code
+ */
+QDF_STATUS dp_peer_host_add_map_ast(struct dp_soc *soc, uint16_t peer_id,
+				    uint8_t *mac_addr, uint16_t hw_peer_id,
+				    uint8_t vdev_id, uint16_t ast_hash,
+				    uint8_t is_wds);
+#endif
 #endif /* _DP_PEER_H_ */

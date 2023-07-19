@@ -41,6 +41,7 @@
 #ifndef ENABLE_HOST_TO_TARGET_CONVERSION
 #include <wmi_unified.h>
 #endif
+#include <wlan_objmgr_vdev_obj.h>
 
 #define MAC_MAX_KEY_LENGTH 32
 #define MAC_PN_LENGTH 8
@@ -1217,6 +1218,9 @@ struct wmi_host_link_state_params {
  * @emlsr_support: indicate if eMLSR supported
  * @emlmr_support: indicate if eMLMR supported
  * @msd_cap_support: indicate if MSD supported
+ * @nstr_bitmap_present: indicate if NSTR bitmap is present
+ * @nstr_bitmap_size: Indicates size of NSTR bitmap,
+ *                    as per the 802.11be specification
  * @unused: spare bits
  * @mld_mac: MLD mac address
  * @logical_link_index: Unique index for links of the mlo. Starts with Zero
@@ -1231,6 +1235,11 @@ struct wmi_host_link_state_params {
  * @medium_sync_max_txop_num: Max number of TXOPs
  * @max_num_simultaneous_links: Max number of simultaneous links as per
  *                              MLD Capability for ML peer
+ * @nstr_indication_bitmap: NSTR indication bitmap
+ * @vdev_id: ID of the vdev object
+ * @bssid: AP link address
+ * @chan: Wlan channel information
+ * @mac_addr: Self mac addresses
  */
 struct peer_assoc_mlo_params {
 	uint32_t mlo_enabled:1,
@@ -1242,7 +1251,9 @@ struct peer_assoc_mlo_params {
 		 emlsr_support:1,
 		 emlmr_support:1,
 		 msd_cap_support:1,
-		 unused:23;
+		 nstr_bitmap_present:1,
+		 nstr_bitmap_size:1,
+		 unused:21;
 	uint8_t mld_mac[QDF_MAC_ADDR_SIZE];
 	uint32_t logical_link_index;
 	uint32_t ml_peer_id;
@@ -1255,6 +1266,11 @@ struct peer_assoc_mlo_params {
 	uint16_t medium_sync_ofdm_ed_thresh;
 	uint16_t medium_sync_max_txop_num;
 	uint16_t max_num_simultaneous_links;
+	uint32_t nstr_indication_bitmap;
+	uint32_t vdev_id;
+	struct qdf_mac_addr bssid;
+	struct wlan_channel chan;
+	struct qdf_mac_addr mac_addr;
 };
 
 /**
@@ -1273,6 +1289,10 @@ struct peer_assoc_mlo_params {
  * @msd_cap_support: indicate if MSD supported
  * @unused: spare bits
  * @logical_link_index: Unique index for links of the mlo. Starts with Zero
+ * @link_id: AP Link Id
+ * @bssid: AP link address
+ * @chan: Wlan channel information
+ * @mac_addr: Self mac addresses
  */
 struct ml_partner_info {
 	uint32_t vdev_id;
@@ -1288,6 +1308,10 @@ struct ml_partner_info {
 		 msd_cap_support:1,
 		 unused:23;
 	uint32_t logical_link_index;
+	uint32_t link_id;
+	struct qdf_mac_addr bssid;
+	struct wlan_channel chan;
+	struct qdf_mac_addr mac_addr;
 };
 
 /**
@@ -1375,6 +1399,7 @@ struct peer_assoc_ml_partner_links {
  * @ml_links: MLO partner links
  * @qcn_node_flag: if node is QCN node
  * @mesh_node_flag: if node is 4 addr node
+ * @is_assoc_vdev: true if assoc vdev
  * @peer_dms_capable: is peer DMS capable
  * @reserved: spare bits
  * @t2lm_params: TID-to-link mapping params
@@ -1463,6 +1488,7 @@ struct peer_assoc_params {
 	struct peer_assoc_ml_partner_links ml_links;
 	bool qcn_node_flag;
 	bool mesh_node_flag;
+	bool is_assoc_vdev;
 #endif
 	uint8_t peer_dms_capable:1,
 		reserved:7;
@@ -3226,7 +3252,7 @@ struct smart_ant_enable_tx_feedback_params {
  * @rssi_rpt_mode: RSSI report mode
  * @rssi_thr: RSSI threshold
  * @pwr_format: Power format
- * @rpt_mode: Report mdoe
+ * @rpt_mode: Report mode
  * @bin_scale: BIN scale
  * @dbm_adj: DBM adjust
  * @chn_mask: chain mask
@@ -3644,7 +3670,7 @@ struct macaddr_params {
  * struct acparams_params - acparams config structure
  * @ac: AC to configure
  * @use_rts: Use rts for this AC
- * @aggrsize_scaling: Aggregrate size scaling for the AC
+ * @aggrsize_scaling: Aggregate size scaling for the AC
  * @min_kbps: min kbps req
  */
 struct acparams_params {
@@ -4761,6 +4787,7 @@ typedef struct {
  * @unsolicited_prb_succ_cnt: Successful unsolicited probe response frames cnt
  * @unsolicited_prb_fail_cnt: Failed unsolictied probe response frames cnt
  * @is_mlo_vdev_active: is the mlo vdev currently active
+ * @vdev_tx_power: Tx power for vdev
  */
 struct wmi_host_vdev_prb_fils_stats {
 	uint32_t vdev_id;
@@ -4769,6 +4796,7 @@ struct wmi_host_vdev_prb_fils_stats {
 	uint32_t unsolicited_prb_succ_cnt;
 	uint32_t unsolicited_prb_fail_cnt;
 	bool is_mlo_vdev_active;
+	uint32_t vdev_tx_power;
 };
 
 /**
@@ -5303,6 +5331,9 @@ typedef enum {
 #ifdef WLAN_FEATURE_11BE_MLO
 	wmi_mlo_link_state_info_eventid,
 #endif
+#ifdef QCA_SUPPORT_PRIMARY_LINK_MIGRATE
+	wmi_peer_ptqm_migration_response_eventid,
+#endif
 	wmi_events_max,
 } wmi_conv_event_id;
 
@@ -5675,6 +5706,10 @@ typedef enum {
 	PDEV_PARAM(pdev_param_rtt_11az_rsid_range,
 		   PDEV_PARAM_RTT_11AZ_RSID_RANGE),
 	PDEV_PARAM(pdev_param_pcie_config, PDEV_PARAM_PCIE_CONFIG),
+	PDEV_PARAM(pdev_param_probe_resp_retry_limit,
+		   PDEV_PARAM_PROBE_RESP_RETRY_LIMIT),
+	PDEV_PARAM(pdev_param_cts_timeout, PDEV_PARAM_CTS_TIMEOUT),
+	PDEV_PARAM(pdev_param_slot_time, PDEV_PARAM_SLOT_TIME),
 	pdev_param_max,
 } wmi_conv_pdev_params_id;
 
@@ -5995,6 +6030,12 @@ typedef enum {
 		   VDEV_PARAM_SET_SAP_PS_WITH_TWT),
 	VDEV_PARAM(vdev_param_chwidth_with_notify,
 		   VDEV_PARAM_CHWIDTH_WITH_NOTIFY),
+	VDEV_PARAM(vdev_param_rtt_11az_tb_max_session_expiry,
+		   VDEV_PARAM_RTT_11AZ_TB_MAX_SESSION_EXPIRY),
+	VDEV_PARAM(vdev_param_rtt_11az_ntb_max_time_bw_meas,
+		   VDEV_PARAM_RTT_11AZ_NTB_MAX_TIME_BW_MEAS),
+	VDEV_PARAM(vdev_param_rtt_11az_ntb_min_time_bw_meas,
+		   VDEV_PARAM_RTT_11AZ_NTB_MIN_TIME_BW_MEAS),
 	vdev_param_max,
 } wmi_conv_vdev_param_id;
 
@@ -6366,7 +6407,13 @@ typedef enum {
 #ifdef WLAN_FEATURE_11BE_MLO
 	wmi_service_mlo_tsf_sync,
 	wmi_service_n_link_mlo_support,
+	wmi_service_per_link_stats_support,
 #endif
+	wmi_service_aux_mac_support,
+#ifdef WLAN_ATF_INCREASED_STA
+	wmi_service_atf_max_client_512_support,
+#endif
+	wmi_service_fisa_dynamic_msdu_aggr_size_support,
 	wmi_services_max,
 } wmi_conv_service_ids;
 #define WMI_SERVICE_UNAVAILABLE 0xFFFF
@@ -6735,10 +6782,12 @@ struct target_feature_set {
  * @reo_qdesc_shared_addr_table_enabled: Reo shared qref enhancement enabled
  * @num_max_active_vdevs: max number of active virtual devices (VAPs) to
  * support
+ * @num_max_mlo_link_per_ml_bss: number of max partner links of a ML BSS
  * @notify_frame_support: capability to mark notify frames from host
  * @dp_peer_meta_data_ver: datapath peer meta data version flag
  * @tx_ilp_enable: capability to support TX ILP from host
  * @rf_path: Indicates RF path 0 primary, 1 secondary
+ * @fw_ast_indication_disable: Disable AST indication
  */
 typedef struct {
 	uint32_t num_vdevs;
@@ -6865,12 +6914,14 @@ typedef struct {
 	bool sawf;
 	bool reo_qdesc_shared_addr_table_enabled;
 	uint32_t num_max_active_vdevs;
+	uint32_t num_max_mlo_link_per_ml_bss;
 	uint8_t notify_frame_support;
 	uint8_t dp_peer_meta_data_ver;
 #ifdef DP_TX_PACKET_INSPECT_FOR_ILP
 	uint8_t tx_ilp_enable;
 #endif
 	bool rf_path;
+	bool fw_ast_indication_disable;
 } target_resource_config;
 
 /**
@@ -8366,7 +8417,7 @@ struct wmi_host_proxy_ast_reserve_param {
 
 /**
  * struct wmi_host_pdev_band_to_mac - freq range for mac
- * @pdev_id: PDEV ID to identifiy mac
+ * @pdev_id: PDEV ID to identify mac
  * @start_freq: start frequency value
  * @end_freq: end frequency value
  */

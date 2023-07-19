@@ -4262,46 +4262,6 @@ add_ppdu_to_sched_list:
 	mon_pdev->sched_comp_list_depth++;
 }
 
-#ifdef WLAN_FEATURE_PKT_CAPTURE_V2
-static void dp_htt_process_smu_ppdu_stats_tlv(struct dp_soc *soc,
-					      qdf_nbuf_t htt_t2h_msg)
-{
-	uint32_t length;
-	uint8_t tlv_type;
-	uint32_t tlv_length, tlv_expected_size;
-	uint8_t *tlv_buf;
-
-	uint32_t *msg_word = (uint32_t *)qdf_nbuf_data(htt_t2h_msg);
-
-	length = HTT_T2H_PPDU_STATS_PAYLOAD_SIZE_GET(*msg_word);
-
-	msg_word = msg_word + 4;
-
-	while (length > 0) {
-		tlv_buf = (uint8_t *)msg_word;
-		tlv_type = HTT_STATS_TLV_TAG_GET(*msg_word);
-		tlv_length = HTT_STATS_TLV_LENGTH_GET(*msg_word);
-
-		if (tlv_length == 0)
-			break;
-
-		tlv_length += HTT_TLV_HDR_LEN;
-
-		if (tlv_type == HTT_PPDU_STATS_FOR_SMU_TLV) {
-			tlv_expected_size = sizeof(htt_ppdu_stats_for_smu_tlv);
-
-			if (tlv_length >= tlv_expected_size)
-				dp_wdi_event_handler(
-					WDI_EVENT_PKT_CAPTURE_PPDU_STATS,
-					soc, msg_word, HTT_INVALID_VDEV,
-					WDI_NO_VAL, 0);
-		}
-		msg_word = (uint32_t *)((uint8_t *)tlv_buf + tlv_length);
-		length -= (tlv_length);
-	}
-}
-#endif
-
 /**
  * dp_process_ppdu_stats_sch_cmd_status_tlv() - Process schedule command status tlv
  * Here we are not going to process the buffer.
@@ -5362,6 +5322,46 @@ static bool dp_tx_ppdu_stats_feat_enable_check(struct dp_pdev *pdev)
 }
 #endif
 
+#ifdef WLAN_FEATURE_PKT_CAPTURE_V2
+static void dp_htt_process_smu_ppdu_stats_tlv(struct dp_soc *soc,
+					      qdf_nbuf_t htt_t2h_msg)
+{
+	uint32_t length;
+	uint8_t tlv_type;
+	uint32_t tlv_length, tlv_expected_size;
+	uint8_t *tlv_buf;
+
+	uint32_t *msg_word = (uint32_t *)qdf_nbuf_data(htt_t2h_msg);
+
+	length = HTT_T2H_PPDU_STATS_PAYLOAD_SIZE_GET(*msg_word);
+
+	msg_word = msg_word + 4;
+
+	while (length > 0) {
+		tlv_buf = (uint8_t *)msg_word;
+		tlv_type = HTT_STATS_TLV_TAG_GET(*msg_word);
+		tlv_length = HTT_STATS_TLV_LENGTH_GET(*msg_word);
+
+		if (tlv_length == 0)
+			break;
+
+		tlv_length += HTT_TLV_HDR_LEN;
+
+		if (tlv_type == HTT_PPDU_STATS_FOR_SMU_TLV) {
+			tlv_expected_size = sizeof(htt_ppdu_stats_for_smu_tlv);
+
+			if (tlv_length >= tlv_expected_size)
+				dp_wdi_event_handler(
+					WDI_EVENT_PKT_CAPTURE_PPDU_STATS,
+					soc, msg_word, HTT_INVALID_VDEV,
+					WDI_NO_VAL, 0);
+		}
+		msg_word = (uint32_t *)((uint8_t *)tlv_buf + tlv_length);
+		length -= (tlv_length);
+	}
+}
+#endif
+
 #if defined(WDI_EVENT_ENABLE)
 #ifdef QCA_ENHANCED_STATS_SUPPORT
 /**
@@ -5434,7 +5434,8 @@ static bool dp_txrx_ppdu_stats_handler(struct dp_soc *soc,
 #endif
 
 #if defined(WDI_EVENT_ENABLE) &&\
-	(defined(QCA_ENHANCED_STATS_SUPPORT) || !defined(REMOVE_PKT_LOG))
+	(defined(QCA_ENHANCED_STATS_SUPPORT) || !defined(REMOVE_PKT_LOG) || \
+	 defined(WLAN_FEATURE_PKT_CAPTURE_V2))
 bool
 dp_ppdu_stats_ind_handler(struct htt_soc *soc,
 			  uint32_t *msg_word,
@@ -5889,20 +5890,6 @@ void dp_mon_register_lpc_ops_1_0(struct dp_mon_ops *mon_ops)
 	mon_ops->rx_hdr_length_set = dp_rx_mon_hdr_length_set;
 	dp_mon_register_tx_pkt_enh_ops_1_0(mon_ops);
 }
-
-static void dp_mon_pdev_filter_lpc_init(struct dp_mon_pdev *mon_pdev)
-{
-	if (!mon_pdev)
-		return;
-
-	mon_pdev->mon_filter_mode = MON_FILTER_PASS;
-	mon_pdev->fp_mgmt_filter = FILTER_MGMT_ALL;
-	mon_pdev->fp_ctrl_filter = FILTER_CTRL_ALL;
-	mon_pdev->fp_data_filter = FILTER_DATA_ALL;
-	mon_pdev->mo_mgmt_filter = 0;
-	mon_pdev->mo_ctrl_filter = 0;
-	mon_pdev->mo_data_filter = 0;
-}
 #else
 #if !defined(DISABLE_MON_CONFIG)
 static inline void dp_mon_config_register_ops(struct dp_mon_ops *mon_ops)
@@ -5945,11 +5932,6 @@ void dp_mon_register_lpc_ops_1_0(struct dp_mon_ops *mon_ops)
 
 	mon_ops->rx_hdr_length_set = NULL;
 	dp_mon_register_tx_pkt_enh_ops_1_0(mon_ops);
-}
-
-static void dp_mon_pdev_filter_lpc_init(struct dp_mon_pdev *mon_pdev)
-{
-	dp_mon_pdev_filter_init(mon_pdev);
 }
 #endif
 
@@ -6002,11 +5984,7 @@ QDF_STATUS dp_mon_pdev_init(struct dp_pdev *pdev)
 	mon_pdev->neighbour_peers_added = false;
 	mon_pdev->monitor_configured = false;
 
-	/* Monitor filter init */
-	if (wlan_cfg_get_local_pkt_capture(pdev->soc->wlan_cfg_ctx))
-		dp_mon_pdev_filter_lpc_init(mon_pdev);
-	else
-		dp_mon_pdev_filter_init(mon_pdev);
+	dp_mon_pdev_filter_init(mon_pdev);
 	/*
 	 * initialize ppdu tlv list
 	 */

@@ -679,6 +679,18 @@ dp_monitor_get_link_desc_pages(struct dp_soc *soc, uint32_t mac_id)
 	return NULL;
 }
 
+static inline struct dp_srng*
+dp_monitor_get_link_desc_ring(struct dp_soc *soc, uint32_t mac_id)
+{
+	return NULL;
+}
+
+static inline uint32_t
+dp_monitor_get_num_link_desc_ring_entries(struct dp_soc *soc)
+{
+	return 0;
+}
+
 static inline uint32_t *
 dp_monitor_get_total_link_descs(struct dp_soc *soc, uint32_t mac_id)
 {
@@ -2015,6 +2027,10 @@ void dp_update_vdev_stats_on_peer_unmap(struct dp_vdev *vdev,
 					 _srcobj->rx.rcvd_reo[i].num; \
 			_tgtobj->rx.rcvd_reo[i].bytes += \
 					_srcobj->rx.rcvd_reo[i].bytes; \
+			_tgtobj->rx.rcvd.num += \
+					 _srcobj->rx.rcvd_reo[i].num; \
+			_tgtobj->rx.rcvd.bytes += \
+					_srcobj->rx.rcvd_reo[i].bytes; \
 		} \
 		for (i = 0; i < CDP_MAX_LMACS; i++) { \
 			_tgtobj->rx.rx_lmac[i].num += \
@@ -2809,12 +2825,14 @@ QDF_STATUS dp_mlo_umac_reset_stats_print(struct dp_soc *soc)
 QDF_STATUS dp_umac_reset_notify_asserted_soc(struct dp_soc *soc);
 
 /**
- * dp_umac_reset_is_inprogress() - Check if umac reset is in progress
+ * dp_get_umac_reset_in_progress_state() - API to check umac reset in progress
+ * state
  * @psoc: dp soc handle
  *
- * Return: true if umac reset is in progress, else false.
+ * Return: umac reset state
  */
-bool dp_umac_reset_is_inprogress(struct cdp_soc_t *psoc);
+enum cdp_umac_reset_state
+dp_get_umac_reset_in_progress_state(struct cdp_soc_t *psoc);
 #else
 static inline
 QDF_STATUS dp_umac_reset_notify_asserted_soc(struct dp_soc *soc)
@@ -2822,10 +2840,10 @@ QDF_STATUS dp_umac_reset_notify_asserted_soc(struct dp_soc *soc)
 	return QDF_STATUS_SUCCESS;
 }
 
-static inline
-bool dp_umac_reset_is_inprogress(struct cdp_soc_t *psoc)
+static inline enum cdp_umac_reset_state
+dp_get_umac_reset_in_progress_state(struct cdp_soc_t *psoc)
 {
-	return false;
+	return CDP_UMAC_RESET_NOT_IN_PROGRESS;
 }
 #endif
 
@@ -3914,7 +3932,7 @@ struct cdp_soc_t *dp_soc_to_cdp_soc_t(struct dp_soc *psoc)
 	return (struct cdp_soc_t *)psoc;
 }
 
-#if defined(WLAN_SUPPORT_RX_FLOW_TAG) || defined(WLAN_SUPPORT_RX_FISA)
+#if defined(WLAN_SUPPORT_RX_FLOW_TAG)
 /**
  * dp_rx_flow_get_fse_stats() - Retrieve a flow's statistics
  * @pdev: pdev handle
@@ -3966,16 +3984,6 @@ QDF_STATUS dp_rx_fst_attach(struct dp_soc *soc, struct dp_pdev *pdev);
 void dp_rx_fst_detach(struct dp_soc *soc, struct dp_pdev *pdev);
 
 /**
- * dp_rx_flow_send_fst_fw_setup() - Program FST parameters in FW/HW post-attach
- * @soc: SoC handle
- * @pdev: Pdev handle
- *
- * Return: Success when fst parameters are programmed in FW, error otherwise
- */
-QDF_STATUS dp_rx_flow_send_fst_fw_setup(struct dp_soc *soc,
-					struct dp_pdev *pdev);
-
-/**
  * dp_mon_rx_update_rx_flow_tag_stats() - Update a mon flow's statistics
  * @pdev: pdev handle
  * @flow_id: flow index (truncated hash) in the Rx FST
@@ -3984,33 +3992,18 @@ QDF_STATUS dp_rx_flow_send_fst_fw_setup(struct dp_soc *soc,
  */
 QDF_STATUS
 dp_mon_rx_update_rx_flow_tag_stats(struct dp_pdev *pdev, uint32_t flow_id);
+#endif
 
-#else /* !((WLAN_SUPPORT_RX_FLOW_TAG) || defined(WLAN_SUPPORT_RX_FISA)) */
-
+#ifdef WLAN_SUPPORT_RX_FLOW_TAG
 /**
- * dp_rx_fst_attach() - Initialize Rx FST and setup necessary parameters
+ * dp_rx_flow_send_fst_fw_setup() - Program FST parameters in FW/HW post-attach
  * @soc: SoC handle
  * @pdev: Pdev handle
  *
- * Return: Handle to flow search table entry
+ * Return: Success when fst parameters are programmed in FW, error otherwise
  */
-static inline
-QDF_STATUS dp_rx_fst_attach(struct dp_soc *soc, struct dp_pdev *pdev)
-{
-	return QDF_STATUS_SUCCESS;
-}
-
-/**
- * dp_rx_fst_detach() - De-initialize Rx FST
- * @soc: SoC handle
- * @pdev: Pdev handle
- *
- * Return: None
- */
-static inline
-void dp_rx_fst_detach(struct dp_soc *soc, struct dp_pdev *pdev)
-{
-}
+QDF_STATUS dp_rx_flow_send_fst_fw_setup(struct dp_soc *soc,
+					struct dp_pdev *pdev);
 #endif
 
 /**
@@ -4127,16 +4120,6 @@ void dp_update_num_mac_rings_for_dbs(struct dp_soc *soc,
 
 
 #if defined(WLAN_SUPPORT_RX_FISA)
-void dp_rx_dump_fisa_table(struct dp_soc *soc);
-
-/**
- * dp_print_fisa_stats() - Print FISA stats
- * @soc: DP soc handle
- *
- * Return: None
- */
-void dp_print_fisa_stats(struct dp_soc *soc);
-
 /**
  * dp_rx_fst_update_cmem_params() - Update CMEM FST params
  * @soc:		DP SoC context
@@ -4149,34 +4132,20 @@ void dp_print_fisa_stats(struct dp_soc *soc);
 void dp_rx_fst_update_cmem_params(struct dp_soc *soc, uint16_t num_entries,
 				  uint32_t cmem_ba_lo, uint32_t cmem_ba_hi);
 
-void
-dp_rx_fst_update_pm_suspend_status(struct dp_soc *soc, bool suspended);
-
 /**
- * dp_rx_fst_requeue_wq() - Re-queue pending work queue tasks
- * @soc:		DP SoC context
- *
- * Return: None
+ * dp_fisa_config() - FISA config handler
+ * @cdp_soc: CDP SoC handle
+ * @pdev_id: PDEV ID
+ * @config_id: FISA config ID
+ * @cfg: FISA config msg data
  */
-void dp_rx_fst_requeue_wq(struct dp_soc *soc);
+QDF_STATUS dp_fisa_config(ol_txrx_soc_handle cdp_soc, uint8_t pdev_id,
+			  enum cdp_fisa_config_id config_id,
+			  union cdp_fisa_config *cfg);
 #else
 static inline void
 dp_rx_fst_update_cmem_params(struct dp_soc *soc, uint16_t num_entries,
 			     uint32_t cmem_ba_lo, uint32_t cmem_ba_hi)
-{
-}
-
-static inline void
-dp_rx_fst_update_pm_suspend_status(struct dp_soc *soc, bool suspended)
-{
-}
-
-static inline void
-dp_rx_fst_requeue_wq(struct dp_soc *soc)
-{
-}
-
-static inline void dp_print_fisa_stats(struct dp_soc *soc)
 {
 }
 #endif /* WLAN_SUPPORT_RX_FISA */

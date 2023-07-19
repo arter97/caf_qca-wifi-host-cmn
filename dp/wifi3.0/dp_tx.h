@@ -848,12 +848,26 @@ static inline void dp_tx_get_queue(struct dp_vdev *vdev,
 }
 #endif
 #else
+#ifdef WLAN_TX_PKT_CAPTURE_ENH
+static inline void dp_tx_get_queue(struct dp_vdev *vdev,
+				   qdf_nbuf_t nbuf, struct dp_tx_queue *queue)
+{
+	if (qdf_unlikely(vdev->is_override_rbm_id))
+		queue->ring_id = vdev->rbm_id;
+	else
+		queue->ring_id = qdf_get_cpu();
+
+	queue->desc_pool_id = queue->ring_id;
+}
+#else
 static inline void dp_tx_get_queue(struct dp_vdev *vdev,
 				   qdf_nbuf_t nbuf, struct dp_tx_queue *queue)
 {
 	queue->ring_id = qdf_get_cpu();
 	queue->desc_pool_id = queue->ring_id;
 }
+
+#endif
 #endif
 
 /**
@@ -1993,7 +2007,7 @@ static inline uint32_t dp_tx_get_pkt_len(struct dp_tx_desc_s *tx_desc)
 {
 	return tx_desc->frm_type == dp_tx_frm_tso ?
 		tx_desc->msdu_ext_desc->tso_desc->seg.total_len :
-		qdf_nbuf_len(tx_desc->nbuf);
+		tx_desc->length;
 }
 
 #ifdef FEATURE_RUNTIME_PM

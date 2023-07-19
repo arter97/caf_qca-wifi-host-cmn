@@ -727,6 +727,7 @@ struct cdp_cmn_ops {
 	void (*txrx_get_tsf2_offset)(struct cdp_soc_t *soc_hdl, uint8_t mac_id,
 				     uint64_t *value);
 	void (*txrx_get_tqm_offset)(struct cdp_soc_t *soc_hdl, uint64_t *value);
+	uint64_t (*get_fst_cmem_base)(struct cdp_soc_t *soc_hdl, uint64_t size);
 };
 
 struct cdp_ctrl_ops {
@@ -953,7 +954,15 @@ struct cdp_ctrl_ops {
 						     uint32_t *mask,
 						     uint32_t *mask_cont);
 #endif
-	bool (*umac_reset_is_inprogress)(struct cdp_soc_t *psoc);
+#ifdef WLAN_SUPPORT_RX_FISA
+	QDF_STATUS (*txrx_fisa_config)(struct cdp_soc_t *soc, uint8_t pdev_id,
+				       enum cdp_fisa_config_id config_id,
+				       union cdp_fisa_config *cfg);
+#endif
+#ifdef DP_UMAC_HW_RESET_SUPPORT
+	enum cdp_umac_reset_state (*get_umac_reset_in_progress_state)(
+				   struct cdp_soc_t *psoc);
+#endif
 };
 
 struct cdp_me_ops {
@@ -1586,6 +1595,12 @@ struct ol_if_ops {
 					    uint8_t *target_pdev_id);
 	bool (*is_roam_inprogress)(uint32_t vdev_id);
 	enum QDF_GLOBAL_MODE (*get_con_mode)(void);
+#if defined(WLAN_FEATURE_11BE_MLO) && defined(WLAN_MLO_MULTI_CHIP)
+	uint8_t (*peer_get_num_mlo_links)(struct cdp_ctrl_objmgr_psoc *psoc,
+					  uint8_t vdev_id,
+					  uint8_t *peer_macaddr,
+					  bool is_mld_peer);
+#endif
 #ifdef QCA_PEER_MULTIQ_SUPPORT
 	int (*peer_ast_flowid_map)(struct cdp_ctrl_objmgr_psoc *ol_soc_handle,
 				   uint16_t peer_id, uint8_t vdev_id,
@@ -1693,6 +1708,7 @@ void (*peer_send_wds_disconnect)(struct cdp_ctrl_objmgr_psoc *psoc,
 #ifdef CONFIG_SAWF_DEF_QUEUES
 	int (*disable_sawf_svc)(uint8_t svc_id);
 #endif
+	void (*dp_print_fisa_stats)(enum cdp_fisa_stats_id stats_id);
 };
 
 #ifdef DP_PEER_EXTENDED_API
@@ -2143,6 +2159,9 @@ struct cdp_throttle_ops {
  * @ipa_tx_buf_smmu_mapping: Create SMMU mappings for Tx
  * @ipa_tx_buf_smmu_unmapping: Release SMMU mappings for Tx
  * buffers to IPA
+ * @ipa_rx_buf_smmu_pool_mapping: Create SMMU mapping for Rx
+ * @ipa_set_smmu_mapped: Set IPA SMMU mapped value
+ * @ipa_get_smmu_mapped: Get IPA SMMU mapped value
  * @ipa_rx_super_rule_setup: Setup cce super rules based on filter tuple
  * @ipa_ast_create: Create/Update ast entry
  * @ipa_get_wdi_version: Get WDI version
@@ -2238,6 +2257,15 @@ struct cdp_ipa_ops {
 						uint8_t pdev_id,
 						const char *func,
 						uint32_t line);
+	QDF_STATUS (*ipa_rx_buf_smmu_pool_mapping)(
+					      struct cdp_soc_t *soc_hdl,
+					      uint8_t pdev_id,
+					      bool create,
+					      const char *func,
+					      uint32_t line);
+	QDF_STATUS (*ipa_set_smmu_mapped)(struct cdp_soc_t *soc_hdl, int val);
+	int (*ipa_get_smmu_mapped)(struct cdp_soc_t *soc_hdl);
+
 #ifdef IPA_OPT_WIFI_DP
 	QDF_STATUS (*ipa_rx_super_rule_setup)(struct cdp_soc_t *soc_hdl,
 					      void *flt_params);
@@ -2414,7 +2442,7 @@ struct cdp_sawf_ops {
 	(*peer_config_ul)(struct cdp_soc_t *hdl, uint8_t *mac_addr, uint8_t tid,
 			  uint32_t service_interval, uint32_t burst_size,
 			  uint32_t min_tput, uint32_t max_latency,
-			  uint8_t add_or_sub);
+			  uint8_t add_or_sub, uint16_t peer_id);
 	QDF_STATUS
 	(*swaf_peer_sla_configuration)(struct cdp_soc_t *soc,
 				       uint8_t *mac_addr, uint16_t *sla_mask);
@@ -2422,7 +2450,8 @@ struct cdp_sawf_ops {
 	QDF_STATUS
 	(*sawf_peer_flow_count)(struct cdp_soc_t *hdl, uint8_t *mac_addr,
 				uint8_t svc_id, uint8_t direction,
-				uint8_t start_or_stop, uint8_t *peer_mac);
+				uint8_t start_or_stop, uint8_t *peer_mac,
+				uint16_t peer_id);
 #endif
 };
 #endif

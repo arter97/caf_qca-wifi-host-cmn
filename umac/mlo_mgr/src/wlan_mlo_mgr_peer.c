@@ -282,6 +282,45 @@ struct wlan_objmgr_peer *wlan_mlo_peer_get_assoc_peer(
 
 qdf_export_symbol(wlan_mlo_peer_get_assoc_peer);
 
+struct wlan_objmgr_peer *wlan_mlo_peer_get_bridge_peer(
+					struct wlan_mlo_peer_context *ml_peer)
+{
+	struct wlan_mlo_link_peer_entry *peer_entry = NULL;
+	struct wlan_objmgr_peer *bridge_peer = NULL;
+	struct wlan_objmgr_peer *link_peer = NULL;
+	int i = 0;
+
+	if (!ml_peer)
+		return NULL;
+
+	mlo_peer_lock_acquire(ml_peer);
+
+	for (i = 0; i < MAX_MLO_LINK_PEERS; i++) {
+		peer_entry = &ml_peer->peer_list[i];
+		if (!peer_entry)
+			continue;
+
+		link_peer = peer_entry->link_peer;
+		if (!link_peer)
+			continue;
+
+		if (wlan_peer_get_peer_type(link_peer) ==
+		    WLAN_PEER_MLO_BRIDGE) {
+			if (peer_entry->is_primary)
+				bridge_peer = link_peer;
+			else
+				mlo_err("Bridge peer is not primary");
+
+			break;
+		}
+	}
+	mlo_peer_lock_release(ml_peer);
+
+	return bridge_peer;
+}
+
+qdf_export_symbol(wlan_mlo_peer_get_bridge_peer);
+
 bool mlo_peer_is_assoc_peer(struct wlan_mlo_peer_context *ml_peer,
 			    struct wlan_objmgr_peer *peer)
 {
@@ -714,6 +753,7 @@ static void mlo_peer_free(struct wlan_mlo_peer_context *ml_peer)
 	mlo_debug("ML Peer " QDF_MAC_ADDR_FMT " is freed",
 		  QDF_MAC_ADDR_REF(ml_peer->peer_mld_addr.bytes));
 	mlo_peer_lock_destroy(ml_peer);
+	mlo_ap_ml_ptqm_peerid_free(ml_dev, ml_peer->mlo_peer_id);
 	mlo_ap_ml_peerid_free(ml_peer->mlo_peer_id);
 	mlo_peer_free_aid(ml_dev, ml_peer);
 	mlo_peer_free_primary_umac(ml_dev, ml_peer);
@@ -1255,6 +1295,12 @@ QDF_STATUS wlan_mlo_peer_asreq(struct wlan_objmgr_vdev *vdev,
 		if (!iter_peer)
 			continue;
 
+		if (wlan_peer_get_peer_type(iter_peer) ==
+						WLAN_PEER_MLO_BRIDGE) {
+			link_count++;
+			continue;
+		}
+
 		for (i = 0; i < WLAN_UMAC_MLO_MAX_VDEVS; i++) {
 			vdev_link = link_vdevs[i];
 			if (!vdev_link)
@@ -1433,6 +1479,9 @@ QDF_STATUS wlan_mlo_peer_create(struct wlan_objmgr_vdev *vdev,
 		ml_peer->mlpeer_state = ML_PEER_CREATED;
 		ml_peer->max_links = ml_info->num_partner_links;
 		ml_peer->primary_umac_psoc_id = ML_PRIMARY_UMAC_ID_INVAL;
+		ml_peer->migrate_primary_umac_psoc_id =
+						ML_PRIMARY_UMAC_ID_INVAL;
+		ml_peer->primary_umac_migration_in_progress = false;
 
 		ml_peer->mlo_peer_id = mlo_ap_ml_peerid_alloc();
 		if (ml_peer->mlo_peer_id == MLO_INVALID_PEER_ID) {

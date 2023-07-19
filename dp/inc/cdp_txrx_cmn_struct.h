@@ -750,6 +750,7 @@ enum wlan_op_subtype {
  * @subtype: subtype of the vdev
  * @qdf_opmode: Operation mode of the vdev
  * @mld_mac_addr: MLD mac addr of the current vdev.
+ * @is_bridge_vap: current vdev is bridge vap or not.
  */
 struct cdp_vdev_info {
 	uint8_t *vdev_mac_addr;
@@ -760,6 +761,9 @@ struct cdp_vdev_info {
 	enum QDF_OPMODE qdf_opmode;
 #ifdef WLAN_FEATURE_11BE_MLO
 	uint8_t *mld_mac_addr;
+#ifdef WLAN_MLO_MULTI_CHIP
+	bool is_bridge_vap;
+#endif
 #endif
 };
 
@@ -1466,6 +1470,11 @@ enum cdp_pdev_param_type {
  * @cdp_rxdma_buf_ring_size: RXDMA buf ring size config
  * @mac_addr: vdev mac address
  * @new_vdev_id: New vdev id to which MLD peer is to be moved
+ * @fisa_params.fisa_fst_size: FISA table size
+ * @fisa_params.rx_flow_max_search: max FST entries
+ * @fisa_params.rx_toeplitz_hash_key: RX hash key
+ * @rx_pkt_tlv_size: RX packet TLV size
+ * @cdp_ast_indication_disable: AST indication disable
  */
 typedef union cdp_config_param_t {
 	/* peer params */
@@ -1571,6 +1580,13 @@ typedef union cdp_config_param_t {
 
 	uint8_t mac_addr[QDF_MAC_ADDR_SIZE];
 	uint8_t new_vdev_id;
+	struct {
+		uint32_t fisa_fst_size;
+		uint16_t rx_flow_max_search;
+		uint8_t *rx_toeplitz_hash_key;
+	} fisa_params;
+	uint16_t rx_pkt_tlv_size;
+	bool cdp_ast_indication_disable;
 } cdp_config_param_type;
 
 /**
@@ -1738,6 +1754,9 @@ enum cdp_vdev_param_type {
  * @CDP_CFG_REO_DST_RING_SIZE: REO destination ring size config
  * @CDP_CFG_RXDMA_REFILL_RING_SIZE: RXDMA refill ring size config
  * @CDP_CFG_RX_REFILL_POOL_NUM: RX refill pool size config param
+ * @CDP_CFG_FISA_PARAMS: FISA params
+ * @CDP_RX_PKT_TLV_SIZE: RX pkt tlv size
+ * @CDP_CFG_AST_INDICATION_DISABLE: AST indication disable
  */
 enum cdp_psoc_param_type {
 	CDP_ENABLE_RATE_STATS,
@@ -1762,6 +1781,9 @@ enum cdp_psoc_param_type {
 #ifdef WLAN_FEATURE_RX_PREALLOC_BUFFER_POOL
 	CDP_CFG_RX_REFILL_POOL_NUM,
 #endif
+	CDP_CFG_FISA_PARAMS,
+	CDP_RX_PKT_TLV_SIZE,
+	CDP_CFG_AST_INDICATION_DISABLE,
 };
 
 #ifdef CONFIG_AP_PLATFORM
@@ -3009,7 +3031,43 @@ struct cdp_peer_cookie {
 	uint8_t cookie;
 };
 
+/**
+ * enum cdp_fisa_stats_id - ID to query FISA stats
+ * @CDP_FISA_STATS_ID_ERR_STATS: FISA error stats
+ * @CDP_FISA_STATS_ID_DUMP_HW_FST: HW FST dump
+ * @CDP_FISA_STATS_ID_DUMP_SW_FST: SW FST dump
+ */
+enum cdp_fisa_stats_id {
+	CDP_FISA_STATS_ID_ERR_STATS,
+	CDP_FISA_STATS_ID_DUMP_HW_FST,
+	CDP_FISA_STATS_ID_DUMP_SW_FST,
+};
+
 #ifdef WLAN_SUPPORT_RX_FISA
+/**
+ * enum cdp_fisa_config_id - FISA config ID
+ * @CDP_FISA_HTT_RX_FISA_CFG: FISA config HTT message
+ * @CDP_FISA_HTT_RX_FSE_OP_CFG: FSE operation HTT message
+ * @CDP_FISA_HTT_RX_FSE_SETUP_CFG: FSE setup HTT message
+ */
+enum cdp_fisa_config_id {
+	CDP_FISA_HTT_RX_FISA_CFG,
+	CDP_FISA_HTT_RX_FSE_OP_CFG,
+	CDP_FISA_HTT_RX_FSE_SETUP_CFG,
+};
+
+/**
+ * union cdp_fisa_config - FISA HTT message data
+ * @fisa_config: FISA config HTT msg data
+ * @fse_op_cmd: FSE operation HTT msg data
+ * @fse_setup_info: FSE setup HTT msg data
+ */
+union cdp_fisa_config {
+	struct dp_htt_rx_fisa_cfg *fisa_config;
+	struct dp_htt_rx_flow_fst_operation *fse_op_cmd;
+	struct dp_htt_rx_flow_fst_setup *fse_setup_info;
+};
+
 struct cdp_flow_stats {
 	uint32_t aggr_count;
 	uint32_t curr_aggr_count;
@@ -3187,4 +3245,18 @@ struct cdp_txrx_peer_params_update {
 	uint8_t	pdev_id;
 };
 
+/**
+ * enum cdp_umac_reset_state - umac reset in progress state
+ * @CDP_UMAC_RESET_NOT_IN_PROGRESS: Umac reset is not in progress
+ * @CDP_UMAC_RESET_IN_PROGRESS: Umac reset is in progress
+ * @CDP_UMAC_RESET_IN_PROGRESS_DURING_BUFFER_WINDOW: Umac reset was in progress
+ *                                                   during this buffer window.
+ * @CDP_UMAC_RESET_INVALID_STATE: Umac reset invalid state
+ */
+enum cdp_umac_reset_state {
+	CDP_UMAC_RESET_NOT_IN_PROGRESS,
+	CDP_UMAC_RESET_IN_PROGRESS,
+	CDP_UMAC_RESET_IN_PROGRESS_DURING_BUFFER_WINDOW,
+	CDP_UMAC_RESET_INVALID_STATE
+};
 #endif

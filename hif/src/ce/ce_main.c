@@ -900,6 +900,9 @@ static struct service_to_pipe target_service_to_ce_map_qca5332[] = {
 #ifdef WLAN_DIAG_AND_DBR_OVER_SEPARATE_CE
 	{ WMI_CONTROL_DIAG_SVC, PIPEDIR_IN, 9, },
 	{ WMI_CONTROL_DBR_SVC, PIPEDIR_IN, 9, },
+#else
+	{ WMI_CONTROL_DIAG_SVC, PIPEDIR_IN, 2, },
+	{ WMI_CONTROL_DBR_SVC, PIPEDIR_IN, 2, },
 #endif
 	/* (Additions here) */
 	{ 0, 0, 0, },
@@ -930,8 +933,13 @@ static struct service_to_pipe target_service_to_ce_map_qcn9224[] = {
 	{ WMI_CONTROL_SVC_WMAC1, PIPEDIR_OUT, 7, },
 	{ WMI_CONTROL_SVC_WMAC1, PIPEDIR_IN, 2, },
 	{ PACKET_LOG_SVC, PIPEDIR_IN, 5, },
+#ifdef WLAN_DIAG_AND_DBR_OVER_SEPARATE_CE
 	{ WMI_CONTROL_DIAG_SVC, PIPEDIR_IN, 14, },
 	{ WMI_CONTROL_DBR_SVC, PIPEDIR_IN, 14, },
+#else
+	{ WMI_CONTROL_DIAG_SVC, PIPEDIR_IN, 2, },
+	{ WMI_CONTROL_DBR_SVC, PIPEDIR_IN, 2, },
+#endif
 	/* (Additions here) */
 	{ 0, 0, 0, },
 };
@@ -1583,6 +1591,12 @@ static bool ce_mark_datapath(struct CE_state *ce_state)
 static void ce_update_msi_batch_intr_flags(struct CE_state *ce_state)
 {
 }
+
+static inline void ce_update_wrt_idx_offset(struct hif_softc *scn,
+					    struct CE_state *ce_state,
+					    uint8_t ring_type)
+{
+}
 #else
 static bool ce_mark_datapath(struct CE_state *ce_state)
 {
@@ -1616,6 +1630,64 @@ static void ce_update_msi_batch_intr_flags(struct CE_state *ce_state)
 {
 	ce_state->msi_supported = true;
 	ce_state->batch_intr_supported = true;
+}
+
+static inline void ce_update_wrt_idx_offset(struct hif_softc *scn,
+					    struct CE_state *ce_state,
+					    uint8_t ring_type)
+{
+	if (ring_type == CE_RING_SRC)
+		ce_state->ce_wrt_idx_offset =
+			CE_SRC_WR_IDX_OFFSET_GET(scn, ce_state->ctrl_addr);
+	else if (ring_type == CE_RING_DEST)
+		ce_state->ce_wrt_idx_offset =
+			CE_DST_WR_IDX_OFFSET_GET(scn, ce_state->ctrl_addr);
+	else
+		QDF_BUG(0);
+}
+
+/*
+ * hif_ce_print_ring_stats() - Print ce ring statistics
+ *
+ * @hif_ctx: hif context
+ *
+ * Returns: None
+ */
+void hif_ce_print_ring_stats(struct hif_opaque_softc *hif_ctx)
+{
+	struct hif_softc *scn = HIF_GET_SOFTC(hif_ctx);
+	struct CE_state *ce_state;
+	int i;
+
+	for (i = 0; i < scn->ce_count; i++) {
+		ce_state = scn->ce_id_to_state[i];
+		if (!ce_state)
+			continue;
+
+		if (ce_state->src_ring) {
+			QDF_TRACE(QDF_MODULE_ID_HIF, QDF_TRACE_LEVEL_FATAL,
+				  "ce%d:SW: sw_index %u write_index %u",
+				  ce_state->src_ring->sw_index,
+				  ce_state->src_ring->write_index);
+
+			QDF_TRACE(QDF_MODULE_ID_HIF, QDF_TRACE_LEVEL_FATAL,
+				  "ce%d:HW: read_index %u write_index %u",
+				  CE_SRC_RING_READ_IDX_GET_FROM_REGISTER(scn, ce_state->ctrl_addr),
+				  CE_SRC_RING_WRITE_IDX_GET_FROM_REGISTER(scn, ce_state->ctrl_addr));
+		}
+
+		if (ce_state->dest_ring) {
+			QDF_TRACE(QDF_MODULE_ID_HIF, QDF_TRACE_LEVEL_FATAL,
+				  "ce%d:SW: sw_index %u write_index %u",
+				  ce_state->dest_ring->sw_index,
+				  ce_state->dest_ring->write_index);
+
+			QDF_TRACE(QDF_MODULE_ID_HIF, QDF_TRACE_LEVEL_FATAL,
+				  "ce%d:HW: read_index %u write_index %u",
+				  CE_DEST_RING_READ_IDX_GET_FROM_REGISTER(scn, ce_state->ctrl_addr),
+				  CE_DEST_RING_WRITE_IDX_GET_FROM_REGISTER(scn, ce_state->ctrl_addr));
+		}
+	}
 }
 #endif
 
@@ -2635,6 +2707,9 @@ struct CE_handle *ce_init(struct hif_softc *scn,
 		goto error_target_access;
 
 	ce_update_msi_batch_intr_flags(CE_state);
+	ce_update_wrt_idx_offset(scn, CE_state,
+				 attr->src_nentries ?
+				 CE_RING_SRC : CE_RING_DEST);
 
 	return (struct CE_handle *)CE_state;
 
@@ -3506,6 +3581,11 @@ QDF_STATUS hif_post_recv_buffers_for_pipe(struct HIF_CE_pipe_info *pipe_info)
 	}
 
 	ce_hdl = pipe_info->ce_hdl;
+	if (!ce_hdl) {
+		hif_err("ce_hdl is NULL");
+		return QDF_STATUS_E_INVAL;
+	}
+
 	ce_id = ((struct CE_state *)ce_hdl)->id;
 
 	qdf_spin_lock_bh(&pipe_info->recv_bufs_needed_lock);

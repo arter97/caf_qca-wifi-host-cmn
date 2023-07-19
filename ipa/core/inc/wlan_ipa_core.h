@@ -48,7 +48,7 @@ static inline bool wlan_ipa_uc_is_enabled(struct wlan_ipa_config *ipa_cfg)
 }
 
 /**
- * wlan_ipa_is_opt_wifi_dp_enabled() - Is IPA optional wifi dp enabled?
+ * wlan_ipa_is_opt_wifi_dp_enabled() - Is optional wifi dp enabled from WLAN
  * @ipa_cfg: IPA config
  *
  * Return: true if IPA opt wifi dp is enabled, false otherwise
@@ -628,29 +628,10 @@ void ipa_set_rps_per_vdev(struct wlan_ipa_priv *ipa_ctx, uint8_t vdev_id,
 		ipa_ctx->rps_enable(vdev_id, enable);
 }
 
-/**
- * wlan_ipa_handle_multiple_sap_evt() - Handle multiple SAP connect/disconnect
- * @ipa_ctx: IPA global context
- * @type: IPA event type.
- *
- * This function is used to disable pipes when multiple SAP are connected and
- * enable pipes back when only one SAP is connected.
- *
- * Return: None
- */
-void wlan_ipa_handle_multiple_sap_evt(struct wlan_ipa_priv *ipa_ctx,
-				      qdf_ipa_wlan_event type);
-
 #else
 static inline
 void ipa_set_rps_per_vdev(struct wlan_ipa_priv *ipa_ctx, uint8_t vdev_id,
 			  bool enable)
-{
-}
-
-static inline
-void wlan_ipa_handle_multiple_sap_evt(struct wlan_ipa_priv *ipa_ctx,
-				      qdf_ipa_wlan_event type)
 {
 }
 #endif

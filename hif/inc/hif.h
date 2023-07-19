@@ -2163,7 +2163,8 @@ int hif_force_wake_release(struct hif_opaque_softc *handle)
 }
 #endif /* FORCE_WAKE */
 
-#ifdef FEATURE_HAL_DELAYED_REG_WRITE
+#if defined(FEATURE_HAL_DELAYED_REG_WRITE) || \
+	defined(FEATURE_HIF_DELAYED_REG_WRITE)
 /**
  * hif_prevent_link_low_power_states() - Prevent from going to low power states
  * @hif: HIF opaque context
@@ -2507,6 +2508,25 @@ void hif_check_detection_latency(struct hif_softc *scn,
 				 bool from_timer,
 				 uint32_t bitmap_type);
 void hif_set_enable_detection(struct hif_opaque_softc *hif_ctx, bool value);
+
+/**
+ * hif_tasklet_latency_record_exec() - record execute time and
+ * check the latency
+ * @scn: HIF opaque context
+ * @idx: CE id
+ *
+ * Return: None
+ */
+void hif_tasklet_latency_record_exec(struct hif_softc *scn, int idx);
+
+/**
+ * hif_tasklet_latency_record_sched() - record schedule time of a tasklet
+ * @scn: HIF opaque context
+ * @idx: CE id
+ *
+ * Return: None
+ */
+void hif_tasklet_latency_record_sched(struct hif_softc *scn, int idx);
 #else
 static inline
 void hif_latency_detect_timer_start(struct hif_opaque_softc *hif_ctx)
@@ -2529,6 +2549,14 @@ void hif_check_detection_latency(struct hif_softc *scn,
 
 static inline
 void hif_set_enable_detection(struct hif_opaque_softc *hif_ctx, bool value)
+{}
+
+static inline
+void hif_tasklet_latency_record_exec(struct hif_softc *scn, int idx)
+{}
+
+static inline
+void hif_tasklet_latency_record_sched(struct hif_softc *scn, int idx)
 {}
 #endif
 
@@ -2907,4 +2935,19 @@ void hif_affinity_mgr_affine_irq(struct hif_softc *scn)
  * Return: None
  */
 void hif_affinity_mgr_set_affinity(struct hif_opaque_softc *scn);
+
+#ifdef FEATURE_HIF_DELAYED_REG_WRITE
+/**
+ * hif_print_reg_write_stats() - Print hif delayed reg write stats
+ * @hif_ctx: hif opaque handle
+ *
+ * Return: None
+ */
+void hif_print_reg_write_stats(struct hif_opaque_softc *hif_ctx);
+#else
+static inline void hif_print_reg_write_stats(struct hif_opaque_softc *hif_ctx)
+{
+}
+#endif
+void hif_ce_print_ring_stats(struct hif_opaque_softc *hif_ctx);
 #endif /* _HIF_H_ */

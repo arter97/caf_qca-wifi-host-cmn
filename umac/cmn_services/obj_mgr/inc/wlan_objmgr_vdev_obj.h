@@ -345,9 +345,11 @@ struct wlan_channel {
  *                      net dev address for non-ML connection
  * @mldaddr:            MLD address
  * @linkaddr:           Link MAC address
+ * @epcs_enable:        EPCS enable flag
  * @mlo_link_id: link id for mlo connection
  * @mlo_external_sae_auth: MLO external SAE auth
  * @wlan_vdev_mlo_lock: lock to protect the set/clear of
+ * @skip_pumac_cnt: Counter to skip vdev to be selected as pumac
  * WLAN_VDEV_FEXT2_MLO feature flag in vdev MLME
  */
 struct wlan_objmgr_vdev_mlme {
@@ -366,12 +368,16 @@ struct wlan_objmgr_vdev_mlme {
 	uint8_t  mldaddr[QDF_MAC_ADDR_SIZE];
 	uint8_t  linkaddr[QDF_MAC_ADDR_SIZE];
 #ifdef WLAN_FEATURE_11BE_MLO
+	bool epcs_enable;
 	uint8_t  mlo_link_id;
 	bool mlo_external_sae_auth;
 #ifdef WLAN_MLO_USE_SPINLOCK
 	qdf_spinlock_t wlan_vdev_mlo_lock;
 #else
 	qdf_mutex_t wlan_vdev_mlo_lock;
+#endif
+#ifdef QCA_SUPPORT_PRIMARY_LINK_MIGRATE
+	qdf_atomic_t skip_pumac_cnt;
 #endif
 #endif
 };
@@ -1662,6 +1668,23 @@ static inline bool wlan_vdev_mlme_is_mlo_ap(struct wlan_objmgr_vdev *vdev)
 }
 
 /**
+ * wlan_vdev_mlme_set_epcs_flag() - Set epcs flag for vdev
+ * @vdev: VDEV object
+ * @flag: True or Flase
+ *
+ * Return: void
+ */
+void wlan_vdev_mlme_set_epcs_flag(struct wlan_objmgr_vdev *vdev, bool flag);
+
+/**
+ * wlan_vdev_mlme_get_epcs_flag() - Get epcs flag for vdev
+ * @vdev: VDEV object
+ *
+ * Return: bool
+ */
+bool wlan_vdev_mlme_get_epcs_flag(struct wlan_objmgr_vdev *vdev);
+
+/**
  * wlan_vdev_mlme_set_mlo_vdev() - Set vdev as an MLO vdev
  * @vdev: VDEV object
  *
@@ -2234,5 +2257,81 @@ static inline bool wlan_mlo_peer_delete_is_not_allowed(
 	return wlan_vdev_mlme_op_flags_get(vdev,
 				WLAN_VDEV_OP_MLME_LEGACY_PEER_DISCON_TRIG);
 }
+
+#ifdef QCA_SUPPORT_PRIMARY_LINK_MIGRATE
+/**
+ * wlan_vdev_init_skip_pumac_cnt() - init skip_pumac_cnt
+ * @vdev: VDEV object
+ *
+ * API to initialize skip_pumac_cnt
+ *
+ * Return: void
+ */
+static inline void
+wlan_vdev_init_skip_pumac_cnt(struct wlan_objmgr_vdev *vdev)
+{
+	qdf_atomic_init(&vdev->vdev_mlme.skip_pumac_cnt);
+}
+
+/**
+ * wlan_vdev_inc_skip_pumac_cnt() - inc skip_pumac_cnt
+ * @vdev: VDEV object
+ *
+ * API to increment skip_pumac_cnt
+ *
+ * Return: void
+ */
+static inline void
+wlan_vdev_inc_skip_pumac_cnt(struct wlan_objmgr_vdev *vdev)
+{
+	qdf_atomic_inc(&vdev->vdev_mlme.skip_pumac_cnt);
+}
+
+/**
+ * wlan_vdev_dec_skip_pumac_cnt() - dec skip_pumac_cnt
+ * @vdev: VDEV object
+ *
+ * API to decrement skip_pumac_cnt
+ *
+ * Return: void
+ */
+static inline void
+wlan_vdev_dec_skip_pumac_cnt(struct wlan_objmgr_vdev *vdev)
+{
+	qdf_atomic_dec(&vdev->vdev_mlme.skip_pumac_cnt);
+}
+
+/**
+ * wlan_vdev_read_skip_pumac_cnt() - read skip_pumac_cnt
+ * @vdev: VDEV object
+ *
+ * API to read skip_pumac_cnt value
+ *
+ * Return: skip_pumac_cnt value
+ */
+static inline int32_t
+wlan_vdev_read_skip_pumac_cnt(struct wlan_objmgr_vdev *vdev)
+{
+	return qdf_atomic_read(&vdev->vdev_mlme.skip_pumac_cnt);
+}
+#else
+static inline void
+wlan_vdev_init_skip_pumac_cnt(struct wlan_objmgr_vdev *vdev)
+{ }
+
+static inline void
+wlan_vdev_inc_skip_pumac_cnt(struct wlan_objmgr_vdev *vdev)
+{ }
+
+static inline void
+wlan_vdev_dec_skip_pumac_cnt(struct wlan_objmgr_vdev *vdev)
+{ }
+
+static inline int32_t
+wlan_vdev_read_skip_pumac_cnt(struct wlan_objmgr_vdev *vdev)
+{
+	return 0;
+}
+#endif
 
 #endif /* _WLAN_OBJMGR_VDEV_OBJ_H_*/

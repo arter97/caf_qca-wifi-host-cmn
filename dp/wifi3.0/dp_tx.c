@@ -404,6 +404,8 @@ dp_tx_desc_release(struct dp_soc *soc, struct dp_tx_desc_s *tx_desc,
 					  tx_desc->msdu_ext_desc->me_buffer);
 
 		dp_tx_ext_desc_free(soc, tx_desc->msdu_ext_desc, desc_pool_id);
+
+		tx_desc->msdu_ext_desc = NULL;
 	}
 
 	if (tx_desc->flags & DP_TX_DESC_FLAG_TO_FW)
@@ -2125,8 +2127,10 @@ void dp_tx_nbuf_unmap(struct dp_soc *soc,
 static inline
 void dp_tx_enh_unmap(struct dp_soc *soc, struct dp_tx_desc_s *desc)
 {
-	dp_tx_nbuf_unmap(soc, desc);
-	desc->flags |= DP_TX_DESC_FLAG_UNMAP_DONE;
+	if (qdf_likely(!(desc->flags & DP_TX_DESC_FLAG_UNMAP_DONE))) {
+		dp_tx_nbuf_unmap(soc, desc);
+		desc->flags |= DP_TX_DESC_FLAG_UNMAP_DONE;
+	}
 }
 
 static inline void dp_tx_unmap(struct dp_soc *soc, struct dp_tx_desc_s *desc)
@@ -3387,6 +3391,8 @@ dp_tx_send_exception(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
 	 *  to minimize lock contention for these resources.
 	 */
 	dp_tx_get_queue(vdev, nbuf, &msdu_info.tx_queue);
+	DP_STATS_INC(vdev, tx_i.rcvd_per_core[msdu_info.tx_queue.desc_pool_id],
+		     1);
 
 	/*
 	 * if the packet is mcast packet send through mlo_macst handler
@@ -4990,7 +4996,7 @@ dp_tx_comp_process_desc(struct dp_soc *soc,
 		qdf_trace_dp_packet(desc->nbuf, QDF_TX,
 				    desc->msdu_ext_desc ?
 				    desc->msdu_ext_desc->tso_desc : NULL,
-				    qdf_ktime_to_ms(desc->timestamp));
+				    qdf_ktime_to_us(desc->timestamp));
 
 	if (!(desc->msdu_ext_desc)) {
 		dp_tx_enh_unmap(soc, desc);

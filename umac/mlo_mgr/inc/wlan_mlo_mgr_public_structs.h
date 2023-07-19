@@ -56,6 +56,7 @@
 struct mlo_mlme_ext_ops;
 struct vdev_mlme_obj;
 struct wlan_t2lm_context;
+struct mlo_link_switch_context;
 
 /* Max LINK PEER support */
 #define MAX_MLO_LINK_PEERS WLAN_UMAC_MLO_MAX_VDEVS
@@ -75,6 +76,9 @@ struct wlan_t2lm_context;
 #define STA_CTRL_2 3
 #define STA_PROFILE_SUB_ELEM_ID 0
 #define PER_STA_PROF_MAC_ADDR_START 4
+
+/* MLO link id max value */
+#define MAX_MLO_LINK_ID 15
 
 #ifdef WLAN_MLO_MULTI_CHIP
 
@@ -205,6 +209,7 @@ struct mlo_state_params {
  * @msgq_ctx: Context switch mgr
  * @mlo_is_force_primary_umac: Force Primary UMAC enable
  * @mlo_forced_primary_umac_id: Force Primary UMAC ID
+ * @force_non_assoc_prim_umac: Force non-assoc link to be primary umac
  *
  * NB: not using kernel-doc format since the kernel-doc script doesn't
  *     handle the qdf_bitmap() macro
@@ -231,6 +236,7 @@ struct mlo_mgr_context {
 	struct ctxt_switch_mgr *msgq_ctx;
 	bool mlo_is_force_primary_umac;
 	uint8_t mlo_forced_primary_umac_id;
+	bool force_non_assoc_prim_umac;
 };
 
 /*
@@ -366,6 +372,33 @@ struct mlo_sta_quiet_status {
 	bool valid_status;
 };
 
+/**
+ * struct ml_link_force_state - link force state.
+ * @force_active_bitmap: force active link bitmap
+ * @force_inactive_bitmap: force inactive link bitmap
+ * @force_active_num: force active link num
+ * @force_active_num_bitmap: force active num link bitmap
+ * @force_inactive_num: force inactive link num
+ * @force_inactive_num_bitmap: force inactive num link bitmap
+ */
+struct ml_link_force_state {
+	uint16_t force_active_bitmap;
+	uint16_t force_inactive_bitmap;
+	uint8_t force_active_num;
+	uint16_t force_active_num_bitmap;
+	uint8_t force_inactive_num;
+	uint16_t force_inactive_num_bitmap;
+};
+
+/**
+ * struct wlan_link_force_context - link force ctx.
+ * @force_state: current force active/inactive states which
+ * have been sent to target
+ */
+struct wlan_link_force_context {
+	struct ml_link_force_state force_state;
+};
+
 /*
  * struct wlan_mlo_sta - MLO sta additional info
  * @wlan_connect_req_links: list of vdevs selected for connection with the MLAP
@@ -386,6 +419,7 @@ struct mlo_sta_quiet_status {
  * NB: not using kernel-doc format since the kernel-doc script doesn't
  *     handle the qdf_bitmap() macro
  * @copied_t2lm_ie_assoc_rsp: copy of t2lm ie received in assoc response
+ * @link_force_ctx: set link force mode context
  */
 struct wlan_mlo_sta {
 	qdf_bitmap(wlan_connect_req_links, WLAN_UMAC_MLO_MAX_VDEVS);
@@ -409,6 +443,9 @@ struct wlan_mlo_sta {
 #ifdef WLAN_FEATURE_11BE_MLO
 	struct ml_link_state_cmd_info ml_link_state;
 	struct wlan_t2lm_context copied_t2lm_ie_assoc_rsp;
+#endif
+#ifdef WLAN_FEATURE_11BE_MLO_ADV_FEATURE
+	struct wlan_link_force_context link_force_ctx;
 #endif
 };
 
@@ -450,6 +487,73 @@ struct wlan_mlo_peer_list {
 };
 
 /**
+ * struct mlo_vdev_link_mac_info - VDEV to link address map
+ * @vdev_id: Vdev Id with which this link mac address is associated:
+ * @link_mac_addr: link specific mac address
+ */
+struct mlo_vdev_link_mac_info {
+	uint8_t vdev_id;
+	struct qdf_mac_addr link_mac_addr;
+};
+
+#if defined(UMAC_SUPPORT_MLNAWDS) || defined(MESH_MODE_SUPPORT)
+/**
+ * struct mlnawds_config - MLO NAWDS configuration
+ * @caps: Bandwidth & NSS capabilities to be configured on NAWDS peer
+ * @puncture_bitmap: puncture bitmap to be configured on NAWDS peer
+ * @mac: MAC address of the NAWDS peer to which the caps & puncture bitmap is
+ * to be configured.
+ */
+struct mlnawds_config {
+	uint64_t caps;
+	uint16_t puncture_bitmap;
+	uint8_t  mac[QDF_MAC_ADDR_SIZE];
+};
+#endif
+
+/**
+ * struct mlo_link_info - ML link info
+ * @link_addr: link mac address
+ * @link_id: link index
+ * @is_bridge : Bridge peer or not
+ * @chan_freq: Operating channel frequency
+ * @nawds_config: peer's NAWDS configurarion
+ * @vdev_id: VDEV ID
+ * @mesh_config: peer's MESH configurarion
+ * @link_status_flags: Current status of link
+ * @ap_link_addr: Associated link BSSID
+ * @link_chan_info: Associated link channel info
+ */
+struct mlo_link_info {
+	struct qdf_mac_addr link_addr;
+	uint8_t link_id;
+	bool is_bridge;
+	uint16_t chan_freq;
+#ifdef UMAC_SUPPORT_MLNAWDS
+	struct mlnawds_config nawds_config;
+#endif
+	uint8_t vdev_id;
+#ifdef MESH_MODE_SUPPORT
+	struct mlnawds_config mesh_config;
+#endif
+#ifdef WLAN_FEATURE_11BE_MLO_ADV_FEATURE
+	uint8_t link_status_flags;
+	struct qdf_mac_addr ap_link_addr;
+	struct wlan_channel *link_chan_info;
+#endif
+};
+
+/**
+ * struct wlan_mlo_link_mac_update: VDEV to link MAC address list
+ * @num_mac_update: Number of mac address
+ * @link_mac_info: Each VDEV to link mac address mapping
+ */
+struct wlan_mlo_link_mac_update {
+	int num_mac_update;
+	struct mlo_vdev_link_mac_info link_mac_info[3];
+};
+
+/**
  * struct wlan_mlo_dev_context - MLO device context
  * @node: QDF list node member
  * @mld_id: MLD id
@@ -466,6 +570,13 @@ struct wlan_mlo_peer_list {
  * @ap_ctx: AP related information
  * @t2lm_ctx: T2LM related information
  * @epcs_ctx: EPCS related information
+ * @ptqm_migrate_timer: timer for ptqm migration
+ * @mlo_peer_id_bmap: mlo_peer_id bitmap for ptqm migration
+ * @MAX_MLO_PEER_ID: Max mlo peer ID supported
+ *
+ * NB: Not using kernel-doc format since the kernel-doc script doesn't
+ *     handle the qdf_bitmap() macro
+ * @link_ctx: link related information
  */
 struct wlan_mlo_dev_context {
 	qdf_list_node_t node;
@@ -488,6 +599,11 @@ struct wlan_mlo_dev_context {
 	struct wlan_mlo_ap *ap_ctx;
 	struct wlan_t2lm_context t2lm_ctx;
 	struct wlan_epcs_context epcs_ctx;
+#ifdef QCA_SUPPORT_PRIMARY_LINK_MIGRATE
+	qdf_timer_t ptqm_migrate_timer;
+	qdf_bitmap(mlo_peer_id_bmap, MAX_MLO_PEER_ID);
+#endif
+	struct mlo_link_switch_context *link_ctx;
 };
 
 /**
@@ -521,21 +637,6 @@ enum mlo_peer_state {
 	ML_PEER_ASSOC_DONE,
 	ML_PEER_DISCONN_INITIATED,
 };
-
-#if defined(UMAC_SUPPORT_MLNAWDS) || defined(MESH_MODE_SUPPORT)
-/**
- * struct mlnawds_config - MLO NAWDS configuration
- * @caps: Bandwidth & NSS capabilities to be configured on NAWDS peer
- * @puncture_bitmap: puncture bitmap to be configured on NAWDS peer
- * @mac: MAC address of the NAWDS peer to which the caps & puncture bitmap is
- * to be configured.
- */
-struct mlnawds_config {
-	uint64_t caps;
-	uint16_t puncture_bitmap;
-	uint8_t  mac[QDF_MAC_ADDR_SIZE];
-};
-#endif
 
 /**
  * struct mlpeer_auth_params - Deferred Auth params
@@ -617,6 +718,20 @@ struct wlan_mlo_mld_cap {
 };
 
 /**
+ * struct mlo_nstr_info - MLO NSTR capability info
+ * @link_id: Lind Id
+ * @nstr_lp_present: Flag for NSTR link pair presence
+ * @nstr_bmp_size: NSTR Bitmap Size
+ * @nstr_lp_bitmap: NSTR link pair bitmap of link_id
+ */
+struct mlo_nstr_info {
+	uint8_t link_id;
+	bool nstr_lp_present;
+	uint8_t nstr_bmp_size;
+	uint16_t nstr_lp_bitmap;
+};
+
+/**
  * struct wlan_mlo_peer_context - MLO peer context
  *
  * @peer_node:     peer list node for ml_dev qdf list
@@ -645,6 +760,11 @@ struct wlan_mlo_mld_cap {
  * @is_mesh_ml_peer: flag to indicate if ml_peer is MESH configured
  * @mesh_config: eack link peer's MESH configuration
  * @mlpeer_mldcap: MLD Capability information for ML peer
+ * @mlpeer_nstrinfo: NSTR Capability info
+ * @migrate_primary_umac_psoc_id: primary umac psoc id selected for umac
+ * migration
+ * @primary_umac_migration_in_progress: flag to indicate primary umac migration
+ * in progress
  */
 struct wlan_mlo_peer_context {
 	qdf_list_node_t peer_node;
@@ -685,30 +805,9 @@ struct wlan_mlo_peer_context {
 	struct mlnawds_config mesh_config[MAX_MLO_LINK_PEERS];
 #endif
 	struct wlan_mlo_mld_cap mlpeer_mldcap;
-};
-
-/**
- * struct mlo_link_info - ML link info
- * @link_addr: link mac address
- * @link_id: link index
- * @is_bridge : Bridge peer or not
- * @chan_freq: Operating channel frequency
- * @nawds_config: peer's NAWDS configurarion
- * @vdev_id: VDEV ID
- * @mesh_config: peer's MESH configurarion
- */
-struct mlo_link_info {
-	struct qdf_mac_addr link_addr;
-	uint8_t link_id;
-	bool is_bridge;
-	uint16_t chan_freq;
-#ifdef UMAC_SUPPORT_MLNAWDS
-	struct mlnawds_config nawds_config;
-#endif
-	uint8_t vdev_id;
-#ifdef MESH_MODE_SUPPORT
-	struct mlnawds_config mesh_config;
-#endif
+	struct mlo_nstr_info mlpeer_nstrinfo[WLAN_UMAC_MLO_MAX_VDEVS];
+	uint8_t migrate_primary_umac_psoc_id;
+	bool primary_umac_migration_in_progress;
 };
 
 /**
@@ -716,12 +815,16 @@ struct mlo_link_info {
  * @num_partner_links: no. of partner links
  * @partner_link_info: per partner link info
  * @t2lm_enable_val: enum wlan_t2lm_enable
+ * @nstr_info: NSTR Capability info
+ * @num_nstr_info_links: No. of links for which NSTR info is present
  */
 struct mlo_partner_info {
 	uint8_t num_partner_links;
 	struct mlo_link_info partner_link_info[WLAN_UMAC_MLO_MAX_VDEVS];
 #ifdef WLAN_FEATURE_11BE
 	enum wlan_t2lm_enable t2lm_enable_val;
+	struct mlo_nstr_info nstr_info[WLAN_UMAC_MLO_MAX_VDEVS];
+	uint8_t num_nstr_info_links;
 #endif
 };
 
@@ -924,6 +1027,11 @@ enum mlo_link_force_reason {
  * @active: current active vdev bitmap array
  * @inactive_sz: size of current inactive vdev bitmap array
  * @inactive: current inactive vdev bitmap array
+ * @use_ieee_link_id: link id is valid in active_linkid_bitmap or
+ *	inactive_linkid_bitmap
+ * @ap_mld_mac_addr: AP MLD mac address
+ * @active_linkid_bitmap: current active link id bitmap
+ * @inactive_linkid_bitmap: current inactive link id bitmap
  */
 struct mlo_link_set_active_resp {
 	uint32_t status;
@@ -931,6 +1039,10 @@ struct mlo_link_set_active_resp {
 	uint32_t active[MLO_VDEV_BITMAP_SZ];
 	uint32_t inactive_sz;
 	uint32_t inactive[MLO_VDEV_BITMAP_SZ];
+	bool use_ieee_link_id;
+	struct qdf_mac_addr  ap_mld_mac_addr;
+	uint32_t active_linkid_bitmap;
+	uint32_t inactive_linkid_bitmap;
 };
 
 /**
@@ -945,6 +1057,41 @@ struct mlo_link_num_param {
 	uint32_t vdev_type;
 	uint32_t vdev_subtype;
 	uint32_t home_freq;
+};
+
+/*
+ * struct mlo_control_flags: This structure is used for setting
+ * wmi_mlo_control_flags.
+ * @overwrite_force_active_bitmap: indicate overwrite all earlier force_active
+ * bitmaps
+ * @overwrite_force_inactive_bitmap: indicate overwrite all earlier
+ * force_inactive bitmaps
+ * @dynamic_force_link_num: indicate fw to use force link number instead of
+ * force link bitmaps
+ */
+struct mlo_control_flags {
+	bool overwrite_force_active_bitmap;
+	bool overwrite_force_inactive_bitmap;
+	bool dynamic_force_link_num;
+};
+
+/* struct ml_link_force_cmd - force command for links
+ * @ap_mld_mac_addr: AP mld mac address
+ * @ieee_link_id_bitmap: link id bitmap
+ * valid for WMI_MLO_LINK_FORCE_ACTIVE, WMI_MLO_LINK_FORCE_INACTIVE,
+ * WMI_MLO_LINK_NO_FORCE, WMI_MLO_LINK_FORCE_ACTIVE_LINK_NUM,
+ * WMI_MLO_LINK_FORCE_INACTIVE_LINK_NUM.
+ * @ieee_link_id_bitmap2: link id bitmap, only valid for
+ * WMI_MLO_LINK_FORCE_ACTIVE_INACTIVE carry the inactive linkid bitmap
+ * @link_num: link num
+ * only valid on WMI_MLO_LINK_FORCE_ACTIVE_LINK_NUM or
+ * WMI_MLO_LINK_FORCE_INACTIVE_LINK_NUM
+ */
+struct ml_link_force_cmd {
+	struct qdf_mac_addr ap_mld_mac_addr;
+	uint16_t ieee_link_id_bitmap;
+	uint16_t ieee_link_id_bitmap2;
+	uint8_t link_num;
 };
 
 /**
@@ -968,6 +1115,11 @@ struct mlo_link_num_param {
  * @inactive_vdev_bitmap: inactive vdev bitmap array
  *  It will be present when force_mode is MLO_LINK_FORCE_MODE_ACTIVE_INACTIVE,
  *  it includes the inactive vdev bitmaps
+ * @control_flags: This structure is used for setting wmi_mlo_control_flags.
+ * @use_ieee_link_id: send link id bitmap to target.
+ *  If this value is true, the "force_cmd" field should be provided and
+ *  that will be sent to target
+ * @force_cmd: force command which includes link id bitmap
  */
 struct mlo_link_set_active_param {
 	uint32_t force_mode;
@@ -978,6 +1130,9 @@ struct mlo_link_set_active_param {
 	struct mlo_link_num_param link_num[MLO_LINK_NUM_SZ];
 	uint32_t vdev_bitmap[MLO_VDEV_BITMAP_SZ];
 	uint32_t inactive_vdev_bitmap[MLO_VDEV_BITMAP_SZ];
+	struct mlo_control_flags control_flags;
+	bool use_ieee_link_id;
+	struct ml_link_force_cmd force_cmd;
 };
 
 /**
@@ -1106,4 +1261,89 @@ struct mlo_link_disable_request_evt_params {
 	struct qdf_mac_addr mld_addr;
 	uint32_t link_id_bitmap;
 };
+
+#ifdef QCA_SUPPORT_PRIMARY_LINK_MIGRATE
+/**
+ * struct peer_ptqm_migrate_entry - peer ptqm migrate entry
+ * @ml_peer_id: ML peer id
+ * @hw_link_id: HW link id
+ */
+struct peer_ptqm_migrate_entry {
+	uint16_t ml_peer_id;
+	uint16_t hw_link_id;
+};
+
+/**
+ * struct peer_ptqm_migrate_params - peer ptqm migrate request parameter
+ * @vdev_id: vdev id
+ * @num_peers: peer count
+ * @num_peers_failed: number of peers for which wmi cmd is failed.
+ * This value is expected to be used only in case failure is returned by WMI
+ * @peer_list: list of peers to be migrated
+ */
+struct peer_ptqm_migrate_params {
+	uint8_t vdev_id;
+	uint16_t num_peers;
+	uint16_t num_peers_failed;
+	struct peer_ptqm_migrate_entry *peer_list;
+};
+
+/**
+ * struct peer_ptqm_migrate_list_entry - peer ptqm migrate list
+ * @node: QDF list node member
+ * @peer: objmgr peer object
+ * @mlo_peer_id: mlo peer id
+ * @new_hw_link_id: hw link id of new primary
+ */
+struct peer_ptqm_migrate_list_entry {
+	qdf_list_node_t node;
+	struct wlan_objmgr_peer *peer;
+	uint32_t mlo_peer_id;
+	uint8_t new_hw_link_id;
+};
+
+/**
+ * struct peer_migrate_ptqm_multi_entries - multi ptqm migrate peer entry params
+ * @num_entries: Number of entries in the peer_list list
+ * @peer_list: List to hold the peer entries to be migrated
+ *
+ */
+struct peer_migrate_ptqm_multi_entries {
+	uint16_t num_entries;
+	qdf_list_t peer_list;
+};
+
+enum primary_link_peer_migration_evenr_status {
+	PRIMARY_LINK_PEER_MIGRATION_SUCCESS,
+	PRIMARY_LINK_PEER_MIGRATION_IN_PROGRESS,
+	PRIMARY_LINK_PEER_MIGRATION_DELETE_IN_PROGRESS,
+	PRIMARY_LINK_PEER_MIGRATION_DELETED,
+	PRIMARY_LINK_PEER_MIGRATION_TX_PIPES_FAILED,
+	PRIMARY_LINK_PEER_MIGRATION_RX_PIPES_FAILED,
+
+	/* Add any new status above this line */
+	PRIMARY_LINK_PEER_MIGRATION_FAIL = 255,
+};
+
+/**
+ * struct peer_ptqm_migrate_event_params - peer ptqm migrate event parameter
+ * @vdev_id: vdev id
+ * @num_peers: peer count
+ */
+struct peer_ptqm_migrate_event_params {
+	uint8_t vdev_id;
+	uint16_t num_peers;
+};
+
+/**
+ * struct peer_entry_ptqm_migrate_event_params - peer entry ptqm migrate
+ * event parameter
+ * @ml_peer_id: ML peer id
+ * @status: migration status
+ */
+struct peer_entry_ptqm_migrate_event_params {
+	uint16_t ml_peer_id;
+	enum primary_link_peer_migration_evenr_status status;
+};
+#endif /* QCA_SUPPORT_PRIMARY_LINK_MIGRATE */
 #endif

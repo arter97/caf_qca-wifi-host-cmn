@@ -67,7 +67,7 @@ target_if_mlo_link_set_active_resp_handler(ol_scn_t scn, uint8_t *data,
 		target_if_err("wmi_handle is null");
 		return -EINVAL;
 	}
-
+	qdf_mem_zero(&resp, sizeof(resp));
 	if (wmi_extract_mlo_link_set_active_resp(wmi_handle, data, &resp) !=
 	    QDF_STATUS_SUCCESS) {
 		target_if_err("Unable to extract mlo link set active resp");
@@ -298,9 +298,12 @@ target_if_mlo_register_event_handler(struct wlan_objmgr_psoc *psoc)
 			wmi_handle,
 			wmi_mlo_link_disable_request_eventid,
 			target_if_mlo_link_disable_request_event_handler);
-	if (QDF_IS_STATUS_ERROR(status))
-		target_if_err("Couldn't register handler for Link removal WMI event %d",
+	if (QDF_IS_STATUS_ERROR(status)) {
+		target_if_err("Couldn't register handler for link disable request WMI event %d",
 			      status);
+		if (status ==  QDF_STATUS_E_NOSUPPORT)
+			status = QDF_STATUS_SUCCESS;
+	}
 
 	return status;
 }
@@ -650,6 +653,52 @@ QDF_STATUS target_if_mlo_send_vdev_pause(struct wlan_objmgr_psoc *psoc,
 	return wmi_send_mlo_vdev_pause(wmi_handle, info);
 }
 
+#ifdef QCA_SUPPORT_PRIMARY_LINK_MIGRATE
+static QDF_STATUS target_if_mlo_send_peer_ptqm_migrate_cmd(
+					struct wlan_objmgr_vdev *vdev,
+					struct peer_ptqm_migrate_params *param)
+{
+	struct wlan_objmgr_pdev *pdev = NULL;
+	struct wmi_unified *wmi_handle;
+	QDF_STATUS status;
+
+	if (!vdev || !param) {
+		target_if_err("Invalid input");
+		return QDF_STATUS_E_INVAL;
+	}
+
+	pdev = wlan_vdev_get_pdev(vdev);
+	if (!pdev) {
+		target_if_err("null pdev");
+		return QDF_STATUS_E_NULL_VALUE;
+	}
+
+	wmi_handle = lmac_get_pdev_wmi_handle(pdev);
+	if (!wmi_handle) {
+		target_if_err("Failed to get WMI handle!");
+		return QDF_STATUS_E_INVAL;
+	}
+
+	status = wmi_unified_peer_ptqm_migrate_send(wmi_handle, param);
+	if (QDF_IS_STATUS_ERROR(status))
+		target_if_err("Failed to send peer ptqm migration WMI");
+
+	return status;
+}
+
+static void target_if_mlo_register_peer_ptqm_migrate_send(
+		struct wlan_lmac_if_mlo_tx_ops *mlo_tx_ops)
+{
+	mlo_tx_ops->peer_ptqm_migrate_send =
+				target_if_mlo_send_peer_ptqm_migrate_cmd;
+}
+#else
+static void target_if_mlo_register_peer_ptqm_migrate_send(
+		struct wlan_lmac_if_mlo_tx_ops *mlo_tx_ops)
+{
+}
+#endif
+
 /**
  * target_if_mlo_register_tx_ops() - lmac handler to register mlo tx ops
  *  callback functions
@@ -685,6 +734,7 @@ target_if_mlo_register_tx_ops(struct wlan_lmac_if_tx_ops *tx_ops)
 		target_if_request_ml_link_state_info;
 	mlo_tx_ops->send_vdev_pause = target_if_mlo_send_vdev_pause;
 
+	target_if_mlo_register_peer_ptqm_migrate_send(mlo_tx_ops);
 	return QDF_STATUS_SUCCESS;
 }
 

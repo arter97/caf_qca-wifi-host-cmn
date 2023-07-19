@@ -1245,6 +1245,8 @@ dp_rx_mon_flush_packet_tlv(struct dp_pdev *pdev, void *buf, uint16_t end_offset,
 {
 	struct dp_soc *soc = pdev->soc;
 	struct dp_mon_pdev *mon_pdev = pdev->monitor_pdev;
+	struct dp_mon_pdev_be *mon_pdev_be =
+			dp_get_be_mon_pdev_from_dp_mon_pdev(mon_pdev);
 	struct dp_mon_soc *mon_soc = soc->monitor_soc;
 	uint16_t work_done = 0;
 	qdf_frag_t addr;
@@ -1275,6 +1277,23 @@ dp_rx_mon_flush_packet_tlv(struct dp_pdev *pdev, void *buf, uint16_t end_offset,
 			struct dp_mon_desc *mon_desc = (struct dp_mon_desc *)(uintptr_t)ppdu_info->packet_info.sw_cookie;
 
 			qdf_assert_always(mon_desc);
+
+			/* WAR: sometimes duplicate pkt desc are received
+			 * from HW, this check gracefully handles
+			 * such cases.
+			 */
+			if ((mon_desc == mon_pdev_be->prev_rxmon_pkt_desc) &&
+			    (mon_desc->cookie ==
+			     mon_pdev_be->prev_rxmon_pkt_cookie)) {
+				dp_mon_err("duplicate pkt desc found mon_pdev: %pK mon_desc: %pK cookie: %d",
+					   mon_pdev, mon_desc,
+					   mon_desc->cookie);
+				mon_pdev->rx_mon_stats.dup_mon_buf_cnt++;
+				goto end;
+			}
+			mon_pdev_be->prev_rxmon_pkt_desc = mon_desc;
+			mon_pdev_be->prev_rxmon_pkt_cookie = mon_desc->cookie;
+
 			addr = mon_desc->buf_addr;
 
 			if (!mon_desc->unmapped) {
@@ -1293,6 +1312,7 @@ dp_rx_mon_flush_packet_tlv(struct dp_pdev *pdev, void *buf, uint16_t end_offset,
 			}
 		}
 
+end:
 		rx_tlv = hal_rx_status_get_next_tlv(rx_tlv, 1);
 
 		if ((rx_tlv - rx_tlv_start) >= (end_offset + 1))
@@ -1363,6 +1383,8 @@ dp_rx_mon_flush_status_buf_queue(struct dp_pdev *pdev)
 		qdf_frag_free(buf);
 		DP_STATS_INC(mon_soc, frag_free, 1);
 	}
+	mon_pdev_be->prev_rxmon_pkt_desc = NULL;
+	mon_pdev_be->prev_rxmon_pkt_cookie = 0;
 
 	if (work_done) {
 		mon_pdev->rx_mon_stats.mon_rx_bufs_replenished_dest +=
@@ -1386,6 +1408,9 @@ dp_rx_mon_handle_flush_n_trucated_ppdu(struct dp_soc *soc,
 				       struct dp_pdev *pdev,
 				       struct dp_mon_desc *mon_desc)
 {
+	struct dp_mon_pdev *mon_pdev = pdev->monitor_pdev;
+	struct dp_mon_pdev_be *mon_pdev_be =
+			dp_get_be_mon_pdev_from_dp_mon_pdev(mon_pdev);
 	union dp_mon_desc_list_elem_t *desc_list = NULL;
 	union dp_mon_desc_list_elem_t *tail = NULL;
 	struct dp_mon_soc *mon_soc = soc->monitor_soc;
@@ -1408,6 +1433,10 @@ dp_rx_mon_handle_flush_n_trucated_ppdu(struct dp_soc *soc,
 		qdf_frag_free(buf);
 		DP_STATS_INC(mon_soc, frag_free, 1);
 	}
+
+	mon_pdev_be->prev_rxmon_desc = NULL;
+	mon_pdev_be->prev_rxmon_cookie = 0;
+
 	if (desc_list)
 		dp_mon_add_desc_list_to_free_list(soc, &desc_list, &tail,
 						  rx_mon_desc_pool);
@@ -1443,12 +1472,15 @@ uint8_t dp_rx_mon_process_tlv_status(struct dp_pdev *pdev,
 	struct dp_soc *soc  = pdev->soc;
 	struct dp_mon_soc *mon_soc = soc->monitor_soc;
 	struct dp_mon_pdev *mon_pdev = pdev->monitor_pdev;
+	struct dp_mon_pdev_be *mon_pdev_be =
+			dp_get_be_mon_pdev_from_dp_mon_pdev(mon_pdev);
 	qdf_nbuf_t nbuf, tmp_nbuf;
 	qdf_frag_t addr;
 	uint8_t user_id = ppdu_info->user_id;
 	uint8_t mpdu_idx = ppdu_info->mpdu_count[user_id];
 	uint16_t num_frags;
 	uint8_t num_buf_reaped = 0;
+	bool rx_hdr_valid = true;
 	QDF_STATUS status;
 
 	if (!mon_pdev->monitor_configured &&
@@ -1456,8 +1488,23 @@ uint8_t dp_rx_mon_process_tlv_status(struct dp_pdev *pdev,
 		return num_buf_reaped;
 	}
 
+	/* If user id or rx header len is invalid drop this
+	 * mpdu. However we have to honor buffer address TLV
+	 * for this mpdu to free any associated packet buffer
+	 */
+	if (qdf_unlikely(user_id >= HAL_MAX_UL_MU_USERS ||
+			 ppdu_info->hdr_len > DP_RX_MON_MAX_RX_HEADER_LEN))
+		rx_hdr_valid = false;
+
 	switch (tlv_status) {
 	case HAL_TLV_STATUS_HEADER: {
+		if (qdf_unlikely(!rx_hdr_valid)) {
+			dp_mon_debug("rx hdr invalid userid: %d, len: %d ",
+				     user_id, ppdu_info->hdr_len);
+			mon_pdev->rx_mon_stats.rx_hdr_invalid_cnt++;
+			return num_buf_reaped;
+		}
+
 		/* If this is first RX_HEADER for MPDU, allocate skb
 		 * else add frag to already allocated skb
 		 */
@@ -1553,10 +1600,25 @@ uint8_t dp_rx_mon_process_tlv_status(struct dp_pdev *pdev,
 		if (mon_desc->magic != DP_MON_DESC_MAGIC)
 			qdf_assert_always(0);
 
+		/* WAR: sometimes duplicate pkt desc are received
+		 * from HW this check gracefully handles
+		 * such cases.
+		 */
+		if ((mon_desc == mon_pdev_be->prev_rxmon_pkt_desc) &&
+		    (mon_desc->cookie ==
+		     mon_pdev_be->prev_rxmon_pkt_cookie)) {
+			dp_mon_err("duplicate pkt desc found mon_pdev: %pK mon_desc: %pK cookie: %d",
+				   mon_pdev, mon_desc,
+				   mon_desc->cookie);
+			mon_pdev->rx_mon_stats.dup_mon_buf_cnt++;
+			return num_buf_reaped;
+		}
+		mon_pdev_be->prev_rxmon_pkt_desc = mon_desc;
+		mon_pdev_be->prev_rxmon_pkt_cookie = mon_desc->cookie;
+
 		addr = mon_desc->buf_addr;
 		qdf_assert_always(addr);
 
-		mpdu_info = &ppdu_info->mpdu_info[user_id];
 		if (!mon_desc->unmapped) {
 			qdf_mem_unmap_page(soc->osdev,
 					   (qdf_dma_addr_t)mon_desc->paddr,
@@ -1568,6 +1630,13 @@ uint8_t dp_rx_mon_process_tlv_status(struct dp_pdev *pdev,
 		num_buf_reaped++;
 
 		mon_pdev->rx_mon_stats.pkt_buf_count++;
+
+		/* if rx hdr is not valid free pkt buffer and return */
+		if (qdf_unlikely(!rx_hdr_valid)) {
+			DP_STATS_INC(mon_soc, frag_free, 1);
+			qdf_frag_free(addr);
+			return num_buf_reaped;
+		}
 
 		if (qdf_unlikely(!ppdu_info->rx_hdr_rcvd[user_id])) {
 
@@ -1587,6 +1656,7 @@ uint8_t dp_rx_mon_process_tlv_status(struct dp_pdev *pdev,
 			return num_buf_reaped;
 		}
 
+		mpdu_info = &ppdu_info->mpdu_info[user_id];
 		if (mpdu_info->decap_type == DP_MON_DECAP_FORMAT_INVALID) {
 			/* decap type is invalid, drop the frame */
 			mon_pdev->rx_mon_stats.mpdu_decap_type_invalid++;
@@ -1673,8 +1743,13 @@ uint8_t dp_rx_mon_process_tlv_status(struct dp_pdev *pdev,
 	break;
 	case HAL_TLV_STATUS_MSDU_END:
 	{
-		struct hal_rx_mon_msdu_info *msdu_info = &ppdu_info->msdu[user_id];
+		struct hal_rx_mon_msdu_info *msdu_info;
 		struct hal_rx_mon_msdu_info *last_buf_info;
+
+		if (qdf_unlikely(!rx_hdr_valid))
+			break;
+
+		msdu_info = &ppdu_info->msdu[user_id];
 		/* update msdu metadata at last buffer of msdu in MPDU */
 		if (qdf_unlikely(!ppdu_info->rx_hdr_rcvd[user_id])) {
 			/* reset msdu info for next msdu for same user */
@@ -1720,6 +1795,9 @@ uint8_t dp_rx_mon_process_tlv_status(struct dp_pdev *pdev,
 	{
 		struct hal_rx_mon_mpdu_info *mpdu_info, *mpdu_meta;
 
+		if (qdf_unlikely(!rx_hdr_valid))
+			break;
+
 		if (qdf_unlikely(!ppdu_info->rx_hdr_rcvd[user_id])) {
 			dp_mon_debug(" <%d> nbuf is NULL, return user: %d mpdu_idx: %d", __LINE__, user_id, mpdu_idx);
 			break;
@@ -1738,6 +1816,10 @@ uint8_t dp_rx_mon_process_tlv_status(struct dp_pdev *pdev,
 	case HAL_TLV_STATUS_MPDU_END:
 	{
 		struct hal_rx_mon_mpdu_info *mpdu_info, *mpdu_meta;
+
+		if (qdf_unlikely(!rx_hdr_valid))
+			break;
+
 		mpdu_info = &ppdu_info->mpdu_info[user_id];
 		if (qdf_unlikely(!ppdu_info->rx_hdr_rcvd[user_id])) {
 			/* reset mpdu info for next mpdu for same user */
@@ -1889,6 +1971,10 @@ dp_rx_mon_process_status_tlv(struct dp_pdev *pdev)
 		mon_pdev->rx_mon_stats.status_buf_count++;
 		dp_mon_record_index_update(mon_pdev_be);
 	}
+	mon_pdev_be->prev_rxmon_desc = NULL;
+	mon_pdev_be->prev_rxmon_cookie = 0;
+	mon_pdev_be->prev_rxmon_pkt_desc = NULL;
+	mon_pdev_be->prev_rxmon_pkt_cookie = 0;
 
 	dp_mon_rx_stats_update_rssi_dbm_params(mon_pdev, ppdu_info);
 	if (work_done) {
@@ -2502,6 +2588,8 @@ void dp_mon_rx_print_advanced_stats_2_0(struct dp_soc *soc,
 		       mon_pdev->rx_mon_stats.end_of_ppdu_drop_cnt);
 	DP_PRINT_STATS("tlv_drop_cnt= %d",
 		       mon_pdev->rx_mon_stats.tlv_drop_cnt);
+	DP_PRINT_STATS("rx_hdr_invalid_cnt = %d",
+		       rx_mon_stats->rx_hdr_invalid_cnt);
 }
 #endif
 
@@ -2535,7 +2623,8 @@ void dp_rx_mon_buf_desc_pool_free(struct dp_soc *soc)
 	struct dp_mon_soc_be *mon_soc_be = dp_get_be_mon_soc_from_dp_mon_soc(mon_soc);
 
 	if (mon_soc)
-		dp_mon_desc_pool_free(&mon_soc_be->rx_desc_mon);
+		dp_mon_desc_pool_free(soc, &mon_soc_be->rx_desc_mon,
+				      DP_MON_RX_DESC_POOL_TYPE);
 }
 
 void dp_rx_mon_soc_detach_2_0(struct dp_soc *soc, int lmac_id)
@@ -2570,7 +2659,8 @@ dp_rx_mon_buf_desc_pool_alloc(struct dp_soc *soc)
 	rx_mon_desc_pool = &mon_soc_be->rx_desc_mon;
 
 	qdf_print("%s:%d rx mon buf desc pool entries: %d", __func__, __LINE__, entries);
-	return dp_mon_desc_pool_alloc(entries, rx_mon_desc_pool);
+	return dp_mon_desc_pool_alloc(soc, DP_MON_RX_DESC_POOL_TYPE,
+				      entries, rx_mon_desc_pool);
 }
 
 void

@@ -715,6 +715,10 @@ int htt_srng_setup(struct htt_soc *soc, int mac_id,
 		htt_ring_id = HTT_TX_MON_MON2HOST_DEST_RING;
 		htt_ring_type = HTT_HW_TO_SW_RING;
 		break;
+	case SW2RXDMA_LINK_RELEASE:
+		htt_ring_id = HTT_RXDMA_MONITOR_DESC_RING;
+		htt_ring_type = HTT_SW_TO_HW_RING;
+		break;
 
 	default:
 		QDF_TRACE(QDF_MODULE_ID_TXRX, QDF_TRACE_LEVEL_ERROR,
@@ -3650,6 +3654,36 @@ static void dp_ipa_rx_cce_super_rule_setup_done_handler(struct htt_soc *soc,
 {
 }
 #endif
+#if defined(WLAN_FEATURE_11BE_MLO) && defined(DP_MLO_LINK_STATS_SUPPORT)
+static inline void
+dp_htt_peer_ext_evt(struct htt_soc *soc, uint32_t *msg_word)
+{
+	struct dp_peer_ext_evt_info info;
+	uint8_t mac_addr_deswizzle_buf[QDF_MAC_ADDR_SIZE];
+
+	info.peer_id = HTT_RX_PEER_EXTENDED_PEER_ID_GET(*msg_word);
+	info.vdev_id = HTT_RX_PEER_EXTENDED_VDEV_ID_GET(*msg_word);
+	info.link_id =
+		HTT_RX_PEER_EXTENDED_LOGICAL_LINK_ID_GET(*(msg_word + 2));
+	info.link_id_valid =
+		HTT_RX_PEER_EXTENDED_LOGICAL_LINK_ID_VALID_GET(*(msg_word + 2));
+
+	info.peer_mac_addr =
+	htt_t2h_mac_addr_deswizzle((u_int8_t *)(msg_word + 1),
+				   &mac_addr_deswizzle_buf[0]);
+
+	dp_htt_info("peer id %u, vdev id %u, link id %u, valid %u,peer_mac " QDF_MAC_ADDR_FMT,
+		    info.peer_id, info.vdev_id, info.link_id,
+		    info.link_id_valid, QDF_MAC_ADDR_REF(info.peer_mac_addr));
+
+	dp_rx_peer_ext_evt(soc->dp_soc, &info);
+}
+#else
+static inline void
+dp_htt_peer_ext_evt(struct htt_soc *soc, uint32_t *msg_word)
+{
+}
+#endif
 
 void dp_htt_t2h_msg_handler(void *context, HTC_PACKET *pkt)
 {
@@ -4103,6 +4137,11 @@ void dp_htt_t2h_msg_handler(void *context, HTC_PACKET *pkt)
 	case HTT_T2H_MSG_TYPE_RX_CCE_SUPER_RULE_SETUP_DONE:
 	{
 		dp_ipa_rx_cce_super_rule_setup_done_handler(soc, msg_word);
+		break;
+	}
+	case HTT_T2H_MSG_TYPE_PEER_EXTENDED_EVENT:
+	{
+		dp_htt_peer_ext_evt(soc, msg_word);
 		break;
 	}
 	default:

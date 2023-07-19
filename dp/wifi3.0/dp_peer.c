@@ -1287,19 +1287,6 @@ void dp_peer_map_ipa_evt(struct dp_soc *soc, struct dp_peer *peer,
 }
 #endif
 
-/**
- * dp_peer_host_add_map_ast() - Add ast entry with HW AST Index
- * @soc: SoC handle
- * @peer_id: peer id from firmware
- * @mac_addr: MAC address of ast node
- * @hw_peer_id: HW AST Index returned by target in peer map event
- * @vdev_id: vdev id for VAP to which the peer belongs to
- * @ast_hash: ast hash value in HW
- * @is_wds: flag to indicate peer map event for WDS ast entry
- *
- * Return: QDF_STATUS code
- */
-static inline
 QDF_STATUS dp_peer_host_add_map_ast(struct dp_soc *soc, uint16_t peer_id,
 				    uint8_t *mac_addr, uint16_t hw_peer_id,
 				    uint8_t vdev_id, uint16_t ast_hash,
@@ -3021,6 +3008,34 @@ dp_rx_peer_unmap_handler(struct dp_soc *soc, uint16_t peer_id,
 	dp_peer_unref_delete(peer, DP_MOD_ID_CONFIG);
 }
 
+#if defined(WLAN_FEATURE_11BE_MLO) && defined(DP_MLO_LINK_STATS_SUPPORT)
+QDF_STATUS
+dp_rx_peer_ext_evt(struct dp_soc *soc, struct dp_peer_ext_evt_info *info)
+{
+	struct dp_peer *peer = NULL;
+	struct cdp_peer_info peer_info = { 0 };
+
+	QDF_ASSERT(info->peer_id <= soc->max_peer_id);
+
+	DP_PEER_INFO_PARAMS_INIT(&peer_info, info->vdev_id, info->peer_mac_addr,
+				 false, CDP_LINK_PEER_TYPE);
+	peer = dp_peer_hash_find_wrapper(soc, &peer_info, DP_MOD_ID_CONFIG);
+
+	if (!peer) {
+		dp_err("peer NULL, id %u, MAC " QDF_MAC_ADDR_FMT ", vdev_id %u",
+		       info->peer_id, QDF_MAC_ADDR_REF(info->peer_mac_addr),
+		       info->vdev_id);
+
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	peer->link_id = info->link_id;
+	peer->link_id_valid = info->link_id_valid;
+	dp_peer_unref_delete(peer, DP_MOD_ID_CONFIG);
+
+	return QDF_STATUS_SUCCESS;
+}
+#endif
 #ifdef WLAN_FEATURE_11BE_MLO
 void dp_rx_mlo_peer_unmap_handler(struct dp_soc *soc, uint16_t peer_id)
 {

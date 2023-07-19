@@ -1789,8 +1789,8 @@ QDF_STATUS (*send_periodic_chan_stats_config_cmd)(wmi_unified_t wmi_handle,
 			struct periodic_chan_stats_params *param);
 
 #ifdef WLAN_ATF_ENABLE
-QDF_STATUS (*send_set_atf_cmd)(wmi_unified_t wmi_handle,
-			       struct set_atf_params *param);
+QDF_STATUS (*send_atf_peer_list_cmd)(wmi_unified_t wmi_handle,
+				     struct set_atf_params *param);
 
 QDF_STATUS
 (*send_atf_peer_request_cmd)(wmi_unified_t wmi_handle,
@@ -1811,6 +1811,14 @@ QDF_STATUS (*extract_atf_peer_stats_ev)(wmi_unified_t wmi_handle,
 QDF_STATUS (*extract_atf_token_info_ev)(wmi_unified_t wmi_handle,
 					void *evt_buf, uint8_t idx,
 					wmi_host_atf_peer_stats_info *atf_info);
+
+#ifdef WLAN_ATF_INCREASED_STA
+QDF_STATUS (*send_atf_peer_list_cmd_v2)(wmi_unified_t wmi_handle,
+					struct atf_peer_params_v2 *param);
+QDF_STATUS
+(*send_set_atf_grouping_cmd_v2)(wmi_unified_t wmi_handle,
+				struct atf_grouping_params_v2 *param);
+#endif
 #endif
 
 QDF_STATUS (*send_get_user_position_cmd)(wmi_unified_t wmi_handle,
@@ -3294,6 +3302,12 @@ QDF_STATUS (*extract_sap_coex_cap_service_ready_ext2)(
 QDF_STATUS
 (*send_wmi_tdma_schedule_request_cmd)(wmi_unified_t wmi_handle,
 				      struct wlan_tdma_sched_cmd_param *param);
+
+#ifdef WLAN_FEATURE_11BE_MLO
+QDF_STATUS
+(*send_wmi_link_recommendation_cmd)(wmi_unified_t wmi_handle,
+				    struct wlan_link_recmnd_param *param);
+#endif
 #endif
 
 QDF_STATUS
@@ -3305,6 +3319,22 @@ QDF_STATUS
 (*extract_csa_ie_received_ev_params)(wmi_unified_t wmi_handle,
 				     void *evt_buf, uint8_t *vdev_id,
 				     struct csa_offload_params *csa_event);
+#ifdef QCA_SUPPORT_PRIMARY_LINK_MIGRATE
+QDF_STATUS (*send_peer_ptqm_migrate_cmd)(
+				wmi_unified_t wmi,
+				struct peer_ptqm_migrate_params *param);
+
+QDF_STATUS (*extract_peer_ptqm_migrate_event)(
+		struct wmi_unified *wmi_handle,
+		uint8_t *buf,
+		struct peer_ptqm_migrate_event_params *params);
+
+QDF_STATUS (*extract_peer_entry_ptqm_migrate_event)(
+		struct wmi_unified *wmi_handle,
+		uint8_t *buf,
+		uint32_t index,
+		struct peer_entry_ptqm_migrate_event_params *entry);
+#endif /* QCA_SUPPORT_PRIMARY_LINK_MIGRATE */
 };
 
 /* Forward declaration for psoc*/
@@ -3910,4 +3940,13 @@ static inline void wmi_coap_attach_tlv(wmi_unified_t wmi_handle)
  * Return: host channel width, enum phy_ch_width
  */
 enum phy_ch_width wmi_map_ch_width(A_UINT32 wmi_width);
+
+/**
+ * wmi_host_to_fw_phymode() - convert host to fw phymode
+ * @host_phymode: phymode to convert
+ *
+ * Return: one of the values defined in enum WMI_HOST_WLAN_PHY_MODE;
+ *         or WMI_HOST_MODE_UNKNOWN if the conversion fails
+ */
+WMI_HOST_WLAN_PHY_MODE wmi_host_to_fw_phymode(enum wlan_phymode host_phymode);
 #endif

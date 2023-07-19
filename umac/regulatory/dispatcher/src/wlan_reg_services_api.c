@@ -952,6 +952,11 @@ wlan_reg_get_max_txpower_for_6g_tpe(struct wlan_objmgr_pdev *pdev,
 					      reg_client, is_psd,
 					      tx_power);
 }
+
+bool wlan_reg_is_6ghz_unii5_chan_freq(qdf_freq_t freq)
+{
+	return reg_is_6ghz_unii5_chan_freq(freq);
+}
 #endif /* CONFIG_BAND_6GHZ */
 
 uint16_t
@@ -1840,12 +1845,12 @@ wlan_reg_get_best_pwr_mode(struct wlan_objmgr_pdev *pdev, qdf_freq_t freq,
 
 qdf_export_symbol(wlan_reg_get_best_pwr_mode);
 
-uint8_t wlan_reg_get_eirp_pwr(struct wlan_objmgr_pdev *pdev, qdf_freq_t freq,
-			      qdf_freq_t cen320, uint16_t bw,
-			      enum reg_6g_ap_type ap_pwr_type,
-			      uint16_t in_punc_pattern,
-			      bool is_client_list_lookup_needed,
-			      enum reg_6g_client_type client_type)
+int8_t wlan_reg_get_eirp_pwr(struct wlan_objmgr_pdev *pdev, qdf_freq_t freq,
+			     qdf_freq_t cen320, uint16_t bw,
+			     enum reg_6g_ap_type ap_pwr_type,
+			     uint16_t in_punc_pattern,
+			     bool is_client_list_lookup_needed,
+			     enum reg_6g_client_type client_type)
 {
 	return reg_get_eirp_pwr(pdev, freq, cen320, bw, ap_pwr_type,
 				in_punc_pattern, is_client_list_lookup_needed,
@@ -1967,4 +1972,18 @@ wlan_reg_unregister_is_chan_connected_callback(struct wlan_objmgr_psoc *psoc,
 {
 	reg_unregister_is_chan_connected_callback(psoc,
 					(reg_is_chan_connected_callback)cbk);
+}
+
+qdf_freq_t
+wlan_reg_get_endchan_cen_from_bandstart(qdf_freq_t band_start,
+					uint16_t bw)
+{
+	return reg_get_endchan_cen_from_bandstart(band_start, bw);
+}
+
+QDF_STATUS
+wlan_reg_get_opclass_from_map(const struct reg_dmn_op_class_map_t **map,
+			      bool is_global_op_table_needed)
+{
+	return reg_get_opclass_from_map(map, is_global_op_table_needed);
 }
