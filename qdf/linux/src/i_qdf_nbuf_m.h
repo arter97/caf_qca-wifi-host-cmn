@@ -217,7 +217,8 @@ struct qdf_nbuf_cb {
 						 fr_ds:1,
 						 to_ds:1,
 						 logical_link_id:4,
-						 reserved1:10;
+						 band:3,
+						 reserved1:7;
 					uint32_t tcp_seq_num;
 					uint32_t tcp_ack_num;
 					union {
@@ -288,7 +289,8 @@ struct qdf_nbuf_cb {
 							reserved:7;
 					} dma_option;
 					uint8_t flag_notify_comp:1,
-						rsvd:7;
+						band:3,
+						rsvd:4;
 					uint8_t reserved[2];
 				} priv_cb_m;
 			} dev;
@@ -561,6 +563,10 @@ QDF_COMPILE_TIME_ASSERT(qdf_nbuf_cb_size,
 	(((struct qdf_nbuf_cb *)((skb)->cb))->u.tx.dev.priv_cb_m. \
 	flag_notify_comp)
 
+#define QDF_NBUF_CB_TX_BAND(skb) \
+	(((struct qdf_nbuf_cb *)((skb)->cb))->u.tx.dev.priv_cb_m. \
+	band)
+
 #define QDF_NBUF_CB_RX_PEER_ID(skb) \
 	(((struct qdf_nbuf_cb *)((skb)->cb))->u.rx.dev.priv_cb_m.dp. \
 	wifi3.peer_id)
@@ -607,6 +613,10 @@ QDF_COMPILE_TIME_ASSERT(qdf_nbuf_cb_size,
 #define QDF_NBUF_CB_RX_LOGICAL_LINK_ID(skb) \
 	(((struct qdf_nbuf_cb *)((skb)->cb))->u.rx.dev.priv_cb_m. \
 	logical_link_id)
+
+#define QDF_NBUF_CB_RX_BAND(skb) \
+	(((struct qdf_nbuf_cb *)((skb)->cb))->u.rx.dev.priv_cb_m. \
+	band)
 
 #define __qdf_nbuf_ipa_owned_get(skb) \
 	QDF_NBUF_CB_TX_IPA_OWNED(skb)
