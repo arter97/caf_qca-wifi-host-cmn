@@ -298,7 +298,7 @@ static void hif_get_poll_times_hist_str(struct qca_napi_stat *stats, char *buf,
 		str_index += qdf_scnprintf(buf + str_index, buf_len - str_index,
 					   "%u|", stats->poll_time_buckets[i]);
 }
-
+#ifdef FEATURE_NAPI
 /**
  * hif_exec_fill_poll_time_histogram() - fills poll time histogram for a NAPI
  * @hif_ext_group: hif_ext_group of type NAPI
@@ -330,7 +330,7 @@ void hif_exec_fill_poll_time_histogram(struct hif_exec_context *hif_ext_group)
 		bucket = QCA_NAPI_NUM_BUCKETS - 1;
 	++napi_stat->poll_time_buckets[bucket];
 }
-
+#endif
 /**
  * hif_exec_poll_should_yield() - Local function deciding if NAPI should yield
  * @hif_ext_group: hif_ext_group of type NAPI
