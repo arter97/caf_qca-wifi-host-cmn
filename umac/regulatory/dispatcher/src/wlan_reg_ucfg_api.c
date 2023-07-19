@@ -157,6 +157,30 @@ QDF_STATUS ucfg_reg_set_default_country(struct wlan_objmgr_psoc *psoc,
 {
 	return reg_set_default_country(psoc, country);
 }
+
+bool ucfg_reg_get_keep_6ghz_sta_cli_connection(
+					struct wlan_objmgr_pdev *pdev)
+{
+	return reg_get_keep_6ghz_sta_cli_connection(pdev);
+}
+
+QDF_STATUS ucfg_reg_set_keep_6ghz_sta_cli_connection(
+					struct wlan_objmgr_pdev *pdev,
+					bool keep_6ghz_sta_cli_connection)
+{
+	return reg_set_keep_6ghz_sta_cli_connection(pdev,
+						keep_6ghz_sta_cli_connection);
+}
+
+bool ucfg_reg_is_user_country_set_allowed(struct wlan_objmgr_psoc *psoc)
+{
+	return reg_is_user_country_set_allowed(psoc);
+}
+
+bool ucfg_reg_is_fcc_constraint_set(struct wlan_objmgr_pdev *pdev)
+{
+	return reg_is_fcc_constraint_set(pdev);
+}
 #endif
 
 QDF_STATUS ucfg_reg_get_default_country(struct wlan_objmgr_psoc *psoc,

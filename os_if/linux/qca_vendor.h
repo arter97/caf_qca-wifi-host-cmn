@@ -121,6 +121,32 @@
  * @QCA_NL80211_VENDOR_SUBCMD_DFS_OFFLOAD_RADAR_DETECTED: Indicate that the
  * 	driver detected radar signal on the current operating channel
  * @QCA_NL80211_VENDOR_SUBCMD_GET_WIFI_INFO: get wlan driver information
+ * @QCA_NL80211_VENDOR_SUBCMD_SET_WIFI_CONFIGURATION: This command is used to
+ *	configure various wiphy or interface level configurations. Attributes
+ *	are defined in enum qca_wlan_vendor_attr_config. Userspace can send one
+ *	or more configuration attributes with a single command. The driver
+ *	accepts the command only if all the configurations are known, otherwise
+ *	it rejects the command. The driver returns success only if processing of
+ *	all the configurations succeeds. The driver continues to process all the
+ *	configurations even if processing of some configurations failed and
+ *	returns the last error occurred while processing the failed
+ *	configurations.
+ *
+ * @QCA_NL80211_VENDOR_SUBCMD_GET_WIFI_CONFIGURATION: This command is used to
+ *	get the current values of the various wiphy or interface level
+ *	configurations. Attributes are defined in enum
+ *	qca_wlan_vendor_attr_config. Userspace needs to specify the
+ *	configuration attributes for which it wants to get the values in the
+ *	command, there is no significance for the value sent in the attribute
+ *	unless explicitly specified in the corresponding configuration
+ *	attribute documentation. The driver accepts the command only if all the
+ *	configurations are known, otherwise it rejects the command. The driver
+ *	returns success only if fetching of all configuration values succeeds
+ *	and indicates the configuration values in corresponding attributes in
+ *	the response. The driver continues to process all the configurations
+ *	even if processing of some configurations failed and returns the last
+ *	error occurred while processing the failed configurations.
+ *
  * @QCA_NL80211_VENDOR_SUBCMD_WIFI_LOGGER_START: start wifi logger
  * @QCA_NL80211_VENDOR_SUBCMD_WIFI_LOGGER_MEMORY_DUMP: memory dump request
  * @QCA_NL80211_VENDOR_SUBCMD_GET_LOGGER_FEATURE_SET: get logger feature set
@@ -697,6 +723,45 @@
  *	%NL80211_CMD_GET_SURVEY response.
  *	CU = %NL80211_SURVEY_INFO_TIME_BUSY * 100 / %NL80211_SURVEY_INFO_TIME.
  *	This command is only used for STA mode.
+ *
+ * @QCA_NL80211_VENDOR_SUBCMD_TID_TO_LINK_MAP: This vendor subcommand is
+ *	used as an event to notify the userspace of TID-to-link map changes
+ *	negotiated by the driver or updated by associated AP MLD with Beacon,
+ *	Probe Response, or Action frames. The attributes used with this command
+ *	are defined in enum qca_wlan_vendor_attr_tid_to_link_map.
+ *
+ *	Note that the attribute
+ *	%QCA_WLAN_VENDOR_ATTR_TID_TO_LINK_MAP_AP_MLD_ADDR may not correspond to
+ *	the current connected AP MLD address.
+ *
+ * @QCA_NL80211_VENDOR_SUBCMD_LINK_RECONFIG: Notify userspace about the removal
+ *	of STA MLD setup links due to AP MLD removing the corresponding
+ *	affiliated APs with Multi-Link reconfiguration. If all the STA MLD setup
+ *	links are removed during Multi-Link reconfiguration, the driver shall
+ *	use %NL80211_CMD_DISCONNECT instead of this command since it is a
+ *	connection drop. The attributes used with this command are defined in
+ *	enum qca_wlan_vendor_attr_link_reconfig.
+ *	Note that the attribute
+ *	%QCA_WLAN_VENDOR_ATTR_LINK_RECONFIG_AP_MLD_ADDR may not correspond to
+ *	the current connected AP MLD address.
+ *
+ * @QCA_NL80211_VENDOR_SUBCMD_TDLS_DISC_RSP_EXT: Vendor command to configure
+ *	the driver with MLO link id information on which to transmit the TDLS
+ *	discovery response frame on the configured MLO BSS link when the
+ *	local station is connected in MLO mode. This command is sent to the
+ *	driver prior to the TDLS discovery response management transmit
+ *	operation and is followed immediately by the TDLS discovery response
+ *	management frame transmit command.
+ *
+ *	The driver saves the configured MLO link id information and uses it for
+ *	the following TDLS discovery response frame transmission on the
+ *	configured MLO BSS link and the link id information is cleared in the
+ *	driver after the TDLS discovery response frame is successfully
+ *	transmitted. This behavior is independent of the TDLS peer STA connection
+ *	mode (MLO or non-MLO).
+ *
+ *	Uses the attributes defined in
+ *	enum qca_wlan_vendor_attr_tdls_disc_rsp_ext.
  */
 
 enum qca_nl80211_vendor_subcmds {
@@ -955,6 +1020,9 @@ enum qca_nl80211_vendor_subcmds {
 	QCA_NL80211_VENDOR_SUBCMD_ROAM_STATS = 226,
 	QCA_NL80211_VENDOR_SUBCMD_MLO_LINK_STATE = 227,
 	QCA_NL80211_VENDOR_SUBCMD_CONNECTED_CHANNEL_STATS = 228,
+	QCA_NL80211_VENDOR_SUBCMD_TID_TO_LINK_MAP = 229,
+	QCA_NL80211_VENDOR_SUBCMD_LINK_RECONFIG = 230,
+	QCA_NL80211_VENDOR_SUBCMD_TDLS_DISC_RSP_EXT = 231,
 };
 
 enum qca_wlan_vendor_tos {
@@ -1267,7 +1335,7 @@ enum qca_wlan_auth_type {
  *  NL80211_ATTR_STA_INFO
  * @QCA_WLAN_VENDOR_ATTR_GET_STATION_INFO_AP_STANDARD_NL80211_ATTR:
  *  Get the standard NL attributes Nested with this attribute.
- *  Ex : Query HT/VHT Capability advertized by the AP.
+ *  Ex : Query HT/VHT Capability advertised by the AP.
  *  NL80211_ATTR_VHT_CAPABILITY / NL80211_ATTR_HT_CAPABILITY
  * @QCA_WLAN_VENDOR_ATTR_GET_STATION_INFO_ROAM_COUNT:
  *  Number of successful Roam attempts before a
@@ -4596,6 +4664,8 @@ enum qca_wlan_vendor_attr_nd_offload {
  * @QCA_WLAN_VENDOR_FEATURE_AP_ALLOWED_FREQ_LIST: Flag indicates that the device
  *	in AP mode supports configuring allowed frequency list for AP operation
  *	with %QCA_WLAN_VENDOR_ATTR_CONFIG_AP_ALLOWED_FREQ_LIST.
+ * @QCA_WLAN_VENDOR_FEATURE_ENHANCED_AUDIO_EXPERIENCE_OVER_WLAN: Flag indicates
+ *	 that the device supports enhanced audio experience over WLAN feature.
  * @NUM_QCA_WLAN_VENDOR_FEATURES: Number of assigned feature bits
  */
 enum qca_wlan_vendor_features {
@@ -4622,6 +4692,7 @@ enum qca_wlan_vendor_features {
 	QCA_WLAN_VENDOR_FEATURE_PROT_RANGE_NEGO_AND_MEASURE_STA = 20,
 	QCA_WLAN_VENDOR_FEATURE_PROT_RANGE_NEGO_AND_MEASURE_AP = 21,
 	QCA_WLAN_VENDOR_FEATURE_AP_ALLOWED_FREQ_LIST = 22,
+	QCA_WLAN_VENDOR_FEATURE_ENHANCED_AUDIO_EXPERIENCE_OVER_WLAN = 23,
 	NUM_QCA_WLAN_VENDOR_FEATURES /* keep last */
 };
 
@@ -4955,12 +5026,12 @@ enum qca_wlan_vendor_attr_config {
 	 */
 	QCA_WLAN_VENDOR_ATTR_CONFIG_RX_MPDU_AGGREGATION = 9,
 	/*
-	 * 8-bit unsigned value to configure the Non aggregrate/11g sw
+	 * 8-bit unsigned value to configure the Non aggregate/11g sw
 	 * retry threshold (0 disable, 31 max).
 	 */
 	QCA_WLAN_VENDOR_ATTR_CONFIG_NON_AGG_RETRY = 10,
 	/*
-	 * 8-bit unsigned value to configure the aggregrate sw
+	 * 8-bit unsigned value to configure the aggregate sw
 	 * retry threshold (0 disable, 31 max).
 	 */
 	QCA_WLAN_VENDOR_ATTR_CONFIG_AGG_RETRY = 11,
@@ -5255,12 +5326,11 @@ enum qca_wlan_vendor_attr_config {
 	 * state, it should not exceed the negotiated channel width. If it is
 	 * configured when STA is in disconnected state, the configured value
 	 * will take effect for the next immediate connection.
-	 * Possible values are:
-	 *   NL80211_CHAN_WIDTH_20
-	 *   NL80211_CHAN_WIDTH_40
-	 *   NL80211_CHAN_WIDTH_80
-	 *   NL80211_CHAN_WIDTH_80P80
-	 *   NL80211_CHAN_WIDTH_160
+	 * This configuration can be sent inside
+	 * %QCA_WLAN_VENDOR_ATTR_CONFIG_MLO_LINKS to specify the maximum
+	 * supported channel width per-MLO link.
+	 *
+	 * This uses values defined in enum nl80211_chan_width.
 	 */
 	QCA_WLAN_VENDOR_ATTR_CONFIG_CHANNEL_WIDTH = 63,
 
@@ -5573,6 +5643,98 @@ enum qca_wlan_vendor_attr_config {
 	 */
 	QCA_WLAN_VENDOR_ATTR_CONFIG_AP_ALLOWED_FREQ_LIST = 91,
 
+	/* Nested attribute to indicate EHT MLO links to be forced active.
+	 * It contains link MAC address attributes. These nested attributes are
+	 * of the type NL80211_ATTR_MAC and are used to force enabling of the
+	 * MLO links corresponding to the indicated link MAC addresses.
+	 * Subsequently, the links corresponding to the link MAC addresses that
+	 * are not indicated are forced inactive.
+	 */
+	QCA_WLAN_VENDOR_ATTR_CONFIG_EHT_MLO_ACTIVE_LINKS = 92,
+
+	/* 8-bit unsigned value to configure EMLSR mode entry or exit.
+	 * Uses enum qca_wlan_emlsr_mode values.
+	 */
+	QCA_WLAN_VENDOR_ATTR_CONFIG_EMLSR_MODE_SWITCH = 93,
+
+	/* 8-bit unsigned value. Optionally specified along with
+	 * %QCA_WLAN_VENDOR_ATTR_CONFIG_CHANNEL_WIDTH when STA is in connected
+	 * state. This configuration is applicable only for the current
+	 * connection. This configuration not allowed in disconnected state.
+	 * This configuration can be sent inside
+	 * %QCA_WLAN_VENDOR_ATTR_CONFIG_MLO_LINKS to specify the maximum
+	 * supported channel width update type per-MLO link.
+	 *
+	 * valid values:
+	 * 0 - The maximum allowed bandwidth change is applicable for both Tx
+	 *	and Rx paths. The driver shall conduct OMI operation as defined
+	 *	in 26.9 (Operating mode indication) or OMN operation as
+	 *	defined in 11.40 (Notification of operating mode
+	 *	changes) in IEEE P802.11-REVme/D2.0 with AP to indicate the
+	 *	change in the maximum allowed operating bandwidth.
+	 * 1 - Limit the change in maximum allowed bandwidth only to Tx path.
+	 *	In this case the driver doesn't need to conduct OMI/OMN
+	 *	operation since %QCA_WLAN_VENDOR_ATTR_CONFIG_CHANNEL_WIDTH is
+	 *	expected to be less than the current connection maximum
+	 *	negotiated bandwidth.
+	 *	For example: Negotiated maximum bandwidth is 160 MHz and the new
+	 *	maximum bandwidth configured is 80 MHz, now the driver limits
+	 *	the maximum bandwidth to 80 MHz only in the Tx path.
+	 */
+	QCA_WLAN_VENDOR_ATTR_CONFIG_CHAN_WIDTH_UPDATE_TYPE = 96,
+
+	/* 8-bit unsigned value to set EPCS (Emergency Preparedness
+	 * Communications Service) feature capability
+	 * 1 - Enable, 0 - Disable.
+	 *
+	 * This configuration is used for testing purposes.
+	 */
+	QCA_WLAN_VENDOR_ATTR_CONFIG_EPCS_CAPABILITY = 97,
+
+	/* 8-bit unsigned value to enable/disable EPCS priority access
+	 * 1 - Enable, 0 - Disable.
+	 * The EPCS priority access shall be enabled only when EPCS feature
+	 * capability is also enabled (see
+	 * QCA_WLAN_VENDOR_ATTR_CONFIG_EPCS_CAPABILITY).
+	 *
+	 * This configuration is used for testing purposes.
+	 */
+	QCA_WLAN_VENDOR_ATTR_CONFIG_EPCS_FUNCTION = 98,
+
+	/* 8-bit unsigned value. Used only for representing MLO link ID of a
+	 * link inside %QCA_WLAN_VENDOR_ATTR_CONFIG_MLO_LINKS.
+	 */
+	QCA_WLAN_VENDOR_ATTR_CONFIG_MLO_LINK_ID = 99,
+
+	/* Array of nested links each identified by
+	 * %QCA_WLAN_VENDOR_ATTR_CONFIG_MLO_LINK_ID. This uses values defined in
+	 * enum qca_wlan_vendor_attr_config, explicit documentation shall be
+	 * added for the attributes in enum qca_wlan_vendor_attr_config to
+	 * support per-MLO link configuration through
+	 * %QCA_WLAN_VENDOR_ATTR_CONFIG_MLO_LINKS.
+	 *
+	 * Userspace can configure a single link or multiple links with this
+	 * attribute by nesting the corresponding configuration attributes and
+	 * %QCA_WLAN_VENDOR_ATTR_CONFIG_MLO_LINK_ID for each link.
+	 *
+	 * Userspace can fetch the configuration attribute values for a single
+	 * link or multiple links with this attribute by nesting the
+	 * corresponding configuration attributes and
+	 * %QCA_WLAN_VENDOR_ATTR_CONFIG_MLO_LINK_ID for each link.
+	 *
+	 * For STA interface, this attribute is applicable only in connected
+	 * state when the current connection is MLO capable. The valid values of
+	 * %QCA_WLAN_VENDOR_ATTR_CONFIG_MLO_LINK_ID are the link IDs of the
+	 * connected AP MLD links.
+	 *
+	 * For AP interface, this configuration applicable only after adding
+	 * MLO links to the AP interface with %NL80211_CMD_ADD_LINK and the
+	 * valid values of %QCA_WLAN_VENDOR_ATTR_CONFIG_MLO_LINK_ID are the link
+	 * IDs specified in %NL80211_CMD_ADD_LINK while adding the MLO links to
+	 * the AP interface.
+	 */
+	QCA_WLAN_VENDOR_ATTR_CONFIG_MLO_LINKS = 100,
+
 	/* keep last */
 	QCA_WLAN_VENDOR_ATTR_CONFIG_AFTER_LAST,
 	QCA_WLAN_VENDOR_ATTR_CONFIG_MAX =
@@ -5840,7 +6002,7 @@ enum qca_wlan_vendor_attr_ndp_params {
 };
 
 /**
- * enum qca_wlan_ndp_sub_cmd - NDP sub comands types for
+ * enum qca_wlan_ndp_sub_cmd - NDP sub commands types for
  * QCA_NL80211_VENDOR_SUBCMD_NDP.
  * @QCA_WLAN_VENDOR_ATTR_NDP_INVALID: invalid value
  * @QCA_WLAN_VENDOR_ATTR_NDP_INTERFACE_CREATE: Command to create a NAN
@@ -9135,9 +9297,19 @@ enum qca_wlan_eht_mlo_mode {
 };
 
 /**
- * enum qca_wlan_vendor_attr_he_omi_tx: Represents attributes for
- * HE operating mode control transmit request. These attributes are
- * sent as part of QCA_WLAN_VENDOR_ATTR_WIFI_TEST_CONFIG_HE_OMI_TX and
+ * enum qca_wlan_emlsr_mode: Enhanced Multi-link Single Radio mode configuration
+ * @QCA_WLAN_EMLSR_MODE_ENTER: Enter EMLSR mode
+ * @QCA_WLAN_EMLSR_MODE_EXIT: Exit EMLSR mode
+ */
+enum qca_wlan_emlsr_mode {
+	QCA_WLAN_EMLSR_MODE_ENTER = 0,
+	QCA_WLAN_EMLSR_MODE_EXIT = 1,
+};
+
+/**
+ * enum qca_wlan_vendor_attr_omi_tx: Represents attributes for HE and
+ * EHT operating mode control transmit request. These attributes are
+ * sent as part of QCA_WLAN_VENDOR_ATTR_WIFI_TEST_CONFIG_OMI_TX and
  * QCA_NL80211_VENDOR_SUBCMD_WIFI_TEST_CONFIGURATION.
  *
  * @QCA_WLAN_VENDOR_ATTR_HE_OMI_RX_NSS: Mandatory 8-bit unsigned value
@@ -9167,20 +9339,47 @@ enum qca_wlan_eht_mlo_mode {
  * 1 - Determine which HE TB PPDU types are allowed by the STA if UL MU disable
  * bit is not set, else UL MU Tx is suspended.
  *
+ * @QCA_WLAN_VENDOR_ATTR_EHT_OMI_RX_NSS_EXTN: 8-bit unsigned value in the EHT OM
+ * Control subfield combined with the Rx NSS subfield in the OM Control subfield
+ * indicates NSS - 1, where NSS is the maximum number of spatial streams that
+ * STA supports in reception for PPDU bandwidths less than or equal to 80 MHz.
+ *
+ * @QCA_WLAN_VENDOR_ATTR_EHT_OMI_CH_BW_EXTN: 8-bit unsigned value indicates
+ * 320 MHz operating channel width supported by the EHT STA for both reception
+ * and transmission.
+ *
+ * @QCA_WLAN_VENDOR_ATTR_EHT_OMI_TX_NSS_EXTN: 8-bit unsigned value in the EHT OM
+ * Control subfield combined with the Tx NSTS subfield in OM Control subfield
+ * indicates NSTS - 1, where NSTS is the maximum number of space-time streams
+ * that the STA supports in transmission for PPDU bandwidths less than or equal
+ * to 80 MHz.
  */
-enum qca_wlan_vendor_attr_he_omi_tx {
+enum qca_wlan_vendor_attr_omi_tx {
 	QCA_WLAN_VENDOR_ATTR_HE_OMI_INVALID = 0,
 	QCA_WLAN_VENDOR_ATTR_HE_OMI_RX_NSS = 1,
 	QCA_WLAN_VENDOR_ATTR_HE_OMI_CH_BW = 2,
 	QCA_WLAN_VENDOR_ATTR_HE_OMI_ULMU_DISABLE = 3,
 	QCA_WLAN_VENDOR_ATTR_HE_OMI_TX_NSTS = 4,
 	QCA_WLAN_VENDOR_ATTR_HE_OMI_ULMU_DATA_DISABLE = 5,
+	QCA_WLAN_VENDOR_ATTR_EHT_OMI_RX_NSS_EXTN = 6,
+	QCA_WLAN_VENDOR_ATTR_EHT_OMI_CH_BW_EXTN = 7,
+	QCA_WLAN_VENDOR_ATTR_EHT_OMI_TX_NSS_EXTN = 8,
 
 	/* keep last */
-	QCA_WLAN_VENDOR_ATTR_HE_OMI_AFTER_LAST,
-	QCA_WLAN_VENDOR_ATTR_HE_OMI_MAX =
-	QCA_WLAN_VENDOR_ATTR_HE_OMI_AFTER_LAST - 1,
+	QCA_WLAN_VENDOR_ATTR_OMI_AFTER_LAST,
+	QCA_WLAN_VENDOR_ATTR_OMI_MAX =
+	QCA_WLAN_VENDOR_ATTR_OMI_AFTER_LAST - 1,
 };
+
+/* deprecated legacy names */
+#define QCA_WLAN_VENDOR_ATTR_WIFI_TEST_CONFIG_HE_OMI_TX \
+	QCA_WLAN_VENDOR_ATTR_WIFI_TEST_CONFIG_OMI_TX
+#define qca_wlan_vendor_attr_he_omi_tx \
+	qca_wlan_vendor_attr_omi_tx
+#define QCA_WLAN_VENDOR_ATTR_HE_OMI_AFTER_LAST \
+	QCA_WLAN_VENDOR_ATTR_OMI_AFTER_LAST
+#define QCA_WLAN_VENDOR_ATTR_HE_OMI_MAX \
+	QCA_WLAN_VENDOR_ATTR_OMI_MAX
 
 /**
  * enum qca_wlan_vendor_phy_mode - Different PHY modes
@@ -9499,10 +9698,10 @@ enum qca_wlan_vendor_attr_wifi_test_config {
 	 * channel bandwidth, Tx Nsts and UL MU disable attributes.
 	 * These nested attributes are used to send HE operating mode control
 	 * with configured values.
-	 * Uses the enum qca_wlan_vendor_attr_he_omi_tx attributes.
+	 * Uses the enum qca_wlan_vendor_attr_omi_tx attributes.
 	 * This attribute is used to configure the testbed device.
 	 */
-	QCA_WLAN_VENDOR_ATTR_WIFI_TEST_CONFIG_HE_OMI_TX = 33,
+	QCA_WLAN_VENDOR_ATTR_WIFI_TEST_CONFIG_OMI_TX = 33,
 
 	/* 8-bit unsigned value to configure +HTC_HE support to indicate the
 	 * support for the reception of a frame that carries an HE variant
@@ -9786,6 +9985,46 @@ enum qca_wlan_vendor_attr_wifi_test_config {
 	 * the 1500 Mb/s and the maximum supported data rate.
 	 */
 	QCA_WLAN_VENDOR_ATTR_WIFI_TEST_CONFIG_EHT_TB_SOUNDING_FB_RL = 66,
+
+	/* 8-bit unsigned value to configure the support for receiving an MPDU
+	 * that contains an EHT operating mode control subfield.
+	 * This attribute is used to configure the testbed device.
+	 * 1-enable, 0-disable.
+	 */
+	QCA_WLAN_VENDOR_ATTR_WIFI_TEST_CONFIG_EHT_OM_CTRL_SUPPORT = 67,
+
+	/* 8-bit unsigned value to configure the driver with EMLSR padding delay
+	 * subfield value.
+	 *
+	 * 0 - 0 us
+	 * 1 - 32 us
+	 * 2 - 64 us
+	 * 3 - 128 us
+	 * 4 - 256 us
+	 * 5-255 - Reserved
+	 *
+	 * This attribute is used for testing purposes.
+	 */
+	QCA_WLAN_VENDOR_ATTR_WIFI_TEST_CONFIG_EMLSR_PADDING_DELAY = 68,
+
+	/*
+	 * 8-bit unsigned value to indicate the firmware to force the active MLO
+	 * links to power save mode for the configured number of beacon periods.
+	 * This allows the firmware to suspend STA links for X beacon periods
+	 * and remain asleep even if the AP advertises TIM as opposed to regular
+	 * power save mode where STA links wake up if the AP indicates that it
+	 * has buffered data to send.
+	 * This attribute is used to configure the testbed device.
+	 */
+	QCA_WLAN_VENDOR_ATTR_WIFI_TEST_CONFIG_FORCE_MLO_POWER_SAVE_BCN_PERIOD = 69,
+
+	/*
+	 * 8-bit unsigned value to indicate the firmware to be in STR MLMR mode
+	 * to enable simultaneous transmission of PPDUs on all active links.
+	 * 0 - Default behavior
+	 * 1 - Enter STR mode for simultaneous data transmission on all links
+	 */
+	QCA_WLAN_VENDOR_ATTR_WIFI_TEST_CONFIG_EHT_MLO_STR_TX = 70,
 
 	/* keep last */
 	QCA_WLAN_VENDOR_ATTR_WIFI_TEST_CONFIG_AFTER_LAST,
@@ -16187,4 +16426,100 @@ enum qca_wlan_vendor_attr_mlo_link_state {
 	QCA_WLAN_VENDOR_ATTR_LINK_STATE_MAX =
 	QCA_WLAN_VENDOR_ATTR_LINK_STATE_AFTER_LAST - 1,
 };
+
+/**
+ * enum qca_wlan_vendor_attr_tid_link_map_status - Definition of attributes used
+ * inside nested attribute %QCA_WLAN_VENDOR_ATTR_TID_TO_LINK_MAP_STATUS.
+ *
+ * @QCA_WLAN_VENDOR_ATTR_LINK_TID_MAP_STATUS_UPLINK: Required u16 attribute
+ * within nested attribute %QCA_WLAN_VENDOR_ATTR_TID_TO_LINK_MAP_STATUS.
+ * Indicates the link mapping bitmap of a TID for uplink traffic. It is a
+ * bitmask of the link IDs in which a bit set means that the TID is mapped with
+ * that link ID in uplink traffic. Otherwise, the TID is not mapped to uplink
+ * traffic for that link.
+ *
+ * @QCA_WLAN_VENDOR_ATTR_LINK_TID_MAP_STATUS_DOWNLINK: Required u16 attribute
+ * within nested attribute %QCA_WLAN_VENDOR_ATTR_TID_TO_LINK_MAP_STATUS.
+ * Indicates the link mapping bitmap of a TID for downlink traffic. It is a
+ * bitmask of the link IDs in which a bit set means that the TID is mapped with
+ * that link ID in downlink traffic. Otherwise, the TID is not mapped to
+ * downlink traffic for that link.
+ */
+enum qca_wlan_vendor_attr_tid_link_map_status {
+	QCA_WLAN_VENDOR_ATTR_LINK_TID_MAP_STATUS_INVALID = 0,
+	QCA_WLAN_VENDOR_ATTR_LINK_TID_MAP_STATUS_UPLINK = 1,
+	QCA_WLAN_VENDOR_ATTR_LINK_TID_MAP_STATUS_DOWNLINK = 2,
+
+	/* keep last */
+	QCA_WLAN_VENDOR_ATTR_LINK_TID_MAP_STATUS_AFTER_LAST,
+	QCA_WLAN_VENDOR_ATTR_LINK_TID_MAP_STATUS_MAX =
+	QCA_WLAN_VENDOR_ATTR_LINK_TID_MAP_STATUS_AFTER_LAST - 1,
+};
+
+/*
+ * enum qca_wlan_vendor_attr_tid_to_link_map: Definition of attributes used with
+ * %QCA_NL80211_VENDOR_SUBCMD_TID_TO_LINK_MAP event.
+ *
+ * @QCA_WLAN_VENDOR_ATTR_TID_TO_LINK_MAP_AP_MLD_ADDR: Required attribute. 6-byte
+ * AP MLD address with which this TID-to-link negotiation mapping is
+ * established/updated.
+ *
+ * @QCA_WLAN_VENDOR_ATTR_TID_TO_LINK_MAP_STATUS: Optional attribute. Array of
+ * nested attributes containing TID-to-links mapping information. This will have
+ * TID-to-link mapping for TID0 to TID7, each containing the uplink and downlink
+ * map information. If this attribute is not present the default TID-to-link
+ * mapping is in use, i.e., all TIDs are mapped to all links for both uplink and
+ * downlink traffic.
+ * See enum qca_wlan_vendor_attr_tid_link_map_status for the nested attributes.
+ */
+enum qca_wlan_vendor_attr_tid_to_link_map {
+	QCA_WLAN_VENDOR_ATTR_TID_TO_LINK_MAP_INVALID = 0,
+	QCA_WLAN_VENDOR_ATTR_TID_TO_LINK_MAP_AP_MLD_ADDR = 1,
+	QCA_WLAN_VENDOR_ATTR_TID_TO_LINK_MAP_STATUS = 2,
+
+	/* keep last */
+	QCA_WLAN_VENDOR_ATTR_TID_TO_LINK_MAP_AFTER_LAST,
+	QCA_WLAN_VENDOR_ATTR_TID_TO_LINK_MAP_MAX =
+	QCA_WLAN_VENDOR_ATTR_TID_TO_LINK_MAP_AFTER_LAST - 1,
+};
+
+/**
+ * enum qca_wlan_vendor_attr_link_reconfig: Definition of attributes used
+ * with %QCA_NL80211_VENDOR_SUBCMD_LINK_RECONFIG event.
+ *
+ * @QCA_WLAN_VENDOR_ATTR_LINK_RECONFIG_AP_MLD_ADDR: Required attribute.
+ * 6-byte AP MLD address of the AP which indicated the link reconfiguration.
+ *
+ * @QCA_WLAN_VENDOR_ATTR_LINK_RECONFIG_REMOVED_LINKS: Required u16 attribute.
+ * A bitmap of the removed setup links link IDs.
+ */
+enum qca_wlan_vendor_attr_link_reconfig {
+	QCA_WLAN_VENDOR_ATTR_LINK_RECONFIG_INVALID = 0,
+	QCA_WLAN_VENDOR_ATTR_LINK_RECONFIG_AP_MLD_ADDR = 1,
+	QCA_WLAN_VENDOR_ATTR_LINK_RECONFIG_REMOVED_LINKS = 2,
+
+	/* keep last */
+	QCA_WLAN_VENDOR_ATTR_LINK_RECONFIG_AFTER_LAST,
+	QCA_WLAN_VENDOR_ATTR_LINK_RECONFIG_MAX =
+	QCA_WLAN_VENDOR_ATTR_LINK_RECONFIG_AFTER_LAST - 1,
+};
+
+/**
+ * enum qca_wlan_vendor_attr_tdls_disc_rsp_ext - Attributes used by
+ * %QCA_NL80211_VENDOR_SUBCMD_TDLS_DISC_RSP_EXT vendor command.
+ *
+ * @QCA_WLAN_VENDOR_ATTR_TDLS_DISC_RSP_EXT_TX_LINK: u8 attribute.
+ * Indicates the MLO link id on which the TDLS discovery response
+ * frame is to be transmitted.
+ */
+enum qca_wlan_vendor_attr_tdls_disc_rsp_ext {
+	QCA_WLAN_VENDOR_ATTR_TDLS_DISC_RSP_EXT_INVALID = 0,
+	QCA_WLAN_VENDOR_ATTR_TDLS_DISC_RSP_EXT_TX_LINK = 1,
+
+	/* Keep last */
+	QCA_WLAN_VENDOR_ATTR_TDLS_DISC_RSP_EXT_AFTER_LAST,
+	QCA_WLAN_VENDOR_ATTR_TDLS_DISC_RSP_EXT_MAX =
+	QCA_WLAN_VENDOR_ATTR_TDLS_DISC_RSP_EXT_AFTER_LAST - 1,
+};
+
 #endif

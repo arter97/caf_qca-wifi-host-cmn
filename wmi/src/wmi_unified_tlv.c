@@ -444,6 +444,10 @@ static const uint32_t pdev_param_tlv[] = {
 	PARAM_MAP(pdev_param_rtt_11az_rsid_range,
 		  PDEV_PARAM_RTT_11AZ_RSID_RANGE),
 	PARAM_MAP(pdev_param_pcie_config, PDEV_PARAM_PCIE_CONFIG),
+	PARAM_MAP(pdev_param_probe_resp_retry_limit,
+		  PDEV_PARAM_PROBE_RESP_RETRY_LIMIT),
+	PARAM_MAP(pdev_param_cts_timeout, PDEV_PARAM_CTS_TIMEOUT),
+	PARAM_MAP(pdev_param_slot_time, PDEV_PARAM_SLOT_TIME),
 };
 
 /* Populate vdev_param array whose index is host param, value is target param */
@@ -719,6 +723,12 @@ static const uint32_t vdev_param_tlv[] = {
 		  VDEV_PARAM_SET_DISABLED_SCHED_MODES),
 	PARAM_MAP(vdev_param_set_sap_ps_with_twt,
 		  VDEV_PARAM_SET_SAP_PS_WITH_TWT),
+	PARAM_MAP(vdev_param_rtt_11az_tb_max_session_expiry,
+		  VDEV_PARAM_RTT_11AZ_TB_MAX_SESSION_EXPIRY),
+	PARAM_MAP(vdev_param_rtt_11az_ntb_max_time_bw_meas,
+		  VDEV_PARAM_RTT_11AZ_NTB_MAX_TIME_BW_MEAS),
+	PARAM_MAP(vdev_param_rtt_11az_ntb_min_time_bw_meas,
+		  VDEV_PARAM_RTT_11AZ_NTB_MIN_TIME_BW_MEAS),
 };
 #endif
 
@@ -9859,7 +9869,7 @@ static inline void copy_fw_abi_version_tlv(wmi_unified_t wmi_handle,
 			(struct _wmi_abi_version *)&wmi_handle->fw_abi_version,
 			&cmd->host_abi_vers);
 
-	wmi_debug("INIT_CMD version: %d, %d, 0x%x, 0x%x, 0x%x, 0x%x",
+	qdf_debug("INIT_CMD version: %d, %d, 0x%x, 0x%x, 0x%x, 0x%x",
 		  WMI_VER_GET_MAJOR(cmd->host_abi_vers.abi_version_0),
 		  WMI_VER_GET_MINOR(cmd->host_abi_vers.abi_version_0),
 		  cmd->host_abi_vers.abi_version_ns_0,
@@ -10668,8 +10678,6 @@ send_pdev_fips_cmd_tlv(wmi_unified_t wmi_handle,
 		} else {
 			cmd->mode = FIPS_ENGINE_AES_CTR;
 		}
-		qdf_print("Key len = %d, Data len = %d",
-			  cmd->key_len, cmd->data_len);
 
 		print_hex_dump(KERN_DEBUG, "Key: ", DUMP_PREFIX_NONE, 16, 1,
 				cmd->key, cmd->key_len, true);
@@ -10690,7 +10698,6 @@ send_pdev_fips_cmd_tlv(wmi_unified_t wmi_handle,
 		wmi_mtrace(WMI_PDEV_FIPS_CMDID, NO_SESSION, 0);
 		retval = wmi_unified_cmd_send(wmi_handle, buf, len,
 			WMI_PDEV_FIPS_CMDID);
-		qdf_print("%s return value %d", __func__, retval);
 	} else {
 		qdf_print("\n%s:%d Key or Data is NULL", __func__, __LINE__);
 		wmi_buf_free(buf);
@@ -12944,7 +12951,7 @@ static uint32_t ready_extract_init_status_tlv(wmi_unified_t wmi_handle,
 	param_buf = (WMI_READY_EVENTID_param_tlvs *) evt_buf;
 	ev = param_buf->fixed_param;
 
-	qdf_print("%s:%d", __func__, ev->status);
+	wmi_info("%s:%d", __func__, ev->status);
 
 	return ev->status;
 }
@@ -14326,6 +14333,22 @@ extract_hw_bdf_status(wmi_service_ready_ext2_event_fixed_param *ev)
 	}
 }
 
+#ifdef QCA_MULTIPASS_SUPPORT
+static void
+extract_multipass_sap_cap(struct wlan_psoc_host_service_ext2_param *param,
+			  uint32_t target_cap_flag)
+{
+	param->is_multipass_sap =
+	WMI_TARGET_CAP_MULTIPASS_SAP_SUPPORT_GET(target_cap_flag);
+}
+#else
+static void
+extract_multipass_sap_cap(struct wlan_psoc_host_service_ext2_param *param,
+			  uint32_t target_cap_flag)
+{
+}
+#endif
+
 /**
  * extract_service_ready_ext2_tlv() - extract service ready ext2 params from
  * event
@@ -14394,6 +14417,9 @@ extract_service_ready_ext2_tlv(wmi_unified_t wmi_handle, uint8_t *event,
 	param->dp_peer_meta_data_ver =
 			WMI_TARGET_CAP_FLAGS_RX_PEER_METADATA_VERSION_GET(
 						ev->target_cap_flags);
+
+	extract_multipass_sap_cap(param, ev->target_cap_flags);
+
 	extract_ul_mumimo_support(param);
 	wmi_debug("htt peer data :%d", ev->target_cap_flags);
 
@@ -14721,6 +14747,24 @@ static void extract_mac_phy_mldcap(struct wlan_psoc_host_mac_phy_caps_ext2 *para
 	param->mldcap.str_freq_sep = WMI_FREQ_SEPERATION_STR_GET(mac_phy_caps->mld_capability);
 	param->mldcap.aar_support = WMI_SUPPORT_AAR_GET(mac_phy_caps->mld_capability);
 }
+
+/**
+ * extract_mac_phy_msdcap() - API to extract MSD Capabilities
+ * @param: host ext2 mac phy capabilities
+ * @mac_phy_caps: ext mac phy capabilities
+ *
+ * Return: void
+ */
+static void extract_mac_phy_msdcap(struct wlan_psoc_host_mac_phy_caps_ext2 *param,
+				   WMI_MAC_PHY_CAPABILITIES_EXT *mac_phy_caps)
+{
+	if (!param || !mac_phy_caps)
+		return;
+
+	param->msdcap.medium_sync_duration = WMI_MEDIUM_SYNC_DURATION_GET(mac_phy_caps->msd_capability);
+	param->msdcap.medium_sync_ofdm_ed_thresh = WMI_MEDIUM_SYNC_OFDM_ED_THRESHOLD_GET(mac_phy_caps->msd_capability);
+	param->msdcap.medium_sync_max_txop_num = WMI_MEDIUM_SYNC_MAX_NO_TXOPS_GET(mac_phy_caps->msd_capability);
+}
 #else
 static void extract_mac_phy_emlcap(struct wlan_psoc_host_mac_phy_caps_ext2 *param,
 				   WMI_MAC_PHY_CAPABILITIES_EXT *mac_phy_caps)
@@ -14728,6 +14772,11 @@ static void extract_mac_phy_emlcap(struct wlan_psoc_host_mac_phy_caps_ext2 *para
 }
 
 static void extract_mac_phy_mldcap(struct wlan_psoc_host_mac_phy_caps_ext2 *param,
+				   WMI_MAC_PHY_CAPABILITIES_EXT *mac_phy_caps)
+{
+}
+
+static void extract_mac_phy_msdcap(struct wlan_psoc_host_mac_phy_caps_ext2 *param,
 				   WMI_MAC_PHY_CAPABILITIES_EXT *mac_phy_caps)
 {
 }
@@ -14866,6 +14915,7 @@ static QDF_STATUS extract_mac_phy_cap_service_ready_ext2_tlv(
 	extract_mac_phy_cap_ehtcaps(param, mac_phy_caps);
 	extract_mac_phy_emlcap(param, mac_phy_caps);
 	extract_mac_phy_mldcap(param, mac_phy_caps);
+	extract_mac_phy_msdcap(param, mac_phy_caps);
 
 	return QDF_STATUS_SUCCESS;
 }
@@ -21724,6 +21774,11 @@ static void populate_tlv_events_id(WMI_EVT_ID *event_ids)
 #endif
 	event_ids[wmi_csa_ie_received_event_id] =
 		WMI_CSA_IE_RECEIVED_EVENTID;
+
+#ifdef QCA_SUPPORT_PRIMARY_LINK_MIGRATE
+	event_ids[wmi_peer_ptqm_migration_response_eventid] =
+			WMI_MLO_PRIMARY_LINK_PEER_MIGRATION_EVENTID;
+#endif
 }
 
 #ifdef WLAN_FEATURE_LINK_LAYER_STATS
@@ -22295,7 +22350,10 @@ static void populate_tlv_service(uint32_t *wmi_service)
 	wmi_service[wmi_service_mlo_tsf_sync] = WMI_SERVICE_MLO_TSF_SYNC;
 	wmi_service[wmi_service_n_link_mlo_support] =
 			WMI_SERVICE_N_LINK_MLO_SUPPORT;
+	wmi_service[wmi_service_per_link_stats_support] =
+					WMI_SERVICE_PER_LINK_STATS_SUPPORT;
 #endif
+	wmi_service[wmi_service_aux_mac_support] = WMI_SERVICE_AUX_MAC_SUPPORT;
 }
 
 /**

@@ -2928,9 +2928,9 @@ mgmt_rx_reo_handle_egress_overflow(struct mgmt_rx_reo_list *reo_egress_list)
 
 	reo_egress_list->overflow_count++;
 	reo_egress_list->last_overflow_ts = qdf_get_log_timestamp();
-	mgmt_rx_reo_err_rl("Egress overflow, cnt:%llu size:%u",
-			   reo_egress_list->overflow_count,
-			   qdf_list_size(&reo_egress_list->list));
+	mgmt_rx_reo_debug_rl("Egress overflow, cnt:%llu size:%u",
+			     reo_egress_list->overflow_count,
+			     qdf_list_size(&reo_egress_list->list));
 
 	egress_list_cur_size = qdf_list_size(&reo_egress_list->list);
 	egress_list_max_size = reo_egress_list->max_list_size;
@@ -3385,7 +3385,18 @@ mgmt_rx_reo_update_ingress_list(struct mgmt_rx_reo_ingress_list *ingress_list,
 	}
 	*is_queued = false;
 
-	ts_new = mgmt_rx_reo_get_global_ts(frame_desc->rx_params);
+	/**
+	 * In some cases, the current frame and its associated
+	 * rx_params/reo_params may get freed immediately after the frame
+	 * is queued to egress list. Hence fetching the global time stamp from
+	 * "frame_desc->rx_params->reo_params" could lead to use after free.
+	 * Store a copy of "reo_params" in the frame descriptor and access
+	 * the copy after the frame is queued to egress list.
+	 *
+	 * TODO:- Fix this cleanly using refcount mechanism or structure
+	 * duplication.
+	 */
+	ts_new = frame_desc->reo_params_copy.global_timestamp;
 
 	frame_desc->ingress_list_size_rx =
 				qdf_list_size(&reo_ingress_list->list);
@@ -3462,9 +3473,9 @@ mgmt_rx_reo_update_ingress_list(struct mgmt_rx_reo_ingress_list *ingress_list,
 			reo_ingress_list->overflow_count++;
 			reo_ingress_list->last_overflow_ts =
 							qdf_get_log_timestamp();
-			mgmt_rx_reo_err_rl("Ingress overflow, cnt:%llu size:%u",
-					   reo_ingress_list->overflow_count,
-					   qdf_list_size(ingress_list_ptr));
+			mgmt_rx_reo_debug_rl("Ingress ovrflw, cnt:%llu size:%u",
+					     reo_ingress_list->overflow_count,
+					     qdf_list_size(ingress_list_ptr));
 		}
 
 		if (new->wait_count.total_count == 0)
@@ -3484,8 +3495,20 @@ mgmt_rx_reo_update_ingress_list(struct mgmt_rx_reo_ingress_list *ingress_list,
 			uint8_t frame_link_id;
 			struct mgmt_rx_reo_wait_count *wait_count;
 
-			frame_link_id =
-				mgmt_rx_reo_get_link_id(frame_desc->rx_params);
+			/**
+			 * In some cases, the current frame and its associated
+			 * rx_params/reo_params may get freed immediately after
+			 * the frame is queued to egress list. Hence fetching
+			 * the link ID from
+			 * "frame_desc->rx_params->reo_params" could lead to
+			 * use after free. Store a copy of "reo_params" in the
+			 * frame descriptor and access the copy after the frame
+			 * is queued to egress list.
+			 *
+			 * TODO:- Fix this cleanly using refcount mechanism or
+			 * structure duplication.
+			 */
+			frame_link_id = frame_desc->reo_params_copy.link_id;
 			wait_count = &cur->wait_count;
 			if (wait_count->per_link_count[frame_link_id]) {
 				uint32_t old_wait_count;
@@ -4810,8 +4833,7 @@ wlan_mgmt_rx_reo_algo_entry(struct wlan_objmgr_pdev *pdev,
 	qdf_assert_always(desc->rx_params->reo_params->valid);
 	qdf_assert_always(desc->frame_type == IEEE80211_FC0_TYPE_MGT);
 
-	if (desc->type == MGMT_RX_REO_FRAME_DESC_HOST_CONSUMED_FRAME ||
-	    desc->type == MGMT_RX_REO_FRAME_DESC_FW_CONSUMED_FRAME)
+	if (desc->type == MGMT_RX_REO_FRAME_DESC_HOST_CONSUMED_FRAME)
 		qdf_assert_always(desc->rx_params->reo_params->duration_us);
 
 	ret = log_ingress_frame_before_list_update(reo_ctx, desc);

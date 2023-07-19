@@ -365,6 +365,7 @@ dp_pdev_nbuf_alloc_and_map_replenish(struct dp_soc *dp_soc,
 
 	nbuf_frag_info_t->paddr =
 		qdf_nbuf_get_frag_paddr((nbuf_frag_info_t->virt_addr).nbuf, 0);
+	if (qdf_atomic_read(&dp_soc->ipa_mapped))
 		dp_ipa_handle_rx_buf_smmu_mapping(dp_soc, (qdf_nbuf_t)(
 						  (nbuf_frag_info_t->virt_addr).nbuf),
 						  rx_desc_pool->buf_size,
@@ -2344,6 +2345,52 @@ dp_rx_validate_rx_callbacks(struct dp_soc *soc,
 	return QDF_STATUS_SUCCESS;
 }
 
+#if defined(WLAN_FEATURE_11BE_MLO) && defined(RAW_PKT_MLD_ADDR_CONVERSION)
+static void dp_rx_raw_pkt_mld_addr_conv(struct dp_soc *soc,
+					struct dp_vdev *vdev,
+					struct dp_txrx_peer *txrx_peer,
+					qdf_nbuf_t nbuf_head)
+{
+	qdf_nbuf_t nbuf, next;
+	struct dp_peer *peer = NULL;
+	struct ieee80211_frame *wh = NULL;
+
+	if (vdev->rx_decap_type == htt_cmn_pkt_type_native_wifi)
+		return;
+
+	peer = dp_peer_get_ref_by_id(soc, txrx_peer->peer_id,
+				     DP_MOD_ID_RX);
+
+	if (!peer)
+		return;
+
+	if (!IS_MLO_DP_MLD_PEER(peer)) {
+		dp_peer_unref_delete(peer, DP_MOD_ID_RX);
+		return;
+	}
+
+	nbuf = nbuf_head;
+	while (nbuf) {
+		next = nbuf->next;
+		wh = (struct ieee80211_frame *)qdf_nbuf_data(nbuf);
+		qdf_mem_copy(wh->i_addr1, vdev->mld_mac_addr.raw,
+			     QDF_MAC_ADDR_SIZE);
+		qdf_mem_copy(wh->i_addr2, peer->mac_addr.raw,
+			     QDF_MAC_ADDR_SIZE);
+		nbuf = next;
+	}
+
+	dp_peer_unref_delete(peer, DP_MOD_ID_RX);
+}
+#else
+static inline
+void dp_rx_raw_pkt_mld_addr_conv(struct dp_soc *soc,
+				 struct dp_vdev *vdev,
+				 struct dp_txrx_peer *txrx_peer,
+				 qdf_nbuf_t nbuf_head)
+{ }
+#endif
+
 QDF_STATUS dp_rx_deliver_to_stack(struct dp_soc *soc,
 				  struct dp_vdev *vdev,
 				  struct dp_txrx_peer *txrx_peer,
@@ -2356,6 +2403,7 @@ QDF_STATUS dp_rx_deliver_to_stack(struct dp_soc *soc,
 
 	if (qdf_unlikely(vdev->rx_decap_type == htt_cmn_pkt_type_raw) ||
 			(vdev->rx_decap_type == htt_cmn_pkt_type_native_wifi)) {
+		dp_rx_raw_pkt_mld_addr_conv(soc, vdev, txrx_peer, nbuf_head);
 		vdev->osif_rsim_rx_decap(vdev->osif_vdev, &nbuf_head,
 					 &nbuf_tail);
 	}
@@ -2826,6 +2874,37 @@ void dp_rx_deliver_to_stack_no_peer(struct dp_soc *soc, qdf_nbuf_t nbuf)
 #endif /* QCA_HOST_MODE_WIFI_DISABLED */
 
 #ifdef WLAN_SUPPORT_RX_FISA
+QDF_STATUS dp_fisa_config(ol_txrx_soc_handle cdp_soc, uint8_t pdev_id,
+			  enum cdp_fisa_config_id config_id,
+			  union cdp_fisa_config *cfg)
+{
+	struct dp_soc *soc = (struct dp_soc *)cdp_soc;
+	struct dp_pdev *pdev;
+	QDF_STATUS status;
+
+	pdev = dp_get_pdev_from_soc_pdev_id_wifi3(soc, pdev_id);
+	if (!pdev) {
+		dp_err("pdev is NULL for pdev_id %u", pdev_id);
+		return QDF_STATUS_E_INVAL;
+	}
+
+	switch (config_id) {
+	case CDP_FISA_HTT_RX_FISA_CFG:
+		status = dp_htt_rx_fisa_config(pdev, cfg->fisa_config);
+		break;
+	case CDP_FISA_HTT_RX_FSE_OP_CFG:
+		status = dp_htt_rx_flow_fse_operation(pdev, cfg->fse_op_cmd);
+		break;
+	case CDP_FISA_HTT_RX_FSE_SETUP_CFG:
+		status = dp_htt_rx_flow_fst_setup(pdev, cfg->fse_setup_info);
+		break;
+	default:
+		status = QDF_STATUS_E_INVAL;
+	}
+
+	return status;
+}
+
 void dp_rx_skip_tlvs(struct dp_soc *soc, qdf_nbuf_t nbuf, uint32_t l3_padding)
 {
 	QDF_NBUF_CB_RX_PACKET_L3_HDR_PAD(nbuf) = l3_padding;
@@ -3082,10 +3161,11 @@ dp_pdev_rx_buffers_attach(struct dp_soc *dp_soc, uint32_t mac_id,
 						     desc_list->rx_desc.cookie,
 						     rx_desc_pool->owner);
 
-			dp_ipa_handle_rx_buf_smmu_mapping(
-					dp_soc, nbuf,
-					rx_desc_pool->buf_size, true,
-					__func__, __LINE__);
+			if (qdf_atomic_read(&dp_soc->ipa_mapped))
+				dp_ipa_handle_rx_buf_smmu_mapping(
+						dp_soc, nbuf,
+						rx_desc_pool->buf_size, true,
+						__func__, __LINE__);
 
 			dp_audio_smmu_map(dp_soc->osdev,
 					  qdf_mem_paddr_from_dmaaddr(dp_soc->osdev,
@@ -3164,7 +3244,7 @@ dp_rx_pdev_desc_pool_alloc(struct dp_pdev *pdev)
 	rx_desc_pool = &soc->rx_desc_buf[mac_for_pdev];
 	rx_sw_desc_num = wlan_cfg_get_dp_soc_rx_sw_desc_num(soc->wlan_cfg_ctx);
 
-	rx_desc_pool->desc_type = DP_RX_DESC_BUF_TYPE;
+	rx_desc_pool->desc_type = QDF_DP_RX_DESC_BUF_TYPE;
 	status = dp_rx_desc_pool_alloc(soc,
 				       rx_sw_desc_num,
 				       rx_desc_pool);

@@ -987,9 +987,7 @@ mlo_update_connected_links_bmap(struct wlan_mlo_dev_context *mlo_dev_ctx,
 
 		for (j = 0; j < ml_parnter_info.num_partner_links; j++) {
 			if (wlan_vdev_get_link_id(mlo_dev_ctx->wlan_vdev_list[i]) ==
-			    ml_parnter_info.partner_link_info[j].link_id &&
-			    wlan_vdev_get_id(mlo_dev_ctx->wlan_vdev_list[i]) ==
-			    ml_parnter_info.partner_link_info[j].vdev_id)
+			    ml_parnter_info.partner_link_info[j].link_id)
 				mlo_update_connected_links(
 					mlo_dev_ctx->wlan_vdev_list[i], 1);
 		}
@@ -1459,7 +1457,7 @@ static QDF_STATUS ml_activate_connect_req_sched_cb(struct scheduler_msg *msg)
 	}
 
 	sta_ctx = mlo_dev_ctx->sta_ctx;
-	if (!sta_ctx) {
+	if (!sta_ctx || !sta_ctx->connect_req) {
 		wlan_objmgr_vdev_release_ref(vdev, WLAN_MLO_MGR_ID);
 		return QDF_STATUS_E_INVAL;
 	}
@@ -2505,4 +2503,31 @@ mlo_get_link_state_context(struct wlan_objmgr_psoc *psoc,
 	return QDF_STATUS_SUCCESS;
 }
 
+void
+wlan_mlo_send_vdev_pause(struct wlan_objmgr_psoc *psoc,
+			 struct wlan_objmgr_vdev *vdev,
+			 uint16_t session_id,
+			 uint16_t vdev_pause_dur)
+{
+	struct wlan_lmac_if_mlo_tx_ops *mlo_tx_ops;
+	struct mlo_vdev_pause vdev_pause_info;
+	QDF_STATUS status = QDF_STATUS_E_FAILURE;
+
+	mlo_tx_ops = &psoc->soc_cb.tx_ops->mlo_ops;
+	if (!mlo_tx_ops) {
+		mlo_err("tx_ops is null!");
+		return;
+	}
+
+	if (!mlo_tx_ops->send_vdev_pause) {
+		mlo_err("send_vdev_pause is null");
+		return;
+	}
+
+	vdev_pause_info.vdev_id = session_id;
+	vdev_pause_info.vdev_pause_duration = vdev_pause_dur;
+	status = mlo_tx_ops->send_vdev_pause(psoc, &vdev_pause_info);
+	if (QDF_IS_STATUS_ERROR(status))
+		mlo_err("Failed to send vdev pause to FW");
+}
 #endif

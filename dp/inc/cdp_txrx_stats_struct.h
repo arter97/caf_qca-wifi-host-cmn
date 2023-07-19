@@ -118,7 +118,7 @@
 #define CDP_MAX_TX_COMP_PPE_RING (CDP_MAX_TX_COMP_RINGS - 1)
 #define CDP_MAX_RX_WBM_RINGS 1 /* max rx wbm rings */
 
-#define CDP_MAX_TX_TQM_STATUS 9  /* max tx tqm completion status */
+#define CDP_MAX_TX_TQM_STATUS 15  /* max tx tqm completion status */
 #define CDP_MAX_TX_HTT_STATUS 7  /* max tx htt completion status */
 
 #define CDP_DMA_CODE_MAX 14 /* max rxdma error */
@@ -190,7 +190,11 @@
 #define CDP_SNR_UPDATE_AVG(x, y) x = CDP_SNR_AVG((x), CDP_SNR_IN((y)))
 
 /*Max SU EVM count */
+#ifdef QCA_MONITOR_2_0_SUPPORT
+#define DP_RX_MAX_SU_EVM_COUNT 256
+#else
 #define DP_RX_MAX_SU_EVM_COUNT 32
+#endif
 
 #define WDI_EVENT_BASE 0x100
 
@@ -1245,7 +1249,7 @@ struct cdp_delay_tid_stats {
  * @bytes: total no of bytes
  */
 struct cdp_pkt_info {
-	uint32_t num;
+	uint64_t num;
 	uint64_t bytes;
 };
 
@@ -1680,6 +1684,7 @@ struct cdp_tx_stats {
  * struct cdp_rx_stats - rx Level Stats
  * @to_stack: Total packets sent up the stack
  * @rcvd_reo:  Packets received on the reo ring
+ * @rcvd: Total packets received
  * @rx_lmac: Packets received on which lmac
  * @unicast: Total unicast packets
  * @multicast: Total multicast packets
@@ -1771,6 +1776,7 @@ struct cdp_tx_stats {
 struct cdp_rx_stats {
 	struct cdp_pkt_info to_stack;
 	struct cdp_pkt_info rcvd_reo[CDP_MAX_RX_RINGS];
+	struct cdp_pkt_info rcvd;
 	struct cdp_pkt_info rx_lmac[CDP_MAX_LMACS];
 	struct cdp_pkt_info unicast;
 	struct cdp_pkt_info multicast;

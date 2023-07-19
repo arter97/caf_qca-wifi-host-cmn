@@ -37,7 +37,7 @@
 #include <uniform_reo_status_header.h>
 #include <wbm_release_ring_tx.h>
 #include <phyrx_location.h>
-#ifdef QCA_MONITOR_2_0_SUPPORT
+#ifdef WLAN_PKT_CAPTURE_TX_2_0
 #include <mon_ingress_ring.h>
 #include <mon_destination_ring.h>
 #endif
@@ -96,7 +96,9 @@
 #define UNIFIED_WBM_RELEASE_RING_6_TX_RATE_STATS_INFO_TX_RATE_STATS_LSB \
 	WBM_RELEASE_RING_TX_TX_RATE_STATS_PPDU_TRANSMISSION_TSF_LSB
 
+#if defined(WLAN_PKT_CAPTURE_TX_2_0) || defined(WLAN_PKT_CAPTURE_RX_2_0)
 #include "hal_be_api_mon.h"
+#endif
 
 #define CMEM_REG_BASE 0x00100000
 
@@ -1072,6 +1074,20 @@ hal_rx_flow_setup_fse_6432(uint8_t *rx_fst, uint32_t table_offset,
 		HAL_SET_FLD_SM(RX_FLOW_SEARCH_ENTRY, L4_PROTOCOL,
 				flow->tuple_info.l4_protocol);
 
+	HAL_CLR_FLD(fse, RX_FLOW_SEARCH_ENTRY, USE_PPE);
+	HAL_SET_FLD(fse, RX_FLOW_SEARCH_ENTRY, USE_PPE) |=
+		HAL_SET_FLD_SM(RX_FLOW_SEARCH_ENTRY, USE_PPE, flow->use_ppe_ds);
+
+	HAL_CLR_FLD(fse, RX_FLOW_SEARCH_ENTRY, PRIORITY_VALID);
+	HAL_SET_FLD(fse, RX_FLOW_SEARCH_ENTRY, PRIORITY_VALID) |=
+		HAL_SET_FLD_SM(RX_FLOW_SEARCH_ENTRY, PRIORITY_VALID,
+			       flow->priority_vld);
+
+	HAL_CLR_FLD(fse, RX_FLOW_SEARCH_ENTRY, SERVICE_CODE);
+	HAL_SET_FLD(fse, RX_FLOW_SEARCH_ENTRY, SERVICE_CODE) |=
+		HAL_SET_FLD_SM(RX_FLOW_SEARCH_ENTRY, SERVICE_CODE,
+			       flow->service_code);
+
 	HAL_CLR_FLD(fse, RX_FLOW_SEARCH_ENTRY, REO_DESTINATION_HANDLER);
 	HAL_SET_FLD(fse, RX_FLOW_SEARCH_ENTRY, REO_DESTINATION_HANDLER) |=
 		HAL_SET_FLD_SM(RX_FLOW_SEARCH_ENTRY, REO_DESTINATION_HANDLER,
@@ -1275,7 +1291,7 @@ static void hal_reo_setup_6432(struct hal_soc *soc, void *reoparams,
 	 * 7: NOT_USED.
 	 */
 	if (reo_params->rx_hash_enabled) {
-		//	hal_compute_reo_remap_ix0_6432(soc);
+		hal_compute_reo_remap_ix0_6432(soc);
 		HAL_REG_WRITE(soc,
 				HWIO_REO_R0_DESTINATION_RING_CTRL_IX_1_ADDR
 				(REO_REG_REG_BASE), reo_params->remap0);
@@ -1509,8 +1525,10 @@ static void hal_hw_txrx_ops_attach_qcn6432(struct hal_soc *hal_soc)
 		hal_rx_link_desc_msdu0_ptr_6432;
 	hal_soc->ops->hal_reo_status_get_header =
 		hal_reo_status_get_header_6432;
+#ifdef WLAN_PKT_CAPTURE_RX_2_0
 	hal_soc->ops->hal_rx_status_get_tlv_info =
 		hal_rx_status_get_tlv_info_wrapper_be;
+#endif
 	hal_soc->ops->hal_rx_wbm_err_info_get =
 		hal_rx_wbm_err_info_get_generic_be;
 	hal_soc->ops->hal_tx_set_pcp_tid_map =
@@ -1688,7 +1706,7 @@ static void hal_hw_txrx_ops_attach_qcn6432(struct hal_soc *hal_soc)
 		hal_get_rx_max_ba_window_qcn6432;
 	hal_soc->ops->hal_get_reo_qdesc_size = hal_qcn6432_get_reo_qdesc_size;
 	/* TX MONITOR */
-#ifdef QCA_MONITOR_2_0_SUPPORT
+#ifdef WLAN_PKT_CAPTURE_TX_2_0
 	hal_soc->ops->hal_txmon_is_mon_buf_addr_tlv =
 		hal_txmon_is_mon_buf_addr_tlv_generic_be;
 	hal_soc->ops->hal_txmon_populate_packet_info =
@@ -1697,7 +1715,14 @@ static void hal_hw_txrx_ops_attach_qcn6432(struct hal_soc *hal_soc)
 		hal_txmon_status_parse_tlv_generic_be;
 	hal_soc->ops->hal_txmon_status_get_num_users =
 		hal_txmon_status_get_num_users_generic_be;
-#endif /* QCA_MONITOR_2_0_SUPPORT */
+#if defined(TX_MONITOR_WORD_MASK)
+	hal_soc->ops->hal_txmon_get_word_mask =
+				hal_txmon_get_word_mask_qcn6432;
+#else
+	hal_soc->ops->hal_txmon_get_word_mask =
+				hal_txmon_get_word_mask_generic_be;
+#endif /* TX_MONITOR_WORD_MASK */
+#endif /* WLAN_PKT_CAPTURE_TX_2_0 */
 	hal_soc->ops->hal_compute_reo_remap_ix0 = NULL;
 	hal_soc->ops->hal_tx_vdev_mismatch_routing_set =
 		hal_tx_vdev_mismatch_routing_set_generic_be;
@@ -1730,6 +1755,8 @@ static void hal_hw_txrx_ops_attach_qcn6432(struct hal_soc *hal_soc)
 		hal_tx_ppe2tcl_ring_halt_reset_6432;
 	hal_soc->ops->hal_tx_ring_halt_poll =
 		hal_tx_ppe2tcl_ring_halt_done_6432;
+	hal_soc->ops->hal_tx_get_num_ppe_vp_search_idx_tbl_entries =
+		hal_tx_get_num_ppe_vp_search_idx_reg_entries_6432;
 };
 
 struct hal_hw_srng_config hw_srng_table_6432[] = {
@@ -2072,7 +2099,7 @@ struct hal_hw_srng_config hw_srng_table_6432[] = {
 		.reg_size = {},
 		.max_size = HAL_RXDMA_MAX_RING_SIZE,
 	},
-#ifdef QCA_MONITOR_2_0_SUPPORT
+#ifdef WLAN_PKT_CAPTURE_RX_2_0
 	{ /* RXDMA_MONITOR_BUF */
 		.start_ring_id = HAL_SRNG_WMAC1_SW2RXDMA2_BUF,
 		.max_rings = 1,
@@ -2102,7 +2129,7 @@ struct hal_hw_srng_config hw_srng_table_6432[] = {
 		.reg_size = {},
 		.max_size = HAL_RXDMA_MAX_RING_SIZE,
 	},
-#ifdef QCA_MONITOR_2_0_SUPPORT
+#ifdef WLAN_PKT_CAPTURE_RX_2_0
 	{ /* RXDMA_MONITOR_DST */
 		.start_ring_id = HAL_SRNG_WMAC1_RXMON2SW0,
 		.max_rings = 2,
@@ -2163,7 +2190,6 @@ struct hal_hw_srng_config hw_srng_table_6432[] = {
 	},
 #endif
 	{ /* REO2PPE */
-#if 0
 		.start_ring_id = HAL_SRNG_REO2PPE,
 		.max_rings = 1,
 		.entry_size = sizeof(struct reo_destination_ring) >> 2,
@@ -2182,10 +2208,8 @@ struct hal_hw_srng_config hw_srng_table_6432[] = {
 		.max_size =
 			HWIO_REO_R0_REO2PPE_RING_BASE_LSB_RING_BASE_ADDR_LSB_BMSK >>
 			HWIO_REO_R0_REO2PPE_RING_BASE_LSB_RING_BASE_ADDR_LSB_SHFT,
-#endif
 	},
 	{ /* PPE2TCL */
-#if 0
 		.start_ring_id = HAL_SRNG_PPE2TCL1,
 		.max_rings = 1,
 		.entry_size = sizeof(struct tcl_entrance_from_ppe_ring) >> 2,
@@ -2201,26 +2225,15 @@ struct hal_hw_srng_config hw_srng_table_6432[] = {
 		.max_size =
 			HWIO_TCL_R0_SW2TCL1_RING_BASE_MSB_RING_SIZE_BMSK >>
 			HWIO_TCL_R0_SW2TCL1_RING_BASE_MSB_RING_SIZE_SHFT,
-#endif
 	},
 	{ /* PPE_RELEASE */
-#if 0
 		.start_ring_id = HAL_SRNG_WBM_PPE_RELEASE,
 		.max_rings = 1,
 		.entry_size = sizeof(struct wbm_release_ring) >> 2,
 		.lmac_ring = FALSE,
 		.ring_dir = HAL_SRNG_SRC_RING,
-		.reg_start = {
-			HWIO_WBM_R0_PPE_RELEASE_RING_BASE_LSB_ADDR(WBM_REG_REG_BASE),
-			HWIO_WBM_R2_PPE_RELEASE_RING_HP_ADDR(WBM_REG_REG_BASE),
-		},
-		.reg_size = {},
-		.max_size =
-			HWIO_WBM_R0_PPE_RELEASE_RING_BASE_MSB_RING_SIZE_BMSK >>
-			HWIO_WBM_R0_PPE_RELEASE_RING_BASE_MSB_RING_SIZE_SHFT,
-#endif
 	},
-#ifdef QCA_MONITOR_2_0_SUPPORT
+#ifdef WLAN_PKT_CAPTURE_TX_2_0
 	{ /* TX_MONITOR_BUF */
 		.start_ring_id = HAL_SRNG_SW2TXMON_BUF0,
 		.max_rings = 1,
@@ -2265,6 +2278,7 @@ struct hal_hw_srng_config hw_srng_table_6432[] = {
 		.max_size = HAL_RXDMA_MAX_RING_SIZE_BE,
 		.dmac_cmn_ring = TRUE,
 	},
+	{ /* SW2RXDMA_LINK_RELEASE */ 0},
 };
 
 /**
@@ -2329,4 +2343,5 @@ void hal_qcn6432_attach(struct hal_soc *hal_soc)
 	hal_soc->dmac_cmn_src_rxbuf_ring = true;
 	if (hal_soc->static_window_map)
 		hal_write_window_register(hal_soc);
+	hal_hw_txrx_ops_override_qcn6432(hal_soc);
 }

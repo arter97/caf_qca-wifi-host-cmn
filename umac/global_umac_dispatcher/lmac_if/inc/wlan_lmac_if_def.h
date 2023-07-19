@@ -686,6 +686,10 @@ struct wlan_lmac_if_p2p_tx_ops {
  * @atf_register_event_handler:   ATF register wmi event handlers
  * @atf_unregister_event_handler: ATF unregister wmi event handlers
  * @atf_set_ppdu_stats:           ATF set ppdu stats to get ATF stats
+ * @atf_send_peer_list_v2:        Send atf list of peers with increased
+ *                                maximum peer support
+ * @atf_set_grouping_v2:          Set atf grouping with increased maximum
+ *                                peer support
  */
 struct wlan_lmac_if_atf_tx_ops {
 	int32_t (*atf_enable_disable)(struct wlan_objmgr_vdev *vdev,
@@ -712,6 +716,12 @@ struct wlan_lmac_if_atf_tx_ops {
 	void (*atf_unregister_event_handler)(struct wlan_objmgr_psoc *psoc);
 	void (*atf_set_ppdu_stats)(struct wlan_objmgr_pdev *pdev,
 				   uint8_t value);
+#ifdef WLAN_ATF_INCREASED_STA
+	int32_t (*atf_send_peer_list_v2)(struct wlan_objmgr_pdev *pdev,
+					 struct pdev_atf_req_v2 *atf_req);
+	int32_t (*atf_set_grouping_v2)(struct wlan_objmgr_pdev *pdev,
+				       struct pdev_atf_ssid_group_req_v2 *req);
+#endif
 };
 #endif
 
@@ -1511,6 +1521,8 @@ struct wlan_lmac_if_son_rx_ops {
  * @shmem_local_ops: operations specific to WLAN_MLO_GLOBAL_SHMEM_SUPPORT
  * @send_tid_to_link_mapping: function to send T2LM command to FW
  * @send_link_removal_cmd: function to send MLO link removal command to FW
+ * @send_vdev_pause: function to send MLO vdev pause to FW
+ * @peer_ptqm_migrate_send: API to send peer ptqm migration request to FW
  */
 struct wlan_lmac_if_mlo_tx_ops {
 	QDF_STATUS (*register_events)(struct wlan_objmgr_psoc *psoc);
@@ -1529,6 +1541,13 @@ struct wlan_lmac_if_mlo_tx_ops {
 	QDF_STATUS (*send_link_removal_cmd)(
 		struct wlan_objmgr_psoc *psoc,
 		const struct mlo_link_removal_cmd_params *param);
+	QDF_STATUS (*send_vdev_pause)(struct wlan_objmgr_psoc *psoc,
+				      struct mlo_vdev_pause *info);
+#ifdef QCA_SUPPORT_PRIMARY_LINK_MIGRATE
+	QDF_STATUS (*peer_ptqm_migrate_send)(
+					struct wlan_objmgr_vdev *vdev,
+					struct peer_ptqm_migrate_params *param);
+#endif /* QCA_SUPPORT_PRIMARY_LINK_MIGRATE */
 };
 
 /**
@@ -1630,7 +1649,7 @@ struct wlan_lmac_if_twt_rx_ops {
 };
 #endif
 
-#if defined WLAN_FEATURE_SR
+#ifdef WLAN_FEATURE_SR
 struct wlan_lmac_if_spatial_reuse_tx_ops {
 	QDF_STATUS (*send_cfg)(struct wlan_objmgr_vdev *vdev, uint8_t sr_ctrl,
 			       uint8_t non_srg_max_pd_offset);
@@ -1641,6 +1660,8 @@ struct wlan_lmac_if_spatial_reuse_tx_ops {
 				struct wlan_objmgr_pdev *pdev,
 				bool is_sr_enable, int32_t srg_pd_threshold,
 				int32_t non_srg_pd_threshold);
+	QDF_STATUS (*target_if_sr_update)(struct wlan_objmgr_pdev *pdev,
+					  uint8_t vdev_id, uint32_t val);
 };
 #endif
 

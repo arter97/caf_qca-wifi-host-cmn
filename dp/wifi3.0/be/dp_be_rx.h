@@ -266,7 +266,7 @@ uint32_t dp_rx_nf_process(struct dp_intr *int_ctx,
 
 #if defined(WLAN_FEATURE_11BE_MLO) && defined(WLAN_MLO_MULTI_CHIP)
 struct dp_soc *
-dp_rx_replensih_soc_get(struct dp_soc *soc, uint8_t chip_id);
+dp_rx_replenish_soc_get(struct dp_soc *soc, uint8_t chip_id);
 
 struct dp_soc *
 dp_soc_get_by_idle_bm_id(struct dp_soc *soc, uint8_t idle_bm_id);
@@ -274,7 +274,7 @@ dp_soc_get_by_idle_bm_id(struct dp_soc *soc, uint8_t idle_bm_id);
 uint8_t dp_soc_get_num_soc_be(struct dp_soc *soc);
 #else
 static inline struct dp_soc *
-dp_rx_replensih_soc_get(struct dp_soc *soc, uint8_t chip_id)
+dp_rx_replenish_soc_get(struct dp_soc *soc, uint8_t chip_id)
 {
 	return soc;
 }
@@ -443,11 +443,10 @@ void dp_rx_prefetch_nbuf_data_be(qdf_nbuf_t nbuf, qdf_nbuf_t next)
 		qdf_prefetch(next);
 		/* skb->cb spread across 2 cache lines hence below prefetch */
 		qdf_prefetch(&next->_skb_refdst);
-		qdf_prefetch(&next->len);
 		qdf_prefetch(&next->protocol);
+		qdf_prefetch(&next->data);
 		qdf_prefetch(next->data);
 		qdf_prefetch(next->data + 64);
-		qdf_prefetch(next->data + 128);
 	}
 }
 #else
@@ -644,14 +643,28 @@ dp_rx_set_msdu_lmac_id(qdf_nbuf_t nbuf, uint32_t peer_mdata)
 #endif
 
 #ifndef CONFIG_NBUF_AP_PLATFORM
+#if defined(WLAN_FEATURE_11BE_MLO) && defined(DP_MLO_LINK_STATS_SUPPORT)
+static inline uint8_t
+dp_rx_peer_mdata_link_id_get_be(uint32_t peer_mdata)
+{
+	uint8_t link_id;
+
+	link_id = HTT_RX_PEER_META_DATA_V1A_LOGICAL_LINK_ID_GET(peer_mdata) + 1;
+	if (link_id > DP_MAX_MLO_LINKS)
+		link_id = 0;
+
+	return link_id;
+}
+#else
 static inline uint8_t
 dp_rx_peer_mdata_link_id_get_be(uint32_t peer_metadata)
 {
 	return 0;
 }
+#endif /* DP_MLO_LINK_STATS_SUPPORT */
 
 static inline void
-dp_rx_set_msdu_hw_link_id(qdf_nbuf_t nbuf, uint32_t peer_mdata)
+dp_rx_set_link_id_be(qdf_nbuf_t nbuf, uint32_t peer_mdata)
 {
 	uint8_t logical_link_id;
 
@@ -708,7 +721,7 @@ static inline uint8_t dp_rx_copy_desc_info_in_nbuf_cb(struct dp_soc *soc,
 	QDF_NBUF_CB_RX_VDEV_ID(nbuf) =
 		dp_rx_peer_metadata_vdev_id_get_be(soc, peer_mdata);
 	dp_rx_set_msdu_lmac_id(nbuf, peer_mdata);
-	dp_rx_set_msdu_hw_link_id(nbuf, peer_mdata);
+	dp_rx_set_link_id_be(nbuf, peer_mdata);
 
 	/* to indicate whether this msdu is rx offload */
 	pkt_capture_offload =
@@ -772,7 +785,7 @@ dp_rx_wbm_err_msdu_continuation_get(struct dp_soc *soc,
 }
 #else
 static inline void
-dp_rx_set_msdu_hw_link_id(qdf_nbuf_t nbuf, uint32_t peer_mdata)
+dp_rx_set_link_id_be(qdf_nbuf_t nbuf, uint32_t peer_mdata)
 {
 }
 
@@ -871,4 +884,15 @@ dp_rx_wbm_err_copy_desc_info_in_nbuf(struct dp_soc *soc,
 	dp_rx_set_wbm_err_info_in_nbuf(soc, nbuf, wbm_err);
 	return wbm_err.info;
 }
+
+#if defined(WLAN_FEATURE_11BE_MLO) && defined(WLAN_MLO_MULTI_CHIP)
+struct dp_soc *
+dp_get_soc_by_chip_id_be(struct dp_soc *soc, uint8_t chip_id);
+#else
+static inline struct dp_soc *
+dp_get_soc_by_chip_id_be(struct dp_soc *soc, uint8_t chip_id)
+{
+	return soc;
+}
+#endif
 #endif

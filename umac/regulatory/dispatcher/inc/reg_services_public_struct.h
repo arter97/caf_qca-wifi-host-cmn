@@ -99,6 +99,8 @@
 /* no subchannels punctured */
 #define NO_SCHANS_PUNC 0x0000
 
+#define REG_MIN_POWER -128
+
 /**
  * enum dfs_reg - DFS region
  * @DFS_UNINIT_REGION: un-initialized region
@@ -1885,6 +1887,7 @@ struct chan_power_info {
  * @frequency: Array of operating frequency
  * @tpe: TPE values processed from TPE IE
  * @chan_power_info: power info to send to FW
+ * @is_power_constraint_abs: is power constraint absolute or not
  */
 struct reg_tpc_power_info {
 	bool is_psd_power;
@@ -1896,6 +1899,7 @@ struct reg_tpc_power_info {
 	qdf_freq_t frequency[MAX_NUM_PWR_LEVEL];
 	uint8_t tpe[MAX_NUM_PWR_LEVEL];
 	struct chan_power_info chan_power_info[MAX_NUM_PWR_LEVEL];
+	bool is_power_constraint_abs;
 };
 
 #ifdef FEATURE_WLAN_CH_AVOID_EXT

@@ -1829,11 +1829,7 @@ dp_disable_enhanced_stats(struct cdp_soc_t *soc, uint8_t pdev_id)
 						   pdev_id);
 	struct dp_mon_pdev *mon_pdev;
 
-
 	if (!pdev || !pdev->monitor_pdev)
-		return QDF_STATUS_E_FAILURE;
-
-	if (pdev->pdev_deinit)
 		return QDF_STATUS_E_FAILURE;
 
 	mon_pdev = pdev->monitor_pdev;
@@ -3178,7 +3174,7 @@ dp_tx_stats_update(struct dp_pdev *pdev, struct dp_peer *peer,
 		   struct cdp_tx_completion_ppdu_user *ppdu,
 		   struct cdp_tx_completion_ppdu *ppdu_desc)
 {
-	uint8_t preamble, mcs;
+	uint8_t preamble, mcs, res_mcs = 0;
 	uint16_t num_msdu;
 	uint16_t num_mpdu;
 	uint16_t mpdu_tried;
@@ -3189,6 +3185,7 @@ dp_tx_stats_update(struct dp_pdev *pdev, struct dp_peer *peer,
 	uint32_t ratekbps = 0;
 	uint64_t tx_byte_count;
 	uint8_t idx = 0;
+	bool is_preamble_valid = true;
 
 	preamble = ppdu->preamble;
 	mcs = ppdu->mcs;
@@ -3293,36 +3290,29 @@ dp_tx_stats_update(struct dp_pdev *pdev, struct dp_peer *peer,
 			     tx_byte_count);
 	}
 
+	switch (preamble) {
+	case DOT11_A:
+		res_mcs = (mcs < MAX_MCS_11A) ? mcs : (MAX_MCS - 1);
+	break;
+	case DOT11_B:
+		res_mcs = (mcs < MAX_MCS_11B) ? mcs : (MAX_MCS - 1);
+	break;
+	case DOT11_N:
+		res_mcs = (mcs < MAX_MCS_11N) ? mcs : (MAX_MCS - 1);
+	break;
+	case DOT11_AC:
+		res_mcs = (mcs < MAX_MCS_11AC) ? mcs : (MAX_MCS - 1);
+	break;
+	case DOT11_AX:
+		res_mcs = (mcs < MAX_MCS_11AX) ? mcs : (MAX_MCS - 1);
+	break;
+	default:
+		is_preamble_valid = false;
+	}
+
 	DP_STATS_INCC(mon_peer,
-		      tx.pkt_type[preamble].mcs_count[MAX_MCS - 1], num_msdu,
-		      ((mcs >= MAX_MCS_11A) && (preamble == DOT11_A)));
-	DP_STATS_INCC(mon_peer,
-		      tx.pkt_type[preamble].mcs_count[mcs], num_msdu,
-		      ((mcs < MAX_MCS_11A) && (preamble == DOT11_A)));
-	DP_STATS_INCC(mon_peer,
-		      tx.pkt_type[preamble].mcs_count[MAX_MCS - 1], num_msdu,
-		      ((mcs >= MAX_MCS_11B) && (preamble == DOT11_B)));
-	DP_STATS_INCC(mon_peer,
-		      tx.pkt_type[preamble].mcs_count[mcs], num_msdu,
-		      ((mcs < (MAX_MCS_11B)) && (preamble == DOT11_B)));
-	DP_STATS_INCC(mon_peer,
-		      tx.pkt_type[preamble].mcs_count[MAX_MCS - 1], num_msdu,
-		      ((mcs >= MAX_MCS_11A) && (preamble == DOT11_N)));
-	DP_STATS_INCC(mon_peer,
-		      tx.pkt_type[preamble].mcs_count[mcs], num_msdu,
-		      ((mcs < MAX_MCS_11A) && (preamble == DOT11_N)));
-	DP_STATS_INCC(mon_peer,
-		      tx.pkt_type[preamble].mcs_count[MAX_MCS - 1], num_msdu,
-		      ((mcs >= MAX_MCS_11AC) && (preamble == DOT11_AC)));
-	DP_STATS_INCC(mon_peer,
-		      tx.pkt_type[preamble].mcs_count[mcs], num_msdu,
-		      ((mcs < MAX_MCS_11AC) && (preamble == DOT11_AC)));
-	DP_STATS_INCC(mon_peer,
-		      tx.pkt_type[preamble].mcs_count[MAX_MCS - 1], num_msdu,
-		      ((mcs >= MAX_MCS_11AX) && (preamble == DOT11_AX)));
-	DP_STATS_INCC(mon_peer,
-		      tx.pkt_type[preamble].mcs_count[mcs], num_msdu,
-		      ((mcs < MAX_MCS_11AX) && (preamble == DOT11_AX)));
+		      tx.pkt_type[preamble].mcs_count[res_mcs], num_msdu,
+		      is_preamble_valid);
 	DP_STATS_INCC(mon_peer, tx.ampdu_cnt, num_mpdu, ppdu->is_ampdu);
 	DP_STATS_INCC(mon_peer, tx.non_ampdu_cnt, num_mpdu, !(ppdu->is_ampdu));
 	DP_STATS_INCC(mon_peer, tx.pream_punct_cnt, 1, ppdu->pream_punct);
@@ -4732,8 +4722,10 @@ dp_ppdu_desc_user_stats_update(struct dp_pdev *pdev,
 	}
 	qdf_assert_always(ppdu_desc->num_users <= ppdu_desc->max_users);
 
-	dp_ppdu_desc_get_txmode(ppdu_desc);
-	dp_pdev_update_deter_stats(pdev, ppdu_desc);
+	if (wlan_cfg_get_sawf_stats_config(pdev->soc->wlan_cfg_ctx)) {
+		dp_ppdu_desc_get_txmode(ppdu_desc);
+		dp_pdev_update_deter_stats(pdev, ppdu_desc);
+	}
 
 	for (i = 0; i < num_users; i++) {
 		ppdu_desc->num_mpdu += ppdu_desc->user[i].num_mpdu;
@@ -4756,8 +4748,12 @@ dp_ppdu_desc_user_stats_update(struct dp_pdev *pdev,
 
 		dp_tx_ctrl_stats_update(pdev, peer, &ppdu_desc->user[i]);
 
-		dp_ppdu_desc_user_deter_stats_update(pdev, peer, ppdu_desc,
-						     &ppdu_desc->user[i]);
+		if (wlan_cfg_get_sawf_stats_config(pdev->soc->wlan_cfg_ctx)) {
+			dp_ppdu_desc_user_deter_stats_update(pdev,
+							     peer,
+							     ppdu_desc,
+							     &ppdu_desc->user[i]);
+		}
 
 		/*
 		 * different frame like DATA, BAR or CTRL has different
@@ -5326,6 +5322,46 @@ static bool dp_tx_ppdu_stats_feat_enable_check(struct dp_pdev *pdev)
 }
 #endif
 
+#ifdef WLAN_FEATURE_PKT_CAPTURE_V2
+static void dp_htt_process_smu_ppdu_stats_tlv(struct dp_soc *soc,
+					      qdf_nbuf_t htt_t2h_msg)
+{
+	uint32_t length;
+	uint8_t tlv_type;
+	uint32_t tlv_length, tlv_expected_size;
+	uint8_t *tlv_buf;
+
+	uint32_t *msg_word = (uint32_t *)qdf_nbuf_data(htt_t2h_msg);
+
+	length = HTT_T2H_PPDU_STATS_PAYLOAD_SIZE_GET(*msg_word);
+
+	msg_word = msg_word + 4;
+
+	while (length > 0) {
+		tlv_buf = (uint8_t *)msg_word;
+		tlv_type = HTT_STATS_TLV_TAG_GET(*msg_word);
+		tlv_length = HTT_STATS_TLV_LENGTH_GET(*msg_word);
+
+		if (tlv_length == 0)
+			break;
+
+		tlv_length += HTT_TLV_HDR_LEN;
+
+		if (tlv_type == HTT_PPDU_STATS_FOR_SMU_TLV) {
+			tlv_expected_size = sizeof(htt_ppdu_stats_for_smu_tlv);
+
+			if (tlv_length >= tlv_expected_size)
+				dp_wdi_event_handler(
+					WDI_EVENT_PKT_CAPTURE_PPDU_STATS,
+					soc, msg_word, HTT_INVALID_VDEV,
+					WDI_NO_VAL, 0);
+		}
+		msg_word = (uint32_t *)((uint8_t *)tlv_buf + tlv_length);
+		length -= (tlv_length);
+	}
+}
+#endif
+
 #if defined(WDI_EVENT_ENABLE)
 #ifdef QCA_ENHANCED_STATS_SUPPORT
 /**
@@ -5379,6 +5415,15 @@ static bool dp_txrx_ppdu_stats_handler(struct dp_soc *soc,
 
 	return free_buf;
 }
+#elif defined(WLAN_FEATURE_PKT_CAPTURE_V2)
+static bool dp_txrx_ppdu_stats_handler(struct dp_soc *soc,
+				       uint8_t pdev_id, qdf_nbuf_t htt_t2h_msg)
+{
+	if (wlan_cfg_get_pkt_capture_mode(soc->wlan_cfg_ctx))
+		dp_htt_process_smu_ppdu_stats_tlv(soc, htt_t2h_msg);
+
+	return true;
+}
 #elif (!defined(REMOVE_PKT_LOG))
 static bool dp_txrx_ppdu_stats_handler(struct dp_soc *soc,
 				       uint8_t pdev_id, qdf_nbuf_t htt_t2h_msg)
@@ -5389,7 +5434,8 @@ static bool dp_txrx_ppdu_stats_handler(struct dp_soc *soc,
 #endif
 
 #if defined(WDI_EVENT_ENABLE) &&\
-	(defined(QCA_ENHANCED_STATS_SUPPORT) || !defined(REMOVE_PKT_LOG))
+	(defined(QCA_ENHANCED_STATS_SUPPORT) || !defined(REMOVE_PKT_LOG) || \
+	 defined(WLAN_FEATURE_PKT_CAPTURE_V2))
 bool
 dp_ppdu_stats_ind_handler(struct htt_soc *soc,
 			  uint32_t *msg_word,
@@ -5542,10 +5588,10 @@ static void dp_mon_pdev_per_target_config(struct dp_pdev *pdev)
 	case TARGET_TYPE_KIWI:
 	case TARGET_TYPE_QCN9224:
 	case TARGET_TYPE_MANGO:
-	case TARGET_TYPE_PEACH:
 		mon_pdev->is_tlv_hdr_64_bit = true;
 		mon_pdev->tlv_hdr_size = HAL_RX_TLV64_HDR_SIZE;
 		break;
+	case TARGET_TYPE_PEACH:
 	default:
 		mon_pdev->is_tlv_hdr_64_bit = false;
 		mon_pdev->tlv_hdr_size = HAL_RX_TLV32_HDR_SIZE;
@@ -5844,20 +5890,6 @@ void dp_mon_register_lpc_ops_1_0(struct dp_mon_ops *mon_ops)
 	mon_ops->rx_hdr_length_set = dp_rx_mon_hdr_length_set;
 	dp_mon_register_tx_pkt_enh_ops_1_0(mon_ops);
 }
-
-static void dp_mon_pdev_filter_lpc_init(struct dp_mon_pdev *mon_pdev)
-{
-	if (!mon_pdev)
-		return;
-
-	mon_pdev->mon_filter_mode = MON_FILTER_PASS;
-	mon_pdev->fp_mgmt_filter = FILTER_MGMT_ALL;
-	mon_pdev->fp_ctrl_filter = FILTER_CTRL_ALL;
-	mon_pdev->fp_data_filter = FILTER_DATA_ALL;
-	mon_pdev->mo_mgmt_filter = 0;
-	mon_pdev->mo_ctrl_filter = 0;
-	mon_pdev->mo_data_filter = 0;
-}
 #else
 #if !defined(DISABLE_MON_CONFIG)
 static inline void dp_mon_config_register_ops(struct dp_mon_ops *mon_ops)
@@ -5900,11 +5932,6 @@ void dp_mon_register_lpc_ops_1_0(struct dp_mon_ops *mon_ops)
 
 	mon_ops->rx_hdr_length_set = NULL;
 	dp_mon_register_tx_pkt_enh_ops_1_0(mon_ops);
-}
-
-static void dp_mon_pdev_filter_lpc_init(struct dp_mon_pdev *mon_pdev)
-{
-	dp_mon_pdev_filter_init(mon_pdev);
 }
 #endif
 
@@ -5957,11 +5984,7 @@ QDF_STATUS dp_mon_pdev_init(struct dp_pdev *pdev)
 	mon_pdev->neighbour_peers_added = false;
 	mon_pdev->monitor_configured = false;
 
-	/* Monitor filter init */
-	if (wlan_cfg_get_local_pkt_capture(pdev->soc->wlan_cfg_ctx))
-		dp_mon_pdev_filter_lpc_init(mon_pdev);
-	else
-		dp_mon_pdev_filter_init(mon_pdev);
+	dp_mon_pdev_filter_init(mon_pdev);
 	/*
 	 * initialize ppdu tlv list
 	 */

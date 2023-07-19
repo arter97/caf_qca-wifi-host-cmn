@@ -693,6 +693,11 @@ void dp_peer_find_id_to_obj_remove(struct dp_soc *soc,
 
 	qdf_spin_lock_bh(&soc->peer_map_lock);
 	peer = soc->peer_id_to_obj_map[peer_id];
+	if (!peer) {
+		dp_err("unable to get peer during peer id obj map remove");
+		qdf_spin_unlock_bh(&soc->peer_map_lock);
+		return;
+	}
 	peer->peer_id = HTT_INVALID_PEER;
 	if (peer->txrx_peer)
 		peer->txrx_peer->peer_id = HTT_INVALID_PEER;
@@ -1282,19 +1287,6 @@ void dp_peer_map_ipa_evt(struct dp_soc *soc, struct dp_peer *peer,
 }
 #endif
 
-/**
- * dp_peer_host_add_map_ast() - Add ast entry with HW AST Index
- * @soc: SoC handle
- * @peer_id: peer id from firmware
- * @mac_addr: MAC address of ast node
- * @hw_peer_id: HW AST Index returned by target in peer map event
- * @vdev_id: vdev id for VAP to which the peer belongs to
- * @ast_hash: ast hash value in HW
- * @is_wds: flag to indicate peer map event for WDS ast entry
- *
- * Return: QDF_STATUS code
- */
-static inline
 QDF_STATUS dp_peer_host_add_map_ast(struct dp_soc *soc, uint16_t peer_id,
 				    uint8_t *mac_addr, uint16_t hw_peer_id,
 				    uint8_t vdev_id, uint16_t ast_hash,
@@ -2404,7 +2396,15 @@ void dp_peer_ast_table_detach(struct dp_soc *soc)
 
 void dp_peer_find_map_detach(struct dp_soc *soc)
 {
+	struct dp_peer *peer = NULL;
+	uint32_t i = 0;
+
 	if (soc->peer_id_to_obj_map) {
+		for (i = 0; i < soc->max_peer_id; i++) {
+			peer = soc->peer_id_to_obj_map[i];
+			if (peer)
+				dp_peer_unref_delete(peer, DP_MOD_ID_CONFIG);
+		}
 		qdf_mem_free(soc->peer_id_to_obj_map);
 		soc->peer_id_to_obj_map = NULL;
 		qdf_spinlock_destroy(&soc->peer_map_lock);
@@ -2475,6 +2475,9 @@ void dp_peer_rx_reo_shared_qaddr_delete(struct dp_soc *soc,
 {
 	uint8_t tid;
 	uint16_t peer_id;
+	uint32_t max_list_size;
+
+	max_list_size = soc->wlan_cfg_ctx->qref_control_size;
 
 	peer_id = peer->peer_id;
 
@@ -2482,10 +2485,30 @@ void dp_peer_rx_reo_shared_qaddr_delete(struct dp_soc *soc,
 		return;
 	if (IS_MLO_DP_LINK_PEER(peer))
 		return;
+
+	if (max_list_size) {
+		unsigned long curr_ts = qdf_get_system_timestamp();
+		struct dp_peer *primary_peer = peer;
+		uint16_t chip_id = 0xFFFF;
+		uint32_t qref_index;
+
+		qref_index = soc->shared_qaddr_del_idx;
+
+		soc->list_shared_qaddr_del[qref_index].peer_id =
+							  primary_peer->peer_id;
+		soc->list_shared_qaddr_del[qref_index].ts_qaddr_del = curr_ts;
+		soc->list_shared_qaddr_del[qref_index].chip_id = chip_id;
+		soc->shared_qaddr_del_idx++;
+
+		if (soc->shared_qaddr_del_idx == max_list_size)
+			soc->shared_qaddr_del_idx = 0;
+	}
+
 	if (hal_reo_shared_qaddr_is_enable(soc->hal_soc)) {
-		for (tid = 0; tid < DP_MAX_TIDS; tid++)
+		for (tid = 0; tid < DP_MAX_TIDS; tid++) {
 			hal_reo_shared_qaddr_write(soc->hal_soc,
 						   peer_id, tid, 0);
+		}
 	}
 }
 #endif
@@ -2825,10 +2848,12 @@ dp_rx_peer_map_handler(struct dp_soc *soc, uint16_t peer_id,
 			if (hal_reo_shared_qaddr_is_enable(soc->hal_soc) &&
 			    peer->rx_tid[0].hw_qdesc_vaddr_unaligned &&
 			    !IS_MLO_DP_LINK_PEER(peer)) {
+				add_entry_write_list(soc, peer, 0);
 				hal_reo_shared_qaddr_write(soc->hal_soc,
 							   peer_id,
 							   0,
 							   peer->rx_tid[0].hw_qdesc_paddr);
+				add_entry_write_list(soc, peer, DP_NON_QOS_TID);
 				hal_reo_shared_qaddr_write(soc->hal_soc,
 							   peer_id,
 							   DP_NON_QOS_TID,
@@ -2983,6 +3008,34 @@ dp_rx_peer_unmap_handler(struct dp_soc *soc, uint16_t peer_id,
 	dp_peer_unref_delete(peer, DP_MOD_ID_CONFIG);
 }
 
+#if defined(WLAN_FEATURE_11BE_MLO) && defined(DP_MLO_LINK_STATS_SUPPORT)
+QDF_STATUS
+dp_rx_peer_ext_evt(struct dp_soc *soc, struct dp_peer_ext_evt_info *info)
+{
+	struct dp_peer *peer = NULL;
+	struct cdp_peer_info peer_info = { 0 };
+
+	QDF_ASSERT(info->peer_id <= soc->max_peer_id);
+
+	DP_PEER_INFO_PARAMS_INIT(&peer_info, info->vdev_id, info->peer_mac_addr,
+				 false, CDP_LINK_PEER_TYPE);
+	peer = dp_peer_hash_find_wrapper(soc, &peer_info, DP_MOD_ID_CONFIG);
+
+	if (!peer) {
+		dp_err("peer NULL, id %u, MAC " QDF_MAC_ADDR_FMT ", vdev_id %u",
+		       info->peer_id, QDF_MAC_ADDR_REF(info->peer_mac_addr),
+		       info->vdev_id);
+
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	peer->link_id = info->link_id;
+	peer->link_id_valid = info->link_id_valid;
+	dp_peer_unref_delete(peer, DP_MOD_ID_CONFIG);
+
+	return QDF_STATUS_SUCCESS;
+}
+#endif
 #ifdef WLAN_FEATURE_11BE_MLO
 void dp_rx_mlo_peer_unmap_handler(struct dp_soc *soc, uint16_t peer_id)
 {

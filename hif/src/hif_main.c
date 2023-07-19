@@ -90,6 +90,7 @@ void *hif_get_targetdef(struct hif_opaque_softc *hif_ctx)
 }
 
 #ifdef FORCE_WAKE
+#ifndef QCA_WIFI_WCN6450
 void hif_srng_init_phase(struct hif_opaque_softc *hif_ctx,
 			 bool init_phase)
 {
@@ -98,6 +99,15 @@ void hif_srng_init_phase(struct hif_opaque_softc *hif_ctx,
 	if (ce_srng_based(scn))
 		hal_set_init_phase(scn->hal_soc, init_phase);
 }
+#else
+void hif_srng_init_phase(struct hif_opaque_softc *hif_ctx,
+			 bool init_phase)
+{
+	struct hif_softc *scn = HIF_GET_SOFTC(hif_ctx);
+
+	hal_set_init_phase(scn->hal_soc, init_phase);
+}
+#endif
 #endif /* FORCE_WAKE */
 
 #ifdef HIF_IPCI
@@ -874,38 +884,76 @@ __hif_tasklet_latency(struct hif_softc *scn, bool from_timer, int idx)
 	 * from_timer==true:  check if tasklet stall
 	 * from_timer==false: check tasklet execute comes late
 	 */
-
-	if ((from_timer ?
-	     qdf_system_time_after(sched_time, exec_time) :
-	     qdf_system_time_after(exec_time, sched_time)) &&
-	    qdf_system_time_after(curr_time, expect_exec_time)) {
+	if (from_timer ?
+	    (qdf_system_time_after(sched_time, exec_time) &&
+	     qdf_system_time_after(curr_time, expect_exec_time)) :
+	    qdf_system_time_after(exec_time, expect_exec_time)) {
 		hif_err("tasklet[%d] latency detected: from_timer %d, curr_time %lu, sched_time %lu, exec_time %lu, threshold %ums, timeout %ums, cpu_id %d, called: %ps",
 			idx, from_timer, curr_time, sched_time,
 			exec_time, threshold,
 			scn->latency_detect.timeout,
 			qdf_get_cpu(), (void *)_RET_IP_);
+		qdf_trigger_self_recovery(NULL,
+					  QDF_TASKLET_CREDIT_LATENCY_DETECT);
 		return -ETIMEDOUT;
 	}
 
 	return 0;
 }
 
-static inline void hif_tasklet_latency(struct hif_softc *scn, bool from_timer)
+/**
+ * hif_tasklet_latency_detect_enabled() - check whether latency detect
+ * is enabled for the tasklet which is specified by idx
+ * @scn: HIF opaque context
+ * @idx: CE id
+ *
+ * Return: true if latency detect is enabled for the specified tasklet,
+ * false otherwise.
+ */
+static inline bool
+hif_tasklet_latency_detect_enabled(struct hif_softc *scn, int idx)
 {
-	int i, ret;
+	if (QDF_GLOBAL_MISSION_MODE != hif_get_conparam(scn))
+		return false;
 
-	for (i = 0; i < HIF_TASKLET_IN_MONITOR; i++) {
-		if (!qdf_test_bit(i, scn->latency_detect.tasklet_bmap))
-			continue;
+	if (!scn->latency_detect.enable_detection)
+		return false;
 
-		ret = __hif_tasklet_latency(scn, from_timer, i);
-		if (!ret)
-			continue;
+	if (idx < 0 || idx >= HIF_TASKLET_IN_MONITOR ||
+	    !qdf_test_bit(idx, scn->latency_detect.tasklet_bmap))
+		return false;
 
-		qdf_trigger_self_recovery(NULL,
-					  QDF_TASKLET_CREDIT_LATENCY_DETECT);
+	return true;
+}
+
+void hif_tasklet_latency_record_exec(struct hif_softc *scn, int idx)
+{
+	if (!hif_tasklet_latency_detect_enabled(scn, idx))
 		return;
-	}
+
+	/*
+	 * hif_set_enable_detection(true) might come between
+	 * hif_tasklet_latency_record_sched() and
+	 * hif_tasklet_latency_record_exec() during wlan startup, then the
+	 * sched_time is 0 but exec_time is not, and hit the timeout case in
+	 * __hif_tasklet_latency().
+	 * To avoid such issue, skip exec_time recording if sched_time has not
+	 * been recorded.
+	 */
+	if (!scn->latency_detect.tasklet_info[idx].sched_time)
+		return;
+
+	scn->latency_detect.tasklet_info[idx].exec_time = qdf_system_ticks();
+	__hif_tasklet_latency(scn, false, idx);
+}
+
+void hif_tasklet_latency_record_sched(struct hif_softc *scn, int idx)
+{
+	if (!hif_tasklet_latency_detect_enabled(scn, idx))
+		return;
+
+	scn->latency_detect.tasklet_info[idx].sched_cpuid = qdf_get_cpu();
+	scn->latency_detect.tasklet_info[idx].sched_time = qdf_system_ticks();
 }
 
 static inline void hif_credit_latency(struct hif_softc *scn, bool from_timer)
@@ -939,6 +987,20 @@ static inline void hif_credit_latency(struct hif_softc *scn, bool from_timer)
 
 latency:
 	qdf_trigger_self_recovery(NULL, QDF_TASKLET_CREDIT_LATENCY_DETECT);
+}
+
+static inline void hif_tasklet_latency(struct hif_softc *scn, bool from_timer)
+{
+	int i, ret;
+
+	for (i = 0; i < HIF_TASKLET_IN_MONITOR; i++) {
+		if (!qdf_test_bit(i, scn->latency_detect.tasklet_bmap))
+			continue;
+
+		ret = __hif_tasklet_latency(scn, from_timer, i);
+		if (ret)
+			return;
+	}
 }
 
 /**
@@ -1136,6 +1198,58 @@ static inline void hif_latency_detect_init(struct hif_softc *scn)
 static inline void hif_latency_detect_deinit(struct hif_softc *scn)
 {}
 #endif
+
+#ifdef WLAN_FEATURE_AFFINITY_MGR
+#define AFFINITY_THRESHOLD 5000000
+static inline void
+hif_affinity_mgr_init(struct hif_softc *scn, struct wlan_objmgr_psoc *psoc)
+{
+	unsigned int cpus;
+	qdf_cpu_mask allowed_mask = {0};
+
+	scn->affinity_mgr_supported =
+		(cfg_get(psoc, CFG_IRQ_AFFINE_AUDIO_USE_CASE) &&
+		qdf_walt_get_cpus_taken_supported());
+
+	hif_info("Affinity Manager supported: %d", scn->affinity_mgr_supported);
+
+	if (!scn->affinity_mgr_supported)
+		return;
+
+	scn->time_threshold = AFFINITY_THRESHOLD;
+	qdf_for_each_possible_cpu(cpus)
+		if (qdf_topology_physical_package_id(cpus) ==
+			CPU_CLUSTER_TYPE_LITTLE)
+			qdf_cpumask_set_cpu(cpus, &allowed_mask);
+	qdf_cpumask_copy(&scn->allowed_mask, &allowed_mask);
+}
+#else
+static inline void
+hif_affinity_mgr_init(struct hif_softc *scn, struct wlan_objmgr_psoc *psoc)
+{
+}
+#endif
+
+#ifdef FEATURE_DIRECT_LINK
+/**
+ * hif_init_direct_link_rcv_pipe_num(): Initialize the direct link receive
+ *  pipe number
+ * @scn: hif context
+ *
+ * Return: None
+ */
+static inline
+void hif_init_direct_link_rcv_pipe_num(struct hif_softc *scn)
+{
+	scn->dl_recv_pipe_num = INVALID_PIPE_NO;
+}
+#else
+static inline
+void hif_init_direct_link_rcv_pipe_num(struct hif_softc *scn)
+{
+}
+#endif
+
 struct hif_opaque_softc *hif_open(qdf_device_t qdf_ctx,
 				  uint32_t mode,
 				  enum qdf_bus_type bus_type,
@@ -1184,6 +1298,8 @@ struct hif_opaque_softc *hif_open(qdf_device_t qdf_ctx,
 
 	hif_cpuhp_register(scn);
 	hif_latency_detect_init(scn);
+	hif_affinity_mgr_init(scn, psoc);
+	hif_init_direct_link_rcv_pipe_num(scn);
 
 out:
 	return GET_HIF_OPAQUE_HDL(scn);
@@ -1263,6 +1379,7 @@ static inline int hif_get_num_active_grp_tasklets(struct hif_softc *scn)
 	defined(QCA_WIFI_QCN9000) || defined(QCA_WIFI_QCA6490) || \
 	defined(QCA_WIFI_QCA6750) || defined(QCA_WIFI_QCA5018) || \
 	defined(QCA_WIFI_KIWI) || defined(QCA_WIFI_QCN9224) || \
+	defined(QCA_WIFI_QCN6432) || \
 	defined(QCA_WIFI_QCA9574)) || defined(QCA_WIFI_QCA5332)
 /**
  * hif_get_num_pending_work() - get the number of entries in
@@ -2276,6 +2393,39 @@ void hif_mem_free_consistent_unaligned(struct hif_softc *scn,
 					size, vaddr, paddr, memctx);
 	}
 }
+
+void hif_prealloc_get_multi_pages(struct hif_softc *scn, uint32_t desc_type,
+				  qdf_size_t elem_size, uint16_t elem_num,
+				  struct qdf_mem_multi_page_t *pages,
+				  bool cacheable)
+{
+	struct hif_driver_state_callbacks *cbk =
+			hif_get_callbacks_handle(scn);
+
+	if (cbk && cbk->prealloc_get_multi_pages)
+		cbk->prealloc_get_multi_pages(desc_type, elem_size, elem_num,
+					      pages, cacheable);
+
+	if (!pages->num_pages)
+		qdf_mem_multi_pages_alloc(scn->qdf_dev, pages,
+					  elem_size, elem_num, 0, cacheable);
+}
+
+void hif_prealloc_put_multi_pages(struct hif_softc *scn, uint32_t desc_type,
+				  struct qdf_mem_multi_page_t *pages,
+				  bool cacheable)
+{
+	struct hif_driver_state_callbacks *cbk =
+			hif_get_callbacks_handle(scn);
+
+	if (cbk && cbk->prealloc_put_multi_pages &&
+	    pages->is_mem_prealloc)
+		cbk->prealloc_put_multi_pages(desc_type, pages);
+
+	if (!pages->is_mem_prealloc)
+		qdf_mem_multi_pages_free(scn->qdf_dev, pages, 0,
+					 cacheable);
+}
 #endif
 
 /**
@@ -2493,5 +2643,339 @@ int hif_system_pm_state_check(struct hif_opaque_softc *hif)
 	}
 
 	return 0;
+}
+#endif
+#ifdef WLAN_FEATURE_AFFINITY_MGR
+/*
+ * hif_audio_cpu_affinity_allowed() - Check if audio cpu affinity allowed
+ *
+ * @scn: hif handle
+ * @cfg: hif affinity manager configuration for IRQ
+ * @audio_taken_cpu: Current CPUs which are taken by audio.
+ * @current_time: Current system time.
+ *
+ * This API checks for 2 conditions
+ *  1) Last audio taken mask and current taken mask are different
+ *  2) Last time when IRQ was affined away due to audio taken CPUs is
+ *     more than time threshold (5 Seconds in current case).
+ * If both condition satisfies then only return true.
+ *
+ * Return: bool: true if it is allowed to affine away audio taken cpus.
+ */
+static inline bool
+hif_audio_cpu_affinity_allowed(struct hif_softc *scn,
+			       struct hif_cpu_affinity *cfg,
+			       qdf_cpu_mask audio_taken_cpu,
+			       uint64_t current_time)
+{
+	if (!qdf_cpumask_equal(&audio_taken_cpu, &cfg->walt_taken_mask) &&
+	    (qdf_log_timestamp_to_usecs(current_time -
+			 cfg->last_affined_away)
+		< scn->time_threshold))
+		return false;
+	return true;
+}
+
+/*
+ * hif_affinity_mgr_check_update_mask() - Check if cpu mask need to be updated
+ *
+ * @scn: hif handle
+ * @cfg: hif affinity manager configuration for IRQ
+ * @audio_taken_cpu: Current CPUs which are taken by audio.
+ * @cpu_mask: CPU mask which need to be updated.
+ * @current_time: Current system time.
+ *
+ * This API checks if Pro audio use case is running and if cpu_mask need
+ * to be updated
+ *
+ * Return: QDF_STATUS
+ */
+static inline QDF_STATUS
+hif_affinity_mgr_check_update_mask(struct hif_softc *scn,
+				   struct hif_cpu_affinity *cfg,
+				   qdf_cpu_mask audio_taken_cpu,
+				   qdf_cpu_mask *cpu_mask,
+				   uint64_t current_time)
+{
+	qdf_cpu_mask allowed_mask;
+
+	/*
+	 * Case 1: audio_taken_mask is empty
+	 *   Check if passed cpu_mask and wlan_requested_mask is same or not.
+	 *      If both mask are different copy wlan_requested_mask(IRQ affinity
+	 *      mask requested by WLAN) to cpu_mask.
+	 *
+	 * Case 2: audio_taken_mask is not empty
+	 *   1. Only allow update if last time when IRQ was affined away due to
+	 *      audio taken CPUs is more than 5 seconds or update is requested
+	 *      by WLAN
+	 *   2. Only allow silver cores to be affined away.
+	 *   3. Check if any allowed CPUs for audio use case is set in cpu_mask.
+	 *       i. If any CPU mask is set, mask out that CPU from the cpu_mask
+	 *       ii. If after masking out audio taken cpu(Silver cores) cpu_mask
+	 *           is empty, set mask to all cpu except cpus taken by audio.
+	 * Example:
+	 *| Audio mask | mask allowed | cpu_mask | WLAN req mask | new cpu_mask|
+	 *|  0x00      |       0x00   |   0x0C   |       0x0C    |      0x0C   |
+	 *|  0x00      |       0x00   |   0x03   |       0x03    |      0x03   |
+	 *|  0x00      |       0x00   |   0xFC   |       0x03    |      0x03   |
+	 *|  0x00      |       0x00   |   0x03   |       0x0C    |      0x0C   |
+	 *|  0x0F      |       0x03   |   0x0C   |       0x0C    |      0x0C   |
+	 *|  0x0F      |       0x03   |   0x03   |       0x03    |      0xFC   |
+	 *|  0x03      |       0x03   |   0x0C   |       0x0C    |      0x0C   |
+	 *|  0x03      |       0x03   |   0x03   |       0x03    |      0xFC   |
+	 *|  0x03      |       0x03   |   0xFC   |       0x03    |      0xFC   |
+	 *|  0xF0      |       0x00   |   0x0C   |       0x0C    |      0x0C   |
+	 *|  0xF0      |       0x00   |   0x03   |       0x03    |      0x03   |
+	 */
+
+	/* Check if audio taken mask is empty*/
+	if (qdf_likely(qdf_cpumask_empty(&audio_taken_cpu))) {
+		/* If CPU mask requested by WLAN for the IRQ and
+		 * cpu_mask passed CPU mask set for IRQ is different
+		 * Copy requested mask into cpu_mask and return
+		 */
+		if (qdf_unlikely(!qdf_cpumask_equal(cpu_mask,
+						    &cfg->wlan_requested_mask))) {
+			qdf_cpumask_copy(cpu_mask, &cfg->wlan_requested_mask);
+			return QDF_STATUS_SUCCESS;
+		}
+		return QDF_STATUS_E_ALREADY;
+	}
+
+	if (!(hif_audio_cpu_affinity_allowed(scn, cfg, audio_taken_cpu,
+					     current_time) ||
+	      cfg->update_requested))
+		return QDF_STATUS_E_AGAIN;
+
+	/* Only allow Silver cores to be affine away */
+	qdf_cpumask_and(&allowed_mask, &scn->allowed_mask, &audio_taken_cpu);
+	if (qdf_cpumask_intersects(cpu_mask, &allowed_mask)) {
+		/* If any of taken CPU(Silver cores) mask is set in cpu_mask,
+		 *  mask out the audio taken CPUs from the cpu_mask.
+		 */
+		qdf_cpumask_andnot(cpu_mask, &cfg->wlan_requested_mask,
+				   &allowed_mask);
+		/* If cpu_mask is empty set it to all CPUs
+		 * except taken by audio(Silver cores)
+		 */
+		if (qdf_unlikely(qdf_cpumask_empty(cpu_mask)))
+			qdf_cpumask_complement(cpu_mask, &allowed_mask);
+		return QDF_STATUS_SUCCESS;
+	}
+
+	return QDF_STATUS_E_ALREADY;
+}
+
+static inline QDF_STATUS
+hif_check_and_affine_irq(struct hif_softc *scn, struct hif_cpu_affinity *cfg,
+			 qdf_cpu_mask audio_taken_cpu, qdf_cpu_mask cpu_mask,
+			 uint64_t current_time)
+{
+	QDF_STATUS status;
+
+	status = hif_affinity_mgr_check_update_mask(scn, cfg,
+						    audio_taken_cpu,
+						    &cpu_mask,
+						    current_time);
+	/* Set IRQ affinity if CPU mask was updated */
+	if (QDF_IS_STATUS_SUCCESS(status)) {
+		status = hif_irq_set_affinity_hint(cfg->irq,
+						   &cpu_mask);
+		if (QDF_IS_STATUS_SUCCESS(status)) {
+			/* Store audio taken CPU mask */
+			qdf_cpumask_copy(&cfg->walt_taken_mask,
+					 &audio_taken_cpu);
+			/* Store CPU mask which was set for IRQ*/
+			qdf_cpumask_copy(&cfg->current_irq_mask,
+					 &cpu_mask);
+			/* Set time when IRQ affinity was updated */
+			cfg->last_updated = current_time;
+			if (hif_audio_cpu_affinity_allowed(scn, cfg,
+							   audio_taken_cpu,
+							   current_time))
+				/* If CPU mask was updated due to CPU
+				 * taken by audio, update
+				 * last_affined_away time
+				 */
+				cfg->last_affined_away = current_time;
+		}
+	}
+
+	return status;
+}
+
+void hif_affinity_mgr_affine_irq(struct hif_softc *scn)
+{
+	bool audio_affinity_allowed = false;
+	int i, j, ce_id;
+	uint64_t current_time;
+	char cpu_str[10];
+	QDF_STATUS status;
+	qdf_cpu_mask cpu_mask, audio_taken_cpu;
+	struct HIF_CE_state *hif_state;
+	struct hif_exec_context *hif_ext_group;
+	struct CE_attr *host_ce_conf;
+	struct HIF_CE_state *ce_sc;
+	struct hif_cpu_affinity *cfg;
+
+	if (!scn->affinity_mgr_supported)
+		return;
+
+	current_time = hif_get_log_timestamp();
+	/* Get CPU mask for audio taken CPUs */
+	audio_taken_cpu = qdf_walt_get_cpus_taken();
+
+	ce_sc = HIF_GET_CE_STATE(scn);
+	host_ce_conf = ce_sc->host_ce_config;
+	for (ce_id = 0; ce_id < scn->ce_count; ce_id++) {
+		if (host_ce_conf[ce_id].flags & CE_ATTR_DISABLE_INTR)
+			continue;
+		cfg = &scn->ce_irq_cpu_mask[ce_id];
+		qdf_cpumask_copy(&cpu_mask, &cfg->current_irq_mask);
+		status =
+			hif_check_and_affine_irq(scn, cfg, audio_taken_cpu,
+						 cpu_mask, current_time);
+		if (QDF_IS_STATUS_SUCCESS(status))
+			audio_affinity_allowed = true;
+	}
+
+	hif_state = HIF_GET_CE_STATE(scn);
+	for (i = 0; i < hif_state->hif_num_extgroup; i++) {
+		hif_ext_group = hif_state->hif_ext_group[i];
+		for (j = 0; j < hif_ext_group->numirq; j++) {
+			cfg = &scn->irq_cpu_mask[hif_ext_group->grp_id][j];
+			qdf_cpumask_copy(&cpu_mask, &cfg->current_irq_mask);
+			status =
+				hif_check_and_affine_irq(scn, cfg, audio_taken_cpu,
+							 cpu_mask, current_time);
+			if (QDF_IS_STATUS_SUCCESS(status)) {
+				qdf_atomic_set(&hif_ext_group->force_napi_complete, -1);
+				audio_affinity_allowed = true;
+			}
+		}
+	}
+	if (audio_affinity_allowed) {
+		qdf_thread_cpumap_print_to_pagebuf(false, cpu_str,
+						   &audio_taken_cpu);
+		hif_info("Audio taken CPU mask: %s", cpu_str);
+	}
+}
+
+static inline QDF_STATUS
+hif_affinity_mgr_set_irq_affinity(struct hif_softc *scn, uint32_t irq,
+				  struct hif_cpu_affinity *cfg,
+				  qdf_cpu_mask *cpu_mask)
+{
+	uint64_t current_time;
+	char cpu_str[10];
+	QDF_STATUS status, mask_updated;
+	qdf_cpu_mask audio_taken_cpu = qdf_walt_get_cpus_taken();
+
+	current_time = hif_get_log_timestamp();
+	qdf_cpumask_copy(&cfg->wlan_requested_mask, cpu_mask);
+	cfg->update_requested = true;
+	mask_updated = hif_affinity_mgr_check_update_mask(scn, cfg,
+							  audio_taken_cpu,
+							  cpu_mask,
+							  current_time);
+	status = hif_irq_set_affinity_hint(irq, cpu_mask);
+	if (QDF_IS_STATUS_SUCCESS(status)) {
+		qdf_cpumask_copy(&cfg->walt_taken_mask, &audio_taken_cpu);
+		qdf_cpumask_copy(&cfg->current_irq_mask, cpu_mask);
+		if (QDF_IS_STATUS_SUCCESS(mask_updated)) {
+			cfg->last_updated = current_time;
+			if (hif_audio_cpu_affinity_allowed(scn, cfg,
+							   audio_taken_cpu,
+							   current_time)) {
+				cfg->last_affined_away = current_time;
+				qdf_thread_cpumap_print_to_pagebuf(false,
+								   cpu_str,
+								   &audio_taken_cpu);
+				hif_info_rl("Audio taken CPU mask: %s",
+					    cpu_str);
+			}
+		}
+	}
+	cfg->update_requested = false;
+	return status;
+}
+
+QDF_STATUS
+hif_affinity_mgr_set_qrg_irq_affinity(struct hif_softc *scn, uint32_t irq,
+				      uint32_t grp_id, uint32_t irq_index,
+				      qdf_cpu_mask *cpu_mask)
+{
+	struct hif_cpu_affinity *cfg;
+
+	if (!scn->affinity_mgr_supported)
+		return hif_irq_set_affinity_hint(irq, cpu_mask);
+
+	cfg = &scn->irq_cpu_mask[grp_id][irq_index];
+	return hif_affinity_mgr_set_irq_affinity(scn, irq, cfg, cpu_mask);
+}
+
+QDF_STATUS
+hif_affinity_mgr_set_ce_irq_affinity(struct hif_softc *scn, uint32_t irq,
+				     uint32_t ce_id, qdf_cpu_mask *cpu_mask)
+{
+	struct hif_cpu_affinity *cfg;
+
+	if (!scn->affinity_mgr_supported)
+		return hif_irq_set_affinity_hint(irq, cpu_mask);
+
+	cfg = &scn->ce_irq_cpu_mask[ce_id];
+	return hif_affinity_mgr_set_irq_affinity(scn, irq, cfg, cpu_mask);
+}
+
+void
+hif_affinity_mgr_init_ce_irq(struct hif_softc *scn, int id, int irq)
+{
+	unsigned int cpus;
+	qdf_cpu_mask cpu_mask = {0};
+	struct hif_cpu_affinity *cfg = NULL;
+
+	if (!scn->affinity_mgr_supported)
+		return;
+
+	/* Set CPU Mask to Silver core */
+	qdf_for_each_possible_cpu(cpus)
+		if (qdf_topology_physical_package_id(cpus) ==
+		    CPU_CLUSTER_TYPE_LITTLE)
+			qdf_cpumask_set_cpu(cpus, &cpu_mask);
+
+	cfg = &scn->ce_irq_cpu_mask[id];
+	qdf_cpumask_copy(&cfg->current_irq_mask, &cpu_mask);
+	qdf_cpumask_copy(&cfg->wlan_requested_mask, &cpu_mask);
+	cfg->irq = irq;
+	cfg->last_updated = 0;
+	cfg->last_affined_away = 0;
+	cfg->update_requested = false;
+}
+
+void
+hif_affinity_mgr_init_grp_irq(struct hif_softc *scn, int grp_id,
+			      int irq_num, int irq)
+{
+	unsigned int cpus;
+	qdf_cpu_mask cpu_mask = {0};
+	struct hif_cpu_affinity *cfg = NULL;
+
+	if (!scn->affinity_mgr_supported)
+		return;
+
+	/* Set CPU Mask to Silver core */
+	qdf_for_each_possible_cpu(cpus)
+		if (qdf_topology_physical_package_id(cpus) ==
+		    CPU_CLUSTER_TYPE_LITTLE)
+			qdf_cpumask_set_cpu(cpus, &cpu_mask);
+
+	cfg = &scn->irq_cpu_mask[grp_id][irq_num];
+	qdf_cpumask_copy(&cfg->current_irq_mask, &cpu_mask);
+	qdf_cpumask_copy(&cfg->wlan_requested_mask, &cpu_mask);
+	cfg->irq = irq;
+	cfg->last_updated = 0;
+	cfg->last_affined_away = 0;
+	cfg->update_requested = false;
 }
 #endif

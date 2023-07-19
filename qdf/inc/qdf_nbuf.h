@@ -1365,6 +1365,7 @@ qdf_nbuf_unmap_nbytes_single_paddr(qdf_device_t osdev, qdf_nbuf_t buf,
 				   qdf_dma_addr_t phy_addr, qdf_dma_dir_t dir,
 				   int nbytes)
 {
+	__qdf_record_nbuf_nbytes(__qdf_nbuf_get_end_offset(buf), dir, false);
 	__qdf_mem_unmap_nbytes_single(osdev, phy_addr, dir, nbytes);
 }
 #endif /* NBUF_MAP_UNMAP_DEBUG */
@@ -5624,5 +5625,16 @@ qdf_nbuf_t qdf_get_nbuf_valid_frag(qdf_nbuf_t nbuf);
  * Return: True if skb support fast_xmit otherwise false
  */
 bool qdf_nbuf_fast_xmit(qdf_nbuf_t nbuf);
+
+/**
+ * qdf_nbuf_set_fast_xmit() - Set fast_xmit in SKB
+ * @nbuf: qdf_nbuf_t master nbuf
+ * @value: value to set in fast_xmit
+ *
+ * This function set fast_xmit in SKB if it exist.
+ *
+ * Return: void
+ */
+void qdf_nbuf_set_fast_xmit(qdf_nbuf_t nbuf, int value);
 
 #endif /* _QDF_NBUF_H */

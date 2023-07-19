@@ -1217,6 +1217,9 @@ struct wmi_host_link_state_params {
  * @emlsr_support: indicate if eMLSR supported
  * @emlmr_support: indicate if eMLMR supported
  * @msd_cap_support: indicate if MSD supported
+ * @nstr_bitmap_present: indicate if NSTR bitmap is present
+ * @nstr_bitmap_size: Indicates size of NSTR bitmap,
+ *                    as per the 802.11be specification
  * @unused: spare bits
  * @mld_mac: MLD mac address
  * @logical_link_index: Unique index for links of the mlo. Starts with Zero
@@ -1229,6 +1232,9 @@ struct wmi_host_link_state_params {
  * @medium_sync_duration: medium sync duration in us
  * @medium_sync_ofdm_ed_thresh: medium sync ofdm threshold in us
  * @medium_sync_max_txop_num: Max number of TXOPs
+ * @max_num_simultaneous_links: Max number of simultaneous links as per
+ *                              MLD Capability for ML peer
+ * @nstr_indication_bitmap: NSTR indication bitmap
  */
 struct peer_assoc_mlo_params {
 	uint32_t mlo_enabled:1,
@@ -1240,7 +1246,9 @@ struct peer_assoc_mlo_params {
 		 emlsr_support:1,
 		 emlmr_support:1,
 		 msd_cap_support:1,
-		 unused:23;
+		 nstr_bitmap_present:1,
+		 nstr_bitmap_size:1,
+		 unused:21;
 	uint8_t mld_mac[QDF_MAC_ADDR_SIZE];
 	uint32_t logical_link_index;
 	uint32_t ml_peer_id;
@@ -1252,6 +1260,8 @@ struct peer_assoc_mlo_params {
 	uint16_t medium_sync_duration;
 	uint16_t medium_sync_ofdm_ed_thresh;
 	uint16_t medium_sync_max_txop_num;
+	uint16_t max_num_simultaneous_links;
+	uint32_t nstr_indication_bitmap;
 };
 
 /**
@@ -3223,7 +3233,7 @@ struct smart_ant_enable_tx_feedback_params {
  * @rssi_rpt_mode: RSSI report mode
  * @rssi_thr: RSSI threshold
  * @pwr_format: Power format
- * @rpt_mode: Report mdoe
+ * @rpt_mode: Report mode
  * @bin_scale: BIN scale
  * @dbm_adj: DBM adjust
  * @chn_mask: chain mask
@@ -3641,7 +3651,7 @@ struct macaddr_params {
  * struct acparams_params - acparams config structure
  * @ac: AC to configure
  * @use_rts: Use rts for this AC
- * @aggrsize_scaling: Aggregrate size scaling for the AC
+ * @aggrsize_scaling: Aggregate size scaling for the AC
  * @min_kbps: min kbps req
  */
 struct acparams_params {
@@ -5300,6 +5310,9 @@ typedef enum {
 #ifdef WLAN_FEATURE_11BE_MLO
 	wmi_mlo_link_state_info_eventid,
 #endif
+#ifdef QCA_SUPPORT_PRIMARY_LINK_MIGRATE
+	wmi_peer_ptqm_migration_response_eventid,
+#endif
 	wmi_events_max,
 } wmi_conv_event_id;
 
@@ -5672,6 +5685,10 @@ typedef enum {
 	PDEV_PARAM(pdev_param_rtt_11az_rsid_range,
 		   PDEV_PARAM_RTT_11AZ_RSID_RANGE),
 	PDEV_PARAM(pdev_param_pcie_config, PDEV_PARAM_PCIE_CONFIG),
+	PDEV_PARAM(pdev_param_probe_resp_retry_limit,
+		   PDEV_PARAM_PROBE_RESP_RETRY_LIMIT),
+	PDEV_PARAM(pdev_param_cts_timeout, PDEV_PARAM_CTS_TIMEOUT),
+	PDEV_PARAM(pdev_param_slot_time, PDEV_PARAM_SLOT_TIME),
 	pdev_param_max,
 } wmi_conv_pdev_params_id;
 
@@ -5992,6 +6009,12 @@ typedef enum {
 		   VDEV_PARAM_SET_SAP_PS_WITH_TWT),
 	VDEV_PARAM(vdev_param_chwidth_with_notify,
 		   VDEV_PARAM_CHWIDTH_WITH_NOTIFY),
+	VDEV_PARAM(vdev_param_rtt_11az_tb_max_session_expiry,
+		   VDEV_PARAM_RTT_11AZ_TB_MAX_SESSION_EXPIRY),
+	VDEV_PARAM(vdev_param_rtt_11az_ntb_max_time_bw_meas,
+		   VDEV_PARAM_RTT_11AZ_NTB_MAX_TIME_BW_MEAS),
+	VDEV_PARAM(vdev_param_rtt_11az_ntb_min_time_bw_meas,
+		   VDEV_PARAM_RTT_11AZ_NTB_MIN_TIME_BW_MEAS),
 	vdev_param_max,
 } wmi_conv_vdev_param_id;
 
@@ -6363,7 +6386,9 @@ typedef enum {
 #ifdef WLAN_FEATURE_11BE_MLO
 	wmi_service_mlo_tsf_sync,
 	wmi_service_n_link_mlo_support,
+	wmi_service_per_link_stats_support,
 #endif
+	wmi_service_aux_mac_support,
 	wmi_services_max,
 } wmi_conv_service_ids;
 #define WMI_SERVICE_UNAVAILABLE 0xFFFF
@@ -8363,7 +8388,7 @@ struct wmi_host_proxy_ast_reserve_param {
 
 /**
  * struct wmi_host_pdev_band_to_mac - freq range for mac
- * @pdev_id: PDEV ID to identifiy mac
+ * @pdev_id: PDEV ID to identify mac
  * @start_freq: start frequency value
  * @end_freq: end frequency value
  */

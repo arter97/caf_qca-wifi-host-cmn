@@ -48,7 +48,7 @@ static inline bool wlan_ipa_uc_is_enabled(struct wlan_ipa_config *ipa_cfg)
 }
 
 /**
- * wlan_ipa_is_opt_wifi_dp_enabled() - Is IPA optional wifi dp enabled?
+ * wlan_ipa_is_opt_wifi_dp_enabled() - Is optional wifi dp enabled from WLAN
  * @ipa_cfg: IPA config
  *
  * Return: true if IPA opt wifi dp is enabled, false otherwise
@@ -525,7 +525,7 @@ void wlan_ipa_uc_rt_debug_host_dump(struct wlan_ipa_priv *ipa_ctx);
 
 /**
  * wlan_ipa_uc_rt_debug_destructor() - called by data packet free
- * @nbuff: packet pinter
+ * @nbuff: packet pointer
  *
  * when free data packet, will be invoked by wlan client and will increase
  * free counter
@@ -628,29 +628,10 @@ void ipa_set_rps_per_vdev(struct wlan_ipa_priv *ipa_ctx, uint8_t vdev_id,
 		ipa_ctx->rps_enable(vdev_id, enable);
 }
 
-/**
- * wlan_ipa_handle_multiple_sap_evt() - Handle multiple SAP connect/disconnect
- * @ipa_ctx: IPA global context
- * @type: IPA event type.
- *
- * This function is used to disable pipes when multiple SAP are connected and
- * enable pipes back when only one SAP is connected.
- *
- * Return: None
- */
-void wlan_ipa_handle_multiple_sap_evt(struct wlan_ipa_priv *ipa_ctx,
-				      qdf_ipa_wlan_event type);
-
 #else
 static inline
 void ipa_set_rps_per_vdev(struct wlan_ipa_priv *ipa_ctx, uint8_t vdev_id,
 			  bool enable)
-{
-}
-
-static inline
-void wlan_ipa_handle_multiple_sap_evt(struct wlan_ipa_priv *ipa_ctx,
-				      qdf_ipa_wlan_event type)
 {
 }
 #endif
@@ -884,9 +865,9 @@ int wlan_ipa_wdi_opt_dpath_flt_rsrv_cb(
  * response to IPA
  * @is_success: result of filter reservation
  *
- * Return 0 on success, negative on failure
+ * Return: None
  */
-int wlan_ipa_wdi_opt_dpath_notify_flt_rsvd(bool is_success);
+void wlan_ipa_wdi_opt_dpath_notify_flt_rsvd(bool is_success);
 
 /**
  * wlan_ipa_wdi_opt_dpath_flt_add_cb - Add rx filter tuple to cce filter
@@ -935,9 +916,9 @@ int wlan_ipa_wdi_opt_dpath_flt_rsrv_rel_cb(void *ipa_ctx);
  * @result0: result of filter0 release
  * @result1: result of filter1 release
  *
- * Return: 0 on success, negative on failure
+ * Return: void
  */
-int wlan_ipa_wdi_opt_dpath_notify_flt_rlsd(int result0, int result1);
+void wlan_ipa_wdi_opt_dpath_notify_flt_rlsd(int result0, int result1);
 
 #endif /* IPA_OPT_WIFI_DP */
 #endif /* IPA_OFFLOAD */

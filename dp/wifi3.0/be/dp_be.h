@@ -55,12 +55,9 @@ enum CMEM_MEM_CLIENTS {
 #define DP_CC_PPT_MEM_SIZE 8192
 #endif
 
-/* FST required CMEM offset from CMEM pool */
+/* FST required CMEM offset M pool */
 #define DP_FST_MEM_OFFSET_IN_CMEM \
 	(DP_CC_MEM_OFFSET_IN_CMEM + DP_CC_PPT_MEM_SIZE)
-
-/* CMEM size for FISA FST 16K */
-#define DP_CMEM_FST_SIZE 16384
 
 /* lower 9 bits in Desc ID for offset in page of SPT */
 #define DP_CC_DESC_ID_SPT_VA_OS_SHIFT 0
@@ -310,6 +307,7 @@ struct dp_ppeds_napi {
  * @num_ppe_vp_entries: Number of PPE VP entries
  * @num_ppe_vp_search_idx_entries: PPEDS VP search idx entries
  * @irq_name: PPEDS VP irq names
+ * @ppeds_stats: PPEDS stats
  * @mlo_enabled: Flag to indicate MLO is enabled or not
  * @mlo_chip_id: MLO chip_id
  * @ml_ctxt: pointer to global ml_context
@@ -351,6 +349,11 @@ struct dp_soc_be {
 	uint8_t num_ppe_vp_search_idx_entries;
 	uint8_t num_ppe_vp_profiles;
 	char irq_name[DP_PPE_INTR_MAX][DP_PPE_INTR_STRNG_LEN];
+	struct {
+		struct {
+			uint64_t desc_alloc_failed;
+		} tx;
+	} ppeds_stats;
 #endif
 #ifdef WLAN_FEATURE_11BE_MLO
 #ifdef WLAN_MLO_MULTI_CHIP
@@ -634,7 +637,7 @@ QDF_STATUS
 dp_hw_cookie_conversion_attach(struct dp_soc_be *be_soc,
 			       struct dp_hw_cookie_conversion_t *cc_ctx,
 			       uint32_t num_descs,
-			       enum dp_desc_type desc_type,
+			       enum qdf_dp_desc_type desc_type,
 			       uint8_t desc_pool_id);
 
 void dp_reo_shared_qaddr_detach(struct dp_soc *soc);
@@ -845,17 +848,17 @@ _dp_srng_test_and_update_nf_params(struct dp_soc *soc,
 
 static inline
 uint32_t dp_desc_pool_get_cmem_base(uint8_t chip_id, uint8_t desc_pool_id,
-				    enum dp_desc_type desc_type)
+				    enum qdf_dp_desc_type desc_type)
 {
 	switch (desc_type) {
-	case DP_TX_DESC_TYPE:
+	case QDF_DP_TX_DESC_TYPE:
 		return (DP_TX_DESC_CMEM_OFFSET +
 			(desc_pool_id * DP_TX_DESC_POOL_CMEM_SIZE));
-	case DP_RX_DESC_BUF_TYPE:
+	case QDF_DP_RX_DESC_BUF_TYPE:
 		return (DP_RX_DESC_CMEM_OFFSET +
 			((chip_id * MAX_RXDESC_POOLS) + desc_pool_id) *
 			DP_RX_DESC_POOL_CMEM_SIZE);
-	case DP_TX_PPEDS_DESC_TYPE:
+	case QDF_DP_TX_PPEDS_DESC_TYPE:
 		return DP_TX_PPEDS_DESC_CMEM_OFFSET;
 	default:
 			QDF_BUG(0);
