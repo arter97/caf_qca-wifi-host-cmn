@@ -526,24 +526,6 @@ mlo_get_ml_vdev_by_mac(struct wlan_objmgr_vdev *vdev,
 #endif
 
 /**
- * mlo_set_keys_saved: set mlo keys saved bool for vdev
- * @vdev: vdev object
- * @mac_address: peer mac address
- * @value: bool true or false
- * Return: none
- */
-void mlo_set_keys_saved(struct wlan_objmgr_vdev *vdev,
-			struct qdf_mac_addr *mac_address, bool value);
-
-/**
- * mlo_get_keys_saved: get if mlo keys are saved for vdev
- * @vdev: vdev object
- * @mac_address: peer mac address
- * Return: boolean value true or false
- */
-bool mlo_get_keys_saved(struct wlan_objmgr_vdev *vdev, uint8_t *mac_address);
-
-/**
  * mlo_get_chan_freq_by_bssid - Get channel freq by bssid
  * @pdev: pdev pointer
  * @bssid: link mac address
@@ -909,19 +891,6 @@ mlo_sta_stop_reconfig_timer_by_vdev(struct wlan_objmgr_vdev *vdev)
 
 static inline void mlo_sta_stop_reconfig_timer(struct wlan_objmgr_vdev *vdev)
 {
-}
-
-static inline
-void mlo_set_keys_saved(struct wlan_objmgr_vdev *vdev,
-			struct qdf_mac_addr *mac_address, bool value)
-{
-}
-
-static inline
-bool mlo_get_keys_saved(struct wlan_objmgr_vdev *vdev,
-			uint8_t *mac_address)
-{
-	return false;
 }
 
 static inline
