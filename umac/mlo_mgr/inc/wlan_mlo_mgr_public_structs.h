@@ -1085,6 +1085,7 @@ enum mlo_link_force_reason {
 /**
  * struct mlo_link_set_active_resp: MLO link set active response structure
  * @status: Return status, 0 for success, non-zero otherwise
+ * @evt_handled: response event is handled
  * @active_sz: size of current active vdev bitmap array
  * @active: current active vdev bitmap array
  * @inactive_sz: size of current inactive vdev bitmap array
@@ -1099,6 +1100,7 @@ enum mlo_link_force_reason {
  */
 struct mlo_link_set_active_resp {
 	uint32_t status;
+	bool evt_handled;
 	uint32_t active_sz;
 	uint32_t active[MLO_VDEV_BITMAP_SZ];
 	uint32_t inactive_sz;
@@ -1134,11 +1136,14 @@ struct mlo_link_num_param {
  * force_inactive bitmaps
  * @dynamic_force_link_num: indicate fw to use force link number instead of
  * force link bitmaps
+ * @post_re_evaluate: run link state check again after command response event
+ * handled
  */
 struct mlo_control_flags {
 	bool overwrite_force_active_bitmap;
 	bool overwrite_force_inactive_bitmap;
 	bool dynamic_force_link_num;
+	bool post_re_evaluate;
 };
 
 /* struct ml_link_force_cmd - force command for links

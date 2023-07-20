@@ -662,6 +662,8 @@ mlo_link_set_active_resp_vdev_handler(struct wlan_objmgr_psoc *psoc,
 	struct wlan_objmgr_vdev *vdev = obj;
 	struct mlo_link_set_active_resp *event = arg;
 
+	if (event->evt_handled)
+		return;
 	req = wlan_serialization_get_active_cmd(wlan_vdev_get_psoc(vdev),
 						wlan_vdev_get_id(vdev),
 						WLAN_SER_CMD_SET_MLO_LINK);
@@ -672,6 +674,7 @@ mlo_link_set_active_resp_vdev_handler(struct wlan_objmgr_psoc *psoc,
 		req->ctx.set_mlo_link_cb(vdev, req->ctx.cb_arg, event);
 
 	mlo_release_ser_link_set_active_cmd(vdev);
+	event->evt_handled = true;
 }
 
 QDF_STATUS
@@ -681,6 +684,9 @@ mlo_process_link_set_active_resp(struct wlan_objmgr_psoc *psoc,
 	wlan_objmgr_iterate_obj_list(psoc, WLAN_VDEV_OP,
 				     mlo_link_set_active_resp_vdev_handler,
 				     event, true, WLAN_MLO_MGR_ID);
+	if (!event->evt_handled)
+		mlo_debug("link set resp evt not handled");
+
 	return QDF_STATUS_SUCCESS;
 }
 
