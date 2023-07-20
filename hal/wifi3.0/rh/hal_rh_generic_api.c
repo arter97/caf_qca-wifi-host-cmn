@@ -240,21 +240,14 @@ static void hal_rx_dump_pkt_tlvs_rh(hal_soc_handle_t hal_soc_hdl,
 				    uint8_t *buf, uint8_t dbg_level)
 {
 	struct rx_pkt_tlvs *pkt_tlvs = (struct rx_pkt_tlvs *)buf;
-	struct rx_attention *rx_attn = &pkt_tlvs->attn_tlv.rx_attn;
-	struct rx_mpdu_start *mpdu_start =
-				&pkt_tlvs->mpdu_start_tlv.rx_mpdu_start;
-	struct rx_msdu_start *msdu_start =
-				&pkt_tlvs->msdu_start_tlv.rx_msdu_start;
-	struct rx_mpdu_end *mpdu_end = &pkt_tlvs->mpdu_end_tlv.rx_mpdu_end;
-	struct rx_msdu_end *msdu_end = &pkt_tlvs->msdu_end_tlv.rx_msdu_end;
 	struct hal_soc *hal_soc = (struct hal_soc *)hal_soc_hdl;
 
-	hal_rx_dump_rx_attention_tlv(rx_attn, dbg_level);
-	hal_rx_dump_mpdu_start_tlv(mpdu_start, dbg_level, hal_soc);
-	hal_rx_dump_msdu_start_tlv(hal_soc, msdu_start, dbg_level);
-	hal_rx_dump_mpdu_end_tlv(mpdu_end, dbg_level);
-	hal_rx_dump_msdu_end_tlv(hal_soc, msdu_end, dbg_level);
-	hal_rx_dump_pkt_hdr_tlv(pkt_tlvs, dbg_level);
+	hal_rx_dump_msdu_end_tlv(hal_soc, pkt_tlvs, dbg_level);
+	hal_rx_dump_rx_attention_tlv(hal_soc, pkt_tlvs, dbg_level);
+	hal_rx_dump_msdu_start_tlv(hal_soc, pkt_tlvs, dbg_level);
+	hal_rx_dump_mpdu_start_tlv(hal_soc, pkt_tlvs, dbg_level);
+	hal_rx_dump_mpdu_end_tlv(hal_soc, pkt_tlvs, dbg_level);
+	hal_rx_dump_pkt_hdr_tlv(hal_soc, pkt_tlvs, dbg_level);
 }
 
 /**
