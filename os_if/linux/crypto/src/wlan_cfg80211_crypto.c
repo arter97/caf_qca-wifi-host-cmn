@@ -102,6 +102,73 @@ void wlan_cfg80211_translate_key(struct wlan_objmgr_vdev *vdev,
 		   QDF_MAC_ADDR_REF(crypto_key->macaddr));
 }
 
+int wlan_cfg80211_store_link_key(struct wlan_objmgr_psoc *psoc,
+				 uint8_t key_index,
+				 enum wlan_crypto_key_type key_type,
+				 const u8 *mac_addr, struct key_params *params,
+				 struct qdf_mac_addr *link_addr,
+				 uint8_t link_id)
+{
+	struct wlan_crypto_key *crypto_key = NULL;
+	enum wlan_crypto_cipher_type cipher;
+	int cipher_len;
+	QDF_STATUS status;
+
+	if (!psoc) {
+		osif_err("psoc is NULL");
+		return -EINVAL;
+	}
+	if (!params) {
+		osif_err("Key params is NULL");
+		return -EINVAL;
+	}
+	cipher_len = osif_nl_to_crypto_cipher_len(params->cipher);
+	if (cipher_len < 0 || params->key_len < cipher_len) {
+		osif_err("cipher length %d less than reqd len %d",
+			 params->key_len, cipher_len);
+		return -EINVAL;
+	}
+	cipher = osif_nl_to_crypto_cipher_type(params->cipher);
+	if (!IS_WEP_CIPHER(cipher)) {
+		if ((key_type == WLAN_CRYPTO_KEY_TYPE_UNICAST) &&
+		    !mac_addr) {
+			osif_err("mac_addr is NULL for pairwise Key");
+			return -EINVAL;
+		}
+	}
+	status = wlan_crypto_validate_key_params(cipher, key_index,
+						 params->key_len,
+						 params->seq_len);
+	if (QDF_IS_STATUS_ERROR(status)) {
+		osif_err("Invalid key params");
+		return -EINVAL;
+	}
+
+	/*
+	 * key may already exist at times and may be retrieved only to
+	 * update it.
+	 */
+	crypto_key = wlan_crypto_get_ml_sta_link_key(psoc, key_index,
+						     link_addr, link_id);
+	if (!crypto_key) {
+		crypto_key = qdf_mem_malloc(sizeof(*crypto_key));
+		if (!crypto_key)
+			return -EINVAL;
+	}
+
+	wlan_cfg80211_translate_ml_sta_key(key_index, key_type, mac_addr,
+					   params, crypto_key);
+
+	status = wlan_crypto_save_ml_sta_key(psoc, key_index, crypto_key,
+					     link_addr, link_id);
+	if (QDF_IS_STATUS_ERROR(status)) {
+		osif_err("Failed to save key");
+		qdf_mem_free(crypto_key);
+		return -EINVAL;
+	}
+	return 0;
+}
+
 int wlan_cfg80211_store_key(struct wlan_objmgr_vdev *vdev,
 			    uint8_t key_index,
 			    enum wlan_crypto_key_type key_type,

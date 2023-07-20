@@ -73,6 +73,24 @@ void wlan_cfg80211_translate_key(struct wlan_objmgr_vdev *vdev,
 				 struct wlan_crypto_key *crypto_key);
 
 /**
+ * wlan_cfg80211_store_link_key() - store link key info
+ * @psoc: psoc handler
+ * @key_index: key index
+ * @key_type: key type
+ * @mac_addr: mac address
+ * @params: params
+ * @link_addr: link address
+ * @link_id: link id
+ *
+ */
+int wlan_cfg80211_store_link_key(struct wlan_objmgr_psoc *psoc,
+				 uint8_t key_index,
+				 enum wlan_crypto_key_type key_type,
+				 const u8 *mac_addr, struct key_params *params,
+				 struct qdf_mac_addr *link_addr,
+				 uint8_t link_id);
+
+/**
  * wlan_cfg80211_store_key() - Store the key
  * @vdev: VDEV Object pointer
  * @key_index: Index to be set as the default
