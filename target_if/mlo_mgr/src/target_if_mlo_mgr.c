@@ -294,10 +294,10 @@ target_if_mlo_register_event_handler(struct wlan_objmgr_psoc *psoc)
 	target_if_mlo_register_vdev_tid_to_link_map_event(wmi_handle);
 	target_if_mlo_register_mlo_link_state_info_event(wmi_handle);
 
-	status = wmi_unified_register_event(
-			wmi_handle,
+	status = wmi_unified_register_event_handler(wmi_handle,
 			wmi_mlo_link_disable_request_eventid,
-			target_if_mlo_link_disable_request_event_handler);
+			target_if_mlo_link_disable_request_event_handler,
+			WMI_RX_SERIALIZER_CTX);
 	if (QDF_IS_STATUS_ERROR(status)) {
 		target_if_err("Couldn't register handler for link disable request WMI event %d",
 			      status);
