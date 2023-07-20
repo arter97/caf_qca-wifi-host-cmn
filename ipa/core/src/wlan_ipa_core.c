@@ -4311,6 +4311,13 @@ void wlan_ipa_opt_dp_deinit(struct wlan_ipa_priv *ipa_ctx)
 
 	if (ipa_ctx->opt_wifi_datapath && ipa_config_is_opt_wifi_dp_enabled())
 		qdf_wake_lock_destroy(&ipa_ctx->opt_dp_wake_lock);
+
+	if (cdp_ipa_get_smmu_mapped(ipa_ctx->dp_soc)) {
+		cdp_ipa_set_smmu_mapped(ipa_ctx->dp_soc, 0);
+		cdp_ipa_rx_buf_smmu_pool_mapping(ipa_ctx->dp_soc,
+						 ipa_ctx->dp_pdev_id,
+						 false, __func__, __LINE__);
+	}
 }
 
 #else
@@ -5246,8 +5253,8 @@ void wlan_ipa_wdi_opt_dpath_notify_flt_rsvd(bool response)
 		smmu_msg->op_code = WLAN_IPA_SMMU_MAP;
 		uc_op_work = &ipa_ctx->uc_op_work[WLAN_IPA_SMMU_MAP];
 		uc_op_work->msg = smmu_msg;
-		qdf_sched_work(0, &uc_op_work->work);
 		cdp_ipa_set_smmu_mapped(ipa_ctx->dp_soc, 1);
+		qdf_sched_work(0, &uc_op_work->work);
 	}
 
 	notify_msg = qdf_mem_malloc(sizeof(*notify_msg));
@@ -5610,8 +5617,8 @@ void wlan_ipa_wdi_opt_dpath_notify_flt_rlsd(int flt0_rslt, int flt1_rslt)
 		smmu_msg->op_code = WLAN_IPA_SMMU_UNMAP;
 		uc_op_work = &ipa_ctx->uc_op_work[WLAN_IPA_SMMU_UNMAP];
 		uc_op_work->msg = smmu_msg;
-		qdf_sched_work(0, &uc_op_work->work);
 		cdp_ipa_set_smmu_mapped(ipa_ctx->dp_soc, 0);
+		qdf_sched_work(0, &uc_op_work->work);
 	} else {
 		ipa_err("IPA SMMU not mapped!!");
 	}
