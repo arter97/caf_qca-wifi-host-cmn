@@ -173,7 +173,6 @@ struct wlan_srng_cfg {
  * @int_timer_threshold_rx:
  * @int_batch_threshold_other:
  * @int_timer_threshold_other:
- * @int_timer_threshold_mon:
  * @tx_ring_size:
  * @time_control_bp:
  * @qref_control_size: list size for memory history arrays
@@ -381,7 +380,6 @@ struct wlan_cfg_dp_soc_ctxt {
 	int int_timer_threshold_rx;
 	int int_batch_threshold_other;
 	int int_timer_threshold_other;
-	int int_timer_threshold_mon;
 	int tx_ring_size;
 	int time_control_bp;
 	int qref_control_size;
@@ -1536,14 +1534,6 @@ int wlan_cfg_get_int_batch_threshold_other(struct wlan_cfg_dp_soc_ctxt *cfg);
  * Return: Timer threshold
  */
 int wlan_cfg_get_int_timer_threshold_other(struct wlan_cfg_dp_soc_ctxt *cfg);
-
-/**
- * wlan_cfg_get_int_timer_threshold_mon - Get int mitigation cfg for mon srngs
- * @cfg: soc configuration context
- *
- * Return: Timer threshold
- */
-int wlan_cfg_get_int_timer_threshold_mon(struct wlan_cfg_dp_soc_ctxt *cfg);
 
 /**
  * wlan_cfg_get_checksum_offload - Get checksum offload enable or disable status
