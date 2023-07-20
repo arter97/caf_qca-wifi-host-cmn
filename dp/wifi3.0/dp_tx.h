@@ -430,6 +430,36 @@ dp_ppeds_tx_desc_free(struct dp_soc *soc, struct dp_tx_desc_s *tx_desc)
 }
 #endif
 
+/**
+ * dp_get_updated_tx_desc() - get updated tx_desc value
+ * @psoc: psoc object
+ * @pool_num: Tx desc pool Id
+ * @current_desc: Current Tx Desc value
+ *
+ * In Lowmem profiles the number of Tx desc in 4th pool is reduced to quarter
+ * for memory optimizations via this flag DP_TX_DESC_POOL_OPTIMIZE
+ *
+ * Return: Updated Tx Desc value
+ */
+#ifdef DP_TX_DESC_POOL_OPTIMIZE
+static inline uint32_t dp_get_updated_tx_desc(struct cdp_ctrl_objmgr_psoc *psoc,
+					      uint8_t pool_num,
+					      uint32_t current_desc)
+{
+	if (pool_num == 3)
+		return cfg_get(psoc, CFG_DP_TX_DESC_POOL_3);
+	else
+		return current_desc;
+}
+#else
+static inline uint32_t dp_get_updated_tx_desc(struct cdp_ctrl_objmgr_psoc *psoc,
+					      uint8_t pool_num,
+					      uint32_t current_desc)
+{
+	return current_desc;
+}
+#endif
+
 #ifdef DP_TX_EXT_DESC_POOL_OPTIMIZE
 /**
  * dp_tx_ext_desc_pool_override() - Override tx ext desc pool Id

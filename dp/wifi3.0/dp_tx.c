@@ -6300,7 +6300,7 @@ void dp_tx_desc_flush(struct dp_pdev *pdev, struct dp_vdev *vdev,
 {
 	uint8_t i, num_pool;
 	uint32_t j;
-	uint32_t num_desc, page_id, offset;
+	uint32_t num_desc, num_desc_t, page_id, offset;
 	uint16_t num_desc_per_page;
 	struct dp_soc *soc = pdev->soc;
 	struct dp_tx_desc_s *tx_desc = NULL;
@@ -6319,9 +6319,11 @@ void dp_tx_desc_flush(struct dp_pdev *pdev, struct dp_vdev *vdev,
 		if (!tx_desc_pool->desc_pages.cacheable_pages)
 			continue;
 
+		num_desc_t = dp_get_updated_tx_desc(soc->ctrl_psoc, i,
+						    num_desc);
 		num_desc_per_page =
 			tx_desc_pool->desc_pages.num_element_per_page;
-		for (j = 0; j < num_desc; j++) {
+		for (j = 0; j < num_desc_t; j++) {
 			page_id = j / num_desc_per_page;
 			offset = j % num_desc_per_page;
 			tx_desc = dp_tx_desc_find(soc, i, page_id, offset);
