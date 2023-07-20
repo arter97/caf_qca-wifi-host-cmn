@@ -13570,9 +13570,6 @@ dp_soc_attach(struct cdp_ctrl_objmgr_psoc *ctrl_psoc,
 	dp_soc_set_def_pdev(soc);
 	dp_soc_set_qref_debug_list(soc);
 
-	if (!ipa_config_is_opt_wifi_dp_enabled())
-		qdf_atomic_set(&soc->ipa_mapped, 1);
-
 	dp_info("Mem stats: DMA = %u HEAP = %u SKB = %u",
 		qdf_dma_mem_stats_read(),
 		qdf_heap_mem_stats_read(),

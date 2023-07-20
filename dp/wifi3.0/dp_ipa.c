@@ -3466,9 +3466,11 @@ QDF_STATUS dp_ipa_enable_pipes(struct cdp_soc_t *soc_hdl, uint8_t pdev_id,
 	qdf_atomic_set(&soc->ipa_pipes_enabled, 1);
 	DP_IPA_EP_SET_TX_DB_PA(soc, ipa_res);
 
-	if (!ipa_config_is_opt_wifi_dp_enabled())
+	if (!ipa_config_is_opt_wifi_dp_enabled()) {
 		dp_ipa_handle_rx_buf_pool_smmu_mapping(soc, pdev, true,
 						       __func__, __LINE__);
+		qdf_atomic_set(&soc->ipa_mapped, 1);
+	}
 
 	result = qdf_ipa_wdi_enable_pipes(hdl);
 	if (result) {

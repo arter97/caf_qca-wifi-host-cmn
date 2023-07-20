@@ -4390,6 +4390,8 @@ QDF_STATUS wlan_ipa_setup(struct wlan_ipa_priv *ipa_ctx,
 	qdf_mutex_create(&ipa_ctx->ipa_lock);
 	qdf_atomic_init(&ipa_ctx->deinit_in_prog);
 
+	cdp_ipa_set_smmu_mapped(ipa_ctx->dp_soc, 0);
+
 	status = wlan_ipa_wdi_setup_rm(ipa_ctx);
 	if (status != QDF_STATUS_SUCCESS)
 		goto fail_setup_rm;
