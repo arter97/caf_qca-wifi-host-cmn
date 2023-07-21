@@ -256,6 +256,7 @@ void dp_tx_process_htt_completion_be(struct dp_soc *soc,
 	struct htt_soc *htt_handle;
 	uint8_t vdev_id;
 	uint16_t peer_id;
+	uint8_t xmit_type;
 
 	tx_status = HTT_TX_WBM_COMPLETION_V3_TX_STATUS_GET(htt_desc[0]);
 	htt_handle = (struct htt_soc *)soc->htt_handle;
@@ -413,7 +414,10 @@ void dp_tx_process_htt_completion_be(struct dp_soc *soc,
 	}
 	case HTT_TX_FW2WBM_TX_STATUS_VDEVID_MISMATCH:
 	{
-		DP_STATS_INC(vdev, tx_i.dropped.fail_per_pkt_vdev_id_check, 1);
+		xmit_type = qdf_nbuf_get_vdev_xmit_type(tx_desc->nbuf);
+		DP_STATS_INC(vdev,
+			     tx_i[xmit_type].dropped.fail_per_pkt_vdev_id_check,
+			     1);
 		goto release_tx_desc;
 	}
 	default:
@@ -618,6 +622,8 @@ dp_tx_mlo_mcast_multipass_send(struct dp_vdev_be *be_vdev,
 	qdf_mem_zero(&msdu_info, sizeof(msdu_info));
 	dp_tx_get_queue(ptnr_vdev, nbuf_clone, &msdu_info.tx_queue);
 	msdu_info.gsn = be_vdev->mlo_dev_ctxt->seq_num;
+	msdu_info.xmit_type = qdf_nbuf_get_vdev_xmit_type(ptr->nbuf);
+
 
 	if (ptr->vlan_id == MULTIPASS_WITH_VLAN_ID) {
 		msdu_info.tid = HTT_TX_EXT_TID_INVALID;
@@ -791,9 +797,12 @@ dp_tx_mlo_mcast_pkt_send(struct dp_vdev_be *be_vdev,
 
 	qdf_mem_zero(&msdu_info, sizeof(msdu_info));
 	dp_tx_get_queue(ptnr_vdev, nbuf_clone, &msdu_info.tx_queue);
-	msdu_info.gsn = be_vdev->mlo_dev_ctxt->seq_num;
 
-	DP_STATS_INC(ptnr_vdev, tx_i.mlo_mcast.send_pkt_count, 1);
+	msdu_info.gsn = be_vdev->mlo_dev_ctxt->seq_num;
+	msdu_info.xmit_type = qdf_nbuf_get_vdev_xmit_type(nbuf_clone);
+
+	DP_STATS_INC(ptnr_vdev,
+		     tx_i[msdu_info.xmit_type].mlo_mcast.send_pkt_count, 1);
 	nbuf_clone = dp_tx_send_msdu_single(
 					ptnr_vdev,
 					nbuf_clone,
@@ -801,7 +810,9 @@ dp_tx_mlo_mcast_pkt_send(struct dp_vdev_be *be_vdev,
 					DP_MLO_MCAST_REINJECT_PEER_ID,
 					NULL);
 	if (qdf_unlikely(nbuf_clone)) {
-		DP_STATS_INC(ptnr_vdev, tx_i.mlo_mcast.fail_pkt_count, 1);
+		DP_STATS_INC(ptnr_vdev,
+			     tx_i[msdu_info.xmit_type].mlo_mcast.fail_pkt_count,
+			     1);
 		dp_info("pkt send failed");
 		qdf_nbuf_free(nbuf_clone);
 		return;
@@ -1039,7 +1050,7 @@ void dp_ppeds_stats(struct dp_soc *soc, uint16_t peer_id)
 					       DP_MOD_ID_TX_COMP);
 	if (txrx_peer) {
 		vdev = txrx_peer->vdev;
-		DP_STATS_INC(vdev, tx_i.dropped.fw2wbm_tx_drop, 1);
+		DP_STATS_INC(vdev, tx_i[DP_XMIT_LINK].dropped.fw2wbm_tx_drop, 1);
 		dp_txrx_peer_unref_delete(txrx_ref_handle, DP_MOD_ID_TX_COMP);
 	}
 }
@@ -1350,7 +1361,9 @@ dp_tx_hw_enqueue_be(struct dp_soc *soc, struct dp_vdev *vdev,
 	if (qdf_unlikely(dp_tx_hal_ring_access_start(soc, hal_ring_hdl))) {
 		dp_err("HAL RING Access Failed -- %pK", hal_ring_hdl);
 		DP_STATS_INC(soc, tx.tcl_ring_full[ring_id], 1);
-		DP_STATS_INC(vdev, tx_i.dropped.enqueue_fail, 1);
+		DP_STATS_INC(vdev,
+			     tx_i[msdu_info->xmit_type].dropped.enqueue_fail,
+			     1);
 		dp_sawf_tx_enqueue_fail_peer_stats(soc, tx_desc);
 		return status;
 	}
@@ -1359,7 +1372,9 @@ dp_tx_hw_enqueue_be(struct dp_soc *soc, struct dp_vdev *vdev,
 	if (qdf_unlikely(!hal_tx_desc)) {
 		dp_verbose_debug("TCL ring full ring_id:%d", ring_id);
 		DP_STATS_INC(soc, tx.tcl_ring_full[ring_id], 1);
-		DP_STATS_INC(vdev, tx_i.dropped.enqueue_fail, 1);
+		DP_STATS_INC(vdev,
+			     tx_i[msdu_info->xmit_type].dropped.enqueue_fail,
+			     1);
 		dp_sawf_tx_enqueue_fail_peer_stats(soc, tx_desc);
 		goto ring_access_fail;
 	}
@@ -1373,7 +1388,8 @@ dp_tx_hw_enqueue_be(struct dp_soc *soc, struct dp_vdev *vdev,
 	coalesce = dp_tx_attempt_coalescing(soc, vdev, tx_desc, tid,
 					    msdu_info, ring_id);
 
-	DP_STATS_INC_PKT(vdev, tx_i.processed, 1, dp_tx_get_pkt_len(tx_desc));
+	DP_STATS_INC_PKT(vdev, tx_i[msdu_info->xmit_type].processed, 1,
+			 dp_tx_get_pkt_len(tx_desc));
 	DP_STATS_INC(soc, tx.tcl_enq[ring_id], 1);
 	dp_tx_update_stats(soc, tx_desc, ring_id);
 	status = QDF_STATUS_SUCCESS;
@@ -1829,6 +1845,7 @@ qdf_nbuf_t dp_tx_fast_send_be(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
 	uint32_t *hal_tx_desc_cached;
 	void *hal_tx_desc;
 	uint8_t tid = HTT_TX_EXT_TID_INVALID;
+	uint8_t xmit_type = qdf_nbuf_get_vdev_xmit_type(nbuf);
 
 	if (qdf_unlikely(vdev_id >= MAX_VDEV_CNT))
 		return nbuf;
@@ -1840,9 +1857,9 @@ qdf_nbuf_t dp_tx_fast_send_be(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
 	desc_pool_id = qdf_nbuf_get_queue_mapping(nbuf) & DP_TX_QUEUE_MASK;
 
 	pkt_len = qdf_nbuf_headlen(nbuf);
-	DP_STATS_INC_PKT(vdev, tx_i.rcvd, 1, pkt_len);
-	DP_STATS_INC(vdev, tx_i.rcvd_in_fast_xmit_flow, 1);
-	DP_STATS_INC(vdev, tx_i.rcvd_per_core[desc_pool_id], 1);
+	DP_STATS_INC_PKT(vdev, tx_i[xmit_type].rcvd, 1, pkt_len);
+	DP_STATS_INC(vdev, tx_i[xmit_type].rcvd_in_fast_xmit_flow, 1);
+	DP_STATS_INC(vdev, tx_i[xmit_type].rcvd_per_core[desc_pool_id], 1);
 
 	pdev = vdev->pdev;
 	if (dp_tx_limit_check(vdev, nbuf))
@@ -1859,8 +1876,10 @@ qdf_nbuf_t dp_tx_fast_send_be(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
 	tx_desc = dp_tx_desc_alloc(soc, desc_pool_id);
 
 	if (qdf_unlikely(!tx_desc)) {
-		DP_STATS_INC(vdev, tx_i.dropped.desc_na.num, 1);
-		DP_STATS_INC(vdev, tx_i.dropped.desc_na_exc_alloc_fail.num, 1);
+		DP_STATS_INC(vdev, tx_i[xmit_type].dropped.desc_na.num, 1);
+		DP_STATS_INC(vdev,
+			     tx_i[xmit_type].dropped.desc_na_exc_alloc_fail.num,
+			     1);
 		return nbuf;
 	}
 
@@ -1885,7 +1904,7 @@ qdf_nbuf_t dp_tx_fast_send_be(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
 	if (!paddr) {
 		/* Handle failure */
 		dp_err("qdf_nbuf_map failed");
-		DP_STATS_INC(vdev, tx_i.dropped.dma_error, 1);
+		DP_STATS_INC(vdev, tx_i[xmit_type].dropped.dma_error, 1);
 		goto release_desc;
 	}
 
@@ -1924,7 +1943,7 @@ qdf_nbuf_t dp_tx_fast_send_be(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
 	if (qdf_unlikely(dp_tx_hal_ring_access_start(soc, hal_ring_hdl))) {
 		dp_err("HAL RING Access Failed -- %pK", hal_ring_hdl);
 		DP_STATS_INC(soc, tx.tcl_ring_full[desc_pool_id], 1);
-		DP_STATS_INC(vdev, tx_i.dropped.enqueue_fail, 1);
+		DP_STATS_INC(vdev, tx_i[xmit_type].dropped.enqueue_fail, 1);
 		goto ring_access_fail2;
 	}
 
@@ -1932,7 +1951,7 @@ qdf_nbuf_t dp_tx_fast_send_be(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
 	if (qdf_unlikely(!hal_tx_desc)) {
 		dp_verbose_debug("TCL ring full ring_id:%d", desc_pool_id);
 		DP_STATS_INC(soc, tx.tcl_ring_full[desc_pool_id], 1);
-		DP_STATS_INC(vdev, tx_i.dropped.enqueue_fail, 1);
+		DP_STATS_INC(vdev, tx_i[xmit_type].dropped.enqueue_fail, 1);
 		goto ring_access_fail;
 	}
 
@@ -1942,7 +1961,7 @@ qdf_nbuf_t dp_tx_fast_send_be(struct cdp_soc_t *soc_hdl, uint8_t vdev_id,
 	qdf_mem_copy(hal_tx_desc, hal_tx_desc_cached, DP_TX_FAST_DESC_SIZE);
 	qdf_dsb();
 
-	DP_STATS_INC_PKT(vdev, tx_i.processed, 1, tx_desc->length);
+	DP_STATS_INC_PKT(vdev, tx_i[xmit_type].processed, 1, tx_desc->length);
 	DP_STATS_INC(soc, tx.tcl_enq[desc_pool_id], 1);
 	status = QDF_STATUS_SUCCESS;
 
