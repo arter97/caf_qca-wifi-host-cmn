@@ -298,6 +298,7 @@ enum dp_peer_state {
  * @DP_MOD_ID_UMAC_RESET:
  * @DP_MOD_ID_TX_MCAST:
  * @DP_MOD_ID_DS:
+ * @DP_MOD_ID_MLO_DEV:
  * @DP_MOD_ID_MAX:
  */
 enum dp_mod_id {
@@ -331,6 +332,7 @@ enum dp_mod_id {
 	DP_MOD_ID_UMAC_RESET,
 	DP_MOD_ID_TX_MCAST,
 	DP_MOD_ID_DS,
+	DP_MOD_ID_MLO_DEV,
 	DP_MOD_ID_MAX,
 };
 
