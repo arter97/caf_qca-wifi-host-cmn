@@ -687,8 +687,6 @@ hal_process_reg_write_q_elem(struct hal_soc *hal,
 	struct hal_srng *srng = q_elem->srng;
 	uint32_t write_val;
 
-	QDF_BUG(q_elem->ring_id == srng->ring_id);
-
 	SRNG_LOCK(&srng->lock);
 
 	srng->reg_write_in_progress = false;
@@ -711,7 +709,6 @@ hal_process_reg_write_q_elem(struct hal_soc *hal,
 
 	q_elem->valid = 0;
 	srng->last_dequeue_time = q_elem->dequeue_time;
-	qdf_atomic_set(&srng->wstats.pending, 0);
 	SRNG_UNLOCK(&srng->lock);
 
 	return write_val;
@@ -914,7 +911,6 @@ static void hal_reg_write_enqueue(struct hal_soc *hal_soc,
 		hal_verbose_debug("Already in progress srng ring id 0x%x addr 0x%pK val %u",
 				  srng->ring_id, addr, value);
 		qdf_atomic_inc(&hal_soc->stats.wstats.coalesces);
-		qdf_atomic_inc(&srng->wstats.pending);
 		srng->wstats.coalesces++;
 		return;
 	}
@@ -949,7 +945,7 @@ static void hal_reg_write_enqueue(struct hal_soc *hal_soc,
 	 */
 	qdf_wmb();
 	q_elem->valid = true;
-	q_elem->ring_id = srng->ring_id;
+
 	/*
 	 * After all other fields in the q_elem has been updated
 	 * in memory successfully, the valid flag needs to be updated
