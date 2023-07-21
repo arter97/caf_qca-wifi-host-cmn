@@ -54,8 +54,13 @@
 
 /* MAX MLO Assoc Links per MLD */
 #ifndef WLAN_UMAC_MLO_ASSOC_MAX_SUPPORTED_LINKS
+#ifdef SAP_MULTI_LINK_EMULATION
+#define WLAN_UMAC_MLO_ASSOC_MAX_SUPPORTED_LINKS 2
+#else
 #define WLAN_UMAC_MLO_ASSOC_MAX_SUPPORTED_LINKS 1
 #endif
+#endif
+
 
 /* Default Initialization value for Max Recommended Simultaneous Links */
 #ifndef WLAN_UMAC_MLO_RECOM_MAX_SIMULT_LINKS_DEFAULT

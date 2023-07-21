@@ -1386,6 +1386,15 @@ QDF_STATUS util_eval_ie_in_noninheritlist(uint8_t *ie, qdf_size_t total_ie_len,
 	return QDF_STATUS_SUCCESS;
 }
 
+#if defined (SAP_MULTI_LINK_EMULATION)
+static inline
+QDF_STATUS util_validate_reportingsta_ie(const uint8_t *reportingsta_ie,
+					 const uint8_t *frame_iesection,
+					 const qdf_size_t frame_iesection_len)
+{
+	return QDF_STATUS_SUCCESS;
+}
+#else
 static inline
 QDF_STATUS util_validate_reportingsta_ie(const uint8_t *reportingsta_ie,
 					 const uint8_t *frame_iesection,
@@ -1462,6 +1471,7 @@ QDF_STATUS util_validate_reportingsta_ie(const uint8_t *reportingsta_ie,
 
 	return QDF_STATUS_SUCCESS;
 }
+#endif
 
 static inline
 QDF_STATUS util_validate_sta_prof_ie(const uint8_t *sta_prof_ie,
