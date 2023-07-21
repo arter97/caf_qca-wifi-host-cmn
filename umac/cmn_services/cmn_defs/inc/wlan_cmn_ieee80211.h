@@ -2109,6 +2109,10 @@ struct wlan_ie_bw_ind {
 #ifdef WLAN_FEATURE_11BE_MLO
 #define WLAN_MLO_MAX_VDEVS 2
 
+#ifndef WLAN_MAX_ML_BSS_LINKS
+#define WLAN_MAX_ML_BSS_LINKS 3
+#endif
+
 /* Size in octets of the BSS Parameters Change Count (sub)field */
 #define WLAN_ML_BSSPARAMCHNGCNT_SIZE                    1
 

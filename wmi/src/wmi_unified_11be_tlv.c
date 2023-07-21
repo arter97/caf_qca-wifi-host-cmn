@@ -1486,7 +1486,7 @@ extract_mlo_link_state_event_tlv(struct wmi_unified *wmi_handle,
 	mld_addr = params->mldaddr.bytes;
 	WMI_MAC_ADDR_TO_CHAR_ARRAY(&ev->mld_macaddr, mld_addr);
 
-	if (params->num_mlo_vdev_link_info > WLAN_MLO_MAX_VDEVS) {
+	if (params->num_mlo_vdev_link_info > WLAN_MAX_ML_BSS_LINKS) {
 		wmi_err_rl("Invalid number of vdev link info");
 		return QDF_STATUS_E_FAILURE;
 	}

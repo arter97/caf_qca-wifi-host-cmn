@@ -322,7 +322,7 @@ struct ml_link_info {
 struct ml_link_state_info_event {
 	uint32_t status;
 	uint32_t hw_mode_index;
-	struct ml_link_info link_info[WLAN_MLO_MAX_VDEVS];
+	struct ml_link_info link_info[WLAN_MAX_ML_BSS_LINKS];
 	uint16_t num_mlo_vdev_link_info;
 	uint8_t vdev_id;
 	struct qdf_mac_addr mldaddr;
