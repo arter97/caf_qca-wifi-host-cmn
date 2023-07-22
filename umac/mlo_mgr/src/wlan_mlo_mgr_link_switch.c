@@ -22,6 +22,7 @@
 #include <wlan_mlo_mgr_sta.h>
 #include <wlan_serialization_api.h>
 #include <wlan_cm_api.h>
+#include <wlan_crypto_def_i.h>
 
 void mlo_mgr_update_link_info_mac_addr(struct wlan_objmgr_vdev *vdev,
 				       struct wlan_mlo_link_mac_update *ml_mac_update)
@@ -134,13 +135,27 @@ void mlo_mgr_reset_ap_link_info(struct wlan_objmgr_vdev *vdev)
 {
 	struct mlo_link_info *link_info;
 	uint8_t link_info_iter;
+	struct wlan_objmgr_psoc *psoc;
 
 	if (!vdev || !vdev->mlo_dev_ctx)
 		return;
 
+	psoc = wlan_vdev_get_psoc(vdev);
+	if (!psoc) {
+		mlo_err("psoc NULL");
+		return;
+	}
+
 	link_info = &vdev->mlo_dev_ctx->link_ctx->links_info[0];
 
-	for (link_info_iter = 0; link_info_iter < 3; link_info_iter++) {
+	for (link_info_iter = 0; link_info_iter < WLAN_MAX_ML_BSS_LINKS;
+	     link_info_iter++) {
+		if (!qdf_is_macaddr_zero(&link_info->ap_link_addr) &&
+		    !qdf_is_macaddr_zero(&link_info->link_addr))
+			wlan_crypto_free_key_by_link_id(
+						psoc,
+						&link_info->link_addr,
+						link_info->link_id);
 		qdf_mem_zero(&link_info->ap_link_addr, QDF_MAC_ADDR_SIZE);
 		qdf_mem_zero(link_info->link_chan_info,
 			     sizeof(*link_info->link_chan_info));
