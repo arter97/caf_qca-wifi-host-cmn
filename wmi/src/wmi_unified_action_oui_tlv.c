@@ -69,6 +69,9 @@ bool wmi_get_action_oui_id(enum action_oui_id action_id,
 	case ACTION_OUI_ENABLE_CTS2SELF_WITH_QOS_NULL:
 		*id = WMI_VENDOR_OUI_ACTION_ENABLE_CTS2SELF_WITH_QOS_NULL;
 		return true;
+	case ACTION_OUI_SEND_SMPS_FRAME_WITH_OMN:
+		*id = WMI_VENDOR_OUI_ACTION_SEND_SMPS_FRAME_WITH_OMN;
+		return true;
 	default:
 		return false;
 	}
