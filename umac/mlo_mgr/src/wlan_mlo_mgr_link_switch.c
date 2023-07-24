@@ -97,7 +97,7 @@ void mlo_mgr_update_ap_channel_info(struct wlan_objmgr_vdev *vdev, uint8_t link_
 	if (!vdev || !vdev->mlo_dev_ctx || !ap_link_addr)
 		return;
 
-	link_info = mlo_mgr_get_ap_link_by_link_id(vdev, link_id);
+	link_info = mlo_mgr_get_ap_link_by_link_id(vdev->mlo_dev_ctx, link_id);
 	if (!link_info)
 		return;
 
@@ -172,15 +172,16 @@ void mlo_mgr_reset_ap_link_info(struct wlan_objmgr_vdev *vdev)
 }
 
 struct mlo_link_info
-*mlo_mgr_get_ap_link_by_link_id(struct wlan_objmgr_vdev *vdev, int link_id)
+*mlo_mgr_get_ap_link_by_link_id(struct wlan_mlo_dev_context *mlo_dev_ctx,
+				int link_id)
 {
 	struct mlo_link_info *link_info;
 	uint8_t link_info_iter;
 
-	if (!vdev || link_id < 0 || link_id > 15)
+	if (!mlo_dev_ctx || link_id < 0 || link_id > 15)
 		return NULL;
 
-	link_info = &vdev->mlo_dev_ctx->link_ctx->links_info[0];
+	link_info = &mlo_dev_ctx->link_ctx->links_info[0];
 	for (link_info_iter = 0; link_info_iter < WLAN_MAX_ML_BSS_LINKS;
 	     link_info_iter++) {
 		if (link_info->link_id == link_id)
@@ -497,7 +498,7 @@ mlo_mgr_osif_update_connect_info(struct wlan_objmgr_vdev *vdev, int32_t link_id)
 	    !g_mlo_ctx->osif_ops->mlo_mgr_osif_update_bss_info)
 		return;
 
-	link_info = mlo_mgr_get_ap_link_by_link_id(vdev, link_id);
+	link_info = mlo_mgr_get_ap_link_by_link_id(vdev->mlo_dev_ctx, link_id);
 	if (!link_info)
 		return;
 
@@ -540,7 +541,8 @@ QDF_STATUS mlo_mgr_link_switch_disconnect_done(struct wlan_objmgr_vdev *vdev,
 		  wlan_vdev_get_id(vdev));
 
 	new_link_info =
-		mlo_mgr_get_ap_link_by_link_id(vdev, req->new_ieee_link_id);
+		mlo_mgr_get_ap_link_by_link_id(vdev->mlo_dev_ctx,
+					       req->new_ieee_link_id);
 	if (!new_link_info) {
 		mlo_err("New link not found in mlo dev ctx");
 		mlo_mgr_remove_link_switch_cmd(vdev);
@@ -597,7 +599,8 @@ QDF_STATUS mlo_mgr_link_switch_set_mac_addr_resp(struct wlan_objmgr_vdev *vdev,
 	}
 
 	new_link_info =
-		mlo_mgr_get_ap_link_by_link_id(vdev, req->new_ieee_link_id);
+		mlo_mgr_get_ap_link_by_link_id(vdev->mlo_dev_ctx,
+					       req->new_ieee_link_id);
 	if (!new_link_info) {
 		mlo_mgr_remove_link_switch_cmd(vdev);
 		return status;
@@ -641,7 +644,8 @@ QDF_STATUS mlo_mgr_link_switch_start_connect(struct wlan_objmgr_vdev *vdev)
 	sta_ctx = vdev->mlo_dev_ctx->sta_ctx;
 
 	mlo_link_info =
-		mlo_mgr_get_ap_link_by_link_id(vdev, req->new_ieee_link_id);
+		mlo_mgr_get_ap_link_by_link_id(vdev->mlo_dev_ctx,
+					       req->new_ieee_link_id);
 
 	if (!mlo_link_info) {
 		mlo_err("New link ID not found");
@@ -956,7 +960,8 @@ mlo_mgr_link_switch_validate_request(struct wlan_objmgr_vdev *vdev,
 		return status;
 	}
 
-	if (!mlo_mgr_get_ap_link_by_link_id(vdev, req->new_ieee_link_id)) {
+	if (!mlo_mgr_get_ap_link_by_link_id(vdev->mlo_dev_ctx,
+					    req->new_ieee_link_id)) {
 		mlo_err("New link id %d not part of association",
 			req->new_ieee_link_id);
 		return status;

@@ -117,8 +117,9 @@ osif_populate_partner_links_roam_mlo_params(struct wlan_objmgr_vdev *roamed_vdev
 		if (QDF_IS_STATUS_ERROR(qdf_status))
 			continue;
 
-		link_info = mlo_mgr_get_ap_link_by_link_id(roamed_vdev,
-							   link_id);
+		link_info = mlo_mgr_get_ap_link_by_link_id(
+					roamed_vdev->mlo_dev_ctx,
+					link_id);
 		if (!link_info) {
 			osif_debug("link info not found for link_id:%d",
 				   link_id);
@@ -411,8 +412,9 @@ osif_send_roam_auth_mlo_links_event(struct sk_buff *skb,
 		/* Standby link */
 		if (link_vdev_id == WLAN_INVALID_VDEV_ID) {
 			struct mlo_link_info *standby_info =
-					mlo_mgr_get_ap_link_by_link_id(vdev,
-								       link_id);
+					mlo_mgr_get_ap_link_by_link_id(
+							vdev->mlo_dev_ctx,
+							link_id);
 			if (standby_info) {
 				link_addr = standby_info->link_addr;
 			} else {

@@ -533,7 +533,8 @@ osif_populate_partner_links_mlo_params(struct wlan_objmgr_vdev *vdev,
 		rsp_partner_info = &rsp->ml_parnter_info.partner_link_info[i];
 		link_id = rsp_partner_info->link_id;
 
-		link_info = mlo_mgr_get_ap_link_by_link_id(vdev, link_id);
+		link_info = mlo_mgr_get_ap_link_by_link_id(vdev->mlo_dev_ctx,
+							   link_id);
 		if (!link_info)
 			continue;
 
@@ -569,7 +570,8 @@ static void osif_fill_connect_resp_mlo_params(struct wlan_objmgr_vdev *vdev,
 	}
 
 	assoc_link_id = wlan_vdev_get_link_id(vdev);
-	link_info = mlo_mgr_get_ap_link_by_link_id(vdev, assoc_link_id);
+	link_info = mlo_mgr_get_ap_link_by_link_id(vdev->mlo_dev_ctx,
+						   assoc_link_id);
 	if (!link_info) {
 		osif_err("Unable to find link_info for link_id: %d",
 			 assoc_link_id);

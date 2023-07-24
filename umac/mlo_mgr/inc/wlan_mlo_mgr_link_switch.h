@@ -234,7 +234,7 @@ void mlo_mgr_update_ap_channel_info(struct wlan_objmgr_vdev *vdev,
 
 /**
  * mlo_mgr_get_ap_link_by_link_id() - Get mlo link info from link id
- * @vdev: Object Manager vdev
+ * @mlo_dev_ctx: mlo context
  * @link_id: Link id of the AP MLD link
  *
  * Search for the @link_id in the array in link_ctx in mlo_dev_ctx.
@@ -244,7 +244,8 @@ void mlo_mgr_update_ap_channel_info(struct wlan_objmgr_vdev *vdev,
  * Return: Pointer of link info
  */
 struct mlo_link_info*
-mlo_mgr_get_ap_link_by_link_id(struct wlan_objmgr_vdev *vdev, int link_id);
+mlo_mgr_get_ap_link_by_link_id(struct wlan_mlo_dev_context *mlo_dev_ctx,
+			       int link_id);
 
 /**
  * mlo_mgr_get_ap_link() - Assoc mlo link info from link id
