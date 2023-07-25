@@ -3904,6 +3904,9 @@ void hif_ce_prepare_config(struct hif_softc *scn)
 					sizeof(target_ce_config_wlan_qca6490);
 
 		scn->ce_count = QCA_6490_CE_COUNT;
+		if (msi_data_count == 1) {
+			scn->disable_wake_irq = 1;
+		}
 		break;
 	case TARGET_TYPE_QCA6750:
 		hif_state->host_ce_config = host_ce_config_wlan_qca6750;

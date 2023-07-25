@@ -2822,7 +2822,9 @@ int hif_ce_msi_configure_irq_by_ceid(struct hif_softc *scn, int ce_id)
 		      pci_slot, ce_id);
 
 	ret = pfrm_request_irq(scn->qdf_dev->dev,
-			       irq, hif_ce_interrupt_handler, IRQF_SHARED,
+			       irq, hif_ce_interrupt_handler, IRQF_SHARED |
+							      IRQF_NO_SUSPEND |
+							      IRQF_NOBALANCING,
 			       ce_irqname[pci_slot][ce_id],
 			       &ce_sc->tasklets[ce_id]);
 	if (ret)
@@ -3140,7 +3142,7 @@ int hif_pci_configure_grp_irq(struct hif_softc *scn,
 		ret = pfrm_request_irq(
 				scn->qdf_dev->dev, irq,
 				hif_ext_group_interrupt_handler,
-				IRQF_SHARED | IRQF_NO_SUSPEND,
+				IRQF_SHARED | IRQF_NO_SUSPEND | IRQF_NOBALANCING,
 				dp_irqname[pci_slot][hif_ext_group->grp_id],
 				hif_ext_group);
 		if (ret) {
