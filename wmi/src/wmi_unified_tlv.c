@@ -14316,13 +14316,13 @@ static QDF_STATUS extract_service_ready_ext_tlv(wmi_unified_t wmi_handle,
 	if (!chain_mask_combo)
 		return QDF_STATUS_SUCCESS;
 
-	wmi_nofl_debug("Dumping chain mask combo data");
+	wmi_nofl_info_high("Dumping chain mask combo data");
 
 	for (i = 0; i < param->num_chainmask_tables; i++) {
 
-		wmi_nofl_debug("table_id : %d Num valid chainmasks: %d",
-			       chain_mask_combo->chainmask_table_id,
-			       chain_mask_combo->num_valid_chainmask);
+		wmi_nofl_info_high("table_id : %d Num valid chainmasks: %d",
+				   chain_mask_combo->chainmask_table_id,
+				   chain_mask_combo->num_valid_chainmask);
 
 		param->chainmask_table[i].table_id =
 			chain_mask_combo->chainmask_table_id;
@@ -14330,7 +14330,7 @@ static QDF_STATUS extract_service_ready_ext_tlv(wmi_unified_t wmi_handle,
 			chain_mask_combo->num_valid_chainmask;
 		chain_mask_combo++;
 	}
-	wmi_nofl_debug("chain mask combo end");
+	wmi_nofl_info_high("chain mask combo end");
 
 	return QDF_STATUS_SUCCESS;
 }
