@@ -1043,6 +1043,13 @@ uint8_t dp_sawf_config_be(struct dp_soc *soc, uint32_t *hal_tx_desc_cached,
 }
 
 static inline
+QDF_STATUS dp_sawf_reinject_handler(struct dp_soc *soc, qdf_nbuf_t nbuf,
+				    uint32_t *htt_desc)
+{
+	return QDF_STATUS_E_FAILURE;
+}
+
+static inline
 QDF_STATUS dp_sawf_tx_enqueue_peer_stats(struct dp_soc *soc,
 					 struct dp_tx_desc_s *tx_desc)
 {
@@ -1058,6 +1065,31 @@ QDF_STATUS dp_sawf_tx_enqueue_fail_peer_stats(struct dp_soc *soc,
 #endif
 
 #ifdef WLAN_SUPPORT_PPEDS
+
+static inline
+void dp_ppeds_reinject_handler(struct dp_soc *soc, struct dp_tx_desc_s *tx_desc,
+			       uint32_t *htt_desc)
+{
+	uint8_t reinject_reason;
+	QDF_STATUS status;
+
+	reinject_reason = HTT_TX_WBM_COMPLETION_V3_REINJECT_REASON_GET
+							(htt_desc[1]);
+
+	if (reinject_reason ==
+	    HTT_TX_FW2WBM_REINJECT_REASON_SAWF_SVC_CLASS_ID_ABSENT) {
+		qdf_nbuf_t nbuf = tx_desc->nbuf;
+
+		/*
+		 * sawf reinject handler consume the nbuf,
+		 * so set tx_desc->nbuf = NULL here.
+		 */
+		status = dp_sawf_reinject_handler(soc, nbuf, htt_desc);
+		if (QDF_IS_STATUS_SUCCESS(status))
+			tx_desc->nbuf = NULL;
+		return;
+	}
+}
 
 /**
  * dp_ppeds_stats() - Accounting fw2wbm_tx_drop drops in Tx path
@@ -1169,12 +1201,26 @@ int dp_ppeds_tx_comp_handler(struct dp_soc_be *be_soc, uint32_t quota)
 		tx_desc->buffer_src = buf_src;
 
 		if (qdf_unlikely(buf_src == HAL_TX_COMP_RELEASE_SOURCE_FW)) {
+			uint8_t htt_tx_status[HAL_TX_COMP_HTT_STATUS_LEN];
+
+			hal_tx_comp_get_htt_desc(tx_comp_hal_desc,
+						 htt_tx_status);
+
 			status = hal_tx_comp_get_tx_status(tx_comp_hal_desc);
-			if (status != HTT_TX_FW2WBM_TX_STATUS_OK)
+
+			if (status == HTT_TX_FW2WBM_TX_STATUS_REINJECT) {
+				dp_ppeds_reinject_handler
+					(soc, tx_desc,
+					 (uint32_t *)htt_tx_status);
+			}
+
+			if (status != HTT_TX_FW2WBM_TX_STATUS_OK &&
+			    status != HTT_TX_FW2WBM_TX_STATUS_REINJECT)
 				dp_ppeds_stats(soc, tx_desc->peer_id);
 
 			nbuf = dp_ppeds_tx_desc_free(soc, tx_desc);
-			qdf_nbuf_free(nbuf);
+			if (nbuf)
+				qdf_nbuf_free(nbuf);
 		} else {
 			tx_desc->tx_status =
 				hal_tx_comp_get_tx_status(tx_comp_hal_desc);
