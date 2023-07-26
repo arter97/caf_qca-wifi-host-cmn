@@ -398,6 +398,7 @@ typedef void (*crypto_add_key_callback)(void *context,
  * @key:              key buffers for this peer
  * @igtk_key:         igtk key buffer for this peer
  * @bigtk_key:        bigtk key buffer for this peer
+ * @ltf_key_seed:     LTF Key Seed buffer
  * @igtk_key_type:    igtk key type
  * @def_tx_keyid:     default key used for this peer
  * @def_igtk_tx_keyid: default igtk key used for this peer
@@ -408,6 +409,7 @@ struct wlan_crypto_keys {
 	struct wlan_crypto_key *key[WLAN_CRYPTO_MAX_VLANKEYIX];
 	struct wlan_crypto_key *igtk_key[WLAN_CRYPTO_MAXIGTKKEYIDX];
 	struct wlan_crypto_key *bigtk_key[WLAN_CRYPTO_MAXBIGTKKEYIDX];
+	struct wlan_crypto_ltf_keyseed_data ltf_key_seed;
 	enum wlan_crypto_cipher_type igtk_key_type;
 	uint8_t def_tx_keyid;
 	uint8_t def_igtk_tx_keyid;
@@ -625,6 +627,17 @@ struct pdev_crypto {
 };
 
 /**
+ * wlan_crypto_add_key_entry() - Add a filled key entry to the hashing
+ * framework
+ * @psoc: PSOC pointer
+ * @new_entry: New entry
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS wlan_crypto_add_key_entry(struct wlan_objmgr_psoc *psoc,
+				     struct wlan_crypto_key_entry *new_entry);
+
+/**
  * crypto_add_entry - add key entry to hashing framework
  * @psoc: psoc handler
  * @link_id: link id
@@ -651,6 +664,7 @@ wlan_crypto_key_entry * crypto_hash_find_by_linkid_and_macaddr(
 				uint8_t link_id,
 				uint8_t *mac_addr);
 
+#ifdef WLAN_FEATURE_11BE_MLO_ADV_FEATURE
 /**
  * wlan_crypto_free_key_by_link_id - free key by link id
  * @psoc: psoc handler
@@ -660,5 +674,11 @@ wlan_crypto_key_entry * crypto_hash_find_by_linkid_and_macaddr(
 void wlan_crypto_free_key_by_link_id(struct wlan_objmgr_psoc *psoc,
 				     struct qdf_mac_addr *link_addr,
 				     uint8_t link_id);
-
+#else
+static inline
+void wlan_crypto_free_key_by_link_id(struct wlan_objmgr_psoc *psoc,
+				     struct qdf_mac_addr *link_addr,
+				     uint8_t link_id)
+{}
+#endif /* WLAN_FEATURE_11BE_MLO_ADV_FEATURE */
 #endif /* end of _WLAN_CRYPTO_DEF_I_H_ */

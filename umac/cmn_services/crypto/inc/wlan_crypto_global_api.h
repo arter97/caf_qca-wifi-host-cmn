@@ -27,6 +27,38 @@
 #include <qdf_crypto.h>
 
 /**
+ * is_valid_keyix() - is key index valid
+ * @keyix: Key index
+ *
+ * Return: true or false
+ */
+bool is_valid_keyix(uint16_t keyix);
+
+/**
+ * is_igtk() - is given key index for IGTK
+ * @keyix: Key index
+ *
+ * Return: true or false
+ */
+bool is_igtk(uint16_t keyix);
+
+/**
+ * is_bigtk() - Is given key index for BIGTK
+ * @keyix: Key index
+ *
+ * Return: true or false
+ */
+bool is_bigtk(uint16_t keyix);
+
+/**
+ * is_gtk() - Is given key index for GTK
+ * @keyix: Key index
+ *
+ * Return: true or false
+ */
+bool is_gtk(uint16_t keyix);
+
+/**
  * wlan_crypto_set_vdev_param() - called by ucfg to set crypto param
  * @vdev: vdev
  * @param: param to be set.

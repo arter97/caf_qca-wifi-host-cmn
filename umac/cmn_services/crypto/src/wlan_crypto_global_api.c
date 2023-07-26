@@ -58,7 +58,7 @@ const struct wlan_crypto_cipher *wlan_crypto_cipher_ops[WLAN_CRYPTO_CIPHER_MAX];
 	WLAN_CRYPTO_ADDSELECTOR(frm,\
 				wlan_crypto_rsn_keymgmt_to_suite(keymgmt))
 
-static int is_valid_keyix(uint16_t keyix)
+bool is_valid_keyix(uint16_t keyix)
 {
 	if (keyix >= (WLAN_CRYPTO_MAXKEYIDX + WLAN_CRYPTO_MAXIGTKKEYIDX
 			+ WLAN_CRYPTO_MAXBIGTKKEYIDX))
@@ -67,7 +67,7 @@ static int is_valid_keyix(uint16_t keyix)
 		return 1;
 }
 
-static int is_igtk(uint16_t keyix)
+bool is_igtk(uint16_t keyix)
 {
 	if (keyix < WLAN_CRYPTO_MAXKEYIDX)
 		return 0;
@@ -77,7 +77,7 @@ static int is_igtk(uint16_t keyix)
 		return 1;
 }
 
-static int is_bigtk(uint16_t keyix)
+bool is_bigtk(uint16_t keyix)
 {
 	if (keyix < (WLAN_CRYPTO_MAXKEYIDX + WLAN_CRYPTO_MAXIGTKKEYIDX))
 		return 0;
@@ -88,13 +88,14 @@ static int is_bigtk(uint16_t keyix)
 		return 1;
 }
 
-static int is_gtk(uint16_t keyix)
+bool is_gtk(uint16_t keyix)
 {
 	if (keyix == 1 || keyix == 2)
 		return 1;
 	else
 		return 0;
 }
+
 /**
  * wlan_crypto_vdev_get_comp_params() - called by mlme to get crypto params
  * @vdev: vdev
