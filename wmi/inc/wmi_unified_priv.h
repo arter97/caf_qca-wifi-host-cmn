@@ -402,6 +402,7 @@ QDF_STATUS
 (*extract_roam_event)(wmi_unified_t wmi_handle, void *evt_buf, uint32_t len,
 		      struct roam_offload_roam_event *roam_event);
 #endif
+
 #ifdef WLAN_FEATURE_ROAM_OFFLOAD
 QDF_STATUS
 (*extract_roam_btm_response_stats)(wmi_unified_t wmi_handle, void *evt_buf,
@@ -487,7 +488,28 @@ QDF_STATUS
 		uint8_t *event, uint32_t data_len,
 		struct roam_vendor_handoff_params **vendor_handoff_params);
 #endif
+
+#ifdef WLAN_FEATURE_11BE_MLO
+/**
+ * extract_roam_synch_key_event() - Extract Roam synch key event
+ * @wmi_handle: WMI Handle
+ * @event: Event buffer
+ * @data_len: Event data length
+ * @keys: Destination buffer to fill the keys
+ * @num_keys: Number of keys
+ * @mld_addr: Peer MLD address
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS
+(*extract_roam_synch_key_event) (wmi_unified_t wmi_handle, uint8_t *event,
+				 uint32_t data_len,
+				 struct wlan_crypto_key_entry **keys,
+				 uint8_t *num_keys,
+				 struct qdf_mac_addr *mld_addr);
 #endif
+#endif
+
 #ifdef FEATURE_MEC_OFFLOAD
 QDF_STATUS
 (*send_pdev_set_mec_timer_cmd)(struct wmi_unified *wmi_handle,

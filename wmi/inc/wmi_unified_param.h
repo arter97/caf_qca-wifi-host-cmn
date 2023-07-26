@@ -5343,6 +5343,9 @@ typedef enum {
 #ifdef WLAN_FEATURE_11BE_MLO
 	wmi_mlo_link_state_info_eventid,
 #endif
+#if defined(WLAN_FEATURE_ROAM_OFFLOAD) && defined(WLAN_FEATURE_11BE_MLO)
+	wmi_roam_synch_key_event_id,
+#endif
 #ifdef QCA_SUPPORT_PRIMARY_LINK_MIGRATE
 	wmi_peer_ptqm_migration_response_eventid,
 #endif

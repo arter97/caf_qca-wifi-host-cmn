@@ -205,9 +205,15 @@ QDF_STATUS wlan_crypto_add_key_entry(struct wlan_objmgr_psoc *psoc,
 						(struct qdf_mac_addr *)new_entry->mac_addr.raw,
 						link_id);
 
-	crypto_hash_add(crypto_psoc_obj, new_entry, link_id);
+	crypto_entry = qdf_mem_malloc(sizeof(*crypto_entry));
+	if (!crypto_entry)
+		return QDF_STATUS_E_NOMEM;
+
+	*crypto_entry = *new_entry;
+
+	crypto_hash_add(crypto_psoc_obj, crypto_entry, link_id);
 	qdf_atomic_inc(&crypto_psoc_obj->crypto_key_cnt);
-	new_entry->is_active = 1;
+	crypto_entry->is_active = 1;
 
 	return QDF_STATUS_SUCCESS;
 }
@@ -280,9 +286,8 @@ static void crypto_remove_entry(struct crypto_psoc_priv_obj *psoc,
 					   crypto_entry->link_id);
 	TAILQ_HEAD(, wlan_crypto_key_entry) * free_list = ptr;
 
-	crypto_debug("crypto remove entry key index %d link id %d crypto_entry %pK ",
-		     index, crypto_entry->link_id,
-		     crypto_entry);
+	crypto_info("crypto remove entry key index %d link id %d",
+		    index, crypto_entry->link_id);
 
 	for (i = 0; i < WLAN_CRYPTO_MAX_VLANKEYIX; i++) {
 		if (crypto_entry->keys.key[i]) {
@@ -617,39 +622,40 @@ static QDF_STATUS wlan_crypto_peer_obj_create_handler(
 	return status;
 }
 
-static void wlan_crypto_free_key(struct wlan_crypto_comp_priv *crypto_priv)
+void wlan_crypto_free_key(struct wlan_crypto_keys *crypto_key)
 {
 	uint8_t i;
 
-	if (!crypto_priv) {
-		crypto_err("crypto_priv NULL");
+	if (!crypto_key) {
+		crypto_err("given key ptr is NULL");
 		return;
 	}
 
 	for (i = 0; i < WLAN_CRYPTO_MAX_VLANKEYIX; i++) {
-		if (crypto_priv->crypto_key.key[i]) {
-			qdf_mem_free(crypto_priv->crypto_key.key[i]);
-			crypto_priv->crypto_key.key[i] = NULL;
+		if (crypto_key->key[i]) {
+			qdf_mem_free(crypto_key->key[i]);
+			crypto_key->key[i] = NULL;
 		}
 	}
 
 	for (i = 0; i < WLAN_CRYPTO_MAXIGTKKEYIDX; i++) {
-		if (crypto_priv->crypto_key.igtk_key[i]) {
-			qdf_mem_free(crypto_priv->crypto_key.igtk_key[i]);
-			crypto_priv->crypto_key.igtk_key[i] = NULL;
+		if (crypto_key->igtk_key[i]) {
+			qdf_mem_free(crypto_key->igtk_key[i]);
+			crypto_key->igtk_key[i] = NULL;
 		}
 	}
 
 	for (i = 0; i < WLAN_CRYPTO_MAXBIGTKKEYIDX; i++) {
-		if (crypto_priv->crypto_key.bigtk_key[i]) {
-			qdf_mem_free(crypto_priv->crypto_key.bigtk_key[i]);
-			crypto_priv->crypto_key.bigtk_key[i] = NULL;
+		if (crypto_key->bigtk_key[i]) {
+			qdf_mem_free(crypto_key->bigtk_key[i]);
+			crypto_key->bigtk_key[i] = NULL;
 		}
 	}
+
 	/* Reset All key index as well */
-	crypto_priv->crypto_key.def_tx_keyid = 0;
-	crypto_priv->crypto_key.def_igtk_tx_keyid = 0;
-	crypto_priv->crypto_key.def_bigtk_tx_keyid = 0;
+	crypto_key->def_tx_keyid = 0;
+	crypto_key->def_igtk_tx_keyid = 0;
+	crypto_key->def_bigtk_tx_keyid = 0;
 }
 
 #ifdef CRYPTO_SET_KEY_CONVERGED
@@ -663,7 +669,7 @@ void wlan_crypto_free_vdev_key(struct wlan_objmgr_vdev *vdev)
 		return;
 	}
 
-	wlan_crypto_free_key(crypto_priv);
+	wlan_crypto_free_key(&crypto_priv->crypto_key);
 }
 #endif
 
@@ -732,7 +738,7 @@ static QDF_STATUS wlan_crypto_vdev_obj_destroy_handler(
 						(void *)crypto_priv);
 
 	wlan_crypto_pmksa_flush(&crypto_priv->crypto_params);
-	wlan_crypto_free_key(crypto_priv);
+	wlan_crypto_free_key(&crypto_priv->crypto_key);
 	qdf_mem_free(crypto_priv);
 
 	return QDF_STATUS_SUCCESS;
@@ -758,7 +764,7 @@ static QDF_STATUS wlan_crypto_peer_obj_destroy_handler(
 	wlan_objmgr_peer_component_obj_detach(peer,
 						WLAN_UMAC_COMP_CRYPTO,
 						(void *)crypto_priv);
-	wlan_crypto_free_key(crypto_priv);
+	wlan_crypto_free_key(&crypto_priv->crypto_key);
 	qdf_mem_free(crypto_priv);
 
 	return QDF_STATUS_SUCCESS;

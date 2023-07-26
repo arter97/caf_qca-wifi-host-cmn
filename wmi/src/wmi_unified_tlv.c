@@ -22139,9 +22139,10 @@ static void populate_tlv_events_id(WMI_EVT_ID *event_ids)
 	event_ids[wmi_vdev_standalone_sound_complete_eventid] =
 		WMI_VDEV_STANDALONE_SOUND_COMPLETE_EVENTID;
 #endif
-	event_ids[wmi_csa_ie_received_event_id] =
-		WMI_CSA_IE_RECEIVED_EVENTID;
-
+	event_ids[wmi_csa_ie_received_event_id] = WMI_CSA_IE_RECEIVED_EVENTID;
+#if defined(WLAN_FEATURE_ROAM_OFFLOAD) && defined(WLAN_FEATURE_11BE_MLO)
+	event_ids[wmi_roam_synch_key_event_id] = WMI_ROAM_SYNCH_KEY_EVENTID;
+#endif
 #ifdef QCA_SUPPORT_PRIMARY_LINK_MIGRATE
 	event_ids[wmi_peer_ptqm_migration_response_eventid] =
 			WMI_MLO_PRIMARY_LINK_PEER_MIGRATION_EVENTID;

@@ -24,10 +24,11 @@
 #define _WLAN_CRYPTO_DEF_I_H_
 
 #include <wlan_cmn_ieee80211.h>
+#include "wlan_objmgr_pdev_obj.h"
+#include "wlan_crypto_global_def.h"
 #ifdef WLAN_CRYPTO_AES
 #include "wlan_crypto_aes_i.h"
 #endif
-
 
 /* Number of bits per byte */
 #define CRYPTO_NBBY  8
@@ -394,29 +395,6 @@ typedef void (*crypto_add_key_callback)(void *context,
 					struct crypto_add_key_result *result);
 
 /**
- * struct wlan_crypto_keys - crypto keys structure
- * @key:              key buffers for this peer
- * @igtk_key:         igtk key buffer for this peer
- * @bigtk_key:        bigtk key buffer for this peer
- * @ltf_key_seed:     LTF Key Seed buffer
- * @igtk_key_type:    igtk key type
- * @def_tx_keyid:     default key used for this peer
- * @def_igtk_tx_keyid: default igtk key used for this peer
- * @def_bigtk_tx_keyid: default bigtk key used for this peer
- *
- */
-struct wlan_crypto_keys {
-	struct wlan_crypto_key *key[WLAN_CRYPTO_MAX_VLANKEYIX];
-	struct wlan_crypto_key *igtk_key[WLAN_CRYPTO_MAXIGTKKEYIDX];
-	struct wlan_crypto_key *bigtk_key[WLAN_CRYPTO_MAXBIGTKKEYIDX];
-	struct wlan_crypto_ltf_keyseed_data ltf_key_seed;
-	enum wlan_crypto_cipher_type igtk_key_type;
-	uint8_t def_tx_keyid;
-	uint8_t def_igtk_tx_keyid;
-	uint8_t def_bigtk_tx_keyid;
-};
-
-/**
  * struct wlan_crypto_comp_priv - crypto component private structure
  * @crypto_params:    crypto params for the peer
  * @crypto_key: crypto keys structure for the peer
@@ -566,42 +544,6 @@ static inline int wlan_get_tid(const void *data)
 	} else
 		return WLAN_NONQOS_SEQ;
 }
-
-union crypto_align_mac_addr {
-	uint8_t raw[QDF_MAC_ADDR_SIZE];
-	struct {
-		uint16_t bytes_ab;
-		uint16_t bytes_cd;
-		uint16_t bytes_ef;
-	} align2;
-	struct {
-		uint32_t bytes_abcd;
-		uint16_t bytes_ef;
-	} align4;
-	struct __packed {
-		uint16_t bytes_ab;
-		uint32_t bytes_cdef;
-	} align4_2;
-};
-
-/**
- * struct wlan_crypto_key_entry - crypto key entry structure
- * @mac_addr: mac addr
- * @is_active: active key entry
- * @link_id: link id
- * @vdev_id: vdev id
- * @keys: crypto keys
- * @hash_list_elem: hash list element
- */
-struct wlan_crypto_key_entry {
-	union crypto_align_mac_addr mac_addr;
-	bool is_active;
-	uint8_t link_id;
-	uint8_t vdev_id;
-	struct wlan_crypto_keys keys;
-
-	TAILQ_ENTRY(wlan_crypto_key_entry) hash_list_elem;
-};
 
 struct crypto_psoc_priv_obj {
 	/** @crypto_key_lock: lock for crypto key table */
