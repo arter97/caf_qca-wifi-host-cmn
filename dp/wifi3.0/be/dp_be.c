@@ -403,7 +403,9 @@ dp_hw_cookie_conversion_attach(struct dp_soc_be *be_soc,
 	uint8_t chip_id;
 
 	/* estimate how many SPT DDR pages needed */
-	num_spt_pages = num_descs / DP_CC_SPT_PAGE_MAX_ENTRIES;
+	num_spt_pages = qdf_do_div(
+				num_descs + (DP_CC_SPT_PAGE_MAX_ENTRIES - 1),
+				DP_CC_SPT_PAGE_MAX_ENTRIES);
 	num_spt_pages = num_spt_pages <= DP_CC_PPT_MAX_ENTRIES ?
 					num_spt_pages : DP_CC_PPT_MAX_ENTRIES;
 	dp_info("num_spt_pages needed %d", num_spt_pages);
