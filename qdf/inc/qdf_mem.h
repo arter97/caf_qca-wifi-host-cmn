@@ -737,17 +737,16 @@ static inline void qdf_mempool_free(qdf_device_t osdev, qdf_mempool_t pool,
 
 /**
  * qdf_kmem_cache_create() - OS abstraction for cache creation
- * @cache_name: Cache name
- * @size: Size of the object to be created
+ * @c: Cache name
+ * @z: Size of the object to be created
  *
  * Return: Cache address on successful creation, else NULL
  */
-static inline qdf_kmem_cache_t
-qdf_kmem_cache_create(const char *cache_name,
-		      qdf_size_t size)
-{
-	return __qdf_kmem_cache_create(cache_name, size);
-}
+#ifdef QCA_KMEM_CACHE_SUPPORT
+#define qdf_kmem_cache_create(c, z) __qdf_kmem_cache_create(c, z)
+#else
+#define qdf_kmem_cache_create(c, z) NULL
+#endif
 
 /**
  * qdf_kmem_cache_destroy() - OS abstraction for cache destruction
