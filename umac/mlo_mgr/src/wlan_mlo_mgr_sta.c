@@ -1157,10 +1157,12 @@ void mlo_sta_link_connect_notify(struct wlan_objmgr_vdev *vdev,
 	if (mlo_sta_ignore_link_connect_fail(vdev))
 		return;
 
+	if (wlan_cm_is_vdev_disconnected(vdev))
+		mlo_free_copied_conn_req(sta_ctx);
+
 	if (wlan_vdev_mlme_is_mlo_vdev(vdev)) {
 		mlo_debug("Vdev: %d", wlan_vdev_get_id(vdev));
 		if (wlan_cm_is_vdev_disconnected(vdev)) {
-			mlo_free_copied_conn_req(sta_ctx);
 			mlo_handle_sta_link_connect_failure(vdev, rsp);
 			return;
 		} else if (!wlan_cm_is_vdev_connected(vdev)) {
