@@ -1153,6 +1153,8 @@ struct wlan_host_t2lm_of_tids {
  * @peer_macaddr: link peer macaddr
  * @num_dir: number of directions for which T2LM info is available
  * @t2lm_info: TID-to-link mapping info for the given directions
+ * @mapping_switch_time: Mapping switch time of this T2LM IE
+ * @expected_duration: Expected duration of this T2LM IE
  * @preferred_links: Preferred link info.
  */
 struct wmi_host_tid_to_link_map_params {
@@ -1160,6 +1162,8 @@ struct wmi_host_tid_to_link_map_params {
 	uint8_t peer_macaddr[QDF_MAC_ADDR_SIZE];
 	uint8_t num_dir;
 	struct wlan_host_t2lm_of_tids t2lm_info[WLAN_T2LM_MAX_DIRECTION];
+	uint16_t mapping_switch_time;
+	uint32_t expected_duration;
 #ifdef WMI_AP_SUPPORT
 	struct wlan_host_preferred_links preferred_links;
 #endif

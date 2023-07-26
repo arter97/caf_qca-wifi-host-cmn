@@ -395,6 +395,8 @@ typedef QDF_STATUS (*wlan_mlo_t2lm_link_update_handler)(
  * @tsf: time sync func value received via beacon
  * @link_update_handler: handler to update T2LM link
  * @is_valid_handler: T2LM handler is valid or not
+ * @mst_start_tsf: calculated mapping switch start tsf
+ * @mst_end_tsf: calculated mapping switch end tsf
  */
 struct wlan_t2lm_context {
 	struct wlan_mlo_t2lm_ie established_t2lm;
@@ -409,6 +411,10 @@ struct wlan_t2lm_context {
 	wlan_mlo_t2lm_link_update_handler
 		link_update_handler[MAX_T2LM_HANDLERS];
 	bool is_valid_handler[MAX_T2LM_HANDLERS];
+#ifdef WLAN_FEATURE_11BE_MLO_ADV_FEATURE
+	uint64_t mst_start_tsf;
+	uint64_t mst_end_tsf;
+#endif
 };
 
 #ifdef WLAN_FEATURE_11BE
