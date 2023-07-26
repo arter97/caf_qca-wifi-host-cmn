@@ -6942,6 +6942,8 @@ dp_print_host_stats(struct dp_vdev *vdev,
 		dp_print_ast_stats(pdev->soc);
 		dp_print_mec_stats(pdev->soc);
 		dp_print_peer_table(vdev);
+		if (soc->arch_ops.dp_mlo_print_ptnr_info)
+			soc->arch_ops.dp_mlo_print_ptnr_info(vdev);
 		break;
 	case TXRX_SRNG_PTR_STATS:
 		dp_print_ring_stats(pdev);
