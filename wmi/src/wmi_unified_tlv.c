@@ -19464,7 +19464,9 @@ extract_roam_trigger_stats_tlv(wmi_unified_t wmi_handle, void *evt_buf,
 		if (periodic_data) {
 			trig->periodic_trig_data.periodic_timer_ms =
 				periodic_data->periodic_timer_ms;
-		}
+		} else if (src_data)
+			trig->rssi_trig_data.threshold =
+				src_data->roam_rssi_threshold;
 		return QDF_STATUS_SUCCESS;
 
 	case WMI_ROAM_TRIGGER_REASON_LOW_RSSI:
