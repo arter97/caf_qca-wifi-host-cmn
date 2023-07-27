@@ -389,6 +389,7 @@ dp_tx_hw_enqueue_rh(struct dp_soc *soc, struct dp_vdev *vdev,
 	tx_desc->flags |= DP_TX_DESC_FLAG_QUEUED_TX;
 	dp_vdev_peer_stats_update_protocol_cnt_tx(vdev, nbuf);
 	DP_STATS_INC_PKT(vdev, tx_i.processed, 1, tx_desc->length);
+	DP_STATS_INC(soc, tx.tcl_enq[0], 1);
 	dp_tx_update_stats(soc, tx_desc, 0);
 	status = QDF_STATUS_SUCCESS;
 
