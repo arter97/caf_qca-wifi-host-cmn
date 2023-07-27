@@ -3088,6 +3088,38 @@ dp_rx_set_wbm_err_info_in_nbuf(struct dp_soc *soc,
 			       qdf_nbuf_t nbuf,
 			       union hal_wbm_err_info_u wbm_err);
 
+#if defined(WLAN_MAX_PDEVS) && (WLAN_MAX_PDEVS == 1)
+static inline uint8_t
+dp_rx_get_defrag_bm_id(struct dp_soc *soc)
+{
+	return DP_DEFRAG_RBM(soc->wbm_sw0_bm_id);
+}
+
+static inline uint8_t
+dp_rx_get_rx_bm_id(struct dp_soc *soc)
+{
+	return DP_WBM2SW_RBM(soc->wbm_sw0_bm_id);
+}
+#else
+static inline uint8_t
+dp_rx_get_rx_bm_id(struct dp_soc *soc)
+{
+	struct wlan_cfg_dp_soc_ctxt *cfg_ctx = soc->wlan_cfg_ctx;
+	uint8_t wbm2_sw_rx_rel_ring_id;
+
+	wbm2_sw_rx_rel_ring_id = wlan_cfg_get_rx_rel_ring_id(cfg_ctx);
+
+	return HAL_RX_BUF_RBM_SW_BM(soc->wbm_sw0_bm_id,
+				    wbm2_sw_rx_rel_ring_id);
+}
+
+static inline uint8_t
+dp_rx_get_defrag_bm_id(struct dp_soc *soc)
+{
+	return dp_rx_get_rx_bm_id(soc);
+}
+#endif
+
 #ifndef WLAN_SOFTUMAC_SUPPORT /* WLAN_SOFTUMAC_SUPPORT */
 /**
  * dp_rx_dump_info_and_assert() - dump RX Ring info and Rx Desc info
@@ -3463,38 +3495,6 @@ dp_rx_mark_first_packet_after_wow_wakeup(struct dp_pdev *pdev,
 }
 #endif
 
-#if defined(WLAN_MAX_PDEVS) && (WLAN_MAX_PDEVS == 1)
-static inline uint8_t
-dp_rx_get_defrag_bm_id(struct dp_soc *soc)
-{
-	return DP_DEFRAG_RBM(soc->wbm_sw0_bm_id);
-}
-
-static inline uint8_t
-dp_rx_get_rx_bm_id(struct dp_soc *soc)
-{
-	return DP_WBM2SW_RBM(soc->wbm_sw0_bm_id);
-}
-#else
-static inline uint8_t
-dp_rx_get_rx_bm_id(struct dp_soc *soc)
-{
-	struct wlan_cfg_dp_soc_ctxt *cfg_ctx = soc->wlan_cfg_ctx;
-	uint8_t wbm2_sw_rx_rel_ring_id;
-
-	wbm2_sw_rx_rel_ring_id = wlan_cfg_get_rx_rel_ring_id(cfg_ctx);
-
-	return HAL_RX_BUF_RBM_SW_BM(soc->wbm_sw0_bm_id,
-				    wbm2_sw_rx_rel_ring_id);
-}
-
-static inline uint8_t
-dp_rx_get_defrag_bm_id(struct dp_soc *soc)
-{
-	return dp_rx_get_rx_bm_id(soc);
-}
-#endif
-
 #else
 static inline QDF_STATUS
 dp_rx_link_desc_return_by_addr(struct dp_soc *soc,
@@ -3510,18 +3510,6 @@ static inline void dp_rx_wbm_sg_list_reset(struct dp_soc *soc)
 
 static inline void dp_rx_wbm_sg_list_deinit(struct dp_soc *soc)
 {
-}
-
-static inline uint8_t
-dp_rx_get_defrag_bm_id(struct dp_soc *soc)
-{
-	return 0;
-}
-
-static inline uint8_t
-dp_rx_get_rx_bm_id(struct dp_soc *soc)
-{
-	return 0;
 }
 #endif /* WLAN_SOFTUMAC_SUPPORT */
 

@@ -260,6 +260,7 @@ qdf_size_t dp_mon_get_context_size_rh(enum dp_context_type context_type)
 static QDF_STATUS dp_soc_attach_rh(struct dp_soc *soc,
 				   struct cdp_soc_attach_params *params)
 {
+	soc->wbm_sw0_bm_id = hal_tx_get_wbm_sw0_bm_id();
 	return QDF_STATUS_SUCCESS;
 }
 
