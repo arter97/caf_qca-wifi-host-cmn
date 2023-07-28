@@ -793,6 +793,9 @@ __qdf_nbuf_alloc(__qdf_device_t osdev, size_t size, int reserve, int align,
  * unaligned will result in an unaligned address.
  * It will call into kernel page fragment APIs, long time keeping for scattered
  * allocations should be considered for avoidance.
+ * This also brings in more probability of page frag allocation failures during
+ * low memory situation. In case of page frag allocation failure, fallback to
+ * non-frag slab allocations.
  *
  * Return: nbuf or %NULL if no memory
  */
