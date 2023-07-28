@@ -647,7 +647,11 @@ struct sk_buff *__qdf_nbuf_frag_alloc(qdf_device_t osdev, size_t size,
 	}
 
 	skb = __netdev_alloc_skb(NULL, size, flags);
+	if (skb)
+		goto skb_alloc;
 
+	/* 32k page frag alloc failed, try page slab allocation */
+	skb = alloc_skb(size, flags);
 	if (skb)
 		goto skb_alloc;
 
