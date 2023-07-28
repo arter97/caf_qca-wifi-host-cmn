@@ -252,6 +252,7 @@ void dp_tx_process_htt_completion_be(struct dp_soc *soc,
 	struct cdp_tid_tx_stats *tid_stats = NULL;
 	struct htt_soc *htt_handle;
 	uint8_t vdev_id;
+	uint16_t peer_id;
 
 	tx_status = HTT_TX_WBM_COMPLETION_V3_TX_STATUS_GET(htt_desc[0]);
 	htt_handle = (struct htt_soc *)soc->htt_handle;
@@ -354,7 +355,8 @@ void dp_tx_process_htt_completion_be(struct dp_soc *soc,
 		if (tx_status < CDP_MAX_TX_HTT_STATUS)
 			tid_stats->htt_status_cnt[tx_status]++;
 
-		txrx_peer = dp_txrx_peer_get_ref_by_id(soc, ts.peer_id,
+		peer_id = dp_tx_comp_adjust_peer_id_be(soc, ts.peer_id);
+		txrx_peer = dp_txrx_peer_get_ref_by_id(soc, peer_id,
 						       &txrx_ref_handle,
 						       DP_MOD_ID_HTT_COMP);
 		if (qdf_likely(txrx_peer))
