@@ -46,6 +46,8 @@ static uint32_t get_infra_cp_stats_id(enum infra_cp_stats_id type)
 		return WMI_REQUEST_CTRL_PATH_BMISS_STAT;
 	case TYPE_REQ_CTRL_PATH_PMLO_STAT:
 		return WMI_REQUEST_CTRL_PATH_PMLO_STAT;
+	case TYPE_REQ_CTRL_PATH_RRM_STA_STAT:
+		return WMI_REQUEST_CTRL_STA_RRM_STAT;
 	default:
 		return -EINVAL;
 	}
