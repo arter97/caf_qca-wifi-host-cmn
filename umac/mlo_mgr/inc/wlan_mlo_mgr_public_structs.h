@@ -65,6 +65,7 @@ struct mlo_osif_ext_ops;
 struct vdev_mlme_obj;
 struct wlan_t2lm_context;
 struct mlo_link_switch_context;
+struct wlan_mlo_link_switch_req;
 
 /* Max LINK PEER support */
 #define MAX_MLO_LINK_PEERS WLAN_UMAC_MLO_MAX_VDEVS
@@ -207,6 +208,62 @@ struct mlo_state_params {
 
 #endif
 
+typedef QDF_STATUS
+(*mlo_mgr_link_switch_notifier_cb)(struct wlan_objmgr_vdev *vdev,
+				   struct wlan_mlo_link_switch_req *lswitch_req);
+
+#ifdef WLAN_FEATURE_11BE_MLO_ADV_FEATURE
+/*
+ * struct wlan_mlo_link_switch_notifier - Link switch notifier callbacks
+ * @in_use: Set to true on successful notifier callback registration
+ * @cb: Callback to notify link switch start
+ */
+struct wlan_mlo_link_switch_notifier {
+	bool in_use;
+	mlo_mgr_link_switch_notifier_cb cb;
+};
+
+/**
+ * mlo_mgr_register_link_switch_notifier() - API to register link switch
+ * start notifier callback
+ * @comp_id: Component requesting notification on link switch start
+ * @cb: Callback to register.
+ *
+ * The @cb will be triggered on start of link switch with params of the
+ * link switch.
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS
+mlo_mgr_register_link_switch_notifier(enum wlan_umac_comp_id comp_id,
+				      mlo_mgr_link_switch_notifier_cb cb);
+
+/**
+ * mlo_mgr_unregister_link_switch_notifier() - API to unregister link switch
+ * notifier callback.
+ * @comp_id: Component to deregister.
+ *
+ * The API will cleanup the notification callback registered for link switch.
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS
+mlo_mgr_unregister_link_switch_notifier(enum wlan_umac_comp_id comp_id);
+#else
+static inline QDF_STATUS
+mlo_mgr_register_link_switch_notifier(enum wlan_umac_comp_id comp_id,
+				      mlo_mgr_link_switch_notifier_cb cb)
+{
+	return QDF_STATUS_E_NOSUPPORT;
+}
+
+static inline QDF_STATUS
+mlo_mgr_unregister_link_switch_notifier(enum wlan_umac_comp_id comp_id)
+{
+	return QDF_STATUS_E_NOSUPPORT;
+}
+#endif /* WLAN_FEATURE_11BE_MLO_ADV_FEATURE */
+
 /*
  * struct mlo_mgr_context - MLO manager context
  * @ml_dev_list_lock: ML DEV list lock
@@ -227,6 +284,7 @@ struct mlo_state_params {
  *
  * NB: not using kernel-doc format since the kernel-doc script doesn't
  *     handle the qdf_bitmap() macro
+ * @lswitch_notifier: Holds callback functions to notify link switch start
  */
 struct mlo_mgr_context {
 #ifdef WLAN_MLO_USE_SPINLOCK
@@ -254,6 +312,9 @@ struct mlo_mgr_context {
 	bool mlo_is_force_primary_umac;
 	uint8_t mlo_forced_primary_umac_id;
 	bool force_non_assoc_prim_umac;
+#ifdef WLAN_FEATURE_11BE_MLO_ADV_FEATURE
+	struct wlan_mlo_link_switch_notifier lswitch_notifier[WLAN_UMAC_COMP_ID_MAX];
+#endif /* WLAN_FEATURE_11BE_MLO_ADV_FEATURE */
 };
 
 /*
@@ -1022,6 +1083,7 @@ struct mlo_mlme_ext_ops {
  * @mlo_mgr_osif_update_bss_info: Callback to update each link connection info.
  * @mlo_mgr_osif_update_mac_addr: Callback to notify MAC addr update complete
  *                                from old link id to new link id for the vdev.
+ * @mlo_mgr_osif_link_switch_notification: Notify OSIF on start of link switch
  */
 struct mlo_osif_ext_ops {
 	QDF_STATUS
@@ -1032,6 +1094,10 @@ struct mlo_osif_ext_ops {
 	QDF_STATUS (*mlo_mgr_osif_update_mac_addr)(int32_t ieee_old_link_id,
 						   int32_t ieee_new_link_id,
 						   uint8_t vdev_id);
+
+	QDF_STATUS
+	(*mlo_mgr_osif_link_switch_notification)(struct wlan_objmgr_vdev *vdev,
+						 uint8_t non_trans_vdev_id);
 };
 
 /* maximum size of vdev bitmap array for MLO link set active command */

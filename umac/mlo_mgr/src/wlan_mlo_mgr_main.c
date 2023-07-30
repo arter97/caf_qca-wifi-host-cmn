@@ -18,7 +18,6 @@
 /*
  * DOC: contains MLO manager init/deinit api's
  */
-#include <wlan_mlo_mgr_link_switch.h>
 #include "wlan_cmn.h"
 #include <wlan_objmgr_cmn.h>
 #include <wlan_objmgr_global_obj.h>
@@ -32,6 +31,7 @@
 #include <target_if_mlo_mgr.h>
 #include <wlan_mlo_t2lm.h>
 #include <wlan_cm_api.h>
+#include <wlan_mlo_mgr_public_api.h>
 
 static void mlo_global_ctx_deinit(void)
 {
@@ -129,6 +129,78 @@ QDF_STATUS wlan_mlo_mgr_psoc_disable(struct wlan_objmgr_psoc *psoc)
 	return mlo_tx_ops->unregister_events(psoc);
 }
 
+#ifdef WLAN_FEATURE_11BE_MLO_ADV_FEATURE
+QDF_STATUS
+mlo_mgr_register_link_switch_notifier(enum wlan_umac_comp_id comp_id,
+				      mlo_mgr_link_switch_notifier_cb cb)
+{
+	struct mlo_mgr_context *g_mlo_mgr_ctx = wlan_objmgr_get_mlo_ctx();
+
+	if (!g_mlo_mgr_ctx) {
+		mlo_err("global mlo mgr not initialized");
+		return QDF_STATUS_E_INVAL;
+	}
+
+	if (!cb || comp_id >= WLAN_UMAC_COMP_ID_MAX) {
+		mlo_err("Invalid component");
+		QDF_ASSERT(0);
+		return QDF_STATUS_E_INVAL;
+	}
+
+	if (g_mlo_mgr_ctx->lswitch_notifier[comp_id].in_use)
+		return QDF_STATUS_E_ALREADY;
+
+	g_mlo_mgr_ctx->lswitch_notifier[comp_id].in_use = true;
+	g_mlo_mgr_ctx->lswitch_notifier[comp_id].cb = cb;
+	return QDF_STATUS_SUCCESS;
+}
+
+QDF_STATUS
+mlo_mgr_unregister_link_switch_notifier(enum wlan_umac_comp_id comp_id)
+{
+	struct mlo_mgr_context *g_mlo_mgr_ctx = wlan_objmgr_get_mlo_ctx();
+
+	if (!g_mlo_mgr_ctx) {
+		mlo_err("global mlo mgr not initialized");
+		return QDF_STATUS_E_INVAL;
+	}
+
+	if (comp_id >= WLAN_UMAC_COMP_ID_MAX) {
+		mlo_err("Invalid component");
+		QDF_ASSERT(0);
+		return QDF_STATUS_E_INVAL;
+	}
+
+	if (!g_mlo_mgr_ctx->lswitch_notifier[comp_id].in_use)
+		return QDF_STATUS_E_INVAL;
+
+	g_mlo_mgr_ctx->lswitch_notifier[comp_id].in_use = false;
+	g_mlo_mgr_ctx->lswitch_notifier[comp_id].cb = NULL;
+	return QDF_STATUS_SUCCESS;
+}
+
+static QDF_STATUS mlo_mgr_init_link_switch_notifier(void)
+{
+	int i;
+	struct mlo_mgr_context *g_mlo_mgr_ctx = wlan_objmgr_get_mlo_ctx();
+
+	if (!g_mlo_mgr_ctx)
+		return QDF_STATUS_E_INVAL;
+
+	for (i = 0; i < WLAN_UMAC_COMP_ID_MAX; i++) {
+		g_mlo_mgr_ctx->lswitch_notifier[i].in_use = false;
+		g_mlo_mgr_ctx->lswitch_notifier[i].cb = NULL;
+	}
+
+	return QDF_STATUS_SUCCESS;
+}
+#else
+static inline QDF_STATUS mlo_mgr_init_link_switch_notifier(void)
+{
+	return QDF_STATUS_E_NOSUPPORT;
+}
+#endif /* WLAN_FEATURE_11BE_MLO_ADV_FEATURE */
+
 QDF_STATUS wlan_mlo_mgr_init(void)
 {
 	QDF_STATUS status;
@@ -145,12 +217,21 @@ QDF_STATUS wlan_mlo_mgr_init(void)
 
 	status = wlan_objmgr_register_vdev_destroy_handler(WLAN_UMAC_COMP_MLO_MGR,
 		wlan_mlo_mgr_vdev_destroyed_notification, NULL);
-	if (QDF_IS_STATUS_SUCCESS(status)) {
-		mlo_debug("MLO vdev create and delete handler registered with objmgr");
-		return QDF_STATUS_SUCCESS;
+	if (QDF_IS_STATUS_ERROR(status)) {
+		mlo_debug("Failed to register VDEV destroy handler");
+		wlan_objmgr_unregister_vdev_create_handler(WLAN_UMAC_COMP_MLO_MGR,
+					wlan_mlo_mgr_vdev_created_notification, NULL);
+		return status;
 	}
-	wlan_objmgr_unregister_vdev_create_handler(WLAN_UMAC_COMP_MLO_MGR,
-				wlan_mlo_mgr_vdev_created_notification, NULL);
+
+	status = mlo_mgr_init_link_switch_notifier();
+	if (QDF_IS_STATUS_SUCCESS(status)) {
+		status = mlo_mgr_register_link_switch_notifier(WLAN_UMAC_COMP_MLO_MGR,
+							       mlo_mgr_link_switch_notification);
+		return status;
+	}
+	if (status == QDF_STATUS_E_NOSUPPORT)
+		status = QDF_STATUS_SUCCESS;
 
 	return status;
 }
@@ -179,6 +260,7 @@ QDF_STATUS wlan_mlo_mgr_deinit(void)
 	if (status != QDF_STATUS_SUCCESS)
 		mlo_err("Failed to unregister vdev delete handler");
 
+	wlan_mlo_mgr_unregister_link_switch_notifier(WLAN_UMAC_COMP_MLO_MGR);
 	return status;
 }
 

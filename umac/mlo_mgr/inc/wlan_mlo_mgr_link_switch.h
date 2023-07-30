@@ -175,8 +175,9 @@ struct mlo_link_switch_context {
  * Update link mac addresses for the ML links
  * Return: none
  */
-void mlo_mgr_update_link_info_mac_addr(struct wlan_objmgr_vdev *vdev,
-			       struct wlan_mlo_link_mac_update *mlo_mac_update);
+void
+mlo_mgr_update_link_info_mac_addr(struct wlan_objmgr_vdev *vdev,
+				  struct wlan_mlo_link_mac_update *mlo_mac_update);
 
 /**
  * mlo_mgr_update_link_info_reset() - Reset link info of ml dev context
@@ -315,6 +316,20 @@ mlo_mgr_link_switch_get_curr_state(struct wlan_mlo_dev_context *mlo_dev_ctx);
 bool mlo_mgr_is_link_switch_in_progress(struct wlan_objmgr_vdev *vdev);
 
 /**
+ * mlo_mgr_link_switch_notification() - Notify MLO manager on start
+ * of link switch
+ * @vdev: VDEV object manager
+ * @lswitch_req: Link switch request params from FW
+ *
+ * The link switch notifier callback to MLO manager invoked before starting
+ * link switch disconnect
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS mlo_mgr_link_switch_notification(struct wlan_objmgr_vdev *vdev,
+					    struct wlan_mlo_link_switch_req *lswitch_req);
+
+/**
  * mlo_mgr_is_link_switch_on_assoc_vdev() - API to query whether link switch
  * is on-going on assoc VDEV.
  * @vdev: VDEV object manager
@@ -322,6 +337,18 @@ bool mlo_mgr_is_link_switch_in_progress(struct wlan_objmgr_vdev *vdev);
  * Return: bool
  */
 bool mlo_mgr_is_link_switch_on_assoc_vdev(struct wlan_objmgr_vdev *vdev);
+
+/**
+ * mlo_mgr_link_switch_get_assoc_vdev() - Get current link switch VDEV
+ * pointer if it is assoc VDEV.
+ * @vdev: VDEV object manager.
+ *
+ * If the current link switch VDEV is assoc VDEV, fetch the pointer of that VDEV
+ *
+ * Return: VDEV object manager pointer
+ */
+struct wlan_objmgr_vdev *
+mlo_mgr_link_switch_get_assoc_vdev(struct wlan_objmgr_vdev *vdev);
 
 /**
  * mlo_mgr_ser_link_switch_cmd() - The API will serialize link switch
@@ -452,10 +479,23 @@ mlo_mgr_is_link_switch_in_progress(struct wlan_objmgr_vdev *vdev)
 	return false;
 }
 
+static inline QDF_STATUS
+mlo_mgr_link_switch_notification(struct wlan_objmgr_vdev *vdev,
+				 struct wlan_mlo_link_switch_req *lswitch_req)
+{
+	return QDF_STATUS_E_NOSUPPORT;
+}
+
 static inline bool
 mlo_mgr_is_link_switch_on_assoc_vdev(struct wlan_objmgr_vdev *vdev)
 {
 	return false;
+}
+
+static inline struct wlan_objmgr_vdev *
+mlo_mgr_link_switch_get_assoc_vdev(struct wlan_objmgr_vdev *vdev)
+{
+	return NULL;
 }
 
 static inline QDF_STATUS
