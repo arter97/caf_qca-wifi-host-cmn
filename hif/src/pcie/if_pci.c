@@ -37,6 +37,7 @@
 #include <linux/debugfs.h>
 #include <linux/seq_file.h>
 #include "qdf_status.h"
+#include "qdf_types.h"
 #include "qdf_atomic.h"
 #include "qdf_platform.h"
 #include "pld_common.h"
@@ -272,6 +273,7 @@ irqreturn_t hif_pci_legacy_ce_interrupt_handler(int irq, void *arg)
 	struct hif_pci_softc *sc = (struct hif_pci_softc *)arg;
 	struct hif_softc *scn = HIF_GET_SOFTC(sc);
 	struct HIF_CE_state *hif_state = HIF_GET_CE_STATE(arg);
+	struct hif_driver_state_callbacks *cbk = hif_get_callbacks_handle(scn);
 
 	volatile int tmp;
 	uint16_t val = 0;
@@ -359,7 +361,14 @@ irqreturn_t hif_pci_legacy_ce_interrupt_handler(int irq, void *arg)
 			hif_err("0x80018 = 0x%08x, 0x8001c = 0x%08x",
 				hif_read32_mb(sc, sc->mem + 0x80018),
 				hif_read32_mb(sc, sc->mem + 0x8001c));
-			QDF_BUG(0);
+			if (cbk && cbk->trigger_ssr_from_hif) {
+				hif_err("%s: assert at LIne %d, trigger ssr",
+					__func__, __LINE__);
+				cbk->trigger_ssr_from_hif(cbk->context,
+							  QDF_DEADBEEF_ERROR,
+							  __func__,__LINE__);
+			} else
+				QDF_BUG(0);
 		}
 
 		PCI_CLR_CAUSE0_REGISTER(sc);
