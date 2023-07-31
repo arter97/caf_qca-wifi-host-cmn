@@ -1964,12 +1964,12 @@ dp_rx_mon_process_status_tlv(struct dp_pdev *pdev)
 			if ((rx_tlv - rx_tlv_start) >= (end_offset + 1))
 				break;
 
-	} while ((tlv_status == HAL_TLV_STATUS_PPDU_NOT_DONE) ||
-			(tlv_status == HAL_TLV_STATUS_HEADER) ||
-			(tlv_status == HAL_TLV_STATUS_MPDU_END) ||
-			(tlv_status == HAL_TLV_STATUS_MSDU_END) ||
-			(tlv_status == HAL_TLV_STATUS_MON_BUF_ADDR) ||
-			(tlv_status == HAL_TLV_STATUS_MPDU_START));
+		} while ((tlv_status == HAL_TLV_STATUS_PPDU_NOT_DONE) ||
+			 (tlv_status == HAL_TLV_STATUS_HEADER) ||
+			 (tlv_status == HAL_TLV_STATUS_MPDU_END) ||
+			 (tlv_status == HAL_TLV_STATUS_MSDU_END) ||
+			 (tlv_status == HAL_TLV_STATUS_MON_BUF_ADDR) ||
+			 (tlv_status == HAL_TLV_STATUS_MPDU_START));
 
 		/* set status buffer pointer to NULL */
 		mon_pdev_be->status[idx] = NULL;
