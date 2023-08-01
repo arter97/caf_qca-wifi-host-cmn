@@ -567,6 +567,18 @@ struct mlo_partner_info {
 #endif
 };
 
+#ifdef WLAN_FEATURE_11BE_MLO
+/**
+ * struct emlsr_capability - EMLSR capabilities info
+ * @emlsr_supp: EMLSR support is present or not.
+ * @trans_timeout: transition timeout
+ */
+struct emlsr_capability {
+	bool emlsr_supp;
+	uint8_t trans_timeout;
+};
+#endif
+
 /*
  * struct wlan_mlo_sta - MLO sta additional info
  * @wlan_connect_req_links: list of vdevs selected for connection with the MLAP
@@ -612,6 +624,7 @@ struct wlan_mlo_sta {
 	struct ml_link_state_cmd_info ml_link_state;
 	struct wlan_t2lm_context copied_t2lm_ie_assoc_rsp;
 	struct mlo_partner_info ml_partner_info;
+	struct emlsr_capability emlsr_cap;
 #endif
 #ifdef WLAN_FEATURE_11BE_MLO_ADV_FEATURE
 	struct wlan_link_force_context link_force_ctx;
