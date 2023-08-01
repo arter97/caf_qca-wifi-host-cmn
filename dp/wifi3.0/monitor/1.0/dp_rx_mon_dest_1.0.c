@@ -1302,7 +1302,7 @@ void dp_rx_pdev_mon_desc_pool_free(struct dp_pdev *pdev)
 {
 	int mac_id;
 
-	for (mac_id = 0; mac_id < NUM_RXDMA_RINGS_PER_PDEV; mac_id++)
+	for (mac_id = 0; mac_id < NUM_RXDMA_STATUS_RINGS_PER_PDEV; mac_id++)
 		dp_rx_pdev_mon_cmn_desc_pool_free(pdev, mac_id);
 }
 
@@ -1323,7 +1323,7 @@ dp_rx_pdev_mon_desc_pool_deinit(struct dp_pdev *pdev)
 {
 	int mac_id;
 
-	for (mac_id = 0; mac_id < NUM_RXDMA_RINGS_PER_PDEV; mac_id++)
+	for (mac_id = 0; mac_id < NUM_RXDMA_STATUS_RINGS_PER_PDEV; mac_id++)
 		dp_rx_pdev_mon_cmn_desc_pool_deinit(pdev, mac_id);
 	qdf_spinlock_destroy(&pdev->monitor_pdev->mon_lock);
 }
@@ -1346,7 +1346,7 @@ dp_rx_pdev_mon_desc_pool_init(struct dp_pdev *pdev)
 {
 	int mac_id;
 
-	for (mac_id = 0; mac_id < NUM_RXDMA_RINGS_PER_PDEV; mac_id++)
+	for (mac_id = 0; mac_id < NUM_RXDMA_STATUS_RINGS_PER_PDEV; mac_id++)
 		dp_rx_pdev_mon_cmn_desc_pool_init(pdev, mac_id);
 	qdf_spinlock_create(&pdev->monitor_pdev->mon_lock);
 }
@@ -1457,7 +1457,7 @@ dp_rx_pdev_mon_desc_pool_alloc(struct dp_pdev *pdev)
 	QDF_STATUS status;
 	int mac_id, count;
 
-	for (mac_id = 0; mac_id < NUM_RXDMA_RINGS_PER_PDEV; mac_id++) {
+	for (mac_id = 0; mac_id < NUM_RXDMA_STATUS_RINGS_PER_PDEV; mac_id++) {
 		status = dp_rx_pdev_mon_cmn_desc_pool_alloc(pdev, mac_id);
 		if (!QDF_IS_STATUS_SUCCESS(status)) {
 			dp_rx_mon_dest_err("%pK: %d failed",
