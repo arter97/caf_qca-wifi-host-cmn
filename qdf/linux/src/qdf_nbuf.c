@@ -5134,11 +5134,6 @@ qdf_nbuf_update_radiotap_he_mu_flags(struct mon_rx_status *rx_status,
 
 		rtap_buf[rtap_len] = rx_status->he_RU[3];
 		rtap_len += 1;
-		qdf_debug("he_flags %x %x he-RU %x %x %x %x",
-			  rx_status->he_flags1,
-			  rx_status->he_flags2, rx_status->he_RU[0],
-			  rx_status->he_RU[1], rx_status->he_RU[2],
-			  rx_status->he_RU[3]);
 	} else {
 		put_unaligned_le16(rx_user_status->he_flags1,
 				   &rtap_buf[rtap_len]);
@@ -5205,11 +5200,6 @@ qdf_nbuf_update_radiotap_he_mu_other_flags(struct mon_rx_status *rx_status,
 
 		rtap_buf[rtap_len] = rx_status->he_per_user_known;
 		rtap_len += 1;
-		qdf_debug("he_per_user %x %x pos %x knwn %x",
-			  rx_status->he_per_user_1,
-			  rx_status->he_per_user_2,
-			  rx_status->he_per_user_position,
-			  rx_status->he_per_user_known);
 	} else {
 		put_unaligned_le16(rx_user_status->he_per_user_1,
 				   &rtap_buf[rtap_len]);
@@ -5224,11 +5214,6 @@ qdf_nbuf_update_radiotap_he_mu_other_flags(struct mon_rx_status *rx_status,
 
 		rtap_buf[rtap_len] = rx_user_status->he_per_user_known;
 		rtap_len += 1;
-		qdf_debug("he_per_user %x %x pos %x knwn %x",
-			  rx_user_status->he_per_user_1,
-			  rx_user_status->he_per_user_2,
-			  rx_user_status->he_per_user_position,
-			  rx_user_status->he_per_user_known);
 	}
 
 	return rtap_len;
