@@ -4107,6 +4107,8 @@ static QDF_STATUS send_scan_start_cmd_tlv(wmi_unified_t wmi_handle,
 	cmd->ie_len = params->extraie.len;
 	cmd->n_probes = params->n_probes;
 	cmd->scan_ctrl_flags_ext = params->scan_ctrl_flags_ext;
+	WMI_SCAN_MLD_PARAM_MLD_ID_SET(cmd->mld_parameter, params->mld_id);
+	wmi_debug("MLD ID: %u", cmd->mld_parameter);
 
 	if (params->scan_random.randomize)
 		wmi_copy_scan_random_mac(params->scan_random.mac_addr,

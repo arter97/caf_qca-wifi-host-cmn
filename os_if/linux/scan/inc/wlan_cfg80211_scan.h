@@ -123,6 +123,7 @@ struct scan_req {
  * @scan_probe_unicast_ra: Use BSSID in probe request frame RA.
  * @scan_f_2ghz: Scan only 2GHz channels
  * @scan_f_5ghz: Scan only 5+6GHz channels
+ * @mld_id: MLD ID of the requested BSS within ML probe request
  */
 struct scan_params {
 	uint8_t source;
@@ -140,6 +141,7 @@ struct scan_params {
 	bool scan_probe_unicast_ra;
 	bool scan_f_2ghz;
 	bool scan_f_5ghz;
+	uint8_t mld_id;
 };
 
 /**

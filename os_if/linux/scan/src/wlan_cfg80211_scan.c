@@ -1751,6 +1751,8 @@ int wlan_cfg80211_scan(struct wlan_objmgr_vdev *vdev,
 	osif_debug("scan_ctrl_flags_ext %0x",
 		   req->scan_req.scan_ctrl_flags_ext);
 
+	req->scan_req.mld_id = params->mld_id;
+
 	/*
 	 * Acquire wakelock to handle the case where APP's send scan to connect.
 	 * If suspend is received during scan scan will be aborted and APP will
