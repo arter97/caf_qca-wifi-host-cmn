@@ -34,7 +34,8 @@
 #define hal_alert(params...) QDF_TRACE_FATAL(QDF_MODULE_ID_HAL, params)
 #define hal_err(params...) QDF_TRACE_ERROR(QDF_MODULE_ID_HAL, params)
 #define hal_warn(params...) QDF_TRACE_WARN(QDF_MODULE_ID_HAL, params)
-#define hal_info(params...) QDF_TRACE_INFO(QDF_MODULE_ID_HAL, params)
+#define hal_info(params...) \
+	__QDF_TRACE_FL(QDF_TRACE_LEVEL_INFO_HIGH, QDF_MODULE_ID_HAL, ## params)
 #define hal_debug(params...) QDF_TRACE_DEBUG(QDF_MODULE_ID_HAL, params)
 
 #define hal_alert_rl(params...) QDF_TRACE_FATAL_RL(QDF_MODULE_ID_HAL, params)
