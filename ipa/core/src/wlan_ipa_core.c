@@ -2258,7 +2258,8 @@ static QDF_STATUS wlan_ipa_setup_iface(struct wlan_ipa_priv *ipa_ctx,
 
 	for (i = 0; i < WLAN_IPA_MAX_IFACE; i++) {
 		iface_context = &(ipa_ctx->iface_context[i]);
-		if (iface_context->dev == net_dev) {
+		if (wlan_ipa_check_iface_netdev_sessid(iface_context, net_dev,
+						       session_id)) {
 			if (iface_context->device_mode == device_mode) {
 				/**
 				 * Lower layer may send multiple START_BSS_EVENT
@@ -3140,7 +3141,9 @@ static QDF_STATUS __wlan_ipa_wlan_evt(qdf_netdev_t net_dev, uint8_t device_mode,
 			    type == QDF_IPA_AP_DISCONNECT) {
 				for (i = 0; i < WLAN_IPA_MAX_IFACE; i++) {
 					iface_ctx = &ipa_ctx->iface_context[i];
-					if (iface_ctx->dev == net_dev) {
+					if (wlan_ipa_check_iface_netdev_sessid(
+							     iface_ctx, net_dev,
+							     session_id)) {
 						wlan_ipa_cleanup_iface(
 								iface_ctx,
 								mac_addr);
@@ -3176,7 +3179,8 @@ static QDF_STATUS __wlan_ipa_wlan_evt(qdf_netdev_t net_dev, uint8_t device_mode,
 		 */
 		if (ipa_ctx->sta_connected) {
 			iface_ctx = wlan_ipa_get_iface_by_mode_netdev(
-					ipa_ctx, net_dev, QDF_STA_MODE);
+					ipa_ctx, net_dev, QDF_STA_MODE,
+					session_id);
 			if (iface_ctx) {
 				ipa_ctx->sta_connected--;
 				wlan_ipa_cleanup_iface(iface_ctx, NULL);
@@ -3314,7 +3318,8 @@ static QDF_STATUS __wlan_ipa_wlan_evt(qdf_netdev_t net_dev, uint8_t device_mode,
 
 			iface = wlan_ipa_get_iface_by_mode_netdev(ipa_ctx,
 								  net_dev,
-								  QDF_STA_MODE);
+								  QDF_STA_MODE,
+								  session_id);
 			if (iface)
 				wlan_ipa_cleanup_iface(iface, mac_addr);
 
@@ -3371,7 +3376,8 @@ static QDF_STATUS __wlan_ipa_wlan_evt(qdf_netdev_t net_dev, uint8_t device_mode,
 
 		iface_ctx = wlan_ipa_get_iface_by_mode_netdev(ipa_ctx,
 							      net_dev,
-							      QDF_STA_MODE);
+							      QDF_STA_MODE,
+							      session_id);
 		if (iface_ctx)
 			wlan_ipa_cleanup_iface(iface_ctx, mac_addr);
 
@@ -3423,7 +3429,8 @@ static QDF_STATUS __wlan_ipa_wlan_evt(qdf_netdev_t net_dev, uint8_t device_mode,
 
 		for (i = 0; i < WLAN_IPA_MAX_IFACE; i++) {
 			iface_ctx = &ipa_ctx->iface_context[i];
-			if (iface_ctx->dev == net_dev) {
+			if (wlan_ipa_check_iface_netdev_sessid(iface_ctx,
+							net_dev, session_id)) {
 				wlan_ipa_cleanup_iface(iface_ctx, mac_addr);
 				break;
 			}
@@ -4530,9 +4537,19 @@ struct wlan_ipa_iface_context
 	return NULL;
 }
 
+int wlan_ipa_check_iface_netdev_sessid(struct wlan_ipa_iface_context *iface_ctx,
+				       qdf_netdev_t net_dev, uint8_t session_id)
+{
+	if (iface_ctx->dev == net_dev && iface_ctx->session_id == session_id)
+		return 1;
+
+	return 0;
+}
+
 struct wlan_ipa_iface_context *
 wlan_ipa_get_iface_by_mode_netdev(struct wlan_ipa_priv *ipa_ctx,
-				  qdf_netdev_t ndev, uint8_t mode)
+				  qdf_netdev_t ndev, uint8_t mode,
+				  uint8_t session_id)
 {
 	struct wlan_ipa_iface_context *iface_ctx = NULL;
 	int i;
@@ -4540,7 +4557,9 @@ wlan_ipa_get_iface_by_mode_netdev(struct wlan_ipa_priv *ipa_ctx,
 	for (i = 0; i < WLAN_IPA_MAX_IFACE; i++) {
 		iface_ctx = &ipa_ctx->iface_context[i];
 
-		if (iface_ctx->device_mode == mode && iface_ctx->dev == ndev)
+		if (iface_ctx->device_mode == mode &&
+		    wlan_ipa_check_iface_netdev_sessid(iface_ctx, ndev,
+						       session_id))
 			return iface_ctx;
 	}
 
@@ -5051,7 +5070,7 @@ static QDF_STATUS wlan_ipa_uc_send_evt(qdf_netdev_t net_dev,
 }
 
 void wlan_ipa_uc_cleanup_sta(struct wlan_ipa_priv *ipa_ctx,
-			     qdf_netdev_t net_dev)
+			     qdf_netdev_t net_dev, uint8_t session_id)
 {
 	struct wlan_ipa_iface_context *iface_ctx;
 	int i;
@@ -5061,7 +5080,8 @@ void wlan_ipa_uc_cleanup_sta(struct wlan_ipa_priv *ipa_ctx,
 	for (i = 0; i < WLAN_IPA_MAX_IFACE; i++) {
 		iface_ctx = &ipa_ctx->iface_context[i];
 		if (iface_ctx && iface_ctx->device_mode == QDF_STA_MODE &&
-		    iface_ctx->dev && iface_ctx->dev == net_dev) {
+		    wlan_ipa_check_iface_netdev_sessid(iface_ctx, net_dev,
+						       session_id)) {
 			wlan_ipa_uc_send_evt(net_dev, QDF_IPA_STA_DISCONNECT,
 					     (uint8_t *)net_dev->dev_addr,
 					     ipa_ctx);
@@ -5094,14 +5114,15 @@ QDF_STATUS wlan_ipa_uc_disconnect_ap(struct wlan_ipa_priv *ipa_ctx,
 }
 
 void wlan_ipa_cleanup_dev_iface(struct wlan_ipa_priv *ipa_ctx,
-				qdf_netdev_t net_dev)
+				qdf_netdev_t net_dev, uint8_t session_id)
 {
 	struct wlan_ipa_iface_context *iface_ctx;
 	int i;
 
 	for (i = 0; i < WLAN_IPA_MAX_IFACE; i++) {
 		iface_ctx = &ipa_ctx->iface_context[i];
-		if (iface_ctx->dev == net_dev) {
+		if (wlan_ipa_check_iface_netdev_sessid(iface_ctx, net_dev,
+						       session_id)) {
 			wlan_ipa_cleanup_iface(iface_ctx, NULL);
 			break;
 		}

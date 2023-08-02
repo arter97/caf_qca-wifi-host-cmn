@@ -484,6 +484,7 @@ bool ipa_is_fw_wdi_activated(struct wlan_objmgr_pdev *pdev);
  * ipa_uc_cleanup_sta() - disconnect and cleanup sta iface
  * @pdev: pdev obj
  * @net_dev: Interface net device
+ * @session_id: vdev id
  *
  * Send disconnect sta event to IPA driver and cleanup IPA iface,
  * if not yet done
@@ -491,7 +492,7 @@ bool ipa_is_fw_wdi_activated(struct wlan_objmgr_pdev *pdev);
  * Return: void
  */
 void ipa_uc_cleanup_sta(struct wlan_objmgr_pdev *pdev,
-			qdf_netdev_t net_dev);
+			qdf_netdev_t net_dev, uint8_t session_id);
 
 /**
  * ipa_uc_disconnect_ap() - send ap disconnect event
@@ -509,11 +510,12 @@ QDF_STATUS ipa_uc_disconnect_ap(struct wlan_objmgr_pdev *pdev,
  * ipa_cleanup_dev_iface() - Clean up net dev IPA interface
  * @pdev: pdev obj
  * @net_dev: Interface net device
+ * @session_id: vdev_id
  *
  * Return: None
  */
 void ipa_cleanup_dev_iface(struct wlan_objmgr_pdev *pdev,
-			   qdf_netdev_t net_dev);
+			   qdf_netdev_t net_dev, uint8_t session_id);
 
 /**
  * ipa_uc_ssr_cleanup() - handle IPA UC cleanup during SSR
