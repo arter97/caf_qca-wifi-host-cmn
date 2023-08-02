@@ -380,6 +380,9 @@ dp_rx_decrypt_unecrypt_err_handler_rh(struct dp_soc *soc, qdf_nbuf_t nbuf,
 	bool is_broadcast;
 	uint8_t *rx_tlv_hdr;
 	uint16_t peer_id;
+	uint16_t buf_size;
+
+	buf_size = wlan_cfg_rx_buffer_size(soc->wlan_cfg_ctx);
 
 	rx_tlv_hdr = qdf_nbuf_data(nbuf);
 
@@ -419,7 +422,7 @@ dp_rx_decrypt_unecrypt_err_handler_rh(struct dp_soc *soc, qdf_nbuf_t nbuf,
 	msdu_len = hal_rx_msdu_start_msdu_len_get(soc->hal_soc, rx_tlv_hdr);
 	pkt_len = msdu_len + l2_hdr_offset + soc->rx_pkt_tlv_size;
 
-	if (qdf_unlikely(pkt_len > RX_DATA_BUFFER_SIZE)) {
+	if (qdf_unlikely(pkt_len > buf_size)) {
 		DP_STATS_INC_PKT(soc, rx.err.rx_invalid_pkt_len,
 				 1, pkt_len);
 		goto free_nbuf;
@@ -748,6 +751,7 @@ dp_rx_data_indication_handler(struct dp_soc *soc, qdf_nbuf_t data_ind,
 	uint32_t error;
 	uint32_t error_code;
 	QDF_STATUS status;
+	uint16_t buf_size;
 
 	DP_HIST_INIT();
 
@@ -757,6 +761,7 @@ dp_rx_data_indication_handler(struct dp_soc *soc, qdf_nbuf_t data_ind,
 
 	scn = soc->hif_handle;
 	dp_runtime_pm_mark_last_busy(soc);
+	buf_size = wlan_cfg_rx_buffer_size(soc->wlan_cfg_ctx);
 
 	/* reset local variables here to be re-used in the function */
 	nbuf_head = NULL;
@@ -834,7 +839,7 @@ dp_rx_data_indication_handler(struct dp_soc *soc, qdf_nbuf_t data_ind,
 				 * reap this MPDU
 				 */
 				if ((msdu_len /
-				     (RX_DATA_BUFFER_SIZE -
+				     (buf_size -
 				      soc->rx_pkt_tlv_size) + 1) >
 				    num_pending) {
 					DP_STATS_INC(soc,
