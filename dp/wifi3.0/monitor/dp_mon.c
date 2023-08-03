@@ -6475,6 +6475,12 @@ dp_mon_peer_get_stats_param(struct dp_peer *peer, enum cdp_peer_stats_type type,
 	case cdp_peer_rx_snr:
 		buf->rx_snr = mon_peer->stats.rx.snr;
 		break;
+	case cdp_peer_rx_avg_rate:
+		buf->rx_rate_avg = mon_peer->stats.rx.rnd_avg_rx_rate;
+		break;
+	case cdp_peer_tx_avg_rate:
+		buf->tx_rate_avg = mon_peer->stats.tx.rnd_avg_tx_rate;
+		break;
 	default:
 		dp_err("Invalid stats type: %u requested", type);
 		ret = QDF_STATUS_E_FAILURE;
