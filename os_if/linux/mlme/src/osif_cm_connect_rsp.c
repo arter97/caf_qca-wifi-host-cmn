@@ -544,7 +544,7 @@ osif_populate_partner_links_mlo_params(struct wlan_objmgr_vdev *vdev,
 
 		osif_populate_connect_response_for_link(vdev, conn_rsp_params,
 							link_id,
-							link_info->ap_link_addr.bytes,
+							link_info->link_addr.bytes,
 							bss);
 	}
 }
@@ -578,7 +578,7 @@ static void osif_fill_connect_resp_mlo_params(struct wlan_objmgr_vdev *vdev,
 
 	osif_populate_connect_response_for_link(vdev, conn_rsp_params,
 						assoc_link_id,
-						link_info->ap_link_addr.bytes,
+						link_info->link_addr.bytes,
 						bss);
 	osif_populate_partner_links_mlo_params(vdev, rsp, conn_rsp_params);
 }
