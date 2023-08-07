@@ -1443,6 +1443,7 @@ cm_get_band_score(uint32_t freq, struct scoring_cfg *score_config)
 }
 
 #ifdef WLAN_FEATURE_11BE
+#ifdef WLAN_FEATURE_11BE_MLO_ADV_FEATURE
 bool cm_is_eht_allowed_for_current_security(struct scan_cache_entry *scan_entry)
 {
 	const uint8_t *rsnxe, *rsnxe_caps;
@@ -1474,6 +1475,7 @@ bool cm_is_eht_allowed_for_current_security(struct scan_cache_entry *scan_entry)
 		return true;
 	return false;
 }
+#endif
 
 static int cm_calculate_eht_score(struct scan_cache_entry *entry,
 				  struct scoring_cfg *score_config,
