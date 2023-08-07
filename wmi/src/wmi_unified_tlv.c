@@ -21761,6 +21761,8 @@ static void populate_tlv_events_id(WMI_EVT_ID *event_ids)
 					WMI_PEER_DELETE_RESP_EVENTID;
 	event_ids[wmi_peer_delete_all_response_event_id] =
 					WMI_VDEV_DELETE_ALL_PEER_RESP_EVENTID;
+	event_ids[wmi_peer_oper_mode_change_event_id] =
+					WMI_PEER_OPER_MODE_CHANGE_EVENTID;
 	event_ids[wmi_mgmt_rx_event_id] = WMI_MGMT_RX_EVENTID;
 	event_ids[wmi_host_swba_event_id] = WMI_HOST_SWBA_EVENTID;
 	event_ids[wmi_tbttoffset_update_event_id] =
