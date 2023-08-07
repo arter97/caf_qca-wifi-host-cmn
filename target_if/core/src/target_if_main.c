@@ -794,6 +794,7 @@ QDF_STATUS target_if_psoc_tgt_info_mem_free(
 	init_deinit_scan_radio_cap_free(tgt_psoc_info);
 	init_deinit_msdu_idx_qtype_map_free(tgt_psoc_info);
 	init_deinit_aux_dev_cap_free(tgt_psoc_info);
+	init_deinit_rcc_aoa_cap_ext2_free(tgt_psoc_info);
 
 	return QDF_STATUS_SUCCESS;
 }
