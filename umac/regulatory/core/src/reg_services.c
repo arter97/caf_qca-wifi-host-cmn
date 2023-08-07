@@ -2182,6 +2182,7 @@ static void reg_modify_chan_list_for_dfs_channels(struct regulatory_channel
 	}
 }
 
+#ifdef CONFIG_REG_CLIENT
 static void reg_modify_chan_list_for_indoor_channels(
 		struct wlan_regulatory_pdev_priv_obj *pdev_priv_obj)
 {
@@ -2213,6 +2214,12 @@ static void reg_modify_chan_list_for_indoor_channels(
 		}
 	}
 }
+#else
+static void reg_modify_chan_list_for_indoor_channels(
+		struct wlan_regulatory_pdev_priv_obj *pdev_priv_obj)
+{
+}
+#endif
 
 #ifdef DISABLE_CHANNEL_LIST
 static void reg_modify_chan_list_for_cached_channels(
