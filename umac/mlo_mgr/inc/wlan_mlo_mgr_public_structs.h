@@ -361,7 +361,7 @@ struct mlo_link_state_cmd_params {
  * struct ml_link_info - ml link information
  * @vdev_id: vdev id for this link
  * @link_id: link id defined as in 802.11 BE spec.
- * @link_status: active 0, inactive 1
+ * @link_status: inactive 0, active 1
  * @reserved: reserved bits
  * @chan_freq: Channel frequency in MHz
  */
