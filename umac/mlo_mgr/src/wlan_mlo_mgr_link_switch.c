@@ -23,6 +23,9 @@
 #include <wlan_serialization_api.h>
 #include <wlan_cm_api.h>
 #include <wlan_crypto_def_i.h>
+#ifdef WLAN_FEATURE_11BE_MLO_ADV_FEATURE
+#include "wlan_cm_roam_api.h"
+#endif
 
 void mlo_mgr_update_link_info_mac_addr(struct wlan_objmgr_vdev *vdev,
 				       struct wlan_mlo_link_mac_update *ml_mac_update)
@@ -52,6 +55,34 @@ void mlo_mgr_update_link_info_mac_addr(struct wlan_objmgr_vdev *vdev,
 	}
 }
 
+void mlo_mgr_roam_update_ap_link_info(struct wlan_objmgr_vdev *vdev,
+				      uint8_t link_id, uint8_t *ap_link_addr,
+				      struct wlan_channel channel)
+{
+	struct mlo_link_info *link_info;
+	uint8_t iter;
+
+	if (!vdev || !vdev->mlo_dev_ctx || !vdev->mlo_dev_ctx->link_ctx ||
+	    !ap_link_addr)
+		return;
+
+	for (iter = 0; iter < WLAN_MAX_ML_BSS_LINKS; iter++) {
+		link_info = &vdev->mlo_dev_ctx->link_ctx->links_info[iter];
+		if (link_id == link_info->link_id)
+			break;
+	}
+
+	if (iter == WLAN_MAX_ML_BSS_LINKS)
+		return;
+
+	qdf_mem_copy(&link_info->ap_link_addr, ap_link_addr, QDF_MAC_ADDR_SIZE);
+	qdf_mem_copy(link_info->link_chan_info, &channel, sizeof(channel));
+
+	mlo_debug("Update AP Link info for link_id: %d, vdev_id:%d, link_addr:" QDF_MAC_ADDR_FMT,
+		  link_info->link_id, link_info->vdev_id,
+		  QDF_MAC_ADDR_REF(link_info->ap_link_addr.bytes));
+}
+
 void mlo_mgr_update_ap_link_info(struct wlan_objmgr_vdev *vdev, uint8_t link_id,
 				 uint8_t *ap_link_addr,
 				 struct wlan_channel channel)
@@ -75,6 +106,7 @@ void mlo_mgr_update_ap_link_info(struct wlan_objmgr_vdev *vdev, uint8_t link_id,
 		return;
 
 	qdf_mem_copy(&link_info->ap_link_addr, ap_link_addr, QDF_MAC_ADDR_SIZE);
+
 	qdf_mem_copy(link_info->link_chan_info, &channel, sizeof(channel));
 	link_info->link_status_flags = 0;
 	link_info->link_id = link_id;
@@ -139,7 +171,7 @@ void mlo_mgr_reset_ap_link_info(struct wlan_objmgr_vdev *vdev)
 	uint8_t link_info_iter;
 	struct wlan_objmgr_psoc *psoc;
 
-	if (!vdev || !vdev->mlo_dev_ctx)
+	if (!vdev || !vdev->mlo_dev_ctx || !vdev->mlo_dev_ctx->link_ctx)
 		return;
 
 	psoc = wlan_vdev_get_psoc(vdev);
@@ -331,6 +363,28 @@ mlo_mgr_link_switch_get_curr_state(struct wlan_mlo_dev_context *mlo_dev_ctx)
 	return state;
 }
 
+#ifdef WLAN_FEATURE_11BE_MLO_ADV_FEATURE
+static void
+mlo_mgr_reset_roam_state_for_link_vdev(struct wlan_objmgr_vdev *vdev,
+				       struct wlan_objmgr_vdev *assoc_vdev)
+{
+	QDF_STATUS status;
+
+	status = wlan_cm_roam_state_change(wlan_vdev_get_pdev(vdev),
+					   wlan_vdev_get_id(assoc_vdev),
+					   WLAN_ROAM_DEINIT,
+					   REASON_ROAM_LINK_SWITCH_ASSOC_VDEV_CHANGE);
+	if (QDF_IS_STATUS_ERROR(status))
+		mlo_err("vdev:%d failed to change RSO state to deinit",
+			wlan_vdev_get_id(assoc_vdev));
+}
+#else
+static inline void
+mlo_mgr_reset_roam_state_for_link_vdev(struct wlan_objmgr_vdev *vdev,
+				       struct wlan_objmgr_vdev *assoc_vdev)
+{}
+#endif
+
 QDF_STATUS mlo_mgr_link_switch_notification(struct wlan_objmgr_vdev *vdev,
 					    struct wlan_mlo_link_switch_req *lswitch_req)
 {
@@ -360,6 +414,8 @@ QDF_STATUS mlo_mgr_link_switch_notification(struct wlan_objmgr_vdev *vdev,
 	if (lswitch_req->restore_vdev_flag) {
 		wlan_vdev_mlme_clear_mlo_link_vdev(vdev);
 		wlan_vdev_mlme_set_mlo_link_vdev(assoc_vdev);
+		mlo_mgr_reset_roam_state_for_link_vdev(vdev, assoc_vdev);
+
 		lswitch_req->restore_vdev_flag = false;
 
 		status = cb(assoc_vdev, wlan_vdev_get_id(vdev));
