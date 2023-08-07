@@ -3361,6 +3361,11 @@ QDF_STATUS (*extract_aux_dev_cap_service_ready_ext2)(
 			uint8_t *evt_buf, uint8_t idx,
 			struct wlan_psoc_host_aux_dev_caps *param);
 
+#ifdef WLAN_RCC_ENHANCED_AOA_SUPPORT
+QDF_STATUS (*extract_aoa_caps_service_ready_ext2)
+		(struct wmi_unified *wmi_handle, uint8_t *buf,
+		 struct wlan_psoc_host_rcc_enh_aoa_caps_ext2 *aoa_cap);
+#endif /* WLAN_RCC_ENHANCED_AOA_SUPPORT */
 };
 
 /* Forward declaration for psoc*/
