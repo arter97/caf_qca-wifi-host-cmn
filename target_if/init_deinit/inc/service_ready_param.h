@@ -481,6 +481,15 @@ struct wlan_psoc_host_aux_dev_caps {
  * @num_bin_scaling_params: Number of Spectral bin scaling parameters
  * @chainmask_table: Available chain mask tables.
  * @sar_version: SAR version info
+ *
+ * Following fields are used to save the values that are received in service
+ * ready EXT event. Currently, used by RF path switch code.
+ * @wireless_modes: Regdmn modes
+ * @low_2ghz_chan: 2 GHz channel low
+ * @high_2ghz_chan: 2 GHz channel High
+ * @low_5ghz_chan: 5 GHz channel low
+ * @high_5ghz_chan: 5 GHz channel High
+ *
  */
 struct wlan_psoc_host_service_ext_param {
 	uint32_t default_conc_scan_config_bits;
@@ -499,6 +508,11 @@ struct wlan_psoc_host_service_ext_param {
 	struct wlan_psoc_host_chainmask_table
 		chainmask_table[PSOC_MAX_CHAINMASK_TABLES];
 	uint32_t sar_version;
+	uint64_t wireless_modes;
+	uint32_t low_2ghz_chan;
+	uint32_t high_2ghz_chan;
+	uint32_t low_5ghz_chan;
+	uint32_t high_5ghz_chan;
 };
 
 /**
@@ -534,6 +548,14 @@ struct wlan_psoc_host_service_ext_param {
  * @is_multipass_sap: Multipass sap flag
  * @num_max_mlo_link_per_ml_bss_supp: max link number per MLD FW supports.
  * @num_aux_dev_caps: number of aux dev capabilities
+ *
+ * Following fields are used to save the values that are received in service
+ * ready EXT2 event. Currently, used by RF path switch code.
+ * @wireless_modes_ext: REGDMN MODE, see REGDMN_MODE_ enum
+ * @low_2ghz_chan_ext: 2 GHz channel ext low
+ * @high_2ghz_chan_ext: 2 GHz channel ext High
+ * @low_5ghz_chan_ext: 5 GHz channel ext low
+ * @high_5ghz_chan_ext: 5 GHz channel ext High
  */
 struct wlan_psoc_host_service_ext2_param {
 	uint8_t reg_db_version_major;
@@ -569,6 +591,12 @@ struct wlan_psoc_host_service_ext2_param {
 #endif
 	uint32_t num_max_mlo_link_per_ml_bss_supp;
 	uint32_t num_aux_dev_caps;
+
+	uint64_t wireless_modes_ext;
+	uint32_t low_2ghz_chan_ext;
+	uint32_t high_2ghz_chan_ext;
+	uint32_t low_5ghz_chan_ext;
+	uint32_t high_5ghz_chan_ext;
 };
 
 #endif /* _SERVICE_READY_PARAM_H_*/
