@@ -5798,7 +5798,6 @@ qdf_export_symbol(__qdf_nbuf_init);
 void qdf_nbuf_init_fast(qdf_nbuf_t nbuf)
 {
 	qdf_nbuf_users_set(&nbuf->users, 1);
-	nbuf->data = nbuf->head + NET_SKB_PAD;
 	skb_reset_tail_pointer(nbuf);
 }
 qdf_export_symbol(qdf_nbuf_init_fast);
