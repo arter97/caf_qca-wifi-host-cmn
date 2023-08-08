@@ -19866,6 +19866,7 @@ extract_roam_scan_ap_stats_tlv(wmi_unified_t wmi_handle, void *evt_buf,
 		dst->dl_source = src->bl_source;
 		dst->dl_timestamp = src->bl_timestamp;
 		dst->dl_original_timeout = src->bl_original_timeout;
+		dst->is_mlo = WMI_GET_AP_INFO_MLO_STATUS(src->flags);
 
 		src++;
 		dst++;
@@ -19911,6 +19912,10 @@ extract_roam_scan_stats_tlv(wmi_unified_t wmi_handle, void *evt_buf,
 	dst->frame_info_count = src_data->frame_info_count;
 	if (dst->frame_info_count >  WLAN_ROAM_MAX_FRAME_INFO)
 		dst->frame_info_count =  WLAN_ROAM_MAX_FRAME_INFO;
+
+	dst->band = WMI_GET_MLO_BAND(src_data->flags);
+	if (dst->band != WMI_MLO_BAND_NO_MLO)
+		dst->is_mlo = true;
 
 	/* Read the channel data only for dst->type is 0 (partial scan) */
 	if (dst->num_chan && !dst->type && param_buf->num_roam_scan_chan_info &&

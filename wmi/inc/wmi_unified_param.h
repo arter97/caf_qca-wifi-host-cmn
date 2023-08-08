@@ -9276,6 +9276,7 @@ struct wmi_roam_trigger_abort_reason {
  *  to denylist.
  *  @dl_original_timeout: Original timeout value in milli seconds
  *  when AP added to DL
+ *  @is_mlo: Flag to check whether the existing connection is MLO connection
  */
 struct wmi_roam_candidate_info {
 	uint32_t timestamp;
@@ -9292,6 +9293,7 @@ struct wmi_roam_candidate_info {
 	uint32_t dl_source;
 	uint32_t dl_timestamp;
 	uint32_t dl_original_timeout;
+	bool is_mlo;
 };
 
 /**
@@ -9307,6 +9309,8 @@ struct wmi_roam_candidate_info {
  * @ap: List of candidate AP info
  * @dwell_type: roam scan channel dwell type, enum in roam_scan_dwell_type
  * @scan_complete_timestamp: timestamp of all channels scan completed
+ * @is_mlo: Flag to check whether the existing connection is MLO connection
+ * @band: Band involved in the roaming during a MLO connection.
  */
 struct wmi_roam_scan_data {
 	bool present;
@@ -9320,6 +9324,8 @@ struct wmi_roam_scan_data {
 	struct wmi_roam_candidate_info ap[MAX_ROAM_CANDIDATE_AP];
 	uint8_t dwell_type[MAX_ROAM_SCAN_CHAN];
 	uint32_t scan_complete_timestamp;
+	bool is_mlo;
+	uint8_t band;
 };
 
 /**
